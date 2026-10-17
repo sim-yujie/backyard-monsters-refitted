@@ -270,6 +270,15 @@ const RAIL_SEGMENT = 32;
 /** World px a walking creep's body middle sits above its ground point: where shots land and leave. */
 export const BODY_HEIGHT = 10;
 
+/**
+ * How far above its ground point a shot at a creep lands: a walker's body
+ * middle, or a flyer's altitude. Towers and ranged creeps aim alike, so a
+ * shot at a Teratorn meets it in the air, not the ground under it.
+ */
+export function aimLift(creep: Pick<CreepSnapshot, "flying" | "monsterId"> | null | undefined): number {
+  return creep?.flying ? flyerAltitude(creep.monsterId) : BODY_HEIGHT;
+}
+
 const BOLT_COLOUR = 0x30c8fa; // `EFFECTS.Lightning` default 3197178
 const BEAM_GLOW = 0xfca133; // `LASER.Tick` 16555315
 const BEAM_CORE = 0xf4eddd; // 16051677
@@ -690,8 +699,7 @@ export class TowerFx {
   private aimAt(creep: CreepSnapshot | undefined, ix: number, iy: number): Point {
     const x = (creep?.ix ?? ix) - (creep?.iy ?? iy) + this.origin.x;
     const y = ((creep?.ix ?? ix) + (creep?.iy ?? iy)) / 2 + this.origin.y;
-    const lift = creep?.flying ? flyerAltitude(creep.monsterId) : BODY_HEIGHT;
-    return { x, y: y - lift };
+    return { x, y: y - aimLift(creep) };
   }
 
   private drawFlashes(tick: number): void {

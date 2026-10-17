@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Container, Texture, TextureSource } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import { TICKS_PER_SECOND, type CreepSnapshot } from "@/game/combat/rules";
@@ -605,6 +605,54 @@ describe("AttackBattleLayer against a defence (#195)", () => {
       expect(sheet).toBeDefined();
       expect(urls.some((url) => url === sheetUrl(sheet!))).toBe(true);
     }
+    layer.destroy();
+  });
+
+  it("aims a caged Fomor's fireball at a Teratorn in the air, not the ground under it", async () => {
+    const session = new AttackSession({ target: targetOf({ C14: 2 }), seed: 3 });
+    const response = {
+      ...towerYard(),
+      // A Champion Cage, and two harvesters near it for the Teratorns.
+      buildingdata: {
+        "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: 150, Y: 150 },
+        "3": { id: 3, t: 1, l: 1, X: 300, Y: 300 },
+      },
+      defenderforces: { defenderChampions: [{ t: 3, l: 3, hp: 5000, pl: 0 }] },
+    } as unknown as BaseLoadResponse;
+    session.load(response);
+    const yard = readYard(response);
+    const layer = new AttackBattleLayer({
+      session,
+      yard,
+      host: hostOf(),
+      overlay: new Container(),
+      reducedMotion: false,
+      textures: new MonsterSheetTextures((url) => Promise.resolve(blankSheet(keyOf(url)))),
+    });
+    const shots = vi.spyOn(layer.creepEffects, "projectile");
+    session.appendFling({ x: 140, y: 140, monsters: { C14: 2 } });
+    await flush();
+    const origin = { x: yard.bounds.originX, y: yard.bounds.originY };
+    let lift: number | null = null;
+    playUntil(session, 30, layer, () => {
+      // A shot at a creep, not a building: the Fomor's at a Teratorn.
+      const call = shots.mock.calls.find((args) => args[3] === -1);
+      if (!call) return false;
+      const to = call[2];
+      const below = session
+        .battle()
+        ?.creeps()
+        .filter((creep) => creep.monsterId === "C14")
+        .map((creep) => groundWorld(creep.ix, creep.iy, origin))
+        .find((ground) => Math.abs(ground.x - to.x) < 2);
+      if (!below) return false;
+      lift = below.y - to.y;
+      return true;
+    });
+    expect(lift).not.toBeNull();
+    // Towers aim at a flyer's altitude; the Fomor does too, give or take a step.
+    expect(lift!).toBeGreaterThan(flyerAltitude("C14") - 5);
     layer.destroy();
   });
 });
