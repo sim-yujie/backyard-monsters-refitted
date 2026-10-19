@@ -45,6 +45,7 @@ import {
   type AttackRoster,
   type AttackTarget,
 } from "@/game/attack/attackTarget";
+import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
@@ -833,7 +834,14 @@ export class MapRoom2Scene implements Scene {
       return { attack: null, refusal: refusal ?? "This cell cannot be attacked." };
     }
     return {
-      attack: { baseid: payload.bid, kind, cell, name: targetName(payload), roster },
+      attack: {
+        baseid: payload.bid,
+        kind,
+        cell,
+        name: targetName(payload),
+        ...("uid" in payload && payload.uid > 0 ? { owner: payload.uid } : {}),
+        roster,
+      },
       refusal: null,
     };
   }
@@ -853,8 +861,10 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    setAttackTarget(attack);
-    context.goTo(SceneName.ATTACK);
+    void attackWithFriendWarning(attack, context.overlay.modal, () => {
+      setAttackTarget(attack);
+      context.goTo(SceneName.ATTACK);
+    });
   }
 
   /**

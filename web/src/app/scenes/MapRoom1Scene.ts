@@ -9,6 +9,7 @@ import {
 } from "@/api/maproom1";
 import type { BaseLoadResponse } from "@/api/types";
 import { setAttackTarget, setViewTarget, type AttackTarget } from "@/game/attack/attackTarget";
+import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { Mr1Guide } from "@/game/guide/mr1Guide";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
@@ -261,8 +262,10 @@ export class MapRoom1Scene implements Scene {
       });
       return;
     }
-    setAttackTarget(attack);
-    context.goTo(SceneName.ATTACK);
+    void attackWithFriendWarning(attack, context.overlay.modal, () => {
+      setAttackTarget(attack);
+      context.goTo(SceneName.ATTACK);
+    });
   }
 
   /**

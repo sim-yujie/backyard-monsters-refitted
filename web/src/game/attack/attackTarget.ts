@@ -126,6 +126,8 @@ export interface AttackTarget {
   readonly cell?: OffsetCell;
   /** Owner username, or the tribe name of a wild monster camp. */
   readonly name: string;
+  /** The defender's user id when a player owns it (not a wild camp); the friend warning reads it. */
+  readonly owner?: number;
   readonly roster: AttackRoster;
   /**
    * The Map Room the attack load names, when it is not the client's default
