@@ -3,6 +3,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import { friendRefusedErr } from "../../errors/errors.js";
 import { bookFriendDecline } from "../bots/friendDecline.js";
 import { notifyFriend, type FriendNotice } from "./friendNotifications.js";
+import { dropWaitingGifts } from "./gifts.js";
 import { askAgainAt, blockedIdsOf, FRIEND_LIMITS, lapseCutoff, secondsOf, utcDayStart } from "./friendRules.js";
 import { friendView, requestView, type FriendView, type RequestView } from "./friendViews.js";
 
@@ -317,8 +318,9 @@ export const blockPlayer = async (em: EntityManager, me: number, other: number, 
 };
 
 /**
- * Ends any friendship and cancels any waiting request between two players:
- * what a block does besides the block itself. Also called where blocking
+ * Ends any friendship and cancels any waiting request between two players,
+ * and drops the gifts `b` sent `a` that are still waiting (§3.6): what `a`
+ * blocking `b` does besides the block itself. Also called where blocking
  * already happened before friends existed (reporting a mail thread).
  * Expects to run in the caller's transaction.
  */
@@ -329,6 +331,7 @@ export const clearBetween = async (tx: EntityManager, a: number, b: number, now:
       WHERE status = 'pending' AND ((from_userid = ? AND to_userid = ?) OR (from_userid = ? AND to_userid = ?))`,
     [dateOf(now), a, b, b, a]
   );
+  await dropWaitingGifts(tx, b, a, now);
 };
 
 /** Takes a player off the caller's blocked list; nothing happens if they are not on it. */

@@ -1022,6 +1022,7 @@ export type FriendRefusal =
   | "underAttack"
   | "noSuchPlayer"
   | "noSuchRequest"
+  | "noSuchGift"
   | "self";
 
 const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
@@ -1044,6 +1045,7 @@ const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
   underAttack: "They are under attack right now.",
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
+  noSuchGift: "That gift is no longer waiting.",
   self: "That's you!",
 };
 
