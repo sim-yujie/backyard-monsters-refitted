@@ -21,6 +21,8 @@ import {
 } from "../../../services/maproom/v2/outpostNotices.js";
 import { notifyAndCount } from "../../../services/notifications/notifications.js";
 import { baseModeView } from "./modes/baseModeView.js";
+import { baseModeHelp } from "./modes/baseModeHelp.js";
+import { helpBlockFor } from "../../../services/friends/helpHook.js";
 import { baseModeBuild } from "./modes/baseModeBuild.js";
 import { baseModeAttack } from "./modes/baseModeAttack.js";
 import { infernoModeDescent } from "./modes/infernoModeDescent.js";
@@ -129,6 +131,10 @@ export const baseLoad: KoaController = async (ctx) => {
     case BaseMode.VIEW:
     case BaseMode.IVIEW:
       baseSave = await baseModeView(baseid, mapversion, user.save!.worldid, user);
+      break;
+
+    case BaseMode.HELP:
+      baseSave = await baseModeHelp(user, baseid);
       break;
 
     case BaseMode.ATTACK:
@@ -411,7 +417,8 @@ export const baseLoad: KoaController = async (ctx) => {
     }
   }
 
-  const attackAllowed = canAttack(userSave, baseSave, mapversion);
+  // A visit is look-only: nothing to attack from it (friends WP2, #369).
+  const attackAllowed = type === BaseMode.HELP ? false : canAttack(userSave, baseSave, mapversion);
 
   let baseOwner;
 
@@ -470,6 +477,7 @@ export const baseLoad: KoaController = async (ctx) => {
     pic_square: avatar,
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
+    ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),
     ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
     // The player's own level for the yard HUD (#192): their main save's, on
     // an outpost too, as the map shows it (`userCell.ts`).

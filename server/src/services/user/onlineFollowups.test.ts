@@ -32,6 +32,7 @@ mock.module("../../server.js", () => ({
       find: async (entity: unknown) => tables.get(entity) ?? [],
       findOne: async (entity: unknown, where: { basesaveid?: number }) =>
         (tables.get(entity) ?? []).find((row) => row.basesaveid === where.basesaveid) ?? null,
+      execute: async () => [],
       persist: () => {},
       flush: async () => {},
     },

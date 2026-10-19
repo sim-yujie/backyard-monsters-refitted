@@ -308,7 +308,16 @@ seconds when asking again works). A malformed body is a 400 as elsewhere.
 player; its row's `jobs` holds one entry, `{ event: "request" | "accepted", userid, username }`.
 
 **Friend flag.** Map cells, neighbour lists and mail targets fill `friend: 1` for friends instead of
-the hard-coded 0, so the legacy client paths behave (WP2).
+the hard-coded 0, so the legacy client paths behave (WP2). Read fresh from the `friend` table on every
+answer (the Map Room 1 neighbour list is cached for weeks but its flag is refreshed each time). A map
+cell carries it as `fr`; a cell of the viewer's own is 0.
+
+**Help-mode load.** `POST /base/load { type: "help", baseid }` answers 409 `notFriends` for anyone who
+is not a friend of the owner (also a blocked pair, a banned account, an unknown id), the same for all
+of them. The friend's outpost id answers like an unknown base (`baseNotFound`). It is served as a
+`view` is, with no fog of war check, `canattack: false`, no write and no presence mark, so it shows
+nothing an attacker's view would not. The `help` block comes from `services/friends/helpHook.ts`
+(empty until WP6 installs its rules).
 
 **Accounts that cannot be friended.** A request to an account that never answers is handled the way
 truce requests to such accounts are (`server/src/services/bots/truceDecline.ts`): the request is

@@ -4,6 +4,7 @@ import { mailboxErr } from "../../errors/errors.js";
 import { Thread } from "../../database/models/thread.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
+import { friendFlag, friendsAmong } from "../../services/friends/friendFlags.js";
 import { SYSTEM_SENDER, SYSTEM_SENDER_NAME } from "../../services/mail/systemSender.js";
 import { DELETED_PLAYER_NAME } from "../../services/privacy/deleteAccount.js";
 import type { KoaController } from "../../utils/KoaController.js";
@@ -68,15 +69,17 @@ export const getMessageTargets: KoaController = async (ctx) => {
       }
     );
 
+    const friends = await friendsAmong(postgres.em, user.userid, conversationPartnerIds);
+
     const targets: TargetUsers = Object.fromEntries(
-      users.map((user) => [
-        user.userid,
+      users.map((partner) => [
+        partner.userid,
         {
-          friend: 0,
+          friend: friendFlag(friends, partner.userid),
           mapver: MapRoomVersion.V2,
-          first_name: user.username,
-          last_name: user.last_name,
-          pic_square: user.pic_square,
+          first_name: partner.username,
+          last_name: partner.last_name,
+          pic_square: partner.pic_square,
         },
       ])
     );
