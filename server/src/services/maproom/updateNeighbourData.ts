@@ -10,6 +10,7 @@ import { getTruces } from "./getTruces.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
+import { friendFlag, friendsAmong } from "../friends/friendFlags.js";
 import { BaseType } from "../../enums/Base.js";
 
 
@@ -46,7 +47,13 @@ const NEIGHBOUR_USER_FIELDS = ["userid", "username", "pic_square"] as const;
  * @param {Base.MAIN | Base.INFERNO} baseType - Which save type to query for live updates
  * @returns {Promise<NeighbourData[]>} - Updated neighbour data with current attack permissions
  */
-export const updateNeighbourData = async (cachedNeighbours: NeighbourData[], baseType: Base, currentUserId?: number): Promise<NeighbourData[]> => {
+export const updateNeighbourData = async (
+  cachedNeighbours: NeighbourData[],
+  baseType: Base,
+  currentUserId?: number,
+  /** Whose friends are flagged; the Inferno list has no truces, so it names the viewer here alone. */
+  friendViewerId: number | undefined = currentUserId
+): Promise<NeighbourData[]> => {
   if (!cachedNeighbours.length) return cachedNeighbours;
 
   const userIds = cachedNeighbours.map((neighbour) => neighbour.userid);
@@ -54,7 +61,7 @@ export const updateNeighbourData = async (cachedNeighbours: NeighbourData[], bas
 
   const currentTime = getCurrentDateTime();
 
-  const [neighbourUsers, neighbourSaves, lastSeens, truces, online] = await Promise.all([
+  const [neighbourUsers, neighbourSaves, lastSeens, truces, online, friends] = await Promise.all([
     postgres.em.find(
       User,
       { userid: { $in: userIds } },
@@ -75,6 +82,9 @@ export const updateNeighbourData = async (cachedNeighbours: NeighbourData[], bas
     // yard's needs a real action too; an Inferno yard's only its last-seen mark
     // (`infernoModeAttack.ts`).
     baseType === BaseType.MAIN ? onlinePlayers(userIds, currentTime) : null,
+
+    // The friend flag, read fresh: the cached list outlives friendships (friends WP2, #369).
+    friendsAmong(postgres.em, friendViewerId, userIds),
   ]);
 
   const saves = new Map(neighbourSaves.map((save) => [save.userid, save]));
@@ -124,6 +134,7 @@ export const updateNeighbourData = async (cachedNeighbours: NeighbourData[], bas
       neighbour.attackpermitted = AttackPermission.ATTACKABLE;
     }
 
+    neighbour.friend = friendFlag(friends, neighbour.userid);
     neighbour.protectedUntil = isProtected ? neighbourSave.protected : 0;
     neighbour.baseid = neighbourSave.baseid;
     neighbour.level = calculateBaseLevel(neighbourSave.points, neighbourSave.basevalue);

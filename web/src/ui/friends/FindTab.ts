@@ -1,5 +1,6 @@
 import { friendRefusal, SEARCH_MIN_LENGTH, type FriendsApi, type PlayerResult, type Relation } from "@/api/friends";
 import type { FriendsStore } from "@/game/friends/friendsStore";
+import { BLOCK_TEXT as BlockText, blockButton } from "./BlockButton";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
 
 /**
@@ -170,7 +171,30 @@ export class FindTab implements FriendsTabView {
   }
 
   private row(player: PlayerResult): HTMLLIElement {
-    return playerRow(player, { actions: [this.action(player)] });
+    const actions = [this.action(player)];
+    if (player.relation !== "self") {
+      actions.push(
+        blockButton({
+          userid: player.userid,
+          username: player.username,
+          block: (userid) => this.options.api.block(userid),
+          onBlocked: () => this.blocked(player),
+          onError: (message) => this.status.set(message, "error"),
+        }),
+      );
+    }
+    return playerRow(player, { actions });
+  }
+
+  /** Drops a player the viewer just blocked from both lists. */
+  private blocked(player: PlayerResult): void {
+    const keep = (list: PlayerResult[] | null): PlayerResult[] | null =>
+      list && list.filter((other) => other.userid !== player.userid);
+    this.results = keep(this.results);
+    this.suggestions = keep(this.suggestions);
+    this.status.set(BlockText.done(player.username));
+    void this.options.store.refresh();
+    this.render();
   }
 
   /** What a player's row offers, by how they stand to the player. */

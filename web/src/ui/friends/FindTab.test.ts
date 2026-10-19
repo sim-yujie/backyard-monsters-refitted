@@ -73,7 +73,7 @@ describe("FindTab", () => {
     expect(row(tab, 3)?.textContent).toContain(FIND_TEXT.requested);
     expect(row(tab, 4)?.textContent).toContain(FIND_TEXT.friend);
     expect(row(tab, 5)?.textContent).toContain(FIND_TEXT.self);
-    expect(row(tab, 3)?.querySelector("button")).toBeNull();
+    expect(row(tab, 3)?.querySelector(".btn--primary")).toBeNull();
   });
 
   it("says when no one has that name", async () => {
