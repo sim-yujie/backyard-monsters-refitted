@@ -10,6 +10,7 @@ import { builtEvents, recordAchievements } from "../../services/achievements/rec
 import { storageCap } from "../../services/base/economy/resourceBudget.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { notifyFriend } from "../../services/friends/friendNotifications.js";
+import { markHelped } from "../../services/friends/helpedMark.js";
 import { friendsSince, helpsToday, readSides, recordHelp } from "../../services/friends/helpFacts.js";
 import {
   gateRefusal,
@@ -46,7 +47,8 @@ import type { FriendsBody } from "./friends.js";
  * 5. Apply the speed-up or the repair to the friend's yard, credit the reward
  *    to the helper's main yard through the storage-cap clamp, write the
  *    `friend_help` row, flush, commit.
- * 6. After the commit, a `friend` notification for the owner.
+ * 6. After the commit, a `friend` notification for the owner, and the
+ *    helped mark the presence ping reads (`helpedMark.ts`, #374).
  *
  * The client names the friend, the building and the kind; the time taken
  * off, the health and the reward are worked out here from the locked saves.
@@ -181,6 +183,8 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       : { event: "helpRepair", userid: helper, username: done.helperName, building: Number(done.building.t), buildingId },
     new Date(now * 1000)
   );
+  // The owner's open yard reads itself again on their next presence ping (#374).
+  await markHelped(owner, now);
 
   const { helperName: _name, ...answer } = done;
   return { error: 0, ...answer };

@@ -2,6 +2,7 @@ import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { postgres, redis } from "../../server.js";
 import { readAttackSession } from "../base/attackSessionStore.js";
+import { readHelped } from "../friends/helpedMark.js";
 import { ATTACK_TIMEOUT, isAttackActive } from "../base/isAttackActive.js";
 import type { RaidView } from "../raids/raidFlow.js";
 import { challengeKey, readLastAction } from "./online.js";
@@ -38,6 +39,12 @@ export interface PresenceAnswer {
    * ping answers it: a ping that says "yard, Planner closed" may open one.
    */
   readonly raid?: RaidView;
+  /**
+   * When a friend last helped in the player's main yard (#374), unix
+   * seconds, for ten minutes after (`helpedMark.ts`). Absent otherwise. A
+   * client whose yard was read before it reads the yard again.
+   */
+  readonly helped?: number;
 }
 
 /**
@@ -66,10 +73,17 @@ export const attackOnMainYard = async (user: User): Promise<PresenceAnswer["atta
  *   (the tap that just made one); read from Redis otherwise.
  */
 export const presenceAnswer = async (user: User, now: number, lastAction?: number): Promise<PresenceAnswer> => {
-  const [action, attack, check] = await Promise.all([
+  const [action, attack, check, helped] = await Promise.all([
     lastAction ?? readLastAction(user.userid, now),
     attackOnMainYard(user),
     redis.get(challengeKey(user.userid)),
+    readHelped(user.userid),
   ]);
-  return { now, lastAction: action ?? 0, checkPending: check !== null && check !== undefined, ...(attack && { attack }) };
+  return {
+    now,
+    lastAction: action ?? 0,
+    checkPending: check !== null && check !== undefined,
+    ...(attack && { attack }),
+    ...(helped !== null && { helped }),
+  };
 };
