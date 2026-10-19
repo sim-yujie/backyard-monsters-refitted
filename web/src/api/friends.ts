@@ -1,3 +1,4 @@
+import { dayText } from "@/game/mail/mailbox";
 import { getSession } from "./auth";
 import { ApiError, get, NetworkError, postJson } from "./http";
 import type { ApiEnvelope, BaseLoadResponse } from "./types";
@@ -10,7 +11,8 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
  * - `GET  /bm/friends`: the list, the cap and the counts the badges show.
  * - `GET  /bm/friends/requests`: requests waiting for the player, and sent.
  * - `POST /bm/friends/request { userid } | { username }`: asks a player. To a
- *   player who already asked the player, it accepts theirs.
+ *   player who already asked the player, it accepts theirs and names the new
+ *   `friend`.
  * - `POST /bm/friends/request/answer { requestid, accept }`.
  * - `POST /bm/friends/request/cancel { requestid }`.
  * - `POST /bm/friends/remove { userid }`: silent, for both.
@@ -102,13 +104,24 @@ export interface FriendsList {
  * one the player sent.
  */
 export interface FriendRequest {
+  /** The server's `requestid`. */
   readonly id: number;
   readonly userid: number;
   readonly username: string;
   readonly pic: string | null;
   readonly level: number;
-  /** Unix seconds; null when the server sent none. */
+  /** `pending` while it waits; `accepted` on a request that asking back accepted. */
+  readonly status: "pending" | "accepted" | "declined" | "cancelled" | "expired";
+  /** When it was made, unix seconds (`at`); null when the server sent none. */
   readonly createdAt: number | null;
+  /** When it lapses unanswered, unix seconds (`expires`); null when the server sent none. */
+  readonly expiresAt: number | null;
+}
+
+/** `POST /bm/friends/request`: the request stored, and the new friend when it accepted theirs. */
+export interface RequestResult {
+  readonly request: FriendRequest | null;
+  readonly friend: Friend | null;
 }
 
 /** `GET /bm/friends/requests`. */
@@ -232,7 +245,7 @@ export type FriendRefusalReason =
 export interface FriendRefusal {
   readonly reason: FriendRefusalReason | "network" | "unknown";
   readonly message: string;
-  /** For `tooNew`: when it becomes possible, unix seconds, when the server knows. */
+  /** For `declinedRecently` and `tooNew`: when it becomes possible, unix seconds, when the server knows. */
   readonly from?: number;
 }
 
@@ -299,7 +312,11 @@ export const friendRefusal = (caught: unknown): FriendRefusal => {
     const reason = data["reason"] ?? body["reason"];
     if (isReason(reason)) {
       const from = toSeconds(data["from"] ?? body["from"]);
-      return { reason, message: REFUSAL_TEXT[reason], ...(from !== null && { from }) };
+      const message =
+        reason === "declinedRecently" && from !== null
+          ? `You can't ask this player again until ${dayText(from)}.`
+          : REFUSAL_TEXT[reason];
+      return { reason, message, ...(from !== null && { from }) };
     }
   }
   return { reason: "unknown", message: GENERAL_REFUSAL };
@@ -352,13 +369,20 @@ export const friendOf = (raw: Record<string, unknown>): Friend => {
   };
 };
 
+const REQUEST_STATUSES: ReadonlySet<string> = new Set(["pending", "accepted", "declined", "cancelled", "expired"]);
+
 const requestOf = (raw: Record<string, unknown>): FriendRequest => ({
-  id: id(raw["id"] ?? raw["requestid"]),
+  id: id(raw["requestid"] ?? raw["id"]),
   userid: id(raw["userid"]),
   username: text(raw["username"], "A player"),
   pic: picOf(raw["pic"]),
   level: count(raw["level"]),
-  createdAt: toSeconds(raw["createdAt"] ?? raw["created_at"]),
+  status:
+    typeof raw["status"] === "string" && REQUEST_STATUSES.has(raw["status"])
+      ? (raw["status"] as FriendRequest["status"])
+      : "pending",
+  createdAt: toSeconds(raw["at"] ?? raw["createdAt"]),
+  expiresAt: toSeconds(raw["expires"] ?? raw["expiresAt"]),
 });
 
 const playerOf = (raw: Record<string, unknown>): PlayerResult => ({
@@ -395,8 +419,8 @@ type Answer = ApiEnvelope & Record<string, unknown>;
 export interface FriendsApi {
   list(): Promise<FriendsList>;
   requests(): Promise<FriendRequests>;
-  /** Asks a player by id or by exact name; the stored request. */
-  request(to: { readonly userid: number } | { readonly username: string }): Promise<FriendRequest | null>;
+  /** Asks a player by id or by exact name; to one who asked first, accepts theirs. */
+  request(to: { readonly userid: number } | { readonly username: string }): Promise<RequestResult>;
   /** Accepts or declines a request; the new friend on accept, when the server sends one. */
   answer(requestid: number, accept: boolean): Promise<Friend | null>;
   cancel(requestid: number): Promise<void>;
@@ -437,7 +461,10 @@ export const friendsApi: FriendsApi = {
   async request(to) {
     const body = "userid" in to ? { userid: to.userid } : { username: to.username.trim() };
     const answer = await postJson<Answer>(REQUEST_PATH, body);
-    return answer["request"] ? requestOf(record(answer["request"])) : null;
+    return {
+      request: answer["request"] ? requestOf(record(answer["request"])) : null,
+      friend: answer["friend"] ? friendOf(record(answer["friend"])) : null,
+    };
   },
   async answer(requestid, accept) {
     const answer = await postJson<Answer>(ANSWER_PATH, { requestid, accept });
@@ -453,11 +480,11 @@ export const friendsApi: FriendsApi = {
     const q = query.trim();
     if (q.length < SEARCH_MIN_LENGTH) return [];
     const answer = await get<Answer>(SEARCH_PATH, { q });
-    return list(answer["players"] ?? answer["results"]).map(playerOf);
+    return list(answer["results"] ?? answer["players"]).map(playerOf);
   },
   async suggestions() {
     const answer = await get<Answer>(SUGGESTIONS_PATH);
-    return list(answer["players"] ?? answer["suggestions"] ?? answer["results"]).map(playerOf);
+    return list(answer["results"] ?? answer["players"]).map(playerOf);
   },
   async sendGift(userid, resource) {
     const answer = await postJson<Answer>(GIFT_PATH, { userid, resource });
@@ -500,7 +527,7 @@ export const friendsApi: FriendsApi = {
   },
   async blocked() {
     const answer = await get<Answer>(BLOCKED_PATH);
-    const players = Array.isArray(answer) ? answer : (answer["blocked"] ?? answer["players"]);
+    const players = Array.isArray(answer) ? answer : answer["blocked"];
     return list(players).map((raw) => ({ userid: id(raw["userid"]), username: text(raw["username"], "A player") }));
   },
   async block(userid) {

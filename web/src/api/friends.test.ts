@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { dayText } from "@/game/mail/mailbox";
 import {
   friendRefusal,
   friendsApi,
@@ -107,19 +108,19 @@ describe("friendsApi reads", () => {
   it("reads requests both ways", async () => {
     stubFetch({
       error: 0,
-      incoming: [{ id: 3, userid: 7, username: "Bob", level: 4, createdAt: 1_760_000_000 }],
-      outgoing: [{ requestid: 4, userid: 8, username: "Cat", created_at: "2026-10-19T00:00:00Z" }],
+      incoming: [{ requestid: 3, userid: 7, username: "Bob", level: 4, at: 1_760_000_000 }],
+      outgoing: [{ requestid: 4, userid: 8, username: "Cat", at: "2026-10-19T00:00:00Z" }],
     });
     const { incoming, outgoing } = await friendsApi.requests();
     expect(calls[0]?.url).toMatch(/\/bm\/friends\/requests$/);
-    expect(incoming).toEqual([{ id: 3, userid: 7, username: "Bob", pic: null, level: 4, createdAt: 1_760_000_000 }]);
+    expect(incoming).toEqual([{ id: 3, userid: 7, username: "Bob", pic: null, level: 4, status: "pending", createdAt: 1_760_000_000, expiresAt: null }]);
     expect(outgoing[0]).toMatchObject({ id: 4, userid: 8, createdAt: Math.floor(Date.parse("2026-10-19T00:00:00Z") / 1000) });
   });
 
   it("searches with q and reads each player's relation", async () => {
     stubFetch({
       error: 0,
-      players: [
+      results: [
         { userid: 7, username: "Bob", level: 3, relation: "asked" },
         { userid: 8, username: "Bobby", level: 3, relation: "weird" },
       ],
@@ -130,13 +131,13 @@ describe("friendsApi reads", () => {
   });
 
   it("does not ask the server for a search under 3 letters", async () => {
-    stubFetch({ error: 0, players: [{ userid: 1 }] });
+    stubFetch({ error: 0, results: [{ userid: 1 }] });
     expect(await friendsApi.search("Bo")).toEqual([]);
     expect(calls).toHaveLength(0);
   });
 
   it("reads suggestions from the suggestions route", async () => {
-    stubFetch({ error: 0, players: [{ userid: 5, username: "Mate", level: 9, relation: "none" }] });
+    stubFetch({ error: 0, results: [{ userid: 5, username: "Mate", level: 9, relation: "none" }] });
     expect(await friendsApi.suggestions()).toEqual([{ userid: 5, username: "Mate", pic: null, level: 9, relation: "none" }]);
     expect(calls[0]?.url).toMatch(/\/bm\/friends\/suggestions$/);
   });
@@ -147,7 +148,7 @@ describe("friendsApi reads", () => {
       collectsLeft: 4,
       gifts: [{ id: 1, userid: 7, resource: "r3", amount: 1200 }],
     });
-    stubFetch([{ userid: 9, username: "Grump" }]);
+    stubFetch({ error: 0, blocked: [{ userid: 9, username: "Grump" }] });
     expect(await friendsApi.blocked()).toEqual([{ userid: 9, username: "Grump" }]);
     expect(calls[1]?.url).toMatch(/\/player\/blocked$/);
   });
@@ -156,7 +157,7 @@ describe("friendsApi reads", () => {
 describe("friendsApi writes", () => {
   it("sends every POST as JSON, booleans kept as booleans", async () => {
     stubFetch({ error: 0, request: { id: 11, userid: 7, username: "Bob" } });
-    expect(await friendsApi.request({ username: " Bob " })).toMatchObject({ id: 11, userid: 7 });
+    expect((await friendsApi.request({ username: " Bob " })).request).toMatchObject({ id: 11, userid: 7 });
     await friendsApi.request({ userid: 7 });
 
     stubFetch({ error: 0, friend: { userid: 7, username: "Bob", level: 2 } });
@@ -261,6 +262,17 @@ describe("friendRefusal", () => {
       reason: "tooNew",
       message: REFUSAL_TEXT.tooNew,
       from: Math.floor(Date.parse("2026-10-20T00:00:00Z") / 1000),
+    });
+  });
+
+  it("names the day a declined request can be asked again", () => {
+    const from = "2026-10-20T00:00:00Z";
+    const error = new ApiError("no", { status: 409, body: { reason: "declinedRecently", from } });
+    const seconds = Math.floor(Date.parse(from) / 1000);
+    expect(friendRefusal(error)).toEqual({
+      reason: "declinedRecently",
+      message: `You can't ask this player again until ${dayText(seconds)}.`,
+      from: seconds,
     });
   });
 

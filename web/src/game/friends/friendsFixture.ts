@@ -34,7 +34,9 @@ export const fixtureRequest = (id: number, userid: number, extra: Partial<Friend
   username: `Player ${userid}`,
   pic: null,
   level: 4,
+  status: "pending",
   createdAt: null,
+  expiresAt: null,
   ...extra,
 });
 
@@ -68,7 +70,7 @@ export const fixtureApi = (
   const api: FriendsApi = {
     list: answer("list", fixtureList([])),
     requests: answer("requests", { incoming: [], outgoing: [] }),
-    request: answer("request", null),
+    request: answer("request", { request: null, friend: null }),
     answer: answer("answer", null),
     cancel: answer("cancel", undefined),
     remove: answer("remove", undefined),

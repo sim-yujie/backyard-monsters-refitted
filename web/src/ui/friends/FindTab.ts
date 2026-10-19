@@ -199,10 +199,12 @@ export class FindTab implements FriendsTabView {
     this.render();
     const asked = player.relation === "asked";
     try {
-      await this.options.api.request({ userid: player.userid });
-      this.setRelation(player.userid, asked ? "friend" : "requested");
-      this.status.set(asked ? FIND_TEXT.accepted(player.username) : FIND_TEXT.sent(player.username));
-      if (asked) void this.options.store.refresh();
+      const result = await this.options.api.request({ userid: player.userid });
+      const nowFriends = asked || result.friend !== null;
+      if (result.friend) this.options.store.addFriend(result.friend);
+      this.setRelation(player.userid, nowFriends ? "friend" : "requested");
+      this.status.set(nowFriends ? FIND_TEXT.accepted(player.username) : FIND_TEXT.sent(player.username));
+      if (nowFriends) void this.options.store.refresh();
     } catch (caught) {
       const refusal = friendRefusal(caught);
       this.status.set(refusal.message, "error");
