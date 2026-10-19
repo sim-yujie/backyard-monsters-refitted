@@ -254,7 +254,7 @@ player's rows from every new table, in the package that adds the table.
 
 ### 6.2 API
 
-All under `/api/:apiVersion`, logged-in, rate-limited like the mail routes. Routes live in a new
+All under `/api/:apiVersion`, logged-in (`verifyUserAuth` then `verifyAccountStatus`), rate-limited like the mail routes. Routes live in a new
 `server/src/controllers/friends/routes.ts` mounted once from `app.routes.ts` (WP1); later packages
 add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 
@@ -295,7 +295,7 @@ A player who blocked you shows as `none`, and a request then fails with the neut
 
 **Refusals** (409, a stable `reason` the client turns into words): `friendLimit`, `theirFriendLimit`,
 `requestLimit`, `alreadyFriends`, `alreadyRequested`, `requestsOff`, `declinedRecently`,
-`cannotSend` (blocked either way, or the account cannot be friended), `tooNew` (24-hour, account age
+`cannotSend` (blocked either way, either account banned, or the account cannot be friended), `tooNew` (24-hour, account age
 or level rule, with `from` when known), `dailyCap`, `giftSentToday`, `collectLimit`, `notFriends`,
 `helpersFull`, `alreadyHelped`, `nothingToHelp`, `underAttack`, and three for bad targets:
 `noSuchPlayer` (no such id or name), `noSuchRequest` (not a waiting request of yours) and `self`.
