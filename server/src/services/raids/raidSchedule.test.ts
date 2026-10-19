@@ -20,6 +20,7 @@ const { Save } = await import("../../database/models/save.model.js");
 const {
   FIRST_RAID_DELAY_SECONDS,
   LONG_GAP_SECONDS,
+  RAID_MIN_GAP_SECONDS,
   RAID_PREFERENCES,
   RECENT_RAIDS_KEPT,
   countRaidSession,
@@ -27,11 +28,14 @@ const {
   raidAlreadyApplied,
   raidDueCheck,
   raidDueNow,
+  raidGapEndsAt,
   readSchedule,
   recordRaidFinished,
   setRaidFrequency,
   startSession,
+  withRaidOpened,
 } = await import("./raidSchedule.js");
+const { MIN_HOURS_BETWEEN_TRIBE_RAIDS } = await import("../../config/RaidConfig.js");
 const { openRaid, recordRaidScreen } = await import("./raidStore.js");
 const { REAL_ACTION_WINDOW_SECONDS } = await import("../user/online.js");
 
@@ -227,6 +231,32 @@ describe("the due rule", () => {
     expect(raidDueCheck(dueFacts({ save: { ...save, aiattacks: { ...unset, lastattack: NOW - 2 * DAY } } }))).toBe("notYet");
     // Never a raid and no session to set a time: not yet.
     expect(raidDueCheck(dueFacts({ save: { ...save, aiattacks: { ...unset, lastattack: 0 } } }))).toBe("notYet");
+  });
+
+  test("at least 3 hours since the last raid opened, landed or cancelled (owner, 2026-10-19)", () => {
+    expect(MIN_HOURS_BETWEEN_TRIBE_RAIDS).toBe(3);
+    expect(RAID_MIN_GAP_SECONDS).toBe(3 * 60 * 60);
+    const save = dueSave();
+    const base = save.aiattacks as Record<string, unknown>;
+    const opened = (lastOpenedAt: number) => dueFacts({ save: { ...save, aiattacks: { ...base, lastOpenedAt } } });
+    // A raid opened a minute ago and called off: still due by its time, held back by the gap.
+    expect(raidDueCheck(opened(NOW - 60))).toBe("tooSoon");
+    expect(raidDueCheck(opened(NOW - RAID_MIN_GAP_SECONDS + 1))).toBe("tooSoon");
+    expect(raidDueCheck(opened(NOW - RAID_MIN_GAP_SECONDS))).toBeNull();
+    // A schedule from before `lastOpenedAt` was kept counts from the last landed raid.
+    const legacy = { ...base, lastattack: NOW - 60, nextAttack: NOW - 10 };
+    expect(raidDueCheck(dueFacts({ save: { ...save, aiattacks: legacy } }))).toBe("tooSoon");
+    expect(raidGapEndsAt(readSchedule(legacy))).toBe(NOW - 60 + RAID_MIN_GAP_SECONDS);
+  });
+
+  test("the gap's mark is kept, and read back from the column", () => {
+    const schedule = withRaidOpened(readSchedule(dueSave().aiattacks), NOW);
+    expect(schedule.lastOpenedAt).toBe(NOW);
+    expect(readSchedule(JSON.parse(JSON.stringify(schedule))).lastOpenedAt).toBe(NOW);
+    // A session and a landed raid both keep it.
+    expect(startSession(schedule, NOW + 5).lastOpenedAt).toBe(NOW);
+    expect(recordRaidFinished(schedule, { id: "r", at: NOW + 300, tribe: "kozu", health: 1, stolen: {}, shiny: 10 }).lastOpenedAt).toBe(NOW);
+    expect(readSchedule({ lastOpenedAt: "junk" }).lastOpenedAt).toBeUndefined();
   });
 
   test("nothing damaged or repairing (owner, Q5)", () => {
