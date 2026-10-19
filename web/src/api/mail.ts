@@ -73,6 +73,11 @@ export interface MailMessage {
    * about, whose replay its Watch opens (#363). Null on everything else.
    */
   readonly replayid?: number | null;
+  /**
+   * On the game's attack and takeover notices: the player who did it, for the
+   * notice's Add friend (friends WP11, #378). Null on everything else.
+   */
+  readonly byuserid?: number | null;
 }
 
 /** One name `getmessagetargets` gives, by user id. */

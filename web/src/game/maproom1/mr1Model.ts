@@ -76,6 +76,8 @@ export interface Mr1Neighbour {
   readonly truceUntil: number | null;
   /** Their critter (issue #175): the one they picked, or their default. */
   readonly avatar: AvatarId;
+  /** Whether they are the player's friend, as the route says (friends §6.2). */
+  readonly friend?: boolean;
 }
 
 export type Mr1Target = Mr1Tribe | Mr1Neighbour;
@@ -177,6 +179,7 @@ const readNeighbour = (wire: MapRoom1NeighbourWire, now: number): Mr1Neighbour =
     protectedUntil: num(wire.protectedUntil) > 0 ? num(wire.protectedUntil) : null,
     truceUntil: truce ? (num(wire.truceexpire) > 0 ? now + num(wire.truceexpire) : now) : null,
     avatar: avatarOf(wire.pic, wire.userid),
+    friend: num(wire.friend) === 1,
   };
 };
 

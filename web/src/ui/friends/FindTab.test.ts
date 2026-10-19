@@ -94,6 +94,16 @@ describe("FindTab", () => {
     expect(tab.statusText).toBe(FIND_TEXT.sent("Bob"));
   });
 
+  it("adds an alliance mate from the suggestions (#378)", async () => {
+    const { tab, calls } = setup();
+    await tab.show();
+    row(tab, 9)?.querySelector("button")?.click();
+    await settle();
+    expect(calls).toContainEqual(["request", { userid: 9 }]);
+    expect(row(tab, 9)?.textContent).toContain(FIND_TEXT.requested);
+    expect(tab.statusText).toBe(FIND_TEXT.sent("Mate"));
+  });
+
   it("accepts a player who asked first by asking back", async () => {
     const { tab, calls } = setup();
     tab.searchInput.value = "Bob";

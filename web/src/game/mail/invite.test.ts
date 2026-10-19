@@ -20,6 +20,7 @@ const item = (type: string): MailItem => ({
   cell: null,
   invite: null,
   defenceId: null,
+  byUserId: null,
 });
 
 describe("where an invitation stands", () => {

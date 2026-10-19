@@ -149,3 +149,28 @@ describe("targetCard", () => {
     expect(box.textContent).toBe("MO");
   });
 });
+
+describe("targetCard Add friend (friends WP11, #378)", () => {
+  const addFriend = () =>
+    vi.fn((target: { readonly name: string }) => {
+      const node = document.createElement("span");
+      node.className = "add-friend";
+      node.textContent = `Add ${target.name}`;
+      return node;
+    });
+
+  it("puts a neighbour's Add friend with Message and Truce", () => {
+    const make = addFriend();
+    const target = find("player-901");
+    const card = targetCard(target, { world, own, now: NOW }, { ...handlers(), onMessage: vi.fn(), addFriend: make }, "panel");
+    expect(make).toHaveBeenCalledWith(target);
+    expect(card.querySelector(".mr1-card__social .add-friend")?.textContent).toBe(`Add ${target.name}`);
+  });
+
+  it("offers none on a tribe", () => {
+    const make = addFriend();
+    const tribe = targetCard(find("tribe-11"), { world, own, now: NOW }, { ...handlers(), addFriend: make }, "panel");
+    expect(tribe.querySelector(".add-friend")).toBeNull();
+    expect(make).not.toHaveBeenCalled();
+  });
+});

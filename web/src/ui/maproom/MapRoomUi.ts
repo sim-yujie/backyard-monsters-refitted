@@ -11,6 +11,7 @@ import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
 import type { AchievementsDoor } from "@/ui/achievements/AchievementsDoor";
 import { achievementsLine } from "@/ui/achievements/AchievementsLine";
+import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel, type OwnFlinger, type OwnMoves } from "./CellPanel";
@@ -362,6 +363,13 @@ export class MapRoomUi {
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.autoAttack ? [this.autoAttack, this.takeover] : this.takeover,
         ...(this.hud.achievements ? { achievementsLine: (payload: PlayerCell) => this.achievementsLine(payload) } : {}),
+        addFriend: (payload: PlayerCell) =>
+          addFriendButton({
+            userid: payload.uid,
+            username: payload.n,
+            friend: payload.fr === 1,
+            className: "btn btn--outline mr2-cell__secondary",
+          }),
       }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));
       this.cellPanel.setRangeOn(this.rangeOn);
     }

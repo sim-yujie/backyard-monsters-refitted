@@ -108,6 +108,21 @@ describe("threadItems", () => {
     expect(items.map((one) => one.defenceId)).toEqual([41, null, null, null, null]);
   });
 
+  it("carries an attack notice's player for Add friend, and none on anything else (#378)", () => {
+    const items = threadItems(
+      [
+        message({ userid: 0, messagetype: "outpostattacked", message: "attacked", byuserid: 77 }),
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "attacked", byuserid: null }),
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "attacked" }),
+        message({ userid: 77, messagetype: "message", message: "hi", byuserid: 77 }),
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "self", byuserid: 2505 }),
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "bad", byuserid: -3 }),
+      ],
+      2505,
+    );
+    expect(items.map((one) => one.byUserId)).toEqual([77, null, null, null, null, null]);
+  });
+
   it("gives a notice without whole coordinates no cell", () => {
     expect(noticeCell({ coords: null })).toBeNull();
     expect(noticeCell({ coords: [1.5, 2] })).toBeNull();
