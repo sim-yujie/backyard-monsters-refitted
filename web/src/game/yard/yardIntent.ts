@@ -3,7 +3,8 @@
  * Build window on one building's tile ("Build Flinger" on a Map Room 1 card)
  * or a tab of the Monsters screen ("Hatch"), or the Monster Baiter's test
  * panel (a Baiter test's "Change army", #22 WP4), or the Defences screen (a
- * defence replay's Back, an attack notice's Defences on the map, #363).
+ * defence replay's Back, an attack notice's Defences on the map, #363), or a
+ * notice (a friend's visit refused on the way in, #372).
  *
  * The same one-shot handoff as `game/attack/attackTarget.ts`:
  * `SceneManager.goTo` takes a name and nothing else, so the request rides in
@@ -14,7 +15,9 @@ export type YardIntent =
   | { readonly kind: "build"; readonly type: number }
   | { readonly kind: "monsters"; readonly tab: string }
   | { readonly kind: "baiter" }
-  | { readonly kind: "defences" };
+  | { readonly kind: "defences" }
+  /** A line to show on arrival: why a friend's yard did not open (#372). */
+  | { readonly kind: "notice"; readonly text: string };
 
 let pending: YardIntent | null = null;
 

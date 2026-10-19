@@ -2,6 +2,7 @@ import { HudStatus } from "./yard/HudStatus";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { setAvatar } from "@/api/account";
 import { getSession } from "@/api/auth";
+import type { Friend } from "@/api/friends";
 import type { ResourceCaps, Resources } from "@/api/types";
 import { avatarOf, pickedAvatar, type AvatarId } from "@/game/avatars";
 import { incomePerHour } from "@/game/yard/incomeRate";
@@ -125,6 +126,11 @@ export interface HudOptions {
    * the scene closes whatever else docks where it does.
    */
   onAchievementsOpen?: () => void;
+  /**
+   * The Friends list's Visit (issue #372): the scene opens the friend's yard.
+   * Without it the list has no Visit button.
+   */
+  onVisitFriend?: (friend: Friend) => void;
 }
 
 /** At or under this width the corner layout is the phone's (`yard-hud.css`). */
@@ -392,6 +398,7 @@ export class Hud {
         },
         onClosedWithFocus: () => this.accountMenu?.focus(),
         onCount: (waiting) => this.accountMenu?.setFriendsCount(waiting),
+        ...(options.onVisitFriend && { onVisit: options.onVisitFriend }),
       });
       this.friendsDoor = friends;
       this.accountMenu = new AccountMenu({

@@ -45,6 +45,7 @@ import {
   type AttackRoster,
   type AttackTarget,
 } from "@/game/attack/attackTarget";
+import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
@@ -269,6 +270,14 @@ export class MapRoom2Scene implements Scene {
         onAchievementsOpen: () => {
           this.mail?.close();
           this.clearSelection();
+        },
+        // The Friends list's Visit (#372): the friend's main yard, wherever it is.
+        onVisitFriend: (friend) => {
+          visitFriend(
+            friend,
+            this.ownSave ? { resources: this.ownSave.resources ?? null, credits: this.ownSave.credits } : undefined,
+          );
+          context.goTo(SceneName.YARD);
         },
         onHome: () => this.goHome(),
         onRefresh: () => this.refreshNow(),
