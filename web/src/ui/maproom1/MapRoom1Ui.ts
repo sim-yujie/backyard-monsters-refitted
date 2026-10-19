@@ -10,6 +10,7 @@ import {
   type Mr1World,
 } from "@/game/maproom1/mr1Model";
 import { achievementsLine } from "@/ui/achievements/AchievementsLine";
+import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { Mr1ListView } from "./Mr1ListView";
@@ -280,6 +281,13 @@ export class MapRoom1Ui {
               ...(this.handlers.onMessage ? { onMessage: this.handlers.onMessage } : {}),
               ...(this.handlers.onTruce ? { onTruce: this.handlers.onTruce } : {}),
               ...(achievements ? { achievementsLine: (neighbour: Mr1Neighbour) => this.achievementsLine(neighbour) } : {}),
+              addFriend: (neighbour: Mr1Neighbour) =>
+                addFriendButton({
+                  userid: neighbour.userid,
+                  username: neighbour.name,
+                  friend: neighbour.friend === true,
+                  className: "btn btn--outline mr1-card__button mr1-card__friend",
+                }),
             },
             variant,
           )

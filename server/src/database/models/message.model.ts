@@ -105,6 +105,15 @@ export class Message {
   @FrontendKey
   replayid: number | null = null;
 
+  /**
+   * On the game's attack notices (`outpostattacked`, `outposttaken`,
+   * `yardattacked`), the player who did it, for the notice's Add friend
+   * (friends WP11, #378); null on every other message and on older notices.
+   */
+  @Property({ type: "number", nullable: true })
+  @FrontendKey
+  byuserid: number | null = null;
+
   @Property({ type: Date, onCreate: () => new Date() })
   createdAt: Opt<Date> = new Date();
 

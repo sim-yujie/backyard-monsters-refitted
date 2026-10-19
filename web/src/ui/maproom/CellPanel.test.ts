@@ -474,3 +474,41 @@ describe("Invitations to move (#205)", () => {
     expect(inviteRow(open(player()).host).hidden).toBe(true);
   });
 });
+
+describe("Add friend on another player's yard (friends WP11, #378)", () => {
+  const maker = () =>
+    vi.fn((payload: PlayerCell) => {
+      const node = document.createElement("span");
+      node.className = "add-friend";
+      node.textContent = `Add ${payload.n}`;
+      return node;
+    });
+  const row = (host: HTMLElement): HTMLElement => host.querySelector<HTMLElement>(".mr2-cell__friend")!;
+
+  it("shows a row of its own under Message and Truce, for that player", () => {
+    const addFriend = maker();
+    const { host } = open(player(), { addFriend });
+    expect(row(host).hidden).toBe(false);
+    expect(row(host).textContent).toBe("Add Bramblefoot");
+    expect(addFriend.mock.calls[0]![0].uid).toBe(77);
+  });
+
+  it("keeps the same player's button through a refresh, and makes a new one for the next", () => {
+    const addFriend = maker();
+    const { host, panel } = open(player(), { addFriend });
+    const first = row(host).firstElementChild;
+    panel.update(player({ dm: 20 }));
+    expect(row(host).firstElementChild).toBe(first);
+    panel.show({ col: 1, row: 2 }, player({ uid: 88, n: "Thornback" }));
+    expect(row(host).textContent).toBe("Add Thornback");
+    expect(addFriend).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows none on the player's own yard, a camp, or without the option", () => {
+    const addFriend = maker();
+    expect(row(open(player({ mine: 1 }), { addFriend }).host).hidden).toBe(true);
+    expect(row(open(camp(), { addFriend }).host).hidden).toBe(true);
+    expect(addFriend).not.toHaveBeenCalled();
+    expect(row(open(player()).host).hidden).toBe(true);
+  });
+});

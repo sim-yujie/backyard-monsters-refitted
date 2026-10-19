@@ -1,5 +1,6 @@
 import type { MailApi } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
+import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { MailButton, type MailButtonStyle } from "./MailButton";
 import { MailboxScreen, type ComposeTarget, type InviteTarget, type TruceTarget } from "./MailboxScreen";
 
@@ -104,6 +105,7 @@ export class MailDoor {
       ...(this.options.onInviteChanged ? { onInviteChanged: this.options.onInviteChanged } : {}),
       ...(this.options.onWatchDefence ? { onWatchDefence: this.options.onWatchDefence } : {}),
       ...(this.options.onOpenDefences ? { onOpenDefences: this.options.onOpenDefences } : {}),
+      addFriend: (userid) => addFriendButton({ userid, className: "btn btn--outline mail-message__add-friend" }),
       onUnreadChange: (count) => {
         this.mailboxCount = count;
         this.show();

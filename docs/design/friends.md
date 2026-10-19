@@ -312,6 +312,11 @@ the hard-coded 0, so the legacy client paths behave (WP2). Read fresh from the `
 answer (the Map Room 1 neighbour list is cached for weeks but its flag is refreshed each time). A map
 cell carries it as `fr`; a cell of the viewer's own is 0.
 
+**Attack notices name the attacker (WP11).** The game's attack and takeover notices
+(`outpostattacked`, `outposttaken`, `yardattacked`) store the player who did it in the new
+`message.byuserid` column, and the mail routes send it, so the mailbox can offer Add friend on
+them. Null on every other message and on notices written before it.
+
 **Help-mode load.** `POST /base/load { type: "help", baseid }` answers 409 `notFriends` for anyone who
 is not a friend of the owner (also a blocked pair, a banned account, an unknown id), the same for all
 of them. The friend's outpost id answers like an unknown base (`baseNotFound`). It is served as a
