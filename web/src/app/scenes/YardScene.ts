@@ -15,6 +15,7 @@ import { bankActions } from "@/api/yardBank";
 import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
+import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { worldChat } from "@/game/chat/chatSession";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
@@ -816,6 +817,16 @@ export class YardScene implements Scene {
 
     this.attacking = true;
     this.dock?.setAttack({ disabled: true, title });
+    let confirmed = false;
+    await attackWithFriendWarning(attack, context.overlay.modal, () => {
+      confirmed = true;
+    });
+    if (!confirmed) {
+      if (this.context !== context) return;
+      this.attacking = false;
+      this.dock?.setAttack({ disabled: false, title });
+      return;
+    }
     this.notices.show("attack", `Starting the attack on ${attack.name}…`, { level: "info" });
 
     try {

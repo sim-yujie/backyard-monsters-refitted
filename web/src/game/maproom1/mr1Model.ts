@@ -559,6 +559,7 @@ export const mr1AttackTarget = (
     baseid: target.baseid,
     kind: target.kind === "tribe" ? "wild" : "main",
     name: target.name,
+    ...(target.kind === "tribe" ? {} : { owner: target.userid }),
     roster: mainYardRoster(ownSave, flingerLevel),
     mapversion: 1,
   };
