@@ -25,6 +25,10 @@ export const SPAM_LIMITS = {
    * top of the one-line-per-half-second throttle every room already has.
    */
   allianceChat: { max: 300, minutes: 60 },
+  /** Friend requests sent (`bm/friends/request`); the daily cap of 30 applies as well. */
+  friendRequest: { max: 30, minutes: 60 },
+  /** Friend requests answered or cancelled, friends removed, players blocked or unblocked, counted together. */
+  friendAction: { max: 120, minutes: 60 },
 } as const satisfies Record<string, SpamLimit>;
 
 /**

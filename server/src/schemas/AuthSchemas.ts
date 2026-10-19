@@ -117,7 +117,11 @@ export const ChangeUsernameSchema = z.object({ username: usernameSchema });
  * - shinyLocked toggles no-shiny mode.
  */
 export const UpdateSettingsSchema = z.object({
-  shinyLocked: z.boolean(),
+  shinyLocked: z.boolean().optional(),
+  /** Friends see no online dot or "seen" time (`docs/design/friends.md` §3.6). */
+  hideOnline: z.boolean().optional(),
+  /** Accept friend requests; false refuses them with `requestsOff` (§3.6). */
+  friendRequests: z.boolean().optional(),
 });
 
 /**

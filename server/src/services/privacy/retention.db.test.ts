@@ -38,6 +38,8 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     await sql(`DELETE FROM bym.attack_logs WHERE attacker_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.chat_report WHERE reporter_id IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.job_run WHERE job = ?`, [RETENTION_JOB]);
+    await sql(`DELETE FROM bym.friend_request WHERE from_userid IN (?, ?)`, [A, B]);
+    await sql(`DELETE FROM bym."user" WHERE userid IN (?, ?) AND username LIKE 'zz_ret_%'`, [A, B]);
   };
 
   /** A message in a thread, sent `days` ago. */
@@ -154,6 +156,30 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     expect(await attackLogAges()).toEqual([364, 3]);
     const reports = await sql(`SELECT 1 FROM bym.chat_report WHERE reporter_id = ?`, [A]);
     expect(reports.length).toBe(1);
+  });
+
+  test("friend requests answered more than 30 days ago go; pending ones go 30 days after they were made", async () => {
+    for (const [userid, name] of [[A, "zz_ret_a"], [B, "zz_ret_b"]] as const) {
+      await sql(`INSERT INTO bym."user" (userid, username, email, password, blocked_users) VALUES (?, ?, ?, 'x', '[]')`, [userid, name, `${name}@test.invalid`]);
+    }
+    const request = (status: string, madeDays: number, answeredDays: number | null) =>
+      sql(`INSERT INTO bym.friend_request (from_userid, to_userid, status, created_at, answered_at) VALUES (?, ?, ?, ?, ?)`, [
+        A,
+        B,
+        status,
+        ago(madeDays),
+        answeredDays === null ? null : ago(answeredDays),
+      ]);
+    await request("declined", 40, 31);
+    await request("accepted", 40, 10);
+    await request("expired", 31, null);
+    await request("pending", 10, null);
+
+    const result = await run();
+
+    expect(result).toMatchObject({ friendRequests: 2 });
+    const left = await sql<{ status: string }>(`SELECT status FROM bym.friend_request WHERE from_userid = ? ORDER BY id`, [A]);
+    expect(left.map((row) => row.status)).toEqual(["accepted", "pending"]);
   });
 
   test("each limit is its own setting", async () => {

@@ -58,6 +58,9 @@ const em = {
   },
   flush: async () => {},
   count: async () => 0,
+  // A block also clears friends rows between the pair (#368): plain SQL, nothing to read back here.
+  execute: async () => [],
+  transactional: async <T>(work: (tx: unknown) => Promise<T>) => work(em),
 };
 
 mock.module("../../server.js", () => ({ postgres: { em } }));
