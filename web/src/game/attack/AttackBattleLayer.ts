@@ -40,6 +40,7 @@ import {
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
 import { BlastFx } from "./blastFx";
+import { dirtFor, surfaceHop } from "./burrowFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
@@ -572,6 +573,11 @@ interface CreepView {
   snapshot: CreepSnapshot | null;
   /** The body's tint when it is not hurt: white, or a marker's colour. */
   baseTint: number;
+  /** A Wormzer underground at the last tick looked at: nothing drawn but dirt. */
+  burrowed: boolean;
+  /** The tick it last came up, for the hop; and of its last clod of dirt. */
+  surfaceTick: number;
+  dirtTick: number;
 }
 
 type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
@@ -595,6 +601,9 @@ interface Splat {
   readonly radius: number;
   readonly disc: Graphics;
   readonly gibs: Gib[];
+  /** Ticks it lasts, when not {@link SPLAT_TICKS}; and whether its disc stays its size as it fades. */
+  readonly life?: number;
+  readonly still?: boolean;
 }
 
 interface Gib {
@@ -621,6 +630,21 @@ const VENOM_COLOUR = 0x7bd62a;
 /** Blink.as:78: a hopping Bolt is drawn at this alpha. A cloaked Brain is drawn the same. */
 const UNSEEN_ALPHA = 0.3;
 const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
+/** A tunnelling Wormzer's dirt: the mound it throws up and the clods. */
+const DIRT_COLOUR = 0x6b4a2b;
+const DIRT_CLOD_COLOURS = [0x7a5532, 0x5a3d22, 0x94693f] as const;
+/**
+ * The dirt is drawn a little bigger and longer-lived than Flash's (owner,
+ * 2026-10-19): Flash's three 10 px clods were easy to miss zoomed out. A dig
+ * throws a wider mound and more clods; each trail stop is five clods on a
+ * dark patch that lingers for most of a second, so the tunnel reads as a line.
+ */
+const DIG_RADIUS = 18;
+const DIG_CLODS = 12;
+const DIG_TICKS = 48;
+const TRAIL_RADIUS = 8;
+const TRAIL_CLODS = 5;
+const TRAIL_TICKS = 72;
 const BAR_BACK_COLOUR = 0x6b1616;
 const BAR_FRONT_COLOUR = 0x5ee06a;
 const BAR_CHAMPION_COLOUR = 0xffd24a;
@@ -1038,6 +1062,17 @@ export class AttackBattleLayer {
     return view ? this.shownFraction(view) : null;
   }
 
+  /** How a creep's body and bar are drawn right now, for a test or the dev hook; null with no sprite. */
+  bodyOf(id: number): { readonly alpha: number; readonly barAlpha: number; readonly y: number } | null {
+    const view = this.views.get(id);
+    return view ? { alpha: view.body.alpha, barAlpha: view.barBack.alpha, y: view.body.y } : null;
+  }
+
+  /** Splats, dirt and gibs still fading on the ground, for tests. */
+  get splatCount(): number {
+    return this.splats.length;
+  }
+
   /** Tower shots whose wounds still wait for their bullets (#77). */
   get heldShots(): number {
     return this.ledger.heldShots;
@@ -1250,6 +1285,7 @@ export class AttackBattleLayer {
         state: "walking",
         targetBuilding: -1,
         targetCreep: -1,
+        burrowed: false,
       };
       this.place(view, walking, shown);
       if (frame.climb > 0) {
@@ -1298,6 +1334,10 @@ export class AttackBattleLayer {
     const unseen = creep?.invisible === true || creep?.blinking === true;
     const flicker = creep?.blinking === true && !this.reducedMotion && Math.floor(tick / 4) % 2 === 1;
     view.body.alpha = unseen ? (flicker ? UNSEEN_ALPHA * 0.5 : UNSEEN_ALPHA) : 1;
+    // Underground, Flash drew the whole graphic, bar and all, at alpha 0 (`MonsterBase.as:660-662`).
+    if (view.burrowed) view.body.alpha = 0;
+    view.barBack.alpha = view.burrowed ? 0 : 1;
+    view.barFront.alpha = view.barBack.alpha;
     const stacks = creep?.poisonStacks ?? 0;
     view.venom.visible = stacks > 0;
     if (stacks > 0) {
@@ -1335,6 +1375,9 @@ export class AttackBattleLayer {
     view.top = ground.y;
     view.snapshot = creep;
     view.baseTint = 0xffffff;
+    view.burrowed = false;
+    view.surfaceTick = Number.NEGATIVE_INFINITY;
+    view.dirtTick = tick;
     view.body.visible = true;
     view.barBack.visible = true;
     view.barFront.visible = true;
@@ -1343,6 +1386,8 @@ export class AttackBattleLayer {
     view.barBack.height = bar.height;
     view.barFront.height = bar.height;
     view.barFront.tint = creepColour(creep);
+    // A Wormzer digs in as it lands, on its first frame (`MonsterBase.as:658-670`).
+    this.tunnel(view, creep.burrowed === true, ground, tick);
     return view;
   }
 
@@ -1385,6 +1430,9 @@ export class AttackBattleLayer {
       top: 0,
       snapshot: null,
       baseTint: 0xffffff,
+      burrowed: false,
+      surfaceTick: Number.NEGATIVE_INFINITY,
+      dirtTick: 0,
     };
   }
 
@@ -1451,6 +1499,7 @@ export class AttackBattleLayer {
         this.fx.number(tick, `creep:${creep.id}`, creep.id, gained, over, "heal");
       }
       view.lastHp = creep.hp;
+      this.tunnel(view, creep.burrowed === true, ground, tick);
       view.lastX = ground.x;
       view.lastY = ground.y;
       view.lastTick = tick;
@@ -1469,6 +1518,8 @@ export class AttackBattleLayer {
     // wound's tint (#68) and the health bar wait for `paintCreeps`, after
     // this frame's bullets have landed (#77).
     const lunge = this.reducedMotion ? 0 : lungeOffset(tick - view.lungeTick);
+    // A Wormzer that has just come up hops out of its hole (`MonsterBase.jump`).
+    const hop = this.reducedMotion ? 0 : surfaceHop(tick - view.surfaceTick);
 
     let top: number;
     if (sheet) {
@@ -1487,9 +1538,9 @@ export class AttackBattleLayer {
         // sampled at a fraction of a pixel shimmers as it moves.
         body.position.set(
           Math.round(layout.x + lunge * view.lungeX),
-          Math.round(layout.y + lunge * view.lungeY),
+          Math.round(layout.y + lunge * view.lungeY - hop),
         );
-        top = layout.y;
+        top = layout.y - hop;
       } else {
         view.baseTint = this.placeMarker(body, ground, creep);
         top = body.y;
@@ -1919,6 +1970,75 @@ export class AttackBattleLayer {
     this.spawnSplat(event.tick, at, event.champion ? 22 : 12);
   }
 
+  /**
+   * A burrower's dirt for this tick (`MonsterBase.renderBurrow`, see
+   * `burrowFx.ts`): a `Dig` as it goes down or comes up, which also starts
+   * the hop on the way up, and a trail clod every fifth Flash frame between.
+   */
+  private tunnel(view: CreepView, under: boolean, ground: Point, tick: number): void {
+    const dirt = dirtFor(view.burrowed, under, tick, view.dirtTick);
+    if (dirt === null) return;
+    if (dirt === "dig" && !under) view.surfaceTick = tick;
+    view.burrowed = under;
+    view.dirtTick = tick;
+    this.spawnDirt(tick, ground, dirt === "dig");
+  }
+
+  /**
+   * `EFFECTS.Dig` (twenty clods out to 30 px) or `EFFECTS.Burrow` (three
+   * within 10 px), `EFFECTS.as:269-275`: a mound of earth that fades, with
+   * clods thrown up from a dig. Deterministic, like the gibs.
+   */
+  private spawnDirt(tick: number, at: Point, dig: boolean): void {
+    const radius = dig ? DIG_RADIUS : TRAIL_RADIUS;
+    const mound = new Graphics();
+    if (dig) {
+      mound.ellipse(0, 0, radius, radius / 2).fill({ color: DIRT_COLOUR, alpha: 0.8 });
+    } else {
+      // A dark patch of turned earth, and clods round it turned a little each time.
+      mound.ellipse(0, 0, radius * 0.7, radius * 0.35).fill({ color: DIRT_COLOUR, alpha: 0.55 });
+      for (let index = 0; index < TRAIL_CLODS; index += 1) {
+        const angle = ((index + 0.5) / TRAIL_CLODS) * Math.PI * 2 + tick * 0.61;
+        const reach = radius * (0.6 + ((index * 3 + tick) % 4) * 0.13);
+        const x = Math.cos(angle) * reach;
+        const y = Math.sin(angle) * reach * 0.5;
+        const colour = DIRT_CLOD_COLOURS[index % DIRT_CLOD_COLOURS.length] ?? DIRT_COLOUR;
+        mound.ellipse(x, y, 3.5, 2.2).fill({ color: colour });
+      }
+    }
+    mound.position.set(at.x, at.y);
+    this.effects.addChild(mound);
+
+    const gibs: Gib[] = [];
+    if (dig && !this.reducedMotion) {
+      const count = DIG_CLODS;
+      for (let index = 0; index < count; index += 1) {
+        const sprite = this.gibPool.pop() ?? this.makeGib();
+        sprite.visible = true;
+        sprite.alpha = 1;
+        sprite.tint = DIRT_CLOD_COLOURS[index % DIRT_CLOD_COLOURS.length] ?? DIRT_COLOUR;
+        const angle = ((index + 0.5) / count) * Math.PI * 2 + tick * 0.37;
+        const speed = 1.2 + ((index * 7 + tick) % 5) * 0.3;
+        gibs.push({
+          sprite,
+          x: at.x,
+          y: at.y - 2,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed * 0.5 - 2,
+        });
+      }
+    }
+    this.splats.push({
+      tick,
+      at,
+      radius,
+      disc: mound,
+      gibs,
+      life: dig ? DIG_TICKS : TRAIL_TICKS,
+      still: !dig,
+    });
+  }
+
   private spawnSplat(tick: number, at: Point, radius: number): void {
     const disc = new Graphics();
     disc.ellipse(0, 0, radius, radius / 2).fill({ color: SPLAT_COLOUR, alpha: 0.85 });
@@ -2002,7 +2122,8 @@ export class AttackBattleLayer {
     let keep = 0;
     for (const splat of this.splats) {
       const age = tick - splat.tick;
-      if (age > SPLAT_TICKS) {
+      const lasts = splat.life ?? SPLAT_TICKS;
+      if (age > lasts) {
         splat.disc.destroy();
         for (const gib of splat.gibs) {
           gib.sprite.visible = false;
@@ -2012,9 +2133,9 @@ export class AttackBattleLayer {
       }
       this.splats[keep] = splat;
       keep += 1;
-      const life = 1 - age / SPLAT_TICKS;
+      const life = 1 - age / lasts;
       splat.disc.alpha = life;
-      splat.disc.scale.set(1 + (1 - life) * 0.4);
+      if (!splat.still) splat.disc.scale.set(1 + (1 - life) * 0.4);
       for (const gib of splat.gibs) {
         // Integrated once per frame rather than per tick: at 2x the gibs
         // simply fly for half as many frames, which is what faster means.
