@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GameNotification, NotificationsApi } from "@/api/notifications";
 import type { CompletedJob } from "@/api/types";
+import { setFriendsOpener } from "@/game/friends/friendsView";
 import { typeName } from "@/game/yard/planner/summary";
 import { NotificationDoor } from "./NotificationDoor";
 import { EMPTY_TEXT, LOAD_FAILED_TEXT } from "./NotificationPanel";
@@ -213,5 +214,18 @@ describe("NotificationDoor", () => {
     await door.open();
     expect(friends.nudge).toHaveBeenCalledTimes(2);
     expect(rows()[0]?.textContent).toContain("Bob wants to be your friend.");
+  });
+
+  it("opens the Friends screen on its Gifts tab from a gift's row, closing the list", async () => {
+    const opener = vi.fn();
+    const clear = setFriendsOpener(opener);
+    const api = fakeApi([notification({ id: 5, kind: "friend", jobs: [{ event: "gift", userid: 7, username: "Bob" }] as never })]);
+    const door = doorWith(api);
+    await door.open();
+    rows()[0]!.click();
+    expect(opener).toHaveBeenCalledWith("gifts");
+    expect(door.isOpen).toBe(false);
+    expect(api.read).toHaveBeenCalledWith(5);
+    clear();
   });
 });

@@ -1,4 +1,5 @@
 import type { FriendOnline } from "@/api/friends";
+import type { FriendsOpenTab } from "@/game/friends/friendsView";
 import { buildingName } from "@/game/yard/buildingArt";
 import { formatAmount, formatCountdown } from "@/ui/format";
 
@@ -101,3 +102,7 @@ export const friendLineText = (jobs: readonly unknown[]): string => {
   if (notices.length === 0) return "News from your friends.";
   return notices.map(friendNoticeText).join(" ");
 };
+
+/** The Friends tab a `friend` row opens when clicked: "gifts" for a gift, else none. */
+export const friendLineTab = (jobs: readonly unknown[]): FriendsOpenTab | null =>
+  jobs.some((job) => typeof job === "object" && job !== null && (job as FriendNotice).event === "gift") ? "gifts" : null;
