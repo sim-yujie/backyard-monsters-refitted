@@ -56,6 +56,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
               last_seen_at = NULL, alliance_id = NULL, banned = false
         WHERE userid IN (${list})`
     );
+    await sql(`DELETE FROM bym.alliance WHERE name = 'zz_fr_alliance'`);
   };
 
   /** The 409 reason a call is refused with. */
@@ -222,7 +223,8 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     await ask(D, B);
     await friends.blockAnswer(em(), as(B), { userid: D }, T0);
     expect((await requests(B)).incoming).toEqual([]);
-    expect((await requests(D)).outgoing).toEqual([]);
+    // D's request to B went; D's request to A stays.
+    expect((await requests(D)).outgoing.map((r: any) => r.userid)).toEqual([A]);
 
     expect(await friends.blockedAnswer(em(), as(B))).toEqual({
       error: 0,
@@ -291,13 +293,14 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     const crowd = ((await friends.searchAnswer(em(), as(A), { q: "ZZ_FR_CROWD" }, T0)) as any).results;
     expect(crowd).toHaveLength(10);
 
-    await sql(`UPDATE bym."user" SET username = 'zz_fr_crowd1x' WHERE userid = ?`, [CROWD + 2]);
+    // Exact match first, then names that start with the text, then shorter names.
+    await sql(`UPDATE bym."user" SET username = 'Crowd1' WHERE userid = ?`, [CROWD + 2]);
+    await sql(`UPDATE bym."user" SET username = 'crowd1_zz_fr' WHERE userid = ?`, [CROWD + 3]);
     try {
-      const exact = ((await friends.searchAnswer(em(), as(A), { q: "zz_fr_crowd1" }, T0)) as any).results;
-      expect(exact[0]).toMatchObject({ userid: CROWD + 1, username: "zz_fr_crowd1" });
-      expect(exact[1]).toMatchObject({ username: "zz_fr_crowd1x" });
+      const ranked = ((await friends.searchAnswer(em(), as(A), { q: "crowd1" }, T0)) as any).results;
+      expect(ranked.slice(0, 3).map((r: any) => r.username)).toEqual(["Crowd1", "crowd1_zz_fr", "zz_fr_crowd1"]);
     } finally {
-      await sql(`UPDATE bym."user" SET username = 'zz_fr_crowd2' WHERE userid = ?`, [CROWD + 2]);
+      await sql(`UPDATE bym."user" SET username = 'zz_fr_crowd' || (userid - ?) WHERE userid IN (?, ?)`, [CROWD, CROWD + 2, CROWD + 3]);
     }
 
     await ask(A, B);
@@ -318,7 +321,12 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
 
   test("suggestions: alliance mates not yet friends", async () => {
     expect(await friends.suggestionsAnswer(em(), as(A), T0)).toEqual({ error: 0, results: [] });
-    await sql(`UPDATE bym."user" SET alliance_id = 994000 WHERE userid IN (?, ?, ?)`, [A, B, C]);
+    const [alliance] = await sql<{ id: number }>(
+      `INSERT INTO bym.alliance (name, leader_userid, leader_name, world_id, created_at)
+       VALUES ('zz_fr_alliance', ?, 'zz_fr_alice', '00000000-0000-4000-8000-0000000f71e0', now()) RETURNING id`,
+      [A]
+    );
+    await sql(`UPDATE bym."user" SET alliance_id = ? WHERE userid IN (?, ?, ?)`, [Number(alliance!.id), A, B, C]);
     const friendship = (await ask(A, C)) as any;
     await answer(C, friendship.request.requestid, true);
     await ask(B, A);

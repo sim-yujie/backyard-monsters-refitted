@@ -69,7 +69,7 @@ describe("friends migration and routes", () => {
   const appRoutes = readFileSync(new URL("../../app.routes.ts", import.meta.url), "utf8");
 
   test("the migration only adds things, and has the pending-pair index", () => {
-    expect(migration).not.toMatch(/\bDROP\b|\bDELETE\b|\bTRUNCATE\b/i);
+    expect(migration.replace(/ON DELETE CASCADE/gi, "")).not.toMatch(/\bDROP\b|\bDELETE\b|\bTRUNCATE\b/i);
     for (const statement of migration.match(/CREATE (UNIQUE )?(TABLE|INDEX) [A-Z ]*"/g) ?? []) {
       expect(statement).toContain("IF NOT EXISTS");
     }
