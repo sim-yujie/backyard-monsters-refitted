@@ -12,6 +12,7 @@ import type {
   BuildingHealthData,
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { withoutHelpers } from "../friends/helpList.js";
 import { requirementDetail } from "../base/economy/transitions.js";
 import { ACADEMY_TYPE } from "../yard/academy.js";
 import { LAB_TYPE, labResearch } from "../yard/lab.js";
@@ -392,7 +393,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
       cost,
       finished: false,
       points: 0,
-      building: { ...building, cU: seconds, cL: seconds },
+      building: { ...withoutHelpers(building), cU: seconds, cL: seconds },
     };
   }
 

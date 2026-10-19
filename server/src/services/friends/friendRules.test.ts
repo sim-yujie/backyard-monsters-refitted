@@ -92,6 +92,7 @@ describe("friends migration and routes", () => {
       ["get", "/player/blocked`"],
       ["post", "/player/block`"],
       ["post", "/player/unblock`"],
+      ["post", "/bm/friends/help`"],
     ]) {
       const line = `router.${method}(\`\${api}${path}`;
       expect([line, routes.includes(line)]).toEqual([line, true]);
@@ -101,7 +102,8 @@ describe("friends migration and routes", () => {
 
   test("every friends route checks the login, then the account's status", () => {
     const mounts = routes.match(/router\.(get|post)\([^\n]*/g) ?? [];
-    expect(mounts).toHaveLength(11);
+    // WP1's eleven and WP6's help route; later packages add more.
+    expect(mounts.length).toBeGreaterThanOrEqual(12);
     for (const mount of mounts) expect(mount).toContain("apiVersion, verifyUserAuth, verifyAccountStatus,");
   });
 });

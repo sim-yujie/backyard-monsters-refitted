@@ -190,7 +190,7 @@ export const planCancelUpgrade = (save: UpgradeActionSave, id: number) => {
     throw yardRefusedErr("notUpgrading", "That building is not being upgraded.");
   }
 
-  const { cU: _cancelled, cL: _length, ...rest } = building;
+  const { cU: _cancelled, cL: _length, hl: _helpers, ...rest } = building;
   const refund = cancelRefund(Number(building.t), levelOf(building), yardKindOf(save));
   // What the wrapper's clamp will let through (`credit.ts`, T3), for the report.
   const report: CancelUpgradeReport = { id, refund: fitCredit(save, refund).credited };

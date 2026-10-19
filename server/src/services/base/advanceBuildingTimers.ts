@@ -56,6 +56,7 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
       if (building.cU <= 0) {
         delete building.cU;
         delete building.cL;
+        delete building.hl;
         building.l = (building.l || 1) + 1;
       }
     } else if (building.cB) {
@@ -64,6 +65,7 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
       if (building.cB <= 0) {
         delete building.cB;
         delete building.cL;
+        delete building.hl;
         if (building.prefab) building.l = building.prefab;
         delete building.prefab;
       }
@@ -72,6 +74,7 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
 
       if (building.cF <= 0) {
         delete building.cF;
+        delete building.hl;
         building.fort = (building.fort ?? 0) + 1;
       }
     }
