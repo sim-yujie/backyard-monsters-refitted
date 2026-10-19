@@ -1565,7 +1565,6 @@ body {
   font-weight: 600;
   color: var(--colour-text-strong);
 }
-
 .account-settings__heading {
   margin: 0;
   font-size: var(--text-md);
@@ -1612,4 +1611,4 @@ body {
 
 .block-button__question {
   font-size: var(--text-sm);
-}
+}
