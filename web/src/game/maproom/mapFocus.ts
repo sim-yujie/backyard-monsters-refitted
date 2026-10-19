@@ -56,3 +56,11 @@ export const rememberMapView = (view: MapView): void => {
 /** Where this account left the map, or null when it has not been here yet. */
 export const recallMapView = (yard: string): MapView | null =>
   lastView?.yard === yard ? lastView : null;
+
+/**
+ * Forgets where the map was left: the main yard has moved (issue #366), so
+ * the next map opens on the new home instead of the old spot.
+ */
+export const forgetMapView = (): void => {
+  lastView = null;
+};

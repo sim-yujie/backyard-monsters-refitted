@@ -26,6 +26,7 @@ import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
 import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE } from "@/game/yard/championModel";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
+import { availableAgainText, outpostCountOf, randomMoveWait } from "@/game/maproom/randomMove";
 
 /**
  * What the building panel offers for one building, as data
@@ -222,6 +223,18 @@ export interface PanelModel {
   readonly recycle: RecycleOffer | null;
   /** Fortify, on a building with a fortify ladder in this yard; null elsewhere and while a job runs. */
   readonly fortify: FortifyOffer | null;
+  /** "Move to a random spot", on the Map Room of a Map Room 2 main yard (#366); null elsewhere. */
+  readonly randomMove: RandomMoveOffer | null;
+}
+
+/** "Move to a random spot" (#366): how many outposts it loses, and why it cannot run now. */
+export interface RandomMoveOffer {
+  /** The outposts the main yard lists: all of them are lost. */
+  readonly outposts: number;
+  /** Seconds until the week is up; 0 when the move may be made now. */
+  readonly wait: number;
+  /** "Available again in 3 days." while the week runs; null when free to move. */
+  readonly blocked: string | null;
 }
 
 const ZERO: UpgradeCost = { r1: 0, r2: 0, r3: 0, r4: 0 };
@@ -494,6 +507,23 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
         ? null
         : recycleOfferFor(building, context),
     fortify: fortifyOffer(building, context),
+    randomMove: randomMoveOffer(building, context),
+  };
+};
+
+/**
+ * The Map Room's "Move to a random spot" (#366): offered only on the Map Room
+ * of a main yard that is on Map Room 2 and has a home cell, with the week's
+ * wait from the last move. The server holds the same week.
+ */
+export const randomMoveOffer = (building: YardBuilding, context: PanelContext): RandomMoveOffer | null => {
+  if (building.type !== MAP_ROOM_TYPE || context.yard.kind === "outpost") return null;
+  if (!hasMapRoom2(context) || !context.save.homebase) return null;
+  const wait = randomMoveWait(context.save, Math.floor(context.now()));
+  return {
+    outposts: outpostCountOf(context.save),
+    wait,
+    blocked: wait > 0 ? availableAgainText(wait) : null,
   };
 };
 

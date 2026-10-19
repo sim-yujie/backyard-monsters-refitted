@@ -2,6 +2,7 @@ import { redis } from "../../server.js";
 import {
   ATTACK_SESSION_TTL,
   attackSessionKey,
+  attackerSessionKey,
   parseAttackSession,
   serialiseAttackSession,
   type AttackSession,
@@ -20,7 +21,8 @@ import {
  */
 
 /**
- * Records the attacker against the defender's row for the length of the attack.
+ * Records the attacker against the defender's row for the length of the attack,
+ * and the row against the attacker.
  *
  * Called once the attack has been persisted, so `basesaveid` is populated.
  *
@@ -36,6 +38,8 @@ export const startAttackSession = async (
     ATTACK_SESSION_TTL,
     serialiseAttackSession(session)
   );
+  // Which row the attacker is on, for `isPlayerAttacking` (issue #366).
+  await redis.setex(attackerSessionKey(session.attackerid), ATTACK_SESSION_TTL, String(basesaveid));
 };
 
 /**

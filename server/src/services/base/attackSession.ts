@@ -180,6 +180,13 @@ const OK: AttackBindingResult = { ok: true };
 export const attackSessionKey = (basesaveid: number) => `attack-session:${basesaveid}`;
 
 /**
+ * The key naming the defender row an attacker's latest attack is on, so a
+ * route can ask whether a player is in an attack of their own (issue #366).
+ * Written beside the session, with the same expiry.
+ */
+export const attackerSessionKey = (attackerid: number) => `attacker-session:${attackerid}`;
+
+/**
  * A session as stored: three integers, so a stray key is readable by eye, or
  * JSON once it carries `entryHoused` or `defenderResources`.
  */
