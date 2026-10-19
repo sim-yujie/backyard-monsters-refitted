@@ -11,7 +11,8 @@ import type { MarkAnchor } from "./YardHatchMarks";
  *
  * A badge sits where a job bar would (`YardRenderer.jobBarAnchor`), as the
  * hatchery numbers do, and grows against the zoom so it stays readable
- * zoomed out.
+ * zoomed out. A tap on a badge picks its building (`pick`), as a tap on the
+ * building does.
  */
 
 /** The badge's radius and its gap above the anchor, world pixels at zoom 1. */
@@ -61,6 +62,19 @@ export class YardHelpMarks {
   }
 
   /** Puts every badge back over its building: after art arrives. */
+  /** The building whose badge is under a world point, or null. */
+  pick(worldX: number, worldY: number): number | null {
+    const scale = jobBarScale(this.zoom);
+    const radius = BADGE_RADIUS * scale;
+    for (const [id, badge] of this.badges) {
+      if (!badge.visible) continue;
+      const dx = worldX - badge.x;
+      const dy = worldY - (badge.y - (BADGE_RADIUS + BADGE_GAP) * scale);
+      if (dx * dx + dy * dy <= radius * radius) return id;
+    }
+    return null;
+  }
+
   reposition(): void {
     for (const [id, badge] of this.badges) {
       const anchor = this.anchorOf(id);
