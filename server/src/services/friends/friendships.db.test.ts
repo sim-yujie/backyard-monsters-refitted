@@ -319,6 +319,28 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     expect(await reasonOf(ask(A, D))).toBe("cannotSend");
   });
 
+  test("banned accounts: cannot ask or be asked, cannot be accepted, and are left out of search and suggestions", async () => {
+    const fromB = (await ask(B, A)) as any;
+    await sql(`UPDATE bym."user" SET banned = true WHERE userid = ?`, [B]);
+    // Asked, or asking, either way: the neutral refusal.
+    expect(await reasonOf(ask(A, B))).toBe("cannotSend");
+    expect(await reasonOf(ask(B, C))).toBe("cannotSend");
+    // A request made before the ban cannot be accepted after it.
+    expect(await reasonOf(answer(A, fromB.request.requestid, true))).toBe("cannotSend");
+    expect(((await list_(A)) as any).friends).toEqual([]);
+
+    const found = ((await friends.searchAnswer(em(), as(A), { q: "zz_fr_bob" }, T0)) as any).results;
+    expect(found).toEqual([]);
+    const [alliance] = await sql<{ id: number }>(
+      `INSERT INTO bym.alliance (name, leader_userid, leader_name, world_id, created_at)
+       VALUES ('zz_fr_alliance', ?, 'zz_fr_alice', '00000000-0000-4000-8000-0000000f71e0', now()) RETURNING id`,
+      [A]
+    );
+    await sql(`UPDATE bym."user" SET alliance_id = ? WHERE userid IN (?, ?, ?)`, [Number(alliance!.id), A, B, C]);
+    const suggested = ((await friends.suggestionsAnswer(em(), as(A), T0)) as any).results.map((r: any) => r.userid);
+    expect(suggested).toEqual([C]);
+  });
+
   test("suggestions: alliance mates not yet friends", async () => {
     expect(await friends.suggestionsAnswer(em(), as(A), T0)).toEqual({ error: 0, results: [] });
     const [alliance] = await sql<{ id: number }>(

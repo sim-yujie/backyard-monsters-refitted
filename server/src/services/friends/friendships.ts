@@ -34,6 +34,7 @@ interface LockedUser {
   username: string;
   blocked_users: unknown;
   friend_requests_off: boolean;
+  banned: boolean;
 }
 
 const dateOf = (seconds: number): Date => new Date(seconds * 1000);
@@ -53,7 +54,7 @@ export const resolvePlayer = async (em: EntityManager, target: FriendTarget): Pr
 /** Locks both players' rows, lower id first; `noSuchPlayer` if either is gone. */
 const lockPair = async (tx: EntityManager, a: number, b: number): Promise<[LockedUser, LockedUser]> => {
   const rows = await tx.execute<LockedUser[]>(
-    `SELECT userid, username, blocked_users, friend_requests_off FROM bym."user"
+    `SELECT userid, username, blocked_users, friend_requests_off, banned FROM bym."user"
       WHERE userid IN (?, ?) ORDER BY userid FOR UPDATE`,
     [a, b]
   );
@@ -64,8 +65,12 @@ const lockPair = async (tx: EntityManager, a: number, b: number): Promise<[Locke
   return [first, second];
 };
 
-const blockedEitherWay = (a: LockedUser, b: LockedUser): boolean =>
-  blockedIdsOf(a.blocked_users).includes(Number(b.userid)) || blockedIdsOf(b.blocked_users).includes(Number(a.userid));
+/** A block either way, or either account banned: the neutral `cannotSend`. */
+const cannotReach = (a: LockedUser, b: LockedUser): boolean =>
+  a.banned ||
+  b.banned ||
+  blockedIdsOf(a.blocked_users).includes(Number(b.userid)) ||
+  blockedIdsOf(b.blocked_users).includes(Number(a.userid));
 
 /** Marks the pair's lapsed requests, both ways, `expired`. */
 const lapsePair = (tx: EntityManager, a: number, b: number, now: number) =>
@@ -135,7 +140,7 @@ export interface RequestOutcome {
 
 /**
  * Asks a player to be friends (§3.1). Refused, in this order: `self`,
- * `noSuchPlayer`, `cannotSend` (a block either way), `alreadyFriends`,
+ * `noSuchPlayer`, `cannotSend` (a block either way, or either account banned), `alreadyFriends`,
  * `alreadyRequested`; then, unless the other player had already asked (which
  * accepts their request, `friendLimit`/`theirFriendLimit` permitting),
  * `requestsOff`, `friendLimit`, `theirFriendLimit`, `requestLimit` (30
@@ -159,7 +164,7 @@ export const sendFriendRequest = async (
 
   const { requestid, accepted, notices } = await em.transactional(async (tx) => {
     const [mine, theirs] = await lockPair(tx, me, other);
-    if (blockedEitherWay(mine, theirs)) throw friendRefusedErr("cannotSend");
+    if (cannotReach(mine, theirs)) throw friendRefusedErr("cannotSend");
     await lapsePair(tx, me, other, now);
     if (await areFriends(tx, me, other)) throw friendRefusedErr("alreadyFriends");
 
@@ -255,7 +260,7 @@ export const answerFriendRequest = async (
       return [];
     }
 
-    if (blockedEitherWay(mine, theirs)) throw friendRefusedErr("cannotSend");
+    if (cannotReach(mine, theirs)) throw friendRefusedErr("cannotSend");
     if (await areFriends(tx, me, other)) {
       await tx.execute(`UPDATE bym.friend_request SET status = 'accepted', answered_at = ? WHERE id = ?`, [dateOf(now), requestid]);
       return [];

@@ -98,4 +98,10 @@ describe("friends migration and routes", () => {
     }
     expect(appRoutes.match(/mountFriendsRoutes\(router\);/g)).toHaveLength(1);
   });
+
+  test("every friends route checks the login, then the account's status", () => {
+    const mounts = routes.match(/router\.(get|post)\([^\n]*/g) ?? [];
+    expect(mounts).toHaveLength(11);
+    for (const mount of mounts) expect(mount).toContain("apiVersion, verifyUserAuth, verifyAccountStatus,");
+  });
 });
