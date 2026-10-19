@@ -6,13 +6,13 @@
 export const tiers = [
   {
     name: "Lab Assistant",
-    price: "$3",
+    price: "$5",
     blurb: "Lend a hand in the lab and help pay the server bills.",
     perks: ["One vote in the monthly feature poll", "Your name on the Support page"],
   },
   {
     name: "Lab Partner",
-    price: "$8",
+    price: "$10",
     blurb: "Back the game a bit more and get a first look at what's coming.",
     perks: [
       "Two votes in the monthly feature poll",
