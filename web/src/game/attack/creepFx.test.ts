@@ -1,9 +1,13 @@
+import { Texture, type Graphics } from "pixi.js";
 import { describe, expect, it } from "vitest";
+import { MONSTER_PROPS } from "@/game/combat/rules/combatStatsData";
 import type { Point } from "@/game/yard/YardGrid";
 import {
   BURST_TICKS,
   BUILDING_NUMBER_LIFT,
   CreepFx,
+  HEAL_BURST_TICKS,
+  HEALER_STYLES,
   FLASH_COOLDOWN_TICKS,
   FLASH_TICKS,
   JUMP_PX_PER_TICK,
@@ -17,14 +21,20 @@ import {
   LUNGE_PX,
   LUNGE_TICKS,
   PROJECTILE_TICKS,
+  ROCKET_DIRECTIONS,
+  ROCKET_SPREAD,
   SMOKE_TICKS,
+  burstTicks,
   drawsProjectile,
   flightPoint,
   jumpTicks,
   labelPose,
   labelShift,
   lungeOffset,
+  projectileStyle,
+  rocketPair,
   type CreepFxHost,
+  type ProjectileStyle,
 } from "./creepFx";
 
 /**
@@ -323,7 +333,8 @@ describe("CreepFx", () => {
     fx.number(0, "building:1", -1, 60, AT, "damage");
     host.zoomLevel = 2;
     fx.update(0);
-    const text = fx.root.children[2]?.children[0] as { scale: { x: number } } | undefined;
+    // Fire, rockets, smoke, then the numbers.
+    const text = fx.root.children[3]?.children[0] as { scale: { x: number } } | undefined;
     expect(text?.scale.x).toBeCloseTo(0.5);
     fx.destroy();
   });
@@ -372,5 +383,158 @@ describe("mouthPoint", () => {
   it("stays in the cell's middle when the target is straight on", () => {
     const mouth = mouthPoint(cell, { x: 150, y: -144 + 80 * 0.62 });
     expect(mouth).toEqual({ x: 150, y: -144 + 80 * 0.62 });
+  });
+});
+
+/* ── Whose shot looks like what ─────────────────────────────────────────── */
+
+/** The colours the shots' graphics fill and stroke with this frame. */
+const coloursDrawn = (fx: CreepFx): Set<number> => {
+  const fire = fx.root.children[0] as Graphics;
+  const colours = new Set<number>();
+  for (const instruction of fire.context.instructions) {
+    const style = (instruction.data as { style?: { color?: number } }).style;
+    if (style?.color !== undefined) colours.add(style.color);
+  }
+  return colours;
+};
+
+const STYLES: readonly ProjectileStyle[] = ["fireball", "rocket", "fomor", "zafreeti", "vorg"];
+
+describe("projectile styles", () => {
+  it("gives D.A.V.E., Fomor, Zafreeti and Vorg their own, and everyone else the fireball", () => {
+    expect(projectileStyle("C12")).toBe("rocket");
+    expect(projectileStyle("G3")).toBe("fomor");
+    expect(projectileStyle("C15")).toBe("zafreeti");
+    expect(projectileStyle("C16")).toBe("vorg");
+    for (const id of ["C14", "C19", "IC7", "C1", ""]) expect(projectileStyle(id)).toBe("fireball");
+  });
+
+  it("puts every monster that heals, and only those, in the healer family", () => {
+    const healers = Object.entries(MONSTER_PROPS)
+      .filter(([, stat]) => (stat.props.damage ?? []).some((damage) => damage < 0))
+      .map(([id]) => id)
+      .sort();
+    expect(healers).toEqual(["C15", "C16"]);
+    for (const id of Object.keys(MONSTER_PROPS)) {
+      expect(HEALER_STYLES.has(projectileStyle(id))).toBe(healers.includes(id));
+    }
+    expect([...HEALER_STYLES].sort()).toEqual(["vorg", "zafreeti"]);
+  });
+
+  it("lands every style on the same tick with the same flash and number as the fireball", () => {
+    for (const style of STYLES) {
+      const host = hostOf();
+      const landed: Array<[number, number]> = [];
+      host.landed = (id, amount) => landed.push([id, amount]);
+      const fx = new CreepFx(host);
+      fx.projectile(10, { x: 0, y: 0 }, { x: 80, y: 40 }, 7, false, 120, PROJECTILE_TICKS, style);
+      fx.update(10 + PROJECTILE_TICKS - 1);
+      expect(host.flashes, style).toEqual([]);
+      expect(landed, style).toEqual([]);
+      fx.update(10 + PROJECTILE_TICKS);
+      expect(host.flashes, style).toEqual([{ id: 7, on: true }]);
+      // One loss of the whole swing, even from D.A.V.E.'s pair of rockets.
+      expect(landed, style).toEqual([[7, 120]]);
+      expect(fx.labelsFor("building:7").map((label) => label.amount), style).toEqual([-120]);
+      // Every shot is gone once its landing has been shown.
+      fx.update(10 + PROJECTILE_TICKS + burstTicks(style) + 1);
+      expect(fx.projectileCount, style).toBe(0);
+      fx.destroy();
+    }
+  });
+
+  it("shows a heal's landing longer than a fireball's", () => {
+    expect(burstTicks("zafreeti")).toBe(HEAL_BURST_TICKS);
+    expect(burstTicks("vorg")).toBe(HEAL_BURST_TICKS);
+    expect(burstTicks("fireball")).toBe(BURST_TICKS);
+    expect(burstTicks("fomor")).toBe(BURST_TICKS);
+    expect(HEAL_BURST_TICKS).toBeGreaterThan(BURST_TICKS);
+  });
+
+  it("fires D.A.V.E.'s rockets as a pair, either side of the line, closing on the target", () => {
+    const from = { x: 0, y: 0 };
+    const to = { x: 100, y: 0 };
+    const [left, right] = rocketPair(from, to);
+    expect(left!.from.y).toBeCloseTo(ROCKET_SPREAD);
+    expect(right!.from.y).toBeCloseTo(-ROCKET_SPREAD);
+    expect(Math.hypot(left!.to.x - to.x, left!.to.y - to.y)).toBeLessThanOrEqual(3);
+    expect(Math.hypot(right!.to.x - to.x, right!.to.y - to.y)).toBeLessThanOrEqual(3);
+
+    const fx = new CreepFx(hostOf());
+    fx.projectile(0, from, to, 3, false, 90, PROJECTILE_TICKS, "rocket");
+    expect(fx.shots.map((shot) => [shot.style, shot.amount])).toEqual([
+      ["rocket", 90],
+      ["rocket", 0],
+    ]);
+    // Straight, no arc: a rocket halfway is on the line between its ends.
+    const half = flightPoint(left!.from, left!.to, PROJECTILE_TICKS / 2, PROJECTILE_TICKS, 0);
+    expect(half.y).toBeCloseTo((left!.from.y + left!.to.y) / 2);
+    fx.destroy();
+  });
+
+  it("draws a rocket from the sheet once it is in, and by hand before", () => {
+    const columns: number[] = [];
+    const host = hostOf();
+    let ready = false;
+    host.rocketCell = (column) => {
+      columns.push(column);
+      return ready ? Texture.WHITE : null;
+    };
+    const fx = new CreepFx(host);
+    fx.projectile(0, { x: 0, y: 0 }, { x: 0, y: 100 }, 3, false, 90, PROJECTILE_TICKS, "rocket");
+    fx.update(4);
+    const rockets = fx.root.children[1]!;
+    expect(rockets.children.filter((child) => child.visible)).toHaveLength(0);
+    // Straight down is a quarter turn clockwise from east: column 8 of 32.
+    expect(columns).toEqual([ROCKET_DIRECTIONS / 4, ROCKET_DIRECTIONS / 4]);
+    ready = true;
+    fx.update(5);
+    expect(rockets.children.filter((child) => child.visible)).toHaveLength(2);
+    // Gone once they land.
+    fx.update(PROJECTILE_TICKS + 1);
+    expect(rockets.children.filter((child) => child.visible)).toHaveLength(0);
+    fx.destroy();
+  });
+
+  it("draws each style in colours of its own, the healers sharing the white plus", () => {
+    const inFlight = new Map<ProjectileStyle, Set<number>>();
+    const landing = new Map<ProjectileStyle, Set<number>>();
+    for (const style of STYLES) {
+      const fx = new CreepFx(hostOf());
+      fx.projectile(0, { x: 0, y: 0 }, { x: 120, y: 60 }, -1, false, 0, PROJECTILE_TICKS, style);
+      fx.update(6);
+      inFlight.set(style, coloursDrawn(fx));
+      fx.update(PROJECTILE_TICKS + 2);
+      landing.set(style, coloursDrawn(fx));
+      fx.destroy();
+    }
+    // No two styles fly in the same colours.
+    const seen = new Set<string>();
+    for (const style of STYLES) {
+      const key = [...inFlight.get(style)!].sort().join(",");
+      expect(seen.has(key), style).toBe(false);
+      seen.add(key);
+    }
+    // The healers land with a white plus; the damage shots do not.
+    for (const style of STYLES) {
+      expect(landing.get(style)!.has(0xffffff), style).toBe(HEALER_STYLES.has(style));
+    }
+  });
+
+  it("drops the trails but keeps each style's shape under reduced motion", () => {
+    const count = (fx: CreepFx) => (fx.root.children[0] as Graphics).context.instructions.length;
+    for (const style of STYLES) {
+      const calm = new CreepFx(hostOf(), true);
+      const busy = new CreepFx(hostOf(), false);
+      for (const fx of [calm, busy]) {
+        fx.projectile(0, { x: 0, y: 0 }, { x: 120, y: 60 }, -1, false, 0, PROJECTILE_TICKS, style);
+        fx.update(8);
+      }
+      expect(count(calm), style).toBeGreaterThan(0);
+      expect(count(calm), style).toBeLessThan(count(busy));
+      calm.destroy();
+      busy.destroy();
+    }
   });
 });

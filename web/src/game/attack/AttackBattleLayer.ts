@@ -35,8 +35,10 @@ import {
   jumpTicks,
   lungeOffset,
   mouthPoint,
+  projectileStyle,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
+import { DAVE_ID } from "@/game/combat/rules/specialMoves";
 import { BlastFx } from "./blastFx";
 import { dirtFor, surfaceHop } from "./burrowFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
@@ -163,6 +165,9 @@ export const STILL_LATCH_TICKS = 3;
 
 /** The tint a creep's body shows for `HURT_TICKS` after it is hit. */
 export const HURT_TINT = 0xff7070;
+
+/** The sheet a ranked D.A.V.E.'s rockets are cut from (`SPRITES.as:83`). */
+const ROCKET_SHEET: MonsterSheet = MONSTER_SPRITES["rocket"]!;
 
 /** Health bar sizes: creeps and the champion. */
 const BAR = { width: 18, height: 3, gap: 5 } as const;
@@ -812,6 +817,7 @@ export class AttackBattleLayer {
         flashBuilding: (id, on) => this.host.flashBuilding?.(id, on),
         zoom: () => this.host.zoom ?? 1,
         landed: (id, amount) => this.onFireballLanded(id, amount),
+        rocketCell: (column) => this.textures.frame(ROCKET_SHEET, column, 0),
       },
       this.reducedMotion,
     );
@@ -1149,6 +1155,8 @@ export class AttackBattleLayer {
       const sheet = spriteFor(id, this.session.levels[id] ?? 1);
       if (sheet) this.textures.preload(sheet);
     }
+    // A ranked D.A.V.E. fires rockets; a bunker's D.A.V.E. is caught below.
+    if (DAVE_ID in roster.monsters) this.textures.preload(ROCKET_SHEET);
     for (const champion of roster.champions) {
       const sheet = spriteFor(`G${champion.t}`, champion.l);
       if (sheet) this.textures.preload(sheet);
@@ -1167,6 +1175,7 @@ export class AttackBattleLayer {
       for (const id of Object.keys(garrison)) {
         const sheet = spriteFor(id, defence.defenderLevels[id] ?? 1);
         if (sheet) this.textures.preload(sheet);
+        if (id === DAVE_ID) this.textures.preload(ROCKET_SHEET);
       }
     }
     for (const caged of defence.defenderChampions) {
@@ -1643,7 +1652,16 @@ export class AttackBattleLayer {
           (this.heldBuildingHp.get(event.buildingId) ?? 0) + event.amount,
         );
       }
-      this.fx.projectile(event.tick, from, target, event.buildingId, champion, event.amount);
+      this.fx.projectile(
+        event.tick,
+        from,
+        target,
+        event.buildingId,
+        champion,
+        event.amount,
+        PROJECTILE_TICKS,
+        projectileStyle(monsterId),
+      );
       return;
     }
     if (view) {

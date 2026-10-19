@@ -980,3 +980,103 @@ describe("creepColour (#195)", () => {
     expect(colours[1]).toBe(0xffd24a);
   });
 });
+
+describe("each monster's own projectile", () => {
+  /** A layer over a fresh session against the one-tower yard, its sheet fetches noted. */
+  const battleOf = (monsters: Record<string, number>, ranks?: Record<string, number>) => {
+    const base = targetOf(monsters);
+    const target: AttackTarget = ranks ? { ...base, roster: { ...base.roster, ranks } } : base;
+    const session = new AttackSession({ target, seed: 1 });
+    const response = towerYard();
+    session.load(response);
+    const urls: string[] = [];
+    const layer = new AttackBattleLayer({
+      session,
+      yard: readYard(response),
+      host: hostOf(),
+      overlay: new Container(),
+      reducedMotion: false,
+      textures: new MonsterSheetTextures((url) => {
+        urls.push(url);
+        return Promise.resolve(blankSheet(keyOf(url)));
+      }),
+    });
+    return { session, layer, urls };
+  };
+
+  it("fires a ranked D.A.V.E.'s swing as a pair of rockets, its sheet fetched up front", async () => {
+    const { session, layer, urls } = battleOf({ C12: 1 }, { C12: 1 });
+    expect(urls).toContain(sheetUrl(MONSTER_SPRITES["rocket"]!));
+    session.appendFling({ x: -100, y: -100, monsters: { C12: 1 } });
+    await flush();
+    const fired = playUntil(session, 10, layer, () => layer.creepEffects.projectileCount > 0);
+    expect(fired).toBe(true);
+    const shots = layer.creepEffects.shots;
+    expect(shots.map((shot) => shot.style)).toEqual(["rocket", "rocket"]);
+    // The pair carries the swing's damage once.
+    expect(shots[0]!.amount).toBeGreaterThan(0);
+    expect(shots[1]!.amount).toBe(0);
+    layer.destroy();
+  });
+
+  it("does not fetch the rocket sheet when no D.A.V.E. can come", () => {
+    const { layer, urls } = battleOf({ C1: 3 });
+    expect(urls).not.toContain(sheetUrl(MONSTER_SPRITES["rocket"]!));
+    layer.destroy();
+  });
+
+  it("fires Fomor's own bolt", async () => {
+    const { session, layer } = battleOf({ C1: 1 });
+    session.appendFling({ x: -80, y: -80, monsters: {}, champion: { t: 3, l: 1 } });
+    await flush();
+    playUntil(session, 6, layer, () => layer.creepEffects.projectileCount > 0);
+    expect(layer.creepEffects.shots[0]?.style).toBe("fomor");
+    layer.destroy();
+  });
+
+  for (const [id, style] of [
+    ["C16", "vorg"],
+    ["C15", "zafreeti"],
+  ] as const) {
+    it(`heals with ${style}'s shot from the healer family`, async () => {
+      const { session, layer } = battleOf({ C1: 4, [id]: 1 });
+      const projectile = vi.spyOn(layer.creepEffects, "projectile");
+      session.appendFling({ x: -100, y: -100, monsters: { C1: 4, [id]: 1 } });
+      await flush();
+      // The tower wounds the Pokeys; the healer shoots at one of them.
+      const healed = playUntil(session, 20, layer, () =>
+        projectile.mock.calls.some((args) => args[3] === -1),
+      );
+      expect(healed).toBe(true);
+      const heal = projectile.mock.calls.find((args) => args[3] === -1)!;
+      expect(heal[7]).toBe(style);
+      layer.destroy();
+    });
+  }
+
+  it("leaves the battle itself as it was: the same state with or without the shots drawn", async () => {
+    const monsters = { C1: 4, C12: 1, C16: 1 };
+    const fling = { x: -100, y: -100, monsters };
+    const drawn = battleOf(monsters, { C12: 1 });
+    const bare = new AttackSession({
+      target: { ...targetOf(monsters), roster: { ...targetOf(monsters).roster, ranks: { C12: 1 } } },
+      seed: 1,
+    });
+    bare.load(towerYard());
+    drawn.session.appendFling(fling);
+    bare.appendFling(fling);
+    await flush();
+    const styles = new Set<string>();
+    playUntil(drawn.session, 12, drawn.layer, () => {
+      for (const shot of drawn.layer.creepEffects.shots) styles.add(shot.style);
+      return false;
+    });
+    for (let frame = 0; frame < 12 * 60; frame += 1) bare.advance(1 / 60);
+    // The run drew rockets, and fought the same fight.
+    expect(styles.has("rocket")).toBe(true);
+    expect(drawn.session.battle()!.tick).toBe(bare.battle()!.tick);
+    expect(drawn.session.battle()!.checkpoint()).toEqual(bare.battle()!.checkpoint());
+    expect(drawn.session.battle()!.state()).toEqual(bare.battle()!.state());
+    drawn.layer.destroy();
+  });
+});
