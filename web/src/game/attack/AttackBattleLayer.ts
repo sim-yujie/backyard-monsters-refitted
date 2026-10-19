@@ -2025,7 +2025,7 @@ export class AttackBattleLayer {
       }
     }
     mound.position.set(at.x, at.y);
-    this.effects.addChild(mound);
+    this.debrisLayer().addChild(mound);
 
     const gibs: Gib[] = [];
     if (dig && !this.reducedMotion) {
