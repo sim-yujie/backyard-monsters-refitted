@@ -6,8 +6,10 @@ import { logger } from "../../utils/logger.js";
 /**
  * The daily privacy clean-up: deletes in-game mail, battle records
  * (`attack_logs`) and chat reports older than their limits
- * (`config/RetentionConfig.ts`, the Privacy Policy, section 4). Log files are
- * pruned by the logger itself (`utils/logFiles.ts`).
+ * (`config/RetentionConfig.ts`, the Privacy Policy, section 4), and friend
+ * requests answered or lapsed more than {@link FRIEND_REQUEST_RETENTION_DAYS}
+ * days ago (issue #368). Log files are pruned by the logger itself
+ * (`utils/logFiles.ts`).
  *
  * Every delete goes in batches of {@link RETENTION_BATCH} rows, each its own
  * short statement (mail: its own short transaction), so no table is ever
@@ -16,6 +18,13 @@ import { logger } from "../../utils/logger.js";
 
 /** The clean-up's `bym.job_run` name; its period is the UTC day. */
 export const RETENTION_JOB = "privacy-retention";
+
+/**
+ * Days a friend request is kept once answered (or, still pending, since it
+ * was made: it lapsed at 14). Long enough for the 7-day wait after a decline
+ * and the daily cap, which read them (`services/friends/friendships.ts`).
+ */
+export const FRIEND_REQUEST_RETENTION_DAYS = 30;
 
 /** Rows deleted per statement. */
 export const RETENTION_BATCH = 1000;
@@ -31,6 +40,7 @@ export interface RetentionResult {
   threads: number;
   attackLogs: number;
   chatReports: number;
+  friendRequests: number;
 }
 
 export interface RetentionOptions {
@@ -52,7 +62,7 @@ const cutoff = (now: number, days: number): Date => new Date(now - days * DAY_MS
  *
  * @param {string} table - The table, unquoted, in schema `bym`.
  * @param {string} key - Its primary key column.
- * @param {string} timeColumn - The column the age is read from.
+ * @param {string} timeColumn - The column (or expression) the age is read from.
  * @returns {Promise<number>} How many rows went.
  */
 const deleteOldRows = async (
@@ -158,7 +168,16 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
-  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports };
+  const friendRequests = await deleteOldRows(
+    em,
+    "friend_request",
+    "id",
+    "coalesce(answered_at, created_at)",
+    cutoff(now, FRIEND_REQUEST_RETENTION_DAYS),
+    batchSize,
+    pauseMs
+  );
+  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports, friendRequests };
 };
 
 /**
