@@ -9,6 +9,8 @@ import {
 } from "@/api/maproom1";
 import type { BaseLoadResponse } from "@/api/types";
 import { setAttackTarget, setViewTarget, type AttackTarget } from "@/game/attack/attackTarget";
+import { visitFriend } from "@/game/friends/friendVisit";
+import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { Mr1Guide } from "@/game/guide/mr1Guide";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
@@ -79,6 +81,12 @@ export class MapRoom1Scene implements Scene {
           context.goTo(SceneName.LOGIN);
         },
         onClose: () => context.goTo(SceneName.YARD),
+        // The Friends list's Visit (#372): the friend's main yard.
+        onVisitFriend: (friend) => {
+          const save = this.ownSave;
+          visitFriend(friend, save ? { resources: save.resources ?? null, credits: save.credits } : undefined);
+          context.goTo(SceneName.YARD);
+        },
         onView: (target) => this.view(target),
         onAttack: (target) => this.attack(target),
         onAction: (action) => this.act(action),
@@ -261,8 +269,10 @@ export class MapRoom1Scene implements Scene {
       });
       return;
     }
-    setAttackTarget(attack);
-    context.goTo(SceneName.ATTACK);
+    void attackWithFriendWarning(attack, context.overlay.modal, () => {
+      setAttackTarget(attack);
+      context.goTo(SceneName.ATTACK);
+    });
   }
 
   /**

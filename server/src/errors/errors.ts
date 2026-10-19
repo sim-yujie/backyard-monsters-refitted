@@ -3,6 +3,7 @@ import { ClientSafeError } from "../middleware/clientSafeError.js";
 import type { EconomyViolation } from "../services/base/economy/auditEconomySave.js";
 import type { CombatViolation } from "../game-rules/combat/index.js";
 import type { RelocateRefusal } from "../services/maproom/v2/relocateRules.js";
+import type { RandomMoveRefusal } from "../services/maproom/v2/randomMoveRules.js";
 import type { TakeoverRefusal } from "../services/maproom/v2/takeoverRules.js";
 
 /**
@@ -873,6 +874,32 @@ export const relocateRefusedErr = (reason: RelocateRefusal) =>
     isClientFriendly: false,
   });
 
+const RANDOM_MOVE_REFUSAL_MESSAGES: Record<RandomMoveRefusal, string> = {
+  notMapRoom2: "You can only move to a random spot on Map Room 2.",
+  noHomeCell: "Your main yard is not on the map.",
+  coolingDown: "You have already moved this week. Try again when the week is up.",
+  underAttack: "Your main yard is under attack. Try again when the attack is over.",
+  outpostUnderAttack: "One of your outposts is under attack. Try again when the attack is over.",
+  attacking: "You are in the middle of an attack. Finish it first.",
+  noFreeCell: "No free spot could be found right now. Please try again.",
+};
+
+/**
+ * "Move to a random spot" refused before anything moved (issue #366,
+ * `services/maproom/v2/randomMoveRules.ts`). Whole sentences the client shows
+ * as they are.
+ *
+ * @param {RandomMoveRefusal} reason - Which rule refused it.
+ * @param {object} detail - Figures for the client, e.g. `availableAt`.
+ */
+export const randomMoveRefusedErr = (reason: RandomMoveRefusal, detail: object = {}) =>
+  new ClientSafeError({
+    message: RANDOM_MOVE_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
+    data: { reason, ...detail },
+    isClientFriendly: true,
+  });
+
 const TAKEOVER_REFUSAL_MESSAGES: Record<TakeoverRefusal, string> = {
   notFound: "that yard could not be found.",
   mainYard: "a main yard cannot be taken over.",
@@ -994,6 +1021,69 @@ export const raidRefusedErr = (reason: RaidRefusal, details: object = {}) =>
         : reason === "badRequest"
           ? Status.BAD_REQUEST
           : Status.CONFLICT,
+    data: { reason, ...details },
+    isClientFriendly: true,
+  });
+
+/**
+ * Why a friends route refused (`docs/design/friends.md` §6.2): the stable
+ * `reason` the client turns into words. Every one is a `409`.
+ */
+export type FriendRefusal =
+  | "friendLimit"
+  | "theirFriendLimit"
+  | "requestLimit"
+  | "alreadyFriends"
+  | "alreadyRequested"
+  | "requestsOff"
+  | "declinedRecently"
+  | "cannotSend"
+  | "tooNew"
+  | "dailyCap"
+  | "giftSentToday"
+  | "collectLimit"
+  | "notFriends"
+  | "helpersFull"
+  | "alreadyHelped"
+  | "nothingToHelp"
+  | "underAttack"
+  | "noSuchPlayer"
+  | "noSuchRequest"
+  | "noSuchGift"
+  | "self";
+
+const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
+  friendLimit: "You already have the most friends you can have.",
+  theirFriendLimit: "This player already has the most friends they can have.",
+  requestLimit: "You have a lot of friend requests waiting for an answer. Wait for some to be answered first.",
+  alreadyFriends: "You are already friends.",
+  alreadyRequested: "You have already asked this player.",
+  requestsOff: "This player isn't taking friend requests.",
+  declinedRecently: "You can't ask this player again yet.",
+  cannotSend: "You can't send that to this player.",
+  tooNew: "That isn't possible yet.",
+  dailyCap: "You have done that as many times as you can today.",
+  giftSentToday: "You have already sent this friend a gift today.",
+  collectLimit: "You have collected as many gifts as you can today.",
+  notFriends: "You are not friends with this player.",
+  helpersFull: "Enough friends have already helped with this.",
+  alreadyHelped: "You have already helped with this.",
+  nothingToHelp: "There is nothing to help with here.",
+  underAttack: "They are under attack right now.",
+  noSuchPlayer: "There is no player with that name.",
+  noSuchRequest: "That request is no longer waiting for an answer.",
+  noSuchGift: "That gift is no longer waiting.",
+  self: "That's you!",
+};
+
+/**
+ * A friends route refused (`409`); `data.reason` says why, with any details
+ * beside it (`from`: unix seconds when it becomes possible, when known).
+ */
+export const friendRefusedErr = (reason: FriendRefusal, details: object = {}) =>
+  new ClientSafeError({
+    message: FRIEND_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
     data: { reason, ...details },
     isClientFriendly: true,
   });

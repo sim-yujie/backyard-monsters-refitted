@@ -107,7 +107,7 @@ export interface AccountResponse extends ApiEnvelope {
   username: string;
   canChangeUsername: boolean;
   nextChangeAt: string | null;
-  settings?: { shinyLocked?: boolean };
+  settings?: { shinyLocked?: boolean; hideOnline?: boolean; friendRequests?: boolean };
 }
 
 /** `POST /api/:apiVersion/player/changeusername`. */
@@ -620,6 +620,11 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * the yard switcher can list them from whichever yard is open.
    */
   outposts?: OutpostEntry[] | null;
+  /**
+   * When "Move to a random spot" last moved the main yard, unix seconds; null
+   * or absent when it never has (issue #366). The next move opens 7 days later.
+   */
+  randommoveat?: number | null;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   mushrooms?: MushroomSave | null;

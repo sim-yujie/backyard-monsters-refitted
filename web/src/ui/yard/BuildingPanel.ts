@@ -43,6 +43,7 @@ import {
   type FortifyOffer,
   type JobOffer,
   type PanelModel,
+  type RandomMoveOffer,
   type SpeedupOffer,
   type UpgradeGate,
   type UpgradeOffer,
@@ -55,6 +56,10 @@ import { ChampionPanel } from "./ChampionPanel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
+import { moveToRandomSpot, type RandomMoveResponse } from "@/api/maproom";
+import { forgetMapView } from "@/game/maproom/mapFocus";
+import { RANDOM_MOVE_TEXT } from "@/game/maproom/randomMove";
+import { RandomMoveDialog } from "@/ui/maproom/RandomMoveDialog";
 
 /** What an outpost harvester's panel says in place of its stored amount. */
 export const AUTO_BANKING = "Auto-banking: what it makes goes straight to your main yard's storage";
@@ -686,15 +691,20 @@ export class BuildingPanel {
     if (model?.open === "map" && this.openMap) {
       const run = this.openMap;
       const button = actionButton("Open map", () => run(), "btn--primary");
+      const randomMove = model.randomMove && this.yard ? this.randomMoveControl(model.randomMove) : [];
       if (model.openBlocked) {
         button.disabled = true;
         button.title = model.openBlocked;
         const wrap = document.createElement("div");
         wrap.className = "building-panel__block";
-        wrap.append(button, gateText(model.openBlocked));
+        wrap.append(button, gateText(model.openBlocked), ...randomMove);
         return wrap;
       }
-      return button;
+      if (randomMove.length === 0) return button;
+      const wrap = document.createElement("div");
+      wrap.className = "building-panel__block building-panel__map-actions";
+      wrap.append(button, ...randomMove);
+      return wrap;
     }
     if (model?.open === "baiter" && this.yard) {
       const button = actionButton("Test attack", () => this.openBaiterWindow(model.openBlocked), "btn--primary");
@@ -753,6 +763,48 @@ export class BuildingPanel {
       return button;
     }
     return null;
+  }
+
+  /**
+   * "Move to a random spot" under the Map Room's Open map (#366): opens the
+   * confirm with its warning, or, inside the week after a move, is greyed
+   * out with when it opens again.
+   */
+  private randomMoveControl(offer: RandomMoveOffer): HTMLElement[] {
+    const button = actionButton(RANDOM_MOVE_TEXT.button, () => this.openRandomMove(offer), "btn--ghost");
+    button.classList.add("building-panel__random-move");
+    button.setAttribute("aria-haspopup", "dialog");
+    button.title = RANDOM_MOVE_TEXT.buttonTitle;
+    if (!offer.blocked) return [button];
+    button.disabled = true;
+    button.title = offer.blocked;
+    const gate = gateText(offer.blocked);
+    gate.classList.add("building-panel__random-move-wait");
+    return [button, gate];
+  }
+
+  private openRandomMove(offer: RandomMoveOffer): void {
+    const yard = this.yard;
+    if (!yard || offer.blocked) return;
+    const store = yard.store;
+    const openMap = this.openMap;
+    new RandomMoveDialog({
+      outposts: offer.outposts,
+      move: () => moveToRandomSpot(),
+      onMoved: (answer: RandomMoveResponse) => {
+        // The map opens on the new home, not where it was left.
+        forgetMapView();
+        const coords = answer.coords;
+        store.mergeWrite({
+          ...(Array.isArray(coords) && coords.length === 2 ? { homebase: [coords[0], coords[1]] } : {}),
+          outposts: [],
+          ...(typeof answer.randommoveat === "number" ? { randommoveat: answer.randommoveat } : {}),
+        });
+        this.render();
+      },
+      ...(openMap ? { openMap } : {}),
+      now: () => store.now(),
+    }).mount(yard.modal ?? this.element.ownerDocument.body);
   }
 
   private repairBlock(building: YardBuilding, offer: RepairOffer, used: Set<string>): HTMLElement {

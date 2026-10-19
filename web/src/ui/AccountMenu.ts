@@ -22,12 +22,18 @@
  *
  * With `onAchievements` (issue #204) the menu has an "Achievements" item,
  * the way into the achievements screen on every screen with the HUD.
+ *
+ * With `onFriends` (issue #370) it has a "Friends" item, the way into the
+ * Friends screen, with the count of requests and gifts waiting
+ * (`setFriendsCount`); while any wait, the button wears a small count too.
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
+import { waitingText } from "@/game/friends/friendText";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
 import { openAccountSettings } from "@/ui/AccountSettings";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
+import "@/ui/friends/friends.css";
 import "@/ui/styles/guide-start.css";
 
 export interface AccountAvatar {
@@ -52,6 +58,8 @@ export interface AccountMenuOptions {
   readonly variant?: "button" | "pill";
   /** The "Achievements" item's action; without it there is no such item. */
   readonly onAchievements?: () => void;
+  /** The "Friends" item's action; without it there is no such item. */
+  readonly onFriends?: () => void;
 }
 
 /** What the picker's heading adds while the player still wears the default. */
@@ -83,6 +91,10 @@ export class AccountMenu {
   private readonly replay: HTMLButtonElement;
   /** Enters or leaves fullscreen; hidden where the browser has none. */
   private readonly fullscreen: HTMLButtonElement;
+  /** The Friends item's count and the button's; null without the item. */
+  private readonly friendsCount: HTMLElement | null = null;
+  private readonly buttonCount: HTMLElement | null = null;
+  private friendsWaiting = 0;
   private readonly name: string;
   private current: AvatarId | null = null;
   private saving = false;
@@ -216,6 +228,31 @@ export class AccountMenu {
       this.toggle(false);
       startGuideTour();
     });
+    if (options.onFriends) {
+      const onFriends = options.onFriends;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const friends = document.createElement("button");
+      friends.type = "button";
+      friends.className = "btn btn--ghost account-menu__help account-menu__friends";
+      friends.setAttribute("role", "menuitem");
+      const label = document.createElement("span");
+      label.textContent = "Friends";
+      this.friendsCount = document.createElement("span");
+      this.friendsCount.className = "account-menu__count";
+      this.friendsCount.hidden = true;
+      friends.append(label, this.friendsCount);
+      friends.addEventListener("click", () => {
+        this.toggle(false);
+        onFriends();
+      });
+      this.list.append(friends);
+      // The same count on the button, so it shows with the menu shut.
+      this.buttonCount = document.createElement("span");
+      this.buttonCount.className = "account-menu__button-count";
+      this.buttonCount.setAttribute("aria-hidden", "true");
+      this.buttonCount.hidden = true;
+      this.button.append(this.buttonCount);
+    }
     if (options.onAchievements) {
       const onAchievements = options.onAchievements;
       // Not `account-menu__item` either, for the same reason as Help's.
@@ -280,6 +317,19 @@ export class AccountMenu {
       "aria-label",
       level === null ? `Your account: ${this.name}` : `Your account: ${this.name}, ${text}`,
     );
+  }
+
+  /** The requests and gifts waiting, on the Friends item and the button; none shows at 0. */
+  setFriendsCount(count: number): void {
+    const next = Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
+    if (!this.friendsCount || !this.buttonCount || next === this.friendsWaiting) return;
+    this.friendsWaiting = next;
+    for (const badge of [this.friendsCount, this.buttonCount]) {
+      badge.textContent = next > 99 ? "99+" : String(next);
+      badge.hidden = next === 0;
+    }
+    this.friendsCount.title = next > 0 ? waitingText(next) : "";
+    this.button.dataset["friendsWaiting"] = String(next);
   }
 
   /** Focus back on the menu's button, for a screen it opened that has closed. */

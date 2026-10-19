@@ -56,6 +56,7 @@ import { baseSave } from "./controllers/base/save/baseSave.js";
 import { updateSaved } from "./controllers/base/save/updateSaved.js";
 import { attackCheckpoint } from "./controllers/base/attackCheckpoint.js";
 import { migrateBase } from "./controllers/maproom/v2/migrateBase.js";
+import { randomMove } from "./controllers/maproom/v2/randomMove.js";
 import { migrateToFriend, rejectMigrateToFriend } from "./controllers/maproom/v2/migrateToFriend.js";
 
 import { getNewMap } from "./controllers/maproom/getNewMap.js";
@@ -111,6 +112,7 @@ import {
 import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
 import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
+import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -224,6 +226,7 @@ router.post("/worldmapv2/setmapversion", verifyUserAuth, logRequest, setMapVersi
 router.post("/worldmapv2/takeoverCell", verifyUserAuth, verifyAccountStatus, logRequest, takeoverCell);
 router.post("/worldmapv2/takeoverquote", verifyUserAuth, verifyAccountStatus, takeoverQuoteLimiter, logRequest, takeoverQuote);
 router.post("/worldmapv2/declinetakeover", verifyUserAuth, verifyAccountStatus, logRequest, declineTakeover);
+router.post("/worldmapv2/randommove", verifyUserAuth, verifyAccountStatus, logRequest, randomMove);
 // Auto-attack on a wild monster camp (#221): the plan, the attack, and its replay for Watch.
 router.post("/worldmapv2/autoattackplan", verifyUserAuth, verifyAccountStatus, autoAttackPlanLimiter, logRequest, autoAttackPlan);
 router.post("/worldmapv2/autoattack", verifyUserAuth, verifyAccountStatus, autoAttackLimiter, logRequest, autoAttack);
@@ -301,6 +304,11 @@ router.get("/api/:apiVersion/bm/achievements/player/:userid", apiVersion, verify
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/defences", apiVersion, verifyUserAuth, verifyAccountStatus, defencesLimiter, getDefences);
 router.get("/api/:apiVersion/defences/:id/replay", apiVersion, verifyUserAuth, verifyAccountStatus, defencesLimiter, getDefenceReplay);
+
+/**  ────────────────────────────────────────────────
+* 📦 Friends: requests, the list, search, blocking (issue #368, `controllers/friends/routes.ts`)
+* ──────────────────────────────────────────────── */
+mountFriendsRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

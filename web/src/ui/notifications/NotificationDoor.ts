@@ -1,5 +1,7 @@
 import { notificationsApi, type GameNotification, type NotificationsApi } from "@/api/notifications";
 import type { CompletedJob } from "@/api/types";
+import { friendsStore, type FriendsStore } from "@/game/friends/friendsStore";
+import { friendsOpener } from "@/game/friends/friendsView";
 import { NotificationBell } from "./NotificationBell";
 import { LOAD_FAILED_TEXT, NotificationPanel } from "./NotificationPanel";
 
@@ -30,6 +32,8 @@ export interface NotificationDoorOptions {
   readonly api?: NotificationsApi;
   /** Unix seconds now, for a test. */
   readonly now?: () => number;
+  /** The friends list a `friend` notification refreshes (#370), for a test. */
+  readonly friends?: Pick<FriendsStore, "nudge">;
 }
 
 export class NotificationDoor {
@@ -37,6 +41,7 @@ export class NotificationDoor {
 
   private readonly options: NotificationDoorOptions;
   private readonly api: NotificationsApi;
+  private readonly friends: Pick<FriendsStore, "nudge">;
   private panel: NotificationPanel | null = null;
   private saveCount: number | null = null;
   private destroyed = false;
@@ -46,6 +51,7 @@ export class NotificationDoor {
   constructor(options: NotificationDoorOptions) {
     this.options = options;
     this.api = options.api ?? notificationsApi;
+    this.friends = options.friends ?? friendsStore;
     this.bell = new NotificationBell(() => this.toggle());
   }
 
@@ -63,6 +69,8 @@ export class NotificationDoor {
     if (typeof count !== "number" || !Number.isFinite(count)) return;
     const next = Math.max(0, Math.floor(count));
     if (next === this.saveCount) return;
+    // A rise may be a friend's request or help (#370): the friends list follows.
+    if (this.saveCount !== null && next > this.saveCount) this.friends.nudge();
     this.saveCount = next;
     this.bell.setCount(next);
   }
@@ -114,6 +122,13 @@ export class NotificationDoor {
       onClose: (hadFocus) => {
         if (hadFocus) this.bell.element.focus();
       },
+      openFriends: (tab) => {
+        const open = friendsOpener();
+        if (!open) return;
+        // The Friends screen docks where the list does.
+        this.close();
+        open(tab);
+      },
       ...(this.options.now ? { now: this.options.now } : {}),
     }).mount(this.options.container);
     return this.panel;
@@ -128,6 +143,7 @@ export class NotificationDoor {
       if (this.destroyed || generation !== this.generation) return;
       panel.show(notifications);
       this.bell.setCount(unread);
+      if (notifications.some((one) => one.kind === "friend" && !one.read)) this.friends.nudge();
     } catch {
       if (this.destroyed || generation !== this.generation) return;
       panel.setStatus(LOAD_FAILED_TEXT);

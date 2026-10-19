@@ -81,6 +81,8 @@ export interface MapRoom1NeighbourWire {
   truceexpire?: number;
   /** Unix seconds their damage protection ends; 0 without any. */
   protectedUntil?: number;
+  /** 1 when they are the caller's friend (friends §6.2), read fresh on every answer. */
+  friend?: number;
   [key: string]: unknown;
 }
 

@@ -28,6 +28,14 @@ import type { OffsetCell } from "@/game/HexGrid";
 export type AttackTargetKind = "wild" | "main" | "outpost";
 
 /**
+ * What a look can open: any attack target's kind, or `friend`, a friend's
+ * main yard opened to help in (`docs/design/friends.md` §3.3, issue #372).
+ * A friend's yard is loaded with `type: "help"` and never attacked from the
+ * visit, so it is not an {@link AttackTargetKind}.
+ */
+export type ViewTargetKind = AttackTargetKind | "friend";
+
+/**
  * One own cell's housing, as the map cell carries it in `m`
  * (`docs/specs/maproom2.md:286-290`: `hcc`, `h`, `hstage`, `hid`, `housed`,
  * `space`, `hcount`, `finishtime`, …).
@@ -126,6 +134,8 @@ export interface AttackTarget {
   readonly cell?: OffsetCell;
   /** Owner username, or the tribe name of a wild monster camp. */
   readonly name: string;
+  /** The defender's user id when a player owns it (not a wild camp); the friend warning reads it. */
+  readonly owner?: number;
   readonly roster: AttackRoster;
   /**
    * The Map Room the attack load names, when it is not the client's default
@@ -143,8 +153,11 @@ export interface AttackTarget {
 
 /** A foreign cell the yard scene is about to show read-only. */
 export interface ViewTarget {
+  /** The yard's base id; empty for a friend, whose main yard is looked up by `friend` on load. */
   readonly baseid: string;
-  readonly kind: AttackTargetKind;
+  readonly kind: ViewTargetKind;
+  /** A `friend` visit's friend: their user id, which the help calls name (#372). */
+  readonly friend?: number;
   /** Where on the Map Room 2 world it is; Map Room 1 has no cells. */
   readonly cell?: OffsetCell;
   readonly name: string;

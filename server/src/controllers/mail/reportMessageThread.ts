@@ -6,6 +6,8 @@ import { Thread } from "../../database/models/thread.model.js";
 import { User } from "../../database/models/user.model.js";
 import { mailboxErr } from "../../errors/errors.js";
 import { SYSTEM_SENDER } from "../../services/mail/systemSender.js";
+import { clearBetween } from "../../services/friends/friendships.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 /**
  * Controller to report/block a user from a message thread
@@ -36,6 +38,9 @@ export const reportMessageThread: KoaController = async (ctx) => {
   user.blockedUsers.push(blockedUserId);
   postgres.em.persist(user);
   await postgres.em.flush();
+
+  // A block also ends any friendship and waiting friend request between them (#368).
+  await postgres.em.transactional((tx) => clearBetween(tx, user.userid, blockedUserId, getCurrentDateTime()));
 
   ctx.status = Status.OK;
   ctx.body = { error: 0 };

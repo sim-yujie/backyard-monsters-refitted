@@ -449,4 +449,61 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(done.alliance).toBe(`leaves alliance "zz_del_qp"`);
     expect(await one<{ leader_userid: number }>(`SELECT leader_userid FROM bym.alliance WHERE id = ?`, [allianceId])).toEqual({ leader_userid: q });
   });
+
+  test("their friendships, friend requests and friend helps go both ways, and their friends' counts drop", async () => {
+    const p = await player("p");
+    const q = await player("q");
+    const r = await player("r");
+    // P and Q are friends, Q and R are friends; P asked R, and R asked P earlier.
+    await sql(`INSERT INTO bym.friend (userid, friend_userid) VALUES (?, ?), (?, ?), (?, ?), (?, ?)`, [p, q, q, p, q, r, r, q]);
+    await sql(`UPDATE bym."user" SET friendcount = CASE WHEN userid = ? THEN 2 ELSE 1 END WHERE userid IN (?, ?, ?)`, [q, p, q, r]);
+    await sql(
+      `INSERT INTO bym.friend_request (from_userid, to_userid, status, created_at) VALUES (?, ?, 'pending', now()), (?, ?, 'declined', now())`,
+      [p, r, r, p]
+    );
+    // P helped Q, and R helped P (issue #373).
+    await sql(
+      `INSERT INTO bym.friend_help (helper_userid, owner_userid, baseid, building_id, kind, help_day) VALUES (?, ?, '1', 1, 'speedup', now()), (?, ?, '1', 1, 'repair', now())`,
+      [p, q, r, p]
+    );
+    // P sent Q a gift, and R sent P one (issue #375).
+    await sql(
+      `INSERT INTO bym.friend_gift (from_userid, to_userid, resource, amount, gift_day, expires_at) VALUES (?, ?, 'r1', 300, now(), now() + interval '7 days'), (?, ?, 'r2', 300, now(), now() + interval '7 days')`,
+      [p, q, r, p]
+    );
+    store = fakeRedis();
+    const account = await findAccount(orm.em, "zz_del_p");
+
+    const plan = await planAccountDeletion(orm.em, store.redis, account);
+    expect(plan.rows).toMatchObject({
+      "their friends' friend counts (lowered)": 1,
+      "friendships (both ways)": 2,
+      "friend requests (sent and received)": 2,
+      "friend helps (given and received)": 2,
+      "friend gifts (sent and received)": 2,
+    });
+    expect(await countOf(`bym.friend WHERE userid = ? OR friend_userid = ?`, [p, p])).toBe(2);
+
+    const done = await deleteAccount(orm.em, store.redis, account);
+    expect(done.rows).toMatchObject({
+      "their friends' friend counts (lowered)": 1,
+      "friendships (both ways)": 2,
+      "friend requests (sent and received)": 2,
+      "friend helps (given and received)": 2,
+      "friend gifts (sent and received)": 2,
+    });
+    expect(await countOf(`bym.friend WHERE userid = ? OR friend_userid = ?`, [p, p])).toBe(0);
+    expect(await countOf(`bym.friend_request WHERE from_userid = ? OR to_userid = ?`, [p, p])).toBe(0);
+    expect(await countOf(`bym.friend_help WHERE helper_userid = ? OR owner_userid = ?`, [p, p])).toBe(0);
+    expect(await countOf(`bym.friend_gift WHERE from_userid = ? OR to_userid = ?`, [p, p])).toBe(0);
+    expect(await countOf(`bym.friend WHERE userid IN (?, ?)`, [q, r])).toBe(2);
+    const friendcounts = await sql<{ userid: number; friendcount: number }>(
+      `SELECT userid, friendcount FROM bym."user" WHERE userid IN (?, ?) ORDER BY userid`,
+      [q, r]
+    );
+    expect(friendcounts.map((row) => [Number(row.userid), Number(row.friendcount)])).toEqual([
+      [q, 1],
+      [r, 1],
+    ]);
+  });
 });

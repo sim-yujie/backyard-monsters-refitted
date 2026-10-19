@@ -74,7 +74,7 @@ const getInfernoNeighbours: KoaController = async (ctx) => {
     await postgres.em.flush();
   }
 
-  const neighbours = await updateNeighbourData(infernoMaproom.neighbors, BaseType.INFERNO);
+  const neighbours = await updateNeighbourData(infernoMaproom.neighbors, BaseType.INFERNO, undefined, user.userid);
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, wmbases: [], bases: neighbours };

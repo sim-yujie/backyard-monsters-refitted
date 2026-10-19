@@ -38,6 +38,8 @@ const em = {
   // there is nothing for either `getArea` or `getPlayerSight`'s own
   // populate calls to actually load.
   populate: async () => {},
+  // The friend lookup (friends WP2, #369): plain SQL, no friends here.
+  execute: async () => [],
 };
 
 mock.module("../../../server.js", () => ({ postgres: { em }, redis }));

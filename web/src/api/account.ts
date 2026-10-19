@@ -1,6 +1,7 @@
 import { avatarPath, type AvatarId } from "@/game/avatars";
 import { setSessionPicSquare, setSessionUsername } from "./auth";
 import { get, post, postJson } from "./http";
+import { privacyOf, type PrivacySettings } from "./privacy";
 import type { AccountResponse, ChangeUsernameResponse, SetAvatarResponse, SettingsResponse } from "./types";
 
 /**
@@ -31,6 +32,8 @@ export interface AccountInfo {
   readonly nextChangeAt: string | null;
   /** Shiny Lock: while on, the server refuses every Shiny spend. */
   readonly shinyLocked: boolean;
+  /** The privacy switches (friends WP9). */
+  readonly privacy: PrivacySettings;
 }
 
 export const fetchAccount = async (): Promise<AccountInfo> => {
@@ -40,6 +43,7 @@ export const fetchAccount = async (): Promise<AccountInfo> => {
     canChangeUsername: response.canChangeUsername,
     nextChangeAt: response.nextChangeAt,
     shinyLocked: response.settings?.shinyLocked === true,
+    privacy: privacyOf(response.settings),
   };
 };
 

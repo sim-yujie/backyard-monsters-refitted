@@ -45,6 +45,8 @@ import {
   type AttackRoster,
   type AttackTarget,
 } from "@/game/attack/attackTarget";
+import { visitFriend } from "@/game/friends/friendVisit";
+import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
@@ -268,6 +270,14 @@ export class MapRoom2Scene implements Scene {
         onAchievementsOpen: () => {
           this.mail?.close();
           this.clearSelection();
+        },
+        // The Friends list's Visit (#372): the friend's main yard, wherever it is.
+        onVisitFriend: (friend) => {
+          visitFriend(
+            friend,
+            this.ownSave ? { resources: this.ownSave.resources ?? null, credits: this.ownSave.credits } : undefined,
+          );
+          context.goTo(SceneName.YARD);
         },
         onHome: () => this.goHome(),
         onRefresh: () => this.refreshNow(),
@@ -833,7 +843,14 @@ export class MapRoom2Scene implements Scene {
       return { attack: null, refusal: refusal ?? "This cell cannot be attacked." };
     }
     return {
-      attack: { baseid: payload.bid, kind, cell, name: targetName(payload), roster },
+      attack: {
+        baseid: payload.bid,
+        kind,
+        cell,
+        name: targetName(payload),
+        ...("uid" in payload && payload.uid > 0 ? { owner: payload.uid } : {}),
+        roster,
+      },
       refusal: null,
     };
   }
@@ -853,8 +870,10 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    setAttackTarget(attack);
-    context.goTo(SceneName.ATTACK);
+    void attackWithFriendWarning(attack, context.overlay.modal, () => {
+      setAttackTarget(attack);
+      context.goTo(SceneName.ATTACK);
+    });
   }
 
   /**

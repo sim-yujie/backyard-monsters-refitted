@@ -458,7 +458,11 @@ the fight's length at 2x minus 5 seconds after start, so a script cannot collect
 watching.
 
 After a cancel nothing changes in the schedule, so the raid is still due. **Decided (Q1):** it comes
-back on the player's next yard visit (Flash's effect), with no fresh wait. **Decided (Q2):** quitting
+back on the player's next yard visit (Flash's effect), with no fresh wait. **Changed (owner,
+2026-10-19):** no raid opens sooner than 3 hours after the last one opened, whether that one landed,
+was cancelled or was never launched (`MIN_HOURS_BETWEEN_TRIBE_RAIDS` in
+`server/src/config/RaidConfig.ts`; the save keeps `aiattacks.lastOpenedAt`). So a cancelled raid
+comes back on the first yard visit after that gap. **Decided (Q2):** quitting
 during the 5-minute warning is a cancel too, exactly like quitting mid-fight (rules 3 and 4 above).
 
 ### 7.2 Other players during a raid

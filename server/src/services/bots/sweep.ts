@@ -43,6 +43,7 @@ import {
 } from "./revenge.js";
 import { tendShiny } from "./shiny.js";
 import { declineTruce } from "./truceDecline.js";
+import { declineFriend } from "./friendDecline.js";
 import { visitMapRoom1 } from "./lookAlike.js";
 import { generateBotYard } from "./yardGenerator.js";
 
@@ -86,6 +87,7 @@ import { generateBotYard } from "./yardGenerator.js";
  * | `repair` | 1-4 h after an attack (booked by `afterAttack.ts`) | catch-up, Repair all, traps re-armed, bunkers and Housing refilled, the champion fed and healed, loot in its band |
  * | `revenge` | 1-24 h after an attack, 1 in 3 (booked by `afterAttack.ts`) | the checks (`revenge.ts`), then the attack (`revengeRun.ts`, passed in as {@link SweepDeps.revenge}); waits or gives up as the checks say |
  * | `declineTruce` | 2-8 h after a truce request (booked by `truceDecline.ts`) | rejects the request in its thread, as a player would (`truceDecline.ts`) |
+ * | `declineFriend` | 2-8 h after a friend request (booked by `friendDecline.ts`) | declines the request, as a player would (`friendDecline.ts`) |
  *
  * A damaged yard does not grow (a player repairs before upgrading); a grow
  * that finds damage and no repair booked books one.
@@ -137,7 +139,7 @@ export const RUNNING_SHARE = 0.9;
 /** The rebalance's `bym.job_run` name. */
 export const REBALANCE_JOB = "bots-rebalance";
 /** The kinds this sweep runs; `revenge` too while `BOTS_REVENGE` is on. */
-export const HANDLED_KINDS: readonly BotJobKind[] = ["grow", "repair", "declineTruce"];
+export const HANDLED_KINDS: readonly BotJobKind[] = ["grow", "repair", "declineTruce", "declineFriend"];
 
 /** Minutes until a failed job is tried again: 5, 10, 20, 40. */
 export const backoffMinutes = (attempts: number): number => 5 * 2 ** Math.max(0, attempts - 1);
@@ -481,7 +483,14 @@ const declineTruceJob: Handler = async (tx, job, { now }) => {
   return {};
 };
 
-const HANDLERS: Record<string, Handler> = { grow, repair, revenge, declineTruce: declineTruceJob };
+/** The `declineFriend` job (`friendDecline.ts`): the answer, then the row is done. */
+const declineFriendJob: Handler = async (tx, job, { now }) => {
+  await declineFriend(tx, job, now);
+  await deleteJob(tx, job);
+  return {};
+};
+
+const HANDLERS: Record<string, Handler> = { grow, repair, revenge, declineTruce: declineTruceJob, declineFriend: declineFriendJob };
 
 /** Cancels every booked revenge (`BOTS_REVENGE` off); returns how many. */
 export const cancelRevenges = async (em: EntityManager): Promise<number> => {

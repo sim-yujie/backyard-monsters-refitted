@@ -30,6 +30,8 @@ let threads: Array<Record<string, unknown>> = [];
 let messages: Array<{ threadid: number }> = [];
 let users: Array<Record<string, unknown>> = [];
 let written: unknown[] = [];
+/** What the friends lookup reads back (friends WP2, #369). */
+let friendRows: Array<{ friend_userid: number }> = [];
 
 const em = {
   find: async (entity: { name: string }, where: Record<string, unknown>) => {
@@ -58,6 +60,9 @@ const em = {
   },
   flush: async () => {},
   count: async () => 0,
+  // A block also clears friends rows between the pair (#368): plain SQL, nothing to read back here.
+  execute: async (sql: string) => (/^s*SELECT friend_userid/.test(sql) ? friendRows : []),
+  transactional: async <T>(work: (tx: unknown) => Promise<T>) => work(em),
 };
 
 mock.module("../../server.js", () => ({ postgres: { em } }));
@@ -76,6 +81,7 @@ const owner = () => ({ userid: OWNER, username: "agenttester", blockedUsers: [] 
 
 beforeEach(() => {
   written = [];
+  friendRows = [];
   threads = [
     { threadid: SYSTEM_THREAD, userid: 0, targetid: OWNER, messagecount: 1, lastMessage: noticeMessage() },
     { threadid: PLAYER_THREAD, userid: OTHER, targetid: OWNER, messagecount: 1, lastMessage: null },
@@ -91,6 +97,22 @@ describe("the game's notices in the mail routes", () => {
     const { targets } = ctx.body as { targets: Record<number, { first_name: string }> };
     expect(targets[0]?.first_name).toBe("Backyard Monsters");
     expect(targets[OTHER]?.first_name).toBe("Bramble");
+  });
+
+  test("getmessagetargets flags a real friend with friend: 1 and others with 0 (#369)", async () => {
+    friendRows = [{ friend_userid: OTHER }];
+    const ctx = ctxFor(owner());
+    await getMessageTargets(ctx);
+    const { targets } = ctx.body as { targets: Record<number, { friend: number }> };
+    expect(targets[OTHER]?.friend).toBe(1);
+    expect(targets[0]?.friend).toBe(0);
+  });
+
+  test("getmessagetargets flags nobody when there are no friends (#369)", async () => {
+    const ctx = ctxFor(owner());
+    await getMessageTargets(ctx);
+    const { targets } = ctx.body as { targets: Record<number, { friend: number }> };
+    expect(targets[OTHER]?.friend).toBe(0);
   });
 
   test("getmessagetargets adds no game entry when the game never wrote", async () => {

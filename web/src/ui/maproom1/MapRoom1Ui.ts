@@ -1,4 +1,5 @@
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
+import type { Friend } from "@/api/friends";
 import type { Resources } from "@/api/types";
 import {
   formatRespawn,
@@ -9,6 +10,7 @@ import {
   type Mr1World,
 } from "@/game/maproom1/mr1Model";
 import { achievementsLine } from "@/ui/achievements/AchievementsLine";
+import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { Mr1ListView } from "./Mr1ListView";
@@ -32,6 +34,8 @@ export type Mr1View = "map" | "list";
 export interface MapRoom1UiHandlers {
   readonly onSceneSelect: (id: string) => void;
   readonly onSignOut: () => void;
+  /** The Friends list's Visit (#372): the scene opens the friend's yard. */
+  readonly onVisitFriend?: (friend: Friend) => void;
   readonly onClose: () => void;
   readonly onView: (target: Mr1Target) => void;
   readonly onAttack: (target: Mr1Target) => void;
@@ -84,6 +88,7 @@ export class MapRoom1Ui {
       // The achievements screen docks over the side panel and a floating
       // card: the card goes first, as Map Room 2's cell panel does.
       onAchievementsOpen: () => this.select(null),
+      ...(handlers.onVisitFriend ? { onVisitFriend: handlers.onVisitFriend } : {}),
     });
     this.hud.setActiveScene(activeScene);
 
@@ -276,6 +281,13 @@ export class MapRoom1Ui {
               ...(this.handlers.onMessage ? { onMessage: this.handlers.onMessage } : {}),
               ...(this.handlers.onTruce ? { onTruce: this.handlers.onTruce } : {}),
               ...(achievements ? { achievementsLine: (neighbour: Mr1Neighbour) => this.achievementsLine(neighbour) } : {}),
+              addFriend: (neighbour: Mr1Neighbour) =>
+                addFriendButton({
+                  userid: neighbour.userid,
+                  username: neighbour.name,
+                  friend: neighbour.friend === true,
+                  className: "btn btn--outline mr1-card__button mr1-card__friend",
+                }),
             },
             variant,
           )

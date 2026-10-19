@@ -8,7 +8,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
  * daily rebalance is not one: it belongs to no bot and claims its day in
  * `bym.job_run` instead.
  */
-export type BotJobKind = "grow" | "repair" | "revenge" | "declineTruce";
+export type BotJobKind = "grow" | "repair" | "revenge" | "declineTruce" | "declineFriend";
 
 /**
  * One piece of bot work due at a future time (issue #235,
@@ -33,7 +33,7 @@ export class BotJob {
   @Property({ type: "string", columnType: "text" })
   kind!: BotJobKind;
 
-  /** The player a `revenge` or `declineTruce` job is about. */
+  /** The player a `revenge`, `declineTruce` or `declineFriend` job is about. */
   @Property({ type: "number", nullable: true })
   target_userid?: number | null;
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import {
   OUTPOST_ATTACKED,
+  OUTPOST_TAKEN,
   YARD_ATTACKED,
   attackNoticeText,
   noticeOutpostAttack,
@@ -153,6 +154,7 @@ describe("a Map Room 2 yard's defence (#361)", () => {
         message: "It was left 35% damaged, and 800 Pebbles were looted.",
         coords: null,
         replayid: 77,
+        byuserid: ATTACKER,
       }),
     ]);
 
@@ -258,6 +260,24 @@ describe("on the owner's next load", () => {
     expect(notice).toMatchObject({ kind: "yardAttacked", id: "1234", at: 30 });
     expect(notice!.detail.text).toBe("Bramble attacked your yard. It was left 40% damaged, and nothing was looted.");
     expect(unread.get(OWNER)).toBe(0);
+  });
+
+  test("an attack or takeover notice names its player for Add friend; an invitation's answer does not (#378)", async () => {
+    const write = (type: string) =>
+      writeOutpostNotice(em, {
+        ownerId: OWNER,
+        byUserId: ATTACKER,
+        type,
+        text: { subject: "s", message: "m" },
+        cell: { x: 1, y: 2 },
+        baseid: OUTPOST,
+        now: 40,
+      });
+    await write(OUTPOST_ATTACKED);
+    await write(YARD_ATTACKED);
+    await write(OUTPOST_TAKEN);
+    await write("inviteaccepted");
+    expect(messages.map((message) => message.byuserid ?? null)).toEqual([ATTACKER, ATTACKER, ATTACKER, null]);
   });
 
   test("nobody else sees them: not the attacker, not a third player", async () => {

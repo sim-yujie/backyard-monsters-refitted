@@ -253,6 +253,15 @@ export class Save {
   @Property({ type: 'number', nullable: true })
   cantmovetill?: number | null;
 
+  /**
+   * When "Move to a random spot" last moved this main yard, unix seconds
+   * (issue #366, `randomMoveRules.ts`). Sent to the client for the Map Room's
+   * week-long cooldown; only the server writes it.
+   */
+  @FrontendKey
+  @Property({ type: 'number', nullable: true })
+  randommoveat?: number | null;
+
   // Attack Objects
   @FrontendKey
   @Property({ columnType: "jsonb" })

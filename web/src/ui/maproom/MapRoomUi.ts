@@ -1,5 +1,6 @@
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import type { Bookmark } from "@/api/bookmarks";
+import type { Friend } from "@/api/friends";
 import type { TakeoverPayment } from "@/api/maproom";
 import type { MapCell, PlayerCell, Resources, SightSource, TakeoverQuoteResponse } from "@/api/types";
 import { MAX_ZOOM, MIN_ZOOM } from "@/config";
@@ -11,6 +12,7 @@ import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
 import type { AchievementsDoor } from "@/ui/achievements/AchievementsDoor";
 import { achievementsLine } from "@/ui/achievements/AchievementsLine";
+import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { Hud } from "@/ui/Hud";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { CellPanel, type OwnFlinger, type OwnMoves } from "./CellPanel";
@@ -61,6 +63,8 @@ export interface MapRoomUiHandlers {
   onSignOut: () => void;
   /** Before the Account menu's achievements screen opens (#204): it docks where the cell panel does. */
   onAchievementsOpen?: () => void;
+  /** The Friends list's Visit (#372): the scene opens the friend's yard. */
+  onVisitFriend?: (friend: Friend) => void;
   onHome: () => void;
   onRefresh: () => void;
   onJump: (cell: OffsetCell) => void;
@@ -150,6 +154,7 @@ export class MapRoomUi {
       onSceneSelect: handlers.onSceneSelect,
       onSignOut: handlers.onSignOut,
       ...(handlers.onAchievementsOpen ? { onAchievementsOpen: handlers.onAchievementsOpen } : {}),
+      ...(handlers.onVisitFriend ? { onVisitFriend: handlers.onVisitFriend } : {}),
     });
     this.hud.setActiveScene(activeScene);
 
@@ -362,6 +367,13 @@ export class MapRoomUi {
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.autoAttack ? [this.autoAttack, this.takeover] : this.takeover,
         ...(this.hud.achievements ? { achievementsLine: (payload: PlayerCell) => this.achievementsLine(payload) } : {}),
+        addFriend: (payload: PlayerCell) =>
+          addFriendButton({
+            userid: payload.uid,
+            username: payload.n,
+            friend: payload.fr === 1,
+            className: "btn btn--outline mr2-cell__secondary",
+          }),
       }).mount(this.dock("map-dock map-dock--right mr2-cell-dock"));
       this.cellPanel.setRangeOn(this.rangeOn);
     }

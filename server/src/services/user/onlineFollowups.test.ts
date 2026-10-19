@@ -32,6 +32,7 @@ mock.module("../../server.js", () => ({
       find: async (entity: unknown) => tables.get(entity) ?? [],
       findOne: async (entity: unknown, where: { basesaveid?: number }) =>
         (tables.get(entity) ?? []).find((row) => row.basesaveid === where.basesaveid) ?? null,
+      execute: async () => [],
       persist: () => {},
       flush: async () => {},
     },
@@ -48,6 +49,7 @@ const { toAllianceMember } = await import("../alliance/allianceMember.js");
 const { ATTACK_TIMEOUT } = await import("../base/isAttackActive.js");
 const { attackSessionKey } = await import("../base/attackSession.js");
 const { REAL_ACTION_WINDOW_SECONDS, isPlayerOnline, onlinePlayers, setChallengePending } = await import("./online.js");
+const { HELPED_MARK_SECONDS, markHelped } = await import("../friends/helpedMark.js");
 
 const PLAYER = 2505;
 const OTHER = 77;
@@ -191,6 +193,15 @@ describe("the presence answer", () => {
     await upgrade(PLAYER);
     at(T0 + 100);
     expect(await ping(PLAYER)).toEqual({ error: 0, now: T0 + 100, lastAction: T0, checkPending: false });
+  });
+
+  test("says when a friend last helped in the main yard, for ten minutes (#374)", async () => {
+    at(T0);
+    await markHelped(PLAYER, T0);
+    expect(await ping(PLAYER)).toEqual({ error: 0, now: T0, lastAction: 0, checkPending: false, helped: T0 });
+    expect(await ping(OTHER)).toEqual({ error: 0, now: T0, lastAction: 0, checkPending: false });
+    at(T0 + HELPED_MARK_SECONDS + 1);
+    expect(await ping(PLAYER)).toEqual({ error: 0, now: T0 + HELPED_MARK_SECONDS + 1, lastAction: 0, checkPending: false });
   });
 
   test("names the attacker while an attack runs on the main yard, and drops it once it ends", async () => {

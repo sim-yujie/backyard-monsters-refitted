@@ -167,3 +167,28 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Move to a random spot (#366) ───────────────────────────────────────── */
+
+.random-move-dialog__warning {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.random-move-dialog__line {
+  margin: 0;
+}
+
+.random-move-dialog__line:first-child {
+  font-weight: 700;
+}
+
+.random-move-dialog__none p,
+.random-move-dialog__free {
+  margin: 0;
+}
+
+.random-move-dialog__done {
+  display: grid;
+  gap: var(--space-3);
+}

@@ -104,6 +104,12 @@ export interface MailboxScreenOptions {
   readonly onWatchDefence?: (id: number) => Promise<string | null>;
   /** An attack notice's Defences: open the Defences screen (#363). Absent: no such button. */
   readonly onOpenDefences?: () => void;
+  /**
+   * An attack notice's Add friend for the player who did it (friends WP11,
+   * #378, `ui/friends/AddFriendButton.ts`). Absent: none. Never on the
+   * game's other notices, nor on older notices that name no one.
+   */
+  readonly addFriend?: (userid: number) => HTMLElement;
 }
 
 /** A new message's recipient when the map opened it: the player whose yard it was. */
@@ -505,6 +511,11 @@ export class MailboxScreen {
       if (item.defenceId !== null) {
         const defence = this.defenceButtons(item.defenceId);
         if (defence) bubble.append(defence);
+      }
+      if (item.notice && item.byUserId !== null && this.options.addFriend) {
+        const friend = make("div", "mail-message__friend");
+        friend.append(this.options.addFriend(item.byUserId));
+        bubble.append(friend);
       }
       const cell = item.cell;
       if (cell && this.options.onShowOnMap) {

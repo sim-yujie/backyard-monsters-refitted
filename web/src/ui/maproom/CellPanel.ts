@@ -96,6 +96,12 @@ export interface CellPanelOptions {
    * section is open, so a closed one costs no fetch. Absent: no line.
    */
   achievementsLine?: (payload: PlayerCell) => HTMLElement;
+  /**
+   * Another player's yard: Add friend, or how they stand to the player
+   * (friends WP11, #378, `ui/friends/AddFriendButton.ts`), a row of its own
+   * under Message and Truce. Absent: no row.
+   */
+  addFriend?: (payload: PlayerCell) => HTMLElement;
 }
 
 /** How far one of the player's own cells flings. */
@@ -174,6 +180,10 @@ export class CellPanel {
   /** On another player's yard, a row of its own: invite them to one of the player's outposts (#205). */
   private readonly inviteRow: HTMLElement;
   private readonly inviteToOutpostButton: HTMLButtonElement;
+  /** On another player's yard, a row of its own: Add friend (#378). */
+  private readonly friendRow: HTMLElement;
+  /** Whose Add friend the row holds, kept across updates so its answer stays; null for none. */
+  private friendOf: number | null = null;
   private readonly more: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
   /** Under the facts: another player's achievements line (#204). */
@@ -309,11 +319,13 @@ export class CellPanel {
     });
     this.inviteRow = el("div", "mr2-cell__row");
     this.inviteRow.append(this.inviteToOutpostButton);
+    this.friendRow = el("div", "mr2-cell__row mr2-cell__friend");
+    this.friendRow.hidden = true;
 
     const actions = el("div", "mr2-cell__actions");
     actions.append(this.attackButton, this.openButton);
     for (const action of this.extras) actions.append(action.button);
-    actions.append(this.secondary, this.social, this.inviteRow, this.moves);
+    actions.append(this.secondary, this.social, this.friendRow, this.inviteRow, this.moves);
 
     this.facts = document.createElement("dl");
     this.facts.className = "cell-facts mr2-cell__facts";
@@ -480,6 +492,7 @@ export class CellPanel {
       this.inviteRow.hidden =
         this.options.onInviteToOutpost === undefined || !(this.options.canInviteToOutpost?.(payload) ?? true);
       this.achievementsOf = payload;
+      this.showAddFriend(payload);
     }
 
     this.addDamage(payload.dm, payload.d === 1);
@@ -587,6 +600,21 @@ export class CellPanel {
    * Which buttons show: Attack with a way to look inside and a bookmark, the
    * player's own Open yard, a bookmark alone (water) or nothing (loading).
    */
+  /**
+   * Add friend on another player's yard (#378). Made again only for another
+   * owner, so an update keeps what a press said; a friend the map now flags
+   * is shown as one.
+   */
+  private showAddFriend(payload: PlayerCell): void {
+    const make = this.options.addFriend;
+    if (!make || !(payload.uid > 0)) return;
+    if (this.friendOf !== payload.uid || (payload.fr === 1 && this.friendRow.querySelector(".add-friend__button"))) {
+      this.friendOf = payload.uid;
+      this.friendRow.replaceChildren(make(payload));
+    }
+    this.friendRow.hidden = false;
+  }
+
   private setActions(kind: "attack" | "open" | "bookmark" | "none", viewLabel = "View yard"): void {
     const attack = kind === "attack";
     this.attackButton.hidden = !attack;
@@ -598,6 +626,7 @@ export class CellPanel {
     this.truceButton.hidden = true;
     this.social.hidden = true;
     this.inviteRow.hidden = true;
+    this.friendRow.hidden = true;
     this.viewYardLabel.textContent = viewLabel;
     this.viewYardButton.title = kind === "none" ? VIEW_LOADING : VIEW_OTHER;
     this.bookmarkButton.disabled = !this.options.canBookmark();

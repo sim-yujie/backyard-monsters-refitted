@@ -85,6 +85,11 @@ export interface MailItem {
   readonly invite: MessageInvite | null;
   /** On an "attacked your yard" notice with a kept defence, its id (#363); null on anything else. */
   readonly defenceId: number | null;
+  /**
+   * On an attack or takeover notice, the player who did it (`byuserid`), for
+   * its Add friend (friends WP11, #378); null on anything else and on older notices.
+   */
+  readonly byUserId: number | null;
 }
 
 /** A past contact, for a new message's recipient list. */
@@ -165,6 +170,12 @@ export const defenceIdOf = (message: Pick<MailMessage, "replayid">): number | nu
   return message.replayid != null && Number.isInteger(id) && id > 0 ? id : null;
 };
 
+/** An attack notice's player (`byuserid`), or null when it names none, or names the player. */
+export const byUserIdOf = (message: Pick<MailMessage, "byuserid">, myId: number): number | null => {
+  const id = Number(message.byuserid);
+  return message.byuserid != null && Number.isInteger(id) && id > 0 && id !== myId ? id : null;
+};
+
 /** An open thread, oldest first, each message the player's or the other side's. */
 export const threadItems = (messages: readonly MailMessage[], myId: number): MailItem[] =>
   messages.map((message) => {
@@ -179,6 +190,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
       cell: notice && message.messagetype !== YARD_ATTACKED ? noticeCell(message) : null,
       invite: message.messagetype === "migraterequest" ? inviteOf(message) : null,
       defenceId: notice && message.messagetype === YARD_ATTACKED ? defenceIdOf(message) : null,
+      byUserId: notice ? byUserIdOf(message, myId) : null,
     };
   });
 
