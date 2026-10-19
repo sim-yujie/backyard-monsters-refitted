@@ -1,6 +1,7 @@
 import type { GameNotification } from "@/api/notifications";
 import { achievementLineText } from "@/game/achievements/unlockText";
-import { friendLineText } from "@/game/friends/friendText";
+import { friendLineTab, friendLineText } from "@/game/friends/friendText";
+import type { FriendsOpenTab } from "@/game/friends/friendsView";
 import { sentText } from "@/game/mail/mailbox";
 import { Panel } from "@/ui/Panel";
 import { jobLine, jobLineText } from "@/ui/yard/JobNotices";
@@ -17,7 +18,8 @@ import "@/ui/styles/notifications.css";
  * Planner, +10 Shiny", `achievementLineText`, #204); or something a friend
  * did ("Bob wants to be your friend.", `friendLineText`, #370). An unread row has a dot and stays unread until it is
  * clicked; a building named in it is a button that selects it, when the
- * notification is about the yard that is open. "Mark all read" clears every
+ * notification is about the yard that is open; a friend's gift row opens the
+ * Friends screen on its Gifts tab. "Mark all read" clears every
  * dot. The panel only shows and reports; `NotificationDoor` fetches and marks.
  */
 
@@ -31,6 +33,8 @@ export interface NotificationPanelOptions {
    */
   readonly selectFor: (notification: GameNotification) => ((buildingId: number) => void) | null;
   readonly onClose?: (hadFocus: boolean) => void;
+  /** A friend's row that leads to a Friends tab was clicked (a gift: "gifts"). */
+  readonly openFriends?: (tab: FriendsOpenTab) => void;
   /** Unix seconds now, for "5 min ago". */
   readonly now?: () => number;
 }
@@ -191,8 +195,10 @@ export class NotificationPanel {
     row.append(text, meta);
     row.title = words;
 
+    const tab = notification.kind === "friend" ? friendLineTab(notification.jobs) : null;
     const read = (): void => {
       if (!notification.read) this.options.onRead(notification.id);
+      if (tab) this.options.openFriends?.(tab);
     };
     // A building's button selects it and, bubbling up, marks the row read too.
     row.addEventListener("click", read);

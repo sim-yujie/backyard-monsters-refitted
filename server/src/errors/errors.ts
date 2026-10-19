@@ -3,6 +3,7 @@ import { ClientSafeError } from "../middleware/clientSafeError.js";
 import type { EconomyViolation } from "../services/base/economy/auditEconomySave.js";
 import type { CombatViolation } from "../game-rules/combat/index.js";
 import type { RelocateRefusal } from "../services/maproom/v2/relocateRules.js";
+import type { RandomMoveRefusal } from "../services/maproom/v2/randomMoveRules.js";
 import type { TakeoverRefusal } from "../services/maproom/v2/takeoverRules.js";
 
 /**
@@ -871,6 +872,32 @@ export const relocateRefusedErr = (reason: RelocateRefusal) =>
     status: Status.CONFLICT,
     data: { reason },
     isClientFriendly: false,
+  });
+
+const RANDOM_MOVE_REFUSAL_MESSAGES: Record<RandomMoveRefusal, string> = {
+  notMapRoom2: "You can only move to a random spot on Map Room 2.",
+  noHomeCell: "Your main yard is not on the map.",
+  coolingDown: "You have already moved this week. Try again when the week is up.",
+  underAttack: "Your main yard is under attack. Try again when the attack is over.",
+  outpostUnderAttack: "One of your outposts is under attack. Try again when the attack is over.",
+  attacking: "You are in the middle of an attack. Finish it first.",
+  noFreeCell: "No free spot could be found right now. Please try again.",
+};
+
+/**
+ * "Move to a random spot" refused before anything moved (issue #366,
+ * `services/maproom/v2/randomMoveRules.ts`). Whole sentences the client shows
+ * as they are.
+ *
+ * @param {RandomMoveRefusal} reason - Which rule refused it.
+ * @param {object} detail - Figures for the client, e.g. `availableAt`.
+ */
+export const randomMoveRefusedErr = (reason: RandomMoveRefusal, detail: object = {}) =>
+  new ClientSafeError({
+    message: RANDOM_MOVE_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
+    data: { reason, ...detail },
+    isClientFriendly: true,
   });
 
 const TAKEOVER_REFUSAL_MESSAGES: Record<TakeoverRefusal, string> = {

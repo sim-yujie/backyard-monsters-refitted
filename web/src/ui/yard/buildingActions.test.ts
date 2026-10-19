@@ -7,6 +7,7 @@ import {
   fortifyOffer,
   jobOffer,
   panelModel,
+  randomMoveOffer,
   upgradeOffer,
   type PanelContext,
 } from "./buildingActions";
@@ -679,5 +680,53 @@ describe("panelModel: the General Store (§8.2)", () => {
   it("is not offered for a foundation", () => {
     const context = contextOf({ buildings: [HALL(5), building(2, 12, 0, { cB: 600 })] });
     expect(panelModel(pick(context, 2), context).open).toBeNull();
+  });
+});
+
+describe("randomMoveOffer: Move to a random spot (#366)", () => {
+  const DAY = 24 * 60 * 60;
+  const onMapRoom2 = (save: Partial<BaseLoadResponse> = {}, type?: string): PanelContext => {
+    const context = contextOf({ buildings: [HALL(6), building(2, 11, 2)], ...(type ? { type } : {}) });
+    return {
+      ...context,
+      save: { ...context.save, homebase: [241, 207], outposts: [[241, 208, "a"], [243, 210, "b"]], ...save },
+    };
+  };
+
+  it("is offered on a Map Room 2 main yard's Map Room, with the outposts it loses", () => {
+    const context = onMapRoom2();
+    expect(randomMoveOffer(pick(context, 2), context)).toEqual({ outposts: 2, wait: 0, blocked: null });
+    expect(panelModel(pick(context, 2), context).randomMove).toEqual({ outposts: 2, wait: 0, blocked: null });
+  });
+
+  it("is not offered on any other building", () => {
+    const context = onMapRoom2();
+    expect(randomMoveOffer(pick(context, 1), context)).toBeNull();
+  });
+
+  it("is not offered before Map Room 2, or without a home cell", () => {
+    const mr1 = contextOf({ buildings: [HALL(6), building(2, 11, 1)] });
+    expect(randomMoveOffer(pick(mr1, 2), { ...mr1, save: { ...mr1.save, homebase: [1, 2] } })).toBeNull();
+    const placed = onMapRoom2();
+    const { homebase: _dropped, ...unplaced } = placed.save;
+    const homeless = { ...placed, save: unplaced as BaseLoadResponse };
+    expect(randomMoveOffer(pick(homeless, 2), homeless)).toBeNull();
+  });
+
+  it("is not offered on an outpost", () => {
+    const context = onMapRoom2({}, "outpost");
+    expect(context.yard.kind).toBe("outpost");
+    expect(randomMoveOffer(pick(context, 2), context)).toBeNull();
+  });
+
+  it("inside the week after a move, says when it opens again", () => {
+    const context = onMapRoom2({ randommoveat: T0 - 2 * DAY });
+    expect(randomMoveOffer(pick(context, 2), context)).toEqual({
+      outposts: 2,
+      wait: 5 * DAY,
+      blocked: "Available again in 5 days.",
+    });
+    const later = onMapRoom2({ randommoveat: T0 - 7 * DAY });
+    expect(randomMoveOffer(pick(later, 2), later)?.blocked).toBeNull();
   });
 });

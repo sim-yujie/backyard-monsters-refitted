@@ -47,9 +47,11 @@ const { START_LOCK_SECONDS, engageRaid, finishRaid, prepareRaid, raidOnPing, set
 );
 const { fightRaid } = await import("./raidFight.js");
 const { raidFighting } = await import("./raidLock.js");
-const { RAID_PREFERENCES, countRaidSession, readSchedule } = await import("./raidSchedule.js");
+const { RAID_MIN_GAP_SECONDS, RAID_PREFERENCES, countRaidSession, readSchedule } = await import("./raidSchedule.js");
 const { planRaid } = await import("./raidPlan.js");
-const { WARNING_SECONDS, readOpenRaid, recordRaidScreen, updateOpenRaid } = await import("./raidStore.js");
+const { WARNING_SECONDS, cancelRaidOnYardLoad, readOpenRaid, recordRaidScreen, updateOpenRaid } = await import(
+  "./raidStore.js"
+);
 const { challengeKey, lastActionKey, lastSeenKey } = await import("../user/online.js");
 const { damagedBuildings } = await import("../yard/repair.js");
 
@@ -312,7 +314,8 @@ describe("the warning", () => {
 
     db.row = repairing(NOW - 30);
     expect(await raidOnPing(em, user, YARD, NOW)).toMatchObject({ phase: "warning" });
-    expect(db.locks).toBe(1);
+    // The catch-up's, and the opening's mark for the gap to the next raid.
+    expect(db.locks).toBe(2);
     expect(damagedBuildings(db.row as never)).toEqual([]);
   });
 
@@ -570,6 +573,68 @@ describe("the finish", () => {
     },
     FIGHT_TIMEOUT_MS
   );
+});
+
+describe("the gap between raids (owner, 2026-10-19)", () => {
+  /** An own-main-yard build load, as `baseLoad` runs it: the session count, then cancel rule 3. */
+  const yardLoad = async (now: number, gameWasClosed = false) => {
+    await em.transactional(async (tx) => {
+      const locked = (await tx.findOne(Object, {}, { lockMode: LockMode.PESSIMISTIC_WRITE })) as never;
+      countRaidSession(locked, now);
+      await tx.flush();
+    });
+    await cancelRaidOnYardLoad(USER, gameWasClosed);
+  };
+
+  test("opening a raid marks the save, before anything can cancel it", async () => {
+    await present(NOW);
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeDefined();
+    expect(readSchedule(db.row!.aiattacks).lastOpenedAt).toBe(NOW);
+  });
+
+  test(
+    "a reload during the fight: nothing lands, and no new raid comes until 3 hours after the first opened",
+    async () => {
+      const { id } = await toFight();
+      at(NOW + 20);
+      await yardLoad(NOW + 20);
+
+      // The fight is called off and nothing landed (the yard as it was).
+      expect(await readOpenRaid(USER)).toBeNull();
+      expect(await refusal(finishRaid(em, user, id, NOW + 200))).toEqual({ reason: "noRaid" });
+      expect(readSchedule(db.row!.aiattacks)).toMatchObject({ recent: [], lastOpenedAt: NOW });
+
+      // Before the gap no ping opens another raid, however often the player loads the yard.
+      for (const now of [NOW + 30, NOW + 60 * 60, NOW + RAID_MIN_GAP_SECONDS - 1]) {
+        at(now);
+        await yardLoad(now);
+        await present(now);
+        expect(await raidOnPing(em, user, YARD, now)).toBeUndefined();
+      }
+      expect(await readOpenRaid(USER)).toBeNull();
+
+      // Once the gap is over the cancelled raid comes back.
+      const later = NOW + RAID_MIN_GAP_SECONDS;
+      at(later);
+      await present(later);
+      const next = await raidOnPing(em, user, YARD, later);
+      expect(next?.phase).toBe("warning");
+      expect(next?.id).not.toBe(id);
+      expect(readSchedule(db.row!.aiattacks).lastOpenedAt).toBe(later);
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test("a warning cancelled because the game was closed counts too", async () => {
+    await present(NOW);
+    await raidOnPing(em, user, YARD, NOW);
+    at(NOW + 600);
+    await yardLoad(NOW + 600, true);
+    expect(await readOpenRaid(USER)).toBeNull();
+
+    await present(NOW + 600);
+    expect(await raidOnPing(em, user, YARD, NOW + 600)).toBeUndefined();
+  });
 });
 
 describe("the frequency choice", () => {

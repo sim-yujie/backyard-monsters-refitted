@@ -763,7 +763,10 @@ export class YardRenderer {
   /** The building under a world point in the active view, or null. */
   pick(worldX: number, worldY: number): YardBuilding | null {
     if (this.currentView === YardView.BLUEPRINT) return this.blueprint.pick(worldX, worldY);
-    return this.buildings.pick(worldX, worldY);
+    // A friend's wrench stands above its building, often over another one (#374).
+    const wrenched = this.helpMarks.pick(worldX, worldY);
+    const helped = wrenched === null ? undefined : this.byId.get(wrenched);
+    return helped ?? this.buildings.pick(worldX, worldY);
   }
 
   /** The mushroom under a world point in the isometric yard, or null. */

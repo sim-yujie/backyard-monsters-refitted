@@ -1,3 +1,4 @@
+import { MIN_HOURS_BETWEEN_TRIBE_RAIDS } from "../../config/RaidConfig.js";
 import type { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
@@ -51,6 +52,12 @@ export const FIRST_RAID_DELAY_SECONDS = 60;
 /** How many finished raids `recent` keeps, newest first. */
 export const RECENT_RAIDS_KEPT = 10;
 
+/**
+ * No raid opens sooner than this after the last one opened, landed or not
+ * (owner, 2026-10-19; the hours are set in `config/RaidConfig.ts`).
+ */
+export const RAID_MIN_GAP_SECONDS = MIN_HOURS_BETWEEN_TRIBE_RAIDS * 60 * 60;
+
 export { RAID_PREFERENCES, type RaidPreference, type RaidPreferenceEffect } from "./raidPreferences.js";
 
 /** One finished raid, as `recent` keeps it. */
@@ -85,6 +92,11 @@ export interface RaidSchedule {
   readonly attackPreference: RaidPreference;
   /** The last raid applied, so a second finish of it applies nothing. */
   readonly lastRaidId?: string;
+  /**
+   * Unix seconds the last raid's warning opened, kept whether it then landed
+   * or was cancelled, for {@link RAID_MIN_GAP_SECONDS}.
+   */
+  readonly lastOpenedAt?: number;
   readonly recent: readonly RaidRecord[];
   /** The raid being fought, which locks the yard until it lands (`raidLock.ts`, WP3). */
   readonly fight?: RaidFightLock;
@@ -159,6 +171,7 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
     ? stored.recent.flatMap((entry) => readRecord(entry) ?? []).slice(0, RECENT_RAIDS_KEPT)
     : [];
   const trojan = readTrojan(stored.trojan);
+  const lastOpenedAt = whole(stored.lastOpenedAt);
   return {
     v: 2,
     lastattack: Math.max(0, whole(stored.lastattack) ?? 0),
@@ -166,6 +179,7 @@ export const readSchedule = (raw: unknown): RaidSchedule => {
     sessionsSinceLastAttack: Math.max(0, whole(stored.sessionsSinceLastAttack) ?? 0),
     attackPreference: Math.sign(preference) as RaidPreference,
     ...(typeof stored.lastRaidId === "string" ? { lastRaidId: stored.lastRaidId } : {}),
+    ...(lastOpenedAt !== undefined && lastOpenedAt > 0 ? { lastOpenedAt } : {}),
     recent,
     ...(fight ? { fight } : {}),
     ...("s1" in stored ? { s1: stored.s1 } : {}),
@@ -229,7 +243,8 @@ export const raidAlreadyApplied = (schedule: RaidSchedule, raidId: string): bool
  * the wait starts again from the fight's start, sessions back to 0, the next
  * raid after the preference's wait (D2 applies the choice every time), and
  * the raid kept in `recent`. A cancelled raid never comes here, so it stays
- * due and comes back on the player's next yard visit (owner, Q1).
+ * due and comes back on the player's next yard visit (owner, Q1), but not
+ * before {@link RAID_MIN_GAP_SECONDS} after it opened ({@link withRaidOpened}).
  */
 export const recordRaidFinished = (schedule: RaidSchedule, record: RaidRecord): RaidSchedule => ({
   ...withoutFightLock(schedule),
@@ -262,6 +277,17 @@ export const recordTrojanFinished = (schedule: RaidSchedule, record: RaidRecord,
   };
 };
 
+/** A raid's warning opened now: the minimum gap to the next one starts here. */
+export const withRaidOpened = (schedule: RaidSchedule, now: number): RaidSchedule => ({ ...schedule, lastOpenedAt: now });
+
+/**
+ * Unix seconds before which no raid opens: {@link RAID_MIN_GAP_SECONDS} after
+ * the last raid opened, or after the last landed one started for a schedule
+ * from before `lastOpenedAt` was kept.
+ */
+export const raidGapEndsAt = (schedule: RaidSchedule): number =>
+  Math.max(schedule.lastOpenedAt ?? 0, schedule.lastattack) + RAID_MIN_GAP_SECONDS;
+
 /** The yard locked for a raid's fight (`raidLock.ts`). */
 export const withFightLock = (schedule: RaidSchedule, fight: RaidFightLock): RaidSchedule => ({ ...schedule, fight });
 
@@ -278,6 +304,7 @@ export type RaidNotDue =
   | "level"
   | "sessions"
   | "notYet"
+  | "tooSoon"
   | "damaged"
   | "underAttack"
   | "raidOpen"
@@ -331,6 +358,8 @@ const yardDamaged = (save: RaidDueSave): boolean =>
  * 3. At least 4 sessions since the last raid.
  * 4. Its time has come: `nextAttack`, or with none set yet the last raid
  *    plus the preference's wait (never, with no raid and no session yet).
+ *    And at least {@link RAID_MIN_GAP_SECONDS} since the last raid opened,
+ *    cancelled ones too (owner, 2026-10-19).
  * 5. Nothing in the yard damaged or repairing (owner, Q5).
  * 6. Not under attack, and no raid already open.
  * 7. Online by #271's rule with the attack load's 60-second window, and no
@@ -351,6 +380,7 @@ export const raidDueCheck = (facts: RaidDueFacts): RaidNotDue | null => {
     schedule.nextAttack ??
     (schedule.lastattack > 0 ? schedule.lastattack + RAID_PREFERENCES[schedule.attackPreference].waitSeconds : null);
   if (dueAt === null || now < dueAt) return "notYet";
+  if (now < raidGapEndsAt(schedule)) return "tooSoon";
 
   if (yardDamaged(save)) return "damaged";
   if (facts.underAttack) return "underAttack";

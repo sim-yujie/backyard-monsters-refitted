@@ -68,4 +68,23 @@ describe("NotificationPanel friend lines (#370)", () => {
     expect(row.querySelector("button")).toBeNull();
     panel.destroy();
   });
+
+  it("opens the Gifts tab from a gift's row, and no tab from other friend rows", () => {
+    const onRead = vi.fn();
+    const openFriends = vi.fn();
+    const panel = new NotificationPanel({ onRead, onReadAll: vi.fn(), selectFor: () => null, openFriends, now: () => NOW });
+    panel.mount(document.body);
+    panel.show([
+      friendRow(3, { event: "gift", userid: 7, username: "Bob" }),
+      friendRow(4, { event: "accepted", userid: 7, username: "Bob" }),
+    ]);
+    const [gift, accepted] = [...document.querySelectorAll<HTMLElement>(".notif-row")];
+    gift!.click();
+    expect(onRead).toHaveBeenCalledWith(3);
+    expect(openFriends).toHaveBeenCalledWith("gifts");
+    accepted!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(onRead).toHaveBeenCalledWith(4);
+    expect(openFriends).toHaveBeenCalledTimes(1);
+    panel.destroy();
+  });
 });

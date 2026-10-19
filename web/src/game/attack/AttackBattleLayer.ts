@@ -10,7 +10,6 @@ import {
 } from "pixi.js";
 import {
   BOMBS,
-  EYE_RA_ID,
   TICKS_PER_SECOND,
   battleDefence,
   isSpurtzCannon,
@@ -40,6 +39,13 @@ import {
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
 import { BlastFx } from "./blastFx";
+import {
+  BANDITO_PUNCHY,
+  QUAKE_PUNCHY,
+  SURFACE_BLAST_RADIUS,
+  SURFACE_PUNCHY,
+  splashLook,
+} from "./punchyMoments";
 import { dirtFor, surfaceHop } from "./burrowFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
@@ -895,7 +901,9 @@ export class AttackBattleLayer {
     // Once put to rest, what is left — splats, trap rings — fades out on the wall clock.
     this.drawSplats(this.settled ? shown : tick);
     this.drawBursts(this.settled ? shown : tick);
-    this.blastFx.update(this.settled ? shown : tick);
+    // The shown clock, so a blast at the very end plays out and its shake
+    // settles rather than standing still with the battle.
+    this.blastFx.update(shown);
     this.fx.update(shown);
     this.bombFx.update(shown);
     this.showBombNumbers(shown);
@@ -1387,7 +1395,7 @@ export class AttackBattleLayer {
     view.barFront.height = bar.height;
     view.barFront.tint = creepColour(creep);
     // A Wormzer digs in as it lands, on its first frame (`MonsterBase.as:658-670`).
-    this.tunnel(view, creep.burrowed === true, ground, tick);
+    this.tunnel(view, creep, ground, tick);
     return view;
   }
 
@@ -1499,7 +1507,7 @@ export class AttackBattleLayer {
         this.fx.number(tick, `creep:${creep.id}`, creep.id, gained, over, "heal");
       }
       view.lastHp = creep.hp;
-      this.tunnel(view, creep.burrowed === true, ground, tick);
+      this.tunnel(view, creep, ground, tick);
       view.lastX = ground.x;
       view.lastY = ground.y;
       view.lastTick = tick;
@@ -1946,12 +1954,16 @@ export class AttackBattleLayer {
       return;
     }
     if (event.kind === "splash") {
-      // Eye-ra's blast is a fireball (feat/eyera-explosion); other splashes keep the rings.
-      if (event.moveId === EYE_RA_ID) {
-        this.blastFx.fiery(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius);
+      // Eye-ra's blast is a fireball (feat/eyera-explosion); a Bandito's
+      // rings come with a flash (feat/punchy-trial); the rest keep the rings.
+      const at = groundWorld(event.ix, event.iy, this.origin);
+      const look = splashLook(event.moveId);
+      if (look === "fiery") {
+        this.blastFx.fiery(event.tick, at, event.radius);
         return;
       }
-      this.spawnRing(event.tick, groundWorld(event.ix, event.iy, this.origin), event.radius, SPLASH_COLOUR);
+      this.spawnRing(event.tick, at, event.radius, SPLASH_COLOUR);
+      if (look === "rings-flash") this.blastFx.punchy(event.tick, at, event.radius, BANDITO_PUNCHY);
       return;
     }
     if (event.kind === "blink") {
@@ -1975,10 +1987,16 @@ export class AttackBattleLayer {
    * `burrowFx.ts`): a `Dig` as it goes down or comes up, which also starts
    * the hop on the way up, and a trail clod every fifth Flash frame between.
    */
-  private tunnel(view: CreepView, under: boolean, ground: Point, tick: number): void {
+  private tunnel(view: CreepView, creep: CreepSnapshot, ground: Point, tick: number): void {
+    const under = creep.burrowed === true;
     const dirt = dirtFor(view.burrowed, under, tick, view.dirtTick);
     if (dirt === null) return;
-    if (dirt === "dig" && !under) view.surfaceTick = tick;
+    if (dirt === "dig" && !under) {
+      view.surfaceTick = tick;
+      // Up out of the ground to bite: a light punchy blast (feat/punchy-trial);
+      // not when it comes up to walk, home or to a foe close by.
+      if (creep.state === "attacking") this.blastFx.punchy(tick, ground, SURFACE_BLAST_RADIUS, SURFACE_PUNCHY);
+    }
     view.burrowed = under;
     view.dirtTick = tick;
     this.spawnDirt(tick, ground, dirt === "dig");
@@ -2007,7 +2025,7 @@ export class AttackBattleLayer {
       }
     }
     mound.position.set(at.x, at.y);
-    this.effects.addChild(mound);
+    this.debrisLayer().addChild(mound);
 
     const gibs: Gib[] = [];
     if (dig && !this.reducedMotion) {
@@ -2075,6 +2093,8 @@ export class AttackBattleLayer {
    */
   private spawnQuake(tick: number, at: Point, radius: number): void {
     this.spawnRing(tick, at, radius, QUAKE_COLOUR);
+    // And the stomp itself, a punchy blast inside the reach (feat/punchy-trial).
+    this.blastFx.punchy(tick, at, radius * 0.9, QUAKE_PUNCHY);
   }
 
   /** Three fading rings on the ground, radius wide: a quake, or a special move's burst. */

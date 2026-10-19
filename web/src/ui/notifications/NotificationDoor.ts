@@ -1,6 +1,7 @@
 import { notificationsApi, type GameNotification, type NotificationsApi } from "@/api/notifications";
 import type { CompletedJob } from "@/api/types";
 import { friendsStore, type FriendsStore } from "@/game/friends/friendsStore";
+import { friendsOpener } from "@/game/friends/friendsView";
 import { NotificationBell } from "./NotificationBell";
 import { LOAD_FAILED_TEXT, NotificationPanel } from "./NotificationPanel";
 
@@ -120,6 +121,13 @@ export class NotificationDoor {
       },
       onClose: (hadFocus) => {
         if (hadFocus) this.bell.element.focus();
+      },
+      openFriends: (tab) => {
+        const open = friendsOpener();
+        if (!open) return;
+        // The Friends screen docks where the list does.
+        this.close();
+        open(tab);
       },
       ...(this.options.now ? { now: this.options.now } : {}),
     }).mount(this.options.container);

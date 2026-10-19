@@ -123,6 +123,18 @@
   align-self: stretch;
 }
 
+/* The Map Room: Open map, then "Move to a random spot" (#366) under it,
+   without the boxed look of a gated block. */
+.building-panel__map-actions {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.building-panel__random-move {
+  align-self: stretch;
+}
+
 /* ── Shiny tap-again ────────────────────────────────────────────────────── */
 
 .shiny-button {

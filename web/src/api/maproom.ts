@@ -171,6 +171,25 @@ export const moveMainYard = (baseid: string, payment: RelocatePayment): Promise<
   });
 
 /**
+ * `POST /worldmapv2/randommove`'s answer (issue #366): the new home cell, how
+ * many outposts were lost, and the move's time, which starts the week's wait.
+ */
+export interface RandomMoveResponse extends ApiEnvelope {
+  coords?: [number, number];
+  outpostsLost?: number;
+  randommoveat?: number;
+}
+
+/**
+ * Moves the main yard to a random free spot in the same world, losing every
+ * outpost (issue #366). Free, once every 7 days. A refusal (the week not up,
+ * an attack running) is an {@link ApiError} whose message is the reason in a
+ * whole sentence; inside the week, `errorDetails.data.availableAt` says when.
+ */
+export const moveToRandomSpot = (): Promise<RandomMoveResponse> =>
+  post<RandomMoveResponse>("/worldmapv2/randommove", {});
+
+/**
  * Moves monsters between two of the player's yards
  * (`POST /worldmapv2/transferassets`): the counts moved, `{ C1: 5 }` (#196).
  * The server applies them to both yards' rosters as it has them now, so a
