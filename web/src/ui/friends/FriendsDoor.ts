@@ -74,13 +74,12 @@ export class FriendsDoor {
     if (this.screen) return this.screen;
     const container = this.options.container();
     if (!container) return null;
-    const { onVisit, onGift, onBlock, api } = this.options;
+    const { onVisit, onGift, api } = this.options;
     this.screen = new FriendsScreen({
       store: this.store,
       ...(api && { api }),
       ...(onVisit && { onVisit }),
       ...(onGift && { onGift }),
-      ...(onBlock && { onBlock }),
       onClose: (hadFocus) => {
         if (hadFocus) this.options.onClosedWithFocus?.();
       },

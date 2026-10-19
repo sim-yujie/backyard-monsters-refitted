@@ -66,6 +66,17 @@ export class User {
   @Property({ type: "boolean", default: false })
   shiny_locked: Opt<boolean> = false;
 
+  /**
+   * Friends see no online dot and no "seen" time (`docs/design/friends.md`
+   * §3.6, issue #368). Set in Account settings (`/player/settings`).
+   */
+  @Property({ type: "boolean", default: false })
+  hide_online: Opt<boolean> = false;
+
+  /** Friend requests to this player are refused with `requestsOff` (§3.6). Existing friends stay. */
+  @Property({ type: "boolean", default: false })
+  friend_requests_off: Opt<boolean> = false;
+
   @Property({ type: "string", unique: true })
   @FrontendKey
   email!: string;

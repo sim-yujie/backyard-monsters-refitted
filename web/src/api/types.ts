@@ -107,7 +107,7 @@ export interface AccountResponse extends ApiEnvelope {
   username: string;
   canChangeUsername: boolean;
   nextChangeAt: string | null;
-  settings?: { shinyLocked?: boolean };
+  settings?: { shinyLocked?: boolean; hideOnline?: boolean; friendRequests?: boolean };
 }
 
 /** `POST /api/:apiVersion/player/changeusername`. */
