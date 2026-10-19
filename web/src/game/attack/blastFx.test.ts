@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Container } from "pixi.js";
-import { BlastFx, MAX_BITS, MAX_MARKS, bitPath, blastNoise, tintAt } from "./blastFx";
+import { BlastFx, MAX_BITS, MAX_MARKS, MAX_SHAKE, bitPath, blastNoise, tintAt } from "./blastFx";
 
 const fxOf = (reducedMotion = false) => {
   const air = new Container();
@@ -82,6 +82,79 @@ describe("the drawn blasts (feat/eyera-explosion)", () => {
     const still = fxOf(true);
     still.fx.punchy(10, { x: 0, y: 0 }, 85);
     expect(still.fx.bitCount).toBeLessThanOrEqual(5);
+  });
+});
+
+describe("punchy strengths and the shared shake (feat/punchy-trial)", () => {
+  it("light: the flash and the shockwave only, no sparks and no shake", () => {
+    const light = fxOf();
+    light.fx.punchy(10, { x: 0, y: 0 }, 85, "light");
+    // One flash, two shockwave rings.
+    expect(light.fx.bitCount).toBe(3);
+    expect(light.fx.shakeAmp).toBe(0);
+    for (let tick = 10; tick < 40; tick += 1) light.fx.update(tick);
+    expect(light.shakes.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
+
+    const full = fxOf();
+    full.fx.punchy(10, { x: 0, y: 0 }, 85, "full");
+    expect(full.fx.bitCount).toBeGreaterThan(10);
+    expect(full.fx.shakeAmp).toBeGreaterThan(0);
+  });
+
+  it("flash: the flash alone, no shockwave, no sparks and no shake", () => {
+    const flash = fxOf();
+    flash.fx.punchy(10, { x: 0, y: 0 }, 85, "flash");
+    expect(flash.fx.bitCount).toBe(1);
+    expect(flash.fx.blastsMade).toBe(1);
+    expect(flash.fx.shakeAmp).toBe(0);
+    for (let tick = 10; tick < 40; tick += 1) flash.fx.update(tick);
+    expect(flash.shakes.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
+    expect(flash.fx.bitCount).toBe(0);
+  });
+
+  it("is full when no strength is given", () => {
+    const { fx } = fxOf();
+    fx.punchy(10, { x: 0, y: 0 }, 85);
+    expect(fx.shakeAmp).toBeGreaterThan(0);
+  });
+
+  it("never shakes past the cap, even for a huge blast", () => {
+    const { fx, shakes } = fxOf();
+    fx.punchy(10, { x: 0, y: 0 }, 2000);
+    expect(fx.shakeAmp).toBeLessThanOrEqual(MAX_SHAKE);
+    for (let tick = 10; tick < 40; tick += 1) fx.update(tick);
+    for (const [dx, dy] of shakes) {
+      expect(Math.abs(dx)).toBeLessThanOrEqual(MAX_SHAKE);
+      expect(Math.abs(dy)).toBeLessThanOrEqual(MAX_SHAKE);
+    }
+  });
+
+  it("runs one shake at a time: blasts together shake no harder than one", () => {
+    const one = fxOf();
+    one.fx.punchy(10, { x: 0, y: 0 }, 85);
+    const many = fxOf();
+    for (let index = 0; index < 6; index += 1) many.fx.punchy(10, { x: index * 30, y: 0 }, 85);
+    for (let tick = 10; tick < 40; tick += 1) {
+      one.fx.update(tick);
+      many.fx.update(tick);
+    }
+    expect(many.shakes).toEqual(one.shakes);
+  });
+
+  it("lets a harder blast take over a fading shake, and not a softer one", () => {
+    const { fx } = fxOf();
+    fx.punchy(10, { x: 0, y: 0 }, 85);
+    const first = fx.shakeAmp;
+    // A small blast while the first still shakes hard: the first goes on.
+    fx.punchy(11, { x: 0, y: 0 }, 40);
+    expect(fx.shakeAmp).toBe(first);
+    // Late in the first one's life, a fresh blast starts its own.
+    fx.punchy(22, { x: 0, y: 0 }, 60);
+    expect(fx.shakeAmp).toBeLessThan(first);
+    expect(fx.shakeAmp).toBeGreaterThan(0);
+    // Long after, none runs and the yard is back in place.
+    fx.update(60);
+    expect(fx.shakeAmp).toBe(0);
   });
 });
 
