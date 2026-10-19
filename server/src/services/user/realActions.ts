@@ -128,6 +128,7 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/base/migratetofriend" },
   { method: "POST", path: "/base/rejectmigratetofriend" },
   { method: "GET", path: "/worldmapv3/relocate" },
+  { method: "POST", path: "/worldmapv2/randommove" },
   // Map Room 2: taking over, auto-attacking, sending monsters.
   { method: "POST", path: "/worldmapv2/takeoverCell" },
   { method: "POST", path: "/worldmapv2/declinetakeover" },

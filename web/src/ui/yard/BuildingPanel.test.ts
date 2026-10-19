@@ -7,6 +7,13 @@ import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
 import { BuildingPanel, recycledMessage, type BuildingPanelOptions } from "./BuildingPanel";
+import type * as maproomApi from "@/api/maproom";
+import { moveToRandomSpot } from "@/api/maproom";
+
+vi.mock("@/api/maproom", async (original) => ({
+  ...(await original<typeof maproomApi>()),
+  moveToRandomSpot: vi.fn(),
+}));
 
 /**
  * The panel as a player meets it: which buttons each building shows, what
@@ -767,5 +774,68 @@ describe("BuildingPanel: fortifying an outpost (#191)", () => {
     expect(sent[0]!.url).toMatch(/\/bm\/yard\/fortify\/cancel$/);
     panel.close();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("BuildingPanel: Move to a random spot on the Map Room (#366)", () => {
+  const DAY = 24 * 60 * 60;
+  const MAP_ROOM_2 = [building(1, 14, 6), building(2, 11, 2)];
+  const onMap = { homebase: [241, 207], outposts: [[241, 208, "a"], [243, 210, "b"]] } as Partial<BaseLoadResponse>;
+
+  it("sits under Open map on a Map Room 2 main yard and opens the warning", () => {
+    const modal = document.createElement("div");
+    document.body.append(modal);
+    const { element } = setup(MAP_ROOM_2, 2, { load: onMap, panel: { openMap: vi.fn() }, modal });
+    const move = buttonNamed(element, "Move to a random spot")!;
+    expect(move.disabled).toBe(false);
+    expect(move.getAttribute("aria-haspopup")).toBe("dialog");
+    move.click();
+    const dialog = modal.querySelector(".random-move-dialog")!;
+    expect(dialog.textContent).toContain("All 2 of your outposts will be lost.");
+    modal.remove();
+  });
+
+  it("is not there before Map Room 2", () => {
+    const { element } = setup([building(1, 14, 6), building(2, 11, 1)], 2, {
+      load: onMap,
+      panel: { openMap: vi.fn() },
+    });
+    expect(buttonNamed(element, "Move to a random spot")).toBeUndefined();
+  });
+
+  it("inside the week after a move, is greyed out with when it opens again", () => {
+    const { element } = setup(MAP_ROOM_2, 2, {
+      load: { ...onMap, randommoveat: T0 - 3 * DAY },
+      panel: { openMap: vi.fn() },
+    });
+    expect(buttonNamed(element, "Move to a random spot")!.disabled).toBe(true);
+    expect(element.querySelector(".building-panel__random-move-wait")?.textContent).toBe(
+      "Available again in 4 days.",
+    );
+  });
+
+  it("after the move, the yard knows its new home, its outposts are gone and the week starts", async () => {
+    vi.mocked(moveToRandomSpot).mockResolvedValueOnce({
+      error: 0,
+      coords: [50, 60],
+      outpostsLost: 2,
+      randommoveat: T0,
+    });
+    const modal = document.createElement("div");
+    document.body.append(modal);
+    const { element, store } = setup(MAP_ROOM_2, 2, { load: onMap, panel: { openMap: vi.fn() }, modal });
+    buttonNamed(element, "Move to a random spot")!.click();
+    [...modal.querySelectorAll<HTMLButtonElement>("button")].find((one) => one.textContent === "Move my yard")!.click();
+    for (let i = 0; i < 4; i += 1) await Promise.resolve();
+    expect(moveToRandomSpot).toHaveBeenCalledTimes(1);
+    expect(store.save.homebase).toEqual([50, 60]);
+    expect(store.save.outposts).toEqual([]);
+    expect(store.save.randommoveat).toBe(T0);
+    expect(modal.textContent).toContain("Your main yard has moved to 50, 60.");
+    expect(buttonNamed(element, "Move to a random spot")!.disabled).toBe(true);
+    expect(element.querySelector(".building-panel__random-move-wait")?.textContent).toBe(
+      "Available again in 7 days.",
+    );
+    modal.remove();
   });
 });
