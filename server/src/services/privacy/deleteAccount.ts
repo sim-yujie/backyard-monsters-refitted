@@ -27,8 +27,9 @@ import {
  * player's Map Room land, mail no one else will read (the game's notices to
  * them, mail with bots or with players already deleted, and threads the other
  * player had blocked), truces, alliance chat and invites, notifications,
- * the replays of attacks on them, attack plans, neighbour lists, the
- * anti-cheat report and every Redis key of theirs, including login sessions,
+ * the replays of attacks on them, attack plans, neighbour lists, their
+ * friendships and friend requests both ways (their friends' `friendcount`
+ * drops by one), the anti-cheat report and every Redis key of theirs, including login sessions,
  * so they are logged out. Their lines are taken out of world chat history and
  * the fair-play log.
  *
@@ -190,9 +191,26 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "inferno neighbour lists", table: "maproom_inferno", where: `userid = ?`, params: [u] },
   { label: "anti-cheat report", table: "report", where: `userid = ?`, params: [u] },
   { label: "bot jobs aimed at them", table: "bot_job", where: `target_userid = ?`, params: [u] },
+  { label: "friendships (both ways)", table: "friend", where: `userid = ? OR friend_userid = ?`, params: [u, u] },
+  { label: "friend requests (sent and received)", table: "friend_request", where: `from_userid = ? OR to_userid = ?`, params: [u, u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
   { label: "saves (yards, outposts, inferno)", table: "save", where: `userid = ?`, params: [u] },
+];
+
+/**
+ * Changes made before the deletes, while the rows they read are still there:
+ * their friends' `friendcount` drops by them (it always equals the real count).
+ */
+const beforeDeleteSteps = (u: number): UpdateStep[] => [
+  {
+    label: "their friends' friend counts (lowered)",
+    table: `"user"`,
+    set: `friendcount = (SELECT count(*) FROM bym.friend f WHERE f.userid = "user".userid AND f.friend_userid <> ?)`,
+    setParams: [u],
+    where: `userid IN (SELECT friend_userid FROM bym.friend WHERE userid = ?)`,
+    params: [u],
+  },
 ];
 
 const updateSteps = (u: number, username: string): UpdateStep[] => [
@@ -401,6 +419,7 @@ export const planAccountDeletion = async (
   const defenders = await capturedDefenders(tx, u, worldid);
   if (defenders.cells) rows["captured Map Room 3 defender cells"] = defenders.cells;
 
+  for (const step of beforeDeleteSteps(u)) rows[step.label] = await count(sql, step.table, step.where, step.params);
   for (const step of deleteSteps(u)) rows[step.label] = await count(sql, step.table, step.where, step.params);
   if (defenders.baseids.length) rows["saves of captured defenders (other players')"] = defenders.baseids.length;
   for (const step of updateSteps(u, account.username)) rows[step.label] = await count(sql, step.table, step.where, step.params);
@@ -482,6 +501,13 @@ export const deleteAccount = async (
       });
     }
 
+    for (const step of beforeDeleteSteps(u)) {
+      const changed = await sql(
+        `UPDATE bym.${step.table} SET ${step.set} WHERE ${step.where} RETURNING 1`,
+        [...step.setParams, ...step.params]
+      );
+      rows[step.label] = changed.length;
+    }
     for (const step of deleteSteps(u)) {
       const gone = await sql(`DELETE FROM bym.${step.table} WHERE ${step.where} RETURNING 1`, step.params);
       rows[step.label] = gone.length;
