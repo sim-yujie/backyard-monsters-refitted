@@ -1078,6 +1078,12 @@ interface Creep {
    */
   looking: boolean;
   /**
+   * A defending burrower walking up to a foe it took within
+   * {@link DEFEND_SURFACE_SQUARED}: Flash's `_doDefenseBurrow` false
+   * (`CreepBase.as:580-585`), so it stays above ground on that chase.
+   */
+  surfaceChase: boolean;
+  /**
    * An attacking champion's Mode as weights (issue #220, `stance.ts`); null
    * for every other creep and for a Hybrid champion, which picks as Flash's.
    */
@@ -1143,6 +1149,7 @@ const NO_ABILITIES = {
   spawnY: 0,
   homing: false,
   looking: false,
+  surfaceChase: false,
   weights: null,
 } as const;
 
@@ -1355,6 +1362,12 @@ const CHAMPION_CAGE_TYPE = 114;
 
 /** How far a defender looks for an attacker to chase (`CreepBase.as:1531-1556`). */
 const DEFEND_SEARCH = 400;
+
+/**
+ * A defending burrower that takes a fresh foe closer than this (120 screen
+ * px, squared) walks up to it instead of tunnelling (`CreepBase.as:580-585`).
+ */
+const DEFEND_SURFACE_SQUARED = 14400;
 
 /** The reach a creep fights another at: its range, and never less than `DEFENSE_RANGE_SQUARED`. */
 const creepReach = (range: number): number => Math.max(range * range, 2500);
@@ -3262,6 +3275,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
       creep.targetCreep = found.id;
       target = found;
+      if (creep.burrows) {
+        const squared = screenDistanceSquared(creep.ix, creep.iy, found.ix, found.iy);
+        creep.surfaceChase = squared < DEFEND_SURFACE_SQUARED;
+      }
     }
     creep.homing = false;
     fight(creep, target);
@@ -3945,11 +3962,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * takes `TARGETS_INVISIBLE` into its flags, so no tower picks it, no
    * defender or bunker sees it, and only what reaches the invisible (a trap,
    * the cannon's blast, the Laser, the Railgun) hurts it. Run after its tick,
-   * so it surfaces on the tick it starts to swing. A defending burrower is
-   * left above ground: the defence's chase is the owner's rule, not Flash's.
+   * so it surfaces on the tick it starts to swing. A defender tunnels too
+   * while it chases a foe (`_doDefenseBurrow`, `:657`), except up to one it
+   * took close by ({@link DEFEND_SURFACE_SQUARED}); walking home it goes
+   * above ground, as Flash's `changeModeBunker` does (`CreepBase.as:419`).
+   * A retreating attacker stays up (`MonsterBase.as:763-766`).
    */
   const tickBurrow = (creep: Creep): void => {
-    const under = !creep.friendly && creep.behaviour === "attack" && !creep.attacking;
+    const chasing = creep.friendly
+      ? creep.behaviour === "defend" &&
+        !creep.homing &&
+        creep.targetCreep >= 0 &&
+        !creep.surfaceChase
+      : creep.behaviour === "attack";
+    const under = chasing && !creep.attacking;
     if (under === creep.invisible) return;
     creep.invisible = under;
     if (under) creep.flags |= TARGETS_INVISIBLE;

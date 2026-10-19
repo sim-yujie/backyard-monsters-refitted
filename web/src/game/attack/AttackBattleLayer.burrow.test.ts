@@ -108,8 +108,9 @@ describe("a tunnelling Wormzer, drawn as Flash drew it", () => {
       expect(layer.bodyOf(creep.id)).toMatchObject({ alpha: 0, barAlpha: 0 });
     }
     expect(underFrames).toBeGreaterThan(TICKS_PER_SECOND / 2);
-    // The dig and the trail clods: a second under ground throws several.
-    expect(layer.splatCount).toBeGreaterThan(2);
+    // The trail clods linger most of a second, so a second under ground
+    // leaves a line of them (Flash's faded after a third of one).
+    expect(layer.splatCount).toBeGreaterThanOrEqual(6);
   });
 
   it("comes up whole and hops out of its hole to swing", async () => {

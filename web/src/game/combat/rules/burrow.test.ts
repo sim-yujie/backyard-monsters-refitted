@@ -154,24 +154,72 @@ describe("the Wormzer's tunnel", () => {
     expect(whileUnder).toBe(0);
   });
 
-  it("does not tunnel as a bunker's defender", () => {
+  it("tunnels as a bunker's defender while it chases, up to bite", () => {
     const yard = yardOf({
       "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
       "2": { id: 2, t: 6, l: 1, X: 150, Y: 150 },
     });
     const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C13: 2 } } });
     battle.apply(dropOf("C1", 300, 300, 3));
-    let defenders = 0;
     let burrowed = 0;
+    let bitUnder = 0;
+    // Each defender's ticks reduced to U (underground), S (swinging) or W (walking above).
+    const states = new Map<number, string[]>();
     watch(battle, 1500, (creeps) => {
       for (const creep of creeps) {
         if (!creep.friendly || creep.monsterId !== "C13") continue;
-        defenders += 1;
         if (creep.burrowed) burrowed += 1;
+        if (creep.state === "attacking" && creep.burrowed) bitUnder += 1;
+        const now = creep.burrowed ? "U" : creep.state === "attacking" ? "S" : "W";
+        const seen = states.get(creep.id) ?? [];
+        if (seen[seen.length - 1] !== now) seen.push(now);
+        states.set(creep.id, seen);
       }
     });
-    expect(defenders).toBeGreaterThan(0);
-    expect(burrowed).toBe(0);
+    expect(burrowed).toBeGreaterThan(0);
+    expect(bitUnder).toBe(0);
+    // It tunnels to a foe and pops up to bite it.
+    expect([...states.values()].some((seen) => seen.join("").includes("US"))).toBe(true);
+  });
+
+  it("cannot be hit by attackers while it tunnels as a defender", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 6, l: 1, X: 150, Y: 150 },
+    });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C13: 2 } } });
+    battle.apply(dropOf("C1", 300, 300, 3));
+    let hitUnder = 0;
+    let wasUnder = new Set<number>();
+    watch(battle, 1500, (creeps, events) => {
+      // Under at both ends of the tick, it was invisible all through it.
+      for (const event of events) {
+        if (event.kind !== "hurt" || !event.friendly) continue;
+        const hit = creeps.find((creep) => creep.id === event.creepId);
+        if (hit?.burrowed && wasUnder.has(hit.id)) hitUnder += 1;
+      }
+      wasUnder = new Set(
+        creeps
+          .filter((creep) => creep.friendly && creep.monsterId === "C13" && creep.burrowed)
+          .map((creep) => creep.id),
+      );
+    });
+    expect(hitUnder).toBe(0);
+  });
+
+  it("walks up to its next foe when it takes one close by, as Flash's defender does", () => {
+    const yard = yardOf({ "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C13: 1 } } });
+    battle.apply(dropOf("C1", 150, 150, 3));
+    const states: string[] = [];
+    watch(battle, 300, (creeps) => {
+      const worm = creeps.find((creep) => creep.friendly && creep.monsterId === "C13");
+      if (!worm) return;
+      const now = worm.burrowed ? "U" : worm.state === "attacking" ? "S" : "W";
+      if (states[states.length - 1] !== now) states.push(now);
+    });
+    // Out of the bunker it tunnels to its first foe; the next stands close, so it walks.
+    expect(states.slice(0, 4)).toEqual(["U", "S", "W", "S"]);
   });
 });
 

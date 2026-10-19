@@ -596,6 +596,9 @@ interface Splat {
   readonly radius: number;
   readonly disc: Graphics;
   readonly gibs: Gib[];
+  /** Ticks it lasts, when not {@link SPLAT_TICKS}; and whether its disc stays its size as it fades. */
+  readonly life?: number;
+  readonly still?: boolean;
 }
 
 interface Gib {
@@ -625,6 +628,18 @@ const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
 /** A tunnelling Wormzer's dirt: the mound it throws up and the clods. */
 const DIRT_COLOUR = 0x6b4a2b;
 const DIRT_CLOD_COLOURS = [0x7a5532, 0x5a3d22, 0x94693f] as const;
+/**
+ * The dirt is drawn a little bigger and longer-lived than Flash's (owner,
+ * 2026-10-19): Flash's three 10 px clods were easy to miss zoomed out. A dig
+ * throws a wider mound and more clods; each trail stop is five clods on a
+ * dark patch that lingers for most of a second, so the tunnel reads as a line.
+ */
+const DIG_RADIUS = 18;
+const DIG_CLODS = 12;
+const DIG_TICKS = 48;
+const TRAIL_RADIUS = 8;
+const TRAIL_CLODS = 5;
+const TRAIL_TICKS = 72;
 const BAR_BACK_COLOUR = 0x6b1616;
 const BAR_FRONT_COLOUR = 0x5ee06a;
 const BAR_CHAMPION_COLOUR = 0xffd24a;
@@ -1957,17 +1972,20 @@ export class AttackBattleLayer {
    * clods thrown up from a dig. Deterministic, like the gibs.
    */
   private spawnDirt(tick: number, at: Point, dig: boolean): void {
-    const radius = dig ? 14 : 6;
+    const radius = dig ? DIG_RADIUS : TRAIL_RADIUS;
     const mound = new Graphics();
     if (dig) {
       mound.ellipse(0, 0, radius, radius / 2).fill({ color: DIRT_COLOUR, alpha: 0.8 });
     } else {
-      // Three clods round the spot, turned a little each time.
-      for (let index = 0; index < 3; index += 1) {
-        const angle = ((index + 0.5) / 3) * Math.PI * 2 + tick * 0.61;
-        const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * radius * 0.5;
-        mound.ellipse(x, y, 2.5, 1.5).fill({ color: DIRT_CLOD_COLOURS[index] ?? DIRT_COLOUR });
+      // A dark patch of turned earth, and clods round it turned a little each time.
+      mound.ellipse(0, 0, radius * 0.7, radius * 0.35).fill({ color: DIRT_COLOUR, alpha: 0.55 });
+      for (let index = 0; index < TRAIL_CLODS; index += 1) {
+        const angle = ((index + 0.5) / TRAIL_CLODS) * Math.PI * 2 + tick * 0.61;
+        const reach = radius * (0.6 + ((index * 3 + tick) % 4) * 0.13);
+        const x = Math.cos(angle) * reach;
+        const y = Math.sin(angle) * reach * 0.5;
+        const colour = DIRT_CLOD_COLOURS[index % DIRT_CLOD_COLOURS.length] ?? DIRT_COLOUR;
+        mound.ellipse(x, y, 3.5, 2.2).fill({ color: colour });
       }
     }
     mound.position.set(at.x, at.y);
@@ -1975,7 +1993,7 @@ export class AttackBattleLayer {
 
     const gibs: Gib[] = [];
     if (dig && !this.reducedMotion) {
-      const count = 8;
+      const count = DIG_CLODS;
       for (let index = 0; index < count; index += 1) {
         const sprite = this.gibPool.pop() ?? this.makeGib();
         sprite.visible = true;
@@ -1992,7 +2010,15 @@ export class AttackBattleLayer {
         });
       }
     }
-    this.splats.push({ tick, at, radius, disc: mound, gibs });
+    this.splats.push({
+      tick,
+      at,
+      radius,
+      disc: mound,
+      gibs,
+      life: dig ? DIG_TICKS : TRAIL_TICKS,
+      still: !dig,
+    });
   }
 
   private spawnSplat(tick: number, at: Point, radius: number): void {
@@ -2078,7 +2104,8 @@ export class AttackBattleLayer {
     let keep = 0;
     for (const splat of this.splats) {
       const age = tick - splat.tick;
-      if (age > SPLAT_TICKS) {
+      const lasts = splat.life ?? SPLAT_TICKS;
+      if (age > lasts) {
         splat.disc.destroy();
         for (const gib of splat.gibs) {
           gib.sprite.visible = false;
@@ -2088,9 +2115,9 @@ export class AttackBattleLayer {
       }
       this.splats[keep] = splat;
       keep += 1;
-      const life = 1 - age / SPLAT_TICKS;
+      const life = 1 - age / lasts;
       splat.disc.alpha = life;
-      splat.disc.scale.set(1 + (1 - life) * 0.4);
+      if (!splat.still) splat.disc.scale.set(1 + (1 - life) * 0.4);
       for (const gib of splat.gibs) {
         // Integrated once per frame rather than per tick: at 2x the gibs
         // simply fly for half as many frames, which is what faster means.
