@@ -92,6 +92,7 @@ import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
 import { showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
+import { FriendsBar } from "@/ui/friends/FriendsBar";
 import { YardDock } from "@/ui/yard/YardDock";
 import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -298,6 +299,8 @@ export class YardScene implements Scene {
    * the yard switcher on the own yard; Layout, Map, Home and Attack on a visit.
    */
   private dock: YardDock | null = null;
+  /** The friends bar (#371): own yard only; null on a visit. */
+  private friendsBar: FriendsBar | null = null;
   /**
    * What the player may do with the planner in the yard now open (§8, Q5).
    *
@@ -463,6 +466,8 @@ export class YardScene implements Scene {
       this.dock.setAttack({ disabled: true, title: `Attack ${target.name}'s yard` });
     }
     if (!target) {
+      // Visiting a friend is WP5 (#372): until it lands the card has no Visit.
+      this.friendsBar = new FriendsBar().mount(context.overlay.content);
       this.mail = new MailDoor({
         style: "dock",
         container: context.overlay.content,
@@ -539,6 +544,8 @@ export class YardScene implements Scene {
     this.defences = null;
     this.chat?.destroy();
     this.chat = null;
+    this.friendsBar?.destroy();
+    this.friendsBar = null;
     this.dock?.destroy();
     this.dock = null;
     this.input?.detach();

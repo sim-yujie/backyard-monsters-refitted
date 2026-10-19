@@ -8,6 +8,7 @@
  */
 
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
+import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
 import { Popup } from "@/ui/Popup";
@@ -21,6 +22,17 @@ export const SETTINGS_TEXT = {
   shinyLabel: "Shiny Lock",
   shinyHint: "While on, Shiny cannot be spent, so a stray click never costs you any.",
   shinyFailed: "Could not save the Shiny Lock setting. Try again.",
+  privacyTitle: "Privacy",
+  hideOnlineLabel: "Show when I'm online",
+  hideOnlineHint: "When off, friends see no online dot or last-seen time.",
+  friendRequestsLabel: "Accept friend requests",
+  friendRequestsHint: "When off, nobody can send you a friend request.",
+  privacyFailed: "Could not save that privacy setting. Try again.",
+  blockedTitle: "Blocked players",
+  blockedNone: "You have not blocked anyone.",
+  blockedLoadFailed: "Could not load your blocked players.",
+  unblock: "Unblock",
+  unblockFailed: "Could not unblock that player. Try again.",
 } as const;
 
 /** "You can change your username again on 3 Mar 2027." for the cooldown line. */
@@ -58,7 +70,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
 
   fetchAccount().then(
     (account) => {
-      body.replaceChildren(usernameSection(account, options), shinySection(account));
+      body.replaceChildren(usernameSection(account, options), shinySection(account), privacySection(account.privacy));
       popup.focusFirst();
     },
     () => {
@@ -184,4 +196,133 @@ const shinySection = (account: AccountInfo): HTMLElement => {
 
   section.append(row, hint);
   return section;
+};
+
+/** One switch that saves as soon as it is flipped and goes back if the save fails. */
+const privacyToggle = (
+  id: string,
+  label: string,
+  hintText: string,
+  checked: boolean,
+  save: (wanted: boolean) => Promise<boolean>,
+): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.id = id;
+  box.checked = checked;
+  const words = document.createElement("span");
+  words.textContent = label;
+  row.append(box, words);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = `${id}-hint`;
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = hintText;
+  box.setAttribute("aria-describedby", hint.id);
+  box.addEventListener("change", () => {
+    const wanted = box.checked;
+    box.disabled = true;
+    hint.classList.remove("field__hint--error");
+    save(wanted).then(
+      (stored) => {
+        box.checked = stored;
+        hint.textContent = hintText;
+        box.disabled = false;
+      },
+      () => {
+        box.checked = !wanted;
+        hint.textContent = SETTINGS_TEXT.privacyFailed;
+        hint.classList.add("field__hint--error");
+        box.disabled = false;
+      },
+    );
+  });
+  section.append(row, hint);
+  return section;
+};
+
+/** Privacy: the two switches and the blocked players with Unblock (friends WP9). */
+const privacySection = (privacy: PrivacySettings): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const heading = document.createElement("h3");
+  heading.className = "account-settings__heading";
+  heading.textContent = SETTINGS_TEXT.privacyTitle;
+  section.append(
+    heading,
+    // The switch says "show", the server stores "hide".
+    privacyToggle("settings-show-online", SETTINGS_TEXT.hideOnlineLabel, SETTINGS_TEXT.hideOnlineHint, !privacy.hideOnline, async (wanted) =>
+      !(await setPrivacy({ hideOnline: !wanted })).hideOnline,
+    ),
+    privacyToggle("settings-friend-requests", SETTINGS_TEXT.friendRequestsLabel, SETTINGS_TEXT.friendRequestsHint, privacy.friendRequests, async (wanted) =>
+      (await setPrivacy({ friendRequests: wanted })).friendRequests,
+    ),
+    blockedSection(),
+  );
+  return section;
+};
+
+const blockedSection = (): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const heading = document.createElement("h3");
+  heading.className = "account-settings__heading";
+  heading.textContent = SETTINGS_TEXT.blockedTitle;
+  const list = document.createElement("ul");
+  list.className = "account-settings__blocked";
+  list.id = "settings-blocked";
+  const note = document.createElement("p");
+  note.className = "field__hint";
+  note.setAttribute("aria-live", "polite");
+  note.textContent = "Loading…";
+  section.append(heading, list, note);
+
+  const show = (blocked: BlockedPlayer[]): void => {
+    list.replaceChildren(...blocked.map((player) => blockedRow(player, note, list)));
+    note.classList.remove("field__hint--error");
+    note.textContent = blocked.length === 0 ? SETTINGS_TEXT.blockedNone : "";
+  };
+  fetchBlocked().then(show, () => {
+    note.textContent = SETTINGS_TEXT.blockedLoadFailed;
+    note.classList.add("field__hint--error");
+  });
+  return section;
+};
+
+const blockedRow = (
+  player: BlockedPlayer,
+  note: HTMLElement,
+  list: HTMLElement,
+): HTMLElement => {
+  const row = document.createElement("li");
+  row.className = "account-settings__blocked-row";
+  row.dataset["userid"] = String(player.userid);
+  const name = document.createElement("span");
+  name.textContent = player.username;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn--ghost";
+  button.textContent = SETTINGS_TEXT.unblock;
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    unblockPlayer(player.userid).then(
+      () => {
+        row.remove();
+        const left = list.children.length;
+        note.classList.remove("field__hint--error");
+        note.textContent = left === 0 ? SETTINGS_TEXT.blockedNone : "";
+      },
+      () => {
+        button.disabled = false;
+        note.textContent = SETTINGS_TEXT.unblockFailed;
+        note.classList.add("field__hint--error");
+      },
+    );
+  });
+  row.append(name, button);
+  return row;
 };
