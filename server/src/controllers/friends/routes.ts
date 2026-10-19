@@ -27,6 +27,8 @@ import {
   unblockAnswer,
   type FriendsBody,
 } from "./friends.js";
+import { helpBlock } from "../../services/friends/helpFacts.js";
+import { setHelpBlockFor } from "../../services/friends/helpHook.js";
 import { helpAnswer } from "./help.js";
 
 /** Binds an answer function to Koa: the caller, the body or query, `postgres.em`, now. */
@@ -45,6 +47,9 @@ const route =
  */
 export const mountFriendsRoutes = (router: Router): void => {
   const api = "/api/:apiVersion";
+
+  // The help-mode `/base/load` asks the help rules which buildings the visitor can help (WP2's hook).
+  setHelpBlockFor((helper, ownerSave) => helpBlock(postgres.em, helper, ownerSave, getCurrentDateTime()));
 
   router.get(`${api}/bm/friends`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
     route((ctx, now) => friendsAnswer(postgres.em, ctx.authUser, now)));
