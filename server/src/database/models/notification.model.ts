@@ -4,9 +4,11 @@ import { BigIntType, type Opt, PrimaryKeyProp } from "@mikro-orm/core";
 /**
  * A `jobs` row is one kind of job from a yard answer; an `away` row is a whole
  * load's; an `achievement` row is one paid unlock, or the backfill's together
- * (`services/achievements/record.ts`, issue #204).
+ * (`services/achievements/record.ts`, issue #204). A `friend` row is one
+ * friends event, its payload the only entry in `jobs`
+ * (`services/friends/friendNotifications.ts`, issue #368).
  */
-export type NotificationKind = "jobs" | "away" | "achievement";
+export type NotificationKind = "jobs" | "away" | "achievement" | "friend";
 
 /**
  * One entry in the yard's notification list (issue #257,
