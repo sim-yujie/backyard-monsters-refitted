@@ -17,7 +17,7 @@ export const FRIEND_LIMITS = {
   declineWaitDays: 7,
   /** Gifts and help need this many hours of friendship (Q7); `canGiftFrom` reports it. */
   friendshipAgeHours: 24,
-  /** Helps a player can give in a UTC day (Q1); `helpsLeft` until the help engine (WP6) counts them. */
+  /** Helps a player can give in a UTC day (Q1); the help engine counts them (`services/friends/helpConfig.ts`). */
   dailyHelps: 20,
 } as const;
 

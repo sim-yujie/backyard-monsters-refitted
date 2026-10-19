@@ -327,6 +327,34 @@ one transaction. `hl` clearing is added where jobs end or start (`services/yard/
 The `help` mode load (WP2) returns the yard like `view` and asks the help rules (WP6) which
 buildings can be helped. Until WP6 lands, `help.buildings` is empty.
 
+**As built (WP6, #373).** Numbers in `server/src/services/friends/helpConfig.ts`; rules in
+`helpRules.ts`; the route in `controllers/friends/help.ts`.
+
+- Answer: `{ error: 0, secondsSaved | healed: true, reward: { r1..r4 }, helpsLeft, building }`, where
+  `reward` is what landed in the helper's pool (after the cap clamp) and `building` is the friend's
+  building as now saved (shorter countdown and `hl`, or healed).
+- Refusal order: `self`, `noSuchPlayer`, `notFriends`, `cannotSend` (so a stranger learns nothing
+  about the yard), `underAttack` (the friend's yard attacked or raided; the helper's own yard gives
+  the yard actions' `underAttack` / `raidInProgress`), then after both catch-ups `tooNew`,
+  `dailyCap`, then `nothingToHelp`,
+  `alreadyHelped`, `helpersFull`. `tooNew` carries `from` (the latest of friendship + 24 h and
+  each account's age + 3 days) unless a level is what stops it. A refusal writes nothing, the
+  catch-ups included.
+- Account age is the main save's `createtime`; level is the main save's level after its catch-up.
+- A countdown under 20 seconds (5% rounds to 0) is `nothingToHelp`, so a help always saves time.
+- Race safety: both main saves are locked in user-id order, so helps on one yard and helps by one
+  helper run one at a time; the 5-helper limit, once-per-job, once-per-damage and the daily cap
+  are all read inside the locks.
+- `hl` is cleared where a countdown runs out (`advanceBuildingTimers`, which the catch-up, Shiny
+  finish, instant upgrade, planner and attack save all use), where an upgrade or fortify starts
+  (`startUpgrades`, `fortify`), where one is cancelled (`upgrade`, `fortify`) and where the Map
+  Room's upgrade is taken over (`mapRoom`). A Shiny speed-up that does not finish keeps it.
+- Notification payload: `{ event: "helpSpeedup", userid, username, building: <type>, buildingId,
+  seconds }` or `{ event: "helpRepair", userid, username, building: <type>, buildingId }`.
+- `GET /bm/friends`: `helpsLeft` is the real count; each friend's `help` is `null` when the gates
+  refuse, else `{ speedup, repair }` (anything helpable now).
+- `friend_help` rows go with either account and after 90 days (`retention.ts`).
+
 ## 7. Anti-abuse rules
 
 1. **Friendship age gate:** gifts and help need 24 hours of friendship. Remove and

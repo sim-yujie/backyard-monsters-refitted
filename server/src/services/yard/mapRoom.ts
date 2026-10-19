@@ -199,7 +199,7 @@ const migratedMapRoom = (building: BuildingData, mr2upgraded: boolean): Building
   const target = mr2upgraded ? MAP_ROOM_MAX_LEVEL : Math.min(level, MAP_ROOM_MAX_LEVEL);
   if (target === level && !(upgrading && level >= MAP_ROOM_MAX_LEVEL)) return null;
 
-  const { cU: _upgrade, cL: _length, ...rest } = building;
+  const { cU: _upgrade, cL: _length, hl: _helpers, ...rest } = building;
   return { ...rest, l: target } as BuildingData;
 };
 

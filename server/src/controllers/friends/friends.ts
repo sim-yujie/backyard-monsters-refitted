@@ -12,6 +12,8 @@ import {
   unblockPlayer,
 } from "../../services/friends/friendships.js";
 import { FRIEND_LIMITS } from "../../services/friends/friendRules.js";
+import { friendsHelp, helpsToday } from "../../services/friends/helpFacts.js";
+import { helpsLeftOf } from "../../services/friends/helpRules.js";
 import {
   allianceSuggestions,
   countIncoming,
@@ -43,15 +45,21 @@ export const SearchSchema = z.object({ q: z.string().trim().min(3).max(64) });
 
 /** `GET /bm/friends`: the list and the counts the bar and screen show. */
 export const friendsAnswer = async (em: EntityManager, user: User, now: number): Promise<FriendsBody> => {
-  const [friends, requestsIn] = await Promise.all([listFriends(em, user.userid, now), countIncoming(em, user.userid, now)]);
+  const [listed, requestsIn, today] = await Promise.all([
+    listFriends(em, user.userid, now),
+    countIncoming(em, user.userid, now),
+    helpsToday(em, user.userid, now),
+  ]);
+  const help = await friendsHelp(em, user.userid, listed.map((friend) => friend.userid), now);
+  const friends = listed.map((friend) => ({ ...friend, help: help.get(friend.userid) ?? null }));
   return {
     error: 0,
     friends,
     max: FRIEND_LIMITS.maxFriends,
     requestsIn,
-    // Gifts (WP8) and help (WP6) fill these in.
+    // Gifts (WP8) fill this in.
     giftsWaiting: 0,
-    helpsLeft: FRIEND_LIMITS.dailyHelps,
+    helpsLeft: helpsLeftOf(today),
   };
 };
 

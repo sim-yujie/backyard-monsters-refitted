@@ -34,7 +34,7 @@ export interface FriendView {
   giftSentToday: boolean;
   /** When the 24-hour friendship rule clears, unix seconds; null once it has. */
   canGiftFrom: number | null;
-  /** Whether you could help them today; null until the help engine (WP6). */
+  /** Whether you could help them now; null when the help gates refuse (`GET /bm/friends` fills it, WP6). */
   help: { speedup: boolean; repair: boolean } | null;
 }
 

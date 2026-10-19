@@ -28,7 +28,7 @@ import {
  * them, mail with bots or with players already deleted, and threads the other
  * player had blocked), truces, alliance chat and invites, notifications,
  * the replays of attacks on them, attack plans, neighbour lists, their
- * friendships and friend requests both ways (their friends' `friendcount`
+ * friendships, friend requests and friend helps both ways (their friends' `friendcount`
  * drops by one), the anti-cheat report and every Redis key of theirs, including login sessions,
  * so they are logged out. Their lines are taken out of world chat history and
  * the fair-play log.
@@ -193,6 +193,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "bot jobs aimed at them", table: "bot_job", where: `target_userid = ?`, params: [u] },
   { label: "friendships (both ways)", table: "friend", where: `userid = ? OR friend_userid = ?`, params: [u, u] },
   { label: "friend requests (sent and received)", table: "friend_request", where: `from_userid = ? OR to_userid = ?`, params: [u, u] },
+  { label: "friend helps (given and received)", table: "friend_help", where: `helper_userid = ? OR owner_userid = ?`, params: [u, u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
   { label: "saves (yards, outposts, inferno)", table: "save", where: `userid = ?`, params: [u] },

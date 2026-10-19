@@ -450,7 +450,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(await one<{ leader_userid: number }>(`SELECT leader_userid FROM bym.alliance WHERE id = ?`, [allianceId])).toEqual({ leader_userid: q });
   });
 
-  test("their friendships and friend requests go both ways, and their friends' counts drop", async () => {
+  test("their friendships, friend requests and friend helps go both ways, and their friends' counts drop", async () => {
     const p = await player("p");
     const q = await player("q");
     const r = await player("r");
@@ -461,6 +461,11 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       `INSERT INTO bym.friend_request (from_userid, to_userid, status, created_at) VALUES (?, ?, 'pending', now()), (?, ?, 'declined', now())`,
       [p, r, r, p]
     );
+    // P helped Q, and R helped P (issue #373).
+    await sql(
+      `INSERT INTO bym.friend_help (helper_userid, owner_userid, baseid, building_id, kind, help_day) VALUES (?, ?, '1', 1, 'speedup', now()), (?, ?, '1', 1, 'repair', now())`,
+      [p, q, r, p]
+    );
     store = fakeRedis();
     const account = await findAccount(orm.em, "zz_del_p");
 
@@ -469,6 +474,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       "their friends' friend counts (lowered)": 1,
       "friendships (both ways)": 2,
       "friend requests (sent and received)": 2,
+      "friend helps (given and received)": 2,
     });
     expect(await countOf(`bym.friend WHERE userid = ? OR friend_userid = ?`, [p, p])).toBe(2);
 
@@ -477,9 +483,11 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       "their friends' friend counts (lowered)": 1,
       "friendships (both ways)": 2,
       "friend requests (sent and received)": 2,
+      "friend helps (given and received)": 2,
     });
     expect(await countOf(`bym.friend WHERE userid = ? OR friend_userid = ?`, [p, p])).toBe(0);
     expect(await countOf(`bym.friend_request WHERE from_userid = ? OR to_userid = ?`, [p, p])).toBe(0);
+    expect(await countOf(`bym.friend_help WHERE helper_userid = ? OR owner_userid = ?`, [p, p])).toBe(0);
     expect(await countOf(`bym.friend WHERE userid IN (?, ?)`, [q, r])).toBe(2);
     const friendcounts = await sql<{ userid: number; friendcount: number }>(
       `SELECT userid, friendcount FROM bym."user" WHERE userid IN (?, ?) ORDER BY userid`,

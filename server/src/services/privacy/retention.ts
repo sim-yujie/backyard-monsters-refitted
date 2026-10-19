@@ -8,7 +8,8 @@ import { logger } from "../../utils/logger.js";
  * (`attack_logs`) and chat reports older than their limits
  * (`config/RetentionConfig.ts`, the Privacy Policy, section 4), and friend
  * requests answered or lapsed more than {@link FRIEND_REQUEST_RETENTION_DAYS}
- * days ago (issue #368). Log files are pruned by the logger itself
+ * days ago (issue #368), and friend helps older than
+ * {@link FRIEND_HELP_RETENTION_DAYS} days (issue #373). Log files are pruned by the logger itself
  * (`utils/logFiles.ts`).
  *
  * Every delete goes in batches of {@link RETENTION_BATCH} rows, each its own
@@ -26,6 +27,13 @@ export const RETENTION_JOB = "privacy-retention";
  */
 export const FRIEND_REQUEST_RETENTION_DAYS = 30;
 
+/**
+ * Days a friend help (`friend_help`) is kept: the daily cap reads only
+ * today's, and the rest is the audit trail for spotting help rings
+ * (`docs/design/friends.md` §7 rule 9).
+ */
+export const FRIEND_HELP_RETENTION_DAYS = 90;
+
 /** Rows deleted per statement. */
 export const RETENTION_BATCH = 1000;
 
@@ -41,6 +49,7 @@ export interface RetentionResult {
   attackLogs: number;
   chatReports: number;
   friendRequests: number;
+  friendHelps: number;
 }
 
 export interface RetentionOptions {
@@ -177,7 +186,16 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
-  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports, friendRequests };
+  const friendHelps = await deleteOldRows(
+    em,
+    "friend_help",
+    "id",
+    "created_at",
+    cutoff(now, FRIEND_HELP_RETENTION_DAYS),
+    batchSize,
+    pauseMs
+  );
+  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports, friendRequests, friendHelps };
 };
 
 /**

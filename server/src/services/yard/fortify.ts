@@ -12,6 +12,7 @@ import {
   type ResourceAmounts,
 } from "../yardplanner/costs.js";
 import { busyWorkers, sharperToolsMultiplier, workerCount } from "../yardplanner/workers.js";
+import { withoutHelpers } from "../friends/helpList.js";
 import { buildingOrThrow, damagedErr, isDamaged } from "./buildingJobs.js";
 import { fitCredit } from "./credit.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
@@ -159,7 +160,7 @@ export const planFortify = (save: FortifySave, id: number, now: number) => {
 
   return {
     report,
-    slices: { buildingdata: { ...buildings, [String(id)]: { ...building, cF: seconds } } },
+    slices: { buildingdata: { ...buildings, [String(id)]: { ...withoutHelpers(building), cF: seconds } } },
     debit: cost,
   };
 };
@@ -182,7 +183,7 @@ export const planCancelFortify = (save: FortifySave, id: number) => {
     throw yardRefusedErr("notFortifying", "That building is not being fortified.");
   }
 
-  const { cF: _cancelled, ...rest } = building;
+  const { cF: _cancelled, hl: _helpers, ...rest } = building;
   const step = fortifyStepsOf(Number(building.t), yardKindOf(save))[fortOf(building)];
   const refund = step ? stepAmounts(step) : { r1: 0, r2: 0, r3: 0, r4: 0 };
   // What the wrapper's clamp will let through (`credit.ts`, T3), for the report.

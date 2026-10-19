@@ -27,6 +27,7 @@ import {
   unblockAnswer,
   type FriendsBody,
 } from "./friends.js";
+import { helpAnswer } from "./help.js";
 
 /** Binds an answer function to Koa: the caller, the body or query, `postgres.em`, now. */
 const route =
@@ -61,6 +62,8 @@ export const mountFriendsRoutes = (router: Router): void => {
     route((ctx, now) => searchAnswer(postgres.em, ctx.authUser, ctx.query, now)));
   router.get(`${api}/bm/friends/suggestions`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
     route((ctx, now) => suggestionsAnswer(postgres.em, ctx.authUser, now)));
+  router.post(`${api}/bm/friends/help`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx, now) => helpAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
 
   router.get(`${api}/player/blocked`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
     route((ctx) => blockedAnswer(postgres.em, ctx.authUser)));
