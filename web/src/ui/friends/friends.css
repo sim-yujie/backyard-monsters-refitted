@@ -1,0 +1,319 @@
+/*
+ * The Friends screen (issue #370, docs/design/friends.md §8): docked on the
+ * right like the achievements screen, a bottom sheet on a phone. Also the
+ * Account menu's Friends item and its count.
+ *
+ * Every value comes from tokens.css.
+ */
+
+.friends-screen {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-hud);
+  width: min(460px, calc(100vw - 2 * var(--space-4)));
+  max-width: none;
+  min-width: 0;
+}
+
+.friends-screen[hidden] {
+  display: none;
+}
+
+.friends-screen .panel__titlebar {
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.friends-screen .panel__title {
+  font-size: var(--text-xl);
+}
+
+.friends-screen__close {
+  margin-left: auto;
+}
+
+.friends-screen .panel__body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow: hidden;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+
+.friends-tabs {
+  flex: none;
+}
+
+.friends-tabs__tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.friends-tabs__count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.friends-tabs__count:empty,
+.friends-tabs__count[hidden] {
+  display: none;
+}
+
+.friends-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.friends-tab,
+.friends-tab__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.friends-summary {
+  margin: 0;
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.friends-summary:empty {
+  display: none;
+}
+
+.friends-status {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.friends-status[hidden] {
+  display: none;
+}
+
+.friends-status--error {
+  color: var(--colour-danger);
+  font-weight: 600;
+}
+
+/* ── Sections and rows ────────────────────────────────────────────────── */
+
+.friends-section__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--colour-text-muted);
+}
+
+.friends-section__empty,
+.friends-empty__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.friends-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.friends-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.friends-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.friends-row--confirm {
+  border-color: var(--colour-danger);
+}
+
+.friends-row__face {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--colour-surface-control);
+  object-fit: cover;
+}
+
+.friends-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.friends-row__name {
+  overflow: hidden;
+  font-weight: 700;
+  color: var(--colour-text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friends-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.friends-online {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The green dot, as the bar's portraits will wear it (§3.2). */
+.friends-online--online::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--colour-online);
+}
+
+.friends-online--online {
+  color: var(--colour-text);
+  font-weight: 600;
+}
+
+.friends-row__actions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.friends-row__action {
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.friends-row__relation {
+  font-size: var(--text-xs);
+}
+
+/* ── Find ─────────────────────────────────────────────────────────────── */
+
+.friends-find {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.friends-find__input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── The Account menu's Friends item and count ────────────────────────── */
+
+.account-menu__friends {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.account-menu__count,
+.account-menu__button-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-menu__count {
+  margin-left: auto;
+}
+
+.account-menu__count[hidden],
+.account-menu__button-count[hidden] {
+  display: none;
+}
+
+.account-menu__button {
+  position: relative;
+}
+
+.account-menu__button-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  pointer-events: none;
+}
+
+@media (width <= 620px) {
+  .friends-screen {
+    top: var(--hud-height);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .overlay__layer:has(> .friends-screen:not([hidden])) > .yard-dock {
+    display: none;
+  }
+
+  .friends-tabs__tab {
+    padding: 0 var(--space-2);
+  }
+
+  .friends-row {
+    flex-wrap: wrap;
+  }
+
+  .friends-row__actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: calc(44px + var(--space-3));
+  }
+}
