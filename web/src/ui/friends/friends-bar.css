@@ -244,3 +244,23 @@
     bottom: 100px;
   }
 }
+
+/* A desktop: the bar sits between the dock's Places column on the left and the
+   leftmost round button on the right (Goals, or Goals one place further left
+   when the Defences button shows), not centred on the screen. */
+@media (width > 620px) {
+  .friends-bar {
+    --friends-bar-left: 140px;
+    --friends-bar-right: 500px;
+    right: var(--friends-bar-right);
+    left: var(--friends-bar-left);
+    width: fit-content;
+    max-width: none;
+    margin-inline: auto;
+    transform: none;
+  }
+
+  .overlay__layer:has(.yard-dock__button--defences:not([hidden])) > .friends-bar {
+    --friends-bar-right: 590px;
+  }
+}
