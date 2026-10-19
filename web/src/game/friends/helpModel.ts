@@ -1,4 +1,5 @@
 import { REFUSAL_TEXT, type HelpBlock, type HelpKind, type HelpOffer, type HelpResult, type ResourceAmounts } from "@/api/friends";
+import type { BuildingData } from "@/api/types";
 import type { YardBuilding } from "@/game/yard/yardModel";
 import { formatAmount, formatCountdown } from "@/ui/format";
 
@@ -89,6 +90,23 @@ export const timeLeft = (building: YardBuilding, now: number): number | null => 
   const countdown = building.countdown;
   if (!countdown || countdown.kind === "rebuild") return null;
   return countdown.paused ? countdown.seconds : Math.max(0, Math.floor(countdown.endsAt - now));
+};
+
+/**
+ * The building a help answers with, counted from the visit's own `savetime`.
+ * The server answers with its countdowns as seconds left now, having saved
+ * the yard now; the visit's save still counts from when it was loaded, so a
+ * running countdown moves forward by the time since. A frozen one is not
+ * counted from any time and stays as it is.
+ */
+export const fromVisitSave = <T extends BuildingData>(raw: T, elapsed: number, paused: boolean): T => {
+  if (paused || elapsed <= 0) return raw;
+  const out: T = { ...raw };
+  for (const key of ["cB", "cU", "cF", "cR"] as const) {
+    const left = raw[key];
+    if (typeof left === "number" && left > 0) out[key] = left + Math.floor(elapsed);
+  }
+  return out;
 };
 
 /** What a speed-up would take off this much time left: `floor(5%)`. */

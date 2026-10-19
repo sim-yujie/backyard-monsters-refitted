@@ -5,6 +5,7 @@ import {
   afterHelp,
   afterRefusal,
   buildingHelp,
+  fromVisitSave,
   helpableIds,
   helpersOf,
   helpersText,
@@ -142,5 +143,19 @@ describe("the block after a help (#374)", () => {
     const next = afterRefusal(block, 7, "speedup", "helpersFull");
     expect(next.buildings["7"]).toEqual({ speedup: "helpersFull" });
     expect(afterRefusal(block, 99, "speedup", "helpersFull")).toBe(block);
+  });
+});
+
+describe("the building a help answers with (#374)", () => {
+  it("counts a running countdown from the visit's savetime, not the server's now", () => {
+    // Loaded 2,611 s ago; the server says 4,930 s are left now.
+    const raw = { X: 0, Y: 0, t: 6, id: 45, cU: 4_930, hl: [3] };
+    expect(fromVisitSave(raw, 2_611.6, false)).toEqual({ X: 0, Y: 0, t: 6, id: 45, cU: 7_541, hl: [3] });
+    expect(raw.cU).toBe(4_930);
+  });
+
+  it("leaves a frozen countdown and a building with no job as they are", () => {
+    expect(fromVisitSave({ X: 0, Y: 0, t: 6, id: 45, cU: 4_930 }, 600, true)).toEqual({ X: 0, Y: 0, t: 6, id: 45, cU: 4_930 });
+    expect(fromVisitSave({ X: 0, Y: 0, t: 6, id: 45 }, 600, false)).toEqual({ X: 0, Y: 0, t: 6, id: 45 });
   });
 });

@@ -32,6 +32,7 @@ import {
   afterHelp,
   afterRefusal,
   buildingHelp,
+  fromVisitSave,
   helpableIds,
   helpingLine,
   helpRefusalText,
@@ -67,7 +68,7 @@ import {
   yardTitle,
   type OwnYardTarget,
 } from "@/game/yard/ownYards";
-import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import { isCountdownPaused, readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { isUnderAttackRefusal, YardAttackGuard } from "@/game/yard/yardAttackGuard";
 import { presence } from "@/game/presence/presencePing";
 import { yardAttack } from "@/game/presence/yardAttack";
@@ -1571,7 +1572,10 @@ export class YardScene implements Scene {
       (one) => Number((save.buildingdata?.[one] as { id?: unknown } | undefined)?.id ?? one) === building.id,
     );
     if (!key || !save.buildingdata) return;
-    save.buildingdata = { ...save.buildingdata, [key]: raw as BuildingDataMap[string] };
+    const answer = raw as BuildingDataMap[string];
+    const paused = isCountdownPaused(answer, save.buildinghealthdata ?? null);
+    const patched = fromVisitSave(answer, Date.now() / 1000 - yard.savedAt, paused);
+    save.buildingdata = { ...save.buildingdata, [key]: patched };
     const next = readYard(save, { foreign: true }).buildings.find((one) => one.id === building.id);
     if (!next) return;
     this.yard = { ...yard, buildings: yard.buildings.map((one) => (one.id === building.id ? next : one)) };
