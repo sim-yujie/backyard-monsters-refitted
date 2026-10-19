@@ -83,7 +83,6 @@ export class FriendsScreen {
         onFind: () => void this.open("find"),
         ...(options.onVisit && { onVisit: options.onVisit }),
         ...(options.onGift && { onGift: options.onGift }),
-        ...(options.onBlock && { onBlock: options.onBlock }),
       }),
     );
     this.tabs.set("requests", new RequestsTab({ api, store: this.store, ...(options.now && { now: options.now }) }));

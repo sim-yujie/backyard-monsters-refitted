@@ -26,10 +26,9 @@ const setup = (options: { list?: Parameters<typeof fixtureApi>[0]; hooks?: boole
   const onFind = vi.fn();
   const onVisit = vi.fn();
   const onGift = vi.fn();
-  const onBlock = vi.fn();
-  const tab = new FriendsTab({ api, store, onFind, ...(options.hooks && { onVisit, onGift, onBlock }) });
+  const tab = new FriendsTab({ api, store, onFind, ...(options.hooks && { onVisit, onGift }) });
   document.body.append(tab.element);
-  return { tab, store, calls, onFind, onVisit, onGift, onBlock };
+  return { tab, store, calls, onFind, onVisit, onGift };
 };
 
 const names = (root: HTMLElement): string[] =>
@@ -116,7 +115,7 @@ describe("FriendsTab", () => {
     expect(bare.tab.element.textContent).not.toContain(FRIENDS_TEXT.visit);
     bare.tab.destroy();
 
-    const { tab, onVisit, onGift, onBlock } = setup({
+    const { tab, onVisit, onGift, calls } = setup({
       hooks: true,
       list: { list: fixtureList([fixtureFriend(4, { username: "Dee", giftSentToday: true }), fixtureFriend(5)]) },
     });
@@ -127,7 +126,10 @@ describe("FriendsTab", () => {
     expect(buttonIn(dee, FRIENDS_TEXT.giftSent).disabled).toBe(true);
     buttonIn(tab.element.querySelector('[data-userid="5"]'), FRIENDS_TEXT.gift).click();
     expect(onGift).toHaveBeenCalledWith(expect.objectContaining({ userid: 5 }));
+    // Block asks first, then blocks through the friends API.
     buttonIn(dee, FRIENDS_TEXT.block).click();
-    expect(onBlock).toHaveBeenCalledWith(expect.objectContaining({ userid: 4 }));
+    expect(calls.some((call) => call[0] === "block")).toBe(false);
+    dee?.querySelector<HTMLButtonElement>(".block-button__yes")?.click();
+    expect(calls).toContainEqual(["block", 4]);
   });
 });

@@ -1,6 +1,7 @@
 import { friendRefusal, type Friend, type FriendsApi } from "@/api/friends";
 import { friendCountText, onlineText } from "@/game/friends/friendText";
 import type { FriendsSnapshot, FriendsStore } from "@/game/friends/friendsStore";
+import { blockButton } from "./BlockButton";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
 
 /**
@@ -21,7 +22,6 @@ export interface FriendActions {
   /** Send them a gift (WP8). */
   readonly onGift?: (friend: Friend) => void;
   /** Block them (WP9). */
-  readonly onBlock?: (friend: Friend) => void;
 }
 
 export interface FriendsTabOptions extends FriendActions {
@@ -134,7 +134,7 @@ export class FriendsTab implements FriendsTabView {
       return row;
     }
     const actions: HTMLElement[] = [];
-    const { onVisit, onGift, onBlock } = this.options;
+    const { onVisit, onGift } = this.options;
     if (onVisit) actions.push(button(FRIENDS_TEXT.visit, () => onVisit(friend), "primary"));
     if (onGift) {
       const gift = button(friend.giftSentToday ? FRIENDS_TEXT.giftSent : FRIENDS_TEXT.gift, () => onGift(friend));
@@ -147,7 +147,15 @@ export class FriendsTab implements FriendsTabView {
     }, "ghost");
     remove.disabled = busy;
     actions.push(remove);
-    if (onBlock) actions.push(button(FRIENDS_TEXT.block, () => onBlock(friend), "ghost"));
+    actions.push(
+      blockButton({
+        userid: friend.userid,
+        username: friend.username,
+        block: (userid) => this.options.api.block(userid),
+        onBlocked: () => void this.options.store.refresh(),
+        onError: (message) => this.status.set(message, "error"),
+      }),
+    );
     return playerRow(friend, {
       ...(online && { note: online, noteClass: `friends-online friends-online--${friend.online}` }),
       actions,
