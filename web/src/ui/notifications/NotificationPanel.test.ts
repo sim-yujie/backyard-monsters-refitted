@@ -47,3 +47,25 @@ describe("NotificationPanel achievement lines", () => {
     panel.destroy();
   });
 });
+
+describe("NotificationPanel friend lines (#370)", () => {
+  const friendRow = (id: number, notice: Record<string, unknown>): GameNotification => ({
+    id,
+    kind: "friend",
+    baseid: null,
+    at: NOW - 60,
+    read: false,
+    jobs: [notice] as unknown as CompletedJob[],
+  });
+
+  it("words a friend's event as plain text", () => {
+    expect(lineText(friendRow(1, { event: "accepted", userid: 7, username: "Bob" }))).toBe("Bob is now your friend.");
+    const panel = new NotificationPanel({ onRead: vi.fn(), onReadAll: vi.fn(), selectFor: () => vi.fn(), now: () => NOW });
+    panel.mount(document.body);
+    panel.show([friendRow(2, { event: "helpRepair", userid: 7, username: "Bob", building: "Cannon Tower" })]);
+    const row = document.querySelector<HTMLElement>(".notif-row")!;
+    expect(row.querySelector(".notif-row__text")!.textContent).toBe("Bob repaired your Cannon Tower.");
+    expect(row.querySelector("button")).toBeNull();
+    panel.destroy();
+  });
+});

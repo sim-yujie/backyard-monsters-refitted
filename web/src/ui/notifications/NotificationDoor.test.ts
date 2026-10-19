@@ -53,7 +53,10 @@ describe("NotificationDoor", () => {
     yard = null;
   });
 
+  let friends: { nudge: ReturnType<typeof vi.fn> };
+
   const doorWith = (api: NotificationsApi, onOpen = () => {}) => {
+    friends = { nudge: vi.fn() };
     const door = new NotificationDoor({
       container,
       api,
@@ -61,6 +64,7 @@ describe("NotificationDoor", () => {
       currentYard: () => yard,
       selectBuilding: select,
       now: () => NOW,
+      friends,
     });
     container.append(door.bell.element);
     return door;
@@ -195,5 +199,19 @@ describe("NotificationDoor", () => {
     door.destroy();
     expect(container.querySelector(".notif-screen")).toBeNull();
     expect(container.querySelector(".yard-dock__button--bell")).toBeNull();
+  });
+  it("refreshes the friends list when the count rises or a friend's line is unread (#370)", async () => {
+    const door = doorWith(
+      fakeApi([notification({ id: 4, kind: "friend", jobs: [{ event: "request", userid: 7, username: "Bob" }] as never })]),
+    );
+    door.setSaveCount(2);
+    expect(friends.nudge).not.toHaveBeenCalled();
+    door.setSaveCount(1);
+    expect(friends.nudge).not.toHaveBeenCalled();
+    door.setSaveCount(3);
+    expect(friends.nudge).toHaveBeenCalledTimes(1);
+    await door.open();
+    expect(friends.nudge).toHaveBeenCalledTimes(2);
+    expect(rows()[0]?.textContent).toContain("Bob wants to be your friend.");
   });
 });

@@ -9,6 +9,8 @@ import { nextWorkerJob } from "@/game/yard/jobs";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { AccountMenu } from "./AccountMenu";
 import { AchievementsDoor } from "./achievements/AchievementsDoor";
+import { friendsStore } from "@/game/friends/friendsStore";
+import { FriendsDoor } from "./friends/FriendsDoor";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
@@ -232,6 +234,8 @@ export class Hud {
   private accountMenu: AccountMenu | null = null;
   /** The achievements screen behind the Account menu's item; null without the menu. */
   private achievementsDoor: AchievementsDoor | null = null;
+  /** The Friends screen behind the Account menu's item (#370); null without the menu. */
+  private friendsDoor: FriendsDoor | null = null;
   private fitted: HudFit = HudFit.FULL;
   /** The animation frame counting a readout up, or 0. */
   private frame = 0;
@@ -372,12 +376,27 @@ export class Hud {
       // Docked beside the HUD, in whatever the scene put it in.
       const door = new AchievementsDoor({
         container: () => this.element.parentElement,
-        ...(options.onAchievementsOpen ? { onOpen: options.onAchievementsOpen } : {}),
+        onOpen: () => {
+          this.friendsDoor?.close();
+          options.onAchievementsOpen?.();
+        },
         onClosedWithFocus: () => this.accountMenu?.focus(),
       });
       this.achievementsDoor = door;
+      // The Friends screen docks where the achievements screen does (#370).
+      const friends = new FriendsDoor({
+        container: () => this.element.parentElement,
+        onOpen: () => {
+          door.close();
+          options.onAchievementsOpen?.();
+        },
+        onClosedWithFocus: () => this.accountMenu?.focus(),
+        onCount: (waiting) => this.accountMenu?.setFriendsCount(waiting),
+      });
+      this.friendsDoor = friends;
       this.accountMenu = new AccountMenu({
         onAchievements: () => void door.open(),
+        onFriends: () => void friends.open(),
         name: options.accountName === undefined ? session?.username : options.accountName,
         onSignOut: options.onSignOut,
         variant: this.corner ? "pill" : "button",
@@ -392,6 +411,7 @@ export class Hud {
         }),
       });
       this.element.append(this.accountMenu.element);
+      this.accountMenu.setFriendsCount(friendsStore.waiting);
     }
   }
 
@@ -484,6 +504,11 @@ export class Hud {
     return this.achievementsDoor;
   }
 
+  /** The Friends screen behind the Account menu (#370); null without the menu. */
+  get friends(): FriendsDoor | null {
+    return this.friendsDoor;
+  }
+
   /** The level the bar is showing at (`HudFit`). */
   get fitLevel(): HudFit {
     return this.fitted;
@@ -572,6 +597,8 @@ export class Hud {
     this.accountMenu = null;
     this.achievementsDoor?.destroy();
     this.achievementsDoor = null;
+    this.friendsDoor?.destroy();
+    this.friendsDoor = null;
     for (const float of this.floats) float.remove();
     this.floats.clear();
     this.element.remove();
