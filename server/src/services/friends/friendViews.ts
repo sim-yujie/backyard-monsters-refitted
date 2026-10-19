@@ -65,10 +65,10 @@ export interface PlayerResult {
 }
 
 /** The columns every player description reads: the account and its main save's level. */
-const CARD_COLUMNS = `u.userid, u.username, u.pic_square, s.points, s.basevalue`;
-const CARD_JOIN = `bym."user" u LEFT JOIN bym.save s ON s.basesaveid = u.save_basesaveid`;
+export const CARD_COLUMNS = `u.userid, u.username, u.pic_square, s.points, s.basevalue`;
+export const CARD_JOIN = `bym."user" u LEFT JOIN bym.save s ON s.basesaveid = u.save_basesaveid`;
 
-interface CardRow {
+export interface CardRow {
   userid: number | string;
   username: string;
   pic_square: string | null;
@@ -79,7 +79,7 @@ interface CardRow {
 const levelOf = (row: CardRow): number =>
   row.points === null && row.basevalue === null ? 1 : calculateBaseLevel(row.points ?? "0", row.basevalue ?? "0");
 
-const cardOf = (row: CardRow) => ({
+export const cardOf = (row: CardRow) => ({
   userid: Number(row.userid),
   username: row.username,
   pic: row.pic_square ?? null,

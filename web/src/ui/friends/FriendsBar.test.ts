@@ -102,13 +102,25 @@ describe("empty state and the plus slot", () => {
 
 describe("the card", () => {
   it("has Send gift and Friends list, and no Visit until a visit hook exists", async () => {
-    const { openFriends } = await setup();
+    const onGift = vi.fn();
+    await setup([friend(1), friend(2)], { onGift });
     slots()[0]!.click();
     const labels = () => [...document.querySelectorAll(".friends-bar__card-button")].map((b) => b.textContent);
     expect(labels()).toEqual(["Send gift", "Friends list"]);
     (document.querySelectorAll(".friends-bar__card-button")[0] as HTMLElement).click();
-    expect(openFriends).toHaveBeenCalledWith("gifts");
+    expect(onGift).toHaveBeenCalledWith(expect.objectContaining({ userid: 1 }));
     expect(document.querySelector(".friends-bar__card")).toBeNull();
+  });
+
+  it("Send gift opens the gift picker, and is off once a gift went today (#375)", async () => {
+    await setup([friend(1, { username: "Ann" }), friend(2, { username: "Bo", giftSentToday: true })]);
+    const card = () => [...document.querySelectorAll<HTMLButtonElement>(".friends-bar__card-button")];
+    slots().find((s) => s.textContent?.includes("Bo"))!.click();
+    expect(card()[0]!.textContent).toBe("Gift sent today");
+    expect(card()[0]!.disabled).toBe(true);
+    slots().find((s) => s.textContent?.includes("Ann"))!.click();
+    card()[0]!.click();
+    expect(document.querySelector(".gift-picker")?.textContent).toContain("Ann");
   });
 
   it("hands the friend to onVisit", async () => {

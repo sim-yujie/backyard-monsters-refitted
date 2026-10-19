@@ -34,6 +34,13 @@ export const FRIEND_REQUEST_RETENTION_DAYS = 30;
  */
 export const FRIEND_HELP_RETENTION_DAYS = 90;
 
+/**
+ * Days a friend gift (`friend_gift`) is kept: a gift lapses after 7, the
+ * one-a-day rule reads only today's, and the rest is the audit trail
+ * (`docs/design/friends.md` §7 rule 9), as for helps.
+ */
+export const FRIEND_GIFT_RETENTION_DAYS = 90;
+
 /** Rows deleted per statement. */
 export const RETENTION_BATCH = 1000;
 
@@ -50,6 +57,7 @@ export interface RetentionResult {
   chatReports: number;
   friendRequests: number;
   friendHelps: number;
+  friendGifts: number;
 }
 
 export interface RetentionOptions {
@@ -195,7 +203,16 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
-  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports, friendRequests, friendHelps };
+  const friendGifts = await deleteOldRows(
+    em,
+    "friend_gift",
+    "id",
+    "created_at",
+    cutoff(now, FRIEND_GIFT_RETENTION_DAYS),
+    batchSize,
+    pauseMs
+  );
+  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports, friendRequests, friendHelps, friendGifts };
 };
 
 /**

@@ -2,6 +2,7 @@ import type { Friend } from "@/api/friends";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { friendsOpener } from "@/game/friends/friendsView";
+import { openGiftPicker } from "./GiftPicker";
 import { make } from "./rows";
 import "./friends-bar.css";
 
@@ -47,6 +48,8 @@ export const pageOf = <T>(items: readonly T[], page: number, size: number): { it
 
 type FriendsTabName = "friends" | "gifts";
 
+const GIFT_SENT = "Gift sent today";
+
 export interface FriendsBarOptions {
   /** Takes the player to this friend's yard. Without it the card has no Visit. */
   readonly onVisit?: (friend: Friend) => void;
@@ -54,6 +57,8 @@ export interface FriendsBarOptions {
   readonly store?: FriendsStore;
   /** Opens the Friends screen; the shared opener by default. */
   readonly openFriends?: (tab?: FriendsTabName) => void;
+  /** Sends this friend a gift; the gift picker (#375) by default. */
+  readonly onGift?: (friend: Friend) => void;
 }
 
 export class FriendsBar {
@@ -184,9 +189,10 @@ export class FriendsBar {
     card.setAttribute("role", "dialog");
     card.setAttribute("aria-label", friend.username);
     card.append(make("div", "friends-bar__card-title", `${friend.username}, level ${friend.level}`));
-    const add = (label: string, run: () => void): void => {
+    const add = (label: string, run: () => void, disabled = false): void => {
       const b = make("button", "friends-bar__card-button", label);
       b.type = "button";
+      b.disabled = disabled;
       b.addEventListener("click", run);
       card.append(b);
     };
@@ -197,7 +203,15 @@ export class FriendsBar {
         onVisit(friend);
       });
     }
-    add("Send gift", () => this.openFriends("gifts"));
+    add(
+      friend.giftSentToday ? GIFT_SENT : "Send gift",
+      () => {
+        this.closeCard();
+        if (this.options.onGift) this.options.onGift(friend);
+        else openGiftPicker(friend, this.element.parentElement, { store: this.store });
+      },
+      friend.giftSentToday,
+    );
     add("Friends list", () => this.openFriends("friends"));
     this.card = card;
     this.element.append(card);

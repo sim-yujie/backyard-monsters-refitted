@@ -317,3 +317,38 @@
     padding-left: calc(44px + var(--space-3));
   }
 }
+
+/* Gifts (#375) ─────────────────────────────────────────────────────────────
+ * The Gifts tab's line above the list (collects left, Collect all), the
+ * amount under a sender's name, and the gift picker's four resources. */
+
+.gifts-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.gifts-summary__left {
+  margin: 0;
+}
+
+.gift-amount {
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.gift-picker__choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.gift-picker__choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}

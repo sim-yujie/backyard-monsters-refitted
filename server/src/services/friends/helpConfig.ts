@@ -26,3 +26,16 @@ export const FRIEND_GATES = {
   accountAgeDays: 3,
   minLevel: 5,
 } as const;
+
+/**
+ * Every number the gift rules use (`docs/design/friends.md` §5 and §7, issue
+ * #375). Who may send a gift is {@link FRIEND_GATES}, as for help.
+ */
+export const GIFT_RULES = {
+  /** Share of the lower of the sender's and the receiver's storage caps one gift is worth, rounded down. */
+  share: 0.03,
+  /** Gifts a player can collect in a UTC day; the rest wait. */
+  collectsPerDay: 5,
+  /** Days a gift waits to be collected before it lapses. */
+  waitDays: 7,
+} as const;

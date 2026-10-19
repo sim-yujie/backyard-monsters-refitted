@@ -40,6 +40,7 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     await sql(`DELETE FROM bym.job_run WHERE job = ?`, [RETENTION_JOB]);
     await sql(`DELETE FROM bym.friend_request WHERE from_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.friend_help WHERE helper_userid IN (?, ?)`, [A, B]);
+    await sql(`DELETE FROM bym.friend_gift WHERE from_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym."user" WHERE userid IN (?, ?) AND username LIKE 'zz_ret_%'`, [A, B]);
   };
 
@@ -199,6 +200,25 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     expect(result).toMatchObject({ friendHelps: 2 });
     const left = await sql<{ building_id: number }>(`SELECT building_id FROM bym.friend_help WHERE helper_userid = ? ORDER BY id`, [A]);
     expect(left.map((row) => Number(row.building_id))).toEqual([89, 1]);
+  });
+
+  test("friend gifts go after 90 days, collected or not (issue #375)", async () => {
+    for (const [userid, name] of [[A, "zz_ret_a"], [B, "zz_ret_b"]] as const) {
+      await sql(`INSERT INTO bym."user" (userid, username, email, password, blocked_users) VALUES (?, ?, ?, 'x', '[]')`, [userid, name, `${name}@test.invalid`]);
+    }
+    for (const days of [120, 91, 89, 1]) {
+      await sql(
+        `INSERT INTO bym.friend_gift (from_userid, to_userid, resource, amount, gift_day, created_at, expires_at, collected_at)
+         VALUES (?, ?, 'r1', ?, ?, ?, ?, ?)`,
+        [A, B, days, ago(days), ago(days), ago(days - 7), days === 91 ? ago(days) : null]
+      );
+    }
+
+    const result = await run();
+
+    expect(result).toMatchObject({ friendGifts: 2 });
+    const left = await sql<{ amount: number }>(`SELECT amount FROM bym.friend_gift WHERE from_userid = ? ORDER BY id`, [A]);
+    expect(left.map((row) => Number(row.amount))).toEqual([89, 1]);
   });
 
   test("each limit is its own setting", async () => {
