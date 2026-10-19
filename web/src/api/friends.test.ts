@@ -185,8 +185,8 @@ describe("friendsApi writes", () => {
   it("sends a gift, collects one or all, and reads what came back", async () => {
     stubFetch({ error: 0, gift: { id: 5, userid: 7, resource: "r2", amount: 300 } });
     expect(await friendsApi.sendGift(7, "r2")).toMatchObject({ id: 5, resource: "r2", amount: 300 });
-    stubFetch({ error: 0, collected: 2, resources: { r1: 100, r2: "50", r3: -1 } });
-    expect(await friendsApi.collect("all")).toEqual({ collected: 2, resources: { r1: 100, r2: 50 } });
+    stubFetch({ error: 0, collected: 2, resources: { r1: 100, r2: "50", r3: -1 }, collectsLeft: 3, giftsWaiting: 1 });
+    expect(await friendsApi.collect("all")).toEqual({ collected: 2, resources: { r1: 100, r2: 50 }, collectsLeft: 3, giftsWaiting: 1 });
     await friendsApi.collect(5);
     expect(calls.map((call) => call.json)).toEqual([{ userid: 7, resource: "r2" }, { all: true }, { giftid: 5 }]);
   });

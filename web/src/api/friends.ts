@@ -146,18 +146,23 @@ export interface PlayerResult {
   readonly relation: Relation;
 }
 
-/** One gift waiting for the player (WP8). */
+/**
+ * One gift (WP8, #375). In the Gifts list the player is the sender; in the
+ * answer to sending one, the receiver.
+ */
 export interface Gift {
   readonly id: number;
-  /** The sender. */
   readonly userid: number;
   readonly username: string;
   readonly pic: string | null;
+  readonly level: number;
   readonly resource: GiftResource;
   readonly amount: number;
   /** Unix seconds; null when the server sent none. */
   readonly createdAt: number | null;
   readonly expiresAt: number | null;
+  /** Still friends with the sender and no gift sent them today: "Send one back" can be pressed. */
+  readonly canSendBack: boolean;
 }
 
 /** `GET /bm/friends/gifts`. */
@@ -173,6 +178,10 @@ export interface GiftCollect {
   readonly collected: number;
   /** What went into the main yard, after the storage cap. */
   readonly resources: ResourceAmounts;
+  /** Gifts the player can still collect today. */
+  readonly collectsLeft: number;
+  /** Gifts still waiting. */
+  readonly giftsWaiting: number;
 }
 
 /** `POST /bm/friends/help`. */
@@ -239,6 +248,7 @@ export type FriendRefusalReason =
   | "underAttack"
   | "noSuchPlayer"
   | "noSuchRequest"
+  | "noSuchGift"
   | "self";
 
 /** A refused call, in words: its reason (or `network`/`unknown`) and what to tell the player. */
@@ -270,6 +280,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   underAttack: "They are under attack right now.",
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
+  noSuchGift: "That gift is no longer waiting.",
   self: "That's you!",
 };
 
@@ -399,6 +410,7 @@ const giftOf = (raw: Record<string, unknown>): Gift => ({
   userid: id(raw["userid"] ?? raw["from_userid"]),
   username: text(raw["username"], "A friend"),
   pic: picOf(raw["pic"]),
+  level: count(raw["level"]),
   resource:
     typeof raw["resource"] === "string" && GIFT_RESOURCES.has(raw["resource"])
       ? (raw["resource"] as GiftResource)
@@ -406,6 +418,7 @@ const giftOf = (raw: Record<string, unknown>): Gift => ({
   amount: count(raw["amount"]),
   createdAt: toSeconds(raw["createdAt"] ?? raw["created_at"]),
   expiresAt: toSeconds(raw["expiresAt"] ?? raw["expires_at"]),
+  canSendBack: raw["canSendBack"] === true,
 });
 
 const privacyOf = (raw: Record<string, unknown>): PrivacySettings => ({
@@ -496,7 +509,12 @@ export const friendsApi: FriendsApi = {
   },
   async collect(giftid) {
     const answer = await postJson<Answer>(COLLECT_PATH, giftid === "all" ? { all: true } : { giftid });
-    return { collected: count(answer["collected"]), resources: amounts(answer["resources"]) };
+    return {
+      collected: count(answer["collected"]),
+      resources: amounts(answer["resources"]),
+      collectsLeft: count(answer["collectsLeft"]),
+      giftsWaiting: count(answer["giftsWaiting"]),
+    };
   },
   async help(userid, buildingId, kind) {
     const answer = await postJson<Answer>(HELP_PATH, { userid, buildingId, kind });

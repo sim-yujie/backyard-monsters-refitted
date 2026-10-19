@@ -1,4 +1,4 @@
-import type { Friend, FriendRequest, FriendsApi, FriendsList, PlayerResult } from "@/api/friends";
+import type { Friend, FriendRequest, FriendsApi, FriendsList, Gift, PlayerResult } from "@/api/friends";
 
 /**
  * Friends in the §6.2 contract's shapes (issue #370), for the tests: a
@@ -50,6 +50,21 @@ export const fixturePlayer = (userid: number, relation: PlayerResult["relation"]
 });
 
 /** One call the fake API took: the method and its arguments. */
+/** One gift waiting, from `userid`. */
+export const fixtureGift = (id: number, userid: number, extra: Partial<Gift> = {}): Gift => ({
+  id,
+  userid,
+  username: `Player ${userid}`,
+  pic: null,
+  level: 6,
+  resource: "r1",
+  amount: 300,
+  createdAt: null,
+  expiresAt: null,
+  canSendBack: true,
+  ...extra,
+});
+
 export type FixtureCall = readonly [method: keyof FriendsApi, ...args: unknown[]];
 
 /**
@@ -78,7 +93,7 @@ export const fixtureApi = (
     suggestions: answer("suggestions", []),
     sendGift: answer("sendGift", null),
     gifts: answer("gifts", { gifts: [], collectsLeft: 5 }),
-    collect: answer("collect", { collected: 0, resources: {} }),
+    collect: answer("collect", { collected: 0, resources: {}, collectsLeft: 5, giftsWaiting: 0 }),
     help: answer("help", { reward: {}, helpsLeft: 0, building: null }),
     loadHelpYard: answer("loadHelpYard", { error: 0 } as Awaited<ReturnType<FriendsApi["loadHelpYard"]>>),
     setPrivacy: answer("setPrivacy", { hideOnline: false, friendRequests: true }),

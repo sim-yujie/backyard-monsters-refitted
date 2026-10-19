@@ -16,6 +16,7 @@ import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { setPlayerPool } from "@/game/friends/friendsView";
 import { worldChat } from "@/game/chat/chatSession";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
@@ -301,6 +302,8 @@ export class YardScene implements Scene {
   private dock: YardDock | null = null;
   /** The friends bar (#371): own yard only; null on a visit. */
   private friendsBar: FriendsBar | null = null;
+  /** Takes back the pool the Gifts tab reads and refreshes after a collect (#375). */
+  private clearPlayerPool: (() => void) | null = null;
   /**
    * What the player may do with the planner in the yard now open (§8, Q5).
    *
@@ -468,6 +471,11 @@ export class YardScene implements Scene {
     if (!target) {
       // Visiting a friend is WP5 (#372): until it lands the card has no Visit.
       this.friendsBar = new FriendsBar().mount(context.overlay.content);
+      // A collected gift lands in this pool; the Gifts tab warns against its caps.
+      this.clearPlayerPool = setPlayerPool({
+        read: () => (this.store ? { resources: this.store.resources, caps: this.store.caps } : null),
+        refresh: () => void this.store?.refresh(),
+      });
       this.mail = new MailDoor({
         style: "dock",
         container: context.overlay.content,
@@ -546,6 +554,8 @@ export class YardScene implements Scene {
     this.chat = null;
     this.friendsBar?.destroy();
     this.friendsBar = null;
+    this.clearPlayerPool?.();
+    this.clearPlayerPool = null;
     this.dock?.destroy();
     this.dock = null;
     this.input?.detach();

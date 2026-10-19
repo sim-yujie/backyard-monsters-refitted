@@ -145,6 +145,21 @@ export class FriendsStore {
     if (next !== this.state.requestsIn) this.set({ ...this.state, requestsIn: next });
   }
 
+  /** Sets the gifts-waiting count, as the Gifts tab last saw it. */
+  setGiftsWaiting(giftsWaiting: number): void {
+    const next = Math.max(0, Math.floor(giftsWaiting));
+    if (next !== this.state.giftsWaiting) this.set({ ...this.state, giftsWaiting: next });
+  }
+
+  /** Marks a friend as sent a gift today, ahead of the next refresh (the player sent one). */
+  markGifted(userid: number): void {
+    if (!this.ids.has(userid)) return;
+    const friends = this.state.friends.map((friend) =>
+      friend.userid === userid ? { ...friend, giftSentToday: true } : friend,
+    );
+    this.set({ ...this.state, friends });
+  }
+
   /** Forgets everything. */
   reset(): void {
     this.lastRefresh = -Infinity;
