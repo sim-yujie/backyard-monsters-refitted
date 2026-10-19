@@ -8,7 +8,8 @@ up to three helpers can build at once.
 
 All citations are `path:line` or `path` relative to the repository root. Claims about current
 behaviour cite the server, the web client or the Flash client (`client/scripts`); anything new is a
-proposal. Numbers the owner has not confirmed are marked `[PROPOSED]` and listed in section 10.
+proposal. The numbers this document had to propose are listed in section 10; the owner approved all
+of them on 2026-10-19.
 
 Contents:
 
@@ -112,7 +113,7 @@ yet**, so decision 7's alliance entry point has nowhere to live (see section 10,
 - On accept, both players see each other in their list and bar, and both get a notification.
 - **Remove friend** ends it at once for both, silently. Attacking a friend does not end it.
 - Limits: 100 friends; 30 requests waiting for an answer at a time; a request lapses after 14 days;
-  after a decline, the same player cannot ask again for 7 days `[PROPOSED]`.
+  after a decline, the same player cannot ask again for 7 days.
 
 ### 3.2 The friends bar
 
@@ -128,7 +129,7 @@ shows as many portraits as fit, with arrows to page. Clicking a portrait opens a
 **Visit**, **Send gift**, **Friends list**. On a phone the strip hides behind a **Friends** round
 button in the bottom-left group and slides up when pressed.
 
-The bar shows on the own yard only `[PROPOSED]`: the maps are already crowded.
+The bar shows on the own yard only: the maps are already crowded.
 
 ### 3.3 Visiting a friend
 
@@ -155,7 +156,7 @@ free for the sender. One gift per friend per day. The friend sees a notification
 Friends; their **Gifts** tab lists waiting gifts with **Collect** (and **Collect all**) and **Send
 one back**. Collecting adds the resource to the main yard up to its storage cap; if there is not
 room for all of it, the button warns first. A gift waits 7 days, then lapses. A player can collect
-at most 5 gifts a day; the rest wait `[PROPOSED]`.
+at most 5 gifts a day; the rest wait.
 
 ### 3.5 Attacking a friend
 
@@ -171,7 +172,8 @@ In **Account settings**, a new **Privacy** part:
 - **Blocked players**: the list, each with **Unblock**.
 
 **Block** sits on a friend's row, on a search result, and in a mail thread (beside Report, which
-keeps blocking as it does now). Blocking someone removes the friendship and any requests between
+keeps blocking as it does now, and now also ends any friendship and requests between you, as Block
+does; WP1). Blocking someone removes the friendship and any requests between
 you, drops their waiting gifts to you, and stops their requests, gifts and messages. They are not
 told; what they try fails with the same neutral "You can't send that to this player." Blocking does
 not stop attacks either way.
@@ -181,11 +183,11 @@ not stop attacks either way.
 All checks are on the server. A **help** is one speed-up or one repair.
 
 **Who may help.** The two players are friends, have been for at least 24 hours, both accounts are at
-least 3 days old and both are at least level 5 `[PROPOSED]` (section 7). Neither has blocked the
-other. Only the friend's **main yard** can be helped `[PROPOSED]`.
+least 3 days old and both are at least level 5 (section 7). Neither has blocked the
+other. Only the friend's **main yard** can be helped.
 
-**Daily cap.** At most **20 helps a day** per helper `[PROPOSED]`, speed-ups and repairs together.
-The day turns at 00:00 UTC `[PROPOSED]`. A help that is refused does not count.
+**Daily cap.** At most **20 helps a day** per helper, speed-ups and repairs together.
+The day turns at 00:00 UTC. A help that is refused does not count.
 
 **Speed-up.**
 - Allowed on a building with a build, upgrade or fortify countdown running (`cB`, `cU` or `cF` above
@@ -199,12 +201,12 @@ The day turns at 00:00 UTC `[PROPOSED]`. A help that is refused does not count.
 
 **Repair.**
 - Allowed on a building below full health. It **heals the building to full health at once**
-  `[PROPOSED]` and clears `rE`, like a one-building "Repair now" with no Shiny. Because the building
+  and clears `rE`, like a one-building "Repair now" with no Shiny. Because the building
   is then healthy, it can be repaired only once per damage, by one friend.
 - Damage and the yard's damage figure follow the existing repair rules (`catchUpDamage.ts`).
 
 **Reward.** Each counted help pays the helper **0.25% of the lower of the two players' storage caps
-in each of Twigs, Pebbles, Putty and Goo** `[PROPOSED]`, credited to the helper's main yard up to
+in each of Twigs, Pebbles, Putty and Goo**, credited to the helper's main yard up to
 its cap. Using the lower cap means helping a tiny fake yard pays almost nothing. 20 helps a day is at
 most 5% of a cap in each resource.
 
@@ -214,16 +216,16 @@ in the yard.
 ## 5. Gift rules
 
 - **Who may gift:** the same friendship rules as help (24 hours of friendship, both accounts 3 days
-  old, both level 5+) `[PROPOSED]`, and not blocked either way.
+  old, both level 5+), and not blocked either way.
 - **One gift per sender per friend per day** (decision 6), UTC day. Removing and re-adding a friend
   does not give a second gift that day.
 - **Amount:** **3% of the lower of the sender's and the receiver's storage caps**, in the resource
-  the sender picks `[PROPOSED]`. The sender's cap is how decision 6's "scaled to the sender's level"
+  the sender picks. The sender's cap is how decision 6's "scaled to the sender's level"
   is measured: it grows with their silos, packing and outposts. Taking the lower cap means a fake
   low-level account sends very little, and a big player cannot flood a beginner. Worked out and
   fixed when sent.
 - **Free:** nothing is taken from the sender.
-- **Receiving:** gifts wait up to 7 days. At most **5 collected a day** per player `[PROPOSED]`.
+- **Receiving:** gifts wait up to 7 days. At most **5 collected a day** per player.
   Collecting credits the main yard, clamped to its cap (the yard action credit rule, T3).
 - For scale: at most 15% of one's cap a day from gifts, plus at most 5% per resource from helping.
 
@@ -260,19 +262,19 @@ add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 | --- | --- | --- |
 | `GET /bm/friends` | — | `friends: Friend[]`, `max: 100`, `requestsIn: n`, `giftsWaiting: n`, `helpsLeft: n` |
 | `GET /bm/friends/requests` | — | `incoming: Request[]`, `outgoing: Request[]` |
-| `POST /bm/friends/request` | `{ userid }` or `{ username }` | `{ request }` or a refusal |
+| `POST /bm/friends/request` | `{ userid }` or `{ username }` | `{ request, friend? }` or a refusal |
 | `POST /bm/friends/request/answer` | `{ requestid, accept }` | `{ friend? }` |
 | `POST /bm/friends/request/cancel` | `{ requestid }` | `{}` |
 | `POST /bm/friends/remove` | `{ userid }` | `{}` |
-| `GET /bm/friends/search` | `?q=` (3+ chars) | up to 10 `{ userid, username, pic, level, relation }`, exact match first |
-| `GET /bm/friends/suggestions` | — | alliance mates not yet friends, same shape |
+| `GET /bm/friends/search` | `?q=` (3+ chars) | `results`: up to 10 `{ userid, username, pic, level, relation }`, exact match first |
+| `GET /bm/friends/suggestions` | — | `results`: alliance mates not yet friends (up to 50), same shape |
 | `POST /bm/friends/gift` | `{ userid, resource }` | `{ gift }` |
 | `GET /bm/friends/gifts` | — | `gifts: Gift[]`, `collectsLeft: n` |
 | `POST /bm/friends/gifts/collect` | `{ giftid }` or `{ all: true }` | `{ collected, resources }` |
 | `POST /bm/friends/help` | `{ userid, buildingId, kind }` | `{ secondsSaved?, healed?, reward, helpsLeft, building }` |
 | `POST /base/load` with `type: "help"` | `baseid` of the friend's main yard | the yard as `view` serves it, plus `help: { helpsLeft, buildings: { [id]: { speedup?, repair? } } }`, each `true` or a reason |
-| `POST /player/settings` (existing) | adds `hideOnline?`, `friendRequests?` | `settings` adds both |
-| `GET /player/blocked` | — | `[{ userid, username }]` |
+| `POST /player/settings` (existing) | adds `hideOnline?`, `friendRequests?` (every field optional) | `settings` adds both |
+| `GET /player/blocked` | — | `blocked: [{ userid, username }]` |
 | `POST /player/block`, `POST /player/unblock` | `{ userid }` | `{}` |
 
 `Friend` = `{ userid, username, pic, level, online: "online" | "today" | "week" | "away" | null,
@@ -281,6 +283,13 @@ friend hides it; "today"/"week"/"away" come from `last_seen_at`, coarse on purpo
 when the 24-hour rule clears (null once it has). `help` says whether you could help today; until WP6
 lands it is `null`.
 
+`Request` = `{ requestid, userid, username, pic, level, status, at, expires }`, where `userid`,
+`username`, `pic` and `level` are the other player's (the sender in `incoming`, the recipient in
+`outgoing`), `status` is `pending` | `accepted` | `declined` | `cancelled` | `expired`, and `at` /
+`expires` are unix seconds (made / lapses 14 days later). `POST /bm/friends/request` to a player who
+had already asked you accepts their request instead: the answer's `request` is theirs with
+`status: "accepted"`, and `friend` is the new friend.
+
 `relation` = `self` | `friend` | `requested` (you asked) | `asked` (they asked you) | `none`.
 A player who blocked you shows as `none`, and a request then fails with the neutral refusal.
 
@@ -288,7 +297,15 @@ A player who blocked you shows as `none`, and a request then fails with the neut
 `requestLimit`, `alreadyFriends`, `alreadyRequested`, `requestsOff`, `declinedRecently`,
 `cannotSend` (blocked either way, or the account cannot be friended), `tooNew` (24-hour, account age
 or level rule, with `from` when known), `dailyCap`, `giftSentToday`, `collectLimit`, `notFriends`,
-`helpersFull`, `alreadyHelped`, `nothingToHelp`, `underAttack`.
+`helpersFull`, `alreadyHelped`, `nothingToHelp`, `underAttack`, and three for bad targets:
+`noSuchPlayer` (no such id or name), `noSuchRequest` (not a waiting request of yours) and `self`.
+`requestLimit` is 30 requests waiting; `dailyCap` is 30 requests made today (cancelled ones count).
+The body is the usual `ClientSafeError` shape: the reason is in `errorDetails.data.reason`, the
+player-facing sentence in `errorDetails.message`, and `declinedRecently` adds `data.from` (unix
+seconds when asking again works). A malformed body is a 400 as elsewhere.
+
+**Notifications.** Requests and accepted requests leave a `friend` notification for the other
+player; its row's `jobs` holds one entry, `{ event: "request" | "accepted", userid, username }`.
 
 **Friend flag.** Map cells, neighbour lists and mail targets fill `friend: 1` for friends instead of
 the hard-coded 0, so the legacy client paths behave (WP2).
@@ -312,14 +329,14 @@ buildings can be helped. Until WP6 lands, `help.buildings` is empty.
 
 ## 7. Anti-abuse rules
 
-1. **Friendship age gate:** gifts and help need 24 hours of friendship `[PROPOSED]`. Remove and
+1. **Friendship age gate:** gifts and help need 24 hours of friendship. Remove and
    re-add starts the clock again.
-2. **Account gate:** both accounts at least 3 days old and level 5 or more `[PROPOSED]`, so a fresh
+2. **Account gate:** both accounts at least 3 days old and level 5 or more, so a fresh
    fake account is useless for days and costs real play.
 3. **Lower-cap scaling:** gift and reward amounts use the lower of the two storage caps, so small
    fake yards give and earn little.
 4. **Hard caps:** 100 friends; 30 open outgoing requests; 30 new requests a day; 20 helps a day; 5
-   helps per job; one gift per friend per day; 5 gifts collected a day `[PROPOSED]` where not set
+   helps per job; one gift per friend per day; 5 gifts collected a day where not set
    by the owner.
 5. **Per-pair keys:** `gift_day` and `hl` stop repeats even across remove and re-add.
 6. **Server decides everything:** time saved, health, amounts and caps are worked out on the server
@@ -329,7 +346,7 @@ buildings can be helped. Until WP6 lands, `help.buildings` is empty.
    player.
 9. **Audit:** `friend_help` and `friend_gift` keep who did what for whom, for spotting rings later.
 10. **No farming through requests:** declining or ignoring is free; a sender waits 7 days after a
-    decline `[PROPOSED]`.
+    decline.
 
 ## 8. Web client
 
@@ -384,11 +401,12 @@ Every package ends with its tests (server database tests for routes and rules, w
 panels) and a short browser check in the shared session. A last end-to-end run with two accounts
 (request, accept, visit, speed-up, repair, gift, block) closes the parent issue.
 
-## 10. Owner questions
+## 10. Owner questions (approved 2026-10-19)
 
-Only the numbers and choices this document had to propose. Everything else is decided.
+Only the numbers and choices this document had to propose. The owner approved every proposal below
+on 2026-10-19 (for Q4, the first option: heal to full at once).
 
-| # | Question | Proposal |
+| # | Question | Decision |
 | --- | --- | --- |
 | Q1 | Daily help cap per helper | **20** helps a day, speed-ups and repairs together |
 | Q2 | When does "a day" turn over? | **00:00 UTC** for every daily limit |
