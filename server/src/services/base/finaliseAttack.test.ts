@@ -150,7 +150,11 @@ mock.module("../../server.js", () => ({
 const core = await import("@mikro-orm/core");
 mock.module("@mikro-orm/core", () => ({
   ...core,
-  RequestContext: { ...core.RequestContext, create: (_em: unknown, next: () => unknown) => next() },
+  // Object.create, not a spread: the static getEntityManager is non-enumerable and the
+  // DB tests that run later in the same process need it.
+  RequestContext: Object.assign(Object.create(core.RequestContext), {
+    create: (_em: unknown, next: () => unknown) => next(),
+  }),
 }));
 
 mock.module("../../utils/logger.js", () => ({
