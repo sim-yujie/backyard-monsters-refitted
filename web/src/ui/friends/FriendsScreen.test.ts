@@ -25,11 +25,11 @@ afterEach(() => {
 });
 
 describe("FriendsScreen", () => {
-  it("has the Friends, Requests and Find tabs, in that order", () => {
+  it("has the Friends, Requests, Gifts and Find tabs, in that order", () => {
     const { screen } = setup();
     const labels = [...screen.element.querySelectorAll(".friends-tabs__label")].map((node) => node.textContent);
-    expect(labels).toEqual(["Friends", "Requests", "Find"]);
-    expect(FRIENDS_TABS.map((tab) => tab.id)).toEqual(["friends", "requests", "find"]);
+    expect(labels).toEqual(["Friends", "Requests", "Gifts", "Find"]);
+    expect(FRIENDS_TABS.map((tab) => tab.id)).toEqual(["friends", "requests", "gifts", "find"]);
     expect(screen.element.hidden).toBe(true);
   });
 
@@ -53,6 +53,15 @@ describe("FriendsScreen", () => {
     expect(count.hidden).toBe(true);
   });
 
+  it("shows the gifts waiting on the Gifts tab (#375)", () => {
+    const { screen, store } = setup();
+    const count = tabButton(screen, "gifts").querySelector(".friends-tabs__count") as HTMLElement;
+    store.setGiftsWaiting(4);
+    expect(count.textContent).toBe("4");
+    store.setGiftsWaiting(0);
+    expect(count.hidden).toBe(true);
+  });
+
   it("switches tabs by click and by arrow keys, fetching each fresh", async () => {
     const { screen, calls } = setup();
     await screen.open();
@@ -60,6 +69,9 @@ describe("FriendsScreen", () => {
     expect(screen.activeTab).toBe("requests");
     expect(calls).toContainEqual(["requests"]);
     tabButton(screen, "requests").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(screen.activeTab).toBe("gifts");
+    expect(calls).toContainEqual(["gifts"]);
+    tabButton(screen, "gifts").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(screen.activeTab).toBe("find");
     expect(calls).toContainEqual(["suggestions"]);
     tabButton(screen, "find").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));

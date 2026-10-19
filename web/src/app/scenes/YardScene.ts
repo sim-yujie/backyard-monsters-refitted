@@ -16,6 +16,7 @@ import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { setPlayerPool } from "@/game/friends/friendsView";
 import {
   friendRefusal,
   friendsApi,
@@ -328,6 +329,8 @@ export class YardScene implements Scene {
   private dock: YardDock | null = null;
   /** The friends bar (#371): own yard only; null on a visit. */
   private friendsBar: FriendsBar | null = null;
+  /** Takes back the pool the Gifts tab reads and refreshes after a collect (#375). */
+  private clearPlayerPool: (() => void) | null = null;
   /**
    * A friend's visit (#372, #374): what the help-mode load said can be
    * helped, kept current after each help; null on every other yard.
@@ -516,6 +519,11 @@ export class YardScene implements Scene {
       this.friendsBar = new FriendsBar({ onVisit: (friend) => this.visitFriendYard(friend) }).mount(
         context.overlay.content,
       );
+      // A collected gift lands in this pool; the Gifts tab warns against its caps.
+      this.clearPlayerPool = setPlayerPool({
+        read: () => (this.store ? { resources: this.store.resources, caps: this.store.caps } : null),
+        refresh: () => void this.store?.refresh(),
+      });
       this.mail = new MailDoor({
         style: "dock",
         container: context.overlay.content,
@@ -594,6 +602,8 @@ export class YardScene implements Scene {
     this.chat = null;
     this.friendsBar?.destroy();
     this.friendsBar = null;
+    this.clearPlayerPool?.();
+    this.clearPlayerPool = null;
     this.stopHelpedWatch?.();
     this.stopHelpedWatch = null;
     this.helpPanel?.close();

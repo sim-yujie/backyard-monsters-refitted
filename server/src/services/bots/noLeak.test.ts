@@ -46,6 +46,8 @@ const READERS: Record<string, string> = {
     "books a bot's decline of the request (#245); returns the same as for a player, writes only a bot_job row",
   "services/friends/friendships.ts":
     "books the decline of a friend request under the friends design's §6.2 rule (#368); the request is stored and answered alike for anyone, writes only a bot_job row",
+  "controllers/friends/gift.ts":
+    "refuses a gift to or from a bot as notFriends, the same answer as for any player who is not a friend (#375)",
 };
 
 /** Directories whose files may read bot data freely: the bot code and the database layer. */

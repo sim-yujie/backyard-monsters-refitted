@@ -30,6 +30,7 @@ import {
 import { helpBlock } from "../../services/friends/helpFacts.js";
 import { setHelpBlockFor } from "../../services/friends/helpHook.js";
 import { helpAnswer } from "./help.js";
+import { collectGiftsAnswer, giftsAnswer, sendGiftAnswer } from "./gift.js";
 
 /** Binds an answer function to Koa: the caller, the body or query, `postgres.em`, now. */
 const route =
@@ -69,6 +70,12 @@ export const mountFriendsRoutes = (router: Router): void => {
     route((ctx, now) => suggestionsAnswer(postgres.em, ctx.authUser, now)));
   router.post(`${api}/bm/friends/help`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
     route((ctx, now) => helpAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
+  router.post(`${api}/bm/friends/gift`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx, now) => sendGiftAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
+  router.get(`${api}/bm/friends/gifts`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
+    route((ctx, now) => giftsAnswer(postgres.em, ctx.authUser, now)));
+  router.post(`${api}/bm/friends/gifts/collect`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx, now) => collectGiftsAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
 
   router.get(`${api}/player/blocked`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
     route((ctx) => blockedAnswer(postgres.em, ctx.authUser)));

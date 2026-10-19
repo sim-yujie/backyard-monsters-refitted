@@ -466,6 +466,11 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       `INSERT INTO bym.friend_help (helper_userid, owner_userid, baseid, building_id, kind, help_day) VALUES (?, ?, '1', 1, 'speedup', now()), (?, ?, '1', 1, 'repair', now())`,
       [p, q, r, p]
     );
+    // P sent Q a gift, and R sent P one (issue #375).
+    await sql(
+      `INSERT INTO bym.friend_gift (from_userid, to_userid, resource, amount, gift_day, expires_at) VALUES (?, ?, 'r1', 300, now(), now() + interval '7 days'), (?, ?, 'r2', 300, now(), now() + interval '7 days')`,
+      [p, q, r, p]
+    );
     store = fakeRedis();
     const account = await findAccount(orm.em, "zz_del_p");
 
@@ -475,6 +480,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       "friendships (both ways)": 2,
       "friend requests (sent and received)": 2,
       "friend helps (given and received)": 2,
+      "friend gifts (sent and received)": 2,
     });
     expect(await countOf(`bym.friend WHERE userid = ? OR friend_userid = ?`, [p, p])).toBe(2);
 
@@ -484,10 +490,12 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
       "friendships (both ways)": 2,
       "friend requests (sent and received)": 2,
       "friend helps (given and received)": 2,
+      "friend gifts (sent and received)": 2,
     });
     expect(await countOf(`bym.friend WHERE userid = ? OR friend_userid = ?`, [p, p])).toBe(0);
     expect(await countOf(`bym.friend_request WHERE from_userid = ? OR to_userid = ?`, [p, p])).toBe(0);
     expect(await countOf(`bym.friend_help WHERE helper_userid = ? OR owner_userid = ?`, [p, p])).toBe(0);
+    expect(await countOf(`bym.friend_gift WHERE from_userid = ? OR to_userid = ?`, [p, p])).toBe(0);
     expect(await countOf(`bym.friend WHERE userid IN (?, ?)`, [q, r])).toBe(2);
     const friendcounts = await sql<{ userid: number; friendcount: number }>(
       `SELECT userid, friendcount FROM bym."user" WHERE userid IN (?, ?) ORDER BY userid`,

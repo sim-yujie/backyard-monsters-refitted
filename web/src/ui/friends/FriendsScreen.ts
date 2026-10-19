@@ -3,6 +3,8 @@ import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/f
 import { Panel } from "@/ui/Panel";
 import { FindTab } from "./FindTab";
 import { FriendsTab, type FriendActions } from "./FriendsTab";
+import { openGiftPicker } from "./GiftPicker";
+import { GiftsTab } from "./GiftsTab";
 import { RequestsTab } from "./RequestsTab";
 import { make, type FriendsTabView } from "./rows";
 import "./friends.css";
@@ -10,20 +12,21 @@ import "./friends.css";
 /**
  * The Friends screen (`docs/design/friends.md` §3.1 and §8, issue #370): a
  * docked panel like the achievements screen, a full-height sheet on a phone,
- * with the tabs **Friends**, **Requests** and **Find**. Each tab lives in its
- * own file; Gifts (WP8) slots in between Requests and Find with one line in
- * {@link FRIENDS_TABS} and one in the constructor.
+ * with the tabs **Friends**, **Requests**, **Gifts** (#375) and **Find**.
+ * Each tab lives in its own file.
  *
- * Requests carries the count of requests waiting, from the store. Every time
- * a tab comes forward it fetches fresh.
+ * Requests and Gifts carry the counts waiting, from the store. Every time a
+ * tab comes forward it fetches fresh. "Send gift" on a friend's row opens the
+ * gift picker unless the opener hands in its own.
  */
 
 export type FriendsTabId = "friends" | "requests" | "gifts" | "find";
 
-/** The tabs in their order, and their names. Gifts has its slot here once WP8 adds it. */
+/** The tabs in their order, and their names. */
 export const FRIENDS_TABS: readonly { readonly id: FriendsTabId; readonly label: string }[] = [
   { id: "friends", label: "Friends" },
   { id: "requests", label: "Requests" },
+  { id: "gifts", label: "Gifts" },
   { id: "find", label: "Find" },
 ];
 
@@ -82,10 +85,13 @@ export class FriendsScreen {
         store: this.store,
         onFind: () => void this.open("find"),
         ...(options.onVisit && { onVisit: options.onVisit }),
-        ...(options.onGift && { onGift: options.onGift }),
+        onGift:
+          options.onGift ??
+          ((friend) => void openGiftPicker(friend, this.element.parentElement, { api, store: this.store })),
       }),
     );
     this.tabs.set("requests", new RequestsTab({ api, store: this.store, ...(options.now && { now: options.now }) }));
+    this.tabs.set("gifts", new GiftsTab({ api, store: this.store, ...(options.now && { now: options.now }) }));
     this.tabs.set(
       "find",
       new FindTab({ api, store: this.store, ...(options.debounceMs !== undefined && { debounceMs: options.debounceMs }) }),
@@ -114,7 +120,10 @@ export class FriendsScreen {
     this.body.setAttribute("role", "tabpanel");
     panel.setContent(strip, this.body);
 
-    this.unsubscribe = this.store.subscribe((snapshot) => this.setCount("requests", snapshot.requestsIn));
+    this.unsubscribe = this.store.subscribe((snapshot) => {
+      this.setCount("requests", snapshot.requestsIn);
+      this.setCount("gifts", snapshot.giftsWaiting);
+    });
   }
 
   get isOpen(): boolean {
