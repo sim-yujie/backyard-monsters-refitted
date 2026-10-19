@@ -163,6 +163,8 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
 
     const [notice] = await sql(`SELECT jobs FROM bym.notification WHERE userid = ? AND kind = 'friend'`, [OWNER]);
     expect(notice!.jobs[0]).toEqual({ event: "helpSpeedup", userid: H1, username: `zz_fh_${H1}`, building: CANNON, buildingId: 1, seconds: 500 });
+    // The owner's presence ping hears of it (#374).
+    expect(await redis.get(`friend-helped:${OWNER}`)).toBe(String(T0));
   });
 
   test("the countdown is caught up first: 5% of the time left now, not at the last save", async () => {

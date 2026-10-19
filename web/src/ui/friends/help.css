@@ -1,0 +1,86 @@
+/*
+ * Visiting and helping a friend (issues #372 and #374, docs/design/friends.md
+ * §3.3): the "Helping Bob: 17 helps left today" line across the top of the
+ * yard, and the help panel docked where the building panel docks.
+ *
+ * Every value comes from tokens.css.
+ */
+
+.friend-visit-line {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  z-index: var(--z-hud);
+  max-width: calc(100vw - 2 * var(--space-4));
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-warning-bright);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.help-panel__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.help-panel__choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+}
+
+.help-panel__line,
+.help-panel__note,
+.help-panel__reason,
+.help-panel__status {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.help-panel__note {
+  color: var(--colour-text-muted);
+}
+
+.help-panel__reason {
+  color: var(--colour-warning-bright);
+}
+
+.help-panel__button {
+  align-self: flex-start;
+}
+
+.help-panel__status[hidden] {
+  display: none;
+}
+
+.help-panel__status--thanks {
+  color: var(--colour-success);
+  font-weight: 600;
+}
+
+.help-panel__status--error {
+  color: var(--colour-danger);
+  font-weight: 600;
+}
+
+@media (width <= 620px) {
+  .friend-visit-line {
+    top: 96px;
+    font-size: var(--text-xs, var(--text-sm));
+  }
+}
