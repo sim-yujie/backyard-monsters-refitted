@@ -22,6 +22,10 @@ const DEFAULT_PAGE_SIZE = 5;
 
 /** A portrait slot's width including its gap, in px (`friends-bar.css`). */
 const SLOT_PX = 68;
+/** The strip has a gap between slots but none after the last, so n slots are n * SLOT_PX - this wide. */
+const SLOT_GAP_PX = 4;
+/** An arrow button plus the gap beside it. */
+const ARROW_PX = 32;
 
 /** Whether the player could help this friend today. */
 export const canHelp = (friend: Friend): boolean => !!friend.help && (friend.help.speedup || friend.help.repair);
@@ -102,18 +106,21 @@ export class FriendsBar {
       this.resize = new ResizeObserver(() => this.fit());
       this.resize.observe(this.strip);
     }
-    this.unsubscribe = this.store.subscribe(() => this.render());
+    window.addEventListener("resize", this.onWindowResize);
+    this.unsubscribe = this.store.subscribe(() => (this.element.isConnected ? this.fit() : this.render()));
     this.render();
   }
 
   mount(parent: HTMLElement): this {
     parent.append(this.element);
+    this.fit();
     return this;
   }
 
   destroy(): void {
     this.unsubscribe();
     this.resize?.disconnect();
+    window.removeEventListener("resize", this.onWindowResize);
     this.element.remove();
   }
 
@@ -123,13 +130,27 @@ export class FriendsBar {
     this.toggle.setAttribute("aria-expanded", String(open));
   }
 
+  private readonly onWindowResize = (): void => this.fit();
+
+  /**
+   * The strip is sized by its contents, so its current width says nothing about the room there is.
+   * Show everyone, let the bar's max width squeeze the strip, and read how much room was left.
+   */
   private fit(): void {
+    if (!this.element.isConnected) return;
+    const total = this.store.friends.length;
+    const before = this.pageSize;
+    this.pageSize = Math.max(1, total);
+    this.render();
     const room = this.strip.clientWidth;
-    if (room <= 0) return;
-    // One slot is the "+".
-    const size = Math.max(1, Math.floor(room / SLOT_PX) - 1);
-    if (size === this.pageSize) return;
-    this.pageSize = size;
+    if (room <= 0) {
+      this.pageSize = before;
+      this.render();
+      return;
+    }
+    // One slot is the "+"; the arrows take room too once there is more than one page.
+    const fits = (width: number): number => Math.max(1, Math.floor((width + SLOT_GAP_PX) / SLOT_PX) - 1);
+    this.pageSize = fits(room) >= total ? Math.max(1, total) : fits(room - 2 * ARROW_PX);
     this.render();
   }
 
