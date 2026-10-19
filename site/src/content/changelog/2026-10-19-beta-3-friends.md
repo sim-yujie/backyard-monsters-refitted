@@ -19,7 +19,7 @@ date: 2026-10-19
 
 - Building with every worker busy: pick the spot first, then choose how to free a worker. The building goes up on that spot as soon as one is free.
 - The yard view no longer jumps away after you place a building, and build timers count down steadily.
-- Tribe raids now come at least 3 hours apart, and refreshing the page no longer lets you dodge one.
+- Tribe raids now come at least 3 hours apart.
 - "Skip tips" now closes all of Bob's tips at once.
 - The account menu no longer sits on top of the zoom buttons.
 - Clearer wording on the notice shown when your housing is too full.
