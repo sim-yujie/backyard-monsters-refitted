@@ -27,6 +27,7 @@ import { landRaid, landedResult, type RaidResult } from "./raidLanding.js";
 import { raidFighting, readFightLock } from "./raidLock.js";
 import { planRaid, type RaidPlan } from "./raidPlan.js";
 import {
+  RAID_MIN_GAP_SECONDS,
   SESSIONS_BETWEEN_RAIDS,
   raidAlreadyApplied,
   raidDueCheck,
@@ -35,6 +36,7 @@ import {
   scheduleColumn,
   setRaidFrequency,
   withFightLock,
+  withRaidOpened,
   withoutFightLock,
   type RaidPreference,
 } from "./raidSchedule.js";
@@ -207,6 +209,14 @@ export const raidOnPing = async (
     seed,
   });
   if (!plan) return undefined;
+
+  // The minimum gap to the next raid starts now, kept in the save before the
+  // raid opens: a reload or a lost Redis that cancels it cannot undo it.
+  await em.transactional(async (tx) => {
+    const locked = await lockMain(tx, user);
+    locked.aiattacks = scheduleColumn(withRaidOpened(readSchedule(locked.aiattacks), now));
+    await tx.flush();
+  });
 
   const raid: OpenRaid = {
     id: newRaidId(),
@@ -539,14 +549,16 @@ export const setRaidPreference = (
 /**
  * DEV only (`app.routes.ts` mounts it on a local server alone): makes a raid
  * due now, for testing the screens (WP4). The yard must still be whole, the
- * player level 9 or more and the ping must say "yard, Planner closed".
+ * player level 9 or more and the ping must say "yard, Planner closed". The
+ * minimum gap since the last raid is waived too.
  */
 export const makeRaidDue = (em: EntityManager, user: User, now: number): Promise<{ nextAttack: number }> =>
   em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
-    const schedule = readSchedule(locked.aiattacks);
+    const { lastOpenedAt: _lastOpenedAt, ...schedule } = readSchedule(locked.aiattacks);
     locked.aiattacks = scheduleColumn({
       ...schedule,
+      lastattack: Math.min(schedule.lastattack, now - RAID_MIN_GAP_SECONDS),
       sessionsSinceLastAttack: Math.max(schedule.sessionsSinceLastAttack, SESSIONS_BETWEEN_RAIDS),
       nextAttack: now,
     });
