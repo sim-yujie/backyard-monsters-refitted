@@ -15,7 +15,7 @@ export const tiers = [
     price: "$8",
     blurb: "Back the game a bit more and get a first look at what's coming.",
     perks: [
-      "One vote in the monthly feature poll",
+      "Two votes in the monthly feature poll",
       'Your name listed first, under "Lab Partners"',
       "Members-only early-look posts about planned features",
     ],
