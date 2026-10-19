@@ -8,8 +8,9 @@ import type { Point } from "@/game/yard/YardGrid";
  * - `fiery`: a fireball, embers that arc and fall, dark smoke that lingers
  *   about a second, and a scorch on the ground that fades. Eye-ra's blast.
  * - `punchy`: a white-yellow flash, a fast shockwave ring and sparks, and a
- *   short shake of the yard (`full`); or just the flash and the shockwave
- *   (`light`), for a move that goes off every swing (feat/punchy-trial).
+ *   short shake of the yard (`full`); just the flash and the shockwave
+ *   (`light`); or the flash alone (`flash`), for a move that goes off every
+ *   swing (feat/punchy-trial).
  *
  * Every particle is a pooled sprite placed from its age alone, so 1x and 2x
  * play the same path, at their own speed.
@@ -22,8 +23,11 @@ export const MAX_MARKS = 14;
 /** The most the yard is ever shaken, screen px, however many blasts go off. */
 export const MAX_SHAKE = 8;
 
-/** A punchy blast in full (flash, shockwave, sparks, shake), or light (flash and shockwave). */
-export type PunchyStrength = "full" | "light";
+/**
+ * A punchy blast in full (flash, shockwave, sparks, shake), light (flash and
+ * shockwave), or the flash alone.
+ */
+export type PunchyStrength = "full" | "light" | "flash";
 
 /** A blast's own screen size for a level-1 Eye-ra: 60 cartesian, root two wide. */
 const BASE_RADIUS = 85;
@@ -326,12 +330,14 @@ export class BlastFx {
 
   /**
    * A punchy blast at the ground point `at`, `radius` screen px wide: a flash,
-   * a shockwave, and in `full` the fire glow, sparks and a short shake.
+   * a shockwave, and in `full` the fire glow, sparks and a short shake;
+   * `flash` is the flash and nothing else.
    */
   punchy(tick: number, at: Point, radius: number, strength: PunchyStrength = "full"): void {
     const { scale, many } = this.begin(radius);
     const lift = { x: at.x, y: at.y - 12 };
     this.add(tick, { look: "soft", at: lift, add: true, life: 9, size0: radius * 0.5, size1: radius * 1.5, easeOut: true, colours: [0xffffff, 0xfff3a0, 0xffc040] });
+    if (strength === "flash") return;
     if (strength === "full") {
       this.add(tick, { look: "soft", at: lift, add: true, life: 16, size0: radius * 0.6, size1: radius * 0.9, colours: [0xfff6c0, 0xffa020, 0xff6000], peak: 0.9 });
     }

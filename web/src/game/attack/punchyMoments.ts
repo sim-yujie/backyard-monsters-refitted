@@ -1,29 +1,34 @@
-import { BANDITO_ID, EYE_RA_ID, PROJECT_X_ID, WORMZER_ID } from "@/game/combat/rules";
+import { BANDITO_ID, EYE_RA_ID } from "@/game/combat/rules";
 import type { PunchyStrength } from "./blastFx";
 
 /**
- * Where the battle screen draws a punchy blast (feat/punchy-trial, a trial
- * for the owner to pick from). Drawing only: nothing here reaches the battle.
+ * Where the battle screen draws a punchy blast (feat/punchy-trial, as the
+ * owner picked on 2026-10-19). Drawing only: nothing here reaches the battle.
  *
  * - Korath's quake: `full`, over its orange rings.
- * - A Project X's death blast: `full`, in place of the yellow rings.
- * - The Town Hall (an outpost's core) destroyed: `full`.
- * - A Bandito's whirlwind and a Wormzer's burst: `light`, in place of the
- *   yellow rings, as they go off every swing.
+ * - A Bandito's whirlwind: the `flash` alone, over its yellow rings, as it
+ *   goes off every swing.
+ * - A Wormzer popping up out of the ground to bite: `light`, attacking or
+ *   sent out by a bunker.
+ * - Every other splash (Project X's death blast, a Wormzer's burst) keeps
+ *   its yellow rings; the Town Hall falling keeps its old look.
  */
 
-/** How a ranked splash is drawn: Eye-ra's fireball, a punchy blast, or the yellow rings. */
-export type SplashLook = "fiery" | PunchyStrength | "rings";
+/** How a ranked splash is drawn: Eye-ra's fireball, the yellow rings, or the rings with a flash. */
+export type SplashLook = "fiery" | "rings" | "rings-flash";
 
 export const splashLook = (moveId: string): SplashLook => {
   if (moveId === EYE_RA_ID) return "fiery";
-  if (moveId === PROJECT_X_ID) return "full";
-  if (moveId === BANDITO_ID || moveId === WORMZER_ID) return "light";
+  if (moveId === BANDITO_ID) return "rings-flash";
   return "rings";
 };
 
 /** Korath's quake blast. */
 export const QUAKE_PUNCHY: PunchyStrength = "full";
 
-/** The Town Hall's blast, screen px: a big building, a big bang. */
-export const TOWN_HALL_BLAST_RADIUS = 120;
+/** A Bandito's whirlwind blast, over its rings. */
+export const BANDITO_PUNCHY: PunchyStrength = "flash";
+
+/** A Wormzer coming up to bite: its blast, and how wide, screen px. */
+export const SURFACE_PUNCHY: PunchyStrength = "light";
+export const SURFACE_BLAST_RADIUS = 40;

@@ -101,6 +101,17 @@ describe("punchy strengths and the shared shake (feat/punchy-trial)", () => {
     expect(full.fx.shakeAmp).toBeGreaterThan(0);
   });
 
+  it("flash: the flash alone, no shockwave, no sparks and no shake", () => {
+    const flash = fxOf();
+    flash.fx.punchy(10, { x: 0, y: 0 }, 85, "flash");
+    expect(flash.fx.bitCount).toBe(1);
+    expect(flash.fx.blastsMade).toBe(1);
+    expect(flash.fx.shakeAmp).toBe(0);
+    for (let tick = 10; tick < 40; tick += 1) flash.fx.update(tick);
+    expect(flash.shakes.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
+    expect(flash.fx.bitCount).toBe(0);
+  });
+
   it("is full when no strength is given", () => {
     const { fx } = fxOf();
     fx.punchy(10, { x: 0, y: 0 }, 85);

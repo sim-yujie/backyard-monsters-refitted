@@ -16,10 +16,11 @@ import { sheetUrl } from "./monsterSprites";
 import { splashLook } from "./punchyMoments";
 
 /**
- * The punchy blast trial (feat/punchy-trial): over a real session it goes off
- * at Korath's quake, a Project X's death, the Town Hall falling, a Bandito's
- * whirlwind and a Wormzer's burst, at the strength each was given, and the
- * battle comes out the same as one nobody draws.
+ * The punchy blast (feat/punchy-trial, as the owner picked on 2026-10-19):
+ * over a real session it goes off at Korath's quake (full), a Bandito's
+ * whirlwind (the flash alone, over its rings) and a Wormzer popping up to
+ * bite (light); Project X's death blast and the Town Hall falling keep their
+ * old look; and the battle comes out the same as one nobody draws.
  */
 
 type BuildingRow = { id: number; t: number; l: number; X: number; Y: number };
@@ -88,9 +89,17 @@ interface Scene {
   readonly fling: FlingInput;
 }
 
-const setUp = (scene: Scene) => {
+/** A defence's bunkers, as the base load hands them over. */
+interface Forces {
+  readonly bunkers: Record<number, Record<string, number>>;
+}
+
+const setUp = (scene: Scene, forces?: Forces) => {
   const session = new AttackSession({ target: targetOf(scene.monsters, scene.ranks ?? {}), seed: 1 });
-  const response = yardOf(scene.buildings);
+  const response = {
+    ...yardOf(scene.buildings),
+    ...(forces ? { defenderforces: { ...forces, defenderLevels: {}, defenderChampions: [] } } : {}),
+  } as BaseLoadResponse;
   session.load(response);
   // The overlay sits in a root, as on screen, so the shake has something to move.
   const root = new Container();
@@ -130,6 +139,31 @@ const until = (
     if (found(events)) return events;
   }
   throw new Error("never happened");
+};
+
+/**
+ * Runs `seconds` of battle, counting each time a Wormzer comes up out of the
+ * ground swinging (a bite), a bunker's among them, and its bursts.
+ */
+const watchBites = (session: AttackSession, layer: AttackBattleLayer, seconds: number) => {
+  const under = new Map<number, boolean>();
+  let bites = 0;
+  let defenderBites = 0;
+  let splashes = 0;
+  for (let step = 0; step < TICKS_PER_SECOND * seconds && !session.ended; step += 1) {
+    const events = frame(session, layer);
+    if (splashBy("C13")(events)) splashes += 1;
+    for (const creep of session.battle()?.creeps() ?? []) {
+      if (creep.monsterId !== "C13") continue;
+      const was = under.get(creep.id) ?? false;
+      const now = creep.burrowed === true;
+      under.set(creep.id, now);
+      if (!was || now || creep.state !== "attacking") continue;
+      bites += 1;
+      if (creep.friendly) defenderBites += 1;
+    }
+  }
+  return { bites, defenderBites, splashes };
 };
 
 const splashBy = (moveId: string) => (events: readonly BattleVisualEvent[]) =>
@@ -176,11 +210,11 @@ const SCENES = {
 } satisfies Record<string, Scene>;
 
 describe("which splash gets which look (feat/punchy-trial)", () => {
-  it("full for Project X, light for Bandito and Wormzer, the fireball for Eye-ra, rings else", () => {
-    expect(splashLook("C11")).toBe("full");
-    expect(splashLook("C7")).toBe("light");
-    expect(splashLook("C13")).toBe("light");
+  it("the fireball for Eye-ra, rings and a flash for Bandito, rings else", () => {
     expect(splashLook("C5")).toBe("fiery");
+    expect(splashLook("C7")).toBe("rings-flash");
+    expect(splashLook("C11")).toBe("rings");
+    expect(splashLook("C13")).toBe("rings");
     expect(splashLook("C4")).toBe("rings");
   });
 });
@@ -196,54 +230,61 @@ describe("the punchy blast in a real attack (feat/punchy-trial)", () => {
     expect(Math.abs(root.pivot.y)).toBeLessThanOrEqual(MAX_SHAKE);
   });
 
-  it("Project X's death blast: a full blast", () => {
+  it("Project X's death blast: the yellow rings, no punchy blast", () => {
     const { session, layer } = setUp(SCENES.projectX);
+    const before = layer.splatCount;
     until(session, layer, splashBy("C11"));
-    expect(layer.blasts.blastsMade).toBe(1);
-    expect(layer.blasts.shakeAmp).toBeGreaterThan(0);
+    expect(layer.splatCount).toBeGreaterThan(before);
+    expect(layer.blasts.blastsMade).toBe(0);
   });
 
-  for (const [name, id] of [["bandito", "C7"], ["wormzer", "C13"]] as const) {
-    it(`${name}: a light blast on its swing, which never shakes`, () => {
-      const { session, layer, root } = setUp(SCENES[name]);
-      until(session, layer, splashBy(id));
-      expect(layer.blasts.blastsMade).toBeGreaterThan(0);
-      expect(layer.blasts.bitCount).toBeGreaterThan(0);
-      // Swing on for a while: still no shake.
-      for (let step = 0; step < TICKS_PER_SECOND * 4; step += 1) {
-        frame(session, layer);
-        expect(layer.blasts.shakeAmp).toBe(0);
-        expect(root.pivot.x).toBe(0);
-        expect(root.pivot.y).toBe(0);
-      }
-    });
-  }
-
-  it("the Town Hall falling: one full blast, which settles after the attack ends", () => {
-    const { session, layer, root, tickWall } = setUp(SCENES.townHall);
-    until(session, layer, () => (session.battle()?.state().health["1"] ?? 1) <= 0);
-    expect(layer.blasts.blastsMade).toBe(1);
-    expect(layer.blasts.shakeAmp).toBeGreaterThan(0);
-    // The battle clock stands still once the attack is over; the blast plays
-    // on the wall clock and the yard comes back to rest.
-    expect(session.ended).toBe(true);
-    for (let step = 0; step < 60; step += 1) {
-      tickWall(1000 / 60);
-      layer.update();
+  it("bandito: its rings and the flash alone on every swing, never a shake", () => {
+    const { session, layer, root } = setUp(SCENES.bandito);
+    let splashes = 0;
+    for (let step = 0; step < TICKS_PER_SECOND * 6; step += 1) {
+      const rings = layer.splatCount;
+      const made = layer.blasts.blastsMade;
+      const bits = layer.blasts.bitCount;
+      const events = frame(session, layer);
+      expect(layer.blasts.shakeAmp).toBe(0);
+      expect(root.pivot.x).toBe(0);
+      expect(root.pivot.y).toBe(0);
+      if (!splashBy("C7")(events)) continue;
+      splashes += 1;
+      // The yellow rings come back; each blast is one flash, no rings or sparks.
+      expect(layer.splatCount).toBeGreaterThan(rings);
+      const blasts = layer.blasts.blastsMade - made;
+      expect(blasts).toBeGreaterThan(0);
+      expect(layer.blasts.bitCount).toBeLessThanOrEqual(bits + blasts);
     }
-    expect(layer.blasts.shakeAmp).toBe(0);
-    expect(layer.blasts.bitCount).toBe(0);
+    expect(splashes).toBeGreaterThan(0);
+  });
+
+  it("wormzer: a light blast each time it pops up to bite, none on its burst", () => {
+    const { session, layer, root } = setUp(SCENES.wormzer);
+    const { bites, splashes } = watchBites(session, layer, 12);
+    expect(splashes).toBeGreaterThan(0);
+    expect(bites).toBeGreaterThan(0);
+    expect(layer.blasts.blastsMade).toBe(bites);
     expect(root.pivot.x).toBe(0);
     expect(root.pivot.y).toBe(0);
   });
 
-  it("no blast for a building that is not the Town Hall", () => {
-    const { session, layer } = setUp({
-      buildings: [{ id: 1, t: 14, l: 10, X: 0, Y: 0 }, { id: 2, t: 1, l: 1, X: -120, Y: -120 }],
-      monsters: { C1: 10 },
-      fling: { x: -150, y: -150, monsters: { C1: 10 } },
-    });
-    until(session, layer, () => (session.battle()?.state().health["2"] ?? 1) <= 0);
+  it("wormzer: a bunker's Wormzer gets the blast too when it pops up to bite", () => {
+    const scene: Scene = {
+      buildings: [{ id: 1, t: 22, l: 1, X: 0, Y: 0 }, { id: 2, t: 6, l: 1, X: 150, Y: 150 }],
+      monsters: { C1: 3 },
+      fling: { x: 300, y: 300, monsters: { C1: 3 } },
+    };
+    const { session, layer } = setUp(scene, { bunkers: { 1: { C13: 2 } } });
+    const { bites, defenderBites } = watchBites(session, layer, 25);
+    expect(defenderBites).toBeGreaterThan(0);
+    expect(layer.blasts.blastsMade).toBe(bites);
+  });
+
+  it("the Town Hall falling: no punchy blast, the old look", () => {
+    const { session, layer } = setUp(SCENES.townHall);
+    until(session, layer, () => (session.battle()?.state().health["1"] ?? 1) <= 0);
     expect(layer.blasts.blastsMade).toBe(0);
   });
 
@@ -253,7 +294,6 @@ describe("the punchy blast in a real attack (feat/punchy-trial)", () => {
       for (let step = 0; step < TICKS_PER_SECOND * 20 && !drawn.session.ended; step += 1) {
         frame(drawn.session, drawn.layer);
       }
-      expect(drawn.layer.blasts.blastsMade).toBeGreaterThan(0);
       const ticks = drawn.session.battle()?.tick ?? 0;
 
       const bare = new AttackSession({ target: targetOf(scene.monsters, scene.ranks ?? {}), seed: 1 });
