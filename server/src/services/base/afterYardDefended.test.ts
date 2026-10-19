@@ -114,7 +114,8 @@ describe("a real defender", () => {
     messages = [];
     await afterYardDefended(request, defence({ attacker: { userid: BOT, username: "Bramble" } }));
     const fromBot = messages[0];
-    expect(fromBot).toEqual(fromPlayer);
+    // only the attacker's id (for the Add friend button) may differ
+    expect({ ...fromBot, byuserid: 0 }).toEqual({ ...fromPlayer, byuserid: 0 });
     expect(jobs).toEqual([]);
   });
 
@@ -160,7 +161,7 @@ describe("a Map Room 2 main yard (#361)", () => {
     threads = [];
     messages = [];
     await afterYardDefended(request, mr2({ replayId: 5, attacker: { userid: BOT, username: "Bramble" } }));
-    expect(messages[0]).toEqual(fromPlayer);
+    expect({ ...messages[0], byuserid: 0 }).toEqual({ ...fromPlayer, byuserid: 0 });
     expect(jobs).toEqual([]);
   });
 
