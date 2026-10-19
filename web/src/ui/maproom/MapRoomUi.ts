@@ -1,5 +1,6 @@
 import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import type { Bookmark } from "@/api/bookmarks";
+import type { Friend } from "@/api/friends";
 import type { TakeoverPayment } from "@/api/maproom";
 import type { MapCell, PlayerCell, Resources, SightSource, TakeoverQuoteResponse } from "@/api/types";
 import { MAX_ZOOM, MIN_ZOOM } from "@/config";
@@ -61,6 +62,8 @@ export interface MapRoomUiHandlers {
   onSignOut: () => void;
   /** Before the Account menu's achievements screen opens (#204): it docks where the cell panel does. */
   onAchievementsOpen?: () => void;
+  /** The Friends list's Visit (#372): the scene opens the friend's yard. */
+  onVisitFriend?: (friend: Friend) => void;
   onHome: () => void;
   onRefresh: () => void;
   onJump: (cell: OffsetCell) => void;
@@ -150,6 +153,7 @@ export class MapRoomUi {
       onSceneSelect: handlers.onSceneSelect,
       onSignOut: handlers.onSignOut,
       ...(handlers.onAchievementsOpen ? { onAchievementsOpen: handlers.onAchievementsOpen } : {}),
+      ...(handlers.onVisitFriend ? { onVisitFriend: handlers.onVisitFriend } : {}),
     });
     this.hud.setActiveScene(activeScene);
 

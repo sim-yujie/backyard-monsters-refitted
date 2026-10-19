@@ -11,6 +11,7 @@ const api = () => ({
   loadOwnYard: vi.fn(() => Promise.resolve(response)),
   loadOwnBase: vi.fn(() => Promise.resolve(response)),
   viewBase: vi.fn(() => Promise.resolve(response)),
+  loadFriendYard: vi.fn((_userid: number) => Promise.resolve(response)),
 });
 
 const visit = (kind: ViewTarget["kind"]): ViewTarget => ({
@@ -62,6 +63,16 @@ describe("loadYardFor", () => {
     const target: ViewTarget = { baseid: "11", kind: "wild", name: "Kozu Tribe", attack: null, refusal: null, mapversion: 1 };
     await loadYardFor(target, loaders);
     expect(loaders.viewBase.mock.calls).toEqual([["11", "wild", { mapversion: 1 }]]);
+  });
+
+  it("opens a friend's yard by the friend's user id, never by view (#372)", async () => {
+    const loaders = api();
+    const target: ViewTarget = { baseid: "", kind: "friend", friend: 77, name: "Bob", attack: null, refusal: null };
+    await loadYardFor(target, loaders, outpostTarget("2000242209"));
+    expect(loaders.loadFriendYard.mock.calls).toEqual([[77]]);
+    expect(loaders.viewBase).not.toHaveBeenCalled();
+    expect(loaders.loadOwnYard).not.toHaveBeenCalled();
+    expect(loaders.loadOwnBase).not.toHaveBeenCalled();
   });
 });
 
