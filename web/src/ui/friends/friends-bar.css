@@ -178,6 +178,13 @@
 
 /* A phone: the strip hides behind a Friends button above the bottom-left
    buttons and slides up when it is pressed. */
+/* A phone on its side: the dock's buttons reach well past the middle, so the bar rides above them. */
+@media (width > 620px) and (height <= 500px) {
+  .friends-bar {
+    bottom: 128px;
+  }
+}
+
 @media (width <= 620px) {
   .friends-bar {
     right: 8px;
@@ -208,7 +215,7 @@
 
   .friends-bar__strip,
   .friends-bar__arrow {
-    margin-bottom: 44px;
+    margin-bottom: 140px;
     visibility: hidden;
     opacity: 0;
     transform: translateY(24px);
@@ -235,5 +242,25 @@
 
   .friends-bar__card {
     bottom: 100px;
+  }
+}
+
+/* A desktop: the bar sits between the dock's Places column on the left and the
+   leftmost round button on the right (Goals, or Goals one place further left
+   when the Defences button shows), not centred on the screen. */
+@media (width > 620px) {
+  .friends-bar {
+    --friends-bar-left: 140px;
+    --friends-bar-right: 500px;
+    right: var(--friends-bar-right);
+    left: var(--friends-bar-left);
+    width: fit-content;
+    max-width: none;
+    margin-inline: auto;
+    transform: none;
+  }
+
+  .overlay__layer:has(.yard-dock__button--defences:not([hidden])) > .friends-bar {
+    --friends-bar-right: 590px;
   }
 }

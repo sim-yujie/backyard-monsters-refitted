@@ -60,6 +60,29 @@ describe("paging", () => {
     expect(next!.disabled).toBe(true);
   });
 
+  it("sizes the page from the room there is, not from the strip's current width", async () => {
+    // A strip sized by its contents, squeezed by a bar that is `room` wide at most.
+    let room = 1000;
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("friends-bar__strip") ? Math.min(this.children.length * 68 - 4, room) : 0;
+    });
+    const many = Array.from({ length: 10 }, (_, i) => friend(i + 1, { level: 100 - i, username: `P${i + 1}` }));
+    const { bar } = await setup([], {});
+    expect(names()).toEqual([]);
+    const store = new FriendsStore({ api: fixtureApi({ list: fixtureList(many) }).api });
+    bar.destroy();
+    await store.refresh();
+    new FriendsBar({ store, openFriends: vi.fn() }).mount(document.body);
+    expect(names()).toHaveLength(10);
+    room = 400;
+    window.dispatchEvent(new Event("resize"));
+    expect(names()).toHaveLength(4);
+    room = 1000;
+    window.dispatchEvent(new Event("resize"));
+    expect(names()).toHaveLength(10);
+    vi.restoreAllMocks();
+  });
+
   it("hides the arrows for a short list", async () => {
     await setup();
     expect([...document.querySelectorAll<HTMLElement>(".friends-bar__arrow")].every((a) => a.hidden)).toBe(true);

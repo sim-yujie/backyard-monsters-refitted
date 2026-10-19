@@ -217,8 +217,8 @@
   }
 
   .yard-dock__right > .yard-dock__button--defences {
-    right: 268px;
-    bottom: 18px;
+    right: 116px;
+    bottom: 262px;
   }
 
   .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--bell {
