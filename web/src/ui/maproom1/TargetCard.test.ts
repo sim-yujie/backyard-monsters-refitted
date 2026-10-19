@@ -159,12 +159,12 @@ describe("targetCard Add friend (friends WP11, #378)", () => {
       return node;
     });
 
-  it("puts a neighbour's Add friend with Message and Truce", () => {
+  it("puts a neighbour's Add friend in a row under Message and Truce", () => {
     const make = addFriend();
     const target = find("player-901");
     const card = targetCard(target, { world, own, now: NOW }, { ...handlers(), onMessage: vi.fn(), addFriend: make }, "panel");
     expect(make).toHaveBeenCalledWith(target);
-    expect(card.querySelector(".mr1-card__social .add-friend")?.textContent).toBe(`Add ${target.name}`);
+    expect(card.querySelector(".mr1-card__friend .add-friend")?.textContent).toBe(`Add ${target.name}`);
   });
 
   it("offers none on a tribe", () => {

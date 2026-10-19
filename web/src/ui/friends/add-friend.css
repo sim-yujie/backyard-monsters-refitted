@@ -42,9 +42,9 @@
   flex: 1;
 }
 
-/* Map Room 1's neighbour card: a line of its own under Message and Truce. */
-.mr1-card__social .add-friend {
-  grid-column: 1 / -1;
+/* Map Room 1's neighbour card: a row of its own under Message and Truce. */
+.mr1-card__friend .add-friend {
+  display: flex;
 }
 
 /* An attack notice in the mailbox (`MailboxScreen`). */

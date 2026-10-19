@@ -53,7 +53,7 @@ export interface CardHandlers {
   readonly achievementsLine?: (target: Mr1Neighbour) => HTMLElement;
   /**
    * A neighbour's Add friend, or how they stand to the player (friends WP11,
-   * #378, `ui/friends/AddFriendButton.ts`), after Message and Truce. Absent: none.
+   * #378, `ui/friends/AddFriendButton.ts`), a row under Message and Truce. Absent: none.
    */
   readonly addFriend?: (target: Mr1Neighbour) => HTMLElement;
 }
@@ -326,8 +326,12 @@ export const targetCard = (
       truce.addEventListener("click", () => onTruce(target));
       social.append(truce);
     }
-    if (addFriend) social.append(addFriend(target));
     if (social.childElementCount > 0) card.append(social);
+    if (addFriend) {
+      const friend = el("div", "mr1-card__friend");
+      friend.append(addFriend(target));
+      card.append(friend);
+    }
   }
 
   if (gate.reason) {
