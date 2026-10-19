@@ -12,6 +12,7 @@ import { MapRoom2, MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js
 import { onlinePlayers } from "../../../services/user/online.js";
 import { getTruces } from "../../../services/maproom/getTruces.js";
 import { attackersAmong } from "../../../services/maproom/v2/attackers.js";
+import { friendsAmong } from "../../../services/friends/friendFlags.js";
 import { idleWorkerSaves } from "../../../services/maproom/v2/idleWorkers.js";
 import { pendingInvitesOn } from "../../../services/mail/inviteRules.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
@@ -220,7 +221,7 @@ export const getArea: KoaController = async (ctx) => {
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST && cell.save)
     .map((cell) => cell.save!.basesaveid);
 
-  const [ownersList, online, truces, pendingInvites, idleWorkers, attackers] = await Promise.all([
+  const [ownersList, online, truces, pendingInvites, idleWorkers, attackers, friends] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
@@ -233,6 +234,8 @@ export const getArea: KoaController = async (ctx) => {
     idleWorkerSaves(postgres.em, ownOutpostSaveIds),
     // Who has ever attacked the viewer: the red "attacked you" plate (`ak`).
     attackersAmong(postgres.em, user.userid, ownerIds),
+    // Friends among them: the `fr` flag (friends WP2, #369).
+    friendsAmong(postgres.em, user.userid, ownerIds),
   ]);
 
   const cellOwners = new Map(ownersList.map((u) => [u.userid, u]));
@@ -242,6 +245,7 @@ export const getArea: KoaController = async (ctx) => {
   ctx.state.pendingInvites = pendingInvites;
   ctx.state.idleWorkers = idleWorkers;
   ctx.state.attackers = attackers;
+  ctx.state.friends = friends;
 
   const allianceIds = new Set<number>();
 
