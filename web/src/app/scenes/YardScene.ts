@@ -15,6 +15,30 @@ import { bankActions } from "@/api/yardBank";
 import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
+import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { setPlayerPool } from "@/game/friends/friendsView";
+import {
+  friendRefusal,
+  friendsApi,
+  type Friend,
+  type FriendsApi,
+  type HelpBlock,
+  type HelpKind,
+  type HelpYardResponse,
+} from "@/api/friends";
+import { friendsStore } from "@/game/friends/friendsStore";
+import { HelpedWatch } from "@/game/friends/helpedWatch";
+import { loadFriendYard, visitFailureText, visitFriend } from "@/game/friends/friendVisit";
+import {
+  afterHelp,
+  afterRefusal,
+  buildingHelp,
+  fromVisitSave,
+  helpableIds,
+  helpingLine,
+  helpRefusalText,
+  thanksText,
+} from "@/game/friends/helpModel";
 import { worldChat } from "@/game/chat/chatSession";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
@@ -45,13 +69,13 @@ import {
   yardTitle,
   type OwnYardTarget,
 } from "@/game/yard/ownYards";
-import { readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
+import { isCountdownPaused, readYard, type Yard, type YardBuilding } from "@/game/yard/yardModel";
 import { isUnderAttackRefusal, YardAttackGuard } from "@/game/yard/yardAttackGuard";
 import { presence } from "@/game/presence/presencePing";
 import { yardAttack } from "@/game/presence/yardAttack";
 import { UnderAttackLock } from "@/ui/yard/UnderAttackLock";
 import { withStoredDecorations } from "@/game/yard/decorStorage";
-import { consumeYardIntent, type YardIntent } from "@/game/yard/yardIntent";
+import { consumeYardIntent, setYardIntent, type YardIntent } from "@/game/yard/yardIntent";
 import { yardLifeOf } from "@/game/yard/yardLifeModel";
 import {
   YardChangeReason,
@@ -91,6 +115,8 @@ import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
 import { showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
+import { FriendsBar } from "@/ui/friends/FriendsBar";
+import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { YardDock } from "@/ui/yard/YardDock";
 import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
@@ -155,6 +181,8 @@ export interface YardLoaders {
   loadOwnYard: typeof loadOwnYard;
   loadOwnBase: typeof loadOwnBase;
   viewBase: typeof viewBase;
+  /** A friend's main yard, to help in (#372). */
+  loadFriendYard: (userid: number) => Promise<BaseLoadResponse>;
 }
 
 /**
@@ -165,16 +193,18 @@ export interface YardLoaders {
  */
 export const loadYardFor = (
   target: ViewTarget | null,
-  api: YardLoaders = { loadOwnYard, loadOwnBase, viewBase },
+  api: YardLoaders = { loadOwnYard, loadOwnBase, viewBase, loadFriendYard: (userid) => loadFriendYard(userid) },
   own: OwnYardTarget = MAIN_YARD,
 ): Promise<BaseLoadResponse> =>
   !target
     ? own.kind === "outpost"
       ? api.loadOwnBase(own.baseid)
       : api.loadOwnYard()
-    : target.mapversion === undefined
-      ? api.viewBase(target.baseid, target.kind)
-      : api.viewBase(target.baseid, target.kind, { mapversion: target.mapversion });
+    : target.kind === "friend"
+      ? api.loadFriendYard(target.friend ?? 0)
+      : target.mapversion === undefined
+        ? api.viewBase(target.baseid, target.kind)
+        : api.viewBase(target.baseid, target.kind, { mapversion: target.mapversion });
 
 /**
  * What an outpost holding nothing but its core says, with a way to the
@@ -297,6 +327,28 @@ export class YardScene implements Scene {
    * the yard switcher on the own yard; Layout, Map, Home and Attack on a visit.
    */
   private dock: YardDock | null = null;
+  /** The friends bar (#371): own yard only; null on a visit. */
+  private friendsBar: FriendsBar | null = null;
+  /** Takes back the pool the Gifts tab reads and refreshes after a collect (#375). */
+  private clearPlayerPool: (() => void) | null = null;
+  /**
+   * A friend's visit (#372, #374): what the help-mode load said can be
+   * helped, kept current after each help; null on every other yard.
+   */
+  private helpBlock: HelpBlock | null = null;
+  /** The "Helping Bob: 17 helps left today" line; a friend's visit only. */
+  private visitLine: HTMLElement | null = null;
+  /** The help panel, while open on a friend's building. */
+  private helpPanel: HelpPanel | null = null;
+  /**
+   * The visitor's own pool on a visit, as the screen they came from read it,
+   * so a help's reward can be added to what the HUD shows (#374).
+   */
+  private visitorPool: { resources: Resources; credits?: number | undefined } | null = null;
+  /** Stops listening for helps landing in the own main yard (#374). */
+  private stopHelpedWatch: (() => void) | null = null;
+  /** The routes a help uses; a test may replace them. */
+  private readonly friends: FriendsApi = friendsApi;
   /**
    * What the player may do with the planner in the yard now open (§8, Q5).
    *
@@ -412,6 +464,8 @@ export class YardScene implements Scene {
         logout();
         context.goTo(SceneName.LOGIN);
       },
+      // The Friends list's Visit (#372).
+      onVisitFriend: (friend) => this.visitFriendYard(friend),
     });
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
@@ -462,6 +516,14 @@ export class YardScene implements Scene {
       this.dock.setAttack({ disabled: true, title: `Attack ${target.name}'s yard` });
     }
     if (!target) {
+      this.friendsBar = new FriendsBar({ onVisit: (friend) => this.visitFriendYard(friend) }).mount(
+        context.overlay.content,
+      );
+      // A collected gift lands in this pool; the Gifts tab warns against its caps.
+      this.clearPlayerPool = setPlayerPool({
+        read: () => (this.store ? { resources: this.store.resources, caps: this.store.caps } : null),
+        refresh: () => void this.store?.refresh(),
+      });
       this.mail = new MailDoor({
         style: "dock",
         container: context.overlay.content,
@@ -538,6 +600,18 @@ export class YardScene implements Scene {
     this.defences = null;
     this.chat?.destroy();
     this.chat = null;
+    this.friendsBar?.destroy();
+    this.friendsBar = null;
+    this.clearPlayerPool?.();
+    this.clearPlayerPool = null;
+    this.stopHelpedWatch?.();
+    this.stopHelpedWatch = null;
+    this.helpPanel?.close();
+    this.helpPanel = null;
+    this.visitLine?.remove();
+    this.visitLine = null;
+    this.helpBlock = null;
+    this.visitorPool = null;
     this.dock?.destroy();
     this.dock = null;
     this.input?.detach();
@@ -747,6 +821,9 @@ export class YardScene implements Scene {
       // somebody else's twigs as if they were the player's own.
       const pool = hudPoolFor(target, yard);
       if (pool) this.hud?.setResources(pool.resources, pool.credits);
+      this.visitorPool = target ? pool : null;
+      // A friend's yard (#372, #374): the helping line and the wrenches.
+      if (target?.kind === "friend") this.startHelping(response as HelpYardResponse, target.name);
       if (this.target?.attack) {
         this.dock?.setAttack({ disabled: false, title: `Attack ${this.target.name}'s yard` });
       } else {
@@ -763,9 +840,18 @@ export class YardScene implements Scene {
       // What the screen the player came from asked for, on the own yard only.
       if (store) this.applyIntent(consumeYardIntent());
       if (store?.kind === "outpost") this.arriveAtOutpost(store, context);
+      // A friend's help landing while the player is here refreshes the yard (#374).
+      if (store?.kind === "main") this.watchHelps(store);
     } catch (caught) {
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
+        return;
+      }
+      // A friend's yard that will not open (not friends any more, gone, the
+      // server down) sends the player home, saying why (#372).
+      if (target?.kind === "friend") {
+        setYardIntent({ kind: "notice", text: visitFailureText(target.name, caught) });
+        context.goTo(SceneName.YARD);
         return;
       }
       // Someone is attacking it: the lock says so, and loads it once they are done.
@@ -816,6 +902,16 @@ export class YardScene implements Scene {
 
     this.attacking = true;
     this.dock?.setAttack({ disabled: true, title });
+    let confirmed = false;
+    await attackWithFriendWarning(attack, context.overlay.modal, () => {
+      confirmed = true;
+    });
+    if (!confirmed) {
+      if (this.context !== context) return;
+      this.attacking = false;
+      this.dock?.setAttack({ disabled: false, title });
+      return;
+    }
     this.notices.show("attack", `Starting the attack on ${attack.name}…`, { level: "info" });
 
     try {
@@ -1145,6 +1241,15 @@ export class YardScene implements Scene {
     // In planner mode the selection belongs to the planner, which draws its own
     // chrome and has its own multi-selection; the read-only panel stays shut.
     if (this.planner) return;
+    // A friend's building with a help to give opens the help panel instead (#374).
+    if (this.helpPanel && this.helpPanel.shown?.id !== building?.id) this.helpPanel.close();
+    if (building && this.target?.kind === "friend") {
+      const help = buildingHelp(this.helpBlock, building.id);
+      if (help) {
+        this.showHelp(building);
+        return;
+      }
+    }
     this.selected = building;
     this.renderer.setSelected(building);
 
@@ -1351,6 +1456,153 @@ export class YardScene implements Scene {
     guideBus.emit("buildMenu", { open: true, ...(category ? { tab: category } : {}) });
   }
 
+  /* ── Friends: visiting and helping (#372, #374) ─────────────────────── */
+
+  /**
+   * The friends bar's and the Friends list's Visit (#372): the friend's main
+   * yard, read-only, with Home on the dock. The pool the HUD shows comes
+   * along, so a help's reward can be added to it.
+   */
+  private visitFriendYard(friend: Friend): void {
+    const context = this.context;
+    if (!context) return;
+    const store = this.store;
+    visitFriend(friend, store ? { resources: store.resources, credits: store.credits } : this.target?.own);
+    context.goTo(SceneName.YARD);
+  }
+
+  /** A friend's yard has loaded: the helping line and the wrenches (#374). */
+  private startHelping(response: HelpYardResponse, name: string): void {
+    const context = this.context;
+    if (!context) return;
+    this.helpBlock = response.help ?? { helpsLeft: 0, buildings: {} };
+    if (!this.visitLine) {
+      this.visitLine = document.createElement("div");
+      this.visitLine.className = "friend-visit-line";
+      this.visitLine.setAttribute("role", "status");
+      context.overlay.content.append(this.visitLine);
+    }
+    this.visitLine.dataset["name"] = name;
+    this.showHelpBlock();
+  }
+
+  /** Puts the help block on screen: the line, the wrenches and the open panel. */
+  private showHelpBlock(): void {
+    const block = this.helpBlock;
+    if (!block) return;
+    if (this.visitLine) this.visitLine.textContent = helpingLine(this.target?.name ?? "", block.helpsLeft);
+    this.renderer.setHelpMarks(helpableIds(block));
+    const shown = this.helpPanel?.shown;
+    if (shown) this.helpPanel?.show(shown, buildingHelp(block, shown.id));
+  }
+
+  /** Opens the help panel on a friend's building, docked where the building panel docks. */
+  private showHelp(picked: YardBuilding): void {
+    const dock = this.panelDock;
+    if (!dock) return;
+    // The yard's copy, which a help keeps current; the drawn one is as loaded.
+    const building = this.yard?.buildings.find((one) => one.id === picked.id) ?? picked;
+    this.panel?.close();
+    this.buildMenu?.close();
+    this.selected = building;
+    this.renderer.setSelected(building);
+    if (!this.helpPanel) {
+      this.helpPanel = new HelpPanel({
+        onHelp: (target, kind) => this.help(target, kind),
+        onClose: () => {
+          this.helpPanel = null;
+          this.selected = null;
+          this.renderer.setSelected(null);
+        },
+      }).mount(dock);
+    }
+    this.helpPanel.show(building, buildingHelp(this.helpBlock, building.id));
+  }
+
+  /**
+   * One help (#374): the server decides and answers with the building as it
+   * now is, the reward and the helps left. A refusal is said in words and
+   * stands on the button from then on.
+   */
+  private async help(building: YardBuilding, kind: HelpKind): Promise<void> {
+    const target = this.target;
+    const friend = target?.friend;
+    const context = this.context;
+    if (!target || friend === undefined || !this.helpBlock || !context) return;
+    try {
+      const result = await this.friends.help(friend, building.id, kind);
+      if (this.context !== context || !this.helpBlock) return;
+      this.helpBlock = afterHelp(this.helpBlock, building.id, kind, result.helpsLeft);
+      if (result.building) this.patchVisitBuilding(building, result.building);
+      // The reward lands in the visitor's own pool (#374): the HUD floats it.
+      const pool = this.visitorPool;
+      if (pool) {
+        const resources: Resources = { ...pool.resources };
+        for (const key of ["r1", "r2", "r3", "r4"] as const) {
+          const add = result.reward[key] ?? 0;
+          if (add > 0) resources[key] = (resources[key] ?? 0) + add;
+        }
+        this.visitorPool = { ...pool, resources };
+        this.hud?.setResources(resources, pool.credits);
+      }
+      this.showHelpBlock();
+      this.helpPanel?.setMessage(thanksText(kind, result, target.name, building.name), "thanks");
+      // The friends bar's wrench and the helps left follow.
+      friendsStore.nudge();
+    } catch (caught) {
+      if (this.context !== context || !this.helpBlock) return;
+      if (caught instanceof ApiError && caught.isAuthFailure) {
+        context.goTo(SceneName.LOGIN);
+        return;
+      }
+      const refusal = friendRefusal(caught);
+      const known = refusal.reason !== "unknown" && refusal.reason !== "network";
+      const text = known ? helpRefusalText(refusal.reason) : refusal.message;
+      if (refusal.reason === "dailyCap") {
+        this.helpBlock = afterHelp(this.helpBlock, -1, kind, 0);
+      } else if (known && refusal.reason !== "underAttack" && refusal.reason !== "notFriends") {
+        this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason);
+      }
+      this.showHelpBlock();
+      this.helpPanel?.setMessage(text, "error");
+    }
+  }
+
+  /**
+   * The friend's building as the server now has it, put in the visit's save
+   * and yard so the read-only panel and the help panel read the new
+   * countdown and helpers. Nothing is redrawn: a visit shows no job bars and
+   * no damage outside a battle.
+   */
+  private patchVisitBuilding(building: YardBuilding, raw: Record<string, unknown>): void {
+    const save = this.save;
+    const yard = this.yard;
+    if (!save || !yard) return;
+    const key = Object.keys(save.buildingdata ?? {}).find(
+      (one) => Number((save.buildingdata?.[one] as { id?: unknown } | undefined)?.id ?? one) === building.id,
+    );
+    if (!key || !save.buildingdata) return;
+    const answer = raw as BuildingDataMap[string];
+    const paused = isCountdownPaused(answer, save.buildinghealthdata ?? null);
+    const patched = fromVisitSave(answer, Date.now() / 1000 - yard.savedAt, paused);
+    save.buildingdata = { ...save.buildingdata, [key]: patched };
+    const next = readYard(save, { foreign: true }).buildings.find((one) => one.id === building.id);
+    if (!next) return;
+    this.yard = { ...yard, buildings: yard.buildings.map((one) => (one.id === building.id ? next : one)) };
+    if (this.helpPanel?.shown?.id === building.id) this.helpPanel.show(next, buildingHelp(this.helpBlock, next.id));
+  }
+
+  /**
+   * The own main yard hears when a friend helps in it (#374): the presence
+   * ping's `helped` is newer than the yard, so the store asks the server
+   * again, which brings the shorter countdown, the full health and the bell.
+   */
+  private watchHelps(store: YardStore): void {
+    this.stopHelpedWatch?.();
+    const watch = new HelpedWatch(store.now(), () => void this.store?.refresh());
+    this.stopHelpedWatch = presence.onAnswer((answer) => watch.hear(answer));
+  }
+
   /**
    * World chat's "View yard" (#282): the player's main yard, read-only, by
    * the map rooms' way in (`setViewTarget`). Chat does not know where they
@@ -1414,6 +1666,10 @@ export class YardScene implements Scene {
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */
   private applyIntent(intent: YardIntent | null): void {
     if (!intent) return;
+    if (intent.kind === "notice") {
+      this.notices.show("friend-visit", intent.text, { level: "warning", timeoutMs: 8_000 });
+      return;
+    }
     if (intent.kind === "build") this.openBuildMenu(intent.type);
     else if (intent.kind === "defences") {
       if (this.defences && !this.defences.button.element.hidden) void this.defences.open();

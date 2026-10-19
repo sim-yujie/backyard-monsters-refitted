@@ -24,6 +24,7 @@ mock.module("../../server.js", () => ({
       findOne: async () => maproom,
       find: async (entity: { name?: string }) =>
         entity?.name === "User" ? neighbourRows.users : entity?.name === "Save" ? neighbourRows.saves : [],
+      execute: async () => [],
       persist: () => {},
       flush: async () => {},
     },

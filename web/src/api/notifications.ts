@@ -25,17 +25,21 @@ const READ_ALL_PATH = "/api/:apiVersion/bm/notifications/readall";
  * everything a yard load finished while the player was away (`away`), or an
  * achievement earned (`achievement`, #204: one unlock, or the backfill's
  * together, each entry `{ kind: "achievement", id, detail: { name, shiny,
- * backfill? } }`).
+ * backfill? } }`), or something a friend did (`friend`, #370: one entry,
+ * `{ event, userid, username, ... }`, read with `friendLineText`).
  */
 export interface GameNotification {
   readonly id: number;
-  readonly kind: "jobs" | "away" | "achievement";
+  readonly kind: "jobs" | "away" | "achievement" | "friend";
   /** The outpost it is about; null for the main yard. */
   readonly baseid: string | null;
   /** Unix seconds it was written. */
   readonly at: number;
   readonly read: boolean;
-  /** The catch-up's `completed` entries, as the yard answer carried them; an achievement's unlocks. */
+  /**
+   * The catch-up's `completed` entries, as the yard answer carried them; an
+   * achievement's unlocks; a `friend` row's one payload, not a job at all.
+   */
   readonly jobs: readonly CompletedJob[];
 }
 

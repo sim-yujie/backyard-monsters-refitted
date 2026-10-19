@@ -187,3 +187,14 @@ describe("userCell attacker mark", () => {
     expect(await userCell(ctx, cell, owners)).not.toHaveProperty("ak");
   });
 });
+
+describe("userCell friend flag (friends WP2, #369)", () => {
+  const withFriends = (friends?: Set<number>) =>
+    ({ authUser: { userid: 2505 }, state: { online: new Set(), truces: new Map(), friends } }) as unknown as Context;
+
+  test("fr is 1 for a friend's cell, 0 for anyone else and when no friends are loaded", async () => {
+    expect(await userCell(withFriends(new Set([OWNER])), outpostWith(0, 0), owners)).toMatchObject({ fr: 1 });
+    expect(await userCell(withFriends(new Set([5])), outpostWith(0, 0), owners)).toMatchObject({ fr: 0 });
+    expect(await userCell(withFriends(), outpostWith(0, 0), owners)).toMatchObject({ fr: 0 });
+  });
+});

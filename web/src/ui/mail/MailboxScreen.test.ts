@@ -223,6 +223,50 @@ describe("the mailbox screen", () => {
     });
   });
 
+  describe("Add friend on an attack notice (friends WP11, #378)", () => {
+    const attacked = message({
+      threadid: 5,
+      userid: 0,
+      messagetype: "outpostattacked",
+      subject: "Kai_Builds attacked your outpost at (3, 4)",
+      message: "It was left 20% damaged.",
+      updatetime: NOW - 30,
+      byuserid: 3131,
+    });
+    const addFriend = () =>
+      vi.fn((userid: number) => {
+        const node = document.createElement("span");
+        node.className = "add-friend";
+        node.textContent = `Add ${userid}`;
+        return node;
+      });
+    const openOne = async (overrides: Partial<MailboxScreenOptions>, item: MailMessage) => {
+      const api = fakeApi([[item]], { [item.threadid]: [item] });
+      const opened = await openScreen(api, overrides);
+      click(rows(opened.host)[0]);
+      await settle();
+      return opened;
+    };
+
+    it("offers it for the player the notice names", async () => {
+      const make = addFriend();
+      const { host } = await openOne({ addFriend: make }, attacked);
+      expect(make).toHaveBeenCalledWith(3131);
+      expect(host.querySelector(".mail-message__friend .add-friend")?.textContent).toBe("Add 3131");
+    });
+
+    it("offers none on a notice naming no one, the game's other notices, or a player's message", async () => {
+      const make = addFriend();
+      const older = await openOne({ addFriend: make }, { ...attacked, byuserid: null });
+      expect(older.host.querySelector(".add-friend")).toBeNull();
+      const answered = await openOne({ addFriend: make }, { ...attacked, messagetype: "inviteaccepted", byuserid: null });
+      expect(answered.host.querySelector(".add-friend")).toBeNull();
+      const forged = await openOne({ addFriend: make }, message({ threadid: 6, userid: 77, message: "hi", byuserid: 3131 }));
+      expect(forged.host.querySelector(".add-friend")).toBeNull();
+      expect(make).not.toHaveBeenCalled();
+    });
+  });
+
   it("replies in a player's thread, on its subject, and shows the server's refusal", async () => {
     const thread = [message({ userid: 77, message: "hi" }), message({ userid: ME, targetid: 77, message: "hello" })];
     const api = fakeApi([[message()]], { 1: thread });

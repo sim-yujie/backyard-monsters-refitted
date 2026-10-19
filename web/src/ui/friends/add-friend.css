@@ -1,0 +1,53 @@
+/* Add friend outside the Friends screen (issue #378): the map popups and an
+ * attack notice. The button takes its neighbours' classes; the note under it
+ * says what happened. */
+
+.add-friend {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.add-friend__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.add-friend__relation {
+  align-self: flex-start;
+}
+
+.add-friend__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.add-friend__note[hidden] {
+  display: none;
+}
+
+.add-friend__note--error {
+  color: var(--colour-danger);
+  font-weight: 600;
+}
+
+/* The Map Room 2 popup's row (`CellPanel`), as wide as Message and Truce. */
+.mr2-cell__friend .add-friend {
+  flex: 1;
+}
+
+/* Map Room 1's neighbour card: a row of its own under Message and Truce. */
+.mr1-card__friend .add-friend {
+  display: flex;
+}
+
+/* An attack notice in the mailbox (`MailboxScreen`). */
+.mail-message__friend {
+  margin-top: var(--space-2);
+}

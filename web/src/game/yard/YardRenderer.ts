@@ -6,6 +6,7 @@ import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
+import { YardHelpMarks } from "./YardHelpMarks";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
 import { YardLifeLayer } from "./YardLifeLayer";
 import { holdBack, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
@@ -81,6 +82,8 @@ export class YardRenderer {
   private readonly jobBars = new YardJobBars((id) => this.jobBarAnchor(id));
   /** The hatchery numbers while the Hatch tab is open (#268), above a job bar where there is one. */
   private readonly hatchMarks = new YardHatchMarks((id) => this.hatchMarkAnchor(id));
+  /** The wrenches over a friend's yard on a visit (#374); see `YardHelpMarks`. */
+  private readonly helpMarks = new YardHelpMarks((id) => this.hatchMarkAnchor(id));
   /** What lives on the yard (#158, #159): scenery, never in the battle. */
   private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
   /** The planner is open: the creatures step out of the way until it closes. */
@@ -153,6 +156,7 @@ export class YardRenderer {
       this.buildings.markers,
       this.jobBars.root,
       this.hatchMarks.root,
+      this.helpMarks.root,
       this.buildings.labels,
     );
   }
@@ -239,6 +243,7 @@ export class YardRenderer {
       this.jobBars.update();
       // A handful of badges: cheap to place every frame.
       if (this.hatchMarks.current) this.hatchMarks.reposition();
+      if (this.helpMarks.active) this.helpMarks.reposition();
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
     }
@@ -282,6 +287,7 @@ export class YardRenderer {
       this.buildings.markers,
       this.jobBars.root,
       this.hatchMarks.root,
+      this.helpMarks.root,
       this.buildings.labels,
     ]) {
       layer.visible = iso;
@@ -369,6 +375,7 @@ export class YardRenderer {
     this.blueprint.setZoom(zoom);
     this.jobBars.setZoom(zoom);
     this.hatchMarks.setZoom(zoom);
+    this.helpMarks.setZoom(zoom);
     this.zoomWatcher?.(zoom);
   }
 
@@ -409,6 +416,16 @@ export class YardRenderer {
    */
   setHatcheryMarks(marks: HatcheryMarks | null): void {
     if (this.hatchMarks.set(marks)) this.chromeDirty = true;
+  }
+
+  /** Puts a wrench over these buildings of a friend's yard (#374), or none when empty. */
+  setHelpMarks(ids: ReadonlySet<number>): void {
+    this.helpMarks.set(ids);
+  }
+
+  /** The buildings wearing a wrench now, by id. */
+  get helpMarkIds(): number[] {
+    return this.helpMarks.drawn;
   }
 
   /** The hatchery badges drawn now: number and whether it is the chosen one. */
@@ -746,7 +763,10 @@ export class YardRenderer {
   /** The building under a world point in the active view, or null. */
   pick(worldX: number, worldY: number): YardBuilding | null {
     if (this.currentView === YardView.BLUEPRINT) return this.blueprint.pick(worldX, worldY);
-    return this.buildings.pick(worldX, worldY);
+    // A friend's wrench stands above its building, often over another one (#374).
+    const wrenched = this.helpMarks.pick(worldX, worldY);
+    const helped = wrenched === null ? undefined : this.byId.get(wrenched);
+    return helped ?? this.buildings.pick(worldX, worldY);
   }
 
   /** The mushroom under a world point in the isometric yard, or null. */
@@ -776,6 +796,7 @@ export class YardRenderer {
     this.planner.destroy();
     this.jobBars.destroy();
     this.hatchMarks.destroy();
+    this.helpMarks.destroy();
     this.blueprint.destroy();
     this.byId.clear();
     this.yard = null;

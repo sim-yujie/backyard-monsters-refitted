@@ -98,6 +98,22 @@ describe("entity discovery", () => {
       });
       expect(columns("Message").replayid).toEqual({ type: "bigint", nullable: true });
       expect(columns("User").last_seen_at).toEqual({ type: "timestamptz", nullable: true });
+      // The friends tables and privacy switches (issue #368), against their migration.
+      expect(columns("Friend")).toEqual({
+        userid: { type: "int", nullable: false },
+        friend_userid: { type: "int", nullable: false },
+        created_at: { type: "timestamptz", nullable: false },
+      });
+      expect(columns("FriendRequest")).toEqual({
+        id: { type: "bigserial", nullable: false },
+        from_userid: { type: "int", nullable: false },
+        to_userid: { type: "int", nullable: false },
+        status: { type: "text", nullable: false },
+        created_at: { type: "timestamptz", nullable: false },
+        answered_at: { type: "timestamptz", nullable: true },
+      });
+      expect(columns("User").hide_online).toEqual({ type: "boolean", nullable: false });
+      expect(columns("User").friend_requests_off).toEqual({ type: "boolean", nullable: false });
       // The attack cap's dropped neighbours (issue #247), against its migration.
       expect(columns("Maproom").dropped_neighbours).toEqual({ type: "jsonb", nullable: false });
     } finally {

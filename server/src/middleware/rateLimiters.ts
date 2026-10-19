@@ -463,3 +463,54 @@ export const allianceCreateEditLimiter = spamLimiter("alliance-create-edit", SPA
   ctx.status = Status.TOO_MANY_REQUESTS;
   ctx.body = { error: "You have changed alliances a lot. Please wait a while and try again.", reason: "rateLimited" };
 });
+
+/**
+ * Rate limit for the friends search (issue #368, `docs/design/friends.md`
+ * §7.7) - 30 a minute per user: the Find tab searches as the player types.
+ */
+export const friendSearchLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "friend-search",
+  keyGenerator: byUser("friend-search"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many searches. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/**
+ * Rate limit for the friends lists (issue #368): the list, the requests, the
+ * suggestions and the blocked list - 60 a minute per user, counted together.
+ * The client reads them on open, on a friend notification and every few minutes.
+ */
+export const friendsReadLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "friends-read",
+  keyGenerator: byUser("friends-read"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/** A friends refusal for a spam limit: `message` for the web client, `error` as elsewhere. */
+const friendsRefusal = (text: string) => (ctx: Context) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: text, message: text, reason: "rateLimited" };
+};
+
+/** Friend requests sent (issue #368). */
+export const friendRequestLimiter = spamLimiter(
+  "friend-request",
+  SPAM_LIMITS.friendRequest,
+  friendsRefusal("You have sent a lot of friend requests. Please wait a while before sending more.")
+);
+
+/** Friend requests answered or cancelled, friends removed, players blocked or unblocked (issue #368). */
+export const friendActionLimiter = spamLimiter(
+  "friend-action",
+  SPAM_LIMITS.friendAction,
+  friendsRefusal("You have done that a lot. Please wait a while and try again.")
+);

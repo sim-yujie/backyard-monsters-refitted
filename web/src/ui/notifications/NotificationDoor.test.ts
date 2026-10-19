@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GameNotification, NotificationsApi } from "@/api/notifications";
 import type { CompletedJob } from "@/api/types";
+import { setFriendsOpener } from "@/game/friends/friendsView";
 import { typeName } from "@/game/yard/planner/summary";
 import { NotificationDoor } from "./NotificationDoor";
 import { EMPTY_TEXT, LOAD_FAILED_TEXT } from "./NotificationPanel";
@@ -53,7 +54,10 @@ describe("NotificationDoor", () => {
     yard = null;
   });
 
+  let friends: { nudge: ReturnType<typeof vi.fn> };
+
   const doorWith = (api: NotificationsApi, onOpen = () => {}) => {
+    friends = { nudge: vi.fn() };
     const door = new NotificationDoor({
       container,
       api,
@@ -61,6 +65,7 @@ describe("NotificationDoor", () => {
       currentYard: () => yard,
       selectBuilding: select,
       now: () => NOW,
+      friends,
     });
     container.append(door.bell.element);
     return door;
@@ -195,5 +200,32 @@ describe("NotificationDoor", () => {
     door.destroy();
     expect(container.querySelector(".notif-screen")).toBeNull();
     expect(container.querySelector(".yard-dock__button--bell")).toBeNull();
+  });
+  it("refreshes the friends list when the count rises or a friend's line is unread (#370)", async () => {
+    const door = doorWith(
+      fakeApi([notification({ id: 4, kind: "friend", jobs: [{ event: "request", userid: 7, username: "Bob" }] as never })]),
+    );
+    door.setSaveCount(2);
+    expect(friends.nudge).not.toHaveBeenCalled();
+    door.setSaveCount(1);
+    expect(friends.nudge).not.toHaveBeenCalled();
+    door.setSaveCount(3);
+    expect(friends.nudge).toHaveBeenCalledTimes(1);
+    await door.open();
+    expect(friends.nudge).toHaveBeenCalledTimes(2);
+    expect(rows()[0]?.textContent).toContain("Bob wants to be your friend.");
+  });
+
+  it("opens the Friends screen on its Gifts tab from a gift's row, closing the list", async () => {
+    const opener = vi.fn();
+    const clear = setFriendsOpener(opener);
+    const api = fakeApi([notification({ id: 5, kind: "friend", jobs: [{ event: "gift", userid: 7, username: "Bob" }] as never })]);
+    const door = doorWith(api);
+    await door.open();
+    rows()[0]!.click();
+    expect(opener).toHaveBeenCalledWith("gifts");
+    expect(door.isOpen).toBe(false);
+    expect(api.read).toHaveBeenCalledWith(5);
+    clear();
   });
 });

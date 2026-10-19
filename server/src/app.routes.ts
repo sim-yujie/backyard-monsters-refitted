@@ -112,6 +112,7 @@ import {
 import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
 import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
+import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -303,6 +304,11 @@ router.get("/api/:apiVersion/bm/achievements/player/:userid", apiVersion, verify
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/defences", apiVersion, verifyUserAuth, verifyAccountStatus, defencesLimiter, getDefences);
 router.get("/api/:apiVersion/defences/:id/replay", apiVersion, verifyUserAuth, verifyAccountStatus, defencesLimiter, getDefenceReplay);
+
+/**  ────────────────────────────────────────────────
+* 📦 Friends: requests, the list, search, blocking (issue #368, `controllers/friends/routes.ts`)
+* ──────────────────────────────────────────────── */
+mountFriendsRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Leaderboards & Attack Logs

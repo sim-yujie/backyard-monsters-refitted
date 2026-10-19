@@ -118,6 +118,9 @@ export const takenNoticeText = (taker: string, cell: OutpostCell): { subject: st
   message: "It is theirs now, with every building on it.",
 });
 
+/** The notices about an attack or a takeover, which name the player who did it (`byuserid`, #378). */
+export const ATTACK_NOTICE_TYPES: ReadonlySet<string> = new Set([OUTPOST_ATTACKED, OUTPOST_TAKEN, YARD_ATTACKED]);
+
 export interface OutpostNoticeInput {
   /** The outpost's owner, who is told. */
   readonly ownerId: number;
@@ -162,6 +165,8 @@ export const writeOutpostNotice = async (em: EntityManager, input: OutpostNotice
     baseid,
     updatetime: now,
     ...(replayid != null && { replayid }),
+    // The attacker or taker, for the notice's Add friend (#378); not who answered an invitation.
+    ...(ATTACK_NOTICE_TYPES.has(type) && byUserId > 0 && { byuserid: byUserId }),
   });
   thread.lastMessage = message;
   em.persist(thread);

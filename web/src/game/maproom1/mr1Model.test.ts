@@ -335,3 +335,13 @@ describe("mr1AttackTarget (#132)", () => {
     expect(mr1AttackTarget(world.tribes[1]!, null, world, NOW)).toBeNull();
   });
 });
+
+describe("a neighbour's friend flag (friends WP11, #378)", () => {
+  it("reads the route's friend: 1, and anything else as not a friend", () => {
+    const wire = mapRoom1Fixture(NOW);
+    const [first, second] = wire.neighbours!;
+    const world = readMapRoom1({ ...wire, neighbours: [{ ...first!, friend: 1 }, { ...second!, friend: 0 }] }, NOW);
+    expect(world.neighbours.find((one) => one.userid === first!.userid)?.friend).toBe(true);
+    expect(world.neighbours.find((one) => one.userid === second!.userid)?.friend).toBe(false);
+  });
+});

@@ -207,6 +207,38 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
+  describe("the Friends item (#370)", () => {
+    it("is there only when asked for, opens the screen, and carries the count waiting", () => {
+      const { button } = build();
+      button.click();
+      expect(menu!.element.querySelector(".account-menu__friends")).toBeNull();
+      menu!.setFriendsCount(3);
+      menu!.destroy();
+
+      const onFriends = vi.fn();
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onFriends });
+      document.body.append(menu.element);
+      const opener = menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!;
+      const onButton = opener.querySelector<HTMLElement>(".account-menu__button-count")!;
+      expect(onButton.hidden).toBe(true);
+      menu.setFriendsCount(3);
+      expect(onButton.hidden).toBe(false);
+      expect(onButton.textContent).toBe("3");
+      opener.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__friends")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("Friends3");
+      expect(menu.element.querySelectorAll(".account-menu__item").length).toBe(1);
+      menu.setFriendsCount(150);
+      expect(item.querySelector(".account-menu__count")!.textContent).toBe("99+");
+      menu.setFriendsCount(0);
+      expect(item.querySelector<HTMLElement>(".account-menu__count")!.hidden).toBe(true);
+      expect(onButton.hidden).toBe(true);
+      item.click();
+      expect(onFriends).toHaveBeenCalledOnce();
+      expect(menu.open).toBe(false);
+    });
+  });
 });
 
 /**

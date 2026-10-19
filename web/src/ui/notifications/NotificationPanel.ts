@@ -1,5 +1,7 @@
 import type { GameNotification } from "@/api/notifications";
 import { achievementLineText } from "@/game/achievements/unlockText";
+import { friendLineTab, friendLineText } from "@/game/friends/friendText";
+import type { FriendsOpenTab } from "@/game/friends/friendsView";
 import { sentText } from "@/game/mail/mailbox";
 import { Panel } from "@/ui/Panel";
 import { jobLine, jobLineText } from "@/ui/yard/JobNotices";
@@ -13,9 +15,11 @@ import "@/ui/styles/notifications.css";
  * Each row is one notification worded as the yard's toasts were
  * (`jobLine`): one kind of job a yard answer finished, or the "While you were
  * away" line of a load; or an achievement earned ("Achievement earned: Town
- * Planner, +10 Shiny", `achievementLineText`, #204). An unread row has a dot and stays unread until it is
+ * Planner, +10 Shiny", `achievementLineText`, #204); or something a friend
+ * did ("Bob wants to be your friend.", `friendLineText`, #370). An unread row has a dot and stays unread until it is
  * clicked; a building named in it is a button that selects it, when the
- * notification is about the yard that is open. "Mark all read" clears every
+ * notification is about the yard that is open; a friend's gift row opens the
+ * Friends screen on its Gifts tab. "Mark all read" clears every
  * dot. The panel only shows and reports; `NotificationDoor` fetches and marks.
  */
 
@@ -29,6 +33,8 @@ export interface NotificationPanelOptions {
    */
   readonly selectFor: (notification: GameNotification) => ((buildingId: number) => void) | null;
   readonly onClose?: (hadFocus: boolean) => void;
+  /** A friend's row that leads to a Friends tab was clicked (a gift: "gifts"). */
+  readonly openFriends?: (tab: FriendsOpenTab) => void;
   /** Unix seconds now, for "5 min ago". */
   readonly now?: () => number;
 }
@@ -41,7 +47,9 @@ export const LOAD_FAILED_TEXT = "Your notifications could not load.";
 export const lineText = (notification: GameNotification): string =>
   notification.kind === "achievement"
     ? achievementLineText(notification.jobs)
-    : jobLineText(notification.kind, notification.jobs);
+    : notification.kind === "friend"
+      ? friendLineText(notification.jobs)
+      : jobLineText(notification.kind, notification.jobs);
 
 export class NotificationPanel {
   readonly element: HTMLElement;
@@ -169,7 +177,7 @@ export class NotificationPanel {
     row.tabIndex = 0;
     const words = lineText(notification);
     const text =
-      notification.kind === "achievement"
+      notification.kind === "achievement" || notification.kind === "friend"
         ? Object.assign(document.createElement("span"), { textContent: words })
         : jobLine(notification.kind, notification.jobs, this.options.selectFor(notification));
     text.classList.add("notif-row__text");
@@ -187,8 +195,10 @@ export class NotificationPanel {
     row.append(text, meta);
     row.title = words;
 
+    const tab = notification.kind === "friend" ? friendLineTab(notification.jobs) : null;
     const read = (): void => {
       if (!notification.read) this.options.onRead(notification.id);
+      if (tab) this.options.openFriends?.(tab);
     };
     // A building's button selects it and, bubbling up, marks the row read too.
     row.addEventListener("click", read);

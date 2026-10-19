@@ -1542,7 +1542,7 @@ body {
   font-size: var(--text-sm);
 }
 
-/* ── Account settings (username, Shiny Lock) ───────────────────────────── */
+/* ── Account settings (username, Shiny Lock, privacy) ───────────────────────────── */
 
 .account-settings {
   display: flex;
@@ -1564,4 +1564,51 @@ body {
   cursor: pointer;
   font-weight: 600;
   color: var(--colour-text-strong);
+}
+.account-settings__heading {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--colour-text-strong);
+}
+
+.account-settings__blocked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-settings__blocked-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Block button with its confirm (friends rows, Find results) */
+
+.block-button {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.block-button__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.block-button__confirm[hidden],
+.block-button__ask[hidden] {
+  display: none;
+}
+
+.block-button__question {
+  font-size: var(--text-sm);
 }
