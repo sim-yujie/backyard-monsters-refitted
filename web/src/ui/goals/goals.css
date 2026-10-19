@@ -207,6 +207,22 @@
   bottom: 30px;
 }
 
+/* Defences pushes the bell into Goals' place: Goals moves one place further left. */
+.yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--goals {
+  right: 510px;
+}
+
+/* A phone on its side: pull the row in so Goals stays clear of the Places column. */
+@media (width > 620px) and (height <= 500px) {
+  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--bell {
+    right: 416px;
+  }
+
+  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--goals {
+    right: 484px;
+  }
+}
+
 /* ── The dock button's badge ───────────────────────────────────────────── */
 
 .yard-dock__badge.goals-badge {
@@ -219,9 +235,15 @@
 }
 
 @media (width <= 620px) {
+  /* A third row above Layout and Collect all: the bottom row only has room
+     for Mail, Monsters and Build beside the Places column. */
   .yard-dock__right > .yard-dock__button--goals {
-    right: 268px;
-    bottom: 18px;
+    right: 26px;
+    bottom: 262px;
+  }
+
+  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--goals {
+    right: 26px;
   }
 
   .goals-panel {

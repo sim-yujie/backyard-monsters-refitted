@@ -178,6 +178,13 @@
 
 /* A phone: the strip hides behind a Friends button above the bottom-left
    buttons and slides up when it is pressed. */
+/* A phone on its side: the dock's buttons reach well past the middle, so the bar rides above them. */
+@media (width > 620px) and (height <= 500px) {
+  .friends-bar {
+    bottom: 128px;
+  }
+}
+
 @media (width <= 620px) {
   .friends-bar {
     right: 8px;
@@ -208,7 +215,7 @@
 
   .friends-bar__strip,
   .friends-bar__arrow {
-    margin-bottom: 44px;
+    margin-bottom: 140px;
     visibility: hidden;
     opacity: 0;
     transform: translateY(24px);
