@@ -1,5 +1,6 @@
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { levelLabel } from "@/game/friends/friendText";
+import { onlineDot } from "@/ui/onlineDot";
 
 /**
  * The pieces every Friends tab builds its rows from (issue #370): a row
@@ -47,13 +48,15 @@ const BADGE_TEXT: Readonly<Record<RowBadge, { readonly icon: string; readonly ti
 };
 
 /**
- * One player's row: critter, name, "Level 12", an optional line under them
- * (online, "2 h ago"), and the actions. `badges` puts the bar's wrench and
- * gift marks on the critter. `data-userid` lets a test find it.
+ * One player's row: critter, name (with the green dot when `online`),
+ * "Level 12", an optional line under them ("Seen today"), and the actions.
+ * `badges` puts the bar's wrench and gift marks on the critter. `data-userid`
+ * lets a test find it.
  */
 export const playerRow = (
   player: RowPlayer,
   options: {
+    readonly online?: boolean;
     readonly note?: string;
     readonly noteClass?: string;
     readonly actions?: readonly HTMLElement[];
@@ -79,8 +82,10 @@ export const playerRow = (
   }
 
   const words = make("div", "friends-row__text");
-  const name = make("span", "friends-row__name", player.username);
-  words.append(name);
+  const top = make("span", "friends-row__top");
+  top.append(make("span", "friends-row__name", player.username));
+  if (options.online) top.append(onlineDot());
+  words.append(top);
   const level = levelLabel(player.level);
   const meta = make("span", "friends-row__meta");
   if (level) meta.append(make("span", "friends-row__level", level));

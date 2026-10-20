@@ -162,17 +162,6 @@
   flex: none;
 }
 
-.mr1-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.mr1-dot--online {
-  background: var(--colour-online);
-}
-
 .mr1-countdown {
   color: var(--colour-text);
   font-variant-numeric: tabular-nums;
@@ -536,8 +525,8 @@
 }
 
 .mr1-legend__swatch--online {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border: 0;
   background: var(--colour-online);
 }
@@ -811,7 +800,7 @@
   color: var(--colour-meter);
 }
 
-.mr1-reason .mr1-dot {
+.mr1-reason .online-dot {
   margin: 6px 4px 0;
 }
 
