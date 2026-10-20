@@ -1,7 +1,8 @@
 /**
- * Cloudflare Turnstile, the sign-up form's bot check (issue #213).
+ * Cloudflare Turnstile, the sign-up form's bot check (issue #213), also on
+ * the login screen's bug report form (`ui/bugReport/BugReportDialog.ts`).
  *
- * The widget's script is loaded only when the sign-up form opens, never on
+ * The widget's script is loaded only when one of those forms opens, never on
  * the sign-in form or in the game, and only when the build has a site key
  * (`TURNSTILE_SITE_KEY`, see `.env.example`). The widget hands the form a
  * one-use token, which the register route checks with Cloudflare before it
@@ -75,7 +76,14 @@ export class BotCheck {
   private currentToken: string | null = null;
   private destroyed = false;
 
-  constructor(private readonly siteKey: string) {
+  /**
+   * @param siteKey The build's Turnstile site key.
+   * @param action Cloudflare's label for where the check ran: sign-up, or the login screen's bug report.
+   */
+  constructor(
+    private readonly siteKey: string,
+    private readonly action = "signup",
+  ) {
     this.element = document.createElement("div");
     this.element.className = "bot-check";
 
@@ -99,7 +107,7 @@ export class BotCheck {
       this.widgetId =
         api.render(this.element, {
           sitekey: this.siteKey,
-          action: "signup",
+          action: this.action,
           theme: "dark",
           callback: (token) => {
             this.currentToken = token;

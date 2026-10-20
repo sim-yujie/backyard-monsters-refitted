@@ -30,6 +30,9 @@ export const ownYardTarget = (save: BaseLoadResponse, roster: AttackRoster): Att
         buildingdata: save.buildingdata,
         academy: save.academy,
         champion: save.champion,
+        // The yard's running shop boosts defend it, as in a real raid (beta.4).
+        storedata: save.storedata,
+        now: Math.floor(Date.now() / 1000),
       }),
     },
     roster,

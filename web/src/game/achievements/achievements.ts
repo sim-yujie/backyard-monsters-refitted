@@ -57,7 +57,7 @@ export const earnedText = (at: number | undefined): string => {
   return `Earned ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 };
 
-/** "7 of 16 earned · 85 Shiny earned"; without Shiny (someone else's) "7 of 16 earned". */
+/** "7 of 17 earned · 85 Shiny earned"; without Shiny (someone else's) "7 of 17 earned". */
 export const summaryText = (earned: number, total: number, shinyEarned?: number): string => {
   const count = `${formatAmount(earned)} of ${formatAmount(total)} earned`;
   return shinyEarned === undefined ? count : `${count} · ${formatAmount(shinyEarned)} Shiny earned`;

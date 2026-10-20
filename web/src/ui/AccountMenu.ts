@@ -29,6 +29,9 @@
  *
  * With `onWhatsNew` it has a "What's new" item, which opens the newest
  * release's cards again (`ui/events/WhatsNewDialog.ts`).
+ *
+ * With `onReportBug` it has a "Report a bug" item, which opens the bug report
+ * form (`ui/bugReport/BugReportDialog.ts`).
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
@@ -66,6 +69,8 @@ export interface AccountMenuOptions {
   readonly onFriends?: () => void;
   /** The "What's new" item's action; without it there is no such item. */
   readonly onWhatsNew?: () => void;
+  /** The "Report a bug" item's action; without it there is no such item. */
+  readonly onReportBug?: () => void;
 }
 
 /** What the picker's heading adds while the player still wears the default. */
@@ -286,6 +291,20 @@ export class AccountMenu {
         onWhatsNew();
       });
       this.list.append(whatsNew);
+    }
+    if (options.onReportBug) {
+      const onReportBug = options.onReportBug;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const reportBug = document.createElement("button");
+      reportBug.type = "button";
+      reportBug.className = "btn btn--ghost account-menu__help account-menu__report-bug";
+      reportBug.setAttribute("role", "menuitem");
+      reportBug.textContent = "Report a bug";
+      reportBug.addEventListener("click", () => {
+        this.toggle(false);
+        onReportBug();
+      });
+      this.list.append(reportBug);
     }
     // Account settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
     const settings = document.createElement("button");

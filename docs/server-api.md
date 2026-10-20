@@ -1061,6 +1061,13 @@ a raid being fought (and a warning when the game had been closed).
 |---|---|---|---|---|---|
 | GET | `/api/:apiVersion/events/wmi` | apiVersion, logRequest (no auth) | Query `type`: `"wmi1"` \| `"wmi2"` (required) | Success: `{ start, end, extension }` (unix seconds); failure: `400 {error:"Missing required event parameters"}` or `400 {error:"Invalid invasion event"}` | Returns the schedule window for a Wild Monster Invasion event. WMI1/WMI2 alternate by calendar-month parity, always start the 10th of the month, run 7 days; `extension` is currently computed equal to `end` (adds 0 days). `devConfig.wmi{1,2}StartNowOverride` can force an immediate start for testing. Per-user wave progress/reset logic (`invasionUtils.ts`) exists but is not part of this endpoint's response. |
 
+### Bug reports
+
+| Method | Path | Middleware | Request fields | Response | Description |
+|---|---|---|---|---|---|
+| POST | `/api/:apiVersion/bugreport` | apiVersion, verifyUserAuth, bugReportLimiter (10/h per user; no logRequest, the body carries pictures) | JSON: `message` (3-2000 chars, required), `gameVersion`, `screen`, `device` (`"phone"`/`"computer"`), `userAgent`, `screenSize`, `errors` (array of strings; last 20 kept, 1000 chars each), `screenshot` (`data:image/jpeg\|png\|webp;base64,...`, at most 1.5 MB decoded), `picture` (same, at most 3 MB) | `200 { error: 0, id, message }`; `400` `invalidBugReport` naming the `field`; `429` `bugReportLimit` (5 in 24 h per account) | The web client's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`). Saved in `bym.bug_report`, then emailed in the background to `BUG_REPORT_EMAIL` (default simyujie@gmail.com) with the pictures attached and Reply-To the account's email; a failed email leaves the row with `emailed_at` null. With `DEV_SANDBOX=true` the email goes to the server log. Metadata fields are clipped, never refused; pictures are checked by their first bytes. |
+| POST | `/api/:apiVersion/bugreport/guest` | apiVersion, bugReportLimiter (10/h per IP) | As above, plus `email` (required, for the reply) and `turnstileToken` | As above; `400 botCheckFailed`, `503 botCheckUnavailable`; `429 bugReportLimit` is 5 in 24 h per IP (kept only as a keyed hash) | The login screen's form, signed out. The Turnstile token is checked (when `TURNSTILE_SECRET_KEY` is set) before anything is counted or saved. |
+
 ### Leaderboards
 
 | Method | Path | Middleware | Request fields | Response | Description |

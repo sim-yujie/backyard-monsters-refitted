@@ -104,7 +104,7 @@ describe("achievements/state", () => {
 
     expect(answer.status).toBe(200);
     const state = stateOf(answer);
-    expect(state.total).toBe(16);
+    expect(state.total).toBe(17);
     expect(state.earned).toBe(1);
     expect(state.shinyEarned).toBe(5);
     expect(entry(answer, 1)).toMatchObject({ status: "earned", shiny: 5, progress: { value: 2, target: 2 } });
@@ -158,7 +158,7 @@ describe("achievements/state", () => {
   test("lists only the available entries, in Flash's order", async () => {
     const ids = stateOf(await call(yardAchievementsStateAction)).achievements.map((view) => view.id);
 
-    expect(ids).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 22]);
+    expect(ids).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 22]);
   });
 });
 

@@ -521,6 +521,21 @@ describe("routes Flash refuses in an outpost", () => {
         (overdrive.body.report as { credits: number }).credits,
     );
   });
+
+  test("an outpost sells Tower Overdrive for its own towers, but no monster boost", async () => {
+    for (const item of ["MOD", "MDOD", "MSOD"]) {
+      const refused = await onOutpost(yardShopBuyAction, { item });
+      expect(refused.status).toBe(400);
+      expect(refused.body.reason).toBe("notForSale");
+    }
+    const tower = await onOutpost(yardShopBuyAction, { item: "TOD" });
+    expect(tower.status).toBe(200);
+    const report = tower.body.report as { credits: number; endsAt: number };
+    expect(report.credits).toBe(600);
+    expect((outpostSave().storedata as Row).TOD).toMatchObject({ q: 1, e: report.endsAt });
+    expect((mainSave().storedata as Row).TOD).toBeUndefined();
+    expect(mainSave().credits).toBe(400);
+  });
 });
 
 describe("fortify", () => {

@@ -117,7 +117,7 @@ describe("LoginScene sign-up", () => {
     open();
     button("Create account").click();
     const order = [...root.querySelectorAll("input, button")]
-      .filter((element) => !element.closest(".panel__titlebar, [hidden]"))
+      .filter((element) => !element.closest(".panel__titlebar, .login-footer, [hidden]"))
       .map((element) => element.id || element.textContent);
     expect(order).toEqual([
       "signup-username",
@@ -127,6 +127,15 @@ describe("LoginScene sign-up", () => {
       "Create account",
       "I already have an account",
     ]);
+  });
+
+  it("opens the bug report from the footer, asking for an email for the reply", async () => {
+    open();
+    button("Report a bug").click();
+    await settle();
+    const form = document.body.querySelector(".bug-report");
+    expect(form).not.toBeNull();
+    expect(form!.querySelector("input[type=email]")).not.toBeNull();
   });
 
   it("shows a definite mistake as it is typed, and a short one only after leaving the field", () => {

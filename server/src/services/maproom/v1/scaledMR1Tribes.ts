@@ -29,6 +29,7 @@ import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/s
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
+import { recordAttackAchievements } from "../../achievements/events.js";
 import {
   acquireMR1TribeFinalLock,
   endMR1TribeSession,
@@ -182,6 +183,18 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   // attacker's main row under its own lock.
   if (battle?.destroyed && !wasDestroyed) {
     await recordTribeDestroyed(postgres.em, userSave.basesaveid, String(saveData.baseid));
+  }
+
+  // Each biggest Putty bomb fired counts towards Huge Rage (#299); a Map Room 1
+  // Kozu tribe is counted by its tribe counter above, never here.
+  if (bombs) {
+    await recordAttackAchievements(postgres.em, {
+      attackerBasesaveid: userSave.basesaveid,
+      defender: {},
+      before: null,
+      after: null,
+      bombs: bombs.charges,
+    });
   }
 
   // Spent: the lock is still held, so a copy of this save finds nothing.

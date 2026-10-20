@@ -215,6 +215,9 @@ needs your value:
 - `MAIL_FROM`: for example `Backyard Monsters Refitted <no-reply@yourgame.com>`;
 - `TURNSTILE_SECRET_KEY`: the secret key from step 5.
 
+Optional: `BUG_REPORT_EMAIL` is where in-game bug reports are emailed (it
+has a default; set it only to send them somewhere else).
+
 Save with Ctrl+O, Enter, then leave with Ctrl+X.
 
 Keep a copy of `production.env` somewhere safe off the server (a password

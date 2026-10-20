@@ -84,6 +84,9 @@ export const recordAchievementEvents = (
     return recorded;
   });
 
+/** The biggest Putty catapult bomb (`game-rules/combat/stats.ts`), which `hugerage` counts. */
+export const HUGE_RAGE_BOMB = "pu3";
+
 /** What {@link recordAttackAchievements} reads of a landed attack. */
 export interface LandedAttack {
   /** The attacker's main save. */
@@ -94,21 +97,37 @@ export interface LandedAttack {
   before: HealthMap;
   /** The battle's `buildinghealthdata`. */
   after: HealthMap;
+  /** The bombs the attack was charged for (`combat/bombSpend.ts`), once per attack. */
+  bombs?: readonly { readonly id: string }[] | null;
 }
 
 /**
  * The achievement events of a landed attack: `wm2hall` for a Map Room 2 Kozu
- * Town Hall brought down. Called once the landing is written; the attack has
- * landed whatever happens here, so a failure is logged, never thrown.
+ * Town Hall brought down, and `hugerage` for each `pu3` fired (Flash
+ * `ResourceBombs.as:318-319`, which Flash itself never let count).
+ */
+export const landedAttackEvents = (attack: LandedAttack): AchievementEvents => {
+  const events: AchievementEvents = {};
+  if (kozuHallFell(attack.defender, attack.before, attack.after)) events.wm2hall = 1;
+  const rages = (attack.bombs ?? []).filter((bomb) => bomb.id === HUGE_RAGE_BOMB).length;
+  if (rages > 0) events.hugerage = rages;
+  return events;
+};
+
+/**
+ * Records the achievement events of a landed attack ({@link landedAttackEvents}).
+ * Called once the landing is written; the attack has landed whatever happens
+ * here, so a failure is logged, never thrown.
  *
  * @returns Whether an event was recorded.
  */
 export const recordAttackAchievements = async (em: EntityManager, attack: LandedAttack): Promise<boolean> => {
-  if (!kozuHallFell(attack.defender, attack.before, attack.after)) return false;
+  const events = landedAttackEvents(attack);
+  if (Object.keys(events).length === 0) return false;
   try {
-    return (await recordAchievementEvents(em, attack.attackerBasesaveid, { wm2hall: 1 })) !== null;
+    return (await recordAchievementEvents(em, attack.attackerBasesaveid, events)) !== null;
   } catch (err) {
-    logger.error(`Recording the Kozu Town Hall for main save ${attack.attackerBasesaveid} failed: ${err}`);
+    logger.error(`Recording attack achievements for main save ${attack.attackerBasesaveid} failed: ${err}`);
     return false;
   }
 };

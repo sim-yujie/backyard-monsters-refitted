@@ -71,7 +71,7 @@ export interface AchievementView {
   mr1KozuDestroyed?: boolean;
 }
 
-/** Event stats to add (§7.1): Block and Heavy Trap builds, takeovers, a Starter Kit, a Kozu hall. */
+/** Event stats to add (§7.1): Block and Heavy Trap builds, takeovers, a Starter Kit, a Kozu hall, a biggest Putty bomb. */
 export type AchievementEvents = Partial<Record<AchievementStat, number>>;
 
 /** One achievement this evaluation unlocked. */

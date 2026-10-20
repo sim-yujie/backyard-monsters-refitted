@@ -531,3 +531,14 @@ export const eventsLimiter = RateLimit.middleware({
     ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
   },
 });
+
+/**
+ * Bug reports sent (`controllers/bugReports/submitBugReport.ts`), signed in
+ * by account, signed out by IP. Counted before the Turnstile check, so a
+ * script cannot keep Cloudflare busy; the daily cap is the table's own count.
+ */
+export const bugReportLimiter = spamLimiter("bug-report", SPAM_LIMITS.bugReport, (ctx) => {
+  const text = "You have sent a lot of reports. Please wait a while before sending another.";
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: text, message: text, reason: "bugReportLimit" };
+});

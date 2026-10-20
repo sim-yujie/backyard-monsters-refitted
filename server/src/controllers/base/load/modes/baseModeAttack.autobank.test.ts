@@ -245,6 +245,43 @@ describe("the attack load serves the defence and keeps it in the session (#195)"
   });
 });
 
+describe("the attack load freezes both sides' shop boosts (beta.4)", () => {
+  const running = () => ({ q: 1, s: now() - 60, e: now() + 3_600 });
+  const over = () => ({ q: 1, s: now() - 90_000, e: now() - 60 });
+
+  test("the defender's own, and the attacker's monster boosts off their main yard", async () => {
+    defenderMain().storedata = { TOD: running(), MOD: running(), MDOD: over(), POD: running() };
+    const attackerSave = tables.get(Save)!.find((row) => row.basesaveid === 2526)!;
+    attackerSave.storedata = { TOD: running(), MSOD: running(), MDOD: running(), MOD: over() };
+
+    const session = await attack(MAIN_BASEID);
+
+    expect(session?.defenderForces?.buffs).toEqual({
+      defender: { towerDamage: true, monsterDamage: true },
+      // Their Tower Overdrive stays home: an attacker brings no towers.
+      attacker: { monsterArmour: true, monsterSpeed: true },
+    });
+  });
+
+  test("an outpost defends with its own Tower Overdrive, not its main yard's", async () => {
+    defenderMain().storedata = { TOD: running(), MOD: running() };
+    const session = await attack(OUTPOST_BASEID);
+    expect(session?.defenderForces?.buffs).toBeUndefined();
+
+    sessions.clear();
+    const outpost = tables.get(Save)!.find((row) => row.basesaveid === 900)!;
+    outpost.storedata = { TOD: running() };
+    outpost.attackid = 0;
+    const again = await attack(OUTPOST_BASEID);
+    expect(again?.defenderForces?.buffs).toEqual({ defender: { towerDamage: true } });
+  });
+
+  test("no boosts anywhere: the defence is served as before", async () => {
+    const session = await attack(MAIN_BASEID);
+    expect(session?.defenderForces).not.toHaveProperty("buffs");
+  });
+});
+
 describe("the attack load ends the attacker's bought protection, notice and all (#200)", () => {
   test.each([
     ["a player's main yard", MAIN_BASEID],
