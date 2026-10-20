@@ -2,11 +2,26 @@
 import Base from "../layouts/Base.astro";
 import { SITE } from "../config";
 
+import { tiers } from "../data/patreon";
+
 /**
- * Supporter names, shown in a "Thank you" section once the list has any.
- * Empty for now: the section stays hidden until names are added here.
+ * Patreon supporter names for the "Thank you" section.
+ *
+ * HOW TO ADD NAMES: paste each name (or the nickname the supporter asked
+ * for) in quotes, separated by commas, into the list for their tier, e.g.
+ *   const labPartners: string[] = ["Alex", "Mo the Great"];
+ * Names only: never amounts, emails or join dates. Replace both lists in
+ * full each month from the Patreon member export, so people who left drop
+ * off. Lab Partners are shown first. Each list stays hidden while it is
+ * empty, and the whole section stays hidden while both are.
  */
-const supporters: string[] = [];
+const labPartners: string[] = [];
+const labAssistants: string[] = [];
+
+const thanks = [
+  { title: "Lab Partners", names: labPartners },
+  { title: "Lab Assistants", names: labAssistants },
+].filter((group) => group.names.length > 0);
 
 const costs = [
   {
@@ -76,15 +91,44 @@ const costs = [
       </ul>
     </section>
 
+    <section class="tiers-block" aria-labelledby="tiers-title">
+      <h2 id="tiers-title">Patreon tiers</h2>
+      <p class="tiers-block__lead">
+        Both tiers get a say in what we build next. Neither gives anything inside the game.
+      </p>
+      <ul class="tiers">
+        {
+          tiers.map((t) => (
+            <li class="tier">
+              <h3>
+                {t.name} <span class="tier__price">{t.price}<small>/month</small></span>
+              </h3>
+              <p>{t.blurb}</p>
+              <ul class="tier__perks">
+                {t.perks.map((perk) => (
+                  <li>{perk}</li>
+                ))}
+              </ul>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
     {
-      supporters.length > 0 && (
+      thanks.length > 0 && (
         <section class="thanks" aria-labelledby="thanks-title">
           <h2 id="thanks-title">Thank you</h2>
-          <ul class="thanks__list">
-            {supporters.map((name) => (
-              <li>{name}</li>
-            ))}
-          </ul>
+          {thanks.map((group) => (
+            <div class="thanks__group">
+              <h3>{group.title}</h3>
+              <ul class="thanks__list">
+                {group.names.map((name) => (
+                  <li>{name}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
       )
     }
@@ -204,6 +248,56 @@ const costs = [
     color: var(--text-secondary);
   }
 
+  .tiers-block__lead {
+    color: var(--text-secondary);
+  }
+
+  .tiers {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .tier {
+    padding: 22px 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .tier h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 12px;
+  }
+
+  .tier__price {
+    color: #ff8a73;
+  }
+
+  .tier__price small {
+    font-size: 0.75em;
+    color: var(--text-secondary);
+  }
+
+  .tier p {
+    color: var(--text-secondary);
+  }
+
+  .tier__perks {
+    margin: 0;
+    padding-left: 1.2em;
+  }
+
+  .thanks__group + .thanks__group {
+    margin-top: 22px;
+  }
+
   .thanks__list {
     list-style: none;
     margin: 0;
@@ -236,7 +330,8 @@ const costs = [
 
   @media (max-width: 860px) {
     .patreon,
-    .costs__list {
+    .costs__list,
+    .tiers {
       grid-template-columns: 1fr;
     }
   }

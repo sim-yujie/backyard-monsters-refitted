@@ -30,6 +30,17 @@ export const SITE = {
    * Set `src` to "" to show only the still. `uploaded` and `seconds` describe
    * the clip to search engines: update them with the clip.
    */
+  /**
+   * The trailer at the top of the home page. It plays muted on a loop, with a
+   * "Play with sound" button, and only loads once the page has settled. Drop
+   * the finished trailer (MP4, H.264 + AAC, 1280x720 or 1920x1080, ideally
+   * under 15 MB) in at `src`. Until that file exists, or if it fails to load,
+   * visitors simply see the poster still and no buttons.
+   */
+  trailer: {
+    src: "/video/trailer-beta3.mp4",
+    poster: "/video/trailer-beta3-poster.webp",
+  },
   showcaseVideo: {
     src: "/video/raid-loop.mp4",
     poster: "/video/raid-loop-poster.webp",
