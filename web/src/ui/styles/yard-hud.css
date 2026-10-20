@@ -863,6 +863,31 @@
     left: 0;
   }
 
+  /* The friend-request count rides the critter, not the end of a long name. */
+  .account-menu--pill .account-menu__button-count {
+    right: auto;
+    left: -6px;
+  }
+
+  /* The level strip starts after the floating "?" instead of over it, level
+     with the button (whose top is --hud-height plus a step, tips.css). */
+  .overlay__layer:has(> .guide-help--float:not([hidden])) > .hud--corner > .hud-status {
+    top: calc(var(--hud-height) - var(--hud-inset) + var(--space-2) + 4px);
+    left: 48px;
+    max-width: calc(100% - 48px);
+  }
+
+  /* Notices (the wild monsters' warning) hang under the "?" and Chat, not on them. */
+  .overlay__layer:has(> .chat-box:not([hidden])) > .yard-notices {
+    top: calc(var(--notice-top-inset) + 92px);
+  }
+
+  /* A tall sheet reaches past the Chat strip, which would peek over its top. */
+  .overlay__layer:has(> .build-menu:not([hidden])) > .chat-box,
+  .overlay__layer:has(> .monsters-screen:not([hidden])) > .chat-box {
+    display: none;
+  }
+
   /* The buttons, smaller and closer to the edges. */
   .yard-dock__left {
     left: var(--space-4);
@@ -920,8 +945,9 @@
     bottom: 136px;
   }
 
+  /* A step right of the Alerts button, so its count and label keep clear of the ring. */
   .yard-dock__right > .yard-collect {
-    right: 112px;
+    right: 106px;
     bottom: 150px;
     transform: scale(0.84);
     transform-origin: bottom right;
@@ -1110,5 +1136,28 @@
 
   .account-menu__button--pill {
     padding: var(--space-1);
+  }
+}
+
+/* A narrow phone: Workers and Shiny share two quarter columns, so their chips
+   tighten up rather than run into each other. */
+@media (width <= 420px) {
+  .hud--corner .hud__workers-button,
+  .hud--corner .hud__resource--shiny .hud__resource-button {
+    column-gap: 4px;
+    padding: 0 6px;
+  }
+
+  .hud--corner .hud__workers-icon {
+    height: 20px;
+  }
+
+  .hud--corner .hud__resource--shiny .res-icon {
+    height: 18px;
+  }
+
+  .hud--corner .hud__workers-button .hud__resource-value,
+  .hud--corner .hud__resource--shiny .hud__resource-value {
+    font-size: 13px;
   }
 }

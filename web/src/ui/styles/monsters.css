@@ -553,7 +553,9 @@
   .locker__split {
     padding: var(--space-2) var(--space-3) var(--space-3);
     overflow-y: auto;
-    grid-template-rows: minmax(160px, 38vh) auto;
+    /* The list gives way so the card's Start unlocking / Instant buttons stay
+       on screen; it scrolls on its own. */
+    grid-template-rows: minmax(120px, 1fr) auto;
   }
 
   .locker-detail__portrait {

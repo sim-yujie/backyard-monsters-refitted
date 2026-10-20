@@ -41,4 +41,12 @@ describe("AttackPresentation (#148)", () => {
     release();
     expect(presentation.damageShown(stateAt(42))).toBe(42);
   });
+
+  it("never shows less than 0 before the first hit", () => {
+    const presentation = new AttackPresentation();
+    // An untouched yard's sum can land a rounding error under 0.
+    expect(Math.floor(presentation.damageShown(stateAt(-1e-13)))).toBe(0);
+    presentation.showDamageWith(() => -1e-12);
+    expect(Math.floor(presentation.damageShown(stateAt(0)))).toBe(0);
+  });
 });

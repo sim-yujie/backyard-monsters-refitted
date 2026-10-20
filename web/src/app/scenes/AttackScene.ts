@@ -968,7 +968,7 @@ export class AttackScene implements Scene {
       title: "Retreat?",
       message: "Retreating ends the attack now and cannot be undone.",
       note:
-        `${Math.floor(state.damagePercent)}% damage dealt so far will be kept.` +
+        `${Math.max(0, Math.floor(state.damagePercent))}% damage dealt so far will be kept.` +
         (goingTo
           ? ` The result is saved on the end screen first, which leads back to the map, not straight to ${goingTo}.`
           : ""),
