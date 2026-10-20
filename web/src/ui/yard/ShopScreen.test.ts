@@ -75,6 +75,7 @@ describe("ShopScreen", () => {
       "Building",
       "Storage and production",
       "Monsters",
+      "Battle boosts",
       "Protection",
       "Coming later",
     ]);
@@ -82,7 +83,7 @@ describe("ShopScreen", () => {
       [...element.querySelectorAll<HTMLElement>(".shop-card:not(.shop-card--later)")].map(
         (one) => one.dataset["item"],
       ),
-    ).toEqual(["BEW", "BST", "BIP", "ENL", "POD", "CLOD", "HOD", "HOD2", "HOD3", "EXH", "PRO1", "PRO2", "PRO3"]);
+    ).toEqual(["BEW", "BST", "BIP", "ENL", "POD", "CLOD", "HOD", "HOD2", "HOD3", "EXH", "TOD", "MOD", "MDOD", "MSOD", "PRO1", "PRO2", "PRO3"]);
     expect(card("BEW")!.querySelector(".shop-card__meta")!.textContent).toBe("1 of 4 bought");
     expect(button("BEW").getAttribute("aria-label")).toBe("Buy Extra Worker, 500 Shiny");
     expect(card("BST")!.querySelector(".shop-card__meta")!.textContent).toBe("Lasts 7 days");
@@ -187,8 +188,11 @@ describe("ShopScreen", () => {
       [...element.querySelectorAll<HTMLElement>(".shop-card:not(.shop-card--later)")].map(
         (one) => one.dataset["item"],
       ),
-    ).toEqual(["BST", "POD", "HOD", "HOD2", "HOD3", "EXH"]);
+    ).toEqual(["BST", "POD", "HOD", "HOD2", "HOD3", "EXH", "TOD"]);
     expect(element.querySelector('[data-section="protection"]')).toBeNull();
+    expect(element.querySelector('[data-section="boosts"] .shop-section__note')!.textContent).toBe(
+      "Tower Overdrive works when this outpost is attacked. Buying it again restarts it; time left is not added.",
+    );
   });
 
   it("sells protection on top of what is left, and says how much is left", () => {
@@ -198,7 +202,7 @@ describe("ShopScreen", () => {
       storedata: { PRO1: { q: 1, s: T0 - 60, e: T0 + 2 * 86_400 + 3 * 3_600 } },
     });
 
-    expect(element.querySelector(".shop-section__note")!.textContent).toBe(
+    expect(element.querySelector('[data-section="protection"] .shop-section__note')!.textContent).toBe(
       "Your yard is protected for 2d 3h. Protection you buy is added on top.",
     );
     // A running PRO1 is still on sale: its time stacks.
@@ -207,15 +211,33 @@ describe("ShopScreen", () => {
     expect(button("PRO3").getAttribute("aria-label")).toBe("Buy Ultimate Protection, 1,100 Shiny");
   });
 
+  it("keeps a running boost on sale, glowing, with its time left", () => {
+    const { card, button } = setup({ storedata: { MOD: { q: 1, s: T0 - 60, e: T0 + 5 * 3_600 + 30 * 60 } } });
+
+    expect(card("MOD")!.dataset["state"]).toBe("buy");
+    expect(card("MOD")!.querySelector(".shop-card__meta")!.textContent).toBe(
+      "Running: 5h 30m left. Buy again to restart at 24 hours",
+    );
+    expect(card("MOD")!.classList.contains("shop-card--boosted")).toBe(true);
+    expect(button("MOD").hidden).toBe(false);
+    expect(button("MOD").disabled).toBe(false);
+    expect(card("TOD")!.classList.contains("shop-card--boosted")).toBe(false);
+    expect(card("TOD")!.querySelector(".shop-card__meta")!.textContent).toBe("Lasts 24 hours");
+  });
+
+  it("says under Battle boosts where they work and that they restart", () => {
+    const { element } = setup();
+
+    expect(element.querySelector('[data-section="boosts"] .shop-section__note')!.textContent).toBe(
+      "Monster boosts work in your attacks and when your yard is attacked. Buying one again restarts it; time left is not added.",
+    );
+  });
+
   it("lists the held-back items as coming later, with no price and no button", () => {
     const { element } = setup();
     const later = [...element.querySelectorAll<HTMLElement>(".shop-card--later")];
 
     expect(later.map((one) => one.querySelector(".shop-card__name")!.textContent)).toEqual([
-      "Tower Overdrive",
-      "Monster Overdrive",
-      "Monster Defensive Buff",
-      "Monster Speed Buff",
       "Wall Upgrades",
       "Shiny Decorations",
     ]);

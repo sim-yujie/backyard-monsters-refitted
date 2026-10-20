@@ -275,8 +275,8 @@ describe("recordDefenceReplay", () => {
 });
 
 describe("a stored payload fights the battle that landed", () => {
-  const stored = () => {
-    const fought = input();
+  const stored = (overrides: Record<string, unknown> = {}) => {
+    const fought = input(overrides);
     // Through the store's own gzip, as it is kept and served.
     const payload = decodeReplay(encodeReplay(defenceReplayPayload(defenceReplayLoadOf(sandbox), fought as never, "report")));
     return { fought, payload };
@@ -318,5 +318,18 @@ describe("a stored payload fights the battle that landed", () => {
 
     expect(replayed.health).toEqual(original.buildinghealthdata);
     expect(replayed.damage).toBeCloseTo(original.damage, 2);
+  });
+
+  test("keeps both sides' shop boosts, and plays them again as they landed (beta.4)", () => {
+    const buffs = { attacker: { monsterDamage: true, monsterSpeed: true }, defender: { towerDamage: true, monsterArmour: true } };
+    const { fought, payload } = stored({ defence: { ...DEFENCE, buffs } });
+    expect(payload.load.defenderforces).toMatchObject({ buffs });
+
+    const original = replayAbandonedAttack(fought as never);
+    const again = replayAbandonedAttack(defenceReplayInput(payload));
+    expect(again.buildinghealthdata).toEqual(original.buildinghealthdata);
+    expect(again.damage).toBe(original.damage);
+    // And they mattered: the same battle without them lands differently.
+    expect(replayAbandonedAttack(input() as never).buildinghealthdata).not.toEqual(original.buildinghealthdata);
   });
 });

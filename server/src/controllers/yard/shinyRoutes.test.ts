@@ -274,6 +274,38 @@ describe("POST /bm/yard/shop/buy", () => {
     expect(db.row).toMatchObject({ credits: 800 });
   });
 
+  test.each([
+    ["TOD", 600],
+    ["MOD", 500],
+    ["MDOD", 500],
+    ["MSOD", 500],
+  ])("%s runs 24 hours for %d Shiny", async (item, price) => {
+    const answer = await call(yardShopBuyAction, { item });
+    const now = answer.body.currenttime as number;
+
+    expect(answer.body.report).toEqual({ item, credits: price, q: 1, endsAt: now + 86400 });
+    expect(db.row).toMatchObject({ credits: 1000 - price, storedata: { [item]: { q: 1, s: now, e: now + 86400 } } });
+  });
+
+  test("a boost bought again while it runs restarts at a full 24 hours from now, without stacking", async () => {
+    const now = getCurrentDateTime();
+    db.row = rowOf({ storedata: { MOD: { q: 1, s: now - 80000, e: now + 6400 }, MSOD: { q: 1, s: now, e: now + 86400 } } });
+
+    const again = await call(yardShopBuyAction, { item: "MOD" });
+    const at = again.body.currenttime as number;
+    expect(again.body.report).toEqual({ item: "MOD", credits: 500, q: 1, endsAt: at + 86400 });
+    expect(db.row).toMatchObject({
+      credits: 500,
+      storedata: { MOD: { q: 1, s: at, e: at + 86400 }, MSOD: { q: 1, s: now, e: now + 86400 } },
+    });
+
+    // Bought twice in a row: still 24 hours from the last buy, never 48.
+    const twice = await call(yardShopBuyAction, { item: "MOD" });
+    expect((twice.body.report as { endsAt: number }).endsAt).toBe((twice.body.currenttime as number) + 86400);
+    expect(db.row).toMatchObject({ credits: 0 });
+    expect(await call(yardShopBuyAction, { item: "MOD" })).toMatchObject({ status: 409, body: { reason: "credits" } });
+  });
+
   test("PRO1 protects the yard for 24 hours from now when it has none", async () => {
     const answer = await call(yardShopBuyAction, { item: "PRO1" });
     const now = answer.body.currenttime as number;
@@ -321,7 +353,7 @@ describe("POST /bm/yard/shop/buy", () => {
   });
 
   test("items off the allowlist are 400 notForSale", async () => {
-    const heldBack = ["TOD", "MOD", "MDOD", "MSOD", "BLK2", "BLK5", "BUILDING28"];
+    const heldBack = ["TODI", "BLK2", "BLK5", "BUILDING28"];
     const dropped = ["HODI", "ENLI", "MUSK", "HAMS", "BR11", "BR43", "FQ", "FIX", "SP4"];
     for (const item of [...heldBack, ...dropped, "toString", "__proto__"]) {
       const answer = await call(yardShopBuyAction, { item });

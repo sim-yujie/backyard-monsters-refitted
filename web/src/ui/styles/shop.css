@@ -143,9 +143,16 @@
   color: var(--colour-text-muted);
 }
 
-.shop-card[data-state="running"] .shop-card__meta {
+.shop-card[data-state="running"] .shop-card__meta,
+.shop-card--boosted .shop-card__meta {
   font-weight: 700;
   color: var(--colour-success);
+}
+
+/* A battle boost that is running, still on sale to restart it (beta.4). */
+.shop-card--boosted {
+  border-color: var(--colour-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--colour-success) 35%, transparent);
 }
 
 .shop-card[data-state="soldOut"],

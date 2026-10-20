@@ -10,6 +10,7 @@ import {
   type RepairAllOffer,
   type ShopOffer,
 } from "@/game/yard/shop";
+import type { YardKind } from "@/game/yard/buildingCostData";
 import { actionKey, YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
@@ -70,10 +71,20 @@ export const offerMeta = (offer: ShopOffer, now: number): string => {
   const { item, owned, state } = offer;
   if (state.kind === "running") return `Running: ${formatCountdown(state.endsAt - now)} left`;
   if (state.kind === "soldOut") return `All ${item.prices.length} bought`;
+  // A battle boost that runs: buying it again starts its full time afresh.
+  if (state.endsAt !== undefined) {
+    return `Running: ${formatCountdown(state.endsAt - now)} left. Buy again to restart at ${durationText(item.seconds)}`;
+  }
   if (owned !== null) return `${owned} of ${item.prices.length} bought`;
   if (item.stacks) return `Adds ${durationText(item.seconds)}`;
   return `Lasts ${durationText(item.seconds)}`;
 };
+
+/** The line under the Battle boosts heading: where they work, and that they do not add up. */
+export const boostsNote = (kind: YardKind): string =>
+  kind === "outpost"
+    ? "Tower Overdrive works when this outpost is attacked. Buying it again restarts it; time left is not added."
+    : "Monster boosts work in your attacks and when your yard is attacked. Buying one again restarts it; time left is not added.";
 
 /** The line under the Protection heading: how long the yard is still protected. */
 export const protectionText = (until: number | null, now: number): string =>
@@ -219,7 +230,11 @@ export class ShopScreen {
           section,
           SHOP_SECTION_TITLES[section],
           offers.map((offer) => this.offerCard(offer, now)),
-          section === ShopSection.PROTECTION ? protectionText(model.protectedUntil, now) : null,
+          section === ShopSection.PROTECTION
+            ? protectionText(model.protectedUntil, now)
+            : section === ShopSection.BOOSTS
+              ? boostsNote(store.kind)
+              : null,
         ),
       );
     }
@@ -293,6 +308,8 @@ export class ShopScreen {
     const card = this.card(item.item, item.name, item.blurb, "Buy", () => void this.buy(item.item, item.name), true);
     card.meta.textContent = offerMeta(offer, now);
     card.element.dataset["state"] = state.kind;
+    // A running battle boost glows (`shop-card--boosted`) while it stays on sale.
+    card.element.classList.toggle("shop-card--boosted", state.kind === "buy" && state.endsAt !== undefined);
     if (item.item === "BEW") tutTarget(card.element, TutTarget.SHOP_WORKERS);
 
     if (state.kind === "buy") {

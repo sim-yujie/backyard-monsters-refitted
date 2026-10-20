@@ -104,7 +104,7 @@ describe("shopModel", () => {
   });
 
   it("an outpost sells only its own list", () => {
-    expect(shopItemsFor("outpost").map((one) => one.item)).toEqual(["BST", "POD", "HOD", "HOD2", "HOD3", "EXH"]);
+    expect(shopItemsFor("outpost").map((one) => one.item)).toEqual(["BST", "POD", "HOD", "HOD2", "HOD3", "EXH", "TOD"]);
     expect(shopModel(storeOf({}, "outpost")).offers.map((one) => one.item.item)).toEqual(
       shopItemsFor("outpost").map((one) => one.item),
     );

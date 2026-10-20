@@ -62,6 +62,8 @@ const ICONS = {
   bell: ["M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z", "M10 20.5a2 2 0 0 0 4 0", "M12 3.5V5"],
   // A shield: the Defences screen, the attacks on the yard (#363).
   shield: ["M12 3.5l7.5 3v5.5c0 4.4-3.1 7.6-7.5 9-4.4-1.4-7.5-4.6-7.5-9V6.5z", "M9 12l2.2 2.2L15.5 10"],
+  // A lightning bolt: a shop boost in battle (beta.4).
+  boost: ["M13 2.5L4.5 13.5H11l-1 8 8.5-11H12z"],
   // Three bars: the phone's menu of the yard's other buttons (#381).
   menu: ["M4 7h16", "M4 12h16", "M4 17h16"],
   // Two heads: the phone's Friends button (#381).

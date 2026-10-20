@@ -18,6 +18,7 @@ date: 2026-10-27
 - **Champions hatch from eggs.** Raising a champion now gives you an egg that hatches one day later. Nothing speeds an egg up. Changed your mind? Cancel the egg and pick again (the new egg takes a full day too).
 - **Monsters on the move.** 15 monsters have brand-new walk and attack animations: Crabatron scuttles, Fang creeps, Eye-ra slithers, Bolt crawls, D.A.V.E. rolls on its treads, and lots more.
 - **Report a bug.** Found something broken? Use "Report a bug" in the Account menu (or under the sign-in box) to tell us. A screenshot is added for you, and you can take it out or add your own picture.
+- **Battle boosts in the Shop.** Tower Overdrive (600 Shiny) makes your towers hit 25% harder when your yard is attacked. Monster Overdrive (25% more damage), Monster Defensive Buff (30% less damage taken) and Monster Speed Buff (50% faster) cost 500 Shiny each and help your monsters in your attacks and when your yard is attacked. Each lasts 24 hours; buying one again starts its 24 hours afresh. An outpost can buy its own Tower Overdrive. Older defence replays are hidden once, because the game rules changed to add the boosts.
 
 ### Improvements
 
