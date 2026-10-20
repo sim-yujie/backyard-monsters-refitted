@@ -75,6 +75,10 @@ export const buildSaveData = (save: Save, user: User, ownerSave: OwnerSave | nul
   // empty one where a real player shows theirs (#245).
   if (!isOwner) filteredSave.aiattacks = {};
 
+  // The Yard Planner's saved layouts, trap spots included, are the account's
+  // own: anyone viewing, helping or attacking the yard gets none.
+  if (save.userid !== user.userid) filteredSave.savetemplate = [];
+
   const shinyLocked = isShinyLocked(user);
   
   if (shinyLocked) filteredSave.credits = 0;

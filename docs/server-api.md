@@ -1074,6 +1074,11 @@ Flash client's and are deprecated. A layout saved through either is visible thro
 version 1 rows are converted to version 2 on read and never rewritten in place, and version 2
 rows are converted back down for `gettemplates`.
 
+`savetemplate` also rides along on `/base/load` and the `/base/save` reply, but only to the
+yard's owner: anyone else (view, help, attack, an Inferno attack's save) gets `[]`
+(`services/base/mapSaveData.ts`, `controllers/inferno/infernoSave.ts`), so a player's layouts and
+trap spots never reach another account.
+
 A **layout** is `{ slot, name, version: 2, expansion, updatedAt, nodes }`. `expansion` is the
 `storedata.ENL.q` the layout was drawn for (0-6) and `updatedAt` is unix seconds. A **node** is
 `{ id, t, x, y, l?, fort?, plan? }`: the building id from `buildingdata`, its type, and its
