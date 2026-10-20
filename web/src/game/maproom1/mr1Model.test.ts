@@ -4,12 +4,15 @@ import { defaultAvatar } from "@/game/avatars";
 import { mapRoom1Fixture } from "./mr1Fixture";
 import {
   attackGate,
-  battlesText,
+  battleCounts,
   flingerState,
   formatAgo,
   formatRespawn,
   formatSpan,
   initials,
+  isPlayingNow,
+  LIST_SORT_DIRECTIONS,
+  ListSort,
   mr1AttackTarget,
   pageOf,
   pinTone,
@@ -21,6 +24,7 @@ import {
   sortNeighbours,
   type Mr1Neighbour,
   type Mr1Own,
+  type SortDirection,
 } from "./mr1Model";
 
 const NOW = 1_800_000_000;
@@ -232,19 +236,34 @@ describe("words", () => {
     expect(formatAgo(5 * 86_400)).toBe("5 d ago");
   });
 
-  it("describes presence and battles", () => {
-    expect(presenceText(named("Bramblefoot"), NOW)).toBe("Playing now");
-    expect(presenceText(named("Mossbeard"), NOW)).toBe("Offline · last seen 3 h ago");
-    expect(battlesText(named("Mossbeard"))).toBe("Attacked you 2 times · you attacked 1");
-    expect(battlesText(named("Grimble"))).toBe("No battles yet");
-    expect(battlesText(named("Wartwhistle"))).toBe("You attacked them 3 times");
+  it("describes presence: no words while online, no \"Offline\" ever", () => {
+    expect(presenceText(named("Bramblefoot"), NOW)).toBe("");
+    expect(presenceText(named("Mossbeard"), NOW)).toBe("Last seen 3 h ago");
+    expect(presenceText({ ...named("Mossbeard"), lastSeen: 0 }, NOW)).toBe("");
+  });
+
+  it("counts battles for the shield and sword icons, only the sides above 0", () => {
+    expect(battleCounts(named("Mossbeard"))).toEqual([
+      { kind: "attackedYou", count: 2, label: "Attacked you 2 times" },
+      { kind: "youAttacked", count: 1, label: "You attacked them 1 time" },
+    ]);
+    expect(battleCounts(named("Wartwhistle"))).toEqual([
+      { kind: "youAttacked", count: 3, label: "You attacked them 3 times" },
+    ]);
+    expect(battleCounts({ ...named("Grimble"), attacksFrom: 1 })).toEqual([
+      { kind: "attackedYou", count: 1, label: "Attacked you 1 time" },
+    ]);
+    // No battles: nothing at all, not "No battles yet".
+    expect(battleCounts(named("Grimble"))).toEqual([]);
   });
 
   it("takes the server's word on who is online (#275): seen is not enough without a real action", () => {
     const seen = named("Bramblefoot");
     expect(seen.online).toBeNull();
-    expect(presenceText({ ...seen, online: false }, NOW)).toBe("Offline · last seen just now");
-    expect(presenceText({ ...seen, online: true }, NOW)).toBe("Playing now");
+    expect(presenceText({ ...seen, online: false }, NOW)).toBe("Last seen just now");
+    expect(presenceText({ ...seen, online: true }, NOW)).toBe("");
+    expect(isPlayingNow({ ...seen, online: true }, NOW)).toBe(true);
+    expect(isPlayingNow({ ...seen, online: false }, NOW)).toBe(false);
     const fixture = mapRoom1Fixture(NOW);
     const wires = fixture.neighbours ?? [];
     const read = readMapRoom1(
@@ -269,14 +288,13 @@ describe("words", () => {
     expect(initials("x")).toBe("X");
   });
 
-  it("writes the list's second line", () => {
-    expect(rowLine(named("Mossbeard"), NOW)).toEqual({
-      text: "Attacked you 2× · offline 3 h",
-      tone: "warn",
-    });
-    expect(rowLine(named("Bramblefoot"), NOW).text).toBe("Playing now · can't attack");
-    expect(rowLine(named("Grimble"), NOW).text).toBe("Offline 24 h · no battles yet");
-    expect(rowLine(named("Nettlejaw"), NOW).text).toBe("New player · protected 5 d");
+  it("writes the list's second line, with no battle words (those are icons)", () => {
+    expect(rowLine(named("Mossbeard"), NOW)).toBe("Last seen 3 h ago");
+    expect(rowLine(named("Bramblefoot"), NOW)).toBe("In their yard · can't attack");
+    expect(rowLine(named("Grimble"), NOW)).toBe("Last seen 24 h ago");
+    expect(rowLine({ ...named("Grimble"), lastSeen: 0 }, NOW)).toBe("");
+    expect(rowLine({ ...named("Mossbeard"), lastSeen: 0 }, NOW)).toBe("");
+    expect(rowLine(named("Nettlejaw"), NOW)).toBe("New player · protected 5 d");
   });
 });
 
@@ -289,6 +307,36 @@ describe("the list", () => {
     expect(names("seen")[0]).toBe("Bramblefoot");
     expect(names("battles").slice(0, 2)).toEqual(["Mossbeard", "Wartwhistle"]);
     expect(names("status").slice(0, 2)).toEqual(["Mossbeard", "Sludgepot"]);
+  });
+
+  it("turns each sort round when asked, keeping A to Z for ties", () => {
+    const names = (sort: ListSort, direction: SortDirection) =>
+      sortNeighbours(world.neighbours, sort, NOW, direction).map((one) => one.name);
+    for (const sort of Object.values(ListSort)) {
+      const start = LIST_SORT_DIRECTIONS[sort].start;
+      // Leaving the direction out is the sort's own starting order.
+      expect(names(sort, start)).toEqual(
+        sortNeighbours(world.neighbours, sort, NOW).map((one) => one.name),
+      );
+    }
+    expect(names("name", "desc")).toEqual([...names("name", "asc")].reverse());
+    const levels = (direction: SortDirection) =>
+      sortNeighbours(world.neighbours, "level", NOW, direction).map((one) => one.level);
+    expect(levels("asc")).toEqual([...levels("asc")].sort((a, b) => a - b));
+    expect(levels("desc")).toEqual([...levels("asc")].reverse());
+    // Most battles last, the tied pair still A to Z.
+    expect(names("battles", "asc").slice(-2)).toEqual(["Mossbeard", "Wartwhistle"]);
+    expect(names("status", "asc").slice(-2)).toEqual(["Mossbeard", "Sludgepot"]);
+    // Equal rows stay A to Z whichever way the key runs.
+    for (const direction of ["asc", "desc"] as const) {
+      const sorted = sortNeighbours(world.neighbours, "level", NOW, direction);
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i]!.level !== sorted[i - 1]!.level) continue;
+        expect(
+          sorted[i - 1]!.name.localeCompare(sorted[i]!.name, undefined, { sensitivity: "base" }),
+        ).toBeLessThanOrEqual(0);
+      }
+    }
   });
 
   it("pages seven at a time and clamps the page", () => {

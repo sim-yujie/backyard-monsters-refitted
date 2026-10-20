@@ -1,0 +1,143 @@
+---
+import Base from "../../layouts/Base.astro";
+import { SITE } from "../../config";
+import { supporterGroups } from "../../data/supporters";
+
+// Names are edited in src/data/supporters.ts, not here.
+---
+
+<Base
+  title="Thank you"
+  description="The supporters who help keep Backyard Monsters Revamped online. The game stays free, and supporting gives no in-game advantage."
+  current="support"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow">Thank you</span>
+      <h1>The people keeping the lab running</h1>
+      <p>
+        Backyard Monsters Revamped stays free for everyone thanks to these supporters. They help pay for the game server,
+        this website and email.
+      </p>
+    </div>
+  </header>
+
+  <div class="wrap page-body">
+    {
+      supporterGroups.length > 0 ? (
+        <>
+          {supporterGroups.map((group, i) => (
+            <section class="group" aria-labelledby={`group-${i}`}>
+              <h2 id={`group-${i}`}>{group.title}</h2>
+              <p class="group__note">{group.note}</p>
+              <ul class="names">
+                {group.names.map((name) => (
+                  <li>{name}</li>
+                ))}
+              </ul>
+            </section>
+          ))}
+          <p class="fine">Names are shown only for supporters who said yes to being listed.</p>
+
+          <section class="join" aria-labelledby="join-title">
+            <h2 id="join-title">Want to join them?</h2>
+            <p>Supporting is optional and never gives anything inside the game.</p>
+            <div class="btn-row">
+              <a class="btn btn--patreon" href={SITE.patreonUrl} rel="noopener noreferrer">
+                Support on Patreon
+              </a>
+              {SITE.kofiUrl && (
+                <a class="btn btn--kofi" href={SITE.kofiUrl} rel="noopener noreferrer">
+                  One-time gift on Ko-fi
+                </a>
+              )}
+              <a href="/support/">Where the money goes</a>
+            </div>
+          </section>
+        </>
+      ) : (
+        <section class="first" aria-labelledby="first-title">
+          <h2 id="first-title">Be the first to support the lab!</h2>
+          <p>
+            Nobody is listed here yet. Supporting is optional, helps pay the monthly bills and never gives anything
+            inside the game.
+          </p>
+          <div class="btn-row">
+            <a class="btn btn--patreon btn--big" href={SITE.patreonUrl} rel="noopener noreferrer">
+              Support on Patreon
+            </a>
+            {SITE.kofiUrl && (
+              <a class="btn btn--kofi btn--big" href={SITE.kofiUrl} rel="noopener noreferrer">
+                One-time gift on Ko-fi
+              </a>
+            )}
+          </div>
+          <a class="first__more" href="/support/">
+            Where the money goes
+          </a>
+        </section>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .group + .group {
+    margin-top: clamp(32px, 5vw, 48px);
+  }
+
+  .group__note {
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+  }
+
+  .names {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .names li {
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--wash);
+    border: 1px solid var(--border);
+    overflow-wrap: anywhere;
+  }
+
+  .fine {
+    margin-top: clamp(32px, 5vw, 48px);
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+  }
+
+  .join,
+  .first {
+    padding: clamp(24px, 4vw, 40px);
+    border-radius: var(--radius-lg);
+    background:
+      radial-gradient(500px 260px at 0% 0%, rgb(255 95 74 / 16%), transparent 70%),
+      var(--panel);
+    border: 1px solid rgb(255 95 74 / 30%);
+  }
+
+  .join {
+    margin-top: 24px;
+  }
+
+  .join p,
+  .first p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    max-width: 640px;
+    margin-bottom: 24px;
+  }
+
+  .first__more {
+    display: inline-block;
+    margin-top: 22px;
+  }
+</style>

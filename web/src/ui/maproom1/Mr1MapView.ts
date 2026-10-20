@@ -18,6 +18,7 @@ import {
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { avatar, countdown } from "./TargetCard";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon } from "./icons";
 
 /**
@@ -237,7 +238,7 @@ export class Mr1MapView {
       const shielded = isProtected(target);
       control.setAttribute(
         "aria-label",
-        `${target.name}, level ${target.level}${playing ? ", playing now" : ""}${shielded ? ", protected" : ""}${
+        `${target.name}, level ${target.level}${playing ? ", online" : ""}${shielded ? ", protected" : ""}${
           target.attacksFrom > target.attacksTo ? ", attacked you" : ""
         }`,
       );
@@ -245,7 +246,7 @@ export class Mr1MapView {
       if (shielded) badge.append(icon("shield", 12));
       else badge.textContent = String(target.level);
       control.append(badge);
-      if (playing) tag.append(el("span", "mr1-dot mr1-dot--online"));
+      if (playing) tag.append(onlineDot("", true));
       tag.append(target.name);
     }
 
@@ -438,7 +439,7 @@ export class Mr1MapView {
       entry("mr1-tone--attacked", "Attacked you"),
       entry("mr1-tone--protected", "Protected"),
       entry("mr1-legend__swatch--tribe mr1-tone--tribe", "Wild monster tribe"),
-      entry("mr1-legend__swatch--online", "Playing now"),
+      entry("mr1-legend__swatch--online", "Online"),
     );
     return legend;
   }

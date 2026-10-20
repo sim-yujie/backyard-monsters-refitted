@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { mapRoom1Fixture } from "@/game/maproom1/mr1Fixture";
 import { readMapRoom1, type Mr1Own } from "@/game/maproom1/mr1Model";
 import { avatar, targetCard, type CardHandlers } from "./TargetCard";
+import { Mr1ListView } from "./Mr1ListView";
 
 const NOW = 1_800_000_000;
 const world = readMapRoom1(mapRoom1Fixture(NOW), NOW);
@@ -122,7 +123,6 @@ describe("targetCard", () => {
     expect(card.querySelector("[role=note]")?.textContent).toBe(
       "You are protected for 2 d 4 h. Attacking Mossbeard ends your protection, and others can attack you again.",
     );
-    expect(card.textContent).toContain("times they attacked you");
   });
 
   it("offers a way out when your own yard is the reason", () => {
@@ -172,5 +172,63 @@ describe("targetCard Add friend (friends WP11, #378)", () => {
     const tribe = targetCard(find("tribe-11"), { world, own, now: NOW }, { ...handlers(), addFriend: make }, "panel");
     expect(tribe.querySelector(".add-friend")).toBeNull();
     expect(make).not.toHaveBeenCalled();
+  });
+});
+
+describe("targetCard online status", () => {
+  it("puts a green dot by an online player's name and no words", () => {
+    const card = targetCard(find("player-902"), { world, own, now: NOW }, handlers(), "panel");
+    const dot = card.querySelector(".mr1-card__title-row .online-dot");
+    expect(dot?.getAttribute("aria-label")).toBe("Online");
+    expect(dot?.getAttribute("title")).toBe("Online");
+    expect(card.textContent).not.toContain("Last seen");
+    expect(card.textContent).not.toContain("Playing now");
+  });
+
+  it("gives an offline player no dot and no \"Offline\", only when they were last seen", () => {
+    const card = targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel");
+    expect(card.querySelector(".online-dot")).toBeNull();
+    expect(card.querySelector(".mr1-card__sub")?.textContent).toMatch(/^Last seen 3 h ago/);
+    expect(card.textContent).not.toContain("Offline");
+  });
+});
+
+describe("battle icons", () => {
+  it("shows a shield and a sword with counts beside \"Last seen\", the words on hover", () => {
+    const card = targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel");
+    const sub = card.querySelector(".mr1-card__sub")!;
+    expect(sub.textContent).toBe("Last seen 3 h ago21");
+    const badges = [...sub.querySelectorAll<HTMLElement>(".mr1-battle")];
+    expect(badges.map((badge) => [badge.title, badge.getAttribute("aria-label"), badge.textContent])).toEqual([
+      ["Attacked you 2 times", "Attacked you 2 times", "2"],
+      ["You attacked them 1 time", "You attacked them 1 time", "1"],
+    ]);
+    expect(badges[0]!.getAttribute("role")).toBe("img");
+    expect(badges[0]!.querySelector("svg")).not.toBeNull();
+    expect(card.textContent).not.toContain("attacked");
+  });
+
+  it("shows only the sides above 0, and nothing (no \"No battles yet\") without battles", () => {
+    const sword = targetCard(find("player-907"), { world, own, now: NOW }, handlers(), "panel");
+    expect([...sword.querySelectorAll(".mr1-battle")].map((badge) => badge.className)).toEqual([
+      "mr1-battle mr1-battle--youAttacked",
+    ]);
+    const none = targetCard(find("player-903"), { world, own, now: NOW }, handlers(), "sheet");
+    expect(none.querySelector(".mr1-battles")).toBeNull();
+    expect(none.textContent).not.toMatch(/battles/i);
+    expect(none.querySelector(".mr1-card__sub")?.textContent).toBe("Last seen 24 h ago");
+  });
+
+  it("puts the icons on the list's second line and the words in the row's name", () => {
+    const list = new Mr1ListView({ onSelect: vi.fn() });
+    list.setData(world, NOW);
+    const row = list.element.querySelector<HTMLElement>('[data-key="player-901"]')!;
+    expect(row.getAttribute("aria-label")).toBe(
+      "Mossbeard, level 9, Last seen 3 h ago, Attacked you 2 times, You attacked them 1 time",
+    );
+    expect(row.querySelector(".mr1-row__line .mr1-battles")?.textContent).toBe("21");
+    const quiet = list.element.querySelector<HTMLElement>('[data-key="player-903"]')!;
+    expect(quiet.querySelector(".mr1-battles")).toBeNull();
+    expect(list.element.textContent).not.toMatch(/no battles/i);
   });
 });

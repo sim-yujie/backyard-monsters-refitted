@@ -56,6 +56,9 @@ const PATHS = {
   swap: ["M4 8h14", "M14 4l4 4-4 4", "M20 16H6", "M10 12l-4 4 4 4"],
   // The kit filter's button on a phone (#381).
   filter: ["M4 5h16l-6 7.5V19l-4-2v-4.5z"],
+  // A list's order: the arrow points the way the values fall.
+  sortDesc: ["M7 4v16", "M3.5 16.5L7 20l3.5-3.5", "M13 6h8", "M13 12h6", "M13 18h4"],
+  sortAsc: ["M7 20V4", "M3.5 7.5L7 4l3.5 3.5", "M13 6h4", "M13 12h6", "M13 18h8"],
 } as const;
 
 export type IconName = keyof typeof PATHS;

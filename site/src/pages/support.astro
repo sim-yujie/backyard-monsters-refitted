@@ -3,25 +3,12 @@ import Base from "../layouts/Base.astro";
 import { SITE } from "../config";
 
 import { tiers } from "../data/patreon";
+// Supporter names are edited in src/data/supporters.ts.
+import { allSupporters } from "../data/supporters";
 
-/**
- * Patreon supporter names for the "Thank you" section.
- *
- * HOW TO ADD NAMES: paste each name (or the nickname the supporter asked
- * for) in quotes, separated by commas, into the list for their tier, e.g.
- *   const labPartners: string[] = ["Alex", "Mo the Great"];
- * Names only: never amounts, emails or join dates. Replace both lists in
- * full each month from the Patreon member export, so people who left drop
- * off. Lab Partners are shown first. Each list stays hidden while it is
- * empty, and the whole section stays hidden while both are.
- */
-const labPartners: string[] = [];
-const labAssistants: string[] = [];
-
-const thanks = [
-  { title: "Lab Partners", names: labPartners },
-  { title: "Lab Assistants", names: labAssistants },
-].filter((group) => group.names.length > 0);
+// The "Thank you" section previews the first few names; the rest are on /support/thanks/.
+const preview = allSupporters.slice(0, 8);
+const more = allSupporters.length - preview.length;
 
 const costs = [
   {
@@ -63,7 +50,16 @@ const costs = [
           Every bit helps pay the monthly bills that keep the game online. Supporting is entirely optional, and you can
           stop at any time on Patreon.
         </p>
-        <a class="btn btn--patreon btn--big" href={SITE.patreonUrl} rel="noopener noreferrer">Support on Patreon</a>
+        <div class="btn-row">
+          <a class="btn btn--patreon btn--big" href={SITE.patreonUrl} rel="noopener noreferrer">Support on Patreon</a>
+          {
+            SITE.kofiUrl && (
+              <a class="btn btn--kofi btn--big" href={SITE.kofiUrl} rel="noopener noreferrer">
+                One-time gift on Ko-fi
+              </a>
+            )
+          }
+        </div>
       </div>
       <ul class="promises">
         <li>
@@ -92,11 +88,15 @@ const costs = [
     </section>
 
     <section class="tiers-block" aria-labelledby="tiers-title">
-      <h2 id="tiers-title">Patreon tiers</h2>
+      <h2 id="tiers-title">{SITE.kofiUrl ? "Ways to support" : "Patreon tiers"}</h2>
       <p class="tiers-block__lead">
-        Both tiers get a say in what we build next. Neither gives anything inside the game.
+        {
+          SITE.kofiUrl
+            ? "Both Patreon tiers get a say in what we build next, and a one-time gift is just as welcome. None of them give anything inside the game."
+            : "Both tiers get a say in what we build next. Neither gives anything inside the game."
+        }
       </p>
-      <ul class="tiers">
+      <ul class:list={["tiers", { "tiers--three": SITE.kofiUrl }]}>
         {
           tiers.map((t) => (
             <li class="tier">
@@ -112,26 +112,47 @@ const costs = [
             </li>
           ))
         }
+        {
+          SITE.kofiUrl && (
+            <li class="tier tier--kofi">
+              <h3>
+                One-time gift <span class="tier__price">Any amount</span>
+              </h3>
+              <p>Rather give once than every month? Every gift goes to the same bills.</p>
+              <ul class="tier__perks">
+                <li>Your name on the Thank-you page, if you'd like</li>
+                <li>No poll votes: those come with the monthly tiers</li>
+              </ul>
+              <a class="btn btn--kofi" href={SITE.kofiUrl} rel="noopener noreferrer">
+                Give on Ko-fi
+              </a>
+            </li>
+          )
+        }
       </ul>
     </section>
 
-    {
-      thanks.length > 0 && (
-        <section class="thanks" aria-labelledby="thanks-title">
-          <h2 id="thanks-title">Thank you</h2>
-          {thanks.map((group) => (
-            <div class="thanks__group">
-              <h3>{group.title}</h3>
-              <ul class="thanks__list">
-                {group.names.map((name) => (
-                  <li>{name}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
-      )
-    }
+    <section class="thanks" aria-labelledby="thanks-title">
+      <h2 id="thanks-title">Thank you</h2>
+      {
+        preview.length > 0 ? (
+          <>
+            <p>A big thank you to everyone who helps keep the lab running, including:</p>
+            <ul class="thanks__list">
+              {preview.map((name) => (
+                <li>{name}</li>
+              ))}
+              {more > 0 && <li class="thanks__more">and {more} more</li>}
+            </ul>
+          </>
+        ) : (
+          <p>Supporters who say yes to being listed get their name on our Thank-you page.</p>
+        )
+      }
+      <a class="btn btn--ghost" href="/support/thanks/">
+        {preview.length > 0 ? "See everyone" : "Visit the Thank-you page"}
+      </a>
+    </section>
 
     <section class="other" aria-labelledby="other-title">
       <h2 id="other-title">Other ways to help</h2>
@@ -294,13 +315,36 @@ const costs = [
     padding-left: 1.2em;
   }
 
-  .thanks__group + .thanks__group {
-    margin-top: 22px;
+  .tiers--three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tier--kofi {
+    display: flex;
+    flex-direction: column;
+    border-color: rgb(114 164 242 / 40%);
+  }
+
+  .tier--kofi .tier__price {
+    color: #8db6f5;
+  }
+
+  .tier--kofi .btn {
+    align-self: flex-start;
+    margin-top: auto;
+  }
+
+  .tier--kofi .tier__perks {
+    margin-bottom: 22px;
+  }
+
+  .thanks p {
+    color: var(--text-secondary);
   }
 
   .thanks__list {
     list-style: none;
-    margin: 0;
+    margin: 0 0 22px;
     padding: 0;
     display: flex;
     flex-wrap: wrap;
@@ -312,6 +356,13 @@ const costs = [
     border-radius: var(--radius-pill);
     background: var(--wash);
     border: 1px solid var(--border);
+    overflow-wrap: anywhere;
+  }
+
+  .thanks__list .thanks__more {
+    background: none;
+    border-style: dashed;
+    color: var(--text-secondary);
   }
 
   .other .btn {
@@ -326,6 +377,12 @@ const costs = [
 
   .credits-teaser p {
     color: var(--text-secondary);
+  }
+
+  @media (max-width: 1060px) {
+    .tiers--three {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   @media (max-width: 860px) {

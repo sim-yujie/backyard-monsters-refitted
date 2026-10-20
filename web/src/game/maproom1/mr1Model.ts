@@ -321,23 +321,49 @@ export const formatAgo = (seconds: number): string => {
   return `${Math.floor(s / 86_400)} d ago`;
 };
 
-/** "Playing now" or "Offline · last seen 3 h ago". */
+/**
+ * "Last seen 3 h ago" under an offline neighbour's name. Empty while they are
+ * online (the green dot beside the name says it) or when the time is not known.
+ */
 export const presenceText = (neighbour: Mr1Neighbour, now: number): string => {
-  if (isPlayingNow(neighbour, now)) return "Playing now";
-  if (!neighbour.lastSeen) return "Offline";
-  return `Offline · last seen ${formatAgo(now - neighbour.lastSeen)}`;
+  if (isPlayingNow(neighbour, now) || !neighbour.lastSeen) return "";
+  return `Last seen ${formatAgo(now - neighbour.lastSeen)}`;
 };
 
 const times = (count: number): string => (count === 1 ? "1 time" : `${count} times`);
 
-/** "Attacked you 2 times · you attacked 1", or "No battles yet". */
-export const battlesText = (neighbour: Mr1Neighbour): string => {
+/** One side of the battles with a neighbour, shown as an icon and a count. */
+export interface Mr1BattleCount {
+  /** `attackedYou` draws a shield, `youAttacked` a sword. */
+  readonly kind: "attackedYou" | "youAttacked";
+  readonly count: number;
+  /** The words for the tooltip and screen readers: "Attacked you 2 times". */
+  readonly label: string;
+}
+
+/**
+ * The battles with a neighbour for the shield and sword icons beside their
+ * "Last seen" line: only the sides above 0, and nothing at all (no "No
+ * battles yet") when they never fought.
+ */
+export const battleCounts = (neighbour: Mr1Neighbour): Mr1BattleCount[] => {
+  const counts: Mr1BattleCount[] = [];
   const { attacksFrom, attacksTo } = neighbour;
-  if (!attacksFrom && !attacksTo) return "No battles yet";
-  if (!attacksFrom) return `You attacked them ${times(attacksTo)}`;
-  return (
-    `Attacked you ${times(attacksFrom)}` + (attacksTo ? ` · you attacked ${attacksTo}` : "")
-  );
+  if (attacksFrom > 0) {
+    counts.push({
+      kind: "attackedYou",
+      count: attacksFrom,
+      label: `Attacked you ${times(attacksFrom)}`,
+    });
+  }
+  if (attacksTo > 0) {
+    counts.push({
+      kind: "youAttacked",
+      count: attacksTo,
+      label: `You attacked them ${times(attacksTo)}`,
+    });
+  }
+  return counts;
 };
 
 /** Seconds until a wrecked camp is back, or null when it is not wrecked. */
@@ -433,7 +459,7 @@ const targetReason = (target: Mr1Target, now: number): Mr1Reason | null => {
   if (isPlayingNow(target, now)) {
     return {
       key: ReasonKey.PLAYING,
-      title: "Playing now",
+      title: "Online now",
       detail: "They are in their yard. Try again when they leave.",
     };
   }
@@ -591,6 +617,24 @@ export const LIST_SORT_LABELS: Readonly<Record<ListSort, string>> = {
   status: "Status",
 };
 
+/** Which way a sort runs: `desc` puts the most (highest, latest, Z) first. */
+export type SortDirection = "asc" | "desc";
+
+/**
+ * Each sort's order the first time it is picked, and the words for both ways
+ * round. Level, last seen, battles and status start "most first" as Flash's
+ * did; name starts A to Z.
+ */
+export const LIST_SORT_DIRECTIONS: Readonly<
+  Record<ListSort, { readonly start: SortDirection; readonly desc: string; readonly asc: string }>
+> = {
+  level: { start: "desc", desc: "Highest level first", asc: "Lowest level first" },
+  seen: { start: "desc", desc: "Most recently seen first", asc: "Longest away first" },
+  name: { start: "asc", desc: "Z to A", asc: "A to Z" },
+  battles: { start: "desc", desc: "Most battles first", asc: "Fewest battles first" },
+  status: { start: "desc", desc: "Attackable first", asc: "Attackable last" },
+};
+
 /** Attackable first, then the ones that attacked you, then the rest. */
 const statusRank = (neighbour: Mr1Neighbour, now: number): number => {
   if (targetReason(neighbour, now)) return 2;
@@ -599,24 +643,27 @@ const statusRank = (neighbour: Mr1Neighbour, now: number): number => {
 
 /**
  * Sorts the neighbours. Level and battles go highest first, last seen most
- * recent first, name A to Z; ties fall back to the name so a refresh does not
- * shuffle equal rows.
+ * recent first, name A to Z, unless `direction` turns them round; ties fall
+ * back to the name, A to Z, so a refresh does not shuffle equal rows.
  */
 export const sortNeighbours = (
   neighbours: readonly Mr1Neighbour[],
   sort: ListSort,
   now: number,
+  direction: SortDirection = LIST_SORT_DIRECTIONS[sort].start,
 ): Mr1Neighbour[] => {
   const byName = (a: Mr1Neighbour, b: Mr1Neighbour): number =>
     a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.userid - b.userid;
+  // Each key compares lowest first; `desc` flips it.
   const key: Record<ListSort, (a: Mr1Neighbour, b: Mr1Neighbour) => number> = {
-    level: (a, b) => b.level - a.level,
-    seen: (a, b) => b.lastSeen - a.lastSeen,
-    name: () => 0,
-    battles: (a, b) => b.attacksFrom + b.attacksTo - (a.attacksFrom + a.attacksTo),
-    status: (a, b) => statusRank(a, now) - statusRank(b, now),
+    level: (a, b) => a.level - b.level,
+    seen: (a, b) => a.lastSeen - b.lastSeen,
+    name: byName,
+    battles: (a, b) => a.attacksFrom + a.attacksTo - (b.attacksFrom + b.attacksTo),
+    status: (a, b) => statusRank(b, now) - statusRank(a, now),
   };
-  return [...neighbours].sort((a, b) => key[sort](a, b) || byName(a, b));
+  const sign = direction === "desc" ? -1 : 1;
+  return [...neighbours].sort((a, b) => sign * key[sort](a, b) || byName(a, b));
 };
 
 export interface ListPage<T> {
@@ -637,34 +684,20 @@ export const pageOf = <T>(
   return { items: items.slice(clamped * size, clamped * size + size), page: clamped, pages };
 };
 
-/** The short line under a neighbour's name in the list. */
-export const rowLine = (
-  neighbour: Mr1Neighbour,
-  now: number,
-): { text: string; tone: "warn" | "muted" } => {
+/**
+ * The short words under a neighbour's name in the list: why they can't be
+ * attacked, else "Last seen 3 h ago", else nothing. The battle counts sit
+ * beside it as icons (`battleCounts`).
+ */
+export const rowLine = (neighbour: Mr1Neighbour, now: number): string => {
   const reason = targetReason(neighbour, now);
-  if (reason?.key === ReasonKey.PLAYING)
-    return { text: "Playing now · can't attack", tone: "muted" };
+  if (reason?.key === ReasonKey.PLAYING) return "In their yard · can't attack";
   if (reason?.key === ReasonKey.NEW_PLAYER) {
     const left = neighbour.protectedUntil !== null ? neighbour.protectedUntil - now : 0;
-    return {
-      text: left > 0 ? `New player · protected ${formatSpan(left)}` : "New player · protected",
-      tone: "muted",
-    };
+    return left > 0 ? `New player · protected ${formatSpan(left)}` : "New player · protected";
   }
-  if (reason?.key === ReasonKey.DAMAGE_PROTECTION)
-    return { text: "Damage protection", tone: "muted" };
-  if (reason?.key === ReasonKey.UNDER_ATTACK)
-    return { text: "Under attack now", tone: "muted" };
-  if (reason?.key === ReasonKey.TRUCE) return { text: "Truce", tone: "muted" };
-  const seen = neighbour.lastSeen
-    ? `offline ${formatAgo(now - neighbour.lastSeen).replace(/ ago$/, "")}`
-    : "offline";
-  if (neighbour.attacksFrom > neighbour.attacksTo) {
-    return { text: `Attacked you ${neighbour.attacksFrom}× · ${seen}`, tone: "warn" };
-  }
-  const battles = neighbour.attacksFrom + neighbour.attacksTo;
-  const capital = seen.charAt(0).toUpperCase() + seen.slice(1);
-  const count = battles === 1 ? "1 battle" : battles ? `${battles} battles` : "no battles yet";
-  return { text: `${capital} · ${count}`, tone: "muted" };
+  if (reason?.key === ReasonKey.DAMAGE_PROTECTION) return "Damage protection";
+  if (reason?.key === ReasonKey.UNDER_ATTACK) return "Under attack now";
+  if (reason?.key === ReasonKey.TRUCE) return "Truce";
+  return presenceText(neighbour, now);
 };

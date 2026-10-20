@@ -66,8 +66,10 @@ import { SITE } from "../config";
       <h2 id="support">Support us</h2>
       <p>
         If you enjoy the game, you can
-        <strong><a href={SITE.patreonUrl} rel="noopener noreferrer">support us on Patreon</a></strong>. It helps pay for
-        the servers. It gives no in-game advantage. <a href="/support/">More about supporting</a>.
+        <strong><a href={SITE.patreonUrl} rel="noopener noreferrer">support us on Patreon</a></strong>{
+          SITE.kofiUrl && <> or give a <a href={SITE.kofiUrl} rel="noopener noreferrer">one-time gift on Ko-fi</a></>
+        }. It helps pay for the servers. It gives no in-game advantage. <a href="/support/">More about supporting</a>
+        and our <a href="/support/thanks/">thank-you page</a>.
       </p>
     </div>
   </div>

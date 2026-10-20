@@ -283,6 +283,17 @@ p {
   color: #fff;
 }
 
+.btn--kofi {
+  background: #72a4f2;
+  color: #0b1a33;
+  box-shadow: 0 6px 0 #4f80cf;
+}
+
+.btn--kofi:hover {
+  background: #8db6f5;
+  color: #0b1a33;
+}
+
 .btn-row {
   display: flex;
   flex-wrap: wrap;

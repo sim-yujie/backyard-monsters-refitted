@@ -38,6 +38,7 @@ export const GET: APIRoute = async () => {
     `- [Home page](${abs("/")}): what the game is, screenshots, a gameplay clip and these questions.`,
     `- [Changelog](${abs("/changelog/")}): every update, in plain language.`,
     `- [Support us](${abs("/support/")}): what running the game costs and how to help.`,
+    `- [Thank you](${abs("/support/thanks/")}): the supporters who help keep the game online.`,
     `- [Credits](${abs("/credits/")}): the Backyard Monsters Refitted server, the licence, the art and the font.`,
     "",
   ];
