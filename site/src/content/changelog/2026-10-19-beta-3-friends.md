@@ -25,6 +25,7 @@ date: 2026-10-19
 - Clearer wording on the notice shown when your housing is too full.
 - The friends bar and friends list fit better on phones and smaller screens, and no longer cover the dock buttons.
 - The friends bar now pages properly on wide screens when you have many friends.
+- Lots of layout fixes on phones, upright and sideways: buttons and panels no longer overlap or run off the screen.
 
 ### Fixes
 
@@ -34,5 +35,6 @@ date: 2026-10-19
 - Attacking a Map Room 2 yard that sits on a map edge no longer offers double the monsters and then refuses the result.
 - A Wormzer's dirt mound no longer covers bunker roofs.
 - Battles with lots of Banditos no longer stutter when they spin at the same time.
+- The attack bar now shows 0% damage before the battle starts (it showed -1%).
 - Other players can no longer see when wild monsters are due to raid your yard.
 - Fixed a background server problem.
