@@ -25,11 +25,17 @@ A release happens only when the owner says "release". Versions are tagged
 6. Go live, all from this `release` checkout at the tag:
    - **Game server**: follow "Updating without GitHub" in `docs/deploy.md`
      (backup, copy the code with `git archive ... release`, rebuild).
-   - **Game page**: from `web/`, `vercel deploy --prod` (project
-     `bymrevamped`, scope `sim-yujies-projects`).
-   - **Info site**: fast-forward the `wt-site` worktree to `release`
-     (not `revamp`), then run `vercel deploy --prod` from `wt-site/site`
-     (project `bymrevamped-site`).
+   - **Vercel deploys** (game page and info site) run from the
+     `worktrees/release-hotfix` worktree (on `release`), because both Vercel
+     links live there. Keep that worktree; do not delete it. First
+     fast-forward it to the tag (`git merge --ff-only v2.0.0-beta.N`).
+   - **Game page**: from `worktrees/release-hotfix/web`,
+     `vercel deploy --prod` (project `bymrevamped`, scope
+     `sim-yujies-projects`).
+   - **Info site**: from `worktrees/release-hotfix/site`,
+     `vercel deploy --prod` (project `bymrevamped-site`). The site's
+     `.vercel` folder (the link) is git-ignored, so a fresh checkout is not
+     linked; run `vercel link` there if it is ever lost.
 7. Merge `release` back into `revamp` so the two do not drift:
    `git merge --no-ff release` on `revamp`, push.
 
