@@ -10,6 +10,7 @@ import {
   formatRespawn,
   formatSpan,
   initials,
+  isPlayingNow,
   mr1AttackTarget,
   pageOf,
   pinTone,
@@ -232,9 +233,10 @@ describe("words", () => {
     expect(formatAgo(5 * 86_400)).toBe("5 d ago");
   });
 
-  it("describes presence and battles", () => {
-    expect(presenceText(named("Bramblefoot"), NOW)).toBe("Playing now");
-    expect(presenceText(named("Mossbeard"), NOW)).toBe("Offline · last seen 3 h ago");
+  it("describes presence and battles: no words while online, no \"Offline\" ever", () => {
+    expect(presenceText(named("Bramblefoot"), NOW)).toBe("");
+    expect(presenceText(named("Mossbeard"), NOW)).toBe("Last seen 3 h ago");
+    expect(presenceText({ ...named("Mossbeard"), lastSeen: 0 }, NOW)).toBe("");
     expect(battlesText(named("Mossbeard"))).toBe("Attacked you 2 times · you attacked 1");
     expect(battlesText(named("Grimble"))).toBe("No battles yet");
     expect(battlesText(named("Wartwhistle"))).toBe("You attacked them 3 times");
@@ -243,8 +245,10 @@ describe("words", () => {
   it("takes the server's word on who is online (#275): seen is not enough without a real action", () => {
     const seen = named("Bramblefoot");
     expect(seen.online).toBeNull();
-    expect(presenceText({ ...seen, online: false }, NOW)).toBe("Offline · last seen just now");
-    expect(presenceText({ ...seen, online: true }, NOW)).toBe("Playing now");
+    expect(presenceText({ ...seen, online: false }, NOW)).toBe("Last seen just now");
+    expect(presenceText({ ...seen, online: true }, NOW)).toBe("");
+    expect(isPlayingNow({ ...seen, online: true }, NOW)).toBe(true);
+    expect(isPlayingNow({ ...seen, online: false }, NOW)).toBe(false);
     const fixture = mapRoom1Fixture(NOW);
     const wires = fixture.neighbours ?? [];
     const read = readMapRoom1(
@@ -271,11 +275,13 @@ describe("words", () => {
 
   it("writes the list's second line", () => {
     expect(rowLine(named("Mossbeard"), NOW)).toEqual({
-      text: "Attacked you 2× · offline 3 h",
+      text: "Attacked you 2× · last seen 3 h ago",
       tone: "warn",
     });
-    expect(rowLine(named("Bramblefoot"), NOW).text).toBe("Playing now · can't attack");
-    expect(rowLine(named("Grimble"), NOW).text).toBe("Offline 24 h · no battles yet");
+    expect(rowLine(named("Bramblefoot"), NOW).text).toBe("In their yard · can't attack");
+    expect(rowLine(named("Grimble"), NOW).text).toBe("Last seen 24 h ago · no battles yet");
+    expect(rowLine({ ...named("Grimble"), lastSeen: 0 }, NOW).text).toBe("No battles yet");
+    expect(rowLine({ ...named("Mossbeard"), lastSeen: 0 }, NOW).text).toBe("Attacked you 2×");
     expect(rowLine(named("Nettlejaw"), NOW).text).toBe("New player · protected 5 d");
   });
 });

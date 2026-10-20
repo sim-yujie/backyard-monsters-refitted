@@ -221,7 +221,8 @@ export class FriendsTab implements FriendsTabView {
   }
 
   private row(friend: Friend): HTMLLIElement {
-    const online = onlineText(friend.online);
+    const online = friend.online === "online";
+    const seen = online ? "" : onlineText(friend.online);
     const busy = this.busy.has(friend.userid);
     if (this.confirming === friend.userid) {
       const yes = button(FRIENDS_TEXT.removeYes, () => void this.remove(friend), "danger");
@@ -275,7 +276,8 @@ export class FriendsTab implements FriendsTabView {
     if (canHelp(friend)) badges.push("wrench");
     if (!friend.giftSentToday) badges.push("gift");
     const row = playerRow(friend, {
-      ...(online && { note: online, noteClass: `friends-online friends-online--${friend.online}` }),
+      online,
+      ...(seen && { note: seen, noteClass: "friends-online" }),
       actions,
       badges,
     });

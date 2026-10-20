@@ -174,3 +174,21 @@ describe("targetCard Add friend (friends WP11, #378)", () => {
     expect(make).not.toHaveBeenCalled();
   });
 });
+
+describe("targetCard online status", () => {
+  it("puts a green dot by an online player's name and no words", () => {
+    const card = targetCard(find("player-902"), { world, own, now: NOW }, handlers(), "panel");
+    const dot = card.querySelector(".mr1-card__title-row .online-dot");
+    expect(dot?.getAttribute("aria-label")).toBe("Online");
+    expect(dot?.getAttribute("title")).toBe("Online");
+    expect(card.textContent).not.toContain("Last seen");
+    expect(card.textContent).not.toContain("Playing now");
+  });
+
+  it("gives an offline player no dot and no \"Offline\", only when they were last seen", () => {
+    const card = targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel");
+    expect(card.querySelector(".online-dot")).toBeNull();
+    expect(card.querySelector(".mr1-card__sub")?.textContent).toBe("Last seen 3 h ago");
+    expect(card.textContent).not.toContain("Offline");
+  });
+});

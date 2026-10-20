@@ -60,8 +60,8 @@ describe("FriendsTab", () => {
     expect(names(tab.element)).toEqual(["Bob", "Ann", "Cat"]);
     const bob = tab.element.querySelector('[data-userid="2"]');
     expect(bob?.textContent).toContain("Level 9");
-    expect(bob?.textContent).toContain("Online");
-    expect(bob?.querySelector(".friends-online--online")).not.toBeNull();
+    expect(bob?.querySelector(".friends-row__top .online-dot")?.getAttribute("aria-label")).toBe("Online");
+    expect(bob?.textContent).not.toContain("Online");
     // A friend who hides it shows no line at all.
     expect(tab.element.querySelector('[data-userid="3"] .friends-online')).toBeNull();
   });

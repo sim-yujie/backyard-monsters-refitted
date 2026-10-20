@@ -452,6 +452,19 @@ body {
   font-weight: 700;
 }
 
+/* ── Online dot ─────────────────────────────────────────────────────────────
+ * The green dot beside an online player's name (`ui/onlineDot.ts`). Offline
+ * players get none; a "Last seen" line says the rest.
+ */
+.online-dot {
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--colour-online);
+}
+
 /* ── Tabs and segments ──────────────────────────────────────────────────────
  * One look for every row of tabs: a quiet tray, the chosen tab lit and
  * underlined in the accent. The Monsters and Build screens' strips

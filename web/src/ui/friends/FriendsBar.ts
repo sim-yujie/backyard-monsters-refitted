@@ -282,7 +282,13 @@ export class FriendsBar {
     img.src = avatarUrl(avatarOf(friend.pic, friend.userid), "small");
     img.alt = "";
     face.append(img);
-    if (friend.online === "online") face.append(make("span", "friends-bar__dot"));
+    if (friend.online === "online") {
+      const dot = make("span", "friends-bar__dot");
+      dot.title = "Online";
+      dot.setAttribute("role", "img");
+      dot.setAttribute("aria-label", "Online");
+      face.append(dot);
+    }
     if (canHelp(friend)) face.append(badge("wrench", "Can help today"));
     if (!friend.giftSentToday) face.append(badge("gift", "No gift sent today"));
     slot.append(face, make("span", "friends-bar__name", friend.username), make("span", "friends-bar__level", `Lv ${friend.level}`));
