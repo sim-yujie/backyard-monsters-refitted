@@ -73,6 +73,8 @@ import {
   CHAMPION_STRIKE_FRAMES,
   HIT_STOP_CHAMPION_MS,
   HIT_STOP_DESTROY_MS,
+  SLOW_MO_EASE_SECONDS,
+  SLOW_MO_SECONDS,
   WINDUP_PULL_PX,
   bigLungeOffset,
   expectedSwingGap,
@@ -1053,7 +1055,20 @@ export class AttackBattleLayer {
     for (let index = this.eventsSeen; index < events.length; index += 1) {
       if (events[index]?.kind === "bomb") return true;
     }
-    return this.walkingOff();
+    return this.finishing || this.walkingOff();
+  }
+
+  /**
+   * Whether the blow that ended the attack is still playing in slow motion
+   * (feat/attack-juice-demo). Just after the end it answers yes until the
+   * first frames have seen whether a building fell to it; the Baiter's report
+   * and the end panel wait for it.
+   */
+  get finishing(): boolean {
+    if (this.destroyed || this.juice !== "full" || this.reducedMotion || !this.session.ended) return false;
+    if (!this.endedAt) return true;
+    const wall = (this.now() - this.endedAt.ms) / 1000;
+    return this.slowEnd ? wall < SLOW_MO_SECONDS + SLOW_MO_EASE_SECONDS : wall < 0.2;
   }
 
   /**
