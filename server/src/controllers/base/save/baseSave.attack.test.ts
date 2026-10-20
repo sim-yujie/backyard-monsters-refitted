@@ -645,6 +645,15 @@ describe("the attacker's own row through the save (#23, C1)", () => {
     attackerSave.siege = { jars: { quantity: 2 } };
   });
 
+  test("an attack save cannot hand the attacker a Krallen", async () => {
+    attackerSave.champion = [];
+    await save({
+      over: "1",
+      attackerchampion: JSON.stringify([{ t: 5, hp: 62_000, l: 5, ft: 0, fd: 0, fb: 0, pl: 2, status: 0 }]),
+    });
+    expect(attackerSave.champion).toEqual([]);
+  });
+
   test("a crafted save cannot raise a champion's level or health, nor add siege", async () => {
     await save({
       over: "1",

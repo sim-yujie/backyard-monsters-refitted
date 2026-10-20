@@ -81,7 +81,7 @@ import {
   type HousingLoss,
 } from "../../../services/base/combat/housingLoss.js";
 import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
-import { championsAfterLessons, withStoredBrains } from "../../../services/base/combat/championBrain.js";
+import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
@@ -383,12 +383,10 @@ const saveBase = async (
           if (saveData.champion && clientBattle) {
             championHandler(saveData.champion, baseSave);
           }
-        } else {
-          if (saveData.champion) {
-            // The brains are the server's alone (issue #219): kept, never sent.
-            baseSave.champion = withStoredBrains(baseSave.champion, saveData.champion);
-          }
         }
+        // An owner save never writes the champion list: every change to it is
+        // a server action (the cage, the chamber), so a hand-made list could
+        // only add a champion, raise one or forge its brain (issue #219).
         break;
 
       // The stock less what the log used, on the save that ends the attack;
