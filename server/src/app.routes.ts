@@ -26,6 +26,7 @@ import {
   autoAttackLimiter,
   autoAttackPlanLimiter,
   defencesLimiter,
+  leaderboardLimiter,
   botCheckReadLimiter,
   botCheckAnswerLimiter,
   chatReportLimiter,
@@ -118,6 +119,7 @@ import { mountEventsRoutes } from "./controllers/events/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
+import { getEmpireBoard } from "./controllers/leaderboards/getEmpireBoard.js";
 import { getAttackLogs } from "./controllers/attacklogs/getAttackLogs.js";
 
 import { wildMonsterInvasion } from "./controllers/events/wildMonsterInvasion.js";
@@ -318,6 +320,8 @@ mountFriendsRoutes(router);
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/worlds", publicReadLimiter, getAvailableWorlds);
 router.get("/api/:apiVersion/leaderboards", publicReadLimiter, getLeaderboards);
+// The leaderboard by empire points (beta.4, `services/leaderboard/empireBoard.ts`): the top 100 and the caller's own row.
+router.get("/api/:apiVersion/leaderboards/empire", apiVersion, verifyUserAuth, verifyAccountStatus, leaderboardLimiter, getEmpireBoard);
 router.get("/api/:apiVersion/attacklogs", verifyUserAuth, getAttackLogs);
 
 /**  ────────────────────────────────────────────────
