@@ -1675,6 +1675,7 @@ const speedupSlot = (item: SpeedupItem): "finish" | "minusOne" | "minusTwo" =>
 
 const applySpeedup = (button: ShinyButton, offer: SpeedupOffer): void => {
   button.setPrice(offer.price);
+  button.setFree(offer.free);
   button.setBlocked(
     offer.blocked === "paused"
       ? "Repair the building first: its countdown is paused."

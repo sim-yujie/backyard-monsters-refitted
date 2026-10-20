@@ -113,6 +113,7 @@ import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js"
 import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
+import { mountEventsRoutes } from "./controllers/events/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -343,6 +344,8 @@ router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRe
 * 📦 Events
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/events/wmi", apiVersion, logRequest, wildMonsterInvasion);
+// The Events page and "What's new" (`controllers/events/routes.ts`); the claims are yard actions.
+mountEventsRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Debug

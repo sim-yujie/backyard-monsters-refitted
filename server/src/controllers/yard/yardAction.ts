@@ -113,7 +113,8 @@ import { logger } from "../../utils/logger.js";
  * `docs/design/achievements.md` §7.2) added `achievements` to
  * {@link YardSlices}, `achievementEvents` to {@link YardOutcome}, and the
  * unseen unlocks to the answer; its WP4 added
- * {@link YardAction.reportAfterAchievements}.
+ * {@link YardAction.reportAfterAchievements}. Events (2026-10-20) added
+ * `grantShiny` to {@link YardOutcome}.
  */
 
 /** Save columns an action may replace wholesale. */
@@ -181,6 +182,12 @@ export interface YardOutcome<Report> {
   credit?: Partial<ResourceAmounts>;
   /** Shiny to take. Refused `409 shinyLocked` for a locked account, `409 credits` if short. */
   shiny?: number;
+  /**
+   * Shiny to give: an event reward (`services/events/grant.ts`). Added after
+   * any `shiny` is taken; never refused, a Shiny-locked account included
+   * (the lock stops spending, not receiving).
+   */
+  grantShiny?: number;
   /** Empire points to add. */
   points?: number;
   /**
@@ -279,6 +286,8 @@ export const applyOutcome = (save: Save, user: User, outcome: YardOutcome<unknow
   creditResources(save, credit);
 
   if (shiny > 0) save.credits -= shiny;
+  const granted = amount(outcome.grantShiny);
+  if (granted > 0) save.credits += granted;
 
   const points = amount(outcome.points);
   if (points > 0) save.points = String(Number(save.points ?? "0") + points);
