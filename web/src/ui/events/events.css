@@ -1,0 +1,473 @@
+/*
+ * The Events page (`ui/events/EventsPanel.ts`) and its button
+ * (`game/yard/plugins/events.ts`).
+ *
+ * Same rule as ui.css: values come from tokens.css. The panel is the shared
+ * `.panel`, docked on the right under the Events button so the yard stays in
+ * view; on a phone it is a bottom sheet, as Goals is (goals.css).
+ */
+
+/* ── The button: top right, under the HUD, the emptiest corner on every screen size ── */
+
+.yard-dock > .events-door {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  right: var(--space-4);
+}
+
+.events-door .yard-dock__disc {
+  width: 56px;
+  height: 56px;
+  color: #ffb347;
+}
+
+.events-door[aria-expanded="true"] .yard-dock__disc {
+  border-color: var(--colour-accent);
+}
+
+.yard-dock__badge.events-badge {
+  background: #ff8a1f;
+  color: #1d1003;
+}
+
+@media (width <= 620px) {
+  .yard-dock > .events-door {
+    top: calc(var(--hud-height) + var(--space-2));
+    right: var(--space-3);
+  }
+
+  .events-door .yard-dock__disc {
+    width: 48px;
+    height: 48px;
+  }
+
+  .events-door .yard-dock__label {
+    font-size: var(--text-xs);
+  }
+}
+
+/* A phone on its side: Collect all, Layout and the zoom take the top right,
+   so the button sits right of the level bar instead. */
+@media (width > 620px) and (height <= 500px) {
+  .yard-dock > .events-door {
+    top: calc(var(--hud-height) - var(--space-2));
+    right: auto;
+    left: 226px;
+  }
+
+  .events-door .yard-dock__disc {
+    width: 44px;
+    height: 44px;
+  }
+
+  .events-door .yard-dock__label {
+    font-size: var(--text-xs);
+  }
+}
+
+/* ── The panel ─────────────────────────────────────────────────────────── */
+
+.events-panel {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  right: calc(var(--space-4) + 72px);
+  z-index: var(--z-hud);
+  width: min(420px, calc(100vw - 2 * var(--space-4) - 72px));
+  max-height: calc(100vh - var(--hud-height) - 150px);
+  min-width: 0;
+}
+
+.events-panel .panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.events-section__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── An event that is on ──────────────────────────────────────────────── */
+
+.events-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.events-card__banner {
+  position: relative;
+  aspect-ratio: 4 / 1;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--colour-border-subtle);
+  background: linear-gradient(135deg, #3a2a4a, #1b1424);
+}
+
+.events-card__banner--halloween {
+  background:
+    radial-gradient(circle at 80% 30%, rgb(255 160 60 / 55%), transparent 45%),
+    linear-gradient(135deg, #3b1f4f, #160d1f);
+}
+
+.events-card__banner-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.events-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.events-card__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--colour-text-strong);
+}
+
+.events-card__countdown {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #ffb347;
+}
+
+.events-card__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.events-card__extra:empty {
+  display: none;
+}
+
+/* ── The login calendar ───────────────────────────────────────────────── */
+
+.events-calendar,
+.events-ladder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.events-calendar__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.events-calendar__count {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+}
+
+.events-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 74px;
+  padding: 6px 4px;
+  box-sizing: border-box;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+.events-day__label {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--colour-text-muted);
+}
+
+.events-day__rewards {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.events-day--today {
+  border-color: #ffb347;
+  background: rgb(255 140 40 / 18%);
+  box-shadow: 0 0 0 1px #ffb347 inset;
+}
+
+.events-day--today .events-day__label {
+  color: #ffb347;
+}
+
+.events-day--claimed {
+  opacity: 0.55;
+}
+
+.events-day--locked .events-day__rewards {
+  opacity: 0.7;
+}
+
+.events-day--tomorrow {
+  border-style: dashed;
+}
+
+.events-day__mark {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  color: var(--colour-success);
+}
+
+/* One reward's picture and figure. */
+.events-reward {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.events-reward__pictures {
+  display: inline-flex;
+  align-items: center;
+  color: var(--colour-text);
+}
+
+.events-reward__pictures > .res-icon + .res-icon {
+  margin-left: -6px;
+}
+
+.events-reward__image {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.events-reward__figure {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text);
+  white-space: nowrap;
+}
+
+.events-claim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--control-height);
+}
+
+.events-claim__label {
+  font-weight: 800;
+}
+
+.events-claim__what {
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.events-claim--busy {
+  cursor: progress;
+}
+
+.events-calendar__note {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+.events-refusal {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-danger);
+}
+
+/* ── A collection ladder (the pumpkin hunt) ───────────────────────────── */
+
+.events-ladder__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events-tier {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.events-tier--ready {
+  border-color: #ffb347;
+}
+
+.events-tier--claimed {
+  opacity: 0.55;
+}
+
+.events-tier__need {
+  flex: none;
+  min-width: 64px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.events-tier__rewards {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.events-tier__mark {
+  flex: none;
+  color: var(--colour-text-muted);
+}
+
+.events-tier--claimed .events-tier__mark {
+  color: var(--colour-success);
+}
+
+/* ── Coming up ────────────────────────────────────────────────────────── */
+
+.events-upcoming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.events-upcoming__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events-upcoming__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.events-upcoming__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.events-upcoming__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+/* ── Loading, errors ──────────────────────────────────────────────────── */
+
+.events-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+.events-status__text {
+  margin: 0;
+}
+
+/* ── Phones ───────────────────────────────────────────────────────────── */
+
+@media (width <= 620px) {
+  .events-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    max-height: min(85vh, calc(100dvh - var(--hud-height)));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .events-panel .panel__body {
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .events-calendar__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .events-claim {
+    min-height: 48px;
+  }
+}
+
+/* A phone on its side: the panel takes the height down to the screen's foot. */
+@media (width > 620px) and (height <= 500px) {
+  .events-panel {
+    top: calc(var(--hud-height) + var(--space-1));
+    right: var(--space-4);
+    width: min(440px, calc(100vw - 2 * var(--space-4)));
+    max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
+  }
+
+  .events-calendar__grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .events-card__banner {
+    aspect-ratio: 7 / 1;
+  }
+}

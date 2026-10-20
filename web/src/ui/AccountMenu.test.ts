@@ -239,6 +239,25 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
+  describe("the What's new item", () => {
+    it("is there only when asked for and opens the cards", () => {
+      const { button } = build();
+      button.click();
+      expect(menu!.element.querySelector(".account-menu__whats-new")).toBeNull();
+      menu!.destroy();
+
+      const onWhatsNew = vi.fn();
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onWhatsNew });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__whats-new")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("What's new");
+      item.click();
+      expect(onWhatsNew).toHaveBeenCalledOnce();
+      expect(menu.open).toBe(false);
+    });
+  });
 });
 
 /**

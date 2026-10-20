@@ -469,9 +469,9 @@ describe("jobOffer: speed-ups by time left", () => {
   it("90 minutes: Finish now at the time price, −1 h yes, −2 h no", () => {
     const job = at(5_400);
     // timeCost(5400) = min(ceil(5400 × 20 / 3600), trunc(sqrt(5400 × 0.8))) = min(30, 65).
-    expect(job.finish).toEqual({ item: "SP4", price: 30, blocked: null });
-    expect(job.minusOne).toEqual({ item: "SP2", price: 20, blocked: null });
-    expect(job.minusTwo).toEqual({ item: "SP3", price: 40, blocked: "tooShort" });
+    expect(job.finish).toEqual({ item: "SP4", price: 30, free: 0, blocked: null });
+    expect(job.minusOne).toEqual({ item: "SP2", price: 20, free: 0, blocked: null });
+    expect(job.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, blocked: "tooShort" });
   });
 
   it("24 hours: Finish now costs 262 (the design's worked example)", () => {
@@ -480,7 +480,7 @@ describe("jobOffer: speed-ups by time left", () => {
 
   it("five minutes or less: the finish is free (SP1) and the hour items are refused", () => {
     const job = at(200);
-    expect(job.finish).toEqual({ item: "SP1", price: 0, blocked: null });
+    expect(job.finish).toEqual({ item: "SP1", price: 0, free: 0, blocked: null });
     expect(job.minusOne?.blocked).toBe("tooShort");
   });
 
@@ -488,6 +488,17 @@ describe("jobOffer: speed-ups by time left", () => {
     const job = at(5_400, 25);
     expect(job.finish?.blocked).toBe("credits");
     expect(job.minusOne?.blocked).toBeNull();
+  });
+
+  it("a free speed-up held from an event costs nothing, even without Shiny", () => {
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 20, 4, { cU: 9_000 })],
+      credits: 0,
+      storedata: { BEW: { q: 4 }, FREESP2: { q: 2 } },
+    });
+    const job = jobOffer(pick(context, 2), context);
+    expect(job?.minusOne).toEqual({ item: "SP2", price: 0, free: 2, blocked: null });
+    expect(job?.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, blocked: "credits" });
   });
 
   it("a damaged building's countdown is paused and every speed-up with it", () => {

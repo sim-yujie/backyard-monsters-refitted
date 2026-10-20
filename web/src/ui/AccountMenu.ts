@@ -26,6 +26,9 @@
  * With `onFriends` (issue #370) it has a "Friends" item, the way into the
  * Friends screen, with the count of requests and gifts waiting
  * (`setFriendsCount`); while any wait, the button wears a small count too.
+ *
+ * With `onWhatsNew` it has a "What's new" item, which opens the newest
+ * release's cards again (`ui/events/WhatsNewDialog.ts`).
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
@@ -60,6 +63,8 @@ export interface AccountMenuOptions {
   readonly onAchievements?: () => void;
   /** The "Friends" item's action; without it there is no such item. */
   readonly onFriends?: () => void;
+  /** The "What's new" item's action; without it there is no such item. */
+  readonly onWhatsNew?: () => void;
 }
 
 /** What the picker's heading adds while the player still wears the default. */
@@ -266,6 +271,20 @@ export class AccountMenu {
         onAchievements();
       });
       this.list.append(achievements);
+    }
+    if (options.onWhatsNew) {
+      const onWhatsNew = options.onWhatsNew;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const whatsNew = document.createElement("button");
+      whatsNew.type = "button";
+      whatsNew.className = "btn btn--ghost account-menu__help account-menu__whats-new";
+      whatsNew.setAttribute("role", "menuitem");
+      whatsNew.textContent = "What's new";
+      whatsNew.addEventListener("click", () => {
+        this.toggle(false);
+        onWhatsNew();
+      });
+      this.list.append(whatsNew);
     }
     // Account settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
     const settings = document.createElement("button");

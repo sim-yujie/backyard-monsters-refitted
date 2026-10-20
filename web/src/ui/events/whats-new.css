@@ -1,0 +1,106 @@
+/*
+ * The "What's new" cards (`ui/events/WhatsNewDialog.ts`): a popup (the shared
+ * `.panel` on a scrim) with picture cards in two columns, one on a phone.
+ */
+
+.whats-new-popup {
+  width: min(640px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+}
+
+.whats-new-popup .panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.whats-new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.whats-new__release {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.whats-new__cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.whats-new__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.whats-new__picture {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-sm, 6px);
+  background: linear-gradient(135deg, #24384a, #121b26);
+}
+
+.whats-new__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.whats-new__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 800;
+  color: var(--colour-text-strong);
+}
+
+.whats-new__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.whats-new__older-summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+}
+
+.whats-new__older .whats-new__cards {
+  margin-top: var(--space-2);
+}
+
+.whats-new__done {
+  align-self: center;
+  min-width: 160px;
+  min-height: var(--control-height);
+}
+
+@media (width <= 620px) {
+  .whats-new__cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .whats-new__done {
+    align-self: stretch;
+    min-height: 48px;
+  }
+}

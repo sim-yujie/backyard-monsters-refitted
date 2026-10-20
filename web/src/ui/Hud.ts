@@ -12,6 +12,7 @@ import { AccountMenu } from "./AccountMenu";
 import { AchievementsDoor } from "./achievements/AchievementsDoor";
 import { friendsStore } from "@/game/friends/friendsStore";
 import { FriendsDoor } from "./friends/FriendsDoor";
+import { modalLayer, openWhatsNew } from "./events/WhatsNewDialog";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
@@ -404,6 +405,7 @@ export class Hud {
       this.accountMenu = new AccountMenu({
         onAchievements: () => void door.open(),
         onFriends: () => void friends.open(),
+        onWhatsNew: () => void openWhatsNew({ container: modalLayer() }),
         name: options.accountName === undefined ? session?.username : options.accountName,
         onSignOut: options.onSignOut,
         variant: this.corner ? "pill" : "button",

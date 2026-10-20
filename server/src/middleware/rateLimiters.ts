@@ -514,3 +514,20 @@ export const friendActionLimiter = spamLimiter(
   SPAM_LIMITS.friendAction,
   friendsRefusal("You have done that a lot. Please wait a while and try again.")
 );
+
+/**
+ * Rate limit for the Events page's reads and the "What's new" record
+ * (`controllers/events/eventsState.ts`): 30 a minute per user, counted
+ * together. The client reads the events when the yard opens, when the page
+ * opens and after a claim.
+ */
+export const eventsLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "events",
+  keyGenerator: byUser("events"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
