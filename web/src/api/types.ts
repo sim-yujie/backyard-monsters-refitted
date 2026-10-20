@@ -216,7 +216,10 @@ export interface ChampionSaveEntry {
   fb: number;
   /** Power level, 0 to 3. */
   pl: number;
-  /** 0 active, 1 frozen, 2 juiced. Only 0 may be flung (`combat.md:750-751`). */
+  /**
+   * 0 active, 1 frozen, 2 juiced, 3 an egg in the cage (`ft` then its hatch
+   * time). Only 0 may be flung (`combat.md:750-751`).
+   */
   status: number;
   nm?: string;
   /** The Mode it last attacked in (issue #220); absent is Hybrid. Anything else is ignored. */

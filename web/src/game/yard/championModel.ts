@@ -25,6 +25,11 @@ import {
  * way the server's catch-up heals, `int(max × 5 / healtime)` per whole
  * 5-second period of the clock (`champions/ChampionBase.as:1047-1053`), so the
  * bar fills while the panel is open and Heal's price falls with it.
+ *
+ * Raising lays an egg (status 3, owner 2026-10-20): `ft` is its hatch time, a
+ * day after the raise, and nothing hurries it. The server hatches it in its
+ * catch-up; until the answer that does, the cage shows the egg (at 0 left,
+ * "hatching", and the panel asks the server for its state).
  */
 
 /** Champion Cage type id (`client/scripts/CHAMPIONCAGE.as:22`). */
@@ -34,7 +39,10 @@ export const CHAMPION_CAGE_TYPE = 114;
 export const CHAMPION_CHAMBER_TYPE = 119;
 
 /** `ChampionBase` statuses (`champions/ChampionBase.as:26-36`). */
-export const ChampionStatus = { ACTIVE: 0, FROZEN: 1, JUICED: 2 } as const;
+export const ChampionStatus = { ACTIVE: 0, FROZEN: 1, JUICED: 2, EGG: 3 } as const;
+
+/** How long an egg takes to hatch: one day, every time (`server/src/services/yard/champion.ts`). */
+export const EGG_HATCH_SECONDS = 24 * 60 * 60;
 
 /** The longest name `champion/rename` takes. */
 export const CHAMPION_NAME_MAX = 20;
@@ -74,6 +82,12 @@ export const specialChampion = (save: BaseLoadResponse): ChampionSaveEntry | nul
     (champion) =>
       entryOfChampion(champion)?.kind === "special" &&
       [ChampionStatus.ACTIVE, ChampionStatus.FROZEN].includes(statusOf(champion) as 0 | 1),
+  ) ?? null;
+
+/** The basic champion's egg in the cage, if any. */
+export const cageEgg = (save: BaseLoadResponse): ChampionSaveEntry | null =>
+  championsOf(save).find(
+    (champion) => statusOf(champion) === ChampionStatus.EGG && entryOfChampion(champion)?.kind === "basic",
   ) ?? null;
 
 /** Every champion frozen in the Chamber. */
@@ -160,7 +174,26 @@ export type CageView =
   | { readonly kind: "building" }
   /** No champion in the cage: the raise cards, and which types are frozen. */
   | { readonly kind: "empty"; readonly choices: readonly RaiseChoice[] }
+  /** An egg waiting to hatch: no champion yet. */
+  | { readonly kind: "egg"; readonly egg: EggView }
   | { readonly kind: "active"; readonly view: ChampionView };
+
+/** The egg in the cage. */
+export interface EggView {
+  readonly entry: ChampionEntry;
+  /** Unix seconds it hatches (`ft`). */
+  readonly hatchAt: number;
+  /** Seconds left, 0 once its time has come (the server's next answer hatches it). */
+  readonly left: number;
+}
+
+/** The egg's view at `now`, or null for an entry that is not a known champion. */
+export const eggView = (egg: ChampionSaveEntry, now: number): EggView | null => {
+  const entry = entryOfChampion(egg);
+  if (!entry) return null;
+  const hatchAt = numberOf(egg.ft);
+  return { entry, hatchAt, left: Math.max(0, hatchAt - now) };
+};
 
 /** One raise card. */
 export interface RaiseChoice {
@@ -306,6 +339,9 @@ export const cageView = (save: BaseLoadResponse, now: number): CageView => {
   const active = activeChampion(save);
   const view = active ? championView(save, active, now) : null;
   if (view) return { kind: "active", view };
+  const egg = cageEgg(save);
+  const waiting = egg ? eggView(egg, now) : null;
+  if (waiting) return { kind: "egg", egg: waiting };
   const frozen = new Set(frozenChampions(save).map((champion) => Math.trunc(numberOf(champion.t))));
   return {
     kind: "empty",
@@ -328,6 +364,8 @@ export type ChamberView =
       readonly cage: "none" | "building" | "ready";
       /** The champion in the cage, which could be frozen. */
       readonly active: ChampionView | null;
+      /** The egg in the cage: nothing thaws into the cage until it is cancelled or hatches. */
+      readonly egg: EggView | null;
       readonly frozen: readonly FrozenView[];
     };
 
@@ -361,11 +399,13 @@ export const chamberView = (save: BaseLoadResponse, now: number): ChamberView =>
   if (chamber.building) return { kind: "building" };
   const cage = buildingOfType(save, CHAMPION_CAGE_TYPE);
   const active = activeChampion(save);
+  const egg = cageEgg(save);
   return {
     kind: "ready",
     damaged: damagedEntry(save, chamber.id),
     cage: !cage ? "none" : cage.building ? "building" : "ready",
     active: active ? championView(save, active, now) : null,
+    egg: egg ? eggView(egg, now) : null,
     frozen: frozenChampions(save).map((champion) => {
       const entry = entryOfChampion(champion)!;
       const level = levelOf(champion, entry);
@@ -403,6 +443,7 @@ export const thawGate = (view: ChamberView, special = false): string | null => {
   if (view.cage === "none") return "Build a Champion Cage first.";
   if (view.cage === "building") return "Your Champion Cage is still being built.";
   if (view.active && !special) return `Freeze ${view.active.name} first: the cage holds one champion at a time.`;
+  if (view.egg && !special) return `Your cage holds a ${view.egg.entry.name} egg. Cancel it before you thaw a champion.`;
   return null;
 };
 

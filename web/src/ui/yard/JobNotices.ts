@@ -121,6 +121,22 @@ const STARTER_BASE = "starterBase";
 const STARVED = "starve";
 
 /**
+ * A champion's egg hatched, a day after it was raised (owner 2026-10-20;
+ * `server/src/services/yard/catchUpChampions.ts`): "Your Drull has hatched!",
+ * a sentence of its own, ahead of what finished.
+ */
+const CHAMPION_HATCH = "championHatch";
+
+/** The hatch sentence. */
+const championHatchGroup = (job: CompletedJob): JobNoticeGroup => ({
+  kind: CHAMPION_HATCH,
+  heading: "Your ",
+  items: [{ label: championEntry(String(job.id))?.name ?? "champion", buildingId: null }],
+  tail: " has hatched!",
+  standalone: true,
+});
+
+/**
  * Monsters the catch-up moved from a hatchery into housing, one entry per
  * type with its `count` (`server/src/services/yard/catchUpMonsters.ts`). A
  * busy yard hatches one every few seconds, so a live answer's hatches raise
@@ -279,9 +295,10 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
 export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNoticeGroup[] => {
   const starters = completed.filter((job) => job.kind === STARTER_BASE).map(starterGroup);
   const notices = completed.filter(isServerNotice).map(serverNoticeGroup);
+  const hatches = completed.filter((job) => job.kind === CHAMPION_HATCH).map(championHatchGroup);
   const byKind = new Map<string, JobNoticeItem[]>();
   for (const job of completed) {
-    if (job.kind === STARTER_BASE || isServerNotice(job)) continue;
+    if (job.kind === STARTER_BASE || job.kind === CHAMPION_HATCH || isServerNotice(job)) continue;
     const items = byKind.get(job.kind) ?? [];
     items.push(labelOf(job));
     byKind.set(job.kind, items);
@@ -293,6 +310,7 @@ export const groupCompletedJobs = (completed: readonly CompletedJob[]): JobNotic
   return [
     ...starters,
     ...notices,
+    ...hatches,
     ...[...byKind].map(([kind, items]) =>
       kind === MAP_ROOM_ADDED
         ? { kind, heading: "A ", items, tail: " was added to your yard" }
@@ -316,6 +334,13 @@ export const noticeText = (group: JobNoticeGroup): string => {
   return group.tail === undefined ? `${group.heading}: ${items}` : `${group.heading}${items}${group.tail}`;
 };
 
+/** What goes after a sentence before the next: ". ", or a space after one that ends itself ("…hatched!"). */
+const after = (text: string): string => (/[.!?]$/.test(text) ? " " : ". ");
+
+/** Sentences joined by {@link after}. */
+const sentences = (texts: readonly string[]): string =>
+  texts.reduce((line, text, index) => (index === 0 ? text : line + after(line) + text), "");
+
 /** A heading after the away lead-in, where it no longer starts the sentence. */
 const awayHeading = (group: JobNoticeGroup): JobNoticeGroup => ({
   ...group,
@@ -332,7 +357,7 @@ export const awayNoticeText = (groups: readonly JobNoticeGroup[]): string => {
   const standalone = groups.filter((group) => group.standalone).map(noticeText);
   const away = groups.filter((group) => !group.standalone);
   const rest = away.map((group) => noticeText(awayHeading(group))).join("; ");
-  return [...standalone, ...(away.length === 0 ? [] : [AWAY_PREFIX + rest])].join(". ");
+  return sentences([...standalone, ...(away.length === 0 ? [] : [AWAY_PREFIX + rest])]);
 };
 
 /** Whether a line is one answer's kind of job (`jobs`) or a whole load's (`away`). */
@@ -344,7 +369,7 @@ export type JobLineKind = "jobs" | "away";
  */
 export const jobLineText = (kind: JobLineKind, completed: readonly CompletedJob[]): string => {
   const groups = groupCompletedJobs(completed);
-  return kind === "away" ? awayNoticeText(groups) : groups.map(noticeText).join(". ");
+  return kind === "away" ? awayNoticeText(groups) : sentences(groups.map(noticeText));
 };
 
 /**
@@ -363,11 +388,11 @@ export const jobLine = (
   const standalone = kind === "away" ? groups.filter((group) => group.standalone) : groups;
   const away = kind === "away" ? groups.filter((group) => !group.standalone) : [];
   standalone.forEach((group, index) => {
-    if (index > 0) line.append(". ");
+    if (index > 0) line.append(after(line.textContent ?? ""));
     appendGroup(line, group, select);
   });
   if (away.length > 0) {
-    line.append(standalone.length > 0 ? `. ${AWAY_PREFIX}` : AWAY_PREFIX);
+    line.append(standalone.length > 0 ? `${after(line.textContent ?? "")}${AWAY_PREFIX}` : AWAY_PREFIX);
     away.forEach((group, index) => {
       if (index > 0) line.append("; ");
       appendGroup(line, awayHeading(group), select);

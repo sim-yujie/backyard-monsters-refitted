@@ -116,3 +116,24 @@ describe("no client can send a brain (issue #219)", () => {
     expect(kept[1]).not.toHaveProperty("bs");
   });
 });
+
+describe("no client list can hatch, shorten or lay an egg", () => {
+  const egg = (t: number, ft = 2_000_000_000) => champion(t, { status: 3, ft, hp: 12_000 });
+
+  test("an old or new client's list parses an egg (status 3) like any entry", () => {
+    const parsed = ChampionListSchema.parse(JSON.stringify([egg(2), champion(5)]))!;
+    expect(parsed.map((one) => one.status)).toEqual([3, champion(5).status]);
+  });
+
+  test("a stored egg stays as stored, whatever the client sends of its type", () => {
+    const stored = [egg(2)];
+    expect(withStoredBrains(stored, [champion(2, { status: 0, ft: 1 })])).toEqual(stored);
+    expect(withStoredBrains(stored, [egg(2, 1)])).toEqual(stored);
+    // Left out of the list, it is still kept.
+    expect(withStoredBrains(stored, [champion(5)])).toEqual([champion(5), egg(2)]);
+  });
+
+  test("an egg the client names that is not stored is dropped", () => {
+    expect(withStoredBrains([champion(1)], [champion(1), egg(3, 1)])).toEqual([champion(1)]);
+  });
+});

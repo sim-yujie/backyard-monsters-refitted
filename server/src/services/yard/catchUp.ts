@@ -4,7 +4,12 @@ import {
   type CatchUpBuildingsSave,
   type StoreItemJob,
 } from "./catchUpBuildings.js";
-import { catchUpChampions, type CatchUpChampionsSave, type StarveJob } from "./catchUpChampions.js";
+import {
+  catchUpChampions,
+  type CatchUpChampionsSave,
+  type ChampionHatchJob,
+  type StarveJob,
+} from "./catchUpChampions.js";
 import { catchUpDamage, type CatchUpDamageSave } from "./catchUpDamage.js";
 import { catchUpHarvesters, type CatchUpHarvestersSave } from "./catchUpHarvesters.js";
 import {
@@ -57,7 +62,7 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * | 3 | `catchUpRepairs.ts` — repairs heal; runs before the buildings, whose paused countdowns it restarts at the repair's end | 3 |
  * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpMushrooms.ts` | 3 |
  * | 4 | `catchUpTraining.ts` — academy training (legacy relative `time` made absolute once); `catchUpResearch`, lab research | 4 |
- * | 5 | `catchUpChampions.ts` — champions in the cage heal and starve | 5 |
+ * | 5 | `catchUpChampions.ts` — the egg in the cage hatches; champions in the cage heal and starve | 5 |
  * | 6 | `catchUpDamage.ts` — `damage` follows the repairs down (#182 B) | — |
  * | 7 | `derivedLevels.ts` `syncBaseValue` — `basevalue` rises to the finished buildings' worth (#209) | — |
  *
@@ -101,7 +106,8 @@ export type CompletedJob =
   | ResearchJob
   | RepairJob
   | StarterBaseJob
-  | StarveJob;
+  | StarveJob
+  | ChampionHatchJob;
 
 /** The slice of a save the catch-up reads and writes. */
 export interface CatchUpSave

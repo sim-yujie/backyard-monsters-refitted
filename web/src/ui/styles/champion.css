@@ -288,6 +288,37 @@
   font-size: var(--text-sm);
 }
 
+/* ── Egg ─────────────────────────────────────────────────────────────────── */
+
+.champion__header--egg {
+  flex-direction: column;
+  text-align: center;
+}
+
+.champion__header--egg .champion__who {
+  align-items: center;
+}
+
+.champion__egg-picture {
+  width: 120px;
+  height: 120px;
+  flex: none;
+  object-fit: contain;
+}
+
+.champion__egg-time {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.champion__part--cancel-egg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 /* ── Raise cards ─────────────────────────────────────────────────────────── */
 
 .champion__cards {
@@ -325,6 +356,11 @@
 
 .champion-card__name {
   font-size: var(--text-md);
+}
+
+.champion-card__hatch {
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 .champion-card__role {

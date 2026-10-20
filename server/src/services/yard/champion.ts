@@ -29,14 +29,21 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * (`server/src/schemas/ChampionSchema.ts`): one entry per champion type, `l`
  * level 1-6, `hp`, `fd` feeds at this level, `fb` food-bonus rank 0-3, `ft` the
  * feed time (absolute while in the cage), `status` 0 in the cage, 1 frozen,
- * 2 juiced. Only one basic champion (Gorgo, Drull, Fomor, Korath) is in the
- * cage at a time (`CREATURES._guardian`, `client/scripts/CREATURES.as:219-239`);
+ * 2 juiced, 3 an egg in the cage (`ft` then its hatch time). Only one basic
+ * champion (Gorgo, Drull, Fomor, Korath), or its egg, is in the cage at a time (`CREATURES._guardian`, `client/scripts/CREATURES.as:219-239`);
  * every action here works on that one.
  *
  * **Raise** (`CHAMPIONSELECTPOPUP.RaiseGuard`, `CHAMPIONSELECTPOPUP.as:72-90`)
- * is free and only for Gorgo, Drull and Fomor (D17): level 1, full health, fed
- * for 23 hours. Refused while a champion is in the cage or while that type is
- * frozen in the Chamber.
+ * is free and only for Gorgo, Drull and Fomor (D17). It lays an EGG (owner,
+ * 2026-10-20): status 3, `ft` the hatch time a full day ahead, every time,
+ * with no way to hurry it (no Shiny, item or friend help: those all work on
+ * building countdowns, never on the champion list). The catch-up hatches it
+ * (`catchUpChampions.ts`): level 1, full health, fed for 23 hours from the
+ * hatch. Refused while a champion or an egg is in the cage or while that type
+ * is frozen in the Chamber. **Cancel egg** takes the egg out, so another can
+ * be picked; the new egg takes its own full day. While the egg waits nothing
+ * defends, and feed, evolve, heal, rename, juice and freeze are refused
+ * (`409 eggInCage`); so is thawing a champion into the cage.
  *
  * **Feed** (`CHAMPIONCAGE.FeedGuardian`, `CHAMPIONCAGE.as:682-877`), only once
  * the champion is hungry (`ft` has passed), except the top level's Shiny feed:
@@ -75,7 +82,10 @@ export const CHAMPION_CAGE_TYPE = 114;
 export const CHAMPION_CHAMBER_TYPE = 119;
 
 /** `ChampionBase` statuses (`client/scripts/com/monsters/monsters/champions/ChampionBase.as:26-36`). */
-export const CHAMPION_STATUS = { ACTIVE: 0, FROZEN: 1, JUICED: 2 } as const;
+export const CHAMPION_STATUS = { ACTIVE: 0, FROZEN: 1, JUICED: 2, EGG: 3 } as const;
+
+/** How long an egg takes to hatch: one day, every time (owner, 2026-10-20). */
+export const EGG_HATCH_SECONDS = 24 * 60 * 60;
 
 /** The longest name `champion/rename` takes. */
 export const CHAMPION_NAME_MAX = 20;
@@ -157,6 +167,16 @@ export const buildingOfType = (
   return null;
 };
 
+/** Index of the basic champion's egg in the cage, or -1. */
+export const eggIndex = (champions: readonly ChampionData[]): number =>
+  champions.findIndex(
+    (champion) => statusOf(champion) === CHAMPION_STATUS.EGG && entryOf(champion)?.kind === "basic"
+  );
+
+/** `409 eggInCage`: what every cage action says while the egg has not hatched. */
+export const eggInCageErr = (message = "Your egg has not hatched yet.") =>
+  yardRefusedErr("eggInCage", message);
+
 /** The finished Champion Cage: `409 noCage` without one, `409 busy` while it is being built. */
 export const cageOrThrow = (save: ChampionSave): BuildingData => {
   const cage = buildingOfType(save, CHAMPION_CAGE_TYPE);
@@ -182,7 +202,10 @@ export const activeIndexOfType = (champions: readonly ChampionData[], type?: num
 const activeOrThrow = (save: ChampionSave, type?: number) => {
   const champions = readChampions(save.champion);
   const index = activeIndexOfType(champions, type);
-  if (index < 0) throw yardRefusedErr("noChampion", "There is no champion in your cage.");
+  if (index < 0) {
+    if (championEntry(type ?? 0)?.kind !== "special" && eggIndex(champions) >= 0) throw eggInCageErr();
+    throw yardRefusedErr("noChampion", "There is no champion in your cage.");
+  }
   const champion = champions[index]!;
   return { champions, index, champion, entry: entryOf(champion)! };
 };
@@ -216,11 +239,13 @@ const evolved = (champion: ChampionData, entry: ChampionEntry, level: number, no
 };
 
 /**
- * `POST /bm/yard/champion/raise`: hatch a champion at the cage.
+ * `POST /bm/yard/champion/raise`: lay a champion's egg in the cage; it hatches
+ * {@link EGG_HATCH_SECONDS} later.
  *
  * Refusals, in order: `409 notRaisable { type }` (Korath and Krallen, D17);
  * `409 noCage` / `409 busy`; `409 championInCage` while a champion is in the
- * cage; `409 frozen { type }` while that champion is frozen in the Chamber
+ * cage; `409 eggInCage { type, hatchAt }` while an egg is; `409 frozen { type }`
+ * while that champion is frozen in the Chamber
  * (`championchamber_alreadyfrozen`, `CHAMPIONSELECTPOPUP.as:77-80`).
  *
  * @param type - Champion type 1..5.
@@ -237,6 +262,13 @@ export const planChampionRaise = (save: ChampionSave, type: number, now: number)
   if (activeChampionIndex(champions) >= 0) {
     throw yardRefusedErr("championInCage", "Your cage already holds a champion.");
   }
+  const egg = eggIndex(champions);
+  if (egg >= 0) {
+    throw yardRefusedErr("eggInCage", "Your cage already holds an egg. Cancel it to pick another champion.", {
+      type: Math.trunc(numberOf(champions[egg]!.t)),
+      hatchAt: numberOf(champions[egg]!.ft),
+    });
+  }
   const existing = champions.findIndex((champion) => Math.trunc(numberOf(champion.t)) === entry.t);
   if (existing >= 0 && statusOf(champions[existing]!) === CHAMPION_STATUS.FROZEN) {
     throw yardRefusedErr("frozen", `Your ${entry.name} is frozen in the Champion Chamber. Thaw it instead.`, {
@@ -245,22 +277,72 @@ export const planChampionRaise = (save: ChampionSave, type: number, now: number)
   }
 
   // A juiced (or otherwise gone) champion of the same type is replaced, as the
-  // original re-used its entry (`RaiseGuard`, `:82-85`, then `export`).
+  // original re-used its entry (`RaiseGuard`, `:82-85`, then `export`). The
+  // egg already holds the level-1 champion it hatches into; `ft` is the hatch.
   const champion: ChampionData = {
     t: entry.t,
     hp: atChampionLevel(entry.health, 1),
     l: 1,
-    ft: now + entry.feedTime,
+    ft: now + EGG_HATCH_SECONDS,
     fd: 0,
     fb: 0,
     pl: entry.powerLevel,
-    status: CHAMPION_STATUS.ACTIVE,
+    status: CHAMPION_STATUS.EGG,
   };
   if (existing >= 0) champions[existing] = champion;
   else champions.push(champion);
 
   const report: ChampionReport = { champion };
   return { report, slices: { champion: champions } };
+};
+
+/**
+ * `POST /bm/yard/champion/cancelegg`: take the egg out of the cage, so the
+ * player can pick a champion again. Nothing is paid back (raising is free) and
+ * the next egg takes its own full day.
+ *
+ * Refusals: `409 noCage` / `409 busy`; `409 noEgg` when the cage holds none.
+ */
+export const planChampionCancelEgg = (save: ChampionSave) => {
+  cageOrThrow(save);
+  const champions = readChampions(save.champion);
+  const index = eggIndex(champions);
+  if (index < 0) throw yardRefusedErr("noEgg", "There is no egg in your cage.");
+  const [egg] = champions.splice(index, 1);
+
+  const report: ChampionReport = { champion: egg! };
+  return { report, slices: { champion: champions } };
+};
+
+/**
+ * Hatches the egg in `champions` once its time has come: the level-1 champion
+ * it holds, at the health it holds (full, unless something took some), fed for
+ * one interval from the hatch, not from now. Mutates `champions`.
+ *
+ * @returns The hatch time and the champion's catalogue entry, or null when
+ *   nothing hatched.
+ */
+export const hatchDueEgg = (
+  champions: ChampionData[],
+  now: number
+): { at: number; entry: ChampionEntry } | null => {
+  const index = eggIndex(champions);
+  if (index < 0) return null;
+  const egg = champions[index]!;
+  const hatchAt = numberOf(egg.ft);
+  if (hatchAt > now) return null;
+  const entry = entryOf(egg)!;
+  const hatched: ChampionData = {
+    ...egg,
+    l: 1,
+    fd: 0,
+    fb: 0,
+    ft: hatchAt + entry.feedTime,
+    status: CHAMPION_STATUS.ACTIVE,
+  };
+  hatched.hp = Math.min(Math.max(0, numberOf(egg.hp)), maxHealthOf(hatched, entry));
+  champions[index] = hatched;
+  return { at: hatchAt, entry };
 };
 
 /**

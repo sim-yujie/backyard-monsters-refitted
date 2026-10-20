@@ -9,6 +9,8 @@ import {
   cageOrThrow,
   CHAMPION_CHAMBER_TYPE,
   CHAMPION_STATUS,
+  eggInCageErr,
+  eggIndex,
   entryOf,
   isHungry,
   maxHealthOf,
@@ -37,6 +39,11 @@ import { yardRefusedErr } from "./yardErrors.js";
  * cage, `ft + now`, status 0. Refused while the chamber is damaged
  * (`bdg_chamber_damaged`) or a champion is in the cage
  * (`bdg_chamber_freeze`).
+ *
+ * **Eggs** (owner, 2026-10-20; `champion.ts`): an egg cannot be frozen, and
+ * no basic champion thaws while an egg is in the cage (`409 eggInCage`):
+ * cancel the egg first. Krallen is beside the cage either way, so neither
+ * rule touches him.
  *
  * **Storage** is unchanged from the original: the `champion` list is the
  * truth, and the chamber's own `fz` keeps a JSON string of the frozen
@@ -98,14 +105,20 @@ export interface ChamberReport {
 /**
  * `POST /bm/yard/champion/freeze`: the champion in the cage into the chamber.
  *
- * Refusals, in order: `409 noChamber` / `409 busy`; `409 noChampion`;
- * `409 injured { hp, max }`; `409 hungry { feedTime }`.
+ * Refusals, in order: `409 noChamber` / `409 busy`; `409 eggInCage` (an egg
+ * cannot be frozen); `409 noChampion`; `409 injured { hp, max }`; `409 hungry
+ * { feedTime }`.
  */
 export const planChampionFreeze = (save: ChampionSave, now: number, type?: number) => {
   const { key, building } = chamberOrThrow(save);
   const champions = readChampions(save.champion);
   const index = activeIndexOfType(champions, type);
-  if (index < 0) throw yardRefusedErr("noChampion", "There is no champion in your cage.");
+  if (index < 0) {
+    if (championEntry(type ?? 0)?.kind !== "special" && eggIndex(champions) >= 0) {
+      throw eggInCageErr("An egg cannot be frozen. Wait for it to hatch.");
+    }
+    throw yardRefusedErr("noChampion", "There is no champion in your cage.");
+  }
   const champion = champions[index]!;
   const entry = entryOf(champion)!;
 
@@ -141,7 +154,7 @@ export const planChampionFreeze = (save: ChampionSave, now: number, type?: numbe
  *
  * Refusals, in order: `409 noChamber` / `409 busy`; `409 damaged { id }` (the
  * chamber); `409 noCage` / `409 busy` (the cage); `409 championInCage`;
- * `409 notFrozen { type }`.
+ * `409 eggInCage`; `409 notFrozen { type }`.
  *
  * @param type - Champion type 1..5.
  */
@@ -158,6 +171,9 @@ export const planChampionThaw = (save: ChampionSave, type: number, now: number) 
   // Krallen waits beside the basic champion, so only a basic thaw needs the cage empty.
   if (championEntry(type)?.kind !== "special" && activeChampionIndex(champions) >= 0) {
     throw yardRefusedErr("championInCage", "Freeze the champion in your cage before you thaw another.");
+  }
+  if (championEntry(type)?.kind !== "special" && eggIndex(champions) >= 0) {
+    throw eggInCageErr("Your cage holds an egg. Cancel it before you thaw a champion.");
   }
   const index = champions.findIndex(
     (champion) =>
