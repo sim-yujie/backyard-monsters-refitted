@@ -8,7 +8,7 @@ export const tiers = [
     name: "Lab Assistant",
     price: "US$5",
     blurb: "Lend a hand in the lab and help pay the server bills.",
-    perks: ["One vote in the monthly feature poll", "Your name on the Support page"],
+    perks: ["One vote in the monthly feature poll", "Your name on the Thank-you page"],
   },
   {
     name: "Lab Partner",
