@@ -260,6 +260,29 @@ describe("the punchy blast in a real attack (feat/punchy-trial)", () => {
     expect(splashes).toBeGreaterThan(0);
   });
 
+  it("a crowd of banditos: their rings share one drawing and come from a pool (fix/bandito-lag)", () => {
+    const crowd = { C7: 24 };
+    const { session, layer } = setUp({
+      ...SCENES.bandito,
+      monsters: crowd,
+      ranks: { C7: 1 },
+      fling: { x: 100, y: 100, monsters: crowd },
+    });
+    let swings = 0;
+    let most = 0;
+    for (let step = 0; step < TICKS_PER_SECOND * 10 && !session.ended; step += 1) {
+      const events = frame(session, layer);
+      swings += events.filter((event) => event.kind === "splash" && event.moveId === "C7").length;
+      most = Math.max(most, layer.splatCount);
+    }
+    expect(swings).toBeGreaterThan(48);
+    // One drawing for the Bandito's ring, and no more ring objects than were ever alive at once.
+    expect(layer.groundRings.shapeCount).toBe(1);
+    // (A frame's new swings come in before its old rings go back: one per Bandito at most.)
+    expect(layer.groundRings.madeCount).toBeLessThanOrEqual(most + crowd.C7);
+    expect(layer.groundRings.madeCount).toBeLessThan(swings / 4);
+  });
+
   it("wormzer: a light blast each time it pops up to bite, none on its burst", () => {
     const { session, layer, root } = setUp(SCENES.wormzer);
     const { bites, splashes } = watchBites(session, layer, 12);
