@@ -140,18 +140,38 @@ export class FriendsBar {
     if (!this.element.isConnected) return;
     const total = this.store.friends.length;
     const before = this.pageSize;
+    // Showing everyone resets the page, and a short last page shrinks the strip and lands here again,
+    // so keep the first friend shown on the page it falls on.
+    const first = this.page * before;
     this.pageSize = Math.max(1, total);
     this.render();
-    const room = this.strip.clientWidth;
-    if (room <= 0) {
+    if (this.strip.clientWidth <= 0) {
       this.pageSize = before;
+      this.page = Math.floor(first / before);
       this.render();
       return;
     }
+    const room = Math.min(this.strip.clientWidth, this.roomBetweenEdges());
     // One slot is the "+"; the arrows take room too once there is more than one page.
     const fits = (width: number): number => Math.max(1, Math.floor((width + SLOT_GAP_PX) / SLOT_PX) - 1);
     this.pageSize = fits(room) >= total ? Math.max(1, total) : fits(room - 2 * ARROW_PX);
+    this.page = Math.floor(first / this.pageSize);
     this.render();
+  }
+
+  /**
+   * The strip's room from the bar's `left` and `right` edges in its parent, less the bar's own padding
+   * and border. Should the CSS ever stop squeezing the strip, the bar still pages instead of running
+   * under the dock's buttons. Unlimited when the edges are not set.
+   */
+  private roomBetweenEdges(): number {
+    const style = getComputedStyle(this.element);
+    const left = parseFloat(style.left);
+    const right = parseFloat(style.right);
+    const parentWidth = this.element.parentElement?.clientWidth ?? 0;
+    if (!Number.isFinite(left) || !Number.isFinite(right) || parentWidth <= 0) return Infinity;
+    const chrome = this.element.offsetWidth - this.strip.clientWidth;
+    return parentWidth - left - right - Math.max(0, chrome);
   }
 
   private openFriends(tab: FriendsTabName): void {
@@ -170,6 +190,8 @@ export class FriendsBar {
     this.page = view.page;
     this.closeCard();
     this.strip.replaceChildren(this.plusSlot(ordered.length === 0), ...view.items.map((f) => this.portrait(f)));
+    // A full page wide while paging, so a short last page does not move the arrows.
+    this.strip.style.width = view.pages > 1 ? `${(this.pageSize + 1) * SLOT_PX - SLOT_GAP_PX}px` : "";
     this.prev.hidden = view.pages <= 1;
     this.next.hidden = view.pages <= 1;
     this.prev.disabled = view.page === 0;

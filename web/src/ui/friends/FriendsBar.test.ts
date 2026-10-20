@@ -20,6 +20,7 @@ const slots = () => [...document.querySelectorAll<HTMLElement>(".friends-bar__sl
 const names = () => slots().map((s) => s.querySelector(".friends-bar__name")!.textContent);
 
 afterEach(() => {
+  vi.restoreAllMocks();
   document.body.replaceChildren();
 });
 
@@ -80,6 +81,60 @@ describe("paging", () => {
     room = 1000;
     window.dispatchEvent(new Event("resize"));
     expect(names()).toHaveLength(10);
+    vi.restoreAllMocks();
+  });
+
+  it("pages 100 friends in a narrow space even when the strip grows to fit them all", async () => {
+    // The desktop bug: the strip grew to every portrait (about 6,900px) and ran under the dock's buttons.
+    const parentWidth = 1280;
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("friends-bar__strip")) return this.children.length * 68 - 4;
+      return this === document.body ? parentWidth : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      const strip = this.querySelector<HTMLElement>(".friends-bar__strip");
+      return this.classList.contains("friends-bar") && strip ? strip.clientWidth + 18 : 0;
+    });
+    const many = Array.from({ length: 100 }, (_, i) => friend(i + 1, { level: 200 - i, username: `P${i + 1}` }));
+    const store = new FriendsStore({ api: fixtureApi({ list: fixtureList(many) }).api });
+    await store.refresh();
+    const bar = new FriendsBar({ store, openFriends: vi.fn() });
+    bar.element.style.left = "140px";
+    bar.element.style.right = "500px";
+    bar.mount(document.body);
+    // 1280 - 140 - 500 - 18 = 622px of strip: the "+", the arrows and 7 portraits.
+    expect(names()).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7"]);
+    const [prev, next] = document.querySelectorAll<HTMLButtonElement>(".friends-bar__arrow");
+    expect(prev!.hidden || next!.hidden).toBe(false);
+    next!.click();
+    expect(names()[0]).toBe("P8");
+    for (let i = 0; i < 20; i++) next!.click();
+    expect(names()).toEqual(["P99", "P100"]);
+    expect(next!.disabled).toBe(true);
+    // The short last page shrinks the strip, which measures again: it must stay on that page.
+    window.dispatchEvent(new Event("resize"));
+    expect(names()).toEqual(["P99", "P100"]);
+    expect(document.querySelector<HTMLElement>(".friends-bar__strip")!.style.width).toBe(`${8 * 68 - 4}px`);
+    vi.restoreAllMocks();
+  });
+
+  it("shows 1 or 5 friends with no arrows when they fit", async () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("friends-bar__strip")) return this.children.length * 68 - 4;
+      return this === document.body ? 1600 : 0;
+    });
+    for (const count of [1, 5]) {
+      const list = Array.from({ length: count }, (_, i) => friend(i + 1));
+      const store = new FriendsStore({ api: fixtureApi({ list: fixtureList(list) }).api });
+      await store.refresh();
+      const bar = new FriendsBar({ store, openFriends: vi.fn() });
+      bar.element.style.left = "140px";
+      bar.element.style.right = "500px";
+      bar.mount(document.body);
+      expect(names()).toHaveLength(count);
+      expect([...document.querySelectorAll<HTMLElement>(".friends-bar__arrow")].every((a) => a.hidden)).toBe(true);
+      bar.destroy();
+    }
     vi.restoreAllMocks();
   });
 

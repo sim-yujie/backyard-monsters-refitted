@@ -224,6 +224,14 @@
       opacity 0.18s ease;
   }
 
+  /* Arrows at the strip's edges are easy to miss on a small screen, so they get a frame and a bigger mark. */
+  .friends-bar__arrow {
+    border: 1px solid var(--colour-border-strong);
+    background: var(--colour-surface-raised);
+    font-size: 22px;
+    font-weight: 700;
+  }
+
   .friends-bar__strip {
     flex: 1;
     padding: var(--space-1);
@@ -255,7 +263,8 @@
     right: var(--friends-bar-right);
     left: var(--friends-bar-left);
     width: fit-content;
-    max-width: none;
+    /* fit-content alone grows to every portrait, so cap it at the room between the buttons. */
+    max-width: calc(100% - var(--friends-bar-left) - var(--friends-bar-right));
     margin-inline: auto;
     transform: none;
   }
