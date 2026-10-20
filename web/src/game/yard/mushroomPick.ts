@@ -1,5 +1,7 @@
 import type { MushroomPickReport } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
+import { notePumpkins } from "@/game/events/pumpkinHunt";
+import { currentSeason, type Season } from "@/game/season";
 import { freeWorkers } from "./workers";
 import type { YardActionResult, YardStoreAction, YardStoreReader } from "./YardStore";
 import type { YardMushroom } from "./yardModel";
@@ -60,6 +62,17 @@ export const ORDINARY_QUIPS: readonly string[] = [
   "These things grow like weeds.",
   "Plain old fungus.",
 ];
+
+/** The same quips for a Halloween pumpkin (`game/season.ts`). */
+export const PUMPKIN_QUIPS: readonly string[] = [
+  "Mmmm, pumpkin pie.",
+  "Another one for the pumpkin patch.",
+  "Just a plain old pumpkin.",
+];
+
+/** "12 pumpkins found." for the pick's toast during the pumpkin hunt. */
+export const pumpkinsFound = (count: number): string =>
+  `${count.toLocaleString("en-US")} ${count === 1 ? "pumpkin" : "pumpkins"} found.`;
 
 /**
  * A mushroom is known by where it stands. Its index is only its place in the
@@ -144,18 +157,21 @@ export class MushroomPicker {
   private readonly view: MushroomPickView;
   private readonly timers: PickTimers;
   private readonly random: () => number;
+  /** The season now, for the quips (`game/season.ts`). */
+  private readonly season: () => Season;
   /** Mushrooms shaking or in flight, by {@link mushroomKey}: a second tap on one is ignored. */
   private readonly busy = new Set<string>();
 
   constructor(
     store: MushroomPickStore,
     view: MushroomPickView,
-    options: { timers?: PickTimers; random?: () => number } = {},
+    options: { timers?: PickTimers; random?: () => number; season?: () => Season } = {},
   ) {
     this.store = store;
     this.view = view;
     this.timers = options.timers ?? realTimers;
     this.random = options.random ?? Math.random;
+    this.season = options.season ?? currentSeason;
   }
 
   /** Whether this mushroom is shaking or its pick is in flight. */
@@ -188,11 +204,16 @@ export class MushroomPicker {
             this.view.stop(mushroom);
             if (!result.ok) {
               this.view.refused(result.refusal.message);
-            } else if (result.report.golden) {
+              return;
+            }
+            const pumpkins = result.report.pumpkins;
+            if (pumpkins !== undefined) notePumpkins(pumpkins);
+            if (result.report.golden) {
               this.view.golden(result.report.shiny);
             } else {
-              const quip = ORDINARY_QUIPS[Math.floor(this.random() * ORDINARY_QUIPS.length)];
-              this.view.ordinary(quip ?? ORDINARY_QUIPS[0]!);
+              const quips = this.season() === "halloween" ? PUMPKIN_QUIPS : ORDINARY_QUIPS;
+              const quip = quips[Math.floor(this.random() * quips.length)] ?? quips[0]!;
+              this.view.ordinary(pumpkins === undefined ? quip : `${quip} ${pumpkinsFound(pumpkins)}`);
             }
           })
           .finally(() => {

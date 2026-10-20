@@ -88,17 +88,49 @@ export const HALLOWEEN_2026_CALENDAR: readonly CalendarDay[] = [
   },
 ];
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * HALLOWEEN 2026 PUMPKIN HUNT LADDER: what picking pumpkins earns.
+ * Tiers set by the owner (2026-10-20). During the event
+ * the yard's mushrooms grow as pumpkins, about one an hour
+ * (`services/yard/season.ts`), and every pumpkin a player picks adds one to
+ * the counter (`controllers/yard/mushrooms.ts`). Each tier is claimed once,
+ * by hand, on the Events page. `need` is the pumpkin count.
+ * r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 111 is the
+ * Mini-Pumpkin, 110 the D.A.V.E. Pumpkin.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
+  /* 10 pumpkins  */ { need: 10, rewards: [{ kind: "shiny", amount: 10 }] },
+  /* 25 pumpkins  */ { need: 25, rewards: [{ kind: "resources", amounts: { r1: 25_000, r2: 25_000, r3: 25_000, r4: 25_000 } }] },
+  /* 50 pumpkins  */ {
+    need: 50,
+    rewards: [
+      { kind: "decoration", type: 111, count: 2 },
+      { kind: "shiny", amount: 20 },
+    ],
+  },
+  /* 100 pumpkins */ {
+    need: 100,
+    rewards: [
+      { kind: "decoration", type: 110, count: 1 },
+      { kind: "shiny", amount: 30 },
+    ],
+  },
+];
+
 /** Every event, past, present and future. Append new ones at the end. */
 export const EVENTS: readonly EventDefinition[] = [
   {
     id: "halloween-2026",
     title: "Halloween",
-    text: "Spooky season is here! Log in each day to claim a treat from the calendar.",
+    text: "Spooky season is here! Log in each day to claim a treat, and pick the pumpkins growing in your yard for extra prizes.",
     kind: "halloween",
     startsAt: "2026-10-28T00:00:00Z",
     endsAt: "2026-11-11T00:00:00Z",
     banner: "/events/halloween-2026-banner.png",
     calendar: HALLOWEEN_2026_CALENDAR,
+    ladder: { label: "Pumpkins found", tiers: HALLOWEEN_2026_LADDER },
   },
 ];
 

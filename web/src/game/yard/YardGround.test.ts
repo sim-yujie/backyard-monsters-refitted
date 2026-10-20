@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
-import type { Graphics } from "pixi.js";
+import { describe, expect, it, vi } from "vitest";
+import { Assets, type Graphics } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import { readYard } from "./yardModel";
 import { YardGround } from "./YardGround";
@@ -43,5 +43,23 @@ describe("YardGround", () => {
     ground.layout(bounds, 1, "open");
     expect(layers(ground).boundary.getLocalBounds().width).toBe(0);
     ground.destroy();
+  });
+
+  it("at Halloween fetches the dusky tile set instead of the grass", async () => {
+    const load = vi.spyOn(Assets, "load").mockRejectedValue(new Error("offline"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const ground = new YardGround();
+    ground.layout(bounds, 1, "plot");
+
+    await ground.loadTiles();
+    ground.setSeason("halloween");
+    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(14));
+
+    const roots = load.mock.calls.map(([url]) => String(url).replace(/[^/]+$/, ""));
+    expect(roots.slice(0, 7).every((root) => root === "/assets/yardbg/grass/")).toBe(true);
+    expect(roots.slice(7).every((root) => root === "/assets/yardbg/spooky/")).toBe(true);
+    ground.destroy();
+    load.mockRestore();
+    warn.mockRestore();
   });
 });

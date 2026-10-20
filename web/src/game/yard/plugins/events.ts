@@ -1,9 +1,12 @@
 import { eventsActions, eventsApi, type EventsActions, type EventsApi, type EventView } from "@/api/events";
 import { claimableCount, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
+import { onPumpkins, withPumpkinCount } from "@/game/events/pumpkinHunt";
+import { seasonFor, setSeason } from "@/game/season";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
 import { eventsArt } from "@/ui/events/eventsArt";
 import { calendarKey, EventsPanel, rewardsText, tierKey, type EventsPanelView } from "@/ui/events/EventsPanel";
 import { modalLayer, openWhatsNew } from "@/ui/events/WhatsNewDialog";
+import "@/ui/events/pumpkinHuntHint";
 import { dockButton } from "@/ui/yard/YardDock";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 
@@ -46,6 +49,8 @@ export class EventsDoor {
   private timer: number | null = null;
   private destroyed = false;
   private whatsNewChecked = false;
+  /** Stops following the pumpkin hunt's count (`game/events/pumpkinHunt.ts`). */
+  private readonly unwatchPumpkins: () => void;
 
   constructor(mounts: YardMounts, api: EventsApi = eventsApi, actions: EventsActions = eventsActions(mounts.store, api)) {
     this.mounts = mounts;
@@ -56,6 +61,12 @@ export class EventsDoor {
     this.button.classList.add("events-door");
     this.button.hidden = true;
     this.button.setAttribute("aria-expanded", "false");
+    // A pumpkin picked: the ladder and the badge move at once, not at the next read.
+    this.unwatchPumpkins = onPumpkins((count) => {
+      if (!this.events) return;
+      this.events = withPumpkinCount(this.events, count);
+      this.refresh();
+    });
     this.badge = document.createElement("span");
     this.badge.className = "yard-dock__badge events-badge";
     this.badge.hidden = true;
@@ -77,6 +88,8 @@ export class EventsDoor {
       if (this.destroyed) return;
       this.clock = serverClock(body.now, Date.now());
       this.events = body.events;
+      // An event that started since the yard loaded dresses it now.
+      setSeason(seasonFor(body.events.filter((event) => event.status === "active").map((event) => event.kind)));
       this.loadFailed = null;
       serverSeen = body.whatsNewSeen;
     } catch {
@@ -205,6 +218,7 @@ export class EventsDoor {
 
   destroy(): void {
     this.destroyed = true;
+    this.unwatchPumpkins();
     if (this.timer !== null) window.clearInterval(this.timer);
     this.panel?.close();
     this.button.remove();

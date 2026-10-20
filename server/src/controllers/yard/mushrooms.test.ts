@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeAll, afterAll, beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import type { Random } from "../../services/yard/mushrooms.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { readOnboarding } from "../../services/onboarding/state.js";
+import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { mushroomPickAction } from "./mushrooms.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
 
@@ -83,6 +84,17 @@ beforeEach(() => {
   db.row = rowOf();
 });
 
+
+// These run outside every event: a local EVENTS_FORCE_ON (server/.env) would
+// switch the Halloween pumpkin hunt on and change the mushroom rules under test.
+const forcedOn = process.env.EVENTS_FORCE_ON;
+beforeAll(() => {
+  delete process.env.EVENTS_FORCE_ON;
+});
+afterAll(() => {
+  if (forcedOn !== undefined) process.env.EVENTS_FORCE_ON = forcedOn;
+});
+
 describe("POST /bm/yard/mushroom/pick", () => {
   test("a golden mushroom goes and its Shiny is credited", async () => {
     const answer = await pick({ id: "1", x: "-300", y: "40" }, sequence(0.1, 0.5));
@@ -137,5 +149,46 @@ describe("POST /bm/yard/mushroom/pick", () => {
     expect((await pick({ id: 0, x: 1, y: 1 }, Math.random)).body).toMatchObject({
       reason: "moved",
     });
+  });
+});
+
+describe("the Halloween pumpkin hunt", () => {
+  const huntPick = (store: ReturnType<typeof memoryProgressStore>, on: boolean, body: Row = { id: "0" }) =>
+    runYardAction(
+      em as unknown as EntityManager,
+      userOf(),
+      mushroomPickAction(sequence(0.9), store, () => on),
+      body
+    );
+
+  test("during the event every pick adds a pumpkin to the ladder count", async () => {
+    const store = memoryProgressStore();
+
+    const first = await huntPick(store, true);
+    const second = await huntPick(store, true);
+
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ report: { golden: false, pumpkins: 1 } });
+    expect(second.body).toMatchObject({ report: { pumpkins: 2 } });
+    expect(store.rows.get("2505:halloween-2026")?.counter).toBe(2);
+  });
+
+  test("outside the event nothing is counted and the report has no pumpkins", async () => {
+    const store = memoryProgressStore();
+
+    const answer = await huntPick(store, false);
+
+    expect(answer.status).toBe(200);
+    expect((answer.body as { report: Record<string, unknown> }).report).not.toHaveProperty("pumpkins");
+    expect(store.rows.size).toBe(0);
+  });
+
+  test("a refused pick counts nothing", async () => {
+    const store = memoryProgressStore();
+
+    const answer = await huntPick(store, true, { id: "9" });
+
+    expect(answer.status).toBe(400);
+    expect(store.rows.size).toBe(0);
   });
 });
