@@ -42,3 +42,26 @@ describe("buildSaveData aiattacks", () => {
     }
   });
 });
+
+/**
+ * Who sees a yard's saved Yard Planner layouts (`savetemplate`, trap spots
+ * included): only its owner. A viewer, helper or attacker gets an empty list.
+ */
+describe("buildSaveData savetemplate", () => {
+  const LAYOUTS = [{ slot: 0, name: "Main yard", version: 2, nodes: "[{\"t\":24,\"x\":-85,\"y\":210,\"id\":506}]" }];
+
+  const plannedYard = (type: BaseType) => Object.assign(yardOf(type), { savetemplate: LAYOUTS });
+
+  test("the owner gets their own layouts", () => {
+    const yard = plannedYard(BaseType.MAIN);
+    expect(buildSaveData(yard, userOf(OWNER, yard), null).savetemplate).toEqual(LAYOUTS);
+  });
+
+  test("anyone else gets none, on a main yard and an outpost alike", () => {
+    for (const type of [BaseType.MAIN, BaseType.OUTPOST]) {
+      const yard = plannedYard(type);
+      expect(buildSaveData(yard, userOf(VIEWER, new Save()), null).savetemplate).toEqual([]);
+      expect(yard.savetemplate).toEqual(LAYOUTS);
+    }
+  });
+});
