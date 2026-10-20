@@ -6,10 +6,16 @@ import { SITE } from "../config";
 import { getCollection } from "astro:content";
 import { faq } from "../data/faq";
 import { faqPage, raidVideo, videoGame } from "../data/schema";
+import { tiers } from "../data/patreon";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
-const latest = (await getCollection("changelog", ({ data }) => !data.draft))
-  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
-  .slice(0, 2);
+const changelog = (await getCollection("changelog", ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
+);
+const latest = changelog.slice(0, 2);
+// The beta.3 changelog entry, for the "full list" link in its section.
+const beta3Log = changelog.find((entry) => entry.id.includes("beta-3"));
 
 const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
@@ -81,6 +87,52 @@ const whatsNew = [
     alt: "Monsters raiding a walled yard",
   },
 ];
+
+// "New in beta.3". Pictures are stills from beta.3 gameplay; `img` names a
+// pair in public/images/beta3/ (<name>.webp at 768 px wide, <name>-384.webp).
+const beta3 = [
+  {
+    title: "Watch your defences back",
+    text: 'On Map Room 2, open "Defences" in your yard to replay the last 20 attacks on it at 1x, 2x or 4x speed, with a skip button.',
+    img: "replays",
+    alt: "Teratorns and Korath attacking the edge of a yard",
+    badge: "1x · 2x · 4x",
+  },
+  {
+    title: "Wormzers tunnel again",
+    text: "Like in the original, Wormzers dig in, can't be seen or shot on the way, and pop up to bite. Wormzers from your bunkers tunnel too.",
+    img: "wormzers",
+    alt: "A Wormzer bursting up under a building, rings spreading through the ground",
+  },
+  {
+    title: "Every monster, its own shot",
+    text: "A magenta orb for Fomor, sea-green healing orbs for Zafreeti, and new shots for Vorg. Once researched in the Monster Lab, D.A.V.E. fires twin smoking rockets and Teratorns' fireballs hop from building to building.",
+    img: "shots",
+    alt: "Zafreeti healing orbs and magenta orbs flying over a building under attack",
+  },
+  {
+    title: "Bigger hits, bigger bangs",
+    text: "Eye-ra goes off in a fiery explosion with smoke and a scorch mark, and every blast now lands. Korath's quake shakes the screen, and Bandito's whirlwind (a Monster Lab move) flashes.",
+    img: "eyera",
+    alt: "An Eye-ra exploding against a wall, leaving smoke and a scorch mark",
+  },
+];
+
+const beta3More = [
+  "On Map Room 2, move your main yard to a random new spot from the Map Room, free once every 7 days.",
+  "Monsters walk or fly off the yard when an attack ends, instead of vanishing.",
+  "With every worker busy, pick the spot first, then choose how to free a worker.",
+  "Tribe raids come at least 3 hours apart.",
+  '"Skip tips" closes all of Bob\'s tips at once.',
+  "The friends bar pages properly on wide screens when you have many friends.",
+  "Battles with lots of Banditos no longer stutter when they spin at the same time.",
+  "Towers aim at flying monsters where you actually see them, plus lots more fixes.",
+];
+
+// FRIENDS IMAGE: drop a 768x512 picture at public/images/beta3/friends.webp
+// (plus a 384 px wide friends-384.webp) and it replaces the monster art in the
+// friends card on the next build. No other change needed.
+const friendsImg = existsSync(join(process.cwd(), "public/images/beta3/friends.webp"));
 
 const roster = [
   ["C1", "Pokey"],
@@ -184,6 +236,13 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
           <a class="btn btn--ghost" href="/guides/getting-started/">How to start</a>
         </div>
         <p class="hero__small">Sign up with a username, email and password. Free to play, nothing to install.</p>
+        <a class="hero__trailer" href="#trailer" hidden>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <circle cx="12" cy="12" r="11" fill="currentColor"></circle>
+            <path d="M10 8v8l6-4Z" fill="#0f141c"></path>
+          </svg>
+          Watch the beta 3 trailer
+        </a>
       </div>
 
       <div class="hero__art" aria-hidden="true">
@@ -216,6 +275,43 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     </svg>
   </section>
 
+  <section id="trailer" class="trailer" aria-label="Trailer">
+    <div class="wrap">
+      <figure class="trailer__frame">
+        <img
+          class="trailer__poster"
+          src={SITE.trailer.poster}
+          alt="A big attack on a walled yard: monsters storm the housing as towers fire back"
+          width="1280"
+          height="720"
+          decoding="async"
+        />
+        {
+          SITE.trailer.src && (
+            <video
+              class="trailer__video"
+              data-src={SITE.trailer.src}
+              width="1280"
+              height="720"
+              muted
+              loop
+              playsinline
+              preload="none"
+              aria-label="Backyard Monsters Revamped trailer"
+            />
+          )
+        }
+        <button class="trailer__sound btn btn--primary" type="button" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"></path>
+            <path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"></path>
+          </svg>
+          <span class="trailer__label">Play with sound</span>
+        </button>
+      </figure>
+    </div>
+  </section>
+
   <section class="beta" aria-labelledby="beta-title">
     <div class="wrap">
       <div class="notice beta__notice reveal">
@@ -230,6 +326,87 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
             <strong>your progress may be reset</strong> before the full launch. Play for fun, and tell us what you find at
             <a href={`mailto:${SITE.bugEmail}`}>{SITE.bugEmail}</a>.
           </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="beta-3" class="section beta3" aria-labelledby="beta3-title">
+    <div class="wrap">
+      <div class="section__head reveal">
+        <span class="eyebrow">Update 2.0.0-beta.3</span>
+        <h2 id="beta3-title">New in beta 3</h2>
+        <p>Play with your friends, watch your defences back, and a lot more bang in every battle.</p>
+      </div>
+      <div class="beta3__grid">
+        <article class="friends-card reveal reveal--pop">
+          <div class="friends-card__art">
+            {
+              friendsImg ? (
+                <img
+                  src="/images/beta3/friends.webp"
+                  srcset="/images/beta3/friends-384.webp 384w, /images/beta3/friends.webp 768w"
+                  sizes="(max-width: 860px) 100vw, 560px"
+                  alt="The friends bar along the bottom of a yard"
+                  width="768"
+                  height="512"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div class="friends-card__crew" aria-hidden="true">
+                  <Sprite name="spin-C7" height={120} duration={1.5} />
+                  <Sprite name="walk-C1" height={96} duration={0.42} />
+                  <Sprite name="spin-C2" height={112} duration={1.5} />
+                  <svg class="friends-card__heart" viewBox="0 0 24 24">
+                    <path d="M12 21s-7.5-4.6-9.5-9.2C1.1 8.5 3.2 5 6.6 5c2 0 3.9 1.1 5.4 3 1.5-1.9 3.4-3 5.4-3 3.4 0 5.5 3.5 4.1 6.8C19.5 16.4 12 21 12 21Z" fill="#ff5f4a"></path>
+                  </svg>
+                </div>
+              )
+            }
+            <span class="pill pill--beta change__badge">New</span>
+          </div>
+          <div class="friends-card__body">
+            <h3>Friends are here</h3>
+            <p>Add friends and keep them close in the friends bar at the bottom of your yard.</p>
+            <ul class="friends-card__list">
+              <li>Visit a friend's yard</li>
+              <li>Speed up their builds or repair their buildings</li>
+              <li>Send them a gift</li>
+              <li>Add friend buttons in the Map Room, mailbox and alliance</li>
+              <li>Privacy settings: hide your online status, turn off requests or block a player</li>
+            </ul>
+          </div>
+        </article>
+        {
+          beta3.map((b, i) => (
+            <article class="change reveal reveal--pop" style={`--i:${i % 3}`}>
+              <div class="change__art">
+                <img
+                  src={`/images/beta3/${b.img}.webp`}
+                  srcset={`/images/beta3/${b.img}-384.webp 384w, /images/beta3/${b.img}.webp 768w`}
+                  sizes="(max-width: 560px) 100vw, (max-width: 1020px) 50vw, 380px"
+                  alt={b.alt}
+                  width="768"
+                  height="512"
+                  loading="lazy"
+                  decoding="async"
+                />
+                {b.badge && <span class="pill pill--beta change__badge">{b.badge}</span>}
+              </div>
+              <div class="change__body">
+                <h3>{b.title}</h3>
+                <p>{b.text}</p>
+              </div>
+            </article>
+          ))
+        }
+        <div class="beta3__more reveal" style="--i:1">
+          <h3>Also in this update</h3>
+          <ul>
+            {beta3More.map((item) => <li>{item}</li>)}
+          </ul>
+          {beta3Log && <a href={`/changelog/#${beta3Log.id}`}>See every change in beta 3</a>}
         </div>
       </div>
     </div>
@@ -362,7 +539,7 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
       </figure>
       <div class="shots">
         <div class="reveal" style="--i:0"><Shot name="yard" caption="Your yard: Town Hall walled in the middle, towers all round" sizes="(max-width: 860px) 100vw, 380px" /></div>
-        <div class="reveal" style="--i:1"><Shot name="attack" caption="Flinging monsters into an enemy yard" sizes="(max-width: 860px) 100vw, 380px" /></div>
+        <div class="reveal" style="--i:1"><Shot name="raid-yard" caption="Teratorns and Korath storming an enemy yard" sizes="(max-width: 860px) 100vw, 380px" /></div>
         <div class="reveal" style="--i:2"><Shot name="map" caption="The Map Room" sizes="(max-width: 860px) 100vw, 380px" /></div>
       </div>
     </div>
@@ -410,17 +587,42 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
         </ul>
         <a href="/changelog/">See the full changelog</a>
       </div>
-      <div class="support-card reveal reveal--pop" style="--i:1">
-        <h2>Keep the yard running</h2>
+    </div>
+  </section>
+
+  <section id="support" class="section support" aria-labelledby="support-title">
+    <div class="wrap support__inner">
+      <div class="support__copy reveal">
+        <span class="eyebrow">Support the lab</span>
+        <h2 id="support-title">Keep the yard running</h2>
         <p>
-          The game is free and stays free. If you enjoy it, you can help pay for the server, the website and email on
-          Patreon. Supporting gives no in-game advantage.
+          The game is free and stays free, with no pay-to-win. If you enjoy it, you can help pay for the server, the
+          website and email on Patreon, and get a say in what we build next.
         </p>
+        <p class="support__note">Supporting never gives you anything inside the game.</p>
         <div class="btn-row">
-          <a class="btn btn--patreon" href={SITE.patreonUrl} rel="noopener noreferrer">Support on Patreon</a>
+          <a class="btn btn--patreon btn--big" href={SITE.patreonUrl} rel="noopener noreferrer">Join on Patreon</a>
           <a href="/support/">Where the money goes</a>
         </div>
       </div>
+      <ul class="support__tiers">
+        {
+          tiers.map((t, i) => (
+            <li class={`tier-card reveal reveal--pop${i === 1 ? " tier-card--top" : ""}`} style={`--i:${i + 1}`}>
+              <h3>{t.name}</h3>
+              <p class="tier-card__price">
+                {t.price}
+                <small>/month</small>
+              </p>
+              <ul class="tier-card__perks">
+                {t.perks.map((perk) => (
+                  <li>{perk}</li>
+                ))}
+              </ul>
+            </li>
+          ))
+        }
+      </ul>
     </div>
   </section>
 
@@ -494,6 +696,71 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
       hero.style.setProperty("--px", "0");
       hero.style.setProperty("--py", "0");
     });
+  }
+
+  // The trailer under the hero. It starts loading only once the page itself
+  // has finished loading, plays muted on a loop, and offers "Play with
+  // sound". With reduced motion or data saver it does not play by itself; the
+  // button then reads "Play trailer". If the file is missing or fails, the
+  // poster still simply stays and no button or hero link ever appears.
+  const trailerFrame = document.querySelector<HTMLElement>(".trailer__frame");
+  const trailer = trailerFrame?.querySelector<HTMLVideoElement>(".trailer__video");
+  const trailerSrc = trailer?.dataset.src;
+  if (trailerFrame && trailer && trailerSrc) {
+    const button = trailerFrame.querySelector<HTMLButtonElement>(".trailer__sound")!;
+    const label = button.querySelector<HTMLElement>(".trailer__label")!;
+    const heroLink = document.querySelector<HTMLElement>(".hero__trailer");
+    const still = calm.matches || Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
+    let failed = false;
+
+    const ready = () => {
+      if (failed) return;
+      button.hidden = false;
+      if (heroLink) heroLink.hidden = false;
+    };
+    trailer.addEventListener("error", () => {
+      failed = true;
+      button.hidden = true;
+      if (heroLink) heroLink.hidden = true;
+      trailerFrame.classList.remove("is-playing");
+    });
+    trailer.addEventListener("playing", () => trailerFrame.classList.add("is-playing"));
+    trailer.addEventListener(still ? "loadedmetadata" : "playing", ready, { once: true });
+
+    button.addEventListener("click", () => {
+      trailer.muted = false;
+      trailer.loop = false;
+      trailer.currentTime = 0;
+      trailer.controls = true;
+      button.hidden = true;
+      trailer.play().catch(() => {});
+    });
+
+    const start = () => {
+      if (still) {
+        label.textContent = "Play trailer";
+        trailer.preload = "metadata";
+        trailer.src = trailerSrc;
+        return;
+      }
+      const watcher = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              if (!trailer.src) trailer.src = trailerSrc;
+              if (!failed) trailer.play().catch(() => ready());
+            } else if (trailer.src && trailer.muted) {
+              trailer.pause();
+            }
+          }
+        },
+        { rootMargin: "200px 0px" },
+      );
+      watcher.observe(trailerFrame);
+    };
+    const whenIdle = () => ("requestIdleCallback" in window ? requestIdleCallback(start, { timeout: 2000 }) : setTimeout(start, 300));
+    if (document.readyState === "complete") whenIdle();
+    else window.addEventListener("load", whenIdle, { once: true });
   }
 
   // The gameplay clip loads only when it is about to scroll into view. With
@@ -645,6 +912,24 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     margin: 22px 0 0;
     font-size: 0.95rem;
     color: var(--text-muted);
+  }
+
+  .hero__trailer {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .hero__trailer:hover {
+    color: var(--accent-hover);
+  }
+
+  .hero__trailer[hidden] {
+    display: none;
   }
 
   .hero__art {
@@ -947,6 +1232,219 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     font-size: 1.3rem;
     color: var(--warning-bright);
     margin-bottom: 6px;
+  }
+
+  /* ── Trailer ─────────────────────────────────────────────────────────── */
+
+  .trailer {
+    padding-top: clamp(28px, 4vw, 48px);
+  }
+
+  .trailer__frame {
+    position: relative;
+    margin: 0 auto;
+    max-width: 980px;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-strong);
+    box-shadow:
+      0 30px 70px rgb(0 0 0 / 55%),
+      0 0 0 6px rgb(255 255 255 / 4%);
+  }
+
+  .trailer__poster,
+  .trailer__video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* The video stays invisible until it really plays, so a missing or slow
+     file never shows a black box: the poster still is there instead. */
+  .trailer__video {
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  .trailer__frame.is-playing .trailer__video {
+    opacity: 1;
+  }
+
+  .trailer__sound {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  }
+
+  .trailer__sound[hidden] {
+    display: none;
+  }
+
+  @media (max-width: 560px) {
+    .trailer__frame {
+      border-radius: var(--radius-md);
+    }
+
+    .trailer__sound {
+      right: 10px;
+      bottom: 10px;
+      padding: 8px 14px;
+      font-size: 0.95rem;
+    }
+  }
+
+  /* ── New in beta 3 ───────────────────────────────────────────────────── */
+
+  .beta3__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .friends-card {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    background:
+      radial-gradient(500px 260px at 100% 0%, rgb(255 95 74 / 12%), transparent 70%),
+      var(--panel);
+    border: 1px solid var(--accent-line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .friends-card__art {
+    position: relative;
+    aspect-ratio: 3 / 2;
+    background:
+      radial-gradient(circle at 50% 70%, rgb(111 191 74 / 30%), transparent 60%),
+      linear-gradient(180deg, #13261a, #1f4527);
+  }
+
+  .friends-card__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .friends-card__crew {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: clamp(8px, 3vw, 28px);
+    padding-bottom: 18%;
+  }
+
+  .friends-card__heart {
+    position: absolute;
+    top: 22%;
+    left: 50%;
+    width: 56px;
+    height: 56px;
+    translate: -50% 0;
+    filter: drop-shadow(0 6px 16px rgb(255 95 74 / 50%));
+    animation: heart-beat 1.6s ease-in-out infinite;
+  }
+
+  @keyframes heart-beat {
+    0%,
+    100% {
+      scale: 1;
+    }
+    15% {
+      scale: 1.18;
+    }
+    30% {
+      scale: 1;
+    }
+    45% {
+      scale: 1.12;
+    }
+  }
+
+  .friends-card__body {
+    padding: clamp(22px, 3vw, 36px);
+    align-self: center;
+  }
+
+  .friends-card__body h3 {
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+  }
+
+  .friends-card__body p {
+    color: var(--text-secondary);
+    font-size: 1.08rem;
+  }
+
+  .friends-card__list {
+    margin: 0;
+    padding-left: 1.2em;
+    display: grid;
+    gap: 6px;
+    color: var(--text-secondary);
+  }
+
+  .friends-card__list li::marker {
+    color: var(--accent);
+  }
+
+  .beta3__more {
+    grid-column: span 2;
+    padding: clamp(22px, 3vw, 30px);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  .beta3__more ul {
+    margin: 0 0 16px;
+    padding-left: 1.2em;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 28px;
+    color: var(--text-secondary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .friends-card__heart {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 1020px) {
+    .beta3__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .beta3__more {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .friends-card {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .beta3__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .beta3__more ul {
+      grid-template-columns: 1fr;
+    }
   }
 
   /* ── What's new in Revamped ──────────────────────────────────────────── */
@@ -1492,10 +1990,7 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
   }
 
   .news__inner {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 40px;
-    align-items: start;
+    max-width: 760px;
   }
 
   .news__list {
@@ -1533,23 +2028,115 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     font-size: 1.2rem;
   }
 
-  .support-card {
+  /* ── Support the lab (Patreon tiers) ─────────────────────────────────── */
+
+  .support {
+    background:
+      radial-gradient(700px 360px at 85% 30%, rgb(255 95 74 / 12%), transparent 70%),
+      radial-gradient(600px 300px at 0% 100%, rgb(111 191 74 / 8%), transparent 70%);
+    border-top: 1px solid var(--border);
+  }
+
+  .support__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: clamp(28px, 5vw, 56px);
+    align-items: center;
+  }
+
+  .support__copy p {
+    color: var(--text-secondary);
+    font-size: 1.08rem;
+  }
+
+  .support__note {
+    font-weight: 700;
+    color: #9fe0b0 !important;
+  }
+
+  .support__tiers {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: stretch;
+  }
+
+  .tier-card {
+    position: relative;
+    padding: 24px 22px 22px;
     background: linear-gradient(160deg, #241a2a, #1a1f2b);
-    border: 1px solid rgb(255 95 74 / 35%);
+    border: 1px solid rgb(255 95 74 / 30%);
     border-radius: var(--radius-lg);
-    padding: 28px;
+    transition:
+      translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.2s ease;
   }
 
-  .support-card h2 {
-    font-size: 1.6rem;
+  .tier-card:hover {
+    translate: 0 -6px;
+    box-shadow: 0 18px 40px rgb(0 0 0 / 35%);
   }
 
-  .support-card p {
+  .tier-card--top {
+    border-color: rgb(255 95 74 / 70%);
+    box-shadow: 0 0 0 1px rgb(255 95 74 / 25%) inset;
+  }
+
+  .tier-card h3 {
+    font-size: 1.35rem;
+    margin-bottom: 4px;
+  }
+
+  .tier-card__price {
+    font-family: var(--font-display);
+    font-size: 2.2rem;
+    line-height: 1.1;
+    color: #ff8a73;
+    margin: 0 0 14px;
+  }
+
+  .tier-card__price small {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    color: var(--text-muted);
+  }
+
+  .tier-card__perks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
     color: var(--text-secondary);
   }
 
+  .tier-card__perks li {
+    position: relative;
+    padding-left: 24px;
+  }
+
+  .tier-card__perks li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.45em;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #9fe0b0;
+  }
+
   @media (max-width: 860px) {
-    .news__inner {
+    .support__inner {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .support__tiers {
       grid-template-columns: 1fr;
     }
   }
