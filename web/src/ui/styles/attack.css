@@ -233,10 +233,13 @@
     display: none;
   }
 
+  /* One thin row (#381): menu, timer and damage, then the speed and Retreat
+     at the right end. It fits from 360 px; anything longer (a replay's 4x)
+     still wraps rather than running off the edge. */
   .attack-strip {
     top: 0;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
+    gap: var(--space-1);
+    padding: var(--space-2);
     border-width: 0 0 1px;
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
@@ -250,9 +253,11 @@
     display: none;
   }
 
-  /* In its place, the overflow menu: Map, Yard, Sign out (§4.3, #151). */
+  /* In its place, the overflow menu: Map, Yard, Sign out (§4.3, #151). It
+     leads the row, its list hanging from the left. */
   .attack-menu {
     display: flex;
+    order: -1;
   }
 
   .attack-strip__retreat,
@@ -260,13 +265,22 @@
     min-height: 40px;
   }
 
-  /* Tighter, so the menu still fits on the one row at 412 px. */
+  /* Tighter, so everything still fits on the one row at 360 px. */
   .attack-strip__retreat {
-    padding-inline: var(--space-3);
+    padding-inline: var(--space-2);
   }
 
   .attack-strip__speed-button {
-    padding-inline: var(--space-2);
+    padding-inline: 6px;
+  }
+
+  .attack-strip__clock {
+    padding-inline: var(--space-1);
+  }
+
+  .attack-menu__list {
+    left: 0;
+    right: auto;
   }
 
   /* The dock is a bottom sheet: a handle, and a body that opens on tap. Half
@@ -389,6 +403,11 @@
     display: none;
   }
 
+  /* The status line goes, as upright: the map button has that corner (#381). */
+  .attack-status {
+    display: none;
+  }
+
   .attack-menu {
     display: flex;
   }
@@ -407,6 +426,48 @@
     right: auto;
     left: var(--space-3);
     align-items: flex-start;
+  }
+}
+
+/*
+ * The overview map and zoom fold behind one map button on a phone, upright or
+ * on its side (#381, `ui/attack/ViewToolsFold.ts`): only the button stays on
+ * the battlefield until it is tapped. A wider screen never shows the button.
+ */
+.attack-viewtools__fold {
+  display: none;
+}
+
+@media (width <= 620px), (height <= 500px) {
+  .attack-viewtools__fold {
+    display: grid;
+    place-items: center;
+    width: var(--control-height);
+    height: var(--control-height);
+    padding: 0;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-md);
+    background: var(--colour-surface-raised);
+    -webkit-backdrop-filter: var(--blur-panel);
+    backdrop-filter: var(--blur-panel);
+    box-shadow: var(--shadow-float);
+    color: var(--colour-text);
+  }
+
+  .attack-viewtools__fold[aria-expanded="true"] {
+    border: 2px solid var(--colour-accent);
+    color: var(--colour-accent);
+  }
+
+  .attack-viewtools:not(.attack-viewtools--open) > :not(.attack-viewtools__fold) {
+    display: none;
+  }
+}
+
+/* The narrowest phones: "37%" without its word, so Retreat stays on the row. */
+@media (width <= 380px) {
+  .attack-strip__word {
+    display: none;
   }
 }
 

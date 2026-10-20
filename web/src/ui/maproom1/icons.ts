@@ -54,6 +54,8 @@ const PATHS = {
   fit: ["M4 9V4h5", "M20 9V4h-5", "M4 15v5h5", "M20 15v5h-5"],
   // Move monsters between yards (#186).
   swap: ["M4 8h14", "M14 4l4 4-4 4", "M20 16H6", "M10 12l-4 4 4 4"],
+  // The kit filter's button on a phone (#381).
+  filter: ["M4 5h16l-6 7.5V19l-4-2v-4.5z"],
 } as const;
 
 export type IconName = keyof typeof PATHS;

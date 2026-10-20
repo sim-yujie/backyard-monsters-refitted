@@ -441,6 +441,11 @@
   color: var(--colour-accent-text);
 }
 
+/* The phone's Filter button (#381); the row of kits shows as it is elsewhere. */
+.mr2-kit-filter__toggle {
+  display: none;
+}
+
 .mr2-range-legend {
   width: 360px;
   max-width: calc(100vw - 2 * var(--space-4));
@@ -1152,6 +1157,17 @@
     bottom: var(--space-2);
   }
 
+  /* The kit list opens upwards from the row along the bottom edge (#381). */
+  .mr2-tools-dock .mr2-kit-filter {
+    bottom: calc(100% + var(--space-2));
+  }
+
+  /* The thicker lit border, without the label moving. */
+  .mr2-kit-filter__toggle--active,
+  .mr2-kit-filter__toggle[aria-expanded="true"] {
+    padding: 0 calc(var(--space-4) - 1px);
+  }
+
   .overlay__layer:has(> .map-dock--right > *) > .mr2-tools-dock.map-dock--bottom-right,
   .overlay__layer:has(.mr2-find--open) > .mr2-tools-dock.map-dock--bottom-right {
     display: none;
@@ -1239,5 +1255,90 @@
 
   .overlay__layer:has(.mr2-find--open) > .mr2-tools-dock.map-dock--bottom-right {
     display: none;
+  }
+
+  /* One row under the HUD (#381): "Find a place", then Mail, My range and
+     Filter as icon buttons. The kit row folds into Filter and opens as a list
+     under it, so nothing is pushed off the screen's edge. */
+  .mr2-find-dock {
+    right: calc(12px + 3 * var(--control-height) + 3 * var(--space-2));
+  }
+
+  /* The open Find sheet takes the whole width; the tool row steps aside. */
+  .overlay__layer:has(.mr2-find--open) > .mr2-find-dock {
+    right: 12px;
+  }
+
+  .mr2-tools-dock {
+    top: calc(var(--hud-height) + var(--space-2));
+    left: auto;
+  }
+
+  .mr2-tools-dock .mr2-toolrow {
+    flex-wrap: nowrap;
+  }
+
+  .mr2-tools-dock .mr2-tool,
+  .mr2-tools-dock .mr2-tool[aria-pressed="true"] {
+    position: relative;
+    width: var(--control-height);
+    padding: 0;
+    justify-content: center;
+  }
+
+  /* Still read out, not shown. */
+  .mr2-tools-dock .mr2-tool__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .mr2-tools-dock .mail-badge--tool {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+  }
+
+  /* The kit list hangs under the row. */
+  .mr2-tools-dock .mr2-kit-filter {
+    top: calc(100% + var(--space-2));
+  }
+}
+
+/*
+ * The kit row folds into a Filter button on a phone, upright or on its side
+ * (#381, `KitFilterControl`): the button opens the kits as a short list.
+ */
+@media (width <= 620px), (height <= 500px) {
+  .mr2-kit-filter__toggle {
+    display: flex;
+  }
+
+  /* Lit while a kit dims the map, like My range while it shows. */
+  .mr2-kit-filter__toggle--active,
+  .mr2-kit-filter__toggle[aria-expanded="true"] {
+    border: 2px solid var(--colour-accent);
+    color: var(--colour-accent);
+  }
+
+  .mr2-tools-dock .mr2-kit-filter {
+    position: absolute;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 12rem;
+  }
+
+  .mr2-tools-dock .mr2-kit-filter:not(.mr2-kit-filter--open) {
+    display: none;
+  }
+
+  .mr2-tools-dock .mr2-kit-filter__option {
+    min-height: var(--control-height);
+    padding: 0 var(--space-4);
+    text-align: start;
   }
 }
