@@ -7,15 +7,13 @@ import { getCollection } from "astro:content";
 import { faq } from "../data/faq";
 import { faqPage, raidVideo, videoGame } from "../data/schema";
 import { tiers } from "../data/patreon";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 
 const changelog = (await getCollection("changelog", ({ data }) => !data.draft)).sort(
   (a, b) => b.data.date.getTime() - a.data.date.getTime(),
 );
 const latest = changelog.slice(0, 2);
-// The beta.3 changelog entry, for the "full list" link in its section.
-const beta3Log = changelog.find((entry) => entry.id.includes("beta-3"));
+// The beta.4 changelog entry, for the "full list" link in its section.
+const beta4Log = changelog.find((entry) => entry.id.includes("beta-4"));
 
 const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
@@ -88,51 +86,65 @@ const whatsNew = [
   },
 ];
 
-// "New in beta.3". Pictures are stills from beta.3 gameplay; `img` names a
-// pair in public/images/beta3/ (<name>.webp at 768 px wide, <name>-384.webp).
-const beta3 = [
+// "New in beta.4". Pictures are the painted What's new cards from the game
+// (web/public/whats-new/beta4-*.webp); `img` names a pair in
+// public/images/beta4/ (<name>.webp at 768 x 432, <name>-384.webp).
+const halloweenPrizes = [
+  ["10 pumpkins", "10 Shiny"],
+  ["25 pumpkins", "25,000 of each resource"],
+  ["50 pumpkins", "2 Mini-Pumpkins and 20 Shiny"],
+  ["100 pumpkins", "a D.A.V.E. Pumpkin and 30 Shiny"],
+];
+
+const beta4 = [
   {
-    title: "Watch your defences back",
-    text: 'On Map Room 2, open "Defences" in your yard to replay the last 20 attacks on it at 1x, 2x or 4x speed, with a skip button.',
-    img: "replays",
-    alt: "Teratorns and Korath attacking the edge of a yard",
-    badge: "1x · 2x · 4x",
+    title: "Events and daily treats",
+    text: "The new Events button shows what's on now and what's coming next. Log in each day of Halloween for 14 days of treats, free speed-ups included.",
+    img: "events",
+    alt: "Bob opening a wooden advent calendar full of treats",
+    badge: "14 days",
   },
   {
-    title: "Wormzers tunnel again",
-    text: "Like in the original, Wormzers dig in, can't be seen or shot on the way, and pop up to bite. Wormzers from your bunkers tunnel too.",
-    img: "wormzers",
-    alt: "A Wormzer bursting up under a building, rings spreading through the ground",
+    title: "Champions hatch from eggs",
+    text: "Raising a champion now gives you a special egg. One day later, out pops your new champion. Changed your mind? Cancel the egg and pick again.",
+    img: "champion-eggs",
+    alt: "A furry blue champion egg cracking open in a straw nest",
   },
   {
-    title: "Every monster, its own shot",
-    text: "A magenta orb for Fomor, sea-green healing orbs for Zafreeti, and new shots for Vorg. Once researched in the Monster Lab, D.A.V.E. fires twin smoking rockets and Teratorns' fireballs hop from building to building.",
-    img: "shots",
-    alt: "Zafreeti healing orbs and magenta orbs flying over a building under attack",
+    title: "Friends list upgrade",
+    text: "Find friends fast with search and filters, and see at a glance who you can help or send a gift to.",
+    img: "friends",
+    alt: "Two cheerful Pokeys high-fiving, one holding a gift",
   },
   {
-    title: "Bigger hits, bigger bangs",
-    text: "Eye-ra goes off in a fiery explosion with smoke and a scorch mark, and every blast now lands. Korath's quake shakes the screen, and Bandito's whirlwind (a Monster Lab move) flashes.",
-    img: "eyera",
-    alt: "An Eye-ra exploding against a wall, leaving smoke and a scorch mark",
+    title: "Tidier on phones",
+    text: "One Menu button holds everything, friends tuck away behind their own button, and the battle screen stays clear.",
+    img: "phone",
+    alt: "A Pokey sweeping up buttons beside a phone showing a yard",
+  },
+  {
+    title: "Special moves tuned",
+    text: "Bandito's whirlwind spins through enemy monsters, Teratorn's fireball bounces on to walls, and defending Bolts blink too. Fang's venom bites once a second again.",
+    img: "special-moves",
+    alt: "A Bandito spinning a green whirlwind while a Teratorn breathes fire at a fence",
+  },
+  {
+    title: "Monsters on the move",
+    text: "Crabatron scuttles, Fang creeps, Eye-ra slithers, and lots more: 15 monsters now walk and attack with brand-new animations.",
+    img: "animations",
+    alt: "Eye-ra, Fang and Crabatron racing across the grass",
+    badge: "15 monsters",
   },
 ];
 
-const beta3More = [
-  "On Map Room 2, move your main yard to a random new spot from the Map Room, free once every 7 days.",
-  "Monsters walk or fly off the yard when an attack ends, instead of vanishing.",
-  "With every worker busy, pick the spot first, then choose how to free a worker.",
-  "Tribe raids come at least 3 hours apart.",
-  '"Skip tips" closes all of Bob\'s tips at once.',
-  "The friends bar pages properly on wide screens when you have many friends.",
-  "Battles with lots of Banditos no longer stutter when they spin at the same time.",
-  "Towers aim at flying monsters where you actually see them, plus lots more fixes.",
+const beta4More = [
+  "Map Room 1 shows online players with a green dot.",
+  "Battles on Map Room 1 show as a shield (they attacked you) and a sword (you attacked them).",
+  "Map Room 1 remembers how you sorted the list, with a highest/lowest-first button.",
+  "On Map Room 2 on phones, Mail, My range and Filter sit beside \"Find a place\".",
+  "What's new cards like these pop up in the game after an update.",
+  "A new Thank-you page on this website for everyone who supports the game.",
 ];
-
-// FRIENDS IMAGE: drop a 768x512 picture at public/images/beta3/friends.webp
-// (plus a 384 px wide friends-384.webp) and it replaces the monster art in the
-// friends card on the next build. No other change needed.
-const friendsImg = existsSync(join(process.cwd(), "public/images/beta3/friends.webp"));
 
 const roster = [
   ["C1", "Pokey"],
@@ -331,64 +343,56 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     </div>
   </section>
 
-  <section id="beta-3" class="section beta3" aria-labelledby="beta3-title">
+  <section id="beta-4" class="section beta4" aria-labelledby="beta4-title">
     <div class="wrap">
       <div class="section__head reveal">
-        <span class="eyebrow">Update 2.0.0-beta.3</span>
-        <h2 id="beta3-title">New in beta 3</h2>
-        <p>Play with your friends, watch your defences back, and a lot more bang in every battle.</p>
+        <span class="eyebrow">Update 2.0.0-beta.4</span>
+        <h2 id="beta4-title">New in beta 4</h2>
+        <p>Halloween comes to the backyard, with a pumpkin hunt, daily treats and champions that hatch from eggs.</p>
       </div>
-      <div class="beta3__grid">
-        <article class="friends-card reveal reveal--pop">
-          <div class="friends-card__art">
-            {
-              friendsImg ? (
-                <img
-                  src="/images/beta3/friends.webp"
-                  srcset="/images/beta3/friends-384.webp 384w, /images/beta3/friends.webp 768w"
-                  sizes="(max-width: 860px) 100vw, 560px"
-                  alt="The friends bar along the bottom of a yard"
-                  width="768"
-                  height="512"
-                  loading="lazy"
-                  decoding="async"
-                />
-              ) : (
-                <div class="friends-card__crew" aria-hidden="true">
-                  <Sprite name="spin-C7" height={120} duration={1.5} />
-                  <Sprite name="walk-C1" height={96} duration={0.42} />
-                  <Sprite name="spin-C2" height={112} duration={1.5} />
-                  <svg class="friends-card__heart" viewBox="0 0 24 24">
-                    <path d="M12 21s-7.5-4.6-9.5-9.2C1.1 8.5 3.2 5 6.6 5c2 0 3.9 1.1 5.4 3 1.5-1.9 3.4-3 5.4-3 3.4 0 5.5 3.5 4.1 6.8C19.5 16.4 12 21 12 21Z" fill="#ff5f4a"></path>
-                  </svg>
-                </div>
-              )
-            }
-            <span class="pill pill--beta change__badge">New</span>
+      <div class="beta4__grid">
+        <article class="spotlight reveal reveal--pop">
+          <div class="spotlight__art">
+            <img
+              src="/images/beta4/halloween.webp"
+              srcset="/images/beta4/halloween-384.webp 384w, /images/beta4/halloween.webp 768w"
+              sizes="(max-width: 760px) 100vw, 560px"
+              alt="Bob in a witch's hat beside a glowing jack-o'-lantern on a moonlit night"
+              width="768"
+              height="432"
+              loading="lazy"
+              decoding="async"
+            />
+            <span class="pill pill--beta change__badge">From 28 Oct</span>
           </div>
-          <div class="friends-card__body">
-            <h3>Friends are here</h3>
-            <p>Add friends and keep them close in the friends bar at the bottom of your yard.</p>
-            <ul class="friends-card__list">
-              <li>Visit a friend's yard</li>
-              <li>Speed up their builds or repair their buildings</li>
-              <li>Send them a gift</li>
-              <li>Add friend buttons in the Map Room, mailbox and alliance</li>
-              <li>Privacy settings: hide your online status, turn off requests or block a player</li>
+          <div class="spotlight__body">
+            <h3>Halloween is here!</h3>
+            <p>
+              From 28 October your yard goes spooky for two whole weeks, with pumpkins where the mushrooms used to grow.
+              Tap a pumpkin to send a worker to pick it, and collect enough for prizes:
+            </p>
+            <ul class="spotlight__list">
+              {
+                halloweenPrizes.map(([need, prize]) => (
+                  <li>
+                    <strong>{need}:</strong> {prize}
+                  </li>
+                ))
+              }
             </ul>
           </div>
         </article>
         {
-          beta3.map((b, i) => (
+          beta4.map((b, i) => (
             <article class="change reveal reveal--pop" style={`--i:${i % 3}`}>
-              <div class="change__art">
+              <div class="change__art change__art--wide">
                 <img
-                  src={`/images/beta3/${b.img}.webp`}
-                  srcset={`/images/beta3/${b.img}-384.webp 384w, /images/beta3/${b.img}.webp 768w`}
+                  src={`/images/beta4/${b.img}.webp`}
+                  srcset={`/images/beta4/${b.img}-384.webp 384w, /images/beta4/${b.img}.webp 768w`}
                   sizes="(max-width: 560px) 100vw, (max-width: 1020px) 50vw, 380px"
                   alt={b.alt}
                   width="768"
-                  height="512"
+                  height="432"
                   loading="lazy"
                   decoding="async"
                 />
@@ -401,12 +405,12 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
             </article>
           ))
         }
-        <div class="beta3__more reveal" style="--i:1">
+        <div class="beta4__more reveal" style="--i:1">
           <h3>Also in this update</h3>
           <ul>
-            {beta3More.map((item) => <li>{item}</li>)}
+            {beta4More.map((item) => <li>{item}</li>)}
           </ul>
-          {beta3Log && <a href={`/changelog/#${beta3Log.id}`}>See every change in beta 3</a>}
+          {beta4Log && <a href={`/changelog/#${beta4Log.id}`}>See every change in beta 4</a>}
         </div>
       </div>
     </div>
@@ -1301,92 +1305,53 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     }
   }
 
-  /* ── New in beta 3 ───────────────────────────────────────────────────── */
+  /* ── New in beta 4 ───────────────────────────────────────────────────── */
 
-  .beta3__grid {
+  .beta4__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px;
   }
 
-  .friends-card {
+  .spotlight {
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
     background:
-      radial-gradient(500px 260px at 100% 0%, rgb(255 95 74 / 12%), transparent 70%),
+      radial-gradient(500px 260px at 100% 0%, rgb(255 140 40 / 16%), transparent 70%),
       var(--panel);
     border: 1px solid var(--accent-line);
     border-radius: var(--radius-lg);
     overflow: hidden;
   }
 
-  .friends-card__art {
+  .spotlight__art {
     position: relative;
-    aspect-ratio: 3 / 2;
-    background:
-      radial-gradient(circle at 50% 70%, rgb(111 191 74 / 30%), transparent 60%),
-      linear-gradient(180deg, #13261a, #1f4527);
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(180deg, #241a3a, #3a2550);
   }
 
-  .friends-card__art img {
+  .spotlight__art img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
 
-  .friends-card__crew {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: clamp(8px, 3vw, 28px);
-    padding-bottom: 18%;
-  }
-
-  .friends-card__heart {
-    position: absolute;
-    top: 22%;
-    left: 50%;
-    width: 56px;
-    height: 56px;
-    translate: -50% 0;
-    filter: drop-shadow(0 6px 16px rgb(255 95 74 / 50%));
-    animation: heart-beat 1.6s ease-in-out infinite;
-  }
-
-  @keyframes heart-beat {
-    0%,
-    100% {
-      scale: 1;
-    }
-    15% {
-      scale: 1.18;
-    }
-    30% {
-      scale: 1;
-    }
-    45% {
-      scale: 1.12;
-    }
-  }
-
-  .friends-card__body {
+  .spotlight__body {
     padding: clamp(22px, 3vw, 36px);
     align-self: center;
   }
 
-  .friends-card__body h3 {
+  .spotlight__body h3 {
     font-size: clamp(1.5rem, 2.6vw, 2rem);
   }
 
-  .friends-card__body p {
+  .spotlight__body p {
     color: var(--text-secondary);
     font-size: 1.08rem;
   }
 
-  .friends-card__list {
+  .spotlight__list {
     margin: 0;
     padding-left: 1.2em;
     display: grid;
@@ -1394,19 +1359,27 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     color: var(--text-secondary);
   }
 
-  .friends-card__list li::marker {
+  .spotlight__list strong {
+    color: var(--text);
+  }
+
+  .spotlight__list li::marker {
     color: var(--accent);
   }
 
-  .beta3__more {
-    grid-column: span 2;
+  .change__art--wide {
+    aspect-ratio: 16 / 9;
+  }
+
+  .beta4__more {
+    grid-column: 1 / -1;
     padding: clamp(22px, 3vw, 30px);
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
   }
 
-  .beta3__more ul {
+  .beta4__more ul {
     margin: 0 0 16px;
     padding-left: 1.2em;
     display: grid;
@@ -1415,34 +1388,24 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     color: var(--text-secondary);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .friends-card__heart {
-      animation: none;
-    }
-  }
-
   @media (max-width: 1020px) {
-    .beta3__grid {
+    .beta4__grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .beta3__more {
-      grid-column: 1 / -1;
     }
   }
 
   @media (max-width: 760px) {
-    .friends-card {
+    .spotlight {
       grid-template-columns: 1fr;
     }
   }
 
   @media (max-width: 560px) {
-    .beta3__grid {
+    .beta4__grid {
       grid-template-columns: 1fr;
     }
 
-    .beta3__more ul {
+    .beta4__more ul {
       grid-template-columns: 1fr;
     }
   }
