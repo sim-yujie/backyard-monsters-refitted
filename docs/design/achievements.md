@@ -432,9 +432,12 @@ added to the Map Room 2 area answer, which covers many cells at once.
 
 ### 10.4 Art
 
-Sixteen badges, one per shown achievement, made with Gemini as the art plan says. Until then a
-placeholder trophy in three tiers by reward (5: bronze, 10-15: silver, 20-25: gold), drawn in CSS
-so the screen ships without waiting.
+Sixteen painted badges (#298, made with Codex), one per shown achievement: the symbol on a round
+studded medal whose rim is bronze, silver or gold by reward (5: bronze, 10-15: silver, 20-25: gold),
+`web/public/achievements/badge-<id>.webp`, 176 px square, shown at 60 px (52 px on a phone, 24 px in
+another player's line), grey while not earned. The tier is painted into each picture, so it shows on
+the public list too. The CSS trophy in the same three tiers stays as the fallback when a picture
+fails to load or an achievement has none.
 
 ## 11. Safety
 
