@@ -299,6 +299,20 @@
     padding-inline: var(--space-1);
   }
 
+  /* The boosts chip shrinks to its bolt and hangs just under the strip, so the
+     row stays one row; its label stays for screen readers. */
+  .attack-strip__boosts {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: var(--space-2);
+    padding: 4px;
+    background: var(--colour-surface-raised);
+  }
+
+  .attack-strip__boosts .attack-strip__word {
+    display: none;
+  }
+
   .attack-menu__list {
     left: 0;
     right: auto;
