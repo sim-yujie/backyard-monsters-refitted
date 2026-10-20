@@ -222,7 +222,19 @@
     max-width: none;
   }
 
-  .guide-bob--alt {
+  /* A screen tip keeps its small Bob, so its box stays short. */
+  .guide-bob--tip {
+    --guide-bob-size: 48px;
+  }
+
+  /* Map Room 1 hides the dock, so a tip sits at the bottom edge instead of
+     floating over the list where the dock would be (phone audit L). */
+  :root:has(.mr1) .guide-bob {
+    bottom: var(--space-2);
+  }
+
+  .guide-bob--alt,
+  :root:has(.mr1) .guide-bob--alt {
     bottom: auto;
     top: max(72px, var(--guide-bob-clear-top, 0px));
   }

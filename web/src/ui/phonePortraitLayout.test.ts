@@ -69,4 +69,24 @@ describe("upright phone layout", () => {
     const phone = media(css("styles/build-menu.css"), "width <= 620px");
     expect(phone).toMatch(/\.build-menu__tabs \.tabs__tab \{[^}]*font-size: min\(var\(--text-sm\), 3\.1vw\);/);
   });
+
+  it("keeps Map Room 1's corner buttons small over the map (K)", () => {
+    const phone = media(css("styles/maproom1.css"), "width <= 620px");
+    expect(phone).toMatch(/\.mr1-map__home-label \{\s*display: none;/);
+    expect(phone).toMatch(/\.mr1-mini \{[^}]*width: 84px;/);
+  });
+
+  it("keeps a tip's Bob small, and drops it to the bottom edge in Map Room 1 (L)", () => {
+    const phone = media(css("styles/guide.css"), "width <= 620px");
+    expect(phone).toMatch(/\.guide-bob--tip \{\s*--guide-bob-size: 48px;/);
+    expect(phone).toMatch(/:root:has\(\.mr1\) \.guide-bob \{\s*bottom: var\(--space-2\);/);
+    // The tip's rule comes after the phone's own Bob size, or that one wins.
+    expect(phone.indexOf(".guide-bob--tip {")).toBeGreaterThan(phone.indexOf("--guide-bob-size: 80px;"));
+  });
+
+  it("shrinks the attack's minimap and zoom (M)", () => {
+    const phone = media(css("styles/attack.css"), "width <= 620px");
+    expect(phone).toMatch(/\.attack-viewtools \.yard-minimap \{[^}]*width: 120px !important;/);
+    expect(phone).toMatch(/\.attack-viewtools \.yard-zoom__slider,\s*\.attack-viewtools \.yard-zoom__readout \{\s*display: none;/);
+  });
 });
