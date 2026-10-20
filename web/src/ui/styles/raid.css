@@ -289,3 +289,29 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* A phone on its side: the alert keeps its tribe line in view instead of
+   opening scrolled down to its buttons. */
+@media (width > 620px) and (height <= 500px) {
+  .raid-alert {
+    width: min(92vw, 36rem);
+  }
+
+  .raid-alert .panel__body {
+    max-height: calc(100dvh - 96px);
+    gap: var(--space-2);
+  }
+
+  .raid-alert__head {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+  }
+
+  .raid-alert__monster {
+    padding: var(--space-1);
+  }
+
+  .raid-alert__portrait {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}

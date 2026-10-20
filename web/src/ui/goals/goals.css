@@ -266,3 +266,14 @@
     min-height: 44px;
   }
 }
+
+/* A phone on its side: the 250px kept for the bottom-left buttons left the
+   panel only its title bar, so it moves right of them and the chat chip and
+   takes the height down to the screen's foot instead. */
+@media (width > 620px) and (height <= 500px) {
+  .goals-panel {
+    left: 150px;
+    width: min(380px, calc(100vw - 150px - 98px));
+    max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
+  }
+}
