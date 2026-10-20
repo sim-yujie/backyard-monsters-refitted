@@ -69,7 +69,10 @@ export const blinkRouteLimit = (rank: number): number => 5 * rank;
 /** The blink is this many hops, each a tenth of the way (`Blink.as:12`, `:42`). */
 export const BLINK_HOPS = 10;
 
-/** C7 Bandito: "Whirlwind" (`Bandito.as`, `BanditoAOEDamageSpin.as`). */
+/**
+ * C7 Bandito: "Whirlwind" (`Bandito.as`, `BanditoAOEDamageSpin.as`). The spin
+ * hurts the other side's ground monsters only, never a building (owner, 2026-10-20).
+ */
 export const BANDITO_ID = "C7";
 /** The spin splashes this far round the Bandito, full damage inside it (`Bandito.as:15`). */
 export const BANDITO_RADIUS = 60;
@@ -80,8 +83,8 @@ export const banditoSpeedPercent = (rank: number): number => 50 + 50 * rank;
 export const FANG_ID = "C8";
 /** Each stack of venom hurts for the Fang's damage times this: 0.1, 0.2, 0.3 (the Lab screen's). */
 export const venomShare = (rank: number): number => rank / 10;
-/** The venom bites every half second: Flash's 40 loops at 80 a second (owner, 2026-10-10). */
-export const VENOM_INTERVAL_SECONDS = 0.5;
+/** The venom bites once a second, the design's figure (owner, 2026-10-20; half a second before). */
+export const VENOM_INTERVAL_SECONDS = 1;
 
 /** C9 Brain: "Cloak Delay" (`Brain.as:5-7`, `Invisibility.as`). */
 export const BRAIN_ID = "C9";
@@ -90,7 +93,10 @@ export const cloakDelaySeconds = (rank: number): number => 4 * (rank - 1);
 
 /** C14 Teratorn: "Fireball Bounces" (`Teratorn.as:5-8`, `GlavesOnAttack.as`, `FIREBALL.as`). */
 export const TERATORN_ID = "C14";
-/** A fireball jumps on to a building within this many screen px of the last (`FIREBALL.as:279`). */
+/**
+ * A fireball jumps on to a building within this many screen px of the last, or
+ * to a wall when no building is that close (`FIREBALL.as:279-307`).
+ */
 export const BOUNCE_RADIUS = 100;
 /** How many times the fireball jumps on: its rank. */
 export const bounceCount = (rank: number): number => rank;
