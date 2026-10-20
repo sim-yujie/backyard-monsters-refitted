@@ -1,4 +1,4 @@
-import type { FriendOnline } from "@/api/friends";
+import type { Friend, FriendOnline } from "@/api/friends";
 import type { FriendsOpenTab } from "@/game/friends/friendsView";
 import { buildingName } from "@/game/yard/buildingArt";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -23,6 +23,9 @@ export const onlineText = (online: FriendOnline): string => {
       return "";
   }
 };
+
+/** Whether the player could help this friend today: the wrench on the bar and the list. */
+export const canHelp = (friend: Friend): boolean => !!friend.help && (friend.help.speedup || friend.help.repair);
 
 /** "12 of 100 friends". */
 export const friendCountText = (count: number, max: number): string =>

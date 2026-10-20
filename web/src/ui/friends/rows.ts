@@ -38,13 +38,27 @@ export interface RowPlayer {
   readonly level: number;
 }
 
+/** A corner mark on a row's critter, as the friends bar wears them. */
+export type RowBadge = "wrench" | "gift";
+
+const BADGE_TEXT: Readonly<Record<RowBadge, { readonly icon: string; readonly title: string }>> = {
+  wrench: { icon: "🔧", title: "Can help today" },
+  gift: { icon: "🎁", title: "No gift sent today" },
+};
+
 /**
  * One player's row: critter, name, "Level 12", an optional line under them
- * (online, "2 h ago"), and the actions. `data-userid` lets a test find it.
+ * (online, "2 h ago"), and the actions. `badges` puts the bar's wrench and
+ * gift marks on the critter. `data-userid` lets a test find it.
  */
 export const playerRow = (
   player: RowPlayer,
-  options: { readonly note?: string; readonly noteClass?: string; readonly actions?: readonly HTMLElement[] } = {},
+  options: {
+    readonly note?: string;
+    readonly noteClass?: string;
+    readonly actions?: readonly HTMLElement[];
+    readonly badges?: readonly RowBadge[];
+  } = {},
 ): HTMLLIElement => {
   const row = make("li", "friends-row");
   row.dataset["userid"] = String(player.userid);
@@ -54,6 +68,15 @@ export const playerRow = (
   face.alt = "";
   face.decoding = "async";
   face.loading = "lazy";
+  const faceBox = make("span", "friends-row__face-box");
+  faceBox.append(face);
+  for (const kind of options.badges ?? []) {
+    const { icon, title } = BADGE_TEXT[kind];
+    const badge = make("span", `friends-row__badge friends-row__badge--${kind}`, icon);
+    badge.title = title;
+    badge.setAttribute("aria-label", title);
+    faceBox.append(badge);
+  }
 
   const words = make("div", "friends-row__text");
   const name = make("span", "friends-row__name", player.username);
@@ -66,7 +89,7 @@ export const playerRow = (
 
   const actions = make("div", "friends-row__actions");
   actions.append(...(options.actions ?? []));
-  row.append(face, words, actions);
+  row.append(faceBox, words, actions);
   return row;
 };
 

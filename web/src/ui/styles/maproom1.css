@@ -1280,9 +1280,24 @@
     margin-bottom: var(--space-4);
   }
 
+  /* Smaller corner buttons over the map, so fewer pins sit under them (phone audit K). */
+  .mr1-map__home {
+    top: var(--space-2);
+    left: var(--space-2);
+    justify-content: center;
+    width: var(--control-height);
+    padding: 0;
+  }
+
+  .mr1-map__home-label {
+    display: none;
+  }
+
   .mr1-mini {
-    width: 104px;
-    padding: 6px;
+    top: var(--space-2);
+    right: var(--space-2);
+    width: 84px;
+    padding: 4px;
   }
 
   .mr1-mini__caption,
