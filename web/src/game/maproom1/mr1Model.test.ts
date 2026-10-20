@@ -11,6 +11,8 @@ import {
   formatSpan,
   initials,
   isPlayingNow,
+  LIST_SORT_DIRECTIONS,
+  ListSort,
   mr1AttackTarget,
   pageOf,
   pinTone,
@@ -22,6 +24,7 @@ import {
   sortNeighbours,
   type Mr1Neighbour,
   type Mr1Own,
+  type SortDirection,
 } from "./mr1Model";
 
 const NOW = 1_800_000_000;
@@ -304,6 +307,36 @@ describe("the list", () => {
     expect(names("seen")[0]).toBe("Bramblefoot");
     expect(names("battles").slice(0, 2)).toEqual(["Mossbeard", "Wartwhistle"]);
     expect(names("status").slice(0, 2)).toEqual(["Mossbeard", "Sludgepot"]);
+  });
+
+  it("turns each sort round when asked, keeping A to Z for ties", () => {
+    const names = (sort: ListSort, direction: SortDirection) =>
+      sortNeighbours(world.neighbours, sort, NOW, direction).map((one) => one.name);
+    for (const sort of Object.values(ListSort)) {
+      const start = LIST_SORT_DIRECTIONS[sort].start;
+      // Leaving the direction out is the sort's own starting order.
+      expect(names(sort, start)).toEqual(
+        sortNeighbours(world.neighbours, sort, NOW).map((one) => one.name),
+      );
+    }
+    expect(names("name", "desc")).toEqual([...names("name", "asc")].reverse());
+    const levels = (direction: SortDirection) =>
+      sortNeighbours(world.neighbours, "level", NOW, direction).map((one) => one.level);
+    expect(levels("asc")).toEqual([...levels("asc")].sort((a, b) => a - b));
+    expect(levels("desc")).toEqual([...levels("asc")].reverse());
+    // Most battles last, the tied pair still A to Z.
+    expect(names("battles", "asc").slice(-2)).toEqual(["Mossbeard", "Wartwhistle"]);
+    expect(names("status", "asc").slice(-2)).toEqual(["Mossbeard", "Sludgepot"]);
+    // Equal rows stay A to Z whichever way the key runs.
+    for (const direction of ["asc", "desc"] as const) {
+      const sorted = sortNeighbours(world.neighbours, "level", NOW, direction);
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i]!.level !== sorted[i - 1]!.level) continue;
+        expect(
+          sorted[i - 1]!.name.localeCompare(sorted[i]!.name, undefined, { sensitivity: "base" }),
+        ).toBeLessThanOrEqual(0);
+      }
+    }
   });
 
   it("pages seven at a time and clamps the page", () => {

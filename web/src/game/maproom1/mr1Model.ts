@@ -617,6 +617,24 @@ export const LIST_SORT_LABELS: Readonly<Record<ListSort, string>> = {
   status: "Status",
 };
 
+/** Which way a sort runs: `desc` puts the most (highest, latest, Z) first. */
+export type SortDirection = "asc" | "desc";
+
+/**
+ * Each sort's order the first time it is picked, and the words for both ways
+ * round. Level, last seen, battles and status start "most first" as Flash's
+ * did; name starts A to Z.
+ */
+export const LIST_SORT_DIRECTIONS: Readonly<
+  Record<ListSort, { readonly start: SortDirection; readonly desc: string; readonly asc: string }>
+> = {
+  level: { start: "desc", desc: "Highest level first", asc: "Lowest level first" },
+  seen: { start: "desc", desc: "Most recently seen first", asc: "Longest away first" },
+  name: { start: "asc", desc: "Z to A", asc: "A to Z" },
+  battles: { start: "desc", desc: "Most battles first", asc: "Fewest battles first" },
+  status: { start: "desc", desc: "Attackable first", asc: "Attackable last" },
+};
+
 /** Attackable first, then the ones that attacked you, then the rest. */
 const statusRank = (neighbour: Mr1Neighbour, now: number): number => {
   if (targetReason(neighbour, now)) return 2;
@@ -625,24 +643,27 @@ const statusRank = (neighbour: Mr1Neighbour, now: number): number => {
 
 /**
  * Sorts the neighbours. Level and battles go highest first, last seen most
- * recent first, name A to Z; ties fall back to the name so a refresh does not
- * shuffle equal rows.
+ * recent first, name A to Z, unless `direction` turns them round; ties fall
+ * back to the name, A to Z, so a refresh does not shuffle equal rows.
  */
 export const sortNeighbours = (
   neighbours: readonly Mr1Neighbour[],
   sort: ListSort,
   now: number,
+  direction: SortDirection = LIST_SORT_DIRECTIONS[sort].start,
 ): Mr1Neighbour[] => {
   const byName = (a: Mr1Neighbour, b: Mr1Neighbour): number =>
     a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.userid - b.userid;
+  // Each key compares lowest first; `desc` flips it.
   const key: Record<ListSort, (a: Mr1Neighbour, b: Mr1Neighbour) => number> = {
-    level: (a, b) => b.level - a.level,
-    seen: (a, b) => b.lastSeen - a.lastSeen,
-    name: () => 0,
-    battles: (a, b) => b.attacksFrom + b.attacksTo - (a.attacksFrom + a.attacksTo),
-    status: (a, b) => statusRank(a, now) - statusRank(b, now),
+    level: (a, b) => a.level - b.level,
+    seen: (a, b) => a.lastSeen - b.lastSeen,
+    name: byName,
+    battles: (a, b) => a.attacksFrom + a.attacksTo - (b.attacksFrom + b.attacksTo),
+    status: (a, b) => statusRank(b, now) - statusRank(a, now),
   };
-  return [...neighbours].sort((a, b) => key[sort](a, b) || byName(a, b));
+  const sign = direction === "desc" ? -1 : 1;
+  return [...neighbours].sort((a, b) => sign * key[sort](a, b) || byName(a, b));
 };
 
 export interface ListPage<T> {
