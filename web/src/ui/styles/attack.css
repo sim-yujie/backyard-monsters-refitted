@@ -71,6 +71,27 @@
   color: var(--colour-text-muted);
 }
 
+/* The shop boosts this battle is fought with (beta.4): a small glowing chip. */
+.attack-strip__boosts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--colour-accent);
+  border-radius: 999px;
+  background: var(--colour-accent-soft);
+  box-shadow: 0 0 6px var(--colour-accent-soft);
+  color: var(--colour-accent-hover);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.attack-strip__boosts[hidden] {
+  display: none;
+}
+
 .attack-strip__spacer {
   flex: 1 1 auto;
 }

@@ -313,7 +313,14 @@ const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: nu
       buildinghealthdata: locked.buildinghealthdata ?? {},
       resources: locked.resources ?? {},
     });
-    const defence = defenderForcesOf({ buildingdata: yard.buildingdata, academy: locked.academy, champion: locked.champion });
+    // The player's own shop boosts defend too (beta.4); the raiders have none.
+    const defence = defenderForcesOf({
+      buildingdata: yard.buildingdata,
+      academy: locked.academy,
+      champion: locked.champion,
+      storedata: locked.storedata,
+      now,
+    });
     locked.aiattacks = scheduleColumn(
       withFightLock(readSchedule(locked.aiattacks), { id: raid.id, until: now + START_LOCK_SECONDS })
     );

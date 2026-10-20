@@ -375,6 +375,20 @@ describe("the fight", () => {
   );
 
   test(
+    "defends with the player's running shop boosts, and gives the raiders none (beta.4)",
+    async () => {
+      db.row!.storedata = {
+        TOD: { q: 1, s: NOW - 60, e: NOW + 3_600 },
+        MDOD: { q: 1, s: NOW - 60, e: NOW + 3_600 },
+        MOD: { q: 1, s: NOW - 90_000, e: NOW - 60 },
+      };
+      const { start } = await toFight();
+      expect(start.fight.defence.buffs).toEqual({ defender: { towerDamage: true, monsterArmour: true } });
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
     "runs outside any transaction: the yard's row is free meanwhile, held by a provisional fight lock",
     async () => {
       const id = await toStart();

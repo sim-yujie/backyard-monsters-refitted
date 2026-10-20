@@ -39,6 +39,13 @@ export interface ShopItemRule {
    * post-attack protection included, and written to `save.protected`.
    */
   protection?: true;
+  /**
+   * A battle boost (`TOD`, `MOD`, `MDOD`, `MSOD`): never `alreadyActive`;
+   * buying one that still runs starts its full time again from now, without
+   * adding what was left (owner decision for beta.4, as the Flash save path
+   * did, `controllers/base/save/handlers/purchaseHandler.ts`).
+   */
+  restart?: true;
 }
 
 /**
@@ -65,6 +72,14 @@ export interface ShopItemRule {
  * protection left, as the Flash save path did
  * (`controllers/base/save/handlers/purchaseHandler.ts`), owner decision
  * 2026-09-29. Attacking anyone still ends it (`finaliseAttack.ts`).
+ *
+ * v2.0.0-beta.4, the battle boosts: `TOD` (Tower Overdrive, 600, towers do
+ * 1.25x damage), `MOD` (Monster Overdrive, 500, monsters do 1.25x damage),
+ * `MDOD` (Monster Defensive Buff, 500, monsters take 30% less damage) and
+ * `MSOD` (Monster Speed Buff, 500, monsters move and swing 1.5x as fast), 24
+ * hours each. Each can be bought again while it runs, which restarts it. The
+ * battle reads them off `storedata` at attack start
+ * (`game-rules/combat/defence.ts` `storeBuffs`).
  */
 export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BEW: {},
@@ -80,6 +95,10 @@ export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   PRO1: { protection: true },
   PRO2: { protection: true },
   PRO3: { protection: true },
+  TOD: { restart: true },
+  MOD: { restart: true },
+  MDOD: { restart: true },
+  MSOD: { restart: true },
 };
 
 /**
@@ -88,11 +107,13 @@ export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
  * and resource packs, speed-ups, `POD`, `FIX`, `HOD*`, `PRO*`, `TOD`,
  * `EXH`), so no extra worker (one per outpost) and no Locker Overdrive, and
  * no damage protection: it is sold for the main yard only and protects only
- * that (owner decision 2026-09-29). A
+ * that (owner decision 2026-09-29). Tower Overdrive is sold in outposts and
+ * boosts only the outpost's towers; the monster boosts are the main yard's,
+ * which the attacker's monsters take along into every attack. A
  * timed item bought in an outpost is the outpost's: it lands in the outpost's
  * own `storedata`, as Flash kept store data per yard.
  */
-export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set(["BST", "HOD", "HOD2", "HOD3", "EXH", "POD"]);
+export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set(["BST", "HOD", "HOD2", "HOD3", "EXH", "POD", "TOD"]);
 
 /** What the route sends back as `report`. */
 export interface ShopBuyReport {
@@ -159,7 +180,7 @@ export const yardShopBuyAction = defineYardAction({
 
     if (rule.protection) return buyProtection(input, storeItem.c[0] ?? 0, storeItem.du);
 
-    if (timed && count(entry.e) > now) {
+    if (timed && !rule.restart && count(entry.e) > now) {
       throw yardRefusedErr("alreadyActive", "That is already running.", {
         item,
         endsAt: count(entry.e),

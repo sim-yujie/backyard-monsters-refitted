@@ -26,6 +26,7 @@ export const ShopSection = {
   BUILDING: "building",
   STORAGE: "storage",
   MONSTERS: "monsters",
+  BOOSTS: "boosts",
   PROTECTION: "protection",
 } as const;
 export type ShopSection = (typeof ShopSection)[keyof typeof ShopSection];
@@ -34,6 +35,7 @@ export const SHOP_SECTION_TITLES: Readonly<Record<ShopSection, string>> = {
   building: "Building",
   storage: "Storage and production",
   monsters: "Monsters",
+  boosts: "Battle boosts",
   protection: "Protection",
 };
 
@@ -56,6 +58,11 @@ export interface ShopItem {
    * never "running", always on sale.
    */
   readonly stacks?: true;
+  /**
+   * Bought again while it runs, it starts its full time again from then
+   * (the battle boosts): on sale while it runs, its time left beside the price.
+   */
+  readonly restarts?: true;
 }
 
 const HOUR = 3_600;
@@ -157,6 +164,50 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     seconds: DAY,
     outposts: true,
   },
+  // The battle boosts (beta.4): in battle from the moment they are bought
+  // (`combat/rules/defence.ts` `storeBuffs`). Tower Overdrive is the yard's
+  // own, so an outpost sells it too; the monster boosts are the main yard's,
+  // and its monsters take them into every attack.
+  {
+    item: "TOD",
+    name: "Tower Overdrive",
+    blurb: "This yard's towers do 25% more damage for 24 hours.",
+    section: ShopSection.BOOSTS,
+    prices: [600],
+    seconds: DAY,
+    outposts: true,
+    restarts: true,
+  },
+  {
+    item: "MOD",
+    name: "Monster Overdrive",
+    blurb: "Your monsters do 25% more damage for 24 hours, in your attacks and at home.",
+    section: ShopSection.BOOSTS,
+    prices: [500],
+    seconds: DAY,
+    outposts: false,
+    restarts: true,
+  },
+  {
+    item: "MDOD",
+    name: "Monster Defensive Buff",
+    blurb: "Your monsters take 30% less damage for 24 hours, in your attacks and at home.",
+    section: ShopSection.BOOSTS,
+    prices: [500],
+    seconds: DAY,
+    outposts: false,
+    restarts: true,
+  },
+  {
+    item: "MSOD",
+    name: "Monster Speed Buff",
+    blurb: "Your monsters move and attack 50% faster for 24 hours, in your attacks and at home.",
+    section: ShopSection.BOOSTS,
+    prices: [500],
+    seconds: DAY,
+    outposts: false,
+    restarts: true,
+  },
   // Damage protection: added on top of whatever protection is left, main yard
   // only (owner decision 2026-09-29).
   {
@@ -201,14 +252,10 @@ export interface ComingLaterItem {
 
 /**
  * What the original sold that is held back until its effect is modelled
- * (§8.2; Tower and Monster Overdrive by owner decision 2026-09-29). Listed,
- * never sold: `shop/buy` refuses every one of them.
+ * (§8.2). Listed, never sold: `shop/buy` refuses every one of them. The four
+ * battle boosts were here until beta.4.
  */
 export const COMING_LATER: readonly ComingLaterItem[] = [
-  { items: ["TOD"], name: "Tower Overdrive", blurb: "Towers do more damage for a while." },
-  { items: ["MOD"], name: "Monster Overdrive", blurb: "Your monsters do more damage for a while." },
-  { items: ["MDOD"], name: "Monster Defensive Buff", blurb: "Your monsters take less damage for a while." },
-  { items: ["MSOD"], name: "Monster Speed Buff", blurb: "Your monsters move faster for a while." },
   {
     items: ["BLK2", "BLK3", "BLK4", "BLK5"],
     name: "Wall Upgrades",
@@ -222,8 +269,11 @@ const HATCHERY_OVERDRIVES: readonly string[] = ["HOD", "HOD2", "HOD3"];
 
 /** What a row offers now. */
 export type ShopOfferState =
-  /** On sale; `blocked` says why it cannot be bought now. */
-  | { readonly kind: "buy"; readonly price: number; readonly blocked: string | null }
+  /**
+   * On sale; `blocked` says why it cannot be bought now. A restarting item
+   * that is running says when it ends: buying it again starts it afresh.
+   */
+  | { readonly kind: "buy"; readonly price: number; readonly blocked: string | null; readonly endsAt?: number }
   /** A timed item that is running; it can be bought again once it ends. */
   | { readonly kind: "running"; readonly endsAt: number }
   /** Every step is bought. */
@@ -306,15 +356,14 @@ export const shopOffer = (item: ShopItem, reader: YardStoreReader): ShopOffer =>
   const now = reader.now();
   const storedata = reader.save.storedata;
 
-  if (item.seconds > 0 && !item.stacks) {
-    const endsAt = runningUntil(storedata, item.item, now);
-    if (endsAt !== null) return { item, owned: null, state: { kind: "running", endsAt } };
-  }
+  const endsAt = item.seconds > 0 && !item.stacks ? runningUntil(storedata, item.item, now) : null;
+  if (endsAt !== null && !item.restarts) return { item, owned: null, state: { kind: "running", endsAt } };
 
   const owned = item.prices.length > 1 ? ownedOf(storedata, item.item) : null;
   const price = item.prices[owned ?? 0];
   if (price === undefined) return { item, owned, state: { kind: "soldOut" } };
-  return { item, owned, state: { kind: "buy", price, blocked: blockedReason(item, price, reader, now) } };
+  const blocked = blockedReason(item, price, reader, now);
+  return { item, owned, state: { kind: "buy", price, blocked, ...(endsAt !== null && { endsAt }) } };
 };
 
 /** Repair everything now, or null when nothing is damaged. */
