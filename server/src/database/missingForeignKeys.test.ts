@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   AddMissingForeignKeys,
   MISSING_FOREIGN_KEYS,
-} from "./migrations/20261020_AddMissingForeignKeys";
+} from "./migrations/20261020_AddMissingForeignKeys.js";
 
 /**
  * The migration that adds the foreign keys a fresh `db:init` skipped (#365).
