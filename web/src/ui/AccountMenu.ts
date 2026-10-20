@@ -27,6 +27,9 @@
  * Friends screen, with the count of requests and gifts waiting
  * (`setFriendsCount`); while any wait, the button wears a small count too.
  *
+ * With `onLeaderboard` it has a "Leaderboard" item, which opens the board of
+ * every player by empire points (`ui/leaderboard/LeaderboardDialog.ts`).
+ *
  * With `onWhatsNew` it has a "What's new" item, which opens the newest
  * release's cards again (`ui/events/WhatsNewDialog.ts`).
  *
@@ -66,6 +69,8 @@ export interface AccountMenuOptions {
   readonly onAchievements?: () => void;
   /** The "Friends" item's action; without it there is no such item. */
   readonly onFriends?: () => void;
+  /** The "Leaderboard" item's action; without it there is no such item. */
+  readonly onLeaderboard?: () => void;
   /** The "What's new" item's action; without it there is no such item. */
   readonly onWhatsNew?: () => void;
   /** The "Report a bug" item's action; without it there is no such item. */
@@ -276,6 +281,20 @@ export class AccountMenu {
         onAchievements();
       });
       this.list.append(achievements);
+    }
+    if (options.onLeaderboard) {
+      const onLeaderboard = options.onLeaderboard;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const leaderboard = document.createElement("button");
+      leaderboard.type = "button";
+      leaderboard.className = "btn btn--ghost account-menu__help account-menu__leaderboard";
+      leaderboard.setAttribute("role", "menuitem");
+      leaderboard.textContent = "Leaderboard";
+      leaderboard.addEventListener("click", () => {
+        this.toggle(false);
+        onLeaderboard();
+      });
+      this.list.append(leaderboard);
     }
     if (options.onWhatsNew) {
       const onWhatsNew = options.onWhatsNew;

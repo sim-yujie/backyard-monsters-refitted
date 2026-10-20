@@ -20,6 +20,7 @@ date: 2026-10-27
 - **Report a bug.** Found something broken? Use "Report a bug" in the Account menu (or under the sign-in box) to tell us. A screenshot is added for you, and you can take it out or add your own picture.
 - **Battle boosts in the Shop.** Tower Overdrive (600 Shiny) makes your towers hit 25% harder when your yard is attacked. Monster Overdrive (25% more damage), Monster Defensive Buff (30% less damage taken) and Monster Speed Buff (50% faster) cost 500 Shiny each and help your monsters in your attacks and when your yard is attacked. Each lasts 24 hours; buying one again starts its 24 hours afresh. An outpost can buy its own Tower Overdrive. Older defence replays are hidden once, because the game rules changed to add the boosts.
 - **New achievement: Huge Rage.** Fire the Massive putty bomb from your Catapult in an attack to earn it and 10 Shiny.
+- **Leaderboard.** "Leaderboard" in the Account menu ranks every player by empire points (your yard's points plus what its buildings are worth) and shows each player's Map Room 2 outposts. See the top 100, with your own place lit up, or "You: #N" if you're further down.
 
 ### Improvements
 

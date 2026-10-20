@@ -363,6 +363,22 @@ export const defencesLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limit for the leaderboard (beta.4) - 30 a minute per user. The panel
+ * asks once each time it opens, and the board is cached, so this bounds the
+ * rare rebuild rather than the read.
+ */
+export const leaderboardLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "leaderboard",
+  keyGenerator: byUser("leaderboard"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down." };
+  },
+});
+
+/**
  * Rate limit for another player's achievements (issue #204) - 30 a minute per
  * user. The map asks once per panel opened; a record never worked out (a bot)
  * is worked out on each read, so this bounds that work.
