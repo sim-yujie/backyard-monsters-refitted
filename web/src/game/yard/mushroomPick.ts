@@ -1,5 +1,6 @@
 import type { MushroomPickReport } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
+import { notePumpkins } from "@/game/events/pumpkinHunt";
 import { currentSeason, type Season } from "@/game/season";
 import { freeWorkers } from "./workers";
 import type { YardActionResult, YardStoreAction, YardStoreReader } from "./YardStore";
@@ -68,6 +69,10 @@ export const PUMPKIN_QUIPS: readonly string[] = [
   "Another one for the pumpkin patch.",
   "Just a plain old pumpkin.",
 ];
+
+/** "12 pumpkins found." for the pick's toast during the pumpkin hunt. */
+export const pumpkinsFound = (count: number): string =>
+  `${count.toLocaleString("en-US")} ${count === 1 ? "pumpkin" : "pumpkins"} found.`;
 
 /**
  * A mushroom is known by where it stands. Its index is only its place in the
@@ -199,12 +204,16 @@ export class MushroomPicker {
             this.view.stop(mushroom);
             if (!result.ok) {
               this.view.refused(result.refusal.message);
-            } else if (result.report.golden) {
+              return;
+            }
+            const pumpkins = result.report.pumpkins;
+            if (pumpkins !== undefined) notePumpkins(pumpkins);
+            if (result.report.golden) {
               this.view.golden(result.report.shiny);
             } else {
               const quips = this.season() === "halloween" ? PUMPKIN_QUIPS : ORDINARY_QUIPS;
-              const quip = quips[Math.floor(this.random() * quips.length)];
-              this.view.ordinary(quip ?? quips[0]!);
+              const quip = quips[Math.floor(this.random() * quips.length)] ?? quips[0]!;
+              this.view.ordinary(pumpkins === undefined ? quip : `${quip} ${pumpkinsFound(pumpkins)}`);
             }
           })
           .finally(() => {

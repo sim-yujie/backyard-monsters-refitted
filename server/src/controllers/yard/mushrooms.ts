@@ -1,7 +1,9 @@
 import z from "zod";
+import { sqlProgressStore, type EventProgressStore } from "../../services/events/progressStore.js";
 import { countMushroom } from "../../services/goals/counters.js";
 import type { Random } from "../../services/yard/mushrooms.js";
 import { planMushroomPick } from "../../services/yard/mushrooms.js";
+import { PUMPKIN_HUNT_EVENT, pumpkinHuntOn } from "../../services/yard/season.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -25,15 +27,29 @@ export const YardMushroomPickSchema = z.object({
  * debits nothing), so the credit and the new `mushrooms` land together or,
  * on an error, roll back together. A Shiny-locked account still gets it:
  * rewards arrive whatever the lock (§2.1 "Shiny lock").
+ *
+ * During the Halloween pumpkin hunt (`services/yard/season.ts`) each pick is
+ * a pumpkin and adds one to the player's count for the event's ladder
+ * (`game-data/events/events.ts`), in the same transaction, after the save's
+ * lock, as the ladder claim takes them; the report carries the new count.
+ * The progress store and the hunt's clock are parameters so tests run
+ * without a database, in or out of the event.
  */
-export const mushroomPickAction = (random: Random) =>
+export const mushroomPickAction = (
+  random: Random,
+  store: EventProgressStore = sqlProgressStore,
+  huntOn: (now: number) => boolean = pumpkinHuntOn
+) =>
   defineYardAction({
     schema: YardMushroomPickSchema,
-    run: ({ save, body }) => {
+    run: async ({ save, user, body, now, em }) => {
       const pick = planMushroomPick(save, body.id, { x: body.x, y: body.y }, random);
       if (pick.shiny > 0) save.credits = Number(save.credits ?? 0) + pick.shiny;
+      const pumpkins = huntOn(now)
+        ? await store.addToCounter(em, user.userid, PUMPKIN_HUNT_EVENT, 1)
+        : undefined;
       return {
-        report: pick.report,
+        report: pumpkins === undefined ? pick.report : { ...pick.report, pumpkins },
         // Goals M1-M6 count the pick, golden by the server's own roll (#227).
         slices: { mushrooms: { ...pick.mushrooms }, onboarding: countMushroom(save, pick.report.golden) },
       };

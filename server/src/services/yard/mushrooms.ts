@@ -265,6 +265,11 @@ export interface MushroomPickReport {
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;
+  /**
+   * During the Halloween pumpkin hunt (`season.ts`): the player's pumpkin
+   * count for the event's ladder, this one included. Absent otherwise.
+   */
+  pumpkins?: number;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, afterAll, describe, expect, test } from "bun:test";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
 import {
   MUSHROOM_RESPAWN_SECONDS,
@@ -7,41 +7,52 @@ import {
   readMushrooms,
   type MushroomYardSave,
 } from "./mushrooms.js";
-import { activeEventKinds, forcedEvents, pumpkinHuntOn } from "./season.js";
+import { EVENTS } from "../../game-data/events/events.js";
+import { activeEventKinds, PUMPKIN_HUNT_EVENT, pumpkinHuntOn } from "./season.js";
 
 /**
  * The Halloween season (`season.ts`): on from 2026-10-28 to 2026-11-11 UTC,
- * forced on locally by EVENTS_FORCE_ON, never forced on production; and the
- * pumpkin hunt's faster growth while it is on.
+ * forced on locally by EVENTS_FORCE_ON; and the pumpkin hunt's faster growth
+ * while it is on.
  */
 
 const at = (iso: string): number => Math.floor(Date.parse(iso) / 1000);
 const NONE: ReadonlySet<string> = new Set();
 const FORCED: ReadonlySet<string> = new Set(["halloween-2026"]);
 
+
+// These run outside every event: a local EVENTS_FORCE_ON (server/.env) would
+// switch the Halloween pumpkin hunt on and change the mushroom rules under test.
+const forcedOn = process.env.EVENTS_FORCE_ON;
+beforeAll(() => {
+  delete process.env.EVENTS_FORCE_ON;
+});
+afterAll(() => {
+  if (forcedOn !== undefined) process.env.EVENTS_FORCE_ON = forcedOn;
+});
+
 describe("Halloween season", () => {
   test("on from its start up to, not including, its end", () => {
-    expect(pumpkinHuntOn(at("2026-10-27T23:59:59Z"), NONE)).toBe(false);
-    expect(pumpkinHuntOn(at("2026-10-28T00:00:00Z"), NONE)).toBe(true);
-    expect(pumpkinHuntOn(at("2026-11-10T23:59:59Z"), NONE)).toBe(true);
-    expect(pumpkinHuntOn(at("2026-11-11T00:00:00Z"), NONE)).toBe(false);
+    expect(pumpkinHuntOn(at("2026-10-27T23:59:59Z"), EVENTS, NONE)).toBe(false);
+    expect(pumpkinHuntOn(at("2026-10-28T00:00:00Z"), EVENTS, NONE)).toBe(true);
+    expect(pumpkinHuntOn(at("2026-11-10T23:59:59Z"), EVENTS, NONE)).toBe(true);
+    expect(pumpkinHuntOn(at("2026-11-11T00:00:00Z"), EVENTS, NONE)).toBe(false);
   });
 
   test("the base load's kinds: halloween while on, nothing otherwise", () => {
-    expect(activeEventKinds(at("2026-11-01T12:00:00Z"), NONE)).toEqual(["halloween"]);
-    expect(activeEventKinds(at("2026-10-20T12:00:00Z"), NONE)).toEqual([]);
+    expect(activeEventKinds(at("2026-11-01T12:00:00Z"), EVENTS, NONE)).toEqual(["halloween"]);
+    expect(activeEventKinds(at("2026-10-20T12:00:00Z"), EVENTS, NONE)).toEqual([]);
   });
 
-  test("forced on, it runs from today's UTC midnight for its usual 14 days", () => {
+  test("forced on (EVENTS_FORCE_ON), it runs from today's UTC midnight", () => {
     const today = at("2026-10-20T15:00:00Z");
-    expect(pumpkinHuntOn(today, FORCED)).toBe(true);
-    expect(activeEventKinds(today, FORCED)).toEqual(["halloween"]);
+    expect(pumpkinHuntOn(today, EVENTS, FORCED)).toBe(true);
+    expect(activeEventKinds(today, EVENTS, FORCED)).toEqual(["halloween"]);
   });
 
-  test("EVENTS_FORCE_ON is read off the env and ignored on production", () => {
-    expect([...forcedEvents({ EVENTS_FORCE_ON: " halloween-2026 , other " })]).toEqual(["halloween-2026", "other"]);
-    expect(forcedEvents({ EVENTS_FORCE_ON: "halloween-2026", ENV: "production" }).size).toBe(0);
-    expect(forcedEvents({}).size).toBe(0);
+  test("the hunt is the halloween-2026 event's", () => {
+    expect(PUMPKIN_HUNT_EVENT).toBe("halloween-2026");
+    expect(EVENTS.find((event) => event.id === PUMPKIN_HUNT_EVENT)?.ladder?.label).toBe("Pumpkins found");
   });
 });
 

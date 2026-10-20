@@ -1547,6 +1547,8 @@ export interface MushroomPickReport {
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;
+  /** During the Halloween pumpkin hunt: the player's pumpkin count, this one included. */
+  pumpkins?: number;
 }
 
 /** `POST /bm/yard/shop/buy`. */

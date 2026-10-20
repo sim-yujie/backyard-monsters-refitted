@@ -8,11 +8,13 @@ import {
   mushroomPickAction,
   ORDINARY_QUIPS,
   PUMPKIN_QUIPS,
+  pumpkinsFound,
   pickRefusal,
   SHAKE_MS,
   type MushroomPickView,
 } from "./mushroomPick";
 import { YardStore } from "./YardStore";
+import { onPumpkins } from "@/game/events/pumpkinHunt";
 import { readYard, type YardMushroom } from "./yardModel";
 
 /**
@@ -227,6 +229,29 @@ describe("MushroomPicker", () => {
     await done;
 
     expect(calls.at(-1)).toBe(`ordinary ${PUMPKIN_QUIPS[1]}`);
+  });
+
+  it("during the pumpkin hunt the toast says the count and the Events page hears it", async () => {
+    const save = loadWith();
+    const store = storeOf(save, vi.fn(() => Promise.resolve(answer(save, 0, { pumpkins: 12 }))));
+    const { view, calls } = viewSpy();
+    const time = handTimers();
+    const heard = vi.fn();
+    const stop = onPumpkins(heard);
+    const picker = new MushroomPicker(store, view, {
+      timers: time.timers,
+      random: () => 0.5,
+      season: () => "halloween",
+    });
+
+    const done = picker.pick(store.yard.mushrooms[0]!);
+    time.fire();
+    await done;
+    stop();
+
+    expect(calls.at(-1)).toBe(`ordinary ${PUMPKIN_QUIPS[1]} 12 pumpkins found.`);
+    expect(heard).toHaveBeenCalledWith(12);
+    expect(pumpkinsFound(1)).toBe("1 pumpkin found.");
   });
 
   it("no free worker: says so at once, no shake, nothing sent", async () => {

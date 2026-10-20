@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, afterAll, describe, expect, test } from "bun:test";
 import { catchUpYard, type CatchUpSave } from "./catchUp.js";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
 import { overlaps, rectOf } from "../yardplanner/layoutGeometry.js";
@@ -28,6 +28,17 @@ const saveOf = (count: number, s: number | undefined = LAST): MushroomYardSave =
 });
 
 const countOf = (save: MushroomYardSave): number => readMushrooms(save.mushrooms).l.length;
+
+
+// These run outside every event: a local EVENTS_FORCE_ON (server/.env) would
+// switch the Halloween pumpkin hunt on and change the mushroom rules under test.
+const forcedOn = process.env.EVENTS_FORCE_ON;
+beforeAll(() => {
+  delete process.env.EVENTS_FORCE_ON;
+});
+afterAll(() => {
+  if (forcedOn !== undefined) process.env.EVENTS_FORCE_ON = forcedOn;
+});
 
 describe("catchUpMushrooms", () => {
   test("less than one period since the last spawn grows nothing and leaves s alone", () => {
