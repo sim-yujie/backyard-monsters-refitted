@@ -41,7 +41,10 @@ export interface DefenderForces {
   readonly buffs?: BattleBuffs;
 }
 
-/** The shop items that boost a side in battle, and what each one turns on (`STORE.as:2431-2500`). */
+/**
+ * The shop items that boost a side in battle, and what each one turns on
+ * (`STORE.as:2431-2500`).
+ */
 export const BOOST_ITEMS: Readonly<Record<string, keyof SideBuffs>> = {
   TOD: "towerDamage",
   MOD: "monsterDamage",
@@ -123,7 +126,8 @@ const parseBattleBuffs = (raw: unknown): BattleBuffs | undefined => {
   const value = record(raw);
   const attacker = parseSideBuffs(value?.attacker);
   const defender = parseSideBuffs(value?.defender);
-  return attacker || defender ? { ...(attacker && { attacker }), ...(defender && { defender }) } : undefined;
+  if (!attacker && !defender) return undefined;
+  return { ...(attacker && { attacker }), ...(defender && { defender }) };
 };
 
 /**
@@ -134,7 +138,11 @@ const parseBattleBuffs = (raw: unknown): BattleBuffs | undefined => {
  * @param storedata - The attacker's main yard's `storedata`.
  * @param now - The attack's start, unix seconds.
  */
-export const withAttackerBuffs = (forces: DefenderForces, storedata: unknown, now: number): DefenderForces => {
+export const withAttackerBuffs = (
+  forces: DefenderForces,
+  storedata: unknown,
+  now: number,
+): DefenderForces => {
   const attacker = storeBuffs(storedata, now, "attacker");
   if (!attacker) return forces;
   return { ...forces, buffs: { ...forces.buffs, attacker } };
@@ -200,7 +208,8 @@ export const defenderForcesOf = (save: {
   readonly now?: number;
 }): DefenderForces => {
   const defenderRanks = academyRanks(save.academy);
-  const defender = save.now === undefined ? undefined : storeBuffs(save.storedata, save.now, "defender");
+  const defender =
+    save.now === undefined ? undefined : storeBuffs(save.storedata, save.now, "defender");
   return {
     bunkers: bunkerGarrisons(record(save.buildingdata) as CombatBuildingDataMap | null),
     defenderLevels: academyLevels(save.academy),
@@ -268,18 +277,22 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
  */
 export const battleDefence = (
   forces: DefenderForces | null | undefined,
-): Pick<BattleOptions, "bunkers" | "defenderLevels" | "defenderRanks" | "defenderChampions" | "buffs"> => {
+): Pick<
+  BattleOptions,
+  "bunkers" | "defenderLevels" | "defenderRanks" | "defenderChampions" | "buffs"
+> => {
   if (!forces) return {};
   const hasBunkers = Object.keys(forces.bunkers).length > 0;
   const hasChampions = forces.defenderChampions.length > 0;
   const hasLevels = Object.keys(forces.defenderLevels).length > 0;
   const hasRanks = Object.keys(forces.defenderRanks ?? {}).length > 0;
+  const hasBuffs = Boolean(forces.buffs && (forces.buffs.attacker || forces.buffs.defender));
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
     ...(hasBunkers || hasChampions || hasLevels ? { defenderLevels: forces.defenderLevels } : {}),
     // Only a bunker's monsters fight at the defender's rank (issue #352).
     ...(hasBunkers && hasRanks ? { defenderRanks: forces.defenderRanks as MonsterRanks } : {}),
     ...(hasChampions ? { defenderChampions: forces.defenderChampions } : {}),
-    ...(forces.buffs && (forces.buffs.attacker || forces.buffs.defender) ? { buffs: forces.buffs } : {}),
+    ...(hasBuffs ? { buffs: forces.buffs } : {}),
   };
 };

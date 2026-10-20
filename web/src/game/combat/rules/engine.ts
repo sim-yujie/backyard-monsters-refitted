@@ -581,7 +581,10 @@ export interface BattleBuffs {
 export const TOWER_OVERDRIVE = 1.25;
 /** Monster Overdrive's damage multiplier (`MonsterDust.k_value`). */
 export const MONSTER_OVERDRIVE = 1.25;
-/** The Monster Defensive Buff's armour: the share of each hit shrugged off (`BeastMode.k_value`). */
+/**
+ * The Monster Defensive Buff's armour: the share of each hit shrugged off
+ * (`BeastMode.k_value`).
+ */
 export const MONSTER_ARMOUR_BUFF = 0.3;
 /** The Monster Speed Buff's move and swing multiplier (`HyperSpeed.k_value`). */
 export const MONSTER_SPEED_BUFF = 1.5;
