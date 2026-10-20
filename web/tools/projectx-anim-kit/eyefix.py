@@ -17,6 +17,7 @@ from scipy import ndimage as ndi
 
 N, ROWS = 30, 12
 SS = 4  # supersampling for the painted parts
+CUT = 48  # top row of the old still inside a frame (build_h.py's PY)
 ELEV = math.radians(25)  # camera height used to project the leaves
 
 # iris turn (degrees, + = to screen-right) by heading; None = keep the art as it is
@@ -36,6 +37,8 @@ def ball(a):
     comp = lab == i + 1
     # grow into the shaded side of the ball (darker but still unsaturated cream)
     soft = solid & (lum > 85) & (sat < 0.33)
+    # a painted iris and pupil at the rim belong to the ball too
+    soft |= solid & (((rgb[..., 0] > 120) & (rgb[..., 0] > rgb[..., 1] + 30) & (rgb[..., 2] < 90)) | (lum < 60))
     for _ in range(4):
         comp |= ndi.binary_dilation(comp) & soft
     comp = ndi.binary_opening(ndi.binary_fill_holes(comp))
@@ -46,9 +49,27 @@ def ball(a):
     for y in range(top, min(top + 40, comp.shape[0])):
         xx = np.where(comp[y])[0]
         if len(xx) and xx.max() - xx.min() + 1 > best:
-            best = xx.max() - xx.min() + 1; cx = (xx.max() + xx.min()) / 2
+            best = xx.max() - xx.min() + 1; cx = (xx.max() + xx.min()) / 2; eq = y
     R = best / 2
+    if top == CUT:  # the idle still's ball is cut flat by the old cell top
+        # the cut chord's width says how much of the cap is missing
+        xx = np.where(comp[CUT])[0]; half = min((xx.max() - xx.min() + 1) / 2, R)
+        return (xx.max() + xx.min()) / 2, CUT - (R - math.sqrt(R * R - half * half)) + R - 0.5, R, comp
     return cx, top + R - 0.5, R, comp
+
+
+def round_top(a, cx, cy, R):
+    """Paint back the top of the ball that the idle still lost to its cell edge."""
+    out = a.copy()
+    for x in range(int(cx - R), int(cx + R) + 2):
+        if not (0 <= x < a.shape[1]) or a[CUT, x, 3] < 200:
+            continue
+        for y in range(CUT - 1, int(cy - R) - 2, -1):
+            cov = np.clip(R + 0.5 - math.hypot(x - cx, y - cy), 0, 1)
+            if cov <= 0 or out[y, x, 3] >= 255 * cov:
+                continue
+            out[y, x, :3] = a[CUT, x, :3]; out[y, x, 3] = 255 * cov
+    return out
 
 
 def lerp(c0, c1, t):
@@ -161,6 +182,8 @@ def over(dst, src):
 
 def fix_frame(a, n, k):
     cx, cy, R, mask = ball(a)
+    if k == 0 and mask[CUT].any():
+        a = round_top(a, cx, cy, R)
     H, W = a.shape[:2]
     items = blades(n, k, cx, cy, R)
     back = leaf_layer(H, W, items, False)  # every leaf sits behind the ball
@@ -169,7 +192,7 @@ def fix_frame(a, n, k):
     disk = np.clip(R + 0.5 - np.hypot(xx - cx, yy - cy), 0, 1)
     rgb = a[..., :3]
     lips = (a[..., 3] > 128) & (rgb[..., 0] > 140) & (rgb[..., 0] > rgb[..., 1] + 40) & (rgb[..., 2] > 60)         & (np.abs(xx - cx) < 1.2 * R) & (yy > cy) & (yy < cy + 1.8 * R)
-    hide = np.maximum(disk, ndi.uniform_filter(lips.astype(float), 3))
+    hide = np.maximum(disk, ndi.uniform_filter((lips | ndi.binary_dilation(mask)).astype(float), 3))
     back[..., 3] *= 1 - np.clip(hide, 0, 1)
     mask = (disk > 0.5) & ~lips
     out = over(a, back)
