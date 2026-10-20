@@ -171,6 +171,19 @@ describe("groupCompletedJobs", () => {
     expect(noticeText(two!)).toBe("Your champion starved 2 times: Gorgo lost a food bonus, Gorgo lost a food bonus");
   });
 
+  it("says a champion's egg hatched, as a sentence of its own", () => {
+    const hatch: CompletedJob = { kind: "championHatch", id: "G2", t: null, at: 1, detail: {} };
+    const [group] = groupCompletedJobs([hatch]);
+    expect(noticeText(group!)).toBe("Your Drull has hatched!");
+    expect(jobLineText("jobs", [hatch])).toBe("Your Drull has hatched!");
+    expect(jobLineText("away", [hatch, upgrade(1, CANNON, 5)])).toBe(
+      `Your Drull has hatched! While you were away: upgrade finished: ${typeName(CANNON)} 5`,
+    );
+    expect(jobLine("away", [hatch, upgrade(1, CANNON, 5)], null).textContent).toBe(
+      `Your Drull has hatched! While you were away: upgrade finished: ${typeName(CANNON)} 5`,
+    );
+  });
+
   it("reads a kind a later phase adds through its common keys", () => {
     const [group] = groupCompletedJobs([{ kind: "hunger", id: "C5", t: null, at: 1, detail: {} }]);
     expect(noticeText(group!)).toBe("Hunger finished: C5");
