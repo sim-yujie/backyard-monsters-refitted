@@ -38,7 +38,7 @@ describe("showGoldenMushroom", () => {
     expect(layer.querySelector(".panel__title")?.textContent).toBe(JACK_O_LANTERN_TITLE);
     expect(layer.querySelector("img")?.getAttribute("src")).toBe(JACK_O_LANTERN_ART);
     const text = layer.querySelector(".mushroom-reward__text")!;
-    expect(spokenText(text)).toMatch(/jack-o'-lantern worth Shiny 3\. Pumpkins grow back every hour/);
+    expect(spokenText(text)).toMatch(/jack-o'-lantern worth Shiny 3\. Pumpkins keep growing while Halloween lasts\./);
     popup.close();
   });
 });

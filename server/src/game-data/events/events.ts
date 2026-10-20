@@ -91,7 +91,7 @@ export const HALLOWEEN_2026_CALENDAR: readonly CalendarDay[] = [
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * HALLOWEEN 2026 PUMPKIN HUNT LADDER: what picking pumpkins earns.
- * PLACEHOLDER TIERS (2026-10-20), for the owner to tune. During the event
+ * Tiers set by the owner (2026-10-20). During the event
  * the yard's mushrooms grow as pumpkins, about one an hour
  * (`services/yard/season.ts`), and every pumpkin a player picks adds one to
  * the counter (`controllers/yard/mushrooms.ts`). Each tier is claimed once,
@@ -114,7 +114,7 @@ export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
     need: 100,
     rewards: [
       { kind: "decoration", type: 110, count: 1 },
-      { kind: "shiny", amount: 50 },
+      { kind: "shiny", amount: 30 },
     ],
   },
 ];

@@ -35,7 +35,7 @@ const DRESS: Readonly<Record<Season, { art: string; title: string; before: strin
     art: JACK_O_LANTERN_ART,
     title: JACK_O_LANTERN_TITLE,
     before: "You've picked a glowing jack-o'-lantern worth ",
-    after: ". Pumpkins grow back every hour while Halloween lasts.",
+    after: ". Pumpkins keep growing while Halloween lasts.",
   },
 };
 

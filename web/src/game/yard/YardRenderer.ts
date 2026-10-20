@@ -252,6 +252,7 @@ export class YardRenderer {
       // Both stand on their base: the glyph's stalk foot, the pumpkin's bottom.
       if (pumpkin) sprite.anchor.set(0.5, PUMPKIN_BASE);
       else sprite.anchor.set(0.5, 0.85);
+      sprite.scale.set(this.mushroomSize());
       sprite.position.set(mushroom.worldX, mushroom.worldY);
       this.mushroomLayer.addChild(sprite);
       this.mushroomSprites.set(key, sprite);
@@ -916,7 +917,13 @@ export class YardRenderer {
     for (const sprite of this.mushroomSprites.values()) {
       sprite.texture = pumpkin ?? atlas.mushroom;
       sprite.anchor.set(0.5, pumpkin ? PUMPKIN_BASE : 0.85);
+      sprite.scale.set(this.mushroomSize());
     }
+  }
+
+  /** How big a mushroom sprite stands at rest: the Halloween pumpkin a bit bigger. */
+  private mushroomSize(): number {
+    return this.season === "halloween" && this.pumpkin ? PUMPKIN_SCALE : 1;
   }
 
   private clearMushrooms(): void {
@@ -928,7 +935,7 @@ export class YardRenderer {
   private popMushrooms(deltaSeconds: number): void {
     for (const [key, elapsed] of this.popping) {
       const now = elapsed + deltaSeconds;
-      this.mushroomSprites.get(key)?.scale.set(mushroomPopScale(now));
+      this.mushroomSprites.get(key)?.scale.set(mushroomPopScale(now) * this.mushroomSize());
       if (now >= MUSHROOM_POP_SECONDS) this.popping.delete(key);
       else this.popping.set(key, now);
     }
@@ -972,11 +979,13 @@ export class YardRenderer {
 
 /**
  * The Halloween yard pumpkin: the small pumpkin decoration's top picture
- * (25 x 22), about the mushroom glyph's size. `PUMPKIN_BASE` is where its
- * bottom sits, as a fraction of its height.
+ * (25 x 22), drawn at `PUMPKIN_SCALE` so it reads a little bigger than the
+ * mushroom glyph (owner's call, 20 Oct 2026). `PUMPKIN_BASE` is where its
+ * bottom sits, as a fraction of its height; scaling keeps it on the ground.
  */
 const PUMPKIN_ART = "/assets/buildings/decorations/pumpkins/top.png";
 const PUMPKIN_BASE = 0.9;
+const PUMPKIN_SCALE = 1.3;
 
 /** How far a hatchery's number is raised over a job bar and its time, world pixels at zoom 1. */
 const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;
