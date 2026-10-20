@@ -85,6 +85,14 @@ describe("GET /bm/events after a hunt ends", () => {
     await store.claimTier(em, 4, "krallen-2026-11", 0, KRALLEN_HUNT_GOAL);
     expect(await ids(store, DEC_3)).not.toContain("krallen-2026-11:ended");
   });
+
+  test("not shown to a player whose Krallen is at the top already: the goal pays nothing more", async () => {
+    const store = memoryProgressStore();
+    await store.addToCounter(em, 4, "krallen-2026-11", KRALLEN_HUNT_GOAL);
+    const topped = { ...user, save: { ...user.save, champion: [{ t: 5, l: 5 }] } } as unknown as User;
+    const views = (await eventsAnswer(em, store, topped, DEC_3)).events.map((view) => view.id);
+    expect(views).not.toContain("krallen-2026-11");
+  });
 });
 
 describe("POST /bm/whatsnew/seen body", () => {

@@ -103,6 +103,10 @@ export const eventView = (
   };
 };
 
-/** Whether the player has a ladder tier reached and not yet claimed. */
+/**
+ * Whether the player has a ladder tier reached and not yet claimed that would
+ * pay something: a Krallen at the top already takes nothing from the hunt.
+ */
 export const hasTierToClaim = (view: EventView): boolean =>
+  !(view.krallen && view.krallen.level >= view.krallen.maxLevel) &&
   (view.ladder?.tiers ?? []).some((tier) => !tier.claimed && (view.ladder?.counter ?? 0) >= tier.need);
