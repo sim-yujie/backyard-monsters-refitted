@@ -60,7 +60,7 @@ export const UPCOMING_DAYS = 30;
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * HALLOWEEN 2026 LOGIN CALENDAR: the 14 daily rewards, day 1 first.
- * PLACEHOLDER AMOUNTS (2026-10-20), for the owner to tune. Resources land
+ * Amounts approved by the owner (2026-10-20). Resources land
  * clamped to the player's storage cap, like every other reward.
  * r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 111 is the
  * Mini-Pumpkin, 110 the D.A.V.E. Pumpkin.

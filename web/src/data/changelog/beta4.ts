@@ -8,7 +8,7 @@ export const BETA_4: ChangelogRelease = {
     {
       image: "/whats-new/beta4-halloween.webp",
       title: "Halloween is here!",
-      text: "From 28 October your yard goes spooky for two whole weeks. Dark grass, a big moon and pumpkins where the mushrooms used to grow!",
+      text: "From 28 October your yard goes spooky for two whole weeks. Dark grass and pumpkins where the mushrooms used to grow!",
     },
     {
       image: "/whats-new/beta4-pumpkin-hunt.webp",
