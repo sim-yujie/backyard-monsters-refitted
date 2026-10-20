@@ -21,6 +21,23 @@ export const guidedStartOn = (env: Record<string, string | undefined>): boolean 
 export const sandboxStartAvailable = (env: Record<string, string | undefined>): boolean =>
   env.ENV !== Env.PROD && env.DEV_SANDBOX === "true";
 
+/**
+ * Events switched on now for local testing, whatever their dates
+ * (`game-data/events/events.ts`): EVENTS_FORCE_ON=halloween-2026, or several
+ * ids comma-separated. A forced event runs from today's UTC midnight for its
+ * usual length (`services/events/schedule.ts`). Never on ENV=production,
+ * where the list is always empty.
+ */
+export const eventsForcedOn = (env: Record<string, string | undefined>): ReadonlySet<string> =>
+  env.ENV === Env.PROD
+    ? new Set()
+    : new Set(
+        (env.EVENTS_FORCE_ON ?? "")
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0)
+      );
+
 /** Visit our Wiki to get more information on each flag.
  * Wiki: https://github.com/bym-refitted/backyard-monsters-refitted/wiki/Dev-Settings-%E2%80%90-Configuration
  */

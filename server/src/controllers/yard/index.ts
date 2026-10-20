@@ -52,6 +52,7 @@ import { goalsRoutes } from "./goals.js";
 import { guideRoutes } from "./guide.js";
 import { tipsRoutes } from "./tips.js";
 import { achievementsRoutes } from "./achievements.js";
+import { eventsRoutes } from "./events.js";
 
 /**
  * Every yard action route, mounted by `app.routes.ts` as
@@ -123,4 +124,6 @@ export const yardRoutes: YardRouteEntry[] = [
   ...tipsRoutes,
   // Achievements (issue #204, WP4).
   ...achievementsRoutes,
+  // Events: the login calendar and collection ladder claims (`events.ts`).
+  ...eventsRoutes,
 ];
