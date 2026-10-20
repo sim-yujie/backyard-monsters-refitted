@@ -4,6 +4,7 @@ import {
   battlesText,
   formatRespawn,
   initials,
+  isPlayingNow,
   pinTone,
   presenceText,
   ReasonKey,
@@ -20,6 +21,7 @@ import { tribeInfo } from "@/game/maproom1/tribes";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { monsterName } from "@/ui/attack/ArmyPanel";
+import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon, type IconName } from "./icons";
 
 /**
@@ -141,7 +143,7 @@ const reasonLine = (
   const line = el("p", "mr1-reason");
   line.id = id;
   if (reason.key === ReasonKey.PLAYING) {
-    line.append(el("span", "mr1-dot mr1-dot--online"));
+    line.append(onlineDot("", true));
   } else {
     line.append(icon(REASON_ICONS[reason.key] ?? "lock", 16, "mr1-icon mr1-reason__icon"));
   }
@@ -187,10 +189,9 @@ export const targetCard = (
   const head = el("div", "mr1-card__head");
   const titles = el("div", "mr1-card__titles");
   const titleRow = el("div", "mr1-card__title-row");
-  titleRow.append(
-    el("h2", "mr1-card__title u-display", target.name),
-    el("span", "chip", `Level ${target.level}`),
-  );
+  titleRow.append(el("h2", "mr1-card__title u-display", target.name));
+  if (target.kind !== "tribe" && isPlayingNow(target, state.now)) titleRow.append(onlineDot());
+  titleRow.append(el("span", "chip", `Level ${target.level}`));
   titles.append(titleRow);
   if (target.kind === "tribe") {
     titles.append(
@@ -201,11 +202,8 @@ export const targetCard = (
       ),
     );
   } else {
-    const presence = el("span", "mr1-card__sub");
-    if (presenceText(target, state.now) === "Playing now")
-      presence.append(el("span", "mr1-dot mr1-dot--online"));
-    presence.append(presenceText(target, state.now));
-    titles.append(presence);
+    const seen = presenceText(target, state.now);
+    if (seen) titles.append(el("span", "mr1-card__sub", seen));
   }
   const close = button("btn btn--icon mr1-card__close");
   close.setAttribute("aria-label", "Close");

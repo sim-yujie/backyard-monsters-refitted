@@ -27,6 +27,7 @@ import {
   storeItemJobs,
   trainingEndsAt,
   trainingJobs,
+  mushroomJobs,
   yardJobs,
   type YardJob,
 } from "./jobs";
@@ -334,6 +335,10 @@ describe("mushrooms and store buffs", () => {
       mushrooms: { s: SAVED, l: Array.from({ length: MUSHROOM_CAP }, () => ({})) },
     });
     expect(yardJobs(full).some((job) => job.kind === JobKind.MUSHROOM)).toBe(false);
+  });
+
+  it("a pumpkin respawns an hour after the last while Halloween is on", () => {
+    expect(mushroomJobs({ s: SAVED, l: [] }, 3_600)[0]?.endsAt).toBe(SAVED + 3_600);
   });
 
   it("stops at 10 mushrooms, and a yard above 10 has no respawn either", () => {

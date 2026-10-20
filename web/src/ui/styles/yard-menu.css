@@ -1,0 +1,159 @@
+/*
+ * The phone's Menu (#381, `YardMenu.ts`): on a phone the own yard's bottom
+ * row is Menu, Friends (`friends-bar.css`), Collect all and Build; the other
+ * round buttons sit in a grid on a sheet that slides up from the bottom. The
+ * dock wears `is-folded` while they are in there. A desktop never folds, so
+ * nothing here changes it.
+ *
+ * Every value comes from tokens.css.
+ */
+
+.yard-menu {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--z-popup);
+  padding: var(--space-2) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  border: 1px solid var(--colour-border);
+  border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-popup);
+  pointer-events: auto;
+  animation: yard-menu-up var(--motion-fast) var(--easing);
+}
+
+.yard-menu[hidden] {
+  display: none;
+}
+
+@keyframes yard-menu-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yard-menu {
+    animation: none;
+  }
+}
+
+.yard-menu__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.yard-menu__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+}
+
+.yard-menu__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3) 0;
+  justify-items: center;
+}
+
+/* Out of the dock's corner boxes, the buttons sit in the grid's cells. */
+.yard-menu__grid > * {
+  position: static;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.yard-menu__grid .yard-dock__label {
+  max-width: 100%;
+  padding-inline: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The audit's order: the ways out first, then what needs a look. */
+.yard-menu__grid > [data-dock="map"] {
+  order: 1;
+}
+
+.yard-menu__grid > [data-dock="mail"] {
+  order: 2;
+}
+
+.yard-menu__grid > [data-dock="monsters"] {
+  order: 3;
+}
+
+.yard-menu__grid > [data-dock="bell"] {
+  order: 4;
+}
+
+.yard-menu__grid > [data-dock="goals"] {
+  order: 5;
+}
+
+.yard-menu__grid > .yard-dock__button--defences {
+  order: 6;
+}
+
+.yard-menu__grid > [data-dock="layout"] {
+  order: 7;
+}
+
+.yard-menu__grid > [data-dock="kits"] {
+  order: 8;
+}
+
+.yard-menu__grid > .yard-switcher {
+  order: 9;
+}
+
+/* The yard list opens upwards from the switcher, over the sheet. */
+.yard-menu__grid .yard-switcher__list {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.yard-dock__badge.yard-menu__badge {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+/* Upright: Menu where Map was, Friends beside it, Collect all between them
+   and Build. */
+@media (width <= 620px) {
+  .yard-dock.is-folded .yard-dock__right > .yard-collect {
+    right: calc((100vw - 244px) / 2 + 56px);
+    bottom: 12px;
+    transform: scale(0.84);
+    transform-origin: bottom center;
+  }
+}
+
+/* Sideways: one row of buttons in the sheet, and Collect all beside Build. */
+@media (width > 620px) and (height <= 500px) {
+  .yard-menu__grid {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  }
+
+  .yard-dock.is-folded .yard-dock__right > .yard-collect {
+    top: auto;
+    right: 108px;
+    bottom: var(--space-4);
+    transform: scale(0.76);
+    transform-origin: bottom right;
+  }
+}
+
+/* The yard's readout line would sit on the bottom row. */
+.overlay__layer:has(> .yard-dock.is-folded) > .cell-readout {
+  display: none;
+}

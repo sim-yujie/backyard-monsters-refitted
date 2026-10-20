@@ -17,6 +17,7 @@ import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { setPlayerPool } from "@/game/friends/friendsView";
+import { currentSeason } from "@/game/season";
 import {
   friendRefusal,
   friendsApi,
@@ -2419,7 +2420,7 @@ export class YardScene implements Scene {
     return {
       shake: (spot) => this.renderer.shakeMushroom(spot, true),
       stop: (spot) => this.renderer.shakeMushroom(spot, false),
-      golden: (shiny) => void showGoldenMushroom(context.overlay.modal, shiny),
+      golden: (shiny) => void showGoldenMushroom(context.overlay.modal, shiny, currentSeason()),
       ordinary: (quip) => this.notices.show("mushroom", quip, { level: "info", timeoutMs: 4000 }),
       refused: (message) =>
         this.notices.show("mushroom", message, { level: "error", timeoutMs: 5000 }),

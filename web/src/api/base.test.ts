@@ -11,6 +11,7 @@ import {
 } from "./base";
 import type { AttackData, BaseLoadResponse } from "./types";
 import type { AttackRoster } from "@/game/attack/attackTarget";
+import { currentSeason, setSeason } from "@/game/season";
 import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attackStats";
 
 /** A real own-yard load of the sandbox account, captured from the dev server. */
@@ -268,5 +269,19 @@ describe("saveAttack", () => {
       left: "1",
       attackloot: '{"r1":5,"r2":0,"r3":0,"r4":0}',
     });
+  });
+});
+
+describe("the season off a base load", () => {
+  afterEach(() => setSeason("normal"));
+
+  it("dresses the yard for Halloween while the load says it is on, and back after", async () => {
+    stubFetch({ basesaveid: 9, buildingdata: {}, activeevents: ["halloween"] });
+    await viewBase("21970243208", "wild");
+    expect(currentSeason()).toBe("halloween");
+
+    stubFetch({ basesaveid: 9, buildingdata: {} });
+    await viewBase("21970243208", "wild");
+    expect(currentSeason()).toBe("normal");
   });
 });

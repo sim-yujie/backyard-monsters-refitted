@@ -210,7 +210,7 @@ export class MapRoomUi {
     bottomRight.append(this.rangeControl.legend);
     const tools = document.createElement("div");
     tools.className = "mr2-toolrow";
-    tools.append(this.rangeControl.button, this.kitFilterControl.element);
+    tools.append(this.rangeControl.button, this.kitFilterControl.toggle, this.kitFilterControl.element);
     this.zoomControl.mount(tools);
     bottomRight.append(tools);
     this.tools = tools;
@@ -234,6 +234,7 @@ export class MapRoomUi {
     this.autoAttack = null;
     this.minimap.destroy();
     this.zoomControl.destroy();
+    this.kitFilterControl.destroy();
     this.notices.destroy();
     for (const dock of this.docks) dock.remove();
     this.docks.length = 0;

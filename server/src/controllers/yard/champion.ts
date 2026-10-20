@@ -7,6 +7,7 @@ import {
   YardChampionTypedSchema,
 } from "../../schemas/YardSchemas.js";
 import {
+  planChampionCancelEgg,
   planChampionEvolve,
   planChampionFeed,
   planChampionHeal,
@@ -24,10 +25,16 @@ import { defineYardAction } from "./yardAction.js";
  * before any of these runs. The wrapper charges the Shiny and writes once.
  */
 
-/** `POST /bm/yard/champion/raise` — hatch Gorgo, Drull or Fomor at the cage, free. */
+/** `POST /bm/yard/champion/raise` — lay Gorgo's, Drull's or Fomor's egg in the cage, free; it hatches in a day. */
 export const yardChampionRaiseAction = defineYardAction({
   schema: YardChampionRaiseSchema,
   run: ({ save, body, now }) => planChampionRaise(save, body.type, now),
+});
+
+/** `POST /bm/yard/champion/cancel-egg` — take the egg out of the cage, to pick again. */
+export const yardChampionCancelEggAction = defineYardAction({
+  schema: YardChampionSchema,
+  run: ({ save }) => planChampionCancelEgg(save),
 });
 
 /** `POST /bm/yard/champion/feed` — feed the champion from housing (`monsters`) or with Shiny. */

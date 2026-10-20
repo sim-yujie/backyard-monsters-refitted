@@ -303,12 +303,13 @@ import {
  *    caught by the retreat at the end of the countdown, is taken off the field
  *    rather than walked to the edge (`ATTACK.as:237-240`). It deals no more
  *    damage either way.
- * 8. **Not modelled at all**, each because its numbers were never traced
- *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
- *    scope: invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
- *    four emitters, every siege weapon, and the per-creep `_hitLimit`, even
- *    for a raid (note 17, owner decision 2026-10-06). A yard holding one of
- *    those buildings fires it as an ordinary single-target tower.
+ * 8. **Not modelled at all**, each because it is out of Map Room 2's scope:
+ *    the Stronghold's four emitters, every siege weapon, and the per-creep
+ *    `_hitLimit`, even for a raid (note 17, owner decision 2026-10-06). A yard
+ *    holding one of those buildings fires it as an ordinary single-target
+ *    tower. The Monster Lab's moves (Brain's cloak, Bolt's blink, Fang's
+ *    venom, Teratorn's bounces and the rest) are modelled since issue #352,
+ *    with the owner's numbers (`docs/design/special-moves.md`).
  * 9. **The defence is supplied, and its rules are the owner's.** The defender's
  *    bunker blob is opaque to the server (§6 item 5), so
  *    {@link BattleOptions.bunkers} carries it, read off `buildingdata` by
@@ -2865,14 +2866,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * the other side and, for an attacker, every building, within `radius` of
    * the striker, nearest first (`sortOn dist`; a tie goes creeps before
    * buildings, then by id, which Flash leaves to the sort). A defender's
-   * monsters never splash buildings (`:36-39`). `skipCreep` and
-   * `skipBuilding` are the initial target when it is left out.
+   * monsters never splash buildings (`:36-39`), and nor does a splash that
+   * leaves them out with `buildings` false. `skipCreep` and `skipBuilding` are
+   * the initial target when it is left out.
    */
   const splashTargets = (
     striker: Creep,
     radius: number,
     skipCreep: Creep | null,
     skipBuilding: EngineBuilding | null,
+    buildings = true,
   ): SplashTarget[] => {
     const found: SplashTarget[] = [];
     const side = striker.friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS;
@@ -2880,7 +2883,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (hit.creep.id === striker.id || hit.creep === skipCreep || hit.creep.gone) continue;
       found.push({ creep: hit.creep, building: null, dist: hit.dist });
     }
-    if (!striker.friendly) {
+    if (!striker.friendly && buildings) {
       for (const building of yard.buildings) {
         if (building === skipBuilding || !splashable(building)) continue;
         const squared = Math.trunc(distanceSquared(striker.x, striker.y, building.cx, building.cy));
@@ -2947,9 +2950,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       dealSplash(creep, damage * wormzerMultiplier(creep.rank), WORMZER_RADIUS, 0, targets);
       noteSplash(creep, WORMZER_RADIUS, targets.length);
     } else if (creep.monsterId === BANDITO_ID) {
-      // The whirlwind: everything within 60, the target left out, no cap, full damage
-      // (`Bandito.as:15`, `BanditoAOEDamageSpin`: `includeInitialTarget` false).
-      const targets = splashTargets(creep, BANDITO_RADIUS, foe, building);
+      // The whirlwind: the other side's ground monsters within 60, the target left
+      // out, no cap, full damage (`Bandito.as:15`, `BanditoAOEDamageSpin`:
+      // `includeInitialTarget` false). No building, the owner's choice (2026-10-20).
+      const targets = splashTargets(creep, BANDITO_RADIUS, foe, null, false);
       dealSplash(creep, damage, BANDITO_RADIUS, BANDITO_RADIUS, targets);
       noteSplash(creep, BANDITO_RADIUS, targets.length);
     } else if (creep.monsterId === FANG_ID) {
@@ -3006,9 +3010,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * `FIREBALL.FindGlaiveTarget` (`FIREBALL.as:269-340`): after the fireball
    * lands, a ranked Teratorn's jumps on `rank` times, each to the nearest
    * other building within 100 screen px of the last (not a wall, mushroom,
-   * decoration, immovable, enemy, trap or jarred tower), skipping back to the
-   * one before only when another stands. Each jump is half the last, and loots
-   * as a `DummyTarget` does (1).
+   * decoration, immovable, enemy, trap or jarred tower), or, when none is, to
+   * the nearest standing wall that close; it skips back to the one before only
+   * when another stands. Each jump is half the last, and loots as a
+   * `DummyTarget` does (1).
    */
   const bounceFireball = (creep: Creep, first: EngineBuilding, damage: number): void => {
     let from = first;
@@ -3019,13 +3024,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const originX = from.sx;
       const originY = from.sy + from.middle;
       const near: { building: EngineBuilding; dist: number }[] = [];
-      for (const building of yard.buildings) {
-        if (building === from || !glaiveable(building)) continue;
-        const dist = Math.trunc(
-          Math.sqrt(distanceSquared(originX, originY, building.sx, building.sy + building.middle)),
-        );
-        if (dist <= BOUNCE_RADIUS) near.push({ building, dist });
-      }
+      const gather = (allowed: (building: EngineBuilding) => boolean): void => {
+        for (const building of yard.buildings) {
+          if (building === from || !allowed(building)) continue;
+          const dist = Math.trunc(
+            Math.sqrt(
+              distanceSquared(originX, originY, building.sx, building.sy + building.middle),
+            ),
+          );
+          if (dist <= BOUNCE_RADIUS) near.push({ building, dist });
+        }
+      };
+      gather(glaiveable);
+      // With no building that close it jumps to a standing wall (`FIREBALL.as:294-307`).
+      if (near.length === 0) gather((building) => building.kind === "wall" && building.hp > 0);
       near.sort((one, other) => one.dist - other.dist || one.building.id - other.building.id);
       if (near[0]?.building === previous) near.shift();
       const next = near[0]?.building;
@@ -3266,6 +3278,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         .inRange(DEFEND_SEARCH, creep.x, creep.y, creep.hitFlags)
         .find((hit) => leashed(hit.creep))?.creep;
       if (!found) {
+        if (creep.blinkHops > 0) stopBlink(creep);
         creep.targetCreep = -1;
         creep.atTarget = false;
         creep.attacking = false;
@@ -3341,6 +3354,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         ? creep.range * KORATH_DEFEND_FLYER_REACH
         : creep.range;
     creep.atTarget = squared < creepReach(range);
+    // A defending Bolt blinks at its foe; an attacker's blink ends when it turns to fight.
+    const blinks = creep.friendly && creep.rank > 0 && creep.monsterId === BOLT_ID;
+    if (creep.blinkHops > 0 && (creep.atTarget || !blinks)) stopBlink(creep);
     if (creep.atTarget) {
       creep.attacking = true;
       if (creep.attackCooldown <= 0) {
@@ -3356,6 +3372,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.attacking = false;
     creep.waypoints = [{ x: foe.ix, y: foe.iy }];
     creep.waypointIndex = 0;
+    if (blinks && tickBlink(creep)) return;
     moveCreep(creep);
   };
 
@@ -3397,6 +3414,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       other.friendly &&
       other.hp > 0 &&
       !other.gone &&
+      other.targetable &&
       canHit(creep.hitFlags, other.flags);
     let foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     if (!usable(foe)) {
@@ -3931,8 +3949,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * target to walk to cloaks, which takes `TARGETS_INVISIBLE` into its flags so
    * only what reaches the invisible (the trap, Fomor's aura, Korath's quake)
    * can see it. Once it has arrived it stays cloaked for the rank's delay, then
-   * shows itself until it has to walk again. Flash's aggro range of 1 is not
-   * modelled (it is the Brain's own awareness, which this engine has none of).
+   * shows itself until it has to walk again. So towers, bunker monsters and
+   * caged champions leave it alone while it is cloaked, as Flash's `BTOWER`
+   * skips an `invisible` creep (`BTOWER.as:208`). Flash also sets its aggro
+   * range to 1, but nothing in Flash reads that, so it changes nothing here.
    */
   const tickCloak = (creep: Creep): void => {
     if (creep.invisible) {
@@ -3994,13 +4014,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * rank*150 screen px, it blinks: untargetable, it jumps a tenth of the way
    * to the last waypoint each tick for ten ticks and then counts as arrived.
    * It does not walk meanwhile. True when this tick was a hop or the blink's
-   * start. Attackers only: a defender has no route to blink along.
+   * start. A defender's route is the one step to its foe ({@link fight}), so a
+   * bunker's Bolt blinks at a foe within its range (owner, 2026-10-20).
    */
   const tickBlink = (creep: Creep): boolean => {
     const last = creep.waypoints[creep.waypoints.length - 1];
     const left = creep.waypoints.length - creep.waypointIndex;
     const within =
-      !creep.friendly &&
       !creep.atTarget &&
       !!last &&
       left > 0 &&

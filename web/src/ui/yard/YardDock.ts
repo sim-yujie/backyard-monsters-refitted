@@ -12,6 +12,7 @@ import { icon, type IconName } from "@/ui/icons";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
 import "@/ui/styles/yard-hud.css";
 import { CollectAll } from "./CollectAll";
+import { YardMenu } from "./YardMenu";
 import { YardSwitcher } from "./YardSwitcher";
 
 /**
@@ -38,6 +39,9 @@ import { YardSwitcher } from "./YardSwitcher";
  * showed Kits on Map Room 2 outposts only, `UI_MENU.as:39-41`, `:100-101`);
  * Monsters wherever the scene can open the Monsters screen; the switcher once
  * an own yard is bound.
+ *
+ * On a phone the own yard's dock folds into one Menu button (`YardMenu`,
+ * #381): only Build, Collect all and Menu stay on the bottom row.
  */
 
 /** Monsters' picture: a Pokey, the first monster every player has. */
@@ -181,6 +185,8 @@ export class YardDock {
   private readonly monstersBadge: HTMLElement;
   private readonly collect = new CollectAll();
   private readonly switcher: YardSwitcher | null;
+  /** The phone's Menu: the own yard only (a visit has few buttons). */
+  private readonly menu: YardMenu | null;
   private binding: YardUiBinding | null = null;
   private unsubscribe: (() => void) | null = null;
   private readonly finished: FinishedMonstersJobs;
@@ -264,6 +270,18 @@ export class YardDock {
       ...(this.attack ? [this.attack.element] : []),
     );
     this.element.append(left, right);
+    this.menu = this.build
+      ? new YardMenu({
+          sources: [left, right],
+          host: this.element,
+          keep: (element) =>
+            element === this.build?.element || element === this.collect.element,
+        })
+      : null;
+    if (this.menu) {
+      left.append(this.menu.button);
+      this.element.append(this.menu.sheet);
+    }
     this.unsubscribeFinished = this.finished.subscribe(() => this.refreshBadge());
     this.bind(null);
   }
@@ -341,6 +359,7 @@ export class YardDock {
 
   destroy(): void {
     this.unsubscribeFinished();
+    this.menu?.destroy();
     this.bind(null);
     this.collect.destroy();
     this.switcher?.destroy();

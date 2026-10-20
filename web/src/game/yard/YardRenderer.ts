@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, type Renderer } from "pixi.js";
+import { Assets, Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
 import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
@@ -13,6 +13,7 @@ import { holdBack, type LifeHold, type YardLife, type YardPoint } from "./yardLi
 import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
+import { currentSeason, onSeasonChange, type Season } from "@/game/season";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
@@ -112,6 +113,11 @@ export class YardRenderer {
   readonly flatDecals: Container = this.blueprint.decals;
 
   private atlas: YardArtAtlas | null = null;
+  /** The season the yard is dressed for (`game/season.ts`); see `setSeason`. */
+  private season: Season = "normal";
+  /** The Halloween pumpkin that stands in for a mushroom, once it has loaded. */
+  private pumpkin: Texture | null = null;
+  private unwatchSeason: (() => void) | null = null;
   private yard: Yard | null = null;
   /** Which buildings are working and the clock to read it on (#255); see `setWork`. */
   private work: WorkSource | null = null;
@@ -165,6 +171,32 @@ export class YardRenderer {
   attach(renderer: Renderer): void {
     this.atlas ??= yardArtAtlas(renderer);
     this.life.useRenderer(renderer);
+    // The yard follows the season from here on (`game/season.ts`).
+    if (!this.unwatchSeason) {
+      this.setSeason(currentSeason());
+      this.unwatchSeason = onSeasonChange((season) => this.setSeason(season));
+    }
+  }
+
+  /**
+   * Dresses the yard for `season`: the ground's tiles, and pumpkins in place
+   * of the mushrooms at Halloween. The mushrooms keep the glyph until the
+   * pumpkin picture arrives, and keep it for good if it never does.
+   */
+  setSeason(season: Season): void {
+    if (season === this.season) return;
+    this.season = season;
+    this.ground.setSeason(season);
+    if (season === "halloween" && !this.pumpkin) {
+      void Assets.load<Texture>(PUMPKIN_ART).then(
+        (texture) => {
+          this.pumpkin = texture;
+          this.redrawMushrooms();
+        },
+        (caught: unknown) => console.warn("The Halloween pumpkin did not load; mushrooms stay.", caught),
+      );
+    }
+    this.redrawMushrooms();
   }
 
   /** Buildings still waiting on, or missing, their picture. */
@@ -213,10 +245,14 @@ export class YardRenderer {
 
     const fresh = popNew ? newMushroomKeys(shownBefore, yard.mushrooms) : [];
     const keys = new Set<string>();
+    const pumpkin = this.season === "halloween" ? this.pumpkin : null;
     for (const mushroom of yard.mushrooms) {
       const key = mushroomKey(mushroom);
-      const sprite = new Sprite(atlas.mushroom);
-      sprite.anchor.set(0.5, 0.85);
+      const sprite = new Sprite(pumpkin ?? atlas.mushroom);
+      // Both stand on their base: the glyph's stalk foot, the pumpkin's bottom.
+      if (pumpkin) sprite.anchor.set(0.5, PUMPKIN_BASE);
+      else sprite.anchor.set(0.5, 0.85);
+      sprite.scale.set(this.mushroomSize());
       sprite.position.set(mushroom.worldX, mushroom.worldY);
       this.mushroomLayer.addChild(sprite);
       this.mushroomSprites.set(key, sprite);
@@ -789,6 +825,8 @@ export class YardRenderer {
   }
 
   destroy(): void {
+    this.unwatchSeason?.();
+    this.unwatchSeason = null;
     this.collect.destroy();
     this.life.destroy();
     this.clearMushrooms();
@@ -871,6 +909,23 @@ export class YardRenderer {
     }
   }
 
+  /** Swaps every mushroom sprite's picture for the season's, where they stand. */
+  private redrawMushrooms(): void {
+    const atlas = this.atlas;
+    if (!atlas) return;
+    const pumpkin = this.season === "halloween" ? this.pumpkin : null;
+    for (const sprite of this.mushroomSprites.values()) {
+      sprite.texture = pumpkin ?? atlas.mushroom;
+      sprite.anchor.set(0.5, pumpkin ? PUMPKIN_BASE : 0.85);
+      sprite.scale.set(this.mushroomSize());
+    }
+  }
+
+  /** How big a mushroom sprite stands at rest: the Halloween pumpkin a bit bigger. */
+  private mushroomSize(): number {
+    return this.season === "halloween" && this.pumpkin ? PUMPKIN_SCALE : 1;
+  }
+
   private clearMushrooms(): void {
     for (const child of this.mushroomLayer.removeChildren()) child.destroy();
     this.mushroomSprites.clear();
@@ -880,7 +935,7 @@ export class YardRenderer {
   private popMushrooms(deltaSeconds: number): void {
     for (const [key, elapsed] of this.popping) {
       const now = elapsed + deltaSeconds;
-      this.mushroomSprites.get(key)?.scale.set(mushroomPopScale(now));
+      this.mushroomSprites.get(key)?.scale.set(mushroomPopScale(now) * this.mushroomSize());
       if (now >= MUSHROOM_POP_SECONDS) this.popping.delete(key);
       else this.popping.set(key, now);
     }
@@ -921,6 +976,16 @@ export class YardRenderer {
     this.buildings.setHighlight(id, on);
   }
 }
+
+/**
+ * The Halloween yard pumpkin: the small pumpkin decoration's top picture
+ * (25 x 22), drawn at `PUMPKIN_SCALE` so it reads a little bigger than the
+ * mushroom glyph (owner's call, 20 Oct 2026). `PUMPKIN_BASE` is where its
+ * bottom sits, as a fraction of its height; scaling keeps it on the ground.
+ */
+const PUMPKIN_ART = "/assets/buildings/decorations/pumpkins/top.png";
+const PUMPKIN_BASE = 0.9;
+const PUMPKIN_SCALE = 1.3;
 
 /** How far a hatchery's number is raised over a job bar and its time, world pixels at zoom 1. */
 const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;

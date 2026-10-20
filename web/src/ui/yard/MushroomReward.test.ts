@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { spokenText } from "@/ui/resourceIcon";
-import { GOLDEN_MUSHROOM_ART, GOLDEN_TITLE, showGoldenMushroom } from "./MushroomReward";
+import {
+  GOLDEN_MUSHROOM_ART,
+  GOLDEN_TITLE,
+  JACK_O_LANTERN_ART,
+  JACK_O_LANTERN_TITLE,
+  showGoldenMushroom,
+} from "./MushroomReward";
 
 /** The golden mushroom popup (design §5.6): title, picture, the Shiny with its icon, one button. */
 describe("showGoldenMushroom", () => {
@@ -21,5 +27,18 @@ describe("showGoldenMushroom", () => {
     ok.click();
     expect(layer.querySelector(".mushroom-reward")).toBeNull();
     expect(popup.element.isConnected).toBe(false);
+  });
+
+  it("at Halloween the golden mushroom is a glowing jack-o'-lantern", () => {
+    const layer = document.createElement("div");
+    document.body.append(layer);
+
+    const popup = showGoldenMushroom(layer, 3, "halloween");
+
+    expect(layer.querySelector(".panel__title")?.textContent).toBe(JACK_O_LANTERN_TITLE);
+    expect(layer.querySelector("img")?.getAttribute("src")).toBe(JACK_O_LANTERN_ART);
+    const text = layer.querySelector(".mushroom-reward__text")!;
+    expect(spokenText(text)).toMatch(/jack-o'-lantern worth Shiny 3\. Pumpkins keep growing while Halloween lasts\./);
+    popup.close();
   });
 });

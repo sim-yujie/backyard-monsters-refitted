@@ -202,6 +202,13 @@
   gap: 2px;
 }
 
+.friends-row__top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .friends-row__name {
   overflow: hidden;
   font-weight: 700;
@@ -230,20 +237,6 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-}
-
-/* The green dot, as the bar's portraits will wear it (§3.2). */
-.friends-online--online::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--colour-online);
-}
-
-.friends-online--online {
-  color: var(--colour-text);
-  font-weight: 600;
 }
 
 .friends-row__actions {

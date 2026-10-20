@@ -47,6 +47,7 @@ import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
+import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
 import { ZoomControl } from "@/ui/ZoomControl";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -611,6 +612,10 @@ export class AttackScene implements Scene {
       },
     }).mount(tools);
     this.minimap.refreshBuildings();
+    // On a phone both fold behind one map button (#381); it redraws on opening.
+    new ViewToolsFold(tools, (open) => {
+      if (open) this.minimap?.markDirty();
+    });
     this.placeViewTools();
   }
 
@@ -644,9 +649,17 @@ export class AttackScene implements Scene {
     clock.setAttribute("aria-live", "off");
     clock.textContent = "—:——";
 
+    // The number alone on the narrowest phones (#381): the word gives way so
+    // Retreat stays on the one row.
     const damage = document.createElement("span");
     damage.className = "attack-strip__readout";
-    damage.textContent = "0% damage";
+    damage.title = "Damage";
+    const damageValue = document.createElement("span");
+    damageValue.textContent = "0%";
+    const damageWord = document.createElement("span");
+    damageWord.className = "attack-strip__word";
+    damageWord.textContent = " damage";
+    damage.append(damageValue, damageWord);
 
     // "Loot" and one icon-and-amount per resource (#93).
     const loot = document.createElement("span");
@@ -720,7 +733,7 @@ export class AttackScene implements Scene {
 
     this.strip = strip;
     this.clock = clock;
-    this.damage = damage;
+    this.damage = damageValue;
     this.loot = loot;
     this.hudSlot = hudSlot;
     this.retreatButton = retreat;
@@ -889,7 +902,7 @@ export class AttackScene implements Scene {
         )
       : { damage: Math.floor(damageShown), loot: state.loot };
     if (this.damage) {
-      this.damage.textContent = `${readout.damage}% damage`;
+      this.damage.textContent = `${readout.damage}%`;
     }
     if (this.loot) {
       const { r1, r2, r3, r4 } = readout.loot;

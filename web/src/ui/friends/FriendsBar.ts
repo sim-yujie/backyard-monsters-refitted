@@ -3,6 +3,7 @@ import { avatarOf, avatarUrl } from "@/game/avatars";
 import { canHelp } from "@/game/friends/friendText";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { friendsOpener } from "@/game/friends/friendsView";
+import { icon } from "@/ui/icons";
 import { openGiftPicker } from "./GiftPicker";
 import { make } from "./rows";
 import "./friends-bar.css";
@@ -11,8 +12,10 @@ import "./friends-bar.css";
  * The friends bar (issue #371, `docs/design/friends.md` §3.2): a strip of
  * friend portraits along the bottom of the player's own yard. A "+" first
  * slot opens the Friends screen, arrows page through the rest, and a portrait
- * opens a small card: Visit, Send gift, Friends list. On a phone the strip
- * hides behind a Friends round button and slides up when pressed.
+ * opens a small card: Visit, Send gift, Friends list. On a phone (#381) the
+ * strip hides behind a round Friends button beside Menu, whose badge counts
+ * the friends that can use a hand (or shows a gift while one can still be
+ * sent), and opens as a sheet along the bottom.
  *
  * It reads the shared friends store (kept fresh by the Friends door) and only
  * reports what was picked.
@@ -54,6 +57,39 @@ type FriendsTabName = "friends" | "gifts";
 
 const GIFT_SENT = "Gift sent today";
 
+/** The Friends button's badge caps at this. */
+const BADGE_MAX = 99;
+
+/** What the phone's Friends button wears. */
+export interface FriendsBadge {
+  /** A count of friends that can use help, or a gift. */
+  readonly text: string;
+  readonly kind: "help" | "gift";
+  /** Its words, for the tooltip and a screen reader. */
+  readonly label: string;
+}
+
+/**
+ * The Friends button's badge: how many friends can use a hand today, or,
+ * when none can, a gift while one can still be sent; null when there is
+ * nothing to do.
+ */
+export const friendsBadge = (friends: readonly Friend[]): FriendsBadge | null => {
+  const helpable = friends.filter(canHelp).length;
+  if (helpable > 0) {
+    return {
+      text: helpable > BADGE_MAX ? `${BADGE_MAX}+` : String(helpable),
+      kind: "help",
+      label: helpNote(helpable),
+    };
+  }
+  if (friends.some((friend) => !friend.giftSentToday)) return { text: "🎁", kind: "gift", label: "A gift can be sent" };
+  return null;
+};
+
+/** "3 can use your help", the phone sheet's note. */
+export const helpNote = (count: number): string => (count === 1 ? "1 can use your help" : `${count} can use your help`);
+
 export interface FriendsBarOptions {
   /** Takes the player to this friend's yard. Without it the card has no Visit. */
   readonly onVisit?: (friend: Friend) => void;
@@ -71,7 +107,9 @@ export class FriendsBar {
   private readonly options: FriendsBarOptions;
   private readonly store: FriendsStore;
   private readonly strip = make("div", "friends-bar__strip");
-  private readonly toggle = make("button", "friends-bar__toggle", "Friends");
+  private readonly toggle = make("button", "friends-bar__toggle");
+  private readonly badge = make("span", "yard-dock__badge friends-bar__count");
+  private readonly note = make("span", "friends-bar__note");
   private readonly prev = make("button", "friends-bar__arrow", "‹");
   private readonly next = make("button", "friends-bar__arrow", "›");
   private card: HTMLElement | null = null;
@@ -89,6 +127,18 @@ export class FriendsBar {
     this.toggle.type = "button";
     this.toggle.setAttribute("aria-expanded", "false");
     this.toggle.addEventListener("click", () => this.setOpen(!this.element.classList.contains("is-open")));
+    const disc = make("span", "yard-dock__disc");
+    this.badge.hidden = true;
+    disc.append(icon("friends", 29), this.badge);
+    this.toggle.append(disc, make("span", "yard-dock__label", "Friends"));
+    // The phone's sheet: a title row with a close.
+    const head = make("div", "friends-bar__head");
+    const close = make("button", "btn btn--ghost btn--icon friends-bar__close");
+    close.type = "button";
+    close.setAttribute("aria-label", "Close friends");
+    close.append(icon("close", 20));
+    close.addEventListener("click", () => this.setOpen(false));
+    head.append(make("span", "friends-bar__title", "Friends"), this.note, close);
     const arrows = [
       [this.prev, "Previous friends", -1],
       [this.next, "More friends", 1],
@@ -101,7 +151,8 @@ export class FriendsBar {
         this.render();
       });
     }
-    this.element.append(this.toggle, this.prev, this.strip, this.next);
+    this.element.append(this.toggle, head, this.prev, this.strip, this.next);
+    window.addEventListener("keydown", this.onKeyDown);
     if (typeof ResizeObserver !== "undefined") {
       this.resize = new ResizeObserver(() => this.fit());
       this.resize.observe(this.strip);
@@ -121,6 +172,7 @@ export class FriendsBar {
     this.unsubscribe();
     this.resize?.disconnect();
     window.removeEventListener("resize", this.onWindowResize);
+    window.removeEventListener("keydown", this.onKeyDown);
     this.element.remove();
   }
 
@@ -131,6 +183,10 @@ export class FriendsBar {
   }
 
   private readonly onWindowResize = (): void => this.fit();
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === "Escape" && this.element.classList.contains("is-open")) this.setOpen(false);
+  };
 
   /**
    * The strip is sized by its contents, so its current width says nothing about the room there is.
@@ -186,6 +242,7 @@ export class FriendsBar {
 
   private render(): void {
     const ordered = orderFriends(this.store.friends);
+    this.renderBadge();
     const view = pageOf(ordered, this.page, this.pageSize);
     this.page = view.page;
     this.closeCard();
@@ -196,6 +253,16 @@ export class FriendsBar {
     this.next.hidden = view.pages <= 1;
     this.prev.disabled = view.page === 0;
     this.next.disabled = view.page >= view.pages - 1;
+  }
+
+  private renderBadge(): void {
+    const badge = friendsBadge(this.store.friends);
+    this.badge.hidden = badge === null;
+    this.badge.textContent = badge?.text ?? "";
+    this.badge.classList.toggle("friends-bar__count--gift", badge?.kind === "gift");
+    this.toggle.title = badge ? `Friends: ${badge.label}` : "Friends";
+    this.toggle.setAttribute("aria-label", badge ? `Friends. ${badge.label}` : "Friends");
+    this.note.textContent = badge?.kind === "help" ? badge.label : "";
   }
 
   private plusSlot(empty: boolean): HTMLElement {
@@ -215,7 +282,13 @@ export class FriendsBar {
     img.src = avatarUrl(avatarOf(friend.pic, friend.userid), "small");
     img.alt = "";
     face.append(img);
-    if (friend.online === "online") face.append(make("span", "friends-bar__dot"));
+    if (friend.online === "online") {
+      const dot = make("span", "friends-bar__dot");
+      dot.title = "Online";
+      dot.setAttribute("role", "img");
+      dot.setAttribute("aria-label", "Online");
+      face.append(dot);
+    }
     if (canHelp(friend)) face.append(badge("wrench", "Can help today"));
     if (!friend.giftSentToday) face.append(badge("gift", "No gift sent today"));
     slot.append(face, make("span", "friends-bar__name", friend.username), make("span", "friends-bar__level", `Lv ${friend.level}`));

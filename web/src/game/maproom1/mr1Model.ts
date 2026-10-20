@@ -321,11 +321,13 @@ export const formatAgo = (seconds: number): string => {
   return `${Math.floor(s / 86_400)} d ago`;
 };
 
-/** "Playing now" or "Offline · last seen 3 h ago". */
+/**
+ * "Last seen 3 h ago" under an offline neighbour's name. Empty while they are
+ * online (the green dot beside the name says it) or when the time is not known.
+ */
 export const presenceText = (neighbour: Mr1Neighbour, now: number): string => {
-  if (isPlayingNow(neighbour, now)) return "Playing now";
-  if (!neighbour.lastSeen) return "Offline";
-  return `Offline · last seen ${formatAgo(now - neighbour.lastSeen)}`;
+  if (isPlayingNow(neighbour, now) || !neighbour.lastSeen) return "";
+  return `Last seen ${formatAgo(now - neighbour.lastSeen)}`;
 };
 
 const times = (count: number): string => (count === 1 ? "1 time" : `${count} times`);
@@ -433,7 +435,7 @@ const targetReason = (target: Mr1Target, now: number): Mr1Reason | null => {
   if (isPlayingNow(target, now)) {
     return {
       key: ReasonKey.PLAYING,
-      title: "Playing now",
+      title: "Online now",
       detail: "They are in their yard. Try again when they leave.",
     };
   }
@@ -644,7 +646,7 @@ export const rowLine = (
 ): { text: string; tone: "warn" | "muted" } => {
   const reason = targetReason(neighbour, now);
   if (reason?.key === ReasonKey.PLAYING)
-    return { text: "Playing now · can't attack", tone: "muted" };
+    return { text: "In their yard · can't attack", tone: "muted" };
   if (reason?.key === ReasonKey.NEW_PLAYER) {
     const left = neighbour.protectedUntil !== null ? neighbour.protectedUntil - now : 0;
     return {
@@ -657,14 +659,13 @@ export const rowLine = (
   if (reason?.key === ReasonKey.UNDER_ATTACK)
     return { text: "Under attack now", tone: "muted" };
   if (reason?.key === ReasonKey.TRUCE) return { text: "Truce", tone: "muted" };
-  const seen = neighbour.lastSeen
-    ? `offline ${formatAgo(now - neighbour.lastSeen).replace(/ ago$/, "")}`
-    : "offline";
+  const seen = presenceText(neighbour, now);
   if (neighbour.attacksFrom > neighbour.attacksTo) {
-    return { text: `Attacked you ${neighbour.attacksFrom}× · ${seen}`, tone: "warn" };
+    const attacked = `Attacked you ${neighbour.attacksFrom}×`;
+    return { text: seen ? `${attacked} · ${seen.toLowerCase()}` : attacked, tone: "warn" };
   }
   const battles = neighbour.attacksFrom + neighbour.attacksTo;
-  const capital = seen.charAt(0).toUpperCase() + seen.slice(1);
   const count = battles === 1 ? "1 battle" : battles ? `${battles} battles` : "no battles yet";
-  return { text: `${capital} · ${count}`, tone: "muted" };
+  if (seen) return { text: `${seen} · ${count}`, tone: "muted" };
+  return { text: count.charAt(0).toUpperCase() + count.slice(1), tone: "muted" };
 };

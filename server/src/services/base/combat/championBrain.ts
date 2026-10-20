@@ -7,6 +7,9 @@ import {
 } from "../../../game-rules/combat/index.js";
 import type { ChampionData } from "../../../schemas/ChampionSchema.js";
 
+/** An egg's status (`CHAMPION_STATUS.EGG`, `services/yard/champion.ts`). */
+const EGG_STATUS = 3;
+
 /**
  * Where a champion's learning brain is updated (issue #219, the rule itself
  * is `game-rules/combat/brain.ts`).
@@ -66,19 +69,33 @@ export const championsAfterLessons = <T extends ChampionData>(
  * from the stored list by type. The client's list never carries one: the
  * schema drops `b` and `bs` (`ChampionSchema.ts`).
  *
+ * Eggs (status 3, `services/yard/champion.ts`) are the server's too: a stored
+ * egg stays exactly as stored, whatever the client says of its type, and an
+ * egg the client names that is not stored is dropped, so no list can hatch,
+ * shorten or lay one.
+ *
  * @param stored - The champions as stored.
  * @param sent - The client's list, as parsed.
  */
 export const withStoredBrains = <T extends ChampionData>(
   stored: readonly ChampionData[] | null | undefined,
   sent: readonly T[]
-): T[] =>
-  sent.map((champion) => {
+): T[] => {
+  const isEgg = (one: ChampionData | null | undefined) => Number(one?.status) === EGG_STATUS;
+  const eggs = (stored ?? []).filter(isEgg);
+  const kept = sent.flatMap((champion) => {
+    const egg = eggs.find((one) => one.t === champion.t);
+    if (egg) return [egg as T];
+    if (isEgg(champion)) return [];
     const { b: _b, bs: _bs, ...rest } = champion;
-    const kept = (stored ?? []).find((one) => one?.t === champion.t);
-    return {
-      ...rest,
-      ...(kept?.b && { b: kept.b }),
-      ...(kept?.bs && { bs: kept.bs }),
-    } as T;
+    const was = (stored ?? []).find((one) => one?.t === champion.t);
+    return [
+      {
+        ...rest,
+        ...(was?.b && { b: was.b }),
+        ...(was?.bs && { bs: was.bs }),
+      } as T,
+    ];
   });
+  return [...kept, ...eggs.filter((egg) => !sent.some((one) => one.t === egg.t)).map((egg) => egg as T)];
+};

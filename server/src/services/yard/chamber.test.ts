@@ -119,3 +119,21 @@ describe("champion/freeze and thaw for Krallen", () => {
     ]);
   });
 });
+
+describe("eggs and the chamber", () => {
+  const egg = gorgo({ t: 2, hp: 12_000, ft: NOW + HOUR, fd: 0, status: 3 });
+
+  test("an egg cannot be frozen", () => {
+    expect(refusal(() => planChampionFreeze(yard([egg]), NOW))).toBe("eggInCage");
+  });
+
+  test("no champion thaws into a cage that holds an egg: cancel it first", () => {
+    const frozen = gorgo({ status: 1, ft: 5 * HOUR });
+    expect(refusal(() => planChampionThaw(yard([frozen, egg]), 1, NOW))).toBe("eggInCage");
+  });
+
+  test("Krallen thaws beside the egg, as he does beside a champion", () => {
+    const krallen = gorgo({ t: 5, hp: 50_000, status: 1, ft: HOUR });
+    expect(planChampionThaw(yard([egg, krallen]), 5, NOW).report.champion.status).toBe(0);
+  });
+});
