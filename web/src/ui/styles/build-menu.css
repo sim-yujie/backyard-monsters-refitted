@@ -669,9 +669,11 @@
     padding: var(--space-2) var(--space-3) var(--space-3);
   }
 
+  /* "Decorations" is the longest name; the size follows the width so it fits
+     its quarter even at 360 px. */
   .build-menu__tabs .tabs__tab {
-    padding: 0 var(--space-1);
-    font-size: var(--text-sm);
+    padding: 0 2px;
+    font-size: min(var(--text-sm), 3.1vw);
   }
 
   .build-menu__main {

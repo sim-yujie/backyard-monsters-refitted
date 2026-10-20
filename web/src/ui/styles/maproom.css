@@ -1169,10 +1169,30 @@
     max-height: calc(100vh - var(--hud-height) - 160px);
   }
 
+  /* The floating "?" stands at the bar's left end, so the bar starts after it. */
+  .overlay__layer:has(> .guide-help--float:not([hidden])) > .mr2-find-dock {
+    left: 56px;
+  }
+
   .mr2-tools-dock {
     top: calc(var(--hud-height) + var(--space-2) + var(--control-height) + var(--space-3));
     bottom: auto;
+    left: 12px;
     right: 12px;
+  }
+
+  /* Mail, My range and the kit filter are wider than a phone together: the
+     filter wraps to a row of its own instead of pushing Mail off the left edge. */
+  .mr2-tools-dock .mr2-toolrow {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+
+  /* The row now spans the screen: only its buttons take a tap, so the map
+     between them still drags. */
+  .mr2-tools-dock .mr2-toolrow > * {
+    pointer-events: auto;
   }
 
   .mr2-toolrow .zoom-controls {
