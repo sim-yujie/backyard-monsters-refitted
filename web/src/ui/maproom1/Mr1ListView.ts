@@ -2,6 +2,7 @@ import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
   battleCounts,
   isPlayingNow,
+  LIST_SORT_DIRECTIONS,
   LIST_SORT_LABELS,
   ListSort,
   pageOf,
@@ -9,19 +10,30 @@ import {
   rowLine,
   sortNeighbours,
   type Mr1World,
+  type SortDirection,
 } from "@/game/maproom1/mr1Model";
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { avatar, battleIcons, countdown } from "./TargetCard";
 import { onlineDot } from "@/ui/onlineDot";
+import { loadSortPref, saveSortPref } from "@/ui/sortPrefs";
 import { button, el, icon } from "./icons";
 
 /**
  * The List view (`com/monsters/maproom/views/ListView.as`): the tribes as
  * four tiles, then the neighbours seven to a page with page arrows, sortable
  * by level, last seen, name, battles or status as Flash's were
- * (`ListView.as:37`, `:44`, `:181-238`). A row opens the same card the map's
- * pins do.
+ * (`ListView.as:37`, `:44`, `:181-238`), either way round. The sort and its
+ * direction are remembered in this browser. A row opens the same card the
+ * map's pins do.
  */
+
+/** Where the neighbour list's sort is remembered. */
+export const MR1_LIST_SORT_KEY = "bymr.mr1.list-sort";
+
+const DEFAULT_SORT = {
+  sort: ListSort.LEVEL,
+  direction: LIST_SORT_DIRECTIONS[ListSort.LEVEL].start,
+} as const;
 
 export interface ListViewHandlers {
   readonly onSelect: (key: string) => void;
@@ -33,6 +45,7 @@ export class Mr1ListView {
   private readonly tribes: HTMLElement;
   private readonly count: HTMLElement;
   private readonly sort: HTMLSelectElement;
+  private readonly direction: HTMLButtonElement;
   private readonly rows: HTMLElement;
   private readonly pager: HTMLElement;
   private readonly pageLabel: HTMLElement;
@@ -43,7 +56,8 @@ export class Mr1ListView {
   private now = 0;
   private page = 0;
   private selected: string | null = null;
-  private sortKey: ListSort = ListSort.LEVEL;
+  private sortKey: ListSort;
+  private sortDirection: SortDirection;
 
   constructor(private readonly handlers: ListViewHandlers) {
     this.element = el("div", "mr1-list");
@@ -62,7 +76,11 @@ export class Mr1ListView {
     const head = el("div", "mr1-list__head");
     this.count = el("h2", "mr1-list__heading", "Neighbours");
     this.count.id = "mr1-neighbours-heading";
-    const sortLabel = el("label", "mr1-list__sort");
+    const saved = loadSortPref(MR1_LIST_SORT_KEY, Object.values(ListSort), DEFAULT_SORT);
+    this.sortKey = saved.sort;
+    this.sortDirection = saved.direction;
+    const sortBox = el("div", "mr1-list__sort");
+    const sortLabel = el("label", "mr1-list__sort-label");
     sortLabel.append(el("span", undefined, "Sort:"));
     this.sort = el("select", "mr1-list__sort-select");
     for (const [value, label] of Object.entries(LIST_SORT_LABELS)) {
@@ -73,11 +91,18 @@ export class Mr1ListView {
     this.sort.value = this.sortKey;
     this.sort.addEventListener("change", () => {
       this.sortKey = this.sort.value as ListSort;
-      this.page = 0;
-      this.render();
+      this.sortDirection = LIST_SORT_DIRECTIONS[this.sortKey].start;
+      this.resort();
     });
     sortLabel.append(this.sort);
-    head.append(this.count, sortLabel);
+    this.direction = button("btn mr1-list__sort-dir");
+    this.direction.addEventListener("click", () => {
+      this.sortDirection = this.sortDirection === "desc" ? "asc" : "desc";
+      this.resort();
+    });
+    this.showDirection();
+    sortBox.append(sortLabel, this.direction);
+    head.append(this.count, sortBox);
 
     this.rows = el("div", "mr1-list__rows");
     this.pager = el("div", "mr1-list__pager");
@@ -108,6 +133,25 @@ export class Mr1ListView {
     for (const control of this.element.querySelectorAll<HTMLElement>("[data-key]")) {
       control.setAttribute("aria-pressed", String(control.dataset["key"] === key));
     }
+  }
+
+  /** Back to page one in the new order, remembered for next time. */
+  private resort(): void {
+    saveSortPref(MR1_LIST_SORT_KEY, { sort: this.sortKey, direction: this.sortDirection });
+    this.showDirection();
+    this.page = 0;
+    this.render();
+  }
+
+  /** The direction button's arrow and words for the current order. */
+  private showDirection(): void {
+    const words = LIST_SORT_DIRECTIONS[this.sortKey][this.sortDirection];
+    this.direction.dataset["direction"] = this.sortDirection;
+    this.direction.setAttribute("aria-label", `Order: ${words}`);
+    this.direction.title = words;
+    this.direction.replaceChildren(
+      icon(this.sortDirection === "desc" ? "sortDesc" : "sortAsc", 18),
+    );
   }
 
   private turn(step: number): void {
@@ -156,7 +200,7 @@ export class Mr1ListView {
     );
 
     this.count.textContent = `Neighbours · ${world.neighbours.length}`;
-    const sorted = sortNeighbours(world.neighbours, this.sortKey, now);
+    const sorted = sortNeighbours(world.neighbours, this.sortKey, now, this.sortDirection);
     const page = pageOf(sorted, this.page);
     this.page = page.page;
 

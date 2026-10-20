@@ -916,12 +916,29 @@
   min-height: var(--control-height);
 }
 
-.mr1-list__sort {
+.mr1-list__sort,
+.mr1-list__sort-label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-sm);
   color: var(--colour-text-secondary);
+}
+
+.mr1-list__sort {
+  gap: var(--space-1);
+}
+
+/* The order toggle: a square the select's height, its border and fill. */
+.mr1-list__sort-dir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  padding: 0;
+  border-color: var(--colour-border);
+  border-radius: var(--radius-sm);
 }
 
 .mr1-list__sort-select {
