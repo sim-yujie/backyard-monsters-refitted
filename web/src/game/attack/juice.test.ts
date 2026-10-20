@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  BIG_LABEL_LATE_MERGE_TICKS,
+  BIG_LABEL_MERGE_TICKS,
+  BIG_LABEL_PER_TARGET,
   BIG_LABEL_TICKS,
   BIG_LUNGE_PX,
   SLOW_MO_EASE_SECONDS,
   SLOW_MO_RATE,
   SLOW_MO_SECONDS,
+  bigLabelPlan,
   bigLabelPose,
+  bigLabelSide,
+  bigLabelSize,
+  bigLabelSpread,
   bigLungeOffset,
   nextSwingGap,
   reduceEffects,
@@ -93,6 +100,47 @@ describe("the juiced lunge, squash and numbers", () => {
     expect(bigLabelPose(20, 6).scale).toBeCloseTo(1);
     expect(bigLabelPose(BIG_LABEL_TICKS, 6).alpha).toBe(0);
     expect(bigLabelPose(BIG_LABEL_TICKS, 6).dx).toBe(6);
+  });
+});
+
+describe("many hits on one target", () => {
+  it("adds a hit into a fresh number, starts one while there is room, else drops it", () => {
+    expect(bigLabelPlan(null, 0)).toBe("new");
+    expect(bigLabelPlan(BIG_LABEL_MERGE_TICKS - 1, 1)).toBe("merge");
+    expect(bigLabelPlan(BIG_LABEL_MERGE_TICKS, 1)).toBe("new");
+    // All places taken: the newest still counts up a while longer.
+    expect(bigLabelPlan(BIG_LABEL_MERGE_TICKS, BIG_LABEL_PER_TARGET)).toBe("merge");
+    expect(bigLabelPlan(BIG_LABEL_LATE_MERGE_TICKS, BIG_LABEL_PER_TARGET)).toBe("drop");
+    // A heal on a creep showing only damage has nothing of its kind to join.
+    expect(bigLabelPlan(null, BIG_LABEL_PER_TARGET)).toBe("drop");
+  });
+
+  it("puts each number in the first free place: middle, right, left", () => {
+    expect(bigLabelSide([])).toBe(0);
+    expect(bigLabelSide([0])).toBe(1);
+    expect(bigLabelSide([0, 1])).toBe(-1);
+    expect(bigLabelSide([1, -1])).toBe(0);
+  });
+
+  it("spreads the places by a whole number's width, wider for longer and bigger", () => {
+    expect(bigLabelSpread(0, 3, 20)).toBe(0);
+    expect(bigLabelSpread(1, 2, 20)).toBe(-bigLabelSpread(-1, 2, 20));
+    expect(bigLabelSpread(1, 3, 20)).toBeGreaterThan(bigLabelSpread(1, 2, 20));
+    expect(bigLabelSpread(1, 2, 26)).toBeGreaterThan(bigLabelSpread(1, 2, 20));
+    // Clears the neighbour's half and this one's half, at rest.
+    expect(bigLabelSpread(1, 2, 20)).toBeGreaterThanOrEqual(2 * 20 * 0.6);
+  });
+
+  it("grows the type with the sum, up to a cap", () => {
+    expect(bigLabelSize(1)).toBe(bigLabelSize(0));
+    expect(bigLabelSize(500)).toBeGreaterThan(bigLabelSize(20));
+    expect(bigLabelSize(1e9)).toBe(bigLabelSize(1e6));
+  });
+
+  it("swells a number again for a moment when a hit is added into it", () => {
+    const settled = bigLabelPose(30, 0).scale;
+    expect(bigLabelPose(30, 0, 0).scale).toBeGreaterThan(settled * 1.2);
+    expect(bigLabelPose(30, 0, 8).scale).toBeCloseTo(settled);
   });
 });
 

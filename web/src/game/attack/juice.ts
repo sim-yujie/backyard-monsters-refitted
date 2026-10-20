@@ -1,7 +1,8 @@
 import { championAttackDelay, monsterAttackDelay } from "@/game/combat/rules/stats";
 
 /**
- * Bigger attack effects (feat/attack-juice-demo, owner's "GO BIG" trial).
+ * Bigger attack effects (feat/attack-juice-demo, the owner's "GO BIG" trial,
+ * kept for beta.4 without the shockwave ring when a building falls).
  * Drawing only: nothing here reaches the battle, its clock, its countdown or
  * its replay. The hit-stop holds the picture still for a few frames while the
  * battle runs on underneath, and the slow-motion end plays the effects after
@@ -12,7 +13,7 @@ import { championAttackDelay, monsterAttackDelay } from "@/game/combat/rules/sta
  *   bouncier numbers, a hit-stop on big hits, slow motion at the end.
  * - `reduced` (the "Reduce effects" setting): the same, without shake,
  *   hit-stop or slow motion, and with fewer bits flying.
- * - `off`: the screen as it was before the trial, for side-by-side clips
+ * - `off`: the screen as it was before, for side-by-side clips
  *   (`?juice=0` in the address).
  */
 export type JuiceLevel = "full" | "reduced" | "off";
@@ -47,7 +48,7 @@ export const setReduceEffects = (on: boolean, store: Storage | null = storage())
 };
 
 /**
- * The demo's switch: `?juice=0` in the address, or `bymr.juiceDemo` set to
+ * The before-and-after switch: `?juice=0` in the address, or `bymr.juiceDemo` set to
  * `off` in this browser, draws the attack as before.
  */
 const juiceOffInAddress = (): boolean => {
@@ -61,7 +62,7 @@ const juiceOffInAddress = (): boolean => {
 
 /** How big the attack effects are drawn right now. */
 export const juiceLevel = (): JuiceLevel => {
-  // The battle screen's own tests pin the look as it was; the trial's are in juice.test.ts.
+  // The battle screen's own tests pin the look as it was; the bigger ones' are in juice.test.ts.
   if (import.meta.env.MODE === "test") return "off";
   if (juiceOffInAddress()) return "off";
   return reduceEffects() ? "reduced" : "full";
@@ -174,21 +175,77 @@ export const BIG_LABEL_RISE = 34;
 /** Font size of a juiced number, and the bigger one for a hard hit. */
 export const BIG_LABEL_SIZE = 18;
 
+/** A juiced number's font size for `amount`: bigger for a harder hit. */
+export const bigLabelSize = (amount: number): number =>
+  BIG_LABEL_SIZE + Math.min(10, Math.log10(Math.max(1, amount)) * 4);
+
+/** Ticks a merged-in hit makes its number swell again. */
+export const BIG_LABEL_KICK_TICKS = 8;
+
 /**
  * A juiced number at `age`: pops in at nearly twice its size, settles with a
- * bounce, hops up and drifts sideways, then shrinks away.
+ * bounce, hops up and drifts sideways, then shrinks away. `sinceMerge` is the
+ * ticks since another hit was added into it, which swells it a little again;
+ * null when none has been.
  */
 export const bigLabelPose = (
   age: number,
   drift: number,
+  sinceMerge: number | null = null,
 ): { rise: number; dx: number; scale: number; alpha: number } => {
   const t = Math.max(0, Math.min(1, age / BIG_LABEL_TICKS));
   // A ballistic hop: up fast, slowing at the top.
   const rise = (1 - (1 - t) ** 3) * BIG_LABEL_RISE;
   const pop = age < 10 ? 1.9 - 0.9 * (age / 10) + Math.sin((age / 10) * Math.PI) * 0.25 : 1;
+  const kick =
+    sinceMerge !== null && sinceMerge >= 0 && sinceMerge < BIG_LABEL_KICK_TICKS
+      ? 1 + 0.3 * (1 - sinceMerge / BIG_LABEL_KICK_TICKS)
+      : 1;
   const end = t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
-  return { rise, dx: drift * t, scale: pop * (0.6 + 0.4 * end), alpha: Math.max(0, end) };
+  return { rise, dx: drift * t, scale: Math.max(pop, kick) * (0.6 + 0.4 * end), alpha: Math.max(0, end) };
 };
+
+/* ── Many hits on one target ────────────────────────────────────────────── */
+
+/**
+ * Many monsters on one building made the big numbers pile up on each other.
+ * So, juiced, a target shows at most {@link BIG_LABEL_PER_TARGET} numbers at
+ * once, each in its own place (middle, right, left, drifting outwards), and a
+ * hit that comes while the newest is still fresh is added into it: one number
+ * counting up, swelling with each blow, rather than a stack. Nothing is lost:
+ * the numbers on screen add up to the damage done.
+ */
+export const BIG_LABEL_PER_TARGET = 3;
+/** Ticks a fresh number takes further hits into its sum (0.175 s at 1x). */
+export const BIG_LABEL_MERGE_TICKS = 14;
+/** With all places taken, ticks the newest number still takes hits into its sum. */
+export const BIG_LABEL_LATE_MERGE_TICKS = 32;
+/** World px a side number drifts outwards over its life. */
+export const BIG_LABEL_DRIFT = 12;
+
+export type BigLabelPlan = "new" | "merge" | "drop";
+
+/**
+ * What a hit on a target does: start a number, add into the newest one of
+ * its kind (`newestAge` ticks old, or null when it has none), or, all
+ * `alive` places taken and that one too old, nothing.
+ */
+export const bigLabelPlan = (newestAge: number | null, alive: number): BigLabelPlan => {
+  if (newestAge !== null && newestAge < BIG_LABEL_MERGE_TICKS) return "merge";
+  if (alive < BIG_LABEL_PER_TARGET) return "new";
+  return newestAge !== null && newestAge < BIG_LABEL_LATE_MERGE_TICKS ? "merge" : "drop";
+};
+
+/** The first free place for a new number: 0 the middle, 1 right, -1 left. */
+export const bigLabelSide = (taken: readonly number[]): number =>
+  [0, 1, -1].find((side) => !taken.includes(side)) ?? 0;
+
+/**
+ * Screen px a number on `side` sits from the middle: a whole number's width
+ * at `size`, plus a gap, so neighbours clear each other even mid-pop.
+ */
+export const bigLabelSpread = (side: number, digits: number, size: number): number =>
+  side * Math.round(digits * size * 0.62 + 12);
 
 /* ── Hit-stop and slow motion ───────────────────────────────────────────── */
 

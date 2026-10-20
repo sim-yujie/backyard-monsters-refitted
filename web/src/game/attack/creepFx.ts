@@ -1,6 +1,15 @@
 import { Container, Graphics, Sprite, Text, type Texture } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
-import { BIG_FLASH_TICKS, BIG_LABEL_SIZE, BIG_LABEL_TICKS, bigLabelPose } from "./juice";
+import {
+  BIG_FLASH_TICKS,
+  BIG_LABEL_DRIFT,
+  BIG_LABEL_TICKS,
+  bigLabelPlan,
+  bigLabelPose,
+  bigLabelSide,
+  bigLabelSize,
+  bigLabelSpread,
+} from "./juice";
 import { directionColumn } from "./monsterSprites";
 
 /**
@@ -357,6 +366,10 @@ interface Label {
   drift: number;
   /** A juiced number's size at rest, before the camera's zoom. */
   size: number;
+  /** A juiced number's place by its target: 0 the middle, 1 right, -1 left. */
+  side: number;
+  /** The tick a later hit was last added into a juiced number, or null. */
+  mergedTick: number | null;
   /** Where it was last anchored, for after the creep is gone. */
   x: number;
   y: number;
@@ -477,20 +490,60 @@ export class CreepFx {
    */
   number(tick: number, key: string, follow: number, amount: number, at: Point, kind: NumberKind): void {
     const shown = Math.max(1, Math.round(Math.abs(amount)));
+    if (this.juiced) {
+      this.bigNumber(tick, key, follow, shown, at, kind);
+      return;
+    }
     const siblings = (this.labelsByKey.get(key) ?? []).filter(
       (label) => tick - label.bornTick < LABEL_WINDOW_TICKS,
     );
     if (siblings.length >= LABEL_PER_TARGET) return;
     const label = this.acquireLabel();
     if (!label) return;
+    label.shiftX = labelShift(siblings.length, String(shown).length);
+    label.drift = 0;
+    label.size = 13;
+    label.side = 0;
+    this.showLabel(label, tick, key, follow, shown, at, kind);
+    this.labelsByKey.set(key, [...siblings, label]);
+  }
+
+  /**
+   * A juiced number: bigger for a harder hit, and on a busy target added
+   * into the newest one or put in a place of its own, never on top of
+   * another ({@link bigLabelPlan}).
+   */
+  private bigNumber(tick: number, key: string, follow: number, shown: number, at: Point, kind: NumberKind): void {
+    const alive = (this.labelsByKey.get(key) ?? []).filter((label) => tick - label.bornTick <= BIG_LABEL_TICKS);
+    const heal = kind === "heal";
+    const newest = [...alive].reverse().find((label) => (label.amount > 0) === heal);
+    const plan = bigLabelPlan(newest ? tick - newest.bornTick : null, alive.length);
+    if (plan === "drop") return;
+    if (plan === "merge" && newest) {
+      newest.amount += heal ? shown : -shown;
+      const total = Math.abs(newest.amount);
+      newest.mergedTick = tick;
+      newest.size = bigLabelSize(total);
+      newest.text.style.fontSize = newest.size;
+      newest.text.text = heal ? `+${total}` : String(total);
+      return;
+    }
+    const label = this.acquireLabel();
+    if (!label) return;
+    label.size = bigLabelSize(shown);
+    label.side = bigLabelSide(alive.map((other) => other.side));
+    label.shiftX = bigLabelSpread(label.side, String(shown).length, label.size);
+    label.drift = label.side * BIG_LABEL_DRIFT;
+    this.showLabel(label, tick, key, follow, shown, at, kind);
+    this.labelsByKey.set(key, [...alive, label]);
+  }
+
+  private showLabel(label: Label, tick: number, key: string, follow: number, shown: number, at: Point, kind: NumberKind): void {
     label.key = key;
     label.follow = follow;
     label.bornTick = tick;
+    label.mergedTick = null;
     label.amount = kind === "heal" ? shown : -shown;
-    label.shiftX = labelShift(siblings.length, String(shown).length);
-    // Juiced: a bigger number for a harder hit, flying off to one side.
-    label.drift = this.juiced ? (((tick * 7 + siblings.length * 5) % 9) - 4) * 3 : 0;
-    label.size = this.juiced ? BIG_LABEL_SIZE + Math.min(10, Math.log10(shown) * 4) : 13;
     label.text.style.fontSize = label.size;
     label.x = at.x;
     label.y = at.y;
@@ -500,7 +553,6 @@ export class CreepFx {
     label.text.alpha = 1;
     label.text.position.set(Math.round(at.x + label.shiftX), Math.round(at.y));
     this.active.push(label);
-    this.labelsByKey.set(key, [...siblings, label]);
   }
 
   /* ── Frame ──────────────────────────────────────────────────────────── */
@@ -577,7 +629,7 @@ export class CreepFx {
    */
   labelsFor(key: string): Array<{ amount: number; x: number; y: number }> {
     return (this.labelsByKey.get(key) ?? [])
-      .filter((label) => tickAge(this.tick, label.bornTick) <= LABEL_TICKS)
+      .filter((label) => tickAge(this.tick, label.bornTick) <= (this.juiced ? BIG_LABEL_TICKS : LABEL_TICKS))
       .map((label) => ({ amount: label.amount, x: label.text.x, y: label.text.y }));
   }
 
@@ -926,7 +978,7 @@ export class CreepFx {
     text.anchor.set(0.5, 1);
     text.eventMode = "none";
     this.labels.addChild(text);
-    return { text, key: "", follow: -1, bornTick: 0, amount: 0, shiftX: 0, drift: 0, size: 13, x: 0, y: 0 };
+    return { text, key: "", follow: -1, bornTick: 0, amount: 0, shiftX: 0, drift: 0, size: 13, side: 0, mergedTick: null, x: 0, y: 0 };
   }
 
   private forget(label: Label): void {
@@ -958,7 +1010,7 @@ export class CreepFx {
         label.y = anchor.top - 6;
       }
       if (this.juiced && !this.reducedMotion) {
-        const big = bigLabelPose(age, label.drift);
+        const big = bigLabelPose(age, label.drift, label.mergedTick === null ? null : tick - label.mergedTick);
         label.text.scale.set(scale * big.scale);
         label.text.position.set(
           Math.round(label.x + label.shiftX * scale + big.dx),

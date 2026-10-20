@@ -37,6 +37,7 @@ type Look = "soft" | "dot" | "ring" | "scorch";
 /** One sprite of a blast, placed from its age each frame. */
 interface Bit {
   readonly sprite: Sprite;
+  readonly look: Look;
   readonly born: number;
   readonly life: number;
   /** Ground point it starts over, world px, and its height above it. */
@@ -245,7 +246,7 @@ export class BlastFx {
   private made = 0;
 
   /**
-   * `maxShake` raises the shake's ceiling (the bigger effects trial), and
+   * `maxShake` raises the shake's ceiling (bigger attack effects), and
    * `fewer` halves the extra bits ("Reduce effects").
    */
   constructor(
@@ -258,6 +259,13 @@ export class BlastFx {
   /** Bits alive, for tests and the dev hook. */
   get bitCount(): number {
     return this.bits.length;
+  }
+
+  /** How many bits of each look are alive, for tests. */
+  looksAlive(): Partial<Record<Look, number>> {
+    const counts: Partial<Record<Look, number>> = {};
+    for (const bit of this.bits) counts[bit.look] = (counts[bit.look] ?? 0) + 1;
+    return counts;
   }
 
   get markCount(): number {
@@ -368,10 +376,12 @@ export class BlastFx {
   /* ── Demolish ───────────────────────────────────────────────────────── */
 
   /**
-   * A building falling (feat/attack-juice-demo): the punchy flash and
-   * shockwave, a ring of dust, chunks of the building thrown up that land
-   * and stay a moment, a scorch, and a shake as hard as the building is big.
-   * A `small` one (a wall) gets the flash, a few chunks and no shake.
+   * A building falling (bigger attack effects): a flash and a fireball,
+   * dust rolling along the ground, sparks, chunks of the building thrown up
+   * that land and stay a moment, a scorch, and a shake as hard as the
+   * building is big. No shockwave ring: the owner dropped it, as it read like
+   * the Bandito's attack. A `small` one (a wall) gets the flash, a few chunks
+   * and no shake.
    */
   demolish(tick: number, at: Point, radius: number, small = false): void {
     const { scale, many } = this.begin(radius);
@@ -380,8 +390,6 @@ export class BlastFx {
     if (!small) {
       this.mark(tick, "scorch", at, radius * 1.6, 0.6, 220);
       this.add(tick, { look: "soft", at: lift, add: true, life: 22, size0: radius * 0.8, size1: radius * 1.2, colours: [0xfff6c0, 0xffa020, 0xff6000, 0x802000], peak: 0.95 });
-      this.add(tick, { look: "ring", at, add: true, life: 22, size0: radius * 0.2, size1: radius * 3, squash: 0.5, easeOut: true, hold: 0.1, colours: [0xffffff, 0xfff0a0, 0xffb040] });
-      this.add(tick, { look: "ring", at, add: true, delay: 4, life: 20, size0: radius * 0.15, size1: radius * 2.2, squash: 0.5, easeOut: true, peak: 0.55, colours: [0xffffff, 0xffe080] });
       // Dust rolling out along the ground.
       const dust = many(10);
       for (let index = 0; index < dust; index += 1) {
@@ -427,7 +435,7 @@ export class BlastFx {
     }
   }
 
-  /** A small spark where a blow lands (feat/attack-juice-demo): a flash and a few bits. */
+  /** A small spark where a blow lands (bigger attack effects): a flash and a few bits. */
   impact(tick: number, at: Point, radius: number): void {
     const { many } = this.begin(radius);
     this.add(tick, { look: "soft", at, add: true, life: 7, size0: radius * 0.4, size1: radius * 1.3, easeOut: true, colours: [0xffffff, 0xfff3a0, 0xffc040] });
@@ -509,6 +517,7 @@ export class BlastFx {
     this.host.air.addChild(sprite);
     const bit: Bit = {
       sprite,
+      look: spec.look,
       born: tick + (spec.delay ?? 0),
       life: spec.life ?? 20,
       x: spec.at.x,
