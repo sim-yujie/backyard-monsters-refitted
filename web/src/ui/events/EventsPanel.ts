@@ -387,11 +387,11 @@ export class EventsPanel {
 
     const prize = el("div", `events-krallen__prize${maxed ? " events-krallen__prize--maxed" : ""}`);
     const words = el("div", "events-krallen__words");
-    words.append(
-      el("h4", "events-section__title", "The prize"),
-      el("p", "events-krallen__prize-text", krallenPrizeText(krallen)),
-      el("p", "events-krallen__level", krallen.level > 0 ? `Your Krallen: level ${krallen.level}` : "You have no Krallen yet"),
-    );
+    // Claimed this month: the line says what the next hunt pays.
+    const prizeText = tier?.claimed && !maxed ? `Next hunt: ${krallenPrizeText(krallen)}` : krallenPrizeText(krallen);
+    words.append(el("h4", "events-section__title", "The prize"), el("p", "events-krallen__prize-text", prizeText));
+    // Her level now, when the prize line does not already say it in other words.
+    if (krallen.level > 0 && !maxed) words.append(el("p", "events-krallen__level", `Your Krallen is level ${krallen.level}`));
     prize.append(krallenPicture(Math.max(1, krallen.level), "card", "events-krallen__portrait"), words);
     section.append(prize);
 
