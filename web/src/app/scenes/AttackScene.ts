@@ -820,17 +820,24 @@ export class AttackScene implements Scene {
    * corner below it; a tall army panel (the Baiter's whole test roster, with
    * its champion row last) ran on under the minimap, which took its taps. The
    * dock stops above the view tools and scrolls. A phone's sheet is sized by
-   * the stylesheet.
+   * the stylesheet, and so is the dock when the tools are not under it (a
+   * phone on its side keeps them in the other corner, attack.css).
    */
   private fitDock(): void {
     const dock = this.dock;
     const tools = this.viewTools;
     if (!dock || !tools) return;
-    if (dock.classList.contains("attack-dock--sheet")) {
+    const toolsBox = tools.getBoundingClientRect();
+    const dockBox = dock.getBoundingClientRect();
+    if (
+      dock.classList.contains("attack-dock--sheet") ||
+      toolsBox.right <= dockBox.left ||
+      toolsBox.left >= dockBox.right
+    ) {
       dock.style.maxHeight = "";
       return;
     }
-    const room = tools.getBoundingClientRect().top - dock.getBoundingClientRect().top - DOCK_GAP;
+    const room = toolsBox.top - dockBox.top - DOCK_GAP;
     dock.style.maxHeight = room > 0 ? `${Math.max(MIN_DOCK_HEIGHT, Math.floor(room))}px` : "";
   }
 

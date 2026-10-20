@@ -233,6 +233,14 @@
   }
 }
 
+/* A phone on its side: a panel docked on the right (a building's) reaches
+   down to Bob's corner, so the bubble stops short of it. */
+@media (width > 620px) and (height <= 500px) {
+  :root:has(.map-dock--right > *) .guide-bob {
+    max-width: calc(100vw - 112px - 300px - var(--space-6));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .guide-arrow__hand,
   .guide-spotlight__ring {
