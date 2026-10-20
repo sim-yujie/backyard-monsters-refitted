@@ -1,48 +1,49 @@
 import type { ChangelogRelease } from "./types";
 
-/**
- * v2.0.0-beta.4. PLACEHOLDER words and pictures: the owner rewrites the text
- * and the pictures (web/public/whats-new/beta4-*.png) are stand-ins until the
- * real art is made.
- */
+/** v2.0.0-beta.4: pictures in web/public/whats-new/beta4-*.webp (960x540, 16:9). */
 export const BETA_4: ChangelogRelease = {
   version: "2.0.0-beta.4",
   title: "Beta 4",
   cards: [
     {
-      image: "/whats-new/beta4-halloween.png",
-      title: "Halloween is here",
-      text: "A spooky two-week event with treats to claim. Look for the pumpkin button on your yard.",
+      image: "/whats-new/beta4-halloween.webp",
+      title: "Halloween is here!",
+      text: "From 28 October your yard goes spooky for two whole weeks. Dark grass, a big moon and pumpkins where the mushrooms used to grow!",
     },
     {
-      image: "/whats-new/beta4-events.png",
-      title: "New Events page",
-      text: "See what is on now, how long it lasts and what is coming up next, all in one place.",
+      image: "/whats-new/beta4-pumpkin-hunt.webp",
+      title: "Pumpkin hunt",
+      text: "Tap a pumpkin to send a worker to pick it. Collect enough for prizes, all the way up to a D.A.V.E. Pumpkin!",
     },
     {
-      image: "/whats-new/beta4-whats-new.png",
-      title: "What's new",
-      text: "This screen! It shows up once after each update. Open it again any time from your account menu.",
+      image: "/whats-new/beta4-events.webp",
+      title: "Events and daily treats",
+      text: "The new Events button shows what's on now and what's coming next. Log in each day of Halloween for 14 days of treats, free speed-ups included!",
     },
     {
-      image: "/whats-new/beta4-friends.png",
+      image: "/whats-new/beta4-champion-eggs.webp",
+      title: "Champions hatch from eggs",
+      text: "Raising a champion now gives you a special egg. One day later, out pops your new champion!",
+    },
+    {
+      image: "/whats-new/beta4-friends.webp",
       title: "Friends list upgrade",
-      text: "Your friends list is easier to use, with more ways to keep in touch.",
+      text: "Find friends fast with search and filters, and see at a glance who you can help or send a gift to.",
     },
     {
-      image: "/whats-new/beta4-phone.png",
-      title: "Better on phones",
-      text: "Buttons and panels no longer get in each other's way on small screens.",
+      image: "/whats-new/beta4-phone.webp",
+      title: "Tidier on phones",
+      text: "One Menu button holds everything, friends tuck away behind their own button, and the battle screen stays clear.",
     },
     {
-      image: "/whats-new/beta4-special-moves.png",
+      image: "/whats-new/beta4-special-moves.webp",
       title: "Special moves tuned",
-      text: "Some monsters' special moves have been tweaked to feel fairer and more fun.",
+      text: "Bandito's whirlwind spins through enemy monsters, Teratorn's fireball bounces to walls, and defending Bolts blink too. Fang's venom bites once a second again.",
     },
     {
-      image: "/whats-new/beta4-animations.png",
-      title: "New monster animations",
-      text: "More monsters now walk, attack and celebrate with fresh animations.",
+      image: "/whats-new/beta4-animations.webp",
+      title: "Monsters on the move",
+      text: "Crabatron scuttles, Fang creeps, Eye-ra slithers, and lots more monsters now walk and attack with brand-new animations.",
     },
   ],
 };
