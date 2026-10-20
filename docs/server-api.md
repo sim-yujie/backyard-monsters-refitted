@@ -569,7 +569,8 @@ Mode the log flung it in, under the final lock, so once per attack. A defending 
 lesson. `b` and `bs` are the server's alone: `ChampionSchema` drops both from every champion list
 a client sends, and no path writes a sent list wholesale any more: an owner save ignores its
 `champion`, and an Inferno tribe attack takes only lower health for a flung champion, as Map Room 1
-and 2 do (`championsAfterAttack`).
+and 2 do (`championsAfterAttack`). Krallen is made and raised only by the Krallen Hunt's reward
+(`services/events/krallenReward.ts`).
 
 The loot is the final save's (issues #163, #165), and so is the replay: the same `battleReplayInput`
 (issue #23, C3), to the checkpoint's tick. The replay fights over the pool the attack load

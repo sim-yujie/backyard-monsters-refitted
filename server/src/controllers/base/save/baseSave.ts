@@ -82,6 +82,7 @@ import {
 } from "../../../services/base/combat/housingLoss.js";
 import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
+import { countAttackLoot } from "../../../services/events/lootEvents.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
@@ -385,8 +386,9 @@ const saveBase = async (
           }
         }
         // An owner save never writes the champion list: every change to it is
-        // a server action (the cage, the chamber), so a hand-made list could
-        // only add a champion, raise one or forge its brain (issue #219).
+        // a server action (the cage, the chamber, an event's Krallen,
+        // `services/events/krallenReward.ts`), so a hand-made list could only
+        // add a champion, raise one or forge its brain (issue #219).
         break;
 
       // The stock less what the log used, on the save that ends the attack;
@@ -540,6 +542,10 @@ const saveBase = async (
 
     postgres.em.persist(userSave);
     await postgres.em.flush();
+
+    // Event loot (the monthly Krallen Hunt) counts the credit before the cap,
+    // once: this save holds the final lock (`services/events/lootEvents.ts`).
+    if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
 
     // MR3 Takeover Logic:
     // If the attack is over and damage >= 90, trigger takeover or destroy logic.

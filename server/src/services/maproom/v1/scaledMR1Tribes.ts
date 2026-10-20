@@ -28,6 +28,7 @@ import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
+import { countAttackLoot } from "../../events/lootEvents.js";
 import {
   acquireMR1TribeFinalLock,
   endMR1TribeSession,
@@ -111,6 +112,8 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   const wasDestroyed = Boolean(existingTribe.destroyed);
   /** What the attacker's pool took of the loot, for the response. */
   let credited: ResourceAmounts | null = null;
+  /** The battle's credit before the attacker's cap, for event loot. */
+  let lootCredit: ResourceAmounts | null = null;
 
   // The tribe keeps its own monsters, the stored ones or its template's: the
   // save's copy is never written (issue #23, C2). What the battle did to it
@@ -160,6 +163,7 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
     // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
     const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
     credited = bankAttackLoot(userSave, credit, krallenBuff).credited;
+    lootCredit = credit;
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
@@ -169,6 +173,10 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   postgres.em.persist(maproom);
   postgres.em.persist(userSave);
   await postgres.em.flush();
+
+  // Event loot (the monthly Krallen Hunt): the tribe's whole credit, before
+  // the attacker's cap, once, under the tribe's final lock.
+  if (lootCredit) await countAttackLoot(postgres.em, user.userid, userSave, lootCredit, now);
 
   // Goals WM1-WM4 (#227): a tribe this replay destroyed, counted on the
   // attacker's main row under its own lock.

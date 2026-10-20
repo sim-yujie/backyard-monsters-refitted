@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
 import { gzipSync } from "node:zlib";
 import type { BrainWeights } from "../../../game-rules/combat/index.js";
@@ -36,6 +36,8 @@ const store = new Map<string, string>();
 const upsert = mock(async (_entity: unknown, _row: Record<string, any>) => {});
 /** Defence replays written (issue #359). */
 const replays: Record<string, any>[] = [];
+/** The event counter writes (`services/events/progressStore.ts`), as `[event, amount]`. */
+const counted: [string, number][] = [];
 
 mock.module("../../../server.js", () => ({
   postgres: {
@@ -64,6 +66,12 @@ mock.module("../../../server.js", () => ({
       upsert,
       persist: () => {},
       flush: async () => {},
+      // Only the event counter's SQL is answered; anything else fails as with no database.
+      execute: async (sql: string, params: unknown[]) => {
+        if (!sql.includes("event_progress")) throw new Error("no database");
+        counted.push([String(params[1]), Number(params[2])]);
+        return [{ counter: params[2] }];
+      },
       // The attacker's main row, locked for an achievement event (#204).
       transactional: async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
@@ -202,6 +210,7 @@ beforeEach(() => {
   reports.length = 0;
   replays.length = 0;
   notices.length = 0;
+  counted.length = 0;
   store.clear();
   defender = {
     basesaveid: 9,
@@ -337,6 +346,63 @@ describe("the champion's learning brain through the save (issue #219)", () => {
       () => {}
     );
     expect(attackerSave.champion).toEqual(after);
+  });
+});
+
+describe("the Krallen Hunt's loot through the save", () => {
+  const FORCED = process.env.EVENTS_FORCE_ON;
+  beforeEach(() => {
+    // A day no hunt runs on its own; the forced one starts that midnight.
+    setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    process.env.EVENTS_FORCE_ON = "krallen-2026-11";
+    attackerSave.buildingdata = { "0": { id: 0, t: 14, l: 6, X: 0, Y: 0 } };
+  });
+  afterEach(() => {
+    setSystemTime();
+    if (FORCED === undefined) delete process.env.EVENTS_FORCE_ON;
+    else process.env.EVENTS_FORCE_ON = FORCED;
+  });
+
+  const sum = (amounts: Record<string, number>) => amounts.r1! + amounts.r2! + amounts.r3! + amounts.r4!;
+
+  test("the save that ends the attack counts the replay's credit once, loot that did not fit included", async () => {
+    const cap = replayCap();
+    expect(sum(cap)).toBeGreaterThan(0);
+    // Storage far over any cap: nothing lands, all of it counts.
+    attackerSave.resources = { r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 };
+    await baseSave(ctxFor({ over: "1", attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(attackerSave.resources).toEqual({ r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 });
+    // What the server's battle took, not the 4 billion the save claimed.
+    expect(counted).toEqual([["krallen-2026-11", sum(cap)]]);
+  });
+
+  test("a save that does not end the attack counts nothing", async () => {
+    await baseSave(ctxFor({ attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(counted).toEqual([]);
+  });
+
+  test("below Town Hall 6, or outside the event, nothing counts", async () => {
+    attackerSave.buildingdata = { "0": { id: 0, t: 14, l: 5, X: 0, Y: 0 } };
+    await baseSave(ctxFor({ over: "1", flinglog: JSON.stringify(LOG) }), async () => {});
+    attackerSave.buildingdata = { "0": { id: 0, t: 14, l: 6, X: 0, Y: 0 } };
+    delete process.env.EVENTS_FORCE_ON;
+    defender.attackid = ATTACK_ID;
+    await baseSave(ctxFor({ over: "1", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(counted).toEqual([]);
+  });
+
+  test("an attack save cannot hand the attacker a Krallen", async () => {
+    attackerSave.champion = [];
+    await baseSave(
+      ctxFor({
+        over: "1",
+        flinglog: JSON.stringify(LOG),
+        attackerchampion: JSON.stringify([{ t: 5, hp: 62_000, l: 5, ft: 0, fd: 0, fb: 0, pl: 2, status: 0 }]),
+      }),
+      async () => {}
+    );
+    expect(attackerSave.champion).toEqual([]);
   });
 });
 

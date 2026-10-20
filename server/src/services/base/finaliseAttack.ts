@@ -42,6 +42,7 @@ import type { FlingLog, ResourceAmounts } from "../../game-rules/combat/index.js
 import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
 import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 import { recordAttackAchievements } from "../achievements/events.js";
+import { countAttackLoot } from "../events/lootEvents.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -364,6 +365,9 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   defender.savetime = now;
   postgres.em.persist(defender);
   await postgres.em.flush();
+
+  // Event loot (the monthly Krallen Hunt), before the cap, once: still under the final lock.
+  await countAttackLoot(postgres.em, attacker.userid, userSave, loot.credit, now);
 
   await endAttackSession(basesaveid);
   await discardCheckpoint(basesaveid);
