@@ -4,7 +4,7 @@
  */
 
 export interface ChangelogCard {
-  /** A picture under web/public, e.g. `/whats-new/beta4-events.png` (16:9 reads best). */
+  /** A picture under web/public, e.g. `/whats-new/beta4-events.webp` (16:9 reads best). */
   readonly image: string;
   readonly title: string;
   /** One or two short sentences, in everyday words. */

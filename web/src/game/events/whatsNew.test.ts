@@ -56,7 +56,7 @@ describe("the changelog", () => {
       expect(release.version).toMatch(/^[0-9A-Za-z.+-]{1,32}$/);
       expect(release.cards.length).toBeGreaterThan(0);
       for (const card of release.cards) {
-        expect(card.image).toMatch(/^\/whats-new\/.+\.png$/);
+        expect(card.image).toMatch(/^\/whats-new\/.+\.(png|webp)$/);
         expect(card.title.length).toBeGreaterThan(0);
         expect(card.text.length).toBeGreaterThan(0);
       }
