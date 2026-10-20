@@ -652,14 +652,16 @@ const saveBase = async (
     await recordAttackPlan(user.userid, baseSave, battleInput.log, battleInput.tick);
   }
 
-  // A Map Room 2 Kozu Town Hall the battle brought down counts towards the
-  // attacker's achievements, on their main row under its own lock (issue #204).
-  if (battle && saveData.over) {
+  // A Map Room 2 Kozu Town Hall the battle brought down, and each biggest
+  // Putty bomb fired, count towards the attacker's achievements, on their main
+  // row under its own lock (issue #204, #299).
+  if (saveData.over && (battle || bombs)) {
     await recordAttackAchievements(postgres.em, {
       attackerBasesaveid: userSave.basesaveid,
       defender: baseSave,
       before: storedHealthData,
-      after: battle.buildinghealthdata,
+      after: battle?.buildinghealthdata,
+      bombs: bombs?.charges,
     });
   }
 

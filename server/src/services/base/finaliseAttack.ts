@@ -377,13 +377,15 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // its tribe and level from now on (issue #221); an auto-attack never is.
   if (options.recordPlan ?? true) await recordAttackPlan(attacker.userid, defender, input.log, input.tick);
 
-  // A Map Room 2 Kozu Town Hall the battle brought down counts towards the
-  // attacker's achievements, hand-played or auto-attack alike (issue #204).
+  // A Map Room 2 Kozu Town Hall the battle brought down, and each biggest
+  // Putty bomb fired, count towards the attacker's achievements, hand-played
+  // or auto-attack alike (issue #204, #299).
   await recordAttackAchievements(postgres.em, {
     attackerBasesaveid: userSave.basesaveid,
     defender,
     before: storedHealthData,
     after: outcome.buildinghealthdata,
+    bombs: bombs.charges,
   });
 
   logger.info("Finalised {username}'s abandoned attack on base {baseid} at tick {tick}", {
