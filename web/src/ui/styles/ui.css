@@ -974,7 +974,9 @@ body {
   /* Edge to edge on a phone: the top row has no width to spare for an inset. */
   :root {
     --hud-inset: 0px;
-    --hud-bar-height: 92px;
+    /* Two 44 px rows, their gap and the padding: at 92 px the Map/Yard switch
+       poked above the screen's top edge. */
+    --hud-bar-height: 100px;
   }
 
   .hud {
@@ -1016,6 +1018,36 @@ body {
   .hud__resource-button .res-icon,
   .hud__workers-icon {
     height: 18px;
+  }
+}
+
+/* A narrow phone on its side keeps the one-row bar: tighter readouts so Shiny
+   still shows beside the screen buttons. */
+@media (620px < width <= 820px) and (height <= 500px) {
+  .hud__resources {
+    gap: 0;
+  }
+
+  .hud__resource-button {
+    padding: var(--space-1);
+  }
+
+  .hud__resource-value {
+    font-size: var(--text-sm);
+  }
+
+  .hud__resource-button .res-icon {
+    height: 18px;
+  }
+}
+
+/* A phone on its side: the Account list would run off the bottom, so it keeps
+   to the screen and scrolls. */
+@media (width > 620px) and (height <= 500px) {
+  .account-menu__list {
+    max-height: calc(100dvh - 84px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 

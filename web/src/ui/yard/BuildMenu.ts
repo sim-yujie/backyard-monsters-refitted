@@ -72,6 +72,12 @@ const PHONE_QUERY = "(width <= 620px), (pointer: coarse)";
 const isPhone = (): boolean =>
   typeof window !== "undefined" && window.matchMedia?.(PHONE_QUERY).matches === true;
 
+/** The info over the tiles rather than beside them: a phone, or a screen too short for both (a phone on its side). */
+const STACKED_QUERY = `${PHONE_QUERY}, (height <= 500px)`;
+
+const isStacked = (): boolean =>
+  typeof window !== "undefined" && window.matchMedia?.(STACKED_QUERY).matches === true;
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** A small line icon in the text's colour, hidden from assistive technology. */
@@ -179,7 +185,7 @@ export class BuildMenu {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       event.stopPropagation();
       // On a phone Escape backs out of the info first, as Back does.
-      if (this.picked !== null && isPhone()) this.pick(null);
+      if (this.picked !== null && isStacked()) this.pick(null);
       else this.close();
     });
 
@@ -287,7 +293,7 @@ export class BuildMenu {
     }
     this.element.querySelector("#build-menu-main")?.setAttribute("aria-labelledby", `build-tab-${category}`);
     // Beside the tiles there is room to show the first one straight away.
-    if (this.picked === null && !isPhone()) this.picked = this.sorted()[0]?.type ?? null;
+    if (this.picked === null && !isStacked()) this.picked = this.sorted()[0]?.type ?? null;
     this.render();
     if (!wasOpen) this.tabButtons.get(category)?.focus();
     if (!wasOpen) guideBus.emit("screen", { id: GuideScreen.BUILD, root: this.element, header: this.header });
@@ -299,7 +305,7 @@ export class BuildMenu {
     this.element.hidden = true;
     this.disarm();
     // A phone reopens on the tiles, not on an info it was showing.
-    if (isPhone()) this.picked = null;
+    if (isStacked()) this.picked = null;
     this.onClose?.();
   }
 
@@ -321,7 +327,7 @@ export class BuildMenu {
     this.picked = type;
     this.render();
     if (type !== null) {
-      if (isPhone()) this.info.querySelector<HTMLElement>(".build-info__back")?.focus();
+      if (isStacked()) this.info.querySelector<HTMLElement>(".build-info__back")?.focus();
     } else if (back !== null) {
       this.grid.querySelector<HTMLElement>(`.build-tile[data-type="${back}"]`)?.focus();
     }

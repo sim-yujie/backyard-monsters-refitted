@@ -1109,6 +1109,83 @@
   display: none;
 }
 
+/* ── A phone on its side: the map keeps most of the little height ───────── */
+
+/* As on a phone (below): no hint, no footer, no legend, a smaller overview. */
+@media (width > 620px) and (height <= 500px) {
+  .mr1 {
+    inset: calc(var(--hud-height) + var(--space-2)) var(--space-4) var(--space-2);
+    gap: var(--space-2);
+    padding: 0 var(--space-3) var(--space-3);
+  }
+
+  .mr1__header {
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+  }
+
+  .mr1__title {
+    font-size: 20px;
+    white-space: nowrap;
+  }
+
+  .mr1__hint,
+  .mr1__footer,
+  .mr1-mini__caption,
+  .mr1-legend {
+    display: none;
+  }
+
+  .mr1-map__home {
+    top: var(--space-2);
+    left: var(--space-2);
+  }
+
+  .mr1-mini {
+    top: var(--space-2);
+    right: var(--space-2);
+    width: 104px;
+    padding: 6px;
+  }
+
+  /* No room for the card beside its pin or the list: it is a sheet along the
+     bottom (MapRoom1Ui.ts), as on a phone. */
+  .mr1-listpane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mr1-side {
+    display: none;
+  }
+
+  .mr1--sheet-open .mr1-list {
+    margin-bottom: 60vh;
+  }
+
+  .mr1-sheet {
+    position: absolute;
+    right: var(--space-4);
+    bottom: 0;
+    z-index: var(--z-hud);
+    width: min(480px, calc(100vw - 2 * var(--space-4)));
+    /* Clear of the window's title row, with its Map / List and close. */
+    max-height: calc(100vh - var(--hud-height) - 64px);
+    overflow-y: auto;
+  }
+
+  .mr1-card--sheet {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4) var(--space-4);
+    border-width: 1px 1px 0;
+    border-radius: 22px 22px 0 0;
+    box-shadow: var(--shadow-popup);
+  }
+
+  .mr1-card--sheet .mr1-card__blurb {
+    font-size: var(--text-sm);
+  }
+}
+
 /* ── A phone: the list first, the card as a bottom sheet ────────────────── */
 
 @media (width <= 620px) {
