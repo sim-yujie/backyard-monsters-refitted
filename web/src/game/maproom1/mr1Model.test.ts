@@ -4,7 +4,7 @@ import { defaultAvatar } from "@/game/avatars";
 import { mapRoom1Fixture } from "./mr1Fixture";
 import {
   attackGate,
-  battlesText,
+  battleCounts,
   flingerState,
   formatAgo,
   formatRespawn,
@@ -233,13 +233,25 @@ describe("words", () => {
     expect(formatAgo(5 * 86_400)).toBe("5 d ago");
   });
 
-  it("describes presence and battles: no words while online, no \"Offline\" ever", () => {
+  it("describes presence: no words while online, no \"Offline\" ever", () => {
     expect(presenceText(named("Bramblefoot"), NOW)).toBe("");
     expect(presenceText(named("Mossbeard"), NOW)).toBe("Last seen 3 h ago");
     expect(presenceText({ ...named("Mossbeard"), lastSeen: 0 }, NOW)).toBe("");
-    expect(battlesText(named("Mossbeard"))).toBe("Attacked you 2 times · you attacked 1");
-    expect(battlesText(named("Grimble"))).toBe("No battles yet");
-    expect(battlesText(named("Wartwhistle"))).toBe("You attacked them 3 times");
+  });
+
+  it("counts battles for the shield and sword icons, only the sides above 0", () => {
+    expect(battleCounts(named("Mossbeard"))).toEqual([
+      { kind: "attackedYou", count: 2, label: "Attacked you 2 times" },
+      { kind: "youAttacked", count: 1, label: "You attacked them 1 time" },
+    ]);
+    expect(battleCounts(named("Wartwhistle"))).toEqual([
+      { kind: "youAttacked", count: 3, label: "You attacked them 3 times" },
+    ]);
+    expect(battleCounts({ ...named("Grimble"), attacksFrom: 1 })).toEqual([
+      { kind: "attackedYou", count: 1, label: "Attacked you 1 time" },
+    ]);
+    // No battles: nothing at all, not "No battles yet".
+    expect(battleCounts(named("Grimble"))).toEqual([]);
   });
 
   it("takes the server's word on who is online (#275): seen is not enough without a real action", () => {
@@ -273,16 +285,13 @@ describe("words", () => {
     expect(initials("x")).toBe("X");
   });
 
-  it("writes the list's second line", () => {
-    expect(rowLine(named("Mossbeard"), NOW)).toEqual({
-      text: "Attacked you 2× · last seen 3 h ago",
-      tone: "warn",
-    });
-    expect(rowLine(named("Bramblefoot"), NOW).text).toBe("In their yard · can't attack");
-    expect(rowLine(named("Grimble"), NOW).text).toBe("Last seen 24 h ago · no battles yet");
-    expect(rowLine({ ...named("Grimble"), lastSeen: 0 }, NOW).text).toBe("No battles yet");
-    expect(rowLine({ ...named("Mossbeard"), lastSeen: 0 }, NOW).text).toBe("Attacked you 2×");
-    expect(rowLine(named("Nettlejaw"), NOW).text).toBe("New player · protected 5 d");
+  it("writes the list's second line, with no battle words (those are icons)", () => {
+    expect(rowLine(named("Mossbeard"), NOW)).toBe("Last seen 3 h ago");
+    expect(rowLine(named("Bramblefoot"), NOW)).toBe("In their yard · can't attack");
+    expect(rowLine(named("Grimble"), NOW)).toBe("Last seen 24 h ago");
+    expect(rowLine({ ...named("Grimble"), lastSeen: 0 }, NOW)).toBe("");
+    expect(rowLine({ ...named("Mossbeard"), lastSeen: 0 }, NOW)).toBe("");
+    expect(rowLine(named("Nettlejaw"), NOW)).toBe("New player · protected 5 d");
   });
 });
 

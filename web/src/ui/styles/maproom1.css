@@ -655,38 +655,28 @@
   color: var(--colour-text-muted);
 }
 
-.mr1-card__stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+/* The shield (they attacked you) and sword (you attacked them) counts on a
+ * neighbour's "Last seen" line, card and list alike. */
+.mr1-battles {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
 }
 
-.mr1-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px var(--space-3);
-  border: 1px solid var(--colour-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
+.mr1-card__sub:has(> .mr1-battles),
+.mr1-row__line:has(> .mr1-battles) {
+  gap: 8px;
 }
 
-.mr1-stat__value {
-  font-size: 20px;
+.mr1-battle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
-.mr1-stat__label {
-  font-size: var(--text-sm);
-  color: var(--colour-text-secondary);
-}
-
-.mr1-stat--warn {
-  border-color: color-mix(in srgb, var(--colour-warning) 35%, transparent);
-  background: color-mix(in srgb, var(--colour-warning) 10%, transparent);
-}
-
-.mr1-stat--warn .mr1-stat__value,
-.mr1-stat--warn .mr1-stat__label {
+.mr1-battle--attackedYou {
   color: var(--colour-warning);
 }
 
@@ -977,11 +967,6 @@
   gap: 5px;
   font-size: var(--text-xs);
   color: var(--colour-text-secondary);
-}
-
-.mr1-row__line--warn {
-  color: var(--colour-warning);
-  font-weight: 600;
 }
 
 .mr1-row__chevron {
