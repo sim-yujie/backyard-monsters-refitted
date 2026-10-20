@@ -1,4 +1,4 @@
-import type { BaseLoadResponse, ResourceCaps, Resources, SpeedupItem, UpgradeCost } from "@/api/types";
+import type { BaseLoadResponse, ResourceCaps, Resources, SpeedupItem, StoreData, UpgradeCost } from "@/api/types";
 import type { CostRequirement } from "@/game/yard/buildingCostData";
 import {
   costOf,
@@ -85,6 +85,20 @@ export const MAP_ROOM_2_LEVEL = 2;
 export const SPEEDUP_PRICE: Readonly<Record<"SP2" | "SP3", number>> = { SP2: 20, SP3: 40 };
 const SPEEDUP_SECONDS: Readonly<Record<"SP2" | "SP3", number>> = { SP2: 3_600, SP3: 7_200 };
 
+/**
+ * Where a yard keeps free SP2/SP3 speed-ups won from events: `storedata[key].q`
+ * (server `game-data/events/eventRewards.ts` `FREE_SPEEDUP_KEYS`). The server
+ * spends one of these before any Shiny (`controllers/yard/speedup.ts`).
+ */
+const FREE_SPEEDUP_KEYS: Readonly<Record<"SP2" | "SP3", string>> = { SP2: "FREESP2", SP3: "FREESP3" };
+
+/** How many free `item` speed-ups the yard holds. */
+export const freeSpeedupsHeld = (storedata: StoreData | null | undefined, item: SpeedupItem): number => {
+  if (item !== "SP2" && item !== "SP3") return 0;
+  const count = Number(storedata?.[FREE_SPEEDUP_KEYS[item]]?.q);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+};
+
 /** What the panel reads: the store, or anything shaped like its read side. */
 export interface PanelContext {
   readonly yard: Yard;
@@ -136,8 +150,10 @@ export interface UpgradeOffer {
 /** One Shiny speed-up on a running job. */
 export interface SpeedupOffer {
   readonly item: SpeedupItem;
-  /** Shiny; 0 for SP1. */
+  /** Shiny; 0 for SP1, and while a free one is held. */
   readonly price: number;
+  /** Free ones of this speed-up the yard holds (event rewards); spent before Shiny. */
+  readonly free: number;
   /** Null when it can be pressed, else why not. */
   readonly blocked: "paused" | "tooShort" | "credits" | null;
 }
@@ -378,10 +394,11 @@ const speedup = (
   remaining: number,
   paused: boolean,
   credits: number,
+  free = 0,
 ): SpeedupOffer => {
   const seconds = Math.trunc(remaining);
   const price =
-    item === "SP4" ? timeCost(seconds) : item === "SP1" ? 0 : SPEEDUP_PRICE[item];
+    item === "SP4" ? timeCost(seconds) : item === "SP1" || free > 0 ? 0 : SPEEDUP_PRICE[item];
   const allowed =
     item === "SP1"
       ? seconds > 0 && seconds <= FREE_FINISH_SECONDS
@@ -395,7 +412,7 @@ const speedup = (
       : credits < price
         ? "credits"
         : null;
-  return { item, price, blocked };
+  return { item, price, free, blocked };
 };
 
 /**
@@ -454,8 +471,12 @@ export const jobOffer = (building: YardBuilding, context: PanelContext): JobOffe
     total,
     paused: countdown.paused,
     finish: speedable ? speedup(finishItem, remaining, countdown.paused, credits) : null,
-    minusOne: speedable ? speedup("SP2", remaining, countdown.paused, credits) : null,
-    minusTwo: speedable ? speedup("SP3", remaining, countdown.paused, credits) : null,
+    minusOne: speedable
+      ? speedup("SP2", remaining, countdown.paused, credits, freeSpeedupsHeld(context.save.storedata, "SP2"))
+      : null,
+    minusTwo: speedable
+      ? speedup("SP3", remaining, countdown.paused, credits, freeSpeedupsHeld(context.save.storedata, "SP3"))
+      : null,
     // A build still running is at level 0, so this is `costs[0]`: the build's
     // full price, which `build/cancel` gives back (§5.3).
     cancel:
