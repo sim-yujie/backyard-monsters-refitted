@@ -898,8 +898,7 @@ export class AttackScene implements Scene {
     if (!summary) return;
     const word = chip.querySelector<HTMLElement>(".attack-strip__word");
     if (word) word.textContent = summary.label;
-    chip.title = summary.lines.join("
-");
+    chip.title = summary.lines.join("\n");
     chip.setAttribute("aria-label", `${summary.label}. ${summary.lines.join(". ")}`);
     chip.setAttribute("role", "note");
     chip.hidden = false;
