@@ -70,10 +70,13 @@ export class AttackPresentation {
 
   /**
    * The damage percentage to show: what the screen has visibly applied, never
-   * more than the engine's figure.
+   * more than the engine's figure, and never below 0: an untouched yard's
+   * `100 - 100 / max * total` can come out a hair under 0, which read as
+   * "-1% damage" before the first hit.
    */
   damageShown(state: AttackSessionState): number {
     const view = this.damageView;
-    return view ? Math.min(state.damagePercent, view(state)) : state.damagePercent;
+    const shown = view ? Math.min(state.damagePercent, view(state)) : state.damagePercent;
+    return Math.max(0, shown);
   }
 }

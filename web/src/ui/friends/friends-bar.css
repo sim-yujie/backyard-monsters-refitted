@@ -251,6 +251,18 @@
   .friends-bar__card {
     bottom: 100px;
   }
+
+  /* While a sheet or a screen is open the dock's buttons step aside
+     (yard-hud.css and each screen's own rule), and the Friends button with
+     them, so it never sits on a panel's heading. */
+  .overlay__layer:has(> .panel:not([hidden])) > .friends-bar,
+  .overlay__layer:has(> .map-dock--right > *) > .friends-bar,
+  .overlay__layer:has(> .build-menu:not([hidden])) > .friends-bar,
+  .overlay__layer:has(> .monsters-screen:not([hidden])) > .friends-bar,
+  .overlay__layer:has(> .build-placing) > .friends-bar,
+  .overlay__layer:has(> .planner-bar) > .friends-bar {
+    display: none;
+  }
 }
 
 /* A desktop: the bar sits between the dock's Places column on the left and the

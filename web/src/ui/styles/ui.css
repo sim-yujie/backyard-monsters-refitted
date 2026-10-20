@@ -974,7 +974,9 @@ body {
   /* Edge to edge on a phone: the top row has no width to spare for an inset. */
   :root {
     --hud-inset: 0px;
-    --hud-bar-height: 92px;
+    /* Two 44 px rows, their gap and the padding: at 92 px the Map/Yard switch
+       poked above the screen's top edge. */
+    --hud-bar-height: 100px;
   }
 
   .hud {
