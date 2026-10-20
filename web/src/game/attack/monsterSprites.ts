@@ -163,6 +163,284 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Bolt: 42x38 cells (the old 30x28 cell plus 6 px each side and 10 px on
+  // top), so the anchor moves by (6, 10) and the worm and its shadow stay put.
+  // Same rows as the Bandito: 0 idle, 1-6 crawl, 7-11 attack.
+  "monsters/sprite.3.v2.png": {
+    frameWidth: 42,
+    frameHeight: 38,
+    anchorX: 13,
+    anchorY: 30,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Fink: 46x42 cells (the old 34x32 cell plus 6 px each side and 10 px on
+  // top), so the anchor moves by (6, 10) and the creature and its shadow stay
+  // put. Same rows as the Bandito: 0 idle, 1-6 scuttle, 7-11 attack.
+  "monsters/fink.png": {
+    frameWidth: 46,
+    frameHeight: 42,
+    anchorX: 21,
+    anchorY: 31,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Eye-ra: 40x32 cells (the old 26x23 cell plus 7 px each side and 9 px on
+  // top), so the anchor moves by (7, 9) and the creature and its shadow stay
+  // put. Same rows as the Bandito: 0 idle, 1-6 slither, 7-11 attack.
+  "monsters/eyera.png": {
+    frameWidth: 40,
+    frameHeight: 32,
+    anchorX: 18,
+    anchorY: 24,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Fang: 46x42 cells (the old 34x31 cell plus 6 px each side and 11 px on
+  // top), so the anchor moves by (6, 11) and the creature and its shadow stay
+  // put. Same rows as the Bandito: 0 idle, 1-6 scuttle, 7-11 attack.
+  "monsters/fang.png": {
+    frameWidth: 46,
+    frameHeight: 42,
+    anchorX: 22,
+    anchorY: 30,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Ichi: 47x38 cells (the old 27x26 cell plus 10 px each side and 12 px on
+  // top), so the anchor moves by (10, 12) and the creature and its shadow stay
+  // put. Same rows as the Bandito: 0 idle, 1-6 plod, 7-11 attack.
+  "monsters/ichi.png": {
+    frameWidth: 47,
+    frameHeight: 38,
+    anchorX: 21,
+    anchorY: 29,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Crabatron: 57x39 cells (the old 37x27 cell plus 10 px each side and 12 px on
+  // top), so the anchor moves by (10, 12) and the creature and its shadow stay
+  // put. Same rows as the Bandito: 0 idle, 1-6 scuttle, 7-11 attack.
+  "monsters/crabatron.png": {
+    frameWidth: 57,
+    frameHeight: 39,
+    anchorX: 25,
+    anchorY: 30,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // D.A.V.E. (normal and gold skin share one layout): 77x60 cells (the old 53x46 cell plus
+  // 12 px each side and 14 px on top), so the anchor moves by (12, 14) and the tank and its
+  // shadow stay put. Same rows as the Bandito: 0 idle, 1-6 heavy tread crawl, 7-11 attack.
+  "monsters/sprite.12.v2.png": {
+    frameWidth: 77,
+    frameHeight: 60,
+    anchorX: 33,
+    anchorY: 41,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Project X: 68x47 cells (the old 48x35 cell plus 10 px each side and 12 px on top), so the
+  // anchor moves by (10, 12) and the creature and its shadow stay put. Same rows as the
+  // Bandito: 0 idle, 1-6 tentacle crawl, 7-11 attack.
+  "monsters/sprite.11.v2.png": {
+    frameWidth: 68,
+    frameHeight: 47,
+    anchorX: 34,
+    anchorY: 34,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Wormzer: 56x41 cells (the old 40x26 cell plus 8 px each side, 14 px on top and 1 px at the
+  // bottom for the PNG's extra shadow row), so the anchor moves by (8, 14) and the worm and its
+  // shadow stay put. The sheet keeps the Flash 32 columns (30 headings, then copies of 29 and 0).
+  // Rows: 0 idle, 1-6 caterpillar crawl, 7-11 attack. Burrowing is not drawn: the normal sprite
+  // is shown while it moves.
+  "monsters/13.png": {
+    frameWidth: 56,
+    frameHeight: 41,
+    anchorX: 27,
+    anchorY: 31,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Zafreeti: 76x88 cells (the old 56x70 cell plus 10 px each side, 12 px on top and 6 at the
+  // bottom), so the anchor moves by (10, 12) and the creature stays put (it flies; its shadow is a
+  // separate sprite). The sheet keeps the 32 headings. Rows: 0 idle, 1-6 hover-float (a gentle bob
+  // and sway), 7-11 attack.
+  "monsters/zafreeti.v2.png": {
+    frameWidth: 76,
+    frameHeight: 88,
+    anchorX: 38,
+    anchorY: 47,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Slimeattikus: 64x48 cells (the old 48x31 cell plus 8 px each side and 17 px on top), so the
+  // anchor moves by (8, 17) and the slime stays put. The sheet keeps the Flash 32 columns
+  // (30 headings, then copies of 29 and 0). Rows: 0 idle (the old still), 1-6 ooze crawl
+  // (squash and stretch), 7-11 attack (crouch, rear up, slam, spread, recover).
+  "monsters/slimeattikus_anim.png": {
+    frameWidth: 64,
+    frameHeight: 48,
+    anchorX: 34,
+    anchorY: 32,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // The small slime: the same frames scaled down, 40x32 cells (old 30x20 plus 5 px each side, 11 px
+  // on top and 1 at the bottom), anchor moves by (5, 11).
+  "monsters/slimeattikusmini_anim.png": {
+    frameWidth: 40,
+    frameHeight: 32,
+    anchorX: 20,
+    anchorY: 22,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Rezghul: 64x56 cells (the old 48x43 cell plus 8 px each side and 13 px on top), so the anchor
+  // moves by (8, 13) and the demon stays put. The sheet keeps the Flash 32 columns. Rows: 0 idle
+  // (the still with the tail knob), 1-6 floating glide-walk, 7-11 attack (hunch, rear up, lunge,
+  // sweep, recover). The old 6-row layout (idle and walk both on row 1-5) is gone.
+  "monsters/rezghul.png": {
+    frameWidth: 64,
+    frameHeight: 56,
+    anchorX: 34,
+    anchorY: 49,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Brain: 46x38 cells (the old 34x24 cell plus 6 px each side, 12 px on top and 2 at the bottom),
+  // so the anchor moves by (6, 12) and the creature stays put. The sheet keeps the 30 headings.
+  // Rows: 0 idle (the old still), 1-6 walk, 7-11 attack. The old "invisible" row is gone: a cloaked
+  // Brain is drawn from the walk/attack rows at the see-through alpha (AttackBattleLayer.paintMoves).
+  "monsters/brain.v2.png": {
+    frameWidth: 46,
+    frameHeight: 38,
+    anchorX: 22,
+    anchorY: 25,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Teratorn: 40x44 cells (the old 28x28 cell plus 6 px each side, 10 px on top and 6 at the bottom),
+  // so the anchor moves by (6, 10) and the flyer stays put (its shadow is a separate sprite).
+  // Rows: 0-2 the wing flap exactly as before (`walk` steps through them every 3 ticks, `landed`
+  // shows row 0), 3-7 attack (anticipation, wind-up, strike, follow-through, recovery), each with
+  // its own clear wing pose. Between swings the flap goes on.
+  "monsters/14.v1.png": {
+    frameWidth: 40,
+    frameHeight: 44,
+    anchorX: 21,
+    anchorY: 24,
+    rows: 8,
+    animations: {
+      walk: { first: 0, count: 3, ticksPerFrame: 3 },
+      landed: { first: 0, count: 1, ticksPerFrame: 8 },
+      attack: { first: 3, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  // Vorg: 52x56 cells (the old 40x40 cell plus 6 px each side, 10 px on top and 6 at the bottom),
+  // so the anchor moves by (6, 10) and the flyer stays put (its shadow is a separate sprite).
+  // Rows: 0-2 the wing flap exactly as before (wings up, half open, down; `walk` steps through
+  // them every 3 ticks, `landed` shows row 0), 3-7 attack (anticipation, wind-up, strike,
+  // follow-through, recovery), each with its own clear wing pose. Between swings the flap goes on.
+  "monsters/vorg_anim.png": {
+    frameWidth: 52,
+    frameHeight: 56,
+    anchorX: 32,
+    anchorY: 46,
+    rows: 8,
+    animations: {
+      walk: { first: 0, count: 3, ticksPerFrame: 3 },
+      landed: { first: 0, count: 1, ticksPerFrame: 8 },
+      attack: { first: 3, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
+  "monsters/sprite.12.gold.png": {
+    frameWidth: 77,
+    frameHeight: 60,
+    anchorX: 33,
+    anchorY: 41,
+    rows: 12,
+    animations: {
+      idle: { first: 0, count: 1, ticksPerFrame: 8 },
+      walk: { first: 1, count: 6, ticksPerFrame: 8 },
+      attack: { first: 7, count: 5, ticksPerFrame: 4 },
+    },
+    strikeFrame: 2,
+  },
   // Octo-ooze: 55x36 cells (the old 39x28 cell plus 8 px each side and 8 px on
   // top), so the anchor moves by (8, 8) and the body and its shadow stay put.
   // Same rows as the Bandito: 0 idle, 1-6 tentacle crawl, 7-11 attack.
@@ -450,26 +728,26 @@ export function flyerAltitude(creatureId: string): number {
  * switch the trial off.
  */
 export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
-  "monsters/14.v1.png": "monsters/14-repaint@4x.png", // Teratorn art trial
+  "monsters/14.v1.png": "monsters/teratorn-anim@4x.png", // Teratorn animated repaint (3 flap rows + 5 attack rows)
   "monsters/sprite.1.v1.png": "monsters/pokey-anim@4x.png", // Pokey animated repaint
-  "monsters/sprite.3.v2.png": "monsters/bolt-repaint@4x.png", // Bolt art trial
+  "monsters/sprite.3.v2.png": "monsters/bolt-anim@4x.png", // Bolt animated repaint
   "monsters/octoooze.png": "monsters/octo-anim@4x.png", // Octo-ooze animated repaint
-  "monsters/fink.png": "monsters/fink-repaint@4x.png", // Fink art trial
+  "monsters/fink.png": "monsters/fink-anim@4x.png", // Fink animated repaint
   "monsters/bandito.png": "monsters/bandito-anim@4x.png", // Bandito animated repaint
-  "monsters/fang.png": "monsters/fang-repaint@4x.png", // Fang art trial
-  "monsters/eyera.png": "monsters/eyera-repaint@4x.png", // Eye-ra art trial
-  "monsters/ichi.png": "monsters/ichi-repaint@4x.png", // Ichi art trial
-  "monsters/sprite.12.v2.png": "monsters/dave-repaint@4x.png", // D.A.V.E. art trial
-  "monsters/sprite.12.gold.png": "monsters/dave-gold-repaint@4x.png", // D.A.V.E. gold skin (same frames, gold tone)
-  "monsters/crabatron.png": "monsters/crabatron-repaint@4x.png", // Crabatron art trial
-  "monsters/brain.v2.png": "monsters/brain-repaint@4x.png", // Brain art trial (2 rows: visible, invisible)
-  "monsters/sprite.11.v2.png": "monsters/projectx-repaint@4x.png", // Project X art trial
-  "monsters/13.png": "monsters/wormzer-repaint@4x.png", // Wormzer art trial
-  "monsters/zafreeti.v2.png": "monsters/zafreeti-repaint@4x.png", // Zafreeti art trial
-  "monsters/vorg_anim.png": "monsters/vorg-repaint@4x.png", // Vorg art trial (3 rows: wings up, half open, down)
-  "monsters/slimeattikus_anim.png": "monsters/slimeattikus-repaint@4x.png", // Slimeattikus art trial (only row 0 is drawn)
-  "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-repaint@4x.png", // mini slime, same frames
-  "monsters/rezghul.png": "monsters/rezghul-repaint@4x.png", // Rezghul art trial (rows 1-5 walk bob)
+  "monsters/fang.png": "monsters/fang-anim@4x.png", // Fang animated repaint
+  "monsters/eyera.png": "monsters/eyera-anim@4x.png", // Eye-ra animated repaint
+  "monsters/ichi.png": "monsters/ichi-anim@4x.png", // Ichi animated repaint
+  "monsters/sprite.12.v2.png": "monsters/dave-anim@4x.png", // D.A.V.E. animated repaint
+  "monsters/sprite.12.gold.png": "monsters/dave-gold-anim@4x.png", // D.A.V.E. animated gold skin (same frames, gold tone)
+  "monsters/crabatron.png": "monsters/crabatron-anim@4x.png", // Crabatron animated repaint
+  "monsters/brain.v2.png": "monsters/brain-anim@4x.png", // Brain animated repaint (walk + attack; cloak = alpha)
+  "monsters/sprite.11.v2.png": "monsters/projectx-anim@4x.png", // Project X animated repaint
+  "monsters/13.png": "monsters/wormzer-anim@4x.png", // Wormzer animated repaint
+  "monsters/zafreeti.v2.png": "monsters/zafreeti-anim@4x.png", // Zafreeti animated repaint
+  "monsters/vorg_anim.png": "monsters/vorg-anim@4x.png", // Vorg animated repaint (3 flap rows + 5 attack rows)
+  "monsters/slimeattikus_anim.png": "monsters/slimeattikus-anim@4x.png", // Slimeattikus animated repaint
+  "monsters/slimeattikusmini_anim.png": "monsters/slimeattikusmini-anim@4x.png", // mini slime animated repaint (same frames scaled)
+  "monsters/rezghul.png": "monsters/rezghul-anim@4x.png", // Rezghul animated repaint (glide walk + attack, tail knob)
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)
