@@ -801,3 +801,118 @@
     flex: 2;
   }
 }
+
+/*
+ * A phone on its side: too short for the tiles and the info side by side, so
+ * the info stands in the tiles' place once one is picked (BuildMenu.ts treats
+ * the screen as stacked too), the tiles lie down with the picture beside the
+ * name, and the window keeps to the screen and scrolls inside.
+ */
+@media (width > 620px) and (height <= 500px) {
+  .build-menu {
+    top: calc(var(--hud-height) + var(--space-2));
+    max-height: calc(100% - var(--hud-height) - var(--space-2) - var(--space-2));
+  }
+
+  .build-menu .panel__titlebar {
+    padding: var(--space-1) var(--space-2) 0 var(--space-4);
+  }
+
+  .build-menu .panel__title {
+    font-size: var(--text-lg);
+  }
+
+  .build-menu .panel__body {
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3) var(--space-3);
+  }
+
+  .build-menu__tabs .tabs__tab {
+    min-height: 40px;
+    font-size: var(--text-sm);
+  }
+
+  .build-menu__main {
+    display: block;
+  }
+
+  .build-menu--picked .build-menu__browse,
+  .build-menu:not(.build-menu--picked) .build-info {
+    display: none;
+  }
+
+  .build-menu__browse {
+    gap: var(--space-2);
+  }
+
+  .build-menu__pager {
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .build-menu__turn {
+    height: var(--control-height);
+  }
+
+  .build-menu__grid {
+    gap: var(--space-2);
+  }
+
+  .build-tile {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-areas:
+      "picture name"
+      "picture count";
+    align-content: center;
+    column-gap: var(--space-2);
+    row-gap: 2px;
+    padding: var(--space-1);
+  }
+
+  .build-tile__picture {
+    grid-area: picture;
+    width: 40px;
+  }
+
+  .build-tile__name {
+    grid-area: name;
+    align-self: end;
+    font-size: var(--text-sm);
+    overflow-wrap: normal;
+  }
+
+  .build-tile__count {
+    grid-area: count;
+    align-self: start;
+    font-size: var(--text-xs);
+  }
+
+  .build-badge {
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+  }
+
+  .build-menu__legend {
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  }
+
+  .build-menu__legend .build-menu__key {
+    display: none;
+  }
+
+  .build-info {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .build-info__back {
+    display: inline-flex;
+  }
+
+  .build-info__picture {
+    width: 64px;
+  }
+}

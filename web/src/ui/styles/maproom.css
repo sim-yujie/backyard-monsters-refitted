@@ -1128,6 +1128,37 @@
 }
 
 /*
+ * A phone on its side: the tool row needs the whole bottom edge, so Find
+ * moves up beside the floating "?" and opens downwards, and the tool row
+ * steps aside while the cell panel (right) is open, as on a phone. Closing
+ * the panel brings it back; pinching still zooms.
+ */
+@media (width > 620px) and (height <= 500px) {
+  .mr2-find-dock {
+    top: calc(var(--hud-height) + var(--space-2));
+    bottom: auto;
+    left: calc(var(--hud-inset) + var(--space-2) + 40px + var(--space-2));
+  }
+
+  .mr2-find {
+    flex-direction: column-reverse;
+  }
+
+  .mr2-find__sheet .panel__body {
+    max-height: calc(100vh - var(--hud-height) - 150px);
+  }
+
+  .mr2-tools-dock {
+    bottom: var(--space-2);
+  }
+
+  .overlay__layer:has(> .map-dock--right > *) > .mr2-tools-dock.map-dock--bottom-right,
+  .overlay__layer:has(.mr2-find--open) > .mr2-tools-dock.map-dock--bottom-right {
+    display: none;
+  }
+}
+
+/*
  * A phone (R-MR2-phone): Find becomes the wide "Find a place" bar under the
  * HUD, My range sits under it on the right, and pinching replaces the zoom
  * buttons. The cell panel is the bottom sheet (#174), and while it is open

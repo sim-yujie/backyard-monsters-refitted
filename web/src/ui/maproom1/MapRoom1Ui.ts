@@ -49,6 +49,12 @@ const PHONE_QUERY = "(width <= 620px)";
 const isPhone = (): boolean =>
   typeof window !== "undefined" && window.matchMedia?.(PHONE_QUERY).matches === true;
 
+/** The card as a bottom sheet: a phone, or a screen too short for it beside its pin (a phone on its side). */
+const SHEET_QUERY = `${PHONE_QUERY}, (height <= 500px)`;
+
+const isSheet = (): boolean =>
+  typeof window !== "undefined" && window.matchMedia?.(SHEET_QUERY).matches === true;
+
 /** The view the screen last showed, kept for the session (Flash kept it in `mrlv`). */
 let lastView: Mr1View | null = null;
 
@@ -74,7 +80,8 @@ export class MapRoom1Ui {
   private own: Mr1Own | null = null;
   private now = 0;
   private selected: string | null = null;
-  private phone = isPhone();
+  private readonly phone = isPhone();
+  private sheetCard = isSheet();
 
   constructor(
     private readonly handlers: MapRoom1UiHandlers,
@@ -212,9 +219,9 @@ export class MapRoom1Ui {
   }
 
   private readonly onResize = (): void => {
-    const phone = isPhone();
-    if (phone !== this.phone) {
-      this.phone = phone;
+    const sheet = isSheet();
+    if (sheet !== this.sheetCard) {
+      this.sheetCard = sheet;
       this.renderSelection();
     }
     this.mapView.measure();
@@ -293,7 +300,7 @@ export class MapRoom1Ui {
           )
         : null;
 
-    if (this.phone) {
+    if (this.sheetCard) {
       this.mapView.setSelected(target?.key ?? null, null);
       this.side.replaceChildren();
       const sheetCard = card("sheet");

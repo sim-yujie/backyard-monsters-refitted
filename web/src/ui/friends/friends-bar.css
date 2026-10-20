@@ -178,13 +178,6 @@
 
 /* A phone: the strip hides behind a Friends button above the bottom-left
    buttons and slides up when it is pressed. */
-/* A phone on its side: the dock's buttons reach well past the middle, so the bar rides above them. */
-@media (width > 620px) and (height <= 500px) {
-  .friends-bar {
-    bottom: 128px;
-  }
-}
-
 @media (width <= 620px) {
   .friends-bar {
     right: 8px;
@@ -283,5 +276,21 @@
 
   .overlay__layer:has(.yard-dock__button--defences:not([hidden])) > .friends-bar {
     --friends-bar-right: 590px;
+  }
+}
+
+/* A phone on its side: the bar rides above the bottom row, from the Places
+   column to the zoom rail (yard-hud.css hangs Layout and Collect all above it). */
+@media (width > 620px) and (height <= 500px) {
+  .friends-bar,
+  .overlay__layer:has(.yard-dock__button--defences:not([hidden])) > .friends-bar {
+    --friends-bar-left: 116px;
+    --friends-bar-right: 82px;
+    bottom: 108px;
+  }
+
+  /* A building's panel docks on the right (maproom.css): the bar ends before it. */
+  .overlay__layer:has(> .map-dock--right > *) > .friends-bar {
+    --friends-bar-right: calc(300px + var(--space-6));
   }
 }

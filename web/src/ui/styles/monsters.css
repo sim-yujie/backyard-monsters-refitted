@@ -487,6 +487,32 @@
   }
 }
 
+/* A phone on its side: the frame keeps to the screen as before, with a
+   tighter title row, and the list and card scroll as one when stacked. */
+@media (width > 620px) and (height <= 500px) {
+  .monsters-screen {
+    top: calc(var(--hud-height) + var(--space-2));
+    bottom: var(--space-2);
+  }
+
+  .monsters-screen .panel__titlebar {
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .monsters-screen .panel__title {
+    font-size: var(--text-lg);
+  }
+
+  .monsters-header {
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .locker__split {
+    padding: var(--space-2) var(--space-3);
+    overflow-y: auto;
+  }
+}
+
 /* A phone: a bottom sheet over the lower part of the yard. */
 @media (width <= 620px) {
   .monsters-screen,

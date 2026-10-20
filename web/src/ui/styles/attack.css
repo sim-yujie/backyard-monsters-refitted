@@ -345,6 +345,60 @@
   }
 }
 
+/*
+ * A phone on its side: the HUD and the strip took almost half the height, and
+ * the minimap sat on the army column. As on a phone the HUD gives way to the
+ * strip and its menu (Map, Yard, Sign out, Bob's tips), the strip keeps to one
+ * row, and the zoom and minimap move to the bottom-left corner, clear of the
+ * column on the right.
+ */
+@media (width > 620px) and (height <= 500px) {
+  .hud--attack {
+    display: none;
+  }
+
+  .attack-strip {
+    top: var(--hud-inset);
+    flex-wrap: nowrap;
+    min-height: 60px;
+    box-sizing: border-box;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  }
+
+  .attack-strip__title,
+  .attack-strip > .guide-help {
+    display: none;
+  }
+
+  .attack-menu {
+    display: flex;
+  }
+
+  .attack-strip__retreat,
+  .attack-menu__button {
+    min-height: 40px;
+  }
+
+  .attack-dock {
+    top: calc(var(--hud-inset) + 60px + var(--space-2));
+    max-height: calc(100vh - var(--hud-inset) - 60px - var(--space-2) - var(--space-3));
+  }
+
+  .yard-viewtools.attack-viewtools {
+    right: auto;
+    left: var(--space-3);
+    align-items: flex-start;
+  }
+}
+
+/* Too narrow for the loot as well: the end panel still shows it. */
+@media (620px < width <= 820px) and (height <= 500px) {
+  .attack-strip__loot {
+    display: none;
+  }
+}
+
 /* WP3 army panel ─────────────────────────────────────────────────────────
  * The army composition panel (§F2, §4.2, §4.3): a capacity meter, a row per
  * housed monster type with a number box flanked by −/+ and a Fill, the

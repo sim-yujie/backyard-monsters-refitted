@@ -972,6 +972,173 @@
   }
 }
 
+/* ── A phone on its side (a short screen with the desktop layout) ─────── */
+
+/* The desktop corner needs about 500px of height. Below that the readouts
+   lose their income line, the buttons shrink to the phone's sizes, and the
+   right-hand ones are hung from the top instead of stacking up from the
+   bottom into the zoom rail and the top bar. */
+@media (width > 620px) and (height <= 500px) {
+  :root:has(.hud--corner) {
+    --hud-bar-height: 54px;
+    --dock-top: calc(var(--hud-height) + var(--space-2));
+  }
+
+  .hud--corner .hud__bar {
+    padding: var(--space-1);
+  }
+
+  .hud--corner .hud__resource-button,
+  .hud--corner .hud__workers-button {
+    column-gap: var(--space-1);
+    min-height: 36px;
+    padding: var(--space-1) 6px;
+  }
+
+  .hud--corner .hud__resource-button .res-icon,
+  .hud--corner .hud__workers-icon {
+    height: 22px;
+  }
+
+  .hud--corner .hud__resource-value,
+  .hud--corner .hud__workers-button .hud__resource-value {
+    font-size: 14px;
+  }
+
+  .hud--corner .hud__cap-bar {
+    width: 52px;
+  }
+
+  .hud--corner .hud__rate {
+    display: none;
+  }
+
+  .account-menu__button--pill {
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  }
+
+  .account-menu__ring {
+    width: 40px;
+    height: 40px;
+  }
+
+  .account-menu__ring-face {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* The phone's sizes. */
+  .yard-dock__disc {
+    width: 56px;
+    height: 56px;
+  }
+
+  .yard-dock__disc > svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .yard-dock__picture {
+    width: 38px;
+    height: 38px;
+  }
+
+  .yard-dock__button--big .yard-dock__disc {
+    width: 76px;
+    height: 76px;
+  }
+
+  .yard-dock__button--big .yard-dock__disc > svg {
+    width: 32px;
+    height: 32px;
+  }
+
+  .yard-dock__left {
+    left: var(--space-4);
+    bottom: var(--space-4);
+    gap: var(--space-2);
+  }
+
+  /* The whole screen, so the top row below can hang from its top edge. */
+  .yard-dock__right {
+    inset: 0;
+    width: auto;
+    height: auto;
+  }
+
+  .yard-dock__right > .yard-dock__button--build,
+  .yard-dock__right > .yard-dock__button--attack {
+    right: var(--space-4);
+  }
+
+  /* The bottom row (Monsters, Mail, the bell, ... from their own files). */
+  .yard-dock .yard-dock__right > .yard-dock__button:not(.yard-dock__button--layout, .yard-dock__button--kits) {
+    bottom: var(--space-4);
+  }
+
+  /* Layout, then Collect all (or an outpost's Kits), in a row under the top
+     bar, left of the zoom rail. */
+  .yard-dock__right > .yard-dock__button--layout {
+    top: var(--dock-top);
+    right: 82px;
+    bottom: auto;
+  }
+
+  .yard-dock__right > .yard-collect,
+  .yard-dock__right > .yard-dock__button--kits {
+    top: var(--dock-top);
+    right: 154px;
+    bottom: auto;
+  }
+
+  .yard-dock__right > .yard-collect {
+    transform: scale(0.64);
+    transform-origin: top right;
+  }
+
+  .yard-dock__right:not(:has(.yard-dock__button--big)) > .yard-dock__button--layout {
+    top: auto;
+    right: var(--space-4);
+    bottom: var(--space-4);
+  }
+
+  /* The rail hangs from the top too, clear of Build under it. */
+  .yard-viewtools--rail {
+    top: var(--dock-top);
+    transform: none;
+  }
+
+  .yard-viewtools--rail .yard-zoom__step,
+  .yard-viewtools--rail .yard-viewtools__overview {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+
+  .yard-viewtools--rail .yard-minimap {
+    top: 0;
+    transform: none;
+  }
+
+  /* The Build and Monsters windows take the screen's height: the buttons
+     would only peek out under them. */
+  .overlay__layer:has(> .monsters-screen:not([hidden])) > .yard-dock,
+  .overlay__layer:has(> .build-menu:not([hidden])) > .yard-dock {
+    display: none;
+  }
+}
+
+/* Too narrow for the name as well: the critter alone opens the menu. */
+@media (620px < width <= 820px) and (height <= 500px) {
+  .hud--corner .account-menu__pill-text {
+    display: none;
+  }
+
+  .account-menu__button--pill {
+    padding: var(--space-1);
+  }
+}
+
 /* A narrow phone: Workers and Shiny share two quarter columns, so their chips
    tighten up rather than run into each other. */
 @media (width <= 420px) {
