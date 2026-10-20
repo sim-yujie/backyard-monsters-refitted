@@ -35,6 +35,7 @@ import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
 import { waitingText } from "@/game/friends/friendText";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
 import { openAccountSettings } from "@/ui/AccountSettings";
+import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
 import "@/ui/friends/friends.css";
 import "@/ui/styles/guide-start.css";
@@ -306,7 +307,24 @@ export class AccountMenu {
       this.toggle(false);
       void toggleFullscreen();
     });
-    this.list.append(settings, this.fullscreen, this.replay, signOut);
+    // Reduce effects (feat/attack-juice-demo): no shake, hit-stop or slow
+    // motion in attacks, and fewer bits flying. Read when an attack opens.
+    const effects = document.createElement("button");
+    effects.type = "button";
+    effects.className = "btn btn--ghost account-menu__help account-menu__effects";
+    effects.setAttribute("role", "menuitemcheckbox");
+    const showEffects = (): void => {
+      const on = reduceEffects();
+      effects.setAttribute("aria-checked", String(on));
+      effects.textContent = `Reduce effects: ${on ? "On" : "Off"}`;
+      effects.title = "Turns off screen shake, hit pauses and slow motion in attacks, with fewer particles";
+    };
+    showEffects();
+    effects.addEventListener("click", () => {
+      setReduceEffects(!reduceEffects());
+      showEffects();
+    });
+    this.list.append(settings, this.fullscreen, effects, this.replay, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);

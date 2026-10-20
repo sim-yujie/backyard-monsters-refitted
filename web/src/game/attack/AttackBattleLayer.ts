@@ -66,7 +66,23 @@ import {
   sheetColumn,
   sheetUrl,
   spriteFor,
+  type SwingTiming,
 } from "./monsterSprites";
+import {
+  BIG_MAX_SHAKE,
+  CHAMPION_STRIKE_FRAMES,
+  HIT_STOP_CHAMPION_MS,
+  HIT_STOP_DESTROY_MS,
+  WINDUP_PULL_PX,
+  bigLungeOffset,
+  expectedSwingGap,
+  juiceLevel,
+  nextSwingGap,
+  slowMoSeconds,
+  squashScale,
+  windUpFrame,
+  type JuiceLevel,
+} from "./juice";
 
 /**
  * Everything that moves during a battle (`docs/design/attack-flow.md` §F5, §6
@@ -212,6 +228,8 @@ export interface CreepPose {
   readonly age: number;
   /** Ticks since this creep's last hit landed; absent before its first. */
   readonly swingAge?: number;
+  /** When its next blow is expected, for the juiced wind-up; absent draws it as before. */
+  readonly swing?: SwingTiming;
 }
 
 export interface LayoutOptions {
@@ -293,7 +311,9 @@ export const layoutCreep = (
   const column = sheetColumn(sheet, pose.heading);
   const animation = animationFor(creep, pose.moving);
   const row =
-    animation === "attack" ? attackRow(sheet, pose.swingAge, pose.age) : frameRow(sheet, animation, pose.age);
+    animation === "attack"
+      ? attackRow(sheet, pose.swingAge, pose.age, pose.swing)
+      : frameRow(sheet, animation, pose.age);
   const anchor = anchorOffset(sheet);
 
   let y = ground.y + anchor.y;
@@ -531,6 +551,8 @@ export interface AttackBattleLayerOptions {
   /** The scene's world-space overlay above the buildings (`mounts.battleLayer`). */
   readonly overlay: Container;
   readonly reducedMotion?: boolean;
+  /** How big the effects are drawn; the player's setting when left out (feat/attack-juice-demo). */
+  readonly juice?: JuiceLevel;
   readonly textures?: MonsterSheetTextures;
   /** The bomb sheets; a test hands in its own (#87). */
   readonly bombArt?: BombArt;
@@ -568,6 +590,8 @@ interface CreepView {
   lungeTick: number;
   /** Tick of its last hit, melee or ranged: the attack animation's clock. */
   swingTick: number;
+  /** Ticks expected from its last hit to the next, for the juiced wind-up. */
+  swingGap: number;
   lungeX: number;
   lungeY: number;
   /** The tick the creep was last hurt, for the red tint (#68). */
@@ -777,6 +801,15 @@ export class AttackBattleLayer {
   /** Put to rest by {@link settle}: no creeps, no guns, only what plays out. */
   private settled = false;
 
+  /* The bigger effects trial (feat/attack-juice-demo); drawing only. */
+  private readonly juice: JuiceLevel;
+  /** Wall-clock ms the picture holds still until, for a hit-stop; the battle runs on. */
+  private holdUntil = Number.NEGATIVE_INFINITY;
+  /** Whether the attack-ending blow plays its last moments in slow motion. */
+  private slowEnd = false;
+  /** The last shown tick a building fell on, to tell the attack-ending blow. */
+  private lastFellTick = Number.NEGATIVE_INFINITY;
+
   constructor(options: AttackBattleLayerOptions) {
     this.session = options.session;
     this.yard = options.yard;
@@ -786,6 +819,7 @@ export class AttackBattleLayer {
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
     this.textures = options.textures ?? new MonsterSheetTextures();
     this.now = options.now ?? (() => performance.now());
+    this.juice = options.juice ?? juiceLevel();
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -808,6 +842,8 @@ export class AttackBattleLayer {
         shake: (dx, dy) => this.shakeYard(dx, dy),
       },
       this.reducedMotion,
+      this.juice === "full" ? BIG_MAX_SHAKE : undefined,
+      this.juice === "reduced" && !this.reducedMotion,
     );
     this.bombFx = new BombFx(
       {
@@ -830,6 +866,7 @@ export class AttackBattleLayer {
         rocketCell: (column) => this.textures.frame(ROCKET_SHEET, column, 0),
       },
       this.reducedMotion,
+      this.juice !== "off",
     );
     this.overlay.addChild(this.fx.root);
 
@@ -883,6 +920,9 @@ export class AttackBattleLayer {
     // then only the yard as it was left: none of what happened on the way.
     if (this.session.skipping) return;
     if (this.session.skipped && !this.settled) this.restAfterSkip(battle);
+    // A hit-stop holds the picture still; the battle runs on, and the next
+    // frame after it catches up with everything it did meanwhile.
+    if (this.now() < this.holdUntil) return;
     const tick = battle.tick;
     // The effects' clock: the battle's, and after the end the wall's.
     const shown = this.shownTick(tick);
@@ -941,8 +981,18 @@ export class AttackBattleLayer {
       return tick;
     }
     const now = this.now();
-    this.endedAt ??= { tick, ms: now };
-    const since = Math.max(0, now - this.endedAt.ms) / 1000;
+    if (!this.endedAt) {
+      this.endedAt = { tick, ms: now };
+      // The blow that ended it, if a building fell to it: its last moments in
+      // slow motion (feat/attack-juice-demo).
+      this.slowEnd =
+        this.juice === "full" &&
+        !this.reducedMotion &&
+        this.session.endedBy === "destroyed" &&
+        tick - this.lastFellTick <= 8;
+    }
+    const wall = Math.max(0, now - this.endedAt.ms) / 1000;
+    const since = this.slowEnd ? slowMoSeconds(wall) : wall;
     return this.endedAt.tick + Math.floor(since * TICKS_PER_SECOND * this.session.speed);
   }
 
@@ -1381,6 +1431,7 @@ export class AttackBattleLayer {
     view.cellKey = "";
     view.lungeTick = Number.NEGATIVE_INFINITY;
     view.swingTick = Number.NEGATIVE_INFINITY;
+    view.swingGap = expectedSwingGap(creep.monsterId, creep.level, creep.champion);
     view.lungeX = 0;
     view.lungeY = 0;
     view.hurtTick = Number.NEGATIVE_INFINITY;
@@ -1436,6 +1487,7 @@ export class AttackBattleLayer {
       cellKey: "",
       lungeTick: Number.NEGATIVE_INFINITY,
       swingTick: Number.NEGATIVE_INFINITY,
+      swingGap: 60,
       lungeX: 0,
       lungeY: 0,
       hurtTick: Number.NEGATIVE_INFINITY,
@@ -1519,18 +1571,35 @@ export class AttackBattleLayer {
     }
 
     const sheet = view.sheet;
+    const swing = this.swingTiming(view);
     const pose: CreepPose = {
       heading: view.heading,
       moving: view.moving,
       age: tick - view.bornTick,
       swingAge: tick - view.swingTick,
+      ...(swing ? { swing } : {}),
     };
     const body = view.body;
 
     // A melee hit nudges the body toward what it struck and back (#63). The
     // wound's tint (#68) and the health bar wait for `paintCreeps`, after
-    // this frame's bullets have landed (#77).
-    const lunge = this.reducedMotion ? 0 : lungeOffset(tick - view.lungeTick);
+    // this frame's bullets have landed (#77). Juiced, it snaps further, and
+    // the body leans back as it winds up and squashes and stretches.
+    const sinceHit = tick - view.swingTick;
+    const windUp =
+      swing && sheet && creep.state === "attacking" && !view.moving
+        ? this.windUpOf(sheet, sinceHit, swing)
+        : null;
+    const squash =
+      swing && !this.reducedMotion && creep.state === "attacking" && !creep.flying
+        ? squashScale(sinceHit, windUp, swing.strike ?? 2)
+        : { x: 1, y: 1 };
+    const lunge = this.reducedMotion
+      ? 0
+      : swing
+        ? bigLungeOffset(tick - view.lungeTick) -
+          (windUp !== null ? WINDUP_PULL_PX * ((windUp + 1) / Math.max(1, swing.strike ?? 2)) : 0)
+        : lungeOffset(tick - view.lungeTick);
     // A Wormzer that has just come up hops out of its hole (`MonsterBase.jump`).
     const hop = this.reducedMotion ? 0 : surfaceHop(tick - view.surfaceTick);
 
@@ -1545,13 +1614,14 @@ export class AttackBattleLayer {
           view.cellKey = layout.key;
           body.texture = cell;
         }
-        body.scale.set(1);
+        body.scale.set(squash.x, squash.y);
         view.baseTint = 0xffffff;
         // Whole pixels, as Flash drew them (`MonsterBase.as:613-616`): a cell
-        // sampled at a fraction of a pixel shimmers as it moves.
+        // sampled at a fraction of a pixel shimmers as it moves. A squash
+        // scales about the feet, so they stay on the ground.
         body.position.set(
-          Math.round(layout.x + lunge * view.lungeX),
-          Math.round(layout.y + lunge * view.lungeY - hop),
+          Math.round(layout.groundX + (layout.x - layout.groundX) * squash.x + lunge * view.lungeX),
+          Math.round(layout.groundY + (layout.y - layout.groundY) * squash.y + lunge * view.lungeY - hop),
         );
         top = layout.y - hop;
       } else {
@@ -1573,6 +1643,26 @@ export class AttackBattleLayer {
     const barY = Math.round(top - bar.gap);
     view.barBack.position.set(barX, barY);
     view.barFront.position.set(barX, barY);
+  }
+
+  /**
+   * When the creep's next blow is expected, for the juiced wind-up and
+   * squash; null draws it as before (juice off, or a sheet with no strike).
+   */
+  private swingTiming(view: CreepView): SwingTiming | null {
+    if (this.juice === "off" || !view.sheet) return null;
+    const strike = (view.sheet as { strikeFrame?: number }).strikeFrame ?? CHAMPION_STRIKE_FRAMES[view.sheet.family];
+    if (strike === undefined) return null;
+    return { period: view.swingGap, strike };
+  }
+
+  private windUpOf(sheet: MonsterSheet, sinceHit: number, swing: SwingTiming): number | null {
+    const cycle = sheet.animations.attack;
+    if (!cycle || swing.strike === undefined) return null;
+    const strike = Math.min(Math.max(0, swing.strike), cycle.count - 1);
+    // Still in the strike and its follow-through: not winding up.
+    if (Math.floor(Math.max(0, sinceHit) / cycle.ticksPerFrame) + strike < cycle.count) return null;
+    return windUpFrame(sinceHit, swing.period, strike, cycle.count, cycle.ticksPerFrame);
   }
 
   /** A creep with no sheet yet: a small square at its feet, tinted by kind. Returns the tint. */
@@ -1634,7 +1724,14 @@ export class AttackBattleLayer {
     const view = this.views.get(event.creepId);
     const ground = groundWorld(event.ix, event.iy, this.origin);
     const monsterId = view?.monsterId ?? "";
-    if (view) view.swingTick = event.tick;
+    if (view) {
+      // The gap since its last blow is the best guess at the next (juiced wind-up).
+      const fallback = view.snapshot
+        ? expectedSwingGap(view.snapshot.monsterId, view.snapshot.level, view.snapshot.champion)
+        : view.swingGap;
+      view.swingGap = nextSwingGap(event.tick - view.swingTick, fallback);
+      view.swingTick = event.tick;
+    }
     let target: Point | null = null;
     if (event.buildingId >= 0) {
       target = this.host.centreOf(event.buildingId);
@@ -1686,6 +1783,13 @@ export class AttackBattleLayer {
       view.lungeY = length > 0 ? dy / length : 0;
     }
     this.fx.flash(event.buildingId, event.tick);
+    if (this.juice !== "off" && event.buildingId >= 0) {
+      // A spark where the blow lands, between the monster and the building's middle.
+      const champion = view?.snapshot?.champion === true;
+      const contact = { x: target.x + (ground.x - target.x) * 0.45, y: target.y + (ground.y - target.y) * 0.45 - 10 };
+      this.blastFx.impact(event.tick, contact, champion ? 34 : 20);
+      if (champion) this.hitStop(HIT_STOP_CHAMPION_MS);
+    }
     // Flash showed the same red numbers on buildings (`BFOUNDATION.as:534`).
     if (event.buildingId >= 0 && event.amount > 0) {
       const over = { x: target.x, y: target.y - BUILDING_NUMBER_LIFT };
@@ -1918,8 +2022,32 @@ export class AttackBattleLayer {
       if (!crossedDestroyed && !crossedDamaged) continue;
       const centre = this.host.centreOf(id);
       if (centre) this.fx.poof(tick, centre, crossedDestroyed);
+      if (centre && crossedDestroyed && this.juice !== "off") this.demolish(id, centre, tick);
     }
     this.smokePrimed = true;
+  }
+
+  /**
+   * A building just fell (feat/attack-juice-demo): a blast sized to it, with
+   * debris and a shake, and a hit-stop for anything bigger than a wall. The
+   * blow that ends the attack plays its last moments in slow motion.
+   */
+  private demolish(id: number, centre: Point, tick: number): void {
+    const building = this.yard.buildings.find((each) => each.id === id);
+    const width = building ? building.box.width : 60;
+    const small = width < 50;
+    const radius = Math.max(28, Math.min(120, width * 0.75));
+    this.blastFx.demolish(tick, centre, radius, small);
+    this.lastFellTick = tick;
+    if (this.juice !== "full" || this.reducedMotion) return;
+    if (!small) this.hitStop(HIT_STOP_DESTROY_MS);
+    if (this.session.ended && this.endedAt && tick - this.endedAt.tick <= 8) this.slowEnd = true;
+  }
+
+  /** Holds the picture still for `ms` of wall clock; the battle runs on. */
+  private hitStop(ms: number): void {
+    if (this.juice !== "full" || this.reducedMotion) return;
+    this.holdUntil = Math.max(this.holdUntil, this.now() + ms);
   }
 
   /* ── Shots and deaths ───────────────────────────────────────────────── */

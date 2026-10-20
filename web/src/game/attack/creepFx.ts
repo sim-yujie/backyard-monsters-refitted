@@ -1,5 +1,6 @@
 import { Container, Graphics, Sprite, Text, type Texture } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
+import { BIG_FLASH_TICKS, BIG_LABEL_SIZE, BIG_LABEL_TICKS, bigLabelPose } from "./juice";
 import { directionColumn } from "./monsterSprites";
 
 /**
@@ -352,6 +353,10 @@ interface Label {
   amount: number;
   /** Sideways shift for the second and third number of a target. */
   shiftX: number;
+  /** World px a juiced number drifts sideways over its life. */
+  drift: number;
+  /** A juiced number's size at rest, before the camera's zoom. */
+  size: number;
   /** Where it was last anchored, for after the creep is gone. */
   x: number;
   y: number;
@@ -380,9 +385,11 @@ export class CreepFx {
   private tick = 0;
   private poofs = 0;
 
+  /** `juiced` draws the bigger flash and bouncier numbers (feat/attack-juice-demo). */
   constructor(
     private readonly host: CreepFxHost,
     private readonly reducedMotion = false,
+    private readonly juiced = false,
   ) {
     for (const layer of [this.root, this.fire, this.rockets, this.smoke, this.labels]) {
       layer.eventMode = "none";
@@ -436,7 +443,7 @@ export class CreepFx {
     if (started !== undefined && tick - started < FLASH_COOLDOWN_TICKS) return;
     this.flashStarted.set(buildingId, tick);
     if (!this.flashUntil.has(buildingId)) this.host.flashBuilding(buildingId, true);
-    this.flashUntil.set(buildingId, tick + FLASH_TICKS);
+    this.flashUntil.set(buildingId, tick + (this.juiced ? BIG_FLASH_TICKS : FLASH_TICKS));
   }
 
   /**
@@ -481,6 +488,10 @@ export class CreepFx {
     label.bornTick = tick;
     label.amount = kind === "heal" ? shown : -shown;
     label.shiftX = labelShift(siblings.length, String(shown).length);
+    // Juiced: a bigger number for a harder hit, flying off to one side.
+    label.drift = this.juiced ? (((tick * 7 + siblings.length * 5) % 9) - 4) * 3 : 0;
+    label.size = this.juiced ? BIG_LABEL_SIZE + Math.min(10, Math.log10(shown) * 4) : 13;
+    label.text.style.fontSize = label.size;
     label.x = at.x;
     label.y = at.y;
     label.text.text = kind === "heal" ? `+${shown}` : String(shown);
@@ -915,7 +926,7 @@ export class CreepFx {
     text.anchor.set(0.5, 1);
     text.eventMode = "none";
     this.labels.addChild(text);
-    return { text, key: "", follow: -1, bornTick: 0, amount: 0, shiftX: 0, x: 0, y: 0 };
+    return { text, key: "", follow: -1, bornTick: 0, amount: 0, shiftX: 0, drift: 0, size: 13, x: 0, y: 0 };
   }
 
   private forget(label: Label): void {
@@ -930,9 +941,10 @@ export class CreepFx {
     const zoom = this.host.zoom();
     const scale = zoom > 0 ? 1 / zoom : 1;
     let keep = 0;
+    const life = this.juiced ? BIG_LABEL_TICKS : LABEL_TICKS;
     for (const label of this.active) {
       const age = tick - label.bornTick;
-      if (age > LABEL_TICKS) {
+      if (age > life) {
         label.text.visible = false;
         this.forget(label);
         this.labelPool.push(label);
@@ -944,6 +956,16 @@ export class CreepFx {
       if (anchor) {
         label.x = anchor.ground.x;
         label.y = anchor.top - 6;
+      }
+      if (this.juiced && !this.reducedMotion) {
+        const big = bigLabelPose(age, label.drift);
+        label.text.scale.set(scale * big.scale);
+        label.text.position.set(
+          Math.round(label.x + label.shiftX * scale + big.dx),
+          Math.round(label.y - big.rise),
+        );
+        label.text.alpha = big.alpha;
+        continue;
       }
       const pose = labelPose(age);
       const rise = this.reducedMotion ? 0 : pose.rise;

@@ -1,4 +1,5 @@
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet, type RowCycle } from "./monsterSpriteData";
+import { windUpFrame } from "./juice";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -634,15 +635,38 @@ export function frameRow(sheet: MonsterSheet, animation: MonsterAnimation, tick:
  * `strikeFrame`, or before the first hit has landed (`swingAge` undefined),
  * the cycle simply loops on the animation clock `age`.
  */
-export function attackRow(sheet: AnimatedSheet, swingAge: number | undefined, age: number): number {
+export function attackRow(
+  sheet: AnimatedSheet,
+  swingAge: number | undefined,
+  age: number,
+  swing?: SwingTiming,
+): number {
   const cycle = sheet.animations.attack;
-  if (!cycle || sheet.strikeFrame === undefined || swingAge === undefined || !Number.isFinite(swingAge)) {
+  const strikeFrame = sheet.strikeFrame ?? swing?.strike;
+  if (!cycle || strikeFrame === undefined || swingAge === undefined || !Number.isFinite(swingAge)) {
     return frameRow(sheet, "attack", age);
   }
-  const strike = Math.min(Math.max(0, sheet.strikeFrame), cycle.count - 1);
+  const strike = Math.min(Math.max(0, strikeFrame), cycle.count - 1);
   const step = Math.floor(Math.max(0, swingAge) / cycle.ticksPerFrame) + strike;
-  if (step >= cycle.count) return frameRow(sheet, "idle", age);
+  if (step >= cycle.count) {
+    // The juiced wind-up (feat/attack-juice-demo): the frames before the
+    // strike, played into the next expected blow.
+    const windUp =
+      swing === undefined
+        ? null
+        : windUpFrame(swingAge, swing.period, strike, cycle.count, cycle.ticksPerFrame);
+    return windUp === null ? frameRow(sheet, "idle", age) : cycle.first + windUp;
+  }
   return cycle.first + step;
+}
+
+/**
+ * When the next blow is expected, for the juiced wind-up: ticks from one hit
+ * to the next, and a strike frame for a sheet that names none (a champion).
+ */
+export interface SwingTiming {
+  readonly period: number;
+  readonly strike?: number;
 }
 
 /** The pixel rectangle of cell `(column, row)` in the sheet (`SPRITES.as:379-380`). */
