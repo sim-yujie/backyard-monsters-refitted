@@ -81,7 +81,7 @@ export const countAttackLoot = async (
     try {
       counted.set(event.id, await store.addToCounter(em, userid, event.id, total));
     } catch (error) {
-      logger.error("Could not count attack loot for {userid} in {event}: {error}", {
+      logger.error("Could not count attack loot for {userid} in {eventId}: {error}", {
         event: "event-loot-count-failed",
         userid,
         eventId: event.id,
