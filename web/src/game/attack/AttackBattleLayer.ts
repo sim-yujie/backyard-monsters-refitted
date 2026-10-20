@@ -39,6 +39,7 @@ import {
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
 import { BlastFx } from "./blastFx";
+import { RingFx } from "./ringFx";
 import {
   BANDITO_PUNCHY,
   QUAKE_PUNCHY,
@@ -610,6 +611,8 @@ interface Splat {
   /** Ticks it lasts, when not {@link SPLAT_TICKS}; and whether its disc stays its size as it fades. */
   readonly life?: number;
   readonly still?: boolean;
+  /** A pooled ring from {@link RingFx}: given back, not destroyed. */
+  readonly ring?: boolean;
 }
 
 interface Gib {
@@ -717,6 +720,7 @@ export class AttackBattleLayer {
   private endWalked = false;
   private readonly splats: Splat[] = [];
   private readonly gibPool: Sprite[] = [];
+  private readonly ringFx = new RingFx(this.effects);
   private readonly damageApplied = new Map<number, number>();
   private readonly maxHpById = new Map<number, number>();
 
@@ -1113,6 +1117,7 @@ export class AttackBattleLayer {
       for (const gib of splat.gibs) gib.sprite.destroy();
     }
     this.splats.length = 0;
+    this.ringFx.destroy();
     for (const sprite of this.gibPool) sprite.destroy();
     this.gibPool.length = 0;
 
@@ -2099,14 +2104,8 @@ export class AttackBattleLayer {
 
   /** Three fading rings on the ground, radius wide: a quake, or a special move's burst. */
   private spawnRing(tick: number, at: Point, radius: number, colour: number): void {
-    const rings = new Graphics();
-    for (const share of [1, 0.8, 0.6]) {
-      rings.ellipse(0, 0, radius * share, (radius * share) / 2);
-    }
-    rings.stroke({ color: colour, width: 2, alpha: 0.9 });
-    rings.position.set(at.x, at.y);
-    this.effects.addChild(rings);
-    this.splats.push({ tick, at, radius, disc: rings, gibs: [] });
+    const rings = this.ringFx.take(at, radius, colour);
+    this.splats.push({ tick, at, radius, disc: rings, gibs: [], ring: true });
   }
 
   /**
@@ -2123,6 +2122,11 @@ export class AttackBattleLayer {
   /** The drawn explosions, for tests and the dev hook. */
   get blasts(): BlastFx {
     return this.blastFx;
+  }
+
+  /** The pooled ground rings and their shared drawings, for tests. */
+  get groundRings(): RingFx {
+    return this.ringFx;
   }
 
   /** Rings on the ground (a splash, a Bolt's hop, a quake), for tests. */
@@ -2144,7 +2148,8 @@ export class AttackBattleLayer {
       const age = tick - splat.tick;
       const lasts = splat.life ?? SPLAT_TICKS;
       if (age > lasts) {
-        splat.disc.destroy();
+        if (splat.ring) this.ringFx.release(splat.disc);
+        else splat.disc.destroy();
         for (const gib of splat.gibs) {
           gib.sprite.visible = false;
           this.gibPool.push(gib.sprite);
