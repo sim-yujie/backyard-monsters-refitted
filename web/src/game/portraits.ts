@@ -51,8 +51,7 @@ export type PortraitSize = "card" | "icon";
  * A champion's egg (owner 2026-10-20: raising lays an egg that hatches in a
  * day): `eggs/G<n>-egg.webp`, 240 px square, for the cage window, and
  * `eggs/G<n>-egg-yard.webp`, 96 x 120, stood in the cage on the yard at half
- * size. The files there now are placeholders drawn by
- * `web/tools/gen-egg-placeholders.py` until the painted eggs are approved.
+ * size. Painted eggs; their full-size options are kept outside the repo.
  */
 export const championEggUrl = (id: string, where: "window" | "yard"): string =>
   `${import.meta.env.BASE_URL}eggs/${id}-egg${where === "yard" ? "-yard" : ""}.webp`;
