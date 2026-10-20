@@ -1,4 +1,5 @@
 import { Assets, Container, Graphics, Texture, TilingSprite } from "pixi.js";
+import type { Season } from "@/game/season";
 import { noiseMask } from "./groundNoise";
 import type { YardBounds } from "./YardGrid";
 
@@ -46,8 +47,16 @@ import type { YardBounds } from "./YardGrid";
  * backdrop. See {@link GroundStyle} for the edge.
  */
 
-/** Where the game server keeps the yard backgrounds. Proxied in development. */
-const TILE_ROOT = "/assets/yardbg/grass/";
+/**
+ * Where the game server keeps the yard backgrounds, by season. Proxied in
+ * development. The Halloween set is the same seven images recoloured to a
+ * dusky purple-grey with dead grass (a luminance gradient map, so each keeps
+ * its texture and the blend works unchanged), under the same file names.
+ */
+const TILE_ROOT: Readonly<Record<Season, string>> = {
+  normal: "/assets/yardbg/grass/",
+  halloween: "/assets/yardbg/spooky/",
+};
 
 /**
  * The seven grass images, in the order `MAPBG` numbers them
@@ -74,8 +83,8 @@ const BLOCK_ROWS = 5;
 const BLOCK_WIDTH = TILE_WIDTH * BLOCK_COLUMNS;
 const BLOCK_HEIGHT = TILE_HEIGHT * BLOCK_ROWS;
 
-/** Grass green, shown until the tiles arrive and behind them if they never do. */
-const GROUND_COLOUR = 0x4a7a3a;
+/** Grass green (dusk purple at Halloween), shown until the tiles arrive and behind them if they never do. */
+const GROUND_COLOUR: Readonly<Record<Season, number>> = { normal: 0x4a7a3a, halloween: 0x5a4c5e };
 
 /**
  * The plot edge on the own yard: a soft dark line with a faint light one just
@@ -126,6 +135,8 @@ export class YardGround {
 
   private bounds: YardBounds | null = null;
   private seed = 1;
+  private style: GroundStyle = "plot";
+  private season: Season = "normal";
 
   constructor() {
     // The clip is only ever used as a mask. Pixi takes it out of the ordinary
@@ -139,6 +150,7 @@ export class YardGround {
   layout(bounds: YardBounds, seed: number, style: GroundStyle = "plot"): void {
     this.bounds = bounds;
     this.seed = seed;
+    this.style = style;
 
     const corners = bounds.corners;
     const first = corners[0];
@@ -154,9 +166,9 @@ export class YardGround {
     this.surround
       .clear()
       .rect(left, top, right - left, bottom - top)
-      .fill({ color: GROUND_COLOUR });
+      .fill({ color: GROUND_COLOUR[this.season] });
 
-    this.plot.clear().poly(world).fill({ color: GROUND_COLOUR });
+    this.plot.clear().poly(world).fill({ color: GROUND_COLOUR[this.season] });
     this.clip.clear().poly(world).fill({ color: 0xffffff });
     this.boundary.clear();
     if (style === "plot") {
@@ -177,16 +189,20 @@ export class YardGround {
   async loadTiles(): Promise<boolean> {
     const bounds = this.bounds;
     if (!bounds || this.tiles) return this.tiles !== null;
+    const season = this.season;
 
     let textures: Texture[];
     try {
       textures = await Promise.all(
-        GRASS_TILES.map((file) => Assets.load<Texture>(TILE_ROOT + file)),
+        GRASS_TILES.map((file) => Assets.load<Texture>(TILE_ROOT[season] + file)),
       );
     } catch (caught) {
       console.warn("Yard grass did not load; the plot stays a flat colour.", caught);
       return false;
     }
+
+    // The season changed while these were in flight: the newer load lays its own.
+    if (season !== this.season || this.tiles) return this.tiles !== null;
 
     const composite = this.bakeComposite(textures);
     if (!composite) return false;
@@ -202,12 +218,30 @@ export class YardGround {
     return true;
   }
 
+  /**
+   * Re-dresses the ground for `season` (`game/season.ts`): the fill colour at
+   * once, the tiles as soon as the season's set arrives. A no-op when the
+   * season is the one already shown.
+   */
+  setSeason(season: Season): void {
+    if (season === this.season) return;
+    this.season = season;
+    this.dropTiles();
+    if (!this.bounds) return;
+    this.layout(this.bounds, this.seed, this.style);
+    void this.loadTiles();
+  }
+
   destroy(): void {
+    this.dropTiles();
+    this.root.destroy({ children: true });
+  }
+
+  private dropTiles(): void {
     this.tiles?.destroy();
     this.tiles = null;
     this.composite?.destroy(true);
     this.composite = null;
-    this.root.destroy({ children: true });
   }
 
   private sizeTiles(bounds: YardBounds): void {

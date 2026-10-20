@@ -7,6 +7,7 @@ import {
   MushroomPicker,
   mushroomPickAction,
   ORDINARY_QUIPS,
+  PUMPKIN_QUIPS,
   pickRefusal,
   SHAKE_MS,
   type MushroomPickView,
@@ -208,6 +209,24 @@ describe("MushroomPicker", () => {
     await done;
 
     expect(calls.at(-1)).toBe(`ordinary ${ORDINARY_QUIPS[1]}`);
+  });
+
+  it("at Halloween the quip is about the pumpkin", async () => {
+    const save = loadWith();
+    const store = storeOf(save, vi.fn(() => Promise.resolve(answer(save, 0))));
+    const { view, calls } = viewSpy();
+    const time = handTimers();
+    const picker = new MushroomPicker(store, view, {
+      timers: time.timers,
+      random: () => 0.5,
+      season: () => "halloween",
+    });
+
+    const done = picker.pick(store.yard.mushrooms[0]!);
+    time.fire();
+    await done;
+
+    expect(calls.at(-1)).toBe(`ordinary ${PUMPKIN_QUIPS[1]}`);
   });
 
   it("no free worker: says so at once, no shake, nothing sent", async () => {
