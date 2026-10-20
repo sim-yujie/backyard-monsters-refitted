@@ -73,6 +73,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "lab/finish",
   "lab/instant",
   "champion/raise",
+  "champion/cancel-egg",
   "champion/feed",
   "champion/evolve",
   "champion/heal",

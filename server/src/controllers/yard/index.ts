@@ -11,6 +11,7 @@ import { yardBunkerFillAction, yardBunkerRemoveAction } from "./bunker.js";
 import { yardCancelFortifyAction, yardFortifyAction } from "./fortify.js";
 import { yardChampionFreezeAction, yardChampionThawAction } from "./chamber.js";
 import {
+  yardChampionCancelEggAction,
   yardChampionEvolveAction,
   yardChampionFeedAction,
   yardChampionHealAction,
@@ -106,6 +107,7 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "lab/finish", controller: yardRoute(yardLabFinishAction) },
   { path: "lab/instant", controller: yardRoute(yardLabInstantAction) },
   { path: "champion/raise", controller: yardRoute(yardChampionRaiseAction) },
+  { path: "champion/cancel-egg", controller: yardRoute(yardChampionCancelEggAction) },
   { path: "champion/feed", controller: yardRoute(yardChampionFeedAction) },
   { path: "champion/evolve", controller: yardRoute(yardChampionEvolveAction) },
   { path: "champion/heal", controller: yardRoute(yardChampionHealAction) },

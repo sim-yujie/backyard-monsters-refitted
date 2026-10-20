@@ -77,6 +77,7 @@ const NOTHING_BACK_KINDS: ReadonlySet<string> = new Set(["taunt", "gift"]);
 /** Champion statuses (`ChampionBase.as:26-36`). */
 const CHAMPION_ACTIVE = 0;
 const CHAMPION_FROZEN = 1;
+const CHAMPION_EGG = 3;
 
 /** The slice of a save recycling reads. */
 export interface RecycleSave extends StorageCapSave {
@@ -146,6 +147,9 @@ const refuse = (save: RecycleSave, building: BuildingData, id: number, now: numb
     champions.some((champion) => Number(champion.status ?? CHAMPION_ACTIVE) === CHAMPION_ACTIVE)
   ) {
     throw refused("championInCage", "Your champion lives in this cage. It cannot be recycled.");
+  }
+  if (type === CHAMPION_CAGE_TYPE && champions.some((champion) => Number(champion.status) === CHAMPION_EGG)) {
+    throw refused("eggInCage", "An egg is hatching in this cage. Cancel it first.");
   }
   if (
     type === CHAMPION_CHAMBER_TYPE &&
