@@ -102,4 +102,12 @@ describe("scrolling", () => {
       y: 580,
     });
   });
+
+  it("lets the map go a pad past its edges, so edge pins clear the corner buttons", () => {
+    expect(clampScroll({ x: -500, y: 5000 }, { width: 360, height: 600 }, 96)).toEqual({
+      x: -96,
+      y: MAP_SIZE - 600 + 96,
+    });
+    expect(centreOn({ x: 0, y: 0 }, { width: 360, height: 600 }, 96)).toEqual({ x: -96, y: -96 });
+  });
 });

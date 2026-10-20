@@ -336,6 +336,24 @@
   .overlay__layer:has(> .attack-dock--sheet.attack-dock--open) > .attack-viewtools .yard-minimap {
     display: none;
   }
+
+  /* Smaller corner tools, so less of the battlefield sits under them (phone
+     audit M): the minimap shrinks, and the zoom keeps -, + and Fit without
+     the slider and readout (pinch zooms), as the planner does on a phone. */
+  /* !important: the minimap sets its own size on the element. */
+  .attack-viewtools .yard-minimap {
+    width: 120px !important;
+    height: auto !important;
+  }
+
+  .attack-viewtools .yard-zoom__slider,
+  .attack-viewtools .yard-zoom__readout {
+    display: none;
+  }
+
+  .attack-viewtools .yard-zoom__step {
+    min-width: 36px;
+  }
 }
 
 @media (pointer: coarse) {

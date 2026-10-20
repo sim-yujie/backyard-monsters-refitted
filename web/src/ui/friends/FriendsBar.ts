@@ -1,5 +1,6 @@
 import type { Friend } from "@/api/friends";
 import { avatarOf, avatarUrl } from "@/game/avatars";
+import { canHelp } from "@/game/friends/friendText";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { friendsOpener } from "@/game/friends/friendsView";
 import { openGiftPicker } from "./GiftPicker";
@@ -27,8 +28,7 @@ const SLOT_GAP_PX = 4;
 /** An arrow button plus the gap beside it. */
 const ARROW_PX = 32;
 
-/** Whether the player could help this friend today. */
-export const canHelp = (friend: Friend): boolean => !!friend.help && (friend.help.speedup || friend.help.repair);
+export { canHelp };
 
 const onlineRank = (friend: Friend): number => (friend.online === "online" ? 1 : 0);
 

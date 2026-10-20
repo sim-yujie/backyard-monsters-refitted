@@ -1,8 +1,8 @@
 import { friendRefusal, type Friend, type FriendsApi } from "@/api/friends";
-import { friendCountText, onlineText } from "@/game/friends/friendText";
+import { canHelp, friendCountText, onlineText } from "@/game/friends/friendText";
 import type { FriendsSnapshot, FriendsStore } from "@/game/friends/friendsStore";
 import { blockButton } from "./BlockButton";
-import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
+import { button, make, playerRow, section, StatusLine, type FriendsTabView, type RowBadge } from "./rows";
 
 /**
  * The Friends screen's **Friends** tab (`docs/design/friends.md` §3, issue
@@ -14,6 +14,11 @@ import { button, make, playerRow, section, StatusLine, type FriendsTabView } fro
  *
  * The rows come from the store, which this tab refreshes when it comes
  * forward; a removal takes the row off at once.
+ *
+ * Issue #380, for long lists: a search box (part of a name) and three filter
+ * buttons (Can help, Online, Gift not sent; pressed ones must all hold) above
+ * the list; the bar's wrench and gift marks on each critter; and one-line
+ * rows, with Remove and Block folded behind a "More" button.
  */
 
 export interface FriendActions {
@@ -42,10 +47,40 @@ export const FRIENDS_TEXT = {
   cancel: "Keep",
   removed: (name: string): string => `${name} is no longer your friend.`,
   visit: "Visit",
-  gift: "Send gift",
-  giftSent: "Gift sent today",
+  gift: "Gift",
+  giftSent: "Sent",
+  giftTitle: "Send gift",
+  giftSentTitle: "Gift sent today",
   block: "Block",
+  more: "More",
+  search: "Search friends",
+  noMatch: "No friends match.",
+  clear: "Clear",
+  matching: (shown: number): string => `${shown} shown`,
 } as const;
+
+export type FriendFilter = "help" | "online" | "gift";
+
+/** The filter buttons, in order. */
+export const FRIEND_FILTERS: readonly { readonly id: FriendFilter; readonly label: string }[] = [
+  { id: "help", label: "Can help" },
+  { id: "online", label: "Online" },
+  { id: "gift", label: "Gift not sent" },
+];
+
+const FILTER_TEST: Readonly<Record<FriendFilter, (friend: Friend) => boolean>> = {
+  help: canHelp,
+  online: (friend) => friend.online === "online",
+  gift: (friend) => !friend.giftSentToday,
+};
+
+/** Whether a friend matches the search (any part of the name, any case) and every pressed filter. */
+export const friendMatches = (friend: Friend, query: string, filters: ReadonlySet<FriendFilter>): boolean => {
+  const wanted = query.trim().toLowerCase();
+  if (wanted && !friend.username.toLowerCase().includes(wanted)) return false;
+  for (const filter of filters) if (!FILTER_TEST[filter](friend)) return false;
+  return true;
+};
 
 const ONLINE_ORDER: Readonly<Record<string, number>> = { online: 0, today: 1, week: 2, away: 3 };
 
@@ -60,11 +95,18 @@ export class FriendsTab implements FriendsTabView {
 
   private readonly options: FriendsTabOptions;
   private readonly summary: HTMLElement;
+  private readonly tools: HTMLElement;
+  private readonly search: HTMLInputElement;
+  private readonly filterButtons = new Map<FriendFilter, HTMLButtonElement>();
   private readonly status = new StatusLine();
   private readonly body: HTMLElement;
   private readonly unsubscribe: () => void;
   /** The friend whose Remove is waiting for "Yes, remove". */
   private confirming: number | null = null;
+  /** The friend whose More is open, showing Remove and Block. */
+  private opened: number | null = null;
+  private query = "";
+  private readonly filters = new Set<FriendFilter>();
   private busy = new Set<number>();
   private snapshot: FriendsSnapshot | null = null;
 
@@ -73,7 +115,42 @@ export class FriendsTab implements FriendsTabView {
     this.element = make("div", "friends-tab friends-tab--friends");
     this.summary = make("p", "friends-summary");
     this.body = make("div", "friends-tab__body");
-    this.element.append(this.summary, this.status.element, this.body);
+    this.tools = make("div", "friends-tools");
+    const searchBox = make("div", "friends-tools__search");
+    searchBox.setAttribute("role", "search");
+    const label = make("label", "u-visually-hidden", FRIENDS_TEXT.search);
+    label.htmlFor = "friends-list-search";
+    this.search = make("input", "field__input friends-tools__input");
+    this.search.id = "friends-list-search";
+    this.search.type = "search";
+    this.search.placeholder = FRIENDS_TEXT.search;
+    this.search.autocomplete = "off";
+    this.search.spellcheck = false;
+    this.search.maxLength = 40;
+    this.search.addEventListener("input", () => {
+      this.query = this.search.value;
+      this.opened = null;
+      this.render();
+    });
+    searchBox.append(label, this.search);
+    const filterRow = make("div", "friends-tools__filters");
+    for (const { id, label: words } of FRIEND_FILTERS) {
+      const chip = make("button", "friends-filter", words);
+      chip.type = "button";
+      chip.dataset["filter"] = id;
+      chip.setAttribute("aria-pressed", "false");
+      chip.addEventListener("click", () => {
+        if (this.filters.has(id)) this.filters.delete(id);
+        else this.filters.add(id);
+        this.opened = null;
+        this.render();
+      });
+      this.filterButtons.set(id, chip);
+      filterRow.append(chip);
+    }
+    this.tools.append(searchBox, filterRow);
+    this.tools.hidden = true;
+    this.element.append(this.summary, this.tools, this.status.element, this.body);
     this.unsubscribe = options.store.subscribe((snapshot) => {
       this.snapshot = snapshot;
       this.render();
@@ -87,6 +164,7 @@ export class FriendsTab implements FriendsTabView {
 
   async show(): Promise<void> {
     this.confirming = null;
+    this.opened = null;
     if (!this.snapshot?.loaded) this.status.set(FRIENDS_TEXT.loading);
     await this.options.store.refresh();
     if (!this.options.store.snapshot.loaded) this.status.set(FRIENDS_TEXT.loadFailed, "error");
@@ -102,10 +180,12 @@ export class FriendsTab implements FriendsTabView {
     const snapshot = this.snapshot;
     if (!snapshot?.loaded) {
       this.summary.textContent = "";
+      this.tools.hidden = true;
       this.body.replaceChildren();
       return;
     }
     this.summary.textContent = friendCountText(snapshot.friends.length, snapshot.max);
+    this.tools.hidden = snapshot.friends.length === 0;
     if (snapshot.friends.length === 0) {
       const empty = make("div", "friends-empty");
       empty.append(
@@ -115,8 +195,29 @@ export class FriendsTab implements FriendsTabView {
       this.body.replaceChildren(empty);
       return;
     }
-    const rows = [...snapshot.friends].sort(friendOrder).map((friend) => this.row(friend));
-    this.body.replaceChildren(section("Your friends", rows, FRIENDS_TEXT.empty));
+    for (const { id, label } of FRIEND_FILTERS) {
+      const chip = this.filterButtons.get(id);
+      if (!chip) continue;
+      chip.textContent = `${label} (${snapshot.friends.filter(FILTER_TEST[id]).length})`;
+      chip.setAttribute("aria-pressed", String(this.filters.has(id)));
+    }
+    const shown = snapshot.friends.filter((friend) => friendMatches(friend, this.query, this.filters)).sort(friendOrder);
+    const narrowed = this.query.trim() !== "" || this.filters.size > 0;
+    if (narrowed && shown.length === 0) {
+      const none = make("div", "friends-empty");
+      none.append(make("p", "friends-empty__text", FRIENDS_TEXT.noMatch), button(FRIENDS_TEXT.clear, () => this.clearSearch()));
+      this.body.replaceChildren(none);
+      return;
+    }
+    const title = narrowed ? FRIENDS_TEXT.matching(shown.length) : "Your friends";
+    this.body.replaceChildren(section(title, shown.map((friend) => this.row(friend)), FRIENDS_TEXT.empty));
+  }
+
+  private clearSearch(): void {
+    this.query = "";
+    this.search.value = "";
+    this.filters.clear();
+    this.render();
   }
 
   private row(friend: Friend): HTMLLIElement {
@@ -126,6 +227,7 @@ export class FriendsTab implements FriendsTabView {
       const yes = button(FRIENDS_TEXT.removeYes, () => void this.remove(friend), "danger");
       const no = button(FRIENDS_TEXT.cancel, () => {
         this.confirming = null;
+        this.opened = null;
         this.render();
       });
       yes.disabled = busy;
@@ -139,6 +241,7 @@ export class FriendsTab implements FriendsTabView {
     if (onGift) {
       const gift = button(friend.giftSentToday ? FRIENDS_TEXT.giftSent : FRIENDS_TEXT.gift, () => onGift(friend));
       gift.disabled = friend.giftSentToday;
+      gift.title = friend.giftSentToday ? FRIENDS_TEXT.giftSentTitle : FRIENDS_TEXT.giftTitle;
       actions.push(gift);
     }
     const remove = button(FRIENDS_TEXT.remove, () => {
@@ -146,20 +249,38 @@ export class FriendsTab implements FriendsTabView {
       this.render();
     }, "ghost");
     remove.disabled = busy;
-    actions.push(remove);
-    actions.push(
-      blockButton({
-        userid: friend.userid,
-        username: friend.username,
-        block: (userid) => this.options.api.block(userid),
-        onBlocked: () => void this.options.store.refresh(),
-        onError: (message) => this.status.set(message, "error"),
-      }),
-    );
-    return playerRow(friend, {
+    const opened = this.opened === friend.userid;
+    const more = button("⋯", () => {
+      this.opened = opened ? null : friend.userid;
+      this.render();
+    }, "ghost");
+    more.classList.add("friends-row__more");
+    more.title = FRIENDS_TEXT.more;
+    more.setAttribute("aria-label", FRIENDS_TEXT.more);
+    more.setAttribute("aria-expanded", String(opened));
+    actions.push(more);
+    if (opened) {
+      actions.push(
+        remove,
+        blockButton({
+          userid: friend.userid,
+          username: friend.username,
+          block: (userid) => this.options.api.block(userid),
+          onBlocked: () => void this.options.store.refresh(),
+          onError: (message) => this.status.set(message, "error"),
+        }),
+      );
+    }
+    const badges: RowBadge[] = [];
+    if (canHelp(friend)) badges.push("wrench");
+    if (!friend.giftSentToday) badges.push("gift");
+    const row = playerRow(friend, {
       ...(online && { note: online, noteClass: `friends-online friends-online--${friend.online}` }),
       actions,
+      badges,
     });
+    row.classList.toggle("friends-row--open", opened);
+    return row;
   }
 
   private async remove(friend: Friend): Promise<void> {
@@ -169,6 +290,7 @@ export class FriendsTab implements FriendsTabView {
     try {
       await this.options.api.remove(friend.userid);
       this.confirming = null;
+      this.opened = null;
       this.status.set(FRIENDS_TEXT.removed(friend.username));
       this.options.store.removeFriend(friend.userid);
     } catch (caught) {

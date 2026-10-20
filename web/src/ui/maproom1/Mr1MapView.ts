@@ -35,6 +35,11 @@ export const MAP_ART = "/assets/ui/map.v1.jpg";
 const DRAG_THRESHOLD = 5;
 /** Arrow-key pan step. */
 const KEY_STEP = 80;
+/**
+ * How far past the map's edges it can be dragged, so a pin on the edge can be
+ * moved out from under My yard and the overview map (phone audit K).
+ */
+const EDGE_PAD = 56;
 
 export interface MapViewHandlers {
   readonly onSelect: (key: string | null) => void;
@@ -101,7 +106,8 @@ export class Mr1MapView {
     this.viewport.append(this.world);
 
     const myYard = button("btn mr1-map__home");
-    myYard.append(icon("target", 18), "My yard");
+    myYard.setAttribute("aria-label", "My yard");
+    myYard.append(icon("target", 18), el("span", "mr1-map__home-label", "My yard"));
     myYard.addEventListener("click", () => this.centreOnYou());
 
     this.mini = el("div", "mr1-mini");
@@ -188,7 +194,7 @@ export class Mr1MapView {
   /** Scrolls so a pin is in view, for a pick made in the list. */
   reveal(key: string): void {
     const pin = this.pins.get(key);
-    if (pin) this.scrollTo(centreOn(pin.spot, this.size));
+    if (pin) this.scrollTo(centreOn(pin.spot, this.size, EDGE_PAD));
   }
 
   centreOnYou(): void {
@@ -293,7 +299,7 @@ export class Mr1MapView {
   /* ── Scrolling ──────────────────────────────────────────────────────── */
 
   private scrollTo(scroll: PinSpot): void {
-    this.scroll = clampScroll(scroll, this.size);
+    this.scroll = clampScroll(scroll, this.size, EDGE_PAD);
     this.world.style.transform = `translate(${-Math.round(this.scroll.x)}px, ${-Math.round(this.scroll.y)}px)`;
     this.updateMini();
   }
