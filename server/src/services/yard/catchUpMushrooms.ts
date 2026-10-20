@@ -3,17 +3,20 @@ import {
   MUSHROOM_CAP,
   MUSHROOM_RESPAWN_SECONDS,
   moveMushroomsOffBuildings,
+  mushroomRespawnSeconds,
   readMushrooms,
   spawnMushrooms,
   type MushroomYardSave,
   type Random,
 } from "./mushrooms.js";
+import { pumpkinHuntOn } from "./season.js";
 
 /**
  * Catch-up step 3 (mushrooms): new mushrooms grow while the player is away
  * (`docs/design/yard-buildings.md` §2.3, §5.6).
  *
- * One mushroom per {@link MUSHROOM_RESPAWN_SECONDS} since the last spawn,
+ * One mushroom per {@link MUSHROOM_RESPAWN_SECONDS} since the last spawn (one
+ * an hour while the Halloween pumpkin hunt is on, `season.ts`),
  * `mushrooms.s`; at most {@link MUSHROOM_BURST} in one catch-up and never more
  * than {@link MUSHROOM_CAP} in the yard (a yard already above it keeps its
  * mushrooms and grows none, owner decision 2026-09-28). Whenever at least one period has
@@ -37,15 +40,17 @@ import {
  * @param save - The yard, mutated in place: `mushrooms` may change.
  * @param now - Unix seconds to advance to.
  * @param random - The spot and frame source.
+ * @param respawnSeconds - The period: the pumpkin hunt's while it is on at `now`.
  */
 export const catchUpMushrooms = (
   save: MushroomYardSave,
   now: number,
-  random: Random = Math.random
+  random: Random = Math.random,
+  respawnSeconds: number = mushroomRespawnSeconds(pumpkinHuntOn(now))
 ): [] => {
   moveMushroomsOffBuildings(save, random);
   const { l, s } = readMushrooms(save.mushrooms);
-  const periods = s > 0 ? Math.floor((now - s) / MUSHROOM_RESPAWN_SECONDS) : MUSHROOM_BURST;
+  const periods = s > 0 ? Math.floor((now - s) / respawnSeconds) : MUSHROOM_BURST;
   if (periods <= 0) return [];
 
   const count = Math.min(periods, MUSHROOM_BURST, MUSHROOM_CAP - l.length);

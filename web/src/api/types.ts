@@ -610,6 +610,11 @@ export interface BaseLoadResponse extends ApiEnvelope {
   /** [height, width]; 800 x 800 on Map Room 2. */
   worldsize: [number, number];
   currenttime: number;
+  /**
+   * The kinds of the seasonal events on now (`"halloween"`), absent when none
+   * is (`server/src/services/yard/season.ts`). The yard dresses for them.
+   */
+  activeevents?: string[];
   /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
   savetime?: number;
   resources?: Resources;
@@ -1545,6 +1550,8 @@ export interface MushroomPickReport {
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;
+  /** During the Halloween pumpkin hunt: the player's pumpkin count, this one included. */
+  pumpkins?: number;
 }
 
 /** `POST /bm/yard/shop/buy`. */

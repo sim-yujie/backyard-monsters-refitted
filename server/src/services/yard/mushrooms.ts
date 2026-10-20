@@ -37,6 +37,17 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 /** One mushroom grows back per this many seconds since the last spawn (`MUSHROOMS.as:129`). */
 export const MUSHROOM_RESPAWN_SECONDS = 17_280;
 
+/**
+ * While the Halloween pumpkin hunt is on (`season.ts`), the mushrooms grow as
+ * pumpkins, one per this many seconds: about one an hour, under the same
+ * {@link MUSHROOM_CAP}.
+ */
+export const PUMPKIN_RESPAWN_SECONDS = 3_600;
+
+/** The respawn period: the pumpkin hunt's while it is on, else the usual. */
+export const mushroomRespawnSeconds = (pumpkinHunt: boolean): number =>
+  pumpkinHunt ? PUMPKIN_RESPAWN_SECONDS : MUSHROOM_RESPAWN_SECONDS;
+
 /** At most this many grow in one catch-up (`MUSHROOMS.as:132-134`). */
 export const MUSHROOM_BURST = 10;
 
@@ -254,6 +265,11 @@ export interface MushroomPickReport {
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;
+  /**
+   * During the Halloween pumpkin hunt (`season.ts`): the player's pumpkin
+   * count for the event's ladder, this one included. Absent otherwise.
+   */
+  pumpkins?: number;
 }
 
 /**

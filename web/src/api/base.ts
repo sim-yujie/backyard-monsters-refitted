@@ -1,5 +1,6 @@
 import { post, send, type FormBody, type RequestOptions } from "./http";
 import { getSession } from "./auth";
+import { seasonFor, setSeason } from "@/game/season";
 import {
   BaseMode,
   type AttackData,
@@ -19,6 +20,16 @@ import { ATTACK_CHAMPION_PROPS, ATTACK_MONSTER_PROPS } from "@/game/attack/attac
  * no apiVersion middleware (docs/server-api.md §Base / Yard).
  */
 const LOAD_PATH = "/base/load";
+
+/**
+ * One `/base/load`. Every answer says which seasonal events are on
+ * (`activeevents`), and the yard follows it (`game/season.ts`).
+ */
+const loadBase = async (body: BaseLoadRequest): Promise<BaseLoadResponse> => {
+  const response = await post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  setSeason(seasonFor(response.activeevents ?? []));
+  return response;
+};
 const SAVE_PATH = "/base/save";
 const CHECKPOINT_PATH = "/base/checkpoint";
 
@@ -105,7 +116,7 @@ export const loadOwnYard = async (
     ...(options.mapversion !== undefined ? { mapversion: options.mapversion } : {}),
   };
 
-  const response = await post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  const response = await loadBase(body);
   noteAwayJobs(response.completed);
   return response;
 };
@@ -130,7 +141,7 @@ export const loadOwnBase = async (
     ...(options.mapversion !== undefined ? { mapversion: options.mapversion } : {}),
   };
 
-  const response = await post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  const response = await loadBase(body);
   noteAwayJobs(response.completed, baseid);
   return response;
 };
@@ -162,7 +173,7 @@ export const viewBase = async (
     mapversion: options.mapversion ?? MAP_ROOM_VERSION,
   };
 
-  return post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  return loadBase(body);
 };
 
 /**
@@ -225,7 +236,7 @@ export const loadAttack = async (
     attackData: JSON.stringify(buildAttackData(roster)),
   };
 
-  return post<BaseLoadResponse>(LOAD_PATH, { ...body });
+  return loadBase(body);
 };
 
 /**
