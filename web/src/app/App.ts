@@ -1,5 +1,6 @@
 import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
+import { setGameFrameSource, setScreenNameSource } from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withHold, withPresence, withProtection } from "./presenceScene";
@@ -158,6 +159,14 @@ export class App {
       this.pixi.screen.width,
       this.pixi.screen.height,
     );
+
+    // The bug report's screenshot reads the game right after a fresh render,
+    // and its "which screen" is the scene on show.
+    setGameFrameSource(() => {
+      this.pixi.render();
+      return this.pixi.canvas;
+    });
+    setScreenNameSource(() => this.scenes?.activeScene ?? null);
 
     // "Stay protected?" nine minutes after the last real game action (#275),
     // on the server's clock. Every answer carrying `lastAction` moves it: the
@@ -331,6 +340,7 @@ export class App {
     this.botCheckCard?.hide();
     this.botCheckCard = null;
     this.pixi.renderer.off("resize", this.handleResize);
+    setGameFrameSource(null);
     this.scenes?.destroy();
     this.scenes = null;
     this.perf?.destroy();

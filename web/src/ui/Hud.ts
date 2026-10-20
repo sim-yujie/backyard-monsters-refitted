@@ -13,6 +13,7 @@ import { AchievementsDoor } from "./achievements/AchievementsDoor";
 import { friendsStore } from "@/game/friends/friendsStore";
 import { FriendsDoor } from "./friends/FriendsDoor";
 import { modalLayer, openWhatsNew } from "./events/WhatsNewDialog";
+import { openBugReport } from "./bugReport/BugReportDialog";
 import { formatAmount, formatCompact } from "./format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
@@ -406,6 +407,7 @@ export class Hud {
         onAchievements: () => void door.open(),
         onFriends: () => void friends.open(),
         onWhatsNew: () => void openWhatsNew({ container: modalLayer() }),
+        onReportBug: () => void openBugReport({ container: modalLayer(), signedIn: true }),
         name: options.accountName === undefined ? session?.username : options.accountName,
         onSignOut: options.onSignOut,
         variant: this.corner ? "pill" : "button",

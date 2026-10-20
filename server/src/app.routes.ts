@@ -35,6 +35,7 @@ import {
   mailTruceRequestLimiter,
   threadReportLimiter,
   allianceCreateEditLimiter,
+  bugReportLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -138,6 +139,7 @@ import { kickMember } from "./controllers/alliance/kickMember.js";
 import { promoteMember } from "./controllers/alliance/promoteMember.js";
 import { changeRelationship } from "./controllers/alliance/changeRelationship.js";
 import { getPowerups } from "./controllers/alliance/getPowerups.js";
+import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
 import { activatePowerup } from "./controllers/alliance/activatePowerup.js";
 import { purchasePowerup } from "./controllers/alliance/purchasePowerup.js";
 
@@ -346,6 +348,13 @@ router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRe
 router.get("/api/:apiVersion/events/wmi", apiVersion, logRequest, wildMonsterInvasion);
 // The Events page and "What's new" (`controllers/events/routes.ts`); the claims are yard actions.
 mountEventsRoutes(router);
+
+/**  ────────────────────────────────────────────────
+* 📦 Bug reports: the game's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`).
+* Not echoed by logRequest: the body carries pictures.
+* ──────────────────────────────────────────────── */
+router.post("/api/:apiVersion/bugreport", apiVersion, verifyUserAuth, bugReportLimiter, submitBugReportController);
+router.post("/api/:apiVersion/bugreport/guest", apiVersion, bugReportLimiter, submitGuestBugReportController);
 
 /**  ────────────────────────────────────────────────
 * 📦 Debug

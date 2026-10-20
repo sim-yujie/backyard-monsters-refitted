@@ -14,6 +14,10 @@ import "@/ui/styles/takeover.css";
 import "@/ui/styles/moveyards.css";
 
 import { App } from "@/app/App";
+import { installErrorLog } from "@/game/bugReport/errorLog";
+
+// The bug report's list of recent errors, from the very start.
+installErrorLog();
 
 const host = document.querySelector<HTMLElement>("#game-root");
 

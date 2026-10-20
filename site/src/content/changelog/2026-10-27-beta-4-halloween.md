@@ -17,6 +17,7 @@ date: 2026-10-27
 - **Free speed-ups.** Some treats are free speed-ups. They show up in the building panel as "Free (n left)" when you speed up a building.
 - **Champions hatch from eggs.** Raising a champion now gives you an egg that hatches one day later. Nothing speeds an egg up. Changed your mind? Cancel the egg and pick again (the new egg takes a full day too).
 - **Monsters on the move.** 15 monsters have brand-new walk and attack animations: Crabatron scuttles, Fang creeps, Eye-ra slithers, Bolt crawls, D.A.V.E. rolls on its treads, and lots more.
+- **Report a bug.** Found something broken? Use "Report a bug" in the Account menu (or under the sign-in box) to tell us. A screenshot is added for you, and you can take it out or add your own picture.
 
 ### Improvements
 
