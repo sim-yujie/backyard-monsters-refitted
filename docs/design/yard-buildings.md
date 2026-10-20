@@ -1054,7 +1054,7 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
   (monsters), **Feed · 26 shiny**, **Evolve now · 158 shiny** (`feedShiny × 2 × feeds left`, MH
   §7.4), **Heal · n shiny**, **Rename**, **Juice** (Phase 5 Juicer, confirmation). The panel stays
   open after each action.
-- Routes: `champion/raise` `type`; `champion/feed` `mode` = `monsters`|`shiny` (doubled price
+- Routes: `champion/raise` `type` (lays an egg, below); `champion/cancel-egg`; `champion/feed` `mode` = `monsters`|`shiny` (doubled price
   outside the feed window, MH §7.4); `champion/evolve`; `champion/heal`; `champion/rename` `name`
   (1–20 characters, filtered); `champion/juice`.
 - Catch-up (`catchUpChampions.ts`): passive heal `max × 5 / healtime` per 5 s; starvation — past
@@ -1065,6 +1065,28 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
   damaged or the cage is occupied (MH §7.6). Storage unchanged: `champion[i].status = 1`, `ft`
   relative while frozen, and the chamber's `fz` JSON string (`CHAMPIONCHAMBER.as:313-378`); the
   server writes both.
+- **Eggs (owner 2026-10-20)**: raising a champion lays an **egg** that hatches **24 hours** later,
+  every time, the first champion included. Nothing speeds it up: no Shiny, no items, no friend help
+  (speed-ups only touch building countdowns). The player can **cancel** the egg (in-game confirm:
+  "Cancel the egg? You can pick again, but the new egg takes a full day.") and raise again; the new
+  egg starts a full day over. Korath is still not raisable. While it waits, the egg does nothing:
+  it does not defend or attack, cannot be fed, healed, evolved, renamed, juiced or frozen
+  (`409 eggInCage`), and goals and achievements do not count it. **Chamber rule**: an egg cannot be
+  frozen, and no basic champion thaws into the cage while an egg is there (cancel it first);
+  Krallen is unaffected. Recycling the cage with an egg in it is refused (cancel first).
+  - Storage: a normal `champion` entry with `status` 3 and `ft` = hatch time (raise + 86 400 s);
+    the other fields hold the level-1 champion. No new fields, no migration.
+  - The server's catch-up hatches it once `ft <= now` (also offline: attacks and raids catch up
+    both yards): `status` 0, `ft` = hatch time + the feed time, and it emits the completed job
+    `championHatch` (`id` = `G<n>`), shown as "Your Drull has hatched!".
+  - Route `champion/cancel-egg` (none; `409 noEgg`); `champion/raise` refuses `409 eggInCage
+    { type, hatchAt }` while one waits.
+  - Client: the cage window shows the egg, "Hatches in 23h 12m" and **Cancel egg**, and none of
+    the champion's buttons; at 0 it says "Hatching…" and asks the server. The raise cards say
+    "Hatches in 1 day". On the yard the egg stands in the middle of the cage's pen (own and
+    visited yards, not the attack screen). Pictures: `web/public/eggs/G<n>-egg.webp` (window,
+    240 square, drawn at 120 px) and `G<n>-egg-yard.webp` (yard, 96 x 120, drawn 60 px tall);
+    placeholders from `web/tools/gen-egg-placeholders.py` until the painted eggs are approved.
 
 ### 7.3 Monster Juicer (D10)
 

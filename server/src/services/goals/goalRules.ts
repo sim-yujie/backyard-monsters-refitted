@@ -68,6 +68,8 @@ const championLevel = (champions: unknown, type: number): number => {
   let best = 0;
   for (const champion of champions) {
     if (!isRecord(champion) || Math.trunc(Number(champion.t)) !== type) continue;
+    // An egg (status 3) has not hatched yet (`services/yard/champion.ts`).
+    if (Number(champion.status) === 3) continue;
     const level = Math.trunc(Number(champion.l));
     best = Math.max(best, Number.isFinite(level) && level > 0 ? level : 1);
   }

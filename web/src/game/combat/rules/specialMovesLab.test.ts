@@ -102,24 +102,50 @@ describe("Bandito's whirlwind", () => {
 
   const swing = monsterStat("C7", "damage", 1);
 
-  it("hits only its target at rank 0", () => {
-    const { yard, splashes } = firstSwing(0);
+  it.each([0, 1, 2, 3])("never splashes a building, rank %i", (rank) => {
+    const { yard, splashes } = firstSwing(rank);
     const hurt = lossOf(yard).filter((loss) => loss > 0);
-    expect(hurt).toHaveLength(1);
-    expect(splashes).toBe(0);
+    // Only the building it swung at, though four more stand within 60.
+    expect(hurt).toEqual([swing]);
+    expect(splashes).toBe(rank > 0 ? 1 : 0);
   });
 
-  it.each([1, 2, 3])("splashes every other building within 60 at full damage, rank %i", (rank) => {
-    const { yard } = firstSwing(rank);
-    const hurt = lossOf(yard).filter((loss) => loss > 0);
-    // The target and its neighbours, no cap, each for the whole swing.
-    expect(hurt.length).toBeGreaterThanOrEqual(3);
-    for (const loss of hurt) expect(loss % swing).toBe(0);
-    expect(lossOf(yard)[5]).toBe(0);
+  /** Banditos dropped between two bunkers of `garrison`; the hits of each of their splashes. */
+  const amongDefenders = (rank: number, garrison: Record<string, number>, banditos = 1) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": block(2, 160, -130),
+      "3": { id: 3, t: 22, l: 1, X: 260, Y: -260 },
+    });
+    const battle = createBattle(yard, {
+      seed: 3,
+      bunkers: { 1: garrison, 3: garrison },
+      ranks: { C7: rank },
+    });
+    battle.apply(dropOf("C7", 130, -130, banditos, 0));
+    const hits: number[] = [];
+    let defendersHurt = 0;
+    watch(battle, 900, (_creeps, events) => {
+      for (const event of events) {
+        if (event.kind === "splash") hits.push(event.hits);
+        if (event.kind === "hurt" && event.friendly) defendersHurt += 1;
+      }
+    });
+    return { hits, defendersHurt };
+  };
+
+  it("spins through the defending ground monsters round it", () => {
+    const plain = amongDefenders(0, { C1: 4 });
+    const ranked = amongDefenders(2, { C1: 4 });
+    expect(plain.hits).toHaveLength(0);
+    expect(ranked.hits.some((hits) => hits > 0)).toBe(true);
+    expect(ranked.defendersHurt).toBeGreaterThan(plain.defendersHurt);
   });
 
-  it("splashes the same at every rank, whatever the speed", () => {
-    expect(lossOf(firstSwing(1).yard)).toEqual(lossOf(firstSwing(3).yard));
+  it("leaves flying defenders alone", () => {
+    const { hits } = amongDefenders(3, { C14: 1 }, 3);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((count) => count === 0)).toBe(true);
   });
 
   it("spins at 1, 1.5 and 2 x the plain swing rate", () => {
@@ -165,7 +191,7 @@ describe("Fang's venom", () => {
     expect(stacks).toBe(0);
   });
 
-  it.each([1, 2, 3])("adds a stack a bite and hurts every half second for stacks x damage x %i/10", (rank) => {
+  it.each([1, 2, 3])("adds a stack a bite and hurts once a second for stacks x damage x %i/10", (rank) => {
     const battle = fight(rank);
     const damage = monsterStat("C8", "damage", 1);
     let top = 0;
@@ -189,10 +215,11 @@ describe("Fang's venom", () => {
     for (const bite of bites) {
       expect(bite.amount).toBeCloseTo((bite.stacks * damage * rank) / 10, 6);
     }
-    // One bite every 40 loops (half a second).
+    // One bite a second (owner, 2026-10-20).
+    expect(bites.length).toBeGreaterThan(1);
     if (bites.length > 1) {
       for (let at = 1; at < bites.length; at += 1) {
-        expect((bites[at]?.tick ?? 0) - (bites[at - 1]?.tick ?? 0)).toBe(TICKS_PER_SECOND / 2);
+        expect((bites[at]?.tick ?? 0) - (bites[at - 1]?.tick ?? 0)).toBe(TICKS_PER_SECOND);
       }
     }
   });
@@ -278,6 +305,39 @@ describe("Brain's cloak", () => {
     const stayed = invisibleTo - arrived;
     const wanted = cloakDelaySeconds(rank) * TICKS_PER_SECOND;
     expect(Math.abs(stayed - wanted)).toBeLessThanOrEqual(2);
+  });
+
+  it("is dropped by a tower that was shooting it once it walks on, cloaked", () => {
+    // A rank 1 Brain shows itself as it arrives, so the Cannon shoots it while it
+    // swings; each time it walks on to the next building it cloaks again.
+    const yard = yardOf({
+      "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 6, l: 1, X: -80, Y: -80 },
+      "3": { id: 3, t: 6, l: 1, X: 80, Y: 80 },
+    });
+    const battle = createBattle(yard, { seed: 5, ranks: { C9: 1 } });
+    battle.apply(dropOf("C9", -200, -200, 1, 0));
+    let cloaks = 0;
+    let hidden = false;
+    let shotsHidden = 0;
+    let shotsSeen = 0;
+    let lastShots = 0;
+    watch(battle, 4000, (creeps) => {
+      const brain = creeps.find((creep) => creep.monsterId === "C9");
+      if (!brain) return;
+      const shots = battle.state().towers[0]?.shots ?? 0;
+      if (brain.invisible) {
+        shotsHidden += shots - lastShots;
+        if (!hidden) cloaks += 1;
+      } else {
+        shotsSeen += shots - lastShots;
+      }
+      hidden = !!brain.invisible;
+      lastShots = shots;
+    });
+    expect(cloaks).toBeGreaterThanOrEqual(2);
+    expect(shotsSeen).toBeGreaterThan(0);
+    expect(shotsHidden).toBe(0);
   });
 
   it("is seen by a trap, which reaches the invisible", () => {
@@ -376,6 +436,43 @@ describe("Bolt's blink", () => {
   });
 });
 
+describe("a bunker's Bolt", () => {
+  /** A bunker of Bolts, Pokeys dropped inside its range; the hops of each side's Bolts. */
+  const defend = (options: {
+    defenderRanks?: Record<string, number>;
+    ranks?: Record<string, number>;
+  }) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": block(2, 200, 200),
+    });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C3: 3 } }, ...options });
+    battle.apply(dropOf("C1", 180, 180, 6, 10));
+    let defenderHops = 0;
+    let blinkingTicks = 0;
+    const friendly = new Set<number>();
+    watch(battle, 1200, (creeps, events) => {
+      for (const creep of creeps) if (creep.friendly) friendly.add(creep.id);
+      if (creeps.some((creep) => creep.friendly && creep.blinking)) blinkingTicks += 1;
+      defenderHops += events.filter(
+        (event) => event.kind === "blink" && friendly.has(event.creepId),
+      ).length;
+    });
+    return { defenderHops, blinkingTicks };
+  };
+
+  it("walks at its foes at rank 0, whatever the attacker's ranks", () => {
+    expect(defend({})).toEqual({ defenderHops: 0, blinkingTicks: 0 });
+    expect(defend({ ranks: { C3: 3 } })).toEqual({ defenderHops: 0, blinkingTicks: 0 });
+  });
+
+  it.each([1, 2, 3])("blinks at its foe at the defender's rank %i", (rank) => {
+    const { defenderHops, blinkingTicks } = defend({ defenderRanks: { C3: rank } });
+    expect(defenderHops).toBeGreaterThan(0);
+    expect(blinkingTicks).toBeGreaterThan(0);
+  });
+});
+
 describe("Teratorn's bounces", () => {
   const swing = monsterStat("C14", "damage", 1);
 
@@ -412,25 +509,50 @@ describe("Teratorn's bounces", () => {
     expect(lossOf(yard).filter((loss) => loss > 0)).toHaveLength(1);
   });
 
-  it.each([1, 2, 3])("jumps %i time(s), half the last each, never to a wall", (rank) => {
-    const { yard, bounces } = firstFireball(rank);
-    expect(bounces).toHaveLength(rank);
-    let expected = swing;
-    for (const bounce of bounces) {
-      expected /= 2;
-      expect(bounce.amount).toBeCloseTo(expected, 6);
-      expect(bounce.toBuildingId).not.toBe(5);
-      expect(bounce.toBuildingId).not.toBe(6);
-    }
-    // Each jump starts where the last one landed.
-    for (let at = 1; at < bounces.length; at += 1) {
-      expect(bounces[at]?.fromBuildingId).toBe(bounces[at - 1]?.toBuildingId);
-    }
-    // The wall was never touched by the fireball.
-    expect(lossOf(yard)[4]).toBe(0);
+  it.each([1, 2, 3])(
+    "jumps %i time(s), half the last each, never to a wall while a building is near",
+    (rank) => {
+      const { yard, bounces } = firstFireball(rank);
+      expect(bounces).toHaveLength(rank);
+      let expected = swing;
+      for (const bounce of bounces) {
+        expected /= 2;
+        expect(bounce.amount).toBeCloseTo(expected, 6);
+        expect(bounce.toBuildingId).not.toBe(5);
+        expect(bounce.toBuildingId).not.toBe(6);
+      }
+      // Each jump starts where the last one landed.
+      for (let at = 1; at < bounces.length; at += 1) {
+        expect(bounces[at]?.fromBuildingId).toBe(bounces[at - 1]?.toBuildingId);
+      }
+      // The wall was never touched by the fireball.
+      expect(lossOf(yard)[4]).toBe(0);
+    },
+  );
+
+  it.each([1, 2, 3])("jumps to a wall when no building is near, rank %i", (rank) => {
+    const yard = yardOf({
+      "1": block(1, 0, 0),
+      "2": { id: 2, t: 17, l: 1, X: 0, Y: 60 },
+      "3": block(3, 400, 400),
+    });
+    const battle = createBattle(yard, { seed: 9, ranks: { C14: rank } });
+    battle.apply(dropOf("C14", -40, 0, 1, 0));
+    const bounces: Extract<BattleVisualEvent, { kind: "bounce" }>[] = [];
+    let landed = false;
+    watch(battle, 1500, (_creeps, events) => {
+      if (landed) return;
+      for (const event of events) if (event.kind === "bounce") bounces.push(event);
+      landed = events.some((event) => event.kind === "hit");
+    });
+    // On to the wall, then back to the building it came from is the only way on,
+    // which Flash's rule of not going straight back forbids.
+    expect(bounces.map((bounce) => bounce.toBuildingId)).toEqual([2]);
+    expect(bounces[0]?.amount).toBeCloseTo(swing / 2, 6);
+    expect(lossOf(yard)[1]).toBeGreaterThan(0);
   });
 
-  it("stops when no building is within 100", () => {
+  it("stops when no building or wall is within 100", () => {
     const yard = yardOf({ "1": block(1, 0, 0), "2": block(2, 400, 400) });
     const battle = createBattle(yard, { seed: 9, ranks: { C14: 3 } });
     battle.apply(dropOf("C14", -40, 0, 1, 0));

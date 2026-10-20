@@ -96,6 +96,8 @@ describe("conditions", () => {
 
   test("champions: hatched, and level 6", () => {
     expect(conditionMet(goal("HG1").condition, { champion: [{ t: 1, l: 1 }] }, none)).toBe(true);
+    // An egg in the cage has not hatched yet.
+    expect(conditionMet(goal("HG1").condition, { champion: [{ t: 1, l: 1, status: 3 }] }, none)).toBe(false);
     expect(conditionMet(goal("HG2").condition, { champion: [{ t: 1, l: 1 }] }, none)).toBe(false);
     expect(conditionMet(goal("UG1").condition, { champion: [{ t: 1, l: 5 }] }, none)).toBe(false);
     expect(conditionMet(goal("UG1").condition, { champion: [{ t: 1, l: 6 }] }, none)).toBe(true);
