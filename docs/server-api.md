@@ -1083,10 +1083,10 @@ Flash client's and are deprecated. A layout saved through either is visible thro
 version 1 rows are converted to version 2 on read and never rewritten in place, and version 2
 rows are converted back down for `gettemplates`.
 
-`savetemplate` also rides along on `/base/load` and the `/base/save` reply, but only to the
-yard's owner: anyone else (view, help, attack, an Inferno attack's save) gets `[]`
-(`services/base/mapSaveData.ts`, `controllers/inferno/infernoSave.ts`), so a player's layouts and
-trap spots never reach another account.
+`savetemplate` never rides along on `/base/load`, the `/base/save` reply or any other shaped
+save, the owner's own included (it is not a `@FrontendKey` on `Save`): a player's layouts and trap
+spots never reach another account, and an own-yard load is not weighed down by up to ~260 KB of
+layouts nothing reads there. Only the routes in this section read or write them.
 
 A **layout** is `{ slot, name, version: 2, expansion, updatedAt, nodes }`. `expansion` is the
 `storedata.ENL.q` the layout was drawn for (0-6) and `updatedAt` is unix seconds. A **node** is

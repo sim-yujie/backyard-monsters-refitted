@@ -441,7 +441,9 @@ export class Save {
   @Property({ columnType: "jsonb", nullable: true })
   monsterupdate?: JsonObject | null = [];
 
-  @FrontendKey
+  // The Yard Planner's saved layouts (up to ~260 KB): never sent with a base
+  // load or save reply, owner included. Only the planner's own routes read them
+  // (`controllers/yardplanner`), Flash's `gettemplates` among them.
   @Property({ columnType: "jsonb", nullable: true })
   savetemplate: Opt<any[]> = [];
 

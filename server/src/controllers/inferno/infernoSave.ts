@@ -164,9 +164,6 @@ export const infernoSave: KoaController = async (ctx) => {
     const filteredSave = FilterFrontendKeys(baseSave);
     const credits = visibleCredits(user, userSave.credits);
 
-    // An attacker gets none of the owner's Yard Planner layouts (see buildSaveData).
-    if (!isOwner) filteredSave.savetemplate = [];
-
     ctx.status = Status.OK;
     ctx.body = {
       error: 0,
