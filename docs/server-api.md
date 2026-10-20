@@ -567,8 +567,9 @@ dealt against what it could have dealt, and the health it kept. `championsAfterL
 updates each one's `b` (weights) and `bs` (attack count and each Mode's running baseline) by the
 Mode the log flung it in, under the final lock, so once per attack. A defending champion has no
 lesson. `b` and `bs` are the server's alone: `ChampionSchema` drops both from every champion list
-a client sends, and the paths that write a sent list wholesale (owner saves, the Inferno) keep the
-stored brains (`withStoredBrains`).
+a client sends, and no path writes a sent list wholesale any more: an owner save ignores its
+`champion`, and an Inferno tribe attack takes only lower health for a flung champion, as Map Room 1
+and 2 do (`championsAfterAttack`).
 
 The loot is the final save's (issues #163, #165), and so is the replay: the same `battleReplayInput`
 (issue #23, C3), to the checkpoint's tick. The replay fights over the pool the attack load

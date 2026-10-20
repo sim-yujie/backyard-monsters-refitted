@@ -3,7 +3,7 @@ import { learnFromLesson, type ChampionLesson, type FlingLog } from "../../../ga
 import { ChampionListSchema } from "../../../schemas/ChampionSchema.js";
 import type { ChampionData } from "../../../schemas/ChampionSchema.js";
 import { championsAfterAttack } from "./attackerRow.js";
-import { championsAfterLessons, withStoredBrains } from "./championBrain.js";
+import { championsAfterLessons } from "./championBrain.js";
 
 /**
  * Where a champion's brain is updated after an attack lands (issue #219), and
@@ -107,12 +107,25 @@ describe("no client can send a brain (issue #219)", () => {
     expect(after[0]).toMatchObject({ hp: 200, b: stored[0]!.b, bs: { n: 3 } });
   });
 
-  test("a wholesale champion list keeps the stored brains, never the sent ones", () => {
-    const stored = [champion(1, { b: { tower: 10, loot: 0, finish: 0, focus: 0, threat: 0 }, bs: { n: 3 } })];
-    const sent = [{ ...champion(1, { hp: 5 }), ...forged }, { ...champion(2), ...forged }] as ChampionData[];
-    const kept = withStoredBrains(stored, sent);
-    expect(kept[0]).toMatchObject({ hp: 5, b: stored[0]!.b, bs: { n: 3 } });
-    expect(kept[1]).not.toHaveProperty("b");
-    expect(kept[1]).not.toHaveProperty("bs");
+});
+
+describe("no attacker's list can add or raise a champion", () => {
+  test("a Krallen the attacker does not own is ignored, flung or not", () => {
+    const stored = [champion(1)];
+    const sent = ChampionListSchema.parse(JSON.stringify([champion(1), champion(5, { l: 5, pl: 2 })]))!;
+    expect(championsAfterAttack(stored, sent, logFlinging({ t: 5 }))).toEqual(stored);
+    // Nor does a player with no champion at all get one.
+    expect(championsAfterAttack([], sent, logFlinging({ t: 5 }))).toEqual([]);
+  });
+
+  test("a level, power level, food bonus or status the list claims is never taken", () => {
+    const stored = [champion(5, { l: 1, pl: 0 }), champion(2, { status: 1, hp: 12_000 })];
+    const sent = ChampionListSchema.parse(
+      JSON.stringify([champion(5, { l: 5, pl: 2, fb: 3, hp: 900 }), champion(2, { status: 0, hp: 5 })])
+    )!;
+    const after = championsAfterAttack(stored, sent, logFlinging({ t: 5 }, { t: 2 }));
+    expect(after[0]).toEqual({ ...stored[0]!, hp: 900 });
+    // A frozen champion cannot have fought: it keeps its own health too.
+    expect(after[1]).toEqual(stored[1]!);
   });
 });

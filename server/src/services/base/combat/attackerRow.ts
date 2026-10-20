@@ -58,7 +58,10 @@ export const siegeAfterAttack = (
  * champion the log flung takes the health the save reports for it, when that
  * is lower (a death is 0). A champion the save leaves out, or reports at more
  * health than it had, or one the log never flung, keeps its stored health; a
- * champion the save names that the attacker does not own is ignored.
+ * champion the save names that the attacker does not own is ignored. Only
+ * health ever moves: no list adds a champion or changes its type, level,
+ * power level, food bonus or status, and a champion not out of the cage
+ * (a frozen or juiced one) cannot have fought, so keeps its own.
  *
  * @param stored - The attacker's `champion` as stored.
  * @param reported - The save's `attackerchampion`.
@@ -74,7 +77,7 @@ export const championsAfterAttack = (
   const flung = flungChampions(flinglog);
 
   return champions.map((champion) => {
-    if (!flung.has(champion.t)) return champion;
+    if (!flung.has(champion.t) || Number(champion.status ?? 0) !== 0) return champion;
     const match = reported.find((entry) => entry?.t === champion.t);
     const hp = Number(match?.hp);
     if (!match || !Number.isFinite(hp)) return champion;

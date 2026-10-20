@@ -59,26 +59,3 @@ export const championsAfterLessons = <T extends ChampionData>(
     return { ...champion, b: learned.brain, bs: learned.stats };
   });
 };
-
-/**
- * A champion list the client sent, written wholesale by a path that predates
- * the brain (an owner save, the Inferno), with each champion's brain kept
- * from the stored list by type. The client's list never carries one: the
- * schema drops `b` and `bs` (`ChampionSchema.ts`).
- *
- * @param stored - The champions as stored.
- * @param sent - The client's list, as parsed.
- */
-export const withStoredBrains = <T extends ChampionData>(
-  stored: readonly ChampionData[] | null | undefined,
-  sent: readonly T[]
-): T[] =>
-  sent.map((champion) => {
-    const { b: _b, bs: _bs, ...rest } = champion;
-    const kept = (stored ?? []).find((one) => one?.t === champion.t);
-    return {
-      ...rest,
-      ...(kept?.b && { b: kept.b }),
-      ...(kept?.bs && { bs: kept.bs }),
-    } as T;
-  });
