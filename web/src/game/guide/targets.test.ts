@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearCanvasTargets, findTarget, registerCanvasTarget, tutTarget, TutTarget } from "./targets";
+import {
+  clearCanvasTargets,
+  findTarget,
+  registerCanvasTarget,
+  TUT_FOLD_ATTRIBUTE,
+  tutTarget,
+  TutTarget,
+} from "./targets";
 
 /** Bob's targets: `data-tut` controls and canvas resolvers (issue #227). */
 
@@ -48,6 +55,26 @@ describe("findTarget", () => {
 
     expect(findTarget("build-card:21")?.element).toBe(shown);
     expect(findTarget("build-card:5")).toBeNull();
+  });
+
+  it("points at what opens a closed menu while the target is folded away in it (#381)", () => {
+    const menu = control(TutTarget.DOCK_MENU);
+    const sheet = document.createElement("div");
+    sheet.hidden = true;
+    sheet.setAttribute(TUT_FOLD_ATTRIBUTE, TutTarget.DOCK_MENU);
+    const map = control(TutTarget.DOCK_MAP, { left: 1, top: 2, width: 60, height: 60 });
+    sheet.append(map);
+    document.body.append(sheet);
+
+    expect(findTarget(TutTarget.DOCK_MAP)?.element).toBe(menu);
+
+    sheet.hidden = false;
+    expect(findTarget(TutTarget.DOCK_MAP)?.element).toBe(map);
+
+    // Nothing to open it with: not on screen.
+    sheet.hidden = true;
+    menu.remove();
+    expect(findTarget(TutTarget.DOCK_MAP)).toBeNull();
   });
 
   it("asks a canvas resolver, exact or by prefix with the parameter", () => {
