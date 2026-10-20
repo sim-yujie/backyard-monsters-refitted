@@ -1,5 +1,6 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
+  battleCounts,
   isPlayingNow,
   LIST_SORT_LABELS,
   ListSort,
@@ -10,7 +11,7 @@ import {
   type Mr1World,
 } from "@/game/maproom1/mr1Model";
 import { tribeInfo } from "@/game/maproom1/tribes";
-import { avatar, countdown } from "./TargetCard";
+import { avatar, battleIcons, countdown } from "./TargetCard";
 import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon } from "./icons";
 
@@ -174,17 +175,31 @@ export class Mr1ListView {
           row.dataset["key"] = neighbour.key;
           const line = rowLine(neighbour, now);
           const online = isPlayingNow(neighbour, now);
+          const battles = battleCounts(neighbour).map((count) => count.label);
           row.setAttribute(
             "aria-label",
-            `${neighbour.name}, level ${neighbour.level}${online ? ", online" : ""}, ${line.text}`,
+            [
+              neighbour.name,
+              `level ${neighbour.level}`,
+              online ? "online" : "",
+              line,
+              ...battles,
+            ]
+              .filter(Boolean)
+              .join(", "),
           );
           const words = el("span", "mr1-row__words");
           const top = el("span", "mr1-row__top");
           top.append(el("span", "mr1-row__name", neighbour.name));
           if (online) top.append(onlineDot());
           top.append(el("span", "chip mr1-chip--small", `Lv ${neighbour.level}`));
-          const second = el("span", `mr1-row__line mr1-row__line--${line.tone}`, line.text);
-          words.append(top, second);
+          words.append(top);
+          const icons = battleIcons(neighbour);
+          if (line || icons) {
+            const second = el("span", "mr1-row__line", line);
+            if (icons) second.append(icons);
+            words.append(second);
+          }
           row.append(
             avatar(neighbour, "sm"),
             words,

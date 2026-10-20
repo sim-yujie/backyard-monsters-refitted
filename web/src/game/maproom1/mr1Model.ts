@@ -332,14 +332,38 @@ export const presenceText = (neighbour: Mr1Neighbour, now: number): string => {
 
 const times = (count: number): string => (count === 1 ? "1 time" : `${count} times`);
 
-/** "Attacked you 2 times · you attacked 1", or "No battles yet". */
-export const battlesText = (neighbour: Mr1Neighbour): string => {
+/** One side of the battles with a neighbour, shown as an icon and a count. */
+export interface Mr1BattleCount {
+  /** `attackedYou` draws a shield, `youAttacked` a sword. */
+  readonly kind: "attackedYou" | "youAttacked";
+  readonly count: number;
+  /** The words for the tooltip and screen readers: "Attacked you 2 times". */
+  readonly label: string;
+}
+
+/**
+ * The battles with a neighbour for the shield and sword icons beside their
+ * "Last seen" line: only the sides above 0, and nothing at all (no "No
+ * battles yet") when they never fought.
+ */
+export const battleCounts = (neighbour: Mr1Neighbour): Mr1BattleCount[] => {
+  const counts: Mr1BattleCount[] = [];
   const { attacksFrom, attacksTo } = neighbour;
-  if (!attacksFrom && !attacksTo) return "No battles yet";
-  if (!attacksFrom) return `You attacked them ${times(attacksTo)}`;
-  return (
-    `Attacked you ${times(attacksFrom)}` + (attacksTo ? ` · you attacked ${attacksTo}` : "")
-  );
+  if (attacksFrom > 0) {
+    counts.push({
+      kind: "attackedYou",
+      count: attacksFrom,
+      label: `Attacked you ${times(attacksFrom)}`,
+    });
+  }
+  if (attacksTo > 0) {
+    counts.push({
+      kind: "youAttacked",
+      count: attacksTo,
+      label: `You attacked them ${times(attacksTo)}`,
+    });
+  }
+  return counts;
 };
 
 /** Seconds until a wrecked camp is back, or null when it is not wrecked. */
@@ -639,33 +663,20 @@ export const pageOf = <T>(
   return { items: items.slice(clamped * size, clamped * size + size), page: clamped, pages };
 };
 
-/** The short line under a neighbour's name in the list. */
-export const rowLine = (
-  neighbour: Mr1Neighbour,
-  now: number,
-): { text: string; tone: "warn" | "muted" } => {
+/**
+ * The short words under a neighbour's name in the list: why they can't be
+ * attacked, else "Last seen 3 h ago", else nothing. The battle counts sit
+ * beside it as icons (`battleCounts`).
+ */
+export const rowLine = (neighbour: Mr1Neighbour, now: number): string => {
   const reason = targetReason(neighbour, now);
-  if (reason?.key === ReasonKey.PLAYING)
-    return { text: "In their yard · can't attack", tone: "muted" };
+  if (reason?.key === ReasonKey.PLAYING) return "In their yard · can't attack";
   if (reason?.key === ReasonKey.NEW_PLAYER) {
     const left = neighbour.protectedUntil !== null ? neighbour.protectedUntil - now : 0;
-    return {
-      text: left > 0 ? `New player · protected ${formatSpan(left)}` : "New player · protected",
-      tone: "muted",
-    };
+    return left > 0 ? `New player · protected ${formatSpan(left)}` : "New player · protected";
   }
-  if (reason?.key === ReasonKey.DAMAGE_PROTECTION)
-    return { text: "Damage protection", tone: "muted" };
-  if (reason?.key === ReasonKey.UNDER_ATTACK)
-    return { text: "Under attack now", tone: "muted" };
-  if (reason?.key === ReasonKey.TRUCE) return { text: "Truce", tone: "muted" };
-  const seen = presenceText(neighbour, now);
-  if (neighbour.attacksFrom > neighbour.attacksTo) {
-    const attacked = `Attacked you ${neighbour.attacksFrom}×`;
-    return { text: seen ? `${attacked} · ${seen.toLowerCase()}` : attacked, tone: "warn" };
-  }
-  const battles = neighbour.attacksFrom + neighbour.attacksTo;
-  const count = battles === 1 ? "1 battle" : battles ? `${battles} battles` : "no battles yet";
-  if (seen) return { text: `${seen} · ${count}`, tone: "muted" };
-  return { text: count.charAt(0).toUpperCase() + count.slice(1), tone: "muted" };
+  if (reason?.key === ReasonKey.DAMAGE_PROTECTION) return "Damage protection";
+  if (reason?.key === ReasonKey.UNDER_ATTACK) return "Under attack now";
+  if (reason?.key === ReasonKey.TRUCE) return "Truce";
+  return presenceText(neighbour, now);
 };
