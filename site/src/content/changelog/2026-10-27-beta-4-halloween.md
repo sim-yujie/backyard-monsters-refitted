@@ -13,6 +13,7 @@ date: 2026-10-27
 
 - **Events page.** The new Events button on your yard shows what's on now, what's coming next, the daily login calendar and the prizes you can claim. A badge shows when a treat is waiting.
 - **What's new cards.** After an update, picture cards show you what changed. Open them again any time from the Account menu.
+- **Krallen Hunt.** Every month from the 15th to the end of the month (the first is 15 to 30 November), take 100 million loot in attacks to win the champion Krallen, or raise yours one level, up to level 5. Raids on players, wild monster camps and tribes all count. For Town Hall 6 and up; you have a week after the hunt ends to claim your prize.
 - **Free speed-ups.** Some treats are free speed-ups. They show up in the building panel as "Free (n left)" when you speed up a building.
 - **Champions hatch from eggs.** Raising a champion now gives you an egg that hatches one day later. Nothing speeds an egg up. Changed your mind? Cancel the egg and pick again (the new egg takes a full day too).
 - **Monsters on the move.** 15 monsters have brand-new walk and attack animations: Crabatron scuttles, Fang creeps, Eye-ra slithers, Bolt crawls, D.A.V.E. rolls on its treads, and lots more.

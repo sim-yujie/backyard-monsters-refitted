@@ -3,7 +3,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 
 import type { User } from "../../database/models/user.model.js";
-import type { EventDefinition } from "../../game-data/events/events.js";
+import { KRALLEN_HUNT_GOAL, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { eventsActions } from "./eventsActions.js";
 import { yardSpeedupAction } from "./speedup.js";
@@ -239,5 +239,99 @@ describe("POST /bm/yard/speedup with free speed-ups", () => {
 
     expect(answer.body.report).toMatchObject({ item: "SP3", credits: 40 });
     expect(db.row!.credits).toBe(60);
+  });
+});
+
+describe("the Krallen Hunt's reward through the ladder claim", () => {
+  const JANUARY = krallenHunt(2030, 1);
+  const FEBRUARY = krallenHunt(2030, 2);
+  const JAN_START = Date.UTC(2030, 0, 15) / 1000;
+  const JAN_END = Date.UTC(2030, 1, 1) / 1000;
+  const FEB_START = Date.UTC(2030, 1, 15) / 1000;
+
+  /** A feed time still ahead, so the yard's catch-up starves nobody. */
+  const FED = JAN_START + 20 * DAY;
+  const krallenOf = () => (db.row!.champion as Row[]).find((one) => one.t === 5);
+  const win = (event: EventDefinition) => store.addToCounter(em as never, 2, event.id, KRALLEN_HUNT_GOAL);
+  const claimHunt = (event: EventDefinition) => call(actions.ladderClaim, { event: event.id, tier: 0 });
+
+  beforeEach(() => {
+    actions = eventsActions(store, [JANUARY, FEBRUARY]);
+    at(JAN_START + 3 * DAY);
+  });
+
+  test("short of the goal the claim is refused and pays nothing", async () => {
+    await store.addToCounter(em as never, 2, JANUARY.id, KRALLEN_HUNT_GOAL - 1);
+    expect(await claimHunt(JANUARY)).toMatchObject({
+      status: 409,
+      body: { reason: "tierLocked", have: KRALLEN_HUNT_GOAL - 1, need: KRALLEN_HUNT_GOAL },
+    });
+    expect(krallenOf()).toBeUndefined();
+  });
+
+  test("the first win is a level 1 Krallen beside the cage, full health and fed; a second claim is refused", async () => {
+    await win(JANUARY);
+    const answer = await claimHunt(JANUARY);
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallen", level: 1, raised: true }] });
+    expect(krallenOf()).toEqual({ t: 5, hp: 50_000, l: 1, ft: JAN_START + 3 * DAY + 82_800, fd: 0, fb: 0, pl: 0, status: 0 });
+    expect(await claimHunt(JANUARY)).toMatchObject({ status: 409, body: { reason: "tierClaimed" } });
+    expect(krallenOf()).toMatchObject({ l: 1 });
+  });
+
+  test("each later month's win is one level more", async () => {
+    await win(JANUARY);
+    await claimHunt(JANUARY);
+    at(FEB_START + DAY);
+    await win(FEBRUARY);
+    const answer = await claimHunt(FEBRUARY);
+
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallen", level: 2, raised: true }] });
+    expect(krallenOf()).toMatchObject({ l: 2, hp: 52_000, fd: 0 });
+  });
+
+  test("at level 5 a win pays nothing more, and she stays as she is", async () => {
+    const top = { t: 5, hp: 40_000, l: 5, ft: FED, fd: 4, fb: 0, pl: 2, status: 0, nm: "Kral" };
+    db.row = rowOf({ champion: [top] });
+    await win(JANUARY);
+    const answer = await claimHunt(JANUARY);
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallen", level: 5, raised: false }] });
+    expect(krallenOf()).toEqual(top);
+  });
+
+  test("an old save's Krallen (the Flash client's string list) counts as hers and goes up a level", async () => {
+    const gorgo = { t: 1, hp: 4000, l: 3, ft: FED, fd: 1, fb: 0, pl: 0, status: 0 };
+    const old = { t: 5, hp: 100, l: 3, ft: FED, fd: 2, fb: 0, pl: 2, status: 0, nm: "Old" };
+    db.row = rowOf({ champion: JSON.stringify([gorgo, old]) });
+    await win(JANUARY);
+    await claimHunt(JANUARY);
+
+    expect(db.row!.champion).toEqual([gorgo, { ...old, l: 4, hp: 58_000, fd: 0, ft: JAN_START + 3 * DAY + 82_800 }]);
+  });
+
+  test("a frozen Krallen goes up a level and stays frozen, her feed clock stopped", async () => {
+    const frozen = { t: 5, hp: 54_000, l: 3, ft: 5_000, fd: 0, fb: 0, pl: 0, status: 1 };
+    db.row = rowOf({ champion: [frozen] });
+    await win(JANUARY);
+    await claimHunt(JANUARY);
+
+    expect(krallenOf()).toEqual({ ...frozen, l: 4, hp: 58_000 });
+  });
+
+  test("a goal reached in time can be claimed for 7 days after the month, not after", async () => {
+    await win(JANUARY);
+    at(JAN_END + 7 * DAY - 1);
+    expect((await claimHunt(JANUARY)).status).toBe(200);
+
+    db.row = rowOf();
+    store = memoryProgressStore();
+    actions = eventsActions(store, [JANUARY, FEBRUARY]);
+    await win(JANUARY);
+    at(JAN_END + 7 * DAY);
+    expect(await claimHunt(JANUARY)).toMatchObject({ status: 409, body: { reason: "eventNotActive" } });
+    expect(krallenOf()).toBeUndefined();
   });
 });
