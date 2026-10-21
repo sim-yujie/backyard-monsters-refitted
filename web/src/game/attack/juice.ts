@@ -196,7 +196,10 @@ export const bigLabelPose = (
   const t = Math.max(0, Math.min(1, age / BIG_LABEL_TICKS));
   // A ballistic hop: up fast, slowing at the top.
   const rise = (1 - (1 - t) ** 3) * BIG_LABEL_RISE;
-  const pop = age < 10 ? 1.9 - 0.9 * (age / 10) + Math.sin((age / 10) * Math.PI) * 0.25 : 1;
+  const pop =
+    age < BIG_LABEL_POP_TICKS
+      ? BIG_LABEL_POP_SCALE - 0.9 * (age / BIG_LABEL_POP_TICKS) + Math.sin((age / BIG_LABEL_POP_TICKS) * Math.PI) * 0.25
+      : 1;
   const kick =
     sinceMerge !== null && sinceMerge >= 0 && sinceMerge < BIG_LABEL_KICK_TICKS
       ? 1 + 0.3 * (1 - sinceMerge / BIG_LABEL_KICK_TICKS)
@@ -240,12 +243,29 @@ export const bigLabelPlan = (newestAge: number | null, alive: number): BigLabelP
 export const bigLabelSide = (taken: readonly number[]): number =>
   [0, 1, -1].find((side) => !taken.includes(side)) ?? 0;
 
+/** About how wide a number of `digits` is at `size`, screen px, outline and all. */
+export const bigLabelWidth = (digits: number, size: number): number => digits * size * 0.62 + 6;
+
+/** Ticks a new number takes to pop in, at up to {@link BIG_LABEL_POP_SCALE} its size. */
+export const BIG_LABEL_POP_TICKS = 10;
+export const BIG_LABEL_POP_SCALE = 1.9;
+
+/** How much bigger than at rest a number of `age` ticks may be drawn: popping in, or swelling with a merged hit. */
+export const bigLabelReach = (age: number): number =>
+  age < BIG_LABEL_POP_TICKS ? BIG_LABEL_POP_SCALE : 1.3;
+
 /**
- * Screen px a number on `side` sits from the middle: a whole number's width
- * at `size`, plus a gap, so neighbours clear each other even mid-pop.
+ * Screen px a number `width` wide sits from the middle on `side`, next to a
+ * `neighbour` that wide: far enough that each clears the other at the most
+ * either may swell to (`reach` and `neighbourReach`, from {@link bigLabelReach}).
  */
-export const bigLabelSpread = (side: number, digits: number, size: number): number =>
-  side * Math.round(digits * size * 0.62 + 12);
+export const bigLabelSpread = (
+  side: number,
+  width: number,
+  neighbour: number,
+  reach = BIG_LABEL_POP_SCALE,
+  neighbourReach = 1.3,
+): number => (side === 0 ? 0 : side * Math.round((neighbour * neighbourReach + width * reach) / 2 + 4));
 
 /* ── Hit-stop and slow motion ───────────────────────────────────────────── */
 

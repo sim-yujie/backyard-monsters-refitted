@@ -177,6 +177,16 @@ describe("a building falling (bigger attack effects)", () => {
     expect(fx.shakeAmp).toBe(0);
   });
 
+  it("does not shake under Reduce effects, and throws fewer bits", () => {
+    const air = new Container();
+    const reduced = new BlastFx({ air, ground: () => new Container(), shake: () => {} }, false, MAX_SHAKE, true);
+    reduced.demolish(10, { x: 0, y: 0 }, 80);
+    expect(reduced.shakeAmp).toBe(0);
+    const { fx } = fxOf();
+    fx.demolish(10, { x: 0, y: 0 }, 80);
+    expect(reduced.bitCount).toBeLessThan(fx.bitCount);
+  });
+
   it("keeps to the flash and the fireball for a viewer who asked for less motion", () => {
     const { fx } = fxOf(true);
     fx.demolish(10, { x: 0, y: 0 }, 80);

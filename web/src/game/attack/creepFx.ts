@@ -6,9 +6,11 @@ import {
   BIG_LABEL_TICKS,
   bigLabelPlan,
   bigLabelPose,
+  bigLabelReach,
   bigLabelSide,
   bigLabelSize,
   bigLabelSpread,
+  bigLabelWidth,
 } from "./juice";
 import { directionColumn } from "./monsterSprites";
 
@@ -520,22 +522,46 @@ export class CreepFx {
     const plan = bigLabelPlan(newest ? tick - newest.bornTick : null, alive.length);
     if (plan === "drop") return;
     if (plan === "merge" && newest) {
+      // The sum counts up; its type stays the size its first hit set.
       newest.amount += heal ? shown : -shown;
       const total = Math.abs(newest.amount);
       newest.mergedTick = tick;
-      newest.size = bigLabelSize(total);
-      newest.text.style.fontSize = newest.size;
       newest.text.text = heal ? `+${total}` : String(total);
+      this.spreadOut(alive, tick);
       return;
     }
     const label = this.acquireLabel();
     if (!label) return;
     label.size = bigLabelSize(shown);
     label.side = bigLabelSide(alive.map((other) => other.side));
-    label.shiftX = bigLabelSpread(label.side, String(shown).length, label.size);
     label.drift = label.side * BIG_LABEL_DRIFT;
     this.showLabel(label, tick, key, follow, shown, at, kind);
-    this.labelsByKey.set(key, [...alive, label]);
+    const all = [...alive, label];
+    this.spreadOut(all, tick);
+    label.text.position.set(Math.round(at.x + label.shiftX), Math.round(at.y));
+    this.labelsByKey.set(key, all);
+  }
+
+  /**
+   * Sets each side number of one target clear of the middle one (or, with
+   * the middle empty, of the widest other), as wide as each is now and as big
+   * as each may still swell: a sum that gains a digit pushes itself out.
+   */
+  private spreadOut(labels: readonly Label[], tick: number): void {
+    const width = (label: Label): number => bigLabelWidth(String(Math.abs(label.amount)).length, label.size);
+    const reach = (label: Label): number => bigLabelReach(tick - label.bornTick);
+    const middle = labels.find((label) => label.side === 0);
+    for (const label of labels) {
+      if (label.side === 0) {
+        label.shiftX = 0;
+        continue;
+      }
+      const others = labels.filter((other) => other !== label);
+      const next = middle ?? others.reduce<Label | null>((widest, other) => (!widest || width(other) > width(widest) ? other : widest), null);
+      label.shiftX = next
+        ? bigLabelSpread(label.side, width(label), width(next), reach(label), reach(next))
+        : 0;
+    }
   }
 
   private showLabel(label: Label, tick: number, key: string, follow: number, shown: number, at: Point, kind: NumberKind): void {

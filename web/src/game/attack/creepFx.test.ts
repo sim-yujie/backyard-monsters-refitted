@@ -593,6 +593,24 @@ describe("big numbers on a busy building (bigger attack effects)", () => {
     fx.destroy();
   });
 
+  it("moves a side number further out as its sum gains digits", () => {
+    const fx = new CreepFx(hostOf(), false, true);
+    fx.number(0, "building:6", -1, 40, AT, "damage");
+    fx.number(BIG_LABEL_MERGE_TICKS, "building:6", -1, 40, AT, "damage");
+    fx.update(BIG_LABEL_MERGE_TICKS);
+    const before = fx.labelsFor("building:6")[1]?.x ?? 0;
+    for (let index = 1; index <= 5; index += 1) {
+      fx.number(BIG_LABEL_MERGE_TICKS + index, "building:6", -1, 40, AT, "damage");
+    }
+    fx.update(BIG_LABEL_MERGE_TICKS + 5);
+    const [middle, right] = fx.labelsFor("building:6");
+    expect(middle?.amount).toBe(-40);
+    expect(right?.amount).toBe(-240);
+    // Well past the little it drifted in those five ticks.
+    expect(right?.x ?? 0).toBeGreaterThan(before + 5);
+    fx.destroy();
+  });
+
   it("keeps healing and damage on a creep apart", () => {
     const fx = new CreepFx(hostOf(), false, true);
     fx.number(0, "creep:3", -1, 12, AT, "damage");

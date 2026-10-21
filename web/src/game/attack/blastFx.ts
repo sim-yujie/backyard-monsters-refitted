@@ -430,7 +430,8 @@ export class BlastFx {
         colours: [tone > 0.5 ? 0x6b5a48 : 0x8a7a66, 0x4a4038],
       });
     }
-    if (!this.reducedMotion && !small) {
+    // "Reduce effects" keeps the fall's shake out, as it keeps the hit-stop.
+    if (!this.reducedMotion && !this.fewer && !small) {
       this.startShake({ born: tick, life: 22, amp: Math.min(this.maxShake, 7 * Math.min(2, scale)) });
     }
   }

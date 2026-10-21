@@ -3,6 +3,8 @@ import {
   BIG_LABEL_LATE_MERGE_TICKS,
   BIG_LABEL_MERGE_TICKS,
   BIG_LABEL_PER_TARGET,
+  BIG_LABEL_POP_SCALE,
+  BIG_LABEL_POP_TICKS,
   BIG_LABEL_TICKS,
   BIG_LUNGE_PX,
   SLOW_MO_EASE_SECONDS,
@@ -10,9 +12,11 @@ import {
   SLOW_MO_SECONDS,
   bigLabelPlan,
   bigLabelPose,
+  bigLabelReach,
   bigLabelSide,
   bigLabelSize,
   bigLabelSpread,
+  bigLabelWidth,
   bigLungeOffset,
   nextSwingGap,
   reduceEffects,
@@ -122,13 +126,18 @@ describe("many hits on one target", () => {
     expect(bigLabelSide([1, -1])).toBe(0);
   });
 
-  it("spreads the places by a whole number's width, wider for longer and bigger", () => {
-    expect(bigLabelSpread(0, 3, 20)).toBe(0);
-    expect(bigLabelSpread(1, 2, 20)).toBe(-bigLabelSpread(-1, 2, 20));
-    expect(bigLabelSpread(1, 3, 20)).toBeGreaterThan(bigLabelSpread(1, 2, 20));
-    expect(bigLabelSpread(1, 2, 26)).toBeGreaterThan(bigLabelSpread(1, 2, 20));
-    // Clears the neighbour's half and this one's half, at rest.
-    expect(bigLabelSpread(1, 2, 20)).toBeGreaterThanOrEqual(2 * 20 * 0.6);
+  it("spreads the places so a popping number clears its swelling neighbour", () => {
+    const width = bigLabelWidth(2, 20);
+    expect(bigLabelSpread(0, width, width)).toBe(0);
+    expect(bigLabelSpread(1, width, width)).toBe(-bigLabelSpread(-1, width, width));
+    expect(bigLabelSpread(1, bigLabelWidth(3, 20), width)).toBeGreaterThan(bigLabelSpread(1, width, width));
+    expect(bigLabelSpread(1, width, bigLabelWidth(4, 26))).toBeGreaterThan(bigLabelSpread(1, width, width));
+    // Half of each, at their biggest: this one popping, the other swelling.
+    expect(bigLabelSpread(1, width, width)).toBeGreaterThanOrEqual((width * 1.9 + width * 1.3) / 2);
+    expect(bigLabelWidth(3, 20)).toBeGreaterThan(bigLabelWidth(2, 20));
+    // Once it has popped in it needs less room.
+    expect(bigLabelSpread(1, width, width, bigLabelReach(BIG_LABEL_POP_TICKS))).toBeLessThan(bigLabelSpread(1, width, width));
+    expect(bigLabelReach(0)).toBe(BIG_LABEL_POP_SCALE);
   });
 
   it("grows the type with the sum, up to a cap", () => {
