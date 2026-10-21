@@ -73,6 +73,7 @@ describe("ShopScreen", () => {
 
     expect([...element.querySelectorAll(".shop-section__title")].map((one) => one.textContent)).toEqual([
       "Building",
+      "Walls",
       "Storage and production",
       "Monsters",
       "Battle boosts",
@@ -83,7 +84,7 @@ describe("ShopScreen", () => {
       [...element.querySelectorAll<HTMLElement>(".shop-card:not(.shop-card--later)")].map(
         (one) => one.dataset["item"],
       ),
-    ).toEqual(["BEW", "BST", "BIP", "ENL", "POD", "CLOD", "HOD", "HOD2", "HOD3", "EXH", "TOD", "MOD", "MDOD", "MSOD", "PRO1", "PRO2", "PRO3"]);
+    ).toEqual(["BEW", "BST", "BLK2", "BLK3", "BLK4", "BLK5", "BIP", "ENL", "POD", "CLOD", "HOD", "HOD2", "HOD3", "EXH", "TOD", "MOD", "MDOD", "MSOD", "PRO1", "PRO2", "PRO3"]);
     expect(card("BEW")!.querySelector(".shop-card__meta")!.textContent).toBe("1 of 4 bought");
     expect(button("BEW").getAttribute("aria-label")).toBe("Buy Extra Worker, 500 Shiny");
     expect(card("BST")!.querySelector(".shop-card__meta")!.textContent).toBe("Lasts 7 days");
@@ -188,7 +189,7 @@ describe("ShopScreen", () => {
       [...element.querySelectorAll<HTMLElement>(".shop-card:not(.shop-card--later)")].map(
         (one) => one.dataset["item"],
       ),
-    ).toEqual(["BST", "POD", "HOD", "HOD2", "HOD3", "EXH", "TOD"]);
+    ).toEqual(["BST", "BLK2", "BLK3", "BLK4", "BLK5", "POD", "HOD", "HOD2", "HOD3", "EXH", "TOD"]);
     expect(element.querySelector('[data-section="protection"]')).toBeNull();
     expect(element.querySelector('[data-section="boosts"] .shop-section__note')!.textContent).toBe(
       "Tower Overdrive works when this outpost is attacked. Buying it again restarts it; time left is not added.",
@@ -237,14 +238,60 @@ describe("ShopScreen", () => {
     const { element } = setup();
     const later = [...element.querySelectorAll<HTMLElement>(".shop-card--later")];
 
-    expect(later.map((one) => one.querySelector(".shop-card__name")!.textContent)).toEqual([
-      "Wall Upgrades",
-      "Shiny Decorations",
-    ]);
+    expect(later.map((one) => one.querySelector(".shop-card__name")!.textContent)).toEqual(["Shiny Decorations"]);
     for (const one of later) {
       expect(one.querySelector("button")).toBeNull();
       expect(one.querySelector(".shop-card__meta")!.textContent).toBe("Coming later");
     }
+  });
+
+  it("sells the wall upgrades under Walls, priced from the yard's Blocks", async () => {
+    const { store, element, card, button } = setup({
+      buildingdata: {
+        "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 },
+        "1": { id: 1, t: 17, X: 100, Y: 100, l: 1 },
+        "2": { id: 2, t: 17, X: 110, Y: 100, l: 2 },
+      },
+    });
+
+    expect(element.querySelector('[data-section="walls"] .shop-section__note')!.textContent).toContain(
+      "3 Shiny to reach stone",
+    );
+    // Stone: only the level-1 Block, 3 Shiny.
+    expect(card("BLK2")!.querySelector(".shop-card__meta")!.textContent).toBe("1 Block to raise");
+    expect(button("BLK2").getAttribute("aria-label")).toBe("Buy Stone Blocks, 3 Shiny");
+    // Metal: 3 + 6 for the first, 6 for the second; Town Hall 3 is short of 4.
+    expect(card("BLK3")!.querySelector(".shop-card__meta")!.textContent).toBe("2 Blocks to raise");
+    expect(button("BLK3").disabled).toBe(true);
+    expect(card("BLK3")!.querySelector(".shop-card__gate")!.textContent).toBe("Needs Town Hall level 4.");
+
+    const buy = vi.spyOn(store, "buy").mockImplementation(
+      (): Promise<YardActionResult<ShopBuyReport>> =>
+        Promise.resolve({
+          ok: true,
+          report: { item: "BLK2", credits: 3, q: 0, endsAt: null, tier: 2, blocks: 1, points: 10 },
+          completed: [],
+        }),
+    );
+    button("BLK2").click();
+    button("BLK2").click();
+    expect(buy).toHaveBeenCalledWith("BLK2");
+    await settle();
+    expect(spokenText(element.querySelector(".shop-status")!)).toBe("Stone Blocks: 1 Block raised, Shiny 3 spent.");
+  });
+
+  it("hides a wall upgrade's button once every Block has reached it", () => {
+    const { card, button } = setup({
+      buildingdata: { "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 }, "1": { id: 1, t: 17, X: 100, Y: 100, l: 3 } },
+    });
+
+    expect(card("BLK2")!.dataset["state"]).toBe("reached");
+    expect(card("BLK2")!.querySelector(".shop-card__meta")!.textContent).toBe(
+      "Already reached: every Block is stone or better.",
+    );
+    expect(button("BLK2").hidden).toBe(true);
+    expect(button("BLK3").hidden).toBe(true);
+    expect(button("BLK4").hidden).toBe(false);
   });
 
   it("offers Repair everything now while something is damaged, through repair/instant", async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
-import { SHOP_ITEMS, shopItemsFor, shopModel, type ShopOffer } from "./shop";
+import { SHOP_ITEMS, shopItemsFor, shopModel, wallOffers, type ShopOffer } from "./shop";
 import { YardStore } from "./YardStore";
 
 /**
@@ -124,5 +124,60 @@ describe("shopModel", () => {
     const repair = shopModel(damaged).repair;
     expect(repair).toMatchObject({ count: 1, blocked: null });
     expect(repair!.price).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("wallOffers", () => {
+  const blocks = (hall: number, levels: (number | { t?: number; l?: number; cB?: number })[]) => ({
+    buildingdata: {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: hall },
+      ...Object.fromEntries(
+        levels.map((one, i) => [
+          String(10 + i),
+          { id: 10 + i, t: 17, X: i * 20, Y: 0, ...(typeof one === "number" ? { l: one } : one) },
+        ]),
+      ),
+    },
+  });
+
+  it("prices every Block below the tier, 3 / 6 / 10 / 15 per level climbed", () => {
+    const [stone, metal, gold, black] = wallOffers(storeOf({ ...blocks(6, [1, 2, 3, 4, 5]), credits: 10_000 }));
+
+    expect(stone).toMatchObject({ blocks: 1, state: { kind: "buy", price: 3, blocked: null } });
+    expect(metal).toMatchObject({ blocks: 2, state: { kind: "buy", price: 9 + 6 } });
+    // A level-1 Block to gold is 19.
+    expect(gold).toMatchObject({ blocks: 3, state: { kind: "buy", price: 19 + 16 + 10 } });
+    expect(black).toMatchObject({ blocks: 4, state: { kind: "buy", price: 34 + 31 + 25 + 15 } });
+  });
+
+  it("counts a Block being built as level 1 and a legacy Stone row as level 2", () => {
+    const [stone, metal] = wallOffers(storeOf(blocks(6, [{ l: 1, cB: 50 }, { t: 18, l: 1 }])));
+
+    expect(stone).toMatchObject({ blocks: 1, state: { kind: "buy", price: 3 } });
+    expect(metal).toMatchObject({ blocks: 2, state: { kind: "buy", price: 9 + 6 } });
+  });
+
+  it("gates each tier on its Town Hall level in the main yard, then on Shiny", () => {
+    const [stone, metal] = wallOffers(storeOf({ ...blocks(3, [1]), credits: 2 }));
+    expect(stone!.state).toMatchObject({ blocked: "Not enough Shiny." });
+    expect(metal!.state).toMatchObject({ blocked: "Needs Town Hall level 4." });
+  });
+
+  it("says when every Block has reached a tier, or there are none", () => {
+    expect(wallOffers(storeOf(blocks(6, [3, 4])))[1]!.state).toEqual({ kind: "reached" });
+    expect(wallOffers(storeOf(blocks(6, [])))[0]!.state).toEqual({ kind: "none" });
+  });
+
+  it("an outpost has no Town Hall gate", () => {
+    const outpost = storeOf(
+      {
+        buildingdata: {
+          "1": { id: 1, t: 112, X: 0, Y: 0, l: 1 },
+          "2": { id: 2, t: 17, X: 50, Y: 50, l: 1 },
+        },
+      },
+      "outpost",
+    );
+    expect(wallOffers(outpost)[3]).toMatchObject({ blocks: 1, state: { kind: "buy", price: 34, blocked: null } });
   });
 });

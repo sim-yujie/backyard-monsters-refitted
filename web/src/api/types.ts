@@ -1564,4 +1564,8 @@ export interface ShopBuyReport {
   q: number;
   /** The buff's expiry, unix seconds, for a timed item (`BST`); null for a permanent one (`BEW`). */
   endsAt: number | null;
+  /** Wall upgrades (`BLK2`..`BLK5`) only: the tier, how many Blocks it raised, the points they earned. */
+  tier?: number;
+  blocks?: number;
+  points?: number;
 }
