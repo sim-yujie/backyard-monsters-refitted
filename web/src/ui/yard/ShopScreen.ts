@@ -348,7 +348,7 @@ export class ShopScreen {
     const card = this.card(
       tier.item,
       tier.name,
-      `Every Block below ${tier.material} becomes ${tier.material} at once, healed to full.`,
+      `Every lower Block becomes ${tier.material}, healed to full.`,
       "Buy",
       () => void this.buy(tier.item, tier.name),
       true,
