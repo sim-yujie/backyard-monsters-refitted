@@ -536,6 +536,23 @@ describe("routes Flash refuses in an outpost", () => {
     expect((mainSave().storedata as Row).TOD).toBeUndefined();
     expect(mainSave().credits).toBe(400);
   });
+
+  test("an outpost sells the wall upgrades with no core gate, raising only its own Blocks", async () => {
+    db.rows.set(
+      OUTPOST,
+      outpostRow({
+        buildingdata: { ...buildings(outpostRow()), "4": { id: 4, t: 17, X: 50, Y: 50, l: 1 } },
+      }),
+    );
+    const before = mainSave().buildingdata;
+    const answer = await onOutpost(yardShopBuyAction, { item: "BLK5" });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ credits: 34, blocks: 1, tier: 5 });
+    expect(buildings(outpostSave())["4"]).toMatchObject({ t: 17, l: 5 });
+    expect(mainSave().buildingdata).toEqual(before);
+    expect(mainSave().credits).toBe(1000 - 34);
+  });
 });
 
 describe("fortify", () => {

@@ -9,6 +9,7 @@ import {
   shopModel,
   type RepairAllOffer,
   type ShopOffer,
+  type WallOffer,
 } from "@/game/yard/shop";
 import type { YardKind } from "@/game/yard/buildingCostData";
 import { actionKey, YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
@@ -28,7 +29,8 @@ import "@/ui/styles/shop.css";
  * {@link ShinyButton} with the next price (tap, then tap again). An item that
  * cannot be bought now says why under the button. While something is damaged
  * a Repairs card offers Repair everything now (`FIX`, the `repair/instant`
- * route). Docked like the Monsters screen and, like it, not a modal and open
+ * route). Under Building, a Walls section sells the four wall upgrades,
+ * priced from the yard's Blocks. Docked like the Monsters screen and, like it, not a modal and open
  * after every purchase.
  *
  * What the rows say comes from `game/yard/shop.ts`; the server prices and
@@ -85,6 +87,18 @@ export const boostsNote = (kind: YardKind): string =>
   kind === "outpost"
     ? "Tower Overdrive works when this outpost is attacked. Buying it again restarts it; time left is not added."
     : "Monster boosts work in your attacks and when your yard is attacked. Buying one again restarts it; time left is not added.";
+
+/** The line under the Walls heading: how the price adds up. */
+export const WALLS_NOTE =
+  "Each Block costs 3 Shiny to reach stone, then 6 more for metal, 10 more for gold and 15 more for black diamond. Blocks still being built or upgraded are finished.";
+
+/** The line under a wall upgrade's blurb. */
+export const wallMeta = (offer: WallOffer): string => {
+  const { tier, blocks, state } = offer;
+  if (state.kind === "none") return "No Blocks in this yard yet.";
+  if (state.kind === "reached") return `Already reached: every Block is ${tier.material} or better.`;
+  return `${formatAmount(blocks)} ${blocks === 1 ? "Block" : "Blocks"} to raise`;
+};
 
 /** The line under the Protection heading: how long the yard is still protected. */
 export const protectionText = (until: number | null, now: number): string =>
@@ -237,6 +251,9 @@ export class ShopScreen {
               : null,
         ),
       );
+      if (section === ShopSection.BUILDING) {
+        sections.push(this.section("walls", "Walls", model.walls.map((offer) => this.wallCard(offer)), WALLS_NOTE));
+      }
     }
     if (model.repair) sections.push(this.section("repairs", "Repairs", [this.repairCard(model.repair)]));
     this.comingLater ??= this.section(
@@ -321,6 +338,32 @@ export class ShopScreen {
     } else {
       card.button.element.hidden = true;
       card.button.setBlocked(state.kind === "running" ? "Already running." : "Sold out.");
+      card.gate.hidden = true;
+    }
+    return card.element;
+  }
+
+  private wallCard(offer: WallOffer): HTMLElement {
+    const { tier, state } = offer;
+    const card = this.card(
+      tier.item,
+      tier.name,
+      `Every lower Block becomes ${tier.material}, healed to full.`,
+      "Buy",
+      () => void this.buy(tier.item, tier.name),
+      true,
+    );
+    card.meta.textContent = wallMeta(offer);
+    card.element.dataset["state"] = state.kind;
+    if (state.kind === "buy") {
+      card.button.element.hidden = false;
+      card.button.setPrice(state.price);
+      card.button.setBlocked(state.blocked);
+      card.gate.textContent = state.blocked ?? "";
+      card.gate.hidden = state.blocked === null;
+    } else {
+      card.button.element.hidden = true;
+      card.button.setBlocked(state.kind === "reached" ? "Already reached." : "No Blocks yet.");
       card.gate.hidden = true;
     }
     return card.element;
@@ -421,7 +464,10 @@ export class ShopScreen {
     const result = await this.binding.store.buy(item);
     if (this.destroyed) return;
     if (result.ok) {
-      this.setStatus("good", [`${name} bought: `, resourceAmount("shiny", result.report.credits), " spent."]);
+      const blocks = result.report.blocks;
+      const what =
+        blocks === undefined ? `${name} bought: ` : `${name}: ${formatAmount(blocks)} ${blocks === 1 ? "Block" : "Blocks"} raised, `;
+      this.setStatus("good", [what, resourceAmount("shiny", result.report.credits), " spent."]);
     } else {
       this.setStatus("bad", [refusalText(result.refusal)]);
     }

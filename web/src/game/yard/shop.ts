@@ -1,6 +1,7 @@
 import type { StoreData } from "@/api/types";
 import { overdriveBlocked, runningUnlock, type LockerContext } from "@/game/monsters/lockerModel";
 import type { YardKind } from "./buildingCostData";
+import { townHallLevel } from "./buildingCosts";
 import { damagedAt, repairNowPrice } from "./repair";
 import type { YardStoreReader } from "./YardStore";
 
@@ -12,7 +13,8 @@ import type { YardStoreReader } from "./YardStore";
  * (`server/src/game-data/store/storeItems.ts`); `shop/buy` always charges
  * its own. The one exception is Repair everything now (`FIX`), which is not a
  * store row but the `repair/instant` route, priced from the damage
- * (`repair.ts` `repairNowPrice`).
+ * (`repair.ts` `repairNowPrice`). The wall upgrades (`BLK2`..`BLK5`) are
+ * priced from the yard's Blocks as the server prices them ({@link wallOffers}).
  *
  * Pure: {@link shopModel} reads a store and returns rows; the screen
  * (`ui/yard/ShopScreen.ts`) draws them.
@@ -253,16 +255,55 @@ export interface ComingLaterItem {
 /**
  * What the original sold that is held back until its effect is modelled
  * (§8.2). Listed, never sold: `shop/buy` refuses every one of them. The four
- * battle boosts were here until beta.4.
+ * battle boosts and the wall upgrades were here until beta.4.
  */
 export const COMING_LATER: readonly ComingLaterItem[] = [
-  {
-    items: ["BLK2", "BLK3", "BLK4", "BLK5"],
-    name: "Wall Upgrades",
-    blurb: "Every wall block to stone, metal, gold or black diamond at once.",
-  },
   { items: ["BUILDING28"], name: "Shiny Decorations", blurb: "Decorations bought with Shiny." },
 ];
+
+/** One wall upgrade: every Block below `tier` raised to it (`server/src/services/yard/wallBlocks.ts`). */
+export interface WallTier {
+  readonly item: string;
+  readonly tier: number;
+  readonly name: string;
+  /** "stone", "metal", … for the lines on the card. */
+  readonly material: string;
+  /** The Town Hall level it needs in the main yard (`client/scripts/STORE.as:1674-1690`); outposts have no gate. */
+  readonly townHall: number;
+}
+
+export const WALL_TIERS: readonly WallTier[] = [
+  { item: "BLK2", tier: 2, name: "Stone Blocks", material: "stone", townHall: 3 },
+  { item: "BLK3", tier: 3, name: "Metal Blocks", material: "metal", townHall: 4 },
+  { item: "BLK4", tier: 4, name: "Gold Blocks", material: "gold", townHall: 5 },
+  { item: "BLK5", tier: 5, name: "Black Diamond Blocks", material: "black diamond", townHall: 6 },
+];
+
+/** Shiny per Block to climb into level `n` (index = n), as `shop/buy` charges it (`STORE.as:404-519`). */
+export const WALL_STEP_SHINY: readonly number[] = [0, 0, 3, 6, 10, 15];
+
+/** The Block, and the legacy Stone Block row the server reads as at least level 2. */
+const WALL_TYPE = 17;
+const LEGACY_WALL_TYPE = 18;
+
+/** What a wall upgrade offers now. */
+export type WallOfferState =
+  | { readonly kind: "buy"; readonly price: number; readonly blocked: string | null }
+  /** Every Block is at the tier or better. */
+  | { readonly kind: "reached" }
+  /** The yard has no Blocks. */
+  | { readonly kind: "none" };
+
+export interface WallOffer {
+  readonly tier: WallTier;
+  /** Blocks it would raise. */
+  readonly blocks: number;
+  readonly state: WallOfferState;
+}
+
+/** A Block's level for pricing: one still being built (level 0) is level 1, a legacy Stone row at least 2. */
+const blockLevel = (type: number, level: number): number =>
+  type === LEGACY_WALL_TYPE ? Math.max(2, level) : Math.max(1, level);
 
 /** The Hatchery Overdrives: one of the three at a time (§4.4). */
 const HATCHERY_OVERDRIVES: readonly string[] = ["HOD", "HOD2", "HOD3"];
@@ -298,6 +339,8 @@ export interface RepairAllOffer {
 /** Everything the Shop shows. */
 export interface ShopModel {
   readonly offers: readonly ShopOffer[];
+  /** The wall upgrades, Stone to Black Diamond. */
+  readonly walls: readonly WallOffer[];
   /** Null when nothing is damaged. */
   readonly repair: RepairAllOffer | null;
   /** When the yard's damage protection ends (unix s), or null when it has none. */
@@ -305,6 +348,32 @@ export interface ShopModel {
 }
 
 export const NOT_ENOUGH_SHINY = "Not enough Shiny.";
+
+/** The four wall upgrades for the yard as it stands: price, Blocks raised, and why not. */
+export const wallOffers = (reader: YardStoreReader): readonly WallOffer[] => {
+  const levels = reader.yard.buildings
+    .filter((one) => one.type === WALL_TYPE || one.type === LEGACY_WALL_TYPE)
+    .map((one) => blockLevel(one.type, one.level));
+  const hall = townHallLevel(reader.yard);
+  return WALL_TIERS.map((tier): WallOffer => {
+    if (levels.length === 0) return { tier, blocks: 0, state: { kind: "none" } };
+    let blocks = 0;
+    let price = 0;
+    for (const level of levels) {
+      if (level >= tier.tier) continue;
+      blocks++;
+      for (let step = level + 1; step <= tier.tier; step++) price += WALL_STEP_SHINY[step] ?? 0;
+    }
+    if (blocks === 0) return { tier, blocks, state: { kind: "reached" } };
+    const blocked =
+      reader.kind === "main" && hall < tier.townHall
+        ? `Needs Town Hall level ${tier.townHall}.`
+        : reader.credits < price
+          ? NOT_ENOUGH_SHINY
+          : null;
+    return { tier, blocks, state: { kind: "buy", price, blocked } };
+  });
+};
 
 const finite = (raw: unknown): number | null => {
   if (raw === undefined || raw === null || raw === "") return null;
@@ -383,6 +452,7 @@ export const protectedUntil = (reader: YardStoreReader): number | null => {
 /** The whole Shop for a yard as it stands now. */
 export const shopModel = (reader: YardStoreReader): ShopModel => ({
   offers: shopItemsFor(reader.kind).map((item) => shopOffer(item, reader)),
+  walls: wallOffers(reader),
   repair: repairAllOffer(reader),
   protectedUntil: protectedUntil(reader),
 });
