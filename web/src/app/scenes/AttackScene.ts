@@ -47,6 +47,7 @@ import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
+import { ATTACK_CONFIRM_CLASS } from "@/ui/attack/attackDialogs";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
@@ -1031,7 +1032,7 @@ export class AttackScene implements Scene {
         this.confirm = null;
       },
     });
-    this.confirm.element.classList.add("attack-confirm");
+    this.confirm.element.classList.add(ATTACK_CONFIRM_CLASS);
     this.confirm.mount(context.overlay.modal);
   }
 
