@@ -2,7 +2,7 @@ import { RequestContext } from "@mikro-orm/core";
 import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
-import { postgres } from "../../server.js";
+import { postgres, redis } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
@@ -23,7 +23,8 @@ import {
   readCheckpoint,
   releaseFinalLock,
 } from "./attackCheckpointStore.js";
-import { endAttackSession } from "./attackSessionStore.js";
+import { attackerSessionKey } from "./attackSession.js";
+import { endAttackSession, readAttackSession } from "./attackSessionStore.js";
 import { buildingDataWithout, spendFlung, type SourceCell } from "./combat/abandonedAttack.js";
 import { battleReplayInput, foughtLoot } from "./combat/battle.js";
 import { replayAbandonedInWorker } from "./combat/replayRunner.js";
@@ -515,10 +516,59 @@ export const finaliseExpiredOnBase = async (baseid: string): Promise<void> => {
 };
 
 /**
+ * Before a player's yard load or attack: their own open attack that has
+ * nothing to land, released. An attack left with nothing dropped sends no
+ * save (`web/src/game/attack/plugins/end.ts`, #79) and leaves no checkpoint,
+ * so nothing above finishes it, and its target stayed "Under attack now" for
+ * the whole of `isAttackActive`'s window, to the attacker as well as to
+ * everyone else. With nothing fought there is nothing to write: the
+ * target's `attackid` goes back to 0 (unless a newer attack holds it) and
+ * the session ends. An attack with a checkpoint is left to the finaliser.
+ *
+ * @param userid - The player loading.
+ * @returns Whether an attack was released.
+ */
+export const releaseUnfoughtAttackOf = async (userid: number): Promise<boolean> => {
+  const basesaveid = Number(await redis.get(attackerSessionKey(userid)));
+  if (!Number.isSafeInteger(basesaveid) || basesaveid <= 0) return false;
+
+  return RequestContext.create(postgres.orm.em, async () => {
+    // The lock a save or the finaliser holds: whichever has the row first wins.
+    if (!(await acquireFinalLock(basesaveid))) return false;
+    try {
+      const session = await readAttackSession(basesaveid);
+      if (!session || session.attackerid !== userid) {
+        await redis.del(attackerSessionKey(userid));
+        return false;
+      }
+      if (await readCheckpoint(basesaveid)) return false;
+
+      const defender = await postgres.em.findOne(Save, { basesaveid });
+      if (defender && defender.attackid === session.attackid) {
+        defender.attackid = 0;
+        await postgres.em.flush();
+      }
+      await endAttackSession(basesaveid);
+      await redis.del(attackerSessionKey(userid));
+      logger.info("Released an attack left with nothing fought", {
+        event: "attack-released-unfought",
+        basesaveid,
+        attackerid: userid,
+        attackid: session.attackid,
+      });
+      return true;
+    } finally {
+      await releaseFinalLock(basesaveid);
+    }
+  });
+};
+
+/**
  * What `/base/load` runs first (`baseLoad.ts`), before it reads a single row:
  * on the player's own yard load and before their next attack, every attack
- * they left without a save; before an attack, the target's previous attack if
- * it expired unsaved. Never throws — a failure here must not cost the player
+ * they left without a save, and their open attack with nothing fought
+ * released; before an attack, the target's previous attack if it expired
+ * unsaved. Never throws — a failure here must not cost the player
  * their yard; the sweep tries again.
  *
  * @param userid - The player loading.
@@ -534,6 +584,7 @@ export const finaliseBeforeLoad = async (
 ): Promise<void> => {
   try {
     await finaliseAttacksFor(userid, mode);
+    await releaseUnfoughtAttackOf(userid);
     if (attacking) await finaliseExpiredOnBase(baseid);
   } catch (err) {
     logger.error(`Finalising abandoned attacks before a ${mode} load failed: ${err}`);

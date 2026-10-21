@@ -175,12 +175,17 @@ mock.module("../alliance/powerups.js", () => ({
   isDeclareWarRunning: async () => false,
 }));
 
-const { finaliseAbandonedAttack, finaliseAttacksFor, finaliseExpiredOnBase, landCheckpointedAttack } = await import(
-  "./finaliseAttack.js"
-);
+const {
+  finaliseAbandonedAttack,
+  finaliseAttacksFor,
+  finaliseBeforeLoad,
+  finaliseExpiredOnBase,
+  landCheckpointedAttack,
+  releaseUnfoughtAttackOf,
+} = await import("./finaliseAttack.js");
 const { storeCheckpoint, acquireFinalLock } = await import("./attackCheckpointStore.js");
 const { attackCheckpointKey } = await import("./attackCheckpoint.js");
-const { attackSessionKey } = await import("./attackSession.js");
+const { attackSessionKey, attackerSessionKey } = await import("./attackSession.js");
 const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
 const { attackLootOf } = await import("./combat/attackLoot.js");
 const { foughtLoot } = await import("./combat/battle.js");
@@ -744,6 +749,63 @@ describe("when finalisation runs", () => {
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(0);
   }, REPLAY_TIMEOUT_MS);
+});
+
+describe("an attack left with nothing fought", () => {
+  /** An open attack by `attackerid` with no checkpoint: nothing was dropped (#79). */
+  const open = (attackerid = ATTACKER, attackid = ATTACK_ID) => {
+    store.set(
+      attackSessionKey(BASESAVEID),
+      JSON.stringify({ attackerid, attackid, startedat: now() - 30, entryHoused: {} })
+    );
+    store.set(attackerSessionKey(attackerid), String(BASESAVEID));
+  };
+
+  test("the attacker's next load frees the target at once and ends the session", async () => {
+    open();
+    await finaliseBeforeLoad(ATTACKER, "build", "0", false);
+    expect(defender.attackid).toBe(0);
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(store.has(attackSessionKey(BASESAVEID))).toBe(false);
+    expect(store.has(attackerSessionKey(ATTACKER))).toBe(false);
+  });
+
+  test("an attack with a checkpoint is the finaliser's, never released unwritten", async () => {
+    await arm();
+    store.set(attackerSessionKey(ATTACKER), String(BASESAVEID));
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(false);
+    expect(defender.attackid).toBe(ATTACK_ID);
+    expect(store.has(attackSessionKey(BASESAVEID))).toBe(true);
+  });
+
+  test("a newer attack on the row by someone else keeps its attackid", async () => {
+    open();
+    defender.attackid = ATTACK_ID + 1;
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(true);
+    expect(defender.attackid).toBe(ATTACK_ID + 1);
+  });
+
+  test("a session that names another attacker is left alone", async () => {
+    open(31337);
+    store.set(attackerSessionKey(ATTACKER), String(BASESAVEID));
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(false);
+    expect(defender.attackid).toBe(ATTACK_ID);
+    expect(store.has(attackSessionKey(BASESAVEID))).toBe(true);
+    expect(store.has(attackerSessionKey(ATTACKER))).toBe(false);
+  });
+
+  test("waits out a save that holds the lock", async () => {
+    open();
+    expect(await acquireFinalLock(BASESAVEID)).toBe(true);
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(false);
+    expect(defender.attackid).toBe(ATTACK_ID);
+  });
+
+  test("a player with no attack of their own touches nothing", async () => {
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(false);
+    expect(defender.attackid).toBe(ATTACK_ID);
+    expect(flush).not.toHaveBeenCalled();
+  });
 });
 
 
