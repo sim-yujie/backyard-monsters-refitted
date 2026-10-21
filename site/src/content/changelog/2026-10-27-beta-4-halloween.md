@@ -34,4 +34,5 @@ date: 2026-10-27
 
 ### Fixes
 
+- Bob's tips no longer cover the What's new cards. They wait until you close the cards.
 - Fixed a background server problem.
