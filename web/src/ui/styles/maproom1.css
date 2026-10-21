@@ -503,6 +503,11 @@
   pointer-events: none;
 }
 
+/* A pin's card too tall to fit above the legend (`Mr1MapView.placeCard`). */
+.mr1-map--legend-aside .mr1-legend {
+  visibility: hidden;
+}
+
 .mr1-legend__item {
   display: inline-flex;
   align-items: center;
@@ -551,6 +556,9 @@
   position: absolute;
   z-index: 2;
   width: 320px;
+  /* Capped to the window in a short one (`Mr1MapView.placeCard`): scrolls to View and Attack. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-4);
   border-color: var(--colour-border-strong);
   box-shadow: var(--shadow-popup);
