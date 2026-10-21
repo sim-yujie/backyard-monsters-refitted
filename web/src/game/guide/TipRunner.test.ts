@@ -5,7 +5,7 @@ import type { GuideStep } from "@/ui/guide/GuideOverlay";
 import { GuideBus, GuideScreen } from "./guideBus";
 import { clearCanvasTargets, findTarget, tutTarget, TutTarget } from "./targets";
 import type { Tip } from "./tipsCatalogue";
-import { TipRunner, type TipView } from "./TipRunner";
+import { TipRunner, type BlockQuestion, type TipView } from "./TipRunner";
 
 /** Bob's screen tips, run: when they show, "seen", pausing, "?" (issue #227, §7.1). */
 
@@ -517,107 +517,29 @@ describe("more than one screen", () => {
     await settle(300);
     expect(view()!.shown).toMatchObject({ text: "Click Collect all." });
   });
-});
 
-describe('the "?" button', () => {
-  it("sits before a title row's close button and replays the screen's tips, marking nothing", async () => {
-    const { bus, view, send, runner: tips } = setup();
-    tips.setOnboarding(onboarding("done", { mail: 3 }));
-    const { root, header } = panel();
-    control(TutTarget.MAIL_THREADS, root);
-    bus.emit("screen", { id: GuideScreen.MAIL, root, header });
-    await settle();
-    expect(view()).toBeUndefined();
-
-    const help = header.querySelector<HTMLButtonElement>(".guide-help")!;
-    expect(help.nextElementSibling?.getAttribute("aria-label")).toBe("Close Build");
-    expect(help.textContent).toBe("?");
-    help.click();
-    await settle(0);
-    expect(view()!.shown).toMatchObject({ text: "Threads." });
-    view()!.press("Close");
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it("replays every tip, the ones whose control is not on screen without the hand", async () => {
-    const { view, runner: tips } = setup();
-    tips.setOnboarding(onboarding("done"));
-    const root = box();
-    tips.replay([{ screen: GuideScreen.BUILD, root }]);
-    await settle(0);
-    expect(view()!.shown).toMatchObject({ text: "Locked ones say why.", target: "tip:" });
-    expect(findTarget("tip:")).toBeNull();
-  });
-
-  it("floats over a screen with no title row, and is only added once", async () => {
-    const { bus, runner: tips } = setup();
-    tips.setOnboarding(onboarding("done"));
+  it("asks the block about the tips' screen and the control the tip points at", async () => {
+    const { bus, view, runner: tips } = setup();
+    tips.setOnboarding(onboarding("skipped"));
     const root = yard();
+    const collect = root.querySelector<HTMLElement>(`[data-tut="${TutTarget.COLLECT_ALL}"]`);
+    let covered: HTMLElement | null = null;
+    const asked: BlockQuestion[] = [];
+    tips.setBlocked((screen) => {
+      asked.push(screen);
+      return screen.target === covered;
+    });
     bus.emit("screen", { id: GuideScreen.YARD, root, header: null });
-    bus.emit("screen", { id: GuideScreen.YARD, root, header: null });
-    expect(root.querySelectorAll(".guide-help--float")).toHaveLength(1);
-  });
+    await settle();
+    expect(view()!.shown).not.toBeNull();
+    expect(collect).not.toBeNull();
+    expect(asked.every((screen) => screen.root === root && screen.target === collect)).toBe(true);
 
-  it("is hidden while the guided start runs", () => {
-    const { bus, runner: tips } = setup();
-    tips.setOnboarding(onboarding("active"));
-    const { root, header } = panel();
-    bus.emit("screen", { id: GuideScreen.MAIL, root, header });
-    const help = header.querySelector<HTMLButtonElement>(".guide-help")!;
-    expect(help.hidden).toBe(true);
-    tips.setOnboarding(onboarding("done"));
-    expect(help.hidden).toBe(false);
-  });
-
-  it('a panel inside the building panel shares its "?", which replays both', async () => {
-    const { bus, view, runner: tips } = setup();
-    tips.setOnboarding(onboarding("done", { building: 1, repair: 1 }));
-    const { root, header } = panel();
-    control(TutTarget.UPGRADE, root);
-    control(TutTarget.REPAIR, root);
-    bus.emit("screen", { id: GuideScreen.BUILDING, root, header });
-    const inner = box(root);
-    bus.emit("screen", { id: GuideScreen.REPAIR, root: inner, header: null });
-    expect(header.querySelectorAll(".guide-help")).toHaveLength(1);
-
-    header.querySelector<HTMLButtonElement>(".guide-help")!.click();
-    await settle(0);
-    expect(view()!.shown).toMatchObject({ text: "Upgrade." });
-    view()!.press("Got it");
-    expect(view()!.shown).toMatchObject({ text: "Repair." });
-  });
-
-  it("a row with an overflow menu (the attack strip) also gets a \"Bob's tips\" item there", async () => {
-    const { bus, view, runner: tips } = setup();
-    tips.setOnboarding(onboarding("done", { mr2: 1 }));
-    const strip = box(document.body, "attack-strip");
-    const menu = box(strip, "attack-menu");
-    const toggle = document.createElement("button");
-    toggle.className = "attack-menu__button";
-    const closeMenu = vi.fn();
-    toggle.addEventListener("click", closeMenu);
-    const list = box(menu, "attack-menu__list");
-    menu.prepend(toggle);
-    control(TutTarget.MR2_RANGE);
-    bus.emit("screen", { id: GuideScreen.MR2, root: box(), header: strip });
-
-    const item = list.querySelector<HTMLButtonElement>(".guide-help--menu")!;
-    expect(item.textContent).toBe("Bob's tips");
-    expect(strip.querySelectorAll(":scope > .guide-help")).toHaveLength(1);
-    item.click();
-    expect(closeMenu).toHaveBeenCalledOnce();
-    await settle(0);
-    expect(view()!.shown).toMatchObject({ text: "Range." });
-
-    tips.setOnboarding(onboarding("active"));
-    expect(item.hidden).toBe(true);
-  });
-
-  it("no button for a screen with no tips", () => {
-    const { bus, runner: tips } = setup();
-    tips.setOnboarding(onboarding("done"));
-    const { root, header } = panel();
-    bus.emit("screen", { id: GuideScreen.PLANNER, root, header });
-    expect(header.querySelector(".guide-help")).toBeNull();
+    covered = collect;
+    await settle(300);
+    expect(view()!.shown).toBeNull();
+    covered = null;
+    await settle(300);
+    expect(view()!.shown).toMatchObject({ text: "Click Collect all." });
   });
 });

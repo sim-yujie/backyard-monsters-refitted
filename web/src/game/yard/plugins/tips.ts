@@ -1,6 +1,7 @@
 import { markTipsSeen } from "@/api/tips";
 import { GuideScreen } from "@/game/guide/guideBus";
 import { TipRunner, type TipView } from "@/game/guide/TipRunner";
+import { windowOver } from "@/game/guide/windowOver";
 import { isAttackDialogOpen } from "@/ui/attack/attackDialogs";
 import { isWhatsNewOpen } from "@/ui/events/WhatsNewDialog";
 import { GuideOverlay } from "@/ui/guide/GuideOverlay";
@@ -20,8 +21,10 @@ import { YARD_PLUGINS, type YardSceneControls } from "../yardPlugins";
  * closes), the Yard Planner (no tips over it), and the planner help card's
  * "seen" flag, which moves to the server here. Wherever they are, the tips
  * also wait while another Bob is talking (the guided start, Help's tour),
- * while the What's new cards are up, and while the attack screen's Retreat
- * question or "Attack over" panel is.
+ * while the What's new cards are up, while the attack screen's Retreat
+ * question or "Attack over" panel is, and while any other window is over
+ * their screen (the Leaderboard, Report a bug, the Shop once its own tips are
+ * done, Friends on a phone).
  */
 
 /** The overlay's guide layer, above the modals (`ui/overlay.ts`). */
@@ -72,8 +75,12 @@ const runner = new TipRunner({ send: markTipsSeen, createView, touch });
 /** The own yard's controls while it is up: the tips hide over its planner. */
 let yardScene: YardSceneControls | null = null;
 runner.setBlocked(
-  () =>
-    otherBobTalking() || isWhatsNewOpen() || isAttackDialogOpen() || (yardScene?.plannerOpen() ?? false),
+  (screen) =>
+    otherBobTalking() ||
+    isWhatsNewOpen() ||
+    isAttackDialogOpen() ||
+    windowOver(screen) ||
+    (yardScene?.plannerOpen() ?? false),
 );
 
 YARD_PLUGINS.push(({ store, scene }) => {
