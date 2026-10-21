@@ -59,6 +59,18 @@ describe("EventsPanel", () => {
     panel.close();
   });
 
+  it("draws the banner picture only when there is one, and drops it if the file fails", () => {
+    const { panel } = mounted();
+    panel.render(list([event(), event({ id: "with-picture", banner: "/events/halloween-2026-banner.png" })]));
+    const cards = [...panel.element.querySelectorAll<HTMLElement>(".events-card")];
+    expect(cards[0]?.querySelector(".events-card__banner")).toBeNull();
+    const band = cards[1]?.querySelector(".events-card__banner");
+    expect(band?.querySelector("img")?.getAttribute("src")).toBe("/events/halloween-2026-banner.png");
+    band?.querySelector("img")?.dispatchEvent(new Event("error"));
+    expect(cards[1]?.querySelector(".events-card__banner")).toBeNull();
+    panel.close();
+  });
+
   it("claims today's day from the button, which names the reward", () => {
     const { panel, options } = mounted();
     panel.render(list([event()]));

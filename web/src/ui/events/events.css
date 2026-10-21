@@ -390,14 +390,6 @@
 
 /* ── The Krallen Hunt: the prize, the bar toward the goal, the claim ──── */
 
-/* A plain band until the hunt has a banner of its own. */
-.events-card__banner--krallen {
-  aspect-ratio: 6 / 1;
-  background:
-    radial-gradient(circle at 85% 40%, rgb(120 220 255 / 45%), transparent 50%),
-    linear-gradient(135deg, #18425a, #0c1a26);
-}
-
 .events-card--ended .events-card__countdown {
   color: var(--colour-text-muted);
 }

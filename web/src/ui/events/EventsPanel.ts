@@ -145,18 +145,17 @@ const krallenPicture = (level: number, size: "card" | "icon", className: string)
   return image;
 };
 
-/** A banner picture that gives way to a plain band when the file is missing. */
-const banner = (event: EventView): HTMLElement => {
+/** The event's banner picture; nothing when it has none or the file is missing. */
+const banner = (event: EventView): HTMLElement[] => {
+  if (!event.banner) return [];
   const band = el("div", `events-card__banner events-card__banner--${event.kind}`);
-  if (event.banner) {
-    const image = el("img", "events-card__banner-image");
-    image.src = event.banner;
-    image.alt = "";
-    image.decoding = "async";
-    image.addEventListener("error", () => image.remove(), { once: true });
-    band.append(image);
-  }
-  return band;
+  const image = el("img", "events-card__banner-image");
+  image.src = event.banner;
+  image.alt = "";
+  image.decoding = "async";
+  image.addEventListener("error", () => band.remove(), { once: true });
+  band.append(image);
+  return [band];
 };
 
 /** A countdown line the panel's `tick` keeps running. */
@@ -261,7 +260,7 @@ export class EventsPanel {
     card.dataset["event"] = event.id;
     const head = el("div", "events-card__head");
     head.append(el("h3", "events-card__title", event.title), countdown(event, view.now));
-    card.append(banner(event), head, el("p", "events-card__text", event.text));
+    card.append(...banner(event), head, el("p", "events-card__text", event.text));
     if (event.calendar) card.append(this.calendar(event, view));
     // The collection ladder's place (the pumpkin hunt): drawn when the event has one.
     if (event.ladder && event.krallen) card.append(this.krallenHunt(event, event.ladder, event.krallen, view));
