@@ -169,6 +169,12 @@ const findIn = (root: HTMLElement, selector: string): HTMLElement | null => {
   return null;
 };
 
+/** What a block is asked about: the tips' screen, and what the tip up now points at (null for none, or the canvas). */
+export interface BlockQuestion {
+  readonly root: HTMLElement;
+  readonly target: HTMLElement | null;
+}
+
 /** Whether a rectangle is not wholly inside the window. */
 const offScreen = (rect: TargetRect): boolean =>
   rect.top < 0 || rect.left < 0 || rect.top + rect.height > window.innerHeight || rect.left + rect.width > window.innerWidth;
@@ -185,7 +191,7 @@ export class TipRunner {
   private readonly unregisterTarget: () => void;
 
   private onboarding: Onboarding | null = null;
-  private blocked: (() => boolean) | null = null;
+  private blocked: ((screen: BlockQuestion) => boolean) | null = null;
   /** Screens this runner marked seen, whatever the server has said since. */
   private readonly seenHere = new Set<string>();
 
@@ -240,8 +246,11 @@ export class TipRunner {
     }
   }
 
-  /** What hides the tips while it says so (the Yard Planner); null for nothing. */
-  setBlocked(blocked: (() => boolean) | null): void {
+  /**
+   * What hides the tips while it says so (the Yard Planner, a window over
+   * their screen), asked about the tip up now; null for nothing.
+   */
+  setBlocked(blocked: ((screen: BlockQuestion) => boolean) | null): void {
     this.blocked = blocked;
   }
 
@@ -406,7 +415,7 @@ export class TipRunner {
     const sequence = this.current;
     const view = this.view;
     if (!sequence || !view) return;
-    if (this.blocked?.()) {
+    if (this.blockedNow(sequence)) {
       view.hide();
       this.hiddenByBlock = true;
       return;
@@ -447,6 +456,19 @@ export class TipRunner {
       },
     });
     sequence.displayed = true;
+  }
+
+  /** Whether the block says to keep the sequence's current tip off screen. */
+  private blockedNow(sequence: Sequence): boolean {
+    if (!this.blocked) return false;
+    const tip = sequence.tips[sequence.index];
+    const found = tip ? this.resolve(tip, sequence.root) : null;
+    const target = !found
+      ? null
+      : found.selector
+        ? findIn(sequence.root, found.selector)
+        : (findTarget(found.name)?.element ?? null);
+    return this.blocked({ root: sequence.root, target });
   }
 
   private advance(): void {
@@ -564,7 +586,7 @@ export class TipRunner {
   private tick(): void {
     this.prune();
     if (!this.current || !this.view) return;
-    const blocked = this.blocked?.() ?? false;
+    const blocked = this.blockedNow(this.current);
     if (blocked && !this.hiddenByBlock) {
       this.view.hide();
       this.hiddenByBlock = true;
