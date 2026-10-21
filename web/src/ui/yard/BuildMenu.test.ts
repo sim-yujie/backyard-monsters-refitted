@@ -245,6 +245,18 @@ describe("BuildMenu", () => {
     expect(onPick).toHaveBeenLastCalledWith(20, true);
   });
 
+  it("no Build instantly while the guided start pays for the building, only for the others", () => {
+    const onboarding = { v: 1, guide: { state: "active", step: "build-maproom" } };
+    const { menu } = setup([HALL], { onboarding } as unknown as Partial<BaseLoadResponse>);
+    menu.open(BuildCategory.BUILDINGS);
+    menu.pick(11);
+    expect(info(menu).querySelector(".build-info__build")).not.toBeNull();
+    expect(info(menu).querySelector(".build-info__instant")).toBeNull();
+
+    menu.pick(15);
+    expect(info(menu).querySelector(".build-info__instant")).not.toBeNull();
+  });
+
   it("walls: at once, no worker", () => {
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.DEFENSIVE);
