@@ -79,7 +79,7 @@ export const eventView = (
   return {
     id: event.id,
     title: event.title,
-    text: event.text,
+    text: status === "upcoming" ? (event.upcomingText ?? event.text) : event.text,
     kind: event.kind,
     banner: event.banner ?? null,
     status,

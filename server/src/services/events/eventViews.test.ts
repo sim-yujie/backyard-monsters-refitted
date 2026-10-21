@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { eventsAnswer, WhatsNewSeenSchema } from "../../controllers/events/eventsState.js";
 import type { User } from "../../database/models/user.model.js";
-import { KRALLEN_HUNT_GOAL, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
+import { EVENTS, KRALLEN_HUNT_GOAL, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
 import { eventView } from "./eventViews.js";
 import { memoryProgressStore, NO_PROGRESS } from "./progressStore.js";
+import { visibleEvents } from "./schedule.js";
 
 const DAY = 86_400;
 const START = Date.UTC(2030, 0, 1) / 1000;
@@ -37,6 +38,25 @@ describe("eventView", () => {
     expect(eventView(active, today, START + DAY).calendar).toMatchObject({ canClaim: true, nextAt: null });
     const done = { ...NO_PROGRESS, calendarDays: 2, calendarLast: "2030-01-02" };
     expect(eventView(active, done, START + 2 * DAY).calendar).toMatchObject({ claimed: 2, canClaim: false, nextAt: null });
+  });
+});
+
+describe("an event's words before and after its start", () => {
+  const halloween = EVENTS.find((event) => event.id === "halloween-2026")!;
+  const start = Date.parse(halloween.startsAt) / 1000;
+  const shown = (now: number) => visibleEvents(now, EVENTS, new Set()).find((one) => one.event.id === halloween.id)!;
+
+  test("Halloween says it is coming while it counts down, and is here once it starts", () => {
+    const before = shown(start - 6 * DAY);
+    expect(before.status).toBe("upcoming");
+    expect(eventView(before, NO_PROGRESS, start - 6 * DAY).text).toStartWith("Spooky season is coming!");
+    const after = shown(start + 60);
+    expect(after.status).toBe("active");
+    expect(eventView(after, NO_PROGRESS, start + 60).text).toStartWith("Spooky season is here!");
+  });
+
+  test("an event without upcoming words shows its text either way", () => {
+    expect(eventView({ event: EVENT, window, status: "upcoming" }, NO_PROGRESS, START - DAY).text).toBe("t");
   });
 });
 
