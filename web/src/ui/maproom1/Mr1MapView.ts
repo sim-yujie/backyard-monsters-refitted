@@ -66,6 +66,9 @@ export const practiceSpot = (own: PinSpot | null): PinSpot => {
   return { x, y: Math.min(MAP_SIZE - margin, base.y + 60) };
 };
 
+/** On the map while a pin's card has no room above the legend: the legend steps aside. */
+const LEGEND_ASIDE = "mr1-map--legend-aside";
+
 export class Mr1MapView {
   readonly element: HTMLElement;
 
@@ -76,6 +79,7 @@ export class Mr1MapView {
   private readonly miniFrame: HTMLElement;
   private readonly miniDots: HTMLElement;
   private readonly miniCaption: HTMLElement;
+  private readonly legendBox: HTMLElement;
   private readonly resizeObserver: ResizeObserver | null;
 
   private scroll: PinSpot = { x: 0, y: 0 };
@@ -122,7 +126,8 @@ export class Mr1MapView {
     this.mini.append(miniMap, this.miniCaption);
     this.mini.title = "The whole map. Drag the box to move around.";
 
-    this.element.append(this.viewport, myYard, this.mini, this.legend());
+    this.legendBox = this.legend();
+    this.element.append(this.viewport, myYard, this.mini, this.legendBox);
 
     this.viewport.addEventListener("pointerdown", this.onPointerDown);
     this.viewport.addEventListener("click", this.onClickCapture, true);
@@ -187,6 +192,7 @@ export class Mr1MapView {
     if (this.card && this.card !== card) this.card.remove();
     this.card = card;
     const pin = this.selected ? this.pins.get(this.selected) : null;
+    this.element.classList.remove(LEGEND_ASIDE);
     if (!card || !pin) return;
     this.pinLayer.append(card);
     this.placeCard(card, pin.spot);
@@ -283,16 +289,27 @@ export class Mr1MapView {
     dot.style.top = `${(spot.y / MAP_SIZE) * 100}%`;
   }
 
-  /** Beside the pin, on whichever side has room, kept inside the window. */
+  /**
+   * Beside the pin, on whichever side has room, kept inside the window and
+   * above the legend, so the legend never sits on its View and Attack. In a
+   * window too short for both, the legend steps aside while the card is open,
+   * and a card taller than the whole window scrolls inside, down to them.
+   */
   private placeCard(card: HTMLElement, spot: PinSpot): void {
+    card.style.maxHeight = "";
     const width = card.offsetWidth || 320;
     const height = card.offsetHeight || 260;
     const gap = 44;
     const roomRight = this.scroll.x + this.size.width - (spot.x + gap);
     const left = roomRight >= width + 8 ? spot.x + gap : spot.x - gap - width;
+    // The legend's top, from the top of the view; the bottom of the view when it is hidden (a phone).
+    const floor = this.legendBox.offsetHeight > 0 ? this.legendBox.offsetTop : this.size.height;
     const minTop = this.scroll.y + 8;
-    const maxTop = this.scroll.y + this.size.height - height - 8;
+    const maxTop = this.scroll.y + floor - height - 8;
     const top = Math.max(minTop, Math.min(spot.y - 60, maxTop));
+    this.element.classList.toggle(LEGEND_ASIDE, top > maxTop);
+    const room = this.size.height - 16;
+    if (height > room) card.style.maxHeight = `${Math.floor(room)}px`;
     card.style.left = `${Math.round(left)}px`;
     card.style.top = `${Math.round(top)}px`;
   }
