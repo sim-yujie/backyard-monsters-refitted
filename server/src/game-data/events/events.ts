@@ -53,6 +53,8 @@ export interface EventDefinition {
   readonly title: string;
   /** One or two short sentences for the Events page. */
   readonly text: string;
+  /** The same, worded for before the start ("is coming"); `text` when absent. */
+  readonly upcomingText?: string;
   /** What sort of event; the web client may dress the page by it. */
   readonly kind: string;
   /** UTC, ISO 8601. */
@@ -205,6 +207,7 @@ export const EVENTS: readonly EventDefinition[] = [
     id: "halloween-2026",
     title: "Halloween",
     text: "Spooky season is here! Log in each day to claim a treat, and pick the pumpkins growing in your yard for extra prizes.",
+    upcomingText: "Spooky season is coming! Log in each day to claim a treat, and pick the pumpkins growing in your yard for extra prizes.",
     kind: "halloween",
     startsAt: "2026-10-28T00:00:00Z",
     endsAt: "2026-11-11T00:00:00Z",
