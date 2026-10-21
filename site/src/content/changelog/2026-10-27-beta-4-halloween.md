@@ -41,4 +41,5 @@ date: 2026-10-27
 - Leaving an attack before sending anything no longer leaves that yard showing "Under attack now" for several minutes. It is free again as soon as you are back on the map.
 - During the guided start, the Build menu no longer shows a Build instantly button that could not be pressed while Bob is paying for the building.
 - Bob's tips on the attack screen no longer sit on top of the Retreat question or the "Attack over" panel. They step aside while those are open.
+- Bob's tips no longer cover other open windows, such as the Leaderboard, the Shop or Report a bug. They wait until you close the window.
 - Fixed a background server problem.
