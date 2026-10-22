@@ -48,7 +48,7 @@ import {
   type UpgradeGate,
   type UpgradeOffer,
 } from "./buildingActions";
-import { buildingInfo, type InfoValue } from "./buildingInfo";
+import { buildingHealthLabel, buildingInfo, type InfoValue } from "./buildingInfo";
 import { BaiterPanel } from "./BaiterPanel";
 import { BunkerPanel } from "./BunkerPanel";
 import { ChamberPanel } from "./ChamberPanel";
@@ -1561,9 +1561,10 @@ export class BuildingPanel {
   }
 
   private addHealth(building: YardBuilding): void {
+    const label = buildingHealthLabel(building.type);
     if (building.hp === null) {
       this.add(
-        "Health",
+        label,
         building.maxHp === null
           ? devDetails()
             ? "Full (the save omits health above full)"
@@ -1574,7 +1575,7 @@ export class BuildingPanel {
     }
 
     this.add(
-      "Health",
+      label,
       building.maxHp === null
         ? building.hp.toLocaleString()
         : `${building.hp.toLocaleString()} / ${building.maxHp.toLocaleString()}`,

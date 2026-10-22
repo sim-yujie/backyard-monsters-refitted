@@ -2,6 +2,7 @@ import { BaseType } from "../../../enums/Base.js";
 import { Save } from "../../../database/models/save.model.js";
 import { defenderForcesOf, type DefenderForces } from "../../../game-rules/combat/index.js";
 import { postgres } from "../../../server.js";
+import { championsHealedTo } from "../../yard/catchUpChampions.js";
 
 /**
  * The defence an attack load serves (issue #195): the target row's bunker
@@ -10,13 +11,18 @@ import { postgres } from "../../../server.js";
  * in the attack session and hands the same to the client, so both fight one
  * defence.
  *
+ * The caged champion defends at the health it has healed to by `now`, not
+ * the health stored at the owner's last visit: it heals in its cage while
+ * the owner is away (`championsHealedTo`).
+ *
  * @param save - The row being attacked.
+ * @param now - Unix seconds the attack starts.
  */
-export const servedDefenderForces = async (save: Save): Promise<DefenderForces> =>
+export const servedDefenderForces = async (save: Save, now: number): Promise<DefenderForces> =>
   defenderForcesOf({
     buildingdata: save.buildingdata,
     academy: await defendingAcademy(save),
-    champion: save.champion,
+    champion: championsHealedTo(save.champion, Number(save.savetime), now),
   });
 
 /** The academy the row's monsters fight at: its own, or its owner's main yard's for an outpost. */

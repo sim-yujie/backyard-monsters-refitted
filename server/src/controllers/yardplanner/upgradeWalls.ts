@@ -1,6 +1,7 @@
 import { Status } from "../../enums/StatusCodes.js";
 import { WallUpgradeSchema } from "../../schemas/YardPlannerSchemas.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
+import { healChampions } from "../../services/yard/catchUpChampions.js";
 import {
   Operation,
   updateResources,
@@ -72,6 +73,8 @@ const upgradeWallsOn = (save: Save, ids: readonly number[], level: number, now: 
   save.points = String(Number(save.points ?? "0") + plan.points);
   syncDerivedLevels(save);
   syncBaseValue(save);
+  // The caged champions keep the healing `savetime` moves past.
+  healChampions(save, Number(save.savetime), now);
   save.savetime = now;
 
   return {

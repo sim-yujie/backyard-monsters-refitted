@@ -291,6 +291,18 @@ describe("finaliseAbandonedAttack", () => {
     expect(store.has(attackSessionKey(BASESAVEID))).toBe(false);
   }, REPLAY_TIMEOUT_MS);
 
+  test("the defender's caged champion keeps the healing savetime moves past", async () => {
+    await arm();
+    // A level 1 Fomor stored at 1,200 two hours ago is full (15,000) an hour later.
+    defender.savetime = now() - 2 * 3_600;
+    defender.champion = [{ t: 3, l: 1, hp: 1_200, fd: 0, fb: 0, pl: 1, ft: now() + 3_600, status: 0 }];
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(defender.champion[0].hp).toBe(15_000);
+    expect(defender.savetime).toBeGreaterThanOrEqual(now() - 1);
+  }, REPLAY_TIMEOUT_MS);
+
   test("monsters hatched during the attack stay: the flung are taken from the caught-up yard", async () => {
     await arm();
     // Home hatches Pokeys (8 s each at academy level 3) from a queue, with
