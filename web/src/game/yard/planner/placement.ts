@@ -463,7 +463,10 @@ export const validatePlan = (
   const issues: PlacementIssue[] = [];
 
   for (const node of nodes) {
-    if (!inBounds(node, node.x, node.y, plot)) {
+    // A fixed node stands where the server put it and nothing here can move
+    // it: the Trojan Horse waits outside the plot by design, and blocking
+    // Apply on it would block it for good (`docs/design/trojan-horse.md` §7).
+    if (!node.fixed && !inBounds(node, node.x, node.y, plot)) {
       issues.push({ id: node.id, reason: InvalidReason.BOUNDS });
       // Still stamped: a node that is out of bounds can also be sitting on top
       // of one that is not, and the player needs to see both problems.
