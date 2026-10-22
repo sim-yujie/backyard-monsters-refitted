@@ -11,14 +11,7 @@ import {
   YARD_PLANNER_TYPE,
 } from "./access";
 
-/**
- * The planner's entry rule (design §8, Q5).
- *
- * Two of the three inputs have no caller in the client yet — every load it
- * makes is its own main yard in build mode — so these cases are the
- * specification a visit flow will be held to, not a description of code paths
- * that run today.
- */
+/** The planner's entry rule (design §8, Q5, as changed 2026-09-30 and 2026-10-22). */
 
 /** A yard holding one building of each given type. */
 const yardOf = (...types: number[]) => ({
@@ -38,69 +31,39 @@ describe("hasYardPlanner", () => {
 });
 
 describe("plannerAccess", () => {
-  it("opens on the player's own yard with or without a Yard Planner (2026-09-30)", () => {
-    expect(plannerAccess(WITHOUT, BaseMode.BUILD, true)).toBe(PlannerAccess.EDIT);
-    expect(plannerAccess({ buildings: [] }, BaseMode.BUILD, true)).toBe(PlannerAccess.EDIT);
-  });
-
-  it("still locks someone else's yard with no Yard Planner", () => {
-    expect(plannerAccess(WITHOUT, BaseMode.VIEW, false)).toBe(PlannerAccess.LOCKED);
-    expect(plannerAccess(WITHOUT, BaseMode.WORLD_MAP_VIEW, false)).toBe(PlannerAccess.LOCKED);
-    expect(plannerAccess(WITHOUT, BaseMode.VIEW, true)).toBe(PlannerAccess.LOCKED);
-  });
-
-  it("gives full editing on the player's own yard in build mode", () => {
-    expect(plannerAccess(WITH, BaseMode.BUILD, true)).toBe(PlannerAccess.EDIT);
-  });
-
-  it("is read-only on someone else's yard, however it was loaded", () => {
-    expect(plannerAccess(WITH, BaseMode.VIEW, false)).toBe(PlannerAccess.READ_ONLY);
-    expect(plannerAccess(WITH, BaseMode.WORLD_MAP_VIEW, false)).toBe(PlannerAccess.READ_ONLY);
-    expect(plannerAccess(WITH, BaseMode.ATTACK, false)).toBe(PlannerAccess.READ_ONLY);
-    // Ownership alone is not enough: a build-mode load of a yard that is not
-    // the caller's would still only be read-only.
-    expect(plannerAccess(WITH, BaseMode.BUILD, false)).toBe(PlannerAccess.READ_ONLY);
-  });
-
-  it("is read-only on the player's own yard outside build mode", () => {
-    expect(plannerAccess(WITH, BaseMode.VIEW, true)).toBe(PlannerAccess.READ_ONLY);
-    expect(plannerAccess(WITH, BaseMode.ATTACK, true)).toBe(PlannerAccess.READ_ONLY);
+  it("opens on the player's own yard in build mode, main yard or outpost alike", () => {
+    expect(plannerAccess(BaseMode.BUILD, true)).toBe(PlannerAccess.EDIT);
   });
 
   /**
-   * The rule Q5 struck out. The Flash client pulled the entry when the Yard
-   * Planner was damaged or counting down (`BUILDINGINFO.as:99,111,118,125`);
-   * nothing here reads health, level, fortification or a countdown, so a
-   * building in any of those states still unlocks the planner.
+   * Owner report 2026-10-22: a look at someone else's yard through the
+   * planner gave away every building's level, tower ranges, storage room and
+   * the traps by kind and count. No yard but the player's own opens it, with
+   * or without a Yard Planner in it.
    */
-  it("never locks on the Yard Planner's own damage, build or upgrade state", () => {
-    const ruined = {
-      buildings: [
-        {
-          id: 1,
-          type: YARD_PLANNER_TYPE,
-          level: 0,
-          fortification: 0,
-          hp: 0,
-          condition: "destroyed",
-          countdown: { kind: "upgrade", endsAt: 9_999_999_999, seconds: 60, paused: false },
-        },
-      ],
-    };
-    expect(plannerAccess(ruined, BaseMode.BUILD, true)).toBe(PlannerAccess.EDIT);
+  it("never opens on someone else's yard, however it was loaded", () => {
+    for (const mode of [BaseMode.VIEW, BaseMode.WORLD_MAP_VIEW, BaseMode.ATTACK, BaseMode.BUILD]) {
+      expect(plannerAccess(mode, false)).toBe(PlannerAccess.LOCKED);
+    }
+  });
+
+  it("never opens on the player's own yard outside build mode", () => {
+    expect(plannerAccess(BaseMode.VIEW, true)).toBe(PlannerAccess.LOCKED);
+    expect(plannerAccess(BaseMode.ATTACK, true)).toBe(PlannerAccess.LOCKED);
+  });
+
+  it("has only the two answers: the own yard's planner, or none", () => {
+    expect(Object.values(PlannerAccess).sort()).toEqual([PlannerAccess.EDIT, PlannerAccess.LOCKED].sort());
   });
 });
 
 describe("plannerEntryTooltip", () => {
-  it("says why a visited yard's layout cannot be looked at", () => {
-    expect(plannerEntryTooltip(PlannerAccess.LOCKED)).toBe(
-      "This yard has no Yard Planner to look at its layout with",
-    );
+  it("says the planner is for the player's own yards", () => {
+    expect(plannerEntryTooltip(PlannerAccess.LOCKED)).toBe("The layout planner is only for your own yards");
   });
 
   it("offers the shortcut when the planner can be opened", () => {
     expect(plannerEntryTooltip(PlannerAccess.EDIT)).toContain("(P)");
-    expect(plannerEntryTooltip(PlannerAccess.READ_ONLY)).toContain("(P)");
   });
 });
 

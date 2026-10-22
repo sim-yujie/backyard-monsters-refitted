@@ -1088,6 +1088,11 @@ save, the owner's own included (it is not a `@FrontendKey` on `Save`): a player'
 spots never reach another account, and an own-yard load is not weighed down by up to ~260 KB of
 layouts nothing reads there. Only the routes in this section read or write them.
 
+`firedtraps` (where traps stood when they fired, read only by the owner's planner to offer
+re-arming them) does ride along, but only to the yard's owner: anyone else (view, help, attack,
+an Inferno attack's save) gets `[]` (`services/base/mapSaveData.ts`,
+`controllers/inferno/infernoSave.ts`).
+
 A **layout** is `{ slot, name, version: 2, expansion, updatedAt, nodes }`. `expansion` is the
 `storedata.ENL.q` the layout was drawn for (0-6) and `updatedAt` is unix seconds. A **node** is
 `{ id, t, x, y, l?, fort?, plan? }`: the building id from `buildingdata`, its type, and its

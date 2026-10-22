@@ -75,6 +75,11 @@ export const buildSaveData = (save: Save, user: User, ownerSave: OwnerSave | nul
   // empty one where a real player shows theirs (#245).
   if (!isOwner) filteredSave.aiattacks = {};
 
+  // The list of traps that fired is the account's own: only the owner's
+  // planner reads it (to offer putting them back), and it says where traps
+  // stood. Anyone viewing, helping or attacking the yard gets none.
+  if (save.userid !== user.userid) filteredSave.firedtraps = [];
+
   const shinyLocked = isShinyLocked(user);
   
   if (shinyLocked) filteredSave.credits = 0;
