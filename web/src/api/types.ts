@@ -216,7 +216,10 @@ export interface ChampionSaveEntry {
   fb: number;
   /** Power level, 0 to 3. */
   pl: number;
-  /** 0 active, 1 frozen, 2 juiced. Only 0 may be flung (`combat.md:750-751`). */
+  /**
+   * 0 active, 1 frozen, 2 juiced, 3 an egg in the cage (`ft` then its hatch
+   * time). Only 0 may be flung (`combat.md:750-751`).
+   */
   status: number;
   nm?: string;
   /** The Mode it last attacked in (issue #220); absent is Hybrid. Anything else is ignored. */
@@ -607,6 +610,11 @@ export interface BaseLoadResponse extends ApiEnvelope {
   /** [height, width]; 800 x 800 on Map Room 2. */
   worldsize: [number, number];
   currenttime: number;
+  /**
+   * The kinds of the seasonal events on now (`"halloween"`), absent when none
+   * is (`server/src/services/yard/season.ts`). The yard dresses for them.
+   */
+  activeevents?: string[];
   /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
   savetime?: number;
   resources?: Resources;
@@ -840,10 +848,13 @@ export interface PlayerCell {
   l: number;
   /** Empire value. */
   v: number;
-  /** Flinger level 0..4. */
-  f: number;
-  /** Catapult level 0..3. */
-  c: number;
+  /**
+   * Flinger level 0..4, on the player's own cells only: the server leaves it
+   * out of anyone else's (owner decision 2026-10-22).
+   */
+  f?: number;
+  /** Catapult level 0..3, on the player's own cells only, like `f`. */
+  c?: number;
   /** Effective damage percent; reported as 0 once protection lapses. */
   dm: number;
   /** 1 when damage >= 90, i.e. takeover-eligible. */
@@ -1542,6 +1553,8 @@ export interface MushroomPickReport {
   golden: boolean;
   /** Shiny it gave: 0, 3 or 8. */
   shiny: number;
+  /** During the Halloween pumpkin hunt: the player's pumpkin count, this one included. */
+  pumpkins?: number;
 }
 
 /** `POST /bm/yard/shop/buy`. */
@@ -1554,4 +1567,8 @@ export interface ShopBuyReport {
   q: number;
   /** The buff's expiry, unix seconds, for a timed item (`BST`); null for a permanent one (`BEW`). */
   endsAt: number | null;
+  /** Wall upgrades (`BLK2`..`BLK5`) only: the tier, how many Blocks it raised, the points they earned. */
+  tier?: number;
+  blocks?: number;
+  points?: number;
 }

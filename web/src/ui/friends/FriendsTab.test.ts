@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import { fixtureApi, fixtureFriend, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
-import { FRIENDS_TEXT, FriendsTab, friendOrder } from "./FriendsTab";
+import { FRIENDS_TEXT, FriendsTab, friendMatches, friendOrder } from "./FriendsTab";
 
 /** The Friends tab (issue #370): the list, Remove, and the later packages' hooks. */
 
@@ -40,6 +40,12 @@ const buttonIn = (row: Element | null | undefined, label: string): HTMLButtonEle
   return found;
 };
 
+/** Opens a row's More, where Remove and Block wait. */
+const openMore = (tab: FriendsTab, userid: number): Element | null => {
+  tab.element.querySelector<HTMLButtonElement>(`[data-userid="${userid}"] .friends-row__more`)?.click();
+  return tab.element.querySelector(`[data-userid="${userid}"]`);
+};
+
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 afterEach(() => {
@@ -54,8 +60,8 @@ describe("FriendsTab", () => {
     expect(names(tab.element)).toEqual(["Bob", "Ann", "Cat"]);
     const bob = tab.element.querySelector('[data-userid="2"]');
     expect(bob?.textContent).toContain("Level 9");
-    expect(bob?.textContent).toContain("Online");
-    expect(bob?.querySelector(".friends-online--online")).not.toBeNull();
+    expect(bob?.querySelector(".friends-row__top .online-dot")?.getAttribute("aria-label")).toBe("Online");
+    expect(bob?.textContent).not.toContain("Online");
     // A friend who hides it shows no line at all.
     expect(tab.element.querySelector('[data-userid="3"] .friends-online')).toBeNull();
   });
@@ -84,13 +90,14 @@ describe("FriendsTab", () => {
   it("asks before removing, then removes at once", async () => {
     const { tab, store, calls } = setup();
     await tab.show();
-    buttonIn(tab.element.querySelector('[data-userid="1"]'), FRIENDS_TEXT.remove).click();
+    expect(tab.element.querySelector('[data-userid="1"]')?.textContent).not.toContain(FRIENDS_TEXT.remove);
+    buttonIn(openMore(tab, 1), FRIENDS_TEXT.remove).click();
     const confirm = tab.element.querySelector('[data-userid="1"]');
     expect(confirm?.textContent).toContain(FRIENDS_TEXT.removeConfirm("Ann"));
     buttonIn(confirm, FRIENDS_TEXT.cancel).click();
     expect(tab.element.querySelector('[data-userid="1"]')?.textContent).not.toContain("Remove Ann");
 
-    buttonIn(tab.element.querySelector('[data-userid="1"]'), FRIENDS_TEXT.remove).click();
+    buttonIn(openMore(tab, 1), FRIENDS_TEXT.remove).click();
     buttonIn(tab.element.querySelector('[data-userid="1"]'), FRIENDS_TEXT.removeYes).click();
     await settle();
     expect(calls).toContainEqual(["remove", 1]);
@@ -102,7 +109,7 @@ describe("FriendsTab", () => {
   it("says why a removal was refused, and keeps the row", async () => {
     const { tab, store } = setup({ list: { remove: refused("notFriends") } });
     await tab.show();
-    buttonIn(tab.element.querySelector('[data-userid="2"]'), FRIENDS_TEXT.remove).click();
+    buttonIn(openMore(tab, 2), FRIENDS_TEXT.remove).click();
     buttonIn(tab.element.querySelector('[data-userid="2"]'), FRIENDS_TEXT.removeYes).click();
     await settle();
     expect(tab.statusText).toBe("You are not friends with this player any more.");
@@ -126,10 +133,87 @@ describe("FriendsTab", () => {
     expect(buttonIn(dee, FRIENDS_TEXT.giftSent).disabled).toBe(true);
     buttonIn(tab.element.querySelector('[data-userid="5"]'), FRIENDS_TEXT.gift).click();
     expect(onGift).toHaveBeenCalledWith(expect.objectContaining({ userid: 5 }));
-    // Block asks first, then blocks through the friends API.
-    buttonIn(dee, FRIENDS_TEXT.block).click();
+    // Block waits behind More, asks first, then blocks through the friends API.
+    expect(dee?.textContent).not.toContain(FRIENDS_TEXT.block);
+    const opened = openMore(tab, 4);
+    buttonIn(opened, FRIENDS_TEXT.block).click();
     expect(calls.some((call) => call[0] === "block")).toBe(false);
-    dee?.querySelector<HTMLButtonElement>(".block-button__yes")?.click();
+    opened?.querySelector<HTMLButtonElement>(".block-button__yes")?.click();
     expect(calls).toContainEqual(["block", 4]);
+  });
+
+  it("wears the bar's wrench and gift marks", async () => {
+    const { tab } = setup({
+      list: {
+        list: fixtureList([
+          fixtureFriend(6, { help: { speedup: true, repair: false }, giftSentToday: true }),
+          fixtureFriend(7, { help: { speedup: false, repair: false } }),
+        ]),
+      },
+    });
+    await tab.show();
+    const six = tab.element.querySelector('[data-userid="6"]');
+    expect(six?.querySelector(".friends-row__badge--wrench")).not.toBeNull();
+    expect(six?.querySelector(".friends-row__badge--gift")).toBeNull();
+    const seven = tab.element.querySelector('[data-userid="7"]');
+    expect(seven?.querySelector(".friends-row__badge--wrench")).toBeNull();
+    expect(seven?.querySelector(".friends-row__badge--gift")).not.toBeNull();
+  });
+
+  it("narrows the list by part of a name and by the pressed filters", async () => {
+    const { tab } = setup({
+      list: {
+        list: fixtureList([
+          fixtureFriend(1, { username: "Annie", online: "online", help: { speedup: true, repair: false } }),
+          fixtureFriend(2, { username: "Bob", online: "online", giftSentToday: true }),
+          fixtureFriend(3, { username: "Joanna", online: "away" }),
+        ]),
+      },
+    });
+    await tab.show();
+    const search = tab.element.querySelector<HTMLInputElement>(".friends-tools__input")!;
+    const chip = (id: string) => tab.element.querySelector<HTMLButtonElement>(`[data-filter="${id}"]`)!;
+    expect(chip("help").textContent).toBe("Can help (1)");
+    expect(chip("online").textContent).toBe("Online (2)");
+    expect(chip("gift").textContent).toBe("Gift not sent (2)");
+
+    search.value = "ANN";
+    search.dispatchEvent(new Event("input"));
+    expect(names(tab.element)).toEqual(["Annie", "Joanna"]);
+    expect(tab.element.querySelector(".friends-section__title")?.textContent).toBe("2 shown");
+
+    chip("online").click();
+    expect(chip("online").getAttribute("aria-pressed")).toBe("true");
+    expect(names(tab.element)).toEqual(["Annie"]);
+
+    search.value = "";
+    search.dispatchEvent(new Event("input"));
+    chip("gift").click();
+    expect(names(tab.element)).toEqual(["Annie"]);
+
+    chip("help").click();
+    chip("online").click();
+    expect(names(tab.element)).toEqual(["Annie"]);
+    search.value = "zzz";
+    search.dispatchEvent(new Event("input"));
+    expect(tab.element.textContent).toContain(FRIENDS_TEXT.noMatch);
+    buttonIn(tab.element, FRIENDS_TEXT.clear).click();
+    expect(search.value).toBe("");
+    expect(names(tab.element)).toEqual(["Annie", "Bob", "Joanna"]);
+    expect(tab.element.querySelector(".friends-section__title")?.textContent).toBe("Your friends");
+  });
+
+  it("keeps the search box hidden until there are friends", async () => {
+    const { tab } = setup({ list: { list: fixtureList([]) } });
+    await tab.show();
+    expect(tab.element.querySelector<HTMLElement>(".friends-tools")?.hidden).toBe(true);
+  });
+
+  it("matches any part of a name, ignoring case and spaces around it", () => {
+    const ann = fixtureFriend(1, { username: "BigAnn", online: "today" });
+    expect(friendMatches(ann, "  gan ", new Set())).toBe(true);
+    expect(friendMatches(ann, "bob", new Set())).toBe(false);
+    expect(friendMatches(ann, "", new Set(["online"]))).toBe(false);
+    expect(friendMatches(ann, "", new Set(["gift"]))).toBe(true);
   });
 });

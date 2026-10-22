@@ -162,17 +162,6 @@
   flex: none;
 }
 
-.mr1-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.mr1-dot--online {
-  background: var(--colour-online);
-}
-
 .mr1-countdown {
   color: var(--colour-text);
   font-variant-numeric: tabular-nums;
@@ -514,6 +503,11 @@
   pointer-events: none;
 }
 
+/* A pin's card too tall to fit above the legend (`Mr1MapView.placeCard`). */
+.mr1-map--legend-aside .mr1-legend {
+  visibility: hidden;
+}
+
 .mr1-legend__item {
   display: inline-flex;
   align-items: center;
@@ -536,8 +530,8 @@
 }
 
 .mr1-legend__swatch--online {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border: 0;
   background: var(--colour-online);
 }
@@ -562,6 +556,9 @@
   position: absolute;
   z-index: 2;
   width: 320px;
+  /* Capped to the window in a short one (`Mr1MapView.placeCard`): scrolls to View and Attack. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-4);
   border-color: var(--colour-border-strong);
   box-shadow: var(--shadow-popup);
@@ -666,38 +663,28 @@
   color: var(--colour-text-muted);
 }
 
-.mr1-card__stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+/* The shield (they attacked you) and sword (you attacked them) counts on a
+ * neighbour's "Last seen" line, card and list alike. */
+.mr1-battles {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
 }
 
-.mr1-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px var(--space-3);
-  border: 1px solid var(--colour-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
+.mr1-card__sub:has(> .mr1-battles),
+.mr1-row__line:has(> .mr1-battles) {
+  gap: 8px;
 }
 
-.mr1-stat__value {
-  font-size: 20px;
+.mr1-battle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
-.mr1-stat__label {
-  font-size: var(--text-sm);
-  color: var(--colour-text-secondary);
-}
-
-.mr1-stat--warn {
-  border-color: color-mix(in srgb, var(--colour-warning) 35%, transparent);
-  background: color-mix(in srgb, var(--colour-warning) 10%, transparent);
-}
-
-.mr1-stat--warn .mr1-stat__value,
-.mr1-stat--warn .mr1-stat__label {
+.mr1-battle--attackedYou {
   color: var(--colour-warning);
 }
 
@@ -811,7 +798,7 @@
   color: var(--colour-meter);
 }
 
-.mr1-reason .mr1-dot {
+.mr1-reason .online-dot {
   margin: 6px 4px 0;
 }
 
@@ -937,12 +924,29 @@
   min-height: var(--control-height);
 }
 
-.mr1-list__sort {
+.mr1-list__sort,
+.mr1-list__sort-label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-sm);
   color: var(--colour-text-secondary);
+}
+
+.mr1-list__sort {
+  gap: var(--space-1);
+}
+
+/* The order toggle: a square the select's height, its border and fill. */
+.mr1-list__sort-dir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  padding: 0;
+  border-color: var(--colour-border);
+  border-radius: var(--radius-sm);
 }
 
 .mr1-list__sort-select {
@@ -988,11 +992,6 @@
   gap: 5px;
   font-size: var(--text-xs);
   color: var(--colour-text-secondary);
-}
-
-.mr1-row__line--warn {
-  color: var(--colour-warning);
-  font-weight: 600;
 }
 
 .mr1-row__chevron {
@@ -1280,9 +1279,24 @@
     margin-bottom: var(--space-4);
   }
 
+  /* Smaller corner buttons over the map, so fewer pins sit under them (phone audit K). */
+  .mr1-map__home {
+    top: var(--space-2);
+    left: var(--space-2);
+    justify-content: center;
+    width: var(--control-height);
+    padding: 0;
+  }
+
+  .mr1-map__home-label {
+    display: none;
+  }
+
   .mr1-mini {
-    width: 104px;
-    padding: 6px;
+    top: var(--space-2);
+    right: var(--space-2);
+    width: 84px;
+    padding: 4px;
   }
 
   .mr1-mini__caption,

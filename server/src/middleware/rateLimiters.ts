@@ -363,6 +363,22 @@ export const defencesLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limit for the leaderboard (beta.4) - 30 a minute per user. The panel
+ * asks once each time it opens, and the board is cached, so this bounds the
+ * rare rebuild rather than the read.
+ */
+export const leaderboardLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "leaderboard",
+  keyGenerator: byUser("leaderboard"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down." };
+  },
+});
+
+/**
  * Rate limit for another player's achievements (issue #204) - 30 a minute per
  * user. The map asks once per panel opened; a record never worked out (a bot)
  * is worked out on each read, so this bounds that work.
@@ -514,3 +530,31 @@ export const friendActionLimiter = spamLimiter(
   SPAM_LIMITS.friendAction,
   friendsRefusal("You have done that a lot. Please wait a while and try again.")
 );
+
+/**
+ * Rate limit for the Events page's reads and the "What's new" record
+ * (`controllers/events/eventsState.ts`): 30 a minute per user, counted
+ * together. The client reads the events when the yard opens, when the page
+ * opens and after a claim.
+ */
+export const eventsLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "events",
+  keyGenerator: byUser("events"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/**
+ * Bug reports sent (`controllers/bugReports/submitBugReport.ts`), signed in
+ * by account, signed out by IP. Counted before the Turnstile check, so a
+ * script cannot keep Cloudflare busy; the daily cap is the table's own count.
+ */
+export const bugReportLimiter = spamLimiter("bug-report", SPAM_LIMITS.bugReport, (ctx) => {
+  const text = "You have sent a lot of reports. Please wait a while before sending another.";
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: text, message: text, reason: "bugReportLimit" };
+});

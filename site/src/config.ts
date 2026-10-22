@@ -19,6 +19,12 @@ export const SITE = {
    */
   discordUrl: "",
   /**
+   * The Ko-fi page for one-time gifts. Leave it empty and every Ko-fi button
+   * and all "one-time gift" wording stays hidden; paste the page link here
+   * (e.g. "https://ko-fi.com/yourname") once it exists.
+   */
+  kofiUrl: "https://ko-fi.com/themonsterlab",
+  /**
    * Where players send bug reports until the Discord exists. Shown as plain
    * text with a mailto link on the Support page and the home page's beta notice.
    */

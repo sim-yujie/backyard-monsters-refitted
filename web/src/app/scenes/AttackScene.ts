@@ -7,6 +7,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse, Resources } from "@/api/types";
 import { clockReading, formatClock } from "@/game/attack/attackClock";
 import { withLoot } from "@/game/attack/attackerPool";
+import { boostSummary, loadBoosts } from "@/game/attack/boostSummary";
 import { attackYardHandlers } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import {
@@ -41,12 +42,15 @@ import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
+import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
+import { ATTACK_CONFIRM_CLASS } from "@/ui/attack/attackDialogs";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
+import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
 import { ZoomControl } from "@/ui/ZoomControl";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -150,6 +154,9 @@ export class AttackScene implements Scene {
 
   private strip: HTMLElement | null = null;
   private clock: HTMLElement | null = null;
+  /** The shop boosts chip (beta.4), filled once the load has said what runs. */
+  private boosts: HTMLElement | null = null;
+  private boostsShown = false;
   private damage: HTMLElement | null = null;
   private loot: HTMLElement | null = null;
   /** The loot readout's four amounts, twigs to goo. */
@@ -611,6 +618,10 @@ export class AttackScene implements Scene {
       },
     }).mount(tools);
     this.minimap.refreshBuildings();
+    // On a phone both fold behind one map button (#381); it redraws on opening.
+    new ViewToolsFold(tools, (open) => {
+      if (open) this.minimap?.markDirty();
+    });
     this.placeViewTools();
   }
 
@@ -644,9 +655,17 @@ export class AttackScene implements Scene {
     clock.setAttribute("aria-live", "off");
     clock.textContent = "—:——";
 
+    // The number alone on the narrowest phones (#381): the word gives way so
+    // Retreat stays on the one row.
     const damage = document.createElement("span");
     damage.className = "attack-strip__readout";
-    damage.textContent = "0% damage";
+    damage.title = "Damage";
+    const damageValue = document.createElement("span");
+    damageValue.textContent = "0%";
+    const damageWord = document.createElement("span");
+    damageWord.className = "attack-strip__word";
+    damageWord.textContent = " damage";
+    damage.append(damageValue, damageWord);
 
     // "Loot" and one icon-and-amount per resource (#93).
     const loot = document.createElement("span");
@@ -715,12 +734,21 @@ export class AttackScene implements Scene {
     retreat.hidden = this.raiding || isDefenceWatch(this.watchRun);
     this.menu.element.hidden = this.raiding;
 
-    strip.append(title, clock, damage, loot, spacer, hudSlot, speed, retreat, this.menu.element);
+    // The shop boosts this battle is fought with (beta.4): hidden until the load says.
+    const boosts = document.createElement("span");
+    boosts.className = "attack-strip__boosts";
+    boosts.hidden = true;
+    const boostsWord = document.createElement("span");
+    boostsWord.className = "attack-strip__word";
+    boosts.append(icon("boost", 14), boostsWord);
+
+    strip.append(title, boosts, clock, damage, loot, spacer, hudSlot, speed, retreat, this.menu.element);
     context.overlay.content.append(strip);
 
     this.strip = strip;
+    this.boosts = boosts;
     this.clock = clock;
-    this.damage = damage;
+    this.damage = damageValue;
     this.loot = loot;
     this.hudSlot = hudSlot;
     this.retreatButton = retreat;
@@ -844,6 +872,7 @@ export class AttackScene implements Scene {
   /* ── The session on screen ──────────────────────────────────────────── */
 
   private onSessionChange(state: AttackSessionState): void {
+    this.showBoosts();
     this.refreshStrip(state);
     this.refreshStatus(state);
     this.fellPens(state);
@@ -853,6 +882,27 @@ export class AttackScene implements Scene {
       this.confirm?.close();
       this.confirm = null;
     }
+  }
+
+  /**
+   * The boosts chip, once: what each side's shop boosts do, read off the load
+   * the battle was built from. The player defends in a raid and a defence
+   * replay, and attacks everywhere else.
+   */
+  private showBoosts(): void {
+    const chip = this.boosts;
+    const load = this.session?.attackLoad();
+    if (this.boostsShown || !chip || !load) return;
+    this.boostsShown = true;
+    const side = this.raiding || isDefenceWatch(this.watchRun) ? "defender" : "attacker";
+    const summary = boostSummary(loadBoosts(load), side);
+    if (!summary) return;
+    const word = chip.querySelector<HTMLElement>(".attack-strip__word");
+    if (word) word.textContent = summary.label;
+    chip.title = summary.lines.join("\n");
+    chip.setAttribute("aria-label", `${summary.label}. ${summary.lines.join(". ")}`);
+    chip.setAttribute("role", "note");
+    chip.hidden = false;
   }
 
   /** A Housing destroyed in the battle takes its monsters with it (`BUILDING15.as:93-104`). */
@@ -889,7 +939,7 @@ export class AttackScene implements Scene {
         )
       : { damage: Math.floor(damageShown), loot: state.loot };
     if (this.damage) {
-      this.damage.textContent = `${readout.damage}% damage`;
+      this.damage.textContent = `${readout.damage}%`;
     }
     if (this.loot) {
       const { r1, r2, r3, r4 } = readout.loot;
@@ -982,7 +1032,7 @@ export class AttackScene implements Scene {
         this.confirm = null;
       },
     });
-    this.confirm.element.classList.add("attack-confirm");
+    this.confirm.element.classList.add(ATTACK_CONFIRM_CLASS);
     this.confirm.mount(context.overlay.modal);
   }
 

@@ -157,3 +157,47 @@ describe("catchUpYard runs step 5", () => {
     expect(completed.map((job) => job.kind)).toContain("starve");
   });
 });
+
+describe("catchUpChampions: eggs", () => {
+  const DAY = 24 * HOUR;
+  const egg = (overrides: Partial<ChampionData> = {}): ChampionData =>
+    gorgo({ t: 2, hp: 12_000, ft: NOW, status: 3, ...overrides });
+
+  test("nothing hatches before the day is up: no champion in the cage", () => {
+    const save = { champion: [egg({ ft: NOW + 1 })] };
+    expect(catchUpChampions(save, NOW - DAY + 1, NOW)).toEqual([]);
+    expect((save.champion as ChampionData[])[0]).toMatchObject({ status: 3, ft: NOW + 1 });
+  });
+
+  test("hatches at its hatch time: level 1, full health, fed for 23 hours from the hatch", () => {
+    const save = { champion: [egg()] };
+    const jobs = catchUpChampions(save, NOW - 10, NOW);
+    expect(jobs).toEqual([{ kind: "championHatch", id: "G2", t: null, at: NOW, detail: {} }]);
+    expect(save.champion).toEqual([
+      { t: 2, hp: 12_000, l: 1, ft: NOW + 23 * HOUR, fd: 0, fb: 0, pl: 1, status: 0 },
+    ]);
+  });
+
+  test("an egg that hatched while the player was away is fed from the hatch, not from now", () => {
+    const save = { champion: [egg({ ft: NOW - 5 * HOUR })] };
+    const jobs = catchUpChampions(save, NOW - 2 * DAY, NOW);
+    expect(jobs.map((job) => job.at)).toEqual([NOW - 5 * HOUR]);
+    expect((save.champion as ChampionData[])[0]).toMatchObject({ status: 0, ft: NOW + 18 * HOUR });
+  });
+
+  test("a second catch-up does not hatch it again", () => {
+    const save = { champion: [egg()] };
+    catchUpChampions(save, NOW - 10, NOW);
+    expect(catchUpChampions(save, NOW, NOW + 10)).toEqual([]);
+  });
+
+  test("catchUpYard reports the hatch", () => {
+    const save = {
+      savetime: NOW - DAY,
+      buildingdata: { "3": { id: 3, t: 114, x: 0, y: 0, l: 1 } },
+      champion: [egg()],
+    };
+    const completed = catchUpYard(save as Parameters<typeof catchUpYard>[0], NOW);
+    expect(completed.map((job) => job.kind)).toContain("championHatch");
+  });
+});

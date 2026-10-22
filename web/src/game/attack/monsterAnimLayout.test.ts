@@ -61,11 +61,28 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey and Octo-ooze layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul and Slimeattikus (big and mini) layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
+      "monsters/13.png",
+      "monsters/14.v1.png",
       "monsters/bandito.png",
+      "monsters/brain.v2.png",
+      "monsters/crabatron.png",
+      "monsters/eyera.png",
+      "monsters/fang.png",
+      "monsters/fink.png",
+      "monsters/ichi.png",
       "monsters/octoooze.png",
+      "monsters/rezghul.png",
+      "monsters/slimeattikus_anim.png",
+      "monsters/slimeattikusmini_anim.png",
       "monsters/sprite.1.v1.png",
+      "monsters/sprite.11.v2.png",
+      "monsters/sprite.12.gold.png",
+      "monsters/sprite.12.v2.png",
+      "monsters/sprite.3.v2.png",
+      "monsters/vorg_anim.png",
+      "monsters/zafreeti.v2.png",
     ]);
     const other = MONSTER_SPRITES["IC8"];
     if (!other) throw new Error("no IC8");
@@ -90,6 +107,298 @@ describe("applyLayout", () => {
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Bolt layout matches the animated PNG and keeps the worm where it was", () => {
+    const old = MONSTER_SPRITES["C3"];
+    if (!old) throw new Error("no C3");
+    const sheet = spriteFor("C3");
+    if (!sheet) throw new Error("no sprite for C3");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/bolt-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 6 px added left and right, 10 px added on top: the worm stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Fink layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C4"];
+    if (!old) throw new Error("no C4");
+    const sheet = spriteFor("C4");
+    if (!sheet) throw new Error("no sprite for C4");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/fink-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 6 px added left and right, 10 px added on top: the Fink stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Eye-ra layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C5"];
+    if (!old) throw new Error("no C5");
+    const sheet = spriteFor("C5");
+    if (!sheet) throw new Error("no sprite for C5");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/eyera-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 7 px added left and right, 9 px added on top: the Eye-ra stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 7);
+    expect(sheet.anchorY).toBe(old.anchorY + 9);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 7);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Fang layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C8"];
+    if (!old) throw new Error("no C8");
+    const sheet = spriteFor("C8");
+    if (!sheet) throw new Error("no sprite for C8");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/fang-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 6 px added left and right, 11 px added on top: the Fang stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 11);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Ichi layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C6"];
+    if (!old) throw new Error("no C6");
+    const sheet = spriteFor("C6");
+    if (!sheet) throw new Error("no sprite for C6");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/ichi-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 10 px added left and right, 12 px added on top: the Ichi stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 10);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 10);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Crabatron layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C10"];
+    if (!old) throw new Error("no C10");
+    const sheet = spriteFor("C10");
+    if (!sheet) throw new Error("no sprite for C10");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/crabatron-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(png.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(png.readUInt32BE(20));
+    // 10 px added left and right, 12 px added on top: the Crabatron stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 10);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 10);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the D.A.V.E. layouts (normal and gold) match the animated PNGs and keep the tank where it was", () => {
+    const old = MONSTER_SPRITES["C12"];
+    if (!old) throw new Error("no C12");
+    for (const [id, png] of [["C12", "dave-anim@4x.png"], ["C12Gold", "dave-gold-anim@4x.png"]] as const) {
+      const sheet = spriteFor(id);
+      if (!sheet) throw new Error(`no sprite for ${id}`);
+      const data = readFileSync(resolve(__dirname, `../../../../server/public/assets/monsters/${png}`));
+      expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+      expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+      expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+      expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+      // 12 px added left and right, 14 px on top: the tank stays on the same ground point.
+      expect(sheet.anchorX).toBe(old.anchorX + 12);
+      expect(sheet.anchorY).toBe(old.anchorY + 14);
+      expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+      expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 12);
+      expect(sheet.animations.attack?.first).toBe(7);
+      expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+      expect(sheet.strikeFrame).toBe(2);
+    }
+  });
+
+  it("the Project X layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C11"];
+    if (!old) throw new Error("no C11");
+    const sheet = spriteFor("C11");
+    if (!sheet) throw new Error("no sprite for C11");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/projectx-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+    // 10 px added left and right, 12 px on top: the creature stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 10);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 10);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Wormzer layout matches the animated PNG and keeps the worm where it was", () => {
+    const old = MONSTER_SPRITES["C13"];
+    if (!old) throw new Error("no C13");
+    const sheet = spriteFor("C13");
+    if (!sheet) throw new Error("no sprite for C13");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/wormzer-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(32);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+    // 8 px added left and right, 14 px on top: the worm stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 8);
+    expect(sheet.anchorY).toBe(old.anchorY + 14);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Brain layout matches the animated PNG and keeps the creature where it was", () => {
+    const old = MONSTER_SPRITES["C9"];
+    if (!old) throw new Error("no C9");
+    const sheet = spriteFor("C9");
+    if (!sheet) throw new Error("no sprite for C9");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/brain-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(30);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+    // 6 px added left and right, 12 px on top: the creature stays on the same point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+    expect(sheet.animations.invisible).toBeUndefined();
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Zafreeti layout matches the animated PNG and keeps the flyer where it was", () => {
+    const old = MONSTER_SPRITES["C15"];
+    if (!old) throw new Error("no C15");
+    const sheet = spriteFor("C15");
+    if (!sheet) throw new Error("no sprite for C15");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/zafreeti-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(32);
+    expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+    expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+    // 10 px added left and right, 12 px on top: the creature stays on the same point.
+    expect(sheet.anchorX).toBe(old.anchorX + 10);
+    expect(sheet.anchorY).toBe(old.anchorY + 12);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 10);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Vorg layout matches the animated PNG, keeps the 3-row wing flap and adds attack rows", () => {
+    const old = MONSTER_SPRITES["C16"];
+    if (!old) throw new Error("no C16");
+    const sheet = spriteFor("C16");
+    if (!sheet) throw new Error("no sprite for C16");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/vorg-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(32);
+    // 6 px added left and right, 10 px on top: the flyer stays on the same point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    // The flap is untouched: rows 0-2, a new row every 3 ticks, `tick % 9 / 3`.
+    expect(sheet.animations.walk).toEqual(old.animations.walk);
+    expect(sheet.animations.landed).toEqual(old.animations.landed);
+    expect([0, 3, 6, 9, 12, 15].map((tick) => frameRow(sheet, "walk", tick))).toEqual([0, 1, 2, 0, 1, 2]);
+    expect(sheet.animations.attack?.first).toBe(3);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(sheet.rows);
+    expect(sheet.strikeFrame).toBe(2);
+    // The strike lands on row 5, the swing ends on the recovery row and the flap goes on after it.
+    expect(attackRow(sheet, 0, 0)).toBe(5);
+    expect(attackRow(sheet, 4, 0)).toBe(6);
+    expect(attackRow(sheet, 8, 0)).toBe(7);
+    expect(attackRow(sheet, 12, 6)).toBe(frameRow(sheet, "idle", 6));
+    expect(frameRow(sheet, "idle", 6)).toBe(2);
+  });
+
+  it("the Teratorn layout matches the animated PNG, keeps the 3-row wing flap and adds attack rows", () => {
+    const old = MONSTER_SPRITES["C14"];
+    if (!old) throw new Error("no C14");
+    const sheet = spriteFor("C14");
+    if (!sheet) throw new Error("no sprite for C14");
+    const data = readFileSync(resolve(__dirname, "../../../../server/public/assets/monsters/teratorn-anim@4x.png"));
+    expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(32);
+    // 6 px added left and right, 10 px on top: the flyer stays on the same point.
+    expect(sheet.anchorX).toBe(old.anchorX + 6);
+    expect(sheet.anchorY).toBe(old.anchorY + 10);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 6);
+    // The flap is untouched: rows 0-2, a new row every 3 ticks, `tick % 9 / 3`.
+    expect(sheet.animations.walk).toEqual(old.animations.walk);
+    expect(sheet.animations.landed).toEqual(old.animations.landed);
+    expect([0, 3, 6, 9, 12, 15].map((tick) => frameRow(sheet, "walk", tick))).toEqual([0, 1, 2, 0, 1, 2]);
+    expect(sheet.animations.attack?.first).toBe(3);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(sheet.rows);
+    expect(sheet.strikeFrame).toBe(2);
+    // The strike lands on row 5, the swing ends on the recovery row and the flap goes on after it.
+    expect(attackRow(sheet, 0, 0)).toBe(5);
+    expect(attackRow(sheet, 4, 0)).toBe(6);
+    expect(attackRow(sheet, 8, 0)).toBe(7);
+    expect(attackRow(sheet, 12, 6)).toBe(frameRow(sheet, "idle", 6));
+    expect(frameRow(sheet, "idle", 6)).toBe(2);
   });
 
   it("the Bandito layout matches the animated PNG and keeps the feet where they were", () => {
@@ -131,6 +440,54 @@ describe("applyLayout", () => {
     expect(sheet.anchorY).toBe(old.anchorY + 8);
     expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
     expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
+    expect(sheet.animations.attack?.first).toBe(7);
+    expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+    expect(sheet.strikeFrame).toBe(2);
+  });
+
+  it("the Slimeattikus layouts (big and mini) match the animated PNGs and keep the slime where it was", () => {
+    for (const [key, png, dx, dy] of [
+      ["C17", "slimeattikus-anim@4x.png", 8, 17],
+      ["C18", "slimeattikusmini-anim@4x.png", 5, 11],
+    ] as const) {
+      const old = MONSTER_SPRITES[key];
+      if (!old) throw new Error(`no ${key}`);
+      const sheet = spriteFor(key);
+      if (!sheet) throw new Error(`no sprite for ${key}`);
+      const data = readFileSync(resolve(__dirname, `../../../../server/public/assets/monsters/${png}`));
+      expect(data.readUInt32BE(16)).toBe(sheet.width * 4);
+      expect(data.readUInt32BE(20)).toBe(sheet.height * 4);
+      expect(sheet.columns).toBe(32);
+      expect(sheet.frameWidth * sheet.columns * 4).toBe(data.readUInt32BE(16));
+      expect(sheet.frameHeight * sheet.rows * 4).toBe(data.readUInt32BE(20));
+      expect(sheet.anchorX).toBe(old.anchorX + dx);
+      expect(sheet.anchorY).toBe(old.anchorY + dy);
+      expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
+      expect(sheet.animations.attack?.first).toBe(7);
+      expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
+      expect(sheet.strikeFrame).toBe(2);
+    }
+  });
+
+  it("the Rezghul layout matches the animated PNG and keeps the demon where it was", () => {
+    const old = MONSTER_SPRITES["C19"];
+    if (!old) throw new Error("no C19");
+    const sheet = spriteFor("C19");
+    if (!sheet) throw new Error("no sprite for C19");
+    const png = readFileSync(
+      resolve(__dirname, "../../../../server/public/assets/monsters/rezghul-anim@4x.png"),
+    );
+    expect(png.readUInt32BE(16)).toBe(sheet.width * 4);
+    expect(png.readUInt32BE(20)).toBe(sheet.height * 4);
+    expect(sheet.columns).toBe(32);
+    expect(sheet.rows).toBe(12);
+    // 8 px added left and right, 13 px added on top: the demon stays on the same ground point.
+    expect(sheet.anchorX).toBe(old.anchorX + 8);
+    expect(sheet.anchorY).toBe(old.anchorY + 13);
+    expect(sheet.frameHeight - sheet.anchorY).toBe(old.frameHeight - old.anchorY);
+    expect(sheet.frameWidth - sheet.anchorX).toBe(old.frameWidth - old.anchorX + 8);
+    expect(sheet.animations.idle).toEqual({ first: 0, count: 1, ticksPerFrame: 8 });
+    expect(sheet.animations.walk).toEqual({ first: 1, count: 6, ticksPerFrame: 8 });
     expect(sheet.animations.attack?.first).toBe(7);
     expect((sheet.animations.attack?.first ?? 0) + (sheet.animations.attack?.count ?? 0)).toBe(12);
     expect(sheet.strikeFrame).toBe(2);

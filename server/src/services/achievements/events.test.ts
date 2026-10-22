@@ -4,6 +4,7 @@ import { achievementConfig } from "../../config/AchievementConfig.js";
 import {
   KOZU_CAMP_WMID,
   kozuHallFell,
+  landedAttackEvents,
   recordAchievementEvents,
   recordAttackAchievements,
   type DefenderLike,
@@ -137,6 +138,20 @@ describe("recordAchievementEvents", () => {
   });
 });
 
+describe("landedAttackEvents", () => {
+  test("counts each pu3 and the Kozu hall together", () => {
+    const attack = {
+      attackerBasesaveid: 7,
+      defender: kozuCamp(),
+      before: {},
+      after: { "0": 0 },
+      bombs: [{ id: "pu3" }, { id: "tw3" }, { id: "pu3" }],
+    };
+    expect(landedAttackEvents(attack)).toEqual({ wm2hall: 1, hugerage: 2 });
+    expect(landedAttackEvents({ ...attack, defender: {}, bombs: undefined })).toEqual({});
+  });
+});
+
 describe("recordAttackAchievements", () => {
   const landed = (defender: DefenderLike, after: Row = { "0": 0 }) => ({ attackerBasesaveid: 7, defender, before: {}, after });
 
@@ -150,6 +165,26 @@ describe("recordAttackAchievements", () => {
     expect(await recordAttackAchievements(em, landed(kozuCamp(), { "0": 300 }))).toBe(false);
     expect(db.transactions).toBe(0);
     expect(readAchievements(db.row!).s.wm2hall).toBe(0);
+  });
+
+  test("a biggest Putty bomb unlocks Huge Rage once, on any camp, and pays its Shiny", async () => {
+    achievementConfig.rewards = true;
+    const rage = { ...landed({}, {}), bombs: [{ id: "tw1" }, { id: "pu3" }] };
+    expect(await recordAttackAchievements(em, rage)).toBe(true);
+    expect(readAchievements(db.row!).s.hugerage).toBe(1);
+    expect(readAchievements(db.row!).c["9"]).toMatchObject({ shiny: 10 });
+    expect(db.row!.credits).toBe(110);
+
+    expect(await recordAttackAchievements(em, rage)).toBe(true);
+    expect(readAchievements(db.row!).s.hugerage).toBe(2);
+    expect(db.row!.credits).toBe(110);
+    expect(db.bell).toHaveLength(1);
+  });
+
+  test("smaller bombs, or none, record nothing", async () => {
+    expect(await recordAttackAchievements(em, { ...landed({}, {}), bombs: [{ id: "pu2" }, { id: "pb3" }] })).toBe(false);
+    expect(await recordAttackAchievements(em, { ...landed({}, {}), bombs: null })).toBe(false);
+    expect(db.transactions).toBe(0);
   });
 
   test("a failure is logged, never thrown: the attack has landed", async () => {

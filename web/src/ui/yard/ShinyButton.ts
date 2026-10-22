@@ -60,6 +60,7 @@ export class ShinyButton {
   private readonly live: HTMLElement;
 
   private price = 0;
+  private free = 0;
   private reason: string | null = null;
   private busy = false;
   private armTimer: unknown = null;
@@ -105,6 +106,13 @@ export class ShinyButton {
   setPrice(price: number): void {
     if (price === this.price) return;
     this.price = price;
+    this.draw();
+  }
+
+  /** Free ones held (an event's speed-ups): the price reads "Free (n left)" instead of Shiny. */
+  setFree(count: number): void {
+    if (count === this.free) return;
+    this.free = count;
     this.draw();
   }
 
@@ -155,15 +163,19 @@ export class ShinyButton {
 
   private draw(): void {
     const armed = this.armed;
-    const priceText = this.spell(this.price);
+    const freeText = this.free > 0 ? `Free (${this.free} left)` : null;
+    const priceText = freeText ?? this.spell(this.price);
     this.labelNode.textContent = armed ? "Tap again" : this.label;
-    this.priceNode.replaceChildren(resourceAmount("shiny", priceText, { decorative: true }));
+    if (freeText) this.priceNode.textContent = freeText;
+    else this.priceNode.replaceChildren(resourceAmount("shiny", priceText, { decorative: true }));
     this.element.classList.toggle("shiny-button--armed", armed);
+    this.element.classList.toggle("shiny-button--free", freeText !== null);
     this.element.disabled = this.reason !== null || this.busy;
     this.element.setAttribute("aria-pressed", armed ? "true" : "false");
+    const cost = freeText ? `a free one, ${this.free} left` : `${priceText} Shiny`;
     const name = armed
-      ? `Tap again to spend ${priceText} Shiny on ${this.what ?? this.label}`
-      : `${this.what ? `${this.label} ${this.what}` : this.label}, ${priceText} Shiny`;
+      ? `Tap again to ${freeText ? "use" : "spend"} ${cost} on ${this.what ?? this.label}`
+      : `${this.what ? `${this.label} ${this.what}` : this.label}, ${cost}`;
     this.element.setAttribute("aria-label", this.reason ? `${name}. ${this.reason}` : name);
     this.element.title = this.reason ?? (armed ? "Tap again within 3 seconds to spend" : "");
   }

@@ -93,13 +93,11 @@ export const buildSaveData = (
   // empty one where a real player shows theirs (#245).
   if (!isOwner) filteredSave.aiattacks = {};
 
-  // The Yard Planner's saved layouts, trap spots included, are the account's
-  // own: anyone viewing, helping or attacking the yard gets none. So is the
-  // list of traps that fired, which only the owner's planner reads (to offer
-  // putting them back) and which says where traps stood.
-  // Nor is the owner's Shiny count anyone else's business.
+  // The list of traps that fired is the account's own: only the owner's
+  // planner reads it (to offer putting them back), and it says where traps
+  // stood. Anyone viewing, helping or attacking the yard gets none. Nor is
+  // the owner's Shiny count anyone else's business.
   if (save.userid !== user.userid) {
-    filteredSave.savetemplate = [];
     filteredSave.firedtraps = [];
     filteredSave.credits = 0;
   }

@@ -452,6 +452,19 @@ body {
   font-weight: 700;
 }
 
+/* ── Online dot ─────────────────────────────────────────────────────────────
+ * The green dot beside an online player's name (`ui/onlineDot.ts`). Offline
+ * players get none; a "Last seen" line says the rest.
+ */
+.online-dot {
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--colour-online);
+}
+
 /* ── Tabs and segments ──────────────────────────────────────────────────────
  * One look for every row of tabs: a quiet tray, the chosen tab lit and
  * underlined in the accent. The Monsters and Build screens' strips
@@ -1199,8 +1212,30 @@ body {
 }
 
 /* A phone breaks the line between links, not inside one. */
-.login-footer a {
+.login-footer a,
+.login-footer__report {
   white-space: nowrap;
+}
+
+/* "Report a bug" opens a form rather than a page, so it is a button dressed as the links. */
+.login-footer__report {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--colour-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.login-footer__report:hover {
+  color: var(--colour-accent-hover);
+}
+
+.login-footer__report:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
 }
 
 /* Cloudflare Turnstile's widget on the sign-up form: it draws its own box. */

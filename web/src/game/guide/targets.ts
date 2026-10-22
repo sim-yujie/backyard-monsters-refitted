@@ -19,6 +19,12 @@
 export const TUT_ATTRIBUTE = "data-tut";
 
 /**
+ * On a closed container that holds targets (the phone's Menu sheet, #381):
+ * the target to point at instead while they are out of sight.
+ */
+export const TUT_FOLD_ATTRIBUTE = "data-tut-fold";
+
+/**
  * The target names the foundation package put in place, for the packages to
  * point at without guessing. Parameterised ones are prefixes.
  */
@@ -32,6 +38,8 @@ export const TutTarget = {
   DOCK_GOALS: "dock-goals",
   DOCK_MAIL: "dock-mail",
   DOCK_YARDS: "dock-yards",
+  /** The phone's Menu button, which holds Map, Mail, Monsters and the rest (#381). */
+  DOCK_MENU: "dock-menu",
   BUILD_TAB: "build-tab:",
   BUILD_CARD: "build-card:",
   BUILD_NEXT_PAGE: "build-next-page",
@@ -133,8 +141,14 @@ const rectOf = (element: HTMLElement): TargetRect => {
  */
 export const findTarget = (name: string, root: ParentNode = document): FoundTarget | null => {
   const selector = `[${TUT_ATTRIBUTE}="${CSS.escape(name)}"]`;
-  for (const element of root.querySelectorAll<HTMLElement>(selector)) {
+  const elements = [...root.querySelectorAll<HTMLElement>(selector)];
+  for (const element of elements) {
     if (shown(element)) return { rect: rectOf(element), element };
+  }
+  // Folded away in a closed menu: point at what opens it.
+  for (const element of elements) {
+    const fold = element.closest(`[${TUT_FOLD_ATTRIBUTE}]`)?.getAttribute(TUT_FOLD_ATTRIBUTE);
+    if (fold && fold !== name) return findTarget(fold, root);
   }
 
   const exact = canvasTargets.get(name);

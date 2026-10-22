@@ -4,6 +4,7 @@ import type { YardApi } from "./yard";
 import { YardStore } from "@/game/yard/YardStore";
 import {
   championActions,
+  championCancelEgg,
   championFeed,
   championRaise,
   championStance,
@@ -44,6 +45,12 @@ describe("champion routes", () => {
     expect(sent[1]!.body.get("mode")).toBe("shiny");
   });
 
+  it("cancel-egg posts to its own route", async () => {
+    stubFetch();
+    await championCancelEgg();
+    expect(sent[0]!.url).toMatch(/\/bm\/yard\/champion\/cancel-egg$/);
+  });
+
   it("stance sends the champion type and its Mode (#220)", async () => {
     stubFetch();
     await championStance(5, "defensive");
@@ -76,6 +83,7 @@ const setup = (champion: ChampionSaveEntry[], housed: Record<string, number> = {
   const answer = { error: 0, savetime: T0, currenttime: T0, completed: [], report: {} } as unknown as YardResponse<never>;
   const api = {
     raise: vi.fn(() => Promise.resolve(answer)),
+    cancelEgg: vi.fn(() => Promise.resolve(answer)),
     feed: vi.fn(() => Promise.resolve(answer)),
     evolve: vi.fn(() => Promise.resolve(answer)),
     heal: vi.fn(() => Promise.resolve(answer)),
@@ -110,6 +118,16 @@ describe("championActions: local checks", () => {
     expect(reasonOf(await frozen.actions.raise(4))).toBe("notRaisable");
     expect((await frozen.actions.raise(2)).ok).toBe(true);
     expect(frozen.api.raise).toHaveBeenCalledWith(2);
+  });
+
+  it("raise: not while an egg waits in the cage; cancelEgg needs one", async () => {
+    const egg = setup([gorgo({ t: 2, status: 3, ft: T0 + 3_600 })]);
+    expect(reasonOf(await egg.actions.raise(1))).toBe("eggInCage");
+    expect(reasonOf(await egg.actions.feed("shiny"))).toBe("noChampion");
+    expect(reasonOf(await egg.actions.juice())).toBe("noChampion");
+    expect((await egg.actions.cancelEgg()).ok).toBe(true);
+    expect(egg.api.cancelEgg).toHaveBeenCalled();
+    expect(reasonOf(await setup([]).actions.cancelEgg())).toBe("noEgg");
   });
 
   it("feed: waits for hunger and checks housing", async () => {

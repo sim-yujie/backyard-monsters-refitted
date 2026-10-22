@@ -5,6 +5,7 @@ import {
   entryOf,
   feedsOf,
   foodBonusOf,
+  hatchDueEgg,
   levelOf,
   maxHealthOf,
   readChampions,
@@ -12,8 +13,15 @@ import {
 } from "./champion.js";
 
 /**
- * Catch-up step 5: champions in the cage heal and starve while the player is
- * away (`docs/design/yard-buildings.md` §7.2 "Catch-up", decision D11).
+ * Catch-up step 5: the egg in the cage hatches, and champions in the cage heal
+ * and starve while the player is away (`docs/design/yard-buildings.md` §7.2
+ * "Catch-up", decision D11).
+ *
+ * - **Hatching** (owner, 2026-10-20): an egg (status 3) whose hatch time `ft`
+ *   has come becomes the level-1 champion it holds, fed until one interval
+ *   after the hatch (`champion.ts` `hatchDueEgg`), and the answer says so
+ *   (`championHatch`). It then heals and starves below like any champion
+ *   from that moment.
  *
  * The original did both in the champion's pen tick
  * (`client/scripts/com/monsters/monsters/champions/ChampionBase.tickBPen`,
@@ -56,6 +64,17 @@ export interface StarveJob {
     /** Food-bonus rank afterwards (at the top level). */
     foodBonus: number;
   };
+}
+
+/** An egg that hatched, as `completed` spells it. */
+export interface ChampionHatchJob {
+  kind: "championHatch";
+  /** The champion, `G1`..`G4`. */
+  id: string;
+  t: null;
+  /** Unix seconds it hatched: its hatch time, not the catch-up's `now`. */
+  at: number;
+  detail: Record<string, never>;
 }
 
 /** The slice of a save this step reads and writes. */
@@ -156,13 +175,19 @@ export const catchUpChampions = (
   save: CatchUpChampionsSave,
   from: number,
   now: number
-): StarveJob[] => {
+): (StarveJob | ChampionHatchJob)[] => {
   const champions = readChampions(save.champion);
   if (champions.length === 0) return [];
 
   const periods = healPeriods(from, now);
-  const jobs: StarveJob[] = [];
+  const jobs: (StarveJob | ChampionHatchJob)[] = [];
   let changed = false;
+
+  const hatch = hatchDueEgg(champions, now);
+  if (hatch) {
+    jobs.push({ kind: "championHatch", id: hatch.entry.id, t: null, at: hatch.at, detail: {} });
+    changed = true;
+  }
 
   champions.forEach((stored, index) => {
     const entry = entryOf(stored);

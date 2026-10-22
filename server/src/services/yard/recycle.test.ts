@@ -135,6 +135,10 @@ describe("planRecycle: refusals", () => {
       "championInCage"
     );
     expect(planRecycle(yardOf([cage], { champion: [{ t: 1, status: 2 }] }), 1, NOW).report.id).toBe(1);
+    // An egg hatching in the cage: cancel it first.
+    expect(reasonOf(() => planRecycle(yardOf([cage], { champion: [{ t: 2, status: 3 }] }), 1, NOW))).toBe(
+      "eggInCage"
+    );
 
     const chamber = building(2, 119, { fz: JSON.stringify([{ t: 2 }]) });
     expect(reasonOf(() => planRecycle(yardOf([chamber]), 2, NOW))).toBe("championsFrozen");

@@ -195,6 +195,8 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "friend requests (sent and received)", table: "friend_request", where: `from_userid = ? OR to_userid = ?`, params: [u, u] },
   { label: "friend helps (given and received)", table: "friend_help", where: `helper_userid = ? OR owner_userid = ?`, params: [u, u] },
   { label: "friend gifts (sent and received)", table: "friend_gift", where: `from_userid = ? OR to_userid = ?`, params: [u, u] },
+  { label: "event progress (calendars, collections)", table: "event_progress", where: `userid = ?`, params: [u] },
+  { label: "bug reports they sent", table: "bug_report", where: `userid = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
   { label: "saves (yards, outposts, inferno)", table: "save", where: `userid = ?`, params: [u] },

@@ -18,6 +18,7 @@ import {
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { avatar, countdown } from "./TargetCard";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon } from "./icons";
 
 /**
@@ -35,6 +36,11 @@ export const MAP_ART = "/assets/ui/map.v1.jpg";
 const DRAG_THRESHOLD = 5;
 /** Arrow-key pan step. */
 const KEY_STEP = 80;
+/**
+ * How far past the map's edges it can be dragged, so a pin on the edge can be
+ * moved out from under My yard and the overview map (phone audit K).
+ */
+const EDGE_PAD = 56;
 
 export interface MapViewHandlers {
   readonly onSelect: (key: string | null) => void;
@@ -60,6 +66,9 @@ export const practiceSpot = (own: PinSpot | null): PinSpot => {
   return { x, y: Math.min(MAP_SIZE - margin, base.y + 60) };
 };
 
+/** On the map while a pin's card has no room above the legend: the legend steps aside. */
+const LEGEND_ASIDE = "mr1-map--legend-aside";
+
 export class Mr1MapView {
   readonly element: HTMLElement;
 
@@ -70,6 +79,7 @@ export class Mr1MapView {
   private readonly miniFrame: HTMLElement;
   private readonly miniDots: HTMLElement;
   private readonly miniCaption: HTMLElement;
+  private readonly legendBox: HTMLElement;
   private readonly resizeObserver: ResizeObserver | null;
 
   private scroll: PinSpot = { x: 0, y: 0 };
@@ -101,7 +111,8 @@ export class Mr1MapView {
     this.viewport.append(this.world);
 
     const myYard = button("btn mr1-map__home");
-    myYard.append(icon("target", 18), "My yard");
+    myYard.setAttribute("aria-label", "My yard");
+    myYard.append(icon("target", 18), el("span", "mr1-map__home-label", "My yard"));
     myYard.addEventListener("click", () => this.centreOnYou());
 
     this.mini = el("div", "mr1-mini");
@@ -115,7 +126,8 @@ export class Mr1MapView {
     this.mini.append(miniMap, this.miniCaption);
     this.mini.title = "The whole map. Drag the box to move around.";
 
-    this.element.append(this.viewport, myYard, this.mini, this.legend());
+    this.legendBox = this.legend();
+    this.element.append(this.viewport, myYard, this.mini, this.legendBox);
 
     this.viewport.addEventListener("pointerdown", this.onPointerDown);
     this.viewport.addEventListener("click", this.onClickCapture, true);
@@ -180,6 +192,7 @@ export class Mr1MapView {
     if (this.card && this.card !== card) this.card.remove();
     this.card = card;
     const pin = this.selected ? this.pins.get(this.selected) : null;
+    this.element.classList.remove(LEGEND_ASIDE);
     if (!card || !pin) return;
     this.pinLayer.append(card);
     this.placeCard(card, pin.spot);
@@ -188,7 +201,7 @@ export class Mr1MapView {
   /** Scrolls so a pin is in view, for a pick made in the list. */
   reveal(key: string): void {
     const pin = this.pins.get(key);
-    if (pin) this.scrollTo(centreOn(pin.spot, this.size));
+    if (pin) this.scrollTo(centreOn(pin.spot, this.size, EDGE_PAD));
   }
 
   centreOnYou(): void {
@@ -231,7 +244,7 @@ export class Mr1MapView {
       const shielded = isProtected(target);
       control.setAttribute(
         "aria-label",
-        `${target.name}, level ${target.level}${playing ? ", playing now" : ""}${shielded ? ", protected" : ""}${
+        `${target.name}, level ${target.level}${playing ? ", online" : ""}${shielded ? ", protected" : ""}${
           target.attacksFrom > target.attacksTo ? ", attacked you" : ""
         }`,
       );
@@ -239,7 +252,7 @@ export class Mr1MapView {
       if (shielded) badge.append(icon("shield", 12));
       else badge.textContent = String(target.level);
       control.append(badge);
-      if (playing) tag.append(el("span", "mr1-dot mr1-dot--online"));
+      if (playing) tag.append(onlineDot("", true));
       tag.append(target.name);
     }
 
@@ -276,16 +289,27 @@ export class Mr1MapView {
     dot.style.top = `${(spot.y / MAP_SIZE) * 100}%`;
   }
 
-  /** Beside the pin, on whichever side has room, kept inside the window. */
+  /**
+   * Beside the pin, on whichever side has room, kept inside the window and
+   * above the legend, so the legend never sits on its View and Attack. In a
+   * window too short for both, the legend steps aside while the card is open,
+   * and a card taller than the whole window scrolls inside, down to them.
+   */
   private placeCard(card: HTMLElement, spot: PinSpot): void {
+    card.style.maxHeight = "";
     const width = card.offsetWidth || 320;
     const height = card.offsetHeight || 260;
     const gap = 44;
     const roomRight = this.scroll.x + this.size.width - (spot.x + gap);
     const left = roomRight >= width + 8 ? spot.x + gap : spot.x - gap - width;
+    // The legend's top, from the top of the view; the bottom of the view when it is hidden (a phone).
+    const floor = this.legendBox.offsetHeight > 0 ? this.legendBox.offsetTop : this.size.height;
     const minTop = this.scroll.y + 8;
-    const maxTop = this.scroll.y + this.size.height - height - 8;
+    const maxTop = this.scroll.y + floor - height - 8;
     const top = Math.max(minTop, Math.min(spot.y - 60, maxTop));
+    this.element.classList.toggle(LEGEND_ASIDE, top > maxTop);
+    const room = this.size.height - 16;
+    if (height > room) card.style.maxHeight = `${Math.floor(room)}px`;
     card.style.left = `${Math.round(left)}px`;
     card.style.top = `${Math.round(top)}px`;
   }
@@ -293,7 +317,7 @@ export class Mr1MapView {
   /* ── Scrolling ──────────────────────────────────────────────────────── */
 
   private scrollTo(scroll: PinSpot): void {
-    this.scroll = clampScroll(scroll, this.size);
+    this.scroll = clampScroll(scroll, this.size, EDGE_PAD);
     this.world.style.transform = `translate(${-Math.round(this.scroll.x)}px, ${-Math.round(this.scroll.y)}px)`;
     this.updateMini();
   }
@@ -432,7 +456,7 @@ export class Mr1MapView {
       entry("mr1-tone--attacked", "Attacked you"),
       entry("mr1-tone--protected", "Protected"),
       entry("mr1-legend__swatch--tribe mr1-tone--tribe", "Wild monster tribe"),
-      entry("mr1-legend__swatch--online", "Playing now"),
+      entry("mr1-legend__swatch--online", "Online"),
     );
     return legend;
   }

@@ -24,7 +24,7 @@ const ago = (days: number) => new Date(NOW - days * DAY);
 
 const A = 990001;
 const B = 990002;
-const CONFIG: RetentionConfig = { logDays: 30, mailDays: 365, attackLogDays: 365, chatReportDays: 365 };
+const CONFIG: RetentionConfig = { logDays: 30, mailDays: 365, attackLogDays: 365, chatReportDays: 365, bugReportDays: 180 };
 
 describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
   let orm: MikroORM;

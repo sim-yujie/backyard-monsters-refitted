@@ -21,6 +21,7 @@ export const GET: APIRoute = async () => {
     { path: "/guides/", lastmod: latestGuide },
     { path: "/changelog/", lastmod: latestNews },
     { path: "/support/" },
+    { path: "/support/thanks/" },
     { path: "/credits/" },
     ...guides.map((g) => ({ path: `/guides/${g.id}/`, lastmod: day(g.data.updated) })),
   ];

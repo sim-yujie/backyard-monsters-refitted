@@ -303,12 +303,13 @@ import {
  *    caught by the retreat at the end of the countdown, is taken off the field
  *    rather than walked to the edge (`ATTACK.as:237-240`). It deals no more
  *    damage either way.
- * 8. **Not modelled at all**, each because its numbers were never traced
- *    (`docs/specs/combat.md:1362-1375`) or because it is out of Map Room 2's
- *    scope: invisibility, `Blink`, `PoisonOnAttack`, `GlavesOnAttack`, the Stronghold's
- *    four emitters, every siege weapon, and the per-creep `_hitLimit`, even
- *    for a raid (note 17, owner decision 2026-10-06). A yard holding one of
- *    those buildings fires it as an ordinary single-target tower.
+ * 8. **Not modelled at all**, each because it is out of Map Room 2's scope:
+ *    the Stronghold's four emitters, every siege weapon, and the per-creep
+ *    `_hitLimit`, even for a raid (note 17, owner decision 2026-10-06). A yard
+ *    holding one of those buildings fires it as an ordinary single-target
+ *    tower. The Monster Lab's moves (Brain's cloak, Bolt's blink, Fang's
+ *    venom, Teratorn's bounces and the rest) are modelled since issue #352,
+ *    with the owner's numbers (`docs/design/special-moves.md`).
  * 9. **The defence is supplied, and its rules are the owner's.** The defender's
  *    bunker blob is opaque to the server (§6 item 5), so
  *    {@link BattleOptions.bunkers} carries it, read off `buildingdata` by
@@ -433,12 +434,25 @@ import {
  *    landing's blast is that shell's own size, damage and point, where Flash
  *    borrows the newest shell's; a fallen cannon stops firing at once, where
  *    Flash's finishes its burst at half damage (both the owner's calls,
- *    2026-10-06). The jar and the tower overdrive are not modelled. The cull
+ *    2026-10-06). The jar is not modelled; the tower overdrive is (note 19). The cull
  *    goes on once the cannon has fallen. A hatched Spurtz walks straight at
  *    its foe, and an attacker that hits it does not make it turn on that
  *    attacker. Its level is the defender's for it from
  *    {@link BattleOptions.defenderLevels}, else 1. Its damage and kills go on
  *    its cannon's report row; Flash has no such report.
+ * 19. **The shop's boosts (`STORE.as:2431-2500`, {@link BattleOptions.buffs}).**
+ *    Tower Overdrive multiplies every defending tower's shot by 1.25, the
+ *    Spurtz Cannon's shells too (`BUILDING20.as:27-31` and the other towers),
+ *    before the shot is cut to a whole number. Monster Overdrive multiplies
+ *    a side's monsters' and champions' damage by 1.25 (`MonsterDust.as`), the
+ *    defensive buff takes 30% off every hit they take, on top of any other
+ *    armour (`BeastMode.as`, `ArmorPropertyModifier`), and the speed buff makes
+ *    them walk 1.5 times as fast and swing 1.5 times as often
+ *    (`HyperSpeed.as`). The defender's boosts are its yard's; the attacker's
+ *    are its main yard's, copied at attack start (`GLOBAL.as:816-822`,
+ *    `MonsterBase.updateBuffs`, `:799-845`), and a wild raid has none. Where
+ *    it is not Flash: a boost runs the whole battle if it was running when the
+ *    battle began, where Flash's stops the moment it runs out.
  *
  * ## The random stream's order
  *
@@ -532,7 +546,48 @@ export interface BattleOptions {
    * (`docs/design/trojan-horse.md` §5), so it sets this to its last spawn.
    */
   readonly raidSpawnsUntil?: number;
+  /**
+   * The shop's boosts each side fights with (fidelity note 19), as the server
+   * read them off the yards at attack start. None, or a side without any,
+   * fights exactly as it did before the boosts existed. A wild raid's
+   * attacker never has any.
+   */
+  readonly buffs?: BattleBuffs;
 }
+
+/**
+ * The boosts one side's shop items give it in a battle (fidelity note 19):
+ * Tower Overdrive (`TOD`), Monster Overdrive (`MOD`), the Monster Defensive
+ * Buff (`MDOD`) and the Monster Speed Buff (`MSOD`). Each is on or absent.
+ */
+export interface SideBuffs {
+  /** Tower Overdrive: the side's towers do {@link TOWER_OVERDRIVE} times the damage. */
+  readonly towerDamage?: boolean;
+  /** Monster Overdrive: its monsters do {@link MONSTER_OVERDRIVE} times the damage. */
+  readonly monsterDamage?: boolean;
+  /** Monster Defensive Buff: its monsters take {@link MONSTER_ARMOUR_BUFF} off every hit. */
+  readonly monsterArmour?: boolean;
+  /** Monster Speed Buff: its monsters walk and swing {@link MONSTER_SPEED_BUFF} times as fast. */
+  readonly monsterSpeed?: boolean;
+}
+
+/** Each side's boosts ({@link SideBuffs}); the attacker's towers never fire. */
+export interface BattleBuffs {
+  readonly attacker?: SideBuffs;
+  readonly defender?: SideBuffs;
+}
+
+/** Tower Overdrive's damage multiplier (`BUILDING20.as:29-31`). */
+export const TOWER_OVERDRIVE = 1.25;
+/** Monster Overdrive's damage multiplier (`MonsterDust.k_value`). */
+export const MONSTER_OVERDRIVE = 1.25;
+/**
+ * The Monster Defensive Buff's armour: the share of each hit shrugged off
+ * (`BeastMode.k_value`).
+ */
+export const MONSTER_ARMOUR_BUFF = 0.3;
+/** The Monster Speed Buff's move and swing multiplier (`HyperSpeed.k_value`). */
+export const MONSTER_SPEED_BUFF = 1.5;
 
 /** The champion a Champion Cage holds, as the defender's save keeps it (issue #195). */
 export interface DefenderChampion {
@@ -1474,6 +1529,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   let tick = 0;
   /** How many creeps carry a putty boost; lets the tick skip the scan. */
   let puttied = 0;
+  /*
+   * Each side's shop boosts (fidelity note 19). A creep is the defender's when
+   * it is friendly; a wild raid's raiders have none of the player's.
+   */
+  const attackerBuffs: SideBuffs = (options.raid ? undefined : options.buffs?.attacker) ?? {};
+  const defenderBuffs: SideBuffs = options.buffs?.defender ?? {};
+  const buffsOf = (creep: Creep): SideBuffs => (creep.friendly ? defenderBuffs : attackerBuffs);
+  /** Tower Overdrive on the defender's towers' damage, 1 without it. */
+  const towerBoost = defenderBuffs.towerDamage ? TOWER_OVERDRIVE : 1;
+  /** Monster Overdrive (`MonsterDust.as`), on a creep as it joins the field. */
+  const boostDamage = (creep: Creep): void => {
+    if (buffsOf(creep).monsterDamage) creep.damage *= MONSTER_OVERDRIVE;
+  };
   let nextCreepId = 1;
   let creepsFlung = 0;
   let creepsKilled = 0;
@@ -1852,6 +1920,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // A putty boost is its own armour; the two combine as 1-(1-a)(1-b).
     if (creep.armour > 0) raw *= 1 - creep.armour;
     if (creep.puttyArmour > 0) raw *= 1 - creep.puttyArmour;
+    // The Monster Defensive Buff is armour of its own too (`BeastMode.as`).
+    if (buffsOf(creep).monsterArmour) raw *= 1 - MONSTER_ARMOUR_BUFF;
     const applied = Math.min(raw, creep.hp);
     if (applied > 0) {
       visual.push({
@@ -2143,6 +2213,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
+    boostDamage(creep);
     return creep;
   };
 
@@ -2244,6 +2315,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
+    boostDamage(creep);
     equipChampion(creep, power, at);
     // Its Mode's tilt on its learned brain, as the log froze it (issues #220, #219).
     creep.weights = stanceWeights(stance, brainBase(brain));
@@ -2328,6 +2400,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
+    boostDamage(creep);
     equipChampion(creep, power, { x: at.ix, y: at.iy }, at.frame);
     return creep;
   };
@@ -2762,6 +2835,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const swingDelay = (creep: Creep): number => {
     let boost = creep.enrage * creep.puttySpeed;
+    // The Monster Speed Buff divides the delay too (`HyperSpeed.as`, `DivisionModifier`).
+    if (buffsOf(creep).monsterSpeed) boost *= MONSTER_SPEED_BUFF;
     // A ranked Bandito spins faster: 1, 1.5, 2 x (`BanditoAOEDamageSpin.as:23`, issue #352).
     if (creep.rank > 0 && creep.monsterId === BANDITO_ID) {
       boost *= banditoSpeedPercent(creep.rank) / 100;
@@ -2875,14 +2950,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * the other side and, for an attacker, every building, within `radius` of
    * the striker, nearest first (`sortOn dist`; a tie goes creeps before
    * buildings, then by id, which Flash leaves to the sort). A defender's
-   * monsters never splash buildings (`:36-39`). `skipCreep` and
-   * `skipBuilding` are the initial target when it is left out.
+   * monsters never splash buildings (`:36-39`), and nor does a splash that
+   * leaves them out with `buildings` false. `skipCreep` and `skipBuilding` are
+   * the initial target when it is left out.
    */
   const splashTargets = (
     striker: Creep,
     radius: number,
     skipCreep: Creep | null,
     skipBuilding: EngineBuilding | null,
+    buildings = true,
   ): SplashTarget[] => {
     const found: SplashTarget[] = [];
     const side = striker.friendly ? TARGETS_ATTACKERS : TARGETS_DEFENDERS;
@@ -2890,7 +2967,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (hit.creep.id === striker.id || hit.creep === skipCreep || hit.creep.gone) continue;
       found.push({ creep: hit.creep, building: null, dist: hit.dist });
     }
-    if (!striker.friendly) {
+    if (!striker.friendly && buildings) {
       for (const building of yard.buildings) {
         if (building === skipBuilding || !splashable(building)) continue;
         const squared = Math.trunc(distanceSquared(striker.x, striker.y, building.cx, building.cy));
@@ -2957,9 +3034,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       dealSplash(creep, damage * wormzerMultiplier(creep.rank), WORMZER_RADIUS, 0, targets);
       noteSplash(creep, WORMZER_RADIUS, targets.length);
     } else if (creep.monsterId === BANDITO_ID) {
-      // The whirlwind: everything within 60, the target left out, no cap, full damage
-      // (`Bandito.as:15`, `BanditoAOEDamageSpin`: `includeInitialTarget` false).
-      const targets = splashTargets(creep, BANDITO_RADIUS, foe, building);
+      // The whirlwind: the other side's ground monsters within 60, the target left
+      // out, no cap, full damage (`Bandito.as:15`, `BanditoAOEDamageSpin`:
+      // `includeInitialTarget` false). No building, the owner's choice (2026-10-20).
+      const targets = splashTargets(creep, BANDITO_RADIUS, foe, null, false);
       dealSplash(creep, damage, BANDITO_RADIUS, BANDITO_RADIUS, targets);
       noteSplash(creep, BANDITO_RADIUS, targets.length);
     } else if (creep.monsterId === FANG_ID) {
@@ -3016,9 +3094,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * `FIREBALL.FindGlaiveTarget` (`FIREBALL.as:269-340`): after the fireball
    * lands, a ranked Teratorn's jumps on `rank` times, each to the nearest
    * other building within 100 screen px of the last (not a wall, mushroom,
-   * decoration, immovable, enemy, trap or jarred tower), skipping back to the
-   * one before only when another stands. Each jump is half the last, and loots
-   * as a `DummyTarget` does (1).
+   * decoration, immovable, enemy, trap or jarred tower), or, when none is, to
+   * the nearest standing wall that close; it skips back to the one before only
+   * when another stands. Each jump is half the last, and loots as a
+   * `DummyTarget` does (1).
    */
   const bounceFireball = (creep: Creep, first: EngineBuilding, damage: number): void => {
     let from = first;
@@ -3029,13 +3108,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const originX = from.sx;
       const originY = from.sy + from.middle;
       const near: { building: EngineBuilding; dist: number }[] = [];
-      for (const building of yard.buildings) {
-        if (building === from || !glaiveable(building)) continue;
-        const dist = Math.trunc(
-          Math.sqrt(distanceSquared(originX, originY, building.sx, building.sy + building.middle)),
-        );
-        if (dist <= BOUNCE_RADIUS) near.push({ building, dist });
-      }
+      const gather = (allowed: (building: EngineBuilding) => boolean): void => {
+        for (const building of yard.buildings) {
+          if (building === from || !allowed(building)) continue;
+          const dist = Math.trunc(
+            Math.sqrt(
+              distanceSquared(originX, originY, building.sx, building.sy + building.middle),
+            ),
+          );
+          if (dist <= BOUNCE_RADIUS) near.push({ building, dist });
+        }
+      };
+      gather(glaiveable);
+      // With no building that close it jumps to a standing wall (`FIREBALL.as:294-307`).
+      if (near.length === 0) gather((building) => building.kind === "wall" && building.hp > 0);
       near.sort((one, other) => one.dist - other.dist || one.building.id - other.building.id);
       if (near[0]?.building === previous) near.shift();
       const next = near[0]?.building;
@@ -3214,6 +3300,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.enrage !== 1) speed *= creep.enrage;
     // A putty bomb's boost, on top of Fomor's (`ResourceBomb.as:170-185`).
     if (creep.puttySpeed !== 1) speed *= creep.puttySpeed;
+    // The Monster Speed Buff (`HyperSpeed.k_moveSpeedModifier`).
+    if (buffsOf(creep).monsterSpeed) speed *= MONSTER_SPEED_BUFF;
     const factor = BEHAVIOUR_SPEED[creep.behaviour];
     if (factor !== undefined) speed *= factor;
     if (creep.attacking) return;
@@ -3276,6 +3364,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         .inRange(DEFEND_SEARCH, creep.x, creep.y, creep.hitFlags)
         .find((hit) => leashed(hit.creep))?.creep;
       if (!found) {
+        if (creep.blinkHops > 0) stopBlink(creep);
         creep.targetCreep = -1;
         creep.atTarget = false;
         creep.attacking = false;
@@ -3351,6 +3440,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         ? creep.range * KORATH_DEFEND_FLYER_REACH
         : creep.range;
     creep.atTarget = squared < creepReach(range);
+    // A defending Bolt blinks at its foe; an attacker's blink ends when it turns to fight.
+    const blinks = creep.friendly && creep.rank > 0 && creep.monsterId === BOLT_ID;
+    if (creep.blinkHops > 0 && (creep.atTarget || !blinks)) stopBlink(creep);
     if (creep.atTarget) {
       creep.attacking = true;
       if (creep.attackCooldown <= 0) {
@@ -3366,6 +3458,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.attacking = false;
     creep.waypoints = [{ x: foe.ix, y: foe.iy }];
     creep.waypointIndex = 0;
+    if (blinks && tickBlink(creep)) return;
     moveCreep(creep);
   };
 
@@ -3407,6 +3500,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       other.friendly &&
       other.hp > 0 &&
       !other.gone &&
+      other.targetable &&
       canHit(creep.hitFlags, other.flags);
     let foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     if (!usable(foe)) {
@@ -3941,8 +4035,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * target to walk to cloaks, which takes `TARGETS_INVISIBLE` into its flags so
    * only what reaches the invisible (the trap, Fomor's aura, Korath's quake)
    * can see it. Once it has arrived it stays cloaked for the rank's delay, then
-   * shows itself until it has to walk again. Flash's aggro range of 1 is not
-   * modelled (it is the Brain's own awareness, which this engine has none of).
+   * shows itself until it has to walk again. So towers, bunker monsters and
+   * caged champions leave it alone while it is cloaked, as Flash's `BTOWER`
+   * skips an `invisible` creep (`BTOWER.as:208`). Flash also sets its aggro
+   * range to 1, but nothing in Flash reads that, so it changes nothing here.
    */
   const tickCloak = (creep: Creep): void => {
     if (creep.invisible) {
@@ -4004,13 +4100,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * rank*150 screen px, it blinks: untargetable, it jumps a tenth of the way
    * to the last waypoint each tick for ten ticks and then counts as arrived.
    * It does not walk meanwhile. True when this tick was a hop or the blink's
-   * start. Attackers only: a defender has no route to blink along.
+   * start. A defender's route is the one step to its foe ({@link fight}), so a
+   * bunker's Bolt blinks at a foe within its range (owner, 2026-10-20).
    */
   const tickBlink = (creep: Creep): boolean => {
     const last = creep.waypoints[creep.waypoints.length - 1];
     const left = creep.waypoints.length - creep.waypointIndex;
     const within =
-      !creep.friendly &&
       !creep.atTarget &&
       !!last &&
       left > 0 &&
@@ -4198,8 +4294,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (building.hp <= 0) return;
     const stats = towerStats(building.type, building.level, yard.kind);
-    const damage = stats?.damage;
-    if (stats?.range === undefined || damage === undefined) return;
+    const base = stats?.damage;
+    if (stats?.range === undefined || base === undefined) return;
+    // Tower Overdrive (fidelity note 19): on the shot before it is cut to a whole number.
+    const damage = towerBoost === 1 ? base : base * towerBoost;
     if (building.type === AERIAL_DEFENSE_TYPE) {
       tickSalvo(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
       return;
@@ -4288,8 +4386,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     cullSpurtz(tower, gun);
     if (building.hp <= 0) return;
     const stats = towerStats(building.type, building.level, yard.kind);
-    const damage = stats?.damage;
-    if (stats?.range === undefined || damage === undefined) return;
+    const base = stats?.damage;
+    if (stats?.range === undefined || base === undefined) return;
+    const damage = towerBoost === 1 ? base : base * towerBoost;
 
     tower.fireTick -= 1;
     if (tower.fireTick <= 0) {

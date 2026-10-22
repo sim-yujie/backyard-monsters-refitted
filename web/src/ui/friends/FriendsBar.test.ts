@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fixtureApi, fixtureFriend, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
-import { FriendsBar, canHelp, orderFriends, pageOf } from "./FriendsBar";
+import { FriendsBar, canHelp, friendsBadge, helpNote, orderFriends, pageOf } from "./FriendsBar";
 
 /** The friends bar (issue #371, design §3.2). */
 
@@ -223,5 +223,57 @@ describe("destroy", () => {
     bar.destroy();
     expect(document.querySelector(".friends-bar")).toBeNull();
     expect(() => store.addFriend(friend(5))).not.toThrow();
+  });
+});
+
+describe("the phone's Friends button (#381)", () => {
+  const helps = { help: { speedup: true, repair: false } };
+
+  it("counts the friends that can use a hand, else shows a gift while one can be sent", () => {
+    expect(friendsBadge([friend(1, helps), friend(2, helps), friend(3)])).toEqual({
+      text: "2",
+      kind: "help",
+      label: "2 can use your help",
+    });
+    expect(friendsBadge([friend(1, { giftSentToday: true }), friend(2)])).toEqual({
+      text: "🎁",
+      kind: "gift",
+      label: "A gift can be sent",
+    });
+    expect(friendsBadge([friend(1, { giftSentToday: true })])).toBeNull();
+    expect(friendsBadge([])).toBeNull();
+    expect(helpNote(1)).toBe("1 can use your help");
+  });
+
+  it("wears the badge and the sheet's note, and follows the store", async () => {
+    const { store } = await setup([friend(1, helps), friend(2, { giftSentToday: true })]);
+    const badge = document.querySelector<HTMLElement>(".friends-bar__count")!;
+    const note = document.querySelector(".friends-bar__note")!;
+    expect(badge.hidden).toBe(false);
+    expect(badge.textContent).toBe("1");
+    expect(note.textContent).toBe("1 can use your help");
+    expect(document.querySelector(".friends-bar__toggle")?.getAttribute("aria-label")).toBe(
+      "Friends. 1 can use your help",
+    );
+
+    store.addFriend(friend(3, helps));
+    expect(badge.textContent).toBe("2");
+  });
+
+  it("opens and shuts the sheet from the button, its close and Esc", async () => {
+    await setup();
+    const bar = document.querySelector<HTMLElement>(".friends-bar")!;
+    const toggle = document.querySelector<HTMLElement>(".friends-bar__toggle")!;
+
+    toggle.click();
+    expect(bar.classList.contains("is-open")).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    document.querySelector<HTMLElement>(".friends-bar__close")!.click();
+    expect(bar.classList.contains("is-open")).toBe(false);
+
+    toggle.click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(bar.classList.contains("is-open")).toBe(false);
   });
 });

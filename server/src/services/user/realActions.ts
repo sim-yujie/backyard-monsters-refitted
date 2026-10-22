@@ -73,6 +73,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "lab/finish",
   "lab/instant",
   "champion/raise",
+  "champion/cancel-egg",
   "champion/feed",
   "champion/evolve",
   "champion/heal",
@@ -92,12 +93,14 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "guide/finish",
   "guide/army",
   "guide/skip",
+  "events/ladder/claim",
 ];
 
 /**
- * The yard routes that are not: reads, and a tip or an achievement pop-up
- * marked seen. A test holds every yard route to one list or the other, so a
- * new route needs a decision.
+ * The yard routes that are not: reads, a tip or an achievement pop-up
+ * marked seen, and the daily login-calendar claim (a reward for turning up,
+ * which is being there, not playing). A test holds every yard route to one
+ * list or the other, so a new route needs a decision.
  */
 export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "state",
@@ -105,6 +108,7 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "tips/seen",
   "achievements/state",
   "achievements/seen",
+  "events/calendar/claim",
 ];
 
 /** An in-game check's answer (#273) counts only when it was right. */

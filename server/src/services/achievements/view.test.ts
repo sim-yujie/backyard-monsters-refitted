@@ -40,7 +40,7 @@ describe("achievementsState and publicAchievements", () => {
         "2": { at: 200, shiny: 10 },
         "6": { at: 300, shiny: 10, unpaid: 1 },
         // An entry not offered yet (§5.3) is never listed or counted.
-        "9": { at: 300, shiny: 20, seen: 1 },
+        "14": { at: 300, shiny: 20, seen: 1 },
       },
       backfilledAt: 100,
     },
@@ -50,10 +50,10 @@ describe("achievementsState and publicAchievements", () => {
   test("the player's own: earned, Shiny earned, and the paid unlocks not yet shown", () => {
     const state = achievementsState(save, false);
 
-    expect(state).toMatchObject({ earned: 2, total: 16, shinyEarned: 15 });
+    expect(state).toMatchObject({ earned: 2, total: 17, shinyEarned: 15 });
     expect(state.fresh).toEqual([{ id: 2, name: entry(2).name, shiny: 10 }]);
     expect(state.achievements.find((view) => view.id === 6)).toMatchObject({ status: "locked" });
-    expect(state.achievements.some((view) => view.id === 9)).toBe(false);
+    expect(state.achievements.some((view) => view.id === 14)).toBe(false);
   });
 
   test("an owed unlock reads earned once rewards are on: the next evaluation pays it", () => {

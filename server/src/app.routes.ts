@@ -26,6 +26,7 @@ import {
   autoAttackLimiter,
   autoAttackPlanLimiter,
   defencesLimiter,
+  leaderboardLimiter,
   botCheckReadLimiter,
   botCheckAnswerLimiter,
   chatReportLimiter,
@@ -35,6 +36,7 @@ import {
   mailTruceRequestLimiter,
   threadReportLimiter,
   allianceCreateEditLimiter,
+  bugReportLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -113,9 +115,11 @@ import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js"
 import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
+import { mountEventsRoutes } from "./controllers/events/routes.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
+import { getEmpireBoard } from "./controllers/leaderboards/getEmpireBoard.js";
 import { getAttackLogs } from "./controllers/attacklogs/getAttackLogs.js";
 
 import { wildMonsterInvasion } from "./controllers/events/wildMonsterInvasion.js";
@@ -137,6 +141,7 @@ import { kickMember } from "./controllers/alliance/kickMember.js";
 import { promoteMember } from "./controllers/alliance/promoteMember.js";
 import { changeRelationship } from "./controllers/alliance/changeRelationship.js";
 import { getPowerups } from "./controllers/alliance/getPowerups.js";
+import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
 import { activatePowerup } from "./controllers/alliance/activatePowerup.js";
 import { purchasePowerup } from "./controllers/alliance/purchasePowerup.js";
 
@@ -315,6 +320,8 @@ mountFriendsRoutes(router);
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/worlds", publicReadLimiter, getAvailableWorlds);
 router.get("/api/:apiVersion/leaderboards", publicReadLimiter, getLeaderboards);
+// The leaderboard by empire points (beta.4, `services/leaderboard/empireBoard.ts`): the top 100 and the caller's own row.
+router.get("/api/:apiVersion/leaderboards/empire", apiVersion, verifyUserAuth, verifyAccountStatus, leaderboardLimiter, getEmpireBoard);
 router.get("/api/:apiVersion/attacklogs", verifyUserAuth, getAttackLogs);
 
 /**  ────────────────────────────────────────────────
@@ -343,6 +350,15 @@ router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRe
 * 📦 Events
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/events/wmi", apiVersion, logRequest, wildMonsterInvasion);
+// The Events page and "What's new" (`controllers/events/routes.ts`); the claims are yard actions.
+mountEventsRoutes(router);
+
+/**  ────────────────────────────────────────────────
+* 📦 Bug reports: the game's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`).
+* Not echoed by logRequest: the body carries pictures.
+* ──────────────────────────────────────────────── */
+router.post("/api/:apiVersion/bugreport", apiVersion, verifyUserAuth, bugReportLimiter, submitBugReportController);
+router.post("/api/:apiVersion/bugreport/guest", apiVersion, bugReportLimiter, submitGuestBugReportController);
 
 /**  ────────────────────────────────────────────────
 * 📦 Debug

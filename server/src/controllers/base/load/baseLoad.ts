@@ -60,6 +60,7 @@ import type { AcademyLevels, AcademyRanks, ChampionBrains } from "../../../servi
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
 import { logger } from "../../../utils/logger.js";
 import { cancelRaidOnYardLoad, presenceLapsed } from "../../../services/raids/raidStore.js";
+import { activeEventKinds } from "../../../services/yard/season.js";
 import {
   defenceReplayLoadOf,
   isDefenceReplayTarget,
@@ -465,6 +466,8 @@ export const baseLoad: KoaController = async (ctx) => {
   // `docs/design/achievements.md` §9.3). The catch-up above evaluated them.
   const achievements = isOwner && !isInferno && type === BaseMode.BUILD ? unseenAchievements(user.save!) : [];
 
+  const activeKinds = activeEventKinds(getCurrentDateTime());
+
   const response: Record<string, unknown> = {
     ...filteredSave,
     relationship,
@@ -477,6 +480,10 @@ export const baseLoad: KoaController = async (ctx) => {
     tutorialstage: isTutorialEnabled,
     currenttime: getCurrentDateTime(),
     pic_square: avatar,
+    // The seasonal events on now, by kind (`services/yard/season.ts`): the
+    // web client dresses every yard for them (Halloween: dusky ground,
+    // pumpkins). Left out when none is on.
+    ...(activeKinds.length > 0 && { activeevents: activeKinds }),
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),

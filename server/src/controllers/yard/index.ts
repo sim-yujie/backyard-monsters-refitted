@@ -11,6 +11,7 @@ import { yardBunkerFillAction, yardBunkerRemoveAction } from "./bunker.js";
 import { yardCancelFortifyAction, yardFortifyAction } from "./fortify.js";
 import { yardChampionFreezeAction, yardChampionThawAction } from "./chamber.js";
 import {
+  yardChampionCancelEggAction,
   yardChampionEvolveAction,
   yardChampionFeedAction,
   yardChampionHealAction,
@@ -52,6 +53,7 @@ import { goalsRoutes } from "./goals.js";
 import { guideRoutes } from "./guide.js";
 import { tipsRoutes } from "./tips.js";
 import { achievementsRoutes } from "./achievements.js";
+import { eventsRoutes } from "./events.js";
 
 /**
  * Every yard action route, mounted by `app.routes.ts` as
@@ -105,6 +107,7 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "lab/finish", controller: yardRoute(yardLabFinishAction) },
   { path: "lab/instant", controller: yardRoute(yardLabInstantAction) },
   { path: "champion/raise", controller: yardRoute(yardChampionRaiseAction) },
+  { path: "champion/cancel-egg", controller: yardRoute(yardChampionCancelEggAction) },
   { path: "champion/feed", controller: yardRoute(yardChampionFeedAction) },
   { path: "champion/evolve", controller: yardRoute(yardChampionEvolveAction) },
   { path: "champion/heal", controller: yardRoute(yardChampionHealAction) },
@@ -123,4 +126,6 @@ export const yardRoutes: YardRouteEntry[] = [
   ...tipsRoutes,
   // Achievements (issue #204, WP4).
   ...achievementsRoutes,
+  // Events: the login calendar and collection ladder claims (`events.ts`).
+  ...eventsRoutes,
 ];

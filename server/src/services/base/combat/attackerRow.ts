@@ -61,7 +61,7 @@ export const siegeAfterAttack = (
  * champion the save names that the attacker does not own is ignored. Only
  * health ever moves: no list adds a champion or changes its type, level,
  * power level, food bonus or status, and a champion not out of the cage
- * (a frozen or juiced one) cannot have fought, so keeps its own.
+ * (an egg, a frozen or juiced one) cannot have fought, so keeps its own.
  *
  * @param stored - The attacker's `champion` as stored.
  * @param reported - The save's `attackerchampion`.

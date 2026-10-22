@@ -98,6 +98,7 @@ import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
+import { isPhoneLayout } from "@/ui/phoneLayout";
 
 /**
  * Map Room 2.
@@ -330,7 +331,7 @@ export class MapRoom2Scene implements Scene {
         ownFlinger: (_cell, payload) => {
           const own = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
           const reach = withDeclareWar(own, this.declareWar);
-          return { level: payload.f, reach, bonus: reach - own };
+          return { level: payload.f ?? 0, reach, bonus: reach - own };
         },
         ownMoves: (_cell, payload) => ({
           // Flash offered the transfer only to a player with an outpost
@@ -539,7 +540,9 @@ export class MapRoom2Scene implements Scene {
         if (inWorld(cell.col, cell.row)) {
           this.home = cell;
           this.ui?.setHome(cell);
-          this.jumpTo(cell, DEFAULT_ZOOM);
+          // On a phone the "Your yard" card would cover a third of the map
+          // on every visit (#381): the map opens on the home cell, card shut.
+          this.jumpTo(cell, DEFAULT_ZOOM, !isPhoneLayout());
         }
       }
       // Back from a yard: where the map was left, not home (#153).
@@ -673,12 +676,12 @@ export class MapRoom2Scene implements Scene {
     this.selectCell(cell);
   }
 
-  private jumpTo(cell: OffsetCell, zoom?: number): void {
+  private jumpTo(cell: OffsetCell, zoom?: number, select = true): void {
     if (!inWorld(cell.col, cell.row)) return;
     if (zoom !== undefined) this.camera.zoom = zoom;
     this.camera.centreOn(mapRoomGrid.cellToPixel(cell.col, cell.row));
     this.camera.dirty = true;
-    this.selectCell(cell);
+    if (select) this.selectCell(cell);
   }
 
   private goHome(): void {

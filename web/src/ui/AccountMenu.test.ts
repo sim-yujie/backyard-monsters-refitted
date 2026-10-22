@@ -239,6 +239,65 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
+  describe("the What's new item", () => {
+    it("is there only when asked for and opens the cards", () => {
+      const { button } = build();
+      button.click();
+      expect(menu!.element.querySelector(".account-menu__whats-new")).toBeNull();
+      menu!.destroy();
+
+      const onWhatsNew = vi.fn();
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onWhatsNew });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__whats-new")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("What's new");
+      item.click();
+      expect(onWhatsNew).toHaveBeenCalledOnce();
+      expect(menu.open).toBe(false);
+    });
+  });
+  describe("the Leaderboard item", () => {
+    it("is there only when asked for, just before What's new, and opens the board", () => {
+      const { button } = build();
+      button.click();
+      expect(menu!.element.querySelector(".account-menu__leaderboard")).toBeNull();
+      menu!.destroy();
+
+      const onLeaderboard = vi.fn();
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onLeaderboard, onWhatsNew: vi.fn() });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__leaderboard")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("Leaderboard");
+      expect(item.nextElementSibling?.classList.contains("account-menu__whats-new")).toBe(true);
+      item.click();
+      expect(onLeaderboard).toHaveBeenCalledOnce();
+      expect(menu.open).toBe(false);
+    });
+  });
+  describe("the Report a bug item", () => {
+    it("is there only when asked for, after What's new, and opens the form", () => {
+      const { button } = build();
+      button.click();
+      expect(menu!.element.querySelector(".account-menu__report-bug")).toBeNull();
+      menu!.destroy();
+
+      const onReportBug = vi.fn();
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onWhatsNew: vi.fn(), onReportBug });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__report-bug")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("Report a bug");
+      expect(item.previousElementSibling?.classList.contains("account-menu__whats-new")).toBe(true);
+      item.click();
+      expect(onReportBug).toHaveBeenCalledOnce();
+      expect(menu.open).toBe(false);
+    });
+  });
 });
 
 /**

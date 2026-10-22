@@ -9,7 +9,7 @@ import {
 } from "@/api/yardChampion";
 import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
-import { showPortrait } from "@/game/portraits";
+import { championEggUrl, showPortrait } from "@/game/portraits";
 import { brainSummary, learnedFromText, tendenciesText } from "@/game/yard/championBrain";
 import type { ChampionEntry } from "@/game/yard/championCatalogue";
 import {
@@ -22,6 +22,7 @@ import {
   championView,
   type CageView,
   type ChampionStats,
+  type EggView,
   type ChampionView,
   type RaiseChoice,
 } from "@/game/yard/championModel";
@@ -39,6 +40,12 @@ import { ShinyButton } from "./ShinyButton";
  * Opened by the panel's **Open cage**. With no champion in the cage: one card
  * each for Gorgo, Drull and Fomor (Korath and Krallen are not offered), each
  * with **Raise** (free), or a note when that one is frozen in the Chamber.
+ * Raising lays an egg that hatches a day later (owner 2026-10-20): while it
+ * waits the cage shows the egg, the time to hatching and **Cancel egg**
+ * (confirmed inline; picking again lays a new egg with a full day to go), and
+ * nothing else: no feeding, healing, evolving, freezing or juicing. Nothing
+ * speeds an egg up. At 0 it says "Hatching…" and asks the server, whose
+ * catch-up hatches it.
  * With a champion: its picture, name (**Rename**), level, how it fights (the
  * tendencies its learning brain picked up, #219), health with the
  * time to full and **Heal** (Shiny), its evolution (feeds so far of the
@@ -98,6 +105,12 @@ export class ChampionPanel {
   private renaming = false;
   private nameDraft = "";
   private confirmingJuice = false;
+  private confirmingCancel = false;
+  private cancelYes: HTMLButtonElement | null = null;
+  private cancelButton: HTMLButtonElement | null = null;
+  private eggTime: HTMLElement | null = null;
+  /** Set once a due egg asked the server for its state, so it asks once. */
+  private refreshedHatch = false;
   /** Set once a starving champion asked the server for its state, so it asks once. */
   private refreshedStarving = false;
 
@@ -154,6 +167,9 @@ export class ChampionPanel {
     this.live = null;
     this.feedButton = null;
     this.juiceYes = null;
+    this.cancelYes = null;
+    this.cancelButton = null;
+    this.eggTime = null;
     this.freezeButton = null;
     this.freezeSpecialButton = null;
     this.specialHealth = null;
@@ -165,6 +181,8 @@ export class ChampionPanel {
       this.renaming = false;
       this.confirmingJuice = false;
     }
+    if (view.kind !== "egg") this.confirmingCancel = false;
+    if (view.kind !== "egg" || view.egg.left > 0) this.refreshedHatch = false;
     switch (view.kind) {
       case "noCage":
         this.body.replaceChildren(note("This Champion Cage is gone."));
@@ -174,6 +192,9 @@ export class ChampionPanel {
         break;
       case "empty":
         this.body.replaceChildren(...this.raiseCards(view.choices), ...this.specialBlocks(now));
+        break;
+      case "egg":
+        this.body.replaceChildren(...this.eggBlocks(view.egg), ...this.specialBlocks(now));
         break;
       case "active":
         this.refreshedStarving = view.view.hunger === "starving" && this.refreshedStarving;
@@ -193,6 +214,15 @@ export class ChampionPanel {
     }
     this.view = view;
     this.drawSpecialHealth(now);
+    if (view.kind === "egg") {
+      if (this.eggTime) this.eggTime.textContent = eggTimeText(view.egg);
+      if (view.egg.left <= 0 && !this.refreshedHatch) {
+        // The server hatches it on its next answer; ask for it now.
+        this.refreshedHatch = true;
+        void this.store.refresh();
+      }
+      return;
+    }
     if (view.kind !== "active" || !this.live) return;
     const champion = view.view;
     this.drawHealth(champion, now);
@@ -219,6 +249,8 @@ export class ChampionPanel {
     }
     for (const button of this.raiseButtons.values()) button.disabled = store.isRunning(ChampionKey.raise);
     if (this.juiceYes) this.juiceYes.disabled = store.isRunning(ChampionKey.juice);
+    if (this.cancelYes) this.cancelYes.disabled = store.isRunning(ChampionKey.cancelEgg);
+    if (this.cancelButton) this.cancelButton.disabled = store.isRunning(ChampionKey.cancelEgg);
     if (this.freezeButton && view) {
       this.freezeButton.disabled = freezeGate(store.save, view) !== null || store.isRunning(ChampionKey.freeze);
     }
@@ -237,7 +269,7 @@ export class ChampionPanel {
 
   private raiseCards(choices: readonly RaiseChoice[]): HTMLElement[] {
     const intro = note(
-      "Raise a champion to guard your yard and join your attacks. Raising is free; one champion lives in the cage at a time.",
+      "Raise a champion to guard your yard and join your attacks. Raising is free: it lays an egg that hatches in 1 day. One champion lives in the cage at a time.",
     );
     const list = document.createElement("ul");
     list.className = "champion__cards";
@@ -262,7 +294,10 @@ export class ChampionPanel {
     const blurb = document.createElement("p");
     blurb.className = "champion-card__blurb";
     blurb.textContent = entry.description;
-    words.append(name, role, blurb);
+    const hatch = document.createElement("span");
+    hatch.className = "champion-card__hatch";
+    hatch.textContent = "Hatches in 1 day";
+    words.append(name, role, blurb, hatch);
     card.append(picture, words);
     if (frozen) {
       const gate = document.createElement("p");
@@ -279,6 +314,89 @@ export class ChampionPanel {
       card.append(button);
     }
     return card;
+  }
+
+  /* ── An egg in the cage ───────────────────────────────────────────── */
+
+  private eggBlocks(egg: EggView): HTMLElement[] {
+    const header = document.createElement("div");
+    header.className = "champion__header champion__header--egg";
+    const picture = document.createElement("img");
+    picture.className = "champion__egg-picture";
+    picture.src = championEggUrl(egg.entry.id, "window");
+    picture.alt = "";
+    picture.width = 120;
+    picture.height = 120;
+    picture.decoding = "async";
+    const words = document.createElement("div");
+    words.className = "champion__who";
+    const name = document.createElement("h4");
+    name.className = "champion__name";
+    name.textContent = `${egg.entry.name} egg`;
+    const time = document.createElement("p");
+    time.className = "champion__egg-time";
+    time.textContent = eggTimeText(egg);
+    this.eggTime = time;
+    words.append(
+      name,
+      time,
+      note(`It hatches into a level 1 ${egg.entry.name}. Until then it cannot fight, eat or be frozen, and nothing speeds it up.`),
+    );
+    header.append(picture, words);
+    return [header, this.cancelEggBlock(egg)];
+  }
+
+  private cancelEggBlock(egg: EggView): HTMLElement {
+    const block = document.createElement("div");
+    block.className = "champion__part champion__part--cancel-egg";
+    if (this.confirmingCancel) {
+      const wrap = document.createElement("div");
+      wrap.className = "champion__confirm";
+      wrap.setAttribute("role", "group");
+      wrap.setAttribute("aria-label", "Confirm cancel egg");
+      const question = document.createElement("p");
+      question.className = "champion__question";
+      question.textContent = "Cancel the egg? You can pick again, but the new egg takes a full day.";
+      const yes = document.createElement("button");
+      yes.type = "button";
+      yes.className = "btn btn--danger champion__cancel-egg-yes";
+      yes.textContent = "Yes, cancel the egg";
+      yes.addEventListener("click", () => void this.runCancelEgg(egg));
+      this.cancelYes = yes;
+      const keep = document.createElement("button");
+      keep.type = "button";
+      keep.className = "btn";
+      keep.textContent = "Keep it";
+      const stop = (): void => {
+        this.confirmingCancel = false;
+        this.show();
+        this.element.querySelector<HTMLButtonElement>(".champion__cancel-egg")?.focus();
+      };
+      keep.addEventListener("click", stop);
+      wrap.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        stop();
+      });
+      const row = document.createElement("div");
+      row.className = "map-row";
+      row.append(yes, keep);
+      wrap.append(question, row);
+      block.append(wrap);
+      return block;
+    }
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn btn--ghost champion__cancel-egg";
+    cancel.textContent = "Cancel egg";
+    cancel.addEventListener("click", () => {
+      this.confirmingCancel = true;
+      this.show();
+      this.cancelYes?.focus();
+    });
+    this.cancelButton = cancel;
+    block.append(cancel);
+    return block;
   }
 
   /* ── A champion in the cage ───────────────────────────────────────── */
@@ -717,8 +835,19 @@ export class ChampionPanel {
     const result = await this.actions.raise(entry.t);
     this.setStatus(
       result.ok
-        ? { tone: "good", content: [`${entry.name} hatched in your cage. Feed it every day so it grows.`] }
+        ? { tone: "good", content: [`${entry.name}'s egg is in your cage. It hatches in 1 day.`] }
         : { tone: "bad", content: [refusalText(result.refusal)] },
+    );
+    this.show();
+  }
+
+  private async runCancelEgg(egg: EggView): Promise<void> {
+    const result = await this.actions.cancelEgg();
+    this.confirmingCancel = false;
+    this.setStatus(
+      result.ok
+        ? { tone: "good", content: [`The ${egg.entry.name} egg is gone. Pick a champion to raise.`] }
+        : bad(result.refusal),
     );
     this.show();
   }
@@ -884,6 +1013,7 @@ export const statsBlock = (view: ChampionView): HTMLElement => {
 
 /** What the tick compares to decide whether the body must be rebuilt. */
 const shapeOf = (view: CageView): string => {
+  if (view.kind === "egg") return `egg:${view.egg.entry.id}:${view.egg.hatchAt}:${view.egg.left > 0}`;
   if (view.kind !== "active") {
     return view.kind === "empty"
       ? `empty:${view.choices.map((one) => `${one.entry.id}${one.frozen ? "f" : ""}`).join()}`
@@ -905,6 +1035,10 @@ const shapeOf = (view: CageView): string => {
     brainSummary(champion.champion).attacks,
   ].join(":");
 };
+
+/** The egg's clock: "Hatches in 23h 12m", or "Hatching…" once its time has come. */
+export const eggTimeText = (egg: EggView): string =>
+  egg.left > 0 ? `Hatches in ${formatCountdown(egg.left)}` : "Hatching…";
 
 /** The hunger line: a short state and what happens next. */
 export const hungerText = (view: ChampionView, now: number): { title: string; detail: string } => {

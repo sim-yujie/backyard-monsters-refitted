@@ -109,7 +109,14 @@ describe("no client can send a brain (issue #219)", () => {
 
 });
 
-describe("no attacker's list can add or raise a champion", () => {
+describe("no attacker's list can add, raise or hatch a champion", () => {
+  const egg = (t: number, ft = 2_000_000_000) => champion(t, { status: 3, ft, hp: 12_000 });
+
+  test("an old or new client's list parses an egg (status 3) like any entry", () => {
+    const parsed = ChampionListSchema.parse(JSON.stringify([egg(2), champion(5)]))!;
+    expect(parsed.map((one) => one.status)).toEqual([3, champion(5).status]);
+  });
+
   test("a Krallen the attacker does not own is ignored, flung or not", () => {
     const stored = [champion(1)];
     const sent = ChampionListSchema.parse(JSON.stringify([champion(1), champion(5, { l: 5, pl: 2 })]))!;
@@ -119,13 +126,12 @@ describe("no attacker's list can add or raise a champion", () => {
   });
 
   test("a level, power level, food bonus or status the list claims is never taken", () => {
-    const stored = [champion(5, { l: 1, pl: 0 }), champion(2, { status: 1, hp: 12_000 })];
+    const stored = [champion(5, { l: 1, pl: 0 }), egg(2)];
     const sent = ChampionListSchema.parse(
-      JSON.stringify([champion(5, { l: 5, pl: 2, fb: 3, hp: 900 }), champion(2, { status: 0, hp: 5 })])
+      JSON.stringify([champion(5, { l: 5, pl: 2, fb: 3, hp: 900 }), champion(2, { status: 0, ft: 1 })])
     )!;
     const after = championsAfterAttack(stored, sent, logFlinging({ t: 5 }, { t: 2 }));
     expect(after[0]).toEqual({ ...stored[0]!, hp: 900 });
-    // A frozen champion cannot have fought: it keeps its own health too.
     expect(after[1]).toEqual(stored[1]!);
   });
 });

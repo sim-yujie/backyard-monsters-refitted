@@ -47,6 +47,15 @@ export interface Portrait {
 /** `card` for the big picture on a monster's card, `icon` for a row or a slot. */
 export type PortraitSize = "card" | "icon";
 
+/**
+ * A champion's egg (owner 2026-10-20: raising lays an egg that hatches in a
+ * day): `eggs/G<n>-egg.webp`, 240 px square, for the cage window, and
+ * `eggs/G<n>-egg-yard.webp`, 96 x 120, stood in the cage on the yard at half
+ * size. Painted eggs; their full-size options are kept outside the repo.
+ */
+export const championEggUrl = (id: string, where: "window" | "yard"): string =>
+  `${import.meta.env.BASE_URL}eggs/${id}-egg${where === "yard" ? "-yard" : ""}.webp`;
+
 const painted = (file: string): string => `${import.meta.env.BASE_URL}portraits/${file}.webp`;
 
 const portrait = (paintedFile: string | null, original: string): Portrait =>

@@ -64,6 +64,7 @@ const setup = (
   });
   const spies = {
     raise: vi.fn(actions.raise ?? (() => never())),
+    cancelEgg: vi.fn(actions.cancelEgg ?? (() => never())),
     feed: vi.fn(actions.feed ?? (() => never())),
     evolve: vi.fn(actions.evolve ?? (() => never())),
     heal: vi.fn(actions.heal ?? (() => never())),
@@ -98,6 +99,12 @@ describe("ChampionPanel: no champion", () => {
     expect(spies.raise).toHaveBeenCalledWith(2);
   });
 
+  it("says each one hatches in 1 day", () => {
+    const { element } = setup([]);
+    expect(element.textContent).toContain("lays an egg that hatches in 1 day");
+    expect(textOf(element, ".champion-card__hatch")).toBe("Hatches in 1 day");
+  });
+
   it("says a frozen champion must be thawed instead", () => {
     const { element } = setup([gorgo({ status: 1, ft: HOUR })]);
     expect(buttonNamed(element, "Raise Gorgo")).toBeUndefined();
@@ -107,6 +114,42 @@ describe("ChampionPanel: no champion", () => {
   it("says so while the cage is being built", () => {
     const { element } = setup([], [{ ...CAGE, l: 0, cB: 500 }]);
     expect(element.textContent).toContain("once it is built");
+  });
+});
+
+describe("ChampionPanel: an egg", () => {
+  const egg = (left: number) => gorgo({ t: 2, status: 3, ft: T0 + left });
+
+  it("shows the egg and the time to hatching, and none of a champion's buttons", () => {
+    const { element } = setup([egg(23 * HOUR + 12 * 60 + 5)], [CAGE, JUICER]);
+    expect(textOf(element, ".champion__name")).toBe("Drull egg");
+    expect(textOf(element, ".champion__egg-time")).toBe("Hatches in 23h 12m");
+    expect(element.querySelector(".champion__egg-picture")!.getAttribute("src")).toBe("/eggs/G2-egg.webp");
+    for (const name of ["Feed", "Heal", "Evolve", "Juice", "Freeze", "Rename", "Raise"]) {
+      expect(buttonNamed(element, name)).toBeUndefined();
+    }
+  });
+
+  it("cancels only after the confirmation, and Keep it goes back", () => {
+    const { element, spies } = setup([egg(HOUR)]);
+    buttonNamed(element, "Cancel egg")!.click();
+    expect(textOf(element, ".champion__question")).toBe(
+      "Cancel the egg? You can pick again, but the new egg takes a full day.",
+    );
+    buttonNamed(element, "Keep it")!.click();
+    expect(spies.cancelEgg).not.toHaveBeenCalled();
+    buttonNamed(element, "Cancel egg")!.click();
+    buttonNamed(element, "Yes, cancel the egg")!.click();
+    expect(spies.cancelEgg).toHaveBeenCalledTimes(1);
+  });
+
+  it("says Hatching… at 0 and asks the server once", () => {
+    const { element, panel, store } = setup([egg(0)]);
+    const refresh = vi.spyOn(store, "refresh").mockResolvedValue(undefined as never);
+    expect(textOf(element, ".champion__egg-time")).toBe("Hatching…");
+    panel.tick();
+    panel.tick();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
 

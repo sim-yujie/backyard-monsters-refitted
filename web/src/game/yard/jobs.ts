@@ -7,6 +7,7 @@ import type {
   LockerData,
   StoreData,
 } from "@/api/types";
+import { MUSHROOM_RESPAWN_SECONDS_BY_SEASON, currentSeason } from "@/game/season";
 import { maxHealth } from "./buildingArt";
 import { costOf, fortifyStepsOf, rowOf, upgradeSteps, type YardKind } from "./buildingCosts";
 import { damageOf } from "./repair";
@@ -536,8 +537,14 @@ export const championJobs = (champions: BaseLoadResponse["champion"]): YardJob[]
   return jobs;
 };
 
-/** The next mushroom respawn, while the yard holds fewer than {@link MUSHROOM_CAP}. */
-export const mushroomJobs = (mushrooms: BaseLoadResponse["mushrooms"]): YardJob[] => {
+/**
+ * The next mushroom respawn, while the yard holds fewer than {@link MUSHROOM_CAP}.
+ * `respawnSeconds` is the season's (pumpkins grow faster at Halloween, `game/season.ts`).
+ */
+export const mushroomJobs = (
+  mushrooms: BaseLoadResponse["mushrooms"],
+  respawnSeconds: number = MUSHROOM_RESPAWN_SECONDS_BY_SEASON[currentSeason()],
+): YardJob[] => {
   const last = finite(mushrooms?.s);
   const count = Array.isArray(mushrooms?.l) ? mushrooms.l.length : 0;
   if (last === null || last <= 0 || count >= MUSHROOM_CAP) return [];
@@ -547,7 +554,7 @@ export const mushroomJobs = (mushrooms: BaseLoadResponse["mushrooms"]): YardJob[
       key: JobKind.MUSHROOM,
       id: JobKind.MUSHROOM,
       buildingId: null,
-      endsAt: last + MUSHROOM_RESPAWN_SECONDS,
+      endsAt: last + respawnSeconds,
       holdsWorker: false,
     },
   ];

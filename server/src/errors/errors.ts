@@ -94,6 +94,33 @@ export const botCheckUnavailableErr = () =>
     isClientFriendly: true,
   });
 
+/** A bug report field the player can fix (`services/bugReports`): a 400 naming it. */
+export const invalidBugReportErr = (message: string, field: string) =>
+  new ClientSafeError({
+    message,
+    status: Status.BAD_REQUEST,
+    data: { reason: "invalidBugReport", field },
+    isClientFriendly: true,
+  });
+
+/** The daily cap on bug reports (`config/BugReportConfig.ts`) is reached. Nothing is saved. */
+export const bugReportLimitErr = (perDay: number) =>
+  new ClientSafeError({
+    message: `Thanks for all your reports! You can send ${perDay} a day, so please try again tomorrow.`,
+    status: Status.TOO_MANY_REQUESTS,
+    data: { reason: "bugReportLimit" },
+    isClientFriendly: true,
+  });
+
+/** Cloudflare could not be asked about a signed-out bug report's Turnstile token. Nothing is saved. */
+export const bugReportCheckUnavailableErr = () =>
+  new ClientSafeError({
+    message: "We couldn't run the check that you're a person just now. Please try again in a minute.",
+    status: Status.SERVICE_UNAVAILABLE,
+    data: { reason: "botCheckUnavailable" },
+    isClientFriendly: true,
+  });
+
 export const usernameCooldownErr = (nextChangeAt: Date) =>
   new ClientSafeError({
     message: `You can only change your username once every 6 months. You can change it again on ${nextChangeAt.toUTCString()}.`,

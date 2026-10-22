@@ -29,6 +29,11 @@ export const SPAM_LIMITS = {
   friendRequest: { max: 30, minutes: 60 },
   /** Friend requests answered or cancelled, friends removed, players blocked or unblocked, counted together. */
   friendAction: { max: 120, minutes: 60 },
+  /**
+   * Bug reports sent (`bugreport`, and by IP `bugreport/guest`), counted
+   * before the Turnstile check; the daily cap (`config/BugReportConfig.ts`) applies as well.
+   */
+  bugReport: { max: 10, minutes: 60 },
 } as const satisfies Record<string, SpamLimit>;
 
 /**

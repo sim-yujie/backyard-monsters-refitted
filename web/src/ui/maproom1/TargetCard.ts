@@ -1,9 +1,10 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
   attackGate,
-  battlesText,
+  battleCounts,
   formatRespawn,
   initials,
+  isPlayingNow,
   pinTone,
   presenceText,
   ReasonKey,
@@ -20,6 +21,7 @@ import { tribeInfo } from "@/game/maproom1/tribes";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { monsterName } from "@/ui/attack/ArmyPanel";
+import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon, type IconName } from "./icons";
 
 /**
@@ -97,6 +99,26 @@ export const avatar = (target: Mr1Target, size: "sm" | "md" | "lg"): HTMLElement
   return box;
 };
 
+/**
+ * A shield and a count for "Attacked you 2 times", a sword and a count for
+ * "You attacked them 1 time", each with those words on hover and for screen
+ * readers. Null when they never fought.
+ */
+export const battleIcons = (neighbour: Mr1Neighbour): HTMLElement | null => {
+  const counts = battleCounts(neighbour);
+  if (!counts.length) return null;
+  const group = el("span", "mr1-battles");
+  for (const { kind, count, label } of counts) {
+    const badge = el("span", `mr1-battle mr1-battle--${kind}`);
+    badge.title = label;
+    badge.setAttribute("role", "img");
+    badge.setAttribute("aria-label", label);
+    badge.append(icon(kind === "attackedYou" ? "shield" : "attack", 13), String(count));
+    group.append(badge);
+  }
+  return group;
+};
+
 /** "You can send Pokey ×16 Octo-ooze ×6", or null with nothing housed. */
 export const armyChips = (own: Mr1Own | null, label = "You can send"): HTMLElement | null => {
   if (!own?.army.length) return null;
@@ -141,7 +163,7 @@ const reasonLine = (
   const line = el("p", "mr1-reason");
   line.id = id;
   if (reason.key === ReasonKey.PLAYING) {
-    line.append(el("span", "mr1-dot mr1-dot--online"));
+    line.append(onlineDot("", true));
   } else {
     line.append(icon(REASON_ICONS[reason.key] ?? "lock", 16, "mr1-icon mr1-reason__icon"));
   }
@@ -187,10 +209,9 @@ export const targetCard = (
   const head = el("div", "mr1-card__head");
   const titles = el("div", "mr1-card__titles");
   const titleRow = el("div", "mr1-card__title-row");
-  titleRow.append(
-    el("h2", "mr1-card__title u-display", target.name),
-    el("span", "chip", `Level ${target.level}`),
-  );
+  titleRow.append(el("h2", "mr1-card__title u-display", target.name));
+  if (target.kind !== "tribe" && isPlayingNow(target, state.now)) titleRow.append(onlineDot());
+  titleRow.append(el("span", "chip", `Level ${target.level}`));
   titles.append(titleRow);
   if (target.kind === "tribe") {
     titles.append(
@@ -201,11 +222,13 @@ export const targetCard = (
       ),
     );
   } else {
-    const presence = el("span", "mr1-card__sub");
-    if (presenceText(target, state.now) === "Playing now")
-      presence.append(el("span", "mr1-dot mr1-dot--online"));
-    presence.append(presenceText(target, state.now));
-    titles.append(presence);
+    const seen = presenceText(target, state.now);
+    const battles = battleIcons(target);
+    if (seen || battles) {
+      const sub = el("span", "mr1-card__sub", seen);
+      if (battles) sub.append(battles);
+      titles.append(sub);
+    }
   }
   const close = button("btn btn--icon mr1-card__close");
   close.setAttribute("aria-label", "Close");
@@ -246,32 +269,6 @@ export const targetCard = (
   } else {
     const line = handlers.achievementsLine?.(target);
     if (line) card.append(line);
-    const stats = el("div", "mr1-card__stats");
-    const stat = (count: number, words: string, warn: boolean): HTMLElement => {
-      const tile = el("div", warn ? "mr1-stat mr1-stat--warn" : "mr1-stat");
-      tile.append(
-        el("span", "mr1-stat__value u-display", String(count)),
-        el("span", "mr1-stat__label", words),
-      );
-      return tile;
-    };
-    if (target.attacksFrom || target.attacksTo) {
-      stats.append(
-        stat(
-          target.attacksFrom,
-          target.attacksFrom === 1 ? "time they attacked you" : "times they attacked you",
-          target.attacksFrom > 0,
-        ),
-        stat(
-          target.attacksTo,
-          target.attacksTo === 1 ? "time you attacked them" : "times you attacked them",
-          false,
-        ),
-      );
-      card.append(stats);
-    } else {
-      card.append(el("p", "mr1-card__sub", battlesText(target)));
-    }
   }
 
   if (gate.warning) {

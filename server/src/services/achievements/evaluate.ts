@@ -71,7 +71,7 @@ export interface AchievementView {
   mr1KozuDestroyed?: boolean;
 }
 
-/** Event stats to add (§7.1): Block and Heavy Trap builds, takeovers, a Starter Kit, a Kozu hall. */
+/** Event stats to add (§7.1): Block and Heavy Trap builds, takeovers, a Starter Kit, a Kozu hall, a biggest Putty bomb. */
 export type AchievementEvents = Partial<Record<AchievementStat, number>>;
 
 /** One achievement this evaluation unlocked. */
@@ -102,6 +102,8 @@ const championLevel = (champions: unknown, type: number): number => {
   let best = 0;
   for (const champion of champions) {
     if (!isRecord(champion) || Math.trunc(Number(champion.t)) !== type) continue;
+    // An egg (status 3) has not hatched yet (`services/yard/champion.ts`).
+    if (Number(champion.status) === 3) continue;
     const level = Math.trunc(Number(champion.l));
     best = Math.max(best, Number.isFinite(level) && level > 0 ? level : 1);
   }

@@ -140,15 +140,19 @@ export const layoutPlayers = (
 };
 
 /**
- * Keeps a viewport's top-left corner inside the map. A viewport larger than
- * the map is centred on it instead.
+ * Keeps a viewport's top-left corner inside the map, give or take `pad`
+ * pixels past each edge (so a pin on the edge can be dragged out from under
+ * the buttons over the map). A viewport larger than the map is centred on it
+ * instead.
  */
 export const clampScroll = (
   scroll: PinSpot,
   viewport: { readonly width: number; readonly height: number },
+  pad = 0,
 ): PinSpot => {
+  // `0 - pad` rather than `-pad`, which would hand back -0 when pad is 0.
   const axis = (value: number, size: number): number =>
-    size >= MAP_SIZE ? (MAP_SIZE - size) / 2 : Math.min(Math.max(0, value), MAP_SIZE - size);
+    size >= MAP_SIZE ? (MAP_SIZE - size) / 2 : Math.min(Math.max(0 - pad, value), MAP_SIZE - size + pad);
   return { x: axis(scroll.x, viewport.width), y: axis(scroll.y, viewport.height) };
 };
 
@@ -156,5 +160,6 @@ export const clampScroll = (
 export const centreOn = (
   spot: PinSpot,
   viewport: { readonly width: number; readonly height: number },
+  pad = 0,
 ): PinSpot =>
-  clampScroll({ x: spot.x - viewport.width / 2, y: spot.y - viewport.height / 2 }, viewport);
+  clampScroll({ x: spot.x - viewport.width / 2, y: spot.y - viewport.height / 2 }, viewport, pad);
