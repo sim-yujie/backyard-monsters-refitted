@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
 import { gzipSync } from "node:zlib";
 import type { BrainWeights } from "../../../game-rules/combat/index.js";
@@ -36,6 +36,8 @@ const store = new Map<string, string>();
 const upsert = mock(async (_entity: unknown, _row: Record<string, any>) => {});
 /** Defence replays written (issue #359). */
 const replays: Record<string, any>[] = [];
+/** The event counter writes (`services/events/progressStore.ts`), as `[event, amount]`. */
+const counted: [string, number][] = [];
 
 mock.module("../../../server.js", () => ({
   postgres: {
@@ -64,6 +66,12 @@ mock.module("../../../server.js", () => ({
       upsert,
       persist: () => {},
       flush: async () => {},
+      // Only the event counter's SQL is answered; anything else fails as with no database.
+      execute: async (sql: string, params: unknown[]) => {
+        if (!sql.includes("event_progress")) throw new Error("no database");
+        counted.push([String(params[1]), Number(params[2])]);
+        return [{ counter: params[2] }];
+      },
       // The attacker's main row, locked for an achievement event (#204).
       transactional: async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
@@ -202,6 +210,7 @@ beforeEach(() => {
   reports.length = 0;
   replays.length = 0;
   notices.length = 0;
+  counted.length = 0;
   store.clear();
   defender = {
     basesaveid: 9,
@@ -337,6 +346,128 @@ describe("the champion's learning brain through the save (issue #219)", () => {
       () => {}
     );
     expect(attackerSave.champion).toEqual(after);
+  });
+});
+
+describe("the Krallen Hunt's loot through the save", () => {
+  const FORCED = process.env.EVENTS_FORCE_ON;
+  beforeEach(() => {
+    // A day no hunt runs on its own; the forced one starts that midnight.
+    setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    process.env.EVENTS_FORCE_ON = "krallen-2026-11";
+    attackerSave.buildingdata = { "0": { id: 0, t: 14, l: 6, X: 0, Y: 0 } };
+  });
+  afterEach(() => {
+    setSystemTime();
+    if (FORCED === undefined) delete process.env.EVENTS_FORCE_ON;
+    else process.env.EVENTS_FORCE_ON = FORCED;
+  });
+
+  const sum = (amounts: Record<string, number>) => amounts.r1! + amounts.r2! + amounts.r3! + amounts.r4!;
+
+  test("the save that ends the attack counts the replay's credit once, loot that did not fit included", async () => {
+    const cap = replayCap();
+    expect(sum(cap)).toBeGreaterThan(0);
+    // Storage far over any cap: nothing lands, all of it counts.
+    attackerSave.resources = { r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 };
+    await baseSave(ctxFor({ over: "1", attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(attackerSave.resources).toEqual({ r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 });
+    // What the server's battle took, not the 4 billion the save claimed.
+    expect(counted).toEqual([["krallen-2026-11", sum(cap)]]);
+  });
+
+  test("a save that does not end the attack counts nothing", async () => {
+    await baseSave(ctxFor({ attackloot: JSON.stringify(CLAIM), flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(counted).toEqual([]);
+  });
+
+  test("below Town Hall 6, or outside the event, nothing counts", async () => {
+    attackerSave.buildingdata = { "0": { id: 0, t: 14, l: 5, X: 0, Y: 0 } };
+    await baseSave(ctxFor({ over: "1", flinglog: JSON.stringify(LOG) }), async () => {});
+    attackerSave.buildingdata = { "0": { id: 0, t: 14, l: 6, X: 0, Y: 0 } };
+    delete process.env.EVENTS_FORCE_ON;
+    defender.attackid = ATTACK_ID;
+    await baseSave(ctxFor({ over: "1", flinglog: JSON.stringify(LOG) }), async () => {});
+    expect(counted).toEqual([]);
+  });
+
+  test("an attack save cannot hand the attacker a Krallen", async () => {
+    attackerSave.champion = [];
+    await baseSave(
+      ctxFor({
+        over: "1",
+        flinglog: JSON.stringify(LOG),
+        attackerchampion: JSON.stringify([{ t: 5, hp: 62_000, l: 5, ft: 0, fd: 0, fb: 0, pl: 2, status: 0 }]),
+      }),
+      async () => {}
+    );
+    expect(attackerSave.champion).toEqual([]);
+  });
+});
+
+describe("the shop boosts through the save (beta.4)", () => {
+  // Two Pokeys at the Cannon Tower: it kills them before they finish it, so
+  // how hard they hit and how much they take shows in the tower's health.
+  const FEW = {
+    v: 1,
+    seed: 5,
+    events: [{ kind: "fling", t: 80, x: 220, y: 220, r: 30, monsters: { C1: 2 } }],
+  };
+  const ALL = { monsterDamage: true, monsterArmour: true, monsterSpeed: true };
+  const forces = (buffs?: unknown) => ({
+    bunkers: {},
+    defenderLevels: {},
+    defenderChampions: [],
+    ...(buffs ? { buffs } : {}),
+  });
+
+  /** The tower's health after the server's own battle against `defence`. */
+  const serverHealth = (defence: unknown) => {
+    const session = { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY, defenderForces: defence };
+    const input = battleReplayInput({
+      flinglog: FEW,
+      session: session as never,
+      defender: { type: "tribe", buildingdata: YARD as never, buildinghealthdata: {}, resources: defender.resources },
+      attacker: attackerSave,
+      tick: battleTick(undefined),
+      declareWar: false,
+    });
+    return replayAbandonedAttack(input!).buildinghealthdata["1"];
+  };
+
+  const save = (body: Record<string, string> = {}) =>
+    baseSave(
+      ctxFor({ over: "1", flinglog: JSON.stringify(FEW), buildinghealthdata: JSON.stringify({}), ...body }),
+      async () => {}
+    );
+
+  test("the attacker's boosts change the server's battle", () => {
+    const plain = serverHealth(forces());
+    expect(plain).toBeGreaterThan(0);
+    expect(serverHealth(forces({ attacker: ALL }))).toBeLessThan(plain);
+    // The same boosts, the same battle.
+    expect(serverHealth(forces({ attacker: ALL }))).toBe(serverHealth(forces({ attacker: ALL })));
+    // The defender's Tower Overdrive kills them sooner.
+    expect(serverHealth(forces({ defender: { towerDamage: true } }))).toBeGreaterThan(plain);
+  });
+
+  test("the save is fought with the boosts the attack load froze", async () => {
+    sessionForces = forces({ attacker: ALL });
+    await save();
+    expect(defender.buildinghealthdata["1"]).toBe(serverHealth(forces({ attacker: ALL })));
+  });
+
+  test("a client cannot claim a boost: the save's own say and the attacker's store are ignored", async () => {
+    sessionForces = forces();
+    // A boost bought after the load, and a save that claims every boost.
+    attackerSave.storedata = { MOD: { q: 1, e: 4e9 }, MDOD: { q: 1, e: 4e9 }, MSOD: { q: 1, e: 4e9 } };
+    await save({
+      defenderforces: JSON.stringify(forces({ attacker: ALL })),
+      buffs: JSON.stringify({ attacker: ALL }),
+      attpowerups: JSON.stringify({ MOD: 1, MDOD: 1, MSOD: 1 }),
+    });
+    expect(defender.buildinghealthdata["1"]).toBe(serverHealth(forces()));
   });
 });
 
@@ -921,7 +1052,7 @@ describe("the defence lands (#195)", () => {
   const GORGO = { t: 1, l: 1, hp: 3000, pl: 0, status: 0, fd: 0, ft: 0, fb: 0 };
   const TICK = 4_000;
 
-  const serverBattle = () =>
+  const serverBattle = (forces: typeof FORCES = FORCES) =>
     replayAbandonedAttack(
       battleReplayInput({
         flinglog: LOG,
@@ -930,7 +1061,7 @@ describe("the defence lands (#195)", () => {
           attackid: ATTACK_ID,
           startedat: 0,
           entryHoused: ENTRY,
-          defenderForces: FORCES,
+          defenderForces: forces,
         },
         defender: {
           type: "tribe",
@@ -978,6 +1109,35 @@ describe("the defence lands (#195)", () => {
 
     expect(reports.some((line) => line.includes("champion"))).toBe(true);
     expect((defender.champion as { hp: number }[])[0]!.hp).toBeLessThan(3000);
+  });
+
+  test("a champion hurt before its owner left heals up to the attack before savetime moves past it", async () => {
+    // Stored at 1,000 two hours ago: a level 1 Gorgo is full (40,000) an hour
+    // after that. Nothing of the champion fights here, so the healing alone shows.
+    sessionForces = { ...FORCES, defenderChampions: [] };
+    defender.savetime = Math.floor(Date.now() / 1000) - 2 * 3_600;
+    defender.champion = [{ ...GORGO, hp: 1_000 }];
+
+    await baseSave(ctxFor({ over: "1", tick: String(TICK), flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.champion).toEqual([{ ...GORGO, hp: 40_000 }]);
+  });
+
+  test("the battle's health lands on the healed champion, not on the stale stored health", async () => {
+    // The attack load served the champion healed to its full 40,000
+    // (`servedDefenderForces`); its row still says 100 from an hour before,
+    // and a level 1 Gorgo heals from empty to full in an hour.
+    const served = { ...FORCES, defenderChampions: [{ t: 1, l: 1, hp: 40_000, pl: 0 }] };
+    sessionForces = served;
+    const left = Math.floor(serverBattle(served).defenderChampions[0]!.hp);
+    expect(left).toBeGreaterThan(100);
+    defender.savetime = Math.floor(Date.now() / 1000) - 3_600;
+    defender.champion = [{ ...GORGO, hp: 100 }];
+
+    await baseSave(ctxFor({ over: "1", tick: String(TICK), flinglog: JSON.stringify(LOG) }), async () => {});
+
+    // What the battle left of the 40,000 it fought with, not the row's 100.
+    expect(defender.champion).toEqual([{ ...GORGO, hp: left }]);
   });
 });
 

@@ -67,7 +67,7 @@ describe("evaluateAchievements: the rules", () => {
 
   test("unavailable entries never unlock, whatever the stats", () => {
     const evaluation = evaluateAchievements(
-      worked({ hugerage: 9, alliance: 1, descent: 14, underhall: 5, infernoquests: 10 }),
+      worked({ alliance: 1, descent: 14, underhall: 5, infernoquests: 10 }),
       {},
       NOW
     );
@@ -75,14 +75,14 @@ describe("evaluateAchievements: the rules", () => {
     expect(evaluation.shiny).toBe(0);
   });
 
-  test("everything met pays the 16 shown achievements, 220 Shiny, once", () => {
+  test("everything met pays the 17 shown achievements, 230 Shiny, once", () => {
     const all = Object.fromEntries(
       ACHIEVEMENTS.flatMap((entry) => entry.rules.map((rule) => [rule.stat, 10_000]))
     );
     const first = evaluateAchievements(worked(all), {}, NOW);
 
-    expect(first.unlocked).toHaveLength(16);
-    expect(first.shiny).toBe(220);
+    expect(first.unlocked).toHaveLength(17);
+    expect(first.shiny).toBe(230);
     expect(first.unlocked.every((unlock) => unlock.backfill === undefined)).toBe(true);
     expect(first.record.c["22"]).toEqual({ at: NOW, shiny: 25 });
 

@@ -1,5 +1,5 @@
 import { eventsActions, eventsApi, type EventsActions, type EventsApi, type EventView } from "@/api/events";
-import { claimableCount, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
+import { claimableCount, grantedKrallenText, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
 import { onPumpkins, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { seasonFor, setSeason } from "@/game/season";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
@@ -205,7 +205,8 @@ export class EventsDoor {
     this.claiming = null;
     if (result.ok) {
       const rewards = event.ladder?.tiers[tier]?.rewards ?? [];
-      this.mounts.notices.show(EVENTS_NOTICE, `Reward claimed: ${rewardsText(rewards)}`, {
+      const words = grantedKrallenText(result.report.granted) ?? `Reward claimed: ${rewardsText(rewards)}`;
+      this.mounts.notices.show(EVENTS_NOTICE, words, {
         level: "info",
         timeoutMs: 5_000,
       });

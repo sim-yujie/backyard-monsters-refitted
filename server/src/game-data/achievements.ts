@@ -6,9 +6,10 @@
  * left out.
  *
  * Names, descriptions and Shiny were approved by the owner on 2026-10-05
- * (open questions Q1 and Q6). Six entries need features the web does not have
+ * (open questions Q1 and Q6). Five entries need features the web does not have
  * (Q2): they stay `available: false`, which means never evaluated, never sent
- * to a client and never paid, until their feature lands (WP9, #299).
+ * to a client and never paid, until their feature lands (WP9, #299). Huge Rage,
+ * which Flash blocked, was turned on in WP9.
  *
  * Each rule reads the server-side stats of `save.achievements`
  * (`services/achievements/state.ts`), never `save.stats`, which `/base/save`
@@ -164,8 +165,10 @@ const LIST: readonly AchievementDef[] = [
     shiny: 10,
     rules: [{ stat: "hugerage", target: 1 }],
     mode: "all",
-    // Flash blocked it and never awarded it (ACHIEVEMENTS.as:48-50, :113-116).
-    available: false,
+    // Flash blocked it and never awarded it (ACHIEVEMENTS.as:48-50, :113-116);
+    // the owner had it turned on (#299): each landed attack counts its `pu3`
+    // bombs (`services/achievements/events.ts`).
+    available: true,
     flash: "ACHIEVEMENTS.as:48-50; com/monsters/effects/ResourceBombs.as:318-319",
   },
   {

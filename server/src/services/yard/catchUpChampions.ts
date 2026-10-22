@@ -1,4 +1,5 @@
 import { atChampionLevel, STARVE_SECONDS } from "../../game-data/championCatalogue.js";
+import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import {
   CHAMPION_STATUS,
   entryOf,
@@ -94,6 +95,75 @@ const numberOf = (raw: unknown): number => {
 };
 
 /**
+ * Whole heal periods from `from` to `now`, the window clamped to 30 days. A
+ * `from` that is not a time (a yard never saved) heals nothing, as
+ * `catchUpYard` reads it.
+ */
+const healPeriods = (from: number, now: number): number => {
+  if (!Number.isFinite(from) || from <= 0) return 0;
+  const start = Math.min(now, Math.max(from, now - MAX_ELAPSED_SECONDS));
+  return Math.max(0, Math.floor(now / HEAL_PERIOD) - Math.floor(start / HEAL_PERIOD));
+};
+
+/**
+ * One champion's health after `periods` heals: unchanged unless it is in the
+ * cage (status 0) and below full.
+ */
+const healedHealth = (champion: ChampionData, periods: number): ChampionData["hp"] => {
+  const entry = entryOf(champion);
+  if (!entry || statusOf(champion) !== CHAMPION_STATUS.ACTIVE) return champion.hp;
+  const max = maxHealthOf(champion, entry);
+  const hp = numberOf(champion.hp);
+  if (hp >= max || periods <= 0) return champion.hp;
+  const rate = Math.trunc((max * HEAL_PERIOD) / atChampionLevel(entry.healtime, levelOf(champion, entry)));
+  return Math.min(max, hp + rate * periods);
+};
+
+/**
+ * The champions as they stand at `now`, healed from `from` as the catch-up
+ * heals them, without starving them and without touching what it is handed.
+ * What a yard defends with when it is attacked: the stored health is the
+ * health at the owner's last catch-up, and a champion keeps healing in its
+ * cage while the owner is away, as the original's pen tick did during the
+ * attack load's replay (`ChampionBase.as:1043-1053`).
+ *
+ * @param raw - A save's `champion` column.
+ * @param from - Unix seconds the stored health is from (`savetime`).
+ * @param now - Unix seconds to heal to.
+ */
+export const championsHealedTo = (raw: unknown, from: number, now: number): ChampionData[] => {
+  const periods = healPeriods(from, now);
+  return readChampions(raw).map((champion) => {
+    const hp = healedHealth(champion, periods);
+    return hp === champion.hp ? champion : { ...champion, hp };
+  });
+};
+
+/**
+ * Heals the champions in the cage from `from` to `now` in place, and nothing
+ * else. For every write that moves a yard's `savetime` to `now` without the
+ * full catch-up (an attack landing on it, the owner's save, the Yard
+ * Planner's batches): moving `savetime` past healing that was never written
+ * loses it for good.
+ *
+ * @param save - The yard, its `champion` column replaced when anything healed.
+ * @param from - Unix seconds of the stored health (`savetime`).
+ * @param now - Unix seconds to heal to.
+ */
+export const healChampions = (save: CatchUpChampionsSave, from: number, now: number): void => {
+  const periods = healPeriods(from, now);
+  const champions = readChampions(save.champion);
+  let changed = false;
+  const healed = champions.map((champion) => {
+    const hp = healedHealth(champion, periods);
+    if (hp === champion.hp) return champion;
+    changed = true;
+    return { ...champion, hp };
+  });
+  if (changed) save.champion = healed;
+};
+
+/**
  * Heals and starves every champion in the cage from `from` to `now`.
  *
  * @param save - The yard, its `champion` column replaced when anything changed.
@@ -109,8 +179,7 @@ export const catchUpChampions = (
   const champions = readChampions(save.champion);
   if (champions.length === 0) return [];
 
-  const start = Math.min(now, Math.max(from, now - MAX_ELAPSED_SECONDS));
-  const periods = Math.max(0, Math.floor(now / HEAL_PERIOD) - Math.floor(start / HEAL_PERIOD));
+  const periods = healPeriods(from, now);
   const jobs: (StarveJob | ChampionHatchJob)[] = [];
   let changed = false;
 
@@ -123,15 +192,8 @@ export const catchUpChampions = (
   champions.forEach((stored, index) => {
     const entry = entryOf(stored);
     if (!entry || statusOf(stored) !== CHAMPION_STATUS.ACTIVE) return;
-    const champion = { ...stored };
+    const champion = { ...stored, hp: healedHealth(stored, periods) };
     const level = levelOf(champion, entry);
-
-    const max = maxHealthOf(champion, entry);
-    const hp = numberOf(champion.hp);
-    if (hp < max && periods > 0) {
-      const rate = Math.trunc((max * HEAL_PERIOD) / atChampionLevel(entry.healtime, level));
-      champion.hp = Math.min(max, hp + rate * periods);
-    }
 
     if (now > numberOf(champion.ft) + STARVE_SECONDS) {
       let lost = false;

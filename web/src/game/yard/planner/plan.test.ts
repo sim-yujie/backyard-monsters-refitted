@@ -6,6 +6,7 @@ import { LAYOUT_VERSION } from "@/api/types";
 import { layoutDate, MissReason, payloadFor, planLoad } from "./layout";
 import { Plan } from "./plan";
 import { moveCommand } from "./commands";
+import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
 
 const yard = readYard(fixture as unknown as BaseLoadResponse);
 
@@ -903,5 +904,31 @@ describe("Plan nearby", () => {
     );
     for (const id of least) expect(found.has(id)).toBe(true);
     for (const id of found) expect(plan.get(id)?.fixed).toBe(false);
+  });
+});
+
+describe("the Trojan Horse in the plan", () => {
+  // Where the server puts it: outside the plot, on the far north edge
+  // (`server/src/services/raids/trojanHorse.ts`'s `TROJAN_HORSE_SPOT`).
+  const HORSE_ID = 9_000;
+  const withHorse = (): Plan => {
+    const response = fixture as unknown as BaseLoadResponse;
+    const horse = { id: HORSE_ID, t: TROJAN_HORSE_TYPE, X: -70, Y: -800 };
+    return Plan.fromYard(
+      readYard({ ...response, buildingdata: { ...response.buildingdata, [String(HORSE_ID)]: horse } }),
+    );
+  };
+
+  it("does not block Apply by standing outside the plot", () => {
+    const plan = withHorse();
+    expect(plan.get(HORSE_ID)?.fixed).toBe(true);
+    expect(plan.validate().issues.filter((issue) => issue.id === HORSE_ID)).toEqual([]);
+    expect(plan.validate().valid).toBe(true);
+  });
+
+  it("is never written to a layout", () => {
+    const payload = payloadFor(withHorse());
+    expect(payload.nodes.some((node) => node.id === HORSE_ID)).toBe(false);
+    expect(payload.stored ?? []).toEqual([]);
   });
 });

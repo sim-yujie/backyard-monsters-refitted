@@ -37,6 +37,7 @@ type Look = "soft" | "dot" | "ring" | "scorch";
 /** One sprite of a blast, placed from its age each frame. */
 interface Bit {
   readonly sprite: Sprite;
+  readonly look: Look;
   readonly born: number;
   readonly life: number;
   /** Ground point it starts over, world px, and its height above it. */
@@ -244,14 +245,27 @@ export class BlastFx {
   private shaking = false;
   private made = 0;
 
+  /**
+   * `maxShake` raises the shake's ceiling (bigger attack effects), and
+   * `fewer` halves the extra bits ("Reduce effects").
+   */
   constructor(
     private readonly host: BlastHost,
     private readonly reducedMotion = false,
+    private readonly maxShake = MAX_SHAKE,
+    private readonly fewer = false,
   ) {}
 
   /** Bits alive, for tests and the dev hook. */
   get bitCount(): number {
     return this.bits.length;
+  }
+
+  /** How many bits of each look are alive, for tests. */
+  looksAlive(): Partial<Record<Look, number>> {
+    const counts: Partial<Record<Look, number>> = {};
+    for (const bit of this.bits) counts[bit.look] = (counts[bit.look] ?? 0) + 1;
+    return counts;
   }
 
   get markCount(): number {
@@ -276,7 +290,7 @@ export class BlastFx {
     this.made += 1;
     const scale = Math.max(0.6, Math.min(1.8, radius / BASE_RADIUS));
     // Many at once: the extras thin out before the core flash and ring do.
-    const busy = this.bits.length > MAX_BITS / 2 ? 0.5 : 1;
+    const busy = (this.bits.length > MAX_BITS / 2 ? 0.5 : 1) * (this.fewer ? 0.5 : 1);
     const many = (count: number): number =>
       this.reducedMotion ? 0 : Math.max(1, Math.round(count * busy));
     return { scale, many };
@@ -359,6 +373,87 @@ export class BlastFx {
     if (!this.reducedMotion) this.startShake({ born: tick, life: 14, amp: Math.min(MAX_SHAKE, 5 * Math.min(1.4, scale)) });
   }
 
+  /* ── Demolish ───────────────────────────────────────────────────────── */
+
+  /**
+   * A building falling (bigger attack effects): a flash and a fireball,
+   * dust rolling along the ground, sparks, chunks of the building thrown up
+   * that land and stay a moment, a scorch, and a shake as hard as the
+   * building is big. No shockwave ring: the owner dropped it, as it read like
+   * the Bandito's attack. A `small` one (a wall) gets the flash, a few chunks
+   * and no shake.
+   */
+  demolish(tick: number, at: Point, radius: number, small = false): void {
+    const { scale, many } = this.begin(radius);
+    const lift = { x: at.x, y: at.y - 14 };
+    this.add(tick, { look: "soft", at: lift, add: true, life: 12, size0: radius * 0.7, size1: radius * 2, easeOut: true, colours: [0xffffff, 0xfff3a0, 0xffb040] });
+    if (!small) {
+      this.mark(tick, "scorch", at, radius * 1.6, 0.6, 220);
+      this.add(tick, { look: "soft", at: lift, add: true, life: 22, size0: radius * 0.8, size1: radius * 1.2, colours: [0xfff6c0, 0xffa020, 0xff6000, 0x802000], peak: 0.95 });
+      // Dust rolling out along the ground.
+      const dust = many(10);
+      for (let index = 0; index < dust; index += 1) {
+        const angle = (index / dust) * Math.PI * 2 + blastNoise(tick, index + 500);
+        this.add(tick, {
+          look: "soft", at, delay: 2,
+          life: 46 + Math.round(blastNoise(tick, index + 520) * 20),
+          vx: Math.cos(angle) * 3.2 * scale, vy: Math.sin(angle) * 1.6 * scale, drag: 0.08,
+          z: 4, vz: 0.15, size0: radius * 0.3, size1: radius * 0.75, fadeIn: 4, peak: 0.6, hold: 0.2,
+          colours: [0x9a8a70, 0x7a6e60, 0x5a5550],
+        });
+      }
+      const sparks = many(14);
+      for (let index = 0; index < sparks; index += 1) {
+        const angle = ((index + blastNoise(tick, index + 540)) / sparks) * Math.PI * 2;
+        const speed = (8 + blastNoise(tick, index + 560) * 7) * scale;
+        this.add(tick, {
+          look: "dot", at: lift, add: true,
+          life: 14 + Math.round(blastNoise(tick, index + 580) * 8),
+          vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed * 0.5,
+          drag: 0.14, size0: 5, size1: 1.5, stretch: true,
+          colours: [0xffffff, 0xffe070, 0xff8020],
+        });
+      }
+    }
+    // Chunks of the building, thrown up, landing and lying a moment.
+    const chunks = small ? Math.min(4, many(4)) : many(16);
+    for (let index = 0; index < chunks; index += 1) {
+      const angle = ((index + blastNoise(tick, index + 600)) / chunks) * Math.PI * 2;
+      const speed = (1.5 + blastNoise(tick, index + 620) * 3) * scale;
+      const tone = blastNoise(tick, index + 640);
+      this.add(tick, {
+        look: "dot", at: { x: at.x, y: at.y },
+        life: 50 + Math.round(blastNoise(tick, index + 660) * 20),
+        z: 16, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed * 0.5,
+        vz: 4 + blastNoise(tick, index + 680) * 4, gravity: 0.32, drag: 0.03,
+        size0: 6 + tone * 5, size1: 5, hold: 0.7, spin: 0.3,
+        colours: [tone > 0.5 ? 0x6b5a48 : 0x8a7a66, 0x4a4038],
+      });
+    }
+    // "Reduce effects" keeps the fall's shake out, as it keeps the hit-stop.
+    if (!this.reducedMotion && !this.fewer && !small) {
+      this.startShake({ born: tick, life: 22, amp: Math.min(this.maxShake, 7 * Math.min(2, scale)) });
+    }
+  }
+
+  /** A small spark where a blow lands (bigger attack effects): a flash and a few bits. */
+  impact(tick: number, at: Point, radius: number): void {
+    const { many } = this.begin(radius);
+    this.add(tick, { look: "soft", at, add: true, life: 7, size0: radius * 0.4, size1: radius * 1.3, easeOut: true, colours: [0xffffff, 0xfff3a0, 0xffc040] });
+    const sparks = many(5);
+    for (let index = 0; index < sparks; index += 1) {
+      const angle = ((index + blastNoise(tick, index + 700)) / sparks) * Math.PI * 2;
+      const speed = 4 + blastNoise(tick, index + 720) * 4;
+      this.add(tick, {
+        look: "dot", at, add: true,
+        life: 8 + Math.round(blastNoise(tick, index + 740) * 5),
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed * 0.5 - 1,
+        drag: 0.18, size0: 3.5, size1: 1, stretch: true,
+        colours: [0xffffff, 0xffe070, 0xff8020],
+      });
+    }
+  }
+
   /* ── Fiery ──────────────────────────────────────────────────────────── */
 
   /** A fiery blast at the ground point `at`, `radius` screen px wide: Eye-ra's. */
@@ -423,6 +518,7 @@ export class BlastFx {
     this.host.air.addChild(sprite);
     const bit: Bit = {
       sprite,
+      look: spec.look,
       born: tick + (spec.delay ?? 0),
       life: spec.life ?? 20,
       x: spec.at.x,
@@ -538,7 +634,8 @@ export class BlastFx {
     const amp = BlastFx.shakeLeft(shake, tick);
     const dx = Math.sin(age * 1.9 + shake.born) * amp;
     const dy = Math.cos(age * 2.7 + shake.born) * amp * 0.7;
-    this.host.shake(Math.max(-MAX_SHAKE, Math.min(MAX_SHAKE, dx)), Math.max(-MAX_SHAKE, Math.min(MAX_SHAKE, dy)));
+    const cap = this.maxShake;
+    this.host.shake(Math.max(-cap, Math.min(cap, dx)), Math.max(-cap, Math.min(cap, dy)));
     this.shaking = true;
   }
 }

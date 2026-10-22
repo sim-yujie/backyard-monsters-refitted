@@ -15,6 +15,9 @@ const halloween: EventView = {
   endsAt: 10 * 86_400,
   calendar: null,
   ladder: null,
+  claimUntil: null,
+  locked: null,
+  krallen: null,
 };
 
 describe("pumpkinHuntHint", () => {

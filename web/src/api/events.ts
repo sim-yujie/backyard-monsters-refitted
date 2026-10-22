@@ -24,7 +24,9 @@ export type EventReward =
   | { readonly kind: "shiny"; readonly amount: number }
   | { readonly kind: "shopItem"; readonly item: string }
   | { readonly kind: "speedup"; readonly item: string; readonly count: number }
-  | { readonly kind: "decoration"; readonly type: number; readonly count: number };
+  | { readonly kind: "decoration"; readonly type: number; readonly count: number }
+  /** The champion Krallen: level 1 the first time, one level more each later win, at most 5. */
+  | { readonly kind: "krallen" };
 
 /** One reward as a claim paid it (server `services/events/grant.ts`). */
 export type GrantedReward =
@@ -32,7 +34,9 @@ export type GrantedReward =
   | { kind: "shiny"; amount: number }
   | { kind: "shopItem"; item: string; endsAt: number }
   | { kind: "speedup"; item: string; count: number; held: number }
-  | { kind: "decoration"; type: number; count: number; stored: number };
+  | { kind: "decoration"; type: number; count: number; stored: number }
+  /** `raised` false: she was at the top already and nothing changed. */
+  | { kind: "krallen"; level: number; raised: boolean };
 
 export interface CalendarView {
   /** Each day's rewards, day 1 first. */
@@ -64,12 +68,19 @@ export interface EventView {
   kind: string;
   /** A picture under /public, or null. */
   banner: string | null;
-  status: "active" | "upcoming";
+  /** "ended": over, with a ladder tier the player can still claim until `claimUntil`. */
+  status: "active" | "upcoming" | "ended";
   /** Unix seconds. */
   startsAt: number;
   endsAt: number;
+  /** When ladder claims close (unix s), for an event that keeps them open after its end; else null. */
+  claimUntil: number | null;
+  /** Why the player cannot take part (Town Hall too low, guided start not done), in words; null when they can. */
+  locked: string | null;
   calendar: CalendarView | null;
   ladder: LadderView | null;
+  /** For an event that pays Krallen: her level now (0 for none) and the top an event raises her to. */
+  krallen: { level: number; maxLevel: number } | null;
 }
 
 export interface EventsBody extends ApiEnvelope {
@@ -109,7 +120,8 @@ export const claimCalendar = (event: string): Promise<YardResponse<CalendarClaim
   post<YardResponse<CalendarClaimReport>>(`${EVENTS_PATH}/calendar/claim`, { event });
 
 /**
- * One ladder tier. Refusals: 400 `unknownEvent`, `unknownTier`; 409
+ * One ladder tier, while the event is on or, for one with claim days, until
+ * its `claimUntil`. Refusals: 400 `unknownEvent`, `unknownTier`; 409
  * `eventNotActive`, `tierClaimed`, `tierLocked { have, need }`.
  */
 export const claimLadderTier = (event: string, tier: number): Promise<YardResponse<LadderClaimReport>> =>

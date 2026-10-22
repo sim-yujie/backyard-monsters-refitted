@@ -1,6 +1,7 @@
 import type { StoreData } from "@/api/types";
 import { overdriveBlocked, runningUnlock, type LockerContext } from "@/game/monsters/lockerModel";
 import type { YardKind } from "./buildingCostData";
+import { townHallLevel } from "./buildingCosts";
 import { damagedAt, repairNowPrice } from "./repair";
 import type { YardStoreReader } from "./YardStore";
 
@@ -12,7 +13,8 @@ import type { YardStoreReader } from "./YardStore";
  * (`server/src/game-data/store/storeItems.ts`); `shop/buy` always charges
  * its own. The one exception is Repair everything now (`FIX`), which is not a
  * store row but the `repair/instant` route, priced from the damage
- * (`repair.ts` `repairNowPrice`).
+ * (`repair.ts` `repairNowPrice`). The wall upgrades (`BLK2`..`BLK5`) are
+ * priced from the yard's Blocks as the server prices them ({@link wallOffers}).
  *
  * Pure: {@link shopModel} reads a store and returns rows; the screen
  * (`ui/yard/ShopScreen.ts`) draws them.
@@ -26,6 +28,7 @@ export const ShopSection = {
   BUILDING: "building",
   STORAGE: "storage",
   MONSTERS: "monsters",
+  BOOSTS: "boosts",
   PROTECTION: "protection",
 } as const;
 export type ShopSection = (typeof ShopSection)[keyof typeof ShopSection];
@@ -34,6 +37,7 @@ export const SHOP_SECTION_TITLES: Readonly<Record<ShopSection, string>> = {
   building: "Building",
   storage: "Storage and production",
   monsters: "Monsters",
+  boosts: "Battle boosts",
   protection: "Protection",
 };
 
@@ -56,6 +60,11 @@ export interface ShopItem {
    * never "running", always on sale.
    */
   readonly stacks?: true;
+  /**
+   * Bought again while it runs, it starts its full time again from then
+   * (the battle boosts): on sale while it runs, its time left beside the price.
+   */
+  readonly restarts?: true;
 }
 
 const HOUR = 3_600;
@@ -157,6 +166,50 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     seconds: DAY,
     outposts: true,
   },
+  // The battle boosts (beta.4): in battle from the moment they are bought
+  // (`combat/rules/defence.ts` `storeBuffs`). Tower Overdrive is the yard's
+  // own, so an outpost sells it too; the monster boosts are the main yard's,
+  // and its monsters take them into every attack.
+  {
+    item: "TOD",
+    name: "Tower Overdrive",
+    blurb: "This yard's towers do 25% more damage for 24 hours.",
+    section: ShopSection.BOOSTS,
+    prices: [600],
+    seconds: DAY,
+    outposts: true,
+    restarts: true,
+  },
+  {
+    item: "MOD",
+    name: "Monster Overdrive",
+    blurb: "Your monsters do 25% more damage for 24 hours, in your attacks and at home.",
+    section: ShopSection.BOOSTS,
+    prices: [500],
+    seconds: DAY,
+    outposts: false,
+    restarts: true,
+  },
+  {
+    item: "MDOD",
+    name: "Monster Defensive Buff",
+    blurb: "Your monsters take 30% less damage for 24 hours, in your attacks and at home.",
+    section: ShopSection.BOOSTS,
+    prices: [500],
+    seconds: DAY,
+    outposts: false,
+    restarts: true,
+  },
+  {
+    item: "MSOD",
+    name: "Monster Speed Buff",
+    blurb: "Your monsters move and attack 50% faster for 24 hours, in your attacks and at home.",
+    section: ShopSection.BOOSTS,
+    prices: [500],
+    seconds: DAY,
+    outposts: false,
+    restarts: true,
+  },
   // Damage protection: added on top of whatever protection is left, main yard
   // only (owner decision 2026-09-29).
   {
@@ -201,29 +254,67 @@ export interface ComingLaterItem {
 
 /**
  * What the original sold that is held back until its effect is modelled
- * (§8.2; Tower and Monster Overdrive by owner decision 2026-09-29). Listed,
- * never sold: `shop/buy` refuses every one of them.
+ * (§8.2). Listed, never sold: `shop/buy` refuses every one of them. The four
+ * battle boosts and the wall upgrades were here until beta.4.
  */
 export const COMING_LATER: readonly ComingLaterItem[] = [
-  { items: ["TOD"], name: "Tower Overdrive", blurb: "Towers do more damage for a while." },
-  { items: ["MOD"], name: "Monster Overdrive", blurb: "Your monsters do more damage for a while." },
-  { items: ["MDOD"], name: "Monster Defensive Buff", blurb: "Your monsters take less damage for a while." },
-  { items: ["MSOD"], name: "Monster Speed Buff", blurb: "Your monsters move faster for a while." },
-  {
-    items: ["BLK2", "BLK3", "BLK4", "BLK5"],
-    name: "Wall Upgrades",
-    blurb: "Every wall block to stone, metal, gold or black diamond at once.",
-  },
   { items: ["BUILDING28"], name: "Shiny Decorations", blurb: "Decorations bought with Shiny." },
 ];
+
+/** One wall upgrade: every Block below `tier` raised to it (`server/src/services/yard/wallBlocks.ts`). */
+export interface WallTier {
+  readonly item: string;
+  readonly tier: number;
+  readonly name: string;
+  /** "stone", "metal", … for the lines on the card. */
+  readonly material: string;
+  /** The Town Hall level it needs in the main yard (`client/scripts/STORE.as:1674-1690`); outposts have no gate. */
+  readonly townHall: number;
+}
+
+export const WALL_TIERS: readonly WallTier[] = [
+  { item: "BLK2", tier: 2, name: "Stone Blocks", material: "stone", townHall: 3 },
+  { item: "BLK3", tier: 3, name: "Metal Blocks", material: "metal", townHall: 4 },
+  { item: "BLK4", tier: 4, name: "Gold Blocks", material: "gold", townHall: 5 },
+  { item: "BLK5", tier: 5, name: "Black Diamond Blocks", material: "black diamond", townHall: 6 },
+];
+
+/** Shiny per Block to climb into level `n` (index = n), as `shop/buy` charges it (`STORE.as:404-519`). */
+export const WALL_STEP_SHINY: readonly number[] = [0, 0, 3, 6, 10, 15];
+
+/** The Block, and the legacy Stone Block row the server reads as at least level 2. */
+const WALL_TYPE = 17;
+const LEGACY_WALL_TYPE = 18;
+
+/** What a wall upgrade offers now. */
+export type WallOfferState =
+  | { readonly kind: "buy"; readonly price: number; readonly blocked: string | null }
+  /** Every Block is at the tier or better. */
+  | { readonly kind: "reached" }
+  /** The yard has no Blocks. */
+  | { readonly kind: "none" };
+
+export interface WallOffer {
+  readonly tier: WallTier;
+  /** Blocks it would raise. */
+  readonly blocks: number;
+  readonly state: WallOfferState;
+}
+
+/** A Block's level for pricing: one still being built (level 0) is level 1, a legacy Stone row at least 2. */
+const blockLevel = (type: number, level: number): number =>
+  type === LEGACY_WALL_TYPE ? Math.max(2, level) : Math.max(1, level);
 
 /** The Hatchery Overdrives: one of the three at a time (§4.4). */
 const HATCHERY_OVERDRIVES: readonly string[] = ["HOD", "HOD2", "HOD3"];
 
 /** What a row offers now. */
 export type ShopOfferState =
-  /** On sale; `blocked` says why it cannot be bought now. */
-  | { readonly kind: "buy"; readonly price: number; readonly blocked: string | null }
+  /**
+   * On sale; `blocked` says why it cannot be bought now. A restarting item
+   * that is running says when it ends: buying it again starts it afresh.
+   */
+  | { readonly kind: "buy"; readonly price: number; readonly blocked: string | null; readonly endsAt?: number }
   /** A timed item that is running; it can be bought again once it ends. */
   | { readonly kind: "running"; readonly endsAt: number }
   /** Every step is bought. */
@@ -248,6 +339,8 @@ export interface RepairAllOffer {
 /** Everything the Shop shows. */
 export interface ShopModel {
   readonly offers: readonly ShopOffer[];
+  /** The wall upgrades, Stone to Black Diamond. */
+  readonly walls: readonly WallOffer[];
   /** Null when nothing is damaged. */
   readonly repair: RepairAllOffer | null;
   /** When the yard's damage protection ends (unix s), or null when it has none. */
@@ -255,6 +348,32 @@ export interface ShopModel {
 }
 
 export const NOT_ENOUGH_SHINY = "Not enough Shiny.";
+
+/** The four wall upgrades for the yard as it stands: price, Blocks raised, and why not. */
+export const wallOffers = (reader: YardStoreReader): readonly WallOffer[] => {
+  const levels = reader.yard.buildings
+    .filter((one) => one.type === WALL_TYPE || one.type === LEGACY_WALL_TYPE)
+    .map((one) => blockLevel(one.type, one.level));
+  const hall = townHallLevel(reader.yard);
+  return WALL_TIERS.map((tier): WallOffer => {
+    if (levels.length === 0) return { tier, blocks: 0, state: { kind: "none" } };
+    let blocks = 0;
+    let price = 0;
+    for (const level of levels) {
+      if (level >= tier.tier) continue;
+      blocks++;
+      for (let step = level + 1; step <= tier.tier; step++) price += WALL_STEP_SHINY[step] ?? 0;
+    }
+    if (blocks === 0) return { tier, blocks, state: { kind: "reached" } };
+    const blocked =
+      reader.kind === "main" && hall < tier.townHall
+        ? `Needs Town Hall level ${tier.townHall}.`
+        : reader.credits < price
+          ? NOT_ENOUGH_SHINY
+          : null;
+    return { tier, blocks, state: { kind: "buy", price, blocked } };
+  });
+};
 
 const finite = (raw: unknown): number | null => {
   if (raw === undefined || raw === null || raw === "") return null;
@@ -306,15 +425,14 @@ export const shopOffer = (item: ShopItem, reader: YardStoreReader): ShopOffer =>
   const now = reader.now();
   const storedata = reader.save.storedata;
 
-  if (item.seconds > 0 && !item.stacks) {
-    const endsAt = runningUntil(storedata, item.item, now);
-    if (endsAt !== null) return { item, owned: null, state: { kind: "running", endsAt } };
-  }
+  const endsAt = item.seconds > 0 && !item.stacks ? runningUntil(storedata, item.item, now) : null;
+  if (endsAt !== null && !item.restarts) return { item, owned: null, state: { kind: "running", endsAt } };
 
   const owned = item.prices.length > 1 ? ownedOf(storedata, item.item) : null;
   const price = item.prices[owned ?? 0];
   if (price === undefined) return { item, owned, state: { kind: "soldOut" } };
-  return { item, owned, state: { kind: "buy", price, blocked: blockedReason(item, price, reader, now) } };
+  const blocked = blockedReason(item, price, reader, now);
+  return { item, owned, state: { kind: "buy", price, blocked, ...(endsAt !== null && { endsAt }) } };
 };
 
 /** Repair everything now, or null when nothing is damaged. */
@@ -334,6 +452,7 @@ export const protectedUntil = (reader: YardStoreReader): number | null => {
 /** The whole Shop for a yard as it stands now. */
 export const shopModel = (reader: YardStoreReader): ShopModel => ({
   offers: shopItemsFor(reader.kind).map((item) => shopOffer(item, reader)),
+  walls: wallOffers(reader),
   repair: repairAllOffer(reader),
   protectedUntil: protectedUntil(reader),
 });

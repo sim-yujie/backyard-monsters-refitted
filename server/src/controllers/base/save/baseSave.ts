@@ -81,7 +81,9 @@ import {
   type HousingLoss,
 } from "../../../services/base/combat/housingLoss.js";
 import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
+import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
+import { countAttackLoot } from "../../../services/events/lootEvents.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
@@ -313,6 +315,12 @@ const saveBase = async (
   // The yard's damage before this attack, for its defence replay (#359).
   const damageBefore = baseSave.damage ?? 0;
 
+  // `savetime` moves to now below, so the caged champions heal up to now
+  // first, before the battle's health lands on them: the defence fought at
+  // that healed health (`servedDefenderForces`), and healing skipped here
+  // would be lost for good.
+  healChampions(baseSave, Number(baseSave.savetime), now);
+
   // Standard save logic
   for (const key of isAttack ? Save.attackSaveKeys : Save.saveKeys) {
     const value = body[key] as string;
@@ -385,8 +393,9 @@ const saveBase = async (
           }
         }
         // An owner save never writes the champion list: every change to it is
-        // a server action (the cage, the chamber), so a hand-made list could
-        // only add a champion, raise one or forge its brain (issue #219).
+        // a server action (the cage, the chamber, an event's Krallen,
+        // `services/events/krallenReward.ts`), so a hand-made list could only
+        // add a champion, raise one or forge its brain (issue #219).
         break;
 
       // The stock less what the log used, on the save that ends the attack;
@@ -541,6 +550,10 @@ const saveBase = async (
     postgres.em.persist(userSave);
     await postgres.em.flush();
 
+    // Event loot (the monthly Krallen Hunt) counts the credit before the cap,
+    // once: this save holds the final lock (`services/events/lootEvents.ts`).
+    if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
+
     // MR3 Takeover Logic:
     // If the attack is over and damage >= 90, trigger takeover or destroy logic.
     // MR3 capturable structures (RESOURCE, STRONGHOLD, FORTIFICATION) allow re-capture
@@ -646,18 +659,21 @@ const saveBase = async (
     await recordAttackPlan(user.userid, baseSave, battleInput.log, battleInput.tick);
   }
 
-  // A Map Room 2 Kozu Town Hall the battle brought down counts towards the
-  // attacker's achievements, on their main row under its own lock (issue #204).
-  if (battle && saveData.over) {
+  // A Map Room 2 Kozu Town Hall the battle brought down, and each biggest
+  // Putty bomb fired, count towards the attacker's achievements, on their main
+  // row under its own lock (issue #204, #299).
+  if (saveData.over && (battle || bombs)) {
     await recordAttackAchievements(postgres.em, {
       attackerBasesaveid: userSave.basesaveid,
       defender: baseSave,
       before: storedHealthData,
-      after: battle.buildinghealthdata,
+      after: battle?.buildinghealthdata,
+      bombs: bombs?.charges,
     });
   }
 
-  const filteredSave = buildSaveData(baseSave, user, outpostOwnerSave);
+  // An attack save has passed its binding check: the attacker keeps the whole yard.
+  const filteredSave = buildSaveData(baseSave, user, outpostOwnerSave, { attack: isAttack });
   logger.info(`Saving ${user.username}'s base | IP: ${ctx.ip}`);
 
   const responseBody = {

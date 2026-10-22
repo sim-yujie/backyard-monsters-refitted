@@ -162,16 +162,34 @@ export const createBaiterPlugin = (recorder: () => BaiterRecorder): AttackPlugin
     }).mount(mounts.modal);
   };
 
+  // The blow that ended the test plays out in slow motion before the report
+  // covers it (feat/attack-juice-demo); with the effects off it opens at once.
+  let waiting: number | null = null;
+  const reportWhenFinished = (): void => {
+    if (report || waiting !== null) return;
+    const since = Date.now();
+    const check = (): void => {
+      waiting = null;
+      if (mounts.presentation.finishing() && Date.now() - since < 3000) {
+        waiting = window.setTimeout(check, 100);
+        return;
+      }
+      showReport();
+    };
+    check();
+  };
+
   const unsubscribe = session.subscribe((state) => {
     startRecord();
     watchChampions(state);
     dock.update(state);
-    if (state.phase === "ended") showReport();
+    if (state.phase === "ended") reportWhenFinished();
   });
-  if (session.state().phase === "ended") showReport();
+  if (session.state().phase === "ended") reportWhenFinished();
 
   return () => {
     unsubscribe();
+    if (waiting !== null) window.clearTimeout(waiting);
     dock.destroy();
     report?.close();
   };

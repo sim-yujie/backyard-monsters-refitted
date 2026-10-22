@@ -84,7 +84,8 @@ export class HelpPanel {
     this.building = building;
     this.help = help;
     if (other || options.clear) this.setMessage(null);
-    this.panel.setTitle(building.level > 0 ? `${building.name}, level ${building.level}` : building.name);
+    // A friend's yard is someone else's: no level (owner report 2026-10-22).
+    this.panel.setTitle(building.name);
     this.render();
   }
 

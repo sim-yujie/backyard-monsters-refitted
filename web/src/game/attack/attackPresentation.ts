@@ -19,6 +19,7 @@ export class AttackPresentation {
   private readonly holds = new Set<() => boolean>();
   private damageView: ((state: AttackSessionState) => number) | null = null;
   private readonly settlers = new Set<() => void>();
+  private readonly finishes = new Set<() => boolean>();
 
   /**
    * Registers something still playing out while `playing` answers true. The
@@ -34,6 +35,24 @@ export class AttackPresentation {
   /** Whether anything on screen is still catching up with the engine. */
   playing(): boolean {
     for (const playing of this.holds) if (playing()) return true;
+    return false;
+  }
+
+  /**
+   * Registers the last blow's slow motion while `playing` answers true
+   * (feat/attack-juice-demo). The Baiter's report, which opens at once rather
+   * than after the walk-off, waits for this alone. Returns the release.
+   */
+  holdFinish(playing: () => boolean): () => void {
+    this.finishes.add(playing);
+    return () => {
+      this.finishes.delete(playing);
+    };
+  }
+
+  /** Whether the blow that ended the attack is still playing in slow motion. */
+  finishing(): boolean {
+    for (const playing of this.finishes) if (playing()) return true;
     return false;
   }
 

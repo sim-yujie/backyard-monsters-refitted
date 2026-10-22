@@ -3,7 +3,13 @@ import z from "zod";
 import { EVENTS, eventById, type EventDefinition } from "../../game-data/events/events.js";
 import { planGrant, type GrantedReward } from "../../services/events/grant.js";
 import type { EventProgressStore } from "../../services/events/progressStore.js";
-import { eventWindow, nextUtcMidnight as nextDayAt, statusAt, utcDay } from "../../services/events/schedule.js";
+import {
+  claimsUntil,
+  eventWindow,
+  nextUtcMidnight as nextDayAt,
+  statusAt,
+  utcDay,
+} from "../../services/events/schedule.js";
 import { yardBadRequestErr, yardRefusedErr } from "../../services/yard/yardErrors.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -21,8 +27,13 @@ import { defineYardAction } from "./yardAction.js";
  *   the end). Refusals: `400 unknownEvent`, `409 eventNotActive {startsAt,
  *   endsAt}`, `409 claimedToday {nextAt}`, `409 calendarDone`.
  * - `events/ladder/claim { event, tier }`: one collection-ladder tier, once
- *   the counter reaches it. Refusals: `400 unknownEvent`, `400 unknownTier`,
- *   `409 eventNotActive`, `409 tierClaimed`, `409 tierLocked {have, need}`.
+ *   the counter reaches it, while the event is on or, for an event with
+ *   `claimDays`, until that many days after its end (the counter stops at
+ *   the end, so only a tier reached in time can be claimed then).
+ *   Refusals: `400 unknownEvent`, `400 unknownTier`, `409 eventNotActive`,
+ *   `409 tierClaimed`, `409 tierLocked {have, need}`. A tier paying Krallen
+ *   at her top level is claimed and pays nothing (`granted` says
+ *   `raised: false`).
  *
  * The report says which day or tier was paid and what each reward came to
  * (`granted`; resources after the storage cap).
@@ -49,12 +60,22 @@ export interface LadderClaimReport {
   granted: GrantedReward[];
 }
 
-/** The event, on now, or the refusal. */
-const activeEvent = (id: string, now: number, events: readonly EventDefinition[]): EventDefinition => {
+/**
+ * The event, on now, or the refusal. `claims`: a ladder claim, which an event
+ * with `claimDays` also takes for that long after it ends.
+ */
+const activeEvent = (
+  id: string,
+  now: number,
+  events: readonly EventDefinition[],
+  claims = false
+): EventDefinition => {
   const event = eventById(id, events);
   if (!event) throw yardBadRequestErr("There is no such event.", { event: id }, "unknownEvent");
   const window = eventWindow(event, now);
-  if (statusAt(window, now) !== "active") {
+  const status = statusAt(window, now);
+  const open = status === "active" || (claims && status === "past" && now < claimsUntil(event, window));
+  if (!open) {
     throw yardRefusedErr("eventNotActive", "That event is not on right now.", {
       event: id,
       startsAt: window.startsAt,
@@ -102,7 +123,7 @@ export const eventsActions = (store: EventProgressStore, events: readonly EventD
   ladderClaim: defineYardAction({
     schema: LadderClaimSchema,
     run: async ({ save, user, body, now, em }) => {
-      const event = activeEvent(body.event, now, events);
+      const event = activeEvent(body.event, now, events, true);
       const tier = event.ladder?.tiers[body.tier];
       if (!tier) throw yardBadRequestErr("There is no such tier.", { event: event.id, tier: body.tier }, "unknownTier");
 

@@ -116,6 +116,7 @@ export interface RevengeChampion {
   readonly t: number;
   readonly l: number;
   readonly pl?: number;
+  readonly fb?: number;
 }
 
 /** What the bot attacks with. */
@@ -149,7 +150,7 @@ export const revengeArmyOf = (save: {
   const champion = cagedChampions(save.champion)[0];
   return {
     monsters: countsOf(housed),
-    champion: champion ? { t: champion.t, l: champion.l, pl: champion.pl } : null,
+    champion: champion ? { t: champion.t, l: champion.l, pl: champion.pl, fb: champion.fb } : null,
     levels: academyLevels(save.academy),
   };
 };

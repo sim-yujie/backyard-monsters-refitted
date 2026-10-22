@@ -113,11 +113,11 @@ const fixtures = new Map<string, Fixture>(
 
 /** The attacker's champions, as `battle.test.ts` gives them: Krallen, Gorgo, Korath, Fomor. */
 const CHAMPIONS: readonly ChampionSaveEntry[] = [
-  { t: 5, l: 5, hp: 62_000, pl: 2 },
-  { t: 1, l: 4, hp: 190_000, pl: 3 },
-  { t: 4, l: 6, hp: 179_000, pl: 3 },
-  { t: 3, l: 6, hp: 44_000, pl: 3 },
-].map((champion) => ({ ...champion, ft: 0, fd: 0, fb: 0, status: 0 }));
+  { t: 5, l: 5, hp: 62_000, pl: 2, fb: 0 },
+  { t: 1, l: 4, hp: 190_000, pl: 3, fb: 3 },
+  { t: 4, l: 6, hp: 179_000, pl: 3, fb: 3 },
+  { t: 3, l: 6, hp: 42_200, pl: 3, fb: 2 },
+].map((champion) => ({ ...champion, ft: 0, fd: 0, status: 0 }));
 
 const SIEGE = { jars: { quantity: 2 }, decoy: { quantity: 1 } };
 const POOL = { r1: 50_000_000, r2: 50_000_000, r3: 50_000_000, r4: 50_000_000 };

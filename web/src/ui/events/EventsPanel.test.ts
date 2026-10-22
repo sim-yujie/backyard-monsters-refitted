@@ -25,6 +25,9 @@ const event = (over: Partial<EventView> = {}): EventView => ({
   endsAt: 10 * 86_400,
   calendar: DAYS,
   ladder: null,
+  claimUntil: null,
+  locked: null,
+  krallen: null,
   ...over,
 });
 
@@ -53,6 +56,18 @@ describe("EventsPanel", () => {
     const states = [...root.querySelectorAll(".events-day")].map((day) => day.className.replace("events-day events-day--", ""));
     expect(states).toEqual(["claimed", "today", "locked"]);
     expect(root.querySelector(".events-calendar__count")?.textContent).toBe("1 / 3 claimed");
+    panel.close();
+  });
+
+  it("draws the banner picture only when there is one, and drops it if the file fails", () => {
+    const { panel } = mounted();
+    panel.render(list([event(), event({ id: "with-picture", banner: "/events/halloween-2026-banner.png" })]));
+    const cards = [...panel.element.querySelectorAll<HTMLElement>(".events-card")];
+    expect(cards[0]?.querySelector(".events-card__banner")).toBeNull();
+    const band = cards[1]?.querySelector(".events-card__banner");
+    expect(band?.querySelector("img")?.getAttribute("src")).toBe("/events/halloween-2026-banner.png");
+    band?.querySelector("img")?.dispatchEvent(new Event("error"));
+    expect(cards[1]?.querySelector(".events-card__banner")).toBeNull();
     panel.close();
   });
 
@@ -145,5 +160,81 @@ describe("EventsPanel", () => {
 
   it("says when the next treat is ready", () => {
     expect(nextText(0)).toBe("Next treat is ready: reopen Events");
+  });
+});
+
+describe("EventsPanel: the Krallen Hunt", () => {
+  const hunt = (counter: number, over: Partial<EventView> = {}): EventView =>
+    event({
+      id: "krallen-2026-11",
+      title: "Krallen Hunt",
+      kind: "krallen",
+      calendar: null,
+      ladder: { label: "Loot taken", counter, tiers: [{ need: 100_000_000, rewards: [{ kind: "krallen" }], claimed: false }] },
+      claimUntil: 10 * 86_400 + 7 * 86_400,
+      krallen: { level: 0, maxLevel: 5 },
+      ...over,
+    });
+
+  it("draws a bar toward the goal, the prize with her portrait, and no claim before the goal", () => {
+    const { panel } = mounted();
+    panel.render(list([hunt(25_000_000)]));
+    const root = panel.element;
+    const bar = root.querySelector<HTMLElement>(".events-krallen__bar")!;
+    expect(bar.getAttribute("aria-valuenow")).toBe("25000000");
+    expect(root.querySelector<HTMLElement>(".events-krallen__fill")!.style.width).toBe("25%");
+    expect(root.querySelector(".events-krallen .events-calendar__count")?.textContent).toBe("25M / 100M");
+    expect(root.querySelector(".events-krallen__prize-text")?.textContent).toBe("Win Krallen, a champion of your own");
+    expect(root.querySelector<HTMLImageElement>(".events-krallen__portrait")!.src).toContain("portraits/G5.webp");
+    expect(root.querySelector(".events-krallen__claim")).toBeNull();
+    expect(root.querySelector(".events-ladder")).toBeNull();
+    panel.close();
+  });
+
+  it("claims at the goal, naming the next level", () => {
+    const { panel, options } = mounted();
+    panel.render(list([hunt(120_000_000, { krallen: { level: 2, maxLevel: 5 } })]));
+    const button = panel.element.querySelector<HTMLButtonElement>(".events-krallen__claim")!;
+    expect(button.textContent).toBe("Raise Krallen to level 3Goal reached!");
+    expect(panel.element.querySelector<HTMLElement>(".events-krallen__fill")!.style.width).toBe("100%");
+    button.click();
+    expect(options.onClaimTier).toHaveBeenCalledWith(expect.objectContaining({ id: "krallen-2026-11" }), 0);
+    panel.close();
+  });
+
+  it("at level 5: the polite note and no claim", () => {
+    const { panel } = mounted();
+    panel.render(list([hunt(120_000_000, { krallen: { level: 5, maxLevel: 5 } })]));
+    expect(panel.element.querySelector(".events-krallen__prize-text")?.textContent).toContain("already level 5");
+    expect(panel.element.querySelector(".events-krallen__claim")).toBeNull();
+    panel.close();
+  });
+
+  it("locked below Town Hall 6: the reason, no bar", () => {
+    const { panel } = mounted();
+    panel.render(list([hunt(0, { locked: "Reach Town Hall 6 to take part." })]));
+    expect(panel.element.querySelector(".events-krallen__locked")?.textContent).toBe("Reach Town Hall 6 to take part.");
+    expect(panel.element.querySelector(".events-krallen__bar")).toBeNull();
+    panel.close();
+  });
+
+  it("ended: listed with the ones on now, counting down to the claim deadline", () => {
+    const { panel } = mounted();
+    panel.render(list([hunt(100_000_000, { status: "ended" })], { now: 11 * 86_400 }));
+    const card = panel.element.querySelector(".events-card--ended")!;
+    expect(card.querySelector(".events-card__countdown")?.textContent).toMatch(/^Ended: claim by .+ \(6d 0h left\)$/);
+    expect(card.querySelector(".events-krallen__claim")).not.toBeNull();
+    panel.tick(12 * 86_400);
+    expect(card.querySelector(".events-card__countdown")?.textContent).toMatch(/\(5d 0h left\)$/);
+    panel.close();
+  });
+
+  it("claimed: a tick and when the next hunt starts", () => {
+    const { panel } = mounted();
+    const claimed = hunt(100_000_000);
+    claimed.ladder!.tiers[0]!.claimed = true;
+    panel.render(list([claimed]));
+    expect(panel.element.querySelector(".events-krallen__done")?.textContent).toBe("Prize claimed. The next hunt starts on the 15th.");
+    panel.close();
   });
 });

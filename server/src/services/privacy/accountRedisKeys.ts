@@ -72,5 +72,9 @@ export const CHAT_IGNORE_PATTERN = "chat-ignore:*";
 /** The fair-play log (`services/user/botCheckLog.ts`): JSON rows with `userid`. */
 export const BOT_CHECK_LOG_KEY = "bot-check:log";
 
-/** The Map Room leaderboards cache (`controllers/leaderboards/getLeaderboards.ts`), which lists names. */
+/**
+ * The leaderboard caches, which list names: the Map Room boards
+ * (`controllers/leaderboards/getLeaderboards.ts`) and the empire board
+ * (`services/leaderboard/empireBoard.ts`).
+ */
 export const LEADERBOARD_PATTERN = "leaderboards_*";

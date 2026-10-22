@@ -55,6 +55,7 @@ export interface RetentionResult {
   threads: number;
   attackLogs: number;
   chatReports: number;
+  bugReports: number;
   friendRequests: number;
   friendHelps: number;
   friendGifts: number;
@@ -185,6 +186,15 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
+  const bugReports = await deleteOldRows(
+    em,
+    "bug_report",
+    "id",
+    "created_at",
+    cutoff(now, config.bugReportDays),
+    batchSize,
+    pauseMs
+  );
   const friendRequests = await deleteOldRows(
     em,
     "friend_request",
@@ -212,7 +222,7 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
-  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports, friendRequests, friendHelps, friendGifts };
+  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports, bugReports, friendRequests, friendHelps, friendGifts };
 };
 
 /**
@@ -258,7 +268,7 @@ export const startRetentionSweep = (em: EntityManager): (() => void) => {
       const result = await runDailyRetention(em);
       if (result) {
         logger.info(
-          "Privacy clean-up: deleted {messages} mail messages ({threads} empty threads), {attackLogs} battle records, {chatReports} chat reports",
+          "Privacy clean-up: deleted {messages} mail messages ({threads} empty threads), {attackLogs} battle records, {chatReports} chat reports, {bugReports} bug reports",
           { ...result }
         );
       }

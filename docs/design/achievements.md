@@ -199,8 +199,10 @@ prove (§8). Shiny is the proposed reward (open question Q1).
 | 21 | Inferno quests ≥ 10 | **Hellraiser** — Complete 10 Inferno quests | Event, when Inferno exists | — | No | 15 |
 | 22 | `thlevel` ≥ 10 | **Top of the Heap** — Town Hall level 10 | Derived | Yes | Yes | 25 |
 
-**Shown now: 16 achievements, 220 Shiny in total.** The six hidden ones add 80 more when their
-features arrive (300 for all 22).
+**Shown now: 17 achievements, 230 Shiny in total.** The five hidden ones add 70 more when their
+features arrive (300 for all 22). Huge Rage (9) was turned on at the owner's request in beta.4
+(#299): every landed attack counts the `pu3` bombs it was charged for (`services/achievements/events.ts`).
+No backfill: the only stored battle logs are defence replays (attacks on players' main yards since mid-October, newest 20 per yard), which miss every camp and tribe attack; the next `pu3` fired earns it.
 
 How the Shiny was scaled `[PLACEHOLDER]`: 5 for a first step anyone reaches in a day or two (Town
 Hall 2, first unlock, a kit); 10 for a milestone of the middle game (Town Hall 5, Map Room 2, first
@@ -222,7 +224,7 @@ champions, 25 million of everything).
 
 | # | Needs | Recommendation |
 | --- | --- | --- |
-| 9 `hugerage` | Nothing new: catapult bombs exist in web attacks | **Leave out.** Flash blocked it on purpose and never awarded it (`ACHIEVEMENTS.as:44-46`, `:115-117`). Easy to add later from the attack replay if the owner wants it. |
+| 9 `hugerage` | Nothing new: catapult bombs exist in web attacks | **Leave out.** Flash blocked it on purpose and never awarded it (`ACHIEVEMENTS.as:44-46`, `:115-117`). Easy to add later from the attack replay if the owner wants it. **Turned on in beta.4 (#299), owner's choice.** |
 | 14 `alliance` | A web alliance screen (none planned) | **Leave out until alliances reach the web client.** Membership is state, so a later backfill unlocks it for everyone already in one. |
 | 18, 19 Descent | Inferno Descent | **Leave out until it exists.** |
 | 20 Underhall | Inferno yard | **Leave out until it exists.** |

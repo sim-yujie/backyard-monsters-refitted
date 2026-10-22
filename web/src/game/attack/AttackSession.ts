@@ -1,6 +1,7 @@
 import type { BaseLoadResponse } from "@/api/types";
 import {
   ATTACK_COUNTDOWN_SECONDS,
+  CHAMPION_MAX_FOOD_BONUS,
   CHAMPION_MAX_POWER_LEVEL,
   DECLARE_WAR_COUNTDOWN_SECONDS,
   RETREAT_GRACE_SECONDS,
@@ -760,8 +761,9 @@ export class AttackSession {
 
   /**
    * A flung champion as the log records it: its type and level, the power
-   * level its roster entry holds (issue #202), which it fights at and the
-   * server checks against the attacker's stored champion, and the Mode the
+   * level (issue #202) and food-bonus rank its roster entry holds, which it
+   * fights at and the server checks against the attacker's stored champion
+   * (the food bonus adds the stats its cage card shows), and the Mode the
    * player picked (issue #220), which the server replays it in, and its
    * learned brain as the attack load froze it (issue #219, {@link servedBrain}).
    */
@@ -769,16 +771,19 @@ export class AttackSession {
     t: number;
     l: number;
     pl?: number;
+    fb?: number;
     s?: ChampionStance;
     b?: BrainWeights;
   } {
     const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
     const pl = Number(entry?.pl);
+    const fb = Number(entry?.fb);
     const brain = servedBrain(this.response?.attackerbrains, champion.t);
     return {
       t: champion.t,
       l: champion.l,
       ...(Number.isInteger(pl) && pl > 0 ? { pl: Math.min(pl, CHAMPION_MAX_POWER_LEVEL) } : {}),
+      ...(Number.isInteger(fb) && fb > 0 ? { fb: Math.min(fb, CHAMPION_MAX_FOOD_BONUS) } : {}),
       ...(isChampionStance(champion.s) ? { s: champion.s } : {}),
       ...(brain ? { b: brain } : {}),
     };

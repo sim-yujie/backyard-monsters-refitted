@@ -1,7 +1,7 @@
 import { BaseMode } from "@/api/types";
 
 /**
- * Who may open the planner, and whether they may change anything.
+ * Who may open the planner.
  *
  * Design §8, Q5: "Planner opens **read-only from anywhere** and is **editable
  * in build mode**. Owning the Yard Planner building unlocks it; its damage,
@@ -10,13 +10,16 @@ import { BaseMode } from "@/api/types";
  *
  * Owner decision 2026-09-30 replaced the first of Q5's rules: layout mode is
  * every player's, and the Yard Planner building unlocks only the Blueprint
- * view. The rules now:
+ * view. Owner report 2026-10-22 struck the "read-only from anywhere" half: in
+ * someone else's yard the planner gave away what the yard itself keeps
+ * hidden — every building's level on the Blueprint, tower ranges and dead
+ * zones, storage room, workers, and Find listing the traps by kind and count.
+ * The rules now:
  *
  * 1. The player's own yard, loaded in build mode, is editable, main yard or
  *    outpost, Yard Planner or not.
- * 2. Anything else that can be drawn — a visit, a world-map view, a replay of
- *    an attack — opens the planner to look at, never to change, and only if
- *    that yard holds a Yard Planner (a visit keeps the rule it always had).
+ * 2. Anything else — a visit, a world-map view, a friend's yard, an attack —
+ *    has no planner at all: the Layout button is left out and P does nothing.
  * 3. The Blueprint view needs a Yard Planner in the yard shown, and is never
  *    offered in an outpost, even one that has one ({@link blueprintBlock}).
  *
@@ -34,11 +37,9 @@ import { BaseMode } from "@/api/types";
 export const YARD_PLANNER_TYPE = 10;
 
 export const PlannerAccess = {
-  /** Someone else's yard with no Yard Planner: the button is disabled. */
+  /** Not the player's own yard: no planner, and no button for one. */
   LOCKED: "locked",
-  /** The planner opens, but nothing in it can be changed. */
-  READ_ONLY: "read-only",
-  /** The planner opens with every tool. */
+  /** The player's own yard: the planner opens with every tool. */
   EDIT: "edit",
 } as const;
 export type PlannerAccess = (typeof PlannerAccess)[keyof typeof PlannerAccess];
@@ -46,8 +47,7 @@ export type PlannerAccess = (typeof PlannerAccess)[keyof typeof PlannerAccess];
 /**
  * The little of a yard this needs: the types it holds.
  *
- * Narrower than `Yard` so a test — and a future visit flow that has not built a
- * full `Yard` yet — can ask without constructing a save.
+ * Narrower than `Yard` so a test can ask without constructing a save.
  */
 export interface PlannerAccessYard {
   readonly buildings: readonly { readonly type: number }[];
@@ -58,23 +58,17 @@ export const hasYardPlanner = (yard: PlannerAccessYard): boolean =>
   yard.buildings.some((building) => building.type === YARD_PLANNER_TYPE);
 
 /**
- * What the player may do with the planner in this yard.
+ * Whether the player may open the planner in this yard.
  *
  * `loadType` is the `type` the yard was fetched with (`BaseMode`); `ownYard`
  * is whether the yard belongs to the signed-in player. Both are needed: a
  * build-mode load is always the caller's own base today, but a client that
- * gains outposts or an admin view should not have "build mode" alone stand in
- * for ownership.
+ * gains an admin view should not have "build mode" alone stand in for
+ * ownership. Whether the yard holds a Yard Planner does not matter here: it
+ * unlocks the Blueprint view only, and only in the player's own yard.
  */
-export const plannerAccess = (
-  yard: PlannerAccessYard,
-  loadType: string,
-  ownYard: boolean,
-): PlannerAccess => {
-  if (ownYard && loadType === BaseMode.BUILD) return PlannerAccess.EDIT;
-  if (!hasYardPlanner(yard)) return PlannerAccess.LOCKED;
-  return PlannerAccess.READ_ONLY;
-};
+export const plannerAccess = (loadType: string, ownYard: boolean): PlannerAccess =>
+  ownYard && loadType === BaseMode.BUILD ? PlannerAccess.EDIT : PlannerAccess.LOCKED;
 
 /** Why the Blueprint view is off in a yard with no Yard Planner. */
 export const BLUEPRINT_NEEDS_PLANNER = "Build a Yard Planner to unlock Blueprint view";
@@ -94,18 +88,13 @@ export const blueprintBlock = (
 };
 
 /**
- * The Plan button's tooltip, which is the only place the rule is explained.
- *
- * A disabled button with no reason on it is the worst version of this: the
- * player cannot see the Yard Planner is what unlocks it, so the tooltip names
- * the building.
+ * The Layout button's tooltip. Someone else's yard has no button to put it
+ * on; the locked text is there for any other way in that is ever added.
  */
 export const plannerEntryTooltip = (access: PlannerAccess): string => {
   switch (access) {
     case PlannerAccess.LOCKED:
-      return "This yard has no Yard Planner to look at its layout with";
-    case PlannerAccess.READ_ONLY:
-      return "Open the Yard Planner to look around (P) — editing needs your own yard in build mode";
+      return "The layout planner is only for your own yards";
     case PlannerAccess.EDIT:
       return "Open the Yard Planner (P)";
   }

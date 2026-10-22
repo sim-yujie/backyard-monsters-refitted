@@ -1,6 +1,7 @@
 import { Status } from "../../enums/StatusCodes.js";
 import { TrapRearmSchema, type TrapPlacement } from "../../schemas/YardPlannerSchemas.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
+import { healChampions } from "../../services/yard/catchUpChampions.js";
 import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { parseTrapPlacements, planTrapRearm } from "../../services/yardplanner/trapRearm.js";
 import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
@@ -71,6 +72,8 @@ const rearmTrapsOn = (save: Save, traps: readonly TrapPlacement[], now: number) 
   moveMushroomsOffBuildings(save);
   syncDerivedLevels(save);
   syncBaseValue(save);
+  // The caged champions keep the healing `savetime` moves past.
+  healChampions(save, Number(save.savetime), now);
   save.savetime = now;
 
   return {

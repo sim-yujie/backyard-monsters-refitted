@@ -312,7 +312,7 @@
   }
 }
 
-/* Another player's line on the map's panels (WP7, §10.3): "Achievements", the newest badges, "7 / 16". */
+/* Another player's line on the map's panels (WP7, §10.3): "Achievements", the newest badges, "7 / 17". */
 .ach-line {
   display: flex;
   align-items: center;

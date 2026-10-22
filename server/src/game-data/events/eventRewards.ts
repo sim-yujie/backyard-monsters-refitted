@@ -16,13 +16,22 @@ import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
  *   (`researchdata["b<type>"]`, `services/yard/decor.ts`), placed from the
  *   decorations drawer. Only real decorations (`isDecoration`) are allowed:
  *   the Halloween props 53 and 54 are immovable and cannot be placed.
+ * - `krallen`: the champion Krallen (type 5) in the `champion` list: level 1
+ *   for a player without one, one level more for a player who has one, up
+ *   to {@link KRALLEN_MAX_LEVEL}, and nothing more at the top. She is kept
+ *   for good. This is the only way a Krallen is made or raised.
  */
 export type EventReward =
   | { readonly kind: "resources"; readonly amounts: Readonly<Partial<ResourceAmounts>> }
   | { readonly kind: "shiny"; readonly amount: number }
   | { readonly kind: "shopItem"; readonly item: TimedRewardItem }
   | { readonly kind: "speedup"; readonly item: FreeSpeedupItem; readonly count: number }
-  | { readonly kind: "decoration"; readonly type: number; readonly count: number };
+  | { readonly kind: "decoration"; readonly type: number; readonly count: number }
+  | { readonly kind: "krallen" };
+
+/** Krallen's champion type, and the highest level an event raises her to (her catalogue's `levels`). */
+export const KRALLEN_TYPE = 5;
+export const KRALLEN_MAX_LEVEL = 5;
 
 /** Timed store buffs an event may give (`game-data/store/storeItems.ts`). */
 export const TIMED_REWARD_ITEMS = ["BST", "POD", "EXH"] as const;

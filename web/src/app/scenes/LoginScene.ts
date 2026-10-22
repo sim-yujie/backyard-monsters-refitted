@@ -4,6 +4,8 @@ import { unlockInbox } from "@/game/achievements/unlockInbox";
 import { clearTestHistory } from "@/game/baiter/testHistory";
 import { worldChat } from "@/game/chat/chatSession";
 import { CREDITS_URL, PATREON_URL, PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
+import { openBugReport } from "@/ui/bugReport/BugReportDialog";
+import { modalLayer } from "@/ui/events/WhatsNewDialog";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
@@ -133,10 +135,21 @@ const termsLine = (): HTMLElement => {
   return line;
 };
 
-/** The Terms, Privacy, Credits and Patreon links under the sign-in panel. */
-const footerLinks = (): HTMLElement => {
+/**
+ * The Terms, Privacy, Credits, Patreon and "Report a bug" links under the
+ * sign-in panel. Signed out, the bug report asks for an email and runs the
+ * Turnstile check when the build has a site key.
+ */
+const footerLinks = (turnstileSiteKey: string): HTMLElement => {
   const footer = document.createElement("p");
   footer.className = "login-footer";
+  const report = document.createElement("button");
+  report.type = "button";
+  report.className = "login-footer__report";
+  report.textContent = "Report a bug";
+  report.addEventListener("click", () =>
+    openBugReport({ container: modalLayer(), signedIn: false, turnstileSiteKey }),
+  );
   footer.append(
     newTabLink(TERMS_URL, "Terms"),
     " · ",
@@ -146,6 +159,8 @@ const footerLinks = (): HTMLElement => {
     " · ",
     // An outside site: no referrer, so it does not learn which page sent the player.
     newTabLink(PATREON_URL, "Support us on Patreon", "noopener noreferrer"),
+    " · ",
+    report,
   );
   return footer;
 };
@@ -234,7 +249,7 @@ export class LoginScene implements Scene {
 
     const stack = document.createElement("div");
     stack.className = "login-stack";
-    stack.append(brand(), this.panel.element, footerLinks());
+    stack.append(brand(), this.panel.element, footerLinks(this.turnstileSiteKey));
     this.wrapper.append(stack);
     context.overlay.content.append(this.wrapper);
 

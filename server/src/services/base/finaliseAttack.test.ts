@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -98,6 +98,9 @@ const reset = () => {
 };
 reset();
 
+/** The event counter writes (`services/events/progressStore.ts`), as `[event, amount]`. */
+const counted: [string, number][] = [];
+
 const attacker = () => ({ userid: ATTACKER, username: "yardtester", alliance_id: null, save: userSave });
 
 mock.module("../../server.js", () => ({
@@ -126,6 +129,12 @@ mock.module("../../server.js", () => ({
       persist: () => {},
       upsert,
       flush,
+      // Only the event counter's SQL is answered; anything else fails as with no database.
+      execute: async (sql: string, params: unknown[]) => {
+        if (!sql.includes("event_progress")) throw new Error("no database");
+        counted.push([String(params[1]), Number(params[2])]);
+        return [{ counter: params[2] }];
+      },
       // A defence replay is written in a context of its own (#359).
       fork() {
         return this;
@@ -166,12 +175,17 @@ mock.module("../alliance/powerups.js", () => ({
   isDeclareWarRunning: async () => false,
 }));
 
-const { finaliseAbandonedAttack, finaliseAttacksFor, finaliseExpiredOnBase, landCheckpointedAttack } = await import(
-  "./finaliseAttack.js"
-);
+const {
+  finaliseAbandonedAttack,
+  finaliseAttacksFor,
+  finaliseBeforeLoad,
+  finaliseExpiredOnBase,
+  landCheckpointedAttack,
+  releaseUnfoughtAttackOf,
+} = await import("./finaliseAttack.js");
 const { storeCheckpoint, acquireFinalLock } = await import("./attackCheckpointStore.js");
 const { attackCheckpointKey } = await import("./attackCheckpoint.js");
-const { attackSessionKey } = await import("./attackSession.js");
+const { attackSessionKey, attackerSessionKey } = await import("./attackSession.js");
 const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
 const { attackLootOf } = await import("./combat/attackLoot.js");
 const { foughtLoot } = await import("./combat/battle.js");
@@ -289,6 +303,18 @@ describe("finaliseAbandonedAttack", () => {
     // Nothing left to finish from, and the row is free.
     expect(store.has(attackCheckpointKey(BASESAVEID))).toBe(false);
     expect(store.has(attackSessionKey(BASESAVEID))).toBe(false);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("the defender's caged champion keeps the healing savetime moves past", async () => {
+    await arm();
+    // A level 1 Fomor stored at 1,200 two hours ago is full (15,000) an hour later.
+    defender.savetime = now() - 2 * 3_600;
+    defender.champion = [{ t: 3, l: 1, hp: 1_200, fd: 0, fb: 0, pl: 1, ft: now() + 3_600, status: 0 }];
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(defender.champion[0].hp).toBe(15_000);
+    expect(defender.savetime).toBeGreaterThanOrEqual(now() - 1);
   }, REPLAY_TIMEOUT_MS);
 
   test("monsters hatched during the attack stay: the flung are taken from the caught-up yard", async () => {
@@ -575,6 +601,54 @@ describe("finaliseAbandonedAttack", () => {
   }, REPLAY_TIMEOUT_MS);
 });
 
+describe("the Krallen Hunt's loot when the server finishes the attack", () => {
+  const FORCED = process.env.EVENTS_FORCE_ON;
+  beforeEach(() => {
+    counted.length = 0;
+    // A day no hunt runs on its own; the forced one starts that midnight.
+    setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    process.env.EVENTS_FORCE_ON = "krallen-2026-11";
+  });
+  afterEach(() => {
+    setSystemTime();
+    if (FORCED === undefined) delete process.env.EVENTS_FORCE_ON;
+    else process.env.EVENTS_FORCE_ON = FORCED;
+  });
+
+  test("counts the credit before the cap, once", async () => {
+    await arm({ tick: LATE });
+    const client = replayed(LATE);
+    const save = attackLootOf({
+      sent: client.attackloot,
+      reported: client.defenderDelta,
+      flinglog: LOG,
+      session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: now() - 30, ...facts() },
+      defender: { type: "tribe", buildingdata: sandbox.buildingdata, buildinghealthdata: {}, resources: defender.resources },
+      attacker: structuredClone(userSave),
+      mapRoom3: false,
+      fought: foughtLoot(client),
+    });
+    // Town Hall 6 and no silo: most of it does not fit, all of it counts.
+    userSave.buildingdata = { "0": { id: 0, t: 14, l: 6, X: 0, Y: 0 } };
+    const total = save.credit.r1 + save.credit.r2 + save.credit.r3 + save.credit.r4;
+    expect(total).toBeGreaterThan(13_000);
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(counted).toEqual([["krallen-2026-11", total]]);
+
+    // A second finalisation finds nothing, so counts nothing.
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("none");
+    expect(counted).toHaveLength(1);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("below Town Hall 6 nothing counts", async () => {
+    await arm({ tick: LATE });
+    userSave.buildingdata = { "0": { id: 0, t: 14, l: 5, X: 0, Y: 0 } };
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+    expect(counted).toEqual([]);
+  }, REPLAY_TIMEOUT_MS);
+});
+
 describe("the plan an abandoned camp attack leaves (issue #221)", () => {
   const asKozuCamp = () => Object.assign(defender, { wmid: 11, level: 35 });
 
@@ -687,6 +761,63 @@ describe("when finalisation runs", () => {
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(0);
   }, REPLAY_TIMEOUT_MS);
+});
+
+describe("an attack left with nothing fought", () => {
+  /** An open attack by `attackerid` with no checkpoint: nothing was dropped (#79). */
+  const open = (attackerid = ATTACKER, attackid = ATTACK_ID) => {
+    store.set(
+      attackSessionKey(BASESAVEID),
+      JSON.stringify({ attackerid, attackid, startedat: now() - 30, entryHoused: {} })
+    );
+    store.set(attackerSessionKey(attackerid), String(BASESAVEID));
+  };
+
+  test("the attacker's next load frees the target at once and ends the session", async () => {
+    open();
+    await finaliseBeforeLoad(ATTACKER, "build", "0", false);
+    expect(defender.attackid).toBe(0);
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(store.has(attackSessionKey(BASESAVEID))).toBe(false);
+    expect(store.has(attackerSessionKey(ATTACKER))).toBe(false);
+  });
+
+  test("an attack with a checkpoint is the finaliser's, never released unwritten", async () => {
+    await arm();
+    store.set(attackerSessionKey(ATTACKER), String(BASESAVEID));
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(false);
+    expect(defender.attackid).toBe(ATTACK_ID);
+    expect(store.has(attackSessionKey(BASESAVEID))).toBe(true);
+  });
+
+  test("a newer attack on the row by someone else keeps its attackid", async () => {
+    open();
+    defender.attackid = ATTACK_ID + 1;
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(true);
+    expect(defender.attackid).toBe(ATTACK_ID + 1);
+  });
+
+  test("a session that names another attacker is left alone", async () => {
+    open(31337);
+    store.set(attackerSessionKey(ATTACKER), String(BASESAVEID));
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(false);
+    expect(defender.attackid).toBe(ATTACK_ID);
+    expect(store.has(attackSessionKey(BASESAVEID))).toBe(true);
+    expect(store.has(attackerSessionKey(ATTACKER))).toBe(false);
+  });
+
+  test("waits out a save that holds the lock", async () => {
+    open();
+    expect(await acquireFinalLock(BASESAVEID)).toBe(true);
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(false);
+    expect(defender.attackid).toBe(ATTACK_ID);
+  });
+
+  test("a player with no attack of their own touches nothing", async () => {
+    expect(await releaseUnfoughtAttackOf(ATTACKER)).toBe(false);
+    expect(defender.attackid).toBe(ATTACK_ID);
+    expect(flush).not.toHaveBeenCalled();
+  });
 });
 
 

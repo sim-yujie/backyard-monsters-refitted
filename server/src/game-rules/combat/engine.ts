@@ -77,7 +77,7 @@ import {
   championByType,
   championMode,
   championStat,
-  championStatWithPower,
+  championStatWithFood,
   fortifiedDamage,
   lootingMultiplier,
   isLootable,
@@ -329,7 +329,7 @@ import {
  *      {@link BattleState.bunkerGarrisons} is what each holds afterwards: a
  *      fallen bunker keeps only the defenders that were out.
  *    - The champion in the Champion Cage comes out at its stored health, at
- *      its level plus its power level's bonus, and fights on if the cage
+ *      its level plus its food bonus, and fights on if the cage
  *      falls. When it comes out and what it chases are Flash's (note 14).
  *    - Towers, traps and bombs never hurt a defender.
  * 10. **Storage loot is not capped by the attacker's pool.** `ATTACK.Loot`
@@ -434,12 +434,25 @@ import {
  *    landing's blast is that shell's own size, damage and point, where Flash
  *    borrows the newest shell's; a fallen cannon stops firing at once, where
  *    Flash's finishes its burst at half damage (both the owner's calls,
- *    2026-10-06). The jar and the tower overdrive are not modelled. The cull
+ *    2026-10-06). The jar is not modelled; the tower overdrive is (note 19). The cull
  *    goes on once the cannon has fallen. A hatched Spurtz walks straight at
  *    its foe, and an attacker that hits it does not make it turn on that
  *    attacker. Its level is the defender's for it from
  *    {@link BattleOptions.defenderLevels}, else 1. Its damage and kills go on
  *    its cannon's report row; Flash has no such report.
+ * 19. **The shop's boosts (`STORE.as:2431-2500`, {@link BattleOptions.buffs}).**
+ *    Tower Overdrive multiplies every defending tower's shot by 1.25, the
+ *    Spurtz Cannon's shells too (`BUILDING20.as:27-31` and the other towers),
+ *    before the shot is cut to a whole number. Monster Overdrive multiplies
+ *    a side's monsters' and champions' damage by 1.25 (`MonsterDust.as`), the
+ *    defensive buff takes 30% off every hit they take, on top of any other
+ *    armour (`BeastMode.as`, `ArmorPropertyModifier`), and the speed buff makes
+ *    them walk 1.5 times as fast and swing 1.5 times as often
+ *    (`HyperSpeed.as`). The defender's boosts are its yard's; the attacker's
+ *    are its main yard's, copied at attack start (`GLOBAL.as:816-822`,
+ *    `MonsterBase.updateBuffs`, `:799-845`), and a wild raid has none. Where
+ *    it is not Flash: a boost runs the whole battle if it was running when the
+ *    battle began, where Flash's stops the moment it runs out.
  *
  * ## The random stream's order
  *
@@ -533,7 +546,48 @@ export interface BattleOptions {
    * (`docs/design/trojan-horse.md` §5), so it sets this to its last spawn.
    */
   readonly raidSpawnsUntil?: number;
+  /**
+   * The shop's boosts each side fights with (fidelity note 19), as the server
+   * read them off the yards at attack start. None, or a side without any,
+   * fights exactly as it did before the boosts existed. A wild raid's
+   * attacker never has any.
+   */
+  readonly buffs?: BattleBuffs;
 }
+
+/**
+ * The boosts one side's shop items give it in a battle (fidelity note 19):
+ * Tower Overdrive (`TOD`), Monster Overdrive (`MOD`), the Monster Defensive
+ * Buff (`MDOD`) and the Monster Speed Buff (`MSOD`). Each is on or absent.
+ */
+export interface SideBuffs {
+  /** Tower Overdrive: the side's towers do {@link TOWER_OVERDRIVE} times the damage. */
+  readonly towerDamage?: boolean;
+  /** Monster Overdrive: its monsters do {@link MONSTER_OVERDRIVE} times the damage. */
+  readonly monsterDamage?: boolean;
+  /** Monster Defensive Buff: its monsters take {@link MONSTER_ARMOUR_BUFF} off every hit. */
+  readonly monsterArmour?: boolean;
+  /** Monster Speed Buff: its monsters walk and swing {@link MONSTER_SPEED_BUFF} times as fast. */
+  readonly monsterSpeed?: boolean;
+}
+
+/** Each side's boosts ({@link SideBuffs}); the attacker's towers never fire. */
+export interface BattleBuffs {
+  readonly attacker?: SideBuffs;
+  readonly defender?: SideBuffs;
+}
+
+/** Tower Overdrive's damage multiplier (`BUILDING20.as:29-31`). */
+export const TOWER_OVERDRIVE = 1.25;
+/** Monster Overdrive's damage multiplier (`MonsterDust.k_value`). */
+export const MONSTER_OVERDRIVE = 1.25;
+/**
+ * The Monster Defensive Buff's armour: the share of each hit shrugged off
+ * (`BeastMode.k_value`).
+ */
+export const MONSTER_ARMOUR_BUFF = 0.3;
+/** The Monster Speed Buff's move and swing multiplier (`HyperSpeed.k_value`). */
+export const MONSTER_SPEED_BUFF = 1.5;
 
 /** The champion a Champion Cage holds, as the defender's save keeps it (issue #195). */
 export interface DefenderChampion {
@@ -543,8 +597,10 @@ export interface DefenderChampion {
   readonly l: number;
   /** The health it has now, which is what it comes out with. */
   readonly hp: number;
-  /** Its power level, `pl`, 0 to 3. */
+  /** Its power level, `pl`, 0 to 3, which gates its abilities. */
   readonly pl?: number;
+  /** Its food-bonus rank, `fb`, 0 to 3, which picks its `bonus*` stats. */
+  readonly fb?: number;
 }
 
 /* ── Outputs ──────────────────────────────────────────────────────────────── */
@@ -1473,6 +1529,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   let tick = 0;
   /** How many creeps carry a putty boost; lets the tick skip the scan. */
   let puttied = 0;
+  /*
+   * Each side's shop boosts (fidelity note 19). A creep is the defender's when
+   * it is friendly; a wild raid's raiders have none of the player's.
+   */
+  const attackerBuffs: SideBuffs = (options.raid ? undefined : options.buffs?.attacker) ?? {};
+  const defenderBuffs: SideBuffs = options.buffs?.defender ?? {};
+  const buffsOf = (creep: Creep): SideBuffs => (creep.friendly ? defenderBuffs : attackerBuffs);
+  /** Tower Overdrive on the defender's towers' damage, 1 without it. */
+  const towerBoost = defenderBuffs.towerDamage ? TOWER_OVERDRIVE : 1;
+  /** Monster Overdrive (`MonsterDust.as`), on a creep as it joins the field. */
+  const boostDamage = (creep: Creep): void => {
+    if (buffsOf(creep).monsterDamage) creep.damage *= MONSTER_OVERDRIVE;
+  };
   let nextCreepId = 1;
   let creepsFlung = 0;
   let creepsKilled = 0;
@@ -1851,6 +1920,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // A putty boost is its own armour; the two combine as 1-(1-a)(1-b).
     if (creep.armour > 0) raw *= 1 - creep.armour;
     if (creep.puttyArmour > 0) raw *= 1 - creep.puttyArmour;
+    // The Monster Defensive Buff is armour of its own too (`BeastMode.as`).
+    if (buffsOf(creep).monsterArmour) raw *= 1 - MONSTER_ARMOUR_BUFF;
     const applied = Math.min(raw, creep.hp);
     if (applied > 0) {
       visual.push({
@@ -2142,6 +2213,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
+    boostDamage(creep);
     return creep;
   };
 
@@ -2179,14 +2251,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     level: number,
     at: Cart,
     power = 0,
+    foodBonus = 0,
     stance?: ChampionStance,
     brain?: Partial<BrainWeights>,
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
-    // At its level plus its power level's bonus, as the caged champion fights
-    // (issue #202); a log with no `pl` gives 0, which adds nothing.
-    const health = championStatWithPower(id, "health", level, power);
+    // At its level plus its food bonus, as the cage card shows it
+    // (`ChampionBase.as:123-155`); a log with no `fb` gives 0, which adds
+    // nothing. Its power level gates its abilities alone (issue #202).
+    const health = championStatWithFood(id, "health", level, foodBonus);
     // A `fly` rung puts the champion in the air exactly as it does a monster:
     // altitude 108 and the flying defence flag (`ChampionBase.as:181-188`), so
     // walls never stop it and only air-capable towers can shoot it.
@@ -2204,9 +2278,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       y: cart.y,
       hp: health,
       maxHp: health,
-      baseSpeed: championStatWithPower(id, "speed", level, power) / 4,
-      damage: championStatWithPower(id, "damage", level, power),
-      range: championStatWithPower(id, "range", level, power) || 1,
+      baseSpeed: championStatWithFood(id, "speed", level, foodBonus) / 4,
+      damage: championStatWithFood(id, "damage", level, foodBonus),
+      range: championStatWithFood(id, "range", level, foodBonus) || 1,
       attackDelay: championAttackDelay(id, level),
       targetGroup: championStat(id, "targetGroup", level) || TARGET_GROUP.ALL,
       flying,
@@ -2233,7 +2307,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       hatchedBy: -1,
       rechargeAt: 0,
-      hitFlags: fightFlags(false, flying, championStatWithPower(id, "range", level, power) || 1),
+      hitFlags: fightFlags(false, flying, championStatWithFood(id, "range", level, foodBonus) || 1),
       home: null,
       provokedBy: -1,
       ...NO_ABILITIES,
@@ -2241,6 +2315,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
+    boostDamage(creep);
     equipChampion(creep, power, at);
     // Its Mode's tilt on its learned brain, as the log froze it (issues #220, #219).
     creep.weights = stanceWeights(stance, brainBase(brain));
@@ -2266,16 +2341,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * The caged champion comes out for the first time (issues #195, #260): from
    * where it stood in its cage, at its stored health, its stats at its level
-   * plus its power level's bonus, with the frame it counted in there.
+   * plus its food bonus, with the frame it counted in there.
    */
   const releaseChampion = (caged: DefenderChampion, at: CagePen): Creep | null => {
     const id = championByType(caged.t);
     if (!id) return null;
     const level = Math.max(1, Math.floor(caged.l));
     const power = caged.pl ?? 0;
-    const maxHp = championStatWithPower(id, "health", level, power);
+    const food = caged.fb ?? 0;
+    const maxHp = championStatWithFood(id, "health", level, food);
     const flying = isFlyingMovement(championMode(id, "movement", level));
-    const range = championStatWithPower(id, "range", level, power) || 1;
+    const range = championStatWithFood(id, "range", level, food) || 1;
     const creep: Creep = {
       id: nextCreepId,
       monsterId: id,
@@ -2288,8 +2364,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       y: at.y,
       hp: Math.min(cagedHealth(caged), maxHp),
       maxHp,
-      baseSpeed: championStatWithPower(id, "speed", level, power) / 4,
-      damage: championStatWithPower(id, "damage", level, power),
+      baseSpeed: championStatWithFood(id, "speed", level, food) / 4,
+      damage: championStatWithFood(id, "damage", level, food),
       range,
       attackDelay: championAttackDelay(id, level),
       targetGroup: TARGET_GROUP.ALL,
@@ -2324,6 +2400,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     nextCreepId += 1;
     creeps.push(creep);
     byCreepId.set(creep.id, creep);
+    boostDamage(creep);
     equipChampion(creep, power, { x: at.ix, y: at.iy }, at.frame);
     return creep;
   };
@@ -2339,7 +2416,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const id = championByType(caged.t);
     if (!id) return null;
     const level = Math.max(1, Math.floor(caged.l));
-    const power = caged.pl ?? 0;
     const jitterX = building.sx - 20 + rng.float() * 40;
     const jitterY = building.sy - 20 + rng.float() * 40;
     const gridX = Math.ceil(jitterX * 0.5 + jitterY);
@@ -2352,14 +2428,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const ix = screenY + screenX / 2;
     const iy = screenY - screenX / 2;
     const flying = isFlyingMovement(championMode(id, "movement", level));
-    const range = championStatWithPower(id, "range", level, power) || 1;
+    const range = championStatWithFood(id, "range", level, caged.fb ?? 0) || 1;
     return {
       ix,
       iy,
       ...rangePointOf(ix, iy),
       frame: startFrame(flying),
       flying,
-      hitFlags: championReach(id, level, championPower(id, power), fightFlags(true, flying, range)),
+      hitFlags: championReach(
+        id,
+        level,
+        championPower(id, caged.pl ?? 0),
+        fightFlags(true, flying, range),
+      ),
     };
   };
   // Each in turn, as `SpawnGuardian` pens each with its own draws (issue #310).
@@ -2392,13 +2473,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
     }
     if (event.champion) {
-      // Its level plus its power level's `bonus*` ladders (issue #202); the
-      // abilities those ladders also feed stay out (fidelity note 8).
+      // Its level plus its food bonus's `bonus*` ladders; its power level
+      // gates its abilities (issue #202).
       spawnChampion(
         event.champion.t,
         event.champion.l,
         dropPoint(event.x, event.y, radius),
         event.champion.pl ?? 0,
+        event.champion.fb ?? 0,
         event.champion.s,
         event.champion.b,
       );
@@ -2753,6 +2835,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const swingDelay = (creep: Creep): number => {
     let boost = creep.enrage * creep.puttySpeed;
+    // The Monster Speed Buff divides the delay too (`HyperSpeed.as`, `DivisionModifier`).
+    if (buffsOf(creep).monsterSpeed) boost *= MONSTER_SPEED_BUFF;
     // A ranked Bandito spins faster: 1, 1.5, 2 x (`BanditoAOEDamageSpin.as:23`, issue #352).
     if (creep.rank > 0 && creep.monsterId === BANDITO_ID) {
       boost *= banditoSpeedPercent(creep.rank) / 100;
@@ -3216,6 +3300,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.enrage !== 1) speed *= creep.enrage;
     // A putty bomb's boost, on top of Fomor's (`ResourceBomb.as:170-185`).
     if (creep.puttySpeed !== 1) speed *= creep.puttySpeed;
+    // The Monster Speed Buff (`HyperSpeed.k_moveSpeedModifier`).
+    if (buffsOf(creep).monsterSpeed) speed *= MONSTER_SPEED_BUFF;
     const factor = BEHAVIOUR_SPEED[creep.behaviour];
     if (factor !== undefined) speed *= factor;
     if (creep.attacking) return;
@@ -4208,8 +4294,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (building.hp <= 0) return;
     const stats = towerStats(building.type, building.level, yard.kind);
-    const damage = stats?.damage;
-    if (stats?.range === undefined || damage === undefined) return;
+    const base = stats?.damage;
+    if (stats?.range === undefined || base === undefined) return;
+    // Tower Overdrive (fidelity note 19): on the shot before it is cut to a whole number.
+    const damage = towerBoost === 1 ? base : base * towerBoost;
     if (building.type === AERIAL_DEFENSE_TYPE) {
       tickSalvo(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
       return;
@@ -4298,8 +4386,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     cullSpurtz(tower, gun);
     if (building.hp <= 0) return;
     const stats = towerStats(building.type, building.level, yard.kind);
-    const damage = stats?.damage;
-    if (stats?.range === undefined || damage === undefined) return;
+    const base = stats?.damage;
+    if (stats?.range === undefined || base === undefined) return;
+    const damage = towerBoost === 1 ? base : base * towerBoost;
 
     tower.fireTick -= 1;
     if (tower.fireTick <= 0) {

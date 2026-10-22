@@ -3,14 +3,16 @@ import {
   calendarDays,
   claimableTiers,
   countdownText,
+  krallenPrizeText,
   rewardText,
   shortAmount,
   sortEvents,
   type CalendarDayView,
 } from "@/game/events/eventsModel";
+import { championPortrait, showPortrait } from "@/game/portraits";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
-import { formatCountdown } from "@/ui/format";
+import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
@@ -28,6 +30,10 @@ import "./events.css";
  *
  * The ladder is drawn from the list's `ladder` (server `events.ts`): an event
  * that gets one (the pumpkin hunt) shows it here with no change to this file.
+ * An event that pays Krallen (the monthly Krallen Hunt) draws its one tier as
+ * a progress bar toward the goal instead, with the prize for this player's
+ * Krallen level, why they cannot take part yet, and the claim. Such an event
+ * stays listed after its end while its reward can still be claimed.
  * Anything else an event needs on the page goes in the slot
  * `.events-card__extra[data-event=<id>]` through {@link EVENT_EXTRAS}.
  */
@@ -107,6 +113,9 @@ const rewardBadge = (reward: EventReward): HTMLElement => {
       pictures.append(eventsArt("tools", 20));
       figure = reward.item === "BST" ? "7d" : "";
       break;
+    case "krallen":
+      pictures.append(krallenPicture(1, "icon", "events-reward__image"));
+      break;
     case "decoration": {
       const art = resolveArt(reward.type, 1, ArtState.DEFAULT);
       if (art) {
@@ -127,18 +136,26 @@ const rewardBadge = (reward: EventReward): HTMLElement => {
   return badge;
 };
 
-/** A banner picture that gives way to a plain band when the file is missing. */
-const banner = (event: EventView): HTMLElement => {
+/** Krallen's portrait at a level. */
+const krallenPicture = (level: number, size: "card" | "icon", className: string): HTMLImageElement => {
+  const image = el("img", className);
+  showPortrait(image, championPortrait("G5", level, size));
+  image.alt = "";
+  image.decoding = "async";
+  return image;
+};
+
+/** The event's banner picture; nothing when it has none or the file is missing. */
+const banner = (event: EventView): HTMLElement[] => {
+  if (!event.banner) return [];
   const band = el("div", `events-card__banner events-card__banner--${event.kind}`);
-  if (event.banner) {
-    const image = el("img", "events-card__banner-image");
-    image.src = event.banner;
-    image.alt = "";
-    image.decoding = "async";
-    image.addEventListener("error", () => image.remove(), { once: true });
-    band.append(image);
-  }
-  return band;
+  const image = el("img", "events-card__banner-image");
+  image.src = event.banner;
+  image.alt = "";
+  image.decoding = "async";
+  image.addEventListener("error", () => band.remove(), { once: true });
+  band.append(image);
+  return [band];
 };
 
 /** A countdown line the panel's `tick` keeps running. */
@@ -147,6 +164,7 @@ const countdown = (event: EventView, now: number): HTMLElement => {
   line.dataset["countdown"] = event.status;
   line.dataset["startsAt"] = String(event.startsAt);
   line.dataset["endsAt"] = String(event.endsAt);
+  if (event.claimUntil !== null) line.dataset["claimUntil"] = String(event.claimUntil);
   return line;
 };
 
@@ -179,9 +197,14 @@ export class EventsPanel {
   /** Moves every countdown on to `now` (server time, unix s). */
   tick(now: number): void {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-countdown]")) {
-      const { countdown: status, startsAt, endsAt } = line.dataset;
+      const { countdown: status, startsAt, endsAt, claimUntil } = line.dataset;
       line.textContent = countdownText(
-        { status: status === "active" ? "active" : "upcoming", startsAt: Number(startsAt), endsAt: Number(endsAt) },
+        {
+          status: status === "active" || status === "ended" ? status : "upcoming",
+          startsAt: Number(startsAt),
+          endsAt: Number(endsAt),
+          claimUntil: claimUntil === undefined ? null : Number(claimUntil),
+        },
         now,
       );
     }
@@ -232,14 +255,16 @@ export class EventsPanel {
   }
 
   private activeCard(event: EventView, view: Extract<EventsPanelView, { kind: "list" }>): HTMLElement {
-    const card = el("article", `events-card events-card--${event.kind}`);
+    const ended = event.status === "ended" ? " events-card--ended" : "";
+    const card = el("article", `events-card events-card--${event.kind}${ended}`);
     card.dataset["event"] = event.id;
     const head = el("div", "events-card__head");
     head.append(el("h3", "events-card__title", event.title), countdown(event, view.now));
-    card.append(banner(event), head, el("p", "events-card__text", event.text));
+    card.append(...banner(event), head, el("p", "events-card__text", event.text));
     if (event.calendar) card.append(this.calendar(event, view));
     // The collection ladder's place (the pumpkin hunt): drawn when the event has one.
-    if (event.ladder) card.append(this.ladder(event, event.ladder, view));
+    if (event.ladder && event.krallen) card.append(this.krallenHunt(event, event.ladder, event.krallen, view));
+    else if (event.ladder) card.append(this.ladder(event, event.ladder, view));
     const extra = el("div", "events-card__extra");
     extra.dataset["event"] = event.id;
     const own = EVENT_EXTRAS.get(event.kind)?.(event);
@@ -345,6 +370,78 @@ export class EventsPanel {
       if (view.refusal?.key === key) list.append(refusalNote(view.refusal.message));
     });
     section.append(head, list);
+    return section;
+  }
+
+  /** The Krallen Hunt: the prize, then the bar toward the goal and the claim, or why the player cannot take part. */
+  private krallenHunt(
+    event: EventView,
+    ladder: LadderView,
+    krallen: NonNullable<EventView["krallen"]>,
+    view: Extract<EventsPanelView, { kind: "list" }>,
+  ): HTMLElement {
+    const section = el("section", "events-krallen");
+    const tier = ladder.tiers[0];
+    const maxed = krallen.level >= krallen.maxLevel;
+
+    const prize = el("div", `events-krallen__prize${maxed ? " events-krallen__prize--maxed" : ""}`);
+    const words = el("div", "events-krallen__words");
+    // Claimed this month: the line says what the next hunt pays.
+    const prizeText = tier?.claimed && !maxed ? `Next hunt: ${krallenPrizeText(krallen)}` : krallenPrizeText(krallen);
+    words.append(el("h4", "events-section__title", "The prize"), el("p", "events-krallen__prize-text", prizeText));
+    // Her level now, when the prize line does not already say it in other words.
+    if (krallen.level > 0 && !maxed) words.append(el("p", "events-krallen__level", `Your Krallen is level ${krallen.level}`));
+    prize.append(krallenPicture(Math.max(1, krallen.level), "card", "events-krallen__portrait"), words);
+    section.append(prize);
+
+    if (event.locked !== null) {
+      const note = el("p", "events-krallen__locked");
+      note.append(eventsArt("lock", 18, "events-krallen__lock"), el("span", "", event.locked));
+      section.append(note);
+      return section;
+    }
+    if (!tier) return section;
+
+    const progress = el("div", "events-krallen__progress");
+    const head = el("div", "events-calendar__head");
+    const reached = Math.min(ladder.counter, tier.need);
+    head.append(
+      el("h4", "events-section__title", ladder.label),
+      el("span", "events-calendar__count", `${shortAmount(reached)} / ${shortAmount(tier.need)}`),
+    );
+    const share = tier.need > 0 ? reached / tier.need : 1;
+    const bar = el("div", "events-krallen__bar");
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-label", ladder.label);
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", String(tier.need));
+    bar.setAttribute("aria-valuenow", String(reached));
+    bar.setAttribute("aria-valuetext", `${formatAmount(ladder.counter)} of ${formatAmount(tier.need)}`);
+    const fill = el("span", "events-krallen__fill");
+    fill.style.width = `${Math.round(share * 1000) / 10}%`;
+    bar.append(fill);
+    progress.append(head, bar);
+    section.append(progress);
+
+    const key = tierKey(event.id, 0);
+    if (tier.claimed) {
+      const done = el("p", "events-krallen__done");
+      done.append(eventsArt("tick", 18, "events-krallen__tick"), el("span", "", "Prize claimed. The next hunt starts on the 15th."));
+      section.append(done);
+    } else if (ladder.counter >= tier.need && !maxed) {
+      const button = el("button", "btn btn--primary events-claim events-krallen__claim");
+      button.type = "button";
+      button.dataset["claim"] = key;
+      button.append(
+        el("span", "events-claim__label", krallen.level > 0 ? `Raise Krallen to level ${krallen.level + 1}` : "Claim Krallen"),
+        el("span", "events-claim__what", "Goal reached!"),
+      );
+      button.disabled = view.claiming !== null;
+      if (view.claiming === key) button.classList.add("events-claim--busy");
+      button.addEventListener("click", () => this.options.onClaimTier(event, 0));
+      section.append(button);
+    }
+    if (view.refusal?.key === key) section.append(refusalNote(view.refusal.message));
     return section;
   }
 }

@@ -1,6 +1,12 @@
 import { KRALLEN_ID } from "./champions.js";
-import { bunkerGarrisons, type BattleOptions, type DefenderChampion } from "./engine.js";
-import { championByType, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
+import {
+  bunkerGarrisons,
+  type BattleBuffs,
+  type BattleOptions,
+  type DefenderChampion,
+  type SideBuffs,
+} from "./engine.js";
+import { championByType, CHAMPION_MAX_FOOD_BONUS, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
 import { MAX_RANK } from "./specialMoves.js";
 import type { CombatBuildingDataMap, MonsterLevels, MonsterRanks, Roster } from "./types.js";
 
@@ -26,7 +32,25 @@ export interface DefenderForces {
   readonly defenderRanks?: MonsterRanks;
   /** The champions at home in the cage, none to two ({@link cagedChampions}). */
   readonly defenderChampions: readonly DefenderChampion[];
+  /**
+   * The shop boosts running when the battle was set up (engine fidelity note
+   * 19): the defending yard's own, and in an attack the attacker's, off its
+   * main yard ({@link withAttackerBuffs}). Frozen with the rest of the
+   * defence, so every replay fights with the same. Absent: none on either side.
+   */
+  readonly buffs?: BattleBuffs;
 }
+
+/**
+ * The shop items that boost a side in battle, and what each one turns on
+ * (`STORE.as:2431-2500`).
+ */
+export const BOOST_ITEMS: Readonly<Record<string, keyof SideBuffs>> = {
+  TOD: "towerDamage",
+  MOD: "monsterDamage",
+  MDOD: "monsterArmour",
+  MSOD: "monsterSpeed",
+};
 
 /** No defence at all: what a Map Room 1 tribe or a Map Room 2 camp has. */
 export const NO_DEFENCE: DefenderForces = {
@@ -63,6 +87,67 @@ export const academyRanks = (academy: unknown): MonsterRanks => {
   return ranks;
 };
 
+/**
+ * The boosts a yard's `storedata` has running at `now` (unix seconds): each
+ * {@link BOOST_ITEMS} entry whose end `e` is still ahead. An attacker brings
+ * no towers, so its Tower Overdrive is left out. Undefined when none runs.
+ *
+ * @param storedata - The yard's `storedata`.
+ * @param now - The battle's start, unix seconds.
+ * @param side - Whose boosts these are.
+ */
+export const storeBuffs = (
+  storedata: unknown,
+  now: number,
+  side: "attacker" | "defender",
+): SideBuffs | undefined => {
+  const store = record(storedata);
+  if (!store) return undefined;
+  const buffs: { -readonly [K in keyof SideBuffs]: SideBuffs[K] } = {};
+  for (const [item, buff] of Object.entries(BOOST_ITEMS)) {
+    if (side === "attacker" && buff === "towerDamage") continue;
+    const ends = Number(record(store[item])?.e);
+    if (Number.isFinite(ends) && ends > now) buffs[buff] = true;
+  }
+  return Object.keys(buffs).length > 0 ? buffs : undefined;
+};
+
+/** A side's boosts as stored or served: only the known ones, and only when on. */
+const parseSideBuffs = (raw: unknown): SideBuffs | undefined => {
+  const value = record(raw);
+  if (!value) return undefined;
+  const buffs: { -readonly [K in keyof SideBuffs]: SideBuffs[K] } = {};
+  for (const buff of Object.values(BOOST_ITEMS)) if (value[buff] === true) buffs[buff] = true;
+  return Object.keys(buffs).length > 0 ? buffs : undefined;
+};
+
+/** Both sides' boosts as stored or served; undefined when neither has any. */
+const parseBattleBuffs = (raw: unknown): BattleBuffs | undefined => {
+  const value = record(raw);
+  const attacker = parseSideBuffs(value?.attacker);
+  const defender = parseSideBuffs(value?.defender);
+  if (!attacker && !defender) return undefined;
+  return { ...(attacker && { attacker }), ...(defender && { defender }) };
+};
+
+/**
+ * A defence with the attacker's boosts added: the ones running on its main
+ * yard at attack start (`GLOBAL.as:816-822`), never its Tower Overdrive.
+ *
+ * @param forces - The defence the attack load worked out.
+ * @param storedata - The attacker's main yard's `storedata`.
+ * @param now - The attack's start, unix seconds.
+ */
+export const withAttackerBuffs = (
+  forces: DefenderForces,
+  storedata: unknown,
+  now: number,
+): DefenderForces => {
+  const attacker = storeBuffs(storedata, now, "attacker");
+  if (!attacker) return forces;
+  return { ...forces, buffs: { ...forces.buffs, attacker } };
+};
+
 /** One save entry as a caged champion, or null when it is not at home with health left. */
 const atHome = (entry: unknown): DefenderChampion | null => {
   const champion = record(entry);
@@ -73,11 +158,13 @@ const atHome = (entry: unknown): DefenderChampion | null => {
   if (!championByType(t) || !(Number(champion.status ?? 0) === 0)) return null;
   if (!Number.isFinite(l) || l < 1 || !Number.isFinite(hp) || hp <= 0) return null;
   const pl = Number(champion.pl);
+  const fb = Number(champion.fb);
   return {
     t,
     l: Math.floor(l),
     hp: Math.floor(hp),
     pl: Number.isFinite(pl) ? Math.min(Math.max(Math.floor(pl), 0), CHAMPION_MAX_POWER_LEVEL) : 0,
+    fb: Number.isFinite(fb) ? Math.min(Math.max(Math.floor(fb), 0), CHAMPION_MAX_FOOD_BONUS) : 0,
   };
 };
 
@@ -112,20 +199,26 @@ export const cagedChampions = (champions: unknown): DefenderChampion[] => {
  *
  * @param save - The defending row's `buildingdata` and `champion`, and the
  *   academy its monsters fight at: its own, or its owner's main yard's for an
- *   outpost.
+ *   outpost; and, with the battle's start `now`, its own `storedata`, for the
+ *   shop boosts it defends with ({@link storeBuffs}).
  */
 export const defenderForcesOf = (save: {
   readonly buildingdata: unknown;
   readonly academy: unknown;
   readonly champion: unknown;
+  readonly storedata?: unknown;
+  readonly now?: number;
 }): DefenderForces => {
   const defenderRanks = academyRanks(save.academy);
+  const defender =
+    save.now === undefined ? undefined : storeBuffs(save.storedata, save.now, "defender");
   return {
     bunkers: bunkerGarrisons(record(save.buildingdata) as CombatBuildingDataMap | null),
     defenderLevels: academyLevels(save.academy),
     // Kept only when the Lab has researched something, so a yard without ranks serves what it did.
     ...(Object.keys(defenderRanks).length > 0 ? { defenderRanks } : {}),
     defenderChampions: cagedChampions(save.champion),
+    ...(defender && { buffs: { defender } }),
   };
 };
 
@@ -156,6 +249,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
       ranks[id] = rank as number;
     }
   }
+  const buffs = parseBattleBuffs(value.buffs);
   // A session stored before issue #310 holds one `defenderChampion`.
   const champions = Array.isArray(value.defenderChampions)
     ? value.defenderChampions
@@ -172,6 +266,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
         return champion ? { ...champion, status: 0 } : null;
       }),
     ),
+    ...(buffs && { buffs }),
   };
 };
 
@@ -179,21 +274,27 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
  * The battle options a defence gives, and none for no defence at all, so a
  * battle without one runs as it always did. The levels go in whenever there
  * are any: a Spurtz Cannon's Spurtz fight at the defender's level with no
- * bunker or caged champion on the yard too (issue #313).
+ * bunker or caged champion on the yard too (issue #313). The boosts go in
+ * whenever either side has one.
  */
 export const battleDefence = (
   forces: DefenderForces | null | undefined,
-): Pick<BattleOptions, "bunkers" | "defenderLevels" | "defenderRanks" | "defenderChampions"> => {
+): Pick<
+  BattleOptions,
+  "bunkers" | "defenderLevels" | "defenderRanks" | "defenderChampions" | "buffs"
+> => {
   if (!forces) return {};
   const hasBunkers = Object.keys(forces.bunkers).length > 0;
   const hasChampions = forces.defenderChampions.length > 0;
   const hasLevels = Object.keys(forces.defenderLevels).length > 0;
   const hasRanks = Object.keys(forces.defenderRanks ?? {}).length > 0;
+  const hasBuffs = Boolean(forces.buffs && (forces.buffs.attacker || forces.buffs.defender));
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
     ...(hasBunkers || hasChampions || hasLevels ? { defenderLevels: forces.defenderLevels } : {}),
     // Only a bunker's monsters fight at the defender's rank (issue #352).
     ...(hasBunkers && hasRanks ? { defenderRanks: forces.defenderRanks as MonsterRanks } : {}),
     ...(hasChampions ? { defenderChampions: forces.defenderChampions } : {}),
+    ...(hasBuffs ? { buffs: forces.buffs } : {}),
   };
 };

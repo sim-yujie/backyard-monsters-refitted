@@ -31,7 +31,9 @@ describe("HelpPanel (#374)", () => {
     const { panel } = mount();
     panel.show(silo, buildingHelp({ helpsLeft: 5, buildings: { "7": { speedup: true } } }, 7));
     const text = panel.element.textContent ?? "";
-    expect(text).toContain("Storage Silo, level 3");
+    // A friend's yard is someone else's: the title is the name, no level (owner report 2026-10-22).
+    expect(panel.element.querySelector(".panel__title")?.textContent).toBe("Storage Silo");
+    expect(text).not.toMatch(/level/i);
     expect(text).toContain("Takes 6m 30s off the Storage Silo upgrade (5% of the time left).");
     expect(text).toContain("3 of 5 friends have helped");
     const [speed] = buttons(panel);

@@ -10,15 +10,15 @@ describe("the achievements catalogue", () => {
     expect(achievementById(23)).toBeUndefined();
   });
 
-  test("16 are shown, worth 220 Shiny; all 22 are worth 300", () => {
-    expect(AVAILABLE_ACHIEVEMENTS).toHaveLength(16);
-    expect(AVAILABLE_ACHIEVEMENTS.reduce((sum, entry) => sum + entry.shiny, 0)).toBe(220);
+  test("17 are shown, worth 230 Shiny; all 22 are worth 300", () => {
+    expect(AVAILABLE_ACHIEVEMENTS).toHaveLength(17);
+    expect(AVAILABLE_ACHIEVEMENTS.reduce((sum, entry) => sum + entry.shiny, 0)).toBe(230);
     expect(ACHIEVEMENTS.reduce((sum, entry) => sum + entry.shiny, 0)).toBe(300);
   });
 
-  test("the six tied to missing features stay hidden", () => {
+  test("the five tied to missing features stay hidden", () => {
     const hidden = ACHIEVEMENTS.filter((entry) => !entry.available).map((entry) => entry.id);
-    expect(hidden).toEqual([9, 14, 18, 19, 20, 21]);
+    expect(hidden).toEqual([14, 18, 19, 20, 21]);
   });
 
   test("has Flash's rules", () => {

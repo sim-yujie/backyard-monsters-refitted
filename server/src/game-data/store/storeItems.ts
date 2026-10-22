@@ -1006,8 +1006,8 @@ export const storeItems: { [key: string]: StoreItem } = {
   },
   MOD: {
     t: "Monster Overdrive",
-    d: "Increase all your monsters damage by 25% for 1 hour",
-    du: 84600,
+    d: "Increase all your monsters damage by 25% for 24 hours",
+    du: 86400,
     c: [500],
     i: 0,
     a: 0,
@@ -1030,7 +1030,7 @@ export const storeItems: { [key: string]: StoreItem } = {
   },
   MDOD: {
     t: "Monster Defensive Buff",
-    d: " ",
+    d: "Your monsters take 30% less damage for 24 hours",
     du: 86400,
     c: [500],
     i: 0,
@@ -1038,7 +1038,7 @@ export const storeItems: { [key: string]: StoreItem } = {
   },
   MSOD: {
     t: "Monster Speed Buff",
-    d: " ",
+    d: "Your monsters move and attack 50% faster for 24 hours",
     du: 86400,
     c: [500],
     i: 0,

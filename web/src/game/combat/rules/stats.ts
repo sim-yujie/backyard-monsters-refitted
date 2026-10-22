@@ -321,15 +321,20 @@ export const championAttackDelay = (id: string, level: number): number =>
   atLevel(CHAMPION_ATTACK_DELAY[id], level, CHAMPION_ATTACK_DELAY_DEFAULT);
 
 /**
- * The power level a champion's `bonus*` ladders are indexed by, 0 to 3.
+ * The highest power level, `pl`, 0 to 3, which gates a champion's abilities.
  *
  * `Krallen` clamps its own to `MAX_POWERLEVEL` before the super call
- * (`champions/Krallen.as:25`), and every bonus array in the stat table is three
- * entries long, so a power level of 0 adds nothing.
+ * (`champions/Krallen.as:25`).
  */
 export const CHAMPION_MAX_POWER_LEVEL = 3;
 
-/** The `bonus*` ladder each base stat takes its power-level bonus from. */
+/**
+ * The highest food-bonus rank, `fb`, 0 to 3, which the `bonus*` ladders are
+ * indexed by: every bonus array in the stat table is three entries long.
+ */
+export const CHAMPION_MAX_FOOD_BONUS = 3;
+
+/** The `bonus*` ladder each base stat takes its food bonus from. */
 const CHAMPION_BONUS_KEY = {
   speed: "bonusSpeed",
   health: "bonusHealth",
@@ -338,20 +343,23 @@ const CHAMPION_BONUS_KEY = {
 } as const;
 
 /**
- * A champion stat at its level plus its power level's bonus, which the
- * `bonus*` ladders add to the level figure, one entry per power level 1 to 3
- * (issue #195). Power level 0 adds nothing.
+ * A champion stat at its level plus its food bonus, which the `bonus*` ladders
+ * add to the level figure, one entry per food-bonus rank 1 to 3, the last for
+ * any rank past them. Rank 0 adds nothing (`ChampionBase.as:123-155`,
+ * `CHAMPIONCAGE.as:401-416`), as the cage card shows it.
  */
-export const championStatWithPower = (
+export const championStatWithFood = (
   id: string,
   key: keyof typeof CHAMPION_BONUS_KEY,
   level: number,
-  powerLevel: number,
+  foodBonus: number,
 ): number => {
   const base = championStat(id, key, level);
-  const power = Math.min(Math.max(Math.floor(powerLevel), 0), CHAMPION_MAX_POWER_LEVEL);
-  if (power === 0) return base;
-  const bonus = CHAMPION_PROPS[id]?.props[CHAMPION_BONUS_KEY[key]]?.[power - 1];
+  const rank = Math.max(Math.floor(foodBonus), 0);
+  if (!rank) return base;
+  const ladder = CHAMPION_PROPS[id]?.props[CHAMPION_BONUS_KEY[key]];
+  if (!ladder || ladder.length === 0) return base;
+  const bonus = ladder[Math.min(rank, ladder.length) - 1];
   return base + (typeof bonus === "number" ? bonus : 0);
 };
 

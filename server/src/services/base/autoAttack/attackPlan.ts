@@ -148,6 +148,7 @@ export interface OwnedChampion {
   readonly t: number;
   readonly l: number;
   readonly pl?: number;
+  readonly fb?: number;
   readonly hp?: number;
   readonly status?: number;
 }
@@ -248,10 +249,16 @@ export const planLog = (
     const owned = (champions ?? []).find((champion) => champion?.t === event.champion!.t);
     if (!owned) return event;
     const pl = Number(owned.pl);
-    const { pl: _old, ...rest } = event.champion;
+    const fb = Number(owned.fb);
+    const { pl: _old, fb: _oldFood, ...rest } = event.champion;
     return {
       ...event,
-      champion: { ...rest, l: owned.l, ...(Number.isInteger(pl) && pl > 0 && { pl }) },
+      champion: {
+        ...rest,
+        l: owned.l,
+        ...(Number.isInteger(pl) && pl > 0 && { pl }),
+        ...(Number.isInteger(fb) && fb > 0 && { fb }),
+      },
     };
   }),
 });
