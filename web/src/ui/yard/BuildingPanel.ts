@@ -53,6 +53,7 @@ import { BaiterPanel } from "./BaiterPanel";
 import { BunkerPanel } from "./BunkerPanel";
 import { ChamberPanel } from "./ChamberPanel";
 import { ChampionPanel } from "./ChampionPanel";
+import { withChampionsHealed } from "@/game/yard/championModel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
@@ -1446,7 +1447,8 @@ export class BuildingPanel {
     const store = yard.store;
     const opened: BaiterPanel = new BaiterPanel({
       level: building.level,
-      save: () => store.save,
+      // The champion defends at the health the cage panel shows.
+      save: () => withChampionsHealed(store.save, store.now()),
       blocked,
       onRun: (run) => yard.scene.runBaiter?.(run),
       ...(yard.scene.watchBaiter ? { onWatch: (run: BaiterRun) => yard.scene.watchBaiter?.(run) } : {}),
