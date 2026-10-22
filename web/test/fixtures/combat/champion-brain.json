@@ -52,77 +52,77 @@
   },
   "expected": {
     "ticks": 9800,
-    "damage": 8.2275769301028,
+    "damage": 6.9508610525267045,
     "destroyed": null,
     "attackloot": {
-      "r1": 4680,
-      "r2": 23400,
-      "r3": 4680,
-      "r4": 4680
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
     },
     "defenderLoss": {
-      "r1": 5200,
-      "r2": 26000,
-      "r3": 5200,
-      "r4": 5200
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
     },
     "firedTraps": 0,
-    "destroyedBuildings": 23,
+    "destroyedBuildings": 22,
     "creepsFlung": 40,
     "creepsKilled": 40,
-    "championHp": 144412.62940635096,
-    "damagedBuildings": 24,
-    "rngDraws": 2302,
+    "championHp": 83677.19815886217,
+    "damagedBuildings": 22,
+    "rngDraws": 1772,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "726782e259d2caac"
+        "digest": "7aa6b1f76d01a125"
       },
       {
         "tick": 1600,
-        "digest": "d18c375c54a97046"
+        "digest": "9d153a88e7233bee"
       },
       {
         "tick": 2400,
-        "digest": "e249bd1d5fc958cf"
+        "digest": "aabe5a52548575f4"
       },
       {
         "tick": 3200,
-        "digest": "de25594fd80146e9"
+        "digest": "159cc9ce2b8a7718"
       },
       {
         "tick": 4000,
-        "digest": "be261ac14de39607"
+        "digest": "ace8bc9239820840"
       },
       {
         "tick": 4800,
-        "digest": "3e7faef615bbc72c"
+        "digest": "4a4fcca4ecf784ce"
       },
       {
         "tick": 5600,
-        "digest": "1eeeed41c8bbcee3"
+        "digest": "f6b6ce8f5f5813a5"
       },
       {
         "tick": 6400,
-        "digest": "c2f1fc81cfe331f7"
+        "digest": "31226b430e16664d"
       },
       {
         "tick": 7200,
-        "digest": "f2e61dbdec862beb"
+        "digest": "d6d643b633e66d38"
       },
       {
         "tick": 8000,
-        "digest": "12d99e5098ae6256"
+        "digest": "3b3b36ce54a43bb8"
       },
       {
         "tick": 8800,
-        "digest": "76fe49812355219f"
+        "digest": "be61a19c446473d6"
       },
       {
         "tick": 9600,
-        "digest": "4ff889e91d8a4043"
+        "digest": "c2b13414bf1f9466"
       }
     ],
-    "digest": "2ce6991e43a0fad4"
+    "digest": "df1b7cec012f8aa2"
   }
 }

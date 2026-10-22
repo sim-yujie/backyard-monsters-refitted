@@ -4,7 +4,7 @@ import {
   ATTACK_COUNTDOWN_SECONDS,
   DECLARE_WAR_COUNTDOWN_SECONDS,
   TICKS_PER_SECOND,
-  championStatWithPower,
+  championStatWithFood,
 } from "@/game/combat/rules";
 import {
   AttackSession,
@@ -332,9 +332,23 @@ describe("AttackSession events and the fling log", () => {
     session.start();
     const event = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 2 } });
     expect(event.champion).toEqual({ t: 1, l: 2, pl: 3 });
+    // The power level gates abilities; it adds no health of its own.
     expect(session.battle()!.creeps().find((creep) => creep.champion)?.maxHp).toBe(
-      championStatWithPower("G1", "health", 2, 3),
+      championStatWithFood("G1", "health", 2, 0),
     );
+  });
+
+  it("logs a flung champion at the food bonus its roster entry holds, and it fights with it", () => {
+    const champion = { t: 1, hp: 100, l: 6, ft: 0, fd: 0, fb: 2, pl: 1, status: 0 };
+    const session = sessionOf({
+      roster: { monsters: {}, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null },
+    });
+    session.start();
+    const event = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 6 } });
+    expect(event.champion).toEqual({ t: 1, l: 6, pl: 1, fb: 2 });
+    const creep = session.battle()!.creeps().find((one) => one.champion);
+    // The cage card's figures: level 6 plus food bonus rank 2.
+    expect(creep?.maxHp).toBe(championStatWithFood("G1", "health", 6, 2));
   });
 
   it("calls a flung champion back with the Retreat champion button, and logs it (#222)", () => {

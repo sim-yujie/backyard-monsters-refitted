@@ -7,7 +7,7 @@ import {
   CHAMPION_MAX_POWER_LEVEL,
   KRALLEN_MAX_POWER_LEVEL,
   championByType,
-  championStatWithPower,
+  championStatWithFood,
   isChampionStance,
   type ChampionStance,
   type FlingEvent,
@@ -240,9 +240,9 @@ export const levelsOf = (army: TestArmy): Record<string, number> =>
 
 /**
  * A test champion as the attack's roster lists champions (`ChampionSaveEntry`):
- * made up, at full health for its level and power level, active (`status: 0`),
- * fed nothing, and with no learned brain, so it always fights as a fresh one
- * (owner answer Q6).
+ * made up, at full health for its level, active (`status: 0`), fed nothing, so
+ * with no food bonus (its power level gates its abilities alone), and with no
+ * learned brain, so it always fights as a fresh one (owner answer Q6).
  */
 export const testChampionEntry = (champion: TestChampion): ChampionSaveEntry => {
   const id = championByType(champion.t) ?? "";
@@ -250,7 +250,7 @@ export const testChampionEntry = (champion: TestChampion): ChampionSaveEntry => 
     t: champion.t,
     l: champion.l,
     pl: champion.pl,
-    hp: championStatWithPower(id, "health", champion.l, champion.pl),
+    hp: championStatWithFood(id, "health", champion.l, 0),
     status: 0,
     ft: 0,
     fd: 0,

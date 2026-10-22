@@ -77,7 +77,7 @@ import {
   championByType,
   championMode,
   championStat,
-  championStatWithPower,
+  championStatWithFood,
   fortifiedDamage,
   lootingMultiplier,
   isLootable,
@@ -328,7 +328,7 @@ import {
  *      {@link BattleState.bunkerGarrisons} is what each holds afterwards: a
  *      fallen bunker keeps only the defenders that were out.
  *    - The champion in the Champion Cage comes out at its stored health, at
- *      its level plus its power level's bonus, and fights on if the cage
+ *      its level plus its food bonus, and fights on if the cage
  *      falls. When it comes out and what it chases are Flash's (note 14).
  *    - Towers, traps and bombs never hurt a defender.
  * 10. **Storage loot is not capped by the attacker's pool.** `ATTACK.Loot`
@@ -542,8 +542,10 @@ export interface DefenderChampion {
   readonly l: number;
   /** The health it has now, which is what it comes out with. */
   readonly hp: number;
-  /** Its power level, `pl`, 0 to 3. */
+  /** Its power level, `pl`, 0 to 3, which gates its abilities. */
   readonly pl?: number;
+  /** Its food-bonus rank, `fb`, 0 to 3, which picks its `bonus*` stats. */
+  readonly fb?: number;
 }
 
 /* ── Outputs ──────────────────────────────────────────────────────────────── */
@@ -2178,14 +2180,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     level: number,
     at: Cart,
     power = 0,
+    foodBonus = 0,
     stance?: ChampionStance,
     brain?: Partial<BrainWeights>,
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
-    // At its level plus its power level's bonus, as the caged champion fights
-    // (issue #202); a log with no `pl` gives 0, which adds nothing.
-    const health = championStatWithPower(id, "health", level, power);
+    // At its level plus its food bonus, as the cage card shows it
+    // (`ChampionBase.as:123-155`); a log with no `fb` gives 0, which adds
+    // nothing. Its power level gates its abilities alone (issue #202).
+    const health = championStatWithFood(id, "health", level, foodBonus);
     // A `fly` rung puts the champion in the air exactly as it does a monster:
     // altitude 108 and the flying defence flag (`ChampionBase.as:181-188`), so
     // walls never stop it and only air-capable towers can shoot it.
@@ -2203,9 +2207,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       y: cart.y,
       hp: health,
       maxHp: health,
-      baseSpeed: championStatWithPower(id, "speed", level, power) / 4,
-      damage: championStatWithPower(id, "damage", level, power),
-      range: championStatWithPower(id, "range", level, power) || 1,
+      baseSpeed: championStatWithFood(id, "speed", level, foodBonus) / 4,
+      damage: championStatWithFood(id, "damage", level, foodBonus),
+      range: championStatWithFood(id, "range", level, foodBonus) || 1,
       attackDelay: championAttackDelay(id, level),
       targetGroup: championStat(id, "targetGroup", level) || TARGET_GROUP.ALL,
       flying,
@@ -2232,7 +2236,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       hatchedBy: -1,
       rechargeAt: 0,
-      hitFlags: fightFlags(false, flying, championStatWithPower(id, "range", level, power) || 1),
+      hitFlags: fightFlags(false, flying, championStatWithFood(id, "range", level, foodBonus) || 1),
       home: null,
       provokedBy: -1,
       ...NO_ABILITIES,
@@ -2265,16 +2269,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * The caged champion comes out for the first time (issues #195, #260): from
    * where it stood in its cage, at its stored health, its stats at its level
-   * plus its power level's bonus, with the frame it counted in there.
+   * plus its food bonus, with the frame it counted in there.
    */
   const releaseChampion = (caged: DefenderChampion, at: CagePen): Creep | null => {
     const id = championByType(caged.t);
     if (!id) return null;
     const level = Math.max(1, Math.floor(caged.l));
     const power = caged.pl ?? 0;
-    const maxHp = championStatWithPower(id, "health", level, power);
+    const food = caged.fb ?? 0;
+    const maxHp = championStatWithFood(id, "health", level, food);
     const flying = isFlyingMovement(championMode(id, "movement", level));
-    const range = championStatWithPower(id, "range", level, power) || 1;
+    const range = championStatWithFood(id, "range", level, food) || 1;
     const creep: Creep = {
       id: nextCreepId,
       monsterId: id,
@@ -2287,8 +2292,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       y: at.y,
       hp: Math.min(cagedHealth(caged), maxHp),
       maxHp,
-      baseSpeed: championStatWithPower(id, "speed", level, power) / 4,
-      damage: championStatWithPower(id, "damage", level, power),
+      baseSpeed: championStatWithFood(id, "speed", level, food) / 4,
+      damage: championStatWithFood(id, "damage", level, food),
       range,
       attackDelay: championAttackDelay(id, level),
       targetGroup: TARGET_GROUP.ALL,
@@ -2338,7 +2343,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const id = championByType(caged.t);
     if (!id) return null;
     const level = Math.max(1, Math.floor(caged.l));
-    const power = caged.pl ?? 0;
     const jitterX = building.sx - 20 + rng.float() * 40;
     const jitterY = building.sy - 20 + rng.float() * 40;
     const gridX = Math.ceil(jitterX * 0.5 + jitterY);
@@ -2351,14 +2355,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const ix = screenY + screenX / 2;
     const iy = screenY - screenX / 2;
     const flying = isFlyingMovement(championMode(id, "movement", level));
-    const range = championStatWithPower(id, "range", level, power) || 1;
+    const range = championStatWithFood(id, "range", level, caged.fb ?? 0) || 1;
     return {
       ix,
       iy,
       ...rangePointOf(ix, iy),
       frame: startFrame(flying),
       flying,
-      hitFlags: championReach(id, level, championPower(id, power), fightFlags(true, flying, range)),
+      hitFlags: championReach(
+        id,
+        level,
+        championPower(id, caged.pl ?? 0),
+        fightFlags(true, flying, range),
+      ),
     };
   };
   // Each in turn, as `SpawnGuardian` pens each with its own draws (issue #310).
@@ -2391,13 +2400,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
     }
     if (event.champion) {
-      // Its level plus its power level's `bonus*` ladders (issue #202); the
-      // abilities those ladders also feed stay out (fidelity note 8).
+      // Its level plus its food bonus's `bonus*` ladders; its power level
+      // gates its abilities (issue #202).
       spawnChampion(
         event.champion.t,
         event.champion.l,
         dropPoint(event.x, event.y, radius),
         event.champion.pl ?? 0,
+        event.champion.fb ?? 0,
         event.champion.s,
         event.champion.b,
       );

@@ -16,7 +16,7 @@ import {
   championIds,
   championMode,
   championStat,
-  championStatWithPower,
+  championStatWithFood,
   flyerMode,
   fortifiedDamage,
   gridCost,
@@ -615,17 +615,18 @@ describe("outpostHarvesterStock (`BRESOURCE.as:506-518`)", () => {
   });
 });
 
-describe("championStatWithPower (issue #195)", () => {
-  it("adds the power level's bonus to the level figure, and nothing at power level 0", () => {
+describe("championStatWithFood (`ChampionBase.as:123-155`)", () => {
+  it("adds the food-bonus rank's bonus to the level figure, and nothing at rank 0", () => {
     // Gorgo at level 2: 80,000 health and 1,200 damage; bonuses 12,500 / 27,500 / 50,000 and 150 / 330 / 600.
-    expect(championStatWithPower("G1", "health", 2, 0)).toBe(80000);
-    expect(championStatWithPower("G1", "health", 2, 1)).toBe(92500);
-    expect(championStatWithPower("G1", "health", 2, 3)).toBe(130000);
-    expect(championStatWithPower("G1", "damage", 2, 2)).toBe(1530);
+    expect(championStatWithFood("G1", "health", 2, 0)).toBe(80000);
+    expect(championStatWithFood("G1", "health", 2, 1)).toBe(92500);
+    expect(championStatWithFood("G1", "health", 2, 3)).toBe(130000);
+    expect(championStatWithFood("G1", "damage", 2, 2)).toBe(1530);
   });
 
-  it("clamps the power level to 0..3", () => {
-    expect(championStatWithPower("G1", "health", 2, 9)).toBe(130000);
-    expect(championStatWithPower("G1", "health", 2, -1)).toBe(80000);
+  it("reads a rank past the ladder as its last entry, and none below 1", () => {
+    expect(championStatWithFood("G1", "health", 2, 9)).toBe(130000);
+    expect(championStatWithFood("G1", "health", 2, -1)).toBe(80000);
+    expect(championStatWithFood("G1", "health", 2, Number.NaN)).toBe(80000);
   });
 });

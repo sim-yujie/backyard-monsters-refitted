@@ -18,7 +18,7 @@ import {
   bombsFor,
   championAttackDelay,
   championStat,
-  championStatWithPower,
+  championStatWithFood,
   HARVESTER_TYPES,
   LOOT_PROPERTY_BASE,
   LOOT_PROPERTY_BONUS,
@@ -211,7 +211,7 @@ export const monsterPotential = (
 
 /**
  * The most a champion on the field can deal in the interval: its swings at
- * its level plus its power level's bonus (issue #202), swinging faster when
+ * its level plus its food bonus (`ChampionBase.as:123-155`), swinging faster when
  * Fomor has enraged it, and Korath's quakes on top (issue #222).
  *
  * A quake comes after three swings (`Korath.as:184`), so the interval holds
@@ -226,14 +226,15 @@ export const championPotential = (
   powerLevel = 0,
   yard: CombatYard | null = null,
   enrage = 1,
+  foodBonus = 0,
 ): number => {
-  const damage = championStatWithPower(id, "damage", level, powerLevel);
+  const damage = championStatWithFood(id, "damage", level, foodBonus);
   if (damage <= 0) return 0;
   const area = CHAMPION_AOE[id] ?? 1;
   const hits = swings(elapsedSeconds, enragedDelay(championAttackDelay(id, level), enrage));
   let total = damage * hits * area;
   if (yard && hasQuake(id, level, championPower(id, powerLevel))) {
-    const range = championStatWithPower(id, "range", level, powerLevel);
+    const range = championStatWithFood(id, "range", level, foodBonus);
     const quakes = Math.floor(hits / QUAKE_SWINGS) + 1;
     total += quakes * quakePotential(yard, range * QUAKE_RADIUS_RANGES, damage);
   }
@@ -499,7 +500,15 @@ export const damagePotential = (
   for (const one of champions) {
     // Fomor does not enrage itself (`AOEEnrage.as:45`).
     const sped = one.id === FOMOR_ID ? 1 : enrage;
-    champion += championPotential(one.id, one.level, elapsed, one.powerLevel, context.yard, sped);
+    champion += championPotential(
+      one.id,
+      one.level,
+      elapsed,
+      one.powerLevel,
+      context.yard,
+      sped,
+      one.foodBonus ?? 0,
+    );
   }
 
   const bombs = bombsPotential(context.attacker.catapultLevel, context.yard);

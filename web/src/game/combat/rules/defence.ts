@@ -1,6 +1,6 @@
 import { KRALLEN_ID } from "./champions.js";
 import { bunkerGarrisons, type BattleOptions, type DefenderChampion } from "./engine.js";
-import { championByType, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
+import { championByType, CHAMPION_MAX_FOOD_BONUS, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
 import { MAX_RANK } from "./specialMoves.js";
 import type { CombatBuildingDataMap, MonsterLevels, MonsterRanks, Roster } from "./types.js";
 
@@ -73,11 +73,13 @@ const atHome = (entry: unknown): DefenderChampion | null => {
   if (!championByType(t) || !(Number(champion.status ?? 0) === 0)) return null;
   if (!Number.isFinite(l) || l < 1 || !Number.isFinite(hp) || hp <= 0) return null;
   const pl = Number(champion.pl);
+  const fb = Number(champion.fb);
   return {
     t,
     l: Math.floor(l),
     hp: Math.floor(hp),
     pl: Number.isFinite(pl) ? Math.min(Math.max(Math.floor(pl), 0), CHAMPION_MAX_POWER_LEVEL) : 0,
+    fb: Number.isFinite(fb) ? Math.min(Math.max(Math.floor(fb), 0), CHAMPION_MAX_FOOD_BONUS) : 0,
   };
 };
 
