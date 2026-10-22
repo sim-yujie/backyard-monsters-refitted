@@ -252,7 +252,7 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
   // base instead, and its save is bound to that (issue #161).
   // The defence the battle is fought against, served to the client and kept
   // in the session for the server's replay (issue #195).
-  const defenderForces = await servedDefenderForces(save);
+  const defenderForces = await servedDefenderForces(save, getCurrentDateTime());
   // The attacker's champions' brains as they stand now, after the load has
   // landed any attack they left (issue #219): frozen into the session, served
   // to the client, and the only brains this battle is ever fought with.

@@ -53,7 +53,7 @@ interface HonestSave {
   attacker: {
     monsters: Record<string, number>;
     academy: Record<string, number>;
-    champion: { t: number; l: number; hp: number; pl?: number }[];
+    champion: { t: number; l: number; hp: number; pl?: number; fb?: number }[];
     siege: Record<string, { quantity: number }>;
     catapult: number;
     resources: Record<string, number>;

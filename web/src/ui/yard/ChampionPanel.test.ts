@@ -110,13 +110,25 @@ describe("ChampionPanel: no champion", () => {
   });
 });
 
+describe("ChampionPanel: whose health each number is", () => {
+  it("names the champion's live health and calls the card's figure its max health", () => {
+    // Level 1 Gorgo, hurt: the live line is its own, the card's 40,000 → 80,000 its full health now and at level 2.
+    const { element } = setup([gorgo({ hp: 1_200, nm: "Gorgy" })]);
+    expect(textOf(element, ".champion__line strong")).toBe("Gorgy's health 1,200 / 40,000");
+    expect(element.querySelector(".champion__bar--health")!.getAttribute("aria-label")).toBe("Gorgy's health");
+    const stats = [...element.querySelectorAll(".champion__stat")].map((item) => item.textContent);
+    expect(stats).toContain("Max health 40,000 → 80,000");
+    expect(stats.some((line) => line?.startsWith("Health"))).toBe(false);
+  });
+});
+
 describe("ChampionPanel: a fed champion", () => {
   it("shows name, level, health, feeds and the time to hunger", () => {
     const { element } = setup([gorgo({ hp: 20_000 })]);
     expect(textOf(element, ".champion__name")).toBe("Gorgo");
     expect(textOf(element, ".champion__level")).toBe("Level 1 of 6 · High Defense");
     expect(element.querySelector(".champion__picture")!.getAttribute("src")).toBe("/portraits/G1-L1.webp");
-    expect(element.textContent).toContain("Health 20,000 / 40,000");
+    expect(element.textContent).toContain("Gorgo's health 20,000 / 40,000");
     expect(element.textContent).toContain("Feeds 1 / 3 to level 2");
     expect(textOf(element, ".champion__hunger")).toBe("Fed. Hungry in 14h 0m.");
   });

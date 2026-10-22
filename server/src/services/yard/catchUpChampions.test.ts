@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
-import { catchUpChampions } from "./catchUpChampions.js";
+import { catchUpChampions, championsHealedTo, healChampions } from "./catchUpChampions.js";
 import { catchUpYard } from "./catchUp.js";
 
 /**
@@ -96,6 +96,53 @@ describe("catchUpChampions: starving (23 h + 24 h grace)", () => {
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.detail).toEqual({ level: 6, feeds: 0, foodBonus: 2 });
     expect((save.champion as ChampionData[])[0]).toMatchObject({ l: 6, fb: 2, hp: 227_500, ft: NOW + 23 * HOUR });
+  });
+});
+
+describe("championsHealedTo and healChampions: the heal alone, where savetime moves without a catch-up", () => {
+  // Level 1 Fomor: full 15,000, int(15,000 × 5 / 3,600) = 20 per 5 s.
+  const fomor = (overrides: Partial<ChampionData> = {}): ChampionData =>
+    gorgo({ t: 3, hp: 1_200, ...overrides });
+
+  test("a champion attacked an hour after its owner last looked defends healed to full", () => {
+    const stored = [fomor()];
+    const healed = championsHealedTo(stored, NOW - HOUR, NOW);
+    expect(healed[0]!.hp).toBe(15_000);
+    // The stored list is left alone: the attack load only reads it.
+    expect(stored[0]!.hp).toBe(1_200);
+  });
+
+  test("heals exactly what the catch-up would, and no more", () => {
+    expect(championsHealedTo([fomor()], NOW - 60, NOW)[0]!.hp).toBe(1_200 + 20 * 12);
+    const save = { champion: [fomor()] };
+    catchUpChampions(save, NOW - 60, NOW);
+    expect((save.champion as ChampionData[])[0]!.hp).toBe(1_200 + 20 * 12);
+  });
+
+  test("never starves, and leaves a frozen, juiced or full champion as it is", () => {
+    const starving = fomor({ ft: NOW - 50 * HOUR, fd: 2 });
+    const frozen = gorgo({ hp: 1, status: 1 });
+    const full = gorgo({ t: 2, hp: 12_000 });
+    const healed = championsHealedTo([starving, frozen, full], NOW - HOUR, NOW);
+    expect(healed[0]).toMatchObject({ hp: 15_000, fd: 2, ft: NOW - 50 * HOUR });
+    expect(healed[1]).toEqual(frozen);
+    expect(healed[2]).toEqual(full);
+  });
+
+  test("a yard never saved (no savetime) heals nothing", () => {
+    expect(championsHealedTo([fomor()], 0, NOW)[0]!.hp).toBe(1_200);
+    expect(championsHealedTo([fomor()], Number(undefined), NOW)[0]!.hp).toBe(1_200);
+  });
+
+  test("healChampions writes the healed list onto the save, and nothing when nothing healed", () => {
+    const save: { champion?: unknown } = { champion: [fomor()] };
+    healChampions(save, NOW - 2 * HOUR, NOW);
+    expect((save.champion as ChampionData[])[0]!.hp).toBe(15_000);
+
+    const untouched = [gorgo()];
+    const whole: { champion?: unknown } = { champion: untouched };
+    healChampions(whole, NOW - HOUR, NOW);
+    expect(whole.champion).toBe(untouched);
   });
 });
 

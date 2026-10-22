@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { championStatWithPower } from "@/game/combat/rules";
+import { championStatWithFood } from "@/game/combat/rules";
 import {
   BAITER_CAP,
   TEST_ROSTER,
@@ -188,7 +188,8 @@ describe("champions", () => {
       t: 4,
       l: 3,
       pl: 2,
-      hp: championStatWithPower("G4", "health", 3, 2),
+      // Unfed, so no food bonus; the power level adds no health.
+      hp: championStatWithFood("G4", "health", 3, 0),
       status: 0,
       ft: 0,
       fd: 0,
@@ -224,7 +225,7 @@ describe("the hand-off and the attack target", () => {
     expect((target.load as { defenderforces?: unknown }).defenderforces).toEqual({
       bunkers: { 5: { C1: 4 } },
       defenderLevels: { C1: 6, C4: 3 },
-      defenderChampions: [{ t: 2, l: 3, hp: 800, pl: 1 }],
+      defenderChampions: [{ t: 2, l: 3, hp: 800, pl: 1, fb: 0 }],
     });
     expect(target.roster).toEqual({
       monsters: { C1: 20, C4: 5 },

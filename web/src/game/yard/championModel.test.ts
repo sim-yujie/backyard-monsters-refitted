@@ -7,6 +7,7 @@ import {
   freezeGate,
   predictedHealth,
   thawGate,
+  withChampionsHealed,
 } from "./championModel";
 import { championEntry } from "./championCatalogue";
 
@@ -177,5 +178,20 @@ describe("the Champion Chamber (#125)", () => {
     expect(thawGate(view)).toMatch(/damaged/);
     expect(thawGate(chamberView(withChamber([gorgo({ status: 1 })]), NOW))).toBeNull();
     expect(chamberView(saveOf([]), NOW).kind).toBe("noChamber");
+  });
+});
+
+describe("withChampionsHealed: what a practice attack on the own yard defends with", () => {
+  it("the caged champion comes out at the health the cage panel shows, not the stored one", () => {
+    // Stored at 10,000 an hour ago: a level 1 Gorgo is back to its full 40,000.
+    const save = saveOf([gorgo({ hp: 10_000 })], { savetime: NOW - HOUR });
+    const healed = withChampionsHealed(save, NOW);
+    expect(healed.champion?.[0]?.hp).toBe(40_000);
+    expect(save.champion?.[0]?.hp).toBe(10_000);
+  });
+
+  it("a frozen champion, or one already at its health, leaves the save as it is", () => {
+    const save = saveOf([gorgo({ t: 2, hp: 1, status: 1 }), gorgo()], { savetime: NOW - HOUR });
+    expect(withChampionsHealed(save, NOW)).toBe(save);
   });
 });

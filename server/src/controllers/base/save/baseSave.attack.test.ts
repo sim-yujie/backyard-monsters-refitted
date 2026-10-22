@@ -921,7 +921,7 @@ describe("the defence lands (#195)", () => {
   const GORGO = { t: 1, l: 1, hp: 3000, pl: 0, status: 0, fd: 0, ft: 0, fb: 0 };
   const TICK = 4_000;
 
-  const serverBattle = () =>
+  const serverBattle = (forces: typeof FORCES = FORCES) =>
     replayAbandonedAttack(
       battleReplayInput({
         flinglog: LOG,
@@ -930,7 +930,7 @@ describe("the defence lands (#195)", () => {
           attackid: ATTACK_ID,
           startedat: 0,
           entryHoused: ENTRY,
-          defenderForces: FORCES,
+          defenderForces: forces,
         },
         defender: {
           type: "tribe",
@@ -978,6 +978,35 @@ describe("the defence lands (#195)", () => {
 
     expect(reports.some((line) => line.includes("champion"))).toBe(true);
     expect((defender.champion as { hp: number }[])[0]!.hp).toBeLessThan(3000);
+  });
+
+  test("a champion hurt before its owner left heals up to the attack before savetime moves past it", async () => {
+    // Stored at 1,000 two hours ago: a level 1 Gorgo is full (40,000) an hour
+    // after that. Nothing of the champion fights here, so the healing alone shows.
+    sessionForces = { ...FORCES, defenderChampions: [] };
+    defender.savetime = Math.floor(Date.now() / 1000) - 2 * 3_600;
+    defender.champion = [{ ...GORGO, hp: 1_000 }];
+
+    await baseSave(ctxFor({ over: "1", tick: String(TICK), flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.champion).toEqual([{ ...GORGO, hp: 40_000 }]);
+  });
+
+  test("the battle's health lands on the healed champion, not on the stale stored health", async () => {
+    // The attack load served the champion healed to its full 40,000
+    // (`servedDefenderForces`); its row still says 100 from an hour before,
+    // and a level 1 Gorgo heals from empty to full in an hour.
+    const served = { ...FORCES, defenderChampions: [{ t: 1, l: 1, hp: 40_000, pl: 0 }] };
+    sessionForces = served;
+    const left = Math.floor(serverBattle(served).defenderChampions[0]!.hp);
+    expect(left).toBeGreaterThan(100);
+    defender.savetime = Math.floor(Date.now() / 1000) - 3_600;
+    defender.champion = [{ ...GORGO, hp: 100 }];
+
+    await baseSave(ctxFor({ over: "1", tick: String(TICK), flinglog: JSON.stringify(LOG) }), async () => {});
+
+    // What the battle left of the 40,000 it fought with, not the row's 100.
+    expect(defender.champion).toEqual([{ ...GORGO, hp: left }]);
   });
 });
 

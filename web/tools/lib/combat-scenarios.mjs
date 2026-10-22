@@ -192,8 +192,8 @@ export const SCENARIOS = [
   {
     name: "champion-power",
     description:
-      "A level 4 Gorgo at power level 3 with sixty Pokeys: the champion's bonus ladders add " +
-      "health, damage and speed to its level's (issue #202).",
+      "A level 4 Gorgo at power level 3 and food bonus 3 with sixty Pokeys: the food bonus's " +
+      "ladders add health, damage and speed to its level's (`ChampionBase.as:123-155`).",
     yard: "sandbox",
     without: SPURTZ_CANNONS,
     kind: "main",
@@ -211,7 +211,7 @@ export const SCENARIOS = [
           y: -480,
           r: 300,
           monsters: { C1: 60 },
-          champion: { t: 1, l: 4, pl: 3 },
+          champion: { t: 1, l: 4, pl: 3, fb: 3 },
         },
       ],
     },
@@ -326,7 +326,7 @@ export const SCENARIOS = [
           y: -480,
           r: 300,
           monsters: { C1: 60 },
-          champion: { t: 4, l: 6, pl: 3 },
+          champion: { t: 4, l: 6, pl: 3, fb: 3 },
         },
         {
           kind: "fling",
@@ -352,7 +352,7 @@ export const SCENARIOS = [
     playerLevel: 20,
     tailTicks: 12000,
     defence: {
-      defenderChampions: [{ t: 4, l: 6, hp: 175000, pl: 3 }],
+      defenderChampions: [{ t: 4, l: 6, hp: 175000, pl: 3, fb: 3 }],
     },
     log: {
       v: 1,
@@ -392,7 +392,7 @@ export const SCENARIOS = [
           y: -300,
           r: 300,
           monsters: { C1: 80, C8: 10 },
-          champion: { t: 3, l: 6, pl: 3 },
+          champion: { t: 3, l: 6, pl: 3, fb: 2 },
         },
       ],
     },
@@ -411,7 +411,7 @@ export const SCENARIOS = [
     defence: {
       defenderChampions: [
         { t: 5, l: 5, hp: 60000, pl: 2 },
-        { t: 3, l: 6, hp: 40000, pl: 1 },
+        { t: 3, l: 6, hp: 40000, pl: 1, fb: 1 },
       ],
     },
     log: {
