@@ -80,7 +80,11 @@ export const AUTO_BANKING = "Auto-banking: what it makes goes straight to your m
  * What is offered and what it costs is decided in `buildingActions.ts`; this
  * file draws it and runs the store's actions (`YardStore.ts`, "Hooks for the
  * UI work packages"). On a foreign yard there is no store: the panel shows
- * the numbers and the details and offers nothing.
+ * the building's name, its state and what it holds, and offers nothing. It
+ * keeps its level and every number that would tell it (health, damage, range,
+ * fortification, a running job) to itself (owner report 2026-10-22); the
+ * server sends a viewer only the level the art needs anyway
+ * (`server/src/services/base/viewMask.ts`), so those numbers would be wrong.
  *
  * ## Shiny and Cancel
  *
@@ -370,7 +374,7 @@ export class BuildingPanel {
       this.housing?.destroy();
       this.housing = null;
       this.panel.setTitle(
-        building.level > 0 ? `${building.name} · Level ${building.level}` : building.name,
+        building.level > 0 && this.yard ? `${building.name} · Level ${building.level}` : building.name,
       );
     }
     this.render();
@@ -584,11 +588,10 @@ export class BuildingPanel {
   };
 
   private renderInfo(building: YardBuilding): void {
-    const { rows, list } = buildingInfo(
-      building,
-      this.yard?.store.kind ?? "main",
-      this.yard?.store.yard.cellHeight ?? 0,
-    );
+    // Every row tells the level, on a foreign yard a level the server made up.
+    const { rows, list } = this.yard
+      ? buildingInfo(building, this.yard.store.kind, this.yard.store.yard.cellHeight)
+      : { rows: [], list: null };
     this.info.replaceChildren();
     for (const row of rows) {
       const term = document.createElement("dt");
@@ -1531,6 +1534,8 @@ export class BuildingPanel {
     // file are a developer's; a player's Details are level, fortification,
     // health, the job and what it holds (#150).
     const dev = devDetails();
+    // Someone else's yard keeps its level, and what would tell it, to itself.
+    const foreign = this.yard === undefined;
     if (dev) this.add("Type id", String(building.type));
     this.add(
       "Level",
@@ -1538,9 +1543,11 @@ export class BuildingPanel {
         ? dev
           ? "0 — foundation, still building"
           : "Still being built"
-        : dev && building.raw.l === undefined
-          ? "1 (the save omits the level at 1)"
-          : String(building.level),
+        : foreign
+          ? "Hidden"
+          : dev && building.raw.l === undefined
+            ? "1 (the save omits the level at 1)"
+            : String(building.level),
     );
 
     if (dev) {
@@ -1550,14 +1557,15 @@ export class BuildingPanel {
       this.add("Building id", String(building.id));
     }
 
-    this.add(
-      "Fortification",
-      building.fortification === 0 ? "None" : `Level ${building.fortification}`,
-      building.fortification > 0 ? "is-info" : undefined,
-    );
-
-    this.addHealth(building);
-    this.addCountdown(building);
+    if (!foreign) {
+      this.add(
+        "Fortification",
+        building.fortification === 0 ? "None" : `Level ${building.fortification}`,
+        building.fortification > 0 ? "is-info" : undefined,
+      );
+      this.addHealth(building);
+      this.addCountdown(building);
+    }
     this.addProduction(building);
     if (dev) this.addArt(building);
   }

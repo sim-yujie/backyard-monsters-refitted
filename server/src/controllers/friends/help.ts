@@ -28,6 +28,8 @@ import { notMainYardErr, yardRaidInProgressErr, yardUnderAttackErr } from "../..
 import type { BuildingData } from "../../types/BuildingData.js";
 import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
 import { catchUpLockedRow } from "../yard/yardAction.js";
+import { isTrap } from "../../game-rules/combat/damagePercent.js";
+import { maskBuilding } from "../../services/base/viewMask.js";
 import type { FriendsBody } from "./friends.js";
 
 /**
@@ -135,7 +137,8 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
 
     const key = String(buildingId);
     const building = theirs.buildingdata?.[key];
-    if (!building) throw friendRefusedErr("nothingToHelp");
+    // A trap is never shown to a visitor (`viewMask.ts`), so it has no help to give.
+    if (!building || isTrap(Number(building.t))) throw friendRefusedErr("nothingToHelp");
 
     let secondsSaved = 0;
     if (kind === "speedup") {
@@ -170,7 +173,8 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       ...(kind === "speedup" ? { secondsSaved } : { healed: true as const }),
       reward,
       helpsLeft: helpsLeftOf(today + 1),
-      building: theirs.buildingdata![key]!,
+      // Sent back for the visit's panel: masked as the visit's load was (`viewMask.ts`).
+      building: maskBuilding(theirs.buildingdata![key]!, "main"),
       helperName: mySide.username,
     };
   });

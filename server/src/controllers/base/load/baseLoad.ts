@@ -297,7 +297,9 @@ export const baseLoad: KoaController = async (ctx) => {
     await invalidateSightIfFlingerChanged(user, flingerBefore, baseSave.flinger);
   }
 
-  const filteredSave = await mapSaveData(baseSave, user);
+  // An attack load is committed by now (`baseModeAttack`, `infernoModeAttack`):
+  // its attacker gets the whole yard; a view, a visit or a help gets it masked.
+  const filteredSave = await mapSaveData(baseSave, user, { attack: isAttack });
   const isTutorialEnabled = devConfig.skipTutorial ? 205 : filteredSave.tutorialstage;
 
   const flags = getFlags();
