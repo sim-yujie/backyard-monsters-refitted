@@ -1078,7 +1078,8 @@ rows are converted back down for `gettemplates`.
 `savetemplate` also rides along on `/base/load` and the `/base/save` reply, but only to the
 yard's owner: anyone else (view, help, attack, an Inferno attack's save) gets `[]`
 (`services/base/mapSaveData.ts`, `controllers/inferno/infernoSave.ts`), so a player's layouts and
-trap spots never reach another account.
+trap spots never reach another account. `firedtraps` (where traps stood when they fired, read only by
+the owner's planner to offer re-arming them) follows the same rule.
 
 A **layout** is `{ slot, name, version: 2, expansion, updatedAt, nodes }`. `expansion` is the
 `storedata.ENL.q` the layout was drawn for (0-6) and `updatedAt` is unix seconds. A **node** is

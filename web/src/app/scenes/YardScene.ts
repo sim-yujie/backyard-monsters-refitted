@@ -117,7 +117,7 @@ import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { FriendsBar } from "@/ui/friends/FriendsBar";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
-import { YardDock } from "@/ui/yard/YardDock";
+import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
 import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { askForWorker } from "@/ui/yard/WorkersBusyBox";
@@ -160,8 +160,8 @@ import { devDetails } from "../devDetails";
  *
  * A foreign yard is the same screen with the own-yard doors shut
  * (`docs/design/attack-flow.md` §F1, §4.1): the load is a `view`/`wmview`
- * rather than a `build`, the planner opens to look and not to change
- * (`plannerAccess` with `ownYard` false, the visit flow its comment names),
+ * rather than a `build`, there is no planner (`plannerAccess` with `ownYard`
+ * false: it gave away levels, ranges and traps, owner report 2026-10-22),
  * and the HUD shows no resources because the response's pool is the
  * defender's. The one thing it gains is an Attack button, offered only when
  * the map's gate passed, which issues the attack load while this yard stays
@@ -237,6 +237,47 @@ export const hudPoolFor = (
   const own = target.own;
   return own?.resources ? { resources: own.resources, credits: own.credits } : null;
 };
+
+/**
+ * Whether the planner opens over this yard: the player's own, loaded in build
+ * mode, always; any visit (a map view, a wild camp, a friend's yard) never,
+ * since the planner reads out levels, ranges and traps the yard itself keeps
+ * hidden (owner report 2026-10-22).
+ */
+export const plannerAccessFor = (target: ViewTarget | null): PlannerAccess =>
+  plannerAccess(
+    target ? (target.kind === "wild" ? BaseMode.WORLD_MAP_VIEW : BaseMode.VIEW) : BaseMode.BUILD,
+    target === null,
+  );
+
+/** What the dock's buttons do, one handler each; which of them a yard gets is {@link yardDockOptions}. */
+export interface YardDockActions {
+  readonly map: () => void;
+  readonly home: () => void;
+  readonly layout: () => void;
+  readonly build: () => void;
+  readonly yardSelect: (next: OwnYardTarget) => void;
+  readonly kits: () => void;
+  readonly attack: () => void;
+}
+
+/**
+ * The dock's buttons for this yard. Layout, Build, the switcher and Kits are
+ * the own yard's; a visit gets Home, and Attack only when the map's gate
+ * passed. No planner on a visit: see {@link plannerAccessFor}.
+ */
+export const yardDockOptions = (target: ViewTarget | null, actions: YardDockActions): YardDockOptions => ({
+  onMap: actions.map,
+  ...(target
+    ? { onHome: actions.home }
+    : {
+        onLayout: actions.layout,
+        onBuild: actions.build,
+        onYardSelect: actions.yardSelect,
+        onKits: actions.kits,
+      }),
+  ...(target?.attack ? { onAttack: actions.attack } : {}),
+});
 
 /** How often the open panel's countdowns are refreshed. */
 const UI_TICK_SECONDS = 1;
@@ -485,8 +526,8 @@ export class YardScene implements Scene {
     this.status.textContent = `Loading ${whose}…`;
 
     /*
-     * Layout is the way into the planner (P does the same, and the Q5 access
-     * rule is unchanged); Build (§5.3) is the own yard's only and is disabled
+     * Layout is the way into the planner (P does the same), and like Build
+     * (§5.3) is the own yard's only, left out of a visit; Build is disabled
      * until the yard's store is up, because every tile reads it. A visit's way
      * into the attack (§4.1) is left out entirely, not disabled, when the
      * map's gate refused — the yard says why once it opens (#153) — and is disabled
@@ -494,18 +535,17 @@ export class YardScene implements Scene {
      * failed to open.
      */
     const target = this.target;
-    this.dock = new YardDock({
-      onMap: () => this.openMap(),
-      onLayout: () => this.togglePlanner(),
-      ...(target
-        ? { onHome: () => context.goTo(SceneName.YARD) }
-        : {
-            onBuild: () => this.toggleBuildMenu(),
-            onYardSelect: (next: OwnYardTarget) => this.openOwnYard(next),
-            onKits: () => this.openKits(),
-          }),
-      ...(target?.attack ? { onAttack: () => void this.startAttack() } : {}),
-    }).mount(context.overlay.content);
+    this.dock = new YardDock(
+      yardDockOptions(target, {
+        map: () => this.openMap(),
+        home: () => context.goTo(SceneName.YARD),
+        layout: () => this.togglePlanner(),
+        build: () => this.toggleBuildMenu(),
+        yardSelect: (next) => this.openOwnYard(next),
+        kits: () => this.openKits(),
+        attack: () => void this.startAttack(),
+      }),
+    ).mount(context.overlay.content);
     this.dock.setLayout({
       disabled: true,
       open: false,
@@ -779,14 +819,8 @@ export class YardScene implements Scene {
       const chat = target ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
       if (chat) worldChat.configure(chat);
 
-      // Q5's entry rule. The player's own main yard arrives in build mode and
-      // is editable; a visit arrives in view mode and opens the planner, if
-      // the yard holds one, to look at and never to change.
-      this.access = plannerAccess(
-        yard,
-        target ? (target.kind === "wild" ? BaseMode.WORLD_MAP_VIEW : BaseMode.VIEW) : BaseMode.BUILD,
-        target === null,
-      );
+      // The planner's entry rule: the own yard's, never a visit's.
+      this.access = plannerAccessFor(target);
       this.refreshPlannerButton();
 
       // Bars over running jobs are the own yard's alone (#139), on the
@@ -1282,16 +1316,12 @@ export class YardScene implements Scene {
           guideBus.emit("panel", { building: null });
         },
         // Clicking the Yard Planner should open the yard planner. The offer is
-        // left out entirely when there is none to open, which is also the only
-        // state in which that building cannot be on screen.
+        // left out entirely where there is none to open: someone else's yard.
         ...(this.access === PlannerAccess.LOCKED
           ? {}
           : {
               planner: {
-                label:
-                  this.access === PlannerAccess.READ_ONLY
-                    ? "View layout planner"
-                    : "Open layout planner",
+                label: "Open layout planner",
                 title: plannerEntryTooltip(this.access),
                 open: () => this.togglePlanner(),
               },
@@ -1830,9 +1860,9 @@ export class YardScene implements Scene {
       return;
     }
 
-    // No Yard Planner in this yard, so there is no planner to open. Checked
-    // here as well as on the button because the P key does not go through it.
-    if (this.access === PlannerAccess.LOCKED) return;
+    // Not the player's own yard, so there is no planner to open. Checked here
+    // as well as on the button because the P key does not go through it.
+    if (this.access === PlannerAccess.LOCKED || this.target) return;
 
     const yard = this.plannerYard();
     const camera = this.camera;
@@ -1865,7 +1895,6 @@ export class YardScene implements Scene {
       overlay: context.overlay.content,
       notices: this.notices,
       readOnlyToolbar: hud.element,
-      readOnly: this.access === PlannerAccess.READ_ONLY,
       // Blueprint needs a Yard Planner in this yard, and never in an outpost.
       blueprintBlocked: blueprintBlock(yard),
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
@@ -1928,7 +1957,7 @@ export class YardScene implements Scene {
     this.dock?.setLayout({
       disabled: this.access === PlannerAccess.LOCKED,
       open,
-      label: open ? "Close layout" : this.access === PlannerAccess.READ_ONLY ? "View layout" : "Layout",
+      label: open ? "Close layout" : "Layout",
       title: open ? "Leave the layout planner (P)" : plannerEntryTooltip(this.access),
     });
     // Outside the planner the zoom is the rail on the right edge (#171); the

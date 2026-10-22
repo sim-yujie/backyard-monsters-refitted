@@ -657,7 +657,8 @@ const saveBase = async (
     });
   }
 
-  const filteredSave = buildSaveData(baseSave, user, outpostOwnerSave);
+  // An attack save has passed its binding check: the attacker keeps the whole yard.
+  const filteredSave = buildSaveData(baseSave, user, outpostOwnerSave, { attack: isAttack });
   logger.info(`Saving ${user.username}'s base | IP: ${ctx.ip}`);
 
   const responseBody = {

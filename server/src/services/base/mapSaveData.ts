@@ -4,8 +4,19 @@ import { User } from "../../database/models/user.model.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { isShinyLocked, visibleCredits } from "../user/shinyLock.js";
+import { maskYardForViewer, masksFor } from "./viewMask.js";
 
 type OwnerSave = Pick<Save, "resources">;
+
+export interface SaveDataOptions {
+  /**
+   * The yard is served to its attacker once the attack is committed
+   * (`baseModeAttack`, or an attack save past its binding check): the battle
+   * runs in their game and needs every trap and level. Anyone else who is not
+   * the owner gets the masked yard (`viewMask.ts`).
+   */
+  readonly attack?: boolean;
+}
 
 /**
  * State that belongs to the player rather than to any one of their yards. Served from
@@ -36,12 +47,13 @@ const mapOwnerState = (user: User, userSave: Save) => ({
  *
  * @param {Save} save - The save being sent
  * @param {User} user - The requesting user, who may or may not own it
+ * @param {SaveDataOptions} options - Whether this is a committed attack's load
  * @returns {Promise<Partial<Save>>} The frontend-visible fields
  */
-export const mapSaveData = async (save: Save, user: User): Promise<Partial<Save>> => {
+export const mapSaveData = async (save: Save, user: User, options: SaveDataOptions = {}): Promise<Partial<Save>> => {
   const ownerSave = await getOutpostOwnerSave(save, user);
 
-  return buildSaveData(save, user, ownerSave);
+  return buildSaveData(save, user, ownerSave, options);
 };
 
 /**
@@ -59,9 +71,15 @@ export const mapSaveData = async (save: Save, user: User): Promise<Partial<Save>
  * @param {Save} save - The save being sent
  * @param {User} user - The requesting user, who may or may not own it
  * @param {OwnerSave | null} ownerSave - The owner's main save when `save` is an outpost, null otherwise
+ * @param {SaveDataOptions} options - Whether this is a committed attack's load
  * @returns {Partial<Save>} The frontend-visible fields
  */
-export const buildSaveData = (save: Save, user: User, ownerSave: OwnerSave | null): Partial<Save> => {
+export const buildSaveData = (
+  save: Save,
+  user: User,
+  ownerSave: OwnerSave | null,
+  options: SaveDataOptions = {}
+): Partial<Save> => {
   const filteredSave = FilterFrontendKeys(save);
 
   const isOwner = save.type !== BaseType.INFERNO && save.userid === user.userid;
@@ -76,8 +94,19 @@ export const buildSaveData = (save: Save, user: User, ownerSave: OwnerSave | nul
   if (!isOwner) filteredSave.aiattacks = {};
 
   // The Yard Planner's saved layouts, trap spots included, are the account's
-  // own: anyone viewing, helping or attacking the yard gets none.
-  if (save.userid !== user.userid) filteredSave.savetemplate = [];
+  // own: anyone viewing, helping or attacking the yard gets none. So is the
+  // list of traps that fired, which only the owner's planner reads (to offer
+  // putting them back) and which says where traps stood.
+  // Nor is the owner's Shiny count anyone else's business.
+  if (save.userid !== user.userid) {
+    filteredSave.savetemplate = [];
+    filteredSave.firedtraps = [];
+    filteredSave.credits = 0;
+  }
+
+  // Someone only looking at a player's yard gets no traps and no levels
+  // (owner report 2026-10-22, `viewMask.ts`); its committed attacker gets all.
+  if (!options.attack && masksFor(save, user.userid)) maskYardForViewer(filteredSave, save);
 
   const shinyLocked = isShinyLocked(user);
   

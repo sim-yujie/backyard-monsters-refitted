@@ -65,3 +65,26 @@ describe("buildSaveData savetemplate", () => {
     }
   });
 });
+
+/**
+ * Who sees where a yard's traps fired (`firedtraps`): only its owner, whose
+ * planner offers to put them back. Anyone else would learn where traps stood.
+ */
+describe("buildSaveData firedtraps", () => {
+  const FIRED = [{ t: 24, X: -85, Y: 210, at: 1_700_000_000 }];
+
+  const firedYard = (type: BaseType) => Object.assign(yardOf(type), { firedtraps: FIRED });
+
+  test("the owner gets their own fired traps", () => {
+    const yard = firedYard(BaseType.MAIN);
+    expect(buildSaveData(yard, userOf(OWNER, yard), null).firedtraps).toEqual(FIRED);
+  });
+
+  test("anyone else gets none, on a main yard and an outpost alike", () => {
+    for (const type of [BaseType.MAIN, BaseType.OUTPOST]) {
+      const yard = firedYard(type);
+      expect(buildSaveData(yard, userOf(VIEWER, new Save()), null).firedtraps).toEqual([]);
+      expect(yard.firedtraps).toEqual(FIRED);
+    }
+  });
+});
