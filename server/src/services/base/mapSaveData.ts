@@ -76,8 +76,13 @@ export const buildSaveData = (save: Save, user: User, ownerSave: OwnerSave | nul
   if (!isOwner) filteredSave.aiattacks = {};
 
   // The Yard Planner's saved layouts, trap spots included, are the account's
-  // own: anyone viewing, helping or attacking the yard gets none.
-  if (save.userid !== user.userid) filteredSave.savetemplate = [];
+  // own: anyone viewing, helping or attacking the yard gets none. So is the
+  // list of traps that fired, which only the owner's planner reads (to offer
+  // putting them back) and which says where traps stood.
+  if (save.userid !== user.userid) {
+    filteredSave.savetemplate = [];
+    filteredSave.firedtraps = [];
+  }
 
   const shinyLocked = isShinyLocked(user);
   

@@ -3,7 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import type { ViewTarget } from "@/game/attack/attackTarget";
 import { MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
-import { hudPoolFor, loadYardFor, refusalNotice, storageText } from "./YardScene";
+import { PlannerAccess } from "@/game/yard/planner/access";
+import { dockButtonsFor } from "@/ui/yard/YardDock";
+import {
+  hudPoolFor,
+  loadYardFor,
+  plannerAccessFor,
+  refusalNotice,
+  storageText,
+  yardDockOptions,
+  type YardDockActions,
+} from "./YardScene";
 
 const response = { error: 0, id: 1, baseid: "1000", basesaveid: 1 } as BaseLoadResponse;
 
@@ -114,5 +124,49 @@ describe("storageText (#128)", () => {
     expect(storageText({ stored: [5, 6], placed: [9] })).toBe(
       "2 decorations put in storage. 1 decoration placed from storage.",
     );
+  });
+});
+
+/**
+ * Owner report 2026-10-22: the planner, opened over someone else's yard, read
+ * out every building's level, tower ranges, storage room and the traps by kind
+ * and count. It is the own yard's only, with no way in from a visit.
+ */
+describe("the planner on a visit (2026-10-22)", () => {
+  const VISITS: ViewTarget[] = [
+    visit("main"),
+    visit("outpost"),
+    visit("wild"),
+    { baseid: "", kind: "friend", friend: 77, name: "Bob", attack: null, refusal: null },
+    { baseid: "11", kind: "wild", name: "Kozu Tribe", attack: null, refusal: null, mapversion: 1 },
+  ];
+
+  const actions = (): YardDockActions => ({
+    map: vi.fn(),
+    home: vi.fn(),
+    layout: vi.fn(),
+    build: vi.fn(),
+    yardSelect: vi.fn(),
+    kits: vi.fn(),
+    attack: vi.fn(),
+  });
+
+  it("opens on the player's own yard", () => {
+    expect(plannerAccessFor(null)).toBe(PlannerAccess.EDIT);
+    expect(dockButtonsFor(yardDockOptions(null, actions()), null).layout).toBe(true);
+  });
+
+  it("never opens on someone else's yard, of any kind", () => {
+    for (const target of VISITS) {
+      expect(plannerAccessFor(target)).toBe(PlannerAccess.LOCKED);
+      expect(yardDockOptions(target, actions()).onLayout).toBeUndefined();
+      expect(dockButtonsFor(yardDockOptions(target, actions()), null).layout).toBe(false);
+    }
+  });
+
+  it("leaves a visit its way home and, where the gate passed, its attack", () => {
+    const attack = { baseid: "21970243208", kind: "wild" } as unknown as NonNullable<ViewTarget["attack"]>;
+    const options = yardDockOptions({ ...visit("wild"), attack, refusal: null }, actions());
+    expect(dockButtonsFor(options, null)).toMatchObject({ home: true, attack: true, build: false, layout: false });
   });
 });

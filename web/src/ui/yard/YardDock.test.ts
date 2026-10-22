@@ -70,8 +70,9 @@ const fakeBinding = (
 const OUTPOST = outpostTarget("2000242209", { col: 242, row: 209 });
 
 describe("dockButtonsFor", () => {
-  const own: Pick<YardDockOptions, "onBuild" | "onYardSelect"> = {
+  const own: Pick<YardDockOptions, "onBuild" | "onLayout" | "onYardSelect"> = {
     onBuild: () => {},
+    onLayout: () => {},
     onYardSelect: () => {},
   };
 
@@ -79,6 +80,7 @@ describe("dockButtonsFor", () => {
     const { binding } = fakeBinding(MAIN_YARD, vi.fn());
     expect(dockButtonsFor(own, binding)).toEqual({
       build: true,
+      layout: true,
       collect: true,
       kits: false,
       monsters: true,
@@ -101,6 +103,7 @@ describe("dockButtonsFor", () => {
   it("shows only the ways out and the attack on a visit", () => {
     expect(dockButtonsFor({ onHome: () => {}, onAttack: () => {} }, null)).toEqual({
       build: false,
+      layout: false,
       collect: false,
       kits: false,
       monsters: false,
@@ -217,11 +220,16 @@ describe("YardDock", () => {
     expect(dock.shown.collect).toBe(false);
   });
 
-  it("offers Home and Attack on a visit, and no Build", () => {
+  it("offers Home and Attack on a visit, and no Build or Layout", () => {
     const onHome = vi.fn();
     const onAttack = vi.fn();
-    dock = new YardDock({ onMap: vi.fn(), onLayout: vi.fn(), onHome, onAttack }).mount(document.body);
+    dock = new YardDock({ onMap: vi.fn(), onHome, onAttack }).mount(document.body);
     expect(button("build")).toBeNull();
+    // No planner in someone else's yard (owner report 2026-10-22), and
+    // setting its state is a no-op rather than an error.
+    expect(button("layout")).toBeNull();
+    dock.setLayout({ disabled: false, open: false, label: "Layout", title: "Open the Yard Planner (P)" });
+    expect(button("layout")).toBeNull();
     expect(dock.element.querySelector(".yard-switcher")).toBeNull();
     button("home").click();
     expect(onHome).toHaveBeenCalledOnce();
