@@ -88,7 +88,7 @@ const flungChampions = (run: DefenceWatch, events: readonly FlingEvent[]): Champ
   const seen = new Set<number>();
   for (const event of events) {
     if (event.kind !== "fling" || !event.champion || seen.has(event.champion.t)) continue;
-    const { t, l, pl } = event.champion;
+    const { t, l, pl, fb } = event.champion;
     seen.add(t);
     const entry = stored.find(
       (one): one is Record<string, unknown> =>
@@ -101,7 +101,7 @@ const flungChampions = (run: DefenceWatch, events: readonly FlingEvent[]): Champ
       hp: typeof entry?.hp === "number" ? entry.hp : 0,
       ft: typeof entry?.ft === "number" ? entry.ft : 0,
       fd: typeof entry?.fd === "number" ? entry.fd : 0,
-      fb: typeof entry?.fb === "number" ? entry.fb : 0,
+      fb: typeof entry?.fb === "number" ? entry.fb : (fb ?? 0),
       pl: typeof entry?.pl === "number" ? entry.pl : (pl ?? 0),
       status: 0,
     });

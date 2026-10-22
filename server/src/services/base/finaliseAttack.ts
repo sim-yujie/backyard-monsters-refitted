@@ -33,6 +33,7 @@ import { bombSpendOf, catapultLevelOf, chargeBombSpend } from "./combat/bombSpen
 import { combatCellHeight } from "./combat/cellHeight.js";
 import { garrisonsAfterBattle } from "./combat/bunkerGarrison.js";
 import { championsAfterDefence } from "./combat/defenderChampion.js";
+import { healChampions } from "../yard/catchUpChampions.js";
 import { championsAfterLessons } from "./combat/championBrain.js";
 import { landHousingLoss, lostCount, reportWithHousingLoss } from "./combat/housingLoss.js";
 import { getHousingOwner, getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
@@ -296,6 +297,8 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // fought with holds what it left it, as the save's own would (issues #130,
   // #195, `bunkerGarrison.ts`); the caged champion keeps what health it has.
   defender.buildingdata = garrisonsAfterBattle(defender.buildingdata, outcome);
+  // Healed up to now before `savetime` moves there, as `baseSave.ts` does.
+  healChampions(defender, Number(defender.savetime), now);
   defender.champion = championsAfterDefence(defender.champion, outcome.defenderChampions) ?? defender.champion;
   defender.buildinghealthdata = outcome.buildinghealthdata;
   // Whole and cut down, as the attack's own save stores it (#72).

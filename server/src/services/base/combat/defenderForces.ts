@@ -3,6 +3,7 @@ import { Save } from "../../../database/models/save.model.js";
 import { defenderForcesOf, withAttackerBuffs, type DefenderForces } from "../../../game-rules/combat/index.js";
 import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
+import { championsHealedTo } from "../../yard/catchUpChampions.js";
 
 /**
  * The defence an attack load serves (issue #195): the target row's bunker
@@ -16,6 +17,10 @@ import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
  * main yard's (`GLOBAL.as:816-822`). Only the shop writes those, so nothing
  * the client says can turn one on.
  *
+ * The caged champion defends at the health it has healed to by `now`, not
+ * the health stored at the owner's last visit: it heals in its cage while
+ * the owner is away (`championsHealedTo`).
+ *
  * @param save - The row being attacked.
  * @param attacker - The attacker's main yard, whose monster boosts they bring.
  * @param now - The attack's start, unix seconds.
@@ -28,7 +33,7 @@ export const servedDefenderForces = async (
   const forces = defenderForcesOf({
     buildingdata: save.buildingdata,
     academy: await defendingAcademy(save),
-    champion: save.champion,
+    champion: championsHealedTo(save.champion, Number(save.savetime), now),
     storedata: save.storedata,
     now,
   });

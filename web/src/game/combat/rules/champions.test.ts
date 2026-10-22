@@ -8,7 +8,7 @@ import {
   linearAreaDamage,
 } from "./champions.js";
 import { createBattle, type BattleVisualEvent, type CreepSnapshot } from "./engine.js";
-import { championStatWithPower } from "./stats.js";
+import { championStatWithFood } from "./stats.js";
 import { findChampionTarget } from "./targeting.js";
 import { buildEngineYard } from "./yard.js";
 import type { CombatBuildingDataMap, Roster } from "./types.js";
@@ -133,11 +133,11 @@ describe("Korath (issue #222)", () => {
   it("fireballs a flyer for a quarter of his damage from power level 2 at level 4, and it burns", () => {
     const battle = createBattle(cageYard(), {
       seed: 5,
-      defenderChampions: [{ t: 4, l: 4, hp: 200_000, pl: 2 }],
+      defenderChampions: [{ t: 4, l: 4, hp: 200_000, pl: 2, fb: 2 }],
     });
     fling(battle, 140, { C14: 3 });
     const { hits, hurts } = korathHits(battle, 1200);
-    const damage = championStatWithPower("G4", "damage", 4, 2);
+    const damage = championStatWithFood("G4", "damage", 4, 2);
     expect(hits.length).toBeGreaterThan(0);
     for (const hit of hits) expect(hit.amount).toBeLessThanOrEqual(Math.trunc(damage / 4));
     expect(hits[0]?.amount).toBe(Math.trunc(damage / 4));
@@ -167,7 +167,7 @@ describe("Korath (issue #222)", () => {
     });
     fling(battle, 140, { C6: 30 });
     const { hits, quakes } = korathHits(battle, 1500);
-    const range = championStatWithPower("G4", "range", 5, 3);
+    const range = championStatWithFood("G4", "range", 5, 3);
     expect(quakes.length).toBeGreaterThan(0);
     expect(quakes[0]!.radius).toBe(range * 2.5);
     // Three blows, then the stand: nothing lands until the quake, 48 frames in.

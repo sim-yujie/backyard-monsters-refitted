@@ -81,6 +81,7 @@ import {
   type HousingLoss,
 } from "../../../services/base/combat/housingLoss.js";
 import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
+import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { countAttackLoot } from "../../../services/events/lootEvents.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
@@ -313,6 +314,12 @@ const saveBase = async (
   const storedHealthData = baseSave.buildinghealthdata;
   // The yard's damage before this attack, for its defence replay (#359).
   const damageBefore = baseSave.damage ?? 0;
+
+  // `savetime` moves to now below, so the caged champions heal up to now
+  // first, before the battle's health lands on them: the defence fought at
+  // that healed health (`servedDefenderForces`), and healing skipped here
+  // would be lost for good.
+  healChampions(baseSave, Number(baseSave.savetime), now);
 
   // Standard save logic
   for (const key of isAttack ? Save.attackSaveKeys : Save.saveKeys) {

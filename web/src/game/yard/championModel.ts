@@ -248,6 +248,28 @@ const rankGain = (entry: ChampionEntry, level: number, rank: number): ChampionSt
   };
 };
 
+/**
+ * The yard with every champion in the cage at the health it has healed to by
+ * `now` ({@link predictedHealth}), as the cage panel shows it: the save holds
+ * the health at the last catch-up. What a practice attack on the own yard
+ * defends with, so the champion comes out with the health the panel shows.
+ * The same save when nothing healed.
+ */
+export const withChampionsHealed = (save: BaseLoadResponse, now: number): BaseLoadResponse => {
+  if (!Array.isArray(save.champion)) return save;
+  const savetime = numberOf(save.savetime) || now;
+  let changed = false;
+  const champion = save.champion.map((entry) => {
+    const catalogue = entryOfChampion(entry);
+    if (!catalogue || statusOf(entry) !== 0) return entry;
+    const hp = predictedHealth(entry, catalogue, savetime, now);
+    if (hp === numberOf(entry.hp)) return entry;
+    changed = true;
+    return { ...entry, hp };
+  });
+  return changed ? { ...save, champion } : save;
+};
+
 /** The view of a champion in the cage at `now`. */
 export const championView = (
   save: BaseLoadResponse,

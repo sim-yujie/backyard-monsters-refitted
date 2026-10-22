@@ -93,16 +93,17 @@ const defenderOf = (one: Fixture): LootDefender =>
 
 /**
  * The attacker who fought the fixture: its academy, a Krallen and a Gorgo at
- * the power levels the fixtures fling them at (issue #202), a level 5 catapult.
+ * the power levels and food bonuses the fixtures fling them at (issue #202), a
+ * level 5 catapult.
  */
 const attackerOf = (one: Fixture): LootAttacker => ({
   academy: Object.fromEntries(Object.entries(one.levels).map(([id, level]) => [id, { level }])),
   // Korath and Fomor at the power level the champion-ability fixtures fling them at (issue #222).
   champion: [
     { t: 5, l: 5, pl: 2 },
-    { t: 1, l: 4, pl: 3 },
-    { t: 4, l: 6, pl: 3 },
-    { t: 3, l: 6, pl: 3 },
+    { t: 1, l: 4, pl: 3, fb: 3 },
+    { t: 4, l: 6, pl: 3, fb: 3 },
+    { t: 3, l: 6, pl: 3, fb: 2 },
   ],
   catapult: 5,
   buildingdata: {},
@@ -559,6 +560,23 @@ describe("fightableLog", () => {
     expect(
       fightableLog({ v: 1, seed: 7, events: [withPower(3)] }, attacker, {}).events[0] as FlingEvent
     ).toEqual(withPower(0));
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a champion fights at no more than its stored food bonus; a log without one, with none", () => {
+    const fed: LootAttacker = { ...attacker, champion: [{ t: 1, l: 6, pl: 1, fb: 2 }] };
+    const withFood = (fb?: number): FlingEvent =>
+      ({ ...fling(10, {}), champion: { t: 1, l: 6, ...(fb !== undefined && { fb }) } }) as FlingEvent;
+    const fought = (fb?: number) =>
+      fightableLog({ v: 1, seed: 7, events: [withFood(fb)] }, fed, {}).events[0] as FlingEvent;
+
+    expect(fought(2)).toEqual(withFood(2));
+    expect(fought(3)).toEqual(withFood(2));
+    expect(fought(-1)).toEqual(withFood(0));
+    expect(fought(undefined)).toEqual(withFood(undefined));
+    // A stored champion with no `fb` has none to give.
+    expect(
+      fightableLog({ v: 1, seed: 7, events: [withFood(3)] }, attacker, {}).events[0] as FlingEvent
+    ).toEqual(withFood(0));
   }, REPLAY_TIMEOUT_MS);
 
   test("a champion keeps the Mode it was flung in; a log without one keeps none (#220)", () => {

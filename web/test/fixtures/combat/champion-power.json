@@ -1,6 +1,6 @@
 {
   "name": "champion-power",
-  "description": "A level 4 Gorgo at power level 3 with sixty Pokeys: the champion's bonus ladders add health, damage and speed to its level's (issue #202).",
+  "description": "A level 4 Gorgo at power level 3 and food bonus 3 with sixty Pokeys: the food bonus's ladders add health, damage and speed to its level's (`ChampionBase.as:123-155`).",
   "yard": "sandbox",
   "without": [
     52,
@@ -37,7 +37,8 @@
         "champion": {
           "t": 1,
           "l": 4,
-          "pl": 3
+          "pl": 3,
+          "fb": 3
         }
       }
     ]
