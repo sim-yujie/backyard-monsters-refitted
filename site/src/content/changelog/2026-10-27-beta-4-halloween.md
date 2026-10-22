@@ -32,7 +32,7 @@ date: 2026-10-27
 - On Map Room 2 on phones, Mail, My range and a new Filter button sit beside "Find a place".
 - Map Room 1: online players show a green dot beside their name, and battles show as a shield (they attacked you) and a sword (you attacked them) with a count.
 - Map Room 1 remembers how you sorted the list, and a new button flips it between highest and lowest first.
-- **Achievement badges.** Every achievement now has its own painted medal, with a bronze, silver or gold rim to match its reward. Badges you have not earned yet stay grey.
+- **Achievement badges.** Achievements now show painted medals, with a bronze, silver or gold rim to match their reward. Badges you have not earned yet stay grey.
 - **Special moves tuned.** Fang's venom bites once a second again. Bandito's whirlwind spins through enemy monsters (it never hurts buildings). When no building is near, Teratorn's fireball bounces on to a wall. Bolts defending from your bunkers can blink too.
 - A new [Thank-you page](/support/thanks/) on this website for everyone who supports the game.
 
