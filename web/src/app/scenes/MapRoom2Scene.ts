@@ -331,7 +331,7 @@ export class MapRoom2Scene implements Scene {
         ownFlinger: (_cell, payload) => {
           const own = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
           const reach = withDeclareWar(own, this.declareWar);
-          return { level: payload.f, reach, bonus: reach - own };
+          return { level: payload.f ?? 0, reach, bonus: reach - own };
         },
         ownMoves: (_cell, payload) => ({
           // Flash offered the transfer only to a player with an outpost

@@ -199,7 +199,7 @@ export const rosterInRange = (
   for (const own of ownCells) {
     const reach = cellReach(own.cell, declareWar);
     if (reach === 0 || cellDistance(own, target) > reach) continue;
-    flingerLevel = Math.max(flingerLevel, own.cell.f);
+    flingerLevel = Math.max(flingerLevel, own.cell.f ?? 0);
 
     const m = own.cell.m;
     if (typeof m !== "object" || m === null) continue;
