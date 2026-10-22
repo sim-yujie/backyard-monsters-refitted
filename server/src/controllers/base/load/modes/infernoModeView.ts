@@ -3,9 +3,12 @@ import { InfernoMaproom, type TribeData } from "../../../../database/models/infe
 import { Save } from "../../../../database/models/save.model.js";
 import { User } from "../../../../database/models/user.model.js";
 import { postgres } from "../../../../server.js";
+import { BaseType } from "../../../../enums/Base.js";
 
 export const infernoModeView = async (user: User, baseid: string) => {
-  const save = await postgres.em.findOne(Save, { baseid });
+  // An Inferno view opens Inferno yards only: any base id used to load here,
+  // a Map Room 2 yard outside the player's sight among them.
+  const save = await postgres.em.findOne(Save, { baseid, type: { $in: [BaseType.INFERNO, BaseType.INFERNO_TRIBE] } });
 
   if (save) return save;
 
