@@ -848,10 +848,13 @@ export interface PlayerCell {
   l: number;
   /** Empire value. */
   v: number;
-  /** Flinger level 0..4. */
-  f: number;
-  /** Catapult level 0..3. */
-  c: number;
+  /**
+   * Flinger level 0..4, on the player's own cells only: the server leaves it
+   * out of anyone else's (owner decision 2026-10-22).
+   */
+  f?: number;
+  /** Catapult level 0..3, on the player's own cells only, like `f`. */
+  c?: number;
   /** Effective damage percent; reported as 0 once protection lapses. */
   dm: number;
   /** 1 when damage >= 90, i.e. takeover-eligible. */
