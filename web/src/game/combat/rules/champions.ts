@@ -176,22 +176,42 @@ export const FOMOR_DRIFT = 1.25;
 
 /* ── Krallen (G5) ─────────────────────────────────────────────────────────── */
 
-/** `ProximityLootBuff` is her third ability, live from power level 2 (`CHAMPIONCAGE.as:265`). */
-export const hasLootAura = (id: string, power: number): boolean =>
-  id === KRALLEN_ID && power >= KRALLEN_MAX_POWER_LEVEL;
+/**
+ * Her loot aura is on from her level 3 (owner, 2026-10-23). Flash gave
+ * `ProximityLootBuff`, her third ability, to a powered-up Krallen at any
+ * level instead (power level 2, `CHAMPIONCAGE.as:265`); the Krallen Hunt
+ * raises her level, never her power level.
+ */
+export const KRALLEN_AURA_LEVEL = 3;
 
 /**
- * Krallen's `_buff` is her `buffs` rung alone (`Krallen.as:33`); her
- * `bonusBuffs` ladder is `[0]`, so `updateBuffs` adds nothing to it.
+ * Whether a champion carries the loot aura: an attacking Krallen from
+ * {@link KRALLEN_AURA_LEVEL}. A Krallen defending from her cage never
+ * lifts the loot of the monsters attacking her yard.
  */
-export const krallenBuff = (level: number): number => championStat(KRALLEN_ID, "buffs", level);
+export const hasLootAura = (id: string, level: number, friendly: boolean): boolean =>
+  id === KRALLEN_ID && !friendly && Math.floor(level) >= KRALLEN_AURA_LEVEL;
 
 /** The aura's radius: her `buffRadius` rung, on screen (`ProximityLootBuff.as:24`). */
 export const krallenAuraRadius = (level: number): number =>
   championStat(KRALLEN_ID, "buffRadius", level);
 
-/** What the aura adds to a looting property: `1 + _buff` (`ProximityLootBuff.as:47`). */
-export const lootAuraBonus = (buff: number): number => 1 + buff;
+/**
+ * What the aura adds to a looting property at her levels 3, 4 and 5 (owner,
+ * 2026-10-23), added as `LootingMultiplier` adds (`LootingMultiplier.as:46-53`).
+ * Level 5 is Flash's own `1 + _buff` at her top `buffs` rung, 0.3
+ * (`ProximityLootBuff.as:51`): an ordinary monster's 0.5 becomes 1.8, 3.6
+ * times, and a looter's 2 becomes 3.3. Each level below it adds 0.4 less:
+ * 0.9 at level 4 (1.4, 2.8 times) and 0.5 at level 3 (1.0, twice).
+ */
+export const LOOT_AURA_BONUS: readonly number[] = [0.5, 0.9, 1.3];
+
+/** What the aura adds to a looting property at her `level`, 0 below {@link KRALLEN_AURA_LEVEL}. */
+export const lootAuraBonus = (level: number): number => {
+  const rung = Math.floor(level) - KRALLEN_AURA_LEVEL;
+  if (!(rung >= 0)) return 0;
+  return LOOT_AURA_BONUS[Math.min(rung, LOOT_AURA_BONUS.length - 1)] ?? 0;
+};
 
 /** The aura looks around every 50 of her frames (`ProximityLootBuff.as:42`). */
 export const LOOT_AURA_FRAMES = 50;

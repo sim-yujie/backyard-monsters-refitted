@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { eventsAnswer, WhatsNewSeenSchema } from "../../controllers/events/eventsState.js";
 import type { User } from "../../database/models/user.model.js";
-import { EVENTS, KRALLEN_HUNT_GOAL, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
+import { EVENTS, KRALLEN_HUNT_GOALS, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
 import { eventView } from "./eventViews.js";
 import { memoryProgressStore, NO_PROGRESS } from "./progressStore.js";
 import { visibleEvents } from "./schedule.js";
@@ -76,9 +76,26 @@ describe("the Krallen Hunt's view", () => {
     const view = eventView(scheduled, { ...NO_PROGRESS, counter: 12 }, huntWindow.startsAt, player(6, true, 3));
     expect(view.krallen).toEqual({ level: 3, maxLevel: 5 });
     expect(view.claimUntil).toBe(huntWindow.endsAt + 7 * DAY);
-    expect(view.ladder).toMatchObject({ counter: 12, tiers: [{ need: KRALLEN_HUNT_GOAL, claimed: false }] });
+    expect(view.ladder).toMatchObject({ counter: 12, tiers: [{ need: KRALLEN_HUNT_GOALS[3], claimed: false }] });
     expect(eventView({ event: EVENT, window, status: "active" }, NO_PROGRESS, START).krallen).toBeNull();
     expect(eventView({ event: EVENT, window, status: "active" }, NO_PROGRESS, START).claimUntil).toBeNull();
+  });
+
+  test("shows each player their own goal, in the bar and in the words", () => {
+    const goalOf = (level: number) => eventView(scheduled, NO_PROGRESS, huntWindow.startsAt, player(6, true, level));
+    expect([0, 1, 2, 3, 4, 5].map((level) => goalOf(level).ladder!.tiers[0]!.need)).toEqual([
+      60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000, 300_000_000,
+    ]);
+    expect(goalOf(0).text).toStartWith("Take 60 million loot in attacks");
+    expect(goalOf(3).text).toStartWith("Take 225 million loot in attacks");
+    expect(goalOf(3).text).not.toContain("{goal}");
+  });
+
+  test("a goal claimed this month keeps the goal it was claimed at, though she is a level higher now", () => {
+    const claimed = { ...NO_PROGRESS, counter: 160_000_000, claimedTiers: [0] };
+    const view = eventView(scheduled, claimed, huntWindow.startsAt, player(6, true, 3));
+    expect(view.ladder!.tiers[0]).toMatchObject({ need: 150_000_000, claimed: true });
+    expect(view.text).toStartWith("Take 150 million loot");
   });
 });
 
@@ -93,22 +110,24 @@ describe("GET /bm/events after a hunt ends", () => {
   const user = { userid: 4, save: { buildingdata: { "0": { id: 0, t: 14, l: 6 } }, tutorialstage: 205, champion: [] } } as unknown as User;
   const DEC_3 = Date.UTC(2026, 11, 3) / 1000;
   const DEC_9 = Date.UTC(2026, 11, 9) / 1000;
+  /** The goal for a player with no Krallen yet. */
+  const WIN = KRALLEN_HUNT_GOALS[0]!;
   const ids = async (store: ReturnType<typeof memoryProgressStore>, now: number) =>
     (await eventsAnswer(em, store, user, now)).events.map((view) => `${view.id}:${view.status}`);
 
   test("shown as ended only with the goal reached and not claimed, and only within the 7 days", async () => {
     const store = memoryProgressStore();
     expect(await ids(store, DEC_3)).not.toContain("krallen-2026-11:ended");
-    await store.addToCounter(em, 4, "krallen-2026-11", KRALLEN_HUNT_GOAL);
+    await store.addToCounter(em, 4, "krallen-2026-11", WIN);
     expect(await ids(store, DEC_3)).toContain("krallen-2026-11:ended");
     expect(await ids(store, DEC_9)).not.toContain("krallen-2026-11:ended");
-    await store.claimTier(em, 4, "krallen-2026-11", 0, KRALLEN_HUNT_GOAL);
+    await store.claimTier(em, 4, "krallen-2026-11", 0, WIN);
     expect(await ids(store, DEC_3)).not.toContain("krallen-2026-11:ended");
   });
 
   test("not shown to a player whose Krallen is at the top already: the goal pays nothing more", async () => {
     const store = memoryProgressStore();
-    await store.addToCounter(em, 4, "krallen-2026-11", KRALLEN_HUNT_GOAL);
+    await store.addToCounter(em, 4, "krallen-2026-11", WIN);
     const topped = { ...user, save: { ...user.save, champion: [{ t: 5, l: 5 }] } } as unknown as User;
     const views = (await eventsAnswer(em, store, topped, DEC_3)).events.map((view) => view.id);
     expect(views).not.toContain("krallen-2026-11");
