@@ -199,7 +199,8 @@ describe("layoutBotYard", () => {
             .sort((a, b) => a - b);
           return out[Math.floor(out.length / 2)]!;
         };
-        expect(median(HARVESTERS)).toBeGreaterThan(median(new Set([SILO])) + 150);
+        // A whole-yard ring keeps the base tight, so the harvesters sit only a little further out.
+        expect(median(HARVESTERS)).toBeGreaterThan(median(new Set([SILO])) + 120);
 
         const towers = layout.buildings.filter((spot) => TOWERS.has(spot.t)).map(centre);
         const spacing =
@@ -365,9 +366,13 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
           const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
           const hall = layout.buildings.find((spot) => spot.t === TOWN_HALL_TYPE)!;
           expect({ level, index, hall: reachable(blocks, hall, layout.expansion) }).toEqual({ level, index, hall: false });
-          // A core-walled yard's fifth and sixth silos stand inside its tower ring, which has gaps.
+          // A core-walled yard's fifth and sixth silos stand inside its tower ring, which has gaps; a
+          // whole-yard-walled one's inside its ring round the grid, once that is closed.
           const silos = layout.buildings.filter((spot) => spot.t === SILO);
-          for (const silo of yardStyleOf(seed).walls === "core" ? silos.slice(0, 4) : silos) {
+          const walls = new Set(layout.buildings.filter((spot) => spot.t === WALL_TYPE).map((spot) => `${spot.X},${spot.Y}`));
+          const ring = botWallPlan(seed).filter((cell) => cell.enclosure);
+          const closed = ring.length > 0 && ring.every((cell) => walls.has(`${cell.x},${cell.y}`));
+          for (const silo of closed ? silos : silos.slice(0, 4)) {
             expect({ level, index, silo: reachable(blocks, silo, layout.expansion) }).toEqual({ level, index, silo: false });
           }
         }
@@ -444,6 +449,7 @@ describe("layoutBotYard keeps its walls tidy", () => {
         const walls = layout.buildings.filter((spot) => spot.t === WALL_TYPE);
         const at = new Set(walls.map((spot) => `${spot.X},${spot.Y}`));
         let alone = 0;
+        const newest = walls.reduce((last, wall) => (wall.id > last ? wall.id : last), 0);
         for (const wall of walls) {
           expect({ seed, wall, hallway: plan.get(`${wall.X},${wall.Y}`)?.opening }).toEqual({ seed, wall, hallway: false });
           const joined = [
@@ -456,10 +462,10 @@ describe("layoutBotYard keeps its walls tidy", () => {
             const key = `${wall.X + dx!},${wall.Y + dy!}`;
             return at.has(key) || plan.get(key)?.opening === true;
           });
-          if (!joined) alone++;
+          // The newest wall may be the first of a ring's run, the rest of which is still to come.
+          if (!joined && wall.id !== newest) alone++;
         }
-        // The yard's first wall has nothing to join yet, unless it stands by a hallway.
-        expect({ seed, alone: alone <= (walls.length === 1 ? 1 : 0) }).toEqual({ seed, alone: true });
+        expect({ seed, alone }).toEqual({ seed, alone: 0 });
         for (const trap of layout.buildings.filter((spot) => TRAP_TYPES.has(spot.t))) {
           const onWallCell = plan.get(`${trap.X},${trap.Y}`)?.opening === false;
           expect({ seed, trap, onWallCell }).toEqual({ seed, trap, onWallCell: false });
@@ -482,7 +488,8 @@ describe("layoutBotYard keeps its walls tidy", () => {
           const inLine = plan.some((cell) => meets(box, cellBox(cell)));
           // A hallway's walkway, 10 either side, is the way in.
           const plugs = hallways.some((cell) => meets(box, cellBox(cell, 10)));
-          const touches = w < 100 && plan.some((cell) => meets(box, cellBox(cell), true));
+          // Any building may stand hard against a whole-yard ring: its inside is tight.
+          const touches = w < 100 && plan.some((cell) => !cell.enclosure && meets(box, cellBox(cell), true));
           expect({ seed, spot, inLine, plugs, touches }).toEqual({ seed, spot, inLine: false, plugs: false, touches: false });
         }
       }

@@ -246,9 +246,43 @@ describe("walls and traps (issue #250)", () => {
           trapRoom += allowed(24, hall) + allowed(117, hall);
         }
       }
-      // Walls come late in each Town Hall's plan, so a hall just upgraded is still catching up.
+      // A hall just upgraded builds its new harvesters and towers before its new walls.
       expect(walls / wallRoom).toBeGreaterThan(0.65);
       expect(traps / trapRoom).toBeGreaterThan(0.65);
+    },
+    { timeout: 60_000 }
+  );
+
+  test(
+    "walls from soon after they unlock at Town Hall 2 (owner review 2026-10-23: none before level 25 read wrong)",
+    () => {
+      for (let level = 12; level <= 40; level++) {
+        for (let index = 0; index < 6; index++) {
+          const seed = level * 7919 + index * 104729;
+          const yard = yardAtPoints(seed, PERSONAS[index % PERSONAS.length]!, targetInBand(level, (index + 0.5) / 6));
+          const mine = yard.buildings.filter((building) => building.t === 17).length;
+          // Level 16 on, every bot has its Town Hall 2 and stands walls; many already have them at 12-15.
+          if (level >= 16) {
+            expect({ level, index, hall: yard.townHall >= 2, walls: mine > 0 }).toEqual({
+              level,
+              index,
+              hall: true,
+              walls: true,
+            });
+          }
+        }
+      }
+      // Walls go down with the basics of a hall, not after its upgrades: most Town Hall 2 bots have theirs.
+      let walled = 0;
+      let all = 0;
+      for (let seed = 1; seed <= 60; seed++) {
+        const yard = yardAtPoints(seed * 7727, PERSONAS[seed % PERSONAS.length]!, targetInBand(14, 0.5));
+        if (yard.townHall !== 2) continue;
+        all++;
+        if (yard.buildings.some((building) => building.t === 17)) walled++;
+      }
+      expect(all).toBeGreaterThan(30);
+      expect(walled / all).toBeGreaterThan(0.5);
     },
     { timeout: 60_000 }
   );

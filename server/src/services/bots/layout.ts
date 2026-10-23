@@ -213,6 +213,9 @@ const ENCLOSURE_DEPTHS_MIN = 36;
 /** How much wider than tall that ring is: the plot's own shape (1000 x 800). */
 const ENCLOSURE_ASPECT = 1.2;
 
+/** The fewest walls the hall will stand that start that ring, or a core-walled yard's tower ring `[PLACEHOLDER]` (see `Layout.wallCell`). */
+const ENCLOSURE_FIRST_RUN = 10;
+
 /** That ring's place in a whole-yard-walled seed's wall groups: straight after the core. */
 const ENCLOSURE_GROUP = 1;
 
@@ -642,9 +645,13 @@ const wallPlan = (
  * wider than tall as the plot is; each side's depth is jittered by a cell.
  */
 const enclosureDepths = (rng: Rng, seed: number, wide: boolean): Depths => {
-  const walls = (wallTargets(seed)[ENCLOSURE_HALL] ?? 0) - CORE_WALLS;
+  const targets = wallTargets(seed);
+  const F = Number(process.env.F ?? 0);
+  const walls = (targets[ENCLOSURE_HALL]! + F * (targets[ENCLOSURE_HALL + 1]! - targets[ENCLOSURE_HALL]!)) - Math.max(CORE_WALLS, targets[3] ?? 0);
   // The ring's cells: the core's box grown by every depth on its side, so its wall is CORE_CELLS + 2 x their sum.
-  const total = Math.max(ENCLOSURE_DEPTHS_MIN, Math.floor((walls - CORE_CELLS) / 2));
+  // A single wall over would stand on its own by the core: leave none, or a few that make a run.
+  let total = Math.max(ENCLOSURE_DEPTHS_MIN, Math.floor((walls - CORE_CELLS) / 2));
+  if (walls - CORE_CELLS - 2 * total === 1) total--;
   const coreW = (wide ? CORE_LONG : CORE_SHORT) + WALL_CELL;
   const coreH = (wide ? CORE_SHORT : CORE_LONG) + WALL_CELL;
   const span = coreW + coreH + total * WALL_CELL;
@@ -767,11 +774,16 @@ export interface PlannedWallCell {
   opening: boolean;
   /** On the core's own wall. */
   core: boolean;
+  /** On the ring round a whole-yard-walled seed's grid. */
+  enclosure: boolean;
 }
 
 /** Every cell of a seed's wall plan (see the file comment): for tests and tools. */
-export const botWallPlan = (seed: number): PlannedWallCell[] =>
-  planFor(seed, "economy").slots.map((slot) => ({ ...slot }));
+export const botWallPlan = (seed: number): PlannedWallCell[] => {
+  const plan = planFor(seed, "economy");
+  const enclosure = new Set(plan.style.walls === "full" ? plan.groups[ENCLOSURE_GROUP] : []);
+  return plan.slots.map((slot, at) => ({ ...slot, enclosure: enclosure.has(at) }));
+};
 
 /** Cell marks: what may stand on a cell of the core or the reserved wall lines. */
 const FREE = 0;
@@ -984,6 +996,7 @@ class Layout {
   /** Walls the yard stands once caught up, by Town Hall level (`wallTargets`). */
   private readonly budgets: number[];
   private wallsPlaced = 0;
+  private hallNow = 1;
   /** How far out each silo, tower and harvester placed so far sits, in order (see {@link frontier}). */
   private readonly baseReach: number[] = [];
   /** Expansions bought early because a building found no room (see the file comment). */
@@ -1093,8 +1106,7 @@ class Layout {
   private bandOf(role: Role): { min: number; max: number } {
     if (role !== "general" && role !== "army") return this.plan.bands[role];
     const own = this.plan.bands[role];
-    // Outside the ring of a whole-yard-walled seed from the start, leaving its room to the base.
-    const min = this.started.size > 1 || this.plan.style.walls === "full" ? EDGE.outside : Math.min(EDGE.outside, Math.max(own.min, this.frontier + EDGE.past));
+    const min = this.started.size > 1 || (this.plan.style.walls === "full" && this.hallNow >= Number(process.env.EDGE_HALL ?? 99)) ? EDGE.outside : Math.min(EDGE.outside, Math.max(own.min, this.frontier + EDGE.past));
     return { min, max: min + EDGE.depth };
   }
 
@@ -1370,9 +1382,15 @@ class Layout {
       if (left.length === 0) continue;
       if (!this.started.has(g)) {
         // A core-walled yard's tower ring may stand part built (see `yardStyle.ts`), and so may the
-        // ring round a whole-yard-walled one's grid, the one its walls catch up on before it is closed.
-        const partBuilt = this.plan.style.walls === "core" || g === ENCLOSURE_GROUP;
-        if (!partBuilt && (this.wallsPlaced + left.length > budget || !left.every(free))) break;
+        // ring round a whole-yard-walled one's grid once all of it is on the plot: the one its walls
+        // catch up on before it is closed, a single run.
+        const partBuilt = this.plan.style.walls === "core";
+        const enclosure = this.plan.style.walls === "full" && g === ENCLOSURE_GROUP;
+        // Either is started with a run of a fair length, not a stub off on its own: a Town Hall's last
+        // few walls double the core instead.
+        if ((partBuilt || enclosure) && budget - this.wallsPlaced < ENCLOSURE_FIRST_RUN) break;
+        if (enclosure && !left.every(free)) break;
+        if (!partBuilt && !enclosure && (this.wallsPlaced + left.length > budget || !left.every(free))) break;
         this.started.add(g);
       }
       const next = left.find(free);
@@ -1423,6 +1441,7 @@ class Layout {
 
   /** Places one building (see the file comment) and returns its spot. */
   place(id: number, type: number, level: number, hall: number): PlacedSpot {
+    this.hallNow = hall;
     const expansion = Math.max(expansionFor(this.seed, level), this.bought);
     const role = roleOf(type);
     const rng = streamOf(this.seed, SALT.building, id);

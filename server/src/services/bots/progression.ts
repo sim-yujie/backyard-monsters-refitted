@@ -8,7 +8,7 @@ import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
 import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import { GUIDE_BUILDINGS } from "../onboarding/guidedStart.js";
-import { BEGINNER_TOP_HALL, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
+import { BEGINNER_TOP_HALL, CORE_WALLS, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
 
 /**
  * A bot's build order (`docs/design/bot-neighbours.md` §4.2 step 1, issue #237).
@@ -461,7 +461,9 @@ export const wallTargets = (seed: number): number[] => {
   const { walls } = yardStyleOf(seed);
   let most = 0;
   return fillsFor(seed).wall.map((fill, hall) => {
-    const wanted = Math.round(allowedAt(WALL_TYPE, hall) * fill);
+    let wanted = Math.round(allowedAt(WALL_TYPE, hall) * fill);
+    // One wall past the core's would stand on its own beside it (`layout.ts`): a player puts down two.
+    if (wanted === CORE_WALLS + 1) wanted++;
     most = Math.max(most, walls === "core" ? coreStyleWalls(wanted) : wanted);
     return most;
   });
