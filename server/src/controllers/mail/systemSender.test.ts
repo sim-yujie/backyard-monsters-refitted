@@ -65,7 +65,8 @@ const em = {
   transactional: async <T>(work: (tx: unknown) => Promise<T>) => work(em),
 };
 
-mock.module("../../server.js", () => ({ postgres: { em } }));
+// redis: modules this one imports read it at load; nothing here calls it.
+mock.module("../../server.js", () => ({ postgres: { em }, redis: {} }));
 
 const { Message } = await import("../../database/models/message.model.js");
 const { getMessageTargets } = await import("./getMessageTargets.js");

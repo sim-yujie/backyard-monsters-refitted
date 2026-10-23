@@ -4,7 +4,10 @@ import { MikroORM } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
 import { Save } from "../../database/models/save.model.js";
+import type { Context } from "koa";
 import { creditsAsDelta } from "../base/creditsDelta.js";
+import { purchaseHandler } from "../../controllers/base/save/handlers/purchaseHandler.js";
+import { storeItems } from "../../game-data/store/storeItems.js";
 import { SUPPORT_SENDER } from "../mail/systemSender.js";
 import { getBugReport, listBugReports } from "./bugReportsAdmin.js";
 import { giveShiny, listShinyAwards, searchPlayers, type ShinyAwardRequest } from "./shinyAwards.js";
@@ -261,6 +264,26 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
       save.name = "yard ";
       await request.flush();
       expect(await credits(PLAYER)).toBe(START + 500);
+    });
+
+    test("a normal purchase, with no award, still charges the store price once", async () => {
+      const request = orm.em.fork();
+      const save = (await request.findOne(Save, { basesaveid: saves.get(PLAYER)! }))!;
+      save.storedata = {};
+      // The game's own save, as baseSave runs it: the purchase, then the change as an addition.
+      const ctx = { authUser: { shiny_locked: false, save } } as unknown as Context;
+      purchaseHandler(ctx, ["PRO1", 1], save);
+      creditsAsDelta(save);
+      await request.flush();
+
+      const price = storeItems.PRO1!.c[0]!;
+      expect(price).toBeGreaterThan(0);
+      expect(await credits(PLAYER)).toBe(START - price);
+      expect(save.credits).toBe(START - price);
+      // A second save with nothing bought changes nothing more.
+      creditsAsDelta(save);
+      await request.flush();
+      expect(await credits(PLAYER)).toBe(START - price);
     });
 
     test("a yard action holding the row lock: the award waits for it, and both land", async () => {
