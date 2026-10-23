@@ -26,7 +26,7 @@ import { bornQuietShare } from "../services/bots/population.js";
  * names (`server/.env`, or `DB_NAME=... bun ...` to point it elsewhere).
  *
  *   bun src/scripts/bots.ts create --target N [--per-day N] [--dry-run]
- *       Tops the active bots up to N, spread evenly over levels 1-40, lowest
+ *       Tops the active bots up to N, spread evenly over levels 15-40, lowest
  *       levels first. Idempotent: it counts the bots there are and makes only
  *       the difference. --per-day caps the bots made in any 24 hours (run it
  *       daily to spread a live rollout over a few days). Each level starts

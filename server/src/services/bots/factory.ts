@@ -179,7 +179,7 @@ const avatarFor = (rng: Rng): string =>
  * Draws one bot of `level` (see the file comment).
  *
  * @param {Rng} rng - The draw
- * @param {number} level - The bot's level, 1-40
+ * @param {number} level - The bot's level, 15-40
  * @param {number} now - Unix seconds
  * @param {Pace} pace - `BotConfig.pace`
  * @param {boolean} [fresh] - Start at the bottom of the level, as a new player

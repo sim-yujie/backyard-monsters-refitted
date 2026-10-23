@@ -83,7 +83,7 @@ describe("isBlankSeedYard", () => {
 });
 
 describe("planSeededLevels", () => {
-  test("2,500 players are spread evenly over levels 1-40, as the bots are, and shuffled", () => {
+  test("2,500 players are spread evenly over levels 15-40, as the bots are, and shuffled", () => {
     const levels = planSeededLevels(2500, {}, mulberry32(233));
     expect(levels).toHaveLength(2500);
     const counts = Array.from({ length: BOT_MAX_LEVEL }, (_, index) => levels.filter((level) => level === index + 1).length);
@@ -93,16 +93,16 @@ describe("planSeededLevels", () => {
 
   test("a second run fills the levels the first left short", () => {
     const already: Record<number, number> = {};
-    for (let level = 1; level <= 40; level++) already[level] = level <= 20 ? 1 : 0;
+    for (let level = 15; level <= 40; level++) already[level] = level <= 20 ? 1 : 0;
     expect(planSeededLevels(20, already, mulberry32(1)).sort((a, b) => a - b)).toEqual(
       Array.from({ length: 20 }, (_, index) => 21 + index)
     );
   });
 
   test("players past an even share still get a level", () => {
-    const levels = planSeededLevels(5, { 1: 10 }, mulberry32(2));
+    const levels = planSeededLevels(5, { 15: 10 }, mulberry32(2));
     expect(levels).toHaveLength(5);
-    for (const level of levels) expect(level).toBeGreaterThanOrEqual(1);
+    for (const level of levels) expect(level).toBeGreaterThanOrEqual(15);
   });
 });
 
@@ -162,7 +162,7 @@ describe("the dev-only guard", () => {
 });
 
 describe("giveSeededYards", () => {
-  test("blank seeded players get a generated yard on every level 1-40 and a seeded row; built-on ones are left", async () => {
+  test("blank seeded players get a generated yard on every level 15-40 and a seeded row; built-on ones are left", async () => {
     const saves = new Map<number, Row>();
     for (let userid = 1; userid <= 40; userid++) saves.set(userid, seededSave(userid));
     const builtOn = seededSave(41);
@@ -182,19 +182,17 @@ describe("giveSeededYards", () => {
     expect(report.notBlank).toBe(1);
     expect(report.given).toHaveLength(40);
     expect(batches).toEqual([25, 15]);
-    // Forty players against an even spread: one on each level, 1-40.
+    // Forty players against an even spread over 15-40: one on each level, two on the lowest fourteen.
     expect(report.given.map((player) => player.level).sort((a, b) => a - b)).toEqual(
-      Array.from({ length: 40 }, (_, index) => index + 1)
+      Array.from({ length: 26 }, (_, index) => (index < 14 ? [15 + index, 15 + index] : [15 + index])).flat()
     );
 
     for (const player of report.given) {
       const save = saves.get(player.userid)!;
-      // A level 1 yard can be just the starter set, as a level 1 bot's is; above that it is built on.
-      if (player.level > 1) {
-        expect(isBlankSeedYard(save.buildingdata)).toBe(false);
-        expect(Object.keys(save.buildingdata).length).toBeGreaterThan(4);
-        expect(Number(save.points)).toBeGreaterThan(0);
-      }
+      // Every yard is built on: no bot or seeded yard stands below level 15.
+      expect(isBlankSeedYard(save.buildingdata)).toBe(false);
+      expect(Object.keys(save.buildingdata).length).toBeGreaterThan(4);
+      expect(Number(save.points)).toBeGreaterThan(0);
       expect(Object.values(save.buildingdata).some((building: any) => building.t === 14)).toBe(true);
       expect(save.level).toBe(player.level);
       expect(save.protected).toBe(0);

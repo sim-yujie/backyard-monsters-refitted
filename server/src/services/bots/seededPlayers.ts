@@ -23,7 +23,7 @@ import type { Persona } from "./progression.js";
  * 1. **Dev testing only.** Nothing here runs when `ENV` is production
  *    ({@link seededYardsOn}): the seed scripts refuse, the sweep leaves
  *    seeded rows alone and an attack books them nothing.
- * 2. **The bots' yard generator**, with the levels spread over 1-40 the way
+ * 2. **The bots' yard generator**, with the levels spread over 15-40 the way
  *    the bots are (`fillPlan`), drawn exactly as the factory draws a bot.
  * 3. **They repair and grow like the Map Room 1 bots**, by the bot sweep's
  *    own `grow` and `repair` jobs. Each player gets a `bym.bot` row in state
@@ -58,13 +58,13 @@ export const isBlankSeedYard = (buildingdata: BuildingDataMap | null | undefined
 /**
  * One level per player for `count` more seeded yards, the bots' way: the
  * shortfall of each level against an even spread of all seeded players over
- * levels 1-40 (`fillPlan`), any left over at random levels, then shuffled so
+ * levels 15-40 (`fillPlan`), any left over at random levels, then shuffled so
  * players next to each other on the map are not all one level.
  *
  * @param {number} count - Players to give a yard
  * @param {Record<number, number>} seededByLevel - Seeded players per level already
  * @param {Rng} rng - The draw
- * @returns {number[]} `count` levels, 1-40
+ * @returns {number[]} `count` levels, 15-40
  */
 export const planSeededLevels = (count: number, seededByLevel: Readonly<Record<number, number>>, rng: Rng): number[] => {
   const already = Object.values(seededByLevel).reduce((sum, have) => sum + have, 0);
