@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ACTIVE_LEAD_MS,
+  ACTIVE_RETRY_MS,
   PROTECTION_TIMINGS,
   ProtectionWatch,
   RESUME_GRACE_MS,
@@ -134,6 +136,117 @@ describe("ProtectionWatch", () => {
     expect(watch.showing).toBe(true);
     watch.stop();
     expect(watch.showing).toBe(false);
+  });
+});
+
+describe("ProtectionWatch.active: work in the Yard Planner", () => {
+  let taps: number;
+  beforeEach(() => {
+    taps = 0;
+    stayAnswer = async () => {
+      taps += 1;
+      return { now: serverNow(), lastAction: serverNow() };
+    };
+  });
+
+  it("sends nothing while the prompt is far off", async () => {
+    watch.hear({ now: serverNow(), lastAction: serverNow() });
+    vi.advanceTimersByTime(minutes(8) - 1);
+    watch.active();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(taps).toBe(0);
+  });
+
+  it("taps for a player busy rearranging, so the prompt never comes", async () => {
+    watch.hear({ now: serverNow(), lastAction: serverNow() });
+    // A planner move every 20 seconds for half an hour.
+    for (let step = 0; step < 90; step += 1) {
+      await vi.advanceTimersByTimeAsync(20_000);
+      watch.active();
+      expect(watch.showing).toBe(false);
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    expect(shown).toHaveLength(0);
+    // A minute before each nine-minute mark, at 8, 16 and 24 minutes.
+    expect(taps).toBe(3);
+  });
+
+  it("still asks a player who sits idle in the planner", async () => {
+    watch.hear({ now: serverNow(), lastAction: serverNow() });
+    watch.active();
+    await vi.advanceTimersByTimeAsync(minutes(9));
+    expect(taps).toBe(0);
+    expect(watch.showing).toBe(true);
+  });
+
+  it("takes the prompt down when the player gets back to work", async () => {
+    watch.hear({ now: serverNow(), lastAction: serverNow() });
+    vi.advanceTimersByTime(minutes(9) + 10_000);
+    expect(watch.showing).toBe(true);
+    watch.active();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(taps).toBe(1);
+    expect(watch.showing).toBe(false);
+  });
+
+  it("sends one at a time, and waits after a failure (a drag calls it on every move)", async () => {
+    let fail = true;
+    let settle: (() => void) | null = null;
+    stayAnswer = () =>
+      new Promise((resolve, reject) => {
+        taps += 1;
+        settle = () => (fail ? reject(new Error("offline")) : resolve({ now: serverNow(), lastAction: serverNow() }));
+      });
+    watch.hear({ now: serverNow(), lastAction: serverNow() });
+    vi.advanceTimersByTime(minutes(9));
+    watch.active();
+    watch.active();
+    watch.active();
+    expect(taps).toBe(1);
+    settle!();
+    await vi.advanceTimersByTimeAsync(0);
+    watch.active();
+    expect(taps).toBe(1);
+    await vi.advanceTimersByTimeAsync(ACTIVE_RETRY_MS);
+    fail = false;
+    watch.active();
+    expect(taps).toBe(2);
+    settle!();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(watch.showing).toBe(false);
+  });
+
+  it("sends nothing while held back, off a game screen, or after the idle disconnect", async () => {
+    watch.hear({ now: serverNow(), lastAction: serverNow() });
+    vi.advanceTimersByTime(minutes(9));
+    watch.suppress(true);
+    watch.active();
+    const fresh = make();
+    fresh.hear({ now: serverNow(), lastAction: serverNow() - minutes(9) / 1000 });
+    fresh.active();
+    fresh.stop();
+    watch.suppress(false);
+    watch.stop();
+    watch.active();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(taps).toBe(0);
+  });
+
+  it("keeps to half the quiet time under a short DEV ?protect=", async () => {
+    const short = make({ windowMs: 40_000, warningMs: 20_000 });
+    short.hold();
+    short.hear({ now: serverNow(), lastAction: serverNow() });
+    short.active();
+    await vi.advanceTimersByTimeAsync(9_000);
+    short.active();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(taps).toBe(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    short.active();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(taps).toBe(1);
+    expect(ACTIVE_LEAD_MS).toBe(60_000);
+    short.stop();
   });
 });
 

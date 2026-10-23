@@ -10,6 +10,7 @@ import { IdleWarning } from "@/ui/IdleWarning";
 import { getAuthToken, onAnswer } from "@/api/http";
 import { stayProtected } from "@/api/presence";
 import { ProtectionWatch, protectionTimingsFor } from "@/game/presence/protectionWatch";
+import { onPlannerActivity } from "@/game/presence/plannerActivity";
 import { yardAttack } from "@/game/presence/yardAttack";
 import { StayProtectedPrompt } from "@/ui/StayProtectedPrompt";
 import { answerBotCheck, fetchBotCheck, forceBotCheck } from "@/api/botCheck";
@@ -212,12 +213,19 @@ export class App {
     this.botCheck = botCheck;
     this.botCheckCard = card;
 
-    this.stopHearing = onAnswer(({ lastAction, now, checkPending }) => {
+    const stopAnswers = onAnswer(({ lastAction, now, checkPending }) => {
       if (typeof lastAction === "number") {
         protection.hear({ lastAction, ...(typeof now === "number" && { now }) });
       }
       if (typeof checkPending === "boolean") botCheck.hear(checkPending);
     });
+    // Work in the Yard Planner, which the server hears nothing of until Apply,
+    // counts too: the watch taps "stay" for a player busy there (beta.4).
+    const stopPlanner = onPlannerActivity(() => protection.active());
+    this.stopHearing = () => {
+      stopAnswers();
+      stopPlanner();
+    };
 
     // Ten minutes without input disconnects (#271). The 10 and the 1 minute
     // are `IDLE_TIMINGS`; a dev build takes `?idle=40,20` (seconds) to test.
