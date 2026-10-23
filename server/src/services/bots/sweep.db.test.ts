@@ -326,7 +326,7 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
   }, 30_000);
 
   test(`a bot whose grow is dropped ${MAX_GROW_DROPS} times in a row is retired`, async () => {
-    const [bot] = await make([6]);
+    const [bot] = await make([16]);
     await pass(NOW, 1);
     await sql(`UPDATE bym.save SET type = 'gone' WHERE userid = ? AND type = 'main'`, [bot!.userid]);
 
