@@ -3481,7 +3481,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.friendly && foe.flying && creep.champion && creep.monsterId === KORATH_ID
         ? creep.range * KORATH_DEFEND_FLYER_REACH
         : creep.range;
-    creep.atTarget = squared < creepReach(range) && (creep.friendly || seesFoe(creep, foe, squared));
+    creep.atTarget =
+      squared < creepReach(range) && (creep.friendly || seesFoe(creep, foe, squared));
     // A defending Bolt blinks at its foe; an attacker's blink ends when it turns to fight.
     const blinks = creep.friendly && creep.rank > 0 && creep.monsterId === BOLT_ID;
     if (creep.blinkHops > 0 && (creep.atTarget || !blinks)) stopBlink(creep);
