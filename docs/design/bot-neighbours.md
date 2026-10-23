@@ -48,6 +48,8 @@ costly, section 12 says so.
 3. **Bots look exactly like real players:** real-looking names, no bot tag anywhere a player can
    see.
 4. **500 bots in total** (global; Map Room 1 has no worlds), spread evenly over levels 1-40.
+   **Changed 2026-10-23:** spread evenly over levels 15-40; no bot stands below level 15
+   (decision 25).
 5. **Neighbour lists:** up to 25 neighbours within ±7 levels, cached 2 weeks, 30-minute retry under
    10. Real players get places first; bots fill the rest. The 150-most-recent-saves limit must be
    handled, because bots never log in.
@@ -55,6 +57,7 @@ costly, section 12 says so.
    a real player has, with randomness in placement so they look player-made.
 7. **Growth:** bots slowly level up like a player upgrading; a bot that outgrows its level slot is
    swapped for a fresh low-level bot, keeping the even 1-40 spread and the total at 500.
+   (Now 15-40 and a real player's speed: decisions 17 and 25-30, section 4.4.)
 8. **Loot:** about what a real player of that level has: storage partly full, harvesters fill over
    time, refilled after attacks.
 9. **Defence:** monsters in Monster Bunkers (housed monsters do not defend) plus a champion in its
@@ -107,6 +110,26 @@ Later owner decision (2026-10-04, from the #245 leak audit):
 24. **Bots get a random, level-scaled Shiny** (`credits`), roughly what a player of that level might
     hold, instead of every bot keeping the new-save 1,500 that a view or attack load shows
     (section 4.6).
+
+Owner decisions of 2026-10-23 (beta 5, bots from level 15):
+
+25. **No bot below level 15.** The 500 are spread evenly over levels 15-40 (`BOT_FLOOR_LEVEL`,
+    `LEVEL_WEIGHTS` 0 below it).
+26. **The smallest bot yard** is Town Hall 2 with every resource building it allows (2 of each
+    harvester, 2 silos), a Housing with an army in it, and towers (3 Cannon, 3 Sniper). No walls
+    needed. That yard comes to level 10-15 (median 11, 600 seeds; an economy bot builds harvesters
+    before towers and gets there latest), so the floor is 15, and a level 15 bot is started at
+    least as far into its level as it takes to hold that yard (`minimumYardTotal`).
+27. **New bots start at 15:** about `BOTS_FRESH_PER_DAY` (3) a day start at the bottom of level 15
+    with that yard and grow on the same real-player curve. The early quit chances of levels 1-4
+    are gone; `BOTS_QUIET_RATE` (0.05 a level) stays.
+28. **No beginner yards:** the "1 in 4 bots keep a beginner's tidy yard" rule is dropped.
+29. **Bots below 15 are retired, not raised:** the daily rebalance retires every active bot under
+    the floor and refills its place on 15-40 at up to `BOTS_NEW_PER_DAY` a day (about 3 weeks on
+    a live server), or at once with `bun src/scripts/bots.ts create --fill`.
+30. **Players under 15 still meet bots:** their real-player window is as before, and bots come
+    from the nearest levels the bots stand on (section 4.3). Revenge stays unmatched by level
+    (section 4.7, owner: keep as is).
 
 ## 3. What already exists
 
@@ -318,7 +341,11 @@ It works the way a player does, so the limits hold by construction:
    is compact, as real players build: compartments only a row or two of buildings deep, every
    building packed hard by its neighbours and the walls and as far in as its zone allows, the
    compartments filled edge to edge before anything spills out, and from Town Hall 4 the general
-   and monster buildings packed round the outside of the grid. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
+   and monster buildings packed round the outside of the grid. A building put up on Town Hall 1-3
+   aims closer in still (`EARLY_SQUEEZE` in `layout.ts`, 0.3 of its zone's reach past the core on
+   Town Halls 1-2 and 0.45 on 3 `[PLACEHOLDER]`; owner review 2026-10-23, a level 12 yard's
+   buildings stood too far apart), so a level 15-20 yard is a tight cluster round the Town Hall and
+   the base grows out past it. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
    spot is jittered, checked with `rectOf` / `overlaps` / `withinBounds` (`layoutGeometry.ts`), and
    the plot grows with the yard expansions a player of that level usually owns (`storedata.ENL.q`,
    up to 6 like the sandbox yard, `utils/sandbox/overworldYard.ts:3864`; one at about levels 10,
@@ -364,6 +391,10 @@ function of (seed, P): growth (4.4) is the same progression run a little further
 2. **Bots fill the rest.** `25 − real` bots from the `bot` table (`state = 'active'`,
    `level BETWEEN min AND max`), not already in the list, preferring bots that are attackable now
    (not protected, not under attack), shuffled and spread across the levels in range.
+   A player under level 15 (decision 30) has no bot in their own window when it ends below 15, so
+   the bots are drawn from the floor up instead: from level 15 to whichever is higher of the
+   window's top and 15 + `FLOOR_REACH` (2) (`botLevelWindow` in `botNeighbours.ts`). A level 3
+   player sees real players on 1-10 first, then bots on levels 15-17.
 
 The cached list stores bot entries exactly as real ones (`createNeighbourData`), and the whole
 list is shuffled before it is cached, so the order (real players first, bots after) gives nothing
@@ -389,13 +420,15 @@ before, and past 26 (no data) that carries on, as each level needs about 1.4 tim
 30 at about 28 days, 35 at 150, 40 at 800, past 40 at 1,100.
 **Some bots go quiet**: each level a bot gains it has `BOTS_QUIET_RATE` chance (`[PLACEHOLDER]`
 0.05, halved from 0.1 by the owner on 2026-10-23) to stop growing somewhere in that level, as a player who quits or slows down
-(`bot.quiet_since`). Up to level 4 the chance is 0.25 (`EARLY_QUIET`), as 14 of those 24 players
-stopped at level 1-4 on their first day. A quiet bot is still repaired, refilled and kept in its
+(`bot.quiet_since`). (Up to level 4 the chance was 0.25, `EARLY_QUIET`, as 14 of those 24 players
+stopped at level 1-4 on their first day; gone with the floor of 15, decision 27.) A quiet bot is still repaired, refilled and kept in its
 loot band, but shows online only on `BOTS_QUIET_ONLINE` (`[PLACEHOLDER]` 0.05) of its grows, about
 once in three days (owner, 2026-10-23). **When a
 level runs short, a new bot is made right at that level** with a yard drawn for it; **a crowded
 level retires** its quiet bots first (longest quiet first), then its growing bots longest on the
-level. Total about 500 (`BOTS_TOTAL`), each level its `LEVEL_WEIGHTS` share (even). The pure
+level. Total about 500 (`BOTS_TOTAL`), each level its `LEVEL_WEIGHTS` share (even over 15-40,
+none below: about 19 a level; decision 25). Every active bot below level 15 is retired by the
+next rebalance (decision 29). The pure
 rules are in `services/bots/population.ts`.
 
 - **Grow job** (every 2-6 hours per bot, jittered): the bot's place on the climb walks the days
@@ -421,26 +454,37 @@ rules are in `services/bots/population.ts`.
   and need replacing in turn: several new bots a day instead of about one every two days. No
   level should drift more than 4 bots (`SPREAD_TOLERANCE`) from its share; the sweep logs a
   warning when one does (issue #251).
-- **Bots that start at level 1** (owner, 2026-10-23): short levels are only ever 31-40 (quiet bots
-  never leave a level, so lower ones never run short), so the band-filling alone leaves every bot
-  on levels 1-30 quiet. Each rebalance therefore also starts about `BOTS_LEVEL1_PER_DAY`
-  (`[PLACEHOLDER]` 3, owner 2026-10-23; the whole part each day, plus one more by the chance of the fraction; 0
-  turns it off) new bots at the very bottom of level 1, growing, as new players. They climb and
-  quit like real players: the same curve and the same early quit chances, so about 58% stop at
-  levels 1-4, then `BOTS_QUIET_RATE` each level after. They come before the band-filling and count in `BOTS_NEW_PER_DAY`. Once the total
-  is full each takes the place of a quiet bot on the most crowded level (the higher one on a tie);
-  with no quiet bot anywhere, none starts. The quiet bots they leave on levels 1-4 are retired by
-  the crowded-level rule above.
-- **What it gives** (`population.test.ts` and a 1,500-day simulation, 3 seeds, at the defaults):
-  3 bots a day started at level 1 plus about 1.5-1.75 a day on short levels, about 4.5-4.75
-  retirements a day (mostly quiet bots making room or left crowded on levels 1-4), every level
-  within 2 of its share, 494-500 bots standing (498 on average). Growing bots: on average about
-  17 on levels 1-30 at any moment (about 1 on 1-10, 1 on 11-20, 15 on 21-30), and nearly all of
-  31-40 (about 113 of 120). At the old 1 a day and 0.1 only about 2 grew on levels 1-30, because
-  so few of the bots started at level 1 kept growing that far. More level-1 bots a day or a lower
-  `BOTS_QUIET_RATE` raise that number, with retirements rising to match; level-1 bots count in
-  `BOTS_NEW_PER_DAY`, so a rate near 8 needs that cap raised too. Neighbour lists are drawn fresh
-  from a level window each time, so a player still meets different bots as they climb.
+- **Bots that start at the floor** (owner, 2026-10-23, decisions 26-27): short levels are only
+  ever the high ones (quiet bots never leave a level, so lower ones never run short), so the
+  band-filling alone leaves the low levels all quiet. Each rebalance therefore also starts about
+  `BOTS_FRESH_PER_DAY` (`[PLACEHOLDER]` 3; the whole part each day, plus one more by the chance of
+  the fraction; 0 turns it off; was `BOTS_LEVEL1_PER_DAY` while they started at level 1) new bots
+  at the bottom of level 15, growing, as new players, each holding the smallest bot yard
+  (decision 26; `atLeastMinimum` in `factory.ts` starts it as far into level 15 as that yard
+  needs). They climb like real players: the same curve and `BOTS_QUIET_RATE` each level, with no
+  early quit chances. They come before the band-filling and count in `BOTS_NEW_PER_DAY`. Once
+  the total is full each takes the place of a quiet bot on the most crowded level (the higher one
+  on a tie); with no quiet bot anywhere, none starts.
+- **What it gives** (`population.test.ts` and a 1,500-day simulation, 3 seeds, at the defaults,
+  2026-10-23, bots from level 15; the last year of each run):
+  3 bots a day started at level 15 plus about 2.15-2.3 a day on short levels, about 5.15-5.3
+  retirements a day (mostly quiet bots making room), every level within 2-3 of its share,
+  481-500 bots standing (497 on average). No bot ever stands below 15.
+
+  | Levels | Bots | Growing | Quiet |
+  | --- | --- | --- | --- |
+  | 15-20 | 117-119 | 3-5 | 96-97% |
+  | 21-25 | 94-95 | 12-13 | 86-87% |
+  | 26-30 | 95-97 | 44-50 | 47-54% |
+  | 31-35 | 96-97 | 75-90 | 7-23% |
+  | 36-39 | 73-75 | 72-74 | 0-1% |
+  | 40 | 20-21 | 20-21 | 0% |
+
+  Levels 15-20 take a real player under a day each, so few growing bots stand on them at any
+  moment though 3 a day pass. More fresh bots a day or a lower `BOTS_QUIET_RATE` raise the growing
+  numbers, with retirements rising to match; fresh bots count in `BOTS_NEW_PER_DAY`, so a rate
+  near 8 needs that cap raised too. Neighbour lists are drawn fresh from a level window each
+  time, so a player still meets different bots as they climb.
 
 ### 4.5 After a player attacks a bot (decisions 10, 11)
 
@@ -477,6 +521,11 @@ is a real player:
   level or still exactly 1,500 (a bot made before this). It is never a multiple of ten.
 
 ### 4.7 Revenge attack (decisions 11-13)
+
+**No level match** (checked 2026-10-23, owner: keep as is): nothing in the checks below compares
+the bot's level with the player's. Revenge only follows the player's own attack on that bot, so
+a level 3 player who attacks a level 15 bot can be hit back by a level 15 army (about 1 in 3),
+within the caps of decision 19.
 
 The `revenge` job, when due:
 
@@ -582,7 +631,7 @@ and checks the yard is the starter yard.
 ### 4.11 Seeded Map Room 2 dev players get real yards (issue #233)
 
 Owner decisions (2026-10-05): the 2,500 `db:seed:mr2` players are for dev testing only; they get
-this generator's yards, spread over levels 1-40 as the bots are; after an attack they repair and
+this generator's yards, spread over levels 15-40 as the bots are (levels 1-40 before 2026-10-23); after an attack they repair and
 grow by the bots' own jobs.
 
 - `db:seed:mr2` gives each new player a yard, and `bun run db:seed:mr2:yards` fills in the blank
@@ -772,7 +821,7 @@ day and a half, so 500 bots absorb roughly 300 heavy attacks a day across all le
 level. That is plenty for a small player base and thin if hundreds of new players arrive in one
 week. The bot count, the pace scale, the quiet rate and the daily cap are config values (`BOTS_TOTAL`,
 `BOTS_PACE_SCALE`, `BOTS_QUIET_RATE`, `BOTS_GROWING_FLOW`, `BOTS_NEW_PER_DAY`,
-`BOTS_LEVEL1_PER_DAY`, `BOTS_LEVEL_SLACK`), so they can be changed without code.
+`BOTS_FRESH_PER_DAY`, `BOTS_LEVEL_SLACK`), so they can be changed without code.
 
 ## 8. What the client needs
 

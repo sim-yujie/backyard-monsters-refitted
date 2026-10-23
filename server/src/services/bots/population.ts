@@ -131,7 +131,6 @@ export const drawQuiet = (
   return null;
 };
 
-
 /**
  * The share of new bots on `level` that start quiet, so a level is made with
  * the mix it holds once the population has settled: about `flow`
