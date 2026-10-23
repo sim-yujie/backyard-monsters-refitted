@@ -1,7 +1,7 @@
 import type { BadgeTier } from "@/game/achievements/achievements";
 
-/** The sixteen shown achievements that have a painted badge (#298). */
-const PAINTED = new Set([1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 22]);
+/** The seventeen shown achievements that have a painted badge (#298; Huge Rage, 9, added for beta.4). */
+const PAINTED = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 22]);
 
 /**
  * The painted badge for an achievement: its symbol on a round medal whose rim
