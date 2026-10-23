@@ -19,7 +19,7 @@ import { mailboxErr } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { isServerSender, SUPPORT_SENDER } from "../../services/mail/systemSender.js";
-import { mayAnswerTeam } from "../../services/admin/supportMail.js";
+import { mayAnswerTeam } from "../../services/mail/teamThreads.js";
 
 /**
  * Controller to send message

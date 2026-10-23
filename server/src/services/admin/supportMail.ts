@@ -14,7 +14,7 @@ import { logger } from "../../utils/logger.js";
  *
  * - A reply to a bug report goes into that report's thread
  *   (`bug_report.mail_thread_id`), started by the first reply. The player can
- *   answer in it like any thread (`sendMessage`, {@link mayAnswerTeam}), and
+ *   answer in it like any thread (`sendMessage`, `mayAnswerTeam` in `services/mail/teamThreads.ts`), and
  *   the answers show under the report.
  * - A Shiny gift from a report goes into the same thread; one given from the
  *   Shiny section, with no report, is a notice of its own that cannot be
@@ -201,21 +201,4 @@ export const readSupportThread = async (em: EntityManager, threadid: number): Pr
     );
   }
   return messages;
-};
-
-/**
- * Whether `userid` may answer the team in `threadid`: only in a thread that
- * belongs to one of their own bug reports. A notice (a Shiny gift with no
- * report) and a thread they started to the team themselves cannot be answered.
- */
-export const mayAnswerTeam = async (em: EntityManager, userid: number, threadid: number): Promise<boolean> => {
-  if (!Number.isSafeInteger(threadid) || threadid < 1) return false;
-  const [row] = await em.execute<{ found: number }[]>(
-    `SELECT 1 AS found FROM bym.bug_report r
-       JOIN bym.thread t ON t.threadid = r.mail_thread_id
-      WHERE r.mail_thread_id = ? AND r.userid = ? AND t.userid = ? AND t.targetid = ?
-      LIMIT 1`,
-    [threadid, userid, SUPPORT_SENDER, userid]
-  );
-  return Boolean(row);
 };

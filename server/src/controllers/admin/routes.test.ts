@@ -18,6 +18,12 @@ describe("the dashboard routes (controllers/admin/routes.ts)", () => {
     expect(routes.map((r) => r.route)).toContain("GET /health");
   });
 
+  test("include the replies and Shiny routes", () => {
+    expect(routes.map((r) => r.route)).toEqual(
+      expect.arrayContaining(["POST /bugreports/:id/reply", "GET /players", "GET /shiny", "POST /shiny"])
+    );
+  });
+
   test("all go through the owner-only check", () => {
     expect(routes.length).toBeGreaterThan(5);
     for (const { route, rest } of routes) expect(`${route}: ${rest}`).toContain("apiVersion, adminOnly,");
