@@ -288,6 +288,68 @@ describe("Fomor (issue #222)", () => {
     });
     expect(followed).toBe(true);
   });
+
+  /**
+   * A line of walls from -200 to 200 across Y 0..20, Fomor's harvester on the
+   * near side and a Pokey pack under a Cannon Tower on the far side. Flash
+   * routes a walking Fomor to its ally (`WaypointTo`, `Fomor.as:79`) and flies
+   * it straight from its level 3 (`:74-76`; `CHAMPIONCAGE.as:160`).
+   */
+  const acrossTheWall = (fomorLevel: number) => {
+    const buildings: Record<string, CombatBuildingDataMap[string]> = {
+      "1": { id: 1, t: 1, l: 1, X: 0, Y: -400, st: 100_000 },
+      "2": { id: 2, t: 1, l: 1, X: 0, Y: 300, st: 100_000 },
+      "3": { id: 3, t: 20, l: 1, X: 100, Y: 300 },
+    };
+    for (let index = 0; index <= 20; index += 1) {
+      const id = 10 + index;
+      buildings[String(id)] = { id, t: 17, l: 1, X: -200 + index * 20, Y: 0 };
+    }
+    const yard = yardOf(buildings);
+    const battle = createBattle(yard, { seed: 8, levels: { C6: 10 } });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: 0,
+      y: -320,
+      r: 20,
+      monsters: {},
+      champion: { t: 3, l: fomorLevel },
+    });
+    battle.apply({ kind: "fling", t: 0, x: 0, y: 360, r: 40, monsters: { C6: 3 } });
+    const walls = yard.buildings.filter((building) => building.type === 17);
+    let crossedIntact = false;
+    let wentRound = false;
+    let flying = false;
+    watch(battle, 1500, (_event, current) => {
+      const fomor = championOf(current, false);
+      if (!fomor) return;
+      flying = fomor.flying;
+      if (fomor.iy >= 0 && (fomor.ix >= 220 || fomor.ix < -200)) wentRound = true;
+      const inWall = walls.some(
+        (wall) =>
+          fomor.ix >= wall.cx &&
+          fomor.ix < wall.cx + wall.w &&
+          fomor.iy >= wall.cy &&
+          fomor.iy < wall.cy + wall.h,
+      );
+      if (inWall && walls.every((wall) => wall.hp > 0)) crossedIntact = true;
+    });
+    return { crossedIntact, wentRound, flying };
+  };
+
+  it("walks round a wall to a wounded ally at level 1, never through it", () => {
+    const { crossedIntact, wentRound, flying } = acrossTheWall(1);
+    expect(flying).toBe(false);
+    expect(wentRound).toBe(true);
+    expect(crossedIntact).toBe(false);
+  });
+
+  it("flies straight over the wall to a wounded ally from level 3", () => {
+    const { crossedIntact, flying } = acrossTheWall(3);
+    expect(flying).toBe(true);
+    expect(crossedIntact).toBe(true);
+  });
 });
 
 describe("Krallen (issue #222)", () => {
