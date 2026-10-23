@@ -301,11 +301,18 @@ It works the way a player does, so the limits hold by construction:
    Death Trap), a 3 x 3 grid of walled compartments with the core as its middle, holding the
    towers with the harvesters in front of them and inside their range, defences spread so no side
    is weak, each kind of harvester spread out, the general and monster buildings round the edge
-   (outside the grid once the plot has room: the guide's Never Ending Chain). Walls close the grid
-   one compartment at a time, the core first, and a compartment is only started when the walls
-   the bot's Town Hall will stand can close it, so at most one is ever being built; walls it cannot
-   use yet double the core, a side at a time. The grid and that ring hold every wall a Town Hall
-   10 allows, so no wall stands on its own. Only the core has openings, a two-cell hallway on each
+   (outside the grid once the plot has room: the guide's Never Ending Chain). Each bot has one of
+   two wall styles (`yardStyle.ts`; owner review 2026-10-23). Both close the core first. A
+   **core-walled** bot then stands a ring round the core and the towers beside it, with gaps. A
+   **whole-yard-walled** bot then stands one ring round the whole grid, so the Town Hall, silos,
+   towers and harvesters all end up inside it; there are no walls between the compartments (they
+   ate the room inside the ring). The ring is sized halfway between the walls a Town Hall 6 and a
+   Town Hall 7 yard stand: it stands part built, one run, from about Town Hall 4 and closes at
+   Town Hall 7 (level 37-40 or so), when 94-100% of those key buildings are inside it. A ring
+   Town Hall 6 could close was tried and dropped: only 70-88% fit inside. A ring or run is only
+   started when the bot's Town Hall leaves at least 10 walls for it; walls it cannot use yet
+   double the core, then the outer ring, so no wall stands on its own, and the plan holds every
+   wall a Town Hall 10 allows. Only the core has openings, a two-cell hallway on each
    long side (and the ring cells in front), which traps fill first; nothing stands in a wall line
    or in front of a hallway. Further traps go between harvesters and silos and by towers. The base
    is compact, as real players build: compartments only a row or two of buildings deep, every
@@ -316,10 +323,18 @@ It works the way a player does, so the limits hold by construction:
    the plot grows with the yard expansions a player of that level usually owns (`storedata.ENL.q`,
    up to 6 like the sandbox yard, `utils/sandbox/overworldYard.ts:3864`; one at about levels 10,
    14, 19, 24, 29 and 34 `[PLACEHOLDER]`, each bot shifted by up to 2 levels). The progression
-   builds walls and traps as such a player does: from Town Hall 3 it keeps 90-100% of the wall
+   builds walls and traps as such a player does: walls start when they unlock (Town Hall 2, about
+   level 10), right after that hall's new harvesters and towers rather than just before the next
+   Town Hall upgrade, so every bot has walls from about level 12-16; from Town Hall 3 it keeps
+   90-100% of the wall
    allowance and 70-100% of the trap allowance standing `[PLACEHOLDER]`, and it upgrades its walls
    (real costs, Town Hall gates and points) towards an average level per Town Hall, mostly wood at
-   Town Hall 3, stone by Town Hall 4-5, level 4-5 by Town Hall 10 `[PLACEHOLDER]`.
+   Town Hall 3, stone by Town Hall 4-5, level 4-5 by Town Hall 10 `[PLACEHOLDER]`. The layout
+   tests were loosened for the tighter, ringed base: harvesters sit at most 120 (was 150) from a
+   silo at the median; the fifth and sixth silos must be walled in only once the ring is closed;
+   buildings may touch the ring's inside; the newest wall (the first of a new run) may stand
+   alone. A test checks that once the ring is closed (every whole-yard bot by level 40) at least
+   90% of the key buildings are inside it.
 3. **Army and defence.** Unlocked monsters: those the Locker level allows
    (`yard/locker.ts:176-204`), less a random one or two of the newest. Academy levels by level band.
    Bunkers filled to 70-100% of capacity with bunkerable unlocked monsters (`yard/bunker.ts:53`,
