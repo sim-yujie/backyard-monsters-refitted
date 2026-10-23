@@ -16,6 +16,13 @@ export type BugFilter = "all" | "open" | "closed";
 export type ErrorSource = "browser" | "server";
 export type DashboardSection = "health" | "backups" | "errors" | "bugs";
 
+/** The most Shiny one award can give, and above how much the page asks "are you sure?". */
+export const MAX_SHINY_AWARD = 10_000;
+export const CONFIRM_SHINY_ABOVE = 500;
+export const MAX_AWARD_REASON = 200;
+/** The longest message to a player (the game's mail limit). */
+export const MAX_REPLY = 580;
+
 export interface AdminMe {
   admin: true;
   userid: number;
@@ -59,6 +66,8 @@ export interface BugReportSummary {
   status: TicketStatus;
   statusChangedAt: string | null;
   hasNotes: boolean;
+  /** The player's answers in the report's mail thread not opened yet. */
+  unreadReplies: number;
 }
 
 export interface TicketChange {
@@ -68,7 +77,47 @@ export interface TicketChange {
   notes: string | null;
 }
 
-export interface BugReportDetail extends Omit<BugReportSummary, "preview"> {
+/** One mail in a report's thread: the owner's (as "The game team") or the player's. */
+export interface SupportMessage {
+  id: string;
+  from: "team" | "player";
+  text: string;
+  at: string;
+  /** A player's answer not seen before this read. */
+  unread: boolean;
+}
+
+/** Why the owner cannot write to a report's player in the game. */
+export type NoReplyReason = "signedOut" | "noPlayer";
+
+export interface ShinyAwardView {
+  id: number;
+  userid: number;
+  username: string;
+  amount: number;
+  reason: string;
+  /** The report it was given from, or null from the Shiny section. */
+  bugReportId: number | null;
+  by: number | null;
+  at: string;
+}
+
+export interface PlayerMatch {
+  userid: number;
+  username: string;
+  lastSeenAt: string | null;
+}
+
+export type ShinyAwardRequest = {
+  userid: number;
+  amount: number;
+  reason: string;
+  bugReportId?: number;
+  /** The id of this press of Give: sent again on a retry, so it gives once. */
+  requestId: string;
+};
+
+export interface BugReportDetail extends Omit<BugReportSummary, "preview" | "unreadReplies"> {
   message: string;
   contactEmail: string | null;
   userAgent: string;
@@ -81,6 +130,9 @@ export interface BugReportDetail extends Omit<BugReportSummary, "preview"> {
   ownerNotes: string;
   notesChangedAt: string | null;
   changes: TicketChange[];
+  thread: SupportMessage[];
+  cannotReply: NoReplyReason | null;
+  awards: ShinyAwardView[];
 }
 
 export interface ErrorGroup {
@@ -227,6 +279,31 @@ export const updateTicket = (
   update: { status?: TicketStatus; notes?: string },
 ): Promise<Envelope<{ report: BugReportDetail }>> =>
   postJson(`${ADMIN}/bugreports/${id}/ticket`, update);
+
+/** Writes to the report's player in the game's mail, as "The game team". */
+export const replyToReport = (
+  id: number,
+  message: string,
+): Promise<Envelope<{ report: BugReportDetail }>> =>
+  postJson(`${ADMIN}/bugreports/${id}/reply`, { message });
+
+export const searchPlayers = (q: string): Promise<Envelope<{ players: PlayerMatch[] }>> =>
+  get(`${ADMIN}/players`, { q });
+
+export const fetchShinyAwards = (
+  before?: number,
+): Promise<
+  Envelope<{
+    awards: ShinyAwardView[];
+    nextBefore: number | null;
+    total: { awards: number; shiny: number };
+  }>
+> => get(`${ADMIN}/shiny`, { before, limit: 30 });
+
+export const giveShiny = (
+  award: ShinyAwardRequest,
+): Promise<Envelope<{ award: ShinyAwardView; already: boolean; report?: BugReportDetail }>> =>
+  postJson(`${ADMIN}/shiny`, award);
 
 export const fetchErrors = (
   source: ErrorSource | "all",

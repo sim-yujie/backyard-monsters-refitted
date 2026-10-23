@@ -17,7 +17,10 @@ import {
   updateBugReportTicket,
   type BugReportImageKind,
 } from "../../services/admin/bugReportsAdmin.js";
+import { giveShiny, listShinyAwards, parseShinyAward, searchPlayers } from "../../services/admin/shinyAwards.js";
+import { parseTeamText, replyToReport } from "../../services/admin/supportMail.js";
 import { errorTotals, listErrors } from "../../services/errors/errorStore.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { adminHealthReport } from "../../services/health/adminHealth.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
@@ -51,6 +54,17 @@ const refuse = (ctx: Context, status: number, message: string, reason: string): 
   ctx.set("Cache-Control", "no-store");
   ctx.body = { error: message, reason };
 };
+
+const NO_REPLY_WORDS = {
+  signedOut: "This report was sent signed out, so there is no player to write to in the game.",
+  noPlayer: "This player's account is gone.",
+} as const;
+
+const AWARD_REFUSAL_WORDS = {
+  noPlayer: "There is no such player.",
+  noMainYard: "This player has no yard yet, so there is nowhere to put the Shiny.",
+  notTheirReport: "That bug report is not from this player.",
+} as const;
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -138,6 +152,46 @@ export const mountAdminRoutes = (router: Router): void => {
     const report = await updateBugReportTicket(postgres.em.fork(), id, update.value, ctx.authUser.userid);
     if (!report) return refuse(ctx, Status.NOT_FOUND, "There is no such bug report.", "notFound");
     ok(ctx, { report });
+  });
+
+  // Replies and Shiny (dashboard support tools): written to the player in the
+  // game's mail as "The game team".
+  router.post(`${admin}/bugreports/:id/reply`, apiVersion, adminOnly, async (ctx) => {
+    const id = reportId(ctx);
+    if (id === null) return;
+    const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+    const text = parseTeamText(body.message);
+    if (!text.ok) return refuse(ctx, Status.BAD_REQUEST, text.message, "badReply");
+    const em = postgres.em.fork();
+    const outcome = await replyToReport(em, id, text.text, ctx.authUser.userid, getCurrentDateTime());
+    if (outcome === "notFound") return refuse(ctx, Status.NOT_FOUND, "There is no such bug report.", "notFound");
+    if (outcome !== "sent") return refuse(ctx, Status.CONFLICT, NO_REPLY_WORDS[outcome], outcome);
+    ok(ctx, { report: await getBugReport(em, id) });
+  });
+
+  router.get(`${admin}/players`, apiVersion, adminOnly, async (ctx) => {
+    const query = typeof ctx.query.q === "string" ? ctx.query.q : "";
+    ok(ctx, { players: await searchPlayers(postgres.em.fork(), query) });
+  });
+
+  router.get(`${admin}/shiny`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, { ...(await listShinyAwards(postgres.em.fork(), { before: intOf(ctx.query.before), limit: intOf(ctx.query.limit) })) });
+  });
+
+  router.post(`${admin}/shiny`, apiVersion, adminOnly, async (ctx) => {
+    const award = parseShinyAward(ctx.request.body);
+    if (!award.ok) return refuse(ctx, Status.BAD_REQUEST, award.message, "badAward");
+    const em = postgres.em.fork();
+    const done = await giveShiny(em, award.value, ctx.authUser.userid, getCurrentDateTime());
+    if (done.outcome !== "given" && done.outcome !== "already") {
+      return refuse(ctx, Status.CONFLICT, AWARD_REFUSAL_WORDS[done.outcome], done.outcome);
+    }
+    const fromReport = award.value.bugReportId;
+    ok(ctx, {
+      award: done.award,
+      already: done.outcome === "already",
+      ...(fromReport !== null && { report: await getBugReport(em, fromReport) }),
+    });
   });
 
   router.get(`${admin}/errors`, apiVersion, adminOnly, async (ctx) => {

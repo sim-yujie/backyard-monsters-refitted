@@ -754,3 +754,53 @@ describe("invitations to move in the mailbox (#205)", () => {
     );
   });
 });
+
+describe("mail from the game team (dashboard replies and Shiny gifts)", () => {
+  const reply = message({
+    threadid: 5,
+    userid: -1,
+    messagetype: "team",
+    subject: "About your bug report",
+    message: "Thanks! Which screen was it on?",
+    unread: 1,
+    updatetime: NOW - 30,
+  });
+  const gift = message({
+    threadid: 6,
+    userid: -1,
+    messagetype: "teamnotice",
+    subject: "A gift of 250 Shiny",
+    message: "We have added 250 Shiny to your account.\nWhy: Thanks for the report\nThank you for playing!",
+    unread: 1,
+    updatetime: NOW - 20,
+  });
+
+  it("names the team, offers no truce or Block, and answers a report's thread in it", async () => {
+    const api = fakeApi([[reply]], { 5: [reply] }, {});
+    const { host } = await openScreen(api);
+
+    expect(rows(host)[0]?.textContent).toContain("The game team");
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-pane__name")?.textContent).toBe("The game team");
+    expect(host.querySelector(".mail-block")).toBeNull();
+    expect(host.querySelector(".mail-pane__truce")).toBeNull();
+
+    type(host.querySelector<HTMLTextAreaElement>(".mail-writer textarea")!, "The map room");
+    click(host.querySelector(".mail-writer button[type=submit], .mail-writer__send"));
+    await settle();
+    expect(api.sent[0]).toMatchObject({ threadid: 5, targetid: -1, subject: "About your bug report", message: "The map room" });
+  });
+
+  it("a Shiny gift on its own reads as a message that cannot be answered", async () => {
+    const api = fakeApi([[gift]], { 6: [gift] }, {});
+    const { host } = await openScreen(api);
+
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-writer")).toBeNull();
+    expect(host.querySelector(".mail-block")).toBeNull();
+    expect(host.querySelector(".mail-pane__note")?.textContent).toBe("A message from the game team. It cannot be answered.");
+    expect(host.querySelector(".mail-message__text")?.textContent).toContain("Why: Thanks for the report");
+  });
+});
