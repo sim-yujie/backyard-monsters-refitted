@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SESSION_STORAGE_KEY } from "@/config";
-import { boot, readRoute } from "./main";
+import fixture from "../../test/fixtures/admin-dashboard.json";
+import { boot, readRoute, sectionLevels } from "./main";
+import type { TopItem } from "./problems";
 
 /**
  * Who sees the dashboard: only the owner. Without a session, or when the
@@ -18,6 +20,23 @@ describe("the address", () => {
     expect(readRoute("?bug=41", "")).toEqual({ bug: 41, section: "bugs" });
     expect(readRoute("?bug=x", "#nothing")).toEqual({ bug: null, section: null });
     expect(readRoute("?bug=-3", "#health")).toEqual({ bug: null, section: "health" });
+  });
+});
+
+describe("the section links", () => {
+  it("take the worst state of each section's problems", () => {
+    const item = (level: TopItem["level"], section: TopItem["section"]): TopItem => ({
+      level,
+      section,
+      key: `${section}-${level}`,
+      title: "",
+      detail: "",
+      steps: [],
+    });
+    expect(sectionLevels([])).toEqual({});
+    expect(
+      sectionLevels([item("warn", "health"), item("bad", "health"), item("warn", "health"), item("warn", "backups")]),
+    ).toEqual({ health: "bad", backups: "warn" });
   });
 });
 
@@ -56,5 +75,71 @@ describe("who sees the dashboard", () => {
     expect(new Headers(init.headers).get("Authorization")).toBe("Bearer player-token");
     expect(document.title).toBe("Not found");
     expect(document.body.textContent).not.toMatch(/dashboard|admin|health|bug/i);
+  });
+});
+
+describe("the owner's first look", () => {
+  /** The server's answers, by route, from a test server with made-up data. */
+  const answer = (url: string): unknown => {
+    const path = new URL(url, "http://localhost").pathname;
+    if (path.endsWith("/admin/me")) return fixture.me;
+    if (path.endsWith("/admin/health")) return fixture.health;
+    if (path.endsWith("/admin/stats/overview")) return fixture.overview;
+    if (path.endsWith("/admin/bugreports")) return fixture.bugReports;
+    if (path.endsWith("/admin/errors")) return fixture.errors;
+    return null;
+  };
+
+  beforeEach(() => {
+    document.body.replaceChildren();
+    localStorage.clear();
+    localStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({ token: "owner-token", userId: 2505 }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const body = answer(url);
+        return body === null ? notFoundResponse() : Response.json(body);
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  it("says in one sentence what is wrong, and what to do about it", async () => {
+    await boot();
+    await settle();
+    const box = document.getElementById("problems")!;
+    expect(box.querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box.textContent).toContain("Last night's backup did not happen");
+    expect(box.textContent).toContain("Telegram alerts are off");
+    // The first real problem opens its "What to do" by itself, with a command to copy.
+    const fix = box.querySelector<HTMLDetailsElement>("details.fix");
+    expect(fix?.open).toBe(true);
+    expect(fix?.querySelector("code")?.textContent).toBe("deploy/prod.sh exec backup bash /backup.sh");
+    expect(fix?.querySelector("button.copy")?.getAttribute("aria-label")).toMatch(/^Copy: /);
+  });
+
+  it("keeps the technical words behind Technical details", async () => {
+    await boot();
+    await settle();
+    const health = document.getElementById("health")!;
+    expect(health.textContent).toContain("Game server");
+    for (const word of ["f8304513abead896", "bun 1.4.2", "bymr-sgp1"]) {
+      const places = [...document.querySelectorAll("body *")].filter(
+        (el) => el.childElementCount === 0 && el.textContent?.includes(word),
+      );
+      expect(places.length, word).toBeGreaterThan(0);
+      for (const place of places) expect(place.closest("details.tech"), word).not.toBeNull();
+    }
   });
 });
