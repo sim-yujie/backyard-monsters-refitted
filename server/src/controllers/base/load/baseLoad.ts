@@ -29,6 +29,7 @@ import { infernoModeDescent } from "./modes/infernoModeDescent.js";
 import { infernoModeView } from "./modes/infernoModeView.js";
 import { infernoModeAttack } from "./modes/infernoModeAttack.js";
 import { infernoModeBuild } from "./modes/infernoModeBuild.js";
+import { INFERNO_MODES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
 import { validateAttack } from "../../../services/maproom/validateAttack.js";
 import { playerMapVersion } from "../../../services/maproom/playerMapVersion.js";
 import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
@@ -84,6 +85,9 @@ const INFERNO_SAVE_MODES = new Set<string>([BaseMode.IBUILD, BaseMode.IATTACK, B
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const { baseid, type, mapversion: requestedVersion, attackData, attackcost } = BaseLoadSchema.parse(ctx.request.body);
+
+  // The old Inferno modes are closed until the new Inferno ships (`config/InfernoConfig.ts`).
+  if (INFERNO_MODES.has(type)) requireInfernoOpen(ctx, user, `load ${type}`);
 
   // An attack the player left without saving is finished before anything
   // below reads a row it writes — the player's own save above all — so their

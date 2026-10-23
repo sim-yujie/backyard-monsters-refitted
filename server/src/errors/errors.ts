@@ -826,6 +826,18 @@ export const monsterTransferRejectedErr = (
   });
 
 /**
+ * An old Flash Inferno route, refused until the new Inferno ships
+ * (`config/InfernoConfig.ts`). The web client never calls one.
+ */
+export const infernoClosedErr = () =>
+  new ClientSafeError({
+    message: "The Inferno is closed for now. It will open again in a later update.",
+    status: Status.FORBIDDEN,
+    data: { reason: "infernoClosed" },
+    isClientFriendly: true,
+  });
+
+/**
  * An owner `/base/save` of a main yard, refused because owner saves are retired
  * (issue #101, `docs/design/yard-buildings.md` T1, `OWNER_SAVE_MODE=refuse`).
  *

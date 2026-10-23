@@ -7,6 +7,7 @@ import { Maproom } from "../../database/models/maproom.model.js";
 import { postgres } from "../../server.js";
 import { BaseType } from "../../enums/Base.js";
 import { findInfernoNeighbours } from "../../services/maproom/inferno/findInfernoNeighbours.js";
+import { requireInfernoOpen } from "../../services/inferno/infernoGate.js";
 import { findOverworldNeighbours } from "../../services/maproom/v1/findOverworldNeighbours.js";
 import { updateNeighbourData } from "../../services/maproom/updateNeighbourData.js";
 import {
@@ -34,6 +35,8 @@ export const getNeighbours: KoaController = async (ctx) => {
   const { type } = GetNeighboursSchema.parse(ctx.request.body);
 
   if (type === BaseType.INFERNO) {
+    // Closed until the new Inferno ships (`config/InfernoConfig.ts`).
+    requireInfernoOpen(ctx, ctx.authUser, "neighbours inferno");
     return getInfernoNeighbours(ctx);
   } else {
     return getOverworldNeighbours(ctx);

@@ -89,6 +89,7 @@ import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanSt
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
+import { INFERNO_SAVE_TYPES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -131,6 +132,10 @@ export const baseSave: KoaController = async (ctx) => {
 
   // Not the owner and not in an attack
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
+
+  // An Inferno yard or a Moloch tribe row is the old Inferno's, closed until
+  // the new Inferno ships (`config/InfernoConfig.ts`).
+  if (INFERNO_SAVE_TYPES.has(baseSave.type)) requireInfernoOpen(ctx, user, `base/save on ${baseSave.type}`);
 
   // Owner saves of a main yard (issue #101) or an outpost (outposts plan WP0b)
   // are retired: yards change through the server's action routes now, and this

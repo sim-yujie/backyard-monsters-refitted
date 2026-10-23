@@ -692,6 +692,8 @@ rejects, in any mode:
 
 ### Map Room 1 / Inferno
 
+**The old Inferno routes are closed** until the new Inferno ships (`server/src/config/InfernoConfig.ts`, `infernoConfig.legacyRoutesOpen = false`). Every Inferno load mode (`ibuild`, `iattack`, `iwmattack`, `idescent`, `iview`, `ihelp`, `iwmview`) on `/base/load`, `/api/:apiVersion/bm/base/load` and `/api/:apiVersion/bm/base/updatesaved`, the whole of `/api/:apiVersion/bm/base/save` and `/api/:apiVersion/bm/base/infernomonsters`, `/base/save` naming an Inferno yard or Inferno tribe row, and `/api/:apiVersion/bm/neighbours/get` with `type: "inferno"` answer `403` with `reason: "infernoClosed"` (`infernoClosedErr()`, `services/inferno/infernoGate.ts`) before anything is read or written. They trust the client too far, and the web client calls none of them. The rows below describe them as they run when reopened; `/api/:apiVersion/bm/base/save` then writes Inferno rows only.
+
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
 | POST | `/api/:apiVersion/bm/getnewmap` | apiVersion, verifyUserAuth, logRequest | none | If the user's home cell is on Map Room 3: `{ newmap: true, mapheaderurl, width: 500, height: 500 }`; else `{ newmap: false }` | Tells the client at startup whether to use the legacy (non-grid) map UI or the MR3 grid UI. |
