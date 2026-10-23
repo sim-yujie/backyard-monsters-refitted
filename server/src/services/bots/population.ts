@@ -40,9 +40,14 @@ import { BOT_MAX_LEVEL } from "./factory.js";
  * never passed: when it is full, a new bot's place is freed on the level most
  * over its share.
  *
- * Because a growing bot spends only hours on each low level, nearly every bot
- * standing on levels 1-20 is a quiet one in the long run, and only from about
- * level 25 up is a real share still growing. Neighbour lists are drawn fresh
+ * Because a growing bot spends only hours on each low level, and short levels
+ * are only ever 31-40 (quiet bots never leave a level, so lower ones never run
+ * short), the band-filling alone would leave every bot on levels 1-30 quiet.
+ * So each day also starts about `BotConfig.level1PerDay` new bots at the
+ * bottom of level 1 ({@link birthsToday}), growing, to climb and quit as new
+ * players do. They come first, within the daily cap; once the total is full,
+ * each takes the place of a quiet bot on the most crowded level
+ * ({@link planRebalance}). Neighbour lists are drawn fresh
  * from a level window each time (`botNeighbours.ts`), so a player still meets
  * different bots as they climb.
  */
@@ -134,6 +139,16 @@ export const quietChance = (level: number, quietRate: number): number =>
 export const bornQuietShare = (level: number, pace: Pace, share: number, flow: number): number =>
   share <= 0 ? 0 : Math.min(1, Math.max(0, 1 - (flow * daysOn(pace, level)) / share));
 
+/**
+ * How many new bots start at level 1 today for `perDay` a day on average: its
+ * whole part, and one more by the chance of its fraction.
+ */
+export const birthsToday = (perDay: number, rng: () => number): number => {
+  if (!(perDay > 0)) return 0;
+  const whole = Math.floor(perDay);
+  return whole + (rng() < perDay - whole ? 1 : 0);
+};
+
 /** One active bot as the rebalance sees it. */
 export interface RebalanceBot extends PaceBot {
   userid: number;
@@ -146,13 +161,17 @@ export interface RebalanceRules {
   total: number;
   slack: number;
   newPerDay: number;
+  /** New bots to start at level 1 today ({@link birthsToday}); absent reads as 0. */
+  births?: number;
 }
 
 /** The daily rebalance's plan. */
 export interface RebalancePlan {
   /** Bots to retire. */
   retire: number[];
-  /** One level per new bot to make, the shortest level first. */
+  /** New bots to start at the bottom of level 1, growing. */
+  born: number;
+  /** One level per new bot to make on a short level, the shortest level first. */
   make: number[];
 }
 
@@ -168,11 +187,11 @@ const leavesFirst =
   };
 
 /**
- * The daily rebalance at `now` (the file comment): which bots to retire and
- * which levels to make new bots on.
+ * The daily rebalance at `now` (the file comment): which bots to retire, how
+ * many to start at level 1 and which levels to make new bots on.
  */
 export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRules, now: number): RebalancePlan => {
-  const { share, total, slack, newPerDay } = rules;
+  const { share, total, slack, newPerDay, births = 0 } = rules;
   const byLevel: RebalanceBot[][] = share.map(() => []);
   for (const bot of bots) byLevel[Math.min(Math.max(bot.level, 1), share.length) - 1]!.push(bot);
   for (const list of byLevel) list.sort(leavesFirst(now));
@@ -180,6 +199,9 @@ export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRul
   const retire: number[] = [];
   const take = (index: number) => retire.push(byLevel[index]!.shift()!.userid);
   const want = (index: number) => share[index] ?? 0;
+  /** New bots planned on each level. */
+  const planned = share.map(() => 0);
+  const held = (index: number) => byLevel[index]!.length + planned[index]!;
 
   byLevel.forEach((list, index) => {
     if (list.length > want(index) + slack) while (list.length > want(index)) take(index);
@@ -189,8 +211,18 @@ export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRul
   const mostOver = (): number => {
     let best = -1;
     byLevel.forEach((list, index) => {
-      const over = list.length - want(index);
-      if (over > 0 && (best < 0 || over > byLevel[best]!.length - want(best))) best = index;
+      const over = held(index) - want(index);
+      if (list.length > 0 && over > 0 && (best < 0 || over > held(best) - want(best))) best = index;
+    });
+    return best;
+  };
+
+  /** The most crowded level whose next bot to leave is quiet, the higher on a tie; -1 when no bot is quiet. */
+  const mostCrowdedQuiet = (): number => {
+    let best = -1;
+    byLevel.forEach((list, index) => {
+      if (list.length > 0 && isQuiet(list[0]!, now) && (best < 0 || held(index) - want(index) >= held(best) - want(best)))
+        best = index;
     });
     return best;
   };
@@ -203,11 +235,23 @@ export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRul
     live--;
   }
 
-  const short = byLevel.flatMap((list, index) => (list.length < want(index) - slack ? [index] : []));
-  const planned = share.map(() => 0);
-  const gap = (index: number) => want(index) - byLevel[index]!.length - planned[index]!;
+  let born = 0;
+  while (born < Math.min(births, newPerDay)) {
+    if (live >= total) {
+      const index = mostCrowdedQuiet();
+      if (index < 0) break;
+      take(index);
+      live--;
+    }
+    planned[0]!++;
+    born++;
+    live++;
+  }
+
+  const short = byLevel.flatMap((_, index) => (held(index) < want(index) - slack ? [index] : []));
+  const gap = (index: number) => want(index) - held(index);
   const make: number[] = [];
-  while (make.length < newPerDay) {
+  while (born + make.length < newPerDay) {
     const index = short.reduce((best, one) => (best < 0 || gap(one) > gap(best) ? one : best), -1);
     if (index < 0 || gap(index) <= 0) break;
     if (live >= total) {
@@ -220,5 +264,5 @@ export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRul
     make.push(index + 1);
     live++;
   }
-  return { retire, make };
+  return { retire, born, make };
 };

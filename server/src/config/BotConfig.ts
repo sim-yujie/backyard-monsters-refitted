@@ -27,6 +27,12 @@ import { Env } from "../enums/Env.js";
  * - `BOTS_NEW_PER_DAY`  — at most this many new bots a day, made by the daily
  *                         rebalance on levels short of their share (default
  *                         {@link DEFAULT_BOTS_NEW_PER_DAY}).
+ * - `BOTS_LEVEL1_PER_DAY` — how many new bots a day, on average, start at
+ *                         level 1 as new players and grow (and quit) like
+ *                         them; each takes the place of a quiet bot on the
+ *                         most crowded level once the total is full (default
+ *                         {@link DEFAULT_BOTS_LEVEL1_PER_DAY}, 0 turns it off).
+ *                         Counted in `BOTS_NEW_PER_DAY`.
  * - `BOTS_LEVEL_SLACK`  — how far a level may sit off its share before the
  *                         rebalance acts: more retires its extra bots, fewer
  *                         makes new ones (default {@link DEFAULT_BOTS_LEVEL_SLACK}).
@@ -47,6 +53,8 @@ export const DEFAULT_BOTS_GROWING_FLOW = 0.3;
 /** `[PLACEHOLDER]`: a quiet bot shows online about once in three days, a growing one several times a day (owner, 2026-10-23). */
 export const DEFAULT_BOTS_QUIET_ONLINE = 0.05;
 export const DEFAULT_BOTS_NEW_PER_DAY = 8;
+/** `[PLACEHOLDER]`: about one new player's worth of bot a day, so levels 1-30 see some bots grow (owner, 2026-10-23). */
+export const DEFAULT_BOTS_LEVEL1_PER_DAY = 1;
 export const DEFAULT_BOTS_LEVEL_SLACK = 2;
 
 /**
@@ -119,6 +127,8 @@ export interface BotConfig {
   readonly growingFlow: number;
   /** At most this many new bots a day. */
   readonly newPerDay: number;
+  /** New growing bots a day, on average, started at level 1; absent reads as 0. */
+  readonly level1PerDay?: number;
   /** Bots a level may sit off its share before the rebalance acts. */
   readonly levelSlack: number;
   /** Seeded Map Room 2 dev players are repaired and grown too; absent reads as false. */
@@ -146,6 +156,12 @@ export const zeroToOne = (raw: string | undefined, fallback: number): number => 
   return raw?.trim() && Number.isFinite(value) && value >= 0 && value <= 1 ? value : fallback;
 };
 
+/** A number 0 or more from the environment, or the fallback when absent or not one. */
+export const zeroOrMore = (raw: string | undefined, fallback: number): number => {
+  const value = Number(raw?.trim());
+  return raw?.trim() && Number.isFinite(value) && value >= 0 ? value : fallback;
+};
+
 /** A whole number 0 or more from the environment, or the fallback when absent or not one. */
 export const wholeNumber = (raw: string | undefined, fallback: number): number => {
   const value = Number(raw?.trim());
@@ -167,6 +183,7 @@ export const botConfig = (): BotConfig => ({
   quietOnline: zeroToOne(process.env.BOTS_QUIET_ONLINE, DEFAULT_BOTS_QUIET_ONLINE),
   growingFlow: positiveNumber(process.env.BOTS_GROWING_FLOW, DEFAULT_BOTS_GROWING_FLOW),
   newPerDay: wholeNumber(process.env.BOTS_NEW_PER_DAY, DEFAULT_BOTS_NEW_PER_DAY),
+  level1PerDay: zeroOrMore(process.env.BOTS_LEVEL1_PER_DAY, DEFAULT_BOTS_LEVEL1_PER_DAY),
   levelSlack: wholeNumber(process.env.BOTS_LEVEL_SLACK, DEFAULT_BOTS_LEVEL_SLACK),
   seeded: seededYardsOn(process.env),
 });

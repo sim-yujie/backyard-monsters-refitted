@@ -150,7 +150,7 @@ describe("the daily rebalance", () => {
 
   test("within the slack nothing happens", () => {
     const bots = [bot(1, 1), bot(1, 1), bot(1, 1), bot(3, 1)];
-    expect(planRebalance(bots, rules([2, 1, 1]), NOW)).toEqual({ retire: [], make: [] });
+    expect(planRebalance(bots, rules([2, 1, 1]), NOW)).toEqual({ retire: [], born: 0, make: [] });
   });
 
   test("short levels get new bots at that level, the shortest first, at most the daily cap", () => {

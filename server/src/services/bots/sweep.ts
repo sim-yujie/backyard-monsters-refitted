@@ -22,6 +22,7 @@ import { applyGrowth, holdLootInBand, rearmFiredTraps, refillArmy, targetAt, ten
 import { createBots, evenSpread } from "./factory.js";
 import {
   anchorFor,
+  birthsToday,
   bornQuietShare,
   drawQuiet,
   isQuiet,
@@ -60,8 +61,9 @@ import { generateBotYard } from "./yardGenerator.js";
  *    claimed in `bym.job_run` (`job = 'bots-rebalance'`, as
  *    `scripts/monthly-shiny.ts` claims its month), so one server runs it.
  *    It is not a `bot_job`: it belongs to no bot. It retires the bots of
- *    crowded levels and makes new bots on short ones (`planRebalance`,
- *    `population.ts`), at most `BOTS_NEW_PER_DAY`.
+ *    crowded levels, starts about `BOTS_LEVEL1_PER_DAY` new bots at level 1
+ *    and makes new bots on short levels (`planRebalance`, `population.ts`),
+ *    at most `BOTS_NEW_PER_DAY` in all.
  * 3. **Runs due jobs**, at most {@link JOBS_PER_PASS}, each in its own
  *    transaction: the row is claimed with `FOR UPDATE SKIP LOCKED`, so two
  *    servers never run one job, and the job's effect and its reschedule (or
@@ -217,7 +219,10 @@ export interface SweepReport {
   failed: number;
   dropped: number;
   retired: number[];
+  /** New bots made by the rebalance: those started at level 1 and those on short levels. */
   replaced: number[];
+  /** Of `replaced`, those started at level 1. */
+  born: number[];
   grew: { userid: number; from: number; to: number }[];
   /** Bots whose growth was refused (logged): their yard is not the generator's. */
   refused: number[];
@@ -604,8 +609,9 @@ export const rebalancePeriod = (now: number): string => at(now).toISOString().sl
 const rebalance = async (
   em: EntityManager,
   now: number,
-  config: BotConfig
-): Promise<{ retired: number[]; make: number[] } | null> =>
+  config: BotConfig,
+  rng: () => number
+): Promise<{ retired: number[]; born: number; make: number[] } | null> =>
   em.fork().transactional(async (tx) => {
     const claimed = await tx.execute<{ job: string }[]>(
       `INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING job`,
@@ -625,7 +631,13 @@ const rebalance = async (
     const share = evenSpread(config.total);
     const plan = planRebalance(
       bots,
-      { share, total: config.total, slack: config.levelSlack, newPerDay: config.newPerDay },
+      {
+        share,
+        total: config.total,
+        slack: config.levelSlack,
+        newPerDay: config.newPerDay,
+        births: birthsToday(config.level1PerDay ?? 0, rng),
+      },
       now
     );
 
@@ -642,15 +654,20 @@ const rebalance = async (
       else await retireUnloaded(tx, userid, now);
       retired.push(userid);
     }
-    logger.info("Bot rebalance {period}: {active} active, {retired} retired off crowded levels, {made} new to make", {
-      period: rebalancePeriod(now),
-      active: bots.length,
-      retired: retired.length,
-      made: plan.make.length,
-    });
+    logger.info(
+      "Bot rebalance {period}: {active} active, {retired} retired off crowded levels, {born} new at level 1 and {made} new on short levels to make",
+      {
+        period: rebalancePeriod(now),
+        active: bots.length,
+        retired: retired.length,
+        born: plan.born,
+        made: plan.make.length,
+      }
+    );
 
     const counts = share.map(() => 0);
     for (const bot of bots) if (!retired.includes(bot.userid)) counts[Math.min(bot.level, share.length) - 1]!++;
+    counts[0]! += plan.born;
     for (const level of plan.make) counts[level - 1]!++;
     const drifted = share.flatMap((want, index) =>
       Math.abs(counts[index]! - want) > SPREAD_TOLERANCE ? [`level ${index + 1}: ${counts[index]} of ${want}`] : []
@@ -661,14 +678,21 @@ const rebalance = async (
         drifted: drifted.join(", "),
       });
     }
-    return { retired, make: plan.make };
+    return { retired, born: plan.born, make: plan.make };
   });
 
 /**
  * Makes a new bot on each of `levels`, starting quiet by its level's settled
- * mix (`bornQuietShare`); failures are logged and left to the next rebalance.
+ * mix (`bornQuietShare`), or with `fresh` growing from the bottom of its level
+ * as a new player; failures are logged and left to the next rebalance.
  */
-const makeBots = async (em: EntityManager, levels: readonly number[], now: number, deps: JobContext): Promise<number[]> => {
+const makeBots = async (
+  em: EntityManager,
+  levels: readonly number[],
+  now: number,
+  deps: JobContext,
+  fresh = false
+): Promise<number[]> => {
   if (levels.length === 0) return [];
   const { config } = deps;
   const share = evenSpread(config.total);
@@ -677,7 +701,10 @@ const makeBots = async (em: EntityManager, levels: readonly number[], now: numbe
       rng: mulberry32(Math.floor(deps.rng() * 2 ** 32)),
       now,
       pace: config.pace,
-      quietShare: (level) => bornQuietShare(level, config.pace, share[level - 1] ?? 0, config.growingFlow),
+      fresh,
+      quietShare: fresh
+        ? undefined
+        : (level) => bornQuietShare(level, config.pace, share[level - 1] ?? 0, config.growingFlow),
     });
     return made.map((bot) => bot.userid);
   } catch (error) {
@@ -706,6 +733,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     dropped: 0,
     retired: [],
     replaced: [],
+    born: [],
     grew: [],
     refused: [],
     revenge: {},
@@ -725,11 +753,13 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     kinds = [...HANDLED_KINDS, "revenge"];
   }
 
-  const rebalanced = await rebalance(em, now, config);
+  const rebalanced = await rebalance(em, now, config, context.rng);
   if (rebalanced !== null) {
     report.rebalanced = true;
     report.retired.push(...rebalanced.retired);
-    report.replaced.push(...(await makeBots(em, rebalanced.make, now, context)));
+    const born = await makeBots(em, Array<number>(rebalanced.born).fill(1), now, context, true);
+    report.born.push(...born);
+    report.replaced.push(...born, ...(await makeBots(em, rebalanced.make, now, context)));
   }
 
   const online: number[] = [];
