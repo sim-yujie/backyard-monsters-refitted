@@ -13,7 +13,7 @@ import type {
 import { RAID_MAP_WIDTH, raidArmy, raidWalk } from "./raidArmy.js";
 import { DEGREES, chooseRaidDirection } from "./raidDirection.js";
 import { RAID_PREFERENCES, type RaidPreference } from "./raidPreferences.js";
-import { pickRaidTribe } from "./raidTribe.js";
+import { chooseRaidTribe, type RaidCamp } from "./raidTribe.js";
 
 /**
  * The raid planner (#226 WP1, `docs/design/wild-raids.md` §5): from a saved
@@ -21,8 +21,8 @@ import { pickRaidTribe } from "./raidTribe.js";
  * would have sent, as a raid log the engine fights (`replayRaid`).
  *
  * Pure: no database, no Redis, no clock. The same input and seed always give
- * the same plan. One stream off the seed draws the tribe, then the routes'
- * scatter (`raidDirection.ts`).
+ * the same plan. One stream off the seed draws the tribe's roll (used only
+ * with no camps, `raidTribe.ts`), then the routes' scatter (`raidDirection.ts`).
  *
  * Every type lands in a disc `800 + d/2` out on the chosen bearing, `d/2`
  * across, where `d` is its distance from `raidArmy.ts` (`WMATTACK.SpawnA`,
@@ -63,6 +63,8 @@ export interface RaidPlanInput {
   readonly preference: RaidPreference;
   /** The raid's own seed. */
   readonly seed: number;
+  /** The player's Map Room 1 camps, which pick the tribe (`raidTribe.ts`); none on Map Room 2. */
+  readonly camps?: readonly RaidCamp[] | null;
 }
 
 /** A planned raid. */
@@ -136,7 +138,7 @@ const raidEvents = (
  */
 export const planRaid = (input: RaidPlanInput): RaidPlan | null => {
   const rng = mulberry32(input.seed);
-  const tribe = pickRaidTribe(rng);
+  const tribe = chooseRaidTribe(rng, input.level, input.camps ?? null);
   const yard = buildEngineYard({
     buildingdata: input.buildingdata,
     buildinghealthdata: input.buildinghealthdata ?? null,

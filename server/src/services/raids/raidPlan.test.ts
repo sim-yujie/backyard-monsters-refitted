@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Tribe } from "../../enums/Tribes.js";
+import { MR1_TRIBES, Tribe } from "../../enums/Tribes.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { replayRaid } from "../../game-rules/combat/replay.js";
 import { RAID_MAX_SECONDS, ticks } from "../../game-rules/combat/stats.js";
 import type { CombatBuildingDataMap, ResourceAmounts } from "../../game-rules/combat/types.js";
 import { DEGREES } from "./raidDirection.js";
 import { RAID_LANDING_LIMIT, SWARM_SPACING_DEGREES, planRaid, raidLanding, type RaidPlan } from "./raidPlan.js";
-import { RAID_TRIBES, pickRaidTribe } from "./raidTribe.js";
+import { RAID_TRIBES, chooseRaidTribe, mr1RaidCamps, pickRaidTribe, type RaidCamp } from "./raidTribe.js";
+import { MR1_TRIBE_RESPAWN_SECONDS, currentMR1Tribes } from "../maproom/v1/mr1TribeRules.js";
 
 const SANDBOX = JSON.parse(
   readFileSync(fileURLToPath(new URL("../../../../web/test/fixtures/baseload-sandbox-yard.json", import.meta.url)), "utf8"),
@@ -35,14 +36,98 @@ const seedFor = (tribe: Tribe): number => {
 const REACH = Math.sqrt(1.25);
 
 describe("pickRaidTribe", () => {
-  test("random, one of the four, for everyone", () => {
+  test("random, one of the four, with no camps", () => {
     const seen = new Set<Tribe>();
     for (let seed = 1; seed <= 200; seed += 1) seen.add(pickRaidTribe(mulberry32(seed)));
     expect([...seen].sort()).toEqual([...RAID_TRIBES].sort());
   });
 
-  test("the plan's tribe is its seed's first draw", () => {
+  test("the plan's tribe is its seed's first draw, with no camps", () => {
     for (const seed of [1, 2, 3, 4, 5]) expect(plan(seed).tribe).toBe(pickRaidTribe(mulberry32(seed)));
+  });
+});
+
+describe("chooseRaidTribe: Flash's WMATTACK.Trigger (owner, 2026-10-23)", () => {
+  const camp = (tribe: Tribe, level: number, destroyed = false): RaidCamp => ({ tribe, level, destroyed });
+  const camps = [
+    camp(Tribe.DREADNAUT, 22),
+    camp(Tribe.KOZU, 20),
+    camp(Tribe.ABUNAKKI, 21),
+    camp(Tribe.LEGIONNAIRE, 19),
+  ];
+
+  test("the weakest camp still standing", () => {
+    expect(chooseRaidTribe(mulberry32(1), 20, camps)).toBe(Tribe.LEGIONNAIRE);
+    const legionnaireDown = camps.map((one) => (one.tribe === Tribe.LEGIONNAIRE ? { ...one, destroyed: true } : one));
+    expect(chooseRaidTribe(mulberry32(1), 20, legionnaireDown)).toBe(Tribe.KOZU);
+  });
+
+  test("but none more than 10 levels below the player", () => {
+    const spread = [camp(Tribe.KOZU, 9), camp(Tribe.ABUNAKKI, 10), camp(Tribe.DREADNAUT, 30)];
+    expect(chooseRaidTribe(mulberry32(1), 20, spread)).toBe(Tribe.ABUNAKKI);
+  });
+
+  test("with camps but none that fits, Legionnaire", () => {
+    const allDown = camps.map((one) => ({ ...one, destroyed: true }));
+    for (const seed of [1, 2, 3, 4]) expect(chooseRaidTribe(mulberry32(seed), 20, allDown)).toBe(Tribe.LEGIONNAIRE);
+    expect(chooseRaidTribe(mulberry32(1), 40, [camp(Tribe.KOZU, 5)])).toBe(Tribe.LEGIONNAIRE);
+  });
+
+  test("with no camps, the roll", () => {
+    for (const tribe of RAID_TRIBES) {
+      expect(chooseRaidTribe(mulberry32(seedFor(tribe)), 20, null)).toBe(tribe);
+      expect(chooseRaidTribe(mulberry32(seedFor(tribe)), 20, [])).toBe(tribe);
+    }
+  });
+
+  test("the roll is drawn either way, so the routes come out the same", () => {
+    const seed = seedFor(Tribe.LEGIONNAIRE);
+    const rolled = plan(seed);
+    const picked = planRaid({
+      buildingdata: SANDBOX.buildingdata,
+      resources: SANDBOX.resources,
+      level: 20,
+      preference: 0,
+      seed,
+      camps,
+    })!;
+    expect(picked.tribe).toBe(Tribe.LEGIONNAIRE);
+    expect(picked.bearing).toBe(rolled.bearing);
+    expect(picked.log).toEqual(rolled.log);
+  });
+
+  test("the plan's tribe follows its camps", () => {
+    const kozuOnly = [camp(Tribe.KOZU, 20)];
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const planned = planRaid({ buildingdata: SANDBOX.buildingdata, resources: SANDBOX.resources, level: 20, preference: 0, seed, camps: kozuOnly });
+      expect(planned!.tribe).toBe(Tribe.KOZU);
+    }
+  });
+});
+
+describe("mr1RaidCamps: the four as Map Room 1 shows them", () => {
+  const NOW = 1_900_000_000;
+  const slots = currentMR1Tribes(4, MR1_TRIBES);
+  const baseid = (index: number) => String(slots[index]!.template.baseid);
+
+  test("one per tribe, one below the player's level up to two above", () => {
+    expect(mr1RaidCamps(4, 20, [], NOW)).toEqual([
+      { tribe: Tribe.LEGIONNAIRE, level: 19, destroyed: false },
+      { tribe: Tribe.KOZU, level: 20, destroyed: false },
+      { tribe: Tribe.ABUNAKKI, level: 21, destroyed: false },
+      { tribe: Tribe.DREADNAUT, level: 22, destroyed: false },
+    ]);
+    // So a Map Room 1 raid is Legionnaire's while its camp stands.
+    expect(chooseRaidTribe(mulberry32(seedFor(Tribe.DREADNAUT)), 20, mr1RaidCamps(4, 20, [], NOW))).toBe(Tribe.LEGIONNAIRE);
+  });
+
+  test("a wrecked camp counts as wrecked until its ten minutes are up", () => {
+    const wrecked = [{ baseid: baseid(0), tribeHealthData: {}, destroyed: 1, destroyedAt: NOW - 60 }];
+    const camps = mr1RaidCamps(4, 20, wrecked as never, NOW);
+    expect(camps[0]!.destroyed).toBe(true);
+    expect(chooseRaidTribe(mulberry32(1), 20, camps)).toBe(Tribe.KOZU);
+    const back = mr1RaidCamps(4, 20, wrecked as never, NOW - 60 + MR1_TRIBE_RESPAWN_SECONDS);
+    expect(back[0]!.destroyed).toBe(false);
   });
 });
 

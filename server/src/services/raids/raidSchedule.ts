@@ -2,6 +2,7 @@ import { MIN_HOURS_BETWEEN_TRIBE_RAIDS } from "../../config/RaidConfig.js";
 import type { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
+import { PROTECTION_ITEMS } from "../../game-data/store/storeItems.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import { playerLevelOf } from "../base/calculateBaseLevel.js";
@@ -305,6 +306,7 @@ export type RaidNotDue =
   | "sessions"
   | "notYet"
   | "tooSoon"
+  | "protected"
   | "damaged"
   | "underAttack"
   | "raidOpen"
@@ -318,6 +320,9 @@ export interface RaidDueSave {
   points?: string | null;
   basevalue?: string | null;
   aiattacks?: unknown;
+  /** Damage protection's end, unix seconds; with {@link storedata}, whether it was bought. */
+  protected?: number | string | null;
+  storedata?: unknown;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
 }
@@ -341,6 +346,25 @@ export interface RaidDueFacts {
 export const RAIDED_MAP_ROOMS: ReadonlySet<number> = new Set([MapRoomVersion.V1, MapRoomVersion.V2]);
 
 /**
+ * Whether the yard is under protection the player bought, Flash's
+ * "sanctuary" (`STORE.as:2502-2505`): protected now, with a damage protection
+ * item (`PRO1`..`PRO3`) on the books. A shop item whose time is up counts as
+ * gone, as the yard load clears it (`clearExpiredStoreItems`). The free
+ * protection after being attacked, or a new player's, is not bought, so it
+ * does not hold a raid back (`WMATTACK.as:327`).
+ */
+export const boughtProtection = (save: Pick<RaidDueSave, "protected" | "storedata">, now: number): boolean => {
+  if (!(Number(save.protected ?? 0) > now)) return false;
+  const storedata = (save.storedata ?? {}) as Record<string, { e?: unknown } | null | undefined>;
+  return PROTECTION_ITEMS.some((item) => {
+    const entry = storedata[item];
+    if (!entry) return false;
+    const ends = Number(entry.e ?? 0);
+    return !ends || ends > now;
+  });
+};
+
+/**
  * Any building damaged or repairing. The save should be caught up first: a
  * stored save can still show damage a repair has healed since, which only
  * holds the raid back until the next catch-up.
@@ -360,13 +384,14 @@ const yardDamaged = (save: RaidDueSave): boolean =>
  *    plus the preference's wait (never, with no raid and no session yet).
  *    And at least {@link RAID_MIN_GAP_SECONDS} since the last raid opened,
  *    cancelled ones too (owner, 2026-10-19).
- * 5. Nothing in the yard damaged or repairing (owner, Q5).
- * 6. Not under attack, and no raid already open.
- * 7. Online by #271's rule with the attack load's 60-second window, and no
+ * 5. No protection the player bought ({@link boughtProtection}): it pauses
+ *    raids, as in Flash (owner, 2026-10-23, replacing Q6). Free protection
+ *    does not.
+ * 6. Nothing in the yard damaged or repairing (owner, Q5).
+ * 7. Not under attack, and no raid already open.
+ * 8. Online by #271's rule with the attack load's 60-second window, and no
  *    in-game check pending (#273).
- * 8. The last presence ping said "yard, Planner closed" (§7.3).
- *
- * Protection does not hold a raid back (owner, Q6).
+ * 9. The last presence ping said "yard, Planner closed" (§7.3).
  */
 export const raidDueCheck = (facts: RaidDueFacts): RaidNotDue | null => {
   const { save, now } = facts;
@@ -381,6 +406,7 @@ export const raidDueCheck = (facts: RaidDueFacts): RaidNotDue | null => {
     (schedule.lastattack > 0 ? schedule.lastattack + RAID_PREFERENCES[schedule.attackPreference].waitSeconds : null);
   if (dueAt === null || now < dueAt) return "notYet";
   if (now < raidGapEndsAt(schedule)) return "tooSoon";
+  if (boughtProtection(save, now)) return "protected";
 
   if (yardDamaged(save)) return "damaged";
   if (facts.underAttack) return "underAttack";
