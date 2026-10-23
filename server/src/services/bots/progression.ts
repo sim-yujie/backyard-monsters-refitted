@@ -678,6 +678,8 @@ export class Progression {
     if (candidate.t === WALL_TYPE) return this.shortOfTier() ? "walls" : "upgrades";
     if (MAIN_HARVESTERS.has(candidate.t) || candidate.t === SILO) return "mainUpgrades";
     if (SIDE_HARVESTERS.has(candidate.t)) return "sideUpgrades";
+    // A tower bot upgrades its towers as it builds them.
+    if (category === "defence" && this.persona === "towers") return "towers";
     return "upgrades";
   }
 
@@ -725,9 +727,15 @@ export class Progression {
       staged.set(stage, list);
     }
     // Ready once every building the hall allows stands, walls and traps to their fill, and the levels are far
-    // enough on; or once the plan has nothing else to do.
-    const buildsLeft = [...staged.values()].some((list) => list.some((candidate) => candidate.kind === "build"));
-    const hallReady = staged.size === 0 || (!buildsLeft && this.readiness() >= (this.thresholds[this.hall] ?? 1));
+    // enough on; or once the plan has nothing else to do. A build too big for this level band (a Hatchery
+    // Control Centre at Town Hall 3) waits for a later band rather than hold the hall back.
+    const buildsLeft = [...staged.values()].some((list) =>
+      list.some((candidate) => candidate.kind === "build" && inBand(candidate))
+    );
+    // Its walls are brought up to this hall's tier first, too.
+    const wallsLeft = (staged.get("walls") ?? []).some(inBand);
+    const hallReady =
+      staged.size === 0 || (!buildsLeft && !wallsLeft && this.readiness() >= (this.thresholds[this.hall] ?? 1));
 
     const open = PLAN_ORDER[this.persona].filter((stage) => staged.get(stage)?.some(inBand));
     const hall = hallReady ? hallUpgrade.filter(inBand) : [];

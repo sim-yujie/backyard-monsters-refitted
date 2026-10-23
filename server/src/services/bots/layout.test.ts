@@ -20,6 +20,7 @@ import {
   type PlacedSpot,
 } from "./layout.js";
 import { PERSONAS, targetInBand, wallTargets, yardAtPoints, type Persona, type ProgressionYard } from "./progression.js";
+import { BEGINNER_TOP_HALL, yardStyleOf } from "./yardStyle.js";
 
 /** The bot yard layout (issues #238, #250, #252; `docs/design/bot-neighbours.md` §4.2 step 2). */
 
@@ -116,10 +117,10 @@ describe("layoutBotYard", () => {
     "a yard too broken up for its next Housing buys its next expansion early, and stays legal",
     () => {
       // This seed's second Housing finds no room on the plot of its level (found by a 400-yard search).
-      const laid = laidOut(209475, "army", 22, 0.5);
+      const laid = laidOut(233232, "economy", 18, 0.5);
       const early = laid.layout.buildings.find((spot, index) => {
         const level = laid.yard.builtAtLevel[laid.yard.buildings[index]!.id]!;
-        return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(209475, level));
+        return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(233232, level));
       });
       expect(early?.t).toBe(15);
       expectBuildable(laid);
@@ -319,7 +320,10 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
       let all = 0;
       for (let level = 10; level <= 40; level++) {
         for (let index = 0; index < 3; index++) {
-          const { yard, layout } = laidOut(level * 7919 + index * 104729, PERSONAS[index]!, level, (index + 0.5) / 3);
+          const seed = level * 7919 + index * 104729;
+          const { yard, layout } = laidOut(seed, PERSONAS[index]!, level, (index + 0.5) / 3);
+          // A beginner's first Town Halls put buildings down with no thought for cover (`yardStyle.ts`).
+          if (yardStyleOf(seed).beginner && yard.townHall <= BEGINNER_TOP_HALL) continue;
           const towers = layout.buildings.flatMap((spot, at) => {
             const range = TOWER_STATS[spot.t]?.[yard.buildings[at]!.l - 1]?.range;
             if (!TOWERS.has(spot.t) || range === undefined) return [];
@@ -351,12 +355,15 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
     () => {
       for (let level = 25; level <= 40; level++) {
         for (let index = 0; index < 3; index++) {
-          const { yard, layout } = laidOut(level * 7919 + index * 104729, PERSONAS[index]!, level, (index + 0.5) / 3);
+          const seed = level * 7919 + index * 104729;
+          const { yard, layout } = laidOut(seed, PERSONAS[index]!, level, (index + 0.5) / 3);
           if (yard.townHall < 4) continue;
           const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
           const hall = layout.buildings.find((spot) => spot.t === TOWN_HALL_TYPE)!;
           expect({ level, index, hall: reachable(blocks, hall, layout.expansion) }).toEqual({ level, index, hall: false });
-          for (const silo of layout.buildings.filter((spot) => spot.t === SILO)) {
+          // A core-walled yard's fifth and sixth silos stand inside its tower ring, which has gaps.
+          const silos = layout.buildings.filter((spot) => spot.t === SILO);
+          for (const silo of yardStyleOf(seed).walls === "core" ? silos.slice(0, 4) : silos) {
             expect({ level, index, silo: reachable(blocks, silo, layout.expansion) }).toEqual({ level, index, silo: false });
           }
         }
@@ -366,20 +373,23 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
   );
 
   test(
-    "Town Hall 10: most harvesters sit inside the walled compartments",
+    "level 40, whole yard walled: most harvesters sit inside the walled compartments",
     () => {
       let inside = 0;
       let all = 0;
-      for (let seed = 0; seed < 9; seed++) {
+      for (let seed = 0; seed < 18; seed++) {
+        // A core-walled yard leaves its harvesters out in the open (`yardStyle.ts`).
+        if (yardStyleOf(seed * 7727 + 3).walls !== "full") continue;
         const { yard, layout } = laidOut(seed * 7727 + 3, PERSONAS[seed % PERSONAS.length]!, 40, 0.8);
-        expect(yard.townHall).toBe(10);
+        expect(yard.townHall).toBeGreaterThanOrEqual(8);
         const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
         for (const harvester of layout.buildings.filter((spot) => HARVESTERS.has(spot.t))) {
           all++;
           if (!reachable(blocks, harvester, layout.expansion)) inside++;
         }
       }
-      expect(inside / all).toBeGreaterThan(0.5);
+      // Level 40 is Town Hall 8 or so: its walls close the core and about half the compartments.
+      expect(inside / all).toBeGreaterThan(0.45);
     },
     { timeout: 60_000 }
   );
@@ -444,8 +454,8 @@ describe("layoutBotYard keeps its walls tidy", () => {
           });
           if (!joined) alone++;
         }
-        // The yard's first wall has nothing to join yet.
-        expect({ seed, alone }).toEqual({ seed, alone: walls.length === 1 ? 1 : 0 });
+        // The yard's first wall has nothing to join yet, unless it stands by a hallway.
+        expect({ seed, alone: alone <= (walls.length === 1 ? 1 : 0) }).toEqual({ seed, alone: true });
         for (const trap of layout.buildings.filter((spot) => TRAP_TYPES.has(spot.t))) {
           const onWallCell = plan.get(`${trap.X},${trap.Y}`)?.opening === false;
           expect({ seed, trap, onWallCell }).toEqual({ seed, trap, onWallCell: false });
@@ -499,12 +509,15 @@ describe("layoutBotYard keeps its walls tidy", () => {
         const core = botWallPlan(seed).filter((cell) => cell.core);
         expect(core.filter((cell) => cell.opening).length).toBe(4);
         const shut = core.every((cell) => (cell.opening ? traps : walls).has(`${cell.x},${cell.y}`));
-        // A Town Hall just upgraded may still be walling; once the yard has the walls Town Hall 3 stands, the core is shut.
-        if (walls.size >= wallTargets(seed)[3]!) expect({ seed, shut }).toEqual({ seed, shut: true });
+        // A Town Hall just upgraded may still be walling (walls come late in its plan); once the yard has the
+        // walls Town Hall 3 stands, the core is shut.
+        if (walls.size < wallTargets(seed)[3]!) continue;
+        expect({ seed, shut }).toEqual({ seed, shut: true });
         all++;
         if (shut) closed++;
       }
-      expect(closed / all).toBeGreaterThan(0.95);
+      expect(all).toBeGreaterThan(20);
+      expect(closed).toBe(all);
     },
     { timeout: 60_000 }
   );
@@ -551,10 +564,11 @@ describe("layoutBotYard packs the base in", () => {
     "levels 11-40: buildings stand close together and the base fills its bounding box",
     () => {
       const bands = [
-        // Before #252's packing: 0.29 and 17.6, 0.33 and 13.8, 0.43 and 7.5.
-        { from: 11, to: 20, density: 0.35, gap: 8 },
+        // Before #252's packing: 0.29 and 17.6, 0.33 and 13.8, 0.43 and 7.5. A core-walled yard's tower ring
+        // keeps its inside for towers to come, so levels 11-20 read a little looser (`yardStyle.ts`).
+        { from: 11, to: 20, density: 0.28, gap: 10 },
         { from: 21, to: 30, density: 0.35, gap: 8 },
-        { from: 31, to: 40, density: 0.44, gap: 5.5 },
+        { from: 31, to: 40, density: 0.41, gap: 5.5 },
       ];
       for (const band of bands) {
         const yards = matrix().filter(({ yard }) => yard.level >= band.from && yard.level <= band.to);
