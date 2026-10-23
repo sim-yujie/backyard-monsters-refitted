@@ -40,7 +40,8 @@ describe("health check deploy files", () => {
     expect(workflow).toContain("if: vars.UPTIME_CHECK == 'on' || github.event_name == 'workflow_dispatch'");
     expect(workflow).toContain("TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}");
     expect(workflow).toContain("TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}");
-    expect(workflow).toMatch(/permissions:\n {2}contents: read\n/);
+    // A Windows checkout may turn the workflow's line endings to CRLF.
+    expect(workflow).toMatch(/permissions:\r?\n {2}contents: read\r?\n/);
     expect(read("../../../../.github/scripts/uptime-check.sh")).not.toContain("\r");
   });
 

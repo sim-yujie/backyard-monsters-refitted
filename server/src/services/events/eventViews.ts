@@ -1,4 +1,5 @@
 import { KRALLEN_MAX_LEVEL, type EventReward } from "../../game-data/events/eventRewards.js";
+import { tierNeed, type LadderTier } from "../../game-data/events/events.js";
 import { lockedReason, type EventPlayer } from "./eventPlayer.js";
 import { NO_PROGRESS, type EventProgress } from "./progressStore.js";
 import { claimsUntil, nextUtcMidnight, utcDay, type ScheduledEvent } from "./schedule.js";
@@ -46,6 +47,10 @@ export interface EventView {
   krallen: { level: number; maxLevel: number } | null;
 }
 
+/** An amount for the page's sentences: "60 million", "2.5 million", "25,000". */
+export const amountWords = (amount: number): string =>
+  amount >= 1_000_000 ? `${Math.round(amount / 100_000) / 10} million` : amount.toLocaleString("en-US");
+
 /** A player with nothing known: may take part, no Krallen. */
 const ANYONE: EventPlayer = { townHall: Number.POSITIVE_INFINITY, tutorialDone: true, krallenLevel: 0 };
 
@@ -76,10 +81,19 @@ export const eventView = (
   const { event, window, status } = scheduled;
   const active = status === "active";
   const paysKrallen = (event.ladder?.tiers ?? []).some((tier) => tier.rewards.some((reward) => reward.kind === "krallen"));
+  // A tier claimed this month raised her a level: it shows the goal it was
+  // claimed at, not the next month's.
+  const needOf = (tier: LadderTier, index: number): number =>
+    tierNeed(
+      tier,
+      progress.claimedTiers.includes(index) && player.krallenLevel > 0 ? player.krallenLevel - 1 : player.krallenLevel
+    );
+  const firstTier = event.ladder?.tiers[0];
+  const text = status === "upcoming" ? (event.upcomingText ?? event.text) : event.text;
   return {
     id: event.id,
     title: event.title,
-    text: status === "upcoming" ? (event.upcomingText ?? event.text) : event.text,
+    text: firstTier ? text.replaceAll("{goal}", amountWords(needOf(firstTier, 0))) : text,
     kind: event.kind,
     banner: event.banner ?? null,
     status,
@@ -93,7 +107,7 @@ export const eventView = (
           label: event.ladder.label,
           counter: progress.counter,
           tiers: event.ladder.tiers.map((tier, index) => ({
-            need: tier.need,
+            need: needOf(tier, index),
             rewards: tier.rewards,
             claimed: progress.claimedTiers.includes(index),
           })),

@@ -44,14 +44,30 @@ export type LadderSource = "own" | "attackLoot";
 /** One tier of a collection ladder: claimable once the counter reaches `need`. */
 export interface LadderTier {
   readonly need: number;
+  /**
+   * The need by the player's Krallen level, 0 (none yet) first, in place of
+   * `need`; past the end, the last entry ({@link tierNeed}). The Krallen Hunt's.
+   */
+  readonly needByKrallenLevel?: readonly number[];
   readonly rewards: readonly EventReward[];
 }
+
+/** What a tier needs of a player whose Krallen is at `krallenLevel` (0 for none). */
+export const tierNeed = (tier: LadderTier, krallenLevel: number): number => {
+  const needs = tier.needByKrallenLevel;
+  if (!needs?.length) return tier.need;
+  const index = Math.min(Math.max(Math.trunc(krallenLevel) || 0, 0), needs.length - 1);
+  return needs[index]!;
+};
 
 export interface EventDefinition {
   /** Stable id, also the key of the players' progress rows. Never reuse one. */
   readonly id: string;
   readonly title: string;
-  /** One or two short sentences for the Events page. */
+  /**
+   * One or two short sentences for the Events page. `{goal}` stands for the
+   * player's own need for the first ladder tier, in words ("60 million").
+   */
   readonly text: string;
   /** The same, worded for before the start ("is coming"); `text` when absent. */
   readonly upcomingText?: string;
@@ -162,9 +178,16 @@ export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
  * storage cap, so loot that did not fit still counts; outpost income does
  * not). Reaching the goal pays Krallen: level 1 the first time, one level
  * more each later month, at most 5 (`services/events/grant.ts`).
+ *
+ * The goal follows the player's Krallen level (owner, 2026-10-23): 60
+ * million to win her, then 100, 150, 225 and 300 million to raise her to
+ * levels 2, 3, 4 and 5. A level 5 Krallen keeps the last goal on the page,
+ * though the hunt has nothing more to give her.
  * ═══════════════════════════════════════════════════════════════════════
  */
-export const KRALLEN_HUNT_GOAL = 100_000_000;
+export const KRALLEN_HUNT_GOALS: readonly number[] = [
+  60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000,
+];
 
 /** The first month the hunt runs, and how many months are listed from it. */
 export const KRALLEN_HUNT_FIRST = { year: 2026, month: 11 } as const;
@@ -181,14 +204,16 @@ export const krallenHunt = (year: number, month: number): EventDefinition => {
   return {
     id: `krallen-${year}-${twoDigits(month)}`,
     title: "Krallen Hunt",
-    text: "Take 100 million loot in attacks before the month is out to win Krallen, or raise yours a level. Raids on players, wild monster camps and tribes all count, even loot that does not fit in your storage.",
+    text: "Take {goal} loot in attacks before the month is out to win Krallen, or raise yours a level. Each level needs more loot than the last. Raids on players, wild monster camps and tribes all count, even loot that does not fit in your storage.",
     kind: "krallen",
     startsAt: `${year}-${twoDigits(month)}-15T00:00:00Z`,
     endsAt: `${next.year}-${twoDigits(next.month)}-01T00:00:00Z`,
     ladder: {
       label: "Loot taken",
       source: "attackLoot",
-      tiers: [{ need: KRALLEN_HUNT_GOAL, rewards: [{ kind: "krallen" }] }],
+      tiers: [
+        { need: KRALLEN_HUNT_GOALS[0]!, needByKrallenLevel: KRALLEN_HUNT_GOALS, rewards: [{ kind: "krallen" }] },
+      ],
     },
     requires: { townHall: 6, tutorial: true },
     claimDays: KRALLEN_HUNT_CLAIM_DAYS,

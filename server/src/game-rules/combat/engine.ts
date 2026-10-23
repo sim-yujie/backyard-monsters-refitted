@@ -32,7 +32,6 @@ import {
   hasLootAura,
   hasQuake,
   krallenAuraRadius,
-  krallenBuff,
   linearAreaDamage,
   lootAuraBonus,
 } from "./champions.js";
@@ -2236,7 +2235,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // `screenPointOf` undone, as in {@link dropPoint}.
     creep.spawnX = spawnSy + spawnSx / 2;
     creep.spawnY = spawnSy - spawnSx / 2;
-    if (id === FOMOR_ID || hasLootAura(id, creep.power)) creep.aura = { counter: 0, members: [] };
+    if (id === FOMOR_ID || hasLootAura(id, creep.level, creep.friendly)) {
+      creep.aura = { counter: 0, members: [] };
+    }
     creep.hitFlags = championReach(id, creep.level, creep.power, creep.hitFlags);
   };
 
@@ -3702,9 +3703,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * `ProximityLootBuff.tick` (`components/abilities/ProximityLootBuff.as:33-58`):
    * while Krallen attacks, on every {@link LOOT_AURA_FRAMES}th of her frames,
-   * every other attacker within her `buffRadius` on screen gains `1 + _buff`
-   * on its looting property, and every one she gave it to that has strayed out
-   * loses it.
+   * every other attacker within her `buffRadius` on screen gains her
+   * {@link lootAuraBonus} on its looting property, and every one she gave it
+   * to that has strayed out loses it.
    */
   const tickLootAura = (krallen: Creep, aura: Aura): void => {
     if (krallen.behaviour !== "attack" || krallen.frame % LOOT_AURA_FRAMES !== 0) return;
@@ -3714,7 +3715,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const other of creeps) {
       if (other === krallen || other.friendly || other.gone || other.hp <= 0) continue;
       if (!near(other) || other.lootBuffedBy >= 0) continue;
-      other.lootBonus = lootAuraBonus(krallenBuff(krallen.level));
+      other.lootBonus = lootAuraBonus(krallen.level);
       other.lootBuffedBy = krallen.id;
       aura.members.push(other);
     }

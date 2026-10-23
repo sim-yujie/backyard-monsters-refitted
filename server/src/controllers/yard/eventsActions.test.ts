@@ -3,7 +3,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 
 import type { User } from "../../database/models/user.model.js";
-import { KRALLEN_HUNT_GOAL, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
+import { KRALLEN_HUNT_GOALS, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { eventsActions } from "./eventsActions.js";
 import { yardSpeedupAction } from "./speedup.js";
@@ -252,7 +252,8 @@ describe("the Krallen Hunt's reward through the ladder claim", () => {
   /** A feed time still ahead, so the yard's catch-up starves nobody. */
   const FED = JAN_START + 20 * DAY;
   const krallenOf = () => (db.row!.champion as Row[]).find((one) => one.t === 5);
-  const win = (event: EventDefinition) => store.addToCounter(em as never, 2, event.id, KRALLEN_HUNT_GOAL);
+  /** Loot enough for any level's goal. */
+  const win = (event: EventDefinition) => store.addToCounter(em as never, 2, event.id, KRALLEN_HUNT_GOALS.at(-1)!);
   const claimHunt = (event: EventDefinition) => call(actions.ladderClaim, { event: event.id, tier: 0 });
 
   beforeEach(() => {
@@ -261,12 +262,28 @@ describe("the Krallen Hunt's reward through the ladder claim", () => {
   });
 
   test("short of the goal the claim is refused and pays nothing", async () => {
-    await store.addToCounter(em as never, 2, JANUARY.id, KRALLEN_HUNT_GOAL - 1);
+    await store.addToCounter(em as never, 2, JANUARY.id, 60_000_000 - 1);
     expect(await claimHunt(JANUARY)).toMatchObject({
       status: 409,
-      body: { reason: "tierLocked", have: KRALLEN_HUNT_GOAL - 1, need: KRALLEN_HUNT_GOAL },
+      body: { reason: "tierLocked", have: 60_000_000 - 1, need: 60_000_000 },
     });
     expect(krallenOf()).toBeUndefined();
+  });
+
+  test("the goal follows her level at the claim: a level 2 Krallen needs 150 million", async () => {
+    const second = { t: 5, hp: 52_000, l: 2, ft: FED, fd: 0, fb: 0, pl: 0, status: 0 };
+    db.row = rowOf({ champion: [second] });
+    await store.addToCounter(em as never, 2, JANUARY.id, 150_000_000 - 1);
+    expect(await claimHunt(JANUARY)).toMatchObject({
+      status: 409,
+      body: { reason: "tierLocked", have: 150_000_000 - 1, need: 150_000_000 },
+    });
+    expect(krallenOf()).toMatchObject({ l: 2 });
+
+    await store.addToCounter(em as never, 2, JANUARY.id, 1);
+    const answer = await claimHunt(JANUARY);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "krallen", level: 3, raised: true }] });
+    expect(krallenOf()).toMatchObject({ l: 3 });
   });
 
   test("the first win is a level 1 Krallen beside the cage, full health and fed; a second claim is refused", async () => {
