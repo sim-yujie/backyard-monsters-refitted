@@ -59,7 +59,7 @@ describe.skipIf(!dbName)("a friend request under the §6.2 rule is declined thro
 
   /** A player who asks the account for friendship, as `POST /bm/friends/request` does. */
   const ask = async () => {
-    const [bot] = await createBots(orm.em.fork(), [5], { rng: mulberry32(368), now: NOW, pace: T });
+    const [bot] = await createBots(orm.em.fork(), [15], { rng: mulberry32(368), now: NOW, pace: T });
     const em = orm.em.fork();
     const player = em.create(User, { username: PLAYER, email: `${PLAYER}@test.com`, password: "x" });
     await em.flush();

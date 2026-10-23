@@ -589,7 +589,9 @@ describe("layoutBotYard packs the base in", () => {
         // Before #252's packing: 0.29 and 17.6, 0.33 and 13.8, 0.43 and 7.5. A core-walled yard's tower ring
         // keeps its inside for towers to come, so levels 11-20 read a little looser (`yardStyle.ts`).
         // Levels 11-20's mean gap over a sweep of 120 yards is 10.05-10.1 (2026-10-23), so 10 was a coin flip.
-        { from: 11, to: 20, density: 0.28, gap: 10.5 },
+        // Early Town Halls build closer in (`EARLY_SQUEEZE`, owner review 2026-10-23): this matrix's levels
+        // 11-20 went from 0.36 and 7.95 to 0.40 and 3.8.
+        { from: 11, to: 20, density: 0.37, gap: 6 },
         { from: 21, to: 30, density: 0.35, gap: 8 },
         { from: 31, to: 40, density: 0.41, gap: 5.5 },
       ];
@@ -604,6 +606,29 @@ describe("layoutBotYard packs the base in", () => {
           close: true,
         });
       }
+    },
+    { timeout: 60_000 }
+  );
+
+  test(
+    "levels 15-20: the buildings cluster round the Town Hall, as a new player builds (owner review 2026-10-23)",
+    () => {
+      const distances = matrix()
+        .filter(({ yard }) => yard.level >= 15 && yard.level <= 20)
+        .map(({ layout }) => {
+          const hall = layout.buildings.find((spot) => spot.t === TOWN_HALL_TYPE)!;
+          const spots = layout.buildings.filter(
+            (spot) => spot !== hall && spot.t !== WALL_TYPE && !TRAP_TYPES.has(spot.t)
+          );
+          const sum = spots.reduce((total, spot) => {
+            const { w, h } = footprintOf(spot.t);
+            return total + Math.hypot(spot.X + w / 2 - (hall.X + 65), spot.Y + h / 2 - (hall.Y + 65));
+          }, 0);
+          return sum / spots.length;
+        });
+      // Mean distance from the Town Hall's centre: 331 on average and up to 398 before, 291 and 321 after.
+      expect(distances.reduce((sum, one) => sum + one, 0) / distances.length).toBeLessThan(310);
+      expect(Math.max(...distances)).toBeLessThan(350);
     },
     { timeout: 60_000 }
   );

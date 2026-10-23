@@ -110,6 +110,9 @@ import {
  * the defended base also tries every spot of a 10-unit lattice inside the
  * compartments, so a compartment fills edge to edge before the base spills
  * out. Traps likewise fill gaps rather than ring a building in the open.
+ * A building put up on Town Hall 1-3 aims closer in still
+ * ({@link EARLY_SQUEEZE}): a new player's yard is a tight cluster round the
+ * Town Hall, and the base grows out past it.
  * When the zone is full the building looks further out, then takes the best
  * free spot anywhere off the wall lines; only a full plot makes the layout
  * throw.
@@ -253,6 +256,16 @@ const FRONTIER_SHARE = 0.85;
 
 /** The edge buildings' band, past the defended base's frontier `[PLACEHOLDER]`. */
 const EDGE = { past: 0.03, depth: 0.35, outside: 1.06 } as const;
+
+/**
+ * How far out a building put up on an early Town Hall aims, by that Town
+ * Hall: the share of its band's reach past the core's walls `[PLACEHOLDER]`.
+ * A new player builds round the Town Hall, not out where the base will
+ * reach years later (owner review 2026-10-23: a level 12 yard's buildings
+ * stood too far apart), so a level 15-20 yard is a tight cluster; the base
+ * grows out past it from Town Hall 4.
+ */
+const EARLY_SQUEEZE: Readonly<Record<number, number>> = { 1: 0.3, 2: 0.3, 3: 0.45 };
 
 /** The share of bots that put out a decoration at all `[PLACEHOLDER]`. */
 export const DECORATED_SHARE = 0.15;
@@ -998,6 +1011,8 @@ class Layout {
   private readonly baseReach: number[] = [];
   /** Expansions bought early because a building found no room (see the file comment). */
   bought = 0;
+  /** How far the bands past the core reach for the building being placed (see {@link EARLY_SQUEEZE}). */
+  private squeeze = 1;
 
   constructor(
     private readonly seed: number,
@@ -1098,13 +1113,20 @@ class Layout {
    * buildings go just past the defended base's frontier, so they ring the
    * base as it stands rather than the grid it will fill; once the
    * compartments are being walled (Town Hall 4), outside the grid, where
-   * they leave the compartments to the towers and harvesters.
+   * they leave the compartments to the towers and harvesters. A building
+   * put up on an early Town Hall aims closer in ({@link EARLY_SQUEEZE}).
    */
   private bandOf(role: Role): { min: number; max: number } {
-    if (role !== "general" && role !== "army") return this.plan.bands[role];
-    const own = this.plan.bands[role];
+    const planned = this.plan.bands[role];
+    const own = PACKED.has(role) ? { min: this.squeezed(planned.min), max: this.squeezed(planned.max) } : planned;
+    if (role !== "general" && role !== "army") return own;
     const min = this.started.size > 1 ? EDGE.outside : Math.min(EDGE.outside, Math.max(own.min, this.frontier + EDGE.past));
-    return { min, max: min + EDGE.depth };
+    return { min, max: min + EDGE.depth * this.squeeze };
+  }
+
+  /** `reach` drawn in towards the core's walls by {@link squeeze}; the core itself as planned. */
+  private squeezed(reach: number): number {
+    return reach <= CORE_REACH ? reach : CORE_REACH + (reach - CORE_REACH) * this.squeeze;
   }
 
   /**
@@ -1426,6 +1448,7 @@ class Layout {
     const expansion = Math.max(expansionFor(this.seed, level), this.bought);
     const role = roleOf(type);
     const rng = streamOf(this.seed, SALT.building, id);
+    this.squeeze = EARLY_SQUEEZE[hall] ?? 1;
     const { w, h } = footprintOf(type);
 
     if (role === "hall") {

@@ -60,7 +60,7 @@ describe.skipIf(!dbName)("a bot declines a truce through the sweep (issue #245)"
 
   /** A player who asks a bot for a truce from the map, as `requestTruce` writes it. */
   const askBot = async () => {
-    const [bot] = await createBots(orm.em.fork(), [5], { rng: mulberry32(245), now: NOW, pace: T });
+    const [bot] = await createBots(orm.em.fork(), [15], { rng: mulberry32(245), now: NOW, pace: T });
     const em = orm.em.fork();
     const player = em.create(User, { username: PLAYER, email: `${PLAYER}@test.com`, password: "x" });
     await em.flush();

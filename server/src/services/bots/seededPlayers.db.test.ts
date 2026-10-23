@@ -94,7 +94,7 @@ describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real d
   });
 
   test("a seeded player gets a first grow and grows like a bot, never shown online", async () => {
-    const [player] = await makeSeeded([10]);
+    const [player] = await makeSeeded([20]);
     const first = await pass(NOW, true);
     expect(first.report.booked).toBe(1);
     expect((await jobs(player!.userid)).map((job) => job.kind)).toEqual(["grow"]);
@@ -107,7 +107,7 @@ describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real d
     const row = await botRow(player!.userid);
     const save = await saveRow(player!.userid);
     expect(row.state).toBe("seeded");
-    expect(row.level).toBeGreaterThan(10);
+    expect(row.level).toBeGreaterThan(20);
     expect(calculateBaseLevel(save.points, save.basevalue)).toBe(row.level);
     expect(save.mapversion).toBe(2);
     expect(online).toBe(0);
@@ -151,7 +151,7 @@ describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real d
   }, 60_000);
 
   test("on production a seeded player's jobs are dropped and none booked", async () => {
-    const [player] = await makeSeeded([12]);
+    const [player] = await makeSeeded([16]);
     await sql(`INSERT INTO bym.bot_job (bot_userid, kind, due_at) VALUES (?, 'grow', ?), (?, 'repair', ?)`, [
       player!.userid,
       new Date(NOW * 1000),
@@ -169,7 +169,7 @@ describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real d
   }, 60_000);
 
   test("seeded players count for nothing in the bot total", async () => {
-    await makeSeeded([1, 1, 1]);
+    await makeSeeded([15, 15, 15]);
     const { report } = await pass(NOW, true, 2);
     expect(report.rebalanced).toBe(true);
     expect(report.replaced).toHaveLength(2);
