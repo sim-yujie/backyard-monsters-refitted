@@ -103,10 +103,13 @@ const counted: [string, number][] = [];
 
 const attacker = () => ({ userid: ATTACKER, username: "yardtester", alliance_id: null, save: userSave });
 
+/** The stand-in ORM's entity manager: only it skips the request context. */
+const fakeOrmEm = {};
+
 mock.module("../../server.js", () => ({
   redis: fakeRedis,
   postgres: {
-    orm: { em: {} },
+    orm: { em: fakeOrmEm },
     em: {
       // `isBot` asks the request's context (bot neighbours, #241).
       global: false,
@@ -157,12 +160,17 @@ mock.module("../../server.js", () => ({
 }));
 
 const core = await import("@mikro-orm/core");
+// Kept before the stand-in replaces the module in place.
+const RealRequestContext = core.RequestContext;
+const realCreate = core.RequestContext.create.bind(core.RequestContext);
 mock.module("@mikro-orm/core", () => ({
   ...core,
   // Object.create, not a spread: the static getEntityManager is non-enumerable and the
-  // DB tests that run later in the same process need it.
-  RequestContext: Object.assign(Object.create(core.RequestContext), {
-    create: (_em: unknown, next: () => unknown) => next(),
+  // DB tests that run later in the same process need it. They need a real request
+  // context too (the bot revenge finaliser, `revengeRun.db.test.ts`), so only the
+  // stand-in's entity manager skips it.
+  RequestContext: Object.assign(Object.create(RealRequestContext), {
+    create: (em: unknown, next: () => unknown) => (em === fakeOrmEm ? next() : realCreate(em as never, next as never)),
   }),
 }));
 
