@@ -185,6 +185,11 @@ export interface PathGrid {
   costAt(index: number): number;
   /** The id of the wall occupying a cell, or -1. */
   wallAt(index: number): number;
+  /**
+   * Whether no standing wall stands between two yard points, the target's own
+   * cells aside: `PATHING.LineOfSight` ({@link WALL_SIGHT_TYPE}).
+   */
+  lineOfSight(fromX: number, fromY: number, toX: number, toY: number, targetId: number): boolean;
   /** Subtract a dead building's rectangles and clear its registration. */
   removeBuilding(building: EngineBuilding): void;
   /** Walk from a creep to a building or a point. */
@@ -192,6 +197,16 @@ export interface PathGrid {
   /** How many floods have been computed, which is what the bench watches. */
   floodCount(): number;
 }
+
+/**
+ * The one building that blocks a shot: the Wall, type 17. A Stone Block is a
+ * wall to the pathing too but never to `PATHING.LineOfSight` (`:589`).
+ */
+export const WALL_SIGHT_TYPE = 17;
+
+/** `PATHING.c180PI` and `cPI180` (`:30-32`): the angle goes to degrees and back. */
+const C180_PI = 180 / Math.PI;
+const C_PI180 = Math.PI / 180;
 
 /** A resumable shortest-path flood out of one target footprint. */
 interface Flood {
@@ -331,11 +346,47 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     }
   };
 
+  /** The walls that block a shot, by id; a fallen one has left `wall` already. */
+  const sightBlockers = new Set<number>();
   for (const building of yard.buildings) {
     if (building.hp <= 0 && building.kind !== "mushroom") continue;
     stamp(building, 1);
     if (blocksPathing(building.type)) register(building, building.id);
+    if (building.type === WALL_SIGHT_TYPE) sightBlockers.add(building.id);
   }
+
+  /**
+   * `PATHING.LineOfSight` (`:573-597`): from the shooter's cell, one cell
+   * length at a time along the line to the target's cell, each step truncated
+   * to a cell. A step onto a standing wall that is not the target fails it;
+   * a step off the grid passes it at once, as Flash's missing cost does.
+   */
+  const lineOfSight = (
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    targetId: number,
+  ): boolean => {
+    const startX = toCellAxis(fromX, GRID_WIDTH);
+    const startY = toCellAxis(fromY, GRID_HEIGHT);
+    const across = toCellAxis(toX, GRID_WIDTH) - startX;
+    const down = toCellAxis(toY, GRID_HEIGHT) - startY;
+    const angle = Math.atan2(down, across) * C180_PI * C_PI180;
+    const stepX = Math.cos(angle);
+    const stepY = Math.sin(angle);
+    const total = Math.sqrt(across * across + down * down);
+    for (let travelled = 0; travelled < total; travelled += 1) {
+      const index = cellIndexOf(
+        Math.trunc(startX + stepX * travelled),
+        Math.trunc(startY + stepY * travelled),
+      );
+      if (index < 0) return true;
+      const id = wall[index] as number;
+      if (id >= 0 && id !== targetId && sightBlockers.has(id)) return false;
+    }
+    return true;
+  };
 
   /**
    * Take a fallen building off the grid, and with it every flood its cells
@@ -549,6 +600,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     },
     costAt: (index: number) => (index < 0 ? 0 : (cost[index] as number)),
     wallAt: (index: number) => (index < 0 ? -1 : (wall[index] as number)),
+    lineOfSight,
     removeBuilding,
     path,
     floodCount: () => floodsComputed,
