@@ -1,24 +1,32 @@
 import {
+  MAX_REPLY,
   TICKET_STATUSES,
   fetchBugReport,
   fetchBugReports,
   fetchReportImage,
+  replyToReport,
   updateTicket,
   type BugFilter,
   type BugReportDetail,
   type BugReportSummary,
+  type SupportMessage,
   type TicketChange,
   type TicketStatus,
 } from "./api";
 import { h, replace, type Child } from "./dom";
-import { ago, dateTime, statusWord } from "./format";
+import { ago, count, dateTime, statusWord } from "./format";
 import { icon } from "./icons";
 import { technical } from "./sections";
+import { awardForm, awardRow, errorWords } from "./shiny";
 
 /**
  * The bug reports section: the list, newest first, with Open / All / Closed,
  * and one report's page with the player's words, the game's details, the
  * screenshot, the ticket status, the owner's notes and what changed when.
+ *
+ * The player can be written to in the game's mail (as "The game team") and
+ * their answers show here; Shiny can be given from the report, and the mail
+ * about it goes into the same conversation.
  *
  * The open report is in the address (`?bug=<id>`), as the alerts link it, so
  * the phone's back button returns to the list.
@@ -56,6 +64,38 @@ export const changeText = (change: TicketChange): string => {
   return parts.join(" · ") || "Changed";
 };
 
+/** The conversation with the report's player, oldest first. */
+export const threadView = (thread: readonly SupportMessage[], playerName: string): HTMLElement =>
+  thread.length
+    ? h(
+        "ol",
+        { class: "thread", attrs: { "aria-label": "Messages with the player" } },
+        ...thread.map((message) =>
+          h(
+            "li",
+            { class: `bubble bubble-${message.from}` },
+            h(
+              "span",
+              { class: "bubble-who" },
+              message.from === "team" ? "You, as The game team" : playerName,
+              " · ",
+              h(
+                "time",
+                { attrs: { datetime: message.at, title: dateTime(message.at) } },
+                ago(message.at),
+              ),
+              message.unread ? h("span", { class: "chip chip-info" }, "New") : null,
+            ),
+            h("span", { class: "bubble-text" }, message.text),
+          ),
+        ),
+      )
+    : h(
+        "p",
+        { class: "note" },
+        "No messages yet. What you write reaches the player in the game's Mail, from The game team, and they can answer it.",
+      );
+
 /** Who sent it, as the list and the report show it. */
 export const sender = (report: Pick<BugReportSummary, "userid" | "username">): string =>
   report.userid === null ? "Signed out" : `${report.username ?? "?"} (#${report.userid})`;
@@ -64,6 +104,17 @@ export interface BugsOptions {
   /** Called when a report is opened or closed, to put it in the address. */
   onRoute(id: number | null): void;
   onError(message: string): void;
+  /** A short "done" message (the page's toast). */
+  onSay(message: string): void;
+  /** Shiny was given from a report: the Shiny section's log is out of date. */
+  onAward(): void;
+}
+
+/** What the owner has typed on a report but not sent, kept when the page is drawn again. */
+interface Draft {
+  id: number;
+  reply: string;
+  award: { amount: string; reason: string };
 }
 
 export class BugsView {
@@ -73,6 +124,7 @@ export class BugsView {
   private nextBefore: number | null = null;
   private openId: number | null = null;
   private images: string[] = [];
+  private draft: Draft | null = null;
 
   constructor(private readonly options: BugsOptions) {}
 
@@ -149,6 +201,15 @@ export class BugsView {
                     "span",
                     { class: "row-top" },
                     pill(report.status),
+                    report.unreadReplies > 0
+                      ? h(
+                          "span",
+                          { class: "chip chip-info" },
+                          report.unreadReplies === 1
+                            ? "New reply"
+                            : `${count(report.unreadReplies)} new replies`,
+                        )
+                      : null,
                     h("span", { class: "row-when" }, ago(report.createdAt)),
                   ),
                   h("span", { class: "row-title" }, report.preview || "(no text)"),
@@ -215,6 +276,8 @@ export class BugsView {
     );
     try {
       const { report } = await fetchBugReport(id);
+      // Opening it read the player's answers.
+      this.reports = this.reports.map((r) => (r.id === id ? { ...r, unreadReplies: 0 } : r));
       this.renderReport(report);
     } catch {
       replace(
@@ -289,6 +352,10 @@ export class BugsView {
       saveNotes.toggleAttribute("disabled", notes.value === report.ownerNotes);
     });
 
+    if (this.draft?.id !== report.id)
+      this.draft = { id: report.id, reply: "", award: { amount: "", reason: "" } };
+    const draft = this.draft;
+
     const facts: [string, Child][] = [
       ["Sent", `${dateTime(report.createdAt)} (${ago(report.createdAt)})`],
       ["Player", sender(report)],
@@ -354,6 +421,8 @@ export class BugsView {
         h("blockquote", { class: "message" }, report.message || "(no text)"),
         report.hasScreenshot || report.hasPicture ? pictures : null,
         h("div", { class: "report-block" }, h("h4", {}, "Status"), statusButtons),
+        this.conversation(report, draft),
+        this.shinyBlock(report, draft),
         h(
           "div",
           { class: "report-block" },
@@ -407,6 +476,127 @@ export class BugsView {
             : h("p", { class: "note" }, "No changes yet."),
         ),
       ),
+    );
+  }
+
+  /** The messages with the player, and the box to write the next one. */
+  private conversation(report: BugReportDetail, draft: Draft): HTMLElement {
+    const name = report.username ?? "The player";
+    const title = h("h4", {}, "Messages with the player");
+    if (report.cannotReply) {
+      const why =
+        report.cannotReply === "signedOut"
+          ? h(
+              "p",
+              { class: "note" },
+              "Sent while signed out, so there is no game account to write to.",
+              ...(report.contactEmail
+                ? [
+                    " Reply by email: ",
+                    h("a", { attrs: { href: `mailto:${report.contactEmail}` } }, report.contactEmail),
+                  ]
+                : []),
+            )
+          : h("p", { class: "note" }, "The player's account is gone, so they cannot get messages.");
+      return h(
+        "div",
+        { class: "report-block" },
+        title,
+        report.thread.length ? threadView(report.thread, name) : null,
+        why,
+      );
+    }
+    const box = h("textarea", {
+      class: "notes reply-box",
+      attrs: {
+        id: "reply-text",
+        rows: "3",
+        maxlength: String(MAX_REPLY),
+        placeholder: `Write to ${name}…`,
+        "aria-describedby": "reply-count",
+      },
+    });
+    box.value = draft.reply;
+    const counter = h("span", { class: "counter", attrs: { id: "reply-count" } });
+    const send = h("button", { class: "button primary", attrs: { type: "button" } }, "Send");
+    const sync = () => {
+      counter.textContent = `${box.value.length} / ${MAX_REPLY}`;
+      send.disabled = box.value.trim() === "";
+    };
+    sync();
+    box.addEventListener("input", () => {
+      draft.reply = box.value;
+      sync();
+    });
+    send.addEventListener("click", () => {
+      const text = box.value.trim();
+      if (!text) return;
+      send.disabled = true;
+      box.disabled = true;
+      send.textContent = "Sending…";
+      void replyToReport(report.id, text)
+        .then(({ report: updated }) => {
+          draft.reply = "";
+          this.options.onSay(`Sent to ${name}'s Mail in the game`);
+          if (this.openId === report.id) this.renderReport(updated);
+        })
+        .catch((err: unknown) => {
+          box.disabled = false;
+          send.textContent = "Send";
+          sync();
+          this.options.onError(`Not sent: ${errorWords(err)}`);
+        });
+    });
+    return h(
+      "div",
+      { class: "report-block" },
+      title,
+      threadView(report.thread, name),
+      h(
+        "label",
+        { class: "sr-only", attrs: { for: "reply-text" } },
+        `Your message to ${name}`,
+      ),
+      box,
+      h(
+        "div",
+        { class: "actions split" },
+        h("span", { class: "hint" }, counter, " · they see it from The game team"),
+        send,
+      ),
+    );
+  }
+
+  /** Shiny given from this report, and the form to give more. */
+  private shinyBlock(report: BugReportDetail, draft: Draft): HTMLElement | null {
+    if (report.userid === null || report.cannotReply === "noPlayer") return null;
+    const player = { userid: report.userid, username: report.username ?? `#${report.userid}` };
+    return h(
+      "div",
+      { class: "report-block" },
+      h("h4", {}, "Give Shiny", h("span", { class: "hint" }, " the mail about it joins the messages above")),
+      report.awards.length
+        ? h(
+            "ul",
+            { class: "rows award-log" },
+            ...report.awards.map((award) => awardRow(award, undefined, false)),
+          )
+        : null,
+      awardForm({
+        player,
+        bugReportId: report.id,
+        draft: draft.award,
+        onDraft: (award) => (draft.award = award),
+        onGiven: (award, already, updated) => {
+          this.options.onSay(
+            already
+              ? "That gift was already given"
+              : `Gave ${count(award.amount)} Shiny to ${award.username}`,
+          );
+          this.options.onAward();
+          if (updated && this.openId === report.id) this.renderReport(updated);
+        },
+      }),
     );
   }
 
