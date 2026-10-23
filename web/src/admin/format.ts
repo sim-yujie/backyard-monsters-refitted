@@ -56,7 +56,8 @@ export const ago = (iso: string | null | undefined, now: number = Date.now()): s
   const seconds = (now - at) / 1000;
   if (seconds < 60) return "just now";
   if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+  // Hours up to two days: "31 h ago" says more than "1 d ago".
+  if (seconds < 2 * 86400) return `${Math.floor(seconds / 3600)} h ago`;
   return `${Math.floor(seconds / 86400)} d ago`;
 };
 
@@ -99,3 +100,19 @@ const STATUS_WORDS = {
 
 /** The words the owner sees for a ticket status. */
 export const statusWord = (status: keyof typeof STATUS_WORDS): string => STATUS_WORDS[status];
+
+/** "1 report", "3 reports". */
+export const plural = (n: number, one: string, many = `${one}s`): string =>
+  `${count(n)} ${n === 1 ? one : many}`;
+
+/** "3 days 4 hours", "5 hours 2 minutes", "12 minutes": how long, in plain words. */
+export const longDuration = (seconds: number): string => {
+  const s = Math.max(0, Math.round(seconds));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const part = (n: number, unit: string) => (n ? plural(n, unit) : "");
+  if (d) return [part(d, "day"), part(h, "hour")].filter(Boolean).join(" ");
+  if (h) return [part(h, "hour"), part(m, "minute")].filter(Boolean).join(" ");
+  return m ? part(m, "minute") : "under a minute";
+};

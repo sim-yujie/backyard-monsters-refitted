@@ -37,7 +37,7 @@ import {
 } from "./champions.js";
 import { BRAIN_KEYS, brainBase } from "./brain.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
-import { buildPathGrid } from "./grid.js";
+import { buildPathGrid, pointTarget } from "./grid.js";
 import {
   cannotBeat,
   exposure,
@@ -347,10 +347,10 @@ import {
  *    Fomor's enrage aura, its following of wounded allies and its fireball's
  *    loot of 1; Krallen's loot aura; and the "Retreat" on a champion's own
  *    button, the `championRetreat` event. Only a ranged champion, or Korath
- *    with his fireball, can hit a flyer. Where the engine still parts from
- *    Flash: a ground Fomor walks straight to the ally it follows (the grid
- *    routes to buildings only); a champion that leaves walks straight back to
- *    its spawn point, and only so its aura lasts until it is off the field
+ *    with his fireball, can hit a flyer. A ground Fomor walks to the ally it
+ *    follows by the grid, round walls, as Flash's `WaypointTo` does. Where the
+ *    engine still parts from Flash: a champion that leaves walks straight back
+ *    to its spawn point, and only so its aura lasts until it is off the field
  *    (otherwise note 7 holds); the flung Fomor's render-only first look on
  *    landing (`Fomor.as:13-16`) is not taken. A bunker's defenders still
  *    choose their quarry by the owner's rules of note 9; the caged champion
@@ -3829,14 +3829,33 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * Fomor heads for its ally. Flying, its waypoint is the ally's own
-   * `_tmpPoint`, which moves with it (`Fomor.as:74-76`); on foot it walks
-   * straight to where the ally was, because the grid routes to buildings only
-   * (Flash asks it for a route to the point, `:79`).
+   * `_tmpPoint`, which moves with it (`Fomor.as:74-76`); on foot it asks the
+   * grid for a route to where the ally was (`WaypointTo`, `:79`), so a wall
+   * is walked round or, where the route runs into one, taken on, exactly as
+   * {@link routeTo} does on the way to a building.
    */
   const followAlly = (creep: Creep, ally: Creep): void => {
-    creep.waypoints = [{ x: ally.ix, y: ally.iy }];
     creep.waypointIndex = 0;
     creep.followHelper = creep.flying;
+    if (creep.flying) {
+      creep.waypoints = [{ x: ally.ix, y: ally.iy }];
+      return;
+    }
+    const route = grid.path(
+      {
+        fromX: creep.ix,
+        fromY: creep.iy,
+        target: pointTarget(ally.ix, ally.iy),
+        ignoreWalls: creep.ignoreWalls,
+      },
+      rng,
+    );
+    if (route.blockedBy >= 0) {
+      const wall = buildingOf(route.blockedBy);
+      if (wall && wall.hp > 0) creep.targetBuilding = wall.id;
+    }
+    creep.waypoints =
+      route.waypoints.length > 1 ? route.waypoints.slice(1) : [{ x: ally.ix, y: ally.iy }];
   };
 
   /** `ChampionBase.changeModeAttack` (`:288-293`): back to buildings. */

@@ -7,6 +7,7 @@ import {
   carryAttackCounters,
   dayStart,
   droppedToday,
+  levelMovedAway,
   noteDropped,
   needsAttackableRetry,
   needsNewNeighbours,
@@ -115,5 +116,22 @@ describe("the attack cap's dropped list (issue #247)", () => {
   test("a row with no list yet has nothing dropped", () => {
     expect(droppedToday(undefined, morning)).toEqual([]);
     expect(droppedToday(null, morning)).toEqual([]);
+  });
+});
+
+describe("the player's level moving away from the list's (owner, 2026-10-23)", () => {
+  test("a list built at level 5 is searched again once the player is level 13, not at 12", () => {
+    expect(levelMovedAway(5, 12)).toBe(false);
+    expect(levelMovedAway(5, 13)).toBe(true);
+  });
+
+  test("a move down counts the same as a move up", () => {
+    expect(levelMovedAway(20, 13)).toBe(false);
+    expect(levelMovedAway(20, 12)).toBe(true);
+  });
+
+  test("a list with no level noted, built before levels were kept, is searched again", () => {
+    expect(levelMovedAway(null, 5)).toBe(true);
+    expect(levelMovedAway(undefined, 5)).toBe(true);
   });
 });

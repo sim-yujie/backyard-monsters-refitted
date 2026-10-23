@@ -139,13 +139,37 @@ export interface PathResult {
   readonly reached: boolean;
 }
 
+/** What a route floods out of: a building's footprint, or a point's square. */
+export interface PathTarget {
+  readonly cx: number;
+  readonly cy: number;
+  readonly w: number;
+  readonly h: number;
+  /** A point rather than a building, whose flood is never kept. */
+  readonly point?: boolean;
+}
+
+/**
+ * A route to a point rather than a building: `WaypointTo` with no building
+ * floods out of a 10 x 10 square there (`MonsterBase.as:1181-1183`), one cell.
+ * Its flood is thrown away after the one route, because a creep walking to a
+ * moving ally would otherwise keep a new one for every place the ally stood.
+ */
+export const pointTarget = (x: number, y: number): PathTarget => ({
+  cx: Math.trunc(x),
+  cy: Math.trunc(y),
+  w: GRID_CELL,
+  h: GRID_CELL,
+  point: true,
+});
+
 /** What a caller asks a route for. */
 export interface PathRequest {
   /** The creep, in yard units. */
   readonly fromX: number;
   readonly fromY: number;
-  /** The building being walked to. */
-  readonly target: EngineBuilding;
+  /** The building being walked to, or a {@link pointTarget}. */
+  readonly target: PathTarget;
   /** Behaviours that walk through walls rather than into them (`:1174-1177`). */
   readonly ignoreWalls?: boolean;
 }
@@ -163,7 +187,7 @@ export interface PathGrid {
   wallAt(index: number): number;
   /** Subtract a dead building's rectangles and clear its registration. */
   removeBuilding(building: EngineBuilding): void;
-  /** Walk from a creep to a building. */
+  /** Walk from a creep to a building or a point. */
   path(request: PathRequest, rng: Rng): PathResult;
   /** How many floods have been computed, which is what the bench watches. */
   floodCount(): number;
@@ -337,7 +361,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   };
 
   /** A flood's key: its target's origin cell, and whether it ignores walls. */
-  const floodKey = (target: EngineBuilding, ignoreWalls: boolean): number =>
+  const floodKey = (target: PathTarget, ignoreWalls: boolean): number =>
     (toCellAxis(target.cx, GRID_WIDTH) * GRID_HEIGHT + toCellAxis(target.cy, GRID_HEIGHT)) * 2 +
     (ignoreWalls ? 1 : 0);
 
@@ -347,14 +371,20 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
       ? GRID_IGNORE_WALLS_COST
       : (cost[index] as number);
 
-  /** The flood out of a target's footprint, created on first use. */
-  const floodFor = (target: EngineBuilding, ignoreWalls: boolean): Flood => {
-    const originX = toCellAxis(target.cx, GRID_WIDTH);
-    const originY = toCellAxis(target.cy, GRID_HEIGHT);
+  /** The flood out of a building's footprint, created on first use. */
+  const floodFor = (target: PathTarget, ignoreWalls: boolean): Flood => {
     const key = floodKey(target, ignoreWalls);
     const held = floods.get(key);
     if (held) return held;
+    const flood = freshFlood(target, ignoreWalls);
+    floods.set(key, flood);
+    return flood;
+  };
 
+  /** A new flood out of a target's footprint, kept by no one yet. */
+  const freshFlood = (target: PathTarget, ignoreWalls: boolean): Flood => {
+    const originX = toCellAxis(target.cx, GRID_WIDTH);
+    const originY = toCellAxis(target.cy, GRID_HEIGHT);
     const reused = spare.pop();
     const flood: Flood = {
       depth: reused ? reused.depth.fill(-1) : new Int32Array(CELL_COUNT).fill(-1),
@@ -375,7 +405,6 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
         push(flood, 0, index);
       }
     }
-    floods.set(key, flood);
     floodsComputed += 1;
     return flood;
   };
@@ -433,7 +462,16 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     const start = cellOf(Math.trunc(request.fromX), Math.trunc(request.fromY));
     if (start < 0) return { waypoints: [], blockedBy: -1, reached: false };
 
-    const flood = floodFor(request.target, ignoreWalls);
+    const target = request.target;
+    if (!target.point) return walk(floodFor(target, ignoreWalls), start, ignoreWalls, rng);
+    const flood = freshFlood(target, ignoreWalls);
+    const route = walk(flood, start, ignoreWalls, rng);
+    spare.push({ depth: flood.depth, settled: flood.settled });
+    return route;
+  };
+
+  /** Expands a flood to the creep's cell and walks down it. */
+  const walk = (flood: Flood, start: number, ignoreWalls: boolean, rng: Rng): PathResult => {
     expandTo(flood, start);
     const depth = flood.depth;
     if ((depth[start] as number) < 0) {

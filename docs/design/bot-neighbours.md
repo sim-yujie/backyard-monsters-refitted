@@ -93,9 +93,14 @@ The owner's answers to this design's questions (2026-10-03):
     v1.1 (WP13).
 22. **Bots appear online now and then,** about 2 minutes at a time, which blocks attacks on them for
     that minute as for a real player.
-23. **No early re-search when a player's level changes:** the 2-week cache stays as it is. (The
-    separate "fewer than 5 attackable" retry in section 4.3 is kept: it reacts to bots under
-    protection, not to the player's level.)
+23. ~~**No early re-search when a player's level changes:** the 2-week cache stays as it is.~~
+    **Replaced by the owner on 2026-10-23:** the list is searched again as soon as the player's
+    level has moved more than 7 levels (the neighbour window), up or down, from the level it was
+    built for, because real players level fast (level 17 in about a day). The level is kept in
+    `maproom.neighbors_level` (migration `AddNeighborsLevelToMaproom`); a list from before that
+    column has no level and is searched again once on its next open. Everything else stays: the
+    2-week cache, the "fewer than 5 attackable" 30-minute retry in section 4.3, real players
+    first, 25 at most, and attackers added to the list by `registerAttacker`.
 
 Later owner decision (2026-10-04, from the #245 leak audit):
 
@@ -353,8 +358,9 @@ attack counters of neighbours that stay are carried over, as the Inferno path al
 **Keeping lists useful.** A bot attacked hard sits under 36-hour protection, so a two-week list
 can go stale. So the list is also re-searched after the 30-minute retry when fewer than 5 entries
 are attackable right now. Real players keep their places (step 1 runs first); only the bot picks
-change. There is **no** early re-search when the player's own level changes (decision 23): that
-is a different trigger, and the 2-week cache stays as it is.
+change. The list is also searched again at once when the player's own level has moved more than
+7 levels from the level it was built for (decision 23 as replaced on 2026-10-23); the 2-week cache
+stays otherwise.
 
 ### 4.4 Growth and the even spread (decision 7)
 
@@ -814,7 +820,7 @@ Each is sized for one agent (S < 2 days, M < 1 week).
 | --- | --- | --- | --- |
 | WP1 | **Seed fix.** `sandbox_start: false` in the three seeds, `getDefaultBaseData` refuses the sandbox to bots, test. | — | S |
 | WP2 | **Data model.** Migration (`bot`, `bot_job`, `user.last_seen_at`), entities, `isBot`, config switches, login and reset guards, `last_seen_at` written by the owner's yard load. | — | S |
-| WP3 | **Neighbour search rewrite.** Real players seen in 30 days by SQL level range without the 150 cut, bot fill, counters carried over, attackable-count retry (no level-change re-search, decision 23). | WP2 | M |
+| WP3 | **Neighbour search rewrite.** Real players seen in 30 days by SQL level range without the 150 cut, bot fill, counters carried over, attackable-count retry (the level-move re-search came later, decision 23 as replaced 2026-10-23). | WP2 | M |
 | WP4 | **Progression.** Pure seeded build order inside the limits, points and base value, level targeting, the champion and unlock tables. Tests for every level. | — | M |
 | WP5 | **Layout.** Pure seeded placement by zones, walls and traps, expansions; plugs into WP4. | WP4 | M |
 | WP6 | **Bot factory and CLI.** Names, avatars, back-dated rows, army and loot fill, `bots.ts create / status / retire-all / delete-retired`. | WP2, WP5 | M |

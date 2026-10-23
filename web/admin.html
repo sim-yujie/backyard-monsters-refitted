@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -9,12 +9,21 @@
          the page shows only "Not found" to anyone but the owner. The title
          stays plain until the server says who is looking. -->
     <title>Backyard Monsters Revamped</title>
+    <meta name="color-scheme" content="light dark" />
     <style>
+      /* Until the page's own styles load: the same ground, light or dark. */
       html,
       body {
         margin: 0;
-        background: #0f141c;
-        color: #edf1f5;
+        background: #f3f5f8;
+        color: #1b2230;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #111620;
+          color: #eef1f5;
+        }
       }
     </style>
   </head>

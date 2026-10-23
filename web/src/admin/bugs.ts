@@ -12,6 +12,8 @@ import {
 } from "./api";
 import { h, replace, type Child } from "./dom";
 import { ago, dateTime, statusWord } from "./format";
+import { icon } from "./icons";
+import { technical } from "./sections";
 
 /**
  * The bug reports section: the list, newest first, with Open / All / Closed,
@@ -29,7 +31,15 @@ const FILTERS: readonly [BugFilter, string][] = [
 ];
 
 const pill = (status: TicketStatus): HTMLElement =>
-  h("span", { class: `pill pill-${status}` }, statusWord(status));
+  h("span", { class: `pill pill-${status}` }, h("span", { class: "pill-dot" }), statusWord(status));
+
+/** What each status means, under its button. */
+const STATUS_HINTS: Record<TicketStatus, string> = {
+  new: "Not looked at yet",
+  working: "Being looked into",
+  fixed: "Done; closes it",
+  wontfix: "Not a bug, or not worth it; closes it",
+};
 
 /** The words for one change in a report's history. */
 export const changeText = (change: TicketChange): string => {
@@ -120,7 +130,7 @@ export class BugsView {
     const items = this.reports.length
       ? h(
           "ul",
-          { class: "list" },
+          { class: "rows" },
           ...this.reports.map((report) =>
             h(
               "li",
@@ -128,47 +138,66 @@ export class BugsView {
               h(
                 "button",
                 {
-                  class: "list-item",
+                  class: "row bug-row",
                   attrs: { type: "button" },
                   onClick: () => this.options.onRoute(report.id),
                 },
                 h(
                   "span",
-                  { class: "item-top" },
-                  h("strong", {}, `#${report.id}`),
-                  pill(report.status),
-                  h("span", { class: "muted" }, ago(report.createdAt)),
+                  { class: "row-main" },
+                  h(
+                    "span",
+                    { class: "row-top" },
+                    pill(report.status),
+                    h("span", { class: "row-when" }, ago(report.createdAt)),
+                  ),
+                  h("span", { class: "row-title" }, report.preview || "(no text)"),
+                  h(
+                    "span",
+                    { class: "row-meta" },
+                    [
+                      `#${report.id}`,
+                      sender(report),
+                      report.device,
+                      report.screen ? `${report.screen} screen` : null,
+                      report.hasScreenshot || report.hasPicture ? "has a picture" : null,
+                      report.hasNotes ? "has your notes" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · "),
+                  ),
                 ),
-                h("span", { class: "item-text" }, report.preview || "(no text)"),
-                h(
-                  "span",
-                  { class: "item-meta" },
-                  [
-                    sender(report),
-                    report.device,
-                    report.screen,
-                    report.hasScreenshot ? "screenshot" : null,
-                    report.hasPicture ? "picture" : null,
-                    report.hasNotes ? "notes" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · "),
-                ),
+                icon("chevron", 18),
               ),
             ),
           ),
         )
       : h(
-          "p",
-          { class: "muted" },
-          this.filter === "open" ? "No open bug reports." : "No bug reports.",
+          "div",
+          { class: "empty" },
+          h(
+            "strong",
+            {},
+            this.filter === "open"
+              ? "No open bug reports"
+              : this.filter === "closed"
+                ? "No closed bug reports"
+                : "No bug reports yet",
+          ),
+          h(
+            "p",
+            {},
+            this.filter === "open"
+              ? "Nothing is waiting for you. New ones from players show up here."
+              : "When players send one from the game, it shows up here.",
+          ),
         );
     const more =
       this.nextBefore !== null
         ? h(
             "button",
             {
-              class: "button wide",
+              class: "button wide quiet",
               attrs: { type: "button" },
               onClick: () => void this.loadList(true),
             },
@@ -180,7 +209,10 @@ export class BugsView {
 
   private async loadReport(id: number): Promise<void> {
     this.releaseImages();
-    replace(this.element, h("p", { class: "muted" }, `Loading bug report #${id}…`));
+    replace(
+      this.element,
+      h("div", { class: "skeleton", attrs: { "aria-label": `Loading bug report #${id}` } }),
+    );
     try {
       const { report } = await fetchBugReport(id);
       this.renderReport(report);
@@ -189,9 +221,10 @@ export class BugsView {
         this.element,
         this.backButton(),
         h(
-          "p",
-          { class: "muted" },
-          `There is no bug report #${id} (it may have been deleted after 180 days).`,
+          "div",
+          { class: "empty" },
+          h("strong", {}, `No bug report #${id}`),
+          h("p", {}, "It may have been deleted: reports are kept for 180 days."),
         ),
       );
     }
@@ -201,11 +234,12 @@ export class BugsView {
     return h(
       "button",
       {
-        class: "button back",
+        class: "button quiet back",
         attrs: { type: "button" },
         onClick: () => this.options.onRoute(null),
       },
-      "← All bug reports",
+      icon("back", 18),
+      "All bug reports",
     );
   }
 
@@ -220,9 +254,14 @@ export class BugsView {
           {
             class: `status-button status-${status}`,
             attrs: { type: "button", "aria-pressed": String(status === report.status) },
-            onClick: () => void this.save(report.id, { status }),
+            onClick: (event) => {
+              if (status === report.status) return;
+              (event.currentTarget as HTMLElement).classList.add("is-saving");
+              void this.save(report.id, { status });
+            },
           },
-          statusWord(status),
+          h("span", { class: "status-name" }, h("span", { class: "pill-dot" }), statusWord(status)),
+          h("span", { class: "status-hint" }, STATUS_HINTS[status]),
         ),
       ),
     );
@@ -232,8 +271,8 @@ export class BugsView {
       attrs: {
         rows: "4",
         maxlength: "4000",
-        "aria-label": "Your notes",
-        placeholder: "Your notes (only you see them)",
+        id: "owner-notes",
+        placeholder: "What you found, what to do next…",
       },
     });
     notes.value = report.ownerNotes;
@@ -254,12 +293,12 @@ export class BugsView {
       ["Sent", `${dateTime(report.createdAt)} (${ago(report.createdAt)})`],
       ["Player", sender(report)],
       ["Reply to", report.contactEmail],
-      ["Game version", report.gameVersion],
-      ["Screen", report.screen],
+      ["Where in the game", report.screen],
       ["Device", report.device],
       ["Browser", report.browser],
       ["Screen size", report.screenSize],
-      ["Emailed", report.emailedAt ? dateTime(report.emailedAt) : "no"],
+      ["Game version", report.gameVersion],
+      ["Also emailed to you", report.emailedAt ? dateTime(report.emailedAt) : "no"],
     ];
 
     const pictures = h("div", { class: "pictures" });
@@ -267,33 +306,27 @@ export class BugsView {
       const slot = h(
         "figure",
         { class: "picture" },
+        h("div", { class: "picture-frame skeleton" }),
         h("figcaption", {}, label),
-        h("p", { class: "muted" }, "Loading…"),
       );
       pictures.append(slot);
       try {
         const url = await fetchReportImage(report.id, which);
         this.images.push(url);
-        const img = h("img", {
-          attrs: { src: url, alt: `${label} of bug report #${report.id}` },
-        });
         replace(
           slot,
           h(
-            "figcaption",
-            {},
-            label,
-            " · ",
-            h(
-              "a",
-              { attrs: { href: url, target: "_blank", rel: "noopener" } },
-              "open full size",
-            ),
+            "a",
+            {
+              class: "picture-frame",
+              attrs: { href: url, target: "_blank", rel: "noopener", title: "Open full size" },
+            },
+            h("img", { attrs: { src: url, alt: `${label} of bug report #${report.id}` } }),
           ),
-          img,
+          h("figcaption", {}, label, h("span", { class: "hint" }, " · tap to open full size")),
         );
       } catch (err) {
-        replace(slot, h("figcaption", {}, label), h("p", { class: "muted" }, String(err)));
+        replace(slot, h("figcaption", {}, label), h("p", { class: "note" }, String(err)));
       }
     };
     if (report.hasScreenshot) void addImage("screenshot", "Screenshot");
@@ -303,69 +336,76 @@ export class BugsView {
       this.element,
       this.backButton(),
       h(
-        "div",
-        { class: "card report" },
+        "article",
+        { class: "report" },
         h(
-          "div",
-          { class: "item-top" },
+          "header",
+          { class: "report-head" },
           h("h3", {}, `Bug report #${report.id}`),
           pill(report.status),
         ),
-        h("p", { class: "message" }, report.message || "(no text)"),
-        h("h4", {}, "Status"),
-        statusButtons,
-        h("h4", {}, "Your notes"),
-        notes,
-        h("div", { class: "actions" }, saveNotes),
-      ),
-      report.hasScreenshot || report.hasPicture
-        ? h("div", { class: "card" }, h("h3", {}, "Pictures"), pictures)
-        : null,
-      h(
-        "div",
-        { class: "card" },
-        h("h3", {}, "Game details"),
         h(
-          "dl",
-          { class: "facts" },
-          ...facts
-            .filter(([, value]) => value)
-            .flatMap(([name, value]) => [h("dt", {}, name), h("dd", {}, value)]),
+          "p",
+          { class: "report-from" },
+          [sender(report), report.device, report.screen ? `${report.screen} screen` : null, ago(report.createdAt)]
+            .filter(Boolean)
+            .join(" · "),
         ),
-        ...(report.errors.length
-          ? [
-              h("h4", {}, "Last game errors"),
-              h("ol", { class: "code-list" }, ...report.errors.map((e) => h("li", {}, e))),
-            ]
-          : [h("p", { class: "muted small" }, "No game errors were sent with it.")]),
+        h("blockquote", { class: "message" }, report.message || "(no text)"),
+        report.hasScreenshot || report.hasPicture ? pictures : null,
+        h("div", { class: "report-block" }, h("h4", {}, "Status"), statusButtons),
         h(
-          "details",
-          {},
-          h("summary", {}, "Browser details"),
-          h("p", { class: "code" }, report.userAgent),
+          "div",
+          { class: "report-block" },
+          h(
+            "h4",
+            {},
+            h("label", { attrs: { for: "owner-notes" } }, "Your notes"),
+            h("span", { class: "hint" }, " only you see them"),
+          ),
+          notes,
+          h("div", { class: "actions" }, saveNotes),
         ),
-      ),
-      h(
-        "div",
-        { class: "card" },
-        h("h3", {}, "History"),
-        report.changes.length
-          ? h(
-              "ol",
-              { class: "history" },
-              ...[...report.changes]
-                .reverse()
-                .map((change) =>
-                  h(
-                    "li",
-                    {},
-                    h("span", { class: "muted" }, dateTime(change.at)),
-                    " ",
-                    changeText(change),
+        h(
+          "div",
+          { class: "report-block" },
+          h("h4", {}, "About the player's game"),
+          h(
+            "dl",
+            { class: "facts" },
+            ...facts
+              .filter(([, value]) => value)
+              .flatMap(([name, value]) => [h("dt", {}, name), h("dd", {}, value)]),
+          ),
+          technical(
+            `Technical details${report.errors.length ? ` (${report.errors.length} game errors)` : ""}`,
+            report.errors.length
+              ? h("ol", { class: "code-list" }, ...report.errors.map((e) => h("li", {}, e)))
+              : h("p", { class: "note" }, "No game errors were sent with it."),
+            h("p", { class: "code" }, report.userAgent),
+          ),
+        ),
+        h(
+          "div",
+          { class: "report-block" },
+          h("h4", {}, "History"),
+          report.changes.length
+            ? h(
+                "ol",
+                { class: "history" },
+                ...[...report.changes]
+                  .reverse()
+                  .map((change) =>
+                    h(
+                      "li",
+                      {},
+                      h("span", { class: "history-when" }, dateTime(change.at)),
+                      h("span", {}, changeText(change)),
+                    ),
                   ),
-                ),
-            )
-          : h("p", { class: "muted" }, "No changes yet."),
+              )
+            : h("p", { class: "note" }, "No changes yet."),
+        ),
       ),
     );
   }
