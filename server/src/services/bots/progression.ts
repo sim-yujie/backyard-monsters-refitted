@@ -7,6 +7,7 @@ import { BUILDABLE_TYPES, buildGates } from "../yard/build.js";
 import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
 import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
+import { GUIDE_BUILDINGS } from "../onboarding/guidedStart.js";
 import { BEGINNER_TOP_HALL, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
 
 /**
@@ -63,9 +64,15 @@ import { BEGINNER_TOP_HALL, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
  *
  * ## The build plan (owner decisions, 2026-10-23)
  *
- * A bot builds as a real player does, Town Hall by Town Hall. At each hall it
- * runs through the stages of {@link PLAN_ORDER}, its persona's order: every
- * Twig Snapper and Pebble Shiner the hall allows first, then the Putty
+ * A bot builds as a real player does, Town Hall by Town Hall. It starts as a
+ * player leaves the guided start (`onboarding/guidedStart.ts`): the guide's
+ * Housing, Sniper Tower, Map Room and Flinger come first. Housing comes first
+ * of all: until it fits the level band the bot takes only the smallest
+ * actions, and the guide's other buildings wait for it, so a bot has an army,
+ * and can take revenge, from level 3 (owner, 2026-10-23: Housing early, as a
+ * player after the guide). At each
+ * hall it then runs through the stages of {@link PLAN_ORDER}, its persona's
+ * order: every Twig Snapper and Pebble Shiner the hall allows first, then the Putty
  * Squishers, Goo Factories and silos, then the towers, the other buildings,
  * the walls and traps and the upgrades, in an order that leans the persona's
  * way. Each action is taken from the earliest stage that has one, now and
@@ -149,6 +156,8 @@ const CATEGORY_OF: Readonly<Record<number, Category>> = {
 /**
  * A stage of a hall's build plan (see the file comment):
  *
+ * - `guide`: building the first of each of the guided start's buildings,
+ *   Housing before the rest (the rest are left out until it stands);
  * - `mainHarvesters`: building Twig Snappers and Pebble Shiners;
  * - `economy`: building Putty Squishers, Goo Factories and silos;
  * - `towers`: building towers;
@@ -159,6 +168,7 @@ const CATEGORY_OF: Readonly<Record<number, Category>> = {
  * - `upgrades`: every other upgrade.
  */
 export type Stage =
+  | "guide"
   | "mainHarvesters"
   | "economy"
   | "towers"
@@ -169,16 +179,46 @@ export type Stage =
   | "upgrades";
 
 /**
- * The order each persona runs a hall's stages in `[PLACEHOLDER]`. Harvesters
- * first for every bot (the owner: as many resource buildings as allowed,
+ * The order each persona runs a hall's stages in `[PLACEHOLDER]`. The guided
+ * start's buildings, then harvesters first for every bot (the owner: as many resource buildings as allowed,
  * before walls; Twigs and Pebbles before Putty and Goo); an economy bot then
  * levels its harvesters before its towers, a tower bot builds and walls its
  * defences sooner, an army bot its monster buildings.
  */
 export const PLAN_ORDER: Readonly<Record<Persona, readonly Stage[]>> = {
-  economy: ["mainHarvesters", "economy", "mainUpgrades", "towers", "buildings", "sideUpgrades", "walls", "upgrades"],
-  towers: ["mainHarvesters", "economy", "towers", "mainUpgrades", "walls", "buildings", "sideUpgrades", "upgrades"],
-  army: ["mainHarvesters", "economy", "towers", "buildings", "mainUpgrades", "sideUpgrades", "walls", "upgrades"],
+  economy: [
+    "guide",
+    "mainHarvesters",
+    "economy",
+    "mainUpgrades",
+    "towers",
+    "buildings",
+    "sideUpgrades",
+    "walls",
+    "upgrades",
+  ],
+  towers: [
+    "guide",
+    "mainHarvesters",
+    "economy",
+    "towers",
+    "mainUpgrades",
+    "walls",
+    "buildings",
+    "sideUpgrades",
+    "upgrades",
+  ],
+  army: [
+    "guide",
+    "mainHarvesters",
+    "economy",
+    "towers",
+    "buildings",
+    "mainUpgrades",
+    "sideUpgrades",
+    "walls",
+    "upgrades",
+  ],
 };
 
 /** The chance an action comes from the stage after the earliest one with work left `[PLACEHOLDER]`. */
@@ -194,6 +234,9 @@ export const PERSONA_WEIGHTS: Readonly<Record<Persona, Readonly<Record<Exclude<C
   towers: { economy: 2, defence: 4, army: 1.5, utility: 1, walls: 1.5, traps: 1 },
   army: { economy: 2, defence: 2, army: 4, utility: 1.5, walls: 1, traps: 1 },
 };
+
+/** The buildings a player has on leaving the guided start, the `guide` stage (see {@link Stage}). */
+const GUIDE_TYPES: ReadonlySet<number> = new Set(Object.values(GUIDE_BUILDINGS));
 
 /** Harvesters and silos by stage (see {@link Stage}). */
 const MAIN_HARVESTERS: ReadonlySet<number> = new Set([1, 2]);
@@ -670,6 +713,10 @@ export class Progression {
     if (candidate.kind === "build") {
       // Walls and traps past their fill wait for a bigger hall's fill.
       if (category === "walls" || category === "traps") return this.shortOfFill(candidate.t) ? "walls" : null;
+      if (GUIDE_TYPES.has(candidate.t) && !this.byType.get(candidate.t)?.length) {
+        const housed = candidate.t === GUIDE_BUILDINGS.housing || !!this.byType.get(GUIDE_BUILDINGS.housing)?.length;
+        return housed ? "guide" : null;
+      }
       if (MAIN_HARVESTERS.has(candidate.t)) return "mainHarvesters";
       if (category === "economy") return "economy";
       if (category === "defence") return "towers";
@@ -737,11 +784,21 @@ export class Progression {
     const hallReady =
       staged.size === 0 || (!buildsLeft && !wallsLeft && this.readiness() >= (this.thresholds[this.hall] ?? 1));
 
+    // Saving up for the guide's Housing: the smallest step until it fits the band.
+    const guide = staged.get("guide") ?? [];
+    if (guide.length > 0 && !guide.some(inBand)) {
+      const small = [...staged.values()].flat().filter(inBand);
+      if (small.length > 0) {
+        return small.reduce((best, candidate) => (totalAfter(candidate) < totalAfter(best) ? candidate : best));
+      }
+    }
+
     const open = PLAN_ORDER[this.persona].filter((stage) => staged.get(stage)?.some(inBand));
     const hall = hallReady ? hallUpgrade.filter(inBand) : [];
     if (hall.length > 0 && (open.length === 0 || this.rng.float() < HALL_TAKE)) return hall[0]!;
     if (open.length > 0) {
-      const stage = open.length > 1 && this.rng.float() < STAGE_SLIP ? open[1]! : open[0]!;
+      const slip = open[0] !== "guide" && open.length > 1 && this.rng.float() < STAGE_SLIP;
+      const stage = slip ? open[1]! : open[0]!;
       return this.pickIn(stage, staged.get(stage)!.filter(inBand));
     }
 
