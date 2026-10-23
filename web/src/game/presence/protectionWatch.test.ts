@@ -24,7 +24,7 @@ const serverNow = () => Math.floor(Date.now() / 1000) + SKEW_S;
 let shown: number[];
 let hides: number;
 let account: string | null;
-let stayAnswer: () => Promise<ProtectionAnswer>;
+let stayAnswer: (plan?: string) => Promise<ProtectionAnswer>;
 let watch: ProtectionWatch;
 
 const make = (timings = PROTECTION_TIMINGS) =>
@@ -34,7 +34,7 @@ const make = (timings = PROTECTION_TIMINGS) =>
     onHide: () => {
       hides += 1;
     },
-    stay: () => stayAnswer(),
+    stay: (plan) => stayAnswer(plan),
     account: () => account,
     now: () => Date.now(),
   });
@@ -230,6 +230,39 @@ describe("ProtectionWatch.active: work in the Yard Planner", () => {
     watch.active();
     await vi.advanceTimersByTimeAsync(0);
     expect(taps).toBe(0);
+  });
+
+  it("carries the planner's plan, read only when the tap goes", async () => {
+    const carried: (string | undefined)[] = [];
+    stayAnswer = async (plan) => {
+      carried.push(plan);
+      return { now: serverNow(), lastAction: serverNow() };
+    };
+    const plan = vi.fn(() => '{"version":2}');
+    watch.hear({ now: serverNow(), lastAction: serverNow() });
+    watch.active(plan);
+    expect(plan).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(minutes(8) + 1_000);
+    watch.active(plan);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(plan).toHaveBeenCalledTimes(1);
+    expect(carried).toEqual(['{"version":2}']);
+  });
+
+  it("still taps, plainly, when the plan cannot be read", async () => {
+    const carried: (string | undefined)[] = [];
+    stayAnswer = async (plan) => {
+      carried.push(plan);
+      return { now: serverNow(), lastAction: serverNow() };
+    };
+    watch.hear({ now: serverNow(), lastAction: serverNow() });
+    vi.advanceTimersByTime(minutes(9));
+    watch.active(() => {
+      throw new Error("no plan");
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(carried).toEqual([undefined]);
+    expect(watch.showing).toBe(false);
   });
 
   it("keeps to half the quiet time under a short DEV ?protect=", async () => {

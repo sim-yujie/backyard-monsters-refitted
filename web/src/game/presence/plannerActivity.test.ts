@@ -15,4 +15,14 @@ describe("planner activity", () => {
     expect(one).toHaveBeenCalledTimes(1);
     expect(two).toHaveBeenCalledTimes(2);
   });
+
+  it("hands on the plan reader, unread", () => {
+    const heard = vi.fn();
+    const plan = vi.fn(() => "{}");
+    const stop = onPlannerActivity(heard);
+    notePlannerActivity(plan);
+    stop();
+    expect(heard).toHaveBeenCalledWith(plan);
+    expect(plan).not.toHaveBeenCalled();
+  });
 });

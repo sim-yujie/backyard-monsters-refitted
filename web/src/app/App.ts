@@ -220,8 +220,9 @@ export class App {
       if (typeof checkPending === "boolean") botCheck.hear(checkPending);
     });
     // Work in the Yard Planner, which the server hears nothing of until Apply,
-    // counts too: the watch taps "stay" for a player busy there (beta.4).
-    const stopPlanner = onPlannerActivity(() => protection.active());
+    // counts too: the watch taps "stay" for a player busy there, with the
+    // plan, which the bot check reads as play (beta.4).
+    const stopPlanner = onPlannerActivity((plan) => protection.active(plan));
     this.stopHearing = () => {
       stopAnswers();
       stopPlanner();

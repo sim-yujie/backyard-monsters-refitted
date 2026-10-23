@@ -430,7 +430,7 @@ export class YardPlanner {
     // here, as Apply is the only save the server hears (#275, beta.4).
     if (!this.readOnly) {
       for (const chrome of [this.bar.toolbar, this.bar.actionBar, this.dock, this.inspectorDock, this.helpDock]) {
-        chrome.addEventListener("pointerdown", notePlannerActivity, { passive: true });
+        chrome.addEventListener("pointerdown", this.noteWork, { passive: true });
       }
     }
     this.applyLayout();
@@ -1272,7 +1272,7 @@ export class YardPlanner {
     this.options.onPlanChanged?.();
     // A move, a placement, a turn, an undo, a selection or a tool: the player
     // at work, which keeps "Stay protected?" away (`plannerActivity.ts`).
-    if (!this.readOnly) notePlannerActivity();
+    if (!this.readOnly) this.noteWork();
     const state = this.session.state();
     this.bar.update(state);
     this.bar.setCoverage(figuresOf(this.currentCoverage()));
@@ -1412,6 +1412,18 @@ export class YardPlanner {
   }
 
   /* ── Phones (#45) ───────────────────────────────────────────────────── */
+
+  /**
+   * Says the player is at work here (`plannerActivity.ts`). On the main yard
+   * it hands over the plan, read only if a "stay" tap goes, which the tap
+   * carries for the server's bot check; an outpost's plan is not the main
+   * yard's, so none goes from there.
+   */
+  private readonly noteWork = (): void => {
+    notePlannerActivity(this.options.baseid === undefined ? this.planJson : undefined);
+  };
+
+  private readonly planJson = (): string => JSON.stringify(this.session.payload());
 
   private readonly onResize = (): void => {
     this.applyLayout();

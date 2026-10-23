@@ -49,4 +49,10 @@ export const ELSEWHERE: PresenceScreen = { where: "other", planner: false };
 export const sendPresence = (screen: PresenceScreen = ELSEWHERE): Promise<PresenceAnswer> =>
   postJson<PresenceAnswer>(PRESENCE_PATH, { where: screen.where, planner: screen.planner });
 
-export const stayProtected = (): Promise<PresenceAnswer> => post<PresenceAnswer>(STAY_PROTECTED_PATH);
+/**
+ * The tap made for a player at work in the Yard Planner carries the plan as
+ * it stands (`plan`, a layout payload as JSON), which the server's bot check
+ * counts as play when it is new work (beta.4, `game/presence/plannerActivity.ts`).
+ */
+export const stayProtected = (plan?: string): Promise<PresenceAnswer> =>
+  post<PresenceAnswer>(STAY_PROTECTED_PATH, plan === undefined ? {} : { plan });

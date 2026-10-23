@@ -36,6 +36,7 @@ export const playerKeys = (userid: number, email: string): string[] => [
   `bot-check:cooldown:${userid}`,
   `bot-check:times:${userid}`,
   `bot-check:stay:${userid}`,
+  `bot-check:plan:${userid}`,
 ];
 
 /** Keys named by one of the player's saves (`services/base/attackCheckpoint.ts`, `attackSession.ts`, `takeoverGrantStore.ts`, `services/defences/defenceReplayLoad.ts`). */

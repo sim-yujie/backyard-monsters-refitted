@@ -89,8 +89,11 @@ export interface ProtectionWatchOptions {
   readonly onShow: (endsAt: number) => void;
   /** Takes it down: a real action came, or the idle countdown is up. */
   readonly onHide: () => void;
-  /** Sends the tap; its answer is heard like a ping's. */
-  readonly stay: () => Promise<ProtectionAnswer>;
+  /**
+   * Sends the tap; its answer is heard like a ping's. A tap made for a player
+   * at work in the Yard Planner carries the plan ({@link ProtectionWatch.active}).
+   */
+  readonly stay: (plan?: string) => Promise<ProtectionAnswer>;
   /** Who is signed in; a new account starts the clock again. */
   readonly account?: () => string | null;
   /** Milliseconds; `Date.now` by default. */
@@ -101,7 +104,7 @@ export class ProtectionWatch {
   readonly timings: ProtectionTimings;
   private readonly onShow: (endsAt: number) => void;
   private readonly onHide: () => void;
-  private readonly sendStay: () => Promise<ProtectionAnswer>;
+  private readonly sendStay: (plan?: string) => Promise<ProtectionAnswer>;
   private readonly account: () => string | null;
   private readonly now: () => number;
   /** The server's clock minus the browser's, milliseconds. */
@@ -196,8 +199,12 @@ export class ProtectionWatch {
    * prompt sends, at most once per protection window, so it gives the player
    * nothing a tap would not. One at a time, and after a failure none for
    * {@link ACTIVE_RETRY_MS}, as a drag calls this on every pointer move.
+   *
+   * `plan` reads the planner's plan, only when the tap goes, and the tap
+   * carries it: the server's bot check counts new work in it as play, so a
+   * long stretch of these taps is not taken for a bot's (`plannerActivity.ts`).
    */
-  active(): void {
+  active(plan?: () => string): void {
     if (this.stopped || this.holders === 0 || this.suppressed || this.activeBusy) return;
     const promptAt = this.promptAt();
     const now = this.now();
@@ -206,7 +213,15 @@ export class ProtectionWatch {
     const lead = Math.min(ACTIVE_LEAD_MS, (this.timings.windowMs - this.timings.warningMs) / 2);
     if (promptAt === null || now < promptAt - lead || now < this.activeRetryAt) return;
     this.activeBusy = true;
-    this.stay()
+    let carried: string | undefined;
+    try {
+      carried = plan?.();
+    } catch {
+      // A plan that cannot be read leaves a plain tap, which still protects.
+      carried = undefined;
+    }
+    this.sendStay(carried)
+      .then((answer) => this.hear(answer))
       .catch(() => {
         this.activeRetryAt = this.now() + ACTIVE_RETRY_MS;
       })

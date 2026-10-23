@@ -9,14 +9,21 @@
  * watch (`ProtectionWatch.active`), which taps "stay" for them when the
  * prompt is nearly due. Sitting idle in the planner says nothing, so the
  * prompt still comes then.
+ *
+ * On the main yard the planner hands over its plan too, read only when a tap
+ * goes: the tap carries it, and the server's bot check counts new work in it
+ * as play (`server/src/services/user/plannerWork.ts`), so hours of
+ * rearranging with no Apply never read as a run of bare taps.
  */
 
-type Listener = () => void;
+/** The plan as it stands, a layout payload as JSON. */
+export type PlannerPlan = () => string;
+type Listener = (plan?: PlannerPlan) => void;
 const listeners = new Set<Listener>();
 
-/** The player just did something in the planner. */
-export const notePlannerActivity = (): void => {
-  for (const listener of listeners) listener();
+/** The player just did something in the planner; `plan` reads its plan on the main yard. */
+export const notePlannerActivity = (plan?: PlannerPlan): void => {
+  for (const listener of listeners) listener(plan);
 };
 
 /** Hears every {@link notePlannerActivity}. Returns the unsubscribe. */
