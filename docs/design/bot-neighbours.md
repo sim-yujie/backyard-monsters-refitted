@@ -291,7 +291,9 @@ It works the way a player does, so the limits hold by construction:
    if the server's own gate passes: `quantity[hall]`, `re` prerequisites and maximum level, the
    same checks `planBuild` and `planUpgradeAction` make. Each action adds its points
    (`pointsForBuild` / `pointsForUpgrade`). Stop when points plus base value reach the target.
-   The Map Room never goes past level 1.
+   The Map Room never goes past level 1. A bot starts as a player leaving the guided start: the
+   guide's Housing first, as soon as it fits the level band (so every bot has an army from level 3
+   and can take revenge, owner 2026-10-23), then its Sniper Tower, Map Room and Flinger.
 2. **Placement.** Each new building gets a spot from zones around the Town Hall, after the wiki's
    [Base Defense Guide](https://backyardmonsters.fandom.com/wiki/Base_Defense_Guide), which most
    players follow (owner reviews, issues #250 and #252): the Town Hall dead centre with four silos
@@ -365,11 +367,17 @@ stays otherwise.
 ### 4.4 Growth and the even spread (decision 7)
 
 Owner decision 2026-10-23 (replaces decision 17's conveyor): **each bot grows at a real
-player's speed**, one `[PLACEHOLDER]` table of days on each level, `DAYS_ON_LEVEL` in
-`config/BotConfig.ts` (about 1.5 days to level 10, 10 to 20, 90 to 30, 600 to 40, 900 to pass 40).
+player's speed**, one table of days on each level, `DAYS_ON_LEVEL` in `config/BotConfig.ts`,
+anchored to the live game's 24 real players on 2026-10-23 (all under 13 days old): level 12 at
+0.6 days, 17 at 1.1, 21 at 2.1, 25 at 6, 26 at 8. From level 17 each level takes 1.4 times the one
+before, and past 26 (no data) that carries on, as each level needs about 1.4 times the points: level
+30 at about 28 days, 35 at 150, 40 at 800, past 40 at 1,100.
 **Some bots go quiet**: each level a bot gains it has `BOTS_QUIET_RATE` chance (`[PLACEHOLDER]`
 0.1) to stop growing somewhere in that level, as a player who quits or slows down
-(`bot.quiet_since`). A quiet bot is still repaired, refilled and kept in its loot band. **When a
+(`bot.quiet_since`). Up to level 4 the chance is 0.25 (`EARLY_QUIET`), as 14 of those 24 players
+stopped at level 1-4 on their first day. A quiet bot is still repaired, refilled and kept in its
+loot band, but shows online only on `BOTS_QUIET_ONLINE` (`[PLACEHOLDER]` 0.05) of its grows, about
+once in three days (owner, 2026-10-23). **When a
 level runs short, a new bot is made right at that level** with a yard drawn for it; **a crowded
 level retires** its quiet bots first (longest quiet first), then its growing bots longest on the
 level. Total about 500 (`BOTS_TOTAL`), each level its `LEVEL_WEIGHTS` share (even). The pure
@@ -520,7 +528,7 @@ attack, run by the sweep): the job is claimed only with `BOTS_BRAIN` and `BOTS_R
 - **Alliance invites** cannot reach a bot (no world, `inviteUser.ts:51`); the same decline job is
   wired in case that changes. **Friend invites** do not exist on the server.
 - **Chat:** a bot never connects. Nothing to build.
-- **Presence:** each grow job marks the bot online for 2 minutes (`last-seen:main:<bot>`, as a real
+- **Presence:** each grow job of a growing bot (a quiet one's now and then, `BOTS_QUIET_ONLINE`) marks the bot online for 2 minutes (`last-seen:main:<bot>`, as a real
   load does), so bots are sometimes seen online and, for that minute, cannot be attacked, like a
   player (decision 22).
 
