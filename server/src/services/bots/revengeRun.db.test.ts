@@ -234,7 +234,9 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
   test(
     "a replay past its deadline spends nothing, and the finaliser lands it exactly once, as the same log and seed fight",
     async () => {
-      await sql(`UPDATE bym.save SET protected = 0 WHERE userid = ?`, [player]);
+      // The first test's revenge may have flattened the yard (its battle seed is fresh each run), and
+      // a yard with nothing left standing has nothing to attack: mend it first, as a player would.
+      await sql(`UPDATE bym.save SET protected = 0, buildinghealthdata = '{}' WHERE userid = ?`, [player]);
       await attackedBot(secondBot);
 
       const yardBefore = await yard(player);
