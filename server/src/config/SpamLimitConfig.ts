@@ -34,6 +34,13 @@ export const SPAM_LIMITS = {
    * before the Turnstile check; the daily cap (`config/BugReportConfig.ts`) applies as well.
    */
   bugReport: { max: 10, minutes: 60 },
+  /**
+   * Batches of browser errors the web client sends on its own (`clienterrors`,
+   * and by IP `clienterrors/guest`), at most 10 errors each. The client sends at
+   * most one batch a half minute and stops after a few, so a player meets this
+   * only when something is badly wrong.
+   */
+  clientErrors: { max: 20, minutes: 60 },
 } as const satisfies Record<string, SpamLimit>;
 
 /**
