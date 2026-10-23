@@ -20,6 +20,10 @@ export class Maproom {
   @Property({ type: Date, nullable: true })
   neighborsLastCalculated?: Date;
 
+  /** The player's level when the Map Room 1 list was last searched; null for lists from before it was kept. */
+  @Property({ type: "number", nullable: true })
+  neighborsLevel?: number | null;
+
   /** Neighbours dropped today by the daily attack cap; a re-search leaves them out (issue #247). */
   @Property({ columnType: "jsonb" })
   droppedNeighbours: Opt<DroppedNeighbour[]> = [];

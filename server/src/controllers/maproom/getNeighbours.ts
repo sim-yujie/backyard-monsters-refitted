@@ -13,9 +13,11 @@ import { updateNeighbourData } from "../../services/maproom/updateNeighbourData.
 import {
   carryAttackCounters,
   droppedToday,
+  levelMovedAway,
   needsAttackableRetry,
   needsNewNeighbours,
 } from "../../services/maproom/neighbourCache.js";
+import { calculateBaseLevel } from "../../services/base/calculateBaseLevel.js";
 import type { Save } from "../../database/models/save.model.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
 
@@ -118,7 +120,9 @@ const getOverworldNeighbours: KoaController = async (ctx) => {
  *
  * The list is also re-searched, once the 30-minute retry has passed, when
  * fewer than 5 of its neighbours can be attacked now (issue #236,
- * `docs/design/bot-neighbours.md` §4.3). Every re-search keeps the attack
+ * `docs/design/bot-neighbours.md` §4.3), and at once when the player's level
+ * has moved more than 7 levels from the level the list was built for (owner,
+ * 2026-10-23). Every re-search keeps the attack
  * counters of neighbours who stay on the list, and leaves out neighbours
  * dropped today by the 10 attacks a day cap (issue #247).
  *
@@ -133,6 +137,7 @@ export const overworldNeighbours = async (user: User, save: Save): Promise<Neigh
   if (!maproom) maproom = await Maproom.setupMapRoomData(postgres.em, user);
 
   const currentDate = new Date();
+  const level = calculateBaseLevel(save.points, save.basevalue);
 
   const research = async (cache: Maproom) => {
     const foundNeighbours = await findOverworldNeighbours(postgres.em, user, save, {
@@ -142,11 +147,12 @@ export const overworldNeighbours = async (user: User, save: Save): Promise<Neigh
 
     cache.neighbors = carryAttackCounters(cache.neighbors, foundNeighbours);
     cache.neighborsLastCalculated = currentDate;
+    cache.neighborsLevel = level;
     postgres.em.persist(cache);
     await postgres.em.flush();
   };
 
-  if (needsNewNeighbours(maproom, currentDate)) {
+  if (needsNewNeighbours(maproom, currentDate) || levelMovedAway(maproom.neighborsLevel, level)) {
     await research(maproom);
     return updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid);
   }
