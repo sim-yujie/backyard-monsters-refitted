@@ -475,21 +475,19 @@ export interface DailySummary {
   /** As of the moment the summary was made. */
   readonly players: PlayerTotals;
   /** Kinds of error first seen that day, most frequent first (at most 5). */
-  readonly newErrors: readonly { source: string; message: string; count: number }[];
+  readonly newErrors: readonly { id: number; source: string; count: number }[];
   /** Bug reports sent that day (at most 10), oldest first. */
-  readonly bugReports: readonly { id: number; message: string }[];
+  readonly bugReports: readonly { id: number }[];
 }
-
-/** One line of a message: no line breaks, cut to `max`. */
-const oneLine = (text: string, max: number): string => {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
-};
 
 /**
  * The numbers for the daily summary of finished UTC day `day` (`YYYY-MM-DD`):
  * the day's row (counted first if the hourly count has not reached it yet),
  * players seen recently, new kinds of error and the day's bug reports.
+ *
+ * Numbers only, never words: the summary goes to Telegram, an outside
+ * service, so it carries no player-written text, error text, names or emails
+ * (docs/alerts.md, "Privacy"). The dashboard shows the rest.
  *
  * With no `deps`, uses the running server's database and Redis.
  *
@@ -512,21 +510,21 @@ export const getDailySummary = async (day: string, deps?: StatsDeps, now: number
 
   const from = dayStart(day);
   const to = dayStart(nextDay(day));
-  const newErrors = await use.em.execute<{ source: string; message: string; count: number | string }[]>(
-    `SELECT source, message, count FROM bym.app_error WHERE first_seen >= ? AND first_seen < ?
+  const newErrors = await use.em.execute<{ id: number | string; source: string; count: number | string }[]>(
+    `SELECT id, source, count FROM bym.app_error WHERE first_seen >= ? AND first_seen < ?
       ORDER BY count DESC, id LIMIT 5`,
     [from, to]
   );
-  const reports = await use.em.execute<{ id: number | string; message: string }[]>(
-    `SELECT id, message FROM bym.bug_report WHERE created_at >= ? AND created_at < ? ORDER BY id LIMIT 10`,
+  const reports = await use.em.execute<{ id: number | string }[]>(
+    `SELECT id FROM bym.bug_report WHERE created_at >= ? AND created_at < ? ORDER BY id LIMIT 10`,
     [from, to]
   );
   return {
     day,
     stat: stat!,
     players: await playerTotals(use, now),
-    newErrors: newErrors.map((row) => ({ source: row.source, message: oneLine(row.message, 120), count: Number(row.count) })),
-    bugReports: reports.map((row) => ({ id: Number(row.id), message: oneLine(row.message, 80) })),
+    newErrors: newErrors.map((row) => ({ id: Number(row.id), source: row.source, count: Number(row.count) })),
+    bugReports: reports.map((row) => ({ id: Number(row.id) })),
   };
 };
 

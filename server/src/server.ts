@@ -27,6 +27,8 @@ import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.j
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
+import { startAlertSweep } from "./services/alerts/alertSweep.js";
+import { trackResponseTimes } from "./services/health/responseTimes.js";
 import { turnstileSecretKey } from "./services/auth/turnstile.js";
 import { requiresDiscordVerification } from "./config/AccountConfig.js";
 import { botConfig } from "./config/BotConfig.js";
@@ -105,6 +107,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
     logger.error(`Unhandled Rejection at: ${promise} reason: ${reason}`);
   });
 
+  // How fast requests are answered, for the owner's dashboard (`services/health/`).
+  app.use(trackResponseTimes);
+
   app.use(ErrorInterceptor);
   // What Koa sees outside the routes, a client that closed mid-download above all (#274).
   app.on("error", onAppError);
@@ -145,6 +150,11 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
       logBase: LOG_BASE,
     });
   }
+
+  // Telegram alerts to the owner (docs/alerts.md): full disk, missed backup,
+  // error jumps, the database or Redis gone. Off unless TELEGRAM_BOT_TOKEN and
+  // TELEGRAM_CHAT_ID are set.
+  startAlertSweep({ redis, sql: (query) => postgres.em.fork().execute(query) });
 
   // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
   // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without

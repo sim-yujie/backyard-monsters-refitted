@@ -34,6 +34,7 @@ date: 2026-10-27
 - Map Room 1: online players show a green dot beside their name, and battles show as a shield (they attacked you) and a sword (you attacked them) with a count.
 - Map Room 1 remembers how you sorted the list, and a new button flips it between highest and lowest first.
 - **Special moves tuned.** Fang's venom bites once a second again. Bandito's whirlwind spins through enemy monsters (it never hurts buildings). When no building is near, Teratorn's fireball bounces on to a wall. Bolts defending from your bunkers can blink too.
+- **Tribe raids work more like the original game.** Protection you buy in the Shop now pauses wild monster tribe raids (the free protection you get after being attacked does not; a raid still in its warning when you buy is called off, one already fighting carries on). On Map Room 1, the raid comes from your weakest tribe camp still standing; on Map Room 2 the tribe is still one of the four at random.
 - A new [Thank-you page](/support/thanks/) on this website for everyone who supports the game.
 
 ### Fixes
@@ -43,4 +44,6 @@ date: 2026-10-27
 - During the guided start, the Build menu no longer shows a Build instantly button that could not be pressed while Bob is paying for the building.
 - Bob's tips on the attack screen no longer sit on top of the Retreat question or the "Attack over" panel. They step aside while those are open.
 - Bob's tips no longer cover other open windows, such as the Leaderboard, the Shop or Report a bug. They wait until you close the window.
+- The "Stay protected?" question no longer pops up while you are busy rearranging your yard in the Yard Planner. It still comes if you leave the game sitting in the Planner.
+- In the Monster Baiter, a fully grown test champion now fights fully fed, with every food bonus.
 - Fixed a background server problem.

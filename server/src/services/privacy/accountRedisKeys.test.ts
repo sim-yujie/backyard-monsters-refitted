@@ -42,6 +42,7 @@ const OWNERS: [file: string, template: string][] = [
   ["services/user/botChallenge.ts", "`bot-check:cooldown:${userid}`"],
   ["services/user/botPatterns.ts", "`bot-check:times:${userid}`"],
   ["services/user/botPatterns.ts", "`bot-check:stay:${userid}`"],
+  ["services/user/botPatterns.ts", "`bot-check:plan:${userid}`"],
   ["services/user/botPatterns.ts", "`bot-check:routes:${userid}:${bucket}`"],
   ["services/base/attackCheckpoint.ts", "`attack-checkpoint:${basesaveid}`"],
   ["services/base/attackCheckpoint.ts", "`attack-final:${basesaveid}`"],
@@ -83,6 +84,7 @@ describe("the Redis keys account deletion removes (accountRedisKeys.ts)", () => 
       "bot-check:cooldown:42",
       "bot-check:times:42",
       "bot-check:stay:42",
+      "bot-check:plan:42",
     ]);
   });
 

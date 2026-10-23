@@ -277,7 +277,8 @@ describe.skipIf(!dbName)("the owner's dashboard on a real database", () => {
 
       const summary = await getDailySummary("2026-01-09", deps, NOW);
       expect(summary.stat).toMatchObject({ day: "2026-01-09", newPlayers: 1, bugReports: 1 });
-      expect(summary.bugReports.map((r) => r.message)).toEqual(["dashtest day report"]);
+      expect(summary.bugReports).toHaveLength(1);
+      expect(Object.keys(summary.bugReports[0]!)).toEqual(["id"]);
       expect(summary.players.total).toBeGreaterThanOrEqual(3);
       await expect(getDailySummary("2026-01-12", deps, NOW)).rejects.toThrow(/not over/);
 

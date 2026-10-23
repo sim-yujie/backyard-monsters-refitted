@@ -1,12 +1,15 @@
 import { randomInt } from "node:crypto";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
+import { Maproom } from "../../database/models/maproom.model.js";
 import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
+import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { raidRefusedErr } from "../../errors/errors.js";
 import { defenderForcesOf, type DefenderForces, type RaidEvent, type Roster } from "../../game-rules/combat/index.js";
 import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { extractTownHall } from "../../utils/extractTownHall.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { noteTribeRaid } from "../stats/activity.js";
@@ -30,6 +33,7 @@ import { planRaid, type RaidPlan } from "./raidPlan.js";
 import {
   RAID_MIN_GAP_SECONDS,
   SESSIONS_BETWEEN_RAIDS,
+  boughtProtection,
   raidAlreadyApplied,
   raidDueCheck,
   raidDueNow,
@@ -41,6 +45,7 @@ import {
   withoutFightLock,
   type RaidPreference,
 } from "./raidSchedule.js";
+import { mr1RaidCamps, type RaidCamp } from "./raidTribe.js";
 import {
   FIGHT_GRACE_SECONDS,
   WARNING_SECONDS,
@@ -134,7 +139,44 @@ const SCHEDULE_FIELDS = [
   "aiattacks",
   "attackid",
   "attacks",
+  "protected",
+  "storedata",
 ] as const;
+
+/**
+ * The player's Map Room 1 camps, which pick the raiding tribe
+ * (`raidTribe.ts`): none for a player on Map Room 2, who has left them behind.
+ */
+const raidCampsOf = async (em: EntityManager, save: Save, now: number): Promise<RaidCamp[] | null> => {
+  if (Number(save.mapversion ?? MapRoomVersion.V1) !== MapRoomVersion.V1) return null;
+  const maproom = await em.findOne(Maproom, { userid: save.userid });
+  const townHall = extractTownHall(save.buildingdata ?? {});
+  return mr1RaidCamps(townHall?.l ?? 1, playerLevelOf(save), maproom?.tribedata ?? [], now);
+};
+
+/**
+ * A raid still in its warning when the player has bought protection since it
+ * opened: called off, as bought protection pauses raids (owner, 2026-10-23).
+ * Flash held such a raid back until the protection ended (`WMATTACK.as:304`,
+ * `:317`); here a raid never outlives its warning, so it is cancelled and,
+ * its schedule untouched, comes again once the protection is over. A fight
+ * already started goes on.
+ */
+const cancelWarningUnderProtection = async (em: EntityManager, user: User, raid: OpenRaid, now: number): Promise<boolean> => {
+  if (raid.phase !== "warning") return false;
+  const basesaveid = user.save?.basesaveid;
+  if (basesaveid == null) return false;
+  const save = await em.findOne(Save, { basesaveid }, { fields: ["basesaveid", "protected", "storedata"], refresh: true });
+  if (!save || !boughtProtection(save, now)) return false;
+  if ((await readOpenRaid(user.userid))?.id !== raid.id) return false;
+  await cancelOpenRaid(user.userid);
+  logger.info("Wild monster raid {id} called off for userid {userid}: protection bought", {
+    event: "wild-raid-protected",
+    userid: user.userid,
+    id: raid.id,
+  });
+  return true;
+};
 
 /** A fresh 31-bit seed for a raid (§3), also used to seed the Trojan Horse's fight (`trojanFight.ts`). */
 export const newSeed = (): number => randomInt(1, 2 ** 31);
@@ -171,7 +213,7 @@ export const raidOnPing = async (
   now: number
 ): Promise<RaidView | undefined> => {
   const open = await readOpenRaid(user.userid);
-  if (open) return raidView(open);
+  if (open) return (await cancelWarningUnderProtection(em, user, open, now)) ? undefined : raidView(open);
   if (screen?.where !== "yard" || screen.planner) return undefined;
   const basesaveid = user.save?.basesaveid;
   if (basesaveid == null) return undefined;
@@ -183,7 +225,15 @@ export const raidOnPing = async (
   if (!scheduled || scheduled.userid !== user.userid) return undefined;
   // No buildings in this slice, so the damage gate waits for the full read.
   const early = raidDueCheck({
-    save: { type: scheduled.type, mapversion: scheduled.mapversion, points: scheduled.points, basevalue: scheduled.basevalue, aiattacks: scheduled.aiattacks },
+    save: {
+      type: scheduled.type,
+      mapversion: scheduled.mapversion,
+      points: scheduled.points,
+      basevalue: scheduled.basevalue,
+      aiattacks: scheduled.aiattacks,
+      protected: scheduled.protected,
+      storedata: scheduled.storedata,
+    },
     now,
     marks,
     screen,
@@ -208,6 +258,7 @@ export const raidOnPing = async (
     level: playerLevelOf(save),
     preference: readSchedule(save.aiattacks).attackPreference,
     seed,
+    camps: await raidCampsOf(em, save, now),
   });
   if (!plan) return undefined;
 
@@ -297,11 +348,13 @@ export const START_LOCK_SECONDS = Math.ceil(FINALISE_REPLAY_DEADLINE_MS / 1000) 
  * the fight, and held for it by a provisional fight lock (`raidLock.ts`), so
  * nothing changes it while the fight runs outside any transaction.
  */
-const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: number): Promise<FrozenYard> => {
+const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: number): Promise<FrozenYard | null> => {
   let completed: CompletedJob[] = [];
   const frozen = await em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     if (isAttackActive(locked)) throw raidRefusedErr("underAttack");
+    // Protection bought during the warning: the raid is called off (`startRaid`).
+    if (boughtProtection(locked, now)) return null;
     // A second start of this raid, sent before the first answered: both read
     // the warning, but the first already holds the yard.
     if (readFightLock(readSchedule(locked.aiattacks).fight)?.id === raid.id && raidFighting(locked, now)) {
@@ -380,6 +433,9 @@ export const lockForFight = (
  * raid, never sent (`lockForFight`). The client is handed what it needs to
  * play the same fight.
  *
+ * Protection the player bought during the warning calls the raid off: the
+ * start is refused `noRaid` (`cancelWarningUnderProtection`).
+ *
  * A raid whose time has not come is refused (`notYet`), as is one on a yard
  * under attack (`underAttack`: it waits, §4.1), and a second start of a raid
  * already starting (`notWarning`). With no replay slot free, or a fight the
@@ -398,7 +454,12 @@ export const startRaid = async (em: EntityManager, user: User, raidId: unknown, 
   if (!release) throw raidRefusedErr("busy");
   let start: RaidStart;
   try {
-    const { yard, defence } = await freezeYard(em, user, raid, now);
+    const frozen = await freezeYard(em, user, raid, now);
+    if (!frozen) {
+      if ((await readOpenRaid(user.userid))?.id === raid.id) await cancelOpenRaid(user.userid);
+      throw raidRefusedErr("noRaid");
+    }
+    const { yard, defence } = frozen;
     let outcome: RaidFightOutcome;
     try {
       outcome = await fightRaidInWorker({

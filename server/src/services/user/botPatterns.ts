@@ -18,7 +18,8 @@ import { redis } from "../../server.js";
  *   ten minutes rather than resetting on the clock's hour.
  * - `stay`: the "Stay protected?" tap {@link STAY_STREAK_LIMIT} times running
  *   with no other real action in between: someone, or something, keeping the
- *   yard safe without playing.
+ *   yard safe without playing. New work in the Yard Planner, which a tap may
+ *   carry, counts as another action (`plannerWork.ts`, {@link breakStayStreak}).
  *
  * The state is the player's, in Redis, and every key has a life: the last 30
  * action times live {@link REGULAR_TIMES_TTL_SECONDS} after the last action,
@@ -66,6 +67,8 @@ export interface BotTrigger {
 const timesKey = (userid: number): string => `bot-check:times:${userid}`;
 const routesKey = (userid: number, bucket: number): string => `bot-check:routes:${userid}:${bucket}`;
 const stayKey = (userid: number): string => `bot-check:stay:${userid}`;
+/** The last Yard Planner plan a stay tap carried (`plannerWork.ts`). */
+export const plannerPlanKey = (userid: number): string => `bot-check:plan:${userid}`;
 const bucketOf = (nowMs: number): number => Math.floor(nowMs / 1000 / SAME_ROUTE_BUCKET_SECONDS);
 
 /** What the `regular` rule saw in a run that fired. */
@@ -136,12 +139,23 @@ export const observeRealAction = async (userid: number, route: string, nowMs: nu
   return null;
 };
 
+/**
+ * Ends the player's run of stay taps, as a real action between them would:
+ * work the server has checked but which is not an action by itself, new
+ * Yard Planner work carried by the tap (`plannerWork.ts`). The tap it came
+ * with still counts, as the first of a new run.
+ */
+export const breakStayStreak = async (userid: number): Promise<void> => {
+  await redis.del(stayKey(userid));
+};
+
 /** Forgets the player's patterns: a solved check starts them clean. */
 export const resetPatterns = async (userid: number, nowMs: number): Promise<void> => {
   const bucket = bucketOf(nowMs);
   await redis.del(
     timesKey(userid),
     stayKey(userid),
+    plannerPlanKey(userid),
     ...Array.from({ length: SAME_ROUTE_BUCKETS }, (_, i) => routesKey(userid, bucket - i))
   );
 };

@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { takeCapturedErrors } from "../../utils/errorCapture.js";
 import { logger } from "../../utils/logger.js";
+import { noteServerErrors } from "../alerts/errorRate.js";
 import { noteErrors, type ErrorSource } from "../stats/activity.js";
 
 /**
@@ -191,8 +192,11 @@ export const SERVER_ERROR_FLUSH_MS = 30_000;
  */
 export const flushServerErrors = async (em: EntityManager): Promise<number> => {
   const { entries, dropped } = takeCapturedErrors();
-  if (entries.length === 0 && dropped === 0) return 0;
   const occurrences = entries.reduce((sum, entry) => sum + entry.count, 0) + dropped;
+  // The "sudden jump in errors" alert (`services/alerts/errorRate.ts`) counts
+  // every flush, an empty one too, so its check runs from the first flush.
+  noteServerErrors(occurrences);
+  if (entries.length === 0 && dropped === 0) return 0;
   noteErrors("server", occurrences);
   try {
     return await recordErrors(

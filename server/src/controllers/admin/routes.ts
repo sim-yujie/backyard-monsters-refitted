@@ -18,6 +18,7 @@ import {
   type BugReportImageKind,
 } from "../../services/admin/bugReportsAdmin.js";
 import { errorTotals, listErrors } from "../../services/errors/errorStore.js";
+import { adminHealthReport } from "../../services/health/adminHealth.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
 
@@ -153,5 +154,11 @@ export const mountAdminRoutes = (router: Router): void => {
       }),
       totals: await errorTotals(em),
     });
+  });
+
+  // Server health and open alerts (docs/alerts.md). It never throws: a failed
+  // part (the database down, say) is reported as failed.
+  router.get(`${admin}/health`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, { ...(await adminHealthReport({ sql: (query) => postgres.em.fork().execute(query), redis })) });
   });
 };

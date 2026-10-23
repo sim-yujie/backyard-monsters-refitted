@@ -6,6 +6,7 @@ import { postgres, redis } from "../../server.js";
 import { presenceAnswer } from "../../services/user/presenceAnswer.js";
 import { raidOnPing, type RaidView } from "../../services/raids/raidFlow.js";
 import { parseRaidScreen, recordRaidScreen } from "../../services/raids/raidStore.js";
+import { hearPlannerWork } from "../../services/user/plannerWork.js";
 import { logger } from "../../utils/logger.js";
 import { noteActivePlayer } from "../../services/stats/activity.js";
 
@@ -76,11 +77,30 @@ export const presence: KoaController = async (ctx) => {
  * `last-action` to now once this answers, and the player is online again for
  * ten minutes. It refreshes the presence mark too, as a ping does, and
  * answers like one, with `lastAction` already now.
+ *
+ * The tap the web client makes for a player at work in the Yard Planner
+ * carries the plan as it stands, as `plan` (beta.4): new work on the main
+ * yard ends the bot check's run of stay taps (`services/user/plannerWork.ts`).
+ * Hearing it never fails the tap.
  */
 export const stayProtected: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const now = getCurrentDateTime();
   await redis.setex(`last-seen:main:${user.userid}`, PRESENCE_TTL_SECONDS, now.toString());
+
+  const plan = (ctx.request.body as { plan?: unknown } | undefined)?.plan;
+  if (plan !== undefined) {
+    try {
+      await postgres.em.populate(user, ["save"]);
+      await hearPlannerWork(user.userid, plan, user.save?.buildingdata);
+    } catch (err) {
+      logger.warn("Could not hear the Yard Planner plan on a stay tap for userid {userid}: {error}", {
+        event: "stay-plan-failed",
+        userid: user.userid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...(await presenceAnswer(user, now, now)) };
