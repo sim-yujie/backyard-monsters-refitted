@@ -1,4 +1,5 @@
 import { AttackPermission } from "../../enums/MapRoom.js";
+import { NEIGHBOUR_LEVEL_RANGE } from "./v1/findOverworldNeighbours.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
 
 /** Full cache TTL once >= 10 neighbours are found. */
@@ -88,7 +89,7 @@ export const needsNewNeighbours = (cache: NeighbourCache, now: Date): boolean =>
  * Whether a Map Room 1 list, its live fields just refreshed, should be
  * searched again because fewer than {@link MIN_ATTACKABLE} of its neighbours
  * can be attacked now and the last search is older than the retry interval.
- * The player's own level changing is never a reason (decision 23).
+ * The player's own level moving is the separate {@link levelMovedAway}.
  *
  * @param {NeighbourData[]} neighbours - The list after `updateNeighbourData`
  * @param {Date | undefined} lastCalculated - When the list was last searched
@@ -105,6 +106,20 @@ export const needsAttackableRetry = (
   const attackable = neighbours.filter((neighbour) => neighbour.attackpermitted === AttackPermission.ATTACKABLE);
   return attackable.length < MIN_ATTACKABLE;
 };
+
+/**
+ * Whether a Map Room 1 list should be searched again because the player's
+ * level has moved more than {@link NEIGHBOUR_LEVEL_RANGE} levels, up or down,
+ * from the level it was built for (owner, 2026-10-23, replacing decision 23
+ * of `docs/design/bot-neighbours.md`). A list built before the level was kept
+ * has none, and is searched again once so it gets one.
+ *
+ * @param {number | null | undefined} builtFor - The player's level at the last search
+ * @param {number} level - The player's level now
+ * @returns {boolean} True if a new search should be run
+ */
+export const levelMovedAway = (builtFor: number | null | undefined, level: number): boolean =>
+  builtFor == null || Math.abs(level - builtFor) > NEIGHBOUR_LEVEL_RANGE;
 
 /**
  * A fresh search's list, with the attack counters of neighbours who were
