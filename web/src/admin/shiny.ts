@@ -79,7 +79,6 @@ export const awardForm = (options: AwardFormOptions): HTMLFormElement => {
       inputmode: "numeric",
       autocomplete: "off",
       enterkeyhint: "next",
-      placeholder: "250",
       "aria-describedby": `award-amount-hint-${n}`,
     },
   });
@@ -91,7 +90,7 @@ export const awardForm = (options: AwardFormOptions): HTMLFormElement => {
       maxlength: String(MAX_AWARD_REASON),
       autocomplete: "off",
       enterkeyhint: "done",
-      placeholder: "Sorry for the lost troops in your attack",
+      placeholder: "For example: sorry for the lost troops",
       "aria-describedby": `award-reason-count-${n}`,
     },
   });

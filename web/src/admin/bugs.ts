@@ -574,7 +574,7 @@ export class BugsView {
     return h(
       "div",
       { class: "report-block" },
-      h("h4", {}, "Give Shiny", h("span", { class: "hint" }, " the mail about it joins the messages above")),
+      h("h4", {}, "Give Shiny", h("span", { class: "hint" }, " they get a mail saying why")),
       report.awards.length
         ? h(
             "ul",

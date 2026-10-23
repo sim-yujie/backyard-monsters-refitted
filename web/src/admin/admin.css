@@ -1822,7 +1822,7 @@ tbody th {
 
 .award-row {
   display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
+  grid-template-columns: 4.25rem minmax(0, 1fr);
   gap: 12px;
   align-items: start;
   padding: 12px 16px;
