@@ -408,6 +408,30 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect((await pass(NOW + HOUR, 80, { config: tight })).report.rebalanced).toBe(false);
   }, 60_000);
 
+  test("the rebalance starts bots at level 1 as new players, growing; on a full table each takes a quiet bot's place", async () => {
+    const rules = config(3);
+    const withBirths = () => ({ ...rules(), level1PerDay: 1 });
+    const [quiet, growing, high] = await make([20, 20, 30]);
+    await sql(`UPDATE bym.bot SET quiet_since = ? WHERE userid = ?`, [new Date((NOW - DAY) * 1000), quiet!.userid]);
+
+    const { report } = await pass(NOW, 3, { config: withBirths });
+    expect(report.retired).toEqual([quiet!.userid]);
+    expect(report.born).toHaveLength(1);
+    expect(report.replaced).toEqual(report.born);
+    const born = await botRow(report.born[0]!);
+    expect(born).toMatchObject({ state: "active", level: 1, quiet_since: null });
+    // At the very bottom of level 1, as a new player.
+    expect(new Date(born.level_since).getTime()).toBe(NOW * 1000);
+    expect((await jobs(born.userid)).map((job) => job.kind)).toEqual(["grow"]);
+    for (const other of [growing!, high!]) expect((await botRow(other.userid)).state).toBe("active");
+
+    // The next day, no quiet bot is left to give up its place: none starts.
+    const next = await pass(NOW + DAY, 3, { config: withBirths });
+    expect(next.report.rebalanced).toBe(true);
+    expect(next.report.born).toEqual([]);
+    expect(next.report.retired).toEqual([]);
+  }, 60_000);
+
   test("a quiet bot stands still while still tended; a bot that climbs may go quiet", async () => {
     const [still, climber] = await make([10, 10], 2401);
     const quietAt = new Date(NOW * 1000);

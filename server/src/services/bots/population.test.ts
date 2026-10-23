@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DAYS_ON_LEVEL,
   DEFAULT_BOTS_GROWING_FLOW,
+  DEFAULT_BOTS_LEVEL1_PER_DAY,
   DEFAULT_BOTS_LEVEL_SLACK,
   DEFAULT_BOTS_NEW_PER_DAY,
   DEFAULT_BOTS_QUIET_RATE,
@@ -12,6 +13,7 @@ import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { evenSpread } from "./factory.js";
 import {
   anchorFor,
+  birthsToday,
   bornQuietShare,
   drawQuiet,
   isQuiet,
@@ -127,7 +129,7 @@ describe("the daily rebalance", () => {
     level_since: date(NOW - daysOnLevel * DAY),
     quiet_since: quietDaysAgo === undefined ? null : date(NOW - quietDaysAgo * DAY),
   });
-  const rules = (share: number[], extra: Partial<{ total: number; slack: number; newPerDay: number }> = {}) => ({
+  const rules = (share: number[], extra: Partial<{ total: number; slack: number; newPerDay: number; births: number }> = {}) => ({
     share,
     total: share.reduce((a, b) => a + b, 0),
     slack: 1,
@@ -177,6 +179,42 @@ describe("the daily rebalance", () => {
     expect(lowered.retire).toHaveLength(4);
     expect(lowered.make).toEqual([]);
   });
+
+  test("bots start at level 1 while there is room, before the short levels and within the daily cap", () => {
+    const bots = [bot(1, 1), bot(2, 1), bot(2, 1), bot(3, 1), bot(3, 1), bot(3, 1)];
+    const share = [3, 3, 3, 3];
+    expect(planRebalance(bots, rules(share, { slack: 0, births: 2 }), NOW)).toEqual({ retire: [], born: 2, make: [4, 4, 2, 4] });
+    // Level 1's planned bots count against its share.
+    expect(planRebalance(bots, rules(share, { slack: 0, births: 1, newPerDay: 3 }), NOW)).toEqual({ retire: [], born: 1, make: [4, 4] });
+    expect(planRebalance(bots, rules(share, { slack: 0, births: 5, newPerDay: 3 }), NOW).born).toBe(3);
+    expect(planRebalance(bots, rules(share, { slack: 0, births: 1, newPerDay: 0 }), NOW).born).toBe(0);
+  });
+
+  test("on a full table each bot started at level 1 takes a quiet bot's place on the most crowded level, the higher on a tie", () => {
+    const quietLow = bot(2, 1, 3);
+    const quietHigh = bot(4, 1, 3);
+    const quietLonger = bot(4, 1, 6);
+    const bots = [bot(1, 1), bot(1, 1), bot(2, 1), quietLow, bot(3, 1), bot(3, 1), bot(4, 1), quietHigh, quietLonger];
+    // Levels 2 and 4 are one over, 1 and 3 one under (within the slack); growing bots never leave for a birth.
+    const plan = planRebalance(bots, rules([3, 1, 3, 2], { total: 9, births: 2 }), NOW);
+    expect(plan).toEqual({ retire: [quietLonger.userid, quietLow.userid], born: 2, make: [] });
+  });
+
+  test("with no quiet bot to give up its place, a full table starts none at level 1", () => {
+    const bots = [bot(1, 1), bot(2, 1), bot(2, 1)];
+    expect(planRebalance(bots, rules([1, 2], { births: 1 }), NOW)).toEqual({ retire: [], born: 0, make: [] });
+  });
+
+  test("the bots started at level 1 a day: the whole part of the rate, and one more by the chance of its fraction", () => {
+    expect(birthsToday(0, () => 0)).toBe(0);
+    expect(birthsToday(2, () => 0)).toBe(2);
+    expect(birthsToday(1.25, () => 0.2)).toBe(2);
+    expect(birthsToday(1.25, () => 0.3)).toBe(1);
+    const draw = mulberry32(5);
+    let sum = 0;
+    for (let n = 0; n < 4000; n++) sum += birthsToday(0.85, () => draw.float());
+    expect(sum / 4000).toBeCloseTo(0.85, 1);
+  });
 });
 
 describe("the population over simulated time", () => {
@@ -207,21 +245,37 @@ describe("the population over simulated time", () => {
         growAt: now + rng() * 6 * HOUR,
       });
     };
+    /** The ids of bots started at level 1, and the highest level one of them reached while still growing. */
+    const born = new Set<number>();
+    let bornTop = 0;
+    const startAtLevel1 = (now: number) => {
+      bots.push({ userid: ++id, level: 1, level_since: date(now), quiet_since: null, growAt: now + rng() * 6 * HOUR });
+      born.add(id);
+    };
     share.forEach((want, index) => {
       for (let n = 0; n < want; n++) make(index + 1, NOW);
     });
 
     const made: number[] = [];
+    const births: number[] = [];
     const worstOff: number[] = [];
     const totals: number[] = [];
     for (let now = NOW + HOUR; now <= NOW + days * DAY; now += HOUR) {
       if (Math.floor(now / DAY) !== Math.floor((now - HOUR) / DAY)) {
-        const rules = { share, total: TOTAL, slack: DEFAULT_BOTS_LEVEL_SLACK, newPerDay: DEFAULT_BOTS_NEW_PER_DAY };
+        const rules = {
+          share,
+          total: TOTAL,
+          slack: DEFAULT_BOTS_LEVEL_SLACK,
+          newPerDay: DEFAULT_BOTS_NEW_PER_DAY,
+          births: birthsToday(DEFAULT_BOTS_LEVEL1_PER_DAY, rng),
+        };
         const plan = planRebalance(bots, rules, now);
         const gone = new Set(plan.retire);
         bots = bots.filter((one) => !gone.has(one.userid));
+        for (let n = 0; n < plan.born; n++) startAtLevel1(now);
         for (const level of plan.make) make(level, now);
-        made.push(plan.make.length);
+        made.push(plan.born + plan.make.length);
+        births.push(plan.born);
         const counts = share.map(() => 0);
         for (const one of bots) counts[one.level - 1]!++;
         worstOff.push(Math.max(...counts.map((have, index) => Math.abs(have - share[index]!))));
@@ -238,27 +292,33 @@ describe("the population over simulated time", () => {
           one.quiet_since ??= drawQuiet(rng, one.level, level, now, pace, DEFAULT_BOTS_QUIET_RATE);
           one.level_since = anchorFor(position, level, clock, pace);
           one.level = level;
+          if (born.has(one.userid) && !isQuiet(one, now)) bornTop = Math.max(bornTop, level);
         }
         return true;
       });
     }
     const growingOver = (from: number) =>
       bots.filter((one) => one.level >= from && !isQuiet(one, NOW + days * DAY)).length;
-    return { made, worstOff, totals, growingOver };
+    return { made, births, worstOff, totals, growingOver, bornTop: () => bornTop };
   };
 
   test("over half a year 500 bots keep every level near its share with few new bots a day", () => {
-    const { made, worstOff, totals, growingOver } = simulate(180, 7);
+    const { made, births, worstOff, totals, growingOver, bornTop } = simulate(180, 7);
     expect(Math.max(...worstOff.slice(3))).toBeLessThanOrEqual(SPREAD_TOLERANCE);
     for (const total of totals) {
       expect(total).toBeLessThanOrEqual(TOTAL);
       expect(total).toBeGreaterThan(TOTAL - 40);
     }
-    // Well under one new bot a day on average, and never more than the cap.
+    // About one bot a day starts at level 1; under three new bots a day in all, and never more than the cap.
+    const bornPerDay = births.reduce((a, b) => a + b, 0) / births.length;
+    expect(bornPerDay).toBeGreaterThan(DEFAULT_BOTS_LEVEL1_PER_DAY * 0.8);
+    expect(bornPerDay).toBeLessThan(DEFAULT_BOTS_LEVEL1_PER_DAY * 1.2);
     const perDay = made.reduce((a, b) => a + b, 0) / made.length;
-    expect(perDay).toBeLessThan(2);
+    expect(perDay).toBeLessThan(3);
     expect(Math.max(...made)).toBeLessThanOrEqual(DEFAULT_BOTS_NEW_PER_DAY);
     // The top levels are still growing.
     expect(growingOver(36)).toBeGreaterThan(30);
+    // Some bots started at level 1 grow on through the low levels, as some players do.
+    expect(bornTop()).toBeGreaterThanOrEqual(20);
   }, 60_000);
 });

@@ -6,6 +6,7 @@ import {
   daysBetween,
   daysOn,
   DEFAULT_BOTS_GROWING_FLOW,
+  DEFAULT_BOTS_LEVEL1_PER_DAY,
   DEFAULT_BOTS_LEVEL_SLACK,
   DEFAULT_BOTS_NEW_PER_DAY,
   DEFAULT_BOTS_QUIET_ONLINE,
@@ -25,6 +26,7 @@ const KEYS = [
   "BOTS_GROWING_FLOW",
   "BOTS_NEW_PER_DAY",
   "BOTS_LEVEL_SLACK",
+  "BOTS_LEVEL1_PER_DAY",
   "ENV",
 ];
 const saved: Record<string, string | undefined> = {};
@@ -55,6 +57,7 @@ describe("bot switches (issue #235)", () => {
       quietOnline: DEFAULT_BOTS_QUIET_ONLINE,
       growingFlow: DEFAULT_BOTS_GROWING_FLOW,
       newPerDay: DEFAULT_BOTS_NEW_PER_DAY,
+      level1PerDay: DEFAULT_BOTS_LEVEL1_PER_DAY,
       levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
       seeded: true,
     });
@@ -113,6 +116,17 @@ describe("bot switches (issue #235)", () => {
         levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
         growingFlow: DEFAULT_BOTS_GROWING_FLOW,
       });
+    }
+  });
+
+  test("the bots started at level 1 a day take any number 0 or more; 0 turns it off", () => {
+    process.env.BOTS_LEVEL1_PER_DAY = "0";
+    expect(botConfig().level1PerDay).toBe(0);
+    process.env.BOTS_LEVEL1_PER_DAY = " 2.5 ";
+    expect(botConfig().level1PerDay).toBe(2.5);
+    for (const bad of ["", "-1", "lots"]) {
+      process.env.BOTS_LEVEL1_PER_DAY = bad;
+      expect(botConfig().level1PerDay).toBe(DEFAULT_BOTS_LEVEL1_PER_DAY);
     }
   });
 });
