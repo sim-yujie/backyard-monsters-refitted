@@ -88,7 +88,8 @@ The owner's answers to this design's questions (2026-10-03):
 18. **Truce requests** to a bot are declined after a random **2-8 hours**.
 19. **Revenge caps:** at most **2 revenge attacks on one player per 24 hours**, **1 per bot-player
     pair per 24 hours**; a revenge that cannot run gives up **72 hours** after the attack that
-    triggered it.
+    triggered it. **Since decision 31** the caps count revenges (chains), not attacks: at most 2
+    bots' revenges on one player in any 24 hours, 1 by each bot.
 20. **Only real players seen in the last 30 days** take neighbour places, read from a new
     `user.last_seen_at` column set by the owner's own yard load.
 21. **Defence reports for every Map Room 1 main-yard defence** (real or bot attacker): a mail notice
@@ -130,6 +131,13 @@ Owner decisions of 2026-10-23 (beta 5, bots from level 15):
 30. **Players under 15 still meet bots:** their real-player window is as before, and bots come
     from the nearest levels the bots stand on (section 4.3). Revenge stays unmatched by level
     (section 4.7, owner: keep as is).
+31. **A revenge is a chain of 2-4 attacks** (owner 2026-10-23): a real player hits back more than
+    once, until the yard is wrecked, and stops after one when it went badly (a bot that did about 5%
+    does not come back). Each attack must do at least 20% damage itself and leave the yard short of
+    destroyed for the next to follow; the bot waits for its hatcheries to refill its army; it never
+    attacks through protection; every attack gets the normal reports. The 1-in-3 chance, the 1-24
+    hour delay, no level match and the "online in the last 2 minutes" wait stay (section 4.7,
+    "Revenge chains").
 
 ## 3. What already exists
 
@@ -582,6 +590,47 @@ attack, run by the sweep): the job is claimed only with `BOTS_BRAIN` and `BOTS_R
   whose replay runs past its deadline (it lands later from its checkpoint through the attack
   finaliser's sweep) still counts. Such a late landing goes through the finaliser's default, so its
   battle report reads "left the attack", as for any attack landed that way.
+
+#### Revenge chains (decision 31, owner 2026-10-23)
+
+A revenge is now a **chain of up to 2-4 attacks** by the same bot on the same player, all on the one
+`revenge` job (`services/bots/revengeChain.ts`, run by the sweep). The first attack is exactly the
+revenge above (the 1-in-3 chance, 1-24 hours, the checks, the caps). After **each** attack lands:
+
+| After an attack | Then |
+| --- | --- |
+| it was the chain's last (the length is drawn 2-4 at the first attack) | the chain ends |
+| it did less than **20 points** of damage itself (yard damage after minus before) | the chain ends |
+| the yard is left at **90%** damage or more (destroyed) | the chain ends |
+| otherwise | the next attack is booked on the same job |
+
+- **Gap = the bot's real refill time:** each monster it sent, at its hatch time (`cTime`, the game's
+  own, at the bot's academy level), divided by the bot's hatcheries working side by side, held to
+  30 minutes-12 hours, plus 10-60 minutes of slack (a player does not attack the second the last
+  monster hatches). Typical bots come out at about 1-4 hours (§ the report's numbers). When the next
+  attack runs, the bot's Housing is topped up as its repair would (`refillArmy` against the
+  generator's yard for its level), because that time has passed.
+- **Checks for the later attacks:** all the first attack's checks (bot active, player still on Map
+  Room 1, no truce, not protected, not online in the last 2 minutes, nobody attacking either yard),
+  except that **the caps are not asked** (the chain is one revenge, capped at its start), and
+  "already avenged" means an attack by this bot since the chain's **last** attack.
+- **Never through protection:** a later attack waits until the protection ends plus 1-6 hours, as
+  the first one does, but **gives up 12 hours after it was due**; past that the chain ends. So
+  50% damage or more (36 hours of damage protection) or a bought shield ends the chain; the 1-hour
+  "4 attacks in an hour" protection only delays it. Online waits retry every 15-60 minutes inside
+  the same 12 hours.
+- **Every attack is a normal attack:** its own attack log, map counters, `retaliatecount` + 1,
+  defence notice and "While you were away" toast, post-attack protection, as the first.
+- **A late landing ends the chain:** an attack whose replay ran past its deadline lands later from
+  its checkpoint; its damage is not known when the job is settled, so the chain stops there.
+- The chain lives in the job's `payload.chain` (`length`, `done`, `last` = the attack log's time,
+  rounded up); the job's `due_at` and `giveup_at` move to the next attack's. A job booked before
+  this change has no chain yet and starts one at its first attack.
+- **Settings** (code constants marked `[PLACEHOLDER]` in `revengeChain.ts`): `CHAIN_LENGTH` 2-4,
+  `CHAIN_MIN_DAMAGE` 20, `CHAIN_DESTROYED_DAMAGE` 90, `CHAIN_WAIT_HOURS` 12, `CHAIN_SLACK_MINUTES`
+  10-60, `CHAIN_REFILL_HOURS` 0.5-12 (no hatchery: 12).
+- The sweep report counts `chain:next` and `chain:length` / `chain:lowDamage` / `chain:destroyed`
+  next to `landed`; the log line is `bot-revenge-chain`.
 
 ### 4.8 Defence report and replay (decision 13)
 
