@@ -19,7 +19,7 @@ import { syncBaseValue, syncDerivedLevels } from "../yard/derivedLevels.js";
 import { damagedBuildings, planRepair } from "../yard/repair.js";
 import { REPAIR_DELAY_HOURS } from "./afterAttack.js";
 import { applyGrowth, holdLootInBand, rearmFiredTraps, refillArmy, targetAt, tendChampion } from "./brain.js";
-import { createBots, evenSpread } from "./factory.js";
+import { BOT_MIN_LEVEL, createBots, evenSpread } from "./factory.js";
 import {
   anchorFor,
   birthsToday,
@@ -61,8 +61,9 @@ import { generateBotYard } from "./yardGenerator.js";
  *    claimed in `bym.job_run` (`job = 'bots-rebalance'`, as
  *    `scripts/monthly-shiny.ts` claims its month), so one server runs it.
  *    It is not a `bot_job`: it belongs to no bot. It retires the bots of
- *    crowded levels, starts about `BOTS_LEVEL1_PER_DAY` new bots at level 1
- *    and makes new bots on short levels (`planRebalance`, `population.ts`),
+ *    crowded levels and every bot below the level 15 floor, starts about
+ *    `BOTS_FRESH_PER_DAY` new bots at the bottom of level 15 and makes new
+ *    bots on short levels (`planRebalance`, `population.ts`),
  *    at most `BOTS_NEW_PER_DAY` in all.
  * 3. **Runs due jobs**, at most {@link JOBS_PER_PASS}, each in its own
  *    transaction: the row is claimed with `FOR UPDATE SKIP LOCKED`, so two
@@ -219,9 +220,9 @@ export interface SweepReport {
   failed: number;
   dropped: number;
   retired: number[];
-  /** New bots made by the rebalance: those started at level 1 and those on short levels. */
+  /** New bots made by the rebalance: those started at the floor (level 15) and those on short levels. */
   replaced: number[];
-  /** Of `replaced`, those started at level 1. */
+  /** Of `replaced`, those started at the floor. */
   born: number[];
   grew: { userid: number; from: number; to: number }[];
   /** Bots whose growth was refused (logged): their yard is not the generator's. */
@@ -636,7 +637,7 @@ const rebalance = async (
         total: config.total,
         slack: config.levelSlack,
         newPerDay: config.newPerDay,
-        births: birthsToday(config.level1PerDay ?? 0, rng),
+        births: birthsToday(config.freshPerDay ?? 0, rng),
       },
       now
     );
@@ -655,7 +656,7 @@ const rebalance = async (
       retired.push(userid);
     }
     logger.info(
-      "Bot rebalance {period}: {active} active, {retired} retired off crowded levels, {born} new at level 1 and {made} new on short levels to make",
+      "Bot rebalance {period}: {active} active, {retired} retired off crowded levels or below the floor, {born} new at the floor and {made} new on short levels to make",
       {
         period: rebalancePeriod(now),
         active: bots.length,
@@ -667,7 +668,7 @@ const rebalance = async (
 
     const counts = share.map(() => 0);
     for (const bot of bots) if (!retired.includes(bot.userid)) counts[Math.min(bot.level, share.length) - 1]!++;
-    counts[0]! += plan.born;
+    counts[BOT_MIN_LEVEL - 1]! += plan.born;
     for (const level of plan.make) counts[level - 1]!++;
     const drifted = share.flatMap((want, index) =>
       Math.abs(counts[index]! - want) > SPREAD_TOLERANCE ? [`level ${index + 1}: ${counts[index]} of ${want}`] : []
@@ -757,7 +758,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
   if (rebalanced !== null) {
     report.rebalanced = true;
     report.retired.push(...rebalanced.retired);
-    const born = await makeBots(em, Array<number>(rebalanced.born).fill(1), now, context, true);
+    const born = await makeBots(em, Array<number>(rebalanced.born).fill(BOT_MIN_LEVEL), now, context, true);
     report.born.push(...born);
     report.replaced.push(...born, ...(await makeBots(em, rebalanced.make, now, context)));
   }

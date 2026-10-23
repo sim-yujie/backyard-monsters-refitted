@@ -11,6 +11,8 @@ import {
   levelBand,
   levelOfTotal,
   MAP_ROOM_TYPE,
+  MINIMUM_YARD,
+  minimumYardTotal,
   PERSONAS,
   Progression,
   targetInBand,
@@ -401,5 +403,27 @@ describe("levelOfTotal", () => {
         expect(levelOfTotal(total)).toBe(calculateBaseLevel(String(total), "0"));
       }
     }
+  });
+});
+
+describe("the minimum yard (owner, 2026-10-23)", () => {
+  test("a Town Hall 2 with every resource building and tower it allows and Housing comes at level 10-15, never past the level 15 floor", () => {
+    const levels: number[] = [];
+    for (let index = 0; index < 150; index++) {
+      const seed = 31337 + index * 7919;
+      const persona = PERSONAS[index % PERSONAS.length]!;
+      const total = minimumYardTotal(seed, persona);
+      const yard = yardAtPoints(seed, persona, total);
+      // The yard the run stops at for that total holds the minimum yard.
+      expect(yard.townHall).toBeGreaterThanOrEqual(MINIMUM_YARD.hall);
+      const count = (type: number) => yard.buildings.filter((building) => building.t === type).length;
+      for (const type of [1, 2, 3, 4, 6]) expect(count(type)).toBe(2);
+      expect(count(15)).toBe(1);
+      expect(count(20)).toBe(3);
+      expect(count(21)).toBe(3);
+      levels.push(levelOfTotal(total));
+    }
+    expect(Math.min(...levels)).toBeGreaterThanOrEqual(10);
+    expect(Math.max(...levels)).toBeLessThanOrEqual(15);
   });
 });

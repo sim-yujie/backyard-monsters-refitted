@@ -6,13 +6,14 @@ import {
   daysBetween,
   daysOn,
   DEFAULT_BOTS_GROWING_FLOW,
-  DEFAULT_BOTS_LEVEL1_PER_DAY,
+  DEFAULT_BOTS_FRESH_PER_DAY,
   DEFAULT_BOTS_LEVEL_SLACK,
   DEFAULT_BOTS_NEW_PER_DAY,
   DEFAULT_BOTS_QUIET_ONLINE,
   DEFAULT_BOTS_QUIET_RATE,
   DEFAULT_BOTS_TOTAL,
   LEVEL_WEIGHTS,
+  BOT_FLOOR_LEVEL,
 } from "./BotConfig.js";
 
 const KEYS = [
@@ -26,7 +27,7 @@ const KEYS = [
   "BOTS_GROWING_FLOW",
   "BOTS_NEW_PER_DAY",
   "BOTS_LEVEL_SLACK",
-  "BOTS_LEVEL1_PER_DAY",
+  "BOTS_FRESH_PER_DAY",
   "ENV",
 ];
 const saved: Record<string, string | undefined> = {};
@@ -57,7 +58,7 @@ describe("bot switches (issue #235)", () => {
       quietOnline: DEFAULT_BOTS_QUIET_ONLINE,
       growingFlow: DEFAULT_BOTS_GROWING_FLOW,
       newPerDay: DEFAULT_BOTS_NEW_PER_DAY,
-      level1PerDay: DEFAULT_BOTS_LEVEL1_PER_DAY,
+      freshPerDay: DEFAULT_BOTS_FRESH_PER_DAY,
       levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
       seeded: true,
     });
@@ -120,13 +121,13 @@ describe("bot switches (issue #235)", () => {
   });
 
   test("the bots started at level 1 a day take any number 0 or more; 0 turns it off", () => {
-    process.env.BOTS_LEVEL1_PER_DAY = "0";
-    expect(botConfig().level1PerDay).toBe(0);
-    process.env.BOTS_LEVEL1_PER_DAY = " 2.5 ";
-    expect(botConfig().level1PerDay).toBe(2.5);
+    process.env.BOTS_FRESH_PER_DAY = "0";
+    expect(botConfig().freshPerDay).toBe(0);
+    process.env.BOTS_FRESH_PER_DAY = " 2.5 ";
+    expect(botConfig().freshPerDay).toBe(2.5);
     for (const bad of ["", "-1", "lots"]) {
-      process.env.BOTS_LEVEL1_PER_DAY = bad;
-      expect(botConfig().level1PerDay).toBe(DEFAULT_BOTS_LEVEL1_PER_DAY);
+      process.env.BOTS_FRESH_PER_DAY = bad;
+      expect(botConfig().freshPerDay).toBe(DEFAULT_BOTS_FRESH_PER_DAY);
     }
   });
 });
@@ -164,8 +165,12 @@ describe("the growth curve", () => {
     expect(daysBetween(12, 11.5, 3)).toBe(0);
   });
 
-  test("every level 1-40 has a share of the total", () => {
+  test("every level 15-40 has a share of the total and no level below the floor has one", () => {
+    expect(BOT_FLOOR_LEVEL).toBe(15);
     expect(LEVEL_WEIGHTS).toHaveLength(40);
-    for (const weight of LEVEL_WEIGHTS) expect(weight).toBeGreaterThan(0);
+    LEVEL_WEIGHTS.forEach((weight, index) => {
+      if (index + 1 < BOT_FLOOR_LEVEL) expect(weight).toBe(0);
+      else expect(weight).toBeGreaterThan(0);
+    });
   });
 });

@@ -27,17 +27,20 @@ import { Env } from "../enums/Env.js";
  * - `BOTS_NEW_PER_DAY`  — at most this many new bots a day, made by the daily
  *                         rebalance on levels short of their share (default
  *                         {@link DEFAULT_BOTS_NEW_PER_DAY}).
- * - `BOTS_LEVEL1_PER_DAY` — how many new bots a day, on average, start at
- *                         level 1 as new players and grow (and quit) like
- *                         them; each takes the place of a quiet bot on the
- *                         most crowded level once the total is full (default
- *                         {@link DEFAULT_BOTS_LEVEL1_PER_DAY}, 0 turns it off).
- *                         Counted in `BOTS_NEW_PER_DAY`.
+ * - `BOTS_FRESH_PER_DAY` — how many new bots a day, on average, start at
+ *                         the bottom of the level floor ({@link BOT_FLOOR_LEVEL})
+ *                         and grow (and quit) like players from there; each
+ *                         takes the place of a quiet bot on the most crowded
+ *                         level once the total is full (default
+ *                         {@link DEFAULT_BOTS_FRESH_PER_DAY}, 0 turns it off).
+ *                         Counted in `BOTS_NEW_PER_DAY`. (Was
+ *                         `BOTS_LEVEL1_PER_DAY` while bots started at level 1.)
  * - `BOTS_LEVEL_SLACK`  — how far a level may sit off its share before the
  *                         rebalance acts: more retires its extra bots, fewer
  *                         makes new ones (default {@link DEFAULT_BOTS_LEVEL_SLACK}).
  *
- * Each level's share of the total is {@link LEVEL_WEIGHTS}: even over 1-40.
+ * Each level's share of the total is {@link LEVEL_WEIGHTS}: even over
+ * {@link BOT_FLOOR_LEVEL}-40, none below.
  *
  * Not a switch: `seeded` is whether the sweep may tend the seeded Map Room 2
  * dev players' yards (issue #233, `services/bots/seededPlayers.ts`), true
@@ -54,13 +57,23 @@ export const DEFAULT_BOTS_QUIET_RATE = 0.05;
 /** `[PLACEHOLDER]`: a quiet bot shows online about once in three days, a growing one several times a day (owner, 2026-10-23). */
 export const DEFAULT_BOTS_QUIET_ONLINE = 0.05;
 export const DEFAULT_BOTS_NEW_PER_DAY = 8;
-/** `[PLACEHOLDER]`: three new players' worth of bots a day, so levels 1-30 see some bots grow (owner, 2026-10-23). */
-export const DEFAULT_BOTS_LEVEL1_PER_DAY = 3;
+/** `[PLACEHOLDER]`: three new players' worth of bots a day, so the lower levels see some bots grow (owner, 2026-10-23). */
+export const DEFAULT_BOTS_FRESH_PER_DAY = 3;
 export const DEFAULT_BOTS_LEVEL_SLACK = 2;
 
 /**
+ * No bot stands below this level (owner, 2026-10-23). The smallest yard a
+ * bot shows (`MINIMUM_YARD`, `progression.ts`: Town Hall 2, every resource
+ * building and tower it allows, Housing with an army) comes at level 10-15,
+ * so the floor is 15 and a bot keeps building until it has both.
+ */
+export const BOT_FLOOR_LEVEL = 15;
+
+/**
  * Days a bot grows on each level, index 1-40 (index 0 is unused): a real
- * player's climb (`docs/design/bot-neighbours.md` §4.4).
+ * player's climb (`docs/design/bot-neighbours.md` §4.4). Bots start at
+ * {@link BOT_FLOOR_LEVEL}, so only levels 15-40 are walked: a bot started
+ * there takes as long from 15 up as a real player does.
  *
  * Source: the live game's 24 real players on 2026-10-23, all under 13 days
  * old (the owner's query; a player's age is an upper bound on how long they
@@ -85,18 +98,13 @@ export const DAYS_ON_LEVEL: readonly number[] = Object.freeze([
 ]);
 
 /**
- * Quitting early: a bot gaining a level up to `toLevel` goes quiet at `rate`
- * instead of `BotConfig.quietRate` (unless that is 0, which turns quiet off). Source: 14 of the live game's 24 real
- * players (2026-10-23) stopped at level 1-4 on their first day; the three
- * draws of 0.25 on reaching levels 2, 3 and 4 stop 58% of bots there.
- */
-export const EARLY_QUIET = Object.freeze({ toLevel: 4, rate: 0.25 });
-
-/**
  * How much of the total each level 1-40 holds, index 0 is level 1
- * `[PLACEHOLDER]`: even, so every level has neighbours (decision 4).
+ * `[PLACEHOLDER]`: even over {@link BOT_FLOOR_LEVEL}-40, so every level there
+ * has neighbours (decision 4), and none below the floor (owner, 2026-10-23).
  */
-export const LEVEL_WEIGHTS: readonly number[] = Object.freeze(Array.from({ length: 40 }, () => 1));
+export const LEVEL_WEIGHTS: readonly number[] = Object.freeze(
+  Array.from({ length: 40 }, (_, index) => (index + 1 >= BOT_FLOOR_LEVEL ? 1 : 0))
+);
 
 /** Days a bot grows on each level: one number for every level (tests), or a table as {@link DAYS_ON_LEVEL}. */
 export type Pace = number | readonly number[];
@@ -120,7 +128,7 @@ export interface BotConfig {
   readonly revenge: boolean;
   readonly total: number;
   readonly pace: Pace;
-  /** The chance a bot goes quiet each level it gains past {@link EARLY_QUIET}, 0-1. */
+  /** The chance a bot goes quiet each level it gains, 0-1. */
   readonly quietRate: number;
   /** The chance a quiet bot shows online on a grow, 0-1; absent reads as {@link DEFAULT_BOTS_QUIET_ONLINE}. */
   readonly quietOnline?: number;
@@ -128,8 +136,8 @@ export interface BotConfig {
   readonly growingFlow: number;
   /** At most this many new bots a day. */
   readonly newPerDay: number;
-  /** New growing bots a day, on average, started at level 1; absent reads as 0. */
-  readonly level1PerDay?: number;
+  /** New growing bots a day, on average, started at the bottom of {@link BOT_FLOOR_LEVEL}; absent reads as 0. */
+  readonly freshPerDay?: number;
   /** Bots a level may sit off its share before the rebalance acts. */
   readonly levelSlack: number;
   /** Seeded Map Room 2 dev players are repaired and grown too; absent reads as false. */
@@ -184,7 +192,7 @@ export const botConfig = (): BotConfig => ({
   quietOnline: zeroToOne(process.env.BOTS_QUIET_ONLINE, DEFAULT_BOTS_QUIET_ONLINE),
   growingFlow: positiveNumber(process.env.BOTS_GROWING_FLOW, DEFAULT_BOTS_GROWING_FLOW),
   newPerDay: wholeNumber(process.env.BOTS_NEW_PER_DAY, DEFAULT_BOTS_NEW_PER_DAY),
-  level1PerDay: zeroOrMore(process.env.BOTS_LEVEL1_PER_DAY, DEFAULT_BOTS_LEVEL1_PER_DAY),
+  freshPerDay: zeroOrMore(process.env.BOTS_FRESH_PER_DAY, DEFAULT_BOTS_FRESH_PER_DAY),
   levelSlack: wholeNumber(process.env.BOTS_LEVEL_SLACK, DEFAULT_BOTS_LEVEL_SLACK),
   seeded: seededYardsOn(process.env),
 });

@@ -549,6 +549,11 @@ export class Progression {
     return this.hall;
   }
 
+  /** How many buildings of `type` stand. */
+  countOf(type: number): number {
+    return this.byType.get(type)?.length ?? 0;
+  }
+
   /** Every building, in id order, copied. */
   buildings(): ProgressionBuilding[] {
     return Object.values(this.buildingdata)
@@ -886,6 +891,36 @@ export const yardAtPoints = (seed: number, persona: Persona, target: number): Pr
     builtAtLevel,
     builtAtHall,
   };
+};
+
+/**
+ * The smallest yard a bot shows (owner, 2026-10-23): a Town Hall 2 with every
+ * resource building a Town Hall 2 allows (two of each harvester, two silos),
+ * its Housing (the generator fills it with an army) and every tower a Town
+ * Hall 2 allows (three Cannon and three Sniper Towers). Walls are not part
+ * of it; they come as the bot grows.
+ */
+export const MINIMUM_YARD = Object.freeze({ hall: 2, types: Object.freeze([1, 2, 3, 4, 6, 15, 20, 21]) });
+
+/** Whether a run's yard holds {@link MINIMUM_YARD}. */
+const holdsMinimum = (run: Progression): boolean =>
+  run.townHall >= MINIMUM_YARD.hall &&
+  MINIMUM_YARD.types.every((type) => run.countOf(type) >= allowedAt(type, MINIMUM_YARD.hall));
+
+/**
+ * The empire points (points plus base value) at which a seed's run first
+ * holds {@link MINIMUM_YARD}. It comes at level 10-15 (11 for most seeds;
+ * an economy bot levels its harvesters before its towers, so it is the
+ * latest), so a bot made at the level 15 floor is never short of it once its
+ * target is at least this (`factory.ts`).
+ */
+export const minimumYardTotal = (seed: number, persona: Persona): number => {
+  const run = new Progression(seed, persona);
+  while (!holdsMinimum(run)) {
+    if (!run.next()) break;
+    run.apply();
+  }
+  return run.total;
 };
 
 /** The empire-points band of a level: `[experiencePoints[L-1], experiencePoints[L])`. */

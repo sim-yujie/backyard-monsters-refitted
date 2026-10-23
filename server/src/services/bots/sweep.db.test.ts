@@ -410,7 +410,7 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
 
   test("the rebalance starts bots at level 1 as new players, growing; on a full table each takes a quiet bot's place", async () => {
     const rules = config(3);
-    const withBirths = () => ({ ...rules(), level1PerDay: 1 });
+    const withBirths = () => ({ ...rules(), freshPerDay: 1 });
     const [quiet, growing, high] = await make([20, 20, 30]);
     await sql(`UPDATE bym.bot SET quiet_since = ? WHERE userid = ?`, [new Date((NOW - DAY) * 1000), quiet!.userid]);
 

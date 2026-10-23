@@ -10,12 +10,12 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { AVATAR_IDS, avatarPath, PLACEHOLDER_PIC_SQUARE } from "../../game-data/avatars.js";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
 import type { Rng } from "../../game-rules/combat/rng.js";
-import { daysBetween, daysOn, LEVEL_WEIGHTS, type Pace } from "../../config/BotConfig.js";
+import { BOT_FLOOR_LEVEL, daysBetween, daysOn, LEVEL_WEIGHTS, type Pace } from "../../config/BotConfig.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { usernameMatch } from "../user/usernameLookup.js";
 import { botName } from "./names.js";
 import { shinyForSeed } from "./shiny.js";
-import { PERSONAS, targetInBand, type Persona } from "./progression.js";
+import { levelBand, minimumYardTotal, PERSONAS, targetInBand, type Persona } from "./progression.js";
 import { generateBotYard, type BotYard } from "./yardGenerator.js";
 import { catchUpYard } from "../yard/catchUp.js";
 import { visitMapRoom1 } from "./lookAlike.js";
@@ -52,14 +52,14 @@ import { visitMapRoom1 } from "./lookAlike.js";
  *
  * {@link createBots} writes in batches of {@link BATCH_SIZE}, one transaction
  * each. {@link fillPlan} decides which levels to make for an even spread over
- * levels 1-40, low levels first.
+ * levels 15-40, low levels first.
  *
  * Takes its entity manager from the caller and never imports `server.js`, so
  * the CLI (`scripts/bots.ts`) can use it without booting a server.
  */
 
-/** Bots live on levels 1 to 40 (decision 4). */
-export const BOT_MIN_LEVEL = 1;
+/** Bots live on levels 15 to 40 (decision 4; no bot below 15, owner 2026-10-23). */
+export const BOT_MIN_LEVEL = BOT_FLOOR_LEVEL;
 export const BOT_MAX_LEVEL = 40;
 
 /** Bots made per transaction (§10). */
@@ -78,13 +78,14 @@ const DAY = 24 * 60 * 60;
 
 /**
  * How many bots each level should hold for `total` spread over levels 1-40 by
- * `weights` (`LEVEL_WEIGHTS`, even by default, decision 4): each level its
- * weight's share rounded down, the remainder one more each on the levels
- * rounded down most, lowest levels first. Index 0 is level 1.
+ * `weights` (`LEVEL_WEIGHTS`, even over 15-40 by default, decision 4): each
+ * level its weight's share rounded down, the remainder one more each on the
+ * levels rounded down most, lowest levels first. Index 0 is level 1; levels
+ * below {@link BOT_MIN_LEVEL} hold none, whatever their weight.
  */
 export const evenSpread = (total: number, weights: readonly number[] = LEVEL_WEIGHTS): number[] => {
-  const levels = BOT_MAX_LEVEL - BOT_MIN_LEVEL + 1;
-  const weightOf = (index: number) => Math.max(0, weights[index] ?? 0);
+  const levels = BOT_MAX_LEVEL;
+  const weightOf = (index: number) => (index + 1 < BOT_MIN_LEVEL ? 0 : Math.max(0, weights[index] ?? 0));
   const sum = Array.from({ length: levels }, (_, index) => weightOf(index)).reduce((a, b) => a + b, 0) || 1;
   const exact = Array.from({ length: levels }, (_, index) => (total * weightOf(index)) / sum);
   const share = exact.map(Math.floor);
@@ -117,7 +118,7 @@ export const fillPlan = (
 ): number[] => {
   const plan: number[] = [];
   evenSpread(target).forEach((want, index) => {
-    const level = BOT_MIN_LEVEL + index;
+    const level = index + 1;
     for (let have = activeByLevel[level] ?? 0; have < want; have++) plan.push(level);
   });
   return plan.slice(0, Math.max(0, limit));
@@ -157,6 +158,19 @@ export const backdate = (rng: Rng, level: number, fraction: number, pace: Pace):
   return Math.floor(Math.max(climb, onLevel) + head);
 };
 
+/**
+ * `fraction` of `level`'s band, moved up to where the seed's yard first holds
+ * the minimum yard (`minimumYardTotal`) when that is further in: on the
+ * floor level a bot keeps building until it has it (owner, 2026-10-23).
+ * Above that level every yard already holds it.
+ */
+const atLeastMinimum = (seed: number, persona: Persona, level: number, fraction: number): number => {
+  if (level !== BOT_MIN_LEVEL) return fraction;
+  const { min, max } = levelBand(level);
+  const minimum = minimumYardTotal(seed, persona);
+  return Math.max(fraction, Math.min(0.999999, (minimum - min + 0.5) / (max - min)));
+};
+
 /** A critter or, for {@link AVATAR_SHARE} of bots, the placeholder. */
 const avatarFor = (rng: Rng): string =>
   rng.float() < AVATAR_SHARE ? avatarPath(AVATAR_IDS[rng.int(AVATAR_IDS.length)]!) : PLACEHOLDER_PIC_SQUARE;
@@ -174,7 +188,7 @@ const avatarFor = (rng: Rng): string =>
 export const drawProfile = (rng: Rng, level: number, now: number, pace: Pace, fresh = false): BotProfile => {
   const seed = rng.next();
   const persona = PERSONAS[rng.int(PERSONAS.length)]!;
-  const fraction = fresh ? 0 : rng.float();
+  const fraction = atLeastMinimum(seed, persona, level, fresh ? 0 : rng.float());
   const age = backdate(rng, level, fraction, pace);
   // Last seen saving some time in the past day and a half, never before it was made.
   const savetime = now - Math.floor(Math.min(age, 36 * 60 * 60) * rng.float());

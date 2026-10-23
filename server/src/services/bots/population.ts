@@ -1,8 +1,8 @@
-import { daysBetween, daysOn, EARLY_QUIET, type Pace } from "../../config/BotConfig.js";
-import { BOT_MAX_LEVEL } from "./factory.js";
+import { daysBetween, daysOn, type Pace } from "../../config/BotConfig.js";
+import { BOT_MAX_LEVEL, BOT_MIN_LEVEL } from "./factory.js";
 
 /**
- * How the bot population climbs and is kept even over levels 1-40
+ * How the bot population climbs and is kept even over levels 15-40
  * (`docs/design/bot-neighbours.md` §4.4). Everything here is pure; the sweep
  * (`sweep.ts`) reads the rows, runs these and writes.
  *
@@ -20,8 +20,9 @@ import { BOT_MAX_LEVEL } from "./factory.js";
  *
  * Each level a bot gains, it has `BotConfig.quietRate` chance to go quiet
  * ({@link drawQuiet}): to stop growing at some point of the level it is on,
- * as a player who quits or slows down. Up to level 4 the chance is
- * `EARLY_QUIET`'s, higher, as most real players stop there on day one. From `quiet_since` on its place on the
+ * as a player who quits or slows down. (Bots no longer start below level 15,
+ * so the higher early chance real players show at levels 1-4 is gone, owner
+ * 2026-10-23.) From `quiet_since` on its place on the
  * climb stands still; the sweep still repairs it, refills it and keeps its
  * loot in band. A quiet bot never wakes up again. A new bot, from the fill or
  * the rebalance, starts quiet by its level's settled mix ({@link bornQuietShare}).
@@ -32,6 +33,11 @@ import { BOT_MAX_LEVEL } from "./factory.js";
  * ## The daily rebalance
  *
  * Every level should hold its share of the total ({@link planRebalance}). A
+ * bot below the level floor (`BOT_MIN_LEVEL`, 15) is always retired, all of
+ * them on the first rebalance after the floor came in (owner, 2026-10-23):
+ * neighbour lists already skip them, and raising them in place would only
+ * pile them all on level 15, where the crowded-level rule would retire them
+ * the next day; the band-filling below makes their places up on 15-40. A
  * level more than `BotConfig.levelSlack` bots over its share retires bots
  * down to it, quiet ones first (longest quiet first), then growing ones
  * (longest on the level first). A level more than the slack short gets new
@@ -40,12 +46,13 @@ import { BOT_MAX_LEVEL } from "./factory.js";
  * never passed: when it is full, a new bot's place is freed on the level most
  * over its share.
  *
- * Because a growing bot spends only hours on each low level, and short levels
- * are only ever 31-40 (quiet bots never leave a level, so lower ones never run
- * short), the band-filling alone would leave every bot on levels 1-30 quiet.
- * So each day also starts about `BotConfig.level1PerDay` new bots at the
- * bottom of level 1 ({@link birthsToday}), growing, to climb and quit as new
- * players do. They come first, within the daily cap; once the total is full,
+ * Because a growing bot spends under a day on each level up to 22, and short
+ * levels are only ever the high ones (quiet bots never leave a level, so lower
+ * ones never run short), the band-filling alone would leave nearly every bot
+ * on the lower levels quiet. So each day also starts about
+ * `BotConfig.freshPerDay` new bots at the bottom of level 15, the floor
+ * ({@link birthsToday}), growing, to climb and quit as players do from there.
+ * They come first, within the daily cap; once the total is full,
  * each takes the place of a quiet bot on the most crowded level
  * ({@link planRebalance}). Neighbour lists are drawn fresh
  * from a level window each time (`botNeighbours.ts`), so a player still meets
@@ -106,8 +113,7 @@ export const anchorFor = (position: number, level: number, clock: number, pace: 
 
 /**
  * When a bot that just climbed from level `from` to `to` goes quiet, or null
- * when it keeps growing: each level gained has `quietRate` chance
- * ({@link quietChance}). The bot
+ * when it keeps growing: each level gained has `quietRate` chance. The bot
  * stops at a random point of the level it is on, so quiet bots stand all
  * through their levels rather than at the bottom.
  */
@@ -120,14 +126,11 @@ export const drawQuiet = (
   quietRate: number
 ): Date | null => {
   for (let level = from + 1; level <= Math.min(to, BOT_MAX_LEVEL); level++) {
-    if (rng() < quietChance(level, quietRate)) return new Date((now + rng() * daysOn(pace, to) * DAY) * 1000);
+    if (rng() < quietRate) return new Date((now + rng() * daysOn(pace, to) * DAY) * 1000);
   }
   return null;
 };
 
-/** The chance a bot reaching `level` goes quiet: `EARLY_QUIET`'s up to its level, `quietRate` past it; never at 0. */
-export const quietChance = (level: number, quietRate: number): number =>
-  quietRate > 0 && level <= EARLY_QUIET.toLevel ? EARLY_QUIET.rate : quietRate;
 
 /**
  * The share of new bots on `level` that start quiet, so a level is made with
@@ -140,7 +143,7 @@ export const bornQuietShare = (level: number, pace: Pace, share: number, flow: n
   share <= 0 ? 0 : Math.min(1, Math.max(0, 1 - (flow * daysOn(pace, level)) / share));
 
 /**
- * How many new bots start at level 1 today for `perDay` a day on average: its
+ * How many new bots start at the floor today for `perDay` a day on average: its
  * whole part, and one more by the chance of its fraction.
  */
 export const birthsToday = (perDay: number, rng: () => number): number => {
@@ -161,7 +164,7 @@ export interface RebalanceRules {
   total: number;
   slack: number;
   newPerDay: number;
-  /** New bots to start at level 1 today ({@link birthsToday}); absent reads as 0. */
+  /** New bots to start at the floor today ({@link birthsToday}); absent reads as 0. */
   births?: number;
 }
 
@@ -169,7 +172,7 @@ export interface RebalanceRules {
 export interface RebalancePlan {
   /** Bots to retire. */
   retire: number[];
-  /** New bots to start at the bottom of level 1, growing. */
+  /** New bots to start at the bottom of the floor level, growing. */
   born: number;
   /** One level per new bot to make on a short level, the shortest level first. */
   make: number[];
@@ -188,7 +191,7 @@ const leavesFirst =
 
 /**
  * The daily rebalance at `now` (the file comment): which bots to retire, how
- * many to start at level 1 and which levels to make new bots on.
+ * many to start at the floor and which levels to make new bots on.
  */
 export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRules, now: number): RebalancePlan => {
   const { share, total, slack, newPerDay, births = 0 } = rules;
@@ -204,7 +207,8 @@ export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRul
   const held = (index: number) => byLevel[index]!.length + planned[index]!;
 
   byLevel.forEach((list, index) => {
-    if (list.length > want(index) + slack) while (list.length > want(index)) take(index);
+    if (index + 1 < BOT_MIN_LEVEL) while (list.length > 0) take(index);
+    else if (list.length > want(index) + slack) while (list.length > want(index)) take(index);
   });
 
   /** The level most over its share, to free a place on; -1 when none is over. */
@@ -243,7 +247,7 @@ export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRul
       take(index);
       live--;
     }
-    planned[0]!++;
+    planned[BOT_MIN_LEVEL - 1]!++;
     born++;
     live++;
   }
