@@ -14,6 +14,7 @@ import {
   CHAT_HISTORY_PATTERN,
   CHAT_IGNORE_PATTERN,
   LEADERBOARD_PATTERN,
+  PLAY_COUNT_PATTERNS,
   playerKeyPatterns,
   playerKeys,
   saveKeys,
@@ -83,6 +84,8 @@ export interface DeletionPlan {
     botCheckRows: number;
     /** Other players' chat ignore lists that name them. */
     ignoreLists: number;
+    /** The dashboard's daily play lists that name them. */
+    playLists: number;
   };
 }
 
@@ -266,6 +269,22 @@ const updateSteps = (u: number, username: string): UpdateStep[] => [
     where: `userid <> ? AND blocked_users @> jsonb_build_array(?::int)`,
     params: [u, u],
   },
+  {
+    label: "the dashboard's error groups (account number removed)",
+    table: "app_error",
+    set: `userids = array_remove(userids, ?::int)`,
+    setParams: [u],
+    where: `?::int = ANY(userids)`,
+    params: [u],
+  },
+  {
+    label: "the dashboard's bug report changes made by them (account number removed)",
+    table: "bug_report_change",
+    set: `changed_by = NULL`,
+    setParams: [],
+    where: `changed_by = ?`,
+    params: [u],
+  },
 ];
 
 const count = async (sql: Sql, table: string, where: string, params: unknown[]) => {
@@ -384,7 +403,14 @@ const redisFootprint = async (redis: CommandRedis, account: AccountRow, basesave
     if (Number(await redis.send("SISMEMBER", [key, String(account.userid)])) === 1) ignoreLists.push(key);
   }
 
-  return { keys: [...new Set(existing)], chat, botCheckRows, ignoreLists };
+  const playLists: string[] = [];
+  for (const pattern of PLAY_COUNT_PATTERNS) {
+    for (const key of await scanKeys(redis, pattern)) {
+      if (Number(await redis.send("SISMEMBER", [key, String(account.userid)])) === 1) playLists.push(key);
+    }
+  }
+
+  return { keys: [...new Set(existing)], chat, botCheckRows, ignoreLists, playLists };
 };
 
 /** The other players in the account's battle records. */
@@ -438,6 +464,7 @@ export const planAccountDeletion = async (
       chatLines: footprint.chat.reduce((sum, { lines }) => sum + lines.length, 0),
       botCheckRows: footprint.botCheckRows.length,
       ignoreLists: footprint.ignoreLists.length,
+      playLists: footprint.playLists.length,
     },
   };
 };
@@ -534,7 +561,7 @@ export const deleteAccount = async (
     for (const line of new Set(lines)) await redis.send("LREM", [key, "0", line]);
   }
   for (const row of new Set(footprint.botCheckRows)) await redis.send("LREM", [BOT_CHECK_LOG_KEY, "0", row]);
-  for (const key of footprint.ignoreLists) await redis.send("SREM", [key, String(u)]);
+  for (const key of [...footprint.ignoreLists, ...footprint.playLists]) await redis.send("SREM", [key, String(u)]);
 
   return {
     account,
@@ -545,6 +572,7 @@ export const deleteAccount = async (
       chatLines: footprint.chat.reduce((sum, { lines }) => sum + lines.length, 0),
       botCheckRows: footprint.botCheckRows.length,
       ignoreLists: footprint.ignoreLists.length,
+      playLists: footprint.playLists.length,
     },
   };
 };

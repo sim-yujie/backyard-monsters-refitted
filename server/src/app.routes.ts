@@ -37,6 +37,7 @@ import {
   threadReportLimiter,
   allianceCreateEditLimiter,
   bugReportLimiter,
+  clientErrorLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -116,6 +117,8 @@ import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
+import { mountAdminRoutes } from "./controllers/admin/routes.js";
+import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -359,6 +362,18 @@ mountEventsRoutes(router);
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/bugreport", apiVersion, verifyUserAuth, bugReportLimiter, submitBugReportController);
 router.post("/api/:apiVersion/bugreport/guest", apiVersion, bugReportLimiter, submitGuestBugReportController);
+
+/**  ────────────────────────────────────────────────
+* 📦 Browser errors the web client sends on its own, for the owner's dashboard
+* (`controllers/errors/clientErrors.ts`). Not echoed by logRequest.
+* ──────────────────────────────────────────────── */
+router.post("/api/:apiVersion/clienterrors", apiVersion, verifyUserAuth, clientErrorLimiter, clientErrors);
+router.post("/api/:apiVersion/clienterrors/guest", apiVersion, clientErrorLimiter, guestClientErrors);
+
+/**  ────────────────────────────────────────────────
+* 📦 The owner's dashboard (`controllers/admin/routes.ts`): 404 to anyone not in ADMIN_USER_IDS.
+* ──────────────────────────────────────────────── */
+mountAdminRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Debug

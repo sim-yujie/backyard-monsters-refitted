@@ -7,6 +7,7 @@ import { presenceAnswer } from "../../services/user/presenceAnswer.js";
 import { raidOnPing, type RaidView } from "../../services/raids/raidFlow.js";
 import { parseRaidScreen, recordRaidScreen } from "../../services/raids/raidStore.js";
 import { logger } from "../../utils/logger.js";
+import { noteActivePlayer } from "../../services/stats/activity.js";
 
 /**
  * How long one ping keeps the player online, in seconds: the life every other
@@ -49,6 +50,8 @@ export const presence: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const now = getCurrentDateTime();
   await redis.setex(`last-seen:main:${user.userid}`, PRESENCE_TTL_SECONDS, now.toString());
+  // Played today, for the owner's dashboard: a game left open past midnight counts on both days.
+  noteActivePlayer(user.userid);
 
   const screen = parseRaidScreen(ctx.request.body);
   if (screen) await recordRaidScreen(user.userid, screen);

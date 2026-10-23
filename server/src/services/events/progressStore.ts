@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 
 import type { JsonObject } from "../../types/JsonObject.js";
+import { noteEventPlayer } from "../stats/activity.js";
 
 /**
  * A player's progress in each event: one `bym.event_progress` row per player
@@ -123,7 +124,9 @@ export const sqlProgressStore: EventProgressStore = {
        RETURNING calendar_days`,
       [userid, eventId, today, total]
     );
-    return rows.length > 0 ? Number(rows[0]!.calendar_days) : null;
+    if (rows.length === 0) return null;
+    noteEventPlayer(eventId, userid);
+    return Number(rows[0]!.calendar_days);
   },
 
   async claimTier(em, userid, eventId, tier, need) {
@@ -135,6 +138,7 @@ export const sqlProgressStore: EventProgressStore = {
        RETURNING userid`,
       [one, userid, eventId, need, one]
     );
+    if (rows.length > 0) noteEventPlayer(eventId, userid);
     return rows.length > 0;
   },
 
@@ -148,6 +152,7 @@ export const sqlProgressStore: EventProgressStore = {
        RETURNING counter`,
       [userid, eventId, add, COUNTER_MAX]
     );
+    if (add > 0) noteEventPlayer(eventId, userid);
     return Number(rows[0]?.counter) || 0;
   },
 };

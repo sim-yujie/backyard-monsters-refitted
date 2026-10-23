@@ -6,6 +6,7 @@ import { transporter } from "../../config/MailConfig.js";
 import { sandboxStartAvailable } from "../../config/GameConfig.js";
 import { bugReportLimitErr } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
+import { alertNewBugReport } from "../alerts/bugReportAlert.js";
 import { imageExtension, type BugReportImage } from "./bugReportImage.js";
 
 /**
@@ -20,6 +21,8 @@ import { imageExtension, type BugReportImage } from "./bugReportImage.js";
  *   signed in, per IP address (kept only as a keyed hash) when not.
  * - **No real email locally.** With DEV_SANDBOX on (never on production) the
  *   email goes to the server log instead, like the password reset link.
+ * - **Telegram too.** Once saved, a short alert also goes to the owner's
+ *   Telegram when alerts are set up (`services/alerts/bugReportAlert.ts`).
  */
 
 /** What one report holds, as checked by the controller. */
@@ -188,6 +191,8 @@ export const sendBugReportMail: SendBugReportMail = async (mail) => {
 export interface SubmitBugReportDeps {
   readonly store?: BugReportStore;
   readonly send?: SendBugReportMail;
+  /** The Telegram alert for a saved report: its number only, never its contents; never rejects. */
+  readonly notify?: (id: number) => Promise<unknown>;
   readonly now?: number;
 }
 
@@ -211,7 +216,7 @@ export const submitBugReport = async (
   em: EntityManager,
   row: BugReportRow,
   replyEmail: string | null,
-  { store = sqlBugReportStore, send = sendBugReportMail, now = Date.now() }: SubmitBugReportDeps = {}
+  { store = sqlBugReportStore, send = sendBugReportMail, notify = alertNewBugReport, now = Date.now() }: SubmitBugReportDeps = {}
 ): Promise<SubmittedBugReport> => {
   const who: BugReporter = row.userid !== null ? { userid: row.userid } : { ipHash: row.ipHash ?? "" };
   if ((await store.countSince(em, who, new Date(now - DAY_MS))) >= BUG_REPORTS_PER_DAY) {
@@ -219,6 +224,8 @@ export const submitBugReport = async (
   }
 
   const id = await store.insert(em, row);
+
+  void notify(id).catch(() => {});
 
   const emailed = (async () => {
     try {

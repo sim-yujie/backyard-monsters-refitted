@@ -22,6 +22,9 @@
     "consumer:list": "bun src/scripts/api-consumers.ts list",
     "consumer:revoke": "bun src/scripts/api-consumers.ts revoke",
     "account:delete": "bun src/scripts/delete-account.ts",
+    "alerts:chat-id": "bun src/scripts/alerts.ts chat-id",
+    "alerts:test": "bun src/scripts/alerts.ts test",
+    "alerts:check": "bun src/scripts/alerts.ts check",
     "typecheck": "bunx tsc --noEmit"
   },
   "engines": {

@@ -1,0 +1,70 @@
+# The outside check for "game server down" and "game page down": every 5
+# minutes GitHub asks the game server and the game page whether they answer,
+# and tells the owner on Telegram (.github/scripts/uptime-check.sh,
+# docs/alerts.md). It needs no server of its own and costs nothing on a
+# public repository.
+#
+# OFF until the owner turns it on: the scheduled runs do nothing unless the
+# repository variable UPTIME_CHECK is `on` (Settings > Secrets and variables >
+# Actions > Variables). A run started by hand (Actions > Uptime check > Run
+# workflow) always runs, so the setup can be tried first.
+#
+# Repository secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID.
+# Optional repository variables: GAME_SERVER_URL, GAME_PAGE_URL, ADMIN_DASHBOARD_URL.
+#
+# GitHub runs schedules only from the default branch, sometimes some minutes
+# late, and pauses them after 60 days without a commit to the repository.
+name: Uptime check
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Only send a test message to Telegram"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: vars.UPTIME_CHECK == 'on' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
+      # What was down at the last run, so a problem is said once, not every 5 minutes.
+      - name: Restore what was down
+        uses: actions/cache/restore@v4
+        with:
+          path: .uptime-state
+          key: uptime-state-${{ github.run_id }}
+          restore-keys: uptime-state-
+
+      - name: Check the game server and the game page
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GAME_SERVER_URL: ${{ vars.GAME_SERVER_URL || 'https://api.bymrevamped.com/connection' }}
+          GAME_PAGE_URL: ${{ vars.GAME_PAGE_URL || 'https://play.bymrevamped.com/' }}
+          DASHBOARD_URL: ${{ vars.ADMIN_DASHBOARD_URL || 'https://play.bymrevamped.com/admin' }}
+          STATE_DIR: .uptime-state
+        run: bash .github/scripts/uptime-check.sh ${{ inputs.test && 'test' || '' }}
+
+      - name: Keep what is down for the next run
+        if: always() && !inputs.test
+        uses: actions/cache/save@v4
+        with:
+          path: .uptime-state
+          key: uptime-state-${{ github.run_id }}-${{ github.run_attempt }}
