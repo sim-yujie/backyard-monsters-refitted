@@ -1,6 +1,8 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { logger } from "../../utils/logger.js";
+import { awardsForReport, type ShinyAwardView } from "./shinyAwards.js";
+import { noReplyReason, readSupportThread, UNREAD_REPLIES, type NoReplyReason, type SupportMessage } from "./supportMail.js";
 
 /**
  * The dashboard's bug reports (`bym.bug_report`, `services/bugReports`):
@@ -36,6 +38,8 @@ export interface BugReportSummary {
   /** When the status last changed; null while it was never changed. */
   readonly statusChangedAt: string | null;
   readonly hasNotes: boolean;
+  /** The player's answers in the report's mail thread the owner has not opened yet. */
+  readonly unreadReplies: number;
 }
 
 /** One change to a report's ticket, oldest first in {@link BugReportDetail.changes}. */
@@ -64,6 +68,12 @@ export interface BugReportDetail extends Omit<BugReportSummary, "preview"> {
   readonly ownerNotes: string;
   readonly notesChangedAt: string | null;
   readonly changes: readonly TicketChange[];
+  /** The mail between the player and "The game team" about this report, oldest first (`supportMail.ts`). */
+  readonly thread: readonly SupportMessage[];
+  /** Why the owner cannot write to the player in the game, or null when they can. */
+  readonly cannotReply: NoReplyReason | null;
+  /** The Shiny given to the player from this report, oldest first (`shinyAwards.ts`). */
+  readonly awards: readonly ShinyAwardView[];
 }
 
 export interface BugReportListQuery {
@@ -101,11 +111,14 @@ interface SummaryRow {
   status: string;
   status_changed_at: Date | string | null;
   has_notes: boolean;
+  mail_thread_id: number | null;
+  unread_replies: number | string;
 }
 
 const SUMMARY_COLUMNS = `id, created_at, userid, username, message, game_version, screen, device,
   screenshot IS NOT NULL AS has_screenshot, picture IS NOT NULL AS has_picture, emailed_at,
-  status, status_changed_at, owner_notes <> '' AS has_notes`;
+  status, status_changed_at, owner_notes <> '' AS has_notes, mail_thread_id,
+  ${UNREAD_REPLIES} AS unread_replies`;
 
 const summaryOf = (row: SummaryRow): BugReportSummary => ({
   id: Number(row.id),
@@ -122,6 +135,7 @@ const summaryOf = (row: SummaryRow): BugReportSummary => ({
   status: isTicketStatus(row.status) ? row.status : "new",
   statusChangedAt: iso(row.status_changed_at),
   hasNotes: Boolean(row.has_notes),
+  unreadReplies: Number(row.unread_replies) || 0,
 });
 
 /** Reports newest first, a page at a time (at most 100), without their pictures. */
@@ -213,6 +227,9 @@ export const getBugReport = async (em: EntityManager, id: number): Promise<BugRe
     ownerNotes: row.owner_notes,
     notesChangedAt: iso(row.notes_changed_at),
     changes: changes.map(changeOf),
+    thread: row.mail_thread_id === null ? [] : await readSupportThread(em, Number(row.mail_thread_id)),
+    cannotReply: await noReplyReason(em, summary.userid),
+    awards: await awardsForReport(em, id),
   };
 };
 

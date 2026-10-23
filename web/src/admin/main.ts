@@ -24,6 +24,8 @@ import {
   renderPlayers,
   type Level,
 } from "./sections";
+import { ShinyView } from "./shiny";
+import { applyTheme, readTheme, themePicker } from "./theme";
 
 /**
  * The owner's dashboard at /admin (docs/design/admin-dashboard-api.md). It
@@ -33,6 +35,7 @@ import {
  *
  * Phone first: the owner opens it from a Telegram alert, which links a
  * section (`#health`, `#backups`, `#errors`, `#bugs`) or a report (`?bug=<id>`).
+ * The Shiny section (`#shiny`) gives Shiny to a player and lists every gift.
  * The top answers "is anything wrong, and what do I do?" in one sentence,
  * then each problem with its fix; the sections below are ordered by how often
  * they need the owner (bug reports first, server internals last).
@@ -45,6 +48,7 @@ import {
 
 const SECTIONS = [
   ["bugs", "Bug reports"],
+  ["shiny", "Shiny"],
   ["players", "Players"],
   ["activity", "Activity"],
   ["errors", "Errors"],
@@ -135,6 +139,12 @@ class Dashboard {
   private readonly bugs = new BugsView({
     onRoute: (id) => this.openBug(id),
     onError: (message) => this.say(message),
+    onSay: (message) => this.say(message),
+    onAward: () => void this.shiny.refresh(),
+  });
+  private readonly shiny = new ShinyView({
+    openReport: (id) => this.openBug(id),
+    say: (message) => this.say(message),
   });
   private readonly errors = new ErrorsView((message) => this.say(message));
   private readonly sections: Record<SectionId, Section>;
@@ -205,6 +215,7 @@ class Dashboard {
     };
     this.sections = {
       bugs: section("bugs", "Bug reports"),
+      shiny: section("shiny", "Give Shiny"),
       players: section("players", "Players", rangeButtons),
       activity: section("activity", "Activity"),
       errors: section("errors", "Errors"),
@@ -212,6 +223,7 @@ class Dashboard {
       backups: section("backups", "Backups"),
     };
     replace(this.sections.bugs.body, this.bugs.element);
+    replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.errors.body, this.errors.element);
 
     this.refreshButton = h(
@@ -245,6 +257,7 @@ class Dashboard {
               h("span", { class: "signed-in" }, `Signed in as ${username}`),
             ),
             h("div", { class: "top-actions" }, this.updated, this.refreshButton),
+            themePicker(),
           ),
           this.nav,
         ),
@@ -271,7 +284,12 @@ class Dashboard {
   async start(): Promise<void> {
     const route = readRoute(location.search, location.hash);
     // The errors list loads with the stats, whose daily counts its charts use.
-    await Promise.all([this.loadHealth(), this.loadStats(), this.bugs.show(route.bug)]);
+    await Promise.all([
+      this.loadHealth(),
+      this.loadStats(),
+      this.bugs.show(route.bug),
+      this.shiny.refresh(),
+    ]);
     // The sections grew as they loaded; go to the one the link named.
     if (route.section) this.sections[route.section].element.scrollIntoView();
   }
@@ -310,7 +328,12 @@ class Dashboard {
   private async loadAll(): Promise<void> {
     this.refreshButton.classList.add("is-busy");
     this.refreshButton.disabled = true;
-    await Promise.all([this.loadHealth(), this.loadStats(), this.bugs.refresh()]);
+    await Promise.all([
+      this.loadHealth(),
+      this.loadStats(),
+      this.bugs.refresh(),
+      this.shiny.refresh(),
+    ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;
     this.say("Up to date");
@@ -392,7 +415,8 @@ class Dashboard {
     const levels = sectionLevels(items);
     for (const [id] of SECTIONS) {
       const { state, link } = this.sections[id];
-      const level = id === "players" || id === "activity" ? undefined : levels[id];
+      const level =
+        id === "players" || id === "activity" || id === "shiny" ? undefined : levels[id];
       const badge = link.querySelector(".nav-state")!;
       if (id === "bugs" && this.newBugs) {
         const text = this.newBugs >= 30 ? "30+" : String(this.newBugs);
@@ -575,6 +599,8 @@ class Dashboard {
 
 /** Opens the dashboard for the owner, or "Not found" for anyone else. */
 export const boot = async (): Promise<void> => {
+  // Light or dark first, so nothing flashes in the other one.
+  applyTheme(readTheme(), false);
   if (!restoreStoredSession()) {
     showNotFound();
     return;

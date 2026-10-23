@@ -30,7 +30,7 @@ sign-in from the same browser (the session in `localStorage`); with none, or
 for anyone but the owner, it shows only "Not found". It should call `GET .../admin/me`
 first and show nothing (or the game's normal 404) unless that answers 200. It
 should honour `?bug=<id>` (open that bug report) and `#health`, `#backups`,
-`#errors`, `#bugs` (scroll to that part), which the alerts link to. Pictures
+`#errors`, `#bugs`, `#shiny` (scroll to that part), which the alerts link to. Pictures
 (screenshots) must be fetched with the Bearer header and shown through a blob
 URL (`URL.createObjectURL`), since an `<img src>` cannot send the header.
 
@@ -46,6 +46,10 @@ URL (`URL.createObjectURL`), since an `<img src>` cannot send the header.
 | `GET /api/:apiVersion/admin/bugreports/:id/screenshot` | the picture's bytes with its type (JPEG/PNG/WebP), or `404` |
 | `GET /api/:apiVersion/admin/bugreports/:id/picture` | the player's added picture, the same way |
 | `POST /api/:apiVersion/admin/bugreports/:id/ticket` | body `{ status?, notes? }`; answers `{ report: BugReportDetail }` as it is afterwards; `400 badTicket`, `404 notFound` |
+| `POST /api/:apiVersion/admin/bugreports/:id/reply` | body `{ message }`; writes to the report's player in the game's mail; answers `{ report: BugReportDetail }`; `400 badReply`, `404 notFound`, `409 signedOut` / `noPlayer` |
+| `GET /api/:apiVersion/admin/players?q=` | `{ players: PlayerMatch[] }`: at most 10 whose name starts with `q` (any case) or whose account number it is; bots left out |
+| `GET /api/:apiVersion/admin/shiny?before=&limit=` | `{ awards: ShinyAwardView[], nextBefore: number \| null, total: { awards, shiny } }`, newest first; `limit` 1 to 100 (default 50) |
+| `POST /api/:apiVersion/admin/shiny` | body `{ userid, amount, reason, bugReportId?, requestId }`; answers `{ award: ShinyAwardView, already: boolean, report?: BugReportDetail }`; `400 badAward`, `409 noPlayer` / `noMainYard` / `notTheirReport` |
 | `GET /api/:apiVersion/admin/errors?source=&sort=&limit=&sinceDays=` | `{ groups: ErrorGroup[], totals }` |
 | `GET /api/:apiVersion/admin/health` | `AdminHealthReport` (see "Health" below) |
 
@@ -71,6 +75,40 @@ Each report has a status and the owner's notes, kept on the server only
   the owner's account number in `bym.bug_report_change`, and shown in the
   report's `changes`. The changes go with their report (180-day clean-up,
   account deletion).
+
+## Replies and Shiny
+
+The owner can write to a bug report's player, and give Shiny to any player.
+Both arrive in the game's Mail from **"The game team"** (sender account
+number `-1`, `SUPPORT_SENDER` in `server/src/services/mail/systemSender.ts`);
+the player never sees who on the team wrote it.
+
+- **Replies.** The first reply starts the report's mail thread
+  (`bym.bug_report.mail_thread_id`, subject "About your bug report"); later
+  ones join it. The player can answer it from the game's Mail: only a thread
+  linked to their own report (`mayAnswerTeam`), never a new thread to `-1`,
+  and no truce or Block on it. Their answers show in the report's `thread`
+  and count in the list's `unreadReplies` until the owner opens the report.
+  An answer does not change the ticket's status. A message is 1 to 580
+  characters (the game's mail limit). A report sent signed out, or whose
+  account is gone, cannot be answered in the game (`cannotReply`); the page
+  shows the report's email, if any, instead.
+- **Shiny.** A whole number from 1 to 10,000 per gift, with a reason of 1 to
+  200 characters that the player sees. The page asks "are you sure?" above
+  500 (the server does not). Given from a report (`bugReportId`), it must be
+  that report's player, and the mail goes into the report's thread, so they
+  can answer it; given from the Shiny section, it is a notice of its own that
+  cannot be answered. The Shiny goes onto the player's main yard, the mail is
+  written and the gift is logged (`bym.shiny_award`) together or not at all.
+- **One press, one gift.** The page makes a `requestId` (8 to 64 letters,
+  digits or `-`) for each press of Give and sends the same one again on a
+  retry. The server keeps it once (unique), so a repeat answers the first
+  gift with `already: true` instead of giving twice.
+- **The game's own save.** A save that buys something writes Shiny as a
+  change (`credits = credits + change`), never the whole balance, so a save
+  read before a gift cannot wipe the gift out.
+- **Account deletion** removes the player's gifts from the log; a deleted
+  owner's gifts stay with `by: null`.
 
 ## Shapes
 
@@ -152,6 +190,44 @@ interface ErrorGroup {
   userids: number[];             // up to 5 recent account numbers, newest first
 }
 ```
+
+Replies and Shiny:
+
+```ts
+// BugReportSummary also has: unreadReplies: number (the player's answers not opened yet)
+// BugReportDetail also has:
+//   thread: SupportMessage[]          (oldest first; opening the report marks answers read)
+//   cannotReply: "signedOut" | "noPlayer" | null
+//   awards: ShinyAwardView[]          (given from this report, oldest first)
+
+interface SupportMessage {
+  id: string;
+  from: "team" | "player";
+  text: string;
+  at: string;       // ISO time
+  unread: boolean;  // a player's answer not seen before this read
+}
+
+interface ShinyAwardView {
+  id: number;
+  userid: number;
+  username: string;
+  amount: number;
+  reason: string;
+  bugReportId: number | null;
+  by: number | null; // the owner's account number
+  at: string;
+}
+
+interface PlayerMatch {
+  userid: number;
+  username: string;
+  lastSeenAt: string | null;
+}
+```
+
+A refusal is `{ error: "<plain words to show>", reason }` with the status in the
+route table.
 
 ## Where the numbers come from
 
