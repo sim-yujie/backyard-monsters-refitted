@@ -10,11 +10,12 @@ import { CHAMPION_STATUS, entryOf, maxHealthOf, readChampions } from "../yard/ch
 import { cullHousing, housingCapacity, housingUsedBy } from "../yard/housing.js";
 import { readMushrooms } from "../yard/mushrooms.js";
 import { currentExpansion, overlaps, rectOf } from "../yardplanner/layoutGeometry.js";
-import { levelOf, pointsForBuild, pointsForUpgrade } from "../yardplanner/costs.js";
+import { levelOf } from "../yardplanner/costs.js";
+import { workerCount } from "../yardplanner/workers.js";
 import { BOT_MAX_LEVEL } from "./factory.js";
 import { TRAP_TYPES } from "./layout.js";
-import { targetInBand } from "./progression.js";
-import { BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from "./yardGenerator.js";
+import { bankPoints, botPointsForBuild, botPointsForUpgrade, targetInBand } from "./progression.js";
+import { BOT_WORKERS, BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from "./yardGenerator.js";
 
 /**
  * The bot brain's decisions (issue #240, `docs/design/bot-neighbours.md` §4.4,
@@ -40,14 +41,16 @@ import { BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from "./yardGenera
  * always a prefix of it: same ids, same spots, levels only rising. So growing
  * is a diff of the live yard against the generator's ({@link applyGrowth}): a
  * building the live yard lacks is built, one at a lower level is upgraded,
- * every step earning the points a finished job earns (`pointsForBuild`,
- * `pointsForUpgrade`, as `catchUpBuildings.ts` awards them). Resources are
- * not charged (§4.4): a bot has nobody farming for it, and its loot is held
- * in its band instead (§4.6).
+ * every step earning the points the generator counts for it
+ * (`botPointsForBuild`, `botPointsForUpgrade`: a finished job's points, as
+ * `catchUpBuildings.ts` awards them, and the banking a player did to pay for
+ * it). Resources are not charged (§4.4): a bot has nobody farming for it, and
+ * its loot is held in its band instead (§4.6).
  *
- * The last step is left running on a real countdown, as a player's worker
- * would be, capped to finish before the next grow job, and the catch-up
- * finishes it and awards its points then.
+ * The last steps are left running on a real countdown, one per worker
+ * ({@link BOT_WORKERS}, on different buildings), as a player's workers would
+ * be, capped to finish before the next grow job. Their banking points come at
+ * once; the catch-up finishes them and awards the job's own points then.
  *
  * The live yard also holds what the generator does not know about: mushrooms
  * grow on free ground (`catchUpMushrooms.ts`). Every new spot is checked with
@@ -138,9 +141,9 @@ export interface GrowthReport {
   built: number[];
   /** Ids upgraded, in id order. */
   upgraded: number[];
-  /** The id left on a countdown, or null. */
-  running: number | null;
-  /** Empire points awarded now (the running step's come when it finishes). */
+  /** The ids left on a countdown, in id order: at most one per worker. */
+  running: number[];
+  /** Empire points awarded now (the running steps' job points come when they finish). */
   points: number;
   /** Mushrooms picked to clear a spot. */
   picked: number;
@@ -182,16 +185,22 @@ const wantedOf = (yard: BotYard): Wanted[] =>
 /** Kinds a worker never holds: they finish the moment they go up (`build.ts`, D13). */
 const AT_ONCE_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
-/** Points for taking a building from `from` to `to`: the build at level 0, each upgrade after. */
+/** Points for taking a building from `from` to `to`: the build at level 0, each upgrade after, banking included. */
 const stepPoints = (type: number, from: number, to: number): number => {
   const costs = costOf(type)?.costs ?? [];
   let points = 0;
   for (let level = from; level < to; level++) {
     const step = costs[level];
     if (!step) break;
-    points += level === 0 ? pointsForBuild(step) : pointsForUpgrade(step);
+    points += level === 0 ? botPointsForBuild(step) : botPointsForUpgrade(step);
   }
   return points;
+};
+
+/** The banking points of the step that takes a building of `type` to `level`, paid before it starts. */
+const stepBank = (type: number, level: number): number => {
+  const step = costOf(type)?.costs[level - 1];
+  return step ? bankPoints(step) : 0;
 };
 
 /** The countdown of the step that takes a building of `type` to `level` (`costs[level - 1]` time). */
@@ -232,6 +241,9 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
   const liveExpansion = currentExpansion(save.storedata);
   const expansion = Math.max(liveExpansion, yard.storedata.ENL?.q ?? 0);
   const view: BrainSave = { ...save, storedata: { ...(save.storedata ?? {}), ENL: { q: expansion } } };
+  // A bot made before it had its workers gets them with its next growth.
+  const liveBought = workerCount(save.storedata) - 1;
+  const bought = Math.max(liveBought, yard.storedata.BEW.q);
 
   const builds: Wanted[] = [];
   const upgrades: { want: Wanted; key: string; building: BuildingData; from: number }[] = [];
@@ -254,21 +266,25 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
     if (want.l > from) upgrades.push({ want, key, building, from });
   }
 
-  const report: GrowthReport = { built: [], upgraded: [], running: null, points: 0, picked: pick.size };
+  const report: GrowthReport = { built: [], upgraded: [], running: [], points: 0, picked: pick.size };
   if (builds.length === 0 && upgrades.length === 0) return report;
 
-  // The step left running: the latest building that holds a worker.
+  // The steps left running: the latest buildings that hold a worker, one per worker.
   const holdsWorker = (want: Wanted) => want.l > 0 && !AT_ONCE_KINDS.has(costOf(want.t)?.kind ?? "");
-  const running = [...builds, ...upgrades.map((upgrade) => upgrade.want)]
-    .filter(holdsWorker)
-    .reduce<Wanted | null>((latest, want) => (!latest || want.id > latest.id ? want : latest), null);
-  const seconds = running ? Math.max(1, Math.min(stepSeconds(running.t, running.l), Math.floor(runCap))) : 0;
+  const running = new Set(
+    [...builds, ...upgrades.map((upgrade) => upgrade.want)]
+      .filter(holdsWorker)
+      .sort((a, b) => b.id - a.id)
+      .slice(0, BOT_WORKERS)
+  );
+  const secondsOf = (want: Wanted) => Math.max(1, Math.min(stepSeconds(want.t, want.l), Math.floor(runCap)));
 
   const buildingdata: BuildingDataMap = { ...(save.buildingdata ?? {}) };
   const health: BuildingHealthData = { ...(save.buildinghealthdata ?? {}) };
 
   for (const want of builds) {
-    const left = want === running;
+    const left = running.has(want);
+    const seconds = left ? secondsOf(want) : 0;
     const level = left ? want.l - 1 : want.l;
     // A garrison or buffer sized for the finished level waits for the refill after it.
     const extra = left ? {} : want.extra;
@@ -282,11 +298,12 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
     // A trap that went off left a zero here under its id (`rearmTraps.ts`).
     delete health[String(want.id)];
     report.built.push(want.id);
-    report.points += stepPoints(want.t, 0, level);
+    report.points += stepPoints(want.t, 0, level) + (left ? stepBank(want.t, want.l) : 0);
   }
 
   for (const { want, key, building, from } of upgrades) {
-    const left = want === running;
+    const left = running.has(want);
+    const seconds = left ? secondsOf(want) : 0;
     const level = left ? want.l - 1 : want.l;
     const { cU: _upgrade, cB: _build, cL: _length, ...rest } = building;
     const next = { ...rest } as BuildingData;
@@ -295,16 +312,24 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
     else if (left) Object.assign(next, { cU: seconds, cL: seconds });
     buildingdata[key] = next;
     report.upgraded.push(want.id);
-    report.points += stepPoints(want.t, from, level);
+    // A step still running from the last grow had its banking paid then.
+    const paid = building.cU !== undefined || building.cB !== undefined ? stepBank(want.t, from + 1) : 0;
+    report.points += stepPoints(want.t, from, level) + (left ? stepBank(want.t, want.l) : 0) - paid;
   }
 
-  report.running = running?.id ?? null;
+  report.running = [...running].map((want) => want.id).sort((a, b) => a - b);
   report.built.sort((a, b) => a - b);
   report.upgraded.sort((a, b) => a - b);
 
   save.buildingdata = buildingdata;
   save.buildinghealthdata = health;
-  if (expansion > liveExpansion) save.storedata = view.storedata;
+  if (expansion > liveExpansion || bought > liveBought) {
+    save.storedata = {
+      ...(save.storedata ?? {}),
+      ...(expansion > liveExpansion ? { ENL: { q: expansion } } : {}),
+      ...(bought > liveBought ? { BEW: { q: bought } } : {}),
+    };
+  }
   if (pick.size > 0) {
     const mushrooms = readMushrooms(save.mushrooms);
     save.mushrooms = { ...(save.mushrooms ?? {}), l: mushrooms.l.filter((_, index) => !pick.has(index)) };

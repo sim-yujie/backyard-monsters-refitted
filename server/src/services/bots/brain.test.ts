@@ -31,7 +31,7 @@ import {
 import { evenSpread } from "./factory.js";
 import { TRAP_TYPES } from "./layout.js";
 import { levelBand, type Persona } from "./progression.js";
-import { generateBotYard, LOOT_BAND, type BotYard } from "./yardGenerator.js";
+import { BOT_WORKERS, generateBotYard, LOOT_BAND, type BotYard } from "./yardGenerator.js";
 
 /** The bot brain's pure decisions (issue #240, `docs/design/bot-neighbours.md` §4.4-§4.6). */
 
@@ -127,12 +127,18 @@ describe("growth (§4.4)", () => {
     const report = grown(applyGrowth(save, after, 3 * 60 * 60));
 
     expect(report.built.length + report.upgraded.length).toBeGreaterThan(0);
-    expect(report.running).not.toBeNull();
-    const running = save.buildingdata![String(report.running)]!;
-    const countdown = Number(running.cU ?? running.cB);
-    expect(countdown).toBeGreaterThan(0);
-    expect(countdown).toBeLessThanOrEqual(3 * 60 * 60);
-    expect(Number(running.cL)).toBe(countdown);
+    // One step per worker left running, each on its own building.
+    expect(report.running.length).toBeGreaterThan(0);
+    expect(report.running.length).toBeLessThanOrEqual(BOT_WORKERS);
+    expect(new Set(report.running).size).toBe(report.running.length);
+    for (const id of report.running) {
+      const running = save.buildingdata![String(id)]!;
+      const countdown = Number(running.cU ?? running.cB);
+      expect(countdown).toBeGreaterThan(0);
+      expect(countdown).toBeLessThanOrEqual(3 * 60 * 60);
+      expect(Number(running.cL)).toBe(countdown);
+    }
+    expect(save.storedata?.BEW).toEqual({ q: BOT_WORKERS - 1 });
 
     // Once the countdown has run out the yard is the generator's, points and all.
     catchUpYard(save as Parameters<typeof catchUpYard>[0], NOW + 4 * 60 * 60);
@@ -146,7 +152,7 @@ describe("growth (§4.4)", () => {
     const yard = yardFor(77, "army", 18.4);
     const save = saveOf(yard);
     const before = structuredClone(save);
-    expect(grown(applyGrowth(save, yard, 3600))).toEqual({ built: [], upgraded: [], running: null, points: 0, picked: 0 });
+    expect(grown(applyGrowth(save, yard, 3600))).toEqual({ built: [], upgraded: [], running: [], points: 0, picked: 0 });
     expect(save).toEqual(before);
   });
 

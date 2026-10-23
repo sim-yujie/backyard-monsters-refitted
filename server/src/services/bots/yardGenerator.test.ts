@@ -13,6 +13,7 @@ import { checkNodePlacement } from "../yardplanner/validateLayout.js";
 import { expansionFor } from "./layout.js";
 import { PERSONAS, targetInBand } from "./progression.js";
 import {
+  BOT_WORKERS,
   BUNKER_FILL,
   championLevelFor,
   fillRoom,
@@ -112,7 +113,7 @@ const expectFilled = (yard: BotYard) => {
 const expectPlaced = (yard: BotYard, seed: number) => {
   const expansion = yard.storedata.ENL?.q ?? 0;
   expect(expansion).toBeGreaterThanOrEqual(expansionFor(seed, yard.level));
-  expect(yard.storedata).toEqual(expansion > 0 ? { ENL: { q: expansion } } : {});
+  expect(yard.storedata).toEqual({ BEW: { q: BOT_WORKERS - 1 }, ...(expansion > 0 ? { ENL: { q: expansion } } : {}) });
   const nodes = [...yard.buildings, ...yard.decorations].map((spot) => ({ id: spot.id, t: spot.t, x: spot.X, y: spot.Y }));
   expect(() => checkNodePlacement(nodes, expansion)).not.toThrow();
 };
