@@ -5,7 +5,7 @@ import { postgres } from "../../server.js";
 import { Thread } from "../../database/models/thread.model.js";
 import { User } from "../../database/models/user.model.js";
 import { mailboxErr } from "../../errors/errors.js";
-import { SYSTEM_SENDER } from "../../services/mail/systemSender.js";
+import { isServerSender } from "../../services/mail/systemSender.js";
 import { clearBetween } from "../../services/friends/friendships.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
@@ -28,8 +28,8 @@ export const reportMessageThread: KoaController = async (ctx) => {
   // Determine the other user in the thread
   const blockedUserId = thread.userid === user.userid ? thread.targetid : thread.userid;
 
-  // The game is not a player: blocking it would only hide its notices.
-  if (blockedUserId === SYSTEM_SENDER || user.blockedUsers.includes(blockedUserId)) {
+  // The game and its team are not players: blocking them would only hide their mail.
+  if (isServerSender(blockedUserId) || user.blockedUsers.includes(blockedUserId)) {
     ctx.status = Status.OK;
     ctx.body = { error: 0 };
     return;

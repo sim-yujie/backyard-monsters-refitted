@@ -199,6 +199,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "friend helps (given and received)", table: "friend_help", where: `helper_userid = ? OR owner_userid = ?`, params: [u, u] },
   { label: "friend gifts (sent and received)", table: "friend_gift", where: `from_userid = ? OR to_userid = ?`, params: [u, u] },
   { label: "event progress (calendars, collections)", table: "event_progress", where: `userid = ?`, params: [u] },
+  { label: "Shiny the game team gave them", table: "shiny_award", where: `userid = ?`, params: [u] },
   { label: "bug reports they sent", table: "bug_report", where: `userid = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
@@ -283,6 +284,14 @@ const updateSteps = (u: number, username: string): UpdateStep[] => [
     set: `changed_by = NULL`,
     setParams: [],
     where: `changed_by = ?`,
+    params: [u],
+  },
+  {
+    label: "Shiny the dashboard gave from their account (account number removed)",
+    table: "shiny_award",
+    set: `awarded_by = NULL`,
+    setParams: [],
+    where: `awarded_by = ?`,
     params: [u],
   },
 ];

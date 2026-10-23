@@ -11,6 +11,7 @@ import { SaveKeys } from "../../../enums/SaveKeys.js";
 import { BaseSaveSchema } from "../../../schemas/BaseSaveSchema.js";
 import { resourcesHandler } from "./handlers/resourceHandler.js";
 import { purchaseHandler } from "./handlers/purchaseHandler.js";
+import { creditsAsDelta } from "../../../services/base/creditsDelta.js";
 import { academyHandler } from "./handlers/academyHandler.js";
 import { BaseType } from "../../../enums/Base.js";
 import {
@@ -439,7 +440,12 @@ const saveBase = async (
     if (isOutpostOwner) updateOutposts(userSave, baseSave, key);
   }
 
-  if (!isAttack && saveData.purchase) purchaseHandler(ctx, saveData.purchase, userSave);
+  if (!isAttack && saveData.purchase) {
+    purchaseHandler(ctx, saveData.purchase, userSave);
+    // Spent or gained as an addition to the row, so Shiny the server added
+    // since this request read the save (a dashboard award) is kept.
+    creditsAsDelta(userSave);
+  }
 
   // The replay's battle, on the defender (issue #23, C3), as the finaliser
   // writes an abandoned one: the traps that fired, the health, the damage

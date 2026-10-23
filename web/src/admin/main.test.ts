@@ -129,6 +129,16 @@ describe("the owner's first look", () => {
     expect(fix?.querySelector("button.copy")?.getAttribute("aria-label")).toMatch(/^Copy: /);
   });
 
+  it("has the Shiny section in the links, and the light or dark switch in the header", async () => {
+    await boot();
+    await settle();
+    expect(document.querySelector(".nav a[href='#shiny']")?.textContent).toBe("Shiny");
+    expect(document.getElementById("shiny")?.querySelector("#player-search")).not.toBeNull();
+    const select = document.querySelector<HTMLSelectElement>(".top .theme-pick select")!;
+    expect([...select.options].map((o) => o.value)).toEqual(["auto", "light", "dark"]);
+    expect(select.value).toBe("auto");
+  });
+
   it("keeps the technical words behind Technical details", async () => {
     await boot();
     await settle();

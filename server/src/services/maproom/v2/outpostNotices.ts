@@ -225,7 +225,7 @@ export const takeOutpostNotices = async (em: EntityManager, userid: number): Pro
  * (`countUnreadMessage.ts`'s query), counted through `em` so a notice written
  * inside a transaction is counted with it.
  */
-const refreshUnread = async (em: EntityManager, userid: number): Promise<void> => {
+export const refreshUnread = async (em: EntityManager, userid: number): Promise<void> => {
   const count = await em.count(Message, {
     $or: [
       { userid, userUnread: 1 },

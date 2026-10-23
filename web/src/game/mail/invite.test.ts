@@ -13,6 +13,7 @@ const CELL = { col: 241, row: 208 };
 const item = (type: string): MailItem => ({
   mine: false,
   notice: false,
+  team: false,
   label: null,
   type,
   text: "",
