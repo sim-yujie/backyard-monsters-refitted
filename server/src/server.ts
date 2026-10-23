@@ -7,7 +7,7 @@ import router from "./app.routes.js";
 import { RedisClient } from "bun";
 import { MikroORM, RequestContext } from "@mikro-orm/core";
 import { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
-import { logger } from "./utils/logger.js";
+import { LOG_BASE, LOG_DIR, logger } from "./utils/logger.js";
 import { ascii_node } from "./utils/ascii_art.js";
 import { ErrorInterceptor } from "./middleware/clientSafeError.js";
 import { onAppError } from "./middleware/appErrors.js";
@@ -27,6 +27,8 @@ import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.j
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
+import { startAlertSweep } from "./services/alerts/alertSweep.js";
+import { trackResponseTimes } from "./services/health/responseTimes.js";
 import { turnstileSecretKey } from "./services/auth/turnstile.js";
 import { requiresDiscordVerification } from "./config/AccountConfig.js";
 import { botConfig } from "./config/BotConfig.js";
@@ -34,6 +36,9 @@ import { PRESENCE_TTL_SECONDS } from "./controllers/maproom/presence.js";
 import { clientIp } from "./middleware/clientIp.js";
 import { trustedProxies } from "./config/ProxyConfig.js";
 import { startupRefusals } from "./config/StartupSafety.js";
+import { redisActivityRecorder, setActivityRecorder } from "./services/stats/activity.js";
+import { startDailyStats } from "./services/stats/dailyStats.js";
+import { startServerErrorFlush } from "./services/errors/errorStore.js";
 
 // `ctx.ip` comes from the clientIp middleware, which believes CF-Connecting-IP
 // only from a trusted proxy (issue #214), so Koa's own proxy trust stays off.
@@ -102,6 +107,9 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
     logger.error(`Unhandled Rejection at: ${promise} reason: ${reason}`);
   });
 
+  // How fast requests are answered, for the owner's dashboard (`services/health/`).
+  app.use(trackResponseTimes);
+
   app.use(ErrorInterceptor);
   // What Koa sees outside the routes, a client that closed mid-download above all (#274).
   app.on("error", onAppError);
@@ -126,6 +134,27 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // servers sharing a database run it once between them; `RETENTION_SWEEP=off`
   // turns it off on this one.
   if (process.env.RETENTION_SWEEP !== "off") startRetentionSweep(postgres.em);
+
+  // The owner's dashboard (`docs/design/admin-dashboard-api.md`): who played
+  // and what they did each UTC day, kept in Redis for 8 days; the server's
+  // own errors, saved every half minute; and the daily stats table, filled
+  // at boot and checked hourly. `DASHBOARD_STATS=off` leaves the table to
+  // another server sharing the database.
+  setActivityRecorder(redisActivityRecorder(redis), (err) => logger.warn(`Dashboard activity not recorded: ${err}`));
+  startServerErrorFlush(postgres.em);
+  if (process.env.DASHBOARD_STATS !== "off") {
+    startDailyStats({
+      em: postgres.em,
+      redis,
+      logDir: process.env.ENV === Env.LOCAL ? null : LOG_DIR,
+      logBase: LOG_BASE,
+    });
+  }
+
+  // Telegram alerts to the owner (docs/alerts.md): full disk, missed backup,
+  // error jumps, the database or Redis gone. Off unless TELEGRAM_BOT_TOKEN and
+  // TELEGRAM_CHAT_ID are set.
+  startAlertSweep({ redis, sql: (query) => postgres.em.fork().execute(query) });
 
   // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
   // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without

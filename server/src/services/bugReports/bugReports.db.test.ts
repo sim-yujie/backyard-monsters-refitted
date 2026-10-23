@@ -69,7 +69,8 @@ describe.skipIf(!dbName)("bug reports on a real database", () => {
     const columns = await sql<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns WHERE table_schema = 'bym' AND table_name = 'bug_report' ORDER BY ordinal_position`
     );
-    expect(columns.map((one) => one.column_name)).toEqual([
+    // The dashboard's migration (20261023) adds its ticket columns after these.
+    expect(columns.map((one) => one.column_name).slice(0, 18)).toEqual([
       "id",
       "userid",
       "username",

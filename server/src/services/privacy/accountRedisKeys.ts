@@ -70,6 +70,13 @@ export const CHAT_HISTORY_PATTERN = "history:*";
 /** Every player's chat ignore list (`chat/chatChannels.ts`): sets of user ids. */
 export const CHAT_IGNORE_PATTERN = "chat-ignore:*";
 
+/**
+ * The owner's dashboard's day-by-day play lists (`services/stats/activity.ts`):
+ * sets of the account numbers that played, or took part in an event, that UTC
+ * day, kept 8 days.
+ */
+export const PLAY_COUNT_PATTERNS = ["stats:active:*", "stats:event:*"];
+
 /** The fair-play log (`services/user/botCheckLog.ts`): JSON rows with `userid`. */
 export const BOT_CHECK_LOG_KEY = "bot-check:log";
 

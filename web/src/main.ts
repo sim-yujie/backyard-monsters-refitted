@@ -15,9 +15,12 @@ import "@/ui/styles/moveyards.css";
 
 import { App } from "@/app/App";
 import { installErrorLog } from "@/game/bugReport/errorLog";
+import { installErrorReporter } from "@/game/bugReport/errorReporter";
 
-// The bug report's list of recent errors, from the very start.
+// The bug report's list of recent errors, from the very start, and the
+// owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
 installErrorLog();
+installErrorReporter();
 
 const host = document.querySelector<HTMLElement>("#game-root");
 

@@ -46,6 +46,7 @@ agent-handoffs/
 # Production server secrets and backups (docs/deploy.md)
 server/production.env
 server/backups/
+server/status/
 
 # Env variants (.env.local, .env.production, ...); the example files stay tracked
 .env.*

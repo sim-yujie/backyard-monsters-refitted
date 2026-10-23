@@ -12,6 +12,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { extractTownHall } from "../../utils/extractTownHall.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
+import { noteTribeRaid } from "../stats/activity.js";
 import { catchUpLockedRow, catchUpLockedYard } from "../../controllers/yard/yardAction.js";
 import { notifyAndCount } from "../notifications/notifications.js";
 import { playerLevelOf } from "../base/calculateBaseLevel.js";
@@ -562,6 +563,8 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
   const raid = taken.raid;
   const outcome = raid.outcome as RaidFightOutcome;
   let completed: CompletedJob[] = [];
+  // False when this finish only repeats one that already landed, so the dashboard counts each raid once.
+  let landedNow = false;
   const result = await em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     if (raidAlreadyApplied(readSchedule(locked.aiattacks), raid.id)) {
@@ -572,11 +575,13 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     completed = await catchUpLockedRow(tx, locked, now);
     const landed = landRaid(locked, { id: raid.id, tribe: raid.tribe, startedAt: raid.startedAt ?? now, outcome }, now);
     await tx.flush();
+    landedNow = true;
     return landed;
   });
   await notifyJobs(em, user.userid, completed);
 
   const plan = planOf(raid);
+  if (landedNow) noteTribeRaid();
   logger.info("Wild monster raid {id} landed for userid {userid}: {tribe}, health {health}", {
     event: "wild-raid",
     userid: user.userid,
