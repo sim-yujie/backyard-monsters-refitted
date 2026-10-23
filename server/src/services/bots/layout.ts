@@ -5,7 +5,6 @@ import { MAX_EXPANSIONS, rectOf, withinBounds, yardSize } from "../yardplanner/l
 import { TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import { capAtHall, wallTargets, type Persona } from "./progression.js";
 import {
-  BEGINNER_TOP_HALL,
   CORE_CELLS,
   CORE_WALLS,
   TOWER_RING_GAPS,
@@ -358,9 +357,6 @@ const ROLE_OF: Readonly<Record<number, Role>> = {
 
 const roleOf = (type: number): Role => ROLE_OF[type] ?? (footprintOf(type).decoration ? "decoration" : "general");
 
-/** Roles a beginner still places as everyone does: the core, the wall plan, the hallways' traps, decorations. */
-const UNPLAIN: ReadonlySet<Role> = new Set(["hall", "silo", "wall", "trap", "decoration"]);
-
 /** Roles whose range covers the resource buildings. */
 const DEFENDERS: ReadonlySet<Role> = new Set(["tower", "support", "aerial"]);
 
@@ -438,7 +434,7 @@ interface WallPlan {
 
 /** A seed's layout plan (see the file comment). */
 interface Plan extends WallPlan {
-  /** How the bot walls its yard and whether it starts as a beginner (`yardStyle.ts`). */
+  /** How the bot walls its yard (`yardStyle.ts`). */
   style: YardStyle;
   cx: number;
   cy: number;
@@ -1137,20 +1133,6 @@ class Layout {
     return nearest;
   }
 
-  /**
-   * A beginner's score (see `yardStyle.ts`): close to the Town Hall and to
-   * its own kind, with no thought for bands, cover or spread. Lower is better.
-   */
-  private plainScore(rng: Rng, type: number, x: number, y: number): number {
-    const { w, h } = footprintOf(type);
-    const kin = this.kinGap(type, x, y);
-    return (
-      Math.hypot(x + w / 2 - this.plan.cx, y + h / 2 - this.plan.cy) / 100 +
-      (Number.isFinite(kin) ? Math.min(kin, 200) / 50 : 0) +
-      rng.float() * 0.6
-    );
-  }
-
   /** A spot's score: lower is better (see the file comment). */
   private score(rng: Rng, type: number, role: Role, x: number, y: number, hall: number): number {
     const { w, h } = footprintOf(type);
@@ -1335,13 +1317,12 @@ class Layout {
     expansion: number,
     allowed: number,
     spots: readonly { x: number; y: number }[],
-    hall: number,
-    plain = false
+    hall: number
   ): Candidate | null {
     let best: Candidate | null = null;
     for (const spot of spots) {
       if (!this.fits(type, spot.x, spot.y, expansion, allowed)) continue;
-      const score = plain ? this.plainScore(rng, type, spot.x, spot.y) : this.score(rng, type, role, spot.x, spot.y, hall);
+      const score = this.score(rng, type, role, spot.x, spot.y, hall);
       if (!best || score < best.score) best = { x: spot.x, y: spot.y, score };
     }
     return best;
@@ -1477,28 +1458,6 @@ class Layout {
           : ON_FREE) |
       (IN_CORE.has(role) ? ON_CORE : 0) |
       (w >= BIG ? ON_WALKWAY : 0);
-
-    // A beginner puts it down beside what already stands, close to the Town Hall (see `yardStyle.ts`).
-    if (this.plan.style.beginner && hall <= BEGINNER_TOP_HALL && !UNPLAIN.has(role)) {
-      const standing = [...this.byGroup.entries()].flatMap(([group, list]) => {
-        const kind = roleOf(group);
-        return kind === "wall" || kind === "trap" || kind === "decoration" ? [] : list;
-      });
-      const plain = this.best(
-        rng,
-        type,
-        role,
-        expansion,
-        allowed,
-        [
-          ...this.beside(rng, type, standing, [0, 5, 10], 60),
-          ...this.zoneSpots(rng, type, role, 40, 0, { min: CORE_REACH, max: CORE_REACH + 0.25 }),
-        ],
-        hall,
-        true
-      );
-      if (plain) return this.put(id, type, plain.x, plain.y, hall);
-    }
 
     const spots: { x: number; y: number }[] = this.zoneSpots(rng, type, role, 40);
     const gaps = CLUSTER_GAPS[role];

@@ -19,31 +19,18 @@ import { mulberry32 } from "../../game-rules/combat/rng.js";
  * Town Hall 6 on it stands fewer walls than its Town Hall allows, as a
  * player who walls only the middle does.
  *
- * ## Beginners
- *
- * About one bot in four ({@link BEGINNER_SHARE}) starts like a new player:
- * while its Town Hall is level 1 or 2 it puts each building down next to the
- * ones already standing, harvesters of a kind side by side and towers by the
- * Town Hall, with no thought for rings or cover. From Town Hall 3 on it has
- * learnt, and builds the rest the way every other bot does. Its early
- * buildings stay where they were put, as growth never moves a building.
+ * Every bot lays out its yard this way from the start: the "1 in 4 beginner
+ * yards" rule was dropped with the level 15 floor (owner, 2026-10-23).
  */
 
 export type WallStyle = "full" | "core";
 
 export interface YardStyle {
   walls: WallStyle;
-  beginner: boolean;
 }
 
 /** The share of bots that wall in the whole yard `[PLACEHOLDER]` (owner: "about 50/50"). */
 export const FULL_WALLS_SHARE = 0.5;
-
-/** The share of bots that start out with a beginner's plain yard `[PLACEHOLDER]` (owner: "about 1 in 4"). */
-export const BEGINNER_SHARE = 0.25;
-
-/** The highest Town Hall level a beginner builds plainly at. */
-export const BEGINNER_TOP_HALL = 2;
 
 /**
  * The core's wall in cells (17 x 12 round its inside, `layout.ts`) and how
@@ -72,7 +59,7 @@ const STYLE_SALT = 0x4f1bbcdc;
 export const yardStyleOf = (seed: number): YardStyle => {
   const rng = mulberry32((Math.floor(seed) ^ STYLE_SALT) >>> 0);
   const walls: WallStyle = rng.float() < FULL_WALLS_SHARE ? "full" : "core";
-  return { walls, beginner: rng.float() < BEGINNER_SHARE };
+  return { walls };
 };
 
 /** Every wall a `core` bot ever stands: its three rings. */

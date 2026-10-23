@@ -20,7 +20,7 @@ import {
   type PlacedSpot,
 } from "./layout.js";
 import { PERSONAS, targetInBand, wallTargets, yardAtPoints, type Persona, type ProgressionYard } from "./progression.js";
-import { BEGINNER_TOP_HALL, yardStyleOf } from "./yardStyle.js";
+import { yardStyleOf } from "./yardStyle.js";
 
 /** The bot yard layout (issues #238, #250, #252; `docs/design/bot-neighbours.md` §4.2 step 2). */
 
@@ -324,8 +324,6 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
         for (let index = 0; index < 3; index++) {
           const seed = level * 7919 + index * 104729;
           const { yard, layout } = laidOut(seed, PERSONAS[index]!, level, (index + 0.5) / 3);
-          // A beginner's first Town Halls put buildings down with no thought for cover (`yardStyle.ts`).
-          if (yardStyleOf(seed).beginner && yard.townHall <= BEGINNER_TOP_HALL) continue;
           const towers = layout.buildings.flatMap((spot, at) => {
             const range = TOWER_STATS[spot.t]?.[yard.buildings[at]!.l - 1]?.range;
             if (!TOWERS.has(spot.t) || range === undefined) return [];

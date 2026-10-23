@@ -8,7 +8,7 @@ import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
 import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import { GUIDE_BUILDINGS } from "../onboarding/guidedStart.js";
-import { BEGINNER_TOP_HALL, CORE_WALLS, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
+import { CORE_WALLS, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
 
 /**
  * A bot's build order (`docs/design/bot-neighbours.md` §4.2 step 1, issue #237).
@@ -259,12 +259,10 @@ const ECONOMY_WEIGHTS: Readonly<Record<number, number>> = { 3: 2, 4: 1, [SILO]: 
  * The share of the wall allowance a seed means to stand at each hall level,
  * drawn in `[min, max)` `[PLACEHOLDER]`: a Town Hall 2 yard has just started,
  * from Town Hall 3 a player walls most of what they may, at least enough to
- * close the core (`layout.ts`). A beginner (`yardStyle.ts`) walls less while
- * it is one.
+ * close the core (`layout.ts`).
  */
 export const WALL_FILL = {
   early: { min: 0.4, max: 0.9 },
-  beginner: { min: 0, max: 0.5 },
   later: { min: 0.9, max: 1 },
 } as const;
 
@@ -328,6 +326,9 @@ export const READINESS: readonly { min: number; max: number }[] = [
 
 /** The highest Town Hall level. */
 const TOP_HALL = 10;
+
+/** The highest Town Hall level that stands its walls and traps to the `early` fills. */
+const EARLY_TOP_HALL = 2;
 
 /** Kinds that add nothing to base value (`BASE_VALUE_EXCLUDED`, `economy/resourceBudget.ts`). */
 const VALUE_EXCLUDED_KINDS: ReadonlySet<string> = new Set(["decoration", "enemy", "immovable", "trap"]);
@@ -437,12 +438,11 @@ const pick = <T>(rng: Rng, items: readonly { item: T; weight: number }[]): T | n
 /** The share of the wall and trap allowances a seed means to stand, per hall level (see the file comment). */
 const fillsFor = (seed: number): { wall: number[]; trap: number[] } => {
   const fills = mulberry32((Math.floor(seed) ^ FILL_SALT) >>> 0);
-  const { beginner } = yardStyleOf(seed);
   const wall: number[] = [];
   const trap: number[] = [];
   for (let hall = 0; hall <= TOP_HALL; hall++) {
-    const early = hall <= BEGINNER_TOP_HALL;
-    const walls = early ? (beginner ? WALL_FILL.beginner : WALL_FILL.early) : WALL_FILL.later;
+    const early = hall <= EARLY_TOP_HALL;
+    const walls = early ? WALL_FILL.early : WALL_FILL.later;
     const traps = early ? TRAP_FILL.early : TRAP_FILL.later;
     wall.push(walls.min + (walls.max - walls.min) * fills.float());
     trap.push(traps.min + (traps.max - traps.min) * fills.float());

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BEGINNER_SHARE, FULL_WALLS_SHARE, yardStyleOf } from "./yardStyle.js";
+import { FULL_WALLS_SHARE, yardStyleOf } from "./yardStyle.js";
 
 /** How a bot's seed picks its yard's style (owner decisions, 2026-10-23). */
 describe("yardStyleOf", () => {
@@ -14,14 +14,8 @@ describe("yardStyleOf", () => {
     expect(styles.every((style) => style.walls === "full" || style.walls === "core")).toBe(true);
   });
 
-  test("about one bot in four starts out with a beginner's yard, of either wall style", () => {
-    expect(BEGINNER_SHARE).toBe(0.25);
-    const beginners = styles.filter((style) => style.beginner);
-    expect(beginners.length / SEEDS).toBeGreaterThan(0.22);
-    expect(beginners.length / SEEDS).toBeLessThan(0.28);
-    const full = beginners.filter((style) => style.walls === "full").length / beginners.length;
-    expect(full).toBeGreaterThan(0.4);
-    expect(full).toBeLessThan(0.6);
+  test("no beginner yards: the style is only how the bot walls (owner, 2026-10-23)", () => {
+    for (const style of styles.slice(0, 100)) expect(Object.keys(style)).toEqual(["walls"]);
   });
 
   test("the same seed gives the same style", () => {
