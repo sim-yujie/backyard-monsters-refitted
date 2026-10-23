@@ -1,0 +1,251 @@
+import { ApiError, apiUrl, get, getAuthToken, postJson } from "@/api/http";
+import type { ApiEnvelope } from "@/api/types";
+
+/**
+ * The owner dashboard's server routes (docs/design/admin-dashboard-api.md).
+ * Every one is behind the owner-only check: anyone else gets a plain 404,
+ * the same as an unknown address, which the page shows as "Not found".
+ */
+
+const ADMIN = "/api/:apiVersion/admin";
+
+export type TicketStatus = "new" | "working" | "fixed" | "wontfix";
+export const TICKET_STATUSES: readonly TicketStatus[] = ["new", "working", "fixed", "wontfix"];
+
+export type BugFilter = "all" | "open" | "closed";
+export type ErrorSource = "browser" | "server";
+export type DashboardSection = "health" | "backups" | "errors" | "bugs";
+
+export interface AdminMe {
+  admin: true;
+  userid: number;
+  username: string;
+}
+
+export interface DailyStat {
+  day: string;
+  newPlayers: number;
+  totalPlayers: number;
+  activePlayers: number | null;
+  activeSource: "tracked" | "logs" | "partial" | null;
+  attacks: number;
+  tribeRaids: number | null;
+  eventNewPlayers: Record<string, number>;
+  eventPlayers: Record<string, number> | null;
+  bugReports: number;
+  browserErrors: number | null;
+  serverErrors: number | null;
+}
+
+export interface StatsOverview {
+  generatedAt: string;
+  players: { total: number; activeToday: number; active7: number; active30: number };
+  today: DailyStat;
+  days: DailyStat[];
+}
+
+export interface BugReportSummary {
+  id: number;
+  createdAt: string;
+  userid: number | null;
+  username: string | null;
+  preview: string;
+  gameVersion: string;
+  screen: string;
+  device: string;
+  hasScreenshot: boolean;
+  hasPicture: boolean;
+  emailed: boolean;
+  status: TicketStatus;
+  statusChangedAt: string | null;
+  hasNotes: boolean;
+}
+
+export interface TicketChange {
+  at: string;
+  by: number | null;
+  status: { from: TicketStatus | null; to: TicketStatus } | null;
+  notes: string | null;
+}
+
+export interface BugReportDetail extends Omit<BugReportSummary, "preview"> {
+  message: string;
+  contactEmail: string | null;
+  userAgent: string;
+  browser: string;
+  screenSize: string;
+  errors: string[];
+  screenshotType: string | null;
+  pictureType: string | null;
+  emailedAt: string | null;
+  ownerNotes: string;
+  notesChangedAt: string | null;
+  changes: TicketChange[];
+}
+
+export interface ErrorGroup {
+  id: number;
+  source: ErrorSource;
+  message: string;
+  place: string;
+  stack: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+  gameVersion: string;
+  screen: string;
+  userids: number[];
+}
+
+export interface ErrorTotals {
+  browser: { kinds: number; occurrences: number };
+  server: { kinds: number; occurrences: number };
+}
+
+export interface Problem {
+  key: string;
+  title: string;
+  detail: string;
+  section: DashboardSection;
+}
+
+export interface Container {
+  service: string;
+  state: string;
+  health: string | null;
+  restartCount: number | null;
+  startedAt: string;
+  oomKilled: boolean;
+  exitCode: number | null;
+}
+
+export interface Disk {
+  path: string;
+  mount: string;
+  totalBytes: number | null;
+  usedBytes: number | null;
+  availableBytes: number | null;
+  usedPercent: number | null;
+}
+
+export interface HealthSummary {
+  generatedAt: string;
+  server: {
+    startedAt: string;
+    uptimeSeconds: number;
+    version: { release: string | null; commit: string | null };
+    rulesVersion: string;
+    runtime: string;
+    memory: {
+      rssBytes: number;
+      heapUsedBytes: number;
+      containerUsedBytes: number | null;
+      containerLimitBytes: number | null;
+    };
+  };
+  host: null | {
+    generatedAt: string;
+    stale: boolean;
+    hostname: string;
+    uptimeSeconds: number | null;
+    load: (number | null)[];
+    memory: {
+      totalBytes: number | null;
+      availableBytes: number | null;
+      swapTotalBytes: number | null;
+      swapFreeBytes: number | null;
+    };
+    containers: Container[] | null;
+  };
+  disks: Disk[];
+  disksFrom: "host" | "container" | null;
+  database: { ok: boolean; pingMs: number | null; sizeBytes: number | null; error?: string };
+  redis: {
+    ok: boolean;
+    pingMs: number | null;
+    usedMemoryBytes: number | null;
+    peakMemoryBytes: number | null;
+    maxMemoryBytes: number | null;
+    error?: string;
+  };
+  backups: null | {
+    count: number;
+    totalBytes: number;
+    partialCount: number | null;
+    newest: null | {
+      name: string;
+      at: string | null;
+      sizeBytes: number | null;
+      ageHours: number | null;
+    };
+  };
+  responseTimes: {
+    requests: number;
+    p50Ms: number | null;
+    p95Ms: number | null;
+    maxMs: number | null;
+    serverErrors: number;
+    windowMinutes: number;
+  };
+}
+
+export interface AdminHealthReport {
+  health: HealthSummary;
+  problems: Problem[];
+  unchecked: string[];
+  openAlerts: Record<
+    string,
+    { title: string; section: string; since: number; lastSentAt: number }
+  >;
+  telegram: boolean;
+}
+
+type Envelope<T> = ApiEnvelope & T;
+
+/** Whether a failed request was the owner-only check saying no (or no such route). */
+export const isNotFound = (err: unknown): boolean =>
+  err instanceof ApiError && (err.status === 404 || err.status === 401 || err.status === 403);
+
+export const fetchMe = (): Promise<Envelope<AdminMe>> => get(`${ADMIN}/me`);
+
+export const fetchOverview = (days: number): Promise<Envelope<StatsOverview>> =>
+  get(`${ADMIN}/stats/overview`, { days });
+
+export const fetchHealth = (): Promise<Envelope<AdminHealthReport>> => get(`${ADMIN}/health`);
+
+export const fetchBugReports = (
+  filter: BugFilter | TicketStatus,
+  before?: number,
+): Promise<Envelope<{ reports: BugReportSummary[]; nextBefore: number | null }>> =>
+  get(`${ADMIN}/bugreports`, { filter, before, limit: 30 });
+
+export const fetchBugReport = (id: number): Promise<Envelope<{ report: BugReportDetail }>> =>
+  get(`${ADMIN}/bugreports/${id}`);
+
+export const updateTicket = (
+  id: number,
+  update: { status?: TicketStatus; notes?: string },
+): Promise<Envelope<{ report: BugReportDetail }>> =>
+  postJson(`${ADMIN}/bugreports/${id}/ticket`, update);
+
+export const fetchErrors = (
+  source: ErrorSource | "all",
+  sort: "last" | "count",
+): Promise<Envelope<{ groups: ErrorGroup[]; totals: ErrorTotals }>> =>
+  get(`${ADMIN}/errors`, { source: source === "all" ? undefined : source, sort, limit: 100 });
+
+/**
+ * A bug report's screenshot or added picture, as a blob URL: an `<img src>`
+ * cannot send the sign-in header. The caller revokes it when done.
+ */
+export const fetchReportImage = async (
+  id: number,
+  which: "screenshot" | "picture",
+): Promise<string> => {
+  const token = getAuthToken();
+  const response = await fetch(apiUrl(`${ADMIN}/bugreports/${id}/${which}`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new Error(`The ${which} could not be loaded (${response.status}).`);
+  return URL.createObjectURL(await response.blob());
+};

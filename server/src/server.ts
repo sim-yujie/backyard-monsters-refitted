@@ -28,6 +28,7 @@ import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSav
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
 import { startAlertSweep } from "./services/alerts/alertSweep.js";
+import { startDailySummary } from "./services/alerts/dailySummary.js";
 import { trackResponseTimes } from "./services/health/responseTimes.js";
 import { turnstileSecretKey } from "./services/auth/turnstile.js";
 import { requiresDiscordVerification } from "./config/AccountConfig.js";
@@ -37,7 +38,7 @@ import { clientIp } from "./middleware/clientIp.js";
 import { trustedProxies } from "./config/ProxyConfig.js";
 import { startupRefusals } from "./config/StartupSafety.js";
 import { redisActivityRecorder, setActivityRecorder } from "./services/stats/activity.js";
-import { startDailyStats } from "./services/stats/dailyStats.js";
+import { getDailySummary, startDailyStats } from "./services/stats/dailyStats.js";
 import { startServerErrorFlush } from "./services/errors/errorStore.js";
 
 // `ctx.ip` comes from the clientIp middleware, which believes CF-Connecting-IP
@@ -155,6 +156,17 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // error jumps, the database or Redis gone. Off unless TELEGRAM_BOT_TOKEN and
   // TELEGRAM_CHAT_ID are set.
   startAlertSweep({ redis, sql: (query) => postgres.em.fork().execute(query) });
+  // And yesterday's numbers every morning, just after 00:00 UTC (08:00 SGT).
+  startDailySummary({
+    redis,
+    summary: (day) =>
+      getDailySummary(day, {
+        em: postgres.em.fork(),
+        redis,
+        logDir: process.env.ENV === Env.LOCAL ? null : LOG_DIR,
+        logBase: LOG_BASE,
+      }),
+  });
 
   // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
   // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without

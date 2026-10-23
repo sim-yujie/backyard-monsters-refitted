@@ -4,8 +4,14 @@ import { RedisClient } from "bun";
 import { MikroORM } from "@mikro-orm/postgresql";
 
 import { alertConfig, dashboardLink } from "../config/AlertConfig.js";
+import { redisAlertStore } from "../services/alerts/alerts.js";
+import { dailySummaryText } from "../services/alerts/dailySummary.js";
 import { recentTelegramChats, sendTelegram } from "../services/alerts/telegram.js";
 import { adminHealthReport } from "../services/health/adminHealth.js";
+import { utcDay } from "../services/stats/activity.js";
+import { getDailySummary } from "../services/stats/dailyStats.js";
+import { Env } from "../enums/Env.js";
+import { LOG_BASE, LOG_DIR } from "../utils/logger.js";
 
 /**
  * The owner's Telegram alerts, by hand (docs/alerts.md). Run from the server
@@ -21,12 +27,15 @@ import { adminHealthReport } from "../services/health/adminHealth.js";
  *   bun run alerts:check
  *       Prints the health summary and what is wrong now, and which problems
  *       are open (already said). Sends nothing.
+ *   bun run alerts:summary [YYYY-MM-DD] [--send]
+ *       Prints the daily summary for that finished UTC day (yesterday if no
+ *       day is given), as Telegram would get it. Sends it only with --send.
  *
  * It never prints the bot token. It opens its own connections and never
  * imports `server.ts`, so it is safe to run while the game is up.
  */
 
-const USAGE = "Usage: bun run alerts:chat-id | alerts:test | alerts:check";
+const USAGE = "Usage: bun run alerts:chat-id | alerts:test | alerts:check | alerts:summary [YYYY-MM-DD] [--send]";
 
 const chatId = async () => {
   const chats = await recentTelegramChats(process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "");
@@ -62,8 +71,32 @@ const check = async () => {
   }
 };
 
+const summary = async () => {
+  const args = process.argv.slice(3);
+  const day = args.find((arg) => /^\d{4}-\d{2}-\d{2}$/.test(arg)) ?? utcDay(Date.now() - 24 * 60 * 60 * 1000);
+  const orm = await MikroORM.init({ ...mikroOrmConfig, debug: false });
+  const redis = new RedisClient(process.env.REDIS_URL);
+  try {
+    await redis.connect();
+    const config = alertConfig();
+    // The same log folder as the server, in case this fills the day's row first.
+    const logDir = process.env.ENV === Env.LOCAL ? null : LOG_DIR;
+    const daily = await getDailySummary(day, { em: orm.em.fork(), redis, logDir, logBase: LOG_BASE });
+    const text = dailySummaryText(daily, [...(await redisAlertStore(redis).all()).values()], config);
+    console.log(text);
+    if (args.includes("--send")) {
+      const outcome = await sendTelegram(text, { config });
+      if (!outcome.sent) throw new Error(outcome.reason);
+      console.log("\nSent. Check Telegram.");
+    }
+  } finally {
+    redis.close();
+    await orm.close();
+  }
+};
+
 (async () => {
-  const commands: Record<string, () => Promise<void>> = { "chat-id": chatId, test, check };
+  const commands: Record<string, () => Promise<void>> = { "chat-id": chatId, test, check, summary };
   const command = commands[process.argv[2] ?? ""];
   if (!command) {
     console.error(USAGE);

@@ -1,0 +1,60 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SESSION_STORAGE_KEY } from "@/config";
+import { boot, readRoute } from "./main";
+
+/**
+ * Who sees the dashboard: only the owner. Without a session, or when the
+ * server's owner check answers 404, the page says "Not found" and nothing else.
+ */
+
+const notFoundResponse = () =>
+  new Response("Not Found", { status: 404, headers: { "Content-Type": "text/plain" } });
+
+describe("the address", () => {
+  it("reads a section and a bug report", () => {
+    expect(readRoute("", "#errors")).toEqual({ bug: null, section: "errors" });
+    expect(readRoute("?bug=41", "#bugs")).toEqual({ bug: 41, section: "bugs" });
+    expect(readRoute("?bug=41", "")).toEqual({ bug: 41, section: "bugs" });
+    expect(readRoute("?bug=x", "#nothing")).toEqual({ bug: null, section: null });
+    expect(readRoute("?bug=-3", "#health")).toEqual({ bug: null, section: "health" });
+  });
+});
+
+describe("who sees the dashboard", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows only Not found without a session, and asks the server nothing", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await boot();
+    expect(document.title).toBe("Not found");
+    expect(document.body.textContent).toBe(
+      "Not foundThere is nothing at this address.Go to the game",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("shows only Not found when the server says the player is not the owner", async () => {
+    localStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({ token: "player-token", userId: 2 }),
+    );
+    const fetch = vi.fn(async () => notFoundResponse());
+    vi.stubGlobal("fetch", fetch);
+    await boot();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(/\/admin\/me$/);
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer player-token");
+    expect(document.title).toBe("Not found");
+    expect(document.body.textContent).not.toMatch(/dashboard|admin|health|bug/i);
+  });
+});

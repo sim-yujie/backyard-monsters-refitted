@@ -15,3 +15,5 @@ server/production.env.example text eol=lf
 # The live version: git archive (docs/deploy.md) writes the release tag into it.
 server/src/config/release-stamp.txt export-subst
 .github/scripts/** text eol=lf
+# The workflows too: deployFiles.test.ts reads uptime-check.yml and fails on CRLF.
+.github/workflows/** text eol=lf

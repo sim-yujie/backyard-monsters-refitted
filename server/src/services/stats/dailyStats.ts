@@ -476,17 +476,32 @@ export interface DailySummary {
   readonly players: PlayerTotals;
   /** Kinds of error first seen that day, most frequent first (at most 5). */
   readonly newErrors: readonly { id: number; source: string; count: number }[];
-  /** Bug reports sent that day (at most 10), oldest first. */
-  readonly bugReports: readonly { id: number }[];
+  /**
+   * Bug reports sent that day (at most 10), oldest first, each with the first
+   * {@link SUMMARY_TEXT_LENGTH} characters of what the player wrote, on one line.
+   */
+  readonly bugReports: readonly { id: number; text: string }[];
+  /** Bug reports still open (new or working on it), of any day. */
+  readonly openBugReports: number;
 }
+
+/** How much of a bug report's text the daily summary carries (owner, 2026-10-23). */
+export const SUMMARY_TEXT_LENGTH = 80;
+
+/** The start of a player's text as one line: no line breaks, at most `max` characters. */
+const oneLine = (text: string, max: number): string => {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+};
 
 /**
  * The numbers for the daily summary of finished UTC day `day` (`YYYY-MM-DD`):
  * the day's row (counted first if the hourly count has not reached it yet),
  * players seen recently, new kinds of error and the day's bug reports.
  *
- * Numbers only, never words: the summary goes to Telegram, an outside
- * service, so it carries no player-written text, error text, names or emails
+ * The summary goes to Telegram, an outside service. The only words in it are
+ * the start of each bug report's text, which the owner chose to have there
+ * (2026-10-23; listed in the Privacy Policy). No error text, names or emails
  * (docs/alerts.md, "Privacy"). The dashboard shows the rest.
  *
  * With no `deps`, uses the running server's database and Redis.
@@ -515,16 +530,20 @@ export const getDailySummary = async (day: string, deps?: StatsDeps, now: number
       ORDER BY count DESC, id LIMIT 5`,
     [from, to]
   );
-  const reports = await use.em.execute<{ id: number | string }[]>(
-    `SELECT id FROM bym.bug_report WHERE created_at >= ? AND created_at < ? ORDER BY id LIMIT 10`,
+  const reports = await use.em.execute<{ id: number | string; message: string }[]>(
+    `SELECT id, message FROM bym.bug_report WHERE created_at >= ? AND created_at < ? ORDER BY id LIMIT 10`,
     [from, to]
+  );
+  const [open] = await use.em.execute<{ n: number | string }[]>(
+    `SELECT count(*) AS n FROM bym.bug_report WHERE status IN ('new', 'working')`
   );
   return {
     day,
     stat: stat!,
     players: await playerTotals(use, now),
     newErrors: newErrors.map((row) => ({ id: Number(row.id), source: row.source, count: Number(row.count) })),
-    bugReports: reports.map((row) => ({ id: Number(row.id) })),
+    bugReports: reports.map((row) => ({ id: Number(row.id), text: oneLine(row.message ?? "", SUMMARY_TEXT_LENGTH) })),
+    openBugReports: Number(open?.n ?? 0),
   };
 };
 

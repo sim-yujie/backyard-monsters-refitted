@@ -32,7 +32,8 @@ const P3 = 997003;
 const TEST_ACCOUNT = 997004;
 const BOT = 997005;
 const OWNER = 997006;
-const ALL = [P1, P2, P3, TEST_ACCOUNT, BOT, OWNER];
+const SEEDED = 997007;
+const ALL = [P1, P2, P3, TEST_ACCOUNT, BOT, OWNER, SEEDED];
 
 const at = (iso: string) => new Date(iso);
 const NOW = Date.parse("2026-01-12T10:00:00Z");
@@ -205,10 +206,16 @@ describe.skipIf(!dbName)("the owner's dashboard on a real database", () => {
       await player(P1, "dashtest_one", "2026-01-05T10:00:00Z");
       await player(P2, "dashtest_two", "2026-01-08T23:30:00Z");
       await player(P3, "dashtest_three", "2026-01-09T00:30:00Z");
-      // Neither of these is a player: a test account by its email, and a bot.
+      // None of these is a player: a test account by its email, a bot, and a
+      // seeded Map Room 2 dev player (a person to the game, but nobody plays it).
       await player(TEST_ACCOUNT, "dashtest_four", "2026-01-09T01:00:00Z", "four@test.invalid");
       await player(BOT, "dashtest_bot", "2026-01-09T02:00:00Z");
       await sql(`INSERT INTO bym.bot (userid, seed, persona, level, level_since, created_at) VALUES (?, 1, '{}', 1, now(), now())`, [BOT]);
+      await player(SEEDED, "dashtest_seeded", "2026-01-09T03:00:00Z");
+      await sql(
+        `INSERT INTO bym.bot (userid, seed, persona, level, level_since, state, created_at) VALUES (?, 1, '{}', 1, now(), 'seeded', now())`,
+        [SEEDED]
+      );
       await sql(`INSERT INTO bym.event_progress (userid, event_id, counter, created_at) VALUES (?, 'dash-event', 1, ?)`, [P1, at("2026-01-09T05:00:00Z")]);
       await sql(`INSERT INTO bym.event_progress (userid, event_id, counter, created_at) VALUES (?, 'dash-event', 1, ?)`, [TEST_ACCOUNT, at("2026-01-09T05:00:00Z")]);
       await report("dashtest day report", "2026-01-09T12:00:00Z");
@@ -277,8 +284,9 @@ describe.skipIf(!dbName)("the owner's dashboard on a real database", () => {
 
       const summary = await getDailySummary("2026-01-09", deps, NOW);
       expect(summary.stat).toMatchObject({ day: "2026-01-09", newPlayers: 1, bugReports: 1 });
-      expect(summary.bugReports).toHaveLength(1);
-      expect(Object.keys(summary.bugReports[0]!)).toEqual(["id"]);
+      expect(summary.bugReports.map((r) => r.text)).toEqual(["dashtest day report"]);
+      expect(Object.keys(summary.bugReports[0]!).sort()).toEqual(["id", "text"]);
+      expect(summary.openBugReports).toBeGreaterThanOrEqual(1);
       expect(summary.players.total).toBeGreaterThanOrEqual(3);
       await expect(getDailySummary("2026-01-12", deps, NOW)).rejects.toThrow(/not over/);
 

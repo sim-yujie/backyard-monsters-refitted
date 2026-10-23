@@ -15,6 +15,16 @@ dashboard (a hidden page on the game page, `/admin`) shows the server's health.
 | The machine's health file stopped updating | the game server | `/admin#health` |
 | Sudden jump in server errors | the game server, from the error store | `/admin#errors` |
 | Each new bug report (at most 10 an hour) | the game server, when it saves one | `/admin#bugs` |
+| Daily summary of yesterday (not a problem; once a day) | the game server, just after 00:00 UTC (08:00 SGT) | `/admin#bugs`, or `#health` on a day without reports |
+
+The daily summary (`services/alerts/dailySummary.ts`) has yesterday's new and
+active players, attacks and tribe raids, event players, browser and server
+errors, the problems still open, and the day's bug reports (at most 10), each
+with the first 80 characters of what the player wrote. It goes once a day
+between 00:05 and 12:00 UTC: a server that was down at midnight sends it when
+it is back, and two servers sharing one Redis send it once. A failed send is
+tried again 15 minutes later. `bun run alerts:summary [YYYY-MM-DD]` prints it
+without sending; add `--send` to send it.
 
 A problem is said once. If it is still there 12 hours later it is said again,
 and when it clears a "fixed" message says how long it lasted. A message that
@@ -26,19 +36,23 @@ changes when they are off.
 
 ## Privacy
 
-Telegram is an outside service, so its messages carry no personal details:
-no player-written text, no usernames or account numbers, no emails, no
-device or browser details, and no error text. A message says what kind of
-problem it is, numbers (a disk's percent, a backup's age, error counts, a bug
-report's number and how many came this hour) and a link to the dashboard,
-which shows the rest after the owner signs in. The bug report alert is handed
-the report's number only, never the report (`services/alerts/bugReportAlert.ts`),
-and the daily summary (`getDailySummary`) holds numbers only. Database and
+Telegram is an outside service. The alerts carry no personal details: no
+player-written text, no usernames or account numbers, no emails, no device or
+browser details, and no error text. An alert says what kind of problem it is,
+numbers (a disk's percent, a backup's age, error counts, a bug report's number
+and how many came this hour) and a link to the dashboard, which shows the rest
+after the owner signs in. The bug report alert is handed the report's number
+only, never the report (`services/alerts/bugReportAlert.ts`). Database and
 Redis alerts include the connection error the server got (for example
 "connection refused"); that is about the server, not a player.
 
-Because no personal data goes to Telegram, the Privacy Policy does not need to
-list it. Keep it that way: a new alert or summary must follow the same rule.
+The one exception is the daily summary: it carries the first 80 characters of
+each of the day's bug reports (the owner's choice, 2026-10-23), with no name,
+account number, email or device. Because that is player-written text, the
+Privacy Policy lists Telegram among the outside services (both copies:
+`web/privacy.html` and `launch/legal/privacy-policy.md`, which the site's
+`/privacy` page is built from). Anything else new must follow the no-text rule;
+more player text in Telegram needs the owner's say and a policy update.
 
 ## How it works
 

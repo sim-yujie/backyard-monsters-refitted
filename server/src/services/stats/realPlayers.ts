@@ -3,8 +3,10 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 /**
  * Who counts as a player in the dashboard's numbers: every account except
  *
- * - bots: a `bym.bot` row that is not a seeded dev player's (`isBot`,
- *   `services/bots/isBot.ts`), and
+ * - bots: any `bym.bot` row, the seeded Map Room 2 dev players (state
+ *   'seeded') included. The game treats a seeded player as a person
+ *   (`isBot`, `services/bots/isBot.ts`), but nobody plays them, so they stay
+ *   out of these numbers; and
  * - test accounts: a username starting `zz_` (the tutorial and test helpers'
  *   `zz_tut_*`, `zz_br_*`...), or an email at a reserved test domain: one
  *   ending `.invalid` or `.example`, or at example.com, example.net or
@@ -18,7 +20,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
  * named `alias`. It takes no parameters.
  */
 export const realPlayerSql = (alias = "u"): string =>
-  `NOT EXISTS (SELECT 1 FROM bym.bot zb WHERE zb.userid = ${alias}.userid AND zb.state IS DISTINCT FROM 'seeded')
+  `NOT EXISTS (SELECT 1 FROM bym.bot zb WHERE zb.userid = ${alias}.userid)
    AND ${alias}.username NOT ILIKE 'zz\\_%'
    AND lower(${alias}.email) !~ '(\\.invalid|\\.example|@example\\.(com|net|org))$'`;
 

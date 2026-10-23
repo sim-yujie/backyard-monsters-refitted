@@ -24,7 +24,10 @@ the Health section below is separate and was written with the Telegram alerts
 
 ## The web page
 
-Lives at `/admin` on the game's web address. It should call `GET .../admin/me`
+`web/admin.html` (`web/src/admin/`), its own Vite page, so on Vercel
+(`cleanUrls`) it lives at `/admin` on the game's web address. It uses the game's
+sign-in from the same browser (the session in `localStorage`); with none, or
+for anyone but the owner, it shows only "Not found". It should call `GET .../admin/me`
 first and show nothing (or the game's normal 404) unless that answers 200. It
 should honour `?bug=<id>` (open that bug report) and `#health`, `#backups`,
 `#errors`, `#bugs` (scroll to that part), which the alerts link to. Pictures
@@ -152,8 +155,9 @@ interface ErrorGroup {
 
 ## Where the numbers come from
 
-Every player count leaves out bots and test accounts (usernames starting
-`zz_`, emails at `.invalid`, `.example`, `example.com/net/org`):
+Every player count leaves out bots (every `bym.bot` row, the seeded Map
+Room 2 dev players included) and test accounts (usernames starting `zz_`,
+emails at `.invalid`, `.example`, `example.com/net/org`):
 `server/src/services/stats/realPlayers.ts`.
 
 - **Daily table** `bym.daily_stat`: one row per finished UTC day, written once
@@ -194,9 +198,11 @@ Every player count leaves out bots and test accounts (usernames starting
 
 `getDailySummary(day)` in `server/src/services/stats/dailyStats.ts`, for a
 finished UTC day (throws for today or later). Without a second argument it
-uses the running server's database and Redis. It holds numbers only, no
-player-written text, error text, names or emails, because the summary goes to
-Telegram (docs/alerts.md, "Privacy").
+uses the running server's database and Redis. `services/alerts/dailySummary.ts`
+sends it to Telegram every morning just after 00:00 UTC (08:00 SGT). Besides
+numbers it holds only the first 80 characters of each of the day's bug
+reports (the owner's choice; Telegram is in the Privacy Policy); no error
+text, names or emails (docs/alerts.md, "Privacy").
 
 ```ts
 interface DailySummary {
@@ -204,7 +210,8 @@ interface DailySummary {
   stat: DailyStat;               // counted now if the hourly fill has not reached it
   players: { total; activeToday; active7; active30 };  // as of now
   newErrors: { id: number; source: string; count: number }[];  // kinds first seen that day, top 5
-  bugReports: { id: number }[];                        // that day's reports, first 10
+  bugReports: { id: number; text: string }[];          // that day's reports, first 10; text on one line, 80 characters at most
+  openBugReports: number;                              // new or working on it, any day
 }
 ```
 
