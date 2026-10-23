@@ -53,7 +53,7 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
     Object.values((save.monsters?.housed ?? {}) as Record<string, number>).reduce((sum, count) => sum + count, 0);
   const pool = (save: Record<string, any>) =>
     ["r1", "r2", "r3", "r4"].reduce((sum, key) => sum + Number(save.resources?.[key] ?? 0), 0);
-  const config = (): BotConfig => ({ fill: false, brain: true, revenge: true, total: 3, daysPerLevel: 3 });
+  const config = (): BotConfig => ({ fill: false, brain: true, revenge: true, total: 3, pace: 3, quietRate: 0, growingFlow: 1, newPerDay: 8, levelSlack: 2 });
 
   let modules: {
     runRevengeAttack: typeof import("./revengeRun.js").runRevengeAttack;
@@ -134,7 +134,7 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
     await sql(`DELETE FROM bym.job_run WHERE job = ?`, [REBALANCE_JOB]);
     // Two bots of level 25 and 26, and a level 20 player: a bot-made yard
     // grown once by the sweep (a real catch-up), then taken out of the bot table.
-    const made = await createBots(orm.em.fork(), [25, 26, 20], { rng: mulberry32(2244), now: now(), daysPerLevel: 3 });
+    const made = await createBots(orm.em.fork(), [25, 26, 20], { rng: mulberry32(2244), now: now(), pace: 3 });
     [bot, secondBot, player] = made.map((one) => one.userid) as [number, number, number];
     await sql(`INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, now())`, [
       REBALANCE_JOB,

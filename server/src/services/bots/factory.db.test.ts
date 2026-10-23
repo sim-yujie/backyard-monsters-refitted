@@ -47,7 +47,7 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
   };
 
   const make = (levels: number[], seed = 239) =>
-    createBots(orm.em.fork(), levels, { rng: mulberry32(seed), now: NOW, daysPerLevel: T });
+    createBots(orm.em.fork(), levels, { rng: mulberry32(seed), now: NOW, pace: T });
 
   beforeAll(async () => {
     if (dbName === "bym") throw new Error("BOTS_TEST_DB must be a throwaway database, not bym");
@@ -91,8 +91,9 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
       expect(Number(save.homebaseid)).toBe(Number(bot.baseid));
       expect(save.onboarding).toBeNull();
       expect(calculateBaseLevel(save.points, save.basevalue)).toBe(bot.level);
-      // Not the sandbox yard (maxed) and not the bare starter base.
-      expect(Object.keys(save.buildingdata).length).toBeGreaterThan(4);
+      // Not the sandbox yard (maxed). Above level 1 not the bare starter base either; a level 1 yard
+      // can be just the starter set, as a new player's is (the per-Town-Hall build plan).
+      expect(Object.keys(save.buildingdata).length).toBeGreaterThanOrEqual(bot.level === 1 ? 4 : 5);
 
       expect(row.level).toBe(bot.level);
       expect(row.state).toBe("active");
@@ -124,7 +125,7 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
     const made = await createBots(orm.em.fork(), levels, {
       rng: mulberry32(5),
       now: NOW,
-      daysPerLevel: T,
+      pace: T,
       onBatch: (batch) => batches.push(batch.length),
     });
     expect(made).toHaveLength(BATCH_SIZE + 5);
@@ -168,5 +169,20 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
     expect(await sql(`SELECT 1 FROM bym.message WHERE id = 'wp6-test-message'`)).toEqual([]);
     expect(await sql(`SELECT 1 FROM bym."user" WHERE email LIKE 'bot+%'`)).toEqual([]);
     expect(await sql(`SELECT 1 FROM bym.save WHERE userid IN (?, ?)`, [kept!.userid, active!.userid])).toEqual([]);
+  });
+
+  test("a quiet share makes bots quiet from now; without one every bot grows", async () => {
+    const quiet = await createBots(orm.em.fork(), [3, 30], {
+      rng: mulberry32(2390),
+      now: NOW,
+      pace: T,
+      quietShare: (level) => (level < 10 ? 1 : 0),
+    });
+    expect(quiet.map((bot) => bot.quiet)).toEqual([true, false]);
+    const [low] = await sql<Record<string, any>>(`SELECT quiet_since FROM bym.bot WHERE userid = ?`, [quiet[0]!.userid]);
+    const [high] = await sql<Record<string, any>>(`SELECT quiet_since FROM bym.bot WHERE userid = ?`, [quiet[1]!.userid]);
+    expect(new Date(low.quiet_since).getTime()).toBe(NOW * 1000);
+    expect(high.quiet_since).toBeNull();
+    expect((await make([5])).map((bot) => bot.quiet)).toEqual([false]);
   });
 });

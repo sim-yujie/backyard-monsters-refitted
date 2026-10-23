@@ -36,7 +36,7 @@ describe.skipIf(!dbName)("a bot declines a truce through the sweep (issue #245)"
 
   const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => orm.em.fork().execute<R[]>(query, params);
 
-  const config = (): BotConfig => ({ fill: false, brain: true, revenge: false, total: 1, daysPerLevel: T });
+  const config = (): BotConfig => ({ fill: false, brain: true, revenge: false, total: 1, pace: T, quietRate: 0, growingFlow: 1, newPerDay: 8, levelSlack: 2 });
 
   const pass = (at: number) => runBotSweep({ em: orm.em, now: () => at, config, rng: mulberry32(at).float });
 
@@ -60,7 +60,7 @@ describe.skipIf(!dbName)("a bot declines a truce through the sweep (issue #245)"
 
   /** A player who asks a bot for a truce from the map, as `requestTruce` writes it. */
   const askBot = async () => {
-    const [bot] = await createBots(orm.em.fork(), [5], { rng: mulberry32(245), now: NOW, daysPerLevel: T });
+    const [bot] = await createBots(orm.em.fork(), [5], { rng: mulberry32(245), now: NOW, pace: T });
     const em = orm.em.fork();
     const player = em.create(User, { username: PLAYER, email: `${PLAYER}@test.com`, password: "x" });
     await em.flush();

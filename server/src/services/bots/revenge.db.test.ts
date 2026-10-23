@@ -56,7 +56,7 @@ describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () =
 
   const config =
     (revenge = true): (() => BotConfig) =>
-    () => ({ fill: false, brain: true, revenge, total: 3, daysPerLevel: 3 });
+    () => ({ fill: false, brain: true, revenge, total: 3, pace: 3, quietRate: 0, growingFlow: 1, newPerDay: 8, levelSlack: 2 });
 
   const pass = (options: { revenge?: boolean; runner?: RevengeRunner | null; when?: number; draw?: number } = {}) =>
     runBotSweep({
@@ -98,7 +98,7 @@ describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () =
     if (player) await dropPlayer(player);
     await sql(`DELETE FROM bym.job_run WHERE job = ?`, [REBALANCE_JOB]);
     // Two bots, and a player: a bot-made user and yard taken out of the bot table.
-    const made = await createBots(orm.em.fork(), [10, 12, 11], { rng: mulberry32(244), now: NOW, daysPerLevel: 3 });
+    const made = await createBots(orm.em.fork(), [10, 12, 11], { rng: mulberry32(244), now: NOW, pace: 3 });
     [bot, otherBot, player] = made.map((one) => one.userid) as [number, number, number];
     await sql(`DELETE FROM bym.bot WHERE userid = ?`, [player]);
     // Today's rebalance is done, and both bots have their grows booked well ahead.

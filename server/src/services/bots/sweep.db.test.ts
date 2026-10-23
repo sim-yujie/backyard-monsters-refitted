@@ -6,7 +6,6 @@ import type { BotConfig } from "../../config/BotConfig.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
 import { readMushrooms } from "../yard/mushrooms.js";
-import { SLOW_PACE } from "./brain.js";
 import { createBots, deleteBots } from "./factory.js";
 import { LOOT_BAND } from "./yardGenerator.js";
 import { LEGACY_BOT_SHINY, shinyBand } from "./shiny.js";
@@ -16,8 +15,8 @@ import { bookFirstGrows, MAX_ATTEMPTS, MAX_GROW_DROPS, REBALANCE_JOB, rebalanceP
 
 /**
  * The bot sweep against a real Postgres (issue #240): the first grows, the
- * `SKIP LOCKED` claim, growth on a made-up clock, retirement and its
- * replacement, the repair, the backoff and the daily rebalance.
+ * `SKIP LOCKED` claim, growth on a made-up clock, quiet bots, retirement, the
+ * repair, the backoff and the daily rebalance.
  *
  * Opt-in, like `factory.db.test.ts`: runs only when BOTS_TEST_DB names a
  * throwaway database with the `bym` schema, and refuses the shared `bym`
@@ -41,11 +40,11 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
   };
 
   const make = (levels: number[], seed = 240) =>
-    createBots(orm.em.fork(), levels, { rng: mulberry32(seed), now: NOW, daysPerLevel: T });
+    createBots(orm.em.fork(), levels, { rng: mulberry32(seed), now: NOW, pace: T });
 
   const config =
     (total: number, brain = true): (() => BotConfig) =>
-    () => ({ fill: false, brain, revenge: false, total, daysPerLevel: T });
+    () => ({ fill: false, brain, revenge: false, total, pace: T, quietRate: 0, growingFlow: 1, newPerDay: 8, levelSlack: 2 });
 
   /** A pass at `at`, with the online marks it made. */
   const pass = async (at: number, total: number, extra: Partial<SweepDeps> = {}) => {
@@ -155,9 +154,9 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect((await saveRow(bot!.userid)).savetime).toBe(before.savetime);
   }, 30_000);
 
-  test("past level 40 a bot retires to Map Room 2 and a fresh level 1 bot takes its place", async () => {
+  test("past level 40 a bot retires to Map Room 2; no bot takes its place until a rebalance finds the level short", async () => {
     const [old] = await make([40]);
-    // The day's rebalance is claimed already: a lone bot on level 40 against a total of one would be slowed.
+    // The day's rebalance is claimed already, so only the grow acts.
     await sql(`INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, ?)`, [REBALANCE_JOB, rebalancePeriod(NOW), new Date(NOW * 1000)]);
     await pass(NOW, 1);
     await sql(`UPDATE bym.bot SET level_since = ? WHERE userid = ?`, [new Date((NOW - 3.2 * T * DAY / 3) * 1000), old!.userid]);
@@ -165,7 +164,7 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
 
     const { report } = await pass(NOW, 1);
     expect(report.retired).toEqual([old!.userid]);
-    expect(report.replaced).toHaveLength(1);
+    expect(report.replaced).toEqual([]);
 
     const row = await botRow(old!.userid);
     const save = await saveRow(old!.userid);
@@ -174,10 +173,6 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect(save.mapversion).toBe(2);
     expect(save.worldid).toBeNull();
     expect(await jobs(old!.userid)).toEqual([]);
-
-    const fresh = await botRow(report.replaced[0]!);
-    expect(fresh).toMatchObject({ level: 1, state: "active" });
-    expect((await jobs(fresh.userid)).map((job) => job.kind)).toEqual(["grow"]);
   }, 30_000);
 
   test("Shiny: made inside the level's band, a bot still on the new-save 1,500 redrawn on its next grow", async () => {
@@ -330,7 +325,7 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     await sql(`UPDATE bym.save SET type = 'main' WHERE userid = ? AND type = 'gone'`, [bot!.userid]);
   }, 30_000);
 
-  test(`a bot whose grow is dropped ${MAX_GROW_DROPS} times in a row is retired and replaced at level 1`, async () => {
+  test(`a bot whose grow is dropped ${MAX_GROW_DROPS} times in a row is retired`, async () => {
     const [bot] = await make([6]);
     await pass(NOW, 1);
     await sql(`UPDATE bym.save SET type = 'gone' WHERE userid = ? AND type = 'main'`, [bot!.userid]);
@@ -357,10 +352,8 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect(row.state).toBe("retired");
     expect(row.grow_drops).toBe(MAX_GROW_DROPS);
     expect(await jobs(bot!.userid)).toEqual([]);
-    // The usual replacement: one fresh level 1 bot, with its first grow booked.
-    expect(replaced).toHaveLength(1);
-    expect((await botRow(replaced[0]!)).level).toBe(1);
-    expect((await jobs(replaced[0]!)).map((job) => job.kind)).toEqual(["grow"]);
+    // No bot in its place until a rebalance finds its level short.
+    expect(replaced).toEqual([]);
     // Retired bots are never booked again.
     expect((await pass(at, 1)).report.booked).toBe(0);
     await sql(`UPDATE bym.save SET type = 'main' WHERE userid = ? AND type = 'gone'`, [bot!.userid]);
@@ -385,28 +378,61 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     for (const job of await jobs()) expect(new Date(job.due_at).getTime() / 1000).toBeGreaterThan(NOW + HOUR);
   }, 60_000);
 
-  test("the rebalance runs once a day: paces nudged, the total topped up at level 1", async () => {
-    // A full table of five, one a level on levels 1-5: the level 9 bot is far ahead of its spot, so it slows.
-    const made = await make([1, 2, 3, 4, 9]);
+  test("the rebalance runs once a day: crowded levels retire quiet bots first, short levels get new bots", async () => {
+    // Two a level (a total of 80), no slack, three new bots a day.
+    const rules = config(80);
+    const tight = () => ({ ...rules(), levelSlack: 0, newPerDay: 3 });
+    const crowded = await make([5, 5, 5, 5, 10, 10]);
     await bookFirstGrows(orm.em.fork(), NOW + 2 * DAY);
+    // Level 5 holds four: two quiet (the longer quiet goes first) and two growing.
+    const [longQuiet, quiet] = [crowded[2]!.userid, crowded[1]!.userid];
+    await sql(`UPDATE bym.bot SET quiet_since = ? WHERE userid = ?`, [new Date((NOW - 3 * DAY) * 1000), longQuiet]);
+    await sql(`UPDATE bym.bot SET quiet_since = ? WHERE userid = ?`, [new Date((NOW - DAY) * 1000), quiet]);
 
-    const first = await pass(NOW, 5);
+    const first = await pass(NOW, 80, { config: tight });
     expect(first.report.rebalanced).toBe(true);
-    expect(first.report.replaced).toEqual([]);
-    const paces = await sql<{ bot_userid: number; speed: number | null }>(
-      `SELECT bot_userid, (payload->>'speed')::float AS speed FROM bym.bot_job WHERE kind = 'grow' AND payload->>'speed' IS NOT NULL`
-    );
-    expect(paces).toEqual([{ bot_userid: made[4]!.userid, speed: SLOW_PACE }]);
-
-    expect((await pass(NOW + HOUR, 5)).report.rebalanced).toBe(false);
-
-    // The next day the total is 8: level 1 has room for its share (1) and the slack (2), less the one it has.
-    const next = await pass(NOW + DAY, 8);
-    expect(next.report.rebalanced).toBe(true);
-    expect(next.report.replaced).toHaveLength(2);
-    // The new level 1 bots start at the bottom of the level, as new players.
-    for (const userid of next.report.replaced) {
-      expect(new Date((await botRow(userid)).level_since).getTime() / 1000).toBe(NOW + DAY);
+    expect(first.report.retired).toEqual([longQuiet, quiet]);
+    for (const userid of [longQuiet, quiet]) {
+      expect((await botRow(userid)).state).toBe("retired");
+      expect((await saveRow(userid)).mapversion).toBe(2);
     }
+    // Every other level is two short: the cap of three goes to the lowest of them, one each.
+    expect(first.report.replaced).toHaveLength(3);
+    const levels = await Promise.all(first.report.replaced.map(async (userid) => (await botRow(userid)).level));
+    expect(levels.sort()).toEqual([1, 2, 3]);
+    for (const userid of first.report.replaced) {
+      expect(await botRow(userid)).toMatchObject({ state: "active", quiet_since: null });
+      expect((await jobs(userid)).map((job) => job.kind)).toEqual(["grow"]);
+    }
+
+    expect((await pass(NOW + HOUR, 80, { config: tight })).report.rebalanced).toBe(false);
   }, 60_000);
+
+  test("a quiet bot stands still while still tended; a bot that climbs may go quiet", async () => {
+    const [still, climber] = await make([10, 10], 2401);
+    const quietAt = new Date(NOW * 1000);
+    await sql(`UPDATE bym.bot SET quiet_since = ? WHERE userid = ?`, [quietAt, still!.userid]);
+    const before = await botRow(still!.userid);
+    // Every level gained goes quiet.
+    const rules = config(2);
+    const alwaysQuiet = () => ({ ...rules(), quietRate: 1 });
+
+    let grows = 0;
+    for (let at = NOW; at <= NOW + 4 * DAY; at += 3 * HOUR) {
+      await dueNow(at);
+      grows += (await pass(at, 2, { config: alwaysQuiet })).report.ran.grow ?? 0;
+    }
+    expect(grows).toBeGreaterThan(2 * 20);
+
+    const after = await botRow(still!.userid);
+    expect(after.level).toBe(10);
+    expect(new Date(after.level_since).getTime()).toBe(new Date(before.level_since).getTime());
+    expect(new Date(after.quiet_since).getTime()).toBe(quietAt.getTime());
+
+    // T days a level: the climber reached level 11 within four days, went quiet there and stopped.
+    const climbed = await botRow(climber!.userid);
+    expect(climbed.level).toBeGreaterThanOrEqual(11);
+    expect(climbed.level).toBeLessThanOrEqual(12);
+    expect(climbed.quiet_since).not.toBeNull();
+  }, 120_000);
 });

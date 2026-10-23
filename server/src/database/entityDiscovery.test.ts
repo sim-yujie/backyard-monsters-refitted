@@ -50,6 +50,7 @@ describe("entity discovery", () => {
         persona: { type: "text", nullable: false },
         level: { type: "int", nullable: false },
         level_since: { type: "timestamptz", nullable: false },
+        quiet_since: { type: "timestamptz", nullable: true },
         state: { type: "text", nullable: false },
         created_at: { type: "timestamptz", nullable: false },
         retired_at: { type: "timestamptz", nullable: true },

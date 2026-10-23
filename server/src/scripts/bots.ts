@@ -14,9 +14,11 @@ import {
   botStatus,
   createBots,
   deleteBots,
+  evenSpread,
   fillPlan,
   retireAllBots,
 } from "../services/bots/factory.js";
+import { bornQuietShare } from "../services/bots/population.js";
 
 /**
  * Makes and removes Map Room 1 bots (issue #239, `docs/design/bot-neighbours.md`
@@ -27,12 +29,15 @@ import {
  *       Tops the active bots up to N, spread evenly over levels 1-40, lowest
  *       levels first. Idempotent: it counts the bots there are and makes only
  *       the difference. --per-day caps the bots made in any 24 hours (run it
- *       daily to spread a live rollout over a few days).
+ *       daily to spread a live rollout over a few days). Each level starts
+ *       with the mix of quiet and growing bots it holds once settled
+ *       (`bornQuietShare`, `services/bots/population.ts`).
  *   bun src/scripts/bots.ts create --fill [--per-day N] [--dry-run]
  *       The same, up to BOTS_TOTAL (default 500).
  *   bun src/scripts/bots.ts create --levels 5,15,25 [--count N] [--dry-run]
  *       Makes N more bots on the levels given, taken in turn (N defaults to one
- *       per level listed), whatever the target. For a few test bots.
+ *       per level listed), whatever the target. For a few test bots; they
+ *       all grow.
  *   bun src/scripts/bots.ts create --count N [--target N | --fill] [--dry-run]
  *       Without --levels, --count caps a fill: the next N bots toward the
  *       target (BOTS_TOTAL when none is given), lowest levels first.
@@ -189,13 +194,16 @@ const runCreate = async (em: EntityManager, args: BotsArgs) => {
   }
 
   const seed = args.seed ?? randomBytes(4).readUInt32LE(0);
+  const share = evenSpread(config.total);
   const made = await createBots(em, plan, {
     rng: mulberry32(seed),
     now: Math.floor(now.getTime() / 1000),
-    daysPerLevel: config.daysPerLevel,
+    pace: config.pace,
+    quietShare: args.levels ? undefined : (level) => bornQuietShare(level, config.pace, share[level - 1] ?? 0, config.growingFlow),
     onBatch: (batch) => {
       for (const bot of batch) {
-        console.log(`  made ${bot.username} (userid ${bot.userid}, baseid ${bot.baseid}) level ${bot.level} ${bot.persona}`);
+        const quiet = bot.quiet ? " quiet" : "";
+        console.log(`  made ${bot.username} (userid ${bot.userid}, baseid ${bot.baseid}) level ${bot.level} ${bot.persona}${quiet}`);
       }
     },
   });

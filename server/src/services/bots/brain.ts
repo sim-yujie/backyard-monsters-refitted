@@ -12,27 +12,20 @@ import { readMushrooms } from "../yard/mushrooms.js";
 import { currentExpansion, overlaps, rectOf } from "../yardplanner/layoutGeometry.js";
 import { levelOf } from "../yardplanner/costs.js";
 import { workerCount } from "../yardplanner/workers.js";
-import { BOT_MAX_LEVEL } from "./factory.js";
 import { TRAP_TYPES } from "./layout.js";
 import { bankPoints, botPointsForBuild, botPointsForUpgrade, targetInBand } from "./progression.js";
 import { BOT_WORKERS, BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from "./yardGenerator.js";
 
 /**
  * The bot brain's decisions (issue #240, `docs/design/bot-neighbours.md` §4.4,
- * §4.5, §4.6 and §6): what a `grow` or `repair` job does to a bot's yard, and
- * the daily rebalance's plan. Everything here is pure; the sweep (`sweep.ts`)
+ * §4.5, §4.6 and §6): what a `grow` or `repair` job does to a bot's yard.
+ * Everything here is pure; the sweep (`sweep.ts`)
  * locks the rows, runs these on the caught-up save and writes.
  *
- * ## The pace (§4.4, decision 17)
+ * ## The target (§4.4)
  *
- * A bot climbs one level every `BOTS_DAYS_PER_LEVEL` days. Its place on the
- * climb is `level + (now - level_since) × speed / T` levels ({@link pacePosition}),
- * and its target is that far into the level's band ({@link targetAt}): the
- * bottom of the band at `level_since`, the top `T` days later. `speed` is 1
- * unless the rebalance nudged it ({@link planRebalance}). When the yard's
- * level changes, `level_since` is moved so the place stays where it was
- * ({@link anchorFor}): a bot that could not grow for a while (damaged, under
- * attack) catches up on its next grow, it never loses the time.
+ * A bot's place on the climb (`pacePosition` in `population.ts`) sets its
+ * target: that far into the level's band ({@link targetAt}).
  *
  * ## Growth (§4.4)
  *
@@ -69,53 +62,11 @@ import { BOT_WORKERS, BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from 
  * ({@link rearmFiredTraps}).
  */
 
-const DAY = 24 * 60 * 60;
-
-/** A bot retires once its place on the climb passes level 40 (decision 17). */
-export const RETIRE_POSITION = BOT_MAX_LEVEL + 1;
-
-/** The rebalance's pace nudges `[PLACEHOLDER]`: a slowed bot takes 4 days a level, a hurried one 2. */
-export const SLOW_PACE = 0.75;
-export const FAST_PACE = 1.5;
-
-/** A bot may stand this many bots' places off its spot in the queue before the rebalance nudges it (§4.4). */
-export const REBALANCE_SLACK = 2;
-
-/**
- * With the rebalance running daily, no level should sit more than this many
- * bots off its share once it has had a few days (issue #251); the rebalance
- * logs a warning when one does.
- */
-export const SPREAD_TOLERANCE = 4;
-
 /** Points-plus-base-value of a level-band position: `floor(p)` and the fraction into it. */
 export const targetAt = (position: number): number => {
   const level = Math.max(1, Math.floor(position));
   return targetInBand(level, position - level);
 };
-
-/** What the pace reads of a bot. */
-export interface PaceBot {
-  level: number;
-  level_since: Date;
-}
-
-/**
- * Where on the climb a bot stands at `now` (unix seconds), in levels: its
- * level plus the share of `T / speed` days spent on it.
- */
-export const pacePosition = (bot: PaceBot, now: number, daysPerLevel: number, speed = 1): number => {
-  const since = bot.level_since.getTime() / 1000;
-  return bot.level + (Math.max(0, now - since) * speed) / (daysPerLevel * DAY);
-};
-
-/**
- * `level_since` for a bot now on `level` that keeps it at `position`: the
- * part of the position past `level`, counted back at the bot's pace. Never in
- * the future.
- */
-export const anchorFor = (position: number, level: number, now: number, daysPerLevel: number, speed = 1): Date =>
-  new Date((now - (Math.max(0, position - level) * daysPerLevel * DAY) / speed) * 1000);
 
 /** The slices of a save the brain reads and writes. */
 export interface BrainSave {
@@ -477,88 +428,4 @@ export const rearmFiredTraps = (save: BrainSave, yard: BotYard): number => {
   save.buildinghealthdata = health;
   save.firedtraps = left;
   return rearmed;
-};
-
-/** One active bot as the rebalance sees it. */
-export interface RebalanceBot {
-  userid: number;
-  level: number;
-  level_since: Date;
-  speed: number;
-}
-
-/** A pace the rebalance sets, with the anchor that keeps the bot where it stands. */
-export interface PaceNudge {
-  userid: number;
-  speed: number;
-  level_since: Date;
-}
-
-/** The daily rebalance's plan. */
-export interface RebalancePlan {
-  nudges: PaceNudge[];
-  /** Level 1 bots to make. */
-  topUp: number;
-}
-
-/**
- * The daily rebalance (§4.4) against the even spread `share` (index 0 is
- * level 1). The bots queue up by their place on the climb, furthest on first,
- * and each place in the queue has a spot: the first `share[39]` places spread
- * evenly through level 40, the next `share[38]` through level 39, and so on.
- * A bot more than {@link REBALANCE_SLACK} bots' places ahead of its spot is
- * slowed to {@link SLOW_PACE}, one as far behind it hurried to
- * {@link FAST_PACE}, and one near it goes back to the normal pace. So a
- * crowded level's furthest-on bots move on sooner and its newest arrivals
- * linger behind, and the bots around a thin level close in on it, until every
- * level holds about its share.
- *
- * A nudge lasts until the bot's next level (the grow job sets the pace back
- * to 1 then) or the next rebalance, and moves `level_since` so the bot keeps
- * its place on the climb ({@link anchorFor}). A bot already at the pace asked
- * is left alone.
- *
- * The total is topped back up with level 1 bots, at most as many as level 1
- * has room for within its share and the slack, so a near-empty table is not
- * refilled at level 1 all at once (the factory's `create --fill` spreads a
- * fresh population over the levels; the rest follow on later days). While
- * the table is short no pace is nudged: the queue's spots assume a full table,
- * and the gaps are the fill's and the top-up's to close.
- */
-export const planRebalance = (
-  bots: readonly RebalanceBot[],
-  share: readonly number[],
-  total: number,
-  now: number,
-  daysPerLevel: number
-): RebalancePlan => {
-  const levelOne = bots.filter((bot) => bot.level === 1).length;
-  const missing = Math.max(0, total - bots.length);
-  const levelOneRoom = Math.max(0, (share[0] ?? 0) + REBALANCE_SLACK - levelOne);
-  const topUp = Math.min(missing, levelOneRoom);
-  if (missing > 0) return { nudges: [], topUp };
-
-  // A bot that could not grow stands at the top of its level, not past it.
-  const placed = bots
-    .map((bot) => ({ bot, at: Math.min(pacePosition(bot, now, daysPerLevel, bot.speed), bot.level + 0.999999) }))
-    .sort((a, b) => b.at - a.at);
-
-  const nudges: PaceNudge[] = [];
-  let level = share.length;
-  let inLevel = 0;
-  for (const { bot, at } of placed) {
-    while (level > 1 && inLevel >= (share[level - 1] ?? 0)) {
-      level--;
-      inLevel = 0;
-    }
-    const want = Math.max(1, share[level - 1] ?? 0);
-    const spot = level + 1 - (inLevel + 0.5) / want;
-    inLevel++;
-    const ahead = (at - spot) * want;
-    const speed = ahead > REBALANCE_SLACK ? SLOW_PACE : ahead < -REBALANCE_SLACK ? FAST_PACE : 1;
-    if (speed === bot.speed) continue;
-    nudges.push({ userid: bot.userid, speed, level_since: anchorFor(at, bot.level, now, daysPerLevel, speed) });
-  }
-
-  return { nudges, topUp };
 };

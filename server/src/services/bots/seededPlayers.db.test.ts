@@ -39,7 +39,7 @@ describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real d
 
   /** Seeded players on `levels`, their saves on Map Room 2 as a seeded account's would be. */
   const makeSeeded = async (levels: number[]) => {
-    const made = await createBots(orm.em.fork(), levels, { rng: mulberry32(233), now: NOW, daysPerLevel: T });
+    const made = await createBots(orm.em.fork(), levels, { rng: mulberry32(233), now: NOW, pace: T });
     for (const bot of made) {
       await sql(`UPDATE bym.bot SET state = 'seeded' WHERE userid = ?`, [bot.userid]);
       await sql(`UPDATE bym.save SET mapversion = 2 WHERE userid = ? AND type = 'main'`, [bot.userid]);
@@ -49,7 +49,7 @@ describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real d
 
   const config =
     (seeded: boolean, total = 0): (() => BotConfig) =>
-    () => ({ fill: false, brain: true, revenge: false, total, daysPerLevel: T, seeded });
+    () => ({ fill: false, brain: true, revenge: false, total, pace: T, quietRate: 0, growingFlow: 1, newPerDay: 8, levelSlack: 0, seeded });
 
   const pass = async (at: number, seeded: boolean, total = 0) => {
     const online: number[] = [];
@@ -66,7 +66,7 @@ describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real d
     return { report: report!, online };
   };
 
-  /** The day's rebalance claimed already, so a pass makes no level 1 bots. */
+  /** The day's rebalance claimed already, so a pass makes no bots. */
   const claimRebalance = (at: number) =>
     sql(`INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`, [
       REBALANCE_JOB,

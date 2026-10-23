@@ -155,7 +155,7 @@ describe("the dev-only guard", () => {
       return [];
     };
     await expect(
-      giveSeededYards(em, { rng: mulberry32(1), now: NOW, daysPerLevel: 3, env: { ENV: "production" } })
+      giveSeededYards(em, { rng: mulberry32(1), now: NOW, pace: 3, env: { ENV: "production" } })
     ).rejects.toThrow(/dev databases only/);
     expect(reads).toEqual([]);
   });
@@ -174,7 +174,7 @@ describe("giveSeededYards", () => {
     const report = await giveSeededYards(em, {
       rng: mulberry32(233),
       now: NOW,
-      daysPerLevel: 3,
+      pace: 3,
       env: { ENV: "local" },
       onBatch: (batch) => batches.push(batch.length),
     });
@@ -223,7 +223,7 @@ describe("giveSeededYards", () => {
       save.buildingdata["9"] = { id: 9, t: 6, X: 0, Y: 0, l: 1 };
       return save;
     };
-    const report = await giveSeededYards(em, { rng: mulberry32(3), now: NOW, daysPerLevel: 3, env: {} });
+    const report = await giveSeededYards(em, { rng: mulberry32(3), now: NOW, pace: 3, env: {} });
     expect(report.given).toEqual([]);
     expect(created).toEqual([]);
   });

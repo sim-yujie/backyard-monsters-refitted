@@ -188,7 +188,7 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     process.env.BOTS_FILL = "on";
     await cleanUp();
 
-    [bot] = await createBots(db.em.fork(), [1], { rng: mulberry32(245), now: Math.floor(Date.now() / 1000), daysPerLevel: 3 });
+    [bot] = await createBots(db.em.fork(), [1], { rng: mulberry32(245), now: Math.floor(Date.now() / 1000), pace: 3 });
     // The real player first, so the viewer's first Map Room 1 search finds them.
     real = await signUp(`${PREFIX}real`);
     rival = await signUp(`${PREFIX}rival`);

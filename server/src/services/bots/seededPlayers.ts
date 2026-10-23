@@ -1,7 +1,7 @@
 import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { seededYardsOn } from "../../config/BotConfig.js";
+import { seededYardsOn, type Pace } from "../../config/BotConfig.js";
 import { Bot } from "../../database/models/bot.model.js";
 import { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
@@ -88,7 +88,8 @@ export interface GiveSeededYardsOptions {
   rng: Rng;
   /** Unix seconds. */
   now: number;
-  daysPerLevel: number;
+  /** `BotConfig.pace`. */
+  pace: Pace;
   /** Read for {@link seededYardsOn}; `process.env` by default. */
   env?: Record<string, string | undefined>;
   /** Told after each batch commits. */
@@ -144,7 +145,7 @@ export const giveSeededYards = async (
   if (!seededYardsOn(options.env ?? process.env)) {
     throw new Error("Seeded Map Room 2 yards are for dev databases only (ENV is production).");
   }
-  const { rng, now, daysPerLevel } = options;
+  const { rng, now, pace } = options;
   const players = await findSeededPlayers(em);
   const blank = players.filter((player) => isBlankSeedYard(player.buildingdata));
   const levels = planSeededLevels(blank.length, await seededByLevel(em), rng);
@@ -152,7 +153,7 @@ export const giveSeededYards = async (
 
   for (let start = 0; start < blank.length; start += BATCH_SIZE) {
     const batch = blank.slice(start, start + BATCH_SIZE);
-    const drawn = batch.map((_, index) => drawBot(rng, levels[start + index]!, now, daysPerLevel));
+    const drawn = batch.map((_, index) => drawBot(rng, levels[start + index]!, now, pace));
 
     const batchGiven = await em.fork().transactional(async (tx) => {
       const done: SeededYard[] = [];

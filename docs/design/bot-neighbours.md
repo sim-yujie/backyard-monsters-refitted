@@ -79,6 +79,9 @@ The owner's answers to this design's questions (2026-10-03):
 
 17. **Growth is a conveyor:** each bot climbs through all the levels at about **3 days per level**,
     retires once it passes level 40, and a fresh level 1 bot takes its place (section 4.4).
+    **Replaced 2026-10-23** (beta 5 bot yard rework): bots grow at a real player's speed (fast
+    early, slow late), some go quiet, and short levels get new bots made right at that level
+    (section 4.4).
 18. **Truce requests** to a bot are declined after a random **2-8 hours**.
 19. **Revenge caps:** at most **2 revenge attacks on one player per 24 hours**, **1 per bot-player
     pair per 24 hours**; a revenge that cannot run gives up **72 hours** after the attack that
@@ -355,13 +358,20 @@ is a different trigger, and the 2-week cache stays as it is.
 
 ### 4.4 Growth and the even spread (decision 7)
 
-Decision 17: **a conveyor**. Each bot climbs through the levels at the same average pace, `T` = 3
-days per level (so a bot lives about four months). A bot that passes level 40 has outgrown the
-range: it retires and a fresh level 1 bot is created in its place. With an equal pace per level,
-the 1-40 spread stays even on its own; a daily rebalance corrects drift.
+Owner decision 2026-10-23 (replaces decision 17's conveyor): **each bot grows at a real
+player's speed**, one `[PLACEHOLDER]` table of days on each level, `DAYS_ON_LEVEL` in
+`config/BotConfig.ts` (about 1.5 days to level 10, 10 to 20, 90 to 30, 600 to 40, 900 to pass 40).
+**Some bots go quiet**: each level a bot gains it has `BOTS_QUIET_RATE` chance (`[PLACEHOLDER]`
+0.1) to stop growing somewhere in that level, as a player who quits or slows down
+(`bot.quiet_since`). A quiet bot is still repaired, refilled and kept in its loot band. **When a
+level runs short, a new bot is made right at that level** with a yard drawn for it; **a crowded
+level retires** its quiet bots first (longest quiet first), then its growing bots longest on the
+level. Total about 500 (`BOTS_TOTAL`), each level its `LEVEL_WEIGHTS` share (even). The pure
+rules are in `services/bots/population.ts`.
 
-- **Grow job** (every 2-6 hours per bot, jittered): the bot's target points move linearly from the
-  bottom of its level band to the top over `T` days. The job runs the bot's own progression forward
+- **Grow job** (every 2-6 hours per bot, jittered): the bot's place on the climb walks the days
+  since `level_since` along the table, level by level, and its target points sit that far into the
+  level band (a quiet bot's place stops at `quiet_since`). The job runs the bot's own progression forward
   until its points reach the target, through the real pure gates (4.2), then `catchUpYard`, all
   under the row lock as `catchUpLockedYard` does. It leaves the last upgrade running on a real
   timer (capped so it finishes inside the pace), so an attacker sees a busy worker as on a real
@@ -372,12 +382,24 @@ the 1-40 spread stays even on its own; a daily rebalance corrects drift.
   (`updateNeighbourData.ts:52`, the same path a real player who upgrades off Map Room 1 takes); it
   has no map cell, so nobody sees it anywhere. Its rows stay, so mail threads and attack logs keep
   their names. Retired bots with no mail older than 90 days `[PLACEHOLDER]` may be deleted.
-- **Rebalance** (daily, claimed through `bym.job_run`, section 6): the bots line up by how far
-  they have climbed, and each place in the line has a spot spread evenly through its level. A bot
-  more than 2 places ahead of its spot has its growth slowed, one more than 2 behind is sped up,
-  and the rest grow at the normal pace; the total is topped back to 500 at level 1. No pace is
-  nudged while the table is short of the total. No level should drift more than 4 bots
-  (`SPREAD_TOLERANCE`) from its share; the sweep logs a warning when one does (issue #251).
+- **Rebalance** (daily, claimed through `bym.job_run`, section 6): a level more than
+  `BOTS_LEVEL_SLACK` (2) bots over its share retires down to it (quiet first); a level more than
+  the slack short gets new bots at that level, the shortest first, at most `BOTS_NEW_PER_DAY` (8)
+  a day, never past the total (when full, a place is freed on the level most over its share). A
+  new bot starts quiet by its level's settled mix: about `BOTS_GROWING_FLOW` (`[PLACEHOLDER]` 0.3)
+  growing bots a day pass each level, so a level holds that many times its days of growing bots
+  and the rest quiet. Without that every new bot on a short level would grow, leave within days
+  and need replacing in turn: several new bots a day instead of about one every two days. No
+  level should drift more than 4 bots (`SPREAD_TOLERANCE`) from its share; the sweep logs a
+  warning when one does (issue #251).
+- **What it gives** (`population.test.ts` and a 4-year simulation at the defaults): about 0.5 new
+  bots and 0.5 retirements a day once settled (about 1 a day in the first months), every level
+  within 2 of its share, about 480 bots standing. A growing bot spends only hours on each low
+  level, so nearly every bot standing on levels 1-30 is quiet; growing bots are about a quarter
+  of levels 31-35 and nearly all of 36-40. A higher `BOTS_GROWING_FLOW` keeps more bots growing
+  at the cost of more new bots a day (0.6: about 2 a day, most of 31-35 growing; 1: about 4.5 a
+  day, a third of 21-30 growing). Neighbour lists are drawn fresh from a level window each time,
+  so a player still meets different bots as they climb.
 
 ### 4.5 After a player attacks a bot (decisions 10, 11)
 
@@ -605,8 +627,8 @@ after 5 attempts it is dropped with an error log.
 **Rebalance is not a `bot_job` row.** It belongs to no bot, and `bot_job.bot_userid` is required.
 Once a day the sweep claims the day in `bym.job_run` (`job = 'bots-rebalance'`, `period` = the UTC
 date), the same way `scripts/monthly-shiny.ts` claims its month. The insert's primary key means
-only one server runs it each day. It nudges the paces against the bots' spots in the line (section
-4.4) and tops the total back to `BOTS_TOTAL` (creating bots).
+only one server runs it each day. It retires the bots of crowded levels and makes new bots on short
+ones (section 4.4).
 
 Every yard write runs under the save's row lock (`lockRow`, as `catchUpLockedYard`), and is skipped
 while `isAttackActive` (an attack owns the row then), retrying in 10 minutes.
@@ -630,19 +652,17 @@ text above leaves open:
   highest id is left on its countdown (capped at 90% of the time to the next grow). A mushroom on a
   new spot is picked; anything else in the way (or an id holding another type) refuses that growth
   whole and logs it. A damaged yard does not grow; the grow books a repair if none is booked.
-- **The pace** is `level + days on it × speed / BOTS_DAYS_PER_LEVEL`; `level_since` is re-anchored when
-  the level changes so a bot that could not grow catches up rather than losing time. The rebalance's
-  nudges (`[PLACEHOLDER]` 0.75 slow, 1.5 fast) live in the `grow` job's `payload.speed` and end at the
-  bot's next level or the next rebalance. The line runs furthest on first: the first `share[39]`
-  places are spread through level 40, the next `share[38]` through level 39, and so on (issue #251:
-  the first version only nudged levels more than 2 off their share, and slowing a crowded level's
-  newest arrivals kept it crowded).
-- **Retirement** happens when the pace position passes 41 (the bot has had its three days on level 40);
-  the replacement level 1 bot is made after the retirement commits. Replacements and top-up bots start
-  at the bottom of level 1, as a new player would (a random start had them leave level 1 in half the
-  time, so level 1 held about half its share; issue #251). The daily top-up adds level 1
-  bots only up to level 1's share plus the slack of 2, so an empty table is never refilled at level 1
-  all at once (use `bots.ts create --fill`).
+- **The pace** walks the days since `level_since` along `DAYS_ON_LEVEL` (`pacePosition`,
+  `population.ts`; `BOTS_PACE_SCALE` stretches it for dev); `level_since` is re-anchored when the
+  level changes so a bot that could not grow catches up rather than losing time. When a grow finds a
+  new level, the quiet draw runs once per level gained and may set `bot.quiet_since` (migration
+  `20261023_AddQuietSinceToBot`). The 2026-10 pace nudges (`payload.speed`) are gone; an old
+  payload's `speed` is ignored.
+- **Retirement** happens when the pace position passes 41 (the bot has had its days on level 40), or
+  when the rebalance picks it off a crowded level (skipped while it is under attack). Nothing is made
+  in its place at once: the next rebalance makes new bots on whichever levels are short, at a random
+  point of the level. An empty table fills at `BOTS_NEW_PER_DAY` a day, so use
+  `bots.ts create --fill` for a fresh population (it starts each level with its settled quiet mix).
 - **Repair** also re-arms fired traps under their own ids (from `firedtraps`), refills bunkers and
   Housing that are under their band's floor (to the generator's garrison and army, cut to the Housing
   standing), feeds and heals the champion and puts loot back in its band.
@@ -709,8 +729,9 @@ wrecked; and it buys nothing from the store beyond expansions.
 With 36 hours of protection after each heavy attack, one bot absorbs about one heavy attack every
 day and a half, so 500 bots absorb roughly 300 heavy attacks a day across all levels, about 12 per
 level. That is plenty for a small player base and thin if hundreds of new players arrive in one
-week. The bot count and the pace are config values (`BOTS_TOTAL`, `BOTS_DAYS_PER_LEVEL`), so they
-can be raised without code.
+week. The bot count, the pace scale, the quiet rate and the daily cap are config values (`BOTS_TOTAL`,
+`BOTS_PACE_SCALE`, `BOTS_QUIET_RATE`, `BOTS_GROWING_FLOW`, `BOTS_NEW_PER_DAY`,
+`BOTS_LEVEL_SLACK`), so they can be changed without code.
 
 ## 8. What the client needs
 
