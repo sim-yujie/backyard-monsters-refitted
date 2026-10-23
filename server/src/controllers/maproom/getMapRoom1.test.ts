@@ -60,6 +60,7 @@ beforeEach(() => {
     userid: 7,
     neighbors: [],
     neighborsLastCalculated: new Date(),
+    neighborsLevel: 1,
     tribedata: [
       { baseid: LEGIONNAIRE, tribeHealthData: {}, destroyed: 1, destroyedAt: now() - 60, damage: 95 },
       { baseid: KOZU, tribeHealthData: { 3: 10 }, damage: 40 },
