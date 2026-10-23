@@ -406,14 +406,27 @@ rules are in `services/bots/population.ts`.
   and need replacing in turn: several new bots a day instead of about one every two days. No
   level should drift more than 4 bots (`SPREAD_TOLERANCE`) from its share; the sweep logs a
   warning when one does (issue #251).
-- **What it gives** (`population.test.ts` and a 4-year simulation at the defaults): about 0.5 new
-  bots and 0.5 retirements a day once settled (about 1 a day in the first months), every level
-  within 2 of its share, about 480 bots standing. A growing bot spends only hours on each low
-  level, so nearly every bot standing on levels 1-30 is quiet; growing bots are about a quarter
-  of levels 31-35 and nearly all of 36-40. A higher `BOTS_GROWING_FLOW` keeps more bots growing
-  at the cost of more new bots a day (0.6: about 2 a day, most of 31-35 growing; 1: about 4.5 a
-  day, a third of 21-30 growing). Neighbour lists are drawn fresh from a level window each time,
-  so a player still meets different bots as they climb.
+- **Bots that start at level 1** (owner, 2026-10-23): short levels are only ever 31-40 (quiet bots
+  never leave a level, so lower ones never run short), so the band-filling alone leaves every bot
+  on levels 1-30 quiet. Each rebalance therefore also starts about `BOTS_LEVEL1_PER_DAY`
+  (`[PLACEHOLDER]` 1; the whole part each day, plus one more by the chance of the fraction; 0
+  turns it off) new bots at the very bottom of level 1, growing, as new players. They climb and
+  quit like real players: the same curve and the same early quit chances, so about 58% stop at
+  levels 1-4. They come before the band-filling and count in `BOTS_NEW_PER_DAY`. Once the total
+  is full each takes the place of a quiet bot on the most crowded level (the higher one on a tie);
+  with no quiet bot anywhere, none starts. The quiet bots they leave on levels 1-4 are retired by
+  the crowded-level rule above.
+- **What it gives** (`population.test.ts` and a 1,500-day simulation, 3 seeds, at the defaults):
+  1 bot a day started at level 1 plus about 0.75-0.95 a day on short levels, about 1.8-1.9
+  retirements a day, every level within 2 of its share, 491-500 bots standing (499 on average).
+  Growing bots: on average only about 1-2 on levels 1-30 at any moment (most of them at 21-30),
+  about 40% of 31-35 and nearly all of 36-40. With the real quit chances only about 3% of the
+  bots started at level 1 still grow at level 30, so more growing bots low down need a higher
+  `BOTS_LEVEL1_PER_DAY` (3: about 6-7 on levels 1-30; 6: about 10-13; 10: about 21, with
+  retirements rising to match) or a lower `BOTS_QUIET_RATE` (0.05 at 1 a day: about 5; at 3 a
+  day: about 16). A higher `BOTS_GROWING_FLOW` keeps more of 31-40 growing at the cost of more new
+  bots a day. Neighbour lists are drawn fresh from a level window each time, so a player still
+  meets different bots as they climb.
 
 ### 4.5 After a player attacks a bot (decisions 10, 11)
 
@@ -745,7 +758,7 @@ day and a half, so 500 bots absorb roughly 300 heavy attacks a day across all le
 level. That is plenty for a small player base and thin if hundreds of new players arrive in one
 week. The bot count, the pace scale, the quiet rate and the daily cap are config values (`BOTS_TOTAL`,
 `BOTS_PACE_SCALE`, `BOTS_QUIET_RATE`, `BOTS_GROWING_FLOW`, `BOTS_NEW_PER_DAY`,
-`BOTS_LEVEL_SLACK`), so they can be changed without code.
+`BOTS_LEVEL1_PER_DAY`, `BOTS_LEVEL_SLACK`), so they can be changed without code.
 
 ## 8. What the client needs
 
