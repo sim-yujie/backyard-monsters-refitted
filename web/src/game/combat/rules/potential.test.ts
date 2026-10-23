@@ -536,9 +536,12 @@ describe("the loot bounds", () => {
   });
 
   it("widens that allowance by Krallen's loot aura when she has it (issue #222)", () => {
-    // Level 5, power level 2: 2 + 1 + 0.3 over 2, so 5,000 becomes 8,250.
-    expect(lootAuraBound([{ id: KRALLEN_ID, level: 5, powerLevel: 2 }])).toBeCloseTo(1.65, 12);
-    expect(lootAuraBound([{ id: KRALLEN_ID, level: 5, powerLevel: 1 }])).toBe(1);
+    // Level 5: 2 + 1.3 over 2, so 5,000 becomes 8,250; level 3: 2 + 0.5 over 2.
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 5, powerLevel: 0 }])).toBeCloseTo(1.65, 12);
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 4, powerLevel: 0 }])).toBeCloseTo(1.45, 12);
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 3, powerLevel: 0 }])).toBeCloseTo(1.25, 12);
+    // No aura below level 3, powered up or not.
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 2, powerLevel: 2 }])).toBe(1);
     const input = {
       attackloot: { r1: 8000 },
       defenderDelta: { r1: -8000 },
@@ -547,7 +550,7 @@ describe("the loot bounds", () => {
     };
     const plain = auditLoot({ context: contextOf(), ...input });
     const aura = auditLoot({
-      context: contextOf({ champion: { id: KRALLEN_ID, level: 5, powerLevel: 2 } }),
+      context: contextOf({ champion: { id: KRALLEN_ID, level: 5, powerLevel: 0 } }),
       ...input,
     });
     expect(plain.violations.some((one) => one.rule === "lootExceedsDamage")).toBe(true);
