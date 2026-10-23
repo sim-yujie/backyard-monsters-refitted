@@ -17,3 +17,5 @@ Thumbs.db
 production.env
 backups/
 logs/
+# deploy/host-status.sh output (status/host.json), read by the game server
+status/

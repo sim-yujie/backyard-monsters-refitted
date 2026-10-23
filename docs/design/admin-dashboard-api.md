@@ -44,6 +44,7 @@ URL (`URL.createObjectURL`), since an `<img src>` cannot send the header.
 | `GET /api/:apiVersion/admin/bugreports/:id/picture` | the player's added picture, the same way |
 | `POST /api/:apiVersion/admin/bugreports/:id/ticket` | body `{ status?, notes? }`; answers `{ report: BugReportDetail }` as it is afterwards; `400 badTicket`, `404 notFound` |
 | `GET /api/:apiVersion/admin/errors?source=&sort=&limit=&sinceDays=` | `{ groups: ErrorGroup[], totals }` |
+| `GET /api/:apiVersion/admin/health` | `AdminHealthReport` (see "Health" below) |
 
 Bug report list: `filter` is `all` (default), `open` (new or working),
 `closed` (fixed or won't fix), or one status; `limit` 1 to 100 (default 50);
@@ -193,15 +194,17 @@ Every player count leaves out bots and test accounts (usernames starting
 
 `getDailySummary(day)` in `server/src/services/stats/dailyStats.ts`, for a
 finished UTC day (throws for today or later). Without a second argument it
-uses the running server's database and Redis.
+uses the running server's database and Redis. It holds numbers only, no
+player-written text, error text, names or emails, because the summary goes to
+Telegram (docs/alerts.md, "Privacy").
 
 ```ts
 interface DailySummary {
   day: string;
   stat: DailyStat;               // counted now if the hourly fill has not reached it
   players: { total; activeToday; active7; active30 };  // as of now
-  newErrors: { source: string; message: string; count: number }[];  // kinds first seen that day, top 5
-  bugReports: { id: number; message: string }[];       // that day's reports, first 10, 80 characters each
+  newErrors: { id: number; source: string; count: number }[];  // kinds first seen that day, top 5
+  bugReports: { id: number }[];                        // that day's reports, first 10
 }
 ```
 
@@ -212,3 +215,93 @@ interface DailySummary {
 - `DASHBOARD_STATS=off`: this server does not fill the daily table (leave it
   to another server sharing the database). The day-by-day record and the
   error intake run regardless.
+
+## Health
+
+**Function:** `adminHealthReport({ sql, redis })` in
+`server/src/services/health/adminHealth.ts`. It never throws: a part that
+fails (the database down, say) is reported as failed.
+
+**Route:** `GET /api/:apiVersion/admin/health` in
+`controllers/admin/routes.ts`, behind the owner-only check like the rest,
+answering `{ error: 0, ...AdminHealthReport }`.
+
+**Dashboard sections** that Telegram alerts link to, as `#name` on the admin
+page (`ADMIN_DASHBOARD_URL`, default `WEB_URL` + `/admin`, i.e.
+`https://play.bymrevamped.com/admin#health`): `health`, `backups`, `errors`,
+`bugs`. The page should scroll to (or open) the section named in the hash.
+
+### The report
+
+```ts
+interface AdminHealthReport {
+  health: HealthSummary;
+  problems: { key: string; title: string; detail: string; section: "health" | "backups" | "errors" | "bugs" }[];
+  unchecked: string[];            // checks that could not run now: "disk", "backup", "errors"
+  openAlerts: Record<string, { title: string; section: string; since: number; lastSentAt: number }>; // epoch ms
+  telegram: boolean;              // whether this server sends alerts at all
+}
+
+interface HealthSummary {
+  generatedAt: string;            // ISO time
+  server: {
+    startedAt: string;            // the game server's last start ("up since")
+    uptimeSeconds: number;
+    version: { release: string | null; commit: string | null }; // e.g. "v2.0.0-beta.4"; null outside a release copy
+    rulesVersion: string;         // combat rules version (16 hex)
+    runtime: string;              // "bun 1.4.2"
+    memory: { rssBytes: number; heapUsedBytes: number; containerUsedBytes: number | null; containerLimitBytes: number | null };
+  };
+  host: null | {                  // from status/host.json; null on a machine without it
+    generatedAt: string;
+    stale: boolean;               // older than 10 minutes: the host script stopped
+    hostname: string;
+    uptimeSeconds: number | null; // the machine's
+    load: (number | null)[];      // 1, 5, 15 minutes
+    memory: { totalBytes; availableBytes; swapTotalBytes; swapFreeBytes };   // numbers or null
+    containers: null | {          // null when the script could not ask Docker
+      service: string;            // caddy, web, db, redis, backup, db-init
+      state: string;              // running, exited, restarting...
+      health: string | null;      // healthy / unhealthy for db and redis
+      restartCount: number | null; // automatic restarts since the container was made (a deploy resets it)
+      startedAt: string;          // ISO, Docker's
+      oomKilled: boolean;
+      exitCode: number | null;
+    }[];
+  };
+  disks: { path; mount; totalBytes; usedBytes; availableBytes; usedPercent: number | null }[];
+  disksFrom: "host" | "container" | null; // "container": only the logs folder's disk, seen from inside
+  database: { ok: boolean; pingMs: number | null; sizeBytes: number | null; error?: string };
+  redis: { ok: boolean; pingMs: number | null; usedMemoryBytes; peakMemoryBytes; maxMemoryBytes; error?: string };
+  backups: null | {               // null without host.json
+    count: number; totalBytes: number; partialCount: number | null;
+    newest: null | { name: string; at: string | null; sizeBytes: number | null; ageHours: number | null };
+  };
+  responseTimes: { requests: number; p50Ms; p95Ms; maxMs; serverErrors: number; windowMinutes: 15 };
+}
+```
+
+Times are ISO strings except `openAlerts`, which keeps epoch milliseconds.
+Response times cover API requests in the last 15 minutes, in memory (a
+restart starts them afresh); asset downloads and `/connection` are left out.
+
+### Where each part comes from
+
+| Part | Source |
+|---|---|
+| up since, memory | the game server process; the container's limit from cgroup files |
+| version | `server/src/config/release-stamp.txt`, filled in by `git archive` (`export-subst`) |
+| rules version | `game-rules/combat/MANIFEST.json` (`RULES_VERSION`) |
+| database size | `pg_database_size(current_database())`, timed as the ping |
+| Redis memory | `PING`, then `INFO memory` |
+| machine memory, disks, containers, backups | `status/host.json`, written once a minute by `server/deploy/host-status.sh` on the machine (systemd timer), mounted read-only into the game server |
+| error jump | `services/alerts/errorRate.ts`, fed by the error store through `noteServerErrors(count)` |
+
+### Feeding the error-jump alert
+
+The "sudden jump in errors" alert reads a 10-minute counter in
+`services/alerts/errorRate.ts`. The error store's half-minute flush
+(`flushServerErrors` in `services/errors/errorStore.ts`) calls
+`noteServerErrors(occurrences)` every time, an empty flush too, so the check
+runs from the first flush after a start (until then it reports as unchecked).
+The "usual" rate is learnt afresh after each restart.
