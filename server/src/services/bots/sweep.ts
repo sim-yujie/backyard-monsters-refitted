@@ -41,6 +41,7 @@ import {
   type RevengeOutcome,
   type RevengeVerdict,
 } from "./revenge.js";
+import { CHAIN_REFILL_HOURS, nextInChain, readChain, type RevengeChain } from "./revengeChain.js";
 import { tendShiny } from "./shiny.js";
 import { declineTruce } from "./truceDecline.js";
 import { declineFriend } from "./friendDecline.js";
@@ -179,8 +180,8 @@ export interface SweepDeps {
 export interface RevengeRunner {
   /** Whether the player has been seen within the last-seen key's life. */
   isOnline: (userid: number, now: number) => Promise<boolean>;
-  /** Fights and lands the attack (`runRevengeAttack`). */
-  attack: (input: { bot: number; target: number; now: number }) => Promise<RevengeOutcome>;
+  /** Fights and lands the attack (`runRevengeAttack`); a chain's later attack refills the bot's Housing first. */
+  attack: (input: { bot: number; target: number; now: number; refill?: (save: Save) => void }) => Promise<RevengeOutcome>;
 }
 
 /** One claimed job. */
@@ -227,7 +228,10 @@ export interface SweepReport {
   grew: { userid: number; from: number; to: number }[];
   /** Bots whose growth was refused (logged): their yard is not the generator's. */
   refused: number[];
-  /** Revenge jobs by what became of them: `landed`, `pending`, `wait:<why>`, `cancel:<why>`. */
+  /**
+   * Revenge jobs by what became of them: `landed`, `pending`, `wait:<why>`,
+   * `cancel:<why>`, and after a landing `chain:next` or `chain:<why it ended>`.
+   */
   revenge: Partial<Record<string, number>>;
 }
 
@@ -248,9 +252,9 @@ const at = (seconds: number): Date => new Date(seconds * 1000);
 const hoursAfter = (now: number, hours: { min: number; max: number }, rng: () => number): number =>
   Math.floor(now + (hours.min + rng() * (hours.max - hours.min)) * HOUR);
 
-const lockBot = async (tx: EntityManager, userid: number): Promise<BotRow | null> => {
+const lockBot = async (tx: EntityManager, userid: number, lock = true): Promise<BotRow | null> => {
   const [row] = await tx.execute<BotRow[]>(
-    `SELECT userid, seed, persona, level, level_since, quiet_since, state FROM bym.bot WHERE userid = ? FOR UPDATE`,
+    `SELECT userid, seed, persona, level, level_since, quiet_since, state FROM bym.bot WHERE userid = ?${lock ? " FOR UPDATE" : ""}`,
     [userid]
   );
   if (!row) return null;
@@ -456,11 +460,72 @@ const settleRevenge = async (tx: EntityManager, job: JobRow, verdict: RevengeVer
 };
 
 /**
- * The `revenge` job (`docs/design/bot-neighbours.md` §4.7): the checks, read
- * fresh with the bot's row locked, then the attack. A landed attack, or one
- * committed and left to land from its checkpoint, ends the job.
+ * A chain's later attack refills the bot's Housing as its next repair would
+ * (`refillArmy` against the generator's yard for its level now): the chain
+ * waited for its hatcheries. The bot's row is already held (the facts' lock).
  */
-const revenge: Handler = async (tx, job, { now, rng, report, revenge: runner }) => {
+const chainRefill = async (tx: EntityManager, userid: number, now: number, config: BotConfig) => {
+  const row = await lockBot(tx, userid, false);
+  if (!row) return undefined;
+  const yard = yardAt(row, pacePosition(row, now, config.pace), now);
+  return (save: Save) => {
+    refillArmy(save, yard);
+  };
+};
+
+/**
+ * After a revenge attack landed: the chain's next attack, booked on the same
+ * job, or the end of the chain (`revengeChain.ts`). The next attack's "since"
+ * is this attack's log, rounded up, so the checks see it as the chain's own.
+ */
+const continueChain = async (
+  tx: EntityManager,
+  job: JobRow,
+  chain: RevengeChain | null,
+  landed: Extract<RevengeOutcome, { status: "landed" }>,
+  { now, rng, report }: JobContext
+) => {
+  const [log] = await tx.execute<{ at: Date | string | null }[]>(
+    `SELECT max(attacktime) AS at FROM bym.attack_logs WHERE attacker_userid = ? AND defender_userid = ? AND type = ?`,
+    [job.bot_userid, job.target_userid, BaseType.MAIN]
+  );
+  const last = Math.max(now, log?.at ? Math.ceil(new Date(log.at).getTime() / 1000) : 0);
+  const step = nextInChain(chain, landed, last, landed.refillSeconds ?? CHAIN_REFILL_HOURS.max * HOUR, rng);
+  const key = step.act === "next" ? "chain:next" : `chain:${step.reason}`;
+  report.revenge[key] = (report.revenge[key] ?? 0) + 1;
+  if (step.act === "end") await deleteJob(tx, job);
+  else {
+    await tx.execute(`UPDATE bym.bot_job SET due_at = ?, giveup_at = ?, attempts = 0, payload = ?::jsonb WHERE id = ?`, [
+      at(step.due),
+      at(step.giveupAt),
+      JSON.stringify({ ...job.payload, chain: step.chain }),
+      job.id,
+    ]);
+  }
+  logger.info("Bot {bot}'s revenge on {target}: attack {done} of {length}, {act} ({reason})", {
+    event: "bot-revenge-chain",
+    jobid: job.id,
+    bot: job.bot_userid,
+    target: job.target_userid,
+    done: (chain?.done ?? 0) + 1,
+    length: step.act === "next" ? step.chain.length : (chain?.length ?? 1),
+    damageBefore: landed.damageBefore,
+    damageAfter: landed.damageAfter,
+    act: step.act,
+    reason: step.act === "next" ? "next" : step.reason,
+    ...(step.act === "next" && { due: at(step.due).toISOString(), giveupAt: at(step.giveupAt).toISOString() }),
+  });
+};
+
+/**
+ * The `revenge` job (`docs/design/bot-neighbours.md` §4.7): the checks, read
+ * fresh with the bot's row locked, then the attack. A landed attack books the
+ * chain's next attack on the same job or ends it (`revengeChain.ts`); one
+ * committed and left to land from its checkpoint ends the job (its damage is
+ * not known yet, so the chain ends there).
+ */
+const revenge: Handler = async (tx, job, context) => {
+  const { now, rng, report, config, revenge: runner } = context;
   const target = Number(job.target_userid);
   const giveupAt = giveupOf(job.giveup_at, job.created_at);
   if (!runner || !target) {
@@ -468,7 +533,13 @@ const revenge: Handler = async (tx, job, { now, rng, report, revenge: runner }) 
     return {};
   }
 
-  const facts = await readRevengeFacts(tx, { bot: job.bot_userid, target, giveupAt }, now, runner.isOnline);
+  const chain = readChain(job.payload);
+  const facts = await readRevengeFacts(
+    tx,
+    { bot: job.bot_userid, target, giveupAt, ...(chain && { since: chain.last }) },
+    now,
+    runner.isOnline
+  );
   // Null: another server holds this bot right now.
   const verdict = facts ? revengeVerdict(facts, job.bot_userid, rng) : slotBusyVerdict(now, giveupAt);
   if (verdict.act !== "run") {
@@ -476,11 +547,15 @@ const revenge: Handler = async (tx, job, { now, rng, report, revenge: runner }) 
     return {};
   }
 
-  const outcome = await runner.attack({ bot: job.bot_userid, target, now });
+  const refill = chain ? await chainRefill(tx, job.bot_userid, now, config) : undefined;
+  const outcome = await runner.attack({ bot: job.bot_userid, target, now, ...(refill && { refill }) });
   switch (outcome.status) {
     case "landed":
+      report.revenge.landed = (report.revenge.landed ?? 0) + 1;
+      await continueChain(tx, job, chain, outcome, context);
+      return {};
     case "pending":
-      report.revenge[outcome.status] = (report.revenge[outcome.status] ?? 0) + 1;
+      report.revenge.pending = (report.revenge.pending ?? 0) + 1;
       await deleteJob(tx, job);
       return {};
     case "busy":
