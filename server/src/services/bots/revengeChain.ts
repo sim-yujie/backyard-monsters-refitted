@@ -91,7 +91,7 @@ export const armyRefillSeconds = (army: Pick<RevengeArmy, "monsters" | "levels">
 
 /** What follows a landed attack in a chain. */
 export type ChainStep =
-  | { readonly act: "end"; readonly reason: "length" | "lowDamage" | "destroyed" }
+  | { readonly act: "end"; readonly reason: "length" | "lowDamage" | "destroyed"; readonly length: number }
   | { readonly act: "next"; readonly chain: RevengeChain; readonly due: number; readonly giveupAt: number };
 
 /**
@@ -112,9 +112,9 @@ export const nextInChain = (
 ): ChainStep => {
   const length = chain?.length ?? drawChainLength(rng);
   const done = (chain?.done ?? 0) + 1;
-  if (done >= length) return { act: "end", reason: "length" };
-  if (landed.damageAfter - landed.damageBefore < CHAIN_MIN_DAMAGE) return { act: "end", reason: "lowDamage" };
-  if (landed.damageAfter >= CHAIN_DESTROYED_DAMAGE) return { act: "end", reason: "destroyed" };
+  if (done >= length) return { act: "end", reason: "length", length };
+  if (landed.damageAfter - landed.damageBefore < CHAIN_MIN_DAMAGE) return { act: "end", reason: "lowDamage", length };
+  if (landed.damageAfter >= CHAIN_DESTROYED_DAMAGE) return { act: "end", reason: "destroyed", length };
   const slack = CHAIN_SLACK_MINUTES.min + rng() * (CHAIN_SLACK_MINUTES.max - CHAIN_SLACK_MINUTES.min);
   const due = Math.floor(last + refillSeconds + slack * MINUTE);
   return { act: "next", chain: { length, done, last }, due, giveupAt: due + CHAIN_WAIT_HOURS * HOUR };

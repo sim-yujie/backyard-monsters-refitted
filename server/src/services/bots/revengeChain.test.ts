@@ -51,15 +51,16 @@ describe("nextInChain", () => {
   });
 
   test("the damage counted is the attack's own: a yard already at 30% taken to 45% stops it", () => {
-    expect(nextInChain(null, hit(30, 45), NOW, REFILL, () => 0.9)).toEqual({ act: "end", reason: "lowDamage" });
+    expect(nextInChain(null, hit(30, 45), NOW, REFILL, () => 0.9)).toMatchObject({ act: "end", reason: "lowDamage" });
     expect(nextInChain(null, hit(30, 50), NOW, REFILL, () => 0.9).act).toBe("next");
   });
 
   test("a weak attack (the owner's 5%) ends the chain after one", () => {
-    expect(nextInChain(null, hit(0, 5), NOW, REFILL, () => 0.9)).toEqual({ act: "end", reason: "lowDamage" });
+    expect(nextInChain(null, hit(0, 5), NOW, REFILL, () => 0.9)).toMatchObject({ act: "end", reason: "lowDamage" });
     expect(nextInChain(null, hit(0, CHAIN_MIN_DAMAGE - 0.5), NOW, REFILL, () => 0.9)).toEqual({
       act: "end",
       reason: "lowDamage",
+      length: 4,
     });
   });
 
@@ -67,8 +68,9 @@ describe("nextInChain", () => {
     expect(nextInChain(null, hit(40, CHAIN_DESTROYED_DAMAGE), NOW, REFILL, () => 0.9)).toEqual({
       act: "end",
       reason: "destroyed",
+      length: 4,
     });
-    expect(nextInChain(null, hit(0, 100), NOW, REFILL, () => 0.9)).toEqual({ act: "end", reason: "destroyed" });
+    expect(nextInChain(null, hit(0, 100), NOW, REFILL, () => 0.9)).toMatchObject({ act: "end", reason: "destroyed" });
   });
 
   test("the chain ends at its length: 4 attacks at most, 2 at least when every one hits hard", () => {
@@ -86,7 +88,7 @@ describe("nextInChain", () => {
     }
     expect(attacks).toBe(4);
     const two = nextInChain({ length: 2, done: 1, last: NOW }, hit(0, 25), NOW + 3 * HOUR, REFILL, () => 0);
-    expect(two).toEqual({ act: "end", reason: "length" });
+    expect(two).toEqual({ act: "end", reason: "length", length: 2 });
   });
 });
 

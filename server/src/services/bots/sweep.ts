@@ -508,7 +508,7 @@ const continueChain = async (
     bot: job.bot_userid,
     target: job.target_userid,
     done: (chain?.done ?? 0) + 1,
-    length: step.act === "next" ? step.chain.length : (chain?.length ?? 1),
+    length: step.act === "next" ? step.chain.length : step.length,
     damageBefore: landed.damageBefore,
     damageAfter: landed.damageAfter,
     act: step.act,
