@@ -16,10 +16,84 @@ import {
   targetInBand,
   wallTargets,
   yardAtPoints,
+  STAGE_SLIP,
   type ProgressionBuilding,
   type ProgressionYard,
 } from "./progression.js";
 import { CORE_STYLE_WALLS, yardStyleOf } from "./yardStyle.js";
+
+/** `quantity[hall]`, as the build gate reads it. */
+const allowedAt = (type: number, hall: number): number => {
+  const quantity = costOf(type)!.quantity;
+  return quantity[Math.min(hall, quantity.length - 1)] ?? 0;
+};
+
+/** The build plan (owner decisions, 2026-10-23; the file comment of `progression.ts`). */
+describe("the build plan", () => {
+  /** Every action of a run up to level 41, with the yard as it stood before it. */
+  const walk = (seed: number, persona: (typeof PERSONAS)[number], visit: (action: { kind: string; t: number }, run: Progression) => void) => {
+    const run = new Progression(seed, persona);
+    for (let action = run.next(); action && run.level <= 41; action = run.next()) {
+      visit(action, run);
+      run.apply();
+    }
+  };
+  const count = (run: Progression, type: number) => run.buildings().filter((building) => building.t === type).length;
+
+  test(
+    "every harvester the Town Hall allows stands before it is upgraded",
+    () => {
+      let upgrades = 0;
+      for (let seed = 1; seed <= 6; seed++) {
+        for (const persona of PERSONAS) {
+          walk(seed, persona, (action, run) => {
+            if (action.t !== TOWN_HALL_TYPE || action.kind !== "upgrade") return;
+            upgrades++;
+            const missing = [1, 2, 3, 4].filter((type) => count(run, type) < allowedAt(type, run.townHall));
+            expect({ seed, persona, hall: run.townHall, missing }).toEqual({ seed, persona, hall: run.townHall, missing: [] });
+          });
+        }
+      }
+      expect(upgrades).toBeGreaterThan(18 * 5);
+    },
+    { timeout: 60_000 }
+  );
+
+  test(
+    "Twig Snappers and Pebble Shiners before Putty Squishers and Goo Factories, but for the odd slip",
+    () => {
+      let side = 0;
+      let early = 0;
+      for (let seed = 1; seed <= 6; seed++) {
+        for (const persona of PERSONAS) {
+          walk(seed, persona, (action, run) => {
+            if (action.kind !== "build" || (action.t !== 3 && action.t !== 4)) return;
+            side++;
+            if ([1, 2].some((type) => count(run, type) < allowedAt(type, run.townHall))) early++;
+          });
+        }
+      }
+      expect(side).toBeGreaterThan(100);
+      // An action comes from the stage after the earliest only now and then (`STAGE_SLIP`); measured about 8%.
+      expect(early / side).toBeLessThan(STAGE_SLIP);
+    },
+    { timeout: 60_000 }
+  );
+
+  test("a bot has Housing, and so an army, from level 3", () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const persona = PERSONAS[seed % PERSONAS.length]!;
+      for (const level of [3, 4, 5]) {
+        const yard = yardAtPoints(seed, persona, targetInBand(level, 0.5));
+        expect({ seed, level, housing: yard.buildings.some((building) => building.t === 15) }).toEqual({
+          seed,
+          level,
+          housing: true,
+        });
+      }
+    }
+  });
+});
 
 /** The bot progression (issue #237, `docs/design/bot-neighbours.md` §4.2). */
 
