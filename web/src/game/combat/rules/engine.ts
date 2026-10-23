@@ -452,6 +452,17 @@ import {
  *    `MonsterBase.updateBuffs`, `:799-845`), and a wild raid has none. Where
  *    it is not Flash: a boost runs the whole battle if it was running when the
  *    battle began, where Flash's stops the moment it runs out.
+ * 20. **Walls block a shot on foot, as Flash's do (owner decision
+ *    2026-10-23).** An attacker on foot shoots a building only with no
+ *    standing Wall between it and the building's anchor, the target aside
+ *    (`PATHING.LineOfSight`, `PATHING.as:573-597`; `CreepBase.as:735-748`,
+ *    `ChampionBase.as:424-438`); until then it keeps walking its route, round
+ *    the walls or to the wall in its way. A flyer shoots over them. Against a
+ *    defender a monster, and Fomor even in the air (`Fomor.as:34-46`), needs
+ *    the same clear line unless within 50 screen px; other champions do not
+ *    (`ChampionBase.as:1461`). A shot in flight never hits a wall, and towers
+ *    and defenders shoot over walls as before. The flying monsters with a
+ *    range heal rather than shoot, so Flash's check on them never bites.
  *
  * ## The random stream's order
  *
@@ -1427,6 +1438,12 @@ const DEFEND_SURFACE_SQUARED = 14400;
 
 /** The reach a creep fights another at: its range, and never less than `DEFENSE_RANGE_SQUARED`. */
 const creepReach = (range: number): number => Math.max(range * range, 2500);
+
+/**
+ * Two creeps this close, 50 screen px squared, fight with walls between them:
+ * a defender that reaches an attacker sets it on (`CreepBase.as:1111`).
+ */
+const CLOSE_FIGHT_SQUARED = 2500;
 
 /**
  * The creeps one can fight (issue #195): the other side, on the ground, and in
@@ -3433,6 +3450,30 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * screen like the range `canShootCreep` also accepts (`CreepBase.as:1543`,
    * `:723-727`).
    */
+  /**
+   * `canShootCreep` for an attacker turned on a defender: a monster
+   * (`CreepBase.as:720-733`) or Fomor, flying or not (`Fomor.as:34-46`, the
+   * only champion `ChampionBase.as:1461` asks it of), needs a clear line past
+   * the walls (`PATHING.LineOfSight`) unless the two are close. Any other
+   * champion strikes from its range (`:1461`). A defender never asks.
+   */
+  const seesFoe = (creep: Creep, foe: Creep, squared: number): boolean =>
+    (creep.champion && creep.monsterId !== FOMOR_ID) ||
+    squared < CLOSE_FIGHT_SQUARED ||
+    grid.lineOfSight(creep.x, creep.y, foe.x, foe.y, -1);
+
+  /**
+   * `canShootBuilding` and `canHitBuilding` (`CreepBase.as:735-748`,
+   * `ChampionBase.as:424-438`): the building in range and, for a creep on foot,
+   * no standing wall between it and the building's anchor but the target
+   * itself (`PATHING.LineOfSight`). A flyer shoots over walls
+   * (`ChampionBase.as:432-434`; a flying monster strikes from where it circles
+   * in, `MonsterBase.as:1121-1158`). Short of that, a walker keeps to its route.
+   */
+  const canShootBuilding = (creep: Creep, building: EngineBuilding, range: number): boolean =>
+    reachesBuilding(creep.ix, creep.iy, building, range) &&
+    (creep.flying || grid.lineOfSight(creep.x, creep.y, building.cx, building.cy, building.id));
+
   const fight = (creep: Creep, foe: Creep): void => {
     const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
     // A defending Korath reaches a flyer from twice his range (`ChampionBase.as:876`).
@@ -3440,7 +3481,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.friendly && foe.flying && creep.champion && creep.monsterId === KORATH_ID
         ? creep.range * KORATH_DEFEND_FLYER_REACH
         : creep.range;
-    creep.atTarget = squared < creepReach(range);
+    creep.atTarget = squared < creepReach(range) && (creep.friendly || seesFoe(creep, foe, squared));
     // A defending Bolt blinks at its foe; an attacker's blink ends when it turns to fight.
     const blinks = creep.friendly && creep.rank > 0 && creep.monsterId === BOLT_ID;
     if (creep.blinkHops > 0 && (creep.atTarget || !blinks)) stopBlink(creep);
@@ -3901,7 +3942,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       !creep.atTarget &&
       aim &&
       aim.hp > 0 &&
-      reachesBuilding(creep.ix, creep.iy, aim, creep.range)
+      canShootBuilding(creep, aim, creep.range)
     ) {
       creep.atTarget = true;
       return;
@@ -3953,13 +3994,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creep.atTarget = false;
       } else if (creep.waypointIndex >= creep.waypoints.length && !creep.atTarget) {
         const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-        if (aim && reachesBuilding(creep.ix, creep.iy, aim, range)) creep.atTarget = true;
+        if (aim && canShootBuilding(creep, aim, range)) creep.atTarget = true;
         else if (aim) headFor(creep, aim);
       }
     } else if (creep.hasHelpTarget) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
       if (aim && aim.hp > 0) {
-        if (reachesBuilding(creep.ix, creep.iy, aim, range)) {
+        if (canShootBuilding(creep, aim, range)) {
           creep.atTarget = true;
         } else {
           creep.atTarget = false;
@@ -4225,10 +4266,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.rank > 0 && creep.monsterId === BOLT_ID && tickBlink(creep)) return;
 
     // A ranged creep stops as soon as its target is inside its range, a circle
-    // on screen around the building's anchor (`CreepBase.as:735-748`).
+    // on screen around the building's anchor, with no wall in the way on foot
+    // (`CreepBase.as:735-748`).
     if (!creep.atTarget && creep.range > 1) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-      if (aim && reachesBuilding(creep.ix, creep.iy, aim, creep.range)) creep.atTarget = true;
+      if (aim && canShootBuilding(creep, aim, creep.range)) creep.atTarget = true;
     }
 
     if (creep.atTarget) {
