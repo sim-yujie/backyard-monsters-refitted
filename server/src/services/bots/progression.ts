@@ -164,7 +164,8 @@ const CATEGORY_OF: Readonly<Record<number, Category>> = {
  * - `buildings`: building everything else but walls and traps;
  * - `mainUpgrades`: upgrading Twig Snappers, Pebble Shiners and silos;
  * - `sideUpgrades`: upgrading Putty Squishers and Goo Factories;
- * - `walls`: walls and traps up to their fill, walls up to their tier;
+ * - `walls`: building walls and traps up to their fill;
+ * - `wallUpgrades`: upgrading walls up to their tier;
  * - `upgrades`: every other upgrade.
  */
 export type Stage =
@@ -176,14 +177,19 @@ export type Stage =
   | "mainUpgrades"
   | "sideUpgrades"
   | "walls"
+  | "wallUpgrades"
   | "upgrades";
 
 /**
  * The order each persona runs a hall's stages in `[PLACEHOLDER]`. The guided
  * start's buildings, then harvesters first for every bot (the owner: as many resource buildings as allowed,
- * before walls; Twigs and Pebbles before Putty and Goo); an economy bot then
- * levels its harvesters before its towers, a tower bot builds and walls its
- * defences sooner, an army bot its monster buildings.
+ * before walls; Twigs and Pebbles before Putty and Goo). Once those basics
+ * and the towers stand, the walls and traps the hall allows go down, as a
+ * player puts walls out as soon as they unlock at Town Hall 2, so a bot's
+ * walls grow with its Town Hall (owner review 2026-10-23: no walls before
+ * level 25 read wrong). An economy bot then levels its harvesters before its
+ * towers, a tower bot brings its walls up a tier sooner, an army bot its
+ * monster buildings.
  */
 export const PLAN_ORDER: Readonly<Record<Persona, readonly Stage[]>> = {
   economy: [
@@ -192,9 +198,10 @@ export const PLAN_ORDER: Readonly<Record<Persona, readonly Stage[]>> = {
     "economy",
     "mainUpgrades",
     "towers",
+    "walls",
     "buildings",
     "sideUpgrades",
-    "walls",
+    "wallUpgrades",
     "upgrades",
   ],
   towers: [
@@ -202,8 +209,9 @@ export const PLAN_ORDER: Readonly<Record<Persona, readonly Stage[]>> = {
     "mainHarvesters",
     "economy",
     "towers",
-    "mainUpgrades",
     "walls",
+    "mainUpgrades",
+    "wallUpgrades",
     "buildings",
     "sideUpgrades",
     "upgrades",
@@ -213,10 +221,11 @@ export const PLAN_ORDER: Readonly<Record<Persona, readonly Stage[]>> = {
     "mainHarvesters",
     "economy",
     "towers",
+    "walls",
     "buildings",
     "mainUpgrades",
     "sideUpgrades",
-    "walls",
+    "wallUpgrades",
     "upgrades",
   ],
 };
@@ -722,7 +731,7 @@ export class Progression {
       if (category === "defence") return "towers";
       return "buildings";
     }
-    if (candidate.t === WALL_TYPE) return this.shortOfTier() ? "walls" : "upgrades";
+    if (candidate.t === WALL_TYPE) return this.shortOfTier() ? "wallUpgrades" : "upgrades";
     if (MAIN_HARVESTERS.has(candidate.t) || candidate.t === SILO) return "mainUpgrades";
     if (SIDE_HARVESTERS.has(candidate.t)) return "sideUpgrades";
     // A tower bot upgrades its towers as it builds them.
@@ -780,7 +789,7 @@ export class Progression {
       list.some((candidate) => candidate.kind === "build" && inBand(candidate))
     );
     // Its walls are brought up to this hall's tier first, too.
-    const wallsLeft = (staged.get("walls") ?? []).some(inBand);
+    const wallsLeft = [...(staged.get("walls") ?? []), ...(staged.get("wallUpgrades") ?? [])].some(inBand);
     const hallReady =
       staged.size === 0 || (!buildsLeft && !wallsLeft && this.readiness() >= (this.thresholds[this.hall] ?? 1));
 

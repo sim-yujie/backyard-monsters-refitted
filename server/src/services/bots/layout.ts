@@ -4,7 +4,15 @@ import { mulberry32, type Rng } from "../../game-rules/combat/rng.js";
 import { MAX_EXPANSIONS, rectOf, withinBounds, yardSize } from "../yardplanner/layoutGeometry.js";
 import { TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import { capAtHall, wallTargets, type Persona } from "./progression.js";
-import { BEGINNER_TOP_HALL, TOWER_RING_GAPS, TOWER_RING_OFFSET, yardStyleOf, type YardStyle } from "./yardStyle.js";
+import {
+  BEGINNER_TOP_HALL,
+  CORE_CELLS,
+  CORE_WALLS,
+  TOWER_RING_GAPS,
+  TOWER_RING_OFFSET,
+  yardStyleOf,
+  type YardStyle,
+} from "./yardStyle.js";
 
 /**
  * Where a bot's buildings stand (`docs/design/bot-neighbours.md` §4.2 step 2,
@@ -15,27 +23,33 @@ import { BEGINNER_TOP_HALL, TOWER_RING_GAPS, TOWER_RING_OFFSET, yardStyleOf, typ
  * ## The plan
  *
  * Each seed draws one plan up front: the Town Hall's spot near the middle of
- * the plot, a small walled core round it, and a 3 x 3 grid of walled
- * compartments with the core as its middle. The core is the guide's Town Hall
- * and Silo Death Trap: the Town Hall with two silos either side (or above and
- * below), sized so the walls a Town Hall 3 yard stands close it
- * ({@link CORE_LONG}, {@link CORE_SHORT}). The eight compartments round it hold
- * the towers with the harvesters in front of them.
+ * the plot, a small walled core round it, and a 3 x 3 grid with the core as
+ * its middle. The core is the guide's Town Hall and Silo Death Trap: the Town
+ * Hall with two silos either side (or above and below), sized so the walls a
+ * Town Hall 3 yard stands close it ({@link CORE_LONG}, {@link CORE_SHORT}).
+ * The eight compartments round it hold the towers with the harvesters in
+ * front of them.
  *
- * Walls go up one compartment at a time, the core first, then the four beside
- * it in opposite pairs, then the corners, each compartment's walls running on
- * from walls already standing. A compartment is only started when the walls
- * the yard will stand at its Town Hall level (`wallTargets`, the
- * progression's own fill draws) are enough to close it, so the yard shows
- * closed compartments and at most one being built, the one its walls are
- * catching up on. Walls the next compartment cannot use yet double the core:
- * a second ring hard against it, which the guide likes too, built a side at a
- * time (a side those walls will finish first), so a part-built ring reads as
- * a thicker wall, not a gap. Once that ring is whole, walls carry on round the
- * grid regardless, and once the grid is whole they double its outer walls.
- * The compartments are only as deep as a row or two of towers and harvesters
- * needs ({@link DEPTH}); the plan holds every wall a Town Hall 10 allows
- * ({@link TOP_WALLS}), so no wall is ever left over to stand on its own.
+ * How the walls go up depends on the seed's wall style (`yardStyle.ts`). A
+ * yard that walls only its core stands the core, then a ring round the core
+ * and the towers beside it, with gaps. A whole-yard-walled yard (owner review
+ * 2026-10-23: its few walled boxes round the middle read as core-only) stands
+ * the core, then one ring round the whole grid, so the Town Hall, silos,
+ * towers and harvesters all end up inside it. The ring is as big as the walls
+ * its Town Hall {@link ENCLOSURE_HALL} yard stands can close
+ * ({@link enclosureDepths}, `wallTargets`, the progression's own fill draws),
+ * so it closes at that hall; until then it stands part built, one run from
+ * where it was started, the one wall line being caught up on. The grid's
+ * compartments get no walls between them: the room inside the ring is tight,
+ * and buildings may stand hard against its inside.
+ *
+ * Walls nothing else can use yet double the core: a second ring hard against
+ * it, which the guide likes too, built a side at a time (a side those walls
+ * will finish first), so a part-built ring reads as a thicker wall, not a gap.
+ * Once that ring is whole, walls double the outer ring (a whole-yard-walled
+ * yard: double, then treble its ring). The plan holds every wall a Town Hall
+ * 10 allows ({@link TOP_WALLS}), so no wall is ever left over to stand on its
+ * own.
  *
  * Only the core has openings: a two-cell hallway in the middle of each of its
  * two long sides, facing the Town Hall between the silos, and the cells of
@@ -47,7 +61,8 @@ import { BEGINNER_TOP_HALL, TOWER_RING_GAPS, TOWER_RING_OFFSET, yardStyleOf, typ
  * The core, every planned wall cell and a walkway either side of it are kept
  * clear from the first building on, so walls built later always find their
  * path free and nothing stands in a wall line or a hallway. Only a big
- * building may back onto a wall, and never in front of a hallway. A wall
+ * building may back onto a wall (any building, onto the inside of a
+ * whole-yard ring), and never in front of a hallway. A wall
  * cell outside the plot waits for the plot to grow; a compartment is not
  * started until all of it is inside.
  *
@@ -149,7 +164,7 @@ export const TRAP_TYPES: ReadonlySet<number> = new Set([24, 117]);
 const SILO_TYPE = 6;
 
 /** The most walls any Town Hall allows (`buildingCosts.ts`, type 17 at hall 10): the plan has a cell for each. */
-const TOP_WALLS = 400;
+export const TOP_WALLS = 400;
 
 /**
  * The core's inside, long side and short side: the Town Hall (130) with a
@@ -183,6 +198,23 @@ const SILO_INSET = 5;
  * so the base stays compact.
  */
 const DEPTH = { min: 15, max: 18 } as const;
+
+/**
+ * The Town Hall level whose walls close a whole-yard-walled seed's ring round
+ * its grid `[PLACEHOLDER]` (see {@link enclosureDepths}): Town Hall 6, level
+ * 33 or so, the first whose walls ring a grid roomy enough for a Town Hall
+ * 10's towers and harvesters.
+ */
+const ENCLOSURE_HALL = 6;
+
+/** The fewest cells the four grid depths of a whole-yard-walled seed add up to. */
+const ENCLOSURE_DEPTHS_MIN = 36;
+
+/** How much wider than tall that ring is: the plot's own shape (1000 x 800). */
+const ENCLOSURE_ASPECT = 1.2;
+
+/** That ring's place in a whole-yard-walled seed's wall groups: straight after the core. */
+const ENCLOSURE_GROUP = 1;
 
 /** Past this distance from the nearest tower a tower gains nothing more by spreading `[PLACEHOLDER]`. */
 const TOWER_SPREAD = 150;
@@ -535,7 +567,22 @@ const wallPlan = (
     return { slots, groups, places, insides, ring, outerRing: [], openings };
   }
 
-  // The compartments beside the core in opposite pairs, then the corners in diagonal pairs.
+  // One ring round the whole grid next, the yard's silos, towers and harvesters inside it. Until the
+  // walls can close it, it stands part built, one run from where it was started (see the file comment).
+  const enclosure = boxSides(xs[0]!, ys[0]!, xs[3]!, ys[3]!).flat();
+  const enclosureStart = rng.int(enclosure.length);
+  groups.push(
+    enclosure.map((_, k) => {
+      const cell = enclosure[(enclosureStart + k) % enclosure.length]!;
+      return add(cell.x, cell.y);
+    })
+  );
+  places.push([1, 1]);
+  insides.push([xs[0]! + WALL_CELL, ys[0]! + WALL_CELL, xs[3]!, ys[3]!]);
+
+  // The compartments of the grid, which the ring holds without walls between them: the ones beside
+  // the core in opposite pairs, then the corners in diagonal pairs. They only place the fifth and
+  // sixth silos and draw the harvesters inward.
   const sides: [number, number][][] = [
     [
       [1, 0],
@@ -558,45 +605,57 @@ const wallPlan = (
     ],
   ];
   if (rng.int(2) === 1) corners.reverse();
-  const order: [number, number][] = [];
   for (const pair of [...sides, ...corners]) {
     if (rng.int(2) === 1) pair.reverse();
-    order.push(...pair);
-  }
-  // Walls of the core and of the compartments before, which each compartment runs on from.
-  const walled = new Set<string>(corePath.map((cell) => keyOf(cell.x, cell.y)));
-  for (const [i, j] of order) {
-    const path = boxSides(xs[i]!, ys[j]!, xs[i + 1]!, ys[j + 1]!).flat();
-    let start = 0;
-    for (let k = 0; k < path.length; k++) {
-      const here = path[k]!;
-      const next = path[(k + 1) % path.length]!;
-      if (walled.has(keyOf(here.x, here.y)) && !walled.has(keyOf(next.x, next.y))) {
-        start = (k + 1) % path.length;
-        break;
-      }
+    for (const [i, j] of pair) {
+      places.push([i, j]);
+      insides.push([xs[i]! + WALL_CELL, ys[j]! + WALL_CELL, xs[i + 1]!, ys[j + 1]!]);
     }
-    const group: number[] = [];
-    for (let k = 0; k < path.length; k++) {
-      const cell = path[(start + k) % path.length]!;
-      group.push(add(cell.x, cell.y));
-      walled.add(keyOf(cell.x, cell.y));
-    }
-    groups.push(group);
-    places.push([i, j]);
-    insides.push([xs[i]! + WALL_CELL, ys[j]! + WALL_CELL, xs[i + 1]!, ys[j + 1]!]);
   }
 
-  // Walls left once the grid and the core's ring are whole double the grid's outer walls.
-  const outerPath = boxSides(xs[0]! - WALL_CELL, ys[0]! - WALL_CELL, xs[3]! + WALL_CELL, ys[3]! + WALL_CELL).flat();
-  const outerStart = rng.int(outerPath.length);
-  const outerRing = outerPath.map((_, k) => {
-    const cell = outerPath[(outerStart + k) % outerPath.length]!;
-    return add(cell.x, cell.y);
-  });
+  // Walls left once the ring and the core's doubling ring are whole double the ring, then treble it,
+  // so the plan holds every wall a Town Hall 10 allows.
+  const outerRing: number[] = [];
+  for (const out of [1, 2]) {
+    const path = boxSides(
+      xs[0]! - out * WALL_CELL,
+      ys[0]! - out * WALL_CELL,
+      xs[3]! + out * WALL_CELL,
+      ys[3]! + out * WALL_CELL
+    ).flat();
+    const first = rng.int(path.length);
+    for (let k = 0; k < path.length; k++) {
+      const cell = path[(first + k) % path.length]!;
+      outerRing.push(add(cell.x, cell.y));
+    }
+  }
 
   const openings = [...groups[0]!, ...ring.flat()].filter((at) => slots[at]!.opening);
   return { slots, groups, places, insides, ring, outerRing, openings };
+};
+
+/**
+ * A whole-yard-walled seed's grid depths (see the file comment): the ring
+ * round the grid as big as the walls its Town Hall {@link ENCLOSURE_HALL}
+ * yard stands can close once the core is, so the ring closes at that hall
+ * (the progression's own draws, `wallTargets`). The ring is about as much
+ * wider than tall as the plot is; each side's depth is jittered by a cell.
+ */
+const enclosureDepths = (rng: Rng, seed: number, wide: boolean): Depths => {
+  const walls = (wallTargets(seed)[ENCLOSURE_HALL] ?? 0) - CORE_WALLS;
+  // The ring's cells: the core's box grown by every depth on its side, so its wall is CORE_CELLS + 2 x their sum.
+  const total = Math.max(ENCLOSURE_DEPTHS_MIN, Math.floor((walls - CORE_CELLS) / 2));
+  const coreW = (wide ? CORE_LONG : CORE_SHORT) + WALL_CELL;
+  const coreH = (wide ? CORE_SHORT : CORE_LONG) + WALL_CELL;
+  const span = coreW + coreH + total * WALL_CELL;
+  const across = Math.min(total, Math.max(0, Math.round(((span * ENCLOSURE_ASPECT) / (1 + ENCLOSURE_ASPECT) - coreW) / WALL_CELL)));
+  const split = (sum: number): [number, number] => {
+    const first = Math.min(sum, Math.max(0, Math.floor(sum / 2) + rng.int(3) - 1));
+    return [first, sum - first];
+  };
+  const [left, right] = split(across);
+  const [top, bottom] = split(total - across);
+  return { left, right, top, bottom };
 };
 
 /** The seed's plan: centre, walls, bands. */
@@ -625,16 +684,11 @@ const planFor = (seed: number, persona: Persona): Plan => {
 
   // The grid: whole cells out from the core on each side.
   const depth = () => DEPTH.min + rng.int(DEPTH.max - DEPTH.min + 1);
-  const depths: Depths = { left: depth(), right: depth(), top: depth(), bottom: depth() };
+  const drawn: Depths = { left: depth(), right: depth(), top: depth(), bottom: depth() };
   const style = yardStyleOf(seed);
-  // Grown a cell at a time, round the sides, should it not hold every wall. A core-walled yard has
-  // no grid: its depths only set how far out its harvesters reach.
-  let walls = wallPlan(streamOf(seed, SALT.walls), x0, y0, x1, y1, wide, depths, style.walls);
-  const grow: (keyof Depths)[] = ["left", "top", "right", "bottom"];
-  for (let k = 0; style.walls === "full" && walls.slots.filter((slot) => !slot.opening).length < TOP_WALLS; k++) {
-    depths[grow[k % grow.length]!]++;
-    walls = wallPlan(streamOf(seed, SALT.walls), x0, y0, x1, y1, wide, depths, style.walls);
-  }
+  const depths = style.walls === "full" ? enclosureDepths(rng, seed, wide) : drawn;
+  // A core-walled yard has no grid: its depths only set how far out its harvesters reach.
+  const walls = wallPlan(streamOf(seed, SALT.walls), x0, y0, x1, y1, wide, depths, style.walls);
 
   // Silos 5 and 6 (Town Halls 5 and 9) in the two compartments walled first (a core-walled yard: two
   // opposite sides), past the ring and its walkway, and on a hallway's side of the core well clear of it.
@@ -651,7 +705,7 @@ const planFor = (seed: number, persona: Persona): Plan => {
       [2, 1],
     ],
   ];
-  const sidePlaces = style.walls === "full" ? walls.places.slice(1, 3) : pairs[rng.int(2)]!;
+  const sidePlaces = style.walls === "full" ? walls.places.slice(2, 4) : pairs[rng.int(2)]!;
   for (const [i, j] of sidePlaces) {
     if (j === 1) {
       silos.push({ x: i === 0 ? x0 - off - 80 : x1 + WALL_CELL + off, y: along(y0, y1, cy, !wide) });
@@ -945,7 +999,10 @@ class Layout {
     const { cx, cy, core } = plan;
     this.grid.mark(cx - core.hx, cy - core.hy, 2 * core.hx, 2 * core.hy, CORE);
     for (const spot of plan.silos) this.grid.mark(spot.x, spot.y, 80, 80, KEPT);
-    for (const slot of plan.slots) {
+    // Buildings may stand hard against the inside of a whole-yard-walled seed's ring: its room is tight.
+    const hugged = new Set(plan.style.walls === "full" ? plan.groups[ENCLOSURE_GROUP] : []);
+    for (const [at, slot] of plan.slots.entries()) {
+      if (hugged.has(at)) continue;
       const mark = slot.opening ? APPROACH : WALKWAY;
       this.grid.mark(slot.x - WALL_MARGIN, slot.y - WALL_MARGIN, WALL_CELL + 2 * WALL_MARGIN, WALL_CELL + 2 * WALL_MARGIN, mark);
     }
@@ -1036,7 +1093,8 @@ class Layout {
   private bandOf(role: Role): { min: number; max: number } {
     if (role !== "general" && role !== "army") return this.plan.bands[role];
     const own = this.plan.bands[role];
-    const min = this.started.size > 1 ? EDGE.outside : Math.min(EDGE.outside, Math.max(own.min, this.frontier + EDGE.past));
+    // Outside the ring of a whole-yard-walled seed from the start, leaving its room to the base.
+    const min = this.started.size > 1 || this.plan.style.walls === "full" ? EDGE.outside : Math.min(EDGE.outside, Math.max(own.min, this.frontier + EDGE.past));
     return { min, max: min + EDGE.depth };
   }
 
@@ -1201,7 +1259,9 @@ class Layout {
   private insideSpots(type: number, expansion: number, allowed: number, count: number): { x: number; y: number }[] {
     const { w, h } = footprintOf(type);
     const spots: { x: number; y: number; reach: number }[] = [];
-    for (const [x0, y0, x1, y1] of this.plan.insides.slice(1)) {
+    // The ring round a whole-yard-walled grid holds every compartment: its inside is enough.
+    const insides = this.plan.style.walls === "full" ? this.plan.insides.slice(1, 2) : this.plan.insides.slice(1);
+    for (const [x0, y0, x1, y1] of insides) {
       for (let y = y0 + WALL_MARGIN; y + h <= y1 - WALL_MARGIN; y += 2 * GRID) {
         for (let x = x0 + WALL_MARGIN; x + w <= x1 - WALL_MARGIN; x += 2 * GRID) {
           if (this.fits(type, x, y, expansion, allowed)) spots.push({ x, y, reach: this.reachOf(x + w / 2, y + h / 2) });
@@ -1309,8 +1369,9 @@ class Layout {
       const left = groups[g]!.filter((at) => !this.slotUsed[at] && !slots[at]!.opening);
       if (left.length === 0) continue;
       if (!this.started.has(g)) {
-        // A core-walled yard's tower ring may stand part built (see `yardStyle.ts`).
-        const partBuilt = this.plan.style.walls === "core";
+        // A core-walled yard's tower ring may stand part built (see `yardStyle.ts`), and so may the
+        // ring round a whole-yard-walled one's grid, the one its walls catch up on before it is closed.
+        const partBuilt = this.plan.style.walls === "core" || g === ENCLOSURE_GROUP;
         if (!partBuilt && (this.wallsPlaced + left.length > budget || !left.every(free))) break;
         this.started.add(g);
       }
