@@ -382,25 +382,38 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
   );
 
   test(
-    "level 40, whole yard walled: most harvesters sit inside the walled compartments",
+    "whole yard walled: once its ring is closed (by level 40), at least 90% of the key buildings are inside",
     () => {
       let inside = 0;
       let all = 0;
-      for (let seed = 0; seed < 18; seed++) {
-        // A core-walled yard leaves its harvesters out in the open (`yardStyle.ts`).
-        if (yardStyleOf(seed * 7727 + 3).walls !== "full") continue;
-        const { yard, layout } = laidOut(seed * 7727 + 3, PERSONAS[seed % PERSONAS.length]!, 40, 0.8);
-        expect(yard.townHall).toBeGreaterThanOrEqual(8);
-        const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
-        for (const harvester of layout.buildings.filter((spot) => HARVESTERS.has(spot.t))) {
-          all++;
-          if (!reachable(blocks, harvester, layout.expansion)) inside++;
+      let closedYards = 0;
+      for (let level = 30; level <= 40; level++) {
+        for (let seed = 0; seed < (level === 40 ? 30 : 12); seed++) {
+          const at = level * 7727 + seed * 104729 + 3;
+          // A core-walled yard leaves its towers and harvesters out in the open (`yardStyle.ts`).
+          if (yardStyleOf(at).walls !== "full") continue;
+          const { layout } = laidOut(at, PERSONAS[seed % PERSONAS.length]!, level, 0.5);
+          const walls = new Set(layout.buildings.filter((spot) => spot.t === WALL_TYPE).map((spot) => `${spot.X},${spot.Y}`));
+          const ring = botWallPlan(at).filter((cell) => cell.enclosure);
+          const closed = ring.length > 0 && ring.every((cell) => walls.has(`${cell.x},${cell.y}`));
+          // The ring closes at Town Hall 7, level 37-40 or so; every one is closed at level 40.
+          if (level === 40) expect({ level, seed, closed }).toEqual({ level, seed, closed: true });
+          if (!closed) continue;
+          closedYards++;
+          const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
+          const key = layout.buildings.filter(
+            (spot) => spot.t === TOWN_HALL_TYPE || spot.t === SILO || TOWERS.has(spot.t) || HARVESTERS.has(spot.t)
+          );
+          for (const building of key) {
+            all++;
+            if (!reachable(blocks, building, layout.expansion)) inside++;
+          }
         }
       }
-      // Level 40 is Town Hall 8 or so: its walls close the core and about half the compartments.
-      expect(inside / all).toBeGreaterThan(0.45);
+      expect(closedYards).toBeGreaterThan(10);
+      expect(inside / all).toBeGreaterThanOrEqual(0.9);
     },
-    { timeout: 60_000 }
+    { timeout: 120_000 }
   );
 });
 

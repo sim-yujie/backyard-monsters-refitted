@@ -36,9 +36,10 @@ import {
  * 2026-10-23: its few walled boxes round the middle read as core-only) stands
  * the core, then one ring round the whole grid, so the Town Hall, silos,
  * towers and harvesters all end up inside it. The ring is as big as the walls
- * its Town Hall {@link ENCLOSURE_HALL} yard stands can close
+ * halfway between its Town Hall {@link ENCLOSURE_HALL} and 7 yards stand
  * ({@link enclosureDepths}, `wallTargets`, the progression's own fill draws),
- * so it closes at that hall; until then it stands part built, one run from
+ * so it closes at Town Hall 7, level 37-40 or so, roomy enough for nearly
+ * every key building; until then it stands part built, one run from
  * where it was started, the one wall line being caught up on. The grid's
  * compartments get no walls between them: the room inside the ring is tight,
  * and buildings may stand hard against its inside.
@@ -200,10 +201,11 @@ const SILO_INSET = 5;
 const DEPTH = { min: 15, max: 18 } as const;
 
 /**
- * The Town Hall level whose walls close a whole-yard-walled seed's ring round
- * its grid `[PLACEHOLDER]` (see {@link enclosureDepths}): Town Hall 6, level
- * 33 or so, the first whose walls ring a grid roomy enough for a Town Hall
- * 10's towers and harvesters.
+ * The Town Hall level a whole-yard-walled seed's ring round its grid is sized
+ * from `[PLACEHOLDER]` (see {@link enclosureDepths}): halfway between Town
+ * Hall 6's walls and 7's, so it closes at Town Hall 7. A ring Town Hall 6
+ * could close (level 33 or so) is too small: only 70-88% of the key
+ * buildings fit inside it; this one holds 94-100% (probe, 23 Oct 2026).
  */
 const ENCLOSURE_HALL = 6;
 
@@ -639,15 +641,15 @@ const wallPlan = (
 
 /**
  * A whole-yard-walled seed's grid depths (see the file comment): the ring
- * round the grid as big as the walls its Town Hall {@link ENCLOSURE_HALL}
- * yard stands can close once the core is, so the ring closes at that hall
- * (the progression's own draws, `wallTargets`). The ring is about as much
+ * round the grid as big as the walls halfway between its Town Hall
+ * {@link ENCLOSURE_HALL} and 7 yards stand, less the core's, so the ring
+ * closes at Town Hall 7 (the progression's own draws, `wallTargets`). The ring is about as much
  * wider than tall as the plot is; each side's depth is jittered by a cell.
  */
 const enclosureDepths = (rng: Rng, seed: number, wide: boolean): Depths => {
   const targets = wallTargets(seed);
-  const F = Number(process.env.F ?? 0);
-  const walls = (targets[ENCLOSURE_HALL]! + F * (targets[ENCLOSURE_HALL + 1]! - targets[ENCLOSURE_HALL]!)) - Math.max(CORE_WALLS, targets[3] ?? 0);
+  // Halfway between Town Hall 6's and 7's walls, less the core's (and Town Hall 3's few spares, which double it).
+  const walls = (targets[ENCLOSURE_HALL]! + targets[ENCLOSURE_HALL + 1]!) / 2 - Math.max(CORE_WALLS, targets[3] ?? 0);
   // The ring's cells: the core's box grown by every depth on its side, so its wall is CORE_CELLS + 2 x their sum.
   // A single wall over would stand on its own by the core: leave none, or a few that make a run.
   let total = Math.max(ENCLOSURE_DEPTHS_MIN, Math.floor((walls - CORE_CELLS) / 2));
@@ -996,7 +998,6 @@ class Layout {
   /** Walls the yard stands once caught up, by Town Hall level (`wallTargets`). */
   private readonly budgets: number[];
   private wallsPlaced = 0;
-  private hallNow = 1;
   /** How far out each silo, tower and harvester placed so far sits, in order (see {@link frontier}). */
   private readonly baseReach: number[] = [];
   /** Expansions bought early because a building found no room (see the file comment). */
@@ -1106,7 +1107,7 @@ class Layout {
   private bandOf(role: Role): { min: number; max: number } {
     if (role !== "general" && role !== "army") return this.plan.bands[role];
     const own = this.plan.bands[role];
-    const min = this.started.size > 1 || (this.plan.style.walls === "full" && this.hallNow >= Number(process.env.EDGE_HALL ?? 99)) ? EDGE.outside : Math.min(EDGE.outside, Math.max(own.min, this.frontier + EDGE.past));
+    const min = this.started.size > 1 ? EDGE.outside : Math.min(EDGE.outside, Math.max(own.min, this.frontier + EDGE.past));
     return { min, max: min + EDGE.depth };
   }
 
@@ -1441,7 +1442,6 @@ class Layout {
 
   /** Places one building (see the file comment) and returns its spot. */
   place(id: number, type: number, level: number, hall: number): PlacedSpot {
-    this.hallNow = hall;
     const expansion = Math.max(expansionFor(this.seed, level), this.bought);
     const role = roleOf(type);
     const rng = streamOf(this.seed, SALT.building, id);
