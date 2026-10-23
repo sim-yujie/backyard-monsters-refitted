@@ -258,6 +258,8 @@ describe("the population over simulated time", () => {
 
     const made: number[] = [];
     const births: number[] = [];
+    /** Growing bots on levels 1-30, counted at noon UTC each day. */
+    const growingLow: number[] = [];
     const worstOff: number[] = [];
     const totals: number[] = [];
     for (let now = NOW + HOUR; now <= NOW + days * DAY; now += HOUR) {
@@ -281,6 +283,7 @@ describe("the population over simulated time", () => {
         worstOff.push(Math.max(...counts.map((have, index) => Math.abs(have - share[index]!))));
         totals.push(bots.length);
       }
+      if (now % DAY === 12 * HOUR) growingLow.push(bots.filter((one) => one.level <= 30 && !isQuiet(one, now)).length);
       bots = bots.filter((one) => {
         if (one.growAt > now) return true;
         one.growAt = now + (2 + 4 * rng()) * HOUR;
@@ -299,26 +302,29 @@ describe("the population over simulated time", () => {
     }
     const growingOver = (from: number) =>
       bots.filter((one) => one.level >= from && !isQuiet(one, NOW + days * DAY)).length;
-    return { made, births, worstOff, totals, growingOver, bornTop: () => bornTop };
+    return { made, births, growingLow, worstOff, totals, growingOver, bornTop: () => bornTop };
   };
 
   test("over half a year 500 bots keep every level near its share with few new bots a day", () => {
-    const { made, births, worstOff, totals, growingOver, bornTop } = simulate(180, 7);
+    const { made, births, growingLow, worstOff, totals, growingOver, bornTop } = simulate(180, 7);
     expect(Math.max(...worstOff.slice(3))).toBeLessThanOrEqual(SPREAD_TOLERANCE);
     for (const total of totals) {
       expect(total).toBeLessThanOrEqual(TOTAL);
       expect(total).toBeGreaterThan(TOTAL - 40);
     }
-    // About one bot a day starts at level 1; under three new bots a day in all, and never more than the cap.
+    // About BOTS_LEVEL1_PER_DAY bots a day start at level 1, and under two more a day fill short levels; never more than the cap.
     const bornPerDay = births.reduce((a, b) => a + b, 0) / births.length;
     expect(bornPerDay).toBeGreaterThan(DEFAULT_BOTS_LEVEL1_PER_DAY * 0.8);
     expect(bornPerDay).toBeLessThan(DEFAULT_BOTS_LEVEL1_PER_DAY * 1.2);
     const perDay = made.reduce((a, b) => a + b, 0) / made.length;
-    expect(perDay).toBeLessThan(3);
+    expect(perDay).toBeLessThan(DEFAULT_BOTS_LEVEL1_PER_DAY + 2);
     expect(Math.max(...made)).toBeLessThanOrEqual(DEFAULT_BOTS_NEW_PER_DAY);
     // The top levels are still growing.
     expect(growingOver(36)).toBeGreaterThan(30);
     // Some bots started at level 1 grow on through the low levels, as some players do.
     expect(bornTop()).toBeGreaterThanOrEqual(20);
+    // Once they have had two months to climb, levels 1-30 hold a visible number of growing bots (about 16 settled).
+    const lowLater = growingLow.slice(60);
+    expect(lowLater.reduce((a, b) => a + b, 0) / lowLater.length).toBeGreaterThan(8);
   }, 60_000);
 });

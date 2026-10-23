@@ -48,13 +48,14 @@ import { Env } from "../enums/Env.js";
 
 export const DEFAULT_BOTS_TOTAL = 500;
 /** `[PLACEHOLDER]` defaults, from the population simulation (`population.test.ts`). */
-export const DEFAULT_BOTS_QUIET_RATE = 0.1;
 export const DEFAULT_BOTS_GROWING_FLOW = 0.3;
+/** `[PLACEHOLDER]`: halved from 0.1 so more bots started at level 1 grow on through levels 5-30 (owner, 2026-10-23). */
+export const DEFAULT_BOTS_QUIET_RATE = 0.05;
 /** `[PLACEHOLDER]`: a quiet bot shows online about once in three days, a growing one several times a day (owner, 2026-10-23). */
 export const DEFAULT_BOTS_QUIET_ONLINE = 0.05;
 export const DEFAULT_BOTS_NEW_PER_DAY = 8;
-/** `[PLACEHOLDER]`: about one new player's worth of bot a day, so levels 1-30 see some bots grow (owner, 2026-10-23). */
-export const DEFAULT_BOTS_LEVEL1_PER_DAY = 1;
+/** `[PLACEHOLDER]`: three new players' worth of bots a day, so levels 1-30 see some bots grow (owner, 2026-10-23). */
+export const DEFAULT_BOTS_LEVEL1_PER_DAY = 3;
 export const DEFAULT_BOTS_LEVEL_SLACK = 2;
 
 /**
