@@ -224,3 +224,29 @@ describe("routing", () => {
     expect(grid.floodCount()).toBe(2);
   });
 });
+
+describe("line of sight (`PATHING.LineOfSight`, `:573-597`)", () => {
+  it("fails on a standing wall in the way, and passes beside it", () => {
+    const grid = buildPathGrid(oneWall());
+    expect(grid.lineOfSight(-50, 10, 50, 10, -1)).toBe(false);
+    expect(grid.lineOfSight(10, -50, 10, 50, -1)).toBe(false);
+    expect(grid.lineOfSight(-50, 60, 50, 60, -1)).toBe(true);
+    expect(grid.lineOfSight(-50, -40, -50, 60, -1)).toBe(true);
+  });
+
+  it("never counts the target itself, nor a wall that has fallen", () => {
+    const yard = oneWall();
+    const grid = buildPathGrid(yard);
+    expect(grid.lineOfSight(-50, 10, 50, 10, 1)).toBe(true);
+    grid.removeBuilding(yard.buildings[0]!);
+    expect(grid.lineOfSight(-50, 10, 50, 10, -1)).toBe(true);
+  });
+
+  it("is blocked by a Wall alone: a Stone Block and other buildings let it through (`:589`)", () => {
+    const grid = buildPathGrid(
+      yardOf({ "1": { id: 1, t: 18, X: 0, Y: 0 }, "2": { id: 2, t: 20, X: 0, Y: 200 } }),
+    );
+    expect(grid.lineOfSight(-50, 10, 50, 10, -1)).toBe(true);
+    expect(grid.lineOfSight(-50, 220, 80, 220, -1)).toBe(true);
+  });
+});
