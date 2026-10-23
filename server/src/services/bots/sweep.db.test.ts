@@ -435,4 +435,25 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect(climbed.level).toBeLessThanOrEqual(12);
     expect(climbed.quiet_since).not.toBeNull();
   }, 120_000);
+
+  test("a quiet bot shows online only on its BOTS_QUIET_ONLINE share of grows; a growing one on every grow", async () => {
+    const [quiet, growing] = await make([10, 10], 2402);
+    await sql(`UPDATE bym.bot SET quiet_since = ? WHERE userid = ?`, [new Date(NOW * 1000), quiet!.userid]);
+    const marks = async (quietOnline: number, from: number) => {
+      const seen = new Map<number, number>();
+      for (let at = from; at < from + 2 * DAY; at += 3 * HOUR) {
+        await dueNow(at);
+        const rules = config(2);
+        const { online } = await pass(at, 2, { config: () => ({ ...rules(), quietOnline }) });
+        for (const userid of online) seen.set(userid, (seen.get(userid) ?? 0) + 1);
+      }
+      return { quiet: seen.get(quiet!.userid) ?? 0, growing: seen.get(growing!.userid) ?? 0 };
+    };
+
+    const never = await marks(0, NOW);
+    expect(never.quiet).toBe(0);
+    expect(never.growing).toBeGreaterThanOrEqual(15);
+    const always = await marks(1, NOW + 2 * DAY);
+    expect(always.quiet).toBe(always.growing);
+  }, 120_000);
 });
