@@ -106,6 +106,16 @@ The owner's decisions of 2026-09-30 (issue #205), and the defaults the lead acce
   thread. After an accept, Map Room 2 refetches its zones and its own cell; the yard refreshes
   its pool.
 
+## Mail from The game team
+
+The owner dashboard writes to players as "The game team" (sender `-1`; see
+"Replies and Shiny" in `admin-dashboard-api.md`). A reply about a bug report
+can be answered, in that thread only; a Shiny gift given without a report is a
+notice that cannot be answered. Team threads have no truce and no Block, and
+the team is never offered as a contact. In the web client: `SUPPORT_SENDER`,
+the `team` flag and `teamAnswerable` in `web/src/game/mail/mailbox.ts`; the
+reply box or the "cannot be answered" note in `MailboxScreen`.
+
 ## Code
 
 - `web/src/api/mail.ts`: the six routes. `send` turns a refusal or a network failure into a
