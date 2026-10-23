@@ -775,6 +775,10 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)
+  "monsters/ape_3.png": "monsters/ape_3-repaint@4x.png", // Gorgo level 3 repaint (all 16 headings, idle + walk + attack)
+  "monsters/dragon_3.png": "monsters/dragon_3-repaint@4x.png", // Drull level 3 repaint (all 16 headings painted, idle + walk + attack)
+  "monsters/fly_3.png": "monsters/fly_3-repaint@4x.png", // Fomor level 3 repaint (all 16 headings painted, standing + wing beat)
+  "monsters/krallen_2_rev_65.png": "monsters/krallen_2_rev_65-repaint@4x.png", // Krallen look 2 repaint (all 16 headings, run + attack)
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */

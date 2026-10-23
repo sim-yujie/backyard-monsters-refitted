@@ -68,6 +68,18 @@ def feet(mask, frac=0.25):
     return xs[sel].mean(), y1
 
 
+def upper_x(mask):
+    """x centroid of the upper half of the silhouette (head and body: steadier than the feet when the arms and legs swing)."""
+    x0, y0, x1, y1 = bbox(mask)
+    ys, xs = np.where(mask)
+    return xs[ys < (y0 + y1) / 2].mean()
+
+
+def xref(mask):
+    """The horizontal reference a frame is placed by: Fomor's hanging feet in flight (its raised wings swing the upper half), else the upper body."""
+    return feet(mask)[0] if NAME == "fly_3" else upper_x(mask)
+
+
 def key_cell(rgb):
     """RGBA cutout of one painted cell: the magenta ground is flood-filled from the cell edge."""
     rgb = rgb.astype(float)
@@ -153,7 +165,8 @@ cw, ch = CELL[0] * UP, CELL[1] * UP
 placed = {}      # (col, row) -> RGBA cell at 4x
 for c in COLUMNS:
     old_idle = old_body(c, 0)
-    old_fx, old_ground = feet(old_idle)
+    old_ground = feet(old_idle)[1]
+    old_x0 = xref(old_idle)
     old_cx = np.where(old_idle)[1].mean()
     area_0 = solid(frames[c][0][0]).sum()
     ka = k[c]
@@ -164,18 +177,19 @@ for c in COLUMNS:
         hold = SPEC["hold_walk"] and mode == "A" and row > 0
         if hold:
             kk = ka * float(np.clip(np.sqrt(area_0 / s.sum()), 1 - WALK_HOLD, 1 + WALK_HOLD))
-        fx, bottom = feet(s)
+        bottom = feet(s)[1]
         dx = dy = 0.0
         if row == 0:
             idle_ox = old_cx - np.where(s)[1].mean() * kk       # silhouette centre on the old body centre
-            feet_x = fx * kk + idle_ox                           # where row 0's feet are in the cell
-        elif not hold:
-            nx, ny = feet(old_body(c, row))
-            dx, dy = nx - old_fx, ny - old_ground
+            x0 = xref(s) * kk + idle_ox                          # where row 0's reference point is in the cell
+        else:
+            ob = old_body(c, row)
+            dx = xref(ob) - old_x0
+            dy = 0.0 if hold else feet(ob)[1] - old_ground
             if mode == "B":       # an attack keeps still unless the old frame clearly moves
                 dy = 0.0 if abs(dy) < 2 else dy
                 dx = 0.0 if abs(dx) < 1.5 else dx
-        ox = feet_x + dx - fx * kk
+        ox = x0 + dx - xref(s) * kk
         oy = old_ground + dy - bottom * kk
         big = resize_premultiplied(cut, (max(1, round(cut.width * kk * UP)), max(1, round(cut.height * kk * UP))))
         left, top = round(ox * UP), round(oy * UP)
