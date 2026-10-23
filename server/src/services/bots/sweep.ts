@@ -1,7 +1,7 @@
 import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { botConfig, type BotConfig } from "../../config/BotConfig.js";
+import { botConfig, DEFAULT_BOTS_QUIET_ONLINE, type BotConfig } from "../../config/BotConfig.js";
 import type { BotPersona } from "../../database/models/bot.model.js";
 import type { BotJobKind } from "../../database/models/botjob.model.js";
 import { Save } from "../../database/models/save.model.js";
@@ -24,6 +24,7 @@ import {
   anchorFor,
   bornQuietShare,
   drawQuiet,
+  isQuiet,
   paceClock,
   pacePosition,
   planRebalance,
@@ -110,7 +111,8 @@ import { generateBotYard } from "./yardGenerator.js";
  *
  * **Presence** (decision 22): each grow marks the bot online as a yard load
  * does (`markOnline`, the last-seen key for 120 s), so for a minute an attack
- * on it is refused as on a real player's.
+ * on it is refused as on a real player's. A quiet bot, a player who has
+ * stopped, shows online only on a `BotConfig.quietOnline` share of its grows.
  *
  * **Seeded Map Room 2 dev players** (issue #233, `seededPlayers.ts`): rows in
  * state `seeded` get first grows and run `grow` and `repair` as an active bot
@@ -389,7 +391,9 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
   }
   await tx.execute(`UPDATE bym.bot_job SET due_at = ?, attempts = 0 WHERE id = ?`, [at(next), job.id]);
   await tx.execute(`UPDATE bym.bot SET grow_drops = 0 WHERE userid = ? AND grow_drops > 0`, [bot.userid]);
-  return seeded ? {} : { online: bot.userid };
+  if (seeded) return {};
+  if (isQuiet(bot, now) && rng() >= (config.quietOnline ?? DEFAULT_BOTS_QUIET_ONLINE)) return {};
+  return { online: bot.userid };
 };
 
 /**

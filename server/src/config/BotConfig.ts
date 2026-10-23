@@ -16,6 +16,9 @@ import { Env } from "../enums/Env.js";
  * - `BOTS_QUIET_RATE`   — the chance, each level a bot gains, that it goes
  *                         quiet: stops growing, as a player who quits or slows
  *                         down (default {@link DEFAULT_BOTS_QUIET_RATE}, 0-1).
+ * - `BOTS_QUIET_ONLINE` — the chance a quiet bot shows online on a grow (one
+ *                         every 2-6 hours), where a growing bot always does
+ *                         (default {@link DEFAULT_BOTS_QUIET_ONLINE}, 0-1).
  * - `BOTS_GROWING_FLOW` — how many growing bots a day pass each level once
  *                         the population settles; a new bot starts quiet
  *                         unless its level needs it growing for that
@@ -41,28 +44,44 @@ export const DEFAULT_BOTS_TOTAL = 500;
 /** `[PLACEHOLDER]` defaults, from the population simulation (`population.test.ts`). */
 export const DEFAULT_BOTS_QUIET_RATE = 0.1;
 export const DEFAULT_BOTS_GROWING_FLOW = 0.3;
+/** `[PLACEHOLDER]`: a quiet bot shows online about once in three days, a growing one several times a day (owner, 2026-10-23). */
+export const DEFAULT_BOTS_QUIET_ONLINE = 0.05;
 export const DEFAULT_BOTS_NEW_PER_DAY = 8;
 export const DEFAULT_BOTS_LEVEL_SLACK = 2;
 
 /**
- * Days a bot grows on each level, index 1-40 (index 0 is unused)
- * `[PLACEHOLDER]`: a real player's climb, fast early and slow late, until real
- * player data replaces it (`docs/design/bot-neighbours.md` §4.4). Read off
- * the active players' points, it takes about 1.5 days to reach level 10, 10
- * to reach 20, 90 to reach 30 and 600 to reach 40; a bot that grows through
- * level 40 too retires after about 900 days.
+ * Days a bot grows on each level, index 1-40 (index 0 is unused): a real
+ * player's climb (`docs/design/bot-neighbours.md` §4.4).
+ *
+ * Source: the live game's 24 real players on 2026-10-23, all under 13 days
+ * old (the owner's query; a player's age is an upper bound on how long they
+ * took). Levels 11-12 were reached in about a day, 17 in 1-1.3 days, 21 and 25
+ * in about 6 and 26 in about 12. The table reaches level 12 at 0.6 days, 17 at
+ * 1.1, 21 at 2.1, 25 at 5.9 and 26 at 8. From level 17 each level takes 1.4
+ * times the one before; past 26 there is no data, and each level needs about
+ * 1.4 times the points of the one before, so the same rule carries on. That
+ * reaches level 30 at about 28 days, 35 at 150 and 40 at 800; a bot that
+ * grows through level 40 too retires after about 1,100 days.
  */
 export const DAYS_ON_LEVEL: readonly number[] = Object.freeze([
   0,
-  // 1-10
-  0.05, 0.07, 0.09, 0.11, 0.13, 0.15, 0.18, 0.21, 0.25, 0.3,
+  // 1-10: the first half day
+  0.02, 0.03, 0.04, 0.04, 0.05, 0.05, 0.06, 0.06, 0.07, 0.08,
   // 11-20
-  0.36, 0.43, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.2, 2,
+  0.09, 0.09, 0.1, 0.1, 0.11, 0.12, 0.14, 0.2, 0.27, 0.38,
   // 21-30
-  2.4, 3, 3.7, 4.6, 6.1, 7.7, 9.7, 12, 15, 17,
+  0.54, 0.75, 1.05, 1.5, 2.1, 2.9, 4, 5.6, 7.9, 11,
   // 31-40
-  21, 26, 32, 39, 50, 62, 76, 94, 120, 290,
+  15, 22, 30, 42, 59, 83, 116, 162, 227, 318,
 ]);
+
+/**
+ * Quitting early: a bot gaining a level up to `toLevel` goes quiet at `rate`
+ * instead of `BotConfig.quietRate` (unless that is 0, which turns quiet off). Source: 14 of the live game's 24 real
+ * players (2026-10-23) stopped at level 1-4 on their first day; the three
+ * draws of 0.25 on reaching levels 2, 3 and 4 stop 58% of bots there.
+ */
+export const EARLY_QUIET = Object.freeze({ toLevel: 4, rate: 0.25 });
 
 /**
  * How much of the total each level 1-40 holds, index 0 is level 1
@@ -92,8 +111,10 @@ export interface BotConfig {
   readonly revenge: boolean;
   readonly total: number;
   readonly pace: Pace;
-  /** The chance a bot goes quiet each level it gains, 0-1. */
+  /** The chance a bot goes quiet each level it gains past {@link EARLY_QUIET}, 0-1. */
   readonly quietRate: number;
+  /** The chance a quiet bot shows online on a grow, 0-1; absent reads as {@link DEFAULT_BOTS_QUIET_ONLINE}. */
+  readonly quietOnline?: number;
   /** Growing bots a day passing each level once settled: how many new bots start growing. */
   readonly growingFlow: number;
   /** At most this many new bots a day. */
@@ -143,6 +164,7 @@ export const botConfig = (): BotConfig => ({
   total: Math.floor(positiveNumber(process.env.BOTS_TOTAL, DEFAULT_BOTS_TOTAL)) || DEFAULT_BOTS_TOTAL,
   pace: scaledPace(positiveNumber(process.env.BOTS_PACE_SCALE, 1)),
   quietRate: zeroToOne(process.env.BOTS_QUIET_RATE, DEFAULT_BOTS_QUIET_RATE),
+  quietOnline: zeroToOne(process.env.BOTS_QUIET_ONLINE, DEFAULT_BOTS_QUIET_ONLINE),
   growingFlow: positiveNumber(process.env.BOTS_GROWING_FLOW, DEFAULT_BOTS_GROWING_FLOW),
   newPerDay: wholeNumber(process.env.BOTS_NEW_PER_DAY, DEFAULT_BOTS_NEW_PER_DAY),
   levelSlack: wholeNumber(process.env.BOTS_LEVEL_SLACK, DEFAULT_BOTS_LEVEL_SLACK),

@@ -6,6 +6,7 @@ import {
   DEFAULT_BOTS_LEVEL_SLACK,
   DEFAULT_BOTS_NEW_PER_DAY,
   DEFAULT_BOTS_QUIET_RATE,
+  EARLY_QUIET,
 } from "../../config/BotConfig.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { evenSpread } from "./factory.js";
@@ -17,6 +18,7 @@ import {
   paceClock,
   pacePosition,
   planRebalance,
+  quietChance,
   RETIRE_POSITION,
   SPREAD_TOLERANCE,
   type RebalanceBot,
@@ -90,6 +92,20 @@ describe("quiet bots", () => {
     for (let n = 0; n < 4000; n++) if (drawQuiet(rng, 10, 13, NOW, T, 0.1)) quiet++;
     expect(quiet / 4000).toBeGreaterThan(0.24);
     expect(quiet / 4000).toBeLessThan(0.3);
+  });
+
+  test("most bots stop by level 4, as most real players do on their first day; a rate of 0 stops none", () => {
+    expect(quietChance(4, DEFAULT_BOTS_QUIET_RATE)).toBe(EARLY_QUIET.rate);
+    expect(quietChance(5, DEFAULT_BOTS_QUIET_RATE)).toBe(DEFAULT_BOTS_QUIET_RATE);
+    expect(quietChance(2, 0)).toBe(0);
+    const draw = mulberry32(5);
+    const rng = () => draw.float();
+    // Real players: 14 of 24 stopped at level 1-4.
+    let quiet = 0;
+    for (let n = 0; n < 4000; n++) if (drawQuiet(rng, 1, 4, NOW, T, DEFAULT_BOTS_QUIET_RATE)) quiet++;
+    expect(quiet / 4000).toBeGreaterThan(0.54);
+    expect(quiet / 4000).toBeLessThan(0.62);
+    expect(drawQuiet(rng, 1, 4, NOW, T, 0)).toBeNull();
   });
 
   test("new bots start quiet by their level's settled mix: nearly all low, none at the top", () => {

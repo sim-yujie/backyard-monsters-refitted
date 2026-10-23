@@ -8,6 +8,7 @@ import {
   DEFAULT_BOTS_GROWING_FLOW,
   DEFAULT_BOTS_LEVEL_SLACK,
   DEFAULT_BOTS_NEW_PER_DAY,
+  DEFAULT_BOTS_QUIET_ONLINE,
   DEFAULT_BOTS_QUIET_RATE,
   DEFAULT_BOTS_TOTAL,
   LEVEL_WEIGHTS,
@@ -20,6 +21,7 @@ const KEYS = [
   "BOTS_TOTAL",
   "BOTS_PACE_SCALE",
   "BOTS_QUIET_RATE",
+  "BOTS_QUIET_ONLINE",
   "BOTS_GROWING_FLOW",
   "BOTS_NEW_PER_DAY",
   "BOTS_LEVEL_SLACK",
@@ -50,6 +52,7 @@ describe("bot switches (issue #235)", () => {
       total: DEFAULT_BOTS_TOTAL,
       pace: DAYS_ON_LEVEL,
       quietRate: DEFAULT_BOTS_QUIET_RATE,
+      quietOnline: DEFAULT_BOTS_QUIET_ONLINE,
       growingFlow: DEFAULT_BOTS_GROWING_FLOW,
       newPerDay: DEFAULT_BOTS_NEW_PER_DAY,
       levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
@@ -91,18 +94,21 @@ describe("bot switches (issue #235)", () => {
 
   test("the quiet rate takes 0-1, the daily cap and slack whole numbers, the flow a positive number", () => {
     process.env.BOTS_QUIET_RATE = "0";
+    process.env.BOTS_QUIET_ONLINE = "0.2";
     process.env.BOTS_NEW_PER_DAY = "0";
     process.env.BOTS_LEVEL_SLACK = "3";
     process.env.BOTS_GROWING_FLOW = "0.6";
-    expect(botConfig()).toMatchObject({ quietRate: 0, newPerDay: 0, levelSlack: 3, growingFlow: 0.6 });
+    expect(botConfig()).toMatchObject({ quietRate: 0, quietOnline: 0.2, newPerDay: 0, levelSlack: 3, growingFlow: 0.6 });
 
     for (const bad of ["", "1.5", "-0.1", "lots"]) {
       process.env.BOTS_QUIET_RATE = bad;
+      process.env.BOTS_QUIET_ONLINE = bad;
       process.env.BOTS_NEW_PER_DAY = bad === "" ? "2.5" : bad;
       process.env.BOTS_LEVEL_SLACK = bad;
       process.env.BOTS_GROWING_FLOW = bad === "" ? "0" : bad === "1.5" ? "-1" : bad;
       expect(botConfig()).toMatchObject({
         quietRate: DEFAULT_BOTS_QUIET_RATE,
+        quietOnline: DEFAULT_BOTS_QUIET_ONLINE,
         newPerDay: DEFAULT_BOTS_NEW_PER_DAY,
         levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
         growingFlow: DEFAULT_BOTS_GROWING_FLOW,
@@ -111,19 +117,29 @@ describe("bot switches (issue #235)", () => {
   });
 });
 
-describe("the growth curve [PLACEHOLDER]", () => {
-  test("a day or more for each level 1-40, never faster later, fast early and slow late", () => {
+describe("the growth curve", () => {
+  test("every level 1-40 takes some time, never less than the one before", () => {
     expect(DAYS_ON_LEVEL).toHaveLength(41);
     for (let level = 2; level <= 40; level++) expect(DAYS_ON_LEVEL[level]!).toBeGreaterThanOrEqual(DAYS_ON_LEVEL[level - 1]!);
     expect(DAYS_ON_LEVEL[1]!).toBeGreaterThan(0);
-    // About a real player's climb: level 10 in a day or two, 20 in about ten, 30 in about three months, 40 in about 600 days.
-    expect(daysBetween(1, 10, DAYS_ON_LEVEL)).toBeLessThan(2);
-    expect(daysBetween(1, 20, DAYS_ON_LEVEL)).toBeGreaterThan(5);
-    expect(daysBetween(1, 20, DAYS_ON_LEVEL)).toBeLessThan(15);
-    expect(daysBetween(1, 30, DAYS_ON_LEVEL)).toBeGreaterThan(60);
-    expect(daysBetween(1, 30, DAYS_ON_LEVEL)).toBeLessThan(120);
-    expect(daysBetween(1, 40, DAYS_ON_LEVEL)).toBeGreaterThan(450);
-    expect(daysBetween(1, 41, DAYS_ON_LEVEL)).toBeGreaterThan(800);
+  });
+
+  test("fits the live game's real players (2026-10-23; their ages are upper bounds)", () => {
+    const reach = (level: number) => daysBetween(1, level, DAYS_ON_LEVEL);
+    // Levels 11-12 in about a day, 17 in 1-1.3 days, 21 and 25 within about 6, 26 within about 12.
+    expect(reach(13)).toBeLessThanOrEqual(1);
+    expect(reach(17)).toBeGreaterThan(0.8);
+    expect(reach(17)).toBeLessThanOrEqual(1.3);
+    expect(reach(21)).toBeLessThanOrEqual(6);
+    expect(reach(25)).toBeGreaterThan(4);
+    expect(reach(25)).toBeLessThanOrEqual(6);
+    expect(reach(26)).toBeLessThanOrEqual(12);
+    // Past 26, no data: each level needs about 1.4 times the points, so takes about 1.4 times as long.
+    for (let level = 27; level <= 40; level++) {
+      const ratio = DAYS_ON_LEVEL[level]! / DAYS_ON_LEVEL[level - 1]!;
+      expect(ratio).toBeGreaterThan(1.3);
+      expect(ratio).toBeLessThan(1.5);
+    }
   });
 
   test("a number is the same days on every level; past the table, its last level", () => {

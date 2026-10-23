@@ -1,4 +1,4 @@
-import { daysBetween, daysOn, type Pace } from "../../config/BotConfig.js";
+import { daysBetween, daysOn, EARLY_QUIET, type Pace } from "../../config/BotConfig.js";
 import { BOT_MAX_LEVEL } from "./factory.js";
 
 /**
@@ -20,7 +20,8 @@ import { BOT_MAX_LEVEL } from "./factory.js";
  *
  * Each level a bot gains, it has `BotConfig.quietRate` chance to go quiet
  * ({@link drawQuiet}): to stop growing at some point of the level it is on,
- * as a player who quits or slows down. From `quiet_since` on its place on the
+ * as a player who quits or slows down. Up to level 4 the chance is
+ * `EARLY_QUIET`'s, higher, as most real players stop there on day one. From `quiet_since` on its place on the
  * climb stands still; the sweep still repairs it, refills it and keeps its
  * loot in band. A quiet bot never wakes up again. A new bot, from the fill or
  * the rebalance, starts quiet by its level's settled mix ({@link bornQuietShare}).
@@ -100,7 +101,8 @@ export const anchorFor = (position: number, level: number, clock: number, pace: 
 
 /**
  * When a bot that just climbed from level `from` to `to` goes quiet, or null
- * when it keeps growing: each level gained has `quietRate` chance. The bot
+ * when it keeps growing: each level gained has `quietRate` chance
+ * ({@link quietChance}). The bot
  * stops at a random point of the level it is on, so quiet bots stand all
  * through their levels rather than at the bottom.
  */
@@ -113,10 +115,14 @@ export const drawQuiet = (
   quietRate: number
 ): Date | null => {
   for (let level = from + 1; level <= Math.min(to, BOT_MAX_LEVEL); level++) {
-    if (rng() < quietRate) return new Date((now + rng() * daysOn(pace, to) * DAY) * 1000);
+    if (rng() < quietChance(level, quietRate)) return new Date((now + rng() * daysOn(pace, to) * DAY) * 1000);
   }
   return null;
 };
+
+/** The chance a bot reaching `level` goes quiet: `EARLY_QUIET`'s up to its level, `quietRate` past it; never at 0. */
+export const quietChance = (level: number, quietRate: number): number =>
+  quietRate > 0 && level <= EARLY_QUIET.toLevel ? EARLY_QUIET.rate : quietRate;
 
 /**
  * The share of new bots on `level` that start quiet, so a level is made with
