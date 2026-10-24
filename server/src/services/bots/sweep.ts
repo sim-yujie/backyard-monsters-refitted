@@ -18,7 +18,15 @@ import { catchUpYard } from "../yard/catchUp.js";
 import { syncBaseValue, syncDerivedLevels } from "../yard/derivedLevels.js";
 import { damagedBuildings, planRepair } from "../yard/repair.js";
 import { REPAIR_DELAY_HOURS } from "./afterAttack.js";
-import { applyGrowth, holdLootInBand, rearmFiredTraps, refillArmy, targetAt, tendChampion } from "./brain.js";
+import {
+  applyGrowth,
+  holdLootInBand,
+  rearmFiredTraps,
+  rebuildYard,
+  refillArmy,
+  targetAt,
+  tendChampion,
+} from "./brain.js";
 import { BOT_MIN_LEVEL, createBots, evenSpread } from "./factory.js";
 import {
   anchorFor,
@@ -46,7 +54,7 @@ import { tendShiny } from "./shiny.js";
 import { declineTruce } from "./truceDecline.js";
 import { declineFriend } from "./friendDecline.js";
 import { visitMapRoom1 } from "./lookAlike.js";
-import { generateBotYard } from "./yardGenerator.js";
+import { BOT_YARD_VERSION, generateBotYard } from "./yardGenerator.js";
 
 /**
  * The bot sweep (issue #240, `docs/design/bot-neighbours.md` §6): the one
@@ -96,6 +104,14 @@ import { generateBotYard } from "./yardGenerator.js";
  *
  * A damaged yard does not grow (a player repairs before upgrading); a grow
  * that finds damage and no repair booked books one.
+ *
+ * **Older yards**: a bot whose `bot.yard_version` is below the generator's
+ * (`BOT_YARD_VERSION`, `yardGenerator.ts`) has its yard rebuilt whole by its
+ * next grow (`rebuildYard`, `brain.ts`), damaged or not, and the version
+ * set, instead of growing; from then on it grows as usual. A repair before
+ * then repairs but leaves the traps and the army to the rebuild. This is how
+ * a database's bots pick up a generator change such as version 2's Monster
+ * Locker, without being remade.
  *
  * **Retirement** (decision 17): a bot whose place on the climb passes level
  * 40 moves to Map Room 2 with no world (`mapversion` 2, `worldid` null),
@@ -205,6 +221,7 @@ interface BotRow {
   level_since: Date;
   quiet_since: Date | null;
   state: string;
+  yard_version: number;
 }
 
 /** What a job leaves to do once it has committed. */
@@ -228,6 +245,8 @@ export interface SweepReport {
   grew: { userid: number; from: number; to: number }[];
   /** Bots whose growth was refused (logged): their yard is not the generator's. */
   refused: number[];
+  /** Bots whose yard an older generator made, rebuilt by this one's (`BOT_YARD_VERSION`). */
+  rebuilt: number[];
   /**
    * Revenge jobs by what became of them: `landed`, `pending`, `wait:<why>`,
    * `cancel:<why>`, and after a landing `chain:next` or `chain:<why it ended>`.
@@ -254,7 +273,7 @@ const hoursAfter = (now: number, hours: { min: number; max: number }, rng: () =>
 
 const lockBot = async (tx: EntityManager, userid: number, lock = true): Promise<BotRow | null> => {
   const [row] = await tx.execute<BotRow[]>(
-    `SELECT userid, seed, persona, level, level_since, quiet_since, state FROM bym.bot WHERE userid = ?${lock ? " FOR UPDATE" : ""}`,
+    `SELECT userid, seed, persona, level, level_since, quiet_since, state, yard_version FROM bym.bot WHERE userid = ?${lock ? " FOR UPDATE" : ""}`,
     [userid]
   );
   if (!row) return null;
@@ -264,6 +283,7 @@ const lockBot = async (tx: EntityManager, userid: number, lock = true): Promise<
     level: Number(row.level),
     level_since: new Date(row.level_since),
     quiet_since: row.quiet_since ? new Date(row.quiet_since) : null,
+    yard_version: Number(row.yard_version) || 1,
   };
 };
 
@@ -359,7 +379,18 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
 
   const next = hoursAfter(now, GROW_EVERY_HOURS, rng);
   const yard = yardAt(bot, position, now);
-  if (damagedBuildings(save).length > 0) {
+  if (bot.yard_version < BOT_YARD_VERSION) {
+    // An older generator's yard: replaced once by this one's, undamaged (`rebuildYard`).
+    rebuildYard(save, yard);
+    catchUpYard(save, now);
+    await tx.execute(`UPDATE bym.bot SET yard_version = ? WHERE userid = ?`, [BOT_YARD_VERSION, bot.userid]);
+    report.rebuilt.push(bot.userid);
+    logger.info("Bot {userid}'s yard rebuilt for generator version {version}", {
+      userid: bot.userid,
+      from: bot.yard_version,
+      version: BOT_YARD_VERSION,
+    });
+  } else if (damagedBuildings(save).length > 0) {
     // Repair before upgrading, as a player would; make sure a repair is coming.
     await tx.execute(
       `INSERT INTO bym.bot_job (bot_userid, kind, due_at) VALUES (?, 'repair', ?) ON CONFLICT DO NOTHING`,
@@ -433,8 +464,11 @@ const repair: Handler = async (tx, job, { now, config, rng }) => {
   }
   const climbed = pacePosition(row, now, config.pace);
   const yard = yardAt(row, row.state === "seeded" ? Math.min(climbed, SEEDED_TOP_POSITION) : climbed, now);
-  rearmFiredTraps(save, yard);
-  refillArmy(save, yard);
+  // An older generator's yard waits for its next grow's rebuild: this generator's traps and army are not its own.
+  if (row.yard_version >= BOT_YARD_VERSION) {
+    rearmFiredTraps(save, yard);
+    refillArmy(save, yard);
+  }
   tendChampion(save, yard, true);
   holdLootInBand(save, rng);
   await deleteJob(tx, job);
@@ -812,6 +846,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     born: [],
     grew: [],
     refused: [],
+    rebuilt: [],
     revenge: {},
   };
   const context: JobContext = { now, config, rng: deps.rng ?? Math.random, report, revenge: deps.revenge };

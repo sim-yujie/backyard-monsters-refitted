@@ -13,6 +13,7 @@ import {
   applyGrowth,
   holdLootInBand,
   rearmFiredTraps,
+  rebuildYard,
   refillArmy,
   targetAt,
   tendChampion,
@@ -180,6 +181,43 @@ describe("growth (§4.4)", () => {
     catchUpYard(save as Parameters<typeof catchUpYard>[0], NOW + 2 * 3600);
     expect(shape(save.buildingdata)).toEqual(wantedShape(third));
     expect(save.points).toBe(third.points);
+  });
+});
+
+describe("rebuilding an older generator's yard", () => {
+  test("the yard becomes the generator's whole, undamaged and idle, and then grows as usual", () => {
+    const yard = yardFor(9595, "army", 22.4);
+    // Another seed's yard stands in for the one an older generator made: ids and spots differ.
+    const old = yardFor(1234, "towers", 22.4);
+    const save = saveOf(old);
+    expect("refused" in applyGrowth(structuredClone(save), yard, 3600)).toBe(true);
+
+    const [damagedId] = Object.keys(save.buildingdata!);
+    save.buildinghealthdata = { [damagedId!]: 10 };
+    save.firedtraps = [{ id: 1, t: 24, X: 0, Y: 0 }] as unknown as BrainSave["firedtraps"];
+    save.lockerdata = { C1: { t: 2 }, C16: { t: 2 }, C17: { t: 1, s: NOW, e: NOW + 60 } };
+    save.storedata = { ...save.storedata, ENL: { q: 5 }, BLK: { q: 1 } };
+    const spot = yard.buildings.find((building) => building.t !== 14)!;
+    save.mushrooms = { l: [[2, spot.X, spot.Y], [3, 9_000, 9_000]], s: NOW };
+
+    rebuildYard(save, yard);
+
+    expect(shape(save.buildingdata)).toEqual(wantedShape(yard));
+    expect(save.points).toBe(yard.points);
+    expect(save.buildinghealthdata).toEqual({});
+    expect(save.firedtraps).toEqual([]);
+    expect(save.lockerdata).toEqual(yard.lockerdata);
+    expect(save.academy).toEqual(yard.academy);
+    expect(save.monsters).toEqual(yard.monsters);
+    expect(save.champion).toEqual(yard.champion);
+    expect(save.mushrooms).toEqual({ l: [[3, 9_000, 9_000]], s: NOW });
+    // The plot never shrinks, and the store's other items stay.
+    expect(save.storedata).toMatchObject({ ENL: { q: Math.max(5, yard.storedata.ENL?.q ?? 0) }, BLK: { q: 1 } });
+
+    expect(grown(applyGrowth(save, yard, 3600)).built).toEqual([]);
+    const later = yardFor(9595, "army", 23.6);
+    const next = grown(applyGrowth(save, later, 3600));
+    expect(next.built.length + next.upgraded.length).toBeGreaterThan(0);
   });
 });
 

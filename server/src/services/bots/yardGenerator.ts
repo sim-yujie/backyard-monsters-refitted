@@ -1,6 +1,6 @@
 import { CHAMPION_CATALOGUE, championMaxHealth, type ChampionEntry } from "../../game-data/championCatalogue.js";
 import { productionOf } from "../../game-data/buildingCosts.js";
-import { housingSpace, LISTED_MONSTERS, maxTrainingLevel } from "../../game-data/monsterCatalogue.js";
+import { housingSpace, LISTED_MONSTERS, maxTrainingLevel, type MonsterEntry } from "../../game-data/monsterCatalogue.js";
 import { mulberry32, type Rng } from "../../game-rules/combat/rng.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
@@ -25,8 +25,10 @@ import { yardAtPoints, type Persona, type ProgressionBuilding } from "./progress
  * order never depends on it:
  *
  * - **Unlocks** (§4.2 step 3): every monster the Monster Locker's level allows,
- *   less one or two of the top tier the locker has reached; a tier below the
- *   locker's level is whole, so a bot that grows never loses an unlock. The
+ *   less the last one or two (in the locker's list order) of the top tier the
+ *   locker has reached; a tier below the locker's level is whole, so a bot
+ *   that grows never loses an unlock. The locker keeps step with the Town
+ *   Hall (`progression.ts`), so the army is as wide as the hall allows. The
  *   Pokey is always unlocked, as for every player (`STARTER_MONSTER`).
  * - **Academy levels** by level band ({@link academyBandLevel},
  *   `[PLACEHOLDER]`), one less on some monsters, never past what the yard's
@@ -48,6 +50,18 @@ import { yardAtPoints, type Persona, type ProgressionBuilding } from "./progress
  * - **Workers**: {@link BOT_WORKERS}, as a player who bought two more early
  *   (owner decision, 2026-10-23), held as the store's `BEW` purchases.
  */
+
+/**
+ * The generator's version, kept in `bot.yard_version` for the yards it makes.
+ * Bump it with any change that means a yard made before no longer grows into
+ * the yard made now (the build order, the layout, the unlocks); the sweep's
+ * next grow rebuilds an older yard once (`rebuildYard`, `brain.ts`).
+ *
+ * - 1: the first yards.
+ * - 2: the Monster Locker keeps step with the Town Hall (`progression.ts`),
+ *   and unlocks follow the locker's list order.
+ */
+export const BOT_YARD_VERSION = 2;
 
 /** The workers every bot has `[PLACEHOLDER]`: the free one and two bought (`storedata.BEW.q`, `yardplanner/workers.ts`). */
 export const BOT_WORKERS = 3;
@@ -150,21 +164,25 @@ const asBuildingData = (buildings: readonly ProgressionBuilding[]): BuildingData
 const topLevel = (buildings: readonly ProgressionBuilding[], type: number): number =>
   buildings.reduce((best, building) => (building.t === type ? Math.max(best, building.l) : best), 0);
 
+/** Listed monsters in the Monster Locker's own order: page, then place on the page (`CREATURELOCKERPOPUP.as`). */
+const LOCKER_ORDER: readonly MonsterEntry[] = [...LISTED_MONSTERS].sort((a, b) => a.page - b.page || a.order - b.order);
+
 /**
  * The monsters unlocked with a Monster Locker at `lockerLevel` (§4.2 step 3):
- * every listed surface monster up to that level, less one or two of the top
- * tier, picked by the seed per tier. The Pokey always stays.
+ * every listed surface monster up to that level, less the last one or two of
+ * the top tier, so a bot unlocks each tier in the locker's list order as a
+ * player working down the list would. How many are held back is drawn by the
+ * seed per tier. The Pokey always stays.
  */
 export const unlockedMonsters = (seed: number, lockerLevel: number): string[] => {
   const unlocked = new Set<string>([STARTER_MONSTER]);
   for (let tier = 1; tier <= lockerLevel; tier++) {
-    const inTier = LISTED_MONSTERS.filter((entry) => entry.level === tier).map((entry) => entry.id);
+    const inTier = LOCKER_ORDER.filter((entry) => entry.level === tier).map((entry) => entry.id);
     let held = new Set<string>();
     if (tier === lockerLevel) {
-      const rng = streamOf(seed, SALT.unlocks + tier);
       const pool = inTier.filter((id) => id !== STARTER_MONSTER);
-      const drop = Math.min(pool.length, 1 + rng.int(2));
-      held = new Set(shuffled(rng, pool).slice(0, drop));
+      const drop = Math.min(pool.length, 1 + streamOf(seed, SALT.unlocks + tier).int(2));
+      held = new Set(pool.slice(pool.length - drop));
     }
     for (const id of inTier) if (!held.has(id)) unlocked.add(id);
   }

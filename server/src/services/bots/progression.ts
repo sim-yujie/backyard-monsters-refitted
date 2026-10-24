@@ -4,6 +4,7 @@ import { mulberry32, type Rng } from "../../game-rules/combat/rng.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import { BaseType } from "../../enums/Base.js";
 import { BUILDABLE_TYPES, buildGates } from "../yard/build.js";
+import { LOCKER_TYPE } from "../yard/locker.js";
 import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
 import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
@@ -87,6 +88,17 @@ import { CORE_WALLS, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
  * reached against what the hall allows, walls and traps aside) passes a
  * threshold drawn per hall level from the seed ({@link READINESS}), or when
  * nothing else is left to do.
+ *
+ * ## The Monster Locker
+ *
+ * A player opens the next page of the Monster Locker as soon as their Town
+ * Hall lets them, so a bot's locker keeps step with its hall: every Town Hall
+ * upgrade takes the locker step the new hall allows with it, as one action
+ * (the build at Town Hall 2, then one level with each hall up to Town Hall
+ * 5). The pair earns its points together, so the level-band rules and the
+ * cut at a target see one action, and a yard never stands with a new hall
+ * and the old locker. Every bot from Town Hall 2 on (every bot from level 15)
+ * has a locker at the top level its hall allows.
  *
  * ## Walls and traps (issues #250, #252)
  *
@@ -354,12 +366,14 @@ export interface ProgressionAction {
   t: number;
   /** Its level after the action. */
   to: number;
-  /** Empire points earned. */
+  /** Empire points earned, the locker step's included. */
   points: number;
-  /** The base value's raw sum (time plus resources) gained, before the tenth. */
+  /** The base value's raw sum (time plus resources) gained, before the tenth, the locker step's included. */
   raw: number;
   /** Points plus base value after the action. */
   total: number;
+  /** The Monster Locker step a Town Hall upgrade takes with it (see the file comment). */
+  then?: { kind: "build" | "upgrade"; id: number; t: number; to: number };
 }
 
 /** The empire level of a points-plus-base-value total (`calculateBaseLevel`). */
@@ -478,7 +492,15 @@ interface Candidate {
   from: number;
   points: number;
   raw: number;
+  /** The Monster Locker step a Town Hall upgrade takes with it (see the file comment). */
+  then?: Candidate;
 }
+
+/** Points and raw value a candidate earns, the locker step it takes along included. */
+const gainOf = (candidate: Candidate): { points: number; raw: number } => ({
+  points: candidate.points + (candidate.then?.points ?? 0),
+  raw: candidate.raw + (candidate.then?.raw ?? 0),
+});
 
 /**
  * The run itself: a yard that grows one action at a time.
@@ -566,15 +588,17 @@ export class Progression {
     if (this.pending === undefined) this.pending = this.choose();
     const candidate = this.pending;
     if (!candidate) return null;
-    const raw = this.raw + candidate.raw;
+    const gain = gainOf(candidate);
+    const then = candidate.then;
     return {
       kind: candidate.kind,
       id: candidate.id,
       t: candidate.t,
       to: candidate.from + 1,
-      points: candidate.points,
-      raw: candidate.raw,
-      total: this.points + candidate.points + valueOfRaw(raw),
+      points: gain.points,
+      raw: gain.raw,
+      total: this.points + gain.points + valueOfRaw(this.raw + gain.raw),
+      ...(then && { then: { kind: then.kind, id: then.id, t: then.t, to: then.from + 1 } }),
     };
   }
 
@@ -583,6 +607,14 @@ export class Progression {
     if (this.pending === undefined) this.pending = this.choose();
     const candidate = this.pending;
     if (!candidate) throw new Error("The bot progression has nothing left to do.");
+    this.take(candidate);
+    // The locker step goes through the gates with the new hall standing.
+    if (candidate.then) this.take(candidate.then);
+    this.pending = undefined;
+  }
+
+  /** One candidate through the server's gate, then into the yard. */
+  private take(candidate: Candidate): void {
     this.verify(candidate);
     if (candidate.kind === "build") {
       this.nextId++;
@@ -596,7 +628,6 @@ export class Progression {
     this.points += candidate.points;
     this.raw += candidate.raw;
     this.steps++;
-    this.pending = undefined;
   }
 
   private add(building: ProgressionBuilding): void {
@@ -620,18 +651,24 @@ export class Progression {
     return have;
   }
 
-  /** The `re` check on the index (`requirementsMet`, `yardplanner/costs.ts`). */
-  private meets(step: CostStep): boolean {
-    return step[5].every(([type, count, level]) => this.countAtLeast(type, level) >= count);
+  /**
+   * The `re` check on the index (`requirementsMet`, `yardplanner/costs.ts`),
+   * with the Town Hall at `hall`: one up for the locker step an upgrade takes along.
+   */
+  private meets(step: CostStep, hall = this.hall): boolean {
+    return step[5].every(
+      ([type, count, level]) =>
+        (type === TOWN_HALL_TYPE ? (hall >= level ? 1 : 0) : this.countAtLeast(type, level)) >= count
+    );
   }
 
   /** The screen for a build: the build menu, `quantity[hall]`, `re`. */
-  private buildCandidate(type: number): Candidate | null {
+  private buildCandidate(type: number, hall = this.hall): Candidate | null {
     const step = costOf(type)?.costs[0];
     if (!step) return null;
     const have = this.byType.get(type)?.length ?? 0;
-    if (have >= allowedAt(type, this.hall)) return null;
-    if (!this.meets(step)) return null;
+    if (have >= allowedAt(type, hall)) return null;
+    if (!this.meets(step, hall)) return null;
     return {
       kind: "build",
       t: type,
@@ -643,7 +680,7 @@ export class Progression {
   }
 
   /** The screen for an upgrade of the lowest building of `type`: maximum level, `re`. */
-  private upgradeCandidate(type: number): Candidate | null {
+  private upgradeCandidate(type: number, hall = this.hall): Candidate | null {
     if (type === MAP_ROOM_TYPE) return null;
     const list = this.byType.get(type);
     if (!list || list.length === 0) return null;
@@ -651,7 +688,7 @@ export class Progression {
     for (const building of list) if (building.l < lowest.l) lowest = building;
     const costs = costOf(type)?.costs ?? [];
     const step = costs[lowest.l];
-    if (!step || !this.meets(step)) return null;
+    if (!step || !this.meets(step, hall)) return null;
     return {
       kind: "upgrade",
       t: type,
@@ -719,8 +756,19 @@ export class Progression {
       push(this.buildCandidate(type));
       push(this.upgradeCandidate(type));
     }
-    push(this.upgradeCandidate(TOWN_HALL_TYPE));
+    push(this.hallCandidate());
     return groups;
+  }
+
+  /** The Town Hall upgrade, with the locker step the new hall allows (see the file comment). */
+  private hallCandidate(): Candidate | null {
+    const hall = this.upgradeCandidate(TOWN_HALL_TYPE);
+    if (!hall) return null;
+    const next = hall.from + 1;
+    const then = this.byType.has(LOCKER_TYPE)
+      ? this.upgradeCandidate(LOCKER_TYPE, next)
+      : this.buildCandidate(LOCKER_TYPE, next);
+    return then ? { ...hall, then } : hall;
   }
 
   /** The stage of the plan an action belongs to, or null when the plan leaves it out at this hall (see {@link Stage}). */
@@ -777,8 +825,10 @@ export class Progression {
     const level = this.level;
     // Points plus base value at which the yard would stand two levels up.
     const ceiling = experiencePoints[level + 1] ?? Number.POSITIVE_INFINITY;
-    const totalAfter = (candidate: Candidate) =>
-      this.points + candidate.points + valueOfRaw(this.raw + candidate.raw);
+    const totalAfter = (candidate: Candidate) => {
+      const gain = gainOf(candidate);
+      return this.points + gain.points + valueOfRaw(this.raw + gain.raw);
+    };
     const inBand = (candidate: Candidate) => totalAfter(candidate) < ceiling;
 
     const staged = new Map<Stage, Candidate[]>();
@@ -878,6 +928,11 @@ export const yardAtPoints = (seed: number, persona: Persona, target: number): Pr
     if (action.kind === "build") {
       builtAtLevel[action.id] = run.level;
       builtAtHall[action.id] = run.townHall;
+    }
+    if (action.then?.kind === "build") {
+      // Built under the new hall, at the level the yard stood at before the pair.
+      builtAtLevel[action.then.id] = run.level;
+      builtAtHall[action.then.id] = action.to;
     }
     run.apply();
   }

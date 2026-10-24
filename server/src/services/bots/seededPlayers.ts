@@ -12,6 +12,7 @@ import { catchUpYard } from "../yard/catchUp.js";
 import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { BATCH_SIZE, BOT_MAX_LEVEL, BOT_MIN_LEVEL, botYardSlices, drawBot, fillPlan } from "./factory.js";
 import type { Persona } from "./progression.js";
+import { BOT_YARD_VERSION } from "./yardGenerator.js";
 
 /**
  * Real yards for the Map Room 2 dev players `db:seed:mr2` makes (issue #233).
@@ -176,6 +177,7 @@ export const giveSeededYards = async (
           level: yard.level,
           level_since: profile.levelSince,
           state: "seeded",
+          yard_version: BOT_YARD_VERSION,
         });
         done.push({ userid: player.userid, level: yard.level, persona: profile.persona });
       }

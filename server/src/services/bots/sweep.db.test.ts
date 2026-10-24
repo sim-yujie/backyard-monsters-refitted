@@ -7,7 +7,8 @@ import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
 import { readMushrooms } from "../yard/mushrooms.js";
 import { createBots, deleteBots } from "./factory.js";
-import { LOOT_BAND } from "./yardGenerator.js";
+import { BOT_YARD_VERSION, LOOT_BAND } from "./yardGenerator.js";
+import { monsterEntry } from "../../game-data/monsterCatalogue.js";
 import { LEGACY_BOT_SHINY, shinyBand } from "./shiny.js";
 import { BUNKER_TYPE } from "../yard/bunker.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
@@ -367,6 +368,45 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect((await pass(NOW + HOUR, 1)).report.ran.grow).toBe(1);
     expect((await botRow(bot!.userid)).grow_drops).toBe(0);
   }, 30_000);
+
+  test("an older generator's yard is rebuilt once by the next grow, then grows as usual", async () => {
+    const [bot] = await make([20]);
+    expect((await botRow(bot!.userid)).yard_version).toBe(BOT_YARD_VERSION);
+    await pass(NOW, 1);
+    // A new seed stands in for an older generator: the live yard is no longer the generator's.
+    await sql(`UPDATE bym.bot SET seed = seed + 1, yard_version = 1 WHERE userid = ?`, [bot!.userid]);
+    const save = await saveRow(bot!.userid);
+    const hurtKey = Object.keys(save.buildingdata as Record<string, any>)[0]!;
+    await sql(`UPDATE bym.save SET buildinghealthdata = ? WHERE basesaveid = ?`, [
+      JSON.stringify({ [hurtKey]: 1 }),
+      save.basesaveid,
+    ]);
+
+    await dueNow(NOW + HOUR);
+    const rebuilt = await pass(NOW + HOUR, 1);
+    expect(rebuilt.report.rebuilt).toEqual([bot!.userid]);
+    expect(rebuilt.report.refused).toEqual([]);
+    expect((await botRow(bot!.userid)).yard_version).toBe(BOT_YARD_VERSION);
+    const after = await saveRow(bot!.userid);
+    expect(after.buildinghealthdata).toEqual({});
+    const buildings = Object.values(after.buildingdata as Record<string, any>);
+    const hall = Number(buildings.find((building) => building.t === 14).l);
+    const locker = buildings.find((building) => building.t === 8);
+    expect(Number(locker.l)).toBe(Math.min(hall - 1, 4));
+    for (const id of Object.keys(after.lockerdata)) {
+      if (id !== "C1") expect(monsterEntry(id)!.level).toBeLessThanOrEqual(Number(locker.l));
+    }
+
+    await dueNow(NOW + 6 * DAY);
+    const next = await pass(NOW + 6 * DAY, 1);
+    expect(next.report.ran.grow).toBe(1);
+    expect(next.report.rebuilt).toEqual([]);
+    expect(next.report.refused).toEqual([]);
+    // It built or upgraded something, finished or still running, on the rebuilt yard.
+    const progress = (buildingdata: Record<string, any>) =>
+      Object.values(buildingdata).reduce((sum, one) => sum + 1 + Number(one.l ?? 0) + (one.cU || one.cB ? 1 : 0), 0);
+    expect(progress((await saveRow(bot!.userid)).buildingdata)).toBeGreaterThan(progress(after.buildingdata));
+  }, 60_000);
 
   test("two sweeps at once never run one job twice", async () => {
     const made = await make([15, 17, 19, 21, 23, 25]);
