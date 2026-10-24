@@ -4,8 +4,8 @@ import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLay
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
 import { mulberry32 } from "@/game/combat/rules/rng";
 import { championFlightTop, shadowOffset, sheetUrl, spriteFor } from "@/game/attack/monsterSprites";
-import { yardBounds } from "./YardGrid";
-import { EMPTY_LIFE, type YardLife } from "./yardLifeModel";
+import { depthKey, footprintCentre, yardBounds } from "./YardGrid";
+import { CHAMPION_CAGE_TYPE, EMPTY_LIFE, type YardLife } from "./yardLifeModel";
 import { EGG_HEIGHT, YardLifeLayer } from "./YardLifeLayer";
 
 /** Every sheet arrives at once as a blank of the right size. */
@@ -212,6 +212,42 @@ describe("YardLifeLayer", () => {
     // A Fomor on foot, at level 2, stands on its offset.
     const two = await fomorAt(2, true);
     expect(two.body.y).toBe(two.groundY - MONSTER_SPRITES["G3_2"]!.anchorY);
+  });
+
+  it("draws a champion pacing its cage in front of the whole cage, back fence and all", async () => {
+    const { layer, tops, shadows } = setUp(true);
+    const yardLife = life({ groups: [], workers: 0 });
+    layer.set(yardLife, bounds);
+    layer.attach(tops, shadows);
+    layer.update(everywhere, 0);
+    await flush();
+    const [walker] = layer.walkerList;
+    const body = tops.children[0] as Sprite | undefined;
+    if (!walker || !body) throw new Error("no Gorgo");
+    // The cage's picture and its animation layers, as `YardBuildings` sorts them.
+    const cage = yardLife.cage!;
+    const centre = footprintCentre(bounds, CHAMPION_CAGE_TYPE, cage.x, cage.y);
+    const cageTop = depthKey(centre.x, centre.y, cage.id) * 8 + 3;
+    // At every corner of its pen, the back one, behind the cage's middle, too.
+    const { x, y, width, height } = walker.area;
+    for (const [atX, atY] of [
+      [x, y],
+      [x + width, y],
+      [x, y + height],
+      [x + width, y + height],
+    ] as const) {
+      walker.x = atX;
+      walker.y = atY;
+      layer.update(everywhere, 0);
+      expect(body.zIndex).toBeGreaterThan(cageTop);
+    }
+    // On its way to the Chamber it sorts at its own feet again.
+    walker.x = x;
+    walker.y = y;
+    walker.trip = [{ x: 0, y: 0 }];
+    layer.update(everywhere, 0);
+    expect(body.zIndex).toBe(creepZIndex(x - y + bounds.originX, (x + y) / 2 + bounds.originY, 1));
+    expect(body.zIndex).toBeLessThan(cageTop);
   });
 
   it("walks the creatures on the clock, and under reduced motion does not", () => {
