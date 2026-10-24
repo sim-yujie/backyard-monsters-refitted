@@ -661,8 +661,9 @@ describe("AttackBattleLayer over a session", () => {
   it("adds its own containers after what the overlay already holds", () => {
     const { overlay, marker, layer } = setUp();
     expect(overlay.children[0]).toBe(marker);
-    // Effects, tower fire, Spurtz shells, bars, and the creep effects (projectiles, smoke, numbers).
-    expect(overlay.children).toHaveLength(6);
+    // Effects, tower fire, Spurtz shells, the towers' glow and painted sparks, bars, and the
+    // creep effects (projectiles, smoke, numbers).
+    expect(overlay.children).toHaveLength(8);
     layer.destroy();
     expect(overlay.children).toEqual([marker]);
   });
@@ -673,7 +674,7 @@ describe("AttackBattleLayer over a session", () => {
     layer.update();
     expect(layer.creepCount).toBe(3);
     expect(host.depth.children).toHaveLength(3);
-    const bars = overlay.children[4];
+    const bars = overlay.children[6];
     expect(bars?.children).toHaveLength(9); // bar back, bar front, venom drop per creep
 
     // Before the sheet is in, a marker; once it is, the sheet's cell.
