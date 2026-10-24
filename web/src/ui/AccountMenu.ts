@@ -35,6 +35,9 @@
  *
  * With `onReportBug` it has a "Report a bug" item, which opens the bug report
  * form (`ui/bugReport/BugReportDialog.ts`).
+ *
+ * Beside "Reduce effects" sit the two sound switches, Music and Sound
+ * effects (beta.5), saved with the player's yard (`game/sound/soundSwitches.ts`).
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
@@ -42,6 +45,12 @@ import { waitingText } from "@/game/friends/friendText";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
 import { openAccountSettings } from "@/ui/AccountSettings";
 import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
+import {
+  onSoundSwitches,
+  setSoundSwitch,
+  soundSwitches,
+  type SoundSwitches,
+} from "@/game/sound/soundSwitches";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
 import "@/ui/friends/friends.css";
 import "@/ui/styles/guide-start.css";
@@ -90,6 +99,12 @@ export const accountName = (name: string | null | undefined): string => name?.tr
 /** "Level 12", the pill's line under the name. */
 export const levelText = (level: number): string => `Level ${level}`;
 
+/** "Music: On", a sound switch's item. */
+export const soundSwitchText = (label: string, on: boolean): string => `${label}: ${on ? "On" : "Off"}`;
+
+/** A sound switch's tooltip after its save failed; the switch is already back. */
+export const SOUND_SAVE_FAILED = "Could not save that. Try again.";
+
 export class AccountMenu {
   /** The button and the list, in one wrapper the list hangs from. */
   readonly element: HTMLElement;
@@ -111,6 +126,8 @@ export class AccountMenu {
   private readonly friendsCount: HTMLElement | null = null;
   private readonly buttonCount: HTMLElement | null = null;
   private friendsWaiting = 0;
+  /** The sound switches' subscriptions, let go on destroy. */
+  private readonly stopSound: (() => void)[] = [];
   private readonly name: string;
   private current: AvatarId | null = null;
   private saving = false;
@@ -362,7 +379,11 @@ export class AccountMenu {
       setReduceEffects(!reduceEffects());
       showEffects();
     });
-    this.list.append(settings, this.fullscreen, effects, this.replay, signOut);
+    // Music and sound effects (beta.5): saved with the yard, so they follow
+    // the account (`game/sound/soundSwitches.ts`).
+    const music = this.soundSwitch("music", "Music", "Plays the game's music");
+    const sounds = this.soundSwitch("effects", "Sound effects", "Plays the game's sound effects");
+    this.list.append(settings, this.fullscreen, effects, music, sounds, this.replay, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);
@@ -415,7 +436,40 @@ export class AccountMenu {
   destroy(): void {
     document.removeEventListener("pointerdown", this.dismiss, true);
     document.removeEventListener("keydown", this.dismiss, true);
+    for (const stop of this.stopSound) stop();
     this.element.remove();
+  }
+
+  /**
+   * One of the two sound switches, "Music: On" / "Sound effects: Off". It
+   * waits, greyed, until the account's switches are known, and a failed save
+   * puts it back and says so in its tooltip.
+   */
+  private soundSwitch(which: keyof SoundSwitches, label: string, title: string): HTMLButtonElement {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `btn btn--ghost account-menu__help account-menu__sound account-menu__sound--${which}`;
+    item.setAttribute("role", "menuitemcheckbox");
+    let failed = false;
+    const show = (switches: SoundSwitches | null): void => {
+      const on = switches?.[which] === true;
+      item.disabled = switches === null;
+      item.setAttribute("aria-checked", String(on));
+      item.textContent = switches === null ? `${label}: …` : soundSwitchText(label, on);
+      item.title = failed ? SOUND_SAVE_FAILED : title;
+    };
+    show(soundSwitches());
+    this.stopSound.push(onSoundSwitches(show));
+    item.addEventListener("click", () => {
+      const switches = soundSwitches();
+      if (!switches) return;
+      failed = false;
+      setSoundSwitch(which, !switches[which]).catch(() => {
+        failed = true;
+        show(soundSwitches());
+      });
+    });
+    return item;
   }
 
   /** A picture of the current avatar that follows it when it changes. */

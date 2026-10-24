@@ -50,6 +50,7 @@ import {
 import { dirtFor, surfaceHop } from "./burrowFx";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
+import { StatusIconRow, statusesOf } from "./statusIcons";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { TrapReveal } from "./trapReveal";
 import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
@@ -581,8 +582,8 @@ interface CreepView {
   shadow: Sprite | null;
   barBack: Sprite;
   barFront: Sprite;
-  /** The venom drop over a poisoned creep (issue #352). */
-  venom: Graphics;
+  /** The badges over a creep under an effect: venom, flame, enrage, putty, loot. */
+  status: StatusIconRow;
   /** The ground point at the last tick that was looked at, for the heading. */
   lastX: number;
   lastY: number;
@@ -667,10 +668,9 @@ const SHADOW_ALPHA = 0.8;
 const SPLAT_COLOUR = 0x5da832;
 /** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
 const QUAKE_COLOUR = 0xf28500;
-/** The special moves' bursts (issue #352): a splash, a Bolt's hop, the venom drop. */
+/** The special moves' bursts (issue #352): a splash, a Bolt's hop. */
 const SPLASH_COLOUR = 0xe8d44d;
 const BLINK_COLOUR = 0x9fd4ff;
-const VENOM_COLOUR = 0x7bd62a;
 /** Blink.as:78: a hopping Bolt is drawn at this alpha. A cloaked Brain is drawn the same. */
 const UNSEEN_ALPHA = 0.3;
 const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
@@ -1370,9 +1370,9 @@ export class AttackBattleLayer {
     this.departed.add(view.id);
     this.leavers.set(view.id, { view, plan });
     this.walkOffUntil = Math.max(this.walkOffUntil, shown + WALK_OFF_TICKS + WALK_OFF_PAUSE_TICKS);
-    // Whatever it was doing, it is only walking now: no hurt tint, no venom.
+    // Whatever it was doing, it is only walking now: no hurt tint, no badges.
     view.body.tint = view.baseTint;
-    view.venom.visible = false;
+    view.status.hide();
   }
 
   /** Moves and fades every walker; one that is done goes back to the pool. */
@@ -1433,7 +1433,8 @@ export class AttackBattleLayer {
   /**
    * The special moves' looks (issue #352): a hopping Bolt flickers at the
    * alpha Flash gave it (Blink.as:78), a cloaked Brain is see-through, and a
-   * poisoned creep carries a green drop that grows with its stacks.
+   * creep under an effect carries its icons over the bar ({@link StatusIconRow}),
+   * the venom's growing with its stacks.
    */
   private paintMoves(view: CreepView, tick: number): void {
     const creep = view.snapshot;
@@ -1444,12 +1445,12 @@ export class AttackBattleLayer {
     if (view.burrowed) view.body.alpha = 0;
     view.barBack.alpha = view.burrowed ? 0 : 1;
     view.barFront.alpha = view.barBack.alpha;
-    const stacks = creep?.poisonStacks ?? 0;
-    view.venom.visible = stacks > 0;
-    if (stacks > 0) {
-      view.venom.position.set(view.barBack.x + view.barBack.width + 5, view.barBack.y - 3);
-      view.venom.scale.set(1 + Math.min(stacks, 5) * 0.12);
-    }
+    view.status.show(
+      statusesOf(creep),
+      view.barBack.x + view.barBack.width / 2,
+      view.barBack.y,
+      view.barBack.alpha * view.body.alpha,
+    );
   }
 
   private acquire(creep: CreepSnapshot, tick: number): CreepView {
@@ -1506,10 +1507,8 @@ export class AttackBattleLayer {
     barBack.tint = BAR_BACK_COLOUR;
     const barFront = new Sprite(Texture.WHITE);
     barFront.tint = BAR_FRONT_COLOUR;
-    const venom = new Graphics();
-    venom.moveTo(0, -5).quadraticCurveTo(4, 0, 0, 3).quadraticCurveTo(-4, 0, 0, -5).fill({ color: VENOM_COLOUR });
-    venom.visible = false;
-    this.bars.addChild(barBack, barFront, venom);
+    const status = new StatusIconRow();
+    this.bars.addChild(barBack, barFront, status.container);
     return {
       id: -1,
       monsterId: "",
@@ -1518,7 +1517,7 @@ export class AttackBattleLayer {
       shadow: null,
       barBack,
       barFront,
-      venom,
+      status,
       lastX: 0,
       lastY: 0,
       lastTick: -1,
@@ -1548,7 +1547,7 @@ export class AttackBattleLayer {
     view.body.visible = false;
     view.barBack.visible = false;
     view.barFront.visible = false;
-    view.venom.visible = false;
+    view.status.hide();
     // A walker leaves faded; the next creep to use the view starts whole.
     view.barBack.alpha = 1;
     view.barFront.alpha = 1;
@@ -1570,7 +1569,7 @@ export class AttackBattleLayer {
     }
     view.barBack.destroy();
     view.barFront.destroy();
-    view.venom.destroy();
+    view.status.destroy();
   }
 
   private place(view: CreepView, creep: CreepSnapshot, tick: number): void {

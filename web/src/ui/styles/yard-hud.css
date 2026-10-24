@@ -650,6 +650,16 @@
   color: var(--colour-accent);
 }
 
+/* The speaker (beta.5): dimmed while music is off, greyed until the switches are known. */
+.yard-viewtools__music[data-music="off"] {
+  color: var(--colour-text-muted);
+}
+
+.yard-viewtools__music:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* Outside the planner the overview is the rail's third button: the minimap
    opens beside the rail rather than always sitting in the corner. */
 .yard-viewtools--rail .yard-minimap {

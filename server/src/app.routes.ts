@@ -52,6 +52,7 @@ import { resetPassword } from "./controllers/auth/resetPassword.js";
 import { changeUsername } from "./controllers/auth/changeUsername.js";
 import { getAccount } from "./controllers/auth/getAccount.js";
 import { updateSettings } from "./controllers/auth/updateSettings.js";
+import { getSoundSettings, updateSoundSettings } from "./controllers/auth/soundSettings.js";
 import { setAvatar } from "./controllers/auth/setAvatar.js";
 
 import { baseLoad } from "./controllers/base/load/baseLoad.js";
@@ -168,6 +169,9 @@ router.get("/api/:apiVersion/supportedLangs", apiVersion, logRequest, supportedL
 router.get("/api/:apiVersion/player/account", apiVersion, verifyUserAuth, getAccount);
 router.post("/api/:apiVersion/player/changeusername", apiVersion, verifyUserAuth, changeUsernameLimiter, logRequest, changeUsername);
 router.post("/api/:apiVersion/player/settings", apiVersion, verifyUserAuth, logRequest, updateSettings);
+// The music and effects switches, saved with the main yard (beta.5, `services/sound/soundSettings.ts`).
+router.get("/api/:apiVersion/player/sound", apiVersion, verifyUserAuth, getSoundSettings);
+router.post("/api/:apiVersion/player/sound", apiVersion, verifyUserAuth, logRequest, updateSoundSettings);
 router.post("/api/:apiVersion/player/avatar", apiVersion, verifyUserAuth, logRequest, setAvatar);
 
 /**  ────────────────────────────────────────────────
