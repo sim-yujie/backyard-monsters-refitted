@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Container, Texture, TextureSource } from "pixi.js";
-import { LOW_SHOT_BITS, MAX_SHOT_BITS, ShotFx } from "./shotFx";
+import { boltLook, LOW_SHOT_BITS, MAX_SHOT_BITS, ShotFx } from "./shotFx";
 
 /**
  * The towers' painted bits (beta.5 tower attack effects): pooled sprites off
@@ -8,7 +8,7 @@ import { LOW_SHOT_BITS, MAX_SHOT_BITS, ShotFx } from "./shotFx";
  */
 
 const fakeSheet = (): Promise<Texture> =>
-  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 576 }) }));
+  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1248 }) }));
 
 const ready = async (low = false) => {
   const layer = new Container();
@@ -72,5 +72,30 @@ describe("ShotFx", () => {
     fx.update(2);
     expect(layer.children).toHaveLength(0);
     fx.destroy();
+  });
+
+  it("lays a strip along a line for one frame, and gives it back on the next", async () => {
+    const { fx, layer } = await ready();
+    expect(fx.line({ look: "ray", from: { x: 0, y: 0 }, to: { x: 100, y: 0 }, width: 10, alpha: 1, tint: 0xffffff })).toBe(true);
+    fx.line({ look: boltLook(3), from: { x: 0, y: 0 }, to: { x: 0, y: 50 }, width: 12, alpha: 1, tint: 0xffffff, flip: true });
+    fx.spot({ look: "orb", at: { x: 5, y: 5 }, size: 16, alpha: 1, tint: 0xffffff });
+    expect(fx.drawnCount).toBe(3);
+    const [ray, bolt] = layer.children;
+    expect(ray?.width).toBeCloseTo(100);
+    expect(ray?.height).toBeCloseTo(10);
+    expect(ray?.position.x).toBe(50);
+    // Laid down the line, turned over.
+    expect(bolt?.rotation).toBeCloseTo(Math.PI / 2);
+    expect(bolt?.scale.y).toBeLessThan(0);
+    fx.begin();
+    expect(fx.drawnCount).toBe(0);
+    expect(layer.children).toHaveLength(0);
+    fx.destroy();
+  });
+
+  it("names the bolts round and round, each with its core", () => {
+    expect(boltLook(0)).toBe("bolt1");
+    expect(boltLook(7)).toBe("bolt2");
+    expect(boltLook(-1, true)).toBe("core6");
   });
 });

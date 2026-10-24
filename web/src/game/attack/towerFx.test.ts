@@ -12,16 +12,17 @@ import {
   TESLA_LOOP_END,
   TowerFx,
   bearingDegrees,
-  boltForks,
-  boltPath,
+  CATCH_UP_DEGREES_PER_TICK,
+  cellHeading,
   facingCell,
   laserCell,
   muzzleOf,
   railCharge,
   railFade,
   recoilKick,
-  stepCell,
+  stepDegrees,
   teslaTick,
+  TURN_DEGREES_PER_TICK,
   towersOf,
   wrapDegrees,
   type TowerInfo,
@@ -449,14 +450,17 @@ describe("TowerFx landings (#77)", () => {
 /* ── The new look (beta.5 tower attack effects) ──────────────────────────── */
 
 describe("the new look's arithmetic", () => {
-  it("turns a gun the short way round, at most so many cells a tick", () => {
-    expect(stepCell(0, 10, 32, 2)).toBe(2);
-    expect(stepCell(0, 30, 32, 2)).toBe(30);
-    // 0 to 20 of 32 is 12 back the other way.
-    expect(stepCell(0, 20, 32, 2)).toBe(30);
-    expect(stepCell(9, 10, 32, 2)).toBe(10);
-    // No strip, or already there: the wanted cell.
-    expect(stepCell(4, 7, 0, 2)).toBe(7);
+  it("turns a gun the short way round, at most so many degrees a tick", () => {
+    expect(stepDegrees(0, 90, 3)).toBe(3);
+    // 10 to 350 is 20 back the other way.
+    expect(stepDegrees(10, 350, 3)).toBe(7);
+    expect(stepDegrees(359, 2, 3)).toBe(2);
+    expect(stepDegrees(100, 101, 3)).toBe(101);
+  });
+
+  it("reads back the cell a heading came from, so a gun starts turning from where it shows", () => {
+    for (let cell = 0; cell < 30; cell += 1) expect(facingCell(118, cellHeading(118, cell), 30)).toBe(cell);
+    for (let cell = 0; cell < 54; cell += 1) expect(laserCell(cellHeading(23, cell), 54)).toBe(cell);
   });
 
   it("kicks a gun back at once and eases it home by the end of its recoil", () => {
@@ -476,36 +480,23 @@ describe("the new look's arithmetic", () => {
     expect(railCharge(rate + 31, rate)).toBe(0);
   });
 
-  it("draws the same bolt for the same seed, pinned at both ends, and a new one for the next", () => {
-    const from = { x: 0, y: 0 };
-    const to = { x: 200, y: 40 };
-    const path = boltPath(from, to, 7);
-    expect(path[0]).toEqual(from);
-    expect(path[path.length - 1]).toEqual(to);
-    expect(boltPath(from, to, 7)).toEqual(path);
-    expect(boltPath(from, to, 8)).not.toEqual(path);
-    const forks = boltForks(path, 7, 3);
-    expect(forks).toHaveLength(3);
-    expect(boltForks(path, 7, 3)).toEqual(forks);
-    // Every fork starts on the bolt.
-    for (const fork of forks) expect(path).toContainEqual(fork[0]);
-  });
 });
 
 /** A sheet the size of the real one, with nothing to fetch. */
 const fakeSheet = (): Promise<Texture> =>
-  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 576 }) }));
+  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1248 }) }));
 
 const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "full") => {
   const yard = readYard(yardOf(type));
   const sparks = new Container();
   const shakes: { tick: number; amp: number }[] = [];
   const nudges: { dx: number; dy: number }[] = [];
+  const frames = new Map<number, number>();
   const fx = new TowerFx(
     new Graphics(),
     towersOf(yard),
     {
-      setAnimFrame: () => undefined,
+      setAnimFrame: (id, _layer, frame) => frames.set(id, frame),
       nudge: (_id, _layer, dx, dy) => nudges.push({ dx, dy }),
     },
     { x: yard.bounds.originX, y: yard.bounds.originY },
@@ -513,7 +504,7 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
   );
   // The sheet comes in on the next turn of the event loop.
   await new Promise((resolve) => setTimeout(resolve, 0));
-  return { fx, sparks, shakes, nudges };
+  return { fx, sparks, shakes, nudges, frames };
 };
 
 describe("TowerFx's new look", () => {
@@ -579,6 +570,75 @@ describe("TowerFx's new look", () => {
     expect(shakes).toHaveLength(0);
     expect(nudges).toHaveLength(0);
     fx.destroy();
+  });
+
+  it("turns the Railgun onto a creep as it comes into range, a little a tick, before any shot", async () => {
+    const { fx, frames } = await newLookSetUp(118);
+    // Out of range (300 at level 1): the gun stays put.
+    const far = creepAt(35, 35 + 400);
+    fx.update(1, () => far, [far]);
+    expect(frames.get(1)).toBeUndefined();
+    // In range due south: it starts turning from where it shows, not snapping there.
+    const near = creepAt(35, 235);
+    const wanted = facingCell(118, bearingDegrees({ x: 0, y: 0 }, { x: near.ix, y: near.iy }), 30);
+    const start = cellHeading(118, 0);
+    fx.update(2, () => near, [near]);
+    expect(frames.get(1)).toBe(facingCell(118, stepDegrees(start, 90, TURN_DEGREES_PER_TICK), 30));
+    expect(frames.get(1)).not.toBe(wanted);
+    // Given time, it is on the creep before the engine fires.
+    for (let tick = 3; tick <= 80; tick += 1) fx.update(tick, () => near, [near]);
+    expect(frames.get(1)).toBe(wanted);
+    // A friendly creep or a dead one is no target.
+    const { fx: other, frames: still } = await newLookSetUp(118);
+    other.update(1, () => undefined, [{ ...near, friendly: true }, { ...near, id: 10, hp: 0 }]);
+    expect(still.get(1)).toBeUndefined();
+    fx.destroy();
+    other.destroy();
+  });
+
+  it("turns the Laser onto a creep in range before its beam, and follows the beam without a jump", async () => {
+    const { fx, frames } = await newLookSetUp(23);
+    const near = creepAt(35, 135);
+    fx.update(1, () => near, [near]);
+    const first = frames.get(1);
+    expect(first).toBeDefined();
+    for (let tick = 2; tick <= 120; tick += 1) fx.update(tick, () => near, [near]);
+    const aimed = frames.get(1) ?? -1;
+    fx.onShot({ tick: 121, towerId: 1, creepId: 9, ix: near.ix, iy: near.iy, sweep: { fromIx: 0, fromIy: 0, toIx: near.ix, toIy: near.iy } }, near);
+    let last = aimed;
+    for (let tick = 121; tick <= 200; tick += 1) {
+      fx.update(tick, () => near, [near]);
+      const cell = frames.get(1) ?? -1;
+      // Never more than a tick's catch-up a frame (54 cells round).
+      const gap = Math.min(Math.abs(cell - last), 54 - Math.abs(cell - last));
+      expect(gap).toBeLessThanOrEqual(Math.ceil(CATCH_UP_DEGREES_PER_TICK / 6.66) + 1);
+      last = cell;
+    }
+    fx.destroy();
+  });
+
+  it("draws a Tesla zap from painted strips that swap as it fades, and a Laser beam the same way", async () => {
+    const tesla = await newLookSetUp(25);
+    tesla.fx.onCharge(1, 0);
+    shoot(tesla.fx, 70);
+    tesla.fx.update(70, () => target);
+    // Glow, band, bolt and its core.
+    expect(tesla.sparks.children.filter((child) => child.visible).length).toBeGreaterThanOrEqual(4);
+    tesla.fx.update(70 + 20, () => target);
+    tesla.fx.destroy();
+
+    const laser = await newLookSetUp(23);
+    laser.fx.onShot(
+      { tick: 5, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy, sweep: { fromIx: 0, fromIy: 0, toIx: target.ix, toIy: target.iy } },
+      target,
+    );
+    laser.fx.update(5, () => target, [target]);
+    const charging = laser.sparks.children.length;
+    laser.fx.update(40, () => target, [target]);
+    // Charged: the barrel, three rays, the glow and flare where it burns, and its marks.
+    expect(laser.sparks.children.length).toBeGreaterThan(charging);
+    expect(laser.fx.sparkCount).toBeGreaterThan(0);
+    laser.fx.destroy();
   });
 
   it("clears every bit when the battle stands down", async () => {

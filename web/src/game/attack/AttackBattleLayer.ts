@@ -961,12 +961,13 @@ export class AttackBattleLayer {
       // Creeps the engine still has first, then this frame's events, and only
       // then the ones it dropped: a creep a held bullet killed must still have
       // its view when its death is read, to stay on screen until the bullet lands.
-      const seen = this.syncCreeps(battle.creeps(), tick);
+      const live = battle.creeps();
+      const seen = this.syncCreeps(live, tick);
       for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
       this.lastEventTick = tick;
       this.settleGone(seen, tick);
 
-      this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined);
+      this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined, live);
       this.showReleased(this.ledger.expire(tick), tick);
       this.paintCreeps(tick);
       if (this.session.ended && !this.endWalked) this.walkOffAtEnd(shown);

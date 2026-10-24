@@ -1,5 +1,7 @@
 import type { Container, Graphics, Texture } from "pixi.js";
 import {
+  canHit,
+  defenseFlags,
   isSpurtzCannon,
   isTower,
   LASER_DROP,
@@ -12,6 +14,7 @@ import {
   TESLA_WIND_END,
   spurtzBlastRadius,
   towerStats,
+  towerTargets,
   type BeamLine,
   type CreepSnapshot,
   type LaserSweep,
@@ -22,7 +25,7 @@ import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { blastNoise, tintAt } from "./blastFx";
 import { championFlightTop, flyerAltitude, spriteFor } from "./monsterSprites";
-import { ShotFx } from "./shotFx";
+import { boltLook, ShotFx, type StripLook } from "./shotFx";
 import { ShellSprites } from "./spurtzShell";
 
 /**
@@ -70,13 +73,16 @@ import { ShellSprites } from "./spurtzShell";
  * ## The new look (beta.5)
  *
  * Besides the Flash look above (`classic`, which `?juice=0` and the tests
- * keep), the shots can be drawn `full` or `low`: painted glows, sparks, smoke
- * and impact bursts off the {@link ShotFx} sheet, bolts and rails glowing in
- * additive light, the Tesla's bolt forking and flickering (it still hurts one
- * creep), guns that turn rather than snap and kick back as they fire, and a
- * jolt of the yard on the big hits. `low` throws fewer bits and fewer glow
- * strokes, for phones. So far the Cannon, Tesla and Railgun have it; the
- * other towers keep their Flash shots in every look.
+ * keep), the shots can be drawn `full` or `low`, every piece of it painted
+ * (the {@link ShotFx} sheet) and only laid, stretched, tinted and faded here:
+ * glows, sparks, smoke and impact bursts; the Tesla's painted bolts stretched
+ * from coil to creep over a wide faint glow and a brighter band, swapped for
+ * another bolt every few frames (each still hurts the one creep); the Laser's
+ * and the Railgun's rays stacked soft, bright and white-hot; guns that turn
+ * onto the nearest creep in range before they fire rather than snap, and
+ * kick back as they do; and a jolt of the yard on the big hits. `low` throws
+ * fewer bits and fewer layers, for phones. So far the Cannon, Laser, Tesla and
+ * Railgun have it; the other towers keep their Flash shots in every look.
  */
 
 /* ── Pure facing arithmetic ─────────────────────────────────────────────── */
@@ -316,8 +322,13 @@ const SNIPER_CORE = 0xfffbe8;
 const FLAK_ROUND = 0xdfe8ff;
 const SPURTZ_SHELL = 0xf3f0dc;
 
-/** The towers drawn the new way so far (beta.5 sample): Cannon, Tesla, Railgun. */
-const NEW_LOOK_TYPES: ReadonlySet<number> = new Set([20, 25, 118]);
+/** The towers drawn the new way so far (beta.5 sample): Cannon, Laser, Tesla, Railgun. */
+const NEW_LOOK_TYPES: ReadonlySet<number> = new Set([20, 23, 25, 118]);
+/** The new look's guns that turn onto a creep as soon as it is in range: the Laser and the Railgun. */
+const AIMING_TYPES: ReadonlySet<number> = new Set([23, 118]);
+/** The new look's laser: an orange glow, an amber band, a white-hot core. */
+const LASER_BAND = 0xffb84a;
+const LASER_HOT = 0xfff4dc;
 /** The new look's tints: the Tesla's arc, the rail's blue, the cannon's fire. */
 const ARC_MID = 0x9fe8ff;
 const RAIL_MID = 0x2aa8ff;
@@ -345,11 +356,25 @@ export const railFade = (age: number): number | null => {
  */
 export type TowerLook = "classic" | "full" | "low";
 
-/** Ticks a new-look bolt lasts (80 ticks a second), re-forking every {@link ZAP_FLICKER_TICKS}. */
-export const ZAP_TICKS = 10;
-export const ZAP_FLICKER_TICKS = 2;
-/** Cells a turning gun moves a tick at most: a half turn in about a tenth of a second. */
-export const SLEW_CELLS_PER_TICK = 2;
+/**
+ * Ticks a new-look zap lasts as it fades (80 ticks a second, so about 0.15 s),
+ * swapping its painted bolt for another every {@link ZAP_FLICKER_TICKS}.
+ */
+export const ZAP_TICKS = 12;
+export const ZAP_FLICKER_TICKS = 3;
+/** Ticks the white flash where a zap lands lasts. */
+const ZAP_FLASH_TICKS = 5;
+/**
+ * Degrees a gun turns a tick while it lines up on a creep that came into
+ * range: a half turn in three quarters of a second, slow enough to see.
+ */
+export const TURN_DEGREES_PER_TICK = 3;
+/** Degrees a tick once it fires: onto its beam or its target quickly, never in one frame. */
+export const CATCH_UP_DEGREES_PER_TICK = 12;
+/** Ticks the Laser's barrel glows up before its beam comes on in full. */
+export const LASER_CHARGE_TICKS = 10;
+/** Ticks between the scorch marks and sparks a laser leaves where it burns. */
+const LASER_MARK_TICKS = 5;
 /** Ticks a gun's kick lasts, and how far it goes back, world px. */
 export const RECOIL_TICKS = 18;
 export const RECOIL_PX = 4;
@@ -357,17 +382,25 @@ export const RECOIL_PX = 4;
 export const RAIL_CHARGE_TICKS = 70;
 
 /**
- * The cell a turning gun shows next: `current` moved toward `wanted` by at
- * most `most` cells, the short way round, as the strip is a full turn.
+ * A heading in degrees turned toward `wanted` by at most `most`, the short
+ * way round.
  */
-export const stepCell = (current: number, wanted: number, frames: number, most: number): number => {
-  if (frames <= 0 || current === wanted) return wanted;
-  let gap = (wanted - current) % frames;
-  if (gap > frames / 2) gap -= frames;
-  if (gap < -frames / 2) gap += frames;
-  if (Math.abs(gap) <= most) return wanted;
-  const next = (current + Math.sign(gap) * Math.floor(most)) % frames;
-  return next < 0 ? next + frames : next;
+export const stepDegrees = (current: number, wanted: number, most: number): number => {
+  let gap = wrapDegrees(wanted - current);
+  if (gap > 180) gap -= 360;
+  if (Math.abs(gap) <= most) return wrapDegrees(wanted);
+  return wrapDegrees(current + Math.sign(gap) * most);
+};
+
+/**
+ * The heading a gun shows in `cell`, the middle of the cell's degrees: a
+ * bearing for the Railgun, the beam's screen angle for the Laser. Where a gun
+ * that has not turned yet starts from.
+ */
+export const cellHeading = (type: number, cell: number): number => {
+  if (type === 23) return wrapDegrees((cell + 0.5) * LASER_DEGREES_PER_CELL - LASER_TRACK_OFFSET);
+  const rule = FACING[type];
+  return rule ? wrapDegrees((cell + 0.5) * rule.degreesPerCell - rule.offsetDegrees) : 0;
 };
 
 /** How far back a gun is `age` ticks after its shot, 0 to 1: snapped back at once, eased home. */
@@ -388,58 +421,6 @@ export const railCharge = (since: number, rate: number): number => {
   const start = rate - RAIL_CHARGE_TICKS;
   if (since < start || since > rate + 30) return 0;
   return Math.min(1, (since - start) / RAIL_CHARGE_TICKS);
-};
-
-/**
- * A lightning bolt's corners from `from` to `to`: a bend every 18 px thrown
- * off the line, widest in the middle and pinned at both ends. The same
- * `seed` draws the same bolt.
- */
-export const boltPath = (from: Point, to: Point, seed: number, wobble = 1): Point[] => {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const distance = Math.hypot(dx, dy) || 1;
-  const corners = Math.max(2, Math.round(distance / 18));
-  const nx = -dy / distance;
-  const ny = dx / distance;
-  const points: Point[] = [from];
-  for (let index = 1; index < corners; index += 1) {
-    const along = index / corners;
-    const sway = Math.sin(along * Math.PI) * (6 + distance * 0.04) * wobble;
-    const off = (blastNoise(seed, index) * 2 - 1) * sway;
-    points.push({ x: from.x + dx * along + nx * off, y: from.y + dy * along + ny * off });
-  }
-  points.push(to);
-  return points;
-};
-
-/**
- * `count` forks off a bolt's corners: short jagged arms that branch from it
- * and die out. Looks only: the bolt still hurts the one creep at its end.
- */
-export const boltForks = (path: readonly Point[], seed: number, count: number): Point[][] => {
-  const forks: Point[][] = [];
-  if (path.length < 4) return forks;
-  for (let fork = 0; fork < count; fork += 1) {
-    const at = 1 + Math.floor(blastNoise(seed, 50 + fork) * (path.length - 3));
-    const start = path[at];
-    const next = path[at + 1];
-    if (!start || !next) continue;
-    const side = blastNoise(seed, 60 + fork) < 0.5 ? -1 : 1;
-    let heading = Math.atan2(next.y - start.y, next.x - start.x) + side * (0.5 + blastNoise(seed, 70 + fork) * 0.6);
-    const steps = 2 + Math.floor(blastNoise(seed, 80 + fork) * 3);
-    const reach = 9 + blastNoise(seed, 90 + fork) * 9;
-    const arm: Point[] = [start];
-    let { x, y } = start;
-    for (let step = 0; step < steps; step += 1) {
-      heading += (blastNoise(seed, 100 + fork * 10 + step) - 0.5) * 0.9;
-      x += Math.cos(heading) * reach;
-      y += Math.sin(heading) * reach;
-      arm.push({ x, y });
-    }
-    forks.push(arm);
-  }
-  return forks;
 };
 
 /** What the new look asks of the battle screen; everything has a fallback. */
@@ -482,6 +463,8 @@ interface Beam {
   readonly bornTick: number;
   /** The engine's sweep (issue #267), in world px: its end is where the pulses land. */
   readonly sweep: LaserSweep;
+  /** The last tick it left a scorch mark and sparks (new look). */
+  marked: number;
 }
 
 interface Bolt {
@@ -521,6 +504,8 @@ interface TowerState {
   recoil: { readonly tick: number; readonly dx: number; readonly dy: number } | null;
   /** The last tick the coil crackled (new look). */
   crackle: number;
+  /** Where a Laser's or Railgun's gun points in the new look, degrees, turned a little each tick; null until it first turns. */
+  heading: number | null;
 }
 
 /** What the effects ask of the yard renderer. */
@@ -609,6 +594,7 @@ export class TowerFx {
         zapCharge: Number.NaN,
         recoil: null,
         crackle: Number.NEGATIVE_INFINITY,
+        heading: null,
       });
     }
   }
@@ -672,6 +658,7 @@ export class TowerFx {
         towerId: tower.info.id,
         bornTick: event.tick,
         sweep: laserSweep(Math.trunc(start.x), Math.trunc(start.y), Math.trunc(end.x), Math.trunc(end.y)),
+        marked: Number.NEGATIVE_INFINITY,
       });
       return null;
     }
@@ -760,14 +747,21 @@ export class TowerFx {
 
   /**
    * Turns every gun and redraws every projectile for `tick`. `creepAt` is
-   * the creep by id right now, or undefined once it is gone.
+   * the creep by id right now, or undefined once it is gone; `creeps` is
+   * every creep on the field, which the new look's guns watch to line up on
+   * one as it comes into range.
    */
-  update(tick: number, creepAt: (id: number) => CreepSnapshot | undefined): void {
+  update(
+    tick: number,
+    creepAt: (id: number) => CreepSnapshot | undefined,
+    creeps: readonly CreepSnapshot[] = [],
+  ): void {
     const elapsed = Math.max(0, Math.min(tick - this.lastTick, 400));
     this.lastTick = tick;
 
-    for (const tower of this.towers.values()) this.turn(tower, tick, elapsed, creepAt);
+    for (const tower of this.towers.values()) this.turn(tower, tick, elapsed, creepAt, creeps);
 
+    this.sparks?.begin();
     const graphics = this.graphics;
     graphics.clear();
     if (this.glow !== graphics) this.glow.clear();
@@ -824,6 +818,7 @@ export class TowerFx {
     tick: number,
     elapsed: number,
     creepAt: (id: number) => CreepSnapshot | undefined,
+    creeps: readonly CreepSnapshot[],
   ): void {
     const { info } = tower;
     if (info.type === 25) {
@@ -833,6 +828,10 @@ export class TowerFx {
     }
     if (tower.recoil) this.kick(tower, tick);
     if (info.frames <= 0) return;
+    if (this.look !== "classic" && AIMING_TYPES.has(info.type)) {
+      this.aim(tower, tick, elapsed, creepAt, creeps);
+      return;
+    }
     const recent = tick - tower.lastShotTick <= FACING_HOLD_TICKS;
 
     if (info.type === 23) {
@@ -854,9 +853,74 @@ export class TowerFx {
       info.frames,
     );
     if (cell === null) return;
-    // The new look turns the gun round to its target rather than snapping it.
-    const turning = this.look !== "classic" && NEW_LOOK_TYPES.has(info.type) && tower.cell !== null;
-    this.setCell(tower, turning ? stepCell(tower.cell ?? cell, cell, info.frames, SLEW_CELLS_PER_TICK * elapsed) : cell);
+    this.setCell(tower, cell);
+  }
+
+  /**
+   * A Laser's or Railgun's gun in the new look: as soon as a creep it could
+   * shoot is in range it turns, a little each tick, onto the nearest, so it
+   * is already aimed when the engine fires; once it fires it follows its
+   * beam or its target, faster but never in one frame. Looks only: the
+   * engine picks the targets and fires when it always did.
+   */
+  private aim(
+    tower: TowerState,
+    tick: number,
+    elapsed: number,
+    creepAt: (id: number) => CreepSnapshot | undefined,
+    creeps: readonly CreepSnapshot[],
+  ): void {
+    const { info } = tower;
+    let wanted: number | null = null;
+    let speed = CATCH_UP_DEGREES_PER_TICK;
+    if (info.type === 23) {
+      let beam: Beam | undefined;
+      for (const candidate of this.beams) if (candidate.towerId === info.id) beam = candidate;
+      const end = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
+      if (beam && end) wanted = Math.atan2(end.y - beam.sweep.ay, end.x - beam.sweep.ax) * DEGREES;
+    } else if (tick - tower.lastShotTick <= FACING_HOLD_TICKS) {
+      const creep = creepAt(tower.targetCreep);
+      if (creep) wanted = bearingDegrees({ x: info.x, y: info.y }, { x: creep.ix, y: creep.iy });
+    }
+    if (wanted === null) {
+      const creep = this.nearestInRange(info, creeps);
+      if (!creep) return;
+      speed = TURN_DEGREES_PER_TICK;
+      if (info.type === 23) {
+        // The beam's screen angle, from where it starts below the tower to the creep's feet.
+        const feet = this.groundAt(creep.ix, creep.iy);
+        wanted = Math.atan2(feet.y - (info.worldY + LASER_DROP), feet.x - info.worldX) * DEGREES;
+      } else {
+        wanted = bearingDegrees({ x: info.x, y: info.y }, { x: creep.ix, y: creep.iy });
+      }
+    }
+    const from = tower.heading ?? cellHeading(info.type, tower.cell ?? 0);
+    tower.heading = stepDegrees(from, wanted, speed * Math.max(1, elapsed));
+    const cell =
+      info.type === 23 ? laserCell(tower.heading, info.frames) : facingCell(info.type, tower.heading, info.frames);
+    if (cell !== null) this.setCell(tower, cell);
+  }
+
+  /** The nearest creep on the field a tower could shoot, inside its range, or undefined. */
+  private nearestInRange(info: TowerInfo, creeps: readonly CreepSnapshot[]): CreepSnapshot | undefined {
+    const range = towerStats(info.type, info.level)?.range ?? 0;
+    if (range <= 0) return undefined;
+    const flags = towerTargets(info.type);
+    // Measured from the middle of the tower, as the engine scans (`towerScanPoint`).
+    const x = info.x + TOWER_CENTRE;
+    const y = info.y + TOWER_CENTRE;
+    let nearest: CreepSnapshot | undefined;
+    let best = range * range;
+    for (const creep of creeps) {
+      if (creep.friendly || creep.hp <= 0) continue;
+      if (!canHit(flags, defenseFlags(false, creep.flying, false))) continue;
+      const distance = (creep.ix - x) * (creep.ix - x) + (creep.iy - y) * (creep.iy - y);
+      if (distance < best || (distance === best && nearest && creep.id < nearest.id)) {
+        best = distance;
+        nearest = creep;
+      }
+    }
+    return nearest;
   }
 
   /** The gun's kick after a shot (new look), easing home; it ends back in place. */
@@ -1096,6 +1160,10 @@ export class TowerFx {
         x: ax + ((end.x - ax) / along) * 8,
         y: ay + ((end.y - ay) / along) * 8 - LASER_HEIGHT,
       };
+      if (this.painted) {
+        this.drawLitBeam(beam, tick, age, power, start, end);
+        continue;
+      }
       const graphics = this.graphics;
       graphics
         .moveTo(start.x, start.y)
@@ -1219,37 +1287,37 @@ export class TowerFx {
 
   /* ── The new look (beta.5) ──────────────────────────────────────────── */
 
-  /** Strokes `points` as one line on `graphics`. */
-  private static stroke(
-    graphics: Graphics,
-    points: readonly Point[],
-    width: number,
-    color: number,
-    alpha: number,
-  ): void {
-    const first = points[0];
-    if (!first || alpha <= 0.01) return;
-    graphics.moveTo(first.x, first.y);
-    for (let index = 1; index < points.length; index += 1) {
-      const point = points[index];
-      if (point) graphics.lineTo(point.x, point.y);
-    }
-    graphics.stroke({ width, color, alpha, cap: "round", join: "round" });
+  /**
+   * A beam of light from `from` to `to`, painted rays stacked: a wide soft
+   * glow (full look only), a narrower brighter band, a thin white-hot core.
+   * `width` is the band's; the others are sized from it.
+   */
+  private ray(from: Point, to: Point, width: number, glow: number, band: number, core: number, alpha: number): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    if (this.look === "full") sparks.line({ look: "ray", from, to, width: width * 2.6, alpha: 0.32 * alpha, tint: glow });
+    sparks.line({ look: "ray", from, to, width, alpha: 0.75 * alpha, tint: band });
+    sparks.line({ look: "ray", from, to, width: width * 0.42, alpha, tint: core });
   }
 
-  /** A line in light: an outer halo, a glow, a hot core; low drops the halo. */
-  private glowLine(points: readonly Point[], scale: number, halo: number, mid: number, alpha: number): void {
-    const glow = this.glow;
-    if (this.look === "full") TowerFx.stroke(glow, points, 15 * scale, halo, 0.09 * alpha);
-    TowerFx.stroke(glow, points, 8 * scale, halo, 0.2 * alpha);
-    TowerFx.stroke(glow, points, 3.6 * scale, mid, 0.6 * alpha);
-    TowerFx.stroke(glow, points, 1.5 * scale, 0xffffff, alpha);
+  /**
+   * One painted bolt from `from` to `to`, `across` world px from its lowest
+   * bend to its highest: the bolt in pale blue, its own bright core in white
+   * on top. `pick` chooses the painting and which way up it lies.
+   */
+  private bolt(from: Point, to: Point, across: number, pick: number, alpha: number): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    const flip = pick % 2 === 1;
+    const look: StripLook = boltLook(Math.floor(pick / 2));
+    sparks.line({ look, from, to, width: across, alpha, tint: ARC_MID, flip });
+    sparks.line({ look: boltLook(Math.floor(pick / 2), true), from, to, width: across, alpha, tint: 0xffffff, flip });
   }
 
   /**
    * The Tesla's coil while it charges and zaps: a painted glow that swells
    * with the charge and flickers at full, sparks crackling off it, and small
-   * arcs licking round the top once it is well charged.
+   * painted arcs licking round the top once it is well charged.
    */
   private drawLitCoils(tick: number): void {
     const sparks = this.sparks;
@@ -1267,12 +1335,12 @@ export class TowerFx {
         tint: BOLT_COLOUR,
       });
       if (power < 0.35) continue;
-      const beat = Math.floor(tick / 2);
+      const beat = Math.floor(tick / ZAP_FLICKER_TICKS);
       for (let arc = 0; arc < (this.look === "full" ? 2 : 1); arc += 1) {
         const angle = blastNoise(beat, arc + 20) * Math.PI * 2;
-        const reach = 10 + blastNoise(beat, arc + 30) * 12 * power;
+        const reach = 12 + blastNoise(beat, arc + 30) * 14 * power;
         const end = { x: coil.x + Math.cos(angle) * reach, y: coil.y + Math.sin(angle) * reach * 0.7 };
-        this.glowLine(boltPath(coil, end, beat * 13 + arc, 0.6), 0.55, BOLT_COLOUR, ARC_MID, 0.5 + 0.5 * power);
+        this.bolt(coil, end, 4 + reach * 0.25, beat * 3 + arc, 0.5 + 0.5 * power);
       }
       if (tick - tower.crackle >= 6) {
         tower.crackle = tick;
@@ -1292,46 +1360,121 @@ export class TowerFx {
   }
 
   /**
-   * The Tesla's bolts in light: a main arc that re-forks every
-   * {@link ZAP_FLICKER_TICKS} and flickers as it fades, with arms branching off
-   * it. Looks only: each still hurts the one creep at its end.
+   * The Tesla's zaps: a painted bolt stretched from coil to creep over a wide
+   * faint blue glow and a narrower brighter band, its white core on top,
+   * swapped for another painting every {@link ZAP_FLICKER_TICKS} as it fades
+   * over {@link ZAP_TICKS}. Looks only: each still hurts the one creep at its end.
    */
   private drawLitBolts(tick: number): void {
+    const sparks = this.sparks;
     let keep = 0;
     for (const bolt of this.bolts) {
       const age = tick - bolt.tick;
       if (age > ZAP_TICKS) continue;
       this.bolts[keep] = bolt;
       keep += 1;
-      if (age < 0) continue;
-      const seed = bolt.tick * 7 + Math.floor(age / ZAP_FLICKER_TICKS);
+      if (age < 0 || !sparks) continue;
+      const flick = Math.floor(age / ZAP_FLICKER_TICKS);
       const fade = 1 - age / (ZAP_TICKS + 1);
-      const alpha = fade * (0.55 + 0.45 * blastNoise(bolt.tick + age, 3));
-      const scale = bolt.big ? 1.3 : 1;
-      const path = boltPath(bolt.from, bolt.to, seed, bolt.big ? 1.3 : 1);
-      this.glowLine(path, scale, BOLT_COLOUR, ARC_MID, alpha);
-      const forks = boltForks(path, seed, this.look === "low" ? 1 : bolt.big ? 4 : 2);
-      for (const fork of forks) this.glowLine(fork, scale * 0.6, BOLT_COLOUR, ARC_MID, alpha * 0.8);
+      const alpha = fade * (0.8 + 0.2 * blastNoise(bolt.tick + age, 3));
+      const length = Math.hypot(bolt.to.x - bolt.from.x, bolt.to.y - bolt.from.y);
+      const across = Math.min(34, Math.max(14, length * 0.15)) * (bolt.big ? 1.3 : 1);
+      const blue = Math.min(1, 0.6 + 0.4 * fade);
+      if (this.look === "full") {
+        sparks.line({ look: "ray", from: bolt.from, to: bolt.to, width: across * 2.2, alpha: 0.3 * blue, tint: BOLT_COLOUR });
+      }
+      sparks.line({ look: "ray", from: bolt.from, to: bolt.to, width: across * 0.9, alpha: 0.55 * blue, tint: 0x48b8ff });
+      this.bolt(bolt.from, bolt.to, across, Math.floor(blastNoise(bolt.tick, flick + 5) * 12), alpha);
     }
     this.bolts.length = keep;
   }
 
-  /** The Railgun's line in light: a wide blue halo, a pale glow, a white core, and its gun-balls. */
+  /** The Railgun's line in light, painted rays stacked blue, pale and white, and its gun-balls. */
   private drawLitRail(rail: Rail, life: number): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
     const end = { x: rail.from.x + rail.dirX * rail.length, y: rail.from.y + rail.dirY * rail.length };
-    const line = [rail.from, end];
-    const glow = this.glow;
     const thin = 0.55 + 0.45 * life;
-    if (this.look === "full") TowerFx.stroke(glow, line, 26 * thin, RAIL_GLOW, 0.1 * life);
-    TowerFx.stroke(glow, line, 13 * thin, RAIL_MID, 0.22 * life);
-    TowerFx.stroke(glow, line, 6 * thin, RAIL_PALE, 0.55 * life);
-    TowerFx.stroke(glow, line, 2.2, 0xffffff, life);
+    this.ray(rail.from, end, 12 * thin, RAIL_GLOW, RAIL_MID, 0xffffff, life);
     const every = this.look === "full" ? RAIL_SEGMENT : RAIL_SEGMENT * 2;
     for (let along = every; along <= rail.length; along += every) {
-      const x = rail.from.x + rail.dirX * along;
-      const y = rail.from.y + rail.dirY * along;
-      glow.circle(x, y, 5.5).fill({ color: GUN_BALL_RIM, alpha: 0.35 * life });
-      glow.circle(x, y, 2.4).fill({ color: 0xffffff, alpha: 0.9 * life });
+      const at = { x: rail.from.x + rail.dirX * along, y: rail.from.y + rail.dirY * along };
+      sparks.spot({ look: "orb", at, size: 16, alpha: 0.9 * life, tint: GUN_BALL_CORE });
+    }
+  }
+
+  /**
+   * The Laser's beam in light: a short charge-up glow at the barrel, then the
+   * painted rays stacked orange, amber and white-hot, breathing a little in
+   * width, with a glow, sparks and scorch marks where it burns.
+   */
+  private drawLitBeam(beam: Beam, tick: number, age: number, power: number, start: Point, end: Point): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    const charge = Math.min(1, age / LASER_CHARGE_TICKS);
+    const pulse = 1 + 0.14 * Math.sin(age * 0.9) + 0.06 * (blastNoise(tick, 31) - 0.5);
+    // The barrel: swelling as it charges, then holding a hot glow while it fires.
+    sparks.spot({
+      look: "orb",
+      at: start,
+      size: (8 + 22 * charge) * (charge < 1 ? 1 : pulse),
+      alpha: Math.max(charge, power),
+      tint: tintAt([BEAM_GLOW, LASER_BAND, LASER_HOT], charge),
+    });
+    // The beam itself only once the charge is mostly in.
+    const lit = power * Math.max(0, Math.min(1, (age - LASER_CHARGE_TICKS * 0.4) / (LASER_CHARGE_TICKS * 0.6)));
+    if (lit <= 0) return;
+    this.ray(start, end, 9 * pulse, BEAM_GLOW, LASER_BAND, LASER_HOT, lit);
+    sparks.spot({ look: "glow", at: end, size: 34 * pulse, squash: 0.6, alpha: 0.85 * lit, tint: BEAM_GLOW });
+    sparks.spot({ look: "flare", at: end, size: 22 * pulse, alpha: lit, tint: LASER_HOT, rotation: tick * 0.05 });
+    if (tick - beam.marked < LASER_MARK_TICKS) return;
+    beam.marked = tick;
+    sparks.emit(tick, {
+      look: "scorch",
+      at: { x: end.x, y: end.y },
+      life: 90,
+      size0: 14,
+      size1: 18,
+      squash: 0.5,
+      fadeIn: 3,
+      peak: 0.55,
+      hold: 0.4,
+      rotation: blastNoise(tick, 41) * 6.28,
+      colours: [0x2a1a10, 0x302822],
+    });
+    const count = sparks.many(3);
+    for (let index = 0; index < count; index += 1) {
+      const angle = -Math.PI / 2 + (blastNoise(tick, index + 50) - 0.5) * 2.6;
+      const speed = 1.8 + blastNoise(tick, index + 60) * 2.2;
+      sparks.emit(tick, {
+        look: "spark",
+        at: end,
+        add: true,
+        life: 9 + Math.round(blastNoise(tick, index + 70) * 6),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.6,
+        vz: 1,
+        gravity: 0.15,
+        drag: 0.08,
+        size0: 7,
+        size1: 2,
+        stretch: true,
+        colours: [0xffffff, LASER_BAND, BEAM_GLOW],
+      });
+    }
+    if (this.look === "full") {
+      sparks.emit(tick, {
+        look: "wisp",
+        at: end,
+        life: 30,
+        vz: 0.35,
+        size0: 6,
+        size1: 16,
+        fadeIn: 3,
+        peak: 0.3,
+        rotation: blastNoise(tick, 43) * 6.28,
+        colours: SMOKE_TINTS,
+      });
     }
   }
 
@@ -1393,6 +1536,16 @@ export class TowerFx {
       size1: 28,
       rotation: blastNoise(tick, 1) * 0.6,
       colours: [0xffffff, ARC_MID],
+    });
+    // A short white flash where it lands.
+    sparks.emit(tick, {
+      look: "glow",
+      at,
+      add: true,
+      life: ZAP_FLASH_TICKS,
+      size0: 40 * size,
+      size1: 30 * size,
+      colours: [0xffffff],
     });
     sparks.emit(tick, {
       look: "glow",

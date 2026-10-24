@@ -16,14 +16,25 @@ import { bitPath, tintAt } from "./blastFx";
  *   it charges, a Railgun winding up), drawn again every frame they are wanted
  *   and taken away by the first sweep they are not.
  *
+ * Under the cells the sheet holds long strips, laid from one end of a line to
+ * the other: the Tesla's painted bolts (each with its bright core cut out of it
+ * as a strip of its own) and a ray of light, which the beams stack at several
+ * widths and tints. A strip is drawn for one frame only ({@link ShotFx.line}):
+ * whoever wants it again draws it again, after {@link ShotFx.begin}.
+ *
  * Until the sheet is in, nothing is drawn: the caller's code-drawn lines still
  * show the shot.
  */
 
-/** The sheet: twelve 192 px cells, four across (`server/public/assets/fx/`). */
+/** The sheet: twelve 192 px cells, four across, then the strips (`server/public/assets/fx/`). */
 export const SHOT_FX_SHEET_URL = "/assets/fx/tower-fx.png";
 export const SHOT_FX_CELL = 192;
 const COLUMNS = 4;
+/** A strip's size on the sheet, two across under the cells. */
+export const SHOT_STRIP_WIDTH = 384;
+export const SHOT_STRIP_HEIGHT = 96;
+const STRIP_COLUMNS = 2;
+const STRIP_TOP = SHOT_FX_CELL * 3;
 
 /** The cells, in the sheet's order. `muzzle` and `spark` point right; `scorch` is dark. */
 export const SHOT_LOOKS = [
@@ -41,6 +52,25 @@ export const SHOT_LOOKS = [
   "scorch",
 ] as const;
 export type ShotLook = (typeof SHOT_LOOKS)[number];
+
+/** The painted lightning bolts, each a zigzag lying left to right with its forks. */
+export const BOLT_COUNT = 6;
+/**
+ * The strips, in the sheet's order: the bolts, then each bolt's bright core,
+ * then the ray (a straight stroke of light, soft each side, tapered at the ends).
+ */
+export const STRIP_LOOKS = [
+  "bolt1", "bolt2", "bolt3", "bolt4", "bolt5", "bolt6",
+  "core1", "core2", "core3", "core4", "core5", "core6",
+  "ray",
+] as const;
+export type StripLook = (typeof STRIP_LOOKS)[number];
+
+/** The `index`th bolt (any whole number, wrapped), or its core. */
+export const boltLook = (index: number, core = false): StripLook => {
+  const which = (((Math.trunc(index) % BOLT_COUNT) + BOLT_COUNT) % BOLT_COUNT) + 1;
+  return `${core ? "core" : "bolt"}${which}` as StripLook;
+};
 
 /** Bits alive at once in full; the cost ceiling with every tower firing. */
 export const MAX_SHOT_BITS = 240;
@@ -86,6 +116,19 @@ export type ShotSpec = Partial<Omit<Bit, "sprite" | "born" | "x" | "y">> & {
   readonly add?: boolean;
 };
 
+/** A strip laid along a line for one frame. */
+export interface LineSpec {
+  readonly look: StripLook;
+  readonly from: Point;
+  readonly to: Point;
+  /** Across the line, world px: the strip's whole painted height. */
+  readonly width: number;
+  readonly alpha: number;
+  readonly tint: number;
+  /** Turned over the line, so one painting makes two bolts. */
+  readonly flip?: boolean;
+}
+
 export interface LampSpec {
   readonly look: ShotLook;
   readonly at: Point;
@@ -102,7 +145,9 @@ export class ShotFx {
   private readonly pool: Sprite[] = [];
   private readonly lamps = new Map<object, Sprite>();
   private readonly lit = new Set<object>();
-  private readonly cells = new Map<ShotLook, Texture>();
+  /** Strips and spots drawn this frame, given back by the next {@link begin}. */
+  private readonly drawn: Sprite[] = [];
+  private readonly cells = new Map<ShotLook | StripLook, Texture>();
   private sheet: Texture | null = null;
   private asked = false;
   private readonly cap: number;
@@ -208,6 +253,43 @@ export class ShotFx {
     this.lit.add(key);
   }
 
+  /** A new frame: last frame's strips and spots go, to be drawn again if still wanted. */
+  begin(): void {
+    for (const sprite of this.drawn) this.release(sprite);
+    this.drawn.length = 0;
+  }
+
+  /** Lays a strip from `from` to `to` for this frame, in added light; false before the sheet is in. */
+  line(spec: LineSpec): boolean {
+    const length = Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y);
+    if (spec.alpha <= 0.01 || length < 1) return true;
+    const sprite = this.paint(spec.look, spec.alpha, spec.tint);
+    if (!sprite) return false;
+    sprite.position.set((spec.from.x + spec.to.x) / 2, (spec.from.y + spec.to.y) / 2);
+    sprite.rotation = Math.atan2(spec.to.y - spec.from.y, spec.to.x - spec.from.x);
+    sprite.width = length;
+    sprite.height = spec.width;
+    if (spec.flip) sprite.scale.y = -sprite.scale.y;
+    return true;
+  }
+
+  /** A cell held on a point for this frame only, in added light: a gun-ball, a glow at a beam's end. */
+  spot(spec: LampSpec): boolean {
+    if (spec.alpha <= 0.01) return true;
+    const sprite = this.paint(spec.look, spec.alpha, spec.tint);
+    if (!sprite) return false;
+    sprite.rotation = spec.rotation ?? 0;
+    sprite.position.set(spec.at.x, spec.at.y);
+    sprite.width = spec.size;
+    sprite.height = spec.size * (spec.squash ?? 1);
+    return true;
+  }
+
+  /** Strips and spots on screen this frame, for tests. */
+  get drawnCount(): number {
+    return this.drawn.length;
+  }
+
   /** Places every bit for `tick` and takes away the lamps not lit since the last call. */
   update(tick: number): void {
     let keep = 0;
@@ -233,6 +315,7 @@ export class ShotFx {
 
   /** Every bit and lamp gone: the battle stood down. */
   clear(): void {
+    this.begin();
     for (const bit of this.bits) this.release(bit.sprite);
     this.bits.length = 0;
     this.lit.clear();
@@ -248,25 +331,32 @@ export class ShotFx {
     this.cells.clear();
   }
 
-  private cell(look: ShotLook): Texture | null {
+  private cell(look: ShotLook | StripLook): Texture | null {
     this.preload();
     const sheet = this.sheet;
     if (!sheet) return null;
     let texture = this.cells.get(look);
     if (!texture) {
-      const index = SHOT_LOOKS.indexOf(look);
-      texture = new Texture({
-        source: sheet.source,
-        frame: new Rectangle(
-          (index % COLUMNS) * SHOT_FX_CELL,
-          Math.floor(index / COLUMNS) * SHOT_FX_CELL,
-          SHOT_FX_CELL,
-          SHOT_FX_CELL,
-        ),
-      });
+      texture = new Texture({ source: sheet.source, frame: frameOf(look) });
       this.cells.set(look, texture);
     }
     return texture;
+  }
+
+  /** A pooled sprite in added light for this frame, or null before the sheet is in. */
+  private paint(look: ShotLook | StripLook, alpha: number, tint: number): Sprite | null {
+    const texture = this.cell(look);
+    if (!texture) return null;
+    const sprite = this.pool.pop() ?? this.makeSprite();
+    sprite.texture = texture;
+    sprite.blendMode = "add";
+    sprite.visible = true;
+    sprite.alpha = Math.min(1, alpha);
+    sprite.tint = tint;
+    sprite.scale.set(1);
+    this.layer.addChild(sprite);
+    this.drawn.push(sprite);
+    return sprite;
   }
 
   private drawBit(bit: Bit, age: number): void {
@@ -313,3 +403,23 @@ export class ShotFx {
     this.pool.push(sprite);
   }
 }
+
+/** Where a cell or a strip sits on the sheet. */
+const frameOf = (look: ShotLook | StripLook): Rectangle => {
+  const cell = SHOT_LOOKS.indexOf(look as ShotLook);
+  if (cell >= 0) {
+    return new Rectangle(
+      (cell % COLUMNS) * SHOT_FX_CELL,
+      Math.floor(cell / COLUMNS) * SHOT_FX_CELL,
+      SHOT_FX_CELL,
+      SHOT_FX_CELL,
+    );
+  }
+  const strip = STRIP_LOOKS.indexOf(look as StripLook);
+  return new Rectangle(
+    (strip % STRIP_COLUMNS) * SHOT_STRIP_WIDTH,
+    STRIP_TOP + Math.floor(strip / STRIP_COLUMNS) * SHOT_STRIP_HEIGHT,
+    SHOT_STRIP_WIDTH,
+    SHOT_STRIP_HEIGHT,
+  );
+};

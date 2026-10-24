@@ -9,6 +9,11 @@ four across, in the order shotFx.ts reads them. The game tints them in code.
 A painting not made yet is stood in for by another one, reworked, until it is
 painted: see STAND_INS.
 
+Under the cells go the strips, 384 x 96, two across, which the game lays along
+a line: the six painted lightning bolts (tower-fx-kit/src/fxNN_boltN.png), each
+bolt's bright core (the bolt worn down to its middle, so it follows the same
+zigzag thinner), and the ray (the beam painting, trimmed to its glow).
+
     python web/tools/gen-tower-fx-sheet.py
 """
 
@@ -30,6 +35,11 @@ ACROSS = 4
 ORDER = ["glow", "flare", "muzzle", "spark", "burst", "zap", "smoke", "wisp", "ring", "orb", "beam", "scorch"]
 # Cells that keep their painting's size in the cell rather than filling it.
 FILL = 0.92
+STRIP_W, STRIP_H, STRIP_ACROSS = 384, 96, 2
+BOLTS = [f"bolt{n}" for n in range(1, 7)]
+STRIPS = BOLTS + [f"core{n}" for n in range(1, 7)] + ["ray"]
+# What share of a bolt's painted area its core keeps.
+CORE_SHARE = 0.3
 # name: (painting it borrows, how it is reworked)
 STAND_INS = {
     "flare": ("burst", "flare"),
@@ -161,12 +171,65 @@ def cell(name: str) -> tuple[Image.Image, str]:
     return framed, (f"stand-in from {source}" if how else os.path.basename(path))
 
 
+def trim(rgba: np.ndarray, pad: int = 2) -> np.ndarray:
+    ys, xs = np.nonzero(rgba[..., 3] > 0.02)
+    if len(xs) == 0:
+        return rgba
+    h, w = rgba.shape[:2]
+    return rgba[max(0, ys.min() - pad) : min(h, ys.max() + pad + 1), max(0, xs.min() - pad) : min(w, xs.max() + pad + 1)]
+
+
+def stretch(rgba: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Resizes premultiplied to exactly width x height: a strip is stretched along its line anyway."""
+    pre = rgba.copy()
+    pre[..., :3] *= pre[..., 3:4]
+    chans = [np.asarray(Image.fromarray(pre[..., i], "F").resize((width, height), Image.LANCZOS)) for i in range(4)]
+    out = np.clip(np.dstack(chans), 0, 1)
+    a = out[..., 3:4]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out[..., :3] = np.where(a > 1e-4, np.clip(out[..., :3] / a, 0, 1), 1)
+    return out
+
+
+def core_of(rgba: np.ndarray) -> np.ndarray:
+    """The bolt worn down from its edges until CORE_SHARE of it is left: its bright middle, same zigzag."""
+    alpha = Image.fromarray((np.clip(rgba[..., 3] * rgba[..., 0], 0, 1) * 255).round().astype(np.uint8), "L")
+    whole = max(1.0, float((np.asarray(alpha) > 128).sum()))
+    for _ in range(40):
+        if (np.asarray(alpha) > 128).sum() <= whole * CORE_SHARE:
+            break
+        alpha = alpha.filter(ImageFilter.MinFilter(3))
+    soft = alpha.filter(ImageFilter.GaussianBlur(1.5))
+    out = np.ones_like(rgba)
+    out[..., 3] = np.asarray(soft, dtype=np.float32) / 255
+    return out
+
+
+def strip(name: str) -> tuple[Image.Image, str]:
+    source = {"ray": "beam"}.get(name, name.replace("core", "bolt"))
+    path = painting(source)
+    if path is None:
+        raise SystemExit(f"no painting for {name} ({source})")
+    rgba = trim(unmix(path))
+    if name.startswith("core"):
+        # Kept in the bolt's own box, so it lies exactly on the bolt.
+        rgba = core_of(rgba)
+    out = stretch(rgba, STRIP_W, STRIP_H)
+    return Image.fromarray((out * 255).round().astype(np.uint8), "RGBA"), os.path.basename(path)
+
+
 def main() -> None:
     rows = -(-len(ORDER) // ACROSS)
-    sheet = Image.new("RGBA", (CELL * ACROSS, CELL * rows), (0, 0, 0, 0))
+    strip_rows = -(-len(STRIPS) // STRIP_ACROSS)
+    top = CELL * rows
+    sheet = Image.new("RGBA", (CELL * ACROSS, top + STRIP_H * strip_rows), (0, 0, 0, 0))
     for index, name in enumerate(ORDER):
         img, note = cell(name)
         sheet.paste(img, ((index % ACROSS) * CELL, (index // ACROSS) * CELL))
+        print(f"{index:2d} {name:7s} {note}")
+    for index, name in enumerate(STRIPS):
+        img, note = strip(name)
+        sheet.paste(img, ((index % STRIP_ACROSS) * STRIP_W, top + (index // STRIP_ACROSS) * STRIP_H))
         print(f"{index:2d} {name:7s} {note}")
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     sheet.save(OUT, optimize=True)
