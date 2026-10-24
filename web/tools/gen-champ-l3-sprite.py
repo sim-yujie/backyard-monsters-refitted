@@ -8,7 +8,9 @@ from Codex-painted frames. Usage (from the repo root):
 The source folder holds one painted grid per call, `<mode><col>/frames-new.png` on a flat #FF00FF ground (web/tools/champ-l3-kit/make_batch.py
 builds the inputs and the prompt of each call; SHEETS below says which rows each call paints, cell 1 of every call being row 0). Gorgo and
 Krallen have the columns 2..10 (front, through left, to back) painted; the other columns (11..15, 0, 1) are the painted column (4 - c) mod 16
-flipped left/right, placed against column c's own old frames. Drull and Fomor have every column painted (as their level 1 repaints).
+flipped left/right, placed against column c's own old frames. Fomor has every column painted (as its level 1 repaint), Drull every column but
+12, 14 and 15: their paintings gave Drull a second tail (a tall spike as well as the real one), so they are 8, 6 and 5 flipped (the Flash
+sheet is mirrored the same way).
 
 Each painted frame is keyed (the ground is flood-filled from the cell edge) and scaled so that the row-0 silhouette covers AREA times the
 pixels the old row-0 body does (one factor per heading, smoothed over the neighbouring headings). Placement: row 0 sits on the old row 0's
@@ -29,7 +31,7 @@ from scipy import ndimage as ndi
 
 SHEETS = {
     "ape_3": dict(cell=(103, 88), rows=15, painted=range(2, 11), calls={"A": [0, *range(1, 8)], "B": [0, *range(8, 15)]}, hold_walk=True),
-    "dragon_3": dict(cell=(114, 85), rows=15, painted=range(16), calls={"A": [0, *range(1, 8)], "B": [0, *range(8, 15)]}, hold_walk=True),
+    "dragon_3": dict(cell=(114, 85), rows=15, painted=[c for c in range(16) if c not in (12, 14, 15)], calls={"A": [0, *range(1, 8)], "B": [0, *range(8, 15)]}, hold_walk=True),
     "fly_3": dict(cell=(98, 81), rows=7, painted=range(16), calls={"A": list(range(7))}, hold_walk=False),
     "krallen_2_rev_65": dict(cell=(131, 90), rows=16, painted=range(2, 11), calls={"A": list(range(10)), "B": [0, *range(10, 16)]}, hold_walk=False),
 }
@@ -171,9 +173,9 @@ COLUMNS = sorted(frames)
 # one size per painted heading (sqrt of the row-0 area, in 1x pixels), smoothed 1-2-1 over the neighbouring painted headings
 want = {c: np.sqrt(AREA * old_body(c, 0).sum()) for c in PAINTED}
 k = {}
-cyclic = len(PAINTED) == COLS
+cyclic = NAME in ("dragon_3", "fly_3")       # every heading round the circle is painted or mirrored
 for i, c in enumerate(PAINTED):
-    idx = [(j % COLS) if cyclic else j for j in (i - 1, i, i, i + 1)]
+    idx = [(j % len(PAINTED)) if cyclic else j for j in (i - 1, i, i, i + 1)]
     near = [want[PAINTED[j]] for j in idx if 0 <= j < len(PAINTED)]
     k[c] = float(np.mean(near)) / np.sqrt(solid(frames[c][0][0]).sum())
 for c, src in MIRRORED.items():
