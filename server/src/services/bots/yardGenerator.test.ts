@@ -185,6 +185,26 @@ describe("unlockedMonsters", () => {
       }
     }
   });
+
+  test("unlocks the top tier in the locker's list order: only its last ones are held back", () => {
+    for (let seed = 0; seed < 50; seed++) {
+      for (let locker = 1; locker <= 4; locker++) {
+        const unlocked = new Set(unlockedMonsters(seed, locker));
+        const top = LISTED_MONSTERS.filter((entry) => entry.level === locker).sort(
+          (a, b) => a.page - b.page || a.order - b.order
+        );
+        const first = top.findIndex((entry) => !unlocked.has(entry.id));
+        expect(first).toBeGreaterThan(0);
+        for (const entry of top.slice(first)) expect(unlocked.has(entry.id)).toBe(false);
+      }
+    }
+    // Locker 2 always holds back Vorg, last on its page, and Fang too on some seeds; never Bandito.
+    for (let seed = 0; seed < 20; seed++) {
+      const unlocked = unlockedMonsters(seed, 2);
+      expect(unlocked).toContain("C7");
+      expect(unlocked).not.toContain("C16");
+    }
+  });
 });
 
 describe("fillRoom", () => {

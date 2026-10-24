@@ -313,6 +313,43 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
   return report;
 };
 
+/**
+ * Lays the generator's `yard` over a live yard an older generator made
+ * (`BOT_YARD_VERSION`, `yardGenerator.ts`), once: the buildings, decorations,
+ * unlocks, academy levels, army and champion as a new bot of that yard has
+ * them, nothing damaged or running, no trap gone off, and the mushrooms under
+ * a building picked. Points become the yard's; the plot never shrinks; the
+ * resources stay for {@link holdLootInBand}. Growth cannot take such a yard
+ * to the new one: the new generator's yard is no growth of the old one (for
+ * version 2 the build orders part at the first Town Hall upgrade), so the ids
+ * no longer match and {@link applyGrowth} would refuse it. Mutates
+ * `save`; the caller catches it up afterwards, as the factory settles a new
+ * yard.
+ */
+export const rebuildYard = (save: BrainSave, yard: BotYard): void => {
+  const placed = [...yard.buildings, ...yard.decorations];
+  const covered = new Set<number>();
+  for (const building of placed) {
+    for (const index of mushroomsUnder(save, building.t, building.X, building.Y)) covered.add(index);
+  }
+  if (covered.size > 0) {
+    const mushrooms = readMushrooms(save.mushrooms);
+    save.mushrooms = { ...(save.mushrooms ?? {}), l: mushrooms.l.filter((_, index) => !covered.has(index)) };
+  }
+  const expansion = Math.max(currentExpansion(save.storedata), yard.storedata.ENL?.q ?? 0);
+  save.storedata = { ...(save.storedata ?? {}), ...(expansion > 0 ? { ENL: { q: expansion } } : {}) };
+  save.buildingdata = Object.fromEntries(
+    placed.map((building) => [String(building.id), { ...building }])
+  ) as unknown as BuildingDataMap;
+  save.buildinghealthdata = {};
+  save.firedtraps = [];
+  save.points = yard.points;
+  save.lockerdata = { ...yard.lockerdata };
+  save.academy = { ...yard.academy };
+  save.monsters = { housed: { ...yard.monsters.housed } };
+  save.champion = yard.champion.map((champion) => ({ ...champion }));
+};
+
 /** Monster id to academy level, as the space rules read it. */
 const academyLevels = (academy: JsonObject | null | undefined): Record<string, number> =>
   Object.fromEntries(

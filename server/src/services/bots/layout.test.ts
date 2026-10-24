@@ -115,11 +115,11 @@ describe("layoutBotYard", () => {
   test(
     "a yard too broken up for its next Housing buys its next expansion early, and stays legal",
     () => {
-      // This seed's second Housing finds no room on the plot of its level (found by a 400-yard search).
-      const laid = laidOut(209475, "army", 22, 0.5);
+      // One of this seed's Housings finds no room on the plot of its level (found by a seed search).
+      const laid = laidOut(209016, "army", 22, 0.5);
       const early = laid.layout.buildings.find((spot, index) => {
         const level = laid.yard.builtAtLevel[laid.yard.buildings[index]!.id]!;
-        return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(209475, level));
+        return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(209016, level));
       });
       expect(early?.t).toBe(15);
       expectBuildable(laid);

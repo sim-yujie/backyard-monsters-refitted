@@ -235,6 +235,46 @@ describe("Progression", () => {
     }
   });
 
+  test("every Town Hall upgrade takes the Monster Locker step with it, so the locker is never behind", () => {
+    // The top locker level a hall allows: built at Town Hall 2, one more each hall to 4 at Town Hall 5.
+    const lockerFor = (hall: number) => Math.max(0, Math.min(hall - 1, 4));
+    for (const persona of PERSONAS) {
+      for (let seed = 0; seed < 3; seed++) {
+        const run = new Progression(seed * 7919 + 11, persona);
+        let action = run.next();
+        while (action) {
+          if (action.t === TOWN_HALL_TYPE && action.to <= 5) {
+            expect(action.then).toEqual({
+              kind: action.to === 2 ? "build" : "upgrade",
+              id: expect.any(Number),
+              t: 8,
+              to: lockerFor(action.to),
+            });
+          } else {
+            expect(action.then).toBeUndefined();
+          }
+          run.apply();
+          const locker = run.buildings().find((building) => building.t === 8)?.l ?? 0;
+          expect(locker).toBe(lockerFor(run.townHall));
+          action = run.next();
+        }
+      }
+    }
+  });
+
+  test("bots from level 15 have a locker at the top level their hall allows", () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const persona = PERSONAS[seed % PERSONAS.length]!;
+      for (const level of [15, 20, 25, 30, 40]) {
+        const yard = yardAtPoints(seed, persona, targetInBand(level, (seed % 10) / 10));
+        expect(yard.level).toBe(level);
+        const locker = yard.buildings.find((building) => building.t === 8);
+        expect(locker?.l).toBe(Math.min(yard.townHall - 1, 4));
+        expect(yard.builtAtHall[locker!.id]).toBe(2);
+      }
+    }
+  }, 60_000);
+
   test("next() is stable until apply() takes it", () => {
     const run = new Progression(9, "economy");
     for (let step = 0; step < 50; step++) {
