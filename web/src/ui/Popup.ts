@@ -25,6 +25,16 @@ const FOCUSABLE = [
 const openPopups: Popup[] = [];
 
 /**
+ * Whether an open popup sits over `element`: one on the page that does not
+ * hold it. Bob's tips wait while one does (`game/guide/windowOver.ts`), so a
+ * yard tip never lands on the Leaderboard or Report a bug, while a tip that
+ * points into a popup (the Starter Kits, the Baiter's) still shows. A popup a
+ * scene change swept off the page without closing it does not count.
+ */
+export const isPopupOver = (element: HTMLElement): boolean =>
+  openPopups.some((popup) => popup.backdrop.isConnected && !popup.backdrop.contains(element));
+
+/**
  * Escape with focus on the page itself closes the newest popup (#191). A click
  * on a popup's text, or a button that disables itself once pressed, leaves
  * focus on `<body>`, where the popup's own handler never hears the key: Escape

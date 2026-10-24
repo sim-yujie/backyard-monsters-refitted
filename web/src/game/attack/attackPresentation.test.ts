@@ -32,6 +32,20 @@ describe("AttackPresentation (#148)", () => {
     expect(presentation.playing()).toBe(false);
   });
 
+  it("is finishing while a last blow's slow motion plays, apart from the holds", () => {
+    const presentation = new AttackPresentation();
+    expect(presentation.finishing()).toBe(false);
+    let slow = true;
+    const release = presentation.holdFinish(() => slow);
+    expect(presentation.finishing()).toBe(true);
+    expect(presentation.playing()).toBe(false);
+    slow = false;
+    expect(presentation.finishing()).toBe(false);
+    slow = true;
+    release();
+    expect(presentation.finishing()).toBe(false);
+  });
+
   it("shows the screen's damage, never above the engine's, and the engine's with no view", () => {
     const presentation = new AttackPresentation();
     expect(presentation.damageShown(stateAt(42))).toBe(42);

@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 
 import type { JsonObject } from "../../types/JsonObject.js";
+import { noteEventPlayer } from "../stats/activity.js";
 
 /**
  * A player's progress in each event: one `bym.event_progress` row per player
@@ -53,9 +54,19 @@ export interface EventProgressStore {
    * and it is not claimed yet. Returns whether it was recorded.
    */
   claimTier(em: EntityManager, userid: number, eventId: string, tier: number, need: number): Promise<boolean>;
-  /** Adds `amount` (a whole number, may be 0) to the counter; returns the new count. */
+  /**
+   * Adds `amount` (a whole number, may be 0) to the counter; returns the new
+   * count. The column is an `integer`, so the count stops at
+   * {@link COUNTER_MAX} rather than fail the write that raised it.
+   */
   addToCounter(em: EntityManager, userid: number, eventId: string, amount: number): Promise<number>;
 }
+
+/** The highest count the `integer` column holds. */
+export const COUNTER_MAX = 2_147_483_647;
+
+/** A whole amount to add, 0 to {@link COUNTER_MAX}. */
+const addable = (amount: number): number => Math.min(COUNTER_MAX, Math.max(0, Math.floor(amount)) || 0);
 
 interface ProgressRow {
   event_id: string;
@@ -113,7 +124,9 @@ export const sqlProgressStore: EventProgressStore = {
        RETURNING calendar_days`,
       [userid, eventId, today, total]
     );
-    return rows.length > 0 ? Number(rows[0]!.calendar_days) : null;
+    if (rows.length === 0) return null;
+    noteEventPlayer(eventId, userid);
+    return Number(rows[0]!.calendar_days);
   },
 
   async claimTier(em, userid, eventId, tier, need) {
@@ -125,19 +138,21 @@ export const sqlProgressStore: EventProgressStore = {
        RETURNING userid`,
       [one, userid, eventId, need, one]
     );
+    if (rows.length > 0) noteEventPlayer(eventId, userid);
     return rows.length > 0;
   },
 
   async addToCounter(em, userid, eventId, amount) {
-    const add = Math.max(0, Math.floor(amount));
+    const add = addable(amount);
     const rows = await sql(em).execute<{ counter: number | string }[]>(
       `INSERT INTO bym.event_progress AS p (userid, event_id, counter)
        VALUES (?, ?, ?)
        ON CONFLICT (userid, event_id) DO UPDATE
-          SET counter = p.counter + EXCLUDED.counter, updated_at = now()
+          SET counter = LEAST(p.counter::bigint + EXCLUDED.counter, ?)::integer, updated_at = now()
        RETURNING counter`,
-      [userid, eventId, add]
+      [userid, eventId, add, COUNTER_MAX]
     );
+    if (add > 0) noteEventPlayer(eventId, userid);
     return Number(rows[0]?.counter) || 0;
   },
 };
@@ -176,7 +191,7 @@ export const memoryProgressStore = (): EventProgressStore & { rows: Map<string, 
     },
     async addToCounter(_em, userid, eventId, amount) {
       const now = get(userid, eventId);
-      const next = { ...now, counter: now.counter + Math.max(0, Math.floor(amount)) };
+      const next = { ...now, counter: Math.min(COUNTER_MAX, now.counter + addable(amount)) };
       rows.set(key(userid, eventId), next);
       return next.counter;
     },

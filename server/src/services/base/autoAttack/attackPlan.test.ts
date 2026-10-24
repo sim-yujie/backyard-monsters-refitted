@@ -139,6 +139,15 @@ describe("planLog", () => {
     expect(log.events.slice(1)).toEqual(plan.events.slice(1));
   });
 
+  test("fights the champion at the food bonus it has now", () => {
+    const plan = planFromFought(FOUGHT, 6_400)!;
+    const log = planLog(plan, 1234, [{ t: 3, l: 6, pl: 2, fb: 3, hp: 100, status: 0 }]);
+    expect(log.events[0]).toEqual({ ...FOUGHT.events[0]!, champion: { t: 3, l: 6, pl: 2, fb: 3 } } as never);
+    // One fed nothing since has none.
+    const unfed = planLog(plan, 1234, [{ t: 3, l: 6, pl: 2, hp: 100, status: 0 }]);
+    expect(unfed.events[0]).toEqual({ ...FOUGHT.events[0]!, champion: { t: 3, l: 6, pl: 2 } } as never);
+  });
+
   test("repeats the Mode the champion was flung in, through storage and back (#220)", () => {
     const fling = FOUGHT.events[0] as Extract<FlingLog["events"][number], { kind: "fling" }>;
     const fought: FlingLog = {

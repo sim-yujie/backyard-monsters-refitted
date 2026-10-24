@@ -10,6 +10,7 @@ import {
   NO_SUBJECT,
   sendable,
   sentText,
+  teamAnswerable,
   threadItems,
   threadList,
   unreadThreads,
@@ -464,14 +465,14 @@ export class MailboxScreen {
     // The thread's truce belongs to its last request, which carries the card.
     const request = state === null ? -1 : requestIndex(items);
     const until = thread.truce?.until ?? null;
-    if (!thread.notice && canPropose(state, until, items[request]?.mine ?? false, now)) {
+    if (!thread.notice && !thread.team && canPropose(state, until, items[request]?.mine ?? false, now)) {
       head.append(
         buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
           this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
         ),
       );
     }
-    if (!thread.notice) head.append(this.blockControl(thread));
+    if (!thread.notice && !thread.team) head.append(this.blockControl(thread));
 
     // Likewise the thread's latest invitation to move (#205).
     const invitation = inviteIndex(items);
@@ -531,6 +532,8 @@ export class MailboxScreen {
     this.pane.replaceChildren(head, messages);
     if (thread.notice) {
       this.pane.append(make("p", "mail-pane__note", "A notice from the game. It cannot be answered."));
+    } else if (thread.team && !teamAnswerable(items)) {
+      this.pane.append(make("p", "mail-pane__note", "A message from the game team. It cannot be answered."));
     } else {
       this.pane.append(
         this.writer({

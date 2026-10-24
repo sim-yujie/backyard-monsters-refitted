@@ -98,6 +98,9 @@ services:
     environment: *game-env
     volumes:
       - ./logs:/app/logs
+      # What deploy/host-status.sh sees from outside the container (memory,
+      # disks, containers, backups), read-only, for the dashboard and alerts.
+      - ./status:/app/status:ro
     networks:
       - bymr
     deploy:

@@ -40,7 +40,7 @@ const passwordSchema = z.preprocess(
  * - Trimmed and lowercased first, then checked, so a stray space is not a refusal.
  * - Must be a valid email format.
  */
-const emailSchema = z
+export const emailSchema = z
   .string({ error: AccountMessage.email })
   .trim()
   .toLowerCase()

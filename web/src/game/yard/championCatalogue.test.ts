@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { championStatWithFood } from "@/game/combat/rules";
 import {
   atChampionLevel,
   CHAMPION_CATALOGUE,
   championEntry,
+  championMaxHealth,
   evolveShinyPrice,
   feedRecipe,
   feedShinyPrice,
@@ -56,6 +58,21 @@ describe("the champion catalogue", () => {
     expect(feedRecipe(drull, 6, 2)).toEqual({ C8: 30 });
     expect(feedShinyPrice(drull, 4, 0, true)).toBe(105);
     expect(evolveShinyPrice(drull, 4, 11)).toBe(210);
+  });
+
+  it("gives a champion the same full health in battle as its cage card, at every level and food bonus", () => {
+    // The battle once picked the bonus by power level, so a fully healed
+    // champion fought with a bar that was not full (`ChampionBase.as:123-155`).
+    for (const entry of CHAMPION_CATALOGUE) {
+      for (let level = 1; level <= entry.levels; level += 1) {
+        for (let foodBonus = 0; foodBonus <= 3; foodBonus += 1) {
+          expect(
+            championStatWithFood(entry.id, "health", level, foodBonus),
+            `${entry.name} L${level} food bonus ${foodBonus}`,
+          ).toBe(championMaxHealth(entry, level, foodBonus));
+        }
+      }
+    }
   });
 });
 

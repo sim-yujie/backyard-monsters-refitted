@@ -5,7 +5,10 @@ import {
   claimableCount,
   claimableTiers,
   countdownText,
+  grantedKrallenText,
   isOver,
+  krallenMaxed,
+  krallenPrizeText,
   rewardText,
   serverClock,
   shortAmount,
@@ -31,6 +34,9 @@ const event = (over: Partial<EventView> = {}): EventView => ({
   endsAt: 100_000,
   calendar: calendar(),
   ladder: null,
+  claimUntil: null,
+  locked: null,
+  krallen: null,
   ...over,
 });
 
@@ -133,5 +139,50 @@ describe("shortAmount", () => {
     expect(shortAmount(12_500)).toBe("12.5K");
     expect(shortAmount(2_000_000)).toBe("2M");
     expect(shortAmount(25)).toBe("25");
+  });
+});
+
+describe("the Krallen Hunt", () => {
+  const hunt = (over: Partial<EventView> = {}): EventView =>
+    event({
+      id: "krallen-2026-11",
+      kind: "krallen",
+      calendar: null,
+      ladder: { label: "Loot taken", counter: 100_000_000, tiers: [{ need: 100_000_000, rewards: [{ kind: "krallen" }], claimed: false }] },
+      claimUntil: 100_000 + 7 * 86_400,
+      krallen: { level: 0, maxLevel: 5 },
+      ...over,
+    });
+
+  it("names the prize for the player's Krallen level", () => {
+    expect(krallenPrizeText({ level: 0, maxLevel: 5 })).toBe("Win Krallen, a champion of your own");
+    expect(krallenPrizeText({ level: 2, maxLevel: 5 })).toBe("Krallen level 2 → 3");
+    expect(krallenPrizeText({ level: 5, maxLevel: 5 })).toBe("Your Krallen is already level 5, the highest. Thanks for hunting!");
+    expect(rewardText({ kind: "krallen" }, name)).toBe("Krallen");
+  });
+
+  it("says what a claim gave", () => {
+    expect(grantedKrallenText([{ kind: "krallen", level: 1, raised: true }])).toBe("Krallen joined your yard!");
+    expect(grantedKrallenText([{ kind: "krallen", level: 4, raised: true }])).toBe("Krallen is now level 4!");
+    expect(grantedKrallenText([{ kind: "krallen", level: 5, raised: false }])).toBe("Your Krallen is already level 5, the highest.");
+    expect(grantedKrallenText([{ kind: "shiny", amount: 5 }])).toBeNull();
+  });
+
+  it("an ended hunt counts down to its claim deadline, then goes stale", () => {
+    const ended = hunt({ status: "ended" });
+    expect(countdownText(ended, 100_000 + 86_400)).toMatch(/^Ended: claim by .+ \(6d 0h left\)$/);
+    expect(isOver(ended, 100_000 + 86_400)).toBe(false);
+    expect(isOver(ended, 100_000 + 7 * 86_400)).toBe(true);
+  });
+
+  it("an ended hunt is listed after the ones on now and counts toward the badge, unless her level is the top", () => {
+    const ended = hunt({ id: "old", status: "ended" });
+    const on = event();
+    expect(sortEvents([ended, on]).active.map((one) => one.id)).toEqual(["halloween-2026", "old"]);
+    expect(claimableCount([ended])).toBe(1);
+    const topped = hunt({ status: "ended", krallen: { level: 5, maxLevel: 5 } });
+    expect(krallenMaxed(topped)).toBe(true);
+    expect(claimableCount([topped])).toBe(0);
+    expect(claimableCount([hunt({ status: "upcoming" })])).toBe(0);
   });
 });

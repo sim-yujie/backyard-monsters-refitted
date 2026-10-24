@@ -1,8 +1,10 @@
 import { PROTECTION_ITEMS, storeItems } from "../../game-data/store/storeItems.js";
+import { builtEvents } from "../../services/achievements/record.js";
 import { YardShopBuySchema } from "../../schemas/YardSchemas.js";
 import { overdriveGate } from "../../services/yard/hatchery.js";
 import { runningOrThrow } from "../../services/yard/locker.js";
 import { storeItemPrice } from "../../services/yard/shiny.js";
+import { planWallBlocks, WALL_BLOCK_ITEMS } from "../../services/yard/wallBlocks.js";
 import { yardKindOf } from "../../services/yardplanner/costs.js";
 import { yardBadRequestErr, yardRefusedErr } from "../../services/yard/yardErrors.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -39,6 +41,19 @@ export interface ShopItemRule {
    * post-attack protection included, and written to `save.protected`.
    */
   protection?: true;
+  /**
+   * A battle boost (`TOD`, `MOD`, `MDOD`, `MSOD`): never `alreadyActive`;
+   * buying one that still runs starts its full time again from now, without
+   * adding what was left (owner decision for beta.4, as the Flash save path
+   * did, `controllers/base/save/handlers/purchaseHandler.ts`).
+   */
+  restart?: true;
+  /**
+   * A wall upgrade (`BLK2`..`BLK5`): raises every Block below the tier to it,
+   * priced per Block from the yard (`services/yard/wallBlocks.ts`), never from
+   * the store table. Can be bought again whenever a Block is below the tier.
+   */
+  walls?: true;
 }
 
 /**
@@ -65,6 +80,19 @@ export interface ShopItemRule {
  * protection left, as the Flash save path did
  * (`controllers/base/save/handlers/purchaseHandler.ts`), owner decision
  * 2026-09-29. Attacking anyone still ends it (`finaliseAttack.ts`).
+ *
+ * v2.0.0-beta.4, the battle boosts: `TOD` (Tower Overdrive, 600, towers do
+ * 1.25x damage), `MOD` (Monster Overdrive, 500, monsters do 1.25x damage),
+ * `MDOD` (Monster Defensive Buff, 500, monsters take 30% less damage) and
+ * `MSOD` (Monster Speed Buff, 500, monsters move and swing 1.5x as fast), 24
+ * hours each. Each can be bought again while it runs, which restarts it. The
+ * battle reads them off `storedata` at attack start
+ * (`game-rules/combat/defence.ts` `storeBuffs`).
+ *
+ * Also beta.4, the wall upgrades: `BLK2` / `BLK3` / `BLK4` / `BLK5` (Stone,
+ * Metal, Gold, Black Diamond Blocks) raise every Block below the tier to it
+ * for 3 / 6 / 10 / 15 Shiny per Block per level climbed, behind Town Hall
+ * 3 / 4 / 5 / 6 in the main yard (`services/yard/wallBlocks.ts`).
  */
 export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BEW: {},
@@ -80,19 +108,41 @@ export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   PRO1: { protection: true },
   PRO2: { protection: true },
   PRO3: { protection: true },
+  TOD: { restart: true },
+  MOD: { restart: true },
+  MDOD: { restart: true },
+  MSOD: { restart: true },
+  BLK2: { walls: true },
+  BLK3: { walls: true },
+  BLK4: { walls: true },
+  BLK5: { walls: true },
 };
 
 /**
  * What an outpost's store sells of {@link SHOP_ITEMS}: Map Room 2 outposts
  * show a reduced list (`client/scripts/STORE.as:198-199`: `BST`, the block
  * and resource packs, speed-ups, `POD`, `FIX`, `HOD*`, `PRO*`, `TOD`,
- * `EXH`), so no extra worker (one per outpost) and no Locker Overdrive, and
+ * `EXH`, `BLK2`..`BLK5`), so no extra worker (one per outpost) and no Locker Overdrive, and
  * no damage protection: it is sold for the main yard only and protects only
- * that (owner decision 2026-09-29). A
+ * that (owner decision 2026-09-29). Tower Overdrive is sold in outposts and
+ * boosts only the outpost's towers; the monster boosts are the main yard's,
+ * which the attacker's monsters take along into every attack. A
  * timed item bought in an outpost is the outpost's: it lands in the outpost's
  * own `storedata`, as Flash kept store data per yard.
  */
-export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set(["BST", "HOD", "HOD2", "HOD3", "EXH", "POD"]);
+export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set([
+  "BST",
+  "HOD",
+  "HOD2",
+  "HOD3",
+  "EXH",
+  "POD",
+  "TOD",
+  "BLK2",
+  "BLK3",
+  "BLK4",
+  "BLK5",
+]);
 
 /** What the route sends back as `report`. */
 export interface ShopBuyReport {
@@ -103,12 +153,41 @@ export interface ShopBuyReport {
   q: number;
   /** When a timed item runs out (unix s); null for an item that does not expire. */
   endsAt: number | null;
+  /** Wall upgrades only: the tier, how many Blocks it raised and the points they earned. */
+  tier?: number;
+  blocks?: number;
+  points?: number;
 }
 
 /** A non-negative whole number off a jsonb field; anything else is 0. */
 const count = (raw: unknown): number => {
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+};
+
+/** A wall upgrade: every Block below the tier is raised to it (`services/yard/wallBlocks.ts`). */
+const buyWalls = ({ save, body, now }: YardActionInput<{ item: string }>) => {
+  const { item } = body;
+  const plan = planWallBlocks(save, WALL_BLOCK_ITEMS[item] ?? 0, now, yardKindOf(save));
+  const report: ShopBuyReport = {
+    item,
+    credits: plan.shiny,
+    q: 0,
+    endsAt: null,
+    tier: plan.tier,
+    blocks: plan.blocks,
+    points: plan.points,
+  };
+  return {
+    report,
+    slices: {
+      buildingdata: plan.buildingdata,
+      ...(plan.buildinghealthdata && { buildinghealthdata: plan.buildinghealthdata }),
+    },
+    shiny: plan.shiny,
+    points: plan.points,
+    achievementEvents: builtEvents(plan.jobs),
+  };
 };
 
 /**
@@ -158,8 +237,9 @@ export const yardShopBuyAction = defineYardAction({
     const timed = storeItem.du > 0;
 
     if (rule.protection) return buyProtection(input, storeItem.c[0] ?? 0, storeItem.du);
+    if (rule.walls) return buyWalls(input);
 
-    if (timed && count(entry.e) > now) {
+    if (timed && !rule.restart && count(entry.e) > now) {
       throw yardRefusedErr("alreadyActive", "That is already running.", {
         item,
         endsAt: count(entry.e),

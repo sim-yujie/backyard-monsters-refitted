@@ -20,9 +20,13 @@ export const REVENGE_CHANCE = 1 / 3;
 export const REVENGE_DELAY_HOURS = { min: 1, max: 24 } as const;
 /** A revenge that has not run gives up this long after the attack that booked it (decision 19). */
 export const REVENGE_GIVE_UP_HOURS = 72;
-/** Most revenge attacks on one player, from any bots, in any 24 hours (decision 19). */
+/**
+ * Most revenges on one player, from any bots, in any 24 hours (decision 19).
+ * A revenge is a chain of attacks (`revengeChain.ts`), so this counts the bots,
+ * not their attacks.
+ */
 export const REVENGE_PER_PLAYER = 2;
-/** Most revenge attacks by one bot on one player in any 24 hours (decision 19). */
+/** Most revenges by one bot on one player in any 24 hours (decision 19): its chain is one. */
 export const REVENGE_PER_PAIR = 1;
 /** The span the caps count over. */
 export const REVENGE_CAP_WINDOW_MS = 24 * HOUR_MS;
@@ -34,30 +38,33 @@ export interface RevengeEvent {
 }
 
 /**
- * Whether a revenge by `bot` at `at` keeps both caps, given the player's other
- * revenge attacks, done or booked: no 24-hour span may hold more than
- * {@link REVENGE_PER_PLAYER} of them on the player, or more than
- * {@link REVENGE_PER_PAIR} by this bot. A span holding a set of attacks can
- * always start at the earliest of them, so only spans starting at an attack
- * need counting. Pure, so the sweep can ask it again at run time.
+ * Whether a revenge by `bot` starting at `at` keeps both caps, given the
+ * player's other revenge attacks, done or booked: no 24-hour span may hold
+ * attacks on the player by more than {@link REVENGE_PER_PLAYER} different bots,
+ * or more than {@link REVENGE_PER_PAIR} by this bot. A chain's later attacks
+ * are not asked (`revenge.ts`), and count once with their bot here. A span
+ * holding a set of attacks can always start at the earliest of them, so only
+ * spans starting at an attack need counting. Pure, so the sweep can ask it
+ * again at run time.
  */
 export const revengeCapsAllow = (at: Date, bot: number, others: readonly RevengeEvent[]): boolean => {
   const time = at.getTime();
   const near = others.filter((other) => Math.abs(other.at.getTime() - time) < REVENGE_CAP_WINDOW_MS);
-  const capped = (events: readonly RevengeEvent[], cap: number): boolean => {
-    const times = [...events.map((event) => event.at.getTime()), time];
-    return times.some(
-      (start) =>
-        start <= time &&
-        time < start + REVENGE_CAP_WINDOW_MS &&
-        times.filter((other) => other >= start && other < start + REVENGE_CAP_WINDOW_MS).length > cap
-    );
+  const capped = (events: readonly RevengeEvent[], cap: number, distinct: boolean): boolean => {
+    const all = [...events, { bot, at }];
+    return all.some(({ at: from }) => {
+      const start = from.getTime();
+      if (start > time || time >= start + REVENGE_CAP_WINDOW_MS) return false;
+      const inside = all.filter((other) => other.at.getTime() >= start && other.at.getTime() < start + REVENGE_CAP_WINDOW_MS);
+      return (distinct ? new Set(inside.map((other) => other.bot)).size : inside.length) > cap;
+    });
   };
   return (
-    !capped(near, REVENGE_PER_PLAYER) &&
+    !capped(near, REVENGE_PER_PLAYER, true) &&
     !capped(
       near.filter((other) => other.bot === bot),
-      REVENGE_PER_PAIR
+      REVENGE_PER_PAIR,
+      false
     )
   );
 };

@@ -17,7 +17,8 @@ import { icon as lineIcon } from "@/ui/icons";
  * range, and the actions: Attack, then look inside and bookmark. Everything
  * else that used to be a row is either a chip that appears only when it is
  * true (damaged, destroyed, protected, a truce, busy) or sits behind "More
- * about this yard" (empire value, alliance, Flinger and Catapult levels). The
+ * about this yard" (empire value, alliance, and on the player's own yard its
+ * Flinger and Catapult levels: nobody else's are shown or sent). The
  * axial coordinates, terrain height, base id, the avatar's web address,
  * hatchery data, the four resource lines and the user id are gone.
  *
@@ -527,8 +528,9 @@ export class CellPanel {
       this.addFact("Height", `${bonus.metres} m`);
       this.addFact("Ground", `${towerBonusText(bonus)}, ${incomeBonusText(bonus).toLowerCase()}`);
     }
-    this.addFact("Flinger", `Level ${payload.f}`);
-    this.addFact("Catapult", `Level ${payload.c}`);
+    // Only the player's own: the server sends no one else's (owner 2026-10-22).
+    if (mine && payload.f !== undefined) this.addFact("Flinger", `Level ${payload.f}`);
+    if (mine && payload.c !== undefined) this.addFact("Catapult", `Level ${payload.c}`);
   }
 
   /**

@@ -46,7 +46,7 @@ export const rangeSources = (
     const kind = own.cell.b === CellType.OUTPOST ? "outpost" : "main";
     if (kind === "main") homeSeen = true;
     const reach = cellReach(own.cell, declareWar);
-    if (reach > 0) sources.push({ col: own.col, row: own.row, kind, flinger: own.cell.f, reach });
+    if (reach > 0) sources.push({ col: own.col, row: own.row, kind, flinger: own.cell.f ?? 0, reach });
   }
   if (!homeSeen && home && typeof home.flinger === "number") {
     const reach = withDeclareWar(mainYardRange(home.flinger), declareWar);

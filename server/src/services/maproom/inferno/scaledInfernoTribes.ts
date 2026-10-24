@@ -9,7 +9,7 @@ import { postgres } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { BaseSaveSchema } from "../../../schemas/BaseSaveSchema.js";
 import { molochTribes } from "../../../game-data/tribes/inferno/molochTribes.js";
-import { withStoredBrains } from "../../base/combat/championBrain.js";
+import { championsAfterAttack } from "../../base/combat/attackerRow.js";
 
 type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
 
@@ -70,9 +70,12 @@ export const scaledInfernoTribes = async (user: User, saveData: BaseSaveData) =>
         break;
 
       case SaveKeys.ATTACKERCHAMPION:
-        // Brains are the server's alone (issue #219): kept, never sent.
+        // Only health, only downwards, for a champion the log flung, as a
+        // Map Room 1 or 2 attack takes it (#23, C1): the client's list once
+        // replaced the main yard's, so it could add a Krallen or raise any
+        // champion's level.
         if (saveData.attackerchampion) {
-          userSave.champion = withStoredBrains(userSave.champion, saveData.attackerchampion);
+          userSave.champion = championsAfterAttack(userSave.champion, saveData.attackerchampion, saveData.flinglog);
         }
         break;
 

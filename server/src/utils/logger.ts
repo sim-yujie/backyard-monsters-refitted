@@ -12,20 +12,21 @@ import { getPrettyFormatter } from "@logtape/pretty";
 import { Env } from "../enums/Env.js";
 import { retentionConfig } from "../config/RetentionConfig.js";
 import { getDailyRotatingFileSink, pruneLogFiles } from "./logFiles.js";
+import { errorCaptureSink } from "./errorCapture.js";
 
 /**
  * Directory for the JSON log files in production: server/logs, resolved from this
  * file rather than the working directory, so it doesn't depend on where pm2 was
  * started. The file sink does not create it.
  */
-const LOG_DIR = fileURLToPath(new URL("../../logs", import.meta.url));
+export const LOG_DIR = fileURLToPath(new URL("../../logs", import.meta.url));
 
 const isLocal = process.env.ENV === Env.LOCAL;
 
 if (!isLocal) mkdirSync(LOG_DIR, { recursive: true });
 
 /** The log files' name stem: `logs/bymr-2026-10-10.jsonl`. */
-const LOG_BASE = "bymr";
+export const LOG_BASE = "bymr";
 
 /** The most the log files may hold together once old days are pruned. */
 const LOG_MAX_TOTAL_BYTES = 1024 * 1024 * 1024;
@@ -93,6 +94,13 @@ const sinks: Record<string, Sink> = isLocal
         pruneOldLogs
       ),
     };
+
+/**
+ * errorCapture (everywhere): keeps error and fatal records in memory for the
+ * owner's dashboard (`utils/errorCapture.ts`); the server moves them into the
+ * database every half minute (`services/errors/errorStore.ts`).
+ */
+sinks.errorCapture = errorCaptureSink;
 
 /**
  * Configure LogTape logging for the application.

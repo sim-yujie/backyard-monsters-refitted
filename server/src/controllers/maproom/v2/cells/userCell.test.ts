@@ -198,3 +198,28 @@ describe("userCell friend flag (friends WP2, #369)", () => {
     expect(await userCell(withFriends(), outpostWith(0, 0), owners)).toMatchObject({ fr: 0 });
   });
 });
+
+describe("userCell Flinger and Catapult levels (owner 2026-10-22)", () => {
+  const save = { damage: 0, protected: 0, locked: 0, empirevalue: 0, flinger: 4, catapult: 3, attackid: 0, attacks: [] };
+  const cellOf = (uid: number, base_type: number) =>
+    ({ uid, base_type, baseid: "2000240208", terrainHeight: 100, save }) as unknown as Parameters<typeof userCell>[1];
+  const viewer = { authUser: { userid: 2505, save: {} }, state: { online: new Set(), truces: new Map() } } as unknown as Context;
+  const both = new Map([
+    ...(owners as unknown as Map<number, unknown>),
+    [2505, { userid: 2505, username: "me", pic_square: "", alliance_id: null, save: { points: "0", basevalue: "0" } }],
+  ]) as unknown as Parameters<typeof userCell>[2];
+
+  test("someone else's main yard and outpost send neither level", async () => {
+    for (const baseType of [2, 3]) {
+      const payload = await userCell(viewer, cellOf(OWNER, baseType), both);
+      expect(payload).not.toHaveProperty("f");
+      expect(payload).not.toHaveProperty("c");
+    }
+  });
+
+  test("the viewer's own main yard and outpost keep both", async () => {
+    for (const baseType of [2, 3]) {
+      expect(await userCell(viewer, cellOf(2505, baseType), both)).toMatchObject({ f: 4, c: 3 });
+    }
+  });
+});

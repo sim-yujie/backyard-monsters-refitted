@@ -36,6 +36,7 @@ export const playerKeys = (userid: number, email: string): string[] => [
   `bot-check:cooldown:${userid}`,
   `bot-check:times:${userid}`,
   `bot-check:stay:${userid}`,
+  `bot-check:plan:${userid}`,
 ];
 
 /** Keys named by one of the player's saves (`services/base/attackCheckpoint.ts`, `attackSession.ts`, `takeoverGrantStore.ts`, `services/defences/defenceReplayLoad.ts`). */
@@ -69,8 +70,19 @@ export const CHAT_HISTORY_PATTERN = "history:*";
 /** Every player's chat ignore list (`chat/chatChannels.ts`): sets of user ids. */
 export const CHAT_IGNORE_PATTERN = "chat-ignore:*";
 
+/**
+ * The owner's dashboard's day-by-day play lists (`services/stats/activity.ts`):
+ * sets of the account numbers that played, or took part in an event, that UTC
+ * day, kept 8 days.
+ */
+export const PLAY_COUNT_PATTERNS = ["stats:active:*", "stats:event:*"];
+
 /** The fair-play log (`services/user/botCheckLog.ts`): JSON rows with `userid`. */
 export const BOT_CHECK_LOG_KEY = "bot-check:log";
 
-/** The Map Room leaderboards cache (`controllers/leaderboards/getLeaderboards.ts`), which lists names. */
+/**
+ * The leaderboard caches, which list names: the Map Room boards
+ * (`controllers/leaderboards/getLeaderboards.ts`) and the empire board
+ * (`services/leaderboard/empireBoard.ts`).
+ */
 export const LEADERBOARD_PATTERN = "leaderboards_*";

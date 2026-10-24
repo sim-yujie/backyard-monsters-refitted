@@ -92,10 +92,10 @@ const sent = (save: Save) => {
   return { ...fields, buildingdata: byType };
 };
 
-const LEVELS = [1, 2, 3, 5, 8, 10, 13, 15, 18, 20, 23, 25, 28, 30, 33, 35, 38, 40];
+const LEVELS = [15, 16, 18, 20, 23, 25, 28, 30, 33, 35, 38, 40];
 
 describe("a bot's save has a real player's shape (#245)", () => {
-  test.each([1, 2])("level %i: as a new account of that level", (level) => {
+  test.each([15, 16])("level %i: as a new account of that level", (level) => {
     const real = sent(realYard());
     for (const seed of [245, 2450, 24500]) {
       const bot = sent(botYard(level, seed + level));
@@ -114,7 +114,7 @@ describe("a bot's save has a real player's shape (#245)", () => {
   });
 
   test("a new bot's save already has what a loaded yard carries: hatchery queues, mushrooms, Map Room 1's tribes", () => {
-    const bot = botYard(12, 77);
+    const bot = botYard(16, 77);
     expect(Object.keys(bot.monsters ?? {}).sort()).toEqual(Object.keys(realYard().monsters ?? {}).sort());
     expect(bot.mushrooms).toMatchObject({ l: expect.any(Array), s: expect.any(Number) });
     expect(bot.wmstatus).toHaveLength(4);

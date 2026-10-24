@@ -45,7 +45,12 @@ import { yardAtPoints, type Persona, type ProgressionBuilding } from "./progress
  *   `X`/`Y` in a walled layout after the Base Defense Guide, a decoration on a
  *   few bots, and the yard expansions (`storedata.ENL`) the plot grows with.
  *   The layout is told the level and Town Hall each building went up at.
+ * - **Workers**: {@link BOT_WORKERS}, as a player who bought two more early
+ *   (owner decision, 2026-10-23), held as the store's `BEW` purchases.
  */
+
+/** The workers every bot has `[PLACEHOLDER]`: the free one and two bought (`storedata.BEW.q`, `yardplanner/workers.ts`). */
+export const BOT_WORKERS = 3;
 
 /** Storage held between these fractions of the cap (§4.6) `[PLACEHOLDER]`. */
 export const LOOT_BAND = { min: 0.25, max: 0.7 } as const;
@@ -112,8 +117,8 @@ export interface BotYard {
   buildings: BotBuilding[];
   /** Decorations, `{ id, t, X, Y }` as a placed one is stored (`yard/decor.ts`); ids among the buildings'. */
   decorations: PlacedSpot[];
-  /** The yard expansions: `{ ENL: { q } }`, or empty for none (a new save's `storedata` is `{}`). */
-  storedata: { ENL?: { q: number } };
+  /** The workers bought (`BEW`) and the yard expansions (`ENL`, left out when none). */
+  storedata: { BEW: { q: number }; ENL?: { q: number } };
   resources: BotResources;
   lockerdata: Record<string, { t: 2 }>;
   academy: Record<string, { level: number }>;
@@ -356,7 +361,7 @@ export const generateBotYard = (request: BotYardRequest): BotYard => {
     basevalue: String(yard.basevalue),
     buildings,
     decorations: layout.decorations,
-    storedata: layout.expansion > 0 ? { ENL: { q: layout.expansion } } : {},
+    storedata: { BEW: { q: BOT_WORKERS - 1 }, ...(layout.expansion > 0 ? { ENL: { q: layout.expansion } } : {}) },
     resources: resourcesInBand(lootRng, storageCap({ buildingdata })),
     lockerdata: Object.fromEntries(unlocked.map((id) => [id, { t: 2 as const }])),
     academy,

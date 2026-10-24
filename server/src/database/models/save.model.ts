@@ -13,6 +13,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import type { BuildingDataMap, BuildingHealthData, FiredTrap } from "../../types/BuildingData.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { townHallColumnValue } from "../../services/yard/townHallColumn.js";
+import { empirePointsColumnValue } from "../../services/base/calculateEmpirePoints.js";
 
 const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
 
@@ -441,7 +442,9 @@ export class Save {
   @Property({ columnType: "jsonb", nullable: true })
   monsterupdate?: JsonObject | null = [];
 
-  @FrontendKey
+  // The Yard Planner's saved layouts (up to ~260 KB): never sent with a base
+  // load or save reply, owner included. Only the planner's own routes read them
+  // (`controllers/yardplanner`), Flash's `gettemplates` among them.
   @Property({ columnType: "jsonb", nullable: true })
   savetemplate: Opt<any[]> = [];
 
@@ -487,6 +490,35 @@ export class Save {
     const payload = args?.changeSet?.payload;
     if (payload && !("buildingdata" in payload)) return;
     this.thlevel = townHallColumnValue(this.buildingdata);
+  }
+
+  /**
+   * Empire points (`points` + `basevalue`, the Flash score from
+   * `client/scripts/BASE.as:4835-4877`), whole, so the leaderboard can order
+   * main yards by an index rather than casting two strings on every row
+   * (`services/leaderboard/empireBoard.ts`). Kept in step by
+   * {@link Save.syncEmpirePoints}. Not a `@FrontendKey`.
+   */
+  @Property({ type: new BigIntType("number"), default: 0 })
+  empirepoints!: Opt<number>;
+
+  /**
+   * When `empirepoints` last changed, unix seconds: the leaderboard's tie
+   * break, so of two players on the same score the one who reached it first
+   * ranks higher. 0 until worked out.
+   */
+  @Property({ type: "number", default: 0 })
+  empirepointsat!: Opt<number>;
+
+  @BeforeCreate()
+  @BeforeUpdate()
+  syncEmpirePoints(args?: { changeSet?: { payload?: Record<string, unknown> } }): void {
+    const payload = args?.changeSet?.payload;
+    if (payload && !("points" in payload) && !("basevalue" in payload)) return;
+    const total = empirePointsColumnValue(this.points, this.basevalue);
+    if (payload && total === this.empirepoints) return;
+    this.empirepoints = total;
+    this.empirepointsat = Math.floor(Date.now() / 1000);
   }
 
   @FrontendKey

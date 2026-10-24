@@ -8,13 +8,11 @@ import type { KoaController } from "../../utils/KoaController.js";
 interface MR2Leaderboard {
   username: string;
   pic_square: string | null;
-  discord_tag: string | null;
   outpost_count: string;
 }
 
 interface MR3Leaderboard {
   username: string;
-  discord_tag: string | null;
   pic_square: string | null;
   stronghold_count: string;
   outpost_count: string;
@@ -36,6 +34,8 @@ const LB_CACHE_TTL = 7200;
  * First checks if the leaderboard data is cached in Redis.
  * If not, it queries the database for the leaderboard data,
  * caches the result in Redis, and then returns the data to the client.
+ * Discord tags are not sent (beta.4); the `_nodiscord` cache key keeps a
+ * build cached before that from being served.
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -65,7 +65,7 @@ export const getLeaderboards: KoaController = async (ctx) => {
     return;
   }
 
-  const cacheKey = `leaderboards_${worldid}_v${version}`;
+  const cacheKey = `leaderboards_${worldid}_v${version}_nodiscord`;
   const cachedData = await redis.get(cacheKey);
 
   if (cachedData) {
@@ -81,7 +81,6 @@ export const getLeaderboards: KoaController = async (ctx) => {
       `
         SELECT
           u.username,
-          u.discord_tag,
           u.pic_square,
           COUNT(*) FILTER (WHERE wmc.base_type = ?) AS stronghold_count,
           COUNT(*) FILTER (WHERE wmc.base_type = ?) AS outpost_count
@@ -91,7 +90,7 @@ export const getLeaderboards: KoaController = async (ctx) => {
           AND wmc.map_version = ?
           AND wmc.base_type IN (?, ?)
           AND wmc.destroyed_at IS NULL
-        GROUP BY u.userid, u.username, u.discord_tag
+        GROUP BY u.userid, u.username, u.pic_square
         ORDER BY (COUNT(*) FILTER (WHERE wmc.base_type = ?) + COUNT(*) FILTER (WHERE wmc.base_type = ?)) DESC
         LIMIT 25
       `,
@@ -109,7 +108,7 @@ export const getLeaderboards: KoaController = async (ctx) => {
   } else {
     leaderboard = await postgres.em.getConnection().execute<MR2Leaderboard[]>(
       `
-        SELECT u.username, u.discord_tag, u.pic_square, sub.outpost_count
+        SELECT u.username, u.pic_square, sub.outpost_count
         FROM bym.user u
         JOIN (
             SELECT s.userid, COUNT(*) AS outpost_count

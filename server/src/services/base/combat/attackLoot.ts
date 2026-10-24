@@ -158,8 +158,8 @@ export const foughtAcademy = (
 /** What the replay needs of the attacker's main save, as it stood before this save. */
 export interface LootAttacker {
   academy?: JsonObject | null;
-  /** The attacker's champions: type, level, and power level (issue #202). */
-  champion?: readonly { t: number; l: number; pl?: number }[] | null;
+  /** The attacker's champions: type, level, power level (issue #202) and food-bonus rank. */
+  champion?: readonly { t: number; l: number; pl?: number; fb?: number }[] | null;
   catapult?: number | null;
   buildingdata?: JsonObject | null;
   /**
@@ -209,11 +209,16 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     for (const [id, count] of Object.entries(housed)) left[id] = (left[id] ?? 0) + count;
   }
 
-  const owned = new Map<number, { l: number; pl: number }>();
+  const owned = new Map<number, { l: number; pl: number; fb: number }>();
   for (const champion of attacker.champion ?? []) {
     if (!Number.isInteger(champion?.t) || !Number.isFinite(champion.l)) continue;
     const pl = Number(champion.pl);
-    owned.set(champion.t, { l: champion.l, pl: Number.isFinite(pl) ? Math.max(0, Math.floor(pl)) : 0 });
+    const fb = Number(champion.fb);
+    owned.set(champion.t, {
+      l: champion.l,
+      pl: Number.isFinite(pl) ? Math.max(0, Math.floor(pl)) : 0,
+      fb: Number.isFinite(fb) ? Math.max(0, Math.floor(fb)) : 0,
+    });
   }
   const championsFlung = new Set<number>();
 
@@ -247,8 +252,9 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
       left[id] = (left[id] ?? 0) - take;
     }
 
-    // A champion the attacker owns, once, at no more than its stored level and
-    // power level (issue #202); a log with no `pl` fights at its level alone.
+    // A champion the attacker owns, once, at no more than its stored level,
+    // power level (issue #202) and food-bonus rank; a log with neither `pl`
+    // nor `fb` fights at its level alone.
     // Its Mode (issue #220) is the attacker's choice for this attack and rides
     // along as sent; a log with none fights it as Hybrid.
     // Its brain (issue #219) is never the log's: the session's frozen copy is
@@ -257,12 +263,13 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     const stored = event.champion ? owned.get(event.champion.t) : undefined;
     if (event.champion && stored !== undefined && !championsFlung.has(event.champion.t)) {
       championsFlung.add(event.champion.t);
-      const { pl, s } = event.champion;
+      const { pl, fb, s } = event.champion;
       champion = withFrozenBrain(
         {
           t: event.champion.t,
           l: Math.min(event.champion.l, stored.l),
           ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
+          ...(fb !== undefined && { fb: Math.max(0, Math.min(fb, stored.fb)) }),
           ...(s !== undefined && { s }),
         },
         attacker.brains

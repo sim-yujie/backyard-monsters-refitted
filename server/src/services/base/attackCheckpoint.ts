@@ -131,6 +131,8 @@ const isEvent = (value: unknown): value is FlingEvent => {
     Number.isInteger(value.champion.l) &&
     // Its power level (issue #202), absent from a log written before it.
     (value.champion.pl === undefined || Number.isInteger(value.champion.pl)) &&
+    // Its food-bonus rank, absent from a log written before it.
+    (value.champion.fb === undefined || Number.isInteger(value.champion.fb)) &&
     // Its Mode (issue #220), absent from a log written before it.
     (value.champion.s === undefined || isChampionStance(value.champion.s)) &&
     // Its brain (issue #219): read only to be replaced by the session's frozen

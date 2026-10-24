@@ -12,6 +12,7 @@ import { outpostRange } from "@/game/maproom/rules/range";
 import { BUILDING_COST_ROWS } from "@/game/yard/buildingCostData";
 import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
 import type { YardBuilding } from "@/game/yard/yardModel";
+import { CHAMPION_CAGE_TYPE } from "@/game/yard/championModel";
 import { resourceKeyOf, type ResourceKey } from "@/ui/resourceIcon";
 
 /**
@@ -316,12 +317,19 @@ export const townHallUnlocks = (level: number): string[] => {
   return items;
 };
 
+/**
+ * The label of a building's own health. The Champion Cage's says it is the
+ * cage's, as its panel also shows the champion's health and full health.
+ */
+export const buildingHealthLabel = (type: number): string =>
+  type === CHAMPION_CAGE_TYPE ? "Cage health" : "Health";
+
 /** The health row: current and maximum, as the save and the HP ladder give them. */
 const healthRow = (building: YardBuilding): InfoRow | null => {
   if (building.maxHp === null) return null;
   const max = building.maxHp.toLocaleString("en-US");
   const current = building.hp === null ? max : building.hp.toLocaleString("en-US");
-  return { label: "Health", now: text(`${current} / ${max}`) };
+  return { label: buildingHealthLabel(building.type), now: text(`${current} / ${max}`) };
 };
 
 /**

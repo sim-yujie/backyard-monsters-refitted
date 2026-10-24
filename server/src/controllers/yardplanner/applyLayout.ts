@@ -1,6 +1,7 @@
 import { Status } from "../../enums/StatusCodes.js";
 import { layoutInvalidErr, layoutUnplacedErr } from "../../errors/errors.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
+import { healChampions } from "../../services/yard/catchUpChampions.js";
 import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { ApplyLayoutSchema } from "../../schemas/YardPlannerSchemas.js";
 import { currentExpansion } from "../../services/yardplanner/layoutGeometry.js";
@@ -178,6 +179,8 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   moveMushroomsOffBuildings(save);
   syncDerivedLevels(save);
   syncBaseValue(save);
+  // The caged champions keep the healing `savetime` moves past.
+  healChampions(save, Number(save.savetime), now);
   save.savetime = now;
 
   return {

@@ -10,11 +10,12 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { AVATAR_IDS, avatarPath, PLACEHOLDER_PIC_SQUARE } from "../../game-data/avatars.js";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
 import type { Rng } from "../../game-rules/combat/rng.js";
+import { BOT_FLOOR_LEVEL, daysBetween, daysOn, LEVEL_WEIGHTS, type Pace } from "../../config/BotConfig.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { usernameMatch } from "../user/usernameLookup.js";
 import { botName } from "./names.js";
 import { shinyForSeed } from "./shiny.js";
-import { PERSONAS, targetInBand, type Persona } from "./progression.js";
+import { levelBand, minimumYardTotal, PERSONAS, targetInBand, type Persona } from "./progression.js";
 import { generateBotYard, type BotYard } from "./yardGenerator.js";
 import { catchUpYard } from "../yard/catchUp.js";
 import { visitMapRoom1 } from "./lookAlike.js";
@@ -36,28 +37,29 @@ import { visitMapRoom1 } from "./lookAlike.js";
  *   save is built with `getDefaultBaseData(..., { forBot: true })`.
  * - **Age**: `createtime` (and the save's `createdAt`, the account's terms
  *   date) back-dated about as long as a player takes to reach the bot's level
- *   at `BOTS_DAYS_PER_LEVEL`, with jitter ({@link backdate}), so bots made in
+ *   at the bot pace (`DAYS_ON_LEVEL`), with jitter ({@link backdate}), so bots made in
  *   one run do not share a creation minute.
  * - **Yard**: the generator's yard (`yardGenerator.ts`) for a target drawn
  *   inside the level's band, laid over a new main save's defaults: no
  *   protection, the tutorial passed, `mapversion` 1, no world, no Inferno save,
  *   then settled as a player's own load leaves a yard ({@link settleNewYard}).
  * - **Pace**: `bot.level_since` puts the bot as far into its level as its
- *   target is into the band, which is where the grow job's linear pace (§4.4)
- *   would have it.
+ *   target is into the band, which is where the grow job's pace (§4.4,
+ *   `population.ts`) would have it. With `quietShare` given, the bot starts
+ *   quiet (`bot.quiet_since` now) by that chance for its level.
  * - **Shiny**: drawn from the seed inside the band a player of the level
  *   holds (`shiny.ts`), never the new-save 1,500.
  *
  * {@link createBots} writes in batches of {@link BATCH_SIZE}, one transaction
  * each. {@link fillPlan} decides which levels to make for an even spread over
- * levels 1-40, low levels first.
+ * levels 15-40, low levels first.
  *
  * Takes its entity manager from the caller and never imports `server.js`, so
  * the CLI (`scripts/bots.ts`) can use it without booting a server.
  */
 
-/** Bots live on levels 1 to 40 (decision 4). */
-export const BOT_MIN_LEVEL = 1;
+/** Bots live on levels 15 to 40 (decision 4; no bot below 15, owner 2026-10-23). */
+export const BOT_MIN_LEVEL = BOT_FLOOR_LEVEL;
 export const BOT_MAX_LEVEL = 40;
 
 /** Bots made per transaction (§10). */
@@ -75,15 +77,26 @@ const MAX_YARD_DRAWS = 12;
 const DAY = 24 * 60 * 60;
 
 /**
- * How many bots each level should hold for `total` spread evenly over levels
- * 1-40 (decision 4): the same number each, the remainder one more each on the
- * lowest levels. Index 0 is level 1.
+ * How many bots each level should hold for `total` spread over levels 1-40 by
+ * `weights` (`LEVEL_WEIGHTS`, even over 15-40 by default, decision 4): each
+ * level its weight's share rounded down, the remainder one more each on the
+ * levels rounded down most, lowest levels first. Index 0 is level 1; levels
+ * below {@link BOT_MIN_LEVEL} hold none, whatever their weight.
  */
-export const evenSpread = (total: number): number[] => {
-  const levels = BOT_MAX_LEVEL - BOT_MIN_LEVEL + 1;
-  const each = Math.floor(total / levels);
-  const extra = total - each * levels;
-  return Array.from({ length: levels }, (_, index) => each + (index < extra ? 1 : 0));
+export const evenSpread = (total: number, weights: readonly number[] = LEVEL_WEIGHTS): number[] => {
+  const levels = BOT_MAX_LEVEL;
+  const weightOf = (index: number) => (index + 1 < BOT_MIN_LEVEL ? 0 : Math.max(0, weights[index] ?? 0));
+  const sum = Array.from({ length: levels }, (_, index) => weightOf(index)).reduce((a, b) => a + b, 0) || 1;
+  const exact = Array.from({ length: levels }, (_, index) => (total * weightOf(index)) / sum);
+  const share = exact.map(Math.floor);
+  let extra = total - share.reduce((a, b) => a + b, 0);
+  const order = exact.map((value, index) => ({ index, rest: value - Math.floor(value) })).sort((a, b) => b.rest - a.rest || a.index - b.index);
+  for (const { index } of order) {
+    if (extra <= 0) break;
+    share[index]!++;
+    extra--;
+  }
+  return share;
 };
 
 /**
@@ -105,7 +118,7 @@ export const fillPlan = (
 ): number[] => {
   const plan: number[] = [];
   evenSpread(target).forEach((want, index) => {
-    const level = BOT_MIN_LEVEL + index;
+    const level = index + 1;
     for (let have = activeByLevel[level] ?? 0; have < want; have++) plan.push(level);
   });
   return plan.slice(0, Math.max(0, limit));
@@ -135,14 +148,27 @@ export interface BotProfile {
 
 /**
  * The account's age in seconds for a bot at `fraction` of `level`: about the
- * time a player takes to get there at `daysPerLevel` days a level, times
- * 0.8-1.3, plus 1-36 hours, and never younger than its time on this level.
+ * time a player takes to get there at `pace`, times 0.8-1.3, plus 1-36
+ * hours, and never younger than its time on this level.
  */
-export const backdate = (rng: Rng, level: number, fraction: number, daysPerLevel: number): number => {
-  const onLevel = fraction * daysPerLevel * DAY;
-  const climb = (level - 1 + fraction) * daysPerLevel * DAY * (0.8 + 0.5 * rng.float());
+export const backdate = (rng: Rng, level: number, fraction: number, pace: Pace): number => {
+  const onLevel = fraction * daysOn(pace, level) * DAY;
+  const climb = daysBetween(1, level + fraction, pace) * DAY * (0.8 + 0.5 * rng.float());
   const head = (1 + 35 * rng.float()) * 60 * 60;
   return Math.floor(Math.max(climb, onLevel) + head);
+};
+
+/**
+ * `fraction` of `level`'s band, moved up to where the seed's yard first holds
+ * the minimum yard (`minimumYardTotal`) when that is further in: on the
+ * floor level a bot keeps building until it has it (owner, 2026-10-23).
+ * Above that level every yard already holds it.
+ */
+const atLeastMinimum = (seed: number, persona: Persona, level: number, fraction: number): number => {
+  if (level !== BOT_MIN_LEVEL) return fraction;
+  const { min, max } = levelBand(level);
+  const minimum = minimumYardTotal(seed, persona);
+  return Math.max(fraction, Math.min(0.999999, (minimum - min + 0.5) / (max - min)));
 };
 
 /** A critter or, for {@link AVATAR_SHARE} of bots, the placeholder. */
@@ -153,17 +179,17 @@ const avatarFor = (rng: Rng): string =>
  * Draws one bot of `level` (see the file comment).
  *
  * @param {Rng} rng - The draw
- * @param {number} level - The bot's level, 1-40
+ * @param {number} level - The bot's level, 15-40
  * @param {number} now - Unix seconds
- * @param {number} daysPerLevel - `BOTS_DAYS_PER_LEVEL`
+ * @param {Pace} pace - `BotConfig.pace`
  * @param {boolean} [fresh] - Start at the bottom of the level, as a new player
  * @returns {BotProfile} The bot's profile
  */
-export const drawProfile = (rng: Rng, level: number, now: number, daysPerLevel: number, fresh = false): BotProfile => {
+export const drawProfile = (rng: Rng, level: number, now: number, pace: Pace, fresh = false): BotProfile => {
   const seed = rng.next();
   const persona = PERSONAS[rng.int(PERSONAS.length)]!;
-  const fraction = fresh ? 0 : rng.float();
-  const age = backdate(rng, level, fraction, daysPerLevel);
+  const fraction = atLeastMinimum(seed, persona, level, fresh ? 0 : rng.float());
+  const age = backdate(rng, level, fraction, pace);
   // Last seen saving some time in the past day and a half, never before it was made.
   const savetime = now - Math.floor(Math.min(age, 36 * 60 * 60) * rng.float());
   return {
@@ -174,7 +200,7 @@ export const drawProfile = (rng: Rng, level: number, now: number, daysPerLevel: 
     targetPoints: targetInBand(level, fraction),
     createtime: now - age,
     savetime,
-    levelSince: new Date((now - Math.floor(fraction * daysPerLevel * DAY)) * 1000),
+    levelSince: new Date((now - Math.floor(fraction * daysOn(pace, level) * DAY)) * 1000),
     picSquare: avatarFor(rng),
     credits: shinyForSeed(seed, level),
   };
@@ -191,14 +217,14 @@ export const drawBot = (
   rng: Rng,
   level: number,
   now: number,
-  daysPerLevel: number,
+  pace: Pace,
   fresh = false
 ): { profile: BotProfile; yard: BotYard } => {
   if (!Number.isInteger(level) || level < BOT_MIN_LEVEL || level > BOT_MAX_LEVEL) {
     throw new Error(`A bot's level must be ${BOT_MIN_LEVEL}-${BOT_MAX_LEVEL}, not ${level}`);
   }
   for (let draw = 0; draw < MAX_YARD_DRAWS; draw++) {
-    const profile = drawProfile(rng, level, now, daysPerLevel, fresh);
+    const profile = drawProfile(rng, level, now, pace, fresh);
     const yard = generateBotYard({ seed: profile.seed, persona: profile.persona, targetPoints: profile.targetPoints, now });
     if (yard.level === level) return { profile, yard };
   }
@@ -284,6 +310,8 @@ export interface CreatedBot {
   level: number;
   persona: Persona;
   baseid: string;
+  /** Made quiet: it will not grow (`population.ts`). */
+  quiet: boolean;
 }
 
 /** What {@link createBots} is given besides the levels. */
@@ -292,8 +320,11 @@ export interface CreateBotsOptions {
   rng: Rng;
   /** Unix seconds. */
   now: number;
-  daysPerLevel: number;
-  /** Start each bot at the bottom of its level, as a new player (the sweep's level 1 bots). */
+  /** `BotConfig.pace`. */
+  pace: Pace;
+  /** The chance a bot of a level starts quiet (`bornQuietShare`); absent, every bot grows. */
+  quietShare?: (level: number) => number;
+  /** Start each bot at the bottom of its level, as a new player */
   fresh?: boolean;
   /** Told after each batch commits. */
   onBatch?: (made: CreatedBot[]) => void;
@@ -338,12 +369,13 @@ export const createBots = async (
   levels: readonly number[],
   options: CreateBotsOptions
 ): Promise<CreatedBot[]> => {
-  const { rng, now, daysPerLevel, fresh } = options;
+  const { rng, now, pace, fresh, quietShare } = options;
   const made: CreatedBot[] = [];
 
   for (let start = 0; start < levels.length; start += BATCH_SIZE) {
     const batch = levels.slice(start, start + BATCH_SIZE);
-    const drawn = batch.map((level) => drawBot(rng, level, now, daysPerLevel, fresh));
+    const drawn = batch.map((level) => drawBot(rng, level, now, pace, fresh));
+    const quiet = batch.map((level) => (quietShare ? rng.float() < quietShare(level) : false));
     const hashes = await Promise.all(batch.map(randomPasswordHash));
 
     const batchMade = await em.fork().transactional(async (tx) => {
@@ -376,6 +408,7 @@ export const createBots = async (
           persona: profile.persona,
           level: yard.level,
           level_since: profile.levelSince,
+          quiet_since: quiet[index] ? new Date(now * 1000) : null,
         });
       });
       await tx.flush();
@@ -386,6 +419,7 @@ export const createBots = async (
         level: drawn[index]!.yard.level,
         persona: drawn[index]!.profile.persona,
         baseid: saves[index]!.baseid,
+        quiet: quiet[index]!,
       }));
     });
 

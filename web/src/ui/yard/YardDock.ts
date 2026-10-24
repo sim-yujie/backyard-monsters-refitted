@@ -24,7 +24,7 @@ import { YardSwitcher } from "./YardSwitcher";
  * beside Build, with an amber badge for monsters waiting for room, or else a
  * cyan one for monster jobs finished since the player last looked
  * (`finishedJobs.ts`, #192); Layout above
- * Build. Bottom left, the ways out: Map, and above it the yard switcher
+ * Build, on the player's own yards only. Bottom left, the ways out: Map, and above it the yard switcher
  * (`YardSwitcher`, #146) on the own yard or Home on a visit. A visit whose
  * gate passed has Attack in Build's place.
  *
@@ -38,7 +38,8 @@ import { YardSwitcher } from "./YardSwitcher";
  * Kits only on an outpost, in Collect's place (the Starter Kits, #188; Flash
  * showed Kits on Map Room 2 outposts only, `UI_MENU.as:39-41`, `:100-101`);
  * Monsters wherever the scene can open the Monsters screen; the switcher once
- * an own yard is bound.
+ * an own yard is bound; Layout only where the scene can open the planner,
+ * which is never someone else's yard (owner report 2026-10-22).
  *
  * On a phone the own yard's dock folds into one Menu button (`YardMenu`,
  * #381): only Build, Collect all and Menu stay on the bottom row.
@@ -50,8 +51,8 @@ const MONSTERS_ICON_URL = "/assets/monsters/C1-small.png";
 export interface YardDockOptions {
   /** Map: the way to the world. */
   readonly onMap: () => void;
-  /** Layout: the planner, opened or closed. */
-  readonly onLayout: () => void;
+  /** Layout: the planner, opened or closed. The own yard only. */
+  readonly onLayout?: () => void;
   /** Build: the own yard only. */
   readonly onBuild?: () => void;
   /** Attack: a visit whose gate passed. */
@@ -66,9 +67,10 @@ export interface YardDockOptions {
   readonly finished?: FinishedMonstersJobs;
 }
 
-/** Which of the dock's optional buttons show. Map and Layout always do. */
+/** Which of the dock's optional buttons show. Map always does. */
 export interface DockButtons {
   readonly build: boolean;
+  readonly layout: boolean;
   readonly collect: boolean;
   readonly kits: boolean;
   readonly monsters: boolean;
@@ -82,10 +84,11 @@ export interface DockButtons {
  * binding (null on a visit and before the load) whether the own yard's show.
  */
 export const dockButtonsFor = (
-  options: Pick<YardDockOptions, "onBuild" | "onAttack" | "onHome" | "onYardSelect" | "onKits">,
+  options: Pick<YardDockOptions, "onBuild" | "onLayout" | "onAttack" | "onHome" | "onYardSelect" | "onKits">,
   binding: Pick<YardUiBinding, "store" | "scene"> | null,
 ): DockButtons => ({
   build: options.onBuild !== undefined,
+  layout: options.onLayout !== undefined,
   collect: binding !== null && binding.store.kind !== "outpost",
   kits: binding !== null && binding.store.kind === "outpost" && options.onKits !== undefined,
   monsters: binding?.scene.openMonsters !== undefined,
@@ -112,7 +115,7 @@ export interface LayoutState {
   readonly disabled: boolean;
   /** The planner is open. */
   readonly open: boolean;
-  /** "Layout", or "View layout" where it opens read-only. */
+  /** "Layout", or "Close layout" while the planner is open. */
   readonly label: string;
   /** Its tooltip: what it does, or what would unlock it. */
   readonly title: string;
@@ -177,7 +180,7 @@ export class YardDock {
   private readonly options: YardDockOptions;
   private readonly map: RoundButton;
   private readonly home: RoundButton | null;
-  private readonly layout: RoundButton;
+  private readonly layout: RoundButton | null;
   private readonly build: RoundButton | null;
   private readonly attack: RoundButton | null;
   private readonly monsters: RoundButton;
@@ -219,8 +222,10 @@ export class YardDock {
       this.map.element,
     );
 
-    this.layout = iconButton("layout", "Layout", "layout", 29, () => options.onLayout());
-    this.layout.element.setAttribute("aria-pressed", "false");
+    this.layout = options.onLayout
+      ? iconButton("layout", "Layout", "layout", 29, () => options.onLayout?.())
+      : null;
+    this.layout?.element.setAttribute("aria-pressed", "false");
 
     const picture = document.createElement("img");
     picture.className = "yard-dock__picture";
@@ -264,7 +269,7 @@ export class YardDock {
     right.append(
       this.collect.element,
       ...(this.kits ? [this.kits.element] : []),
-      this.layout.element,
+      ...(this.layout ? [this.layout.element] : []),
       this.monsters.element,
       ...(this.build ? [this.build.element] : []),
       ...(this.attack ? [this.attack.element] : []),
@@ -336,6 +341,7 @@ export class YardDock {
   }
 
   setLayout(state: LayoutState): void {
+    if (!this.layout) return;
     const layout = this.layout.element;
     this.layout.label.textContent = state.label;
     layout.disabled = state.disabled;

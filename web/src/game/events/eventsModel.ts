@@ -1,4 +1,4 @@
-import type { CalendarView, EventReward, EventView, LadderView } from "@/api/events";
+import type { CalendarView, EventReward, EventView, GrantedReward, LadderView } from "@/api/events";
 import { formatAmount, formatCompact, formatCountdown } from "@/ui/format";
 
 /**
@@ -49,13 +49,17 @@ export const calendarDays = (calendar: CalendarView): CalendarDayView[] =>
 export const claimableTiers = (ladder: LadderView): number[] =>
   ladder.tiers.flatMap((tier, index) => (!tier.claimed && ladder.counter >= tier.need ? [index] : []));
 
-/** How many rewards wait to be claimed across the events that are on. */
+/** Whether the event pays Krallen and the player's is at the top already: its goal pays nothing more. */
+export const krallenMaxed = (event: Pick<EventView, "krallen">): boolean =>
+  event.krallen !== null && event.krallen.level >= event.krallen.maxLevel;
+
+/** How many rewards wait to be claimed across the events that are on, or over with claims still open. */
 export const claimableCount = (events: readonly EventView[]): number =>
   events
-    .filter((event) => event.status === "active")
+    .filter((event) => event.status !== "upcoming")
     .reduce(
       (sum, event) =>
-        sum + (event.calendar?.canClaim ? 1 : 0) + (event.ladder ? claimableTiers(event.ladder).length : 0),
+        sum + (event.calendar?.canClaim ? 1 : 0) + (event.ladder && !krallenMaxed(event) ? claimableTiers(event.ladder).length : 0),
       0,
     );
 
@@ -70,15 +74,36 @@ export const serverClock = (serverNow: number, deviceNowMs: number, read: () => 
   return { now: () => read() / 1000 + offset };
 };
 
-/** "Ends in 3d 4h" for an event on now, "Starts in 5d 2h" for one coming up. */
-export const countdownText = (event: Pick<EventView, "status" | "startsAt" | "endsAt">, now: number): string =>
-  event.status === "active"
-    ? `Ends in ${formatCountdown(event.endsAt - now)}`
-    : `Starts in ${formatCountdown(event.startsAt - now)}`;
+/** The times a countdown reads. */
+export type CountdownTimes = Pick<EventView, "status" | "startsAt" | "endsAt"> & {
+  readonly claimUntil?: number | null;
+};
 
-/** Whether the event's window has run out at `now` (the list is then stale). */
-export const isOver = (event: Pick<EventView, "status" | "startsAt" | "endsAt">, now: number): boolean =>
-  event.status === "active" ? now >= event.endsAt : now >= event.startsAt;
+/** "25 Nov": a day, in the player's own words for it. */
+export const shortDate = (unixSeconds: number): string =>
+  new Date(unixSeconds * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
+/** When an ended event's claims close: its `claimUntil`, or its end without one. */
+const claimsCloseAt = (event: CountdownTimes): number => event.claimUntil ?? event.endsAt;
+
+/**
+ * "Ends in 3d 4h" for an event on now, "Starts in 5d 2h" for one coming up,
+ * "Ended: claim by 8 Dec (6d 2h left)" for one over with a reward still to claim.
+ */
+export const countdownText = (event: CountdownTimes, now: number): string => {
+  if (event.status === "active") return `Ends in ${formatCountdown(event.endsAt - now)}`;
+  if (event.status === "upcoming") return `Starts in ${formatCountdown(event.startsAt - now)}`;
+  const until = claimsCloseAt(event);
+  return `Ended: claim by ${shortDate(until)} (${formatCountdown(until - now)} left)`;
+};
+
+/** Whether the event's window (or an ended one's claim time) has run out at `now` (the list is then stale). */
+export const isOver = (event: CountdownTimes, now: number): boolean =>
+  event.status === "active"
+    ? now >= event.endsAt
+    : event.status === "upcoming"
+      ? now >= event.startsAt
+      : now >= claimsCloseAt(event);
 
 /** The store buffs an event can give, by item code (server `game-data/store/storeItems.ts`). */
 export const SHOP_ITEM_NAMES: Readonly<Record<string, string>> = {
@@ -125,11 +150,38 @@ export const rewardText = (reward: EventReward, decorationName: (type: number) =
       const name = decorationName(reward.type);
       return reward.count === 1 ? name : `${reward.count}x ${name}`;
     }
+    case "krallen":
+      return "Krallen";
   }
 };
 
-/** The events to list: the ones on now first, then what is coming up soonest first. */
+/**
+ * The Krallen Hunt's prize for this player, in words: what reaching the goal
+ * pays, from her level now (0 for none) and the top an event raises her to.
+ */
+export const krallenPrizeText = (krallen: { level: number; maxLevel: number }): string =>
+  krallen.level <= 0
+    ? "Win Krallen, a champion of your own"
+    : krallen.level >= krallen.maxLevel
+      ? `Your Krallen is already level ${krallen.maxLevel}, the highest. Thanks for hunting!`
+      : `Krallen level ${krallen.level} → ${krallen.level + 1}`;
+
+/** What a paid claim gave, for the notice: "Krallen joined your yard!" or "Krallen is now level 3!". */
+export const grantedKrallenText = (granted: readonly GrantedReward[]): string | null => {
+  const krallen = granted.find((one) => one.kind === "krallen");
+  if (!krallen || krallen.kind !== "krallen") return null;
+  if (!krallen.raised) return `Your Krallen is already level ${krallen.level}, the highest.`;
+  return krallen.level === 1 ? "Krallen joined your yard!" : `Krallen is now level ${krallen.level}!`;
+};
+
+/**
+ * The events to list: the ones on now first, then the ones over with a reward
+ * still to claim, then what is coming up soonest first.
+ */
 export const sortEvents = (events: readonly EventView[]): { active: EventView[]; upcoming: EventView[] } => ({
-  active: events.filter((event) => event.status === "active").sort((a, b) => a.endsAt - b.endsAt),
+  active: [
+    ...events.filter((event) => event.status === "active").sort((a, b) => a.endsAt - b.endsAt),
+    ...events.filter((event) => event.status === "ended").sort((a, b) => a.endsAt - b.endsAt),
+  ],
   upcoming: events.filter((event) => event.status === "upcoming").sort((a, b) => a.startsAt - b.startsAt),
 });

@@ -47,7 +47,7 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
   };
 
   const make = (levels: number[], seed = 239) =>
-    createBots(orm.em.fork(), levels, { rng: mulberry32(seed), now: NOW, daysPerLevel: T });
+    createBots(orm.em.fork(), levels, { rng: mulberry32(seed), now: NOW, pace: T });
 
   beforeAll(async () => {
     if (dbName === "bym") throw new Error("BOTS_TEST_DB must be a throwaway database, not bym");
@@ -66,8 +66,8 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
   });
 
   test("a bot is a user, a Map Room 1 main save and a bot row, and nothing else", async () => {
-    const made = await make([1, 20, 40]);
-    expect(made.map((bot) => bot.level)).toEqual([1, 20, 40]);
+    const made = await make([15, 20, 40]);
+    expect(made.map((bot) => bot.level)).toEqual([15, 20, 40]);
 
     for (const bot of made) {
       const [user] = await sql<Record<string, any>>(`SELECT * FROM bym."user" WHERE userid = ?`, [bot.userid]);
@@ -91,19 +91,19 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
       expect(Number(save.homebaseid)).toBe(Number(bot.baseid));
       expect(save.onboarding).toBeNull();
       expect(calculateBaseLevel(save.points, save.basevalue)).toBe(bot.level);
-      // Not the sandbox yard (maxed) and not the bare starter base.
-      expect(Object.keys(save.buildingdata).length).toBeGreaterThan(4);
+      // Not the sandbox yard (maxed), and not the bare starter base: no bot stands below level 15.
+      expect(Object.keys(save.buildingdata).length).toBeGreaterThan(20);
 
       expect(row.level).toBe(bot.level);
       expect(row.state).toBe("active");
       expect(row.persona).toBe(bot.persona);
       expect(new Date(row.level_since).getTime()).toBeLessThanOrEqual(NOW * 1000);
     }
-    expect(await activeBotsByLevel(orm.em.fork())).toEqual({ 1: 1, 20: 1, 40: 1 });
+    expect(await activeBotsByLevel(orm.em.fork())).toEqual({ 15: 1, 20: 1, 40: 1 });
   });
 
   test("names are unique without case against every user", async () => {
-    const first = await make([5, 5, 5, 5, 5], 77);
+    const first = await make([15, 15, 15, 15, 15], 77);
     await reset();
     // Take every name the same draw gave, in upper case, as players.
     for (const [index, bot] of first.entries()) {
@@ -112,7 +112,7 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
         `${TAKEN_PREFIX}${index}@test.invalid`,
       ]);
     }
-    const second = await make([5, 5, 5, 5, 5], 77);
+    const second = await make([15, 15, 15, 15, 15], 77);
     const taken = new Set(first.map((bot) => bot.username.toLowerCase()));
     expect(second.some((bot) => taken.has(bot.username.toLowerCase()))).toBe(false);
     expect(new Set(second.map((bot) => bot.username.toLowerCase())).size).toBe(5);
@@ -120,11 +120,11 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
 
   test("more than one batch, each committed, all counted", async () => {
     const batches: number[] = [];
-    const levels = Array.from({ length: BATCH_SIZE + 5 }, (_, index) => 1 + (index % 3));
+    const levels = Array.from({ length: BATCH_SIZE + 5 }, (_, index) => 15 + (index % 3));
     const made = await createBots(orm.em.fork(), levels, {
       rng: mulberry32(5),
       now: NOW,
-      daysPerLevel: T,
+      pace: T,
       onBatch: (batch) => batches.push(batch.length),
     });
     expect(made).toHaveLength(BATCH_SIZE + 5);
@@ -135,7 +135,7 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
   });
 
   test("retire-all moves every bot off Map Room 1 and drops its jobs", async () => {
-    const made = await make([3, 9]);
+    const made = await make([15, 19]);
     await sql(`INSERT INTO bym.bot_job (bot_userid, kind, due_at) VALUES (?, 'grow', now())`, [made[0]!.userid]);
 
     expect(await retireAllBots(orm.em.fork(), new Date())).toBe(2);
@@ -148,7 +148,7 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
   });
 
   test("delete-retired keeps a bot the mail refers to and removes the rest whole", async () => {
-    const [kept, gone, active] = await make([4, 6, 8]);
+    const [kept, gone, active] = await make([15, 16, 17]);
     await sql(`UPDATE bym.bot SET state = 'retired' WHERE userid IN (?, ?)`, [kept!.userid, gone!.userid]);
     await sql(
       `INSERT INTO bym.message
@@ -168,5 +168,20 @@ describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () =
     expect(await sql(`SELECT 1 FROM bym.message WHERE id = 'wp6-test-message'`)).toEqual([]);
     expect(await sql(`SELECT 1 FROM bym."user" WHERE email LIKE 'bot+%'`)).toEqual([]);
     expect(await sql(`SELECT 1 FROM bym.save WHERE userid IN (?, ?)`, [kept!.userid, active!.userid])).toEqual([]);
+  });
+
+  test("a quiet share makes bots quiet from now; without one every bot grows", async () => {
+    const quiet = await createBots(orm.em.fork(), [16, 30], {
+      rng: mulberry32(2390),
+      now: NOW,
+      pace: T,
+      quietShare: (level) => (level < 20 ? 1 : 0),
+    });
+    expect(quiet.map((bot) => bot.quiet)).toEqual([true, false]);
+    const [low] = await sql<Record<string, any>>(`SELECT quiet_since FROM bym.bot WHERE userid = ?`, [quiet[0]!.userid]);
+    const [high] = await sql<Record<string, any>>(`SELECT quiet_since FROM bym.bot WHERE userid = ?`, [quiet[1]!.userid]);
+    expect(new Date(low.quiet_since).getTime()).toBe(NOW * 1000);
+    expect(high.quiet_since).toBeNull();
+    expect((await make([15])).map((bot) => bot.quiet)).toEqual([false]);
   });
 });

@@ -20,6 +20,7 @@ interface Rewrite {
 
 interface VercelConfig {
   buildCommand: string;
+  cleanUrls: boolean;
   rewrites: Rewrite[];
 }
 
@@ -56,6 +57,14 @@ describe("vercel.json", () => {
     expect(outside.map((rewrite) => rewrite.source).sort()).toEqual(
       serverFolders.map((folder) => `/${folder}/:path*`),
     );
+  });
+
+  it("serves the owner's dashboard page at /admin, where the alerts link", () => {
+    // cleanUrls serves admin.html at /admin; a rewrite would send it elsewhere.
+    expect(config.cleanUrls).toBe(true);
+    expect(config.rewrites.filter((rewrite) => rewrite.source.startsWith("/admin"))).toEqual([]);
+    const viteConfig = readFileSync(fileURLToPath(new URL("../vite.config.ts", import.meta.url)), "utf8");
+    expect(viteConfig).toContain('admin: fileURLToPath(new URL("./admin.html", import.meta.url))');
   });
 
   it("opens the emailed reset link on the game page", () => {

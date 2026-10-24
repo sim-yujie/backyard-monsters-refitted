@@ -42,6 +42,7 @@ const OWNERS: [file: string, template: string][] = [
   ["services/user/botChallenge.ts", "`bot-check:cooldown:${userid}`"],
   ["services/user/botPatterns.ts", "`bot-check:times:${userid}`"],
   ["services/user/botPatterns.ts", "`bot-check:stay:${userid}`"],
+  ["services/user/botPatterns.ts", "`bot-check:plan:${userid}`"],
   ["services/user/botPatterns.ts", "`bot-check:routes:${userid}:${bucket}`"],
   ["services/base/attackCheckpoint.ts", "`attack-checkpoint:${basesaveid}`"],
   ["services/base/attackCheckpoint.ts", "`attack-final:${basesaveid}`"],
@@ -52,7 +53,9 @@ const OWNERS: [file: string, template: string][] = [
   ["services/maproom/v1/mr1TribeSession.ts", "`attack-final:mr1:${userid}:${baseid}`"],
   ["controllers/attacklogs/getAttackLogs.ts", "`attackLogs:${userid}:${filter}`"],
   ["chat/chatHistory.ts", "`history:${channel}`"],
-  ["controllers/leaderboards/getLeaderboards.ts", "`leaderboards_${worldid}_v${version}`"],
+  ["controllers/leaderboards/getLeaderboards.ts", "`leaderboards_${worldid}_v${version}_nodiscord`"],
+  ["services/leaderboard/empireBoard.ts", `BOARD_KEY = "leaderboards_empire_board"`],
+  ["services/leaderboard/empireBoard.ts", `RANKS_KEY_PREFIX = "leaderboards_empire_ranks_"`],
   ["services/user/botCheckLog.ts", `BOT_CHECK_LOG_KEY = "bot-check:log"`],
 ];
 
@@ -81,6 +84,7 @@ describe("the Redis keys account deletion removes (accountRedisKeys.ts)", () => 
       "bot-check:cooldown:42",
       "bot-check:times:42",
       "bot-check:stay:42",
+      "bot-check:plan:42",
     ]);
   });
 

@@ -510,7 +510,7 @@ export class ChampionPanel {
     const bar = document.createElement("div");
     bar.className = "monsters-bar champion__bar champion__bar--health";
     bar.setAttribute("role", "meter");
-    bar.setAttribute("aria-label", "Health");
+    bar.setAttribute("aria-label", healthLabel(view));
     bar.setAttribute("aria-valuemin", "0");
     const fill = document.createElement("div");
     fill.className = "monsters-bar__fill";
@@ -530,7 +530,7 @@ export class ChampionPanel {
     if (!live) return;
     const full = view.health >= view.maxHealth;
     live.health.replaceChildren(
-      strong(`Health ${formatAmount(Math.floor(view.health))} / ${formatAmount(view.maxHealth)}`),
+      strong(`${healthLabel(view)} ${formatAmount(Math.floor(view.health))} / ${formatAmount(view.maxHealth)}`),
       full
         ? " · full"
         : view.fullAt !== null
@@ -723,7 +723,7 @@ export class ChampionPanel {
     if (!line || !view) return;
     const full = view.health >= view.maxHealth;
     line.replaceChildren(
-      strong(`Health ${formatAmount(Math.floor(view.health))} / ${formatAmount(view.maxHealth)}`),
+      strong(`${healthLabel(view)} ${formatAmount(Math.floor(view.health))} / ${formatAmount(view.maxHealth)}`),
       full ? " · full" : view.fullAt !== null ? ` · full in ${formatCountdown(view.fullAt - now)}` : "",
     );
   }
@@ -963,6 +963,12 @@ const specialShapeOf = (save: YardStore["save"], now: number): string => {
   return `|K:${champion.status ?? 0}:${view.level}:${view.health >= view.maxHealth}:${view.hunger}:${view.healShiny}`;
 };
 
+/**
+ * Whose health a live health line shows, e.g. "Fomor's health": the cage
+ * panel also shows the cage's own health and the champion's full health.
+ */
+export const healthLabel = (view: Pick<ChampionView, "name">): string => `${view.name}'s health`;
+
 /** The numbers on a champion's card: current, with what evolving (or the next food-bonus rank) adds. */
 export const statsBlock = (view: ChampionView): HTMLElement => {
   const wrap = document.createElement("div");
@@ -972,7 +978,7 @@ export const statsBlock = (view: ChampionView): HTMLElement => {
   list.setAttribute("aria-label", "Stats");
   const rows: ReadonlyArray<readonly [string, keyof ChampionStats, (value: number) => string]> = [
     ["Damage", "damage", formatAmount],
-    ["Health", "health", formatAmount],
+    ["Max health", "health", formatAmount],
     ["Speed", "speed", (value) => String(Math.round(value * 10) / 10)],
     ["Range", "range", formatAmount],
     ["Buff", "buff", (value) => `${value}%`],

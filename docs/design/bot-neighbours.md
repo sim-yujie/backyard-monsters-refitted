@@ -48,6 +48,8 @@ costly, section 12 says so.
 3. **Bots look exactly like real players:** real-looking names, no bot tag anywhere a player can
    see.
 4. **500 bots in total** (global; Map Room 1 has no worlds), spread evenly over levels 1-40.
+   **Changed 2026-10-23:** spread evenly over levels 15-40; no bot stands below level 15
+   (decision 25).
 5. **Neighbour lists:** up to 25 neighbours within ±7 levels, cached 2 weeks, 30-minute retry under
    10. Real players get places first; bots fill the rest. The 150-most-recent-saves limit must be
    handled, because bots never log in.
@@ -55,6 +57,7 @@ costly, section 12 says so.
    a real player has, with randomness in placement so they look player-made.
 7. **Growth:** bots slowly level up like a player upgrading; a bot that outgrows its level slot is
    swapped for a fresh low-level bot, keeping the even 1-40 spread and the total at 500.
+   (Now 15-40 and a real player's speed: decisions 17 and 25-30, section 4.4.)
 8. **Loot:** about what a real player of that level has: storage partly full, harvesters fill over
    time, refilled after attacks.
 9. **Defence:** monsters in Monster Bunkers (housed monsters do not defend) plus a champion in its
@@ -79,10 +82,14 @@ The owner's answers to this design's questions (2026-10-03):
 
 17. **Growth is a conveyor:** each bot climbs through all the levels at about **3 days per level**,
     retires once it passes level 40, and a fresh level 1 bot takes its place (section 4.4).
+    **Replaced 2026-10-23** (beta 5 bot yard rework): bots grow at a real player's speed (fast
+    early, slow late), some go quiet, and short levels get new bots made right at that level
+    (section 4.4).
 18. **Truce requests** to a bot are declined after a random **2-8 hours**.
 19. **Revenge caps:** at most **2 revenge attacks on one player per 24 hours**, **1 per bot-player
     pair per 24 hours**; a revenge that cannot run gives up **72 hours** after the attack that
-    triggered it.
+    triggered it. **Since decision 31** the caps count revenges (chains), not attacks: at most 2
+    bots' revenges on one player in any 24 hours, 1 by each bot.
 20. **Only real players seen in the last 30 days** take neighbour places, read from a new
     `user.last_seen_at` column set by the owner's own yard load.
 21. **Defence reports for every Map Room 1 main-yard defence** (real or bot attacker): a mail notice
@@ -90,15 +97,47 @@ The owner's answers to this design's questions (2026-10-03):
     v1.1 (WP13).
 22. **Bots appear online now and then,** about 2 minutes at a time, which blocks attacks on them for
     that minute as for a real player.
-23. **No early re-search when a player's level changes:** the 2-week cache stays as it is. (The
-    separate "fewer than 5 attackable" retry in section 4.3 is kept: it reacts to bots under
-    protection, not to the player's level.)
+23. ~~**No early re-search when a player's level changes:** the 2-week cache stays as it is.~~
+    **Replaced by the owner on 2026-10-23:** the list is searched again as soon as the player's
+    level has moved more than 7 levels (the neighbour window), up or down, from the level it was
+    built for, because real players level fast (level 17 in about a day). The level is kept in
+    `maproom.neighbors_level` (migration `AddNeighborsLevelToMaproom`); a list from before that
+    column has no level and is searched again once on its next open. Everything else stays: the
+    2-week cache, the "fewer than 5 attackable" 30-minute retry in section 4.3, real players
+    first, 25 at most, and attackers added to the list by `registerAttacker`.
 
 Later owner decision (2026-10-04, from the #245 leak audit):
 
 24. **Bots get a random, level-scaled Shiny** (`credits`), roughly what a player of that level might
     hold, instead of every bot keeping the new-save 1,500 that a view or attack load shows
     (section 4.6).
+
+Owner decisions of 2026-10-23 (beta 5, bots from level 15):
+
+25. **No bot below level 15.** The 500 are spread evenly over levels 15-40 (`BOT_FLOOR_LEVEL`,
+    `LEVEL_WEIGHTS` 0 below it).
+26. **The smallest bot yard** is Town Hall 2 with every resource building it allows (2 of each
+    harvester, 2 silos), a Housing with an army in it, and towers (3 Cannon, 3 Sniper). No walls
+    needed. That yard comes to level 10-15 (median 11, 600 seeds; an economy bot builds harvesters
+    before towers and gets there latest), so the floor is 15, and a level 15 bot is started at
+    least as far into its level as it takes to hold that yard (`minimumYardTotal`).
+27. **New bots start at 15:** about `BOTS_FRESH_PER_DAY` (3) a day start at the bottom of level 15
+    with that yard and grow on the same real-player curve. The early quit chances of levels 1-4
+    are gone; `BOTS_QUIET_RATE` (0.05 a level) stays.
+28. **No beginner yards:** the "1 in 4 bots keep a beginner's tidy yard" rule is dropped.
+29. **Bots below 15 are retired, not raised:** the daily rebalance retires every active bot under
+    the floor and refills its place on 15-40 at up to `BOTS_NEW_PER_DAY` a day (about 3 weeks on
+    a live server), or at once with `bun src/scripts/bots.ts create --fill`.
+30. **Players under 15 still meet bots:** their real-player window is as before, and bots come
+    from the nearest levels the bots stand on (section 4.3). Revenge stays unmatched by level
+    (section 4.7, owner: keep as is).
+31. **A revenge is a chain of 2-4 attacks** (owner 2026-10-23): a real player hits back more than
+    once, until the yard is wrecked, and stops after one when it went badly (a bot that did about 5%
+    does not come back). Each attack must do at least 20% damage itself and leave the yard short of
+    destroyed for the next to follow; the bot waits for its hatcheries to refill its army; it never
+    attacks through protection; every attack gets the normal reports. The 1-in-3 chance, the 1-24
+    hour delay, no level match and the "online in the last 2 minutes" wait stay (section 4.7,
+    "Revenge chains").
 
 ## 3. What already exists
 
@@ -283,7 +322,9 @@ It works the way a player does, so the limits hold by construction:
    if the server's own gate passes: `quantity[hall]`, `re` prerequisites and maximum level, the
    same checks `planBuild` and `planUpgradeAction` make. Each action adds its points
    (`pointsForBuild` / `pointsForUpgrade`). Stop when points plus base value reach the target.
-   The Map Room never goes past level 1.
+   The Map Room never goes past level 1. A bot starts as a player leaving the guided start: the
+   guide's Housing first, as soon as it fits the level band (so every bot has an army from level 3
+   and can take revenge, owner 2026-10-23), then its Sniper Tower, Map Room and Flinger.
 2. **Placement.** Each new building gets a spot from zones around the Town Hall, after the wiki's
    [Base Defense Guide](https://backyardmonsters.fandom.com/wiki/Base_Defense_Guide), which most
    players follow (owner reviews, issues #250 and #252): the Town Hall dead centre with four silos
@@ -291,25 +332,44 @@ It works the way a player does, so the limits hold by construction:
    Death Trap), a 3 x 3 grid of walled compartments with the core as its middle, holding the
    towers with the harvesters in front of them and inside their range, defences spread so no side
    is weak, each kind of harvester spread out, the general and monster buildings round the edge
-   (outside the grid once the plot has room: the guide's Never Ending Chain). Walls close the grid
-   one compartment at a time, the core first, and a compartment is only started when the walls
-   the bot's Town Hall will stand can close it, so at most one is ever being built; walls it cannot
-   use yet double the core, a side at a time. The grid and that ring hold every wall a Town Hall
-   10 allows, so no wall stands on its own. Only the core has openings, a two-cell hallway on each
+   (outside the grid once the plot has room: the guide's Never Ending Chain). Each bot has one of
+   two wall styles (`yardStyle.ts`; owner review 2026-10-23). Both close the core first. A
+   **core-walled** bot then stands a ring round the core and the towers beside it, with gaps. A
+   **whole-yard-walled** bot then stands one ring round the whole grid, so the Town Hall, silos,
+   towers and harvesters all end up inside it; there are no walls between the compartments (they
+   ate the room inside the ring). The ring is sized halfway between the walls a Town Hall 6 and a
+   Town Hall 7 yard stand: it stands part built, one run, from about Town Hall 4 and closes at
+   Town Hall 7 (level 37-40 or so), when 94-100% of those key buildings are inside it. A ring
+   Town Hall 6 could close was tried and dropped: only 70-88% fit inside. A ring or run is only
+   started when the bot's Town Hall leaves at least 10 walls for it; walls it cannot use yet
+   double the core, then the outer ring, so no wall stands on its own, and the plan holds every
+   wall a Town Hall 10 allows. Only the core has openings, a two-cell hallway on each
    long side (and the ring cells in front), which traps fill first; nothing stands in a wall line
    or in front of a hallway. Further traps go between harvesters and silos and by towers. The base
    is compact, as real players build: compartments only a row or two of buildings deep, every
    building packed hard by its neighbours and the walls and as far in as its zone allows, the
    compartments filled edge to edge before anything spills out, and from Town Hall 4 the general
-   and monster buildings packed round the outside of the grid. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
+   and monster buildings packed round the outside of the grid. A building put up on Town Hall 1-3
+   aims closer in still (`EARLY_SQUEEZE` in `layout.ts`, 0.3 of its zone's reach past the core on
+   Town Halls 1-2 and 0.45 on 3 `[PLACEHOLDER]`; owner review 2026-10-23, a level 12 yard's
+   buildings stood too far apart), so a level 15-20 yard is a tight cluster round the Town Hall and
+   the base grows out past it. Decorations are rare: one, on about 15% of bots `[PLACEHOLDER]`. Every
    spot is jittered, checked with `rectOf` / `overlaps` / `withinBounds` (`layoutGeometry.ts`), and
    the plot grows with the yard expansions a player of that level usually owns (`storedata.ENL.q`,
    up to 6 like the sandbox yard, `utils/sandbox/overworldYard.ts:3864`; one at about levels 10,
    14, 19, 24, 29 and 34 `[PLACEHOLDER]`, each bot shifted by up to 2 levels). The progression
-   builds walls and traps as such a player does: from Town Hall 3 it keeps 90-100% of the wall
+   builds walls and traps as such a player does: walls start when they unlock (Town Hall 2, about
+   level 10), right after that hall's new harvesters and towers rather than just before the next
+   Town Hall upgrade, so every bot has walls from about level 12-16; from Town Hall 3 it keeps
+   90-100% of the wall
    allowance and 70-100% of the trap allowance standing `[PLACEHOLDER]`, and it upgrades its walls
    (real costs, Town Hall gates and points) towards an average level per Town Hall, mostly wood at
-   Town Hall 3, stone by Town Hall 4-5, level 4-5 by Town Hall 10 `[PLACEHOLDER]`.
+   Town Hall 3, stone by Town Hall 4-5, level 4-5 by Town Hall 10 `[PLACEHOLDER]`. The layout
+   tests were loosened for the tighter, ringed base: harvesters sit at most 120 (was 150) from a
+   silo at the median; the fifth and sixth silos must be walled in only once the ring is closed;
+   buildings may touch the ring's inside; the newest wall (the first of a new run) may stand
+   alone. A test checks that once the ring is closed (every whole-yard bot by level 40) at least
+   90% of the key buildings are inside it.
 3. **Army and defence.** Unlocked monsters: those the Locker level allows
    (`yard/locker.ts:176-204`), less a random one or two of the newest. Academy levels by level band.
    Bunkers filled to 70-100% of capacity with bunkerable unlocked monsters (`yard/bunker.ts:53`,
@@ -339,6 +399,10 @@ function of (seed, P): growth (4.4) is the same progression run a little further
 2. **Bots fill the rest.** `25 − real` bots from the `bot` table (`state = 'active'`,
    `level BETWEEN min AND max`), not already in the list, preferring bots that are attackable now
    (not protected, not under attack), shuffled and spread across the levels in range.
+   A player under level 15 (decision 30) has no bot in their own window when it ends below 15, so
+   the bots are drawn from the floor up instead: from level 15 to whichever is higher of the
+   window's top and 15 + `FLOOR_REACH` (2) (`botLevelWindow` in `botNeighbours.ts`). A level 3
+   player sees real players on 1-10 first, then bots on levels 15-17.
 
 The cached list stores bot entries exactly as real ones (`createNeighbourData`), and the whole
 list is shuffled before it is cached, so the order (real players first, bots after) gives nothing
@@ -350,18 +414,34 @@ attack counters of neighbours that stay are carried over, as the Inferno path al
 **Keeping lists useful.** A bot attacked hard sits under 36-hour protection, so a two-week list
 can go stale. So the list is also re-searched after the 30-minute retry when fewer than 5 entries
 are attackable right now. Real players keep their places (step 1 runs first); only the bot picks
-change. There is **no** early re-search when the player's own level changes (decision 23): that
-is a different trigger, and the 2-week cache stays as it is.
+change. The list is also searched again at once when the player's own level has moved more than
+7 levels from the level it was built for (decision 23 as replaced on 2026-10-23); the 2-week cache
+stays otherwise.
 
 ### 4.4 Growth and the even spread (decision 7)
 
-Decision 17: **a conveyor**. Each bot climbs through the levels at the same average pace, `T` = 3
-days per level (so a bot lives about four months). A bot that passes level 40 has outgrown the
-range: it retires and a fresh level 1 bot is created in its place. With an equal pace per level,
-the 1-40 spread stays even on its own; a daily rebalance corrects drift.
+Owner decision 2026-10-23 (replaces decision 17's conveyor): **each bot grows at a real
+player's speed**, one table of days on each level, `DAYS_ON_LEVEL` in `config/BotConfig.ts`,
+anchored to the live game's 24 real players on 2026-10-23 (all under 13 days old): level 12 at
+0.6 days, 17 at 1.1, 21 at 2.1, 25 at 6, 26 at 8. From level 17 each level takes 1.4 times the one
+before, and past 26 (no data) that carries on, as each level needs about 1.4 times the points: level
+30 at about 28 days, 35 at 150, 40 at 800, past 40 at 1,100.
+**Some bots go quiet**: each level a bot gains it has `BOTS_QUIET_RATE` chance (`[PLACEHOLDER]`
+0.05, halved from 0.1 by the owner on 2026-10-23) to stop growing somewhere in that level, as a player who quits or slows down
+(`bot.quiet_since`). (Up to level 4 the chance was 0.25, `EARLY_QUIET`, as 14 of those 24 players
+stopped at level 1-4 on their first day; gone with the floor of 15, decision 27.) A quiet bot is still repaired, refilled and kept in its
+loot band, but shows online only on `BOTS_QUIET_ONLINE` (`[PLACEHOLDER]` 0.05) of its grows, about
+once in three days (owner, 2026-10-23). **When a
+level runs short, a new bot is made right at that level** with a yard drawn for it; **a crowded
+level retires** its quiet bots first (longest quiet first), then its growing bots longest on the
+level. Total about 500 (`BOTS_TOTAL`), each level its `LEVEL_WEIGHTS` share (even over 15-40,
+none below: about 19 a level; decision 25). Every active bot below level 15 is retired by the
+next rebalance (decision 29). The pure
+rules are in `services/bots/population.ts`.
 
-- **Grow job** (every 2-6 hours per bot, jittered): the bot's target points move linearly from the
-  bottom of its level band to the top over `T` days. The job runs the bot's own progression forward
+- **Grow job** (every 2-6 hours per bot, jittered): the bot's place on the climb walks the days
+  since `level_since` along the table, level by level, and its target points sit that far into the
+  level band (a quiet bot's place stops at `quiet_since`). The job runs the bot's own progression forward
   until its points reach the target, through the real pure gates (4.2), then `catchUpYard`, all
   under the row lock as `catchUpLockedYard` does. It leaves the last upgrade running on a real
   timer (capped so it finishes inside the pace), so an attacker sees a busy worker as on a real
@@ -372,12 +452,47 @@ the 1-40 spread stays even on its own; a daily rebalance corrects drift.
   (`updateNeighbourData.ts:52`, the same path a real player who upgrades off Map Room 1 takes); it
   has no map cell, so nobody sees it anywhere. Its rows stay, so mail threads and attack logs keep
   their names. Retired bots with no mail older than 90 days `[PLACEHOLDER]` may be deleted.
-- **Rebalance** (daily, claimed through `bym.job_run`, section 6): the bots line up by how far
-  they have climbed, and each place in the line has a spot spread evenly through its level. A bot
-  more than 2 places ahead of its spot has its growth slowed, one more than 2 behind is sped up,
-  and the rest grow at the normal pace; the total is topped back to 500 at level 1. No pace is
-  nudged while the table is short of the total. No level should drift more than 4 bots
-  (`SPREAD_TOLERANCE`) from its share; the sweep logs a warning when one does (issue #251).
+- **Rebalance** (daily, claimed through `bym.job_run`, section 6): a level more than
+  `BOTS_LEVEL_SLACK` (2) bots over its share retires down to it (quiet first); a level more than
+  the slack short gets new bots at that level, the shortest first, at most `BOTS_NEW_PER_DAY` (8)
+  a day, never past the total (when full, a place is freed on the level most over its share). A
+  new bot starts quiet by its level's settled mix: about `BOTS_GROWING_FLOW` (`[PLACEHOLDER]` 0.3)
+  growing bots a day pass each level, so a level holds that many times its days of growing bots
+  and the rest quiet. Without that every new bot on a short level would grow, leave within days
+  and need replacing in turn: several new bots a day instead of about one every two days. No
+  level should drift more than 4 bots (`SPREAD_TOLERANCE`) from its share; the sweep logs a
+  warning when one does (issue #251).
+- **Bots that start at the floor** (owner, 2026-10-23, decisions 26-27): short levels are only
+  ever the high ones (quiet bots never leave a level, so lower ones never run short), so the
+  band-filling alone leaves the low levels all quiet. Each rebalance therefore also starts about
+  `BOTS_FRESH_PER_DAY` (`[PLACEHOLDER]` 3; the whole part each day, plus one more by the chance of
+  the fraction; 0 turns it off; was `BOTS_LEVEL1_PER_DAY` while they started at level 1) new bots
+  at the bottom of level 15, growing, as new players, each holding the smallest bot yard
+  (decision 26; `atLeastMinimum` in `factory.ts` starts it as far into level 15 as that yard
+  needs). They climb like real players: the same curve and `BOTS_QUIET_RATE` each level, with no
+  early quit chances. They come before the band-filling and count in `BOTS_NEW_PER_DAY`. Once
+  the total is full each takes the place of a quiet bot on the most crowded level (the higher one
+  on a tie); with no quiet bot anywhere, none starts.
+- **What it gives** (`population.test.ts` and a 1,500-day simulation, 3 seeds, at the defaults,
+  2026-10-23, bots from level 15; the last year of each run):
+  3 bots a day started at level 15 plus about 2.15-2.3 a day on short levels, about 5.15-5.3
+  retirements a day (mostly quiet bots making room), every level within 2-3 of its share,
+  481-500 bots standing (497 on average). No bot ever stands below 15.
+
+  | Levels | Bots | Growing | Quiet |
+  | --- | --- | --- | --- |
+  | 15-20 | 117-119 | 3-5 | 96-97% |
+  | 21-25 | 94-95 | 12-13 | 86-87% |
+  | 26-30 | 95-97 | 44-50 | 47-54% |
+  | 31-35 | 96-97 | 75-90 | 7-23% |
+  | 36-39 | 73-75 | 72-74 | 0-1% |
+  | 40 | 20-21 | 20-21 | 0% |
+
+  Levels 15-20 take a real player under a day each, so few growing bots stand on them at any
+  moment though 3 a day pass. More fresh bots a day or a lower `BOTS_QUIET_RATE` raise the growing
+  numbers, with retirements rising to match; fresh bots count in `BOTS_NEW_PER_DAY`, so a rate
+  near 8 needs that cap raised too. Neighbour lists are drawn fresh from a level window each
+  time, so a player still meets different bots as they climb.
 
 ### 4.5 After a player attacks a bot (decisions 10, 11)
 
@@ -414,6 +529,11 @@ is a real player:
   level or still exactly 1,500 (a bot made before this). It is never a multiple of ten.
 
 ### 4.7 Revenge attack (decisions 11-13)
+
+**No level match** (checked 2026-10-23, owner: keep as is): nothing in the checks below compares
+the bot's level with the player's. Revenge only follows the player's own attack on that bot, so
+a level 3 player who attacks a level 15 bot can be hit back by a level 15 army (about 1 in 3),
+within the caps of decision 19.
 
 The `revenge` job, when due:
 
@@ -471,6 +591,47 @@ attack, run by the sweep): the job is claimed only with `BOTS_BRAIN` and `BOTS_R
   finaliser's sweep) still counts. Such a late landing goes through the finaliser's default, so its
   battle report reads "left the attack", as for any attack landed that way.
 
+#### Revenge chains (decision 31, owner 2026-10-23)
+
+A revenge is now a **chain of up to 2-4 attacks** by the same bot on the same player, all on the one
+`revenge` job (`services/bots/revengeChain.ts`, run by the sweep). The first attack is exactly the
+revenge above (the 1-in-3 chance, 1-24 hours, the checks, the caps). After **each** attack lands:
+
+| After an attack | Then |
+| --- | --- |
+| it was the chain's last (the length is drawn 2-4 at the first attack) | the chain ends |
+| it did less than **20 points** of damage itself (yard damage after minus before) | the chain ends |
+| the yard is left at **90%** damage or more (destroyed) | the chain ends |
+| otherwise | the next attack is booked on the same job |
+
+- **Gap = the bot's real refill time:** each monster it sent, at its hatch time (`cTime`, the game's
+  own, at the bot's academy level), divided by the bot's hatcheries working side by side, held to
+  30 minutes-12 hours, plus 10-60 minutes of slack (a player does not attack the second the last
+  monster hatches). Typical bots come out at about 1-4 hours (§ the report's numbers). When the next
+  attack runs, the bot's Housing is topped up as its repair would (`refillArmy` against the
+  generator's yard for its level), because that time has passed.
+- **Checks for the later attacks:** all the first attack's checks (bot active, player still on Map
+  Room 1, no truce, not protected, not online in the last 2 minutes, nobody attacking either yard),
+  except that **the caps are not asked** (the chain is one revenge, capped at its start), and
+  "already avenged" means an attack by this bot since the chain's **last** attack.
+- **Never through protection:** a later attack waits until the protection ends plus 1-6 hours, as
+  the first one does, but **gives up 12 hours after it was due**; past that the chain ends. So
+  50% damage or more (36 hours of damage protection) or a bought shield ends the chain; the 1-hour
+  "4 attacks in an hour" protection only delays it. Online waits retry every 15-60 minutes inside
+  the same 12 hours.
+- **Every attack is a normal attack:** its own attack log, map counters, `retaliatecount` + 1,
+  defence notice and "While you were away" toast, post-attack protection, as the first.
+- **A late landing ends the chain:** an attack whose replay ran past its deadline lands later from
+  its checkpoint; its damage is not known when the job is settled, so the chain stops there.
+- The chain lives in the job's `payload.chain` (`length`, `done`, `last` = the attack log's time,
+  rounded up); the job's `due_at` and `giveup_at` move to the next attack's. A job booked before
+  this change has no chain yet and starts one at its first attack.
+- **Settings** (code constants marked `[PLACEHOLDER]` in `revengeChain.ts`): `CHAIN_LENGTH` 2-4,
+  `CHAIN_MIN_DAMAGE` 20, `CHAIN_DESTROYED_DAMAGE` 90, `CHAIN_WAIT_HOURS` 12, `CHAIN_SLACK_MINUTES`
+  10-60, `CHAIN_REFILL_HOURS` 0.5-12 (no hatchery: 12).
+- The sweep report counts `chain:next` and `chain:length` / `chain:lowDamage` / `chain:destroyed`
+  next to `landed`; the log line is `bot-revenge-chain`.
+
 ### 4.8 Defence report and replay (decision 13)
 
 - **Report:** `afterYardDefended` writes a system notice for **every Map Room 1 main-yard defence**,
@@ -492,7 +653,7 @@ attack, run by the sweep): the job is claimed only with `BOTS_BRAIN` and `BOTS_R
 - **Alliance invites** cannot reach a bot (no world, `inviteUser.ts:51`); the same decline job is
   wired in case that changes. **Friend invites** do not exist on the server.
 - **Chat:** a bot never connects. Nothing to build.
-- **Presence:** each grow job marks the bot online for 2 minutes (`last-seen:main:<bot>`, as a real
+- **Presence:** each grow job of a growing bot (a quiet one's now and then, `BOTS_QUIET_ONLINE`) marks the bot online for 2 minutes (`last-seen:main:<bot>`, as a real
   load does), so bots are sometimes seen online and, for that minute, cannot be attacked, like a
   player (decision 22).
 
@@ -519,7 +680,7 @@ and checks the yard is the starter yard.
 ### 4.11 Seeded Map Room 2 dev players get real yards (issue #233)
 
 Owner decisions (2026-10-05): the 2,500 `db:seed:mr2` players are for dev testing only; they get
-this generator's yards, spread over levels 1-40 as the bots are; after an attack they repair and
+this generator's yards, spread over levels 15-40 as the bots are (levels 1-40 before 2026-10-23); after an attack they repair and
 grow by the bots' own jobs.
 
 - `db:seed:mr2` gives each new player a yard, and `bun run db:seed:mr2:yards` fills in the blank
@@ -605,8 +766,8 @@ after 5 attempts it is dropped with an error log.
 **Rebalance is not a `bot_job` row.** It belongs to no bot, and `bot_job.bot_userid` is required.
 Once a day the sweep claims the day in `bym.job_run` (`job = 'bots-rebalance'`, `period` = the UTC
 date), the same way `scripts/monthly-shiny.ts` claims its month. The insert's primary key means
-only one server runs it each day. It nudges the paces against the bots' spots in the line (section
-4.4) and tops the total back to `BOTS_TOTAL` (creating bots).
+only one server runs it each day. It retires the bots of crowded levels and makes new bots on short
+ones (section 4.4).
 
 Every yard write runs under the save's row lock (`lockRow`, as `catchUpLockedYard`), and is skipped
 while `isAttackActive` (an attack owns the row then), retrying in 10 minutes.
@@ -630,19 +791,17 @@ text above leaves open:
   highest id is left on its countdown (capped at 90% of the time to the next grow). A mushroom on a
   new spot is picked; anything else in the way (or an id holding another type) refuses that growth
   whole and logs it. A damaged yard does not grow; the grow books a repair if none is booked.
-- **The pace** is `level + days on it × speed / BOTS_DAYS_PER_LEVEL`; `level_since` is re-anchored when
-  the level changes so a bot that could not grow catches up rather than losing time. The rebalance's
-  nudges (`[PLACEHOLDER]` 0.75 slow, 1.5 fast) live in the `grow` job's `payload.speed` and end at the
-  bot's next level or the next rebalance. The line runs furthest on first: the first `share[39]`
-  places are spread through level 40, the next `share[38]` through level 39, and so on (issue #251:
-  the first version only nudged levels more than 2 off their share, and slowing a crowded level's
-  newest arrivals kept it crowded).
-- **Retirement** happens when the pace position passes 41 (the bot has had its three days on level 40);
-  the replacement level 1 bot is made after the retirement commits. Replacements and top-up bots start
-  at the bottom of level 1, as a new player would (a random start had them leave level 1 in half the
-  time, so level 1 held about half its share; issue #251). The daily top-up adds level 1
-  bots only up to level 1's share plus the slack of 2, so an empty table is never refilled at level 1
-  all at once (use `bots.ts create --fill`).
+- **The pace** walks the days since `level_since` along `DAYS_ON_LEVEL` (`pacePosition`,
+  `population.ts`; `BOTS_PACE_SCALE` stretches it for dev); `level_since` is re-anchored when the
+  level changes so a bot that could not grow catches up rather than losing time. When a grow finds a
+  new level, the quiet draw runs once per level gained and may set `bot.quiet_since` (migration
+  `20261023_AddQuietSinceToBot`). The 2026-10 pace nudges (`payload.speed`) are gone; an old
+  payload's `speed` is ignored.
+- **Retirement** happens when the pace position passes 41 (the bot has had its days on level 40), or
+  when the rebalance picks it off a crowded level (skipped while it is under attack). Nothing is made
+  in its place at once: the next rebalance makes new bots on whichever levels are short, at a random
+  point of the level. An empty table fills at `BOTS_NEW_PER_DAY` a day, so use
+  `bots.ts create --fill` for a fresh population (it starts each level with its settled quiet mix).
 - **Repair** also re-arms fired traps under their own ids (from `firedtraps`), refills bunkers and
   Housing that are under their band's floor (to the generator's garrison and army, cut to the Housing
   standing), feeds and heals the champion and puts loot back in its band.
@@ -709,8 +868,9 @@ wrecked; and it buys nothing from the store beyond expansions.
 With 36 hours of protection after each heavy attack, one bot absorbs about one heavy attack every
 day and a half, so 500 bots absorb roughly 300 heavy attacks a day across all levels, about 12 per
 level. That is plenty for a small player base and thin if hundreds of new players arrive in one
-week. The bot count and the pace are config values (`BOTS_TOTAL`, `BOTS_DAYS_PER_LEVEL`), so they
-can be raised without code.
+week. The bot count, the pace scale, the quiet rate and the daily cap are config values (`BOTS_TOTAL`,
+`BOTS_PACE_SCALE`, `BOTS_QUIET_RATE`, `BOTS_GROWING_FLOW`, `BOTS_NEW_PER_DAY`,
+`BOTS_FRESH_PER_DAY`, `BOTS_LEVEL_SLACK`), so they can be changed without code.
 
 ## 8. What the client needs
 
@@ -793,7 +953,7 @@ Each is sized for one agent (S < 2 days, M < 1 week).
 | --- | --- | --- | --- |
 | WP1 | **Seed fix.** `sandbox_start: false` in the three seeds, `getDefaultBaseData` refuses the sandbox to bots, test. | — | S |
 | WP2 | **Data model.** Migration (`bot`, `bot_job`, `user.last_seen_at`), entities, `isBot`, config switches, login and reset guards, `last_seen_at` written by the owner's yard load. | — | S |
-| WP3 | **Neighbour search rewrite.** Real players seen in 30 days by SQL level range without the 150 cut, bot fill, counters carried over, attackable-count retry (no level-change re-search, decision 23). | WP2 | M |
+| WP3 | **Neighbour search rewrite.** Real players seen in 30 days by SQL level range without the 150 cut, bot fill, counters carried over, attackable-count retry (the level-move re-search came later, decision 23 as replaced 2026-10-23). | WP2 | M |
 | WP4 | **Progression.** Pure seeded build order inside the limits, points and base value, level targeting, the champion and unlock tables. Tests for every level. | — | M |
 | WP5 | **Layout.** Pure seeded placement by zones, walls and traps, expansions; plugs into WP4. | WP4 | M |
 | WP6 | **Bot factory and CLI.** Names, avatars, back-dated rows, army and loot fill, `bots.ts create / status / retire-all / delete-retired`. | WP2, WP5 | M |

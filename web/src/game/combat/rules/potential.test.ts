@@ -172,20 +172,21 @@ describe("championPotential", () => {
     expect(championPotential("G4", 1, 10)).toBe(2000 * 12);
   });
 
-  it("adds the power level's bonus damage (issue #202)", () => {
-    // Gorgo level 1, power level 3: 1,000 + 600, 15 swings in 10 s.
-    expect(championPotential("G1", 1, 10, 3)).toBe(1600 * 15);
+  it("adds the food bonus's damage, not the power level's (`ChampionBase.as:123-155`)", () => {
+    // Gorgo level 1, food bonus 3: 1,000 + 600, 15 swings in 10 s.
+    expect(championPotential("G1", 1, 10, 0, null, 1, 3)).toBe(1600 * 15);
+    expect(championPotential("G1", 1, 10, 3)).toBe(1000 * 15);
   });
 
   it("bounds Korath's quakes from the yard: one per three swings, plus one (issue #222)", () => {
-    // Level 5, power level 3: 5,000 + 1,000 damage every 80 ticks, 11 swings
+    // Level 5, power level 3, food bonus 3: 5,000 + 1,000 damage every 80 ticks, 11 swings
     // in 10 s, so 4 quakes. Two level 1 Town Halls (4,000 each) side by side:
     // a quake takes at most both.
     const yard = contextOf({ yardBuildings: [[1, 14], [2, 14]] }).yard;
     expect(quakePotential(yard, 65 * 2.5, 6000)).toBe(8000);
-    expect(championPotential("G4", 5, 10, 3, yard)).toBe(6000 * 11 + 4 * 8000);
+    expect(championPotential("G4", 5, 10, 3, yard, 1, 3)).toBe(6000 * 11 + 4 * 8000);
     // One power level short, no quake.
-    expect(championPotential("G4", 5, 10, 2, yard)).toBe(5600 * 11);
+    expect(championPotential("G4", 5, 10, 2, yard, 1, 3)).toBe(6000 * 11);
   });
 
   it("speeds the monsters and Krallen up under Fomor's enrage, not Fomor itself (issue #222)", () => {
@@ -535,9 +536,12 @@ describe("the loot bounds", () => {
   });
 
   it("widens that allowance by Krallen's loot aura when she has it (issue #222)", () => {
-    // Level 5, power level 2: 2 + 1 + 0.3 over 2, so 5,000 becomes 8,250.
-    expect(lootAuraBound([{ id: KRALLEN_ID, level: 5, powerLevel: 2 }])).toBeCloseTo(1.65, 12);
-    expect(lootAuraBound([{ id: KRALLEN_ID, level: 5, powerLevel: 1 }])).toBe(1);
+    // Level 5: 2 + 1.3 over 2, so 5,000 becomes 8,250; level 3: 2 + 0.5 over 2.
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 5, powerLevel: 0 }])).toBeCloseTo(1.65, 12);
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 4, powerLevel: 0 }])).toBeCloseTo(1.45, 12);
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 3, powerLevel: 0 }])).toBeCloseTo(1.25, 12);
+    // No aura below level 3, powered up or not.
+    expect(lootAuraBound([{ id: KRALLEN_ID, level: 2, powerLevel: 2 }])).toBe(1);
     const input = {
       attackloot: { r1: 8000 },
       defenderDelta: { r1: -8000 },
@@ -546,7 +550,7 @@ describe("the loot bounds", () => {
     };
     const plain = auditLoot({ context: contextOf(), ...input });
     const aura = auditLoot({
-      context: contextOf({ champion: { id: KRALLEN_ID, level: 5, powerLevel: 2 } }),
+      context: contextOf({ champion: { id: KRALLEN_ID, level: 5, powerLevel: 0 } }),
       ...input,
     });
     expect(plain.violations.some((one) => one.rule === "lootExceedsDamage")).toBe(true);

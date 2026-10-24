@@ -26,6 +26,7 @@ import {
   autoAttackLimiter,
   autoAttackPlanLimiter,
   defencesLimiter,
+  leaderboardLimiter,
   botCheckReadLimiter,
   botCheckAnswerLimiter,
   chatReportLimiter,
@@ -35,6 +36,8 @@ import {
   mailTruceRequestLimiter,
   threadReportLimiter,
   allianceCreateEditLimiter,
+  bugReportLimiter,
+  clientErrorLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -114,9 +117,12 @@ import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
+import { mountAdminRoutes } from "./controllers/admin/routes.js";
+import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
+import { getEmpireBoard } from "./controllers/leaderboards/getEmpireBoard.js";
 import { getAttackLogs } from "./controllers/attacklogs/getAttackLogs.js";
 
 import { wildMonsterInvasion } from "./controllers/events/wildMonsterInvasion.js";
@@ -138,6 +144,7 @@ import { kickMember } from "./controllers/alliance/kickMember.js";
 import { promoteMember } from "./controllers/alliance/promoteMember.js";
 import { changeRelationship } from "./controllers/alliance/changeRelationship.js";
 import { getPowerups } from "./controllers/alliance/getPowerups.js";
+import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
 import { activatePowerup } from "./controllers/alliance/activatePowerup.js";
 import { purchasePowerup } from "./controllers/alliance/purchasePowerup.js";
 
@@ -316,6 +323,8 @@ mountFriendsRoutes(router);
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/worlds", publicReadLimiter, getAvailableWorlds);
 router.get("/api/:apiVersion/leaderboards", publicReadLimiter, getLeaderboards);
+// The leaderboard by empire points (beta.4, `services/leaderboard/empireBoard.ts`): the top 100 and the caller's own row.
+router.get("/api/:apiVersion/leaderboards/empire", apiVersion, verifyUserAuth, verifyAccountStatus, leaderboardLimiter, getEmpireBoard);
 router.get("/api/:apiVersion/attacklogs", verifyUserAuth, getAttackLogs);
 
 /**  ────────────────────────────────────────────────
@@ -346,6 +355,25 @@ router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRe
 router.get("/api/:apiVersion/events/wmi", apiVersion, logRequest, wildMonsterInvasion);
 // The Events page and "What's new" (`controllers/events/routes.ts`); the claims are yard actions.
 mountEventsRoutes(router);
+
+/**  ────────────────────────────────────────────────
+* 📦 Bug reports: the game's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`).
+* Not echoed by logRequest: the body carries pictures.
+* ──────────────────────────────────────────────── */
+router.post("/api/:apiVersion/bugreport", apiVersion, verifyUserAuth, bugReportLimiter, submitBugReportController);
+router.post("/api/:apiVersion/bugreport/guest", apiVersion, bugReportLimiter, submitGuestBugReportController);
+
+/**  ────────────────────────────────────────────────
+* 📦 Browser errors the web client sends on its own, for the owner's dashboard
+* (`controllers/errors/clientErrors.ts`). Not echoed by logRequest.
+* ──────────────────────────────────────────────── */
+router.post("/api/:apiVersion/clienterrors", apiVersion, verifyUserAuth, clientErrorLimiter, clientErrors);
+router.post("/api/:apiVersion/clienterrors/guest", apiVersion, clientErrorLimiter, guestClientErrors);
+
+/**  ────────────────────────────────────────────────
+* 📦 The owner's dashboard (`controllers/admin/routes.ts`): 404 to anyone not in ADMIN_USER_IDS.
+* ──────────────────────────────────────────────── */
+mountAdminRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Debug

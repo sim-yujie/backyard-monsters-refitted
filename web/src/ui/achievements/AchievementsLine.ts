@@ -7,7 +7,7 @@ import "./achievements.css";
 
 /**
  * Another player's achievements in one line, for the map's panels
- * (`docs/design/achievements.md` §10.3, issue #204 WP7): "Achievements 7 / 16"
+ * (`docs/design/achievements.md` §10.3, issue #204 WP7): "Achievements 7 / 17"
  * with the newest few badges, a button that opens the read-only list. It is
  * fetched when the line is made, not carried in any map answer.
  *

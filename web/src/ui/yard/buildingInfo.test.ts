@@ -112,6 +112,10 @@ describe("towers", () => {
   it("health leads the rows", () => {
     expect(rowsOf({ t: 20, l: 4 })[0]?.label).toBe("Health");
   });
+
+  it("the Champion Cage's own health says it is the cage's, not its champion's", () => {
+    expect(rowsOf({ t: 114, l: 1 })[0]).toMatchObject({ label: "Cage health", now: { text: "10,000 / 10,000" } });
+  });
 });
 
 describe("Flinger", () => {

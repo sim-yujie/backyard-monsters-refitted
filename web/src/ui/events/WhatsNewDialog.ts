@@ -36,6 +36,16 @@ const card = (item: ChangelogCard): HTMLElement => {
   return box;
 };
 
+/** The popup's class: what {@link isWhatsNewOpen} looks for. */
+const POPUP_CLASS = "whats-new-popup";
+
+/**
+ * Whether the cards are up. Bob's tips wait while they are
+ * (`game/yard/plugins/tips.ts`), so a tip never covers them, which on a
+ * phone hid half the cards.
+ */
+export const isWhatsNewOpen = (): boolean => document.querySelector(`.${POPUP_CLASS}`) !== null;
+
 const cardList = (release: ChangelogRelease): HTMLElement => {
   const list = el("ul", "whats-new__cards");
   list.append(...release.cards.map(card));
@@ -56,7 +66,7 @@ export const openWhatsNew = (options: WhatsNewOptions): Popup | null => {
   if (!latest) return null;
   const popup = new Popup({
     title: "What's new",
-    className: "whats-new-popup",
+    className: POPUP_CLASS,
     ...(options.onClose && { onClose: options.onClose }),
   });
   const body = el("div", "whats-new");

@@ -158,6 +158,43 @@ describe("punchy strengths and the shared shake (feat/punchy-trial)", () => {
   });
 });
 
+describe("a building falling (bigger attack effects)", () => {
+  it("throws its flash, fireball, dust, sparks and chunks, and no shockwave ring", () => {
+    const { fx } = fxOf();
+    fx.demolish(10, { x: 0, y: 0 }, 80);
+    const looks = fx.looksAlive();
+    expect(looks.ring).toBeUndefined();
+    expect(looks.soft).toBeGreaterThan(2);
+    expect(looks.dot).toBeGreaterThan(10);
+    expect(fx.markCount).toBe(1);
+    expect(fx.shakeAmp).toBeGreaterThan(0);
+  });
+
+  it("gives a wall a flash and a few chunks, no ring and no shake", () => {
+    const { fx } = fxOf();
+    fx.demolish(10, { x: 0, y: 0 }, 30, true);
+    expect(fx.looksAlive().ring).toBeUndefined();
+    expect(fx.shakeAmp).toBe(0);
+  });
+
+  it("does not shake under Reduce effects, and throws fewer bits", () => {
+    const air = new Container();
+    const reduced = new BlastFx({ air, ground: () => new Container(), shake: () => {} }, false, MAX_SHAKE, true);
+    reduced.demolish(10, { x: 0, y: 0 }, 80);
+    expect(reduced.shakeAmp).toBe(0);
+    const { fx } = fxOf();
+    fx.demolish(10, { x: 0, y: 0 }, 80);
+    expect(reduced.bitCount).toBeLessThan(fx.bitCount);
+  });
+
+  it("keeps to the flash and the fireball for a viewer who asked for less motion", () => {
+    const { fx } = fxOf(true);
+    fx.demolish(10, { x: 0, y: 0 }, 80);
+    expect(fx.looksAlive()).toEqual({ soft: 2 });
+    expect(fx.shakeAmp).toBe(0);
+  });
+});
+
 describe("the blast's arithmetic", () => {
   it("blends tints between stops", () => {
     expect(tintAt([0xff0000, 0x0000ff], 0)).toBe(0xff0000);

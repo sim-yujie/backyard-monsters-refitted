@@ -24,7 +24,7 @@ const ago = (days: number) => new Date(NOW - days * DAY);
 
 const A = 990001;
 const B = 990002;
-const CONFIG: RetentionConfig = { logDays: 30, mailDays: 365, attackLogDays: 365, chatReportDays: 365 };
+const CONFIG: RetentionConfig = { logDays: 30, mailDays: 365, attackLogDays: 365, chatReportDays: 365, bugReportDays: 180 };
 
 describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
   let orm: MikroORM;
@@ -41,6 +41,7 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     await sql(`DELETE FROM bym.friend_request WHERE from_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.friend_help WHERE helper_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.friend_gift WHERE from_userid IN (?, ?)`, [A, B]);
+    await sql(`DELETE FROM bym.app_error WHERE fingerprint LIKE 'zz-ret-%'`);
     await sql(`DELETE FROM bym."user" WHERE userid IN (?, ?) AND username LIKE 'zz_ret_%'`, [A, B]);
   };
 
@@ -219,6 +220,21 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     expect(result).toMatchObject({ friendGifts: 2 });
     const left = await sql<{ amount: number }>(`SELECT amount FROM bym.friend_gift WHERE from_userid = ? ORDER BY id`, [A]);
     expect(left.map((row) => Number(row.amount))).toEqual([89, 1]);
+  });
+
+  test("the dashboard's error groups go 30 days after they were last seen", async () => {
+    for (const days of [45, 31, 29, 0]) {
+      await sql(
+        `INSERT INTO bym.app_error (source, fingerprint, message, first_seen, last_seen) VALUES ('server', ?, 'x', ?, ?)`,
+        [`zz-ret-${days}`, ago(days + 10), ago(days)]
+      );
+    }
+
+    const result = await run();
+
+    expect(result).toMatchObject({ appErrors: 2 });
+    const left = await sql<{ fingerprint: string }>(`SELECT fingerprint FROM bym.app_error WHERE fingerprint LIKE 'zz-ret-%' ORDER BY id`);
+    expect(left.map((row) => row.fingerprint)).toEqual(["zz-ret-29", "zz-ret-0"]);
   });
 
   test("each limit is its own setting", async () => {

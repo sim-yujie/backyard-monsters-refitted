@@ -15,7 +15,8 @@ import { memoryRedis } from "../../testing/memoryRedis.js";
 
 const redis = memoryRedis();
 
-mock.module("../../server.js", () => ({ postgres: { em: {} }, redis }));
+// `populate` for the stay tap that carries a Yard Planner plan: the tests hand the save in.
+mock.module("../../server.js", () => ({ postgres: { em: { populate: async () => {} } }, redis }));
 
 const { realActionTracker } = await import("../../middleware/realAction.js");
 const { presence, stayProtected } = await import("../../controllers/maproom/presence.js");
@@ -229,6 +230,102 @@ describe("the patterns, through the real-action middleware", () => {
     const body = await stay();
     expect(body.checkPending).toBe(true);
     expect((await readBotCheckLog())[0]).toMatchObject({ event: "trigger", rule: "stay" });
+  });
+
+  describe("stay taps carrying Yard Planner work", () => {
+    /** The player's yard: three buildings. */
+    const buildingdata = {
+      "1": { t: 14, X: 0, Y: 0 },
+      "2": { t: 21, X: 40, Y: 0 },
+      "3": { t: 21, X: 80, Y: 0 },
+    };
+    /** A plan with building 2 at `x`, the others where they stand. */
+    const planWith2At = (x: number, ids: readonly number[] = [1, 2, 3]) =>
+      JSON.stringify({
+        version: 2,
+        expansion: 0,
+        nodes: ids.map((id) => {
+          const building = buildingdata[String(id) as keyof typeof buildingdata] ?? { t: 21, X: 0, Y: 0 };
+          return { id, t: building.t, x: id === 2 ? x : building.X, y: building.Y };
+        }),
+      });
+    const plannerStay = (plan: string) =>
+      call(
+        "/api/:apiVersion/bm/presence/stay",
+        (ctx) => {
+          (ctx as unknown as { authUser: unknown }).authUser = { userid: USER, save: { buildingdata } };
+          return stayProtected(ctx, async () => {});
+        },
+        { plan }
+      );
+
+    test("new work on every tap: the streak never builds, however long", async () => {
+      atMs(T0 * 1000);
+      for (let i = 1; i <= STAY_STREAK_LIMIT * 3; i += 1) {
+        expect((await plannerStay(planWith2At(40 + i * 4))).checkPending).toBe(false);
+        after(9 * 60_000 + i * 7_000);
+      }
+      expect(await pending()).toBe(false);
+    });
+
+    test("the same plan again is a plain tap", async () => {
+      atMs(T0 * 1000);
+      // The first moved building 2 from where the yard has it: work.
+      for (let i = 1; i < STAY_STREAK_LIMIT; i += 1) {
+        expect((await plannerStay(planWith2At(44))).checkPending).toBe(false);
+        after(9 * 60_000);
+      }
+      expect((await plannerStay(planWith2At(44))).checkPending).toBe(true);
+      expect((await readBotCheckLog())[0]).toMatchObject({ event: "trigger", rule: "stay" });
+    });
+
+    test("a plan that is the yard as it stands is no work", async () => {
+      atMs(T0 * 1000);
+      for (let i = 1; i < STAY_STREAK_LIMIT; i += 1) {
+        await plannerStay(planWith2At(40));
+        after(9 * 60_000);
+      }
+      expect((await plannerStay(planWith2At(40))).checkPending).toBe(true);
+    });
+
+    test("a plan of buildings the player does not have, or one that cannot be read, is a plain tap", async () => {
+      atMs(T0 * 1000);
+      const plans = [
+        planWith2At(44, [1, 2, 9]),
+        planWith2At(48, [1, 2, 10]),
+        "{not json",
+        JSON.stringify({ version: 2, expansion: 0, nodes: [] }),
+        planWith2At(52, [1, 2, 11]),
+      ];
+      for (const plan of plans) {
+        expect((await plannerStay(plan)).checkPending).toBe(false);
+        after(9 * 60_000);
+      }
+      expect((await plannerStay(planWith2At(56, [1, 2, 12]))).checkPending).toBe(true);
+    });
+
+    test("work breaks a run of plain taps, which then starts again from that tap", async () => {
+      atMs(T0 * 1000);
+      for (let i = 1; i < STAY_STREAK_LIMIT; i += 1) {
+        await stay();
+        after(9 * 60_000);
+      }
+      expect((await plannerStay(planWith2At(44))).checkPending).toBe(false);
+      for (let i = 1; i < STAY_STREAK_LIMIT - 1; i += 1) {
+        after(9 * 60_000);
+        expect((await stay()).checkPending).toBe(false);
+      }
+      after(9 * 60_000);
+      expect((await stay()).checkPending).toBe(true);
+    });
+
+    test("the last plan heard has a life, and a solved check forgets it", async () => {
+      atMs(T0 * 1000);
+      await plannerStay(planWith2At(44));
+      expect(await redis.ttl(`bot-check:plan:${USER}`)).toBeGreaterThan(0);
+      await patterns.resetPatterns(USER, clockMs);
+      expect(await redis.get(`bot-check:plan:${USER}`)).toBeNull();
+    });
   });
 
   test("every key the patterns keep has a life", async () => {

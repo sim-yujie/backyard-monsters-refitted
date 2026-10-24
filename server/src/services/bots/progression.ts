@@ -7,6 +7,8 @@ import { BUILDABLE_TYPES, buildGates } from "../yard/build.js";
 import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
 import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
+import { GUIDE_BUILDINGS } from "../onboarding/guidedStart.js";
+import { CORE_WALLS, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
 
 /**
  * A bot's build order (`docs/design/bot-neighbours.md` §4.2 step 1, issue #237).
@@ -51,41 +53,53 @@ import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner
  * ends at the target's level, and the cut point only ever moves forward as the
  * target grows, which is what keeps the prefix property.
  *
- * ## The pacing
+ * ## Banking points
+ *
+ * Points also count what a player earns by collecting from harvesters: half
+ * of every resource banked after the tutorial (`yard/bank.ts`). A player
+ * banks what they spend, so each action earns {@link BANK_SHARE} of its
+ * resource cost on top ({@link bankPoints}). Without it a bot of a level would
+ * carry about one Town Hall more than a player of that level (bot-yard-facts
+ * report, 2026-10-23).
+ *
+ * ## The build plan (owner decisions, 2026-10-23)
+ *
+ * A bot builds as a real player does, Town Hall by Town Hall. It starts as a
+ * player leaves the guided start (`onboarding/guidedStart.ts`): the guide's
+ * Housing, Sniper Tower, Map Room and Flinger come first. Housing comes first
+ * of all: until it fits the level band the bot takes only the smallest
+ * actions, and the guide's other buildings wait for it, so a bot has an army,
+ * and can take revenge, from level 3 (owner, 2026-10-23: Housing early, as a
+ * player after the guide). At each
+ * hall it then runs through the stages of {@link PLAN_ORDER}, its persona's
+ * order: every Twig Snapper and Pebble Shiner the hall allows first, then the Putty
+ * Squishers, Goo Factories and silos, then the towers, the other buildings,
+ * the walls and traps and the upgrades, in an order that leans the persona's
+ * way. Each action is taken from the earliest stage that has one, now and
+ * then ({@link STAGE_SLIP}) from the stage after it, so two bots of one level
+ * are not built the same. Inside a stage a new building weighs more than an
+ * upgrade, and an upgrade goes to the lowest building first, so harvesters
+ * of a kind rise together.
  *
  * A player fills out what their Town Hall allows before upgrading it. The
- * Town Hall upgrade is offered only once the yard's "readiness" at its hall
- * (slots filled and levels reached, walls and traps aside) passes a threshold
- * drawn per hall level from the seed, or when nothing else is left to do.
- * Every other action is picked in two draws: a category by the persona's
- * weights (`[PLACEHOLDER]`, {@link PERSONA_WEIGHTS}), then an action inside it,
- * a new building weighing more than an upgrade.
+ * Town Hall upgrade is offered only once every building the hall allows
+ * stands (walls and traps to their fill), and the yard's "readiness" (levels
+ * reached against what the hall allows, walls and traps aside) passes a
+ * threshold drawn per hall level from the seed ({@link READINESS}), or when
+ * nothing else is left to do.
  *
- * ## Walls and traps (issue #250)
+ * ## Walls and traps (issues #250, #252)
  *
- * Most players follow the wiki's Base Defense Guide, which walls the Town
- * Hall and silos into a death trap and the rest into compartments, so a
- * player soon uses most of the blocks their Town Hall allows, and traps
- * fill the hallways. Each seed draws, per hall level, the share of the
- * allowance it means to stand ({@link WALL_FILL}, {@link TRAP_FILL}); while a
- * yard is short of it, building one more weighs {@link FILL_WEIGHT} instead
- * of the persona's weight. The draws come from their own stream, so a yard
- * before its first wall is the same run it always was. The layout reads the
- * same draws ({@link wallTargets}) to know how many walls each Town Hall's
- * yard will stand, so it only starts a compartment those walls will close.
- *
- * ## Wall upgrades (issue #252)
- *
- * A player turns wood into stone and better as their Town Hall and purse
- * allow: mostly wood at Town Hall 3, stone by Town Hall 4 or 5, the higher
- * tiers from Town Hall 6 on. Each seed draws, per hall level, the average wall
- * level it means to reach ({@link WALL_TIER}); while the yard's walls average
- * less, and none is short of its fill, upgrading one weighs
- * {@link TIER_WEIGHT} instead of the persona's weight. The upgrade taken is
- * always the lowest wall, oldest first, so the core goes to stone before the
- * outer compartments, as a player's does. Each
- * upgrade is a real one: the server's gate (`planOneUpgrade`, the Town Hall
- * its `re` list asks for), its points and its base value.
+ * Each seed draws, per hall level, the share of the wall and trap allowances
+ * it means to stand ({@link WALL_FILL}, {@link TRAP_FILL}) and the average wall
+ * level it means to reach ({@link WALL_TIER}): mostly wood at Town Hall 3,
+ * stone by Town Hall 4 or 5, the higher tiers from Town Hall 6 on. A bot that
+ * walls only its core (`yardStyle.ts`) never stands more than its rings take.
+ * The upgrade taken is always the lowest wall, oldest first, so the core goes
+ * to stone before the rest. The layout reads the same draws
+ * ({@link wallTargets}) to know how many walls each Town Hall's yard will
+ * stand. Each upgrade is a real one: the server's gate (`planOneUpgrade`, the
+ * Town Hall its `re` list asks for), its points and its base value.
  */
 
 /** A bot's play style, kept in `bot.persona` (§5). */
@@ -140,16 +154,106 @@ const CATEGORY_OF: Readonly<Record<number, Category>> = {
 };
 
 /**
- * How much each persona favours each category `[PLACEHOLDER]`. Not tuned by
- * play: chosen so an economy bot's harvesters run ahead, a tower bot's
- * defences and walls do, an army bot's monster buildings do, and every bot
- * still builds a bit of everything.
+ * A stage of a hall's build plan (see the file comment):
+ *
+ * - `guide`: building the first of each of the guided start's buildings,
+ *   Housing before the rest (the rest are left out until it stands);
+ * - `mainHarvesters`: building Twig Snappers and Pebble Shiners;
+ * - `economy`: building Putty Squishers, Goo Factories and silos;
+ * - `towers`: building towers;
+ * - `buildings`: building everything else but walls and traps;
+ * - `mainUpgrades`: upgrading Twig Snappers, Pebble Shiners and silos;
+ * - `sideUpgrades`: upgrading Putty Squishers and Goo Factories;
+ * - `walls`: building walls and traps up to their fill;
+ * - `wallUpgrades`: upgrading walls up to their tier;
+ * - `upgrades`: every other upgrade.
+ */
+export type Stage =
+  | "guide"
+  | "mainHarvesters"
+  | "economy"
+  | "towers"
+  | "buildings"
+  | "mainUpgrades"
+  | "sideUpgrades"
+  | "walls"
+  | "wallUpgrades"
+  | "upgrades";
+
+/**
+ * The order each persona runs a hall's stages in `[PLACEHOLDER]`. The guided
+ * start's buildings, then harvesters first for every bot (the owner: as many resource buildings as allowed,
+ * before walls; Twigs and Pebbles before Putty and Goo). Once those basics
+ * and the towers stand, the walls and traps the hall allows go down, as a
+ * player puts walls out as soon as they unlock at Town Hall 2, so a bot's
+ * walls grow with its Town Hall (owner review 2026-10-23: no walls before
+ * level 25 read wrong). An economy bot then levels its harvesters before its
+ * towers, a tower bot brings its walls up a tier sooner, an army bot its
+ * monster buildings.
+ */
+export const PLAN_ORDER: Readonly<Record<Persona, readonly Stage[]>> = {
+  economy: [
+    "guide",
+    "mainHarvesters",
+    "economy",
+    "mainUpgrades",
+    "towers",
+    "walls",
+    "buildings",
+    "sideUpgrades",
+    "wallUpgrades",
+    "upgrades",
+  ],
+  towers: [
+    "guide",
+    "mainHarvesters",
+    "economy",
+    "towers",
+    "walls",
+    "mainUpgrades",
+    "wallUpgrades",
+    "buildings",
+    "sideUpgrades",
+    "upgrades",
+  ],
+  army: [
+    "guide",
+    "mainHarvesters",
+    "economy",
+    "towers",
+    "walls",
+    "buildings",
+    "mainUpgrades",
+    "sideUpgrades",
+    "wallUpgrades",
+    "upgrades",
+  ],
+};
+
+/** The chance an action comes from the stage after the earliest one with work left `[PLACEHOLDER]`. */
+export const STAGE_SLIP = 0.15;
+
+/**
+ * How much each persona favours each category inside the `buildings` and
+ * `upgrades` stages `[PLACEHOLDER]`: an army bot's monster buildings run
+ * ahead, a tower bot's tower upgrades do.
  */
 export const PERSONA_WEIGHTS: Readonly<Record<Persona, Readonly<Record<Exclude<Category, "hall">, number>>>> = {
-  economy: { economy: 4, defence: 2, army: 1.5, utility: 1, walls: 1.5, traps: 0.5 },
-  towers: { economy: 2, defence: 4, army: 1.5, utility: 1, walls: 2.5, traps: 1 },
-  army: { economy: 2, defence: 2, army: 4, utility: 1.5, walls: 1.5, traps: 0.5 },
+  economy: { economy: 4, defence: 2, army: 1.5, utility: 1, walls: 1, traps: 1 },
+  towers: { economy: 2, defence: 4, army: 1.5, utility: 1, walls: 1.5, traps: 1 },
+  army: { economy: 2, defence: 2, army: 4, utility: 1.5, walls: 1, traps: 1 },
 };
+
+/** The buildings a player has on leaving the guided start, the `guide` stage (see {@link Stage}). */
+const GUIDE_TYPES: ReadonlySet<number> = new Set(Object.values(GUIDE_BUILDINGS));
+
+/** Harvesters and silos by stage (see {@link Stage}). */
+const MAIN_HARVESTERS: ReadonlySet<number> = new Set([1, 2]);
+const SIDE_HARVESTERS: ReadonlySet<number> = new Set([3, 4]);
+const SILO = 6;
+
+/** Weights inside the `economy` stage: Putty before Goo, silos alongside `[PLACEHOLDER]`. */
+const ECONOMY_WEIGHTS: Readonly<Record<number, number>> = { 3: 2, 4: 1, [SILO]: 2 };
 
 /**
  * The share of the wall allowance a seed means to stand at each hall level,
@@ -157,17 +261,20 @@ export const PERSONA_WEIGHTS: Readonly<Record<Persona, Readonly<Record<Exclude<C
  * from Town Hall 3 a player walls most of what they may, at least enough to
  * close the core (`layout.ts`).
  */
-export const WALL_FILL = { early: { min: 0.4, max: 0.9 }, later: { min: 0.9, max: 1 } } as const;
+export const WALL_FILL = {
+  early: { min: 0.4, max: 0.9 },
+  later: { min: 0.9, max: 1 },
+} as const;
 
 /** The same for traps `[PLACEHOLDER]`. */
 export const TRAP_FILL = { early: { min: 0.5, max: 0.9 }, later: { min: 0.7, max: 1 } } as const;
 
 /**
- * A wall or trap build's weight while the yard is short of its fill
- * `[PLACEHOLDER]`. Walls are cheap and catch up at once, as a player walls in
- * a new Town Hall's core in one sitting.
+ * The share of every resource an action costs that its player earned in
+ * points banking it first (`yard/bank.ts`: half of what is banked after the
+ * tutorial).
  */
-const FILL_WEIGHT = { walls: 150, traps: 30 } as const;
+export const BANK_SHARE = 0.5;
 
 /** The salt of the fill draws' stream. */
 const FILL_SALT = 0x2545f491;
@@ -188,28 +295,40 @@ export const WALL_TIER: Readonly<Record<number, { min: number; max: number }>> =
   10: { min: 4.2, max: 4.9 },
 };
 
-/** A wall upgrade's weight while the walls average less than their tier `[PLACEHOLDER]`. */
-const TIER_WEIGHT = 80;
-
 /** The salt of the tier draws' stream. */
 const TIER_SALT = 0x68e31da4;
 
 /** The Wall Block (`buildingCosts.ts`, type 17). */
 const WALL_TYPE = 17;
 
-/** The Town Hall upgrade's weight once it is offered: strong, so it comes soon after readiness. */
-const HALL_WEIGHT = 6;
+/** The chance the Town Hall upgrade is taken once it is offered: soon, not at once `[PLACEHOLDER]`. */
+const HALL_TAKE = 0.6;
 
-/** A new building against an upgrade inside one category. */
+/** A new building against an upgrade inside one stage. */
 const BUILD_WEIGHT = 3;
 const UPGRADE_WEIGHT = 1;
 
-/** The readiness a hall level waits for: drawn per hall in this range `[PLACEHOLDER]`. */
-const READINESS_MIN = 0.55;
-const READINESS_SPREAD = 0.3;
+/**
+ * The readiness each hall level waits for, drawn per hall in `[min, max)`
+ * `[PLACEHOLDER]`: a player hurries through the cheap first Town Halls, and
+ * fills out the dear later ones further before moving on. Index is the hall
+ * level; the last entry stands in for any hall past the end.
+ */
+export const READINESS: readonly { min: number; max: number }[] = [
+  { min: 0, max: 0 },
+  { min: 0.3, max: 0.5 },
+  { min: 0.45, max: 0.65 },
+  { min: 0.6, max: 0.8 },
+  { min: 0.65, max: 0.85 },
+  { min: 0.7, max: 0.9 },
+  { min: 0.9, max: 1 },
+];
 
 /** The highest Town Hall level. */
 const TOP_HALL = 10;
+
+/** The highest Town Hall level that stands its walls and traps to the `early` fills. */
+const EARLY_TOP_HALL = 2;
 
 /** Kinds that add nothing to base value (`BASE_VALUE_EXCLUDED`, `economy/resourceBudget.ts`). */
 const VALUE_EXCLUDED_KINDS: ReadonlySet<string> = new Set(["decoration", "enemy", "immovable", "trap"]);
@@ -258,6 +377,15 @@ const valueOfRaw = (raw: number): number => Math.ceil(0.1 * raw);
 
 const stepSum = (step: CostStep): number => step[0] + step[1] + step[2] + step[3] + step[4];
 
+/** The points a player earned banking what a step costs (see the file comment). */
+export const bankPoints = (step: CostStep): number => Math.floor(BANK_SHARE * (step[0] + step[1] + step[2] + step[3]));
+
+/** A bot's points for a build: the finished job's (`pointsForBuild`) and the banking before it. */
+export const botPointsForBuild = (step: CostStep): number => pointsForBuild(step) + bankPoints(step);
+
+/** A bot's points for an upgrade: the finished job's (`pointsForUpgrade`) and the banking before it. */
+export const botPointsForUpgrade = (step: CostStep): number => pointsForUpgrade(step) + bankPoints(step);
+
 /** Whether a type's steps count towards base value. */
 const counted = (type: number): boolean => {
   const kind = costOf(type)?.kind;
@@ -275,7 +403,7 @@ const allowedAt = (type: number, hall: number): number => {
  * The highest level a type reaches with a Town Hall at `hall`, counting only
  * the Town Hall entries of each step's `re`: the readiness measure's yardstick.
  */
-const capAtHall = (() => {
+export const capAtHall = (() => {
   const cache = new Map<string, number>();
   return (type: number, hall: number): number => {
     if (type === MAP_ROOM_TYPE) return 1;
@@ -313,8 +441,9 @@ const fillsFor = (seed: number): { wall: number[]; trap: number[] } => {
   const wall: number[] = [];
   const trap: number[] = [];
   for (let hall = 0; hall <= TOP_HALL; hall++) {
-    const walls = hall <= 2 ? WALL_FILL.early : WALL_FILL.later;
-    const traps = hall <= 2 ? TRAP_FILL.early : TRAP_FILL.later;
+    const early = hall <= EARLY_TOP_HALL;
+    const walls = early ? WALL_FILL.early : WALL_FILL.later;
+    const traps = early ? TRAP_FILL.early : TRAP_FILL.later;
     wall.push(walls.min + (walls.max - walls.min) * fills.float());
     trap.push(traps.min + (traps.max - traps.min) * fills.float());
   }
@@ -324,13 +453,18 @@ const fillsFor = (seed: number): { wall: number[]; trap: number[] } => {
 /**
  * How many walls a seed's yard stands once it has caught up at each Town Hall
  * level, indexed by hall level (0 to 10): its fill of the allowance, never
- * fewer than at the hall before. The progression builds at least this many;
- * the layout plans its compartments by it (`layout.ts`).
+ * more than a `core` bot's rings take (`yardStyle.ts`), never fewer than at
+ * the hall before. The progression builds exactly this many; the layout plans
+ * its walls by it (`layout.ts`).
  */
 export const wallTargets = (seed: number): number[] => {
+  const { walls } = yardStyleOf(seed);
   let most = 0;
   return fillsFor(seed).wall.map((fill, hall) => {
-    most = Math.max(most, Math.round(allowedAt(WALL_TYPE, hall) * fill));
+    let wanted = Math.round(allowedAt(WALL_TYPE, hall) * fill);
+    // One wall past the core's would stand on its own beside it (`layout.ts`): a player puts down two.
+    if (wanted === CORE_WALLS + 1) wanted++;
+    most = Math.max(most, walls === "core" ? coreStyleWalls(wanted) : wanted);
     return most;
   });
 };
@@ -361,8 +495,8 @@ export class Progression {
   /** Every building, by type, in the order built. */
   private readonly byType = new Map<number, ProgressionBuilding[]>();
   private readonly thresholds: number[] = [];
-  /** The share of the wall and trap allowances to stand, per hall level. */
-  private readonly wallFill: number[];
+  /** The walls to stand and the share of the trap allowance to stand, per hall level. */
+  private readonly wallTarget: number[];
   private readonly trapFill: number[];
   /** The average wall level to reach, per hall level (see the file comment). */
   private readonly wallTier: number[] = [];
@@ -378,11 +512,11 @@ export class Progression {
     this.persona = persona;
     this.rng = mulberry32(seed);
     for (let hall = 0; hall <= TOP_HALL; hall++) {
-      this.thresholds.push(READINESS_MIN + READINESS_SPREAD * this.rng.float());
+      const band = READINESS[Math.min(hall, READINESS.length - 1)]!;
+      this.thresholds.push(band.min + (band.max - band.min) * this.rng.float());
     }
-    const fills = fillsFor(seed);
-    this.wallFill = fills.wall;
-    this.trapFill = fills.trap;
+    this.wallTarget = wallTargets(seed);
+    this.trapFill = fillsFor(seed).trap;
     const tiers = mulberry32((Math.floor(seed) ^ TIER_SALT) >>> 0);
     for (let hall = 0; hall <= TOP_HALL; hall++) {
       const band = WALL_TIER[hall] ?? { min: 1, max: 1 };
@@ -413,6 +547,11 @@ export class Progression {
   /** The Town Hall level now. */
   get townHall(): number {
     return this.hall;
+  }
+
+  /** How many buildings of `type` stand. */
+  countOf(type: number): number {
+    return this.byType.get(type)?.length ?? 0;
   }
 
   /** Every building, in id order, copied. */
@@ -498,7 +637,7 @@ export class Progression {
       t: type,
       id: this.nextId,
       from: 0,
-      points: pointsForBuild(step),
+      points: botPointsForBuild(step),
       raw: counted(type) ? stepSum(step) : 0,
     };
   }
@@ -518,7 +657,7 @@ export class Progression {
       t: type,
       id: lowest.id,
       from: lowest.l,
-      points: pointsForUpgrade(step),
+      points: botPointsForUpgrade(step),
       raw: counted(type) ? stepSum(step) - stepSum(costs[lowest.l - 1]!) : 0,
     };
   }
@@ -552,8 +691,9 @@ export class Progression {
 
   /** Whether the yard stands fewer walls or traps of `type` than its fill at this hall (see the file comment). */
   private shortOfFill(type: number): boolean {
-    const fill = (CATEGORY_OF[type] === "walls" ? this.wallFill : this.trapFill)[this.hall] ?? 0;
-    return (this.byType.get(type)?.length ?? 0) < Math.round(allowedAt(type, this.hall) * fill);
+    const have = this.byType.get(type)?.length ?? 0;
+    if (type === WALL_TYPE) return have < (this.wallTarget[this.hall] ?? 0);
+    return have < Math.round(allowedAt(type, this.hall) * (this.trapFill[this.hall] ?? 0));
   }
 
   /** Whether the yard's walls average a lower level than its tier at this hall (see the file comment). */
@@ -583,63 +723,103 @@ export class Progression {
     return groups;
   }
 
+  /** The stage of the plan an action belongs to, or null when the plan leaves it out at this hall (see {@link Stage}). */
+  private stageOf(candidate: Candidate): Stage | null {
+    const category = CATEGORY_OF[candidate.t];
+    if (candidate.kind === "build") {
+      // Walls and traps past their fill wait for a bigger hall's fill.
+      if (category === "walls" || category === "traps") return this.shortOfFill(candidate.t) ? "walls" : null;
+      if (GUIDE_TYPES.has(candidate.t) && !this.byType.get(candidate.t)?.length) {
+        const housed = candidate.t === GUIDE_BUILDINGS.housing || !!this.byType.get(GUIDE_BUILDINGS.housing)?.length;
+        return housed ? "guide" : null;
+      }
+      if (MAIN_HARVESTERS.has(candidate.t)) return "mainHarvesters";
+      if (category === "economy") return "economy";
+      if (category === "defence") return "towers";
+      return "buildings";
+    }
+    if (candidate.t === WALL_TYPE) return this.shortOfTier() ? "wallUpgrades" : "upgrades";
+    if (MAIN_HARVESTERS.has(candidate.t) || candidate.t === SILO) return "mainUpgrades";
+    if (SIDE_HARVESTERS.has(candidate.t)) return "sideUpgrades";
+    // A tower bot upgrades its towers as it builds them.
+    if (category === "defence" && this.persona === "towers") return "towers";
+    return "upgrades";
+  }
+
+  /**
+   * Draws an action inside one stage: a new building over an upgrade, and
+   * among upgrades the lowest building first, each level up halving the
+   * weight, so a stage's buildings rise together.
+   */
+  private pickIn(stage: Stage, list: readonly Candidate[]): Candidate | null {
+    const weights = PERSONA_WEIGHTS[this.persona];
+    let lowest = Number.POSITIVE_INFINITY;
+    for (const candidate of list) if (candidate.kind === "upgrade") lowest = Math.min(lowest, candidate.from);
+    return pick(
+      this.rng,
+      list.map((candidate) => {
+        let weight = candidate.kind === "build" ? BUILD_WEIGHT : UPGRADE_WEIGHT * 0.5 ** (candidate.from - lowest);
+        if (stage === "economy") weight *= ECONOMY_WEIGHTS[candidate.t] ?? 1;
+        if (stage === "buildings" || stage === "upgrades") {
+          weight *= weights[CATEGORY_OF[candidate.t] as keyof typeof weights] ?? 1;
+        }
+        return { item: candidate, weight };
+      })
+    );
+  }
+
   /** Picks the next action (see the file comment), or null when none is left. */
   private choose(): Candidate | null {
     const groups = this.candidates();
-    if (groups.size === 0) return null;
+    const hallUpgrade = groups.get("hall") ?? [];
+    groups.delete("hall");
 
     const level = this.level;
     // Points plus base value at which the yard would stand two levels up.
     const ceiling = experiencePoints[level + 1] ?? Number.POSITIVE_INFINITY;
     const totalAfter = (candidate: Candidate) =>
       this.points + candidate.points + valueOfRaw(this.raw + candidate.raw);
+    const inBand = (candidate: Candidate) => totalAfter(candidate) < ceiling;
 
-    const hallUpgrade = groups.get("hall") ?? [];
-    groups.delete("hall");
-    const others = [...groups.values()].flat();
-    const nothingElse = others.every((candidate) => {
-      const category = CATEGORY_OF[candidate.t];
-      return category === "walls" || category === "traps";
-    });
-    const hallReady = this.readiness() >= (this.thresholds[this.hall] ?? 1) || nothingElse;
+    const staged = new Map<Stage, Candidate[]>();
+    for (const candidate of [...groups.values()].flat()) {
+      const stage = this.stageOf(candidate);
+      if (!stage) continue;
+      const list = staged.get(stage) ?? [];
+      list.push(candidate);
+      staged.set(stage, list);
+    }
+    // Ready once every building the hall allows stands, walls and traps to their fill, and the levels are far
+    // enough on; or once the plan has nothing else to do. A build too big for this level band (a Hatchery
+    // Control Centre at Town Hall 3) waits for a later band rather than hold the hall back.
+    const buildsLeft = [...staged.values()].some((list) =>
+      list.some((candidate) => candidate.kind === "build" && inBand(candidate))
+    );
+    // Its walls are brought up to this hall's tier first, too.
+    const wallsLeft = [...(staged.get("walls") ?? []), ...(staged.get("wallUpgrades") ?? [])].some(inBand);
+    const hallReady =
+      staged.size === 0 || (!buildsLeft && !wallsLeft && this.readiness() >= (this.thresholds[this.hall] ?? 1));
 
-    const weights = PERSONA_WEIGHTS[this.persona];
-    const options: { item: Candidate[]; weight: number }[] = [];
-    for (const [category, list] of groups) {
-      let inBand = list.filter((candidate) => totalAfter(candidate) < ceiling);
-      const weight = weights[category as keyof typeof weights];
-      if (category === "walls" || category === "traps") {
-        // Builds short of the fill go in a group of their own, weighed to catch up.
-        const short = inBand.filter((candidate) => candidate.kind === "build" && this.shortOfFill(candidate.t));
-        if (short.length > 0) options.push({ item: short, weight: FILL_WEIGHT[category] });
-        inBand = inBand.filter((candidate) => !short.includes(candidate));
-        // Walls below their tier go to stone and better the same way, once they stand.
-        const low = inBand.filter((candidate) => candidate.kind === "upgrade" && candidate.t === WALL_TYPE);
-        if (low.length > 0 && short.length === 0 && this.shortOfTier()) {
-          options.push({ item: low, weight: TIER_WEIGHT });
-          inBand = inBand.filter((candidate) => !low.includes(candidate));
-        }
+    // Saving up for the guide's Housing: the smallest step until it fits the band.
+    const guide = staged.get("guide") ?? [];
+    if (guide.length > 0 && !guide.some(inBand)) {
+      const small = [...staged.values()].flat().filter(inBand);
+      if (small.length > 0) {
+        return small.reduce((best, candidate) => (totalAfter(candidate) < totalAfter(best) ? candidate : best));
       }
-      if (inBand.length > 0) options.push({ item: inBand, weight });
-    }
-    if (hallReady) {
-      const inBand = hallUpgrade.filter((candidate) => totalAfter(candidate) < ceiling);
-      if (inBand.length > 0) options.push({ item: inBand, weight: HALL_WEIGHT });
     }
 
-    const group = pick(this.rng, options);
-    if (group) {
-      return pick(
-        this.rng,
-        group.map((candidate) => ({
-          item: candidate,
-          weight: candidate.kind === "build" ? BUILD_WEIGHT : UPGRADE_WEIGHT,
-        }))
-      );
+    const open = PLAN_ORDER[this.persona].filter((stage) => staged.get(stage)?.some(inBand));
+    const hall = hallReady ? hallUpgrade.filter(inBand) : [];
+    if (hall.length > 0 && (open.length === 0 || this.rng.float() < HALL_TAKE)) return hall[0]!;
+    if (open.length > 0) {
+      const slip = open[0] !== "guide" && open.length > 1 && this.rng.float() < STAGE_SLIP;
+      const stage = slip ? open[1]! : open[0]!;
+      return this.pickIn(stage, staged.get(stage)!.filter(inBand));
     }
 
     // Everything left would jump a whole level band: take the smallest step.
-    const all = [...others, ...(hallReady ? hallUpgrade : [])];
+    const all = [...[...staged.values()].flat(), ...(hallReady ? hallUpgrade : [])];
     if (all.length === 0) return null;
     return all.reduce((best, candidate) => (totalAfter(candidate) < totalAfter(best) ? candidate : best));
   }
@@ -711,6 +891,36 @@ export const yardAtPoints = (seed: number, persona: Persona, target: number): Pr
     builtAtLevel,
     builtAtHall,
   };
+};
+
+/**
+ * The smallest yard a bot shows (owner, 2026-10-23): a Town Hall 2 with every
+ * resource building a Town Hall 2 allows (two of each harvester, two silos),
+ * its Housing (the generator fills it with an army) and every tower a Town
+ * Hall 2 allows (three Cannon and three Sniper Towers). Walls are not part
+ * of it; they come as the bot grows.
+ */
+export const MINIMUM_YARD = Object.freeze({ hall: 2, types: Object.freeze([1, 2, 3, 4, 6, 15, 20, 21]) });
+
+/** Whether a run's yard holds {@link MINIMUM_YARD}. */
+const holdsMinimum = (run: Progression): boolean =>
+  run.townHall >= MINIMUM_YARD.hall &&
+  MINIMUM_YARD.types.every((type) => run.countOf(type) >= allowedAt(type, MINIMUM_YARD.hall));
+
+/**
+ * The empire points (points plus base value) at which a seed's run first
+ * holds {@link MINIMUM_YARD}. It comes at level 10-15 (11 for most seeds;
+ * an economy bot levels its harvesters before its towers, so it is the
+ * latest), so a bot made at the level 15 floor is never short of it once its
+ * target is at least this (`factory.ts`).
+ */
+export const minimumYardTotal = (seed: number, persona: Persona): number => {
+  const run = new Progression(seed, persona);
+  while (!holdsMinimum(run)) {
+    if (!run.next()) break;
+    run.apply();
+  }
+  return run.total;
 };
 
 /** The empire-points band of a level: `[experiencePoints[L-1], experiencePoints[L])`. */

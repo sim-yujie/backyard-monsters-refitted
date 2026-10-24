@@ -363,6 +363,22 @@ export const defencesLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limit for the leaderboard (beta.4) - 30 a minute per user. The panel
+ * asks once each time it opens, and the board is cached, so this bounds the
+ * rare rebuild rather than the read.
+ */
+export const leaderboardLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "leaderboard",
+  keyGenerator: byUser("leaderboard"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down." };
+  },
+});
+
+/**
  * Rate limit for another player's achievements (issue #204) - 30 a minute per
  * user. The map asks once per panel opened; a record never worked out (a bot)
  * is worked out on each read, so this bounds that work.
@@ -530,4 +546,25 @@ export const eventsLimiter = RateLimit.middleware({
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
   },
+});
+
+/**
+ * Bug reports sent (`controllers/bugReports/submitBugReport.ts`), signed in
+ * by account, signed out by IP. Counted before the Turnstile check, so a
+ * script cannot keep Cloudflare busy; the daily cap is the table's own count.
+ */
+export const bugReportLimiter = spamLimiter("bug-report", SPAM_LIMITS.bugReport, (ctx) => {
+  const text = "You have sent a lot of reports. Please wait a while before sending another.";
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: text, message: text, reason: "bugReportLimit" };
+});
+
+/**
+ * Browser error batches (`controllers/errors/clientErrors.ts`), signed in by
+ * account, signed out by IP. Over the limit the client stops sending until the
+ * page is reloaded.
+ */
+export const clientErrorLimiter = spamLimiter("client-errors", SPAM_LIMITS.clientErrors, (ctx) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: "Too many error reports.", reason: "rateLimited" };
 });

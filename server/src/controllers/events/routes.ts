@@ -19,6 +19,8 @@ export const mountEventsRoutes = (router: Router): void => {
   const api = "/api/:apiVersion";
 
   router.get(`${api}/bm/events`, apiVersion, verifyUserAuth, verifyAccountStatus, eventsLimiter, async (ctx) => {
+    // The main yard says who may take part and Krallen's level.
+    await postgres.em.populate(ctx.authUser, ["save"]);
     ctx.status = Status.OK;
     ctx.body = await eventsAnswer(postgres.em, sqlProgressStore, ctx.authUser, getCurrentDateTime());
   });

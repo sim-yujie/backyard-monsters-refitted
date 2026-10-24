@@ -205,10 +205,10 @@ describe("revengeArmyOf", () => {
   test("is everything housed and the champion at home with health", () => {
     const army = revengeArmyOf({
       monsters: { housed: { C1: 12, C3: 4.7, C5: 0, C9: -2 } },
-      champion: [{ t: 2, l: 3, hp: 30000, pl: 1, status: 0 }],
+      champion: [{ t: 2, l: 3, hp: 30000, pl: 1, fb: 2, status: 0 }],
       academy: { C1: { level: 2 }, C3: { level: 1 } },
     });
-    expect(army).toEqual({ monsters: { C1: 12, C3: 4 }, champion: { t: 2, l: 3, pl: 1 }, levels: { C1: 2, C3: 1 } });
+    expect(army).toEqual({ monsters: { C1: 12, C3: 4 }, champion: { t: 2, l: 3, pl: 1, fb: 2 }, levels: { C1: 2, C3: 1 } });
   });
 
   test("leaves a dead or frozen champion home, and copes with an empty save", () => {
