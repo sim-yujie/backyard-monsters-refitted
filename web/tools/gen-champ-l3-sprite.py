@@ -77,8 +77,16 @@ def upper_x(mask):
 
 
 def xref(mask):
-    """The horizontal reference a frame is placed by: Fomor's hanging feet in flight (its raised wings swing the upper half), else the upper body."""
-    return feet(mask)[0] if NAME == "fly_3" else upper_x(mask)
+    """The horizontal reference a frame is placed by: Fomor's trunk in flight (its raised wings swing the upper half, its painted legs hang
+    differently from Flash's), else the upper body."""
+    return trunk_x(mask) if NAME == "fly_3" else upper_x(mask)
+
+
+def trunk_x(mask):
+    """x centroid of the thick part of the silhouette (thin tails, reaching arms and spread wings eroded away): where the body stands."""
+    x0, y0, x1, y1 = bbox(mask)
+    core = ndi.binary_erosion(mask, iterations=max(1, round(0.12 * (y1 - y0))))
+    return np.where(core if core.sum() > 20 else mask)[1].mean()
 
 
 def key_cell(rgb):
@@ -93,8 +101,10 @@ def key_cell(rgb):
     lab2, _ = ndi.label(fg)
     ids, cnt = np.unique(lab2[lab2 > 0], return_counts=True)
     keep = np.zeros_like(fg)
+    touch = set(lab2[0, :]) | set(lab2[-1, :]) | set(lab2[:, 0]) | set(lab2[:, -1])
     for i, c in zip(ids, cnt):
-        if c > cnt.max() * 0.02:
+        # a small piece on the cell edge is a wing tip or claw of the neighbouring cell reaching over the line: drop it
+        if c > cnt.max() * (0.15 if i in touch else 0.02):
             keep |= lab2 == i
     keep = ndi.binary_fill_holes(keep)
     # ground trapped inside the body (between the legs, under an arm) is not edge-connected: cut out the clearly magenta pockets
@@ -175,7 +185,7 @@ for c in COLUMNS:
     old_idle = old_body(c, 0)
     old_ground = feet(old_idle)[1]
     old_x0 = xref(old_idle)
-    old_cx = np.where(old_idle)[1].mean()
+    old_cx = trunk_x(old_idle)
     area_0 = solid(frames[c][0][0]).sum()
     ka = k[c]
     for row in range(ROWS):
@@ -188,7 +198,7 @@ for c in COLUMNS:
         bottom = feet(s)[1]
         dx = dy = 0.0
         if row == 0:
-            idle_ox = old_cx - np.where(s)[1].mean() * kk       # silhouette centre on the old body centre
+            idle_ox = old_cx - trunk_x(s) * kk                  # body (trunk) centre on the old body centre
             x0 = xref(s) * kk + idle_ox                          # where row 0's reference point is in the cell
         else:
             ob = old_body(c, row)
