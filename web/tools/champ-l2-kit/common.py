@@ -19,9 +19,9 @@ SHEETS = {
     "dragon_2": dict(champ="drull", file="dragon_2.png", cell=(87, 58), rows=15, walk=list(range(1, 8)), attack=list(range(8, 15)),
                      painted=list(range(16)), key=(255, 0, 255)),
     "fly_2": dict(champ="fomor", file="fly_2.png", cell=(63, 46), rows=9, walk=list(range(1, 9)), attack=[],
-                  painted=list(range(16)), key=(0, 255, 0)),
+                  painted=[*range(11), 14], key=(0, 255, 0)),
     "krallen_1": dict(champ="krallen", file="krallen_1_rev_65.png", cell=(130, 80), rows=16, walk=list(range(0, 10)),
-                      attack=list(range(10, 16)), painted=list(range(16)), key=(255, 0, 255)),
+                      attack=list(range(10, 16)), painted=list(range(2, 11)), key=(0, 255, 0)),
 }
 for k, v in SHEETS.items():
     v["level_dir"] = ART / v["champ"] / ("L1" if k == "krallen_1" else "L2")
@@ -92,18 +92,21 @@ def key_cell(rgb, key):
             if c > cnt.max() * 0.02:
                 keep |= lab2 == i
     keep = ndi.binary_fill_holes(keep)
-    # big holes of pure ground colour inside the body (between legs) are ground too; small or off-colour ones (pink highlights) stay
-    pure = np.sqrt(((rgb - np.array(key, float)) ** 2).sum(-1)) < 45
-    hl, _ = ndi.label(pure & keep)
-    if hl.max():
-        ids, cnt = np.unique(hl[hl > 0], return_counts=True)
-        keep &= ~np.isin(hl, ids[cnt > max(400, keep.sum() * 0.004)])
+    # ground trapped inside the body (between the legs, under the tail, inside an open mouth) is not edge-connected: cut out the
+    # pockets that are clearly the key colour; small off-colour ones (pink highlights) stay
+    near = np.sqrt(((rgb - np.array(key, float)) ** 2).sum(-1)) < 80
+    pocket, _ = ndi.label(is_key(rgb, key) & ~np.isin(lab, list(edge)))
+    if pocket.max():
+        for i, c in zip(*np.unique(pocket[pocket > 0], return_counts=True)):
+            hole = pocket == i
+            if c > 40 and near[hole].mean() > 0.6:
+                keep &= ~ndi.binary_dilation(hole, iterations=1)
     keep = ndi.binary_erosion(keep, iterations=2)
     alpha = np.asarray(Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(1.2))).astype(float)
     rim = ndi.binary_dilation(keep & ~ndi.binary_erosion(keep, iterations=5), iterations=2) & (alpha > 0)
     out = rgb.copy()
     if key == (0, 255, 0):
-        spill = rim & (g > r + 25) & (g > b + 25)
+        spill = (g > r + 25) & (g > b + 25)      # no green parts on Fomor or Krallen: green anywhere is spill
         out[..., 1] = np.where(spill, np.maximum(r, b), g)
     else:
         spill = rim & (r > g + 25) & (b > g + 25)

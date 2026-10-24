@@ -11,7 +11,7 @@ S = SHEETS[name]
 out = S["full"] / "turn"
 out.mkdir(parents=True, exist_ok=True)
 im = sheet(name)
-x0, y0, x1, y1 = union_box(name, [(c, 0) for c in (14, 2, 6, 10)], pad=6, im=im)
+x0, y0, x1, y1 = union_box(name, [(c, 0) for c in (14, 2, 6, 10)], pad=6 if name != "krallen_1" else 24, im=im)
 w, h = x1 - x0, y1 - y0
 k = 768 // w
 grid = Image.new("RGB", (2 * w * k, 2 * h * k), (128, 128, 128))
@@ -43,7 +43,7 @@ if "l1.png" in inputs:
     n += 1
 txt.append(f"""Input {n}, portrait.png: the official painting of {CH} {lvl}; design reference only.
 
-Output: ONE image, same 2x2 layout and canvas proportions as frames.png, each {CH} at the same position, size and facing as in its cell (about the size of the old sprite, at most 1.15x), the SAME creature in all 4 cells.
+Output: ONE image, same 2x2 layout and canvas proportions as frames.png, each {CH} at the same position, size and facing as in its cell (about the size of the old sprite, at most 1.15x), the SAME creature in all 4 cells. Each creature, tail tip included, stays fully inside its own cell with a clear gap to the cell edges.
 PART CHECKLIST, every part visible in each view where the facing allows: {PARTS[name]}
 Style: hand-painted digital illustration exactly like sample.png, soft shading, glossy highlights, NO thick cartoon outline, no cel shading, no pixel art.
 Background everywhere: {KEYNAME[key]}. No shadows, no ground, no grid lines, no text, no labels.

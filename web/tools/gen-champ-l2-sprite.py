@@ -13,9 +13,10 @@ sheets are painted in every column.
 
 Each painted frame is keyed and scaled so that the idle silhouette covers AREA times the pixels the old idle body does (one factor per
 heading, smoothed over the neighbouring headings; walk frames are held to within a few percent of it so the body does not pulse).
-Placement is by the FEET, on the old sheet's own cell for that column (mirrored columns too, so they stand exactly where Flash drew
-them): the idle sits on the old idle's ground line and body centre; walk frames keep the feet on the same ground pixel; attack frames
-follow the old sheet's lift and shift. Output, in the original layout and cell size:
+Placement is on the old sheet's own cell for that column (mirrored columns too, so they stand exactly where Flash drew them): the
+idle sits on the old idle's ground line and body centre; every other frame follows the old frame's sideways shift of the UPPER body
+(head and body: steadier than the swinging feet); Gorgo and Drull walk frames keep the feet on the same ground line, Fomor's and
+Krallen's moving frames and all attack frames follow the old frame's lift. A frame poking out of its cell is nudged back inside. Output, in the original layout and cell size:
 
     server/public/assets/monsters/<file>-repaint.png      same size as the old sheet
     server/public/assets/monsters/<file>-repaint@4x.png   the same at 4x (the game draws this one, REPAINTED_SHEETS in monsterSprites.ts)
@@ -30,6 +31,7 @@ from common import *  # noqa: E402,F403
 UP = 4
 AREA = 1.05                       # new idle silhouette area / old idle body area
 WALK_HOLD = 0.04                  # a walk frame may differ from the idle's size by this much
+MAX_NUDGE = 6                     # 1x px a frame may be moved to stay inside its cell
 
 if len(sys.argv) not in (2, 3):
     sys.exit(__doc__)
@@ -41,6 +43,7 @@ COLS, ROWS = 16, S["rows"]
 ORIGINAL = sheet(NAME)
 PAINTED = [c for c in S["painted"] if (SOURCE / f"A{c}" / "frames-new.png").exists()] if os.environ.get("PARTIAL") else S["painted"]
 WALK = set(S["walk"]) - {0}
+HOLD_WALK = NAME in ("ape_2", "dragon_2")   # walkers keep the feet on the ground; Fomor's hop and Krallen's gallop follow the old lift
 FIRST = 0                         # the row whose silhouette fixes the scale (idle; Krallen: first walk frame)
 
 
@@ -60,6 +63,13 @@ def feet(mask, frac=0.25):
     ys, xs = np.where(mask)
     sel = ys >= y1 - max(2, int((y1 - y0) * frac))
     return xs[sel].mean(), y1
+
+
+def upper_x(mask):
+    """x centroid of the upper half of the silhouette (head and body: steadier than the feet when the legs swing)."""
+    x0, y0, x1, y1 = bbox(mask)
+    ys, xs = np.where(mask)
+    return xs[ys < (y0 + y1) / 2].mean()
 
 
 def grid_cells(path, mode):
@@ -119,35 +129,49 @@ cw, ch = CELL[0] * UP, CELL[1] * UP
 placed = {}      # (col, row) -> RGBA cell at 4x
 for c in COLUMNS:
     old_idle = old_body(c, FIRST)
-    old_fx, old_ground = feet(old_idle)
+    old_ground = feet(old_idle)[1]
+    old_x0 = upper_x(old_idle)
     old_cx = np.where(old_idle)[1].mean()
     area_a0 = solid(frames[c][FIRST]).sum()
     area_b0 = solid(frames[c]["b_idle"]).sum() if "b_idle" in frames[c] else area_a0
     ka = k[c]
     s0 = solid(frames[c][FIRST])
-    fx0, _ = feet(s0)
     idle_ox = old_cx - np.where(s0)[1].mean() * ka       # silhouette centre on the old body centre
-    feet_x = fx0 * ka + idle_ox                           # where the idle's feet are in the cell
+    x0 = upper_x(s0) * ka + idle_ox                       # where the idle's upper body is in the cell
     for row in range(ROWS):
         cut = frames[c][row]
         s = solid(cut)
+        hold = HOLD_WALK and row in WALK
         if row == FIRST:
             kk = ka
-        elif row in WALK:
+        elif hold:
             kk = ka * float(np.clip(np.sqrt(area_a0 / s.sum()), 1 - WALK_HOLD, 1 + WALK_HOLD))
+        elif row in WALK:
+            kk = ka
         else:
             kk = ka * np.sqrt(area_a0 / area_b0)     # the attack call's own idle fixes its scale
-        fx, bottom = feet(s)
+        bottom = feet(s)[1]
         dx = dy = 0.0
-        if row != FIRST and row not in WALK:
-            nx, ny = feet(old_body(c, row))
-            dx, dy = nx - old_fx, ny - old_ground
-            dy = 0.0 if abs(dy) < 2 else dy
-            dx = 0.0 if abs(dx) < 1.5 else dx
-        ox = feet_x + dx - fx * kk
+        if row != FIRST:
+            ob = old_body(c, row)
+            dx = upper_x(ob) - old_x0
+            dy = 0.0 if hold else feet(ob)[1] - old_ground
+            if row not in WALK:      # an attack keeps still unless the old frame clearly moves
+                dy = 0.0 if abs(dy) < 2 else dy
+                dx = 0.0 if abs(dx) < 1.5 else dx
+        ox = x0 + dx - upper_x(s) * kk
         oy = old_ground + dy - bottom * kk
         big = resize_premultiplied(cut, (max(1, round(cut.width * kk * UP)), max(1, round(cut.height * kk * UP))))
         left, top = round(ox * UP), round(oy * UP)
+        # a frame that pokes out of the cell (the far end of a lunge) is nudged back inside, by at most MAX_NUDGE 1x px
+        ys, xs = np.where(np.asarray(big)[..., 3] > 40)
+        lo, hi = left + xs.min(), left + xs.max() + 1
+        if lo < 0 < cw - hi:
+            left += min(-lo, cw - hi, MAX_NUDGE * UP)
+        elif hi > cw and lo > 0:
+            left -= min(hi - cw, lo, MAX_NUDGE * UP)
+        if top + ys.min() < 0:
+            top += min(-(top + ys.min()), MAX_NUDGE * UP)
         layer = Image.new("RGBA", (cw, ch))
         layer.alpha_composite(big, (max(0, left), max(0, top)), (max(0, -left), max(0, -top)))
         lost = np.asarray(big)[..., 3] > 40
@@ -156,6 +180,57 @@ for c in COLUMNS:
             print(f"column {c} row {row}: {int(lost.sum() - kept.sum())} opaque 4x pixels cut by the cell edge", file=sys.stderr)
         placed[(c, row)] = layer
     print(f"column {c:2}: scale {ka:.4f}", file=sys.stderr)
+
+
+
+# Codex paints the full run a little off the approved sample (Fomor pinker and brighter). Each heading's skin/fur pixels (SKIN: how much a
+# pixel is body colour, 0-1; not the eyes, claws, crests, spikes or spots) get one per-channel affine grade onto the mean and spread of the
+# skin of the approved sample (art-trials/champions/<champ>/<level>/sample-new.png), blended in by SKIN. The same grade for every cell of
+# a heading, so its frames never differ from each other. NO_GRADE=1 skips it.
+def _c(x):
+    return np.clip(x, 0, 1)
+
+
+SKIN = {
+    "ape_2": lambda r, g, b: _c((b - r - 10) / 40) * _c((b - g) / 20),
+    "dragon_2": lambda r, g, b: _c((r - g - 30) / 40) * _c((0.65 * r - g) / 20),
+    "fly_2": lambda r, g, b: _c((np.minimum(r, b) - g) / 40),
+    "krallen_1": lambda r, g, b: _c((r - 120) / 40) * _c((g - 0.5 * r) / 20) * _c((0.65 * g - b) / 20),
+}
+
+
+def skin_stats(px):
+    body = px[SKIN[NAME](px[:, 0], px[:, 1], px[:, 2]) > 0.5]
+    return body.mean(0), body.std(0)
+
+
+def opaque_px(im):
+    a = np.asarray(im)
+    return a[a[..., 3] > 200][:, :3].astype(float)
+
+
+S_MEAN, S_STD = skin_stats(np.concatenate([opaque_px(c) for c in sample_cells(NAME)]))
+print(f"sample skin mean {S_MEAN.round(1)} spread {S_STD.round(1)}", file=sys.stderr)
+
+
+def grade_column(c):
+    keys = [key for key in placed if key[0] == c]
+    mean, std = skin_stats(np.concatenate([opaque_px(placed[key]) for key in keys]))
+    ratio = np.clip(S_STD / std, 0.8, 1.25)
+    for key in keys:
+        a = np.asarray(placed[key]).astype(float)
+        rgb = a[..., :3]
+        g = np.clip((rgb - mean) * ratio + S_MEAN, 0, 255)
+        w = SKIN[NAME](rgb[..., 0], rgb[..., 1], rgb[..., 2])[..., None]
+        a[..., :3] = rgb + w * (g - rgb)
+        placed[key] = Image.fromarray(a.round().astype("uint8"), "RGBA")
+    return mean
+
+
+if not os.environ.get("NO_GRADE"):
+    for c in COLUMNS:
+        m = grade_column(c)
+        print(f"column {c:2}: skin mean before grade {m.round(1)}", file=sys.stderr)
 
 out = Image.new("RGBA", (COLS * cw, ROWS * ch))
 for (c, row), cell in placed.items():

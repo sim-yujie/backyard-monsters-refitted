@@ -6,7 +6,7 @@ d=$1; cd "$d" || exit 1
 args=""; for f in $(cat inputs.txt); do args="$args -i $f"; done
 start=$(date +%s)
 codex exec --skip-git-repo-check --sandbox workspace-write $args - < prompt.txt > codex.log 2>&1
-sid=$(grep -m1 "^session id:" codex.log | awk '{print $3}')
+sid=$(grep -a -m1 "^session id:" codex.log | awk '{print $3}')
 own=$(ls -t /c/Users/simyu/.codex/generated_images/$sid/*.png 2>/dev/null | head -1)
 rm -f frames-new.png
 [ -n "$own" ] && cp "$own" frames-new.png

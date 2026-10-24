@@ -18,7 +18,7 @@ w, h = S["cell"]
 
 rows, gc, gr = grid_rows(name, mode)
 im = sheet(name)
-x0, y0, x1, y1 = union_box(name, [(col, r) for r in rows], im=im)
+x0, y0, x1, y1 = union_box(name, [(col, r) for r in rows], pad=16 if name == "krallen_1" else 6, im=im)
 w, h = x1 - x0, y1 - y0
 k = max(1, 1536 // (gc * w))
 grid = Image.new("RGB", (gc * w * k, gr * h * k), (128, 128, 128))
@@ -44,6 +44,8 @@ ATTACK = {
     "dragon_2": "the dragon rears its two heads back and lunges forward, jaws open, then settles",
     "krallen_1": "the big cat rears up a little, then lunges down and forward with the jaws opened wide in a roaring bite, then recovers",
 }
+AWAY = {c: f" It faces AWAY from the viewer: we see its back, rump and tail; the face, eyes and mouth are NOT visible (only the back of the head and the ears or crest, pointing {d} away from the viewer). Never turn it toward the viewer."
+        for c, d in ((8, "up-left"), (9, "up and a little left"), (10, "straight up"), (11, "up and a little right"), (12, "up-right"))}
 n = len(rows)
 cells_txt = {
     ("A", False): f"Cell 1 (top-left) is the idle pose; the other cells, left to right and top to bottom, are the WALK cycle frames 1-{n - 1} in time order.",
@@ -61,7 +63,7 @@ Input 2, style.png: approved painted views of this same {CH} {lvl} ({"; ".join(u
 Input 3, portrait.png: the official painting of {CH} {lvl}, design reference.
 
 Output: ONE image, same {gc}x{gr} layout and canvas proportions as frames.png, the same {n} frames in the same cells and order. Every cell shows the identical painted {CH}, same size in all cells (about the size of the old sprite, at most 1.15x), each creature fully inside its own cell, the feet on the same ground line as in frames.png, body proportions never changing between frames, only the pose. Every pose must be clearly visible at game size: show the legs, head and mouth moving as in the old frames.
-Facing in EVERY cell: {FACING[col]}.
+Facing in EVERY cell: {FACING[col]}.{AWAY.get(col, "")}
 PART CHECKLIST, all visible in every cell as seen from that heading (a part hidden by the turn of the body is the only excuse): {PARTS[name]}
 Style: hand-painted digital illustration like the approved views, soft shading, glossy highlights, NO thick cartoon outline, no cel shading, no pixel art.
 Background everywhere: {KEYNAME[key]}. No shadows, no ground, no grid lines, no text, no labels.
