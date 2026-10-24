@@ -12,6 +12,7 @@ import type { KoaController } from "../../../utils/KoaController.js";
 import { baseModeBuild } from "../load/modes/baseModeBuild.js";
 import { baseModeView } from "../load/modes/baseModeView.js";
 import { infernoModeView } from "../load/modes/infernoModeView.js";
+import { INFERNO_MODES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
@@ -40,6 +41,9 @@ export const updateSaved: KoaController = async (ctx) => {
   const userSave = user.save!;
   const worldid = user.save?.worldid;
   const { baseid, type, mapversion } = UpdateSavedSchema.parse(ctx.request.body);
+
+  // The old Inferno modes are closed until the new Inferno ships (`config/InfernoConfig.ts`).
+  if (INFERNO_MODES.has(type)) requireInfernoOpen(ctx, user, `updatesaved ${type}`);
 
   let baseSave: Save | null = null;
 

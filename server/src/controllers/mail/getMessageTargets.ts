@@ -5,7 +5,7 @@ import { Thread } from "../../database/models/thread.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { friendFlag, friendsAmong } from "../../services/friends/friendFlags.js";
-import { SYSTEM_SENDER, SYSTEM_SENDER_NAME } from "../../services/mail/systemSender.js";
+import { SUPPORT_SENDER, SUPPORT_SENDER_NAME, SYSTEM_SENDER, SYSTEM_SENDER_NAME } from "../../services/mail/systemSender.js";
 import { DELETED_PLAYER_NAME } from "../../services/privacy/deleteAccount.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -90,6 +90,15 @@ export const getMessageTargets: KoaController = async (ctx) => {
         friend: 0,
         mapver: MapRoomVersion.V2,
         first_name: SYSTEM_SENDER_NAME,
+        pic_square: null,
+      };
+    }
+    // Nor does the owner's "The game team" (dashboard replies and Shiny gifts).
+    if (conversationPartnerIds.includes(SUPPORT_SENDER)) {
+      targets[SUPPORT_SENDER] = {
+        friend: 0,
+        mapver: MapRoomVersion.V2,
+        first_name: SUPPORT_SENDER_NAME,
         pic_square: null,
       };
     }

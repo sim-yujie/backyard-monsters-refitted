@@ -11,6 +11,7 @@ import { SaveKeys } from "../../../enums/SaveKeys.js";
 import { BaseSaveSchema } from "../../../schemas/BaseSaveSchema.js";
 import { resourcesHandler } from "./handlers/resourceHandler.js";
 import { purchaseHandler } from "./handlers/purchaseHandler.js";
+import { creditsAsDelta } from "../../../services/base/creditsDelta.js";
 import { academyHandler } from "./handlers/academyHandler.js";
 import { BaseType } from "../../../enums/Base.js";
 import {
@@ -89,6 +90,7 @@ import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanSt
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
+import { INFERNO_SAVE_TYPES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -131,6 +133,10 @@ export const baseSave: KoaController = async (ctx) => {
 
   // Not the owner and not in an attack
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
+
+  // An Inferno yard or a Moloch tribe row is the old Inferno's, closed until
+  // the new Inferno ships (`config/InfernoConfig.ts`).
+  if (INFERNO_SAVE_TYPES.has(baseSave.type)) requireInfernoOpen(ctx, user, `base/save on ${baseSave.type}`);
 
   // Owner saves of a main yard (issue #101) or an outpost (outposts plan WP0b)
   // are retired: yards change through the server's action routes now, and this
@@ -434,7 +440,12 @@ const saveBase = async (
     if (isOutpostOwner) updateOutposts(userSave, baseSave, key);
   }
 
-  if (!isAttack && saveData.purchase) purchaseHandler(ctx, saveData.purchase, userSave);
+  if (!isAttack && saveData.purchase) {
+    purchaseHandler(ctx, saveData.purchase, userSave);
+    // Spent or gained as an addition to the row, so Shiny the server added
+    // since this request read the save (a dashboard award) is kept.
+    creditsAsDelta(userSave);
+  }
 
   // The replay's battle, on the defender (issue #23, C3), as the finaliser
   // writes an abandoned one: the traps that fired, the health, the damage

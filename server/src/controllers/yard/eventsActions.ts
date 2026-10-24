@@ -1,7 +1,8 @@
 import z from "zod";
 
-import { EVENTS, eventById, type EventDefinition } from "../../game-data/events/events.js";
+import { EVENTS, eventById, tierNeed, type EventDefinition } from "../../game-data/events/events.js";
 import { planGrant, type GrantedReward } from "../../services/events/grant.js";
+import { krallenLevelOf } from "../../services/events/krallenReward.js";
 import type { EventProgressStore } from "../../services/events/progressStore.js";
 import {
   claimsUntil,
@@ -27,7 +28,8 @@ import { defineYardAction } from "./yardAction.js";
  *   the end). Refusals: `400 unknownEvent`, `409 eventNotActive {startsAt,
  *   endsAt}`, `409 claimedToday {nextAt}`, `409 calendarDone`.
  * - `events/ladder/claim { event, tier }`: one collection-ladder tier, once
- *   the counter reaches it, while the event is on or, for an event with
+ *   the counter reaches it (the Krallen Hunt's goal by her level at the
+ *   claim, `tierNeed`), while the event is on or, for an event with
  *   `claimDays`, until that many days after its end (the counter stops at
  *   the end, so only a tier reached in time can be claimed then).
  *   Refusals: `400 unknownEvent`, `400 unknownTier`, `409 eventNotActive`,
@@ -127,7 +129,9 @@ export const eventsActions = (store: EventProgressStore, events: readonly EventD
       const tier = event.ladder?.tiers[body.tier];
       if (!tier) throw yardBadRequestErr("There is no such tier.", { event: event.id, tier: body.tier }, "unknownTier");
 
-      if (!(await store.claimTier(em, user.userid, event.id, body.tier, tier.need))) {
+      // The Krallen Hunt's goal follows her level now, under the save lock.
+      const need = tierNeed(tier, krallenLevelOf(save.champion));
+      if (!(await store.claimTier(em, user.userid, event.id, body.tier, need))) {
         const progress = (await store.read(em, user.userid, [event.id])).get(event.id);
         if (progress?.claimedTiers.includes(body.tier)) {
           throw yardRefusedErr("tierClaimed", "You have claimed that reward already.", { event: event.id, tier: body.tier });
@@ -136,7 +140,7 @@ export const eventsActions = (store: EventProgressStore, events: readonly EventD
           event: event.id,
           tier: body.tier,
           have: progress?.counter ?? 0,
-          need: tier.need,
+          need,
         });
       }
 

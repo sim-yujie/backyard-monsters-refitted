@@ -24,9 +24,15 @@ import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers
 import { visibleCredits } from "../../services/user/shinyLock.js";
 import { ownerSaveConfig } from "../../config/OwnerSaveConfig.js";
 import { requireOwnerSaveAllowed } from "../../services/base/ownerSave.js";
+import { INFERNO_SAVE_TYPES, requireInfernoOpen } from "../../services/inferno/infernoGate.js";
 
 export const infernoSave: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
+
+  // Closed until the new Inferno ships (`config/InfernoConfig.ts`): the web
+  // client saves through `/base/save`, and this route trusts what it is sent.
+  requireInfernoOpen(ctx, user, "bm/base/save");
+
   await postgres.em.populate(user, ["save", "infernosave"]);
   
   const userSave = user.save!;
@@ -58,6 +64,10 @@ export const infernoSave: KoaController = async (ctx) => {
     const isAttack = !isOwner && baseSave.attackid !== 0;
 
     if (!isOwner && baseSave.attackid === 0) throw permissionErr();
+
+    // An Inferno save writes Inferno rows only: a main yard, an outpost or a
+    // tribe is saved through `/base/save`, which checks the attack.
+    if (!INFERNO_SAVE_TYPES.has(baseSave.type)) throw permissionErr();
 
     // This route writes any row by `basesaveid`, the caller's main yard
     // included, so the retired owner save (issue #101) is refused here too.

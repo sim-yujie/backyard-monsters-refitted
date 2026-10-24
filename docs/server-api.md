@@ -692,6 +692,8 @@ rejects, in any mode:
 
 ### Map Room 1 / Inferno
 
+**The old Inferno routes are closed** until the new Inferno ships (`server/src/config/InfernoConfig.ts`, `infernoConfig.legacyRoutesOpen = false`). Every Inferno load mode (`ibuild`, `iattack`, `iwmattack`, `idescent`, `iview`, `ihelp`, `iwmview`) on `/base/load`, `/api/:apiVersion/bm/base/load` and `/api/:apiVersion/bm/base/updatesaved`, the whole of `/api/:apiVersion/bm/base/save` and `/api/:apiVersion/bm/base/infernomonsters`, `/base/save` naming an Inferno yard or Inferno tribe row, and `/api/:apiVersion/bm/neighbours/get` with `type: "inferno"` answer `403` with `reason: "infernoClosed"` (`infernoClosedErr()`, `services/inferno/infernoGate.ts`) before anything is read or written. They trust the client too far, and the web client calls none of them. The rows below describe them as they run when reopened; `/api/:apiVersion/bm/base/save` then writes Inferno rows only.
+
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
 | POST | `/api/:apiVersion/bm/getnewmap` | apiVersion, verifyUserAuth, logRequest | none | If the user's home cell is on Map Room 3: `{ newmap: true, mapheaderurl, width: 500, height: 500 }`; else `{ newmap: false }` | Tells the client at startup whether to use the legacy (non-grid) map UI or the MR3 grid UI. |
@@ -1067,6 +1069,14 @@ a raid being fought (and a warning when the game had been closed).
 |---|---|---|---|---|---|
 | POST | `/api/:apiVersion/bugreport` | apiVersion, verifyUserAuth, bugReportLimiter (10/h per user; no logRequest, the body carries pictures) | JSON: `message` (3-2000 chars, required), `gameVersion`, `screen`, `device` (`"phone"`/`"computer"`), `userAgent`, `screenSize`, `errors` (array of strings; last 20 kept, 1000 chars each), `screenshot` (`data:image/jpeg\|png\|webp;base64,...`, at most 1.5 MB decoded), `picture` (same, at most 3 MB) | `200 { error: 0, id, message }`; `400` `invalidBugReport` naming the `field`; `429` `bugReportLimit` (5 in 24 h per account) | The web client's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`). Saved in `bym.bug_report`, then emailed in the background to `BUG_REPORT_EMAIL` (default simyujie@gmail.com) with the pictures attached and Reply-To the account's email; a failed email leaves the row with `emailed_at` null. With `DEV_SANDBOX=true` the email goes to the server log. Metadata fields are clipped, never refused; pictures are checked by their first bytes. |
 | POST | `/api/:apiVersion/bugreport/guest` | apiVersion, bugReportLimiter (10/h per IP) | As above, plus `email` (required, for the reply) and `turnstileToken` | As above; `400 botCheckFailed`, `503 botCheckUnavailable`; `429 bugReportLimit` is 5 in 24 h per IP (kept only as a keyed hash) | The login screen's form, signed out. The Turnstile token is checked (when `TURNSTILE_SECRET_KEY` is set) before anything is counted or saved. |
+
+### Browser errors and the owner's dashboard
+
+| Method | Path | Middleware | Request fields | Response | Description |
+|---|---|---|---|---|---|
+| POST | `/api/:apiVersion/clienterrors` | apiVersion, verifyUserAuth, clientErrorLimiter (20/h per user; no logRequest) | JSON: `errors` (array of `{ kind, message, place, stack, count }`, first 10 read), `gameVersion`, `screen`; nothing is refused for its shape | `{ error: 0, kept }` | The web client's own error sender. Cleaned, grouped by kind and kept 30 days with the account number |
+| POST | `/api/:apiVersion/clienterrors/guest` | apiVersion, clientErrorLimiter (20/h per IP) | As above | As above | The same from the login screen; nothing about the sender is kept |
+| GET/POST | `/api/:apiVersion/admin/...` | apiVersion, adminOnly (sign-in + `ADMIN_USER_IDS`; everyone else gets a plain 404) | | | The owner's dashboard: see `docs/design/admin-dashboard-api.md` |
 
 ### Leaderboards
 

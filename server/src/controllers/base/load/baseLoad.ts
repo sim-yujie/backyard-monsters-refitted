@@ -29,6 +29,7 @@ import { infernoModeDescent } from "./modes/infernoModeDescent.js";
 import { infernoModeView } from "./modes/infernoModeView.js";
 import { infernoModeAttack } from "./modes/infernoModeAttack.js";
 import { infernoModeBuild } from "./modes/infernoModeBuild.js";
+import { INFERNO_MODES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
 import { validateAttack } from "../../../services/maproom/validateAttack.js";
 import { playerMapVersion } from "../../../services/maproom/playerMapVersion.js";
 import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
@@ -58,6 +59,7 @@ import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
 import type { AcademyLevels, AcademyRanks, ChampionBrains } from "../../../services/base/attackSession.js";
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
+import { noteActivePlayer } from "../../../services/stats/activity.js";
 import { logger } from "../../../utils/logger.js";
 import { cancelRaidOnYardLoad, presenceLapsed } from "../../../services/raids/raidStore.js";
 import { activeEventKinds } from "../../../services/yard/season.js";
@@ -83,6 +85,9 @@ const INFERNO_SAVE_MODES = new Set<string>([BaseMode.IBUILD, BaseMode.IATTACK, B
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const { baseid, type, mapversion: requestedVersion, attackData, attackcost } = BaseLoadSchema.parse(ctx.request.body);
+
+  // The old Inferno modes are closed until the new Inferno ships (`config/InfernoConfig.ts`).
+  if (INFERNO_MODES.has(type)) requireInfernoOpen(ctx, user, `load ${type}`);
 
   // An attack the player left without saving is finished before anything
   // below reads a row it writes — the player's own save above all — so their
@@ -123,6 +128,8 @@ export const baseLoad: KoaController = async (ctx) => {
       gameWasClosed = await presenceLapsed(user.userid);
       baseSave = await baseModeBuild(user, baseid);
       redis.setex(`last-seen:main:${user.userid}`, 120, getCurrentDateTime().toString());
+      // Played today, for the owner's dashboard (`services/stats/activity.ts`).
+      noteActivePlayer(user.userid);
       // Seen in the last 30 days is what earns a Map Room 1 neighbour place (issue #235).
       await touchLastSeen(postgres.em, user).catch((err) =>
         logger.warn(`last_seen_at not written for user ${user.userid}: ${err}`)

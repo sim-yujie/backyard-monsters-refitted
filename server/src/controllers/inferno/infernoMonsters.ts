@@ -6,6 +6,7 @@ import type { KoaController } from "../../utils/KoaController.js";
 import { BaseType } from "../../enums/Base.js";
 import { Save } from "../../database/models/save.model.js";
 import { optionalJsonField } from "../../schemas/jsonField.js";
+import { requireInfernoOpen } from "../../services/inferno/infernoGate.js";
 
 export const InfernoMonstersSchema = z.object({
   type: z.string(),
@@ -14,6 +15,10 @@ export const InfernoMonstersSchema = z.object({
 
 export const infernoMonsters: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
+
+  // Closed until the new Inferno ships (`config/InfernoConfig.ts`): `set` writes any roster.
+  requireInfernoOpen(ctx, user, "bm/base/infernomonsters");
+
   let { type, imonsters } = InfernoMonstersSchema.parse(ctx.request.body);
 
   let infernoSave = await postgres.em.findOne(

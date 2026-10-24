@@ -98,6 +98,7 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     await sql(`DELETE FROM bym.defence_replay WHERE attacker_userid IN (${list}) OR defender_userid IN (${list})`);
     await sql(`DELETE FROM bym.attack_plan WHERE userid IN (${list})`);
     await sql(`DELETE FROM bym.maproom WHERE userid IN (${list})`);
+    await sql(`DELETE FROM bym.app_error WHERE fingerprint LIKE 'zz-del-%'`);
     await sql(`DELETE FROM bym.report WHERE userid IN (${list})`);
     await sql(`DELETE FROM bym.bot WHERE userid IN (${list})`);
     await sql(`DELETE FROM bym.world_map_cell WHERE uid IN (${list})`);
@@ -243,6 +244,8 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     store.lists.set("bot-check:log", [JSON.stringify({ userid: p }), JSON.stringify({ userid: q })]);
     store.sets.set(`chat-ignore:${q}`, new Set([String(p), "77"]));
     store.sets.set(`chat-ignore:${p}`, new Set([String(q)]));
+    store.sets.set("stats:active:2026-10-22", new Set([String(p), "77"]));
+    await sql(`INSERT INTO bym.app_error (source, fingerprint, message, userids) VALUES ('browser', 'zz-del-fp', 'x', ARRAY[?, 77]::int[])`, [p]);
 
     return { p, q, r, allianceId, pq, qr, pr, notice };
   };
@@ -317,7 +320,8 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
         "leaderboards_x_v2",
       ].sort()
     );
-    expect(plan.redis).toMatchObject({ chatLines: 2, botCheckRows: 1, ignoreLists: 1 });
+    expect(plan.redis).toMatchObject({ chatLines: 2, botCheckRows: 1, ignoreLists: 1, playLists: 1 });
+    expect(plan.rows).toMatchObject({ "the dashboard's error groups (account number removed)": 1 });
 
     expect(await countOf(`bym."user" WHERE userid = ?`, [p])).toBe(1);
     expect(await countOf(`bym.message WHERE userid = ?`, [p])).toBe(3);
@@ -404,6 +408,8 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(store.lists.get("bot-check:log")).toEqual([JSON.stringify({ userid: q })]);
     expect([...store.sets.get(`chat-ignore:${q}`)!]).toEqual(["77"]);
     expect(store.sets.has(`chat-ignore:${p}`)).toBe(false);
+    expect([...store.sets.get("stats:active:2026-10-22")!]).toEqual(["77"]);
+    expect((await one(`SELECT userids FROM bym.app_error WHERE fingerprint = 'zz-del-fp'`))!.userids).toEqual([77]);
   });
 
   test("a kept thread goes once the player on its other side is deleted too", async () => {

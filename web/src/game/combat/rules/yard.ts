@@ -344,8 +344,8 @@ export const screenDistanceSquared = (
  *
  * `canShootBuilding` and `canHitBuilding`: the screen distance from the
  * creep's `_tmpPoint` to the building's `_position`, its anchor as drawn, at
- * most `range` (`CreepBase.as:735-741`, `ChampionBase.as:428-429`). Line of
- * sight is not modelled.
+ * most `range` (`CreepBase.as:735-741`, `ChampionBase.as:428-429`). The line
+ * of sight past walls is the pathing grid's (`PathGrid.lineOfSight`).
  */
 export const reachesBuilding = (
   x: number,

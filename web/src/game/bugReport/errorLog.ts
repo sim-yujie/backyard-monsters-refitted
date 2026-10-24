@@ -1,8 +1,10 @@
 /**
  * The last few game errors, kept in memory for the bug report form
  * (`ui/bugReport/BugReportDialog.ts`): uncaught errors, unhandled promise
- * rejections and `console.error` calls, newest last. Nothing is stored or
- * sent anywhere else; the list goes only with a report the player sends.
+ * rejections and `console.error` calls, newest last. This list goes only
+ * with a report the player sends. (Uncaught errors and rejections, without
+ * the `console.error` lines, are also sent on their own for the owner's
+ * dashboard: `errorReporter.ts`.)
  *
  * `installErrorLog` runs once, first thing in `main.ts`, so errors during
  * start-up are caught too.

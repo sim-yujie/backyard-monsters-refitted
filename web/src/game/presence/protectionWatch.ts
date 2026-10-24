@@ -16,7 +16,9 @@
  * (`api/http.ts` `onAnswer`), so the prompt goes the moment the player does
  * something real. A `lastAction` of 0 means none in the last ten minutes;
  * before any is known the clock counts from the first answer, so a player
- * who signs in and only looks around is asked nine minutes later.
+ * who signs in and only looks around is asked nine minutes later. The Yard
+ * Planner is the one place real work goes unheard until Apply, so work there
+ * taps for the player as the prompt nears ({@link ProtectionWatch.active}).
  *
  * Only on game screens: every screen past sign-in holds the watch, as it
  * holds the presence ping (`app/presenceScene.ts`), but a Baiter test or its
@@ -62,6 +64,17 @@ export const protectionTimingsFor = (search: string, dev: boolean): ProtectionTi
  */
 export const RESUME_GRACE_MS = 1_000;
 
+/**
+ * How long before the prompt is due work in the Yard Planner taps "stay" for
+ * the player ({@link ProtectionWatch.active}): early enough that a player who
+ * pauses for a few seconds around the nine-minute mark is not asked, late
+ * enough that it goes at most once per protection window.
+ */
+export const ACTIVE_LEAD_MS = 60_000;
+
+/** After a failed planner tap, how long before another is tried. */
+export const ACTIVE_RETRY_MS = 30_000;
+
 /** What the server's answers say; every field optional, as most answers carry only some. */
 export interface ProtectionAnswer {
   /** The server's clock, unix seconds. */
@@ -76,8 +89,11 @@ export interface ProtectionWatchOptions {
   readonly onShow: (endsAt: number) => void;
   /** Takes it down: a real action came, or the idle countdown is up. */
   readonly onHide: () => void;
-  /** Sends the tap; its answer is heard like a ping's. */
-  readonly stay: () => Promise<ProtectionAnswer>;
+  /**
+   * Sends the tap; its answer is heard like a ping's. A tap made for a player
+   * at work in the Yard Planner carries the plan ({@link ProtectionWatch.active}).
+   */
+  readonly stay: (plan?: string) => Promise<ProtectionAnswer>;
   /** Who is signed in; a new account starts the clock again. */
   readonly account?: () => string | null;
   /** Milliseconds; `Date.now` by default. */
@@ -88,7 +104,7 @@ export class ProtectionWatch {
   readonly timings: ProtectionTimings;
   private readonly onShow: (endsAt: number) => void;
   private readonly onHide: () => void;
-  private readonly sendStay: () => Promise<ProtectionAnswer>;
+  private readonly sendStay: (plan?: string) => Promise<ProtectionAnswer>;
   private readonly account: () => string | null;
   private readonly now: () => number;
   /** The server's clock minus the browser's, milliseconds. */
@@ -102,6 +118,10 @@ export class ProtectionWatch {
   /** When the prompt may show again after the idle countdown, a browser-clock time. */
   private resumeAt = 0;
   private stopped = false;
+  /** An {@link active} tap is on its way. */
+  private activeBusy = false;
+  /** No {@link active} tap before this, a browser-clock time: the last one failed. */
+  private activeRetryAt = 0;
   private shown = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -168,6 +188,46 @@ export class ProtectionWatch {
   /** The tap: tells the server, and hears its answer. A failure is the caller's to show. */
   async stay(): Promise<void> {
     this.hear(await this.sendStay());
+  }
+
+  /**
+   * The player is at work somewhere the server cannot see yet: the Yard
+   * Planner, whose moves are saved only on Apply (`plannerActivity.ts`).
+   * Within {@link ACTIVE_LEAD_MS} of the prompt, or past it, this sends the
+   * tap for them, so a player who is busy rearranging is never asked; one who
+   * sits idle sends nothing and is asked as before. It is the same tap the
+   * prompt sends, at most once per protection window, so it gives the player
+   * nothing a tap would not. One at a time, and after a failure none for
+   * {@link ACTIVE_RETRY_MS}, as a drag calls this on every pointer move.
+   *
+   * `plan` reads the planner's plan, only when the tap goes, and the tap
+   * carries it: the server's bot check counts new work in it as play, so a
+   * long stretch of these taps is not taken for a bot's (`plannerActivity.ts`).
+   */
+  active(plan?: () => string): void {
+    if (this.stopped || this.holders === 0 || this.suppressed || this.activeBusy) return;
+    const promptAt = this.promptAt();
+    const now = this.now();
+    // Never more than half the quiet time, so a short DEV `?protect=` does not
+    // tap on every move.
+    const lead = Math.min(ACTIVE_LEAD_MS, (this.timings.windowMs - this.timings.warningMs) / 2);
+    if (promptAt === null || now < promptAt - lead || now < this.activeRetryAt) return;
+    this.activeBusy = true;
+    let carried: string | undefined;
+    try {
+      carried = plan?.();
+    } catch {
+      // A plan that cannot be read leaves a plain tap, which still protects.
+      carried = undefined;
+    }
+    this.sendStay(carried)
+      .then((answer) => this.hear(answer))
+      .catch(() => {
+        this.activeRetryAt = this.now() + ACTIVE_RETRY_MS;
+      })
+      .finally(() => {
+        this.activeBusy = false;
+      });
   }
 
   /** For good: the idle disconnect. */

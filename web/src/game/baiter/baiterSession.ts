@@ -4,6 +4,7 @@ import { KRALLEN_TYPE } from "@/game/attack/AttackSession";
 import { ownYardTarget } from "@/game/attack/ownYardTarget";
 import { academyRanks } from "@/game/combat/rules/defence";
 import {
+  CHAMPION_MAX_FOOD_BONUS,
   CHAMPION_MAX_POWER_LEVEL,
   KRALLEN_MAX_POWER_LEVEL,
   championByType,
@@ -239,22 +240,35 @@ export const levelsOf = (army: TestArmy): Record<string, number> =>
   Object.fromEntries(TEST_ROSTER.map((id) => [id, clampLevel(id, army.monsters[id]?.level ?? 1)]));
 
 /**
+ * The food-bonus rank a test champion fights at: fully fed. In Flash a
+ * champion only earns food-bonus ranks once it is fully grown (feeding below
+ * its top level grows it instead, `CHAMPIONCAGE.as:697-698`), so a test
+ * champion at its top level takes the top rank and one below it has none.
+ * Krallen's ranks add nothing.
+ */
+export const testChampionFoodBonus = (champion: Pick<TestChampion, "t" | "l">): number =>
+  champion.l >= championLevels(champion.t) ? CHAMPION_MAX_FOOD_BONUS : 0;
+
+/**
  * A test champion as the attack's roster lists champions (`ChampionSaveEntry`):
- * made up, at full health for its level, active (`status: 0`), fed nothing, so
- * with no food bonus (its power level gates its abilities alone), and with no
- * learned brain, so it always fights as a fresh one (owner answer Q6).
+ * made up, active (`status: 0`), fully fed (owner 2026-10-23), so at its top
+ * level with every food-bonus rank's health, damage, speed and range
+ * (`ChampionBase.as:123-155`), at full health, and with no learned brain, so it
+ * always fights as a fresh one (owner answer Q6). Its power level still picks
+ * its abilities alone.
  */
 export const testChampionEntry = (champion: TestChampion): ChampionSaveEntry => {
   const id = championByType(champion.t) ?? "";
+  const fb = testChampionFoodBonus(champion);
   return {
     t: champion.t,
     l: champion.l,
     pl: champion.pl,
-    hp: championStatWithFood(id, "health", champion.l, 0),
+    hp: championStatWithFood(id, "health", champion.l, fb),
     status: 0,
     ft: 0,
     fd: 0,
-    fb: 0,
+    fb,
     ...(champion.s ? { s: champion.s } : {}),
   };
 };

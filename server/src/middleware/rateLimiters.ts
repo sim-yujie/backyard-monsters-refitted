@@ -558,3 +558,13 @@ export const bugReportLimiter = spamLimiter("bug-report", SPAM_LIMITS.bugReport,
   ctx.status = Status.TOO_MANY_REQUESTS;
   ctx.body = { error: text, message: text, reason: "bugReportLimit" };
 });
+
+/**
+ * Browser error batches (`controllers/errors/clientErrors.ts`), signed in by
+ * account, signed out by IP. Over the limit the client stops sending until the
+ * page is reloaded.
+ */
+export const clientErrorLimiter = spamLimiter("client-errors", SPAM_LIMITS.clientErrors, (ctx) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error: "Too many error reports.", reason: "rateLimited" };
+});

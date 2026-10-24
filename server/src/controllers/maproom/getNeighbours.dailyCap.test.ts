@@ -91,6 +91,7 @@ beforeEach(() => {
         neighbors: [neighbour(DEFENDER, { attacksTodayCount: 9, attacksTodayDate: dayStartOf(DAY_ONE) }), neighbour(OTHER)],
         droppedNeighbours: [],
         neighborsLastCalculated: new Date(),
+        neighborsLevel: 5,
       },
     ],
     [
@@ -100,6 +101,7 @@ beforeEach(() => {
         neighbors: [neighbour(ATTACKER, { attacksfrom: 9 }), neighbour(OTHER)],
         droppedNeighbours: [],
         neighborsLastCalculated: new Date(),
+        neighborsLevel: 5,
       },
     ],
   ]);

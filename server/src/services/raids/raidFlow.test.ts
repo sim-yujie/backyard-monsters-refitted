@@ -657,3 +657,59 @@ describe("the frequency choice", () => {
     expect(readSchedule(db.row!.aiattacks).attackPreference).toBe(1);
   });
 });
+
+describe("bought protection (owner, 2026-10-23)", () => {
+  /** Protection for a day, bought in the shop as `buyProtection` records it. */
+  const bought = (now: number): Row => ({ protected: now + DAY, storedata: { PRO1: { q: 1, s: now, e: now + DAY } } });
+
+  test("pauses raids: none opens while it lasts, and one does once it is over", async () => {
+    db.row = rowOf(bought(NOW));
+    await present(NOW);
+    expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+    expect(await readOpenRaid(USER)).toBeNull();
+
+    const later = NOW + DAY;
+    at(later);
+    await present(later);
+    expect((await raidOnPing(em, user, YARD, later))?.phase).toBe("warning");
+  });
+
+  test("free protection, after being attacked or a new player's, does not", async () => {
+    db.row = rowOf({ protected: NOW + DAY, storedata: {} });
+    await present(NOW);
+    expect((await raidOnPing(em, user, YARD, NOW))?.phase).toBe("warning");
+  });
+
+  test("bought during the warning, calls the raid off: the next ping has none, and the start is refused", async () => {
+    await present(NOW);
+    const warning = (await raidOnPing(em, user, YARD, NOW))!;
+    expect(warning.phase).toBe("warning");
+    db.row = { ...db.row!, ...bought(NOW + 30) };
+
+    at(NOW + 30);
+    expect(await raidOnPing(em, user, YARD, NOW + 30)).toBeUndefined();
+    expect(await readOpenRaid(USER)).toBeNull();
+    expect(await refusal(startRaid(em, user, warning.id, NOW + 30))).toMatchObject({ reason: "noRaid" });
+  });
+
+  test("bought between the last ping and the start, the start calls it off", async () => {
+    const id = await toStart();
+    db.row = { ...db.row!, ...bought(NOW) };
+    expect(await refusal(startRaid(em, user, id, NOW))).toMatchObject({ reason: "noRaid" });
+    expect(await readOpenRaid(USER)).toBeNull();
+    // Nothing held the yard for it.
+    expect(fightLock()).toBeUndefined();
+  });
+
+  test(
+    "a fight already started goes on",
+    async () => {
+      const { start } = await toFight();
+      db.row = { ...db.row!, ...bought(NOW) };
+      const seen = await raidOnPing(em, user, YARD, NOW);
+      expect(seen?.id).toBe(start.raid.id);
+      expect(seen?.phase).toBe("fighting");
+    },
+    FIGHT_TIMEOUT_MS
+  );
+});

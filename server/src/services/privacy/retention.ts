@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { retentionConfig, type RetentionConfig } from "../../config/RetentionConfig.js";
 import { logger } from "../../utils/logger.js";
+import { ERROR_RETENTION_DAYS } from "../errors/errorStore.js";
 
 /**
  * The daily privacy clean-up: deletes in-game mail, battle records
@@ -9,7 +10,8 @@ import { logger } from "../../utils/logger.js";
  * (`config/RetentionConfig.ts`, the Privacy Policy, section 4), and friend
  * requests answered or lapsed more than {@link FRIEND_REQUEST_RETENTION_DAYS}
  * days ago (issue #368), and friend helps older than
- * {@link FRIEND_HELP_RETENTION_DAYS} days (issue #373). Log files are pruned by the logger itself
+ * {@link FRIEND_HELP_RETENTION_DAYS} days (issue #373), and the dashboard's
+ * error groups not seen for {@link ERROR_RETENTION_DAYS} days. Log files are pruned by the logger itself
  * (`utils/logFiles.ts`).
  *
  * Every delete goes in batches of {@link RETENTION_BATCH} rows, each its own
@@ -59,6 +61,7 @@ export interface RetentionResult {
   friendRequests: number;
   friendHelps: number;
   friendGifts: number;
+  appErrors: number;
 }
 
 export interface RetentionOptions {
@@ -222,7 +225,26 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
-  return { messages: mail.messages, threads: mail.threads, attackLogs, chatReports, bugReports, friendRequests, friendHelps, friendGifts };
+  const appErrors = await deleteOldRows(
+    em,
+    "app_error",
+    "id",
+    "last_seen",
+    cutoff(now, ERROR_RETENTION_DAYS),
+    batchSize,
+    pauseMs
+  );
+  return {
+    messages: mail.messages,
+    threads: mail.threads,
+    attackLogs,
+    chatReports,
+    bugReports,
+    friendRequests,
+    friendHelps,
+    friendGifts,
+    appErrors,
+  };
 };
 
 /**
@@ -268,7 +290,7 @@ export const startRetentionSweep = (em: EntityManager): (() => void) => {
       const result = await runDailyRetention(em);
       if (result) {
         logger.info(
-          "Privacy clean-up: deleted {messages} mail messages ({threads} empty threads), {attackLogs} battle records, {chatReports} chat reports, {bugReports} bug reports",
+          "Privacy clean-up: deleted {messages} mail messages ({threads} empty threads), {attackLogs} battle records, {chatReports} chat reports, {bugReports} bug reports, {appErrors} error groups",
           { ...result }
         );
       }
