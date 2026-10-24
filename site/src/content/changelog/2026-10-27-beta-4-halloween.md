@@ -33,8 +33,10 @@ date: 2026-10-27
 - On Map Room 2 on phones, Mail, My range and a new Filter button sit beside "Find a place".
 - Map Room 1: online players show a green dot beside their name, and battles show as a shield (they attacked you) and a sword (you attacked them) with a count.
 - Map Room 1 remembers how you sorted the list, and a new button flips it between highest and lowest first.
+- **Achievement badges.** Achievements now show painted medals, with a bronze, silver or gold rim to match their reward. Badges you have not earned yet stay grey.
 - **Special moves tuned.** Fang's venom bites once a second again. Bandito's whirlwind spins through enemy monsters (it never hurts buildings). When no building is near, Teratorn's fireball bounces on to a wall. Bolts defending from your bunkers can blink too.
 - **Tribe raids work more like the original game.** Protection you buy in the Shop now pauses wild monster tribe raids (the free protection you get after being attacked does not; a raid still in its warning when you buy is called off, one already fighting carries on). On Map Room 1, the raid comes from your weakest tribe camp still standing; on Map Room 2 the tribe is still one of the four at random.
+- **Walls stop shots on foot.** As in the original game, a walking monster that fires from a distance needs a clear line past the walls to hit a building, so it takes on the wall in its way first. Flying monsters still shoot over walls, and towers and defending monsters shoot over them as before.
 - A new [Thank-you page](/support/thanks/) on this website for everyone who supports the game.
 
 ### Fixes
@@ -44,6 +46,9 @@ date: 2026-10-27
 - During the guided start, the Build menu no longer shows a Build instantly button that could not be pressed while Bob is paying for the building.
 - Bob's tips on the attack screen no longer sit on top of the Retreat question or the "Attack over" panel. They step aside while those are open.
 - Bob's tips no longer cover other open windows, such as the Leaderboard, the Shop or Report a bug. They wait until you close the window.
+- On Map Room 2, another player's yard details no longer show their Flinger and Catapult levels. You still see your own.
 - The "Stay protected?" question no longer pops up while you are busy rearranging your yard in the Yard Planner. It still comes if you leave the game sitting in the Planner.
 - In the Monster Baiter, a fully grown test champion now fights fully fed, with every food bonus.
+- Level 1 Gorgo no longer hops sideways when it turns.
+- A Fomor on foot (levels 1 and 2) now walks round walls to reach the monster it follows, instead of walking through them.
 - Fixed a background server problem.
