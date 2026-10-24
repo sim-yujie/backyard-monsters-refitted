@@ -16,3 +16,32 @@ Use your image generation tool to create 12 SEPARATE square images, each 1024x10
 12. out/fx12_scorch.png - a blast scorch mark on the ground seen from above: a DARK charcoal-grey to near-black splat with ragged radiating streaks and soft edges (this one is dark, not white).
 
 Paint them as polished, high-quality game effects (think modern mobile strategy games like Clash of Clans), clean and readable at small sizes. Make all 12 images, then list the files you saved.
+
+--- Second run (2026-10-24, Antigravity --write): the five stand-ins and six lightning bolts ---
+Saved as src/fx02_flare, fx06_zap, fx08_wisp, fx10_orb, fx12_scorch and fx13_bolt1 ... fx17_bolt5.
+bolt6 was not painted (image quota ran out); until it is, the sheet uses bolt1 upside down (BOLT_STAND_INS).
+Prompt as sent:
+
+You are painting game visual-effect (VFX) sprite textures for "Backyard Monsters", a bright, cartoony, hand-painted isometric strategy game. The images in reference/ are effects already painted for this set (an impact burst, a beam stroke, a smoke puff): match their painterly, polished style. The game tints these textures with colour in code, so paint every effect in NEUTRAL GREYSCALE ONLY (white, light grey, grey; no colour at all), except where noted.
+
+VERY IMPORTANT: every image must be made with your IMAGE GENERATION tool. Do NOT write or run any code (no Python, no PIL, no numpy, no scripts, no SVG, no canvas) to draw, edit, fix, resize or finish any image. If the image tool fails or runs out of quota, STOP and report which files are missing. A missing file is fine; a code-drawn file is not acceptable.
+
+Background for every image: a perfectly flat, solid pure green #00FF00 (RGB 0,255,0) across the whole image: no gradient, no vignette, no texture, no shadow, no ground, no border, no text, no watermark. The effect itself must contain no green. One effect per image, with clear empty green margin on every side.
+
+Square images (1024x1024), effect centred, filling about 70% of the square:
+1. out/fx02_flare.png - a sparkling star flare: a small hot white core with 4 long thin sharp rays (up, down, left, right) and 4 shorter diagonal rays, with a faint soft glow around the core.
+2. out/fx06_zap.png - an electric impact: a bright white core with 6 to 8 small jagged crackling lightning forks branching outward in all directions, each fork tapering from thick to thin, with a soft glow around the core.
+3. out/fx08_wisp.png - a wispy, irregular, soft smoke puff, pale grey, with feathery see-through edges.
+4. out/fx10_orb.png - a glowing energy orb / plasma ball: a white-hot round core with a wispy, swirling energy halo around it.
+5. out/fx12_scorch.png - a blast scorch mark on the ground seen from directly above: a DARK charcoal-grey to near-black splat with ragged radiating streaks and soft edges (this one is dark, not white).
+
+Wide images (as wide as your tool allows, e.g. 1536x512 or 2048x512; if only square is possible, use 1024x1024 and keep the bolt inside the middle third vertically). Each is ONE lightning bolt lying HORIZONTALLY, running from near the left edge to near the right edge (leave about 4% green margin at each end), centred vertically, and staying inside the middle third of the image height:
+6. out/bolt1.png
+7. out/bolt2.png
+8. out/bolt3.png
+9. out/bolt4.png
+10. out/bolt5.png
+11. out/bolt6.png
+Every bolt: a cartoon game lightning bolt painted bright white with a slightly brighter centre line. It makes only 3 to 5 BIG zigzags with SHARP corners (not a wavy line, not many tiny wiggles). The stroke is THICKER at each bend and THINNER on the straight runs between bends, and both ends taper to sharp points. Off two or three of the bends, a small side fork branches out, also tapered from thick to thin and ending in a sharp point. Only a very faint thin glow hugging the stroke, no big glow. Make each of the six bolts a DIFFERENT zigzag shape (different bend positions, heights and fork places), so the game can flicker between them.
+
+Paint them as polished, high-quality game effects (think modern mobile strategy games like Clash of Clans), clean and readable at small sizes. Make all 11 images, then list the files you saved and say for each one that it came from the image generation tool.

@@ -38,6 +38,8 @@ FILL = 0.92
 STRIP_W, STRIP_H, STRIP_ACROSS = 384, 96, 2
 BOLTS = [f"bolt{n}" for n in range(1, 7)]
 STRIPS = BOLTS + [f"core{n}" for n in range(1, 7)] + ["ray"]
+# A bolt not painted yet: another painted bolt, turned upside down.
+BOLT_STAND_INS = {"bolt6": "bolt1"}
 # What share of a bolt's painted area its core keeps.
 CORE_SHARE = 0.3
 # name: (painting it borrows, how it is reworked)
@@ -208,14 +210,21 @@ def core_of(rgba: np.ndarray) -> np.ndarray:
 def strip(name: str) -> tuple[Image.Image, str]:
     source = {"ray": "beam"}.get(name, name.replace("core", "bolt"))
     path = painting(source)
+    turned = False
+    if path is None and source in BOLT_STAND_INS:
+        path, turned = painting(BOLT_STAND_INS[source]), True
     if path is None:
         raise SystemExit(f"no painting for {name} ({source})")
     rgba = trim(unmix(path))
+    if turned:
+        # Upside down it zigzags the other way: a different bolt to flicker to.
+        rgba = rgba[::-1].copy()
     if name.startswith("core"):
         # Kept in the bolt's own box, so it lies exactly on the bolt.
         rgba = core_of(rgba)
     out = stretch(rgba, STRIP_W, STRIP_H)
-    return Image.fromarray((out * 255).round().astype(np.uint8), "RGBA"), os.path.basename(path)
+    note = os.path.basename(path) + (" upside down (stand-in)" if turned else "")
+    return Image.fromarray((out * 255).round().astype(np.uint8), "RGBA"), note
 
 
 def main() -> None:

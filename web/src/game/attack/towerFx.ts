@@ -371,6 +371,12 @@ const ZAP_FLASH_TICKS = 5;
 export const TURN_DEGREES_PER_TICK = 3;
 /** Degrees a tick once it fires: onto its beam or its target quickly, never in one frame. */
 export const CATCH_UP_DEGREES_PER_TICK = 12;
+/**
+ * World px past its range a gun starts watching a creep (about one and a half
+ * tiles), so it is already lined up when the engine first fires. Looks only:
+ * when and at whom towers fire is the engine's.
+ */
+export const AIM_WATCH_MARGIN = 60;
 /** Ticks the Laser's barrel glows up before its beam comes on in full. */
 export const LASER_CHARGE_TICKS = 10;
 /** Ticks between the scorch marks and sparks a laser leaves where it burns. */
@@ -901,10 +907,14 @@ export class TowerFx {
     if (cell !== null) this.setCell(tower, cell);
   }
 
-  /** The nearest creep on the field a tower could shoot, inside its range, or undefined. */
+  /**
+   * The nearest creep on the field a tower could shoot, inside its range plus
+   * {@link AIM_WATCH_MARGIN}, or undefined.
+   */
   private nearestInRange(info: TowerInfo, creeps: readonly CreepSnapshot[]): CreepSnapshot | undefined {
-    const range = towerStats(info.type, info.level)?.range ?? 0;
-    if (range <= 0) return undefined;
+    const stat = towerStats(info.type, info.level)?.range ?? 0;
+    if (stat <= 0) return undefined;
+    const range = stat + AIM_WATCH_MARGIN;
     const flags = towerTargets(info.type);
     // Measured from the middle of the tower, as the engine scans (`towerScanPoint`).
     const x = info.x + TOWER_CENTRE;

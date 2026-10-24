@@ -12,6 +12,7 @@ import {
   TESLA_LOOP_END,
   TowerFx,
   bearingDegrees,
+  AIM_WATCH_MARGIN,
   CATCH_UP_DEGREES_PER_TICK,
   cellHeading,
   facingCell,
@@ -574,10 +575,16 @@ describe("TowerFx's new look", () => {
 
   it("turns the Railgun onto a creep as it comes into range, a little a tick, before any shot", async () => {
     const { fx, frames } = await newLookSetUp(118);
-    // Out of range (300 at level 1): the gun stays put.
+    // Well out of range (300 at level 1, watched to 300 + AIM_WATCH_MARGIN): the gun stays put.
     const far = creepAt(35, 35 + 400);
     fx.update(1, () => far, [far]);
     expect(frames.get(1)).toBeUndefined();
+    // Just short of range it already starts lining up, before the engine can fire.
+    const { fx: watcher, frames: watched } = await newLookSetUp(118);
+    const close = creepAt(35, 35 + 300 + AIM_WATCH_MARGIN - 10);
+    watcher.update(1, () => close, [close]);
+    expect(watched.get(1)).toBeDefined();
+    watcher.destroy();
     // In range due south: it starts turning from where it shows, not snapping there.
     const near = creepAt(35, 235);
     const wanted = facingCell(118, bearingDegrees({ x: 0, y: 0 }, { x: near.ix, y: near.iy }), 30);
