@@ -73,6 +73,9 @@ const ICONS = {
     { circle: [16.5, 9, 2.6] },
     "M15.5 14.2c2.6-.2 4.6 1.3 5 4.3",
   ],
+  // A speaker with its sound waves, and crossed out: the yard's music button (beta.5).
+  speaker: ["M3.5 9.5h4l5-4.5v14l-5-4.5h-4z", "M16 9a4.2 4.2 0 0 1 0 6", "M18.5 6.5a7.8 7.8 0 0 1 0 11"],
+  speakerOff: ["M3.5 9.5h4l5-4.5v14l-5-4.5h-4z", "M16 9.5l5 5", "M21 9.5l-5 5"],
 } as const satisfies Record<string, readonly Shape[]>;
 
 export type IconName = keyof typeof ICONS;

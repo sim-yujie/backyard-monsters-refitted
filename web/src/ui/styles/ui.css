@@ -839,6 +839,11 @@ body {
   -webkit-backdrop-filter: var(--blur-panel);
   backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-popup);
+  /* The list is taller than a laptop screen (or a phone on its side), so it
+     keeps to the screen and scrolls. */
+  max-height: calc(100dvh - 84px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .account-menu__list[hidden] {
@@ -1051,16 +1056,6 @@ body {
 
   .hud__resource-button .res-icon {
     height: 18px;
-  }
-}
-
-/* A phone on its side: the Account list would run off the bottom, so it keeps
-   to the screen and scrolls. */
-@media (width > 620px) and (height <= 500px) {
-  .account-menu__list {
-    max-height: calc(100dvh - 84px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
 }
 

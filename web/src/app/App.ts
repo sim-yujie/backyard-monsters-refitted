@@ -5,6 +5,7 @@ import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
+import { withMusic } from "./musicScene";
 import { IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
 import { getAuthToken, onAnswer } from "@/api/http";
@@ -286,25 +287,23 @@ export class App {
       withPresence(
         withHold(withProtection(withIdle(factory, idle, { defer }), protection, { simulation }), botCheck),
       );
-    this.scenes
-      .register(SceneName.BOOT, () => new BootScene())
-      .register(SceneName.LOGIN, () => new LoginScene())
-      .register(SceneName.MAP, game(() => new MapGateScene()))
-      .register(SceneName.MAP_ROOM_1, game(() => new MapRoom1Scene()))
-      .register(SceneName.MAP_ROOM_2, game(() => new MapRoom2Scene()))
-      .register(SceneName.YARD, game(() => new YardScene()))
-      .register(SceneName.ATTACK, game(() => new AttackScene(), true))
-      .register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true, true))
-      .register(
-        SceneName.BAITER_REPLAY,
-        game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true, true),
-      )
-      .register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true))
-      .register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true))
-      .register(
-        SceneName.AWAY,
-        () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt),
-      );
+    // Every screen asks for its own tune as it opens (`musicScene.ts`).
+    const register = (name: SceneName, factory: SceneFactory) => scenes.register(name, withMusic(name, factory));
+    register(SceneName.BOOT, () => new BootScene());
+    register(SceneName.LOGIN, () => new LoginScene());
+    register(SceneName.MAP, game(() => new MapGateScene()));
+    register(SceneName.MAP_ROOM_1, game(() => new MapRoom1Scene()));
+    register(SceneName.MAP_ROOM_2, game(() => new MapRoom2Scene()));
+    register(SceneName.YARD, game(() => new YardScene()));
+    register(SceneName.ATTACK, game(() => new AttackScene(), true));
+    register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true, true));
+    register(
+      SceneName.BAITER_REPLAY,
+      game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true, true),
+    );
+    register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true));
+    register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true));
+    register(SceneName.AWAY, () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt));
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
