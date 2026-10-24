@@ -1,6 +1,7 @@
 /**
  * The account settings dialog: change username and the Shiny Lock switch,
- * opened from the account menu.
+ * opened from the account menu. Its "Game effects" part is kept in this
+ * browser only: no server.
  *
  * Both are server rules this only fronts. A rename keeps the game's username
  * rules and a long cooldown (`changeUsername.ts`); Shiny Lock makes the server
@@ -11,6 +12,7 @@ import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
+import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { Popup } from "@/ui/Popup";
 
 export const SETTINGS_TEXT = {
@@ -33,6 +35,14 @@ export const SETTINGS_TEXT = {
   blockedLoadFailed: "Could not load your blocked players.",
   unblock: "Unblock",
   unblockFailed: "Could not unblock that player. Try again.",
+  effectsTitle: "Game effects",
+  shakeLabel: "Screen shake",
+  shakeHint: "The screen jolts on big hits in a fight.",
+  shakeReducedHint: "Off, because your device asks for less motion.",
+  qualityLabel: "Effects",
+  qualityFull: "Full",
+  qualityLow: "Low",
+  qualityHint: "Low draws fewer sparks and glows, for slower phones. Phones start on Low.",
 } as const;
 
 /** "You can change your username again on 3 Mar 2027." for the cooldown line. */
@@ -70,12 +80,14 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
 
   fetchAccount().then(
     (account) => {
-      body.replaceChildren(usernameSection(account, options), shinySection(account), privacySection(account.privacy));
+      body.replaceChildren(usernameSection(account, options), shinySection(account), privacySection(account.privacy), effectsSection());
       popup.focusFirst();
     },
     () => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
+      // Kept in this browser, so they work without the server.
+      body.append(effectsSection());
     },
   );
   return popup;
@@ -245,6 +257,65 @@ const privacyToggle = (
   return section;
 };
 
+/** Whether the device asks for less motion: the shake stays off then, whatever the switch says. */
+const osReducedMotion = (): boolean =>
+  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Game effects (beta.5 tower attack effects): the "Screen shake" switch and "Effects: Full / Low". */
+const effectsSection = (): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const heading = document.createElement("h3");
+  heading.className = "account-settings__heading";
+  heading.textContent = SETTINGS_TEXT.effectsTitle;
+
+  const shakeRow = document.createElement("label");
+  shakeRow.className = "account-settings__toggle";
+  const shake = document.createElement("input");
+  shake.type = "checkbox";
+  shake.id = "settings-screen-shake";
+  const still = osReducedMotion();
+  shake.checked = !still && screenShakeOn();
+  shake.disabled = still;
+  const shakeWords = document.createElement("span");
+  shakeWords.textContent = SETTINGS_TEXT.shakeLabel;
+  shakeRow.append(shake, shakeWords);
+  const shakeHint = document.createElement("p");
+  shakeHint.className = "field__hint";
+  shakeHint.id = "settings-screen-shake-hint";
+  shakeHint.textContent = still ? SETTINGS_TEXT.shakeReducedHint : SETTINGS_TEXT.shakeHint;
+  shake.setAttribute("aria-describedby", shakeHint.id);
+  shake.addEventListener("change", () => setScreenShake(shake.checked));
+
+  const qualityRow = document.createElement("label");
+  qualityRow.className = "account-settings__toggle";
+  const qualityWords = document.createElement("span");
+  qualityWords.textContent = SETTINGS_TEXT.qualityLabel;
+  const quality = document.createElement("select");
+  quality.id = "settings-effects-quality";
+  quality.className = "account-settings__select";
+  for (const [value, text] of [
+    ["full", SETTINGS_TEXT.qualityFull],
+    ["low", SETTINGS_TEXT.qualityLow],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    quality.append(option);
+  }
+  quality.value = effectsQuality();
+  qualityRow.append(qualityWords, quality);
+  const qualityHint = document.createElement("p");
+  qualityHint.className = "field__hint";
+  qualityHint.id = "settings-effects-quality-hint";
+  qualityHint.textContent = SETTINGS_TEXT.qualityHint;
+  quality.setAttribute("aria-describedby", qualityHint.id);
+  quality.addEventListener("change", () => setEffectsQuality(quality.value as EffectsQuality));
+
+  section.append(heading, shakeRow, shakeHint, qualityRow, qualityHint);
+  return section;
+};
+
 /** Privacy: the two switches and the blocked players with Unblock (friends WP9). */
 const privacySection = (privacy: PrivacySettings): HTMLElement => {
   const section = document.createElement("div");
@@ -278,7 +349,7 @@ const blockedSection = (): HTMLElement => {
   const note = document.createElement("p");
   note.className = "field__hint";
   note.setAttribute("aria-live", "polite");
-  note.textContent = "Loading…";
+  note.textContent = "Loadingâ€¦";
   section.append(heading, list, note);
 
   const show = (blocked: BlockedPlayer[]): void => {
