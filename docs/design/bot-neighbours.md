@@ -370,8 +370,13 @@ It works the way a player does, so the limits hold by construction:
    buildings may touch the ring's inside; the newest wall (the first of a new run) may stand
    alone. A test checks that once the ring is closed (every whole-yard bot by level 40) at least
    90% of the key buildings are inside it.
-3. **Army and defence.** Unlocked monsters: those the Locker level allows
-   (`yard/locker.ts:176-204`), less a random one or two of the newest. Academy levels by level band.
+3. **Army and defence.** The Monster Locker keeps step with the Town Hall (owner, 24 Oct 2026):
+   every bot has one from Town Hall 2 (so from level 15), and each Town Hall upgrade takes the
+   locker step the new hall allows with it, up to locker level 4 at Town Hall 5 (`progression.ts`).
+   Unlocked monsters: those the Locker level allows (`yard/locker.ts:176-204`), in the locker's
+   list order, less the last one or two (seeded) of the newest tier; the army holds unlocked
+   monsters only. Bots made before this rule (`bot.yard_version` 1) get their yard rebuilt once
+   on their next grow (`BOT_YARD_VERSION`, `yardGenerator.ts`). Academy levels by level band.
    Bunkers filled to 70-100% of capacity with bunkerable unlocked monsters (`yard/bunker.ts:53`,
    `:96`); Housing filled to 80-100% of `housingCapacity`. A champion in the cage once there is a
    cage (Town Hall 4), at a champion level that grows with the bot's level `[PLACEHOLDER]` table in

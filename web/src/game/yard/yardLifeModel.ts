@@ -7,7 +7,7 @@ import {
   monsterTickSpeed,
 } from "@/game/combat/rules";
 import { academyLevel } from "@/game/monsters/housing";
-import { fromIso } from "./YardGrid";
+import { footprintOf, fromIso } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
 /**
@@ -76,6 +76,15 @@ import type { Yard, YardBuilding } from "./yardModel";
  * One owner rule departs from that (#206): a champion at a flying level, Fomor
  * from 3, never lands in its cage but hovers at its flight height and flaps,
  * standing or pacing (`YardLifeLayer`). Krallen picks its sheet by power level (`champions/Krallen.as:46-48`).
+ *
+ * The cage is one picture, both fences, sorted at its middle. Flash sorted a
+ * champion at its feet plus `level * 5` (`MonsterBase.as:726`,
+ * `ChampionBase.as:88`), so one pacing the back half of its pen drew behind
+ * the whole cage and the back fence cut across its body, which the bigger
+ * redrawn sheets show far more often (owner 2026-10-24). A
+ * champion pacing its cage now sorts no further back than the cage's middle
+ * ({@link cageMiddle}): its pen keeps it clear of the front fence, so in front
+ * of the whole picture is always right.
  *
  * ## To and from the Champion Chamber (#314)
  *
@@ -565,6 +574,16 @@ export const cageArea = (cage: LifePen, random: Random): LifeArea => {
     width: CAGE.size,
     height: CAGE.size,
   };
+};
+
+/**
+ * The middle of a cage's footprint in yard units: where the cage sorts by depth
+ * (`yardModel`, #270), and so the point a champion pacing it must sort in
+ * front of for the cage's back fence not to draw across it.
+ */
+export const cageMiddle = (cage: LifePen): YardPoint => {
+  const [width, height] = footprintOf(CHAMPION_CAGE_TYPE);
+  return { x: cage.x + width / 2, y: cage.y + height / 2 };
 };
 
 interface WalkerSpec {

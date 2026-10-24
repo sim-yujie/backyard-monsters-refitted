@@ -17,6 +17,7 @@ import {
 } from "@/game/attack/monsterSprites";
 import { fromIso, type Point, type Rect, type YardBounds } from "./YardGrid";
 import {
+  cageMiddle,
   chamberDoor,
   championTrips,
   championWalkerKey,
@@ -326,6 +327,11 @@ export class YardLifeLayer {
     const onScreen = (x: number, y: number): boolean =>
       x >= left && x <= right && y >= top && y <= bottom;
 
+    // A champion pacing its cage sorts in front of the cage's middle, where the
+    // cage sorts, so the back fence never draws across it (see `cageMiddle`).
+    const cage = this.life.cage ? cageMiddle(this.life.cage) : null;
+    const cageY = cage ? (cage.x + cage.y) / 2 + bounds.originY : null;
+
     let depthId = 0;
     for (const [key, walker] of this.walkers) {
       depthId++;
@@ -340,7 +346,8 @@ export class YardLifeLayer {
       const tick = this.reducedMotion ? 0 : walker.age;
       const hovers = hoversInCage(walker, body.sheet);
       const animation = walker.moving || hovers ? "walk" : "idle";
-      this.place(body, x, y, walker.heading, animation, tick, depthId, hovers);
+      const sortFloor = walker.champion && !walker.trip && cageY !== null ? cageY : -Infinity;
+      this.place(body, x, y, walker.heading, animation, tick, depthId, hovers, sortFloor);
     }
 
     this.workers.forEach((worker, index) => {
@@ -476,6 +483,7 @@ export class YardLifeLayer {
     tick: number,
     depthId: number,
     hovers = false,
+    sortFloor = -Infinity,
   ): void {
     const sheet = body.sheet;
     if (!sheet) return;
@@ -494,8 +502,9 @@ export class YardLifeLayer {
     const anchor = anchorOffset(sheet);
     body.body.position.set(x + anchor.x, y + (hovers ? championFlightTop(tick) : anchor.y));
     // A hovering body sorts as if it stood its altitude further down the
-    // screen, as a flyer does on the attack screen.
-    const zIndex = creepZIndex(x, hovers ? y + flyerAltitude(sheet.family) : y, depthId);
+    // screen, as a flyer does on the attack screen; none sorts further back than `sortFloor`.
+    const sortY = Math.max(hovers ? y + flyerAltitude(sheet.family) : y, sortFloor);
+    const zIndex = creepZIndex(x, sortY, depthId);
     if (body.body.zIndex !== zIndex) body.body.zIndex = zIndex;
     body.body.visible = true;
 
