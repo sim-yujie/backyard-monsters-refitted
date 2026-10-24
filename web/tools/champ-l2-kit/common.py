@@ -88,8 +88,10 @@ def key_cell(rgb, key):
     keep = np.zeros_like(fg)
     if lab2.max():
         ids, cnt = np.unique(lab2[lab2 > 0], return_counts=True)
+        # loose pieces count only near the body: one far away is a tail tip or paw of the neighbouring painted frame
+        far = ndi.distance_transform_edt(lab2 != ids[cnt.argmax()]) > max(12, 0.06 * fg.shape[1])
         for i, c in zip(ids, cnt):
-            if c > cnt.max() * 0.02:
+            if c > cnt.max() * 0.02 and not far[lab2 == i].all():
                 keep |= lab2 == i
     keep = ndi.binary_fill_holes(keep)
     # ground trapped inside the body (between the legs, under the tail, inside an open mouth) is not edge-connected: cut out the

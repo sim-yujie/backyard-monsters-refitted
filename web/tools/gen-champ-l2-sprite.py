@@ -172,6 +172,15 @@ for c in COLUMNS:
             left -= min(hi - cw, lo, MAX_NUDGE * UP)
         if top + ys.min() < 0:
             top += min(-(top + ys.min()), MAX_NUDGE * UP)
+        # still poking out sideways (a pounce wider than the cell): shrink it just enough, keeping the far side in place
+        lo, hi = left + xs.min(), left + xs.max() + 1
+        over = max(0, -lo) + max(0, hi - cw)
+        if over:
+            f = (hi - lo - over) / (hi - lo)
+            big = resize_premultiplied(big, (max(1, round(big.width * f)), max(1, round(big.height * f))))
+            ys, xs = np.where(np.asarray(big)[..., 3] > 40)
+            left = (min(hi, cw) - xs.max() - 1) if lo < 0 else (lo - xs.min())
+            top += round(bottom * kk * UP * (1 - f))      # feet stay on the ground
         layer = Image.new("RGBA", (cw, ch))
         layer.alpha_composite(big, (max(0, left), max(0, top)), (max(0, -left), max(0, -top)))
         lost = np.asarray(big)[..., 3] > 40
