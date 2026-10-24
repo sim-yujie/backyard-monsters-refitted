@@ -174,15 +174,27 @@ for c in PAINTED:
         placed[(c, row)] = layer
     print(f"column {c:2}: scale {ka:.4f}", file=sys.stderr)
 
+def centre_x(im):
+    return np.where(np.asarray(im)[..., 3] > 200)[1].mean()
+
+
 sheet = Image.new("RGBA", (COLS * cw, ROWS * ch))
 for col in range(COLS):
     src = col if col in PAINTED else (4 - col) % 16
     if src not in PAINTED:
         continue
+    # a mirrored column is flipped about the cell centre, but the old Gorgo stands left of it (x ~43.5 of 96): shift the whole column
+    # so its idle sits on that column's old idle body centre, as the painted columns do
+    shift = 0
+    if col not in PAINTED:
+        shift = round(np.where(old_body(col, 0))[1].mean() * UP - centre_x(placed[(src, 0)].transpose(Image.FLIP_LEFT_RIGHT)))
     for row in range(ROWS):
         cell = placed[(src, row)]
         if col not in PAINTED:
             cell = cell.transpose(Image.FLIP_LEFT_RIGHT)
+            moved = Image.new("RGBA", cell.size)
+            moved.alpha_composite(cell, (max(0, shift), 0), (max(0, -shift), 0))
+            cell = moved
         sheet.paste(cell, (col * cw, row * ch))
 sheet.save(ASSETS / "ape_1-repaint@4x.png", optimize=True)
 sheet.resize(ORIGINAL.size, Image.LANCZOS).save(ASSETS / "ape_1-repaint.png", optimize=True)
