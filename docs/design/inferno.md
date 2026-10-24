@@ -2,8 +2,9 @@
 
 A design document for beta.5+ "Inferno": the underground second yard from Flash, with its own
 economy, monsters, map, PvP, quests, and the surface Quake/Magma Towers and siege that it unlocks.
-The owner's answers I1-I12 (2026-10-24, `OWNER-QUESTIONS.md` "Recently answered") set the scope:
-the full Flash Inferno.
+The owner's answers I1-I16 and R1-R12 (2026-10-24, `OWNER-QUESTIONS.md` "Recently answered") set
+the scope: the full Flash Inferno, Flash prices and times, with four owner changes (buyable
+workers, a real Descent burn, bunker attack size, a few Shiny quest prizes).
 
 All citations are `path:line` relative to the repository root; Flash code is under
 `client/scripts` (written as `X.as:line`). Anything new is a proposal. Owner changes to Flash are
@@ -17,6 +18,7 @@ Contents:
 4. [Screens and art](#4-screens-and-art)
 5. [Slices and work packages](#5-slices-and-work-packages)
 6. [Open questions](#6-open-questions)
+7. [Later ideas](#7-later-ideas)
 
 ---
 
@@ -27,8 +29,16 @@ Contents:
   raid counts. After the fifth, you can go down: the **Descent** is 13 Moloch yards in a row; beat
   each one (90% damage) to reach the next. After the 13th you capture your own **Inferno yard**.
 - **The Inferno yard.** A second yard on lava with its own four resources (Bone, Coal, Sulfur,
-  Magma), its own buildings (Under Hall instead of Town Hall), one worker (more can be bought, like
-  on the surface), and its own eight monsters. Shiny is shared with the surface.
+  Magma), its own buildings (Under Hall instead of Town Hall), one worker (up to 5 with Shiny:
+  250/500/1,000/2,000; Flash allowed only 1), and its own eight monsters. Shiny is shared with the
+  surface.
+- **Prices and times.** Exactly Flash: costs (Juicer included), build/upgrade and training times
+  (King Wormzer 48 days), entry raids 12 h apart with no reward, Descent prizes, Moloch yard loot,
+  full-strength Quake Towers in the Descent ("weak armies shouldn't start the Inferno").
+- **Owner changes to Flash.** From Descent yard 7 the toxicity is a real **burn** that hurts
+  surface monsters only (Inferno monsters and Korath are immune), shown with the new status icons;
+  attack size from the Inferno yard = what the Housing Bunkers hold; a few small Shiny prizes in
+  Inferno quests; buyable workers (above).
 - **What you can do there.** Build and upgrade, unlock and train Inferno monsters, attack Moloch
   tribes and real players on the Inferno map, do 38 Inferno quests, earn 4 achievements.
 - **What it gives the surface.** Moving Inferno monsters up to your main yard (one way, free);
@@ -38,34 +48,56 @@ Contents:
 - **Safety.** The server decides everything (when a raid is due, who won, what you looted, what
   you can afford). The old Flash Inferno routes stay closed; new checked routes replace them.
 - **Phones.** Every new screen works on phones from day one.
-- **Build order.** 7 slices, 53 work packages (each about half a day for one helper) plus an art
-  track. Slice 1 (getting in and owning the yard) is the biggest: 22 packages.
+- **Not now.** Korath's three extra powers (no events shop yet), computer-run neighbours on the
+  Inferno map (#383), outposts and conquering (long-term goal, section 7).
+- **Build order.** 7 slices, 54 work packages (each about half a day for one helper) plus an art
+  track. Slice 1 (getting in and owning the yard) is the biggest: 23 packages.
 - **Biggest risks.** The fight engine has no Quake or Magma Tower yet and the Descent yards use
-  them from the 3rd base on; siege weapons are a whole new system; lots of new art (portraits,
-  icons, build pictures, map art) needs your approval.
-- **Questions for you:** I13-I16 in section 6 (Korath's extra abilities, rules for the emergence
-  raids, the Descent "toxicity" warning, two Flash number slips).
+  them from the 3rd base on; the burn waits for the status-icon job (`feat/status-icons`); siege
+  weapons are a whole new system; lots of new art (portraits, icons, build pictures, map art) needs
+  your approval.
+- **Questions for you:** none open (all answered 2026-10-24, 2.1). The burn strength and the
+  Shiny quest amounts are suggestions to check in play tests.
 
 ---
 
 ## 2. Rules (exact to Flash)
 
-### 2.1 Owner decisions (I1-I12, 2026-10-24)
+### 2.1 Owner decisions (2026-10-24)
+
+First round (I1-I12):
 
 | # | Decision | Effect on the build |
 |---|---|---|
 | I1 | The full Flash Inferno | Everything in this section |
 | I2 | Keep all 3 entry steps (TH5, 5 emergence raids, 13-base Descent) | Slice 1 |
-| I3 | Separate economy, shared Shiny; Inferno worker can be bought "same as on the surface" | **[OWNER]** Flash gives 1 worker, none buyable (`QUEUE.as:31-41`). Read as: own ladder like the surface BEW, 250/500/1,000/2,000 Shiny, max 5 (`server/src/controllers/yard/shopBuy.ts:60`). Assumption, not a question |
+| I3 | Separate economy, shared Shiny; Inferno workers buyable | **[OWNER]** Flash gives 1 worker, none buyable (`QUEUE.as:31-41`; a main player complaint). Own ladder like the surface BEW: 250/500/1,000/2,000 Shiny, max 5 (`server/src/controllers/yard/shopBuy.ts:60`). Confirmed |
 | I4 | Monster transfer as in Flash | 2.7 |
 | I5 | Inferno PvP with real players | Slice 3 |
 | I6 | Quake/Magma Towers and siege as in Flash | Slice 6; siege panel comes back (hidden since 2026-10-10) |
 | I7 | Inferno quests and achievements as in Flash | Slice 4 |
 | I8 | Restart Inferno monster repaints, after champion art | Art track A4 |
-| I9 | No Inferno outposts for now | — |
+| I9 | No Inferno outposts or conquering for now | Long-term goal, section 7 |
 | I10 | Korath unlocks on the surface once the player has an Inferno yard; message on the next surface visit; hatch in the champion cage | **[OWNER]** Slice 5 |
 | I11 | Old routes closed (done in beta.4) | Replaced in 3.4, deleted in S7 |
 | I12 | Inferno screens work on phones from day one | Every screen WP |
+
+Second round (I13-I16, R1-R12). Anything not listed is exact Flash:
+
+| # | Decision | Effect on the build |
+|---|---|---|
+| I13 | Korath's Burn, Breath of Fire, Fists of Doom: leave out for now (no events shop) | Not built; section 7 |
+| I14 | The five emergence raids use Flash rules, not our wild-raid rules | 2.3; WP 1.8-1.9 |
+| I15, R8 | Descent toxicity becomes a real **burn**, surface monsters only; Inferno monsters and Korath immune; uses the status-icon system | **[OWNER]** 2.4; WP 1.21 |
+| I16, R1, R2 | All Inferno prices exact Flash, Juicer L1 1M/1M/1M included | 2.5 |
+| R3, R4 | Build/upgrade and academy times exact Flash (King Wormzer 48 days) | 2.5, 2.6 |
+| R5 | Entry raids exact Flash: 12 h apart, no reward | 2.2, 2.3 |
+| R6 | Descent rewards exact Flash (no extra per-yard or milestone prizes) | 2.4 |
+| R7 | Moloch map yard loot exact Flash | 2.7; smooth loot + daily bonus in section 7 |
+| R9 | Quake Towers in the Descent at full Flash strength | WP 1.3, 1.6 (no softening) |
+| R10 | No computer-run neighbours on the Inferno map now | Ticket #383; WP 3.1 real players only |
+| R11 | Attack size from the Inferno yard = what the Housing Bunkers hold | **[OWNER]** 2.5; WP 2.8, 3.2 |
+| R12 | A few small Shiny prizes in Inferno quests | **[OWNER]** 2.8 (amounts are a suggestion); WP 4.2 |
 
 ### 2.2 The cave and the emergence
 
@@ -100,9 +132,10 @@ base value) applies (`WMATTACK.as:723-753`). Source: `INFERNO_PORTAL_ATTACK.as:8
 | 4 | IC2 ceil(65f), IC6 floor(30f), IC3 ceil(40f), IC5 floor(20f), IC7 floor(20f) |
 | 5 | IC2 ceil(70f), IC7 floor(30f), IC5 ceil(20f), IC6 ceil(30f), IC8 floor(25f) |
 
-Our wild-raid owner rules (`docs/design/wild-raids.md:21-49`: 10 Shiny for 90%+ defence, quit =
-cancel, raiders use the player's academy levels, plain stats with no strength scaling, no raid while
-damaged, 3 h gap) differ from the Flash emergence rules -> **I14**.
+**[OWNER I14, R5]** These raids keep the Flash rules: 12 h gap, each raid counts win or lose
+(quitting does not cancel it), Flash raid strength 0.4-0.9, no reward, only needs 10% yard health.
+Our wild-raid rules (`docs/design/wild-raids.md:21-49`: 10 Shiny for 90%+ defence, quit = cancel,
+plain stats, no raid while damaged, 3 h gap) do **not** apply to them.
 
 ### 2.4 The Descent
 
@@ -112,14 +145,16 @@ damaged, 3 h gap) differ from the Flash emergence rules -> **I14**.
 | Counter | 1 + bases cleared; passed at >= 14 | `MAPROOM_DESCENT.as:24`, `:415-426`, `WMBASE.as:101-123` |
 | Win | Damage >= 90% | `ATTACK.as:970`, `BYMConfig.as:30` |
 | Army | From the main yard, surface flinger capacity; no catapult, no siege | `ATTACK.as:589-591`, `UI_TOP.as:964-966`, `:289`, `:296` |
-| Loot | Inferno resources, running total in the report (`descent_battlereport`) | `english.json:2730` |
+| Loot | Inferno resources, running total in the report (`descent_battlereport`); exact Flash, no extra prizes (R6) | `english.json:2730` |
 | Popups | Taunt before (shown on return to the main yard), whimper + report on a win, gloat on a loss; Facebook brag at 1/4/7 (**dropped**, no Facebook) | `INFERNO_DESCENT_POPUPS.as`, `BASE.as:2146` |
 | Capture | After the 13th win: capture popup, counter set to 14, Inferno yard loads | `INFERNO_DESCENT_POPUPS.as:121-133` |
-| Toxicity | Bar from depth 7, text "monsters lose health", but no combat code applies it -> **I15** | `DescentDebuffPopup.as`, `UI_TOP.as:1175`, `english.json:2915-2922` |
+| Toxicity | Flash: bar from depth 7, text "monsters lose health", but no combat code applies it | `DescentDebuffPopup.as`, `UI_TOP.as:1175`, `english.json:2915-2922` |
+| Burn **[OWNER I15, R8]** | Made real, as a burn (not poison): from Descent yard 7, every **surface** monster in the fight loses health over time; Inferno monsters (IC1-IC8) and Korath are immune. Suggested strength `[PLACEHOLDER]`: 2% of full health every 10 s at yard 7, rising evenly to 5% at yard 13. Computed in the shared fight rules (server re-simulates). Shown with the "burning" icon from the status-icon system (`feat/status-icons`, beta.5): adding the effect and its icon should be one line. Toxicity bar and popup stay as the warning | — |
 | Yards | Server data exists: `server/src/game-data/tribes/inferno/molochTribes.ts`; state shape in `server/src/controllers/base/load/modes/infernoModeDescent.ts` | — |
-| Defences used | Quake (129) from base 203, Magma (132) from 204, Housing Bunker (128) from 206, Inferno Cannon 130, Sniper 21, walls 17 | `molochTribes.ts` |
+| Defences used | Quake (129) from base 203, Magma (132) from 204, Housing Bunker (128) from 206, Inferno Cannon 130, Sniper 21, walls 17; all at full Flash strength (R9) | `molochTribes.ts` |
 
-So Quake, Magma and Housing defenders and the IC monsters must work in the engine **in slice 1**.
+So Quake, Magma and Housing defenders, the IC monsters and the burn must work in the engine **in
+slice 1**.
 
 ### 2.5 The Inferno yard
 
@@ -129,8 +164,9 @@ So Quake, Magma and Housing defenders and the IC monsters must work in the engin
 | Resources | r1 Bone, r2 Coal, r3 Sulfur, r4 Magma; caps from Inferno silos | `GLOBAL.as:192` |
 | Spending | Unlock + academy pay Sulfur; hatching pays Magma; juicing an IC on the main yard pays Magma into the Inferno purse | `CREATURELOCKER.as:982`, `ACADEMY.as:68`, `BUILDING13.as:103`, `BUILDING9.as:65`, `BASE.as:4476-4488` |
 | Level gate | Under Hall level (`re [14,1,L]`); building counts indexed by Under Hall level | `INFERNOYARDPROPS.as` |
-| Workers | 1, no BEW **[OWNER I3: buyable ladder]** | `QUEUE.as:31-41` |
-| Map | Map button opens the Inferno map (no Map Room); attack size = Housing Bunker table `[200,300,520,640,1140,1820]` (640 at L4 vs housing 780: Flash slip -> **I16**) | `GLOBAL.as:1362-1367`, `:836-838`, `ATTACK.as:588` |
+| Workers | Flash: 1, no BEW. **[OWNER I3]** 1 free + buy up to 4 more with Shiny 250/500/1,000/2,000 (max 5) | `QUEUE.as:31-41` |
+| Map | Map button opens the Inferno map (no Map Room). Flash attack size table `[200,300,520,640,1140,1820]` (640 at L4 vs housing 780: a slip). **[OWNER R11]** attack size = what the Housing Bunkers hold: `[200,300,520,780,1140,1820]` | `GLOBAL.as:1362-1367`, `:836-838`, `ATTACK.as:588` |
+| Prices and times | Exact Flash (I16, R1-R4) | `INFERNOYARDPROPS.as` |
 | Other | Lava ground; tutorial skipped; no planner | `BASE.as:1493`, `:1072` |
 | Shop | Groups ENLI, BLK2I, BLK3I, BR11I-BR43I, BIP, SP1-4, FIX, HODI.., EXHI, TODI; main yard sells BR..I top-ups after the Descent; price `ceil((sqrt(10% cap / 2))^0.75)` | `STORE.as:202-261` |
 
@@ -142,7 +178,7 @@ Buildable in the Inferno (`INFERNOYARDPROPS.as`, 135 ids; counts per Under Hall 
 | 1-4 | Bone, Coal, Sulfur, Magma harvesters | 10 | [0,1,2,4,5,6] |
 | 6 | Silo | 10 | [0,2,2,3,4,5] |
 | 8 | Monster Locker | 4 | needs incubator |
-| 9 | Juicer | 3 | from UH3; L1 costs 1M/1M/1M (Flash slip -> **I16**) |
+| 9 | Juicer | 3 | from UH3; L1 costs 1M/1M/1M (kept as Flash, I16/R2) |
 | 13 | Incubator (hatchery) | 3 | [0,1,2,3,4,5]; needs Housing Bunker L1 |
 | 17 | Walls | 3 | from UH2 [..30,60,120,200,220] |
 | 21 | Sniper | 7 | [0,2,3,3,4,4,6] |
@@ -170,7 +206,8 @@ laser, tesla and the other surface-only ids.
 | IC7 | 2,457,600 | 172,800 s | 3 | 80 | Sabnox: magma fireball x2 vs towers |
 | IC8 | 4,915,200 | 259,200 s | 4 | 100 | King Wormzer: area hit 100, once per target |
 
-Training: 5 academy steps each; hatch cost/time per level in the same file. The engine has no
+Training: 5 academy steps each, Flash times kept (King Wormzer about 48 days in all, R4); hatch
+cost/time per level in the same file. The engine has no
 Quake/Magma Tower code today (only Korath's quake), `server/src/game-rules/combat/engine.ts`.
 
 ### 2.7 Transfer, map, tribes, PvP
@@ -178,8 +215,8 @@ Quake/Magma Tower code today (only Korath's quake), `server/src/game-rules/comba
 | Topic | Rule | Cite |
 |---|---|---|
 | Transfer | From the cave on the main yard; only IC, only healthy ones; limited by main housing; free; one way | `INFERNOPORTAL.as:65-145`, `INFERNO_ASCENSION_POPUP.as:90-140` |
-| Moloch tribes | 7 tribes by Inferno level (<= 10: ids 214-220; <= 20: 221-227; else 228-234); level pattern -2,-1,0,0,0,+1,+3; respawn 1 h; win = Under Hall destroyed | `createInfernoTribes.ts`, `ATTACK.as:958-967` |
-| PvP neighbours | +-7 levels, 150 newest, max 25, all worlds | `findInfernoNeighbours.ts` |
+| Moloch tribes | 7 tribes by Inferno level (<= 10: ids 214-220; <= 20: 221-227; else 228-234); level pattern -2,-1,0,0,0,+1,+3; respawn 1 h; win = Under Hall destroyed; loot exact Flash (R7) | `createInfernoTribes.ts`, `ATTACK.as:958-967` |
+| PvP neighbours | +-7 levels, 150 newest, max 25, all worlds; real players only, no computer-run neighbours for now (R10, #383) | `findInfernoNeighbours.ts` |
 | Protection | 4 attacks in 1 h -> 1 h; >= 50% damage with an attack in 36 h -> 36 h | `damageProtection.ts:104-131` |
 | Storage | Table `maproom_inferno` | — |
 
@@ -189,6 +226,7 @@ Quake/Magma Tower code today (only Korath's quake), `server/src/game-rules/comba
 |---|---|---|
 | Quests | 38; rewards Bone/Coal/Sulfur/Magma (totals 358,000/298,000/248,000/239,000), no Shiny; checks `bNlvl`, `UNLOCK`, `singleclickbank`; paid into the Inferno purse | `INFERNO_QUESTS.as`, `QUESTS.as:1784-1792` |
 | Monster rewards | e.g. IUC2 10 IC2, IUC3 10 IC3, IUC5 2 IC4, IUC6 15 IC6, IC15 20 IC4, IUC10 20 IC5, IUC11 5 IC7, IC16 5 IC7, IUC12 2 IC8; need free housing | `QUESTS.as:1759-1768` |
+| Shiny prizes **[OWNER R12]** | Flash gives none. Add a few small ones on top of the resource prizes. Suggested `[PLACEHOLDER]` (the five biggest resource quests): IQT1 10, IT3 10, IS5 15, IUT3 25, IQT3 25 = 85 Shiny in all. Paid to the shared Shiny | `INFERNO_QUESTS.as` |
 | Flash quirks kept | `prereq` is never read (no gating); IUC10 repeats IC5 | `QUESTS.as` |
 | Achievements | ids 18-21 (now `available:false`): Descent level 1 (granted after the first Descent attack, win or lose), Descent level 14, Under Hall level 5, 10 Inferno quests | `server/src/game-data/achievements.ts:255-300`, `ACHIEVEMENTS.as:51`, `ATTACK.as:975`, `QUESTS.as:1651` |
 | Surface siege quests | SW4-SW12 dropped from `server/src/game-data/goals.ts`; return with siege | — |
@@ -204,7 +242,7 @@ Quake/Magma Tower code today (only Korath's quake), `server/src/game-rules/comba
 | Gate | Only after the Descent; else "inferno_building_requirement" | `GLOBAL.as:2149-2156`, `BASE.as:3697-3705` |
 | Weapons | Decoy, Vacuum, Jars: 10 levels (damage, range, duration, durability, loot bonus, costs) | `com/monsters/siege/weapons/*.as` |
 | Today | Engine ignores siege (`docs/design/attack-flow.md:434-436`); art exists in `server/public/assets/siegebuttons`, `siegeimages` | — |
-| Korath | Catalogue G4, feeds IC1/IC2/IC7/IC8 (`server/src/game-data/championCatalogue.ts:162-185`); raise free + 1-day egg like the others (`server/src/services/yard/champion.ts`); one basic champion at a time. **[OWNER I10]** unlock = owning an Inferno yard. Flash's Burn/Breath of Fire/Fists of Doom were event prizes (`EventStorePrizeData.as:84-107`, `server/src/enums/Rewards.ts:22-29`) -> **I13** | — |
+| Korath | Catalogue G4, feeds IC1/IC2/IC7/IC8 (`server/src/game-data/championCatalogue.ts:162-185`); raise free + 1-day egg like the others (`server/src/services/yard/champion.ts`); one basic champion at a time. **[OWNER I10]** unlock = owning an Inferno yard. Flash's Burn/Breath of Fire/Fists of Doom were event prizes (`EventStorePrizeData.as:84-107`, `server/src/enums/Rewards.ts:22-29`): **left out for now** (I13, no events shop yet; section 7) | — |
 
 ---
 
@@ -242,8 +280,11 @@ test; those dirs are pinned LF).
 
 ### 3.3 Fight engine additions
 
-Quake Tower, Magma Tower, Housing Bunker defenders, Inferno Cannon, and the four IC specials, in
-the shared rules (both sides, sync test). Slice 6 adds siege weapons to the same engine.
+Quake Tower, Magma Tower, Housing Bunker defenders, Inferno Cannon, the four IC specials, and the
+Descent burn (2.4: a timed health loss on surface monsters only, strength by Descent yard), in the
+shared rules (both sides, sync test). The burn is a status effect on the status-icon system
+(`feat/status-icons`), so the client shows the "burning" icon over each burning monster with no
+extra drawing code. Slice 6 adds siege weapons to the same engine.
 
 ### 3.4 Old routes
 
@@ -264,6 +305,7 @@ before merge.
 | Emergence: earthquake banner + shake, Moloch intro/taunt, stage passed, complete | full-width popup | centred popup | S1 |
 | Descent map (13 bases, next target, progress) | vertical scroll list over map | map | S1 |
 | Descent popups (taunt, whimper + report, gloat, capture) | full-width | centred | S1 |
+| Descent attack from yard 7: toxicity bar + "burning" status icon over surface monsters | existing attack screen | same | S1 |
 | Inferno yard (lava, HUD with 4 resources, build menu, worker, shop, yard switch) | existing yard HUD layout | same | S1 |
 | Monsters: locker, academy, incubator, housing (Inferno) | existing monster screens | same | S2 |
 | Transfer dialog | list + count steppers | same | S2 |
@@ -295,19 +337,19 @@ Size: S = under half a day, M = about half a day, L = a full day (split if it gr
 unit tests on the server, shared-rules sync test where rules change, typecheck, and the listed
 check. Owner screenshots before merge for any screen.
 
-### S1 — Getting in and owning the yard (22)
+### S1 — Getting in and owning the yard (23)
 
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
 | 1.1 | Generate Inferno building tables from `INFERNOYARDPROPS.as` (costs, counts by Under Hall, blocked ids); `YardKind "inferno"` | golden test vs Flash numbers in 2.5 | — | M |
 | 1.2 | Combat tables for 128/129/130/132 and IC1-IC8 stats, both sides | sync test | 1.1 | M |
-| 1.3 | Engine: Quake Tower | engine unit tests (range, damage, timing vs Flash) | 1.2 | M |
+| 1.3 | Engine: Quake Tower, full Flash strength everywhere incl. the Descent (R9) | engine unit tests (range, damage, timing vs Flash) | 1.2 | M |
 | 1.4 | Engine: Magma Tower | same | 1.2 | M |
 | 1.5 | Engine: IC specials audit + fill (Spurtz, Balthazar, Sabnox, Wormzer) | per-monster unit tests | 1.2 | L |
 | 1.6 | Engine: Housing Bunker defenders; replay smoke over the 13 Descent yards + Moloch tribe yards | every yard simulates without error | 1.3-1.5 | M |
 | 1.7 | `inferno_progress` migration + entity, `infernoConfig.enabled`, `GET /bm/inferno/state` | route tests incl. switch off | — | S |
-| 1.8 | Emergence "due" rule on main-yard load (2.2) + pause wild raids | unit tests for each gate | 1.7 | M |
-| 1.9 | Emergence raid army (2.3) + run through `raidFlow`, stage counts win or lose | army snapshot per level/L; flow test | 1.8, 1.5 | M |
+| 1.8 | Emergence "due" rule on main-yard load (2.2, Flash rules I14: 12 h, 10% health) + pause wild raids | unit tests for each gate | 1.7 | M |
+| 1.9 | Emergence raid army (2.3) + run through `raidFlow`, stage counts win or lose, quit does not cancel, no reward | army snapshot per level/L; flow test | 1.8, 1.5 | M |
 | 1.10 | Client: cave sprite, tap menu, emergence popups + earthquake | screenshots phone/desktop | 1.7 | M |
 | 1.11 | Descent state + `attack/start` kind descent (next base only, main army, flinger capacity) | route tests (wrong base refused) | 1.7, 1.6 | M |
 | 1.12 | Descent landing: 90% win, Inferno loot, progress, capture creates the Inferno yard with the start layout, achievements 18/19 | landing tests incl. forged client result ignored | 1.11 | M |
@@ -315,10 +357,11 @@ check. Owner screenshots before merge for any screen.
 | 1.14 | `POST /bm/inferno/load` + harvester catch-up into `iresources` | load tests, caps | 1.12 | M |
 | 1.15 | Yard actions pt 1: build/upgrade/move/recycle with Inferno baseid, Under Hall gating, `lockOwnYard` + `poolView` | action tests per rule | 1.14, 1.1 | M |
 | 1.16 | Yard actions pt 2: collect/bank/repair/speed-up/fortify/walls/traps | action tests | 1.15 | M |
-| 1.17 | Workers (1 + buyable ladder, I3) + Inferno shop items | shop tests | 1.15 | M |
+| 1.17 | Workers (1 free + buy up to 4 more: 250/500/1,000/2,000 Shiny, I3) + Inferno shop items | shop tests (ladder, max 5, Shiny shared with the surface) | 1.15 | M |
 | 1.18 | Client: Inferno yard scene (lava, buildings art, main/Inferno switch) | screenshots | 1.14 | M |
 | 1.19 | Client: HUD 4 resources, Inferno build menu, building panels | screenshots | 1.18, A2 | M |
-| 1.20 | End-to-end: TH5 account -> 5 raids -> Descent -> yard; owner screenshots | scripted run on dev server | all S1 | M |
+| 1.20 | End-to-end: TH5 account -> 5 raids -> Descent (burn on from yard 7) -> yard; owner screenshots | scripted run on dev server | all S1 | M |
+| 1.21 | Descent burn (2.4, I15/R8): status effect in the shared rules, surface monsters only (IC + Korath immune), strength by Descent yard from 7; "burning" icon via the status-icon system | engine tests (immune types, yards 1-6 none, server/client match); screenshot | 1.6, `feat/status-icons` merged | S |
 | A1 | Art: Moloch gloat/whimper portraits, Descent map | owner approval | — | M |
 | A2 | Art: resource icons, 16 build-menu pictures | owner approval | — | L |
 
@@ -333,7 +376,7 @@ check. Owner screenshots before merge for any screen.
 | 2.5 | Transfer route (2.7) | tests: non-IC, hurt, over housing refused | 2.3 | S |
 | 2.6 | Client: transfer dialog from the cave | screenshots | 2.5 | S |
 | 2.7 | Moloch tribes list (`createInfernoTribes.ts`, respawn 1 h) | tests | 1.14 | S |
-| 2.8 | Tribe `attack/start` + landing (Under Hall win, loot, Inferno army + Housing capacity) | landing tests | 2.7, 1.12 | M |
+| 2.8 | Tribe `attack/start` + landing (Under Hall win, Flash loot, Inferno army; attack size = Housing Bunker capacity, R11) | landing tests (L4 bunker allows 780) | 2.7, 1.12 | M |
 | 2.9 | Client: Inferno map screen | screenshots | 2.7, A3 | M |
 | 2.10 | Attack screen Inferno pass ("Monster limit", no catapult/siege) | screenshots + fight smoke | 2.8 | S |
 | A3 | Art: Inferno map art, Moloch tribe portrait | owner approval | — | M |
@@ -342,8 +385,8 @@ check. Owner screenshots before merge for any screen.
 
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
-| 3.1 | Neighbours route (`findInfernoNeighbours.ts`) | tests | 2.7 | S |
-| 3.2 | `attack/start` kind player + defender forces from the Inferno yard | tests (protected, out of range refused) | 3.1, 2.8 | M |
+| 3.1 | Neighbours route (`findInfernoNeighbours.ts`), real players only (R10; bots later, #383) | tests | 2.7 | S |
+| 3.2 | `attack/start` kind player + defender forces from the Inferno yard; same bunker attack size as 2.8 | tests (protected, out of range refused) | 3.1, 2.8 | M |
 | 3.3 | Landing: Inferno loot, protection (`damageProtection.ts`), revenge | tests | 3.2 | M |
 | 3.4 | Defender notice + view | screenshots | 3.3 | S |
 | 3.5 | Client: PvP tab on the Inferno map | screenshots | 3.1, 2.9 | S |
@@ -353,7 +396,7 @@ check. Owner screenshots before merge for any screen.
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
 | 4.1 | 38 Inferno quests data + rule checks | per-rule tests | 1.16 | M |
-| 4.2 | Quest rewards into the purse; monster rewards need housing | tests | 4.1, 2.3 | S |
+| 4.2 | Quest rewards into the purse; monster rewards need housing; small Shiny prizes on 5 quests (2.8, R12) | tests (Shiny paid once, to the shared Shiny) | 4.1, 2.3 | S |
 | 4.3 | Achievements 18-21 on; client Inferno quests panel | tests + screenshots | 4.1, 1.12 | S |
 
 ### S5 — Korath (2)
@@ -383,19 +426,24 @@ check. Owner screenshots before merge for any screen.
 | 7.1 | Delete old Inferno routes, `legacyRoutesOpen`, their tests | full test run | S1-S6 | S |
 | 7.2 | Inferno music/sounds hook (when the sound system exists) | manual | sound plan | S |
 
-Totals: S1 22, S2 11, S3 5, S4 3, S5 2, S6 8, S7 2 = **53**, plus art track A4 (IC repaints) and
+Totals: S1 23, S2 11, S3 5, S4 3, S5 2, S6 8, S7 2 = **54**, plus art track A4 (IC repaints) and
 the Korath redraw from the champion plan. S3-S6 can run in parallel after S1 (S6 only needs
-1.3/1.4/1.12).
+1.3/1.4/1.12). WP 1.21 waits for the status-icon job (`feat/status-icons`) to merge.
 
 ---
 
 ## 6. Open questions
 
-Only questions that are not answered by I1-I12 and change the build. Default = Flash.
+None. I13-I16 and R1-R12 were answered on 2026-10-24 (2.1). Two numbers are suggestions to settle in
+play tests: the burn strength (2.4) and the Shiny quest prizes (2.8).
 
-| # | Question | Default (Flash) |
-|---|---|---|
-| I13 | Korath's three extra abilities (Burn, Breath of Fire, Fists of Doom) were event prizes in Flash. Include them, and how? | Not included at start (no events store yet) |
-| I14 | Emergence raids: Flash rules (raid counts even if you quit, raid strength 0.4-0.9, no Shiny reward, only needs 10% yard health) or our wild-raid rules (quit = cancel, plain stats, 10 Shiny for 90%+ defence, no raid while damaged)? | Flash rules |
-| I15 | Descent "toxicity" warning (from base 7, says monsters lose health, but Flash never applied it): drop it, keep the warning only, or make it real? | Keep the warning, no effect (as Flash); suggest dropping it |
-| I16 | Two Flash number slips: Inferno Juicer level 1 costs 1M of each resource; Housing Bunker L4 attack size is 640 although it holds 780. Fix or keep? | Keep (exact Flash) |
+## 7. Later ideas
+
+Recorded, not planned for this build:
+
+| Idea | From |
+|---|---|
+| **Inferno conquering (Map Room 2 style)**: outposts on the Inferno map. Long-term goal | I9 |
+| Moloch map yards: loot that grows smoothly with level, plus a daily bonus for the first 3 wins | R7 |
+| Computer-run neighbours on the Inferno map so PvP has targets | R10, #383 |
+| Korath's Burn, Breath of Fire, Fists of Doom, once an events shop exists | I13 |
