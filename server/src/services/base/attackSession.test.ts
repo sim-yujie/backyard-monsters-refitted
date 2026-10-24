@@ -162,8 +162,8 @@ describe("the stored session", () => {
       bunkers: { 83: { C1: 10 } },
       defenderLevels: { C1: 6 },
       defenderChampions: [
-        { t: 5, l: 3, hp: 8000, pl: 2 },
-        { t: 1, l: 2, hp: 5000, pl: 1 },
+        { t: 5, l: 3, hp: 8000, pl: 2, fb: 0 },
+        { t: 1, l: 2, hp: 5000, pl: 1, fb: 2 },
       ],
     };
     const stored = newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, defenderForces);

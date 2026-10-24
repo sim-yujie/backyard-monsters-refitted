@@ -6,10 +6,12 @@ import {
   type EventReward,
 } from "../../game-data/events/eventRewards.js";
 import { storeItems } from "../../game-data/store/storeItems.js";
+import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { addAmounts, noAmounts, RESOURCE_KEYS } from "../base/economy/resourceBudget.js";
 import { fitCredit, type CreditSave } from "../yard/credit.js";
 import type { ResourceAmounts } from "../yardplanner/costs.js";
+import { raiseKrallen } from "./krallenReward.js";
 
 /**
  * Paying event rewards (`game-data/events/eventRewards.ts`) into the player's
@@ -19,7 +21,8 @@ import type { ResourceAmounts } from "../yardplanner/costs.js";
  * (`controllers/yard/yardAction.ts`): resources as `credit`, which the
  * wrapper clamps to the storage cap as every credit is; Shiny as
  * `grantShiny`; store buffs and free speed-ups as a new `storedata`;
- * decorations as a new `researchdata`. So a grant always runs inside a yard
+ * decorations as a new `researchdata`; Krallen as a new `champion` list
+ * (`krallenReward.ts`). So a grant always runs inside a yard
  * action, under the main yard's row lock, and lands or rolls back with the
  * claim that paid it (`controllers/yard/events.ts`).
  */
@@ -28,6 +31,7 @@ import type { ResourceAmounts } from "../yardplanner/costs.js";
 export interface GrantSave extends CreditSave {
   storedata?: JsonObject | null;
   researchdata?: JsonObject | null;
+  champion?: unknown;
 }
 
 /** What one reward came to, for the answer. */
@@ -36,13 +40,15 @@ export type GrantedReward =
   | { kind: "shiny"; amount: number }
   | { kind: "shopItem"; item: string; endsAt: number }
   | { kind: "speedup"; item: string; count: number; held: number }
-  | { kind: "decoration"; type: number; count: number; stored: number };
+  | { kind: "decoration"; type: number; count: number; stored: number }
+  /** Krallen's level now; `raised` false when she was at the top already. */
+  | { kind: "krallen"; level: number; raised: boolean };
 
 /** What a yard action returns for a grant: spread into its outcome. */
 export interface GrantPlan {
   credit: ResourceAmounts;
   grantShiny: number;
-  slices: { storedata?: JsonObject; researchdata?: JsonObject };
+  slices: { storedata?: JsonObject; researchdata?: JsonObject; champion?: ChampionData[] };
   granted: GrantedReward[];
 }
 
@@ -75,6 +81,8 @@ export const rewardProblem = (reward: EventReward): string | null => {
     case "decoration":
       if (footprintOf(reward.type).decoration !== true) return "not a placeable decoration";
       return whole(reward.count) > 0 ? null : "no count";
+    case "krallen":
+      return null;
     default:
       return "unknown kind";
   }
@@ -90,6 +98,8 @@ export const rewardProblem = (reward: EventReward): string | null => {
  * - Free speed-ups add to `storedata[FREE_SPEEDUP_KEYS[item]].q`.
  * - Decorations add to `researchdata["b<type>"]`, the storage the
  *   decorations drawer places from.
+ * - Krallen joins the `champion` list at level 1, or goes up one level, at
+ *   most to the top (`krallenReward.ts`).
  *
  * @throws Error on a reward {@link rewardProblem} refuses: a config mistake.
  */
@@ -98,6 +108,7 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
   let grantShiny = 0;
   let storedata: JsonObject | undefined;
   let researchdata: JsonObject | undefined;
+  let champion: ChampionData[] | undefined;
   const granted: GrantedReward[] = [];
   const resourceRows: Extract<GrantedReward, { kind: "resources" }>[] = [];
 
@@ -150,6 +161,12 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
         granted.push({ kind: "decoration", type: reward.type, count, stored });
         break;
       }
+      case "krallen": {
+        const raised = raiseKrallen(champion ?? save.champion, now);
+        champion = raised.champions;
+        granted.push({ kind: "krallen", level: raised.level, raised: raised.raised });
+        break;
+      }
     }
   }
 
@@ -171,6 +188,7 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
     slices: {
       ...(storedata && { storedata }),
       ...(researchdata && { researchdata }),
+      ...(champion && { champion }),
     },
     granted,
   };

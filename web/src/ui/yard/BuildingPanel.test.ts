@@ -285,10 +285,30 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
     expect(open).toHaveBeenCalled();
   });
 
-  it("a foreign yard shows the numbers and no actions", () => {
-    const { element } = setup([HALL, building(2, 20, 4)], 2, { own: false });
-    expect(buttons(element)).toHaveLength(0);
-    expect(infoLines(element)).toContain("Range 190 → 200");
+  it("a foreign yard shows no level, no numbers and no actions (owner report 2026-10-22)", () => {
+    setDevDetails(false);
+    try {
+      const { element } = setup([HALL, building(2, 20, 4, { hp: 9000 })], 2, { own: false });
+      expect(buttons(element)).toHaveLength(0);
+      expect(element.querySelector(".panel__title")?.textContent).toBe("Cannon Tower");
+      expect(infoLines(element)).toEqual([]);
+      expect(element.querySelector<HTMLElement>(".building-panel__info")!.hidden).toBe(true);
+      const details = element.querySelector("details")!.textContent ?? "";
+      expect(details).toContain("LevelHidden");
+      for (const word of ["Health", "Fortification", "9,000", "17,640", "Range", "Damage"]) {
+        expect(element.textContent).not.toContain(word);
+      }
+    } finally {
+      setDevDetails(null);
+    }
+  });
+
+  it("a foreign Town Hall lists no unlocks and a running upgrade shows no countdown", () => {
+    const { element } = setup([building(1, 14, 5, { cU: 3_600 })], 1, { own: false });
+    expect(element.querySelector(".panel__title")?.textContent).toBe("Town Hall");
+    expect(element.querySelector<HTMLElement>(".building-panel__unlocks")?.hidden ?? true).toBe(true);
+    expect(element.textContent).not.toContain("unlocks");
+    expect(element.textContent).not.toContain("Upgrading");
   });
 });
 

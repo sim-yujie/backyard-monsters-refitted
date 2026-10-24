@@ -129,6 +129,49 @@ describe("revengeVerdict", () => {
     const full = revengeVerdict(facts({ landed: [landed(OTHER_BOT, 10), landed(OTHER_BOT + 1, 2)] }), BOT, () => 0);
     expect(full).toEqual({ act: "postpone", due: NOW + 14 * HOUR + BUSY_RETRY_MINUTES.min * MINUTE, reason: "caps" });
   });
+
+  test("a chain counts once: another bot's three attacks hold one of the player's two places", () => {
+    const chain = [landed(OTHER_BOT, 9), landed(OTHER_BOT, 6), landed(OTHER_BOT, 3)];
+    expect(revengeVerdict(facts({ landed: chain }), BOT, Math.random)).toEqual({ act: "run" });
+    // A second bot an hour ago: full until the chain's last attack leaves the window, 21 hours from now.
+    const full = revengeVerdict(facts({ landed: [...chain, landed(OTHER_BOT + 1, 1)] }), BOT, () => 0);
+    expect(full).toEqual({ act: "postpone", due: NOW + 21 * HOUR + BUSY_RETRY_MINUTES.min * MINUTE, reason: "caps" });
+  });
+});
+
+describe("a chain's later attack (revengeChain.ts)", () => {
+  test("the caps are not asked: its own bot's attack 3 hours ago and two other bots' do not hold it", () => {
+    const busy = { landed: [landed(BOT, 3), landed(OTHER_BOT, 2), landed(OTHER_BOT + 1, 1)] };
+    expect(revengeVerdict(facts({ ...busy, followUp: true }), BOT, Math.random)).toEqual({ act: "run" });
+    expect(revengeVerdict(facts(busy), BOT, () => 0)).toMatchObject({ act: "postpone", reason: "caps" });
+  });
+
+  test("never through protection: it waits for the end, or ends when that is past its wait limit", () => {
+    const shield = target({ protectedUntil: NOW + 2 * HOUR });
+    expect(revengeVerdict(facts({ ...shield, followUp: true, giveupAt: NOW + 12 * HOUR }), BOT, () => 0)).toEqual({
+      act: "postpone",
+      due: NOW + 2 * HOUR + PROTECTED_RETRY_HOURS.min * HOUR,
+      reason: "protected",
+    });
+    // 36 hours of damage protection after a 50% hit: past the chain's wait.
+    const damage = target({ protectedUntil: NOW + 36 * HOUR });
+    expect(revengeVerdict(facts({ ...damage, followUp: true, giveupAt: NOW + 12 * HOUR }), BOT, () => 0)).toEqual({
+      act: "cancel",
+      reason: "gaveUp",
+    });
+  });
+
+  test("online, a truce, an attack since the chain's last: as for the first attack", () => {
+    expect(revengeVerdict(facts({ ...target({ online: true }), followUp: true }), BOT, () => 0)).toMatchObject({
+      act: "postpone",
+      reason: "online",
+    });
+    expect(revengeVerdict(facts({ truce: true, followUp: true }), BOT, Math.random)).toEqual({ act: "cancel", reason: "truce" });
+    expect(revengeVerdict(facts({ alreadyAvenged: true, followUp: true }), BOT, Math.random)).toEqual({
+      act: "cancel",
+      reason: "alreadyAvenged",
+    });
+  });
 });
 
 describe("capsFreeAt", () => {

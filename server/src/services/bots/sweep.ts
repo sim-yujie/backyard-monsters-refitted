@@ -1,7 +1,7 @@
 import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { botConfig, type BotConfig } from "../../config/BotConfig.js";
+import { botConfig, DEFAULT_BOTS_QUIET_ONLINE, type BotConfig } from "../../config/BotConfig.js";
 import type { BotPersona } from "../../database/models/bot.model.js";
 import type { BotJobKind } from "../../database/models/botjob.model.js";
 import { Save } from "../../database/models/save.model.js";
@@ -19,20 +19,27 @@ import { syncBaseValue, syncDerivedLevels } from "../yard/derivedLevels.js";
 import { damagedBuildings, planRepair } from "../yard/repair.js";
 import { REPAIR_DELAY_HOURS } from "./afterAttack.js";
 import {
-  anchorFor,
   applyGrowth,
   holdLootInBand,
-  pacePosition,
-  planRebalance,
   rearmFiredTraps,
-  refillArmy,
   rebuildYard,
-  RETIRE_POSITION,
-  SPREAD_TOLERANCE,
+  refillArmy,
   targetAt,
   tendChampion,
 } from "./brain.js";
-import { activeBotsByLevel, createBots, evenSpread } from "./factory.js";
+import { BOT_MIN_LEVEL, createBots, evenSpread } from "./factory.js";
+import {
+  anchorFor,
+  birthsToday,
+  bornQuietShare,
+  drawQuiet,
+  isQuiet,
+  paceClock,
+  pacePosition,
+  planRebalance,
+  RETIRE_POSITION,
+  SPREAD_TOLERANCE,
+} from "./population.js";
 import {
   giveupOf,
   readRevengeFacts,
@@ -42,6 +49,7 @@ import {
   type RevengeOutcome,
   type RevengeVerdict,
 } from "./revenge.js";
+import { CHAIN_REFILL_HOURS, nextInChain, readChain, type RevengeChain } from "./revengeChain.js";
 import { tendShiny } from "./shiny.js";
 import { declineTruce } from "./truceDecline.js";
 import { declineFriend } from "./friendDecline.js";
@@ -61,7 +69,11 @@ import { BOT_YARD_VERSION, generateBotYard } from "./yardGenerator.js";
  * 2. **The daily rebalance**, the first pass of each UTC day: the day is
  *    claimed in `bym.job_run` (`job = 'bots-rebalance'`, as
  *    `scripts/monthly-shiny.ts` claims its month), so one server runs it.
- *    It is not a `bot_job`: it belongs to no bot.
+ *    It is not a `bot_job`: it belongs to no bot. It retires the bots of
+ *    crowded levels and every bot below the level 15 floor, starts about
+ *    `BOTS_FRESH_PER_DAY` new bots at the bottom of level 15 and makes new
+ *    bots on short levels (`planRebalance`, `population.ts`),
+ *    at most `BOTS_NEW_PER_DAY` in all.
  * 3. **Runs due jobs**, at most {@link JOBS_PER_PASS}, each in its own
  *    transaction: the row is claimed with `FOR UPDATE SKIP LOCKED`, so two
  *    servers never run one job, and the job's effect and its reschedule (or
@@ -84,7 +96,7 @@ import { BOT_YARD_VERSION, generateBotYard } from "./yardGenerator.js";
  *
  * | Job | When | Does |
  * | --- | --- | --- |
- * | `grow` | every 2-6 h | catch-up; retires the bot past level 40; otherwise growth to the pace target (`brain.ts`), the army topped up, the champion fed, loot in its band, Shiny in its band (`shiny.ts`), `bot.level` kept, Map Room 1's tribes looked at (`lookAlike.ts`), and about two minutes online |
+ * | `grow` | every 2-6 h | catch-up; retires the bot past level 40; otherwise growth to the pace target (`population.ts`, `brain.ts`; a quiet bot's target stands still), the army topped up, the champion fed, loot in its band, Shiny in its band (`shiny.ts`), `bot.level` kept, Map Room 1's tribes looked at (`lookAlike.ts`), and about two minutes online |
  * | `repair` | 1-4 h after an attack (booked by `afterAttack.ts`) | catch-up, Repair all, traps re-armed, bunkers and Housing refilled, the champion fed and healed, loot in its band |
  * | `revenge` | 1-24 h after an attack, 1 in 3 (booked by `afterAttack.ts`) | the checks (`revenge.ts`), then the attack (`revengeRun.ts`, passed in as {@link SweepDeps.revenge}); waits or gives up as the checks say |
  * | `declineTruce` | 2-8 h after a truce request (booked by `truceDecline.ts`) | rejects the request in its thread, as a player would (`truceDecline.ts`) |
@@ -104,8 +116,13 @@ import { BOT_YARD_VERSION, generateBotYard } from "./yardGenerator.js";
  * **Retirement** (decision 17): a bot whose place on the climb passes level
  * 40 moves to Map Room 2 with no world (`mapversion` 2, `worldid` null),
  * becomes `retired` and loses its jobs, as `retireAllBots` does for all. Every
- * neighbour list drops it on its next read. A fresh level 1 bot is made in its
- * place once the retirement has committed.
+ * neighbour list drops it on its next read. No bot is made in its place at
+ * once: the next daily rebalance makes new bots on whichever levels are short.
+ * The rebalance retires the same way, from crowded levels.
+ *
+ * **Quiet** (`population.ts`): when a grow finds a bot on a new level, each
+ * level gained has `BOTS_QUIET_RATE` chance to set `bot.quiet_since`, the
+ * moment it stops growing.
  *
  * A bot whose `grow` keeps failing is retired the same way (issue #248): each
  * time its grow is dropped after {@link MAX_ATTEMPTS} failures, `bot.grow_drops`
@@ -114,7 +131,8 @@ import { BOT_YARD_VERSION, generateBotYard } from "./yardGenerator.js";
  *
  * **Presence** (decision 22): each grow marks the bot online as a yard load
  * does (`markOnline`, the last-seen key for 120 s), so for a minute an attack
- * on it is refused as on a real player's.
+ * on it is refused as on a real player's. A quiet bot, a player who has
+ * stopped, shows online only on a `BotConfig.quietOnline` share of its grows.
  *
  * **Seeded Map Room 2 dev players** (issue #233, `seededPlayers.ts`): rows in
  * state `seeded` get first grows and run `grow` and `repair` as an active bot
@@ -178,8 +196,8 @@ export interface SweepDeps {
 export interface RevengeRunner {
   /** Whether the player has been seen within the last-seen key's life. */
   isOnline: (userid: number, now: number) => Promise<boolean>;
-  /** Fights and lands the attack (`runRevengeAttack`). */
-  attack: (input: { bot: number; target: number; now: number }) => Promise<RevengeOutcome>;
+  /** Fights and lands the attack (`runRevengeAttack`); a chain's later attack refills the bot's Housing first. */
+  attack: (input: { bot: number; target: number; now: number; refill?: (save: Save) => void }) => Promise<RevengeOutcome>;
 }
 
 /** One claimed job. */
@@ -201,6 +219,7 @@ interface BotRow {
   persona: BotPersona;
   level: number;
   level_since: Date;
+  quiet_since: Date | null;
   state: string;
   yard_version: number;
 }
@@ -219,13 +238,19 @@ export interface SweepReport {
   failed: number;
   dropped: number;
   retired: number[];
+  /** New bots made by the rebalance: those started at the floor (level 15) and those on short levels. */
   replaced: number[];
+  /** Of `replaced`, those started at the floor. */
+  born: number[];
   grew: { userid: number; from: number; to: number }[];
   /** Bots whose growth was refused (logged): their yard is not the generator's. */
   refused: number[];
   /** Bots whose yard an older generator made, rebuilt by this one's (`BOT_YARD_VERSION`). */
   rebuilt: number[];
-  /** Revenge jobs by what became of them: `landed`, `pending`, `wait:<why>`, `cancel:<why>`. */
+  /**
+   * Revenge jobs by what became of them: `landed`, `pending`, `wait:<why>`,
+   * `cancel:<why>`, and after a landing `chain:next` or `chain:<why it ended>`.
+   */
   revenge: Partial<Record<string, number>>;
 }
 
@@ -246,9 +271,9 @@ const at = (seconds: number): Date => new Date(seconds * 1000);
 const hoursAfter = (now: number, hours: { min: number; max: number }, rng: () => number): number =>
   Math.floor(now + (hours.min + rng() * (hours.max - hours.min)) * HOUR);
 
-const lockBot = async (tx: EntityManager, userid: number): Promise<BotRow | null> => {
+const lockBot = async (tx: EntityManager, userid: number, lock = true): Promise<BotRow | null> => {
   const [row] = await tx.execute<BotRow[]>(
-    `SELECT userid, seed, persona, level, level_since, state, yard_version FROM bym.bot WHERE userid = ? FOR UPDATE`,
+    `SELECT userid, seed, persona, level, level_since, quiet_since, state, yard_version FROM bym.bot WHERE userid = ?${lock ? " FOR UPDATE" : ""}`,
     [userid]
   );
   if (!row) return null;
@@ -257,6 +282,7 @@ const lockBot = async (tx: EntityManager, userid: number): Promise<BotRow | null
     seed: Number(row.seed),
     level: Number(row.level),
     level_since: new Date(row.level_since),
+    quiet_since: row.quiet_since ? new Date(row.quiet_since) : null,
     yard_version: Number(row.yard_version) || 1,
   };
 };
@@ -342,11 +368,9 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
     return {};
   }
 
-  const days = config.daysPerLevel;
-  const speed = Number(job.payload?.speed) > 0 ? Number(job.payload.speed) : 1;
   catchUpYard(save, now);
 
-  const climbed = pacePosition(bot, now, days, speed);
+  const climbed = pacePosition(bot, now, config.pace);
   const position = seeded ? Math.min(climbed, SEEDED_TOP_POSITION) : climbed;
   if (position >= RETIRE_POSITION) {
     await retire(tx, save, bot.userid, now);
@@ -395,21 +419,22 @@ const grow: Handler = async (tx, job, { now, config, rng, report }) => {
   if (!seeded) visitMapRoom1(save);
   if (level !== bot.level) {
     report.grew.push({ userid: bot.userid, from: bot.level, to: level });
-    // The place on the climb is kept; a nudged pace lasts until the next level.
-    await tx.execute(`UPDATE bym.bot SET level = ?, level_since = ? WHERE userid = ?`, [
+    // The place on the climb is kept; a bot that climbed may go quiet.
+    const quiet =
+      bot.quiet_since ??
+      (seeded ? null : drawQuiet(rng, bot.level, level, now, config.pace, config.quietRate));
+    await tx.execute(`UPDATE bym.bot SET level = ?, level_since = ?, quiet_since = ? WHERE userid = ?`, [
       level,
-      anchorFor(position, level, now, days, speed),
+      anchorFor(position, level, paceClock(bot, now), config.pace),
+      quiet,
       bot.userid,
     ]);
   }
-  const payload = level !== bot.level ? { ...job.payload, speed: 1 } : job.payload;
-  await tx.execute(`UPDATE bym.bot_job SET due_at = ?, attempts = 0, payload = ? WHERE id = ?`, [
-    at(next),
-    JSON.stringify(payload ?? {}),
-    job.id,
-  ]);
+  await tx.execute(`UPDATE bym.bot_job SET due_at = ?, attempts = 0 WHERE id = ?`, [at(next), job.id]);
   await tx.execute(`UPDATE bym.bot SET grow_drops = 0 WHERE userid = ? AND grow_drops > 0`, [bot.userid]);
-  return seeded ? {} : { online: bot.userid };
+  if (seeded) return {};
+  if (isQuiet(bot, now) && rng() >= (config.quietOnline ?? DEFAULT_BOTS_QUIET_ONLINE)) return {};
+  return { online: bot.userid };
 };
 
 /**
@@ -437,7 +462,7 @@ const repair: Handler = async (tx, job, { now, config, rng }) => {
     // Nothing damaged, or all of it already repairing: the refills still run.
     if (!(error instanceof ClientSafeError)) throw error;
   }
-  const climbed = pacePosition(row, now, config.daysPerLevel);
+  const climbed = pacePosition(row, now, config.pace);
   const yard = yardAt(row, row.state === "seeded" ? Math.min(climbed, SEEDED_TOP_POSITION) : climbed, now);
   // An older generator's yard waits for its next grow's rebuild: this generator's traps and army are not its own.
   if (row.yard_version >= BOT_YARD_VERSION) {
@@ -469,11 +494,72 @@ const settleRevenge = async (tx: EntityManager, job: JobRow, verdict: RevengeVer
 };
 
 /**
- * The `revenge` job (`docs/design/bot-neighbours.md` §4.7): the checks, read
- * fresh with the bot's row locked, then the attack. A landed attack, or one
- * committed and left to land from its checkpoint, ends the job.
+ * A chain's later attack refills the bot's Housing as its next repair would
+ * (`refillArmy` against the generator's yard for its level now): the chain
+ * waited for its hatcheries. The bot's row is already held (the facts' lock).
  */
-const revenge: Handler = async (tx, job, { now, rng, report, revenge: runner }) => {
+const chainRefill = async (tx: EntityManager, userid: number, now: number, config: BotConfig) => {
+  const row = await lockBot(tx, userid, false);
+  if (!row) return undefined;
+  const yard = yardAt(row, pacePosition(row, now, config.pace), now);
+  return (save: Save) => {
+    refillArmy(save, yard);
+  };
+};
+
+/**
+ * After a revenge attack landed: the chain's next attack, booked on the same
+ * job, or the end of the chain (`revengeChain.ts`). The next attack's "since"
+ * is this attack's log, rounded up, so the checks see it as the chain's own.
+ */
+const continueChain = async (
+  tx: EntityManager,
+  job: JobRow,
+  chain: RevengeChain | null,
+  landed: Extract<RevengeOutcome, { status: "landed" }>,
+  { now, rng, report }: JobContext
+) => {
+  const [log] = await tx.execute<{ at: Date | string | null }[]>(
+    `SELECT max(attacktime) AS at FROM bym.attack_logs WHERE attacker_userid = ? AND defender_userid = ? AND type = ?`,
+    [job.bot_userid, job.target_userid, BaseType.MAIN]
+  );
+  const last = Math.max(now, log?.at ? Math.ceil(new Date(log.at).getTime() / 1000) : 0);
+  const step = nextInChain(chain, landed, last, landed.refillSeconds ?? CHAIN_REFILL_HOURS.max * HOUR, rng);
+  const key = step.act === "next" ? "chain:next" : `chain:${step.reason}`;
+  report.revenge[key] = (report.revenge[key] ?? 0) + 1;
+  if (step.act === "end") await deleteJob(tx, job);
+  else {
+    await tx.execute(`UPDATE bym.bot_job SET due_at = ?, giveup_at = ?, attempts = 0, payload = ?::jsonb WHERE id = ?`, [
+      at(step.due),
+      at(step.giveupAt),
+      JSON.stringify({ ...job.payload, chain: step.chain }),
+      job.id,
+    ]);
+  }
+  logger.info("Bot {bot}'s revenge on {target}: attack {done} of {length}, {act} ({reason})", {
+    event: "bot-revenge-chain",
+    jobid: job.id,
+    bot: job.bot_userid,
+    target: job.target_userid,
+    done: (chain?.done ?? 0) + 1,
+    length: step.act === "next" ? step.chain.length : step.length,
+    damageBefore: landed.damageBefore,
+    damageAfter: landed.damageAfter,
+    act: step.act,
+    reason: step.act === "next" ? "next" : step.reason,
+    ...(step.act === "next" && { due: at(step.due).toISOString(), giveupAt: at(step.giveupAt).toISOString() }),
+  });
+};
+
+/**
+ * The `revenge` job (`docs/design/bot-neighbours.md` §4.7): the checks, read
+ * fresh with the bot's row locked, then the attack. A landed attack books the
+ * chain's next attack on the same job or ends it (`revengeChain.ts`); one
+ * committed and left to land from its checkpoint ends the job (its damage is
+ * not known yet, so the chain ends there).
+ */
+const revenge: Handler = async (tx, job, context) => {
+  const { now, rng, report, config, revenge: runner } = context;
   const target = Number(job.target_userid);
   const giveupAt = giveupOf(job.giveup_at, job.created_at);
   if (!runner || !target) {
@@ -481,7 +567,13 @@ const revenge: Handler = async (tx, job, { now, rng, report, revenge: runner }) 
     return {};
   }
 
-  const facts = await readRevengeFacts(tx, { bot: job.bot_userid, target, giveupAt }, now, runner.isOnline);
+  const chain = readChain(job.payload);
+  const facts = await readRevengeFacts(
+    tx,
+    { bot: job.bot_userid, target, giveupAt, ...(chain && { since: chain.last }) },
+    now,
+    runner.isOnline
+  );
   // Null: another server holds this bot right now.
   const verdict = facts ? revengeVerdict(facts, job.bot_userid, rng) : slotBusyVerdict(now, giveupAt);
   if (verdict.act !== "run") {
@@ -489,11 +581,15 @@ const revenge: Handler = async (tx, job, { now, rng, report, revenge: runner }) 
     return {};
   }
 
-  const outcome = await runner.attack({ bot: job.bot_userid, target, now });
+  const refill = chain ? await chainRefill(tx, job.bot_userid, now, config) : undefined;
+  const outcome = await runner.attack({ bot: job.bot_userid, target, now, ...(refill && { refill }) });
   switch (outcome.status) {
     case "landed":
+      report.revenge.landed = (report.revenge.landed ?? 0) + 1;
+      await continueChain(tx, job, chain, outcome, context);
+      return {};
     case "pending":
-      report.revenge[outcome.status] = (report.revenge[outcome.status] ?? 0) + 1;
+      report.revenge.pending = (report.revenge.pending ?? 0) + 1;
       await deleteJob(tx, job);
       return {};
     case "busy":
@@ -614,11 +710,18 @@ const runOneJob = async (
 export const rebalancePeriod = (now: number): string => at(now).toISOString().slice(0, 10);
 
 /**
- * The daily rebalance (step 2 of a pass): claims the day, nudges paces
- * (`planRebalance`) in the same transaction, and returns how many level 1
- * bots to make; null when the day was already claimed.
+ * The daily rebalance (step 2 of a pass): claims the day, retires the bots
+ * `planRebalance` picks off crowded levels in the same transaction, and
+ * returns those retired and the levels to make new bots on; null when the day was already
+ * claimed. A picked bot that is locked or under attack is left for another
+ * day.
  */
-const rebalance = async (em: EntityManager, now: number, config: BotConfig): Promise<number | null> =>
+const rebalance = async (
+  em: EntityManager,
+  now: number,
+  config: BotConfig,
+  rng: () => number
+): Promise<{ retired: number[]; born: number; make: number[] } | null> =>
   em.fork().transactional(async (tx) => {
     const claimed = await tx.execute<{ job: string }[]>(
       `INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING job`,
@@ -626,78 +729,97 @@ const rebalance = async (em: EntityManager, now: number, config: BotConfig): Pro
     );
     if (claimed.length === 0) return null;
 
-    const rows = await tx.execute<{ userid: number; level: number; level_since: Date; speed: number | null }[]>(
-      `SELECT b.userid, b.level, b.level_since, (j.payload->>'speed')::float AS speed
-         FROM bym.bot b LEFT JOIN bym.bot_job j ON j.bot_userid = b.userid AND j.kind = 'grow'
-        WHERE b.state = 'active'`
+    const rows = await tx.execute<{ userid: number; level: number; level_since: Date; quiet_since: Date | null }[]>(
+      `SELECT userid, level, level_since, quiet_since FROM bym.bot WHERE state = 'active'`
     );
     const bots = rows.map((row) => ({
       userid: Number(row.userid),
       level: Number(row.level),
       level_since: new Date(row.level_since),
-      speed: Number(row.speed) > 0 ? Number(row.speed) : 1,
+      quiet_since: row.quiet_since ? new Date(row.quiet_since) : null,
     }));
     const share = evenSpread(config.total);
-    const plan = planRebalance(bots, share, config.total, now, config.daysPerLevel);
-
-    let nudged = 0;
-    for (const nudge of plan.nudges) {
-      const bot = bots.find((one) => one.userid === nudge.userid)!;
-      // Only if the bot has not moved on meanwhile, and only bots with a grow to carry the pace.
-      const moved = await tx.execute<{ userid: number }[]>(
-        `UPDATE bym.bot SET level_since = ? WHERE userid = ? AND level = ? AND level_since = ?
-           AND EXISTS (SELECT 1 FROM bym.bot_job j WHERE j.bot_userid = ? AND j.kind = 'grow')
-         RETURNING userid`,
-        [nudge.level_since, nudge.userid, bot.level, bot.level_since, nudge.userid]
-      );
-      if (moved.length === 0) continue;
-      await tx.execute(
-        `UPDATE bym.bot_job SET payload = payload || jsonb_build_object('speed', ?::float) WHERE bot_userid = ? AND kind = 'grow'`,
-        [nudge.speed, nudge.userid]
-      );
-      nudged++;
-    }
-    logger.info("Bot rebalance {period}: {active} active, {nudged} paces nudged, {topUp} level 1 bots to make", {
-      period: rebalancePeriod(now),
-      active: bots.length,
-      nudged,
-      topUp: plan.topUp,
-    });
-    if (bots.length + plan.topUp < config.total) {
-      logger.warn("Bot rebalance: {missing} bots short of {total}; level 1 takes {topUp} today", {
-        missing: config.total - bots.length,
+    const plan = planRebalance(
+      bots,
+      {
+        share,
         total: config.total,
-        topUp: plan.topUp,
-      });
-    } else {
-      const drifted = share.flatMap((want, index) => {
-        const have = bots.filter((bot) => bot.level === index + 1).length;
-        return Math.abs(have - want) > SPREAD_TOLERANCE ? [`level ${index + 1}: ${have} of ${want}`] : [];
-      });
-      if (drifted.length > 0) {
-        logger.warn("Bot rebalance: levels more than {tolerance} off their share: {drifted}", {
-          tolerance: SPREAD_TOLERANCE,
-          drifted: drifted.join(", "),
-        });
-      }
+        slack: config.levelSlack,
+        newPerDay: config.newPerDay,
+        births: birthsToday(config.freshPerDay ?? 0, rng),
+      },
+      now
+    );
+
+    const retired: number[] = [];
+    for (const userid of plan.retire) {
+      const [row] = await tx.execute<{ userid: number }[]>(
+        `SELECT userid FROM bym.bot WHERE userid = ? AND state = 'active' FOR UPDATE SKIP LOCKED`,
+        [userid]
+      );
+      if (!row) continue;
+      const save = await lockYard(tx, userid);
+      if (save && isAttackActive(save)) continue;
+      if (save) await retire(tx, save, userid, now);
+      else await retireUnloaded(tx, userid, now);
+      retired.push(userid);
     }
-    return plan.topUp;
+    logger.info(
+      "Bot rebalance {period}: {active} active, {retired} retired off crowded levels or below the floor, {born} new at the floor and {made} new on short levels to make",
+      {
+        period: rebalancePeriod(now),
+        active: bots.length,
+        retired: retired.length,
+        born: plan.born,
+        made: plan.make.length,
+      }
+    );
+
+    const counts = share.map(() => 0);
+    for (const bot of bots) if (!retired.includes(bot.userid)) counts[Math.min(bot.level, share.length) - 1]!++;
+    counts[BOT_MIN_LEVEL - 1]! += plan.born;
+    for (const level of plan.make) counts[level - 1]!++;
+    const drifted = share.flatMap((want, index) =>
+      Math.abs(counts[index]! - want) > SPREAD_TOLERANCE ? [`level ${index + 1}: ${counts[index]} of ${want}`] : []
+    );
+    if (drifted.length > 0) {
+      logger.warn("Bot rebalance: levels more than {tolerance} off their share: {drifted}", {
+        tolerance: SPREAD_TOLERANCE,
+        drifted: drifted.join(", "),
+      });
+    }
+    return { retired, born: plan.born, make: plan.make };
   });
 
-/** Makes `count` fresh level 1 bots; failures are logged and left to the next rebalance. */
-const makeLevelOneBots = async (em: EntityManager, count: number, now: number, deps: JobContext): Promise<number[]> => {
-  if (count <= 0) return [];
+/**
+ * Makes a new bot on each of `levels`, starting quiet by its level's settled
+ * mix (`bornQuietShare`), or with `fresh` growing from the bottom of its level
+ * as a new player; failures are logged and left to the next rebalance.
+ */
+const makeBots = async (
+  em: EntityManager,
+  levels: readonly number[],
+  now: number,
+  deps: JobContext,
+  fresh = false
+): Promise<number[]> => {
+  if (levels.length === 0) return [];
+  const { config } = deps;
+  const share = evenSpread(config.total);
   try {
-    const made = await createBots(em, Array.from({ length: count }, () => 1), {
+    const made = await createBots(em, levels, {
       rng: mulberry32(Math.floor(deps.rng() * 2 ** 32)),
       now,
-      daysPerLevel: deps.config.daysPerLevel,
-      fresh: true,
+      pace: config.pace,
+      fresh,
+      quietShare: fresh
+        ? undefined
+        : (level) => bornQuietShare(level, config.pace, share[level - 1] ?? 0, config.growingFlow),
     });
     return made.map((bot) => bot.userid);
   } catch (error) {
-    logger.error("Could not make {count} level 1 bots: {error}", {
-      count,
+    logger.error("Could not make {count} bots: {error}", {
+      count: levels.length,
       error: error instanceof Error ? error.message : String(error),
     });
     return [];
@@ -721,6 +843,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     dropped: 0,
     retired: [],
     replaced: [],
+    born: [],
     grew: [],
     refused: [],
     rebuilt: [],
@@ -741,10 +864,13 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     kinds = [...HANDLED_KINDS, "revenge"];
   }
 
-  const topUp = await rebalance(em, now, config);
-  if (topUp !== null) {
+  const rebalanced = await rebalance(em, now, config, context.rng);
+  if (rebalanced !== null) {
     report.rebalanced = true;
-    report.replaced.push(...(await makeLevelOneBots(em, topUp, now, context)));
+    report.retired.push(...rebalanced.retired);
+    const born = await makeBots(em, Array<number>(rebalanced.born).fill(BOT_MIN_LEVEL), now, context, true);
+    report.born.push(...born);
+    report.replaced.push(...born, ...(await makeBots(em, rebalanced.make, now, context)));
   }
 
   const online: number[] = [];
@@ -755,7 +881,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     if (outcome.effect.retired !== undefined) report.retired.push(outcome.effect.retired);
   }
 
-  // After the commits: presence, and a fresh level 1 bot for each one retired.
+  // After the commits: presence. Retired bots are made up by the next rebalance.
   for (const userid of online) {
     try {
       await deps.markOnline?.(userid, now);
@@ -764,10 +890,8 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     }
   }
   if (report.retired.length > 0) {
-    report.replaced.push(...(await makeLevelOneBots(em, report.retired.length, now, context)));
-    logger.info("Retired {retired} bots (past level 40, or failing to grow); level 1 bots now {levelOne}", {
+    logger.info("Retired {retired} bots (crowded level, past level 40, or failing to grow)", {
       retired: report.retired.length,
-      levelOne: (await activeBotsByLevel(em.fork()))[1] ?? 0,
     });
   }
   if (report.replaced.length > 0) report.booked += await bookFirstGrows(em.fork(), now);

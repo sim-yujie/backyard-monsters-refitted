@@ -26,7 +26,7 @@ import {
   spurtzBlastRadius,
   bombBlast,
   championStat,
-  championStatWithPower,
+  championStatWithFood,
   lootingMultiplier,
   maxHp,
   monsterStat,
@@ -2089,15 +2089,16 @@ describe("the caged champion (issues #195, #260)", () => {
     expect(out).toBeLessThanOrEqual(200);
   });
 
-  it("comes out at its stored health, its level and power level, and fights what came", () => {
+  it("comes out at its stored health, its level and food bonus, and fights what came", () => {
     const battle = createBattle(yard(), { seed: 3, defenderChampions: [gorgo] });
     battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
     untilOut(battle, 400);
+    // Power level 1 adds nothing: the cage card's level 2 full health.
     expect(champion(battle)).toMatchObject({
       monsterId: "G1",
       level: 2,
       hp: 5000,
-      maxHp: championStatWithPower("G1", "health", 2, 1),
+      maxHp: championStat("G1", "health", 2),
     });
     run(battle, 2000);
     // It killed all five, towers never shot it, and it kept what health it had left.
@@ -2105,6 +2106,33 @@ describe("the caged champion (issues #195, #260)", () => {
     const hp = battle.state().defenderChampions[0]!.hp;
     expect(hp).toBeGreaterThan(0);
     expect(hp).toBeLessThan(5000);
+  });
+
+  it("comes out with a full health bar when fully healed, every champion, food bonus or not", () => {
+    // Full health as the cage card shows it: level figure plus the food bonus.
+    // New champions are stored at power level 1 (Gorgo, Drull, Fomor) or 0,
+    // which must not move the bar (`ChampionBase.as:123-155`).
+    const cases: [number, string, number, number, number, number][] = [
+      // t, name, level, pl, fb, full health
+      [1, "Gorgo", 1, 1, 0, 40_000],
+      [2, "Drull", 1, 1, 0, 12_000],
+      [3, "Fomor", 1, 1, 0, 15_000],
+      [3, "Fomor", 6, 1, 0, 40_000],
+      [4, "Korath", 1, 0, 0, 28_000],
+      [5, "Krallen", 1, 0, 0, 50_000],
+      [1, "Gorgo", 6, 1, 3, 250_000],
+      [2, "Drull", 6, 1, 2, 65_500],
+      [3, "Fomor", 6, 1, 1, 41_000],
+      [4, "Korath", 6, 0, 3, 179_000],
+      [5, "Krallen", 5, 0, 3, 62_000],
+    ];
+    for (const [t, name, l, pl, fb, full] of cases) {
+      const battle = createBattle(yard(), { seed: 3, defenderChampions: [{ t, l, hp: full, pl, fb }] });
+      battle.apply({ kind: "fling", t: 0, x: 140, y: 140, r: 50, monsters: { C1: 5 } });
+      untilOut(battle, 400);
+      const out = champion(battle);
+      expect(out, `${name} L${l} fb${fb}`).toMatchObject({ hp: full, maxHp: full });
+    }
   });
 
   it("sees an attacker 800 from itself, and chases it as far as it goes (`ChampionBase.as:501`)", () => {
@@ -2706,8 +2734,8 @@ describe("the champion's health after the field is left (issue #32)", () => {
   });
 });
 
-describe("a flung champion's power level (issue #202)", () => {
-  const gorgo = (pl?: number) => {
+describe("a flung champion's food bonus and power level (`ChampionBase.as:123-155`)", () => {
+  const flung = (t: number, l: number, extra: { pl?: number; fb?: number } = {}) => {
     const battle = createBattle(yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } }), { seed: 1 });
     battle.apply({
       kind: "fling",
@@ -2716,19 +2744,40 @@ describe("a flung champion's power level (issue #202)", () => {
       y: -300,
       r: 100,
       monsters: {},
-      champion: { t: 1, l: 2, ...(pl === undefined ? {} : { pl }) },
+      champion: { t, l, ...extra },
     });
     return battle.creeps().find((creep) => creep.champion)!;
   };
+  const gorgo = (extra: { pl?: number; fb?: number } = {}) => flung(1, 2, extra);
 
-  it("adds its bonus ladders to the level's figures", () => {
-    expect(gorgo(3).maxHp).toBe(championStatWithPower("G1", "health", 2, 3));
-    expect(gorgo(3).maxHp).toBeGreaterThan(championStat("G1", "health", 2));
+  it("adds its food bonus's ladders to the level's figures", () => {
+    expect(gorgo({ fb: 3 }).maxHp).toBe(championStatWithFood("G1", "health", 2, 3));
+    expect(gorgo({ fb: 3 }).maxHp).toBeGreaterThan(championStat("G1", "health", 2));
+    expect(gorgo({ fb: 1 }).maxHp).toBe(championStat("G1", "health", 2) + 12_500);
   });
 
-  it("fights at its level alone in a log written before power levels, as at power level 0", () => {
+  it("adds nothing for its power level, which gates its abilities alone", () => {
+    expect(gorgo({ pl: 3 }).maxHp).toBe(championStat("G1", "health", 2));
+  });
+
+  it("fights at its level alone in a log with neither, as at food bonus 0", () => {
     expect(gorgo().maxHp).toBe(championStat("G1", "health", 2));
-    expect(gorgo(0).maxHp).toBe(gorgo().maxHp);
+    expect(gorgo({ fb: 0 }).maxHp).toBe(gorgo().maxHp);
+  });
+
+  it("fights every champion at its cage card's figures, food bonus 3 included", () => {
+    // Level 6 (Krallen 5), food bonus 3: health as the card adds it up.
+    const cases: [number, string, number, number][] = [
+      [1, "Gorgo", 6, 200_000 + 50_000],
+      [2, "Drull", 6, 60_000 + 10_000],
+      [3, "Fomor", 6, 40_000 + 4_000],
+      [4, "Korath", 6, 175_000 + 4_000],
+      // Krallen's bonus ladders are all 0.
+      [5, "Krallen", 5, 62_000],
+    ];
+    for (const [t, name, level, health] of cases) {
+      expect(flung(t, level, { pl: 1, fb: 3 }).maxHp, name).toBe(health);
+    }
   });
 });
 

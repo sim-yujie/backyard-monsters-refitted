@@ -244,8 +244,10 @@ export interface ChampionOnField {
   /** `G1`..`G5`, the id the stat table is keyed by. */
   readonly id: string;
   readonly level: number;
-  /** 0 to 3; the `bonus*` ladders are indexed by it (`champions/Krallen.as:25`). */
+  /** 0 to 3; it gates the abilities (`champions/Krallen.as:25`). */
   readonly powerLevel: number;
+  /** The food-bonus rank, 0 to 3; it indexes the `bonus*` ladders (`ChampionBase.as:123-155`). */
+  readonly foodBonus?: number;
 }
 
 /** One entry of a `champion` or `attackerchampion` list (`ChampionSchema.ts`). */
@@ -477,9 +479,11 @@ export type FlingEvent =
       readonly r: number;
       readonly monsters: Roster;
       /**
-       * The champion flung with the drop: its type, level and power level
-       * (`pl`, 0 to 3, issue #202). A log written before `pl` existed carries
-       * none, and that champion fights at its level alone. `s` is the Mode it
+       * The champion flung with the drop: its type, level, power level
+       * (`pl`, 0 to 3, issue #202), which gates its abilities, and food-bonus
+       * rank (`fb`, 0 to 3), which adds its `bonus*` stats as the cage card
+       * shows them (`ChampionBase.as:123-155`). A log with neither fights it
+       * at its level alone. `s` is the Mode it
        * was flung in (issue #220, `stance.ts`); a log with none fights it as
        * Hybrid, which is the Flash champion. `b` is its learned brain as the
        * attack froze it at launch (issue #219, `brain.ts`); none is a zero brain.
@@ -488,6 +492,7 @@ export type FlingEvent =
         readonly t: number;
         readonly l: number;
         readonly pl?: number;
+        readonly fb?: number;
         readonly s?: ChampionStance;
         readonly b?: Partial<BrainWeights>;
       };

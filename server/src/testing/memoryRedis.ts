@@ -1,7 +1,8 @@
 /**
  * For tests: the part of Bun's `RedisClient` the presence and bot-check code
  * uses (#271, #273), in memory. Strings, lists and hashes (the last through
- * `send("HINCRBY" | "HGET")`, which the typed client lacks), with key lives
+ * `send("HINCRBY" | "HGET" | "HSET")`, which the typed client lacks, and
+ * `send("EXPIRE")` for a hash's life), with key lives
  * read off `Date.now()`, so `setSystemTime` ages them. Anything else fails
  * loudly rather than answering by accident.
  *
@@ -112,6 +113,21 @@ export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = t
         }
         case "HGET":
           return hashes.get(key)?.get(field) ?? null;
+        case "HSET": {
+          const hash = hashes.get(key) ?? new Map<string, string>();
+          const pairs = args.slice(1);
+          let added = 0;
+          for (let i = 0; i + 1 < pairs.length; i += 2) {
+            if (!hash.has(pairs[i]!)) added++;
+            hash.set(pairs[i]!, pairs[i + 1]!);
+          }
+          hashes.set(key, hash);
+          return added;
+        }
+        case "EXPIRE":
+          if (!exists(key)) return 0;
+          expiry.set(key, Date.now() + Number(field) * 1000);
+          return 1;
         default:
           throw new Error(`memoryRedis: ${command} is not supported`);
       }

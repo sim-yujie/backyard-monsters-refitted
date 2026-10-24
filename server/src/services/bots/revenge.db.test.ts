@@ -4,7 +4,9 @@ import { MikroORM } from "@mikro-orm/postgresql";
 import ormConfig from "../../mikro-orm.config.js";
 import type { BotConfig } from "../../config/BotConfig.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
+import { Save } from "../../database/models/save.model.js";
 import { BUSY_RETRY_MINUTES, PROTECTED_RETRY_HOURS, SLOT_RETRY_MINUTES, type RevengeOutcome } from "./revenge.js";
+import { CHAIN_SLACK_MINUTES, CHAIN_WAIT_HOURS } from "./revengeChain.js";
 import { createBots, deleteBots } from "./factory.js";
 import { backoffMinutes, REBALANCE_JOB, runBotSweep, type RevengeRunner } from "./sweep.js";
 
@@ -43,20 +45,21 @@ describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () =
   };
 
   /** Calls the runner received, and what it answers. */
-  let calls: { bot: number; target: number; now: number }[] = [];
-  let answer: () => Promise<RevengeOutcome> = async () => ({ status: "landed", damageBefore: 0, damageAfter: 40 });
+  type Call = Parameters<RevengeRunner["attack"]>[0];
+  let calls: Call[] = [];
+  let answer: (input: Call) => Promise<RevengeOutcome> = async () => ({ status: "landed", damageBefore: 0, damageAfter: 40 });
   let online = new Set<number>();
   const runner: RevengeRunner = {
     isOnline: async (userid) => online.has(userid),
     attack: async (input) => {
       calls.push(input);
-      return answer();
+      return answer(input);
     },
   };
 
   const config =
     (revenge = true): (() => BotConfig) =>
-    () => ({ fill: false, brain: true, revenge, total: 3, daysPerLevel: 3 });
+    () => ({ fill: false, brain: true, revenge, total: 3, pace: 3, quietRate: 0, growingFlow: 1, newPerDay: 8, levelSlack: 2 });
 
   const pass = (options: { revenge?: boolean; runner?: RevengeRunner | null; when?: number; draw?: number } = {}) =>
     runBotSweep({
@@ -98,7 +101,7 @@ describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () =
     if (player) await dropPlayer(player);
     await sql(`DELETE FROM bym.job_run WHERE job = ?`, [REBALANCE_JOB]);
     // Two bots, and a player: a bot-made user and yard taken out of the bot table.
-    const made = await createBots(orm.em.fork(), [10, 12, 11], { rng: mulberry32(244), now: NOW, daysPerLevel: 3 });
+    const made = await createBots(orm.em.fork(), [15, 17, 16], { rng: mulberry32(244), now: NOW, pace: 3 });
     [bot, otherBot, player] = made.map((one) => one.userid) as [number, number, number];
     await sql(`DELETE FROM bym.bot WHERE userid = ?`, [player]);
     // Today's rebalance is done, and both bots have their grows booked well ahead.
@@ -138,12 +141,105 @@ describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () =
     expect(await dueOf(id)).toBe(NOW - MINUTE);
   }, 30_000);
 
-  test("all clear: the runner attacks once, and a landed revenge ends the job", async () => {
+  test("all clear: the runner attacks once; 20 points or more books the chain's next attack on the job", async () => {
+    answer = async () => ({ status: "landed", damageBefore: 0, damageAfter: 40, refillSeconds: 2 * HOUR });
     const id = await book();
     const report = (await pass())!;
     expect(calls).toEqual([{ bot, target: player, now: NOW }]);
+    expect(report.revenge).toEqual({ landed: 1, "chain:next": 1 });
+    // Draw 0.5: a chain of 3, the next attack 2 hours (the refill) and 35 minutes on.
+    const due = NOW + 2 * HOUR + 35 * MINUTE;
+    const row = (await job(id))!;
+    expect(row.payload).toEqual({ chain: { length: 3, done: 1, last: NOW } });
+    expect(await dueOf(id)).toBe(due);
+    expect(new Date(row.giveup_at).getTime() / 1000).toBe(due + CHAIN_WAIT_HOURS * HOUR);
+  }, 30_000);
+
+  /** The stand-in lands as the real runner does: an attack log at its time, damage as given. */
+  const lands =
+    (damageBefore: number, damageAfter: number): typeof answer =>
+    async (input) => {
+      await attackLog(input.bot, input.now);
+      return { status: "landed", damageBefore, damageAfter, refillSeconds: 2 * HOUR };
+    };
+
+  test("a chain runs to its length: later attacks refill the bot's Housing and skip the caps", async () => {
+    answer = lands(0, 30);
+    const id = await book();
+    // Draw 0.999: a chain of 4, each next attack 2 hours and an hour on.
+    let when = NOW;
+    for (let attack = 1; attack <= 4; attack++) {
+      const report = (await pass({ when, draw: 0.999_999 }))!;
+      expect(calls).toHaveLength(attack);
+      expect(typeof calls[attack - 1]!.refill).toBe(attack === 1 ? "undefined" : "function");
+      if (attack < 4) {
+        // This bot's attack 3 hours ago would fill the pair's cap: a chain's own attacks do not ask it.
+        expect(report.revenge).toEqual({ landed: 1, "chain:next": 1 });
+        expect((await job(id))!.payload).toEqual({ chain: { length: 4, done: attack, last: when } });
+        const next = await dueOf(id);
+        expect(next).toBeGreaterThan(when + 2 * HOUR + (CHAIN_SLACK_MINUTES.max - 1) * MINUTE);
+        when = next;
+      } else {
+        expect(report.revenge).toEqual({ landed: 1, "chain:length": 1 });
+        expect(await job(id)).toBeUndefined();
+      }
+    }
+
+    // The refill tops the bot's emptied Housing up again.
+    const em = orm.em.fork();
+    const save = (await em.findOne(Save, { userid: bot, type: "main" }))!;
+    save.monsters = { ...save.monsters, housed: {} };
+    calls[1]!.refill!(save);
+    expect(Object.keys((save.monsters.housed ?? {}) as Record<string, number>).length).toBeGreaterThan(0);
+  }, 60_000);
+
+  test("a weak attack (5%) or a destroyed yard ends the chain after one", async () => {
+    answer = lands(0, 5);
+    const weak = await book();
+    expect((await pass())!.revenge).toEqual({ landed: 1, "chain:lowDamage": 1 });
+    expect(await job(weak)).toBeUndefined();
+
+    await sql(`DELETE FROM bym.attack_logs WHERE defender_userid = ?`, [player]);
+    answer = lands(60, 95);
+    const wrecked = await book({ by: otherBot });
+    expect((await pass())!.revenge).toEqual({ landed: 1, "chain:destroyed": 1 });
+    expect(await job(wrecked)).toBeUndefined();
+  }, 30_000);
+
+  test("a later attack never goes through protection: it waits, or ends past its wait limit", async () => {
+    answer = lands(0, 30);
+    const id = await book();
+    await pass();
+    const due = await dueOf(id);
+
+    // Two hours of protection left: again an hour after it ends (draw 0).
+    await setYard(player, "protected = ?", [due + 2 * HOUR]);
+    expect((await pass({ when: due, draw: 0 }))!.revenge).toEqual({ "wait:protected": 1 });
+    expect(await dueOf(id)).toBe(due + 2 * HOUR + PROTECTED_RETRY_HOURS.min * HOUR);
+
+    // 36 hours of damage protection: past the chain's 12-hour wait, so the chain ends.
+    await setYard(player, "protected = ?", [due + 36 * HOUR]);
+    await sql(`UPDATE bym.bot_job SET due_at = ? WHERE id = ?`, [at(due), id]);
+    expect((await pass({ when: due, draw: 0 }))!.revenge).toEqual({ "cancel:gaveUp": 1 });
     expect(await job(id)).toBeUndefined();
-    expect(report.revenge).toEqual({ landed: 1 });
+    expect(calls).toHaveLength(1);
+  }, 30_000);
+
+  test("a later attack waits while the player is online, and ends if the bot attacked them since", async () => {
+    answer = lands(0, 30);
+    const id = await book();
+    await pass();
+    const due = await dueOf(id);
+
+    online.add(player);
+    expect((await pass({ when: due, draw: 0 }))!.revenge).toEqual({ "wait:online": 1 });
+    expect(await dueOf(id)).toBe(due + BUSY_RETRY_MINUTES.min * MINUTE);
+    online.clear();
+
+    await attackLog(bot, NOW + HOUR);
+    await sql(`UPDATE bym.bot_job SET due_at = ? WHERE id = ?`, [at(due), id]);
+    expect((await pass({ when: due }))!.revenge).toEqual({ "cancel:alreadyAvenged": 1 });
+    expect(calls).toHaveLength(1);
   }, 30_000);
 
   test("a revenge left to land from its checkpoint also ends the job", async () => {
@@ -221,8 +317,10 @@ describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () =
 
   test("the caps: two bots' revenges in 24 hours make a third wait; this bot's own since the attack ends it", async () => {
     // Another bot's revenge 20 hours ago and a third's 2 hours ago: the first leaves the window in 4 hours.
+    // (A chain counts once: the caps count bots, so the third is a bot of its own.)
+    const [third] = await createBots(orm.em.fork(), [15], { rng: mulberry32(245), now: NOW, pace: 3 });
     await attackLog(otherBot, NOW - 20 * HOUR);
-    await attackLog(otherBot, NOW - 2 * HOUR);
+    await attackLog(third!.userid, NOW - 2 * HOUR);
     const id = await book({ hoursAgo: 10 });
     expect((await pass({ draw: 0 }))!.revenge).toEqual({ "wait:caps": 1 });
     expect(await dueOf(id)).toBe(NOW + 4 * HOUR + BUSY_RETRY_MINUTES.min * MINUTE);
@@ -239,7 +337,7 @@ describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () =
     await attackLog(991_244, NOW - HOUR);
     await attackLog(991_244, NOW - 2 * HOUR);
     await book();
-    expect((await pass())!.revenge).toEqual({ landed: 1 });
+    expect((await pass())!.revenge).toEqual({ landed: 1, "chain:next": 1 });
   }, 30_000);
 
   test("the runner's answers: busy waits 5 minutes, refused 15-60, nothing to send ends it, a throw backs off", async () => {
@@ -284,7 +382,7 @@ describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () =
     release();
     const report = await first;
     expect(calls).toHaveLength(1);
-    expect(report!.revenge).toEqual({ landed: 1 });
+    expect(report!.revenge).toEqual({ landed: 1, "chain:next": 1 });
     expect(second!.revenge).toEqual({});
   }, 30_000);
 });

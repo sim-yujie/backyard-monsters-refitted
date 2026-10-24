@@ -24,9 +24,9 @@ describe("cagedChampions", () => {
   const gorgo = { t: 1, l: 3, hp: 5000, pl: 2, status: 0, fd: 0, ft: 0, fb: 0 };
 
   it("is each champion at home with health left, Krallen included", () => {
-    expect(cagedChampions([gorgo])).toEqual([{ t: 1, l: 3, hp: 5000, pl: 2 }]);
+    expect(cagedChampions([gorgo])).toEqual([{ t: 1, l: 3, hp: 5000, pl: 2, fb: 0 }]);
     expect(cagedChampions([{ ...gorgo, status: 1 }, { ...gorgo, t: 5, l: 2 }])).toEqual([
-      { t: 5, l: 2, hp: 5000, pl: 2 },
+      { t: 5, l: 2, hp: 5000, pl: 2, fb: 0 },
     ]);
     expect(cagedChampions([{ ...gorgo, hp: 0 }, { ...gorgo, t: 3 }]).map((one) => one.t)).toEqual([3]);
   });
@@ -35,8 +35,8 @@ describe("cagedChampions", () => {
     const krallen = { ...gorgo, t: 5, l: 5, hp: 9000 };
     const fomor = { ...gorgo, t: 3, l: 6, hp: 7000 };
     expect(cagedChampions([krallen, fomor])).toEqual([
-      { t: 5, l: 5, hp: 9000, pl: 2 },
-      { t: 3, l: 6, hp: 7000, pl: 2 },
+      { t: 5, l: 5, hp: 9000, pl: 2, fb: 0 },
+      { t: 3, l: 6, hp: 7000, pl: 2, fb: 0 },
     ]);
     expect(cagedChampions([fomor, krallen]).map((one) => one.t)).toEqual([3, 5]);
   });
@@ -44,8 +44,8 @@ describe("cagedChampions", () => {
   it("takes at most one basic champion and one Krallen", () => {
     const krallen = { ...gorgo, t: 5 };
     expect(cagedChampions([gorgo, { ...gorgo, t: 3 }, krallen, { ...krallen, l: 1 }])).toEqual([
-      { t: 1, l: 3, hp: 5000, pl: 2 },
-      { t: 5, l: 3, hp: 5000, pl: 2 },
+      { t: 1, l: 3, hp: 5000, pl: 2, fb: 0 },
+      { t: 5, l: 3, hp: 5000, pl: 2, fb: 0 },
     ]);
   });
 
@@ -59,6 +59,12 @@ describe("cagedChampions", () => {
   it("clamps the power level to 0..3, and reads none as 0", () => {
     expect(cagedChampions([{ ...gorgo, pl: 9 }])[0]?.pl).toBe(3);
     expect(cagedChampions([{ ...gorgo, pl: undefined }])[0]?.pl).toBe(0);
+  });
+
+  it("carries the food-bonus rank, clamped to 0..3, none read as 0", () => {
+    expect(cagedChampions([{ ...gorgo, fb: 2 }])[0]?.fb).toBe(2);
+    expect(cagedChampions([{ ...gorgo, fb: 9 }])[0]?.fb).toBe(3);
+    expect(cagedChampions([{ ...gorgo, fb: undefined }])[0]?.fb).toBe(0);
   });
 });
 
@@ -76,7 +82,7 @@ describe("defenderForcesOf", () => {
     ).toEqual({
       bunkers: { 5: { C1: 4 } },
       defenderLevels: { C1: 3 },
-      defenderChampions: [{ t: 2, l: 4, hp: 900, pl: 0 }],
+      defenderChampions: [{ t: 2, l: 4, hp: 900, pl: 0, fb: 0 }],
     });
   });
 
@@ -93,8 +99,8 @@ describe("parseDefenderForces", () => {
       bunkers: { 83: { C1: 10, C2: 4 } },
       defenderLevels: { C1: 6 },
       defenderChampions: [
-        { t: 5, l: 4, hp: 8000, pl: 2 },
-        { t: 1, l: 2, hp: 5000, pl: 1 },
+        { t: 5, l: 4, hp: 8000, pl: 2, fb: 0 },
+        { t: 1, l: 2, hp: 5000, pl: 1, fb: 2 },
       ],
     };
     expect(parseDefenderForces(JSON.parse(JSON.stringify(forces)))).toEqual(forces);
@@ -110,7 +116,7 @@ describe("parseDefenderForces", () => {
     ).toEqual({
       bunkers: {},
       defenderLevels: {},
-      defenderChampions: [{ t: 1, l: 2, hp: 5000, pl: 1 }],
+      defenderChampions: [{ t: 1, l: 2, hp: 5000, pl: 1, fb: 0 }],
     });
   });
 

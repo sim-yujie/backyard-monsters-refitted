@@ -1,0 +1,301 @@
+{
+  "_about": "Answers of the owner dashboard's server routes, taken from a test server with made-up data (admin-dashboard main.test.ts).",
+  "me": {
+    "error": 0,
+    "admin": true,
+    "userid": 2505,
+    "username": "agenttester"
+  },
+  "health": {
+    "error": 0,
+    "health": {
+      "generatedAt": "2026-10-23T07:03:21.944Z",
+      "server": {
+        "startedAt": "2026-10-23T06:54:23.976Z",
+        "uptimeSeconds": 538,
+        "version": {
+          "release": null,
+          "commit": null
+        },
+        "rulesVersion": "f8304513abead896",
+        "runtime": "bun 1.4.2",
+        "memory": {
+          "rssBytes": 140972032,
+          "heapUsedBytes": 30929557,
+          "containerUsedBytes": null,
+          "containerLimitBytes": null
+        }
+      },
+      "host": {
+        "generatedAt": "2026-10-23T07:03:03.000Z",
+        "stale": false,
+        "hostname": "bymr-sgp1",
+        "uptimeSeconds": 1659600,
+        "load": [
+          0.42,
+          0.37,
+          0.31
+        ],
+        "memory": {
+          "totalBytes": 8589934592,
+          "availableBytes": 4939212390,
+          "swapTotalBytes": 2147483648,
+          "swapFreeBytes": 2147483648
+        },
+        "containers": [
+          {
+            "service": "caddy",
+            "state": "running",
+            "health": null,
+            "restartCount": 0,
+            "startedAt": "2026-10-17T07:03:03.000Z",
+            "oomKilled": false,
+            "exitCode": null
+          },
+          {
+            "service": "web",
+            "state": "running",
+            "health": null,
+            "restartCount": 2,
+            "startedAt": "2026-10-17T07:03:03.000Z",
+            "oomKilled": false,
+            "exitCode": null
+          },
+          {
+            "service": "db",
+            "state": "running",
+            "health": "healthy",
+            "restartCount": 0,
+            "startedAt": "2026-10-17T07:03:03.000Z",
+            "oomKilled": false,
+            "exitCode": null
+          },
+          {
+            "service": "redis",
+            "state": "running",
+            "health": "healthy",
+            "restartCount": 0,
+            "startedAt": "2026-10-17T07:03:03.000Z",
+            "oomKilled": false,
+            "exitCode": null
+          },
+          {
+            "service": "backup",
+            "state": "running",
+            "health": null,
+            "restartCount": 0,
+            "startedAt": "2026-10-17T07:03:03.000Z",
+            "oomKilled": false,
+            "exitCode": null
+          },
+          {
+            "service": "db-init",
+            "state": "exited",
+            "health": null,
+            "restartCount": 0,
+            "startedAt": "2026-10-17T07:03:03.000Z",
+            "oomKilled": false,
+            "exitCode": 0
+          }
+        ]
+      },
+      "disks": [
+        {
+          "path": "/",
+          "mount": "/",
+          "totalBytes": 171798691840,
+          "usedBytes": 147746874982,
+          "availableBytes": 24051816858,
+          "usedPercent": 86
+        }
+      ],
+      "disksFrom": "host",
+      "database": {
+        "ok": true,
+        "pingMs": 2.7,
+        "sizeBytes": 33928895
+      },
+      "redis": {
+        "ok": true,
+        "pingMs": 0.9,
+        "usedMemoryBytes": 2191272,
+        "peakMemoryBytes": 2246880,
+        "maxMemoryBytes": 0
+      },
+      "backups": {
+        "count": 14,
+        "totalBytes": 4660039516,
+        "partialCount": 1,
+        "newest": {
+          "name": "bym-2026-10-22.sql.gz",
+          "at": "2026-10-22T00:03:03.000Z",
+          "sizeBytes": 332859965,
+          "ageHours": 31
+        }
+      },
+      "responseTimes": {
+        "requests": 120,
+        "p50Ms": 7,
+        "p95Ms": 58,
+        "maxMs": 127,
+        "serverErrors": 0,
+        "windowMinutes": 15
+      }
+    },
+    "problems": [
+      {
+        "key": "backup",
+        "title": "The nightly backup was missed",
+        "detail": "The newest database backup (bym-2026-10-22.sql.gz) is 31 hours old.",
+        "section": "backups"
+      }
+    ],
+    "unchecked": [],
+    "openAlerts": {},
+    "telegram": false
+  },
+  "overview": {
+    "error": 0,
+    "generatedAt": "2026-10-23T07:03:22.164Z",
+    "players": {
+      "total": 6,
+      "activeToday": 1,
+      "active7": 2,
+      "active30": 5
+    },
+    "today": {
+      "day": "2026-10-23",
+      "newPlayers": 0,
+      "totalPlayers": 6,
+      "activePlayers": 0,
+      "activeSource": "partial",
+      "attacks": 0,
+      "tribeRaids": 0,
+      "eventNewPlayers": {},
+      "eventPlayers": {},
+      "bugReports": 3,
+      "browserErrors": 0,
+      "serverErrors": 0
+    },
+    "days": [
+      {
+        "day": "2026-10-20",
+        "newPlayers": 54,
+        "totalPlayers": 1819,
+        "activePlayers": 233,
+        "activeSource": "tracked",
+        "attacks": 237,
+        "tribeRaids": 29,
+        "eventNewPlayers": {},
+        "eventPlayers": {
+          "halloween": 78
+        },
+        "bugReports": 1,
+        "browserErrors": 13,
+        "serverErrors": 1
+      },
+      {
+        "day": "2026-10-21",
+        "newPlayers": 29,
+        "totalPlayers": 1848,
+        "activePlayers": 268,
+        "activeSource": "tracked",
+        "attacks": 278,
+        "tribeRaids": 52,
+        "eventNewPlayers": {},
+        "eventPlayers": {
+          "halloween": 56
+        },
+        "bugReports": 4,
+        "browserErrors": 22,
+        "serverErrors": 40
+      },
+      {
+        "day": "2026-10-22",
+        "newPlayers": 35,
+        "totalPlayers": 1883,
+        "activePlayers": 233,
+        "activeSource": "tracked",
+        "attacks": 159,
+        "tribeRaids": 35,
+        "eventNewPlayers": {},
+        "eventPlayers": {
+          "halloween": 79
+        },
+        "bugReports": 2,
+        "browserErrors": 9,
+        "serverErrors": 3
+      }
+    ]
+  },
+  "bugReports": {
+    "error": 0,
+    "reports": [
+      {
+        "id": 102,
+        "createdAt": "2026-10-23T04:28:20.894Z",
+        "userid": null,
+        "username": null,
+        "preview": "Cannot log in on my tablet, the button just spins forever.",
+        "gameVersion": "v2.0.0-beta.3",
+        "screen": "login",
+        "device": "Tablet",
+        "hasScreenshot": false,
+        "hasPicture": false,
+        "emailed": true,
+        "status": "new",
+        "statusChangedAt": null,
+        "hasNotes": false
+      },
+      {
+        "id": 101,
+        "createdAt": "2026-10-23T05:50:20.894Z",
+        "userid": 3,
+        "username": "MonsterMash",
+        "preview": "My Octo-ooze walked straight through the wall on the left side of my yard and then got stuck behind the Town Hall. It stayed there until th…",
+        "gameVersion": "v2.0.0-beta.3",
+        "screen": "attack",
+        "device": "Phone",
+        "hasScreenshot": true,
+        "hasPicture": false,
+        "emailed": true,
+        "status": "new",
+        "statusChangedAt": null,
+        "hasNotes": false
+      }
+    ],
+    "nextBefore": null
+  },
+  "errors": {
+    "error": 0,
+    "groups": [
+      {
+        "id": 1,
+        "source": "browser",
+        "message": "TypeError: Cannot read properties of undefined (reading 'path')",
+        "place": "MonsterWalker.step (walker.ts:212)",
+        "stack": "TypeError: Cannot read properties of undefined (reading 'path')\n    at MonsterWalker.step (walker.ts:212:18)\n    at AttackScene.tick (AttackScene.ts:540:12)\n    at Ticker.run (ticker.ts:44:7)",
+        "count": 37,
+        "firstSeen": "2026-10-20T06:31:20.894Z",
+        "lastSeen": "2026-10-23T05:53:20.894Z",
+        "gameVersion": "v2.0.0-beta.3",
+        "screen": "attack",
+        "userids": [
+          3,
+          7,
+          8
+        ]
+      }
+    ],
+    "totals": {
+      "browser": {
+        "kinds": 3,
+        "occurrences": 311
+      },
+      "server": {
+        "kinds": 3,
+        "occurrences": 16
+      }
+    }
+  }
+}

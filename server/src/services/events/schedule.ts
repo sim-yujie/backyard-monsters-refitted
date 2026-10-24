@@ -45,16 +45,26 @@ export const eventWindow = (
 export const statusAt = (window: EventWindow, now: number): EventStatus =>
   now < window.startsAt ? "upcoming" : now < window.endsAt ? "active" : "past";
 
-/** An event a player can see, with its window. */
+/**
+ * When the event's ladder tiers stop being claimable: `claimDays` after its
+ * end (`game-data/events/events.ts`), or at its end without any.
+ */
+export const claimsUntil = (event: EventDefinition, window: EventWindow): number =>
+  window.endsAt + Math.max(0, Math.floor(event.claimDays ?? 0)) * DAY_SECONDS;
+
+/** An event a player can see, with its window. "ended": over, but its tiers can still be claimed. */
 export interface ScheduledEvent {
   readonly event: EventDefinition;
   readonly window: EventWindow;
-  readonly status: Exclude<EventStatus, "past">;
+  readonly status: "active" | "upcoming" | "ended";
 }
 
 /**
  * The events to show now: every active one, then the ones starting within
- * {@link UPCOMING_DAYS}, each in start order. Past events are left out.
+ * {@link UPCOMING_DAYS}, each in start order, then the ones that are over
+ * but still within their {@link claimsUntil} (whose page shows them only to
+ * players with a tier left to claim, `eventsState.ts`). Other past events
+ * are left out.
  */
 export const visibleEvents = (
   now: number,
@@ -65,10 +75,14 @@ export const visibleEvents = (
   for (const event of events) {
     const window = eventWindow(event, now, forced);
     const status = statusAt(window, now);
-    if (status === "past") continue;
+    if (status === "past") {
+      if (now < claimsUntil(event, window)) shown.push({ event, window, status: "ended" });
+      continue;
+    }
     if (status === "upcoming" && window.startsAt - now > UPCOMING_DAYS * DAY_SECONDS) continue;
     shown.push({ event, window, status });
   }
-  const rank = (one: ScheduledEvent) => (one.status === "active" ? 0 : 1);
+  const RANKS = { active: 0, upcoming: 1, ended: 2 } as const;
+  const rank = (one: ScheduledEvent) => RANKS[one.status];
   return shown.sort((a, b) => rank(a) - rank(b) || a.window.startsAt - b.window.startsAt);
 };

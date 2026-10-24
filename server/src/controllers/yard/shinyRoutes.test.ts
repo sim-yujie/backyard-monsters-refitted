@@ -274,6 +274,38 @@ describe("POST /bm/yard/shop/buy", () => {
     expect(db.row).toMatchObject({ credits: 800 });
   });
 
+  test.each([
+    ["TOD", 600],
+    ["MOD", 500],
+    ["MDOD", 500],
+    ["MSOD", 500],
+  ])("%s runs 24 hours for %d Shiny", async (item, price) => {
+    const answer = await call(yardShopBuyAction, { item });
+    const now = answer.body.currenttime as number;
+
+    expect(answer.body.report).toEqual({ item, credits: price, q: 1, endsAt: now + 86400 });
+    expect(db.row).toMatchObject({ credits: 1000 - price, storedata: { [item]: { q: 1, s: now, e: now + 86400 } } });
+  });
+
+  test("a boost bought again while it runs restarts at a full 24 hours from now, without stacking", async () => {
+    const now = getCurrentDateTime();
+    db.row = rowOf({ storedata: { MOD: { q: 1, s: now - 80000, e: now + 6400 }, MSOD: { q: 1, s: now, e: now + 86400 } } });
+
+    const again = await call(yardShopBuyAction, { item: "MOD" });
+    const at = again.body.currenttime as number;
+    expect(again.body.report).toEqual({ item: "MOD", credits: 500, q: 1, endsAt: at + 86400 });
+    expect(db.row).toMatchObject({
+      credits: 500,
+      storedata: { MOD: { q: 1, s: at, e: at + 86400 }, MSOD: { q: 1, s: now, e: now + 86400 } },
+    });
+
+    // Bought twice in a row: still 24 hours from the last buy, never 48.
+    const twice = await call(yardShopBuyAction, { item: "MOD" });
+    expect((twice.body.report as { endsAt: number }).endsAt).toBe((twice.body.currenttime as number) + 86400);
+    expect(db.row).toMatchObject({ credits: 0 });
+    expect(await call(yardShopBuyAction, { item: "MOD" })).toMatchObject({ status: 409, body: { reason: "credits" } });
+  });
+
   test("PRO1 protects the yard for 24 hours from now when it has none", async () => {
     const answer = await call(yardShopBuyAction, { item: "PRO1" });
     const now = answer.body.currenttime as number;
@@ -321,7 +353,7 @@ describe("POST /bm/yard/shop/buy", () => {
   });
 
   test("items off the allowlist are 400 notForSale", async () => {
-    const heldBack = ["TOD", "MOD", "MDOD", "MSOD", "BLK2", "BLK5", "BUILDING28"];
+    const heldBack = ["TODI", "BLK1", "BLK2I", "BLK3I", "BUILDING28"];
     const dropped = ["HODI", "ENLI", "MUSK", "HAMS", "BR11", "BR43", "FQ", "FIX", "SP4"];
     for (const item of [...heldBack, ...dropped, "toString", "__proto__"]) {
       const answer = await call(yardShopBuyAction, { item });
@@ -342,5 +374,116 @@ describe("POST /bm/yard/shop/buy", () => {
       body: { reason: "credits", credits: { have: 224, need: 225 } },
     });
     expect(db.row).toMatchObject({ credits: 224, storedata: {} });
+  });
+});
+
+describe("POST /bm/yard/shop/buy: wall upgrades (BLK2..BLK5)", () => {
+  /** Town Hall `hall` plus the given Blocks, keyed from 10. */
+  const wallsRow = (hall: number, blocks: Row[], overrides: Row = {}): Row =>
+    rowOf({
+      credits: 1000,
+      buildingdata: {
+        "0": { id: 0, t: 14, X: 0, Y: 0, l: hall },
+        ...Object.fromEntries(blocks.map((block, i) => [String(10 + i), { id: 10 + i, t: 17, X: i * 10, Y: 0, l: 1, ...block }])),
+      },
+      ...overrides,
+    });
+
+  test("BLK4 takes every Block to Gold, priced per Block per level climbed, and awards each level's points", async () => {
+    // Level 1: 3 + 6 + 10 = 19; level 2: 6 + 10 = 16; level 3: 10; level 4 and 5 are left alone.
+    db.row = wallsRow(5, [{ l: 1 }, { l: 2 }, { l: 3 }, { l: 4 }, { l: 5 }]);
+    const answer = await call(yardShopBuyAction, { item: "BLK4" });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ item: "BLK4", credits: 45, tier: 4, blocks: 3 });
+    const levels = Object.values(buildings()).filter((b) => b.t === 17).map((b) => b.l);
+    expect(levels).toEqual([4, 4, 4, 4, 5]);
+    expect(db.row).toMatchObject({ credits: 955 });
+    const points = (answer.body.report as { points: number }).points;
+    expect(points).toBeGreaterThan(0);
+    expect(Number(db.row!.points)).toBe(points);
+  });
+
+  test("a Block still being built counts as level 1 and is finished first; a running upgrade is finished too", async () => {
+    db.row = wallsRow(3, [{ l: 1, cB: 500 }, { l: 1, cU: 500 }]);
+    const answer = await call(yardShopBuyAction, { item: "BLK2" });
+
+    expect(answer.body.report).toMatchObject({ credits: 6, blocks: 2 });
+    for (const id of ["10", "11"]) {
+      expect(buildings()[id]).toMatchObject({ t: 17, l: 2 });
+      expect(buildings()[id].cB).toBeUndefined();
+      expect(buildings()[id].cU).toBeUndefined();
+    }
+  });
+
+  test("a Block already at the tier keeps its running upgrade", async () => {
+    db.row = wallsRow(3, [{ l: 1 }, { l: 4, cU: 9000 }]);
+    await call(yardShopBuyAction, { item: "BLK2" });
+    expect(buildings()["11"]).toMatchObject({ l: 4, cU: 9000 });
+  });
+
+  test("damaged and repairing Blocks come out whole, as an upgrade heals in Flash", async () => {
+    db.row = wallsRow(3, [{ l: 1, hp: 10 }, { l: 1, hp: 20, rE: 1 }], { buildinghealthdata: { "10": 10, "11": 20 } });
+    await call(yardShopBuyAction, { item: "BLK2" });
+
+    for (const id of ["10", "11"]) {
+      expect(buildings()[id].hp).toBeUndefined();
+      expect(buildings()[id].rE).toBeUndefined();
+      expect(buildings()[id]).toMatchObject({ l: 2 });
+    }
+    expect(db.row!.buildinghealthdata).toEqual({});
+  });
+
+  test("a legacy Stone Block row (t: 18) counts as level 2 and is written back as a type 17", async () => {
+    db.row = wallsRow(4, [{ t: 18, l: 1 }]);
+    const answer = await call(yardShopBuyAction, { item: "BLK3" });
+
+    expect(answer.body.report).toMatchObject({ credits: 6, blocks: 1 });
+    expect(buildings()["10"]).toMatchObject({ t: 17, l: 3 });
+  });
+
+  test("each tier needs its Town Hall level in the main yard", async () => {
+    const gates: [string, number][] = [["BLK2", 3], ["BLK3", 4], ["BLK4", 5], ["BLK5", 6]];
+    for (const [item, need] of gates) {
+      db.row = wallsRow(need - 1, [{ l: 1 }]);
+      expect(await call(yardShopBuyAction, { item })).toMatchObject({
+        status: 409,
+        body: { reason: "townHall", have: need - 1, need },
+      });
+      expect(db.row).toMatchObject({ credits: 1000 });
+
+      db.row = wallsRow(need, [{ l: 1 }]);
+      expect((await call(yardShopBuyAction, { item })).status).toBe(200);
+    }
+  });
+
+  test("nothing below the tier, or no Blocks at all, is 409 nothingToUpgrade and charges nothing", async () => {
+    db.row = wallsRow(6, [{ l: 5 }, { l: 5 }]);
+    expect(await call(yardShopBuyAction, { item: "BLK5" })).toMatchObject({
+      status: 409,
+      body: { reason: "nothingToUpgrade", tier: 5 },
+    });
+    db.row = wallsRow(6, []);
+    expect(await call(yardShopBuyAction, { item: "BLK2" })).toMatchObject({ status: 409, body: { reason: "nothingToUpgrade" } });
+    expect(db.row).toMatchObject({ credits: 1000 });
+  });
+
+  test("short of Shiny is refused and nothing changes; Black Diamond from scratch is 34 a Block", async () => {
+    db.row = wallsRow(6, [{ l: 1 }, { l: 1 }], { credits: 67 });
+    const before = structuredClone(db.row);
+    expect(await call(yardShopBuyAction, { item: "BLK5" })).toMatchObject({
+      status: 409,
+      body: { reason: "credits", credits: { have: 67, need: 68 } },
+    });
+    expect(db.row).toEqual(before);
+  });
+
+  test("a Shiny-locked account is refused", async () => {
+    db.row = wallsRow(3, [{ l: 1 }]);
+    expect(await call(yardShopBuyAction, { item: "BLK2" }, userOf({ shiny_locked: true }))).toMatchObject({
+      status: 409,
+      body: { reason: "shinyLocked" },
+    });
+    expect(buildings()["10"]).toMatchObject({ l: 1 });
   });
 });

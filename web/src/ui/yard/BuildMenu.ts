@@ -1,5 +1,6 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
+import { guidePays } from "@/game/guide/steps";
 import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import {
   BUILD_CATALOGUE,
@@ -620,7 +621,12 @@ export class BuildMenu {
 
     // Build instantly is offered once the hall and prerequisites allow the
     // building; what it lacks after that is Shiny, which the button itself says.
-    if (!offer.instantGate || offer.instantGate.reason === "credits") {
+    // Not while the guided start pays for this one ("This one's on me: tap
+    // Build"): there is nothing to spend Shiny on, and Bob's cover over the
+    // panel swallowed the tap, so the button did nothing.
+    const store = this.binding.store;
+    const guidePaid = guidePays(offer.type, store.save.onboarding, store.kind);
+    if (!guidePaid && (!offer.instantGate || offer.instantGate.reason === "credits")) {
       const instant = this.instantButton(offer.type);
       instant.setPrice(offer.instantPrice);
       instant.setBlocked(offer.instantGate ? "Not enough Shiny." : null);

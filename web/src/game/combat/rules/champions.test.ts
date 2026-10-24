@@ -5,10 +5,13 @@ import {
   FLAME_INTERVAL,
   QUAKE_STRIKE_FRAME,
   fomorBuff,
+  hasLootAura,
+  krallenAuraRadius,
   linearAreaDamage,
+  lootAuraBonus,
 } from "./champions.js";
 import { createBattle, type BattleVisualEvent, type CreepSnapshot } from "./engine.js";
-import { championStatWithPower } from "./stats.js";
+import { championStat, championStatWithFood } from "./stats.js";
 import { findChampionTarget } from "./targeting.js";
 import { buildEngineYard } from "./yard.js";
 import type { CombatBuildingDataMap, Roster } from "./types.js";
@@ -133,11 +136,11 @@ describe("Korath (issue #222)", () => {
   it("fireballs a flyer for a quarter of his damage from power level 2 at level 4, and it burns", () => {
     const battle = createBattle(cageYard(), {
       seed: 5,
-      defenderChampions: [{ t: 4, l: 4, hp: 200_000, pl: 2 }],
+      defenderChampions: [{ t: 4, l: 4, hp: 200_000, pl: 2, fb: 2 }],
     });
     fling(battle, 140, { C14: 3 });
     const { hits, hurts } = korathHits(battle, 1200);
-    const damage = championStatWithPower("G4", "damage", 4, 2);
+    const damage = championStatWithFood("G4", "damage", 4, 2);
     expect(hits.length).toBeGreaterThan(0);
     for (const hit of hits) expect(hit.amount).toBeLessThanOrEqual(Math.trunc(damage / 4));
     expect(hits[0]?.amount).toBe(Math.trunc(damage / 4));
@@ -167,7 +170,7 @@ describe("Korath (issue #222)", () => {
     });
     fling(battle, 140, { C6: 30 });
     const { hits, quakes } = korathHits(battle, 1500);
-    const range = championStatWithPower("G4", "range", 5, 3);
+    const range = championStatWithFood("G4", "range", 5, 3);
     expect(quakes.length).toBeGreaterThan(0);
     expect(quakes[0]!.radius).toBe(range * 2.5);
     // Three blows, then the stand: nothing lands until the quake, 48 frames in.
@@ -285,13 +288,75 @@ describe("Fomor (issue #222)", () => {
     });
     expect(followed).toBe(true);
   });
+
+  /**
+   * A line of walls from -200 to 200 across Y 0..20, Fomor's harvester on the
+   * near side and a Pokey pack under a Cannon Tower on the far side. Flash
+   * routes a walking Fomor to its ally (`WaypointTo`, `Fomor.as:79`) and flies
+   * it straight from its level 3 (`:74-76`; `CHAMPIONCAGE.as:160`).
+   */
+  const acrossTheWall = (fomorLevel: number) => {
+    const buildings: Record<string, CombatBuildingDataMap[string]> = {
+      "1": { id: 1, t: 1, l: 1, X: 0, Y: -400, st: 100_000 },
+      "2": { id: 2, t: 1, l: 1, X: 0, Y: 300, st: 100_000 },
+      "3": { id: 3, t: 20, l: 1, X: 100, Y: 300 },
+    };
+    for (let index = 0; index <= 20; index += 1) {
+      const id = 10 + index;
+      buildings[String(id)] = { id, t: 17, l: 1, X: -200 + index * 20, Y: 0 };
+    }
+    const yard = yardOf(buildings);
+    const battle = createBattle(yard, { seed: 8, levels: { C6: 10 } });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: 0,
+      y: -320,
+      r: 20,
+      monsters: {},
+      champion: { t: 3, l: fomorLevel },
+    });
+    battle.apply({ kind: "fling", t: 0, x: 0, y: 360, r: 40, monsters: { C6: 3 } });
+    const walls = yard.buildings.filter((building) => building.type === 17);
+    let crossedIntact = false;
+    let wentRound = false;
+    let flying = false;
+    watch(battle, 1500, (_event, current) => {
+      const fomor = championOf(current, false);
+      if (!fomor) return;
+      flying = fomor.flying;
+      if (fomor.iy >= 0 && (fomor.ix >= 220 || fomor.ix < -200)) wentRound = true;
+      const inWall = walls.some(
+        (wall) =>
+          fomor.ix >= wall.cx &&
+          fomor.ix < wall.cx + wall.w &&
+          fomor.iy >= wall.cy &&
+          fomor.iy < wall.cy + wall.h,
+      );
+      if (inWall && walls.every((wall) => wall.hp > 0)) crossedIntact = true;
+    });
+    return { crossedIntact, wentRound, flying };
+  };
+
+  it("walks round a wall to a wounded ally at level 1, never through it", () => {
+    const { crossedIntact, wentRound, flying } = acrossTheWall(1);
+    expect(flying).toBe(false);
+    expect(wentRound).toBe(true);
+    expect(crossedIntact).toBe(false);
+  });
+
+  it("flies straight over the wall to a wounded ally from level 3", () => {
+    const { crossedIntact, flying } = acrossTheWall(3);
+    expect(flying).toBe(true);
+    expect(crossedIntact).toBe(true);
+  });
 });
 
 describe("Krallen (issue #222)", () => {
-  const lootWith = (pl: number) => {
+  const lootWith = (l: number, pl = 0) => {
     const yard = yardOf({ "1": { id: 1, t: 14, l: 10, X: 0, Y: 0 } });
     const battle = createBattle(yard, { seed: 6 });
-    fling(battle, -60, { C1: 6 }, { t: 5, l: 5, pl });
+    fling(battle, -60, { C1: 6 }, { t: 5, l, pl });
     let boosted = false;
     watch(battle, 600, (_event, current) => {
       if (current.creeps().some((creep) => creep.lootBoosted)) boosted = true;
@@ -299,12 +364,32 @@ describe("Krallen (issue #222)", () => {
     return { loot: battle.state().loot.r1, boosted };
   };
 
-  it("raises the looting of the creeps around her from power level 2", () => {
-    const aura = lootWith(2);
-    const none = lootWith(1);
-    expect(aura.boosted).toBe(true);
-    expect(none.boosted).toBe(false);
-    expect(aura.loot).toBeGreaterThan(none.loot);
+  it("adds 0.5, 0.9 and 1.3 to a looting property at her levels 3, 4 and 5, nothing below", () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map(lootAuraBonus)).toEqual([0, 0, 0, 0.5, 0.9, 1.3, 1.3]);
+    // Level 5 is Flash's own `1 + _buff` at her top `buffs` rung.
+    expect(lootAuraBonus(5)).toBeCloseTo(1 + championStat("G5", "buffs", 5), 12);
+    expect([1, 2, 3, 4, 5].map(krallenAuraRadius)).toEqual([250, 275, 300, 325, 350]);
+  });
+
+  it("raises the looting of the creeps around her from her level 3, more at each level", () => {
+    const third = lootWith(3);
+    const fifth = lootWith(5);
+    expect(third.boosted).toBe(true);
+    expect(fifth.boosted).toBe(true);
+    expect(fifth.loot).toBeGreaterThan(third.loot);
+  });
+
+  it("has no aura at her levels 1 and 2, powered up or not", () => {
+    expect(lootWith(2).boosted).toBe(false);
+    expect(lootWith(2, 2).boosted).toBe(false);
+    expect(lootWith(1, 2).boosted).toBe(false);
+    expect(lootWith(3).loot).toBeGreaterThan(lootWith(2).loot);
+  });
+
+  it("gives the monsters attacking her yard nothing while she defends it", () => {
+    expect(hasLootAura("G5", 5, true)).toBe(false);
+    expect(hasLootAura("G5", 5, false)).toBe(true);
+    expect(hasLootAura("G1", 5, false)).toBe(false);
   });
 
   it("keeps her aura on until she has walked off, not the moment she is called back", () => {

@@ -2,7 +2,8 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import z from "zod";
 
 import type { User } from "../../database/models/user.model.js";
-import { eventView, type EventView } from "../../services/events/eventViews.js";
+import { eventPlayerOf, type EventPlayer } from "../../services/events/eventPlayer.js";
+import { eventView, hasTierToClaim, type EventView } from "../../services/events/eventViews.js";
 import type { EventProgressStore } from "../../services/events/progressStore.js";
 import { visibleEvents } from "../../services/events/schedule.js";
 import { logger } from "../../utils/logger.js";
@@ -13,7 +14,8 @@ import { logger } from "../../utils/logger.js";
  * - `GET /bm/events`: the server's clock (`now`, so countdowns are right
  *   whatever the device's clock says), every event on now or starting within
  *   30 days with the player's progress (`services/events/eventViews.ts`),
- *   and the last "What's new" release the player has seen. Claims are yard
+ *   any that is over but still has a reward the player can claim, and the
+ *   last "What's new" release the player has seen. Claims are yard
  *   actions (`controllers/yard/events.ts`).
  * - `POST /bm/whatsnew/seen { version }`: records that the player has seen
  *   the "What's new" cards up to `version` (a release name such as
@@ -54,12 +56,13 @@ export const readWhatsNewSeen = async (em: EntityManager, userid: number): Promi
   }
 };
 
-/** `GET /bm/events`. */
+/** `GET /bm/events`. `player` is read off the main yard (`eventPlayerOf`). */
 export const eventsAnswer = async (
   em: EntityManager,
   store: EventProgressStore,
   user: User,
-  now: number
+  now: number,
+  player: EventPlayer = eventPlayerOf(user.save)
 ): Promise<EventsBody> => {
   const shown = visibleEvents(now);
   const [progress, whatsNewSeen] = await Promise.all([
@@ -73,7 +76,9 @@ export const eventsAnswer = async (
   return {
     error: 0,
     now,
-    events: shown.map((one) => eventView(one, progress.get(one.event.id), now)),
+    events: shown
+      .map((one) => eventView(one, progress.get(one.event.id), now, player))
+      .filter((view) => view.status !== "ended" || hasTierToClaim(view)),
     whatsNewSeen,
   };
 };

@@ -11,6 +11,7 @@ import { SaveKeys } from "../../../enums/SaveKeys.js";
 import { BaseSaveSchema } from "../../../schemas/BaseSaveSchema.js";
 import { resourcesHandler } from "./handlers/resourceHandler.js";
 import { purchaseHandler } from "./handlers/purchaseHandler.js";
+import { creditsAsDelta } from "../../../services/base/creditsDelta.js";
 import { academyHandler } from "./handlers/academyHandler.js";
 import { BaseType } from "../../../enums/Base.js";
 import {
@@ -81,12 +82,15 @@ import {
   type HousingLoss,
 } from "../../../services/base/combat/housingLoss.js";
 import { championsAfterDefence } from "../../../services/base/combat/defenderChampion.js";
-import { championsAfterLessons, withStoredBrains } from "../../../services/base/combat/championBrain.js";
+import { healChampions } from "../../../services/yard/catchUpChampions.js";
+import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
+import { countAttackLoot } from "../../../services/events/lootEvents.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
+import { INFERNO_SAVE_TYPES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -129,6 +133,10 @@ export const baseSave: KoaController = async (ctx) => {
 
   // Not the owner and not in an attack
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
+
+  // An Inferno yard or a Moloch tribe row is the old Inferno's, closed until
+  // the new Inferno ships (`config/InfernoConfig.ts`).
+  if (INFERNO_SAVE_TYPES.has(baseSave.type)) requireInfernoOpen(ctx, user, `base/save on ${baseSave.type}`);
 
   // Owner saves of a main yard (issue #101) or an outpost (outposts plan WP0b)
   // are retired: yards change through the server's action routes now, and this
@@ -313,6 +321,12 @@ const saveBase = async (
   // The yard's damage before this attack, for its defence replay (#359).
   const damageBefore = baseSave.damage ?? 0;
 
+  // `savetime` moves to now below, so the caged champions heal up to now
+  // first, before the battle's health lands on them: the defence fought at
+  // that healed health (`servedDefenderForces`), and healing skipped here
+  // would be lost for good.
+  healChampions(baseSave, Number(baseSave.savetime), now);
+
   // Standard save logic
   for (const key of isAttack ? Save.attackSaveKeys : Save.saveKeys) {
     const value = body[key] as string;
@@ -383,12 +397,11 @@ const saveBase = async (
           if (saveData.champion && clientBattle) {
             championHandler(saveData.champion, baseSave);
           }
-        } else {
-          if (saveData.champion) {
-            // The brains are the server's alone (issue #219): kept, never sent.
-            baseSave.champion = withStoredBrains(baseSave.champion, saveData.champion);
-          }
         }
+        // An owner save never writes the champion list: every change to it is
+        // a server action (the cage, the chamber, an event's Krallen,
+        // `services/events/krallenReward.ts`), so a hand-made list could only
+        // add a champion, raise one or forge its brain (issue #219).
         break;
 
       // The stock less what the log used, on the save that ends the attack;
@@ -427,7 +440,12 @@ const saveBase = async (
     if (isOutpostOwner) updateOutposts(userSave, baseSave, key);
   }
 
-  if (!isAttack && saveData.purchase) purchaseHandler(ctx, saveData.purchase, userSave);
+  if (!isAttack && saveData.purchase) {
+    purchaseHandler(ctx, saveData.purchase, userSave);
+    // Spent or gained as an addition to the row, so Shiny the server added
+    // since this request read the save (a dashboard award) is kept.
+    creditsAsDelta(userSave);
+  }
 
   // The replay's battle, on the defender (issue #23, C3), as the finaliser
   // writes an abandoned one: the traps that fired, the health, the damage
@@ -543,6 +561,10 @@ const saveBase = async (
     postgres.em.persist(userSave);
     await postgres.em.flush();
 
+    // Event loot (the monthly Krallen Hunt) counts the credit before the cap,
+    // once: this save holds the final lock (`services/events/lootEvents.ts`).
+    if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
+
     // MR3 Takeover Logic:
     // If the attack is over and damage >= 90, trigger takeover or destroy logic.
     // MR3 capturable structures (RESOURCE, STRONGHOLD, FORTIFICATION) allow re-capture
@@ -648,18 +670,21 @@ const saveBase = async (
     await recordAttackPlan(user.userid, baseSave, battleInput.log, battleInput.tick);
   }
 
-  // A Map Room 2 Kozu Town Hall the battle brought down counts towards the
-  // attacker's achievements, on their main row under its own lock (issue #204).
-  if (battle && saveData.over) {
+  // A Map Room 2 Kozu Town Hall the battle brought down, and each biggest
+  // Putty bomb fired, count towards the attacker's achievements, on their main
+  // row under its own lock (issue #204, #299).
+  if (saveData.over && (battle || bombs)) {
     await recordAttackAchievements(postgres.em, {
       attackerBasesaveid: userSave.basesaveid,
       defender: baseSave,
       before: storedHealthData,
-      after: battle.buildinghealthdata,
+      after: battle?.buildinghealthdata,
+      bombs: bombs?.charges,
     });
   }
 
-  const filteredSave = buildSaveData(baseSave, user, outpostOwnerSave);
+  // An attack save has passed its binding check: the attacker keeps the whole yard.
+  const filteredSave = buildSaveData(baseSave, user, outpostOwnerSave, { attack: isAttack });
   logger.info(`Saving ${user.username}'s base | IP: ${ctx.ip}`);
 
   const responseBody = {

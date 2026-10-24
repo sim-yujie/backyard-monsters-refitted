@@ -139,13 +139,37 @@ export interface PathResult {
   readonly reached: boolean;
 }
 
+/** What a route floods out of: a building's footprint, or a point's square. */
+export interface PathTarget {
+  readonly cx: number;
+  readonly cy: number;
+  readonly w: number;
+  readonly h: number;
+  /** A point rather than a building, whose flood is never kept. */
+  readonly point?: boolean;
+}
+
+/**
+ * A route to a point rather than a building: `WaypointTo` with no building
+ * floods out of a 10 x 10 square there (`MonsterBase.as:1181-1183`), one cell.
+ * Its flood is thrown away after the one route, because a creep walking to a
+ * moving ally would otherwise keep a new one for every place the ally stood.
+ */
+export const pointTarget = (x: number, y: number): PathTarget => ({
+  cx: Math.trunc(x),
+  cy: Math.trunc(y),
+  w: GRID_CELL,
+  h: GRID_CELL,
+  point: true,
+});
+
 /** What a caller asks a route for. */
 export interface PathRequest {
   /** The creep, in yard units. */
   readonly fromX: number;
   readonly fromY: number;
-  /** The building being walked to. */
-  readonly target: EngineBuilding;
+  /** The building being walked to, or a {@link pointTarget}. */
+  readonly target: PathTarget;
   /** Behaviours that walk through walls rather than into them (`:1174-1177`). */
   readonly ignoreWalls?: boolean;
 }
@@ -161,13 +185,28 @@ export interface PathGrid {
   costAt(index: number): number;
   /** The id of the wall occupying a cell, or -1. */
   wallAt(index: number): number;
+  /**
+   * Whether no standing wall stands between two yard points, the target's own
+   * cells aside: `PATHING.LineOfSight` ({@link WALL_SIGHT_TYPE}).
+   */
+  lineOfSight(fromX: number, fromY: number, toX: number, toY: number, targetId: number): boolean;
   /** Subtract a dead building's rectangles and clear its registration. */
   removeBuilding(building: EngineBuilding): void;
-  /** Walk from a creep to a building. */
+  /** Walk from a creep to a building or a point. */
   path(request: PathRequest, rng: Rng): PathResult;
   /** How many floods have been computed, which is what the bench watches. */
   floodCount(): number;
 }
+
+/**
+ * The one building that blocks a shot: the Wall, type 17. A Stone Block is a
+ * wall to the pathing too but never to `PATHING.LineOfSight` (`:589`).
+ */
+export const WALL_SIGHT_TYPE = 17;
+
+/** `PATHING.c180PI` and `cPI180` (`:30-32`): the angle goes to degrees and back. */
+const C180_PI = 180 / Math.PI;
+const C_PI180 = Math.PI / 180;
 
 /** A resumable shortest-path flood out of one target footprint. */
 interface Flood {
@@ -307,11 +346,47 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     }
   };
 
+  /** The walls that block a shot, by id; a fallen one has left `wall` already. */
+  const sightBlockers = new Set<number>();
   for (const building of yard.buildings) {
     if (building.hp <= 0 && building.kind !== "mushroom") continue;
     stamp(building, 1);
     if (blocksPathing(building.type)) register(building, building.id);
+    if (building.type === WALL_SIGHT_TYPE) sightBlockers.add(building.id);
   }
+
+  /**
+   * `PATHING.LineOfSight` (`:573-597`): from the shooter's cell, one cell
+   * length at a time along the line to the target's cell, each step truncated
+   * to a cell. A step onto a standing wall that is not the target fails it;
+   * a step off the grid passes it at once, as Flash's missing cost does.
+   */
+  const lineOfSight = (
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    targetId: number,
+  ): boolean => {
+    const startX = toCellAxis(fromX, GRID_WIDTH);
+    const startY = toCellAxis(fromY, GRID_HEIGHT);
+    const across = toCellAxis(toX, GRID_WIDTH) - startX;
+    const down = toCellAxis(toY, GRID_HEIGHT) - startY;
+    const angle = Math.atan2(down, across) * C180_PI * C_PI180;
+    const stepX = Math.cos(angle);
+    const stepY = Math.sin(angle);
+    const total = Math.sqrt(across * across + down * down);
+    for (let travelled = 0; travelled < total; travelled += 1) {
+      const index = cellIndexOf(
+        Math.trunc(startX + stepX * travelled),
+        Math.trunc(startY + stepY * travelled),
+      );
+      if (index < 0) return true;
+      const id = wall[index] as number;
+      if (id >= 0 && id !== targetId && sightBlockers.has(id)) return false;
+    }
+    return true;
+  };
 
   /**
    * Take a fallen building off the grid, and with it every flood its cells
@@ -337,7 +412,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
   };
 
   /** A flood's key: its target's origin cell, and whether it ignores walls. */
-  const floodKey = (target: EngineBuilding, ignoreWalls: boolean): number =>
+  const floodKey = (target: PathTarget, ignoreWalls: boolean): number =>
     (toCellAxis(target.cx, GRID_WIDTH) * GRID_HEIGHT + toCellAxis(target.cy, GRID_HEIGHT)) * 2 +
     (ignoreWalls ? 1 : 0);
 
@@ -347,14 +422,20 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
       ? GRID_IGNORE_WALLS_COST
       : (cost[index] as number);
 
-  /** The flood out of a target's footprint, created on first use. */
-  const floodFor = (target: EngineBuilding, ignoreWalls: boolean): Flood => {
-    const originX = toCellAxis(target.cx, GRID_WIDTH);
-    const originY = toCellAxis(target.cy, GRID_HEIGHT);
+  /** The flood out of a building's footprint, created on first use. */
+  const floodFor = (target: PathTarget, ignoreWalls: boolean): Flood => {
     const key = floodKey(target, ignoreWalls);
     const held = floods.get(key);
     if (held) return held;
+    const flood = freshFlood(target, ignoreWalls);
+    floods.set(key, flood);
+    return flood;
+  };
 
+  /** A new flood out of a target's footprint, kept by no one yet. */
+  const freshFlood = (target: PathTarget, ignoreWalls: boolean): Flood => {
+    const originX = toCellAxis(target.cx, GRID_WIDTH);
+    const originY = toCellAxis(target.cy, GRID_HEIGHT);
     const reused = spare.pop();
     const flood: Flood = {
       depth: reused ? reused.depth.fill(-1) : new Int32Array(CELL_COUNT).fill(-1),
@@ -375,7 +456,6 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
         push(flood, 0, index);
       }
     }
-    floods.set(key, flood);
     floodsComputed += 1;
     return flood;
   };
@@ -433,7 +513,16 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     const start = cellOf(Math.trunc(request.fromX), Math.trunc(request.fromY));
     if (start < 0) return { waypoints: [], blockedBy: -1, reached: false };
 
-    const flood = floodFor(request.target, ignoreWalls);
+    const target = request.target;
+    if (!target.point) return walk(floodFor(target, ignoreWalls), start, ignoreWalls, rng);
+    const flood = freshFlood(target, ignoreWalls);
+    const route = walk(flood, start, ignoreWalls, rng);
+    spare.push({ depth: flood.depth, settled: flood.settled });
+    return route;
+  };
+
+  /** Expands a flood to the creep's cell and walks down it. */
+  const walk = (flood: Flood, start: number, ignoreWalls: boolean, rng: Rng): PathResult => {
     expandTo(flood, start);
     const depth = flood.depth;
     if ((depth[start] as number) < 0) {
@@ -511,6 +600,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
     },
     costAt: (index: number) => (index < 0 ? 0 : (cost[index] as number)),
     wallAt: (index: number) => (index < 0 ? -1 : (wall[index] as number)),
+    lineOfSight,
     removeBuilding,
     path,
     floodCount: () => floodsComputed,

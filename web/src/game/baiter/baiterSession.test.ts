@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { championStatWithPower } from "@/game/combat/rules";
+import { championStatWithFood } from "@/game/combat/rules";
 import {
   BAITER_CAP,
   TEST_ROSTER,
@@ -182,13 +182,15 @@ describe("champions", () => {
     expect(clamped.champions.map((one) => one.t)).toEqual([2]);
   });
 
-  it("are made up: full health, active, unfed and with no learned brain (Q6)", () => {
+  it("are made up: full health, active and with no learned brain (Q6)", () => {
     const entry = testChampionEntry({ t: 4, l: 3, pl: 2, s: "defensive" });
     expect(entry).toEqual({
       t: 4,
       l: 3,
       pl: 2,
-      hp: championStatWithPower("G4", "health", 3, 2),
+      // Below its top level a champion has no food-bonus ranks to earn yet;
+      // the power level adds no health.
+      hp: championStatWithFood("G4", "health", 3, 0),
       status: 0,
       ft: 0,
       fd: 0,
@@ -196,6 +198,22 @@ describe("champions", () => {
       s: "defensive",
     });
     expect(entry).not.toHaveProperty("b");
+  });
+
+  it("fight fully fed: every food-bonus rank at the top level (owner 2026-10-23)", () => {
+    for (const t of [1, 2, 3, 4]) {
+      const top = championLevels(t);
+      const id = `G${t}`;
+      const entry = testChampionEntry({ t, l: top, pl: 0 });
+      expect(entry.fb).toBe(3);
+      expect(entry.hp).toBe(championStatWithFood(id, "health", top, 3));
+      expect(entry.hp).toBeGreaterThan(championStatWithFood(id, "health", top, 0));
+    }
+    // Gorgo L6 fully fed, as its cage card shows it: 250,000.
+    expect(testChampionEntry({ t: 1, l: 6, pl: 0 }).hp).toBe(250_000);
+    // Krallen's food-bonus ranks add nothing, so it is unchanged.
+    const krallen = testChampionEntry({ t: 5, l: 5, pl: 0 });
+    expect(krallen.hp).toBe(championStatWithFood("G5", "health", 5, 0));
   });
 });
 
@@ -224,7 +242,7 @@ describe("the hand-off and the attack target", () => {
     expect((target.load as { defenderforces?: unknown }).defenderforces).toEqual({
       bunkers: { 5: { C1: 4 } },
       defenderLevels: { C1: 6, C4: 3 },
-      defenderChampions: [{ t: 2, l: 3, hp: 800, pl: 1 }],
+      defenderChampions: [{ t: 2, l: 3, hp: 800, pl: 1, fb: 0 }],
     });
     expect(target.roster).toEqual({
       monsters: { C1: 20, C4: 5 },

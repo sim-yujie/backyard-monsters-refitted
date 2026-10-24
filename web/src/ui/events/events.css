@@ -388,6 +388,100 @@
   color: var(--colour-success);
 }
 
+/* ── The Krallen Hunt: the prize, the bar toward the goal, the claim ──── */
+
+.events-card--ended .events-card__countdown {
+  color: var(--colour-text-muted);
+}
+
+.events-krallen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.events-krallen__prize {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.events-krallen__portrait {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.events-krallen__words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.events-krallen__prize-text {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.events-krallen__level {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.events-krallen__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.events-krallen__bar {
+  position: relative;
+  height: 14px;
+  overflow: hidden;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+}
+
+.events-krallen__fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffb347, #ffd27a);
+}
+
+.events-krallen__locked,
+.events-krallen__done {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.events-krallen__lock {
+  flex: none;
+  color: var(--colour-text-muted);
+}
+
+.events-krallen__tick {
+  flex: none;
+  color: var(--colour-success);
+}
+
 /* ── Coming up ────────────────────────────────────────────────────────── */
 
 .events-upcoming {
@@ -468,6 +562,11 @@
 
   .events-claim {
     min-height: 48px;
+  }
+
+  .events-krallen__portrait {
+    width: 56px;
+    height: 56px;
   }
 }
 

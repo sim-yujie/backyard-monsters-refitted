@@ -96,8 +96,10 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     i: cell.terrainHeight,
     v: cellSave.empirevalue,
     mine: mine ? 1 : 0,
-    f: cellSave.flinger,
-    c: cellSave.catapult,
+    // Flinger and Catapult levels on the viewer's own cells only (owner
+    // decision 2026-10-22): Flash showed anyone's, but someone else's yard
+    // keeps its levels hidden on the map as it does in the yard view.
+    ...(mine && { f: cellSave.flinger, c: cellSave.catapult }),
     t: truceExpiry,
     // 1 on a base whose owner has ever attacked the viewer: the map's red plate.
     ...(!mine && (attackers as Set<number> | undefined)?.has(cellOwner.userid) && { ak: 1 }),

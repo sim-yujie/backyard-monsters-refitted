@@ -8,6 +8,7 @@ import { damageOf, healed } from "../yard/repair.js";
 import type { ResourceAmounts } from "../yardplanner/costs.js";
 import { blockedIdsOf } from "./friendRules.js";
 import { helpersOf } from "./helpList.js";
+import { isTrap } from "../../game-rules/combat/damagePercent.js";
 import { FRIEND_GATES, HELP_RULES } from "./helpConfig.js";
 
 /**
@@ -193,7 +194,8 @@ export const previewHelp = (save: HelpPreviewSave, helper: number, now: number, 
 
   const out: BuildingHelp = {};
   for (const [key, building] of Object.entries(copy.buildingdata ?? {})) {
-    if (!building) continue;
+    // Traps are never shown to a visitor (`viewMask.ts`): none is offered.
+    if (!building || isTrap(Number(building.t))) continue;
     const entry: BuildingHelp[string] = {};
     if (helpCountdown(building)) {
       const plan = planSpeedup(building, helper);

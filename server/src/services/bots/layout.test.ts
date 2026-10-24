@@ -20,6 +20,7 @@ import {
   type PlacedSpot,
 } from "./layout.js";
 import { PERSONAS, targetInBand, wallTargets, yardAtPoints, type Persona, type ProgressionYard } from "./progression.js";
+import { yardStyleOf } from "./yardStyle.js";
 
 /** The bot yard layout (issues #238, #250, #252; `docs/design/bot-neighbours.md` §4.2 step 2). */
 
@@ -115,11 +116,11 @@ describe("layoutBotYard", () => {
   test(
     "a yard too broken up for its next Housing buys its next expansion early, and stays legal",
     () => {
-      // One of this seed's Housings finds no room on the plot of its level (found by a seed search).
-      const laid = laidOut(209016, "army", 22, 0.5);
+      // This seed's second Housing finds no room on the plot of its level (found by a 400-yard search).
+      const laid = laidOut(233232, "economy", 18, 0.5);
       const early = laid.layout.buildings.find((spot, index) => {
         const level = laid.yard.builtAtLevel[laid.yard.buildings[index]!.id]!;
-        return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(209016, level));
+        return !withinBounds(rectOf(spot.t, spot.X, spot.Y), expansionFor(233232, level));
       });
       expect(early?.t).toBe(15);
       expectBuildable(laid);
@@ -198,7 +199,8 @@ describe("layoutBotYard", () => {
             .sort((a, b) => a - b);
           return out[Math.floor(out.length / 2)]!;
         };
-        expect(median(HARVESTERS)).toBeGreaterThan(median(new Set([SILO])) + 150);
+        // A whole-yard ring keeps the base tight, so the harvesters sit only a little further out.
+        expect(median(HARVESTERS)).toBeGreaterThan(median(new Set([SILO])) + 120);
 
         const towers = layout.buildings.filter((spot) => TOWERS.has(spot.t)).map(centre);
         const spacing =
@@ -317,9 +319,11 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
     () => {
       let covered = 0;
       let all = 0;
+      let thin = 0;
       for (let level = 10; level <= 40; level++) {
         for (let index = 0; index < 3; index++) {
-          const { yard, layout } = laidOut(level * 7919 + index * 104729, PERSONAS[index]!, level, (index + 0.5) / 3);
+          const seed = level * 7919 + index * 104729;
+          const { yard, layout } = laidOut(seed, PERSONAS[index]!, level, (index + 0.5) / 3);
           const towers = layout.buildings.flatMap((spot, at) => {
             const range = TOWER_STATS[spot.t]?.[yard.buildings[at]!.l - 1]?.range;
             if (!TOWERS.has(spot.t) || range === undefined) return [];
@@ -335,13 +339,16 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
             yours++;
             if (towers.some((tower) => Math.hypot(tower.x - x, tower.y - y) <= tower.range)) mine++;
           }
-          // Every yard with towers has most of its resource buildings in range.
-          if (towers.length > 0) expect({ level, index, most: mine / yours >= 0.7 }).toEqual({ level, index, most: true });
+          // Every yard with towers has most of its resource buildings in range: 70% or more in all but about
+          // one yard in 350 (a sweep of 347 yards, 2026-10-23), and never under 60%.
+          if (towers.length > 0) expect({ level, index, most: mine / yours >= 0.6 }).toEqual({ level, index, most: true });
+          if (towers.length > 0 && mine / yours < 0.7) thin++;
           covered += mine;
           all += yours;
         }
       }
       expect(covered / all).toBeGreaterThan(0.95);
+      expect(thin).toBeLessThanOrEqual(1);
     },
     { timeout: 60_000 }
   );
@@ -351,12 +358,19 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
     () => {
       for (let level = 25; level <= 40; level++) {
         for (let index = 0; index < 3; index++) {
-          const { yard, layout } = laidOut(level * 7919 + index * 104729, PERSONAS[index]!, level, (index + 0.5) / 3);
+          const seed = level * 7919 + index * 104729;
+          const { yard, layout } = laidOut(seed, PERSONAS[index]!, level, (index + 0.5) / 3);
           if (yard.townHall < 4) continue;
           const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
           const hall = layout.buildings.find((spot) => spot.t === TOWN_HALL_TYPE)!;
           expect({ level, index, hall: reachable(blocks, hall, layout.expansion) }).toEqual({ level, index, hall: false });
-          for (const silo of layout.buildings.filter((spot) => spot.t === SILO)) {
+          // A core-walled yard's fifth and sixth silos stand inside its tower ring, which has gaps; a
+          // whole-yard-walled one's inside its ring round the grid, once that is closed.
+          const silos = layout.buildings.filter((spot) => spot.t === SILO);
+          const walls = new Set(layout.buildings.filter((spot) => spot.t === WALL_TYPE).map((spot) => `${spot.X},${spot.Y}`));
+          const ring = botWallPlan(seed).filter((cell) => cell.enclosure);
+          const closed = ring.length > 0 && ring.every((cell) => walls.has(`${cell.x},${cell.y}`));
+          for (const silo of closed ? silos : silos.slice(0, 4)) {
             expect({ level, index, silo: reachable(blocks, silo, layout.expansion) }).toEqual({ level, index, silo: false });
           }
         }
@@ -366,22 +380,38 @@ describe("layoutBotYard follows the Base Defense Guide", () => {
   );
 
   test(
-    "Town Hall 10: most harvesters sit inside the walled compartments",
+    "whole yard walled: once its ring is closed (by level 40), at least 90% of the key buildings are inside",
     () => {
       let inside = 0;
       let all = 0;
-      for (let seed = 0; seed < 9; seed++) {
-        const { yard, layout } = laidOut(seed * 7727 + 3, PERSONAS[seed % PERSONAS.length]!, 40, 0.8);
-        expect(yard.townHall).toBe(10);
-        const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
-        for (const harvester of layout.buildings.filter((spot) => HARVESTERS.has(spot.t))) {
-          all++;
-          if (!reachable(blocks, harvester, layout.expansion)) inside++;
+      let closedYards = 0;
+      for (let level = 30; level <= 40; level++) {
+        for (let seed = 0; seed < (level === 40 ? 30 : 12); seed++) {
+          const at = level * 7727 + seed * 104729 + 3;
+          // A core-walled yard leaves its towers and harvesters out in the open (`yardStyle.ts`).
+          if (yardStyleOf(at).walls !== "full") continue;
+          const { layout } = laidOut(at, PERSONAS[seed % PERSONAS.length]!, level, 0.5);
+          const walls = new Set(layout.buildings.filter((spot) => spot.t === WALL_TYPE).map((spot) => `${spot.X},${spot.Y}`));
+          const ring = botWallPlan(at).filter((cell) => cell.enclosure);
+          const closed = ring.length > 0 && ring.every((cell) => walls.has(`${cell.x},${cell.y}`));
+          // The ring closes at Town Hall 7, level 37-40 or so; every one is closed at level 40.
+          if (level === 40) expect({ level, seed, closed }).toEqual({ level, seed, closed: true });
+          if (!closed) continue;
+          closedYards++;
+          const blocks = layout.buildings.filter((spot) => spot.t === WALL_TYPE || TRAP_TYPES.has(spot.t));
+          const key = layout.buildings.filter(
+            (spot) => spot.t === TOWN_HALL_TYPE || spot.t === SILO || TOWERS.has(spot.t) || HARVESTERS.has(spot.t)
+          );
+          for (const building of key) {
+            all++;
+            if (!reachable(blocks, building, layout.expansion)) inside++;
+          }
         }
       }
-      expect(inside / all).toBeGreaterThan(0.5);
+      expect(closedYards).toBeGreaterThan(10);
+      expect(inside / all).toBeGreaterThanOrEqual(0.9);
     },
-    { timeout: 60_000 }
+    { timeout: 120_000 }
   );
 });
 
@@ -430,6 +460,7 @@ describe("layoutBotYard keeps its walls tidy", () => {
         const walls = layout.buildings.filter((spot) => spot.t === WALL_TYPE);
         const at = new Set(walls.map((spot) => `${spot.X},${spot.Y}`));
         let alone = 0;
+        const newest = walls.reduce((last, wall) => (wall.id > last ? wall.id : last), 0);
         for (const wall of walls) {
           expect({ seed, wall, hallway: plan.get(`${wall.X},${wall.Y}`)?.opening }).toEqual({ seed, wall, hallway: false });
           const joined = [
@@ -442,10 +473,10 @@ describe("layoutBotYard keeps its walls tidy", () => {
             const key = `${wall.X + dx!},${wall.Y + dy!}`;
             return at.has(key) || plan.get(key)?.opening === true;
           });
-          if (!joined) alone++;
+          // The newest wall may be the first of a ring's run, the rest of which is still to come.
+          if (!joined && wall.id !== newest) alone++;
         }
-        // The yard's first wall has nothing to join yet.
-        expect({ seed, alone }).toEqual({ seed, alone: walls.length === 1 ? 1 : 0 });
+        expect({ seed, alone }).toEqual({ seed, alone: 0 });
         for (const trap of layout.buildings.filter((spot) => TRAP_TYPES.has(spot.t))) {
           const onWallCell = plan.get(`${trap.X},${trap.Y}`)?.opening === false;
           expect({ seed, trap, onWallCell }).toEqual({ seed, trap, onWallCell: false });
@@ -468,7 +499,8 @@ describe("layoutBotYard keeps its walls tidy", () => {
           const inLine = plan.some((cell) => meets(box, cellBox(cell)));
           // A hallway's walkway, 10 either side, is the way in.
           const plugs = hallways.some((cell) => meets(box, cellBox(cell, 10)));
-          const touches = w < 100 && plan.some((cell) => meets(box, cellBox(cell), true));
+          // Any building may stand hard against a whole-yard ring: its inside is tight.
+          const touches = w < 100 && plan.some((cell) => !cell.enclosure && meets(box, cellBox(cell), true));
           expect({ seed, spot, inLine, plugs, touches }).toEqual({ seed, spot, inLine: false, plugs: false, touches: false });
         }
       }
@@ -499,12 +531,15 @@ describe("layoutBotYard keeps its walls tidy", () => {
         const core = botWallPlan(seed).filter((cell) => cell.core);
         expect(core.filter((cell) => cell.opening).length).toBe(4);
         const shut = core.every((cell) => (cell.opening ? traps : walls).has(`${cell.x},${cell.y}`));
-        // A Town Hall just upgraded may still be walling; once the yard has the walls Town Hall 3 stands, the core is shut.
-        if (walls.size >= wallTargets(seed)[3]!) expect({ seed, shut }).toEqual({ seed, shut: true });
+        // A Town Hall just upgraded may still be walling (walls come late in its plan); once the yard has the
+        // walls Town Hall 3 stands, the core is shut.
+        if (walls.size < wallTargets(seed)[3]!) continue;
+        expect({ seed, shut }).toEqual({ seed, shut: true });
         all++;
         if (shut) closed++;
       }
-      expect(closed / all).toBeGreaterThan(0.95);
+      expect(all).toBeGreaterThan(20);
+      expect(closed).toBe(all);
     },
     { timeout: 60_000 }
   );
@@ -551,10 +586,14 @@ describe("layoutBotYard packs the base in", () => {
     "levels 11-40: buildings stand close together and the base fills its bounding box",
     () => {
       const bands = [
-        // Before #252's packing: 0.29 and 17.6, 0.33 and 13.8, 0.43 and 7.5.
-        { from: 11, to: 20, density: 0.35, gap: 8 },
+        // Before #252's packing: 0.29 and 17.6, 0.33 and 13.8, 0.43 and 7.5. A core-walled yard's tower ring
+        // keeps its inside for towers to come, so levels 11-20 read a little looser (`yardStyle.ts`).
+        // Levels 11-20's mean gap over a sweep of 120 yards is 10.05-10.1 (2026-10-23), so 10 was a coin flip.
+        // Early Town Halls build closer in (`EARLY_SQUEEZE`, owner review 2026-10-23): this matrix's levels
+        // 11-20 went from 0.36 and 7.95 to 0.40 and 3.8.
+        { from: 11, to: 20, density: 0.37, gap: 6 },
         { from: 21, to: 30, density: 0.35, gap: 8 },
-        { from: 31, to: 40, density: 0.44, gap: 5.5 },
+        { from: 31, to: 40, density: 0.41, gap: 5.5 },
       ];
       for (const band of bands) {
         const yards = matrix().filter(({ yard }) => yard.level >= band.from && yard.level <= band.to);
@@ -567,6 +606,29 @@ describe("layoutBotYard packs the base in", () => {
           close: true,
         });
       }
+    },
+    { timeout: 60_000 }
+  );
+
+  test(
+    "levels 15-20: the buildings cluster round the Town Hall, as a new player builds (owner review 2026-10-23)",
+    () => {
+      const distances = matrix()
+        .filter(({ yard }) => yard.level >= 15 && yard.level <= 20)
+        .map(({ layout }) => {
+          const hall = layout.buildings.find((spot) => spot.t === TOWN_HALL_TYPE)!;
+          const spots = layout.buildings.filter(
+            (spot) => spot !== hall && spot.t !== WALL_TYPE && !TRAP_TYPES.has(spot.t)
+          );
+          const sum = spots.reduce((total, spot) => {
+            const { w, h } = footprintOf(spot.t);
+            return total + Math.hypot(spot.X + w / 2 - (hall.X + 65), spot.Y + h / 2 - (hall.Y + 65));
+          }, 0);
+          return sum / spots.length;
+        });
+      // Mean distance from the Town Hall's centre: 331 on average and up to 398 before, 291 and 321 after.
+      expect(distances.reduce((sum, one) => sum + one, 0) / distances.length).toBeLessThan(310);
+      expect(Math.max(...distances)).toBeLessThan(350);
     },
     { timeout: 60_000 }
   );

@@ -10,28 +10,22 @@ import { CHAMPION_STATUS, entryOf, maxHealthOf, readChampions } from "../yard/ch
 import { cullHousing, housingCapacity, housingUsedBy } from "../yard/housing.js";
 import { readMushrooms } from "../yard/mushrooms.js";
 import { currentExpansion, overlaps, rectOf } from "../yardplanner/layoutGeometry.js";
-import { levelOf, pointsForBuild, pointsForUpgrade } from "../yardplanner/costs.js";
-import { BOT_MAX_LEVEL } from "./factory.js";
+import { levelOf } from "../yardplanner/costs.js";
+import { workerCount } from "../yardplanner/workers.js";
 import { TRAP_TYPES } from "./layout.js";
-import { targetInBand } from "./progression.js";
-import { BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from "./yardGenerator.js";
+import { bankPoints, botPointsForBuild, botPointsForUpgrade, targetInBand } from "./progression.js";
+import { BOT_WORKERS, BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from "./yardGenerator.js";
 
 /**
  * The bot brain's decisions (issue #240, `docs/design/bot-neighbours.md` §4.4,
- * §4.5, §4.6 and §6): what a `grow` or `repair` job does to a bot's yard, and
- * the daily rebalance's plan. Everything here is pure; the sweep (`sweep.ts`)
+ * §4.5, §4.6 and §6): what a `grow` or `repair` job does to a bot's yard.
+ * Everything here is pure; the sweep (`sweep.ts`)
  * locks the rows, runs these on the caught-up save and writes.
  *
- * ## The pace (§4.4, decision 17)
+ * ## The target (§4.4)
  *
- * A bot climbs one level every `BOTS_DAYS_PER_LEVEL` days. Its place on the
- * climb is `level + (now - level_since) × speed / T` levels ({@link pacePosition}),
- * and its target is that far into the level's band ({@link targetAt}): the
- * bottom of the band at `level_since`, the top `T` days later. `speed` is 1
- * unless the rebalance nudged it ({@link planRebalance}). When the yard's
- * level changes, `level_since` is moved so the place stays where it was
- * ({@link anchorFor}): a bot that could not grow for a while (damaged, under
- * attack) catches up on its next grow, it never loses the time.
+ * A bot's place on the climb (`pacePosition` in `population.ts`) sets its
+ * target: that far into the level's band ({@link targetAt}).
  *
  * ## Growth (§4.4)
  *
@@ -40,14 +34,16 @@ import { BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from "./yardGenera
  * always a prefix of it: same ids, same spots, levels only rising. So growing
  * is a diff of the live yard against the generator's ({@link applyGrowth}): a
  * building the live yard lacks is built, one at a lower level is upgraded,
- * every step earning the points a finished job earns (`pointsForBuild`,
- * `pointsForUpgrade`, as `catchUpBuildings.ts` awards them). Resources are
- * not charged (§4.4): a bot has nobody farming for it, and its loot is held
- * in its band instead (§4.6).
+ * every step earning the points the generator counts for it
+ * (`botPointsForBuild`, `botPointsForUpgrade`: a finished job's points, as
+ * `catchUpBuildings.ts` awards them, and the banking a player did to pay for
+ * it). Resources are not charged (§4.4): a bot has nobody farming for it, and
+ * its loot is held in its band instead (§4.6).
  *
- * The last step is left running on a real countdown, as a player's worker
- * would be, capped to finish before the next grow job, and the catch-up
- * finishes it and awards its points then.
+ * The last steps are left running on a real countdown, one per worker
+ * ({@link BOT_WORKERS}, on different buildings), as a player's workers would
+ * be, capped to finish before the next grow job. Their banking points come at
+ * once; the catch-up finishes them and awards the job's own points then.
  *
  * The live yard also holds what the generator does not know about: mushrooms
  * grow on free ground (`catchUpMushrooms.ts`). Every new spot is checked with
@@ -66,53 +62,11 @@ import { BUNKER_FILL, HOUSING_FILL, LOOT_BAND, type BotYard } from "./yardGenera
  * ({@link rearmFiredTraps}).
  */
 
-const DAY = 24 * 60 * 60;
-
-/** A bot retires once its place on the climb passes level 40 (decision 17). */
-export const RETIRE_POSITION = BOT_MAX_LEVEL + 1;
-
-/** The rebalance's pace nudges `[PLACEHOLDER]`: a slowed bot takes 4 days a level, a hurried one 2. */
-export const SLOW_PACE = 0.75;
-export const FAST_PACE = 1.5;
-
-/** A bot may stand this many bots' places off its spot in the queue before the rebalance nudges it (§4.4). */
-export const REBALANCE_SLACK = 2;
-
-/**
- * With the rebalance running daily, no level should sit more than this many
- * bots off its share once it has had a few days (issue #251); the rebalance
- * logs a warning when one does.
- */
-export const SPREAD_TOLERANCE = 4;
-
 /** Points-plus-base-value of a level-band position: `floor(p)` and the fraction into it. */
 export const targetAt = (position: number): number => {
   const level = Math.max(1, Math.floor(position));
   return targetInBand(level, position - level);
 };
-
-/** What the pace reads of a bot. */
-export interface PaceBot {
-  level: number;
-  level_since: Date;
-}
-
-/**
- * Where on the climb a bot stands at `now` (unix seconds), in levels: its
- * level plus the share of `T / speed` days spent on it.
- */
-export const pacePosition = (bot: PaceBot, now: number, daysPerLevel: number, speed = 1): number => {
-  const since = bot.level_since.getTime() / 1000;
-  return bot.level + (Math.max(0, now - since) * speed) / (daysPerLevel * DAY);
-};
-
-/**
- * `level_since` for a bot now on `level` that keeps it at `position`: the
- * part of the position past `level`, counted back at the bot's pace. Never in
- * the future.
- */
-export const anchorFor = (position: number, level: number, now: number, daysPerLevel: number, speed = 1): Date =>
-  new Date((now - (Math.max(0, position - level) * daysPerLevel * DAY) / speed) * 1000);
 
 /** The slices of a save the brain reads and writes. */
 export interface BrainSave {
@@ -138,9 +92,9 @@ export interface GrowthReport {
   built: number[];
   /** Ids upgraded, in id order. */
   upgraded: number[];
-  /** The id left on a countdown, or null. */
-  running: number | null;
-  /** Empire points awarded now (the running step's come when it finishes). */
+  /** The ids left on a countdown, in id order: at most one per worker. */
+  running: number[];
+  /** Empire points awarded now (the running steps' job points come when they finish). */
   points: number;
   /** Mushrooms picked to clear a spot. */
   picked: number;
@@ -182,16 +136,22 @@ const wantedOf = (yard: BotYard): Wanted[] =>
 /** Kinds a worker never holds: they finish the moment they go up (`build.ts`, D13). */
 const AT_ONCE_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
-/** Points for taking a building from `from` to `to`: the build at level 0, each upgrade after. */
+/** Points for taking a building from `from` to `to`: the build at level 0, each upgrade after, banking included. */
 const stepPoints = (type: number, from: number, to: number): number => {
   const costs = costOf(type)?.costs ?? [];
   let points = 0;
   for (let level = from; level < to; level++) {
     const step = costs[level];
     if (!step) break;
-    points += level === 0 ? pointsForBuild(step) : pointsForUpgrade(step);
+    points += level === 0 ? botPointsForBuild(step) : botPointsForUpgrade(step);
   }
   return points;
+};
+
+/** The banking points of the step that takes a building of `type` to `level`, paid before it starts. */
+const stepBank = (type: number, level: number): number => {
+  const step = costOf(type)?.costs[level - 1];
+  return step ? bankPoints(step) : 0;
 };
 
 /** The countdown of the step that takes a building of `type` to `level` (`costs[level - 1]` time). */
@@ -232,6 +192,9 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
   const liveExpansion = currentExpansion(save.storedata);
   const expansion = Math.max(liveExpansion, yard.storedata.ENL?.q ?? 0);
   const view: BrainSave = { ...save, storedata: { ...(save.storedata ?? {}), ENL: { q: expansion } } };
+  // A bot made before it had its workers gets them with its next growth.
+  const liveBought = workerCount(save.storedata) - 1;
+  const bought = Math.max(liveBought, yard.storedata.BEW.q);
 
   const builds: Wanted[] = [];
   const upgrades: { want: Wanted; key: string; building: BuildingData; from: number }[] = [];
@@ -254,21 +217,25 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
     if (want.l > from) upgrades.push({ want, key, building, from });
   }
 
-  const report: GrowthReport = { built: [], upgraded: [], running: null, points: 0, picked: pick.size };
+  const report: GrowthReport = { built: [], upgraded: [], running: [], points: 0, picked: pick.size };
   if (builds.length === 0 && upgrades.length === 0) return report;
 
-  // The step left running: the latest building that holds a worker.
+  // The steps left running: the latest buildings that hold a worker, one per worker.
   const holdsWorker = (want: Wanted) => want.l > 0 && !AT_ONCE_KINDS.has(costOf(want.t)?.kind ?? "");
-  const running = [...builds, ...upgrades.map((upgrade) => upgrade.want)]
-    .filter(holdsWorker)
-    .reduce<Wanted | null>((latest, want) => (!latest || want.id > latest.id ? want : latest), null);
-  const seconds = running ? Math.max(1, Math.min(stepSeconds(running.t, running.l), Math.floor(runCap))) : 0;
+  const running = new Set(
+    [...builds, ...upgrades.map((upgrade) => upgrade.want)]
+      .filter(holdsWorker)
+      .sort((a, b) => b.id - a.id)
+      .slice(0, BOT_WORKERS)
+  );
+  const secondsOf = (want: Wanted) => Math.max(1, Math.min(stepSeconds(want.t, want.l), Math.floor(runCap)));
 
   const buildingdata: BuildingDataMap = { ...(save.buildingdata ?? {}) };
   const health: BuildingHealthData = { ...(save.buildinghealthdata ?? {}) };
 
   for (const want of builds) {
-    const left = want === running;
+    const left = running.has(want);
+    const seconds = left ? secondsOf(want) : 0;
     const level = left ? want.l - 1 : want.l;
     // A garrison or buffer sized for the finished level waits for the refill after it.
     const extra = left ? {} : want.extra;
@@ -282,11 +249,12 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
     // A trap that went off left a zero here under its id (`rearmTraps.ts`).
     delete health[String(want.id)];
     report.built.push(want.id);
-    report.points += stepPoints(want.t, 0, level);
+    report.points += stepPoints(want.t, 0, level) + (left ? stepBank(want.t, want.l) : 0);
   }
 
   for (const { want, key, building, from } of upgrades) {
-    const left = want === running;
+    const left = running.has(want);
+    const seconds = left ? secondsOf(want) : 0;
     const level = left ? want.l - 1 : want.l;
     const { cU: _upgrade, cB: _build, cL: _length, ...rest } = building;
     const next = { ...rest } as BuildingData;
@@ -295,16 +263,24 @@ export const applyGrowth = (save: BrainSave, yard: BotYard, runCap: number): Gro
     else if (left) Object.assign(next, { cU: seconds, cL: seconds });
     buildingdata[key] = next;
     report.upgraded.push(want.id);
-    report.points += stepPoints(want.t, from, level);
+    // A step still running from the last grow had its banking paid then.
+    const paid = building.cU !== undefined || building.cB !== undefined ? stepBank(want.t, from + 1) : 0;
+    report.points += stepPoints(want.t, from, level) + (left ? stepBank(want.t, want.l) : 0) - paid;
   }
 
-  report.running = running?.id ?? null;
+  report.running = [...running].map((want) => want.id).sort((a, b) => a - b);
   report.built.sort((a, b) => a - b);
   report.upgraded.sort((a, b) => a - b);
 
   save.buildingdata = buildingdata;
   save.buildinghealthdata = health;
-  if (expansion > liveExpansion) save.storedata = view.storedata;
+  if (expansion > liveExpansion || bought > liveBought) {
+    save.storedata = {
+      ...(save.storedata ?? {}),
+      ...(expansion > liveExpansion ? { ENL: { q: expansion } } : {}),
+      ...(bought > liveBought ? { BEW: { q: bought } } : {}),
+    };
+  }
   if (pick.size > 0) {
     const mushrooms = readMushrooms(save.mushrooms);
     save.mushrooms = { ...(save.mushrooms ?? {}), l: mushrooms.l.filter((_, index) => !pick.has(index)) };
@@ -489,88 +465,4 @@ export const rearmFiredTraps = (save: BrainSave, yard: BotYard): number => {
   save.buildinghealthdata = health;
   save.firedtraps = left;
   return rearmed;
-};
-
-/** One active bot as the rebalance sees it. */
-export interface RebalanceBot {
-  userid: number;
-  level: number;
-  level_since: Date;
-  speed: number;
-}
-
-/** A pace the rebalance sets, with the anchor that keeps the bot where it stands. */
-export interface PaceNudge {
-  userid: number;
-  speed: number;
-  level_since: Date;
-}
-
-/** The daily rebalance's plan. */
-export interface RebalancePlan {
-  nudges: PaceNudge[];
-  /** Level 1 bots to make. */
-  topUp: number;
-}
-
-/**
- * The daily rebalance (§4.4) against the even spread `share` (index 0 is
- * level 1). The bots queue up by their place on the climb, furthest on first,
- * and each place in the queue has a spot: the first `share[39]` places spread
- * evenly through level 40, the next `share[38]` through level 39, and so on.
- * A bot more than {@link REBALANCE_SLACK} bots' places ahead of its spot is
- * slowed to {@link SLOW_PACE}, one as far behind it hurried to
- * {@link FAST_PACE}, and one near it goes back to the normal pace. So a
- * crowded level's furthest-on bots move on sooner and its newest arrivals
- * linger behind, and the bots around a thin level close in on it, until every
- * level holds about its share.
- *
- * A nudge lasts until the bot's next level (the grow job sets the pace back
- * to 1 then) or the next rebalance, and moves `level_since` so the bot keeps
- * its place on the climb ({@link anchorFor}). A bot already at the pace asked
- * is left alone.
- *
- * The total is topped back up with level 1 bots, at most as many as level 1
- * has room for within its share and the slack, so a near-empty table is not
- * refilled at level 1 all at once (the factory's `create --fill` spreads a
- * fresh population over the levels; the rest follow on later days). While
- * the table is short no pace is nudged: the queue's spots assume a full table,
- * and the gaps are the fill's and the top-up's to close.
- */
-export const planRebalance = (
-  bots: readonly RebalanceBot[],
-  share: readonly number[],
-  total: number,
-  now: number,
-  daysPerLevel: number
-): RebalancePlan => {
-  const levelOne = bots.filter((bot) => bot.level === 1).length;
-  const missing = Math.max(0, total - bots.length);
-  const levelOneRoom = Math.max(0, (share[0] ?? 0) + REBALANCE_SLACK - levelOne);
-  const topUp = Math.min(missing, levelOneRoom);
-  if (missing > 0) return { nudges: [], topUp };
-
-  // A bot that could not grow stands at the top of its level, not past it.
-  const placed = bots
-    .map((bot) => ({ bot, at: Math.min(pacePosition(bot, now, daysPerLevel, bot.speed), bot.level + 0.999999) }))
-    .sort((a, b) => b.at - a.at);
-
-  const nudges: PaceNudge[] = [];
-  let level = share.length;
-  let inLevel = 0;
-  for (const { bot, at } of placed) {
-    while (level > 1 && inLevel >= (share[level - 1] ?? 0)) {
-      level--;
-      inLevel = 0;
-    }
-    const want = Math.max(1, share[level - 1] ?? 0);
-    const spot = level + 1 - (inLevel + 0.5) / want;
-    inLevel++;
-    const ahead = (at - spot) * want;
-    const speed = ahead > REBALANCE_SLACK ? SLOW_PACE : ahead < -REBALANCE_SLACK ? FAST_PACE : 1;
-    if (speed === bot.speed) continue;
-    nudges.push({ userid: bot.userid, speed, level_since: anchorFor(at, bot.level, now, daysPerLevel, speed) });
-  }
-
-  return { nudges, topUp };
 };

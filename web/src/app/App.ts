@@ -1,5 +1,6 @@
 import { Application, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
+import { setGameFrameSource, setScreenNameSource } from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withHold, withPresence, withProtection } from "./presenceScene";
@@ -9,6 +10,7 @@ import { IdleWarning } from "@/ui/IdleWarning";
 import { getAuthToken, onAnswer } from "@/api/http";
 import { stayProtected } from "@/api/presence";
 import { ProtectionWatch, protectionTimingsFor } from "@/game/presence/protectionWatch";
+import { onPlannerActivity } from "@/game/presence/plannerActivity";
 import { yardAttack } from "@/game/presence/yardAttack";
 import { StayProtectedPrompt } from "@/ui/StayProtectedPrompt";
 import { answerBotCheck, fetchBotCheck, forceBotCheck } from "@/api/botCheck";
@@ -159,6 +161,14 @@ export class App {
       this.pixi.screen.height,
     );
 
+    // The bug report's screenshot reads the game right after a fresh render,
+    // and its "which screen" is the scene on show.
+    setGameFrameSource(() => {
+      this.pixi.render();
+      return this.pixi.canvas;
+    });
+    setScreenNameSource(() => this.scenes?.activeScene ?? null);
+
     // "Stay protected?" nine minutes after the last real game action (#275),
     // on the server's clock. Every answer carrying `lastAction` moves it: the
     // presence ping's, the tap's, and every real action's own. A dev build
@@ -203,12 +213,20 @@ export class App {
     this.botCheck = botCheck;
     this.botCheckCard = card;
 
-    this.stopHearing = onAnswer(({ lastAction, now, checkPending }) => {
+    const stopAnswers = onAnswer(({ lastAction, now, checkPending }) => {
       if (typeof lastAction === "number") {
         protection.hear({ lastAction, ...(typeof now === "number" && { now }) });
       }
       if (typeof checkPending === "boolean") botCheck.hear(checkPending);
     });
+    // Work in the Yard Planner, which the server hears nothing of until Apply,
+    // counts too: the watch taps "stay" for a player busy there, with the
+    // plan, which the bot check reads as play (beta.4).
+    const stopPlanner = onPlannerActivity((plan) => protection.active(plan));
+    this.stopHearing = () => {
+      stopAnswers();
+      stopPlanner();
+    };
 
     // Ten minutes without input disconnects (#271). The 10 and the 1 minute
     // are `IDLE_TIMINGS`; a dev build takes `?idle=40,20` (seconds) to test.
@@ -331,6 +349,7 @@ export class App {
     this.botCheckCard?.hide();
     this.botCheckCard = null;
     this.pixi.renderer.off("resize", this.handleResize);
+    setGameFrameSource(null);
     this.scenes?.destroy();
     this.scenes = null;
     this.perf?.destroy();

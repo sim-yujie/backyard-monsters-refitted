@@ -69,6 +69,8 @@ export default defineConfig(({ mode }) => {
           terms: fileURLToPath(new URL("./terms.html", import.meta.url)),
           privacy: fileURLToPath(new URL("./privacy.html", import.meta.url)),
           credits: fileURLToPath(new URL("./credits.html", import.meta.url)),
+          // The owner's dashboard (src/admin/), at /admin; linked from nowhere.
+          admin: fileURLToPath(new URL("./admin.html", import.meta.url)),
         },
       },
     },

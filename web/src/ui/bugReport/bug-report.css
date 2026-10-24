@@ -1,0 +1,130 @@
+/*
+ * The "Report a bug" form (`ui/bugReport/BugReportDialog.ts`): a popup (the
+ * shared `.panel` on a scrim) that scrolls inside on a short screen.
+ */
+
+.bug-report-popup {
+  width: min(520px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+}
+
+.bug-report-popup .panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.bug-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.bug-report__intro,
+.bug-report__also,
+.bug-report__thanks {
+  margin: 0;
+  line-height: var(--leading-normal);
+}
+
+.bug-report__also {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.bug-report__also a {
+  color: var(--colour-accent);
+}
+
+.bug-report__also a:hover {
+  color: var(--colour-accent-hover);
+}
+
+.bug-report__message {
+  min-height: 7.5em;
+  resize: vertical;
+  line-height: var(--leading-normal);
+}
+
+.bug-report__counter {
+  margin: 0;
+  text-align: right;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.bug-report__attachment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.bug-report__attachment-title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.bug-report__attachment-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.bug-report__preview:empty {
+  display: none;
+}
+
+.bug-report__image {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--colour-border);
+}
+
+.bug-report__buttons-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bug-report__attachment-button {
+  align-self: flex-start;
+}
+
+/* Opened by the "Choose a picture" button; the input itself stays out of sight. */
+.bug-report__file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bug-report__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.bug-report--done {
+  align-items: flex-start;
+}
+
+@media (max-width: 480px) {
+  .bug-report__actions {
+    flex-direction: column-reverse;
+  }
+
+  .bug-report__actions .btn {
+    width: 100%;
+  }
+}

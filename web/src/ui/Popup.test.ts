@@ -91,3 +91,30 @@ describe("Popup Escape", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
+
+describe("isPopupOver", () => {
+  it("is true over the page behind an open popup, false inside it and once it closes", async () => {
+    // A fresh copy: the tests above leave popups they never closed on the list.
+    vi.resetModules();
+    const { isPopupOver, Popup } = await import("./Popup");
+    const yard = document.createElement("div");
+    const modal = document.createElement("div");
+    document.body.append(yard, modal);
+    expect(isPopupOver(yard)).toBe(false);
+    const popup = new Popup({ title: "Leaderboard" });
+    popup.setContent(document.createElement("p"));
+    popup.mount(modal);
+    const inside = popup.element.querySelector("p")!;
+    expect(isPopupOver(yard)).toBe(true);
+    expect(isPopupOver(inside)).toBe(false);
+    popup.close();
+    expect(isPopupOver(yard)).toBe(false);
+    // Swept off the page by a scene change, never closed: no longer over anything.
+    const swept = new Popup({ title: "No map yet" }).mount(modal);
+    expect(isPopupOver(yard)).toBe(true);
+    swept.backdrop.remove();
+    expect(isPopupOver(yard)).toBe(false);
+    yard.remove();
+    modal.remove();
+  });
+});

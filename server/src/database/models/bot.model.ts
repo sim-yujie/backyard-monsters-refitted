@@ -45,6 +45,10 @@ export class Bot {
   @Property({ type: Date })
   level_since!: Date;
 
+  /** When the bot stops growing (`services/bots/population.ts`); null while it never will. */
+  @Property({ type: Date, nullable: true })
+  quiet_since?: Date | null;
+
   @Property({ type: "string", columnType: "text", default: "active" })
   state: Opt<BotState> = "active";
 

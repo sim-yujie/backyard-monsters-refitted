@@ -1,6 +1,8 @@
-import type { EventReward } from "../../game-data/events/eventRewards.js";
+import { KRALLEN_MAX_LEVEL, type EventReward } from "../../game-data/events/eventRewards.js";
+import { tierNeed, type LadderTier } from "../../game-data/events/events.js";
+import { lockedReason, type EventPlayer } from "./eventPlayer.js";
 import { NO_PROGRESS, type EventProgress } from "./progressStore.js";
-import { nextUtcMidnight, utcDay, type ScheduledEvent } from "./schedule.js";
+import { claimsUntil, nextUtcMidnight, utcDay, type ScheduledEvent } from "./schedule.js";
 
 /**
  * What `GET /bm/events` sends for one event: the event, its window, and the
@@ -30,13 +32,27 @@ export interface EventView {
   text: string;
   kind: string;
   banner: string | null;
-  status: "active" | "upcoming";
+  /** "ended": over, with a ladder tier the player can still claim until `claimUntil`. */
+  status: "active" | "upcoming" | "ended";
   /** Unix seconds. */
   startsAt: number;
   endsAt: number;
+  /** When ladder claims close (unix s), for an event with claim days after its end; else null. */
+  claimUntil: number | null;
+  /** Why the player cannot take part (`EventDefinition.requires`), or null. Such a player counts nothing. */
+  locked: string | null;
   calendar: CalendarView | null;
   ladder: LadderView | null;
+  /** For an event that pays Krallen: her level now (0 for none) and the top an event raises her to. */
+  krallen: { level: number; maxLevel: number } | null;
 }
+
+/** An amount for the page's sentences: "60 million", "2.5 million", "25,000". */
+export const amountWords = (amount: number): string =>
+  amount >= 1_000_000 ? `${Math.round(amount / 100_000) / 10} million` : amount.toLocaleString("en-US");
+
+/** A player with nothing known: may take part, no Krallen. */
+const ANYONE: EventPlayer = { townHall: Number.POSITIVE_INFINITY, tutorialDone: true, krallenLevel: 0 };
 
 /** The calendar as the player stands in it at `now`. */
 export const calendarView = (
@@ -56,29 +72,55 @@ export const calendarView = (
   };
 };
 
-export const eventView = (scheduled: ScheduledEvent, progress: EventProgress = NO_PROGRESS, now: number): EventView => {
+export const eventView = (
+  scheduled: ScheduledEvent,
+  progress: EventProgress = NO_PROGRESS,
+  now: number,
+  player: EventPlayer = ANYONE
+): EventView => {
   const { event, window, status } = scheduled;
   const active = status === "active";
+  const paysKrallen = (event.ladder?.tiers ?? []).some((tier) => tier.rewards.some((reward) => reward.kind === "krallen"));
+  // A tier claimed this month raised her a level: it shows the goal it was
+  // claimed at, not the next month's.
+  const needOf = (tier: LadderTier, index: number): number =>
+    tierNeed(
+      tier,
+      progress.claimedTiers.includes(index) && player.krallenLevel > 0 ? player.krallenLevel - 1 : player.krallenLevel
+    );
+  const firstTier = event.ladder?.tiers[0];
+  const text = status === "upcoming" ? (event.upcomingText ?? event.text) : event.text;
   return {
     id: event.id,
     title: event.title,
-    text: event.text,
+    text: firstTier ? text.replaceAll("{goal}", amountWords(needOf(firstTier, 0))) : text,
     kind: event.kind,
     banner: event.banner ?? null,
     status,
     startsAt: window.startsAt,
     endsAt: window.endsAt,
+    claimUntil: event.claimDays ? claimsUntil(event, window) : null,
+    locked: lockedReason(event, player),
     calendar: event.calendar?.length ? calendarView(event.calendar, progress, active, now) : null,
     ladder: event.ladder
       ? {
           label: event.ladder.label,
           counter: progress.counter,
           tiers: event.ladder.tiers.map((tier, index) => ({
-            need: tier.need,
+            need: needOf(tier, index),
             rewards: tier.rewards,
             claimed: progress.claimedTiers.includes(index),
           })),
         }
       : null,
+    krallen: paysKrallen ? { level: player.krallenLevel, maxLevel: KRALLEN_MAX_LEVEL } : null,
   };
 };
+
+/**
+ * Whether the player has a ladder tier reached and not yet claimed that would
+ * pay something: a Krallen at the top already takes nothing from the hunt.
+ */
+export const hasTierToClaim = (view: EventView): boolean =>
+  !(view.krallen && view.krallen.level >= view.krallen.maxLevel) &&
+  (view.ladder?.tiers ?? []).some((tier) => !tier.claimed && (view.ladder?.counter ?? 0) >= tier.need);

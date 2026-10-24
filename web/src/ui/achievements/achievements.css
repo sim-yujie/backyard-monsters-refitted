@@ -262,6 +262,29 @@
     linear-gradient(color-mix(in srgb, var(--medal) 40%, black), color-mix(in srgb, var(--medal) 40%, black)) center bottom / 12px 3px no-repeat;
 }
 
+/* ── The painted badge (#298): the picture is the whole medal ─────────── */
+
+.ach-badge--art {
+  width: 60px;
+  height: 60px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+/* Grey like the CSS medal, but less faded: the painted symbol must still read. */
+.ach-badge--art.ach-badge--locked {
+  opacity: 0.7;
+}
+
+.ach-badge__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 1px 1px var(--colour-art-shadow));
+  user-select: none;
+}
+
 /* ── A phone: a full-height sheet ─────────────────────────────────────── */
 
 @media (width <= 620px) {
@@ -282,9 +305,14 @@
   .ach-row {
     flex-wrap: wrap;
   }
+
+  .ach-badge--art {
+    width: 52px;
+    height: 52px;
+  }
 }
 
-/* Another player's line on the map's panels (WP7, §10.3): "Achievements", the newest badges, "7 / 16". */
+/* Another player's line on the map's panels (WP7, §10.3): "Achievements", the newest badges, "7 / 17". */
 .ach-line {
   display: flex;
   align-items: center;
@@ -328,6 +356,11 @@
 /* The medal is drawn in fixed pixels; a half-size copy keeps its cup in proportion. */
 .ach-line__badges .ach-badge {
   zoom: 0.5;
+}
+
+/* The painted medal at the CSS medal's half size here: 24 px. */
+.ach-line__badges .ach-badge--art {
+  zoom: 0.4;
 }
 
 .ach-line__count {

@@ -96,7 +96,13 @@ const freezeTrojan = async (em: EntityManager, user: User, now: number): Promise
       buildinghealthdata: locked.buildinghealthdata ?? {},
       resources: locked.resources ?? {},
     });
-    const defence = defenderForcesOf({ buildingdata: yard.buildingdata, academy: locked.academy, champion: locked.champion });
+    const defence = defenderForcesOf({
+      buildingdata: yard.buildingdata,
+      academy: locked.academy,
+      champion: locked.champion,
+      storedata: locked.storedata,
+      now,
+    });
     const empirePoints = calculateEmpirePoints(locked.points ?? "0", locked.basevalue ?? "0");
     const events = trojanArmy({ horseX: Number(horse.X), horseY: Number(horse.Y), empirePoints });
     const raidId = newRaidId();

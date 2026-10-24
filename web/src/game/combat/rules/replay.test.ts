@@ -220,7 +220,8 @@ describe("a champion's lesson and brain (issue #219)", () => {
     const outcome = learned("champion-brain.json");
     expect(outcome.lessons).toHaveLength(1);
     const [lesson] = outcome.lessons!;
-    expect(lesson).toMatchObject({ t: 1, startHp: 190_000 });
+    // Level 4 Gorgo, power level 3 and no food bonus: the level's 140,000.
+    expect(lesson).toMatchObject({ t: 1, startHp: 140_000 });
     expect(lesson!.picks).toBeGreaterThan(10);
     expect(lesson!.dealt).toBeGreaterThan(0);
     expect(lesson!.dealt).toBeLessThanOrEqual(lesson!.potential);

@@ -176,7 +176,12 @@ A raid is due for a player when all hold:
    `services/user/online.ts`), and no in-game check pending (#273).
 6. The latest presence ping said "yard, Planner closed" (§7.3).
 7. The yard is not under attack (`isAttackActive`) and no raid is already open.
-8. Protection does **not** stop raids (Q6): bought or earned, the timer is ignored.
+8. Protection the player **bought** (`PRO1`..`PRO3`) pauses raids, as Flash's `_isSanctuary` did
+   (`STORE.as:2502-2505`, `WMATTACK.as:327`; owner 2026-10-23, replacing Q6). Free protection,
+   after being attacked or a new player's, does not (`boughtProtection`, `raidSchedule.ts`). A raid
+   still in its warning when protection is bought is called off on the next ping or at its start
+   (Flash held it until the protection ended; ours never outlives its warning, and its schedule is
+   untouched, so it comes again after); a fight already started goes on.
 9. No building in the yard is damaged or repairing (Q5), as Flash's `baseIsRepairing` was meant
    to work (§2.1). A raid that is due waits until the yard is whole again.
 
@@ -242,8 +247,11 @@ All of this is computed on the server from the saved yard, by pure functions (WP
   (`services/maproom/v1/mr1TribeRules.ts:74-85`). The four camps sit at player level -1, +0, +1,
   +2 (`MR1_TRIBE_LEVEL_OFFSETS`, `:67`), so Flash's rule picks the Legionnaire camp unless it is
   down (10 minutes, `MR1_TRIBE_RESPAWN_SECONDS`). A Map Room 2 player has no camps.
-- **Decided (Q3):** the tribe is random, one of the four, for every player (Map Room 1 or 2),
-  rolled from the raid's seed. Flash's camp rule is not used.
+- **Decided (owner 2026-10-23, replacing Q3):** Flash's camp rule (`raidTribe.ts`
+  `chooseRaidTribe`, `mr1RaidCamps`). A Map Room 1 player's camps are the four the Map Room 1
+  screen shows, wrecked ones from `Maproom.tribedata` until they respawn; a Map Room 2 player has
+  none, so their tribe is the roll, one of the four, from the raid's seed. The roll is drawn either
+  way, so the routes' scatter is unchanged.
 
 ### 5.2 Direction
 

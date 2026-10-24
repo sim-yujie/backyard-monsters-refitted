@@ -23,6 +23,7 @@ const {
   RAID_MIN_GAP_SECONDS,
   RAID_PREFERENCES,
   RECENT_RAIDS_KEPT,
+  boughtProtection,
   countRaidSession,
   parseRaidPreference,
   raidAlreadyApplied,
@@ -231,6 +232,30 @@ describe("the due rule", () => {
     expect(raidDueCheck(dueFacts({ save: { ...save, aiattacks: { ...unset, lastattack: NOW - 2 * DAY } } }))).toBe("notYet");
     // Never a raid and no session to set a time: not yet.
     expect(raidDueCheck(dueFacts({ save: { ...save, aiattacks: { ...unset, lastattack: 0 } } }))).toBe("notYet");
+  });
+
+  test("no protection the player bought: it pauses raids, free protection does not (owner, 2026-10-23)", () => {
+    const shop = (item: string, e: number) => ({ [item]: { q: 1, s: NOW - 60, e } });
+    for (const item of ["PRO1", "PRO2", "PRO3"]) {
+      const save = dueSave({ protected: NOW + 3600, storedata: shop(item, NOW + 3600) });
+      expect(raidDueCheck(dueFacts({ save }))).toBe("protected");
+    }
+    // After being attacked, or a new player's: protected, but nothing bought.
+    expect(raidDueCheck(dueFacts({ save: dueSave({ protected: NOW + 3600, storedata: {} }) }))).toBeNull();
+    // Bought, but over: the yard is no longer protected.
+    expect(raidDueCheck(dueFacts({ save: dueSave({ protected: NOW - 1, storedata: shop("PRO1", NOW - 1) }) }))).toBeNull();
+    // Another shop item is not protection.
+    expect(raidDueCheck(dueFacts({ save: dueSave({ protected: NOW + 3600, storedata: shop("TOD", NOW + 3600) }) }))).toBeNull();
+  });
+
+  test("boughtProtection reads Flash's sanctuary: protected now with a protection item still running", () => {
+    expect(boughtProtection({ protected: NOW + 10, storedata: { PRO2: { e: NOW + 10 } } }, NOW)).toBe(true);
+    // The Flash save path's entry ends with its own item, before protection stacked on free time.
+    expect(boughtProtection({ protected: NOW + 10_000, storedata: { PRO1: { e: NOW + 10 } } }, NOW)).toBe(true);
+    expect(boughtProtection({ protected: NOW + 10_000, storedata: { PRO1: { e: NOW - 10 } } }, NOW)).toBe(false);
+    expect(boughtProtection({ protected: NOW + 10, storedata: { PRO3: {} } }, NOW)).toBe(true);
+    expect(boughtProtection({ protected: NOW, storedata: { PRO3: { e: NOW + 10 } } }, NOW)).toBe(false);
+    expect(boughtProtection({ protected: null, storedata: null }, NOW)).toBe(false);
   });
 
   test("at least 3 hours since the last raid opened, landed or cancelled (owner, 2026-10-19)", () => {

@@ -31,8 +31,6 @@ const player = (overrides: Partial<PlayerCell> = {}): PlayerCell => ({
   n: "Bramblefoot",
   l: 24,
   v: 123_456,
-  f: 3,
-  c: 2,
   dm: 0,
   d: 0,
   lo: 0,
@@ -144,7 +142,7 @@ describe("another player's yard", () => {
     expect(buttonNamed(host, "View yard")).toBeDefined();
   });
 
-  it("keeps empire value, alliance, Flinger and Catapult behind More about this yard", () => {
+  it("keeps empire value and alliance behind More about this yard", () => {
     const { host } = open(player({ aid: 12 }));
     const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
     expect(more.hidden).toBe(false);
@@ -152,8 +150,6 @@ describe("another player's yard", () => {
     expect([...more.querySelectorAll("dt")].map((node) => node.textContent)).toEqual([
       "Empire value",
       "Alliance",
-      "Flinger",
-      "Catapult",
     ]);
     expect(host.textContent).not.toContain("user 77");
     expect(host.textContent).not.toContain("/avatars/");
@@ -166,13 +162,20 @@ describe("another player's yard", () => {
       const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
       expect([...more.querySelectorAll("dt")].map((node) => node.textContent)).toEqual([
         "Empire value",
-        "Flinger",
-        "Catapult",
       ]);
       expect(host.textContent).not.toContain("#12");
     } finally {
       setDevDetails(null);
     }
+  });
+
+  it("never shows their Flinger or Catapult level, even from a server that still sends them", () => {
+    const { host } = open(player({ f: 3, c: 2 }));
+    const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
+    const facts = [...more.querySelectorAll("dt")].map((node) => node.textContent);
+    expect(facts).not.toContain("Flinger");
+    expect(facts).not.toContain("Catapult");
+    expect(host.textContent).not.toContain("Flinger");
   });
 
   it("counts protection down when the server says when it ends (#187)", () => {
@@ -292,6 +295,14 @@ describe("the player's own yards", () => {
     toggle.click();
     expect(options.onRangeToggle).toHaveBeenCalledWith(true);
     expect(toggle.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("keeps its own Flinger and Catapult levels behind More", () => {
+    const { host } = open(player({ mine: 1, f: 3, c: 2 }));
+    const more = host.querySelector<HTMLDetailsElement>(".mr2-cell__more")!;
+    const facts = [...more.querySelectorAll("dd")].map((node) => node.previousElementSibling?.textContent + " " + node.textContent);
+    expect(facts).toContain("Flinger Level 3");
+    expect(facts).toContain("Catapult Level 2");
   });
 
   it("opens an own outpost as one (#146)", () => {

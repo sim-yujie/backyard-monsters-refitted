@@ -18,6 +18,8 @@ import { handleInviteRevoke } from "../../services/mail/handleInviteRevoke.js";
 import { mailboxErr } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
+import { isServerSender, SUPPORT_SENDER } from "../../services/mail/systemSender.js";
+import { mayAnswerTeam } from "../../services/mail/teamThreads.js";
 
 /**
  * Controller to send message
@@ -34,11 +36,17 @@ import { ClientSafeError } from "../../middleware/clientSafeError.js";
  * For migraterevoke: withdraws the thread's invitation, and says so in it.
  * A truce or invitation refusal (one already waiting, a request no longer open)
  * keeps its own error rather than the generic mailbox one.
+ * To "The game team" (`SUPPORT_SENDER`): only a plain reply, and only in the
+ * thread of one of the player's own bug reports (`mayAnswerTeam`); it waits
+ * there for the owner's dashboard. Nobody can start a thread to the game.
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
  * @throws {Error} - Throws an error if the request body is missing required fields or if logging fails.
  */
+/** The soft refusal for a message the game cannot take. */
+const CANNOT_ANSWER = "This message cannot be answered.";
+
 export const sendMessage: KoaController = async (ctx) => {
   try {
     const { userid, blockedUsers }: User = ctx.authUser;
@@ -59,10 +67,44 @@ export const sendMessage: KoaController = async (ctx) => {
     const filteredMessage = filter.clean(message.message);
 
     const { threadid, targetid } = message;
+    if (!(threadid > 0) && isServerSender(targetid)) {
+      ctx.status = Status.OK;
+      ctx.body = { error: 1, message: CANNOT_ANSWER };
+      return;
+    }
     const thread = await findOrCreateThread(threadid, targetid, userid);
 
     const isSender = thread.userid === userid;
     const messageTargetId = isSender ? thread.targetid : thread.userid;
+
+    if (messageTargetId === SUPPORT_SENDER) {
+      const answerable =
+        message.type === MessageType.MESSAGE && (await mayAnswerTeam(postgres.em, userid, thread.threadid));
+      if (!answerable) {
+        ctx.status = Status.OK;
+        ctx.body = { error: 1, message: CANNOT_ANSWER };
+        return;
+      }
+      const answer = postgres.em.create(Message, {
+        threadid: thread.threadid,
+        userid,
+        targetid: SUPPORT_SENDER,
+        messagetype: MessageType.MESSAGE,
+        userUnread: 0,
+        targetUnread: 1,
+        subject: filteredSubject,
+        message: filteredMessage,
+        updatetime: getCurrentDateTime(),
+      });
+      thread.messagecount++;
+      thread.lastMessage = answer;
+      postgres.em.persist(thread);
+      await postgres.em.flush();
+      logger.info(`Mail: player ${userid} answered the game team in thread ${thread.threadid}`);
+      ctx.status = Status.OK;
+      ctx.body = { error: 0, messageid: 0, threadid: thread.threadid };
+      return;
+    }
 
     const recipient = await postgres.em.findOne(
       User,

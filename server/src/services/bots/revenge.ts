@@ -25,6 +25,11 @@ import { REVENGE_CAP_WINDOW_MS, REVENGE_GIVE_UP_HOURS, revengeCapsAllow, type Re
  * | the player is not online and nobody is attacking them | either | retry in 15-60 minutes |
  * | the caps: 2 revenges on the player, 1 by this bot, in any 24 hours | full | retry 15-60 minutes after the window frees |
  *
+ * A chain's later attacks (`revengeChain.ts`) make the same checks, with two
+ * changes: "already avenged" means an attack by this bot since the chain's
+ * last one, and the caps are not asked (the chain is one revenge, checked at
+ * its first attack). Their give-up time is the chain's own wait limit.
+ *
  * A retry that would fall at or past the give-up time cancels instead. The
  * caps are counted from bots' attacks on the player that have happened (their
  * `attack_logs` rows), so revenges that run keep them whatever moved the
@@ -72,7 +77,13 @@ export type RevengeVerdict =
 /** What became of a revenge the checks let run (`revengeRun.ts`). */
 export type RevengeOutcome =
   /** Fought and landed. */
-  | { readonly status: "landed"; readonly damageBefore: number; readonly damageAfter: number }
+  | {
+      readonly status: "landed";
+      readonly damageBefore: number;
+      readonly damageAfter: number;
+      /** How long the bot's hatcheries take to hatch what it sent again (`armyRefillSeconds`). */
+      readonly refillSeconds?: number;
+    }
   /** Committed; it lands from its checkpoint later (a replay past its deadline). */
   | { readonly status: "pending" }
   /** No replay worker free: nothing written, try again soon. */
@@ -97,8 +108,10 @@ export interface RevengeFacts {
     readonly online: boolean;
   } | null;
   readonly truce: boolean;
-  /** This bot has attacked the player since the attack that booked the revenge. */
+  /** This bot has attacked the player since the attack that booked the revenge (or the chain's last). */
   readonly alreadyAvenged: boolean;
+  /** A chain's later attack: the caps are not asked. */
+  readonly followUp?: boolean;
   /** Bots' attacks on the player in the last 24 hours. */
   readonly landed: readonly RevengeEvent[];
 }
@@ -144,7 +157,7 @@ export const revengeVerdict = (facts: RevengeFacts, bot: number, rng: () => numb
   }
   if (target.online) return postpone(after(now, BUSY_RETRY_MINUTES, MINUTE, rng), "online");
   if (target.underAttack) return postpone(after(now, BUSY_RETRY_MINUTES, MINUTE, rng), "underAttack");
-  if (!revengeCapsAllow(new Date(now * 1000), bot, facts.landed)) {
+  if (!facts.followUp && !revengeCapsAllow(new Date(now * 1000), bot, facts.landed)) {
     return postpone(after(capsFreeAt(now, bot, facts.landed), BUSY_RETRY_MINUTES, MINUTE, rng), "caps");
   }
   return { act: "run" };
@@ -176,6 +189,8 @@ export interface RevengeJob {
   readonly target: number;
   /** Unix seconds. */
   readonly giveupAt: number;
+  /** A chain's later attack: when its last attack was made, unix seconds. */
+  readonly since?: number;
 }
 
 /** When a revenge job gives up: its `giveup_at`, or 72 hours after it was booked. */
@@ -230,7 +245,10 @@ export const readRevengeFacts = async (
     [job.bot, job.target, job.target, job.bot, TruceStatus.ACCEPTED, now]
   );
 
-  const triggeredAt = job.giveupAt - REVENGE_GIVE_UP_HOURS * HOUR;
+  // A chain's later attack looks for one since the chain's last; its own
+  // attack log is at most that time.
+  const followUp = job.since !== undefined;
+  const triggeredAt = job.since ?? job.giveupAt - REVENGE_GIVE_UP_HOURS * HOUR;
   const logs = await tx.execute<{ bot: number; at: Date | string }[]>(
     `SELECT log.attacker_userid AS bot, log.attacktime AS at FROM bym.attack_logs log
        JOIN bym.bot ON bot.userid = log.attacker_userid
@@ -252,7 +270,11 @@ export const readRevengeFacts = async (
         }
       : null,
     truce: !!truce,
-    alreadyAvenged: events.some((event) => event.bot === job.bot && event.at.getTime() / 1000 >= triggeredAt),
+    alreadyAvenged: events.some(
+      (event) =>
+        event.bot === job.bot && (followUp ? event.at.getTime() / 1000 > triggeredAt : event.at.getTime() / 1000 >= triggeredAt)
+    ),
     landed: events.filter((event) => event.at.getTime() / 1000 > now - CAP_WINDOW),
+    followUp,
   };
 };

@@ -1,0 +1,13 @@
+# Writes status/host.json for the owner's dashboard and alerts
+# (deploy/host-status.sh). Started once a minute by bymr-host-status.timer.
+# Install: docs/alerts.md, "On the server".
+[Unit]
+Description=BYMR host status for the admin dashboard
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash /opt/bymr/server/deploy/host-status.sh
+Nice=10
+NoNewPrivileges=yes
+PrivateTmp=yes

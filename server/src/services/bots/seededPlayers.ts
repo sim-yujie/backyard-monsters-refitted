@@ -1,7 +1,7 @@
 import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { seededYardsOn } from "../../config/BotConfig.js";
+import { seededYardsOn, type Pace } from "../../config/BotConfig.js";
 import { Bot } from "../../database/models/bot.model.js";
 import { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
@@ -24,7 +24,7 @@ import { BOT_YARD_VERSION } from "./yardGenerator.js";
  * 1. **Dev testing only.** Nothing here runs when `ENV` is production
  *    ({@link seededYardsOn}): the seed scripts refuse, the sweep leaves
  *    seeded rows alone and an attack books them nothing.
- * 2. **The bots' yard generator**, with the levels spread over 1-40 the way
+ * 2. **The bots' yard generator**, with the levels spread over 15-40 the way
  *    the bots are (`fillPlan`), drawn exactly as the factory draws a bot.
  * 3. **They repair and grow like the Map Room 1 bots**, by the bot sweep's
  *    own `grow` and `repair` jobs. Each player gets a `bym.bot` row in state
@@ -59,13 +59,13 @@ export const isBlankSeedYard = (buildingdata: BuildingDataMap | null | undefined
 /**
  * One level per player for `count` more seeded yards, the bots' way: the
  * shortfall of each level against an even spread of all seeded players over
- * levels 1-40 (`fillPlan`), any left over at random levels, then shuffled so
+ * levels 15-40 (`fillPlan`), any left over at random levels, then shuffled so
  * players next to each other on the map are not all one level.
  *
  * @param {number} count - Players to give a yard
  * @param {Record<number, number>} seededByLevel - Seeded players per level already
  * @param {Rng} rng - The draw
- * @returns {number[]} `count` levels, 1-40
+ * @returns {number[]} `count` levels, 15-40
  */
 export const planSeededLevels = (count: number, seededByLevel: Readonly<Record<number, number>>, rng: Rng): number[] => {
   const already = Object.values(seededByLevel).reduce((sum, have) => sum + have, 0);
@@ -89,7 +89,8 @@ export interface GiveSeededYardsOptions {
   rng: Rng;
   /** Unix seconds. */
   now: number;
-  daysPerLevel: number;
+  /** `BotConfig.pace`. */
+  pace: Pace;
   /** Read for {@link seededYardsOn}; `process.env` by default. */
   env?: Record<string, string | undefined>;
   /** Told after each batch commits. */
@@ -145,7 +146,7 @@ export const giveSeededYards = async (
   if (!seededYardsOn(options.env ?? process.env)) {
     throw new Error("Seeded Map Room 2 yards are for dev databases only (ENV is production).");
   }
-  const { rng, now, daysPerLevel } = options;
+  const { rng, now, pace } = options;
   const players = await findSeededPlayers(em);
   const blank = players.filter((player) => isBlankSeedYard(player.buildingdata));
   const levels = planSeededLevels(blank.length, await seededByLevel(em), rng);
@@ -153,7 +154,7 @@ export const giveSeededYards = async (
 
   for (let start = 0; start < blank.length; start += BATCH_SIZE) {
     const batch = blank.slice(start, start + BATCH_SIZE);
-    const drawn = batch.map((_, index) => drawBot(rng, levels[start + index]!, now, daysPerLevel));
+    const drawn = batch.map((_, index) => drawBot(rng, levels[start + index]!, now, pace));
 
     const batchGiven = await em.fork().transactional(async (tx) => {
       const done: SeededYard[] = [];

@@ -11,6 +11,7 @@ const DAY = 86_400;
 const item = (type: string, mine = false): MailItem => ({
   mine,
   notice: false,
+  team: false,
   label: null,
   type,
   text: "",

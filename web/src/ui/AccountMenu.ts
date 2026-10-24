@@ -27,14 +27,21 @@
  * Friends screen, with the count of requests and gifts waiting
  * (`setFriendsCount`); while any wait, the button wears a small count too.
  *
+ * With `onLeaderboard` it has a "Leaderboard" item, which opens the board of
+ * every player by empire points (`ui/leaderboard/LeaderboardDialog.ts`).
+ *
  * With `onWhatsNew` it has a "What's new" item, which opens the newest
  * release's cards again (`ui/events/WhatsNewDialog.ts`).
+ *
+ * With `onReportBug` it has a "Report a bug" item, which opens the bug report
+ * form (`ui/bugReport/BugReportDialog.ts`).
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
 import { waitingText } from "@/game/friends/friendText";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
 import { openAccountSettings } from "@/ui/AccountSettings";
+import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
 import "@/ui/friends/friends.css";
 import "@/ui/styles/guide-start.css";
@@ -63,8 +70,12 @@ export interface AccountMenuOptions {
   readonly onAchievements?: () => void;
   /** The "Friends" item's action; without it there is no such item. */
   readonly onFriends?: () => void;
+  /** The "Leaderboard" item's action; without it there is no such item. */
+  readonly onLeaderboard?: () => void;
   /** The "What's new" item's action; without it there is no such item. */
   readonly onWhatsNew?: () => void;
+  /** The "Report a bug" item's action; without it there is no such item. */
+  readonly onReportBug?: () => void;
 }
 
 /** What the picker's heading adds while the player still wears the default. */
@@ -272,6 +283,20 @@ export class AccountMenu {
       });
       this.list.append(achievements);
     }
+    if (options.onLeaderboard) {
+      const onLeaderboard = options.onLeaderboard;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const leaderboard = document.createElement("button");
+      leaderboard.type = "button";
+      leaderboard.className = "btn btn--ghost account-menu__help account-menu__leaderboard";
+      leaderboard.setAttribute("role", "menuitem");
+      leaderboard.textContent = "Leaderboard";
+      leaderboard.addEventListener("click", () => {
+        this.toggle(false);
+        onLeaderboard();
+      });
+      this.list.append(leaderboard);
+    }
     if (options.onWhatsNew) {
       const onWhatsNew = options.onWhatsNew;
       // Not `account-menu__item` either, for the same reason as Help's.
@@ -285,6 +310,20 @@ export class AccountMenu {
         onWhatsNew();
       });
       this.list.append(whatsNew);
+    }
+    if (options.onReportBug) {
+      const onReportBug = options.onReportBug;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const reportBug = document.createElement("button");
+      reportBug.type = "button";
+      reportBug.className = "btn btn--ghost account-menu__help account-menu__report-bug";
+      reportBug.setAttribute("role", "menuitem");
+      reportBug.textContent = "Report a bug";
+      reportBug.addEventListener("click", () => {
+        this.toggle(false);
+        onReportBug();
+      });
+      this.list.append(reportBug);
     }
     // Account settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
     const settings = document.createElement("button");
@@ -306,7 +345,24 @@ export class AccountMenu {
       this.toggle(false);
       void toggleFullscreen();
     });
-    this.list.append(settings, this.fullscreen, this.replay, signOut);
+    // Reduce effects (feat/attack-juice-demo): no shake, hit-stop or slow
+    // motion in attacks, and fewer bits flying. Read when an attack opens.
+    const effects = document.createElement("button");
+    effects.type = "button";
+    effects.className = "btn btn--ghost account-menu__help account-menu__effects";
+    effects.setAttribute("role", "menuitemcheckbox");
+    const showEffects = (): void => {
+      const on = reduceEffects();
+      effects.setAttribute("aria-checked", String(on));
+      effects.textContent = `Reduce effects: ${on ? "On" : "Off"}`;
+      effects.title = "Turns off screen shake, hit pauses and slow motion in attacks, with fewer particles";
+    };
+    showEffects();
+    effects.addEventListener("click", () => {
+      setReduceEffects(!reduceEffects());
+      showEffects();
+    });
+    this.list.append(settings, this.fullscreen, effects, this.replay, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);

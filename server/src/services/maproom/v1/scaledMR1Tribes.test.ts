@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
 
 /**
@@ -17,6 +17,8 @@ const store = new Map<string, string>();
 let maproom: { userid: number; tribedata: Record<string, unknown>[] };
 let userSave: Record<string, unknown>;
 const persisted: unknown[] = [];
+/** The event counter writes (`services/events/progressStore.ts`), as `[event, amount]`. */
+const counted: [string, number][] = [];
 
 mock.module("../../../server.js", () => ({
   postgres: {
@@ -27,6 +29,12 @@ mock.module("../../../server.js", () => ({
       findOne: async () => maproom,
       persist: (entity: unknown) => persisted.push(entity),
       flush: async () => {},
+      // Only the event counter's SQL is answered; anything else fails as with no database.
+      execute: async (sql: string, params: unknown[]) => {
+        if (!sql.includes("event_progress")) throw new Error("no database");
+        counted.push([String(params[1]), Number(params[2])]);
+        return [{ counter: params[2] }];
+      },
       // The Goals tribe counter's own locked write reads the attacker's row (#227).
       transactional: async <T>(cb: (tx: unknown) => Promise<T>) =>
         cb({ findOne: async () => userSave, flush: async () => {} }),
@@ -170,6 +178,7 @@ beforeEach(() => {
   warn.mockClear();
   store.clear();
   persisted.length = 0;
+  counted.length = 0;
   maproom = { userid: ATTACKER, tribedata: [{ baseid: TRIBE, tribeHealthData: {} }] };
   userSave = {
     userid: ATTACKER,
@@ -572,5 +581,58 @@ describe("Map Room 1 tribe save under COMBAT_SAVE_VALIDATION (#23, C7)", () => {
     expect(caught).toBeNull();
     expect(reports).toEqual([]);
     expect(maproom.tribedata[0]!.destroyed).toBe(1);
+  });
+});
+
+describe("Map Room 1 tribe save: the Krallen Hunt's loot", () => {
+  const FORCED = process.env.EVENTS_FORCE_ON;
+  beforeEach(() => {
+    // A day no hunt runs on its own; the forced one starts that midnight.
+    setSystemTime(new Date("2026-10-20T12:00:00Z"));
+    process.env.EVENTS_FORCE_ON = "krallen-2026-11";
+    // Town Hall 6 (type 14): old enough to take part.
+    userSave.buildingdata = { "0": { id: 0, t: 14, X: 0, Y: 0, l: 6 } };
+  });
+  afterEach(() => {
+    setSystemTime();
+    if (FORCED === undefined) delete process.env.EVENTS_FORCE_ON;
+    else process.env.EVENTS_FORCE_ON = FORCED;
+  });
+
+  const total = (amounts: Record<string, number>) => amounts.r1! + amounts.r2! + amounts.r3! + amounts.r4!;
+
+  test("the save that ends the attack counts the whole credit once, loot that did not fit included", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    const battle = serverBattle(WRECK, WRECK_TICK);
+    // A full store: nothing lands, all of it counts.
+    userSave.resources = { r1: 10_000, r2: 10_000, r3: 10_000, r4: 10_000 };
+    expect(await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) }))).toBeNull();
+    expect(userSave.resources).toEqual({ r1: 10_000, r2: 10_000, r3: 10_000, r4: 10_000 });
+    expect(total(battle.attackloot)).toBeGreaterThan(0);
+    expect(counted).toEqual([["krallen-2026-11", total(battle.attackloot)]]);
+
+    // The same save sent again as the page closes counts nothing more.
+    await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) }));
+    expect(counted).toHaveLength(1);
+  });
+
+  test("a save that does not end the attack counts nothing", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    await run(ctxFor({ tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK), attackloot: loot({ r1: 50 }) }));
+    expect(counted).toEqual([]);
+  });
+
+  test("below Town Hall 6 nothing counts", async () => {
+    userSave.buildingdata = { "0": { id: 0, t: 14, X: 0, Y: 0, l: 5 } };
+    startSession(ATTACKER, now(), ARMY);
+    expect(await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) }))).toBeNull();
+    expect(counted).toEqual([]);
+  });
+
+  test("outside the event nothing counts", async () => {
+    delete process.env.EVENTS_FORCE_ON;
+    startSession(ATTACKER, now(), ARMY);
+    expect(await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) }))).toBeNull();
+    expect(counted).toEqual([]);
   });
 });

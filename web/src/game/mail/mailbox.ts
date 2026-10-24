@@ -17,6 +17,19 @@ export const SYSTEM_SENDER = 0;
 export const SYSTEM_SENDER_NAME = "Backyard Monsters";
 
 /**
+ * "The game team" (`SUPPORT_SENDER` in `systemSender.ts`): the owner's replies
+ * to a bug report and Shiny gifts. Not a player, so no truce and no block; the
+ * player can answer only a thread holding a {@link TEAM_MESSAGE} (a report's
+ * thread), never a {@link TEAM_NOTICE}.
+ */
+export const SUPPORT_SENDER = -1;
+export const SUPPORT_SENDER_NAME = "The game team";
+/** A message from the team in a bug report's thread: it can be answered. */
+export const TEAM_MESSAGE = "team";
+/** A message from the team on its own (a Shiny gift): it cannot be answered. */
+export const TEAM_NOTICE = "teamnotice";
+
+/**
  * The notice that the player's Map Room 1 yard was attacked (bot neighbours
  * §4.8, #242; `server/src/services/maproom/v2/outpostNotices.ts`). Map Room 1
  * has no cells, so it never offers "Show on map", whatever `coords` it carries.
@@ -44,6 +57,8 @@ export interface MailThread {
   readonly unread: boolean;
   /** From the game: read-only, not blockable. */
   readonly notice: boolean;
+  /** With the game team: no truce, not blockable; answerable only as {@link teamAnswerable} says. */
+  readonly team: boolean;
   readonly count: number;
   /** The thread's truce, as the server keeps it, or null for none (#203). */
   readonly truce: ThreadTruce | null;
@@ -73,6 +88,8 @@ export interface MailItem {
   /** Sent by the player. */
   readonly mine: boolean;
   readonly notice: boolean;
+  /** Sent by the game team. */
+  readonly team: boolean;
   /** "Truce request", "Truce accepted", …, or null for a plain message. */
   readonly label: string | null;
   /** The server's `messagetype`: `message`, `trucerequest`, a notice's kind, … */
@@ -110,6 +127,7 @@ export const previewOf = (text: string | null): string => {
 /** Whose name a user id goes under. */
 export const nameOf = (userid: number, targets: Readonly<Record<string, MailTarget>>): string => {
   if (userid === SYSTEM_SENDER) return SYSTEM_SENDER_NAME;
+  if (userid === SUPPORT_SENDER) return SUPPORT_SENDER_NAME;
   return targets[String(userid)]?.first_name || `Player ${userid}`;
 };
 
@@ -131,6 +149,7 @@ export const threadList = (
       time: Number(last.updatetime) || 0,
       unread: Number(last.unread) === 1,
       notice: Number(last.userid) === SYSTEM_SENDER,
+      team: Number(last.userid) === SUPPORT_SENDER,
       count: Number(last.messagecount) || 1,
       truce: last.trucestate
         ? { status: last.trucestate, until: Number(last.truceexpire) > 0 ? Number(last.truceexpire) : null }
@@ -183,6 +202,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
     return {
       mine: Number(message.userid) === myId,
       notice,
+      team: Number(message.userid) === SUPPORT_SENDER,
       label: TRUCE_LABELS[message.messagetype] ?? null,
       type: message.messagetype,
       text: message.message ?? "",
@@ -194,6 +214,10 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
     };
   });
 
+/** Whether a thread with the game team can be answered: it holds a message about a bug report. */
+export const teamAnswerable = (items: readonly MailItem[]): boolean =>
+  items.some((item) => item.team && item.type === TEAM_MESSAGE);
+
 /**
  * Everyone the player has written with, by name, the game and deleted
  * accounts left out: the recipients a new message offers.
@@ -202,7 +226,10 @@ export const contactsOf = (targets: Readonly<Record<string, MailTarget>>): MailC
   Object.entries(targets)
     .filter(([, target]) => !target.deleted)
     .map(([userid, target]) => ({ userid: Number(userid), name: target.first_name || `Player ${userid}` }))
-    .filter((contact) => Number.isSafeInteger(contact.userid) && contact.userid !== SYSTEM_SENDER)
+    .filter(
+      (contact) =>
+        Number.isSafeInteger(contact.userid) && contact.userid !== SYSTEM_SENDER && contact.userid !== SUPPORT_SENDER,
+    )
     .sort((one, other) => one.name.localeCompare(other.name) || one.userid - other.userid);
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

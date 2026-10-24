@@ -2,6 +2,7 @@ import { RequestContext } from "@mikro-orm/core";
 
 import { baseModeAttack } from "../../controllers/base/load/modes/baseModeAttack.js";
 import { Maproom } from "../../database/models/maproom.model.js";
+import type { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
@@ -18,6 +19,7 @@ import { finaliseAttacksFor, finaliseExpiredOnBase, landCheckpointedAttack } fro
 import { catchUpArmyRow } from "../yard/armies.js";
 import { isPlayerOnline } from "../user/online.js";
 import { ONLINE_SECONDS, type RevengeOutcome } from "./revenge.js";
+import { armyRefillSeconds, hatcheriesIn } from "./revengeChain.js";
 import { planRevenge, revengeArmyOf } from "./revengePlan.js";
 
 /**
@@ -28,7 +30,8 @@ import { planRevenge, revengeArmyOf } from "./revengePlan.js";
  *
  * 1. Any attack the bot left lands first, and the player's yard's own expired
  *    one, as before any attack (`baseLoad.ts`).
- * 2. **The plan**, before anything is written: the bot's housed monsters and
+ * 2. **The plan**, before anything is written (but a chain's refill, below):
+ *    the bot's housed monsters and
  *    caged champion, caught up to now (`revengeArmyOf`), dropped on the
  *    player's yard as it stands (`planRevenge`). No plan (nothing to send,
  *    nothing standing) is no revenge.
@@ -46,6 +49,11 @@ import { planRevenge, revengeArmyOf } from "./revengePlan.js";
  *    deadline writes nothing: the checkpoint stays and the attack finaliser's
  *    sweep lands it, exactly once, as it lands an attack a player left.
  *
+ * A chain's later attack (`revengeChain.ts`) first refills the bot's Housing
+ * (`refill`, the brain's `refillArmy`): its hatcheries have had the time to
+ * hatch it again. A landing reports how long that takes for the army it sent
+ * (`armyRefillSeconds`), which spaces the chain's next attack.
+ *
  * Past step 4 the attack is committed and this never throws: whatever goes
  * wrong is logged and the attack lands from its checkpoint (or, with no
  * checkpoint, expires as an empty attack). The sweep's checks see the attack
@@ -61,6 +69,8 @@ export interface RevengeAttack {
   readonly planSeed?: number;
   /** The battle's seed; random by default. */
   readonly battleSeed?: number;
+  /** A chain's later attack: refills the bot's yard's Housing before the plan (the caller's `refillArmy`). */
+  readonly refill?: (save: Save) => void;
 }
 
 /** What the runner is built on, for tests to stand in for. */
@@ -99,7 +109,10 @@ const countRetaliation = async (player: number, bot: number): Promise<void> => {
 export const runRevengeAttack = (attack: RevengeAttack, deps: RevengeRunDeps = {}): Promise<RevengeOutcome> =>
   RequestContext.create(postgres.orm.em, () => fight(attack, deps));
 
-const fight = async ({ bot, target, now, planSeed, battleSeed }: RevengeAttack, deps: RevengeRunDeps): Promise<RevengeOutcome> => {
+const fight = async (
+  { bot, target, now, planSeed, battleSeed, refill }: RevengeAttack,
+  deps: RevengeRunDeps
+): Promise<RevengeOutcome> => {
   const land = deps.land ?? landCheckpointedAttack;
   // As an attack load does: what the bot left lands first, then the yard's
   // own expired attack, before either row is read here.
@@ -115,9 +128,14 @@ const fight = async ({ bot, target, now, planSeed, battleSeed }: RevengeAttack, 
     return { status: "nothing" };
   }
 
+  if (refill) {
+    refill(botSave);
+    await postgres.em.flush();
+  }
   const housed = catchUpArmyRow(botSave, botSave, now).monsters;
+  const army = revengeArmyOf({ monsters: housed, champion: botSave.champion, academy: botSave.academy });
   const plan = planRevenge(
-    revengeArmyOf({ monsters: housed, champion: botSave.champion, academy: botSave.academy }),
+    army,
     { buildingdata: yard.buildingdata as never, buildinghealthdata: yard.buildinghealthdata as never },
     planSeed ?? mintSeed()
   );
@@ -186,7 +204,7 @@ const fight = async ({ bot, target, now, planSeed, battleSeed }: RevengeAttack, 
         loot: credited,
         flung: outcome.flung,
       });
-      return { status: "landed", damageBefore, damageAfter };
+      return { status: "landed", damageBefore, damageAfter, refillSeconds: armyRefillSeconds(army, hatcheriesIn(botSave.buildingdata)) };
     } catch (error) {
       if (!(error instanceof ReplayTimeoutError)) {
         logger.error("Bot {bot}'s revenge on {target} failed after it began: {error}", {

@@ -6,6 +6,7 @@ import ormConfig from "../../mikro-orm.config.js";
 import type { BotConfig } from "../../config/BotConfig.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { scheduleAfterBotDefence } from "./afterAttack.js";
+import { CHAIN_DESTROYED_DAMAGE, CHAIN_MIN_DAMAGE } from "./revengeChain.js";
 import { createBots, deleteBots } from "./factory.js";
 import { REBALANCE_JOB, runBotSweep, type RevengeRunner, type SweepReport } from "./sweep.js";
 
@@ -53,7 +54,7 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
     Object.values((save.monsters?.housed ?? {}) as Record<string, number>).reduce((sum, count) => sum + count, 0);
   const pool = (save: Record<string, any>) =>
     ["r1", "r2", "r3", "r4"].reduce((sum, key) => sum + Number(save.resources?.[key] ?? 0), 0);
-  const config = (): BotConfig => ({ fill: false, brain: true, revenge: true, total: 3, daysPerLevel: 3 });
+  const config = (): BotConfig => ({ fill: false, brain: true, revenge: true, total: 3, pace: 3, quietRate: 0, growingFlow: 1, newPerDay: 8, levelSlack: 2 });
 
   let modules: {
     runRevengeAttack: typeof import("./revengeRun.js").runRevengeAttack;
@@ -134,7 +135,7 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
     await sql(`DELETE FROM bym.job_run WHERE job = ?`, [REBALANCE_JOB]);
     // Two bots of level 25 and 26, and a level 20 player: a bot-made yard
     // grown once by the sweep (a real catch-up), then taken out of the bot table.
-    const made = await createBots(orm.em.fork(), [25, 26, 20], { rng: mulberry32(2244), now: now(), daysPerLevel: 3 });
+    const made = await createBots(orm.em.fork(), [25, 26, 20], { rng: mulberry32(2244), now: now(), pace: 3 });
     [bot, secondBot, player] = made.map((one) => one.userid) as [number, number, number];
     await sql(`INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, now())`, [
       REBALANCE_JOB,
@@ -183,11 +184,17 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
       const yardBefore = await yard(player);
       const botBefore = await yard(bot);
       const started = now();
-      expect((await pass()).revenge).toEqual({ landed: 1 });
-      expect(await revengeJobs()).toEqual([]);
+      const report = await pass();
 
       // The player's yard: real damage and real loot, the attack over.
       const yardAfter = await yard(player);
+      // A chain of 2 (draw 0): its next attack is booked unless this one did under 20 points or wrecked the yard.
+      const hit = Number(yardAfter.damage) - Number(yardBefore.damage ?? 0);
+      const step =
+        hit < CHAIN_MIN_DAMAGE ? "chain:lowDamage" : Number(yardAfter.damage) >= CHAIN_DESTROYED_DAMAGE ? "chain:destroyed" : "chain:next";
+      expect(report.revenge).toEqual({ landed: 1, [step]: 1 });
+      expect(await revengeJobs()).toHaveLength(step === "chain:next" ? 1 : 0);
+      await sql(`DELETE FROM bym.bot_job WHERE kind = 'revenge'`);
       expect(Number(yardAfter.damage)).toBeGreaterThan(Number(yardBefore.damage ?? 0));
       expect(pool(yardAfter)).toBeLessThan(pool(yardBefore));
       expect(Number(yardAfter.attackid)).toBe(0);
@@ -234,7 +241,9 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
   test(
     "a replay past its deadline spends nothing, and the finaliser lands it exactly once, as the same log and seed fight",
     async () => {
-      await sql(`UPDATE bym.save SET protected = 0 WHERE userid = ?`, [player]);
+      // The first test's revenge may have flattened the yard (its battle seed is fresh each run), and
+      // a yard with nothing left standing has nothing to attack: mend it first, as a player would.
+      await sql(`UPDATE bym.save SET protected = 0, buildinghealthdata = '{}' WHERE userid = ?`, [player]);
       await attackedBot(secondBot);
 
       const yardBefore = await yard(player);
@@ -295,6 +304,48 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
       expect(await redis.get(key)).toBeNull();
       // Two notices now, one per attack.
       expect(await sql(`SELECT * FROM bym.message WHERE targetid = ? AND userid = 0`, [player])).toHaveLength(2);
+    },
+    HEAVY_MS
+  );
+
+  test(
+    "a chain's second attack: the bot's Housing refilled, a real attack landed, the chain at its end",
+    async () => {
+      // The yard mended and unprotected; the bot's Housing emptied by its first attack.
+      await sql(`UPDATE bym.save SET protected = 0, attackid = 0, buildinghealthdata = '{}' WHERE userid = ?`, [player]);
+      await sql(`UPDATE bym.save SET monsters = jsonb_set(monsters, '{housed}', '{}') WHERE userid = ?`, [bot]);
+      const [first] = await sql<{ at: Date }>(
+        `SELECT max(attacktime) AS at FROM bym.attack_logs WHERE attacker_userid = ? AND defender_userid = ?`,
+        [bot, player]
+      );
+      const last = Math.ceil(new Date(first!.at).getTime() / 1000);
+      await sql(
+        `INSERT INTO bym.bot_job (bot_userid, kind, target_userid, due_at, giveup_at, payload) VALUES (?, 'revenge', ?, ?, ?, ?::jsonb)`,
+        [bot, player, at(now() - MINUTE), at(now() + 12 * HOUR), JSON.stringify({ chain: { length: 2, done: 1, last } })]
+      );
+      const logsBefore = (await sql(`SELECT 1 FROM bym.attack_logs WHERE attacker_userid = ?`, [bot])).length;
+
+      let refilled = 0;
+      const watching: RevengeRunner = {
+        isOnline: modules.seenRecently,
+        attack: (input) =>
+          modules.runRevengeAttack({
+            ...input,
+            ...(input.refill && {
+              refill: (save) => {
+                input.refill!(save);
+                refilled = housedTotal(save);
+              },
+            }),
+          }),
+      };
+      expect((await pass(watching)).revenge).toEqual({ landed: 1, "chain:length": 1 });
+      expect(refilled).toBeGreaterThan(0);
+      expect(housedTotal(await yard(bot))).toBeLessThan(refilled);
+      expect(await revengeJobs()).toEqual([]);
+      expect((await sql(`SELECT 1 FROM bym.attack_logs WHERE attacker_userid = ?`, [bot])).length).toBe(logsBefore + 1);
+      // Its own defence notice, like every attack.
+      expect(await sql(`SELECT * FROM bym.message WHERE targetid = ? AND userid = 0`, [player])).toHaveLength(3);
     },
     HEAVY_MS
   );

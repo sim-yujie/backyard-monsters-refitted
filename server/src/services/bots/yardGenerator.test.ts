@@ -10,9 +10,11 @@ import { CHAMPION_CAGE_TYPE } from "../yard/champion.js";
 import { housingCapacity } from "../yard/housing.js";
 import { LOCKER_TYPE, STARTER_MONSTER } from "../yard/locker.js";
 import { checkNodePlacement } from "../yardplanner/validateLayout.js";
+import { workerCount } from "../yardplanner/workers.js";
 import { expansionFor } from "./layout.js";
 import { PERSONAS, targetInBand } from "./progression.js";
 import {
+  BOT_WORKERS,
   BUNKER_FILL,
   championLevelFor,
   fillRoom,
@@ -112,7 +114,7 @@ const expectFilled = (yard: BotYard) => {
 const expectPlaced = (yard: BotYard, seed: number) => {
   const expansion = yard.storedata.ENL?.q ?? 0;
   expect(expansion).toBeGreaterThanOrEqual(expansionFor(seed, yard.level));
-  expect(yard.storedata).toEqual(expansion > 0 ? { ENL: { q: expansion } } : {});
+  expect(yard.storedata).toEqual({ BEW: { q: BOT_WORKERS - 1 }, ...(expansion > 0 ? { ENL: { q: expansion } } : {}) });
   const nodes = [...yard.buildings, ...yard.decorations].map((spot) => ({ id: spot.id, t: spot.t, x: spot.X, y: spot.Y }));
   expect(() => checkNodePlacement(nodes, expansion)).not.toThrow();
 };
@@ -158,6 +160,15 @@ describe("generateBotYard", () => {
       }
     }
   }, SLOW_TEST_TIMEOUT_MS);
+
+  test("every bot has three workers, the free one and two bought, at every level (owner, 2026-10-23)", () => {
+    expect(BOT_WORKERS).toBe(3);
+    for (const level of [1, 5, 20, 40]) {
+      const yard = generateBotYard({ seed: level, persona: "economy", targetPoints: targetInBand(level, 0.5), now: NOW });
+      expect(yard.storedata.BEW).toEqual({ q: 2 });
+      expect(workerCount(yard.storedata as never)).toBe(3);
+    }
+  });
 
   test("points and base value are the save's strings", () => {
     const yard = generateBotYard({ seed: 1, persona: "towers", targetPoints: targetInBand(12, 0.5), now: NOW });

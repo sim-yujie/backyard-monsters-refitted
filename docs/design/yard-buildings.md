@@ -1245,7 +1245,12 @@ sold with no effect. Existing `storedata` entries of dropped items stay and do n
 4. **No resource packs.** `BR11`–`BR43` are dropped; building panels already top up a shortfall.
 5. **The held-back items stay held back.** `MDOD`, `MSOD`, `BLK2`–`BLK5` and the Shiny decorations
    are "coming later" tiles with no price; their effects and prices were not checked against
-   `STORE.as`.
+   `STORE.as`. **Update, beta.4:** the monster buffs and `BLK2`–`BLK5` are now sold. The wall
+   upgrades raise every Block below the tier to it for 3 / 6 / 10 / 15 Shiny per Block per level
+   climbed, behind Town Hall 3 / 4 / 5 / 6 in the main yard (none in outposts), finishing the
+   Block's running build or upgrade, awarding each level's points and healing it
+   (`server/src/services/yard/wallBlocks.ts`, `STORE.as:404-519`, `:1674-1690`, `:1993-2005`).
+   Unlike Flash, Blocks already at the tier keep their running upgrades.
 6. **Not in the Shop:** `SP1`–`SP4` and `IB` (used from building panels), `FQ` (no queue), `IBSW`,
    `BRAU`, `BRAB` (siege), and the dropped items above.
 
