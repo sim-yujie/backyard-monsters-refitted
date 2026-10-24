@@ -78,11 +78,14 @@ import {
   WINDUP_PULL_PX,
   bigLungeOffset,
   expectedSwingGap,
+  effectsQuality,
   juiceLevel,
   nextSwingGap,
+  screenShakeOn,
   slowMoSeconds,
   squashScale,
   windUpFrame,
+  type EffectsQuality,
   type JuiceLevel,
 } from "./juice";
 
@@ -544,6 +547,8 @@ export interface BattleYardHost {
   flashBuilding?(id: number, on: boolean): void;
   /** The camera's zoom, so damage numbers keep their size on screen (#68); 1 when absent. */
   readonly zoom?: number;
+  /** Shifts one of a building's animation layers by world px: a gun's recoil; 0, 0 puts it back. */
+  nudgeAnim?(id: number, layer: number, dx: number, dy: number): void;
 }
 
 export interface AttackBattleLayerOptions {
@@ -555,6 +560,10 @@ export interface AttackBattleLayerOptions {
   readonly reducedMotion?: boolean;
   /** How big the effects are drawn; the player's setting when left out (feat/attack-juice-demo). */
   readonly juice?: JuiceLevel;
+  /** The "Screen shake" switch; the player's setting when left out (beta.5). */
+  readonly screenShake?: boolean;
+  /** "Effects: full / low" for the towers' shots; the player's setting or the screen size when left out. */
+  readonly effectsQuality?: EffectsQuality;
   readonly textures?: MonsterSheetTextures;
   /** The bomb sheets; a test hands in its own (#87). */
   readonly bombArt?: BombArt;
@@ -730,6 +739,9 @@ export class AttackBattleLayer {
   private readonly fire = new Graphics();
   /** The Spurtz Cannon's shells, off their sheet, just over `fire` (issue #313). */
   private readonly shells = new Container();
+  /** The towers' painted shots (beta.5): their glow lines added on, their sparks over them. */
+  private readonly shotGlow = new Graphics();
+  private readonly shotSparks = new Container();
   private readonly bars = new Container();
 
   private readonly views = new Map<number, CreepView>();
@@ -831,17 +843,20 @@ export class AttackBattleLayer {
 
     this.depth = this.host.depthSortedLayer();
     this.shadows = this.host.groundShadowLayer?.() ?? this.depth;
-    for (const layer of [this.effects, this.blastAir, this.fire, this.shells, this.bars]) {
+    for (const layer of [this.effects, this.blastAir, this.fire, this.shells, this.shotGlow, this.shotSparks, this.bars]) {
       layer.eventMode = "none";
     }
+    this.shotGlow.blendMode = "add";
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
-    this.overlay.addChild(this.effects, this.fire, this.shells, this.bars);
+    this.overlay.addChild(this.effects, this.fire, this.shells, this.shotGlow, this.shotSparks, this.bars);
+    // The "Screen shake" switch stills every shake, the blasts' and the towers'.
+    const shakeOn = options.screenShake ?? screenShakeOn();
     this.blastFx = new BlastFx(
       {
         air: this.blastAir,
         ground: () => this.debrisLayer(),
-        shake: (dx, dy) => this.shakeYard(dx, dy),
+        ...(shakeOn ? { shake: (dx: number, dy: number) => this.shakeYard(dx, dy) } : {}),
       },
       this.reducedMotion,
       this.juice === "full" ? BIG_MAX_SHAKE : undefined,
@@ -882,8 +897,21 @@ export class AttackBattleLayer {
         setAnimFrame: (id, layer, frame) => this.host.setAnimFrame(id, layer, frame),
         landed: (key, tick) => this.showReleased(this.ledger.land(key), tick),
         shellLayer: () => this.shells,
+        nudge: (id, layer, dx, dy) => this.host.nudgeAnim?.(id, layer, dx, dy),
       },
       this.origin,
+      {
+        // `?juice=0` keeps the old look; "Reduce effects" or "Effects: low" draw fewer bits.
+        look:
+          this.juice === "off"
+            ? "classic"
+            : this.juice === "reduced" || (options.effectsQuality ?? effectsQuality()) === "low"
+              ? "low"
+              : "full",
+        sparks: this.shotSparks,
+        glow: this.shotGlow,
+        shake: (tick, amp, life) => this.blastFx.jolt(tick, amp, life),
+      },
     );
     const originOf = new Map<number, Point>();
     for (const building of options.yard.buildings) {
@@ -1208,7 +1236,7 @@ export class AttackBattleLayer {
 
     // Only what this added: the overlay and the sorted container are the
     // scene's and the renderer's, and keep their other children.
-    for (const layer of [this.effects, this.fire, this.shells, this.bars]) {
+    for (const layer of [this.effects, this.fire, this.shells, this.shotGlow, this.shotSparks, this.bars]) {
       this.overlay.removeChild(layer);
       layer.destroy({ children: true });
     }

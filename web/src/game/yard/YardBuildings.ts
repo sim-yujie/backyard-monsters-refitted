@@ -588,6 +588,14 @@ export class YardBuildings {
     if (layer) setLayerFrame(layer, frame);
   }
 
+  /**
+   * Shifts one of a building's animation layers by world px, for a gun's
+   * recoil in a battle (beta.5 tower attack effects); 0, 0 puts it back.
+   */
+  nudgeAnim(id: number, layerIndex: number, dx: number, dy: number): void {
+    this.byId.get(id)?.anims[layerIndex]?.sprite.pivot.set(-dx, -dy);
+  }
+
   /** The cell one of a building's layers is on, or null when it has no such layer. */
   animFrameOf(id: number, layerIndex: number): number | null {
     const layer = this.byId.get(id)?.anims[layerIndex];
