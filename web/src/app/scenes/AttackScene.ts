@@ -54,6 +54,7 @@ import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
 import { ZoomControl } from "@/ui/ZoomControl";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../App";
+import { setScreenTune } from "@/game/sound/sound";
 
 /**
  * The attack: an enemy yard, a clock, and the slots the rest of the flow
@@ -208,6 +209,8 @@ export class AttackScene implements Scene {
       // A defence fought under other rules is refused before anything is built (#362).
       this.watchRefused = this.watchRun ? watchRefusal(this.watchRun) : null;
       this.target = this.watchRun && !this.watchRefused ? watchTarget(this.watchRun) : null;
+      // A defence replay is the player's own yard under attack (`game/sound/tunes.ts`).
+      if (isDefenceWatch(this.watchRun)) setScreenTune("underAttack");
     } else if (this.raiding) {
       this.raidRun = consumeRaidRun();
       this.target = this.raidRun ? raidTarget(this.raidRun) : null;

@@ -123,6 +123,7 @@ import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { askForWorker } from "@/ui/yard/WorkersBusyBox";
 import { icon } from "@/ui/icons";
+import { MusicButton } from "@/ui/MusicButton";
 import { ZoomControl } from "@/ui/ZoomControl";
 import { YardPlanner, type AppliedStorage, type CompareVisuals } from "./YardPlanner";
 import { sceneForMap } from "./MapGateScene";
@@ -449,6 +450,7 @@ export class YardScene implements Scene {
    * and to know where they are just as much as one editing it.
    */
   private viewTools: HTMLElement | null = null;
+  private musicButton: MusicButton | null = null;
   private zoomControl: ZoomControl | null = null;
   private minimap: YardMinimap | null = null;
 
@@ -664,6 +666,8 @@ export class YardScene implements Scene {
     this.minimap = null;
     this.zoomControl?.destroy();
     this.zoomControl = null;
+    this.musicButton?.destroy();
+    this.musicButton = null;
     this.viewTools?.remove();
     this.viewTools = null;
 
@@ -1078,6 +1082,9 @@ export class YardScene implements Scene {
       if (on) this.minimap?.markDirty();
     });
     tools.append(overview);
+
+    // The speaker: music on or off with one press (beta.5). Rail only, like Overview.
+    this.musicButton = new MusicButton("yard-viewtools__overview yard-viewtools__music").mount(tools);
 
     this.placeViewTools();
   }
