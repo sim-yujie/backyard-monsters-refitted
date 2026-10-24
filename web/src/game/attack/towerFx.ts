@@ -1,4 +1,4 @@
-import type { Container, Graphics } from "pixi.js";
+import type { Container, Graphics, Texture } from "pixi.js";
 import {
   isSpurtzCannon,
   isTower,
@@ -20,7 +20,9 @@ import {
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
+import { blastNoise, tintAt } from "./blastFx";
 import { championFlightTop, flyerAltitude, spriteFor } from "./monsterSprites";
+import { ShotFx } from "./shotFx";
 import { ShellSprites } from "./spurtzShell";
 
 /**
@@ -64,6 +66,17 @@ import { ShellSprites } from "./spurtzShell";
  * bolt and the rail hurt at once in Flash and report nothing.
  *
  * Every clock here is the battle tick, so 2x speed doubles it all.
+ *
+ * ## The new look (beta.5)
+ *
+ * Besides the Flash look above (`classic`, which `?juice=0` and the tests
+ * keep), the shots can be drawn `full` or `low`: painted glows, sparks, smoke
+ * and impact bursts off the {@link ShotFx} sheet, bolts and rails glowing in
+ * additive light, the Tesla's bolt forking and flickering (it still hurts one
+ * creep), guns that turn rather than snap and kick back as they fire, and a
+ * jolt of the yard on the big hits. `low` throws fewer bits and fewer glow
+ * strokes, for phones. So far the Cannon, Tesla and Railgun have it; the
+ * other towers keep their Flash shots in every look.
  */
 
 /* ── Pure facing arithmetic ─────────────────────────────────────────────── */
@@ -303,6 +316,15 @@ const SNIPER_CORE = 0xfffbe8;
 const FLAK_ROUND = 0xdfe8ff;
 const SPURTZ_SHELL = 0xf3f0dc;
 
+/** The towers drawn the new way so far (beta.5 sample): Cannon, Tesla, Railgun. */
+const NEW_LOOK_TYPES: ReadonlySet<number> = new Set([20, 25, 118]);
+/** The new look's tints: the Tesla's arc, the rail's blue, the cannon's fire. */
+const ARC_MID = 0x9fe8ff;
+const RAIL_MID = 0x2aa8ff;
+const RAIL_PALE = 0x8fd8ff;
+const FIRE_TINTS = [0xffffff, 0xffe080, 0xff8a20, 0xa03000] as const;
+const SMOKE_TINTS = [0x8a8580, 0x6a6560, 0x55504c] as const;
+
 /**
  * How solid the railgun's trail is `age` ticks after the shot, as
  * `BUILDING118.TickFast` steps it a frame at a time: 1 for ten frames, then
@@ -314,6 +336,124 @@ export const railFade = (age: number): number | null => {
   if (frame >= RAIL_GONE_FRAME) return null;
   return frame <= RAIL_SOLID_FRAMES ? 1 : 1 - (frame - RAIL_SOLID_FRAMES) * 0.2;
 };
+
+/* ── The new look's arithmetic (beta.5) ─────────────────────────────────── */
+
+/**
+ * How the shots are drawn: `classic` is the Flash client's lines; `full` and
+ * `low` are the painted look, `low` with fewer bits for phones.
+ */
+export type TowerLook = "classic" | "full" | "low";
+
+/** Ticks a new-look bolt lasts (80 ticks a second), re-forking every {@link ZAP_FLICKER_TICKS}. */
+export const ZAP_TICKS = 10;
+export const ZAP_FLICKER_TICKS = 2;
+/** Cells a turning gun moves a tick at most: a half turn in about a tenth of a second. */
+export const SLEW_CELLS_PER_TICK = 2;
+/** Ticks a gun's kick lasts, and how far it goes back, world px. */
+export const RECOIL_TICKS = 18;
+export const RECOIL_PX = 4;
+/** Ticks before its next shot the Railgun starts to glow, winding up. */
+export const RAIL_CHARGE_TICKS = 70;
+
+/**
+ * The cell a turning gun shows next: `current` moved toward `wanted` by at
+ * most `most` cells, the short way round, as the strip is a full turn.
+ */
+export const stepCell = (current: number, wanted: number, frames: number, most: number): number => {
+  if (frames <= 0 || current === wanted) return wanted;
+  let gap = (wanted - current) % frames;
+  if (gap > frames / 2) gap -= frames;
+  if (gap < -frames / 2) gap += frames;
+  if (Math.abs(gap) <= most) return wanted;
+  const next = (current + Math.sign(gap) * Math.floor(most)) % frames;
+  return next < 0 ? next + frames : next;
+};
+
+/** How far back a gun is `age` ticks after its shot, 0 to 1: snapped back at once, eased home. */
+export const recoilKick = (age: number): number => {
+  if (age < 0 || age >= RECOIL_TICKS) return 0;
+  if (age < 2) return age === 0 ? 0.6 : 1;
+  const t = (age - 2) / (RECOIL_TICKS - 2);
+  return (1 - t) * (1 - t);
+};
+
+/**
+ * How wound up a Railgun is, 0 to 1, `since` ticks after its last shot with
+ * `rate` ticks between shots: it glows up over the last
+ * {@link RAIL_CHARGE_TICKS} before the next, and lets go if that shot is
+ * overdue (its target gone).
+ */
+export const railCharge = (since: number, rate: number): number => {
+  const start = rate - RAIL_CHARGE_TICKS;
+  if (since < start || since > rate + 30) return 0;
+  return Math.min(1, (since - start) / RAIL_CHARGE_TICKS);
+};
+
+/**
+ * A lightning bolt's corners from `from` to `to`: a bend every 18 px thrown
+ * off the line, widest in the middle and pinned at both ends. The same
+ * `seed` draws the same bolt.
+ */
+export const boltPath = (from: Point, to: Point, seed: number, wobble = 1): Point[] => {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy) || 1;
+  const corners = Math.max(2, Math.round(distance / 18));
+  const nx = -dy / distance;
+  const ny = dx / distance;
+  const points: Point[] = [from];
+  for (let index = 1; index < corners; index += 1) {
+    const along = index / corners;
+    const sway = Math.sin(along * Math.PI) * (6 + distance * 0.04) * wobble;
+    const off = (blastNoise(seed, index) * 2 - 1) * sway;
+    points.push({ x: from.x + dx * along + nx * off, y: from.y + dy * along + ny * off });
+  }
+  points.push(to);
+  return points;
+};
+
+/**
+ * `count` forks off a bolt's corners: short jagged arms that branch from it
+ * and die out. Looks only: the bolt still hurts the one creep at its end.
+ */
+export const boltForks = (path: readonly Point[], seed: number, count: number): Point[][] => {
+  const forks: Point[][] = [];
+  if (path.length < 4) return forks;
+  for (let fork = 0; fork < count; fork += 1) {
+    const at = 1 + Math.floor(blastNoise(seed, 50 + fork) * (path.length - 3));
+    const start = path[at];
+    const next = path[at + 1];
+    if (!start || !next) continue;
+    const side = blastNoise(seed, 60 + fork) < 0.5 ? -1 : 1;
+    let heading = Math.atan2(next.y - start.y, next.x - start.x) + side * (0.5 + blastNoise(seed, 70 + fork) * 0.6);
+    const steps = 2 + Math.floor(blastNoise(seed, 80 + fork) * 3);
+    const reach = 9 + blastNoise(seed, 90 + fork) * 9;
+    const arm: Point[] = [start];
+    let { x, y } = start;
+    for (let step = 0; step < steps; step += 1) {
+      heading += (blastNoise(seed, 100 + fork * 10 + step) - 0.5) * 0.9;
+      x += Math.cos(heading) * reach;
+      y += Math.sin(heading) * reach;
+      arm.push({ x, y });
+    }
+    forks.push(arm);
+  }
+  return forks;
+};
+
+/** What the new look asks of the battle screen; everything has a fallback. */
+export interface TowerFxOptions {
+  readonly look?: TowerLook;
+  /** Where the painted bits go (see `ShotFx`); without it the new look throws none. */
+  readonly sparks?: Container;
+  /** A layer drawn in additive light, for the bolts' and the rail's glow; `graphics` without it. */
+  readonly glow?: Graphics;
+  /** Jolts the yard on a big hit: `amp` screen px over `life` ticks. The host caps it and never stacks two. */
+  readonly shake?: (tick: number, amp: number, life: number) => void;
+  /** The sheet's loader, for tests. */
+  readonly load?: (url: string) => Promise<Texture>;
+}
 
 interface Bullet {
   /** What `onShot` returned for it, and what `landed` reports. */
@@ -348,6 +488,8 @@ interface Bolt {
   readonly from: Point;
   readonly to: Point;
   readonly tick: number;
+  /** The first zap of a charge: the new look draws it bigger and jolts the yard. */
+  readonly big: boolean;
 }
 
 interface Rail {
@@ -361,6 +503,7 @@ interface Rail {
 interface Flash {
   readonly at: Point;
   readonly tick: number;
+  readonly type: number;
 }
 
 interface TowerState {
@@ -372,11 +515,19 @@ interface TowerState {
   /** The tick the Tesla's latest charge began; a charge not yet shown starts the strip. */
   chargeTick: number;
   chargePending: boolean;
+  /** The charge the Tesla's last zap belonged to, so the first of each is told (new look). */
+  zapCharge: number;
+  /** The gun's kick after a shot (new look): when, and how far back at most, world px. */
+  recoil: { readonly tick: number; readonly dx: number; readonly dy: number } | null;
+  /** The last tick the coil crackled (new look). */
+  crackle: number;
 }
 
 /** What the effects ask of the yard renderer. */
 export interface TowerFxHost {
   setAnimFrame(id: number, layer: number, frame: number): void;
+  /** Draws one of a building's animation layers `dx`, `dy` world px off its place: a gun's kick. */
+  nudge?(id: number, layer: number, dx: number, dy: number): void;
   /**
    * A bullet reached its target on `tick` (#77): the moment Flash's
    * `PROJECTILE.Move` dealt its damage, so the moment the wound is shown.
@@ -419,20 +570,33 @@ export class TowerFx {
   private lastTick = 0;
   private nextKey = 1;
   private readonly shells: ShellSprites | null;
+  /** The new look (beta.5): its painted bits, its light layer and its jolt. */
+  private readonly look: TowerLook;
+  private readonly sparks: ShotFx | null;
+  private readonly glow: Graphics;
+  private readonly shake: ((tick: number, amp: number, life: number) => void) | undefined;
 
   /**
    * `graphics` is redrawn every frame; `origin` turns isometric yard px into
-   * world px, the yard's `bounds.originX/Y`.
+   * world px, the yard's `bounds.originX/Y`. `options` picks the look; the
+   * Flash one without them.
    */
   constructor(
     private readonly graphics: Graphics,
     towers: readonly TowerInfo[],
     private readonly host: TowerFxHost,
     private readonly origin: Point,
+    options: TowerFxOptions = {},
   ) {
     const shellLayer = host.shellLayer?.bind(host);
     this.shells = shellLayer ? new ShellSprites(shellLayer) : null;
     if (towers.some((info) => isSpurtzCannon(info.type))) this.shells?.preload();
+    this.look = options.look ?? "classic";
+    this.sparks =
+      this.look !== "classic" && options.sparks ? new ShotFx(options.sparks, this.look === "low", options.load) : null;
+    if (towers.some((info) => NEW_LOOK_TYPES.has(info.type))) this.sparks?.preload();
+    this.glow = options.glow ?? graphics;
+    this.shake = this.look === "classic" ? undefined : options.shake;
     for (const info of towers) {
       this.towers.set(info.id, {
         info,
@@ -442,8 +606,21 @@ export class TowerFx {
         tesla: TESLA_IDLE,
         chargeTick: Number.NEGATIVE_INFINITY,
         chargePending: false,
+        zapCharge: Number.NaN,
+        recoil: null,
+        crackle: Number.NEGATIVE_INFINITY,
       });
     }
+  }
+
+  /** Whether shots are drawn the new way: the look asks for it and the sheet is in. */
+  private get painted(): boolean {
+    return this.sparks?.ready === true;
+  }
+
+  /** Bits of the new look alive, for tests and the frame-rate check. */
+  get sparkCount(): number {
+    return this.sparks?.bitCount ?? 0;
   }
 
   /** A Tesla Tower began to charge on `tick` (issue #266): its strip starts. */
@@ -500,11 +677,11 @@ export class TowerFx {
     }
     if (type === 25) {
       // `BUILDING25.as:150`: the bolt leaves from 50 px above the origin.
-      this.bolts.push({
-        from: { x: tower.info.worldX, y: tower.info.worldY - COIL_HEIGHT },
-        to: aim,
-        tick: event.tick,
-      });
+      const coil = { x: tower.info.worldX, y: tower.info.worldY - COIL_HEIGHT };
+      const big = tower.zapCharge !== tower.chargeTick;
+      tower.zapCharge = tower.chargeTick;
+      this.bolts.push({ from: coil, to: aim, tick: event.tick, big });
+      if (this.painted) this.zapFx(event.tick, coil, aim, big);
       return null;
     }
     if (type === 118) {
@@ -523,7 +700,8 @@ export class TowerFx {
         length: beam ? distance : distance + RAIL_SEGMENT * 2,
         tick: event.tick,
       });
-      this.flashes.push({ at: from, tick: event.tick });
+      this.flashes.push({ at: from, tick: event.tick, type });
+      if (this.painted) this.railFx(event.tick, tower, from, start, dx / distance, dy / distance, aim);
       return null;
     }
 
@@ -570,7 +748,8 @@ export class TowerFx {
       ticks: 0,
       landedTick: null,
     });
-    this.flashes.push({ at: from, tick: event.tick });
+    this.flashes.push({ at: from, tick: event.tick, type });
+    if (type === 20 && this.painted) this.cannonFx(event.tick, from, aim);
     return key;
   }
 
@@ -591,12 +770,15 @@ export class TowerFx {
 
     const graphics = this.graphics;
     graphics.clear();
+    if (this.glow !== graphics) this.glow.clear();
     this.drawFlashes(tick);
     this.drawBullets(tick, elapsed, creepAt);
     this.drawBeams(tick);
     this.drawCoils(tick);
     this.drawBolts(tick);
     this.drawRails(tick);
+    if (this.painted) this.drawWindUps(tick);
+    this.sparks?.update(tick);
   }
 
   /**
@@ -616,14 +798,19 @@ export class TowerFx {
       tower.chargeTick = Number.NEGATIVE_INFINITY;
       tower.tesla = TESLA_IDLE;
       if (tower.info.type === 25 && tower.info.frames > 0) this.setCell(tower, TESLA_IDLE.cell);
+      if (tower.recoil) this.host.nudge?.(tower.info.id, 0, 0, 0);
+      tower.recoil = null;
     }
     this.graphics.clear();
+    this.glow.clear();
+    this.sparks?.clear();
   }
 
   destroy(): void {
     this.towers.clear();
     this.bullets.length = 0;
     this.shells?.destroy();
+    this.sparks?.destroy();
     this.beams.length = 0;
     this.bolts.length = 0;
     this.rails.length = 0;
@@ -644,6 +831,7 @@ export class TowerFx {
       if (info.frames > 0) this.setCell(tower, tower.tesla.cell);
       return;
     }
+    if (tower.recoil) this.kick(tower, tick);
     if (info.frames <= 0) return;
     const recent = tick - tower.lastShotTick <= FACING_HOLD_TICKS;
 
@@ -665,7 +853,24 @@ export class TowerFx {
       bearingDegrees({ x: info.x, y: info.y }, { x: creep.ix, y: creep.iy }),
       info.frames,
     );
-    if (cell !== null) this.setCell(tower, cell);
+    if (cell === null) return;
+    // The new look turns the gun round to its target rather than snapping it.
+    const turning = this.look !== "classic" && NEW_LOOK_TYPES.has(info.type) && tower.cell !== null;
+    this.setCell(tower, turning ? stepCell(tower.cell ?? cell, cell, info.frames, SLEW_CELLS_PER_TICK * elapsed) : cell);
+  }
+
+  /** The gun's kick after a shot (new look), easing home; it ends back in place. */
+  private kick(tower: TowerState, tick: number): void {
+    const recoil = tower.recoil;
+    if (!recoil) return;
+    const age = tick - recoil.tick;
+    if (age >= RECOIL_TICKS || age < 0) {
+      tower.recoil = null;
+      this.host.nudge?.(tower.info.id, 0, 0, 0);
+      return;
+    }
+    const share = recoilKick(age);
+    this.host.nudge?.(tower.info.id, 0, recoil.dx * share, recoil.dy * share);
   }
 
   /**
@@ -718,6 +923,8 @@ export class TowerFx {
       if (age > FLASH_TICKS) continue;
       this.flashes[keep] = flash;
       keep += 1;
+      // The new look paints its own muzzle flash for these.
+      if (this.painted && NEW_LOOK_TYPES.has(flash.type)) continue;
       this.graphics.circle(flash.at.x, flash.at.y, 5 - age).fill({ color: 0xffffff, alpha: 0.9 });
     }
     this.flashes.length = keep;
@@ -736,7 +943,7 @@ export class TowerFx {
       if (bullet.landedTick !== null) {
         const age = tick - bullet.landedTick;
         if (age > IMPACT_TICKS) continue;
-        this.drawImpact(bullet, age);
+        if (!(bullet.type === 20 && this.painted)) this.drawImpact(bullet, age);
       } else {
         this.drawRound(bullet);
       }
@@ -771,6 +978,13 @@ export class TowerFx {
       bullet.ticks += 1;
       bullet.x += bullet.stepX;
       bullet.y += bullet.stepY;
+      if (bullet.type === 20 && bullet.ticks % 5 === 0 && this.look === "full" && this.painted) {
+        // A thin wisp of smoke behind the cannon ball.
+        this.sparks?.emit(stepTick, {
+          look: "wisp", at: { x: bullet.x, y: bullet.y }, life: 26, size0: 6, size1: 14,
+          vz: 0.15, peak: 0.32, rotation: blastNoise(stepTick, 3) * 6.28, colours: SMOKE_TINTS,
+        });
+      }
       const left = Math.hypot(bullet.aim.x - bullet.x, bullet.aim.y - bullet.y);
       // `PROJECTILE.Move` lands once within a full speed of the target. The
       // landing is stamped with the tick it happened on, not the frame's,
@@ -780,6 +994,7 @@ export class TowerFx {
         bullet.y = bullet.aim.y;
         bullet.landedTick = stepTick;
         if (bullet.creepId >= 0) this.host.landed?.(bullet.key, stepTick);
+        if (bullet.type === 20 && this.painted) this.cannonHitFx(stepTick, bullet);
         return;
       }
     }
@@ -902,6 +1117,10 @@ export class TowerFx {
    * same thing in the Flash art; the glow keeps it readable when zoomed out.
    */
   private drawCoils(tick: number): void {
+    if (this.painted) {
+      this.drawLitCoils(tick);
+      return;
+    }
     for (const tower of this.towers.values()) {
       const { phase, cell } = tower.tesla;
       if (phase !== "charge" && phase !== "loop") continue;
@@ -914,6 +1133,10 @@ export class TowerFx {
   }
 
   private drawBolts(tick: number): void {
+    if (this.painted) {
+      this.drawLitBolts(tick);
+      return;
+    }
     let keep = 0;
     for (const bolt of this.bolts) {
       const age = tick - bolt.tick;
@@ -960,6 +1183,10 @@ export class TowerFx {
       this.rails[keep] = rail;
       keep += 1;
       if (life <= 0) continue;
+      if (this.painted) {
+        this.drawLitRail(rail, life);
+        continue;
+      }
       const graphics = this.graphics;
       const end = {
         x: rail.from.x + rail.dirX * rail.length,
@@ -988,5 +1215,487 @@ export class TowerFx {
       }
     }
     this.rails.length = keep;
+  }
+
+  /* ── The new look (beta.5) ──────────────────────────────────────────── */
+
+  /** Strokes `points` as one line on `graphics`. */
+  private static stroke(
+    graphics: Graphics,
+    points: readonly Point[],
+    width: number,
+    color: number,
+    alpha: number,
+  ): void {
+    const first = points[0];
+    if (!first || alpha <= 0.01) return;
+    graphics.moveTo(first.x, first.y);
+    for (let index = 1; index < points.length; index += 1) {
+      const point = points[index];
+      if (point) graphics.lineTo(point.x, point.y);
+    }
+    graphics.stroke({ width, color, alpha, cap: "round", join: "round" });
+  }
+
+  /** A line in light: an outer halo, a glow, a hot core; low drops the halo. */
+  private glowLine(points: readonly Point[], scale: number, halo: number, mid: number, alpha: number): void {
+    const glow = this.glow;
+    if (this.look === "full") TowerFx.stroke(glow, points, 15 * scale, halo, 0.09 * alpha);
+    TowerFx.stroke(glow, points, 8 * scale, halo, 0.2 * alpha);
+    TowerFx.stroke(glow, points, 3.6 * scale, mid, 0.6 * alpha);
+    TowerFx.stroke(glow, points, 1.5 * scale, 0xffffff, alpha);
+  }
+
+  /**
+   * The Tesla's coil while it charges and zaps: a painted glow that swells
+   * with the charge and flickers at full, sparks crackling off it, and small
+   * arcs licking round the top once it is well charged.
+   */
+  private drawLitCoils(tick: number): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    for (const tower of this.towers.values()) {
+      const { phase, cell } = tower.tesla;
+      if (phase !== "charge" && phase !== "loop") continue;
+      const power = phase === "charge" ? cell / TESLA_CHARGE_END : 0.85 + blastNoise(tick, 7) * 0.15;
+      const coil = { x: tower.info.worldX, y: tower.info.worldY - COIL_HEIGHT };
+      sparks.lamp(tower, {
+        look: "glow",
+        at: coil,
+        size: 16 + 46 * power,
+        alpha: 0.25 + 0.6 * power * (0.8 + blastNoise(tick, 11) * 0.2),
+        tint: BOLT_COLOUR,
+      });
+      if (power < 0.35) continue;
+      const beat = Math.floor(tick / 2);
+      for (let arc = 0; arc < (this.look === "full" ? 2 : 1); arc += 1) {
+        const angle = blastNoise(beat, arc + 20) * Math.PI * 2;
+        const reach = 10 + blastNoise(beat, arc + 30) * 12 * power;
+        const end = { x: coil.x + Math.cos(angle) * reach, y: coil.y + Math.sin(angle) * reach * 0.7 };
+        this.glowLine(boltPath(coil, end, beat * 13 + arc, 0.6), 0.55, BOLT_COLOUR, ARC_MID, 0.5 + 0.5 * power);
+      }
+      if (tick - tower.crackle >= 6) {
+        tower.crackle = tick;
+        sparks.emit(tick, {
+          look: "zap",
+          at: coil,
+          add: true,
+          life: 6,
+          size0: 14 + 14 * power,
+          size1: 22 + 16 * power,
+          rotation: blastNoise(tick, 40) * 6.28,
+          colours: [0xffffff, ARC_MID, BOLT_COLOUR],
+          peak: 0.8,
+        });
+      }
+    }
+  }
+
+  /**
+   * The Tesla's bolts in light: a main arc that re-forks every
+   * {@link ZAP_FLICKER_TICKS} and flickers as it fades, with arms branching off
+   * it. Looks only: each still hurts the one creep at its end.
+   */
+  private drawLitBolts(tick: number): void {
+    let keep = 0;
+    for (const bolt of this.bolts) {
+      const age = tick - bolt.tick;
+      if (age > ZAP_TICKS) continue;
+      this.bolts[keep] = bolt;
+      keep += 1;
+      if (age < 0) continue;
+      const seed = bolt.tick * 7 + Math.floor(age / ZAP_FLICKER_TICKS);
+      const fade = 1 - age / (ZAP_TICKS + 1);
+      const alpha = fade * (0.55 + 0.45 * blastNoise(bolt.tick + age, 3));
+      const scale = bolt.big ? 1.3 : 1;
+      const path = boltPath(bolt.from, bolt.to, seed, bolt.big ? 1.3 : 1);
+      this.glowLine(path, scale, BOLT_COLOUR, ARC_MID, alpha);
+      const forks = boltForks(path, seed, this.look === "low" ? 1 : bolt.big ? 4 : 2);
+      for (const fork of forks) this.glowLine(fork, scale * 0.6, BOLT_COLOUR, ARC_MID, alpha * 0.8);
+    }
+    this.bolts.length = keep;
+  }
+
+  /** The Railgun's line in light: a wide blue halo, a pale glow, a white core, and its gun-balls. */
+  private drawLitRail(rail: Rail, life: number): void {
+    const end = { x: rail.from.x + rail.dirX * rail.length, y: rail.from.y + rail.dirY * rail.length };
+    const line = [rail.from, end];
+    const glow = this.glow;
+    const thin = 0.55 + 0.45 * life;
+    if (this.look === "full") TowerFx.stroke(glow, line, 26 * thin, RAIL_GLOW, 0.1 * life);
+    TowerFx.stroke(glow, line, 13 * thin, RAIL_MID, 0.22 * life);
+    TowerFx.stroke(glow, line, 6 * thin, RAIL_PALE, 0.55 * life);
+    TowerFx.stroke(glow, line, 2.2, 0xffffff, life);
+    const every = this.look === "full" ? RAIL_SEGMENT : RAIL_SEGMENT * 2;
+    for (let along = every; along <= rail.length; along += every) {
+      const x = rail.from.x + rail.dirX * along;
+      const y = rail.from.y + rail.dirY * along;
+      glow.circle(x, y, 5.5).fill({ color: GUN_BALL_RIM, alpha: 0.35 * life });
+      glow.circle(x, y, 2.4).fill({ color: 0xffffff, alpha: 0.9 * life });
+    }
+  }
+
+  /**
+   * Each Railgun winding up for its next shot: a blue orb gathering at the
+   * muzzle over the last {@link RAIL_CHARGE_TICKS} before it, with sparks
+   * drawn into it. Only after a first shot: the engine says nothing before.
+   */
+  private drawWindUps(tick: number): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    for (const tower of this.towers.values()) {
+      if (tower.info.type !== 118 || !Number.isFinite(tower.lastShotTick)) continue;
+      const rate = towerStats(tower.info.type, tower.info.level)?.rate ?? 160;
+      const charge = railCharge(tick - tower.lastShotTick, rate);
+      if (charge <= 0) continue;
+      const at = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY);
+      const flicker = 0.85 + blastNoise(tick, 17) * 0.15;
+      sparks.lamp(tower, {
+        look: "orb",
+        at,
+        size: 6 + 30 * charge,
+        alpha: charge * flicker,
+        tint: tintAt([0x1060ff, 0x40c0ff, 0xe0f8ff], charge),
+      });
+      if (this.look !== "full" || charge < 0.3 || tick - tower.crackle < 5) continue;
+      tower.crackle = tick;
+      const angle = blastNoise(tick, 23) * Math.PI * 2;
+      const reach = 24;
+      sparks.emit(tick, {
+        look: "spark",
+        add: true,
+        life: 9,
+        at: { x: at.x + Math.cos(angle) * reach, y: at.y + Math.sin(angle) * reach * 0.6 },
+        vx: (-Math.cos(angle) * reach) / 9,
+        vy: (-Math.sin(angle) * reach * 0.6) / 9,
+        size0: 6,
+        size1: 3,
+        stretch: true,
+        colours: [0xffffff, RAIL_PALE],
+      });
+    }
+  }
+
+  /**
+   * A Tesla's zap lands: an electric burst and sparks on the creep, a flare
+   * on the coil; the first zap of a charge rings the ground and jolts the yard.
+   */
+  private zapFx(tick: number, coil: Point, at: Point, big: boolean): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    const size = big ? 1.4 : 1;
+    sparks.emit(tick, {
+      look: "flare",
+      at: coil,
+      add: true,
+      life: 8,
+      size0: 46 * size,
+      size1: 28,
+      rotation: blastNoise(tick, 1) * 0.6,
+      colours: [0xffffff, ARC_MID],
+    });
+    sparks.emit(tick, {
+      look: "glow",
+      at,
+      add: true,
+      life: 12,
+      size0: 30 * size,
+      size1: 60 * size,
+      easeOut: true,
+      peak: 0.8,
+      colours: [0xe8f8ff, BOLT_COLOUR, 0x0060a0],
+    });
+    sparks.emit(tick, {
+      look: "zap",
+      at,
+      add: true,
+      life: 12,
+      size0: 24 * size,
+      size1: 46 * size,
+      easeOut: true,
+      rotation: blastNoise(tick, 2) * 6.28,
+      colours: [0xffffff, ARC_MID, BOLT_COLOUR],
+    });
+    const count = sparks.many(big ? 9 : 5);
+    for (let index = 0; index < count; index += 1) {
+      const angle = ((index + blastNoise(tick, index + 10)) / count) * Math.PI * 2;
+      const speed = 2.5 + blastNoise(tick, index + 30) * 3;
+      sparks.emit(tick, {
+        look: "spark",
+        at,
+        add: true,
+        life: 10 + Math.round(blastNoise(tick, index + 50) * 8),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.6,
+        drag: 0.12,
+        size0: 9,
+        size1: 3,
+        stretch: true,
+        colours: [0xffffff, ARC_MID, BOLT_COLOUR],
+      });
+    }
+    if (!big) return;
+    sparks.emit(tick, {
+      look: "ring",
+      at: { x: at.x, y: at.y + BODY_HEIGHT },
+      add: true,
+      life: 16,
+      size0: 12,
+      size1: 80,
+      squash: 0.5,
+      easeOut: true,
+      peak: 0.7,
+      colours: [0xffffff, ARC_MID, BOLT_COLOUR],
+    });
+    this.shake?.(tick, 3, 16);
+  }
+
+  /**
+   * A Railgun fires: a blue-white flare and a ring at the muzzle, the gun
+   * kicking back, sparks shed along the line, a burst where it hits, a jolt.
+   */
+  private railFx(
+    tick: number,
+    tower: TowerState,
+    muzzle: Point,
+    start: Point,
+    dirX: number,
+    dirY: number,
+    at: Point,
+  ): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    const heading = Math.atan2(dirY, dirX);
+    sparks.emit(tick, {
+      look: "flare",
+      at: muzzle,
+      add: true,
+      life: 10,
+      size0: 80,
+      size1: 40,
+      rotation: heading,
+      colours: [0xffffff, RAIL_PALE, 0x2080ff],
+    });
+    sparks.emit(tick, {
+      look: "glow",
+      at: muzzle,
+      add: true,
+      life: 16,
+      size0: 50,
+      size1: 90,
+      easeOut: true,
+      peak: 0.8,
+      colours: [0xe8f8ff, 0x40a8ff, 0x0050c0],
+    });
+    sparks.emit(tick, {
+      look: "ring",
+      at: { x: muzzle.x, y: muzzle.y + 6 },
+      add: true,
+      life: 18,
+      size0: 14,
+      size1: 100,
+      squash: 0.5,
+      easeOut: true,
+      peak: 0.7,
+      colours: [0xffffff, 0x60c0ff],
+    });
+    sparks.emit(tick, {
+      look: "burst",
+      at,
+      add: true,
+      life: 12,
+      size0: 24,
+      size1: 62,
+      easeOut: true,
+      rotation: blastNoise(tick, 5) * 6.28,
+      colours: [0xffffff, RAIL_PALE, 0x1060ff],
+    });
+    sparks.emit(tick, {
+      look: "glow",
+      at,
+      add: true,
+      life: 14,
+      size0: 40,
+      size1: 80,
+      easeOut: true,
+      peak: 0.7,
+      colours: [0xe8f8ff, 0x40a8ff, 0x0050c0],
+    });
+    const hits = sparks.many(8);
+    for (let index = 0; index < hits; index += 1) {
+      const angle = heading + (blastNoise(tick, index + 60) - 0.5) * 2.4;
+      const speed = 3 + blastNoise(tick, index + 70) * 4;
+      sparks.emit(tick, {
+        look: "spark",
+        at,
+        add: true,
+        life: 12 + Math.round(blastNoise(tick, index + 80) * 8),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.6,
+        drag: 0.1,
+        size0: 10,
+        size1: 3,
+        stretch: true,
+        colours: [0xffffff, RAIL_PALE, 0x2060ff],
+      });
+    }
+    // Sparks shed along the first stretch of the line, drifting off it.
+    const shed = this.look === "full" ? sparks.many(6) : 0;
+    for (let index = 0; index < shed; index += 1) {
+      const along = 30 + blastNoise(tick, index + 90) * 420;
+      const side = blastNoise(tick, index + 100) < 0.5 ? -1 : 1;
+      sparks.emit(tick, {
+        look: "spark",
+        add: true,
+        delay: Math.round(along / 120),
+        life: 14,
+        at: { x: start.x + dirX * along, y: start.y + dirY * along },
+        vx: -dirY * side * 1.2 + dirX * 0.6,
+        vy: dirX * side * 0.7 + dirY * 0.6,
+        drag: 0.06,
+        size0: 7,
+        size1: 2,
+        stretch: true,
+        colours: [0xffffff, RAIL_PALE],
+      });
+    }
+    tower.recoil = { tick, dx: -dirX * RECOIL_PX, dy: -dirY * RECOIL_PX };
+    this.shake?.(tick, 4, 18);
+  }
+
+  /** The Cannon fires: a flash of flame out of the muzzle and a puff of smoke. */
+  private cannonFx(tick: number, muzzle: Point, aim: Point): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    const heading = Math.atan2(aim.y - muzzle.y, aim.x - muzzle.x);
+    const ahead = { x: muzzle.x + Math.cos(heading) * 9, y: muzzle.y + Math.sin(heading) * 9 };
+    sparks.emit(tick, {
+      look: "muzzle",
+      at: ahead,
+      add: true,
+      life: 7,
+      size0: 30,
+      size1: 38,
+      squash: 0.7,
+      rotation: heading,
+      colours: FIRE_TINTS,
+    });
+    sparks.emit(tick, {
+      look: "glow",
+      at: muzzle,
+      add: true,
+      life: 8,
+      size0: 26,
+      size1: 40,
+      peak: 0.8,
+      colours: FIRE_TINTS,
+    });
+    const puffs = sparks.many(3);
+    for (let index = 0; index < puffs; index += 1) {
+      sparks.emit(tick, {
+        look: index % 2 === 0 ? "smoke" : "wisp",
+        at: ahead,
+        delay: 1 + index,
+        life: 46 + Math.round(blastNoise(tick, index + 10) * 16),
+        vx: Math.cos(heading) * 0.5 + (blastNoise(tick, index + 20) - 0.5) * 0.3,
+        vy: Math.sin(heading) * 0.3,
+        vz: 0.25 + blastNoise(tick, index + 30) * 0.25,
+        drag: 0.03,
+        size0: 9,
+        size1: 24,
+        fadeIn: 3,
+        peak: 0.5,
+        hold: 0.2,
+        rotation: blastNoise(tick, index + 40) * 6.28,
+        colours: SMOKE_TINTS,
+      });
+    }
+  }
+
+  /**
+   * A cannon ball lands: a burst of fire, a ring of dust over the ground it
+   * covers, smoke rolling up, sparks, and a small jolt sized by its splash.
+   */
+  private cannonHitFx(tick: number, bullet: Bullet): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    const at = { x: bullet.x, y: bullet.y };
+    const ground = { x: bullet.x, y: bullet.y + BODY_HEIGHT };
+    const reach = Math.min(Math.max(bullet.splash, 30) / 2, 40);
+    sparks.emit(tick, {
+      look: "burst",
+      at,
+      add: true,
+      life: 11,
+      size0: reach * 0.8,
+      size1: reach * 2,
+      easeOut: true,
+      rotation: blastNoise(tick, 1) * 6.28,
+      colours: FIRE_TINTS,
+    });
+    sparks.emit(tick, {
+      look: "glow",
+      at,
+      add: true,
+      life: 10,
+      size0: reach,
+      size1: reach * 2.2,
+      easeOut: true,
+      peak: 0.75,
+      colours: FIRE_TINTS,
+    });
+    sparks.emit(tick, {
+      look: "ring",
+      at: ground,
+      life: 16,
+      size0: reach * 0.5,
+      size1: reach * 2.6,
+      squash: 0.5,
+      easeOut: true,
+      peak: 0.45,
+      colours: [0xe8d8b8, 0xa89878],
+    });
+    const puffs = sparks.many(4);
+    for (let index = 0; index < puffs; index += 1) {
+      const angle = (index / puffs) * Math.PI * 2 + blastNoise(tick, index + 10);
+      sparks.emit(tick, {
+        look: index % 2 === 0 ? "smoke" : "wisp",
+        delay: 2 + (index % 3),
+        at: { x: at.x + Math.cos(angle) * reach * 0.3, y: at.y + Math.sin(angle) * reach * 0.15 },
+        life: 44 + Math.round(blastNoise(tick, index + 20) * 18),
+        vx: Math.cos(angle) * 0.5,
+        vy: Math.sin(angle) * 0.25,
+        vz: 0.3 + blastNoise(tick, index + 30) * 0.3,
+        drag: 0.04,
+        size0: reach * 0.5,
+        size1: reach * 1.2,
+        fadeIn: 4,
+        peak: 0.6,
+        hold: 0.25,
+        rotation: blastNoise(tick, index + 40) * 6.28,
+        colours: [0x4a423c, 0x6a6460, 0x8a8682],
+      });
+    }
+    const count = sparks.many(7);
+    for (let index = 0; index < count; index += 1) {
+      const angle = ((index + blastNoise(tick, index + 50)) / count) * Math.PI * 2;
+      const speed = 2.5 + blastNoise(tick, index + 60) * 3;
+      sparks.emit(tick, {
+        look: "spark",
+        at,
+        add: true,
+        life: 12 + Math.round(blastNoise(tick, index + 70) * 8),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.5,
+        vz: 1.5,
+        gravity: 0.18,
+        drag: 0.08,
+        size0: 8,
+        size1: 3,
+        stretch: true,
+        colours: [0xffffff, 0xffd060, 0xff6010],
+      });
+    }
+    if (bullet.splash > 0) this.shake?.(tick, 1.5 + bullet.splash / 50, 12);
   }
 }

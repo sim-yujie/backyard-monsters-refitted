@@ -47,6 +47,62 @@ export const setReduceEffects = (on: boolean, store: Storage | null = storage())
   }
 };
 
+/* ── Screen shake and effects quality (beta.5 tower attack effects) ──────── */
+
+/** Where the "Screen shake" switch is kept, in this browser only: "0" is off. */
+export const SCREEN_SHAKE_KEY = "bymr.screenShake";
+/** Where the "Effects" choice is kept: "full" or "low"; unset follows the screen size. */
+export const EFFECTS_QUALITY_KEY = "bymr.effectsQuality";
+
+/** How much the towers' shots draw: every spark and glow, or fewer for phones. */
+export type EffectsQuality = "full" | "low";
+
+/** Whether the "Screen shake" switch is on: on unless the player turned it off. */
+export const screenShakeOn = (store: Storage | null = storage()): boolean => {
+  try {
+    return store?.getItem(SCREEN_SHAKE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+};
+
+export const setScreenShake = (on: boolean, store: Storage | null = storage()): void => {
+  try {
+    if (on) store?.removeItem(SCREEN_SHAKE_KEY);
+    else store?.setItem(SCREEN_SHAKE_KEY, "0");
+  } catch {
+    // Site data blocked: the choice lasts this page only.
+  }
+};
+
+/** The "Effects" choice the player made, or null while it follows the screen. */
+export const effectsQualityChoice = (store: Storage | null = storage()): EffectsQuality | null => {
+  try {
+    const value = store?.getItem(EFFECTS_QUALITY_KEY);
+    return value === "full" || value === "low" ? value : null;
+  } catch {
+    return null;
+  }
+};
+
+export const setEffectsQuality = (quality: EffectsQuality, store: Storage | null = storage()): void => {
+  try {
+    store?.setItem(EFFECTS_QUALITY_KEY, quality);
+  } catch {
+    // Site data blocked: the choice lasts this page only.
+  }
+};
+
+/** A phone-sized screen, where the effects start on low by themselves. */
+export const smallScreen = (): boolean =>
+  typeof matchMedia === "function" && matchMedia("(max-width: 760px), (max-height: 500px)").matches;
+
+/** How much the towers' shots draw now: the player's choice, or low on a small screen. */
+export const effectsQuality = (
+  store: Storage | null = storage(),
+  small: boolean = smallScreen(),
+): EffectsQuality => effectsQualityChoice(store) ?? (small ? "low" : "full");
+
 /**
  * The before-and-after switch: `?juice=0` in the address, or `bymr.juiceDemo` set to
  * `off` in this browser, draws the attack as before.
