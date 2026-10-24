@@ -15,15 +15,11 @@
  * ## What this does
  *
  * Every effect the engine reports on a {@link CreepSnapshot} gets its painted
- * icon (`public/status-icons/<set>/<id>.webp`, 2x the size it shows at), the
- * row centred over the health bar in {@link STATUS_EFFECTS}' order so the
- * icons never swap places as effects come and go. The code only places,
+ * sticker (`public/status-icons/<id>.webp`, a symbol with a white sticker
+ * edge, 2x the size it shows at), the row centred over the health bar in
+ * {@link STATUS_EFFECTS}' order so the icons never swap places as effects
+ * come and go. The code only places,
  * stacks and fades them; the look is all in the pictures.
- *
- * Two painted sets are on trial until the owner picks one (24 Oct 2026):
- * stickers (symbols with a white sticker edge) and shields (each symbol on a
- * coloured shield, shown bigger so the symbol still reads). See
- * {@link statusIconSet} for the switch; the set not picked goes, with it.
  *
  * ## Adding an effect
  *
@@ -41,7 +37,7 @@ import { Assets, Container, Sprite, Texture } from "pixi.js";
 import type { CreepSnapshot } from "@/game/combat/rules";
 
 export interface StatusEffect {
-  /** Also the picture's name: `status-icons/<set>/<id>.webp`. */
+  /** Also the picture's name: `status-icons/<id>.webp`. */
   readonly id: string;
   /** What a player would call it; for tests and the review page. */
   readonly label: string;
@@ -58,7 +54,7 @@ export const STATUS_EFFECTS: readonly StatusEffect[] = [
   { id: "lootBoosted", label: "Loot boost", stacks: (c) => (c.lootBoosted ? 1 : 0) },
 ];
 
-/** The pictures in each set's folder: the effects above and the ones still waiting for the engine. */
+/** The pictures in `public/status-icons/`: the effects above and the ones still waiting for the engine. */
 export const STATUS_ICON_FILES = [
   "poisoned",
   "burning",
@@ -70,41 +66,8 @@ export const STATUS_ICON_FILES = [
   "frozen",
 ] as const;
 
-export type StatusIconSetId = "stickers" | "shields";
-
-/** A painted set: its folder in `public/status-icons/` and how big it shows. */
-export interface StatusIconSet {
-  readonly id: StatusIconSetId;
-  /** An icon's width and height in world px; a creep's health bar is 18 wide. */
-  readonly size: number;
-}
-
-export const STATUS_ICON_SETS: Readonly<Record<StatusIconSetId, StatusIconSet>> = {
-  stickers: { id: "stickers", size: 12 },
-  // A shield's rim takes room from its symbol, so it shows a little bigger to read as well.
-  shields: { id: "shields", size: 14 },
-};
-
-/**
- * The set the battle draws: stickers, unless a dev build is asked for shields
- * by `?icons=shields` in the address or `bymr.statusIcons` set to `shields` in
- * this browser. A trial switch for the owner's side-by-side; it goes with the pick.
- */
-export const statusIconSet = (): StatusIconSet => {
-  if (!import.meta.env.DEV) return STATUS_ICON_SETS.stickers;
-  try {
-    const asked =
-      new URLSearchParams(window.location.search).get("icons") ??
-      window.localStorage.getItem("bymr.statusIcons");
-    return asked === "shields" ? STATUS_ICON_SETS.shields : STATUS_ICON_SETS.stickers;
-  } catch {
-    return STATUS_ICON_SETS.stickers;
-  }
-};
-
 /** Where an effect's picture is served from. */
-export const statusIconUrl = (id: string, set: StatusIconSet = STATUS_ICON_SETS.stickers): string =>
-  `${import.meta.env.BASE_URL}status-icons/${set.id}/${id}.webp`;
+export const statusIconUrl = (id: string): string => `${import.meta.env.BASE_URL}status-icons/${id}.webp`;
 
 /** One icon to show: the effect and how many stacks it has. */
 export interface ActiveStatus {
@@ -126,8 +89,8 @@ export const statusesOf = (
   return on;
 };
 
-/** The stickers' size, the row's default. */
-export const ICON_SIZE = STATUS_ICON_SETS.stickers.size;
+/** An icon's width and height in world px (the files are 48 px); a creep's health bar is 18 wide. */
+export const ICON_SIZE = 12;
 /** The space between two icons, and between the row and the bar under it. */
 export const ICON_GAP = 1;
 /** A stacking effect's icon grows this much a stack past the first, up to {@link MAX_GROWTH_STACKS}. */
@@ -168,24 +131,13 @@ export class StatusIconTextures {
   private readonly asked = new Set<string>();
 
   constructor(
-    private current: StatusIconSet = STATUS_ICON_SETS.stickers,
     // Mipmaps: a 48 px picture is drawn at a quarter of that zoomed out, and shimmers without them.
     private readonly load: StatusIconLoader = (url) =>
       Assets.load<Texture>({ src: url, data: { autoGenerateMipmaps: true } }),
   ) {}
 
-  /** The set being drawn. */
-  get set(): StatusIconSet {
-    return this.current;
-  }
-
-  /** Draws `set` from the next frame on; its pictures are fetched as they are needed. */
-  use(set: StatusIconSet): void {
-    this.current = set;
-  }
-
   get(effect: StatusEffect): Texture | null {
-    const url = statusIconUrl(effect.id, this.current);
+    const url = statusIconUrl(effect.id);
     const ready = this.ready.get(url);
     if (ready) return ready;
     if (!this.asked.has(url)) {
@@ -202,10 +154,7 @@ export class StatusIconTextures {
   }
 }
 
-const sharedTextures = new StatusIconTextures(statusIconSet());
-
-/** Switches every battle's icons to `set`: the trial switch at work, for shots of one held moment in both sets. */
-export const useStatusIconSet = (set: StatusIconSet): void => sharedTextures.use(set);
+const sharedTextures = new StatusIconTextures();
 
 /**
  * A creep's row of icons: one Sprite per effect it has carried, made on
@@ -239,8 +188,7 @@ export class StatusIconRow {
       return;
     }
     for (const icon of this.icons.values()) icon.visible = false;
-    const size = this.textures.set.size;
-    const spots = statusRow(statuses.length, centreX, barTop, size);
+    const spots = statusRow(statuses.length, centreX, barTop);
     statuses.forEach(({ effect, stacks }, index) => {
       const texture = this.textures.get(effect);
       if (!texture) return;
@@ -249,7 +197,7 @@ export class StatusIconRow {
       if (icon.texture !== texture) icon.texture = texture;
       icon.visible = true;
       icon.position.set(Math.round(spot.x), Math.round(spot.y));
-      icon.scale.set((size / Math.max(1, texture.width, texture.height)) * badgeScale(stacks));
+      icon.scale.set((ICON_SIZE / Math.max(1, texture.width, texture.height)) * badgeScale(stacks));
     });
     this.container.alpha = alpha;
     this.container.visible = true;

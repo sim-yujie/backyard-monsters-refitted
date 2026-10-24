@@ -8,11 +8,9 @@ import {
   ICON_SIZE,
   STATUS_EFFECTS,
   STATUS_ICON_FILES,
-  STATUS_ICON_SETS,
   StatusIconRow,
   StatusIconTextures,
   badgeScale,
-  statusIconSet,
   statusIconUrl,
   statusRow,
   statusesOf,
@@ -32,7 +30,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Pictures that are in already, a white square for every effect. */
 const readyTextures = async (): Promise<StatusIconTextures> => {
-  const textures = new StatusIconTextures(STATUS_ICON_SETS.stickers, () => Promise.resolve(Texture.WHITE));
+  const textures = new StatusIconTextures(() => Promise.resolve(Texture.WHITE));
   for (const effect of STATUS_EFFECTS) textures.get(effect);
   await flush();
   return textures;
@@ -113,47 +111,25 @@ describe("the registry", () => {
     for (const id of ids) expect(files).toContain(id);
   });
 
-  it("ships every picture in both sets, the ones still waiting for an effect too", () => {
-    for (const set of Object.values(STATUS_ICON_SETS)) {
-      for (const id of STATUS_ICON_FILES) {
-        const file = path.join(PUBLIC_ICONS, set.id, `${id}.webp`);
-        expect(existsSync(file), file).toBe(true);
-        // Game-sized: a few KB each, not the painted original.
-        expect(statSync(file).size).toBeLessThan(12_000);
-      }
+  it("ships every picture, the ones still waiting for an effect too", () => {
+    for (const id of STATUS_ICON_FILES) {
+      const file = path.join(PUBLIC_ICONS, `${id}.webp`);
+      expect(existsSync(file), file).toBe(true);
+      // Game-sized: a few KB each, not the painted original.
+      expect(statSync(file).size).toBeLessThan(12_000);
     }
   });
 
-  it("serves an effect's picture by its set and id", () => {
-    expect(statusIconUrl("poisoned")).toMatch(/status-icons\/stickers\/poisoned\.webp$/);
-    expect(statusIconUrl("poisoned", STATUS_ICON_SETS.shields)).toMatch(
-      /status-icons\/shields\/poisoned\.webp$/,
-    );
+  it("serves an effect's picture by its id", () => {
+    expect(statusIconUrl("poisoned")).toMatch(/status-icons\/poisoned\.webp$/);
   });
 
-  it("draws the stickers unless the trial switch asks for shields", () => {
-    // No browser here: the stickers.
-    expect(statusIconSet()).toBe(STATUS_ICON_SETS.stickers);
-    const stored = new Map<string, string>();
-    const browser = { location: { search: "" }, localStorage: { getItem: (key: string) => stored.get(key) ?? null } };
-    vi.stubGlobal("window", browser);
-    expect(statusIconSet()).toBe(STATUS_ICON_SETS.stickers);
-    browser.location.search = "?icons=shields";
-    expect(statusIconSet()).toBe(STATUS_ICON_SETS.shields);
-    // The address wins over the stored choice.
-    stored.set("bymr.statusIcons", "shields");
-    browser.location.search = "?icons=stickers";
-    expect(statusIconSet()).toBe(STATUS_ICON_SETS.stickers);
-    browser.location.search = "";
-    expect(statusIconSet()).toBe(STATUS_ICON_SETS.shields);
-    vi.unstubAllGlobals();
-  });
 });
 
 describe("StatusIconTextures", () => {
   it("asks for a picture once, and gives it out once it is in", async () => {
     const asked: string[] = [];
-    const textures = new StatusIconTextures(STATUS_ICON_SETS.stickers, (url) => {
+    const textures = new StatusIconTextures((url) => {
       asked.push(url);
       return Promise.resolve(Texture.WHITE);
     });
@@ -162,33 +138,13 @@ describe("StatusIconTextures", () => {
     expect(textures.get(venom)).toBeNull();
     await flush();
     expect(textures.get(venom)).toBe(Texture.WHITE);
-    expect(asked).toEqual([statusIconUrl("poisoned", STATUS_ICON_SETS.stickers)]);
-  });
-
-  it("fetches the other set's pictures once switched to it", async () => {
-    const asked: string[] = [];
-    const textures = new StatusIconTextures(STATUS_ICON_SETS.stickers, (url) => {
-      asked.push(url);
-      return Promise.resolve(Texture.WHITE);
-    });
-    const [venom] = STATUS_EFFECTS as [StatusEffect];
-    textures.get(venom);
-    await flush();
-    textures.use(STATUS_ICON_SETS.shields);
-    expect(textures.set).toBe(STATUS_ICON_SETS.shields);
-    expect(textures.get(venom)).toBeNull();
-    await flush();
-    expect(textures.get(venom)).toBe(Texture.WHITE);
-    expect(asked).toEqual([
-      statusIconUrl("poisoned", STATUS_ICON_SETS.stickers),
-      statusIconUrl("poisoned", STATUS_ICON_SETS.shields),
-    ]);
+    expect(asked).toEqual([statusIconUrl("poisoned")]);
   });
 
   it("gives up quietly on a picture that did not load", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     let calls = 0;
-    const textures = new StatusIconTextures(STATUS_ICON_SETS.stickers, () => {
+    const textures = new StatusIconTextures(() => {
       calls += 1;
       return Promise.reject(new Error("404"));
     });
@@ -238,7 +194,7 @@ describe("StatusIconRow", () => {
   });
 
   it("keeps a place for a picture still on its way, and shows it once it is in", async () => {
-    const textures = new StatusIconTextures(STATUS_ICON_SETS.stickers, () => Promise.resolve(Texture.WHITE));
+    const textures = new StatusIconTextures(() => Promise.resolve(Texture.WHITE));
     const row = new StatusIconRow(textures);
     const statuses = statusesOf(creepOf({ burning: true, poisonStacks: 2 }));
     row.show(statuses, 50, 20);
@@ -274,21 +230,6 @@ describe("StatusIconRow", () => {
     row.show(statusesOf(creepOf({ poisonStacks: 3 })), 0, 0);
     expect(row.container.children).toHaveLength(1);
     expect(venom.width).toBeCloseTo(ICON_SIZE * badgeScale(3));
-    row.destroy();
-  });
-
-  it("sizes and spaces a set's icons by that set's size", async () => {
-    const { shields } = STATUS_ICON_SETS;
-    const textures = new StatusIconTextures(shields, () => Promise.resolve(Texture.WHITE));
-    for (const effect of STATUS_EFFECTS) textures.get(effect);
-    await flush();
-    const row = new StatusIconRow(textures);
-    row.show(statusesOf(creepOf({ burning: true, poisonStacks: 1 })), 50, 20);
-    const icons = row.container.children as Sprite[];
-    expect(icons[0]?.width).toBeCloseTo(shields.size);
-    expect(icons.map((icon) => icon.x)).toEqual(
-      statusRow(2, 50, 20, shields.size).map((spot) => Math.round(spot.x)),
-    );
     row.destroy();
   });
 
