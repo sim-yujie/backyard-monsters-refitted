@@ -16,7 +16,7 @@ import { usernameMatch } from "../user/usernameLookup.js";
 import { botName } from "./names.js";
 import { shinyForSeed } from "./shiny.js";
 import { levelBand, minimumYardTotal, PERSONAS, targetInBand, type Persona } from "./progression.js";
-import { generateBotYard, type BotYard } from "./yardGenerator.js";
+import { BOT_YARD_VERSION, generateBotYard, type BotYard } from "./yardGenerator.js";
 import { catchUpYard } from "../yard/catchUp.js";
 import { visitMapRoom1 } from "./lookAlike.js";
 
@@ -409,6 +409,7 @@ export const createBots = async (
           level: yard.level,
           level_since: profile.levelSince,
           quiet_since: quiet[index] ? new Date(now * 1000) : null,
+          yard_version: BOT_YARD_VERSION,
         });
       });
       await tx.flush();
