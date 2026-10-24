@@ -36,6 +36,7 @@ SHEETS = {
 UP = 4
 AREA = 1.05                       # new row-0 silhouette area / old row-0 body area
 WALK_HOLD = 0.04                  # a held walk frame may differ from row 0's size by this much
+FIT_SHRINK = 0.15                 # a frame that would be cut by the cell edge may be shrunk by up to this much to fit
 
 if len(sys.argv) != 3 or sys.argv[1] not in SHEETS:
     sys.exit(__doc__)
@@ -96,6 +97,13 @@ def key_cell(rgb):
         if c > cnt.max() * 0.02:
             keep |= lab2 == i
     keep = ndi.binary_fill_holes(keep)
+    # ground trapped inside the body (between the legs, under an arm) is not edge-connected: cut out the clearly magenta pockets
+    pocket, _ = ndi.label(ground & ~np.isin(lab, list(edge)))
+    near = np.sqrt((255 - r) ** 2 + g ** 2 + (255 - b) ** 2) < 80
+    for i, c in zip(*np.unique(pocket[pocket > 0], return_counts=True)):
+        hole = pocket == i
+        if c > 40 and near[hole].mean() > 0.6:
+            keep &= ~ndi.binary_dilation(hole, iterations=1)
     keep = ndi.binary_erosion(keep, iterations=2)
     alpha = np.asarray(Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(1.2))).astype(float)
     # despill the magenta fringe on the rim only: a pixel close to #FF00FF next to the ground is spill (Fomor's purple body is far darker)
@@ -189,8 +197,13 @@ for c in COLUMNS:
             if mode == "B":       # an attack keeps still unless the old frame clearly moves
                 dy = 0.0 if abs(dy) < 2 else dy
                 dx = 0.0 if abs(dx) < 1.5 else dx
-        ox = x0 + dx - xref(s) * kk
-        oy = old_ground + dy - bottom * kk
+        X, Y, xr = x0 + dx, old_ground + dy, xref(s)
+        if row > 0:      # a reach or lunge wider than the old frame: shrink that frame (up to FIT_SHRINK) rather than cut it at the cell edge
+            bx0, by0, bx1, _ = bbox(np.asarray(cut)[..., 3] > 40)
+            fit = min(X / max(xr - bx0, 1), (CELL[0] - X) / max(bx1 - xr, 1), Y / max(bottom - by0, 1))
+            kk = max(min(kk, fit), kk * (1 - FIT_SHRINK))
+        ox = X - xr * kk
+        oy = Y - bottom * kk
         big = resize_premultiplied(cut, (max(1, round(cut.width * kk * UP)), max(1, round(cut.height * kk * UP))))
         left, top = round(ox * UP), round(oy * UP)
         layer = Image.new("RGBA", (cw, ch))
