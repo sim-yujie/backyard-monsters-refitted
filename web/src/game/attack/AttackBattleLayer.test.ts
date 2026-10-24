@@ -674,8 +674,8 @@ describe("AttackBattleLayer over a session", () => {
     expect(layer.creepCount).toBe(3);
     expect(host.depth.children).toHaveLength(3);
     const bars = overlay.children[4];
-    expect(bars?.children).toHaveLength(9); // bar back, bar front, status badge row per creep
-    // Pokeys under no effect carry no badges.
+    expect(bars?.children).toHaveLength(9); // bar back, bar front, status icon row per creep
+    // Pokeys under no effect carry no icons.
     for (let index = 2; index < 9; index += 3) expect(bars?.children[index]?.visible).toBe(false);
 
     // Before the sheet is in, a marker; once it is, the sheet's cell.

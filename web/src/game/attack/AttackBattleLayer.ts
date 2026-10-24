@@ -1405,7 +1405,7 @@ export class AttackBattleLayer {
   /**
    * The special moves' looks (issue #352): a hopping Bolt flickers at the
    * alpha Flash gave it (Blink.as:78), a cloaked Brain is see-through, and a
-   * creep under an effect carries its badges over the bar ({@link StatusIconRow}),
+   * creep under an effect carries its icons over the bar ({@link StatusIconRow}),
    * the venom's growing with its stacks.
    */
   private paintMoves(view: CreepView, tick: number): void {
