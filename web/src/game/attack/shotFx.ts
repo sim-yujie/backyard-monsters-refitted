@@ -192,7 +192,7 @@ export class ShotFx {
     if (!texture) return;
     let sprite = this.lamps.get(key);
     if (!sprite) {
-      sprite = this.makeSprite();
+      sprite = this.pool.pop() ?? this.makeSprite();
       sprite.blendMode = "add";
       this.layer.addChild(sprite);
       this.lamps.set(key, sprite);
@@ -225,7 +225,7 @@ export class ShotFx {
 
     for (const [key, sprite] of this.lamps) {
       if (this.lit.has(key)) continue;
-      sprite.destroy();
+      this.release(sprite);
       this.lamps.delete(key);
     }
     this.lit.clear();

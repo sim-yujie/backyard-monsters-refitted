@@ -1,19 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { Graphics } from "pixi.js";
+import { Container, Graphics, Texture, TextureSource } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
+  RAIL_CHARGE_TICKS,
+  RECOIL_TICKS,
   TESLA_CHARGE_END,
   TESLA_IDLE,
   TESLA_LOOP_END,
   TowerFx,
   bearingDegrees,
+  boltForks,
+  boltPath,
   facingCell,
   laserCell,
   muzzleOf,
+  railCharge,
   railFade,
+  recoilKick,
+  stepCell,
   teslaTick,
   towersOf,
   wrapDegrees,
@@ -436,5 +443,152 @@ describe("TowerFx landings (#77)", () => {
     expect(landingSetUp(21).fx.splashOf(1)).toBe(0);
     expect(landingSetUp(20).fx.splashOf(1)).toBe(30);
     expect(landingSetUp(20).fx.splashOf(77)).toBe(0);
+  });
+});
+
+/* ── The new look (beta.5 tower attack effects) ──────────────────────────── */
+
+describe("the new look's arithmetic", () => {
+  it("turns a gun the short way round, at most so many cells a tick", () => {
+    expect(stepCell(0, 10, 32, 2)).toBe(2);
+    expect(stepCell(0, 30, 32, 2)).toBe(30);
+    // 0 to 20 of 32 is 12 back the other way.
+    expect(stepCell(0, 20, 32, 2)).toBe(30);
+    expect(stepCell(9, 10, 32, 2)).toBe(10);
+    // No strip, or already there: the wanted cell.
+    expect(stepCell(4, 7, 0, 2)).toBe(7);
+  });
+
+  it("kicks a gun back at once and eases it home by the end of its recoil", () => {
+    expect(recoilKick(-1)).toBe(0);
+    expect(recoilKick(1)).toBe(1);
+    expect(recoilKick(RECOIL_TICKS / 2)).toBeGreaterThan(0);
+    expect(recoilKick(RECOIL_TICKS / 2)).toBeLessThan(1);
+    expect(recoilKick(RECOIL_TICKS)).toBe(0);
+  });
+
+  it("winds the Railgun up over the ticks before its next shot, and lets go when it is overdue", () => {
+    const rate = 160;
+    expect(railCharge(0, rate)).toBe(0);
+    expect(railCharge(rate - RAIL_CHARGE_TICKS, rate)).toBe(0);
+    expect(railCharge(rate - RAIL_CHARGE_TICKS / 2, rate)).toBeCloseTo(0.5);
+    expect(railCharge(rate, rate)).toBe(1);
+    expect(railCharge(rate + 31, rate)).toBe(0);
+  });
+
+  it("draws the same bolt for the same seed, pinned at both ends, and a new one for the next", () => {
+    const from = { x: 0, y: 0 };
+    const to = { x: 200, y: 40 };
+    const path = boltPath(from, to, 7);
+    expect(path[0]).toEqual(from);
+    expect(path[path.length - 1]).toEqual(to);
+    expect(boltPath(from, to, 7)).toEqual(path);
+    expect(boltPath(from, to, 8)).not.toEqual(path);
+    const forks = boltForks(path, 7, 3);
+    expect(forks).toHaveLength(3);
+    expect(boltForks(path, 7, 3)).toEqual(forks);
+    // Every fork starts on the bolt.
+    for (const fork of forks) expect(path).toContainEqual(fork[0]);
+  });
+});
+
+/** A sheet the size of the real one, with nothing to fetch. */
+const fakeSheet = (): Promise<Texture> =>
+  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 576 }) }));
+
+const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "full") => {
+  const yard = readYard(yardOf(type));
+  const sparks = new Container();
+  const shakes: { tick: number; amp: number }[] = [];
+  const nudges: { dx: number; dy: number }[] = [];
+  const fx = new TowerFx(
+    new Graphics(),
+    towersOf(yard),
+    {
+      setAnimFrame: () => undefined,
+      nudge: (_id, _layer, dx, dy) => nudges.push({ dx, dy }),
+    },
+    { x: yard.bounds.originX, y: yard.bounds.originY },
+    { look, sparks, glow: new Graphics(), shake: (tick, amp) => shakes.push({ tick, amp }), load: fakeSheet },
+  );
+  // The sheet comes in on the next turn of the event loop.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return { fx, sparks, shakes, nudges };
+};
+
+describe("TowerFx's new look", () => {
+  const target = creepAt(35, 235);
+  const shoot = (fx: TowerFx, tick: number) =>
+    fx.onShot({ tick, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+
+  it("throws painted sparks for a Tesla zap and shakes on the first zap of a charge only", async () => {
+    const { fx, sparks, shakes } = await newLookSetUp(25);
+    fx.onCharge(1, 0);
+    shoot(fx, 70);
+    fx.update(70, () => target);
+    expect(fx.sparkCount).toBeGreaterThan(0);
+    expect(sparks.children.length).toBeGreaterThan(0);
+    shoot(fx, 78);
+    fx.update(78, () => target);
+    expect(shakes).toHaveLength(1);
+    fx.destroy();
+  });
+
+  it("shakes for every Railgun shot and kicks the gun back, ending in place", async () => {
+    const { fx, shakes, nudges } = await newLookSetUp(118);
+    shoot(fx, 10);
+    for (let tick = 10; tick <= 10 + RECOIL_TICKS + 2; tick += 1) fx.update(tick, () => target);
+    expect(shakes).toHaveLength(1);
+    expect(nudges.some(({ dx, dy }) => dx !== 0 || dy !== 0)).toBe(true);
+    expect(nudges[nudges.length - 1]).toEqual({ dx: 0, dy: 0 });
+    fx.destroy();
+  });
+
+  it("shakes when a Cannon's splash shell lands, not when it fires", async () => {
+    const { fx, shakes } = await newLookSetUp(20);
+    fx.update(0, () => target);
+    shoot(fx, 5);
+    fx.update(5, () => target);
+    expect(shakes).toHaveLength(0);
+    expect(fx.sparkCount).toBeGreaterThan(0);
+    for (let tick = 6; tick <= 400; tick += 1) fx.update(tick, () => target);
+    expect(shakes).toHaveLength(1);
+    fx.destroy();
+  });
+
+  it("throws fewer bits on low than on full", async () => {
+    const full = await newLookSetUp(20, "full");
+    const low = await newLookSetUp(20, "low");
+    for (const { fx } of [full, low]) {
+      fx.update(0, () => target);
+      shoot(fx, 5);
+      fx.update(5, () => target);
+    }
+    expect(low.fx.sparkCount).toBeGreaterThan(0);
+    expect(low.fx.sparkCount).toBeLessThan(full.fx.sparkCount);
+    full.fx.destroy();
+    low.fx.destroy();
+  });
+
+  it("keeps the classic look as it was: no bits, no shake, no kick", async () => {
+    const { fx, sparks, shakes, nudges } = await newLookSetUp(118, "classic");
+    shoot(fx, 10);
+    for (let tick = 10; tick <= 40; tick += 1) fx.update(tick, () => target);
+    expect(fx.sparkCount).toBe(0);
+    expect(sparks.children).toHaveLength(0);
+    expect(shakes).toHaveLength(0);
+    expect(nudges).toHaveLength(0);
+    fx.destroy();
+  });
+
+  it("clears every bit when the battle stands down", async () => {
+    const { fx, sparks } = await newLookSetUp(25);
+    fx.onCharge(1, 0);
+    shoot(fx, 70);
+    fx.update(70, () => target);
+    fx.standDown();
+    expect(fx.sparkCount).toBe(0);
+    expect(sparks.children.filter((child) => child.visible)).toHaveLength(0);
+    fx.destroy();
   });
 });
