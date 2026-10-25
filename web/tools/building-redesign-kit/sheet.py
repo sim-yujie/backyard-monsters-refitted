@@ -1,4 +1,7 @@
-"""sheet.py <building> : the owner's overview for one building -> art-samples/redesign/<building>/overview.png
+"""sheet.py <building> [r2] : the owner's overview for one building -> art-samples/redesign/<building>/overview.png
+
+With r2 (round 2, "Flash design, refreshed") -> overview-r2.png: Flash | sharp Flash (cannon only: the faithful tower sample) |
+R2A | R2B, one row at game size (1x) and one row zoomed (4x).
 
 Top: game size (1x), Flash | A1 | A2 | B1 | B2 in a row. Below: zoomed (4x), Flash on the left and the four combos as a 2x2 grid
 (A1 A2 / B1 B2). Every picture is on the yard grass, with Gorgo level 3 (approved repaint) standing beside it for scale.
@@ -15,9 +18,12 @@ from common import ASSETS, REPO, grass, old_rgba, resize_pm, shadow_on  # noqa: 
 from finish import canvas  # noqa: E402
 
 b = sys.argv[1]
+ROUND2 = sys.argv[2:] == ["r2"]
 OUT = REPO / "art-samples" / "redesign" / b
-COMBOS = ["A1", "A2", "B1", "B2"]
-NAME = {"A1": "A1  hand-painted + backyard junk", "A2": "A2  hand-painted + military/tech",
+COMBOS = (["sharp"] if b == "cannon" else []) + ["R2A", "R2B"] if ROUND2 else ["A1", "A2", "B1", "B2"]
+NAME = {"sharp": "Sharp Flash (faithful repaint)", "R2A": "R2-A  Flash refreshed, hand-painted",
+        "R2B": "R2-B  Flash refreshed, 3D render",
+        "A1": "A1  hand-painted + backyard junk", "A2": "A2  hand-painted + military/tech",
         "B1": "B1  3D render + backyard junk", "B2": "B2  3D render + military/tech"}
 TITLE = {"cannon": "Cannon Tower", "townhall": "Town Hall"}[b]
 W, H, cx0, cy0 = canvas(b)
@@ -29,6 +35,17 @@ gb = g4.getbbox()
 g4 = g4.crop(gb)
 base_y = cy0 - oy + np.where(np.asarray(old)[..., 3] >= 200)[0].max() + 1      # old base line on the canvas
 fx1 = cx0 - ox + np.where(np.asarray(old)[..., 3] >= 200)[1].max() + 1          # old right edge
+
+
+def new4(src):
+    """The 4x RGBA picture of a sample on the redesign canvas (W*4 x H*4)."""
+    if src != "sharp":
+        return Image.open(OUT / src / "new-4x.png")
+    # the faithful tower sample sits on the old canvas: move its origin onto this canvas
+    t4 = Image.open(REPO / "art-samples" / "towers" / b / "new-4x.png").convert("RGBA")
+    c4 = Image.new("RGBA", (W * 4, H * 4), (0, 0, 0, 0))
+    c4.alpha_composite(t4, ((cx0 - ox) * 4, (cy0 - oy) * 4))
+    return c4
 
 
 def stand_in_shadow(bg, im4):
@@ -50,7 +67,7 @@ def scene(src, S):
     if src == "flash":
         bg = shadow_on(bg, b, cx0, cy0)
     else:
-        im4 = Image.open(OUT / src / "new-4x.png")
+        im4 = new4(src)
         bg = stand_in_shadow(bg, im4)
     # Gorgo's contact shadow
     d = ImageDraw.Draw(bg, "RGBA")
@@ -72,7 +89,7 @@ def crop_box():
     """Union of everything drawn (1x canvas coords), so empty sky is trimmed."""
     boxes = [(cx0 - ox, cy0 - oy, cx0 - ox + old.width, cy0 - oy + old.height)]
     for c in COMBOS:
-        bb = Image.open(OUT / c / "new-4x.png").getbbox()
+        bb = new4(c).getbbox()
         boxes.append(tuple(v / 4 for v in bb))
     x0 = max(0, min(bx[0] for bx in boxes) - 6); y0 = max(0, min(bx[1] for bx in boxes) - 6)
     x1 = max(max(bx[2] for bx in boxes), fx1 + 8 + g4.width / 4) + 10      # up to Gorgo's right side
@@ -87,6 +104,44 @@ def tile(src, S):
     return scene(src, S).crop((x0 * S, y0 * S, x1 * S, y1 * S))
 
 
+def round2():
+    """One row at 1x, one row at 4x: Flash, then each sample."""
+    srcs = ["flash"] + COMBOS
+    lab = {"flash": "Flash (now)", **NAME}
+    smalls = [tile(c, 1) for c in srcs]
+    bigs = [tile(c, 4) for c in srcs]
+    tw, th = bigs[0].size
+    sw, sh = smalls[0].size
+    PAD, LAB = 24, 34
+    width = PAD + len(srcs) * (tw + PAD)
+    height = 84 + LAB + 8 + LAB + sh + 40 + LAB + 8 + LAB + 6 + th + PAD
+    g = Image.new("RGB", (width, height), BG)
+    d = ImageDraw.Draw(g)
+    from PIL import ImageFont
+    F = ImageFont.truetype("arial.ttf", 26); FB = ImageFont.truetype("arialbd.ttf", 32)
+    d.text((PAD, 10), f"{TITLE}, top tier, round 2: the Flash design, refreshed.  R2-A = hand-painted (like the approved champion "
+                      f"repaints), R2-B = chunky 3D render.", fill=FG, font=F)
+    d.text((PAD, 44), "Gorgo level 3 (approved repaint) beside each, at true game scale.  The new pictures get a simple stand-in "
+                      "shadow.", fill=FG, font=F)
+    y = 84
+    d.text((PAD, y), "Game size (1x)", fill=FG, font=FB); y += LAB + 8
+    for i, (c, im) in enumerate(zip(srcs, smalls)):
+        x = PAD + i * (tw + PAD)
+        d.text((x, y), lab[c], fill=FG, font=F)
+        g.paste(im, (x, y + LAB))
+    y += LAB + sh + 40
+    d.text((PAD, y), "Zoomed (4x)", fill=FG, font=FB); y += LAB + 8
+    for i, (c, im) in enumerate(zip(srcs, bigs)):
+        x = PAD + i * (tw + PAD)
+        d.text((x, y), lab[c], fill=FG, font=FB)
+        g.paste(im, (x, y + LAB + 6))
+    g.save(OUT / "overview-r2.png", optimize=True)
+    print(OUT / "overview-r2.png", g.size)
+
+
+if ROUND2:
+    round2()
+    sys.exit(0)
 small = [("Flash (now)", tile("flash", 1))] + [(c, tile(c, 1)) for c in COMBOS]
 bigs = {c: tile(c, 4) for c in ["flash"] + COMBOS}
 tw, th = bigs["flash"].size

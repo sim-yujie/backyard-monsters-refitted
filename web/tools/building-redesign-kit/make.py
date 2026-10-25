@@ -1,11 +1,12 @@
 """make.py <building> <combo> : set up one Codex call for a building-redesign sample (brief: agent-handoffs/brief-building-redesign.md).
 
-building = cannon | townhall (top tier).  combo = A1 | A2 | B1 | B2:
+building = cannon | townhall (top tier).  combo = A1 | A2 | B1 | B2 (round 1) or R2A | R2B (round 2, "Flash design, refreshed"):
   style A = hand-painted like the approved monster/champion repaints, style B = chunky 3D-render (Clash of Clans / Boom Beach look);
   theme 1 = home-made backyard junk that gets sturdier/fancier at higher tiers, theme 2 = proper military/tech from tier 1.
 Writes art-samples/redesign/<building>/<combo>/: frames.png (the old Flash building blown up on grey: camera angle, footprint, size),
 style.png (style A only: approved champion repaints), prompt.txt, inputs.txt.
 """
+import os
 import sys
 from pathlib import Path
 from PIL import Image
@@ -14,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tower-sample-kit")
 from common import ASSETS, REPO, old_rgba, on  # noqa: E402
 
 b, combo = sys.argv[1], sys.argv[2]
-style, theme = combo[0], combo[1]
+R2 = combo.startswith("R2")                  # round 2: keep the Flash design, refresh it; no theme
+style, theme = (combo[-1], None) if R2 else (combo[0], combo[1])
 OUT = REPO / "art-samples" / "redesign"
 out = OUT / b / combo
 out.mkdir(parents=True, exist_ok=True)
@@ -30,6 +32,17 @@ fr = Image.new("RGB", (W, H), GREY)
 fr.paste(big, ((W - big.width) // 2, round(H * 0.88) - big.height))
 fr.save(out / "frames.png")
 inputs = ["frames.png"]
+
+if R2:
+    # ref.png: the Flash build button (a sharper render of the same design) blown up
+    BUTTON = {"cannon": "20", "townhall": "14.10"}[b]              # Town Hall: the level 10 button
+    bt = Image.open(ASSETS / "buildingbuttons" / f"{BUTTON}.jpg").convert("RGB")
+    bt.resize((bt.width * 5, bt.height * 5), Image.LANCZOS).save(out / "ref.png")
+    inputs.append("ref.png")
+    if b == "cannon" and not os.environ.get("NOFAITHFUL"):   # NOFAITHFUL=1: leave it out (Codex copied it too closely)
+        # faithful.png: the "sharp Flash" repaint from the tower samples, the lower bound
+        Image.open(REPO / "art-samples" / "towers" / "cannon" / "sample-new.png").convert("RGB").save(out / "faithful.png")
+        inputs.append("faithful.png")
 
 if style == "A":
     SH = {"ape_3": (103, 88), "dragon_3": (114, 85), "fly_3": (98, 81)}
@@ -54,6 +67,30 @@ WHAT = {
                  "live). Keep its recognisable idea from frames.png: a round domed hall with a big funnel/antenna on top, a round "
                  "porthole window on the front and pipes around it, but redesign it freely in the theme below"),
 }[b]
+WHAT_R2 = {
+    "cannon": ("the CANNON TOWER, a defence tower that fires heavy cannonballs. Its Flash design (keep it): a RED-AND-WHITE STRIPED "
+               "DRUM base standing on three chunky TAN stone feet, a TAN RING frame around the top with curved TAN PRONGS sticking up "
+               "out of it, and a wide GREY STEEL cannon tube in the middle. One change: the steel cannon tube must now be able to TURN "
+               "to aim, so it sits in a round swivel mount inside the tan ring and is shown TILTED so that its MUZZLE POINTS TOWARD THE "
+               "BOTTOM-LEFT CORNER OF THE IMAGE (towards the viewer and to the left, angled up a little, the open muzzle visible). "
+               "The muzzle must NOT point up, up-left, right or away from the viewer"),
+    "townhall": ("the TOWN HALL, the main building of the monster yard. Its Flash design at level 10 (keep it): a DARK RIVETED DOME "
+                 "(dark grey-brown metal plates with rows of rivets) with a round BLUE GLOWING PORTHOLE on the front, held inside a "
+                 "GOLDEN FRAME of four thick golden pipe pillars with curved golden arms reaching over the dome, small blue gem "
+                 "studs on the gold and clawed golden feet; a golden horned crest with a silver funnel and a thin golden antenna on "
+                 "top; red pipes and golden coils around the waist; a light grey base ring with a row of round black holes"),
+}[b]
+REFRESH = ("THE FLASH DESIGN, REFRESHED (most important). frames.png and ref.png show the building's ORIGINAL design from the old "
+           "Flash game. Keep that design: the same silhouette and proportions, the same colour scheme and the same signature parts "
+           "in the same places, so a player of the old game instantly recognises it. Refresh it: richer materials (worn painted "
+           "metal, polished brass, steel with scratches), crisper detail (bolts, rivets, seams, panel lines), better lighting "
+           "(soft light from the upper left, clear highlights, ambient occlusion in the gaps) and sharper edges. As the TOP TIER it "
+           "may ADD a few parts on top of the Flash design (extra riveted trim plates, small glowing lights, a polished cap, "
+           "a little banner or lamp), but nothing that changes the silhouette or replaces a Flash part. This is NOT a new design "
+           "(an earlier redesign was rejected for being too far from the original) and NOT a plain copy either."
+           + (" Input 3, faithful.png: an earlier faithful repaint of the same tower. Treat it as the LOWER BOUND: keep this "
+              "design, but go further in material, detail and lighting quality (and turn the barrel as described)."
+              if "faithful.png" in inputs else ""))
 STYLE = {
     "A": ("STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters "
           "from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated "
@@ -73,7 +110,30 @@ THEME = {
     "2": ("THEME 2, military / tech: a properly engineered military-tech structure, NOT home-made: armoured steel plating, "
           "red-and-white hazard stripes, heavy bolts, vents, cables, small antennas, glowing energy cores and indicator lights. "
           "This is the TOP TIER, so it is the most advanced, heaviest-armoured, most high-tech version, with glowing parts."),
-}[theme]
+}.get(theme, "")
+if R2:
+    n_style = len(inputs)
+    prompt = f"""Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint a refreshed top-tier version of {WHAT_R2}. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Input 1, frames.png: the OLD Flash building, blown up, on grey ({fr.width}x{fr.height}): its design, camera angle, ground footprint and size. The new picture stands on the same footprint, centred on the same spot, base on the same ground line, and may be up to about 15% taller above the footprint, but not wider at the base.
+Input 2, ref.png: the old build-menu picture of the same building (a sharper render of the same design). Use it to read the small details.{"" if style == "B" else f"""
+Input {n_style}, style.png: see style below."""}
+
+{REFRESH}
+
+{STYLE}
+
+Output: ONE image, {fr.width}x{fr.height}, the building alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.
+"""
+    if os.environ.get("NOTE"):                          # a correction for a repaint, e.g. NOTE="..." bash run.sh cannon R2A
+        prompt += "\nIMPORTANT CORRECTION (an earlier attempt got this wrong): " + os.environ["NOTE"] + "\n"
+    (out / "prompt.txt").write_text(prompt, encoding="utf-8")
+    print("ready", out.as_posix())
+    sys.exit(0)
+
 prompt = f"""Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
 
 Design a NEW top-tier version of {WHAT}. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
