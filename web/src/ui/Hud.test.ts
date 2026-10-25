@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResourceCaps } from "@/api/types";
 import type { YardJob } from "@/game/yard/jobs";
 import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
-import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, Hud, workersText } from "./Hud";
+import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, Hud, INFERNO_FULL_NOTE, workersText } from "./Hud";
 import { Notices } from "./maproom/Notices";
 import { setResourceRealm, spokenText } from "./resourceIcon";
 
@@ -407,7 +407,8 @@ describe("the yard's corner layout (#171)", () => {
       caps: { r1: 1_600, r2: 1_600, r3: 1_600, r4: 1_600 },
       workers: { total: 1, busy: 0 },
       jobs: () => [],
-      save: {},
+      // A level 2 Coal Extractor: 1,440 Coal an hour by the Inferno table.
+      save: { buildingdata: { "1": { id: 1, t: 2, l: 2, X: 0, Y: 0 } } },
       now: () => 0,
       isRunning: () => false,
       subscribe: () => () => undefined,
@@ -417,11 +418,14 @@ describe("the yard's corner layout (#171)", () => {
     hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
     const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
     const r2 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r2"]')!;
-    expect(r1.title).toBe(`Bone: 1,600 of 1,600\n${FULL_NOTE}`);
-    expect(r2.title).toBe("Coal: 1,200 of 1,600");
+    // Full, it names the Inferno's storage, the Resource Pod.
+    expect(r1.title).toBe(`Bone: 1,600 of 1,600\nMaking 0 an hour.\n${INFERNO_FULL_NOTE}`);
+    expect(r2.title).toBe("Coal: 1,200 of 1,600\nMaking 1,440 an hour.");
     expect(r1.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("inferno");
-    // No income line: the surface's rates are not the Inferno's.
-    expect(r2.querySelector<HTMLElement>(".hud__rate")!.hidden).toBe(true);
+    // The income line of the Inferno's own harvesters (Flash's bubble gave the Inferno's rate).
+    const rate = r2.querySelector<HTMLElement>(".hud__rate")!;
+    expect(rate.hidden).toBe(false);
+    expect(rate.textContent).toBe("+1,440/h");
     // Back on the surface the same readouts are Twigs and Pebbles again.
     setResourceRealm("surface");
     hud.bindYard(null);
