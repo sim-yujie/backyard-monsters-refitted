@@ -194,6 +194,25 @@ describe("Town Hall", () => {
   });
 });
 
+describe("Under Hall (WP 1.19)", () => {
+  it("lists the Inferno table's unlocks by the Inferno's names", () => {
+    const items = townHallUnlocks(1, "inferno");
+    expect(items).toContain("Bone Cruncher +1");
+    expect(items).toContain("Sharpshooter +1");
+    expect(items).toContain("Booby Trap (new)");
+    // Not the surface list: no Twig Snapper, no Storage Silo, no Monster Locker.
+    expect(items.some((item) => item.startsWith("Twig Snapper"))).toBe(false);
+    expect(items.some((item) => item.startsWith("Storage Silo"))).toBe(false);
+    expect(items.some((item) => item.startsWith("Monster Locker"))).toBe(false);
+  });
+
+  it("the panel titles the list with the Under Hall's next level", () => {
+    const info = buildingInfo(one({ t: 14, l: 1 }), "inferno");
+    expect(info.list?.label).toBe("Under Hall 2 unlocks");
+    expect(info.list?.items).toContain("Magma Pump +1");
+  });
+});
+
 describe("on an outpost (#191)", () => {
   const onOutpost = (data: Partial<BuildingData> & { t: number }) => {
     const save = {
