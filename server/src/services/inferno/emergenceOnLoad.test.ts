@@ -16,7 +16,7 @@ const redis = memoryRedis();
 mock.module("../../server.js", () => ({ postgres: { em: {} }, redis }));
 
 const { emergenceHoldsRaids, emergenceOnLoad } = await import("./emergenceOnLoad.js");
-const { openRaid } = await import("../raids/raidStore.js");
+const { openRaid, readOpenRaid } = await import("../raids/raidStore.js");
 
 const USER = 41;
 const NOW = 1_800_000_000;
@@ -100,10 +100,45 @@ describe("the emergence on a main-yard load", () => {
     expect(db.raises).toEqual([]);
   });
 
-  test("a yard at 10% health or less waits", async () => {
+  test("from the second raid, a yard at 10% health or less waits, its cave as it was", async () => {
+    db.row = { userid: USER, emergence_level: 1, emergence_last_at: new Date((NOW - 43_200) * 1000) };
     const result = (await emergenceOnLoad(em, USER, save({ buildinghealthdata: { "1": 0 } }), NOW, true))!;
-    expect(result.notDue).toBe("damaged");
+    expect(result).toMatchObject({ raised: null, notDue: "damaged", raid: null });
     expect(db.raises).toEqual([]);
+    expect(await readOpenRaid(USER)).toBeNull();
+  });
+
+  test("the first raise on a yard at 10% or less: the cave goes up to 1 and the stage counts, with no raid (Flash UpgradePortal :172-176)", async () => {
+    db.raiseAnswer = 1;
+    const result = (await emergenceOnLoad(em, USER, save({ buildinghealthdata: { "1": 0 } }), NOW, true))!;
+    expect(result).toMatchObject({ raised: 1, notDue: null, raid: null });
+    expect(result.progress).toMatchObject({ emergenceLevel: 1, emergenceLastAt: NOW });
+    expect(db.raises).toEqual([[USER, 1, NOW, 0, NOW - 43_200]]);
+    expect(await readOpenRaid(USER)).toBeNull();
+  });
+
+  test("a raise opens Moloch's raid for the new level, in its warning and due at once", async () => {
+    db.row = { userid: USER, emergence_level: 2, emergence_last_at: new Date((NOW - 43_200) * 1000) };
+    db.raiseAnswer = 3;
+    const result = (await emergenceOnLoad(em, USER, save({ points: "0", basevalue: "0" }), NOW, true))!;
+    const open = await readOpenRaid(USER);
+    expect(open).not.toBeNull();
+    expect(result.raid).toEqual(open);
+    expect(open).toMatchObject({ phase: "warning", tribe: "moloch", attackAt: NOW, warned: 0 });
+    expect((open!.plan as { level: number }).level).toBe(3);
+  });
+
+  test("a Moloch warning left from an earlier load is called off (the stage stays counted); a wild one is not", async () => {
+    db.row = { userid: USER, emergence_level: 2, emergence_last_at: new Date((NOW - 3_600) * 1000) };
+    await openRaid(USER, { id: "m1", phase: "warning", tribe: "moloch", plan: {}, seed: 1, attackAt: NOW - 60, warned: 0 } as never, NOW - 60);
+    const result = (await emergenceOnLoad(em, USER, save(), NOW, true))!;
+    expect(result).toMatchObject({ raised: null, notDue: "tooSoon" });
+    expect(result.progress.emergenceLevel).toBe(2);
+    expect(await readOpenRaid(USER)).toBeNull();
+
+    await openRaid(USER, { id: "w1", phase: "warning", tribe: "Kozu", plan: {}, seed: 1, attackAt: NOW + 300, warned: 0 } as never, NOW);
+    await emergenceOnLoad(em, USER, save(), NOW, true);
+    expect((await readOpenRaid(USER))?.id).toBe("w1");
   });
 
   test("another load raised it first: no level here, and the stored one is read back", async () => {

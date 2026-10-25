@@ -223,7 +223,7 @@ array with `CHAT_WS_HOST`), and — only when the caller owns the base — `chat
 `chattoken`, `chatchannel`, `alliancedata`, `powerups` (see §Alliance and §Chat), and, outside
 Inferno, `playerlevel` (the player's level from their main save, as the yard routes send it; #192). Attack modes
 add `attpowerups`. A `build` load of the caller's own main yard, or of one of their Map Room 2
-outposts, adds `completed`: what its catch-up finished, in the yard routes' shape (see "The owner's `/base/load`" under "Yard actions"). With the new Inferno switched on (`INFERNO_ENABLED`), a `build` load of the caller's own main yard also adds `infernostate`: the `GET /bm/inferno/state` answer without `error`, plus `raised` (the cave level Moloch's emergence just went up to on this load, or null; see "Moloch's emergence" under "The new Inferno (beta.5)"). Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
+outposts, adds `completed`: what its catch-up finished, in the yard routes' shape (see "The owner's `/base/load`" under "Yard actions"). With the new Inferno switched on (`INFERNO_ENABLED`), a `build` load of the caller's own main yard also adds `infernostate`: the `GET /bm/inferno/state` answer without `error`, plus `raised` (the cave level Moloch's emergence just went up to on this load, or null) and `raid` (Moloch's raid for that level, or null; see "Moloch's emergence" under "The new Inferno (beta.5)"). Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
 `defendingplayer.buffs` object keyed by small numeric buff-type ids (`2`=resource rate,
 `10`=resource capacity, `1`=defender damage reduction %, `5`/`6`=stronghold attacker/defender
 damage bonus %). `idescent` mode additionally overwrites `resources` with the player's
@@ -777,13 +777,30 @@ open wild raid is cancelled), whether the next of the cave's five raids is due. 
 not when: the switch is off (`off`), the yard is not the main yard (`notMainYard`), the cave is
 not showing (`noCave`: below Town Hall 5 or the tutorial not over), all five are done (`done`),
 12 hours have not passed since the last (`tooSoon`), an attack is running on the yard
-(`underAttack`), a wild monster raid is open (`raidOpen`), or the yard is at 10% of its full
-health or less (`damaged`; Flash `isBaseReadyForAttack`, checked on every level). When due, the
-cave goes up one level in one statement (`raiseEmergence`: two loads at once raise it once; a
-lost race is `race`), the load answers `infernostate.raised` with the new level and logs
-`inferno-emergence`. The raid itself is opened by WP 1.9 (not built yet): until then the level
-goes up with no raid. While the cave shows and fewer than five raids are done, wild monster
-raids are held back (see "Wild monster raids").
+(`underAttack`), a wild monster raid is open (`raidOpen`), or, from the second raid on, the yard is
+at 10% of its full health or less (`damaged`; Flash `isBaseReadyForAttack`, checked with the 12
+hours in `SetupPortal`, `INFERNO_EMERGENCE_EVENT.as:98`). When due, the cave goes up one level in
+one statement (`raiseEmergence`: two loads at once raise it once; a lost race is `race`), the load
+answers `infernostate.raised` with the new level and logs `inferno-emergence`. While the cave shows
+and fewer than five raids are done, wild monster raids are held back (see "Wild monster raids").
+
+**Moloch's raids** (`services/inferno/emergenceRaid.ts`; plan §2.3, WP 1.9). Right after the raise
+the load opens Moloch's raid for the new level as an ordinary open raid (Redis `wild-raid:<userid>`)
+with `tribe: "moloch"`, in its warning and due at once (`attackAt` = now: Flash's warning screen
+has only "Engage Attack"), and answers it as `infernostate.raid`: the raid view the raid routes
+answer (`id`, `phase`, `tribe`, `monsters`, `attackAt`, `warned`) plus `groups`, Flash's groups in
+order (`[{ monster, count }]`, one warning-screen card each; raid 1 has two Spurtz groups). The army
+is Flash's (`INFERNO_PORTAL_ATTACK.as`, scaled by the player's level), every wave from bearing 186
+with Flash's raid strength 0.4-0.9 by empire points (`WMATTACK.as:729-753`). The game starts it with
+`/raid/start` and lands it with `/raid/finish`, as a wild raid. By the owner's I14/R5 it differs from a
+wild raid in this: bought protection neither cancels its warning nor its start; landing pays no
+Shiny and no goal credit (`raidsSurvived`), and the wild raids' timetable (`lastattack`,
+`nextAttack`, `sessionsSinceLastAttack`, `lastOpenedAt`) is left as it was (only the fight lock,
+`lastRaidId` and `recent` change); and the cave's level was written before the raid opened, so the
+stage counts whether the yard holds or falls, or the player quits (a fight left unfinished is
+cancelled as any raid's is, and a Moloch warning still open on the next load is called off). On
+the **first** raise only, a yard at 10% health or less gets the level with no raid (`raid: null`;
+Flash saved the level, then skipped the attack, `UpgradePortal`, `:172-176`).
 
 ### Map Room 2
 
@@ -1061,6 +1078,11 @@ routes below are the player's answers to it. All are `POST /api/:apiVersion/bm/r
 `RaidView` is `{ id, phase: "warning" | "fighting", tribe, monsters: { [monsterId]: count },
 attackAt, warned: 0 | 1, startedAt?, finishFrom? }` (unix seconds). It never carries the fight's
 outcome.
+
+Moloch's emergence raid (`tribe: "moloch"`) is opened by the main-yard load, not the ping, and is
+fought through these same routes; the ping answers it while it is open. Its rules (no Shiny, the
+timetable untouched, bought protection ignored) are under "Moloch's raids" in "The new Inferno
+(beta.5)".
 
 | Path | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|

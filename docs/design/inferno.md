@@ -108,7 +108,7 @@ Second round (I13-I16, R1-R12). Anything not listed is exact Flash:
 | Cave building | id 127, fixed grid point (-1200,-150), 190x160, not movable/exported; level = emergence level | `INFERNOPORTAL.as:200-215` |
 | Levels | 5 (one per raid) | `INFERNO_EMERGENCE_EVENT.as:53-55` |
 | Gap | 12 h (43,200 s) since the last level-up, checked on a main-yard load | `:49-51`, `:111-119` |
-| Yard health | Must be > 10% to start a raid | `:184-196` |
+| Yard health | Must be > 10% for a raid (`isBaseReadyForAttack`, `:197-210`). Raids 2-5: checked with the 12 h before the cave grows, so a yard at 10% or less keeps its cave as it is until a later load finds it mended (`SetupPortal`, `:98`). First raise (level 0): no check before it, so the cave goes up to 1 and its time is saved, and only then is the raid skipped (`UpgradePortal`, `:172-176`): no earthquake, no warning, no "stage passed" (only `ATTACK.as:1026`, `:1053` show it, after a fight), and the stage counts, so the next raid (12 h on) is raid 2 | `:91-101`, `:166-181` |
 | Level 0 | Moloch intro dialogue, then level 1 and raid at once | `ai_moloch_intro` |
 | Order | Level and time are **saved before** the raid starts | `UpgradePortal` |
 | Warning | "EARTHQUAKE !" text + screen shake 100 | same file |
@@ -133,7 +133,12 @@ base value) applies (`WMATTACK.as:723-753`). Source: `INFERNO_PORTAL_ATTACK.as:8
 | 5 | IC2 ceil(70f), IC7 floor(30f), IC5 ceil(20f), IC6 ceil(30f), IC8 floor(25f) |
 
 **[OWNER I14, R5]** These raids keep the Flash rules: 12 h gap, each raid counts win or lose
-(quitting does not cancel it), Flash raid strength 0.4-0.9, no reward, only needs 10% yard health.
+(quitting does not cancel it), Flash raid strength 0.4-0.9, no reward, only needs 10% yard health
+(the first raise grows the cave even below it and only skips the raid, as Flash did; see 2.2).
+Before the fight Flash shows Moloch's warning, "INFERNO MONSTER ALERT", with his portrait, one card
+per group (monster picture, name, "x count", its `emerge_mondesc_*` line on hover) and one button,
+"Engage Attack" (`INFERNO_EMERGENCE_ATTACKPOPUP.as`, after `INFERNO_EMERGENCE_POPUPS.ShowWarning`);
+it has no close and no "prepare" (WP 1.9).
 Our wild-raid rules (`docs/design/wild-raids.md:21-49`: 10 Shiny for 90%+ defence, quit = cancel,
 plain stats, no raid while damaged, 3 h gap) do **not** apply to them.
 

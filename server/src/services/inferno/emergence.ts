@@ -139,8 +139,13 @@ export interface EmergenceFacts {
  *    first has no wait.
  * 6. No attack running on the yard and no wild monster raid open: the
  *    raid waits for the next load.
- * 7. The yard above 10% of its full health (`isBaseReadyForAttack`). Not
- *    our wild raids' "nothing damaged" rule (I14).
+ * 7. From the second raid on, the yard above 10% of its full health
+ *    (`isBaseReadyForAttack`, checked with the 12 hours before the cave is
+ *    raised, `SetupPortal`, `INFERNO_EMERGENCE_EVENT.as:98`): a yard at 10%
+ *    or less keeps its cave as it is until a load finds it mended. Not our
+ *    wild raids' "nothing damaged" rule (I14). The first raise has no such
+ *    gate (`:91-95`): the cave goes up to 1 whatever the yard's health, and
+ *    only its raid is skipped ({@link emergenceRaidSkipped}).
  */
 export const emergenceDueCheck = (facts: EmergenceFacts): EmergenceNotDue | null => {
   const { save, progress, now } = facts;
@@ -152,9 +157,20 @@ export const emergenceDueCheck = (facts: EmergenceFacts): EmergenceNotDue | null
   if (now < nextAt) return "tooSoon";
   if (facts.underAttack) return "underAttack";
   if (facts.raidOpen) return "raidOpen";
-  if (!(yardHealthShare(save) > EMERGENCE_MIN_HEALTH)) return "damaged";
+  if (progress.emergenceLevel > 0 && emergenceRaidSkipped(save)) return "damaged";
   return null;
 };
+
+/**
+ * Whether the cave just raised goes without its raid: the yard at 10% of its
+ * full health or less. Flash saved the new level and its time first, then
+ * left the attack out (`UpgradePortal`, `INFERNO_EMERGENCE_EVENT.as:172-176`):
+ * no earthquake, no warning, no fight and no "stage passed", yet the level
+ * stands, so the next raid is the next level's, 12 hours on. Only the first
+ * raise gets here ({@link emergenceDueCheck}, rule 7).
+ */
+export const emergenceRaidSkipped = (save: Pick<EmergenceSave, "buildingdata" | "buildinghealthdata">): boolean =>
+  !(yardHealthShare(save) > EMERGENCE_MIN_HEALTH);
 
 /**
  * Whether the emergence holds wild monster raids back: switched on, the

@@ -167,5 +167,25 @@ export const openEmergenceRaid = async (
   return (await openRaid(userid, raid, now)) ? raid : null;
 };
 
+/** One card of the warning screen: a monster type and its count. */
+export interface EmergenceWarningGroup {
+  readonly monster: string;
+  readonly count: number;
+}
+
+/**
+ * The raid's groups in Flash's order, as its warning screen shows them, one
+ * card each (`INFERNO_EMERGENCE_ATTACKPOPUP.as` `onAdd`, fed
+ * `GetVariableCreeps()`): raid 1's two Spurtz groups are two cards. Read from
+ * the plan's waves, one per group; none for a raid that is not Moloch's.
+ */
+export const emergenceWarningGroups = (raid: OpenRaid): EmergenceWarningGroup[] => {
+  if (!isEmergenceRaid(raid)) return [];
+  const events = (raid.plan as Partial<EmergenceRaidPlan> | undefined)?.log?.events ?? [];
+  return events.flatMap((event) =>
+    event.kind === "raid" ? Object.entries(event.monsters).map(([monster, count]) => ({ monster, count: Number(count) })) : []
+  );
+};
+
 /** Whether an open raid is one of Moloch's. */
 export const isEmergenceRaid = (raid: Pick<OpenRaid, "tribe"> | null | undefined): boolean => raid?.tribe === MOLOCH_TRIBE;

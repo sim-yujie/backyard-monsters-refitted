@@ -11,6 +11,7 @@ import {
   readInfernoProgress,
   type InfernoProgressRecord,
 } from "../../services/inferno/infernoProgress.js";
+import { emergenceWarningGroups, type EmergenceWarningGroup } from "../../services/inferno/emergenceRaid.js";
 import { raidView, type RaidView } from "../../services/raids/raidFlow.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
@@ -99,14 +100,19 @@ export const infernoState: KoaController = async (ctx) => {
  * The load answer's `infernostate`, on the owner's build-mode load of their
  * main yard while the new Inferno is on: the state, `raised`, the level the
  * cave just went up to (its emergence raid comes now), or null, and `raid`,
- * Moloch's raid for that level as the raid routes know it (WP 1.9; the game
- * starts it with `/raid/start` once the earthquake has played), or null.
+ * Moloch's raid for that level as the raid routes know it, with `groups`, its
+ * army one group at a time for the warning screen (WP 1.9; the game starts it
+ * with `/raid/start` once the earthquake and the warning have played), or null.
  */
 export const infernoLoadState = (
   emergence: EmergenceOnLoad,
   main: CaveSave,
   now: number
-): Omit<InfernoStateBody, "error"> & { raised: number | null; raid: RaidView | null } => {
+): Omit<InfernoStateBody, "error"> & {
+  raised: number | null;
+  raid: (RaidView & { groups: EmergenceWarningGroup[] }) | null;
+} => {
   const { error: _error, ...state } = infernoStateAnswer(emergence.progress, main, now);
-  return { ...state, raised: emergence.raised, raid: emergence.raid ? raidView(emergence.raid) : null };
+  const raid = emergence.raid ? { ...raidView(emergence.raid), groups: emergenceWarningGroups(emergence.raid) } : null;
+  return { ...state, raised: emergence.raised, raid };
 };

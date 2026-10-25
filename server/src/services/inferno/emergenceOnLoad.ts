@@ -10,6 +10,7 @@ import {
   EMERGENCE_GAP_SECONDS,
   emergenceDueCheck,
   emergencePausesWildRaids,
+  emergenceRaidSkipped,
   type EmergenceNotDue,
   type EmergenceSave,
 } from "./emergence.js";
@@ -36,7 +37,11 @@ export interface EmergenceOnLoad {
   readonly raised: number | null;
   /** Why it did not; null when it did. */
   readonly notDue: EmergenceNotDue | "race" | null;
-  /** Moloch's raid for the level just reached, open and due now; null when none was opened. */
+  /**
+   * Moloch's raid for the level just reached, open and due now; null when none
+   * was opened: none raised, or the first raise on a yard at 10% health or
+   * less ({@link emergenceRaidSkipped}), which counts the stage with no raid.
+   */
   readonly raid: OpenRaid | null;
 }
 
@@ -116,7 +121,8 @@ export const emergenceOnLoad = async (
     userid,
     level: raised,
   });
-  const raid = await openEmergenceRaid(userid, save, raised, now);
+  // Flash saved the level, then left the attack out on a yard at 10% or less (`:172-176`).
+  const raid = emergenceRaidSkipped(save) ? null : await openEmergenceRaid(userid, save, raised, now);
   return { progress: { ...progress, emergenceLevel: raised, emergenceLastAt: now }, raised, notDue: null, raid };
 };
 

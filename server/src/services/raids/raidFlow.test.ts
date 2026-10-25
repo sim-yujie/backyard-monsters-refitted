@@ -55,6 +55,7 @@ const { WARNING_SECONDS, cancelRaidOnYardLoad, readOpenRaid, recordRaidScreen, u
 );
 const { challengeKey, lastActionKey, lastSeenKey } = await import("../user/online.js");
 const { damagedBuildings } = await import("../yard/repair.js");
+const { openEmergenceRaid } = await import("../inferno/emergenceRaid.js");
 
 type Row = Record<string, unknown>;
 
@@ -733,6 +734,79 @@ describe("bought protection (owner, 2026-10-23)", () => {
       const seen = await raidOnPing(em, user, YARD, NOW);
       expect(seen?.id).toBe(start.raid.id);
       expect(seen?.phase).toBe("fighting");
+    },
+    FIGHT_TIMEOUT_MS
+  );
+});
+
+describe("Moloch's emergence raid (docs/design/inferno.md §2.3, owner I14/R5)", () => {
+  /** The wild raids' timetable as stored. */
+  const timetable = () => {
+    const { lastattack, nextAttack, sessionsSinceLastAttack, attackPreference, lastOpenedAt } = readSchedule(db.row!.aiattacks);
+    return { lastattack, nextAttack, sessionsSinceLastAttack, attackPreference, lastOpenedAt };
+  };
+
+  /** Moloch's raid for cave level 1, opened as the load that raised the cave opens it, then started. */
+  const molochFight = async () => {
+    const raid = (await openEmergenceRaid(USER, db.row as never, 1, NOW))!;
+    await present(NOW);
+    const start = await startRaid(em, user, raid.id, NOW);
+    return { id: raid.id, start, finishFrom: start.raid.finishFrom! };
+  };
+
+  test("its warning is due at once, the ping shows it, and no wild raid opens beside it", async () => {
+    const raid = (await openEmergenceRaid(USER, db.row as never, 1, NOW))!;
+    await present(NOW);
+    const seen = await raidOnPing(em, user, YARD, NOW);
+    expect(seen).toMatchObject({ id: raid.id, phase: "warning", tribe: "moloch", attackAt: NOW });
+    expect(seen?.monsters).toEqual({ IC1: 2 });
+    expect(timetable().lastOpenedAt).toBeUndefined();
+  });
+
+  test(
+    "fought and landed through the raid routes: no Shiny, and the wild raids' timetable as it was",
+    async () => {
+      const before = timetable();
+      const { id, start, finishFrom } = await molochFight();
+      expect(start.raid).toMatchObject({ id, phase: "fighting", tribe: "moloch" });
+      const result = await finishOnTime(id, finishFrom);
+      expect(result).toMatchObject({ id, tribe: "moloch", shiny: 0 });
+      expect(db.row!.credits).toBe(100);
+      expect(timetable()).toEqual(before);
+      const schedule = readSchedule(db.row!.aiattacks);
+      expect(schedule.fight).toBeUndefined();
+      expect(schedule.lastRaidId).toBe(id);
+      expect(schedule.recent[0]).toMatchObject({ id, tribe: "moloch" });
+      expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "bought protection stops neither the warning nor the start (Flash's UpgradePortal never looked)",
+    async () => {
+      db.row = rowOf({ protected: NOW + DAY, storedata: { PRO1: { q: 1, s: NOW, e: NOW + DAY } } });
+      const raid = (await openEmergenceRaid(USER, db.row as never, 1, NOW))!;
+      await present(NOW);
+      expect((await raidOnPing(em, user, YARD, NOW))?.id).toBe(raid.id);
+      const start = await startRaid(em, user, raid.id, NOW);
+      expect(start.raid.phase).toBe("fighting");
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "quitting during the fight calls the raid off with nothing landed and the timetable as it was",
+    async () => {
+      const before = structuredClone(db.row!);
+      const { id, finishFrom } = await molochFight();
+      at(finishFrom);
+      await redis.del(lastSeenKey(USER));
+      expect(await refusal(finishRaid(em, user, id, finishFrom))).toEqual({ reason: "cancelled" });
+      expect(db.row!.resources).toEqual(before.resources);
+      expect(readSchedule(db.row!.aiattacks)).toMatchObject({ recent: [], nextAttack: NOW - 10, sessionsSinceLastAttack: 4 });
+      expect(fightLock()).toBeUndefined();
+      expect(await readOpenRaid(USER)).toBeNull();
     },
     FIGHT_TIMEOUT_MS
   );

@@ -96,7 +96,17 @@ describe("the load answer's infernostate", () => {
       id: "r_moloch",
       phase: "warning",
       tribe: "moloch",
-      plan: { army: { IC1: 2 } },
+      plan: {
+        army: { IC1: 2 },
+        log: {
+          v: 1,
+          seed: 7,
+          events: [
+            { kind: "raid", t: 0, x: -995, y: -105, r: 200, monsters: { IC1: 1 } },
+            { kind: "raid", t: 0, x: -995, y: -105, r: 200, monsters: { IC1: 1 } },
+          ],
+        },
+      },
       seed: 7,
       attackAt: NOW,
       warned: 0,
@@ -106,7 +116,8 @@ describe("the load answer's infernostate", () => {
     expect(state.raised).toBe(1);
     expect(state.cave.level).toBe(1);
     expect(state.emergence.nextAt).toBe(NOW + 43_200);
-    // Moloch's raid, as the raid routes show it: never its plan's log or outcome.
+    // Moloch's raid, as the raid routes show it (never its plan's log or
+    // outcome), with its groups one card each for the warning screen.
     expect(state.raid).toEqual({
       id: "r_moloch",
       phase: "warning",
@@ -114,6 +125,10 @@ describe("the load answer's infernostate", () => {
       monsters: { IC1: 2 },
       attackAt: NOW,
       warned: 0,
+      groups: [
+        { monster: "IC1", count: 1 },
+        { monster: "IC1", count: 1 },
+      ],
     });
   });
 

@@ -7,6 +7,7 @@ import {
   caveShown,
   emergenceDueCheck,
   emergencePausesWildRaids,
+  emergenceRaidSkipped,
   nextEmergenceAt,
   yardHealthShare,
   type EmergenceFacts,
@@ -83,17 +84,26 @@ describe("the emergence due rule", () => {
     expect(emergenceDueCheck(facts({ raidOpen: true }))).toBe("raidOpen");
   });
 
-  test("damaged: the yard at 10% of its health or less; a damaged yard above it still is raided (not our wild-raid rule)", () => {
+  test("damaged: from the second raid, the yard at 10% of its health or less; a damaged yard above it still is raided (not our wild-raid rule)", () => {
+    const second = { ...NO_INFERNO_PROGRESS, emergenceLevel: 1, emergenceLastAt: NOW - EMERGENCE_GAP_SECONDS };
     const at = (share: number) => {
       // The silo is whole; the hall carries the damage.
       const hall = Math.floor(share * (HALL_MAX + SILO_MAX)) - SILO_MAX;
-      return facts({}, { buildinghealthdata: { "1": Math.max(0, hall) } });
+      return facts({ progress: second }, { buildinghealthdata: { "1": Math.max(0, hall) } });
     };
-    expect(emergenceDueCheck(facts({}, { buildinghealthdata: { "1": 0, "2": 0 } }))).toBe("damaged");
+    expect(emergenceDueCheck(facts({ progress: second }, { buildinghealthdata: { "1": 0, "2": 0 } }))).toBe("damaged");
     expect(emergenceDueCheck(at(0.5))).toBeNull();
-    const tenth = facts({}, { buildinghealthdata: { "1": 0, "2": Math.floor(0.1 * (HALL_MAX + SILO_MAX)) } });
+    const tenth = facts({ progress: second }, { buildinghealthdata: { "1": 0, "2": Math.floor(0.1 * (HALL_MAX + SILO_MAX)) } });
     expect(yardHealthShare(tenth.save)).toBeLessThanOrEqual(0.1);
+    expect(emergenceRaidSkipped(tenth.save)).toBe(true);
     expect(emergenceDueCheck(tenth)).toBe("damaged");
+  });
+
+  test("the first raise has no health gate (Flash SetupPortal :91-95): the cave goes up, only its raid is skipped", () => {
+    const wrecked = facts({}, { buildinghealthdata: { "1": 0, "2": 0 } });
+    expect(emergenceDueCheck(wrecked)).toBeNull();
+    expect(emergenceRaidSkipped(wrecked.save)).toBe(true);
+    expect(emergenceRaidSkipped(facts().save)).toBe(false);
   });
 
   test("the gates are checked in order: the first that holds is told", () => {
