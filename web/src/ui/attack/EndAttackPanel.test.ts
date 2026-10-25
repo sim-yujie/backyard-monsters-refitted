@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { spokenText } from "@/ui/resourceIcon";
+import { resourceName, spokenText } from "@/ui/resourceIcon";
 import type { AttackSummary } from "@/game/attack/attackSave";
 import { EndAttackPanel, formatSpan } from "./EndAttackPanel";
 
@@ -21,9 +21,11 @@ const summary = (over: Partial<AttackSummary> = {}): AttackSummary => ({
   buildingsTotal: 14,
   loot: { r1: 12_500, r2: 0, r3: 800, r4: 0 },
   lootTaken: { r1: 12_500, r2: 0, r3: 800, r4: 0 },
+  inferno: false,
   monstersSent: 45,
+  monstersBorn: 0,
   monstersLost: 9,
-  champions: [{ t: 5, hp: 41_000 }],
+  champions: [{ t: 5, l: 1, hp: 41_000 }],
   elapsedSeconds: 140,
   ...over,
 });
@@ -104,10 +106,48 @@ describe("EndAttackPanel", () => {
     expect(query(".attack-end__storage").hidden).toBe(false);
   });
 
-  it("names each champion sent with the health it has left", () => {
-    const { panel } = mountPanel({ champions: [{ t: 3, hp: 1200.7 }, { t: 5, hp: 0 }] });
-    const titled = [...panel.element.querySelectorAll<HTMLElement>("dd[title]")].map((dd) => dd.title);
-    expect(titled).toContain("Fomor health left: 1200; Krallen health left: 0");
+  /** The panel's stats as label: value, one per line. */
+  const statsOf = (panel: EndAttackPanel): Record<string, string> => {
+    const terms = [...panel.element.querySelectorAll(".attack-end__stats dt")];
+    return Object.fromEntries(terms.map((dt) => [dt.textContent, dt.nextElementSibling?.textContent ?? ""]));
+  };
+
+  it("names each champion sent on its own line, one at no health retreated as Flash's log said", () => {
+    const { panel } = mountPanel({ champions: [{ t: 3, l: 2, hp: 1200.7 }, { t: 5, l: 4, hp: 0 }] });
+    expect(statsOf(panel)["Champions"]).toBe("Level 2 Fomor, 1,200 health left; Level 4 Krallen retreated");
+    panel.close();
+    const one = mountPanel();
+    expect(statsOf(one.panel)["Champion"]).toBe("Level 1 Krallen, 41,000 health left");
+    one.panel.close();
+    const none = mountPanel({ champions: [] });
+    expect(Object.keys(statsOf(none.panel))).toEqual(["Damage", "Buildings destroyed", "Monsters lost"]);
+  });
+
+  it("never counts more monsters lost than went out: a champion is not one, and the born are said", () => {
+    // A champion-only attack used to read "2 of 0 sent".
+    const alone = mountPanel({ monstersSent: 0, monstersLost: 0, champions: [{ t: 1, l: 3, hp: 0 }] });
+    expect(statsOf(alone.panel)).toMatchObject({ "Monsters lost": "None sent", Champion: "Level 3 Gorgo retreated" });
+    alone.panel.close();
+    const split = mountPanel({ monstersSent: 4, monstersBorn: 6, monstersLost: 9 });
+    expect(statsOf(split.panel)["Monsters lost"]).toBe("9 of 10 (4 sent, 6 born in the fight)");
+  });
+
+  it("draws an Inferno fight's loot as Bone, Coal, Sulfur and Magma, in full, then as the landing credited it", () => {
+    const { panel, query } = mountPanel({
+      inferno: true,
+      loot: { r1: 3_823, r2: 120, r3: 0, r4: 0 },
+      lootTaken: { r1: 3_823, r2: 120, r3: 0, r4: 0 },
+    });
+    const items = (): HTMLElement[] => [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
+    expect(items().map(spokenText)).toEqual(["Bone 3,823", "Coal 120", "Sulfur 0", "Magma 0"]);
+    expect(items()[0]?.querySelector<HTMLElement>(".res-icon")?.dataset["realm"]).toBe("inferno");
+    // The screen around it stays the surface's.
+    expect(resourceName("r1")).toBe("Twigs");
+    panel.setSaved({ credited: { r1: 3_407, r2: 100, r3: 0, r4: 0 } });
+    expect(items().map(spokenText)).toEqual(["Bone 3,407", "Coal 100", "Sulfur 0", "Magma 0"]);
+    expect(items()[0]?.title).toBe("Bone: 3,407");
+    // The Inferno purse takes it in full: no storage note.
+    expect(query(".attack-end__storage").hidden).toBe(true);
   });
 
   it("opens saving, with Return to map disabled and no way out yet", () => {

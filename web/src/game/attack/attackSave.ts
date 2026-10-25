@@ -17,7 +17,7 @@ import {
   type ResourceAmounts,
   type Roster,
 } from "@/game/combat/rules";
-import type { AttackEndReason, AttackSession, AttackSessionState } from "./AttackSession";
+import { combatKind, type AttackEndReason, type AttackSession, type AttackSessionState } from "./AttackSession";
 import type { AttackTargetKind, RosterSource, SiegeInventory } from "./attackTarget";
 import { keptLoot } from "./attackerStorage";
 import { countedBuildings } from "./trapReveal";
@@ -342,15 +342,29 @@ export interface AttackSummary {
   readonly buildingsTotal: number;
   /**
    * What the attacker keeps: the loot up to the room in their storage
-   * (issue #166, `attackerStorage.ts`), as the server will bank it.
+   * (issue #166, `attackerStorage.ts`), as the server will bank it. An
+   * Inferno fight's goes to the Inferno purse in full, so it is all of it.
    */
   readonly loot: ResourceAmounts;
   /** What the battle took from the defender, before the attacker's storage cap. */
   readonly lootTaken: ResourceAmounts;
+  /**
+   * The fight was on an Inferno yard (a Descent yard, Inferno WP 1.13): its
+   * loot is Bone, Coal, Sulfur and Magma, as Flash's `_resourceNames` were
+   * for the yard it loaded.
+   */
+  readonly inferno: boolean;
+  /** Monsters flung; champions are counted on their own. */
   readonly monstersSent: number;
+  /** Monsters born on the field rather than flung: Slimeattikus Minis and zombies. */
+  readonly monstersBorn: number;
+  /** Monsters that died, of those sent and born; a champion is never one. */
   readonly monstersLost: number;
-  /** Each champion sent, by type, with its health at the end; empty when none was. */
-  readonly champions: readonly { readonly t: number; readonly hp: number }[];
+  /**
+   * Each champion sent, by type and level, with its health at the end; empty
+   * when none was. One at no health retreated (`ChampionBase.as:778-785`).
+   */
+  readonly champions: readonly { readonly t: number; readonly l: number; readonly hp: number }[];
   readonly elapsedSeconds: number;
 }
 
@@ -411,7 +425,14 @@ export const targetLabel = (
 export const summariseAttack = (session: AttackSession): AttackSummary => {
   const { load } = requireLoaded(session);
   const state = session.state();
-  const { kind, name } = session.target;
+  const { kind, name, roster } = session.target;
+  const inferno = combatKind(session.target) === "inferno";
+  // The report's monster rows, without the champions' (#22): the engine's
+  // own kill count takes in a champion at no health, which was never flung
+  // as a monster, and the Minis and zombies born on the field.
+  const monsters = session.attackersAfter().filter((row) => !row.champion);
+  const sum = (field: "sent" | "spawned" | "lost"): number =>
+    monsters.reduce((total, row) => total + row[field], 0);
   return {
     targetName: name,
     kind,
@@ -421,17 +442,19 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
     buildingsDestroyed: state.buildingsDestroyed,
     // Traps left out, as on the status line (#72).
     buildingsTotal: countedBuildings(Object.values(load.buildingdata ?? {}).map((entry) => entry.t)),
-    loot: keptLoot(
-      state.loot,
-      session.target.roster.resources,
-      session.target.roster.storageCap ?? null,
-      session.flingLog(),
-      session.target.roster.champions,
-    ),
+    // The main yard's storage does not hold an Inferno fight's take.
+    loot: inferno
+      ? { ...state.loot }
+      : keptLoot(state.loot, roster.resources, roster.storageCap ?? null, session.flingLog(), roster.champions),
     lootTaken: { ...state.loot },
-    monstersSent: state.creepsFlung,
-    monstersLost: state.creepsKilled,
-    champions: Object.entries(session.championsHpAfter()).map(([t, hp]) => ({ t: Number(t), hp })),
+    inferno,
+    monstersSent: sum("sent"),
+    monstersBorn: sum("spawned"),
+    monstersLost: sum("lost"),
+    champions: Object.entries(session.championsHpAfter()).map(([type, hp]) => {
+      const t = Number(type);
+      return { t, l: roster.champions.find((champion) => champion.t === t)?.l ?? 1, hp };
+    }),
     elapsedSeconds: state.elapsedSeconds,
   };
 };

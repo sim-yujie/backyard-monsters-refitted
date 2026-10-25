@@ -167,8 +167,9 @@ const percent = (value: number): string => `${+value.toFixed(3)}%`;
  */
 export const iconStyle = (
   key: ResourceKey,
+  inRealm: ResourceRealm = realm,
 ): { backgroundImage: string; backgroundSize: string; backgroundPosition: string; aspectRatio: string } => {
-  const { url, width, height, crop } = (realm === "inferno" ? INFERNO_ART : ART)[key];
+  const { url, width, height, crop } = (inRealm === "inferno" ? INFERNO_ART : ART)[key];
   const [x, y, w, h] = crop;
   const along = (offset: number, image: number, part: number): string =>
     image === part ? "0%" : percent((offset / (image - part)) * 100);
@@ -187,11 +188,14 @@ export const iconStyle = (
  * `decorative` drops the name from the accessibility tree and the tooltip, for
  * a control that already carries the name in its own label. `tooltip: false`
  * keeps the name for a screen reader but leaves hover to an ancestor whose own
- * `title` says more, which the icon's would otherwise hide.
+ * `title` says more, which the icon's would otherwise hide. `realm` draws it
+ * as that realm's whatever the screen's is: an Inferno fight's loot on the
+ * attack screen, which shows the surface's (Inferno WP 1.13).
  */
 export interface ResourceIconOptions {
   readonly decorative?: boolean;
   readonly tooltip?: boolean;
+  readonly realm?: ResourceRealm;
 }
 
 export const resourceIcon = (key: ResourceKey, options: ResourceIconOptions = {}): HTMLElement => {
@@ -200,19 +204,20 @@ export const resourceIcon = (key: ResourceKey, options: ResourceIconOptions = {}
   if (options.decorative) icon.setAttribute("aria-hidden", "true");
   else icon.setAttribute("role", "img");
   if (options.tooltip === false) icon.dataset["notip"] = "";
-  restyleIcon(icon, key);
+  restyleIcon(icon, key, options.realm);
   return icon;
 };
 
 /**
- * Draws `icon` as `key` in the screen's realm, and names it so: for an icon
- * made before the realm changed, like the HUD's, which outlives the yard.
+ * Draws `icon` as `key` in the screen's realm, or `inRealm`, and names it so:
+ * for an icon made before the realm changed, like the HUD's, which outlives
+ * the yard.
  */
-export const restyleIcon = (icon: HTMLElement, key: ResourceKey): void => {
-  Object.assign(icon.style, iconStyle(key));
-  icon.dataset["realm"] = realm;
+export const restyleIcon = (icon: HTMLElement, key: ResourceKey, inRealm: ResourceRealm = realm): void => {
+  Object.assign(icon.style, iconStyle(key, inRealm));
+  icon.dataset["realm"] = inRealm;
   if (icon.getAttribute("aria-hidden") === "true") return;
-  const name = RESOURCE_NAMES[key];
+  const name = resourceName(key, inRealm);
   icon.setAttribute("aria-label", name);
   if (icon.dataset["notip"] === undefined) icon.title = name;
 };

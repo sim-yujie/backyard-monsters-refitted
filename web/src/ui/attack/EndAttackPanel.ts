@@ -3,7 +3,7 @@ import type { AttackSummary } from "@/game/attack/attackSave";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import { championName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceName, type ResourceRealm } from "@/ui/resourceIcon";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -64,6 +64,33 @@ export const formatSpan = (seconds: number): string => {
   if (hours === 0) return `${Math.max(1, minutes)} min`;
   return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
 };
+
+/**
+ * The monsters line: those that died of those sent, and of those born on the
+ * field when any were, so the first figure never tops the second. Champions
+ * have their own line ({@link championsText}).
+ */
+export const monstersLostText = (
+  summary: Pick<AttackSummary, "monstersSent" | "monstersBorn" | "monstersLost">,
+): string => {
+  const { monstersSent: sent, monstersBorn: born, monstersLost: lost } = summary;
+  if (sent + born === 0) return "None sent";
+  return born === 0 ? `${lost} of ${sent} sent` : `${lost} of ${sent + born} (${sent} sent, ${born} born in the fight)`;
+};
+
+/**
+ * Each champion sent, as Flash's attack log put one beaten: "Level 2 Gorgo
+ * retreated." (`ChampionBase.as:783`), at no health; otherwise the health it
+ * came back with.
+ */
+export const championsText = (summary: Pick<AttackSummary, "champions">): string =>
+  summary.champions
+    .map(({ t, l, hp }) => {
+      const champion = `Level ${l} ${championName(t)}`;
+      const left = Math.max(0, Math.floor(hp));
+      return left === 0 ? `${champion} retreated` : `${champion}, ${left.toLocaleString("en-US")} health left`;
+    })
+    .join("; ");
 
 const endReasonText = (summary: AttackSummary): string => {
   switch (summary.endReason) {
@@ -133,25 +160,19 @@ export class EndAttackPanel {
 
     const stats = document.createElement("dl");
     stats.className = "attack-end__stats";
-    const stat = (label: string, value: string, title?: string): void => {
+    const stat = (label: string, value: string): void => {
       const dt = document.createElement("dt");
       dt.textContent = label;
       const dd = document.createElement("dd");
       dd.textContent = value;
-      if (title) dd.title = title;
       stats.append(dt, dd);
     };
     stat("Damage", `${Math.floor(summary.damagePercent)}%`);
     stat("Buildings destroyed", `${summary.buildingsDestroyed} of ${summary.buildingsTotal}`);
-    stat(
-      "Monsters lost",
-      `${summary.monstersLost} of ${summary.monstersSent} sent`,
-      summary.champions.length === 0
-        ? undefined
-        : summary.champions
-            .map(({ t, hp }) => `${championName(t)} health left: ${Math.max(0, Math.floor(hp))}`)
-            .join("; "),
-    );
+    stat("Monsters lost", monstersLostText(summary));
+    if (summary.champions.length > 0) {
+      stat(summary.champions.length === 1 ? "Champion" : "Champions", championsText(summary));
+    }
 
     this.loot = document.createElement("ul");
     this.loot.className = "attack-end__loot";
@@ -358,23 +379,28 @@ export class EndAttackPanel {
    * the battle took did not fit in their storage (issue #166). Flash banked
    * only what fit without saying so (`ATTACK.as:703-710`); the note is the
    * one line that explains a figure below the battle's.
+   *
+   * An Inferno fight's loot is Bone, Coal, Sulfur and Magma, drawn so though
+   * the attack screen shows the surface's, and goes to the Inferno purse in
+   * full: no storage turns any away, so it has no such note (Inferno WP 1.13).
    */
   private showLoot(kept: ResourceAmounts): void {
     const whole = (value: number): string => Math.floor(value).toLocaleString("en-US");
-    const { lootTaken } = this.options.summary;
+    const { lootTaken, inferno } = this.options.summary;
+    const realm: ResourceRealm = inferno ? "inferno" : "surface";
     let spilled = false;
     this.loot.replaceChildren();
     for (const key of RESOURCE_KEYS) {
       const item = document.createElement("li");
       const amount = kept[key];
-      const taken = Math.max(amount, lootTaken[key]);
+      const taken = inferno ? amount : Math.max(amount, lootTaken[key]);
+      const name = resourceName(key, realm);
       item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
-      item.append(resourceAmount(key, formatAmount(amount)));
+      item.append(resourceAmount(key, formatAmount(amount), { realm }));
       const lost = Math.floor(taken) > Math.floor(amount);
       item.title = lost
-        ? `${RESOURCE_NAMES[key]}: ${whole(amount)} of ${whole(taken)} taken; ` +
-          "the rest did not fit in your storage"
-        : `${RESOURCE_NAMES[key]}: ${whole(amount)}`;
+        ? `${name}: ${whole(amount)} of ${whole(taken)} taken; the rest did not fit in your storage`
+        : `${name}: ${whole(amount)}`;
       if (lost) spilled = true;
       this.loot.append(item);
     }

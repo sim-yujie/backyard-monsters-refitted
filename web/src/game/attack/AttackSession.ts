@@ -959,6 +959,14 @@ export class AttackSession {
   }
 
   /**
+   * The attacker's report rows (issue #22): each monster type and champion
+   * sent, born on the field and lost. Empty before the battle starts.
+   */
+  attackersAfter(): BattleState["attackers"] {
+    return this.battle_?.state().attackers ?? [];
+  }
+
+  /**
    * Why the champion of type `t` cannot be sent now, or null when it can.
    *
    * Flash's rule (`client/scripts/UI_TOP.as:328-356`): the army list offers

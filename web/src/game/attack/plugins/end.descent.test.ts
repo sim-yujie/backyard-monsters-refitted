@@ -84,6 +84,7 @@ describe("a Descent attack's end", () => {
     const session = new AttackSession({ target, seed: 1 });
     session.start();
     const save = vi.fn(async (_payload: AttackSavePayload) => response as BaseSaveResponse);
+    const creditLoot = vi.fn();
     teardown = createEndPlugin({ save, saveOnLeave: save, now: () => 0 })({
       session,
       target,
@@ -92,12 +93,12 @@ describe("a Descent attack's end", () => {
       goToMap,
       goToOutpost,
       presentation,
-      creditLoot: () => {},
+      creditLoot,
     } as unknown as AttackMounts);
     session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
     session.retreat();
     await flush();
-    return { save, session };
+    return { save, session, creditLoot };
   };
 
   it("fights as an Inferno yard and saves no destroyed flag", () => {
@@ -145,6 +146,18 @@ describe("a Descent attack's end", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("the end panel shows the landing's loot as Bone, Coal, Sulfur and Magma, and leaves the HUD's pool alone", async () => {
+    const { creditLoot } = await run(targetOf(7), landing(true));
+    const items = [...modal.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
+    expect(items.map((item) => item.title)).toEqual(["Bone: 120", "Coal: 80", "Sulfur: 0", "Magma: 0"]);
+    expect(items.map((item) => item.querySelector<HTMLElement>(".res-icon")?.dataset["realm"])).toEqual([
+      "inferno", "inferno", "inferno", "inferno",
+    ]);
+    expect(modal.querySelector<HTMLElement>(".attack-end__storage")!.hidden).toBe(true);
+    // The landing filled the Inferno purse; the HUD here shows the main yard's.
+    expect(creditLoot).not.toHaveBeenCalled();
   });
 
   it("a lost attack: Moloch gloats", async () => {

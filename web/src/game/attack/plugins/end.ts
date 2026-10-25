@@ -286,9 +286,13 @@ export const describeSaveFailure = (caught: unknown, isTribe = false): SaveFailu
  * What the server banked of the loot (`lootcredited`, issue #166): the
  * battle's take cut to the room in the attacker's storage. Null when the
  * response does not say.
+ *
+ * A Descent attack's answer has none: what its landing put in the Inferno
+ * purse is the `descent` block's `loot` (WP 1.12), the figure its battle
+ * report shows, so the end panel shows that one (Inferno WP 1.13).
  */
-export const creditedOf = (response: BaseSaveResponse): ResourceAmounts | null => {
-  const value: unknown = response.lootcredited;
+export const creditedOf = (response: BaseSaveResponse, descent = false): ResourceAmounts | null => {
+  const value: unknown = descent ? descentLandingOf(response)?.loot : response.lootcredited;
   if (typeof value !== "object" || value === null) return null;
   const read = (key: string): number => {
     const amount = Number((value as Record<string, unknown>)[key]);
@@ -360,13 +364,16 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      * finaliser.
      */
     const isTribe = combatKind(target) === "tribe" || descent;
+    const inferno = combatKind(target) === "inferno";
 
     /**
      * The HUD takes the banked loot when the panel shows a landed save (#168),
      * so both read the same amounts; before that it keeps the attack's pool.
+     * An Inferno fight's loot goes to the Inferno purse, not to the main
+     * yard's pool the HUD shows here.
      */
     const creditHud = (): void => {
-      if (credited || !panel || shown?.kind !== "saved" || !shown.credited) return;
+      if (inferno || credited || !panel || shown?.kind !== "saved" || !shown.credited) return;
       credited = true;
       creditLoot(shown.credited);
     };
@@ -462,7 +469,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         kind: "saved",
         protectedUntil: takeover?.grant ? null : protectedUntilOf(response),
         now: now() / 1000,
-        credited: creditedOf(response),
+        credited: creditedOf(response, descent),
         takeover,
       };
     };

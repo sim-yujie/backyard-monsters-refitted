@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, ChampionSaveEntry } from "@/api/types";
 import { TICKS_PER_SECOND } from "@/game/combat/rules";
 import { AttackSession } from "./AttackSession";
@@ -465,13 +465,51 @@ describe("the pieces", () => {
       buildingsDestroyed: state.buildingsDestroyed,
       // 575 buildings, 93 of them traps, which neither count leaves in (#72).
       buildingsTotal: 482,
-      monstersSent: state.creepsFlung,
-      monstersLost: state.creepsKilled,
+      inferno: false,
+      monstersSent: 45,
       elapsedSeconds: 6,
     });
+    expect(summary.monstersSent).toBe(state.creepsFlung);
+    expect(summary.monstersLost).toBeLessThanOrEqual(summary.monstersSent + summary.monstersBorn);
     expect(summary.loot).toEqual(state.loot);
     expect(summary.champions).toHaveLength(1);
-    expect(summary.champions[0]!.t).toBe(5);
+    expect(summary.champions[0]).toMatchObject({ t: 5, l: 5 });
+  });
+
+  it("counts a champion on its own, never as a monster lost (a champion-only attack read 2 of 0)", () => {
+    const session = new AttackSession({ target: targetOf({ load: towerLoad() }), seed: 7 });
+    session.start();
+    session.appendFling({ x: -600, y: 120, monsters: {}, champion: { t: 5, l: 5 } });
+    play(session, 2);
+    session.retreat();
+    const summary = summariseAttack(session);
+    expect(summary).toMatchObject({ monstersSent: 0, monstersBorn: 0, monstersLost: 0 });
+    expect(summary.champions).toEqual([{ t: 5, l: 5, hp: expect.any(Number) }]);
+  });
+
+  it("keeps a Descent fight's whole take, as Inferno loot (Inferno WP 1.13)", () => {
+    // A main yard with no room left would cap a surface attack's loot to nothing.
+    const full = { ...targetOf().roster, resources: { r1: 100, r2: 100, r3: 100, r4: 100 }, storageCap: 100 };
+    const taken = { r1: 3_823, r2: 120, r3: 0, r4: 0 };
+    const run = (descentYard?: number) => {
+      const target = targetOf({ load: towerLoad(), roster: full, ...(descentYard ? { descentYard } : {}) });
+      const session = new AttackSession({ target, seed: 7 });
+      session.start();
+      session.appendFling({ x: -600, y: 120, monsters: { C1: 1 } });
+      play(session, 1);
+      session.retreat();
+      // The fight's take, as a yard with loot in it would have given it.
+      const state = session.state();
+      vi.spyOn(session, "state").mockReturnValue({ ...state, loot: taken });
+      return summariseAttack(session);
+    };
+    const descent = run(1);
+    expect(descent.inferno).toBe(true);
+    expect(descent.loot).toEqual(taken);
+    const surface = run();
+    expect(surface.inferno).toBe(false);
+    expect(surface.loot).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(surface.lootTaken).toEqual(taken);
   });
 });
 
