@@ -26,6 +26,8 @@
  * | `OUTPOST_*`    | `OUTPOST_YARD_PROPS.as`: hp and capacity through the cost |
  * |                | generator's outpost rows (`server/src/game-data/          |
  * |                | buildingCosts.ts`), tower stats read here                 |
+ * | `INFERNO_*`    | `INFERNOYARDPROPS.as`, the same way, through the cost     |
+ * |                | generator's Inferno rows                                  |
  * | `FLYER_MODE`   | `client/scripts/BTOWER.as:25-35`                           |
  * | `GRID_COST`    | The `_gridCost = [...]` of each entry's `cls`, with        |
  * |                | `extends` followed until one is found                      |
@@ -42,6 +44,7 @@ import { lineCounter, matchBrace, readIntArray, readPropsSource } from "./lib/pr
 import { monsterStats } from "../../server/src/game-data/stats/monsterStats.ts";
 import { championStats } from "../../server/src/game-data/stats/championStats.ts";
 import {
+  INFERNO_TRAIT_ROWS,
   OUTPOST_COST_ROWS,
   OUTPOST_TRAIT_ROWS,
 } from "../../server/src/game-data/buildingCosts.ts";
@@ -123,8 +126,14 @@ const byId = new Map(entries.map((one) => [one.id, one]));
  * stands is `INFERNOYARDPROPS.as`, whose entry carries both. Without them the
  * engine saw a bunker with no range and no health, which never sent a defender
  * (issue #143). Name, class and footprint still come from the main entry.
+ *
+ * The Inferno Cannon, 130, is the same case: `YARD_PROPS.as` keeps a stub with
+ * `quantity: [0]` and no `stats` or `hp`, on which `BTOWER.Props` would throw
+ * (`client/scripts/BTOWER.as:89-106`), yet 106 of them stand in the Descent and
+ * Moloch yards (`server/src/game-data/tribes/inferno/molochTribes.ts`). Its
+ * numbers are the Inferno entry's (`INFERNOYARDPROPS.as`, "Blast Tower").
  */
-const INFERNO_ONLY = [128];
+const INFERNO_ONLY = [128, 130];
 
 const inferno = readPropsSource(INFERNO_PROPS).source;
 const infernoById = new Map(
@@ -338,6 +347,61 @@ for (const type of [1, 2, 3, 4]) {
   if (!outpostCapacity.some((one) => one.entry.id === type)) {
     throw new Error(`OUTPOST_YARD_PROPS.as: harvester ${type} has no capacity ladder`);
   }
+}
+
+/* ── Inferno ─────────────────────────────────────────────────────────────── */
+
+/**
+ * The numbers a battle on an Inferno yard reads instead.
+ *
+ * `GLOBAL.SetBuildingProps` swaps the whole props table for
+ * `INFERNOYARDPROPS._infernoYardProps` whenever the yard is an Inferno yard
+ * (`client/scripts/GLOBAL.as:718-719`): a player's, or a Moloch tribe's on the
+ * Inferno map, both of which load with `EnumYardType.INFERNO_YARD`
+ * (`com/monsters/maproom_inferno/PlayerHandler.as:333`). The Descent is fought
+ * from the main yard and keeps the main table, with the two Inferno-only stubs
+ * above filled in.
+ *
+ * As for outposts, the health ladders and capacities are the cost generator's
+ * (`INFERNO_TRAIT_ROWS`), re-read here and compared, and only what differs from
+ * the main table is emitted for health and stats: the Quake Tower's level 6
+ * (48,000 here, 34,000 on the main table), and the Inferno's own ladders for
+ * the shared ids (the Under Hall, harvesters, walls, the Sharpshooter, ...).
+ * Capacity is emitted for the Housing Bunker, the one unblocked type with a
+ * monster room.
+ */
+const infernoHp = [];
+const infernoTowers = [];
+const infernoCapacity = [];
+for (const [type, blocked, ladder, , room] of INFERNO_TRAIT_ROWS) {
+  const entry = infernoById.get(type);
+  const main = byId.get(type);
+  if (!entry || !main) {
+    throw new Error(`INFERNOYARDPROPS.as: no entry ${type} to match its trait row`);
+  }
+  const read = readIntArray(entry.text, "hp");
+  if (!same(read, ladder)) {
+    throw new Error(
+      `INFERNOYARDPROPS.as:${entry.line}: hp reads [${read}] here, [${ladder}] in buildingCosts.ts`,
+    );
+  }
+  if (ladder.length > 0 && !same(ladder, mainHp.get(type))) {
+    infernoHp.push({ entry, main, values: ladder });
+  }
+  const stats = readTowerStats(entry, { ...entry, file: "INFERNOYARDPROPS.as" });
+  if (stats && !same(stats.levels, mainStats.get(type))) {
+    infernoTowers.push({ entry, main, ...stats });
+  }
+  if (!blocked && room.length > 0) infernoCapacity.push({ entry, main, values: room });
+}
+
+for (const type of INFERNO_ONLY) {
+  if (!mainStats.has(type) || !mainHp.has(type)) {
+    throw new Error(`INFERNOYARDPROPS.as: Inferno-only type ${type} has no stats or hp`);
+  }
+}
+if (!infernoCapacity.some((one) => one.entry.id === 128)) {
+  throw new Error("INFERNOYARDPROPS.as: the Housing Bunker (128) has no capacity ladder");
 }
 
 /* ── Flyer mode ───────────────────────────────────────────────────────────── */
@@ -693,6 +757,41 @@ const outpostTowerRows = outpostTowers
   )
   .join("\n");
 
+/** A row comment for an Inferno ladder: the main entry's name and class, the Inferno line. */
+const infernoComment = (one, extra = "") =>
+  `  // ${one.entry.id} ${one.main.name}${one.main.kind ? ` (${one.main.kind})` : ""} ` +
+  `— INFERNOYARDPROPS.as:${one.entry.line}${extra}`;
+
+const infernoHpRows = infernoHp
+  .map(
+    (one) =>
+      `${infernoComment(one)}\n` +
+      `  ${one.entry.id}: [\n` +
+      pack(
+        one.values.map((value) => `${value},`),
+        "    ",
+      ) +
+      `\n  ],`,
+  )
+  .join("\n");
+
+const infernoTowerRows = infernoTowers
+  .map(
+    (one) =>
+      `${infernoComment(one, `, stats :${one.line}`)}\n` +
+      `  ${one.entry.id}: [\n` +
+      pack(
+        one.levels.map((level) => `${object(level)},`),
+        "    ",
+      ) +
+      `\n  ],`,
+  )
+  .join("\n");
+
+const infernoCapacityRows = infernoCapacity
+  .map((one) => `${infernoComment(one)}\n  ${one.entry.id}: [${one.values.join(", ")}],`)
+  .join("\n");
+
 const outpostCapacityRows = outpostCapacity
   .map((one) => `${outpostComment(one)}\n  ${one.entry.id}: [${one.values.join(", ")}],`)
   .join("\n");
@@ -901,6 +1000,35 @@ ${outpostCapacityRows}
 };
 
 /**
+ * An Inferno yard's own health ladders, \`hp[level - 1]\`, where they differ
+ * from {@link BUILDING_HP}.
+ *
+ * \`GLOBAL.SetBuildingProps\` reads \`INFERNOYARDPROPS.as\` for an Inferno yard
+ * (\`client/scripts/GLOBAL.as:718-719\`), a player's or a Moloch tribe's on the
+ * Inferno map. The Descent is fought on the main table. A type with no row
+ * reads the main ladder.
+ */
+export const INFERNO_BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
+${infernoHpRows}
+};
+
+/**
+ * An Inferno yard's own tower \`stats\`, where they differ from
+ * {@link TOWER_STATS}. A type with no row reads the main block.
+ */
+export const INFERNO_TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> = {
+${infernoTowerRows}
+};
+
+/**
+ * The Housing Bunker's monster room on an Inferno yard, \`capacity[level - 1]\`
+ * (\`INFERNOYARDPROPS.as\`; 780 at level 4, owner decision R11).
+ */
+export const INFERNO_CAPACITY: Readonly<Record<number, readonly number[]>> = {
+${infernoCapacityRows}
+};
+
+/**
  * Which creeps a tower may shoot at: 0 ground only, 1 both, 2 air only.
  *
  * \`BTOWER._targetFlyerMode\` (\`client/scripts/BTOWER.as:25-35\`), read twice by
@@ -1075,6 +1203,7 @@ console.log(
     `${flyerMode.length} flyer modes, ${gridCosts.length} grid costs, ` +
     `${outpostHp.length} outpost hp, ${outpostTowers.length} outpost stats, ` +
     `${outpostCapacity.length} outpost capacities, ` +
+    `${infernoHp.length} inferno hp, ${infernoTowers.length} inferno stats, ` +
     `${monsters.length} monsters, ${champions.length} champions`,
 );
 console.log(`-> ${OUT}`);

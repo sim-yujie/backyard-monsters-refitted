@@ -139,6 +139,16 @@ export const TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> =
     { range: 180, damage: 2220, rate: 15 }, { range: 190, damage: 2880, rate: 15 },
     { range: 200, damage: 3640, rate: 15 }, { range: 210, damage: 4400, rate: 15 },
   ],
+  // 130 b_icannontower (tower) — YARD_PROPS.as:7030, stats INFERNOYARDPROPS.as:6234
+  130: [
+    { range: 160, damage: 20, rate: 40, speed: 5, splash: 30 },
+    { range: 170, damage: 40, rate: 40, speed: 6, splash: 35 },
+    { range: 180, damage: 60, rate: 40, speed: 7, splash: 40 },
+    { range: 190, damage: 80, rate: 40, speed: 8, splash: 45 },
+    { range: 200, damage: 100, rate: 40, speed: 8, splash: 50 },
+    { range: 210, damage: 120, rate: 40, speed: 8, splash: 55 },
+    { range: 220, damage: 140, rate: 40, speed: 8, splash: 60 },
+  ],
   // 132 Magma Tower (tower) — YARD_PROPS.as:7142, stats :7157
   132: [
     { range: 180, damage: 180, rate: 20, speed: 14, splash: 0 },
@@ -182,7 +192,7 @@ export const TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> =
 /**
  * Every type's health ladder, `hp[level - 1]` (`YARD_PROPS.as`, `"hp"`).
  *
- * 138 of the 140 entries have one; the rest are
+ * 139 of the 140 entries have one; the rest are
  * placeholders and decorations that never take damage. The Housing Bunker's is
  * `INFERNOYARDPROPS.as`'s, as its range is.
  */
@@ -699,6 +709,10 @@ export const BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
   129: [
     10000, 16000, 22000, 28000, 34000, 34000, 34000, 34000,
   ],
+  // 130 b_icannontower (tower) — YARD_PROPS.as:7030, hp INFERNOYARDPROPS.as:6394
+  130: [
+    6000, 9000, 12600, 17640, 26460, 34400, 45000,
+  ],
   // 131 bdg_wmi2totem (decoration) — YARD_PROPS.as:7045
   131: [
     100, 100, 100, 100, 100, 100,
@@ -945,6 +959,158 @@ export const OUTPOST_CAPACITY: Readonly<Record<number, readonly number[]>> = {
   15: [200, 260, 320, 380, 450, 540],
   // 22 Monster Bunker (tower) — OUTPOST_YARD_PROPS.as:1827
   22: [380, 450, 540, 660],
+};
+
+/**
+ * An Inferno yard's own health ladders, `hp[level - 1]`, where they differ
+ * from {@link BUILDING_HP}.
+ *
+ * `GLOBAL.SetBuildingProps` reads `INFERNOYARDPROPS.as` for an Inferno yard
+ * (`client/scripts/GLOBAL.as:718-719`), a player's or a Moloch tribe's on the
+ * Inferno map. The Descent is fought on the main table. A type with no row
+ * reads the main ladder.
+ */
+export const INFERNO_BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
+  // 5 Flinger (special) — INFERNOYARDPROPS.as:506
+  5: [
+    4000, 8000, 16000, 28000,
+  ],
+  // 11 Map Room (special) — INFERNOYARDPROPS.as:923
+  11: [
+    5000, 10000,
+  ],
+  // 14 Town Hall (special) — INFERNOYARDPROPS.as:1067
+  14: [
+    4000, 8800, 20000, 42000, 94000, 200000,
+  ],
+  // 15 Housing (special) — INFERNOYARDPROPS.as:1211
+  15: [
+    4000, 14000, 25000, 43000, 75000, 130000,
+  ],
+  // 21 Sniper Tower (tower) — INFERNOYARDPROPS.as:1710
+  21: [
+    6000, 9000, 12600, 17640, 26460, 34400, 45000,
+  ],
+  // 22 Monster Bunker (tower) — INFERNOYARDPROPS.as:1887
+  22: [
+    10000, 24500, 52000, 75000,
+  ],
+  // 23 Laser Tower (tower) — INFERNOYARDPROPS.as:1949
+  23: [
+    9000, 12600, 17640, 26460, 34400, 42200,
+  ],
+  // 25 Tesla Tower (tower) — INFERNOYARDPROPS.as:2158
+  25: [
+    15000, 22000, 30000, 48000, 60000, 72000,
+  ],
+  // 26 Monster Academy (special) — INFERNOYARDPROPS.as:2322
+  26: [
+    6000, 10000, 14000, 20000,
+  ],
+  // 115 Aerial Defense Tower (tower) — INFERNOYARDPROPS.as:5348
+  115: [
+    15000, 22000, 30000, 48000, 60000, 72000,
+  ],
+  // 118 Railgun (tower) — INFERNOYARDPROPS.as:5606
+  118: [
+    17640, 34400, 45000, 58000, 75500, 90000,
+  ],
+  // 129 Quake Tower (tower) — INFERNOYARDPROPS.as:6071
+  129: [
+    10000, 16000, 22000, 28000, 34000, 48000,
+  ],
+  // 133 b_siegefactory (special) — INFERNOYARDPROPS.as:6659
+  133: [
+    100, 100, 100, 100, 100, 100,
+  ],
+  // 134 b_siegeworks (special) — INFERNOYARDPROPS.as:6736
+  134: [
+    100, 100, 100, 100, 100, 100,
+  ],
+};
+
+/**
+ * An Inferno yard's own tower `stats`, where they differ from
+ * {@link TOWER_STATS}. A type with no row reads the main block.
+ */
+export const INFERNO_TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> = {
+  // 20 Cannon Tower (tower) — INFERNOYARDPROPS.as:1533, stats :1545
+  20: [
+    { range: 160, damage: 20, rate: 40, speed: 5, splash: 30 },
+    { range: 170, damage: 40, rate: 40, speed: 6, splash: 35 },
+    { range: 180, damage: 60, rate: 40, speed: 7, splash: 40 },
+    { range: 190, damage: 80, rate: 40, speed: 8, splash: 45 },
+    { range: 200, damage: 100, rate: 40, speed: 8, splash: 50 },
+    { range: 210, damage: 120, rate: 40, speed: 8, splash: 55 },
+    { range: 220, damage: 140, rate: 40, speed: 8, splash: 60 },
+  ],
+  // 21 Sniper Tower (tower) — INFERNOYARDPROPS.as:1710, stats :1721
+  21: [
+    { range: 300, damage: 100, rate: 80, speed: 10, splash: 0 },
+    { range: 308, damage: 210, rate: 80, speed: 10, splash: 0 },
+    { range: 316, damage: 320, rate: 80, speed: 10, splash: 0 },
+    { range: 324, damage: 430, rate: 80, speed: 12, splash: 0 },
+    { range: 332, damage: 540, rate: 80, speed: 15, splash: 0 },
+    { range: 340, damage: 650, rate: 80, speed: 17, splash: 0 },
+    { range: 348, damage: 760, rate: 80, speed: 18, splash: 0 },
+  ],
+  // 22 Monster Bunker (tower) — INFERNOYARDPROPS.as:1887, stats :1899
+  22: [
+    { range: 300 }, { range: 350 }, { range: 400 }, { range: 450 },
+  ],
+  // 23 Laser Tower (tower) — INFERNOYARDPROPS.as:1949, stats :1959
+  23: [
+    { range: 160, damage: 120, rate: 80, speed: 0, splash: 40 },
+    { range: 162, damage: 150, rate: 80, speed: 0, splash: 40 },
+    { range: 164, damage: 180, rate: 80, speed: 0, splash: 40 },
+    { range: 168, damage: 200, rate: 80, speed: 0, splash: 40 },
+    { range: 170, damage: 220, rate: 80, speed: 0, splash: 40 },
+    { range: 175, damage: 240, rate: 80, speed: 0, splash: 40 },
+  ],
+  // 25 Tesla Tower (tower) — INFERNOYARDPROPS.as:2158, stats :2168
+  25: [
+    { range: 250, damage: 100, rate: 10, speed: 10, splash: 0 },
+    { range: 270, damage: 120, rate: 15, speed: 10, splash: 0 },
+    { range: 300, damage: 140, rate: 20, speed: 10, splash: 0 },
+    { range: 320, damage: 160, rate: 25, speed: 10, splash: 0 },
+    { range: 340, damage: 180, rate: 25, speed: 10, splash: 0 },
+    { range: 360, damage: 200, rate: 30, speed: 10, splash: 0 },
+  ],
+  // 115 Aerial Defense Tower (tower) — INFERNOYARDPROPS.as:5348, stats :5359
+  115: [
+    { range: 300, damage: 200, rate: 60, speed: 20, splash: 180 },
+    { range: 320, damage: 250, rate: 60, speed: 24, splash: 185 },
+    { range: 340, damage: 250, rate: 60, speed: 28, splash: 190 },
+    { range: 360, damage: 250, rate: 60, speed: 32, splash: 195 },
+    { range: 380, damage: 300, rate: 60, speed: 36, splash: 200 },
+    { range: 400, damage: 350, rate: 60, speed: 40, splash: 215 },
+  ],
+  // 118 Railgun (tower) — INFERNOYARDPROPS.as:5606, stats :5618
+  118: [
+    { range: 300, damage: 400, rate: 160, speed: 20, splash: 0 },
+    { range: 315, damage: 600, rate: 160, speed: 20, splash: 0 },
+    { range: 330, damage: 900, rate: 160, speed: 20, splash: 0 },
+    { range: 345, damage: 1200, rate: 160, speed: 20, splash: 0 },
+    { range: 360, damage: 1600, rate: 160, speed: 20, splash: 0 },
+    { range: 380, damage: 2000, rate: 160, speed: 20, splash: 0 },
+  ],
+  // 133 b_siegefactory (special) — INFERNOYARDPROPS.as:6659, stats :6691
+  133: [
+    { range: 200, duration: 380, radius: 200 }, { range: 210, duration: 390, radius: 210 },
+    { range: 235, duration: 400, radius: 235 }, { range: 335, duration: 410, radius: 335 },
+    { range: 360, duration: 200, radius: 360 }, { range: 370, duration: 210, radius: 370 },
+    { range: 380, duration: 235, radius: 380 }, { range: 390, duration: 335, radius: 390 },
+    { range: 400, duration: 360, radius: 400 }, { range: 410, duration: 370, radius: 410 },
+  ],
+};
+
+/**
+ * The Housing Bunker's monster room on an Inferno yard, `capacity[level - 1]`
+ * (`INFERNOYARDPROPS.as`; 780 at level 4, owner decision R11).
+ */
+export const INFERNO_CAPACITY: Readonly<Record<number, readonly number[]>> = {
+  // 128 b_housingbunker (tower) — INFERNOYARDPROPS.as:5995
+  128: [200, 300, 520, 780, 1140, 1820],
 };
 
 /**

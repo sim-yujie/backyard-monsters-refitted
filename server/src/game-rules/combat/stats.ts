@@ -4,6 +4,9 @@ import {
   FLYER_MODE,
   GRID_COST,
   GRID_COST_FORMULA,
+  INFERNO_BUILDING_HP,
+  INFERNO_CAPACITY,
+  INFERNO_TOWER_STATS,
   MONSTER_PROPS,
   MR2_CAPACITY,
   OUTPOST_BUILDING_HP,
@@ -377,24 +380,42 @@ export const championStatWithFood = (
 const readsOutpostProps = (kind: CombatTargetKind): boolean => kind === "outpost";
 
 /**
+ * Whether a yard of `kind` reads the Inferno props table: a player's Inferno
+ * yard or a Moloch tribe's on the Inferno map, both loaded as
+ * `EnumYardType.INFERNO_YARD` (`client/scripts/GLOBAL.as:718-719`). The Descent
+ * is fought from the main yard on the main table.
+ */
+const readsInfernoProps = (kind: CombatTargetKind): boolean => kind === "inferno";
+
+/** The kind's own override table, or undefined when it reads the main one. */
+const overrideFor = <T>(
+  kind: CombatTargetKind,
+  outpost: Readonly<Record<number, T>>,
+  inferno: Readonly<Record<number, T>>,
+): Readonly<Record<number, T>> | undefined =>
+  readsOutpostProps(kind) ? outpost : readsInfernoProps(kind) ? inferno : undefined;
+
+/**
  * A building's health at one level, 0 for a type with no ladder.
  *
  * Three of the 140 props entries have no `hp`; none of them is targetable. On
  * an outpost the outpost table's ladder wins where it has one: the core's
- * 200,000 and the six-level towers (`OUTPOST_BUILDING_HP`).
+ * 200,000 and the six-level towers (`OUTPOST_BUILDING_HP`). On an Inferno yard
+ * the Inferno table's does (`INFERNO_BUILDING_HP`).
  */
 export const maxHp = (type: number, level: number, kind: CombatTargetKind = "main"): number =>
   atLevel(hpLadder(type, kind), level, 0);
 
 /** The whole health ladder of a type in a yard of `kind`, or an empty array. */
 export const hpLadder = (type: number, kind: CombatTargetKind = "main"): readonly number[] =>
-  (readsOutpostProps(kind) ? OUTPOST_BUILDING_HP[type] : undefined) ?? BUILDING_HP[type] ?? [];
+  overrideFor(kind, OUTPOST_BUILDING_HP, INFERNO_BUILDING_HP)?.[type] ?? BUILDING_HP[type] ?? [];
 
 /**
  * One tower's stats at one level, undefined for a type with no stats block.
  *
  * On an outpost the outpost table's block wins where it has one
- * (`OUTPOST_TOWER_STATS`).
+ * (`OUTPOST_TOWER_STATS`), and on an Inferno yard the Inferno table's
+ * (`INFERNO_TOWER_STATS`).
  */
 export const towerStats = (
   type: number,
@@ -402,7 +423,7 @@ export const towerStats = (
   kind: CombatTargetKind = "main",
 ): TowerLevelStats | undefined => {
   const levels =
-    (readsOutpostProps(kind) ? OUTPOST_TOWER_STATS[type] : undefined) ?? TOWER_STATS[type];
+    overrideFor(kind, OUTPOST_TOWER_STATS, INFERNO_TOWER_STATS)?.[type] ?? TOWER_STATS[type];
   if (!levels || levels.length === 0) return undefined;
   const clamped = Math.max(1, Math.min(Math.floor(level), levels.length));
   return levels[clamped - 1];
@@ -514,11 +535,12 @@ export const gridCost = (type: number, level = 1): readonly GridCostRect[] => {
  * props table is a combat number there (`web/tools/gen-building-costs.mjs:158-167`).
  * On an outpost the outpost table's ladders are read, the harvesters' included,
  * since an attack gives each harvester a buffer out of it
- * ({@link outpostHarvesterStock}).
+ * ({@link outpostHarvesterStock}). On an Inferno yard the Housing Bunker's room
+ * is read (`INFERNO_CAPACITY`).
  */
 export const capacity = (type: number, level: number, kind: CombatTargetKind = "main"): number =>
   atLevel(
-    (readsOutpostProps(kind) ? OUTPOST_CAPACITY[type] : undefined) ?? MR2_CAPACITY[type],
+    overrideFor(kind, OUTPOST_CAPACITY, INFERNO_CAPACITY)?.[type] ?? MR2_CAPACITY[type],
     level,
     0,
   );
