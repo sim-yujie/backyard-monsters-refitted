@@ -16,6 +16,8 @@ import { withoutHelpers } from "../friends/helpList.js";
 import { requirementDetail } from "../base/economy/transitions.js";
 import { ACADEMY_TYPE } from "../yard/academy.js";
 import { LAB_TYPE, labResearch } from "../yard/lab.js";
+import { siegeHold, type SiegeHold } from "../yard/siege.js";
+import type { SiegeId } from "../../game-rules/combat/siege.js";
 import {
   FREE_FINISH_SECONDS,
   isShort,
@@ -105,6 +107,8 @@ export interface UpgradeWalkSave {
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
   storedata?: JsonObject | null;
+  /** The siege weapons: a Siege Factory holding one may not be upgraded. */
+  siege?: JsonObject | null;
 }
 
 /** Why the walk could not start a planned upgrade (§3.2). */
@@ -277,6 +281,8 @@ export interface OneUpgradeRefusal {
   workers?: { total: number; busy: number };
   /** `busy` on an Academy that is training: the monster, for the panel's own words. */
   training?: string;
+  /** `busy` on a Siege Lab or Factory at work or holding a weapon (`siegeHold`). */
+  siege?: { hold: SiegeHold; weapon: SiegeId };
 }
 
 /** The next step of one building, taken. */
@@ -354,6 +360,10 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
     const training = academyTraining(building);
     return refuse("busy", "building", training ? { training } : {});
   }
+  // The Siege Lab researching, the Siege Factory making or holding a weapon
+  // (`SiegeLab.Upgrade`, `SiegeFactory.Upgrade`).
+  const siege = siegeHold(building, save.siege);
+  if (siege) return refuse("busy", "building", { siege });
   if (isDamaged(building, save.buildinghealthdata)) return refuse("damaged", "building");
 
   const hall = townHallLevel(buildings, kind);

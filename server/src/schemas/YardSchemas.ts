@@ -288,3 +288,16 @@ export const YardStarterKitSchema = z.object({
   pay: z.enum(["resources", "shiny"]),
   topUp: z.coerce.number().int().nonnegative().optional(),
 });
+
+/**
+ * `POST /bm/yard/siege/{lab,factory}/{start,instant}`: the siege weapon
+ * (`decoy`, `vacuum`, `jars`) and, to buy a shortfall of Inferno resources
+ * with Shiny, the price the server named in its `409 shortfall`.
+ */
+export const YardSiegeWeaponSchema = z.object({
+  weapon: z.string().min(1).max(16),
+  topUp: z.coerce.number().int().nonnegative().optional(),
+});
+
+/** `POST /bm/yard/siege/{lab,factory}/{cancel,finish}` take no fields: one job per building. */
+export const YardSiegeSchema = z.object({});

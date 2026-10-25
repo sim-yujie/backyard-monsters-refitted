@@ -142,6 +142,11 @@ export type YardSlices = Partial<
     // written whole, through `updateAchievements`. On an outpost it lands on
     // the main row. The wrapper evaluates it again after the slices land.
     | "achievements"
+    // The Siege Lab and Factory (Inferno WP 6.3, `services/yard/siege.ts`):
+    // the weapons, and the Inferno purse they are paid from, which the plans
+    // charge and fund themselves (the wrapper's pool is the surface one).
+    | "siege"
+    | "iresources"
   >
 >;
 

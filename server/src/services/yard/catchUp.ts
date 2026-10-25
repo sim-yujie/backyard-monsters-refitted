@@ -37,6 +37,7 @@ import type { MushroomYardSave } from "./mushrooms.js";
 import { clearOutpostMushrooms, placeOutpostCore } from "./outpostYard.js";
 import { syncBaseValue, type BaseValueSave } from "./derivedLevels.js";
 import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./starterBase.js";
+import { catchUpSiege, type SiegeCompletedJob, type SiegeSave } from "./siege.js";
 import { yardKindOf } from "../yardplanner/costs.js";
 
 /**
@@ -59,6 +60,7 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
  * | 2 | `catchUpLocker.ts` — `unlockStarterMonster`, the Pokey always unlocked (#218); unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
+ * | 2 | `siege.ts` `catchUpSiege` — Siege Lab research and Siege Factory weapons; a job paused over a window its building spends destroyed (runs before the repairs, whose health it reads) | 3 |
  * | 3 | `catchUpRepairs.ts` — repairs heal; runs before the buildings, whose paused countdowns it restarts at the repair's end | 3 |
  * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpMushrooms.ts` | 3 |
  * | 4 | `catchUpTraining.ts` — academy training (legacy relative `time` made absolute once); `catchUpResearch`, lab research | 4 |
@@ -76,8 +78,8 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * ({@link catchUpOutpost}): an empty outpost gets its core first
  * (`outpostYard.ts`), then repairs, buildings, monsters and damage, as above.
  * The rest is the player's or the main yard's alone: the starter base and the
- * Map Room, the Locker, the Academy and the Lab (their data is the main
- * yard's), mushrooms and champions (outposts have neither), and the harvester
+ * Map Room, the Locker, the Academy, the Lab and the Siege Lab and Factory
+ * (their data is the main yard's), mushrooms and champions (outposts have neither), and the harvester
  * buffers (an outpost's harvesters hold nothing; their income is autobanked
  * into the main pool, WP4). Run it on the outpost seen through its owner's
  * main yard (`poolView.ts`), so points and the HCC's goo refund land in the
@@ -107,7 +109,8 @@ export type CompletedJob =
   | RepairJob
   | StarterBaseJob
   | StarveJob
-  | ChampionHatchJob;
+  | ChampionHatchJob
+  | SiegeCompletedJob;
 
 /** The slice of a save the catch-up reads and writes. */
 export interface CatchUpSave
@@ -120,7 +123,8 @@ export interface CatchUpSave
     CatchUpTrainingSave,
     CatchUpChampionsSave,
     CatchUpDamageSave,
-    BaseValueSave {
+    BaseValueSave,
+    SiegeSave {
   savetime?: number;
 }
 
@@ -149,6 +153,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
     ...starter,
     ...migrateYard(save, now),
     ...catchUpLocker(save, from, now),
+    ...catchUpSiege(save, from, now),
     ...catchUpRepairs(save, from, now),
     ...catchUpBuildings(save, from, now),
   ];

@@ -94,6 +94,14 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "guide/army",
   "guide/skip",
   "events/ladder/claim",
+  "siege/lab/start",
+  "siege/lab/cancel",
+  "siege/lab/finish",
+  "siege/lab/instant",
+  "siege/factory/start",
+  "siege/factory/cancel",
+  "siege/factory/finish",
+  "siege/factory/instant",
 ];
 
 /**
