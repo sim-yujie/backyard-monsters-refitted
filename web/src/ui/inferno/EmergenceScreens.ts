@@ -16,6 +16,7 @@ import {
   UPGRADE_NOW,
 } from "@/game/inferno/emergenceText";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
+import { alarmPulse } from "@/ui/alarmPulse";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/inferno.css";
 
@@ -143,6 +144,7 @@ export const molochWarning = (
     dismissable: false,
     onClose,
   });
+  alarmPulse(popup);
   const head = element("div", "inferno-warning");
   const army = element("ul", "inferno-army");
   army.setAttribute("aria-label", "Moloch's monsters");

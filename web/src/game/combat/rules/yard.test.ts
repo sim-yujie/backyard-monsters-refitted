@@ -48,7 +48,9 @@ const generatedClasses = (): Map<number, string> => {
 
 /** Every non-decoration `type -> { w, h }` the server's footprint table holds. */
 const serverFootprints = (): Map<number, { w: number; h: number }> => {
-  const text = readFileSync(SERVER_FOOTPRINTS, "utf8");
+  // The surface table only: the Inferno yard's own rows come after it (WP 1.15),
+  // and the combat engine does not read them yet.
+  const [text = ""] = readFileSync(SERVER_FOOTPRINTS, "utf8").split("export const INFERNO_FOOTPRINTS");
   const found = new Map<number, { w: number; h: number }>();
   const row = /^\s*(\d+):\s*\{\s*w:\s*(\d+),\s*h:\s*(\d+),\s*decoration:\s*(true|false)\s*\}/gm;
   for (const match of text.matchAll(row)) {
