@@ -794,6 +794,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/ape_4.png": "monsters/ape_4-repaint@4x.png", // Gorgo level 4 repaint (all 16 headings, idle + walk + attack)
   "monsters/dragon_4.png": "monsters/dragon_4-repaint@4x.png", // Drull level 4 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_4.png": "monsters/fly_4-repaint@4x.png", // Fomor level 4 repaint (all 16 headings, standing + wing beat)
+  "monsters/ape_5.png": "monsters/ape_5-repaint@4x.png", // Gorgo level 5 repaint (all 16 headings, idle + walk + attack)
   "monsters/dragon_5.png": "monsters/dragon_5-repaint@4x.png", // Drull level 5 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_5.png": "monsters/fly_5-repaint@4x.png", // Fomor level 5 repaint (all 16 headings, standing + wing beat)
   "monsters/krallen_1_rev_65.png": "monsters/krallen_1_rev_65-repaint@4x.png", // Krallen look 1 repaint (all 16 headings, run + attack, ground shadow)

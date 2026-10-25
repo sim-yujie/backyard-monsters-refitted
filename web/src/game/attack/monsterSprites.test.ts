@@ -229,6 +229,7 @@ describe("spriteFor", () => {
       ["G1", 4, "ape_4"],
       ["G2", 4, "dragon_4"],
       ["G3", 4, "fly_4"],
+      ["G1", 5, "ape_5"],
       ["G2", 5, "dragon_5"],
       ["G3", 5, "fly_5"],
     ];
