@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { MikroORM } from "@mikro-orm/postgresql";
 
 import { CreateInfernoProgressTable } from "../../database/migrations/20261025_CreateInfernoProgressTable.js";
+import { AddDescentYardsToInfernoProgress } from "../../database/migrations/20261026_AddDescentYardsToInfernoProgress.js";
 import ormConfig from "../../mikro-orm.config.js";
 import { raiseEmergence } from "./emergenceOnLoad.js";
 import { readInfernoProgress } from "./infernoProgress.js";
@@ -47,10 +48,12 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     await orm.close();
   });
 
-  test("the migration is additive and can run again", async () => {
-    const migration = new CreateInfernoProgressTable(orm.em.getDriver(), orm.config);
-    await migration.up();
-    for (const query of migration.getQueries()) await sql(String(query));
+  test("the migrations are additive and can run again", async () => {
+    for (const Step of [CreateInfernoProgressTable, AddDescentYardsToInfernoProgress]) {
+      const migration = new Step(orm.em.getDriver(), orm.config);
+      await migration.up();
+      for (const query of migration.getQueries()) await sql(String(query));
+    }
 
     const columns = await sql<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns WHERE table_schema = 'bym' AND table_name = 'inferno_progress' ORDER BY ordinal_position`
@@ -68,7 +71,20 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
       "popups_seen",
       "created_at",
       "updated_at",
+      "descent_yards",
     ]);
+  });
+
+  test("a Descent yard's kept damage comes back as written; anything but an object is refused", async () => {
+    await sql(
+      `INSERT INTO bym.inferno_progress (userid, descent_yards) VALUES (?, '{"201":{"health":{"1":0,"2":"120"},"looted":{"r1":40}}}'::jsonb)`,
+      [A]
+    );
+    const record = await readInfernoProgress(em(), A);
+    expect(record.descentYards).toEqual({ "201": { health: { "1": 0, "2": 120 }, looted: { r1: 40, r2: 0, r3: 0, r4: 0 } } });
+
+    await sql(`DELETE FROM bym.inferno_progress WHERE userid = ?`, [A]);
+    await expect(sql(`INSERT INTO bym.inferno_progress (userid, descent_yards) VALUES (?, '[]'::jsonb)`, [A])).rejects.toThrow();
   });
 
   test("a bare row takes the defaults, and the entity reads it", async () => {
