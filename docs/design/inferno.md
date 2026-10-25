@@ -381,7 +381,7 @@ check. Owner screenshots before merge for any screen.
 | 1.11 | Descent state + `attack/start` kind descent (next base only, main army, flinger capacity); the Descent yard is fought as yard kind `"inferno"` with its housed monsters defending from its Housing Bunkers (2.4 "Yard kind", `PlayerHandler.as:333`) | route tests (wrong base refused; Descent fight uses Inferno numbers and Housing Bunker defenders) | 1.7, 1.6 | M |
 | 1.12 | Descent landing: 90% win, Inferno loot, progress, capture creates the Inferno yard with the start layout, achievements 18/19 | landing tests incl. forged client result ignored | 1.11 | M |
 | 1.13 | Client: Descent map + popups | screenshots | 1.11, A1 | M |
-| 1.14 | `POST /bm/inferno/load` + harvester catch-up into `iresources` | load tests, caps | 1.12 | M |
+| 1.14 | `POST /bm/inferno/load` + harvester catch-up into `iresources` (decided 25 Oct, exact to Flash: each harvester fills its own buffer at the Inferno rates and stops when full; it reaches `iresources` only when banked, WP 1.16; the load answers the purse with the Inferno cap) | load tests, caps | 1.12 | M |
 | 1.15 | Yard actions pt 1: build/upgrade/move/recycle with Inferno baseid, Under Hall gating, `lockOwnYard` + `poolView` | action tests per rule | 1.14, 1.1 | M |
 | 1.16 | Yard actions pt 2: collect/bank/repair/speed-up/fortify/walls/traps | action tests | 1.15 | M |
 | 1.17 | Workers (1 free + buy up to 4 more: 250/500/1,000/2,000 Shiny, I3) + Inferno shop items | shop tests (ladder, max 5, Shiny shared with the surface) | 1.15 | M |

@@ -850,6 +850,18 @@ export const infernoOffErr = () =>
   });
 
 /**
+ * `POST /bm/inferno/load` from a player with no Inferno yard: the server makes
+ * it when the 13th Descent yard falls (`services/inferno/infernoYard.ts`).
+ */
+export const noInfernoYardErr = () =>
+  new ClientSafeError({
+    message: "You have no Inferno yard yet. Beat all 13 yards of Moloch's Descent to win one.",
+    status: Status.CONFLICT,
+    data: { reason: "noInfernoYard" },
+    isClientFriendly: true,
+  });
+
+/**
  * An owner `/base/save` of a main yard, refused because owner saves are retired
  * (issue #101, `docs/design/yard-buildings.md` T1, `OWNER_SAVE_MODE=refuse`).
  *

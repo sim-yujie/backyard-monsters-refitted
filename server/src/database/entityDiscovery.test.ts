@@ -125,6 +125,7 @@ describe("entity discovery", () => {
         emergence_last_at: { type: "timestamptz", nullable: true },
         descent_destroyed: { type: "jsonb", nullable: false },
         descent_best: { type: "jsonb", nullable: false },
+        descent_yards: { type: "jsonb", nullable: false },
         descent_passed_at: { type: "timestamptz", nullable: true },
         inferno_baseid: { type: "varchar(255)", nullable: true },
         korath_unlocked_at: { type: "timestamptz", nullable: true },

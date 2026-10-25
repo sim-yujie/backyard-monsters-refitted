@@ -69,6 +69,7 @@ import { infernoSave } from "./controllers/inferno/infernoSave.js";
 import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { infernoState } from "./controllers/inferno/infernoState.js";
 import { infernoAttackStart } from "./controllers/inferno/descentAttack.js";
+import { infernoLoad } from "./controllers/inferno/infernoLoad.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
@@ -201,6 +202,7 @@ router.post("/api/:apiVersion/bm/neighbours/get", apiVersion, verifyUserAuth, lo
 // The new Inferno (docs/design/inferno.md §3.2), refused while `infernoConfig.enabled` is off.
 router.get("/api/:apiVersion/bm/inferno/state", apiVersion, verifyUserAuth, verifyAccountStatus, infernoState);
 router.post("/api/:apiVersion/bm/inferno/attack/start", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, infernoAttackStart);
+router.post("/api/:apiVersion/bm/inferno/load", apiVersion, verifyUserAuth, verifyAccountStatus, infernoLoad);
 // The web client's Map Room 1 screen (issue #132); re-read while the map is open, so not echoed by logRequest.
 router.get("/api/:apiVersion/bm/maproom1", apiVersion, verifyUserAuth, getMapRoom1);
 // The web client's presence ping (#242), every 30 s while its tab is visible, so not echoed by logRequest.
