@@ -801,9 +801,10 @@ export class AttackSession {
   }
 
   /**
-   * Appends a siege weapon at the current tick. The engine accepts and
-   * ignores it today (`engine.ts` fidelity note 8); the log carries it so a
-   * later engine replays it (§F4).
+   * Appends a siege weapon at the current tick. The engine drops the Decoy
+   * when the battle has the attacker's Siege Lab levels (`BattleOptions.siege`,
+   * Inferno WP 6.5) and ignores anything else (`engine.ts` fidelity note 8);
+   * the log carries it either way so a later engine replays it (§F4).
    */
   appendSiege(input: SiegeInput): Extract<FlingEvent, { kind: "siege" }> {
     const battle = this.requireLive("siege");

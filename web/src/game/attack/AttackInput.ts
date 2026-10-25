@@ -15,6 +15,7 @@ import {
   type BombStats,
   type Ellipse,
 } from "@/game/combat/rules";
+import { DECOY, JARS, VACUUM, type SiegeId } from "@/game/combat/rules/siege";
 import type { Point } from "@/game/yard/YardGrid";
 import { toIso } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -176,15 +177,15 @@ export const overlappingBuildings = (
 
 /* ── Siege weapons ────────────────────────────────────────────────────────── */
 
-export type SiegeWeaponId = "decoy" | "vacuum" | "jars";
+export type SiegeWeaponId = SiegeId;
 
 /** One of the three, as the Flash client's `SiegeWeapon` subclasses spell it. */
 export interface SiegeWeaponSpec {
   readonly id: SiegeWeaponId;
   readonly name: string;
   /**
-   * Drop-zone range by level, `RANGE` in `weapons/Decoy.as:55` and
-   * `Jars.as:36`. The Vacuum has none (`Vacuum.as:26`): Flash fired it with no
+   * Drop-zone range by level, the shared siege data's (`combat/rules/siege.ts`,
+   * Flash's `RANGE`). The Vacuum has none (`Vacuum.as:26`): Flash fired it with no
    * drop zone at all, so the ring it gets here is a nominal clearance.
    */
   readonly range: readonly number[];
@@ -201,21 +202,21 @@ export const SIEGE_WEAPONS: readonly SiegeWeaponSpec[] = [
   {
     id: "decoy",
     name: "Decoy",
-    range: [250, 270, 290, 310, 320, 350, 380, 410, 440, 480],
+    range: DECOY.range,
     target: "clear-special",
     hint: "Goes on open ground.",
   },
   {
     id: "vacuum",
     name: "Vacuum",
-    range: [],
+    range: VACUUM.range,
     target: "clear",
     hint: "Goes clear of buildings.",
   },
   {
     id: "jars",
     name: "Jars",
-    range: [200, 210, 235, 335, 360, 370, 380, 390, 400, 410],
+    range: JARS.range,
     target: "tower",
     hint: "Goes on a tower.",
   },
