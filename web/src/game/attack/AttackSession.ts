@@ -263,7 +263,8 @@ export interface AttackSessionOptions {
   /**
    * The Descent yard attacked, 1 to 13 (Inferno WP 1.21): from yard 7 the
    * fight's burn takes health from every surface monster, as the server's
-   * replay of it does. Absent outside the Descent.
+   * replay of it does. Absent: the target's own `descentYard`, which is
+   * absent outside the Descent.
    */
   readonly descentYard?: number;
   /** The clock {@link AttackSession.skipToEnd} budgets a frame by, in ms; `performance.now` by default. */
@@ -274,9 +275,16 @@ export interface AttackSessionOptions {
  * A dev build's `?descentYard=N` (Inferno WP 1.21): the Descent yard, 1 to
  * 13, a practice fight burns as; nothing for anything else.
  */
-export const devDescentYard = (search: string): { descentYard?: number } => {
-  const yard = Number(new URLSearchParams(search).get("descentYard"));
-  return Number.isInteger(yard) && yard >= 1 && yard <= DESCENT_YARDS ? { descentYard: yard } : {};
+export const devDescentYard = (search: string): { descentYard?: number } =>
+  descentYardOf({ descentYard: Number(new URLSearchParams(search).get("descentYard")) });
+
+/**
+ * A target's Descent yard as session options (Inferno WP 1.21): the yard, 1
+ * to 13, the server's attack start named; nothing outside the Descent.
+ */
+export const descentYardOf = (target: Pick<AttackTarget, "descentYard">): { descentYard?: number } => {
+  const yard = target.descentYard;
+  return yard !== undefined && Number.isInteger(yard) && yard >= 1 && yard <= DESCENT_YARDS ? { descentYard: yard } : {};
 };
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
@@ -437,7 +445,8 @@ export class AttackSession {
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? false;
-    this.descentYard = options.descentYard;
+    // The option (the dev practice's `?descentYard`), else the Descent target's own yard.
+    this.descentYard = options.descentYard ?? descentYardOf(options.target).descentYard;
     this.seed = options.seed ?? mintSeed();
     this.levels_ = options.target.roster.levels;
     this.ranks_ = options.target.roster.ranks ?? {};

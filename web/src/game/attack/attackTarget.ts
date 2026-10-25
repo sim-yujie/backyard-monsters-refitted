@@ -149,6 +149,13 @@ export interface AttackTarget {
    * which case the attack scene fetches it.
    */
   readonly load?: BaseLoadResponse;
+  /**
+   * The Descent yard attacked, 1 to 13: the `descentyard` of the server's
+   * Descent attack start (`POST /bm/inferno/attack/start`). From yard 7 the
+   * fight burns surface monsters, as the server's replay of it does (Inferno
+   * WP 1.21). Absent outside the Descent.
+   */
+  readonly descentYard?: number;
 }
 
 /** A foreign cell the yard scene is about to show read-only. */
