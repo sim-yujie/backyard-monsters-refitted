@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tower-sample-kit"))
-from common import ASSETS, REPO, old_rgba, on  # noqa: E402
+from common import ASSETS, REPO, TOWERS, old_rgba, on  # noqa: E402
 
 b, combo = sys.argv[1], sys.argv[2]
 TIER = combo in ("T1", "T2")                 # tiers 1-2 of R2-A, painted to match the R2A picture
@@ -39,7 +39,7 @@ inputs = ["frames.png"]
 
 if R2:
     # ref.png: the Flash build button (a sharper render of the same design) blown up
-    BUTTON = {"cannon": "20", "townhall": "14.10", "townhall2": "14.2", "townhall5": "14.5"}[FK]   # Town Hall: that level's button
+    BUTTON = {"cannon": "20", "townhall": "14.10", "townhall2": "14.2", "townhall5": "14.5"}.get(FK, str(TOWERS[FK]["button"]))   # Town Hall: that level's button
     bt = Image.open(ASSETS / "buildingbuttons" / f"{BUTTON}.jpg").convert("RGB")
     bt.resize((bt.width * 5, bt.height * 5), Image.LANCZOS).save(out / "ref.png")
     inputs.append("ref.png")
@@ -74,7 +74,7 @@ WHAT = {
     "townhall": ("the TOWN HALL, the main and most important building of the monster yard (where the player's resources and command "
                  "live). Keep its recognisable idea from frames.png: a round domed hall with a big funnel/antenna on top, a round "
                  "porthole window on the front and pipes around it, but redesign it freely in the theme below"),
-}[b]
+}.get(b, "")
 WHAT_R2 = {
     "cannon": ("the CANNON TOWER, a defence tower that fires heavy cannonballs. Its Flash design (keep it): a RED-AND-WHITE STRIPED "
                "DRUM base standing on three chunky TAN stone feet, a TAN RING frame around the top with curved TAN PRONGS sticking up "
@@ -87,7 +87,7 @@ WHAT_R2 = {
                  "GOLDEN FRAME of four thick golden pipe pillars with curved golden arms reaching over the dome, small blue gem "
                  "studs on the gold and clawed golden feet; a golden horned crest with a silver funnel and a thin golden antenna on "
                  "top; red pipes and golden coils around the waist; a light grey base ring with a row of round black holes"),
-}[b]
+}.get(b) or (TOWERS[b]["what"] + ". That is its Flash design: keep it, with every part in the same place. Keep any gun, turret or lens aimed exactly the same way as in frames.png")   # the other towers: words from the tower kit
 REFRESH = ("THE FLASH DESIGN, REFRESHED (most important). frames.png and ref.png show the building's ORIGINAL design from the old "
            "Flash game. Keep that design: the same silhouette and proportions, the same colour scheme and the same signature parts "
            "in the same places, so a player of the old game instantly recognises it. Refresh it: richer materials (worn painted "
