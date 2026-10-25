@@ -124,9 +124,10 @@ export const caveMenu = (host: HTMLElement, actions: CaveMenuActions): Popup => 
 
 /**
  * Moloch's warning before each of his raids (`INFERNO_EMERGENCE_ATTACKPOPUP`):
- * Moloch, one card per group of his army in the order they come, each with
- * its `emerge_mondesc` line on hover or focus, and one button, "Engage
- * Attack". No way to close it but that button, as in Flash: `engage` starts
+ * Moloch, one card per group of his army in the order they come, and one
+ * button, "Engage Attack". Under the cards, the `emerge_mondesc` line of the
+ * card last pointed at, focused or tapped (Flash: on mouse-over), the first
+ * card's to begin with. No way to close it but that button, as in Flash: `engage` starts
  * the raid and answers whether the warning is done with; on false (the
  * server busy or out of reach) the button comes back to press again.
  */
@@ -145,9 +146,20 @@ export const molochWarning = (
   const head = element("div", "inferno-warning");
   const army = element("ul", "inferno-army");
   army.setAttribute("aria-label", "Moloch's monsters");
+  const about = element("p", "inferno-army__about");
+  about.setAttribute("aria-live", "polite");
+  const cards: HTMLElement[] = [];
+  const show = (card: HTMLElement, monster: string): void => {
+    for (const one of cards) one.classList.toggle("is-shown", one === card);
+    about.textContent = MOLOCH_MONSTER_HINTS[monster] ?? "";
+  };
   for (const group of groups) {
     const card = element("li", "inferno-army__card");
     card.tabIndex = 0;
+    cards.push(card);
+    for (const event of ["pointerenter", "focus", "click"]) {
+      card.addEventListener(event, () => show(card, group.monster));
+    }
     const image = element("img", "inferno-army__portrait");
     image.alt = "";
     image.decoding = "async";
@@ -157,15 +169,13 @@ export const molochWarning = (
       element("span", "inferno-army__name", monsterName(group.monster)),
       element("span", "inferno-army__count", `×${group.count}`),
     );
-    const hint = MOLOCH_MONSTER_HINTS[group.monster];
-    if (hint) {
-      const tip = element("span", "inferno-army__hint", hint);
-      tip.setAttribute("role", "tooltip");
-      card.append(tip);
-    }
     army.append(card);
   }
-  head.append(picture(MOLOCH_PORTRAIT, "inferno-warning__portrait", "Moloch"), army);
+  const first = cards[0];
+  if (first && groups[0]) show(first, groups[0].monster);
+  const side = element("div", "inferno-warning__army");
+  side.append(army, about);
+  head.append(picture(MOLOCH_PORTRAIT, "inferno-warning__portrait", "Moloch"), side);
 
   const actions = element("div", "inferno-popup__actions");
   const start = button(ENGAGE_ATTACK, "btn btn--primary inferno-warning__engage", () => {
@@ -182,7 +192,10 @@ export const molochWarning = (
   });
   actions.append(start);
   popup.setContent(head, actions);
-  return popup.mount(host);
+  popup.mount(host);
+  // The way on is the button: focus starts there, not on the first card.
+  start.focus();
+  return popup;
 };
 
 /**

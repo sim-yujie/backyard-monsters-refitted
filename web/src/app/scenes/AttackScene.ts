@@ -31,6 +31,8 @@ import {
 import { DEFENCE_REFUSAL_TEXT, defenceReadout, type DefenceRefusal } from "@/game/defences/defenceWatch";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { consumeRaidRun, raidTarget, type RaidRun } from "@/game/raid/raidSession";
+import { MOLOCH_RAID_TITLE, MOLOCH_RAIDERS } from "@/game/inferno/emergenceText";
+import { isMolochRaid } from "@/game/inferno/molochRaid";
 import { tribeTitle } from "@/game/raid/raidText";
 import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
@@ -642,7 +644,9 @@ export class AttackScene implements Scene {
         : "Test attack"
       : this.raiding
         ? this.raidRun
-          ? `${tribeTitle(this.raidRun.raid.tribe)} raid`
+          ? isMolochRaid(this.raidRun.raid)
+            ? MOLOCH_RAID_TITLE
+            : `${tribeTitle(this.raidRun.raid.tribe)} raid`
           : "Wild monster raid"
         : isDefenceWatch(this.watchRun)
           ? `Defence replay: ${this.watchRun.defence.attacker.name}`
@@ -982,10 +986,11 @@ export class AttackScene implements Scene {
       return;
     }
     if (this.raiding) {
+      const raiders = isMolochRaid(this.raidRun?.raid) ? MOLOCH_RAIDERS : "Wild monsters";
       status.textContent =
         state.phase === "ended"
           ? "The raid is over."
-          : `Wild monsters on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
+          : `${raiders} on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
             `${state.creepsAlive} attacking`;
       return;
     }

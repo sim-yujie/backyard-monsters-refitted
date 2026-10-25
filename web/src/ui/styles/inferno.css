@@ -90,7 +90,6 @@
 }
 
 .inferno-army__card {
-  position: relative;
   display: grid;
   justify-items: center;
   gap: var(--space-1);
@@ -99,11 +98,16 @@
   border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
   text-align: center;
+  cursor: pointer;
 }
 
 .inferno-army__card:focus-visible {
   outline: 2px solid var(--colour-danger);
   outline-offset: 2px;
+}
+
+.inferno-army__card.is-shown {
+  border-color: var(--colour-danger);
 }
 
 .inferno-army__portrait {
@@ -125,30 +129,17 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Flash showed each monster's line on mouse-over; here on hover or focus. */
-.inferno-army__hint {
-  position: absolute;
-  bottom: calc(100% + var(--space-1));
-  left: 50%;
-  z-index: 1;
-  width: max-content;
-  max-width: min(16rem, 80vw);
-  padding: var(--space-2);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-md);
-  background: var(--colour-surface-raised);
-  box-shadow: var(--shadow-float);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-  text-align: left;
-  transform: translateX(-50%);
-  visibility: hidden;
-  pointer-events: none;
+.inferno-warning__army {
+  display: grid;
+  gap: var(--space-2);
 }
 
-.inferno-army__card:hover .inferno-army__hint,
-.inferno-army__card:focus-within .inferno-army__hint {
-  visibility: visible;
+/* The line of the card last pointed at (Flash showed it on mouse-over). */
+.inferno-army__about {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 @media (max-width: 30rem) {

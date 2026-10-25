@@ -144,9 +144,16 @@ describe("Moloch's warning", () => {
     const cards = [...modal.querySelectorAll(".inferno-army__card")];
     expect(cards).toHaveLength(2);
     expect(cards.map((card) => card.querySelector(".inferno-army__count")?.textContent)).toEqual(["×12", "×4"]);
-    expect(cards[0]!.querySelector(".inferno-army__hint")?.textContent).toBe(MOLOCH_MONSTER_HINTS.IC1);
+    // The first card's line to begin with, another card's once pointed at.
+    const about = modal.querySelector(".inferno-army__about");
+    expect(about?.textContent).toBe(MOLOCH_MONSTER_HINTS.IC1);
+    (cards[1] as HTMLElement).click();
+    expect(about?.textContent).toBe(MOLOCH_MONSTER_HINTS.IC3);
+    expect(cards[1]!.classList.contains("is-shown")).toBe(true);
+    expect(cards[0]!.classList.contains("is-shown")).toBe(false);
     expect(cards[0]!.querySelector("img")?.getAttribute("src")).toContain("IC1");
     expect(labels(modal)).toEqual([ENGAGE_ATTACK]);
+    expect(document.activeElement).toBe(buttonNamed(modal, ENGAGE_ATTACK));
   });
 
   it("cannot be closed but by Engage Attack, which closes it once the raid starts", async () => {

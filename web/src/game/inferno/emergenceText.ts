@@ -67,6 +67,10 @@ export const TRANSFER_NOT_YET = "Moving monsters into the Inferno comes with the
 /** `ai_inferno_popupwarning_title`: Moloch's warning before each raid (`INFERNO_EMERGENCE_ATTACKPOPUP.as`). */
 export const MOLOCH_ALERT_TITLE = "INFERNO MONSTER ALERT";
 
+/** Ours: the raid scene's title and status line for Moloch's raid, where a wild raid names its tribe. */
+export const MOLOCH_RAID_TITLE = "Moloch's raid";
+export const MOLOCH_RAIDERS = "Moloch's monsters";
+
 /** `ai_engage_btn`: the warning's one button, which brings the raid on. */
 export const ENGAGE_ATTACK = "Engage Attack";
 
