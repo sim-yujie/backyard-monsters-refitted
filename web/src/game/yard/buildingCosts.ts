@@ -3,16 +3,19 @@ import {
   type CostRequirement,
   type CostRow,
   type CostStep,
+  INFERNO_COST_ROWS,
+  INFERNO_TRAIT_ROWS,
   MAIN_FORTIFY_ROWS,
   OUTPOST_CORE_TYPE,
   OUTPOST_COST_ROWS,
   OUTPOST_TRAIT_ROWS,
   type OutpostTraitRow,
+  UNDER_HALL_TYPE,
   type YardKind,
 } from "./buildingCostData";
 import type { Yard } from "./yardModel";
 
-export { OUTPOST_CORE_TYPE, type YardKind };
+export { OUTPOST_CORE_TYPE, UNDER_HALL_TYPE, type YardKind };
 
 /**
  * Reading the building cost table.
@@ -60,6 +63,12 @@ export { OUTPOST_CORE_TYPE, type YardKind };
  * stands in for the Town Hall and never leaves level 1. Every lookup that reads
  * a row takes a {@link YardKind}, defaulting to the main yard.
  *
+ * ## The Inferno
+ *
+ * The Inferno yard swaps in `INFERNO_COST_ROWS` the same way
+ * (`client/scripts/GLOBAL.as:718-719`). Its hall is the Under Hall, which shares
+ * the Town Hall's type id (14), so caps are read at the Under Hall's level.
+ *
  * Nothing here touches the DOM or Pixi: it is arithmetic over a table, which is
  * what lets the bottom bar re-summarise a 400-wall selection on every pointer
  * move without a frame budget worth worrying about.
@@ -96,9 +105,12 @@ const TOWN_HALL_TYPE = 14;
 /** The hall types: the Town Hall, and the outpost core that stands in for it. */
 export const HALL_TYPES: readonly number[] = [TOWN_HALL_TYPE, OUTPOST_CORE_TYPE];
 
-/** The hall of a yard of `kind`: the Town Hall, or the core on an outpost. */
+/**
+ * The hall of a yard of `kind`: the Town Hall, the core on an outpost, or the
+ * Under Hall in the Inferno, which shares the Town Hall's id.
+ */
 export const hallTypeOf = (kind: YardKind): number =>
-  kind === "outpost" ? OUTPOST_CORE_TYPE : TOWN_HALL_TYPE;
+  kind === "outpost" ? OUTPOST_CORE_TYPE : kind === "inferno" ? UNDER_HALL_TYPE : TOWN_HALL_TYPE;
 
 const byType = <T extends readonly [number, ...unknown[]]>(rows: readonly T[]): ReadonlyMap<number, T> =>
   new Map(rows.map((row) => [row[0], row]));
@@ -106,15 +118,17 @@ const byType = <T extends readonly [number, ...unknown[]]>(rows: readonly T[]): 
 const ROWS = byType(BUILDING_COST_ROWS);
 const OUTPOST_ROWS = byType(OUTPOST_COST_ROWS);
 const OUTPOST_TRAITS = byType(OUTPOST_TRAIT_ROWS);
+const INFERNO_ROWS = byType(INFERNO_COST_ROWS);
+const INFERNO_TRAITS = byType(INFERNO_TRAIT_ROWS);
 const MAIN_FORTIFY = byType(MAIN_FORTIFY_ROWS);
 
 /**
  * The cost table a yard of `kind` builds from, keyed by type: the main yard's,
- * or the outpost's, which replaces it wholesale
+ * the outpost's or the Inferno's, each of which replaces it wholesale
  * (`client/scripts/GLOBAL.as:716-723`).
  */
 export const propsFor = (kind: YardKind = "main"): ReadonlyMap<number, CostRow> =>
-  kind === "outpost" ? OUTPOST_ROWS : ROWS;
+  kind === "outpost" ? OUTPOST_ROWS : kind === "inferno" ? INFERNO_ROWS : ROWS;
 
 /** The whole row for a type, or null for a type the props table has no costs for. */
 export const rowOf = (type: number, kind: YardKind = "main"): CostRow | null =>
@@ -189,16 +203,25 @@ export const upgradeSteps = (
 export const outpostTraitsOf = (type: number): OutpostTraitRow | null =>
   OUTPOST_TRAITS.get(type) ?? null;
 
+/** An Inferno type's trait row, in the outpost shape. See `INFERNO_TRAIT_ROWS`. */
+export const infernoTraitsOf = (type: number): OutpostTraitRow | null =>
+  INFERNO_TRAITS.get(type) ?? null;
+
 /**
  * The fortify ladder of a type in a yard of `kind`: `fortify[k]` takes
  * fortification `k` to `k + 1` (`client/scripts/BFOUNDATION.as:2099-2102`).
  *
  * On a main yard the Storage Silo, the Town Hall and the cannon, sniper, laser,
  * tesla, flak and railgun towers have one (Town Hall 5 to 8); on an outpost, the
- * core and the same towers except the silo and the Town Hall.
+ * core and the same towers except the silo and the Town Hall; in the Inferno,
+ * nothing.
  */
 export const fortifyStepsOf = (type: number, kind: YardKind): readonly CostStep[] =>
-  kind === "outpost" ? (OUTPOST_TRAITS.get(type)?.[3] ?? []) : (MAIN_FORTIFY.get(type)?.[1] ?? []);
+  kind === "outpost"
+    ? (OUTPOST_TRAITS.get(type)?.[3] ?? [])
+    : kind === "inferno"
+      ? (INFERNO_TRAITS.get(type)?.[3] ?? [])
+      : (MAIN_FORTIFY.get(type)?.[1] ?? []);
 
 /** The four resource totals and the total time of a run of steps. */
 export const sumCosts = (steps: Iterable<CostStep>): CostTotals => {
