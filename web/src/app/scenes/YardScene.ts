@@ -94,6 +94,8 @@ import { Notices } from "@/ui/maproom/Notices";
 import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
 import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
+import { SiegeScreen } from "@/ui/siege/SiegeScreen";
+import type { SiegeSite } from "@/game/siege/siege";
 import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
@@ -334,6 +336,8 @@ export class YardScene implements Scene {
   private panelDock: HTMLElement | null = null;
   /** The own yard's Monsters screen (§4.1), built the first time it opens. */
   private monsters: MonstersScreen | null = null;
+  /** The Chaos Lab and Chaos Factory screen (Inferno WP 6.4), made on first open. */
+  private siege: SiegeScreen | null = null;
   /** The Shop (§8.2), made on first open; own yard only. */
   private shop: ShopScreen | null = null;
   /** The Mail button and the mailbox behind it (#193): the player's own yards only. */
@@ -756,6 +760,7 @@ export class YardScene implements Scene {
       if (!this.planner) this.store?.tick();
       this.panel?.tick(Date.now() / 1000);
       this.monsters?.tick();
+      this.siege?.tick();
       this.shop?.tick();
       this.refreshStatus();
     }
@@ -1300,6 +1305,7 @@ export class YardScene implements Scene {
       this.panel?.close();
       this.panel = null;
       this.monsters?.besidePanel(false);
+      this.siege?.besidePanel(false);
       this.shop?.besidePanel(false);
       if (open) guideBus.emit("panel", { building: null });
       return;
@@ -1320,6 +1326,7 @@ export class YardScene implements Scene {
           this.selected = null;
           this.renderer.setSelected(null);
           this.monsters?.besidePanel(false);
+          this.siege?.besidePanel(false);
           this.shop?.besidePanel(false);
           guideBus.emit("panel", { building: null });
         },
@@ -1338,6 +1345,7 @@ export class YardScene implements Scene {
     }
     this.panel.show(building);
     this.monsters?.besidePanel(true);
+    this.siege?.besidePanel(true);
     this.shop?.besidePanel(true);
     guideBus.emit("panel", { building: { id: building.id, type: building.type } });
 
@@ -1374,11 +1382,34 @@ export class YardScene implements Scene {
     this.bell?.close();
     this.defences?.close();
     this.hud?.achievements?.close();
+    this.siege?.close();
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(shown, focus);
     // The player is looking: the Monsters button's cyan count starts again (#192).
     finishedMonstersJobs.clear();
+  }
+
+  /**
+   * Opens the Siege screen on its Chaos Lab or Chaos Factory tab (Inferno WP
+   * 6.4): a Siege Lab's or Factory's Open button comes here. Own main yard
+   * only, and not over the planner. It docks where the Monsters screen does,
+   * so the two make way for each other.
+   */
+  private openSiege(site: SiegeSite): void {
+    const binding = this.binding;
+    const context = this.context;
+    if (!binding || !context || this.planner || binding.store.kind === "outpost") return;
+    this.buildMenu?.close();
+    this.shop?.close();
+    this.mail?.close();
+    this.bell?.close();
+    this.defences?.close();
+    this.hud?.achievements?.close();
+    this.monsters?.close();
+    this.siege ??= new SiegeScreen({ binding, openMap: () => this.openMap() }).mount(context.overlay.content);
+    this.siege.besidePanel(this.panel !== null);
+    this.siege.open(site);
   }
 
   /**
@@ -1414,6 +1445,7 @@ export class YardScene implements Scene {
     this.select(null);
     this.buildMenu?.close();
     this.monsters?.close();
+    this.siege?.close();
     this.shop?.close();
   }
 
@@ -1429,6 +1461,7 @@ export class YardScene implements Scene {
     this.endPlacement();
     this.buildMenu?.close();
     this.monsters?.close();
+    this.siege?.close();
     this.mail?.close();
     this.bell?.close();
     this.defences?.close();
@@ -1469,6 +1502,7 @@ export class YardScene implements Scene {
     // The menu docks where the building panel and the Monsters screen do.
     this.select(null);
     this.monsters?.close();
+    this.siege?.close();
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
@@ -1880,6 +1914,7 @@ export class YardScene implements Scene {
 
     this.select(null);
     this.monsters?.close();
+    this.siege?.close();
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
@@ -2195,6 +2230,7 @@ export class YardScene implements Scene {
       scene: {
         selectBuilding: (id) => this.focusBuilding(id),
         openMonsters: (tab, focus) => this.openMonsters(tab, focus),
+        openSiege: (site) => this.openSiege(site),
         runBaiter: (run) => {
           setBaiterRun(run);
           this.context?.goTo(SceneName.BAITER);
@@ -2473,6 +2509,8 @@ export class YardScene implements Scene {
     this.buildMenu = null;
     this.monsters?.destroy();
     this.monsters = null;
+    this.siege?.destroy();
+    this.siege = null;
     this.shop?.destroy();
     this.shop = null;
     this.kitPicker?.close();

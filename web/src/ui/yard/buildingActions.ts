@@ -24,6 +24,7 @@ import { BAITER_TYPE } from "@/game/baiter/baiterSession";
 import { GENERAL_STORE_TYPE } from "@/game/yard/shop";
 import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
+import { siteOfType } from "@/game/siege/siege";
 import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE } from "@/game/yard/championModel";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 import { availableAgainText, outpostCountOf, randomMoveWait } from "@/game/maproom/randomMove";
@@ -210,9 +211,19 @@ export interface CancelOffer {
 /**
  * Which door a building opens: the world map, the layout planner, the
  * Monsters screen, a bunker's controls, the Champion Cage's or Chamber's, the
- * Baiter's, or the Shop (the General Store, §8.2).
+ * Baiter's, the Shop (the General Store, §8.2), or the Siege screen.
  */
-export type OpenTarget = "map" | "planner" | "monsters" | "bunker" | "cage" | "chamber" | "baiter" | "shop";
+export type OpenTarget =
+  | "map"
+  | "planner"
+  | "monsters"
+  | "bunker"
+  | "cage"
+  | "chamber"
+  | "baiter"
+  | "shop"
+  /** The Siege screen: a Siege Lab's Chaos Lab tab, a Siege Factory's Chaos Factory tab (Inferno WP 6.4). */
+  | "siege";
 
 /** Everything the panel shows for a building on the player's own yard. */
 export interface PanelModel {
@@ -509,7 +520,9 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
                   ? "baiter"
                   : building.type === GENERAL_STORE_TYPE && building.level > 0
                     ? "shop"
-                    : null;
+                    : siteOfType(building.type) && building.level > 0 && context.yard.kind !== "outpost"
+                      ? "siege"
+                      : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",

@@ -562,6 +562,19 @@ export type BuildingDataMap = Record<string, BuildingData>;
 export type BuildingHealthData = Record<string, number>;
 
 /**
+ * The siege weapons a player holds (`siege`, Inferno WP 6.3): each weapon's
+ * researched level, 0..10, and how many are made and unused, 0 or 1
+ * (`SiegeWeapon.exportVariables`).
+ */
+export type SiegeData = Record<string, { level?: number; quantity?: number } | undefined>;
+
+/**
+ * The Inferno purse (`iresources`): Bone, Coal, Sulfur and Magma held as
+ * `r1..r4`, their caps as `r1max..r4max` (`BASE._iresources`).
+ */
+export type InfernoResourcesData = Partial<Record<`r${1 | 2 | 3 | 4}` | `r${1 | 2 | 3 | 4}max`, number>>;
+
+/**
  * One yard mushroom as the save stores it: `[frame, X, Y]`, the art frame
  * (1 to 5) and the position in yard units, as for a building
  * (`client/scripts/BASE.as:2749-2757` writes it, `MUSHROOMS.as:84-90` reads
@@ -635,6 +648,10 @@ export interface BaseLoadResponse extends ApiEnvelope {
   randommoveat?: number | null;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
+  /** The siege weapons (WP 6.3). Not a yard-state field: siege answers and `completed` keep it current. */
+  siege?: SiegeData | null;
+  /** The Inferno purse the Siege Lab and Factory pay from (WP 6.3). */
+  iresources?: InfernoResourcesData | null;
   mushrooms?: MushroomSave | null;
   /**
    * Owned store items. `ENL.q` is the yard expansion level, 0..6, `BEW.q` the

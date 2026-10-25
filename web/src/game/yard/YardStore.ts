@@ -23,6 +23,7 @@ import type { HatcheryMarks } from "./YardHatchMarks";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { predictHatches, type HatchPrediction } from "@/game/monsters/hatchPredict";
+import { siegeSlices, type SiegeSite } from "@/game/siege/siege";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
 import { IncomePrediction, overdriveEndOf } from "./outpostIncome";
 import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
@@ -232,6 +233,11 @@ export interface YardSceneHooks {
    * monster building's Open button use it. Absent where there is no screen.
    */
   openMonsters?(tab: MonstersTabId, focus?: MonstersFocus): void;
+  /**
+   * Opens the Siege screen on its Chaos Lab or Chaos Factory tab (Inferno WP
+   * 6.4): a Siege Lab's or Factory's Open button uses it. Absent where there is no screen.
+   */
+  openSiege?(site: SiegeSite): void;
   /** Starts a Wild Monster Baiter practice attack (#126). Absent where there is none. */
   runBaiter?(run: BaiterRun): void;
   /** Plays a finished Baiter test back (#22, WP5, `testHistory.ts`). Absent where there is none. */
@@ -775,6 +781,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerlevel === "number") slices.playerlevel = response.playerlevel;
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
+    // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
+    Object.assign(slices, siegeSlices(this.current, response.completed, response.report));
     this.applied = Math.max(this.applied, number);
     this.syncClock(response.currenttime);
     this.setSave({ ...this.current, ...slices });
