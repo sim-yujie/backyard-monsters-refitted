@@ -17,8 +17,9 @@ from common import ASSETS, REPO, TOWERS, old_rgba, on  # noqa: E402
 
 b, combo = sys.argv[1], sys.argv[2]
 TIER = combo in ("T1", "T2")                 # tiers 1-2 of R2-A, painted to match the R2A picture
-R2 = combo.startswith("R2") or TIER          # round 2: keep the Flash design, refresh it; no theme
-style, theme = ("A", None) if TIER else (combo[-1], None) if R2 else (combo[0], combo[1])
+MAT = combo in ("GOLD", "BLACK")             # tower tiers 2-3 as wall-block materials (owner, 25 Oct evening): gold, black diamond
+R2 = combo.startswith("R2") or TIER or MAT   # round 2: keep the Flash design, refresh it; no theme
+style, theme = ("A", None) if TIER or MAT else (combo[-1], None) if R2 else (combo[0], combo[1])
 # the Flash picture each sample is painted from: the Town Hall has its own picture per level (tier 1 = level 2, tier 2 = level 5)
 FK = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5"}.get((b, combo), b)
 OUT = REPO / "art-samples" / "redesign"
@@ -65,6 +66,13 @@ if TIER:
     # tier3.png: the approved top tier (R2-A) on green, so the tiers read as one building in one finish
     Image.open(OUT / b / "R2A" / "sample-new.png").convert("RGB").save(out / "tier3.png")
     inputs.append("tier3.png")
+# tier 1 of the material tiers: an existing R2-A picture (cannon: the clean steel tier painted as T2; others: R2A)
+MAT_TIER1 = {"cannon": "T2"}
+if MAT:
+    Image.open(OUT / b / MAT_TIER1.get(b, "R2A") / "sample-new.png").convert("RGB").save(out / "tier1.png")
+    blk = Image.open(ASSETS / "buildings" / "walls" / {"GOLD": "top.4.v2.png", "BLACK": "top.5.png"}[combo]).convert("RGBA")
+    on(GREY, blk).resize((blk.width * 10, blk.height * 10), Image.LANCZOS).save(out / "block.png")
+    inputs += ["tier1.png", "block.png"]
 (out / "inputs.txt").write_text(" ".join(inputs) + "\n")
 
 WHAT = {
@@ -119,6 +127,48 @@ THEME = {
           "red-and-white hazard stripes, heavy bolts, vents, cables, small antennas, glowing energy cores and indicator lights. "
           "This is the TOP TIER, so it is the most advanced, heaviest-armoured, most high-tech version, with glowing parts."),
 }.get(theme, "")
+MAT_WHAT = {
+    ("cannon", "GOLD"): ("the tan ring, its curved prongs and the three feet become POLISHED GOLD; the steel barrel gets broad gold "
+                         "bands, a gold collar and a gold muzzle ring; the drum keeps its RED-AND-WHITE STRIPES but with thick gold "
+                         "bands round its top and bottom and gold rivets"),
+    ("cannon", "BLACK"): ("the tan ring, its prongs and the three feet become glossy BLACK faceted armour (like black diamond) with "
+                          "polished GOLD edges and trim; the barrel becomes black gunmetal with gold bands and a gold muzzle ring; "
+                          "the drum keeps its STRIPES but they become BLACK AND GOLD, with gold bands round its top and bottom"),
+    ("tesla", "GOLD"): ("the tan box and its tan base become POLISHED GOLD plating with gold rivets; the striped corner poles keep "
+                        "their RED-AND-WHITE STRIPES but get gold caps and gold bands; the copper coil glows; the silver mushroom "
+                        "dome stays silver with a gold rim"),
+    ("tesla", "BLACK"): ("the box and its base become glossy BLACK faceted armour (like black diamond) with polished GOLD edges "
+                         "and trim; the corner poles become BLACK AND GOLD striped with gold caps; the copper coil glows; the "
+                         "mushroom dome becomes dark black chrome with a gold rim and a faint blue electric glow"),
+}
+if MAT:
+    tier, block = ("2", "Gold Blocks") if combo == "GOLD" else ("3", "Black Diamond Blocks")
+    look = ("gold must be rich, warm and shiny like block.png, clearly much more gold than tier1.png" if combo == "GOLD" else
+            "black must be deep and glossy with crisp faceted highlights like block.png, the gold only on edges, trims, rims and bolts")
+    prompt = f"""Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint TIER {tier} of 3 of {TOWERS[b]["what"]}. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The tower's 3 tiers follow the game's wall blocks: tier 1 is the normal tower, tier 2 is the GOLD version (like the Gold Blocks), tier 3 is the BLACK DIAMOND version (black armour with gold edges, like the Black Diamond Blocks). The SAME tower, the SAME silhouette, proportions, parts and pose at every tier: only the MATERIAL changes, so the tiers read apart at a glance even at small game size.
+
+Input 1, frames.png: the OLD Flash tower, blown up, on grey ({fr.width}x{fr.height}): its design, camera angle, ground footprint and size.
+Input 2, ref.png: the old build-menu picture of the same tower (a sharper render of the same design).
+Input 3, style.png: see style below.
+Input 4, tier1.png: TIER 1 of this tower, already painted and approved. Paint EXACTLY the same tower: same shapes, same parts in the same places, same pose and aim (any barrel points the same way), same camera, same size and the same painting finish and lighting. Only the materials change as described below.
+Input 5, block.png: the game's {block} wall block. Use it ONLY as the colour and material reference for the new material (not its shape).
+
+TIER {tier} materials: {MAT_WHAT[(b, combo)]}. The {look}. It must stay clearly the same Flash tower.
+
+{STYLE}
+
+Output: ONE image, {fr.width}x{fr.height}, the tower alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The tower itself must contain no bright pure green.
+"""
+    if os.environ.get("NOTE"):
+        prompt += "\nIMPORTANT CORRECTION (an earlier attempt got this wrong): " + os.environ["NOTE"] + "\n"
+    (out / "prompt.txt").write_text(prompt, encoding="utf-8")
+    print("ready", out.as_posix())
+    sys.exit(0)
 TIER_WHAT = {
     ("cannon", "T1"): ("TIER 1 of 3 (levels 1-3), the plainest, scrappiest version. Exactly the Flash design and nothing more: the "
                        "striped drum, the three tan feet, the tan ring with its prongs and a plain grey steel tube on a simple swivel "

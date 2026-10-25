@@ -1,0 +1,18 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint TIER 3 of 3 of the CANNON TOWER: a red-and-white striped drum on three tan stone feet, a tan ring frame with curved prongs around the top, and a wide grey steel cannon tube in the middle. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The tower's 3 tiers follow the game's wall blocks: tier 1 is the normal tower, tier 2 is the GOLD version (like the Gold Blocks), tier 3 is the BLACK DIAMOND version (black armour with gold edges, like the Black Diamond Blocks). The SAME tower, the SAME silhouette, proportions, parts and pose at every tier: only the MATERIAL changes, so the tiers read apart at a glance even at small game size.
+
+Input 1, frames.png: the OLD Flash tower, blown up, on grey (1024x1024): its design, camera angle, ground footprint and size.
+Input 2, ref.png: the old build-menu picture of the same tower (a sharper render of the same design).
+Input 3, style.png: see style below.
+Input 4, tier1.png: TIER 1 of this tower, already painted and approved. Paint EXACTLY the same tower: same shapes, same parts in the same places, same pose and aim (any barrel points the same way), same camera, same size and the same painting finish and lighting. Only the materials change as described below.
+Input 5, block.png: the game's Black Diamond Blocks wall block. Use it ONLY as the colour and material reference for the new material (not its shape).
+
+TIER 3 materials: the tan ring, its prongs and the three feet become glossy BLACK faceted armour (like black diamond) with polished GOLD edges and trim; the barrel becomes black gunmetal with gold bands and a gold muzzle ring; the drum keeps its STRIPES but they become BLACK AND GOLD, with gold bands round its top and bottom. The black must be deep and glossy with crisp faceted highlights like block.png, the gold only on edges, trims, rims and bolts. It must stay clearly the same Flash tower.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1024, the tower alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The tower itself must contain no bright pure green.
