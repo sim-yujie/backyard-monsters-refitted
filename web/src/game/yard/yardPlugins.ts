@@ -6,6 +6,7 @@ import type { Overlay } from "@/ui/overlay";
 import type { YardDock } from "@/ui/yard/YardDock";
 import type { YardRenderer } from "./YardRenderer";
 import type { YardStore, YardUiBinding } from "./YardStore";
+import type { OwnYardTarget } from "./ownYards";
 
 /**
  * The registry the own yard mounts the new-player tutorial's packages from
@@ -49,6 +50,8 @@ export interface YardSceneControls {
   carrying(): boolean;
   /** Opens the raid scene on the fight handed over with `setRaidRun` (#226). */
   openRaid(): void;
+  /** Opens another of the player's own yards: the cave's way between the main yard and the Inferno. */
+  openYard(target: OwnYardTarget): void;
   /** Opens this own yard afresh, as the server has it now. */
   reload(): void;
 }

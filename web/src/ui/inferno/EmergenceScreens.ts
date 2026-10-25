@@ -9,6 +9,7 @@ import {
   ENGAGE_ATTACK,
   ENTER_CAVERN,
   ENTER_CAVERN_INVITE,
+  EXIT_CAVERN,
   MOLOCH_ALERT_TITLE,
   MOLOCH_MONSTER_HINTS,
   MOLOCH_PORTRAIT,
@@ -96,19 +97,30 @@ export const caveNote = (host: HTMLElement, text: string, upgrade: (() => void) 
   return popup.mount(host);
 };
 
-export interface CaveMenuActions {
-  readonly enter: () => void;
-  readonly transfer: () => void;
-}
+/** The main yard's cave: Enter Cavern and Transfer Monsters; in the Inferno, Exit Cavern alone. */
+export type CaveMenuActions =
+  | { readonly enter: () => void; readonly transfer: () => void }
+  | { readonly exit: () => void };
 
 /**
  * The open cave's menu (`INFERNOPORTAL.Click` at level 5, the building's
- * options in Flash): Enter Cavern and Transfer Monsters.
+ * options in Flash): Enter Cavern and Transfer Monsters on the main yard, and
+ * in the Inferno yard Exit Cavern, back up (`BUILDINGINFO.as:298-300`).
  */
 export const caveMenu = (host: HTMLElement, actions: CaveMenuActions): Popup => {
   const popup = new Popup({ title: CAVE_NAME, className: "inferno-popup inferno-popup--menu" });
   const art = picture(CAVE_ART, "inferno-menu__art", CAVE_NAME);
   const buttons = element("div", "inferno-popup__actions inferno-menu__actions");
+  if ("exit" in actions) {
+    buttons.append(
+      button(EXIT_CAVERN, "btn btn--primary", () => {
+        popup.close();
+        actions.exit();
+      }),
+    );
+    popup.setContent(art, buttons);
+    return popup.mount(host);
+  }
   buttons.append(
     button(TRANSFER_MONSTERS, "btn btn--ghost", () => {
       popup.close();

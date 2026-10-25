@@ -1,6 +1,7 @@
 import { getSession, logout } from "@/api/auth";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
+import { INFERNO_CLOSED_TEXT, isInfernoClosed, loadInfernoYard } from "@/api/inferno";
 import { ApiError, NetworkError } from "@/api/http";
 import { ELSEWHERE } from "@/api/presence";
 import {
@@ -66,6 +67,7 @@ import {
   outpostBaseid,
   sameYard,
   setOwnYardTarget,
+  infernoTarget,
   withCell,
   yardTitle,
   type OwnYardTarget,
@@ -187,6 +189,8 @@ export interface YardLoaders {
   viewBase: typeof viewBase;
   /** A friend's main yard, to help in (#372). */
   loadFriendYard: (userid: number) => Promise<BaseLoadResponse>;
+  /** The player's Inferno yard (WP 1.18). */
+  loadInfernoYard: typeof loadInfernoYard;
 }
 
 /**
@@ -197,13 +201,21 @@ export interface YardLoaders {
  */
 export const loadYardFor = (
   target: ViewTarget | null,
-  api: YardLoaders = { loadOwnYard, loadOwnBase, viewBase, loadFriendYard: (userid) => loadFriendYard(userid) },
+  api: YardLoaders = {
+    loadOwnYard,
+    loadOwnBase,
+    viewBase,
+    loadFriendYard: (userid) => loadFriendYard(userid),
+    loadInfernoYard,
+  },
   own: OwnYardTarget = MAIN_YARD,
 ): Promise<BaseLoadResponse> =>
   !target
     ? own.kind === "outpost"
       ? api.loadOwnBase(own.baseid)
-      : api.loadOwnYard()
+      : own.kind === "inferno"
+        ? api.loadInfernoYard()
+        : api.loadOwnYard()
     : target.kind === "friend"
       ? api.loadFriendYard(target.friend ?? 0)
       : target.mapversion === undefined
@@ -215,6 +227,12 @@ export const loadYardFor = (
  * Starter Kits, as Flash's help popup offered them there
  * (`client/scripts/BASE.as:2321-2324`, `newmap_sk_hlp`; outposts WP9).
  */
+/** What the Map button says in the Inferno until its map is built. */
+export const INFERNO_MAP_NOT_YET = "The Inferno map is not open yet. Tap the cave to go back up to your main yard.";
+
+/** The Layout button's tooltip in the Inferno, which has no planner (`BASE.as:1072`). */
+export const NO_PLANNER_IN_INFERNO = "The Inferno has no layout planner";
+
 export const EMPTY_OUTPOST_HINT =
   "This outpost has only its core. Open Kits for a ready-made layout, or Build to add buildings one at a time; both are paid from your main yard's storage.";
 
@@ -816,6 +834,10 @@ export class YardScene implements Scene {
       const response = primed ?? (await loadYardFor(target, undefined, own));
       // The scene may have been swapped out while the request was in flight.
       if (this.context !== context) return;
+      // The Inferno load names the yard, whose baseid every yard route sends.
+      if (!target && own.kind === "inferno" && response.baseid) {
+        this.own = infernoTarget(String(response.baseid));
+      }
 
       // A visit is somebody else's yard: open grass and no plot edge, as the
       // Flash client drew it outside BUILD mode. The own yard keeps its edge,
@@ -830,7 +852,8 @@ export class YardScene implements Scene {
       if (chat) worldChat.configure(chat);
 
       // The planner's entry rule: the own yard's, never a visit's.
-      this.access = plannerAccessFor(target);
+      // The Inferno has no planner (`BASE.as:1072`).
+      this.access = !target && this.own.kind === "inferno" ? PlannerAccess.LOCKED : plannerAccessFor(target);
       this.refreshPlannerButton();
 
       // Bars over running jobs are the own yard's alone (#139), on the
@@ -887,6 +910,14 @@ export class YardScene implements Scene {
       // A friend's help landing while the player is here refreshes the yard (#374).
       if (store?.kind === "main") this.watchHelps(store);
     } catch (caught) {
+      // No Inferno yard to open (the Descent not won, or the Inferno switched
+      // off, both refusals rather than a lost sign-in): back to the main yard,
+      // saying why.
+      if (!target && own.kind === "inferno" && isInfernoClosed(caught)) {
+        setYardIntent({ kind: "notice", text: (caught as Error).message || INFERNO_CLOSED_TEXT });
+        context.goTo(SceneName.YARD);
+        return;
+      }
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
         return;
@@ -898,6 +929,7 @@ export class YardScene implements Scene {
         context.goTo(SceneName.YARD);
         return;
       }
+
       // Someone is attacking it: the lock says so, and loads it once they are done.
       if (!target && this.attackGuard && isUnderAttackRefusal(caught)) {
         this.attackGuard.refused();
@@ -922,7 +954,9 @@ export class YardScene implements Scene {
           ? "This yard did not load."
           : own.kind === "outpost"
             ? "Your outpost did not load."
-            : "Your yard did not load.";
+            : own.kind === "inferno"
+              ? "Your Inferno yard did not load."
+              : "Your yard did not load.";
       }
     }
   }
@@ -1716,6 +1750,12 @@ export class YardScene implements Scene {
       context.goTo(SceneName.MAP);
       return;
     }
+    // The Inferno's map (Moloch's tribes, WP 2.x) is not built yet; the
+    // surface map is no way out of the Inferno, whose way up is its cave.
+    if (store.kind === "inferno") {
+      this.notices.show("inferno-map", INFERNO_MAP_NOT_YET, { level: "info", timeoutMs: 5_000 });
+      return;
+    }
     // An outpost is a Map Room 2 cell: its map is that world, opened on it.
     if (store.kind === "outpost") {
       if (store.target.cell) setMapFocus({ cell: store.target.cell });
@@ -2001,7 +2041,11 @@ export class YardScene implements Scene {
       disabled: this.access === PlannerAccess.LOCKED,
       open,
       label: open ? "Close layout" : "Layout",
-      title: open ? "Leave the layout planner (P)" : plannerEntryTooltip(this.access),
+      title: open
+        ? "Leave the layout planner (P)"
+        : !this.target && this.own.kind === "inferno"
+          ? NO_PLANNER_IN_INFERNO
+          : plannerEntryTooltip(this.access),
     });
     // Outside the planner the zoom is the rail on the right edge (#171); the
     // planner keeps the slider, Fit and the minimap along its bottom bar.
@@ -2325,6 +2369,7 @@ export class YardScene implements Scene {
       plannerOpen: () => this.planner !== null,
       carrying: () => this.placement !== null,
       openRaid: () => this.context?.goTo(SceneName.RAID),
+      openYard: (target) => this.openOwnYard(target),
       reload: () => this.reloadOwnYard(),
     };
   }
@@ -2368,7 +2413,7 @@ export class YardScene implements Scene {
         const spot = this.placement?.current;
         const yard = this.yard;
         if (!spot || !yard || !this.placement) return null;
-        return onScreen(footprintBox(yard.bounds, this.placement.type, spot.x, spot.y));
+        return onScreen(footprintBox(yard.bounds, this.placement.type, spot.x, spot.y, yard.kind));
       }),
     );
   }
@@ -2378,7 +2423,7 @@ export class YardScene implements Scene {
   /** "your yard", "your outpost" or "Name's yard", for the loading lines. */
   private whose(): string {
     if (this.target) return `${this.target.name}'s yard`;
-    return this.own.kind === "outpost" ? "your outpost" : "your yard";
+    return this.own.kind === "outpost" ? "your outpost" : this.own.kind === "inferno" ? "your Inferno yard" : "your yard";
   }
 
   /**
@@ -2408,7 +2453,7 @@ export class YardScene implements Scene {
   private reloadOwnYard(): void {
     const context = this.context;
     if (!context) return;
-    if (this.own.kind === "outpost") {
+    if (this.own.kind !== "main") {
       const { takenOver: _shown, ...again } = this.own;
       setOwnYardTarget(again);
     }

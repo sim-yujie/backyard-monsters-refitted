@@ -11,10 +11,12 @@ import {
   EARTHQUAKE,
   ENGAGE_ATTACK,
   ENTER_CAVERN,
+  EXIT_CAVERN,
   MOLOCH_ALERT_TITLE,
   TRANSFER_MONSTERS,
 } from "@/game/inferno/emergenceText";
 import { consumeRaidResult, consumeRaidRun, setRaidResult } from "@/game/raid/raidSession";
+import { INFERNO_YARD, MAIN_YARD } from "@/game/yard/ownYards";
 import { YardView } from "@/game/yard/YardRenderer";
 import type { YardMounts } from "@/game/yard/yardPlugins";
 import { infernoYardPlugin, resetInfernoPlugin } from "./inferno";
@@ -108,6 +110,7 @@ const mount = (state: InfernoLoadState | undefined, { kind = "main", townHall = 
     selectedBuilding: () => null,
     focusBuilding: vi.fn(),
     openRaid: vi.fn(),
+    openYard: vi.fn(),
   };
   const notices = { show: vi.fn() };
   const mounts = {
@@ -190,6 +193,24 @@ describe("whether the cave mounts", () => {
   });
 });
 
+describe("the cave in the Inferno yard (WP 1.18)", () => {
+  it("stands at its top level with no load state, and Exit Cavern opens the main yard", async () => {
+    const { canvas, modal, scene, renderer, teardown } = mount(undefined, { kind: "inferno" });
+    expect(hoisted.levels).toEqual([5]);
+    expect(renderer.standAmongBuildings).toHaveBeenCalledTimes(1);
+    tap(canvas);
+    await settle();
+    const buttons = [...modal.querySelectorAll("button")].map((one) => one.textContent);
+    expect(buttons).toContain(EXIT_CAVERN);
+    expect(buttons).not.toContain(ENTER_CAVERN);
+    expect(buttons).not.toContain(TRANSFER_MONSTERS);
+    [...modal.querySelectorAll("button")].find((one) => one.textContent === EXIT_CAVERN)!.click();
+    expect(scene.openYard).toHaveBeenCalledWith(MAIN_YARD);
+    teardown?.();
+    expect(renderer.leaveBuildings).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("a tap on the cave", () => {
   it("gives the note for its level below 5", async () => {
     const { canvas, modal, teardown } = mount(loadState(2));
@@ -207,6 +228,16 @@ describe("a tap on the cave", () => {
     expect(buttons).toEqual(expect.arrayContaining([TRANSFER_MONSTERS, ENTER_CAVERN]));
     [...modal.querySelectorAll("button")].find((one) => one.textContent === ENTER_CAVERN)!.click();
     expect(notices.show).toHaveBeenCalledWith("inferno", expect.any(String), expect.anything());
+    teardown?.();
+  });
+
+  it("goes down to the Inferno yard once the Descent is won (WP 1.18)", async () => {
+    const { canvas, modal, scene, notices, teardown } = mount({ ...loadState(5), hasYard: true });
+    tap(canvas);
+    await settle();
+    [...modal.querySelectorAll("button")].find((one) => one.textContent === ENTER_CAVERN)!.click();
+    expect(scene.openYard).toHaveBeenCalledWith(INFERNO_YARD);
+    expect(notices.show).not.toHaveBeenCalled();
     teardown?.();
   });
 

@@ -52,8 +52,10 @@ export const CAVERN_DEFENCE = "You successfully defended your yard from an attac
 export const ENTER_CAVERN_INVITE =
   "Moloch's on the run. Enter Inferno and fight your way through his network of subterranean bases.  Any monster in your arsenal is fair game, but you'll have to leave the catapults at home. If you survive, you'll control your own Inferno Base. Are you ready to rip the crown off Moloch's head and take your place as ruler of all that's unholy in the underworld?";
 
-/** `btn_entercavern`, `btn_ascendmonsters`, `emerge_upgrade_btnaction`. */
+/** `btn_entercavern`, `btn_ascendmonsters`, `emerge_upgrade_btnaction`, `btn_exitcavern`. */
 export const ENTER_CAVERN = "Enter Cavern";
+/** The cave's one button in the Inferno yard: back up to the main yard (`BUILDINGINFO.as:298-300`). */
+export const EXIT_CAVERN = "Exit Cavern";
 export const TRANSFER_MONSTERS = "Transfer Monsters";
 export const UPGRADE_NOW = "Upgrade Now";
 

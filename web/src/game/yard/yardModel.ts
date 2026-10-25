@@ -300,6 +300,9 @@ const TRIBE_TYPE = "tribe";
 /** The `type` a player's outpost save carries (`server/src/enums/Base.ts`). */
 const OUTPOST_TYPE = "outpost";
 
+/** The `type` the Inferno yard's save carries (`BaseType.INFERNO`). */
+const INFERNO_TYPE = "inferno";
+
 /**
  * Maximum health at a level, from the outpost table on an outpost.
  *
@@ -308,25 +311,32 @@ const OUTPOST_TYPE = "outpost";
  * and the six-level towers' own ladders. A type it has no ladder for reads the
  * main one ({@link maxHealth}).
  */
-const maxHealthOn = (outpost: boolean, type: number, level: number): number | null => {
-  const ladder = outpost ? outpostTraitsOf(type)?.[2] : undefined;
-  if (!ladder || ladder.length === 0) return maxHealth(type, level);
+const maxHealthOn = (kind: YardKind, type: number, level: number): number | null => {
+  const ladder = kind === "outpost" ? outpostTraitsOf(type)?.[2] : undefined;
+  if (!ladder || ladder.length === 0) return maxHealth(type, level, kind);
   return ladder[Math.min(Math.max(level - 1, 0), ladder.length - 1)] ?? null;
 };
 
 /** Builds the draw list from a `/base/load` response. */
 export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = {}): Yard => {
-  const expansionLevel = response.storedata?.["ENL"]?.q ?? 0;
   // A wild monster camp's save has no store purchases, so the store's rule
   // would put it on the smallest plot; its buildings were laid out for the
   // plot `WMBASE.Setup` grows it to. See `wildYardSize`.
   const wild = response.type === TRIBE_TYPE;
   const foreign = wild || options.foreign === true;
   const outpost = response.type === OUTPOST_TYPE;
-  const kind: YardKind = outpost ? "outpost" : "main";
+  const inferno = response.type === INFERNO_TYPE;
+  const kind: YardKind = outpost ? "outpost" : inferno ? "inferno" : "main";
+  // The Inferno yard grows with its own More Yardage, `ENLI`, which Flash
+  // applies on top of `ENL`; the Inferno row's store data holds no `ENL`
+  // (`client/scripts/STORE.as:2346-2366`).
+  const expansionLevel =
+    (response.storedata?.["ENL"]?.q ?? 0) + (inferno ? (response.storedata?.["ENLI"]?.q ?? 0) : 0);
   // Moloch's cave stands outside the plot (`game/inferno/cave.ts`): the
-  // owner's main yard grows the grass around it to hold it.
-  const ownMargin = !outpost && caveState(response) ? caveYardMargin(expansionLevel) : YARD_MARGIN;
+  // owner's main yard grows the grass around it to hold it, and the Inferno
+  // yard, where it stands as the way back up (`INFERNO_EMERGENCE_EVENT.as:66-68`).
+  const ownMargin =
+    inferno || (!outpost && caveState(response)) ? caveYardMargin(expansionLevel) : YARD_MARGIN;
   const bounds = yardBounds(expansionLevel, {
     wild,
     margin: foreign ? FOREIGN_YARD_MARGIN : ownMargin,
@@ -355,26 +365,26 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
     const level = typeof raw.cB === "number" && raw.cB > 0 ? 0 : stored;
 
     const hp = raw.hp ?? health[String(id)] ?? null;
-    const maxHp = maxHealthOn(outpost, raw.t, level);
+    const maxHp = maxHealthOn(kind, raw.t, level);
     const condition = conditionOf(hp, maxHp);
 
     const world = yardToWorld(bounds, x, y);
-    const centre = footprintCentre(bounds, raw.t, x, y);
+    const centre = footprintCentre(bounds, raw.t, x, y, kind);
 
     buildings.push({
       id,
       type: raw.t,
-      name: buildingName(raw.t) ?? `Type ${raw.t}`,
+      name: buildingName(raw.t, kind) ?? `Type ${raw.t}`,
       x,
       y,
       level,
       fortification: typeof raw.fort === "number" ? raw.fort : 0,
-      footprint: footprintOf(raw.t),
+      footprint: footprintOf(raw.t, kind),
       worldX: world.x,
       worldY: world.y,
       centreX: centre.x,
       centreY: centre.y,
-      box: footprintBox(bounds, raw.t, x, y),
+      box: footprintBox(bounds, raw.t, x, y, kind),
       // The footprint's centre, not its origin: see `depthKey` (#270).
       depth: depthKey(centre.x, centre.y, id),
       condition,
@@ -432,5 +442,5 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
 };
 
 /** The art for a building in its current condition, or null when unmapped. */
-export const artFor = (building: YardBuilding) =>
-  resolveArt(building.type, building.level, artStateFor(building.condition));
+export const artFor = (building: YardBuilding, kind: YardKind = "main") =>
+  resolveArt(building.type, building.level, artStateFor(building.condition), kind);

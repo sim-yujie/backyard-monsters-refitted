@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import type { ViewTarget } from "@/game/attack/attackTarget";
-import { MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
+import { INFERNO_YARD, MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
 import { PlannerAccess } from "@/game/yard/planner/access";
 import { dockButtonsFor } from "@/ui/yard/YardDock";
 import {
@@ -22,6 +22,7 @@ const api = () => ({
   loadOwnBase: vi.fn(() => Promise.resolve(response)),
   viewBase: vi.fn(() => Promise.resolve(response)),
   loadFriendYard: vi.fn((_userid: number) => Promise.resolve(response)),
+  loadInfernoYard: vi.fn(() => Promise.resolve(response)),
 });
 
 const visit = (kind: ViewTarget["kind"]): ViewTarget => ({
@@ -48,6 +49,14 @@ describe("loadYardFor", () => {
     expect(loaders.loadOwnBase.mock.calls).toEqual([["2000242209"]]);
     expect(loaders.loadOwnYard).toHaveBeenCalledTimes(1);
     expect(loaders.viewBase).not.toHaveBeenCalled();
+  });
+
+  it("opens the Inferno yard with its own load, which names no yard (WP 1.18)", async () => {
+    const loaders = api();
+    await loadYardFor(null, loaders, INFERNO_YARD);
+    expect(loaders.loadInfernoYard).toHaveBeenCalledTimes(1);
+    expect(loaders.loadOwnYard).not.toHaveBeenCalled();
+    expect(loaders.loadOwnBase).not.toHaveBeenCalled();
   });
 
   it("views a foreign target even when an own outpost was asked for", async () => {

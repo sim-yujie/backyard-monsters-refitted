@@ -1,6 +1,6 @@
-import { get } from "./http";
+import { ApiError, get, post } from "./http";
 import type { RaidView } from "./raid";
-import type { ApiEnvelope } from "./types";
+import type { ApiEnvelope, BaseLoadResponse } from "./types";
 
 /**
  * The new Inferno (beta.5, `docs/design/inferno.md` §3.2): how far the player
@@ -61,3 +61,28 @@ export type InfernoStateResponse = ApiEnvelope & InfernoState;
 
 export const loadInfernoState = (): Promise<InfernoStateResponse> =>
   get<InfernoStateResponse>("/api/:apiVersion/bm/inferno/state");
+
+/**
+ * `POST /bm/inferno/load` (WP 1.14): the caller's own Inferno yard, caught up,
+ * as the yard routes read it: its save fields, `baseid` (which every yard
+ * route then sends), `type: "inferno"`, the shared Shiny and the Inferno
+ * purse with its cap. `409 noInfernoYard` before the Descent is won, and
+ * `403 infernoOff` while the server's switch is off.
+ */
+export const loadInfernoYard = (): Promise<BaseLoadResponse> =>
+  post<BaseLoadResponse>("/api/:apiVersion/bm/inferno/load");
+
+/**
+ * Whether a refusal says there is no Inferno yard to open: `409 noInfernoYard`
+ * before the Descent is won, `403 infernoOff` while the switch is off.
+ */
+export const isInfernoClosed = (caught: unknown): boolean => {
+  if (!(caught instanceof ApiError)) return false;
+  const reason =
+    (caught.details?.data as { reason?: unknown } | undefined)?.reason ??
+    (caught.body as { reason?: unknown } | undefined)?.reason;
+  return reason === "noInfernoYard" || reason === "infernoOff";
+};
+
+/** What the main yard says when the Inferno yard would not open. */
+export const INFERNO_CLOSED_TEXT = "The Inferno yard is not open to you yet.";

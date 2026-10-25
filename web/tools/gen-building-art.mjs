@@ -29,8 +29,10 @@ const repo = resolve(here, "../..");
 
 const PROPS = resolve(repo, "client/scripts/YARD_PROPS.as");
 const OUTPOST_PROPS = resolve(repo, "client/scripts/OUTPOST_YARD_PROPS.as");
+const INFERNO_PROPS = resolve(repo, "client/scripts/INFERNOYARDPROPS.as");
 const STRINGS = resolve(repo, "server/public/gamestage/assets/archived/en.v612.txt");
 const OUT = resolve(here, "../src/game/yard/buildingArtData.ts");
+const INFERNO_OUT = resolve(here, "../src/game/yard/buildingArtInfernoData.ts");
 const MANIFEST = resolve(here, "../test/fixtures/building-art-files.json");
 const ASSETS = resolve(repo, "server/public/assets");
 
@@ -268,6 +270,8 @@ const readAnims = (level, suffix) =>
     readAnim(level, `anim3${suffix}`),
   ].filter((one) => one !== null);
 
+/** The table's entries for one props file's blocks, ascending by id. */
+const entriesOf = (blocks) => {
 const entries = [];
 const seen = new Set();
 
@@ -326,6 +330,10 @@ for (const block of blocks) {
 }
 
 entries.sort((a, b) => a.id - b.id);
+return entries;
+};
+
+const entries = entriesOf(blocks);
 
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
@@ -356,16 +364,24 @@ const level = (entry) => {
   return `${fixed},${animList(entry.anims)},${animList(entry.animsDamaged)}]`;
 };
 
-const body = entries
-  .map(
-    (entry) =>
-      `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
-      `— ${entry.file}:${entry.line}\n` +
-      `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.baseurl)}, [\n` +
-      entry.levels.map((one) => `    ${level(one)},`).join("\n") +
-      `\n  ], [${entry.hp.join(",")}], ${entry.size}],`,
-  )
-  .join("\n");
+/** A row as emitted, without its comment line. */
+const rowText = (entry) =>
+  `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.baseurl)}, [\n` +
+  entry.levels.map((one) => `    ${level(one)},`).join("\n") +
+  `\n  ], [${entry.hp.join(",")}], ${entry.size}],`;
+
+/** Rows as emitted, each under its comment line. */
+const rowsOf = (list) =>
+  list
+    .map(
+      (entry) =>
+        `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
+        `— ${entry.file}:${entry.line}\n` +
+        rowText(entry),
+    )
+    .join("\n");
+
+const body = rowsOf(entries);
 
 const header = `/**
  * Building art, one row per building type. GENERATED — do not edit by hand.
@@ -456,6 +472,75 @@ export const BUILDING_ART_ROWS: readonly ArtRow[] = [
 
 writeFileSync(OUT, `${header}${body}\n];\n`, "utf8");
 
+/* ── The Inferno table ───────────────────────────────────────────────────────
+ * The Inferno yard swaps in `INFERNOYARDPROPS` for the whole props table
+ * (`BASE.isInfernoMainYardOrOutpost`), so its buildings wear their own art
+ * (`buildings/i*`) and health ladders. Only the rows that differ from the main
+ * table's are written: the rest of its 135 are the surface entries copied
+ * across, and the client falls back to the main row for them.
+ */
+const infernoSource = readFileSync(INFERNO_PROPS, "utf8").replace(/\/\/[^\n]*/g, "");
+const mainRows = new Map(entries.map((entry) => [entry.id, rowText(entry)]));
+/**
+ * Inferno files the props table names that are not on the server's disk,
+ * as `"<type> <folder><file>"`: the art helpers' list (WP 1.18). Each is left
+ * out of the row, so that state falls back to the default picture as a state
+ * with no picture does (`BFOUNDATION.as:921-923`). A row whose default top is
+ * missing at any level is dropped whole, and the type draws from the main
+ * table.
+ */
+const infernoMissing = [];
+
+/** The entry with its absent files left out, or null when a default top is absent. */
+const onDisk = (entry) => {
+  const keep = (image) => {
+    if (!image) return image;
+    if (existsSync(resolve(ASSETS, entry.baseurl, image.file))) return image;
+    infernoMissing.push(`${entry.id} ${entry.baseurl}${image.file}`);
+    return null;
+  };
+  const keepAll = (list) => list.filter((one) => keep(one) !== null);
+  const levels = entry.levels.map((one) => ({
+    ...one,
+    top: keep(one.top),
+    damaged: keep(one.damaged),
+    destroyed: keep(one.destroyed),
+    shadow: keep(one.shadow),
+    shadowDamaged: keep(one.shadowDamaged),
+    shadowDestroyed: keep(one.shadowDestroyed),
+    anims: keepAll(one.anims),
+    animsDamaged: keepAll(one.animsDamaged),
+  }));
+  return levels.every((one) => one.top !== null) ? { ...entry, levels } : null;
+};
+
+const infernoEntries = entriesOf(readBlocks(infernoSource, "INFERNOYARDPROPS.as"))
+  .filter((entry) => mainRows.get(entry.id) !== rowText(entry))
+  .map(onDisk)
+  .filter((entry) => entry !== null);
+
+writeFileSync(
+  INFERNO_OUT,
+  `/**
+ * Building art in the Inferno yard: one row per type whose art or health
+ * differs from the main table's. GENERATED — do not edit by hand.
+ *
+ * Source: \`client/scripts/INFERNOYARDPROPS.as\`, which the Flash client swaps
+ * in for the whole props table on an Inferno yard. Regenerate with
+ * \`node tools/gen-building-art.mjs\` from \`web/\`. Rows have the shape of
+ * \`BUILDING_ART_ROWS\` (\`buildingArtData.ts\`); a type with no row here draws
+ * from the main table.
+ */
+
+import type { ArtRow } from "./buildingArtData";
+
+export const INFERNO_ART_ROWS: readonly ArtRow[] = [
+${rowsOf(infernoEntries)}
+];
+`,
+  "utf8",
+);
+
 /* ── Manifest ─────────────────────────────────────────────────────────────────
  * Which of the files the table names are actually on the game server's disk.
  * The unit tests read this rather than the filesystem, so they still mean
@@ -499,7 +584,9 @@ const strips = {};
 const folders = {};
 const missing = [];
 
-for (const entry of entries) {
+const allEntries = [...entries, ...infernoEntries];
+
+for (const entry of allEntries) {
   for (const level of entry.levels) {
     for (const one of [...level.anims, ...level.animsDamaged]) {
       const key = `${entry.baseurl}${one.file}`;
@@ -508,7 +595,7 @@ for (const entry of entries) {
   }
 }
 
-for (const entry of entries) {
+for (const entry of allEntries) {
   // Several types share one folder — every flower is `decorations/flowers/` —
   // so the listing accumulates rather than replacing what a previous type found.
   const present = folders[entry.baseurl]?.files ?? [];
@@ -545,6 +632,7 @@ writeFileSync(
       folders,
       strips,
       missing: missing.sort(),
+      infernoMissing: infernoMissing.sort(),
     },
     null,
     2,
@@ -553,6 +641,8 @@ writeFileSync(
 );
 
 console.log(`${entries.length} building types -> ${OUT}`);
+console.log(`${infernoEntries.length} Inferno rows -> ${INFERNO_OUT}`);
+console.log(`Inferno files not on disk:\n${infernoMissing.join("\n")}`);
 console.log(`${Object.keys(folders).length} folders, ${missing.length} missing files -> ${MANIFEST}`);
 console.log(
   entries

@@ -3,6 +3,7 @@ import { raidApi } from "@/api/raid";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { screenShakeOn } from "@/game/attack/juice";
 import {
+  CAVE_MAX_LEVEL,
   CAVE_TOWN_HALL,
   SHAKE_FPS,
   SHAKE_FRAMES,
@@ -27,8 +28,9 @@ import {
   molochWarning,
   stagePassed,
 } from "@/ui/inferno/EmergenceScreens";
+import { INFERNO_YARD, MAIN_YARD } from "../ownYards";
 import { YardView } from "../YardRenderer";
-import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
+import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 
 /**
  * Own-yard plugin for Moloch's cave (WP 1.10, `docs/design/inferno.md` §2.2):
@@ -61,18 +63,18 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 /** Whether a popup is open anywhere on the page. */
 const popupOpen = (): boolean => document.querySelector(".popup-backdrop") !== null;
 
-export const infernoYardPlugin: YardPlugin = (mounts) => {
-  const { store, overlay, renderer, camera, canvas, notices, scene } = mounts;
-  if (store.kind !== "main") return;
-  const state = caveState(store.save);
-  if (!state) return;
-
-  let alive = true;
-  let level = state.cave.level;
-  let raidRunning = false;
-  const notice = (message: string): void => notices.show("inferno", message, { level: "info", timeoutMs: 6_000 });
-  const townHall = (): number => store.yard.townHall?.level ?? 0;
-
+/**
+ * The cave drawn outside the plot at a level, following the yard as it is
+ * drawn afresh, and a tap on it (a press that is not a drag, in the iso
+ * view, with nothing in hand) handed to `onTap`. Returns the sprite and the
+ * way to take both down.
+ */
+const mountCave = (
+  mounts: YardMounts,
+  level: number,
+  onTap: () => void,
+): { readonly cave: CaveSprite; readonly dispose: () => void } => {
+  const { renderer, camera, canvas, scene } = mounts;
   const cave = new CaveSprite();
   const shown = renderer.shown;
   if (shown) cave.place(shown.bounds);
@@ -84,6 +86,72 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
   };
   cave.setLevel(level);
   renderer.standAmongBuildings(cave.view);
+
+  let pressX = 0;
+  let pressY = 0;
+  let pressed = false;
+  const onDown = (event: PointerEvent): void => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pressed = true;
+    pressX = event.clientX;
+    pressY = event.clientY;
+  };
+  const onUp = (event: PointerEvent): void => {
+    if (!pressed) return;
+    pressed = false;
+    if (Math.hypot(event.clientX - pressX, event.clientY - pressY) > DRAG_SLOP) return;
+    if (scene.plannerOpen() || scene.carrying() || renderer.view !== YardView.ISO) return;
+    const rect = canvas.getBoundingClientRect();
+    const world = camera.screenToWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+    if (cave.contains(world.x, world.y)) onTap();
+  };
+  canvas.addEventListener("pointerdown", onDown);
+  canvas.addEventListener("pointerup", onUp);
+
+  return {
+    cave,
+    dispose: () => {
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointerup", onUp);
+      renderer.leaveBuildings(cave.view);
+      cave.destroy();
+    },
+  };
+};
+
+/**
+ * The cave in the Inferno yard (WP 1.18): Flash puts the portal there at its
+ * top level, at the same spot as on the surface (`INFERNO_EMERGENCE_EVENT.as:66-68`,
+ * `INFERNOPORTAL.AddPortal(5)`), and its one button, Exit Cavern, loads the
+ * main yard again (`BUILDINGINFO.as:298-300`, `INFERNOPORTAL.ToggleYard`).
+ */
+const infernoYardCave = (mounts: YardMounts): (() => void) => {
+  const { overlay, scene } = mounts;
+  const { dispose } = mountCave(mounts, CAVE_MAX_LEVEL, () => {
+    if (popupOpen()) return;
+    caveMenu(overlay.modal, { exit: () => scene.openYard(MAIN_YARD) });
+  });
+  return dispose;
+};
+
+export const infernoYardPlugin: YardPlugin = (mounts) => {
+  const { store, overlay, renderer, notices, scene } = mounts;
+  if (store.kind === "inferno") return infernoYardCave(mounts);
+  if (store.kind !== "main") return;
+  const state = caveState(store.save);
+  if (!state) return;
+
+  let alive = true;
+  let level = state.cave.level;
+  // Whether the Descent is won and the Inferno yard is there to go down to.
+  let hasYard = state.hasYard;
+  let raidRunning = false;
+  const notice = (message: string): void => notices.show("inferno", message, { level: "info", timeoutMs: 6_000 });
+  const townHall = (): number => store.yard.townHall?.level ?? 0;
+
+  // A tap is answered after the state is read afresh (`openTap`, below).
+  let openTap: () => Promise<void> = async () => {};
+  const { cave, dispose: disposeCave } = mountCave(mounts, level, () => void openTap());
 
   /* ── The earthquake's shake ── */
   let shakeFrame = 0;
@@ -113,7 +181,13 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
   /* ── Moloch's popups, each a promise of its closing ── */
   const closing = (open: (done: () => void) => void): Promise<void> =>
     new Promise((resolve) => open(resolve));
-  const enter = (): void => notice(DESCENT_NOT_YET);
+  // Enter Cavern: down to the Inferno yard once the Descent is won
+  // (`INFERNOPORTAL.EnterPortal`, `MAPROOM_DESCENT.DescentPassed`); the
+  // Descent itself is not here yet.
+  const enter = (): void => {
+    if (hasYard) scene.openYard(INFERNO_YARD);
+    else notice(DESCENT_NOT_YET);
+  };
   const view: EmergenceView = {
     setCaveLevel: (next) => {
       level = Math.max(next, 0);
@@ -138,12 +212,13 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
   };
 
   /* ── A tap on the cave ── */
-  const openTap = async (): Promise<void> => {
+  openTap = async (): Promise<void> => {
     // The latest word on the cave: the yard may have been open for hours.
     try {
       const fresh = await loadInfernoState();
       if (!alive) return;
       if (fresh.cave.level > level) view.setCaveLevel(fresh.cave.level);
+      hasYard = fresh.hasYard ?? hasYard;
     } catch {
       // The load's word stands.
     }
@@ -156,27 +231,6 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
       caveNote(overlay.modal, tap.text, tap.upgrade && hall ? () => scene.focusBuilding(hall.id) : null);
     }
   };
-
-  let pressX = 0;
-  let pressY = 0;
-  let pressed = false;
-  const onDown = (event: PointerEvent): void => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    pressed = true;
-    pressX = event.clientX;
-    pressY = event.clientY;
-  };
-  const onUp = (event: PointerEvent): void => {
-    if (!pressed) return;
-    pressed = false;
-    if (Math.hypot(event.clientX - pressX, event.clientY - pressY) > DRAG_SLOP) return;
-    if (scene.plannerOpen() || scene.carrying() || renderer.view !== YardView.ISO) return;
-    const rect = canvas.getBoundingClientRect();
-    const world = camera.screenToWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top });
-    if (cave.contains(world.x, world.y)) void openTap();
-  };
-  canvas.addEventListener("pointerdown", onDown);
-  canvas.addEventListener("pointerup", onUp);
 
   /* ── The emergence this load raised ── */
   // Each run holds the tips and the achievement card back until it ends, or the yard goes.
@@ -240,10 +294,7 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
     for (const release of holds) release();
     holds.clear();
     stopShake();
-    canvas.removeEventListener("pointerdown", onDown);
-    canvas.removeEventListener("pointerup", onUp);
-    renderer.leaveBuildings(cave.view);
-    cave.destroy();
+    disposeCave();
     if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__infernoPreview"];
   };
 };

@@ -1,5 +1,5 @@
 import type { BaseLoadResponse, ResourceCaps, Resources, SpeedupItem, StoreData, UpgradeCost } from "@/api/types";
-import type { CostRequirement } from "@/game/yard/buildingCostData";
+import type { CostRequirement, YardKind } from "@/game/yard/buildingCostData";
 import {
   costOf,
   fortifyStepsOf,
@@ -282,13 +282,21 @@ export const isDamaged = (building: YardBuilding, save: BaseLoadResponse): boole
   building.raw.rE === 1 ||
   (save.buildinghealthdata != null && String(building.id) in save.buildinghealthdata);
 
-/** Walls and traps upgrade through the planner's batch routes. */
-export const isBatchType = (type: number): boolean =>
-  WALL_TYPES.includes(type) || TRAP_TYPES.includes(type);
+/**
+ * Walls and traps upgrade through the planner's batch routes, except a wall
+ * in the Inferno, which has no planner: it upgrades on its own (WP 1.16).
+ */
+export const isBatchType = (type: number, kind: YardKind = "main"): boolean =>
+  (WALL_TYPES.includes(type) && kind !== "inferno") || TRAP_TYPES.includes(type);
 
-/** Whether a type has a ladder the panel could climb at all. */
-const hasLadder = (type: number): boolean =>
-  !NO_LADDER_KINDS.has(kindOf(type)) && costOf(type, 0) !== null;
+/**
+ * Whether a type has a ladder the panel could climb at all: in the Inferno
+ * table on the Inferno yard, and the main one everywhere else.
+ */
+const hasLadder = (type: number, kind: YardKind): boolean => {
+  const table: YardKind = kind === "inferno" ? "inferno" : "main";
+  return !NO_LADDER_KINDS.has(kindOf(type, table)) && costOf(type, 0, table) !== null;
+};
 
 /** The node `ladderFor` reads: it looks at the type, the level, busy and damaged. */
 const nodeOf = (building: YardBuilding, damaged: boolean): PlanNode => {
@@ -320,7 +328,7 @@ export const upgradeOffer = (
   context: PanelContext,
 ): UpgradeOffer | null => {
   const { type } = building;
-  if (isBatchType(type) || !hasLadder(type)) return null;
+  if (isBatchType(type, context.yard.kind) || !hasLadder(type, context.yard.kind)) return null;
   // A building on a job shows the job instead.
   if (building.countdown) return null;
 
@@ -535,7 +543,7 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
         : open === "baiter"
           ? baiterBlocked(building, context)
           : null,
-    batch: isBatchType(building.type),
+    batch: isBatchType(building.type, context.yard.kind),
     recycle:
       building.type === TOWN_HALL_TYPE || context.yard.kind === "outpost"
         ? null
