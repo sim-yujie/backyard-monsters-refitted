@@ -83,8 +83,8 @@ export interface RaidAlertActions {
 /**
  * The WILD MONSTER ALERT (`AIATTACKPOPUP.as`): the tribe, up to three of its
  * monster types, the time left, and "Engage now" or "Prepare defences".
- * Neither Escape nor the scrim closes it (D6): the player must answer. The
- * alarm glow pulses round the screen while it is up.
+ * Neither Escape nor the scrim closes it (D6): the player must answer. Its
+ * border pulses with the alarm glow while it is up.
  */
 export class RaidAlert {
   readonly popup: Popup;

@@ -4,7 +4,7 @@ import { EFFECTS_QUALITY_KEY } from "@/game/attack/juice";
 import { alarmPulse } from "./alarmPulse";
 import { Popup } from "./Popup";
 
-/** The alarm glow round the screen while a raid's warning is up (owner's request, 25 Oct). */
+/** The alarm glow on a raid warning's border while it is up (owner's request, 25 Oct). */
 
 const openPopup = (): { host: HTMLElement; popup: Popup } => {
   const host = document.createElement("div");
@@ -25,12 +25,13 @@ afterEach(() => {
 });
 
 describe("alarmPulse", () => {
-  it("glows round the screen over the popup's scrim, pulsing, and never takes a tap", () => {
+  it("lays the glow over the popup's window on its scrim, hidden from screen readers", () => {
     deviceAsksForLessMotion(false);
     window.localStorage.setItem(EFFECTS_QUALITY_KEY, "full");
     const { popup } = openPopup();
     const glow = alarmPulse(popup);
     expect(glow.parentElement).toBe(popup.backdrop);
+    expect(popup.backdrop.classList.contains("popup-backdrop--alarm")).toBe(true);
     expect(glow.className).toBe("alarm-pulse");
     expect(glow.getAttribute("aria-hidden")).toBe("true");
   });
