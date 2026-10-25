@@ -136,7 +136,7 @@ base value) applies (`WMATTACK.as:723-753`). Source: `INFERNO_PORTAL_ATTACK.as:8
 (quitting does not cancel it), Flash raid strength 0.4-0.9, no reward, only needs 10% yard health
 (the first raise grows the cave even below it and only skips the raid, as Flash did; see 2.2).
 Before the fight Flash shows Moloch's warning, "INFERNO MONSTER ALERT", with his portrait, one card
-per group (monster picture, name, "x count", its `emerge_mondesc_*` line on hover) and one button,
+per group (monster picture, name, "x count", its `emerge_mondesc_*` line under the cards for the one pointed at, focused or tapped; Flash showed it on mouse-over) and one button,
 "Engage Attack" (`INFERNO_EMERGENCE_ATTACKPOPUP.as`, after `INFERNO_EMERGENCE_POPUPS.ShowWarning`);
 it has no close and no "prepare" (WP 1.9).
 Our wild-raid rules (`docs/design/wild-raids.md:21-49`: 10 Shiny for 90%+ defence, quit = cancel,
