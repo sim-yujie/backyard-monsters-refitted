@@ -191,7 +191,8 @@ describe("the Decoy in a fight", () => {
   it("does nothing without a Siege Lab level, nor for another weapon", () => {
     const plain = battleOf({}, [pokey]).battle;
     const unlevelled = battleOf({}, [pokey, decoyAt]).battle;
-    const vacuum = battleOf({ siege: { vacuum: 3 } }, [
+    // A Decoy level and a Vacuum event: the Vacuum has no level, so nothing drops.
+    const vacuum = battleOf({ siege: { decoy: 1 } }, [
       pokey,
       { kind: "siege", t: 0, x: 100, y: 100, weapon: "vacuum" },
     ]).battle;

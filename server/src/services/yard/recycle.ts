@@ -18,6 +18,7 @@ import { cullHousing, housingCapacity } from "./housing.js";
 import { runningUnlock, LOCKER_TYPE } from "./locker.js";
 import { readHoused, readProduction } from "./production.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
+import { siegeHold, siegeRecycleMessage } from "./siege.js";
 
 /**
  * `POST /bm/yard/recycle`: taking a finished building off the yard
@@ -102,6 +103,8 @@ export interface RecycleSave extends StorageCapSave {
   lockerdata?: JsonObject | null;
   champion?: unknown;
   researchdata?: JsonObject | null;
+  /** The siege weapons: a Siege Factory holding one may not be recycled. */
+  siege?: JsonObject | null;
   mapversion?: number;
 }
 
@@ -194,6 +197,10 @@ const refuse = (save: RecycleSave, building: BuildingData, id: number, now: numb
   if (type === ACADEMY_TYPE && (building.upg || academyTraining(save, now))) {
     throw refused("training", "The Academy is training. Cancel the training first.");
   }
+  // The Siege Lab researching, the Siege Factory making or holding a weapon
+  // (`SiegeLab.Recycle`, `SiegeFactory.Recycle`, Inferno WP 6.3).
+  const siege = siegeHold(building, save.siege);
+  if (siege) throw yardRefusedErr("siegeBusy", siegeRecycleMessage(siege.hold), { id, ...siege });
   if (type === HATCHERY_TYPE || type === HCC_TYPE) {
     const production = readProduction(save.monsters, type === HATCHERY_TYPE ? [id] : [], {});
     const busy =

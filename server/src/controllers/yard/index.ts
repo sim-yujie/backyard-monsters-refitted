@@ -44,6 +44,16 @@ import { yardRecycleAction } from "./recycle.js";
 import { yardMoveAction } from "./move.js";
 import { yardRepairAction, yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
+import {
+  yardSiegeFactoryCancelAction,
+  yardSiegeFactoryFinishAction,
+  yardSiegeFactoryInstantAction,
+  yardSiegeFactoryStartAction,
+  yardSiegeLabCancelAction,
+  yardSiegeLabFinishAction,
+  yardSiegeLabInstantAction,
+  yardSiegeLabStartAction,
+} from "./siege.js";
 import { yardStarterKitAction } from "./starterKit.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
@@ -131,4 +141,13 @@ export const yardRoutes: YardRouteEntry[] = [
   ...eventsRoutes,
   // One building moved (the Inferno's WP 1.15; the main yard and outposts too).
   { path: "move", controller: yardRoute(yardMoveAction) },
+  // The Siege Lab and Siege Factory (Inferno WP 6.3, `siege.ts`).
+  { path: "siege/lab/start", controller: yardRoute(yardSiegeLabStartAction) },
+  { path: "siege/lab/cancel", controller: yardRoute(yardSiegeLabCancelAction) },
+  { path: "siege/lab/finish", controller: yardRoute(yardSiegeLabFinishAction) },
+  { path: "siege/lab/instant", controller: yardRoute(yardSiegeLabInstantAction) },
+  { path: "siege/factory/start", controller: yardRoute(yardSiegeFactoryStartAction) },
+  { path: "siege/factory/cancel", controller: yardRoute(yardSiegeFactoryCancelAction) },
+  { path: "siege/factory/finish", controller: yardRoute(yardSiegeFactoryFinishAction) },
+  { path: "siege/factory/instant", controller: yardRoute(yardSiegeFactoryInstantAction) },
 ];
