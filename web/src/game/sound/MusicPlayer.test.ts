@@ -46,8 +46,9 @@ class FakePage implements GestureTarget {
   tick(times = 1): void {
     for (let i = 0; i < times; i += 1) for (const timer of this.timers.filter((t) => t.live)) timer.run();
   }
-  player(): MusicPlayer {
+  player(canPlayOgg = false): MusicPlayer {
     return new MusicPlayer({
+      canPlayOgg,
       createAudio: (url) => {
         const audio = new FakeAudio(url, this);
         this.audios.push(audio);
@@ -181,6 +182,21 @@ describe("MusicPlayer", () => {
     await settle();
     expect(audioFor(page, TUNES.attack.url)!.paused).toBe(false);
     expect(audioFor(page, TUNES.yard.url)!.paused).toBe(true);
+  });
+
+  it("streams the Ogg copy where the browser plays Ogg, the MP3 where it does not (iPhone)", async () => {
+    for (const canPlayOgg of [true, false]) {
+      const page = new FakePage();
+      const player = page.player(canPlayOgg);
+      player.setEnabled(true);
+      player.want("yard");
+      player.want("attack");
+      await settle();
+      expect(page.audios.map((audio) => audio.url)).toEqual([
+        canPlayOgg ? TUNES.yard.ogg : TUNES.yard.url,
+        TUNES.attack.url,
+      ]);
+    }
   });
 
   it("silence stops listening for a press", async () => {
