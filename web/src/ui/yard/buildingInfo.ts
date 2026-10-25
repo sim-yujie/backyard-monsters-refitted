@@ -9,8 +9,9 @@ import {
   towerStats,
 } from "@/game/combat/rules";
 import { outpostRange } from "@/game/maproom/rules/range";
-import { BUILDING_COST_ROWS } from "@/game/yard/buildingCostData";
+import { BUILDING_COST_ROWS, INFERNO_BUILDABLE_TYPES, INFERNO_COST_ROWS } from "@/game/yard/buildingCostData";
 import { maxLevel, quantityOf, rowOf, type YardKind } from "@/game/yard/buildingCosts";
+import { typeName } from "@/game/yard/planner/summary";
 import type { YardBuilding } from "@/game/yard/yardModel";
 import { CHAMPION_CAGE_TYPE } from "@/game/yard/championModel";
 import { resourceKeyOf, type ResourceKey } from "@/ui/resourceIcon";
@@ -303,16 +304,21 @@ const COUNTED_KINDS: ReadonlySet<string> = new Set([
 /**
  * What raising the Town Hall from `level` lets the yard build: every type
  * whose cap rises, as "Cannon Tower +1", or "Flinger (new)" when the type was
- * not allowed at all before.
+ * not allowed at all before. On the Inferno yard (`yard`), what raising the
+ * Under Hall lets it build, from the Inferno table, by the Inferno's names
+ * (WP 1.19); only what its build menu offers, as its other rows are blocked.
  */
-export const townHallUnlocks = (level: number): string[] => {
+export const townHallUnlocks = (level: number, yard: YardKind = "main"): string[] => {
   const items: string[] = [];
-  for (const [type, name, kind] of BUILDING_COST_ROWS) {
+  const inferno = yard === "inferno";
+  for (const [type, name, kind] of inferno ? INFERNO_COST_ROWS : BUILDING_COST_ROWS) {
     if (!COUNTED_KINDS.has(kind) || type === TOWN_HALL_TYPE) continue;
-    const before = quantityOf(type, level);
-    const after = quantityOf(type, level + 1);
+    if (inferno && !INFERNO_BUILDABLE_TYPES.includes(type)) continue;
+    const before = quantityOf(type, level, yard);
+    const after = quantityOf(type, level + 1, yard);
     if (after <= before) continue;
-    items.push(before === 0 ? `${name} (new)` : `${name} +${after - before}`);
+    const shown = inferno ? typeName(type, yard) : name;
+    items.push(before === 0 ? `${shown} (new)` : `${shown} +${after - before}`);
   }
   return items;
 };
@@ -366,9 +372,9 @@ export const buildingInfo = (
 
   let list: InfoList | null = null;
   if (building.type === TOWN_HALL_TYPE && nextLevelOf(building, kind) !== null) {
-    const items = townHallUnlocks(shownLevel(building));
+    const items = townHallUnlocks(shownLevel(building), kind);
     list = {
-      label: `Town Hall ${shownLevel(building) + 1} unlocks`,
+      label: `${kind === "inferno" ? "Under Hall" : "Town Hall"} ${shownLevel(building) + 1} unlocks`,
       items: items.length > 0 ? items : ["No new buildings"],
     };
   }

@@ -11,7 +11,7 @@ import { repairActions } from "@/api/yardRepair";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { RecordedTest } from "@/game/baiter/testHistory";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
-import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES } from "@/game/yard/buildingCosts";
+import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES, type YardKind } from "@/game/yard/buildingCosts";
 import { HOUSING_TYPE, housingBuildings } from "@/game/monsters/housing";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { SITE_NAME, siteOfType } from "@/game/siege/siege";
@@ -22,6 +22,7 @@ import { progressFraction } from "@/game/yard/jobs";
 import { repairOffer, type RepairOffer } from "@/game/yard/repair";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
+import { hallWord } from "./BuildMenu";
 import {
   actionKey,
   YardChangeReason,
@@ -883,7 +884,7 @@ export class BuildingPanel {
     block.append(this.costFactsLine(offer.cost, resources));
 
     if (offer.gate) {
-      const line = gateLine(offer.gate);
+      const line = gateLine(offer.gate, this.yard?.store.kind);
       line.id = this.gateId(building);
       block.append(line);
     }
@@ -910,7 +911,7 @@ export class BuildingPanel {
       );
       tutTarget(instant.element, TutTarget.INSTANT);
       instant.setPrice(offer.instantPrice);
-      instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate) : null);
+      instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate, this.yard?.store.kind) : null);
       row.append(instant.element);
       this.pendingButtons.push({ key: actionKey("instant", building.id), button: instant });
     }
@@ -951,7 +952,7 @@ export class BuildingPanel {
 
     const gateId = `${this.gateId(building)}-fortify`;
     if (offer.gate) {
-      const line = gateLine(offer.gate);
+      const line = gateLine(offer.gate, this.yard?.store.kind);
       line.id = gateId;
       block.append(line);
     } else if (!NON_TOWER_FORTIFY_TYPES.has(building.type)) {
@@ -1743,14 +1744,15 @@ const gateText = (text: string): HTMLElement => {
 };
 
 /** "2 × Monster Locker at level 3", or "a Monster Locker at level 3" for one. */
-const requirementText = ([type, count, level]: readonly [number, number, number]): string =>
-  `${count === 1 ? "a" : `${count} ×`} ${typeName(type)} at level ${level}`;
+const requirementText = ([type, count, level]: readonly [number, number, number], kind: YardKind): string =>
+  `${count === 1 ? "a" : `${count} ×`} ${typeName(type, kind)} at level ${level}`;
 
 /**
  * Why a gate stops the upgrade, as plain words: what a disabled button's
  * tooltip and accessible name carry, where no icon can go.
  */
-export const gateSentence = (gate: UpgradeGate): string => {
+export const gateSentence = (gate: UpgradeGate, kind: YardKind = "main"): string => {
+  const hall = hallWord(kind);
   switch (gate.reason) {
     case "busy":
       return "Busy with another job.";
@@ -1759,11 +1761,11 @@ export const gateSentence = (gate: UpgradeGate): string => {
     case "damaged":
       return "Repair first.";
     case "townHall":
-      return gate.have <= 0 ? "Build a Town Hall first." : `Needs Town Hall ${gate.need}.`;
+      return gate.have <= 0 ? `Build a ${hall} first.` : `Needs ${hall} ${gate.need}.`;
     case "maxLevel":
       return "Max level.";
     case "requirements":
-      return `Needs ${gate.requirements.map(requirementText).join(", ")}.`;
+      return `Needs ${gate.requirements.map((entry) => requirementText(entry, kind)).join(", ")}.`;
     case "shortfall":
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
@@ -1774,14 +1776,14 @@ export const gateSentence = (gate: UpgradeGate): string => {
 };
 
 /** The one line under the cost that says why Upgrade is disabled, amounts drawn with their icons. */
-export const gateLine = (gate: UpgradeGate): HTMLElement => {
+export const gateLine = (gate: UpgradeGate, kind: YardKind = "main"): HTMLElement => {
   const line = gateText("");
   if (gate.reason === "shortfall" && !gate.overCap) {
     line.append("Need ", costAmounts(gate.shortfall) ?? "", " more.");
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
   } else {
-    line.textContent = gateSentence(gate);
+    line.textContent = gateSentence(gate, kind);
   }
   return line;
 };
