@@ -44,8 +44,16 @@ import {
   decoyTouchesBuilding,
 } from "./decoy.js";
 import type { DecoyPlan } from "./decoy.js";
-import { DECOY, VACUUM } from "./siege.js";
+import { DECOY, JARS, VACUUM } from "./siege.js";
 import type { SiegeId } from "./siege.js";
+import {
+  JAR_CHECK_TICKS,
+  JAR_FRAMES,
+  JAR_TOWER_TYPES,
+  jarFrame,
+  jarShot,
+  jarsPlan,
+} from "./jars.js";
 import {
   VACUUM_FRAME_TICKS,
   VACUUM_TARGET_TYPES,
@@ -324,8 +332,8 @@ import {
  *    rather than walked to the edge (`ATTACK.as:237-240`). It deals no more
  *    damage either way.
  * 8. **Not modelled at all**, each because it is out of Map Room 2's scope:
- *    the Stronghold's four emitters, the Jars (the Decoy and the Vacuum are,
- *    Inferno WP 6.5 and 6.6, {@link BattleOptions.siege}), and the per-creep
+ *    the Stronghold's four emitters (the siege weapons are, Inferno WP 6.5 to
+ *    6.7, {@link BattleOptions.siege}), and the per-creep
  *    `_hitLimit`, even for a raid (note 17, owner decision 2026-10-06). A yard
  *    holding one of those buildings fires it as an ordinary single-target
  *    tower. The Monster Lab's moves (Brain's cloak, Bolt's blink, Fang's
@@ -509,7 +517,7 @@ import {
  * The union is `types.ts`'s {@link FlingEvent}, which is the §3.10 contract the
  * web client's attack flow (issue #32) builds against. The engine consumes it
  * directly rather than restating it, so the two cannot drift apart. A `siege`
- * event drops the Decoy or the Vacuum at the attacker's level
+ * event drops the Decoy, the Vacuum or the Jars at the attacker's level
  * ({@link BattleOptions.siege}); any other weapon, or one with no level, is
  * accepted and ignored (fidelity
  * note 8). A raid battle's waves are
@@ -589,7 +597,7 @@ export interface BattleOptions {
    */
   readonly buffs?: BattleBuffs;
   /**
-   * The attacker's Siege Lab levels per weapon (Inferno WP 6.5, 6.6): what a
+   * The attacker's Siege Lab levels per weapon (Inferno WP 6.5 to 6.7): what a
    * `siege` event fights at. An absent weapon, or none at all, is level 0,
    * and its event is ignored, so a log from before the Decoy replays as it did.
    */
@@ -1308,6 +1316,20 @@ interface Tower {
   gun: SpurtzGun | null;
   /** `_targetVacuum`: it fires at the Vacuum's hose (Inferno WP 6.6). */
   onHose: boolean;
+}
+
+/**
+ * One tower's Candy Jar (Inferno WP 6.7, `BTOWER._jarHealth`,
+ * `_jarAnimation`). `health` is null while it falls and once it is broken;
+ * `breaking` is its strip playing on from `frame` (`KillJar`).
+ */
+interface Jar {
+  readonly building: EngineBuilding;
+  readonly landsAt: number;
+  readonly durability: number;
+  health: number | null;
+  frame: number;
+  breaking: boolean;
 }
 
 /** A Spurtz Cannon's barrel, aim and brood (issue #313, `SpurtzCannon.as`). */
@@ -2667,15 +2689,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   } | null = null;
 
   /**
-   * A `siege` event: the Decoy or the Vacuum at the attacker's level drops
-   * now. Flash keeps one siege weapon live at a time
+   * A `siege` event: the Decoy, the Vacuum or the Jars at the attacker's
+   * level drops now. Flash keeps one siege weapon live at a time
    * (`SiegeWeapons.activeWeaponID`), so one dropped while another is still
    * out is ignored, as is any other weapon.
    */
   const siege = (event: Extract<AttackEvent, { kind: "siege" }>): void => {
-    if (decoy || vacuum) return;
+    if (decoy || vacuum || jarDrop) return;
     if (event.weapon === VACUUM.id) {
       startVacuum();
+      return;
+    }
+    if (event.weapon === JARS.id) {
+      startJars(screenOf(event.x, event.y));
       return;
     }
     if (event.weapon !== DECOY.id) return;
@@ -2966,6 +2992,124 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const amount = vacuumGain(hose.plan.rate, hose.sucked, elapsed);
     hose.sucked = elapsed;
     suck(hose, amount);
+  };
+
+  /* ── The Jars (Inferno WP 6.7, `jars.ts`) ──────────────────────────────── */
+
+  /** Each jarred tower's jar by building id, until its strip ends (`RemoveJar`). */
+  const jars = new Map<number, Jar>();
+
+  /** The Jars while they are the active weapon (`Jars._targets`), or null. */
+  let jarDrop: { readonly droppedAt: number; readonly jars: readonly Jar[] } | null = null;
+
+  /**
+   * `Jars.onActivation` (`Jars.as:190-200`, `:219-230`): a jar on every tower
+   * the drop's range touches (`BASE.GetBuildingOverlap`, the Decoy's test),
+   * fallen or busy ones too, each untargetable from now (`ApplyJar`).
+   */
+  const startJars = (drop: Cart): void => {
+    const plan = jarsPlan(options.siege?.jars ?? 0, tick);
+    if (!plan) return;
+    const held: Jar[] = [];
+    for (const building of yard.buildings) {
+      if (!JAR_TOWER_TYPES.includes(building.type) || isBunker(building.type)) continue;
+      const at = screenOf(building.x, building.y);
+      const dx = at.x - drop.x;
+      const dy = at.y + building.middle - drop.y;
+      if (!decoyTouchesBuilding(plan.range, dx, dy, propsSizeOf(building.type))) continue;
+      const jar: Jar = {
+        building,
+        landsAt: plan.landsAt,
+        durability: plan.durability,
+        health: null,
+        frame: 0,
+        breaking: false,
+      };
+      building.jarred = true;
+      jars.set(building.id, jar);
+      held.push(jar);
+    }
+    jarDrop = { droppedAt: tick, jars: held };
+  };
+
+  /** A tower's jar while it is landed and whole (`isJard`), or null. */
+  const jarOn = (building: EngineBuilding): Jar | null => {
+    const jar = jars.size > 0 ? jars.get(building.id) : undefined;
+    return jar && jar.health !== null ? jar : null;
+  };
+
+  /** `KillJar` (`BTOWER.as:316-322`): it breaks, and its strip plays on. */
+  const killJar = (jar: Jar): void => {
+    jar.health = null;
+    if (jars.get(jar.building.id) === jar) jar.breaking = true;
+  };
+
+  /**
+   * `UpdateJar` (`BTOWER.as:284-298`), where every `BTOWER.Fire` begins: a
+   * landed jar's strip cell from its health. Returns the jar, or null.
+   */
+  const crackJar = (building: EngineBuilding): Jar | null => {
+    const jar = jarOn(building);
+    if (jar && jar.health !== null) jar.frame = jarFrame(jar.health, jar.durability);
+    return jar;
+  };
+
+  /**
+   * A shot the tower fires while its jar is on hits the jar instead, which
+   * breaks at 0 (each tower's `Fire`, `isJard`). False for a tower whose shots
+   * never touch its jar; it fires as ever. A Spurtz Cannon's jar breaks at its
+   * next {@link tickJar}, not here (`SpurtzCannon.shootJar`).
+   */
+  const hitJar = (tower: Tower, jar: Jar, damage: number): boolean => {
+    const building = tower.building;
+    if (jar.health === null) return false;
+    const dealt = jarShot(building.type, damage, building.hp, building.maxHp);
+    if (dealt === null) return false;
+    countShot(tower.report);
+    jar.health -= dealt;
+    if (jar.health <= 0 && !isSpurtzCannon(building.type)) killJar(jar);
+    return true;
+  };
+
+  /**
+   * `TickJar` (`BTOWER.as:300-308`), at the end of every tower's
+   * `TickAttack`, standing or not: a jar at 0 breaks, a breaking one moves on
+   * a cell, and at the strip's end it is gone and the tower can be attacked
+   * again (`RemoveJar`).
+   */
+  const tickJar = (jar: Jar): void => {
+    if (jar.health !== null && jar.health <= 0) killJar(jar);
+    if (jar.breaking) jar.frame += 1;
+    if (jar.frame < JAR_FRAMES) return;
+    jar.building.jarred = false;
+    jars.delete(jar.building.id);
+  };
+
+  /**
+   * The jars before the towers fire: the last tick's `TickJar` for each but a
+   * Spurtz Cannon's (its own loop runs it, {@link tickSpurtzCannon}), then
+   * the landing a second after the drop (`JarLanded`, which comes before the
+   * check on the same tick), then `Jars.update` every second after the drop:
+   * once the jars' health adds up to nothing, every one breaks and the Jars
+   * stop being the active weapon. With no jar at all the sum is `NaN`, so
+   * they never stop.
+   */
+  const tickJars = (): void => {
+    if (jars.size === 0 && !jarDrop) return;
+    for (const jar of jars.values()) {
+      if (!isSpurtzCannon(jar.building.type)) tickJar(jar);
+    }
+    const drop = jarDrop;
+    if (!drop) return;
+    let left = 0;
+    for (const jar of drop.jars) {
+      if (tick === jar.landsAt && !jar.breaking) jar.health = jar.durability;
+      left += jar.health ?? 0;
+    }
+    const elapsed = tick - drop.droppedAt;
+    if (elapsed % JAR_CHECK_TICKS !== 0 || drop.jars.length === 0 || left > 0) return;
+    for (const jar of drop.jars) killJar(jar);
+    jarDrop = null;
   };
 
   /* ── Creeps ────────────────────────────────────────────────────────────── */
@@ -4757,10 +4901,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // `int(damage * scale)`, but the Railgun's beam is not truncated (`BUILDING118.as:195`).
     const shot = towerShotDamage(damage, building.hp, building.maxHp);
     for (const creep of live) {
+      // A landed jar takes the shot instead (Inferno WP 6.7, `BTOWER.Fire`, `isJard`).
+      const jar = crackJar(building);
       if (building.type === TESLA_TYPE) {
         armCoil(tower, creep.id);
         continue;
       }
+      if (jar && hitJar(tower, jar, damage)) continue;
       countShot(tower.report);
       if (building.type === LASER_TYPE) {
         fireLaser(tower, creep, shot, splash);
@@ -4843,8 +4990,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         gun.index = 0;
         tower.shotsFired = 0;
         aimSpurtz(tower, gun);
+        crackJar(building);
       }
     }
+    // `BTOWER.TickAttack` ends with `TickJar`, before the Spurtz's own shot (Inferno WP 6.7).
+    const own = jars.size > 0 ? jars.get(building.id) : undefined;
+    if (own) tickJar(own);
 
     // `updateTarget` (`:120-131`): only the first in the list has to be alive.
     const first = gun.targets[0];
@@ -4865,7 +5016,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tower.shotsFired < (stats.shots ?? 0) &&
       (Math.abs(gun.aim - gun.barrel) <= SPURTZ_START_ANGLE || tower.shotsFired > 0)
     ) {
-      shootSpurtz(tower, gun, gun.target, damage, stats.speed ?? 0);
+      // A landed jar takes it, and the burst does not count it (`shootJar`, `:173-201`).
+      const jar = jarOn(building);
+      if (jar) hitJar(tower, jar, damage);
+      else shootSpurtz(tower, gun, gun.target, damage, stats.speed ?? 0);
     }
   };
 
@@ -5066,6 +5220,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     tower.shotsFired += 1;
+    const jar = crackJar(building);
+    if (jar && hitJar(tower, jar, damage)) return;
     countShot(tower.report);
     const shot = towerShotDamage(damage, building.hp, building.maxHp);
     fireShell(tower, creep, shot, splash, scan.flags);
@@ -5112,7 +5268,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // It zaps the creep it named wherever that is now; a dead one takes nothing.
     // Named none, it zaps the Vacuum's hose while it can reach it (`:137-152`).
     const zapsHose = tower.onHose && tower.zapTarget < 0 && hoseInReach(tower);
-    if ((tower.targets.length > 0 || tower.onHose) && target && target.hp > 0) {
+    // With anything to zap, a landed jar takes the zap first (`:130-136`, Inferno WP 6.7).
+    const jar = tower.targets.length > 0 || tower.onHose ? jarOn(building) : null;
+    if (jar) {
+      hitJar(tower, jar, damage);
+    } else if ((tower.targets.length > 0 || tower.onHose) && target && target.hp > 0) {
       countShot(tower.report);
       visual.push({
         kind: "shot",
@@ -5595,6 +5755,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     index.rebuild(creeps);
     tickLaserBeams();
     for (const trap of traps) tickTrap(trap);
+    tickJars();
     for (const tower of towers) tickTower(tower);
     tickSpurtzShells();
     for (const bunker of bunkers) tickBunker(bunker);
