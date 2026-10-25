@@ -48,6 +48,9 @@ ORDER = [
     "glow", "flare", "muzzle", "spark", "burst", "zap", "smoke", "wisp", "ring", "orb", "beam", "scorch",
     "flak", "shrapnel", "rifleflash", "ricochet", "debris", "shell", "fireball", "aaflash",
 ]
+# The darkest a cell's grey may be: the Sniper's rifle flash and ricochet are laid over the
+# ground tinted orange, and their dark greys turned the orange brown. Alpha and shape are kept.
+LIFT = {"rifleflash": 0.45, "ricochet": 0.5}
 # Cells that keep their painting's size in the cell rather than filling it.
 FILL = 0.92
 STRIP_W, STRIP_H, STRIP_ACROSS = 384, 96, 2
@@ -185,6 +188,9 @@ def cell(name: str) -> tuple[Image.Image, str]:
         rgba = as_light(soften_edge(rgba))
     if how:
         rgba = rework(rgba, how)
+    if name in LIFT:
+        floor = LIFT[name]
+        rgba[..., :3] = floor + (1 - floor) * rgba[..., :3]
     inner = int(CELL * FILL)
     img = Image.fromarray((shrink(rgba, inner) * 255).round().astype(np.uint8), "RGBA")
     framed = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
