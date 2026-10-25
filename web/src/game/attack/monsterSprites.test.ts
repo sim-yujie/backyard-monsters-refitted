@@ -228,6 +228,7 @@ describe("spriteFor", () => {
     const repainted: Array<[string, number, string]> = [
       ["G1", 4, "ape_4"],
       ["G2", 4, "dragon_4"],
+      ["G3", 4, "fly_4"],
     ];
     for (const [id, level, name] of repainted) {
       const one = spriteFor(id, level);

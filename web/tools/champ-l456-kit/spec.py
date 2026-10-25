@@ -18,7 +18,7 @@ _ATK = {"ape": "ATTACK frames 1-8 (a heavy pounding attack: the Gorgo crouches, 
         "dragon": "ATTACK frames 1-8 (the dragon rears its two heads back and lunges forward, jaws open, then settles)"}
 _FLY = ("FLYING wing-beat frames 1-6. In these frames the creature is IN THE AIR, NOT standing: its legs hang loosely below the body with the feet "
         "pointing down and the body tilted a little forward; the bat wings beat through a full cycle, following the wing position of each old frame "
-        "exactly (the pale blurred shape in the old frame is the wing in motion: raised high, level, or swept DOWN below the belly). Cell 8 stays empty magenta")
+        "exactly (the pale blurred shape in the old frame is the wing in motion: raised high, level, or swept DOWN below the belly). Paint the wings CRISP and solid in every frame at that position: NO motion blur, smear or ghost wings. Cell 8 stays empty magenta")
 _DIMS = {"ape_4": (148, 127), "ape_5": (160, 137), "ape_6": (140, 120), "dragon_4": (131, 93), "dragon_5": (156, 117), "dragon_6": (171, 125),
          "fly_4": (120, 92), "fly_5": (133, 105), "fly_6": (124, 105)}
 _CH = {"ape": ("Gorgo", "gorgo"), "dragon": ("Drull", "drull"), "fly": ("Fomor", "fomor")}
