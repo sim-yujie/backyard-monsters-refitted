@@ -1,0 +1,11 @@
+# scratch and inputs that make.py / make_sample.py rebuild
+sample-cut.png
+sample-prev-*.png
+codex.log
+_z.png
+_ov-*.png
+frames.png
+ref.png
+ref-old.png
+style.png
+portrait.png

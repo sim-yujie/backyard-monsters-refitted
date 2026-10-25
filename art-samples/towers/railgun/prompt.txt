@@ -1,0 +1,13 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+This is the RAILGUN: a red-and-white striped pyramid base with a red turret carrying two gold coil capacitors and a long twin-rail gun barrel with a glowing blue core, a defence building in the isometric strategy game Backyard Monsters, seen from the fixed isometric game camera (from the front-right, looking down at about 30 degrees).
+
+Input 1, frames.png: the OLD low-resolution game sprite of this tower, blown up, on grey (1024x1024). Use it for: the camera angle, the exact SHAPE and silhouette, the parts and their places, the direction the gun/turret points, the colours of each part (red-and-white hazard stripes, metals, tan stone, wires, lights), its position and size in the image. Ignore its blurry pixels.
+
+Input 2, ref.png: the old menu picture of the same tower (a sharper render, same design). Use it to read small details (bolts, panels, wires, lights). Its turret may point another way: follow frames.png for the turret direction.
+
+Input 3, style.png: APPROVED hand-painted repaints of three champion monsters from the same game, on green. STYLE ONLY: copy their painting finish (crisp hand-painted digital illustration, soft shading, glossy highlights, rich saturated colours, clean readable shapes). Do not copy their shapes or colours.
+
+Output: ONE image, 1024x1024, the SAME tower painted new: same camera angle, same silhouette, same parts in the same places, same turret direction, same position and size as in frames.png (fill about the same area). Make it much MORE detailed and crisp than the old sprite: clean metal edges and rivets, panel lines, worn paint on the hazard stripes, glints on metal, glowing lights, readable at small game size. It must still be clearly the same Backyard Monsters tower, just repainted at high quality.
+Style: hand-painted digital illustration like style.png, soft shading, glossy highlights, NO thick black cartoon outline, no cel shading, no pixel art, no photo-realism.
+Background everywhere: flat pure green #00FF00. No shadow on the ground, no ground, no grass, no tile, no grid lines, no text, no labels. The tower itself must contain no bright pure green.
