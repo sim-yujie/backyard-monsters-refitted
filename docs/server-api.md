@@ -386,7 +386,9 @@ authorises is **420 seconds**, the same `ATTACK_TIMEOUT` `isAttackActive` uses, 
 that is free to be attacked by somebody else can no longer be written to by the previous
 attacker. The extra 60 seconds of key lifetime exist only so a late save is logged as `expired`
 rather than as a base with no attack at all. A Map Room 1 tribe has no stored row, so its
-session is keyed by attacker and tribe instead — see "Map Room 1 tribe attacks" below.
+session is keyed by attacker and tribe instead — see "Map Room 1 tribe attacks" below. A Descent
+yard (201-213) has none either: its session is keyed by the attacker alone,
+`attack-session:descent:<userid>` — see "Moloch's Descent" under "The new Inferno (beta.5)".
 
 #### Map Room 1 tribe attacks
 
@@ -770,6 +772,7 @@ server-only table `inferno_progress` (see §3).
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
 | GET | `/api/:apiVersion/bm/inferno/state` | apiVersion, verifyUserAuth, verifyAccountStatus | none | `{ error: 0, now, cave: { shown, level, maxLevel: 5 }, emergence: { lastAt, nextAt, done }, descent: { level, destroyed: 0\|1[13], passed }, hasYard, korathNotice }` (unix seconds; `nextAt` 0 = any time, null once all five raids are done) | How far the player is on the way into the Inferno (`controllers/inferno/infernoState.ts`). `cave.shown`: Town Hall 5 or a cave already above level 0, once the tutorial is over (Flash: stage above 200). `descent.level` is Flash's counter, 1 + yards beaten, 14 once passed. `korathNotice`: Korath unlocked and the player not yet told. Read-only. |
+| POST | `/api/:apiVersion/bm/inferno/attack/start` | apiVersion, verifyUserAuth, verifyAccountStatus, logRequest | `{ kind: "descent", baseid: "201"-"213" }` | `{ error: 0, kind: "descent", yardkind: "inferno", attackid, level, base, defenderforces, attackerbrains, attackeracademy, attackerranks?, attpowerups, flingercapacity, descentloot }` | Starts a Descent attack (`controllers/inferno/descentAttack.ts`, WP 1.11): see "Moloch's Descent" below. Refused with `409` `infernoAttackRefusedErr` (`reason`: `kindNotReady` for any other `kind`, `caveClosed` below cave level 5, `descentPassed`, `notDescentBase`, `notNextBase` with `next` = the yard that can be attacked) before anything is written. |
 
 **Moloch's emergence** (`services/inferno/emergence.ts`, `emergenceOnLoad.ts`; plan §2.2). The
 server decides, on the owner's `build` load of their main yard (`baseLoad.ts`, right after the
@@ -801,6 +804,46 @@ stage counts whether the yard holds or falls, or the player quits (a fight left 
 cancelled as any raid's is, and a Moloch warning still open on the next load is called off). On
 the **first** raise only, a yard at 10% health or less gets the level with no raid (`raid: null`;
 Flash saved the level, then skipped the attack, `UpgradePortal`, `:172-176`).
+
+**Moloch's Descent** (`services/inferno/descent.ts`, `descentSession.ts`, `descentLanding.ts`;
+plan §2.4, WP 1.11-1.12). Thirteen Moloch yards, base ids 201-213, each player fighting their own
+copy (`game-data/tribes/inferno/molochTribes.ts`), one after the other: only the next unbeaten yard
+can be attacked, once the cave is at level 5.
+- **Start** (`POST /bm/inferno/attack/start`, above). The main yard's armies are caught up as for a
+  Map Room 1 attack (the Descent is fought from the main yard only), and a session is written to
+  Redis under `attack-session:descent:<userid>`: `{ baseid, flingerCapacity, session }`, the
+  session being the usual one (`attackerid`, `attackid`, `startedat`, `entryHoused`,
+  `defenderForces`, champion brains, academy levels and ranks, Declare War), with the same
+  420-second window. The yard is served as an **Inferno yard** (`yardkind: "inferno"`: the
+  Inferno building table, its Housing Bunkers filled from the yard's `monsters`), with the damage
+  it kept from earlier attacks. `flingercapacity` is what one fling may carry: the surface
+  Flinger's payload at the attacker's own Flinger level, 0 with none, +25% under Declare War.
+  `level` is Flash's counter; `descentloot` the Inferno purse, the report's running total.
+- **Landing** is the ordinary `/base/save` naming the Descent yard (`baseid` 201-213, no
+  `basesaveid`). It must be bound to that session as an attack save is (`attackNotBoundErr`:
+  `no-session` also for a session on another yard, `wrong-attacker`, `expired`, `stale-attack`,
+  `finalising` for a second copy while the first lands). A save without `over` writes nothing.
+  The save with `over` lands once, under the lock `attack-final:descent:<userid>`, and ends the
+  session. The server replays the fling log, cut to what a Descent attack can do (no catapult
+  bombs, no siege, each fling within `flingercapacity`), over the yard as an Inferno yard with
+  the session's defence. The save's own `damage`, `destroyed`, health and `attackloot` are only
+  compared (`attack-replay-mismatch`). A replay past its deadline answers `replayTimeout` and lands
+  nothing; the session is kept for a resent save. An attack with no final save lands nothing.
+- **What lands.** The flung monsters leave the main yard's housing. The replay's loot, capped by
+  what the yard holds less what it gave before, goes into the main save's `iresources` (the
+  Inferno purse) with **no** storage cap (Flash). Damage of 90% or more beats the yard; less keeps
+  its health and what it gave in `inferno_progress.descent_yards`, so the next attack goes on from
+  there (Flash stored a tribe yard between attacks, plan §2.4). The best damage per yard only
+  rises. The 13th win passes the Descent (counter 14, `descent_passed_at`) and makes the
+  player's Inferno yard (`services/inferno/infernoYard.ts`: a new `inferno` save with Flash's
+  start layout — Under Hall, Bone and Coal harvesters at level 1, two level 3 silos — named by
+  the main save's `baseid_inferno` and `inferno_progress.inferno_baseid`; never a second one).
+  Achievements 18 "Into the Depths" (counter 1, any first attack) and 19 "Rock Bottom" (counter
+  14) hear the counter after every Descent attack, won or lost; both are offered only while the
+  switch is on (`availableAchievements`).
+- **Answer**: the yard as the fight left it (the attack-load shape) plus
+  `descent: { won, damage, level, loot, total, captured, infernobaseid }` (`damage` the server's,
+  0-100; `loot` this attack's credit; `total` the purse after it; `infernobaseid` once captured).
 
 ### Map Room 2
 
@@ -1834,7 +1877,9 @@ attacktime)` and `(defender_userid, attacktime)` for the two `/attacklogs` filte
 ### `InfernoProgress` (table `inferno_progress`, PK `userid`)
 
 `emergence_level` (0-5), `emergence_last_at`, `descent_destroyed` / `descent_best` (jsonb arrays,
-13 yards: 1 once beaten / best damage 0-100), `descent_passed_at`, `inferno_baseid`,
+13 yards: 1 once beaten / best damage 0-100), `descent_yards` (jsonb `{ "201": { health, looted } }`:
+what an unbeaten Descent yard kept from its last attack; migration
+`20261026_AddDescentYardsToInfernoProgress`), `descent_passed_at`, `inferno_baseid`,
 `korath_unlocked_at`, `korath_notice_at`, `popups_seen` (jsonb `{ key: unix seconds }`),
 `created_at`, `updated_at`. One row per player, made the first time something is written; no row
 reads as nothing done. Server-only (`services/inferno/infernoProgress.ts`); the foreign key to
