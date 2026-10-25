@@ -2,7 +2,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
-import { siegeActions, type SiegeActions, type SiegeApi } from "@/api/yardSiege";
+import { siegeActions, type SiegeActions, type SiegeApi, type SiegeStateReport } from "@/api/yardSiege";
+import type { SiegeId } from "@/game/combat/rules/siege";
 import { resourcesPrice } from "@/game/siege/siege";
 import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -47,16 +48,20 @@ const never = <R>() => new Promise<R>(() => undefined);
 
 const ok = <R>(report: R): Promise<YardActionResult<R>> => Promise.resolve({ ok: true, report, completed: [] });
 
-const stateReport = { siege: {}, purse: { r1: 0, r2: 0, r3: 0, r4: 0, caps: { r1: 0, r2: 0, r3: 0, r4: 0 } } };
+const none = { level: 0, quantity: 0 };
+const stateReport: Pick<SiegeStateReport, "siege" | "purse"> = {
+  siege: { decoy: none, vacuum: none, jars: none },
+  purse: { r1: 0, r2: 0, r3: 0, r4: 0, caps: { r1: 0, r2: 0, r3: 0, r4: 0 } },
+};
 
 const fakeActions = () =>
   ({
-    start: vi.fn((weapon) =>
+    start: vi.fn((weapon: SiegeId) =>
       ok({ ...stateReport, site: "lab" as const, weapon, building: 20, endsAt: T0 + 14_400, cost: { r1: 37_599, r2: 43_866, r3: 43_866, r4: 0 }, credits: 0 }),
     ),
     cancel: vi.fn(() => ok({ ...stateReport, site: "lab" as const, weapon: "decoy" as const, refund: { r1: 1, r2: 0, r3: 0, r4: 0 } })),
     finish: vi.fn(() => ok({ ...stateReport, site: "lab" as const, weapon: "decoy" as const, credits: 20 })),
-    instant: vi.fn((weapon) => ok({ ...stateReport, site: "lab" as const, weapon, credits: 143 })),
+    instant: vi.fn((weapon: SiegeId) => ok({ ...stateReport, site: "lab" as const, weapon, credits: 143 })),
   }) satisfies SiegeActions;
 
 const setup = (load: Partial<BaseLoadResponse> = {}, openMap = vi.fn()) => {
