@@ -710,6 +710,39 @@ export const TESLA_WIND_END = 55;
 export const TESLA_ZAP_FRAMES = 4;
 
 /**
+ * The Quake Tower (`client/scripts/INFERNOQUAKETOWER.as`, Inferno plan WP 1.3),
+ * which shakes the ground round itself.
+ *
+ * `BTOWER.TickAttack` re-arms and picks a target as any tower does, on the
+ * ground only (its flyer mode, 0). Its `Fire` (`:128-135`) only starts the
+ * wind-up: from the next tick its `TickAttack` (`:102-126`) runs nothing else,
+ * the fire tick standing still, and counts its own `_frameNumber`, a tick at a
+ * time, from the battle's start and only while it winds up. The strip cell
+ * (`_animTick`) steps on every {@link QUAKE_FRAME_TICKS}th of those ticks, and
+ * on every tick once it is within 4 of the strip's end
+ * ({@link QUAKE_ANIM_FRAMES}, `INFERNOYARDPROPS.as:6183`); the tick after it
+ * reaches the end, the quake goes off (`DelayedFire`, `:137-159`). That is 179
+ * ticks after the first `Fire` and 174 after every later one.
+ *
+ * The quake (`:161-193`) hurts every creep within the range of the tower's scan
+ * point, on the ground or unseen (`getOldStyleTargets(-1)`, `:29`):
+ * `damage / range * (range - dist)`, a whole number, no less than a third of
+ * `damage`, no more than the creep's health. The tower's own health does not
+ * weaken it, unlike every other tower's shot ({@link towerShotDamage}).
+ */
+export const QUAKE_TOWER_TYPE = 129;
+export const QUAKE_ANIM_FRAMES = 33;
+export const QUAKE_FRAME_TICKS = 6;
+
+/** The quake's hurt to a creep `dist` from the scan point (`:174-179`). */
+export const quakeDamage = (power: number, range: number, dist: number, hp: number): number => {
+  let dealt = Math.trunc((power / range) * (range - Math.trunc(dist)));
+  if (dealt < power / 3) dealt = Math.trunc(power / 3);
+  if (dealt > hp) dealt = Math.trunc(hp);
+  return dealt;
+};
+
+/**
  * The Laser Tower (issue #267), whose shot is a beam that sweeps and pulses.
  *
  * `BUILDING23.Fire` (`client/scripts/BUILDING23.as:44-67`) hands

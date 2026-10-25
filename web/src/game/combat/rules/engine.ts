@@ -96,6 +96,10 @@ import {
   RAILGUN_SEGMENT,
   RAILGUN_SEGMENTS,
   RAILGUN_TYPE,
+  QUAKE_ANIM_FRAMES,
+  QUAKE_FRAME_TICKS,
+  QUAKE_TOWER_TYPE,
+  quakeDamage,
   AERIAL_DEFENSE_TYPE,
   AERIAL_SHOT_TICKS,
   aerialSalvo,
@@ -165,6 +169,7 @@ import {
   oldStyleTargets,
   towerTargets,
   shellBlastTargets,
+  QUAKE_TARGETS,
   TRAP_TARGETS,
 } from "./targeting.js";
 import {
@@ -1264,6 +1269,7 @@ interface Tower {
   /**
    * Its `_fireStage`. The Aerial Defense's: 1 while it reloads, 2 while it
    * fires a salvo. The Tesla's: 0 idle, 1 charging, 2 zapping, 3 winding down.
+   * The Quake Tower's: 0 idle, 1 winding up.
    */
   stage: number;
   /** Shots fired in the salvo under way, or zaps in the charge. */
@@ -1274,6 +1280,12 @@ interface Tower {
   charge: number;
   /** A Spurtz Cannon's gun (issue #313); null for every other tower. */
   gun: SpurtzGun | null;
+  /**
+   * A Quake Tower's own `_frameNumber`, counted only while it winds up
+   * ({@link QUAKE_TOWER_TYPE}); its wind-up is `stage` 1 and its strip cell
+   * `charge`.
+   */
+  quakeFrame: number;
 }
 
 /** A Spurtz Cannon's barrel, aim and brood (issue #313, `SpurtzCannon.as`). */
@@ -1644,6 +1656,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       gun: isSpurtzCannon(building.type)
         ? { barrel: 0, aim: 0, targets: [], index: 0, target: null, hatched: [] }
         : null,
+      quakeFrame: 0,
     });
   }
 
@@ -4365,6 +4378,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tickSalvo(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
       return;
     }
+    // A Quake Tower winding up does nothing else, its fire tick standing still.
+    if (building.type === QUAKE_TOWER_TYPE && tower.stage === 1) {
+      windQuake(tower, damage);
+      return;
+    }
     rearm(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
     if (building.type === TESLA_TYPE) tickZaps(tower, damage, stats.rate ?? 0);
   };
@@ -4393,6 +4411,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         armCoil(tower, creep);
         continue;
       }
+      if (building.type === QUAKE_TOWER_TYPE) {
+        // `INFERNOQUAKETOWER.Fire` (`:128-135`): the wind-up starts.
+        tower.stage = 1;
+        tower.charge = 0;
+        continue;
+      }
       countShot(tower.report);
       if (building.type === LASER_TYPE) {
         fireLaser(tower, creep, shot, splash);
@@ -4403,6 +4427,41 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         continue;
       }
       fireShell(tower, creep, shot, splash, shellBlastTargets(building.type));
+    }
+  };
+
+  /**
+   * One tick of a Quake Tower's wind-up (`INFERNOQUAKETOWER.TickAttack`,
+   * `:107-122`), and its quake on the tick after the strip's last cell.
+   */
+  const windQuake = (tower: Tower, damage: number): void => {
+    tower.quakeFrame += 1;
+    const step =
+      tower.quakeFrame % QUAKE_FRAME_TICKS === 0 || tower.charge >= QUAKE_ANIM_FRAMES - 4;
+    if (!step) return;
+    if (tower.charge < QUAKE_ANIM_FRAMES) {
+      tower.charge += 1;
+      return;
+    }
+    tower.stage = 0;
+    quakeTower(tower, Math.trunc(damage));
+  };
+
+  /**
+   * `INFERNOQUAKETOWER.Quake` (`:161-189`): every creep on the ground or unseen
+   * within the range of the scan point takes {@link quakeDamage}. The tower's
+   * health does not weaken it. Flash also hurts a Vacuum hose in range, which
+   * the engine does not field.
+   */
+  const quakeTower = (tower: Tower, power: number): void => {
+    countShot(tower.report);
+    const scan = towerScanPoint(tower.building);
+    for (const hit of index.inRange(tower.range, scan.x, scan.y, QUAKE_TARGETS)) {
+      const creep = hit.creep;
+      const before = creep.hp;
+      const dealt = quakeDamage(power, tower.range, hit.dist, creep.hp);
+      tower.report.damageDealt += damageCreep(creep, dealt);
+      if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
     }
   };
 
