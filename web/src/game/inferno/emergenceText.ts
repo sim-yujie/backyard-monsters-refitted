@@ -48,9 +48,9 @@ export const EARTHQUAKE = "EARTHQUAKE !";
 /** `ai_caverndefense`: after each of Moloch's raids, won or lost. */
 export const CAVERN_DEFENCE = "You successfully defended your yard from an attack by Moloch.";
 
-/** `entercavern_popup`: once all five raids are over. */
+/** `entercavern_popup`: once all five raids are over (Flash's "fight your way though" mended). */
 export const ENTER_CAVERN_INVITE =
-  "Moloch's on the run. Enter Inferno and fight your way though his network of subterranean bases.  Any monster in your arsenal is fair game, but you'll have to leave the catapults at home. If you survive, you'll control your own Inferno Base. Are you ready to rip the crown off Moloch's head and take your place as ruler of all that's unholy in the underworld?";
+  "Moloch's on the run. Enter Inferno and fight your way through his network of subterranean bases.  Any monster in your arsenal is fair game, but you'll have to leave the catapults at home. If you survive, you'll control your own Inferno Base. Are you ready to rip the crown off Moloch's head and take your place as ruler of all that's unholy in the underworld?";
 
 /** `btn_entercavern`, `btn_ascendmonsters`, `emerge_upgrade_btnaction`. */
 export const ENTER_CAVERN = "Enter Cavern";

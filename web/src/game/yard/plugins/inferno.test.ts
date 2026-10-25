@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { InfernoLoadState } from "@/api/inferno";
 import { SCREEN_SHAKE_KEY } from "@/game/attack/juice";
+import { emergencePlaying } from "@/game/inferno/emergenceHold";
 import { CAVERN_NOTES, EARTHQUAKE, ENTER_CAVERN, TRANSFER_MONSTERS } from "@/game/inferno/emergenceText";
 import { YardView } from "@/game/yard/YardRenderer";
 import type { YardMounts } from "@/game/yard/yardPlugins";
@@ -10,7 +11,8 @@ import { infernoYardPlugin, resetInfernoPlugin } from "./inferno";
 /**
  * Moloch's cave on the own main yard (Inferno WP 1.10): shown only when the
  * load says so, a tap opens its note or menu, and a raise plays the
- * earthquake, whose shake keeps to the screen-shake setting.
+ * earthquake, whose shake keeps to the screen-shake setting, with Bob's tips
+ * and the achievement card held back while it plays.
  */
 
 const hoisted = vi.hoisted(() => ({
@@ -231,5 +233,26 @@ describe("the earthquake on a raise", () => {
     await vi.advanceTimersByTimeAsync(3_000);
     expect(again.scene.centreOn).not.toHaveBeenCalled();
     again.teardown?.();
+  });
+
+  it("holds Bob's tips and the achievement card back from load until the raise has played", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    expect(emergencePlaying()).toBe(false);
+    const { teardown } = mount(loadState(2, 2));
+    expect(emergencePlaying()).toBe(true);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(emergencePlaying()).toBe(true);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(emergencePlaying()).toBe(false);
+    teardown?.();
+  });
+
+  it("lets go when the yard closes mid-raise, and holds nothing without a raise", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    mount(loadState(2, 2)).teardown?.();
+    expect(emergencePlaying()).toBe(false);
+    const quiet = mount(loadState(2));
+    expect(emergencePlaying()).toBe(false);
+    quiet.teardown?.();
   });
 });

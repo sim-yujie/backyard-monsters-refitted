@@ -97,6 +97,8 @@ describe("after a raid", () => {
     const onClose = vi.fn();
     emergenceComplete(modal, enter, onClose);
     expect(modal.querySelector(".inferno-complete__line")?.textContent).toBe(ENTER_CAVERN_INVITE);
+    // Flash's "fight your way though" mended.
+    expect(ENTER_CAVERN_INVITE).toContain("fight your way through his network");
     buttonNamed(modal, ENTER_CAVERN).click();
     expect(enter).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);

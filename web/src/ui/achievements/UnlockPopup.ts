@@ -40,6 +40,8 @@ export class UnlockPopup {
   private card: HTMLElement | null = null;
   private timer: number | undefined;
   private held = false;
+  /** Out of sight for a moment (`stepAside`). */
+  private aside = false;
   /** A card's time is paused while the pointer or focus is on it. */
   private paused = { pointer: false, focus: false };
   private destroyed = false;
@@ -65,9 +67,26 @@ export class UnlockPopup {
     if (!on) this.pump();
   }
 
+  /**
+   * Out of sight while `on` (Moloch's emergence on the yard, Inferno WP 1.10):
+   * a card already up hides with its time stopped and comes back with a
+   * fresh {@link CARD_MS}; waiting cards wait.
+   */
+  stepAside(on: boolean): void {
+    if (this.aside === on) return;
+    this.aside = on;
+    this.element.style.display = on ? "none" : "";
+    if (on) {
+      if (this.card) this.clearTimer();
+      return;
+    }
+    if (this.card && !this.paused.pointer && !this.paused.focus) this.startTimer();
+    this.pump();
+  }
+
   /** Shows the next waiting card when nothing is up and nothing holds it back. */
   pump(): void {
-    if (this.destroyed || this.held || this.card || this.timer !== undefined) return;
+    if (this.destroyed || this.held || this.aside || this.card || this.timer !== undefined) return;
     const card = this.options.inbox.next();
     if (!card) return;
     this.show(card);
@@ -165,7 +184,7 @@ export class UnlockPopup {
     if (!this.card) return;
     this.paused = { ...this.paused, [by]: on };
     if (this.paused.pointer || this.paused.focus) this.clearTimer();
-    else this.startTimer();
+    else if (!this.aside) this.startTimer();
   }
 
   private startTimer(): void {

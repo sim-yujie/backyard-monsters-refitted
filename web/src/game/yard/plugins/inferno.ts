@@ -12,6 +12,7 @@ import {
 } from "@/game/inferno/cave";
 import { CaveSprite } from "@/game/inferno/CaveSprite";
 import { playEmergence, playStagePassed, type EmergenceView } from "@/game/inferno/emergenceFlow";
+import { holdForEmergence } from "@/game/inferno/emergenceHold";
 import { DESCENT_NOT_YET, TRANSFER_NOT_YET } from "@/game/inferno/emergenceText";
 import {
   caveMenu,
@@ -29,7 +30,9 @@ import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
  * on the main yard, while the load says the cave shows (`infernostate`, sent
  * only with the new Inferno switched on), it draws the cave outside the plot,
  * answers a tap on it, and, when this load raised it (`raised`), plays the
- * emergence: the camera turns to it, Moloch speaks, the earthquake.
+ * emergence: the camera turns to it, Moloch speaks, the earthquake. Bob's
+ * tips and the achievement card keep out of its way while it plays
+ * (`emergenceHold.ts`).
  */
 
 /** Pointer travel, CSS px, above which a press is a drag (`YardInput`'s `DRAG_SLOP`). */
@@ -168,11 +171,22 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
   canvas.addEventListener("pointerup", onUp);
 
   /* ── The emergence this load raised ── */
+  // Each run holds the tips and the achievement card back until it ends, or the yard goes.
+  const holds = new Set<() => void>();
+  const staged = (run: () => Promise<void>): Promise<void> => {
+    const release = holdForEmergence();
+    holds.add(release);
+    return run().finally(() => {
+      holds.delete(release);
+      release();
+    });
+  };
   const raiseKey = state.raised !== null ? `${state.raised}:${state.emergence.lastAt ?? 0}` : null;
   if (state.raised !== null && raiseKey !== playedRaise) {
     playedRaise = raiseKey;
     raidRunning = true;
-    void playEmergence(state.raised, { view, wait, alive: () => alive }).finally(() => {
+    const raised = state.raised;
+    void staged(() => playEmergence(raised, { view, wait, alive: () => alive })).finally(() => {
       // WP 1.9's raid keeps this set while it runs.
       raidRunning = false;
     });
@@ -181,8 +195,8 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
   if (import.meta.env.DEV) {
     // Moloch's popups without his raids, for the screenshots (WP 1.9 plays them for real).
     (globalThis as Record<string, unknown>)["__infernoPreview"] = {
-      raise: (to: number) => playEmergence(to, { view, wait, alive: () => alive }),
-      stagePassed: (at: number) => playStagePassed(at, view),
+      raise: (to: number) => staged(() => playEmergence(to, { view, wait, alive: () => alive })),
+      stagePassed: (at: number) => staged(() => playStagePassed(at, view)),
       tap: () => openTap(),
       focus: () => view.focusCave(),
     };
@@ -190,6 +204,8 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
 
   return () => {
     alive = false;
+    for (const release of holds) release();
+    holds.clear();
     stopShake();
     canvas.removeEventListener("pointerdown", onDown);
     canvas.removeEventListener("pointerup", onUp);
