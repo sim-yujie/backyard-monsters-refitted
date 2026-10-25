@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 
 import type { InfernoProgress } from "../../database/models/infernoprogress.model.js";
@@ -44,18 +44,32 @@ mock.module("../../server.js", () => ({
 }));
 
 // The army catch-up reads and writes the attacker's rows; here it only says what the main yard houses.
+// Bun keeps module mocks across files, so the rest of the module stays real
+// and the stand-in hands back to the real catch-up once this file is done.
+const REAL_ARMIES = "../../services/yard/armies.ts?real";
+const realArmies = (await import(REAL_ARMIES)) as typeof import("../../services/yard/armies.js");
+let standIn = true;
+afterAll(() => {
+  standIn = false;
+});
 const armies: unknown[] = [];
 mock.module("../../services/yard/armies.js", () => ({
-  catchUpArmiesForAttack: async (input: { defender: unknown; mapversion: unknown; cell: unknown }) => {
+  ...realArmies,
+  catchUpArmiesForAttack: async (input: Parameters<typeof realArmies.catchUpArmiesForAttack>[0]) => {
+    if (!standIn) return realArmies.catchUpArmiesForAttack(input);
     calls.push("armies");
     armies.push(input);
     return { defender: input.defender, entryHoused: { [MAIN_BASEID]: { C1: 40 } } };
   },
 }));
 
+const REAL_POWERUPS = "../../services/alliance/powerups.ts?real";
+const realPowerups = (await import(REAL_POWERUPS)) as typeof import("../../services/alliance/powerups.js");
 mock.module("../../services/alliance/powerups.js", () => ({
-  isDeclareWarRunning: async () => declareWar,
-  runningPowerups: async () => [],
+  ...realPowerups,
+  isDeclareWarRunning: async (allianceId: number | null) =>
+    standIn ? declareWar : realPowerups.isDeclareWarRunning(allianceId),
+  runningPowerups: async (allianceId: number | null) => (standIn ? [] : realPowerups.runningPowerups(allianceId)),
 }));
 
 const { infernoAttackStart } = await import("./descentAttack.js");
