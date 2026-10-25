@@ -223,7 +223,7 @@ array with `CHAT_WS_HOST`), and — only when the caller owns the base — `chat
 `chattoken`, `chatchannel`, `alliancedata`, `powerups` (see §Alliance and §Chat), and, outside
 Inferno, `playerlevel` (the player's level from their main save, as the yard routes send it; #192). Attack modes
 add `attpowerups`. A `build` load of the caller's own main yard, or of one of their Map Room 2
-outposts, adds `completed`: what its catch-up finished, in the yard routes' shape (see "The owner's `/base/load`" under "Yard actions"). Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
+outposts, adds `completed`: what its catch-up finished, in the yard routes' shape (see "The owner's `/base/load`" under "Yard actions"). With the new Inferno switched on (`INFERNO_ENABLED`), a `build` load of the caller's own main yard also adds `infernostate`: the `GET /bm/inferno/state` answer without `error`, plus `raised` (the cave level Moloch's emergence just went up to on this load, or null; see "Moloch's emergence" under "The new Inferno (beta.5)"). Map Room 3 build/attack adds a `player.buffs` / `attackingplayer.buffs` /
 `defendingplayer.buffs` object keyed by small numeric buff-type ids (`2`=resource rate,
 `10`=resource capacity, `1`=defender damage reduction %, `5`/`6`=stronghold attacker/defender
 damage bonus %). `idescent` mode additionally overwrites `resources` with the player's
@@ -758,6 +758,33 @@ second its damage protection ends, 0 without any. Refused with a real 409
 `{ error, errorDetails: { data: { reason: "notMapRoom1" } } }` when the player's main save is
 not on map version 1.
 
+### The new Inferno (beta.5)
+
+The Inferno the web game is building (`docs/design/inferno.md`), separate from the closed Flash
+routes above. Every route is behind `infernoConfig.enabled` (`server/src/config/InfernoConfig.ts`,
+env `INFERNO_ENABLED`, off unless `on`/`true`): switched off, each answers `403` with
+`reason: "infernoOff"` (`infernoOffErr()`, `requireInfernoEnabled` in
+`services/inferno/infernoGate.ts`) before anything is read. The player's progress is the
+server-only table `inferno_progress` (see §3).
+
+| Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
+|---|---|---|---|---|---|
+| GET | `/api/:apiVersion/bm/inferno/state` | apiVersion, verifyUserAuth, verifyAccountStatus | none | `{ error: 0, now, cave: { shown, level, maxLevel: 5 }, emergence: { lastAt, nextAt, done }, descent: { level, destroyed: 0\|1[13], passed }, hasYard, korathNotice }` (unix seconds; `nextAt` 0 = any time, null once all five raids are done) | How far the player is on the way into the Inferno (`controllers/inferno/infernoState.ts`). `cave.shown`: Town Hall 5 or a cave already above level 0, once the tutorial is over (Flash: stage above 200). `descent.level` is Flash's counter, 1 + yards beaten, 14 once passed. `korathNotice`: Korath unlocked and the player not yet told. Read-only. |
+
+**Moloch's emergence** (`services/inferno/emergence.ts`, `emergenceOnLoad.ts`; plan §2.2). The
+server decides, on the owner's `build` load of their main yard (`baseLoad.ts`, right after the
+open wild raid is cancelled), whether the next of the cave's five raids is due. In order, it is
+not when: the switch is off (`off`), the yard is not the main yard (`notMainYard`), the cave is
+not showing (`noCave`: below Town Hall 5 or the tutorial not over), all five are done (`done`),
+12 hours have not passed since the last (`tooSoon`), an attack is running on the yard
+(`underAttack`), a wild monster raid is open (`raidOpen`), or the yard is at 10% of its full
+health or less (`damaged`; Flash `isBaseReadyForAttack`, checked on every level). When due, the
+cave goes up one level in one statement (`raiseEmergence`: two loads at once raise it once; a
+lost race is `race`), the load answers `infernostate.raised` with the new level and logs
+`inferno-emergence`. The raid itself is opened by WP 1.9 (not built yet): until then the level
+goes up with no raid. While the cave shows and fewer than five raids are done, wild monster
+raids are held back (see "Wild monster raids").
+
 ### Map Room 2
 
 An 800×800 grid per `World`; terrain for cells that have never held activity is generated
@@ -1024,7 +1051,9 @@ Wild monsters raid the player's own main yard (`docs/design/wild-raids.md`; rule
 `services/raids/`, routes in `controllers/raid/raid.ts`). The **presence ping** opens a raid:
 when its body says `{ where: "yard", planner: false }`, the player is online (a ping in the last
 60 s and a real action in the last 10 min), and the raid is due (level 9+, 4 build-mode visits,
-its time come, nothing damaged or repairing, no attack running), the server plans the army and
+its time come, nothing damaged or repairing, no attack running, and Moloch's emergence not
+under way: with the new Inferno on, from Town Hall 5 until its five raids are done, `emergenceHoldsRaids`,
+Flash `WMATTACK.as:327`), the server plans the army and
 answers it as `raid` in its **warning** (Redis `wild-raid:<userid>`, 5 minutes plus a grace). The
 routes below are the player's answers to it. All are `POST /api/:apiVersion/bm/raid/...`,
 `apiVersion` + `verifyUserAuth` + `logRequest`, and real actions (`services/user/realActions.ts`).
@@ -1779,6 +1808,15 @@ never stored), `created_at`, `last_used_at`, `revoked_at`. Backs `verifyApiConsu
 `defender_userid`/`defender_username`/`defender_pic_square`, `type`, `x`/`y` (nullable),
 `loot` (jsonb), `attackreport` (jsonb), `attacktime`. Indexed on `(attacker_userid,
 attacktime)` and `(defender_userid, attacktime)` for the two `/attacklogs` filter modes.
+
+### `InfernoProgress` (table `inferno_progress`, PK `userid`)
+
+`emergence_level` (0-5), `emergence_last_at`, `descent_destroyed` / `descent_best` (jsonb arrays,
+13 yards: 1 once beaten / best damage 0-100), `descent_passed_at`, `inferno_baseid`,
+`korath_unlocked_at`, `korath_notice_at`, `popups_seen` (jsonb `{ key: unix seconds }`),
+`created_at`, `updated_at`. One row per player, made the first time something is written; no row
+reads as nothing done. Server-only (`services/inferno/infernoProgress.ts`); the foreign key to
+`user` cascades. Migration `20261025_CreateInfernoProgressTable`.
 
 ### `JobRun` (table `job_run`, composite PK `[job, period]`)
 

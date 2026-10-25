@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
+import { caveYardMargin } from "@/game/inferno/cave";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { artStateFor, BuildingCondition, readYard, TOWN_HALL_TYPE } from "./yardModel";
 import { ArtState } from "./buildingArt";
@@ -119,6 +120,17 @@ describe("whose yard it is", () => {
     const shift = FOREIGN_YARD_MARGIN - YARD_MARGIN;
     expect(visit.townHall!.worldX).toBe(yard.townHall!.worldX + shift);
     expect(visit.townHall!.worldY).toBe(yard.townHall!.worldY + shift);
+  });
+
+  it("grows the own main yard's grass to hold Moloch's cave only while the cave shows (Inferno WP 1.10)", () => {
+    const inferno = (shown: boolean) => ({ infernostate: { cave: { shown, level: 1, maxLevel: 5 } } }) as Partial<BaseLoadResponse>;
+    const withCave = yardWith({}, inferno(true));
+    expect(withCave.bounds.margin).toBe(caveYardMargin(0));
+    expect(withCave.bounds.margin).toBeGreaterThan(YARD_MARGIN);
+    expect(yardWith({}, inferno(false)).bounds.margin).toBe(YARD_MARGIN);
+    expect(yardWith({}, { ...inferno(true), type: "outpost" }).bounds.margin).toBe(YARD_MARGIN);
+    const visit = readYard({ ...(fixture as unknown as BaseLoadResponse), ...inferno(true) }, { foreign: true });
+    expect(visit.bounds.margin).toBe(FOREIGN_YARD_MARGIN);
   });
 });
 

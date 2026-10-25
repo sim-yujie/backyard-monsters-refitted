@@ -2,7 +2,7 @@ import type { Context } from "koa";
 import type { User } from "../../database/models/user.model.js";
 import { infernoConfig } from "../../config/InfernoConfig.js";
 import { BaseMode, BaseType } from "../../enums/Base.js";
-import { infernoClosedErr } from "../../errors/errors.js";
+import { infernoClosedErr, infernoOffErr } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
 
 /** Every load mode of the Inferno family (`enums/Base.ts`). */
@@ -46,4 +46,15 @@ export const requireInfernoOpen = (
   });
 
   throw infernoClosedErr();
+};
+
+/**
+ * Refuses a new Inferno route (`/bm/inferno/*`) while the new Inferno is
+ * switched off (`infernoConfig.enabled`), before anything is read.
+ *
+ * @param enabled - The switch; the config's own unless a test passes one.
+ * @throws {ClientSafeError} `403` with `reason: "infernoOff"` while off.
+ */
+export const requireInfernoEnabled = (enabled: boolean = infernoConfig.enabled): void => {
+  if (!enabled) throw infernoOffErr();
 };

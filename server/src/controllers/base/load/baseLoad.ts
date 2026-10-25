@@ -47,6 +47,8 @@ import { unseenAchievements } from "../../../services/achievements/record.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { catchUpOwnerOutpost, catchUpOwnerYard } from "../../yard/yardRoute.js";
+import { infernoLoadState } from "../../inferno/infernoState.js";
+import { emergenceOnLoad, type EmergenceOnLoad } from "../../../services/inferno/emergenceOnLoad.js";
 import type { CompletedJob } from "../../../services/yard/catchUp.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels.js";
@@ -243,6 +245,7 @@ export const baseLoad: KoaController = async (ctx) => {
   let completed: (CompletedJob | OutpostNoticeJob)[] | undefined;
   let notifications: number | undefined;
   let trojanNew = false;
+  let emergence: EmergenceOnLoad | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
     // The catch-up also counts this load as one more session towards the
     // next wild monster raid, in the same write (`catchUpOwnerYard`, #226),
@@ -260,6 +263,11 @@ export const baseLoad: KoaController = async (ctx) => {
     // fight lock (`startSession`): a fight a raid start set going meanwhile
     // is cancelled here, not left open on an unlocked yard.
     await cancelRaidOnYardLoad(user.userid, gameWasClosed);
+    // Moloch's emergence (docs/design/inferno.md §2.2, §3.2): with the new
+    // Inferno on, the cave goes up a level when its next raid is due, written
+    // before the raid starts. After the raid cancel above, so a raid this load
+    // cancelled does not hold it back.
+    emergence = await emergenceOnLoad(postgres.em, user.userid, baseSave, getCurrentDateTime());
   } else if (
     type === BaseMode.BUILD &&
     isOwner &&
@@ -517,6 +525,9 @@ export const baseLoad: KoaController = async (ctx) => {
     // The Trojan Horse was just placed on this load (issue #324): the
     // client's one-time camera pan (design §3.1).
     ...(trojanNew && { trojanNew: true }),
+    // The cave and Moloch's emergence (docs/design/inferno.md §3.2), with
+    // `raised` when this load set its next raid going.
+    ...(emergence && { infernostate: infernoLoadState(emergence, baseSave, getCurrentDateTime()) }),
     ...(isOwner && {
       chatenabled: 1,
       chattoken,

@@ -12,6 +12,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { extractTownHall } from "../../utils/extractTownHall.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
+import { emergenceHoldsRaids } from "../inferno/emergenceOnLoad.js";
 import { noteTribeRaid } from "../stats/activity.js";
 import { catchUpLockedRow, catchUpLockedYard } from "../../controllers/yard/yardAction.js";
 import { notifyAndCount } from "../notifications/notifications.js";
@@ -141,6 +142,9 @@ const SCHEDULE_FIELDS = [
   "attacks",
   "protected",
   "storedata",
+  // The Inferno emergence's pause (`emergenceHoldsRaids`).
+  "thlevel",
+  "tutorialstage",
 ] as const;
 
 /**
@@ -241,6 +245,9 @@ export const raidOnPing = async (
     raidOpen: false,
   });
   if (early !== null) return undefined;
+  // Moloch's emergence holds wild raids back until its five raids are done
+  // (`docs/design/inferno.md` §2.2, Flash `WMATTACK.as:327`).
+  if (await emergenceHoldsRaids(em, user.userid, scheduled)) return undefined;
 
   const stored = await em.findOne(Save, { basesaveid }, { refresh: true });
   if (!stored) return undefined;
