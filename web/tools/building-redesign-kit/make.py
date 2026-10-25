@@ -21,7 +21,7 @@ MAT = combo in ("GOLD", "BLACK")             # tower tiers 2-3 as wall-block mat
 R2 = combo.startswith("R2") or TIER or MAT   # round 2: keep the Flash design, refresh it; no theme
 style, theme = ("A", None) if TIER or MAT else (combo[-1], None) if R2 else (combo[0], combo[1])
 # the Flash picture each sample is painted from: the Town Hall has its own picture per level (tier 1 = level 2, tier 2 = level 5)
-FK = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5"}.get((b, combo), b)
+FK = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5", ("townhall", "GOLD"): "townhall5"}.get((b, combo), b)
 OUT = REPO / "art-samples" / "redesign"
 out = OUT / b / combo
 out.mkdir(parents=True, exist_ok=True)
@@ -67,9 +67,10 @@ if TIER:
     Image.open(OUT / b / "R2A" / "sample-new.png").convert("RGB").save(out / "tier3.png")
     inputs.append("tier3.png")
 # tier 1 of the material tiers: an existing R2-A picture (cannon: the clean steel tier painted as T2; others: R2A)
-MAT_TIER1 = {"cannon": "T2"}
+# Town Hall (owner: one picture per level; test): GOLD = level 5 (T2) with gold added, BLACK = level 10 (R2A) in black diamond
+MAT_TIER1 = {"cannon": "T2", ("townhall", "GOLD"): "T2"}
 if MAT:
-    Image.open(OUT / b / MAT_TIER1.get(b, "R2A") / "sample-new.png").convert("RGB").save(out / "tier1.png")
+    Image.open(OUT / b / MAT_TIER1.get((b, combo), MAT_TIER1.get(b, "R2A")) / "sample-new.png").convert("RGB").save(out / "tier1.png")
     blk = Image.open(ASSETS / "buildings" / "walls" / {"GOLD": "top.4.v2.png", "BLACK": "top.5.png"}[combo]).convert("RGBA")
     on(GREY, blk).resize((blk.width * 10, blk.height * 10), Image.LANCZOS).save(out / "block.png")
     inputs += ["tier1.png", "block.png"]
@@ -134,6 +135,16 @@ MAT_WHAT = {
     ("cannon", "BLACK"): ("the tan ring, its prongs and the three feet become glossy BLACK faceted armour (like black diamond) with "
                           "polished GOLD edges and trim; the barrel becomes black gunmetal with gold bands and a gold muzzle ring; "
                           "the drum keeps its STRIPES but they become BLACK AND GOLD, with gold bands round its top and bottom"),
+    ("townhall", "GOLD"): ("the vertical straps on the ribbed body, the collar under the funnel, the rims of the blue portholes "
+                           "and the round disc feet become POLISHED GOLD; add thick gold bands round the top and bottom of the ribbed "
+                           "body, gold rivets on the dome and gold fittings on the red pipes and railings. The dark riveted dome, the "
+                           "silver ribbed body, the blue portholes, the silver funnel and the red pipes stay, so it is clearly still "
+                           "the level 5 Town Hall"),
+    ("townhall", "BLACK"): ("the dark riveted dome becomes glossy BLACK faceted armour (like black diamond) with polished GOLD "
+                            "seams and rivets between its plates; the light grey base ring with its round holes becomes black "
+                            "armour with a gold rim; the silver funnel becomes black chrome with a gold rim. The golden frame, arms, "
+                            "clawed feet and horned crest stay gold (they are the gold trim), the blue porthole and blue studs stay "
+                            "blue and the red pipes stay red, so it is clearly still the level 10 Town Hall"),
     ("tesla", "GOLD"): ("the tan box and its tan base become POLISHED GOLD plating with gold rivets; the striped corner poles keep "
                         "their RED-AND-WHITE STRIPES but get gold caps and gold bands; the copper coil glows; the silver mushroom "
                         "dome stays silver with a gold rim"),
@@ -143,26 +154,42 @@ MAT_WHAT = {
 }
 if MAT:
     tier, block = ("2", "Gold Blocks") if combo == "GOLD" else ("3", "Black Diamond Blocks")
+    TH = b == "townhall"
+    lvl = "5" if combo == "GOLD" else "10"
+    subject = (f"the TOWN HALL, the main building of the monster yard, at LEVEL {lvl}, in its "
+               f"{'GOLD' if combo == 'GOLD' else 'BLACK DIAMOND'} version" if TH else f"TIER {tier} of 3 of {TOWERS[b]['what']}")
+    tiers = ("The Town Hall has its own picture for every level (from the old Flash game). Its higher levels follow the game's wall "
+             "blocks: the middle levels get GOLD elements (like the Gold Blocks), the top levels BLACK DIAMOND elements (black "
+             "armour with gold edges, like the Black Diamond Blocks). The SAME building, the SAME silhouette, proportions, parts "
+             "and colours as this level's Flash picture: only the MATERIAL of some parts changes, so it reads apart at a glance "
+             "even at small game size." if TH else
+             "The tower's 3 tiers follow the game's wall blocks: tier 1 is the normal tower, tier 2 is the GOLD version (like the "
+             "Gold Blocks), tier 3 is the BLACK DIAMOND version (black armour with gold edges, like the Black Diamond Blocks). The "
+             "SAME tower, the SAME silhouette, proportions, parts and pose at every tier: only the MATERIAL changes, so the tiers "
+             "read apart at a glance even at small game size.")
+    base = (f"the level {lvl} Town Hall already painted in the new style (approved)" if TH else
+            "TIER 1 of this tower, already painted and approved")
+    noun = "building" if TH else "tower"
     look = ("gold must be rich, warm and shiny like block.png, clearly much more gold than tier1.png" if combo == "GOLD" else
             "black must be deep and glossy with crisp faceted highlights like block.png, the gold only on edges, trims, rims and bolts")
     prompt = f"""Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
 
-Paint TIER {tier} of 3 of {TOWERS[b]["what"]}. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+Paint {subject}. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
 
-The tower's 3 tiers follow the game's wall blocks: tier 1 is the normal tower, tier 2 is the GOLD version (like the Gold Blocks), tier 3 is the BLACK DIAMOND version (black armour with gold edges, like the Black Diamond Blocks). The SAME tower, the SAME silhouette, proportions, parts and pose at every tier: only the MATERIAL changes, so the tiers read apart at a glance even at small game size.
+{tiers}
 
-Input 1, frames.png: the OLD Flash tower, blown up, on grey ({fr.width}x{fr.height}): its design, camera angle, ground footprint and size.
-Input 2, ref.png: the old build-menu picture of the same tower (a sharper render of the same design).
+Input 1, frames.png: the OLD Flash {noun}, blown up, on grey ({fr.width}x{fr.height}): its design, camera angle, ground footprint and size.
+Input 2, ref.png: the old build-menu picture of the same {noun} (a sharper render of the same design).
 Input 3, style.png: see style below.
-Input 4, tier1.png: TIER 1 of this tower, already painted and approved. Paint EXACTLY the same tower: same shapes, same parts in the same places, same pose and aim (any barrel points the same way), same camera, same size and the same painting finish and lighting. Only the materials change as described below.
+Input 4, tier1.png: {base}. Paint EXACTLY the same {noun}: same shapes, same parts in the same places, same pose and aim (any barrel points the same way), same camera, same size and the same painting finish and lighting. Only the materials change as described below.
 Input 5, block.png: the game's {block} wall block. Use it ONLY as the colour and material reference for the new material (not its shape).
 
-TIER {tier} materials: {MAT_WHAT[(b, combo)]}. The {look}. It must stay clearly the same Flash tower.
+New materials: {MAT_WHAT[(b, combo)]}. The {look}. It must stay clearly the same Flash {noun}.
 
 {STYLE}
 
-Output: ONE image, {fr.width}x{fr.height}, the tower alone, complete and fully inside the image with margin.
-Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The tower itself must contain no bright pure green.
+Output: ONE image, {fr.width}x{fr.height}, the {noun} alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The {noun} itself must contain no bright pure green.
 """
     if os.environ.get("NOTE"):
         prompt += "\nIMPORTANT CORRECTION (an earlier attempt got this wrong): " + os.environ["NOTE"] + "\n"

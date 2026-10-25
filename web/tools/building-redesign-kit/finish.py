@@ -37,7 +37,7 @@ if __name__ == "__main__":
     out = REPO / "art-samples" / "redesign" / b / combo
     painted = key(np.asarray(Image.open(out / "sample-new.png").convert("RGB")))
     painted.save(out / "sample-cut.png")
-    fk = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5"}.get((b, combo), b)   # same as make.py
+    fk = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5", ("townhall", "GOLD"): "townhall5"}.get((b, combo), b)   # same as make.py
     old, ox, oy = old_rgba(fk)
     l0, r0, b0, t0 = band(old, 200)
     l1, r1, b1, t1 = band(painted, 128)

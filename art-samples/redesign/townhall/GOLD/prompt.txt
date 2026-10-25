@@ -1,0 +1,18 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the TOWN HALL, the main building of the monster yard, at LEVEL 5, in its GOLD version. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The Town Hall has its own picture for every level (from the old Flash game). Its higher levels follow the game's wall blocks: the middle levels get GOLD elements (like the Gold Blocks), the top levels BLACK DIAMOND elements (black armour with gold edges, like the Black Diamond Blocks). The SAME building, the SAME silhouette, proportions, parts and colours as this level's Flash picture: only the MATERIAL of some parts changes, so it reads apart at a glance even at small game size.
+
+Input 1, frames.png: the OLD Flash building, blown up, on grey (1024x1536): its design, camera angle, ground footprint and size.
+Input 2, ref.png: the old build-menu picture of the same building (a sharper render of the same design).
+Input 3, style.png: see style below.
+Input 4, tier1.png: the level 5 Town Hall already painted in the new style (approved). Paint EXACTLY the same building: same shapes, same parts in the same places, same pose and aim (any barrel points the same way), same camera, same size and the same painting finish and lighting. Only the materials change as described below.
+Input 5, block.png: the game's Gold Blocks wall block. Use it ONLY as the colour and material reference for the new material (not its shape).
+
+New materials: the vertical straps on the ribbed body, the collar under the funnel, the rims of the blue portholes and the round disc feet become POLISHED GOLD; add thick gold bands round the top and bottom of the ribbed body, gold rivets on the dome and gold fittings on the red pipes and railings. The dark riveted dome, the silver ribbed body, the blue portholes, the silver funnel and the red pipes stay, so it is clearly still the level 5 Town Hall. The gold must be rich, warm and shiny like block.png, clearly much more gold than tier1.png. It must stay clearly the same Flash building.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1536, the building alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.
