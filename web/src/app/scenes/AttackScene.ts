@@ -12,6 +12,7 @@ import { attackYardHandlers } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import {
   AttackSession,
+  combatKind,
   devDescentYard,
   LIVE_SPEEDS,
   PLAYBACK_SPEEDS,
@@ -678,13 +679,15 @@ export class AttackScene implements Scene {
     damageWord.textContent = " damage";
     damage.append(damageValue, damageWord);
 
-    // "Loot" and one icon-and-amount per resource (#93).
+    // "Loot" and one icon-and-amount per resource (#93); an Inferno fight
+    // takes Bone, Coal, Sulfur and Magma (Inferno WP 1.13).
     const loot = document.createElement("span");
     loot.className = "attack-strip__readout attack-strip__loot";
     const amounts = document.createElement("span");
     amounts.className = "res-list";
+    const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
     this.lootValues = RESOURCE_KEYS.map((key) => {
-      const amount = resourceAmount(key, "0");
+      const amount = resourceAmount(key, "0", { realm });
       amounts.append(amount);
       return amount.querySelector<HTMLElement>(".res-amount__value")!;
     });
