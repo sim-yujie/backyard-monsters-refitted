@@ -36,3 +36,27 @@ export const BUILD_BLURBS: Readonly<Record<number, string>> = {
   118: "High damage in a straight line through everything, but a short reach.",
   119: "Keeps spare Champions safely frozen while one is active.",
 };
+
+/**
+ * The Inferno yard's buildings in Flash's words (`INFERNOYARDPROPS.as`
+ * `description`, `english.json`; Inferno WP 1.19), trimmed as the surface's
+ * are.
+ */
+export const INFERNO_BUILD_BLURBS: Readonly<Record<number, string>> = {
+  1: "Breaks up Bones so they can be used as construction material.",
+  2: "Extracts Coal and reduces it to dust to be used in construction.",
+  3: "Mixes Sulfur into a state where it can be used to aid in the discovery of new monsters.",
+  4: "Pumps Magma from underground sources for use in creating monsters.",
+  6: "Stores Bones, Coal, Sulfur, and Magma for future use.",
+  8: "Unlocks new monsters that can be created in the Incubator.",
+  9: "Recycles monsters you no longer want, to make room for bigger and better things.",
+  13: "Converts Magma into flesh and blood monsters to do your bidding.",
+  17: "A simple block for walls that protect buildings and lead attackers into traps or closer to towers. Upgrades from Brimstone to Granite to Forged Steel.",
+  21: "Long-range tower great for picking off monsters one by one.",
+  24: "Invisible to the enemy until it is too late: it deals large damage to a small area when a monster steps on it.",
+  26: "Monsters need an education too! Your Inferno monsters learn here how to thicken their skins and raise more hell.",
+  128: "Provides your monsters with a place to heal and hang out in between battles.",
+  129: "Creates an earthquake that does damage to all monsters in a certain area.",
+  130: "Short-range tower with exploding shells that do splash damage.",
+  132: "Fires bursts of molten rock that do massive damage.",
+};

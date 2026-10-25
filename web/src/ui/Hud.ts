@@ -16,7 +16,7 @@ import { modalLayer, openWhatsNew } from "./events/WhatsNewDialog";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { formatAmount, formatCompact } from "./format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
 
 /**
@@ -43,7 +43,9 @@ import { DamageBanner } from "./yard/DamageBanner";
  * amounts alone. On the main yard each resource also carries what the player
  * makes of it an hour, "+12,400/h" (#280, `incomeRate.ts`), dimmed with
  * "full" while its silo is full, since that income is lost. In an outpost the amounts and caps are the main yard's pool,
- * as the server sends them.
+ * as the server sends them. On the Inferno yard the four are Bone, Coal,
+ * Sulfur and Magma, with the Inferno purse and its cap (WP 1.19,
+ * `resourceIcon.ts`'s realm), and no income line yet.
  *
  * The yard lays it out as its `corner` (the HUD redesign, #171, option B:
  * "a game, not a dashboard"): no brand and no screen tabs, the readouts and
@@ -733,6 +735,9 @@ export class Hud {
     for (const key of RESOURCE_KEYS) {
       const readout = this.readouts.get(key);
       if (!readout) continue;
+      // Bone, Coal, Sulfur and Magma while the Inferno yard is bound (WP 1.19).
+      const icon = readout.button.querySelector<HTMLElement>(".res-icon");
+      if (icon) restyleIcon(icon, key);
       readout.cap = caps?.[key];
       readout.perHour = rates?.[key];
       this.render(readout);

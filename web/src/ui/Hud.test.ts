@@ -5,7 +5,7 @@ import type { YardJob } from "@/game/yard/jobs";
 import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, Hud, workersText } from "./Hud";
 import { Notices } from "./maproom/Notices";
-import { spokenText } from "./resourceIcon";
+import { setResourceRealm, spokenText } from "./resourceIcon";
 
 /**
  * The HUD's readouts: icons for the words (#93), and every change visible
@@ -397,6 +397,36 @@ describe("the yard's corner layout (#171)", () => {
     const workers = hud.element.querySelector<HTMLButtonElement>(".hud__workers-button")!;
     expect(workers.textContent).toBe("Workers5 / 5");
     expect(workers.querySelector<HTMLElement>(".hud__workers-name")!.hidden).toBe(true);
+    hud.destroy();
+  });
+
+  it("shows the Inferno's four, its purse and its cap on the Inferno yard (WP 1.19)", () => {
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    const store = {
+      kind: "inferno",
+      caps: { r1: 1_600, r2: 1_600, r3: 1_600, r4: 1_600 },
+      workers: { total: 1, busy: 0 },
+      jobs: () => [],
+      save: {},
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.setResources({ r1: 1_600, r2: 1_200 });
+    setResourceRealm("inferno");
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    const r2 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r2"]')!;
+    expect(r1.title).toBe(`Bone: 1,600 of 1,600\n${FULL_NOTE}`);
+    expect(r2.title).toBe("Coal: 1,200 of 1,600");
+    expect(r1.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("inferno");
+    // No income line: the surface's rates are not the Inferno's.
+    expect(r2.querySelector<HTMLElement>(".hud__rate")!.hidden).toBe(true);
+    // Back on the surface the same readouts are Twigs and Pebbles again.
+    setResourceRealm("surface");
+    hud.bindYard(null);
+    expect(r2.title).toBe("Pebbles: 1,200");
+    expect(r2.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("surface");
     hud.destroy();
   });
 

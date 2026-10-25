@@ -38,13 +38,63 @@ export type ResourceKey = "r1" | "r2" | "r3" | "r4" | "shiny";
 /** The four harvested resources in the order the game has always shown them. */
 export const RESOURCE_KEYS = ["r1", "r2", "r3", "r4"] as const;
 
-export const RESOURCE_NAMES: Readonly<Record<ResourceKey, string>> = {
+/**
+ * Which four resources the screen is showing: the surface's, or the Inferno's
+ * while the player is on their Inferno yard (Inferno WP 1.19). The Inferno's
+ * are Bone, Coal, Sulfur and Magma in the same four slots, as Flash swaps
+ * `GLOBAL._resourceNames` for the loaded yard; Shiny is the same in both.
+ *
+ * The yard scene sets it when it opens a yard and puts it back when it leaves
+ * ({@link setResourceRealm}), so every panel drawn meanwhile names and draws
+ * the Inferno's without being told. A node already on screen keeps what it was
+ * drawn with; {@link restyleIcon} brings a long-lived one (the HUD) up to date.
+ */
+export type ResourceRealm = "surface" | "inferno";
+
+let realm: ResourceRealm = "surface";
+
+/** The resources the screen shows now. */
+export const resourceRealm = (): ResourceRealm => realm;
+
+/** Shows the Inferno's resources from now on, or the surface's again. */
+export const setResourceRealm = (next: ResourceRealm): void => {
+  realm = next;
+};
+
+const SURFACE_NAMES: Readonly<Record<ResourceKey, string>> = {
   r1: "Twigs",
   r2: "Pebbles",
   r3: "Putty",
   r4: "Goo",
   shiny: "Shiny",
 };
+
+/** The Inferno's four (`#r_bone#`.. in Flash's keys), Shiny unchanged. */
+export const INFERNO_RESOURCE_NAMES: Readonly<Record<ResourceKey, string>> = {
+  r1: "Bone",
+  r2: "Coal",
+  r3: "Sulfur",
+  r4: "Magma",
+  shiny: "Shiny",
+};
+
+/** A resource's name in `inRealm`, the screen's own by default. */
+export const resourceName = (key: ResourceKey, inRealm: ResourceRealm = realm): string =>
+  (inRealm === "inferno" ? INFERNO_RESOURCE_NAMES : SURFACE_NAMES)[key];
+
+/**
+ * Each resource's name in the screen's realm: "Twigs" on the surface, "Bone"
+ * in the Inferno. Read when used, so it follows {@link setResourceRealm}.
+ */
+export const RESOURCE_NAMES: Readonly<Record<ResourceKey, string>> = Object.defineProperties(
+  {},
+  Object.fromEntries(
+    (Object.keys(SURFACE_NAMES) as ResourceKey[]).map((key) => [
+      key,
+      { enumerable: true, get: () => resourceName(key) },
+    ]),
+  ),
+) as Readonly<Record<ResourceKey, string>>;
 
 /** The key a bomb's numeric `resource` (1 twigs, 2 pebbles, 3 putty) names. */
 export const resourceKeyOf = (resource: number): ResourceKey =>
@@ -68,6 +118,41 @@ const ART: Readonly<Record<ResourceKey, IconArt>> = {
   shiny: { url: "/assets/alliances/shiny-icon.png", width: 40, height: 41, crop: [0, 0, 40, 41] },
 };
 
+/**
+ * The Inferno's icons. Flash's are vector art inside `assets.swf`, which was
+ * not recovered (`docs/design/inferno.md` §4, art track A2), so until they are
+ * painted each is a placeholder drawn here: a lump in the resource's colour
+ * with its initial. This is the one place the art goes in. Drop the painted
+ * file at the URL below (`server/public/assets/popups/resource<name>.png`, a
+ * square PNG with a clear background, 80 × 80 or larger) and replace the
+ * entry with `{ url, width, height, crop }` as the surface's are.
+ */
+const placeholder = (letter: string, fill: string, ink: string): IconArt => {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">` +
+    `<path d="M10 40C6 26 16 10 32 10s28 12 24 28c-3 12-14 18-26 17C19 54 12 49 10 40z" ` +
+    `fill="${fill}" stroke="#2a1208" stroke-width="4"/>` +
+    `<text x="32" y="43" font-family="Arial,sans-serif" font-size="26" font-weight="700" ` +
+    `text-anchor="middle" fill="${ink}">${letter}</text></svg>`;
+  return { url: `data:image/svg+xml,${encodeURIComponent(svg)}`, width: 64, height: 64, crop: [0, 0, 64, 64] };
+};
+
+/** Where the painted Inferno icons go, by key; see the placeholders above. */
+export const INFERNO_ICON_FILES: Readonly<Record<"r1" | "r2" | "r3" | "r4", string>> = {
+  r1: "/assets/popups/resourcebone.png",
+  r2: "/assets/popups/resourcecoal.png",
+  r3: "/assets/popups/resourcesulfur.png",
+  r4: "/assets/popups/resourcemagma.png",
+};
+
+const INFERNO_ART: Readonly<Record<ResourceKey, IconArt>> = {
+  r1: placeholder("B", "#e8dcc0", "#2a1208"),
+  r2: placeholder("C", "#3b3b40", "#f2f2f2"),
+  r3: placeholder("S", "#e6c62e", "#2a1208"),
+  r4: placeholder("M", "#e2541c", "#fff4d6"),
+  shiny: ART.shiny,
+};
+
 /** A percentage with no more digits than a stylesheet needs. */
 const percent = (value: number): string => `${+value.toFixed(3)}%`;
 
@@ -83,7 +168,7 @@ const percent = (value: number): string => `${+value.toFixed(3)}%`;
 export const iconStyle = (
   key: ResourceKey,
 ): { backgroundImage: string; backgroundSize: string; backgroundPosition: string; aspectRatio: string } => {
-  const { url, width, height, crop } = ART[key];
+  const { url, width, height, crop } = (realm === "inferno" ? INFERNO_ART : ART)[key];
   const [x, y, w, h] = crop;
   const along = (offset: number, image: number, part: number): string =>
     image === part ? "0%" : percent((offset / (image - part)) * 100);
@@ -112,16 +197,24 @@ export interface ResourceIconOptions {
 export const resourceIcon = (key: ResourceKey, options: ResourceIconOptions = {}): HTMLElement => {
   const icon = document.createElement("span");
   icon.className = `res-icon res-icon--${key}`;
-  Object.assign(icon.style, iconStyle(key));
-  if (options.decorative) {
-    icon.setAttribute("aria-hidden", "true");
-  } else {
-    const name = RESOURCE_NAMES[key];
-    icon.setAttribute("role", "img");
-    icon.setAttribute("aria-label", name);
-    if (options.tooltip !== false) icon.title = name;
-  }
+  if (options.decorative) icon.setAttribute("aria-hidden", "true");
+  else icon.setAttribute("role", "img");
+  if (options.tooltip === false) icon.dataset["notip"] = "";
+  restyleIcon(icon, key);
   return icon;
+};
+
+/**
+ * Draws `icon` as `key` in the screen's realm, and names it so: for an icon
+ * made before the realm changed, like the HUD's, which outlives the yard.
+ */
+export const restyleIcon = (icon: HTMLElement, key: ResourceKey): void => {
+  Object.assign(icon.style, iconStyle(key));
+  icon.dataset["realm"] = realm;
+  if (icon.getAttribute("aria-hidden") === "true") return;
+  const name = RESOURCE_NAMES[key];
+  icon.setAttribute("aria-label", name);
+  if (icon.dataset["notip"] === undefined) icon.title = name;
 };
 
 export interface ResourceAmountOptions extends ResourceIconOptions {

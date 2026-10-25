@@ -1,5 +1,6 @@
 import type { PurseKey } from "@/game/siege/siege";
 import { formatAmount } from "@/ui/format";
+import { INFERNO_RESOURCE_NAMES as INFERNO_NAMES } from "@/ui/resourceIcon";
 
 /**
  * The four Inferno resources, as the Siege screen spells them
@@ -12,12 +13,8 @@ import { formatAmount } from "@/ui/format";
  * as `resourceAmount` does for the yard's resources.
  */
 
-export const INFERNO_RESOURCE_NAMES: Readonly<Record<PurseKey, string>> = {
-  r1: "Bone",
-  r2: "Coal",
-  r3: "Sulfur",
-  r4: "Magma",
-};
+/** The names the yard's icons carry too (`resourceIcon.ts`). */
+export const INFERNO_RESOURCE_NAMES: Readonly<Record<PurseKey, string>> = INFERNO_NAMES;
 
 /** "Bone 12,345", or the given text in place of the figure ("12,345 / 100,000"). */
 export const infernoAmount = (key: PurseKey, amount: number | string, className?: string): HTMLElement => {

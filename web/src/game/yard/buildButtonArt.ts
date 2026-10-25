@@ -1,3 +1,5 @@
+import type { YardKind } from "./buildingCosts";
+
 /**
  * The build menu's pictures: the original's building buttons, 120 × 160 JPEGs
  * in `server/public/assets/buildingbuttons/` (#157).
@@ -42,14 +44,49 @@ export const SILHOUETTE_FILE: Readonly<Record<number, string>> = {
   119: "119.silhouette.jpg",
 };
 
-/** The file name of a type's button picture. */
-export const buttonFile = (type: number): string => BUTTON_FILE[type] ?? `${type}.jpg`;
+/**
+ * The Inferno yard's buttons (Inferno WP 1.19): every Inferno type's own
+ * `buildingbuttons[0]` (`client/scripts/INFERNOYARDPROPS.as`), all of which
+ * are on disk. The Block's first is Brimstone, `coal_wall.v3`. The Monster
+ * Juicer names none, so it shows `9.jpg`, as on the surface.
+ */
+export const INFERNO_BUTTON_FILE: Readonly<Record<number, string>> = {
+  1: "bone_crusher.v2.jpg",
+  2: "coal_producer.v2.jpg",
+  3: "sulfur.v2.jpg",
+  4: "magma_producer.v2.jpg",
+  6: "sillo.v2.jpg",
+  8: "monster_locker.v2.jpg",
+  13: "hatchery.v2.jpg",
+  17: "coal_wall.v3.jpg",
+  21: "sniper_tower.v2.jpg",
+  24: "booby_trap.v2.jpg",
+  26: "inferno_monster_academy.jpg",
+  128: "monster_housing.v2.jpg",
+  129: "quake_tower.v2.jpg",
+  130: "canon_tower.v2.jpg",
+  132: "magma_tower.v2.jpg",
+};
 
-/** The URL of a type's button picture. */
-export const buttonUrl = (type: number): string => ROOT + buttonFile(type);
+/**
+ * The Inferno silhouettes on disk. The props table names one for most types
+ * (`bone_crusher.v2.silhouette.jpg`..), but only these two were recovered;
+ * the rest are drawn dark from the plain picture, as on the surface.
+ */
+export const INFERNO_SILHOUETTE_FILE: Readonly<Record<number, string>> = {
+  129: "quake_tower.v2.silhouette.jpg",
+  132: "magma_tower.v2.silhouette.jpg",
+};
+
+/** The file name of a type's button picture on a yard of `kind`. */
+export const buttonFile = (type: number, kind: YardKind = "main"): string =>
+  (kind === "inferno" ? INFERNO_BUTTON_FILE[type] : undefined) ?? BUTTON_FILE[type] ?? `${type}.jpg`;
+
+/** The URL of a type's button picture on a yard of `kind`. */
+export const buttonUrl = (type: number, kind: YardKind = "main"): string => ROOT + buttonFile(type, kind);
 
 /** The URL of a type's silhouette, or null when it has none on disk. */
-export const silhouetteUrl = (type: number): string | null => {
-  const file = SILHOUETTE_FILE[type];
+export const silhouetteUrl = (type: number, kind: YardKind = "main"): string | null => {
+  const file = kind === "inferno" ? INFERNO_SILHOUETTE_FILE[type] : SILHOUETTE_FILE[type];
   return file ? ROOT + file : null;
 };

@@ -112,7 +112,7 @@ import {
   type MonstersFocus,
 } from "@/ui/monsters/monstersTab";
 import { monstersTabsFor } from "@/ui/monsters/tabs";
-import { resourceAmount } from "@/ui/resourceIcon";
+import { resourceAmount, setResourceRealm } from "@/ui/resourceIcon";
 import { TestReportPanel } from "@/ui/attack/TestReport";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
@@ -1551,7 +1551,7 @@ export class YardScene implements Scene {
         guideBus.emit("buildMenu", { open: false });
       },
     }).mount(context.overlay.content);
-    const category = type === undefined ? null : categoryOf(type);
+    const category = type === undefined ? null : categoryOf(type, binding.store.kind);
     if (category) {
       this.buildMenu.open(category);
       this.buildMenu.pick(type!);
@@ -1836,11 +1836,12 @@ export class YardScene implements Scene {
 
     const actions = buildActions(store);
     const storage = offer.stored !== null ? decorActions(store) : null;
-    const repeat = buildsAtOnce(type) && !instant && !storage;
+    const repeat = buildsAtOnce(type, store.kind) && !instant && !storage;
     let placed: number | null = null;
 
     const bar = new PlacementBar({
       type,
+      kind: store.kind,
       instant,
       instantPrice: offer.instantPrice,
       cost: offer.cost,
@@ -2268,6 +2269,8 @@ export class YardScene implements Scene {
       },
     });
     this.store = store;
+    // Bone, Coal, Sulfur and Magma on the Inferno yard, in every panel (WP 1.19).
+    setResourceRealm(store.kind === "inferno" ? "inferno" : "surface");
     this.unsubscribeStore = store.subscribe((change) => this.onStoreChange(change));
     this.binding = {
       store,
@@ -2566,6 +2569,7 @@ export class YardScene implements Scene {
     this.store = null;
     this.binding = null;
     this.renderer.finishBank();
+    setResourceRealm("surface");
     this.hud?.bindYard(null);
     this.dock?.bind(null);
   }

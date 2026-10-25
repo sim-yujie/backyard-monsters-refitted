@@ -118,13 +118,34 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
   OUTPOST_BUILD_CATALOGUE.flatMap((category) => category.types),
 );
 
+/**
+ * The Inferno yard's build menu (Inferno WP 1.19): the sixteen types the
+ * Inferno props table offers (`client/scripts/INFERNOYARDPROPS.as`, its
+ * `group` 1 to 3 without `block`; the server's `INFERNO_BUILDABLE_TYPES`), in
+ * that table's `order` within each tab. The Under Hall is the hall. The
+ * Housing Bunker (128) is filed under Buildings, as its `group` 2 files it.
+ * Decorations are not built there, and the storage they come from is the main
+ * yard's, so the tab is empty, as an outpost's.
+ */
+export const INFERNO_BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
+  { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
+  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [8, 26, 128, 13, 9] },
+  { id: BuildCategory.DEFENSIVE, label: "Defensive", types: [21, 129, 130, 132, 24, 17] },
+  { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
+];
+
+/** Every type the Inferno yard's menu offers. */
+export const INFERNO_MENU_TYPES: ReadonlySet<number> = new Set(
+  INFERNO_BUILD_CATALOGUE.flatMap((category) => category.types),
+);
+
 /** The menu of a yard of `kind`. */
 export const catalogueFor = (kind: YardKind = "main"): readonly BuildCategoryDefinition[] =>
-  kind === "outpost" ? OUTPOST_BUILD_CATALOGUE : BUILD_CATALOGUE;
+  kind === "outpost" ? OUTPOST_BUILD_CATALOGUE : kind === "inferno" ? INFERNO_BUILD_CATALOGUE : BUILD_CATALOGUE;
 
 /** Every type the menu of a yard of `kind` offers. */
 export const buildableTypesFor = (kind: YardKind = "main"): ReadonlySet<number> =>
-  kind === "outpost" ? OUTPOST_BUILDABLE_TYPES : BUILDABLE_TYPES;
+  kind === "outpost" ? OUTPOST_BUILDABLE_TYPES : kind === "inferno" ? INFERNO_MENU_TYPES : BUILDABLE_TYPES;
 
 /** Walls and traps are written finished and hold no worker (D13). */
 export const buildsAtOnce = (type: number, kind: YardKind = "main"): boolean => {
@@ -228,10 +249,12 @@ export interface BuildOffer {
 
 /**
  * The tile of a decoration in storage, or null when none is stored or the
- * yard is an outpost (storage is the main yard's, owner decision 2026-09-29).
+ * yard is an outpost or the Inferno (storage is the main yard's, owner
+ * decision 2026-09-29).
  */
 export const storageOffer = (type: number, context: BuildContext): BuildOffer | null => {
-  if ((context.kind ?? context.yard.kind) === "outpost") return null;
+  const kind = context.kind ?? context.yard.kind;
+  if (kind === "outpost" || kind === "inferno") return null;
   const stored = storedCount(context.save.researchdata, type);
   if (stored === 0) return null;
   return {

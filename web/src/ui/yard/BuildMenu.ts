@@ -15,14 +15,14 @@ import {
   type BuildOffer,
 } from "@/game/yard/buildCatalogue";
 import type { SpotCheck } from "@/game/yard/BuildPlacement";
-import { townHallLevel } from "@/game/yard/buildingCosts";
+import { townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS } from "@/game/yard/storage";
 import { typeName } from "@/game/yard/planner/summary";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { costAmounts, resourceAmount } from "@/ui/resourceIcon";
-import { BUILD_BLURBS } from "./buildBlurbs";
+import { BUILD_BLURBS, INFERNO_BUILD_BLURBS } from "./buildBlurbs";
 import { costFactChips } from "./costFactChips";
 import { ShinyButton } from "./ShinyButton";
 import "@/ui/styles/build-menu.css";
@@ -110,17 +110,21 @@ const NEXT = ["M9 6l6 6-6 6"];
 const CLOCK = ["M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M12 7v5l3 2"];
 const WORKER = ["M12 4a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z", "M5 20c0-3.5 3-6 7-6s7 2.5 7 6"];
 
+/** The hall of a yard of `kind`: the Under Hall in the Inferno (WP 1.19). */
+export const hallWord = (kind: YardKind = "main"): string => (kind === "inferno" ? "Under Hall" : "Town Hall");
+
 /** "2 of 3 built" and the like: what a tile says under its name. */
-export const tileLine = (offer: BuildOffer): string => {
+export const tileLine = (offer: BuildOffer, kind: YardKind = "main"): string => {
   if (offer.stored !== null) return `${offer.stored} in storage`;
+  const hall = hallWord(kind);
   switch (offer.status) {
     case "locked": {
       const gate = offer.gate;
       if (gate?.reason === "townHall") {
-        return gate.have <= 0 ? "Needs a Town Hall" : `Unlocks at Town Hall ${gate.need}`;
+        return gate.have <= 0 ? `Needs a ${hall}` : `Unlocks at ${hall} ${gate.need}`;
       }
       const need = offer.needs.find((one) => !one.met);
-      return need ? `Needs ${needText(need)}` : "Not yet";
+      return need ? `Needs ${needText(need, kind)}` : "Not yet";
     }
     case "maxed":
       return `${offer.owned} of ${offer.most} · all built`;
@@ -137,9 +141,9 @@ const plural = (name: string): string => {
 };
 
 /** One line of the needs list, as words. On an outpost the core is the hall. */
-export const needText = (need: BuildNeed, outpost = false): string => {
-  if (need.kind === "townHall") return outpost ? "an Outpost core" : `Town Hall level ${need.level}`;
-  const name = typeName(need.type);
+export const needText = (need: BuildNeed, kind: YardKind = "main"): string => {
+  if (need.kind === "townHall") return kind === "outpost" ? "an Outpost core" : `${hallWord(kind)} level ${need.level}`;
+  const name = typeName(need.type, kind);
   const which =
     need.count === 1 ? `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}` : `${need.count} ${plural(name)}`;
   return need.level > 1 ? `${which} at level ${need.level}` : which;
@@ -397,11 +401,12 @@ export class BuildMenu {
     // the line names the outpost's limits instead (`buildingCosts.ts`).
     const outpost = store.kind === "outpost";
     const hall = townHallLevel(store.yard);
+    const hallName = hallWord(store.kind);
     const free = workers.total - workers.busy;
     this.meta.replaceChildren(
       glyph(WORKER, "build-menu__meta-icon"),
       `${free} of ${workers.total} ${workers.total === 1 ? "worker" : "workers"} free`,
-      outpost ? " · Outpost limits" : hall > 0 ? ` · Town Hall level ${hall}` : " · No Town Hall",
+      outpost ? " · Outpost limits" : hall > 0 ? ` · ${hallName} level ${hall}` : ` · No ${hallName}`,
     );
 
     const offers = this.sorted();
@@ -477,7 +482,7 @@ export class BuildMenu {
       upgrade.type = "button";
       upgrade.className = "btn btn--ghost build-menu__hall";
       upgrade.dataset["focus"] = "hall";
-      upgrade.append("Upgrade Town Hall", glyph(NEXT, "build-menu__hall-icon"));
+      upgrade.append(`Upgrade ${hallWord(this.binding.store.kind)}`, glyph(NEXT, "build-menu__hall-icon"));
       upgrade.addEventListener("click", () => this.onTownHall?.());
       parts.push(upgrade);
     }
@@ -485,7 +490,8 @@ export class BuildMenu {
   }
 
   private tile(offer: BuildOffer): HTMLElement {
-    const name = typeName(offer.type);
+    const kind = this.binding.store.kind;
+    const name = typeName(offer.type, kind);
     const item = document.createElement("li");
     item.className = "build-menu__cell";
 
@@ -503,12 +509,12 @@ export class BuildMenu {
     title.textContent = name;
     const count = document.createElement("span");
     count.className = "build-tile__count";
-    count.textContent = tileLine(offer);
+    count.textContent = tileLine(offer, kind);
     if (offer.status === "locked" && offer.gate?.reason === "requirements") {
       count.classList.add("build-tile__count--needs");
     }
 
-    button.append(picture(offer, "build-tile__picture"), title, count);
+    button.append(picture(offer, "build-tile__picture", kind), title, count);
     item.append(button);
     return item;
   }
@@ -522,7 +528,8 @@ export class BuildMenu {
       this.info.replaceChildren(empty);
       return;
     }
-    const name = typeName(offer.type);
+    const kind = this.binding.store.kind;
+    const name = typeName(offer.type, kind);
     this.info.setAttribute("aria-label", name);
 
     const back = document.createElement("button");
@@ -544,17 +551,17 @@ export class BuildMenu {
     count.className = "build-info__count";
     count.textContent =
       offer.stored !== null || offer.status === "locked"
-        ? tileLine(offer)
+        ? tileLine(offer, kind)
         : `${offer.owned} of ${offer.allowed} built`;
     head.append(title, count);
 
     const blurb = document.createElement("p");
     blurb.className = "build-info__blurb";
     blurb.textContent =
-      BUILD_BLURBS[offer.type] ??
+      (kind === "inferno" ? INFERNO_BUILD_BLURBS : BUILD_BLURBS)[offer.type] ??
       (offer.stored !== null ? "A decoration from your storage. It goes anywhere inside your yard." : "");
     if (offer.stored !== null) {
-      this.info.replaceChildren(back, picture(offer, "build-info__picture"), head, blurb, this.storageActions(offer, name));
+      this.info.replaceChildren(back, picture(offer, "build-info__picture", kind), head, blurb, this.storageActions(offer, name));
       return;
     }
 
@@ -572,7 +579,7 @@ export class BuildMenu {
       const state = document.createElement("span");
       state.className = "u-visually-hidden";
       state.textContent = need.met ? "Done: " : "Not yet: ";
-      const words = needText(need, this.binding.store.kind === "outpost");
+      const words = needText(need, kind);
       line.append(mark, state, words.charAt(0).toUpperCase() + words.slice(1));
       list.append(line);
     }
@@ -590,14 +597,14 @@ export class BuildMenu {
     worker.append(glyph(WORKER, "build-info__fact-icon"), offer.atOnce ? "No worker" : "1 worker");
     facts.append(time, worker);
 
-    const nodes: Node[] = [back, picture(offer, "build-info__picture"), head, blurb, needs, facts];
+    const nodes: Node[] = [back, picture(offer, "build-info__picture", kind), head, blurb, needs, facts];
 
     // The needs list already says what a locked building waits for.
     const gate = offer.gate;
     const reasonId = `build-gate-${offer.type}`;
     const saysWhy = gate !== null && gate.reason !== "townHall" && gate.reason !== "requirements";
     if (gate && saysWhy) {
-      const reason = gateLine(gate);
+      const reason = gateLine(gate, kind);
       reason.id = reasonId;
       nodes.push(reason);
     }
@@ -612,7 +619,7 @@ export class BuildMenu {
     tutTarget(build, TutTarget.BUILD_GO);
     build.textContent = "Build · then pick a spot";
     build.disabled = gate !== null && gate.reason !== "workers";
-    build.setAttribute("aria-label", `Build ${name}` + (gate ? `. ${gateSentence(gate)}` : ""));
+    build.setAttribute("aria-label", `Build ${name}` + (gate ? `. ${gateSentence(gate, kind)}` : ""));
     if (saysWhy) build.setAttribute("aria-describedby", reasonId);
     // Every worker busy still picks the building up: the "all workers busy"
     // box comes once a spot is chosen, and the build goes on there (#345).
@@ -693,7 +700,7 @@ export class BuildMenu {
  * The building's picture from the original's build buttons, or its dark
  * silhouette while it is locked (`game/yard/buildButtonArt.ts`).
  */
-const picture = (offer: BuildOffer, className: string): HTMLElement => {
+const picture = (offer: BuildOffer, className: string, kind: YardKind): HTMLElement => {
   const box = document.createElement("span");
   box.className = className;
   box.setAttribute("aria-hidden", "true");
@@ -701,8 +708,8 @@ const picture = (offer: BuildOffer, className: string): HTMLElement => {
   image.alt = "";
   image.setAttribute("decoding", "async");
   const locked = offer.status === "locked";
-  const silhouette = locked ? silhouetteUrl(offer.type) : null;
-  image.src = silhouette ?? buttonUrl(offer.type);
+  const silhouette = locked ? silhouetteUrl(offer.type, kind) : null;
+  image.src = silhouette ?? buttonUrl(offer.type, kind);
   // No silhouette on disk: the plain picture, drawn dark by the CSS.
   if (locked && !silhouette) box.classList.add(`${className}--shade`);
   box.append(image);
@@ -716,17 +723,18 @@ const picture = (offer: BuildOffer, className: string): HTMLElement => {
 };
 
 /** Why a building cannot be built, as plain words (a button's accessible name, the info's reason). */
-export const gateSentence = (gate: BuildGate): string => {
+export const gateSentence = (gate: BuildGate, kind: YardKind = "main"): string => {
+  const hall = hallWord(kind);
   switch (gate.reason) {
     case "townHall":
-      return gate.have <= 0 ? "Build a Town Hall first." : `Needs Town Hall ${gate.need}.`;
+      return gate.have <= 0 ? `Build a ${hall} first.` : `Needs ${hall} ${gate.need}.`;
     case "limit":
       return gate.next === null
         ? `You have the most a yard can hold (${gate.allowed}).`
-        : `You have all ${gate.allowed} your Town Hall allows. Town Hall ${gate.next} allows more.`;
+        : `You have all ${gate.allowed} your ${hall} allows. ${hall} ${gate.next} allows more.`;
     case "requirements":
       return `Needs ${gate.requirements
-        .map(([type, count, level]) => needText({ kind: "building", type, count, level, met: false }))
+        .map(([type, count, level]) => needText({ kind: "building", type, count, level, met: false }, kind))
         .join(", ")}.`;
     case "shortfall":
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
@@ -738,7 +746,7 @@ export const gateSentence = (gate: BuildGate): string => {
 };
 
 /** The one line that says why a building cannot be built, amounts with their icons. */
-export const gateLine = (gate: BuildGate): HTMLElement => {
+export const gateLine = (gate: BuildGate, kind: YardKind = "main"): HTMLElement => {
   const line = document.createElement("p");
   line.className = "build-info__gate";
   if (gate.reason === "shortfall" && !gate.overCap) {
@@ -746,7 +754,7 @@ export const gateLine = (gate: BuildGate): HTMLElement => {
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
   } else {
-    line.textContent = gateSentence(gate);
+    line.textContent = gateSentence(gate, kind);
   }
   return line;
 };
@@ -767,6 +775,8 @@ export const spotSentence = (check: SpotCheck, nameOf: (id: number) => string | 
 
 export interface PlacementBarOptions {
   readonly type: number;
+  /** The yard's kind, for the Inferno's picture and name; the main yard when absent. */
+  readonly kind?: YardKind;
   /** Placing finished for Shiny rather than for resources. */
   readonly instant: boolean;
   readonly instantPrice: number;
@@ -804,13 +814,13 @@ export class PlacementBar {
     what.className = "build-placing__what";
     const image = document.createElement("img");
     image.className = "build-placing__picture";
-    image.src = buttonUrl(options.type);
+    image.src = buttonUrl(options.type, options.kind);
     image.alt = "";
     const words = document.createElement("div");
     words.className = "build-placing__words";
     const name = document.createElement("strong");
     name.className = "build-placing__name";
-    name.textContent = typeName(options.type);
+    name.textContent = typeName(options.type, options.kind);
     const price = document.createElement("span");
     price.className = "build-placing__price";
     if (options.instant) {
