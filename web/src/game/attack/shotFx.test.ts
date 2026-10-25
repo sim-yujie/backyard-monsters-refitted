@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Container, Texture, TextureSource } from "pixi.js";
+import { Container, Texture, TextureSource, TilingSprite } from "pixi.js";
 import { boltLook, LOW_SHOT_BITS, MAX_SHOT_BITS, ShotFx } from "./shotFx";
 
 /**
@@ -91,6 +91,28 @@ describe("ShotFx", () => {
     expect(fx.drawnCount).toBe(0);
     expect(layer.children).toHaveLength(0);
     fx.destroy();
+  });
+
+  it("lays a flow along a line, slid down it, for one frame; never on low", async () => {
+    const { fx, layer } = await ready();
+    const spec = { look: "energy", from: { x: 0, y: 0 }, to: { x: 0, y: 200 }, width: 16, alpha: 1, tint: 0xffaa00 } as const;
+    expect(fx.flow({ ...spec, offset: 0 })).toBe(true);
+    const [tiles] = layer.children;
+    expect(tiles).toBeInstanceOf(TilingSprite);
+    expect(tiles?.width).toBeCloseTo(200);
+    expect(tiles?.rotation).toBeCloseTo(Math.PI / 2);
+    expect(fx.flowCount).toBe(1);
+    fx.begin();
+    expect(layer.children).toHaveLength(0);
+    // The same sprite again next frame, slid further along.
+    fx.flow({ ...spec, offset: 30 });
+    expect(layer.children[0]).toBe(tiles);
+    expect((tiles as TilingSprite).tilePosition.x).toBe(30);
+    fx.destroy();
+
+    const low = await ready(true);
+    expect(low.fx.flow({ ...spec, offset: 0 })).toBe(false);
+    expect(low.layer.children).toHaveLength(0);
   });
 
   it("names the bolts round and round, each with its core", () => {

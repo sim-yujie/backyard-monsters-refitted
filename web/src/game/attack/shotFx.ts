@@ -1,4 +1,4 @@
-import { Assets, Rectangle, Sprite, Texture, type Container } from "pixi.js";
+import { Assets, Rectangle, Sprite, Texture, TilingSprite, type Container } from "pixi.js";
 import type { Point } from "@/game/yard/YardGrid";
 import { bitPath, tintAt } from "./blastFx";
 
@@ -21,6 +21,11 @@ import { bitPath, tintAt } from "./blastFx";
  * as a strip of its own) and a ray of light, which the beams stack at several
  * widths and tints. A strip is drawn for one frame only ({@link ShotFx.line}):
  * whoever wants it again draws it again, after {@link ShotFx.begin}.
+ *
+ * Beside the sheet, two flows: paintings that repeat end to end (a laser's
+ * plasma, a railgun's spiral), laid along a line and slid along it every frame
+ * so the light seems to stream ({@link ShotFx.flow}). Each is its own small
+ * image, so it can repeat.
  *
  * Until the sheet is in, nothing is drawn: the caller's code-drawn lines still
  * show the shot.
@@ -57,12 +62,13 @@ export type ShotLook = (typeof SHOT_LOOKS)[number];
 export const BOLT_COUNT = 6;
 /**
  * The strips, in the sheet's order: the bolts, then each bolt's bright core,
- * then the ray (a straight stroke of light, soft each side, tapered at the ends).
+ * then the ray (a straight stroke of light, soft each side, tapered at the ends)
+ * and the streak (a lens-flare flash: a hot spot with a long thin streak through it).
  */
 export const STRIP_LOOKS = [
   "bolt1", "bolt2", "bolt3", "bolt4", "bolt5", "bolt6",
   "core1", "core2", "core3", "core4", "core5", "core6",
-  "ray",
+  "ray", "streak",
 ] as const;
 export type StripLook = (typeof STRIP_LOOKS)[number];
 
@@ -71,6 +77,13 @@ export const boltLook = (index: number, core = false): StripLook => {
   const which = (((Math.trunc(index) % BOLT_COUNT) + BOLT_COUNT) % BOLT_COUNT) + 1;
   return `${core ? "core" : "bolt"}${which}` as StripLook;
 };
+
+/** The flows, each its own image so it can repeat: 512 x 64, lying left to right. */
+export const FLOW_LOOKS = ["energy", "helix"] as const;
+export type FlowLook = (typeof FLOW_LOOKS)[number];
+export const flowUrl = (look: FlowLook): string => `/assets/fx/tower-fx-${look}.png`;
+/** A flow image's painted height, px: its repeat is laid at the line's width. */
+const FLOW_HEIGHT = 64;
 
 /** Bits alive at once in full; the cost ceiling with every tower firing. */
 export const MAX_SHOT_BITS = 240;
@@ -140,6 +153,14 @@ export interface LampSpec {
   readonly squash?: number;
 }
 
+/** A flow laid along a line for one frame, slid `offset` world px along it. */
+export interface FlowSpec extends Omit<LineSpec, "look" | "flip"> {
+  readonly look: FlowLook;
+  readonly offset: number;
+  /** How much longer than its painted shape one repeat is laid, 1 by default. */
+  readonly stretch?: number;
+}
+
 export class ShotFx {
   private readonly bits: Bit[] = [];
   private readonly pool: Sprite[] = [];
@@ -147,6 +168,9 @@ export class ShotFx {
   private readonly lit = new Set<object>();
   /** Strips and spots drawn this frame, given back by the next {@link begin}. */
   private readonly drawn: Sprite[] = [];
+  private readonly flowPool: TilingSprite[] = [];
+  private readonly flowsDrawn: TilingSprite[] = [];
+  private readonly flows = new Map<FlowLook, Texture>();
   private readonly cells = new Map<ShotLook | StripLook, Texture>();
   private sheet: Texture | null = null;
   private asked = false;
@@ -182,6 +206,19 @@ export class ShotFx {
         // Asked once: the shots keep their code-drawn lines.
         console.warn("Tower effects sheet did not load.", caught);
       });
+    // Phones on low effects never lay a flow, so never fetch one.
+    if (this.low) return;
+    for (const look of FLOW_LOOKS) {
+      this.load(flowUrl(look))
+        .then((texture) => {
+          texture.source.addressMode = "repeat";
+          this.flows.set(look, texture);
+        })
+        .catch((caught: unknown) => {
+          // Without it the beam is only its rays.
+          console.warn(`Tower effect ${look} did not load.`, caught);
+        });
+    }
   }
 
   /**
@@ -257,6 +294,12 @@ export class ShotFx {
   begin(): void {
     for (const sprite of this.drawn) this.release(sprite);
     this.drawn.length = 0;
+    for (const tiles of this.flowsDrawn) {
+      tiles.visible = false;
+      tiles.parent?.removeChild(tiles);
+      this.flowPool.push(tiles);
+    }
+    this.flowsDrawn.length = 0;
   }
 
   /** Lays a strip from `from` to `to` for this frame, in added light; false before the sheet is in. */
@@ -271,6 +314,39 @@ export class ShotFx {
     sprite.height = spec.width;
     if (spec.flip) sprite.scale.y = -sprite.scale.y;
     return true;
+  }
+
+  /**
+   * Lays a flow from `from` to `to` for this frame, in added light, its
+   * painting repeated along the line and slid `offset` world px down it; false
+   * until its image is in (never, on low effects).
+   */
+  flow(spec: FlowSpec): boolean {
+    const texture = this.flows.get(spec.look);
+    if (!texture || !this.sheet) return false;
+    const length = Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y);
+    if (spec.alpha <= 0.01 || length < 1 || spec.width < 0.5) return true;
+    const tiles = this.flowPool.pop() ?? this.makeFlow(texture);
+    tiles.texture = texture;
+    tiles.visible = true;
+    tiles.alpha = Math.min(1, spec.alpha);
+    tiles.tint = spec.tint;
+    tiles.position.set((spec.from.x + spec.to.x) / 2, (spec.from.y + spec.to.y) / 2);
+    tiles.rotation = Math.atan2(spec.to.y - spec.from.y, spec.to.x - spec.from.x);
+    tiles.width = length;
+    tiles.height = spec.width;
+    const scale = spec.width / FLOW_HEIGHT;
+    tiles.tileScale.set(scale * (spec.stretch ?? 1), scale);
+    // Measured from the line's start, so the light runs from `from` toward `to`.
+    tiles.tilePosition.set(spec.offset, 0);
+    this.layer.addChild(tiles);
+    this.flowsDrawn.push(tiles);
+    return true;
+  }
+
+  /** Flows on screen this frame, for tests. */
+  get flowCount(): number {
+    return this.flowsDrawn.length;
   }
 
   /** A cell held on a point for this frame only, in added light: a gun-ball, a glow at a beam's end. */
@@ -327,6 +403,8 @@ export class ShotFx {
     this.clear();
     for (const sprite of this.pool) sprite.destroy();
     this.pool.length = 0;
+    for (const tiles of this.flowPool) tiles.destroy();
+    this.flowPool.length = 0;
     for (const texture of this.cells.values()) texture.destroy(false);
     this.cells.clear();
   }
@@ -388,6 +466,14 @@ export class ShotFx {
     sprite.rotation = bit.rotation + bit.spin * age;
     sprite.width = size;
     sprite.height = size * bit.squash;
+  }
+
+  private makeFlow(texture: Texture): TilingSprite {
+    const tiles = new TilingSprite({ texture, width: 1, height: 1 });
+    tiles.anchor.set(0.5);
+    tiles.blendMode = "add";
+    tiles.eventMode = "none";
+    return tiles;
   }
 
   private makeSprite(): Sprite {

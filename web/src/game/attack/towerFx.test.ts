@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { Container, Graphics, Texture, TextureSource } from "pixi.js";
+import { Container, Graphics, Texture, TextureSource, TilingSprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
+  LASER_IGNITE_TICKS,
+  LASER_REACH_TICKS,
   RAIL_CHARGE_TICKS,
+  RAIL_LIT_TICKS,
+  RAIL_SLUG_TICKS,
   RECOIL_TICKS,
   TESLA_CHARGE_END,
   TESLA_IDLE,
@@ -17,9 +21,11 @@ import {
   cellHeading,
   facingCell,
   laserCell,
+  laserReach,
   muzzleOf,
   railCharge,
   railFade,
+  railSlugAlong,
   recoilKick,
   stepDegrees,
   teslaTick,
@@ -481,6 +487,18 @@ describe("the new look's arithmetic", () => {
     expect(railCharge(rate + 31, rate)).toBe(0);
   });
 
+  it("runs the Railgun's slug down its line in a few ticks, and shoots the Laser's beam out after its barrel glows", () => {
+    expect(railSlugAlong(0)).toBe(0);
+    expect(railSlugAlong(RAIL_SLUG_TICKS / 2)).toBeCloseTo(0.5);
+    expect(railSlugAlong(RAIL_SLUG_TICKS + 5)).toBe(1);
+    // Seen for about half a second (80 ticks a second), against Flash's 30 ticks.
+    expect(RAIL_LIT_TICKS).toBeGreaterThanOrEqual(40);
+    expect(laserReach(0)).toBe(0);
+    expect(laserReach(LASER_IGNITE_TICKS)).toBe(0);
+    expect(laserReach(LASER_IGNITE_TICKS + LASER_REACH_TICKS / 2)).toBeCloseTo(0.5);
+    expect(laserReach(LASER_IGNITE_TICKS + LASER_REACH_TICKS)).toBe(1);
+  });
+
 });
 
 /** A sheet the size of the real one, with nothing to fetch. */
@@ -646,6 +664,41 @@ describe("TowerFx's new look", () => {
     expect(laser.sparks.children.length).toBeGreaterThan(charging);
     expect(laser.fx.sparkCount).toBeGreaterThan(0);
     laser.fx.destroy();
+  });
+
+  it("keeps the Railgun's trail up about half a second in the new look, then takes it away", async () => {
+    const { fx, sparks } = await newLookSetUp(118);
+    shoot(fx, 10);
+    const lit = () => sparks.children.filter((child) => child.visible).length;
+    fx.update(10 + 2, () => target);
+    const flying = lit();
+    // Every thrown bit is spent well before the end; the trail is still there.
+    fx.update(10 + RAIL_LIT_TICKS - 4, () => target);
+    expect(fx.sparkCount).toBe(0);
+    expect(lit()).toBeGreaterThan(0);
+    expect(lit()).toBeLessThan(flying);
+    fx.update(10 + RAIL_LIT_TICKS + 1, () => target);
+    expect(lit()).toBe(0);
+    fx.destroy();
+  });
+
+  it("lays the Laser's two plasma layers and filament only on full, so low draws its beam in fewer pieces", async () => {
+    const counts: number[] = [];
+    for (const look of ["full", "low"] as const) {
+      const { fx, sparks } = await newLookSetUp(23, look);
+      fx.onShot(
+        { tick: 5, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy, sweep: { fromIx: 0, fromIy: 0, toIx: target.ix, toIy: target.iy } },
+        target,
+      );
+      fx.update(45, () => target, [target]);
+      counts.push(sparks.children.filter((child) => child.visible && child instanceof TilingSprite).length);
+      counts.push(sparks.children.filter((child) => child.visible).length);
+      fx.destroy();
+    }
+    const [fullFlows, fullAll, lowFlows, lowAll] = counts;
+    expect(fullFlows).toBe(2);
+    expect(lowFlows).toBe(0);
+    expect(lowAll).toBeLessThan(fullAll ?? 0);
   });
 
   it("clears every bit when the battle stands down", async () => {

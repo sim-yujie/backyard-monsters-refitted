@@ -12,7 +12,13 @@ painted: see STAND_INS.
 Under the cells go the strips, 384 x 96, two across, which the game lays along
 a line: the six painted lightning bolts (tower-fx-kit/src/fxNN_boltN.png), each
 bolt's bright core (the bolt worn down to its middle, so it follows the same
-zigzag thinner), and the ray (the beam painting, trimmed to its glow).
+zigzag thinner), the ray (the beam painting, trimmed to its glow) and the
+streak (a lens-flare flash, tower-fx-kit/src/fx19_streak.*).
+
+Beside the sheet go the flows, which the game repeats end to end along a beam
+and slides along it: the laser's plasma (fx20_energy.*) and the railgun's
+spiral (fx21_helix.*), each cut to 512 x 64 with its two ends blended into one
+another so the repeat has no seam, saved as tower-fx-<name>.png.
 
     python web/tools/gen-tower-fx-sheet.py
 """
@@ -37,7 +43,11 @@ ORDER = ["glow", "flare", "muzzle", "spark", "burst", "zap", "smoke", "wisp", "r
 FILL = 0.92
 STRIP_W, STRIP_H, STRIP_ACROSS = 384, 96, 2
 BOLTS = [f"bolt{n}" for n in range(1, 7)]
-STRIPS = BOLTS + [f"core{n}" for n in range(1, 7)] + ["ray"]
+STRIPS = BOLTS + [f"core{n}" for n in range(1, 7)] + ["ray", "streak"]
+FLOWS = ["energy", "helix"]
+FLOW_W, FLOW_H = 512, 64
+# Share of a flow's length blended from one end into the other.
+FLOW_SEAM = 0.15
 # A bolt not painted yet: another painted bolt, turned upside down.
 BOLT_STAND_INS = {"bolt6": "bolt1"}
 # What share of a bolt's painted area its core keeps.
@@ -208,7 +218,7 @@ def core_of(rgba: np.ndarray) -> np.ndarray:
 
 
 def strip(name: str) -> tuple[Image.Image, str]:
-    source = {"ray": "beam"}.get(name, name.replace("core", "bolt"))
+    source = {"ray": "beam", "streak": "streak"}.get(name, name.replace("core", "bolt"))
     path = painting(source)
     turned = False
     if path is None and source in BOLT_STAND_INS:
@@ -227,6 +237,39 @@ def strip(name: str) -> tuple[Image.Image, str]:
     return Image.fromarray((out * 255).round().astype(np.uint8), "RGBA"), note
 
 
+def flow(name: str) -> Image.Image:
+    """A flow cut to repeat: its ragged ends trimmed, its band centred, its two ends blended into one another."""
+    path = painting(name)
+    if path is None:
+        raise SystemExit(f"no painting for {name}")
+    rgba = unmix(path)
+    h, w = rgba.shape[:2]
+    rows = np.nonzero(rgba[..., 3].max(axis=1) > 0.05)[0]
+    mid, half = (rows.min() + rows.max()) / 2, (rows.max() - rows.min()) / 2 * 1.15 + 4
+    rgba = rgba[max(0, int(mid - half)) : min(h, int(mid + half) + 1), int(w * 0.03) : int(w * 0.97)]
+    # A painting that repeats a shape (the spiral's turns) is cut to a whole number of them.
+    profile = rgba[..., 3].sum(axis=0)
+    profile = profile - profile.mean()
+    w = rgba.shape[1]
+    lags = range(w // 14, w // 3)
+    scores = [float(np.dot(profile[:-lag], profile[lag:]) / max(1e-6, np.dot(profile[:-lag], profile[:-lag]))) for lag in lags]
+    best = int(np.argmax(scores))
+    seam_share = FLOW_SEAM
+    if scores[best] > 0.6:
+        period = lags[best]
+        rgba = rgba[:, : (w // period) * period + int(period * 0.3)]
+        w = rgba.shape[1]
+        seam_share = period * 0.3 / w
+    seam = int(w * seam_share)
+    ramp = np.linspace(0, 1, seam, dtype=np.float32)[None, :, None]
+    out = rgba[:, : w - seam].copy()
+    out[:, :seam] = rgba[:, w - seam :] * (1 - ramp) + rgba[:, :seam] * ramp
+    # Faded out at the top and bottom, so the band has no hard edge across the beam.
+    y = np.linspace(-1, 1, out.shape[0], dtype=np.float32)[:, None]
+    out[..., 3] *= np.clip((1 - np.abs(y)) / 0.2, 0, 1)
+    return Image.fromarray((stretch(out, FLOW_W, FLOW_H) * 255).round().astype(np.uint8), "RGBA")
+
+
 def main() -> None:
     rows = -(-len(ORDER) // ACROSS)
     strip_rows = -(-len(STRIPS) // STRIP_ACROSS)
@@ -242,11 +285,22 @@ def main() -> None:
         print(f"{index:2d} {name:7s} {note}")
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     sheet.save(OUT, optimize=True)
+    # The flows under the sheet in the preview, each laid twice end to end to show the repeat.
+    shown = Image.new("RGBA", (sheet.width, FLOW_H * len(FLOWS)), (0, 0, 0, 0))
+    for index, name in enumerate(FLOWS):
+        img = flow(name)
+        img.save(os.path.join(os.path.dirname(OUT), f"tower-fx-{name}.png"), optimize=True)
+        for x in range(0, sheet.width, FLOW_W):
+            shown.paste(img, (x, index * FLOW_H))
+        print(f"   {name:7s} {os.path.basename(painting(name) or '')}")
+    whole = Image.new("RGBA", (sheet.width, sheet.height + shown.height), (0, 0, 0, 0))
+    whole.paste(sheet, (0, 0))
+    whole.paste(shown, (0, sheet.height))
     # A look at it on the game's grass and on black, for the review.
-    preview = Image.new("RGBA", (sheet.width, sheet.height * 2), (0, 0, 0, 255))
-    grass = Image.new("RGBA", sheet.size, (92, 140, 60, 255))
-    preview.paste(Image.alpha_composite(grass, sheet), (0, 0))
-    preview.paste(Image.alpha_composite(Image.new("RGBA", sheet.size, (20, 20, 28, 255)), sheet), (0, sheet.height))
+    preview = Image.new("RGBA", (whole.width, whole.height * 2), (0, 0, 0, 255))
+    grass = Image.new("RGBA", whole.size, (92, 140, 60, 255))
+    preview.paste(Image.alpha_composite(grass, whole), (0, 0))
+    preview.paste(Image.alpha_composite(Image.new("RGBA", whole.size, (20, 20, 28, 255)), whole), (0, whole.height))
     preview.convert("RGB").save(PREVIEW)
     print(OUT, os.path.getsize(OUT), "bytes")
 
