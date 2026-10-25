@@ -84,8 +84,12 @@ export const MAX_ADD = 400;
 /** Goo is the fourth resource (`BASE.Charge(4, …)`). */
 const GOO = "r4";
 
-/** The overdrive store items, one at a time (MH §5.5). */
-export const OVERDRIVE_ITEMS = ["HOD", "HOD2", "HOD3"] as const;
+/**
+ * The overdrive store items, one at a time (MH §5.5): the surface's, and the
+ * Inferno shop's `HODI` / `HOD2I` / `HOD3I` (each yard's store data only ever
+ * holds its own).
+ */
+export const OVERDRIVE_ITEMS = ["HOD", "HOD2", "HOD3", "HODI", "HOD2I", "HOD3I"] as const;
 
 /** A hatchery, or the HCC's shared queue. */
 export type HatcheryTarget = number | "hcc";
@@ -640,7 +644,7 @@ export const planHatcheryFinish = (save: HatcherySave, target: HatcheryTarget, n
 };
 
 /**
- * The shop's extra rule for `HOD`/`HOD2`/`HOD3`: one hatchery overdrive at a
+ * The shop's extra rule for `HOD`/`HOD2`/`HOD3` (`HODI`.. in the Inferno): one hatchery overdrive at a
  * time (they do not stack, MH §5.5). `409 alreadyActive { item, endsAt }`
  * names the one running.
  */

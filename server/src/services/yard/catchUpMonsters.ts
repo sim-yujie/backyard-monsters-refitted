@@ -60,8 +60,12 @@ export const HCC_TYPE = 16;
 /** The building-field copies of the hatchery state the original kept (`BFOUNDATION.as:3015-3021`). */
 const BUILDING_COPIES = ["rPS", "rCP", "rIP", "mq"] as const;
 
-/** Hatchery overdrives and their power (`client/scripts/STORE.as:2388-2400`). */
-const OVERDRIVES: Readonly<Record<string, number>> = { HOD: 4, HOD2: 6, HOD3: 10 };
+/**
+ * Hatchery overdrives and their power (`client/scripts/STORE.as:2388-2412`):
+ * the surface's, and the Inferno shop's, which only an Inferno yard's store
+ * data holds.
+ */
+const OVERDRIVES: Readonly<Record<string, number>> = { HOD: 4, HOD2: 6, HOD3: 10, HODI: 4, HOD2I: 6, HOD3I: 10 };
 
 /** Housing Expansion on the surface (`STORE.as:2419-2427`). */
 const EXPANSION = "EXH";

@@ -44,10 +44,12 @@ export interface DefenderForces {
 
 /**
  * The shop items that boost a side in battle, and what each one turns on
- * (`STORE.as:2431-2500`).
+ * (`STORE.as:2431-2500`). `TODI` is the Inferno shop's Tower Overdrive, held
+ * only in an Inferno yard's store data (`STORE.as:2439-2444`).
  */
 export const BOOST_ITEMS: Readonly<Record<string, keyof SideBuffs>> = {
   TOD: "towerDamage",
+  TODI: "towerDamage",
   MOD: "monsterDamage",
   MDOD: "monsterArmour",
   MSOD: "monsterSpeed",

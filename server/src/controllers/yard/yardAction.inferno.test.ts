@@ -5,6 +5,7 @@ import type { User } from "../../database/models/user.model.js";
 import { costOf, productionOf, siloCapacity } from "../../game-data/buildingCosts.js";
 import { INFERNO_REPAIR_TIMES, REPAIR_TIMES } from "../../game-data/repairTimes.js";
 import { footprintOf } from "../../game-data/buildingFootprints.js";
+import { storeBuffs } from "../../game-rules/combat/defence.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import { refundOf, storageCap } from "../../services/base/economy/resourceBudget.js";
 import { infernoStartBuildingData } from "../../services/inferno/infernoYard.js";
@@ -235,7 +236,6 @@ describe("which yard a request acts on", () => {
   test("a route not checked for the Inferno refuses: 409 notInInferno, nothing written", async () => {
     const before = structuredClone(infernoSave());
     for (const [action, request] of [
-      [yardShopBuyAction, { item: "BIP" }],
       [yardLockerCancelAction, {}],
     ] as const) {
       const answer = await inInferno(action as YardAction<z.ZodType, unknown>, request);
@@ -471,8 +471,11 @@ describe("the Inferno tables the rules read", () => {
     expect(footprintOf(14)).toMatchObject({ w: 130, h: 130 });
   });
 
-  test("one worker in the Inferno; the expansion is the Inferno shop's ENLI", () => {
-    expect(workerCount({ BEW: { q: 4 } }, "inferno")).toBe(1);
+  test("the Inferno counts its own bought workers; the expansion is the Inferno shop's ENLI", () => {
+    expect(workerCount({}, "inferno")).toBe(1);
+    expect(workerCount({ BEW: { q: 4 } }, "inferno")).toBe(5);
+    expect(workerCount({ BEW: { q: 9 } }, "inferno")).toBe(5);
+    expect(workerCount({ BEW: { q: 4 } }, "outpost")).toBe(1);
     expect(currentExpansion({ ENL: { q: 3 } }, "inferno")).toBe(0);
     expect(currentExpansion({ ENLI: { q: 2 } }, "inferno")).toBe(2);
     expect(currentExpansion({ ENLI: { q: 2 } })).toBe(0);
@@ -702,5 +705,172 @@ describe("walls and traps in the Inferno", () => {
     // A wall's step finishes at once, as on the surface's planner walk: no worker held.
     expect(buildings(infernoSave())["6"]).toMatchObject({ l: 2 });
     expect(buildings(infernoSave())["6"]!.cU).toBeUndefined();
+  });
+});
+
+// WP 1.17: workers and the Inferno shop.
+
+const buy = (item: string) => inInferno(yardShopBuyAction, { item });
+const infernoStore = () => infernoSave().storedata as Record<string, Row>;
+
+describe("buying workers in the Inferno (owner decision I3)", () => {
+  test("1 free, then 250 / 500 / 1,000 / 2,000 Shiny from the shared purse; sold out at 5", async () => {
+    db.rows.set(MAIN, mainRow({ credits: 5000 }));
+    let credits = 5000;
+    for (const [n, price] of [250, 500, 1000, 2000].entries()) {
+      const answer = await buy("BEW");
+      expect(answer.status).toBe(200);
+      expect(body(answer).report).toMatchObject({ item: "BEW", credits: price, q: n + 1, endsAt: null });
+      credits -= price;
+      expect(mainSave().credits).toBe(credits);
+    }
+    expect(infernoStore().BEW).toEqual({ q: 4 });
+    expect(workerCount(infernoStore(), "inferno")).toBe(5);
+
+    const fifth = await buy("BEW");
+    expect(fifth.status).toBe(409);
+    expect(body(fifth).reason).toBe("soldOut");
+    expect(mainSave().credits).toBe(1250);
+
+    const state = body(await inInferno(yardStateAction));
+    expect(state.workers).toEqual({ total: 5, busy: 0 });
+  });
+
+  test("the Inferno's ladder is its own: the main yard's workers do not count there, and stay the main yard's", async () => {
+    const answer = await buy("BEW");
+    expect(body(answer).report).toMatchObject({ credits: 250, q: 1 });
+    expect(mainSave().storedata).toEqual({ BEW: { q: 4 }, BIP: { q: 5 } });
+    expect(mainSave().credits).toBe(750);
+    expect(infernoSave().credits).toBe(0);
+    // The main yard's own ladder is still sold out, and leaves the Inferno's alone.
+    const main = await call(yardShopBuyAction, { item: "BEW" });
+    expect(main.status).toBe(409);
+    expect(body(main).reason).toBe("soldOut");
+    expect(infernoStore().BEW).toEqual({ q: 1 });
+  });
+
+  test("a bought worker runs a second build at once", async () => {
+    await buy("BEW");
+    expect((await inInferno(yardBuildAction, { type: SHARPSHOOTER, x: 200, y: 200 })).status).toBe(200);
+    expect((await inInferno(yardBuildAction, { type: SHARPSHOOTER, x: 200, y: 300 })).status).toBe(200);
+    expect(body(await inInferno(yardStateAction)).workers).toEqual({ total: 2, busy: 2 });
+  });
+
+  test("Shiny is shared: short of it, 409 credits and nothing written", async () => {
+    db.rows.set(MAIN, mainRow({ credits: 249 }));
+    const before = structuredClone(infernoSave());
+    const short = await buy("BEW");
+    expect(short.status).toBe(409);
+    expect(body(short).reason).toBe("credits");
+    expect(infernoSave()).toEqual(before);
+    expect(mainSave().credits).toBe(249);
+  });
+});
+
+describe("the Inferno shop (STORE.as:210)", () => {
+  test("only the Inferno store's items are sold there: 400 notForSale for the rest", async () => {
+    for (const item of ["BST", "ENL", "POD", "CLOD", "HOD", "EXH", "TOD", "MOD", "BLK2", "BLK4", "BR11I"]) {
+      const answer = await buy(item);
+      expect(answer.status).toBe(400);
+      expect(body(answer).reason).toBe("notForSale");
+    }
+    expect(infernoStore()).toEqual({});
+    expect(mainSave().credits).toBe(1000);
+  });
+
+  test("the Inferno's own items are not sold on the main yard", async () => {
+    for (const item of ["ENLI", "BLK2I", "BLK3I", "HODI", "HOD2I", "HOD3I", "EXHI", "TODI"]) {
+      const answer = await call(yardShopBuyAction, { item });
+      expect(answer.status).toBe(400);
+      expect(body(answer).reason).toBe("notForSale");
+    }
+    expect(mainSave().credits).toBe(1000);
+  });
+
+  test("More Yardage (ENLI): 50 to 250 in five steps, on the Inferno row", async () => {
+    db.rows.set(MAIN, mainRow({ credits: 2000 }));
+    for (const [n, price] of [50, 100, 150, 200, 250].entries()) {
+      expect(body(await buy("ENLI")).report).toMatchObject({ credits: price, q: n + 1 });
+    }
+    expect(currentExpansion(infernoStore(), "inferno")).toBe(5);
+    expect(body(await buy("ENLI")).reason).toBe("soldOut");
+    expect(mainSave().credits).toBe(2000 - 750);
+  });
+
+  test("Improved Packing Skills (BIP) is the Inferno yard's own and raises the Inferno cap", async () => {
+    const answer = await buy("BIP");
+    expect(body(answer).report).toMatchObject({ credits: 50, q: 1 });
+    expect(infernoStore().BIP).toEqual({ q: 1 });
+    expect(mainSave().storedata).toEqual({ BEW: { q: 4 }, BIP: { q: 5 } });
+    const caps = body(await inInferno(yardStateAction)).caps as Record<string, number>;
+    expect(caps.r1).toBeGreaterThan(START_CAP);
+  });
+
+  test("Granite Blocks (BLK2I) wait for Under Hall 3, then raise every Block for 3 Shiny each", async () => {
+    const walls = {
+      "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 },
+      "7": { id: 7, t: WALL, X: 240, Y: 200, l: 1 },
+    };
+    yardWith(layout(2, walls));
+    const gated = await buy("BLK2I");
+    expect(gated.status).toBe(409);
+    expect(body(gated)).toMatchObject({ reason: "townHall", have: 2, need: 3 });
+
+    yardWith(layout(3, walls));
+    const answer = await buy("BLK2I");
+    expect(answer.status).toBe(200);
+    expect(body(answer).report).toMatchObject({ item: "BLK2I", credits: 6, tier: 2, blocks: 2 });
+    expect(mainSave().credits).toBe(1000 - 6);
+    expect(buildings(infernoSave())["6"]).toMatchObject({ l: 2 });
+    expect(buildings(infernoSave())["7"]).toMatchObject({ l: 2 });
+    expect(infernoPoints()).toBe(2 * pointsForUpgrade(costOf(WALL, "inferno")!.costs[1]!));
+    expect(purse()).toEqual(PURSE);
+    expect(body(await buy("BLK2I")).reason).toBe("nothingToUpgrade");
+  });
+
+  test("Forged Steel Blocks (BLK3I) need Under Hall 4 and cost 3 + 6 from level 1", async () => {
+    const walls = { "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 } };
+    yardWith(layout(3, walls));
+    expect(body(await buy("BLK3I"))).toMatchObject({ reason: "townHall", have: 3, need: 4 });
+    yardWith(layout(4, walls));
+    expect(body(await buy("BLK3I")).report).toMatchObject({ credits: 9, tier: 3, blocks: 1 });
+    expect(buildings(infernoSave())["6"]).toMatchObject({ l: 3 });
+  });
+
+  test("the Inferno's Hatchery Overdrives (HODI, HOD2I, HOD3I): 30 / 50 / 100, an hour, one at a time", async () => {
+    const first = await buy("HODI");
+    expect(body(first).report).toMatchObject({ item: "HODI", credits: 30, q: 1 });
+    const entry = infernoStore().HODI!;
+    expect(Number(entry.e) - Number(entry.s)).toBe(3600);
+    const second = await buy("HOD3I");
+    expect(second.status).toBe(409);
+    expect(body(second).reason).toBe("alreadyActive");
+    expect(body(second)).toMatchObject({ item: "HODI" });
+    expect(mainSave().credits).toBe(970);
+  });
+
+  test("Housing Expansion (EXHI): 375, a day, not bought again while it runs", async () => {
+    expect(body(await buy("EXHI")).report).toMatchObject({ credits: 375, q: 1 });
+    expect(body(await buy("EXHI")).reason).toBe("alreadyActive");
+    expect(mainSave().credits).toBe(625);
+  });
+
+  test("Tower Overdrive (TODI): 600, a day, restarted when bought again; the yard's towers defend with it", async () => {
+    db.rows.set(MAIN, mainRow({ credits: 1200 }));
+    expect(body(await buy("TODI")).report).toMatchObject({ credits: 600, q: 1 });
+    expect(body(await buy("TODI")).report).toMatchObject({ credits: 600, q: 1 });
+    expect(mainSave().credits).toBe(0);
+    expect(storeBuffs(infernoStore(), now(), "defender")).toEqual({ towerDamage: true });
+    expect(storeBuffs(infernoStore(), now(), "attacker")).toBeUndefined();
+  });
+
+  test("damage protection (PRO1) protects the Inferno yard, not the main yard", async () => {
+    const t = now();
+    const answer = await buy("PRO1");
+    expect(answer.status).toBe(200);
+    expect(body(answer).report).toMatchObject({ item: "PRO1", credits: 32, q: 1 });
+    expect(Number(infernoSave().protected)).toBeGreaterThanOrEqual(t + 86400);
+    expect(Number(mainSave().protected ?? 0)).toBe(0);
+    expect(mainSave().credits).toBe(968);
   });
 });
