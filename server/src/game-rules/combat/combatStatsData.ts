@@ -967,8 +967,9 @@ export const OUTPOST_CAPACITY: Readonly<Record<number, readonly number[]>> = {
  *
  * `GLOBAL.SetBuildingProps` reads `INFERNOYARDPROPS.as` for an Inferno yard
  * (`client/scripts/GLOBAL.as:718-719`), a player's or a Moloch tribe's on the
- * Inferno map. The Descent is fought on the main table. A type with no row
- * reads the main ladder.
+ * Inferno map. A Descent yard is fought as an Inferno yard too, so it reads
+ * this table (`docs/design/inferno.md` §2.4). A type with no row reads the
+ * main ladder.
  */
 export const INFERNO_BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
   // 5 Flinger (special) — INFERNOYARDPROPS.as:506
