@@ -185,6 +185,8 @@ describe("starting a Descent attack", () => {
       kind: "descent",
       yardkind: "inferno",
       attackid: descent!.session.attackid,
+      // Base id 203 is the third yard: what the client's fight burns by (WP 1.21).
+      descentyard: 3,
       level: 3,
       flingercapacity: 2500,
       descentloot: { r1: 3000, r2: 2000, r3: 1000, r4: 500 },

@@ -257,6 +257,8 @@ const descentBattle = async (
     tick: battleTick(saveData.tick),
     declareWar: session.declareWar ?? false,
     left: saveData.left,
+    // From yard 7 the fight burns surface monsters (WP 1.21), as the client's does.
+    descentYard: descentIndexOf(String(saveData.baseid))! + 1,
   });
   if (!input) return null;
 

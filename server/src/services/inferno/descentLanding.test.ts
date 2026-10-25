@@ -336,6 +336,8 @@ describe("the save that ends a Descent attack", () => {
     const [input] = inputs;
     expect(input!.defender.kind).toBe("inferno");
     expect(input!.defence).toEqual(FORCES as never);
+    // The yard's number, base id less 200, for the burn from yard 7 (WP 1.21).
+    expect(input!.descentYard).toBe(1);
     expect(Object.keys(input!.defender.buildingdata ?? {})).toHaveLength(
       Object.keys(descentYardOf(0).buildingdata as object).length
     );
@@ -462,6 +464,7 @@ describe("the 13th win: the Descent is passed", () => {
 
     expect(await run(ctx)).toBeNull();
     expect(ctx.body.descent).toMatchObject({ won: true, level: 14, captured: true, infernobaseid: NEW_YARD_BASEID });
+    expect(inputs[0]!.descentYard).toBe(13);
     expect(row!.descent_destroyed!.every((flag) => flag === 1)).toBe(true);
     expect(row!.descent_passed_at).toBeInstanceOf(Date);
     expect(row!.inferno_baseid).toBe(NEW_YARD_BASEID);

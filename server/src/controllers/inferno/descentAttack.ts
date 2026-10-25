@@ -58,6 +58,8 @@ export interface DescentAttackStart {
   /** The engine's yard kind the battle is fought as. */
   yardkind: "inferno";
   attackid: number;
+  /** The yard attacked, 1-13 (base id less 200): from 7 the fight burns surface monsters. */
+  descentyard: number;
   /** Flash's Descent counter before this attack, 1-13. */
   level: number;
   /** The yard, as an attack load serves one. */
@@ -138,6 +140,9 @@ export const startDescentAttack = async (
     kind: "descent",
     yardkind: "inferno",
     attackid: yard.attackid,
+    // The yard's number, 1 to 13, for the client's fight (`AttackSessionOptions.descentYard`):
+    // from yard 7 surface monsters burn (WP 1.21).
+    descentyard: index + 1,
     level: descentLevelOf(progress),
     base: await mapSaveData(yard, user, { attack: true }),
     defenderforces: defenderForces,

@@ -88,6 +88,11 @@ export interface AbandonedInput {
    * whose client fought none either.
    */
   defence?: DefenderForces;
+  /**
+   * The Descent yard fought, 1 to 13 (Inferno WP 1.12): from yard 7 the
+   * shared engine burns surface monsters (WP 1.21). Absent outside the Descent.
+   */
+  descentYard?: number;
 }
 
 /** Everything the attack save would have carried, derived. */
@@ -209,6 +214,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       declareWar,
       ...(input.playerLevel !== undefined && { playerLevel: input.playerLevel }),
       ...battleDefence(input.defence),
+      ...(input.descentYard !== undefined && { descentYard: input.descentYard }),
       // Each attacking champion's lesson for its brain (issue #219); reads only.
       learn: true,
     }
