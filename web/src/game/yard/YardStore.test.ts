@@ -510,6 +510,22 @@ describe("the action queue", () => {
     expect(api.cancelUpgrade).not.toHaveBeenCalled();
   });
 
+  it("sends an Inferno wall's upgrade, since the Inferno has no planner", async () => {
+    const pending = deferred<YardResponse<unknown>>();
+    const api = stubApi({ upgrade: vi.fn(() => pending.promise) });
+    const { store } = storeWith(
+      loadWith({
+        type: "inferno",
+        buildingdata: { ...baseBuildings(), "6": { X: 500, Y: 0, t: 17, id: 6, l: 1 } },
+      }),
+      api,
+    );
+    void store.upgrade(6);
+    await flush();
+    // WP 1.16: the server takes a wall upgrade in the Inferno only (BASE.as:1072).
+    expect(api.upgrade).toHaveBeenCalledTimes(1);
+  });
+
   it("reports a server refusal and fetches the state it was refused against", async () => {
     const refused = new ApiError("You do not have enough resources for that.", {
       status: 409,

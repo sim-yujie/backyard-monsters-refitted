@@ -132,6 +132,24 @@ describe("whose yard it is", () => {
     const visit = readYard({ ...(fixture as unknown as BaseLoadResponse), ...inferno(true) }, { foreign: true });
     expect(visit.bounds.margin).toBe(FOREIGN_YARD_MARGIN);
   });
+
+  it("reads an Inferno yard with its own More Yardage and Inferno buildings (WP 1.18)", () => {
+    const hell = yardWith(
+      { "1": { X: 0, Y: 0, t: 14, id: 1, l: 1 }, "2": { X: 200, Y: 0, t: 26, id: 2, l: 1 } },
+      { type: "inferno", storedata: { ENLI: { q: 1 } } } as Partial<BaseLoadResponse>,
+    );
+    expect(hell.kind).toBe("inferno");
+    expect(hell.foreign).toBe(false);
+    // ENL + ENLI, as STORE.as:2346 adds them in the Inferno.
+    expect(hell.expansionLevel).toBe(1);
+    expect(hell.bounds.margin).toBe(caveYardMargin(1));
+    const underHall = hell.buildings.find((building) => building.type === 14)!;
+    expect(underHall.name).toBe("Under Hall");
+    expect(underHall.footprint).toEqual([160, 160]);
+    expect(hell.buildings.find((building) => building.type === 26)!.footprint).toEqual([80, 80]);
+    // The main yard does not count the Inferno's yardage.
+    expect(yardWith({}, { storedata: { ENLI: { q: 1 } } } as Partial<BaseLoadResponse>).expansionLevel).toBe(0);
+  });
 });
 
 describe("the outpost's cell height (#262)", () => {
