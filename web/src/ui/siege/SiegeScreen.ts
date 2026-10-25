@@ -212,7 +212,8 @@ export class SiegeScreen {
   open(site: SiegeSite = this.site): void {
     if (this.destroyed) return;
     const wasOpen = this.opened;
-    if (site !== this.site || !wasOpen) {
+    const changed = site !== this.site;
+    if (changed || !wasOpen) {
       this.confirm = null;
       this.setStatus(null);
     }
@@ -227,6 +228,8 @@ export class SiegeScreen {
     }
     this.body.setAttribute("aria-labelledby", `siege-tab-${site}`);
     this.render();
+    // A phone's sheet scrolls the list and card together: a new tab starts at its list.
+    if (changed) this.split.scrollTop = 0;
     if (!wasOpen) this.tabButtons.get(site)?.focus();
   }
 
