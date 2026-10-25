@@ -16,6 +16,7 @@ import { realActionTracker } from "./middleware/realAction.js";
 import { processLanguagesFile } from "./middleware/processLanguageFile.js";
 import { logMissingAssets, requestLogging } from "./middleware/requestLogging.js";
 import { corsCacheControl } from "./middleware/corsCacheControlSetup.js";
+import { byteRanges } from "./middleware/byteRanges.js";
 import { isStaticPath } from "./utils/staticPaths.js";
 import { Env } from "./enums/Env.js";
 import { initAnticheat } from "./scripts/anticheat/anticheat.js";
@@ -102,7 +103,8 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   app.use(processLanguagesFile);
 
   const staticFiles = serve("public/");
-  app.use((ctx, next) => isStaticPath(ctx.path) ? staticFiles(ctx, next) : next());
+  // Range requests get just the bytes asked for, which iPhone Safari needs to play music.
+  app.use((ctx, next) => isStaticPath(ctx.path) ? byteRanges(ctx, () => staticFiles(ctx, next)) : next());
 
   process.on("unhandledRejection", (reason, promise) => {
     logger.error(`Unhandled Rejection at: ${promise} reason: ${reason}`);
