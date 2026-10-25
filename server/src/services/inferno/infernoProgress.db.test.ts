@@ -3,11 +3,15 @@ import { MikroORM } from "@mikro-orm/postgresql";
 
 import { CreateInfernoProgressTable } from "../../database/migrations/20261025_CreateInfernoProgressTable.js";
 import ormConfig from "../../mikro-orm.config.js";
+import { raiseEmergence } from "./emergenceOnLoad.js";
 import { readInfernoProgress } from "./infernoProgress.js";
 
 /**
  * `bym.inferno_progress` against a real Postgres: the migration (shape, run
  * twice, its checks, the foreign key) and the entity reading what it wrote.
+ *
+ * Then the emergence's level-up statement (`raiseEmergence`): it raises the
+ * cave once however many loads race, and never inside the 12 hours.
  *
  * Opt-in: runs only when INFERNO_TEST_DB names a throwaway database with the
  * `bym` schema and the migrations applied, and refuses the shared `bym`.
@@ -104,5 +108,42 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     const [left] = await sql<{ n: string }>(`SELECT count(*) AS n FROM bym.inferno_progress WHERE userid = ?`, [A]);
     expect(Number(left.n)).toBe(0);
     await addPlayer();
+  });
+
+  test("the first level-up makes the row: level 1, at now", async () => {
+    const NOW = 1_800_000_000;
+    expect(await raiseEmergence(em(), A, 0, NOW)).toBe(1);
+    const record = await readInfernoProgress(em(), A);
+    expect(record.emergenceLevel).toBe(1);
+    expect(record.emergenceLastAt).toBe(NOW);
+  });
+
+  test("loads racing raise the cave once", async () => {
+    const NOW = 1_800_000_000;
+    const results = await Promise.all(Array.from({ length: 6 }, () => raiseEmergence(em(), A, 0, NOW)));
+    expect(results.filter((level) => level === 1)).toHaveLength(1);
+    expect(results.filter((level) => level === null)).toHaveLength(5);
+    expect((await readInfernoProgress(em(), A)).emergenceLevel).toBe(1);
+  });
+
+  test("not within 12 hours of the last; from 12 hours on, the next", async () => {
+    const NOW = 1_800_000_000;
+    await raiseEmergence(em(), A, 0, NOW);
+    expect(await raiseEmergence(em(), A, 1, NOW + 43_199)).toBeNull();
+    expect(await raiseEmergence(em(), A, 1, NOW + 43_200)).toBe(2);
+    expect((await readInfernoProgress(em(), A)).emergenceLastAt).toBe(NOW + 43_200);
+  });
+
+  test("a stale level read loses: the cave is not raised twice from the same level", async () => {
+    const NOW = 1_800_000_000;
+    await raiseEmergence(em(), A, 0, NOW);
+    expect(await raiseEmergence(em(), A, 0, NOW + 100_000)).toBeNull();
+    expect((await readInfernoProgress(em(), A)).emergenceLevel).toBe(1);
+  });
+
+  test("a row made for something else is raised from level 0 too", async () => {
+    await sql(`INSERT INTO bym.inferno_progress (userid, popups_seen) VALUES (?, '{"x":1}'::jsonb)`, [A]);
+    expect(await raiseEmergence(em(), A, 0, 1_800_000_000)).toBe(1);
+    expect((await readInfernoProgress(em(), A)).popupsSeen).toEqual({ x: 1 });
   });
 });

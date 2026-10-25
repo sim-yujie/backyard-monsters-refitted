@@ -4,6 +4,7 @@ import type { User } from "../../database/models/user.model.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { postgres } from "../../server.js";
 import { EMERGENCE_LEVELS, caveShown, nextEmergenceAt, type CaveSave } from "../../services/inferno/emergence.js";
+import type { EmergenceOnLoad } from "../../services/inferno/emergenceOnLoad.js";
 import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
 import {
   DESCENT_YARDS,
@@ -93,3 +94,16 @@ export const infernoState: KoaController = async (ctx) => {
   ctx.body = await readInfernoState(postgres.em, ctx.authUser, getCurrentDateTime());
 };
 
+/**
+ * The load answer's `infernostate`, on the owner's build-mode load of their
+ * main yard while the new Inferno is on: the state, and `raised`, the level
+ * the cave just went up to (its emergence raid comes now), or null.
+ */
+export const infernoLoadState = (
+  emergence: EmergenceOnLoad,
+  main: CaveSave,
+  now: number
+): Omit<InfernoStateBody, "error"> & { raised: number | null } => {
+  const { error: _error, ...state } = infernoStateAnswer(emergence.progress, main, now);
+  return { ...state, raised: emergence.raised };
+};

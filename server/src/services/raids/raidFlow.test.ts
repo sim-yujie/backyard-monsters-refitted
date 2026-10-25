@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } fr
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
+import { InfernoProgress } from "../../database/models/infernoprogress.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { experiencePoints } from "../../game-data/stats/experiencePoints.js";
 import { memoryRedis } from "../../testing/memoryRedis.js";
@@ -59,6 +60,8 @@ type Row = Record<string, unknown>;
 
 const db = {
   row: null as Row | null,
+  /** The player's `inferno_progress` row, or none. */
+  inferno: null as Row | null,
   tail: Promise.resolve() as Promise<void>,
   /** Unlocked reads of the whole row (no `fields`), and locked reads. */
   fullReads: 0,
@@ -75,7 +78,9 @@ const acquire = (): Promise<() => void> => {
 };
 
 const em = {
-  async findOne(_entity: unknown, _where: unknown, options?: { fields?: unknown }) {
+  async findOne(entity: unknown, _where: unknown, options?: { fields?: unknown }) {
+    // The Inferno emergence's progress row (`emergenceHoldsRaids`).
+    if (entity === InfernoProgress) return db.inferno;
     if (!options?.fields) db.fullReads++;
     return db.row && structuredClone(db.row);
   },
@@ -236,6 +241,7 @@ const finishOnTime = async (id: string, finishFrom: number) => {
 beforeEach(() => {
   redis.clear();
   db.row = rowOf();
+  db.inferno = null;
   db.fullReads = 0;
   db.locks = 0;
   standIn.slot = null;
@@ -294,6 +300,24 @@ describe("the warning", () => {
 
     expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
     expect(touchedYard()).toBe(false);
+  });
+
+  test("Moloch's emergence holds wild raids back until its fifth raid (Inferno on, Town Hall 5+)", async () => {
+    const saved = process.env.INFERNO_ENABLED;
+    process.env.INFERNO_ENABLED = "on";
+    try {
+      db.row = rowOf({ thlevel: 10, tutorialstage: 205 });
+      db.inferno = { userid: USER, emergence_level: 2 };
+      await present(NOW);
+      expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+      expect(touchedYard()).toBe(false);
+
+      db.inferno = { userid: USER, emergence_level: 5 };
+      expect(await raidOnPing(em, user, YARD, NOW)).toMatchObject({ phase: "warning" });
+    } finally {
+      if (saved === undefined) delete process.env.INFERNO_ENABLED;
+      else process.env.INFERNO_ENABLED = saved;
+    }
   });
 
   test("a repair not done yet is left to finish; once it is, the ping catches it up and warns", async () => {

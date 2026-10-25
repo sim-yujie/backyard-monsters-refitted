@@ -25,7 +25,7 @@ const em = {
 };
 mock.module("../../server.js", () => ({ postgres: { em }, redis: {} }));
 
-const { infernoState, infernoStateAnswer } = await import("./infernoState.js");
+const { infernoLoadState, infernoState, infernoStateAnswer } = await import("./infernoState.js");
 
 const NOW = 1_800_000_000;
 const hall = (level: number): BuildingDataMap => ({ "1": { id: 1, t: 14, l: level, x: 0, y: 0 } as BuildingData });
@@ -86,6 +86,21 @@ describe("the Inferno state answer", () => {
 
   test("no main yard, no cave", () => {
     expect(infernoStateAnswer(NO_INFERNO_PROGRESS, null, NOW, true).cave.shown).toBe(false);
+  });
+});
+
+describe("the load answer's infernostate", () => {
+  test("the state without `error`, and the level the cave just went up to", () => {
+    const progress = { ...NO_INFERNO_PROGRESS, emergenceLevel: 1, emergenceLastAt: NOW };
+    const state = infernoLoadState({ progress, raised: 1, notDue: null }, yard(5), NOW);
+    expect(state).not.toHaveProperty("error");
+    expect(state.raised).toBe(1);
+    expect(state.cave.level).toBe(1);
+    expect(state.emergence.nextAt).toBe(NOW + 43_200);
+  });
+
+  test("raised is null when no raid came on this load", () => {
+    expect(infernoLoadState({ progress: NO_INFERNO_PROGRESS, raised: null, notDue: "tooSoon" }, yard(5), NOW).raised).toBeNull();
   });
 });
 

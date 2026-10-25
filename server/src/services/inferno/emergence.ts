@@ -1,6 +1,9 @@
 import { devConfig } from "../../config/GameConfig.js";
-import type { BuildingDataMap } from "../../types/BuildingData.js";
-import { townHallLevel } from "../yardplanner/costs.js";
+import { BaseType } from "../../enums/Base.js";
+import { maxHp } from "../../game-rules/combat/stats.js";
+import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
+import { harvesterHealth } from "../yard/catchUpHarvesters.js";
+import { levelOf, townHallLevel } from "../yardplanner/costs.js";
 import type { InfernoProgressRecord } from "./infernoProgress.js";
 
 /**
@@ -21,6 +24,9 @@ export const EMERGENCE_GAP_SECONDS = 43_200;
 
 /** Flash's "tutorial over": `TUTORIAL._stage > 200` (`:212`). */
 export const TUTORIAL_OVER_STAGE = 200;
+
+/** A raid needs the yard above this share of its full health (`_MINIMUM_BASE_HEALTH`, `:184-196`). */
+export const EMERGENCE_MIN_HEALTH = 0.1;
 
 /** The slice of a main save the cave reads. */
 export interface CaveSave {
@@ -67,3 +73,100 @@ export const nextEmergenceAt = (
   if (emergenceDone(progress)) return null;
   return progress.emergenceLastAt === null ? 0 : progress.emergenceLastAt + EMERGENCE_GAP_SECONDS;
 };
+
+/**
+ * The yard's health as a share of full health, over every building with a
+ * health ladder (`isBaseReadyForAttack`, `:184-196`: health over max health
+ * of every building). A yard with none reads 0, as Flash's 0/0 never passed.
+ */
+export const yardHealthShare = (save: Pick<EmergenceSave, "buildingdata" | "buildinghealthdata">): number => {
+  let health = 0;
+  let full = 0;
+  for (const [key, building] of Object.entries(save.buildingdata ?? {})) {
+    if (!building) continue;
+    const max = maxHp(Number(building.t), levelOf(building), "main");
+    if (!(max > 0)) continue;
+    full += max;
+    health += Math.min(max, Math.max(0, harvesterHealth(save, key, building) ?? max));
+  }
+  return full > 0 ? health / full : 0;
+};
+
+/** Why no emergence raid is due; the gates in the order they are checked. */
+export type EmergenceNotDue =
+  | "off"
+  | "notMainYard"
+  | "noCave"
+  | "done"
+  | "tooSoon"
+  | "underAttack"
+  | "raidOpen"
+  | "damaged";
+
+/** The slice of a main save the due rule reads. */
+export interface EmergenceSave extends CaveSave {
+  type?: string;
+  buildinghealthdata?: BuildingHealthData | null;
+}
+
+/** Everything the due rule needs, read beforehand. */
+export interface EmergenceFacts {
+  /** `infernoConfig.enabled`. */
+  readonly enabled: boolean;
+  /** The player's main yard, caught up. */
+  readonly save: EmergenceSave;
+  readonly progress: Pick<InfernoProgressRecord, "emergenceLevel" | "emergenceLastAt">;
+  /** Unix seconds. */
+  readonly now: number;
+  /** An attack is running on the yard. */
+  readonly underAttack: boolean;
+  /** A wild monster raid is open (warning or fight): one raid at a time. */
+  readonly raidOpen: boolean;
+  readonly skipTutorial?: boolean;
+}
+
+/**
+ * The emergence due rule, checked on the owner's build-mode load of their
+ * main yard (`docs/design/inferno.md` §2.2, §3.2; Flash's rules, owner I14):
+ * null when the cave goes up a level and its raid comes now, else the first
+ * gate that holds it back.
+ *
+ * 1. The new Inferno is switched on.
+ * 2. The player's main yard.
+ * 3. The cave shows ({@link caveShown}: Town Hall 5, tutorial over).
+ * 4. Fewer than five raids so far.
+ * 5. 12 hours since the last level-up (`IsBelowMaxLevel`, `:111-119`); the
+ *    first has no wait.
+ * 6. No attack running on the yard and no wild monster raid open: the
+ *    raid waits for the next load.
+ * 7. The yard above 10% of its full health (`isBaseReadyForAttack`). Not
+ *    our wild raids' "nothing damaged" rule (I14).
+ */
+export const emergenceDueCheck = (facts: EmergenceFacts): EmergenceNotDue | null => {
+  const { save, progress, now } = facts;
+  if (!facts.enabled) return "off";
+  if (save.type !== BaseType.MAIN) return "notMainYard";
+  if (!caveShown(save, progress, facts.skipTutorial)) return "noCave";
+  const nextAt = nextEmergenceAt(progress);
+  if (nextAt === null) return "done";
+  if (now < nextAt) return "tooSoon";
+  if (facts.underAttack) return "underAttack";
+  if (facts.raidOpen) return "raidOpen";
+  if (!(yardHealthShare(save) > EMERGENCE_MIN_HEALTH)) return "damaged";
+  return null;
+};
+
+/**
+ * Whether the emergence holds wild monster raids back: switched on, the
+ * player's main yard, the cave showing and fewer than five raids done
+ * (Flash: `!INFERNO_EMERGENCE_EVENT.ShouldRunEvent()` on every raid gate,
+ * `WMATTACK.as:304`, `:307`, `:327`). From the first raid to the fifth, and
+ * from Town Hall 5 before the first, the only raids are Moloch's.
+ */
+export const emergencePausesWildRaids = (
+  enabled: boolean,
+  save: EmergenceSave,
+  progress: Pick<InfernoProgressRecord, "emergenceLevel">,
+  skipTutorial: boolean = devConfig.skipTutorial
+): boolean =>
+  enabled && save.type === BaseType.MAIN && caveShown(save, progress, skipTutorial) && !emergenceDone(progress);
