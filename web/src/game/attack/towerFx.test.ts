@@ -759,7 +759,7 @@ describe("TowerFx's new look", () => {
     return -1;
   };
 
-  it("flies the Sniper's round and the flak shell as painted tracers, landing when the classic look does", async () => {
+  it("flies the Sniper's round and the flak shell as painted tracers; the Sniper's lands near at once", async () => {
     for (const type of [21, 115]) {
       const classic = await newLookSetUp(type, "classic");
       const full = await newLookSetUp(type, "full");
@@ -779,17 +779,25 @@ describe("TowerFx's new look", () => {
       expect(tracers[1]).toBeLessThan(tracers[0] ?? 0);
       full.fx.destroy();
       low.fx.destroy();
-      // Looks only: the round lands on the same tick in every look.
+      // The flak shell lands on the same tick in every look; the painted Sniper's
+      // round cracks across in a tenth of a second or so, where Flash's ball took
+      // more than half a second (the engine took the damage off as it fired).
       const fresh = await newLookSetUp(type, "full");
       const painted = landingTick(fresh.fx, type);
+      const flash = landingTick(classic.fx, type);
       expect(painted).toBeGreaterThan(5);
-      expect(painted).toBe(landingTick(classic.fx, type));
+      if (type === 21) {
+        expect(painted - 5).toBeLessThanOrEqual(12);
+        expect(flash - 5).toBeGreaterThan(40);
+      } else {
+        expect(painted).toBe(flash);
+      }
       fresh.fx.destroy();
       classic.fx.destroy();
     }
   });
 
-  it("kicks the Sniper and the Aerial Defense Tower back as they fire, and jolts only for the flak burst", async () => {
+  it("kicks the Sniper and the Aerial Defense Tower back as they fire, and jolts as the round strikes", async () => {
     for (const type of [21, 115]) {
       const { fx, shakes, nudges } = await newLookSetUp(type);
       const creep = targetFor(type);
@@ -800,7 +808,8 @@ describe("TowerFx's new look", () => {
       expect(fx.sparkCount).toBeGreaterThan(0);
       expect(shakes).toHaveLength(0);
       for (let tick = 6; tick <= 400; tick += 1) fx.update(tick, () => creep, [creep]);
-      expect(shakes).toHaveLength(type === 115 ? 1 : 0);
+      expect(shakes).toHaveLength(1);
+      expect(shakes[0]?.tick).toBeGreaterThan(5);
       expect(nudges.some(({ dx, dy }) => dx !== 0 || dy !== 0)).toBe(true);
       expect(nudges[nudges.length - 1]).toEqual({ dx: 0, dy: 0 });
       fx.destroy();

@@ -469,6 +469,19 @@ export const sightStrength = (since: number, rate: number): number | null => {
 export const SNIPER_TRAIL_TICKS = 34;
 /** Ticks the bright line of a Sniper's trail takes to fade after its round strikes. */
 const SNIPER_GLOW_TICKS = 19;
+/**
+ * World px a tick the new look's Sniper round flies: four times Flash's ball,
+ * so a shot across its range lands in about a tenth of a second and the flash,
+ * the line and the strike read as one crack. Looks only: the engine has taken
+ * the damage off on the tick it fired, and the wound shows when this lands.
+ */
+export const SNIPER_ROUND_SPEED = 20;
+/** The Sniper's strike: the yard's jolt, px, and how long it lasts, ticks. */
+const SNIPER_JOLT = 2.5;
+const SNIPER_JOLT_TICKS = 10;
+/** The Sniper's strike, hot gold to deep orange: its burst and its glow. */
+const SNIPER_BLAST = [0xfff2c8, 0xffc040, 0xff7a10, 0xa83000] as const;
+const SNIPER_BLOOM = [0xffe6a0, 0xff9a20, 0xc04008] as const;
 /** How high a flak shell climbs over its flight, as a share of the way it goes, and at most, world px. */
 export const FLAK_ARC = 0.16;
 export const FLAK_ARC_MAX = 56;
@@ -861,6 +874,7 @@ export class TowerFx {
     this.nextKey += 1;
     // The flak's twin barrels take turns: its shell is drawn out of one of them.
     const barrel = type === 115 && this.painted ? this.barrelOf(tower, from, aim) : undefined;
+    const flies = type === 21 && this.painted ? SNIPER_ROUND_SPEED : speed;
     this.bullets.push({
       key,
       type,
@@ -868,7 +882,7 @@ export class TowerFx {
       bornTick: event.tick,
       x: from.x,
       y: from.y,
-      speed: Math.max(speed, 1),
+      speed: Math.max(flies, 1),
       splash: stats?.splash ?? 0,
       aim,
       stepX: 0,
@@ -2264,9 +2278,10 @@ export class TowerFx {
 
   /**
    * The Sniper fires: a long, sharp orange-gold star of a rifle flash off the
-   * barrel's tip with a hot core, a flare and a warm glow there, gun smoke that lingers and drifts, on full
-   * a brass casing flicked out, and a hard kick. No jolt: one rifle round is
-   * not a blast.
+   * barrel's tip with a hot core, a flare and a warm glow there, a ring of
+   * air blown out round the muzzle, gun smoke that lingers and drifts, on full
+   * a brass casing flicked out, and a hard kick. The jolt waits for the strike,
+   * a tenth of a second on.
    */
   private sniperFx(tick: number, tower: TowerState, muzzle: Point, aim: Point): void {
     const sparks = this.sparks;
@@ -2296,6 +2311,11 @@ export class TowerFx {
     });
     // The hot gold core, last, on top of everything.
     sparks.emit(tick, { look: "glow", at: tip, add: true, life: 5, size0: 34, size1: 30, peak: 0.7, colours: [SNIPER_HOT] });
+    // The blast of the shot, blown out round the muzzle as the round leaves.
+    sparks.emit(tick, {
+      look: "ring", at: { x: tip.x, y: tip.y + 4 }, add: true, life: 12, size0: 10, size1: 66,
+      squash: 0.5, easeOut: true, peak: 0.75, colours: [0xffe0a0, 0xff9030],
+    });
     const puffs = sparks.many(3);
     for (let index = 0; index < puffs; index += 1) {
       sparks.emit(tick, {
@@ -2386,10 +2406,12 @@ export class TowerFx {
   }
 
   /**
-   * A Sniper's round strikes: an orange hit flash on the creep with a hot
-   * middle, a sharp gold flare, a spray of orange sparks and bits out of its far side the way
-   * the round flew, and under a walker a kick of dirt; on full a ring of air
-   * and a puff of dust as well.
+   * A Sniper's round strikes, and everything in it blows outward: a hot gold
+   * pop on the first frames, a burst and a glow of light that swell to twice
+   * its size, a ring of air across the ground, a sharp gold flare, a spray of
+   * orange sparks and bits out of its far side the way the round flew, under a
+   * walker a kick of dirt (on full a puff of dust too), and a short sharp jolt
+   * of the yard: the crack Flash's `snipe1` gave it.
    */
   private sniperHitFx(tick: number, bullet: Bullet): void {
     const sparks = this.sparks;
@@ -2400,26 +2422,28 @@ export class TowerFx {
     const dirY = Math.sin(heading);
     // Dirt and dust first, so their dark bits lie under the flash rather than over it.
     this.sniperHitDirt(tick, bullet, at, dirX);
-    // Then the coloured flash and spray, over the ground; the added light goes on top last.
-    sparks.emit(tick, { look: "glow", at, life: 7, size0: 44, size1: 32, peak: 0.85, colours: [0xff9a20, 0xf06a10] });
+    // Then the coloured flash and spray, over the ground, so the colour holds on bright grass.
+    sparks.emit(tick, {
+      look: "glow", at, life: 8, size0: 24, size1: 56, easeOut: true, peak: 0.8, colours: [0xff9a20, 0xe05a08],
+    });
     // The spray's flash point is a fifth in from its back end: laid on the hit.
     sparks.emit(tick, {
       look: "ricochet",
-      at: { x: at.x + dirX * 12, y: at.y + dirY * 12 },
+      at: { x: at.x + dirX * 14, y: at.y + dirY * 14 },
       add: false,
       life: 11,
-      size0: 44,
-      size1: 50,
+      size0: 50,
+      size1: 60,
       squash: 0.8,
       easeOut: true,
       rotation: heading,
       colours: SNIPER_SPARKS,
     });
-    const count = sparks.many(6);
+    const count = sparks.many(8);
     for (let index = 0; index < count; index += 1) {
       // Within 40 degrees either side of the round's flight.
       const angle = heading + (blastNoise(tick, index + 50) - 0.5) * 1.4;
-      const speed = 3 + blastNoise(tick, index + 60) * 3;
+      const speed = 3.5 + blastNoise(tick, index + 60) * 4;
       sparks.emit(tick, {
         look: "spark",
         at,
@@ -2430,23 +2454,31 @@ export class TowerFx {
         vz: 0.8,
         gravity: 0.15,
         drag: 0.1,
-        size0: 7,
+        size0: 8,
         size1: 3,
         stretch: true,
         colours: SNIPER_SPARKS,
       });
     }
-    if (this.look === "full") {
-      sparks.emit(tick, {
-        look: "ring", at, life: 9, size0: 8, size1: 36, squash: 0.8, easeOut: true, peak: 0.8,
-        colours: [0xffa030, 0xff6a10],
-      });
-    }
+    // The light, added on top last: a burst and a glow that swell, and the ring of air.
     sparks.emit(tick, {
-      look: "flare", at, add: true, life: 8, size0: 40, size1: 14,
+      look: "burst", at, add: true, life: 10, size0: 18, size1: 58, easeOut: true,
+      rotation: blastNoise(tick, 5) * 6.28, colours: SNIPER_BLAST,
+    });
+    sparks.emit(tick, {
+      look: "glow", at, add: true, life: 12, size0: 26, size1: 72, easeOut: true, peak: 0.7, colours: SNIPER_BLOOM,
+    });
+    sparks.emit(tick, {
+      look: "ring", at: { x: at.x, y: at.y + BODY_HEIGHT }, add: true, life: 14, size0: 10, size1: 70,
+      squash: 0.5, easeOut: true, peak: 0.7, colours: SNIPER_BLOOM,
+    });
+    sparks.emit(tick, {
+      look: "flare", at, add: true, life: 9, size0: 64, size1: 24,
       rotation: blastNoise(tick, 1) * 0.8, colours: SNIPER_WARM,
     });
-    sparks.emit(tick, { look: "glow", at, add: true, life: 6, size0: 24, size1: 18, peak: 0.7, colours: [SNIPER_HOT] });
+    // The pop: the brightest frames of the strike, gone almost at once.
+    sparks.emit(tick, { look: "glow", at, add: true, life: 4, size0: 52, size1: 40, colours: [0xfff4d8, SNIPER_HOT] });
+    this.shake?.(tick, SNIPER_JOLT, SNIPER_JOLT_TICKS);
   }
 
   /** Under a walker a Sniper's round kicks up dirt, and on full a puff of dust. */
