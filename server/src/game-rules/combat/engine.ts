@@ -44,8 +44,19 @@ import {
   decoyTouchesBuilding,
 } from "./decoy.js";
 import type { DecoyPlan } from "./decoy.js";
-import { DECOY } from "./siege.js";
+import { DECOY, VACUUM } from "./siege.js";
 import type { SiegeId } from "./siege.js";
+import {
+  VACUUM_FRAME_TICKS,
+  VACUUM_TARGET_TYPES,
+  shootsHose,
+  vacuumGain,
+  vacuumHoseY,
+  vacuumLootCap,
+  vacuumPlan,
+  vacuumTake,
+} from "./vacuum.js";
+import type { VacuumPlan } from "./vacuum.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
 import { buildPathGrid, pointTarget } from "./grid.js";
 import {
@@ -313,8 +324,8 @@ import {
  *    rather than walked to the edge (`ATTACK.as:237-240`). It deals no more
  *    damage either way.
  * 8. **Not modelled at all**, each because it is out of Map Room 2's scope:
- *    the Stronghold's four emitters, the Vacuum and the Jars (the Decoy is,
- *    Inferno WP 6.5, {@link BattleOptions.siege}), and the per-creep
+ *    the Stronghold's four emitters, the Jars (the Decoy and the Vacuum are,
+ *    Inferno WP 6.5 and 6.6, {@link BattleOptions.siege}), and the per-creep
  *    `_hitLimit`, even for a raid (note 17, owner decision 2026-10-06). A yard
  *    holding one of those buildings fires it as an ordinary single-target
  *    tower. The Monster Lab's moves (Brain's cloak, Bolt's blink, Fang's
@@ -349,8 +360,8 @@ import {
  * 11. **The looting property.** A creep loots at 0.5 and a resource
  *    specialist or a champion at 2 (`MonsterBase.as:260`, `CreepBase.as:224-226`,
  *    `ChampionBase.as:221`), Krallen included, whose `_lootMults` is never read
- *    (issue #178). Krallen's aura adds to it (note 12); the Vacuum's
- *    `lootBonus`, a siege weapon, is not modelled.
+ *    (issue #178). Krallen's aura adds to it (note 12). The Vacuum's
+ *    `lootBonus` is no looting property: it sucks the pool itself.
  * 12. **The champions' own behaviour (issue #222)**, from
  *    `com/monsters/monsters/champions/*.as` and the numbers in `champions.ts`:
  *    their target lists (`ChampionBase.findTarget`, Krallen's loot first) and
@@ -498,8 +509,9 @@ import {
  * The union is `types.ts`'s {@link FlingEvent}, which is the §3.10 contract the
  * web client's attack flow (issue #32) builds against. The engine consumes it
  * directly rather than restating it, so the two cannot drift apart. A `siege`
- * event drops the Decoy at the attacker's level ({@link BattleOptions.siege});
- * any other weapon, or one with no level, is accepted and ignored (fidelity
+ * event drops the Decoy or the Vacuum at the attacker's level
+ * ({@link BattleOptions.siege}); any other weapon, or one with no level, is
+ * accepted and ignored (fidelity
  * note 8). A raid battle's waves are
  * the server's own {@link RaidEvent}s (fidelity note 17).
  */
@@ -577,7 +589,7 @@ export interface BattleOptions {
    */
   readonly buffs?: BattleBuffs;
   /**
-   * The attacker's Siege Lab levels per weapon (Inferno WP 6.5): what a
+   * The attacker's Siege Lab levels per weapon (Inferno WP 6.5, 6.6): what a
    * `siege` event fights at. An absent weapon, or none at all, is level 0,
    * and its event is ignored, so a log from before the Decoy replays as it did.
    */
@@ -1294,6 +1306,8 @@ interface Tower {
   charge: number;
   /** A Spurtz Cannon's gun (issue #313); null for every other tower. */
   gun: SpurtzGun | null;
+  /** `_targetVacuum`: it fires at the Vacuum's hose (Inferno WP 6.6). */
+  onHose: boolean;
 }
 
 /** A Spurtz Cannon's barrel, aim and brood (issue #313, `SpurtzCannon.as`). */
@@ -1664,6 +1678,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       gun: isSpurtzCannon(building.type)
         ? { barrel: 0, aim: 0, targets: [], index: 0, target: null, hatched: [] }
         : null,
+      onHose: false,
     });
   }
 
@@ -2652,12 +2667,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   } | null = null;
 
   /**
-   * A `siege` event: the Decoy at the attacker's level drops now. Flash keeps
-   * one siege weapon live at a time (`SiegeWeapons.activeWeaponID`), so one
-   * dropped while a Decoy is still out is ignored, as is any other weapon.
+   * A `siege` event: the Decoy or the Vacuum at the attacker's level drops
+   * now. Flash keeps one siege weapon live at a time
+   * (`SiegeWeapons.activeWeaponID`), so one dropped while another is still
+   * out is ignored, as is any other weapon.
    */
   const siege = (event: Extract<AttackEvent, { kind: "siege" }>): void => {
-    if (event.weapon !== DECOY.id || decoy) return;
+    if (decoy || vacuum) return;
+    if (event.weapon === VACUUM.id) {
+      startVacuum();
+      return;
+    }
+    if (event.weapon !== DECOY.id) return;
     const plan = decoyPlan(options.siege?.decoy ?? 0, tick);
     if (!plan) return;
     decoy = { plan, drop: screenOf(event.x, event.y), pulled: new Set(), before: new Map() };
@@ -2826,6 +2847,125 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (creep) releaseFromDecoy(creep, before);
     }
     ejectForDecoy(drop, range, before);
+  };
+
+  /* ── The Vacuum (Inferno WP 6.6, `vacuum.ts`) ──────────────────────────── */
+
+  /**
+   * The Vacuum's hose on the field, or null: `Vacuum.hose` while the Vacuum
+   * is the active weapon. `health` is `_vacuumHealth`; `sucked` is
+   * `_vacuumCurrTime - _vacuumStartTime` in ticks; `looted` and `cap` are
+   * `_amountLooted` and `_totalPossibleLoot`.
+   */
+  let vacuum: {
+    readonly plan: VacuumPlan;
+    readonly target: EngineBuilding;
+    readonly droppedAt: number;
+    readonly cap: number;
+    health: number;
+    sucked: number;
+    looted: number;
+  } | null = null;
+
+  /**
+   * `Vacuum.activate` and `ApplyVacuum`: it latches onto the Town Hall (or the
+   * Resource Outpost) wherever it was dropped. With no such building, or a
+   * fallen one, Flash's activation never gets going, so nothing happens.
+   */
+  const startVacuum = (): void => {
+    const plan = vacuumPlan(options.siege?.vacuum ?? 0, tick);
+    const target = yard.buildings.find((building) => VACUUM_TARGET_TYPES.includes(building.type));
+    if (!plan || !target || target.hp <= 0) return;
+    const cap = vacuumLootCap(target.type, yard.resources);
+    vacuum = { plan, target, droppedAt: tick, cap, health: plan.durability, sucked: 0, looted: 0 };
+  };
+
+  /**
+   * `BTOWER.canShootVacuumHose` (`BTOWER.as:163-169`): a hose is out, this
+   * tower is one that can shoot it, and the hose is within its range of the
+   * tower's `_position`, a plain distance on screen. The hose is where its
+   * 2 s tween has it now ({@link vacuumHoseY}).
+   */
+  const hoseInReach = (tower: Tower): boolean => {
+    const hose = vacuum;
+    const building = tower.building;
+    if (!hose || !shootsHose(building.type)) return false;
+    const x = hose.target.sx - building.sx;
+    const y = vacuumHoseY(hose.target.sy, tick - hose.droppedAt) - building.sy;
+    return Math.sqrt(x * x + y * y) <= tower.range;
+  };
+
+  /**
+   * A tower's `Fire` at the hose. A Tesla names no creep and starts to charge
+   * ({@link armCoil}); its zaps then hit the hose. A shell with no blast hits
+   * it for `int(damage * scale)` (`PROJECTILE.as:44-50`, `FIREBALL.as:168-174`).
+   * A shell with a blast, the Aerial Defense's, bursts where the hose is and
+   * hits the creeps round it, and the hose for 0 (`PROJECTILE.Splash`, `:64-69`).
+   */
+  const shootHose = (tower: Tower, damage: number, splash: number, flags: number): void => {
+    const hose = vacuum;
+    const building = tower.building;
+    if (!hose) return;
+    if (building.type === TESLA_TYPE) {
+      armCoil(tower, -1);
+      return;
+    }
+    countShot(tower.report);
+    const shot = towerShotDamage(damage, building.hp, building.maxHp);
+    if (splash <= 0) {
+      hose.health -= shot;
+      return;
+    }
+    const at = fromIso(hose.target.sx, vacuumHoseY(hose.target.sy, tick - hose.droppedAt));
+    for (const hit of index.inRange(splash, at.x, at.y, flags)) {
+      const dealt = Math.max((shot / splash) * (splash - hit.dist), shot / 5);
+      const health = hit.creep.hp;
+      tower.report.damageDealt += damageCreep(hit.creep, dealt);
+      if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
+    }
+  };
+
+  /**
+   * `VacuumLoot` (`VacuumHose.as:81-142`): unless it has taken its cap, it
+   * picks one of the pool's non-empty resources at random and takes `amount`
+   * of it, or what is left, to the attacker whole, no storage scalar. Against
+   * a wild monster attack the attacker gets a fifth.
+   */
+  const suck = (hose: NonNullable<typeof vacuum>, amount: number): void => {
+    if (hose.looted > hose.cap) return;
+    const picked = pickStored();
+    if (picked === null) return;
+    const key = `r${picked}` as keyof ResourceAmounts;
+    const taken = vacuumTake(yard.resources[key], amount);
+    yard.resources[key] -= taken;
+    defenderLoss[key] += taken;
+    const credited = wildMonsterAttack ? Math.trunc(taken / WILD_MONSTER_LOOT_DIVISOR) : taken;
+    creditLoot(picked, credited);
+    hose.looted += credited;
+  };
+
+  /**
+   * The hose's frame (`Vacuum.onEnterFrame`, `VacuumHose.tick`, `:266-289`):
+   * every {@link VACUUM_FRAME_TICKS} after the drop it sucks what is due since
+   * the last. It lets go when its timer runs out, whatever the frame, and on
+   * a frame once the building under it has fallen or its health is gone.
+   */
+  const tickVacuum = (): void => {
+    const hose = vacuum;
+    if (!hose) return;
+    if (tick >= hose.plan.endsAt) {
+      vacuum = null;
+      return;
+    }
+    const elapsed = tick - hose.droppedAt;
+    if (elapsed <= 0 || elapsed % VACUUM_FRAME_TICKS !== 0) return;
+    if (hose.target.hp <= 0 || hose.health <= 0) {
+      vacuum = null;
+      return;
+    }
+    const amount = vacuumGain(hose.plan.rate, hose.sucked, elapsed);
+    hose.sucked = elapsed;
+    suck(hose, amount);
   };
 
   /* ── Creeps ────────────────────────────────────────────────────────────── */
@@ -4592,9 +4732,21 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (tower.fireTick > 0) return;
     tower.fireTick += rate * TOWER_REARM_MULTIPLIER;
 
+    // On the Vacuum's hose it shoots nothing else till the hose is gone (`BTOWER.as:197-204`).
+    if (tower.onHose) {
+      if (vacuum) shootHose(tower, damage, splash, towerTargets(building.type));
+      else tower.onHose = false;
+      return;
+    }
     const scan = scanOf(tower);
     const live = liveTargets(tower, scan);
     if (live.length === 0) {
+      // With nobody to shoot, the hose if it can reach it (`:181-185`).
+      if (hoseInReach(tower)) {
+        tower.onHose = true;
+        tower.fireTick = TOWER_ACQUIRE_TICKS;
+        return;
+      }
       findTowerTargets(tower, scan, 1);
       // Every re-acquire path resets the fire tick to 30 (`BTOWER.as:184`, `:189`, `:220`).
       tower.fireTick = TOWER_ACQUIRE_TICKS;
@@ -4606,7 +4758,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const shot = towerShotDamage(damage, building.hp, building.maxHp);
     for (const creep of live) {
       if (building.type === TESLA_TYPE) {
-        armCoil(tower, creep);
+        armCoil(tower, creep.id);
         continue;
       }
       countShot(tower.report);
@@ -4884,16 +5036,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tower.fireTick += rate * TOWER_REARM_MULTIPLIER;
     }
     const scan = scanOf(tower);
-    if (liveTargets(tower, scan).length === 0) {
+    // The Vacuum's hose comes before any creep (`BUILDING115.as:61-69`, Inferno WP 6.6).
+    if (hoseInReach(tower)) {
+      tower.onHose = true;
+      tower.fireTick = TOWER_ACQUIRE_TICKS;
+    } else if (liveTargets(tower, scan).length === 0) {
+      tower.onHose = false;
       findTowerTargets(tower, scan, salvo);
       tower.fireTick = TOWER_ACQUIRE_TICKS;
     }
-    if (tower.targets.length === 0) return;
+    // Flash fires at a hose that is gone and throws; ours goes back to its creeps.
+    if (!vacuum) tower.onHose = false;
+    if (!tower.onHose && tower.targets.length === 0) return;
     if (tower.shotsFired >= salvo) {
       tower.stage = 1;
       return;
     }
     if (tower.frame % AERIAL_SHOT_TICKS !== 0) return;
+    if (tower.onHose) {
+      tower.shotsFired += 1;
+      shootHose(tower, damage, splash, scan.flags);
+      return;
+    }
     const aim = tower.targets[tower.shotsFired % tower.targets.length] as number;
     const creep = byCreepId.get(aim);
     // A target found dead costs the frame its shot; the tower looks again (`:84-93`).
@@ -4911,8 +5075,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * The Tesla's `Fire` (`BUILDING25.as:84-96`): it names its target, and an
    * idle coil starts to charge ({@link TESLA_TYPE}, issue #266).
    */
-  const armCoil = (tower: Tower, creep: Creep): void => {
-    tower.zapTarget = creep.id;
+  const armCoil = (tower: Tower, creepId: number): void => {
+    tower.zapTarget = creepId;
     if (tower.stage !== 0) return;
     tower.stage = 1;
     visual.push({ kind: "charge", tick, towerId: tower.building.id });
@@ -4946,7 +5110,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const building = tower.building;
     const target = byCreepId.get(tower.zapTarget);
     // It zaps the creep it named wherever that is now; a dead one takes nothing.
-    if (tower.targets.length > 0 && target && target.hp > 0) {
+    // Named none, it zaps the Vacuum's hose while it can reach it (`:137-152`).
+    const zapsHose = tower.onHose && tower.zapTarget < 0 && hoseInReach(tower);
+    if ((tower.targets.length > 0 || tower.onHose) && target && target.hp > 0) {
       countShot(tower.report);
       visual.push({
         kind: "shot",
@@ -4961,13 +5127,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         towerShotDamage(damage, building.hp, building.maxHp),
       );
       if (target.hp <= 0) tower.report.kills += 1;
+    } else if (zapsHose && vacuum) {
+      countShot(tower.report);
+      vacuum.health -= towerShotDamage(damage, building.hp, building.maxHp);
     }
     tower.shotsFired += 1;
     if (tower.shotsFired >= rate) {
       tower.stage = 3;
       return;
     }
+    // On the hose it stays on it while it can reach it, else it looks for creeps
+    // (`:161-173`); one whose creep is gone turns to the hose if it can (`:174-177`).
+    if (tower.onHose) {
+      if (hoseInReach(tower)) return;
+      findTowerTargets(tower, scanOf(tower), 1);
+      if (tower.targets.length === 0) tower.stage = 3;
+      return;
+    }
     if (target && target.hp > 0 && target.targetable) return;
+    if (hoseInReach(tower)) {
+      tower.onHose = true;
+      return;
+    }
     const scan = scanOf(tower);
     findTowerTargets(tower, scan, 1);
     if (tower.targets.length === 0) tower.stage = 3;
@@ -5424,6 +5605,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     tickPutty();
     tickDecoy();
+    tickVacuum();
     for (const creep of creeps) {
       tickCreep(creep);
       if (creep.burrows) tickBurrow(creep);
