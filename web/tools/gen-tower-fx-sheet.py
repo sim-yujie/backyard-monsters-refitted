@@ -4,7 +4,8 @@ The paintings come from the image model (Antigravity, prompt in
 tower-fx-kit/prompt.txt): one greyscale effect on flat green each, in
 tower-fx-kit/src/fxNN_name.(png|jpg). Each is unmixed from its green, trimmed,
 centred and shrunk into a 192 px cell of server/public/assets/fx/tower-fx.png,
-four across, in the order shotFx.ts reads them. The game tints them in code.
+four across, in the order shotFx.ts reads them (the Sniper's muzzle-brake flash,
+the flak cloud and the shrapnel spray, fx22-fx24, after the first twelve). The game tints them in code.
 
 A painting not made yet is stood in for by another one, reworked, until it is
 painted: see STAND_INS.
@@ -12,8 +13,9 @@ painted: see STAND_INS.
 Under the cells go the strips, 384 x 96, two across, which the game lays along
 a line: the six painted lightning bolts (tower-fx-kit/src/fxNN_boltN.png), each
 bolt's bright core (the bolt worn down to its middle, so it follows the same
-zigzag thinner), the ray (the beam painting, trimmed to its glow) and the
-streak (a lens-flare flash, tower-fx-kit/src/fx19_streak.*).
+zigzag thinner), the ray (the beam painting, trimmed to its glow), the
+streak (a lens-flare flash, tower-fx-kit/src/fx19_streak.*) and the tracer (a
+bullet's hot head and fading tail, fx25_tracer.*).
 
 Beside the sheet go the flows, which the game repeats end to end along a beam
 and slides along it: the laser's plasma (fx20_energy.*) and the railgun's
@@ -38,12 +40,15 @@ PREVIEW = os.path.join(HERE, "tower-fx-kit", "preview.png")
 
 CELL = 192
 ACROSS = 4
-ORDER = ["glow", "flare", "muzzle", "spark", "burst", "zap", "smoke", "wisp", "ring", "orb", "beam", "scorch"]
+ORDER = [
+    "glow", "flare", "muzzle", "spark", "burst", "zap", "smoke", "wisp", "ring", "orb", "beam", "scorch",
+    "brake", "flak", "shrapnel",
+]
 # Cells that keep their painting's size in the cell rather than filling it.
 FILL = 0.92
 STRIP_W, STRIP_H, STRIP_ACROSS = 384, 96, 2
 BOLTS = [f"bolt{n}" for n in range(1, 7)]
-STRIPS = BOLTS + [f"core{n}" for n in range(1, 7)] + ["ray", "streak"]
+STRIPS = BOLTS + [f"core{n}" for n in range(1, 7)] + ["ray", "streak", "tracer"]
 FLOWS = ["energy", "helix"]
 FLOW_W, FLOW_H = 512, 64
 # Share of a flow's length blended from one end into the other.
@@ -218,7 +223,7 @@ def core_of(rgba: np.ndarray) -> np.ndarray:
 
 
 def strip(name: str) -> tuple[Image.Image, str]:
-    source = {"ray": "beam", "streak": "streak"}.get(name, name.replace("core", "bolt"))
+    source = {"ray": "beam", "streak": "streak", "tracer": "tracer"}.get(name, name.replace("core", "bolt"))
     path = painting(source)
     turned = False
     if path is None and source in BOLT_STAND_INS:

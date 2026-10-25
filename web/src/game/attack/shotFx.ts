@@ -31,7 +31,7 @@ import { bitPath, tintAt } from "./blastFx";
  * show the shot.
  */
 
-/** The sheet: twelve 192 px cells, four across, then the strips (`server/public/assets/fx/`). */
+/** The sheet: fifteen 192 px cells, four across, then the strips (`server/public/assets/fx/`). */
 export const SHOT_FX_SHEET_URL = "/assets/fx/tower-fx.png";
 export const SHOT_FX_CELL = 192;
 const COLUMNS = 4;
@@ -39,9 +39,13 @@ const COLUMNS = 4;
 export const SHOT_STRIP_WIDTH = 384;
 export const SHOT_STRIP_HEIGHT = 96;
 const STRIP_COLUMNS = 2;
-const STRIP_TOP = SHOT_FX_CELL * 3;
 
-/** The cells, in the sheet's order. `muzzle` and `spark` point right; `scorch` is dark. */
+/**
+ * The cells, in the sheet's order. `muzzle`, `spark` and `brake` (a rifle's
+ * muzzle-brake flash) point right; `scorch` is dark and `flak` (a flak
+ * shell's burst cloud) mid grey; `shrapnel` is streaks flying out of an empty
+ * middle.
+ */
 export const SHOT_LOOKS = [
   "glow",
   "flare",
@@ -55,20 +59,26 @@ export const SHOT_LOOKS = [
   "orb",
   "beam",
   "scorch",
+  "brake",
+  "flak",
+  "shrapnel",
 ] as const;
 export type ShotLook = (typeof SHOT_LOOKS)[number];
+/** Where the strips start: under the cells' last row. */
+const STRIP_TOP = SHOT_FX_CELL * Math.ceil(SHOT_LOOKS.length / COLUMNS);
 
 /** The painted lightning bolts, each a zigzag lying left to right with its forks. */
 export const BOLT_COUNT = 6;
 /**
  * The strips, in the sheet's order: the bolts, then each bolt's bright core,
- * then the ray (a straight stroke of light, soft each side, tapered at the ends)
- * and the streak (a lens-flare flash: a hot spot with a long thin streak through it).
+ * then the ray (a straight stroke of light, soft each side, tapered at the ends),
+ * the streak (a lens-flare flash: a hot spot with a long thin streak through it)
+ * and the tracer (a bullet's hot head at the right end, its tail fading out to the left).
  */
 export const STRIP_LOOKS = [
   "bolt1", "bolt2", "bolt3", "bolt4", "bolt5", "bolt6",
   "core1", "core2", "core3", "core4", "core5", "core6",
-  "ray", "streak",
+  "ray", "streak", "tracer",
 ] as const;
 export type StripLook = (typeof STRIP_LOOKS)[number];
 
