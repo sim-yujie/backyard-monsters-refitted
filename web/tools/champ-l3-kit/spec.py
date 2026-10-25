@@ -8,7 +8,7 @@ from scipy import ndimage as ndi
 sys.path.insert(0, "D:/Coding/BYMR/art-trials/champions/_kit/scripts")
 from parts import PARTS, COLOUR  # noqa: E402
 
-ASSETS = Path("D:/Coding/BYMR/worktrees/champ-sheets-l3/server/public/assets/monsters")
+ASSETS = Path(__file__).resolve().parents[3] / "server" / "public" / "assets" / "monsters"
 CH = Path("D:/Coding/BYMR/art-trials/champions")
 
 # key: champion, sample folder, cell w/h, rows, painted columns (rest mirrored), calls {mode: rows}, action text per mode
@@ -28,12 +28,17 @@ SPECS = {
                              calls={"A": list(range(10)), "B": [0] + list(range(10, 16))},
                              what={"A": "RUN cycle frames 1-10 (a galloping big cat; cell 1 is ALSO the first run frame, not a standing pose)",
                                    "B": "ATTACK frames 1-6 (the cat crouches, then rears and swipes/bites forward with claws and the extra back arms, then settles; cell 1 is a run frame for size reference, cell 8 stays empty magenta)"}),
+    "krallen_3_rev_65": dict(champ="Krallen", fam="krallen", sample=CH / "krallen/L3", w=142, h=100, rows=16, painted=list(range(2, 11)),
+                             calls={"A": list(range(10)), "B": [0] + list(range(10, 16))},
+                             what={"A": "RUN cycle frames 1-10 (a galloping big cat; cell 1 is ALSO the first run frame, not a standing pose)",
+                                   "B": "ATTACK frames 1-6 (the cat crouches, then rears and swipes/bites forward with claws and the extra back arms, then settles; cell 1 is a run frame for size reference, cell 8 stays empty magenta)"}),
 }
-PARTS_KEY = {"ape_3": "ape_3", "dragon_3": "dragon_3", "fly_3": "fly_3", "krallen_2_rev_65": "krallen_2"}
+PARTS_KEY = {"ape_3": "ape_3", "dragon_3": "dragon_3", "fly_3": "fly_3", "krallen_2_rev_65": "krallen_2", "krallen_3_rev_65": "krallen_3"}
 EXTRA_PARTS = {
     "dragon_3": " The body is SQUAT and WIDE (not tall and narrow): the two heads sit close together at mid height on short thick necks, the four legs splay out wide, and the long pointed red TAIL rises straight UP behind the middle between the heads as a tall spike.",
     "fly_3": " At level 3 the Fomor has two big pink bat WINGS: folded and standing up behind the head when standing (idle), spread wide and flapping when flying.",
     "krallen_2_rev_65": "",
+    "krallen_3_rev_65": " The two curved dark purple TUSKS hang down beside the jaw, and one tall golden horn-spike stands up from the shoulders, just behind the head.",
     "ape_3": "",
 }
 FACING = {

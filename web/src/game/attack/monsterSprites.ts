@@ -793,6 +793,7 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/fly_3.png": "monsters/fly_3-repaint@4x.png", // Fomor level 3 repaint (all 16 headings painted, standing + wing beat)
   "monsters/krallen_1_rev_65.png": "monsters/krallen_1_rev_65-repaint@4x.png", // Krallen look 1 repaint (all 16 headings, run + attack)
   "monsters/krallen_2_rev_65.png": "monsters/krallen_2_rev_65-repaint@4x.png", // Krallen look 2 repaint (all 16 headings, run + attack)
+  "monsters/krallen_3_rev_65.png": "monsters/krallen_3_rev_65-repaint@4x.png", // Krallen look 3 repaint (all 16 headings, run + attack)
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */

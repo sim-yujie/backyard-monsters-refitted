@@ -212,6 +212,18 @@ describe("spriteFor", () => {
     expect(looks).toEqual(["G5_1", "G5_1", "G5_2", "G5_2", "G5_3"]);
   });
 
+  it("draws every Krallen look from its repaint, look 3 at level 5 included", () => {
+    const urls = [1, 3, 5].map((level) => {
+      const one = spriteFor("G5", level);
+      return one && sheetUrl(one);
+    });
+    expect(urls).toEqual([
+      "/assets/monsters/krallen_1_rev_65-repaint@4x.png",
+      "/assets/monsters/krallen_2_rev_65-repaint@4x.png",
+      "/assets/monsters/krallen_3_rev_65-repaint@4x.png",
+    ]);
+  });
+
   it("is undefined for an unknown id", () => {
     expect(spriteFor("C99")).toBeUndefined();
     expect(spriteFor("G9", 1)).toBeUndefined();
