@@ -10,7 +10,7 @@ import { DESCENT_GLOATS, DESCENT_TAUNTS, DESCENT_WHIMPERS, RETURN_HOME } from "@
 import { INFERNO_YARD, MAIN_YARD } from "@/game/yard/ownYards";
 import { Notices } from "@/ui/maproom/Notices";
 import { descentPlugin } from "./descent";
-import { createEndPlugin } from "./end";
+import { END_PANEL_MAX_WAIT_MS, createEndPlugin } from "./end";
 
 /**
  * A Descent attack's end (Inferno WP 1.13): the save names the yard and
@@ -80,7 +80,7 @@ describe("a Descent attack's end", () => {
     modal.remove();
   });
 
-  const run = async (target: AttackTarget, response: unknown) => {
+  const run = async (target: AttackTarget, response: unknown, presentation = new AttackPresentation()) => {
     const session = new AttackSession({ target, seed: 1 });
     session.start();
     const save = vi.fn(async (_payload: AttackSavePayload) => response as BaseSaveResponse);
@@ -91,7 +91,7 @@ describe("a Descent attack's end", () => {
       notices,
       goToMap,
       goToOutpost,
-      presentation: new AttackPresentation(),
+      presentation,
       creditLoot: () => {},
     } as unknown as AttackMounts);
     session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
@@ -125,6 +125,26 @@ describe("a Descent attack's end", () => {
     home.click();
     expect(goToOutpost).toHaveBeenCalledWith(MAIN_YARD);
     expect(goToMap).not.toHaveBeenCalled();
+  });
+
+  it("Moloch's word waits for the end panel, so it opens over it", async () => {
+    vi.useFakeTimers();
+    try {
+      let settling = true;
+      const presentation = new AttackPresentation();
+      presentation.hold(() => settling);
+      const { save } = await run(targetOf(7), landing(true), presentation);
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(modal.querySelector(".attack-end__return")).toBeNull();
+      expect(modal.textContent).not.toContain(DESCENT_WHIMPERS[6]!.moloch);
+      settling = false;
+      vi.advanceTimersByTime(END_PANEL_MAX_WAIT_MS);
+      const panel = modal.querySelector(".attack-end__return")!;
+      const whimper = buttonNamed(modal, DESCENT_WHIMPERS[6]!.reply)!;
+      expect(panel.compareDocumentPosition(whimper) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("a lost attack: Moloch gloats", async () => {

@@ -242,7 +242,9 @@ export const descentMap = (host: HTMLElement, state: DescentMapState, actions_: 
         card.style.left = marker.style.left;
         card.style.top = marker.style.top;
         if (spot.x > DESCENT_MAP_SIZE.width / 2) card.classList.add("descent-card--left");
+        if (spot.y > DESCENT_MAP_SIZE.height / 2) card.classList.add("descent-card--up");
         map.append(card);
+        keepInside(card, map);
       });
     }
     map.append(marker);
@@ -261,6 +263,14 @@ export const descentMap = (host: HTMLElement, state: DescentMapState, actions_: 
     });
   }
   return popup;
+};
+
+/** Nudges a card that runs past the map's side (a narrow screen) back inside it. */
+const keepInside = (card: HTMLElement, map: HTMLElement): void => {
+  const box = card.getBoundingClientRect();
+  const edge = map.getBoundingClientRect();
+  const nudge = Math.max(edge.left - box.left, 0) + Math.min(edge.right - box.right, 0);
+  if (nudge !== 0) card.style.marginLeft = `${nudge}px`;
 };
 
 /** The next yard's card: how deep it is, a warning from yard 9, and Attack. */

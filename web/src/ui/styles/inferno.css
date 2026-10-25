@@ -200,8 +200,17 @@
   width: min(96vw, 46rem);
 }
 
+/* Only the map scrolls; Return Home stays in sight under it. */
+.descent-map .panel__body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* The map scrolls down inside the popup, as Flash's 700 x 560 window did. */
 .descent-map__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: min(70vh, 40rem);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -366,7 +375,14 @@
     height: 3rem;
   }
 
-  .descent-card {
+  /* No room beside the marker on a phone: the card sits under it, or over it low on the map. */
+  .descent-card,
+  .descent-card--left {
     width: 9.5rem;
+    translate: -50% 2rem;
+  }
+
+  .descent-card--up {
+    translate: -50% calc(-100% - 2rem);
   }
 }

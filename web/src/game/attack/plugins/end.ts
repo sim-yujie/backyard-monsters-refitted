@@ -1,7 +1,7 @@
 import { guideBus } from "@/game/guide/guideBus";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { saveAttack } from "@/api/base";
-import { descentLandingOf } from "@/api/inferno";
+import { descentLandingOf, type DescentLanding } from "@/api/inferno";
 import { ApiError, NetworkError, getAuthToken } from "@/api/http";
 import { declineTakeover, getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
 import type {
@@ -442,11 +442,16 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (next.kind === "saved" && next.takeover) offerTakeover(next.takeover);
     };
 
-    /** Moloch's word on a landed Descent attack, once. */
-    const playDescent = (response: BaseSaveResponse): void => {
-      const landing = descent ? descentLandingOf(response) : null;
-      if (!landing || stopDescentResult || tornDown || leaving) return;
-      stopDescentResult = playDescentResult(modal, target.descentYard!, landing, () => goToOutpost(INFERNO_YARD));
+    /**
+     * Moloch's word on a landed Descent attack, once. It waits for the end
+     * panel: the save often lands while the fight is still settling, and a
+     * popup opened then would sit under the panel mounted after it.
+     */
+    let descentLanded: DescentLanding | null = null;
+    const playDescent = (response?: BaseSaveResponse): void => {
+      if (response && descent) descentLanded = descentLandingOf(response);
+      if (!descentLanded || !panel || stopDescentResult || tornDown || leaving) return;
+      stopDescentResult = playDescentResult(modal, target.descentYard!, descentLanded, () => goToOutpost(INFERNO_YARD));
     };
 
     /** The panel's saved state for a response. A grant's outpost is not protected yet. */
@@ -580,6 +585,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       });
       creditHud();
       offerAgain();
+      playDescent();
     };
 
     /** Opens the panel once nothing on screen is still playing out, or the wait runs out. */
