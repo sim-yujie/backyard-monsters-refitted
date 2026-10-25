@@ -11,6 +11,7 @@ for c in "$@"; do
     d=$D/$m$c
     [ -f $d/frames-new.png ] && [ -z "$REDO" ] && continue
     if [ $m = A ]; then python make_batch.py $n A $c > /dev/null; else python prep_b.py $n $c > /dev/null; fi
+    fam=${n%_*}; [ -f autonote-$fam-$m$c.txt ] && cat autonote-$fam-$m$c.txt >> $d/prompt.txt
     bash run.sh $d frames.png style.png portrait.png; echo "$(date +%H:%M) $n $m$c exit $?" >> chain.log
   done
 done
