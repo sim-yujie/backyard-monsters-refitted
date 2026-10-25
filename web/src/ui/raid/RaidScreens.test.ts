@@ -83,8 +83,10 @@ describe("RaidYardUi", () => {
   it("swaps the alert for the top bar, with I'm Ready Now while it counts down", () => {
     const t = ui();
     t.view.render({ kind: "alert", raid: raid(), secondsLeft: 200 }, null);
+    expect(t.modal.querySelectorAll(".alarm-pulse")).toHaveLength(1);
     t.view.render({ kind: "spotted", raid: raid({ warned: 1 }), secondsLeft: 125 }, null);
     expect(t.modal.querySelector(".raid-alert")).toBeNull();
+    expect(t.modal.querySelector(".alarm-pulse")).toBeNull();
     const bar = t.content.querySelector(".raid-bar")!;
     expect(bar.textContent).toContain("WILD MONSTERS SPOTTED!");
     expect(bar.textContent).toContain("They attack in 2:05");
@@ -96,6 +98,15 @@ describe("RaidYardUi", () => {
     expect(buttonNamed(bar, "I'm Ready Now").hidden).toBe(true);
     t.view.destroy();
     expect(t.content.querySelector(".raid-bar")).toBeNull();
+  });
+
+  it("pulses the alarm glow while the alert is up, once, and stops it when the raid starts", () => {
+    const t = ui();
+    t.view.render({ kind: "alert", raid: raid(), secondsLeft: 200 }, null);
+    t.view.render({ kind: "alert", raid: raid(), secondsLeft: 199 }, "engage");
+    expect(t.modal.querySelectorAll(".alarm-pulse")).toHaveLength(1);
+    t.view.render({ kind: "none" }, null);
+    expect(t.modal.querySelector(".alarm-pulse")).toBeNull();
   });
 
   it("locks the yard while a raid is fought elsewhere, with the map still open", () => {
