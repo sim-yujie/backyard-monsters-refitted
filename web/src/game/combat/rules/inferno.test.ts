@@ -6,10 +6,10 @@ import { capacity, maxHp, towerStats } from "./stats";
 /**
  * The Inferno's combat numbers (`docs/design/inferno.md` §2.5-2.6, WP 1.2).
  *
- * An Inferno yard, a player's or a Moloch tribe's, reads `INFERNOYARDPROPS.as`
- * (`client/scripts/GLOBAL.as:718-719`); the Descent reads the main table. The
- * Housing Bunker and the Inferno Cannon are stubs in the main table, so both
- * tables carry their Inferno numbers.
+ * An Inferno yard, a player's, a Moloch tribe's or a Descent yard (loaded as
+ * one, `maproom_inferno/PlayerHandler.as:333`), reads `INFERNOYARDPROPS.as`
+ * (`client/scripts/GLOBAL.as:718-719`). The Housing Bunker and the Inferno
+ * Cannon are stubs in the main table, so both tables carry their Inferno numbers.
  */
 
 const LOCKER = "../../../../../client/scripts/CREATURELOCKER.as";
@@ -30,7 +30,7 @@ const lockerProps = (id: string): Record<string, number[]> => {
 /** The ladders the fight reads; the rest are training and healing costs. */
 const COMBAT_KEYS = ["speed", "health", "damage", "range", "targetGroup", "bucket", "cStorage"];
 
-describe("the Inferno towers on the main table (the Descent)", () => {
+describe("the Inferno towers on the main table", () => {
   it("gives the Inferno Cannon 130 seven levels, 160 to 220 range", () => {
     expect(towerStats(130, 1)?.range).toBe(160);
     expect(towerStats(130, 7)?.range).toBe(220);

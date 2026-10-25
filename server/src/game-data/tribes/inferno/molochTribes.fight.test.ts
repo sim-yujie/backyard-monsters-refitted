@@ -6,7 +6,6 @@ import {
   defenderForcesOf,
   type BuildingHealthMap,
   type CombatBuildingDataMap,
-  type CombatTargetKind,
 } from "../../../game-rules/combat/index.js";
 import { molochTribes } from "./molochTribes.js";
 
@@ -22,9 +21,8 @@ import { molochTribes } from "./molochTribes.js";
  * and leave every number whole and in bounds, and every Housing Bunker that
  * houses anyone must send them.
  *
- * A Descent yard is fought both ways: as an Inferno yard, which is how Flash
- * loads it (`maproom_inferno/PlayerHandler.as:333`), and on the main table,
- * which WP 1.2 chose; the owner settles which before WP 1.11.
+ * A Descent yard is fought as an Inferno yard, as Flash loads it
+ * (`maproom_inferno/PlayerHandler.as:333`; plan 2.4, "Yard kind").
  */
 
 const DESCENT_IDS = new Set(Array.from({ length: 13 }, (_, i) => String(201 + i)));
@@ -45,14 +43,14 @@ const MAX_TICKS = 4000;
 
 const finite = (value: unknown): boolean => typeof value === "number" && Number.isFinite(value);
 
-const fight = (tribe: (typeof molochTribes)[number], kind: CombatTargetKind) => {
+const fight = (tribe: (typeof molochTribes)[number]) => {
   const buildingdata = tribe.buildingdata as unknown as CombatBuildingDataMap;
   const buildinghealthdata = (tribe.buildinghealthdata ?? {}) as BuildingHealthMap;
   const yard = buildEngineYard({
     buildingdata,
     buildinghealthdata,
     resources: tribe.resources as Record<string, number>,
-    kind,
+    kind: "inferno",
   });
   const defence = defenderForcesOf({
     buildingdata,
@@ -113,11 +111,7 @@ describe("every Moloch yard fights without an error (Inferno WP 1.6)", () => {
 
   for (const tribe of molochTribes) {
     const id = String(tribe.baseid);
-    if (DESCENT_IDS.has(id)) {
-      test(`Descent yard ${id}, as an Inferno yard`, () => check(fight(tribe, "inferno")), TIMEOUT_MS);
-      test(`Descent yard ${id}, on the main table`, () => check(fight(tribe, "main")), TIMEOUT_MS);
-    } else {
-      test(`tribe yard ${id}`, () => check(fight(tribe, "inferno")), TIMEOUT_MS);
-    }
+    const name = DESCENT_IDS.has(id) ? `Descent yard ${id}` : `tribe yard ${id}`;
+    test(name, () => check(fight(tribe)), TIMEOUT_MS);
   }
 });
