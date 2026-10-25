@@ -6,6 +6,8 @@
  * signature rather than pretending the list is complete.
  */
 
+import type { InfernoLoadState } from "./inferno";
+
 /** Every successful game response carries `error: 0`. See ApiError for why. */
 export interface ApiEnvelope {
   error?: number | string;
@@ -761,6 +763,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * yard routes' `completed` shape (issue #135). `[]` when nothing did.
    */
   completed?: CompletedJob[];
+  /**
+   * Only on the owner's build-mode load of their own main yard, and only while
+   * the new Inferno is switched on: the cave, and the level Moloch's
+   * emergence just raised it to (`docs/design/inferno.md` §2.2).
+   */
+  infernostate?: InfernoLoadState;
   /**
    * Only on the owner's build-mode load of their own main yard or outpost:
    * the account's new-player tutorial summary (issue #227). Every yard action

@@ -1,4 +1,5 @@
 import type { BaseLoadResponse, BuildingData, Resources } from "@/api/types";
+import { caveState, caveYardMargin } from "@/game/inferno/cave";
 import { ArtState, buildingName, maxHealth, resolveArt } from "./buildingArt";
 import { OUTPOST_CORE_TYPE, type YardKind } from "./buildingCostData";
 import { outpostTraitsOf } from "./buildingCosts";
@@ -323,9 +324,12 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
   const foreign = wild || options.foreign === true;
   const outpost = response.type === OUTPOST_TYPE;
   const kind: YardKind = outpost ? "outpost" : "main";
+  // Moloch's cave stands outside the plot (`game/inferno/cave.ts`): the
+  // owner's main yard grows the grass around it to hold it.
+  const ownMargin = !outpost && caveState(response) ? caveYardMargin(expansionLevel) : YARD_MARGIN;
   const bounds = yardBounds(expansionLevel, {
     wild,
-    margin: foreign ? FOREIGN_YARD_MARGIN : YARD_MARGIN,
+    margin: foreign ? FOREIGN_YARD_MARGIN : ownMargin,
   });
 
   // A yard that has never been saved reports savetime 0, which would put every

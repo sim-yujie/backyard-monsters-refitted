@@ -1,0 +1,96 @@
+/*
+ * Moloch's emergence on the main yard (WP 1.10, `ui/inferno/EmergenceScreens.ts`,
+ * design `docs/design/inferno.md` §2.2, §4): Moloch's popups, the cave's note
+ * and menu, and the EARTHQUAKE banner. Every value comes from tokens.css.
+ */
+
+.inferno-popup {
+  width: min(92vw, 30rem);
+  border: 2px solid var(--colour-danger);
+}
+
+.inferno-popup .panel__body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Moloch beside his line; stacked on a narrow phone. */
+.inferno-says {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.inferno-says__portrait {
+  width: 100%;
+  aspect-ratio: 237 / 260;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+.inferno-says__line,
+.inferno-complete__line {
+  margin: 0;
+  line-height: var(--leading-normal);
+}
+
+.inferno-popup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.inferno-menu__art {
+  justify-self: center;
+  width: min(100%, 15rem);
+  aspect-ratio: 363 / 335;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+/* A tall card (230 x 303): kept short enough that the words show under it. */
+.inferno-complete__art {
+  justify-self: center;
+  width: auto;
+  max-width: 100%;
+  height: min(32vh, 15rem);
+  aspect-ratio: 230 / 303;
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 30rem) {
+  .inferno-says {
+    grid-template-columns: 5rem minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .inferno-popup__actions > .btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* ── The earthquake ───────────────────────────────────────────────────── */
+
+/* Clear of the HUD and of Bob's tips, which share the top of a phone. */
+.inferno-quake {
+  position: absolute;
+  top: max(calc(var(--hud-height) + var(--space-3)), 26vh);
+  left: 50%;
+  z-index: var(--z-hud);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-danger);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
