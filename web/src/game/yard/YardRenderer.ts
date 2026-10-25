@@ -757,6 +757,11 @@ export class YardRenderer {
     this.buildings.setAnimFrame(id, layerIndex, frame);
   }
 
+  /** Shifts one of a building's animation layers: a gun's recoil; see `YardBuildings.nudgeAnim`. */
+  nudgeAnim(id: number, layerIndex: number, dx: number, dy: number): void {
+    this.buildings.nudgeAnim(id, layerIndex, dx, dy);
+  }
+
   /** Puts every building back where the save had it, in both views. */
   resetPlacements(): void {
     for (const id of this.byId.keys()) this.buildings.offsetBuilding(id, 0, 0);

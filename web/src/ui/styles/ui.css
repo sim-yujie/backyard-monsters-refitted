@@ -1627,6 +1627,12 @@ body {
   font-weight: 600;
   color: var(--colour-text-strong);
 }
+.account-settings__select {
+  margin-left: auto;
+  padding: var(--space-1) var(--space-2);
+  font: inherit;
+  border-radius: 6px;
+}
 .account-settings__heading {
   margin: 0;
   font-size: var(--text-md);

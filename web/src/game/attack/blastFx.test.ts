@@ -218,3 +218,24 @@ describe("the blast's arithmetic", () => {
     expect(bitPath(bit, 200).x).toBeCloseTo(50);
   });
 });
+
+describe("a tower's jolt (beta.5 tower attack effects)", () => {
+  it("shakes no harder than the cap, and a weaker jolt does not cut a harder one short", () => {
+    const { fx, shakes } = fxOf();
+    fx.jolt(0, 20, 18);
+    fx.jolt(1, 1, 18);
+    for (let tick = 0; tick < 30; tick += 1) fx.update(tick);
+    const peak = Math.max(...shakes.map(([dx, dy]) => Math.max(Math.abs(dx), Math.abs(dy))));
+    expect(peak).toBeLessThanOrEqual(MAX_SHAKE);
+    // The hard one kept going past the soft one's start.
+    expect(peak).toBeGreaterThan(2);
+    expect(shakes[shakes.length - 1]).toEqual([0, 0]);
+  });
+
+  it("does not shake under reduced motion", () => {
+    const { fx, shakes } = fxOf(true);
+    fx.jolt(0, 4, 18);
+    for (let tick = 0; tick < 30; tick += 1) fx.update(tick);
+    expect(shakes.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
+  });
+});

@@ -143,4 +143,43 @@ describe("AccountSettings", () => {
     expect(document.querySelectorAll("#settings-blocked li")).toHaveLength(1);
     expect(document.body.textContent).toContain(SETTINGS_TEXT.unblockFailed);
   });
+
+  it("keeps Screen shake in this browser, on until switched off", async () => {
+    localStorage.clear();
+    await open({});
+    const box = document.querySelector<HTMLInputElement>("#settings-screen-shake")!;
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.screenShake")).toBe("0");
+    box.checked = true;
+    box.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.screenShake")).toBeNull();
+  });
+
+  it("greys out Screen shake when the device asks for less motion", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("reduced-motion") }));
+    try {
+      await open({});
+      const box = document.querySelector<HTMLInputElement>("#settings-screen-shake")!;
+      expect(box.checked).toBe(false);
+      expect(box.disabled).toBe(true);
+      expect(document.body.textContent).toContain(SETTINGS_TEXT.shakeReducedHint);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("saves Effects: Full / Low, and shows the effects even when the account fails to load", async () => {
+    localStorage.clear();
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.loadFailed);
+    const select = document.querySelector<HTMLSelectElement>("#settings-effects-quality")!;
+    expect(select.value).toBe("full");
+    select.value = "low";
+    select.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.effectsQuality")).toBe("low");
+  });
 });

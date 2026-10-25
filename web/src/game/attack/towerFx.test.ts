@@ -1,20 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { Graphics } from "pixi.js";
+import { Container, Graphics, Texture, TextureSource, TilingSprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
+  LASER_IGNITE_TICKS,
+  LASER_REACH_TICKS,
+  RAIL_CHARGE_TICKS,
+  RAIL_LIT_TICKS,
+  RAIL_SLUG_TICKS,
+  RECOIL_TICKS,
   TESLA_CHARGE_END,
   TESLA_IDLE,
   TESLA_LOOP_END,
   TowerFx,
   bearingDegrees,
+  AIM_WATCH_MARGIN,
+  CATCH_UP_DEGREES_PER_TICK,
+  cellHeading,
   facingCell,
   laserCell,
+  laserReach,
   muzzleOf,
+  railCharge,
   railFade,
+  railSlugAlong,
+  recoilKick,
+  stepDegrees,
   teslaTick,
+  TURN_DEGREES_PER_TICK,
   towersOf,
   wrapDegrees,
   type TowerInfo,
@@ -436,5 +451,264 @@ describe("TowerFx landings (#77)", () => {
     expect(landingSetUp(21).fx.splashOf(1)).toBe(0);
     expect(landingSetUp(20).fx.splashOf(1)).toBe(30);
     expect(landingSetUp(20).fx.splashOf(77)).toBe(0);
+  });
+});
+
+/* ── The new look (beta.5 tower attack effects) ──────────────────────────── */
+
+describe("the new look's arithmetic", () => {
+  it("turns a gun the short way round, at most so many degrees a tick", () => {
+    expect(stepDegrees(0, 90, 3)).toBe(3);
+    // 10 to 350 is 20 back the other way.
+    expect(stepDegrees(10, 350, 3)).toBe(7);
+    expect(stepDegrees(359, 2, 3)).toBe(2);
+    expect(stepDegrees(100, 101, 3)).toBe(101);
+  });
+
+  it("reads back the cell a heading came from, so a gun starts turning from where it shows", () => {
+    for (let cell = 0; cell < 30; cell += 1) expect(facingCell(118, cellHeading(118, cell), 30)).toBe(cell);
+    for (let cell = 0; cell < 54; cell += 1) expect(laserCell(cellHeading(23, cell), 54)).toBe(cell);
+  });
+
+  it("kicks a gun back at once and eases it home by the end of its recoil", () => {
+    expect(recoilKick(-1)).toBe(0);
+    expect(recoilKick(1)).toBe(1);
+    expect(recoilKick(RECOIL_TICKS / 2)).toBeGreaterThan(0);
+    expect(recoilKick(RECOIL_TICKS / 2)).toBeLessThan(1);
+    expect(recoilKick(RECOIL_TICKS)).toBe(0);
+  });
+
+  it("winds the Railgun up over the ticks before its next shot, and lets go when it is overdue", () => {
+    const rate = 160;
+    expect(railCharge(0, rate)).toBe(0);
+    expect(railCharge(rate - RAIL_CHARGE_TICKS, rate)).toBe(0);
+    expect(railCharge(rate - RAIL_CHARGE_TICKS / 2, rate)).toBeCloseTo(0.5);
+    expect(railCharge(rate, rate)).toBe(1);
+    expect(railCharge(rate + 31, rate)).toBe(0);
+  });
+
+  it("runs the Railgun's slug down its line in a few ticks, and shoots the Laser's beam out after its barrel glows", () => {
+    expect(railSlugAlong(0)).toBe(0);
+    expect(railSlugAlong(RAIL_SLUG_TICKS / 2)).toBeCloseTo(0.5);
+    expect(railSlugAlong(RAIL_SLUG_TICKS + 5)).toBe(1);
+    // Seen for about half a second (80 ticks a second), against Flash's 30 ticks.
+    expect(RAIL_LIT_TICKS).toBeGreaterThanOrEqual(40);
+    expect(laserReach(0)).toBe(0);
+    expect(laserReach(LASER_IGNITE_TICKS)).toBe(0);
+    expect(laserReach(LASER_IGNITE_TICKS + LASER_REACH_TICKS / 2)).toBeCloseTo(0.5);
+    expect(laserReach(LASER_IGNITE_TICKS + LASER_REACH_TICKS)).toBe(1);
+  });
+
+});
+
+/** A sheet the size of the real one, with nothing to fetch. */
+const fakeSheet = (): Promise<Texture> =>
+  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1248 }) }));
+
+const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "full") => {
+  const yard = readYard(yardOf(type));
+  const sparks = new Container();
+  const shakes: { tick: number; amp: number }[] = [];
+  const nudges: { dx: number; dy: number }[] = [];
+  const frames = new Map<number, number>();
+  const fx = new TowerFx(
+    new Graphics(),
+    towersOf(yard),
+    {
+      setAnimFrame: (id, _layer, frame) => frames.set(id, frame),
+      nudge: (_id, _layer, dx, dy) => nudges.push({ dx, dy }),
+    },
+    { x: yard.bounds.originX, y: yard.bounds.originY },
+    { look, sparks, glow: new Graphics(), shake: (tick, amp) => shakes.push({ tick, amp }), load: fakeSheet },
+  );
+  // The sheet comes in on the next turn of the event loop.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return { fx, sparks, shakes, nudges, frames };
+};
+
+describe("TowerFx's new look", () => {
+  const target = creepAt(35, 235);
+  const shoot = (fx: TowerFx, tick: number) =>
+    fx.onShot({ tick, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+
+  it("throws painted sparks for a Tesla zap and shakes on the first zap of a charge only", async () => {
+    const { fx, sparks, shakes } = await newLookSetUp(25);
+    fx.onCharge(1, 0);
+    shoot(fx, 70);
+    fx.update(70, () => target);
+    expect(fx.sparkCount).toBeGreaterThan(0);
+    expect(sparks.children.length).toBeGreaterThan(0);
+    shoot(fx, 78);
+    fx.update(78, () => target);
+    expect(shakes).toHaveLength(1);
+    fx.destroy();
+  });
+
+  it("shakes for every Railgun shot and kicks the gun back, ending in place", async () => {
+    const { fx, shakes, nudges } = await newLookSetUp(118);
+    shoot(fx, 10);
+    for (let tick = 10; tick <= 10 + RECOIL_TICKS + 2; tick += 1) fx.update(tick, () => target);
+    expect(shakes).toHaveLength(1);
+    expect(nudges.some(({ dx, dy }) => dx !== 0 || dy !== 0)).toBe(true);
+    expect(nudges[nudges.length - 1]).toEqual({ dx: 0, dy: 0 });
+    fx.destroy();
+  });
+
+  it("shakes when a Cannon's splash shell lands, not when it fires", async () => {
+    const { fx, shakes } = await newLookSetUp(20);
+    fx.update(0, () => target);
+    shoot(fx, 5);
+    fx.update(5, () => target);
+    expect(shakes).toHaveLength(0);
+    expect(fx.sparkCount).toBeGreaterThan(0);
+    for (let tick = 6; tick <= 400; tick += 1) fx.update(tick, () => target);
+    expect(shakes).toHaveLength(1);
+    fx.destroy();
+  });
+
+  it("throws fewer bits on low than on full", async () => {
+    const full = await newLookSetUp(20, "full");
+    const low = await newLookSetUp(20, "low");
+    for (const { fx } of [full, low]) {
+      fx.update(0, () => target);
+      shoot(fx, 5);
+      fx.update(5, () => target);
+    }
+    expect(low.fx.sparkCount).toBeGreaterThan(0);
+    expect(low.fx.sparkCount).toBeLessThan(full.fx.sparkCount);
+    full.fx.destroy();
+    low.fx.destroy();
+  });
+
+  it("keeps the classic look as it was: no bits, no shake, no kick", async () => {
+    const { fx, sparks, shakes, nudges } = await newLookSetUp(118, "classic");
+    shoot(fx, 10);
+    for (let tick = 10; tick <= 40; tick += 1) fx.update(tick, () => target);
+    expect(fx.sparkCount).toBe(0);
+    expect(sparks.children).toHaveLength(0);
+    expect(shakes).toHaveLength(0);
+    expect(nudges).toHaveLength(0);
+    fx.destroy();
+  });
+
+  it("turns the Railgun onto a creep as it comes into range, a little a tick, before any shot", async () => {
+    const { fx, frames } = await newLookSetUp(118);
+    // Well out of range (300 at level 1, watched to 300 + AIM_WATCH_MARGIN): the gun stays put.
+    const far = creepAt(35, 35 + 400);
+    fx.update(1, () => far, [far]);
+    expect(frames.get(1)).toBeUndefined();
+    // Just short of range it already starts lining up, before the engine can fire.
+    const { fx: watcher, frames: watched } = await newLookSetUp(118);
+    const close = creepAt(35, 35 + 300 + AIM_WATCH_MARGIN - 10);
+    watcher.update(1, () => close, [close]);
+    expect(watched.get(1)).toBeDefined();
+    watcher.destroy();
+    // In range due south: it starts turning from where it shows, not snapping there.
+    const near = creepAt(35, 235);
+    const wanted = facingCell(118, bearingDegrees({ x: 0, y: 0 }, { x: near.ix, y: near.iy }), 30);
+    const start = cellHeading(118, 0);
+    fx.update(2, () => near, [near]);
+    expect(frames.get(1)).toBe(facingCell(118, stepDegrees(start, 90, TURN_DEGREES_PER_TICK), 30));
+    expect(frames.get(1)).not.toBe(wanted);
+    // Given time, it is on the creep before the engine fires.
+    for (let tick = 3; tick <= 80; tick += 1) fx.update(tick, () => near, [near]);
+    expect(frames.get(1)).toBe(wanted);
+    // A friendly creep or a dead one is no target.
+    const { fx: other, frames: still } = await newLookSetUp(118);
+    other.update(1, () => undefined, [{ ...near, friendly: true }, { ...near, id: 10, hp: 0 }]);
+    expect(still.get(1)).toBeUndefined();
+    fx.destroy();
+    other.destroy();
+  });
+
+  it("turns the Laser onto a creep in range before its beam, and follows the beam without a jump", async () => {
+    const { fx, frames } = await newLookSetUp(23);
+    const near = creepAt(35, 135);
+    fx.update(1, () => near, [near]);
+    const first = frames.get(1);
+    expect(first).toBeDefined();
+    for (let tick = 2; tick <= 120; tick += 1) fx.update(tick, () => near, [near]);
+    const aimed = frames.get(1) ?? -1;
+    fx.onShot({ tick: 121, towerId: 1, creepId: 9, ix: near.ix, iy: near.iy, sweep: { fromIx: 0, fromIy: 0, toIx: near.ix, toIy: near.iy } }, near);
+    let last = aimed;
+    for (let tick = 121; tick <= 200; tick += 1) {
+      fx.update(tick, () => near, [near]);
+      const cell = frames.get(1) ?? -1;
+      // Never more than a tick's catch-up a frame (54 cells round).
+      const gap = Math.min(Math.abs(cell - last), 54 - Math.abs(cell - last));
+      expect(gap).toBeLessThanOrEqual(Math.ceil(CATCH_UP_DEGREES_PER_TICK / 6.66) + 1);
+      last = cell;
+    }
+    fx.destroy();
+  });
+
+  it("draws a Tesla zap from painted strips that swap as it fades, and a Laser beam the same way", async () => {
+    const tesla = await newLookSetUp(25);
+    tesla.fx.onCharge(1, 0);
+    shoot(tesla.fx, 70);
+    tesla.fx.update(70, () => target);
+    // Glow, band, bolt and its core.
+    expect(tesla.sparks.children.filter((child) => child.visible).length).toBeGreaterThanOrEqual(4);
+    tesla.fx.update(70 + 20, () => target);
+    tesla.fx.destroy();
+
+    const laser = await newLookSetUp(23);
+    laser.fx.onShot(
+      { tick: 5, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy, sweep: { fromIx: 0, fromIy: 0, toIx: target.ix, toIy: target.iy } },
+      target,
+    );
+    laser.fx.update(5, () => target, [target]);
+    const charging = laser.sparks.children.length;
+    laser.fx.update(40, () => target, [target]);
+    // Charged: the barrel, three rays, the glow and flare where it burns, and its marks.
+    expect(laser.sparks.children.length).toBeGreaterThan(charging);
+    expect(laser.fx.sparkCount).toBeGreaterThan(0);
+    laser.fx.destroy();
+  });
+
+  it("keeps the Railgun's trail up about half a second in the new look, then takes it away", async () => {
+    const { fx, sparks } = await newLookSetUp(118);
+    shoot(fx, 10);
+    const lit = () => sparks.children.filter((child) => child.visible).length;
+    fx.update(10 + 2, () => target);
+    const flying = lit();
+    // Every thrown bit is spent well before the end; the trail is still there.
+    fx.update(10 + RAIL_LIT_TICKS - 4, () => target);
+    expect(fx.sparkCount).toBe(0);
+    expect(lit()).toBeGreaterThan(0);
+    expect(lit()).toBeLessThan(flying);
+    fx.update(10 + RAIL_LIT_TICKS + 1, () => target);
+    expect(lit()).toBe(0);
+    fx.destroy();
+  });
+
+  it("lays the Laser's two plasma layers and filament only on full, so low draws its beam in fewer pieces", async () => {
+    const counts: number[] = [];
+    for (const look of ["full", "low"] as const) {
+      const { fx, sparks } = await newLookSetUp(23, look);
+      fx.onShot(
+        { tick: 5, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy, sweep: { fromIx: 0, fromIy: 0, toIx: target.ix, toIy: target.iy } },
+        target,
+      );
+      fx.update(45, () => target, [target]);
+      counts.push(sparks.children.filter((child) => child.visible && child instanceof TilingSprite).length);
+      counts.push(sparks.children.filter((child) => child.visible).length);
+      fx.destroy();
+    }
+    const [fullFlows, fullAll, lowFlows, lowAll] = counts;
+    expect(fullFlows).toBe(2);
+    expect(lowFlows).toBe(0);
+    expect(lowAll).toBeLessThan(fullAll ?? 0);
+  });
+
+  it("clears every bit when the battle stands down", async () => {
+    const { fx, sparks } = await newLookSetUp(25);
+    fx.onCharge(1, 0);
+    shoot(fx, 70);
+    fx.update(70, () => target);
+    fx.standDown();
+    expect(fx.sparkCount).toBe(0);
+    expect(sparks.children.filter((child) => child.visible)).toHaveLength(0);
+    fx.destroy();
   });
 });
