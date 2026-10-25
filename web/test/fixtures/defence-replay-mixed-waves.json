@@ -18,7 +18,7 @@
     },
     "housedLost": 0,
     "left": false,
-    "rulesVersion": "5c6596d52004aa1b",
+    "rulesVersion": "8f94a2c06eb9ab53",
     "hasReplay": true,
     "playable": true
   },
@@ -3806,7 +3806,7 @@
       },
       "housedLost": 0,
       "left": true,
-      "rulesVersion": "5c6596d52004aa1b",
+      "rulesVersion": "8f94a2c06eb9ab53",
       "hasReplay": true,
       "playable": true
     },

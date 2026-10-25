@@ -44,6 +44,7 @@ import {
   decoyTouchesBuilding,
 } from "./decoy.js";
 import type { DecoyPlan } from "./decoy.js";
+import { DESCENT_BURN_INTERVAL, burnsInDescent, descentBurnShare } from "./descentBurn.js";
 import { DECOY } from "./siege.js";
 import type { SiegeId } from "./siege.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
@@ -594,6 +595,12 @@ export interface BattleOptions {
    * and its event is ignored, so a log from before the Decoy replays as it did.
    */
   readonly siege?: Readonly<Partial<Record<SiegeId, number>>>;
+  /**
+   * The Descent yard fought, 1 to 13 (Inferno WP 1.21): from yard 7 its burn
+   * takes health from every surface monster (`descentBurn.ts`). Absent for
+   * any fight outside the Descent, which then burns nothing.
+   */
+  readonly descentYard?: number;
 }
 
 /**
@@ -817,7 +824,7 @@ export interface CreepSnapshot {
   readonly targetBuilding: number;
   /** The creep it is on — a defender's quarry — or -1. */
   readonly targetCreep: number;
-  /** Korath's flame is on it (issue #222). */
+  /** Korath's flame (issue #222) or the Descent burn (Inferno WP 1.21) is on it. */
   readonly burning?: boolean;
   /** Inside Fomor's enrage aura: faster, and harder to hurt. */
   readonly enraged?: boolean;
@@ -1626,6 +1633,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const playerLevel = options.playerLevel ?? 20;
   const storageHitScalar = storageScalar(yard.kind);
   const wildMonsterAttack = isWildMonsterAttack(yard.kind);
+  // The Descent burn's share of full health a burn (Inferno WP 1.21); 0 burns nothing.
+  const descentBurn = descentBurnShare(options.descentYard);
 
   for (const building of yard.buildings) {
     if (building.hp <= 0) continue;
@@ -3195,6 +3204,23 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return creep.hp <= 0;
   };
 
+  /** Whether the Descent's burn is on this creep (Inferno WP 1.21). */
+  const descentBurning = (creep: Creep): boolean =>
+    descentBurn > 0 && burnsInDescent(creep.monsterId);
+
+  /**
+   * The Descent burn's tick (Inferno WP 1.21), beside the flame's: every
+   * {@link DESCENT_BURN_INTERVAL} ticks the creep has been on the field it
+   * loses its share of full health, through its armour, from no one. True
+   * when it killed.
+   */
+  const tickDescentBurn = (creep: Creep): boolean => {
+    const age = tick - creep.born;
+    if (age <= 0 || age % DESCENT_BURN_INTERVAL !== 0) return false;
+    damageCreep(creep, creep.maxHp * descentBurn);
+    return creep.hp <= 0;
+  };
+
   /**
    * What a splash can reach (`Targeting.getTargetsInRange`, `getBuildingsInRange`):
    * a building that stands and is a target at all.
@@ -4491,6 +4517,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // The flame and the auras tick before their creep acts, and a champion's
     // frame counts up in `tickState` before its behaviour reads it (issue #222).
     if (creep.burnDps > 0 && tickBurn(creep)) return;
+    if (descentBurning(creep) && tickDescentBurn(creep)) return;
     if (creep.venomStacks > 0 && tickVenom(creep)) return;
     if (creep.rank > 0 && creep.monsterId === BRAIN_ID) tickCloak(creep);
     if (creep.champion) {
@@ -5717,7 +5744,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       state: creep.attacking ? "attacking" : "walking",
       targetBuilding: creep.targetBuilding,
       targetCreep: creep.targetCreep,
-      burning: creep.burnDps > 0,
+      burning: creep.burnDps > 0 || descentBurning(creep),
       enraged: creep.enragedBy >= 0,
       puttied: creep.puttyUntil > 0,
       lootBoosted: creep.lootBuffedBy >= 0,
