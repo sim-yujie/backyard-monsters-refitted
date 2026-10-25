@@ -734,6 +734,42 @@ export const QUAKE_TOWER_TYPE = 129;
 export const QUAKE_ANIM_FRAMES = 33;
 export const QUAKE_FRAME_TICKS = 6;
 
+/**
+ * The Inferno monsters' specials (`com/monsters/monsters/creeps/inferno/*.as`,
+ * Inferno plan WP 1.5). IC2, IC3, IC4 and IC6 are plain creeps. IC1 Spurtz only
+ * leaves a scorch mark when it dies (`Spurtz.as:12-14`, `EFFECTS.Burn`), which
+ * hurts nothing.
+ *
+ * IC5 Balthazar flies but sheds both its flying and its ground defence flags
+ * (`Balthazar.as:10-15`), so every tower and every monster that can reach the
+ * attacking side hits it, a ground-only one or an air-only one alike. As a
+ * defender it passes over an Eye-ra (`CreepBase.as:667-671`). Its Lab target
+ * mode (`:16-18`) changes nothing here: every defender already reaches the air.
+ */
+export const BALTHAZAR_ID = "IC5";
+
+/**
+ * IC7 Sabnox throws a magma fireball (`Sabnox.as:12-20`): twice its damage at a
+ * tower, its damage at any other building or at a monster. The doubling is the
+ * tower specialist's, as its target group says (`specialistMultiplier`); the
+ * fireball lands as a `DummyTarget`, so a building it hits loots at 1
+ * (`FIREBALL.as:165`).
+ */
+export const SABNOX_ID = "IC7";
+
+/**
+ * IC8 King Wormzer's splash (`KingWormzer.as:13-27`): every hit sets off
+ * `AOEDamageOnAttackOncePerTarget(100, BUILDINGS | GROUND, 4)`, the swing times
+ * {@link KING_WORMZER_MULTIPLIER} over the buildings within 100 of it, a
+ * straight fall to a fifth at the edge, once per target in a row, with no Lab
+ * rank needed. Its flags name no side, so no monster is hurt (this client's
+ * change, kept from the original game); a defender's splash leaves its own
+ * buildings alone (`AOEDamage.as:36-39`), so only an attacker's lands. Map
+ * Room 3 turns it off, and the engine is never in Map Room 3.
+ */
+export const KING_WORMZER_ID = "IC8";
+export const KING_WORMZER_MULTIPLIER = 4;
+
 /** The quake's hurt to a creep `dist` from the scan point (`:174-179`). */
 export const quakeDamage = (power: number, range: number, dist: number, hp: number): number => {
   let dealt = Math.trunc((power / range) * (range - Math.trunc(dist)));

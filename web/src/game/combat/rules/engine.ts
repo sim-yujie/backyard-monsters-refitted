@@ -96,6 +96,10 @@ import {
   RAILGUN_SEGMENT,
   RAILGUN_SEGMENTS,
   RAILGUN_TYPE,
+  BALTHAZAR_ID,
+  KING_WORMZER_ID,
+  KING_WORMZER_MULTIPLIER,
+  SABNOX_ID,
   QUAKE_ANIM_FRAMES,
   QUAKE_FRAME_TICKS,
   QUAKE_TOWER_TYPE,
@@ -2212,7 +2216,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       burrows: movement === "burrow",
       explode: monsterStat(monsterId, "explode", level) > 0,
       lootMultiplier: lootingMultiplier(targetGroup, false),
-      flags: defenseFlags(friendly, flying, false),
+      // Balthazar sheds both its flying and its ground flag (`Balthazar.as:10-15`).
+      flags:
+        monsterId === BALTHAZAR_ID
+          ? defenseFlags(friendly, flying, false) & ~(TARGETS_FLYING | TARGETS_GROUND)
+          : defenseFlags(friendly, flying, false),
       targetable: true,
       behaviour: mode,
       attackCooldown: 0,
@@ -2887,6 +2895,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (other && other.hp > 0) {
         recordHit(creep, other.ix, other.iy, strikeCreep(creep, other, null));
         if (creep.rank > 0) onAttack(creep, creep.damage, other, null);
+        if (creep.monsterId === KING_WORMZER_ID) {
+          kingWormzerSplash(creep, creep.damage, other, null);
+        }
       }
       return;
     }
@@ -2895,8 +2906,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.monsterId === KORATH_ID && creep.champion) creep.hits += 1;
     const multiplier = specialistMultiplier(creep.targetGroup, target.kind);
     // Fomor's fireball lands as a `DummyTarget`, which loots at 1 (`FIREBALL.as:165`,
-    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222).
-    const looting = creep.champion && creep.monsterId === FOMOR_ID ? 1 : lootOf(creep);
+    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222); so does Sabnox's.
+    const fireball =
+      (creep.champion && creep.monsterId === FOMOR_ID) ||
+      (!creep.champion && creep.monsterId === SABNOX_ID);
+    const looting = fireball ? 1 : lootOf(creep);
     recordHit(
       creep,
       target.x,
@@ -2904,6 +2918,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       damageBuilding(target, creep.damage * multiplier, creep, looting),
     );
     if (creep.rank > 0) onAttack(creep, creep.damage * multiplier, null, target);
+    if (creep.monsterId === KING_WORMZER_ID) {
+      kingWormzerSplash(creep, creep.damage * multiplier, null, target);
+    }
     // Krallen moves on from a harvester she has drained (`ChampionBase.as:836-840`).
     if (
       creep.champion &&
@@ -3090,6 +3107,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       radius,
       hits,
     });
+  };
+
+  /**
+   * King Wormzer's splash on every hit, ranked or not ({@link KING_WORMZER_ID}):
+   * the buildings within {@link WORMZER_RADIUS}, the swing times
+   * {@link KING_WORMZER_MULTIPLIER}, once per target in a row. No monster is
+   * hurt, and a defender's splash finds no building.
+   */
+  const kingWormzerSplash = (
+    creep: Creep,
+    damage: number,
+    foe: Creep | null,
+    building: EngineBuilding | null,
+  ): void => {
+    const key = splashKey(foe, building);
+    if (key === creep.lastSplash) return;
+    creep.lastSplash = key;
+    const targets = splashTargets(creep, WORMZER_RADIUS, null, null).filter(
+      (target) => target.building !== null,
+    );
+    dealSplash(creep, damage * KING_WORMZER_MULTIPLIER, WORMZER_RADIUS, 0, targets);
+    noteSplash(creep, WORMZER_RADIUS, targets.length);
   };
 
   /**
@@ -3391,9 +3430,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       distanceSquared(home.centreX, home.centreY, other.x, other.y) < home.leash * home.leash;
     let target = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     if (!target || target.hp <= 0 || target.gone || !leashed(target) || unseen(target)) {
+      // A Balthazar passes over an Eye-ra (`CreepBase.as:667-671`).
       const found = index
         .inRange(DEFEND_SEARCH, creep.x, creep.y, creep.hitFlags)
-        .find((hit) => leashed(hit.creep))?.creep;
+        .find(
+          (hit) =>
+            leashed(hit.creep) &&
+            !(creep.monsterId === BALTHAZAR_ID && hit.creep.monsterId === EYE_RA_ID),
+        )?.creep;
       if (!found) {
         if (creep.blinkHops > 0) stopBlink(creep);
         creep.targetCreep = -1;
