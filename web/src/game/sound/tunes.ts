@@ -1,7 +1,10 @@
 /**
  * The game's tunes (beta.5): Flash's own MP3s, which the game server already
  * serves under `/assets/sounds/music/` (`client/scripts/SOUNDS.as:122-125`),
- * and which screen plays which.
+ * and which screen plays which. The yard has a new tune of its own (owner's
+ * pick B1, 2026-10-25; how it was made: `yard-theme-CREDITS.md` next to the
+ * files); Flash's `Music_Building.mp3` stays on the server in case it has to
+ * come back.
  *
  * Flash's choice by mode (`client/scripts/GLOBAL.as:866-885`): the yard tune
  * (`musicbuild`) in the own yard, a visit and a help; the attack tune
@@ -18,16 +21,27 @@
 export type Tune = "yard" | "attack" | "underAttack";
 
 export interface TuneFile {
+  /** An MP3, which every browser plays, iPhones included. */
   readonly url: string;
+  /**
+   * The same tune as Ogg Vorbis, for browsers that play it. Ogg loops
+   * without the short silence an MP3 encoder pads its ends with.
+   */
+  readonly ogg?: string;
   /** Flash's own volume for it (`SOUNDS.as:131-138`). */
   readonly volume: number;
 }
 
 export const TUNES: Readonly<Record<Tune, TuneFile>> = {
-  yard: { url: "/assets/sounds/music/Music_Building.mp3", volume: 0.6 },
+  // As loud as Flash's yard tune (-16 against -16.7 LUFS), so Flash's volume holds.
+  yard: { url: "/assets/sounds/music/yard-theme.mp3", ogg: "/assets/sounds/music/yard-theme.ogg", volume: 0.6 },
   attack: { url: "/assets/sounds/music/Music_Attack.mp3", volume: 0.7 },
   underAttack: { url: "/assets/sounds/music/Music_UnderAttack.mp3", volume: 0.7 },
 };
+
+/** The file to stream: the Ogg copy where the browser can play it, else the MP3. */
+export const tuneUrl = (file: TuneFile, canPlayOgg: boolean): string =>
+  canPlayOgg && file.ogg ? file.ogg : file.url;
 
 /**
  * The map rooms' tune. Flash had none of its own: no map room file starts

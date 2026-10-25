@@ -1,4 +1,4 @@
-import { TUNES, type Tune } from "./tunes";
+import { TUNES, tuneUrl, type Tune } from "./tunes";
 
 /**
  * Plays one tune at a time, looping, the way Flash's music did
@@ -40,6 +40,8 @@ export interface GestureTarget {
 
 export interface MusicPlayerOptions {
   readonly createAudio?: (url: string) => AudioLike;
+  /** Whether the browser plays Ogg Vorbis; asked of the browser when left out. */
+  readonly canPlayOgg?: boolean;
   readonly gestures?: GestureTarget;
   readonly setInterval?: (run: () => void, ms: number) => unknown;
   readonly clearInterval?: (handle: unknown) => void;
@@ -55,6 +57,10 @@ export const GESTURE_EVENTS = ["pointerdown", "pointerup", "touchend", "keydown"
 const FADE_STEP = 0.05;
 const FADE_TICK_MS = 25;
 
+/** Safari on iPhone says no, and gets the MP3. */
+const browserPlaysOgg = (): boolean =>
+  typeof document !== "undefined" && document.createElement("audio").canPlayType('audio/ogg; codecs="vorbis"') !== "";
+
 const defaultAudio = (url: string): AudioLike => {
   const audio = new Audio(url);
   audio.preload = "auto";
@@ -68,6 +74,7 @@ interface Fading {
 
 export class MusicPlayer {
   private readonly createAudio: (url: string) => AudioLike;
+  private readonly canPlayOgg: boolean;
   private readonly gestures: GestureTarget | null;
   private readonly startTimer: (run: () => void, ms: number) => unknown;
   private readonly stopTimer: (handle: unknown) => void;
@@ -82,6 +89,7 @@ export class MusicPlayer {
 
   constructor(options: MusicPlayerOptions = {}) {
     this.createAudio = options.createAudio ?? defaultAudio;
+    this.canPlayOgg = options.canPlayOgg ?? browserPlaysOgg();
     this.gestures = options.gestures ?? (typeof document === "undefined" ? null : document);
     this.startTimer = options.setInterval ?? ((run, ms) => setInterval(run, ms));
     this.stopTimer = options.clearInterval ?? ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
@@ -133,7 +141,7 @@ export class MusicPlayer {
   private element(tune: Tune): AudioLike {
     let audio = this.elements.get(tune);
     if (!audio) {
-      audio = this.createAudio(TUNES[tune].url);
+      audio = this.createAudio(tuneUrl(TUNES[tune], this.canPlayOgg));
       audio.loop = true;
       this.elements.set(tune, audio);
     }
