@@ -25,10 +25,11 @@ def band(im, thr):
     return xs[sel].min(), xs[sel].max() + 1, bot, top
 
 
-def canvas(b):
-    """1x canvas for the new art: the old canvas widened by 30% each side and raised by 60%; returns (w, h, origin x, origin y)."""
+def canvas(b, up=0.6):
+    """1x canvas for the new art: the old canvas widened by 30% each side and raised by 60% (up); returns (w, h, origin x, origin y).
+    The taller towers (TALL2/TALL3) use up=1.4; the canvases share the bottom, so pictures line up by their bottom edge."""
     old, ox, oy = old_rgba(b)
-    dx, dy = round(old.width * 0.3), round(old.height * 0.6)
+    dx, dy = round(old.width * 0.3), round(old.height * up)
     return old.width + 2 * dx, old.height + dy, ox + dx, oy + dy
 
 
@@ -42,12 +43,12 @@ if __name__ == "__main__":
     l0, r0, b0, t0 = band(old, 200)
     l1, r1, b1, t1 = band(painted, 128)
     k = (r0 - l0) * UP / (r1 - l1)
-    cap = {"T1": 1.1, "T2": 1.25}.get(combo, 1.35)
+    cap = {"T1": 1.1, "T2": 1.25, "TALL2": 1.7, "TALL3": 2.0}.get(combo, 1.35)   # TALL: the owner wants taller tiers
     k = min(k, (b0 - t0) * cap * UP / (b1 - t1))           # never more than 35% taller than Flash (tiers: less)
     crop = painted.crop(painted.getbbox())
     bx0, by0 = painted.getbbox()[:2]
     crop = resize_pm(crop, (max(1, round(crop.width * k)), max(1, round(crop.height * k))))
-    W, H, cx0, cy0 = canvas(b)
+    W, H, cx0, cy0 = canvas(b, 1.4 if combo.startswith("TALL") else 0.6)
     c4 = Image.new("RGBA", (W * UP, H * UP), (0, 0, 0, 0))
     dx, dy = cx0 - ox, cy0 - oy                              # old canvas -> new canvas
     mid_old = ((l0 + r0) / 2 + dx) * UP

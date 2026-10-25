@@ -18,8 +18,11 @@ from common import ASSETS, REPO, TOWERS, old_rgba, on  # noqa: E402
 b, combo = sys.argv[1], sys.argv[2]
 TIER = combo in ("T1", "T2")                 # tiers 1-2 of R2-A, painted to match the R2A picture
 MAT = combo in ("GOLD", "BLACK")             # tower tiers 2-3 as wall-block materials (owner, 25 Oct evening): gold, black diamond
-R2 = combo.startswith("R2") or TIER or MAT   # round 2: keep the Flash design, refresh it; no theme
-style, theme = ("A", None) if TIER or MAT else (combo[-1], None) if R2 else (combo[0], combo[1])
+# owner feedback on the material tiers: PLAIN = the black-diamond top tier in plain black (no gold), to compare;
+# TALL2 / TALL3 = cannon tiers 2 (gold) and 3 (black diamond) standing taller, as range grows with level
+EXTRA = combo in ("PLAIN", "TALL2", "TALL3")
+R2 = combo.startswith("R2") or TIER or MAT or EXTRA   # round 2: keep the Flash design, refresh it; no theme
+style, theme = ("A", None) if TIER or MAT or EXTRA else (combo[-1], None) if R2 else (combo[0], combo[1])
 # the Flash picture each sample is painted from: the Town Hall has its own picture per level (tier 1 = level 2, tier 2 = level 5)
 FK = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5", ("townhall", "GOLD"): "townhall5"}.get((b, combo), b)
 OUT = REPO / "art-samples" / "redesign"
@@ -44,7 +47,7 @@ if R2:
     bt = Image.open(ASSETS / "buildingbuttons" / f"{BUTTON}.jpg").convert("RGB")
     bt.resize((bt.width * 5, bt.height * 5), Image.LANCZOS).save(out / "ref.png")
     inputs.append("ref.png")
-    if b == "cannon" and not TIER and not os.environ.get("NOFAITHFUL"):   # NOFAITHFUL=1: leave it out (Codex copied it too closely)
+    if b == "cannon" and not (TIER or MAT or EXTRA) and not os.environ.get("NOFAITHFUL"):   # NOFAITHFUL=1: leave it out (Codex copied it too closely)
         # faithful.png: the "sharp Flash" repaint from the tower samples, the lower bound
         Image.open(REPO / "art-samples" / "towers" / "cannon" / "sample-new.png").convert("RGB").save(out / "faithful.png")
         inputs.append("faithful.png")
@@ -69,6 +72,11 @@ if TIER:
 # tier 1 of the material tiers: an existing R2-A picture (cannon: the clean steel tier painted as T2; others: R2A)
 # Town Hall (owner: one picture per level; test): GOLD = level 5 (T2) with gold added, BLACK = level 10 (R2A) in black diamond
 MAT_TIER1 = {"cannon": "T2", ("townhall", "GOLD"): "T2"}
+if EXTRA:
+    # base.png: the picture this one changes (PLAIN: the black-and-gold top tier; TALL2/TALL3: the gold / black-diamond cannon)
+    BASE = {"PLAIN": "BLACK", "TALL2": "GOLD", "TALL3": "BLACK"}[combo]
+    Image.open(OUT / b / BASE / "sample-new.png").convert("RGB").save(out / "base.png")
+    inputs.append("base.png")
 if MAT:
     Image.open(OUT / b / MAT_TIER1.get((b, combo), MAT_TIER1.get(b, "R2A")) / "sample-new.png").convert("RGB").save(out / "tier1.png")
     blk = Image.open(ASSETS / "buildings" / "walls" / {"GOLD": "top.4.v2.png", "BLACK": "top.5.png"}[combo]).convert("RGBA")
@@ -128,6 +136,51 @@ THEME = {
           "red-and-white hazard stripes, heavy bolts, vents, cables, small antennas, glowing energy cores and indicator lights. "
           "This is the TOP TIER, so it is the most advanced, heaviest-armoured, most high-tech version, with glowing parts."),
 }.get(theme, "")
+if EXTRA:
+    noun = "building" if b == "townhall" else "tower"
+    if combo == "PLAIN":
+        task = (f"Repaint base.png in PLAIN BLACK: every part that is GOLD in base.png (gold edges, seams, trims, rims, bands, "
+                f"stripes, bolts{', and the golden frame, arms, clawed feet and horned crest' if b == 'townhall' else ''}) becomes the "
+                f"same glossy BLACK faceted armour as the rest (like black diamond), with crisp cool white-grey highlights. NO gold "
+                f"and NO yellow anywhere. Keep everything else exactly as in base.png: the same shapes, parts, pose, aim, camera, "
+                f"size and painting finish; parts that are not gold keep their colour"
+                f"{' (the blue porthole and blue studs stay blue, the red pipes stay red)' if b == 'townhall' else ''}"
+                f"{' (the copper coil and the blue electric glow stay)' if b == 'tesla' else ''}. The owner wants to compare "
+                f"black-and-gold (base.png) with plain black, so this must be the same picture with the gold turned black.")
+    else:
+        task = ("Make the tower in base.png STAND TALLER, keeping everything else the same: it is tier "
+                f"{'2 of 3 (gold)' if combo == 'TALL2' else '3 of 3 (black diamond)'}, and the higher tiers fire further, so they "
+                "stand taller. Raise it by adding "
+                + ("ONE extra drum section under the striped drum (a second striped red-and-white drum band with a gold band "
+                   "between them), so the whole tower is about 30% taller than base.png"
+                   if combo == "TALL2" else
+                   "TWO extra drum sections under the striped drum (stacked black-and-gold striped drum bands with gold bands "
+                   "between them), so the whole tower is about 60% taller than base.png")
+                + ". The three feet, the ring with its prongs and the barrel keep their size and shape (the feet stay on the ground "
+                "and the ring and barrel ride on top of the taller drum); the FOOTPRINT on the ground stays exactly the same, "
+                "NOT wider. Same materials, colours, pose, aim (the barrel points the same way), camera and painting finish as "
+                "base.png. It must stay clearly the same Flash cannon tower, just taller.")
+    prompt = f"""Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+{task}
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Input 1, frames.png: the OLD Flash {noun}, blown up, on grey ({fr.width}x{fr.height}): its design, camera angle and ground footprint.
+Input 2, ref.png: the old build-menu picture of the same {noun}.
+Input 3, style.png: see style below.
+Input 4, base.png: the approved new picture this one is made from (see above).
+
+{STYLE}
+
+Output: ONE image, {fr.width}x{fr.height}, the {noun} alone, complete and fully inside the image with margin{' (it is taller, so leave room above)' if combo != 'PLAIN' else ''}.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The {noun} itself must contain no bright pure green.
+"""
+    if os.environ.get("NOTE"):
+        prompt += "\nIMPORTANT CORRECTION (an earlier attempt got this wrong): " + os.environ["NOTE"] + "\n"
+    (out / "prompt.txt").write_text(prompt, encoding="utf-8")
+    print("ready", out.as_posix())
+    sys.exit(0)
 MAT_WHAT = {
     ("cannon", "GOLD"): ("the tan ring, its curved prongs and the three feet become POLISHED GOLD; the steel barrel gets broad gold "
                          "bands, a gold collar and a gold muzzle ring; the drum keeps its RED-AND-WHITE STRIPES but with thick gold "
