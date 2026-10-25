@@ -265,7 +265,8 @@ export const buildAttackSave = (
   const battleState = battle.state();
   const log = session.flingLog();
   const damage = Math.round(state.damagePercent * 100) / 100;
-  const destroyed = derivedDestroyed(damage, session.target.kind);
+  // A Descent yard is an Inferno yard to the server, which derives no `destroyed` for it.
+  const destroyed = session.target.descentYard === undefined ? derivedDestroyed(damage, session.target.kind) : undefined;
   const { roster } = session.target;
   const attackerchampion = attackerChampionsAfter(roster.champions, session.championsHpAfter());
   const attackersiege = attackerSiegeAfter(roster.siege, log.events);

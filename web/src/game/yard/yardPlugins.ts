@@ -1,4 +1,5 @@
 import type { Camera } from "@/game/Camera";
+import type { AttackTarget } from "@/game/attack/attackTarget";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { Hud } from "@/ui/Hud";
@@ -50,6 +51,8 @@ export interface YardSceneControls {
   carrying(): boolean;
   /** Opens the raid scene on the fight handed over with `setRaidRun` (#226). */
   openRaid(): void;
+  /** Opens the attack scene on `target`: Moloch's Descent, from the cave (Inferno WP 1.13). */
+  openAttack(target: AttackTarget): void;
   /** Opens another of the player's own yards: the cave's way between the main yard and the Inferno. */
   openYard(target: OwnYardTarget): void;
   /** Opens this own yard afresh, as the server has it now. */

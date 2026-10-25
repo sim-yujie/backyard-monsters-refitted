@@ -28,6 +28,8 @@ export interface EndAttackPanelOptions {
   readonly summary: AttackSummary;
   /** Return to map, after a successful save. */
   readonly onReturn: () => void;
+  /** The return button's words, when it does not go to the map: Moloch's Descent goes home. */
+  readonly returnLabel?: string;
   /** Send the save again. */
   readonly onRetry: () => void;
   /** Leave with the result unsaved; called only after the second confirmation. */
@@ -174,7 +176,7 @@ export class EndAttackPanel {
     this.returnButton.type = "button";
     this.returnButton.className = "btn btn--primary attack-end__return";
     tutTarget(this.returnButton, TutTarget.ATTACK_HOME);
-    this.returnButton.textContent = "Return to map";
+    this.returnButton.textContent = options.returnLabel ?? "Return to map";
     this.returnButton.disabled = true;
     this.returnButton.addEventListener("click", () => {
       if (this.status_ === "saved" || this.status_ === "unsent") this.options.onReturn();

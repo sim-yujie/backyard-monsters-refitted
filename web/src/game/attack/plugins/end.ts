@@ -1,6 +1,7 @@
 import { guideBus } from "@/game/guide/guideBus";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { saveAttack } from "@/api/base";
+import { descentLandingOf } from "@/api/inferno";
 import { ApiError, NetworkError, getAuthToken } from "@/api/http";
 import { declineTakeover, getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
 import type {
@@ -14,9 +15,11 @@ import { buildAttackSave, forKeepalive, summariseAttack } from "@/game/attack/at
 import { combatKind } from "@/game/attack/AttackSession";
 import type { AttackTarget } from "@/game/attack/attackTarget";
 import type { ResourceAmounts } from "@/game/combat/rules";
+import { playDescentResult } from "@/game/inferno/descentResult";
+import { RETURN_HOME } from "@/game/inferno/descentText";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { takeoverGrantOf, type TakeoverKind } from "@/game/maproom/takeover";
-import { outpostTarget } from "@/game/yard/ownYards";
+import { INFERNO_YARD, MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
@@ -342,6 +345,13 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      * A Map Room 2 wild camp attack, once saved, is the plan the server repeats
      * for the camp's tribe and level, so the panel offers it again (owner, #221).
      */
+    /**
+     * Moloch's Descent (Inferno WP 1.13): like a Map Room 1 tribe, nothing
+     * lands it later, and its way out is home to the main yard, where Flash
+     * returned after it, with Moloch's word on the fight over the panel first.
+     */
+    const descent = target.descentYard !== undefined;
+    let stopDescentResult: (() => void) | null = null;
     const repeatable = target.kind === "wild" && (target.mapversion ?? 2) === 2 && target.cell !== undefined;
     /**
      * A Map Room 1 tribe has no checkpoint and nothing lands its attack later
@@ -349,7 +359,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      * is sent again once; a Map Room 2 attack is landed by the server's
      * finaliser.
      */
-    const isTribe = combatKind(target) === "tribe";
+    const isTribe = combatKind(target) === "tribe" || descent;
 
     /**
      * The HUD takes the banked loot when the panel shows a landed save (#168),
@@ -363,6 +373,10 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
 
     /** Opens the map on the target's cell. */
     const returnToMap = (): void => {
+      if (descent) {
+        goToOutpost(MAIN_YARD);
+        return;
+      }
       if (target.cell && (target.mapversion ?? 2) === 2) setMapFocus({ cell: target.cell });
       goToMap();
     };
@@ -428,8 +442,16 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (next.kind === "saved" && next.takeover) offerTakeover(next.takeover);
     };
 
+    /** Moloch's word on a landed Descent attack, once. */
+    const playDescent = (response: BaseSaveResponse): void => {
+      const landing = descent ? descentLandingOf(response) : null;
+      if (!landing || stopDescentResult || tornDown || leaving) return;
+      stopDescentResult = playDescentResult(modal, target.descentYard!, landing, () => goToOutpost(INFERNO_YARD));
+    };
+
     /** The panel's saved state for a response. A grant's outpost is not protected yet. */
     const savedFrom = (response: BaseSaveResponse): SaveShown => {
+      playDescent(response);
       const takeover = takeoverChanceOf(target, response, payload);
       return {
         kind: "saved",
@@ -541,6 +563,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (panel || tornDown) return;
       panel = new EndAttackPanel({
         summary: summariseAttack(session),
+        ...(descent ? { returnLabel: RETURN_HOME } : {}),
         onReturn: () => {
           offer?.declineOnLeave(false);
           returnToMap();
@@ -610,6 +633,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       offer = null;
       repeat?.close();
       repeat = null;
+      stopDescentResult?.();
       tornDown = true;
       page.window.removeEventListener("pagehide", onPageHide);
       unsubscribe();

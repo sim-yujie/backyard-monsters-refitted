@@ -15,7 +15,8 @@ import {
 import { CaveSprite } from "@/game/inferno/CaveSprite";
 import { playEmergence, playStagePassed, type EmergenceView } from "@/game/inferno/emergenceFlow";
 import { holdForEmergence } from "@/game/inferno/emergenceHold";
-import { DESCENT_NOT_YET, TRANSFER_NOT_YET } from "@/game/inferno/emergenceText";
+import { enterDescent } from "@/game/inferno/descentEntry";
+import { TRANSFER_NOT_YET } from "@/game/inferno/emergenceText";
 import { isMolochRaid, startMolochRaid } from "@/game/inferno/molochRaid";
 import { consumeRaidResult, setRaidRun } from "@/game/raid/raidSession";
 import { raidWatch } from "@/game/raid/raidWatch";
@@ -182,11 +183,20 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
   const closing = (open: (done: () => void) => void): Promise<void> =>
     new Promise((resolve) => open(resolve));
   // Enter Cavern: down to the Inferno yard once the Descent is won
-  // (`INFERNOPORTAL.EnterPortal`, `MAPROOM_DESCENT.DescentPassed`); the
-  // Descent itself is not here yet.
+  // (`INFERNOPORTAL.EnterPortal`, `MAPROOM_DESCENT.DescentPassed`), else
+  // the Descent map, whose Attack opens the attack scene (WP 1.13).
   const enter = (): void => {
-    if (hasYard) scene.openYard(INFERNO_YARD);
-    else notice(DESCENT_NOT_YET);
+    if (hasYard) {
+      scene.openYard(INFERNO_YARD);
+      return;
+    }
+    void enterDescent({
+      modal: overlay.modal,
+      own: () => ({ save: store.save, yard: store.yard }),
+      notice,
+      openInferno: () => scene.openYard(INFERNO_YARD),
+      openAttack: (target) => scene.openAttack(target),
+    });
   };
   const view: EmergenceView = {
     setCaveLevel: (next) => {

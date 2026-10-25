@@ -34,7 +34,10 @@ const hoisted = vi.hoisted(() => ({
   levels: [] as number[],
   fresh: { cave: { level: 0 } },
   start: vi.fn(),
+  enterDescent: vi.fn(async (_deps: unknown) => null),
 }));
+
+vi.mock("@/game/inferno/descentEntry", () => ({ enterDescent: hoisted.enterDescent }));
 
 vi.mock("@/api/raid", async (importOriginal) => ({
   ...(await importOriginal<typeof RaidModule>()),
@@ -110,6 +113,7 @@ const mount = (state: InfernoLoadState | undefined, { kind = "main", townHall = 
     selectedBuilding: () => null,
     focusBuilding: vi.fn(),
     openRaid: vi.fn(),
+    openAttack: vi.fn(),
     openYard: vi.fn(),
   };
   const notices = { show: vi.fn() };
@@ -220,14 +224,20 @@ describe("a tap on the cave", () => {
     teardown?.();
   });
 
-  it("opens the menu at level 5, whose buttons say what is still to come", async () => {
-    const { canvas, modal, notices, teardown } = mount(loadState(5));
+  it("opens the menu at level 5, whose Enter Cavern opens the Descent before it is won (WP 1.13)", async () => {
+    hoisted.enterDescent.mockClear();
+    const { canvas, modal, scene, teardown } = mount(loadState(5));
     tap(canvas);
     await settle();
     const buttons = [...modal.querySelectorAll("button")].map((one) => one.textContent);
     expect(buttons).toEqual(expect.arrayContaining([TRANSFER_MONSTERS, ENTER_CAVERN]));
     [...modal.querySelectorAll("button")].find((one) => one.textContent === ENTER_CAVERN)!.click();
-    expect(notices.show).toHaveBeenCalledWith("inferno", expect.any(String), expect.anything());
+    expect(hoisted.enterDescent).toHaveBeenCalledTimes(1);
+    expect(scene.openYard).not.toHaveBeenCalled();
+    // Its Attack hands the target to the attack scene.
+    const deps = hoisted.enterDescent.mock.calls[0]![0] as { openAttack: (target: unknown) => void };
+    deps.openAttack({ baseid: "201" });
+    expect(scene.openAttack).toHaveBeenCalledWith({ baseid: "201" });
     teardown?.();
   });
 

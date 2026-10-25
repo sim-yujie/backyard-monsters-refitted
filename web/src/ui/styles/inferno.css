@@ -185,3 +185,188 @@
   transform: translateX(-50%);
   pointer-events: none;
 }
+
+/*
+ * Moloch's Descent (WP 1.13, `ui/inferno/DescentScreens.ts`): the map of his
+ * 13 yards, his lines, the battle report and the capture.
+ */
+
+/* Flash set his Descent lines in italics (`FormatTextFieldForDialog`). */
+.inferno-says__line--descent {
+  font-style: italic;
+}
+
+.descent-map {
+  width: min(96vw, 46rem);
+}
+
+/* The map scrolls down inside the popup, as Flash's 700 x 560 window did. */
+.descent-map__scroll {
+  max-height: min(70vh, 40rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.descent-map__map {
+  position: relative;
+  width: 100%;
+}
+
+.descent-map__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Stand-in for Flash's fog (`MapViewDescent_Fog_Shroud`, vector art never
+ * exported): the map below the next yard fades into darkness.
+ */
+.descent-map__fog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-top: 2.5rem;
+  background: linear-gradient(to bottom, transparent, var(--colour-shade-strong) 6rem);
+  pointer-events: none;
+}
+
+/*
+ * Stand-ins for Flash's seven yard pictures (`descentBase_images_355`, vector
+ * art in `assets.swf`): a numbered disc, larger for the headquarters.
+ */
+.descent-yard {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  translate: -50% -50%;
+  padding: 0;
+  border: 3px solid var(--colour-danger);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--colour-warning-bright), var(--colour-danger) 60%, var(--colour-shade-strong));
+  color: var(--colour-text-inverse);
+  font: 700 var(--text-md) / 1 var(--font-display);
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+}
+
+.descent-yard--art7 {
+  width: 4rem;
+  height: 4rem;
+}
+
+.descent-yard--dark {
+  filter: grayscale(0.8) brightness(0.45);
+  cursor: default;
+}
+
+.descent-yard--next {
+  outline: 3px solid var(--colour-warning-bright);
+  outline-offset: 3px;
+}
+
+.descent-yard__number {
+  text-shadow: 0 1px 0 var(--colour-art-shadow);
+}
+
+/* The next yard's card (`DescentBasePopup`), above and beside its marker. */
+.descent-card {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-2);
+  width: 11rem;
+  translate: 2rem -50%;
+  padding: var(--space-3);
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+
+.descent-card--left {
+  translate: calc(-100% - 2rem) -50%;
+}
+
+.descent-card__depth {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  font-weight: 700;
+}
+
+.descent-card__bar {
+  height: 0.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  overflow: hidden;
+}
+
+.descent-card__fill {
+  display: block;
+  height: 100%;
+  background: var(--colour-danger);
+}
+
+.descent-card__warning {
+  margin: 0;
+  color: var(--colour-danger);
+  font-weight: 700;
+}
+
+.descent-report__heading {
+  margin: 0;
+  font-weight: 700;
+}
+
+.descent-report__total {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.descent-report__box {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+.descent-report__name {
+  font-weight: 700;
+}
+
+.descent-report__value {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 30rem) {
+  .descent-report__total {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .descent-yard {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: var(--text-sm);
+  }
+
+  .descent-yard--art7 {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .descent-card {
+    width: 9.5rem;
+  }
+}

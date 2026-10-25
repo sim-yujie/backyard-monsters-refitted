@@ -2372,6 +2372,10 @@ export class YardScene implements Scene {
       plannerOpen: () => this.planner !== null,
       carrying: () => this.placement !== null,
       openRaid: () => this.context?.goTo(SceneName.RAID),
+      openAttack: (target) => {
+        setAttackTarget(target);
+        this.context?.goTo(SceneName.ATTACK);
+      },
       openYard: (target) => this.openOwnYard(target),
       reload: () => this.reloadOwnYard(),
     };
