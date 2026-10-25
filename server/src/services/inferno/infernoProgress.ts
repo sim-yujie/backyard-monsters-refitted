@@ -1,6 +1,8 @@
 import type { EntityManager } from "@mikro-orm/core";
 
 import { InfernoProgress } from "../../database/models/infernoprogress.model.js";
+import { RESOURCE_KEYS } from "../../game-rules/combat/index.js";
+import type { DescentYardState } from "./descent.js";
 
 /**
  * A player's Inferno progress (`bym.inferno_progress`,
@@ -16,6 +18,11 @@ export interface InfernoProgressRecord {
   readonly descentDestroyed: readonly number[];
   /** Best damage (0-100) on each Descent yard, in order. */
   readonly descentBest: readonly number[];
+  /**
+   * What each Descent yard not yet beaten kept from the attacks on it, by
+   * base id: its health and what it has given up (`descent.ts`).
+   */
+  readonly descentYards: Readonly<Record<string, DescentYardState>>;
   /** Unix seconds the 13th Descent yard fell, or null. */
   readonly descentPassedAt: number | null;
   /** The player's Inferno yard, or null before the capture. */
@@ -31,6 +38,7 @@ export const NO_INFERNO_PROGRESS: InfernoProgressRecord = {
   emergenceLastAt: null,
   descentDestroyed: [],
   descentBest: [],
+  descentYards: {},
   descentPassedAt: null,
   infernoBaseid: null,
   korathUnlockedAt: null,
@@ -53,6 +61,28 @@ const popups = (raw: unknown): Record<string, number> =>
     ? Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Number(value) || 0]))
     : {};
 
+/** Whole, never negative, numbers from a stored object, anything else read as 0. */
+const wholeValues = (raw: unknown): Record<string, number> =>
+  raw && typeof raw === "object" && !Array.isArray(raw)
+    ? Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Math.max(0, Math.floor(Number(value)) || 0)]))
+    : {};
+
+/** The stored Descent yards, each read safely; anything unreadable is left out. */
+const descentYards = (raw: unknown): Record<string, DescentYardState> => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const yards: Record<string, DescentYardState> = {};
+  for (const [baseid, value] of Object.entries(raw)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const { health, looted } = value as { health?: unknown; looted?: unknown };
+    const amounts = wholeValues(looted);
+    yards[baseid] = {
+      health: wholeValues(health),
+      looted: Object.fromEntries(RESOURCE_KEYS.map((key) => [key, amounts[key] ?? 0])) as DescentYardState["looted"],
+    };
+  }
+  return yards;
+};
+
 /** A stored row as a record. */
 export const progressRecordOf = (row: InfernoProgress | null | undefined): InfernoProgressRecord =>
   row
@@ -61,6 +91,7 @@ export const progressRecordOf = (row: InfernoProgress | null | undefined): Infer
         emergenceLastAt: seconds(row.emergence_last_at),
         descentDestroyed: numbers(row.descent_destroyed),
         descentBest: numbers(row.descent_best),
+        descentYards: descentYards(row.descent_yards),
         descentPassedAt: seconds(row.descent_passed_at),
         infernoBaseid: row.inferno_baseid ?? null,
         korathUnlockedAt: seconds(row.korath_unlocked_at),

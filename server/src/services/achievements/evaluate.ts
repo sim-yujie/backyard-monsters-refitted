@@ -1,5 +1,5 @@
 import {
-  AVAILABLE_ACHIEVEMENTS,
+  availableAchievements,
   type AchievementDef,
   type AchievementStat,
 } from "../../game-data/achievements.js";
@@ -171,6 +171,13 @@ export const backfillStats = (view: AchievementView): Partial<AchievementStats> 
 /** Backfill stats read from the yard as it stands, which already holds this request's event. */
 const SNAPSHOT_STATS = Object.keys(backfillStats({})) as AchievementStat[];
 
+/**
+ * Event stats that are a level the event reports, not a count to add: Flash's
+ * Descent counter after each Descent attack (`ATTACK.as:975`, Inferno WP 1.12),
+ * which `ACHIEVEMENTS.Check` sets, never adds to. They raise.
+ */
+const LEVEL_STATS: readonly AchievementStat[] = ["descent"];
+
 /** Raises each stat to `stats`' value where that is higher. */
 const raise = (into: AchievementStats, stats: Partial<AchievementStats>): void => {
   for (const [stat, value] of Object.entries(stats) as [AchievementStat, number][]) {
@@ -187,7 +194,7 @@ export const achievementMet = (entry: AchievementDef, stats: AchievementStats): 
 /** Unlocks every available entry now met and not yet in `c`. */
 const unlockMet = (record: Achievements, now: number, backfill: boolean): AchievementUnlock[] => {
   const unlocked: AchievementUnlock[] = [];
-  for (const entry of AVAILABLE_ACHIEVEMENTS) {
+  for (const entry of availableAchievements()) {
     const key = String(entry.id);
     if (record.c[key] !== undefined || !achievementMet(entry, record.s)) continue;
     record.c[key] = backfill ? { at: now, shiny: entry.shiny, backfill: 1 } : { at: now, shiny: entry.shiny };
@@ -233,7 +240,9 @@ export const evaluateAchievements = (
   for (const [stat, delta] of Object.entries(events) as [AchievementStat, number | undefined][]) {
     if (delta === undefined || !Number.isFinite(delta) || delta <= 0) continue;
     const add = Math.floor(delta);
-    if (backfilling && SNAPSHOT_STATS.includes(stat)) next.s[stat] = Math.max(next.s[stat], add);
+    if ((backfilling && SNAPSHOT_STATS.includes(stat)) || LEVEL_STATS.includes(stat)) {
+      next.s[stat] = Math.max(next.s[stat], add);
+    }
     else next.s[stat] += add;
   }
   unlocked.push(...unlockMet(next, now, false));

@@ -40,6 +40,8 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
+import { isDescentBaseid } from "../../../services/inferno/descent.js";
+import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
 import { economyConfig } from "../../../config/EconomyConfig.js";
 import {
   auditEconomySave,
@@ -122,6 +124,17 @@ export const baseSave: KoaController = async (ctx) => {
 
     ctx.status = Status.OK;
     ctx.body = { error: 0, ...filteredSave, ...(credited && { lootcredited: credited }) };
+    return;
+  }
+
+  // A Descent yard has no row either: its attack is bound to the attacker
+  // (`POST /bm/inferno/attack/start`, `services/inferno/descentLanding.ts`).
+  if (!baseSave && isDescentBaseid(saveData.baseid)) {
+    const { save: yardSave, descent } = await landDescentAttack(ctx, user, saveData);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(descent && { descent }) };
     return;
   }
 

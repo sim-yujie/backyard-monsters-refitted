@@ -890,6 +890,38 @@ export const mr1TribeRefusedErr = (reason: MR1TribeRefusal, detail: object = {})
     isClientFriendly: true,
   });
 
+/** Why an Inferno attack cannot start (`POST /bm/inferno/attack/start`, `docs/design/inferno.md` §3.2). */
+export type InfernoAttackRefusal =
+  | "caveClosed"
+  | "descentPassed"
+  | "notDescentBase"
+  | "notNextBase"
+  | "kindNotReady";
+
+const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
+  caveClosed: "Moloch's cave has not opened all the way yet.",
+  descentPassed: "You have already fought your way down the Descent.",
+  notDescentBase: "That is not a Descent yard.",
+  notNextBase: "Only the next yard down the Descent can be attacked.",
+  kindNotReady: "That kind of Inferno attack is not open yet.",
+};
+
+/**
+ * An Inferno attack refused before anything is written (WP 1.11): the cave
+ * has not come up all five levels, the Descent is passed, the base is not a
+ * Descent yard or not the next one, or the kind of attack is not built yet.
+ *
+ * @param reason - Which rule refused it.
+ * @param detail - Figures for the client, e.g. `next`, the base id that can be attacked.
+ */
+export const infernoAttackRefusedErr = (reason: InfernoAttackRefusal, detail: object = {}) =>
+  new ClientSafeError({
+    message: INFERNO_ATTACK_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
+    data: { reason, ...detail },
+    isClientFriendly: true,
+  });
+
 const RELOCATE_REFUSAL_MESSAGES: Record<RelocateRefusal, string> = {
   notMapRoom2: "you can only move to a new world from Map Room 2.",
   inAlliance: "you cannot move to a new world while you are in an alliance.",

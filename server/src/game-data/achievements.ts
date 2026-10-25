@@ -1,3 +1,5 @@
+import { infernoConfig } from "../config/InfernoConfig.js";
+
 /**
  * The achievements list (`docs/design/achievements.md` §5, issue #204): all 22
  * of Flash's entries (`client/scripts/ACHIEVEMENTS.as:35-51`), numbered as
@@ -64,6 +66,8 @@ export interface AchievementDef {
   readonly mode: "all" | "any";
   /** False: its feature is missing, so it is never evaluated, shown or paid (§5.3). */
   readonly available: boolean;
+  /** True: it belongs to the new Inferno, so it counts only while the Inferno is switched on (`infernoConfig.enabled`). */
+  readonly inferno?: boolean;
   /** Where Flash defined the rule and moved its stat (`client/scripts`). */
   readonly flash: string;
 }
@@ -259,8 +263,9 @@ const LIST: readonly AchievementDef[] = [
     shiny: 10,
     rules: [{ stat: "descent", target: 1 }],
     mode: "all",
-    // Waits for Inferno Descent.
-    available: false,
+    // Inferno WP 1.12: Flash's counter after each Descent attack, raised by the landing.
+    available: true,
+    inferno: true,
     flash: "ACHIEVEMENTS.as:51; ATTACK.as:975",
   },
   {
@@ -270,8 +275,9 @@ const LIST: readonly AchievementDef[] = [
     shiny: 25,
     rules: [{ stat: "descent", target: 14 }],
     mode: "all",
-    // Waits for Inferno Descent (MAPROOM_DESCENT.as:24: 14 levels).
-    available: false,
+    // Inferno WP 1.12: Flash's counter after each Descent attack, raised by the landing.
+    available: true,
+    inferno: true,
     flash: "ACHIEVEMENTS.as:51; ATTACK.as:975",
   },
   {
@@ -311,8 +317,20 @@ const LIST: readonly AchievementDef[] = [
 /** All 22, in Flash's order. */
 export const ACHIEVEMENTS: readonly AchievementDef[] = LIST;
 
-/** The entries players can earn now: 16 of them (§5.1). */
-export const AVAILABLE_ACHIEVEMENTS: readonly AchievementDef[] = LIST.filter((entry) => entry.available);
+/** The entries players can earn whether or not the new Inferno is on (§5.1). */
+export const AVAILABLE_ACHIEVEMENTS: readonly AchievementDef[] = LIST.filter((entry) => entry.available && !entry.inferno);
+
+/** With the Inferno's own (18, 19) once it is switched on. */
+const WITH_INFERNO: readonly AchievementDef[] = LIST.filter((entry) => entry.available);
+
+/**
+ * The entries players can earn now: {@link AVAILABLE_ACHIEVEMENTS}, and the
+ * Inferno's while the new Inferno is on.
+ *
+ * @param infernoOn - The switch; the config's own unless a test passes one.
+ */
+export const availableAchievements = (infernoOn: boolean = infernoConfig.enabled): readonly AchievementDef[] =>
+  infernoOn ? WITH_INFERNO : AVAILABLE_ACHIEVEMENTS;
 
 const BY_ID = new Map(LIST.map((entry) => [entry.id, entry]));
 

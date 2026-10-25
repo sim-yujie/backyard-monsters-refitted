@@ -34,6 +34,13 @@ export class InfernoProgress {
   @Property({ type: "json", columnType: "jsonb", default: "'[]'::jsonb" })
   descent_best: Opt<number[]> = [];
 
+  /**
+   * What each Descent yard not yet beaten kept from the attacks on it, by base
+   * id: `{ health, looted }` (migration `20261026_AddDescentYardsToInfernoProgress.ts`).
+   */
+  @Property({ type: "json", columnType: "jsonb", default: "'{}'::jsonb" })
+  descent_yards: Opt<Record<string, { health: Record<string, number>; looted: Record<string, number> }>> = {};
+
   /** When the 13th Descent yard fell; null until then. */
   @Property({ type: Date, nullable: true })
   descent_passed_at?: Date | null;
