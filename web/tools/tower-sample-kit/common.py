@@ -6,7 +6,8 @@ All samples and Codex output live in <worktree>/art-samples/towers/<tower>/.
 """
 from pathlib import Path
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
+from scipy import ndimage as ndi
 
 REPO = Path(__file__).resolve().parents[3]
 ASSETS = REPO / "server" / "public" / "assets"
@@ -34,6 +35,9 @@ TOWERS = {
     "railgun": dict(folder="railguntower", button=118, top=("top.3.png", -39, 7), shadow=("shadow.3.jpg", -40, 20),
                     anim=("anim.3.loaded.png", -49, -9, 96, 56, 32), frame=0,
                     what="the RAILGUN: a red-and-white striped pyramid base with a red turret carrying two gold coil capacitors and a long twin-rail gun barrel with a glowing blue core"),
+    # Town Hall, top level (10): no animation; used by the building-redesign samples
+    "townhall": dict(folder="townhall", button=14, top=("top.10.png", -77, -110), shadow=("shadow.10.jpg", -85, 24), anim=None, frame=0,
+                     what="the TOWN HALL, the main building of the yard"),
 }
 
 
@@ -72,6 +76,7 @@ def grass(w, h, seed=3):
     """The yard's grass, tiled from the 200x100 Flash tiles."""
     import glob
     tiles = [Image.open(p).convert("RGB") for p in sorted(glob.glob(str(ASSETS / "yardbg" / "grass" / "*.png")))]
+    tiles = [t for t in tiles if np.asarray(t).reshape(-1, 3).mean(0)[1] > np.asarray(t).reshape(-1, 3).mean(0)[0]]   # grass only, no bare earth
     rng = np.random.default_rng(seed)
     g = Image.new("RGB", (w, h))
     for y in range(0, h, 100):
@@ -124,3 +129,29 @@ def resize_pm(im, size):
     al = np.clip(o[..., 3:], 0, 255)
     rgb = np.where(al > 0, o[..., :3] / np.maximum(al, 1e-3) * 255, 0)
     return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), al]).astype("uint8"), "RGBA")
+
+
+def key(rgb):
+    """RGBA cutout: the green ground flood-filled from the edge, rim despilled."""
+    rgb = rgb.astype(float)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    ground = (g > 170) & (r < 120) & (b < 120)
+    lab, _ = ndi.label(ground)
+    edge = set(lab[0, :]) | set(lab[-1, :]) | set(lab[:, 0]) | set(lab[:, -1])
+    edge.discard(0)
+    fg = ~np.isin(lab, list(edge))
+    # enclosed holes of pure ground (between barrels, under a cage) are ground too
+    fg &= ~(ground & (g > 220) & (r < 60) & (b < 60))
+    fg = ndi.binary_opening(fg, iterations=1)
+    lab2, _ = ndi.label(fg)
+    ids, cnt = np.unique(lab2[lab2 > 0], return_counts=True)
+    keep = np.zeros_like(fg)
+    for i, c in zip(ids, cnt):
+        if c > cnt.max() * 0.01:
+            keep |= lab2 == i
+    keep = ndi.binary_erosion(keep, iterations=1)
+    alpha = np.asarray(Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(1.0))).astype(float)
+    o = rgb.copy()
+    spill = (alpha > 0) & (g > np.maximum(r, b))
+    o[..., 1] = np.where(spill, np.maximum(r, b), g)    # green fringe -> neutral
+    return Image.fromarray(np.dstack([o, alpha]).astype("uint8"), "RGBA")

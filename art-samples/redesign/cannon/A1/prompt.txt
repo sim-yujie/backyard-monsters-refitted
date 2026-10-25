@@ -1,0 +1,14 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Design a NEW top-tier version of the CANNON TOWER, a defence tower that fires heavy cannonballs at attacking monsters. Its gun must be able to TURN to aim: a stout cannon barrel on a round swivel mount on top of the tower, shown pointing toward the viewer's lower LEFT (three-quarter view, muzzle visible), tilted slightly up. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Input 1, frames.png: the OLD building from the original game, blown up, on grey (1024x1024). Use it ONLY for the camera angle, the ground footprint (how wide the base is and where it stands) and the overall size. This is a REDESIGN, not a copy: new shapes and details are wanted. The new building stands on the same footprint, centred on the same spot, base on the same ground line, and may be up to about 20% taller or bulkier above the footprint, but not wider at the base.
+Input 2, style.png: see style below.
+
+THEME 1, evolving backyard junk: the monsters built it themselves from BACKYARD JUNK (tin cans, a dustbin lid, wooden planks and crates, garden hose, bottle caps, bicycle and lawnmower parts, kitchen funnels, string and duct tape). This is the TOP TIER, so the junk has been upgraded to its sturdiest, fanciest version: reinforced with riveted metal plating, brass trim and bolts, little glowing lights and a glowing power part, but it must still clearly read as home-made from junk, cheerful and a bit ramshackle.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Make it look like the most impressive TOP level of this building: readable silhouette at small game size, clear focal point, a couple of glowing details.
+Output: ONE image, 1024x1024, the building alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.

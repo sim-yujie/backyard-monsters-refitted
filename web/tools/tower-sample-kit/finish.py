@@ -8,37 +8,11 @@ from PIL import Image, ImageDraw, ImageFilter
 from scipy import ndimage as ndi
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import OUT, bbox, grass, old_rgba, resize_pm, shadow_on  # noqa: E402
+from common import OUT, bbox, grass, key, old_rgba, resize_pm, shadow_on  # noqa: E402
 
 t = sys.argv[1]
 out = OUT / t
 UP = 4
-
-
-def key(rgb):
-    """RGBA cutout: the green ground flood-filled from the edge, rim despilled."""
-    rgb = rgb.astype(float)
-    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
-    ground = (g > 170) & (r < 120) & (b < 120)
-    lab, _ = ndi.label(ground)
-    edge = set(lab[0, :]) | set(lab[-1, :]) | set(lab[:, 0]) | set(lab[:, -1])
-    edge.discard(0)
-    fg = ~np.isin(lab, list(edge))
-    # enclosed holes of pure ground (between barrels, under a cage) are ground too
-    fg &= ~(ground & (g > 220) & (r < 60) & (b < 60))
-    fg = ndi.binary_opening(fg, iterations=1)
-    lab2, _ = ndi.label(fg)
-    ids, cnt = np.unique(lab2[lab2 > 0], return_counts=True)
-    keep = np.zeros_like(fg)
-    for i, c in zip(ids, cnt):
-        if c > cnt.max() * 0.01:
-            keep |= lab2 == i
-    keep = ndi.binary_erosion(keep, iterations=1)
-    alpha = np.asarray(Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(1.0))).astype(float)
-    o = rgb.copy()
-    spill = (alpha > 0) & (g > np.maximum(r, b))
-    o[..., 1] = np.where(spill, np.maximum(r, b), g)    # green fringe -> neutral
-    return Image.fromarray(np.dstack([o, alpha]).astype("uint8"), "RGBA")
 
 
 def solid(im, thr):

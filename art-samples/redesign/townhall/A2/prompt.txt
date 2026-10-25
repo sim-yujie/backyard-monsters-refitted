@@ -1,0 +1,14 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Design a NEW top-tier version of the TOWN HALL, the main and most important building of the monster yard (where the player's resources and command live). Keep its recognisable idea from frames.png: a round domed hall with a big funnel/antenna on top, a round porthole window on the front and pipes around it, but redesign it freely in the theme below. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Input 1, frames.png: the OLD building from the original game, blown up, on grey (1024x1536). Use it ONLY for the camera angle, the ground footprint (how wide the base is and where it stands) and the overall size. This is a REDESIGN, not a copy: new shapes and details are wanted. The new building stands on the same footprint, centred on the same spot, base on the same ground line, and may be up to about 20% taller or bulkier above the footprint, but not wider at the base.
+Input 2, style.png: see style below.
+
+THEME 2, military / tech: a properly engineered military-tech structure, NOT home-made: armoured steel plating, red-and-white hazard stripes, heavy bolts, vents, cables, small antennas, glowing energy cores and indicator lights. This is the TOP TIER, so it is the most advanced, heaviest-armoured, most high-tech version, with glowing parts.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Make it look like the most impressive TOP level of this building: readable silhouette at small game size, clear focal point, a couple of glowing details.
+Output: ONE image, 1024x1536, the building alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.
