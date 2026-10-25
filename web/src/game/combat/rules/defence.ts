@@ -1,6 +1,7 @@
 import { KRALLEN_ID } from "./champions.js";
 import {
   bunkerGarrisons,
+  housedGarrisons,
   type BattleBuffs,
   type BattleOptions,
   type DefenderChampion,
@@ -194,13 +195,32 @@ export const cagedChampions = (champions: unknown): DefenderChampion[] => {
   return picked;
 };
 
+/** Two sets of garrisons as one, counts added where a bunker is in both. */
+const mergeGarrisons = (
+  one: Record<number, Roster>,
+  other: Record<number, Roster>,
+): Record<number, Roster> => {
+  const merged: Record<number, Record<string, number>> = {};
+  for (const garrisons of [one, other]) {
+    for (const [id, roster] of Object.entries(garrisons)) {
+      const into = (merged[Number(id)] ??= {});
+      for (const [monsterId, count] of Object.entries(roster)) {
+        into[monsterId] = (into[monsterId] ?? 0) + (count ?? 0);
+      }
+    }
+  }
+  return merged;
+};
+
 /**
  * A yard's defence, read off the save that defends it.
  *
  * @param save - The defending row's `buildingdata` and `champion`, and the
  *   academy its monsters fight at: its own, or its owner's main yard's for an
  *   outpost; and, with the battle's start `now`, its own `storedata`, for the
- *   shop boosts it defends with ({@link storeBuffs}).
+ *   shop boosts it defends with ({@link storeBuffs}). An Inferno yard's housed
+ *   `monsters` defend from its Housing Bunkers ({@link housedGarrisons}), read
+ *   with its `buildinghealthdata`; no other yard has a Housing Bunker.
  */
 export const defenderForcesOf = (save: {
   readonly buildingdata: unknown;
@@ -208,12 +228,16 @@ export const defenderForcesOf = (save: {
   readonly champion: unknown;
   readonly storedata?: unknown;
   readonly now?: number;
+  readonly monsters?: unknown;
+  readonly buildinghealthdata?: unknown;
 }): DefenderForces => {
   const defenderRanks = academyRanks(save.academy);
   const defender =
     save.now === undefined ? undefined : storeBuffs(save.storedata, save.now, "defender");
+  const buildingdata = record(save.buildingdata) as CombatBuildingDataMap | null;
+  const housed = housedGarrisons(buildingdata, save.monsters, record(save.buildinghealthdata));
   return {
-    bunkers: bunkerGarrisons(record(save.buildingdata) as CombatBuildingDataMap | null),
+    bunkers: mergeGarrisons(bunkerGarrisons(buildingdata), housed),
     defenderLevels: academyLevels(save.academy),
     // Kept only when the Lab has researched something, so a yard without ranks serves what it did.
     ...(Object.keys(defenderRanks).length > 0 ? { defenderRanks } : {}),

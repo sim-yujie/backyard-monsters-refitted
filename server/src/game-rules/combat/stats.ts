@@ -770,6 +770,32 @@ export const SABNOX_ID = "IC7";
 export const KING_WORMZER_ID = "IC8";
 export const KING_WORMZER_MULTIPLIER = 4;
 
+/**
+ * The Housing Bunker (`client/scripts/HOUSINGBUNKER.as`, Inferno plan WP 1.6):
+ * the Inferno yard's housing, whose housed monsters are its defenders.
+ *
+ * Every 30 of its ticks (`:272-273`) it looks for attackers within its range
+ * of its scan point (`:156-161`): the nearest {@link HOUSING_BUNKER_TARGETS}
+ * walking ones that are not retreating (`FindTargets(3)`, `_loc5_ <= 3`), and
+ * the nearest four flyers too while it holds a Balthazar or a Sabnox
+ * (`canTargetAir`, `:167-178`). It sends one of those two after each flyer
+ * (`getInterceptor`, `:277-288`), then every monster it still holds at the
+ * nearest walking one (`:289-298`). It sends nothing while it is being
+ * upgraded (`:269`); the engine also keeps one being built or fortified in
+ * (its `busy`). When it falls, every monster it houses dies, out or in
+ * (`Destroyed`, `:116-127`; the engine is never in Map Room 3).
+ *
+ * Flash's last loop reads its monster at `_loc1_[_loc3_]`, where `_loc3_` is
+ * left at the flyer target count by an earlier loop, so after sending
+ * interceptors it holds back the first few monsters (an index past the end
+ * is a no-op). The engine takes the plain reading, index 0: every monster
+ * left goes.
+ */
+export const HOUSING_BUNKER_TYPE = 128;
+export const HOUSING_BUNKER_TARGETS = 4;
+/** The monsters a Housing Bunker sends after flyers, in the order it picks them. */
+export const HOUSING_BUNKER_INTERCEPTORS: readonly string[] = [BALTHAZAR_ID, SABNOX_ID];
+
 /** The quake's hurt to a creep `dist` from the scan point (`:174-179`). */
 export const quakeDamage = (power: number, range: number, dist: number, hp: number): number => {
   let dealt = Math.trunc((power / range) * (range - Math.trunc(dist)));

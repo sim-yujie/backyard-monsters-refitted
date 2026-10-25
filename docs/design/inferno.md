@@ -289,6 +289,22 @@ shared rules (both sides, sync test). The burn is a status effect on the status-
 (`feat/status-icons`), so the client shows the "burning" icon over each burning monster with no
 extra drawing code. Slice 6 adds siege weapons to the same engine.
 
+**Housing Bunker defenders (WP 1.6, `HOUSINGBUNKER.as:149-353`, `HOUSING.as:201-235`).** An
+Inferno yard's housed monsters (`monsters` on the save) are its Housing Bunkers' defenders: the
+engine deals them out in turn over the standing bunkers (Flash draws a bunker at random for each;
+`housedGarrisons`). Every 30 ticks a bunker looks at the nearest 4 walking attackers in its range,
+and the nearest 4 flyers while it holds a Balthazar (IC5) or Sabnox (IC7); it sends one of those
+after each flyer, then every monster it still holds at the nearest walker. It sends nothing while
+upgrading. When it falls, every monster it houses dies, out or in, and counts as lost. The Monster
+Bunker (22) keeps its own rule (one random defender every 30 ticks). **Flash bug, our reading:**
+the "send the rest" loop reads `_loc1_[_loc3_]`, where `_loc3_` is still the flyer count from an
+earlier loop, so in Flash, after interceptors go, the first few remaining monsters stay home (an
+index past the end is skipped, so it does not crash). We take the plain reading: every remaining
+monster goes. **Descent yard kind:** Flash loads a Descent yard as an Inferno yard
+(`maproom_inferno/PlayerHandler.as:333`, `EnumYardType.INFERNO_YARD`), so it reads
+`INFERNOYARDPROPS` and its Housing Bunkers hold its housed monsters; WP 1.2's "the Descent reads
+the main table" needs an owner check before WP 1.11 picks the kind (the smoke test runs both).
+
 ### 3.4 Old routes
 
 The closed Flash routes (baseLoad i-modes, baseSave Inferno types, updateSaved, infernoMonsters,
