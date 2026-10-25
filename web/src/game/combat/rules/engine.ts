@@ -96,6 +96,17 @@ import {
   RAILGUN_SEGMENT,
   RAILGUN_SEGMENTS,
   RAILGUN_TYPE,
+  BALTHAZAR_ID,
+  KING_WORMZER_ID,
+  KING_WORMZER_MULTIPLIER,
+  SABNOX_ID,
+  HOUSING_BUNKER_INTERCEPTORS,
+  HOUSING_BUNKER_TARGETS,
+  HOUSING_BUNKER_TYPE,
+  QUAKE_ANIM_FRAMES,
+  QUAKE_FRAME_TICKS,
+  QUAKE_TOWER_TYPE,
+  quakeDamage,
   AERIAL_DEFENSE_TYPE,
   AERIAL_SHOT_TICKS,
   aerialSalvo,
@@ -165,6 +176,7 @@ import {
   oldStyleTargets,
   towerTargets,
   shellBlastTargets,
+  QUAKE_TARGETS,
   TRAP_TARGETS,
 } from "./targeting.js";
 import {
@@ -1264,6 +1276,7 @@ interface Tower {
   /**
    * Its `_fireStage`. The Aerial Defense's: 1 while it reloads, 2 while it
    * fires a salvo. The Tesla's: 0 idle, 1 charging, 2 zapping, 3 winding down.
+   * The Quake Tower's: 0 idle, 1 winding up.
    */
   stage: number;
   /** Shots fired in the salvo under way, or zaps in the charge. */
@@ -1274,6 +1287,12 @@ interface Tower {
   charge: number;
   /** A Spurtz Cannon's gun (issue #313); null for every other tower. */
   gun: SpurtzGun | null;
+  /**
+   * A Quake Tower's own `_frameNumber`, counted only while it winds up
+   * ({@link QUAKE_TOWER_TYPE}); its wind-up is `stage` 1 and its strip cell
+   * `charge`.
+   */
+  quakeFrame: number;
 }
 
 /** A Spurtz Cannon's barrel, aim and brood (issue #313, `SpurtzCannon.as`). */
@@ -1644,6 +1663,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       gun: isSpurtzCannon(building.type)
         ? { barrel: 0, aim: 0, targets: [], index: 0, target: null, hatched: [] }
         : null,
+      quakeFrame: 0,
     });
   }
 
@@ -1809,6 +1829,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     destroyedIds.push(building.id);
     const fallen = towerReports.get(building.id) ?? bunkerReports.get(building.id);
     if (fallen) fallen.destroyedTick = tick;
+    if (building.type === HOUSING_BUNKER_TYPE) housingBunkerFalls(building.id);
     if (byAttacker) {
       // The client empties a harvester when it falls (`BRESOURCE.as:129-134`).
       if (building.stored > 0) takeLoot(building, building.stored, 1);
@@ -2199,7 +2220,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       burrows: movement === "burrow",
       explode: monsterStat(monsterId, "explode", level) > 0,
       lootMultiplier: lootingMultiplier(targetGroup, false),
-      flags: defenseFlags(friendly, flying, false),
+      // Balthazar sheds both its flying and its ground flag (`Balthazar.as:10-15`).
+      flags:
+        monsterId === BALTHAZAR_ID
+          ? defenseFlags(friendly, flying, false) & ~(TARGETS_FLYING | TARGETS_GROUND)
+          : defenseFlags(friendly, flying, false),
       targetable: true,
       behaviour: mode,
       attackCooldown: 0,
@@ -2874,6 +2899,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (other && other.hp > 0) {
         recordHit(creep, other.ix, other.iy, strikeCreep(creep, other, null));
         if (creep.rank > 0) onAttack(creep, creep.damage, other, null);
+        if (creep.monsterId === KING_WORMZER_ID) {
+          kingWormzerSplash(creep, creep.damage, other, null);
+        }
       }
       return;
     }
@@ -2882,8 +2910,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.monsterId === KORATH_ID && creep.champion) creep.hits += 1;
     const multiplier = specialistMultiplier(creep.targetGroup, target.kind);
     // Fomor's fireball lands as a `DummyTarget`, which loots at 1 (`FIREBALL.as:165`,
-    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222).
-    const looting = creep.champion && creep.monsterId === FOMOR_ID ? 1 : lootOf(creep);
+    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222); so does Sabnox's.
+    const fireball =
+      (creep.champion && creep.monsterId === FOMOR_ID) ||
+      (!creep.champion && creep.monsterId === SABNOX_ID);
+    const looting = fireball ? 1 : lootOf(creep);
     recordHit(
       creep,
       target.x,
@@ -2891,6 +2922,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       damageBuilding(target, creep.damage * multiplier, creep, looting),
     );
     if (creep.rank > 0) onAttack(creep, creep.damage * multiplier, null, target);
+    if (creep.monsterId === KING_WORMZER_ID) {
+      kingWormzerSplash(creep, creep.damage * multiplier, null, target);
+    }
     // Krallen moves on from a harvester she has drained (`ChampionBase.as:836-840`).
     if (
       creep.champion &&
@@ -3077,6 +3111,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       radius,
       hits,
     });
+  };
+
+  /**
+   * King Wormzer's splash on every hit, ranked or not ({@link KING_WORMZER_ID}):
+   * the buildings within {@link WORMZER_RADIUS}, the swing times
+   * {@link KING_WORMZER_MULTIPLIER}, once per target in a row. No monster is
+   * hurt, and a defender's splash finds no building.
+   */
+  const kingWormzerSplash = (
+    creep: Creep,
+    damage: number,
+    foe: Creep | null,
+    building: EngineBuilding | null,
+  ): void => {
+    const key = splashKey(foe, building);
+    if (key === creep.lastSplash) return;
+    creep.lastSplash = key;
+    const targets = splashTargets(creep, WORMZER_RADIUS, null, null).filter(
+      (target) => target.building !== null,
+    );
+    dealSplash(creep, damage * KING_WORMZER_MULTIPLIER, WORMZER_RADIUS, 0, targets);
+    noteSplash(creep, WORMZER_RADIUS, targets.length);
   };
 
   /**
@@ -3378,9 +3434,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       distanceSquared(home.centreX, home.centreY, other.x, other.y) < home.leash * home.leash;
     let target = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     if (!target || target.hp <= 0 || target.gone || !leashed(target) || unseen(target)) {
+      // A Balthazar passes over an Eye-ra (`CreepBase.as:667-671`).
       const found = index
         .inRange(DEFEND_SEARCH, creep.x, creep.y, creep.hitFlags)
-        .find((hit) => leashed(hit.creep))?.creep;
+        .find(
+          (hit) =>
+            leashed(hit.creep) &&
+            !(creep.monsterId === BALTHAZAR_ID && hit.creep.monsterId === EYE_RA_ID),
+        )?.creep;
       if (!found) {
         if (creep.blinkHops > 0) stopBlink(creep);
         creep.targetCreep = -1;
@@ -4365,6 +4426,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tickSalvo(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
       return;
     }
+    // A Quake Tower winding up does nothing else, its fire tick standing still.
+    if (building.type === QUAKE_TOWER_TYPE && tower.stage === 1) {
+      windQuake(tower, damage);
+      return;
+    }
     rearm(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
     if (building.type === TESLA_TYPE) tickZaps(tower, damage, stats.rate ?? 0);
   };
@@ -4393,6 +4459,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         armCoil(tower, creep);
         continue;
       }
+      if (building.type === QUAKE_TOWER_TYPE) {
+        // `INFERNOQUAKETOWER.Fire` (`:128-135`): the wind-up starts.
+        tower.stage = 1;
+        tower.charge = 0;
+        continue;
+      }
       countShot(tower.report);
       if (building.type === LASER_TYPE) {
         fireLaser(tower, creep, shot, splash);
@@ -4402,7 +4474,45 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         fireRailgun(tower, creep, damage * towerHealthScale(building.hp, building.maxHp));
         continue;
       }
+      // The Magma Tower's fireball is such a shell (`INFERNO_MAGMA_TOWER.as:56-79`):
+      // one target, no splash. Its `FlameEffect` (`:81-89`) is a listener
+      // nothing ever adds, so a creep it hits does not burn.
       fireShell(tower, creep, shot, splash, shellBlastTargets(building.type));
+    }
+  };
+
+  /**
+   * One tick of a Quake Tower's wind-up (`INFERNOQUAKETOWER.TickAttack`,
+   * `:107-122`), and its quake on the tick after the strip's last cell.
+   */
+  const windQuake = (tower: Tower, damage: number): void => {
+    tower.quakeFrame += 1;
+    const step =
+      tower.quakeFrame % QUAKE_FRAME_TICKS === 0 || tower.charge >= QUAKE_ANIM_FRAMES - 4;
+    if (!step) return;
+    if (tower.charge < QUAKE_ANIM_FRAMES) {
+      tower.charge += 1;
+      return;
+    }
+    tower.stage = 0;
+    quakeTower(tower, Math.trunc(damage));
+  };
+
+  /**
+   * `INFERNOQUAKETOWER.Quake` (`:161-189`): every creep on the ground or unseen
+   * within the range of the scan point takes {@link quakeDamage}. The tower's
+   * health does not weaken it. Flash also hurts a Vacuum hose in range, which
+   * the engine does not field.
+   */
+  const quakeTower = (tower: Tower, power: number): void => {
+    countShot(tower.report);
+    const scan = towerScanPoint(tower.building);
+    for (const hit of index.inRange(tower.range, scan.x, scan.y, QUAKE_TARGETS)) {
+      const creep = hit.creep;
+      const before = creep.hp;
+      const dealt = quakeDamage(power, tower.range, hit.dist, creep.hp);
+      tower.report.damageDealt += damageCreep(creep, dealt);
+      if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
     }
   };
 
@@ -4929,8 +5039,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const range = stats?.range ?? 0;
     if (range <= 0) return;
     // A bunker sends its defenders at anything attacking, air or ground
-    // (`HOUSINGBUNKER.as:269-300`); the interceptor pick is the random draw.
-    // Scanned from the middle of the footprint, like a tower (`HOUSINGBUNKER.as:156`).
+    // (`BUILDING22.as:340-354`); the interceptor pick is the random draw.
+    // Scanned from the middle of the footprint, like a tower (`BUILDING22.as:90`).
     const scan = towerScanPoint(building);
     const found = index.inRange(range, scan.x, scan.y, oldStyleTargets(1));
     if (found.length === 0) return;
@@ -4942,6 +5052,63 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     if (ids.length === 0) return;
     const monsterId = ids[rng.int(ids.length)] as string;
+    sendFromBunker(bunker, monsterId, (found[0] as { creep: Creep }).creep, range, scan);
+  };
+
+  /**
+   * A Housing Bunker's turn ({@link HOUSING_BUNKER_TYPE}): every 30 ticks, a
+   * Balthazar or Sabnox after each flyer in range, then everything it still
+   * holds at the nearest walker. A bunker keeps its healers in (issue #195).
+   */
+  const tickHousingBunker = (bunker: Bunker): void => {
+    const building = bunker.building;
+    if (building.hp <= 0) return;
+    bunker.tickNumber += 1;
+    if (bunker.tickNumber % 30 !== 0 || building.busy) return;
+    if (![...bunker.pool.values()].some((count) => count > 0)) return;
+    const range = towerStats(building.type, building.level, yard.kind)?.range ?? 0;
+    if (range <= 0) return;
+    // Scanned from the middle of the footprint, like a tower (`HOUSINGBUNKER.as:156`).
+    const scan = towerScanPoint(building);
+    const nearest = (flags: number): Creep[] => {
+      const found: Creep[] = [];
+      const hits = index.inRange(range, scan.x, scan.y, flags);
+      for (let at = 0; at < hits.length && at < HOUSING_BUNKER_TARGETS; at += 1) {
+        const creep = (hits[at] as { creep: Creep }).creep;
+        if (creep.behaviour !== "retreat" && !creep.gone) found.push(creep);
+      }
+      return found;
+    };
+    const walkers = nearest(oldStyleTargets(0));
+    const canIntercept = HOUSING_BUNKER_INTERCEPTORS.some((id) => (bunker.pool.get(id) ?? 0) > 0);
+    const flyers = canIntercept ? nearest(oldStyleTargets(2)) : [];
+    for (const flyer of flyers) {
+      const monsterId = HOUSING_BUNKER_INTERCEPTORS.find((id) => (bunker.pool.get(id) ?? 0) > 0);
+      if (!monsterId) break;
+      sendFromBunker(bunker, monsterId, flyer, range, scan);
+    }
+    const walker = walkers[0];
+    if (!walker) return;
+    for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
+      if (monsterStat(monsterId, "damage", 1) <= 0) continue;
+      for (let sent = 0; sent < count; sent += 1) {
+        sendFromBunker(bunker, monsterId, walker, range, scan);
+      }
+    }
+  };
+
+  /**
+   * One of a bunker's monsters out at `foe`. It chases nothing outside the
+   * bunker's own range, and walks back in (issue #195).
+   */
+  const sendFromBunker = (
+    bunker: Bunker,
+    monsterId: string,
+    foe: Creep,
+    range: number,
+    scan: Cart,
+  ): void => {
+    const building = bunker.building;
     bunker.pool.set(monsterId, (bunker.pool.get(monsterId) ?? 0) - 1);
     bunker.dispatched += 1;
     const sentBy = bunkerReports.get(building.id);
@@ -4957,8 +5124,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       1,
       rankOf(options.defenderRanks, monsterId),
     );
-    defender.targetCreep = (found[0] as { creep: Creep }).creep.id;
-    // It chases nothing outside the bunker's own range, and walks back in (issue #195).
+    defender.targetCreep = foe.id;
     defender.home = {
       ix: building.x,
       iy: building.y,
@@ -4966,6 +5132,22 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       centreY: scan.y,
       leash: range,
     };
+  };
+
+  /**
+   * A Housing Bunker fell: every monster it houses dies, those it never sent
+   * and those out fighting (`HOUSINGBUNKER.as:116-127`), each counted against it.
+   */
+  const housingBunkerFalls = (id: number): void => {
+    const bunker = bunkerById.get(id);
+    if (!bunker) return;
+    for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
+      for (let lost = 0; lost < count; lost += 1) addBunkerLoss(bunkerLosses, id, monsterId);
+    }
+    bunker.pool.clear();
+    for (const creep of creeps) {
+      if (creep.homeBunker === id && !creep.gone && creep.hp > 0) creep.hp = 0;
+    }
   };
 
   /**
@@ -5200,7 +5382,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const trap of traps) tickTrap(trap);
     for (const tower of towers) tickTower(tower);
     tickSpurtzShells();
-    for (const bunker of bunkers) tickBunker(bunker);
+    for (const bunker of bunkers) {
+      if (bunker.building.type === HOUSING_BUNKER_TYPE) tickHousingBunker(bunker);
+      else tickBunker(bunker);
+    }
     if (defended) {
       tickCage();
       defendersOut = 0;
@@ -5533,6 +5718,63 @@ export const bunkerGarrisons = (
     }
     if (Object.keys(roster).length === 0) continue;
     garrisons[Math.floor(numberOf(data.id ?? key))] = roster;
+  }
+  return garrisons;
+};
+
+/**
+ * A yard's housed monsters as its Housing Bunkers' garrisons (Inferno plan WP
+ * 1.6), by building id, as {@link BattleOptions.bunkers} takes them.
+ *
+ * On an Inferno yard the Housing Bunkers are the housing: `HOUSING.Populate`
+ * puts each housed monster, the save's `monsters`, in a standing one
+ * (`client/scripts/HOUSING.as:201-235`). Flash draws the bunker at random for
+ * each monster; this deals them out in turn instead, monster ids in order and
+ * bunkers by id, so the split is even and the same on every run. A bunker
+ * whose `buildinghealthdata` entry is 0 is down and takes none. Counts are
+ * read as {@link bunkerGarrisons} reads a bunker's own.
+ *
+ * @param buildingdata - The yard's stored buildings.
+ * @param monsters - The yard's housed monsters, `{ monsterId: count }`.
+ * @param buildinghealthdata - The yard's stored health, by building id.
+ */
+export const housedGarrisons = (
+  buildingdata: CombatBuildingDataMap | readonly CombatBuildingData[] | null | undefined,
+  monsters: unknown,
+  buildinghealthdata?: Readonly<Record<string, unknown>> | null,
+): Record<number, Roster> => {
+  const garrisons: Record<number, Record<string, number>> = {};
+  if (!buildingdata || typeof buildingdata !== "object") return garrisons;
+  if (!monsters || typeof monsters !== "object" || Array.isArray(monsters)) return garrisons;
+  const entries: Array<[string, CombatBuildingData]> = Array.isArray(buildingdata)
+    ? (buildingdata as readonly CombatBuildingData[]).map((data, index) => [String(index), data])
+    : Object.entries(buildingdata as CombatBuildingDataMap);
+  const houses: number[] = [];
+  for (const [key, data] of entries) {
+    if (!data || typeof data !== "object") continue;
+    if (Math.floor(numberOf(data.t)) !== HOUSING_BUNKER_TYPE) continue;
+    const id = Math.floor(numberOf(data.id ?? key));
+    const health = buildinghealthdata?.[String(id)];
+    if (health !== undefined && !(numberOf(health) > 0)) continue;
+    houses.push(id);
+  }
+  if (houses.length === 0) return garrisons;
+  houses.sort((one, other) => one - other);
+  const counts = new Map<string, number>();
+  for (const [raw, value] of Object.entries(monsters as Record<string, unknown>)) {
+    const id = LEGACY_MONSTER_IDS[raw] ?? raw;
+    const count = Array.isArray(value) ? value.length : Math.floor(numberOf(value));
+    if (!isKnownMonster(id) || !(count > 0)) continue;
+    counts.set(id, (counts.get(id) ?? 0) + count);
+  }
+  let turn = 0;
+  for (const id of [...counts.keys()].sort()) {
+    for (let dealt = 0; dealt < (counts.get(id) as number); dealt += 1) {
+      const house = houses[turn % houses.length] as number;
+      const garrison = (garrisons[house] ??= {});
+      garrison[id] = (garrison[id] ?? 0) + 1;
+      turn += 1;
+    }
   }
   return garrisons;
 };

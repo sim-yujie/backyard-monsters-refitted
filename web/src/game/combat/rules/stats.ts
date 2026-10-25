@@ -4,6 +4,9 @@ import {
   FLYER_MODE,
   GRID_COST,
   GRID_COST_FORMULA,
+  INFERNO_BUILDING_HP,
+  INFERNO_CAPACITY,
+  INFERNO_TOWER_STATS,
   MONSTER_PROPS,
   MR2_CAPACITY,
   OUTPOST_BUILDING_HP,
@@ -377,24 +380,42 @@ export const championStatWithFood = (
 const readsOutpostProps = (kind: CombatTargetKind): boolean => kind === "outpost";
 
 /**
+ * Whether a yard of `kind` reads the Inferno props table: a player's Inferno
+ * yard or a Moloch tribe's on the Inferno map, both loaded as
+ * `EnumYardType.INFERNO_YARD` (`client/scripts/GLOBAL.as:718-719`). The Descent
+ * is fought from the main yard on the main table.
+ */
+const readsInfernoProps = (kind: CombatTargetKind): boolean => kind === "inferno";
+
+/** The kind's own override table, or undefined when it reads the main one. */
+const overrideFor = <T>(
+  kind: CombatTargetKind,
+  outpost: Readonly<Record<number, T>>,
+  inferno: Readonly<Record<number, T>>,
+): Readonly<Record<number, T>> | undefined =>
+  readsOutpostProps(kind) ? outpost : readsInfernoProps(kind) ? inferno : undefined;
+
+/**
  * A building's health at one level, 0 for a type with no ladder.
  *
  * Three of the 140 props entries have no `hp`; none of them is targetable. On
  * an outpost the outpost table's ladder wins where it has one: the core's
- * 200,000 and the six-level towers (`OUTPOST_BUILDING_HP`).
+ * 200,000 and the six-level towers (`OUTPOST_BUILDING_HP`). On an Inferno yard
+ * the Inferno table's does (`INFERNO_BUILDING_HP`).
  */
 export const maxHp = (type: number, level: number, kind: CombatTargetKind = "main"): number =>
   atLevel(hpLadder(type, kind), level, 0);
 
 /** The whole health ladder of a type in a yard of `kind`, or an empty array. */
 export const hpLadder = (type: number, kind: CombatTargetKind = "main"): readonly number[] =>
-  (readsOutpostProps(kind) ? OUTPOST_BUILDING_HP[type] : undefined) ?? BUILDING_HP[type] ?? [];
+  overrideFor(kind, OUTPOST_BUILDING_HP, INFERNO_BUILDING_HP)?.[type] ?? BUILDING_HP[type] ?? [];
 
 /**
  * One tower's stats at one level, undefined for a type with no stats block.
  *
  * On an outpost the outpost table's block wins where it has one
- * (`OUTPOST_TOWER_STATS`).
+ * (`OUTPOST_TOWER_STATS`), and on an Inferno yard the Inferno table's
+ * (`INFERNO_TOWER_STATS`).
  */
 export const towerStats = (
   type: number,
@@ -402,7 +423,7 @@ export const towerStats = (
   kind: CombatTargetKind = "main",
 ): TowerLevelStats | undefined => {
   const levels =
-    (readsOutpostProps(kind) ? OUTPOST_TOWER_STATS[type] : undefined) ?? TOWER_STATS[type];
+    overrideFor(kind, OUTPOST_TOWER_STATS, INFERNO_TOWER_STATS)?.[type] ?? TOWER_STATS[type];
   if (!levels || levels.length === 0) return undefined;
   const clamped = Math.max(1, Math.min(Math.floor(level), levels.length));
   return levels[clamped - 1];
@@ -514,11 +535,12 @@ export const gridCost = (type: number, level = 1): readonly GridCostRect[] => {
  * props table is a combat number there (`web/tools/gen-building-costs.mjs:158-167`).
  * On an outpost the outpost table's ladders are read, the harvesters' included,
  * since an attack gives each harvester a buffer out of it
- * ({@link outpostHarvesterStock}).
+ * ({@link outpostHarvesterStock}). On an Inferno yard the Housing Bunker's room
+ * is read (`INFERNO_CAPACITY`).
  */
 export const capacity = (type: number, level: number, kind: CombatTargetKind = "main"): number =>
   atLevel(
-    (readsOutpostProps(kind) ? OUTPOST_CAPACITY[type] : undefined) ?? MR2_CAPACITY[type],
+    overrideFor(kind, OUTPOST_CAPACITY, INFERNO_CAPACITY)?.[type] ?? MR2_CAPACITY[type],
     level,
     0,
   );
@@ -686,6 +708,101 @@ export const TESLA_CHARGE_END = 32;
 export const TESLA_LOOP_END = 41;
 export const TESLA_WIND_END = 55;
 export const TESLA_ZAP_FRAMES = 4;
+
+/**
+ * The Quake Tower (`client/scripts/INFERNOQUAKETOWER.as`, Inferno plan WP 1.3),
+ * which shakes the ground round itself.
+ *
+ * `BTOWER.TickAttack` re-arms and picks a target as any tower does, on the
+ * ground only (its flyer mode, 0). Its `Fire` (`:128-135`) only starts the
+ * wind-up: from the next tick its `TickAttack` (`:102-126`) runs nothing else,
+ * the fire tick standing still, and counts its own `_frameNumber`, a tick at a
+ * time, from the battle's start and only while it winds up. The strip cell
+ * (`_animTick`) steps on every {@link QUAKE_FRAME_TICKS}th of those ticks, and
+ * on every tick once it is within 4 of the strip's end
+ * ({@link QUAKE_ANIM_FRAMES}, `INFERNOYARDPROPS.as:6183`); the tick after it
+ * reaches the end, the quake goes off (`DelayedFire`, `:137-159`). That is 179
+ * ticks after the first `Fire` and 174 after every later one.
+ *
+ * The quake (`:161-193`) hurts every creep within the range of the tower's scan
+ * point, on the ground or unseen (`getOldStyleTargets(-1)`, `:29`):
+ * `damage / range * (range - dist)`, a whole number, no less than a third of
+ * `damage`, no more than the creep's health. The tower's own health does not
+ * weaken it, unlike every other tower's shot ({@link towerShotDamage}).
+ */
+export const QUAKE_TOWER_TYPE = 129;
+export const QUAKE_ANIM_FRAMES = 33;
+export const QUAKE_FRAME_TICKS = 6;
+
+/**
+ * The Inferno monsters' specials (`com/monsters/monsters/creeps/inferno/*.as`,
+ * Inferno plan WP 1.5). IC2, IC3, IC4 and IC6 are plain creeps. IC1 Spurtz only
+ * leaves a scorch mark when it dies (`Spurtz.as:12-14`, `EFFECTS.Burn`), which
+ * hurts nothing.
+ *
+ * IC5 Balthazar flies but sheds both its flying and its ground defence flags
+ * (`Balthazar.as:10-15`), so every tower and every monster that can reach the
+ * attacking side hits it, a ground-only one or an air-only one alike. As a
+ * defender it passes over an Eye-ra (`CreepBase.as:667-671`). Its Lab target
+ * mode (`:16-18`) changes nothing here: every defender already reaches the air.
+ */
+export const BALTHAZAR_ID = "IC5";
+
+/**
+ * IC7 Sabnox throws a magma fireball (`Sabnox.as:12-20`): twice its damage at a
+ * tower, its damage at any other building or at a monster. The doubling is the
+ * tower specialist's, as its target group says (`specialistMultiplier`); the
+ * fireball lands as a `DummyTarget`, so a building it hits loots at 1
+ * (`FIREBALL.as:165`).
+ */
+export const SABNOX_ID = "IC7";
+
+/**
+ * IC8 King Wormzer's splash (`KingWormzer.as:13-27`): every hit sets off
+ * `AOEDamageOnAttackOncePerTarget(100, BUILDINGS | GROUND, 4)`, the swing times
+ * {@link KING_WORMZER_MULTIPLIER} over the buildings within 100 of it, a
+ * straight fall to a fifth at the edge, once per target in a row, with no Lab
+ * rank needed. Its flags name no side, so no monster is hurt (this client's
+ * change, kept from the original game); a defender's splash leaves its own
+ * buildings alone (`AOEDamage.as:36-39`), so only an attacker's lands. Map
+ * Room 3 turns it off, and the engine is never in Map Room 3.
+ */
+export const KING_WORMZER_ID = "IC8";
+export const KING_WORMZER_MULTIPLIER = 4;
+
+/**
+ * The Housing Bunker (`client/scripts/HOUSINGBUNKER.as`, Inferno plan WP 1.6):
+ * the Inferno yard's housing, whose housed monsters are its defenders.
+ *
+ * Every 30 of its ticks (`:272-273`) it looks for attackers within its range
+ * of its scan point (`:156-161`): the nearest {@link HOUSING_BUNKER_TARGETS}
+ * walking ones that are not retreating (`FindTargets(3)`, `_loc5_ <= 3`), and
+ * the nearest four flyers too while it holds a Balthazar or a Sabnox
+ * (`canTargetAir`, `:167-178`). It sends one of those two after each flyer
+ * (`getInterceptor`, `:277-288`), then every monster it still holds at the
+ * nearest walking one (`:289-298`). It sends nothing while it is being
+ * upgraded (`:269`); the engine also keeps one being built or fortified in
+ * (its `busy`). When it falls, every monster it houses dies, out or in
+ * (`Destroyed`, `:116-127`; the engine is never in Map Room 3).
+ *
+ * Flash's last loop reads its monster at `_loc1_[_loc3_]`, where `_loc3_` is
+ * left at the flyer target count by an earlier loop, so after sending
+ * interceptors it holds back the first few monsters (an index past the end
+ * is a no-op). The engine takes the plain reading, index 0: every monster
+ * left goes.
+ */
+export const HOUSING_BUNKER_TYPE = 128;
+export const HOUSING_BUNKER_TARGETS = 4;
+/** The monsters a Housing Bunker sends after flyers, in the order it picks them. */
+export const HOUSING_BUNKER_INTERCEPTORS: readonly string[] = [BALTHAZAR_ID, SABNOX_ID];
+
+/** The quake's hurt to a creep `dist` from the scan point (`:174-179`). */
+export const quakeDamage = (power: number, range: number, dist: number, hp: number): number => {
+  let dealt = Math.trunc((power / range) * (range - Math.trunc(dist)));
+  if (dealt < power / 3) dealt = Math.trunc(power / 3);
+  if (dealt > hp) dealt = Math.trunc(hp);
+  return dealt;
+};
 
 /**
  * The Laser Tower (issue #267), whose shot is a beam that sweeps and pulses.

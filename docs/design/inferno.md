@@ -152,6 +152,7 @@ plain stats, no raid while damaged, 3 h gap) do **not** apply to them.
 | Burn **[OWNER I15, R8]** | Made real, as a burn (not poison): from Descent yard 7, every **surface** monster in the fight loses health over time; Inferno monsters (IC1-IC8) and Korath are immune. Suggested strength `[PLACEHOLDER]`: 2% of full health every 10 s at yard 7, rising evenly to 5% at yard 13. Computed in the shared fight rules (server re-simulates). Shown with the "burning" icon from the status-icon system (`feat/status-icons`, beta.5): adding the effect and its icon should be one line. Toxicity bar and popup stay as the warning | — |
 | Yards | Server data exists: `server/src/game-data/tribes/inferno/molochTribes.ts`; state shape in `server/src/controllers/base/load/modes/infernoModeDescent.ts` | — |
 | Defences used | Quake (129) from base 203, Magma (132) from 204, Housing Bunker (128) from 206, Inferno Cannon 130, Sniper 21, walls 17; all at full Flash strength (R9) | `molochTribes.ts` |
+| Yard kind | A Descent yard is fought as an **Inferno yard**: yard kind `"inferno"`, Inferno building numbers (`INFERNOYARDPROPS`, e.g. Quake Tower 48,000 health), and its Housing Bunkers filled from the yard's housed `monsters` at its `academy` levels (`defenderForcesOf` with `monsters` + `buildinghealthdata`). Flash attacks a Descent base through the Inferno map's handler, which loads it as `EnumYardType.INFERNO_YARD`; `SetBuildingProps` then picks the Inferno table and `HOUSING.Populate` the Housing Bunkers. Decided 25 Oct (exact to Flash, R9); supersedes WP 1.2's "main table" note | `maproom_inferno/DescentMonsterBase.as:111`, `maproom_inferno/PlayerHandler.as:333`, `BASE.as:559-564`, `GLOBAL.as:716-719`, `HOUSING.as:201-235` |
 
 So Quake, Magma and Housing defenders, the IC monsters and the burn must work in the engine **in
 slice 1**.
@@ -197,14 +198,17 @@ laser, tesla and the other surface-only ids.
 
 | Monster | Unlock Sulfur | Unlock time | Locker lv | Housing | Special (`com/monsters/monsters/creeps/inferno/*.as`) |
 |---|---|---|---|---|---|
-| IC1 | 2,400 | 3,600 s | 1 (always unlocked, `:58-66`) | 15 | — |
-| IC2 | 4,800 | 14,400 s | 1 | 15 | — |
-| IC3 | 76,800 | 64,800 s | 2 | 15 | — |
-| IC4 | 38,400 | 64,800 s | 2 | 30 | — |
-| IC5 | 614,400 | 86,400 s | 3 | 40 | Spurtz: burns on death |
-| IC6 | 1,228,800 | 86,400 s | 3 | 50 | Balthazar: strips flying/ground defence flags, powered target mode |
-| IC7 | 2,457,600 | 172,800 s | 3 | 80 | Sabnox: magma fireball x2 vs towers |
-| IC8 | 4,915,200 | 259,200 s | 4 | 100 | King Wormzer: area hit 100, once per target |
+| IC1 Spurtz | 2,400 | 3,600 s | 1 (always unlocked, `:58-66`) | 15 | Spurtz: burn mark on death (looks only, `EFFECTS.as:107`) |
+| IC2 Zagnoid | 4,800 | 14,400 s | 1 | 15 | — |
+| IC3 Malphus | 76,800 | 64,800 s | 2 | 15 | — |
+| IC4 Valgos | 38,400 | 64,800 s | 2 | 30 | — |
+| IC5 Balthazar | 614,400 | 86,400 s | 3 | 40 | Balthazar: strips flying/ground defence flags, powered target mode |
+| IC6 Grokus | 1,228,800 | 86,400 s | 3 | 50 | — |
+| IC7 Sabnox | 2,457,600 | 172,800 s | 3 | 80 | Sabnox: magma fireball x2 vs towers |
+| IC8 King Wormzer | 4,915,200 | 259,200 s | 4 | 100 | King Wormzer: area hit 100, once per target |
+
+Names and classes per `CREATURELOCKER.as` (`name`, `classType`); corrected 2026-10-25, the
+first draft had the specials one or two rows low.
 
 Training: 5 academy steps each, Flash times kept (King Wormzer about 48 days in all, R4); hatch
 cost/time per level in the same file. The engine has no
@@ -286,6 +290,23 @@ shared rules (both sides, sync test). The burn is a status effect on the status-
 (`feat/status-icons`), so the client shows the "burning" icon over each burning monster with no
 extra drawing code. Slice 6 adds siege weapons to the same engine.
 
+**Housing Bunker defenders (WP 1.6, `HOUSINGBUNKER.as:149-353`, `HOUSING.as:201-235`).** An
+Inferno yard's housed monsters (`monsters` on the save) are its Housing Bunkers' defenders: the
+engine deals them out in turn over the standing bunkers (Flash draws a bunker at random for each;
+`housedGarrisons`). Every 30 ticks a bunker looks at the nearest 4 walking attackers in its range,
+and the nearest 4 flyers while it holds a Balthazar (IC5) or Sabnox (IC7); it sends one of those
+after each flyer, then every monster it still holds at the nearest walker. It sends nothing while
+upgrading. When it falls, every monster it houses dies, out or in, and counts as lost. The Monster
+Bunker (22) keeps its own rule (one random defender every 30 ticks). **Flash bug, our reading:**
+the "send the rest" loop reads `_loc1_[_loc3_]`, where `_loc3_` is still the flyer count from an
+earlier loop, so in Flash, after interceptors go, the first few remaining monsters stay home (an
+index past the end is skipped, so it does not crash). We take the plain reading: every remaining
+monster goes. **Descent yard kind:** Flash loads a Descent yard as an Inferno yard
+(`maproom_inferno/PlayerHandler.as:333`, `EnumYardType.INFERNO_YARD`), so it reads
+`INFERNOYARDPROPS` and its Housing Bunkers hold its housed monsters. Decided (main, 25 Oct, by
+the owner's "exact to Flash" rule, R9): a Descent yard is an Inferno yard (see 2.4); WP 1.2's
+"the Descent reads the main table" is superseded.
+
 ### 3.4 Old routes
 
 The closed Flash routes (baseLoad i-modes, baseSave Inferno types, updateSaved, infernoMonsters,
@@ -351,7 +372,7 @@ check. Owner screenshots before merge for any screen.
 | 1.8 | Emergence "due" rule on main-yard load (2.2, Flash rules I14: 12 h, 10% health) + pause wild raids | unit tests for each gate | 1.7 | M |
 | 1.9 | Emergence raid army (2.3) + run through `raidFlow`, stage counts win or lose, quit does not cancel, no reward | army snapshot per level/L; flow test | 1.8, 1.5 | M |
 | 1.10 | Client: cave sprite, tap menu, emergence popups + earthquake | screenshots phone/desktop | 1.7 | M |
-| 1.11 | Descent state + `attack/start` kind descent (next base only, main army, flinger capacity) | route tests (wrong base refused) | 1.7, 1.6 | M |
+| 1.11 | Descent state + `attack/start` kind descent (next base only, main army, flinger capacity); the Descent yard is fought as yard kind `"inferno"` with its housed monsters defending from its Housing Bunkers (2.4 "Yard kind", `PlayerHandler.as:333`) | route tests (wrong base refused; Descent fight uses Inferno numbers and Housing Bunker defenders) | 1.7, 1.6 | M |
 | 1.12 | Descent landing: 90% win, Inferno loot, progress, capture creates the Inferno yard with the start layout, achievements 18/19 | landing tests incl. forged client result ignored | 1.11 | M |
 | 1.13 | Client: Descent map + popups | screenshots | 1.11, A1 | M |
 | 1.14 | `POST /bm/inferno/load` + harvester catch-up into `iresources` | load tests, caps | 1.12 | M |

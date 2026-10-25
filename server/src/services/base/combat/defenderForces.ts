@@ -36,6 +36,9 @@ export const servedDefenderForces = async (
     champion: championsHealedTo(save.champion, Number(save.savetime), now),
     storedata: save.storedata,
     now,
+    // An Inferno yard's housed monsters defend from its Housing Bunkers (Inferno WP 1.6).
+    monsters: save.monsters,
+    buildinghealthdata: save.buildinghealthdata,
   });
   return attacker ? withAttackerBuffs(forces, attacker.storedata, now) : forces;
 };
