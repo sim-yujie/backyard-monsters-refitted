@@ -436,6 +436,14 @@ export class BlastFx {
     }
   }
 
+  /**
+   * A shake on its own, for a tower's big hit (beta.5 tower attack effects):
+   * capped at {@link MAX_SHAKE}, and never on top of a harder one.
+   */
+  jolt(tick: number, amp: number, life: number): void {
+    if (!this.reducedMotion) this.startShake({ born: tick, life, amp: Math.min(MAX_SHAKE, amp) });
+  }
+
   /** A small spark where a blow lands (bigger attack effects): a flash and a few bits. */
   impact(tick: number, at: Point, radius: number): void {
     const { many } = this.begin(radius);

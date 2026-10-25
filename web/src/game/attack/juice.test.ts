@@ -18,9 +18,14 @@ import {
   bigLabelSpread,
   bigLabelWidth,
   bigLungeOffset,
+  effectsQuality,
+  effectsQualityChoice,
   nextSwingGap,
   reduceEffects,
+  screenShakeOn,
+  setEffectsQuality,
   setReduceEffects,
+  setScreenShake,
   slowMoSeconds,
   squashScale,
   windUpFrame,
@@ -175,5 +180,28 @@ describe("the Reduce effects setting", () => {
 
   it("falls back to off where storage cannot be read", () => {
     expect(reduceEffects(null)).toBe(false);
+  });
+});
+
+describe("Game effects settings (beta.5 tower attack effects)", () => {
+  it("keeps Screen shake on until it is switched off, and on where storage cannot be read", () => {
+    const store = memoryStore();
+    expect(screenShakeOn(store)).toBe(true);
+    setScreenShake(false, store);
+    expect(screenShakeOn(store)).toBe(false);
+    setScreenShake(true, store);
+    expect(screenShakeOn(store)).toBe(true);
+    expect(screenShakeOn(null)).toBe(true);
+  });
+
+  it("starts the effects on low on a small screen, and the player's choice wins either way", () => {
+    const store = memoryStore();
+    expect(effectsQualityChoice(store)).toBeNull();
+    expect(effectsQuality(store, false)).toBe("full");
+    expect(effectsQuality(store, true)).toBe("low");
+    setEffectsQuality("full", store);
+    expect(effectsQuality(store, true)).toBe("full");
+    setEffectsQuality("low", store);
+    expect(effectsQuality(store, false)).toBe("low");
   });
 });
