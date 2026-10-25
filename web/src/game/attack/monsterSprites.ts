@@ -513,21 +513,31 @@ const championSheets = (family: string): readonly MonsterSheet[] => {
   return familyIndex.get(family) ?? [];
 };
 
+/** Krallen's sheets, `G5_1` to `G5_3`. */
+const KRALLEN_SHEET_FAMILY = "G5";
+
+/**
+ * Krallen's look, 1 to 3, by her level (owner, 2026-10-25): levels 1-2 the
+ * first, 3-4 the second, 5 the third. Her power level picks none of it.
+ */
+export const krallenLook = (level: number): number => (level >= 5 ? 3 : level >= 3 ? 2 : 1);
+
 /**
  * The sheet for a creature.
  *
  * Creeps have one sheet under their own id. Champions have one per level,
- * keyed `G1_4`, chosen as `min(level, sheets)` (`ChampionBase.as:229`); for
- * Krallen the number is its power level rather than its level
- * (`Krallen.as:48`), so pass that. A level below 1 uses the first sheet.
- * Undefined for an id the table does not know.
+ * keyed `G1_4`, chosen as `min(level, sheets)` (`ChampionBase.as:229`). Krallen
+ * takes her sheet by her level too, through {@link krallenLook}, in the yard
+ * and in battle alike (Flash used her power level, `Krallen.as:48`). A level
+ * below 1 uses the first sheet. Undefined for an id the table does not know.
  */
 export function spriteFor(creatureId: string, level = 1): AnimatedSheet | undefined {
   const direct = MONSTER_SPRITES[creatureId];
   if (direct) return withLayout(direct);
   const sheets = championSheets(creatureId);
   if (sheets.length === 0) return undefined;
-  const index = Math.min(Math.max(1, Math.floor(level)), sheets.length) - 1;
+  const look = creatureId === KRALLEN_SHEET_FAMILY ? krallenLook(level) : level;
+  const index = Math.min(Math.max(1, Math.floor(look)), sheets.length) - 1;
   const chosen = sheets[index];
   return chosen ? withLayout(chosen) : undefined;
 }
@@ -781,7 +791,9 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/ape_3.png": "monsters/ape_3-repaint@4x.png", // Gorgo level 3 repaint (all 16 headings, idle + walk + attack)
   "monsters/dragon_3.png": "monsters/dragon_3-repaint@4x.png", // Drull level 3 repaint (all 16 headings painted, idle + walk + attack)
   "monsters/fly_3.png": "monsters/fly_3-repaint@4x.png", // Fomor level 3 repaint (all 16 headings painted, standing + wing beat)
-  "monsters/krallen_1_rev_65.png": "monsters/krallen_1_rev_65-repaint@4x.png", // Krallen look 1 repaint (all 16 headings, run + attack)
+  "monsters/krallen_1_rev_65.png": "monsters/krallen_1_rev_65-repaint@4x.png", // Krallen look 1 repaint (all 16 headings, run + attack, ground shadow)
+  "monsters/krallen_2_rev_65.png": "monsters/krallen_2_rev_65-repaint@4x.png", // Krallen look 2 repaint (all 16 headings, run + attack, ground shadow)
+  "monsters/krallen_3_rev_65.png": "monsters/krallen_3_rev_65-repaint@4x.png", // Krallen look 3 repaint (all 16 headings, run + attack, ground shadow)
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */

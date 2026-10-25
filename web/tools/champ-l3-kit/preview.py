@@ -2,7 +2,7 @@
 import sys
 from PIL import Image, ImageDraw
 from spec import SPECS, ASSETS
-ANCH = {"ape_3": (42, 52), "dragon_3": (52, 50), "fly_3": (52, 50), "krallen_2_rev_65": (61, 60)}
+ANCH = {"ape_3": (42, 52), "dragon_3": (52, 50), "fly_3": (52, 50), "krallen_2_rev_65": (61, 60), "krallen_3_rev_65": (52, 72)}
 n = sys.argv[1]; cols = [int(c) for c in sys.argv[2].split(",")]; k = int(sys.argv[3]) if len(sys.argv) > 3 else 2
 s = SPECS[n]; w, h, R = s["w"], s["h"], s["rows"]
 old = Image.open(ASSETS / f"{n}.png").convert("RGBA"); new = Image.open(ASSETS / f"{n}-repaint@4x.png").convert("RGBA")

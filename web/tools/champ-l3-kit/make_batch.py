@@ -40,7 +40,8 @@ n = len(rows)
 cells_txt = (f"cells 1-{gc} top row and {gc + 1}-{2 * gc} bottom row in time order" if n == 2 * gc else
              f"cells 1-{gc} top row and {gc + 1}-{n} bottom row in time order, cell {2 * gc} empty")
 FIRST = {"fly_3": {"A": "the STANDING pose on the ground (wings folded up behind the head)"},
-         "krallen_2_rev_65": {"A": "the first run frame", "B": "a run frame, for size reference only"}}
+         "krallen_2_rev_65": {"A": "the first run frame", "B": "a run frame, for size reference only"},
+         "krallen_3_rev_65": {"A": "the first run frame", "B": "a run frame, for size reference only"}}
 first_txt = FIRST.get(name, {}).get(mode, "the idle pose")
 champ = s["champ"]
 prompt = f"""Use your image generation tool (one call) to create a new image and save it as frames-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.

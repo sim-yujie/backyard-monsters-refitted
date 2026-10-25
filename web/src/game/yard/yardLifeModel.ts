@@ -75,7 +75,7 @@ import type { Yard, YardBuilding } from "./yardModel";
  * engine's `speed / 4`), showing its idle row while it stands (`:1538-1540`).
  * One owner rule departs from that (#206): a champion at a flying level, Fomor
  * from 3, never lands in its cage but hovers at its flight height and flaps,
- * standing or pacing (`YardLifeLayer`). Krallen picks its sheet by power level (`champions/Krallen.as:46-48`).
+ * standing or pacing (`YardLifeLayer`). Krallen's sheet follows her level, as in battle (`krallenLook`).
  *
  * The cage is one picture, both fences, sorted at its middle. Flash sorted a
  * champion at its feet plus `level * 5` (`MonsterBase.as:726`,
@@ -171,9 +171,6 @@ const ARRIVED = 5;
 /** A champion's speed prop to yard units a tick, before behaviour (`engine.ts` `speed / 4`). */
 const CHAMPION_SPEED_DIVISOR = 4;
 
-/** Krallen's champion type: its sheet goes by power level (`Krallen.as:46-48`). */
-const KRALLEN_TYPE = 5;
-
 /** Worker motion, in world px and degrees a frame (`WORKER.as:211-316`). */
 export const WORKER_MOTION = {
   /** Top speed with a job, and without one. */
@@ -226,7 +223,7 @@ export interface LifeChampion {
   readonly id: string;
   /** Evolution level: its speed. */
   readonly level: number;
-  /** The level its sheet is picked at: the power level for Krallen. */
+  /** The level its sheet is picked at: its level, Krallen's too (`spriteFor` maps hers to her look). */
   readonly sheetLevel: number;
 }
 
@@ -367,8 +364,7 @@ export const yardLifeOf = (
     if (status === EGG_STATUS && egg === null) egg = `G${t}`;
     if (status !== 0) continue;
     const level = Math.max(1, Math.floor(Number(entry.l)) || 1);
-    const power = Math.max(1, Math.floor(Number(entry.pl)) || 1);
-    champions.push({ id: `G${t}`, level, sheetLevel: t === KRALLEN_TYPE ? power : level });
+    champions.push({ id: `G${t}`, level, sheetLevel: level });
   }
 
   const workless = save.type === TRIBE_TYPE;
