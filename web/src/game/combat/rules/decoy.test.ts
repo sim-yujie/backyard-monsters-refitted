@@ -224,6 +224,22 @@ describe("the Decoy in a fight", () => {
     }
   });
 
+  it("leaves a Housing Bunker's monsters in: Flash ejects from a Monster Bunker only", () => {
+    const housing = { ...buildings, "1": { id: 1, t: 128, l: 1, X: 0, Y: 0 } };
+    const battle = createBattle(
+      buildEngineYard({
+        buildingdata: housing,
+        buildinghealthdata: {},
+        resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+      }),
+      { seed: 11, bunkers: { 1: { IC2: 3 } }, siege: { decoy: 1 } },
+    );
+    for (const event of [pokey, decoyAt]) battle.apply(event);
+    battle.runTo(plan.landsAt + 2 * DECOY_FRAME_TICKS);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
+    expect(battle.state().bunkers[0]?.sent).toBe(0);
+  });
+
   it("blows up on its tick: the linear blast on the defenders and the bunker, then they go home", () => {
     const { yard, battle } = battleOf({ siege: { decoy: 1 } }, [pokey, decoyAt]);
     battle.runTo(plan.explodesAt - 1);

@@ -2740,12 +2740,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * `ejectDefendersFromBunkers` (`Decoy.as:229-239`, `BUILDING22.EjectCreeps`,
    * `:195-239`): a standing bunker the range touches sends out one of each
    * kind it still holds, each frame, already held by the Decoy. As with the
-   * bunker's own sending, a healer stays in (issue #195).
+   * bunker's own sending, a healer stays in (issue #195). Only a Monster
+   * Bunker: Flash ejects from a `BUILDING22` alone (`Decoy.as:234`), so a
+   * Housing Bunker keeps its monsters in.
    */
   const ejectForDecoy = (drop: Cart, range: number, before: Map<number, Behaviour>): void => {
     for (const bunker of bunkers) {
       const building = bunker.building;
-      if (building.hp <= 0) continue;
+      if (building.hp <= 0 || building.type === HOUSING_BUNKER_TYPE) continue;
       const at = screenOf(building.x, building.y);
       const dx = at.x - drop.x;
       const dy = at.y + building.middle - drop.y;
