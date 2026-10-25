@@ -12,6 +12,7 @@ export const yardUpgradeAction = defineYardAction({
   schema: YardUpgradeSchema,
   run: ({ save, body, now }) => planUpgradeAction(save, body.id, now),
   outposts: "allow",
+  inferno: "allow",
 });
 
 /**
@@ -22,4 +23,5 @@ export const yardCancelUpgradeAction = defineYardAction({
   schema: YardCancelUpgradeSchema,
   run: ({ save, body }) => planCancelUpgrade(save, body.id),
   outposts: "allow",
+  inferno: "allow",
 });

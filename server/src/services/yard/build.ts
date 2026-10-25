@@ -1,6 +1,7 @@
 import {
   costOf,
   hallTypeOf,
+  INFERNO_BUILDABLE_TYPES,
   OUTPOST_COSTS,
   OUTPOST_TRAITS,
   type CostRequirement,
@@ -149,16 +150,25 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
   })
 );
 
+/**
+ * Types the Inferno yard's build menu offers (`INFERNO_BUILDABLE_TYPES`, from
+ * `client/scripts/INFERNOYARDPROPS.as` and `BUILDINGSPOPUP.as`): the four
+ * harvesters, the Resource Pod, Monster Locker, Juicer, Incubator, walls,
+ * Sniper, booby trap, Academy, Housing Bunker, Quake Tower, Inferno Cannon and
+ * Magma Tower. Each one's count and Under Hall level are the table's own.
+ */
+export const INFERNO_YARD_BUILDABLE_TYPES: ReadonlySet<number> = new Set(INFERNO_BUILDABLE_TYPES);
+
 /** The build menu of a yard of `kind`. */
 export const buildableTypesOf = (kind: YardKind): ReadonlySet<number> =>
-  kind === "outpost" ? OUTPOST_BUILDABLE_TYPES : BUILDABLE_TYPES;
+  kind === "outpost" ? OUTPOST_BUILDABLE_TYPES : kind === "inferno" ? INFERNO_YARD_BUILDABLE_TYPES : BUILDABLE_TYPES;
 
 /** Walls and traps finish the moment they are placed and hold no worker (D13). */
 const AT_ONCE_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
 /** The parts of a `Save` the build routes read. */
 export interface BuildSave extends StorageCapSave {
-  /** `BaseType`: an outpost builds from the outpost table. */
+  /** `BaseType`: an outpost or the Inferno yard builds from its own table. */
   type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
@@ -260,7 +270,7 @@ export const buildGates =(save: BuildSave, request: BuildRequest): CostStep => {
     throw yardRefusedErr(
       "townHall",
       hall <= 0
-        ? `You need a ${hallLabel} before you can build anything.`
+        ? `You need ${/^[AEIOU]/.test(hallLabel) ? "an" : "a"} ${hallLabel} before you can build anything.`
         : `That needs a level ${need} ${hallLabel}.`,
       { townHall: { have: hall, need: hall <= 0 ? 1 : need } }
     );
@@ -302,17 +312,27 @@ export type PlacementProblem = { placement: "outOfBounds" } | { placement: "over
  * Gate 6's rule, without the refusal: inside the plot, clear of every
  * building. Null when the spot is free. Mushrooms are not looked at: they
  * move out of the way (#263). The Map Room migration checks the spot it picks
- * with it too (`mapRoom.ts`).
+ * with it too (`mapRoom.ts`). Footprints are the yard's own kind's (the
+ * Inferno's Under Hall and Academy differ, `buildingFootprints.ts`).
+ *
+ * @param except - A building to leave out: the one being moved (`move.ts`).
  */
-export const placementProblem = (save: BuildSave, request: BuildRequest): PlacementProblem | null => {
+export const placementProblem = (
+  save: BuildSave,
+  request: BuildRequest,
+  except?: number
+): PlacementProblem | null => {
   const { type, x, y } = request;
-  const rect = rectOf(type, x, y);
+  const kind = yardKindOf(save);
+  const rect = rectOf(type, x, y, kind);
 
-  if (!withinBounds(rect, currentExpansion(save.storedata))) return { placement: "outOfBounds" };
+  if (!withinBounds(rect, currentExpansion(save.storedata, kind))) return { placement: "outOfBounds" };
 
   for (const [key, building] of Object.entries(save.buildingdata ?? {})) {
-    const other = rectOf(Number(building.t), Number(building.X), Number(building.Y));
-    if (overlaps(rect, other)) return { placement: "overlap", with: Number(building.id ?? key) };
+    const id = Number(building.id ?? key);
+    if (except !== undefined && id === except) continue;
+    const other = rectOf(Number(building.t), Number(building.X), Number(building.Y), kind);
+    if (overlaps(rect, other)) return { placement: "overlap", with: id };
   }
   return null;
 };
@@ -322,9 +342,9 @@ const PLACEMENT_MESSAGES: Readonly<Record<PlacementProblem["placement"], string>
   overlap: "Something is already built there.",
 };
 
-/** Gate 6: inside the plot, clear of every building. */
-const placementGate = (save: BuildSave, request: BuildRequest): void => {
-  const problem = placementProblem(save, request);
+/** Gate 6: inside the plot, clear of every building (but `except`). */
+export const placementGate = (save: BuildSave, request: BuildRequest, except?: number): void => {
+  const problem = placementProblem(save, request, except);
   if (problem) throw yardRefusedErr("placement", PLACEMENT_MESSAGES[problem.placement], problem);
 };
 

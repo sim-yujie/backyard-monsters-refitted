@@ -60,17 +60,19 @@ import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js"
 export { propsFor, type YardKind };
 
 /**
- * The kind of yard a save is: an outpost row builds from the outpost table,
- * everything else from the main one. The yard rules read it off the save they
- * are handed, so a route needs no extra argument: the yard action wrapper hands
- * an outpost's rules a save whose `type` is `outpost`
+ * The kind of yard a save is: an outpost row builds from the outpost table, an
+ * Inferno yard from the Inferno table (`GLOBAL.as:718-719`), everything else
+ * from the main one. The yard rules read it off the save they are handed, so a
+ * route needs no extra argument: the yard action wrapper hands an outpost's or
+ * the Inferno yard's rules a save whose `type` is `outpost` or `inferno`
  * (`services/yard/poolView.ts`).
  */
 export const yardKindOf = (save: { type?: string | null } | null | undefined): YardKind =>
-  save?.type === BaseType.OUTPOST ? "outpost" : "main";
+  save?.type === BaseType.OUTPOST ? "outpost" : save?.type === BaseType.INFERNO ? "inferno" : "main";
 
-/** What the player calls a yard's hall in a message: the Town Hall, or the outpost core. */
-export const hallName = (kind: YardKind): string => (kind === "outpost" ? "core" : "Town Hall");
+/** What the player calls a yard's hall in a message: the Town Hall, the outpost core or the Under Hall. */
+export const hallName = (kind: YardKind): string =>
+  kind === "outpost" ? "core" : kind === "inferno" ? "Under Hall" : "Town Hall";
 
 /** A countdown at or below this many seconds is free to finish. */
 export const FREE_FINISH_SECONDS = 300;

@@ -41,6 +41,7 @@ import {
 } from "./locker.js";
 import { yardMushroomPickAction } from "./mushrooms.js";
 import { yardRecycleAction } from "./recycle.js";
+import { yardMoveAction } from "./move.js";
 import { yardRepairAction, yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
 import { yardStarterKitAction } from "./starterKit.js";
@@ -128,4 +129,6 @@ export const yardRoutes: YardRouteEntry[] = [
   ...achievementsRoutes,
   // Events: the login calendar and collection ladder claims (`events.ts`).
   ...eventsRoutes,
+  // One building moved (the Inferno's WP 1.15; the main yard and outposts too).
+  { path: "move", controller: yardRoute(yardMoveAction) },
 ];

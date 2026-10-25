@@ -41,7 +41,11 @@ import type { JsonObject } from "../../types/JsonObject.js";
 /** The most workers a main yard can ever have (`QUEUE.as:42-53`). */
 export const WORKER_CAP = 5;
 
-/** An outpost's workers: one, bought workers ignored (`QUEUE.as:31-52`). */
+/**
+ * An outpost's workers, and the Inferno yard's: one, bought workers ignored
+ * (`QUEUE.as:31-52`, `!BASE.isMainYard`). The Inferno's bought workers
+ * (owner decision I3) come with WP 1.17.
+ */
 export const OUTPOST_WORKERS = 1;
 
 /**
@@ -61,7 +65,8 @@ const running = (raw: unknown): boolean => (finite(raw) ?? 0) > 0;
 
 /**
  * How many workers this yard has: one, plus every extra worker bought, capped
- * at {@link WORKER_CAP}; an outpost has {@link OUTPOST_WORKERS}.
+ * at {@link WORKER_CAP}; an outpost and the Inferno yard have
+ * {@link OUTPOST_WORKERS}.
  *
  * A save with no `storedata` at all, or none that reads as a number, has the
  * one worker every yard starts with.
@@ -70,7 +75,7 @@ export const workerCount = (
   storedata: JsonObject | null | undefined,
   kind: YardKind = "main"
 ): number => {
-  if (kind === "outpost") return OUTPOST_WORKERS;
+  if (kind === "outpost" || kind === "inferno") return OUTPOST_WORKERS;
   const bought = finite(storedata?.BEW?.q) ?? 0;
   const extra = bought > 0 ? Math.floor(bought) : 0;
   return Math.min(WORKER_CAP, 1 + extra);

@@ -38,6 +38,7 @@ export const yardBuildAction = defineYardAction({
     return { ...plan, slices: { ...slices, onboarding: guided }, achievementEvents: built(plan.report.finished) };
   },
   outposts: "allow",
+  inferno: "allow",
 });
 
 /**
@@ -60,6 +61,7 @@ export const yardCancelBuildAction = defineYardAction({
   },
   // `msg_stopconstructionoutpostbuilding` (`client/scripts/BFOUNDATION.as:2511-2517`).
   outposts: { refuse: "You cannot stop the construction of a building in your Outposts." },
+  inferno: "allow",
 });
 
 /**

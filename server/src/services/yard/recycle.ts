@@ -1,9 +1,15 @@
-import { costOf } from "../../game-data/buildingCosts.js";
+import { costOf, type YardKind } from "../../game-data/buildingCosts.js";
 import { TROJAN_HORSE_TYPE } from "../../game-data/buildingFootprints.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { pricingType, refundOf, type StorageCapSave } from "../base/economy/resourceBudget.js";
-import { TOWN_HALL_TYPE, type ResourceAmounts } from "../yardplanner/costs.js";
+import {
+  deriveHousingCapacity,
+  HOUSING_BUNKER_BUILDING_TYPE,
+  housedCounts,
+  housingUsed,
+} from "../monsters/transferRules.js";
+import { hallName, TOWN_HALL_TYPE, yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import { MAP_ROOM_TYPE } from "./buildingJobs.js";
 import { academyLevels, isMapRoom3Monsters } from "./catchUpMonsters.js";
 import { fitCredit } from "./credit.js";
@@ -52,7 +58,14 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  *   first, which refunds it;
  * - `unlocking`: the Monster Locker while an unlock runs (the original cancelled
  *   the unlock as part of the recycle, `BUILDING8.as:104-119`; here the player
- *   cancels it first, which refunds it).
+ *   cancels it first, which refunds it);
+ * - `housingFull`: in the Inferno yard, a Housing Bunker whose housed monsters
+ *   would not fit in the bunkers left (`HOUSINGBUNKER.as:69-76`).
+ *
+ * In the Inferno yard (`type` `inferno`, WP 1.15) the refund is priced from
+ * the Inferno table and lands in the Inferno purse (the yard is seen through
+ * its owner's main yard, `poolView.ts`), and the Under Hall is refused as the
+ * Town Hall is.
  *
  * Recycling a Monster Housing building shrinks housing; if the army no longer
  * fits, the overflow cull runs at once (`housing.ts`, `cullHousing`) and the
@@ -122,15 +135,33 @@ const championsOf = (raw: unknown): JsonObject[] => {
 /** The Chamber's `fz`: its frozen champions, a JSON string in the original (`CHAMPIONCHAMBER.as:313-378`). */
 const frozenIn = (building: BuildingData): number => championsOf(building.fz).length;
 
-/** Whether a building's type is `kind` in the cost table. */
-const kindOf = (type: number): string => costOf(pricingType(type))?.kind ?? "";
+/** A building type's `kind` in the cost table of a yard of `yard`. */
+const kindOf = (type: number, yard: YardKind): string => costOf(pricingType(type), yard)?.kind ?? "";
+
+/**
+ * Whether the Inferno yard's housed monsters would still fit without Housing
+ * Bunker `key`. Flash refuses that recycle outright
+ * (`HOUSINGBUNKER.as:69-76`, `_blockRecycle` when the free space minus the
+ * bunker's capacity is below 0); the main yard's Housing culls instead (the
+ * file comment).
+ */
+const bunkerHousesTooMany = (save: RecycleSave, key: string): boolean => {
+  const { [key]: _gone, ...rest } = save.buildingdata ?? {};
+  const capacity = deriveHousingCapacity({
+    buildingData: rest,
+    healthData: save.buildinghealthdata,
+    inferno: true,
+  });
+  return housingUsed(housedCounts(save.monsters), academyLevels(save.academy)) > capacity;
+};
 
 /** Throws the refusal for a building that may not be recycled now, if any. */
 const refuse = (save: RecycleSave, building: BuildingData, id: number, now: number): void => {
   const type = Number(building.t);
+  const yard = yardKindOf(save);
   const refused = (reason: string, message: string) => yardRefusedErr(reason, message, { id });
 
-  if (type === TOWN_HALL_TYPE) throw refused("isTownHall", "The Town Hall cannot be recycled.");
+  if (type === TOWN_HALL_TYPE) throw refused("isTownHall", `The ${hallName(yard)} cannot be recycled.`);
   if (type === MAP_ROOM_TYPE) {
     throw refused("mapRoom", "The Map Room cannot be recycled: its level is your map.");
   }
@@ -180,6 +211,9 @@ const refuse = (save: RecycleSave, building: BuildingData, id: number, now: numb
   }
   if (type === LOCKER_TYPE && runningUnlock(save.lockerdata)) {
     throw refused("unlocking", "Cancel the unlock first.");
+  }
+  if (yard === "inferno" && type === HOUSING_BUNKER_BUILDING_TYPE && bunkerHousesTooMany(save, String(id))) {
+    throw refused("housingFull", "Your monsters would have nowhere to live. Make room for them first.");
   }
 };
 
@@ -237,7 +271,8 @@ export const planRecycle = (save: RecycleSave, id: number, now: number) => {
   refuse(save, building, id, now);
 
   const type = Number(building.t);
-  const kind = kindOf(type);
+  const yard = yardKindOf(save);
+  const kind = kindOf(type, yard);
 
   const { [key]: _gone, ...buildingdata } = save.buildingdata ?? {};
   const buildinghealthdata: BuildingHealthData = { ...(save.buildinghealthdata ?? {}) };
@@ -250,7 +285,7 @@ export const planRecycle = (save: RecycleSave, id: number, now: number) => {
     stored = { type, count: storedCount(researchdata, type) };
   }
 
-  const owed = kind === "decoration" || NOTHING_BACK_KINDS.has(kind) ? undefined : refundOf(building);
+  const owed = kind === "decoration" || NOTHING_BACK_KINDS.has(kind) ? undefined : refundOf(building, yard);
   // The cap the credit meets is the one without this building (the wrapper
   // applies the slices first), so work the report out against that yard.
   const fit = fitCredit({ ...save, buildingdata }, owed ?? {});

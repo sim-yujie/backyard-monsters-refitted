@@ -86,6 +86,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "fortify/cancel",
   "starterkit",
   "decor/place",
+  "move",
   "goals/claim",
   "goals/baiter-start",
   "goals/baiter-run",

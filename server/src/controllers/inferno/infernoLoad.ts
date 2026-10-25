@@ -8,12 +8,8 @@ import { noInfernoYardErr } from "../../errors/errors.js";
 import { postgres } from "../../server.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
-import {
-  catchUpInfernoYard,
-  infernoPurse,
-  infernoStorageCap,
-  type InfernoPurse,
-} from "../../services/inferno/infernoLoad.js";
+import { infernoPurse, infernoStorageCap, type InfernoPurse } from "../../services/inferno/infernoLoad.js";
+import { catchUpYard } from "../../services/yard/catchUp.js";
 import { visibleCredits } from "../../services/user/shinyLock.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
@@ -61,13 +57,13 @@ export const loadInfernoYard = async (em: EntityManager, user: User, now: number
   const yard = await em.transactional(async (tx) => {
     const locked = await lockInfernoYard(tx, main, user);
     if (!isAttackActive(locked)) {
-      catchUpInfernoYard(locked, now);
+      catchUpYard(locked, now);
       await tx.flush();
     }
     return locked;
   });
 
-  const cap = infernoStorageCap(yard, main.storedata);
+  const cap = infernoStorageCap(yard);
   return {
     ...FilterFrontendKeys(yard),
     error: 0,

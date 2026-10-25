@@ -24,7 +24,8 @@ export const BuildingIdField = z.coerce.number().int().nonnegative();
 /**
  * The yard a request acts on, on every yard route: absent (or `0`) for the
  * caller's main yard, else the `baseid` of one of their Map Room 2 outposts
- * (the id `/base/load` and `Save.outposts` use). The wrapper reads it
+ * (the id `/base/load` and `Save.outposts` use) or of their Inferno yard (the
+ * main save's `baseid_inferno`). The wrapper reads it
  * beside the route's own schema (`controllers/yard/yardAction.ts`).
  */
 export const YardTargetSchema = z.object({
@@ -138,6 +139,16 @@ const YardCoordinateField = z.coerce.number().int().min(-4000).max(4000);
  */
 export const YardBuildSchema = z.object({
   type: z.coerce.number().int().positive(),
+  x: YardCoordinateField,
+  y: YardCoordinateField,
+});
+
+/**
+ * `POST /bm/yard/move`: one building and where its footprint now starts.
+ * Whether it may go there is the route's rule (`services/yard/move.ts`).
+ */
+export const YardMoveSchema = z.object({
+  id: BuildingIdField,
   x: YardCoordinateField,
   y: YardCoordinateField,
 });
