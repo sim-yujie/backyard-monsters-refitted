@@ -11,6 +11,7 @@ import {
   readInfernoProgress,
   type InfernoProgressRecord,
 } from "../../services/inferno/infernoProgress.js";
+import { raidView, type RaidView } from "../../services/raids/raidFlow.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -96,14 +97,16 @@ export const infernoState: KoaController = async (ctx) => {
 
 /**
  * The load answer's `infernostate`, on the owner's build-mode load of their
- * main yard while the new Inferno is on: the state, and `raised`, the level
- * the cave just went up to (its emergence raid comes now), or null.
+ * main yard while the new Inferno is on: the state, `raised`, the level the
+ * cave just went up to (its emergence raid comes now), or null, and `raid`,
+ * Moloch's raid for that level as the raid routes know it (WP 1.9; the game
+ * starts it with `/raid/start` once the earthquake has played), or null.
  */
 export const infernoLoadState = (
   emergence: EmergenceOnLoad,
   main: CaveSave,
   now: number
-): Omit<InfernoStateBody, "error"> & { raised: number | null } => {
+): Omit<InfernoStateBody, "error"> & { raised: number | null; raid: RaidView | null } => {
   const { error: _error, ...state } = infernoStateAnswer(emergence.progress, main, now);
-  return { ...state, raised: emergence.raised };
+  return { ...state, raised: emergence.raised, raid: emergence.raid ? raidView(emergence.raid) : null };
 };

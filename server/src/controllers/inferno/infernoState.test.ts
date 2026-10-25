@@ -92,15 +92,35 @@ describe("the Inferno state answer", () => {
 describe("the load answer's infernostate", () => {
   test("the state without `error`, and the level the cave just went up to", () => {
     const progress = { ...NO_INFERNO_PROGRESS, emergenceLevel: 1, emergenceLastAt: NOW };
-    const state = infernoLoadState({ progress, raised: 1, notDue: null }, yard(5), NOW);
+    const raid = {
+      id: "r_moloch",
+      phase: "warning",
+      tribe: "moloch",
+      plan: { army: { IC1: 2 } },
+      seed: 7,
+      attackAt: NOW,
+      warned: 0,
+    } as const;
+    const state = infernoLoadState({ progress, raised: 1, notDue: null, raid }, yard(5), NOW);
     expect(state).not.toHaveProperty("error");
     expect(state.raised).toBe(1);
     expect(state.cave.level).toBe(1);
     expect(state.emergence.nextAt).toBe(NOW + 43_200);
+    // Moloch's raid, as the raid routes show it: never its plan's log or outcome.
+    expect(state.raid).toEqual({
+      id: "r_moloch",
+      phase: "warning",
+      tribe: "moloch",
+      monsters: { IC1: 2 },
+      attackAt: NOW,
+      warned: 0,
+    });
   });
 
-  test("raised is null when no raid came on this load", () => {
-    expect(infernoLoadState({ progress: NO_INFERNO_PROGRESS, raised: null, notDue: "tooSoon" }, yard(5), NOW).raised).toBeNull();
+  test("raised and raid are null when no raid came on this load", () => {
+    const state = infernoLoadState({ progress: NO_INFERNO_PROGRESS, raised: null, notDue: "tooSoon", raid: null }, yard(5), NOW);
+    expect(state.raised).toBeNull();
+    expect(state.raid).toBeNull();
   });
 });
 

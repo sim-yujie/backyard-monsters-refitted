@@ -5,7 +5,7 @@ import { infernoConfig } from "../../config/InfernoConfig.js";
 import type { Save } from "../../database/models/save.model.js";
 import { logger } from "../../utils/logger.js";
 import { isAttackActive } from "../base/isAttackActive.js";
-import { readOpenRaid } from "../raids/raidStore.js";
+import { cancelOpenRaid, readOpenRaid, type OpenRaid } from "../raids/raidStore.js";
 import {
   EMERGENCE_GAP_SECONDS,
   emergenceDueCheck,
@@ -13,6 +13,7 @@ import {
   type EmergenceNotDue,
   type EmergenceSave,
 } from "./emergence.js";
+import { isEmergenceRaid, openEmergenceRaid } from "./emergenceRaid.js";
 import { readInfernoProgress, type InfernoProgressRecord } from "./infernoProgress.js";
 
 /**
@@ -23,7 +24,8 @@ import { readInfernoProgress, type InfernoProgressRecord } from "./infernoProgre
  *
  * The level and its time are written **before** the raid starts, as Flash
  * saved them before its attack (`UpgradePortal`, `INFERNO_EMERGENCE_EVENT.as`):
- * from here the raid counts, whatever happens to it (owner I14, R5).
+ * from here the raid counts, whatever happens to it (owner I14, R5). Moloch's
+ * raid for the new level is opened right after (`emergenceRaid.ts`, WP 1.9).
  */
 
 /** What the load hook found. */
@@ -34,6 +36,8 @@ export interface EmergenceOnLoad {
   readonly raised: number | null;
   /** Why it did not; null when it did. */
   readonly notDue: EmergenceNotDue | "race" | null;
+  /** Moloch's raid for the level just reached, open and due now; null when none was opened. */
+  readonly raid: OpenRaid | null;
 }
 
 /**
@@ -66,8 +70,15 @@ export const raiseEmergence = async (
 
 /**
  * The load hook: reads the player's progress, and when an emergence raid is
- * due ({@link emergenceDueCheck}) raises the cave a level. Undefined while
- * the new Inferno is switched off, so the load answers nothing of it.
+ * due ({@link emergenceDueCheck}) raises the cave a level and opens Moloch's
+ * raid for it. Undefined while the new Inferno is switched off, so the load
+ * answers nothing of it.
+ *
+ * A Moloch raid still in its warning from an earlier load is called off
+ * first: in Flash the raid lived only in the session that raised the cave,
+ * and a reload dropped it with the stage already counted (`UpgradePortal`
+ * saved the level before the warning). A Moloch fight the load left was
+ * called off already, as any raid's is (`cancelRaidOnYardLoad`).
  *
  * @param save - The main yard, caught up by this load.
  * @param now - Unix seconds.
@@ -80,6 +91,11 @@ export const emergenceOnLoad = async (
   enabled: boolean = infernoConfig.enabled
 ): Promise<EmergenceOnLoad | undefined> => {
   if (!enabled) return undefined;
+  let open = await readOpenRaid(userid);
+  if (open && isEmergenceRaid(open) && open.phase === "warning") {
+    await cancelOpenRaid(userid);
+    open = null;
+  }
   const progress = await readInfernoProgress(em, userid);
   const notDue = emergenceDueCheck({
     enabled,
@@ -87,18 +103,21 @@ export const emergenceOnLoad = async (
     progress,
     now,
     underAttack: isAttackActive(save),
-    raidOpen: (await readOpenRaid(userid)) !== null,
+    raidOpen: open !== null,
   });
-  if (notDue !== null) return { progress, raised: null, notDue };
+  if (notDue !== null) return { progress, raised: null, notDue, raid: null };
 
   const raised = await raiseEmergence(em, userid, progress.emergenceLevel, now);
-  if (raised === null) return { progress: await readInfernoProgress(em, userid), raised: null, notDue: "race" };
+  if (raised === null) {
+    return { progress: await readInfernoProgress(em, userid), raised: null, notDue: "race", raid: null };
+  }
   logger.info("Inferno emergence for userid {userid}: the cave goes up to level {level}", {
     event: "inferno-emergence",
     userid,
     level: raised,
   });
-  return { progress: { ...progress, emergenceLevel: raised, emergenceLastAt: now }, raised, notDue: null };
+  const raid = await openEmergenceRaid(userid, save, raised, now);
+  return { progress: { ...progress, emergenceLevel: raised, emergenceLastAt: now }, raised, notDue: null, raid };
 };
 
 /**
