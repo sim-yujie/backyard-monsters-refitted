@@ -53,7 +53,11 @@ export interface CancelUpgradeReport {
   refund: ResourceAmounts;
 }
 
-/** Kinds `upgrade` sends elsewhere: the planner's batch routes upgrade them. */
+/**
+ * Kinds `upgrade` sends elsewhere: the planner's batch routes upgrade them.
+ * Not on the Inferno yard, which has no planner (Flash): there a wall takes
+ * the building panel's upgrade like anything else (WP 1.16).
+ */
 const BATCH_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
 /** The building with this id, or a 400: the client named a building the yard does not have. */
@@ -128,7 +132,8 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
  * only by the player's own free `SP1` (`services/yard/speedup.ts`).
  *
  * Refuses, in this order: `400 badRequest` (no such building, or one with no
- * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps),
+ * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps, not
+ * on the Inferno yard),
  * then `409` `busy` (`training { monster }` for an Academy that is training,
  * #145), `damaged`, `townHall`, `maxLevel`, `requirements`,
  * `shortfall`, `workers`.
@@ -149,7 +154,7 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
   const yard = yardKindOf(save);
 
   const kind = costOf(Number(building.t), yard)?.kind;
-  if (kind && BATCH_KINDS.has(kind)) {
+  if (kind && BATCH_KINDS.has(kind) && yard !== "inferno") {
     throw yardBadRequestErr(
       "Walls and traps are upgraded from the Yard Planner.",
       { id },

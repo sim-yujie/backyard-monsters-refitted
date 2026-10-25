@@ -21,4 +21,5 @@ export const yardInstantUpgradeAction = defineYardAction({
     };
   },
   outposts: "allow",
+  inferno: "allow",
 });

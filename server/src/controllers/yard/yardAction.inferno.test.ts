@@ -3,18 +3,27 @@ import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import type { User } from "../../database/models/user.model.js";
 import { costOf, productionOf, siloCapacity } from "../../game-data/buildingCosts.js";
+import { INFERNO_REPAIR_TIMES, REPAIR_TIMES } from "../../game-data/repairTimes.js";
 import { footprintOf } from "../../game-data/buildingFootprints.js";
+import { maxHp } from "../../game-rules/combat/stats.js";
 import { refundOf, storageCap } from "../../services/base/economy/resourceBudget.js";
 import { infernoStartBuildingData } from "../../services/inferno/infernoYard.js";
 import { currentExpansion } from "../../services/yardplanner/layoutGeometry.js";
+import { levelOf, pointsForBuild, pointsForUpgrade } from "../../services/yardplanner/costs.js";
 import { workerCount } from "../../services/yardplanner/workers.js";
+import { instantBuildPrice, instantUpgradePrice, timeCost } from "../../services/yard/shiny.js";
 import type { BuildingData } from "../../types/BuildingData.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
+import { yardCancelFortifyAction, yardFortifyAction } from "./fortify.js";
+import { yardInstantUpgradeAction } from "./instantUpgrade.js";
+import { yardLockerCancelAction } from "./locker.js";
 import { yardMoveAction } from "./move.js";
 import { yardRecycleAction } from "./recycle.js";
-import { yardRepairAction } from "./repair.js";
+import { yardRepairAction, yardRepairInstantAction } from "./repair.js";
+import { yardShopBuyAction } from "./shopBuy.js";
+import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
@@ -226,9 +235,8 @@ describe("which yard a request acts on", () => {
   test("a route not checked for the Inferno refuses: 409 notInInferno, nothing written", async () => {
     const before = structuredClone(infernoSave());
     for (const [action, request] of [
-      [yardInstantBuildAction, { type: SHARPSHOOTER, x: 200, y: 200 }],
-      [yardBankAction, { ids: "[2]" }],
-      [yardRepairAction, { all: 1 }],
+      [yardShopBuyAction, { item: "BIP" }],
+      [yardLockerCancelAction, {}],
     ] as const) {
       const answer = await inInferno(action as YardAction<z.ZodType, unknown>, request);
       expect(answer.status).toBe(409);
@@ -475,5 +483,224 @@ describe("the Inferno tables the rules read", () => {
     const steps = costOf(6, "inferno")!.costs.slice(0, 3);
     const half = (i: number) => Math.floor(steps.reduce((sum, step) => sum + Number(step[i]), 0) / 2);
     expect(refundOf(pod, "inferno")).toEqual({ r1: half(0), r2: half(1), r3: half(2), r4: half(3) });
+  });
+});
+
+// WP 1.16: banking, repairs, Shiny finishes and fortification on the Inferno yard.
+
+const INFERNO_CANNON = 130;
+const WALL = 17;
+const TRAP = 24;
+
+/** The Inferno start layout with the Under Hall at `uhLevel`, plus `extra`. */
+const layout = (uhLevel: number, extra: Record<string, Row> = {}) =>
+  ({
+    ...infernoStartBuildingData(),
+    "1": { id: 1, t: 14, X: -100, Y: 0, l: uhLevel },
+    ...extra,
+  }) as unknown as Record<string, BuildingData>;
+
+/** The Inferno yard with these buildings, saved just now so nothing produces or heals. */
+const yardWith = (buildingdata: Record<string, BuildingData>, overrides: Row = {}) =>
+  db.rows.set(INFERNO, infernoRow({ buildingdata, savetime: now(), ...overrides }));
+
+/** The start layout with the harvesters' buffers holding `bone` and `coal`. */
+const withBuffers = (bone: number, coal = 0) => {
+  const yard = layout(1);
+  yard["2"] = { ...yard["2"]!, st: bone } as BuildingData;
+  yard["3"] = { ...yard["3"]!, st: coal } as BuildingData;
+  return yard;
+};
+
+const infernoPoints = () => Number(infernoSave().points);
+
+describe("banking in the Inferno (POST /bm/yard/bank)", () => {
+  test("a harvester's Bone goes into the Inferno purse; half its amount in points on the Inferno row", async () => {
+    yardWith(withBuffers(500));
+    const answer = await inInferno(yardBankAction, { ids: "[2]" });
+    expect(answer.status).toBe(200);
+    expect(purse()).toEqual({ ...PURSE, r1: PURSE.r1 + 500 });
+    expect(buildings(infernoSave())["2"]!.st).toBe(0);
+    // Flash sets the tutorial to its end stage in the Inferno (`BASE.as:1072-1074`): half points.
+    expect(infernoPoints()).toBe(250);
+    expect(mainSave().points).toBe("100");
+    expect(mainSave().resources).toEqual(POOL);
+    // The surface bank goals (BK1-BK4) do not count it.
+    expect(mainSave().onboarding).toBeUndefined();
+    expect(infernoSave().onboarding).toBeUndefined();
+  });
+
+  test("Collect all banks both harvesters", async () => {
+    yardWith(withBuffers(300, 200));
+    const answer = await inInferno(yardBankAction, { all: 1 });
+    expect(answer.status).toBe(200);
+    expect(purse()).toEqual({ ...PURSE, r1: PURSE.r1 + 300, r2: PURSE.r2 + 200 });
+  });
+
+  test("only up to the Inferno cap; the rest stays in the buffer", async () => {
+    db.rows.set(MAIN, mainRow({ iresources: { ...PURSE, r1: START_CAP - 100 } }));
+    yardWith(withBuffers(500));
+    const answer = await inInferno(yardBankAction, { ids: "[2]" });
+    expect(answer.status).toBe(200);
+    expect(purse().r1).toBe(START_CAP);
+    expect(buildings(infernoSave())["2"]!.st).toBe(400);
+    expect((body(answer).report.banked as Row).r1).toBe(100);
+    expect((body(answer).report.leftInBuffers as Row).r1).toBe(400);
+  });
+
+  test("a purse already over the cap is left where it is", async () => {
+    db.rows.set(MAIN, mainRow({ iresources: { ...PURSE, r1: START_CAP + 5000 } }));
+    yardWith(withBuffers(500));
+    await inInferno(yardBankAction, { ids: "[2]" });
+    expect(purse().r1).toBe(START_CAP + 5000);
+    expect(buildings(infernoSave())["2"]!.st).toBe(500);
+  });
+});
+
+describe("repairing in the Inferno", () => {
+  test("repair times come from the Inferno props table", () => {
+    expect(INFERNO_REPAIR_TIMES[HOUSING_BUNKER]).toEqual([100, 200, 300, 400, 500, 600]);
+    expect(REPAIR_TIMES[HOUSING_BUNKER]).toBeUndefined();
+    expect(INFERNO_REPAIR_TIMES[INFERNO_CANNON]).toEqual([360, 720, 1440, 2880, 5760, 11520, 23000]);
+  });
+
+  const BUNKER_MAX = maxHp(HOUSING_BUNKER, 1, "inferno");
+  const damagedBunker = (extra: Row = {}) =>
+    layout(1, { "6": { id: 6, t: HOUSING_BUNKER, X: 200, Y: 200, l: 1, hp: 1000, ...extra } });
+
+  test("repair starts a free repair on the damaged building", async () => {
+    yardWith(damagedBunker(), { buildinghealthdata: { "6": 1000 } });
+    const answer = await inInferno(yardRepairAction, { ids: "[6]" });
+    expect(answer.status).toBe(200);
+    expect(buildings(infernoSave())["6"]!.rE).toBe(1);
+    expect(mainSave().credits).toBe(1000);
+    expect(purse()).toEqual(PURSE);
+  });
+
+  test("the catch-up heals at the Inferno rate: a Housing Bunker heals in 100 s, not an hour", async () => {
+    const rate = Math.ceil(BUNKER_MAX / 100);
+    expect(rate).toBeGreaterThan(Math.ceil(BUNKER_MAX / 3600));
+    yardWith(damagedBunker({ rE: 1 }), { buildinghealthdata: { "6": 1000 }, savetime: now() - 50 });
+    await inInferno(yardStateAction);
+    const health = (infernoSave().buildinghealthdata as Record<string, number>)["6"]!;
+    // 50 seconds of healing, give or take the clock's second.
+    expect(health).toBeGreaterThanOrEqual(1000 + 50 * rate);
+    expect(health).toBeLessThanOrEqual(1000 + 51 * rate);
+  });
+
+  test("repair now: a few seconds left is free, and the building is whole", async () => {
+    // (max - 1000) / rate seconds left, under the 5 free minutes.
+    expect(Math.trunc((BUNKER_MAX - 1000) / Math.ceil(BUNKER_MAX / 100))).toBeLessThanOrEqual(300);
+    yardWith(damagedBunker({ rE: 1 }), { buildinghealthdata: { "6": 1000 } });
+    const answer = await inInferno(yardRepairInstantAction);
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000);
+    const bunker = buildings(infernoSave())["6"]!;
+    expect(bunker.hp).toBeUndefined();
+    expect(bunker.rE).toBeUndefined();
+    expect(infernoSave().buildinghealthdata).toEqual({});
+  });
+});
+
+describe("Shiny finishes in the Inferno", () => {
+  test("speed-up finishes an Inferno Cannon for the player's Shiny; the Inferno table's points", async () => {
+    yardWith(layout(1, { "6": { id: 6, t: INFERNO_CANNON, X: 200, Y: 200, cB: 900, cL: 900 } }));
+    const answer = await inInferno(yardSpeedupAction, { id: 6, item: "SP4" });
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - timeCost(900));
+    const cannon = buildings(infernoSave())["6"]!;
+    expect(levelOf(cannon as unknown as BuildingData)).toBe(1);
+    expect(cannon.cB).toBeUndefined();
+    // The Inferno Cannon has no main-table row: these points are the Inferno table's.
+    expect(infernoPoints()).toBe(pointsForBuild(costOf(INFERNO_CANNON, "inferno")!.costs[0]!));
+    expect(infernoPoints()).toBeGreaterThan(0);
+    expect(mainSave().points).toBe("100");
+  });
+
+  test("instant build prices from the Inferno table", async () => {
+    yardWith(layout(1));
+    const answer = await inInferno(yardInstantBuildAction, { type: INFERNO_CANNON, x: 200, y: 200 });
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - instantBuildPrice(INFERNO_CANNON, "inferno"));
+    expect(infernoPoints()).toBe(pointsForBuild(costOf(INFERNO_CANNON, "inferno")!.costs[0]!));
+    const cannon = Object.values(buildings(infernoSave())).find((b) => b.t === INFERNO_CANNON)!;
+    expect(cannon).toMatchObject({ X: 200, Y: 200 });
+    expect(levelOf(cannon as unknown as BuildingData)).toBe(1);
+    expect(purse()).toEqual(PURSE);
+  });
+
+  test("instant upgrade: gated by the Under Hall, priced from the Inferno table", async () => {
+    const cannon = { "6": { id: 6, t: INFERNO_CANNON, X: 200, Y: 200, l: 1 } };
+    yardWith(layout(1, cannon));
+    const gated = await inInferno(yardInstantUpgradeAction, { id: 6 });
+    expect(gated.status).toBe(409);
+    expect(mainSave().credits).toBe(1000);
+
+    yardWith(layout(2, cannon));
+    const answer = await inInferno(yardInstantUpgradeAction, { id: 6 });
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - instantUpgradePrice(INFERNO_CANNON, 1, "inferno"));
+    expect(buildings(infernoSave())["6"]!.l).toBe(2);
+    expect(infernoPoints()).toBe(pointsForUpgrade(costOf(INFERNO_CANNON, "inferno")!.costs[1]!));
+  });
+});
+
+describe("fortifying in the Inferno", () => {
+  test("nothing fortifies there: 400 notFortifiable, and no fortification to cancel", async () => {
+    const yard = layout(2, { "6": { id: 6, t: SHARPSHOOTER, X: 200, Y: 200, l: 1 } });
+    yardWith(yard);
+    const before = structuredClone(infernoSave());
+    for (const id of [1, 2, 4, 6]) {
+      const answer = await inInferno(yardFortifyAction, { id });
+      expect(answer.status).toBe(400);
+      expect(body(answer).reason).toBe("notFortifiable");
+    }
+    const cancel = await inInferno(yardCancelFortifyAction, { id: 6 });
+    expect(cancel.status).toBe(409);
+    expect(body(cancel).reason).toBe("notFortifying");
+    expect(buildings(infernoSave())).toEqual(buildings(before));
+    expect(purse()).toEqual(PURSE);
+  });
+});
+
+describe("walls and traps in the Inferno", () => {
+  for (const type of [WALL, TRAP]) {
+    test(`type ${type}: built at once from the Inferno purse once the Under Hall allows it`, async () => {
+      yardWith(layout(1));
+      const refused = await inInferno(yardBuildAction, { type, x: 200, y: 200 });
+      expect(refused.status).toBe(409);
+      expect(purse()).toEqual(PURSE);
+
+      yardWith(layout(2));
+      const step = stepOf(type);
+      const answer = await inInferno(yardBuildAction, { type, x: 200, y: 200 });
+      expect(answer.status).toBe(200);
+      const built = Object.values(buildings(infernoSave())).find((b) => b.t === type)!;
+      expect(levelOf(built as unknown as BuildingData)).toBe(1);
+      expect(built.cB).toBeUndefined();
+      expect(purse()).toEqual({
+        r1: PURSE.r1 - step.r1,
+        r2: PURSE.r2 - step.r2,
+        r3: PURSE.r3 - step.r3,
+        r4: PURSE.r4 - step.r4,
+      });
+      expect(infernoPoints()).toBe(pointsForBuild(costOf(type, "inferno")!.costs[0]!));
+    });
+  }
+
+  test("a wall upgrades on its own there (no planner): it waits for the Under Hall, then is paid from the purse", async () => {
+    const wall = { "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 } };
+    yardWith(layout(2, wall));
+    const gated = await inInferno(yardUpgradeAction, { id: 6 });
+    expect(gated.status).toBe(409);
+    expect(body(gated).townHall).toEqual({ have: 2, need: 3 });
+
+    yardWith(layout(3, wall));
+    const answer = await inInferno(yardUpgradeAction, { id: 6 });
+    expect(answer.status).toBe(200);
+    expect(purse().r2).toBe(PURSE.r2 - stepOf(WALL, 1).r2);
+    // A wall's step finishes at once, as on the surface's planner walk: no worker held.
+    expect(buildings(infernoSave())["6"]).toMatchObject({ l: 2 });
+    expect(buildings(infernoSave())["6"]!.cU).toBeUndefined();
   });
 });

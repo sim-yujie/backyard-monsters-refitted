@@ -85,12 +85,13 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * main yard (`poolView.ts`), so points and the HCC's goo refund land in the
  * main yard's pool.
  *
- * **The Inferno yard** (`type` `inferno`, `docs/design/inferno.md` WP 1.14-1.15)
- * runs {@link catchUpInferno}: its buildings' countdowns at the Inferno table's
- * figures, then its Bone, Coal, Sulfur and Magma harvesters at the Inferno
- * rates, each filling its own buffer until full, as in Flash. Nothing else yet:
- * its repairs, Incubators, Academy and Locker come with their own work packages
- * (WP 1.16 on), and until then none of them is ever started. Run it on the
+ * **The Inferno yard** (`type` `inferno`, `docs/design/inferno.md` WP 1.14-1.16)
+ * runs {@link catchUpInferno}: its repairs at the Inferno table's repair times
+ * (WP 1.16), its buildings' countdowns at the Inferno table's figures, then its
+ * Bone, Coal, Sulfur and Magma harvesters at the Inferno rates, each filling
+ * its own buffer until full, as in Flash, and last the damage figure. Nothing
+ * else yet: its Incubators, Academy and Locker come with their own work
+ * packages, and until then none of them is ever started. Run it on the
  * yard seen through its owner's main yard (`poolView.ts`, `infernoView`); the
  * points stay on the Inferno row, its own level as in Flash.
  *
@@ -215,10 +216,10 @@ export const catchUpOutpost = (save: CatchUpSave, now: number): CompletedJob[] =
 };
 
 /**
- * The Inferno yard's catch-up (the file comment): building countdowns, then
- * the harvesters, from the last catch-up (`savetime`, else the moment the yard
- * was made, `createtime`) to `now`, with the same guarantees. A yard with
- * neither starts its clock now.
+ * The Inferno yard's catch-up (the file comment): repairs, building
+ * countdowns, the harvesters and damage, as an outpost's order, from the last
+ * catch-up (`savetime`, else the moment the yard was made, `createtime`) to
+ * `now`, with the same guarantees. A yard with neither starts its clock now.
  *
  * @param save - The Inferno yard, mutated in place; `savetime` ends at `now`.
  * @param now - Unix seconds to advance to.
@@ -227,8 +228,12 @@ export const catchUpInferno = (save: CatchUpSave, now: number): CompletedJob[] =
   const stored = Number(save.savetime) || Number(save.createtime);
   const from = Number.isFinite(stored) && stored > 0 ? Math.min(stored, now) : now;
 
-  const completed: CompletedJob[] = [...catchUpBuildings(save, from, now)];
+  const completed: CompletedJob[] = [
+    ...catchUpRepairs(save, from, now),
+    ...catchUpBuildings(save, from, now),
+  ];
   catchUpHarvesters(save, from, now, completed, "inferno");
+  catchUpDamage(save);
 
   save.savetime = now;
 

@@ -1506,9 +1506,13 @@ The `baseid` of the caller's own Inferno yard (the main save's `baseid_inferno`)
   yard's store data), no outposts. The answer's `caps` is that figure. Shiny is the player's,
   shared with the surface. Points, `storedata`, the Locker, Academy and monsters are the Inferno
   row's own.
-- **Catch-up.** `catchUpInferno`: building countdowns, then the harvesters at the Inferno rates
-  (`INFERNOYARDPROPS.as`), from `savetime` (else `createtime`) to now; nothing is banked. No Map
-  Room 2, no outpost income, and nothing built in the Inferno counts for an achievement.
+- **Catch-up.** `catchUpInferno`: repairs, building countdowns, the harvesters at the Inferno
+  rates (`INFERNOYARDPROPS.as`), then the damage the attacks left, from `savetime` (else
+  `createtime`) to now; nothing is banked. Repairs heal at the Inferno table's `repairTime`
+  (`INFERNO_REPAIR_TIMES`, capped at one hour as on the surface: a Housing Bunker heals in
+  100-600 s, an Inferno Cannon in 360 s up to the hour, where the main table, which lacks both,
+  would give the one-hour default). No Map Room 2, no
+  outpost income, and nothing built in the Inferno counts for an achievement.
 - **Rules.** Priced, limited and gated from the Inferno table (`INFERNOYARDPROPS.as`): the build
   menu is the 16 Inferno types (`400 notBuildable` for anything else), the Under Hall (type 14)
   is the hall (`409 townHall`: "You need an Under Hall before you can build anything.", "Upgrade
@@ -1519,10 +1523,24 @@ The `baseid` of the caller's own Inferno yard (the main save's `baseid_inferno`)
   `storedata.ENLI.q` (`STORE.as:2346-2365`). A Housing Bunker (128) whose housed monsters would
   not fit in the bunkers left is refused `409 housingFull` (`HOUSINGBUNKER.as:69-76`).
 - **Routes.** Allowed: `state`, `build`, `build/cancel`, `upgrade`, `upgrade/cancel`, `recycle`
-  and `move`. Every other route is refused `409 { reason: "notInInferno" }` ("That cannot be done
-  in the Inferno."), before the catch-up, so nothing is written, until a later work package checks
-  it against Flash (WP 1.16: bank, repair, speed-up, fortify, walls, traps; WP 1.17: workers and
-  the Inferno shop). The Yard Planner routes refuse the Inferno `baseid` the same way.
+  and `move` (WP 1.15); `bank`, `repair`, `repair/instant`, `speedup`, `upgrade/instant`,
+  `build/instant`, `fortify` and `fortify/cancel` (WP 1.16). Every other route is refused
+  `409 { reason: "notInInferno" }` ("That cannot be done in the Inferno."), before the catch-up,
+  so nothing is written, until a later work package checks it against Flash (WP 1.17: workers and
+  the Inferno shop). The Yard Planner routes refuse the Inferno `baseid` the same way, so trap
+  re-arm and the batch wall upgrade are not offered there (Flash has no planner in the Inferno).
+- **WP 1.16 rules.** `bank` puts Bone, Coal, Sulfur and Magma into the purse up to the Inferno cap
+  (the rest stays in the buffers) and the points onto the Inferno row; Flash sets the tutorial to
+  its end stage there (`BASE.as:1072-1074`), so banking pays half its amount in points, and it
+  does not count toward the surface's bank goals BK1-BK4 (the Inferno's quests are WP 4.1). The
+  Shiny finishes (`speedup`, `upgrade/instant`, `build/instant`) are paid from the player's Shiny
+  and award the Inferno table's points (an Inferno Cannon or Housing Bunker has no main row).
+  Event free speed-ups (`FREESP2`/`FREESP3`) are read from the Inferno row's own `storedata`, so
+  there are none in the Inferno. Walls (17) and traps (24) are built finished, from Under Hall 2,
+  paid from the purse; with no planner in the Inferno, a wall takes `upgrade` and
+  `upgrade/instant` itself (`useBatchRoute` is the surface's refusal only), its step finishing at
+  once. Nothing fortifies in the Inferno (`INFERNOYARDPROPS.as` has no `can_fortify`): `fortify`
+  answers `400 notFortifiable` and `fortify/cancel` `409 notFortifying`.
 
 **Errors** use the Yard Planner's flat shape, not the global `errorDetails` envelope: the real
 HTTP status and `{ error: "<message for the player>", reason: "<key>", ...detail }`. `400` means

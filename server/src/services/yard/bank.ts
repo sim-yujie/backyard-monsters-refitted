@@ -6,7 +6,8 @@ import {
   isHarvester,
 } from "../base/economy/production.js";
 import { noAmounts, type ResourceKey } from "../base/economy/resourceBudget.js";
-import { levelOf, type ResourceAmounts } from "../yardplanner/costs.js";
+import type { YardKind } from "../../game-data/buildingCosts.js";
+import { levelOf, yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import { bufferOf, counting, harvesterHealth, withBuffer } from "./catchUpHarvesters.js";
 import { fitCredit, type CreditSave } from "./credit.js";
 import { yardBadRequestErr } from "./yardErrors.js";
@@ -87,16 +88,19 @@ const harvestersOf = (save: BankSave): [string, BuildingData, number][] =>
 const atFullHealth = (save: BankSave, key: string, building: BuildingData): boolean => {
   const health = harvesterHealth(save, key, building);
   if (health === undefined) return true;
-  const max = maxHp(Number(building.t), levelOf(building));
+  const max = maxHp(Number(building.t), levelOf(building), yardKindOf(save));
   return max > 0 && health >= max;
 };
 
 /** A harvester that can bank at all right now: built and with no countdown running. */
 const canBank = (building: BuildingData): boolean => levelOf(building) > 0 && !counting(building);
 
-/** What a harvester offers: `min(st, capacity)` (`BRESOURCE.as:443-446`). */
-const offerOf = (building: BuildingData): number => {
-  const rates = harvesterRates(Number(building.t), levelOf(building));
+/**
+ * What a harvester offers: `min(st, capacity)` (`BRESOURCE.as:443-446`), its
+ * capacity from the yard's table (`kind`), the Inferno's in the Inferno.
+ */
+const offerOf = (building: BuildingData, kind: YardKind): number => {
+  const rates = harvesterRates(Number(building.t), levelOf(building), undefined, undefined, kind);
   if (!rates) return 0;
   return Math.floor(Math.min(bufferOf(building).stored, rates.capacity));
 };
@@ -111,12 +115,13 @@ const choose = (
   request: BankRequest
 ): { chosen: [string, BuildingData, number][]; skipped: BankReport["skipped"] } => {
   const harvesters = harvestersOf(save);
+  const kind = yardKindOf(save);
 
   if ("all" in request) {
     return {
       chosen: harvesters.filter(
         ([key, building]) =>
-          canBank(building) && atFullHealth(save, key, building) && offerOf(building) > 0
+          canBank(building) && atFullHealth(save, key, building) && offerOf(building, kind) > 0
       ),
       skipped: [],
     };
@@ -129,7 +134,7 @@ const choose = (
     const entry = byId.get(id);
     if (!entry) throw yardBadRequestErr("That is not a harvester in your yard.", { id });
     if (!canBank(entry[1])) skipped.push({ id, reason: "busy" });
-    else if (offerOf(entry[1]) <= 0) skipped.push({ id, reason: "empty" });
+    else if (offerOf(entry[1], kind) <= 0) skipped.push({ id, reason: "empty" });
     else chosen.push(entry);
   }
   chosen.sort((a, b) => a[2] - b[2]);
@@ -139,7 +144,9 @@ const choose = (
 /**
  * Banks the chosen harvesters.
  *
- * @param save - The caught-up main yard (read only).
+ * @param save - The caught-up yard (read only): the main yard, or the Inferno
+ *   yard seen through it, whose harvesters bank into the Inferno purse up to
+ *   the Inferno cap (WP 1.16).
  * @param request - `{ all: true }` or `{ ids }`.
  * @param tutorialStage - The player's tutorial stage as the game treats it
  *   (the load's own override applies), for the points rule.
@@ -148,10 +155,11 @@ const choose = (
  */
 export const planBank = (save: BankSave, request: BankRequest, tutorialStage: number) => {
   const { chosen, skipped } = choose(save, request);
+  const kind = yardKindOf(save);
 
   // What fits under the cap (`credit.ts`), handed out in id order.
   const offers = noAmounts();
-  for (const [, building] of chosen) offers[`r${Number(building.t)}` as ResourceKey] += offerOf(building);
+  for (const [, building] of chosen) offers[`r${Number(building.t)}` as ResourceKey] += offerOf(building, kind);
   const room = fitCredit(save, offers).credited;
 
   const banked = noAmounts();
@@ -164,7 +172,7 @@ export const planBank = (save: BankSave, request: BankRequest, tutorialStage: nu
   for (const [key, building, id] of chosen) {
     const type = Number(building.t);
     const resource = `r${type}` as ResourceKey;
-    const offer = offerOf(building);
+    const offer = offerOf(building, kind);
     const amount = Math.min(offer, room[resource]);
     const buffer = bufferOf(building);
     const kept = buffer.stored - amount;
@@ -179,8 +187,8 @@ export const planBank = (save: BankSave, request: BankRequest, tutorialStage: nu
 
     const level = levelOf(building);
     const health = harvesterHealth(save, key, building);
-    const max = maxHp(type, level) || undefined;
-    const rates = harvesterRates(type, level, health, max);
+    const max = maxHp(type, level, kind) || undefined;
+    const rates = harvesterRates(type, level, health, max, kind);
     const restart =
       buffer.countdown === null && rates !== null && kept < rates.capacity && canProduce(health, max);
     buildings[key] = withBuffer(building, {

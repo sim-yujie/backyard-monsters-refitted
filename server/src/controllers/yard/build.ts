@@ -77,4 +77,5 @@ export const yardInstantBuildAction = defineYardAction({
     achievementEvents: placedFinishedEvents(body.type),
   }),
   outposts: "allow",
+  inferno: "allow",
 });
