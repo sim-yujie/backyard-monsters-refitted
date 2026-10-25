@@ -14,6 +14,7 @@ import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES } from "@/game/yard/buildingCosts";
 import { HOUSING_TYPE, housingBuildings } from "@/game/monsters/housing";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { SITE_NAME, siteOfType } from "@/game/siege/siege";
 import { harvesterNow, isHarvester } from "@/game/yard/harvest";
 import type { RecycleOffer } from "@/game/yard/recycle";
 import { NEED_MORE_SILOS } from "@/game/yard/storage";
@@ -746,6 +747,14 @@ export class BuildingPanel {
       const button = actionButton("Open Shop", () => openShop(), "btn--primary");
       button.classList.add("building-panel__planner");
       button.title = "Spend Shiny on workers, boosts and more";
+      return button;
+    }
+    const site = model?.open === "siege" ? siteOfType(building.type) : null;
+    if (site && scene?.openSiege) {
+      // Flash's Open button on these two, named for the popup's tab (`BUILDINGINFO.as:240-245`).
+      const button = actionButton(SITE_NAME[site], () => scene.openSiege?.(site), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.title = site === "lab" ? "Research Chaos Weapons" : "Build Chaos Weapons";
       return button;
     }
     if (model?.open === "monsters" && model.monstersTab && scene?.openMonsters) {

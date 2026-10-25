@@ -1,5 +1,7 @@
 import type { CompletedJob } from "@/api/types";
 import { labAbility, monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { siegeData } from "@/game/combat/rules/siege";
+import { SIEGE_LAB_TYPE } from "@/game/yard/jobs";
 import { championEntry } from "@/game/yard/championCatalogue";
 import { typeName } from "@/game/yard/planner/summary";
 import { formatAmount } from "@/ui/format";
@@ -77,6 +79,7 @@ const NOUNS: Readonly<Record<string, readonly [string, string]>> = {
   train: ["training", "trainings"],
   research: ["research", "researches"],
   repair: ["repair", "repairs"],
+  siege: ["Chaos weapon", "Chaos weapons"],
 };
 
 const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
@@ -273,6 +276,16 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
     return {
       label: typeof detail.rank === "number" ? `${what} ${detail.rank}` : what,
       buildingId: typeof detail.lab === "number" ? detail.lab : null,
+    };
+  }
+  if (job.kind === "siege") {
+    // "Marilyn Monstroe level 2" from the Chaos Lab, "Marilyn Monstroe ready" from the Factory (WP 6.3).
+    const id = String(job.id);
+    const detail = job.detail as { level?: unknown; building?: unknown };
+    const name = siegeData(id)?.name ?? id;
+    return {
+      label: job.t === SIEGE_LAB_TYPE && typeof detail.level === "number" ? `${name} level ${detail.level}` : `${name} ready`,
+      buildingId: typeof detail.building === "number" ? detail.building : null,
     };
   }
   const buildingId = typeof job.id === "number" ? job.id : null;

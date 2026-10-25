@@ -5,6 +5,7 @@ import type {
   BuildingData,
   BuildingDataMap,
   LockerData,
+  SiegeData,
   StoreData,
 } from "@/api/types";
 import { MUSHROOM_RESPAWN_SECONDS_BY_SEASON, currentSeason } from "@/game/season";
@@ -50,6 +51,8 @@ export const JobKind = {
   MUSHROOM: "mushroom",
   /** A timed store buff expiring (`BST`, `CLOD`, `HOD`, …). */
   STORE_ITEM: "storeItem",
+  /** A Siege Lab's research or a Siege Factory's weapon (`unlockingWeapons`, Inferno WP 6.3). */
+  SIEGE: "siege",
 } as const;
 export type JobKind = (typeof JobKind)[keyof typeof JobKind];
 
@@ -98,11 +101,16 @@ export const SERVER_COMPLETED_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   JobKind.RESEARCH,
   JobKind.REPAIR,
   JobKind.HATCH,
+  JobKind.SIEGE,
 ]);
 
 /** Monster Academy and Monster Lab type ids (`client/scripts/YARD_PROPS.as:2933`, `:6236`). */
 export const ACADEMY_TYPE = 26;
 export const LAB_TYPE = 116;
+
+/** The Siege Factory and Siege Lab, Flash's Chaos Factory and Chaos Lab (`YARD_PROPS.as`, Inferno WP 6.3). */
+export const SIEGE_FACTORY_TYPE = 133;
+export const SIEGE_LAB_TYPE = 134;
 
 /** Twig Snapper to Goo Factory, the four harvesters. */
 const HARVESTER_TYPES: ReadonlySet<number> = new Set([1, 2, 3, 4]);
@@ -427,6 +435,32 @@ export const trainingJobs = (
   return jobs;
 };
 
+/**
+ * A Siege Lab's research and a Siege Factory's weapon: the building's
+ * `unlockingWeapons = { [weapon]: end }`, its first entry, as the server's
+ * `siegeJob` reads it (`server/src/services/yard/siege.ts`). The id is the weapon.
+ */
+export const siegeJobs = (buildings: BuildingDataMap | null | undefined): YardJob[] => {
+  const jobs: YardJob[] = [];
+  for (const [key, building] of Object.entries(buildings ?? {})) {
+    if (building?.t !== SIEGE_LAB_TYPE && building?.t !== SIEGE_FACTORY_TYPE) continue;
+    const running = building["unlockingWeapons"];
+    if (!running || typeof running !== "object" || Array.isArray(running)) continue;
+    const first = Object.entries(running).find(([, end]) => (finite(end) ?? 0) > 0);
+    if (!first) continue;
+    const id = typeof building.id === "number" ? building.id : Number(key);
+    jobs.push({
+      kind: JobKind.SIEGE,
+      key: `${JobKind.SIEGE}:${id}`,
+      id: first[0],
+      buildingId: id,
+      endsAt: finite(first[1]),
+      holdsWorker: false,
+    });
+  }
+  return jobs;
+};
+
 /** Lab research: the lab building's `upg` (monster), `upt` (absolute end) and `upl` (rank). */
 export const researchJobs = (buildings: BuildingDataMap | null | undefined): YardJob[] => {
   const jobs: YardJob[] = [];
@@ -596,6 +630,7 @@ export const yardJobs = (save: BaseLoadResponse): YardJob[] => {
     ...lockerJobs(save.lockerdata, firstOfType(buildings, LOCKER_TYPE), save.storedata, savedAt),
     ...trainingJobs(save.academy, savedAt, buildings),
     ...researchJobs(buildings),
+    ...siegeJobs(buildings),
     ...hatcheryJobs(save.monsters, save.storedata, savedAt),
     ...championJobs(save.champion),
     ...mushroomJobs(save.mushrooms),
@@ -641,6 +676,7 @@ export const predictCompletion = (
     storedata?: StoreData;
     lockerdata?: LockerData;
     academy?: AcademyData;
+    siege?: SiegeData;
   } = {};
 
   const building = (id: number | null): BuildingData | null => {
@@ -723,6 +759,21 @@ export const predictCompletion = (
         delete entry.duration;
         const hall = building(job.buildingId);
         if (hall && hall["upg"] === monster) delete hall["upg"];
+        break;
+      }
+      case JobKind.SIEGE: {
+        // The server's `finished`: the Lab adds a level, the Factory makes one.
+        const site = building(job.buildingId);
+        if (!site) break;
+        delete site["unlockingWeapons"];
+        const weapon = String(job.id);
+        const siege = (next.siege ??= { ...(save.siege ?? {}) });
+        const entry = { ...(siege[weapon] ?? {}) };
+        if (site.t === SIEGE_LAB_TYPE) {
+          const level = Math.floor(Number(entry.level));
+          entry.level = Math.min((Number.isFinite(level) && level > 0 ? level : 0) + 1, 10);
+        } else entry.quantity = 1;
+        siege[weapon] = entry;
         break;
       }
       case JobKind.RESEARCH: {
