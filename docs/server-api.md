@@ -758,6 +758,19 @@ second its damage protection ends, 0 without any. Refused with a real 409
 `{ error, errorDetails: { data: { reason: "notMapRoom1" } } }` when the player's main save is
 not on map version 1.
 
+### The new Inferno (beta.5)
+
+The Inferno the web game is building (`docs/design/inferno.md`), separate from the closed Flash
+routes above. Every route is behind `infernoConfig.enabled` (`server/src/config/InfernoConfig.ts`,
+env `INFERNO_ENABLED`, off unless `on`/`true`): switched off, each answers `403` with
+`reason: "infernoOff"` (`infernoOffErr()`, `requireInfernoEnabled` in
+`services/inferno/infernoGate.ts`) before anything is read. The player's progress is the
+server-only table `inferno_progress` (see §3).
+
+| Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
+|---|---|---|---|---|---|
+| GET | `/api/:apiVersion/bm/inferno/state` | apiVersion, verifyUserAuth, verifyAccountStatus | none | `{ error: 0, now, cave: { shown, level, maxLevel: 5 }, emergence: { lastAt, nextAt, done }, descent: { level, destroyed: 0\|1[13], passed }, hasYard, korathNotice }` (unix seconds; `nextAt` 0 = any time, null once all five raids are done) | How far the player is on the way into the Inferno (`controllers/inferno/infernoState.ts`). `cave.shown`: Town Hall 5 or a cave already above level 0, once the tutorial is over (Flash: stage above 200). `descent.level` is Flash's counter, 1 + yards beaten, 14 once passed. `korathNotice`: Korath unlocked and the player not yet told. Read-only. |
+
 ### Map Room 2
 
 An 800×800 grid per `World`; terrain for cells that have never held activity is generated
@@ -1779,6 +1792,15 @@ never stored), `created_at`, `last_used_at`, `revoked_at`. Backs `verifyApiConsu
 `defender_userid`/`defender_username`/`defender_pic_square`, `type`, `x`/`y` (nullable),
 `loot` (jsonb), `attackreport` (jsonb), `attacktime`. Indexed on `(attacker_userid,
 attacktime)` and `(defender_userid, attacktime)` for the two `/attacklogs` filter modes.
+
+### `InfernoProgress` (table `inferno_progress`, PK `userid`)
+
+`emergence_level` (0-5), `emergence_last_at`, `descent_destroyed` / `descent_best` (jsonb arrays,
+13 yards: 1 once beaten / best damage 0-100), `descent_passed_at`, `inferno_baseid`,
+`korath_unlocked_at`, `korath_notice_at`, `popups_seen` (jsonb `{ key: unix seconds }`),
+`created_at`, `updated_at`. One row per player, made the first time something is written; no row
+reads as nothing done. Server-only (`services/inferno/infernoProgress.ts`); the foreign key to
+`user` cascades. Migration `20261025_CreateInfernoProgressTable`.
 
 ### `JobRun` (table `job_run`, composite PK `[job, period]`)
 

@@ -3,7 +3,7 @@ import type { Context } from "koa";
 import type { User } from "../../database/models/user.model.js";
 import { infernoConfig } from "../../config/InfernoConfig.js";
 import { BaseMode, BaseType } from "../../enums/Base.js";
-import { INFERNO_MODES, INFERNO_SAVE_TYPES, requireInfernoOpen } from "./infernoGate.js";
+import { INFERNO_MODES, INFERNO_SAVE_TYPES, requireInfernoEnabled, requireInfernoOpen } from "./infernoGate.js";
 
 const ctx = { path: "/base/load", ip: "127.0.0.1" } as Context;
 const user = { userid: 1, username: "player" } as User;
@@ -37,5 +37,21 @@ describe("the old Inferno gate", () => {
 
   test("only Inferno rows count as Inferno saves", () => {
     expect([...INFERNO_SAVE_TYPES].sort()).toEqual([BaseType.INFERNO, BaseType.INFERNO_TRIBE].sort());
+  });
+});
+
+describe("the new Inferno's switch", () => {
+  test("off, a new route is refused with 403 infernoOff", () => {
+    try {
+      requireInfernoEnabled(false);
+      throw new Error("expected a refusal");
+    } catch (err) {
+      expect((err as any).status).toBe(403);
+      expect((err as any).data).toEqual({ reason: "infernoOff" });
+    }
+  });
+
+  test("on, the route runs", () => {
+    expect(() => requireInfernoEnabled(true)).not.toThrow();
   });
 });

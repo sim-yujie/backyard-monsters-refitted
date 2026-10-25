@@ -1,0 +1,108 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { MikroORM } from "@mikro-orm/postgresql";
+
+import { CreateInfernoProgressTable } from "../../database/migrations/20261025_CreateInfernoProgressTable.js";
+import ormConfig from "../../mikro-orm.config.js";
+import { readInfernoProgress } from "./infernoProgress.js";
+
+/**
+ * `bym.inferno_progress` against a real Postgres: the migration (shape, run
+ * twice, its checks, the foreign key) and the entity reading what it wrote.
+ *
+ * Opt-in: runs only when INFERNO_TEST_DB names a throwaway database with the
+ * `bym` schema and the migrations applied, and refuses the shared `bym`.
+ * Its player is `zz_inf_*`, user id 996_001.
+ */
+const dbName = process.env.INFERNO_TEST_DB;
+
+const A = 996_001;
+
+describe.skipIf(!dbName)("Inferno progress on a real database", () => {
+  let orm: MikroORM;
+  const em = () => orm.em.fork();
+  const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => em().execute<R[]>(query, params);
+  const addPlayer = () =>
+    sql(
+      `INSERT INTO bym."user" (userid, username, email, password, blocked_users) VALUES (?, ?, ?, 'x', '[]') ON CONFLICT DO NOTHING`,
+      [A, `zz_inf_${A}`, `zz_inf_${A}@test.invalid`]
+    );
+
+  beforeAll(async () => {
+    if (dbName === "bym") throw new Error("INFERNO_TEST_DB must be a throwaway database, not bym");
+    orm = await MikroORM.init({ ...ormConfig, dbName, debug: false, pool: { min: 0, max: 4 } });
+    await addPlayer();
+  });
+
+  beforeEach(async () => {
+    await sql(`DELETE FROM bym.inferno_progress WHERE userid = ?`, [A]);
+  });
+
+  afterAll(async () => {
+    if (!orm) return;
+    await sql(`DELETE FROM bym."user" WHERE userid = ?`, [A]);
+    await orm.close();
+  });
+
+  test("the migration is additive and can run again", async () => {
+    const migration = new CreateInfernoProgressTable(orm.em.getDriver(), orm.config);
+    await migration.up();
+    for (const query of migration.getQueries()) await sql(String(query));
+
+    const columns = await sql<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'bym' AND table_name = 'inferno_progress' ORDER BY ordinal_position`
+    );
+    expect(columns.map((one) => one.column_name)).toEqual([
+      "userid",
+      "emergence_level",
+      "emergence_last_at",
+      "descent_destroyed",
+      "descent_best",
+      "descent_passed_at",
+      "inferno_baseid",
+      "korath_unlocked_at",
+      "korath_notice_at",
+      "popups_seen",
+      "created_at",
+      "updated_at",
+    ]);
+  });
+
+  test("a bare row takes the defaults, and the entity reads it", async () => {
+    await sql(`INSERT INTO bym.inferno_progress (userid) VALUES (?)`, [A]);
+    const record = await readInfernoProgress(em(), A);
+    expect(record.emergenceLevel).toBe(0);
+    expect(record.emergenceLastAt).toBeNull();
+    expect(record.descentDestroyed).toEqual([]);
+    expect(record.popupsSeen).toEqual({});
+  });
+
+  test("times and flags written come back as unix seconds and numbers", async () => {
+    await sql(
+      `INSERT INTO bym.inferno_progress (userid, emergence_level, emergence_last_at, descent_destroyed, inferno_baseid)
+       VALUES (?, 3, to_timestamp(1800000000), '[1,1]'::jsonb, '42')`,
+      [A]
+    );
+    const record = await readInfernoProgress(em(), A);
+    expect(record.emergenceLevel).toBe(3);
+    expect(record.emergenceLastAt).toBe(1_800_000_000);
+    expect(record.descentDestroyed).toEqual([1, 1]);
+    expect(record.infernoBaseid).toBe("42");
+  });
+
+  test("the cave's level stays 0-5", async () => {
+    await expect(sql(`INSERT INTO bym.inferno_progress (userid, emergence_level) VALUES (?, 6)`, [A])).rejects.toThrow();
+    await expect(sql(`INSERT INTO bym.inferno_progress (userid, emergence_level) VALUES (?, -1)`, [A])).rejects.toThrow();
+  });
+
+  test("no row reads as no progress", async () => {
+    expect((await readInfernoProgress(em(), A)).emergenceLevel).toBe(0);
+  });
+
+  test("the row goes with the account", async () => {
+    await sql(`INSERT INTO bym.inferno_progress (userid) VALUES (?)`, [A]);
+    await sql(`DELETE FROM bym."user" WHERE userid = ?`, [A]);
+    const [left] = await sql<{ n: string }>(`SELECT count(*) AS n FROM bym.inferno_progress WHERE userid = ?`, [A]);
+    expect(Number(left.n)).toBe(0);
+    await addPlayer();
+  });
+});

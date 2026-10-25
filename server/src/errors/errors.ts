@@ -838,6 +838,18 @@ export const infernoClosedErr = () =>
   });
 
 /**
+ * A new Inferno route (`/bm/inferno/*`) while the new Inferno is switched off
+ * (`infernoConfig.enabled`, `INFERNO_ENABLED`). The client shows no cave then.
+ */
+export const infernoOffErr = () =>
+  new ClientSafeError({
+    message: "The Inferno is not open yet.",
+    status: Status.FORBIDDEN,
+    data: { reason: "infernoOff" },
+    isClientFriendly: true,
+  });
+
+/**
  * An owner `/base/save` of a main yard, refused because owner saves are retired
  * (issue #101, `docs/design/yard-buildings.md` T1, `OWNER_SAVE_MODE=refuse`).
  *

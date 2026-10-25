@@ -1,5 +1,10 @@
+import { isSwitchOn } from "./BotConfig.js";
+
 /**
- * The old Flash Inferno routes: closed until the new Inferno ships.
+ * The Inferno's two switches.
+ *
+ * `legacyRoutesOpen` is for the old Flash Inferno routes: closed until the
+ * new Inferno ships.
  *
  * The web game has no Inferno yet, and the routes the Flash client used for it
  * trust what the client sends, for the Inferno yard and the main yard alike.
@@ -17,8 +22,23 @@
  * a stray setting: the new Inferno (beta.5) turns this on in the same change
  * that puts server checks on those routes. Refusals answer `403` with
  * `reason: "infernoClosed"` (`services/inferno/infernoGate.ts`).
+ *
+ * `enabled` is the new Inferno (`docs/design/inferno.md` §3.1): the cave on
+ * the main yard, the emergence raids, and every `/bm/inferno/*` route. Off
+ * unless `INFERNO_ENABLED` is `on` (or `true`), so a server turns it on while
+ * the Inferno is built and tested, and production waits until it ships. Read
+ * on each use, so tests can flip it. It never opens the old routes above.
  */
 export const infernoConfig = {
   /** True lets the old Inferno routes run. Off until the new Inferno is built. */
   legacyRoutesOpen: false,
+
+  /** True turns the new Inferno on (`INFERNO_ENABLED`); off by default. */
+  get enabled(): boolean {
+    return infernoEnabled();
+  },
 };
+
+/** Whether the new Inferno is on: `INFERNO_ENABLED` is `on` or `true`. */
+export const infernoEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
+  isSwitchOn(env.INFERNO_ENABLED);
