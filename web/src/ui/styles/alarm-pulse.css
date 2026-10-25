@@ -1,0 +1,66 @@
+/* ── The alarm glow (alarmPulse.ts) ────────────────────────────────────────
+ * A red and orange glow along the screen's edges, over the raid warning's
+ * scrim. Only its opacity moves, so the pulse stays cheap on a phone, and it
+ * lets every tap through to the popup underneath.
+ */
+.alarm-pulse {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 clamp(2px, 0.5vmin, 4px) rgb(255 96 32 / 85%),
+    inset 0 0 clamp(36px, 7vmin, 72px) clamp(8px, 2vmin, 20px) rgb(232 32 16 / 70%),
+    inset 0 0 clamp(60px, 16vmin, 160px) clamp(10px, 3vmin, 32px) rgb(255 120 24 / 35%);
+  opacity: 0.35;
+  animation: alarm-pulse 1.1s ease-in-out infinite;
+}
+
+/* "Effects: Low": thinner, fainter and gentler. */
+.alarm-pulse--low {
+  box-shadow:
+    inset 0 0 0 clamp(1px, 0.3vmin, 2px) rgb(255 96 32 / 75%),
+    inset 0 0 clamp(28px, 5vmin, 48px) clamp(6px, 1.5vmin, 12px) rgb(232 32 16 / 60%);
+  animation-name: alarm-pulse-low;
+}
+
+/* Less motion: lit, but still. */
+.alarm-pulse--still {
+  animation: none;
+  opacity: 0.7;
+}
+
+.alarm-pulse--low.alarm-pulse--still {
+  opacity: 0.5;
+}
+
+/* One pulse a cycle, about once a second: dim, bright, dim. */
+@keyframes alarm-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes alarm-pulse-low {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alarm-pulse {
+    animation: none;
+    opacity: 0.7;
+  }
+
+  .alarm-pulse--low {
+    opacity: 0.5;
+  }
+}
