@@ -772,7 +772,7 @@ server-only table `inferno_progress` (see §3).
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
 | GET | `/api/:apiVersion/bm/inferno/state` | apiVersion, verifyUserAuth, verifyAccountStatus | none | `{ error: 0, now, cave: { shown, level, maxLevel: 5 }, emergence: { lastAt, nextAt, done }, descent: { level, destroyed: 0\|1[13], passed }, hasYard, korathNotice }` (unix seconds; `nextAt` 0 = any time, null once all five raids are done) | How far the player is on the way into the Inferno (`controllers/inferno/infernoState.ts`). `cave.shown`: Town Hall 5 or a cave already above level 0, once the tutorial is over (Flash: stage above 200). `descent.level` is Flash's counter, 1 + yards beaten, 14 once passed. `korathNotice`: Korath unlocked and the player not yet told. Read-only. |
-| POST | `/api/:apiVersion/bm/inferno/attack/start` | apiVersion, verifyUserAuth, verifyAccountStatus, logRequest | `{ kind: "descent", baseid: "201"-"213" }` | `{ error: 0, kind: "descent", yardkind: "inferno", attackid, level, base, defenderforces, attackerbrains, attackeracademy, attackerranks?, attpowerups, flingercapacity, descentloot }` | Starts a Descent attack (`controllers/inferno/descentAttack.ts`, WP 1.11): see "Moloch's Descent" below. Refused with `409` `infernoAttackRefusedErr` (`reason`: `kindNotReady` for any other `kind`, `caveClosed` below cave level 5, `descentPassed`, `notDescentBase`, `notNextBase` with `next` = the yard that can be attacked) before anything is written. |
+| POST | `/api/:apiVersion/bm/inferno/attack/start` | apiVersion, verifyUserAuth, verifyAccountStatus, logRequest | `{ kind: "descent", baseid: "201"-"213" }` | `{ error: 0, kind: "descent", yardkind: "inferno", attackid, descentyard, level, base, defenderforces, attackerbrains, attackeracademy, attackerranks?, attpowerups, flingercapacity, descentloot }` | Starts a Descent attack (`controllers/inferno/descentAttack.ts`, WP 1.11): see "Moloch's Descent" below. Refused with `409` `infernoAttackRefusedErr` (`reason`: `kindNotReady` for any other `kind`, `caveClosed` below cave level 5, `descentPassed`, `notDescentBase`, `notNextBase` with `next` = the yard that can be attacked) before anything is written. |
 
 **Moloch's emergence** (`services/inferno/emergence.ts`, `emergenceOnLoad.ts`; plan §2.2). The
 server decides, on the owner's `build` load of their main yard (`baseLoad.ts`, right after the
@@ -818,7 +818,7 @@ can be attacked, once the cave is at level 5.
   Inferno building table, its Housing Bunkers filled from the yard's `monsters`), with the damage
   it kept from earlier attacks. `flingercapacity` is what one fling may carry: the surface
   Flinger's payload at the attacker's own Flinger level, 0 with none, +25% under Declare War.
-  `level` is Flash's counter; `descentloot` the Inferno purse, the report's running total.
+  `descentyard` is the yard's number, 1-13, for the client's fight (`AttackSessionOptions.descentYard`: the burn from yard 7); `level` is Flash's counter; `descentloot` the Inferno purse, the report's running total.
 - **Landing** is the ordinary `/base/save` naming the Descent yard (`baseid` 201-213, no
   `basesaveid`). It must be bound to that session as an attack save is (`attackNotBoundErr`:
   `no-session` also for a session on another yard, `wrong-attacker`, `expired`, `stale-attack`,
@@ -826,7 +826,7 @@ can be attacked, once the cave is at level 5.
   The save with `over` lands once, under the lock `attack-final:descent:<userid>`, and ends the
   session. The server replays the fling log, cut to what a Descent attack can do (no catapult
   bombs, no siege, each fling within `flingercapacity`), over the yard as an Inferno yard with
-  the session's defence. The save's own `damage`, `destroyed`, health and `attackloot` are only
+  the session's defence and the yard's number (base id less 200: from yard 7 surface monsters burn, WP 1.21). The save's own `damage`, `destroyed`, health and `attackloot` are only
   compared (`attack-replay-mismatch`). A replay past its deadline answers `replayTimeout` and lands
   nothing; the session is kept for a resent save. An attack with no final save lands nothing.
 - **What lands.** The flung monsters leave the main yard's housing. The replay's loot, capped by

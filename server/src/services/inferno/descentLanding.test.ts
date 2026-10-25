@@ -453,6 +453,21 @@ describe("the save that ends a Descent attack", () => {
     expect((ctx.body.descent!.loot as Record<string, number>).r1).toBeLessThan(1e9);
     expect(row!.descent_destroyed![0]).toBe(0);
   });
+
+  test("from yard 7 the server's replay burns surface monsters, as the client's fight does (WP 1.21)", async () => {
+    row = progressRow(6);
+    startSession("207");
+    const POKEYS = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C1: 40 } }] };
+    const ctx = finalSave("207", { tick: "12000", flinglog: JSON.stringify(POKEYS) });
+
+    expect(await run(ctx)).toBeNull();
+    const input = inputs[0]!;
+    expect(input.descentYard).toBe(7);
+    const burnt = replayAbandonedAttack(input);
+    const unburnt = replayAbandonedAttack({ ...input, descentYard: undefined });
+    expect(ctx.body.descent!.damage).toBe(Math.floor(burnt.damage));
+    expect(burnt.damage).toBeLessThan(unburnt.damage);
+  });
 });
 
 describe("the 13th win: the Descent is passed", () => {
