@@ -35,7 +35,11 @@ const battleOf = (
   options: Partial<BattleOptions> = {},
   buildings: CombatBuildingDataMap = bunkerYard,
 ) => {
-  const battle = createBattle(yardOf(buildings), { seed: 5, bunkers: { 1: garrison }, ...options });
+  const battle = createBattle(yardOf(buildings), {
+    seed: 5,
+    bunkers: { 1: garrison },
+    ...options,
+  });
   for (const fling of flings) battle.apply({ kind: "fling", t: 0, r: 0, ...fling });
   return battle;
 };
@@ -53,7 +57,13 @@ describe("a Housing Bunker sends everything at once (`HOUSINGBUNKER.as:289-298`)
     expect(defenders(battle)).toHaveLength(0);
     run(battle, 1);
     const out = defenders(battle);
-    expect(out.map((creep) => creep.monsterId).sort()).toEqual(["IC1", "IC1", "IC1", "IC2", "IC2"]);
+    expect(out.map((creep) => creep.monsterId).sort()).toEqual([
+      "IC1",
+      "IC1",
+      "IC1",
+      "IC2",
+      "IC2",
+    ]);
     for (const creep of out) expect(creep.targetCreep).toBe(near!.id);
     expect(battle.state().bunkers[0]!.sent).toBe(5);
   });
@@ -65,10 +75,15 @@ describe("a Housing Bunker sends everything at once (`HOUSINGBUNKER.as:289-298`)
   });
 
   it("sends nothing while it is being upgraded (`:269`)", () => {
-    const battle = battleOf({ IC1: 3 }, [{ x: 160, y: 160, monsters: { C1: 1 } }], {}, {
-      ...bunkerYard,
-      "1": { id: 1, t: 128, l: 1, X: 0, Y: 0, cU: 100 },
-    });
+    const battle = battleOf(
+      { IC1: 3 },
+      [{ x: 160, y: 160, monsters: { C1: 1 } }],
+      {},
+      {
+        ...bunkerYard,
+        "1": { id: 1, t: 128, l: 1, X: 0, Y: 0, cU: 100 },
+      },
+    );
     run(battle, 90);
     expect(defenders(battle)).toHaveLength(0);
   });
@@ -176,7 +191,9 @@ describe("a yard's housed monsters in its Housing Bunkers (`HOUSING.as:201-235`)
   });
 
   it("houses nobody on a yard with no Housing Bunker", () => {
-    expect(housedGarrisons({ "5": { id: 5, t: 15, l: 1, X: 0, Y: 0 } }, { C1: 10 })).toEqual({});
+    expect(housedGarrisons({ "5": { id: 5, t: 15, l: 1, X: 0, Y: 0 } }, { C1: 10 })).toEqual(
+      {},
+    );
   });
 
   it("is what an Inferno yard defends with", () => {
