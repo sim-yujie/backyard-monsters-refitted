@@ -4,6 +4,7 @@ import {
   CHAMPION_MAX_FOOD_BONUS,
   CHAMPION_MAX_POWER_LEVEL,
   DECLARE_WAR_COUNTDOWN_SECONDS,
+  DESCENT_YARDS,
   RETREAT_GRACE_SECONDS,
   TICKS_PER_SECOND,
   buildEngineYard,
@@ -259,9 +260,24 @@ export interface AttackSessionOptions {
    * limit, and played back from the server's waves (`playScript`).
    */
   readonly raid?: boolean;
+  /**
+   * The Descent yard attacked, 1 to 13 (Inferno WP 1.21): from yard 7 the
+   * fight's burn takes health from every surface monster, as the server's
+   * replay of it does. Absent outside the Descent.
+   */
+  readonly descentYard?: number;
   /** The clock {@link AttackSession.skipToEnd} budgets a frame by, in ms; `performance.now` by default. */
   readonly now?: () => number;
 }
+
+/**
+ * A dev build's `?descentYard=N` (Inferno WP 1.21): the Descent yard, 1 to
+ * 13, a practice fight burns as; nothing for anything else.
+ */
+export const devDescentYard = (search: string): { descentYard?: number } => {
+  const yard = Number(new URLSearchParams(search).get("descentYard"));
+  return Number.isInteger(yard) && yard >= 1 && yard <= DESCENT_YARDS ? { descentYard: yard } : {};
+};
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
 export const mintSeed = (): number => {
@@ -412,6 +428,7 @@ export class AttackSession {
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
   private readonly raid: boolean;
+  private readonly descentYard: number | undefined;
   /** The academy levels the battle is fought at: the load's, else the roster's. */
   private levels_: MonsterLevels;
   /** The Lab ranks the battle is fought at: the load's, else the roster's (issue #352). */
@@ -420,6 +437,7 @@ export class AttackSession {
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? false;
+    this.descentYard = options.descentYard;
     this.seed = options.seed ?? mintSeed();
     this.levels_ = options.target.roster.levels;
     this.ranks_ = options.target.roster.ranks ?? {};
@@ -489,6 +507,7 @@ export class AttackSession {
       ...(Object.keys(this.ranks_).length > 0 ? { ranks: this.ranks_ } : {}),
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
+      ...(this.descentYard === undefined ? {} : { descentYard: this.descentYard }),
       // The defence the server replays the battle against (issue #195).
       ...defence,
     });

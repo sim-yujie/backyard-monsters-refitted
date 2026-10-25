@@ -12,6 +12,7 @@ import { attackYardHandlers } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import {
   AttackSession,
+  devDescentYard,
   LIVE_SPEEDS,
   PLAYBACK_SPEEDS,
   type AttackSessionState,
@@ -469,6 +470,9 @@ export class AttackScene implements Scene {
           : this.practice
             ? { clockFromFirstDrop: true }
             : {}),
+      // Dev only: `?descentYard=13` fights a practice under the Descent burn,
+      // to see it before the Descent's own attacks exist (Inferno WP 1.21).
+      ...(import.meta.env.DEV && this.practice ? devDescentYard(window.location.search) : {}),
     });
     this.session = session;
     this.unsubscribe = session.subscribe((state) => this.onSessionChange(state));
