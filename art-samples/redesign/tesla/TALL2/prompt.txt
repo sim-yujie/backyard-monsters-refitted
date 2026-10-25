@@ -1,0 +1,15 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Make the tower in base.png STAND TALLER, keeping everything else the same: it is tier 2 of 3 (gold), and the higher tiers fire further, so they stand taller. Raise it by adding ONE extra storey to the box (a second box section stacked under the top one, with a gold band between them), the four striped corner poles growing taller with it, so the whole tower is about 30% taller than base.png. The stepped base, the copper coil and the mushroom dome keep their size and shape (the base stays on the ground and the coil and dome ride on top of the taller box); the FOOTPRINT on the ground stays exactly the same, NOT wider. Same materials, colours, pose, aim (any barrel points the same way), camera and painting finish as base.png. It must stay clearly the same Flash tesla tower, just taller.
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Input 1, frames.png: the OLD Flash tower, blown up, on grey (1024x1536): its design, camera angle and ground footprint.
+Input 2, ref.png: the old build-menu picture of the same tower.
+Input 3, style.png: see style below.
+Input 4, base.png: the approved new picture this one is made from (see above).
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1536, the tower alone, complete and fully inside the image with margin (it is taller, so leave room above).
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The tower itself must contain no bright pure green.

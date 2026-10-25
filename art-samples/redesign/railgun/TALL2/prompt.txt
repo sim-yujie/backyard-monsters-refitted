@@ -1,0 +1,22 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint TIER 2 of 3 of the railgun. The tower's 3 tiers follow the game's wall blocks: tier 1 is the normal tower, tier 2 the GOLD version (like the Gold Blocks), tier 3 the BLACK DIAMOND version (black armour with gold edges, like the Black Diamond Blocks). The higher tiers also fire further, so they STAND TALLER on the same footprint. base.png is TIER 1, already painted and approved. Make TWO changes to it, keeping everything else the same.
+
+(1) Gold: the red turret housing becomes POLISHED GOLD plating with a few red accents; the steel corner brackets of the base become gold; the pyramid base keeps its RED-AND-WHITE STRIPES with gold bands; the twin rails stay steel with gold bands; the gold coil capacitors stay and the blue core keeps glowing. The gold must be rich, warm and shiny like block.png, clearly much more gold than base.png.
+
+(2) Taller: raise it by adding ONE extra tier to the striped pyramid base (a stepped pyramid: a second striped section stacked on the first, with corner brackets on both), so the whole tower is about 30% taller than base.png. The bottom of the base keeps its size, and the turret with its coil capacitors and twin rails keeps its size and shape and rides on top of the taller base; the FOOTPRINT on the ground stays exactly the same, NOT wider.
+
+Same shapes, parts, pose, aim (any barrel or lens points the same way), camera and painting finish as base.png. It must stay clearly the same Flash railgun.
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Input 1, frames.png: the OLD Flash tower, blown up, on grey (1024x1536): its design, camera angle and ground footprint.
+Input 2, ref.png: the old build-menu picture of the same tower.
+Input 3, style.png: see style below.
+Input 4, base.png: the approved new picture this one is made from (see above).
+Input 5, block.png: the game's Gold Blocks wall block. Use it ONLY as the colour and material reference for the new material (not its shape).
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1536, the tower alone, complete and fully inside the image with margin (it is taller, so leave room above).
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The tower itself must contain no bright pure green.

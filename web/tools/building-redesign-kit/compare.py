@@ -2,7 +2,7 @@
 
 plain  -> art-samples/redesign/overview-plain-black.png: black-and-gold top tier next to plain black, for the Town Hall
           (level 10), Cannon and Tesla.
-taller -> art-samples/redesign/cannon/overview-taller.png: Cannon tier 1 as now, tier 2 (gold) and tier 3 (black diamond)
+taller [tower] -> art-samples/redesign/<tower>/overview-taller.png (default cannon): tier 1 as now, tier 2 (gold) and tier 3 (black diamond)
           standing taller on the same footprint.
 Per row: a game-size (1x) strip and a zoomed (4x) strip, on the yard grass with Gorgo level 3 (approved repaint) beside each.
 The pictures sit on canvases that share their bottom edge (finish.py), so they are lined up by it.
@@ -27,11 +27,15 @@ if MODE == "plain":
     DEST = OUT / "overview-plain-black.png"
     LINE1 = "Top tier: black-and-gold (left) next to plain black with no gold (right).  Left half: game size (1x)."
 else:
-    ROWS = [("Cannon Tower: higher tiers stand taller (same footprint)", "cannon",
-             [("T2", "Tier 1 (levels 1-3), as now"), ("TALL2", "Tier 2 (levels 4-6), gold, taller"),
-              ("TALL3", "Tier 3 (levels 7-10), black diamond, taller")])]
-    DEST = OUT / "cannon" / "overview-taller.png"
-    LINE1 = "Cannon Tower tiers growing taller with level (range grows with level).  Same footprint on the ground."
+    # taller <tower>: any defensive tower (owner, 25 Oct night); tier 1 is the cannon's clean steel T2, the others' R2-A
+    tb = sys.argv[2] if len(sys.argv) > 2 else "cannon"
+    NM = {"cannon": "Cannon Tower", "tesla": "Tesla Tower", "sniper": "Sniper Tower", "laser": "Laser Tower",
+          "aerial": "Aerial Defense", "railgun": "Railgun", "bunker": "Monster Bunker"}[tb]
+    ROWS = [(f"{NM}: higher tiers stand taller (same footprint)", tb,
+             [("T2" if tb == "cannon" else "R2A", "Tier 1 (levels 1-3), as now"), ("TALL2", "Tier 2 (levels 4-6), gold, taller"),
+              ("TALL3", "Tier 3 (levels 7-10), black and gold, taller")])]
+    DEST = OUT / tb / "overview-taller.png"
+    LINE1 = f"{NM} tiers growing taller with level (range grows with level).  Same footprint on the ground."
 LINE2 = "Gorgo level 3 (approved repaint) beside each, at true game scale.  New pictures: simple stand-in shadow."
 CHW = 110
 g4 = Image.open(ASSETS / "monsters" / "ape_3-repaint@4x.png").convert("RGBA").crop((2 * 103 * 4, 0, 3 * 103 * 4, 88 * 4))

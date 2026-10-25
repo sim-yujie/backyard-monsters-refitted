@@ -33,7 +33,7 @@ GREY, GREEN = (128, 128, 128), (0, 255, 0)
 # frames.png: the old building, whole-number blow-up on a grey canvas, base near the bottom
 im, _, _ = old_rgba(FK)
 im = im.crop(im.getbbox())
-W, H = (1024, 1536) if im.height / im.width > 1.25 else (1024, 1024)
+W, H = (1024, 1536) if im.height / im.width > 1.25 or combo in ("TALL2", "TALL3") else (1024, 1024)   # TALL: room above
 k = max(1, int(min(W * 0.62 / im.width, H * 0.62 / im.height)))   # room above for a taller top tier
 big = on(GREY, im).resize((im.width * k, im.height * k), Image.NEAREST)
 fr = Image.new("RGB", (W, H), GREY)
@@ -72,11 +72,20 @@ if TIER:
 # tier 1 of the material tiers: an existing R2-A picture (cannon: the clean steel tier painted as T2; others: R2A)
 # Town Hall (owner: one picture per level; test): GOLD = level 5 (T2) with gold added, BLACK = level 10 (R2A) in black diamond
 MAT_TIER1 = {"cannon": "T2", ("townhall", "GOLD"): "T2"}
+# owner, 25 Oct night: every defensive tower gets taller tiers. Cannon and Tesla already have gold / black-diamond pictures
+# (TALL2/TALL3 only raise them); the others are recoloured AND raised in one call: TALL2 from R2A, TALL3 from their TALL2.
+HAS_MAT = b in ("cannon", "tesla")
+RECOLOUR = combo in ("TALL2", "TALL3") and not HAS_MAT
 if EXTRA:
-    # base.png: the picture this one changes (PLAIN: the black-and-gold top tier; TALL2/TALL3: the gold / black-diamond cannon)
-    BASE = {"PLAIN": "BLACK", "TALL2": "GOLD", "TALL3": "BLACK"}[combo]
+    # base.png: the picture this one changes (PLAIN: the black-and-gold top tier; TALL2/TALL3: the gold / black-diamond tower,
+    # or for RECOLOUR the R2-A tier 1 / the taller gold tier 2)
+    BASE = ({"TALL2": "R2A", "TALL3": "TALL2"} if RECOLOUR else {"PLAIN": "BLACK", "TALL2": "GOLD", "TALL3": "BLACK"})[combo]
     Image.open(OUT / b / BASE / "sample-new.png").convert("RGB").save(out / "base.png")
     inputs.append("base.png")
+    if RECOLOUR:
+        blk = Image.open(ASSETS / "buildings" / "walls" / {"TALL2": "top.4.v2.png", "TALL3": "top.5.png"}[combo]).convert("RGBA")
+        on(GREY, blk).resize((blk.width * 10, blk.height * 10), Image.LANCZOS).save(out / "block.png")
+        inputs.append("block.png")
 if MAT:
     Image.open(OUT / b / MAT_TIER1.get((b, combo), MAT_TIER1.get(b, "R2A")) / "sample-new.png").convert("RGB").save(out / "tier1.png")
     blk = Image.open(ASSETS / "buildings" / "walls" / {"GOLD": "top.4.v2.png", "BLACK": "top.5.png"}[combo]).convert("RGBA")
@@ -136,51 +145,6 @@ THEME = {
           "red-and-white hazard stripes, heavy bolts, vents, cables, small antennas, glowing energy cores and indicator lights. "
           "This is the TOP TIER, so it is the most advanced, heaviest-armoured, most high-tech version, with glowing parts."),
 }.get(theme, "")
-if EXTRA:
-    noun = "building" if b == "townhall" else "tower"
-    if combo == "PLAIN":
-        task = (f"Repaint base.png in PLAIN BLACK: every part that is GOLD in base.png (gold edges, seams, trims, rims, bands, "
-                f"stripes, bolts{', and the golden frame, arms, clawed feet and horned crest' if b == 'townhall' else ''}) becomes the "
-                f"same glossy BLACK faceted armour as the rest (like black diamond), with crisp cool white-grey highlights. NO gold "
-                f"and NO yellow anywhere. Keep everything else exactly as in base.png: the same shapes, parts, pose, aim, camera, "
-                f"size and painting finish; parts that are not gold keep their colour"
-                f"{' (the blue porthole and blue studs stay blue, the red pipes stay red)' if b == 'townhall' else ''}"
-                f"{' (the copper coil and the blue electric glow stay)' if b == 'tesla' else ''}. The owner wants to compare "
-                f"black-and-gold (base.png) with plain black, so this must be the same picture with the gold turned black.")
-    else:
-        task = ("Make the tower in base.png STAND TALLER, keeping everything else the same: it is tier "
-                f"{'2 of 3 (gold)' if combo == 'TALL2' else '3 of 3 (black diamond)'}, and the higher tiers fire further, so they "
-                "stand taller. Raise it by adding "
-                + ("ONE extra drum section under the striped drum (a second striped red-and-white drum band with a gold band "
-                   "between them), so the whole tower is about 30% taller than base.png"
-                   if combo == "TALL2" else
-                   "TWO extra drum sections under the striped drum (stacked black-and-gold striped drum bands with gold bands "
-                   "between them), so the whole tower is about 60% taller than base.png")
-                + ". The three feet, the ring with its prongs and the barrel keep their size and shape (the feet stay on the ground "
-                "and the ring and barrel ride on top of the taller drum); the FOOTPRINT on the ground stays exactly the same, "
-                "NOT wider. Same materials, colours, pose, aim (the barrel points the same way), camera and painting finish as "
-                "base.png. It must stay clearly the same Flash cannon tower, just taller.")
-    prompt = f"""Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
-
-{task}
-
-It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
-
-Input 1, frames.png: the OLD Flash {noun}, blown up, on grey ({fr.width}x{fr.height}): its design, camera angle and ground footprint.
-Input 2, ref.png: the old build-menu picture of the same {noun}.
-Input 3, style.png: see style below.
-Input 4, base.png: the approved new picture this one is made from (see above).
-
-{STYLE}
-
-Output: ONE image, {fr.width}x{fr.height}, the {noun} alone, complete and fully inside the image with margin{' (it is taller, so leave room above)' if combo != 'PLAIN' else ''}.
-Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The {noun} itself must contain no bright pure green.
-"""
-    if os.environ.get("NOTE"):
-        prompt += "\nIMPORTANT CORRECTION (an earlier attempt got this wrong): " + os.environ["NOTE"] + "\n"
-    (out / "prompt.txt").write_text(prompt, encoding="utf-8")
-    print("ready", out.as_posix())
-    sys.exit(0)
 MAT_WHAT = {
     ("cannon", "GOLD"): ("the tan ring, its curved prongs and the three feet become POLISHED GOLD; the steel barrel gets broad gold "
                          "bands, a gold collar and a gold muzzle ring; the drum keeps its RED-AND-WHITE STRIPES but with thick gold "
@@ -204,7 +168,145 @@ MAT_WHAT = {
     ("tesla", "BLACK"): ("the box and its base become glossy BLACK faceted armour (like black diamond) with polished GOLD edges "
                          "and trim; the corner poles become BLACK AND GOLD striped with gold caps; the copper coil glows; the "
                          "mushroom dome becomes dark black chrome with a gold rim and a faint blue electric glow"),
+    # the other towers (taller tiers, owner 25 Oct night): GOLD changes the R2-A tier 1, BLACK changes the gold tier 2
+    ("sniper", "GOLD"): ("the tan panels of the octagonal body and the rim of the top deck become POLISHED GOLD plating with gold "
+                         "rivets; the striped corners keep their RED-AND-WHITE STRIPES with gold bands; the iron ball feet get gold "
+                         "bands; the silver domed turret stays silver with a gold rim and a gold muzzle ring on the barrel"),
+    ("sniper", "BLACK"): ("the gold body panels and top deck become glossy BLACK faceted armour (like black diamond) with polished "
+                          "GOLD edges and rivets; the striped corners become BLACK AND GOLD stripes; the ball feet become black with "
+                          "gold bands; the domed turret becomes black chrome with a gold rim and gold muzzle ring; the red and blue "
+                          "wires and the small red lamp stay"),
+    ("laser", "GOLD"): ("the grey-green metal box becomes POLISHED GOLD plating with gold rivets (the yellow hazard triangle stays); "
+                        "the cage bars and the laser head's housing become gold; the striped base keeps its RED-AND-WHITE STRIPES "
+                        "with gold bands; the black rubber bumpers stay black; the blue lens keeps glowing"),
+    ("laser", "BLACK"): ("the gold box becomes glossy BLACK faceted armour (like black diamond) with polished GOLD edges and "
+                         "rivets, the hazard triangle gold on black; the cage bars and the laser head's housing become black with "
+                         "gold joints; the base stripes become BLACK AND GOLD; the black bumpers stay; the blue lens keeps glowing"),
+    ("aerial", "GOLD"): ("the tan armoured turret becomes POLISHED GOLD armour plates with gold rivets; the platform's frame and the "
+                         "rims of the grated panels become gold; the sloping sides keep their RED-AND-WHITE STRIPES with gold bands; "
+                         "the twin barrels stay steel with gold muzzle rings and gold bands"),
+    ("aerial", "BLACK"): ("the gold turret becomes glossy BLACK faceted armour (like black diamond) with polished GOLD edges and "
+                          "rivets; the platform becomes black armour with gold trim (the grated panels dark with gold rims); the "
+                          "sloping sides become BLACK AND GOLD stripes; the twin barrels become black gunmetal with gold rings"),
+    ("railgun", "GOLD"): ("the red turret housing becomes POLISHED GOLD plating with a few red accents; the steel corner brackets of "
+                          "the base become gold; the pyramid base keeps its RED-AND-WHITE STRIPES with gold bands; the twin rails "
+                          "stay steel with gold bands; the gold coil capacitors stay and the blue core keeps glowing"),
+    ("railgun", "BLACK"): ("the gold turret housing becomes glossy BLACK faceted armour (like black diamond) with polished GOLD "
+                           "edges; the corner brackets become black with gold bolts; the base stripes become BLACK AND GOLD; the "
+                           "rails become black gunmetal with gold bands; the gold coil capacitors stay and the blue core keeps "
+                           "glowing"),
+    ("bunker", "GOLD"): ("the curved steel armour plates become POLISHED GOLD with gold rivets; the grated vent box on top gets a "
+                         "gold frame; the sloping roof panels keep their RED-AND-WHITE STRIPES with gold trim; the wooden log beams "
+                         "get gold end caps; the round door gets a gold ring"),
+    ("bunker", "BLACK"): ("the gold armour plates become glossy BLACK faceted armour (like black diamond) with polished GOLD seams "
+                          "and rivets; the roof stripes become BLACK AND GOLD; the vent box becomes black with a gold frame; the log "
+                          "beams become dark wood with gold end caps; the round door becomes black with a gold ring, its small "
+                          "orange lights stay"),
 }
+# how each tower stands taller (owner, 25 Oct night): an extra section of its own body or base that suits it, not a stretch.
+# (tier 2 extra, tier 3 extra), and what keeps its size
+TALL_HOW = {
+    "cannon": ({"TALL2": "ONE extra drum section under the striped drum (a second striped red-and-white drum band with a gold band "
+                         "between them)",
+                "TALL3": "TWO extra drum sections under the striped drum (stacked black-and-gold striped drum bands with gold "
+                         "bands between them)"},
+               "The three feet, the ring with its prongs and the barrel keep their size and shape (the feet stay on the ground "
+               "and the ring and barrel ride on top of the taller drum)"),
+    "tesla": ({"TALL2": "ONE extra storey to the box (a second box section stacked under the top one, with a gold band between "
+                        "them), the four striped corner poles growing taller with it",
+               "TALL3": "TWO extra storeys to the box (three stacked box sections with gold bands between them), the four striped "
+                        "corner poles growing taller with it"},
+              "The stepped base, the copper coil and the mushroom dome keep their size and shape (the base stays on the ground and "
+              "the coil and dome ride on top of the taller box)"),
+    "sniper": ({"TALL2": "ONE extra storey to the octagonal body (a second octagonal section stacked on it, with a riveted band "
+                         "between them, the striped corners running up both)",
+                "TALL3": "TWO extra storeys to the octagonal body (three stacked octagonal sections with riveted bands between "
+                         "them, the striped corners running up all of them)"},
+               "The four short legs with their ball feet, the top deck and the domed gun turret keep their size and shape (the "
+               "legs stay short and on the ground, the turret rides on top of the taller body)"),
+    "laser": ({"TALL2": "ONE extra section to the metal box body (a second box section stacked under the one with the hazard "
+                        "triangle, with a riveted band between them)",
+               "TALL3": "TWO extra sections to the metal box body (three stacked box sections with riveted bands between them)"},
+              "The striped base with its rubber bumpers, the cage and the laser head with its blue lens keep their size and shape "
+              "(the base stays on the ground, the cage and head ride on top of the taller box)"),
+    "aerial": ({"TALL2": "ONE extra stepped platform tier (a second, slightly narrower striped-and-grated platform stacked on the "
+                         "first, like a stepped plinth)",
+                "TALL3": "TWO extra stepped platform tiers (three stacked striped-and-grated platforms, each a little narrower, "
+                         "like a stepped pyramid)"},
+               "The bottom platform keeps its size, and the armoured turret with its twin barrels keeps its size and shape and "
+               "rides on the top platform"),
+    "railgun": ({"TALL2": "ONE extra tier to the striped pyramid base (a stepped pyramid: a second striped section stacked on the "
+                          "first, with corner brackets on both)",
+                 "TALL3": "TWO extra tiers to the striped pyramid base (three stacked striped sections, a stepped pyramid, with "
+                          "corner brackets on each)"},
+                "The bottom of the base keeps its size, and the turret with its coil capacitors and twin rails keeps its size and "
+                "shape and rides on top of the taller base"),
+    "bunker": ({"TALL2": "ONE extra row of curved armour plates to its walls (the armoured walls are one plate-row higher, with a "
+                         "riveted band between the rows)",
+                "TALL3": "TWO extra rows of curved armour plates to its walls (three plate-rows with riveted bands between them)"},
+               "The round door stays at the bottom at the same size; the striped roof, the grated vent box and the log beams keep "
+               "their size and shape and ride on top of the taller walls"),
+}
+NAME = {b: TOWERS[b]["what"].split(":")[0][4:].lower()} if b in TOWERS else {}   # e.g. "sniper tower"
+if EXTRA:
+    noun = "building" if b == "townhall" else "tower"
+    if combo == "PLAIN":
+        task = (f"Repaint base.png in PLAIN BLACK: every part that is GOLD in base.png (gold edges, seams, trims, rims, bands, "
+                f"stripes, bolts{', and the golden frame, arms, clawed feet and horned crest' if b == 'townhall' else ''}) becomes the "
+                f"same glossy BLACK faceted armour as the rest (like black diamond), with crisp cool white-grey highlights. NO gold "
+                f"and NO yellow anywhere. Keep everything else exactly as in base.png: the same shapes, parts, pose, aim, camera, "
+                f"size and painting finish; parts that are not gold keep their colour"
+                f"{' (the blue porthole and blue studs stay blue, the red pipes stay red)' if b == 'townhall' else ''}"
+                f"{' (the copper coil and the blue electric glow stay)' if b == 'tesla' else ''}. The owner wants to compare "
+                f"black-and-gold (base.png) with plain black, so this must be the same picture with the gold turned black.")
+    elif not RECOLOUR:
+        how, keep = TALL_HOW[b]
+        task = ("Make the tower in base.png STAND TALLER, keeping everything else the same: it is tier "
+                f"{'2 of 3 (gold)' if combo == 'TALL2' else '3 of 3 (black diamond)'}, and the higher tiers fire further, so they "
+                f"stand taller. Raise it by adding {how[combo]}, so the whole tower is about "
+                f"{'30' if combo == 'TALL2' else '60'}% taller than base.png. {keep}; the FOOTPRINT on the ground stays exactly "
+                "the same, NOT wider. Same materials, colours, pose, aim (any barrel points the same way), camera and painting "
+                f"finish as base.png. It must stay clearly the same Flash {NAME[b]}, just taller.")
+    else:
+        how, keep = TALL_HOW[b]
+        task = (f"Paint TIER {combo[-1]} of 3 of the {NAME[b]}. The tower's 3 tiers follow the game's wall blocks: tier 1 is the "
+                "normal tower, tier 2 the GOLD version (like the Gold Blocks), tier 3 the BLACK DIAMOND version (black armour with "
+                "gold edges, like the Black Diamond Blocks). The higher tiers also fire further, so they STAND TALLER on the same "
+                "footprint. base.png is "
+                + ("TIER 1, already painted and approved. Make TWO changes to it, keeping everything else the same.\n\n"
+                   f"(1) Gold: {MAT_WHAT[(b, 'GOLD')]}. The gold must be rich, warm and shiny like block.png, clearly much more "
+                   "gold than base.png.\n\n(2) Taller: raise it by adding "
+                   if combo == "TALL2" else
+                   "TIER 2 (gold, already standing taller). Make TWO changes to it, keeping everything else the same.\n\n"
+                   f"(1) Black diamond: {MAT_WHAT[(b, 'BLACK')]}. The black must be deep and glossy with crisp faceted highlights "
+                   "like block.png, the gold only on edges, trims, rims and bolts.\n\n(2) Taller again: raise it by adding ")
+                + how[combo] + (", so the whole tower is about 30% taller than base.png" if combo == "TALL2" else
+                                " (one MORE section than base.png has), so the whole tower is about 25% taller than base.png")
+                + f". {keep}; the FOOTPRINT on the ground stays exactly the same, NOT wider.\n\nSame shapes, parts, pose, aim "
+                "(any barrel or lens points the same way), camera and painting finish as base.png. It must stay clearly the same "
+                f"Flash {NAME[b]}.")
+    prompt = f"""Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+{task}
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Input 1, frames.png: the OLD Flash {noun}, blown up, on grey ({fr.width}x{fr.height}): its design, camera angle and ground footprint.
+Input 2, ref.png: the old build-menu picture of the same {noun}.
+Input 3, style.png: see style below.
+Input 4, base.png: the approved new picture this one is made from (see above).{'''
+Input 5, block.png: the game's ''' + ('Gold Blocks' if combo == 'TALL2' else 'Black Diamond Blocks') + ''' wall block. Use it ONLY as the colour and material reference for the new material (not its shape).''' if RECOLOUR else ''}
+
+{STYLE}
+
+Output: ONE image, {fr.width}x{fr.height}, the {noun} alone, complete and fully inside the image with margin{' (it is taller, so leave room above)' if combo != 'PLAIN' else ''}.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The {noun} itself must contain no bright pure green.
+"""
+    if os.environ.get("NOTE"):
+        prompt += "\nIMPORTANT CORRECTION (an earlier attempt got this wrong): " + os.environ["NOTE"] + "\n"
+    (out / "prompt.txt").write_text(prompt, encoding="utf-8")
+    print("ready", out.as_posix())
+    sys.exit(0)
 if MAT:
     tier, block = ("2", "Gold Blocks") if combo == "GOLD" else ("3", "Black Diamond Blocks")
     TH = b == "townhall"
