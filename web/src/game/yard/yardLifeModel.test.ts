@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
+import { spriteFor } from "@/game/attack/monsterSprites";
 import { BEHAVIOUR_SPEED, championStat, monsterTickSpeed } from "@/game/combat/rules";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard } from "./yardModel";
@@ -76,9 +77,9 @@ describe("yardLifeOf", () => {
     expect(life.cage).toEqual({ id: 51, x: 135, y: -25 });
   });
 
-  it("keeps the active champions, Krallen's sheet at its power level", () => {
+  it("keeps the active champions, Krallen's sheet at her level", () => {
     expect(life.champions).toEqual([
-      { id: "G5", level: 5, sheetLevel: 2 },
+      { id: "G5", level: 5, sheetLevel: 5 },
       { id: "G3", level: 6, sheetLevel: 6 },
     ]);
   });
@@ -99,6 +100,18 @@ describe("yardLifeOf", () => {
       ["C2", 3],
       ["C14", 1],
     ]);
+  });
+
+  it("shows Krallen's look by her level, whatever her power level (owner, 2026-10-25)", () => {
+    const looks = [1, 2, 3, 4, 5].map((l) => {
+      const krallen = {
+        ...save,
+        champion: [{ t: 5, l, hp: 100, fb: 0, fd: 0, ft: 0, pl: 2, status: 0 }],
+      } as BaseLoadResponse;
+      const [champion] = yardLifeOf(krallen, readYard(krallen)).champions;
+      return champion && spriteFor(champion.id, champion.sheetLevel)?.key;
+    });
+    expect(looks).toEqual(["G5_1", "G5_1", "G5_2", "G5_2", "G5_3"]);
   });
 
   it("leaves out a frozen or juiced champion, and a pen at zero health", () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildEngineYard, createBattle } from "@/game/combat/rules";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
 import {
   anchorOffset,
@@ -10,6 +11,7 @@ import {
   championFlightTop,
   hoverOffset,
   isHighResolutionSheet,
+  krallenLook,
   MIRRORED_HEADINGS,
   REPAINTED_SHEETS,
   shadowOffset,
@@ -181,6 +183,33 @@ describe("spriteFor", () => {
     expect(spriteFor("G5", 0)?.key).toBe("G5_1");
     expect(spriteFor("G5", 5)?.key).toBe("G5_3");
     expect(spriteFor("G3", 2.9)?.key).toBe("G3_2");
+  });
+
+  it("gives Krallen look 1 at levels 1-2, look 2 at 3-4 and look 3 at 5 (owner, 2026-10-25)", () => {
+    expect([1, 2, 3, 4, 5].map(krallenLook)).toEqual([1, 1, 2, 2, 3]);
+    expect([1, 2, 3, 4, 5].map((level) => spriteFor("G5", level)?.key)).toEqual([
+      "G5_1",
+      "G5_1",
+      "G5_2",
+      "G5_2",
+      "G5_3",
+    ]);
+  });
+
+  it("draws a flung Krallen in battle by her level, whatever her power level", () => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: 1, X: 100, Y: 100 } },
+      buildinghealthdata: {},
+      resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+    });
+    const looks = [1, 2, 3, 4, 5].map((l) => {
+      const battle = createBattle(yard, { seed: 7 });
+      battle.apply({ kind: "fling", t: 0, x: -300, y: 0, r: 100, monsters: {}, champion: { t: 5, l, pl: 2 } });
+      battle.step();
+      const krallen = battle.creeps().find((creep) => creep.monsterId === "G5");
+      return krallen && spriteFor(krallen.monsterId, krallen.level)?.key;
+    });
+    expect(looks).toEqual(["G5_1", "G5_1", "G5_2", "G5_2", "G5_3"]);
   });
 
   it("is undefined for an unknown id", () => {
