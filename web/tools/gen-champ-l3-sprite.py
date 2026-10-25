@@ -1,13 +1,13 @@
 """
-Build the repainted level 3 batch champion sheets (Gorgo ape_3, Drull dragon_3, Fomor fly_3, Krallen look 2 krallen_2_rev_65)
-from Codex-painted frames. Usage (from the repo root):
+Build the repainted level 3 batch champion sheets (Gorgo ape_3, Drull dragon_3, Fomor fly_3, Krallen looks 2 and 3 krallen_2_rev_65,
+krallen_3_rev_65) from Codex-painted frames. Usage (from the repo root):
 
     pip install pillow numpy scipy
     python web/tools/gen-champ-l3-sprite.py <sheet> <source folder>      e.g.  ape_3 art-trials/champions/gorgo/L3/full
 
 The source folder holds one painted grid per call, `<mode><col>/frames-new.png` on a flat #FF00FF ground (web/tools/champ-l3-kit/make_batch.py
 builds the inputs and the prompt of each call; SHEETS below says which rows each call paints, cell 1 of every call being row 0). Gorgo and
-Krallen have the columns 2..10 (front, through left, to back) painted; the other columns (11..15, 0, 1) are the painted column (4 - c) mod 16
+both Krallen looks have the columns 2..10 (front, through left, to back) painted; the other columns (11..15, 0, 1) are the painted column (4 - c) mod 16
 flipped left/right, placed against column c's own old frames. Fomor has every column painted (as its level 1 repaint), Drull every column but
 12, 14 and 15: their paintings gave Drull a second tail (a tall spike as well as the real one), so they are 8, 6 and 5 flipped (the Flash
 sheet is mirrored the same way).
@@ -34,6 +34,8 @@ SHEETS = {
     "dragon_3": dict(cell=(114, 85), rows=15, painted=[c for c in range(16) if c not in (12, 14, 15)], calls={"A": [0, *range(1, 8)], "B": [0, *range(8, 15)]}, hold_walk=True),
     "fly_3": dict(cell=(98, 81), rows=7, painted=range(16), calls={"A": list(range(7))}, hold_walk=False),
     "krallen_2_rev_65": dict(cell=(131, 90), rows=16, painted=range(2, 11), calls={"A": list(range(10)), "B": [0, *range(10, 16)]}, hold_walk=False),
+    "krallen_3_rev_65": dict(cell=(142, 100), rows=16, painted=range(2, 11), calls={"A": list(range(10)), "B": [0, *range(10, 16)]}, hold_walk=False,
+                             cut_magenta=True),
 }
 UP = 4
 AREA = 1.05                       # new row-0 silhouette area / old row-0 body area
@@ -116,6 +118,10 @@ def key_cell(rgb):
         hole = pocket == i
         if c > 40 and near[hole].mean() > 0.6:
             keep &= ~ndi.binary_dilation(hole, iterations=1)
+    if SPEC.get("cut_magenta"):
+        # a yellow creature has no magenta of its own: ground painted between the legs blended into shading (not pure enough for a
+        # pocket above) is cut too. Pink pads and mouth have more green or far less blue; the purple spines are darker.
+        keep &= ~ndi.binary_dilation((b > 0.75 * r) & (r > 140) & (g < b - 60), iterations=1)
     keep = ndi.binary_erosion(keep, iterations=2)
     alpha = np.asarray(Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(1.2))).astype(float)
     # despill the magenta fringe on the rim only: a pixel close to #FF00FF next to the ground is spill (Fomor's purple body is far darker)
@@ -240,12 +246,14 @@ SKIN = {
     "dragon_3": lambda r, g, b: _c((r - g - 30) / 40) * _c((0.65 * r - g) / 20),
     "fly_3": lambda r, g, b: _c((np.minimum(r, b) - g) / 40),
     "krallen_2_rev_65": lambda r, g, b: _c((r - 120) / 40) * _c((g - 0.5 * r) / 20) * _c((0.65 * g - b) / 20),
+    "krallen_3_rev_65": lambda r, g, b: _c((r - 120) / 40) * _c((g - 0.5 * r) / 20) * _c((0.65 * g - b) / 20),
 }
 SAMPLE = {      # skin mean, spread of the approved sample (both frames)
     "ape_3": ([33.9, 105.4, 182.9], [28.7, 52.4, 59.2]),
     "dragon_3": ([153.9, 52.0, 39.0], [58.3, 35.6, 28.1]),
     "fly_3": ([104.6, 33.6, 77.3], [41.7, 24.3, 29.0]),
     "krallen_2_rev_65": ([212.9, 150.4, 42.7], [35.5, 40.2, 26.1]),
+    "krallen_3_rev_65": ([212.9, 150.4, 42.7], [35.5, 40.2, 26.1]),     # look 2's fur, so the looks do not jump in colour (its sample is yellower)
 }
 
 
