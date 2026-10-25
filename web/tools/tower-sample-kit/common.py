@@ -38,6 +38,11 @@ TOWERS = {
     # Town Hall, top level (10): no animation; used by the building-redesign samples
     "townhall": dict(folder="townhall", button=14, top=("top.10.png", -77, -110), shadow=("shadow.10.jpg", -85, 24), anim=None, frame=0,
                      what="the TOWN HALL, the main building of the yard"),
+    # Town Hall levels 2 and 5 (buildingArtData.ts): the Flash pictures the tier 1 and tier 2 redesign samples are painted from
+    "townhall2": dict(folder="townhall", button=14, top=("top.2.png", -48, -62), shadow=("shadow.2.jpg", -55, 36), anim=None, frame=0,
+                      what="the TOWN HALL at level 2"),
+    "townhall5": dict(folder="townhall", button=14, top=("top.5.png", -67, -75), shadow=("shadow.5.jpg", -67, 33), anim=None, frame=0,
+                      what="the TOWN HALL at level 5"),
 }
 
 

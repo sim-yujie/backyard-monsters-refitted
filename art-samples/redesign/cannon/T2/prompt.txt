@@ -1,0 +1,17 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the CANNON TOWER, a defence tower that fires heavy cannonballs. Its Flash design (keep it): a RED-AND-WHITE STRIPED DRUM base standing on three chunky TAN stone feet, a TAN RING frame around the top with curved TAN PRONGS sticking up out of it, and a wide GREY STEEL cannon tube in the middle. One change: the steel cannon tube must now be able to TURN to aim, so it sits in a round swivel mount inside the tan ring and is shown TILTED so that its MUZZLE POINTS TOWARD THE BOTTOM-LEFT CORNER OF THE IMAGE (towards the viewer and to the left, angled up a little, the open muzzle visible). The muzzle must NOT point up, up-left, right or away from the viewer. TIER 2 of 3 (levels 4-6), halfway between tier 1 and tier3.png: the Flash design in good repair, with clean bright paint on the stripes, solid tan stone, a polished steel tube with a riveted STEEL collar round its middle, plain riveted steel bands round the top and bottom of the drum and steel caps on the three feet. Still NO glowing lamps and NO brass or gold (those are kept for tier 3). At most about 10% taller than Flash. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The building has 3 looks (tiers) as it levels up. Tier 3, the top tier, is already painted and approved: input 4, tier3.png. THIS picture is a LOWER tier of the same building.
+
+Input 1, frames.png: the OLD Flash building at this tier, blown up, on grey (1024x1024): its design, camera angle, ground footprint and size. The new picture stands on the same footprint, centred on the same spot, base on the same ground line, and is not wider at the base.
+Input 2, ref.png: the old build-menu picture of the same building at this tier (a sharper render of the same design). Use it to read the small details.
+Input 3, style.png: see style below.
+Input 4, tier3.png: the approved top tier in the new style. Paint this tier in EXACTLY the same finish, lighting, camera angle, line quality and colour palette, so that the three tiers clearly read as one building growing up. Use the design described above for this tier, NOT tier3.png's extra top-tier parts.
+
+THE FLASH DESIGN, REFRESHED: keep the Flash silhouette, proportions, colour scheme and signature parts in the same places, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting (soft light from the upper left, clear highlights, ambient occlusion in the gaps) and sharper edges. NOT a new design and NOT a plain copy.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1024, the building alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.

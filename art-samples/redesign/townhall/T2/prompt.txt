@@ -1,0 +1,17 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the TOWN HALL, the main building of the monster yard. TIER 2 of 3 (levels 4-6). Paint it from the Flash game's own LEVEL 5 Town Hall shown in frames.png and ref.png, keeping that design: a ribbed silver cylinder body with vertical golden straps; a DARK RIVETED DOME on top with a ring of round BLUE porthole windows; a silver funnel with a golden collar on top of the dome; RED bent pipes curling out around the base with small red railings; short legs with round golden disc feet. Sturdier and shinier than tier 1, but NO golden frame or arms round the dome and NO horned crest (those come at tier 3). It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The building has 3 looks (tiers) as it levels up. Tier 3, the top tier, is already painted and approved: input 4, tier3.png. THIS picture is a LOWER tier of the same building.
+
+Input 1, frames.png: the OLD Flash building at this tier, blown up, on grey (1024x1536): its design, camera angle, ground footprint and size. The new picture stands on the same footprint, centred on the same spot, base on the same ground line, and is not wider at the base.
+Input 2, ref.png: the old build-menu picture of the same building at this tier (a sharper render of the same design). Use it to read the small details.
+Input 3, style.png: see style below.
+Input 4, tier3.png: the approved top tier in the new style. Paint this tier in EXACTLY the same finish, lighting, camera angle, line quality and colour palette, so that the three tiers clearly read as one building growing up. Use the design described above for this tier, NOT tier3.png's extra top-tier parts.
+
+THE FLASH DESIGN, REFRESHED: keep the Flash silhouette, proportions, colour scheme and signature parts in the same places, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting (soft light from the upper left, clear highlights, ambient occlusion in the gaps) and sharper edges. NOT a new design and NOT a plain copy.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1536, the building alone, complete and fully inside the image with margin.
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.

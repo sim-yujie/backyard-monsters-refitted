@@ -1,7 +1,8 @@
 """finish.py <building> <combo> : cut out sample-new.png (green ground) and fit it onto the old building's footprint.
 
 Fit: the width of the bottom 30% of the new building = the same band of the old one (same footprint), centred on the old band,
-base on the old base line. Writes new-4x.png on a canvas with room above and to the sides (see CANVAS), origin in fit.txt.
+base on the old base line. Tiers (T1, T2) fit onto the Flash picture they were painted from (Town Hall: level 2 / 5) and are
+capped lower (tier 1 about Flash's height). Writes new-4x.png on a canvas with room above and to the sides (see CANVAS), origin in fit.txt.
 """
 import sys
 from pathlib import Path
@@ -36,11 +37,13 @@ if __name__ == "__main__":
     out = REPO / "art-samples" / "redesign" / b / combo
     painted = key(np.asarray(Image.open(out / "sample-new.png").convert("RGB")))
     painted.save(out / "sample-cut.png")
-    old, ox, oy = old_rgba(b)
+    fk = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5"}.get((b, combo), b)   # same as make.py
+    old, ox, oy = old_rgba(fk)
     l0, r0, b0, t0 = band(old, 200)
     l1, r1, b1, t1 = band(painted, 128)
     k = (r0 - l0) * UP / (r1 - l1)
-    k = min(k, (b0 - t0) * 1.35 * UP / (b1 - t1))          # never more than 35% taller than Flash
+    cap = {"T1": 1.1, "T2": 1.25}.get(combo, 1.35)
+    k = min(k, (b0 - t0) * cap * UP / (b1 - t1))           # never more than 35% taller than Flash (tiers: less)
     crop = painted.crop(painted.getbbox())
     bx0, by0 = painted.getbbox()[:2]
     crop = resize_pm(crop, (max(1, round(crop.width * k)), max(1, round(crop.height * k))))
