@@ -161,6 +161,8 @@ export interface LineSpec {
   readonly tint: number;
   /** Turned over the line, so one painting makes two bolts. */
   readonly flip?: boolean;
+  /** In added light unless false: false lays it over what is under it, so its colour holds on bright ground. */
+  readonly add?: boolean;
 }
 
 export interface LampSpec {
@@ -172,6 +174,8 @@ export interface LampSpec {
   readonly tint: number;
   readonly rotation?: number;
   readonly squash?: number;
+  /** In added light unless false ({@link spot} only; a lamp is always light). */
+  readonly add?: boolean;
 }
 
 /** A flow laid along a line for one frame, slid `offset` world px along it. */
@@ -323,11 +327,11 @@ export class ShotFx {
     this.flowsDrawn.length = 0;
   }
 
-  /** Lays a strip from `from` to `to` for this frame, in added light; false before the sheet is in. */
+  /** Lays a strip from `from` to `to` for this frame, in added light unless `add` is false; false before the sheet is in. */
   line(spec: LineSpec): boolean {
     const length = Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y);
     if (spec.alpha <= 0.01 || length < 1) return true;
-    const sprite = this.paint(spec.look, spec.alpha, spec.tint);
+    const sprite = this.paint(spec.look, spec.alpha, spec.tint, spec.add);
     if (!sprite) return false;
     sprite.position.set((spec.from.x + spec.to.x) / 2, (spec.from.y + spec.to.y) / 2);
     sprite.rotation = Math.atan2(spec.to.y - spec.from.y, spec.to.x - spec.from.x);
@@ -370,10 +374,10 @@ export class ShotFx {
     return this.flowsDrawn.length;
   }
 
-  /** A cell held on a point for this frame only, in added light: a gun-ball, a glow at a beam's end. */
+  /** A cell held on a point for this frame only, in added light unless `add` is false: a gun-ball, a glow at a beam's end. */
   spot(spec: LampSpec): boolean {
     if (spec.alpha <= 0.01) return true;
-    const sprite = this.paint(spec.look, spec.alpha, spec.tint);
+    const sprite = this.paint(spec.look, spec.alpha, spec.tint, spec.add);
     if (!sprite) return false;
     sprite.rotation = spec.rotation ?? 0;
     sprite.position.set(spec.at.x, spec.at.y);
@@ -442,13 +446,13 @@ export class ShotFx {
     return texture;
   }
 
-  /** A pooled sprite in added light for this frame, or null before the sheet is in. */
-  private paint(look: ShotLook | StripLook, alpha: number, tint: number): Sprite | null {
+  /** A pooled sprite for this frame, in added light unless `add` is false, or null before the sheet is in. */
+  private paint(look: ShotLook | StripLook, alpha: number, tint: number, add = true): Sprite | null {
     const texture = this.cell(look);
     if (!texture) return null;
     const sprite = this.pool.pop() ?? this.makeSprite();
     sprite.texture = texture;
-    sprite.blendMode = "add";
+    sprite.blendMode = add ? "add" : "normal";
     sprite.visible = true;
     sprite.alpha = Math.min(1, alpha);
     sprite.tint = tint;

@@ -346,11 +346,20 @@ const RAIL_MID = 0x2aa8ff;
 const RAIL_PALE = 0x8fd8ff;
 const FIRE_TINTS = [0xffffff, 0xffe080, 0xff8a20, 0xa03000] as const;
 const SMOKE_TINTS = [0x8a8580, 0x6a6560, 0x55504c] as const;
-/** The new look's Sniper: white-gold flash, round and trail, a red aim dot. */
-const SNIPER_FLASH = [0xffffff, 0xfff0b0, 0xffc040, 0xc06010] as const;
-const SNIPER_TRACER = 0xffd468;
+/**
+ * The new look's Sniper: an orange-gold flash, an amber round and trail, orange
+ * sparks, a small red aim dot. Its colours are laid over the ground, not added
+ * to it (added amber on bright grass washes out to white), with a little
+ * added light on top for the glow.
+ */
+const SNIPER_FLASH = [0xffc850, 0xffa020, 0xf07010, 0xa03808] as const;
+const SNIPER_WARM = [0xffd890, 0xffb040, 0xff8020] as const;
+const SNIPER_TRACER = 0xffa418;
+const SNIPER_TRAIL = 0xff8a10;
+const SNIPER_HOT = 0xffd060;
+const SNIPER_SPARKS = [0xffd040, 0xffa020, 0xff6a10] as const;
 const SNIPER_SIGHT = 0xff2a1a;
-const SNIPER_VAPOUR = 0xc8c2b4;
+const SNIPER_VAPOUR = 0xc8905c;
 const SNIPER_DIRT = [0xb8a080, 0x8a7458, 0x6a5840] as const;
 const SNIPER_BRASS = [0xfff0a0, 0xd8a040, 0x8a6020] as const;
 /** The new look's flak: orange shells, a fireball going deep red, a dark cloud left hanging. */
@@ -2202,11 +2211,10 @@ export class TowerFx {
   /* ── The Sniper Tower (new look) ───────────────────────────────────── */
 
   /**
-   * The Sniper takes aim: a red laser dot on the creep it will shoot next, a
-   * faint beam to it from the barrel and a ring closing onto the dot, coming
-   * on {@link SIGHT_TICKS} before the shot is due and brightening, with a
-   * glint on the scope just before it fires; while it has not fired lately, held dimmer on the creep it is
-   * turning onto. On low, the dot and the glint only. Looks only: the engine
+   * The Sniper takes aim: a small red laser dot on the creep it will shoot
+   * next, coming on {@link SIGHT_TICKS} before the shot is due and
+   * brightening, with a glint on the scope just before it fires; while it has
+   * not fired lately, held dimmer on the creep it is turning onto. Looks only: the engine
    * picks the target and fires when it always did.
    */
   private drawSights(
@@ -2239,24 +2247,21 @@ export class TowerFx {
         y: muzzle.y + ((dot.y - muzzle.y) / distance) * 12,
       };
       const pulse = 0.8 + 0.2 * Math.sin(tick * 0.7);
-      if (this.look === "full") {
-        sparks.line({ look: "ray", from: tip, to: dot, width: 4, alpha: 0.25 + 0.45 * strength, tint: SNIPER_SIGHT });
-        // A red ring closing onto the dot as the shot comes due: the lock.
-        sparks.spot({ look: "ring", at: dot, size: 34 - 16 * strength, squash: 0.8, alpha: 0.4 + 0.5 * strength, tint: SNIPER_SIGHT });
-      }
-      sparks.spot({ look: "glow", at: dot, size: 18 + 14 * strength, alpha: (0.6 + 0.4 * strength) * pulse, tint: SNIPER_SIGHT });
-      sparks.spot({ look: "glow", at: dot, size: 6 + 4 * strength, alpha: 1, tint: 0xffd0c8 });
+      sparks.spot({
+        look: "glow", at: dot, size: 9 + 5 * strength, alpha: (0.7 + 0.3 * strength) * pulse, tint: SNIPER_SIGHT, add: false,
+      });
+      sparks.spot({ look: "glow", at: dot, size: 3 + 2 * strength, alpha: 0.9, tint: 0xff7060 });
       if (strength > 0.7) {
         // The scope glints as it is about to fire.
         const glint = (strength - 0.7) / 0.3;
-        sparks.spot({ look: "flare", at: tip, size: 12 + 24 * glint, alpha: glint, tint: 0xfff4d8, rotation: 0.25 });
+        sparks.spot({ look: "flare", at: tip, size: 10 + 18 * glint, alpha: glint, tint: SNIPER_WARM[1], rotation: 0.25 });
       }
     }
   }
 
   /**
-   * The Sniper fires: a long, sharp star of a rifle flash off the barrel's
-   * tip, a flare and a glow there, gun smoke that lingers and drifts, on full
+   * The Sniper fires: a long, sharp orange-gold star of a rifle flash off the
+   * barrel's tip with a hot core, a flare and a warm glow there, gun smoke that lingers and drifts, on full
    * a brass casing flicked out, and a hard kick. No jolt: one rifle round is
    * not a blast.
    */
@@ -2270,21 +2275,33 @@ export class TowerFx {
     // The painting's hot point is a fifth in from its back end: laid on the barrel's tip.
     sparks.emit(tick, {
       look: "rifleflash",
-      at: { x: tip.x + dirX * 24, y: tip.y + dirY * 24 },
-      add: true,
-      life: 6,
-      size0: 84,
-      size1: 96,
+      at: { x: tip.x + dirX * 28, y: tip.y + dirY * 28 },
+      add: false,
+      life: 7,
+      size0: 100,
+      size1: 112,
       squash: 0.6,
       rotation: heading,
       colours: SNIPER_FLASH,
     });
+    // Its hot core, in added light over the coloured star.
     sparks.emit(tick, {
-      look: "flare", at: tip, add: true, life: 6, size0: 46, size1: 14,
-      rotation: blastNoise(tick, 2) * 0.5, colours: [0xffffff, 0xfff0b0],
+      look: "rifleflash",
+      at: { x: tip.x + dirX * 15, y: tip.y + dirY * 15 },
+      add: true,
+      life: 5,
+      size0: 54,
+      size1: 60,
+      squash: 0.5,
+      rotation: heading,
+      colours: SNIPER_WARM,
     });
     sparks.emit(tick, {
-      look: "glow", at: tip, add: true, life: 8, size0: 26, size1: 50, peak: 0.9, colours: SNIPER_FLASH,
+      look: "flare", at: tip, add: true, life: 6, size0: 40, size1: 12,
+      rotation: blastNoise(tick, 2) * 0.5, colours: SNIPER_WARM,
+    });
+    sparks.emit(tick, {
+      look: "glow", at: tip, life: 10, size0: 30, size1: 64, peak: 0.75, colours: [0xffa020, 0xf07010, 0xa03808],
     });
     const puffs = sparks.many(3);
     for (let index = 0; index < puffs; index += 1) {
@@ -2329,8 +2346,8 @@ export class TowerFx {
   }
 
   /**
-   * A Sniper's round in flight: a thin white-gold bullet with a shock cone on
-   * its tip, a white-hot core and a glow on it on full, over the trail it lays.
+   * A Sniper's round in flight: a thin amber bullet with a shock cone on its
+   * tip, a hot gold core and an amber glow on it on full, over the trail it lays.
    */
   private drawSniperRound(bullet: Bullet): boolean {
     const sparks = this.sparks;
@@ -2345,18 +2362,18 @@ export class TowerFx {
     const dirY = bullet.stepY / step;
     const head = { x: bullet.x + dirX * 3, y: bullet.y + dirY * 3 };
     const tail = { x: bullet.x - dirX * length, y: bullet.y - dirY * length };
-    sparks.line({ look: "bullet", from: tail, to: head, width: 10, alpha: 1, tint: SNIPER_TRACER });
+    sparks.line({ look: "bullet", from: tail, to: head, width: 16, alpha: 1, tint: SNIPER_TRACER, add: false });
     if (this.look !== "full") return true;
     const middle = { x: bullet.x - dirX * length * 0.5, y: bullet.y - dirY * length * 0.5 };
-    sparks.line({ look: "bullet", from: middle, to: head, width: 6, alpha: 0.9, tint: 0xffffff });
-    sparks.spot({ look: "glow", at: { x: bullet.x, y: bullet.y }, size: 20, alpha: 0.7, tint: SNIPER_TRACER });
+    sparks.line({ look: "bullet", from: middle, to: head, width: 7, alpha: 0.9, tint: SNIPER_HOT });
+    sparks.spot({ look: "glow", at: { x: bullet.x, y: bullet.y }, size: 24, alpha: 0.8, tint: SNIPER_TRAIL, add: false });
     return true;
   }
 
   /**
-   * The line a Sniper's round lays from the muzzle: a gold glow that dies
-   * soon after it strikes and, on full, a thread of vapour that widens and
-   * hangs a little longer. `age` is ticks since it struck, or -1 in flight.
+   * The line a Sniper's round lays from the muzzle: an amber line with a gold
+   * glow down its middle that dies soon after it strikes and, on full, a thread
+   * of warm vapour that widens and hangs a little longer. `age` is ticks since it struck, or -1 in flight.
    */
   private drawSniperTrail(bullet: Bullet, age: number): void {
     const sparks = this.sparks;
@@ -2365,14 +2382,15 @@ export class TowerFx {
     const to = { x: bullet.x, y: bullet.y };
     const fade = age < 0 ? 1 : Math.max(0, 1 - age / SNIPER_TRAIL_TICKS);
     const glow = age < 0 ? 1 : Math.max(0, 1 - age / (SNIPER_TRAIL_TICKS * 0.4));
-    sparks.line({ look: "ray", from, to, width: 5, alpha: 0.4 * glow, tint: SNIPER_TRACER });
+    sparks.line({ look: "ray", from, to, width: 9, alpha: 0.9 * glow, tint: SNIPER_TRAIL, add: false });
+    sparks.line({ look: "ray", from, to, width: 4, alpha: 0.6 * glow, tint: SNIPER_HOT });
     if (this.look !== "full") return;
-    sparks.line({ look: "vapour", from, to, width: 9 + 9 * (1 - fade), alpha: 0.5 * fade, tint: SNIPER_VAPOUR });
+    sparks.line({ look: "vapour", from, to, width: 9 + 9 * (1 - fade), alpha: 0.45 * fade, tint: SNIPER_VAPOUR, add: false });
   }
 
   /**
-   * A Sniper's round strikes: a white hit flash on the creep, a sharp
-   * white-gold flare, a spray of sparks and bits out of its far side the way
+   * A Sniper's round strikes: an orange hit flash on the creep with a hot
+   * middle, a sharp gold flare, a spray of orange sparks and bits out of its far side the way
    * the round flew, and under a walker a kick of dirt; on full a ring of air
    * and a puff of dust as well.
    */
@@ -2383,23 +2401,24 @@ export class TowerFx {
     const heading = Math.atan2(bullet.stepY, bullet.stepX);
     const dirX = Math.cos(heading);
     const dirY = Math.sin(heading);
-    sparks.emit(tick, { look: "glow", at, add: true, life: 4, size0: 38, size1: 26, colours: [0xffffff] });
+    sparks.emit(tick, { look: "glow", at, life: 7, size0: 44, size1: 32, peak: 0.85, colours: [0xff9a20, 0xf06a10] });
+    sparks.emit(tick, { look: "glow", at, add: true, life: 4, size0: 18, size1: 12, colours: [SNIPER_HOT] });
     sparks.emit(tick, {
-      look: "flare", at, add: true, life: 8, size0: 44, size1: 14,
-      rotation: blastNoise(tick, 1) * 0.8, colours: [0xffffff, 0xfff0b0, SNIPER_TRACER],
+      look: "flare", at, add: true, life: 8, size0: 40, size1: 14,
+      rotation: blastNoise(tick, 1) * 0.8, colours: SNIPER_WARM,
     });
     // The spray's flash point is a fifth in from its back end: laid on the hit.
     sparks.emit(tick, {
       look: "ricochet",
       at: { x: at.x + dirX * 14, y: at.y + dirY * 14 },
-      add: true,
-      life: 10,
-      size0: 36,
-      size1: 56,
+      add: false,
+      life: 11,
+      size0: 44,
+      size1: 68,
       squash: 0.8,
       easeOut: true,
       rotation: heading,
-      colours: [0xffffff, 0xffe080, 0xff9a30],
+      colours: SNIPER_SPARKS,
     });
     const count = sparks.many(6);
     for (let index = 0; index < count; index += 1) {
@@ -2409,7 +2428,7 @@ export class TowerFx {
       sparks.emit(tick, {
         look: "spark",
         at,
-        add: true,
+        add: false,
         life: 8 + Math.round(blastNoise(tick, index + 70) * 6),
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
@@ -2419,13 +2438,13 @@ export class TowerFx {
         size0: 7,
         size1: 3,
         stretch: true,
-        colours: [0xffffff, 0xffe080, 0xff9a30],
+        colours: SNIPER_SPARKS,
       });
     }
     if (this.look === "full") {
       sparks.emit(tick, {
-        look: "ring", at, add: true, life: 9, size0: 8, size1: 36, squash: 0.8, easeOut: true, peak: 0.5,
-        colours: [0xffffff, 0xffe0a0],
+        look: "ring", at, life: 9, size0: 8, size1: 36, squash: 0.8, easeOut: true, peak: 0.5,
+        colours: [0xffb040, 0xff7a20],
       });
     }
     const lift = bullet.lift ?? BODY_HEIGHT;

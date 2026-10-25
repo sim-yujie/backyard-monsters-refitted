@@ -841,7 +841,7 @@ describe("TowerFx's new look", () => {
   const drawnNow = (fx: TowerFx, sparks: Container) =>
     sparks.children.filter((child) => child.visible).length - fx.sparkCount;
 
-  it("puts the Sniper's red laser dot on its target just before the next shot, and its beam and lock ring on full", async () => {
+  it("puts a small red laser dot on the Sniper's target just before the next shot, with no beam or ring", async () => {
     /** The laser's red bits on screen. */
     const red = (sparks: Container) =>
       sparks.children.filter((child) => child.visible && (child as Sprite).tint === 0xff2a1a).length;
@@ -855,12 +855,12 @@ describe("TowerFx's new look", () => {
         fx.update(tick, () => target, [target]);
         expect(red(sparks)).toBe(0);
       }
-      // Just before it is due: the dot, and on full the beam to it and the ring closing on it.
+      // Just before it is due: the dot, and nothing else in red, on full as on low.
       for (let tick = 5 + 80 - SIGHT_TICKS - 1; tick <= 5 + 80 - 1; tick += 1) fx.update(tick, () => target, [target]);
       counts.push(red(sparks));
       fx.destroy();
     }
-    expect(counts).toEqual([3, 1]);
+    expect(counts).toEqual([1, 1]);
   });
 
   it("fires the flak tower's twin barrels in a burst, only the engine's shell landing a wound or jolting", async () => {
