@@ -7,6 +7,7 @@ import {
   shortfallOf,
   siegeOffer,
   siteNotice,
+  stockOf,
   warningText,
   type PurseAmounts,
   type SiegeContext,
@@ -150,6 +151,9 @@ const gate =
     if (!siegeData(weapon)) return refuse("badRequest", "That is not a siege weapon.", { weapon });
     const notice = siteNotice(context, site);
     if (notice && notice !== "noWeapon") return refuse(notice, `${noticeText(site, notice)}`);
+    if (site === "factory" && stockOf(context.save.siege, weapon).level < 1) {
+      return refuse("locked", "Research that weapon in the Chaos Lab first.", { weapon });
+    }
     const offer = siegeOffer(context, site, weapon);
     if (offer.kind === "running") {
       return refuse(site === "lab" ? "labBusy" : "factoryBusy", "That weapon is already in hand.", { weapon });
