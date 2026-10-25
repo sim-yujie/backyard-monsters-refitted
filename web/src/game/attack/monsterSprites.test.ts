@@ -224,6 +224,14 @@ describe("spriteFor", () => {
     ]);
   });
 
+  it("draws the level 4-6 Gorgo, Drull and Fomor from their repaints", () => {
+    const repainted: Array<[string, number, string]> = [["G1", 4, "ape_4"]];
+    for (const [id, level, name] of repainted) {
+      const one = spriteFor(id, level);
+      expect(one && sheetUrl(one)).toBe(`/assets/monsters/${name}-repaint@4x.png`);
+    }
+  });
+
   it("is undefined for an unknown id", () => {
     expect(spriteFor("C99")).toBeUndefined();
     expect(spriteFor("G9", 1)).toBeUndefined();

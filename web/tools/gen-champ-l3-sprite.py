@@ -1,6 +1,7 @@
 """
 Build the repainted level 3 batch champion sheets (Gorgo ape_3, Drull dragon_3, Fomor fly_3, Krallen looks 2 and 3 krallen_2_rev_65,
-krallen_3_rev_65) from Codex-painted frames. Usage (from the repo root):
+krallen_3_rev_65) and the level 4-6 sheets (ape_4..6, dragon_4..6, fly_4..6, columns 2..10 painted, the rest mirrored) from Codex-painted
+frames. Usage (from the repo root):
 
     pip install pillow numpy scipy
     python web/tools/gen-champ-l3-sprite.py <sheet> <source folder>      e.g.  ape_3 art-trials/champions/gorgo/L3/full
@@ -37,6 +38,13 @@ SHEETS = {
     "krallen_3_rev_65": dict(cell=(142, 100), rows=16, painted=range(2, 11), calls={"A": list(range(10)), "B": [0, *range(10, 16)]}, hold_walk=False,
                              cut_magenta=True),
 }
+# levels 4-6 (web/tools/champ-l456-kit): columns 2..10 painted, the rest mirrored (the Flash bodies are mirror images); 8 attack frames
+for _name, _cell in {"ape_4": (148, 127), "ape_5": (160, 137), "ape_6": (140, 120),
+                     "dragon_4": (131, 93), "dragon_5": (156, 117), "dragon_6": (171, 125)}.items():
+    SHEETS[_name] = dict(cell=_cell, rows=16, painted=range(2, 11), calls={"A": [0, *range(1, 8)], "B": [0, *range(8, 16)]}, hold_walk=True,
+                         nudge_in=True)
+for _name, _cell in {"fly_4": (120, 92), "fly_5": (133, 105), "fly_6": (124, 105)}.items():
+    SHEETS[_name] = dict(cell=_cell, rows=7, painted=range(2, 11), calls={"A": list(range(7))}, hold_walk=False, nudge_in=True)
 UP = 4
 AREA = 1.05                       # new row-0 silhouette area / old row-0 body area
 WALK_HOLD = 0.04                  # a held walk frame may differ from row 0's size by this much
@@ -83,7 +91,7 @@ def upper_x(mask):
 def xref(mask):
     """The horizontal reference a frame is placed by: Fomor's trunk in flight (its raised wings swing the upper half, its painted legs hang
     differently from Flash's), else the upper body."""
-    return trunk_x(mask) if NAME == "fly_3" else upper_x(mask)
+    return trunk_x(mask) if NAME.startswith("fly_") else upper_x(mask)
 
 
 def trunk_x(mask):
@@ -222,6 +230,12 @@ for c in COLUMNS:
             kk = max(min(kk, fit), kk * (1 - FIT_SHRINK))
         ox = X - xr * kk
         oy = Y - bottom * kk
+        if row > 0 and SPEC.get("nudge_in"):     # still over the side edge (a lunge placed by a taller old pose): slide it in rather than cut it
+            left, right = ox + bx0 * kk, ox + bx1 * kk
+            if left < 0:
+                ox += min(-left, max(0.0, CELL[0] - right))
+            elif right > CELL[0]:
+                ox -= min(right - CELL[0], max(0.0, left))
         big = resize_premultiplied(cut, (max(1, round(cut.width * kk * UP)), max(1, round(cut.height * kk * UP))))
         left, top = round(ox * UP), round(oy * UP)
         layer = Image.new("RGBA", (cw, ch))
@@ -235,7 +249,7 @@ for c in COLUMNS:
 
 # Codex paints the run hotter than the approved sample (Fomor and Drull redder, Gorgo and Krallen a touch brighter). Each heading's skin/fur
 # pixels (SKIN: how much a pixel is body colour, 0-1; not the eyes, claws, crests, gems or spots) get one per-channel affine grade onto the
-# mean and spread of the skin of the approved sample (art-trials/champions/<champ>/L3/sample-new.png), blended in by SKIN. The same grade
+# mean and spread of the skin of the approved sample (art-trials/champions/<champ>/L<level>/sample-new.png), blended in by SKIN. The same grade
 # for every cell of a heading, so its frames never differ from each other.
 def _c(x):
     return np.clip(x, 0, 1)
@@ -248,12 +262,23 @@ SKIN = {
     "krallen_2_rev_65": lambda r, g, b: _c((r - 120) / 40) * _c((g - 0.5 * r) / 20) * _c((0.65 * g - b) / 20),
     "krallen_3_rev_65": lambda r, g, b: _c((r - 120) / 40) * _c((g - 0.5 * r) / 20) * _c((0.65 * g - b) / 20),
 }
+for _lv in (4, 5, 6):
+    SKIN[f"ape_{_lv}"], SKIN[f"dragon_{_lv}"], SKIN[f"fly_{_lv}"] = SKIN["ape_3"], SKIN["dragon_3"], SKIN["fly_3"]
 SAMPLE = {      # skin mean, spread of the approved sample (both frames)
     "ape_3": ([33.9, 105.4, 182.9], [28.7, 52.4, 59.2]),
     "dragon_3": ([153.9, 52.0, 39.0], [58.3, 35.6, 28.1]),
     "fly_3": ([104.6, 33.6, 77.3], [41.7, 24.3, 29.0]),
     "krallen_2_rev_65": ([212.9, 150.4, 42.7], [35.5, 40.2, 26.1]),
     "krallen_3_rev_65": ([212.9, 150.4, 42.7], [35.5, 40.2, 26.1]),     # look 2's fur, so the looks do not jump in colour (its sample is yellower)
+    "ape_4": ([34.8, 100.3, 165.9], [26.9, 54.0, 63.8]),
+    "ape_5": ([34.0, 97.6, 160.3], [45.5, 55.1, 64.5]),
+    "ape_6": ([48.7, 106.2, 176.5], [51.3, 54.8, 61.3]),
+    "dragon_4": ([146.5, 49.7, 36.5], [57.1, 35.8, 28.0]),
+    "dragon_5": ([168.1, 57.4, 37.0], [61.7, 38.5, 33.6]),
+    "dragon_6": ([154.3, 44.9, 30.2], [60.0, 40.4, 30.8]),
+    "fly_4": ([124.3, 42.5, 89.5], [55.1, 36.6, 42.5]),
+    "fly_5": ([105.5, 36.5, 77.4], [46.0, 25.3, 35.2]),
+    "fly_6": ([130.3, 47.7, 92.0], [52.4, 34.2, 41.4]),
 }
 
 
