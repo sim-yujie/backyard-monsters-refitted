@@ -19,7 +19,7 @@ Paint them as polished, high-quality game effects (think modern mobile strategy 
 
 --- Second run (2026-10-24, Antigravity --write): the five stand-ins and six lightning bolts ---
 Saved as src/fx02_flare, fx06_zap, fx08_wisp, fx10_orb, fx12_scorch and fx13_bolt1 ... fx17_bolt5.
-bolt6 was not painted (image quota ran out); until it is, the sheet uses bolt1 upside down (BOLT_STAND_INS).
+bolt6 was not painted (image quota ran out); painted 2026-10-25 in a bolt6-only run (bolts 1-5 as style references), saved as src/fx18_bolt6.
 Prompt as sent:
 
 You are painting game visual-effect (VFX) sprite textures for "Backyard Monsters", a bright, cartoony, hand-painted isometric strategy game. The images in reference/ are effects already painted for this set (an impact burst, a beam stroke, a smoke puff): match their painterly, polished style. The game tints these textures with colour in code, so paint every effect in NEUTRAL GREYSCALE ONLY (white, light grey, grey; no colour at all), except where noted.
