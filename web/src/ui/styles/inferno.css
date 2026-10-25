@@ -1,7 +1,7 @@
 /*
  * Moloch's emergence on the main yard (WP 1.10, `ui/inferno/EmergenceScreens.ts`,
  * design `docs/design/inferno.md` §2.2, §4): Moloch's popups, the cave's note
- * and menu, and the EARTHQUAKE banner. Every value comes from tokens.css.
+ * and menu, his warning with his army (WP 1.9), and the EARTHQUAKE banner. Every value comes from tokens.css.
  */
 
 .inferno-popup {
@@ -60,7 +60,107 @@
   border-radius: var(--radius-md);
 }
 
+/* ── Moloch's warning: Moloch beside his army, a card per group ─────────── */
+
+.inferno-popup--warning {
+  width: min(92vw, 36rem);
+}
+
+.inferno-warning {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.inferno-warning__portrait {
+  width: 100%;
+  aspect-ratio: 237 / 260;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+.inferno-army {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inferno-army__card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+.inferno-army__card:focus-visible {
+  outline: 2px solid var(--colour-danger);
+  outline-offset: 2px;
+}
+
+.inferno-army__portrait {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.inferno-army__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.inferno-army__count {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Flash showed each monster's line on mouse-over; here on hover or focus. */
+.inferno-army__hint {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 50%;
+  z-index: 1;
+  width: max-content;
+  max-width: min(16rem, 80vw);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-float);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-align: left;
+  transform: translateX(-50%);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.inferno-army__card:hover .inferno-army__hint,
+.inferno-army__card:focus-within .inferno-army__hint {
+  visibility: visible;
+}
+
 @media (max-width: 30rem) {
+  .inferno-warning {
+    grid-template-columns: 1fr;
+  }
+
+  .inferno-warning__portrait {
+    justify-self: center;
+    width: 5rem;
+  }
+
   .inferno-says {
     grid-template-columns: 5rem minmax(0, 1fr);
     align-items: start;

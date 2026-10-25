@@ -25,6 +25,10 @@ const fakeView = (busyFor = 0) => {
     complete: async () => {
       log.push("complete");
     },
+    warning: async (groups, engage) => {
+      log.push(`warning ${groups.map((group) => `${group.monster}x${group.count}`).join(" ")}`);
+      while (!(await engage())) log.push("engage again");
+    },
   };
   return { view, log };
 };
@@ -33,10 +37,19 @@ const instantWait = (log: string[]) => async (ms: number) => {
   log.push(`wait ${ms}`);
 };
 
+/** Moloch's raid for a raise: raid 1's groups at a low level, and a start that hands the fight on. */
+const molochRaid = (start = vi.fn(async () => true)) => ({
+  groups: [
+    { monster: "IC1", count: 1 },
+    { monster: "IC1", count: 1 },
+  ],
+  start,
+});
+
 describe("playEmergence", () => {
-  it("lets Moloch speak before the first raise, then grows the cave with the earthquake", async () => {
+  it("lets Moloch speak before the first raise, grows the cave with the earthquake, then warns with his army", async () => {
     const { view, log } = fakeView();
-    const raid = vi.fn();
+    const raid = molochRaid();
     await playEmergence(1, { view, wait: instantWait(log), alive: () => true, raid });
     expect(log).toEqual([
       "cave 0",
@@ -47,14 +60,48 @@ describe("playEmergence", () => {
       "quake",
       `wait ${ATTACK_DELAY_MS}`,
       "quake over",
+      "warning IC1x1 IC1x1",
     ]);
-    expect(raid).toHaveBeenCalledWith(1);
+    expect(raid.start).toHaveBeenCalledTimes(1);
   });
 
   it("has no intro on a later raise", async () => {
     const { view, log } = fakeView();
-    await playEmergence(3, { view, wait: instantWait(log), alive: () => true });
-    expect(log).toEqual(["cave 2", `wait ${FOCUS_DELAY_MS}`, "focus", "cave 3", "quake", `wait ${ATTACK_DELAY_MS}`, "quake over"]);
+    await playEmergence(3, {
+      view,
+      wait: instantWait(log),
+      alive: () => true,
+      raid: molochRaid(),
+    });
+    expect(log).toEqual([
+      "cave 2",
+      `wait ${FOCUS_DELAY_MS}`,
+      "focus",
+      "cave 3",
+      "quake",
+      `wait ${ATTACK_DELAY_MS}`,
+      "quake over",
+      "warning IC1x1 IC1x1",
+    ]);
+  });
+
+  it("keeps the warning up until the start is done with", async () => {
+    const { view, log } = fakeView();
+    const start = vi.fn<() => Promise<boolean>>().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    await playEmergence(2, {
+      view,
+      wait: instantWait(log),
+      alive: () => true,
+      raid: molochRaid(start),
+    });
+    expect(log.slice(-2)).toEqual(["warning IC1x1 IC1x1", "engage again"]);
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it("a first raise with no raid (the yard at 10% or less) grows the cave with no earthquake and no warning, as Flash", async () => {
+    const { view, log } = fakeView();
+    await playEmergence(1, { view, wait: instantWait(log), alive: () => true, raid: null });
+    expect(log).toEqual(["cave 0", `wait ${FOCUS_DELAY_MS}`, "focus", "moloch intro", "cave 1"]);
   });
 
   it("waits a second at a time while the player is busy", async () => {
@@ -65,7 +112,7 @@ describe("playEmergence", () => {
 
   it("drops the rest once the yard has gone", async () => {
     const { view, log } = fakeView();
-    const raid = vi.fn();
+    const raid = molochRaid();
     let alive = true;
     const wait = async (ms: number) => {
       log.push(`wait ${ms}`);
@@ -73,7 +120,7 @@ describe("playEmergence", () => {
     };
     await playEmergence(2, { view, wait, alive: () => alive, raid });
     expect(log).toEqual(["cave 1", `wait ${FOCUS_DELAY_MS}`]);
-    expect(raid).not.toHaveBeenCalled();
+    expect(raid.start).not.toHaveBeenCalled();
   });
 
   it("stops after the intro if the yard went while Moloch spoke", async () => {
@@ -83,13 +130,18 @@ describe("playEmergence", () => {
       log.push("moloch");
       alive = false;
     };
-    await playEmergence(1, { view, wait: instantWait(log), alive: () => alive });
+    await playEmergence(1, {
+      view,
+      wait: instantWait(log),
+      alive: () => alive,
+      raid: molochRaid(),
+    });
     expect(log).toEqual(["cave 0", `wait ${FOCUS_DELAY_MS}`, "focus", "moloch"]);
   });
 
-  it("stops the earthquake but sends no raid if the yard went during it", async () => {
+  it("stops the earthquake but gives no warning if the yard went during it", async () => {
     const { view, log } = fakeView();
-    const raid = vi.fn();
+    const raid = molochRaid();
     let alive = true;
     const wait = async (ms: number) => {
       log.push(`wait ${ms}`);
@@ -98,7 +150,7 @@ describe("playEmergence", () => {
     };
     await playEmergence(4, { view, wait, alive: () => alive, raid });
     expect(log.at(-1)).toBe("quake over");
-    expect(raid).not.toHaveBeenCalled();
+    expect(raid.start).not.toHaveBeenCalled();
   });
 });
 

@@ -7,7 +7,8 @@ import type { AttackSessionState } from "@/game/attack/AttackSession";
 import { battlePlugin } from "@/game/attack/plugins/battle";
 import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
 import { TRAP_BANNER, TRAP_BANNER_MS } from "@/game/trojan/trojanText";
-import { DOOR_OPEN_MS, RAID_PLUGINS, createRaidPlugin, raidPlugin } from "./raidPlugin";
+import { MOLOCH_RAID_GONE } from "@/game/inferno/emergenceText";
+import { DOOR_OPEN_MS, RAID_PLUGINS, createRaidPlugin, finishNotice, raidPlugin } from "./raidPlugin";
 import { consumeRaidNote, consumeRaidResult, type RaidRun } from "./raidSession";
 import { DONT_PANIC } from "./raidText";
 
@@ -71,7 +72,10 @@ const mount = (
   finish: () => Promise<unknown>,
   withRun = true,
   theRun: RaidRun = run(),
-  renderer: { setAnimFrame: ReturnType<typeof vi.fn>; yardToWorld: ReturnType<typeof vi.fn> } = {
+  renderer: {
+    setAnimFrame: ReturnType<typeof vi.fn>;
+    yardToWorld: ReturnType<typeof vi.fn>;
+  } = {
     setAnimFrame: vi.fn(),
     yardToWorld: vi.fn(),
   },
@@ -162,6 +166,11 @@ describe("raidPlugin", () => {
     expect(consumeRaidResult()).toBeNull();
     expect(consumeRaidNote()).toContain("called off");
     expect(t.goToYard).toHaveBeenCalledTimes(1);
+  });
+
+  it("says Moloch's raid called off is gone, not coming back", () => {
+    expect(finishNotice({ kind: "cancelled" }, "moloch")).toBe(MOLOCH_RAID_GONE);
+    expect(finishNotice({ kind: "cancelled" }, "legionnaire")).toContain("will be back");
   });
 
   it("keeps the result but does not leave once the scene has gone", async () => {

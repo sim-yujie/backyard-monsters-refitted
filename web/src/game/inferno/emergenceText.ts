@@ -35,7 +35,7 @@ export const CAVERN_NOTES: readonly string[] = [
   "This structure looks unstable. It would probably be a good idea to check it again later.",
   "The earthquake has revealed more of this strange formation. It's possible future earthquakes will do the same.",
   "This structure looks like some sort of cavern, but it's too small to tell for sure. You'll need to wait for another earthquake to learn more.",
-  'It looks like this "Skull of Doom" is an entrance of some sort, but it\'s not accessible yet. One more earthquake should open it up enough for you to see what\'s inside.',
+  "It looks like this \"Skull of Doom\" is an entrance of some sort, but it's not accessible yet. One more earthquake should open it up enough for you to see what's inside.",
 ];
 
 /** `entercavernfail_popup`: a tap on the open cave with the hall below 5. */
@@ -63,3 +63,33 @@ export const UPGRADE_NOW = "Upgrade Now";
  */
 export const DESCENT_NOT_YET = "The way down into the Inferno opens in a coming update.";
 export const TRANSFER_NOT_YET = "Moving monsters into the Inferno comes with the Inferno monsters, in a coming update.";
+
+/** `ai_inferno_popupwarning_title`: Moloch's warning before each raid (`INFERNO_EMERGENCE_ATTACKPOPUP.as`). */
+export const MOLOCH_ALERT_TITLE = "INFERNO MONSTER ALERT";
+
+/** `ai_engage_btn`: the warning's one button, which brings the raid on. */
+export const ENGAGE_ATTACK = "Engage Attack";
+
+/**
+ * `emerge_mondesc_mi_*_desc`: what the warning says of each of Moloch's
+ * monsters, shown over its card (Flash: on mouse-over). Keyed by monster id.
+ */
+export const MOLOCH_MONSTER_HINTS: Readonly<Record<string, string>> = {
+  IC1: "Little flaming critters that seem to be made of magma. Favorite Target: ???",
+  IC2: "A strange creature that looks like a reject from a chemistry lab. Favorite Target: ???",
+  IC3: "A sneaky-looking creature that scurries around on multiple legs. Favorite Target: ???",
+  IC4: "This guy looks to be mostly mouth and seems to be able to burrow. Favorite Target: ???",
+  IC5: "It's got wings, so we know it flies, but not much else. Favorite Target: ???",
+  IC6: "This guy looks kind of like a land octopus with rocks on his head. Favorite Target: ???",
+  IC7: "A nasty-looking, worm-like creature that can spit from a distance. Favorite Target: ???",
+  IC8: "This guy looks like a Wormzer on steroids. Favorite Target: ???",
+};
+
+/**
+ * Ours, not Flash's (Flash's raid could not fail to start): what the yard
+ * says when Moloch's raid cannot start now, and when it is gone. The stage
+ * counts either way: the cave's level was saved before the raid opened.
+ */
+export const MOLOCH_RAID_WAIT = "Another attack is on your yard. Moloch's monsters wait until it is over.";
+export const MOLOCH_RAID_RETRY = "Could not reach the server to bring Moloch's monsters on. Try again.";
+export const MOLOCH_RAID_GONE = "Moloch's monsters went back underground. The cave has grown all the same.";

@@ -1,4 +1,5 @@
 import { get } from "./http";
+import type { RaidView } from "./raid";
 import type { ApiEnvelope } from "./types";
 
 /**
@@ -33,13 +34,27 @@ export interface InfernoState {
   readonly korathNotice: boolean;
 }
 
+/** One card of Moloch's warning: a monster type and its count, in Flash's order. */
+export interface MolochGroup {
+  readonly monster: string;
+  readonly count: number;
+}
+
+/** Moloch's raid as the load answers it: the raid routes' view, and its groups for the warning. */
+export interface MolochRaidView extends RaidView {
+  readonly groups: readonly MolochGroup[];
+}
+
 /**
  * The `/base/load` answer's `infernostate`, on the owner's build load of the
- * main yard while the Inferno is on: the state, and `raised`, the level the
- * cave just went up to on this load (its emergence raid is due now), or null.
+ * main yard while the Inferno is on: the state, `raised`, the level the cave
+ * just went up to on this load, or null, and `raid`, Moloch's raid for it
+ * (WP 1.9), due now; null when the first raise found the yard at 10% health
+ * or less, which grows the cave with no raid, as Flash did.
  */
 export interface InfernoLoadState extends InfernoState {
   readonly raised: number | null;
+  readonly raid?: MolochRaidView | null;
 }
 
 export type InfernoStateResponse = ApiEnvelope & InfernoState;

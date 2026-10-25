@@ -1,23 +1,30 @@
+import type { MolochGroup } from "@/api/inferno";
+import { monsterName } from "@/game/combat/rules/report";
 import {
   CAVE_ART,
   CAVE_NAME,
   CAVERN_DEFENCE,
   EARTHQUAKE,
   EMERGE_COMPLETE_ART,
+  ENGAGE_ATTACK,
   ENTER_CAVERN,
   ENTER_CAVERN_INVITE,
+  MOLOCH_ALERT_TITLE,
+  MOLOCH_MONSTER_HINTS,
   MOLOCH_PORTRAIT,
   TRANSFER_MONSTERS,
   UPGRADE_NOW,
 } from "@/game/inferno/emergenceText";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/inferno.css";
 
 /**
  * The screens of Moloch's emergence on the own main yard (WP 1.10,
  * `docs/design/inferno.md` §2.2 and §4): Moloch's dialogue, the cave's note
- * and menu, the EARTHQUAKE banner, and, after a raid, "stage passed" and the
- * last popup. A popup on a phone, centred on a desktop; the pictures are
+ * and menu, the EARTHQUAKE banner, Moloch's warning before each raid (WP
+ * 1.9), and, after a raid, "stage passed" and the last popup. A popup on a
+ * phone, centred on a desktop; the pictures are
  * Flash's own (`portrait_moloch.png`, `popup_emergecomplete.v2.jpg`, the
  * cave's `top.5.v2.png`).
  */
@@ -112,6 +119,69 @@ export const caveMenu = (host: HTMLElement, actions: CaveMenuActions): Popup => 
     }),
   );
   popup.setContent(art, buttons);
+  return popup.mount(host);
+};
+
+/**
+ * Moloch's warning before each of his raids (`INFERNO_EMERGENCE_ATTACKPOPUP`):
+ * Moloch, one card per group of his army in the order they come, each with
+ * its `emerge_mondesc` line on hover or focus, and one button, "Engage
+ * Attack". No way to close it but that button, as in Flash: `engage` starts
+ * the raid and answers whether the warning is done with; on false (the
+ * server busy or out of reach) the button comes back to press again.
+ */
+export const molochWarning = (
+  host: HTMLElement,
+  groups: readonly MolochGroup[],
+  engage: () => Promise<boolean>,
+  onClose: () => void = () => {},
+): Popup => {
+  const popup = new Popup({
+    title: MOLOCH_ALERT_TITLE,
+    className: "inferno-popup inferno-popup--warning",
+    dismissable: false,
+    onClose,
+  });
+  const head = element("div", "inferno-warning");
+  const army = element("ul", "inferno-army");
+  army.setAttribute("aria-label", "Moloch's monsters");
+  for (const group of groups) {
+    const card = element("li", "inferno-army__card");
+    card.tabIndex = 0;
+    const image = element("img", "inferno-army__portrait");
+    image.alt = "";
+    image.decoding = "async";
+    showPortrait(image, monsterPortrait(group.monster, "card"));
+    card.append(
+      image,
+      element("span", "inferno-army__name", monsterName(group.monster)),
+      element("span", "inferno-army__count", `×${group.count}`),
+    );
+    const hint = MOLOCH_MONSTER_HINTS[group.monster];
+    if (hint) {
+      const tip = element("span", "inferno-army__hint", hint);
+      tip.setAttribute("role", "tooltip");
+      card.append(tip);
+    }
+    army.append(card);
+  }
+  head.append(picture(MOLOCH_PORTRAIT, "inferno-warning__portrait", "Moloch"), army);
+
+  const actions = element("div", "inferno-popup__actions");
+  const start = button(ENGAGE_ATTACK, "btn btn--primary inferno-warning__engage", () => {
+    start.disabled = true;
+    start.textContent = "Engaging…";
+    const reset = (): void => {
+      start.disabled = false;
+      start.textContent = ENGAGE_ATTACK;
+    };
+    engage().then(
+      (done) => (done ? popup.close() : reset()),
+      () => reset(),
+    );
+  });
+  actions.append(start);
+  popup.setContent(head, actions);
   return popup.mount(host);
 };
 

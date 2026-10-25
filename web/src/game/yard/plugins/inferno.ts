@@ -1,4 +1,5 @@
-import { loadInfernoState } from "@/api/inferno";
+import { loadInfernoState, type MolochGroup } from "@/api/inferno";
+import { raidApi } from "@/api/raid";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { screenShakeOn } from "@/game/attack/juice";
 import {
@@ -14,12 +15,16 @@ import { CaveSprite } from "@/game/inferno/CaveSprite";
 import { playEmergence, playStagePassed, type EmergenceView } from "@/game/inferno/emergenceFlow";
 import { holdForEmergence } from "@/game/inferno/emergenceHold";
 import { DESCENT_NOT_YET, TRANSFER_NOT_YET } from "@/game/inferno/emergenceText";
+import { isMolochRaid, startMolochRaid } from "@/game/inferno/molochRaid";
+import { consumeRaidResult, setRaidRun } from "@/game/raid/raidSession";
+import { raidWatch } from "@/game/raid/raidWatch";
 import {
   caveMenu,
   caveNote,
   earthquakeBanner,
   emergenceComplete,
   molochDialogue,
+  molochWarning,
   stagePassed,
 } from "@/ui/inferno/EmergenceScreens";
 import { YardView } from "../YardRenderer";
@@ -30,9 +35,11 @@ import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
  * on the main yard, while the load says the cave shows (`infernostate`, sent
  * only with the new Inferno switched on), it draws the cave outside the plot,
  * answers a tap on it, and, when this load raised it (`raised`), plays the
- * emergence: the camera turns to it, Moloch speaks, the earthquake. Bob's
- * tips and the achievement card keep out of its way while it plays
- * (`emergenceHold.ts`).
+ * emergence: the camera turns to it, Moloch speaks, the earthquake, and his
+ * warning, whose "Engage Attack" starts his raid (WP 1.9) in the raid scene.
+ * Back from that fight, it plays "stage passed" and his taunt in place of the
+ * wild raid's result. Bob's tips and the achievement card keep out of its way
+ * while it plays (`emergenceHold.ts`).
  */
 
 /** Pointer travel, CSS px, above which a press is a drag (`YardInput`'s `DRAG_SLOP`). */
@@ -124,6 +131,7 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
       shake();
       return () => banner.remove();
     },
+    warning: (groups, engage) => closing((done) => molochWarning(overlay.modal, groups, engage, done)),
     stagePassed: () => closing((done) => stagePassed(overlay.modal, done)),
     complete: () =>
       closing((done) => emergenceComplete(overlay.modal, townHall() >= CAVE_TOWN_HALL ? enter : null, done)),
@@ -181,21 +189,46 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
       release();
     });
   };
+  // "Engage Attack": the server fights Moloch's raid and the raid scene plays it.
+  const molochRaid = (id: string, groups: readonly MolochGroup[]) => ({
+    groups,
+    start: () =>
+      startMolochRaid(id, {
+        api: raidApi,
+        notice,
+        fight: (start) => {
+          raidWatch.set(start.raid);
+          setRaidRun({ raid: start.raid, fight: start.fight, save: store.save });
+          scene.openRaid();
+        },
+      }),
+  });
   const raiseKey = state.raised !== null ? `${state.raised}:${state.emergence.lastAt ?? 0}` : null;
   if (state.raised !== null && raiseKey !== playedRaise) {
     playedRaise = raiseKey;
     raidRunning = true;
     const raised = state.raised;
-    void staged(() => playEmergence(raised, { view, wait, alive: () => alive })).finally(() => {
-      // WP 1.9's raid keeps this set while it runs.
+    const raid = state.raid ? molochRaid(state.raid.id, state.raid.groups) : null;
+    void staged(() => playEmergence(raised, { view, wait, alive: () => alive, raid })).finally(() => {
       raidRunning = false;
     });
   }
 
+  // Back from Moloch's raid, won or lost: "stage passed" and his taunt.
+  if (consumeRaidResult(isMolochRaid)) void staged(() => playStagePassed(state.cave.level, view));
+
   if (import.meta.env.DEV) {
-    // Moloch's popups without his raids, for the screenshots (WP 1.9 plays them for real).
+    // Moloch's popups without his raids, for the screenshots: the warning's
+    // "Engage Attack" only closes it.
+    const army: MolochGroup[] = [
+      { monster: "IC1", count: 12 },
+      { monster: "IC2", count: 6 },
+      { monster: "IC3", count: 4 },
+    ];
+    const preview = { groups: army, start: async () => true };
     (globalThis as Record<string, unknown>)["__infernoPreview"] = {
-      raise: (to: number) => staged(() => playEmergence(to, { view, wait, alive: () => alive })),
+      raise: (to: number) => staged(() => playEmergence(to, { view, wait, alive: () => alive, raid: preview })),
+      warning: (groups: MolochGroup[] = army) => staged(() => view.warning(groups, preview.start)),
       stagePassed: (at: number) => staged(() => playStagePassed(at, view)),
       tap: () => openTap(),
       focus: () => view.focusCave(),

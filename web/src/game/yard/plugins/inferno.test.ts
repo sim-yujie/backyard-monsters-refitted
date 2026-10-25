@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { InfernoLoadState } from "@/api/inferno";
+import type { InfernoLoadState, MolochRaidView } from "@/api/inferno";
+import type * as RaidModule from "@/api/raid";
+import type { RaidResult } from "@/api/raid";
 import { SCREEN_SHAKE_KEY } from "@/game/attack/juice";
 import { emergencePlaying } from "@/game/inferno/emergenceHold";
-import { CAVERN_NOTES, EARTHQUAKE, ENTER_CAVERN, TRANSFER_MONSTERS } from "@/game/inferno/emergenceText";
+import {
+  CAVERN_DEFENCE,
+  CAVERN_NOTES,
+  EARTHQUAKE,
+  ENGAGE_ATTACK,
+  ENTER_CAVERN,
+  MOLOCH_ALERT_TITLE,
+  TRANSFER_MONSTERS,
+} from "@/game/inferno/emergenceText";
+import { consumeRaidResult, consumeRaidRun, setRaidResult } from "@/game/raid/raidSession";
 import { YardView } from "@/game/yard/YardRenderer";
 import type { YardMounts } from "@/game/yard/yardPlugins";
 import { infernoYardPlugin, resetInfernoPlugin } from "./inferno";
@@ -12,13 +23,20 @@ import { infernoYardPlugin, resetInfernoPlugin } from "./inferno";
  * Moloch's cave on the own main yard (Inferno WP 1.10): shown only when the
  * load says so, a tap opens its note or menu, and a raise plays the
  * earthquake, whose shake keeps to the screen-shake setting, with Bob's tips
- * and the achievement card held back while it plays.
+ * and the achievement card held back while it plays; then Moloch's warning,
+ * whose "Engage Attack" starts his raid (WP 1.9), and "stage passed" after it.
  */
 
 const hoisted = vi.hoisted(() => ({
   hit: true,
   levels: [] as number[],
   fresh: { cave: { level: 0 } },
+  start: vi.fn(),
+}));
+
+vi.mock("@/api/raid", async (importOriginal) => ({
+  ...(await importOriginal<typeof RaidModule>()),
+  raidApi: { start: hoisted.start },
 }));
 
 vi.mock("@/game/inferno/CaveSprite", () => ({
@@ -39,7 +57,25 @@ vi.mock("@/api/inferno", () => ({
   loadInfernoState: vi.fn(async () => hoisted.fresh),
 }));
 
-const loadState = (level: number, raised: number | null = null, shown = true): InfernoLoadState => ({
+const molochRaid: MolochRaidView = {
+  id: "m1",
+  phase: "warning",
+  tribe: "moloch",
+  monsters: { IC1: 12, IC3: 4 },
+  attackAt: 1_000,
+  warned: 0,
+  groups: [
+    { monster: "IC1", count: 12 },
+    { monster: "IC3", count: 4 },
+  ],
+};
+
+const loadState = (
+  level: number,
+  raised: number | null = null,
+  shown = true,
+  raid: MolochRaidView | null = raised === null ? null : molochRaid,
+): InfernoLoadState => ({
   now: 1_000,
   cave: { shown, level, maxLevel: 5 },
   emergence: { lastAt: raised === null ? null : 900, nextAt: 0, done: level >= 5 },
@@ -47,6 +83,7 @@ const loadState = (level: number, raised: number | null = null, shown = true): I
   hasYard: false,
   korathNotice: false,
   raised,
+  raid,
 });
 
 const mount = (state: InfernoLoadState | undefined, { kind = "main", townHall = 5 } = {}) => {
@@ -70,6 +107,7 @@ const mount = (state: InfernoLoadState | undefined, { kind = "main", townHall = 
     carrying: () => false,
     selectedBuilding: () => null,
     focusBuilding: vi.fn(),
+    openRaid: vi.fn(),
   };
   const notices = { show: vi.fn() };
   const mounts = {
@@ -94,6 +132,12 @@ const tap = (canvas: HTMLCanvasElement): void => {
   canvas.dispatchEvent(new PointerEvent("pointerup", { clientX: 11, clientY: 10, pointerType: "touch" }));
 };
 
+const engageButton = (root: ParentNode): HTMLButtonElement => {
+  const found = [...root.querySelectorAll("button")].find((one) => one.textContent === ENGAGE_ATTACK);
+  if (!found) throw new Error("no Engage Attack");
+  return found;
+};
+
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** The frames handed to `requestAnimationFrame`, run by hand. */
@@ -104,6 +148,7 @@ beforeEach(() => {
   hoisted.hit = true;
   hoisted.levels = [];
   hoisted.fresh = { cave: { level: 0 } };
+  hoisted.start.mockReset();
   // jsdom has no PointerEvent; a MouseEvent with a pointerType is all the plugin reads.
   if (typeof PointerEvent === "undefined") {
     vi.stubGlobal(
@@ -235,15 +280,20 @@ describe("the earthquake on a raise", () => {
     again.teardown?.();
   });
 
-  it("holds Bob's tips and the achievement card back from load until the raise has played", async () => {
+  it("holds Bob's tips and the achievement card back from load until Moloch's warning is answered", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    hoisted.start.mockRejectedValue(new Error("offline"));
     expect(emergencePlaying()).toBe(false);
-    const { teardown } = mount(loadState(2, 2));
+    const { modal, teardown } = mount(loadState(2, 2));
     expect(emergencePlaying()).toBe(true);
-    await vi.advanceTimersByTimeAsync(3_000);
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(modal.textContent).toContain(MOLOCH_ALERT_TITLE);
     expect(emergencePlaying()).toBe(true);
-    await vi.advanceTimersByTimeAsync(3_000);
-    expect(emergencePlaying()).toBe(false);
+    // The server out of reach: the warning stays, and holds on.
+    engageButton(modal).click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(engageButton(modal).disabled).toBe(false);
+    expect(emergencePlaying()).toBe(true);
     teardown?.();
   });
 
@@ -254,5 +304,69 @@ describe("the earthquake on a raise", () => {
     const quiet = mount(loadState(2));
     expect(emergencePlaying()).toBe(false);
     quiet.teardown?.();
+  });
+});
+
+describe("Moloch's raid", () => {
+  it("warns with his army three seconds after the earthquake, and Engage Attack hands his fight to the raid scene", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    hoisted.start.mockImplementation(async (id: string) => ({
+      error: 0,
+      raid: { ...molochRaid, id, phase: "fighting" },
+      fight: { seed: 1 },
+    }));
+    const { modal, scene, teardown } = mount(loadState(2, 2));
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(modal.textContent).not.toContain(MOLOCH_ALERT_TITLE);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(modal.querySelectorAll(".inferno-army__card")).toHaveLength(2);
+    engageButton(modal).click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hoisted.start).toHaveBeenCalledWith("m1");
+    expect(scene.openRaid).toHaveBeenCalledTimes(1);
+    expect(consumeRaidRun()?.raid).toMatchObject({ id: "m1", phase: "fighting" });
+    expect(modal.textContent).not.toContain(MOLOCH_ALERT_TITLE);
+    expect(emergencePlaying()).toBe(false);
+    teardown?.();
+  });
+
+  it("grows the cave with no earthquake and no warning when the raise came without a raid", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const { modal, content, scene, teardown } = mount(loadState(1, 1, true, null));
+    await vi.advanceTimersByTimeAsync(3_000);
+    // Moloch's first words still come; then nothing more.
+    modal.querySelector("button")?.click();
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(scene.centreOn).toHaveBeenCalledTimes(1);
+    expect(hoisted.levels.at(-1)).toBe(1);
+    expect(content.textContent).not.toContain(EARTHQUAKE);
+    expect(modal.textContent).not.toContain(MOLOCH_ALERT_TITLE);
+    expect(emergencePlaying()).toBe(false);
+    teardown?.();
+  });
+
+  it("shows stage passed when the yard opens on what his raid landed, and leaves a wild raid's result alone", async () => {
+    const landed = (tribe: string): RaidResult => ({
+      id: "m1",
+      tribe,
+      at: 1,
+      defended: false,
+      health: 0.4,
+      stolen: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      shiny: 0,
+      damaged: [],
+      housedLost: 0,
+    });
+    setRaidResult(landed("moloch"));
+    const after = mount(loadState(2));
+    expect(after.modal.textContent).toContain(CAVERN_DEFENCE);
+    after.teardown?.();
+    document.body.replaceChildren();
+
+    setRaidResult(landed("Kozu"));
+    const wild = mount(loadState(2));
+    expect(wild.modal.textContent).not.toContain(CAVERN_DEFENCE);
+    expect(consumeRaidResult()?.tribe).toBe("Kozu");
+    wild.teardown?.();
   });
 });

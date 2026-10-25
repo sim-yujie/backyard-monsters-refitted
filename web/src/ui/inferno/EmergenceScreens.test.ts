@@ -4,12 +4,23 @@ import {
   CAVERN_DEFENCE,
   EARTHQUAKE,
   ENTER_CAVERN,
+  ENGAGE_ATTACK,
   ENTER_CAVERN_INVITE,
+  MOLOCH_ALERT_TITLE,
   MOLOCH_INTRO,
+  MOLOCH_MONSTER_HINTS,
   TRANSFER_MONSTERS,
   UPGRADE_NOW,
 } from "@/game/inferno/emergenceText";
-import { caveMenu, caveNote, earthquakeBanner, emergenceComplete, molochDialogue, stagePassed } from "./EmergenceScreens";
+import {
+  caveMenu,
+  caveNote,
+  earthquakeBanner,
+  emergenceComplete,
+  molochDialogue,
+  molochWarning,
+  stagePassed,
+} from "./EmergenceScreens";
 
 /** The screens of Moloch's emergence on the own main yard (Inferno WP 1.10), as the DOM shows them. */
 
@@ -117,5 +128,52 @@ describe("the earthquake banner", () => {
     expect(content.contains(banner)).toBe(true);
     banner.remove();
     expect(content.querySelector(".inferno-quake")).toBeNull();
+  });
+});
+
+describe("Moloch's warning", () => {
+  const groups = [
+    { monster: "IC1", count: 12 },
+    { monster: "IC3", count: 4 },
+  ];
+
+  it("shows his army in order, a card per group with its count and line", () => {
+    const modal = host();
+    molochWarning(modal, groups, async () => true);
+    expect(modal.textContent).toContain(MOLOCH_ALERT_TITLE);
+    const cards = [...modal.querySelectorAll(".inferno-army__card")];
+    expect(cards).toHaveLength(2);
+    expect(cards.map((card) => card.querySelector(".inferno-army__count")?.textContent)).toEqual(["×12", "×4"]);
+    expect(cards[0]!.querySelector(".inferno-army__hint")?.textContent).toBe(MOLOCH_MONSTER_HINTS.IC1);
+    expect(cards[0]!.querySelector("img")?.getAttribute("src")).toContain("IC1");
+    expect(labels(modal)).toEqual([ENGAGE_ATTACK]);
+  });
+
+  it("cannot be closed but by Engage Attack, which closes it once the raid starts", async () => {
+    const modal = host();
+    const onClose = vi.fn();
+    const engage = vi.fn(async () => true);
+    molochWarning(modal, groups, engage, onClose);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(modal.querySelector('[aria-label="Close"]')).toBeNull();
+    buttonNamed(modal, ENGAGE_ATTACK).click();
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(engage).toHaveBeenCalledOnce();
+    expect(modal.querySelector(".inferno-army")).toBeNull();
+  });
+
+  it("gives the button back when the raid could not start", async () => {
+    const modal = host();
+    const onClose = vi.fn();
+    let answer!: (done: boolean) => void;
+    molochWarning(modal, groups, () => new Promise<boolean>((resolve) => (answer = resolve)), onClose);
+    const start = buttonNamed(modal, ENGAGE_ATTACK);
+    start.click();
+    expect(start.disabled).toBe(true);
+    answer(false);
+    await vi.waitFor(() => expect(start.disabled).toBe(false));
+    expect(start.textContent).toBe(ENGAGE_ATTACK);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

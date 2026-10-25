@@ -1,6 +1,8 @@
 import { raidApi, type RaidApi } from "@/api/raid";
 import type { AttackPlugin } from "@/game/attack/attackPlugins";
 import { battlePlugin } from "@/game/attack/plugins/battle";
+import { MOLOCH_RAID_GONE } from "@/game/inferno/emergenceText";
+import { isMolochRaid } from "@/game/inferno/molochRaid";
 import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
 import { TRAP_BANNER, TRAP_BANNER_MS } from "@/game/trojan/trojanText";
 import "@/ui/styles/raid.css";
@@ -47,10 +49,16 @@ const DOOR_CLOSED_FRAME = 0;
 const DOOR_OPEN_FRAME = 1;
 const DOOR_LAYER = 0;
 
-/** What the yard says when the fight did not land. */
-export const finishNotice = (finish: RaidFinish): string | null => {
-  if (finish.kind === "cancelled") return "The raid was called off: the wild monsters will be back.";
-  if (finish.kind === "failed") return "Could not reach the server to land the raid. Your yard shows what the server has.";
+/**
+ * What the yard says when the fight did not land. Moloch's raid called off
+ * does not come back: its stage counted when the cave grew.
+ */
+export const finishNotice = (finish: RaidFinish, tribe = ""): string | null => {
+  if (finish.kind === "cancelled") {
+    return isMolochRaid({ tribe }) ? MOLOCH_RAID_GONE : "The raid was called off: the wild monsters will be back.";
+  }
+  if (finish.kind === "failed")
+    return "Could not reach the server to land the raid. Your yard shows what the server has.";
   return null;
 };
 
@@ -130,7 +138,7 @@ export const createRaidPlugin =
       // Kept for the yard even when this screen has gone meanwhile.
       if (outcome.kind === "landed") setRaidResult(outcome.result);
       deps.clearRaid();
-      const notice = finishNotice(outcome);
+      const notice = finishNotice(outcome, run.raid.tribe);
       if (notice) setRaidNote(notice);
       if (!gone) mounts.goToYard?.();
     };
