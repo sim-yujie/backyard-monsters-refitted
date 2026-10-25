@@ -36,6 +36,16 @@ import {
   lootAuraBonus,
 } from "./champions.js";
 import { BRAIN_KEYS, brainBase } from "./brain.js";
+import {
+  DECOY_BUILDING_REACH,
+  DECOY_FRAME_TICKS,
+  decoyPlan,
+  decoyStandPoint,
+  decoyTouchesBuilding,
+} from "./decoy.js";
+import type { DecoyPlan } from "./decoy.js";
+import { DECOY } from "./siege.js";
+import type { SiegeId } from "./siege.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
 import { buildPathGrid, pointTarget } from "./grid.js";
 import {
@@ -303,7 +313,8 @@ import {
  *    rather than walked to the edge (`ATTACK.as:237-240`). It deals no more
  *    damage either way.
  * 8. **Not modelled at all**, each because it is out of Map Room 2's scope:
- *    the Stronghold's four emitters, every siege weapon, and the per-creep
+ *    the Stronghold's four emitters, the Vacuum and the Jars (the Decoy is,
+ *    Inferno WP 6.5, {@link BattleOptions.siege}), and the per-creep
  *    `_hitLimit`, even for a raid (note 17, owner decision 2026-10-06). A yard
  *    holding one of those buildings fires it as an ordinary single-target
  *    tower. The Monster Lab's moves (Brain's cloak, Bolt's blink, Fang's
@@ -487,7 +498,9 @@ import {
  * The union is `types.ts`'s {@link FlingEvent}, which is the §3.10 contract the
  * web client's attack flow (issue #32) builds against. The engine consumes it
  * directly rather than restating it, so the two cannot drift apart. A `siege`
- * event is accepted and ignored (fidelity note 8). A raid battle's waves are
+ * event drops the Decoy at the attacker's level ({@link BattleOptions.siege});
+ * any other weapon, or one with no level, is accepted and ignored (fidelity
+ * note 8). A raid battle's waves are
  * the server's own {@link RaidEvent}s (fidelity note 17).
  */
 export type AttackEvent = FlingEvent | RaidEvent;
@@ -563,6 +576,12 @@ export interface BattleOptions {
    * attacker never has any.
    */
   readonly buffs?: BattleBuffs;
+  /**
+   * The attacker's Siege Lab levels per weapon (Inferno WP 6.5): what a
+   * `siege` event fights at. An absent weapon, or none at all, is level 0,
+   * and its event is ignored, so a log from before the Decoy replays as it did.
+   */
+  readonly siege?: Readonly<Partial<Record<SiegeId, number>>>;
 }
 
 /**
@@ -994,7 +1013,8 @@ export interface Battle {
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
 
-type Behaviour = "attack" | "defend" | "bunker" | "heal" | "retreat";
+/** `decoy`: a defender the Decoy holds ({@link BattleOptions.siege}). */
+type Behaviour = "attack" | "defend" | "bunker" | "heal" | "retreat" | "decoy";
 
 /** A building an Eye-ra's blast reached, and the health it took. */
 type BlastHit = readonly [EngineBuilding, number];
@@ -1823,12 +1843,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * The hit that brings a building down loots nothing of its own: the client
    * calls `Destroyed` first and loots only `if (!this._destroyed)`, so the
    * fall's own rule is all that hit takes.
+   *
+   * `byAttacker` is a blow with an attacker behind it: one by a creep, or the
+   * Decoy's from a `DummyTarget`, which loots and fells like a creep's.
    */
   const damageBuilding = (
     building: EngineBuilding,
     raw: number,
     creep: Creep | null,
     lootMultiplier = creep ? lootOf(creep) : 1,
+    byAttacker = creep !== null,
   ): number => {
     if (building.hp <= 0 || raw <= 0) return 0;
     const dealt = fortifiedDamage(raw, building.fortification, 0);
@@ -1843,14 +1867,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     building.hp -= dealt;
     if (building.hp > 0) {
-      if (creep) takeLoot(building, dealt, lootMultiplier);
+      if (byAttacker) takeLoot(building, dealt, lootMultiplier);
       return applied;
     }
     // The killing hit on storage still makes the pick it made before issue
     // #167 and throws it away, so the random stream every later bunker pick
     // reads is the one it was, and the fall changes the loot and nothing else.
-    if (creep && STORAGE_TYPES.includes(building.type)) pickStored();
-    destroy(building, creep !== null);
+    if (byAttacker && STORAGE_TYPES.includes(building.type)) pickStored();
+    destroy(building, byAttacker);
     return applied;
   };
 
@@ -2611,6 +2635,197 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const share = bombParticleDamage(spec, building);
       if (share > 0) damageBuilding(building, share * spec.particles, null);
     }
+  };
+
+  /* ── The Decoy (Inferno WP 6.5, `decoy.ts`) ────────────────────────────── */
+
+  /**
+   * The Decoy on the field, or null. `pulled` is Flash's `_attractedCreeps`;
+   * `before` is what each creep it holds was doing, to go back to.
+   */
+  let decoy: {
+    readonly plan: DecoyPlan;
+    /** The drop point on screen. */
+    readonly drop: Cart;
+    readonly pulled: Set<number>;
+    readonly before: Map<number, Behaviour>;
+  } | null = null;
+
+  /**
+   * A `siege` event: the Decoy at the attacker's level drops now. Flash keeps
+   * one siege weapon live at a time (`SiegeWeapons.activeWeaponID`), so one
+   * dropped while a Decoy is still out is ignored, as is any other weapon.
+   */
+  const siege = (event: Extract<AttackEvent, { kind: "siege" }>): void => {
+    if (event.weapon !== DECOY.id || decoy) return;
+    const plan = decoyPlan(options.siege?.decoy ?? 0, tick);
+    if (!plan) return;
+    decoy = { plan, drop: screenOf(event.x, event.y), pulled: new Set(), before: new Map() };
+  };
+
+  /**
+   * `getDefendingCreepsInRange` (`Decoy.as:332-357`): a defender on the field
+   * within the range of the drop, on screen. Flash looks only in `CREATURES`,
+   * the defending side, so the attacker's own champion is never pulled; of the
+   * caged champions it looks only at the basic one (`CREATURES._guardian`),
+   * so the Krallen is not either.
+   */
+  const decoyHolds = (creep: Creep, drop: Cart, range: number): boolean => {
+    if (!creep.friendly || creep.hp <= 0 || creep.gone || creep.monsterId === KRALLEN_ID) {
+      return false;
+    }
+    const at = screenPointOf(creep.ix, creep.iy);
+    const dx = at.x - drop.x;
+    const dy = at.y - drop.y;
+    return dx * dx + dy * dy <= range * range;
+  };
+
+  /** `changeModeDecoy`: it stops fighting and walks to stand by the Decoy. */
+  const pullToDecoy = (creep: Creep, drop: Cart, before: Map<number, Behaviour>): void => {
+    if (creep.behaviour !== "decoy") before.set(creep.id, creep.behaviour);
+    creep.behaviour = "decoy";
+    creep.targetCreep = -1;
+    creep.attacking = false;
+    creep.atTarget = false;
+    creep.homing = false;
+    const stand = decoyStandPoint(rng, screenPointOf(creep.ix, creep.iy), drop, creep.flying);
+    // `screenPointOf` undone: screen (a, d) is yard (d + a / 2, d - a / 2).
+    creep.waypoints = [{ x: stand.y + stand.x / 2, y: stand.y - stand.x / 2 }];
+    creep.waypointIndex = 0;
+  };
+
+  /** `detractCreep` and `findDefenseTargets`: back to defending, looking afresh. */
+  const releaseFromDecoy = (creep: Creep, before: Map<number, Behaviour>): void => {
+    creep.behaviour = before.get(creep.id) ?? "defend";
+    before.delete(creep.id);
+    creep.targetCreep = -1;
+    creep.attacking = false;
+    creep.atTarget = false;
+    creep.waypoints = [];
+    creep.waypointIndex = 0;
+  };
+
+  /** A defender the Decoy holds (`tickBDecoy`): it walks to its spot and stands. */
+  const tickDecoyed = (creep: Creep): void => {
+    creep.attacking = false;
+    moveCreep(creep);
+  };
+
+  /**
+   * `ejectDefendersFromBunkers` (`Decoy.as:229-239`, `BUILDING22.EjectCreeps`,
+   * `:195-239`): a standing bunker the range touches sends out one of each
+   * kind it still holds, each frame, already held by the Decoy. As with the
+   * bunker's own sending, a healer stays in (issue #195).
+   */
+  const ejectForDecoy = (drop: Cart, range: number, before: Map<number, Behaviour>): void => {
+    for (const bunker of bunkers) {
+      const building = bunker.building;
+      if (building.hp <= 0) continue;
+      const at = screenOf(building.x, building.y);
+      const dx = at.x - drop.x;
+      const dy = at.y + building.middle - drop.y;
+      if (!decoyTouchesBuilding(range, dx, dy, propsSizeOf(building.type))) continue;
+      const stats = towerStats(building.type, building.level, yard.kind);
+      const leash = stats?.range ?? 0;
+      const scan = towerScanPoint(building);
+      for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
+        if (count <= 0 || monsterStat(monsterId, "damage", 1) <= 0) continue;
+        bunker.pool.set(monsterId, count - 1);
+        bunker.dispatched += 1;
+        const sentBy = bunkerReports.get(building.id);
+        if (sentBy) sentBy.sent += 1;
+        const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
+        const defender = spawnCreep(
+          monsterId,
+          level,
+          { x: building.x, y: building.y },
+          true,
+          "defend",
+          building.id,
+          1,
+          rankOf(options.defenderRanks, monsterId),
+        );
+        if (leash > 0) {
+          defender.home = {
+            ix: building.x,
+            iy: building.y,
+            centreX: scan.x,
+            centreY: scan.y,
+            leash,
+          };
+        }
+        pullToDecoy(defender, drop, before);
+      }
+    }
+  };
+
+  /**
+   * `onDeactivation` (`Decoy.as:278-305`): `DealLinearAEDamage` over the range
+   * (`Targeting.as:340-389`) at the defenders it reaches and at every building
+   * but a mushroom, or one nothing can target, closer than
+   * {@link DECOY_BUILDING_REACH} of the range, each measured on screen to its
+   * anchor. A building takes it from a `DummyTarget`: it loots at 1, and a fall
+   * is the attacker's. Then everyone it held goes back to defending.
+   */
+  const explodeDecoy = (): void => {
+    const live = decoy;
+    if (!live) return;
+    decoy = null;
+    const { drop, before } = live;
+    const { range, damage } = live.plan;
+    const hit = creeps.filter((creep) => decoyHolds(creep, drop, range));
+    const reach = range * DECOY_BUILDING_REACH;
+    for (const creep of hit) {
+      const at = screenPointOf(creep.ix, creep.iy);
+      const dealt = linearAreaDamage(damage, range, 0, Math.hypot(at.x - drop.x, at.y - drop.y));
+      if (dealt !== undefined && !creep.gone) damageCreep(creep, dealt);
+    }
+    for (const building of yard.buildings) {
+      if (building.hp <= 0 || building.kind === "mushroom") continue;
+      if (UNTARGETABLE_TYPES.includes(building.type)) continue;
+      const at = screenOf(building.x, building.y);
+      const away = Math.hypot(at.x - drop.x, at.y - drop.y);
+      if (away >= reach) continue;
+      const dealt = linearAreaDamage(damage, range, 0, away);
+      if (dealt !== undefined) damageBuilding(building, dealt, null, 1, true);
+    }
+    for (const creep of creeps) {
+      if (creep.friendly && creep.behaviour === "decoy") releaseFromDecoy(creep, before);
+    }
+  };
+
+  /**
+   * The Decoy's frame (`Decoy.onEnterFrame`, `updateDecoy`): from the tick it
+   * lands, every {@link DECOY_FRAME_TICKS}, it pulls the defenders newly in
+   * range, lets go of the ones no longer in it, and empties the bunkers it
+   * touches. It blows up on its tick whatever the frame.
+   */
+  const tickDecoy = (): void => {
+    const live = decoy;
+    if (!live || tick < live.plan.landsAt) return;
+    if (tick >= live.plan.explodesAt) {
+      explodeDecoy();
+      return;
+    }
+    if ((tick - live.plan.landsAt) % DECOY_FRAME_TICKS !== 0) return;
+    const { drop, pulled, before } = live;
+    const range = live.plan.range;
+    const held = new Set<number>();
+    for (const creep of creeps) {
+      if (!decoyHolds(creep, drop, range)) continue;
+      held.add(creep.id);
+      if (!pulled.has(creep.id)) {
+        pulled.add(creep.id);
+        pullToDecoy(creep, drop, before);
+      }
+    }
+    for (const id of pulled) {
+      if (held.has(id)) continue;
+      pulled.delete(id);
+      const creep = byCreepId.get(id);
+      if (creep) releaseFromDecoy(creep, before);
+    }
+    ejectForDecoy(drop, range, before);
   };
 
   /* ── Creeps ────────────────────────────────────────────────────────────── */
@@ -4224,7 +4439,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
     }
     if (creep.friendly) {
-      if (creep.champion) tickCageChampion(creep);
+      if (creep.behaviour === "decoy") tickDecoyed(creep);
+      else if (creep.champion) tickCageChampion(creep);
       else if (creep.hatchedBy >= 0) tickSpurtz(creep);
       else tickDefender(creep);
       return;
@@ -5207,6 +5423,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       for (const creep of creeps) if (creep.friendly && creep.hp > 0) defendersOut += 1;
     }
     tickPutty();
+    tickDecoy();
     for (const creep of creeps) {
       tickCreep(creep);
       if (creep.burrows) tickBurrow(creep);
@@ -5268,6 +5485,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (event.kind === "raid") raidWave(event);
     else if (event.kind === "fling") fling(event);
     else if (event.kind === "bomb") bomb(event);
+    else if (event.kind === "siege") siege(event);
     else if (event.kind === "retreat") {
       retreated = true;
       for (const creep of creeps) {
