@@ -346,12 +346,20 @@ const RAIL_MID = 0x2aa8ff;
 const RAIL_PALE = 0x8fd8ff;
 const FIRE_TINTS = [0xffffff, 0xffe080, 0xff8a20, 0xa03000] as const;
 const SMOKE_TINTS = [0x8a8580, 0x6a6560, 0x55504c] as const;
-/** The new look's Sniper: a white-gold flash and tracer, a pale strike. */
+/** The new look's Sniper: white-gold flash, round and trail, a red aim dot. */
 const SNIPER_FLASH = [0xffffff, 0xfff0b0, 0xffc040, 0xc06010] as const;
-const SNIPER_TRACER = 0xffcf5a;
-/** The new look's flak: a cool white tracer, a fiery burst, a dark cloud left hanging. */
-const FLAK_TRACER = 0xbfe0ff;
-const FLAK_CLOUD = [0x6a6460, 0x4a4440, 0x3a3634] as const;
+const SNIPER_TRACER = 0xffd468;
+const SNIPER_SIGHT = 0xff2a1a;
+const SNIPER_VAPOUR = 0xc8c2b4;
+const SNIPER_DIRT = [0xb8a080, 0x8a7458, 0x6a5840] as const;
+const SNIPER_BRASS = [0xfff0a0, 0xd8a040, 0x8a6020] as const;
+/** The new look's flak: orange shells, a fireball going deep red, a dark cloud left hanging. */
+const FLAK_SHELL = 0xff8420;
+const FLAK_SHELL_HOT = 0xffe8b0;
+const FLAK_FIRE = [0xfff4d0, 0xffc050, 0xff7018, 0xb02808] as const;
+const FLAK_FLASH = [0xffffff, 0xffd890, 0xff9030, 0xc04010] as const;
+const FLAK_CLOUD = [0x5a524c, 0x48403a, 0x3a3430] as const;
+const FLAK_EMBER = [0xfff0b0, 0xff8a20, 0x902808, 0x301008] as const;
 
 /**
  * How solid the railgun's trail is `age` ticks after the shot, as
@@ -432,6 +440,41 @@ export const TRACER_MAX = 84;
  */
 export const tracerLength = (speed: number, travelled: number): number =>
   Math.max(0, Math.min(travelled, TRACER_MAX, Math.max(TRACER_MIN, speed * TRACER_TICKS)));
+/** Ticks before the Sniper's next shot its laser dot comes onto the target, and after it is due it stays. */
+export const SIGHT_TICKS = 18;
+export const SIGHT_LATE = 4;
+/**
+ * How bright the Sniper's aim is, 0 to 1, `since` ticks after its last shot
+ * with `rate` ticks between shots: the dot comes on {@link SIGHT_TICKS}
+ * before the next shot is due and brightens to it; null outside that, and
+ * null too while it has not fired lately (it then aims at whatever comes in range).
+ */
+export const sightStrength = (since: number, rate: number): number | null => {
+  if (!Number.isFinite(since) || since > rate + SIGHT_LATE) return null;
+  const due = rate - since;
+  if (due > SIGHT_TICKS) return null;
+  return Math.min(1, 1 - Math.max(0, due) / SIGHT_TICKS);
+};
+/** Ticks the Sniper's glowing trail and its vapour stay after the round lands. */
+export const SNIPER_TRAIL_TICKS = 34;
+/** How high a flak shell climbs over its flight, as a share of the way it goes, and at most, world px. */
+export const FLAK_ARC = 0.16;
+export const FLAK_ARC_MAX = 56;
+/**
+ * How far above its straight line a flak shell is drawn, world px, `along`
+ * (0 to 1) a flight of `span` world px: up in an arc, back on the line where
+ * it bursts, so it bursts where and when it always did.
+ */
+export const flakLift = (span: number, along: number): number => {
+  const share = Math.min(1, Math.max(0, along));
+  return Math.min(FLAK_ARC_MAX, span * FLAK_ARC) * 4 * share * (1 - share);
+};
+/** Shells in one burst of the flak tower's twin barrels (the engine's shot and the ones drawn with it). */
+export const FLAK_VOLLEY_FULL = 3;
+export const FLAK_VOLLEY_LOW = 2;
+/** Ticks between the shells of a burst, the barrels taking turns, and world px between the barrels. */
+export const FLAK_VOLLEY_GAP = 5;
+const FLAK_BARREL_GAP = 4;
 
 /**
  * A heading in degrees turned toward `wanted` by at most `most`, the short
@@ -508,6 +551,28 @@ interface Bullet {
   landedTick: number | null;
   /** A Spurtz Cannon shell's size (issue #313), 0.4 to 1. */
   readonly scale?: number;
+  /** Where it left the muzzle: the Sniper's trail runs from here (new look). */
+  readonly from?: Point;
+  /** How far above the ground its target was, world px, when it last aimed: where the Sniper's dirt kicks up. */
+  lift?: number;
+  /** World px across its flight a flak shell is drawn off the muzzle, out of one of the twin barrels (new look). */
+  readonly barrel?: Point | undefined;
+}
+
+/**
+ * A flak shell drawn with the engine's own in a burst from the twin barrels
+ * (new look): it flies its arc to near the target and bursts there. Looks
+ * only: it hurts nothing and nothing waits on it.
+ */
+interface Volley {
+  readonly tower: TowerState;
+  readonly from: Point;
+  readonly to: Point;
+  /** Where the ground is under where it bursts, world px down from `to`. */
+  readonly lift: number;
+  readonly fireTick: number;
+  readonly flight: number;
+  fired: boolean;
 }
 
 interface Beam {
@@ -562,6 +627,8 @@ interface TowerState {
   crackle: number;
   /** Where a Laser's or Railgun's gun points in the new look, degrees, turned a little each tick; null until it first turns. */
   heading: number | null;
+  /** Shells the flak tower has fired (new look), so its twin barrels take turns. */
+  salvo: number;
 }
 
 /** What the effects ask of the yard renderer. */
@@ -608,6 +675,7 @@ export class TowerFx {
   private readonly bolts: Bolt[] = [];
   private readonly rails: Rail[] = [];
   private readonly flashes: Flash[] = [];
+  private readonly volleys: Volley[] = [];
   private lastTick = 0;
   private nextKey = 1;
   private readonly shells: ShellSprites | null;
@@ -651,6 +719,7 @@ export class TowerFx {
         recoil: null,
         crackle: Number.NEGATIVE_INFINITY,
         heading: null,
+        salvo: 0,
       });
     }
   }
@@ -778,6 +847,8 @@ export class TowerFx {
     }
     const key = this.nextKey;
     this.nextKey += 1;
+    // The flak's twin barrels take turns: its shell is drawn out of one of them.
+    const barrel = type === 115 && this.painted ? this.barrelOf(tower, from, aim) : undefined;
     this.bullets.push({
       key,
       type,
@@ -792,12 +863,15 @@ export class TowerFx {
       stepY: 0,
       ticks: 0,
       landedTick: null,
+      from,
+      lift: aimLift(target),
+      barrel,
     });
     this.flashes.push({ at: from, tick: event.tick, type });
     if (this.painted) {
       if (type === 20) this.cannonFx(event.tick, from, aim);
       else if (type === 21) this.sniperFx(event.tick, tower, from, aim);
-      else if (type === 115) this.flakFx(event.tick, tower, from, aim);
+      else if (type === 115) this.flakVolley(event.tick, tower, from, aim, aimLift(target), Math.max(speed, 1), barrel);
     }
     return key;
   }
@@ -833,7 +907,11 @@ export class TowerFx {
     this.drawCoils(tick);
     this.drawBolts(tick);
     this.drawRails(tick);
-    if (this.painted) this.drawWindUps(tick);
+    if (this.painted) {
+      this.drawWindUps(tick);
+      this.drawSights(tick, creepAt, creeps);
+      this.drawVolleys(tick);
+    }
     this.sparks?.update(tick);
   }
 
@@ -848,6 +926,7 @@ export class TowerFx {
     this.bolts.length = 0;
     this.rails.length = 0;
     this.flashes.length = 0;
+    this.volleys.length = 0;
     for (const tower of this.towers.values()) {
       tower.targetCreep = -1;
       tower.chargePending = false;
@@ -871,6 +950,7 @@ export class TowerFx {
     this.bolts.length = 0;
     this.rails.length = 0;
     this.flashes.length = 0;
+    this.volleys.length = 0;
   }
 
   /* ── Facing ─────────────────────────────────────────────────────────── */
@@ -1072,8 +1152,11 @@ export class TowerFx {
       }
       if (bullet.landedTick !== null) {
         const age = tick - bullet.landedTick;
-        if (age > IMPACT_TICKS) continue;
-        if (!(this.painted && (bullet.type === 20 || TRACER_TYPES.has(bullet.type)))) this.drawImpact(bullet, age);
+        // The new look's Sniper leaves its trail hanging a while after it strikes.
+        const trail = this.painted && bullet.type === 21;
+        if (age > (trail ? Math.max(IMPACT_TICKS, SNIPER_TRAIL_TICKS) : IMPACT_TICKS)) continue;
+        if (trail) this.drawSniperTrail(bullet, age);
+        else if (!(this.painted && (bullet.type === 20 || TRACER_TYPES.has(bullet.type)))) this.drawImpact(bullet, age);
       } else {
         this.drawRound(bullet);
       }
@@ -1098,7 +1181,10 @@ export class TowerFx {
       if (stepTick <= bullet.bornTick) continue;
       if (bullet.ticks % BULLET_AIM_TICKS === 0) {
         const creep = creepAt(bullet.creepId);
-        if (creep) bullet.aim = this.aimAt(creep, creep.ix, creep.iy);
+        if (creep) {
+          bullet.aim = this.aimAt(creep, creep.ix, creep.iy);
+          bullet.lift = aimLift(creep);
+        }
         const dx = bullet.aim.x - bullet.x;
         const dy = bullet.aim.y - bullet.y;
         const heading = Math.atan2(dy, dx);
@@ -1127,7 +1213,7 @@ export class TowerFx {
         if (this.painted) {
           if (bullet.type === 20) this.cannonHitFx(stepTick, bullet);
           else if (bullet.type === 21) this.sniperHitFx(stepTick, bullet);
-          else if (bullet.type === 115) this.flakHitFx(stepTick, bullet);
+          else if (bullet.type === 115) this.flakBurst(stepTick, { x: bullet.x, y: bullet.y }, bullet.lift ?? BODY_HEIGHT, true);
         }
         return;
       }
@@ -1136,7 +1222,8 @@ export class TowerFx {
 
   private drawRound(bullet: Bullet): void {
     const graphics = this.graphics;
-    if (this.painted && TRACER_TYPES.has(bullet.type) && this.drawTracer(bullet)) return;
+    if (this.painted && bullet.type === 21 && this.drawSniperRound(bullet)) return;
+    if (this.painted && bullet.type === 115 && this.drawFlakRound(bullet)) return;
     if (bullet.type === 20) {
       // Flash's cannon ball, a slow heavy round.
       graphics.circle(bullet.x, bullet.y, 4.5).fill({ color: CANNON_BALL });
@@ -2112,37 +2199,66 @@ export class TowerFx {
     if (bullet.splash > 0) this.shake?.(tick, 1.5 + bullet.splash / 50, 12);
   }
 
+  /* ── The Sniper Tower (new look) ───────────────────────────────────── */
+
   /**
-   * A Sniper's round or a flak shell in flight (new look): a painted tracer
-   * a few ticks of its flight long, its hot head on the round; on full a white
-   * core down its front half and a glow on the head as well.
+   * The Sniper takes aim: a red laser dot on the creep it will shoot next, a
+   * faint beam to it from the barrel and a ring closing onto the dot, coming
+   * on {@link SIGHT_TICKS} before the shot is due and brightening, with a
+   * glint on the scope just before it fires; while it has not fired lately, held dimmer on the creep it is
+   * turning onto. On low, the dot and the glint only. Looks only: the engine
+   * picks the target and fires when it always did.
    */
-  private drawTracer(bullet: Bullet): boolean {
+  private drawSights(
+    tick: number,
+    creepAt: (id: number) => CreepSnapshot | undefined,
+    creeps: readonly CreepSnapshot[],
+  ): void {
     const sparks = this.sparks;
-    if (!sparks) return false;
-    const step = Math.hypot(bullet.stepX, bullet.stepY);
-    const length = tracerLength(bullet.speed, bullet.ticks * bullet.speed);
-    // Not off the muzzle yet: its flash shows the shot.
-    if (step <= 0 || length < 1) return true;
-    const dirX = bullet.stepX / step;
-    const dirY = bullet.stepY / step;
-    const flak = bullet.type === 115;
-    const tint = flak ? FLAK_TRACER : SNIPER_TRACER;
-    // The painted head sits a little in from the strip's end.
-    const head = { x: bullet.x + dirX * 3, y: bullet.y + dirY * 3 };
-    const tail = { x: bullet.x - dirX * length, y: bullet.y - dirY * length };
-    sparks.line({ look: "tracer", from: tail, to: head, width: flak ? 12 : 10, alpha: 1, tint });
-    if (this.look !== "full") return true;
-    const middle = { x: bullet.x - dirX * length * 0.5, y: bullet.y - dirY * length * 0.5 };
-    sparks.line({ look: "tracer", from: middle, to: head, width: 5, alpha: 0.9, tint: 0xffffff });
-    sparks.spot({ look: "glow", at: { x: bullet.x, y: bullet.y }, size: flak ? 22 : 16, alpha: 0.75, tint });
-    return true;
+    if (!sparks) return;
+    for (const tower of this.towers.values()) {
+      const { info } = tower;
+      if (info.type !== 21) continue;
+      const rate = towerStats(info.type, info.level)?.rate ?? 80;
+      const since = tick - tower.lastShotTick;
+      let strength = sightStrength(since, rate);
+      let creep: CreepSnapshot | undefined;
+      if (strength !== null) {
+        const held = creepAt(tower.targetCreep);
+        creep = held && held.hp > 0 ? held : this.nearestInRange(info, creeps);
+      } else if (!(since <= rate + SIGHT_LATE)) {
+        creep = this.nearestInRange(info, creeps);
+        strength = 0.5;
+      }
+      if (!creep || strength === null) continue;
+      const dot = this.aimAt(creep, creep.ix, creep.iy);
+      const muzzle = muzzleOf(info.type, info.worldX, info.worldY);
+      const distance = Math.hypot(dot.x - muzzle.x, dot.y - muzzle.y) || 1;
+      const tip = {
+        x: muzzle.x + ((dot.x - muzzle.x) / distance) * 12,
+        y: muzzle.y + ((dot.y - muzzle.y) / distance) * 12,
+      };
+      const pulse = 0.8 + 0.2 * Math.sin(tick * 0.7);
+      if (this.look === "full") {
+        sparks.line({ look: "ray", from: tip, to: dot, width: 4, alpha: 0.25 + 0.45 * strength, tint: SNIPER_SIGHT });
+        // A red ring closing onto the dot as the shot comes due: the lock.
+        sparks.spot({ look: "ring", at: dot, size: 34 - 16 * strength, squash: 0.8, alpha: 0.4 + 0.5 * strength, tint: SNIPER_SIGHT });
+      }
+      sparks.spot({ look: "glow", at: dot, size: 18 + 14 * strength, alpha: (0.6 + 0.4 * strength) * pulse, tint: SNIPER_SIGHT });
+      sparks.spot({ look: "glow", at: dot, size: 6 + 4 * strength, alpha: 1, tint: 0xffd0c8 });
+      if (strength > 0.7) {
+        // The scope glints as it is about to fire.
+        const glint = (strength - 0.7) / 0.3;
+        sparks.spot({ look: "flare", at: tip, size: 12 + 24 * glint, alpha: glint, tint: 0xfff4d8, rotation: 0.25 });
+      }
+    }
   }
 
   /**
-   * The Sniper fires: a long thin muzzle-brake flash down the barrel with
-   * jets out of its sides, a sharp flare on the muzzle, a wisp of smoke, and
-   * the gun kicks. No jolt: one rifle round is not a blast.
+   * The Sniper fires: a long, sharp star of a rifle flash off the barrel's
+   * tip, a flare and a glow there, gun smoke that lingers and drifts, on full
+   * a brass casing flicked out, and a hard kick. No jolt: one rifle round is
+   * not a blast.
    */
   private sniperFx(tick: number, tower: TowerState, muzzle: Point, aim: Point): void {
     const sparks = this.sparks;
@@ -2150,69 +2266,140 @@ export class TowerFx {
     const heading = Math.atan2(aim.y - muzzle.y, aim.x - muzzle.x);
     const dirX = Math.cos(heading);
     const dirY = Math.sin(heading);
+    const tip = { x: muzzle.x + dirX * 12, y: muzzle.y + dirY * 12 };
+    // The painting's hot point is a fifth in from its back end: laid on the barrel's tip.
     sparks.emit(tick, {
-      look: "brake",
-      at: { x: muzzle.x + dirX * 16, y: muzzle.y + dirY * 16 },
+      look: "rifleflash",
+      at: { x: tip.x + dirX * 24, y: tip.y + dirY * 24 },
       add: true,
       life: 6,
-      size0: 40,
-      size1: 50,
-      squash: 0.55,
+      size0: 84,
+      size1: 96,
+      squash: 0.6,
       rotation: heading,
       colours: SNIPER_FLASH,
     });
     sparks.emit(tick, {
-      look: "glow", at: muzzle, add: true, life: 6, size0: 16, size1: 28, peak: 0.8, colours: SNIPER_FLASH,
+      look: "flare", at: tip, add: true, life: 6, size0: 46, size1: 14,
+      rotation: blastNoise(tick, 2) * 0.5, colours: [0xffffff, 0xfff0b0],
     });
     sparks.emit(tick, {
-      look: "flare", at: muzzle, add: true, life: 4, size0: 22, size1: 10,
-      rotation: blastNoise(tick, 2) * 0.6, colours: [0xffffff, 0xfff0b0],
+      look: "glow", at: tip, add: true, life: 8, size0: 26, size1: 50, peak: 0.9, colours: SNIPER_FLASH,
     });
-    if (this.look === "full") {
-      const puffs = sparks.many(2);
-      for (let index = 0; index < puffs; index += 1) {
-        sparks.emit(tick, {
-          look: "wisp",
-          at: { x: muzzle.x + dirX * 8, y: muzzle.y + dirY * 8 },
-          delay: 1 + index,
-          life: 30 + Math.round(blastNoise(tick, index + 10) * 10),
-          vx: dirX * 0.4 + (blastNoise(tick, index + 20) - 0.5) * 0.3,
-          vy: dirY * 0.25,
-          vz: 0.2 + blastNoise(tick, index + 30) * 0.2,
-          drag: 0.04,
-          size0: 6,
-          size1: 16,
-          fadeIn: 2,
-          peak: 0.4,
-          hold: 0.2,
-          rotation: blastNoise(tick, index + 40) * 6.28,
-          colours: SMOKE_TINTS,
-        });
-      }
+    const puffs = sparks.many(3);
+    for (let index = 0; index < puffs; index += 1) {
+      sparks.emit(tick, {
+        look: index % 2 === 0 ? "wisp" : "smoke",
+        at: { x: tip.x + dirX * 6 * index, y: tip.y + dirY * 6 * index },
+        delay: 1 + index,
+        life: 64 + Math.round(blastNoise(tick, index + 10) * 24),
+        vx: dirX * (0.45 - index * 0.1) + (blastNoise(tick, index + 20) - 0.5) * 0.2,
+        vy: dirY * 0.25,
+        vz: 0.12 + blastNoise(tick, index + 30) * 0.12,
+        drag: 0.03,
+        size0: 6,
+        size1: 22,
+        easeOut: true,
+        fadeIn: 3,
+        peak: 0.55,
+        hold: 0.3,
+        rotation: blastNoise(tick, index + 40) * 6.28,
+        colours: [0xe0d8cc, 0xa49e94, 0x7c766e],
+      });
     }
-    tower.recoil = { tick, dx: -dirX * RECOIL_PX * 0.75, dy: -dirY * RECOIL_PX * 0.75 };
+    if (this.look === "full") {
+      // The spent casing, flicked out of the side of the gun.
+      const side = blastNoise(tick, 45) < 0.5 ? -1 : 1;
+      sparks.emit(tick, {
+        look: "spark",
+        at: muzzle,
+        life: 22,
+        vx: -dirY * side * 1.1 - dirX * 0.3,
+        vy: dirX * side * 0.5,
+        vz: 1.3,
+        gravity: 0.12,
+        size0: 6,
+        size1: 5,
+        squash: 0.45,
+        spin: 0.6 * side,
+        colours: SNIPER_BRASS,
+      });
+    }
+    tower.recoil = { tick, dx: -dirX * RECOIL_PX * 1.25, dy: -dirY * RECOIL_PX * 1.25 };
   }
 
   /**
-   * A Sniper's round strikes: a sharp white-gold flare and a small ring, and
-   * sparks carrying on the way the round flew, as if through the creep; on
-   * full a puff of dust under it.
+   * A Sniper's round in flight: a thin white-gold bullet with a shock cone on
+   * its tip, a white-hot core and a glow on it on full, over the trail it lays.
+   */
+  private drawSniperRound(bullet: Bullet): boolean {
+    const sparks = this.sparks;
+    if (!sparks) return false;
+    const step = Math.hypot(bullet.stepX, bullet.stepY);
+    // Not off the muzzle yet: its flash shows the shot.
+    if (step <= 0) return true;
+    this.drawSniperTrail(bullet, -1);
+    const length = tracerLength(bullet.speed, bullet.ticks * bullet.speed);
+    if (length < 1) return true;
+    const dirX = bullet.stepX / step;
+    const dirY = bullet.stepY / step;
+    const head = { x: bullet.x + dirX * 3, y: bullet.y + dirY * 3 };
+    const tail = { x: bullet.x - dirX * length, y: bullet.y - dirY * length };
+    sparks.line({ look: "bullet", from: tail, to: head, width: 10, alpha: 1, tint: SNIPER_TRACER });
+    if (this.look !== "full") return true;
+    const middle = { x: bullet.x - dirX * length * 0.5, y: bullet.y - dirY * length * 0.5 };
+    sparks.line({ look: "bullet", from: middle, to: head, width: 6, alpha: 0.9, tint: 0xffffff });
+    sparks.spot({ look: "glow", at: { x: bullet.x, y: bullet.y }, size: 20, alpha: 0.7, tint: SNIPER_TRACER });
+    return true;
+  }
+
+  /**
+   * The line a Sniper's round lays from the muzzle: a gold glow that dies
+   * soon after it strikes and, on full, a thread of vapour that widens and
+   * hangs a little longer. `age` is ticks since it struck, or -1 in flight.
+   */
+  private drawSniperTrail(bullet: Bullet, age: number): void {
+    const sparks = this.sparks;
+    const from = bullet.from;
+    if (!sparks || !from) return;
+    const to = { x: bullet.x, y: bullet.y };
+    const fade = age < 0 ? 1 : Math.max(0, 1 - age / SNIPER_TRAIL_TICKS);
+    const glow = age < 0 ? 1 : Math.max(0, 1 - age / (SNIPER_TRAIL_TICKS * 0.4));
+    sparks.line({ look: "ray", from, to, width: 5, alpha: 0.4 * glow, tint: SNIPER_TRACER });
+    if (this.look !== "full") return;
+    sparks.line({ look: "vapour", from, to, width: 9 + 9 * (1 - fade), alpha: 0.5 * fade, tint: SNIPER_VAPOUR });
+  }
+
+  /**
+   * A Sniper's round strikes: a white hit flash on the creep, a sharp
+   * white-gold flare, a spray of sparks and bits out of its far side the way
+   * the round flew, and under a walker a kick of dirt; on full a ring of air
+   * and a puff of dust as well.
    */
   private sniperHitFx(tick: number, bullet: Bullet): void {
     const sparks = this.sparks;
     if (!sparks) return;
     const at = { x: bullet.x, y: bullet.y };
     const heading = Math.atan2(bullet.stepY, bullet.stepX);
+    const dirX = Math.cos(heading);
+    const dirY = Math.sin(heading);
+    sparks.emit(tick, { look: "glow", at, add: true, life: 4, size0: 38, size1: 26, colours: [0xffffff] });
     sparks.emit(tick, {
-      look: "flare", at, add: true, life: 8, size0: 34, size1: 14,
+      look: "flare", at, add: true, life: 8, size0: 44, size1: 14,
       rotation: blastNoise(tick, 1) * 0.8, colours: [0xffffff, 0xfff0b0, SNIPER_TRACER],
     });
+    // The spray's flash point is a fifth in from its back end: laid on the hit.
     sparks.emit(tick, {
-      look: "glow", at, add: true, life: 7, size0: 14, size1: 30, easeOut: true, peak: 0.7, colours: SNIPER_FLASH,
-    });
-    sparks.emit(tick, {
-      look: "ring", at, add: true, life: 9, size0: 8, size1: 34, squash: 0.8, easeOut: true, peak: 0.5,
-      colours: [0xffffff, 0xffe0a0],
+      look: "ricochet",
+      at: { x: at.x + dirX * 14, y: at.y + dirY * 14 },
+      add: true,
+      life: 10,
+      size0: 36,
+      size1: 56,
+      squash: 0.8,
+      easeOut: true,
+      rotation: heading,
+      colours: [0xffffff, 0xffe080, 0xff9a30],
     });
     const count = sparks.many(6);
     for (let index = 0; index < count; index += 1) {
@@ -2235,154 +2422,328 @@ export class TowerFx {
         colours: [0xffffff, 0xffe080, 0xff9a30],
       });
     }
+    if (this.look === "full") {
+      sparks.emit(tick, {
+        look: "ring", at, add: true, life: 9, size0: 8, size1: 36, squash: 0.8, easeOut: true, peak: 0.5,
+        colours: [0xffffff, 0xffe0a0],
+      });
+    }
+    const lift = bullet.lift ?? BODY_HEIGHT;
+    // A flyer has no ground under it to kick up.
+    if (lift > BODY_HEIGHT * 2) return;
+    const ground = { x: at.x + dirX * 4, y: at.y + lift };
+    // The painting's fountain rises from its bottom middle: laid on the ground.
+    sparks.emit(tick, {
+      look: "debris",
+      at: { x: ground.x, y: ground.y - 11 },
+      life: 18,
+      size0: 22,
+      size1: 32,
+      easeOut: true,
+      peak: 0.95,
+      hold: 0.35,
+      colours: SNIPER_DIRT,
+    });
     if (this.look !== "full") return;
     sparks.emit(tick, {
       look: "wisp",
-      at: { x: at.x, y: at.y + BODY_HEIGHT },
+      at: ground,
       delay: 1,
-      life: 30,
+      life: 34,
+      vx: dirX * 0.2,
       vz: 0.2,
       drag: 0.04,
-      size0: 6,
-      size1: 16,
+      size0: 8,
+      size1: 20,
       fadeIn: 2,
-      peak: 0.4,
+      peak: 0.45,
       hold: 0.2,
       rotation: blastNoise(tick, 80) * 6.28,
       colours: [0xc8b8a0, 0x9a8a78],
     });
   }
 
-  /** The Aerial Defense Tower fires: a flash of flame and a glow on its barrel, smoke, and the gun kicks. */
-  private flakFx(tick: number, tower: TowerState, muzzle: Point, aim: Point): void {
+  /* ── The Aerial Defense Tower (new look) ───────────────────────────── */
+
+  /**
+   * World px off the muzzle the next shell leaves from, out of one of the
+   * twin barrels in turn, across the line it is fired along.
+   */
+  private barrelOf(tower: TowerState, from: Point, aim: Point): Point {
+    const heading = Math.atan2(aim.y - from.y, aim.x - from.x);
+    const side = tower.salvo % 2 === 0 ? 1 : -1;
+    tower.salvo += 1;
+    return { x: -Math.sin(heading) * FLAK_BARREL_GAP * side, y: Math.cos(heading) * FLAK_BARREL_GAP * side * 0.6 };
+  }
+
+  /**
+   * The flak tower fires a burst: the engine's shell out of one barrel, and
+   * after it, the barrels taking turns, more shells drawn at the same creep
+   * that burst round it ({@link FLAK_VOLLEY_FULL}, or {@link FLAK_VOLLEY_LOW}).
+   * Only the engine's shell hurts; the others are the picture of a burst.
+   */
+  private flakVolley(
+    tick: number,
+    tower: TowerState,
+    from: Point,
+    aim: Point,
+    lift: number,
+    speed: number,
+    barrel: Point | undefined,
+  ): void {
+    this.flakMuzzle(tick, tower, { x: from.x + (barrel?.x ?? 0), y: from.y + (barrel?.y ?? 0) }, aim);
+    const extra = (this.look === "full" ? FLAK_VOLLEY_FULL : FLAK_VOLLEY_LOW) - 1;
+    const span = Math.hypot(aim.x - from.x, aim.y - from.y);
+    const spread = 12 + span * 0.06;
+    for (let index = 1; index <= extra; index += 1) {
+      const offset = this.barrelOf(tower, from, aim);
+      const start = { x: from.x + offset.x, y: from.y + offset.y };
+      const to = {
+        x: aim.x + (blastNoise(tick, index + 90) - 0.5) * 2 * spread,
+        y: aim.y + (blastNoise(tick, index + 95) - 0.5) * spread,
+      };
+      this.volleys.push({
+        tower,
+        from: start,
+        to,
+        lift,
+        fireTick: tick + index * FLAK_VOLLEY_GAP,
+        flight: Math.max(3, Math.round(Math.hypot(to.x - start.x, to.y - start.y) / speed)),
+        fired: false,
+      });
+    }
+  }
+
+  /** The burst's drawn shells: each fires, flies its arc and bursts. */
+  private drawVolleys(tick: number): void {
+    let keep = 0;
+    for (const volley of this.volleys) {
+      const age = tick - volley.fireTick;
+      if (age >= 0 && !volley.fired) {
+        volley.fired = true;
+        this.flakMuzzle(volley.fireTick, volley.tower, volley.from, volley.to);
+      }
+      if (age >= volley.flight) {
+        this.flakBurst(volley.fireTick + volley.flight, volley.to, volley.lift, false);
+        continue;
+      }
+      this.volleys[keep] = volley;
+      keep += 1;
+      // On the muzzle still: its flash shows it.
+      if (age < 1) continue;
+      const dx = volley.to.x - volley.from.x;
+      const dy = volley.to.y - volley.from.y;
+      const along = age / volley.flight;
+      this.drawShell(
+        { x: volley.from.x + dx * along, y: volley.from.y + dy * along },
+        Math.hypot(dx, dy),
+        along,
+        dx,
+        dy,
+      );
+    }
+    this.volleys.length = keep;
+  }
+
+  /** The engine's flak shell in flight, out of its barrel and up in its arc. */
+  private drawFlakRound(bullet: Bullet): boolean {
+    if (!this.sparks) return false;
+    const step = Math.hypot(bullet.stepX, bullet.stepY);
+    // Not off the muzzle yet: its flash shows the shot.
+    if (step <= 0) return true;
+    const travelled = bullet.ticks * bullet.speed;
+    const left = Math.hypot(bullet.aim.x - bullet.x, bullet.aim.y - bullet.y);
+    const span = travelled + left;
+    const along = travelled / Math.max(1, span);
+    // Drawn out of its barrel, drifting onto the line it truly flies by the time it bursts.
+    const off = 1 - along;
+    this.drawShell(
+      { x: bullet.x + (bullet.barrel?.x ?? 0) * off, y: bullet.y + (bullet.barrel?.y ?? 0) * off },
+      span,
+      along,
+      bullet.stepX,
+      bullet.stepY,
+    );
+    return true;
+  }
+
+  /**
+   * A flak shell `along` (0 to 1) a flight of `span` world px whose straight
+   * line runs `dx`, `dy` and passes `on` now: drawn up in its arc, a fat
+   * orange shell with its comet of flame, facing the way it climbs or falls,
+   * with a white-hot nose and, on full, a glow round it.
+   */
+  private drawShell(on: Point, span: number, along: number, dx: number, dy: number): void {
     const sparks = this.sparks;
     if (!sparks) return;
-    const heading = Math.atan2(aim.y - muzzle.y, aim.x - muzzle.x);
+    const length = Math.hypot(dx, dy) || 1;
+    const climb = (Math.min(FLAK_ARC_MAX, span * FLAK_ARC) * 4 * (1 - 2 * along)) / Math.max(1, span);
+    const angle = Math.atan2(dy / length - climb, dx / length);
+    const x = on.x;
+    const y = on.y - flakLift(span, along);
+    const size = 26;
+    // The painting's nose is a quarter in from its front: laid on the shell.
+    sparks.spot({
+      look: "shell",
+      at: { x: x - Math.cos(angle) * size * 0.25, y: y - Math.sin(angle) * size * 0.25 },
+      size,
+      squash: 0.6,
+      rotation: angle,
+      alpha: 1,
+      tint: FLAK_SHELL,
+    });
+    sparks.spot({ look: "glow", at: { x, y }, size: 10, alpha: 0.95, tint: FLAK_SHELL_HOT });
+    if (this.look === "full") sparks.spot({ look: "glow", at: { x, y }, size: 28, alpha: 0.45, tint: 0xff7a20 });
+  }
+
+  /**
+   * A shell leaves one of the flak tower's barrels: a short, fat blast of
+   * flame with a ring of gas, a glow, on full a puff of smoke, and the gun
+   * kicks.
+   */
+  private flakMuzzle(tick: number, tower: TowerState, at: Point, aim: Point): void {
+    const sparks = this.sparks;
+    if (!sparks) return;
+    const heading = Math.atan2(aim.y - at.y, aim.x - at.x);
     const dirX = Math.cos(heading);
     const dirY = Math.sin(heading);
-    const tints = [0xffffff, 0xe8f4ff, 0xffd080, 0xff8a20] as const;
+    // The painting's hot point is a fifth in from its back end: laid on the barrel.
     sparks.emit(tick, {
-      look: "muzzle",
-      at: { x: muzzle.x + dirX * 9, y: muzzle.y + dirY * 9 },
+      look: "aaflash",
+      at: { x: at.x + dirX * 12, y: at.y + dirY * 12 },
       add: true,
       life: 6,
-      size0: 26,
-      size1: 34,
-      squash: 0.6,
+      size0: 36,
+      size1: 46,
+      squash: 0.8,
       rotation: heading,
-      colours: tints,
+      colours: FLAK_FLASH,
     });
-    sparks.emit(tick, { look: "glow", at: muzzle, add: true, life: 6, size0: 20, size1: 32, peak: 0.8, colours: tints });
+    sparks.emit(tick, { look: "glow", at, add: true, life: 6, size0: 22, size1: 36, peak: 0.85, colours: FLAK_FLASH });
     if (this.look === "full") {
-      const puffs = sparks.many(2);
-      for (let index = 0; index < puffs; index += 1) {
-        sparks.emit(tick, {
-          look: index % 2 === 0 ? "smoke" : "wisp",
-          at: { x: muzzle.x + dirX * 10, y: muzzle.y + dirY * 10 },
-          delay: 1 + index,
-          life: 36 + Math.round(blastNoise(tick, index + 10) * 12),
-          vx: dirX * 0.4 + (blastNoise(tick, index + 20) - 0.5) * 0.3,
-          vy: dirY * 0.25,
-          vz: 0.25 + blastNoise(tick, index + 30) * 0.2,
-          drag: 0.03,
-          size0: 7,
-          size1: 18,
-          fadeIn: 2,
-          peak: 0.45,
-          hold: 0.2,
-          rotation: blastNoise(tick, index + 40) * 6.28,
-          colours: SMOKE_TINTS,
-        });
-      }
+      sparks.emit(tick, {
+        look: "smoke",
+        at: { x: at.x + dirX * 10, y: at.y + dirY * 10 },
+        delay: 1,
+        life: 48 + Math.round(blastNoise(tick, 10) * 14),
+        vx: dirX * 0.35 + (blastNoise(tick, 20) - 0.5) * 0.3,
+        vy: dirY * 0.2,
+        vz: 0.25,
+        drag: 0.03,
+        size0: 7,
+        size1: 18,
+        fadeIn: 2,
+        peak: 0.45,
+        hold: 0.2,
+        rotation: blastNoise(tick, 40) * 6.28,
+        colours: SMOKE_TINTS,
+      });
     }
     tower.recoil = { tick, dx: -dirX * RECOIL_PX, dy: -dirY * RECOIL_PX };
   }
 
   /**
-   * A flak shell bursts in the air: fire and a flash, shrapnel flying out,
-   * a dark flak cloud that hangs and drifts up, burning bits falling, and a
-   * small jolt (the blast is overhead, so lighter than the cannon's).
+   * A flak shell bursts in the air `lift` world px over the ground: a white
+   * flash, a fireball going from yellow to deep red, a ring of shrapnel, a
+   * dark flak cloud that hangs and drifts, and burning flecks falling to the
+   * ground. The engine's own shell (`main`) bursts bigger, on full with an air
+   * ring and more cloud, and jolts the yard a little (the blast is overhead,
+   * so lighter than the cannon's); the shells drawn with it burst smaller.
    */
-  private flakHitFx(tick: number, bullet: Bullet): void {
+  private flakBurst(tick: number, at: Point, lift: number, main: boolean): void {
     const sparks = this.sparks;
     if (!sparks) return;
-    const at = { x: bullet.x, y: bullet.y };
-    // Half the splash, capped as the old look caps it: the flak's 180 would fill the screen.
-    const reach = Math.min(Math.max(bullet.splash, 30) / 2, 40);
+    const full = this.look === "full";
+    const reach = main ? 40 : 26;
+    sparks.emit(tick, { look: "glow", at, add: true, life: 4, size0: reach * 1.6, size1: reach * 1.2, colours: [0xffffff] });
     sparks.emit(tick, {
-      look: "burst", at, add: true, life: 9, size0: reach * 0.6, size1: reach * 1.4, easeOut: true,
-      rotation: blastNoise(tick, 1) * 6.28, colours: FIRE_TINTS,
+      look: "fireball",
+      at,
+      life: 16,
+      size0: reach * 0.6,
+      size1: reach * 1.5,
+      easeOut: true,
+      hold: 0.35,
+      rotation: blastNoise(tick, 1) * 6.28,
+      colours: FLAK_FIRE,
     });
     sparks.emit(tick, {
-      look: "glow", at, add: true, life: 8, size0: reach * 0.8, size1: reach * 1.8, easeOut: true, peak: 0.7,
-      colours: FIRE_TINTS,
+      look: "glow", at, add: true, life: 12, size0: reach * 0.9, size1: reach * 2, easeOut: true, peak: 0.7,
+      colours: FLAK_FIRE,
     });
-    sparks.emit(tick, {
-      look: "shrapnel", at, add: true, life: 10, size0: reach * 0.5, size1: reach * 2.4, easeOut: true,
-      rotation: blastNoise(tick, 2) * 6.28, colours: [0xffffff, 0xffe0a0, 0xff9a40],
-    });
+    if (main || full) {
+      sparks.emit(tick, {
+        look: "shrapnel", at, add: true, life: 10, size0: reach * 0.6, size1: reach * 2.6, easeOut: true,
+        rotation: blastNoise(tick, 2) * 6.28, colours: [0xffffff, 0xffd890, 0xff8a30],
+      });
+    }
     sparks.emit(tick, {
       look: "flak",
       at,
-      delay: 1,
-      life: 70,
-      vz: 0.1,
-      drag: 0.03,
-      size0: reach * 0.5,
-      size1: reach * 1.1,
+      delay: 2,
+      life: main ? 100 : 70,
+      vx: 0.12,
+      vz: 0.08,
+      drag: 0.02,
+      size0: reach * 0.6,
+      size1: reach * 1.3,
       easeOut: true,
-      fadeIn: 2,
-      peak: 0.9,
-      hold: 0.35,
+      fadeIn: 3,
+      peak: 0.85,
+      hold: 0.4,
       rotation: blastNoise(tick, 3) * 6.28,
       colours: FLAK_CLOUD,
     });
-    if (this.look === "full") {
+    if (main && full) {
       sparks.emit(tick, {
         look: "ring", at, add: true, life: 12, size0: reach * 0.4, size1: reach * 2.6, squash: 0.9, easeOut: true,
-        peak: 0.35, colours: [0xffffff, 0xd8e8ff],
+        peak: 0.35, colours: [0xffffff, 0xffe0b0],
       });
       const puffs = sparks.many(2);
       for (let index = 0; index < puffs; index += 1) {
         const angle = blastNoise(tick, index + 10) * Math.PI * 2;
         sparks.emit(tick, {
           look: "flak",
-          at: { x: at.x + Math.cos(angle) * reach * 0.35, y: at.y + Math.sin(angle) * reach * 0.25 },
-          delay: 2 + index,
-          life: 56 + Math.round(blastNoise(tick, index + 20) * 14),
-          vz: 0.12,
-          drag: 0.03,
+          at: { x: at.x + Math.cos(angle) * reach * 0.4, y: at.y + Math.sin(angle) * reach * 0.25 },
+          delay: 3 + index,
+          life: 80 + Math.round(blastNoise(tick, index + 20) * 16),
+          vx: 0.14,
+          vz: 0.1,
+          drag: 0.02,
           size0: reach * 0.3,
-          size1: reach * 0.75,
+          size1: reach * 0.8,
           easeOut: true,
-          fadeIn: 2,
+          fadeIn: 3,
           peak: 0.75,
-          hold: 0.3,
+          hold: 0.35,
           rotation: blastNoise(tick, index + 30) * 6.28,
           colours: FLAK_CLOUD,
         });
       }
     }
-    const count = sparks.many(6);
+    // Burning flecks, thrown out and falling to the ground under the burst.
+    const ground = { x: at.x, y: at.y + lift };
+    const count = sparks.many(main ? 8 : 3);
     for (let index = 0; index < count; index += 1) {
       const angle = ((index + blastNoise(tick, index + 50)) / count) * Math.PI * 2;
-      const speed = 1.5 + blastNoise(tick, index + 60) * 2.5;
+      const speed = 0.8 + blastNoise(tick, index + 60) * 1.6;
       sparks.emit(tick, {
         look: "spark",
-        at,
+        at: ground,
+        z: Math.max(0, lift),
         add: true,
-        life: 16 + Math.round(blastNoise(tick, index + 70) * 10),
+        life: 36 + Math.round(blastNoise(tick, index + 70) * 20),
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed * 0.6,
-        vz: 0.5,
-        gravity: 0.2,
-        drag: 0.06,
+        vy: Math.sin(angle) * speed * 0.5,
+        vz: 0.6 + blastNoise(tick, index + 80) * 0.8,
+        gravity: 0.07,
+        drag: 0.04,
         size0: 6,
-        size1: 2,
+        size1: 3,
         stretch: true,
-        colours: [0xffffff, 0xffd060, 0xff6010],
+        colours: FLAK_EMBER,
       });
     }
-    this.shake?.(tick, 1.5, 10);
+    if (main) this.shake?.(tick, 1.5, 10);
   }
 }

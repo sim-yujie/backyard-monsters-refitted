@@ -8,7 +8,7 @@ import { boltLook, LOW_SHOT_BITS, MAX_SHOT_BITS, ShotFx } from "./shotFx";
  */
 
 const fakeSheet = (): Promise<Texture> =>
-  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1536 }) }));
+  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1728 }) }));
 
 const ready = async (low = false) => {
   const layer = new Container();

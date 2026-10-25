@@ -31,7 +31,7 @@ import { bitPath, tintAt } from "./blastFx";
  * show the shot.
  */
 
-/** The sheet: fifteen 192 px cells, four across, then the strips (`server/public/assets/fx/`). */
+/** The sheet: twenty 192 px cells, four across, then the strips (`server/public/assets/fx/`). */
 export const SHOT_FX_SHEET_URL = "/assets/fx/tower-fx.png";
 export const SHOT_FX_CELL = 192;
 const COLUMNS = 4;
@@ -41,10 +41,14 @@ export const SHOT_STRIP_HEIGHT = 96;
 const STRIP_COLUMNS = 2;
 
 /**
- * The cells, in the sheet's order. `muzzle`, `spark` and `brake` (a rifle's
- * muzzle-brake flash) point right; `scorch` is dark and `flak` (a flak
- * shell's burst cloud) mid grey; `shrapnel` is streaks flying out of an empty
- * middle.
+ * The cells, in the sheet's order. `muzzle`, `spark`, `rifleflash` (a
+ * rifle's star of a flash), `ricochet` (a spray of sparks out of a hit),
+ * `shell` (a flak shell with its comet of flame) and `aaflash` (a flak gun's
+ * fat blast with its ring of gas) point right, their hot point or nose
+ * toward one end; `debris` (a fountain of dirt) rises from its bottom middle.
+ * `scorch` is dark, `flak` (a flak shell's burst cloud) and `debris` mid
+ * grey; `shrapnel` is streaks flying out of an empty middle; `fireball` is a
+ * shaded ball of flame, for drawing unlit.
  */
 export const SHOT_LOOKS = [
   "glow",
@@ -59,9 +63,14 @@ export const SHOT_LOOKS = [
   "orb",
   "beam",
   "scorch",
-  "brake",
   "flak",
   "shrapnel",
+  "rifleflash",
+  "ricochet",
+  "debris",
+  "shell",
+  "fireball",
+  "aaflash",
 ] as const;
 export type ShotLook = (typeof SHOT_LOOKS)[number];
 /** Where the strips start: under the cells' last row. */
@@ -72,13 +81,15 @@ export const BOLT_COUNT = 6;
 /**
  * The strips, in the sheet's order: the bolts, then each bolt's bright core,
  * then the ray (a straight stroke of light, soft each side, tapered at the ends),
- * the streak (a lens-flare flash: a hot spot with a long thin streak through it)
- * and the tracer (a bullet's hot head at the right end, its tail fading out to the left).
+ * the streak (a lens-flare flash: a hot spot with a long thin streak through it),
+ * the bullet (a rifle round's hot head and shock cone at the right end, its tail
+ * fading out to the left) and the vapour (a thread of smoke, tight at the right
+ * end, widening and breaking up to the left).
  */
 export const STRIP_LOOKS = [
   "bolt1", "bolt2", "bolt3", "bolt4", "bolt5", "bolt6",
   "core1", "core2", "core3", "core4", "core5", "core6",
-  "ray", "streak", "tracer",
+  "ray", "streak", "bullet", "vapour",
 ] as const;
 export type StripLook = (typeof STRIP_LOOKS)[number];
 
