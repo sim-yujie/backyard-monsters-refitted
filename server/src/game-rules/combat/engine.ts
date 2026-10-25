@@ -4426,6 +4426,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         fireRailgun(tower, creep, damage * towerHealthScale(building.hp, building.maxHp));
         continue;
       }
+      // The Magma Tower's fireball is such a shell (`INFERNO_MAGMA_TOWER.as:56-79`):
+      // one target, no splash. Its `FlameEffect` (`:81-89`) is a listener
+      // nothing ever adds, so a creep it hits does not burn.
       fireShell(tower, creep, shot, splash, shellBlastTargets(building.type));
     }
   };

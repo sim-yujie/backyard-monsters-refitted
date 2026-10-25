@@ -4,6 +4,7 @@ import { createBattle } from "./engine.js";
 import {
   QUAKE_ANIM_FRAMES,
   QUAKE_FRAME_TICKS,
+  maxHp,
   quakeDamage,
   towerStats,
 } from "./stats.js";
@@ -12,9 +13,12 @@ import { buildEngineYard } from "./yard.js";
 import type { CombatBuildingDataMap } from "./types.js";
 
 /**
- * The Quake Tower (`client/scripts/INFERNOQUAKETOWER.as`, Inferno plan WP 1.3),
- * against Flash's numbers: its range and damage from the props, its quake's
- * fall-off, and the wind-up between `Fire` and the quake.
+ * The Inferno's two towers against Flash's numbers (Inferno plan WP 1.3, 1.4).
+ *
+ * The Quake Tower (`client/scripts/INFERNOQUAKETOWER.as`): its range and
+ * damage from the props, its quake's fall-off, and the wind-up between `Fire`
+ * and the quake. The Magma Tower (`INFERNO_MAGMA_TOWER.as`): a plain tower
+ * that lobs one magma fireball at a time.
  */
 
 const yardOf = (buildings: CombatBuildingDataMap, health?: Record<string, number>) =>
@@ -24,14 +28,21 @@ const yardOf = (buildings: CombatBuildingDataMap, health?: Record<string, number
     resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
   });
 
-/** A level `level` Quake Tower and a harvester beside it, where `monsters` land. */
-const quakeBattle = (
+interface TowerBattleOptions {
+  readonly level?: number;
+  readonly health?: Record<string, number>;
+  readonly overdrive?: boolean;
+}
+
+/** A level `level` tower of `type` and a harvester beside it, where `monsters` land. */
+const towerBattle = (
+  type: number,
   monsters: Record<string, number>,
-  options: { level?: number; health?: Record<string, number>; overdrive?: boolean } = {},
+  options: TowerBattleOptions = {},
 ) => {
   const yard = yardOf(
     {
-      "1": { id: 1, t: 129, l: options.level ?? 1, X: 0, Y: 0 },
+      "1": { id: 1, t: type, l: options.level ?? 1, X: 0, Y: 0 },
       "2": { id: 2, t: 1, l: 1, X: 100, Y: 100 },
     },
     options.health,
@@ -43,6 +54,12 @@ const quakeBattle = (
   battle.apply({ kind: "fling", t: 0, x: 110, y: 110, r: 0, monsters });
   return battle;
 };
+
+const quakeBattle = (monsters: Record<string, number>, options: TowerBattleOptions = {}) =>
+  towerBattle(129, monsters, options);
+
+const magmaBattle = (monsters: Record<string, number>, options: TowerBattleOptions = {}) =>
+  towerBattle(132, monsters, options);
 
 /** Every tick a creep was hurt, with what each took; only the tower hurts them here. */
 const quakes = (battle: ReturnType<typeof createBattle>, ticks: number) => {
@@ -170,5 +187,54 @@ describe("the champion's read of a Quake Tower (stance)", () => {
     const expected = (1100 * QUAKE_REACH_SHARE) / (15 * 2 + 174);
     expect(towerPerTick(129, 1, 1100, 15, 2, 10_000, 10_000)).toBeCloseTo(expected, 9);
     expect(towerPerTick(129, 1, 1100, 15, 2, 2_000, 10_000)).toBeCloseTo(expected, 9);
+  });
+});
+
+describe("the Magma Tower (`INFERNO_MAGMA_TOWER.as`)", () => {
+  it("reaches 180 to 230 and burns for 180 to 480, re-arming at 20", () => {
+    expect([1, 2, 3, 4, 5, 6].map((level) => towerStats(132, level)?.range)).toEqual([
+      180, 190, 200, 210, 220, 230,
+    ]);
+    expect([1, 2, 3, 4, 5, 6].map((level) => towerStats(132, level)?.damage)).toEqual([
+      180, 240, 300, 360, 420, 480,
+    ]);
+    expect(towerStats(132, 1)?.rate).toBe(20);
+    expect(towerStats(132, 1)?.splash).toBe(0);
+  });
+
+  it("fires 20 + 30 ticks in, then every rate x 2, its whole damage at full health", () => {
+    const hits = [...quakes(magmaBattle({ C12: 1 }), 400).entries()];
+    // `Props()` seeds the fire tick with `rate`; the first reload finds the
+    // target and waits 30 (`BTOWER.as:184-190`); then one shot every 40.
+    expect(hits.map(([tick]) => tick)).toEqual([50, 90, 130, 170, 210, 250, 290, 330, 370]);
+    for (const [, amounts] of hits) expect(amounts).toEqual([180]);
+  });
+
+  it("is weakened by its own health, as the other towers are (`:62`)", () => {
+    const half = maxHp(132, 1) / 2;
+    const hits = [...quakes(magmaBattle({ C12: 1 }, { health: { "1": half } }), 100).values()];
+    // int(180 * (0.5 + 0.5 * 0.5)).
+    expect(hits[0]).toEqual([135]);
+  });
+
+  it("shoots flyers as well as walkers (flyer mode 1)", () => {
+    const hits = [...quakes(magmaBattle({ C15: 1 }), 100).values()];
+    expect(hits).toEqual([[180], [180]]);
+  });
+
+  it("hits one creep a shot, with no splash and no burn after", () => {
+    const hits = quakes(magmaBattle({ C1: 4 }), 400);
+    for (const amounts of hits.values()) expect(amounts).toHaveLength(1);
+    // The magma's `FlameEffect` hangs off `onProjectileCollision`, which
+    // nothing ever listens with (`:81-89`), so a creep takes nothing between shots.
+    const ticks = [...hits.keys()];
+    for (let at = 1; at < ticks.length; at += 1) {
+      expect(ticks[at]! - ticks[at - 1]!).toBeGreaterThanOrEqual(40);
+    }
+  });
+
+  it("burns a quarter harder under Tower Overdrive", () => {
+    const hits = [...quakes(magmaBattle({ C12: 1 }, { overdrive: true }), 100).values()];
+    expect(hits[0]).toEqual([225]);
   });
 });
