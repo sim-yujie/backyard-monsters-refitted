@@ -197,14 +197,17 @@ laser, tesla and the other surface-only ids.
 
 | Monster | Unlock Sulfur | Unlock time | Locker lv | Housing | Special (`com/monsters/monsters/creeps/inferno/*.as`) |
 |---|---|---|---|---|---|
-| IC1 | 2,400 | 3,600 s | 1 (always unlocked, `:58-66`) | 15 | — |
-| IC2 | 4,800 | 14,400 s | 1 | 15 | — |
-| IC3 | 76,800 | 64,800 s | 2 | 15 | — |
-| IC4 | 38,400 | 64,800 s | 2 | 30 | — |
-| IC5 | 614,400 | 86,400 s | 3 | 40 | Spurtz: burns on death |
-| IC6 | 1,228,800 | 86,400 s | 3 | 50 | Balthazar: strips flying/ground defence flags, powered target mode |
-| IC7 | 2,457,600 | 172,800 s | 3 | 80 | Sabnox: magma fireball x2 vs towers |
-| IC8 | 4,915,200 | 259,200 s | 4 | 100 | King Wormzer: area hit 100, once per target |
+| IC1 Spurtz | 2,400 | 3,600 s | 1 (always unlocked, `:58-66`) | 15 | Spurtz: burn mark on death (looks only, `EFFECTS.as:107`) |
+| IC2 Zagnoid | 4,800 | 14,400 s | 1 | 15 | — |
+| IC3 Malphus | 76,800 | 64,800 s | 2 | 15 | — |
+| IC4 Valgos | 38,400 | 64,800 s | 2 | 30 | — |
+| IC5 Balthazar | 614,400 | 86,400 s | 3 | 40 | Balthazar: strips flying/ground defence flags, powered target mode |
+| IC6 Grokus | 1,228,800 | 86,400 s | 3 | 50 | — |
+| IC7 Sabnox | 2,457,600 | 172,800 s | 3 | 80 | Sabnox: magma fireball x2 vs towers |
+| IC8 King Wormzer | 4,915,200 | 259,200 s | 4 | 100 | King Wormzer: area hit 100, once per target |
+
+Names and classes per `CREATURELOCKER.as` (`name`, `classType`); corrected 2026-10-25, the
+first draft had the specials one or two rows low.
 
 Training: 5 academy steps each, Flash times kept (King Wormzer about 48 days in all, R4); hatch
 cost/time per level in the same file. The engine has no
