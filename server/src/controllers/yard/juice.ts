@@ -1,3 +1,4 @@
+import { isInfernoMonster } from "../../game-data/monsterCatalogue.js";
 import { YardJuiceSchema } from "../../schemas/YardSchemas.js";
 import { countJuiced } from "../../services/goals/counters.js";
 import { planJuice } from "../../services/yard/juice.js";
