@@ -262,7 +262,7 @@ describe("LoginScene sign-up launch extras", () => {
     expect(links.every((link) => link.target === "_blank" && link.rel === "noopener")).toBe(true);
   });
 
-  it("links Terms, Privacy, Credits and the Patreon under the panel, in new tabs", () => {
+  it("links Terms, Privacy, Credits, the Patreon and the Discord under the panel, in new tabs", () => {
     open();
 
     const links = [...$(".login-footer").querySelectorAll("a")];
@@ -271,9 +271,10 @@ describe("LoginScene sign-up launch extras", () => {
       ["Privacy Policy", "/privacy"],
       ["Credits", "/credits"],
       ["Support us on Patreon", "https://www.patreon.com/c/TheMonsterLab"],
+      ["Discord", "https://discord.gg/wthryBRZHz"],
     ]);
     expect(links.every((link) => link.target === "_blank")).toBe(true);
-    expect(links.at(-1)?.rel).toBe("noopener noreferrer");
+    expect(links.slice(-2).map((link) => link.rel)).toEqual(["noopener noreferrer", "noopener noreferrer"]);
   });
 
   it("flags a reserved name as it is typed", () => {

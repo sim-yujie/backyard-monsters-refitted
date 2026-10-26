@@ -34,12 +34,14 @@
  * release's cards again (`ui/events/WhatsNewDialog.ts`).
  *
  * With `onReportBug` it has a "Report a bug" item, which opens the bug report
- * form (`ui/bugReport/BugReportDialog.ts`).
+ * form (`ui/bugReport/BugReportDialog.ts`). After it, always, "Join the
+ * Discord" opens the community invite in a new tab.
  *
  * Beside "Reduce effects" sit the two sound switches, Music and Sound
  * effects (beta.5), saved with the player's yard (`game/sound/soundSwitches.ts`).
  */
 
+import { DISCORD_URL } from "@/config";
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
 import { waitingText } from "@/game/friends/friendText";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
@@ -342,6 +344,16 @@ export class AccountMenu {
       });
       this.list.append(reportBug);
     }
+    // The community Discord, in a new tab; no referrer to the outside site.
+    const discord = document.createElement("a");
+    discord.className = "btn btn--ghost account-menu__help account-menu__discord";
+    discord.setAttribute("role", "menuitem");
+    discord.href = DISCORD_URL;
+    discord.target = "_blank";
+    discord.rel = "noopener noreferrer";
+    discord.textContent = "Join the Discord";
+    discord.addEventListener("click", () => this.toggle(false));
+    this.list.append(discord);
     // Account settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
     const settings = document.createElement("button");
     settings.type = "button";
