@@ -78,7 +78,7 @@ HAS_MAT = b in ("cannon", "tesla")
 RECOLOUR = combo in ("TALL2", "TALL3") and not HAS_MAT
 # owner, 26 Oct: Aerial and Bunker redone. Both tiers are painted from tier 1 (TALL3 from TALL2 kept the old height), TALL3 also
 # sees the new tier 2 (tier2.png); the Aerial also sees the Railgun's tiers 2 and 3 (growref.png), whose stepped base it follows.
-FROM_T1 = RECOLOUR and b in ("aerial", "bunker")
+FROM_T1 = RECOLOUR and b in ("aerial", "bunker") and not os.environ.get("FROM_T2")   # FROM_T2=1: Aerial tier 3 from its stepped tier 2
 if EXTRA:
     # base.png: the picture this one changes (PLAIN: the black-and-gold top tier; TALL2/TALL3: the gold / black-diamond tower,
     # or for RECOLOUR the R2-A tier 1 / the taller gold tier 2)
@@ -92,7 +92,7 @@ if EXTRA:
     if FROM_T1 and combo == "TALL3":
         Image.open(OUT / b / "TALL2" / "sample-new.png").convert("RGB").save(out / "tier2.png")
         inputs.append("tier2.png")
-    if FROM_T1 and b == "aerial":
+    if RECOLOUR and b == "aerial":
         rg = [Image.open(OUT / "railgun" / f / "sample-new.png").convert("RGB") for f in ("TALL2", "TALL3")]
         gr = Image.new("RGB", (sum(i.width for i in rg), max(i.height for i in rg)), GREY)
         gr.paste(rg[0], (0, gr.height - rg[0].height)); gr.paste(rg[1], (rg[0].width, gr.height - rg[1].height))
@@ -301,6 +301,7 @@ if EXTRA:
                 f"finish as base.png. It must stay clearly the same Flash {NAME[b]}, just taller.")
     else:
         how, keep = TALL_HOW[b]
+        how = {c: t if FROM_T1 else t.replace("tier2.png", "base.png") for c, t in how.items()}
         task = (f"Paint TIER {combo[-1]} of 3 of the {NAME[b]}. The tower's 3 tiers follow the game's wall blocks: tier 1 is the "
                 "normal tower, tier 2 the GOLD version (like the Gold Blocks), tier 3 the BLACK DIAMOND version (black armour with "
                 "gold edges, like the Black Diamond Blocks). The higher tiers also fire further, so they STAND TALLER on the same "
@@ -337,7 +338,7 @@ Input 3, style.png: see style below.
 Input 4, base.png: the approved new picture this one is made from (see above).{'''
 Input 5, block.png: the game's ''' + ('Gold Blocks' if combo == 'TALL2' else 'Black Diamond Blocks') + ''' wall block. Use it ONLY as the colour and material reference for the new material (not its shape).''' if RECOLOUR else ''}{'''
 Input 6, tier2.png: the new TIER 2 (gold) of this tower, made from base.png. Tier 3 is the same design, one section more.''' if FROM_T1 and combo == 'TALL3' else ''}{'''
-Input ''' + str(7 if combo == 'TALL3' else 6) + ''', growref.png: the RAILGUN's tier 2 (left) and tier 3 (right), from the same game: its striped stepped-pyramid base grows by one step per tier. Grow this tower's base the same way (only its base; do not copy the Railgun's turret).''' if FROM_T1 and b == 'aerial' else ''}
+Input ''' + str(7 if FROM_T1 and combo == 'TALL3' else 6) + ''', growref.png: the RAILGUN's tier 2 (left) and tier 3 (right), from the same game: its striped stepped-pyramid base grows by one step per tier. Grow this tower's base the same way (only its base; do not copy the Railgun's turret).''' if RECOLOUR and b == 'aerial' else ''}
 
 {STYLE}
 
