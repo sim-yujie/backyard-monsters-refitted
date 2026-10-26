@@ -7,9 +7,15 @@ import {
   BIG_LABEL_POP_TICKS,
   BIG_LABEL_TICKS,
   BIG_LUNGE_PX,
+  FELLED_PX,
+  FELLED_TICKS,
   SLOW_MO_EASE_SECONDS,
   SLOW_MO_RATE,
   SLOW_MO_SECONDS,
+  STRUCK_FLASH_TICKS,
+  STRUCK_PX,
+  STRUCK_SQUASH_TICKS,
+  STRUCK_TICKS,
   bigLabelPlan,
   bigLabelPose,
   bigLabelReach,
@@ -20,6 +26,8 @@ import {
   bigLungeOffset,
   effectsQuality,
   effectsQualityChoice,
+  felledAlpha,
+  felledOffset,
   nextSwingGap,
   reduceEffects,
   screenShakeOn,
@@ -28,6 +36,9 @@ import {
   setScreenShake,
   slowMoSeconds,
   squashScale,
+  struckFlash,
+  struckOffset,
+  struckSquash,
   windUpFrame,
 } from "./juice";
 import { attackRow, spriteFor } from "./monsterSprites";
@@ -85,6 +96,47 @@ describe("the juiced wind-up", () => {
     expect(attackRow(pokey, 50, 0)).toBe(idle);
     expect(attackRow(pokey, 50, 0, { period: 60 })).toBe(first);
     expect(attackRow(pokey, 0, 0, { period: 60 })).toBe(first + 2);
+  });
+});
+
+describe("a heavy round's strike (the Sniper Tower, new look)", () => {
+  it("knocks the creep back most of the way at once, then eases it home", () => {
+    expect(struckOffset(-1)).toBe(0);
+    expect(struckOffset(0)).toBeGreaterThanOrEqual(0.6 * STRUCK_PX - 1e-9);
+    const peak = Math.max(...Array.from({ length: STRUCK_TICKS }, (_, age) => struckOffset(age)));
+    expect(peak).toBeLessThanOrEqual(STRUCK_PX);
+    expect(struckOffset(1)).toBeGreaterThan(struckOffset(8));
+    expect(struckOffset(STRUCK_TICKS)).toBe(0);
+  });
+
+  it("flashes the body full for two ticks, then fades it out", () => {
+    expect(struckFlash(-1)).toBe(0);
+    expect(struckFlash(0)).toBe(1);
+    expect(struckFlash(1)).toBe(1);
+    expect(struckFlash(3)).toBeGreaterThan(0);
+    expect(struckFlash(3)).toBeLessThan(1);
+    expect(struckFlash(STRUCK_FLASH_TICKS)).toBe(0);
+  });
+
+  it("flattens the body wide on the strike and is whole again in a few ticks", () => {
+    expect(struckSquash(-1)).toEqual({ x: 1, y: 1 });
+    const hit = struckSquash(0);
+    expect(hit.x).toBeGreaterThan(1);
+    expect(hit.y).toBeLessThan(1);
+    expect(struckSquash(STRUCK_SQUASH_TICKS)).toEqual({ x: 1, y: 1 });
+  });
+
+  it("throws a creep it killed further, keeps it there and fades it into its splat", () => {
+    expect(felledOffset(0)).toBe(0);
+    expect(felledOffset(2)).toBeGreaterThan(STRUCK_PX / 2);
+    expect(felledOffset(4)).toBeCloseTo(FELLED_PX);
+    expect(felledOffset(FELLED_TICKS)).toBeCloseTo(FELLED_PX);
+    expect(FELLED_PX).toBeGreaterThan(STRUCK_PX);
+    expect(felledAlpha(0)).toBe(1);
+    expect(felledAlpha(1)).toBe(1);
+    expect(felledAlpha(5)).toBeGreaterThan(0);
+    expect(felledAlpha(5)).toBeLessThan(1);
+    expect(felledAlpha(FELLED_TICKS)).toBe(0);
   });
 });
 
