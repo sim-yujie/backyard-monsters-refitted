@@ -13,6 +13,7 @@ import {
   createBattle,
   damagePercent,
   dropRadius,
+  felledCount,
   battleDefence,
   flingCost,
   healthOf,
@@ -1028,7 +1029,7 @@ export class AttackSession {
       declareWar: this.declareWar_,
       speed: this.speed_,
       damagePercent: battleState ? this.damageOf(battleState) : 0,
-      buildingsDestroyed: battleState?.destroyedIds.length ?? 0,
+      buildingsDestroyed: battleState ? this.destroyedOf(battleState) : 0,
       loot: battleState?.loot ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
       defenderLoss: battleState?.defenderLoss ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
       creepsFlung: battleState?.creepsFlung ?? 0,
@@ -1094,6 +1095,12 @@ export class AttackSession {
   private afterEvent(battle: Battle): void {
     this.checkEnd(battle);
     this.notify();
+  }
+
+  /** The felled buildings "N of M" counts: no walls, as `countedBuildings` leaves them out of M. */
+  private destroyedOf(battleState: BattleState): number {
+    const yard = this.combatYard;
+    return yard ? felledCount(yard, battleState.destroyedIds) : battleState.destroyedIds.length;
   }
 
   private damageOf(battleState: BattleState): number {
