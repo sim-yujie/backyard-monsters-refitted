@@ -153,3 +153,121 @@ describe("the owner's first look", () => {
     }
   });
 });
+
+describe("when the health cannot be read (26 Oct)", () => {
+  /**
+   * The game keeps one sign-in per account: opening it again makes a new
+   * token, and the server then answers the dashboard's old one with the same
+   * 404 it gives anyone it does not let in. That is the sign-in running out,
+   * not the server being down.
+   */
+  let accepted: string;
+  let fetch: ReturnType<typeof vi.fn>;
+
+  const answer = (url: string, init?: RequestInit): Response => {
+    const path = new URL(url, "http://localhost").pathname;
+    if (new Headers(init?.headers).get("Authorization") !== `Bearer ${accepted}`) {
+      return notFoundResponse();
+    }
+    if (path.endsWith("/admin/me")) return Response.json(fixture.me);
+    if (path.endsWith("/admin/health")) return Response.json(fixture.health);
+    if (path.endsWith("/admin/stats/overview")) return Response.json(fixture.overview);
+    if (path.endsWith("/admin/bugreports")) return Response.json(fixture.bugReports);
+    if (path.endsWith("/admin/errors")) return Response.json(fixture.errors);
+    return notFoundResponse();
+  };
+
+  const saveSession = (token: string) =>
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ token, userId: 2505 }));
+
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  const box = () => document.getElementById("problems")!;
+  /** The header's refresh button: checks everything again now. */
+  const refresh = () => document.querySelector<HTMLButtonElement>(".top-actions button")!.click();
+
+  beforeEach(() => {
+    document.body.replaceChildren();
+    localStorage.clear();
+    accepted = "first-token";
+    saveSession("first-token");
+    fetch = vi.fn(async (url: string, init?: RequestInit) => answer(url, init));
+    vi.stubGlobal("fetch", fetch);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("says the sign-in ran out, not that the server may be down, and offers to sign in again", async () => {
+    await boot();
+    await settle();
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+
+    // The game signs in again on another device: this browser keeps the old token.
+    accepted = "other-device-token";
+    refresh();
+    await settle();
+
+    expect(box().querySelector("h2")?.textContent).toBe("Your dashboard sign-in has run out");
+    expect(box().textContent).toContain("The server is up");
+    expect(box().textContent).not.toMatch(/down|restarting/);
+    const signIn = [...box().querySelectorAll("a")].find((a) => a.textContent === "Sign in again");
+    expect(signIn?.getAttribute("href")).toBe("/");
+  });
+
+  it("takes up the game's newer sign-in from this browser by itself and carries on", async () => {
+    await boot();
+    await settle();
+
+    // The game opens in another tab of this browser and saves its new token.
+    accepted = "game-token";
+    saveSession("game-token");
+    refresh();
+    await settle();
+
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+    const last = fetch.mock.calls.at(-1) as unknown as [string, RequestInit];
+    expect(new Headers(last[1].headers).get("Authorization")).toBe("Bearer game-token");
+  });
+
+  it("recovers as soon as the game signs in again in another tab", async () => {
+    await boot();
+    await settle();
+    accepted = "other-device-token";
+    refresh();
+    await settle();
+    expect(box().querySelector("h2")?.textContent).toBe("Your dashboard sign-in has run out");
+
+    accepted = "game-token";
+    saveSession("game-token");
+    window.dispatchEvent(new StorageEvent("storage", { key: SESSION_STORAGE_KEY }));
+    await settle();
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+  });
+
+  it("says the server could not be reached only when nothing answers", async () => {
+    await boot();
+    await settle();
+    fetch.mockImplementation(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    refresh();
+    await settle();
+    expect(box().querySelector("h2")?.textContent).toBe("The server could not be reached");
+    expect(box().textContent).toContain("may be down or restarting");
+    expect(box().textContent).not.toContain("Sign in again");
+  });
+
+  it("counts a proxy's 502 as the server not being reached", async () => {
+    await boot();
+    await settle();
+    fetch.mockImplementation(async () => new Response("Bad Gateway", { status: 502 }));
+    refresh();
+    await settle();
+    expect(box().querySelector("h2")?.textContent).toBe("The server could not be reached");
+  });
+});

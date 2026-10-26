@@ -462,6 +462,7 @@ button {
   background: var(--surface);
   color: var(--ink);
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
   transition:
     background-color 150ms var(--ease),
@@ -757,6 +758,12 @@ button {
   gap: 10px;
   justify-items: start;
   margin-top: 16px;
+}
+
+.verdict-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .issues {

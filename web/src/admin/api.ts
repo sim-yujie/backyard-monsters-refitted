@@ -1,4 +1,14 @@
-import { ApiError, apiUrl, get, getAuthToken, postJson } from "@/api/http";
+import { restoreStoredSession } from "@/api/auth";
+import {
+  ApiError,
+  NetworkError,
+  apiUrl,
+  get,
+  getAuthToken,
+  postJson,
+  type FormBody,
+  type JsonBody,
+} from "@/api/http";
 import type { ApiEnvelope } from "@/api/types";
 
 /**
@@ -258,37 +268,84 @@ type Envelope<T> = ApiEnvelope & T;
 export const isNotFound = (err: unknown): boolean =>
   err instanceof ApiError && (err.status === 404 || err.status === 401 || err.status === 403);
 
-export const fetchMe = (): Promise<Envelope<AdminMe>> => get(`${ADMIN}/me`);
+/**
+ * What a failed dashboard request means for the owner. The owner-only check
+ * answers a sign-in it no longer accepts with the same 404 as anyone else, so
+ * a refusal from a server that answered is "signedOut", never "the server is
+ * down"; only no answer at all, or a 5xx (the server or the proxy in front of
+ * it failing), is "unreachable".
+ */
+export type Failure = "signedOut" | "unreachable" | "other";
+
+export const failureKind = (err: unknown): Failure => {
+  if (isNotFound(err)) return "signedOut";
+  if (err instanceof NetworkError || (err instanceof ApiError && err.status >= 500)) {
+    return "unreachable";
+  }
+  return "other";
+};
+
+/**
+ * Takes up a newer game sign-in saved in this browser. The dashboard has no
+ * sign-in of its own: it sends the game's token, and the server keeps only
+ * the newest one per account, so the game opening (which signs in again, here
+ * or on another device) ends the token the dashboard started with. True when
+ * the saved token is not the one in use, so a refused request is worth one
+ * more try with it.
+ */
+export const adoptNewerSignIn = (): boolean => {
+  const before = getAuthToken();
+  const session = restoreStoredSession();
+  return session !== null && session.token !== before;
+};
+
+/** Sends a request, and once more if it was refused and a newer sign-in was found. */
+const signedIn = async <T>(request: () => Promise<T>): Promise<T> => {
+  try {
+    return await request();
+  } catch (err) {
+    if (isNotFound(err) && adoptNewerSignIn()) return request();
+    throw err;
+  }
+};
+
+const adminGet = <T extends ApiEnvelope>(path: string, query?: FormBody): Promise<T> =>
+  signedIn(() => get<T>(path, query));
+
+const adminPost = <T extends ApiEnvelope>(path: string, body: JsonBody): Promise<T> =>
+  signedIn(() => postJson<T>(path, body));
+
+export const fetchMe = (): Promise<Envelope<AdminMe>> => adminGet(`${ADMIN}/me`);
 
 export const fetchOverview = (days: number): Promise<Envelope<StatsOverview>> =>
-  get(`${ADMIN}/stats/overview`, { days });
+  adminGet(`${ADMIN}/stats/overview`, { days });
 
-export const fetchHealth = (): Promise<Envelope<AdminHealthReport>> => get(`${ADMIN}/health`);
+export const fetchHealth = (): Promise<Envelope<AdminHealthReport>> => adminGet(`${ADMIN}/health`);
 
 export const fetchBugReports = (
   filter: BugFilter | TicketStatus,
   before?: number,
 ): Promise<Envelope<{ reports: BugReportSummary[]; nextBefore: number | null }>> =>
-  get(`${ADMIN}/bugreports`, { filter, before, limit: 30 });
+  adminGet(`${ADMIN}/bugreports`, { filter, before, limit: 30 });
 
 export const fetchBugReport = (id: number): Promise<Envelope<{ report: BugReportDetail }>> =>
-  get(`${ADMIN}/bugreports/${id}`);
+  adminGet(`${ADMIN}/bugreports/${id}`);
 
 export const updateTicket = (
   id: number,
   update: { status?: TicketStatus; notes?: string },
 ): Promise<Envelope<{ report: BugReportDetail }>> =>
-  postJson(`${ADMIN}/bugreports/${id}/ticket`, update);
+  adminPost(`${ADMIN}/bugreports/${id}/ticket`, update);
 
 /** Writes to the report's player in the game's mail, as "The game team". */
 export const replyToReport = (
   id: number,
   message: string,
 ): Promise<Envelope<{ report: BugReportDetail }>> =>
-  postJson(`${ADMIN}/bugreports/${id}/reply`, { message });
+  adminPost(`${ADMIN}/bugreports/${id}/reply`, { message });
 
 export const searchPlayers = (q: string): Promise<Envelope<{ players: PlayerMatch[] }>> =>
-  get(`${ADMIN}/players`, { q });
+  adminGet(`${ADMIN}/players`, { q });
 
 export const fetchShinyAwards = (
   before?: number,
@@ -298,18 +355,18 @@ export const fetchShinyAwards = (
     nextBefore: number | null;
     total: { awards: number; shiny: number };
   }>
-> => get(`${ADMIN}/shiny`, { before, limit: 30 });
+> => adminGet(`${ADMIN}/shiny`, { before, limit: 30 });
 
 export const giveShiny = (
   award: ShinyAwardRequest,
 ): Promise<Envelope<{ award: ShinyAwardView; already: boolean; report?: BugReportDetail }>> =>
-  postJson(`${ADMIN}/shiny`, award);
+  adminPost(`${ADMIN}/shiny`, award);
 
 export const fetchErrors = (
   source: ErrorSource | "all",
   sort: "last" | "count",
 ): Promise<Envelope<{ groups: ErrorGroup[]; totals: ErrorTotals }>> =>
-  get(`${ADMIN}/errors`, { source: source === "all" ? undefined : source, sort, limit: 100 });
+  adminGet(`${ADMIN}/errors`, { source: source === "all" ? undefined : source, sort, limit: 100 });
 
 /**
  * A bug report's screenshot or added picture, as a blob URL: an `<img src>`
@@ -319,10 +376,14 @@ export const fetchReportImage = async (
   id: number,
   which: "screenshot" | "picture",
 ): Promise<string> => {
-  const token = getAuthToken();
-  const response = await fetch(apiUrl(`${ADMIN}/bugreports/${id}/${which}`), {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const load = (): Promise<Response> => {
+    const token = getAuthToken();
+    return fetch(apiUrl(`${ADMIN}/bugreports/${id}/${which}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  };
+  let response = await load();
+  if (response.status === 404 && adoptNewerSignIn()) response = await load();
   if (!response.ok) throw new Error(`The ${which} could not be loaded (${response.status}).`);
   return URL.createObjectURL(await response.blob());
 };
