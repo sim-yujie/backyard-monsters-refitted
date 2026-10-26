@@ -88,6 +88,8 @@ describe("SiegeFx", () => {
     const { air, art, fx } = setup();
     fx.update({ ...none, active: "decoy", decoy }, 0);
     expect(fx.shown.decoy).toBe("decoy");
+    // The blast's sheet is fetched on the drop, so it is in by the blast.
+    expect(art.asked).toContainEqual({ sheet: "explosion", frame: 0 });
     const root = air.children[0] as Container;
     expect(root.x).toBe(50);
     expect(root.y).toBeLessThan(75 - 250);
@@ -98,6 +100,10 @@ describe("SiegeFx", () => {
     expect(fx.shown.decoy).toBe("blast");
     expect(art.asked.at(-1)).toEqual({ sheet: "explosion", frame: 0 });
     expect((root.children[1] as Sprite).visible).toBe(false);
+    // Centred on the drop like the wave was, not hung off the wave's corner.
+    const body = root.children[0] as Sprite;
+    expect(body.x).toBe(-SIEGE_STRIPS.explosion.width / 2);
+    expect(body.y).toBe(-SIEGE_STRIPS.explosion.height / 2);
     fx.update(none, decoy.explodesAt + 2 * 33);
     expect(fx.shown.decoy).toBeNull();
     expect(air.children).toHaveLength(0);

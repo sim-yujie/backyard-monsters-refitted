@@ -267,6 +267,8 @@ export class SiegeFx {
       }
       view.fuse.visible = false;
       view.root.position.set(view.at.x, view.at.y);
+      // `setDecoyGraphic`: every graphic is centred on the drop, the blast too.
+      view.body.position.set(-SIEGE_STRIPS.explosion.width / 2, -SIEGE_STRIPS.explosion.height / 2);
       this.show(view.body, "explosion", frame);
       return;
     }
@@ -289,6 +291,9 @@ export class SiegeFx {
     fuse.position.set(body.x - 8, body.y + 30);
     root.addChild(body, fuse);
     this.host.air().addChild(root);
+    // Fetch the fuse and the blast now, or the blast's first cells play unseen.
+    this.art.cell("fuse", 0);
+    this.art.cell("explosion", 0);
     const view: DecoyView = { root, body, fuse, at: this.host.world(decoy.x, decoy.y), plan: decoy, blewAt: null };
     this.decoy = view;
     return view;
