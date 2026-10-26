@@ -43,7 +43,7 @@ export const DESCENT_PASSED_LEVEL = DESCENT_YARDS + 1;
 export const DESCENT_FLINGER_CAPACITY: readonly number[] = [250, 850, 1500, 2500, 3500, 3500, 3500];
 
 /** Declare War adds a quarter to the payload (`ATTACK.as:592-594`). */
-const DECLARE_WAR_PAYLOAD = 0.25;
+export const DECLARE_WAR_PAYLOAD = 0.25;
 
 const FLINGER_TYPE = 5;
 

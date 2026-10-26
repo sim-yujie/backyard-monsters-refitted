@@ -42,6 +42,8 @@ import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
 import { isDescentBaseid } from "../../../services/inferno/descent.js";
 import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
+import { landInfernoTribeAttack } from "../../../services/inferno/infernoTribeLanding.js";
+import { isInfernoTribeBaseid } from "../../../services/inferno/infernoTribes.js";
 import { economyConfig } from "../../../config/EconomyConfig.js";
 import {
   auditEconomySave,
@@ -135,6 +137,17 @@ export const baseSave: KoaController = async (ctx) => {
 
     ctx.status = Status.OK;
     ctx.body = { error: 0, ...filteredSave, ...(descent && { descent }) };
+    return;
+  }
+
+  // Nor does a Moloch tribe of the Inferno map: its attack is bound to the
+  // attacker too (`services/inferno/infernoTribeLanding.ts`).
+  if (!baseSave && isInfernoTribeBaseid(saveData.baseid)) {
+    const { save: yardSave, tribe } = await landInfernoTribeAttack(ctx, user, saveData);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(tribe && { tribe }) };
     return;
   }
 

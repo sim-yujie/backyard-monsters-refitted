@@ -377,14 +377,16 @@ const BASE_VALUE_EXCLUDED = new Set(["decoration", "enemy", "immovable", "trap"]
  *
  * `basevalue` drives the empire level alongside `points`
  * (`services/base/calculateBaseLevel.ts:11-20`), which is why the server
- * derives it rather than storing whatever arrives.
+ * derives it rather than storing whatever arrives. `kind` picks the price
+ * table: an Inferno yard is valued at the Inferno prices, as Flash's
+ * `_buildingProps` there are `INFERNOYARDPROPS`.
  */
-export const baseValueOf = (buildingdata: BuildingDataMap | null | undefined): number => {
+export const baseValueOf = (buildingdata: BuildingDataMap | null | undefined, kind: YardKind = "main"): number => {
   let total = 0;
 
   for (const building of Object.values(buildingdata ?? {})) {
     const type = pricingType(Number(building.t));
-    const row = costOf(type);
+    const row = costOf(type, kind);
     if (!row || BASE_VALUE_EXCLUDED.has(row.kind)) continue;
 
     const level = pricingLevel(building);

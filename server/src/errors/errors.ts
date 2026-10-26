@@ -908,6 +908,10 @@ export type InfernoAttackRefusal =
   | "descentPassed"
   | "notDescentBase"
   | "notNextBase"
+  | "notInfernoTribe"
+  | "notYourTribe"
+  | "tribeDestroyed"
+  | "noMonsters"
   | "kindNotReady";
 
 const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
@@ -915,13 +919,20 @@ const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
   descentPassed: "You have already fought your way down the Descent.",
   notDescentBase: "That is not a Descent yard.",
   notNextBase: "Only the next yard down the Descent can be attacked.",
+  notInfernoTribe: "That is not a Moloch tribe.",
+  notYourTribe: "That tribe is not on your Inferno map.",
+  tribeDestroyed: "That tribe is still in ruins.",
+  // Flash's `infmap_msg_nomonsters` (`maproom_inferno/PlayerHandler.as:308`); its text is not in our `english.json`.
+  noMonsters: "You need monsters in your Housing Bunkers to attack.",
   kindNotReady: "That kind of Inferno attack is not open yet.",
 };
 
 /**
  * An Inferno attack refused before anything is written (WP 1.11): the cave
  * has not come up all five levels, the Descent is passed, the base is not a
- * Descent yard or not the next one, or the kind of attack is not built yet.
+ * Descent yard or not the next one; the base is not a Moloch tribe, not one
+ * of the player's seven, or still wrecked, or the Inferno yard houses no
+ * monsters (WP 2.8); or the kind of attack is not built yet.
  *
  * @param reason - Which rule refused it.
  * @param detail - Figures for the client, e.g. `next`, the base id that can be attacked.

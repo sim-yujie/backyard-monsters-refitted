@@ -30,11 +30,13 @@ import { readInfernoProgress } from "../../services/inferno/infernoProgress.js";
 import { catchUpArmiesForAttack } from "../../services/yard/armies.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { startInfernoTribeAttack, type InfernoTribeAttackStart } from "./tribeAttack.js";
 
 /**
  * `POST /bm/inferno/attack/start` (`docs/design/inferno.md` §3.2, WP 1.11):
- * starts an Inferno attack and mints its attack session. Only the kind
- * `"descent"` is built so far: the next of the 13 Descent yards.
+ * starts an Inferno attack and mints its attack session. This file builds
+ * the kind `"descent"`: the next of the 13 Descent yards. A Moloch tribe
+ * (kind `"tribe"`, WP 2.8) is `tribeAttack.ts`.
  *
  * Every refusal comes before anything is written (`infernoAttackRefusedErr`,
  * 409): the cave not up all five levels, the Descent passed, a base that is
@@ -155,14 +157,16 @@ export const startDescentAttack = async (
   };
 };
 
+/** Kind `"descent"` here, kind `"tribe"` in `tribeAttack.ts`; `"player"` is WP 3.2. */
 export const infernoAttackStart: KoaController = async (ctx) => {
   requireInfernoEnabled();
   const body = (ctx.request.body ?? {}) as { kind?: unknown; baseid?: unknown };
-  if (body.kind !== "descent") throw infernoAttackRefusedErr("kindNotReady");
+  const baseid = String(body.baseid ?? "");
+  let start: DescentAttackStart | InfernoTribeAttackStart;
+  if (body.kind === "descent") start = await startDescentAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
+  else if (body.kind === "tribe") start = await startInfernoTribeAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
+  else throw infernoAttackRefusedErr("kindNotReady");
 
   ctx.status = Status.OK;
-  ctx.body = {
-    error: 0,
-    ...(await startDescentAttack(postgres.em, ctx.authUser, String(body.baseid ?? ""), getCurrentDateTime())),
-  };
+  ctx.body = { error: 0, ...start };
 };
