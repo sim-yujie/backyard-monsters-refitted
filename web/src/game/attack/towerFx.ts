@@ -476,6 +476,8 @@ const SNIPER_GLOW_TICKS = 19;
  * the damage off on the tick it fired, and the wound shows when this lands.
  */
 export const SNIPER_ROUND_SPEED = 20;
+/** Ticks the wide sheath of light round a Sniper's line takes to fade after its round strikes. */
+const SNIPER_CRACK_TICKS = 10;
 /** The Sniper's strike: the yard's jolt, px, and how long it lasts, ticks. */
 const SNIPER_JOLT = 2.5;
 const SNIPER_JOLT_TICKS = 10;
@@ -2387,8 +2389,11 @@ export class TowerFx {
 
   /**
    * The line a Sniper's round lays from the muzzle: an amber line with a gold
-   * glow down its middle that dies soon after it strikes and, on full, a thread
-   * of warm vapour that widens and hangs a little longer. `age` is ticks since it struck, or -1 in flight.
+   * glow down its middle that dies soon after it strikes, a wide orange sheath
+   * of light round it for the first few ticks (the crack of the shot: without
+   * it the line was a hair beside the Railgun's and the Laser's) and, on full,
+   * a thread of warm vapour that widens and hangs a little longer. `age` is
+   * ticks since it struck, or -1 in flight.
    */
   private drawSniperTrail(bullet: Bullet, age: number): void {
     const sparks = this.sparks;
@@ -2401,8 +2406,10 @@ export class TowerFx {
     if (this.look === "full") {
       sparks.line({ look: "vapour", from, to, width: 9 + 9 * (1 - fade), alpha: 0.45 * fade, tint: SNIPER_VAPOUR, add: false });
     }
-    sparks.line({ look: "ray", from, to, width: 9, alpha: 0.9 * glow, tint: SNIPER_TRAIL, add: false });
-    sparks.line({ look: "ray", from, to, width: 5.5, alpha: 0.85 * glow, tint: SNIPER_HOT });
+    const crack = age < 0 ? 1 : Math.max(0, 1 - age / SNIPER_CRACK_TICKS);
+    if (crack > 0) sparks.line({ look: "ray", from, to, width: 44, alpha: 0.8 * crack, tint: SNIPER_GLOW });
+    sparks.line({ look: "ray", from, to, width: 14, alpha: 0.9 * glow, tint: SNIPER_TRAIL, add: false });
+    sparks.line({ look: "ray", from, to, width: 8, alpha: 0.95 * glow, tint: SNIPER_HOT });
   }
 
   /**
