@@ -1,24 +1,95 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ArtState, resolveArt } from "./buildingArt";
-import { TOWER_TIER_ART, tierArtFor, tierLift } from "./buildingArtTiers";
+import {
+  NEW_TOWER_ART_KEY,
+  TOWER_TIER_ART,
+  newTowerArt,
+  readNewTowerArt,
+  setNewTowerArt,
+  tierArtFor,
+  tierLift,
+} from "./buildingArtTiers";
 
 /** The game server's assets, which the tier pictures are served from. */
 const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import.meta.url));
 
 const TOWERS = [20, 21, 22, 23, 25, 115, 118];
 
+/** A browser's site data, kept in memory. */
+const memoryStore = (): Storage => {
+  const items = new Map<string, string>();
+  return {
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => void items.set(key, value),
+    removeItem: (key: string) => void items.delete(key),
+  } as unknown as Storage;
+};
+
+describe("the new tower art switch", () => {
+  it("is off by default, so every tower keeps its Flash art", () => {
+    expect(newTowerArt()).toBe(false);
+    expect(readNewTowerArt("", memoryStore())).toBe(false);
+    expect(resolveArt(20, 8, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
+    expect(resolveArt(21, 5, ArtState.DEFAULT)?.anims.length).toBeGreaterThan(0);
+    for (const type of TOWERS) {
+      expect(tierArtFor(type, 8)).toBeNull();
+      expect(tierLift(type, 8)).toBe(0);
+    }
+  });
+
+  it("turns on with ?towers=new, is remembered, and turns off with ?towers=classic", () => {
+    const store = memoryStore();
+    expect(readNewTowerArt("?towers=new", store)).toBe(true);
+    expect(store.getItem(NEW_TOWER_ART_KEY)).toBe("1");
+    expect(readNewTowerArt("", store)).toBe(true);
+    expect(readNewTowerArt("?towers=classic", store)).toBe(false);
+    expect(store.getItem(NEW_TOWER_ART_KEY)).toBeNull();
+    expect(readNewTowerArt("?towers=anything", store)).toBe(false);
+  });
+
+  it("still follows the address when site data is blocked", () => {
+    const blocked = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    } as unknown as Storage;
+    expect(readNewTowerArt("?towers=new", blocked)).toBe(true);
+    expect(readNewTowerArt("", blocked)).toBe(false);
+    expect(readNewTowerArt("?towers=new", null)).toBe(true);
+  });
+
+  it("turns on and off for the page", () => {
+    setNewTowerArt(true);
+    expect(resolveArt(20, 1, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.t1@2x.webp");
+    setNewTowerArt(false);
+    expect(resolveArt(20, 1, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
+  });
+});
+
 describe("the repainted tower tiers", () => {
-  it("cover all seven defensive towers, two tiers each", () => {
+  beforeEach(() => setNewTowerArt(true));
+  afterEach(() => setNewTowerArt(false));
+
+  it("cover all seven defensive towers, three tiers each", () => {
     expect(Object.keys(TOWER_TIER_ART).map(Number)).toEqual(TOWERS);
-    for (const type of TOWERS) expect(TOWER_TIER_ART[type]).toHaveLength(2);
+    for (const type of TOWERS) {
+      expect(TOWER_TIER_ART[type]).toHaveLength(3);
+      expect(TOWER_TIER_ART[type]?.[0]?.from).toBe(1);
+    }
   });
 
   it("name pictures and shadows the game server has", () => {
     const missing: string[] = [];
     for (const type of TOWERS) {
-      for (const level of [4, 7]) {
+      for (const level of [1, 4, 7]) {
         const art = resolveArt(type, level === 7 && type === 22 ? 5 : level, ArtState.DEFAULT);
         for (const url of [art?.top.url, art?.shadow?.url]) {
           if (!url || !existsSync(ASSETS + url.replace(/^\/assets\//, ""))) {
@@ -30,9 +101,11 @@ describe("the repainted tower tiers", () => {
     expect(missing).toEqual([]);
   });
 
-  it("keep levels 1-3 on the Flash picture and switch at 4 and 7", () => {
+  it("show tier 1 at levels 0-3 and switch at 4 and 7", () => {
     for (const level of [0, 1, 2, 3]) {
-      expect(resolveArt(20, level, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
+      const art = resolveArt(20, level, ArtState.DEFAULT);
+      expect(art?.top.url).toBe("/assets/buildings/cannontower/top.t1@2x.webp");
+      expect(art?.level).toBe(1);
     }
     for (const level of [4, 5, 6]) {
       const art = resolveArt(20, level, ArtState.DEFAULT);
@@ -47,7 +120,7 @@ describe("the repainted tower tiers", () => {
   });
 
   it("split the five-level Monster Bunker 1-2, 3-4 and 5", () => {
-    expect(resolveArt(22, 2, ArtState.DEFAULT)?.top.url).toContain("bunker/anim.1.png");
+    expect(resolveArt(22, 2, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t1@2x.webp");
     expect(resolveArt(22, 3, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t2@2x.webp");
     expect(resolveArt(22, 4, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t2@2x.webp");
     expect(resolveArt(22, 5, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t3@2x.webp");
@@ -69,9 +142,8 @@ describe("the repainted tower tiers", () => {
     expect(ruin?.anims).toEqual([]);
   });
 
-  it("lift the gun with the picture, and not on tier 1 or another type", () => {
-    expect(tierLift(21, 3)).toBe(0);
-    expect(tierLift(21, 4)).toBeGreaterThan(0);
+  it("lift the gun with the picture, and not on another type", () => {
+    expect(tierLift(21, 3)).toBeLessThan(tierLift(21, 4));
     expect(tierLift(21, 7)).toBeGreaterThan(tierLift(21, 4));
     expect(tierLift(14, 10)).toBe(0);
     expect(tierArtFor(1, 10)).toBeNull();
@@ -79,7 +151,8 @@ describe("the repainted tower tiers", () => {
 
   it("stand each higher tier taller, on the same base", () => {
     for (const type of TOWERS) {
-      const [two, three] = TOWER_TIER_ART[type] ?? [];
+      const [one, two, three] = TOWER_TIER_ART[type] ?? [];
+      expect(one && two && two.top[2] < one.top[2] && two.lift > one.lift, `type ${type}`).toBe(true);
       expect(two && three && three.top[2] < two.top[2], `type ${type}`).toBe(true);
       expect(two && three && three.lift > two.lift, `type ${type}`).toBe(true);
     }

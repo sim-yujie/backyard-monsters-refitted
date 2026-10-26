@@ -244,7 +244,7 @@ export interface TowerInfo {
   readonly frames: number;
   /**
    * World px a repainted tier stands taller than the Flash tower, which lifts
-   * its muzzle and coil by as much (`buildingArtTiers.ts`); 0 for tier 1.
+   * its muzzle and coil by as much (`buildingArtTiers.ts`); 0 with the Flash art.
    */
   readonly lift: number;
 }

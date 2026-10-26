@@ -3,6 +3,7 @@ import { Container, Graphics, Texture, TextureSource, TilingSprite } from "pixi.
 import type { Sprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
+import { setNewTowerArt } from "@/game/yard/buildingArtTiers";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
@@ -194,10 +195,16 @@ describe("towersOf", () => {
   it("gives a repainted tier no gun strip and lifts its muzzle with the picture", () => {
     const yard = yardOf(21);
     yard.buildingdata = { "1": { id: 1, t: 21, l: 7, X: 0, Y: 0 } };
-    const [sniper] = towersOf(readYard(yard));
-    expect(sniper?.frames).toBe(0);
-    expect(sniper?.lift).toBeGreaterThan(0);
-    expect(towersOf(readYard(yardOf(21)))[0]?.lift).toBe(0);
+    // The new tower art is off unless turned on: the Flash turret, not lifted.
+    expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
+    setNewTowerArt(true);
+    try {
+      const [sniper] = towersOf(readYard(yard));
+      expect(sniper?.frames).toBe(0);
+      expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);
+    } finally {
+      setNewTowerArt(false);
+    }
   });
 });
 
