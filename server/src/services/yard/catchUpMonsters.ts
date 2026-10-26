@@ -70,6 +70,12 @@ const OVERDRIVES: Readonly<Record<string, number>> = { HOD: 4, HOD2: 6, HOD3: 10
 /** Housing Expansion on the surface (`STORE.as:2419-2427`). */
 const EXPANSION = "EXH";
 
+/** Housing Expansion on the Inferno yard, the Inferno shop's (`STORE.as:210`). */
+const INFERNO_EXPANSION = "EXHI";
+
+/** The Inferno yard's housing: its Housing Bunkers (`HOUSING.as:65`). */
+const HOUSING_BUNKER_TYPE = 128;
+
 /** The original replayed at most 30 days on load (`advanceBuildingTimers.ts`). */
 const MAX_ELAPSED_SECONDS = 60 * 60 * 24 * 30;
 
@@ -172,7 +178,7 @@ const relevantJobs = (completed: readonly unknown[]): BuildingJob[] =>
       typeof job === "object" &&
       job !== null &&
       ((job as BuildingJob).kind === "build" || (job as BuildingJob).kind === "upgrade") &&
-      [HATCHERY_TYPE, HOUSING_TYPE, HCC_TYPE].includes((job as BuildingJob).t)
+      [HATCHERY_TYPE, HOUSING_TYPE, HOUSING_BUNKER_TYPE, HCC_TYPE].includes((job as BuildingJob).t)
   );
 
 /**
@@ -276,16 +282,22 @@ export const catchUpMonsters = (
   const start = Math.min(now, Math.max(stored, now - MAX_ELAPSED_SECONDS));
 
   // The timeline the walk runs against.
-  const expansion = buffWindows(buffs, completed, EXPANSION);
+  const inferno = yardKindOf(save) === "inferno";
+  const housingType = inferno ? HOUSING_BUNKER_TYPE : HOUSING_TYPE;
+  const expansion = buffWindows(buffs, completed, inferno ? INFERNO_EXPANSION : EXPANSION);
   const expansionAt = (t: number) => expansion.some((w) => w.start <= t && t < w.end);
   const capacityAt = (t: number, minHealth?: number) =>
     housingCapacity(
-      { buildingdata: buildingsAt(final, jobs, t), buildinghealthdata: save.buildinghealthdata },
+      {
+        type: save.type,
+        buildingdata: buildingsAt(final, jobs, t),
+        buildinghealthdata: save.buildinghealthdata,
+      },
       expansionAt(t),
       minHealth
     );
   const capacityBreaks = [
-    ...jobs.filter((job) => job.t === HOUSING_TYPE).map((job) => job.at),
+    ...jobs.filter((job) => job.t === housingType).map((job) => job.at),
     ...expansion.flatMap((w) => [w.start, w.end]),
   ].filter((t) => t > start && t <= now);
   const capacity: TimelineStep[] = [start, ...new Set(capacityBreaks)]

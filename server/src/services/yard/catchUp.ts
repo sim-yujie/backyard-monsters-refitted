@@ -86,12 +86,15 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * main yard's pool.
  *
  * **The Inferno yard** (`type` `inferno`, `docs/design/inferno.md` WP 1.14-1.16)
- * runs {@link catchUpInferno}: its repairs at the Inferno table's repair times
- * (WP 1.16), its buildings' countdowns at the Inferno table's figures, then its
- * Bone, Coal, Sulfur and Magma harvesters at the Inferno rates, each filling
- * its own buffer until full, as in Flash, and last the damage figure. Nothing
- * else yet: its Incubators, Academy and Locker come with their own work
- * packages, and until then none of them is ever started. Run it on the
+ * runs {@link catchUpInferno}: Spurtz always unlocked and the Inferno Locker's
+ * unlock (WP 2.2), its repairs at the Inferno table's repair times (WP 1.16),
+ * its buildings' countdowns at the Inferno table's figures, its Incubators'
+ * hatching into the Housing Bunkers (WP 2.3, the `HODI`.. overdrives and
+ * `EXHI` from the Inferno row's own store data), then its Bone, Coal, Sulfur
+ * and Magma harvesters at the Inferno rates, each filling its own buffer until
+ * full, as in Flash, the Inferno Academy's training (WP 2.2), and last the
+ * damage figure. The Inferno roster only (`IC…`, `locker.ts`
+ * `monsterRealmOf`). Run it on the
  * yard seen through its owner's main yard (`poolView.ts`, `infernoView`); the
  * points stay on the Inferno row, its own level as in Flash.
  *
@@ -216,8 +219,9 @@ export const catchUpOutpost = (save: CatchUpSave, now: number): CompletedJob[] =
 };
 
 /**
- * The Inferno yard's catch-up (the file comment): repairs, building
- * countdowns, the harvesters and damage, as an outpost's order, from the last
+ * The Inferno yard's catch-up (the file comment): the Locker, repairs,
+ * building countdowns, the Incubators, the harvesters, the Academy and
+ * damage, in the main yard's order, from the last
  * catch-up (`savetime`, else the moment the yard was made, `createtime`) to
  * `now`, with the same guarantees. A yard with neither starts its clock now.
  *
@@ -228,11 +232,15 @@ export const catchUpInferno = (save: CatchUpSave, now: number): CompletedJob[] =
   const stored = Number(save.savetime) || Number(save.createtime);
   const from = Number.isFinite(stored) && stored > 0 ? Math.min(stored, now) : now;
 
+  unlockStarterMonster(save);
   const completed: CompletedJob[] = [
+    ...catchUpLocker(save, from, now),
     ...catchUpRepairs(save, from, now),
     ...catchUpBuildings(save, from, now),
   ];
+  completed.push(...catchUpMonsters(save, from, now, completed));
   catchUpHarvesters(save, from, now, completed, "inferno");
+  completed.push(...catchUpTraining(save, from, now));
   catchUpDamage(save);
 
   save.savetime = now;

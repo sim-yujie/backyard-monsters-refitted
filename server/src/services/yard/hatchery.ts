@@ -14,7 +14,7 @@ import {
   HOUSING_MIN_HEALTH,
 } from "../monsters/transferRules.js";
 import { fitCredit } from "./credit.js";
-import { obtainableOrThrow } from "./locker.js";
+import { monsterRealmOf, obtainableOrThrow } from "./locker.js";
 import {
   levelOf,
   readProduction,
@@ -388,7 +388,7 @@ export const planHatcheryAdd = (
   count: number,
   now: number
 ) => {
-  obtainableOrThrow(monster);
+  obtainableOrThrow(monster, monsterRealmOf(save));
   if (Number(save.lockerdata?.[monster]?.t) !== 2) {
     throw yardRefusedErr("locked", "Unlock that monster in the Monster Locker first.", {
       monster,
@@ -518,6 +518,7 @@ export const freeHousing = (
     housingExpansionActive: HOUSING_EXPANSION_ITEMS.some(
       (item) => numberOf(save.storedata?.[item]?.e) > now
     ),
+    inferno: yardKindOf(save) === "inferno",
   });
   const used = Object.entries(housed).reduce(
     (total, [id, count]) => total + spaceOf(id, levels) * count,

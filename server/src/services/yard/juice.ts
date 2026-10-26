@@ -1,4 +1,4 @@
-import { hatchCost, monsterEntry } from "../../game-data/monsterCatalogue.js";
+import { hatchCost, isInfernoMonster, monsterEntry } from "../../game-data/monsterCatalogue.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type {
   BuildingData,
@@ -6,11 +6,12 @@ import type {
   BuildingHealthData,
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
-import { yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
+import { yardKindOf, type ResourceAmounts, type YardKind } from "../yardplanner/costs.js";
 import type { StorageCapSave } from "../base/economy/resourceBudget.js";
 import { fitCredit } from "./credit.js";
 import { academyLevels, isMapRoom3Monsters } from "./hatchery.js";
 import { levelOf, monsterIdOf, readHoused } from "./production.js";
+import { capsOf, funded, purseOf, withPurse } from "./siege.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /**
@@ -31,8 +32,18 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * **When it works.** The Juicer must be built (`GLOBAL._bJuicer` is only set
  * once `Constructed`, `BUILDING9.as:140-145`, `:194-199`), not upgrading, and
  * above half health (`HOUSINGPOPUP.as:311-323`, `MONSTERBUNKERPOPUP.as:702-704`).
- * Inferno monsters are refused (`HOUSINGPOPUP.as:307-310`); a Map Room 2 yard
- * only houses `C` ids anyway.
+ * **Inferno monsters** (`docs/design/inferno.md` §2.5 "Spending", WP 2.3)
+ * juice into Magma, `r4` of the Inferno purse, at the same rate
+ * (`BUILDING9.Blend`, `:54-67`, `BASE.Fund(4, …, isInferno)`): on the Inferno
+ * yard every monster is one, and the wrapper credits the purse it sees as the
+ * yard's resources (`infernoView`), up to the Inferno cap; on the main yard an
+ * `IC` monster's Magma goes into the main save's `iresources`, up to the caps
+ * the Inferno yard last wrote there (`r4max`, `syncInfernoCap`), nothing to a
+ * purse already at its cap, as Flash's `Fund` did. Flash's housing and bunker
+ * popups never let the player pick one (`msg_juicernoinferno`,
+ * `HOUSINGPOPUP.as:307-310`); the design opens it. An outpost refuses them
+ * (`409 inferno`): its Magma would need the main row, which the outpost view
+ * does not carry. A surface monster cannot be juiced on the Inferno yard.
  *
  * Pure: the wrapper hands in the caught-up save, this returns what changes.
  */
@@ -48,8 +59,10 @@ export const MAX_JUICE = 100_000;
 
 /** The slice of a save the Juicer reads. */
 export interface JuiceSave extends StorageCapSave {
-  /** `BaseType`: an outpost's Juicer reads the outpost health ladder. */
+  /** `BaseType`: an outpost's Juicer reads the outpost health ladder, the Inferno yard's the Inferno one. */
   type?: string;
+  /** The main yard's Inferno purse, where an `IC` monster juiced there pays its Magma. */
+  iresources?: JsonObject | null;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
@@ -150,18 +163,22 @@ export const juiceGoo = (
 ): number => Math.ceil((hatchCost(monster, levelOf(levels, monster)) ?? 0) * rate) * count;
 
 /**
- * A `C` id the catalogue knows, legacy rename applied; `409 inferno` for an
- * Inferno monster, `400 badRequest` for anything else.
+ * A monster id the yard may juice, legacy rename applied: a `C` id on the
+ * surface, an `IC` id on the main yard or the Inferno yard. `409 inferno` for an
+ * Inferno monster on an outpost, `400 badRequest` for anything else (a surface
+ * monster on the Inferno yard included).
  */
-export const juiceableOrThrow = (raw: string): string => {
-  if (/^IC\d+$/.test(raw)) {
-    throw yardRefusedErr("inferno", "Inferno monsters cannot be juiced.", { monster: raw });
+export const juiceableOrThrow = (raw: string, kind: YardKind = "main"): string => {
+  if (isInfernoMonster(raw)) {
+    if (kind === "outpost") {
+      throw yardRefusedErr("inferno", "Inferno monsters cannot be juiced on an outpost.", { monster: raw });
+    }
+    if (monsterEntry(raw)) return raw;
+  } else if (kind !== "inferno" && /^C\d+$/.test(raw)) {
+    const id = monsterIdOf(raw);
+    if (id && monsterEntry(id)) return id;
   }
-  const id = /^C\d+$/.test(raw) ? monsterIdOf(raw) : null;
-  if (!id || !monsterEntry(id)) {
-    throw yardBadRequestErr("That is not a monster you can juice.", { monster: raw });
-  }
-  return id;
+  throw yardBadRequestErr("That is not a monster you can juice.", { monster: raw });
 };
 
 /** `report` of `juice`. */
@@ -172,12 +189,19 @@ export interface JuiceReport {
   goo: number;
   /** Goo the storage cap turned away. */
   lost: number;
+  /** Magma that landed in the Inferno purse, from Inferno monsters. */
+  magma: number;
+  /** Magma the Inferno cap turned away. */
+  magmaLost: number;
   /** The Juicer's rate that applied. */
   rate: number;
 }
 
 /**
  * `POST /bm/yard/juice`: juices housed monsters for goo.
+ *
+ * Surface monsters pay goo (`r4`) into the yard's storage; Inferno monsters
+ * pay Magma into the Inferno purse (the file comment).
  *
  * Refusals, in order: `409 mapRoom3`; `409 inferno` / `400 badRequest` per id;
  * the Juicer's (`409 noJuicer`, `409 busy`, `409 damaged`); `409 notEnough
@@ -191,9 +215,10 @@ export const planJuice = (save: JuiceSave, monsters: Readonly<Record<string, num
     throw yardRefusedErr("mapRoom3", "Juicing on a Map Room 3 yard is not supported yet.");
   }
 
+  const kind = yardKindOf(save);
   const wanted: Record<string, number> = {};
   for (const [raw, count] of Object.entries(monsters)) {
-    const id = juiceableOrThrow(raw);
+    const id = juiceableOrThrow(raw, kind);
     wanted[id] = (wanted[id] ?? 0) + Math.floor(count);
   }
   if (Object.keys(wanted).length === 0) {
@@ -218,23 +243,50 @@ export const planJuice = (save: JuiceSave, monsters: Readonly<Record<string, num
 
   const levels = academyLevels(save.academy);
   let goo = 0;
+  let magma = 0;
   for (const [id, count] of Object.entries(wanted)) {
-    goo += juiceGoo(id, count, levels, rate);
+    const paid = juiceGoo(id, count, levels, rate);
+    if (isInfernoMonster(id)) magma += paid;
+    else goo += paid;
     housed[id] = housed[id]! - count;
     if (housed[id] === 0) delete housed[id];
   }
 
+  const slices: { monsters: JsonObject; iresources?: JsonObject } = {
+    monsters: { ...(save.monsters ?? {}), housed },
+  };
+
+  // On the Inferno yard the yard's own storage is the Inferno purse.
+  if (kind === "inferno") {
+    const credit: Partial<ResourceAmounts> = { r4: magma };
+    const fit = fitCredit(save, credit);
+    const report: JuiceReport = {
+      juiced: wanted,
+      goo: 0,
+      lost: 0,
+      magma: fit.credited.r4,
+      magmaLost: fit.overflow.r4,
+      rate,
+    };
+    return { report, slices, credit };
+  }
+
+  let magmaIn = 0;
+  if (magma > 0) {
+    const held = purseOf(save.iresources);
+    const after = funded(held.r4, capsOf(save.iresources).r4, magma);
+    magmaIn = after - held.r4;
+    if (magmaIn > 0) slices.iresources = withPurse(save.iresources, { ...held, r4: after });
+  }
   const credit: Partial<ResourceAmounts> = { r4: goo };
   const fit = fitCredit(save, credit);
   const report: JuiceReport = {
     juiced: wanted,
     goo: fit.credited.r4,
     lost: fit.overflow.r4,
+    magma: magmaIn,
+    magmaLost: magma - magmaIn,
     rate,
   };
-  return {
-    report,
-    slices: { monsters: { ...(save.monsters ?? {}), housed } },
-    credit,
-  };
+  return { report, slices, credit };
 };

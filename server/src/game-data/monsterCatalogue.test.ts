@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
   hatchCost,
+  INFERNO_MONSTER_CATALOGUE,
   isListed,
   LAB_ABILITIES,
   LISTED_MONSTERS,
@@ -41,7 +42,7 @@ describe("monsterCatalogue", () => {
   });
 
   test("agrees with monsterStats on every economy number", () => {
-    for (const entry of MONSTER_CATALOGUE) {
+    for (const entry of [...MONSTER_CATALOGUE, ...INFERNO_MONSTER_CATALOGUE]) {
       const stats = monsterStats[entry.id];
       expect(stats, entry.id).toBeDefined();
       expect(entry.resource, entry.id).toBe(stats.resource);
@@ -60,5 +61,15 @@ describe("monsterCatalogue", () => {
     expect(hatchCost("C19", 3)).toBe(1000000);
     expect(trainingStep("C15", 4)).toEqual([18000000, 136 * 3600]);
     expect(trainingStep("C15", 5)).toBeUndefined();
+  });
+
+  test("holds the Inferno roster IC1 to IC8 (Inferno WP 2.1)", () => {
+    expect(INFERNO_MONSTER_CATALOGUE.map((entry) => entry.id)).toEqual(
+      Array.from({ length: 8 }, (_, k) => `IC${k + 1}`)
+    );
+    expect(monsterEntry("IC5")?.resource).toBe(614400);
+    expect(monsterEntry("IC7")?.level).toBe(3);
+    expect(trainingStep("IC8", 5)).toEqual([19248000, 1555200]);
+    expect(hatchCost("IC4", 2)).toBe(35000);
   });
 });

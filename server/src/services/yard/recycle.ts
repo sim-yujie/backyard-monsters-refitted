@@ -16,7 +16,7 @@ import { academyLevels, isMapRoom3Monsters } from "./catchUpMonsters.js";
 import { fitCredit } from "./credit.js";
 import { storeDecoration, storedCount } from "./decor.js";
 import { cullHousing, housingCapacity } from "./housing.js";
-import { runningUnlock, LOCKER_TYPE } from "./locker.js";
+import { monsterRealmOf, runningUnlock, LOCKER_TYPE } from "./locker.js";
 import { readHoused, readProduction } from "./production.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 import { siegeHold, siegeRecycleMessage } from "./siege.js";
@@ -225,7 +225,7 @@ const refuse = (save: RecycleSave, building: BuildingData, id: number, now: numb
       );
     }
   }
-  if (type === LOCKER_TYPE && runningUnlock(save.lockerdata)) {
+  if (type === LOCKER_TYPE && runningUnlock(save.lockerdata, monsterRealmOf(save))) {
     throw refused("unlocking", "Cancel the unlock first.");
   }
   if (yard === "inferno" && type === HOUSING_BUNKER_BUILDING_TYPE && bunkerHousesTooMany(save, String(id))) {
