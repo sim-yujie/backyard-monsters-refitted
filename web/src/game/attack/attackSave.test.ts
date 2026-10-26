@@ -488,6 +488,15 @@ describe("the pieces", () => {
     expect(summary.champions).toEqual([{ t: 5, l: 5, hp: expect.any(Number) }]);
   });
 
+  it("omits destroyed for a Moloch tribe, an Inferno yard the server derives none for (Inferno WP 2.9)", () => {
+    const session = new AttackSession({ target: targetOf({ load: towerLoad(), infernoTribe: true }), seed: 7 });
+    session.start();
+    session.appendFling({ x: -600, y: 120, monsters: { C1: 1 } });
+    play(session, 1);
+    session.retreat();
+    expect(buildAttackSave(session).destroyed).toBeUndefined();
+  });
+
   it("keeps a Descent fight's whole take, as Inferno loot (Inferno WP 1.13)", () => {
     // A main yard with no room left would cap a surface attack's loot to nothing.
     const full = { ...targetOf().roster, resources: { r1: 100, r2: 100, r3: 100, r4: 100 }, storageCap: 100 };
