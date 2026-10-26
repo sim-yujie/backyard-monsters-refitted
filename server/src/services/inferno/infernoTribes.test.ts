@@ -23,7 +23,8 @@ import {
  * win.
  */
 
-const bunker = (id: number, l: number, extra: object = {}) => ({ [String(id)]: { t: 128, id, l, X: 0, Y: 0, ...extra } });
+const bunker = (id: number, l: number, extra: object = {}): BuildingDataMap =>
+  ({ [String(id)]: { t: 128, id, l, X: 0, Y: 0, ...extra } }) as unknown as BuildingDataMap;
 
 describe("which tribes", () => {
   test("base ids 214-234 are the tribes; the Descent's and others are not", () => {
