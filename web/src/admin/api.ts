@@ -107,6 +107,8 @@ export interface PlayerMatch {
   username: string;
   /** The earlier name the search matched (from an old bug report or gift), when it is not their name now. */
   formerName: string | null;
+  /** A computer-run neighbour: shown, marked, after the players. */
+  bot: boolean;
   lastSeenAt: string | null;
 }
 
