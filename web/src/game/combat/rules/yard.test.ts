@@ -122,6 +122,17 @@ describe("footprints", () => {
     expect(footprintOf(28)).toEqual({ w: 20, h: 20 });
     expect(footprintOf(9999)).toEqual(DEFAULT_FOOTPRINT);
   });
+
+  it("gives the Under Hall 160 and the Academy 80 on an Inferno yard only", () => {
+    expect(footprintOf(14, "inferno")).toEqual({ w: 160, h: 160 });
+    expect(footprintOf(26, "inferno")).toEqual({ w: 80, h: 80 });
+    expect(footprintOf(14)).toEqual({ w: 130, h: 130 });
+    expect(footprintOf(26, "main")).toEqual({ w: 100, h: 100 });
+    expect(footprintOf(20, "inferno")).toEqual(footprintOf(20));
+    const hall = { "1": { id: 1, t: 14, X: 0, Y: 0 } };
+    expect(buildEngineYard({ buildingdata: hall, kind: "inferno" }).buildings[0]?.w).toBe(160);
+    expect(buildEngineYard({ buildingdata: hall }).buildings[0]?.w).toBe(130);
+  });
 });
 
 describe("the isometric projection", () => {

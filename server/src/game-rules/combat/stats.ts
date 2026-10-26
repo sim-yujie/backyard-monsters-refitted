@@ -502,6 +502,14 @@ export const towerRearmTicks = (type: number, level: number): number => {
 /** 0 ground only, 1 both, 2 air only. A type with no entry is ground only. */
 export const flyerMode = (type: number): 0 | 1 | 2 => FLYER_MODE[type] ?? 0;
 
+/** The Under Hall's pathing rectangles on an Inferno yard (`BUILDING14.as:19`). */
+const INFERNO_GRID_COST: Readonly<Record<number, readonly GridCostRect[]>> = {
+  14: [
+    [0, 0, 160, 160, 10],
+    [10, 10, 140, 140, 200],
+  ],
+};
+
 /** Whether a tower may fire at a flying creep (`BTOWER.as:165`). */
 export const hitsFlyers = (type: number): boolean => flyerMode(type) !== 0;
 
@@ -514,10 +522,16 @@ export const hitsGround = (type: number): boolean => flyerMode(type) !== 2;
  * Every rectangle is a constant except the wall's inner one, which
  * `BFOUNDATION.SetProps` prices at `100 + level * 25`
  * (`client/scripts/BFOUNDATION.as:3151`). A type with no row stamps nothing,
- * which is what a trap does.
+ * which is what a trap does. On an Inferno yard the Under Hall stamps its
+ * larger Inferno rectangles (`client/scripts/BUILDING14.as:19`); the Academy
+ * keeps its surface ones there (`BUILDING26.as:23`).
  */
-export const gridCost = (type: number, level = 1): readonly GridCostRect[] => {
-  const rects = GRID_COST[type];
+export const gridCost = (
+  type: number,
+  level = 1,
+  kind: CombatTargetKind = "main",
+): readonly GridCostRect[] => {
+  const rects = (readsInfernoProps(kind) ? INFERNO_GRID_COST[type] : undefined) ?? GRID_COST[type];
   if (!rects) return [];
   const formula = GRID_COST_FORMULA[type];
   if (!formula) return rects;

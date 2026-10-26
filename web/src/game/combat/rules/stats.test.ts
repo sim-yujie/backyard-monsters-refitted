@@ -253,6 +253,16 @@ describe("buildings", () => {
     expect(gridCost(24)).toEqual([]);
   });
 
+  it("stamps the Under Hall's larger rectangles on an Inferno yard (`BUILDING14.as:19`)", () => {
+    expect(gridCost(14, 1, "inferno")).toEqual([
+      [0, 0, 160, 160, 10],
+      [10, 10, 140, 140, 200],
+    ]);
+    expect(gridCost(14, 1)[0]?.[2]).toBe(130);
+    // The Academy keeps its surface rectangles there (`BUILDING26.as:23`).
+    expect(gridCost(26, 1, "inferno")).toEqual(gridCost(26, 1));
+  });
+
   it("reads the Map Room 2 capacities", () => {
     // A Map Room 2 fling is capped at the level 4 Flinger's payload
     // (`GLOBAL.as:863`, `:713`).
