@@ -398,9 +398,9 @@ check. Owner screenshots before merge for any screen.
 
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
-| 2.1 | IC unlock/train/hatch data both sides (2.6) | golden + sync tests | 1.2 | S |
-| 2.2 | Locker + academy in the Inferno (Sulfur) | action tests | 2.1, 1.15 | M |
-| 2.3 | Incubator + housing + juicer (Magma; IC juiced on main pays Magma) | action tests | 2.1 | M |
+| 2.1 | IC unlock/train/hatch data both sides (2.6) (done 26 Oct: `gen-monster-catalogue.mjs` writes IC1-IC8 into both catalogue copies; golden test against 2.6 on the web side, economy cross-check on the server. Report `agent-handoffs/reports/inferno-s2.md`) | golden + sync tests | 1.2 | S |
+| 2.2 | Locker + academy in the Inferno (Sulfur) (done 26 Oct: the Inferno yard unlocks and trains only IC monsters, paid in Sulfur from the purse; Spurtz (IC1) always unlocked; the Inferno Academy stops at level 5 as in Flash, so King Wormzer takes 30 days, not 48 (owner to confirm)) | action tests | 2.1, 1.15 | M |
+| 2.3 | Incubator + housing + juicer (Magma; IC juiced on main pays Magma) (done 26 Oct: Incubators hatch IC for Magma into the Housing Bunkers (200 at L1), EXHI the expansion; the Juicer pays Magma on the Inferno yard and, for an IC, into the purse on the main yard (Flash's screens refused it; the design allows it); outposts refuse IC; IC juiced do not count for goals BL1-BL4) | action tests | 2.1 | M |
 | 2.4 | Client: Inferno monster screens | screenshots | 2.2, 2.3 | M |
 | 2.5 | Transfer route (2.7) | tests: non-IC, hurt, over housing refused | 2.3 | S |
 | 2.6 | Client: transfer dialog from the cave | screenshots | 2.5 | S |
