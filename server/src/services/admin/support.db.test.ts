@@ -208,6 +208,33 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
       expect(await credits(OTHER)).toBe(START);
     });
 
+    test("the player cannot tell who gave it: nothing they can read holds the owner's account or name", async () => {
+      const id = await report(PLAYER);
+      await replyToReport(orm.em.fork(), id, "Thanks, we are looking at it.", OWNER, NOW);
+      await giveShiny(orm.em.fork(), award({ amount: 300, bugReportId: id }), OWNER, NOW);
+      await giveShiny(orm.em.fork(), award({ amount: 100, reason: "Sorry for the lost troops" }), OWNER, NOW);
+
+      // Every row the game reads for the player: their mail and threads, their account and yard.
+      const readable = [
+        ...(await sql(`SELECT * FROM bym.message WHERE userid = ? OR targetid = ?`, [PLAYER, PLAYER])),
+        ...(await sql(`SELECT * FROM bym.thread WHERE userid = ? OR targetid = ?`, [PLAYER, PLAYER])),
+        ...(await sql(`SELECT * FROM bym."user" WHERE userid = ?`, [PLAYER])),
+        ...(await sql(`SELECT * FROM bym.save WHERE userid = ?`, [PLAYER])),
+      ];
+      expect(readable.length).toBeGreaterThanOrEqual(6);
+      for (const row of readable) {
+        for (const value of Object.values(row)) expect(Number(value)).not.toBe(OWNER);
+        expect(JSON.stringify(row)).not.toContain(`supporttest_${OWNER}`);
+        expect(JSON.stringify(row)).not.toContain(String(OWNER));
+      }
+      // Every message comes from "The game team", and only it.
+      const mail = await mailTo(PLAYER);
+      expect(mail).toHaveLength(3);
+      expect(mail.every((one) => Number(one.userid) === SUPPORT_SENDER)).toBe(true);
+      // Only the award log, which only the dashboard reads, keeps who gave it.
+      expect((await sql(`SELECT awarded_by FROM bym.shiny_award WHERE userid = ?`, [PLAYER])).map((row) => row.awarded_by)).toEqual([OWNER, OWNER]);
+    });
+
     test("no player, or a player with no yard yet: nothing is given or kept", async () => {
       expect((await giveShiny(orm.em.fork(), award({ userid: 996888 }), OWNER, NOW)).outcome).toBe("noPlayer");
       expect((await giveShiny(orm.em.fork(), award({ userid: NO_YARD }), OWNER, NOW)).outcome).toBe("noMainYard");
