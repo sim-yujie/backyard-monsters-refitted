@@ -227,3 +227,60 @@ export const chargedCost = (cost: SiegeCost): SiegeCost => ({
  * (`VacuumHose.MR3_MAX_LOOT_MULTIPLIER`, `VacuumHose.as:20`, `:205-214`).
  */
 export const VACUUM_OUTPOST_LOOT_SHARE = 0.1;
+
+/* ── An attacker's stock in a fight (Inferno WP 6.8) ─────────────────────── */
+
+/**
+ * The level and count of one weapon in the attacker's `siege` save
+ * (`SiegeWeapon.exportVariables`: `{ level, quantity }`), each a whole
+ * number, 0 for anything unreadable.
+ */
+const heldWeapon = (stock: unknown, id: SiegeId): { level: number; quantity: number } => {
+  if (typeof stock !== "object" || stock === null) return { level: 0, quantity: 0 };
+  const entry = (stock as Record<string, unknown>)[id];
+  if (typeof entry !== "object" || entry === null) return { level: 0, quantity: 0 };
+  const { level, quantity } = entry as { level?: unknown; quantity?: unknown };
+  const count = Math.floor(Number(quantity));
+  return {
+    level: siegeLevel(Number(level)),
+    quantity: Number.isFinite(count) && count > 0 ? count : 0,
+  };
+};
+
+/**
+ * The level each weapon fights at (`BattleOptions.siege`): its Lab level
+ * while the attacker holds one, as `SiegeWeapons.importWeapons` reads the
+ * save; a weapon with none left, or none researched, is absent. Both the web
+ * client and the server's replay read the same save through this.
+ */
+export const siegeLevelsOf = (stock: unknown): Partial<Record<SiegeId, number>> => {
+  const levels: Partial<Record<SiegeId, number>> = {};
+  for (const weapon of SIEGE_WEAPON_DATA) {
+    const held = heldWeapon(stock, weapon.id);
+    if (held.level > 0 && held.quantity > 0) levels[weapon.id] = held.level;
+  }
+  return levels;
+};
+
+/**
+ * The events with every `siege` one past what the attacker held left out:
+ * `SiegeWeapons.activateWeapon` spends one per use (`--quantity`) and the
+ * button goes once none is left. An honest log comes back unchanged.
+ */
+export const fightableSiege = <E extends { readonly kind: string; readonly weapon?: string }>(
+  events: readonly E[],
+  stock: unknown,
+): E[] => {
+  const left: Partial<Record<string, number>> = {};
+  for (const weapon of SIEGE_WEAPON_DATA) {
+    const held = heldWeapon(stock, weapon.id);
+    left[weapon.id] = held.level > 0 ? held.quantity : 0;
+  }
+  return events.filter((event) => {
+    if (event.kind !== "siege") return true;
+    const remaining = left[event.weapon ?? ""] ?? 0;
+    if (remaining <= 0) return false;
+    left[event.weapon ?? ""] = remaining - 1;
+    return true;
+  });
+};

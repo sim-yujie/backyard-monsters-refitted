@@ -38,6 +38,7 @@ import {
   type Roster,
   type ChampionStance,
 } from "@/game/combat/rules";
+import { siegeLevelsOf } from "@/game/combat/rules/siege";
 import { hasDeclareWar } from "./attackEntry";
 import type { AttackTarget } from "./attackTarget";
 
@@ -515,10 +516,15 @@ export class AttackSession {
       this.notify();
       return;
     }
+    // The Lab level of each siege weapon the attacker holds one of, as the
+    // server's replay reads the same save (Inferno WP 6.8). None against an
+    // Inferno yard, the Descent's included (`UI_TOP.as:289`).
+    const siege = kind === "inferno" ? {} : siegeLevelsOf(this.target.roster.siege);
     this.battle_ = createBattle(yard, {
       seed: this.seed,
       levels: this.levels_,
       ...(Object.keys(this.ranks_).length > 0 ? { ranks: this.ranks_ } : {}),
+      ...(Object.keys(siege).length > 0 ? { siege } : {}),
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
       ...(this.descentYard === undefined ? {} : { descentYard: this.descentYard }),
@@ -834,10 +840,10 @@ export class AttackSession {
   }
 
   /**
-   * Appends a siege weapon at the current tick. The engine drops the Decoy
-   * when the battle has the attacker's Siege Lab levels (`BattleOptions.siege`,
-   * Inferno WP 6.5) and ignores anything else (`engine.ts` fidelity note 8);
-   * the log carries it either way so a later engine replays it (§F4).
+   * Appends a siege weapon at the current tick. The battle fights the Decoy,
+   * the Vacuum or the Jars at the attacker's Siege Lab level, read off the
+   * roster's `siege` stock at load (`BattleOptions.siege`, Inferno WP 6.5 to
+   * 6.8); a weapon the attacker holds none of does nothing.
    */
   appendSiege(input: SiegeInput): Extract<FlingEvent, { kind: "siege" }> {
     const battle = this.requireLive("siege");

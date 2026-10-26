@@ -402,7 +402,7 @@ describe("the pieces", () => {
       "0:30 Fired a pebble bomb (tier 2) at (180, -480)",
     );
     expect(reportLine({ kind: "siege", t: 3100, x: 180, y: -480, weapon: "jars" }, names)).toBe(
-      "0:38 Deployed jars at (180, -480)",
+      "0:38 Deployed Candy Jars at (180, -480)",
     );
     expect(reportLine({ kind: "fling", t: 0, x: 0, y: 0, r: 100, monsters: { C1: 1, C2: 0 } }, names)).toBe(
       "0:00 Flung 1 Pokey at (0, 0)",

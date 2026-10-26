@@ -1019,6 +1019,44 @@ export interface LobLine extends BeamLine {
   readonly scale: number;
 }
 
+/**
+ * The siege weapon on the field (Inferno WP 6.8), for the renderer and the
+ * attack screen's siege button. Reads only; the battle is unchanged by it.
+ */
+export interface SiegeSnapshot {
+  /** The weapon holding Flash's one siege slot (`SiegeWeapons.activeWeaponID`), or null. */
+  readonly active: SiegeId | null;
+  /** The Decoy until it blows up: its drop point in yard units and its clock. */
+  readonly decoy: {
+    readonly x: number;
+    readonly y: number;
+    readonly droppedAt: number;
+    readonly landsAt: number;
+    readonly explodesAt: number;
+    readonly range: number;
+  } | null;
+  /** The Vacuum's hose until it lets go: the building it hangs over and its health. */
+  readonly vacuum: {
+    readonly buildingId: number;
+    readonly droppedAt: number;
+    readonly endsAt: number;
+    readonly health: number;
+    readonly durability: number;
+  } | null;
+  /**
+   * Every jar still on a tower, its strip included: `health` is null before
+   * it lands and once it breaks; `frame` is its cell of the 23-cell strip.
+   */
+  readonly jars: readonly {
+    readonly buildingId: number;
+    readonly landsAt: number;
+    readonly frame: number;
+    readonly breaking: boolean;
+    readonly health: number | null;
+    readonly durability: number;
+  }[];
+}
+
 /** How many ticks of shots and deaths a battle remembers: two seconds. */
 export const VISUAL_MEMORY_TICKS = 160;
 
@@ -1048,6 +1086,8 @@ export interface Battle {
    * frame sees everything and one that does not sees the recent past.
    */
   recentEvents(sinceTick: number): readonly BattleVisualEvent[];
+  /** The siege weapon on the field right now (Inferno WP 6.8); a fresh copy per call. */
+  siege(): SiegeSnapshot;
 }
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
@@ -2716,6 +2756,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   let decoy: {
     readonly plan: DecoyPlan;
+    /** The drop point in yard units, as the event gave it. */
+    readonly at: { readonly x: number; readonly y: number };
+    readonly droppedAt: number;
     /** The drop point on screen. */
     readonly drop: Cart;
     readonly pulled: Set<number>;
@@ -2741,7 +2784,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (event.weapon !== DECOY.id) return;
     const plan = decoyPlan(options.siege?.decoy ?? 0, tick);
     if (!plan) return;
-    decoy = { plan, drop: screenOf(event.x, event.y), pulled: new Set(), before: new Map() };
+    decoy = {
+      plan,
+      at: { x: event.x, y: event.y },
+      droppedAt: tick,
+      drop: screenOf(event.x, event.y),
+      pulled: new Set(),
+      before: new Map(),
+    };
   };
 
   /**
@@ -6121,6 +6171,33 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return visual.slice(start);
   };
 
+  const siegeSnapshot = (): SiegeSnapshot => ({
+    active: decoy ? DECOY.id : vacuum ? VACUUM.id : jarDrop ? JARS.id : null,
+    decoy: decoy && {
+      x: decoy.at.x,
+      y: decoy.at.y,
+      droppedAt: decoy.droppedAt,
+      landsAt: decoy.plan.landsAt,
+      explodesAt: decoy.plan.explodesAt,
+      range: decoy.plan.range,
+    },
+    vacuum: vacuum && {
+      buildingId: vacuum.target.id,
+      droppedAt: vacuum.droppedAt,
+      endsAt: vacuum.plan.endsAt,
+      health: vacuum.health,
+      durability: vacuum.plan.durability,
+    },
+    jars: [...jars.values()].map((jar) => ({
+      buildingId: jar.building.id,
+      landsAt: jar.landsAt,
+      frame: jar.frame,
+      breaking: jar.breaking,
+      health: jar.health,
+      durability: jar.durability,
+    })),
+  });
+
   const state = (): BattleState => ({
     tick,
     health: healthMap(),
@@ -6245,6 +6322,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     checkpoint,
     creeps: creepSnapshots,
     recentEvents,
+    siege: siegeSnapshot,
   };
 };
 

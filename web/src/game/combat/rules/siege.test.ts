@@ -10,9 +10,11 @@ import {
   VACUUM_OUTPOST_LOOT_SHARE,
   chargedCost,
   decoyDamage,
+  fightableSiege,
   siegeBuildCost,
   siegeData,
   siegeLevel,
+  siegeLevelsOf,
   siegeUpgradeCost,
   siegeValue,
   type SiegeStat,
@@ -155,5 +157,32 @@ describe("costs", () => {
 
   it("charges each resource floored, as BASE.Charge did", () => {
     expect(chargedCost(DECOY.upgradeCosts[0]!)).toEqual({ r1: 37_599, r2: 43_866, r3: 43_866, r4: 0, time: 14_400 });
+  });
+});
+
+describe("an attacker's stock in a fight (WP 6.8)", () => {
+  it("fights each weapon at its level only while one is held", () => {
+    expect(
+      siegeLevelsOf({
+        decoy: { level: 3, quantity: 1 },
+        vacuum: { level: 7, quantity: 0 },
+        jars: { level: 0, quantity: 1 },
+      }),
+    ).toEqual({ decoy: 3 });
+    expect(siegeLevelsOf({ jars: { level: 14, quantity: 2.6 } })).toEqual({ jars: 10 });
+    expect(siegeLevelsOf(null)).toEqual({});
+    expect(siegeLevelsOf("junk")).toEqual({});
+    expect(siegeLevelsOf({ decoy: { level: "4", quantity: "1" } })).toEqual({ decoy: 4 });
+  });
+
+  it("leaves out every use past the stock, and nothing else", () => {
+    const fling = { kind: "fling", t: 0 };
+    const decoy = { kind: "siege", t: 10, weapon: "decoy" };
+    const jars = { kind: "siege", t: 20, weapon: "jars" };
+    const later = { kind: "siege", t: 900, weapon: "decoy" };
+    const stock = { decoy: { level: 2, quantity: 1 } };
+    expect(fightableSiege([fling, decoy, jars, later], stock)).toEqual([fling, decoy]);
+    expect(fightableSiege([fling, decoy], null)).toEqual([fling]);
+    expect(fightableSiege([decoy, later], { decoy: { level: 2, quantity: 2 } })).toEqual([decoy, later]);
   });
 });

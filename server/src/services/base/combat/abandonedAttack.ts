@@ -19,6 +19,7 @@ import {
   type ResourceAmounts,
   type Roster,
 } from "../../../game-rules/combat/index.js";
+import { fightableSiege, siegeLevelsOf } from "../../../game-rules/combat/siege.js";
 import { BaseType } from "../../../enums/Base.js";
 import type { ChampionData } from "../../../schemas/ChampionSchema.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
@@ -194,7 +195,9 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
   const { defender, attacker, log, declareWar } = input;
   const kind = defender.kind ?? combatKindOf(defender.type);
   const buildingdata = defender.buildingdata ?? {};
-  const events = ordered(log.events);
+  // Only the siege weapons the attacker held, each at its Lab level (Inferno WP 6.8).
+  const events = fightableSiege(ordered(log.events), attacker.siege);
+  const siege = siegeLevelsOf(attacker.siege);
   const lastEvent = events.reduce((last, event) => Math.max(last, Math.floor(event.t)), 0);
   const end = Math.max(Math.floor(input.tick), lastEvent);
 
@@ -211,6 +214,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       levels: academyLevels(attacker.academy),
       // The Lab ranks the attack froze (issue #352): off the same academy as the levels.
       ranks: academyRanks(attacker.academy),
+      ...(Object.keys(siege).length > 0 && { siege }),
       declareWar,
       ...(input.playerLevel !== undefined && { playerLevel: input.playerLevel }),
       ...battleDefence(input.defence),
