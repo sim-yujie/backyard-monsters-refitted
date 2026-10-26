@@ -72,6 +72,7 @@ import {
 import {
   BIG_MAX_SHAKE,
   CHAMPION_STRIKE_FRAMES,
+  FELLED_AFTER_TICKS,
   FELLED_TICKS,
   HIT_STOP_CHAMPION_MS,
   HIT_STOP_DESTROY_MS,
@@ -1376,7 +1377,7 @@ export class AttackBattleLayer {
         continue;
       }
       this.died.delete(id);
-      this.release(view);
+      this.letGo(view, tick);
     }
   }
 
@@ -1947,6 +1948,19 @@ export class AttackBattleLayer {
   }
 
   /**
+   * A dead creep's view back to the pool; one a heavy round struck in its last
+   * few ticks falls first ({@link fell}).
+   */
+  private letGo(view: CreepView, tick: number): void {
+    if (tick - view.struckTick <= FELLED_AFTER_TICKS && view.snapshot) {
+      view.felledTick = view.struckTick;
+      this.felled.set(view.id, view);
+      return;
+    }
+    this.release(view);
+  }
+
+  /**
    * A creep a heavy round killed: frozen on its last frame, flashing, thrown
    * back along the round's flight and fading over its splat, then let go.
    * Drawing only; the engine let go of it already.
@@ -2005,16 +2019,10 @@ export class AttackBattleLayer {
         ? { x: view.lastX, y: view.lastY }
         : groundWorld(death.ix, death.iy, this.origin);
       this.spawnSplat(tick, at, death.champion ? 22 : 12);
-      // The engine let go of this creep a flight ago; its ghost goes with the
-      // splat, or, struck dead by a heavy round this tick, a moment after it.
+      // The engine let go of this creep a flight ago; its ghost goes with the splat.
       if (view && !this.ledger.holds(death.creepId)) {
         this.views.delete(death.creepId);
-        if (tick - view.struckTick <= 1) {
-          view.felledTick = tick;
-          this.felled.set(death.creepId, view);
-        } else {
-          this.release(view);
-        }
+        this.letGo(view, tick);
       }
     }
   }

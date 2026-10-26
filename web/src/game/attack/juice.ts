@@ -229,6 +229,8 @@ export const struckSquash = (age: number): { x: number; y: number } => {
 
 /** Ticks a creep a heavy round killed stays up for, frozen, before it is gone into its splat. */
 export const FELLED_TICKS = 10;
+/** Ticks after a heavy round struck it that a creep's death still counts as that round's kill. */
+export const FELLED_AFTER_TICKS = 6;
 /** How far the killing round throws it back, px. */
 export const FELLED_PX = 14;
 
