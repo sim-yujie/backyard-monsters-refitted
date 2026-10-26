@@ -93,6 +93,10 @@ const portrait = (className: string): HTMLImageElement => {
 
 const percentOf = (value: number, of: number): string => `${+((value / of) * 100).toFixed(3)}%`;
 
+/** A marker's spoken name: the list name, and the countdown while wrecked. */
+const markerLabel = (row: TribeRow, now: number): string =>
+  row.state === TribeState.DESTROYED ? `${row.listName}, wrecked, ${respawnText(row, now)}` : row.listName;
+
 export class InfernoMapScreen {
   readonly popup: Popup;
 
@@ -214,7 +218,9 @@ export class InfernoMapScreen {
     const now = this.now();
     for (const span of this.popup.element.querySelectorAll<HTMLElement>("[data-respawn]")) {
       const row = this.rows.find((one) => one.baseid === span.dataset["respawn"]);
-      if (row) span.textContent = respawnText(row, now);
+      if (!row) continue;
+      span.textContent = respawnText(row, now);
+      span.closest(".inferno-tribe")?.setAttribute("aria-label", markerLabel(row, now));
     }
     if (!this.refreshAsked && respawnDue(this.rows, now)) {
       this.refreshAsked = true;
@@ -275,7 +281,7 @@ export class InfernoMapScreen {
       marker.dataset["baseid"] = row.baseid;
       marker.style.left = percentOf(row.spot.x, INFERNO_MAP_SIZE.width);
       marker.style.top = percentOf(row.spot.y, INFERNO_MAP_SIZE.height);
-      marker.setAttribute("aria-label", `${row.listName}${wrecked ? `, wrecked, ${respawnText(row, now)}` : ""}`);
+      marker.setAttribute("aria-label", markerLabel(row, now));
       const frame = element("span", "inferno-tribe__frame");
       frame.append(portrait("inferno-tribe__portrait"), element("span", "inferno-tribe__level", String(row.level)));
       marker.append(frame, element("span", "inferno-tribe__name", row.name));
@@ -321,6 +327,8 @@ export class InfernoMapScreen {
     if (row.spot.y > INFERNO_MAP_SIZE.height / 2) card.classList.add("inferno-card--up");
     this.map.append(card);
     this.card = card;
+    // A marker near the pane's edge would leave its card cut off on a phone.
+    card.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }
 
   /** Attack, off while the tribe lies wrecked or a start is on its way. */

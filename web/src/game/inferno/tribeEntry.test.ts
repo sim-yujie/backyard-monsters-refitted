@@ -145,6 +145,22 @@ describe("openInfernoMap", () => {
     expect(modal.querySelector<HTMLElement>(".inferno-row:last-child")!.dataset["baseid"]).toBe("216");
   });
 
+  it("keeps a wrecked marker's spoken countdown in step with the one on screen", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      map.mockResolvedValue(mapOf(NOW + 125));
+      await openInfernoMap(deps);
+      const marker = modal.querySelector<HTMLElement>('.inferno-tribe[data-baseid="216"]')!;
+      expect(marker.getAttribute("aria-label")).toBe("Moloch's Minions, Level 5, wrecked, Back in 2:05");
+      clockMs += 5_000;
+      vi.advanceTimersByTime(1_000);
+      expect(marker.textContent).toContain("Back in 2:00");
+      expect(marker.getAttribute("aria-label")).toBe("Moloch's Minions, Level 5, wrecked, Back in 2:00");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("asks the map again once a wrecked tribe's time is up", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     try {
