@@ -156,6 +156,12 @@ export interface AttackTarget {
    * WP 1.21). Absent outside the Descent.
    */
   readonly descentYard?: number;
+  /**
+   * A Moloch tribe from the Inferno map (Inferno WP 2.9): its yard, `"214"`
+   * to `"234"`, is fought as an Inferno yard, as the server's tribe start
+   * serves it and its landing replays it. Absent for anything else.
+   */
+  readonly infernoTribe?: boolean;
 }
 
 /** A foreign cell the yard scene is about to show read-only. */

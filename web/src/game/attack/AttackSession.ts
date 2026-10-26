@@ -365,11 +365,14 @@ export const servedHeight = (raw: unknown): number =>
  * The target kind as the rules module spells it. The two agree by name, but a
  * Map Room 1 tribe, which the map hands over as `wild`, is the rules' `tribe`:
  * Flash's lower loot for a wild monster camp is Map Room 2's alone
- * (`BSTORAGE.as:77`, `:111`, `:117`). A Descent yard is fought as an Inferno
- * yard (`docs/design/inferno.md` §2.4 "Yard kind"), as the server replays it.
+ * (`BSTORAGE.as:77`, `:111`, `:117`). A Descent yard and a Moloch tribe of
+ * the Inferno map are fought as Inferno yards (`docs/design/inferno.md` §2.4
+ * "Yard kind"), as the server replays them.
  */
-export const combatKind = (target: Pick<AttackTarget, "kind" | "mapversion" | "descentYard">): CombatTargetKind =>
-  target.descentYard !== undefined
+export const combatKind = (
+  target: Pick<AttackTarget, "kind" | "mapversion" | "descentYard" | "infernoTribe">,
+): CombatTargetKind =>
+  target.descentYard !== undefined || target.infernoTribe === true
     ? "inferno"
     : target.kind === "wild" && target.mapversion === 1
       ? "tribe"

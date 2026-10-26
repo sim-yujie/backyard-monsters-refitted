@@ -83,11 +83,22 @@ export const loadInfernoYard = (): Promise<BaseLoadResponse> =>
  * before the Descent is won, `403 infernoOff` while the switch is off.
  */
 export const isInfernoClosed = (caught: unknown): boolean => {
-  if (!(caught instanceof ApiError)) return false;
-  const reason =
-    (caught.details?.data as { reason?: unknown } | undefined)?.reason ??
-    (caught.body as { reason?: unknown } | undefined)?.reason;
+  const reason = infernoRefusalOf(caught);
   return reason === "noInfernoYard" || reason === "infernoOff";
+};
+
+/** The `reason` an Inferno route refused with, and the refusal's `data` beside it; null for anything else. */
+export const infernoRefusalOf = (caught: unknown): string | null => {
+  if (!(caught instanceof ApiError)) return null;
+  const reason = refusalData(caught).reason;
+  return typeof reason === "string" ? reason : null;
+};
+
+/** A refusal's `data` (`details.data`) over its body's own fields (an older shape). */
+export const refusalData = (caught: ApiError): Record<string, unknown> => {
+  const asRecord = (value: unknown): Record<string, unknown> =>
+    typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  return { ...asRecord(caught.body), ...asRecord(caught.details?.data) };
 };
 
 /** What the main yard says when the Inferno yard would not open. */
@@ -175,3 +186,75 @@ export const descentLandingOf = (response: unknown): DescentLanding | null => {
   const value = descent as Partial<DescentLanding>;
   return typeof value.won === "boolean" && typeof value.level === "number" ? (value as DescentLanding) : null;
 };
+
+/* ── The Inferno map: Moloch's tribes (WP 2.7-2.9) ── */
+
+/** One Moloch tribe as `GET /bm/inferno/map` answers it (`services/inferno/infernoTribeMap.ts`). */
+export interface InfernoTribeView {
+  /** "214"-"234": the tribe's yard. */
+  readonly baseid: string;
+  /** Its map level. */
+  readonly level: number;
+  /** 1 while it lies wrecked. */
+  readonly destroyed: 0 | 1;
+  /** When a wrecked tribe is back, unix seconds; 0 while it stands. */
+  readonly respawnat: number;
+  /** The last attack's damage this tribe life, 0-100. */
+  readonly damage: number;
+}
+
+/** `GET /bm/inferno/map` (WP 2.7): the seven tribes the Inferno yard faces at its level. */
+export interface InfernoMapResponse extends ApiEnvelope {
+  /** The server's clock, unix seconds. */
+  readonly currenttime: number;
+  /** The Inferno yard's level, which picks the tribes. */
+  readonly level: number;
+  readonly tribes: readonly InfernoTribeView[];
+}
+
+/** `409 noInfernoYard` without an Inferno yard, `403 infernoOff` while the switch is off. */
+export const loadInfernoMap = (): Promise<InfernoMapResponse> =>
+  get<InfernoMapResponse>("/api/:apiVersion/bm/inferno/map");
+
+/**
+ * `POST /bm/inferno/attack/start` with `kind: "tribe"` (WP 2.8,
+ * `controllers/inferno/tribeAttack.ts`): the tribe's yard, fought as an
+ * Inferno yard, and the Inferno yard's army it is fought with. Refused (409)
+ * with `reason` `notInfernoTribe`, `notYourTribe`, `tribeDestroyed` (with
+ * `respawnAt`), `noMonsters`, `noInfernoYard` or `underAttack`.
+ */
+export interface TribeAttackStart extends ApiEnvelope {
+  readonly kind: "tribe";
+  readonly yardkind: "inferno";
+  readonly attackid: number;
+  /** The tribe's map level. */
+  readonly level: number;
+  readonly base: Partial<BaseLoadResponse>;
+  readonly defenderforces: unknown;
+  /** The Inferno yard's base id: the army's yard. */
+  readonly armybaseid: string;
+  /** What the Inferno yard's Housing Bunkers hold: everything the attack can fling. */
+  readonly army: Readonly<Record<string, number>>;
+  /** Infernal Academy levels by monster id. */
+  readonly attackeracademy: Readonly<Record<string, number>>;
+  /** The player's level, for the low-level loot bonus. */
+  readonly attackerlevel?: number;
+  readonly attpowerups?: unknown[];
+  /** What one fling may carry: a Housing Bunker's load (R11). */
+  readonly flingercapacity: number;
+}
+
+export const startTribeAttack = (baseid: string): Promise<TribeAttackStart> =>
+  post<TribeAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "tribe", baseid });
+
+/** The tribe start as the attack scene reads an attack load, an Inferno yard as the Descent's is. */
+export const tribeAttackLoad = (start: TribeAttackStart): BaseLoadResponse =>
+  ({
+    ...start.base,
+    type: "inferno",
+    attackid: start.attackid,
+    defenderforces: start.defenderforces,
+    attackeracademy: start.attackeracademy,
+    ...(start.attackerlevel === undefined ? {} : { attackerlevel: start.attackerlevel }),
+    ...(start.attpowerups === undefined ? {} : { attpowerups: start.attpowerups }),
+  }) as BaseLoadResponse;
