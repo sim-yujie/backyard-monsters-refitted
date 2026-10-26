@@ -1386,6 +1386,20 @@
   color: var(--colour-danger);
 }
 
+/* Cancel keeps its own colours when hovered or pressed: the primary
+   button's cyan hover would sit under the red words, and on a phone the
+   hover sticks after the tap that armed it. The tints stay light enough
+   for the words to pass 4.5:1 in both themes. */
+.btn.attack-siege__fire--armed:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--colour-danger) 8%, var(--colour-surface-raised));
+  border-color: var(--colour-danger);
+}
+
+.btn.attack-siege__fire--armed:active:not(:disabled) {
+  background: color-mix(in srgb, var(--colour-danger) 12%, var(--colour-surface-raised));
+  border-color: var(--colour-danger);
+}
+
 .attack-siege__hint {
   margin: 0;
   font-weight: 700;
