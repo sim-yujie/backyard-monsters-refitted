@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { Container, Graphics, Texture, TextureSource, TilingSprite } from "pixi.js";
+import type { Sprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
+import { setClassicBuildingArt, setNewTowerArt } from "@/game/yard/buildingArtTiers";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
@@ -29,6 +31,17 @@ import {
   recoilKick,
   stepDegrees,
   teslaTick,
+  TRACER_MAX,
+  TRACER_MIN,
+  TRACER_TICKS,
+  tracerLength,
+  FLAK_ARC_MAX,
+  FLAK_VOLLEY_FULL,
+  FLAK_VOLLEY_LOW,
+  flakLift,
+  SIGHT_LATE,
+  SIGHT_TICKS,
+  sightStrength,
   TURN_DEGREES_PER_TICK,
   towersOf,
   wrapDegrees,
@@ -39,7 +52,15 @@ import {
  * The tower effects' arithmetic (issue #67): the Flash bearing-to-cell rule
  * per tower class, the Tesla Tower's charge / loop / wind-down, the muzzle
  * heights, and the effects object turning a gun through a stub host.
+ *
+ * The strips these turn are the Flash towers', the default; the new tower
+ * art's towers are still pictures (the repainted-tier test below).
  */
+
+afterEach(() => {
+  setNewTowerArt(false);
+  setClassicBuildingArt(false);
+});
 
 describe("bearings", () => {
   it("measures from the tower's origin plus (35, 35), +x being 0 and +y being 90", () => {
@@ -177,6 +198,22 @@ describe("towersOf", () => {
     expect(towersOf(readYard(yardOf(20)))[0]?.frames).toBe(0);
     // A trap is not a tower.
     expect(towersOf(readYard(yardOf(24)))).toHaveLength(0);
+  });
+
+  it("gives a repainted tier no gun strip and lifts its muzzle with the picture", () => {
+    const yard = yardOf(21);
+    yard.buildingdata = { "1": { id: 1, t: 21, l: 7, X: 0, Y: 0 } };
+    // The new tower art is off unless turned on: the Flash turret, not lifted.
+    expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
+    // The player's old-art choice wins over the switch.
+    setNewTowerArt(true);
+    setClassicBuildingArt(true);
+    expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
+    // The new tower art: no strip, and the muzzle stands higher than tier 1's.
+    setClassicBuildingArt(false);
+    const [sniper] = towersOf(readYard(yard));
+    expect(sniper?.frames).toBe(0);
+    expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);
   });
 });
 
@@ -499,11 +536,38 @@ describe("the new look's arithmetic", () => {
     expect(laserReach(LASER_IGNITE_TICKS + LASER_REACH_TICKS)).toBe(1);
   });
 
+  it("gives a tracer a few ticks of its round's flight as its tail, never back past the gun", () => {
+    // Nothing yet off the muzzle; then no longer than the round has come.
+    expect(tracerLength(10, 0)).toBe(0);
+    expect(tracerLength(10, 12)).toBe(12);
+    // A slow sniper round streaks its minimum, a fast one a few ticks, a flak shell its cap.
+    expect(tracerLength(2.5, 500)).toBe(TRACER_MIN);
+    expect(tracerLength(10, 500)).toBe(10 * TRACER_TICKS);
+    expect(tracerLength(24, 500)).toBe(TRACER_MAX);
+  });
+
+  it("brings the Sniper's aim dot on just before its next shot is due, and not while it has not fired lately", () => {
+    expect(sightStrength(Number.POSITIVE_INFINITY, 80)).toBeNull();
+    expect(sightStrength(80 - SIGHT_TICKS - 1, 80)).toBeNull();
+    expect(sightStrength(80 - SIGHT_TICKS, 80)).toBe(0);
+    expect(sightStrength(80 - SIGHT_TICKS / 2, 80)).toBeCloseTo(0.5);
+    expect(sightStrength(80, 80)).toBe(1);
+    expect(sightStrength(80 + SIGHT_LATE, 80)).toBe(1);
+    expect(sightStrength(80 + SIGHT_LATE + 1, 80)).toBeNull();
+  });
+
+  it("lifts a flak shell in an arc that is back on its line where it bursts", () => {
+    expect(flakLift(300, 0)).toBe(0);
+    expect(flakLift(300, 1)).toBe(0);
+    expect(flakLift(200, 0.5)).toBeCloseTo(200 * 0.16);
+    expect(flakLift(5000, 0.5)).toBe(FLAK_ARC_MAX);
+    expect(flakLift(300, 0.25)).toBeLessThan(flakLift(300, 0.5));
+  });
 });
 
 /** A sheet the size of the real one, with nothing to fetch. */
 const fakeSheet = (): Promise<Texture> =>
-  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1248 }) }));
+  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1728 }) }));
 
 const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "full") => {
   const yard = readYard(yardOf(type));
@@ -511,19 +575,27 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
   const shakes: { tick: number; amp: number }[] = [];
   const nudges: { dx: number; dy: number }[] = [];
   const frames = new Map<number, number>();
+  /** What the battle screen was told of each round reaching its creep, in order. */
+  const hits: string[] = [];
+  const heading: { x: number; y: number }[] = [];
   const fx = new TowerFx(
     new Graphics(),
     towersOf(yard),
     {
       setAnimFrame: (id, _layer, frame) => frames.set(id, frame),
       nudge: (_id, _layer, dx, dy) => nudges.push({ dx, dy }),
+      landed: (_key, tick) => hits.push(`landed@${tick}`),
+      struck: (id, tick, dirX, dirY) => {
+        hits.push(`struck ${id}@${tick}`);
+        heading.push({ x: dirX, y: dirY });
+      },
     },
     { x: yard.bounds.originX, y: yard.bounds.originY },
     { look, sparks, glow: new Graphics(), shake: (tick, amp) => shakes.push({ tick, amp }), load: fakeSheet },
   );
   // The sheet comes in on the next turn of the event loop.
   await new Promise((resolve) => setTimeout(resolve, 0));
-  return { fx, sparks, shakes, nudges, frames };
+  return { fx, sparks, shakes, nudges, frames, hits, heading };
 };
 
 describe("TowerFx's new look", () => {
@@ -699,6 +771,210 @@ describe("TowerFx's new look", () => {
     expect(fullFlows).toBe(2);
     expect(lowFlows).toBe(0);
     expect(lowAll).toBeLessThan(fullAll ?? 0);
+  });
+
+  /** The Aerial Defense Tower shoots only flyers. */
+  const flyer: CreepSnapshot = { ...target, flying: true };
+  const targetFor = (type: number): CreepSnapshot => (type === 115 ? flyer : target);
+  const fire = (fx: TowerFx, type: number, tick: number) => {
+    const creep = targetFor(type);
+    return fx.onShot({ tick, towerId: 1, creepId: 9, ix: creep.ix, iy: creep.iy }, creep);
+  };
+  /** Runs a shot fired on tick 5 until it lands; the tick it landed on. */
+  const landingTick = (fx: TowerFx, type: number): number => {
+    const creep = targetFor(type);
+    fx.update(0, () => creep, [creep]);
+    fire(fx, type, 5);
+    for (let tick = 5; tick <= 400; tick += 1) {
+      fx.update(tick, () => creep, [creep]);
+      if (fx.flyingCount === 0) return tick;
+    }
+    return -1;
+  };
+
+  it("flies the Sniper's round and the flak shell as painted tracers; the Sniper's lands near at once", async () => {
+    for (const type of [21, 115]) {
+      const classic = await newLookSetUp(type, "classic");
+      const full = await newLookSetUp(type, "full");
+      const low = await newLookSetUp(type, "low");
+      const creep = targetFor(type);
+      const visible = (sparks: Container) => sparks.children.filter((child) => child.visible).length;
+      // Mid-flight, once the muzzle flash has gone: the tracer is up, more of it on full.
+      const tracers: number[] = [];
+      for (const { fx, sparks } of [full, low]) {
+        fx.update(0, () => creep, [creep]);
+        fire(fx, type, 5);
+        fx.update(5 + 7, () => creep, [creep]);
+        expect(fx.flyingCount).toBe(1);
+        tracers.push(visible(sparks) - fx.sparkCount);
+      }
+      expect(tracers[1]).toBeGreaterThanOrEqual(1);
+      expect(tracers[1]).toBeLessThan(tracers[0] ?? 0);
+      full.fx.destroy();
+      low.fx.destroy();
+      // The flak shell lands on the same tick in every look; the painted Sniper's
+      // round cracks across in a tenth of a second or so, where Flash's ball took
+      // more than half a second (the engine took the damage off as it fired).
+      const fresh = await newLookSetUp(type, "full");
+      const painted = landingTick(fresh.fx, type);
+      const flash = landingTick(classic.fx, type);
+      expect(painted).toBeGreaterThan(5);
+      if (type === 21) {
+        expect(painted - 5).toBeLessThanOrEqual(12);
+        expect(flash - 5).toBeGreaterThan(40);
+      } else {
+        expect(painted).toBe(flash);
+      }
+      fresh.fx.destroy();
+      classic.fx.destroy();
+    }
+  });
+
+  it("kicks the Sniper and the Aerial Defense Tower back as they fire, and jolts as the round strikes", async () => {
+    for (const type of [21, 115]) {
+      const { fx, shakes, nudges } = await newLookSetUp(type);
+      const creep = targetFor(type);
+      fx.update(0, () => creep, [creep]);
+      fire(fx, type, 5);
+      fx.update(5, () => creep, [creep]);
+      // Fired: a flash and a kick, never a jolt.
+      expect(fx.sparkCount).toBeGreaterThan(0);
+      expect(shakes).toHaveLength(0);
+      for (let tick = 6; tick <= 400; tick += 1) fx.update(tick, () => creep, [creep]);
+      expect(shakes).toHaveLength(1);
+      expect(shakes[0]?.tick).toBeGreaterThan(5);
+      expect(nudges.some(({ dx, dy }) => dx !== 0 || dy !== 0)).toBe(true);
+      expect(nudges[nudges.length - 1]).toEqual({ dx: 0, dy: 0 });
+      fx.destroy();
+    }
+  });
+
+  it("throws fewer bits for a Sniper's strike and a flak burst on low than on full", async () => {
+    for (const type of [21, 115]) {
+      const counts: number[] = [];
+      for (const look of ["full", "low"] as const) {
+        const { fx } = await newLookSetUp(type, look);
+        const landed = landingTick(fx, type);
+        expect(landed).toBeGreaterThan(5);
+        counts.push(fx.sparkCount);
+        fx.destroy();
+      }
+      expect(counts[1]).toBeGreaterThan(0);
+      expect(counts[1]).toBeLessThan(counts[0] ?? 0);
+    }
+  });
+
+  it("turns the Sniper onto a creep in range before any shot, and the Aerial Defense Tower only onto a flyer", async () => {
+    const sniper = await newLookSetUp(21);
+    sniper.fx.update(1, () => target, [target]);
+    expect(sniper.frames.get(1)).toBeDefined();
+    sniper.fx.destroy();
+    const walker = await newLookSetUp(115);
+    walker.fx.update(1, () => target, [target]);
+    expect(walker.frames.get(1)).toBeUndefined();
+    walker.fx.destroy();
+    const flak = await newLookSetUp(115);
+    flak.fx.update(1, () => flyer, [flyer]);
+    expect(flak.frames.get(1)).toBeDefined();
+    flak.fx.destroy();
+  });
+
+  /** Sprites on screen that are not thrown bits: strips and spots drawn this frame. */
+  const drawnNow = (fx: TowerFx, sparks: Container) =>
+    sparks.children.filter((child) => child.visible).length - fx.sparkCount;
+
+  it("puts a small red laser dot on the Sniper's target just before the next shot, with no beam or ring", async () => {
+    /** The laser's red bits on screen. */
+    const red = (sparks: Container) =>
+      sparks.children.filter((child) => child.visible && (child as Sprite).tint === 0xff2a1a).length;
+    const counts: number[] = [];
+    for (const look of ["full", "low"] as const) {
+      const { fx, sparks } = await newLookSetUp(21, look);
+      fx.update(0, () => target, [target]);
+      fire(fx, 21, 5);
+      // Long before the next shot nothing aims.
+      for (let tick = 6; tick <= 5 + 80 - SIGHT_TICKS - 2; tick += 1) {
+        fx.update(tick, () => target, [target]);
+        expect(red(sparks)).toBe(0);
+      }
+      // Just before it is due: the dot, and nothing else in red, on full as on low.
+      for (let tick = 5 + 80 - SIGHT_TICKS - 1; tick <= 5 + 80 - 1; tick += 1) fx.update(tick, () => target, [target]);
+      counts.push(red(sparks));
+      fx.destroy();
+    }
+    expect(counts).toEqual([1, 1]);
+  });
+
+  it("fires the flak tower's twin barrels in a burst, only the engine's shell landing a wound or jolting", async () => {
+    for (const [look, shells] of [["full", FLAK_VOLLEY_FULL], ["low", FLAK_VOLLEY_LOW]] as const) {
+      const yard = readYard(yardOf(115));
+      const sparks = new Container();
+      const landed: number[] = [];
+      const shakes: number[] = [];
+      const fx = new TowerFx(
+        new Graphics(),
+        towersOf(yard),
+        { setAnimFrame: () => undefined, landed: (key) => landed.push(key) },
+        { x: yard.bounds.originX, y: yard.bounds.originY },
+        { look, sparks, glow: new Graphics(), shake: (tick) => shakes.push(tick), load: fakeSheet },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      fx.update(0, () => flyer, [flyer]);
+      const key = fire(fx, 115, 5);
+      // Each shell in the air is a painted shell with its hot nose (and a glow on full).
+      const perShell = look === "full" ? 3 : 2;
+      let most = 0;
+      for (let tick = 5; tick <= 200; tick += 1) {
+        fx.update(tick, () => flyer, [flyer]);
+        most = Math.max(most, drawnNow(fx, sparks));
+      }
+      expect(most).toBeGreaterThanOrEqual(2 * perShell);
+      expect(most).toBeLessThanOrEqual(shells * perShell);
+      expect(landed).toEqual([key]);
+      expect(shakes).toHaveLength(1);
+      fx.destroy();
+    }
+  });
+
+  it("tells the battle screen the Sniper's round struck its creep, once, just before it lands", async () => {
+    for (const look of ["full", "low"] as const) {
+      const { fx, hits, heading } = await newLookSetUp(21, look);
+      const landed = landingTick(fx, 21);
+      expect(hits).toEqual([`struck 9@${landed}`, `landed@${landed}`]);
+      // Along the round's flight: a unit vector.
+      expect(heading).toHaveLength(1);
+      expect(Math.hypot(heading[0]?.x ?? 0, heading[0]?.y ?? 0)).toBeCloseTo(1);
+      fx.destroy();
+    }
+  });
+
+  it("strikes no creep for the classic Sniper or any other tower's shot", async () => {
+    for (const [type, look] of [[21, "classic"], [20, "full"], [115, "full"], [115, "classic"]] as const) {
+      const { fx, hits } = await newLookSetUp(type, look);
+      landingTick(fx, type);
+      expect(hits.some((hit) => hit.startsWith("struck"))).toBe(false);
+      expect(hits.filter((hit) => hit.startsWith("landed"))).toHaveLength(1);
+      fx.destroy();
+    }
+    for (const type of [23, 25, 118]) {
+      const { fx, hits } = await newLookSetUp(type);
+      fx.onCharge(1, 0);
+      fire(fx, type, 70);
+      for (let tick = 70; tick <= 120; tick += 1) fx.update(tick, () => target, [target]);
+      expect(hits).toEqual([]);
+      fx.destroy();
+    }
+  });
+
+  it("keeps the classic Sniper and flak shots as they were: no bits, no shake, no kick", async () => {
+    for (const type of [21, 115]) {
+      const { fx, sparks, shakes, nudges } = await newLookSetUp(type, "classic");
+      landingTick(fx, type);
+      expect(sparks.children).toHaveLength(0);
+      expect(shakes).toHaveLength(0);
+      expect(nudges).toHaveLength(0);
+      fx.destroy();
+    }
   });
 
   it("clears every bit when the battle stands down", async () => {

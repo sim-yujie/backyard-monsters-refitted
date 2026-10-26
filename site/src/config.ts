@@ -14,10 +14,10 @@ export const SITE = {
   refittedUrl: "https://bymrefitted.com",
   licenceUrl: "https://polyformproject.org/licenses/noncommercial/1.0.0/",
   /**
-   * The community Discord invite. Leave it empty and every Discord button
-   * stays hidden; paste the invite link here once the server is ready.
+   * The community Discord invite (never expires; it lands in #welcome). Set
+   * it to "" and every Discord button and link is hidden.
    */
-  discordUrl: "",
+  discordUrl: "https://discord.gg/wthryBRZHz",
   /**
    * The Ko-fi page for one-time gifts. Leave it empty and every Ko-fi button
    * and all "one-time gift" wording stays hidden; paste the page link here
@@ -25,8 +25,8 @@ export const SITE = {
    */
   kofiUrl: "https://ko-fi.com/themonsterlab",
   /**
-   * Where players send bug reports until the Discord exists. Shown as plain
-   * text with a mailto link on the Support page and the home page's beta notice.
+   * Where players email bug reports. Shown as plain text with a mailto link on
+   * the Support page and the home page's beta notice.
    */
   bugEmail: "simyujie@gmail.com",
   /**

@@ -1,5 +1,6 @@
 import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel, type ArtRow } from "./buildingArtData";
 import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
+import { tierArtFor } from "./buildingArtTiers";
 import type { YardKind } from "./buildingCostData";
 
 /**
@@ -17,6 +18,10 @@ import type { YardKind } from "./buildingCostData";
  * one, otherwise walk *down* until an entry exists. Level 0 — a building still
  * under construction — uses the level 1 art.
  * (`client/scripts/BFOUNDATION.as:896-914`.)
+ *
+ * The repainted defensive towers and Town Hall are the exception: unless the
+ * player chose the old (Flash) art, each tier or level takes a new picture
+ * from `buildingArtTiers.ts` instead of the Flash row.
  *
  * Two buildings have a lower maximum on Map Room 2 than the art table knows
  * about, and the client clamps the level before looking the art up
@@ -302,6 +307,26 @@ export const resolveArt = (
   // Level 0 is a building whose foundation is down but which is not finished;
   // it shows the level 1 art.
   const wanted = effective <= 0 ? 1 : effective;
+
+  // A repainted tier or Town Hall level, unless the old art is on: one still picture
+  // for default and damaged alike; a destroyed one falls through to the Flash rubble.
+  // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art.
+  const ownInfernoArt = kind === "inferno" && row.folder !== ROWS.get(type)?.folder;
+  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted);
+  if (tier) {
+    const top = imageOf(row.folder, tier.top);
+    if (top) {
+      return {
+        name: row.name,
+        folder: row.folder,
+        level: tier.from,
+        top,
+        shadow: imageOf(row.folder, tier.shadow),
+        anims: [],
+        topIsAnim: false,
+      };
+    }
+  }
 
   let chosen: ArtLevel | null = null;
   for (const candidate of row.levels) {

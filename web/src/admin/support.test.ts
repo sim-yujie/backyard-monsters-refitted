@@ -317,7 +317,11 @@ describe("the Shiny section", () => {
     };
     routes["GET /admin/players"] = {
       error: 0,
-      players: [{ userid: 42, username: "MonsterMash", lastSeenAt: null }],
+      players: [
+        { userid: 42, username: "MonsterMash", formerName: null, bot: false, lastSeenAt: null },
+        { userid: 43, username: "NewName", formerName: "Monster_Masher", bot: false, lastSeenAt: null },
+        { userid: 44, username: "monster_smash", formerName: null, bot: true, lastSeenAt: null },
+      ],
     };
     const opened: number[] = [];
     const view = new ShinyView({ openReport: (id) => opened.push(id), say: () => {} });
@@ -335,6 +339,10 @@ describe("the Shiny section", () => {
     search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
     await settle();
     expect(calls.find((c) => c.path.endsWith("/admin/players"))?.query.get("q")).toBe("mons");
+    // A player found by a name they had before says so.
+    expect(button(view.element, "NewName#43 · was called Monster_Masher · never played")).toBeDefined();
+    // A bot is shown, marked, so it is never given to by mistake.
+    expect(button(view.element, "monster_smash#44 · bot · never played")).toBeDefined();
     button(view.element, "MonsterMash#42 · never played").click();
     expect(view.element.querySelector(".picked-card")?.textContent).toContain("Giving to");
     expect(view.element.querySelector("form.award")).not.toBeNull();

@@ -10,13 +10,13 @@
 
 .inferno-amount {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.25em;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-/* The name stands in for the icon until the Inferno art is painted (A2). */
+/* The painted pile, then the name, as the Siege screen's words were checked with the name. */
 .inferno-amount__name {
   color: var(--colour-text-muted);
   font-weight: 700;

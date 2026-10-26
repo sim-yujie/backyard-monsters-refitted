@@ -37,11 +37,12 @@ describe("the Inferno's resources", () => {
     expect(SIEGE_NAMES.r3).toBe(INFERNO_RESOURCE_NAMES.r3);
   });
 
-  it("draws the placeholder icons in the Inferno and the sacks on the surface", () => {
+  it("draws the Inferno's painted piles in the Inferno and the surface's piles on the surface", () => {
     expect(iconStyle("r1").backgroundImage).toContain("/assets/popups/resourcetwigs.png");
     setResourceRealm("inferno");
-    expect(iconStyle("r1").backgroundImage).toMatch(/^url\("data:image\/svg\+xml,/);
-    expect(iconStyle("r1").aspectRatio).toBe("64 / 64");
+    expect(iconStyle("r1").backgroundImage).toContain("/assets/popups/resourcebone.png");
+    expect(iconStyle("r4").backgroundImage).toContain("/assets/popups/resourcemagma.png");
+    expect(iconStyle("r1").aspectRatio).toBe(iconStyle("r1", "surface").aspectRatio);
     expect(iconStyle("shiny").backgroundImage).toContain("/assets/alliances/shiny-icon.png");
   });
 

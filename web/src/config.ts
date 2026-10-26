@@ -40,6 +40,9 @@ export const CREDITS_URL = "/credits";
 /** The owner's Patreon, the login screen's "Support us" link. */
 export const PATREON_URL = "https://www.patreon.com/c/TheMonsterLab";
 
+/** The community Discord invite (never expires; it lands in #welcome). */
+export const DISCORD_URL = "https://discord.gg/wthryBRZHz";
+
 /* ── Map Room 2 world ──────────────────────────────────────────────────────
  * Source: server/src/enums/MapRoom.ts (MapRoom2) via
  * server/src/config/MapRoom2Config.ts, where WORLD_SIZE = [HEIGHT, WIDTH].

@@ -31,7 +31,7 @@ import { bitPath, tintAt } from "./blastFx";
  * show the shot.
  */
 
-/** The sheet: twelve 192 px cells, four across, then the strips (`server/public/assets/fx/`). */
+/** The sheet: twenty 192 px cells, four across, then the strips (`server/public/assets/fx/`). */
 export const SHOT_FX_SHEET_URL = "/assets/fx/tower-fx.png";
 export const SHOT_FX_CELL = 192;
 const COLUMNS = 4;
@@ -39,9 +39,17 @@ const COLUMNS = 4;
 export const SHOT_STRIP_WIDTH = 384;
 export const SHOT_STRIP_HEIGHT = 96;
 const STRIP_COLUMNS = 2;
-const STRIP_TOP = SHOT_FX_CELL * 3;
 
-/** The cells, in the sheet's order. `muzzle` and `spark` point right; `scorch` is dark. */
+/**
+ * The cells, in the sheet's order. `muzzle`, `spark`, `rifleflash` (a
+ * rifle's star of a flash), `ricochet` (a spray of sparks out of a hit),
+ * `shell` (a flak shell with its comet of flame) and `aaflash` (a flak gun's
+ * fat blast with its ring of gas) point right, their hot point or nose
+ * toward one end; `debris` (a fountain of dirt) rises from its bottom middle.
+ * `scorch` is dark, `flak` (a flak shell's burst cloud) and `debris` mid
+ * grey; `shrapnel` is streaks flying out of an empty middle; `fireball` is a
+ * shaded ball of flame, for drawing unlit.
+ */
 export const SHOT_LOOKS = [
   "glow",
   "flare",
@@ -55,20 +63,33 @@ export const SHOT_LOOKS = [
   "orb",
   "beam",
   "scorch",
+  "flak",
+  "shrapnel",
+  "rifleflash",
+  "ricochet",
+  "debris",
+  "shell",
+  "fireball",
+  "aaflash",
 ] as const;
 export type ShotLook = (typeof SHOT_LOOKS)[number];
+/** Where the strips start: under the cells' last row. */
+const STRIP_TOP = SHOT_FX_CELL * Math.ceil(SHOT_LOOKS.length / COLUMNS);
 
 /** The painted lightning bolts, each a zigzag lying left to right with its forks. */
 export const BOLT_COUNT = 6;
 /**
  * The strips, in the sheet's order: the bolts, then each bolt's bright core,
- * then the ray (a straight stroke of light, soft each side, tapered at the ends)
- * and the streak (a lens-flare flash: a hot spot with a long thin streak through it).
+ * then the ray (a straight stroke of light, soft each side, tapered at the ends),
+ * the streak (a lens-flare flash: a hot spot with a long thin streak through it),
+ * the bullet (a rifle round's hot head and shock cone at the right end, its tail
+ * fading out to the left) and the vapour (a thread of smoke, tight at the right
+ * end, widening and breaking up to the left).
  */
 export const STRIP_LOOKS = [
   "bolt1", "bolt2", "bolt3", "bolt4", "bolt5", "bolt6",
   "core1", "core2", "core3", "core4", "core5", "core6",
-  "ray", "streak",
+  "ray", "streak", "bullet", "vapour",
 ] as const;
 export type StripLook = (typeof STRIP_LOOKS)[number];
 
@@ -140,6 +161,8 @@ export interface LineSpec {
   readonly tint: number;
   /** Turned over the line, so one painting makes two bolts. */
   readonly flip?: boolean;
+  /** In added light unless false: false lays it over what is under it, so its colour holds on bright ground. */
+  readonly add?: boolean;
 }
 
 export interface LampSpec {
@@ -151,6 +174,8 @@ export interface LampSpec {
   readonly tint: number;
   readonly rotation?: number;
   readonly squash?: number;
+  /** In added light unless false ({@link spot} only; a lamp is always light). */
+  readonly add?: boolean;
 }
 
 /** A flow laid along a line for one frame, slid `offset` world px along it. */
@@ -302,11 +327,11 @@ export class ShotFx {
     this.flowsDrawn.length = 0;
   }
 
-  /** Lays a strip from `from` to `to` for this frame, in added light; false before the sheet is in. */
+  /** Lays a strip from `from` to `to` for this frame, in added light unless `add` is false; false before the sheet is in. */
   line(spec: LineSpec): boolean {
     const length = Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y);
     if (spec.alpha <= 0.01 || length < 1) return true;
-    const sprite = this.paint(spec.look, spec.alpha, spec.tint);
+    const sprite = this.paint(spec.look, spec.alpha, spec.tint, spec.add);
     if (!sprite) return false;
     sprite.position.set((spec.from.x + spec.to.x) / 2, (spec.from.y + spec.to.y) / 2);
     sprite.rotation = Math.atan2(spec.to.y - spec.from.y, spec.to.x - spec.from.x);
@@ -349,10 +374,10 @@ export class ShotFx {
     return this.flowsDrawn.length;
   }
 
-  /** A cell held on a point for this frame only, in added light: a gun-ball, a glow at a beam's end. */
+  /** A cell held on a point for this frame only, in added light unless `add` is false: a gun-ball, a glow at a beam's end. */
   spot(spec: LampSpec): boolean {
     if (spec.alpha <= 0.01) return true;
-    const sprite = this.paint(spec.look, spec.alpha, spec.tint);
+    const sprite = this.paint(spec.look, spec.alpha, spec.tint, spec.add);
     if (!sprite) return false;
     sprite.rotation = spec.rotation ?? 0;
     sprite.position.set(spec.at.x, spec.at.y);
@@ -421,13 +446,13 @@ export class ShotFx {
     return texture;
   }
 
-  /** A pooled sprite in added light for this frame, or null before the sheet is in. */
-  private paint(look: ShotLook | StripLook, alpha: number, tint: number): Sprite | null {
+  /** A pooled sprite for this frame, in added light unless `add` is false, or null before the sheet is in. */
+  private paint(look: ShotLook | StripLook, alpha: number, tint: number, add = true): Sprite | null {
     const texture = this.cell(look);
     if (!texture) return null;
     const sprite = this.pool.pop() ?? this.makeSprite();
     sprite.texture = texture;
-    sprite.blendMode = "add";
+    sprite.blendMode = add ? "add" : "normal";
     sprite.visible = true;
     sprite.alpha = Math.min(1, alpha);
     sprite.tint = tint;

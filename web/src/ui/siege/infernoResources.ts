@@ -1,16 +1,13 @@
 import type { PurseKey } from "@/game/siege/siege";
 import { formatAmount } from "@/ui/format";
-import { INFERNO_RESOURCE_NAMES as INFERNO_NAMES } from "@/ui/resourceIcon";
+import { INFERNO_RESOURCE_NAMES as INFERNO_NAMES, resourceIcon } from "@/ui/resourceIcon";
 
 /**
  * The four Inferno resources, as the Siege screen spells them
  * (`GLOBAL.getResourceName(id, true)`): Bone, Coal, Sulfur and Magma.
  *
- * Their icons are not painted yet (art track A2, `docs/design/inferno.md`;
- * Flash's are vector art inside assets.swf), so an amount reads as its name
- * and figure. Every Inferno amount on the screen is drawn here, so the icons
- * go in at this one place: give `inferno-amount` an image before the figure,
- * as `resourceAmount` does for the yard's resources.
+ * An amount is the resource's painted pile (`resourceIcon.ts`), its name and
+ * the figure; the pile is decorative, as the name beside it already says it.
  */
 
 /** The names the yard's icons carry too (`resourceIcon.ts`). */
@@ -27,6 +24,6 @@ export const infernoAmount = (key: PurseKey, amount: number | string, className?
   const value = document.createElement("span");
   value.className = "inferno-amount__value";
   value.textContent = typeof amount === "number" ? formatAmount(amount) : amount;
-  node.append(name, " ", value);
+  node.append(resourceIcon(key, { decorative: true, realm: "inferno" }), name, " ", value);
   return node;
 };

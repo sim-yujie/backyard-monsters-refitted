@@ -8,7 +8,7 @@ import { boltLook, LOW_SHOT_BITS, MAX_SHOT_BITS, ShotFx } from "./shotFx";
  */
 
 const fakeSheet = (): Promise<Texture> =>
-  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1248 }) }));
+  Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1728 }) }));
 
 const ready = async (low = false) => {
   const layer = new Container();
@@ -90,6 +90,22 @@ describe("ShotFx", () => {
     fx.begin();
     expect(fx.drawnCount).toBe(0);
     expect(layer.children).toHaveLength(0);
+    fx.destroy();
+  });
+
+  it("lays strips and spots in added light unless told to lay them over the ground", async () => {
+    const { fx, layer } = await ready();
+    const line = { look: "ray", from: { x: 0, y: 0 }, to: { x: 100, y: 0 }, width: 10, alpha: 1, tint: 0xff8a10 } as const;
+    fx.line(line);
+    fx.line({ ...line, add: false });
+    fx.spot({ look: "glow", at: { x: 5, y: 5 }, size: 16, alpha: 1, tint: 0xff2a1a, add: false });
+    expect(layer.children.map((child) => child.blendMode)).toEqual(["add", "normal", "normal"]);
+    // A sprite given back and drawn again in light is lit again.
+    fx.begin();
+    fx.line(line);
+    fx.line(line);
+    fx.spot({ look: "glow", at: { x: 5, y: 5 }, size: 16, alpha: 1, tint: 0xff2a1a });
+    expect(layer.children.map((child) => child.blendMode)).toEqual(["add", "add", "add"]);
     fx.destroy();
   });
 

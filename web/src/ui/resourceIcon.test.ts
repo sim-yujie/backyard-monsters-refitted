@@ -13,21 +13,26 @@ import {
 /** The one helper every amount on screen is drawn with (#93). */
 
 describe("resource icons", () => {
-  it("crops each pile out of its popup art and shows the shiny coins whole", () => {
+  it("shows each pile's full width, trims the empty rows, and shows the shiny coins whole", () => {
     const twigs = iconStyle("r1");
     expect(twigs.backgroundImage).toBe('url("/assets/popups/resourcetwigs.png")');
-    // 182 x 95 image, 79 x 68 crop at (102, 26).
-    expect(twigs.backgroundSize).toBe("230.38% 139.706%");
-    expect(twigs.backgroundPosition).toBe("99.029% 96.296%");
-    expect(twigs.aspectRatio).toBe("79 / 68");
+    // 128 x 128 image, 128 x 84 band at (0, 22).
+    expect(twigs.backgroundSize).toBe("100% 152.381%");
+    expect(twigs.backgroundPosition).toBe("0% 50%");
+    expect(twigs.aspectRatio).toBe("128 / 84");
 
     const shiny = iconStyle("shiny");
     expect(shiny.backgroundImage).toBe('url("/assets/alliances/shiny-icon.png")');
     expect(shiny.backgroundSize).toBe("100% 100%");
     expect(shiny.backgroundPosition).toBe("0% 0%");
 
+    // One band for all four, so the piles are drawn at the same scale.
     for (const key of ["r2", "r3", "r4"] as const) {
-      expect(iconStyle(key).backgroundImage).toMatch(/^url\("\/assets\/popups\/resource[a-z]+\.png"\)$/);
+      const style = iconStyle(key);
+      expect(style.backgroundImage).toMatch(/^url\("\/assets\/popups\/resource[a-z]+\.png"\)$/);
+      expect(style.backgroundSize).toBe(twigs.backgroundSize);
+      expect(style.backgroundPosition).toBe(twigs.backgroundPosition);
+      expect(style.aspectRatio).toBe(twigs.aspectRatio);
     }
   });
 

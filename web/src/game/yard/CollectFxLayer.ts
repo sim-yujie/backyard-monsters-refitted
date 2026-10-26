@@ -1,4 +1,6 @@
 import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
+import type { Effect } from "@/game/sound/EffectsPlayer";
+import { playEffect } from "@/game/sound/sound";
 import { flightPose, type Flight } from "./collectFx";
 import type { HarvestKey } from "./harvest";
 
@@ -17,6 +19,12 @@ import type { HarvestKey } from "./harvest";
  * air at once, so a bank still settles when the yard goes;
  * {@link cancel} takes one throw's balls away without landing them, for a
  * bank the server refused after its balls were already thrown (#208).
+ *
+ * Each ball makes Flash's sounds (`ResourcePackage.as:36-43,97-103`): a pop
+ * as it leaves (`bankfire`) and another as it lands (`bankland`). The effects
+ * player keeps a big bank from rattling (`sound/EffectsPlayer.ts`). Balls
+ * landed all at once by {@link finish}, or taken away, make none: the yard
+ * is going or the bank was refused.
  */
 
 /** The ball of each resource, and the shadow they share. */
@@ -159,10 +167,14 @@ interface Ball {
   readonly dot: Sprite;
   readonly shadow: Sprite;
   elapsed: number;
+  /** Shown once its delay was up, with its pop played. */
+  thrown: boolean;
 }
 
 export interface CollectFxOptions {
   readonly art?: CollectFxArt;
+  /** Plays a sound effect; the game's effects player when left out. */
+  readonly sound?: (effect: Effect) => void;
 }
 
 export class CollectFxLayer {
@@ -171,6 +183,7 @@ export class CollectFxLayer {
   private readonly shadows = new Container();
   private readonly dots = new Container();
   private readonly art: CollectFxArt;
+  private readonly sound: (effect: Effect) => void;
   private readonly balls: Ball[] = [];
   private readonly freeDots: Sprite[] = [];
   private readonly freeShadows: Sprite[] = [];
@@ -178,6 +191,7 @@ export class CollectFxLayer {
 
   constructor(options: CollectFxOptions = {}) {
     this.art = options.art ?? packageArt();
+    this.sound = options.sound ?? playEffect;
     this.root.eventMode = "none";
     this.root.addChild(this.shadows, this.dots);
   }
@@ -200,7 +214,7 @@ export class CollectFxLayer {
       shadow.texture = this.art.shadow;
       dot.visible = false;
       shadow.visible = false;
-      this.balls.push({ group, flight, onLand, dot, shadow, elapsed: 0 });
+      this.balls.push({ group, flight, onLand, dot, shadow, elapsed: 0, thrown: false });
     }
     return group;
   }
@@ -224,10 +238,15 @@ export class CollectFxLayer {
       const ball = balls[index]!;
       ball.elapsed += deltaSeconds;
       const pose = flightPose(ball.flight, ball.elapsed);
+      if (pose.visible && !ball.thrown) {
+        ball.thrown = true;
+        this.sound("bankfire");
+      }
       if (pose.landed) {
         this.release(ball);
         balls[index] = balls[balls.length - 1]!;
         balls.pop();
+        this.sound("bankland");
         ball.onLand(ball.flight.resource, ball.flight.share);
         continue;
       }

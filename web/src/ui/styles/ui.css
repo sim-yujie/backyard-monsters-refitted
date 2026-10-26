@@ -883,6 +883,13 @@ body {
   color: var(--colour-text);
 }
 
+/* "Join the Discord" is a link, not a button: centred upright like the rest. */
+.account-menu__discord {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 /* The player's avatar (#175): a small face on the button, a larger one by the
    name, and the picker — the twelve critters, the current one ringed. */
 .account-menu__face {

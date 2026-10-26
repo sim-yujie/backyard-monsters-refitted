@@ -73,19 +73,27 @@ import {
 import {
   BIG_MAX_SHAKE,
   CHAMPION_STRIKE_FRAMES,
+  FELLED_AFTER_TICKS,
+  FELLED_TICKS,
   HIT_STOP_CHAMPION_MS,
   HIT_STOP_DESTROY_MS,
   SLOW_MO_EASE_SECONDS,
   SLOW_MO_SECONDS,
+  STRUCK_HOLD_TICKS,
   WINDUP_PULL_PX,
   bigLungeOffset,
   expectedSwingGap,
   effectsQuality,
+  felledAlpha,
+  felledOffset,
   juiceLevel,
   nextSwingGap,
   screenShakeOn,
   slowMoSeconds,
   squashScale,
+  struckFlash,
+  struckOffset,
+  struckSquash,
   windUpFrame,
   type EffectsQuality,
   type JuiceLevel,
@@ -195,6 +203,8 @@ export const STILL_LATCH_TICKS = 3;
 
 /** The tint a creep's body shows for `HURT_TICKS` after it is hit. */
 export const HURT_TINT = 0xff7070;
+/** The hot gold-white a creep's body flashes when a heavy round strikes it, in added light. */
+export const STRUCK_TINT = 0xffe2a8;
 
 /** The sheet a ranked D.A.V.E.'s rockets are cut from (`SPRITES.as:83`). */
 const ROCKET_SHEET: MonsterSheet = MONSTER_SPRITES["rocket"]!;
@@ -571,6 +581,8 @@ export interface AttackBattleLayerOptions {
   readonly bombArt?: BombArt;
   /** The siege weapons' sheets; a test hands in its own (Inferno WP 6.8). */
   readonly siegeArt?: SiegeArt;
+  /** The towers' shot sheet; a test hands in its own. */
+  readonly shotSheet?: (url: string) => Promise<Texture>;
   /** The bomb rain's randomness; `Math.random` unless a test fixes it. */
   readonly random?: () => number;
   /** Wall-clock milliseconds, for the rain after the end; `performance.now` unless a test fixes it. */
@@ -611,6 +623,14 @@ interface CreepView {
   lungeY: number;
   /** The tick the creep was last hurt, for the red tint (#68). */
   hurtTick: number;
+  /** The tick a heavy round (the new look's Sniper) last struck it, and the unit vector it flew along. */
+  struckTick: number;
+  struckX: number;
+  struckY: number;
+  /** Its body again in added light, for the strike's flash; made at its first strike. */
+  glint: Sprite | null;
+  /** The tick a heavy round killed it: it stays up, frozen, thrown back and fading ({@link fell}). */
+  felledTick: number;
   /** Health at the last tick looked at: a rise is healing, shown green (#68). */
   lastHp: number;
   /** World y of the top of the body as last drawn, for the numbers over it. */
@@ -751,6 +771,8 @@ export class AttackBattleLayer {
   private readonly pool: CreepView[] = [];
   /** Creeps walking off the field: out of `views`, not yet back in `pool`. */
   private readonly leavers = new Map<number, Leaver>();
+  /** Creeps a heavy round killed, still up for a moment: out of `views`, not yet back in `pool`. */
+  private readonly felled = new Map<number, CreepView>();
   /** Every creep that has walked off or is walking, so the frozen field never redraws it. */
   private readonly departed = new Set<number>();
   /** Creeps the engine reported dead: they splat rather than walk off. */
@@ -913,6 +935,7 @@ export class AttackBattleLayer {
       {
         setAnimFrame: (id, layer, frame) => this.host.setAnimFrame(id, layer, frame),
         landed: (key, tick) => this.showReleased(this.ledger.land(key), tick),
+        struck: (id, tick, dirX, dirY) => this.onStruck(id, tick, dirX, dirY),
         shellLayer: () => this.shells,
         nudge: (id, layer, dx, dy) => this.host.nudgeAnim?.(id, layer, dx, dy),
       },
@@ -928,6 +951,7 @@ export class AttackBattleLayer {
         sparks: this.shotSparks,
         glow: this.shotGlow,
         shake: (tick, amp, life) => this.blastFx.jolt(tick, amp, life),
+        ...(options.shotSheet ? { load: options.shotSheet } : {}),
       },
     );
     const originOf = new Map<number, Point>();
@@ -987,6 +1011,7 @@ export class AttackBattleLayer {
       this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined, live);
       this.showReleased(this.ledger.expire(tick), tick);
       this.paintCreeps(tick);
+      this.fell(tick);
       if (this.session.ended && !this.endWalked) this.walkOffAtEnd(shown);
       this.walkOff(shown);
     }
@@ -1062,6 +1087,8 @@ export class AttackBattleLayer {
     this.views.clear();
     for (const leaver of this.leavers.values()) this.release(leaver.view);
     this.leavers.clear();
+    for (const view of this.felled.values()) this.release(view);
+    this.felled.clear();
     this.ledger.clear();
     this.heldBuildingHp.clear();
     this.lastJump.clear();
@@ -1167,7 +1194,7 @@ export class AttackBattleLayer {
 
   /** How many creeps have a sprite right now, walkers included. */
   get creepCount(): number {
-    return this.views.size + this.leavers.size;
+    return this.views.size + this.leavers.size + this.felled.size;
   }
 
   /** The projectiles, smoke and damage numbers, for a test or the dev hook to read. */
@@ -1186,10 +1213,27 @@ export class AttackBattleLayer {
     return view ? this.shownFraction(view) : null;
   }
 
-  /** How a creep's body and bar are drawn right now, for a test or the dev hook; null with no sprite. */
-  bodyOf(id: number): { readonly alpha: number; readonly barAlpha: number; readonly y: number } | null {
-    const view = this.views.get(id);
-    return view ? { alpha: view.body.alpha, barAlpha: view.barBack.alpha, y: view.body.y } : null;
+  /**
+   * How a creep's body and bar are drawn right now, for a test or the dev
+   * hook, a creep a heavy round killed included; null with no sprite. `glint`
+   * is the strike's flash over the body, 0 when there is none.
+   */
+  bodyOf(id: number): {
+    readonly alpha: number;
+    readonly barAlpha: number;
+    readonly y: number;
+    readonly glint: number;
+    readonly felled: boolean;
+  } | null {
+    const view = this.views.get(id) ?? this.felled.get(id);
+    if (!view) return null;
+    return {
+      alpha: view.body.alpha,
+      barAlpha: view.barBack.alpha,
+      y: view.body.y,
+      glint: view.glint?.visible ? view.glint.alpha : 0,
+      felled: this.felled.has(id),
+    };
   }
 
   /** Splats, dirt and gibs still fading on the ground, for tests. */
@@ -1220,8 +1264,10 @@ export class AttackBattleLayer {
 
     for (const view of [...this.views.values(), ...this.pool]) this.dispose(view);
     for (const leaver of this.leavers.values()) this.dispose(leaver.view);
+    for (const view of this.felled.values()) this.dispose(view);
     this.views.clear();
     this.leavers.clear();
+    this.felled.clear();
     this.pool.length = 0;
 
     for (const splat of this.splats) {
@@ -1350,7 +1396,7 @@ export class AttackBattleLayer {
         continue;
       }
       this.died.delete(id);
-      this.release(view);
+      this.letGo(view, tick);
     }
   }
 
@@ -1447,6 +1493,7 @@ export class AttackBattleLayer {
             ? abilityTint(view.snapshot)
             : view.baseTint;
       this.paintMoves(view, tick);
+      this.paintGlint(view, tick);
     }
   }
 
@@ -1499,6 +1546,10 @@ export class AttackBattleLayer {
     view.lungeX = 0;
     view.lungeY = 0;
     view.hurtTick = Number.NEGATIVE_INFINITY;
+    view.struckTick = Number.NEGATIVE_INFINITY;
+    view.struckX = 0;
+    view.struckY = 0;
+    view.felledTick = Number.NEGATIVE_INFINITY;
     view.lastHp = creep.hp;
     view.top = ground.y;
     view.snapshot = creep;
@@ -1553,6 +1604,11 @@ export class AttackBattleLayer {
       lungeX: 0,
       lungeY: 0,
       hurtTick: Number.NEGATIVE_INFINITY,
+      struckTick: Number.NEGATIVE_INFINITY,
+      struckX: 0,
+      struckY: 0,
+      glint: null,
+      felledTick: Number.NEGATIVE_INFINITY,
       lastHp: 0,
       top: 0,
       snapshot: null,
@@ -1568,6 +1624,7 @@ export class AttackBattleLayer {
     view.barBack.visible = false;
     view.barFront.visible = false;
     view.status.hide();
+    if (view.glint) view.glint.visible = false;
     // A walker leaves faded; the next creep to use the view starts whole.
     view.barBack.alpha = 1;
     view.barFront.alpha = 1;
@@ -1583,6 +1640,10 @@ export class AttackBattleLayer {
   private dispose(view: CreepView): void {
     this.depth.removeChild(view.body);
     view.body.destroy();
+    if (view.glint) {
+      this.depth.removeChild(view.glint);
+      view.glint.destroy();
+    }
     if (view.shadow) {
       this.shadows.removeChild(view.shadow);
       view.shadow.destroy();
@@ -1664,6 +1725,20 @@ export class AttackBattleLayer {
         : lungeOffset(tick - view.lungeTick);
     // A Wormzer that has just come up hops out of its hole (`MonsterBase.jump`).
     const hop = this.reducedMotion ? 0 : surfaceHop(tick - view.surfaceTick);
+    // A heavy round knocks it back along the round's flight, flattens it and
+    // holds it on one frame for a moment ({@link onStruck}).
+    // One it killed is thrown further and stays on that frame ({@link fell}).
+    const struck = tick - view.struckTick;
+    const felled = view.felledTick !== Number.NEGATIVE_INFINITY;
+    const knock = this.reducedMotion
+      ? 0
+      : felled
+        ? felledOffset(tick - view.felledTick)
+        : struckOffset(struck);
+    const flat = this.reducedMotion ? { x: 1, y: 1 } : struckSquash(struck);
+    const held =
+      view.cellKey !== "" &&
+      (felled || (!this.reducedMotion && struck >= 0 && struck < STRUCK_HOLD_TICKS));
 
     let top: number;
     if (sheet) {
@@ -1672,18 +1747,20 @@ export class AttackBattleLayer {
       });
       const cell = this.textures.frame(sheet, layout.column, layout.row);
       if (cell) {
-        if (view.cellKey !== layout.key) {
+        if (view.cellKey !== layout.key && !held) {
           view.cellKey = layout.key;
           body.texture = cell;
         }
-        body.scale.set(squash.x, squash.y);
+        const scaleX = squash.x * flat.x;
+        const scaleY = squash.y * flat.y;
+        body.scale.set(scaleX, scaleY);
         view.baseTint = 0xffffff;
         // Whole pixels, as Flash drew them (`MonsterBase.as:613-616`): a cell
         // sampled at a fraction of a pixel shimmers as it moves. A squash
         // scales about the feet, so they stay on the ground.
         body.position.set(
-          Math.round(layout.groundX + (layout.x - layout.groundX) * squash.x + lunge * view.lungeX),
-          Math.round(layout.groundY + (layout.y - layout.groundY) * squash.y + lunge * view.lungeY - hop),
+          Math.round(layout.groundX + (layout.x - layout.groundX) * scaleX + lunge * view.lungeX + knock * view.struckX),
+          Math.round(layout.groundY + (layout.y - layout.groundY) * scaleY + lunge * view.lungeY + knock * view.struckY - hop),
         );
         top = layout.y - hop;
       } else {
@@ -1876,6 +1953,82 @@ export class AttackBattleLayer {
     this.fx.number(tick, `creep:${wound.creepId}`, wound.creepId, wound.amount, at, "damage");
   }
 
+  /**
+   * A heavy round struck a creep (the new look's Sniper Tower): its body
+   * flashes hot, is knocked back along the round's flight and flattened, and
+   * holds on one frame for a moment, a hit-stop on the creep alone. Drawing only.
+   */
+  private onStruck(creepId: number, tick: number, dirX: number, dirY: number): void {
+    const view = this.views.get(creepId);
+    if (!view) return;
+    view.struckTick = tick;
+    view.struckX = dirX;
+    view.struckY = dirY;
+  }
+
+  /**
+   * A dead creep's view back to the pool; one a heavy round struck in its last
+   * few ticks falls first ({@link fell}).
+   */
+  private letGo(view: CreepView, tick: number): void {
+    if (tick - view.struckTick <= FELLED_AFTER_TICKS && view.snapshot) {
+      view.felledTick = view.struckTick;
+      this.felled.set(view.id, view);
+      return;
+    }
+    this.release(view);
+  }
+
+  /**
+   * A creep a heavy round killed: frozen on its last frame, flashing, thrown
+   * back along the round's flight and fading over its splat, then let go.
+   * Drawing only; the engine let go of it already.
+   */
+  private fell(tick: number): void {
+    for (const [id, view] of this.felled) {
+      const age = tick - view.felledTick;
+      if (age >= FELLED_TICKS || !view.snapshot) {
+        this.felled.delete(id);
+        this.release(view);
+        continue;
+      }
+      this.place(view, view.snapshot, tick);
+      view.barBack.visible = false;
+      view.barFront.visible = false;
+      view.status.hide();
+      const alpha = felledAlpha(age);
+      view.body.alpha = alpha;
+      if (view.shadow) view.shadow.alpha = SHADOW_ALPHA * alpha;
+      this.paintGlint(view, tick);
+    }
+  }
+
+  /** The strike's flash: the body drawn again over itself in added light, fading. */
+  private paintGlint(view: CreepView, tick: number): void {
+    const flash = struckFlash(tick - view.struckTick);
+    if (flash <= 0 || !view.body.visible || view.burrowed) {
+      if (view.glint) view.glint.visible = false;
+      return;
+    }
+    let glint = view.glint;
+    if (!glint) {
+      glint = new Sprite(view.body.texture);
+      glint.eventMode = "none";
+      glint.blendMode = "add";
+      glint.tint = STRUCK_TINT;
+      this.depth.addChild(glint);
+      view.glint = glint;
+    }
+    const body = view.body;
+    glint.texture = body.texture;
+    glint.anchor.copyFrom(body.anchor);
+    glint.position.copyFrom(body.position);
+    glint.scale.copyFrom(body.scale);
+    glint.zIndex = body.zIndex + 0.5;
+    glint.alpha = flash * body.alpha;
+    glint.visible = true;
+  }
+
   /** What landed bullets let go of: their wounds, then the deaths those held. */
   private showReleased(released: Released<DeathEvent>, tick: number): void {
     for (const wound of released.wounds) this.showWound(wound, tick);
@@ -1888,7 +2041,7 @@ export class AttackBattleLayer {
       // The engine let go of this creep a flight ago; its ghost goes with the splat.
       if (view && !this.ledger.holds(death.creepId)) {
         this.views.delete(death.creepId);
-        this.release(view);
+        this.letGo(view, tick);
       }
     }
   }

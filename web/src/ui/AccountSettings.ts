@@ -1,7 +1,7 @@
 /**
  * The account settings dialog: change username and the Shiny Lock switch,
- * opened from the account menu. Its "Game effects" part is kept in this
- * browser only: no server.
+ * opened from the account menu. Its "Game effects" and "Building art" parts
+ * are kept in this browser only: no server.
  *
  * Both are server rules this only fronts. A rename keeps the game's username
  * rules and a long cooldown (`changeUsername.ts`); Shiny Lock makes the server
@@ -12,6 +12,7 @@ import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
+import { saveClassicBuildingArt, savedClassicBuildingArt } from "@/game/yard/buildingArtTiers";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { Popup } from "@/ui/Popup";
 
@@ -43,6 +44,11 @@ export const SETTINGS_TEXT = {
   qualityFull: "Full",
   qualityLow: "Low",
   qualityHint: "Low draws fewer sparks and glows, for slower phones. Phones start on Low.",
+  artTitle: "Building art",
+  classicArtLabel: "Classic building art (original Flash look)",
+  classicArtHint: "Shows repainted buildings, like the Town Hall, as they looked in the original game.",
+  classicArtSaved: "Saved. Reload the page to see the change.",
+  classicArtFailed: "Could not save this in your browser. Check that site data is allowed.",
 } as const;
 
 /** "You can change your username again on 3 Mar 2027." for the cooldown line. */
@@ -80,14 +86,20 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
 
   fetchAccount().then(
     (account) => {
-      body.replaceChildren(usernameSection(account, options), shinySection(account), privacySection(account.privacy), effectsSection());
+      body.replaceChildren(
+        usernameSection(account, options),
+        shinySection(account),
+        privacySection(account.privacy),
+        effectsSection(),
+        artSection(),
+      );
       popup.focusFirst();
     },
     () => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
       // Kept in this browser, so they work without the server.
-      body.append(effectsSection());
+      body.append(effectsSection(), artSection());
     },
   );
   return popup;
@@ -313,6 +325,44 @@ const effectsSection = (): HTMLElement => {
   quality.addEventListener("change", () => setEffectsQuality(quality.value as EffectsQuality));
 
   section.append(heading, shakeRow, shakeHint, qualityRow, qualityHint);
+  return section;
+};
+
+/**
+ * Building art: "Classic building art" brings back the Flash look for every
+ * repainted building (the new art is the default, owner 26 Oct 2026: the Town
+ * Hall now, the towers later). The yard is already drawn, so the choice shows
+ * from the next load.
+ */
+const artSection = (): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const heading = document.createElement("h3");
+  heading.className = "account-settings__heading";
+  heading.textContent = SETTINGS_TEXT.artTitle;
+
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const classic = document.createElement("input");
+  classic.type = "checkbox";
+  classic.id = "settings-classic-art";
+  classic.checked = savedClassicBuildingArt();
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.classicArtLabel;
+  row.append(classic, words);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-classic-art-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.classicArtHint;
+  classic.setAttribute("aria-describedby", hint.id);
+  classic.addEventListener("change", () => {
+    const saved = saveClassicBuildingArt(classic.checked);
+    hint.textContent = saved ? SETTINGS_TEXT.classicArtSaved : SETTINGS_TEXT.classicArtFailed;
+    hint.classList.toggle("field__hint--error", !saved);
+  });
+
+  section.append(heading, row, hint);
   return section;
 };
 

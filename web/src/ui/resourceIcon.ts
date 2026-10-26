@@ -10,14 +10,14 @@ import { formatAmount, formatCompact } from "./format";
  *
  * ## The art
  *
- * The four resources come from the popup art (`/assets/popups/resource*.png`,
- * byte-identical to `archived/bag_*.png`): a sack spilling its contents,
- * about 2:1. At 18 px tall the whole picture is mostly sack, and four brown
- * sacks side by side read as one icon four times. So each is cropped to the
- * spilled pile on the right, which is where the four differ — sticks, grey
- * stones, purple putty, green goo — and which is close to square. The crop is
- * done with `background-size`/`background-position` on the one served image,
- * so there is no second copy of the art to keep in step.
+ * The four resources are piles drawn for the game (`/assets/popups/resource*.png`,
+ * 128 x 128 with a transparent ground): sticks, grey stones, purple putty,
+ * green goo. The old popup art was a sack spilling its contents and had to be
+ * cropped to the pile on the right; these are all pile, so the whole width
+ * shows. Only the empty rows above and below are trimmed, by one band shared
+ * by every pile so all four are drawn at the same scale. The trim is done with
+ * `background-size`/`background-position` on the one served image, so there is
+ * no second copy of the art to keep in step.
  *
  * Shiny is the coin stack from `/assets/alliances/shiny-icon.png`, used whole:
  * it is already square and small, and it reads as money at any size, where
@@ -109,35 +109,28 @@ interface IconArt {
   readonly crop: readonly [number, number, number, number];
 }
 
-/** Crops measured from each image's alpha: the pile, without the sack. */
+/**
+ * The rows every pile sits within: measured from the alpha of all four, and of
+ * the Inferno's bone, coal, sulfur and magma drawn to the same frame.
+ */
+const PILE_CROP = [0, 22, 128, 84] as const;
+
+const pile = (url: string): IconArt => ({ url, width: 128, height: 128, crop: PILE_CROP });
+
 const ART: Readonly<Record<ResourceKey, IconArt>> = {
-  r1: { url: "/assets/popups/resourcetwigs.png", width: 182, height: 95, crop: [102, 26, 79, 68] },
-  r2: { url: "/assets/popups/resourcepebbles.png", width: 190, height: 101, crop: [106, 30, 83, 70] },
-  r3: { url: "/assets/popups/resourceputty.png", width: 191, height: 95, crop: [107, 31, 84, 63] },
-  r4: { url: "/assets/popups/resourcegoo.png", width: 192, height: 98, crop: [108, 31, 83, 65] },
+  r1: pile("/assets/popups/resourcetwigs.png"),
+  r2: pile("/assets/popups/resourcepebbles.png"),
+  r3: pile("/assets/popups/resourceputty.png"),
+  r4: pile("/assets/popups/resourcegoo.png"),
   shiny: { url: "/assets/alliances/shiny-icon.png", width: 40, height: 41, crop: [0, 0, 40, 41] },
 };
 
 /**
  * The Inferno's icons. Flash's are vector art inside `assets.swf`, which was
- * not recovered (`docs/design/inferno.md` §4, art track A2), so until they are
- * painted each is a placeholder drawn here: a lump in the resource's colour
- * with its initial. This is the one place the art goes in. Drop the painted
- * file at the URL below (`server/public/assets/popups/resource<name>.png`, a
- * square PNG with a clear background, 80 × 80 or larger) and replace the
- * entry with `{ url, width, height, crop }` as the surface's are.
+ * not recovered (`docs/design/inferno.md` §4, art track A2), so they are piles
+ * painted for the game in the surface's frame: bone, coal, sulfur and magma,
+ * 128 x 128, trimmed by the same band as the surface's.
  */
-const placeholder = (letter: string, fill: string, ink: string): IconArt => {
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">` +
-    `<path d="M10 40C6 26 16 10 32 10s28 12 24 28c-3 12-14 18-26 17C19 54 12 49 10 40z" ` +
-    `fill="${fill}" stroke="#2a1208" stroke-width="4"/>` +
-    `<text x="32" y="43" font-family="Arial,sans-serif" font-size="26" font-weight="700" ` +
-    `text-anchor="middle" fill="${ink}">${letter}</text></svg>`;
-  return { url: `data:image/svg+xml,${encodeURIComponent(svg)}`, width: 64, height: 64, crop: [0, 0, 64, 64] };
-};
-
-/** Where the painted Inferno icons go, by key; see the placeholders above. */
 export const INFERNO_ICON_FILES: Readonly<Record<"r1" | "r2" | "r3" | "r4", string>> = {
   r1: "/assets/popups/resourcebone.png",
   r2: "/assets/popups/resourcecoal.png",
@@ -146,10 +139,10 @@ export const INFERNO_ICON_FILES: Readonly<Record<"r1" | "r2" | "r3" | "r4", stri
 };
 
 const INFERNO_ART: Readonly<Record<ResourceKey, IconArt>> = {
-  r1: placeholder("B", "#e8dcc0", "#2a1208"),
-  r2: placeholder("C", "#3b3b40", "#f2f2f2"),
-  r3: placeholder("S", "#e6c62e", "#2a1208"),
-  r4: placeholder("M", "#e2541c", "#fff4d6"),
+  r1: pile(INFERNO_ICON_FILES.r1),
+  r2: pile(INFERNO_ICON_FILES.r2),
+  r3: pile(INFERNO_ICON_FILES.r3),
+  r4: pile(INFERNO_ICON_FILES.r4),
   shiny: ART.shiny,
 };
 
