@@ -160,7 +160,7 @@ export class HousingTab implements MonstersTab {
     text.textContent = "Every building houses 25% more for 24 hours.";
     if (!this.buyButton) {
       this.buyButton = new ShinyButton({
-        label: "Expand housing",
+        label: monsterRealmOf(this.store.kind) === "inferno" ? "Expand Compound" : "Expand housing",
         spell: formatAmount,
         onSpend: () => void this.runBuy(),
         className: "housing-expansion__buy",

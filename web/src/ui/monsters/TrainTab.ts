@@ -121,6 +121,11 @@ export class TrainTab implements MonstersTab {
     return this.context.binding.store;
   }
 
+  /** "Academy", or Flash's "Infernal Academy" on the Inferno yard. */
+  private get academyName(): string {
+    return this.realm === "inferno" ? monsterWords(this.realm).academy : "Academy";
+  }
+
   private get realm(): MonsterRealm {
     return monsterRealmOf(this.store.kind);
   }
@@ -200,7 +205,7 @@ export class TrainTab implements MonstersTab {
   }
 
   private slotCard(slot: AcademySlot, used: Set<string>): HTMLElement {
-    const title = `Academy ${slot.number}`;
+    const title = `${this.academyName} ${slot.number}`;
     if (slot.state.kind === "training") return this.trainingCard(title, slot.state.training, used, slot);
 
     const card = document.createElement("section");
@@ -442,7 +447,7 @@ export class TrainTab implements MonstersTab {
         `Level ${level + 1}: `,
         resourceAmount("r3", step[0]),
         ` · ${duration(step[1])}`,
-        ...(gate === null && at ? [` · at Academy ${at.number}`] : []),
+        ...(gate === null && at ? [` · at ${this.academyName} ${at.number}`] : []),
       );
       action.append(facts);
       // Training is a player-wide level, not one monster's (issue #180).

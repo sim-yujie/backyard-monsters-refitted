@@ -213,6 +213,7 @@ describe("Inferno monster screens: Train", () => {
     );
     expect(ids).toEqual(["IC1", "IC2"]);
     expect(tab.element.textContent).toContain("Magma");
+    expect(tab.element.textContent).toContain("Infernal Academy 1");
     expect(tab.element.textContent).not.toMatch(/\bgoo\b/);
   });
 });
