@@ -446,7 +446,7 @@ check. Owner screenshots before merge for any screen.
 | 6.5 | Engine: Decoy | engine tests | 6.2 | M |
 | 6.6 | Engine: Vacuum (loot bonus) | engine tests | 6.2 | M |
 | 6.7 | Engine: Jars | engine tests | 6.2 | M |
-| 6.8 | Siege picker in the attack screen (un-hide) + session/landing use; SW4-SW12 quests back | tests + screenshots | 6.5-6.7 | M |
+| 6.8 | Siege picker in the attack screen (un-hide) + session/landing use; SW4-SW12 quests back (done 26 Oct: the Siege button shows in an attack when a weapon is held, not on Descent or Inferno yards; Flash's one-weapon popup (Fire, then Cancel and a hint for the Decoy and Jars, the Vacuum fires at once and needs a Town Hall standing), time left or health after firing; the Decoy, Vacuum hose and loot stream, and Jars drawn on the field; the abandoned-attack replay fights the held weapon and spends it. SW4-SW12 are back as Flash had them (unlock each weapon after C16, then Levels 5 and 10), shown only with `INFERNO_ENABLED` on; each pays one weapon made in the Chaos Factory, refused (`409 siegeRoom`, Flash's `msg_quest_noroomsiegeweapon`) unless a Factory is built, idle and empty; report `agent-handoffs/reports/inferno-wp68.md`) | tests + screenshots | 6.5-6.7 | M |
 
 ### S7 — Wrap-up (2)
 
