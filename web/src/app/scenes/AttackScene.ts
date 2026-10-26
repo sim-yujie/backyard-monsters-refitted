@@ -35,6 +35,7 @@ import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { consumeRaidRun, raidTarget, type RaidRun } from "@/game/raid/raidSession";
 import { MOLOCH_RAID_TITLE, MOLOCH_RAIDERS } from "@/game/inferno/emergenceText";
 import { isMolochRaid } from "@/game/inferno/molochRaid";
+import { backToInferno } from "@/game/inferno/tribeReturn";
 import { tribeTitle } from "@/game/raid/raidText";
 import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
@@ -49,7 +50,7 @@ import { Hud } from "@/ui/Hud";
 import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
-import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, setResourceRealm } from "@/ui/resourceIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
 import { ATTACK_CONFIRM_CLASS } from "@/ui/attack/attackDialogs";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
@@ -226,6 +227,10 @@ export class AttackScene implements Scene {
     this.renderer.attach(context.renderer);
     this.renderer.root.addChild(this.battleLayer);
 
+    // A Moloch tribe is fought from the Inferno yard for its purse: Bone,
+    // Coal, Sulfur and Magma on the HUD and every panel (Inferno WP 2.10).
+    setResourceRealm(this.target?.infernoTribe ? "inferno" : "surface");
+
     // A raid has no HUD: nothing on it may be left until it is over.
     if (!this.raiding) {
       this.hud = new Hud({
@@ -345,6 +350,7 @@ export class AttackScene implements Scene {
     this.status = null;
     this.hud?.destroy();
     this.hud = null;
+    setResourceRealm("surface");
     this.notices.destroy();
     this.battleLayer.removeChildren();
     this.renderer.destroy();
@@ -514,7 +520,15 @@ export class AttackScene implements Scene {
       guide: context.overlay.guide,
       battleLayer: this.battleLayer,
       notices: this.notices,
-      goToMap: () => context.goTo(SceneName.MAP),
+      goToMap: () => {
+        // A Moloch tribe's map is the Inferno's, over the Inferno yard (WP 2.10).
+        if (target.infernoTribe) {
+          backToInferno(true);
+          context.goTo(SceneName.YARD);
+          return;
+        }
+        context.goTo(SceneName.MAP);
+      },
       goToOutpost: (outpostTarget: OwnYardTarget) => {
         setOwnYardTarget(outpostTarget);
         context.goTo(SceneName.YARD);
@@ -1082,6 +1096,12 @@ export class AttackScene implements Scene {
       return;
     }
     before?.();
+    // A Moloch tribe is left for the Inferno: its yard, or its map over it (WP 2.10).
+    if (this.target?.infernoTribe && (scene === SceneName.MAP || scene === SceneName.YARD)) {
+      backToInferno(scene === SceneName.MAP);
+      context.goTo(SceneName.YARD);
+      return;
+    }
     context.goTo(scene);
   }
 

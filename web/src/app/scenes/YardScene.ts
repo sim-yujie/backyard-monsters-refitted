@@ -1788,6 +1788,10 @@ export class YardScene implements Scene {
       this.notices.show("friend-visit", intent.text, { level: "warning", timeoutMs: 8_000 });
       return;
     }
+    if (intent.kind === "infernoMap") {
+      if (this.store?.kind === "inferno") this.openMap();
+      return;
+    }
     if (intent.kind === "build") this.openBuildMenu(intent.type);
     else if (intent.kind === "defences") {
       if (this.defences && !this.defences.button.element.hidden) void this.defences.open();

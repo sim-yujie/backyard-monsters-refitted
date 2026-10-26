@@ -76,14 +76,14 @@ export const housingBunkerLevel = (save: Pick<BaseLoadResponse, "buildingdata">)
  * the Inferno yard's Housing Bunker monsters, as the start counted them, at
  * its Infernal Academy's levels; no champion, catapult or siege
  * (`UI_TOP.as:289`, `:296`). The Inferno yard's housing is the source the
- * save sends back. Its loot goes to the Inferno purse, so no storage cap.
- * One fling carries what the server says a Housing Bunker holds (R11,
+ * save sends back. Its loot goes to the Inferno purse, so no storage cap,
+ * and the purse is the pool the attack's HUD shows (WP 2.10). One fling carries what the server says a Housing Bunker holds (R11,
  * `flingercapacity`, Declare War's quarter included), and the Housing
  * Bunker's level is the Flinger's.
  */
 export const tribeRoster = (
   start: TribeAttackStart,
-  save: Pick<BaseLoadResponse, "monsters" | "buildingdata">,
+  save: Pick<BaseLoadResponse, "monsters" | "buildingdata" | "resources" | "credits">,
 ): AttackRoster => {
   const monsters: Record<string, number> = {};
   for (const [id, count] of Object.entries(start.army ?? {})) {
@@ -101,8 +101,10 @@ export const tribeRoster = (
     catapultLevel: 0,
     sources,
     siege: null,
-    resources: null,
+    // The Inferno yard's load carries the purse as its resources (`infernoPurse`).
+    resources: save.resources ?? null,
     storageCap: null,
+    ...(typeof save.credits === "number" ? { credits: save.credits } : {}),
   };
 };
 

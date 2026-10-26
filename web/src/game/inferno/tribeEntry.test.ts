@@ -71,6 +71,13 @@ describe("the tribe army", () => {
     expect(roster.sources).toEqual([{ baseid: "9001", m: { housed: { IC1: 6 }, hid: [] } }]);
   });
 
+  it("shows the Inferno purse, which the Inferno yard's load carries, on the attack's HUD (WP 2.10)", () => {
+    const purse = { r1: 1200, r2: 300, r3: 0, r4: 45, r1max: 50_000 };
+    const roster = tribeRoster(startOf("216"), { ...infernoSave({ IC1: 6 }), resources: purse, credits: 12 });
+    expect(roster.resources).toEqual(purse);
+    expect(roster.credits).toBe(12);
+  });
+
   it("flings what the server says a Housing Bunker holds, with the best finished bunker as the Flinger (WP 2.10)", () => {
     const yard = infernoSave(
       { IC1: 6 },
