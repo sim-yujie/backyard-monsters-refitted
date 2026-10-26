@@ -132,8 +132,19 @@ export const STARVE_SECONDS = 24 * 60 * 60;
 export const MUSHROOM_RESPAWN_SECONDS = 17_280;
 export const MUSHROOM_CAP = 10;
 
-/** Hatchery Overdrive multipliers by store code (`docs/specs/monsters-and-hatchery.md` §5.5). */
-export const OVERDRIVE_POWER: Readonly<Record<string, number>> = { HOD: 4, HOD2: 6, HOD3: 10 };
+/**
+ * Hatchery Overdrive multipliers by store code (`docs/specs/monsters-and-hatchery.md` §5.5),
+ * the Inferno's Incubator Overdrives (`HODI`..) with them: each yard's store data only ever
+ * holds its own (`server/src/services/yard/catchUpMonsters.ts`).
+ */
+export const OVERDRIVE_POWER: Readonly<Record<string, number>> = {
+  HOD: 4,
+  HOD2: 6,
+  HOD3: 10,
+  HODI: 4,
+  HOD2I: 6,
+  HOD3I: 10,
+};
 
 const finite = (value: unknown): number | null => {
   const number = typeof value === "number" ? value : Number(value);

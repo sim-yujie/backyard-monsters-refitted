@@ -2,6 +2,7 @@ import type { BaseLoadResponse, ResourceCaps, Resources } from "@/api/types";
 import { maxHp } from "@/game/combat/rules";
 import { academyLevel } from "./housing";
 import { hatchCost } from "./monsterCatalogue";
+import { monsterWords, type MonsterRealm } from "./realm";
 
 /**
  * The Monster Juicer on the client (`docs/design/yard-buildings.md` §7.3,
@@ -74,11 +75,11 @@ export const juicerStatus = (save: BaseLoadResponse): JuicerStatus => {
   return { ok: false, problem: problemOf(first.id, first.building)!, id: first.id };
 };
 
-/** A sentence for a {@link JuicerProblem}. */
-export const juicerProblemText = (problem: JuicerProblem): string => {
+/** A sentence for a {@link JuicerProblem}; Magma in the Inferno. */
+export const juicerProblemText = (problem: JuicerProblem, realm: MonsterRealm = "surface"): string => {
   switch (problem) {
     case "noJuicer":
-      return "Build a Monster Juicer to turn monsters back into goo.";
+      return `Build a Monster Juicer to turn monsters back into ${monsterWords(realm).goo}.`;
     case "building":
       return "Your Monster Juicer is still being built.";
     case "upgrading":

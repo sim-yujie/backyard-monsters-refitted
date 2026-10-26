@@ -1,6 +1,7 @@
 import type { YardRefusal } from "@/api/yard";
 import type { JuiceActions } from "@/api/yardJuice";
-import { expansionEndsAt, HOUSING_EXPANSION } from "@/game/monsters/housing";
+import { expansionEndsAt, housingExpansionOf } from "@/game/monsters/housing";
+import { monsterRealmOf, monsterWords } from "@/game/monsters/realm";
 import { actionKey, YardChangeReason, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { resourceAmount } from "@/ui/resourceIcon";
@@ -23,10 +24,11 @@ import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabCo
  * Every figure comes from `game/monsters/housing.ts`, the header's own
  * arithmetic, so the tab and the header always agree. The purchase goes
  * through the store's `buy("EXH")`. No Ascend (D19).
+ *
+ * On the Inferno yard it is the Compound (Flash's "Monster Compound"): the
+ * Housing Bunkers, the Inferno's own Juicer paying Magma, and the Compound
+ * Expansion, `EXHI` (Inferno WP 2.4).
  */
-
-/** The store's queue key for the expansion purchase. */
-const BUY_KEY = actionKey("buy", HOUSING_EXPANSION.item);
 
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
 
@@ -68,6 +70,7 @@ export class HousingTab implements MonstersTab {
         this.juiceSection.querySelector<HTMLElement>("button:not(:disabled)")?.focus({ preventScroll: true });
       },
     });
+    const words = monsterWords(monsterRealmOf(context.binding.store.kind));
     this.juiceSection = section("housing-juicer", "Monster Juicer");
     this.juice = new HousingJuice({
       store: context.binding.store,
@@ -75,7 +78,7 @@ export class HousingTab implements MonstersTab {
       ...(juiceActions ? { actions: juiceActions } : {}),
     });
     this.juiceSection.append(this.juice.element);
-    this.expansion = section("housing-expansion", "Housing Expansion");
+    this.expansion = section("housing-expansion", words.expansion);
     scroll.append(this.view.element, this.juiceSection, this.expansion);
 
     this.element.append(this.status, scroll);
@@ -83,6 +86,11 @@ export class HousingTab implements MonstersTab {
 
   private get store() {
     return this.context.binding.store;
+  }
+
+  /** The expansion this yard sells: `EXH`, or `EXHI` in the Inferno. */
+  private get offer() {
+    return housingExpansionOf(this.store.save);
   }
 
   show(focus: MonstersFocus): void {
@@ -158,26 +166,26 @@ export class HousingTab implements MonstersTab {
         className: "housing-expansion__buy",
       });
     }
-    this.buyButton.setPrice(HOUSING_EXPANSION.price);
-    this.buyButton.setBlocked(this.store.credits < HOUSING_EXPANSION.price ? "Not enough Shiny." : null);
+    this.buyButton.setPrice(this.offer.price);
+    this.buyButton.setBlocked(this.store.credits < this.offer.price ? "Not enough Shiny." : null);
     fillSection(this.expansion, [text, this.buyButton.element]);
   }
 
   private syncPending(): void {
     this.view.syncPending();
     this.juice.syncPending();
-    this.buyButton?.setBusy(this.store.isRunning(BUY_KEY));
+    this.buyButton?.setBusy(this.store.isRunning(actionKey("buy", this.offer.item)));
   }
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
   private async runBuy(): Promise<void> {
-    const result = await this.store.buy(HOUSING_EXPANSION.item);
+    const result = await this.store.buy(this.offer.item);
     if (result.ok) {
       this.setStatus({
         tone: "good",
         content: [
-          "Housing Expansion on for 24 hours: ",
+          `${monsterWords(monsterRealmOf(this.store.kind)).expansion} on for 24 hours: `,
           resourceAmount("shiny", result.report.credits),
           " spent.",
         ],

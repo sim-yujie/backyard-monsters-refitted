@@ -2,6 +2,7 @@ import type { YardRefusal } from "@/api/yard";
 import { JUICE_KEY, juiceActions, type JuiceActions } from "@/api/yardJuice";
 import { housedRows, type HousedRow } from "@/game/monsters/housing";
 import { juicePreview, juicerProblemText, juicerStatus, type JuicerStatus } from "@/game/monsters/juice";
+import { monsterRealmOf, monsterWords } from "@/game/monsters/realm";
 import type { YardStore } from "@/game/yard/YardStore";
 import { formatAmount } from "@/ui/format";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -84,14 +85,14 @@ export class HousingJuice {
       const note = document.createElement("p");
       note.className =
         status.problem === "noJuicer" ? "housing-juice__note" : "housing-juice__note housing-juice__note--bad";
-      note.textContent = juicerProblemText(status.problem);
+      note.textContent = juicerProblemText(status.problem, monsterRealmOf(this.store.kind));
       this.element.replaceChildren(note);
       return;
     }
 
     const intro = document.createElement("p");
     intro.className = "housing-juice__note";
-    intro.textContent = `Level ${status.level} Juicer: each monster gives back ${Math.round(status.rate * 100)}% of its hatch cost in goo. Juiced monsters are gone for good.`;
+    intro.textContent = `Level ${status.level} Juicer: each monster gives back ${Math.round(status.rate * 100)}% of its hatch cost in ${monsterWords(monsterRealmOf(this.store.kind)).goo}. Juiced monsters are gone for good.`;
 
     if (this.rows.length === 0) {
       this.selection.clear();
@@ -189,7 +190,7 @@ export class HousingJuice {
       if (preview.lost > 0) {
         const lost = document.createElement("p");
         lost.className = "housing-juice__lost";
-        lost.append("Your goo storage is full: ", resourceAmount("r4", formatAmount(preview.lost)), " will not fit and is lost.");
+        lost.append(`Your ${monsterWords(monsterRealmOf(this.store.kind)).goo} storage is full: `, resourceAmount("r4", formatAmount(preview.lost)), " will not fit and is lost.");
         wrap.append(lost);
       }
       const row = document.createElement("div");
