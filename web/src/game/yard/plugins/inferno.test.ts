@@ -230,7 +230,9 @@ describe("a tap on the cave", () => {
     tap(canvas);
     await settle();
     const buttons = [...modal.querySelectorAll("button")].map((one) => one.textContent);
-    expect(buttons).toEqual(expect.arrayContaining([TRANSFER_MONSTERS, ENTER_CAVERN]));
+    expect(buttons).toContain(ENTER_CAVERN);
+    // Transfer Monsters waits for an Inferno yard (`BUILDINGINFO.as:302-306`).
+    expect(buttons).not.toContain(TRANSFER_MONSTERS);
     [...modal.querySelectorAll("button")].find((one) => one.textContent === ENTER_CAVERN)!.click();
     expect(hoisted.enterDescent).toHaveBeenCalledTimes(1);
     expect(scene.openYard).not.toHaveBeenCalled();
@@ -245,6 +247,8 @@ describe("a tap on the cave", () => {
     const { canvas, modal, scene, notices, teardown } = mount({ ...loadState(5), hasYard: true });
     tap(canvas);
     await settle();
+    const buttons = [...modal.querySelectorAll("button")].map((one) => one.textContent);
+    expect(buttons).toEqual(expect.arrayContaining([TRANSFER_MONSTERS, ENTER_CAVERN]));
     [...modal.querySelectorAll("button")].find((one) => one.textContent === ENTER_CAVERN)!.click();
     expect(scene.openYard).toHaveBeenCalledWith(INFERNO_YARD);
     expect(notices.show).not.toHaveBeenCalled();
