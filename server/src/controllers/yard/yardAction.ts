@@ -421,7 +421,7 @@ export const lockOwnYard = async (
  * the row is an Inferno yard and theirs, `409 underAttack` while it is being
  * attacked.
  */
-const lockInfernoRow = async (em: EntityManager, user: User, baseid: string): Promise<Save> => {
+export const lockInfernoRow = async (em: EntityManager, user: User, baseid: string): Promise<Save> => {
   requireInfernoEnabled();
   const inferno = await em.findOne(
     Save,

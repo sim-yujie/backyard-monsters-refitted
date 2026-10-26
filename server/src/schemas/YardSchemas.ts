@@ -212,6 +212,12 @@ const MonsterCountsField = jsonField("monsters must be a JSON object of counts")
 export const YardJuiceSchema = z.object({ monsters: MonsterCountsField });
 
 /**
+ * `POST /bm/inferno/transfer`: Inferno monsters to bring up from the Compound
+ * to the main yard's Housing (`services/inferno/transfer.ts`).
+ */
+export const InfernoTransferSchema = z.object({ monsters: MonsterCountsField });
+
+/**
  * `POST /bm/yard/bunker/fill`: monsters to put in a Monster Bunker, from
  * housing (putty) or bought (Shiny) (`services/yard/bunker.ts`).
  */
