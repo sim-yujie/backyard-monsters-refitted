@@ -510,3 +510,23 @@
 .ascend-dialog__status--failed {
   color: var(--colour-warning);
 }
+
+/* The body scrolls when the dialog is taller than the screen: Transfer
+   Monsters stays pinned to its foot, and on a phone the list scrolls with the
+   body rather than in a box of its own. */
+.ascend-dialog .inferno-popup__actions {
+  position: sticky;
+  bottom: calc(-1 * var(--space-4));
+  margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  /* Solid: the raised surface is see-through, and the rows pass under it. */
+  background: var(--colour-surface-base);
+  border-top: 1px solid var(--colour-border);
+}
+
+@media (max-width: 30rem) {
+  .ascend-dialog__list {
+    max-height: none;
+    overflow-y: visible;
+  }
+}
