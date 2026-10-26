@@ -105,6 +105,8 @@ export interface ShinyAwardView {
 export interface PlayerMatch {
   userid: number;
   username: string;
+  /** The earlier name the search matched (from an old bug report or gift), when it is not their name now. */
+  formerName: string | null;
   lastSeenAt: string | null;
 }
 

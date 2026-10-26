@@ -345,7 +345,7 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
         );
       }
       // The renamed player's bug report keeps the name they had when they sent it.
-      await sql(`INSERT INTO bym.bug_report (userid, username, message) VALUES (?, 'Old_Smasher', 'supporttest renamed')`, [RENAMED]);
+      await sql(`INSERT INTO bym.bug_report (userid, username, message) VALUES (?, 'Old_Smasher', 'a report from before a rename')`, [RENAMED]);
     });
 
     afterAll(async () => {
