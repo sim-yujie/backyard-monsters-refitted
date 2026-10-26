@@ -63,6 +63,12 @@ describe("towers", () => {
     });
   });
 
+  it("the Siege Works shoots nothing, so it shows no Range, though its stats block has one", () => {
+    expect(row({ t: 134, l: 1 }, "Range")).toBeUndefined();
+    // A Monster Bunker's range is where it sends its monsters: kept.
+    expect(row({ t: 22, l: 1 }, "Range")).toBeDefined();
+  });
+
   it("Tesla Tower: damage per shot and shots per charge, as its own text (#266)", () => {
     expect(row({ t: 25, l: 1 }, "Damage per shot")).toEqual({
       label: "Damage per shot",

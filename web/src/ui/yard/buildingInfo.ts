@@ -2,6 +2,7 @@ import {
   AERIAL_DEFENSE_TYPE,
   aerialSalvo,
   BOMBS,
+  buildingClass,
   capacity,
   TESLA_TYPE,
   TOWER_STATS,
@@ -146,9 +147,13 @@ const nextLevelOf = (building: YardBuilding, kind: YardKind = "main"): number | 
  * stretched by the cell's `height`, the same reading the engine fires at and
  * the planner's rings now draw. Damage is the table's own — the terrain
  * never touches it (`client/scripts/BTOWER.as:80-85`).
+ *
+ * Only a tower's: the Siege Works (134, class "special") carries a stats
+ * block too, but its `range` is no reach of anything it fires, so it shows
+ * no Range row.
  */
 const towerRows = (building: YardBuilding, kind: YardKind, height: number): InfoRow[] => {
-  if (!TOWER_STATS[building.type]) return [];
+  if (!TOWER_STATS[building.type] || buildingClass(building.type) !== "tower") return [];
   const level = shownLevel(building);
   const nextLevel = nextLevelOf(building, kind);
   const now = towerStats(building.type, level, kind);
