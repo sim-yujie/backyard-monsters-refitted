@@ -18,6 +18,13 @@ the picture's top stands above the Flash tower's, which is how much higher the g
 `townhall` exports the Town Hall instead: one picture per level (codex-art Part 13), `top.new<N>@2x.webp` for
 levels 1-10. finish.py fits every level onto the level 10 canvas, origin `canvas("townhall")`. It writes no shadow:
 each level keeps Flash's own painted `shadow.<N>.jpg`, which fits the same footprint (owner, 26 Oct 2026).
+
+`turrets` exports the turning turrets (codex-art Part 15) for the Sniper, Laser, Aerial Defense and Railgun: per tier,
+`body.t<N>@2x.webp` (`<tower>/turret/T<N>/body/body-4x.png`, the tier picture with its turret taken off, on the same
+canvas as `new-4x.png`) and `turret.t<N>@2x.webp`, the game's strip (`strip@2x.png`, one cell per facing the game reaches, the
+turret's pivot in the middle of each) with every cell cut to what any cell covers and set on whole 1x pixels so its
+top-left lands on the body's pivot (`strip.json`). It prints the body's offset and the strip's `[file, x, y, width,
+height, frames]` and the pivot in 1x px from the building's origin, as `buildingArtTiers.ts` holds them.
 """
 import json
 import sys
@@ -100,7 +107,65 @@ def export(b, tier, combo=None, flash=None, name=None, stand_in=True):
                 bytes=(folder / top_name).stat().st_size + shadow_bytes)
 
 
+TURRET_TOWERS = ["sniper", "laser", "aerial", "railgun"]
+# Cells the game can reach (`facingCell`): the Aerial and Railgun strips have 32, but 12 degrees a cell stops at cell 29.
+REACHED = {"aerial": 30, "railgun": 30}
+
+
+def turret(b, tier):
+    """The tier's body and turret strip; offsets in 1x px from the building's isometric origin."""
+    combo = TIER_COMBO[tier].get(b, TIER_DEFAULT[tier])
+    src = SAMPLES / b / "turret" / f"T{tier}"
+    body4 = Image.open(src / "body" / "body-4x.png").convert("RGBA")
+    assert body4.size == Image.open(SAMPLES / b / combo / "new-4x.png").size, (b, tier)
+    old, ox, oy = old_rgba(b)
+    H = body4.height // UP
+    _, _, cx0, _ = canvas(b)
+    cy0 = oy + H - old.height
+    x0, y0, x1, y1 = body4.getbbox()
+    x0, y0 = x0 // UP * UP, y0 // UP * UP
+    x1, y1 = -(-x1 // UP) * UP, -(-y1 // UP) * UP
+    crop = body4.crop((x0, y0, x1, y1))
+    folder = ASSETS / TOWERS[b]["folder"]
+    body_name = f"body.t{tier}@2x.webp"
+    resize_pm(crop, (crop.width // 2, crop.height // 2)).save(folder / body_name, "WEBP", quality=90, alpha_quality=100,
+                                                              method=6)
+
+    info = json.loads((src / "strip.json").read_text())
+    strip = Image.open(src / "strip@2x.png").convert("RGBA")
+    cw, ch, cells = info["cell_w"], info["cell_h"], info["cells"]
+    assert strip.size == (cw * cells, ch), (b, tier, strip.size)
+    cells = REACHED.get(b, cells)
+    # The cell's top-left at 2x from the origin: the pivot (4x on the body's canvas) less half a cell.
+    px, py = info["pivot_in_body_4x"]
+    tx, ty = round(px / 2 - cw / 2 - 2 * cx0), round(py / 2 - ch / 2 - 2 * cy0)
+    boxes = [strip.crop((i * cw, 0, (i + 1) * cw, ch)).getbbox() for i in range(cells)]
+    boxes = [box for box in boxes if box]
+    bx0, by0 = min(box[0] for box in boxes), min(box[1] for box in boxes)
+    bx1, by1 = max(box[2] for box in boxes), max(box[3] for box in boxes)
+    # Whole 1x pixels: the cut starts on an even 2x pixel from the origin and is an even number of pixels across.
+    bx0 -= (tx + bx0) % 2
+    by0 -= (ty + by0) % 2
+    w, h = bx1 - bx0 + (bx1 - bx0) % 2, by1 - by0 + (by1 - by0) % 2
+    out = Image.new("RGBA", (w * cells, h), (0, 0, 0, 0))
+    for i in range(cells):
+        out.alpha_composite(strip.crop((i * cw + bx0, by0, i * cw + bx0 + w, by0 + h)), (i * w, 0))
+    turret_name = f"turret.t{tier}@2x.webp"
+    # Quality 85, not 90 like the still pictures: the strips are most of the download and the difference does not show.
+    out.save(folder / turret_name, "WEBP", quality=85, alpha_quality=100, method=6)
+    return dict(tower=b, tier=tier, folder=TOWERS[b]["folder"],
+                body=[body_name, round(x0 / UP - cx0), round(y0 / UP - cy0)],
+                turret=[turret_name, (tx + bx0) // 2, (ty + by0) // 2, w // 2, h // 2, cells],
+                pivot=[round(px / UP - cx0), round(py / UP - cy0)],
+                bytes=(folder / body_name).stat().st_size + (folder / turret_name).stat().st_size)
+
+
 if __name__ == "__main__":
+    if sys.argv[2:] == ["turrets"]:
+        for b in TURRET_TOWERS:
+            for t in (1, 2, 3):
+                print(json.dumps(turret(b, t)))
+        sys.exit()
     if sys.argv[2:] == ["townhall"]:
         for n in range(1, 11):
             print(json.dumps(export("townhall", n, TH_COMBO.get(n, f"L{n}"), f"townhall{n}", f"new{n}", stand_in=False)))
