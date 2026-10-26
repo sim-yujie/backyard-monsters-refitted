@@ -38,12 +38,14 @@ TOWERS = {
     # Town Hall, top level (10): no animation; used by the building-redesign samples
     "townhall": dict(folder="townhall", button=14, top=("top.10.png", -77, -110), shadow=("shadow.10.jpg", -85, 24), anim=None, frame=0,
                      what="the TOWN HALL, the main building of the yard"),
-    # Town Hall levels 2 and 5 (buildingArtData.ts): the Flash pictures the tier 1 and tier 2 redesign samples are painted from
-    "townhall2": dict(folder="townhall", button=14, top=("top.2.png", -48, -62), shadow=("shadow.2.jpg", -55, 36), anim=None, frame=0,
-                      what="the TOWN HALL at level 2"),
-    "townhall5": dict(folder="townhall", button=14, top=("top.5.png", -67, -75), shadow=("shadow.5.jpg", -67, 33), anim=None, frame=0,
-                      what="the TOWN HALL at level 5"),
 }
+# Town Hall levels 1-10 (top / shadow rows from buildingArtData.ts): each level has its own Flash picture; the redesign samples
+# paint tiers 1-2 (levels 2 and 5) and, per the owner (25 Oct night), one picture per level (L1..L10) from them
+TH_ROWS = {1: (-45, -52, -55, 37), 2: (-48, -62, -55, 36), 3: (-65, -67, -70, 28), 4: (-66, -72, -88, 20), 5: (-67, -75, -67, 33),
+           6: (-72, -82, -84, 26), 7: (-81, -88, -121, -3), 8: (-80, -87, -94, 8), 9: (-77, -97, -76, 24), 10: (-77, -110, -85, 24)}
+for _n, (_tx, _ty, _sx, _sy) in TH_ROWS.items():
+    TOWERS[f"townhall{_n}"] = dict(folder="townhall", button=f"14.{_n}", top=(f"top.{_n}.png", _tx, _ty), shadow=(f"shadow.{_n}.jpg", _sx, _sy),
+                                   anim=None, frame=0, what=f"the TOWN HALL at level {_n}")
 
 
 def img(t, f):

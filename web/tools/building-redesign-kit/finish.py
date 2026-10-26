@@ -38,12 +38,13 @@ if __name__ == "__main__":
     out = REPO / "art-samples" / "redesign" / b / combo
     painted = key(np.asarray(Image.open(out / "sample-new.png").convert("RGB")))
     painted.save(out / "sample-cut.png")
-    fk = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5", ("townhall", "GOLD"): "townhall5"}.get((b, combo), b)   # same as make.py
+    lvl = b == "townhall" and combo[:1] == "L" and combo[1:].isdigit()   # Town Hall per level (L1..L10): fits onto that level's Flash picture
+    fk = f"townhall{combo[1:]}" if lvl else {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5", ("townhall", "GOLD"): "townhall5"}.get((b, combo), b)   # same as make.py
     old, ox, oy = old_rgba(fk)
     l0, r0, b0, t0 = band(old, 200)
     l1, r1, b1, t1 = band(painted, 128)
     k = (r0 - l0) * UP / (r1 - l1)
-    cap = {"T1": 1.1, "T2": 1.25, "TALL2": 1.8, "TALL3": 2.3}.get(combo, 1.35)   # TALL: the owner wants taller tiers
+    cap = 1.15 if lvl else {"T1": 1.1, "T2": 1.25, "TALL2": 1.8, "TALL3": 2.3}.get(combo, 1.35)   # TALL: the owner wants taller tiers
     k = min(k, (b0 - t0) * cap * UP / (b1 - t1))           # never more than 35% taller than Flash (tiers: less)
     crop = painted.crop(painted.getbbox())
     bx0, by0 = painted.getbbox()[:2]

@@ -1,0 +1,22 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the TOWN HALL, the main building of the monster yard, at LEVEL 9 of 10, in its BLACK AND GOLD version. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The Town Hall has its own picture for every level in the old Flash game, and each level is repainted from its OWN Flash picture. The levels follow the game's wall blocks: levels 1-4 are the normal building, levels 5-8 get GOLD (like the Gold Blocks), levels 9-10 are BLACK AND GOLD (black armour with gold edges, like the Black Diamond Blocks).
+
+This level's Flash design (keep it): almost all GOLD: a dark riveted dome with one big round BLUE porthole on the front, wrapped in a GOLDEN FRAME of thick curved golden pipe arms with small silver spikes; a golden CROWN-like crest on top holding the silver FUNNEL, with thin curled golden horns; a dark ribbed body inside the frame with small RED pipes; a heavy GOLDEN BASE with chunky golden blocks and clawed golden feet all round.
+
+Input 1, frames.png: the OLD Flash Town Hall at level 9, blown up, on grey (1024x1536): its design, camera angle, ground footprint and size. The new picture stands on the same footprint, centred on the same spot, base on the same ground line, is not wider at the base and about as tall as the Flash picture (at most 10% taller).
+Input 2, ref.png: the old build-menu picture of the Town Hall at level 9 (a sharper render of the same design). Use it to read the small details.
+Input 3, style.png: see style below.
+Input 4, match.png: the Town Hall at level 10 in its BLACK AND GOLD version, already painted in the new style and approved. Paint level 9 in EXACTLY the same finish, lighting, camera angle, line quality, colour palette and materials, so that all ten levels read as one building growing up. But paint THIS level's design from frames.png and ref.png, NOT the design in match.png: no parts from other levels.
+Input 5, block.png: the game's Black Diamond Blocks wall block. Use it ONLY as the colour and material reference for the new material (not its shape).
+
+New materials: the dark riveted dome becomes glossy BLACK faceted armour (like black diamond) with polished GOLD seams and rivets between its plates; the ribbed body and the round base drum become black armour with gold bands and gold rims; the silver funnel becomes black chrome with a gold rim. The golden frame, arms, crest, horns, base blocks and clawed feet stay GOLD (the gold trim), the blue porthole stays blue and the red pipes stay red, as on match.png, so it is clearly the black-and-gold version of THIS level and still clearly level 9. The black must be deep and glossy with crisp faceted highlights like block.png, the gold only on the frame, edges, trims, rims and bolts.
+
+THE FLASH DESIGN, REFRESHED: keep the Flash silhouette, proportions, colour scheme and signature parts in the same places, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting (soft light from the upper left, clear highlights, ambient occlusion in the gaps) and sharper edges. NOT a new design and NOT a plain copy.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1536, the building alone, complete and fully inside the image with margin (the funnel, the crest and every foot inside the image).
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.

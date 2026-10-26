@@ -1,0 +1,22 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the TOWN HALL, the main building of the monster yard, at LEVEL 8 of 10, in its GOLD version. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The Town Hall has its own picture for every level in the old Flash game, and each level is repainted from its OWN Flash picture. The levels follow the game's wall blocks: levels 1-4 are the normal building, levels 5-8 get GOLD (like the Gold Blocks), levels 9-10 are BLACK AND GOLD (black armour with gold edges, like the Black Diamond Blocks).
+
+This level's Flash design (keep it): a DARK RIVETED DOME with MORE round BLUE porthole windows (small and large); a silver FUNNEL on a golden stem on top; FOUR thick GOLDEN PIPE ARMS curving up and over the dome, now with a golden ring round the top of the dome; a ribbed silver body with golden straps and an open dark gap at the front; RED pipes with red knobs round the waist; a WIDE ROUND BASE of stacked silver drums with rows of small holes and golden rims; spiky golden GEAR-shaped feet.
+
+Input 1, frames.png: the OLD Flash Town Hall at level 8, blown up, on grey (1024x1024): its design, camera angle, ground footprint and size. The new picture stands on the same footprint, centred on the same spot, base on the same ground line, is not wider at the base and about as tall as the Flash picture (at most 10% taller).
+Input 2, ref.png: the old build-menu picture of the Town Hall at level 8 (a sharper render of the same design). Use it to read the small details.
+Input 3, style.png: see style below.
+Input 4, match.png: the Town Hall at level 5 in its GOLD version, already painted in the new style and approved. Paint level 8 in EXACTLY the same finish, lighting, camera angle, line quality, colour palette and materials, so that all ten levels read as one building growing up. But paint THIS level's design from frames.png and ref.png, NOT the design in match.png: no parts from other levels.
+Input 5, block.png: the game's Gold Blocks wall block. Use it ONLY as the colour and material reference for the new material (not its shape).
+
+New materials: the vertical straps on the ribbed body, the funnel collar, the rims of the blue portholes, the feet and every golden part already in the Flash design become POLISHED, gleaming GOLD; add thick gold bands round the top and bottom of the ribbed body, gold rivets on the dome and gold rims and fittings on the red pipes and railings, and the silver base drums get gold rims and gold bands. The DARK riveted dome, the SILVER ribbed body between the bands, the BLUE portholes, the silver funnel and the RED pipes stay, exactly as on match.png, so it is clearly the gold version of THIS level and still clearly level 8. The gold must be rich, warm and shiny like block.png, clearly more gold than the Flash picture.
+
+THE FLASH DESIGN, REFRESHED: keep the Flash silhouette, proportions, colour scheme and signature parts in the same places, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting (soft light from the upper left, clear highlights, ambient occlusion in the gaps) and sharper edges. NOT a new design and NOT a plain copy.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1024, the building alone, complete and fully inside the image with margin (the funnel, the crest and every foot inside the image).
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.

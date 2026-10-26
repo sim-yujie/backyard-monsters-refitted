@@ -21,10 +21,14 @@ MAT = combo in ("GOLD", "BLACK")             # tower tiers 2-3 as wall-block mat
 # owner feedback on the material tiers: PLAIN = the black-diamond top tier in plain black (no gold), to compare;
 # TALL2 / TALL3 = cannon tiers 2 (gold) and 3 (black diamond) standing taller, as range grows with level
 EXTRA = combo in ("PLAIN", "TALL2", "TALL3")
-R2 = combo.startswith("R2") or TIER or MAT or EXTRA   # round 2: keep the Flash design, refresh it; no theme
-style, theme = ("A", None) if TIER or MAT or EXTRA else (combo[-1], None) if R2 else (combo[0], combo[1])
+# owner, 25 Oct night: the Town Hall gets one picture per level, L1..L10, each from that level's own Flash picture:
+# levels 1-4 normal, 5-8 gold, 9-10 black and gold (LEVEL = the level, BAND = NORMAL | GOLD | BLACK)
+LEVEL = int(combo[1:]) if b == "townhall" and combo[:1] == "L" and combo[1:].isdigit() else 0
+BAND = "" if not LEVEL else "NORMAL" if LEVEL <= 4 else "GOLD" if LEVEL <= 8 else "BLACK"
+R2 = combo.startswith("R2") or TIER or MAT or EXTRA or bool(LEVEL)   # round 2: keep the Flash design, refresh it; no theme
+style, theme = ("A", None) if TIER or MAT or EXTRA or LEVEL else (combo[-1], None) if R2 else (combo[0], combo[1])
 # the Flash picture each sample is painted from: the Town Hall has its own picture per level (tier 1 = level 2, tier 2 = level 5)
-FK = {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5", ("townhall", "GOLD"): "townhall5"}.get((b, combo), b)
+FK = f"townhall{LEVEL}" if LEVEL else {("townhall", "T1"): "townhall2", ("townhall", "T2"): "townhall5", ("townhall", "GOLD"): "townhall5"}.get((b, combo), b)
 OUT = REPO / "art-samples" / "redesign"
 out = OUT / b / combo
 out.mkdir(parents=True, exist_ok=True)
@@ -43,7 +47,7 @@ inputs = ["frames.png"]
 
 if R2:
     # ref.png: the Flash build button (a sharper render of the same design) blown up
-    BUTTON = {"cannon": "20", "townhall": "14.10", "townhall2": "14.2", "townhall5": "14.5"}.get(FK, str(TOWERS[FK]["button"]))   # Town Hall: that level's button
+    BUTTON = {"cannon": "20", "townhall": "14.10"}.get(FK, str(TOWERS[FK]["button"]))   # Town Hall: that level's button
     bt = Image.open(ASSETS / "buildingbuttons" / f"{BUTTON}.jpg").convert("RGB")
     bt.resize((bt.width * 5, bt.height * 5), Image.LANCZOS).save(out / "ref.png")
     inputs.append("ref.png")
@@ -103,6 +107,20 @@ if MAT:
     blk = Image.open(ASSETS / "buildings" / "walls" / {"GOLD": "top.4.v2.png", "BLACK": "top.5.png"}[combo]).convert("RGBA")
     on(GREY, blk).resize((blk.width * 10, blk.height * 10), Image.LANCZOS).save(out / "block.png")
     inputs += ["tier1.png", "block.png"]
+if LEVEL:
+    # match.png: the approved Town Hall paintings of the same band (finish, materials): normal = level 2 (T1) and plain level 5 (T2),
+    # gold = level 5 gold (GOLD), black and gold = level 10 (BLACK); block.png: the wall block of that material
+    pics = [Image.open(OUT / b / f / "sample-new.png").convert("RGB") for f in {"NORMAL": ("T1", "T2"), "GOLD": ("GOLD",), "BLACK": ("BLACK",)}[BAND]]
+    mt = Image.new("RGB", (sum(i.width for i in pics), max(i.height for i in pics)), GREY)
+    x = 0
+    for i in pics:
+        mt.paste(i, (x, mt.height - i.height)); x += i.width
+    mt.resize((mt.width * 3 // 4, mt.height * 3 // 4), Image.LANCZOS).save(out / "match.png")
+    inputs.append("match.png")
+    if BAND != "NORMAL":
+        blk = Image.open(ASSETS / "buildings" / "walls" / {"GOLD": "top.4.v2.png", "BLACK": "top.5.png"}[BAND]).convert("RGBA")
+        on(GREY, blk).resize((blk.width * 10, blk.height * 10), Image.LANCZOS).save(out / "block.png")
+        inputs.append("block.png")
 (out / "inputs.txt").write_text(" ".join(inputs) + "\n")
 
 WHAT = {
@@ -344,6 +362,95 @@ Input ''' + str(7 if FROM_T1 and combo == 'TALL3' else 6) + ''', growref.png: th
 
 Output: ONE image, {fr.width}x{fr.height}, the {noun} alone, complete and fully inside the image with margin{' (it is taller, so leave room above)' if combo != 'PLAIN' else ''}.
 Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The {noun} itself must contain no bright pure green.
+"""
+    if os.environ.get("NOTE"):
+        prompt += "\nIMPORTANT CORRECTION (an earlier attempt got this wrong): " + os.environ["NOTE"] + "\n"
+    (out / "prompt.txt").write_text(prompt, encoding="utf-8")
+    print("ready", out.as_posix())
+    sys.exit(0)
+# the Town Hall per level (L1..L10): each level's own Flash design in words (read from top.<n>.png and button 14.<n>)
+LEVEL_WHAT = {
+    1: ("the smallest, simplest, home-made Town Hall: a ribbed silver TIN-CAN body (corrugated steel bands) with a loose, crumpled "
+        "dark brown sheet-metal ROOF FLAP draped over its top, a round BLUE porthole window with a silver rim on the front of the can, a "
+        "silver kitchen FUNNEL on top tied on with wire and clips, a black lever handle sticking out on the left, and short thin metal "
+        "legs fixed to the can by small golden brackets and bolts, with little golden gear-shaped feet. NO dome, NO deck, NO red parts"),
+    2: ("a ribbed silver TIN-CAN body (corrugated steel bands) on a ring of thin metal legs with small golden gear-shaped feet and "
+        "golden bolts; a dark brown riveted sheet-metal HOOD roof with flared corners sitting on the can, with a round BLUE porthole "
+        "window in it and a round hinged porthole lid sticking out on the right; a red horseshoe magnet on the front; a silver kitchen "
+        "FUNNEL on top with a few bits of wire round it"),
+    3: ("a ribbed silver body under a rounded dark brown riveted sheet-metal HOOD with flared edges and TWO big round BLUE porthole "
+        "windows with silver rims on its front; a silver FUNNEL with a small golden collar on top; two RED HORSESHOE MAGNETS on the front "
+        "of the body; the body stands in the middle of a flat octagonal GOLDEN DECK frame (thin golden rails round an eight-sided "
+        "platform) held up on thin metal legs with small golden gear-shaped feet"),
+    4: ("a DARK RIVETED DOME (dark brown metal plates with rows of silver rivets) with round BLUE porthole windows; a silver FUNNEL with "
+        "a golden collar on top; a ribbed silver cylinder body with vertical golden straps; four curled RED PIPES bending out from the "
+        "body; the body stands on a flat octagonal GOLDEN DECK frame on thin metal legs with golden gear-shaped feet"),
+    6: ("a DARK RIVETED DOME with a ring of round BLUE porthole windows; a silver FUNNEL with a golden collar on top; a ribbed silver "
+        "cylinder body with vertical golden straps; RED bent pipes and small RED railings curling out around it; below the body a "
+        "WIDER ROUND BASE of two stacked silver drums with rows of small holes and golden rims; short legs with round golden gear-shaped "
+        "feet. NO golden frame or arms round the dome"),
+    7: ("a DARK RIVETED DOME with round BLUE porthole windows (a big one on the front); a silver FUNNEL on a golden stem on top; FOUR "
+        "thick GOLDEN PIPE ARMS curving up from the base and over the shoulders of the dome; a ribbed silver cylinder body with golden "
+        "straps; RED pipes with round red knobs and small red railings round the waist; a WIDE ROUND BASE of stacked silver drums with "
+        "rows of small holes and golden rims; spiky golden GEAR-shaped feet"),
+    8: ("a DARK RIVETED DOME with MORE round BLUE porthole windows (small and large); a silver FUNNEL on a golden stem on top; FOUR "
+        "thick GOLDEN PIPE ARMS curving up and over the dome, now with a golden ring round the top of the dome; a ribbed silver body "
+        "with golden straps and an open dark gap at the front; RED pipes with red knobs round the waist; a WIDE ROUND BASE of stacked "
+        "silver drums with rows of small holes and golden rims; spiky golden GEAR-shaped feet"),
+    9: ("almost all GOLD: a dark riveted dome with one big round BLUE porthole on the front, wrapped in a GOLDEN FRAME of thick "
+        "curved golden pipe arms with small silver spikes; a golden CROWN-like crest on top holding the silver FUNNEL, with thin curled "
+        "golden horns; a dark ribbed body inside the frame with small RED pipes; a heavy GOLDEN BASE with chunky golden blocks and "
+        "clawed golden feet all round"),
+}
+LEVEL_WHAT[5] = ("a ribbed silver cylinder body with vertical golden straps; a DARK RIVETED DOME on top with a ring of round BLUE porthole "
+                  "windows; a silver funnel with a golden collar on top of the dome; RED bent pipes curling out around the base with "
+                  "small red railings; short legs with round golden disc feet. NO golden frame or arms round the dome")
+LEVEL_WHAT[10] = WHAT_R2.split("(keep it): ")[1] if b == "townhall" else ""
+# what the gold (levels 5-8) and black-and-gold (levels 9-10) levels change, worded like the approved level 5 GOLD / level 10 BLACK
+LEVEL_MAT = {
+    "GOLD": ("the vertical straps on the ribbed body, the funnel collar, the rims of the blue portholes, the feet and every golden "
+             "part already in the Flash design become POLISHED, gleaming GOLD; add thick gold bands round the top and bottom of the "
+             "ribbed body, gold rivets on the dome and gold rims and fittings on the red pipes and railings{base}. The DARK riveted dome, "
+             "the SILVER ribbed body between the bands, the BLUE portholes, the silver funnel and the RED pipes stay, exactly as on "
+             "match.png, so it is clearly the gold version of THIS level and still clearly level {n}"),
+    "BLACK": ("the dark riveted dome becomes glossy BLACK faceted armour (like black diamond) with polished GOLD seams and rivets "
+              "between its plates; the ribbed body and the round base drum become black armour with gold bands and gold rims; the silver "
+              "funnel becomes black chrome with a gold rim. The golden frame, arms, crest, horns, base blocks and clawed feet stay GOLD (the gold "
+              "trim), the blue porthole stays blue and the red pipes stay red, as on match.png, so it is clearly the black-and-gold "
+              "version of THIS level and still clearly level {n}"),
+}
+if LEVEL:
+    band = {"NORMAL": "in its NORMAL version (no extra gold: only the golden parts its Flash design already has)",
+            "GOLD": "in its GOLD version", "BLACK": "in its BLACK AND GOLD version"}[BAND]
+    match = {"NORMAL": ("the Town Hall at level 2 (left) and level 5 (right) already painted in the new style and approved, both in the "
+                        "normal version"),
+             "GOLD": "the Town Hall at level 5 in its GOLD version, already painted in the new style and approved",
+             "BLACK": "the Town Hall at level 10 in its BLACK AND GOLD version, already painted in the new style and approved"}[BAND]
+    mat = "" if BAND == "NORMAL" else (
+        "\nNew materials: " + LEVEL_MAT[BAND].format(n=LEVEL, base=", and the silver base drums get gold rims and gold bands" if LEVEL in (6, 7, 8) else "")
+        + (". The gold must be rich, warm and shiny like block.png, clearly more gold than the Flash picture" if BAND == "GOLD" else
+           ". The black must be deep and glossy with crisp faceted highlights like block.png, the gold only on the frame, edges, trims, rims and bolts")
+        + ".\n")
+    prompt = f"""Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the TOWN HALL, the main building of the monster yard, at LEVEL {LEVEL} of 10, {band}. It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The Town Hall has its own picture for every level in the old Flash game, and each level is repainted from its OWN Flash picture. The levels follow the game's wall blocks: levels 1-4 are the normal building, levels 5-8 get GOLD (like the Gold Blocks), levels 9-10 are BLACK AND GOLD (black armour with gold edges, like the Black Diamond Blocks).
+
+This level's Flash design (keep it): {LEVEL_WHAT[LEVEL]}.
+
+Input 1, frames.png: the OLD Flash Town Hall at level {LEVEL}, blown up, on grey ({fr.width}x{fr.height}): its design, camera angle, ground footprint and size. The new picture stands on the same footprint, centred on the same spot, base on the same ground line, is not wider at the base and about as tall as the Flash picture (at most 10% taller).
+Input 2, ref.png: the old build-menu picture of the Town Hall at level {LEVEL} (a sharper render of the same design). Use it to read the small details.
+Input 3, style.png: see style below.
+Input 4, match.png: {match}. Paint level {LEVEL} in EXACTLY the same finish, lighting, camera angle, line quality, colour palette and materials, so that all ten levels read as one building growing up. But paint THIS level's design from frames.png and ref.png, NOT the design in match.png: no parts from other levels.{'''
+Input 5, block.png: the game's ''' + ('Gold Blocks' if BAND == 'GOLD' else 'Black Diamond Blocks') + ''' wall block. Use it ONLY as the colour and material reference for the new material (not its shape).''' if BAND != 'NORMAL' else ''}
+{mat}
+THE FLASH DESIGN, REFRESHED: keep the Flash silhouette, proportions, colour scheme and signature parts in the same places, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting (soft light from the upper left, clear highlights, ambient occlusion in the gaps) and sharper edges. NOT a new design and NOT a plain copy.
+
+{STYLE}
+
+Output: ONE image, {fr.width}x{fr.height}, the building alone, complete and fully inside the image with margin (the funnel, the crest and every foot inside the image).
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.
 """
     if os.environ.get("NOTE"):
         prompt += "\nIMPORTANT CORRECTION (an earlier attempt got this wrong): " + os.environ["NOTE"] + "\n"

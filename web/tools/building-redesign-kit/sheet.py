@@ -1,4 +1,4 @@
-"""sheet.py <building> [r2] : the owner's overview for one building -> art-samples/redesign/<building>/overview.png
+"""sheet.py <building> [r2] : the owner's overview for one building -> art-samples/redesign/<building>/overview.png (Town Hall: overview-round1.png)
 
 With r2 (round 2, "Flash design, refreshed") -> overview-r2.png: Flash | sharp Flash (cannon only: the faithful tower sample) |
 R2A | R2B, one row at game size (1x) and one row zoomed (4x).
@@ -176,5 +176,5 @@ for i, c in enumerate(COMBOS):
     cy = y + (i // 2) * (th + LAB + PAD)
     d.text((cx, cy), NAME[c], fill=FG, font=FB)
     g.paste(bigs[c], (cx, cy + LAB + 6))
-g.save(OUT / "overview.png", optimize=True)
+g.save(OUT / ("overview-round1.png" if b == "townhall" else "overview.png"), optimize=True)
 print(OUT / "overview.png", g.size)

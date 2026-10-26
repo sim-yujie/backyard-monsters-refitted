@@ -1,0 +1,19 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint the TOWN HALL, the main building of the monster yard, at LEVEL 1 of 10, in its NORMAL version (no extra gold: only the golden parts its Flash design already has). It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+The Town Hall has its own picture for every level in the old Flash game, and each level is repainted from its OWN Flash picture. The levels follow the game's wall blocks: levels 1-4 are the normal building, levels 5-8 get GOLD (like the Gold Blocks), levels 9-10 are BLACK AND GOLD (black armour with gold edges, like the Black Diamond Blocks).
+
+This level's Flash design (keep it): the smallest, simplest, home-made Town Hall: a ribbed silver TIN-CAN body (corrugated steel bands) with a loose, crumpled dark brown sheet-metal ROOF FLAP draped over its top, a round BLUE porthole window with a silver rim on the front of the can, a silver kitchen FUNNEL on top tied on with wire and clips, a black lever handle sticking out on the left, and short thin metal legs fixed to the can by small golden brackets and bolts, with little golden gear-shaped feet. NO dome, NO deck, NO red parts.
+
+Input 1, frames.png: the OLD Flash Town Hall at level 1, blown up, on grey (1024x1536): its design, camera angle, ground footprint and size. The new picture stands on the same footprint, centred on the same spot, base on the same ground line, is not wider at the base and about as tall as the Flash picture (at most 10% taller).
+Input 2, ref.png: the old build-menu picture of the Town Hall at level 1 (a sharper render of the same design). Use it to read the small details.
+Input 3, style.png: see style below.
+Input 4, match.png: the Town Hall at level 2 (left) and level 5 (right) already painted in the new style and approved, both in the normal version. Paint level 1 in EXACTLY the same finish, lighting, camera angle, line quality, colour palette and materials, so that all ten levels read as one building growing up. But paint THIS level's design from frames.png and ref.png, NOT the design in match.png: no parts from other levels.
+
+THE FLASH DESIGN, REFRESHED: keep the Flash silhouette, proportions, colour scheme and signature parts in the same places, so a player of the old game instantly recognises it, with richer materials, crisper detail, better lighting (soft light from the upper left, clear highlights, ambient occlusion in the gaps) and sharper edges. NOT a new design and NOT a plain copy.
+
+STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
+
+Output: ONE image, 1024x1536, the building alone, complete and fully inside the image with margin (the funnel, the crest and every foot inside the image).
+Background everywhere: flat pure green #00FF00. No ground, no grass, no tile, no shadow on the ground, no grid lines, no text, no labels. The building itself must contain no bright pure green.
