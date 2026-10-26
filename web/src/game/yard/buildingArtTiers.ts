@@ -27,6 +27,11 @@
  *   (the redesign brief: one rubble pile per building).
  * - **Shadows** are stand-ins: the silhouette leaned back, flattened and
  *   blurred, as on the sample sheets, until shadows are painted.
+ *
+ * The Town Hall rides the same switch, so all the new building art turns on
+ * together: one picture per level (`TOWN_HALL_ART`), each painted from that
+ * level's Flash picture (approved 26 Oct 2026, codex-art Part 13). Flash's
+ * Town Hall has no animation strips, so nothing moving is lost.
  */
 
 /** Where this browser keeps the choice of the new tower art ("1" is on). */
@@ -136,14 +141,31 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   ],
 };
 
+/** The Town Hall's ten levels, one picture each, on the same ground spot as Flash's; no gun, so no lift. */
+export const TOWN_HALL_ART: readonly TierArt[] = [
+  { from: 1, top: ["top.new1@2x.webp", -46, -47], shadow: ["shadow.new1.jpg", -43, 35], lift: 0 },
+  { from: 2, top: ["top.new2@2x.webp", -48, -62], shadow: ["shadow.new2.jpg", -47, 28], lift: 0 },
+  { from: 3, top: ["top.new3@2x.webp", -65, -63], shadow: ["shadow.new3.jpg", -58, 35], lift: 0 },
+  { from: 4, top: ["top.new4@2x.webp", -67, -64], shadow: ["shadow.new4.jpg", -60, 36], lift: 0 },
+  { from: 5, top: ["top.new5@2x.webp", -67, -64], shadow: ["shadow.new5.jpg", -60, 38], lift: 0 },
+  { from: 6, top: ["top.new6@2x.webp", -73, -73], shadow: ["shadow.new6.jpg", -66, 36], lift: 0 },
+  { from: 7, top: ["top.new7@2x.webp", -81, -84], shadow: ["shadow.new7.jpg", -72, 32], lift: 0 },
+  { from: 8, top: ["top.new8@2x.webp", -80, -84], shadow: ["shadow.new8.jpg", -71, 31], lift: 0 },
+  { from: 9, top: ["top.new9@2x.webp", -77, -94], shadow: ["shadow.new9.jpg", -69, 29], lift: 0 },
+  { from: 10, top: ["top.new10@2x.webp", -77, -104], shadow: ["shadow.new10.jpg", -68, 23], lift: 0 },
+];
+
+/** Every type with new art behind the switch: the towers, then the Town Hall (14). */
+const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART };
+
 /**
- * The tier picture a tower shows at `level`, or null while the new art is
- * off, below level 1 and for every type that is not a repainted tower.
+ * The new picture a building shows at `level`, or null while the new art is
+ * off, below level 1 and for every type without new art.
  */
 export const tierArtFor = (type: number, level: number): TierArt | null => {
   if (!newTowerArtOn) return null;
   let chosen: TierArt | null = null;
-  for (const tier of TOWER_TIER_ART[type] ?? []) {
+  for (const tier of NEW_ART[type] ?? []) {
     if (tier.from > level) break;
     chosen = tier;
   }

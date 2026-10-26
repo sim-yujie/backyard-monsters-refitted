@@ -6,7 +6,7 @@ import {
 } from "../../../../server/src/game-data/buildingArtLevels";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { ArtState, resolveArt } from "./buildingArt";
-import { setNewTowerArt, TOWER_TIER_ART } from "./buildingArtTiers";
+import { setNewTowerArt, TOWER_TIER_ART, TOWN_HALL_ART } from "./buildingArtTiers";
 
 /**
  * The server sends someone else's yard with only the level each building's
@@ -55,6 +55,10 @@ describe("the server's art levels match the web art table", () => {
       Object.entries(TOWER_TIER_ART).map(([type, list]) => [type, list.map((tier) => tier.from)]),
     );
     expect(TOWER_TIER_ART_LEVELS).toEqual(tiers);
+  });
+
+  it("needs no tiers for the new Town Hall: it has a picture at every Flash step", () => {
+    expect(TOWN_HALL_ART.map((level) => level.from)).toEqual(BUILDING_ART_LEVELS[14]);
   });
 
   it("picks the picture the client draws for every level up to 20", () => {

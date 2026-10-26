@@ -5,6 +5,7 @@ import { ArtState, resolveArt } from "./buildingArt";
 import {
   NEW_TOWER_ART_KEY,
   TOWER_TIER_ART,
+  TOWN_HALL_ART,
   newTowerArt,
   readNewTowerArt,
   setNewTowerArt,
@@ -33,6 +34,8 @@ describe("the new tower art switch", () => {
     expect(readNewTowerArt("", memoryStore())).toBe(false);
     expect(resolveArt(20, 8, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
     expect(resolveArt(21, 5, ArtState.DEFAULT)?.anims.length).toBeGreaterThan(0);
+    expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.6.png");
+    expect(tierArtFor(14, 6)).toBeNull();
     for (const type of TOWERS) {
       expect(tierArtFor(type, 8)).toBeNull();
       expect(tierLift(type, 8)).toBe(0);
@@ -145,7 +148,7 @@ describe("the repainted tower tiers", () => {
   it("lift the gun with the picture, and not on another type", () => {
     expect(tierLift(21, 3)).toBeLessThan(tierLift(21, 4));
     expect(tierLift(21, 7)).toBeGreaterThan(tierLift(21, 4));
-    expect(tierLift(14, 10)).toBe(0);
+    expect(tierLift(14, 9)).toBe(0);
     expect(tierArtFor(1, 10)).toBeNull();
   });
 
@@ -156,5 +159,46 @@ describe("the repainted tower tiers", () => {
       expect(two && three && three.top[2] < two.top[2], `type ${type}`).toBe(true);
       expect(two && three && three.lift > two.lift, `type ${type}`).toBe(true);
     }
+  });
+});
+
+describe("the repainted Town Hall", () => {
+  beforeEach(() => setNewTowerArt(true));
+  afterEach(() => setNewTowerArt(false));
+
+  it("has its own picture for each of the ten levels, on the server", () => {
+    expect(TOWN_HALL_ART.map((level) => level.from)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const missing: string[] = [];
+    for (let level = 1; level <= 10; level++) {
+      const art = resolveArt(14, level, ArtState.DEFAULT);
+      expect(art?.top.url).toBe(`/assets/buildings/townhall/top.new${level}@2x.webp`);
+      expect(art?.level).toBe(level);
+      for (const url of [art?.top.url, art?.shadow?.url]) {
+        if (!url || !existsSync(ASSETS + url.replace(/^\/assets\//, ""))) missing.push(`level ${level}: ${url}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("shows level 1 while being built and level 10 past the top", () => {
+    expect(resolveArt(14, 0, ArtState.DEFAULT)?.top.url).toContain("townhall/top.new1@2x.webp");
+    expect(resolveArt(14, 11, ArtState.DEFAULT)?.top.url).toContain("townhall/top.new10@2x.webp");
+  });
+
+  it("stands where Flash's does at every level", () => {
+    setNewTowerArt(false);
+    const flash = TOWN_HALL_ART.map((level) => resolveArt(14, level.from, ArtState.DEFAULT)?.top);
+    setNewTowerArt(true);
+    TOWN_HALL_ART.forEach((level, i) => {
+      // Same left edge give or take a pixel or two; at most 15% taller, so the top moves a little at most.
+      expect(Math.abs(level.top[1] - (flash[i]?.x ?? 0)), `level ${level.from}`).toBeLessThanOrEqual(2);
+      expect(Math.abs(level.top[2] - (flash[i]?.y ?? 0)), `level ${level.from}`).toBeLessThanOrEqual(15);
+    });
+  });
+
+  it("keeps its picture when damaged, falls to the Flash rubble when destroyed, and has no strips", () => {
+    expect(resolveArt(14, 7, ArtState.DAMAGED)?.top.url).toBe("/assets/buildings/townhall/top.new7@2x.webp");
+    expect(resolveArt(14, 7, ArtState.DEFAULT)?.anims).toEqual([]);
+    expect(resolveArt(14, 7, ArtState.DESTROYED)?.top.url).toBe("/assets/buildings/townhall/top.7.destroyed.png");
   });
 });

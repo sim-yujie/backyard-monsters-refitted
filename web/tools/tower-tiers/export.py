@@ -1,6 +1,7 @@
 """Exports the owner-approved tower tier paintings into the game's assets.
 
     python -I web/tools/tower-tiers/export.py <codex-art worktree> [tiers...]
+    python -I web/tools/tower-tiers/export.py <codex-art worktree> townhall
 
 Reads `art-samples/redesign/<tower>/<combo>/new-4x.png` from the sample worktree (branch art/samples-towers-champs-l4),
 where each painting already sits on the old tower's footprint: the building-redesign kit's `finish.py` fitted it by the
@@ -13,6 +14,9 @@ writes, per tower and tier, into `server/public/assets/buildings/<folder>/`:
 
 and prints one line of JSON per picture with the 1x offsets (`buildingArtTiers.ts` holds them) and `lift`, the world px
 the picture's top stands above the Flash tower's, which is how much higher the gun sits.
+
+`townhall` exports the Town Hall instead: one picture per level (codex-art Part 13), `top.new<N>@2x.webp` and
+`shadow.new<N>.jpg` for levels 1-10. finish.py fits every level onto the level 10 canvas, origin `canvas("townhall")`.
 """
 import json
 import sys
@@ -34,6 +38,8 @@ UP = 4
 TIER_COMBO = {1: {"cannon": "T2"}, 2: {}, 3: {}}
 TIER_DEFAULT = {1: "R2A", 2: "TALL2", 3: "TALL3"}
 ORDER = ["cannon", "sniper", "bunker", "laser", "tesla", "aerial", "railgun"]
+# The Town Hall's approved picture per level: L<n>, except levels 2, 5 and 10, which reuse earlier approved ones.
+TH_COMBO = {2: "T1", 5: "GOLD", 10: "BLACK"}
 
 
 def shadow(alpha, bot):
@@ -47,8 +53,10 @@ def shadow(alpha, bot):
     return np.asarray(sq.filter(ImageFilter.GaussianBlur(3))).astype(float) / 255
 
 
-def export(b, tier):
-    combo = TIER_COMBO[tier].get(b, TIER_DEFAULT[tier])
+def export(b, tier, combo=None, flash=None, name=None):
+    """`flash` is the Flash picture the lift is measured against (default `b`), `name` the file tag (default `t<tier>`)."""
+    combo = combo or TIER_COMBO[tier].get(b, TIER_DEFAULT[tier])
+    name = name or f"t{tier}"
     im4 = Image.open(SAMPLES / b / combo / "new-4x.png").convert("RGBA")
     # The canvas is the old one widened by 30% each side and raised (by 0.6 of its height for tier 1, 1.4 or 1.7 for
     # the taller tiers: see `canvas`), sharing its bottom; so the origin follows from the size.
@@ -64,7 +72,7 @@ def export(b, tier):
     crop = im4.crop((x0, y0, x1, y1))
     two = resize_pm(crop, (crop.width // 2, crop.height // 2))
     folder = ASSETS / TOWERS[b]["folder"]
-    top_name = f"top.t{tier}@2x.webp"
+    top_name = f"top.{name}@2x.webp"
     two.save(folder / top_name, "WEBP", quality=90, alpha_quality=100, method=6)
 
     # Shadow at 1x on the whole canvas, then cropped to where it darkens.
@@ -74,10 +82,11 @@ def export(b, tier):
     ys, xs = np.where(sh > 0.02)
     sx0, sy0, sx1, sy1 = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
     mult = (255 * (1 - 0.45 * sh[sy0:sy1, sx0:sx1])).round().astype("uint8")
-    shadow_name = f"shadow.t{tier}.jpg"
+    shadow_name = f"shadow.{name}.jpg"
     Image.fromarray(mult).convert("RGB").save(folder / shadow_name, "JPEG", quality=85, optimize=True)
 
-    old_top = np.where(np.asarray(old)[..., 3] >= 200)[0].min() - oy
+    flash_old, _, flash_oy = old_rgba(flash or b)
+    old_top = np.where(np.asarray(flash_old)[..., 3] >= 200)[0].min() - flash_oy
     new_top = y0 / UP - cy0 + np.where(np.asarray(crop)[..., 3] >= 200)[0].min() / UP
     return dict(tower=b, tier=tier, combo=combo, folder=TOWERS[b]["folder"],
                 top=[top_name, round(x0 / UP - cx0), round(y0 / UP - cy0)],
@@ -87,6 +96,10 @@ def export(b, tier):
 
 
 if __name__ == "__main__":
+    if sys.argv[2:] == ["townhall"]:
+        for n in range(1, 11):
+            print(json.dumps(export("townhall", n, TH_COMBO.get(n, f"L{n}"), f"townhall{n}", f"new{n}")))
+        sys.exit()
     tiers = [int(t) for t in sys.argv[2:]] or [2, 3]
     for b in ORDER:
         for t in tiers:
