@@ -391,6 +391,7 @@ export class ShinyView {
                       { class: "row-meta" },
                       [
                         `#${player.userid}`,
+                        player.bot ? "bot" : null,
                         player.formerName ? `was called ${player.formerName}` : null,
                         player.lastSeenAt ? `last played ${ago(player.lastSeenAt)}` : "never played",
                       ]

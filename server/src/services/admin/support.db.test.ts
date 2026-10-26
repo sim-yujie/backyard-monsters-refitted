@@ -345,6 +345,10 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
     const BOT = 996015;
     const SEEDED = 996016;
     const CROWD = Array.from({ length: 11 }, (_, n) => 996020 + n);
+    // The live database's neighbours of Smash_N_Dash (26 Oct): bots named "<first name>_smash", more than a page of them.
+    const SMASH_BOTS = ["tyler", "josh", "lars", "ruby", "finn", "kai", "sam", "alex", "max", "leo", "mia", "zoe"].map(
+      (first, n): [number, string] => [996040 + n, `${first}_smash`]
+    );
     const NAMES = new Map<number, string>([
       [SMASH, "Smash_N_Dash"],
       [LOOKALIKE, "SmashNDash"],
@@ -354,6 +358,7 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
       [SEEDED, "supporttest_smash_seed"],
       // Names that sort before "smash_n_dash" and hold it: they must not push the exact name out.
       ...CROWD.map((userid, n): [number, string] => [userid, `a_smash_n_dash_${n}`]),
+      ...SMASH_BOTS,
     ]);
     const SEARCHED = [...NAMES.keys()].join(",");
     const ids = async (query: string) => (await searchPlayers(orm.em.fork(), query)).map((one) => one.userid);
@@ -365,7 +370,8 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
           [userid, name, `supporttest_${userid}@test.invalid`]
         );
       }
-      for (const [userid, state] of [[BOT, "active"], [SEEDED, "seeded"]] as const) {
+      const bots: [number, string][] = [[BOT, "active"], [SEEDED, "seeded"], ...SMASH_BOTS.map(([userid]): [number, string] => [userid, "active"])];
+      for (const [userid, state] of bots) {
         await sql(
           `INSERT INTO bym.bot (userid, seed, persona, level, level_since, state) VALUES (?, 1, 'economy', 20, now(), ?) ON CONFLICT DO NOTHING`,
           [userid, state]
@@ -406,8 +412,9 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
       expect((await ids("SmashNDash")).slice(0, 2)).toEqual([LOOKALIKE, SMASH]);
     });
 
-    test("a name copied from chat or with an @ in front", async () => {
-      for (const query of ["@Smash_N_Dash", "[12] Smash_N_Dash", "“Smash_N_Dash”"]) {
+    test("a name copied from chat or Discord, or with an @ in front", async () => {
+      // Discord shows "Smash_N_Dash" as "Smash*N*Dash" (italic N) or, escaped, "Smash\_N\_Dash".
+      for (const query of ["@Smash_N_Dash", "[12] Smash_N_Dash", "“Smash_N_Dash”", "Smash*N*Dash", String.raw`Smash\_N\_Dash`]) {
         expect((await ids(query))[0]).toBe(SMASH);
       }
     });
@@ -422,10 +429,32 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
       expect((await searchPlayers(orm.em.fork(), "supporttest_renamed"))[0]!.formerName).toBeNull();
     });
 
-    test("by account number; bots left out, seeded dev players kept", async () => {
+    test("the live case: among a page of *_smash bots, Smash_N_Dash is found ahead of them", async () => {
+      for (const query of ["Smash_N_Dash", "smash_n"]) {
+        const [first] = await searchPlayers(orm.em.fork(), query);
+        expect(first).toEqual(expect.objectContaining({ userid: SMASH, username: "Smash_N_Dash", bot: false }));
+      }
+      // Names that start with "smash" first (the shorter SmashNDash, then Smash_N_Dash), the bots after.
+      for (const query of ["smash", "Smash"]) {
+        expect((await ids(query)).slice(0, 2)).toEqual([LOOKALIKE, SMASH]);
+      }
+      // The bots still show, after the players and marked, never hidden.
+      const [tyler] = await searchPlayers(orm.em.fork(), "tyler_smash");
+      expect(tyler).toEqual(expect.objectContaining({ username: "tyler_smash", bot: true }));
+      const page = await searchPlayers(orm.em.fork(), "_smash");
+      expect(page).toHaveLength(10);
+      expect(page.every((one) => !one.bot)).toBe(true);
+    });
+
+    test("by account number; a bot is marked and shown after players, seeded dev players are players", async () => {
       expect((await ids(String(OTHER)))[0]).toBe(OTHER);
-      expect(await ids("supporttest_smash_bot")).toEqual([]);
-      expect(await ids("supporttest_smash_seed")).toEqual([SEEDED]);
+      const [bot] = await searchPlayers(orm.em.fork(), "supporttest_smash_bot");
+      expect(bot).toEqual(expect.objectContaining({ userid: BOT, bot: true }));
+      expect((await searchPlayers(orm.em.fork(), "supporttest_smash_seed"))[0]).toEqual(
+        expect.objectContaining({ userid: SEEDED, bot: false })
+      );
+      // Both match "supporttest_smash_": the player first.
+      expect((await ids("supporttest_smash_")).slice(0, 2)).toEqual([SEEDED, BOT]);
       expect(await searchPlayers(orm.em.fork(), "   ")).toEqual([]);
       expect(await searchPlayers(orm.em.fork(), "%")).toEqual([]);
     });
