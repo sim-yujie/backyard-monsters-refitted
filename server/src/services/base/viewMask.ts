@@ -14,10 +14,10 @@ import { isTrap, maxHp, type CombatTargetKind } from "../../game-rules/combat/in
  *   health entries of traps, and of traps that already fired (a zero under an
  *   id no longer in the yard), go too.
  * - **Levels** are replaced by the level the building's art needs
- *   (`artLevelOf`). Most buildings, every tower among them, have one picture
- *   for all levels and so read 1; the few whose art changes (Town Hall,
- *   harvesters, walls, Flinger...) give away only what their picture already
- *   shows.
+ *   (`artLevelOf`). Most buildings have one picture for all levels and so
+ *   read 1; the few whose art changes (Town Hall, harvesters, walls, Flinger,
+ *   the defensive towers' three tiers...) give away only what their picture
+ *   already shows.
  * - **Health** keeps its share of the building's full health, re-measured
  *   against the art level's, so a damaged building still looks damaged and a
  *   wrecked one wrecked, but the number no longer tells the level.

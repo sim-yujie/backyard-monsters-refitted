@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { artLevelOf, BUILDING_ART_LEVELS } from "../../../../server/src/game-data/buildingArtLevels";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { ArtState, resolveArt } from "./buildingArt";
+import { TOWER_TIER_ART } from "./buildingArtTiers";
 
 /**
  * The server sends someone else's yard with only the level each building's
@@ -10,11 +11,12 @@ import { ArtState, resolveArt } from "./buildingArt";
  * table, a viewer sees the wrong picture, or the real level leaks again.
  */
 
-/** The art levels of every type whose art changes, as this table has them. */
+/** The art levels of every type whose art changes, as this table and the tower tiers have them. */
 const webArtLevels = (): Record<number, number[]> => {
   const out: Record<number, number[]> = {};
   for (const [type, , , levels] of BUILDING_ART_ROWS) {
-    const steps = levels.map((level) => level[0]);
+    const tiers = (TOWER_TIER_ART[type] ?? []).map((tier) => tier.from);
+    const steps = [...new Set([...levels.map((level) => level[0]), ...tiers])].sort((a, b) => a - b);
     if (steps.length > 1) out[type] = steps;
   }
   return out;

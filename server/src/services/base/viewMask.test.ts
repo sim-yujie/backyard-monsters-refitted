@@ -74,9 +74,9 @@ describe("someone else's yard, only looked at", () => {
   test("each building carries the level its picture needs, not its own", () => {
     const sent = asViewer(yardOf(BaseType.MAIN)).buildingdata as Wire;
 
-    // Towers have one picture for every level.
-    expect(sent["2"]!.l).toBe(1);
-    expect(sent["3"]!.l).toBe(1);
+    // A tower's picture changes at its tiers, levels 4 and 7: 8 and 9 show 7's.
+    expect(sent["2"]!.l).toBe(7);
+    expect(sent["3"]!.l).toBe(7);
     // A Twig Snapper's picture changes at 1, 3, 6 and 10; level 8 shows 6's.
     expect(sent["4"]!.l).toBe(6);
     // The Town Hall's picture is its level: nothing more is given away.
@@ -96,14 +96,14 @@ describe("someone else's yard, only looked at", () => {
     const sent = asViewer(yardOf(BaseType.MAIN));
     const buildings = sent.buildingdata as Wire;
     const health = sent.buildinghealthdata as Record<string, number>;
-    const shown = maxHp(SNIPER, 1);
+    const shown = maxHp(SNIPER, 7);
 
     // 30,000 of a level 9 Sniper's 75,500: damaged, under half.
     expect(buildings["3"]!.hp).toBeLessThan(shown / 2);
     expect(buildings["3"]!.hp).toBeGreaterThan(0);
     expect(health["3"]).toBe(buildings["3"]!.hp as number);
     // 80,000 is over a level 8 Cannon's 58,000: full health of the art level.
-    expect(health["2"]).toBe(maxHp(CANNON, 1));
+    expect(health["2"]).toBe(maxHp(CANNON, 7));
   });
 
   test("the owner's Shiny count is not sent", () => {
@@ -146,10 +146,11 @@ describe("maskedHp", () => {
   test("keeps a building's look on both sides of the half-health line", () => {
     for (const level of [2, 5, 9, 10]) {
       const real = maxHp(CANNON, level);
-      const shown = maxHp(CANNON, artLevelOf(CANNON, level));
+      const art = artLevelOf(CANNON, level);
+      const shown = maxHp(CANNON, art);
       for (const share of [0.01, 0.25, 0.4999, 0.5, 0.75, 0.999]) {
         const hp = Math.floor(real * share) || 1;
-        const masked = maskedHp(hp, CANNON, level, 1, "main");
+        const masked = maskedHp(hp, CANNON, level, art, "main");
         expect(masked < shown / 2).toBe(hp < real / 2);
         expect(masked).toBeGreaterThan(0);
         expect(masked).toBeLessThan(shown);

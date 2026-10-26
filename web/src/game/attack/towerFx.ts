@@ -21,6 +21,7 @@ import {
   type LobLine,
 } from "@/game/combat/rules";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
+import { tierLift } from "@/game/yard/buildingArtTiers";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { blastNoise, tintAt } from "./blastFx";
@@ -241,6 +242,11 @@ export interface TowerInfo {
   readonly worldY: number;
   /** Cells in the first animation strip; 0 for a tower with no gun layer. */
   readonly frames: number;
+  /**
+   * World px a repainted tier stands taller than the Flash tower, which lifts
+   * its muzzle and coil by as much (`buildingArtTiers.ts`); 0 for tier 1.
+   */
+  readonly lift: number;
 }
 
 /** Every tower in a yard, with what its facing and shots need. */
@@ -256,6 +262,7 @@ export const towersOf = (yard: Yard): TowerInfo[] =>
       worldX: building.worldX,
       worldY: building.worldY,
       frames: resolveArt(building.type, building.level, ArtState.DEFAULT)?.anims[0]?.frames ?? 0,
+      lift: tierLift(building.type, building.level),
     }));
 
 /* ── The effects ────────────────────────────────────────────────────────── */
@@ -800,7 +807,7 @@ export class TowerFx {
     tower.lastShotTick = event.tick;
     tower.targetCreep = event.creepId;
 
-    const from = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY);
+    const from = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY - tower.info.lift);
     const aim = this.aimAt(target, event.ix, event.iy);
     const type = tower.info.type;
 
@@ -823,7 +830,7 @@ export class TowerFx {
     }
     if (type === 25) {
       // `BUILDING25.as:150`: the bolt leaves from 50 px above the origin.
-      const coil = { x: tower.info.worldX, y: tower.info.worldY - COIL_HEIGHT };
+      const coil = { x: tower.info.worldX, y: tower.info.worldY - tower.info.lift - COIL_HEIGHT };
       const big = tower.zapCharge !== tower.chargeTick;
       tower.zapCharge = tower.chargeTick;
       this.bolts.push({ from: coil, to: aim, tick: event.tick, big });
@@ -1390,7 +1397,7 @@ export class TowerFx {
       if (phase !== "charge" && phase !== "loop") continue;
       const power = phase === "charge" ? cell / TESLA_CHARGE_END : 0.8 + jitter(tick, 7) * 0.2;
       const x = tower.info.worldX;
-      const y = tower.info.worldY - COIL_HEIGHT;
+      const y = tower.info.worldY - tower.info.lift - COIL_HEIGHT;
       this.graphics.circle(x, y, 4 + 10 * power).fill({ color: BOLT_COLOUR, alpha: 0.12 + 0.3 * power });
       this.graphics.circle(x, y, 2 + 3 * power).fill({ color: 0xe8f8ff, alpha: 0.3 + 0.6 * power });
     }
@@ -1514,7 +1521,7 @@ export class TowerFx {
       const { phase, cell } = tower.tesla;
       if (phase !== "charge" && phase !== "loop") continue;
       const power = phase === "charge" ? cell / TESLA_CHARGE_END : 0.85 + blastNoise(tick, 7) * 0.15;
-      const coil = { x: tower.info.worldX, y: tower.info.worldY - COIL_HEIGHT };
+      const coil = { x: tower.info.worldX, y: tower.info.worldY - tower.info.lift - COIL_HEIGHT };
       sparks.lamp(tower, {
         look: "glow",
         at: coil,
@@ -1807,7 +1814,7 @@ export class TowerFx {
       const rate = towerStats(tower.info.type, tower.info.level)?.rate ?? 160;
       const charge = railCharge(tick - tower.lastShotTick, rate);
       if (charge <= 0) continue;
-      const at = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY);
+      const at = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY - tower.info.lift);
       const flicker = 0.85 + blastNoise(tick, 17) * 0.15;
       sparks.lamp(tower, {
         look: "orb",
@@ -2269,7 +2276,7 @@ export class TowerFx {
       }
       if (!creep || strength === null) continue;
       const dot = this.aimAt(creep, creep.ix, creep.iy);
-      const muzzle = muzzleOf(info.type, info.worldX, info.worldY);
+      const muzzle = muzzleOf(info.type, info.worldX, info.worldY - info.lift);
       const distance = Math.hypot(dot.x - muzzle.x, dot.y - muzzle.y) || 1;
       const tip = {
         x: muzzle.x + ((dot.x - muzzle.x) / distance) * 12,

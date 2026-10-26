@@ -190,6 +190,15 @@ describe("towersOf", () => {
     // A trap is not a tower.
     expect(towersOf(readYard(yardOf(24)))).toHaveLength(0);
   });
+
+  it("gives a repainted tier no gun strip and lifts its muzzle with the picture", () => {
+    const yard = yardOf(21);
+    yard.buildingdata = { "1": { id: 1, t: 21, l: 7, X: 0, Y: 0 } };
+    const [sniper] = towersOf(readYard(yard));
+    expect(sniper?.frames).toBe(0);
+    expect(sniper?.lift).toBeGreaterThan(0);
+    expect(towersOf(readYard(yardOf(21)))[0]?.lift).toBe(0);
+  });
 });
 
 /** How many drawing instructions the graphics holds this frame. */

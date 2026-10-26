@@ -4,8 +4,10 @@
  *
  * A copy of the first number of each `levels` entry in the web client's
  * `BUILDING_ART_ROWS` (`web/src/game/yard/buildingArtData.ts`, generated from
- * `client/scripts/YARD_PROPS.as`); `buildingArtLevels.sync.test.ts` on the web
- * side fails when the two drift.
+ * `client/scripts/YARD_PROPS.as`), plus the tiers of the repainted defensive
+ * towers (`web/src/game/yard/buildingArtTiers.ts`: tiers 2 and 3 from levels 4
+ * and 7, the five-level Monster Bunker's from 3 and 5);
+ * `buildingArtLevels.sync.test.ts` on the web side fails when the two drift.
  *
  * Used to send someone else's yard with only the level its art needs, never
  * the building's real level (`services/base/viewMask.ts`).
@@ -20,8 +22,15 @@ export const BUILDING_ART_LEVELS: Readonly<Record<number, readonly number[]>> = 
   13: [1, 2, 3],
   14: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
   17: [1, 2, 3, 4, 5],
+  20: [1, 4, 7],
+  21: [1, 4, 7],
+  22: [1, 3, 5],
+  23: [1, 4, 7],
+  25: [1, 4, 7],
   26: [1, 2, 3, 4],
   51: [1, 2, 3],
+  115: [1, 4, 7],
+  118: [1, 4, 7],
   121: [1, 2, 3, 4, 5, 6],
   127: [1, 2, 3, 4, 5],
   131: [1, 2, 3, 4, 5, 6],
