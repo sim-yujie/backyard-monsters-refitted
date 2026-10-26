@@ -1,1 +1,1 @@
-frames.png ref.png style.png base.png block.png
+frames.png ref.png style.png base.png block.png tier2.png growref.png

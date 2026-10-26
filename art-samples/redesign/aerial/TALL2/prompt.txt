@@ -4,7 +4,7 @@ Paint TIER 2 of 3 of the aerial defense tower. The tower's 3 tiers follow the ga
 
 (1) Gold: the tan armoured turret becomes POLISHED GOLD armour plates with gold rivets; the platform's frame and the rims of the grated panels become gold; the sloping sides keep their RED-AND-WHITE STRIPES with gold bands; the twin barrels stay steel with gold muzzle rings and gold bands. The gold must be rich, warm and shiny like block.png, clearly much more gold than base.png.
 
-(2) Taller: raise it by adding ONE extra stepped platform tier (a second, slightly narrower striped-and-grated platform stacked on the first, like a stepped plinth), so the whole tower is about 30% taller than base.png. The bottom platform keeps its size, and the armoured turret with its twin barrels keeps its size and shape and rides on the top platform; the FOOTPRINT on the ground stays exactly the same, NOT wider.
+(2) Taller: raise it by adding ONE extra step, the way the Railgun's base grows (see growref.png): its base becomes a STRIPED STEPPED PYRAMID of TWO steps. From the ground up: step 1 (the size of base.png's platform), step 2 (a little narrower, stacked on step 1), then the grated deck with the turret. Each step has red-and-white striped sloping sides and gold-rimmed grated panels, like base.png's platform, so the whole tower is about 30% taller than base.png. Step 1 keeps the size and footprint of base.png's platform, and the armoured turret with its twin barrels keeps its size, shape and aim and rides on top of the pyramid; the FOOTPRINT on the ground stays exactly the same, NOT wider.
 
 Same shapes, parts, pose, aim (any barrel or lens points the same way), camera and painting finish as base.png. It must stay clearly the same Flash aerial defense tower.
 
@@ -15,6 +15,7 @@ Input 2, ref.png: the old build-menu picture of the same tower.
 Input 3, style.png: see style below.
 Input 4, base.png: the approved new picture this one is made from (see above).
 Input 5, block.png: the game's Gold Blocks wall block. Use it ONLY as the colour and material reference for the new material (not its shape).
+Input 6, growref.png: the RAILGUN's tier 2 (left) and tier 3 (right), from the same game: its striped stepped-pyramid base grows by one step per tier. Grow this tower's base the same way (only its base; do not copy the Railgun's turret).
 
 STYLE A, hand-painted: paint it exactly in the finish of style.png (approved hand-painted repaints of champion monsters from the same game): crisp hand-painted digital illustration, soft painterly shading, glossy highlights, rich saturated colours, visible brush texture on materials, no thick black outline, no cel shading, no pixel art. Copy only the painting finish from style.png, not its shapes or colours.
 

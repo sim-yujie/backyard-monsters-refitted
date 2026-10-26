@@ -76,16 +76,28 @@ MAT_TIER1 = {"cannon": "T2", ("townhall", "GOLD"): "T2"}
 # (TALL2/TALL3 only raise them); the others are recoloured AND raised in one call: TALL2 from R2A, TALL3 from their TALL2.
 HAS_MAT = b in ("cannon", "tesla")
 RECOLOUR = combo in ("TALL2", "TALL3") and not HAS_MAT
+# owner, 26 Oct: Aerial and Bunker redone. Both tiers are painted from tier 1 (TALL3 from TALL2 kept the old height), TALL3 also
+# sees the new tier 2 (tier2.png); the Aerial also sees the Railgun's tiers 2 and 3 (growref.png), whose stepped base it follows.
+FROM_T1 = RECOLOUR and b in ("aerial", "bunker")
 if EXTRA:
     # base.png: the picture this one changes (PLAIN: the black-and-gold top tier; TALL2/TALL3: the gold / black-diamond tower,
     # or for RECOLOUR the R2-A tier 1 / the taller gold tier 2)
-    BASE = ({"TALL2": "R2A", "TALL3": "TALL2"} if RECOLOUR else {"PLAIN": "BLACK", "TALL2": "GOLD", "TALL3": "BLACK"})[combo]
+    BASE = ({"TALL2": "R2A", "TALL3": "R2A" if FROM_T1 else "TALL2"} if RECOLOUR else {"PLAIN": "BLACK", "TALL2": "GOLD", "TALL3": "BLACK"})[combo]
     Image.open(OUT / b / BASE / "sample-new.png").convert("RGB").save(out / "base.png")
     inputs.append("base.png")
     if RECOLOUR:
         blk = Image.open(ASSETS / "buildings" / "walls" / {"TALL2": "top.4.v2.png", "TALL3": "top.5.png"}[combo]).convert("RGBA")
         on(GREY, blk).resize((blk.width * 10, blk.height * 10), Image.LANCZOS).save(out / "block.png")
         inputs.append("block.png")
+    if FROM_T1 and combo == "TALL3":
+        Image.open(OUT / b / "TALL2" / "sample-new.png").convert("RGB").save(out / "tier2.png")
+        inputs.append("tier2.png")
+    if FROM_T1 and b == "aerial":
+        rg = [Image.open(OUT / "railgun" / f / "sample-new.png").convert("RGB") for f in ("TALL2", "TALL3")]
+        gr = Image.new("RGB", (sum(i.width for i in rg), max(i.height for i in rg)), GREY)
+        gr.paste(rg[0], (0, gr.height - rg[0].height)); gr.paste(rg[1], (rg[0].width, gr.height - rg[1].height))
+        gr.resize((gr.width // 2, gr.height // 2), Image.LANCZOS).save(out / "growref.png")
+        inputs.append("growref.png")
 if MAT:
     Image.open(OUT / b / MAT_TIER1.get((b, combo), MAT_TIER1.get(b, "R2A")) / "sample-new.png").convert("RGB").save(out / "tier1.png")
     blk = Image.open(ASSETS / "buildings" / "walls" / {"GOLD": "top.4.v2.png", "BLACK": "top.5.png"}[combo]).convert("RGBA")
@@ -203,6 +215,17 @@ MAT_WHAT = {
                           "beams become dark wood with gold end caps; the round door becomes black with a gold ring, its small "
                           "orange lights stay"),
 }
+# tier 3 material when painted straight from tier 1 (FROM_T1)
+MAT_T1_BLACK = {
+    "aerial": ("the tan armoured turret becomes glossy BLACK faceted armour (like black diamond) with polished GOLD edges and "
+               "rivets; every step's frame becomes black armour with gold trim (the grated panels dark with gold rims); the "
+               "striped sloping sides of every step become BLACK AND GOLD stripes; the twin barrels become black gunmetal with gold "
+               "rings"),
+    "bunker": ("the curved steel armour plates become glossy BLACK faceted armour (like black diamond) with polished GOLD seams "
+               "and rivets; the roof stripes become BLACK AND GOLD; the vent box becomes black with a gold frame; the log beams "
+               "become dark wood with gold end caps; the round door becomes black with a gold ring, its small orange lights stay; "
+               "the foundation rings are dark stone and black armour blocks with gold edges and rivets"),
+}
 # how each tower stands taller (owner, 25 Oct night): an extra section of its own body or base that suits it, not a stretch.
 # (tier 2 extra, tier 3 extra), and what keeps its size
 TALL_HOW = {
@@ -229,23 +252,32 @@ TALL_HOW = {
                "TALL3": "TWO extra sections to the metal box body (three stacked box sections with riveted bands between them)"},
               "The striped base with its rubber bumpers, the cage and the laser head with its blue lens keep their size and shape "
               "(the base stays on the ground, the cage and head ride on top of the taller box)"),
-    "aerial": ({"TALL2": "ONE extra stepped platform tier (a second, slightly narrower striped-and-grated platform stacked on the "
-                         "first, like a stepped plinth)",
-                "TALL3": "TWO extra stepped platform tiers (three stacked striped-and-grated platforms, each a little narrower, "
-                         "like a stepped pyramid)"},
-               "The bottom platform keeps its size, and the armoured turret with its twin barrels keeps its size and shape and "
-               "rides on the top platform"),
+    "aerial": ({"TALL2": "ONE extra step, the way the Railgun's base grows (see growref.png): its base becomes a STRIPED STEPPED "
+                         "PYRAMID of TWO steps. From the ground up: step 1 (the size of base.png's platform), step 2 (a little "
+                         "narrower, stacked on step 1), then the grated deck with the turret. Each step has red-and-white striped "
+                         "sloping sides and gold-rimmed grated panels, like base.png's platform",
+                "TALL3": "TWO extra steps, the way the Railgun's base grows (see growref.png): its base becomes a STRIPED STEPPED "
+                         "PYRAMID of THREE steps (one more than tier2.png). From the ground up: step 1 (the size of base.png's "
+                         "platform), step 2 (a little narrower), step 3 (narrower again), then the grated deck with the turret. "
+                         "Count them: THREE striped steps under the deck. Each step has striped sloping sides and grated panels"},
+               "Step 1 keeps the size and footprint of base.png's platform, and the armoured turret with its twin barrels keeps "
+               "its size, shape and aim and rides on top of the pyramid"),
     "railgun": ({"TALL2": "ONE extra tier to the striped pyramid base (a stepped pyramid: a second striped section stacked on the "
                           "first, with corner brackets on both)",
                  "TALL3": "TWO extra tiers to the striped pyramid base (three stacked striped sections, a stepped pyramid, with "
                           "corner brackets on each)"},
                 "The bottom of the base keeps its size, and the turret with its coil capacitors and twin rails keeps its size and "
                 "shape and rides on top of the taller base"),
-    "bunker": ({"TALL2": "ONE extra row of curved armour plates to its walls (the armoured walls are one plate-row higher, with a "
-                         "riveted band between the rows)",
-                "TALL3": "TWO extra rows of curved armour plates to its walls (three plate-rows with riveted bands between them)"},
-               "The round door stays at the bottom at the same size; the striped roof, the grated vent box and the log beams keep "
-               "their size and shape and ride on top of the taller walls"),
+    "bunker": ({"TALL2": "ONE thick FOUNDATION RING at the bottom: the whole bunker stands on a low, wide, solid ring of riveted "
+                         "stone-and-armour blocks with gold edges, exactly as wide as the bunker, which lifts it up. The curved "
+                         "armour-plate walls stay ONE row high, exactly as in base.png",
+                "TALL3": "TWO thick FOUNDATION RINGS at the bottom, stacked (one more than tier2.png): the whole bunker stands on "
+                         "two low, wide, solid rings of riveted stone-and-armour blocks, exactly as wide as the bunker, which lift "
+                         "it up. Count them: TWO foundation rings. The curved armour-plate walls stay ONE row high, exactly as in "
+                         "base.png"},
+               "It must stay a LOW, WIDE, dug-in bunker, NOT a tall tower, hive or lantern: the walls keep ONE row of curved "
+               "plates, and the roof shape, the grated vent box (NOT bigger), the log beams and the round door in the front wall "
+               "keep exactly the size and shape they have in base.png, riding on top of the foundation"),
 }
 NAME = {b: TOWERS[b]["what"].split(":")[0][4:].lower()} if b in TOWERS else {}   # e.g. "sniper tower"
 if EXTRA:
@@ -277,10 +309,16 @@ if EXTRA:
                    f"(1) Gold: {MAT_WHAT[(b, 'GOLD')]}. The gold must be rich, warm and shiny like block.png, clearly much more "
                    "gold than base.png.\n\n(2) Taller: raise it by adding "
                    if combo == "TALL2" else
+                   "TIER 1, already painted and approved; tier2.png is the new TIER 2 (gold): your tier 3 has the same design "
+                   "with one more section. Make TWO changes to base.png, keeping everything else the same.\n\n"
+                   f"(1) Black diamond: {MAT_T1_BLACK.get(b)}. The black must be deep and glossy with crisp faceted highlights "
+                   "like block.png, the gold only on edges, trims, rims and bolts.\n\n(2) Taller: raise it by adding "
+                   if FROM_T1 else
                    "TIER 2 (gold, already standing taller). Make TWO changes to it, keeping everything else the same.\n\n"
                    f"(1) Black diamond: {MAT_WHAT[(b, 'BLACK')]}. The black must be deep and glossy with crisp faceted highlights "
                    "like block.png, the gold only on edges, trims, rims and bolts.\n\n(2) Taller again: raise it by adding ")
                 + how[combo] + (", so the whole tower is about 30% taller than base.png" if combo == "TALL2" else
+                                ", so the whole tower is about 60% taller than base.png" if FROM_T1 else
                                 " (base.png has TWO stacked sections; the new picture must have THREE, one MORE than base.png: "
                                 "count them), so the whole tower is clearly about 25% taller than base.png. A picture the same "
                                 "height as base.png, with only two sections, is wrong")
@@ -297,7 +335,9 @@ Input 1, frames.png: the OLD Flash {noun}, blown up, on grey ({fr.width}x{fr.hei
 Input 2, ref.png: the old build-menu picture of the same {noun}.
 Input 3, style.png: see style below.
 Input 4, base.png: the approved new picture this one is made from (see above).{'''
-Input 5, block.png: the game's ''' + ('Gold Blocks' if combo == 'TALL2' else 'Black Diamond Blocks') + ''' wall block. Use it ONLY as the colour and material reference for the new material (not its shape).''' if RECOLOUR else ''}
+Input 5, block.png: the game's ''' + ('Gold Blocks' if combo == 'TALL2' else 'Black Diamond Blocks') + ''' wall block. Use it ONLY as the colour and material reference for the new material (not its shape).''' if RECOLOUR else ''}{'''
+Input 6, tier2.png: the new TIER 2 (gold) of this tower, made from base.png. Tier 3 is the same design, one section more.''' if FROM_T1 and combo == 'TALL3' else ''}{'''
+Input ''' + str(7 if combo == 'TALL3' else 6) + ''', growref.png: the RAILGUN's tier 2 (left) and tier 3 (right), from the same game: its striped stepped-pyramid base grows by one step per tier. Grow this tower's base the same way (only its base; do not copy the Railgun's turret).''' if FROM_T1 and b == 'aerial' else ''}
 
 {STYLE}
 
