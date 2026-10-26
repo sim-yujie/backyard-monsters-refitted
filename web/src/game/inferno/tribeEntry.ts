@@ -10,6 +10,7 @@ import {
 import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse } from "@/api/types";
 import type { AttackRoster, AttackTarget, RosterSource } from "@/game/attack/attackTarget";
+import { HOUSING_BUNKER_TYPE } from "@/game/monsters/housing";
 import { InfernoMapScreen } from "@/ui/inferno/InfernoMapScreen";
 import {
   TRIBE_MAP_FAILED,
@@ -53,13 +54,37 @@ export const housesMonsters = (save: Pick<BaseLoadResponse, "monsters">): boolea
 };
 
 /**
+ * The level of the Inferno yard's best finished Housing Bunker, which stands
+ * in for the Flinger in a tribe attack (`GLOBAL.as:836-838`, `_attackersFlinger
+ * = _bHousing._lvl`), as the server's `infernoTribeFlingCapacity` reads it:
+ * one still being built counts for none. 0 with none.
+ */
+export const housingBunkerLevel = (save: Pick<BaseLoadResponse, "buildingdata">): number => {
+  let best = 0;
+  for (const building of Object.values(save.buildingdata ?? {})) {
+    const row = building as { t?: unknown; l?: unknown; cB?: unknown } | null;
+    if (Number(row?.t) !== HOUSING_BUNKER_TYPE) continue;
+    if (typeof row?.cB === "number" && row.cB > 0) continue;
+    const level = Number(row?.l);
+    best = Math.max(best, Number.isFinite(level) && level > 0 ? level : 1);
+  }
+  return best;
+};
+
+/**
  * What a tribe attack is fought with (`controllers/inferno/tribeAttack.ts`):
  * the Inferno yard's Housing Bunker monsters, as the start counted them, at
  * its Infernal Academy's levels; no champion, catapult or siege
  * (`UI_TOP.as:289`, `:296`). The Inferno yard's housing is the source the
  * save sends back. Its loot goes to the Inferno purse, so no storage cap.
+ * One fling carries what the server says a Housing Bunker holds (R11,
+ * `flingercapacity`, Declare War's quarter included), and the Housing
+ * Bunker's level is the Flinger's.
  */
-export const tribeRoster = (start: TribeAttackStart, save: Pick<BaseLoadResponse, "monsters">): AttackRoster => {
+export const tribeRoster = (
+  start: TribeAttackStart,
+  save: Pick<BaseLoadResponse, "monsters" | "buildingdata">,
+): AttackRoster => {
   const monsters: Record<string, number> = {};
   for (const [id, count] of Object.entries(start.army ?? {})) {
     if (typeof count === "number" && count > 0) monsters[id] = count;
@@ -71,7 +96,8 @@ export const tribeRoster = (start: TribeAttackStart, save: Pick<BaseLoadResponse
     monsters,
     levels: { ...(start.attackeracademy ?? {}) },
     champions: [],
-    flingerLevel: 1,
+    flingerLevel: housingBunkerLevel(save),
+    flingCapacity: Math.max(0, Math.floor(Number(start.flingercapacity) || 0)),
     catapultLevel: 0,
     sources,
     siege: null,

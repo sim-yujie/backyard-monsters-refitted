@@ -168,6 +168,13 @@ export const TRIBE_START_FAILED = "The attack could not be started. Try again in
 export const TRIBE_START_OFFLINE = "Could not reach the server to start the attack. Check your connection.";
 
 /**
+ * The army panel's name in a tribe attack: Flash's Inferno word for the
+ * flinger bar (`monster_limit`, `UI_TOP.as:239`), since the Housing Bunkers,
+ * not a Flinger, set what one fling carries.
+ */
+export const ATTACK_FORCE = "Attack Force";
+
+/**
  * What a refused tribe start says (`controllers/inferno/tribeAttack.ts`),
  * and whether the map should be asked again (the tribe moved on, or fell).
  */

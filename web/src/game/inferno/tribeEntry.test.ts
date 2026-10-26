@@ -6,7 +6,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import type { AttackTarget } from "@/game/attack/attackTarget";
 import { combatKind } from "@/game/attack/AttackSession";
 import { resetInfernoMapScreen } from "@/ui/inferno/InfernoMapScreen";
-import { housesMonsters, openInfernoMap, tribeRoster, type TribeEntryDeps } from "./tribeEntry";
+import { housesMonsters, housingBunkerLevel, openInfernoMap, tribeRoster, type TribeEntryDeps } from "./tribeEntry";
 import { TRIBE_MAP_FAILED, TRIBE_NO_MONSTERS } from "./tribeMap";
 
 /**
@@ -47,8 +47,8 @@ const startOf = (baseid: string): TribeAttackStart => ({
   flingercapacity: 780,
 });
 
-const infernoSave = (housed: Record<string, number>): BaseLoadResponse =>
-  ({ baseid: "9001", type: "inferno", monsters: { housed, hid: [] } }) as unknown as BaseLoadResponse;
+const infernoSave = (housed: Record<string, number>, buildingdata: Record<string, unknown> = {}): BaseLoadResponse =>
+  ({ baseid: "9001", type: "inferno", monsters: { housed, hid: [] }, buildingdata }) as unknown as BaseLoadResponse;
 
 const refusal = (reason: string, extra: Record<string, unknown> = {}): ApiError =>
   new ApiError("refused", { status: 409, details: { message: "refused", data: { reason, ...extra } } } as never);
@@ -69,6 +69,24 @@ describe("the tribe army", () => {
       storageCap: null,
     });
     expect(roster.sources).toEqual([{ baseid: "9001", m: { housed: { IC1: 6 }, hid: [] } }]);
+  });
+
+  it("flings what the server says a Housing Bunker holds, with the best finished bunker as the Flinger (WP 2.10)", () => {
+    const yard = infernoSave(
+      { IC1: 6 },
+      {
+        "1": { id: 1, t: 128, l: 2 },
+        "2": { id: 2, t: 128, l: 4 },
+        // Still being built: counts for none, as on the server.
+        "3": { id: 3, t: 128, l: 6, cB: 500 },
+        "4": { id: 4, t: 14, l: 5 },
+      },
+    );
+    const roster = tribeRoster({ ...startOf("216"), flingercapacity: 975 }, yard);
+    expect(roster.flingerLevel).toBe(4);
+    expect(roster.flingCapacity).toBe(975);
+    expect(housingBunkerLevel(infernoSave({}))).toBe(0);
+    expect(housingBunkerLevel(infernoSave({}, { "1": { id: 1, t: 128 } }))).toBe(1);
   });
 
   it("knows housing with nothing in it", () => {

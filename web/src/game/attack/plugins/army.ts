@@ -16,6 +16,7 @@ import { championStance } from "@/api/yardChampion";
 import { ATTACK_PLUGINS, type AttackPlugin } from "@/game/attack/attackPlugins";
 import { bucketFor, type BucketOptions } from "@/game/attack/bucket";
 import type { ChampionStance } from "@/game/combat/rules";
+import { ATTACK_FORCE } from "@/game/inferno/tribeMap";
 import { ArmyPanel } from "@/ui/attack/ArmyPanel";
 
 /** How the drop and army packages differ on a Baiter test (#22, WP3). */
@@ -41,6 +42,8 @@ export const createArmyPlugin =
     const session = mounts.session;
     const panel = new ArmyPanel(bucket, {
       onResize: report,
+      // A Moloch tribe is fought with the Inferno yard's Housing Bunkers (WP 2.10).
+      ...(mounts.target.infernoTribe ? { title: ATTACK_FORCE } : {}),
       // The champion row's Retreat (issue #222).
       onRetreatChampion: (t) => {
         session.retreatChampion(t);

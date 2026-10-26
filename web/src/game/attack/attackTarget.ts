@@ -91,6 +91,13 @@ export interface AttackRoster {
    */
   readonly flingerLevel: number;
   /**
+   * What one fling may carry, when the server set it for this attack: a
+   * Moloch tribe's is a Housing Bunker's load (Inferno R11, `flingercapacity`
+   * of `POST /bm/inferno/attack/start`), a Descent's the Descent flinger's.
+   * Absent: the Map Room 2 flinger's payload (`flingerPayload`).
+   */
+  readonly flingCapacity?: number;
+  /**
    * The attacker's catapult level, 0 when none: the Catapult building's level
    * from the own-yard load, or the save's `catapult` field when that is higher
    * (`attackEntry.ts`, `ownCatapultLevel`).
