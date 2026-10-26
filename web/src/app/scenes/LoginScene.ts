@@ -3,7 +3,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import { unlockInbox } from "@/game/achievements/unlockInbox";
 import { clearTestHistory } from "@/game/baiter/testHistory";
 import { worldChat } from "@/game/chat/chatSession";
-import { CREDITS_URL, PATREON_URL, PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
+import { CREDITS_URL, DISCORD_URL, PATREON_URL, PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
 import { openBugReport } from "@/ui/bugReport/BugReportDialog";
 import { modalLayer } from "@/ui/events/WhatsNewDialog";
 import { Panel } from "@/ui/Panel";
@@ -136,7 +136,7 @@ const termsLine = (): HTMLElement => {
 };
 
 /**
- * The Terms, Privacy, Credits, Patreon and "Report a bug" links under the
+ * The Terms, Privacy, Credits, Patreon, Discord and "Report a bug" links under the
  * sign-in panel. Signed out, the bug report asks for an email and runs the
  * Turnstile check when the build has a site key.
  */
@@ -159,6 +159,8 @@ const footerLinks = (turnstileSiteKey: string): HTMLElement => {
     " · ",
     // An outside site: no referrer, so it does not learn which page sent the player.
     newTabLink(PATREON_URL, "Support us on Patreon", "noopener noreferrer"),
+    " · ",
+    newTabLink(DISCORD_URL, "Discord", "noopener noreferrer"),
     " · ",
     report,
   );
