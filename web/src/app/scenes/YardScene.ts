@@ -48,6 +48,7 @@ import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
+import { openInfernoMap } from "@/game/inferno/tribeEntry";
 import {
   blueprintBlock,
   PlannerAccess,
@@ -227,9 +228,6 @@ export const loadYardFor = (
  * Starter Kits, as Flash's help popup offered them there
  * (`client/scripts/BASE.as:2321-2324`, `newmap_sk_hlp`; outposts WP9).
  */
-/** What the Map button says in the Inferno until its map is built. */
-export const INFERNO_MAP_NOT_YET = "The Inferno map is not open yet. Tap the cave to go back up to your main yard.";
-
 /** The Layout button's tooltip in the Inferno, which has no planner (`BASE.as:1072`). */
 export const NO_PLANNER_IN_INFERNO = "The Inferno has no layout planner";
 
@@ -1750,10 +1748,18 @@ export class YardScene implements Scene {
       context.goTo(SceneName.MAP);
       return;
     }
-    // The Inferno's map (Moloch's tribes, WP 2.x) is not built yet; the
-    // surface map is no way out of the Inferno, whose way up is its cave.
+    // The Inferno's own map, Moloch's tribes (`MAPROOM_INFERNO`, WP 2.9):
+    // no Map Room, and the surface map is no way out of the Inferno.
     if (store.kind === "inferno") {
-      this.notices.show("inferno-map", INFERNO_MAP_NOT_YET, { level: "info", timeoutMs: 5_000 });
+      void openInfernoMap({
+        modal: context.overlay.modal,
+        own: () => store.save,
+        notice: (message) => this.notices.show("inferno-map", message, { level: "warning", timeoutMs: 6_000 }),
+        openAttack: (target) => {
+          setAttackTarget(target);
+          context.goTo(SceneName.ATTACK);
+        },
+      });
       return;
     }
     // An outpost is a Map Room 2 cell: its map is that world, opened on it.

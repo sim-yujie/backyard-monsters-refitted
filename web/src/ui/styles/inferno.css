@@ -387,6 +387,312 @@
   }
 }
 
+/* ── The Inferno map: Moloch's tribes (WP 2.9, `ui/inferno/InfernoMapScreen.ts`) ── */
+
+.inferno-map {
+  width: min(96vw, 56rem);
+}
+
+/* Only the view scrolls; the toggle and Return Home stay in sight. */
+.inferno-map .panel__body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.inferno-map [hidden] {
+  display: none;
+}
+
+/* Flash's Map / List buttons, as Map Room 1's toggle. */
+.inferno-map__toggle {
+  display: flex;
+  align-self: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.inferno-map__toggle-button {
+  height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inferno-map__toggle-button:hover {
+  background: var(--colour-surface-control);
+}
+
+.inferno-map__toggle-button[aria-pressed="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+}
+
+.inferno-map__toggle-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.inferno-map__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.inferno-map__status {
+  margin: 0;
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--colour-text-secondary);
+}
+
+/* The map pans both ways in its window, as Flash's 700 x 385 one did. */
+.inferno-map__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: min(62vh, 34rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.inferno-map__map {
+  position: relative;
+  width: 75rem;
+}
+
+.inferno-map__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Stand-ins for Flash's tribe marker (`WildMonsterBaseInferno_CLIP`, vector
+ * art in `assets.swf`): Moloch's picture in a round frame, the level on it,
+ * the name under it in capitals (`WildMonsterBase.Setup`).
+ */
+.inferno-tribe {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  translate: -50% -50%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text-inverse);
+  font: inherit;
+  cursor: pointer;
+}
+
+.inferno-tribe__frame {
+  position: relative;
+  display: block;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 3px solid var(--colour-danger);
+  border-radius: 50%;
+  background: var(--colour-shade-strong);
+  box-shadow: var(--shadow-float);
+}
+
+.inferno-tribe__portrait {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.inferno-tribe__level {
+  position: absolute;
+  right: -0.5rem;
+  bottom: -0.25rem;
+  min-width: 1.5rem;
+  padding: 0 var(--space-1);
+  border: 2px solid var(--colour-text-inverse);
+  border-radius: var(--radius-pill);
+  background: var(--colour-danger);
+  font: 700 var(--text-sm) / 1.25 var(--font-display);
+  text-align: center;
+}
+
+.inferno-tribe__name,
+.inferno-tribe__back {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--colour-shade-strong);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inferno-tribe__name {
+  text-transform: uppercase;
+}
+
+.inferno-tribe--wrecked .inferno-tribe__frame {
+  filter: grayscale(0.9) brightness(0.55);
+}
+
+.inferno-tribe__back,
+.inferno-card__back,
+.inferno-row__back {
+  font-variant-numeric: tabular-nums;
+}
+
+.inferno-tribe[aria-expanded="true"] .inferno-tribe__frame {
+  outline: 3px solid var(--colour-warning-bright);
+  outline-offset: 2px;
+}
+
+.inferno-tribe:focus-visible {
+  outline: none;
+}
+
+.inferno-tribe:focus-visible .inferno-tribe__frame {
+  box-shadow: var(--focus-ring);
+}
+
+/* The tribe's card (`MapBasePopup`), beside its marker. */
+.inferno-card {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-2);
+  width: 12rem;
+  translate: 2.5rem -50%;
+  padding: var(--space-3);
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+
+.inferno-card--left {
+  translate: calc(-100% - 2.5rem) -50%;
+}
+
+.inferno-card__name,
+.inferno-card__back {
+  margin: 0;
+}
+
+.inferno-card__name {
+  font-weight: 700;
+}
+
+.inferno-card__back {
+  color: var(--colour-text-secondary);
+}
+
+/* The list (`ListView`, `WMListViewItem`): a row per tribe with its own Attack. */
+.inferno-map__list {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 0;
+  max-height: min(62vh, 34rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.inferno-map__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.inferno-map__heading {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.inferno-map__rows {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.inferno-row {
+  display: grid;
+  grid-template-columns: 3.125rem minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+}
+
+.inferno-row__portrait {
+  display: block;
+  width: 3.125rem;
+  height: 3.125rem;
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.inferno-row__words {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.inferno-row__name {
+  font-weight: 700;
+}
+
+.inferno-row__back {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.inferno-row--wrecked .inferno-row__portrait {
+  filter: grayscale(0.9) brightness(0.6);
+}
+
+@media (max-width: 38.75rem) {
+  .inferno-map__map {
+    width: 50rem;
+  }
+
+  .inferno-tribe__frame {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .inferno-card,
+  .inferno-card--left {
+    width: 10rem;
+    translate: -50% 2.75rem;
+  }
+
+  .inferno-card--up {
+    translate: -50% calc(-100% - 2.75rem);
+  }
+
+  .inferno-map__toggle {
+    align-self: stretch;
+  }
+
+  .inferno-map__toggle-button {
+    flex: 1 1 0;
+  }
+}
+
 /* ── Transfer Monsters from the cave (WP 2.6, `INFERNO_ASCENSION_POPUP`) ── */
 
 .ascend-dialog {
