@@ -15,10 +15,11 @@
  * building's isometric origin like every row in `buildingArtData.ts`. Its
  * base stands where the Flash tower's does, so a taller tier grows upward.
  *
- * - **On unless the player asks for the old art** (owner, 26 Oct 2026): the
- *   "Classic building art" switch in Account Settings (`classicBuildingArt`)
- *   brings back the Flash look. The server's matching setting,
- *   `TOWER_TIER_ART` (on by default), sends viewers the tier of someone
+ * - **Off unless asked for** (owner, 26 Oct 2026: not until the turrets
+ *   turn): the towers show only in a browser that turned on their hidden
+ *   switch (`newTowerArt`, `?towers=new`), and the player's "Classic building
+ *   art" choice still wins over it. The server's matching setting,
+ *   `TOWER_TIER_ART` (off by default), sends viewers the tier of someone
  *   else's tower (`buildingArtLevels.ts`).
  * - **A still picture.** The gun, coil or door is painted in, so a tier
  *   ships no animation strips: the turret holds its painted facing in a
@@ -29,15 +30,20 @@
  * - **Shadows** are stand-ins: the silhouette leaned back, flattened and
  *   blurred, as on the sample sheets, until shadows are painted.
  *
- * The Town Hall rides the same switch, so the old art comes back for all of
- * them together: one picture per level (`TOWN_HALL_ART`), each painted from
- * that level's Flash picture (approved 26 Oct 2026, codex-art Part 13), on
- * Flash's own shadow for that level, which fits the same footprint. Flash's
- * Town Hall has no animation strips, so nothing moving is lost.
+ * The Town Hall's new art is the default (owner, 26 Oct 2026): one picture
+ * per level (`TOWN_HALL_ART`), each painted from that level's Flash picture
+ * (approved 26 Oct 2026, codex-art Part 13), on Flash's own shadow for that
+ * level, which fits the same footprint. Flash's Town Hall has no animation
+ * strips, so nothing moving is lost. The player's "Classic building art"
+ * choice in Account Settings (`classicBuildingArt`) brings back the Flash
+ * look for every repainted building, the towers too once they are on.
  */
 
 /** Where this browser keeps the choice of the old (Flash) building art ("1" is on). */
 export const CLASSIC_BUILDING_ART_KEY = "bymr.classicBuildingArt";
+
+/** Where this browser keeps the hidden switch for the new tower art, for testing ("1" is on). */
+export const NEW_TOWER_ART_KEY = "bymr.newTowerArt";
 
 const addressSearch = (): string => {
   try {
@@ -56,30 +62,31 @@ const storage = (): Storage | null => {
 };
 
 /**
- * Whether this page shows the old (Flash) building art: off unless this
- * browser chose it, in Account Settings or with `?towers=classic` in the
- * address (remembered); `?towers=new` goes back to the new art.
+ * Whether this page shows the new tower art: off unless this browser turned
+ * it on. `?towers=new` in the address turns it on and remembers that;
+ * `?towers=classic` turns it off again. Not for players yet: the new
+ * towers' turrets do not turn.
  */
-export const readClassicBuildingArt = (search: string = addressSearch(), store: Storage | null = storage()): boolean => {
+export const readNewTowerArt = (search: string = addressSearch(), store: Storage | null = storage()): boolean => {
   const asked = new URLSearchParams(search).get("towers");
   try {
-    if (asked === "classic") store?.setItem(CLASSIC_BUILDING_ART_KEY, "1");
-    else if (asked === "new") store?.removeItem(CLASSIC_BUILDING_ART_KEY);
-    return asked === "classic" || (asked !== "new" && store?.getItem(CLASSIC_BUILDING_ART_KEY) === "1");
+    if (asked === "new") store?.setItem(NEW_TOWER_ART_KEY, "1");
+    else if (asked === "classic") store?.removeItem(NEW_TOWER_ART_KEY);
+    return asked === "new" || (asked !== "classic" && store?.getItem(NEW_TOWER_ART_KEY) === "1");
   } catch {
     // Site data blocked: the address still decides for this page.
-    return asked === "classic";
+    return asked === "new";
   }
 };
 
-let classicArtOn = readClassicBuildingArt();
+let newTowerArtOn = readNewTowerArt();
 
-/** Whether the old building art is on, read once when the game loads. */
-export const classicBuildingArt = (): boolean => classicArtOn;
+/** Whether the new tower art is on, read once when the game loads. */
+export const newTowerArt = (): boolean => newTowerArtOn;
 
-/** Turns the old building art on or off for this page, without saving it; for tests. */
-export const setClassicBuildingArt = (on: boolean): void => {
-  classicArtOn = on;
+/** Turns the new tower art on or off for this page; for tests. */
+export const setNewTowerArt = (on: boolean): void => {
+  newTowerArtOn = on;
 };
 
 /**
@@ -97,13 +104,27 @@ export const saveClassicBuildingArt = (on: boolean, store: Storage | null = stor
   }
 };
 
-/** The saved choice, as Account Settings shows it; false when site data is blocked. */
+/**
+ * Whether the player chose the old (Flash) building art in Account Settings,
+ * as the dialog shows it and the game reads it at load; false when site data
+ * is blocked.
+ */
 export const savedClassicBuildingArt = (store: Storage | null = storage()): boolean => {
   try {
     return store?.getItem(CLASSIC_BUILDING_ART_KEY) === "1";
   } catch {
     return false;
   }
+};
+
+let classicArtOn = savedClassicBuildingArt();
+
+/** Whether the old building art is on, read once when the game loads. */
+export const classicBuildingArt = (): boolean => classicArtOn;
+
+/** Turns the old building art on or off for this page, without saving it; for tests. */
+export const setClassicBuildingArt = (on: boolean): void => {
+  classicArtOn = on;
 };
 
 /** `[file, offsetX, offsetY]` from the building's origin, as in `ArtImage`. */
@@ -189,10 +210,12 @@ const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_AR
 
 /**
  * The new picture a building shows at `level`, or null with the old art on,
- * below level 1 and for every type without new art.
+ * for a tower while the new tower art is off, below level 1 and for every
+ * type without new art.
  */
 export const tierArtFor = (type: number, level: number): TierArt | null => {
   if (classicArtOn) return null;
+  if (!newTowerArtOn && type in TOWER_TIER_ART) return null;
   let chosen: TierArt | null = null;
   for (const tier of NEW_ART[type] ?? []) {
     if (tier.from > level) break;

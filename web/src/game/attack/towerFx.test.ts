@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { Container, Graphics, Texture, TextureSource, TilingSprite } from "pixi.js";
 import type { Sprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
-import { setClassicBuildingArt } from "@/game/yard/buildingArtTiers";
+import { setClassicBuildingArt, setNewTowerArt } from "@/game/yard/buildingArtTiers";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
@@ -53,13 +53,14 @@ import {
  * per tower class, the Tesla Tower's charge / loop / wind-down, the muzzle
  * heights, and the effects object turning a gun through a stub host.
  *
- * The strips these turn are the Flash towers', so the tests run on the old
- * building art; the new art's towers are still pictures (the repainted-tier
- * test below).
+ * The strips these turn are the Flash towers', the default; the new tower
+ * art's towers are still pictures (the repainted-tier test below).
  */
 
-beforeEach(() => setClassicBuildingArt(true));
-afterEach(() => setClassicBuildingArt(false));
+afterEach(() => {
+  setNewTowerArt(false);
+  setClassicBuildingArt(false);
+});
 
 describe("bearings", () => {
   it("measures from the tower's origin plus (35, 35), +x being 0 and +y being 90", () => {
@@ -202,9 +203,13 @@ describe("towersOf", () => {
   it("gives a repainted tier no gun strip and lifts its muzzle with the picture", () => {
     const yard = yardOf(21);
     yard.buildingdata = { "1": { id: 1, t: 21, l: 7, X: 0, Y: 0 } };
-    // With the old art: the Flash turret, not lifted.
+    // The new tower art is off unless turned on: the Flash turret, not lifted.
     expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
-    // The new art, the default: no strip, and the muzzle stands higher than tier 1's.
+    // The player's old-art choice wins over the switch.
+    setNewTowerArt(true);
+    setClassicBuildingArt(true);
+    expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
+    // The new tower art: no strip, and the muzzle stands higher than tier 1's.
     setClassicBuildingArt(false);
     const [sniper] = towersOf(readYard(yard));
     expect(sniper?.frames).toBe(0);

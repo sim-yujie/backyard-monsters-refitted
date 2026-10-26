@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Container, Texture, TextureSource } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import { readYard } from "@/game/yard/yardModel";
@@ -7,12 +7,6 @@ import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
 import { sheetUrl } from "./monsterSprites";
-import { setClassicBuildingArt } from "@/game/yard/buildingArtTiers";
-
-// These tests turn the Flash towers' gun strips, so they run on the old building art
-// (the new art is the default; buildingArtTiers.test.ts covers it).
-beforeAll(() => setClassicBuildingArt(true));
-afterAll(() => setClassicBuildingArt(false));
 
 /**
  * The building side of the battle layer over a real session (issues #64, #66,

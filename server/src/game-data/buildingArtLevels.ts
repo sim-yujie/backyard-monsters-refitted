@@ -32,10 +32,10 @@ export const BUILDING_ART_LEVELS: Readonly<Record<number, readonly number[]>> = 
  * tiers 2 and 3 from levels 4 and 7, the five-level Monster Bunker's from 3
  * and 5. The Flash towers have one picture for every level.
  *
- * Sent unless `TOWER_TIER_ART=off`. The new tower art is the default in the
- * game (owner, 26 Oct 2026), so a viewer is sent each tower's tier, which its
- * picture shows anyway. With it off every tower reads 1, as in Flash, and a
- * browser on the new art shows someone else's towers as tier 1.
+ * Sent only while `TOWER_TIER_ART=on`. The new tower art is off in the live
+ * game until the owner decides, so by default every tower still reads 1, as
+ * before, and gives nothing more away; a browser with the new art on then
+ * shows someone else's towers as tier 1.
  */
 export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   20: [1, 4, 7],
@@ -47,9 +47,9 @@ export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> 
   118: [1, 4, 7],
 };
 
-/** Whether viewers are sent the tier of someone else's towers: on unless `TOWER_TIER_ART=off`. Read on each call, for tests. */
+/** Whether viewers are sent the tier of someone else's towers: `TOWER_TIER_ART=on`. Read on each call, for tests. */
 export const towerTierArtOn = (env: Record<string, string | undefined> = process.env): boolean =>
-  env.TOWER_TIER_ART?.trim().toLowerCase() !== "off";
+  env.TOWER_TIER_ART === "on";
 
 /**
  * The level whose picture a building at `level` shows: the highest art level

@@ -1,16 +1,19 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ArtState, resolveArt } from "./buildingArt";
 import {
   CLASSIC_BUILDING_ART_KEY,
+  NEW_TOWER_ART_KEY,
   TOWER_TIER_ART,
   TOWN_HALL_ART,
   classicBuildingArt,
-  readClassicBuildingArt,
+  newTowerArt,
+  readNewTowerArt,
   saveClassicBuildingArt,
   savedClassicBuildingArt,
   setClassicBuildingArt,
+  setNewTowerArt,
   tierArtFor,
   tierLift,
 } from "./buildingArtTiers";
@@ -30,30 +33,47 @@ const memoryStore = (): Storage => {
   } as unknown as Storage;
 };
 
-describe("the old-art option", () => {
-  it("is off by default, so the towers and Town Hall show the new art", () => {
-    expect(classicBuildingArt()).toBe(false);
-    expect(readClassicBuildingArt("", memoryStore())).toBe(false);
-    expect(resolveArt(20, 8, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.t3@2x.webp");
-    expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new6@2x.webp");
-    for (const type of TOWERS) expect(tierArtFor(type, 8)).not.toBeNull();
-  });
+const blockedStore = (): Storage =>
+  ({
+    getItem: () => {
+      throw new Error("blocked");
+    },
+    setItem: () => {
+      throw new Error("blocked");
+    },
+    removeItem: () => {
+      throw new Error("blocked");
+    },
+  }) as unknown as Storage;
 
-  it("brings back the Flash art for the page", () => {
+describe("the defaults", () => {
+  it("show the new Town Hall and the Flash towers", () => {
+    expect(classicBuildingArt()).toBe(false);
+    expect(newTowerArt()).toBe(false);
+    expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new6@2x.webp");
+    expect(resolveArt(20, 8, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
+    expect(resolveArt(21, 5, ArtState.DEFAULT)?.anims.length).toBeGreaterThan(0);
+    for (const type of TOWERS) {
+      expect(tierArtFor(type, 8)).toBeNull();
+      expect(tierLift(type, 8)).toBe(0);
+    }
+  });
+});
+
+describe("the old-art option", () => {
+  it("brings back the Flash Town Hall, and the Flash towers even with the tower switch on", () => {
     setClassicBuildingArt(true);
+    setNewTowerArt(true);
     try {
-      expect(resolveArt(20, 8, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
-      expect(resolveArt(21, 5, ArtState.DEFAULT)?.anims.length).toBeGreaterThan(0);
       expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.6.png");
       expect(tierArtFor(14, 6)).toBeNull();
-      for (const type of TOWERS) {
-        expect(tierArtFor(type, 8)).toBeNull();
-        expect(tierLift(type, 8)).toBe(0);
-      }
+      expect(resolveArt(20, 8, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
+      for (const type of TOWERS) expect(tierArtFor(type, 8)).toBeNull();
     } finally {
       setClassicBuildingArt(false);
+      setNewTowerArt(false);
     }
-    expect(resolveArt(20, 1, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.t1@2x.webp");
+    expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new6@2x.webp");
   });
 
   it("is what Account Settings saved, read at the next load", () => {
@@ -62,46 +82,54 @@ describe("the old-art option", () => {
     expect(saveClassicBuildingArt(true, store)).toBe(true);
     expect(store.getItem(CLASSIC_BUILDING_ART_KEY)).toBe("1");
     expect(savedClassicBuildingArt(store)).toBe(true);
-    expect(readClassicBuildingArt("", store)).toBe(true);
     expect(saveClassicBuildingArt(false, store)).toBe(true);
-    expect(readClassicBuildingArt("", store)).toBe(false);
+    expect(savedClassicBuildingArt(store)).toBe(false);
     // Saving does not redraw the page that is open.
     expect(classicBuildingArt()).toBe(false);
   });
 
-  it("turns on with ?towers=classic, is remembered, and goes back with ?towers=new", () => {
+  it("reads as off when site data is blocked, and says it could not save", () => {
+    expect(saveClassicBuildingArt(true, blockedStore())).toBe(false);
+    expect(saveClassicBuildingArt(true, null)).toBe(false);
+    expect(savedClassicBuildingArt(blockedStore())).toBe(false);
+  });
+});
+
+describe("the hidden new tower art switch", () => {
+  it("is off by default", () => {
+    expect(readNewTowerArt("", memoryStore())).toBe(false);
+  });
+
+  it("turns on with ?towers=new, is remembered, and turns off with ?towers=classic", () => {
     const store = memoryStore();
-    expect(readClassicBuildingArt("?towers=classic", store)).toBe(true);
-    expect(store.getItem(CLASSIC_BUILDING_ART_KEY)).toBe("1");
-    expect(readClassicBuildingArt("", store)).toBe(true);
-    expect(readClassicBuildingArt("?towers=new", store)).toBe(false);
-    expect(store.getItem(CLASSIC_BUILDING_ART_KEY)).toBeNull();
-    expect(readClassicBuildingArt("?towers=anything", store)).toBe(false);
+    expect(readNewTowerArt("?towers=new", store)).toBe(true);
+    expect(store.getItem(NEW_TOWER_ART_KEY)).toBe("1");
+    expect(readNewTowerArt("", store)).toBe(true);
+    expect(readNewTowerArt("?towers=classic", store)).toBe(false);
+    expect(store.getItem(NEW_TOWER_ART_KEY)).toBeNull();
+    expect(readNewTowerArt("?towers=anything", store)).toBe(false);
   });
 
   it("still follows the address when site data is blocked", () => {
-    const blocked = {
-      getItem: () => {
-        throw new Error("blocked");
-      },
-      setItem: () => {
-        throw new Error("blocked");
-      },
-      removeItem: () => {
-        throw new Error("blocked");
-      },
-    } as unknown as Storage;
-    expect(readClassicBuildingArt("?towers=classic", blocked)).toBe(true);
-    expect(readClassicBuildingArt("", blocked)).toBe(false);
-    expect(readClassicBuildingArt("?towers=classic", null)).toBe(true);
-    expect(saveClassicBuildingArt(true, blocked)).toBe(false);
-    expect(saveClassicBuildingArt(true, null)).toBe(false);
-    expect(savedClassicBuildingArt(blocked)).toBe(false);
+    expect(readNewTowerArt("?towers=new", blockedStore())).toBe(true);
+    expect(readNewTowerArt("", blockedStore())).toBe(false);
+    expect(readNewTowerArt("?towers=new", null)).toBe(true);
+  });
+
+  it("shows the towers' tiers for the page", () => {
+    setNewTowerArt(true);
+    try {
+      expect(resolveArt(20, 1, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.t1@2x.webp");
+    } finally {
+      setNewTowerArt(false);
+    }
+    expect(resolveArt(20, 1, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
   });
 });
 
 describe("the repainted tower tiers", () => {
-  beforeEach(() => setClassicBuildingArt(false));
+  beforeEach(() => setNewTowerArt(true));
+  afterEach(() => setNewTowerArt(false));
 
   it("cover all seven defensive towers, three tiers each", () => {
     expect(Object.keys(TOWER_TIER_ART).map(Number)).toEqual(TOWERS);
@@ -185,7 +213,6 @@ describe("the repainted tower tiers", () => {
 });
 
 describe("the repainted Town Hall", () => {
-  beforeEach(() => setClassicBuildingArt(false));
 
   it("has its own picture for each of the ten levels, on the server", () => {
     expect(TOWN_HALL_ART.map((level) => level.from)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);

@@ -18,7 +18,7 @@ import { stripCells } from "./yardAnim";
 import { setClassicBuildingArt } from "./buildingArtTiers";
 
 // These tests read the Flash art table, its strips and its files, so they run on the old building art
-// (the new art is the default; buildingArtTiers.test.ts covers it).
+// (the new Town Hall is the default; buildingArtTiers.test.ts covers it).
 beforeAll(() => setClassicBuildingArt(true));
 afterAll(() => setClassicBuildingArt(false));
 

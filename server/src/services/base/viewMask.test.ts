@@ -74,9 +74,9 @@ describe("someone else's yard, only looked at", () => {
   test("each building carries the level its picture needs, not its own", () => {
     const sent = asViewer(yardOf(BaseType.MAIN)).buildingdata as Wire;
 
-    // Towers carry their tier (the new tower art, on by default): levels 4 and 7, so 8 and 9 show 7's.
-    expect(sent["2"]!.l).toBe(7);
-    expect(sent["3"]!.l).toBe(7);
+    // Towers have one picture for every level (the new tower art is off).
+    expect(sent["2"]!.l).toBe(1);
+    expect(sent["3"]!.l).toBe(1);
     // A Twig Snapper's picture changes at 1, 3, 6 and 10; level 8 shows 6's.
     expect(sent["4"]!.l).toBe(6);
     // The Town Hall's picture is its level: nothing more is given away.
@@ -96,39 +96,38 @@ describe("someone else's yard, only looked at", () => {
     const sent = asViewer(yardOf(BaseType.MAIN));
     const buildings = sent.buildingdata as Wire;
     const health = sent.buildinghealthdata as Record<string, number>;
-    const shown = maxHp(SNIPER, 7);
+    const shown = maxHp(SNIPER, 1);
 
     // 30,000 of a level 9 Sniper's 75,500: damaged, under half.
     expect(buildings["3"]!.hp).toBeLessThan(shown / 2);
     expect(buildings["3"]!.hp).toBeGreaterThan(0);
     expect(health["3"]).toBe(buildings["3"]!.hp as number);
     // 80,000 is over a level 8 Cannon's 58,000: full health of the art level.
-    expect(health["2"]).toBe(maxHp(CANNON, 7));
+    expect(health["2"]).toBe(maxHp(CANNON, 1));
   });
 
-  test("TOWER_TIER_ART is on unless set to off", () => {
-    expect(towerTierArtOn({})).toBe(true);
-    expect(towerTierArtOn({ TOWER_TIER_ART: "" })).toBe(true);
-    expect(towerTierArtOn({ TOWER_TIER_ART: "on" })).toBe(true);
+  test("TOWER_TIER_ART is off unless set to on: the new towers are not for players yet", () => {
+    expect(towerTierArtOn({})).toBe(false);
+    expect(towerTierArtOn({ TOWER_TIER_ART: "" })).toBe(false);
     expect(towerTierArtOn({ TOWER_TIER_ART: "off" })).toBe(false);
-    expect(towerTierArtOn({ TOWER_TIER_ART: " OFF " })).toBe(false);
+    expect(towerTierArtOn({ TOWER_TIER_ART: "on" })).toBe(true);
   });
 
-  test("with TOWER_TIER_ART=off, every tower reads 1, as in Flash", () => {
+  test("with TOWER_TIER_ART=on, a tower carries its tier: levels 4 and 7, so 8 and 9 show 7's", () => {
     const before = process.env.TOWER_TIER_ART;
-    process.env.TOWER_TIER_ART = "off";
+    process.env.TOWER_TIER_ART = "on";
     try {
       const sent = asViewer(yardOf(BaseType.MAIN));
       const buildings = sent.buildingdata as Wire;
       const health = sent.buildinghealthdata as Record<string, number>;
-      expect(buildings["2"]!.l).toBe(1);
-      expect(buildings["3"]!.l).toBe(1);
-      // Everything else is as with it on.
+      expect(buildings["2"]!.l).toBe(7);
+      expect(buildings["3"]!.l).toBe(7);
+      // Everything else is as with it off.
       expect(buildings["4"]!.l).toBe(6);
       expect(buildings["1"]!.l).toBe(7);
-      // Health is measured against level 1's full health instead.
-      expect(buildings["3"]!.hp).toBeLessThan(maxHp(SNIPER, 1) / 2);
-      expect(health["2"]).toBe(maxHp(CANNON, 1));
+      // Health is measured against the tier's full health instead.
+      expect(buildings["3"]!.hp).toBeLessThan(maxHp(SNIPER, 7) / 2);
+      expect(health["2"]).toBe(maxHp(CANNON, 7));
     } finally {
       if (before === undefined) delete process.env.TOWER_TIER_ART;
       else process.env.TOWER_TIER_ART = before;

@@ -46,7 +46,7 @@ export const SETTINGS_TEXT = {
   qualityHint: "Low draws fewer sparks and glows, for slower phones. Phones start on Low.",
   artTitle: "Building art",
   classicArtLabel: "Classic building art (original Flash look)",
-  classicArtHint: "Shows the towers and Town Hall as they looked in the original game.",
+  classicArtHint: "Shows repainted buildings, like the Town Hall, as they looked in the original game.",
   classicArtSaved: "Saved. Reload the page to see the change.",
   classicArtFailed: "Could not save this in your browser. Check that site data is allowed.",
 } as const;
@@ -329,9 +329,10 @@ const effectsSection = (): HTMLElement => {
 };
 
 /**
- * Building art: "Classic building art" brings back the Flash towers and Town
- * Hall (the new art is the default, owner 26 Oct 2026). The yard is already
- * drawn, so the choice shows from the next load.
+ * Building art: "Classic building art" brings back the Flash look for every
+ * repainted building (the new art is the default, owner 26 Oct 2026: the Town
+ * Hall now, the towers later). The yard is already drawn, so the choice shows
+ * from the next load.
  */
 const artSection = (): HTMLElement => {
   const section = document.createElement("div");
