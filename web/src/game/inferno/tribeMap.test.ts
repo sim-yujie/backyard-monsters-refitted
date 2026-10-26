@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { InfernoTribeView } from "@/api/inferno";
+import { tribeLandingOf, type InfernoTribeView } from "@/api/inferno";
 import {
   TRIBE_NO_MONSTERS,
   TRIBE_START_FAILED,
   TribeSort,
   TribeState,
+  UNDER_HALL_TYPE,
   respawnDue,
   respawnLeft,
   respawnText,
@@ -12,9 +13,11 @@ import {
   sortTribeRows,
   tribeListName,
   tribeMapName,
+  tribeOutcome,
   tribeRefusal,
   tribeRows,
   tribeSpot,
+  underHallFallen,
 } from "./tribeMap";
 
 /**
@@ -169,5 +172,66 @@ describe("tribeRefusal", () => {
   it("falls back to a plain failure", () => {
     expect(tribeRefusal(null, null, NOW)).toEqual({ text: TRIBE_START_FAILED, refresh: false });
     expect(tribeRefusal("underAttack", null, NOW).text).toMatch(/under attack/);
+  });
+});
+
+describe("the tribe attack's result (WP 2.10)", () => {
+  const yard = {
+    "1": { id: 1, t: UNDER_HALL_TYPE, l: 2 },
+    "2": { id: 2, t: 21, l: 1 },
+  };
+
+  it("is won only once the Under Hall has no health left", () => {
+    expect(underHallFallen(yard, {})).toBe(false);
+    expect(underHallFallen(yard, { "1": 5 })).toBe(false);
+    expect(underHallFallen(yard, { "2": 0 })).toBe(false);
+    expect(underHallFallen(yard, { "1": 0 })).toBe(true);
+    expect(underHallFallen(yard, { "1": -3 })).toBe(true);
+  });
+
+  it("finds the Under Hall by its row key when the row has no id", () => {
+    expect(underHallFallen({ "9": { t: UNDER_HALL_TYPE } }, { "9": 0 })).toBe(true);
+  });
+
+  it("has no Under Hall to fall in a yard without one, or no yard", () => {
+    expect(underHallFallen({ "2": { id: 2, t: 21 } }, { "2": 0 })).toBe(false);
+    expect(underHallFallen(null, { "1": 0 })).toBe(false);
+    expect(underHallFallen(undefined, {})).toBe(false);
+  });
+
+  it("uses Flash's Inferno words for a win and a loss", () => {
+    expect(tribeOutcome(true)).toEqual({
+      title: "Base Destroyed!",
+      outcome: "You have destroyed the Under Hall of this Inferno yard! They won't be bothering you for a while.",
+      tone: "win",
+    });
+    expect(tribeOutcome(false)).toEqual({
+      title: "Attack Ended",
+      outcome: "You failed to destroy the Under Hall of this Inferno Yard, rebuild your monsters and try again.",
+      tone: "lose",
+    });
+  });
+});
+
+describe("tribeLandingOf", () => {
+  const tribe = {
+    won: true,
+    damage: 80,
+    loot: { r1: 10, r2: 0, r3: 0, r4: 0 },
+    lootcredited: { r1: 5, r2: 0, r3: 0, r4: 0 },
+    total: { r1: 105, r2: 0, r3: 0, r4: 0 },
+    respawnat: NOW + 3600,
+  };
+
+  it("reads the save answer's tribe block", () => {
+    expect(tribeLandingOf({ error: 0, tribe })).toEqual(tribe);
+  });
+
+  it("is null for an answer without one, or with a broken one", () => {
+    expect(tribeLandingOf({ error: 0 })).toBeNull();
+    expect(tribeLandingOf(null)).toBeNull();
+    expect(tribeLandingOf({ tribe: null })).toBeNull();
+    expect(tribeLandingOf({ tribe: { ...tribe, won: "yes" } })).toBeNull();
+    expect(tribeLandingOf({ tribe: { ...tribe, lootcredited: null } })).toBeNull();
   });
 });

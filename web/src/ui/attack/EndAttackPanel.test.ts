@@ -186,6 +186,100 @@ describe("EndAttackPanel", () => {
     expect(query(".attack-end__protection").hidden).toBe(true);
   });
 
+  describe("after a Moloch tribe (Inferno WP 2.10)", () => {
+    const tribe = {
+      targetName: "Moloch's Minions",
+      endReason: "destroyed" as const,
+      damagePercent: 100,
+      title: "Attack Ended",
+      outcome: "You failed to destroy the Under Hall of this Inferno Yard, rebuild your monsters and try again.",
+      tone: "lose" as const,
+      inferno: true,
+      infernoTribe: true,
+      loot: { r1: 900, r2: 300, r3: 0, r4: 0 },
+      lootTaken: { r1: 900, r2: 300, r3: 0, r4: 0 },
+    };
+    const mountTribe = () => {
+      const onHome = vi.fn();
+      const onReturn = vi.fn();
+      const host = document.createElement("div");
+      document.body.append(host);
+      const panel = new EndAttackPanel({
+        summary: summary(tribe),
+        home: { label: "Return Home", onHome },
+        onReturn,
+        onRetry: vi.fn(),
+        onLeave: vi.fn(),
+      }).mount(host);
+      const query = <T extends HTMLElement>(selector: string): T => panel.element.querySelector<T>(selector)!;
+      return { panel, query, onHome, onReturn };
+    };
+
+    it("heads with Flash's words, and leaves out the yard-destroyed reason", () => {
+      const { panel, query } = mountTribe();
+      expect(query(".panel__title").textContent).toBe("Attack Ended");
+      expect(query(".attack-end__outcome").textContent).toBe(tribe.outcome);
+      expect(query(".attack-end__reason").hidden).toBe(true);
+      expect(panel.panel.element.classList.contains("attack-end--lose")).toBe(true);
+      panel.close();
+    });
+
+    it("opens Return Home, beside Return to map, only once the result is saved", () => {
+      const { panel, query, onHome, onReturn } = mountTribe();
+      const home = query<HTMLButtonElement>(".attack-end__home");
+      expect(home.textContent).toBe("Return Home");
+      expect(home.nextElementSibling).toBe(query(".attack-end__return"));
+      expect(home.disabled).toBe(true);
+      home.click();
+      expect(onHome).not.toHaveBeenCalled();
+      panel.setFailed({ message: "Could not reach the server to save the result.", canRetry: true });
+      expect(home.disabled).toBe(true);
+      panel.setSaved({});
+      expect(home.disabled).toBe(false);
+      home.click();
+      expect(onHome).toHaveBeenCalledTimes(1);
+      expect(onReturn).not.toHaveBeenCalled();
+      panel.close();
+    });
+
+    it("takes the landed result, says when the tribe is back, and what the full purse turned away", () => {
+      const { panel, query } = mountTribe();
+      panel.setSaved({
+        result: { title: "Base Destroyed!", outcome: "The Under Hall fell.", tone: "win" },
+        credited: { r1: 400, r2: 300, r3: 0, r4: 0 },
+        taken: { r1: 900, r2: 300, r3: 0, r4: 0 },
+        backAt: 1_000 + 3600,
+        now: 1_000,
+      });
+      expect(query(".panel__title").textContent).toBe("Base Destroyed!");
+      expect(query(".attack-end__outcome").textContent).toBe("The Under Hall fell.");
+      expect(panel.panel.element.classList.contains("attack-end--win")).toBe(true);
+      expect(panel.panel.element.classList.contains("attack-end--lose")).toBe(false);
+      const back = query(".attack-end__protection");
+      expect(back.hidden).toBe(false);
+      expect(back.textContent).toBe("Moloch's Minions will be back in 1 h.");
+      const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
+      expect(items.map(spokenText)).toEqual(["Bone 400", "Coal 300", "Sulfur 0", "Magma 0"]);
+      expect(items[0]?.title).toBe("Bone: 400 of 900 taken; the rest did not fit in your storage");
+      expect(query(".attack-end__storage").hidden).toBe(false);
+      expect(query(".attack-end__storage").textContent).toBe("Your Inferno storage was full, so some loot was lost.");
+      panel.close();
+    });
+
+    it("says no comeback while the tribe still stands", () => {
+      const { panel, query } = mountTribe();
+      panel.setSaved({ backAt: null, now: 1_000 });
+      expect(query(".attack-end__protection").hidden).toBe(true);
+      panel.close();
+    });
+  });
+
+  it("has no Return Home outside a tribe attack", () => {
+    const { panel } = mountPanel();
+    expect(panel.element.querySelector(".attack-end__home")).toBeNull();
+    panel.close();
+  });
+
   it("on a failure shows the error with Retry, and Retry re-enters saving", () => {
     const { panel, query, onRetry } = mountPanel();
     panel.setFailed({ message: "Could not reach the server to save the result.", canRetry: true });
