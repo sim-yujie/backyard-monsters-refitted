@@ -1042,6 +1042,8 @@ export interface SiegeSnapshot {
     readonly endsAt: number;
     readonly health: number;
     readonly durability: number;
+    /** The resource its last frame took (1-4), for the balls drawn up it; null when none. */
+    readonly took: number | null;
   } | null;
   /**
    * Every jar still on a tower, its strip included: `health` is null before
@@ -2977,6 +2979,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     health: number;
     sucked: number;
     looted: number;
+    /** The resource its last frame took (1-4), null when it took nothing. */
+    took: number | null;
   } | null = null;
 
   /**
@@ -2989,7 +2993,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const target = yard.buildings.find((building) => VACUUM_TARGET_TYPES.includes(building.type));
     if (!plan || !target || target.hp <= 0) return;
     const cap = vacuumLootCap(target.type, yard.resources);
-    vacuum = { plan, target, droppedAt: tick, cap, health: plan.durability, sucked: 0, looted: 0 };
+    vacuum = {
+      plan,
+      target,
+      droppedAt: tick,
+      cap,
+      health: plan.durability,
+      sucked: 0,
+      looted: 0,
+      took: null,
+    };
   };
 
   /**
@@ -3044,11 +3057,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * a wild monster attack the attacker gets a fifth.
    */
   const suck = (hose: NonNullable<typeof vacuum>, amount: number): void => {
+    hose.took = null;
     if (hose.looted > hose.cap) return;
     const picked = pickStored();
     if (picked === null) return;
     const key = `r${picked}` as keyof ResourceAmounts;
     const taken = vacuumTake(yard.resources[key], amount);
+    if (taken > 0) hose.took = picked;
     yard.resources[key] -= taken;
     defenderLoss[key] += taken;
     const credited = wildMonsterAttack ? Math.trunc(taken / WILD_MONSTER_LOOT_DIVISOR) : taken;
@@ -6187,6 +6202,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       endsAt: vacuum.plan.endsAt,
       health: vacuum.health,
       durability: vacuum.plan.durability,
+      took: vacuum.took,
     },
     jars: [...jars.values()].map((jar) => ({
       buildingId: jar.building.id,

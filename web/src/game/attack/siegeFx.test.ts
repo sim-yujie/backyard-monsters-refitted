@@ -8,6 +8,10 @@ import {
   DECOY_FUSE_LEAD,
   SIEGE_DROP_HEIGHT,
   SIEGE_STRIPS,
+  HOSE_BALL_RISE,
+  HOSE_BALL_SPREAD,
+  HOSE_BALL_TICKS,
+  hoseBallAt,
   SiegeFx,
   decoyCells,
   dropOffset,
@@ -42,6 +46,8 @@ const decoy = {
   explodesAt: 10 * TICKS_PER_SECOND,
   range: 250,
 };
+
+const hose = { buildingId: 1, droppedAt: 100, endsAt: 100 + 30 * TICKS_PER_SECOND, health: 6000, durability: 6000 };
 
 const tower = { worldX: 400, worldY: 300, footprint: [70, 70] as const };
 const hall = { worldX: 600, worldY: 200, footprint: [130, 130] as const };
@@ -111,9 +117,10 @@ describe("SiegeFx", () => {
 
   it("lowers the hose over the Town Hall, fading in, and lifts it away when it lets go", () => {
     const { air, art, fx } = setup();
-    const vacuum = { buildingId: 1, droppedAt: 100, endsAt: 100 + 30 * TICKS_PER_SECOND, health: 6000, durability: 6000 };
+    const vacuum = { ...hose, took: null };
     fx.update({ ...none, active: "vacuum", vacuum }, 100);
-    const root = air.children[0] as Container;
+    // The loot balls' layer first, under the hose.
+    const root = air.children[1] as Container;
     expect(root.x).toBe(hall.worldX);
     expect(root.y).toBeCloseTo(hall.worldY - VACUUM_HOSE_RISE);
     expect(root.alpha).toBe(0);
@@ -134,6 +141,30 @@ describe("SiegeFx", () => {
     expect(root.y).toBeLessThan(hall.worldY - 300);
     fx.update(none, at + VACUUM_LOWER_TICKS);
     expect(fx.shown.hose).toBe(false);
+    expect(air.children).toHaveLength(0);
+  });
+
+  it("sends a ball of what each frame took up from the spout into the nozzle, for a second", () => {
+    const { air, fx } = setup();
+    const balls = air.children.length;
+    fx.update({ ...none, active: "vacuum", vacuum: { ...hose, took: null } }, 100);
+    fx.update({ ...none, active: "vacuum", vacuum: { ...hose, took: null } }, 120);
+    // Nothing taken, nothing drawn.
+    expect(fx.shown.balls).toBe(0);
+    fx.update({ ...none, active: "vacuum", vacuum: { ...hose, took: 3 } }, 130);
+    expect(fx.shown.balls).toBe(5);
+    const stream = air.children[balls] as Container;
+    const first = stream.children[0] as Sprite;
+    const spout = { x: hall.worldX + 1, y: hall.worldY + VACUUM_SPOUT_Y };
+    expect({ x: first.x, y: first.y }).toEqual(hoseBallAt(spout, 122, 8));
+    expect(first.y).toBeLessThan(spout.y);
+    expect(Math.abs(first.x - spout.x)).toBeLessThanOrEqual(HOSE_BALL_SPREAD);
+    // A second later it has risen 200 px and goes; the hose letting go stops new ones.
+    expect(hoseBallAt(spout, 122, HOSE_BALL_TICKS).y).toBeCloseTo(spout.y - HOSE_BALL_RISE);
+    fx.update(none, 122 + HOSE_BALL_TICKS);
+    expect(fx.shown.balls).toBe(4);
+    fx.update(none, 130 + HOSE_BALL_TICKS);
+    expect(fx.shown.balls).toBe(0);
   });
 
   it("drops a jar on each tower, shows the engine's cell, and clears it once gone", () => {

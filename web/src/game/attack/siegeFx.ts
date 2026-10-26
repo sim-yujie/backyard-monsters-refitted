@@ -2,7 +2,15 @@ import { Assets, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import type { SiegeSnapshot } from "@/game/combat/rules/engine";
 import { JAR_FALL_TICKS } from "@/game/combat/rules/jars";
 import { TICKS_PER_SECOND } from "@/game/combat/rules/stats";
-import { VACUUM_HOSE_RISE, VACUUM_LOWER_TICKS, vacuumHoseY } from "@/game/combat/rules/vacuum";
+import {
+  VACUUM_FRAME_TICKS,
+  VACUUM_HOSE_RISE,
+  VACUUM_LOWER_TICKS,
+  VACUUM_SPOUT_Y,
+  vacuumHoseY,
+} from "@/game/combat/rules/vacuum";
+import { packageArt, type CollectFxArt } from "@/game/yard/CollectFxLayer";
+import type { HarvestKey } from "@/game/yard/harvest";
 import type { Point } from "@/game/yard/YardGrid";
 
 /**
@@ -20,7 +28,10 @@ import type { Point } from "@/game/yard/YardGrid";
  *   stacked above it to the top of the map, over the Town Hall. It comes
  *   down from 400 px above to the spout over 2 s, fading in (`Expo.easeOut`,
  *   {@link vacuumHoseY}); when it lets go it goes back up and fades out over
- *   2 s. Both strips step every other tick, Flash's 40 fps.
+ *   2 s. Both strips step every other tick, Flash's 40 fps. Each frame
+ *   it takes loot, a ball of that resource rises from the spout up into the
+ *   nozzle (`ParticleVacuumLoot.as`): that is what fills the 50 px between
+ *   the spout and the nozzle's claws.
  * - The Jars (`BTOWER.ApplyJar`, `:255-322`): one jar per tower, its middle
  *   on the tower's anchor shifted by half its `_middle`, falling 300 px over
  *   1 s (`Expo.easeIn`); the cell the engine names (whole, cracked, more
@@ -64,6 +75,22 @@ export const DECOY_FUSE_LEAD = Math.round(0.5 * TICKS_PER_SECOND);
  * many 97 px lengths clears the top of any yard on screen.
  */
 export const HOSE_PIPES = 30;
+
+/** `ParticleVacuumLoot.Launch`: a ball rises 200 px from the spout over 1 s (`Sine.easeIn`). */
+export const HOSE_BALL_RISE = 200;
+export const HOSE_BALL_TICKS = TICKS_PER_SECOND;
+/** ... starting up to 10 px either side of the spout. */
+export const HOSE_BALL_SPREAD = 10;
+
+/** `Sine.easeIn`. */
+export const sineEaseIn = (t: number): number => 1 - Math.cos((Math.min(1, Math.max(0, t)) * Math.PI) / 2);
+
+/** A ball's place `age` ticks after it left the spout at `spout`; `born` picks its sideways start. */
+export const hoseBallAt = (spout: Point, born: number, age: number): Point => ({
+  // Flash's `Math.random()`, fixed by the tick so a replay draws the same stream.
+  x: spout.x + ((born * 7919) % (2 * HOSE_BALL_SPREAD + 1)) - HOSE_BALL_SPREAD,
+  y: spout.y - HOSE_BALL_RISE * sineEaseIn(age / HOSE_BALL_TICKS),
+});
 
 /** `Expo.easeIn` (`gs/easing/Expo.as`): slow off the mark, fastest at the end. */
 export const expoEaseIn = (t: number): number => {
@@ -175,6 +202,8 @@ export interface SiegeFxHost {
 
 export interface SiegeFxOptions {
   readonly art?: SiegeArt;
+  /** The resource balls sucked up the hose. */
+  readonly balls?: CollectFxArt;
   /** No falls, no hose tween, no blast: each weapon shows where it rests and goes when it goes. */
   readonly reducedMotion?: boolean;
 }
@@ -195,6 +224,11 @@ interface HoseView {
   readonly pipes: Sprite[];
   readonly anchor: Point;
   readonly droppedAt: number;
+  /** The loot balls rising into it, under the hose. */
+  readonly stream: Container;
+  readonly balls: { readonly sprite: Sprite; readonly born: number }[];
+  /** The next frame a ball may leave on. */
+  nextBall: number;
   /** Once it has let go: when, and where it was. */
   gone: { readonly at: number; readonly y: number; readonly alpha: number } | null;
 }
@@ -209,6 +243,7 @@ const stripSprite = (): Sprite => {
 export class SiegeFx {
   private readonly host: SiegeFxHost;
   private readonly art: SiegeArt;
+  private readonly ballArt: CollectFxArt;
   private readonly reducedMotion: boolean;
   private decoy: DecoyView | null = null;
   private hose: HoseView | null = null;
@@ -217,14 +252,16 @@ export class SiegeFx {
   constructor(host: SiegeFxHost, options: SiegeFxOptions = {}) {
     this.host = host;
     this.art = options.art ?? new SiegeSheetTextures();
+    this.ballArt = options.balls ?? packageArt();
     this.reducedMotion = options.reducedMotion ?? false;
   }
 
   /** What is on screen, for tests: the Decoy (or its blast), the hose, the jars. */
-  get shown(): { decoy: "decoy" | "blast" | null; hose: boolean; jars: number } {
+  get shown(): { decoy: "decoy" | "blast" | null; hose: boolean; balls: number; jars: number } {
     return {
       decoy: this.decoy ? (this.decoy.blewAt === null ? "decoy" : "blast") : null,
       hose: this.hose !== null,
+      balls: this.hose?.balls.length ?? 0,
       jars: this.jars.size,
     };
   }
@@ -239,11 +276,11 @@ export class SiegeFx {
   destroy(): void {
     this.decoy?.root.destroy({ children: true });
     this.decoy = null;
-    this.hose?.root.destroy({ children: true });
-    this.hose = null;
+    if (this.hose) this.dropHose(this.hose);
     for (const sprite of this.jars.values()) sprite.destroy();
     this.jars.clear();
     this.art.destroy();
+    this.ballArt.destroy();
   }
 
   /* ── The Decoy ──────────────────────────────────────────────────────── */
@@ -304,10 +341,11 @@ export class SiegeFx {
   private updateHose(vacuum: SiegeSnapshot["vacuum"], tick: number): void {
     let view = this.hose;
     if (vacuum && (!view || view.gone !== null || view.droppedAt !== vacuum.droppedAt)) {
-      view?.root.destroy({ children: true });
+      if (view) this.dropHose(view);
       view = this.newHose(vacuum);
     }
     if (!view) return;
+    this.updateBalls(view, vacuum, tick);
     const elapsed = tick - view.droppedAt;
     if (vacuum) {
       const y = this.reducedMotion ? vacuumHoseY(view.anchor.y, VACUUM_LOWER_TICKS) : vacuumHoseY(view.anchor.y, elapsed);
@@ -321,8 +359,7 @@ export class SiegeFx {
     view.gone ??= { at: tick, y: view.root.y, alpha: view.root.alpha };
     const t = (tick - view.gone.at) / VACUUM_LOWER_TICKS;
     if (this.reducedMotion || t >= 1) {
-      view.root.destroy({ children: true });
-      this.hose = null;
+      this.dropHose(view);
       return;
     }
     const eased = expoEaseOut(t);
@@ -334,6 +371,8 @@ export class SiegeFx {
   private newHose(vacuum: NonNullable<SiegeSnapshot["vacuum"]>): HoseView | null {
     const building = this.host.building(vacuum.buildingId);
     if (!building) return null;
+    const stream = new Container();
+    stream.eventMode = "none";
     const root = new Container();
     root.eventMode = "none";
     root.alpha = 0;
@@ -350,17 +389,57 @@ export class SiegeFx {
       root.addChild(pipe);
       pipes.push(pipe);
     }
-    this.host.air().addChild(root);
+    // Flash's `MAP._RESOURCES` is under `_EFFECTSTOP`: the balls go up into the nozzle.
+    this.host.air().addChild(stream, root);
     const view: HoseView = {
       root,
       end,
       pipes,
       anchor: { x: building.worldX, y: building.worldY },
       droppedAt: vacuum.droppedAt,
+      stream,
+      balls: [],
+      nextBall: vacuum.droppedAt + VACUUM_FRAME_TICKS,
       gone: null,
     };
     this.hose = view;
     return view;
+  }
+
+  /**
+   * `ParticleVacuumLoot`: on each of the hose's frames that took loot, a
+   * ball of what it took leaves the spout; each rises for a second and goes.
+   * None with reduced motion.
+   */
+  private updateBalls(view: HoseView, vacuum: SiegeSnapshot["vacuum"], tick: number): void {
+    const spout = { x: view.anchor.x + 1, y: view.anchor.y + VACUUM_SPOUT_Y };
+    if (vacuum && !this.reducedMotion) {
+      for (; view.nextBall <= tick; view.nextBall += VACUUM_FRAME_TICKS) {
+        if (vacuum.took === null || tick - view.nextBall >= HOSE_BALL_TICKS) continue;
+        const sprite = new Sprite(this.ballArt.dot(`r${vacuum.took}` as HarvestKey));
+        sprite.eventMode = "none";
+        sprite.anchor.set(0.5);
+        view.stream.addChild(sprite);
+        view.balls.push({ sprite, born: view.nextBall });
+      }
+    }
+    for (let index = view.balls.length - 1; index >= 0; index -= 1) {
+      const ball = view.balls[index]!;
+      const age = tick - ball.born;
+      if (age >= HOSE_BALL_TICKS) {
+        ball.sprite.destroy();
+        view.balls.splice(index, 1);
+        continue;
+      }
+      const at = hoseBallAt(spout, ball.born, age);
+      ball.sprite.position.set(at.x, at.y);
+    }
+  }
+
+  private dropHose(view: HoseView): void {
+    view.root.destroy({ children: true });
+    view.stream.destroy({ children: true });
+    if (this.hose === view) this.hose = null;
   }
 
   /* ── The Jars ───────────────────────────────────────────────────────── */

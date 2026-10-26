@@ -104,7 +104,7 @@ describe("siegeOnField", () => {
         {
           ...none,
           active: "vacuum",
-          vacuum: { buildingId: 1, droppedAt: 0, endsAt: 30 * TICKS_PER_SECOND, health: 3000, durability: 6000 },
+          vacuum: { buildingId: 1, droppedAt: 0, endsAt: 30 * TICKS_PER_SECOND, health: 3000, durability: 6000, took: null },
         },
         0,
       ),
