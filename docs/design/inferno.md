@@ -439,7 +439,7 @@ check. Owner screenshots before merge for any screen.
 
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
-| 6.1 | Quake/Magma on the main yard (costs, counts by Under Hall, Descent gate) + build menu | tests + screenshots | 1.3, 1.4, 1.12 | M |
+| 6.1 | Quake/Magma on the main yard (costs, counts by Under Hall, Descent gate) + build menu (done 26 Oct: the Quake Tower, Magma Tower, Siege Factory and Siege Lab are in the main build menu once the cave is at level 5, locked until the Descent is passed (`409 infernoLocked`), counted by the Inferno Under Hall (`409 underHall`, `infernostate.underHall`) and paid from the Inferno purse (`shortfall` with `purse: "inferno"`, reports carry `purse`); the upgrade panel follows the same rules; Spurtz Cannons left out, fortify unchanged, the Yard Planner skips them; report `agent-handoffs/reports/inferno-wp61.md`) | tests + screenshots | 1.3, 1.4, 1.12 | M |
 | 6.2 | Siege weapon data both sides (Decoy, Vacuum, Jars, 10 levels) | golden + sync tests | — | S |
 | 6.3 | Siege Lab + Factory server (build, research, make weapons) | action tests | 6.2, 6.1 | M |
 | 6.4 | Client: Siege Lab/Factory screens | screenshots | 6.3 | M |

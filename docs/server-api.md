@@ -771,7 +771,7 @@ server-only table `inferno_progress` (see §3).
 
 | Method | Path | Middleware | Request fields | Response (`ctx.body`) | Description |
 |---|---|---|---|---|---|
-| GET | `/api/:apiVersion/bm/inferno/state` | apiVersion, verifyUserAuth, verifyAccountStatus | none | `{ error: 0, now, cave: { shown, level, maxLevel: 5 }, emergence: { lastAt, nextAt, done }, descent: { level, destroyed: 0\|1[13], passed }, hasYard, korathNotice }` (unix seconds; `nextAt` 0 = any time, null once all five raids are done) | How far the player is on the way into the Inferno (`controllers/inferno/infernoState.ts`). `cave.shown`: Town Hall 5 or a cave already above level 0, once the tutorial is over (Flash: stage above 200). `descent.level` is Flash's counter, 1 + yards beaten, 14 once passed. `korathNotice`: Korath unlocked and the player not yet told. Read-only. |
+| GET | `/api/:apiVersion/bm/inferno/state` | apiVersion, verifyUserAuth, verifyAccountStatus | none | `{ error: 0, now, cave: { shown, level, maxLevel: 5 }, emergence: { lastAt, nextAt, done }, descent: { level, destroyed: 0\|1[13], passed }, hasYard, korathNotice, underHall }` (unix seconds; `nextAt` 0 = any time, null once all five raids are done) | How far the player is on the way into the Inferno (`controllers/inferno/infernoState.ts`). `cave.shown`: Town Hall 5 or a cave already above level 0, once the tutorial is over (Flash: stage above 200). `descent.level` is Flash's counter, 1 + yards beaten, 14 once passed. `korathNotice`: Korath unlocked and the player not yet told. `underHall` (WP 6.1): the Under Hall level of the player's Inferno yard as last saved, 0 before the Descent is passed (not read then) or with no Inferno yard; the main yard's build menu counts its Inferno buildings by it (see "Inferno buildings in the main yard" under "Yard actions"). Read-only. |
 | POST | `/api/:apiVersion/bm/inferno/attack/start` | apiVersion, verifyUserAuth, verifyAccountStatus, logRequest | `{ kind: "descent", baseid: "201"-"213" }` | `{ error: 0, kind: "descent", yardkind: "inferno", attackid, descentyard, level, base, defenderforces, attackerbrains, attackeracademy, attackerranks?, attpowerups, flingercapacity, descentloot }` | Starts a Descent attack (`controllers/inferno/descentAttack.ts`, WP 1.11): see "Moloch's Descent" below. Refused with `409` `infernoAttackRefusedErr` (`reason`: `kindNotReady` for any other `kind`, `caveClosed` below cave level 5, `descentPassed`, `notDescentBase`, `notNextBase` with `next` = the yard that can be attacked) before anything is written. |
 | POST | `/api/:apiVersion/bm/inferno/load` | apiVersion, verifyUserAuth, verifyAccountStatus | none (own yard only; no base id is read) | the Inferno yard's save fields (as `/base/load` filters them: `buildingdata`, `buildinghealthdata`, …) plus `{ error: 0, id, baseid, currenttime, credits, resources: { r1, r2, r3, r4, r1max, r2max, r3max, r4max } }` | Loads the caller's Inferno yard (`controllers/inferno/infernoLoad.ts`, `services/inferno/infernoLoad.ts`, WP 1.14). Under the yard row's lock the harvesters catch up from `savetime` (else `createtime`) to now at the Inferno table's rates (`catchUpHarvesters` with kind `inferno`): each fills its own buffer `st` and stops when full, as in Flash; nothing goes into the purse until it is banked (WP 1.16). Skipped while the yard is attacked. `resources` is the purse, the main save's `iresources` (Bone, Coal, Sulfur, Magma), answered as stored (Descent loot can sit above the cap), with one cap for all four: 10,000 plus each finished Resource Pod's Inferno capacity, times the Inferno yard's own Improved Packing Skills (its `storedata.BIP`, as Flash reads the loaded yard's store data, `BASE.as:1082`; `BASE.as:4705-4828`). `credits` is the shared Shiny. Refused with `409` `reason: "noInfernoYard"` when the main save names no Inferno yard of the caller's (none is made here; the 13th Descent win makes it). |
 
@@ -1555,6 +1555,35 @@ The `baseid` of the caller's own Inferno yard (the main save's `baseid_inferno`)
   purchase lands in the Inferno row's own `storedata` (its own ladders: the main yard's workers and
   packing do not count there, nor its purchases on the main yard's), and is paid from the player's
   Shiny, shared with the surface.
+
+#### Inferno buildings in the main yard (`docs/design/inferno.md` §2.9, WP 6.1)
+
+The Quake Tower (129), Magma Tower (132), Siege Factory (133) and Siege Lab (134) on the **main
+yard** (`services/yard/surfaceInferno.ts`; Flash `BASE.isInfernoBuilding` less the two Spurtz
+Cannons, which this project leaves out). `build`, `build/cancel`, `build/instant`, `upgrade`,
+`upgrade/cancel`, `upgrade/instant` and `recycle` treat them so:
+
+- **The Descent.** Building one before the Descent is passed (or with the new Inferno switched
+  off) is refused `409 { reason: "infernoLocked" }` ("You must capture an Inferno base before you
+  can construct Inferno buildings in your Main Yard.", Flash `inferno_building_requirement`).
+  Upgrades do not check it (Flash `CanUpgrade` reads only the step's `re`).
+- **The Under Hall.** The hall that counts is the player's Inferno Under Hall, not the Town Hall:
+  the level of the Under Hall in their Inferno yard's row as last saved (`readUnderHall`), 0 with
+  no Inferno yard. `quantity[]` is read at that level, and every step's `re` holds the Under Hall
+  entry `[999, 1, 1]`, met by that level. None at all, or an entry it does not reach, is
+  `409 { reason: "underHall", underHall: { have, need } }` ("Under Hall Level N required."). The
+  Siege Factory's `re` also holds the Siege Lab (`409 requirements`, as any `re`).
+- **The purse.** They cost Bone, Coal, Sulfur and Magma from the main save's `iresources`
+  (`BASE.Charge`/`BASE.Fund` with the Inferno flag), not the surface pool. Too little is
+  `409 { reason: "shortfall", shortfall: { r1..r4 }, purse: "inferno" }` ("You do not have enough
+  Inferno resources for that."): `r1..r4` there are Bone, Coal, Sulfur, Magma. Cancels and
+  recycling give back to the purse up to its caps (the rest is lost; `recycle`'s `lost` says how
+  much). The instant routes price in Shiny from the same cost rows, as for any building.
+- **Answers.** The `report` of `build`, `build/cancel`, `upgrade`, `upgrade/cancel` and `recycle`
+  for these types adds `purse: { r1, r2, r3, r4, caps: { r1, r2, r3, r4 } }`, the purse after the
+  action, and the answer's slices add `iresources`. Other buildings' reports are unchanged.
+- **Not covered.** Fortify is unchanged for these types; the Yard Planner cannot see the Under
+  Hall, so its Apply skips them.
 
 **Errors** use the Yard Planner's flat shape, not the global `errorDetails` envelope: the real
 HTTP status and `{ error: "<message for the player>", reason: "<key>", ...detail }`. `400` means
