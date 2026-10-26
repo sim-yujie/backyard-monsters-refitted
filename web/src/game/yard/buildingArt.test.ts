@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import manifest from "../../../test/fixtures/building-art-files.json";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
@@ -15,6 +15,12 @@ import {
   stripCrop,
 } from "./buildingArt";
 import { stripCells } from "./yardAnim";
+import { setClassicBuildingArt } from "./buildingArtTiers";
+
+// These tests read the Flash art table, its strips and its files, so they run on the old building art
+// (the new Town Hall is the default; buildingArtTiers.test.ts covers it).
+beforeAll(() => setClassicBuildingArt(true));
+afterAll(() => setClassicBuildingArt(false));
 
 /**
  * The art table against the art that is actually on the game server.

@@ -23,7 +23,7 @@ Every page carries structured data (JSON-LD, built from `src/data/schema.ts`) de
 
 ## Settings
 
-`src/config.ts` holds every outside link (game, Patreon, Privacy, Terms). `discordUrl` is empty for now: paste the invite there and the Discord buttons appear.
+`src/config.ts` holds every outside link (game, Patreon, Privacy, Terms). `discordUrl` is the community invite; set it to `""` and every Discord button and link is hidden.
 
 ## Images
 

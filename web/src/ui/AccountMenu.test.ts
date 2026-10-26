@@ -307,6 +307,23 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
+  describe("the Join the Discord item", () => {
+    it("is always there, after Report a bug, and opens the invite in a new tab", () => {
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onReportBug: vi.fn() });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLAnchorElement>(".account-menu__discord")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("Join the Discord");
+      expect(item.getAttribute("href")).toBe("https://discord.gg/wthryBRZHz");
+      expect(item.target).toBe("_blank");
+      expect(item.rel).toBe("noopener noreferrer");
+      expect(item.previousElementSibling?.classList.contains("account-menu__report-bug")).toBe(true);
+      item.addEventListener("click", (event) => event.preventDefault());
+      item.click();
+      expect(menu.open).toBe(false);
+    });
+  });
 });
 
 /**

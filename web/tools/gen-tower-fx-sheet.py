@@ -4,7 +4,10 @@ The paintings come from the image model (Antigravity, prompt in
 tower-fx-kit/prompt.txt): one greyscale effect on flat green each, in
 tower-fx-kit/src/fxNN_name.(png|jpg). Each is unmixed from its green, trimmed,
 centred and shrunk into a 192 px cell of server/public/assets/fx/tower-fx.png,
-four across, in the order shotFx.ts reads them. The game tints them in code.
+four across, in the order shotFx.ts reads them (after the first twelve: the
+flak cloud and shrapnel spray, fx23-fx24, then the Sniper's rifle flash, hit
+spray and dirt kick and the flak tower's shell, fireball and muzzle blast,
+fx26 and fx29-fx33). The game tints them in code.
 
 A painting not made yet is stood in for by another one, reworked, until it is
 painted: see STAND_INS.
@@ -12,8 +15,11 @@ painted: see STAND_INS.
 Under the cells go the strips, 384 x 96, two across, which the game lays along
 a line: the six painted lightning bolts (tower-fx-kit/src/fxNN_boltN.png), each
 bolt's bright core (the bolt worn down to its middle, so it follows the same
-zigzag thinner), the ray (the beam painting, trimmed to its glow) and the
-streak (a lens-flare flash, tower-fx-kit/src/fx19_streak.*).
+zigzag thinner), the ray (the beam painting, trimmed to its glow), the
+streak (a lens-flare flash, tower-fx-kit/src/fx19_streak.*), the Sniper's
+bullet (its hot head and shock cone and fading tail, fx27_bullet.*) and its
+vapour trail (fx28_vapour.*). fx22_brake and fx25_tracer, the Sniper's first
+flash and tracer, are no longer laid on the sheet.
 
 Beside the sheet go the flows, which the game repeats end to end along a beam
 and slides along it: the laser's plasma (fx20_energy.*) and the railgun's
@@ -38,12 +44,18 @@ PREVIEW = os.path.join(HERE, "tower-fx-kit", "preview.png")
 
 CELL = 192
 ACROSS = 4
-ORDER = ["glow", "flare", "muzzle", "spark", "burst", "zap", "smoke", "wisp", "ring", "orb", "beam", "scorch"]
+ORDER = [
+    "glow", "flare", "muzzle", "spark", "burst", "zap", "smoke", "wisp", "ring", "orb", "beam", "scorch",
+    "flak", "shrapnel", "rifleflash", "ricochet", "debris", "shell", "fireball", "aaflash",
+]
+# The darkest a cell's grey may be: the Sniper's rifle flash and ricochet are laid over the
+# ground tinted orange, and their dark greys turned the orange brown. Alpha and shape are kept.
+LIFT = {"rifleflash": 0.45, "ricochet": 0.5}
 # Cells that keep their painting's size in the cell rather than filling it.
 FILL = 0.92
 STRIP_W, STRIP_H, STRIP_ACROSS = 384, 96, 2
 BOLTS = [f"bolt{n}" for n in range(1, 7)]
-STRIPS = BOLTS + [f"core{n}" for n in range(1, 7)] + ["ray", "streak"]
+STRIPS = BOLTS + [f"core{n}" for n in range(1, 7)] + ["ray", "streak", "bullet", "vapour"]
 FLOWS = ["energy", "helix"]
 FLOW_W, FLOW_H = 512, 64
 # Share of a flow's length blended from one end into the other.
@@ -176,6 +188,9 @@ def cell(name: str) -> tuple[Image.Image, str]:
         rgba = as_light(soften_edge(rgba))
     if how:
         rgba = rework(rgba, how)
+    if name in LIFT:
+        floor = LIFT[name]
+        rgba[..., :3] = floor + (1 - floor) * rgba[..., :3]
     inner = int(CELL * FILL)
     img = Image.fromarray((shrink(rgba, inner) * 255).round().astype(np.uint8), "RGBA")
     framed = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
@@ -218,7 +233,9 @@ def core_of(rgba: np.ndarray) -> np.ndarray:
 
 
 def strip(name: str) -> tuple[Image.Image, str]:
-    source = {"ray": "beam", "streak": "streak"}.get(name, name.replace("core", "bolt"))
+    source = {"ray": "beam", "streak": "streak", "bullet": "bullet", "vapour": "vapour"}.get(
+        name, name.replace("core", "bolt")
+    )
     path = painting(source)
     turned = False
     if path is None and source in BOLT_STAND_INS:

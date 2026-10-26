@@ -3,6 +3,7 @@ import { BaseMode } from "@/api/types";
 import {
   BLUEPRINT_NEEDS_PLANNER,
   BLUEPRINT_NOT_IN_OUTPOSTS,
+  BLUEPRINT_PLANNER_BUILDING,
   blueprintBlock,
   hasYardPlanner,
   PlannerAccess,
@@ -15,7 +16,7 @@ import {
 
 /** A yard holding one building of each given type. */
 const yardOf = (...types: number[]) => ({
-  buildings: types.map((type, index) => ({ id: index + 1, type })),
+  buildings: types.map((type, index) => ({ id: index + 1, type, level: 1 })),
 });
 
 /** Town hall, a cannon tower and a wall: a yard with no Yard Planner. */
@@ -27,6 +28,14 @@ describe("hasYardPlanner", () => {
     expect(hasYardPlanner(WITH)).toBe(true);
     expect(hasYardPlanner(WITHOUT)).toBe(false);
     expect(hasYardPlanner({ buildings: [] })).toBe(false);
+  });
+
+  /** Owner report 2026-10-26: a Yard Planner still being built (level 0) does not count. */
+  it("does not count a Yard Planner that is still being built", () => {
+    const building = { buildings: [{ type: 14, level: 1 }, { type: YARD_PLANNER_TYPE, level: 0 }] };
+    expect(hasYardPlanner(building)).toBe(false);
+    expect(blueprintBlock(building)).toBe(BLUEPRINT_PLANNER_BUILDING);
+    expect(blueprintBlock({ ...building, kind: "outpost" })).toBe(BLUEPRINT_NOT_IN_OUTPOSTS);
   });
 });
 
