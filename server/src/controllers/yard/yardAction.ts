@@ -24,6 +24,7 @@ import { moveMushroomsOffBuildings } from "../../services/yard/mushrooms.js";
 import { outpostCarryover, outpostProblems } from "../../services/yard/outpostYard.js";
 import { infernoView, poolView } from "../../services/yard/poolView.js";
 import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
+import { syncInfernoCap } from "../../services/inferno/infernoLoad.js";
 import {
   notInInfernoErr,
   notInOutpostErr,
@@ -636,6 +637,9 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx });
       applyOutcome(save, user, outcome);
+      // A Resource Pod built, finished or recycled moves the main yard's
+      // Inferno caps (`syncInfernoCap`).
+      if (yard.inferno) syncInfernoCap(yard.main, yard.inferno);
       moveMushroomsOffBuildings(save);
       // An instant or paid repair shows on the map now, not at the next catch-up (#182 B).
       catchUpDamage(save);

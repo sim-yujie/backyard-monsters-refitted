@@ -8,7 +8,12 @@ import { noInfernoYardErr } from "../../errors/errors.js";
 import { postgres } from "../../server.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
-import { infernoPurse, infernoStorageCap, type InfernoPurse } from "../../services/inferno/infernoLoad.js";
+import {
+  infernoPurse,
+  infernoStorageCap,
+  syncInfernoCap,
+  type InfernoPurse,
+} from "../../services/inferno/infernoLoad.js";
 import { catchUpYard } from "../../services/yard/catchUp.js";
 import { visibleCredits } from "../../services/user/shinyLock.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
@@ -52,15 +57,24 @@ const lockInfernoYard = async (em: EntityManager, main: Save, user: User): Promi
 export const loadInfernoYard = async (em: EntityManager, user: User, now: number): Promise<InfernoLoadBody> => {
   await em.populate(user, ["save"]);
   const main = user.save;
-  if (!main) throw noInfernoYardErr();
+  if (!main || !(Number(main.baseid_inferno) > 0)) throw noInfernoYardErr();
 
-  const yard = await em.transactional(async (tx) => {
-    const locked = await lockInfernoYard(tx, main, user);
+  const { yard, purse } = await em.transactional(async (tx) => {
+    // The main row first, as the yard actions lock them: the main yard's
+    // Inferno caps are written into its `iresources` below.
+    const lockedMain =
+      (await tx.findOne(
+        Save,
+        { basesaveid: main.basesaveid },
+        { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }
+      )) ?? main;
+    const locked = await lockInfernoYard(tx, lockedMain, user);
     if (!isAttackActive(locked)) {
       catchUpYard(locked, now);
+      syncInfernoCap(lockedMain, locked);
       await tx.flush();
     }
-    return locked;
+    return { yard: locked, purse: lockedMain.iresources };
   });
 
   const cap = infernoStorageCap(yard);
@@ -72,7 +86,7 @@ export const loadInfernoYard = async (em: EntityManager, user: User, now: number
     currenttime: now,
     // Shiny is the player's, shared with the main yard.
     credits: visibleCredits(user, Number(main.credits) || 0),
-    resources: infernoPurse(main.iresources, cap),
+    resources: infernoPurse(purse, cap),
   };
 };
 

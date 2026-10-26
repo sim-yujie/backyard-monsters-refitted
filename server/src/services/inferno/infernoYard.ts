@@ -7,6 +7,7 @@ import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
+import { syncInfernoCap } from "./infernoLoad.js";
 
 /**
  * The player's Inferno yard, made by the server when the 13th Descent yard
@@ -74,6 +75,8 @@ export const createInfernoYard = async (em: EntityManager, user: User, main: Sav
   yard.worldid = main.worldid;
   yard.credits = 0;
   main.baseid_inferno = parseInt(baseid, 10);
+  // The main yard's Inferno caps: 70,000 with the two start pods.
+  syncInfernoCap(main, yard);
   user.infernosave = yard;
 
   em.persist(yard);

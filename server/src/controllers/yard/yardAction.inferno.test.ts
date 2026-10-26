@@ -160,7 +160,16 @@ const inInferno = (action: YardAction<z.ZodType, unknown>, body: Row = {}) =>
 const mainSave = () => db.rows.get(MAIN)!;
 const infernoSave = () => db.rows.get(INFERNO)!;
 const buildings = (row: Row) => row.buildingdata as Record<string, Row>;
-const purse = () => mainSave().iresources as Record<string, number>;
+/** The purse's amounts; its caps are {@link caps}. */
+const purse = () => {
+  const { r1max: _r1, r2max: _r2, r3max: _r3, r4max: _r4, ...amounts } = mainSave().iresources as Record<string, number>;
+  return amounts;
+};
+/** The main yard's Inferno caps, as the main save's `iresources` holds them. */
+const caps = () => {
+  const { r1max, r2max, r3max, r4max } = mainSave().iresources as Record<string, number>;
+  return { r1max, r2max, r3max, r4max };
+};
 const body = (answer: YardAnswer) => answer.body as Row & { report: Row };
 
 /** The Inferno table's step, as `r1`..`r4`. */
@@ -199,7 +208,14 @@ describe("which yard a request acts on", () => {
     expect(answer.status).toBe(200);
     expect(db.locked).toEqual([MAIN, INFERNO]);
     const state = body(answer);
-    expect(state.resources).toEqual(PURSE);
+    // The purse, with the caps the action wrote for the main yard (`syncInfernoCap`).
+    expect(state.resources).toEqual({
+      ...PURSE,
+      r1max: START_CAP,
+      r2max: START_CAP,
+      r3max: START_CAP,
+      r4max: START_CAP,
+    });
     expect(state.caps).toEqual({ r1: START_CAP, r2: START_CAP, r3: START_CAP, r4: START_CAP });
     expect(state.workers).toEqual({ total: 1, busy: 0 });
     expect(answer.outpost).toBeNull();
@@ -377,6 +393,13 @@ describe("recycling in the Inferno", () => {
     expect(purse().r1).toBe(START_CAP);
   });
 
+  test("a Resource Pod recycled lowers the main yard's Inferno caps", async () => {
+    const answer = await inInferno(yardRecycleAction, { id: 4 });
+    expect(answer.status).toBe(200);
+    const one = 10_000 + siloCapacity(3, "inferno");
+    expect(caps()).toEqual({ r1max: one, r2max: one, r3max: one, r4max: one });
+  });
+
   test("the Under Hall cannot be recycled", async () => {
     const answer = await inInferno(yardRecycleAction, { id: 1 });
     expect(answer.status).toBe(409);
@@ -453,6 +476,16 @@ describe("the catch-up an Inferno action runs", () => {
     expect(st).toBeGreaterThanOrEqual(10 * bone.produce[0]!);
     expect(st).toBeLessThanOrEqual(11 * bone.produce[0]!);
     // Nothing banked: the purse waits for the bank (WP 1.16).
+    expect(purse()).toEqual(PURSE);
+  });
+
+  test("a Resource Pod it finishes raises the main yard's Inferno caps", async () => {
+    const pods = infernoStartBuildingData() as unknown as Record<string, Row>;
+    pods["6"] = { id: 6, t: 6, l: 0, X: 200, Y: 200, cB: 5, cL: 5 };
+    db.rows.set(INFERNO, infernoRow({ savetime: now() - 100, buildingdata: pods }));
+    await inInferno(yardStateAction);
+    const three = START_CAP + siloCapacity(1, "inferno");
+    expect(caps()).toEqual({ r1max: three, r2max: three, r3max: three, r4max: three });
     expect(purse()).toEqual(PURSE);
   });
 });

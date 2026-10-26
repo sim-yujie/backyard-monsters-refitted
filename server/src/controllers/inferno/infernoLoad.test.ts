@@ -33,7 +33,7 @@ const em = {
   },
   findOne: async (_entity: unknown, where: Record<string, unknown>, options?: { lockMode?: unknown }) => {
     calls.push(`findOne ${JSON.stringify(where)}${options?.lockMode === undefined ? "" : " locked"}`);
-    return yardRow;
+    return "basesaveid" in where ? mainRow : yardRow;
   },
   flush: async () => {
     calls.push("flush");
@@ -200,6 +200,7 @@ describe("loading the Inferno yard", () => {
     expect(calls).toEqual([
       "populate",
       "transaction",
+      `findOne {"basesaveid":${MAIN_BASESAVEID}} locked`,
       `findOne {"baseid":"${YARD_BASEID}"} locked`,
       "flush",
     ]);
@@ -211,6 +212,28 @@ describe("loading the Inferno yard", () => {
     expect((body.buildingdata as BuildingDataMap)["2"]!.st).toBe(20);
     expect(body.resources).toEqual(infernoPurse(mainRow.iresources as never, 70_000));
     expect(body.credits).toBe(40);
+  });
+
+  test("writes the Inferno cap into the main save's iresources, the amounts kept", async () => {
+    await loadInfernoYard(em as never, user(), NOW);
+    expect(mainRow.iresources).toEqual({
+      r1: 5_000,
+      r2: 250_000,
+      r3: 0,
+      r4: 12,
+      r1max: 70_000,
+      r2max: 70_000,
+      r3max: 70_000,
+      r4max: 70_000,
+    });
+
+    // A third pod finished since: the main yard's caps follow.
+    const pods = infernoStartBuildingData();
+    pods["6"] = { id: 6, t: 6, l: 3, X: 200, Y: 0 } as unknown as BuildingData;
+    yardRow = freshYard({ buildingdata: pods });
+    await loadInfernoYard(em as never, user(), NOW);
+    expect((mainRow.iresources as Record<string, number>).r1max).toBe(100_000);
+    expect((mainRow.iresources as Record<string, number>).r4max).toBe(100_000);
   });
 
   test("a yard under attack is answered as it is, not caught up", async () => {

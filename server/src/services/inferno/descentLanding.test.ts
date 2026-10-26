@@ -499,7 +499,17 @@ describe("the 13th win: the Descent is passed", () => {
     ]);
     expect(userSave.baseid_inferno).toBe(Number(NEW_YARD_BASEID));
     // The purse holds what the Descent looted; it is the Inferno yard's to spend.
-    expect(userSave.iresources).toEqual({ r1: 3010, r2: 2010, r3: 1010, r4: 510 });
+    // Its caps are the new yard's: 10,000 plus two level 3 pods (`syncInfernoCap`).
+    expect(userSave.iresources).toEqual({
+      r1: 3010,
+      r2: 2010,
+      r3: 1010,
+      r4: 510,
+      r1max: 70_000,
+      r2max: 70_000,
+      r3max: 70_000,
+      r4max: 70_000,
+    });
     expect(achieved.mock.calls[0]![2]).toEqual({ descent: 14 });
   });
 

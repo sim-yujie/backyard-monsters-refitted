@@ -37,6 +37,29 @@ export const infernoStorageCap = (yard: {
 }): number =>
   storageCap({ type: BaseType.INFERNO, buildingdata: yard.buildingdata, storedata: yard.storedata });
 
+/**
+ * Writes the Inferno cap into the main save's `iresources` (`r1max`..`r4max`),
+ * the amounts and anything else kept. The main yard reads its Inferno caps
+ * from there: the surface Quake Tower's build gate, the surface refunds and the
+ * siege builds (`services/yard/siege.ts` `capsOf`), as Flash's main yard read
+ * `_iresources.rNmax` as last saved (`BASE.as:910-913`, `:2723-2734`). Called
+ * wherever the Inferno yard's pods may have moved: when it is made, when it
+ * loads and after each action on it. Leaves the row untouched (no new object)
+ * when the caps already match.
+ *
+ * @param main - The owner's main save, locked by the caller.
+ * @param yard - The Inferno yard.
+ */
+export const syncInfernoCap = (
+  main: { iresources?: JsonObject | null },
+  yard: Parameters<typeof infernoStorageCap>[0]
+): void => {
+  const cap = infernoStorageCap(yard);
+  const purse = main.iresources ?? {};
+  if (purse.r1max === cap && purse.r2max === cap && purse.r3max === cap && purse.r4max === cap) return;
+  main.iresources = { ...purse, r1max: cap, r2max: cap, r3max: cap, r4max: cap };
+};
+
 /** The purse as the Inferno yard shows it: `r1`..`r4` and their caps. */
 export interface InfernoPurse {
   r1: number;
