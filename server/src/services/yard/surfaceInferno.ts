@@ -82,11 +82,27 @@ export const readInfernoStanding = async (
 ): Promise<InfernoStanding> => {
   if (!infernoConfig.enabled) return NO_INFERNO_STANDING;
   const progress = await readInfernoProgress(em, userid);
-  const descentPassed = progress.descentPassedAt !== null;
+  return {
+    descentPassed: progress.descentPassedAt !== null,
+    underHall: await readUnderHall(em, userid, progress, main),
+  };
+};
+
+/**
+ * The Under Hall level of the player's Inferno yard, as last saved; 0 with
+ * none. The load answer's `infernostate.underHall` reads it too, so the build
+ * menu counts by the same hall.
+ */
+export const readUnderHall = async (
+  em: EntityManager,
+  userid: number,
+  progress: { infernoBaseid: string | null },
+  main: { baseid_inferno?: number | null }
+): Promise<number> => {
   const baseid = progress.infernoBaseid ?? (Number(main.baseid_inferno) > 0 ? String(main.baseid_inferno) : null);
-  if (!baseid) return { descentPassed, underHall: 0 };
+  if (!baseid) return 0;
   const yard = await em.findOne(Save, { baseid, type: BaseType.INFERNO, userid });
-  return { descentPassed, underHall: yard ? underHallLevelOf(yard.buildingdata) : 0 };
+  return yard ? underHallLevelOf(yard.buildingdata) : 0;
 };
 
 /**

@@ -47,7 +47,7 @@ import { unseenAchievements } from "../../../services/achievements/record.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { catchUpOwnerOutpost, catchUpOwnerYard } from "../../yard/yardRoute.js";
-import { infernoLoadState } from "../../inferno/infernoState.js";
+import { infernoLoadState, underHallOnceDescended } from "../../inferno/infernoState.js";
 import { emergenceOnLoad, type EmergenceOnLoad } from "../../../services/inferno/emergenceOnLoad.js";
 import type { CompletedJob } from "../../../services/yard/catchUp.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
@@ -246,6 +246,7 @@ export const baseLoad: KoaController = async (ctx) => {
   let notifications: number | undefined;
   let trojanNew = false;
   let emergence: EmergenceOnLoad | undefined;
+  let underHall: number | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
     // The catch-up also counts this load as one more session towards the
     // next wild monster raid, in the same write (`catchUpOwnerYard`, #226),
@@ -268,6 +269,8 @@ export const baseLoad: KoaController = async (ctx) => {
     // before the raid starts. After the raid cancel above, so a raid this load
     // cancelled does not hold it back.
     emergence = await emergenceOnLoad(postgres.em, user.userid, baseSave, getCurrentDateTime());
+    // The Under Hall the main yard's Inferno buildings count by (WP 6.1).
+    underHall = emergence && (await underHallOnceDescended(postgres.em, user.userid, emergence.progress, baseSave));
   } else if (
     type === BaseMode.BUILD &&
     isOwner &&
@@ -527,7 +530,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(trojanNew && { trojanNew: true }),
     // The cave and Moloch's emergence (docs/design/inferno.md §3.2), with
     // `raised` when this load set its next raid going.
-    ...(emergence && { infernostate: infernoLoadState(emergence, baseSave, getCurrentDateTime()) }),
+    ...(emergence && { infernostate: infernoLoadState(emergence, baseSave, getCurrentDateTime(), underHall) }),
     ...(isOwner && {
       chatenabled: 1,
       chattoken,

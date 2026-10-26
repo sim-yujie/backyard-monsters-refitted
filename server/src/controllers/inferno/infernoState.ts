@@ -13,6 +13,7 @@ import {
 } from "../../services/inferno/infernoProgress.js";
 import { emergenceWarningGroups, type EmergenceWarningGroup } from "../../services/inferno/emergenceRaid.js";
 import { raidView, type RaidView } from "../../services/raids/raidFlow.js";
+import { readUnderHall } from "../../services/yard/surfaceInferno.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -50,16 +51,23 @@ export interface InfernoStateBody {
   };
   /** Whether the player has captured their Inferno yard. */
   hasYard: boolean;
+  /**
+   * Their Inferno yard's Under Hall level, 0 with none or before the Descent
+   * is passed: the hall the main yard's Quake and Magma Towers, Siege
+   * Factory and Lab count by (WP 6.1).
+   */
+  underHall: number;
   /** Korath is unlocked and the player has not been told yet (owner I10). */
   korathNotice: boolean;
 }
 
-/** The answer, from the player's progress and main yard. Pure. */
+/** The answer, from the player's progress, main yard and Under Hall level. Pure. */
 export const infernoStateAnswer = (
   progress: InfernoProgressRecord,
   main: CaveSave | null | undefined,
   now: number,
-  skipTutorial?: boolean
+  skipTutorial?: boolean,
+  underHall = 0
 ): InfernoStateBody => {
   const destroyed = Array.from({ length: DESCENT_YARDS }, (_, index): number => (progress.descentDestroyed[index] ? 1 : 0));
   const passed = progress.descentPassedAt !== null;
@@ -79,16 +87,29 @@ export const infernoStateAnswer = (
       passed,
     },
     hasYard: progress.infernoBaseid !== null,
+    underHall,
     korathNotice: progress.korathUnlockedAt !== null && progress.korathNoticeAt === null,
   };
 };
 
-/** Reads what the answer needs: the player's progress and their main yard. */
+/**
+ * Reads what the answer needs: the player's progress, their main yard and,
+ * once the Descent is passed, their Under Hall.
+ */
 export const readInfernoState = async (em: EntityManager, user: User, now: number): Promise<InfernoStateBody> => {
   await em.populate(user, ["save"]);
   const progress = await readInfernoProgress(em, user.userid);
-  return infernoStateAnswer(progress, user.save ?? null, now);
+  const underHall = await underHallOnceDescended(em, user.userid, progress, user.save ?? {});
+  return infernoStateAnswer(progress, user.save ?? null, now, undefined, underHall);
 };
+
+/** The Under Hall level once the Descent is passed; 0 before, without a read. */
+export const underHallOnceDescended = async (
+  em: EntityManager,
+  userid: number,
+  progress: InfernoProgressRecord,
+  main: { baseid_inferno?: number | null }
+): Promise<number> => (progress.descentPassedAt !== null ? readUnderHall(em, userid, progress, main) : 0);
 
 export const infernoState: KoaController = async (ctx) => {
   requireInfernoEnabled();
@@ -103,16 +124,18 @@ export const infernoState: KoaController = async (ctx) => {
  * Moloch's raid for that level as the raid routes know it, with `groups`, its
  * army one group at a time for the warning screen (WP 1.9; the game starts it
  * with `/raid/start` once the earthquake and the warning have played), or null.
+ * `underHall` is read by the caller ({@link underHallOnceDescended}).
  */
 export const infernoLoadState = (
   emergence: EmergenceOnLoad,
   main: CaveSave,
-  now: number
+  now: number,
+  underHall = 0
 ): Omit<InfernoStateBody, "error"> & {
   raised: number | null;
   raid: (RaidView & { groups: EmergenceWarningGroup[] }) | null;
 } => {
-  const { error: _error, ...state } = infernoStateAnswer(emergence.progress, main, now);
+  const { error: _error, ...state } = infernoStateAnswer(emergence.progress, main, now, undefined, underHall);
   const raid = emergence.raid ? { ...raidView(emergence.raid), groups: emergenceWarningGroups(emergence.raid) } : null;
   return { ...state, raised: emergence.raised, raid };
 };

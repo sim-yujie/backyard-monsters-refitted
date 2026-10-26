@@ -76,6 +76,8 @@ describe("the Inferno state answer", () => {
     expect(body.descent.level).toBe(14);
     expect(body.descent.passed).toBe(true);
     expect(body.hasYard).toBe(true);
+    expect(body.underHall).toBe(0);
+    expect(infernoStateAnswer(passed, yard(5), NOW, false, 3).underHall).toBe(3);
   });
 
   test("Korath's notice is due once unlocked and not yet told", () => {
@@ -136,6 +138,12 @@ describe("the load answer's infernostate", () => {
     const state = infernoLoadState({ progress: NO_INFERNO_PROGRESS, raised: null, notDue: "tooSoon", raid: null }, yard(5), NOW);
     expect(state.raised).toBeNull();
     expect(state.raid).toBeNull();
+    expect(state.underHall).toBe(0);
+  });
+
+  test("carries the Under Hall level the caller read", () => {
+    const state = infernoLoadState({ progress: NO_INFERNO_PROGRESS, raised: null, notDue: "tooSoon", raid: null }, yard(5), NOW, 2);
+    expect(state.underHall).toBe(2);
   });
 });
 
