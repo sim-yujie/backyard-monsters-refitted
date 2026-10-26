@@ -1,3 +1,4 @@
+import { siegeData, type SiegeId } from "../game-rules/combat/siege.js";
 import type { TribeCounterName } from "../services/onboarding/state.js";
 
 /**
@@ -5,10 +6,14 @@ import type { TribeCounterName } from "../services/onboarding/state.js";
  * (`client/scripts/QUESTS.as`, `setupMainQuests`) with Flash's exact rewards,
  * less the quests for features the web does not have, plus three new ones.
  *
- * Flash has 85 quests. Kept: 65. Dropped: C0, C1 and C8 (`block: true`, never
- * paid), EM1 (the Radio Tower), SW4-SW12 (no Siege Factory or Siege Lab), FAN,
- * INVITE1/5/10 and GA1-GA3 (Facebook). New: N1-N3, rewards PLACEHOLDER
- * (decision Q7 of 2026-10-01).
+ * Flash has 85 quests. Kept: 74. Dropped: C0, C1 and C8 (`block: true`, never
+ * paid), EM1 (the Radio Tower), FAN, INVITE1/5/10 and GA1-GA3 (Facebook).
+ * New: N1-N3, rewards PLACEHOLDER (decision Q7 of 2026-10-01).
+ *
+ * SW4-SW12, the siege weapon quests (`QUESTS.as:1384-1580`), came back with
+ * the Chaos Lab and Factory (Inferno WP 6.8): shown only while the new
+ * Inferno is on ({@link GoalDef.inferno}), each paying one weapon made in the
+ * Factory ({@link GoalDef.siege}).
  *
  * The kept entries were read out of `QUESTS.as` by a script: `order`,
  * `reward` (Flash's fifth slot, Shiny, is 0 on every kept quest), `prereq`,
@@ -43,7 +48,9 @@ export type GoalCondition =
   /** The staged raid watched (D1: `onboarding.raidSeen`). */
   | { kind: "raid" }
   /** A layout saved in the Yard Planner (`save.savetemplate`). */
-  | { kind: "layout" };
+  | { kind: "layout" }
+  /** A siege weapon researched to `level` or more in the Chaos Lab (`siege_<id>_level`, `SiegeLab.as:68`). */
+  | { kind: "siegeLevel"; weapon: SiegeId; level: number };
 
 /** Resources a goal pays: twigs, pebbles, putty, goo. */
 export interface GoalReward {
@@ -67,7 +74,36 @@ export interface GoalDef {
   readonly condition: GoalCondition;
   /** Hidden on Map Room 2 (WM1-WM4, decision Q9): their tribes are Map Room 1's. */
   readonly mapRoom1Only?: boolean;
+  /**
+   * One weapon the claim makes in the Chaos Factory (`siegeweapon_reward`,
+   * `siegeweapon_rewardcount` 1 on every SW quest), which needs a Factory
+   * built, idle and holding none (`QUESTS.as:1772-1777`).
+   */
+  readonly siege?: SiegeId;
+  /** Shown only while the new Inferno is on (`INFERNO_ENABLED`): the SW quests. */
+  readonly inferno?: true;
 }
+
+/**
+ * One of SW4-SW12 (`QUESTS.as:1384-1580`): research `weapon` to `level`,
+ * named by Flash's `q_unlockweapon_*` (level 1) or `q_upgradeweapon_*` with
+ * the weapon's Flash name as `#v1#`. Flash's listed reward is all 0; the
+ * weapon is the reward.
+ */
+const siegeGoal = (id: string, order: number, weapon: SiegeId, level: number, prereq: string): GoalDef => {
+  const name = siegeData(weapon)!.name;
+  return {
+    id,
+    order,
+    name: level === 1 ? `Unlock ${name}` : `Upgrade ${name}`,
+    description: level === 1 ? `Unlock the ${name} weapon.` : `Upgrade the ${name} weapon to Level ${level}.`,
+    reward: { r1: 0, r2: 0, r3: 0, r4: 0 },
+    prereq,
+    condition: { kind: "siegeLevel", weapon, level },
+    siege: weapon,
+    inferno: true,
+  };
+};
 
 const LIST: readonly GoalDef[] = [
   {
@@ -646,6 +682,16 @@ const LIST: readonly GoalDef[] = [
     reward: { r1: 0, r2: 0, r3: 0, r4: 10_000 },
     condition: { kind: "champion", type: 3, level: 1 },
   },
+  // Flash pushes these after its list (`QUESTS.as:1384`), so they follow its goals of the same order.
+  siegeGoal("SW4", 59, "decoy", 1, "C16"),
+  siegeGoal("SW5", 60, "vacuum", 1, "C16"),
+  siegeGoal("SW6", 61, "jars", 1, "C16"),
+  siegeGoal("SW7", 62, "decoy", 5, "SW4"),
+  siegeGoal("SW8", 63, "vacuum", 5, "SW5"),
+  siegeGoal("SW9", 64, "jars", 5, "SW6"),
+  siegeGoal("SW10", 65, "decoy", 10, "SW7"),
+  siegeGoal("SW11", 66, "vacuum", 10, "SW8"),
+  siegeGoal("SW12", 67, "jars", 10, "SW9"),
   // New goals (§6.1, decision Q7): rewards PLACEHOLDER.
   {
     id: "N1",

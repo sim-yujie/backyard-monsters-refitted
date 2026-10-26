@@ -25,6 +25,13 @@ export interface GoalMonsters {
   count: number;
 }
 
+/** A siege weapon reward (SW4-SW12): one weapon made in the Chaos Factory. */
+export interface GoalSiege {
+  id: string;
+  name: string;
+  count: number;
+}
+
 /** One goal as `goals/state` sends it; goals the player cannot see yet are not sent. */
 export interface GoalView {
   id: string;
@@ -33,12 +40,16 @@ export interface GoalView {
   description: string;
   reward: UpgradeCost;
   monsters?: GoalMonsters;
+  siege?: GoalSiege;
   status: "open" | "ready" | "claimed";
   /** Marked claimed when Goals arrived, without a reward. */
   baseline?: true;
   /** A counting goal's figures, while open. */
   progress?: { have: number; need: number };
-  /** A ready goal with monsters: whether Housing has room for them all now. */
+  /**
+   * A ready goal with monsters: whether Housing has room for them all now;
+   * with a siege weapon: whether the Chaos Factory can take it now.
+   */
   room?: boolean;
 }
 
@@ -54,6 +65,10 @@ export interface GoalClaimReport {
   /** What the cap turned away. */
   overflow: UpgradeCost;
   monsters?: { id: string; count: number };
+  /** The siege weapon made in the Chaos Factory. */
+  siegeReward?: { id: string; count: number };
+  /** Every weapon's record after a siege reward (merged by `siegeSlices`). */
+  siege?: Record<string, { level: number; quantity: number }>;
   points: number;
 }
 
@@ -62,7 +77,8 @@ export const goalsState = (): Promise<YardResponse<GoalsStateReport>> =>
 
 /**
  * Pays one goal. Refusals: 400 `unknownGoal`; 409 `alreadyClaimed`,
- * `goalHidden`, `notMet`, `mapRoom3`, `housing { monster, count, need, free }`.
+ * `goalHidden`, `notMet`, `mapRoom3`, `housing { monster, count, need, free }`,
+ * `siegeRoom { weapon }`.
  */
 export const claimGoal = (id: string): Promise<YardResponse<GoalClaimReport>> =>
   post<YardResponse<GoalClaimReport>>(`${GOALS_PATH}/claim`, { id });

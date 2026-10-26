@@ -1,3 +1,4 @@
+import { infernoConfig } from "../../config/InfernoConfig.js";
 import { GOALS, type GoalCondition, type GoalDef } from "../../game-data/goals.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
@@ -5,6 +6,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import type { Onboarding } from "../onboarding/state.js";
 import { readLayouts } from "../yardplanner/layoutStorage.js";
 import { levelOf } from "../yardplanner/costs.js";
+import { siegeStock } from "../yard/siege.js";
 
 /**
  * Whether each goal is met, shown and claimable (`docs/design/tutorial.md`
@@ -30,6 +32,8 @@ export interface GoalSave {
   champion?: unknown;
   savetemplate?: unknown[] | null;
   mapversion?: number | null;
+  /** The siege weapons, `{ [id]: { level, quantity } }`, written only by the siege routes. */
+  siege?: JsonObject | null;
 }
 
 /** How far along a counting goal is: "3 / 5". */
@@ -40,7 +44,7 @@ export interface GoalProgress {
 
 /** Where a goal stands for one player. */
 export type GoalStatus =
-  /** Not shown: its prereq is not claimed, or it is a Map Room 1 goal on Map Room 2. */
+  /** Not shown: its prereq is not claimed, a Map Room 1 goal on Map Room 2, or an Inferno goal with the Inferno off. */
   | "hidden"
   /** Shown, not met yet. */
   | "open"
@@ -116,6 +120,8 @@ export const conditionMet = (
       return onboarding.raidSeen !== undefined;
     case "layout":
       return readLayouts(save.savetemplate).length > 0;
+    case "siegeLevel":
+      return siegeStock(save.siege, condition.weapon).level >= condition.level;
   }
 };
 
@@ -131,8 +137,12 @@ export const goalMet = (goal: GoalDef, save: GoalSave, onboarding: Onboarding): 
 const onMapRoom1 = (save: GoalSave): boolean =>
   save.mapversion !== MapRoomVersion.V2 && save.mapversion !== MapRoomVersion.V3;
 
-/** Shown to this player: prereq claimed, and not a Map Room 1 goal off Map Room 1. */
+/**
+ * Shown to this player: prereq claimed, not a Map Room 1 goal off Map Room 1,
+ * and not an Inferno goal (SW4-SW12) while the new Inferno is off.
+ */
 export const goalVisible = (goal: GoalDef, save: GoalSave, onboarding: Onboarding): boolean =>
+  (!goal.inferno || infernoConfig.enabled) &&
   (!goal.mapRoom1Only || onMapRoom1(save)) &&
   (goal.prereq === undefined || isClaimed(onboarding, goal.prereq));
 

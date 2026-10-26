@@ -421,7 +421,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * yard-state field (that shape is frozen), so the store patches them from
  * the two places they ride: each `completed` entry of kind `siege` (`detail:
  * { building, level, quantity }`) and a siege route's `report`, whose
- * `siege` and `purse` are the weapons and the purse after it. A build,
+ * `siege` and `purse` are the weapons and the purse after it (a goal claim
+ * that made a weapon, SW4-SW12, reports `siege` with its `siegeReward`). A build,
  * upgrade, cancel or recycle of a main-yard Inferno building reports the
  * `purse` too (Inferno WP 6.1), so any report's `purse` is taken.
  */
@@ -443,7 +444,8 @@ export const siegeSlices = (
   }
 
   const slices: Pick<BaseLoadResponse, "siege" | "iresources"> = {};
-  if (isRecord(report) && (report["site"] === "lab" || report["site"] === "factory")) {
+  const site = isRecord(report) ? report["site"] : undefined;
+  if (isRecord(report) && (site === "lab" || site === "factory" || isRecord(report["siegeReward"]))) {
     const weapons = report["siege"];
     if (isRecord(weapons)) {
       for (const weapon of SIEGE_WEAPON_DATA) {

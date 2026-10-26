@@ -50,6 +50,14 @@ export interface GoalsPanelOptions {
 export const monstersText = (count: number, name: string): string =>
   `${formatAmount(count)} ${count === 1 ? name : `${name}s`}`;
 
+/** A siege weapon reward as Flash's reward popup listed it: "1 Marilyn Monstroe" (`QUESTS.as:1846-1847`). */
+export const siegeText = (count: number, name: string): string => `${formatAmount(count)} ${name}`;
+
+/** Flash's words when the Chaos Factory cannot take a goal's weapon (`msg_quest_noroomsiegeweapon`). */
+export const SIEGE_ROOM_NOTE =
+  "You cannot collect this reward now. You may need to build a Chaos Factory first. " +
+  "Otherwise, your Chaos Factory is building a Chaos Weapon, or currently has one stored.";
+
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className: string,
@@ -77,7 +85,18 @@ const monsterChip = (goal: GoalView): HTMLElement | null => {
   return chip;
 };
 
-/** The reward as listed: "icon 2,000 icon 2,000", and the monsters. */
+/** The siege weapon reward (SW4-SW12): its siege button picture and "1 Marilyn Monstroe". */
+const siegeChip = (goal: GoalView): HTMLElement | null => {
+  if (!goal.siege) return null;
+  const chip = el("span", "goals-monsters goals-siege");
+  const image = el("img", "goals-monsters__image");
+  image.src = `/assets/siegebuttons/${goal.siege.id}.png`;
+  image.alt = "";
+  chip.append(image, el("span", "goals-monsters__text", siegeText(goal.siege.count, goal.siege.name)));
+  return chip;
+};
+
+/** The reward as listed: "icon 2,000 icon 2,000", the monsters, the siege weapon. */
 const rewardRow = (goal: GoalView): HTMLElement => {
   const row = el("div", "goals-reward");
   for (const key of REWARD_KEYS) {
@@ -85,6 +104,8 @@ const rewardRow = (goal: GoalView): HTMLElement => {
   }
   const monsters = monsterChip(goal);
   if (monsters) row.append(monsters);
+  const siege = siegeChip(goal);
+  if (siege) row.append(siege);
   return row;
 };
 
@@ -111,6 +132,9 @@ export const claimButton = (goal: GoalView, figure: ClaimFigure | undefined): HT
   }
   if (goal.monsters) {
     amounts.append(el("span", "goals-claim__amount", `+${monstersText(goal.monsters.count, goal.monsters.name)}`));
+  }
+  if (goal.siege) {
+    amounts.append(el("span", "goals-claim__amount", `+${siegeText(goal.siege.count, goal.siege.name)}`));
   }
   if (amounts.childElementCount > 0) button.append(amounts);
   if (figure?.capped) button.append(el("span", "goals-claim__full", " (storage full)"));
@@ -199,7 +223,7 @@ export class GoalsPanel {
     row.dataset["goal"] = goal.id;
     this.head(goal, row);
     const button = claimButton(goal, view.figures.get(goal.id));
-    const noRoom = goal.monsters !== undefined && goal.room === false;
+    const noRoom = (goal.monsters !== undefined || goal.siege !== undefined) && goal.room === false;
     button.disabled = view.claiming !== null || noRoom;
     if (view.claiming === goal.id) button.classList.add("goals-claim--busy");
     button.addEventListener("click", () => this.options.onClaim(goal, button));
@@ -212,6 +236,8 @@ export class GoalsPanel {
           `Make room in Housing for ${monstersText(goal.monsters.count, goal.monsters.name)}`,
         ),
       );
+    } else if (noRoom && goal.siege) {
+      row.append(el("p", "goals-row__note", SIEGE_ROOM_NOTE));
     }
     if (view.refusal?.id === goal.id) {
       const note = el("p", "goals-row__note goals-row__note--refused", view.refusal.message);

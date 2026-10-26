@@ -199,6 +199,39 @@ describe("Claim", () => {
     door.destroy();
   });
 
+  it("a siege weapon reward (SW4-SW12) says it waits in the Chaos Factory", async () => {
+    const store = storeOf(1);
+    const { mounts, notices } = mountsOf(store);
+    const sw4: GoalView = {
+      ...goal("SW4", "ready"),
+      reward: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      siege: { id: "decoy", name: "Marilyn Monstroe", count: 1 },
+      room: true,
+    };
+    const actions = actionsOf([sw4]);
+    actions.claim.mockResolvedValueOnce(
+      ok<GoalClaimReport>({
+        id: "SW4",
+        credited: { r1: 0, r2: 0, r3: 0, r4: 0 },
+        overflow: { r1: 0, r2: 0, r3: 0, r4: 0 },
+        siegeReward: { id: "decoy", count: 1 },
+        points: 0,
+      }),
+    );
+    const door = new GoalsDoor(mounts, actions);
+    door.toggle();
+    await settle();
+    document.querySelector<HTMLButtonElement>(".goals-claim")!.click();
+    await settle();
+    expect(actions.claim).toHaveBeenCalledWith("SW4");
+    expect(notices.show).toHaveBeenCalledWith(
+      "goals",
+      "Marilyn Monstroe is built and waiting in your Chaos Factory.",
+      expect.objectContaining({ level: "info" }),
+    );
+    door.destroy();
+  });
+
   it("nothing flies without a point to throw from", () => {
     const fx = { throwGrant: vi.fn(), cancelBank: vi.fn() };
     const hud = { expectBank: vi.fn(), hold: vi.fn(), deliver: vi.fn(), showChange: vi.fn() };

@@ -27,7 +27,8 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  *   as Collect all's do (`bankShow.ts`); the server's answer corrects the
  *   totals, and a refusal takes the balls back. Monster rewards show a notice
  *   and walk into Housing from the yard's edge (`walkIntoHousing`, the
- *   guided start's walk-in).
+ *   guided start's walk-in). A siege weapon (SW4-SW12) shows a notice; the
+ *   answer's `siege` puts it in the save (`siegeSlices`).
  * - **Guide.** Opening the panel emits `screen` ("goals") and closing it
  *   `screenClosed`, for the guided start's last step and the tips.
  *
@@ -221,6 +222,13 @@ export class GoalsDoor {
           this.walkIn = walkIntoHousing(renderer, store.yard, monsters.id, monsters.count, release);
           if (!this.walkIn) release();
         }
+      }
+      // A siege weapon (SW4-SW12) waits in the Chaos Factory for the next attack.
+      if (result.report.siegeReward && goal.siege) {
+        notices.show(GOALS_NOTICE, `${goal.siege.name} is built and waiting in your Chaos Factory.`, {
+          level: "info",
+          timeoutMs: 5_000,
+        });
       }
       // The claimed goal leaves the list now; the next read reveals what its claim opened.
       this.goals = (this.goals ?? []).map((one) => (one.id === goal.id ? { ...one, status: "claimed" } : one));

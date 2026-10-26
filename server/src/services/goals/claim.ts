@@ -1,10 +1,12 @@
 import { GOALS, goalById, type GoalDef, type GoalReward } from "../../game-data/goals.js";
+import { siegeData, type SiegeId } from "../../game-rules/combat/siege.js";
 import { hatchCost, housingSpace, monsterEntry } from "../../game-data/monsterCatalogue.js";
 import type { Save } from "../../database/models/save.model.js";
 import { updateOnboarding, type Onboarding } from "../onboarding/state.js";
 import { fitCredit } from "../yard/credit.js";
 import { academyLevels, freeHousing, isMapRoom3Monsters } from "../yard/hatchery.js";
 import { levelOf, readHoused } from "../yard/production.js";
+import { siegeRewardRoom, siegeView, withRewardWeapon, type SiegeStock } from "../yard/siege.js";
 import { yardBadRequestErr, yardRefusedErr } from "../yard/yardErrors.js";
 import type { ResourceAmounts } from "../yardplanner/costs.js";
 import {
@@ -35,7 +37,10 @@ import {
  * room** (Q10): the claim is refused unless Housing takes all of them.
  * **Points** as Flash's `QUESTS.CollectB` gave them: `ceil(value / 50)`,
  * `value` the listed reward plus each monster's hatch cost
- * (`client/scripts/QUESTS.as:1784-1816`).
+ * (`client/scripts/QUESTS.as:1784-1816`). **A siege weapon reward**
+ * (SW4-SW12) needs room in the Chaos Factory, as Flash's `hasRoom`
+ * (`QUESTS.as:1772-1777`): the claim is refused unless a Factory is built,
+ * making nothing and holding nothing.
  */
 
 /** One monster reward as the panel shows it. */
@@ -43,6 +48,13 @@ export interface GoalMonsters {
   id: string;
   name: string;
   count: number;
+}
+
+/** A siege weapon reward as the panel shows it: always one weapon. */
+export interface GoalSiege {
+  id: SiegeId;
+  name: string;
+  count: 1;
 }
 
 /** One goal as `goals/state` sends it. Hidden goals are not sent. */
@@ -53,11 +65,15 @@ export interface GoalView {
   description: string;
   reward: GoalReward;
   monsters?: GoalMonsters;
+  siege?: GoalSiege;
   status: "open" | "ready" | "claimed";
   /** Marked claimed by the baseline, without a reward. */
   baseline?: true;
   progress?: GoalProgress;
-  /** For a ready goal with monsters: whether Housing has room for all of them now. */
+  /**
+   * For a ready goal with monsters: whether Housing has room for all of them
+   * now; with a siege weapon: whether the Chaos Factory can take it now.
+   */
   room?: boolean;
 }
 
@@ -75,9 +91,18 @@ export interface GoalClaimReport {
   overflow: ResourceAmounts;
   /** Monsters housed. */
   monsters?: { id: string; count: number };
+  /** The siege weapon made in the Chaos Factory. */
+  siegeReward?: { id: SiegeId; count: 1 };
+  /** Every weapon's record after a siege reward, as the siege routes report it. */
+  siege?: Record<SiegeId, SiegeStock>;
   /** Empire points awarded. */
   points: number;
 }
+
+/** Flash's refusal when the Factory cannot take the weapon (`msg_quest_noroomsiegeweapon`). */
+export const SIEGE_ROOM_MESSAGE =
+  "You cannot collect this reward now. You may need to build a Chaos Factory first. " +
+  "Otherwise, your Chaos Factory is building a Chaos Weapon, or currently has one stored.";
 
 /** Brings the record up to date: the baseline if pending, then sticky `done`. */
 const refreshed = (save: Save, now: number): { onboarding: Onboarding; changed: boolean } => {
@@ -109,6 +134,9 @@ const monstersView = (goal: GoalDef): GoalMonsters | undefined =>
     name: monsterEntry(goal.monsters.id)?.name ?? goal.monsters.id,
   };
 
+const siegeRewardView = (goal: GoalDef): GoalSiege | undefined =>
+  goal.siege && { id: goal.siege, name: siegeData(goal.siege)?.name ?? goal.siege, count: 1 };
+
 /** Every shown goal, in order. */
 export const goalViews = (save: Save, onboarding: Onboarding, now: number): GoalView[] => {
   const views: GoalView[] = [];
@@ -116,6 +144,7 @@ export const goalViews = (save: Save, onboarding: Onboarding, now: number): Goal
     const status = goalStatus(goal, save, onboarding);
     if (status === "hidden") continue;
     const monsters = monstersView(goal);
+    const siege = siegeRewardView(goal);
     const progress = progressOf(goal.condition, onboarding);
     views.push({
       id: goal.id,
@@ -124,10 +153,12 @@ export const goalViews = (save: Save, onboarding: Onboarding, now: number): Goal
       description: goal.description,
       reward: goal.reward,
       ...(monsters && { monsters }),
+      ...(siege && { siege }),
       status,
       ...(onboarding.goals[goal.id]?.claimed === "baseline" && { baseline: true as const }),
       ...(progress && status === "open" && { progress }),
       ...(monsters && status === "ready" && { room: hasRoom(save, goal, now) }),
+      ...(siege && status === "ready" && { room: siegeRewardRoom(save) }),
     });
   }
   return views;
@@ -150,7 +181,8 @@ export const planGoalsState = (save: Save, now: number) => {
  * Room 1 goal on Map Room 2); `409 alreadyClaimed` (the baseline's included);
  * `409 notMet`; `409 mapRoom3` for monsters on a Map Room 3 yard;
  * `409 housing { monster, count, need, free }` when Housing cannot take
- * every monster.
+ * every monster; `409 siegeRoom` when the Chaos Factory cannot take the
+ * weapon (none built, making one, or holding one).
  */
 export const planGoalClaim = (save: Save, id: string, now: number) => {
   const goal = goalById(id);
@@ -190,6 +222,12 @@ export const planGoalClaim = (save: Save, id: string, now: number) => {
     monsters = { ...(save.monsters ?? {}), housed };
     value += (hatchCost(monster, levelOf(levels, monster)) ?? 0) * count;
   }
+  // Flash's `CollectB` adds nothing to `value` for the weapon, so it earns no points.
+  let siege: Save["siege"] | undefined;
+  if (goal.siege) {
+    if (!siegeRewardRoom(save)) throw yardRefusedErr("siegeRoom", SIEGE_ROOM_MESSAGE, { weapon: goal.siege });
+    siege = withRewardWeapon(save.siege, goal.siege);
+  }
 
   onboarding.goals[goal.id] = { ...onboarding.goals[goal.id], claimed: now };
   const credit: ResourceAmounts = { ...goal.reward };
@@ -200,11 +238,12 @@ export const planGoalClaim = (save: Save, id: string, now: number) => {
     credited: fit.credited,
     overflow: fit.overflow,
     ...(goal.monsters && { monsters: { id: goal.monsters.id, count: goal.monsters.count } }),
+    ...(goal.siege && siege && { siegeReward: { id: goal.siege, count: 1 as const }, siege: siegeView(siege) }),
     points,
   };
   return {
     report,
-    slices: { onboarding, ...(monsters && { monsters }) },
+    slices: { onboarding, ...(monsters && { monsters }), ...(siege && { siege }) },
     credit,
     points,
   };

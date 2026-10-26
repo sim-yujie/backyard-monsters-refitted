@@ -582,6 +582,30 @@ export const planSiegeInstant = (save: SiegeSave, site: SiegeSite, id: string) =
   return { report, slices: { siege }, shiny: credits };
 };
 
+/* ── Goal rewards ─────────────────────────────────────────────────────── */
+
+/**
+ * Whether the Factory can take a goal's weapon (SW4-SW12): Flash's
+ * `hasRoom`, a Factory built (`GLOBAL._bSiegeFactory`, set once it is
+ * `Constructed`), making none (`upgradingWeapon`) and holding none
+ * (`hasBuiltWeapon`) (`QUESTS.as:1772-1777`). Unlike the Factory's own
+ * routes, an upgrade or damage does not stop it.
+ */
+export const siegeRewardRoom = (save: SiegeSave): boolean => {
+  const found = siegeBuildingOf(save, "factory");
+  if (!found || found.level < 1 || Number(found.building.cB) > 0) return false;
+  if (siegeJob(found.building)) return false;
+  return !(["decoy", "vacuum", "jars"] as const).some((id) => siegeStock(save.siege, id).quantity > 0);
+};
+
+/**
+ * `siege` with one `weapon` made: the goal reward's
+ * `CompleteUpgradingWeapon(id, false)`, which sets its `quantity` to 1 at the
+ * level it has (`SiegeFactory.UpgradeWeapon`).
+ */
+export const withRewardWeapon = (siege: JsonObject | null | undefined, weapon: SiegeId): JsonObject =>
+  withStock(siege, weapon, { ...siegeStock(siege, weapon), quantity: 1 });
+
 /* ── Upgrade and recycle ──────────────────────────────────────────────── */
 
 /** Why a Lab or Factory may not be upgraded or recycled now. */

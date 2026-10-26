@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { GoalView } from "@/api/goals";
 import { spokenText } from "@/ui/resourceIcon";
 import { claimFigure } from "./claimFigure";
-import { GoalsPanel, monstersText, NEXT_COUNT, type GoalsPanelView } from "./GoalsPanel";
+import { GoalsPanel, monstersText, NEXT_COUNT, SIEGE_ROOM_NOTE, siegeText, type GoalsPanelView } from "./GoalsPanel";
 
 /** The Goals panel (#227, `docs/design/tutorial.md` §6.3). */
 
@@ -76,6 +76,30 @@ describe("GoalsPanel", () => {
     expect(panel.element.querySelector(".goals-row__note")!.textContent).toBe(
       "Make room in Housing for 10 Octo-oozes",
     );
+    panel.close();
+  });
+
+  it("siege weapon rewards (SW4-SW12) show the weapon, and wait for room in the Chaos Factory", () => {
+    const { panel } = mounted();
+    const none = { r1: 0, r2: 0, r3: 0, r4: 0 };
+    const siege = { id: "decoy", name: "Marilyn Monstroe", count: 1 };
+    panel.render(
+      listView([
+        goal("SW4", "ready", { reward: none, siege, room: false }),
+        goal("SW5", "ready", { reward: none, siege: { id: "vacuum", name: "Loot-O-Tron 5000", count: 1 }, room: true }),
+        goal("SW6", "open", { reward: none, siege: { id: "jars", name: "Candy Jars", count: 1 } }),
+      ]),
+    );
+    const [blocked, free] = [...panel.element.querySelectorAll<HTMLButtonElement>(".goals-claim")];
+    expect(blocked!.disabled).toBe(true);
+    expect(blocked!.textContent).toContain("+1 Marilyn Monstroe");
+    expect(panel.element.querySelector('[data-goal="SW4"] .goals-row__note')!.textContent).toBe(SIEGE_ROOM_NOTE);
+    expect(free!.disabled).toBe(false);
+    expect(panel.element.querySelector('[data-goal="SW5"] .goals-row__note')).toBeNull();
+    const chip = panel.element.querySelector('[data-goal="SW6"] .goals-siege')!;
+    expect(chip.textContent).toBe("1 Candy Jars");
+    expect(chip.querySelector("img")!.getAttribute("src")).toBe("/assets/siegebuttons/jars.png");
+    expect(siegeText(1, "Loot-O-Tron 5000")).toBe("1 Loot-O-Tron 5000");
     panel.close();
   });
 
