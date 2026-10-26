@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseArgs, parseMonsters, SEED_BUNKER, withBunker } from "./inferno-seed.js";
+import { parseArgs, parseMonsters, SEED_BUNKER, withRoomFor } from "./inferno-seed.js";
 import type { BuildingDataMap } from "../types/BuildingData.js";
 
 /** The dev Inferno seed (`bun run inferno:seed`). */
@@ -33,14 +33,28 @@ describe("parseMonsters", () => {
   });
 });
 
-describe("withBunker", () => {
-  test("adds a level 1 Housing Bunker under the next id", () => {
-    const yard = { "1": { id: 1, t: 14, X: -100, Y: 0, l: 1 } } as unknown as BuildingDataMap;
-    expect(withBunker(yard)["2"]).toEqual({ id: 2, ...SEED_BUNKER } as never);
+describe("withRoomFor", () => {
+  const UNDER_HALL = { id: 1, t: 14, X: -100, Y: 0, l: 1 };
+  const yardOf = (...buildings: object[]) => ({
+    type: "inferno",
+    buildingdata: Object.fromEntries(buildings.map((b) => [String((b as { id: number }).id), b])) as unknown as BuildingDataMap,
+    buildinghealthdata: {},
   });
 
-  test("leaves a yard that has one alone", () => {
-    const yard = { "4": { id: 4, t: 128, X: 0, Y: 0, l: 3 } } as unknown as BuildingDataMap;
-    expect(withBunker(yard)).toEqual(yard);
+  test("adds a Housing Bunker at the lowest level that fits", () => {
+    // 6 x 15 + 4 x 15 + 2 x 30 = 210 places: more than level 1's 200.
+    const buildings = withRoomFor(yardOf(UNDER_HALL), { IC1: 6, IC2: 4, IC4: 2 });
+    expect(buildings["2"]).toEqual({ id: 2, ...SEED_BUNKER, l: 2 } as never);
+  });
+
+  test("leaves a yard with room alone", () => {
+    const yard = yardOf(UNDER_HALL, { id: 4, t: 128, X: 0, Y: 0, l: 3 });
+    expect(withRoomFor(yard, { IC1: 6 })).toEqual(yard.buildingdata);
+  });
+
+  test("raises a Housing Bunker too small, and refuses past level 6", () => {
+    const yard = yardOf({ id: 4, t: 128, X: 0, Y: 0, l: 1 });
+    expect(withRoomFor(yard, { IC8: 5 })["4"]).toMatchObject({ l: 3 });
+    expect(() => withRoomFor(yard, { IC8: 19 })).toThrow("level 6");
   });
 });

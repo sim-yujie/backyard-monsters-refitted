@@ -10,6 +10,7 @@ import { INFERNO_MONSTER_CATALOGUE } from "../game-data/monsterCatalogue.js";
 import { DESCENT_YARDS } from "../services/inferno/infernoProgress.js";
 import { createInfernoYard } from "../services/inferno/infernoYard.js";
 import { housedOf } from "../services/inferno/transfer.js";
+import { housingCapacity, housingUsedBy, type HousingYard } from "../services/yard/housing.js";
 import type { BuildingData, BuildingDataMap } from "../types/BuildingData.js";
 
 /**
@@ -23,8 +24,10 @@ import type { BuildingData, BuildingDataMap } from "../types/BuildingData.js";
  *   Descent passed now (`bym.inferno_progress`).
  * - The Inferno yard `createInfernoYard` makes at the capture (Under Hall, two
  *   harvesters, two silos), unless the account already has one.
- * - With `--monsters`, a level 1 Housing Bunker in the Inferno yard if it has
- *   none, and those monsters added to its Compound (`monsters.housed`).
+ * - With `--monsters`, the Compound (`monsters.housed`) set to exactly those
+ *   monsters, and a Housing Bunker big enough for them: one is added if the
+ *   yard has none, raised to the level they need otherwise (no Under Hall
+ *   check). Without room the server's overflow cull would thin them on load.
  *
  * Refused when ENV is production, and on the database `server/.env` names
  * (the shared one) unless `--env-db` is added. It opens its own ORM and never
@@ -69,16 +72,33 @@ export const parseArgs = (argv: string[]): SeedArgs => {
   return { username, db, monsters: parseMonsters(valueOf("--monsters") ?? ""), envDb: argv.includes("--env-db") };
 };
 
-/** The Housing Bunker the seed adds: level 1 (200 places), left of the Under Hall. */
+/** The Housing Bunker the seed adds when the yard has none: left of the Under Hall. */
 export const SEED_BUNKER = { t: 128, X: -300, Y: 0, l: 1 };
 
-/** The yard's buildings with {@link SEED_BUNKER} added under the next id, unless it has a Housing Bunker. */
-export const withBunker = (buildings: BuildingDataMap | null | undefined): BuildingDataMap => {
-  const all = { ...(buildings ?? {}) };
-  if (Object.values(all).some((building) => Number(building.t) === SEED_BUNKER.t)) return all;
-  const id = Math.max(0, ...Object.keys(all).map(Number).filter(Number.isFinite)) + 1;
-  all[String(id)] = { id, ...SEED_BUNKER } as unknown as BuildingData;
-  return all;
+/** Housing Bunker levels (`HOUSING.as:65`, 200 to 1820 places). */
+const BUNKER_LEVELS = 6;
+
+/**
+ * The Inferno yard's buildings with room for `housed`: as they are when they
+ * have it, else with {@link SEED_BUNKER} added (when there is no Housing
+ * Bunker) and the first Housing Bunker at the lowest level that fits.
+ */
+export const withRoomFor = (yard: HousingYard, housed: Readonly<Record<string, number>>): BuildingDataMap => {
+  const need = housingUsedBy(housed, {});
+  const fits = (buildingdata: BuildingDataMap) => housingCapacity({ ...yard, buildingdata }, false) >= need;
+  const all = { ...(yard.buildingdata ?? {}) };
+  if (fits(all)) return all;
+
+  let bunker = Object.values(all).find((building) => Number(building.t) === SEED_BUNKER.t);
+  if (!bunker) {
+    const id = Math.max(0, ...Object.keys(all).map(Number).filter(Number.isFinite)) + 1;
+    bunker = { id, ...SEED_BUNKER } as unknown as BuildingData;
+  }
+  for (let l = 1; l <= BUNKER_LEVELS; l++) {
+    const tried = { ...all, [String(bunker.id)]: { ...bunker, l } as BuildingData };
+    if (fits(tried)) return tried;
+  }
+  throw new Error(`The monsters take ${need} places, more than a level ${BUNKER_LEVELS} Housing Bunker holds.`);
 };
 
 const seed = async (args: SeedArgs) => {
@@ -106,10 +126,8 @@ const seed = async (args: SeedArgs) => {
       row.inferno_baseid = yard.baseid;
 
       if (Object.keys(args.monsters).length) {
-        yard.buildingdata = withBunker(yard.buildingdata as BuildingDataMap);
-        const housed = housedOf(yard.monsters);
-        for (const [id, count] of Object.entries(args.monsters)) housed[id] = (housed[id] ?? 0) + count;
-        yard.monsters = { ...(yard.monsters ?? {}), housed };
+        yard.buildingdata = withRoomFor(yard as HousingYard, args.monsters);
+        yard.monsters = { ...(yard.monsters ?? {}), housed: { ...args.monsters } };
       }
 
       em.persist([row, yard, main, user]);
