@@ -35,7 +35,7 @@ describe("the Inferno build menu's words", () => {
   });
 
   it("points a price above the Inferno cap at the Resource Pods, not the silos", () => {
-    const overCap = { reason: "shortfall", shortfall: { r1: 1 }, overCap: true } as const;
+    const overCap = { reason: "shortfall", shortfall: { r1: 1, r2: 0, r3: 0, r4: 0 }, overCap: true } as const;
     // On the Inferno yard, and for a main-yard building paid from the Inferno purse.
     expect(gateSentence(overCap, "inferno")).toBe(NEED_MORE_PODS);
     expect(gateLine(overCap, "main", true).textContent).toBe(NEED_MORE_PODS);
