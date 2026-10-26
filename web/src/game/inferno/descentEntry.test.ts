@@ -133,6 +133,8 @@ describe("enterDescent", () => {
     expect(target.load).toMatchObject({ baseid: "207", type: "inferno", attackid: 55, defenderforces: { bunkers: [] } });
     expect(target.roster.monsters).toEqual({ C1: 10 });
     expect(target.roster.flingerLevel).toBe(3);
+    // Each fling carries what the server's replay lets it (`descentFightableLog`).
+    expect(target.roster.flingCapacity).toBe(120);
     expect(target.roster.storageCap).toBeNull();
     // The map is gone.
     expect(modal.querySelector(".descent-map")).toBeNull();

@@ -64,12 +64,17 @@ export const descentRoster = (save: BaseLoadResponse, yard: Yard): AttackRoster 
   storageCap: null,
 });
 
-/** The attack scene's target for a started Descent attack. */
+/**
+ * The attack scene's target for a started Descent attack. One fling carries
+ * what the server's Descent flinger does (`flingercapacity`, Flash's
+ * `YARD_PROPS` table, `ATTACK.as:588-591`), which its replay cuts every
+ * fling to (`descentFightableLog`), not the Map Room 2 flinger's 2,250.
+ */
 export const descentTarget = (start: DescentAttackStart, baseid: string, roster: AttackRoster): AttackTarget => ({
   baseid,
   kind: "wild",
   name: MOLOCH_NAME,
-  roster,
+  roster: { ...roster, flingCapacity: Math.max(0, Math.floor(Number(start.flingercapacity) || 0)) },
   load: descentAttackLoad(start),
   descentYard: start.descentyard,
 });
