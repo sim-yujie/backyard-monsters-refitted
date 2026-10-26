@@ -669,6 +669,12 @@ export interface TowerFxHost {
    */
   landed?(key: number, tick: number): void;
   /**
+   * A heavy round struck creep `creepId` on `tick`, flying along the unit
+   * vector `dirX`, `dirY` (world px): the new look's Sniper. Called just
+   * before {@link landed}, so the creep can flash and be knocked back.
+   */
+  struck?(creepId: number, tick: number, dirX: number, dirY: number): void;
+  /**
    * Where the Spurtz Cannon's shells are drawn off their sheet (issue #313),
    * over the same px as the graphics; without it they are plain dots.
    */
@@ -1237,6 +1243,10 @@ export class TowerFx {
         bullet.x = bullet.aim.x;
         bullet.y = bullet.aim.y;
         bullet.landedTick = stepTick;
+        if (bullet.creepId >= 0 && this.painted && bullet.type === 21) {
+          const step = Math.hypot(bullet.stepX, bullet.stepY) || 1;
+          this.host.struck?.(bullet.creepId, stepTick, bullet.stepX / step, bullet.stepY / step);
+        }
         if (bullet.creepId >= 0) this.host.landed?.(bullet.key, stepTick);
         if (this.painted) {
           if (bullet.type === 20) this.cannonHitFx(stepTick, bullet);

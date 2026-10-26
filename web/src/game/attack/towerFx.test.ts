@@ -550,19 +550,27 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
   const shakes: { tick: number; amp: number }[] = [];
   const nudges: { dx: number; dy: number }[] = [];
   const frames = new Map<number, number>();
+  /** What the battle screen was told of each round reaching its creep, in order. */
+  const hits: string[] = [];
+  const heading: { x: number; y: number }[] = [];
   const fx = new TowerFx(
     new Graphics(),
     towersOf(yard),
     {
       setAnimFrame: (id, _layer, frame) => frames.set(id, frame),
       nudge: (_id, _layer, dx, dy) => nudges.push({ dx, dy }),
+      landed: (_key, tick) => hits.push(`landed@${tick}`),
+      struck: (id, tick, dirX, dirY) => {
+        hits.push(`struck ${id}@${tick}`);
+        heading.push({ x: dirX, y: dirY });
+      },
     },
     { x: yard.bounds.originX, y: yard.bounds.originY },
     { look, sparks, glow: new Graphics(), shake: (tick, amp) => shakes.push({ tick, amp }), load: fakeSheet },
   );
   // The sheet comes in on the next turn of the event loop.
   await new Promise((resolve) => setTimeout(resolve, 0));
-  return { fx, sparks, shakes, nudges, frames };
+  return { fx, sparks, shakes, nudges, frames, hits, heading };
 };
 
 describe("TowerFx's new look", () => {
@@ -899,6 +907,36 @@ describe("TowerFx's new look", () => {
       expect(most).toBeLessThanOrEqual(shells * perShell);
       expect(landed).toEqual([key]);
       expect(shakes).toHaveLength(1);
+      fx.destroy();
+    }
+  });
+
+  it("tells the battle screen the Sniper's round struck its creep, once, just before it lands", async () => {
+    for (const look of ["full", "low"] as const) {
+      const { fx, hits, heading } = await newLookSetUp(21, look);
+      const landed = landingTick(fx, 21);
+      expect(hits).toEqual([`struck 9@${landed}`, `landed@${landed}`]);
+      // Along the round's flight: a unit vector.
+      expect(heading).toHaveLength(1);
+      expect(Math.hypot(heading[0]?.x ?? 0, heading[0]?.y ?? 0)).toBeCloseTo(1);
+      fx.destroy();
+    }
+  });
+
+  it("strikes no creep for the classic Sniper or any other tower's shot", async () => {
+    for (const [type, look] of [[21, "classic"], [20, "full"], [115, "full"], [115, "classic"]] as const) {
+      const { fx, hits } = await newLookSetUp(type, look);
+      landingTick(fx, type);
+      expect(hits.some((hit) => hit.startsWith("struck"))).toBe(false);
+      expect(hits.filter((hit) => hit.startsWith("landed"))).toHaveLength(1);
+      fx.destroy();
+    }
+    for (const type of [23, 25, 118]) {
+      const { fx, hits } = await newLookSetUp(type);
+      fx.onCharge(1, 0);
+      fire(fx, type, 70);
+      for (let tick = 70; tick <= 120; tick += 1) fx.update(tick, () => target, [target]);
+      expect(hits).toEqual([]);
       fx.destroy();
     }
   });

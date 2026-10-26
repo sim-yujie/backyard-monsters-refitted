@@ -195,6 +195,57 @@ export const bigLungeOffset = (age: number): number => {
   return t < 0.2 ? (t / 0.2) * BIG_LUNGE_PX : (1 - (t - 0.2) / 0.8) ** 2 * BIG_LUNGE_PX;
 };
 
+/* ── A heavy round's strike (the Sniper Tower, new look) ─────────────────── */
+
+/** Ticks a creep a heavy round struck is knocked back for, and how far at most, px. */
+export const STRUCK_TICKS = 16;
+export const STRUCK_PX = 8;
+/** Ticks its body flashes hot for. */
+export const STRUCK_FLASH_TICKS = 6;
+/** Ticks its body holds on one frame of its animation: a stagger, a hit-stop on the creep alone. */
+export const STRUCK_HOLD_TICKS = 5;
+/** Ticks its body is flattened for. */
+export const STRUCK_SQUASH_TICKS = 4;
+
+/** The knock-back `age` ticks after the strike, px: most of the way out at once, then eased home. */
+export const struckOffset = (age: number): number => {
+  if (age < 0 || age >= STRUCK_TICKS) return 0;
+  const t = age / STRUCK_TICKS;
+  return t < 0.1 ? (0.6 + (0.4 * t) / 0.1) * STRUCK_PX : (1 - (t - 0.1) / 0.9) ** 2 * STRUCK_PX;
+};
+
+/** The body's flash `age` ticks after the strike, 0 to 1: full for two ticks, then fading. */
+export const struckFlash = (age: number): number => {
+  if (age < 0 || age >= STRUCK_FLASH_TICKS) return 0;
+  return age < 2 ? 1 : 1 - (age - 2) / (STRUCK_FLASH_TICKS - 2);
+};
+
+/** The body's scale `age` ticks after the strike: knocked wide and flat, back to whole in a few ticks. */
+export const struckSquash = (age: number): { x: number; y: number } => {
+  if (age < 0 || age >= STRUCK_SQUASH_TICKS) return { x: 1, y: 1 };
+  const left = 1 - age / STRUCK_SQUASH_TICKS;
+  return { x: 1 + 0.14 * left, y: 1 - 0.14 * left };
+};
+
+/** Ticks a creep a heavy round killed stays up for, frozen, before it is gone into its splat. */
+export const FELLED_TICKS = 10;
+/** How far the killing round throws it back, px. */
+export const FELLED_PX = 14;
+
+/** How far a killed creep is thrown `age` ticks after the strike, px: out fast, then it stays there. */
+export const felledOffset = (age: number): number => {
+  if (age < 0) return 0;
+  const t = Math.min(1, age / 4);
+  return (1 - (1 - t) ** 2) * FELLED_PX;
+};
+
+/** A killed creep's body `age` ticks after the strike, 0 to 1: whole for two ticks, then fading out. */
+export const felledAlpha = (age: number): number => {
+  if (age < 0) return 1;
+  if (age >= FELLED_TICKS) return 0;
+  return age < 2 ? 1 : 1 - (age - 2) / (FELLED_TICKS - 2);
+};
+
 /** How far the body leans back during the wind-up, px, at the last wind-up frame. */
 export const WINDUP_PULL_PX = 3;
 
