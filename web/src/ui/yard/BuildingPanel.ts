@@ -17,7 +17,7 @@ import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { SITE_NAME, siteOfType } from "@/game/siege/siege";
 import { harvesterNow, isHarvester } from "@/game/yard/harvest";
 import type { RecycleOffer } from "@/game/yard/recycle";
-import { NEED_MORE_SILOS } from "@/game/yard/storage";
+import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
 import { repairOffer, type RepairOffer } from "@/game/yard/repair";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
@@ -1784,7 +1784,8 @@ export const gateSentence = (gate: UpgradeGate, kind: YardKind = "main", inferno
     case "requirements":
       return `Needs ${gate.requirements.map((entry) => requirementText(entry, kind)).join(", ")}.`;
     case "shortfall":
-      if (inferno) return gate.overCap ? "More than your Inferno storage holds." : "Not enough Inferno resources.";
+      if (inferno) return gate.overCap ? NEED_MORE_PODS : "Not enough Inferno resources.";
+      if (kind === "inferno") return gate.overCap ? NEED_MORE_PODS : "Not enough resources.";
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;

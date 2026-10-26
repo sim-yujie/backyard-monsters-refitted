@@ -16,7 +16,7 @@ import {
 } from "@/game/yard/buildCatalogue";
 import type { SpotCheck } from "@/game/yard/BuildPlacement";
 import { townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
-import { NEED_MORE_SILOS } from "@/game/yard/storage";
+import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { typeName } from "@/game/yard/planner/summary";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -758,7 +758,8 @@ export const gateSentence = (gate: BuildGate, kind: YardKind = "main", inferno =
         .map(([type, count, level]) => needText({ kind: "building", type, count, level, met: false }, kind))
         .join(", ")}.`;
     case "shortfall":
-      if (inferno) return gate.overCap ? "More than your Inferno storage holds." : "Not enough Inferno resources.";
+      if (inferno) return gate.overCap ? NEED_MORE_PODS : "Not enough Inferno resources.";
+      if (kind === "inferno") return gate.overCap ? NEED_MORE_PODS : "Not enough resources.";
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
@@ -776,7 +777,7 @@ export const gateLine = (gate: BuildGate, kind: YardKind = "main", inferno = fal
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
   } else {
-    line.textContent = gateSentence(gate, kind);
+    line.textContent = gateSentence(gate, kind, inferno);
   }
   return line;
 };

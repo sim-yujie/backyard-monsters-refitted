@@ -1,6 +1,8 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import type { BuildOffer } from "@/game/yard/buildCatalogue";
-import { gateSentence, hallWord, needText, tileLine } from "./BuildMenu";
+import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
+import { gateLine, gateSentence, hallWord, needText, tileLine } from "./BuildMenu";
 
 /** The Inferno build menu's words (WP 1.19): the Under Hall is the hall. */
 
@@ -30,5 +32,13 @@ describe("the Inferno build menu's words", () => {
       /^an? .+ at level 2$/,
     );
     expect(needText({ kind: "building", type: 14, count: 1, level: 1, met: false }, "inferno")).toBe("an Under Hall");
+  });
+
+  it("points a price above the Inferno cap at the Resource Pods, not the silos", () => {
+    const overCap = { reason: "shortfall", shortfall: { r1: 1 }, overCap: true } as const;
+    // On the Inferno yard, and for a main-yard building paid from the Inferno purse.
+    expect(gateSentence(overCap, "inferno")).toBe(NEED_MORE_PODS);
+    expect(gateLine(overCap, "main", true).textContent).toBe(NEED_MORE_PODS);
+    expect(gateLine(overCap, "main").textContent).toBe(NEED_MORE_SILOS);
   });
 });
