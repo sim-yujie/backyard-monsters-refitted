@@ -10,14 +10,14 @@ import { formatAmount, formatCompact } from "./format";
  *
  * ## The art
  *
- * The four resources come from the popup art (`/assets/popups/resource*.png`,
- * byte-identical to `archived/bag_*.png`): a sack spilling its contents,
- * about 2:1. At 18 px tall the whole picture is mostly sack, and four brown
- * sacks side by side read as one icon four times. So each is cropped to the
- * spilled pile on the right, which is where the four differ — sticks, grey
- * stones, purple putty, green goo — and which is close to square. The crop is
- * done with `background-size`/`background-position` on the one served image,
- * so there is no second copy of the art to keep in step.
+ * The four resources are piles drawn for the game (`/assets/popups/resource*.png`,
+ * 128 x 128 with a transparent ground): sticks, grey stones, purple putty,
+ * green goo. The old popup art was a sack spilling its contents and had to be
+ * cropped to the pile on the right; these are all pile, so the whole width
+ * shows. Only the empty rows above and below are trimmed, by one band shared
+ * by every pile so all four are drawn at the same scale. The trim is done with
+ * `background-size`/`background-position` on the one served image, so there is
+ * no second copy of the art to keep in step.
  *
  * Shiny is the coin stack from `/assets/alliances/shiny-icon.png`, used whole:
  * it is already square and small, and it reads as money at any size, where
@@ -59,12 +59,19 @@ interface IconArt {
   readonly crop: readonly [number, number, number, number];
 }
 
-/** Crops measured from each image's alpha: the pile, without the sack. */
+/**
+ * The rows every pile sits within: measured from the alpha of all four, and of
+ * the Inferno's bone, coal, sulfur and magma drawn to the same frame.
+ */
+const PILE_CROP = [0, 22, 128, 84] as const;
+
+const pile = (url: string): IconArt => ({ url, width: 128, height: 128, crop: PILE_CROP });
+
 const ART: Readonly<Record<ResourceKey, IconArt>> = {
-  r1: { url: "/assets/popups/resourcetwigs.png", width: 182, height: 95, crop: [102, 26, 79, 68] },
-  r2: { url: "/assets/popups/resourcepebbles.png", width: 190, height: 101, crop: [106, 30, 83, 70] },
-  r3: { url: "/assets/popups/resourceputty.png", width: 191, height: 95, crop: [107, 31, 84, 63] },
-  r4: { url: "/assets/popups/resourcegoo.png", width: 192, height: 98, crop: [108, 31, 83, 65] },
+  r1: pile("/assets/popups/resourcetwigs.png"),
+  r2: pile("/assets/popups/resourcepebbles.png"),
+  r3: pile("/assets/popups/resourceputty.png"),
+  r4: pile("/assets/popups/resourcegoo.png"),
   shiny: { url: "/assets/alliances/shiny-icon.png", width: 40, height: 41, crop: [0, 0, 40, 41] },
 };
 
