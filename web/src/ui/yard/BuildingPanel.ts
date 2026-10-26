@@ -12,7 +12,7 @@ import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { RecordedTest } from "@/game/baiter/testHistory";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES, type YardKind } from "@/game/yard/buildingCosts";
-import { HOUSING_TYPE, housingBuildings } from "@/game/monsters/housing";
+import { housingBuildings, housingTypeOf } from "@/game/monsters/housing";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { SITE_NAME, siteOfType } from "@/game/siege/siege";
 import { harvesterNow, isHarvester } from "@/game/yard/harvest";
@@ -442,10 +442,15 @@ export class BuildingPanel {
   /**
    * A Housing on the own yard: the Housing panel (#170), not the plain card.
    * Still on its first build, it has no working window yet (#281): the plain
-   * card's construction info shows instead, as for any other building.
+   * card's construction info shows instead, as for any other building. On the
+   * Inferno yard it is a Compound (the Housing Bunker type, Inferno WP 2.4).
    */
   private isHousing(building: YardBuilding): boolean {
-    return building.type === HOUSING_TYPE && this.yard !== undefined && building.level > 0;
+    return (
+      this.yard !== undefined &&
+      building.type === housingTypeOf(this.yard.store.save) &&
+      building.level > 0
+    );
   }
 
   /**
@@ -482,7 +487,7 @@ export class BuildingPanel {
     const count = housingBuildings(store.save, store.now()).length;
     this.blurb.textContent =
       count > 1
-        ? `Where your monsters live. Your ${count} Housings share one space: bigger space, bigger army.`
+        ? `Where your monsters live. Your ${count} ${store.kind === "inferno" ? "Compounds" : "Housings"} share one space: bigger space, bigger army.`
         : "Where your monsters live. Its space is your army's: bigger space, bigger army.";
 
     if (!this.housing) {
