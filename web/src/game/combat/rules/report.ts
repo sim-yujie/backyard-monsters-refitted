@@ -86,9 +86,11 @@ export const reportLine = (
     }
     case "bomb":
       return `${when} Fired a ${bombName(event.id)} ${at(event.x, event.y)}`;
-    case "siege":
+    case "siege": {
       // By the weapon's Flash name (`#w_<id>#`), as `attack_log_siege` gave it.
-      return `${when} Deployed ${siegeData(event.weapon)?.name ?? event.weapon} ${at(event.x, event.y)}`;
+      const name = siegeData(event.weapon)?.name ?? event.weapon;
+      return `${when} Deployed ${name} ${at(event.x, event.y)}`;
+    }
     case "retreat":
       return `${when} Retreated`;
     case "championRetreat":
