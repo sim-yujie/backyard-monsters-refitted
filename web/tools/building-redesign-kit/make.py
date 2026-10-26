@@ -281,7 +281,9 @@ if EXTRA:
                    f"(1) Black diamond: {MAT_WHAT[(b, 'BLACK')]}. The black must be deep and glossy with crisp faceted highlights "
                    "like block.png, the gold only on edges, trims, rims and bolts.\n\n(2) Taller again: raise it by adding ")
                 + how[combo] + (", so the whole tower is about 30% taller than base.png" if combo == "TALL2" else
-                                " (one MORE section than base.png has), so the whole tower is about 25% taller than base.png")
+                                " (base.png has TWO stacked sections; the new picture must have THREE, one MORE than base.png: "
+                                "count them), so the whole tower is clearly about 25% taller than base.png. A picture the same "
+                                "height as base.png, with only two sections, is wrong")
                 + f". {keep}; the FOOTPRINT on the ground stays exactly the same, NOT wider.\n\nSame shapes, parts, pose, aim "
                 "(any barrel or lens points the same way), camera and painting finish as base.png. It must stay clearly the same "
                 f"Flash {NAME[b]}.")
