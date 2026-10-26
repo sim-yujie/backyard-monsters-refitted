@@ -191,10 +191,7 @@ export interface SiegeWeaponSpec {
   readonly range: readonly number[];
   /** What the drop has to satisfy (`docs/specs/combat.md` §3 siege table). */
   readonly target: "clear" | "clear-special" | "tower";
-  /**
-   * Where it goes. Only that: the engine gives siege weapons no effect yet,
-   * so the picker promises none (#152).
-   */
+  /** Where it goes. */
   readonly hint: string;
 }
 
@@ -258,6 +255,18 @@ export const parseSiegeStock = (raw: unknown): SiegeStock[] => {
     stock.push({ id: weapon.id, level: lvl, quantity: Math.max(0, qty) });
   }
   return stock;
+};
+
+/**
+ * `SiegeWeapons.availableWeapon`: the one weapon an attack offers, the first
+ * of Decoy, Vacuum and Jars with one in stock, or null for none.
+ */
+export const availableSiege = (stock: readonly SiegeStock[]): SiegeStock | null => {
+  for (const weapon of SIEGE_WEAPONS) {
+    const held = stock.find((entry) => entry.id === weapon.id);
+    if (held && held.quantity > 0) return held;
+  }
+  return null;
 };
 
 /* ── Tools ────────────────────────────────────────────────────────────────── */
