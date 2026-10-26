@@ -1,11 +1,17 @@
 import { Assets, Container, Texture } from "pixi.js";
 import type * as Pixi from "pixi.js";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import { BuildPlacement } from "./BuildPlacement";
 import { ArtState, resolveArt } from "./buildingArt";
 import { readYard, type Yard } from "./yardModel";
+import { setClassicBuildingArt } from "./buildingArtTiers";
+
+// These tests draw the Flash art table's strips, so they run on the old building art
+// (the new art is the default; buildingArtTiers.test.ts covers it).
+beforeAll(() => setClassicBuildingArt(true));
+afterAll(() => setClassicBuildingArt(false));
 
 // A real filter compiles a shader program, which wants a GPU context.
 vi.mock("pixi.js", async (importOriginal) => ({

@@ -15,8 +15,9 @@ writes, per tower and tier, into `server/public/assets/buildings/<folder>/`:
 and prints one line of JSON per picture with the 1x offsets (`buildingArtTiers.ts` holds them) and `lift`, the world px
 the picture's top stands above the Flash tower's, which is how much higher the gun sits.
 
-`townhall` exports the Town Hall instead: one picture per level (codex-art Part 13), `top.new<N>@2x.webp` and
-`shadow.new<N>.jpg` for levels 1-10. finish.py fits every level onto the level 10 canvas, origin `canvas("townhall")`.
+`townhall` exports the Town Hall instead: one picture per level (codex-art Part 13), `top.new<N>@2x.webp` for
+levels 1-10. finish.py fits every level onto the level 10 canvas, origin `canvas("townhall")`. It writes no shadow:
+each level keeps Flash's own painted `shadow.<N>.jpg`, which fits the same footprint (owner, 26 Oct 2026).
 """
 import json
 import sys
@@ -53,8 +54,9 @@ def shadow(alpha, bot):
     return np.asarray(sq.filter(ImageFilter.GaussianBlur(3))).astype(float) / 255
 
 
-def export(b, tier, combo=None, flash=None, name=None):
-    """`flash` is the Flash picture the lift is measured against (default `b`), `name` the file tag (default `t<tier>`)."""
+def export(b, tier, combo=None, flash=None, name=None, stand_in=True):
+    """`flash` is the Flash picture the lift is measured against (default `b`), `name` the file tag (default `t<tier>`);
+    `stand_in` False writes no shadow (the Town Hall keeps Flash's)."""
     combo = combo or TIER_COMBO[tier].get(b, TIER_DEFAULT[tier])
     name = name or f"t{tier}"
     im4 = Image.open(SAMPLES / b / combo / "new-4x.png").convert("RGBA")
@@ -75,30 +77,33 @@ def export(b, tier, combo=None, flash=None, name=None):
     top_name = f"top.{name}@2x.webp"
     two.save(folder / top_name, "WEBP", quality=90, alpha_quality=100, method=6)
 
-    # Shadow at 1x on the whole canvas, then cropped to where it darkens.
-    one = np.asarray(resize_pm(im4, (W, H)))[..., 3].astype(float) / 255
-    bot = int(np.where(one.max(1) > 0.5)[0].max())
-    sh = shadow(one, bot)
-    ys, xs = np.where(sh > 0.02)
-    sx0, sy0, sx1, sy1 = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
-    mult = (255 * (1 - 0.45 * sh[sy0:sy1, sx0:sx1])).round().astype("uint8")
-    shadow_name = f"shadow.{name}.jpg"
-    Image.fromarray(mult).convert("RGB").save(folder / shadow_name, "JPEG", quality=85, optimize=True)
+    shadow_row, shadow_bytes = None, 0
+    if stand_in:
+        # Shadow at 1x on the whole canvas, then cropped to where it darkens.
+        one = np.asarray(resize_pm(im4, (W, H)))[..., 3].astype(float) / 255
+        bot = int(np.where(one.max(1) > 0.5)[0].max())
+        sh = shadow(one, bot)
+        ys, xs = np.where(sh > 0.02)
+        sx0, sy0, sx1, sy1 = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+        mult = (255 * (1 - 0.45 * sh[sy0:sy1, sx0:sx1])).round().astype("uint8")
+        shadow_name = f"shadow.{name}.jpg"
+        Image.fromarray(mult).convert("RGB").save(folder / shadow_name, "JPEG", quality=85, optimize=True)
+        shadow_row, shadow_bytes = [shadow_name, int(sx0 - cx0), int(sy0 - cy0)], (folder / shadow_name).stat().st_size
 
     flash_old, _, flash_oy = old_rgba(flash or b)
     old_top = np.where(np.asarray(flash_old)[..., 3] >= 200)[0].min() - flash_oy
     new_top = y0 / UP - cy0 + np.where(np.asarray(crop)[..., 3] >= 200)[0].min() / UP
     return dict(tower=b, tier=tier, combo=combo, folder=TOWERS[b]["folder"],
                 top=[top_name, round(x0 / UP - cx0), round(y0 / UP - cy0)],
-                shadow=[shadow_name, int(sx0 - cx0), int(sy0 - cy0)],
+                shadow=shadow_row,
                 lift=max(0, round(old_top - new_top)),
-                bytes=(folder / top_name).stat().st_size + (folder / shadow_name).stat().st_size)
+                bytes=(folder / top_name).stat().st_size + shadow_bytes)
 
 
 if __name__ == "__main__":
     if sys.argv[2:] == ["townhall"]:
         for n in range(1, 11):
-            print(json.dumps(export("townhall", n, TH_COMBO.get(n, f"L{n}"), f"townhall{n}", f"new{n}")))
+            print(json.dumps(export("townhall", n, TH_COMBO.get(n, f"L{n}"), f"townhall{n}", f"new{n}", stand_in=False)))
         sys.exit()
     tiers = [int(t) for t in sys.argv[2:]] or [2, 3]
     for b in ORDER:

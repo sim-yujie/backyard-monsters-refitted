@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // jsdom: a colour-matrix filter asks for a canvas when it is made.
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Sprite, Texture, type ColorMatrixFilter } from "pixi.js";
 import { creepZIndex } from "@/game/attack/AttackBattleLayer";
 import type { BaseLoadResponse } from "@/api/types";
@@ -9,6 +9,12 @@ import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
 import { readWork } from "./buildingWork";
 import { rowOf } from "./buildingCosts";
 import { artFor, readYard } from "./yardModel";
+import { setClassicBuildingArt } from "./buildingArtTiers";
+
+// These tests draw the Flash art table's strips, so they run on the old building art
+// (the new art is the default; buildingArtTiers.test.ts covers it).
+beforeAll(() => setClassicBuildingArt(true));
+afterAll(() => setClassicBuildingArt(false));
 
 /**
  * The frame setter a battle turns a tower's gun with (issue #67), and the

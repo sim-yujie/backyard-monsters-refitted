@@ -15,10 +15,11 @@
  * building's isometric origin like every row in `buildingArtData.ts`. Its
  * base stands where the Flash tower's does, so a taller tier grows upward.
  *
- * - **Off unless asked for.** The live game keeps the Flash towers until the
- *   owner decides: the new art shows only in a browser that turned it on
- *   (`newTowerArt`). The server's matching setting, `TOWER_TIER_ART`, sends
- *   viewers the tier of someone else's tower (`buildingArtLevels.ts`).
+ * - **On unless the player asks for the old art** (owner, 26 Oct 2026): the
+ *   "Classic building art" switch in Account Settings (`classicBuildingArt`)
+ *   brings back the Flash look. The server's matching setting,
+ *   `TOWER_TIER_ART` (on by default), sends viewers the tier of someone
+ *   else's tower (`buildingArtLevels.ts`).
  * - **A still picture.** The gun, coil or door is painted in, so a tier
  *   ships no animation strips: the turret holds its painted facing in a
  *   battle instead of turning, and the Flash strips are not drawn over it.
@@ -28,14 +29,15 @@
  * - **Shadows** are stand-ins: the silhouette leaned back, flattened and
  *   blurred, as on the sample sheets, until shadows are painted.
  *
- * The Town Hall rides the same switch, so all the new building art turns on
- * together: one picture per level (`TOWN_HALL_ART`), each painted from that
- * level's Flash picture (approved 26 Oct 2026, codex-art Part 13). Flash's
+ * The Town Hall rides the same switch, so the old art comes back for all of
+ * them together: one picture per level (`TOWN_HALL_ART`), each painted from
+ * that level's Flash picture (approved 26 Oct 2026, codex-art Part 13), on
+ * Flash's own shadow for that level, which fits the same footprint. Flash's
  * Town Hall has no animation strips, so nothing moving is lost.
  */
 
-/** Where this browser keeps the choice of the new tower art ("1" is on). */
-export const NEW_TOWER_ART_KEY = "bymr.newTowerArt";
+/** Where this browser keeps the choice of the old (Flash) building art ("1" is on). */
+export const CLASSIC_BUILDING_ART_KEY = "bymr.classicBuildingArt";
 
 const addressSearch = (): string => {
   try {
@@ -54,30 +56,54 @@ const storage = (): Storage | null => {
 };
 
 /**
- * Whether this page shows the new tower art: off unless this browser turned
- * it on. `?towers=new` in the address turns it on and remembers that;
- * `?towers=classic` turns it off again. Not in Account Settings yet.
+ * Whether this page shows the old (Flash) building art: off unless this
+ * browser chose it, in Account Settings or with `?towers=classic` in the
+ * address (remembered); `?towers=new` goes back to the new art.
  */
-export const readNewTowerArt = (search: string = addressSearch(), store: Storage | null = storage()): boolean => {
+export const readClassicBuildingArt = (search: string = addressSearch(), store: Storage | null = storage()): boolean => {
   const asked = new URLSearchParams(search).get("towers");
   try {
-    if (asked === "new") store?.setItem(NEW_TOWER_ART_KEY, "1");
-    else if (asked === "classic") store?.removeItem(NEW_TOWER_ART_KEY);
-    return asked === "new" || (asked !== "classic" && store?.getItem(NEW_TOWER_ART_KEY) === "1");
+    if (asked === "classic") store?.setItem(CLASSIC_BUILDING_ART_KEY, "1");
+    else if (asked === "new") store?.removeItem(CLASSIC_BUILDING_ART_KEY);
+    return asked === "classic" || (asked !== "new" && store?.getItem(CLASSIC_BUILDING_ART_KEY) === "1");
   } catch {
     // Site data blocked: the address still decides for this page.
-    return asked === "new";
+    return asked === "classic";
   }
 };
 
-let newTowerArtOn = readNewTowerArt();
+let classicArtOn = readClassicBuildingArt();
 
-/** Whether the new tower art is on, read once when the game loads. */
-export const newTowerArt = (): boolean => newTowerArtOn;
+/** Whether the old building art is on, read once when the game loads. */
+export const classicBuildingArt = (): boolean => classicArtOn;
 
-/** Turns the new tower art on or off for this page; for tests. */
-export const setNewTowerArt = (on: boolean): void => {
-  newTowerArtOn = on;
+/** Turns the old building art on or off for this page, without saving it; for tests. */
+export const setClassicBuildingArt = (on: boolean): void => {
+  classicArtOn = on;
+};
+
+/**
+ * The player's choice from Account Settings: remembered in this browser, like
+ * the other display settings, and used from the next time the game loads
+ * (the yard's pictures are already drawn). True if it was saved.
+ */
+export const saveClassicBuildingArt = (on: boolean, store: Storage | null = storage()): boolean => {
+  try {
+    if (on) store?.setItem(CLASSIC_BUILDING_ART_KEY, "1");
+    else store?.removeItem(CLASSIC_BUILDING_ART_KEY);
+    return store !== null;
+  } catch {
+    return false;
+  }
+};
+
+/** The saved choice, as Account Settings shows it; false when site data is blocked. */
+export const savedClassicBuildingArt = (store: Storage | null = storage()): boolean => {
+  try {
+    return store?.getItem(CLASSIC_BUILDING_ART_KEY) === "1";
+  } catch {
+    return false;
+  }
 };
 
 /** `[file, offsetX, offsetY]` from the building's origin, as in `ArtImage`. */
@@ -141,29 +167,32 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   ],
 };
 
-/** The Town Hall's ten levels, one picture each, on the same ground spot as Flash's; no gun, so no lift. */
+/**
+ * The Town Hall's ten levels, one picture each, on the same ground spot as
+ * Flash's and on Flash's own shadow for that level; no gun, so no lift.
+ */
 export const TOWN_HALL_ART: readonly TierArt[] = [
-  { from: 1, top: ["top.new1@2x.webp", -46, -47], shadow: ["shadow.new1.jpg", -43, 35], lift: 0 },
-  { from: 2, top: ["top.new2@2x.webp", -48, -62], shadow: ["shadow.new2.jpg", -47, 28], lift: 0 },
-  { from: 3, top: ["top.new3@2x.webp", -65, -63], shadow: ["shadow.new3.jpg", -58, 35], lift: 0 },
-  { from: 4, top: ["top.new4@2x.webp", -67, -64], shadow: ["shadow.new4.jpg", -60, 36], lift: 0 },
-  { from: 5, top: ["top.new5@2x.webp", -67, -64], shadow: ["shadow.new5.jpg", -60, 38], lift: 0 },
-  { from: 6, top: ["top.new6@2x.webp", -73, -73], shadow: ["shadow.new6.jpg", -66, 36], lift: 0 },
-  { from: 7, top: ["top.new7@2x.webp", -81, -84], shadow: ["shadow.new7.jpg", -72, 32], lift: 0 },
-  { from: 8, top: ["top.new8@2x.webp", -80, -84], shadow: ["shadow.new8.jpg", -71, 31], lift: 0 },
-  { from: 9, top: ["top.new9@2x.webp", -77, -94], shadow: ["shadow.new9.jpg", -69, 29], lift: 0 },
-  { from: 10, top: ["top.new10@2x.webp", -77, -104], shadow: ["shadow.new10.jpg", -68, 23], lift: 0 },
+  { from: 1, top: ["top.new1@2x.webp", -46, -47], shadow: ["shadow.1.jpg", -55, 37], lift: 0 },
+  { from: 2, top: ["top.new2@2x.webp", -48, -62], shadow: ["shadow.2.jpg", -55, 36], lift: 0 },
+  { from: 3, top: ["top.new3@2x.webp", -65, -63], shadow: ["shadow.3.jpg", -70, 28], lift: 0 },
+  { from: 4, top: ["top.new4@2x.webp", -67, -64], shadow: ["shadow.4.jpg", -88, 20], lift: 0 },
+  { from: 5, top: ["top.new5@2x.webp", -67, -64], shadow: ["shadow.5.jpg", -67, 33], lift: 0 },
+  { from: 6, top: ["top.new6@2x.webp", -73, -73], shadow: ["shadow.6.jpg", -84, 26], lift: 0 },
+  { from: 7, top: ["top.new7@2x.webp", -81, -84], shadow: ["shadow.7.jpg", -121, -3], lift: 0 },
+  { from: 8, top: ["top.new8@2x.webp", -80, -84], shadow: ["shadow.8.jpg", -94, 8], lift: 0 },
+  { from: 9, top: ["top.new9@2x.webp", -77, -94], shadow: ["shadow.9.jpg", -76, 24], lift: 0 },
+  { from: 10, top: ["top.new10@2x.webp", -77, -104], shadow: ["shadow.10.jpg", -85, 24], lift: 0 },
 ];
 
-/** Every type with new art behind the switch: the towers, then the Town Hall (14). */
+/** Every type with new art the old-art switch turns back: the towers, then the Town Hall (14). */
 const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART };
 
 /**
- * The new picture a building shows at `level`, or null while the new art is
- * off, below level 1 and for every type without new art.
+ * The new picture a building shows at `level`, or null with the old art on,
+ * below level 1 and for every type without new art.
  */
 export const tierArtFor = (type: number, level: number): TierArt | null => {
-  if (!newTowerArtOn) return null;
+  if (classicArtOn) return null;
   let chosen: TierArt | null = null;
   for (const tier of NEW_ART[type] ?? []) {
     if (tier.from > level) break;
@@ -172,5 +201,5 @@ export const tierArtFor = (type: number, level: number): TierArt | null => {
   return chosen;
 };
 
-/** World px a tower's gun stands above the Flash tower's at this level; 0 with the Flash art. */
+/** World px a tower's gun stands above the Flash tower's at this level; 0 with the old art. */
 export const tierLift = (type: number, level: number): number => tierArtFor(type, level)?.lift ?? 0;

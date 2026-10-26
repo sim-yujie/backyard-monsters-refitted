@@ -6,16 +6,16 @@ import {
 } from "../../../../server/src/game-data/buildingArtLevels";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { ArtState, resolveArt } from "./buildingArt";
-import { setNewTowerArt, TOWER_TIER_ART, TOWN_HALL_ART } from "./buildingArtTiers";
+import { setClassicBuildingArt, TOWER_TIER_ART, TOWN_HALL_ART } from "./buildingArtTiers";
 
 /**
  * The server sends someone else's yard with only the level each building's
  * art needs (`server/src/services/base/viewMask.ts`), read from its own copy
  * of the levels at which the art changes. If that copy falls behind this
  * table, a viewer sees the wrong picture, or the real level leaks again.
- * The repainted towers' tiers have their own copy, sent only while the
- * server's `TOWER_TIER_ART` is on, as the new tower art is only shown here
- * while its switch is on.
+ * The repainted towers' tiers have their own copy, sent while the server's
+ * `TOWER_TIER_ART` is on (the default), as the new tower art is shown here
+ * unless the player chose the old art.
  */
 
 /** The art levels of every type whose Flash art changes, as this table has them. */
@@ -61,18 +61,18 @@ describe("the server's art levels match the web art table", () => {
     expect(TOWN_HALL_ART.map((level) => level.from)).toEqual(BUILDING_ART_LEVELS[14]);
   });
 
-  it("picks the picture the client draws for every level up to 20", () => {
-    const { drawn, sent } = drawnAndSent(false);
-    expect(sent).toEqual(drawn);
-  });
-
-  it("picks the tier the client draws with the new tower art on both sides", () => {
-    setNewTowerArt(true);
+  it("picks the picture the client draws for every level up to 20, with the old art on both sides", () => {
+    setClassicBuildingArt(true);
     try {
-      const { drawn, sent } = drawnAndSent(true);
+      const { drawn, sent } = drawnAndSent(false);
       expect(sent).toEqual(drawn);
     } finally {
-      setNewTowerArt(false);
+      setClassicBuildingArt(false);
     }
+  });
+
+  it("picks the tier the client draws with the new art, the default, on both sides", () => {
+    const { drawn, sent } = drawnAndSent(true);
+    expect(sent).toEqual(drawn);
   });
 });

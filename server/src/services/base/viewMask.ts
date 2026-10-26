@@ -16,7 +16,7 @@ import { isTrap, maxHp, type CombatTargetKind } from "../../game-rules/combat/in
  * - **Levels** are replaced by the level the building's art needs
  *   (`artLevelOf`). Most buildings have one picture for all levels and so
  *   read 1; the few whose art changes (Town Hall, harvesters, walls, Flinger,
- *   and the defensive towers' three tiers while `TOWER_TIER_ART=on`...) give
+ *   and the defensive towers' three tiers unless `TOWER_TIER_ART=off`...) give
  *   away only what their picture already shows.
  * - **Health** keeps its share of the building's full health, re-measured
  *   against the art level's, so a damaged building still looks damaged and a

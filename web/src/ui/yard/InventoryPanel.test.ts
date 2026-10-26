@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { InventoryPanel } from "./InventoryPanel";
+import { setClassicBuildingArt } from "@/game/yard/buildingArtTiers";
+
+// These tests crop the Flash art table's strips, so they run on the old building art
+// (the new art is the default; buildingArtTiers.test.ts covers it).
+beforeAll(() => setClassicBuildingArt(true));
+afterAll(() => setClassicBuildingArt(false));
 
 /**
  * The drawer (issue #50, categories and search #53).

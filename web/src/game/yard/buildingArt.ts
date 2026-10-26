@@ -17,9 +17,9 @@ import { tierArtFor } from "./buildingArtTiers";
  * under construction — uses the level 1 art.
  * (`client/scripts/BFOUNDATION.as:896-914`.)
  *
- * The repainted defensive towers are the exception: with the new tower art
- * on, each of their three tiers takes a new picture from `buildingArtTiers.ts`
- * instead of the Flash row.
+ * The repainted defensive towers and Town Hall are the exception: unless the
+ * player chose the old (Flash) art, each tier or level takes a new picture
+ * from `buildingArtTiers.ts` instead of the Flash row.
  *
  * Two buildings have a lower maximum on Map Room 2 than the art table knows
  * about, and the client clamps the level before looking the art up
@@ -288,7 +288,7 @@ export const resolveArt = (type: number, level: number, state: ArtState): Resolv
   // it shows the level 1 art.
   const wanted = effective <= 0 ? 1 : effective;
 
-  // A repainted tower's tier, with the new tower art on: one still picture
+  // A repainted tier or Town Hall level, unless the old art is on: one still picture
   // for default and damaged alike; a destroyed one falls through to the Flash rubble.
   const tier = state === ArtState.DESTROYED ? null : tierArtFor(type, wanted);
   if (tier) {
