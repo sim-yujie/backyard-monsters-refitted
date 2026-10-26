@@ -56,6 +56,15 @@ describe("bunker", () => {
     expect(buy.some((row) => row.monster.id === "C1")).toBe(false);
   });
 
+  it("offers Inferno monsters moved to the main yard from housing, never to buy", () => {
+    // MONSTERBUNKERPOPUP.as:48-56 lists IC1-IC8 as bunkerable; the buy list here has none of them.
+    const save = saveOf({ monsters: { housed: { C1: 2, IC1: 3, IC8: 1 } } });
+    const ids = fillRows(save, "housing").map((row) => [row.monster.id, row.available]);
+    expect(ids).toEqual(expect.arrayContaining([["C1", 2], ["IC1", 3], ["IC8", 1]]));
+    expect(ids).toHaveLength(3);
+    expect(fillRows(save, "buy").some((row) => row.monster.id.startsWith("IC"))).toBe(false);
+  });
+
   it("caps a row at what is available and what fits after the rest of the selection", () => {
     const save = saveOf();
     const [pokey] = fillRows(save, "housing");

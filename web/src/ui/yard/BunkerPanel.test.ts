@@ -223,6 +223,24 @@ describe("BunkerPanel: taking monsters out", () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
+  it("removes an Inferno monster even with a working Juicer (BunkerJuiceById)", () => {
+    const { element, remove } = setup({}, [bunker({ m: { C3: 6, IC1: 2 } }), juicer]);
+    expect(element.querySelector(".bunker__part--out .bunker__note")!.textContent).toContain(
+      "an Inferno monster is deleted",
+    );
+    expect(rowFor(outRows(element), "C3").querySelector(".bunker__take")!.textContent).toBe("Juice");
+    const row = rowFor(outRows(element), "IC1");
+    row.querySelector<HTMLButtonElement>(".bunker__fill")!.click();
+    const take = row.querySelector<HTMLButtonElement>(".bunker__take")!;
+    expect(take.textContent).toBe("Remove");
+    take.click();
+    expect(element.querySelector(".bunker__question")!.textContent).toMatch(
+      /^Remove 2 .+\? They are deleted and nothing is refunded\.$/,
+    );
+    buttonNamed(element, "Yes, remove")!.click();
+    expect(remove).toHaveBeenCalledWith(8, "IC1", 2);
+  });
+
   it("says the bunker is empty", () => {
     const { element } = setup({}, [bunker({ m: {} })]);
     expect(element.querySelector(".bunker__part--out .bunker__note")!.textContent).toBe("The bunker is empty.");
