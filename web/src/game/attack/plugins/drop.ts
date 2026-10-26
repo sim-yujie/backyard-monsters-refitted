@@ -120,7 +120,12 @@ class DropRing {
 export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mounts) => {
   const { session, target, yard, renderer, camera, canvas, dock, notices } = mounts;
   const bucket = bucketFor(session, bucketOptionsOf(flavour));
-  const catapultLevel = target.roster.catapultLevel;
+  // An Inferno yard (the Descent's included) offers no catapult and no siege
+  // weapon: Flash loads a Descent yard as `INFERNO_YARD`, and `UI_TOP` adds
+  // neither popup on one (`client/scripts/UI_TOP.as:289`, `:296`,
+  // `maproom_inferno/PlayerHandler.as:333`).
+  const infernoYard = combatKind(target) === "inferno";
+  const catapultLevel = infernoYard ? 0 : target.roster.catapultLevel;
 
   /* ── The attacker's inventory ─────────────────────────────────────── */
 
@@ -130,7 +135,7 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
   const bombsUsed = new Set<number>();
   /** The one siege weapon this attack offers; none in a Baiter test or against an Inferno yard. */
   const offered =
-    flavour.test || combatKind(target) === "inferno"
+    flavour.test || infernoYard
       ? null
       : availableSiege(parseSiegeStock(target.roster.siege));
   const offeredSpec = offered ? siegeWeapon(offered.id) : undefined;
@@ -201,9 +206,9 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
   siegeButton.title = "Siege weapons (S)";
   siegeButton.setAttribute("aria-expanded", "false");
 
-  tools.append(catapultButton);
+  if (!infernoYard) tools.append(catapultButton);
   if (offered) tools.append(siegeButton);
-  if (!flavour.test) dock.append(tools);
+  if (!flavour.test && tools.childElementCount > 0) dock.append(tools);
 
   let catapult: CatapultPanel | null = null;
   let siege: SiegePanel | null = null;
@@ -373,7 +378,12 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
     onRefuse: (reason) => notices.show("attack-drop", reason, { level: "info", timeoutMs: 2500 }),
     onToolUsed,
     onToolChange: () => refreshPanels(),
-    ...(flavour.test ? {} : { onOpenCatapult: toggleCatapult, ...(offered ? { onOpenSiege: toggleSiege } : {}) }),
+    ...(flavour.test
+      ? {}
+      : {
+          ...(infernoYard ? {} : { onOpenCatapult: toggleCatapult }),
+          ...(offered ? { onOpenSiege: toggleSiege } : {}),
+        }),
   });
   input.attach();
 

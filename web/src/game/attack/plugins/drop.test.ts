@@ -125,6 +125,12 @@ describe("the drop plugin's pickers in the dock", () => {
     expect(hasButton("Siege")).toBe(false);
   });
 
+  it("offers no Catapult in the Descent, as Flash's Inferno yard showed none (UI_TOP.as:296)", () => {
+    mount(target(null, { descentYard: 1 }));
+    expect(hasButton("Catapult")).toBe(false);
+    expect(dock.querySelector(".attack-tools")).toBeNull();
+  });
+
   it("offers the first weapon in stock, and Fire arms the Decoy until a tap or Cancel", () => {
     mount(target({ vacuum: { level: 1, quantity: 0 }, decoy: { level: 2, quantity: 1 } }));
     button("Siege").click();
