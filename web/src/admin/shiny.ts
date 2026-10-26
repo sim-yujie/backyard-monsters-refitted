@@ -389,7 +389,13 @@ export class ShinyView {
                     h(
                       "span",
                       { class: "row-meta" },
-                      `#${player.userid} · ${player.lastSeenAt ? `last played ${ago(player.lastSeenAt)}` : "never played"}`,
+                      [
+                        `#${player.userid}`,
+                        player.formerName ? `was called ${player.formerName}` : null,
+                        player.lastSeenAt ? `last played ${ago(player.lastSeenAt)}` : "never played",
+                      ]
+                        .filter(Boolean)
+                        .join(" · "),
                     ),
                   ),
                   icon("chevron", 18),
@@ -400,7 +406,7 @@ export class ShinyView {
         : h(
             "p",
             { class: "note" },
-            `No player called “${query}”. Try the start of the name, or the account number.`,
+            `No player called “${query}”. Try part of the name, or the account number.`,
           ),
     );
   }

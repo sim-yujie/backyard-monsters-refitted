@@ -4,6 +4,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { logger } from "../../utils/logger.js";
+import { escapeLike } from "../friends/friendRules.js";
 import { REPORT_SUBJECT, TEAM_MESSAGE, TEAM_NOTICE, writeTeamMessage } from "./supportMail.js";
 
 /**
@@ -237,28 +238,91 @@ export const awardsForReport = async (em: EntityManager, bugReportId: number): P
 export interface PlayerMatch {
   readonly userid: number;
   readonly username: string;
+  /** The name the query matched when it is not the player's name now (from an old bug report or award). */
+  readonly formerName: string | null;
   readonly lastSeenAt: string | null;
 }
 
+/** Search results a query gives at most. */
+export const PLAYER_SEARCH_LIMIT = 10;
+
+/** The characters players and the owner use between the words of a name: `_`, space, `-` and `.`. */
+const SEPARATORS = /[\s_.-]+/g;
+const SQL_SEPARATORS = `'[[:space:]_.-]+'`;
+
 /**
- * Players whose name starts with `query` (any case), or whose account number
- * it is, for the Shiny section's search: at most 10, bots left out.
+ * The name in a query as the owner may paste it: no spaces around, no `@` or
+ * quotes in front, and no chat level tag ("[12] Smash_N_Dash").
+ */
+export const searchedName = (query: string): string =>
+  query
+    .trim()
+    .replace(/^\[\d{1,3}\]\s*/, "")
+    .replace(/^[@"'‘“]+|["'’”]+$/g, "")
+    .trim()
+    .slice(0, 40);
+
+/**
+ * Players for the Shiny section's search, at most {@link PLAYER_SEARCH_LIMIT},
+ * bots left out (seeded dev players are players). A name matches without
+ * case, anywhere in the name, with `_`, spaces, `-` and `.` all the same
+ * (or left out), and `%` and `_` meaning only themselves. Also by account
+ * number, and by a name the player had before (the name kept on their bug
+ * reports and on awards). Best first: the account number, the exact name,
+ * the name with other separators, a former name, the name without
+ * separators, then names that start with it, then the rest, shorter first.
  */
 export const searchPlayers = async (em: EntityManager, query: string): Promise<PlayerMatch[]> => {
-  const text = query.trim().slice(0, 40);
-  if (text === "") return [];
-  const prefix = `${text.toLowerCase().replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+  const text = searchedName(query);
+  const exact = text.toLowerCase();
+  const spaced = exact.replace(SEPARATORS, "_");
+  const joined = exact.replace(SEPARATORS, "");
+  if (joined === "") return [];
   const number = /^\d{1,9}$/.test(text) ? Number(text) : -1;
-  const rows = await em.execute<{ userid: number; username: string; last_seen_at: Date | string | null }[]>(
-    `SELECT u.userid, u.username, u.last_seen_at FROM bym."user" u
-      WHERE (lower(u.username) LIKE ? OR u.userid = ?)
-        AND NOT EXISTS (SELECT 1 FROM bym.bot b WHERE b.userid = u.userid)
-      ORDER BY (u.userid = ?) DESC, lower(u.username) LIMIT 10`,
-    [prefix, number, number]
+  const spacedName = `regexp_replace(lower(u.username), ${SQL_SEPARATORS}, '_', 'g')`;
+  const joinedName = `regexp_replace(lower(u.username), ${SQL_SEPARATORS}, '', 'g')`;
+  const rows = await em.execute<
+    { userid: number; username: string; former_name: string | null; last_seen_at: Date | string | null }[]
+  >(
+    `WITH former AS (
+       SELECT DISTINCT ON (userid) userid, name FROM (
+         SELECT userid, username AS name FROM bym.bug_report WHERE userid IS NOT NULL AND lower(username) = ?
+         UNION ALL
+         SELECT userid, username AS name FROM bym.shiny_award WHERE lower(username) = ?
+       ) names ORDER BY userid
+     )
+     SELECT u.userid, u.username, u.last_seen_at,
+            CASE WHEN lower(u.username) <> lower(f.name) THEN f.name END AS former_name
+       FROM bym."user" u
+       LEFT JOIN former f ON f.userid = u.userid
+      WHERE (lower(u.username) LIKE ? OR ${joinedName} LIKE ? OR u.userid = ? OR f.userid IS NOT NULL)
+        AND NOT EXISTS (SELECT 1 FROM bym.bot b WHERE b.userid = u.userid AND b.state <> 'seeded')
+      ORDER BY (u.userid = ?) DESC,
+               (lower(u.username) = ?) DESC,
+               (${spacedName} = ?) DESC,
+               (f.userid IS NOT NULL AND lower(u.username) <> lower(f.name)) DESC,
+               (${joinedName} = ?) DESC,
+               (lower(u.username) LIKE ? OR ${joinedName} LIKE ?) DESC,
+               length(u.username), lower(u.username), u.userid
+      LIMIT ${PLAYER_SEARCH_LIMIT}`,
+    [
+      exact,
+      exact,
+      `%${escapeLike(exact)}%`,
+      `%${escapeLike(joined)}%`,
+      number,
+      number,
+      exact,
+      spaced,
+      joined,
+      `${escapeLike(exact)}%`,
+      `${escapeLike(joined)}%`,
+    ]
   );
   return rows.map((row) => ({
     userid: Number(row.userid),
     username: row.username,
+    formerName: row.former_name ?? null,
     lastSeenAt: row.last_seen_at === null ? null : new Date(row.last_seen_at).toISOString(),
   }));
 };

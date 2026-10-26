@@ -208,6 +208,33 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
       expect(await credits(OTHER)).toBe(START);
     });
 
+    test("the player cannot tell who gave it: nothing they can read holds the owner's account or name", async () => {
+      const id = await report(PLAYER);
+      await replyToReport(orm.em.fork(), id, "Thanks, we are looking at it.", OWNER, NOW);
+      await giveShiny(orm.em.fork(), award({ amount: 300, bugReportId: id }), OWNER, NOW);
+      await giveShiny(orm.em.fork(), award({ amount: 100, reason: "Sorry for the lost troops" }), OWNER, NOW);
+
+      // Every row the game reads for the player: their mail and threads, their account and yard.
+      const readable = [
+        ...(await sql(`SELECT * FROM bym.message WHERE userid = ? OR targetid = ?`, [PLAYER, PLAYER])),
+        ...(await sql(`SELECT * FROM bym.thread WHERE userid = ? OR targetid = ?`, [PLAYER, PLAYER])),
+        ...(await sql(`SELECT * FROM bym."user" WHERE userid = ?`, [PLAYER])),
+        ...(await sql(`SELECT * FROM bym.save WHERE userid = ?`, [PLAYER])),
+      ];
+      expect(readable.length).toBeGreaterThanOrEqual(6);
+      for (const row of readable) {
+        for (const value of Object.values(row)) expect(Number(value)).not.toBe(OWNER);
+        expect(JSON.stringify(row)).not.toContain(`supporttest_${OWNER}`);
+        expect(JSON.stringify(row)).not.toContain(String(OWNER));
+      }
+      // Every message comes from "The game team", and only it.
+      const mail = await mailTo(PLAYER);
+      expect(mail).toHaveLength(3);
+      expect(mail.every((one) => Number(one.userid) === SUPPORT_SENDER)).toBe(true);
+      // Only the award log, which only the dashboard reads, keeps who gave it.
+      expect((await sql(`SELECT awarded_by FROM bym.shiny_award WHERE userid = ?`, [PLAYER])).map((row) => row.awarded_by)).toEqual([OWNER, OWNER]);
+    });
+
     test("no player, or a player with no yard yet: nothing is given or kept", async () => {
       expect((await giveShiny(orm.em.fork(), award({ userid: 996888 }), OWNER, NOW)).outcome).toBe("noPlayer");
       expect((await giveShiny(orm.em.fork(), award({ userid: NO_YARD }), OWNER, NOW)).outcome).toBe("noMainYard");
@@ -309,11 +336,98 @@ describe.skipIf(!dbName)("the dashboard's replies and Shiny on a real database",
     });
   });
 
-  test("player search: by the start of a name in any case, or by account number; bots left out", async () => {
-    const byName = await searchPlayers(orm.em.fork(), "SUPPORTTEST_99600");
-    expect(byName.map((one) => one.userid)).toEqual(expect.arrayContaining([PLAYER, OTHER]));
-    expect((await searchPlayers(orm.em.fork(), String(OTHER)))[0]!.userid).toBe(OTHER);
-    expect(await searchPlayers(orm.em.fork(), "   ")).toEqual([]);
-    expect(await searchPlayers(orm.em.fork(), "%")).toEqual([]);
+  describe("player search", () => {
+    // Account numbers from 996011; the names are the owner's real case (26 Oct): "Smash_N_Dash" not found.
+    const SMASH = 996011;
+    const LOOKALIKE = 996012;
+    const WILDCARD = 996013;
+    const RENAMED = 996014;
+    const BOT = 996015;
+    const SEEDED = 996016;
+    const CROWD = Array.from({ length: 11 }, (_, n) => 996020 + n);
+    const NAMES = new Map<number, string>([
+      [SMASH, "Smash_N_Dash"],
+      [LOOKALIKE, "SmashNDash"],
+      [WILDCARD, "SmashXNXDash"],
+      [RENAMED, "supporttest_renamed"],
+      [BOT, "supporttest_smash_bot"],
+      [SEEDED, "supporttest_smash_seed"],
+      // Names that sort before "smash_n_dash" and hold it: they must not push the exact name out.
+      ...CROWD.map((userid, n): [number, string] => [userid, `a_smash_n_dash_${n}`]),
+    ]);
+    const SEARCHED = [...NAMES.keys()].join(",");
+    const ids = async (query: string) => (await searchPlayers(orm.em.fork(), query)).map((one) => one.userid);
+
+    beforeAll(async () => {
+      for (const [userid, name] of NAMES) {
+        await sql(
+          `INSERT INTO bym."user" (userid, username, email, password, blocked_users) VALUES (?, ?, ?, 'x', '[]') ON CONFLICT DO NOTHING`,
+          [userid, name, `supporttest_${userid}@test.invalid`]
+        );
+      }
+      for (const [userid, state] of [[BOT, "active"], [SEEDED, "seeded"]] as const) {
+        await sql(
+          `INSERT INTO bym.bot (userid, seed, persona, level, level_since, state) VALUES (?, 1, 'economy', 20, now(), ?) ON CONFLICT DO NOTHING`,
+          [userid, state]
+        );
+      }
+      // The renamed player's bug report keeps the name they had when they sent it.
+      await sql(`INSERT INTO bym.bug_report (userid, username, message) VALUES (?, 'Old_Smasher', 'a report from before a rename')`, [RENAMED]);
+    });
+
+    afterAll(async () => {
+      await sql(`DELETE FROM bym.bug_report WHERE userid IN (${SEARCHED})`);
+      await sql(`DELETE FROM bym.bot WHERE userid IN (${SEARCHED})`);
+      await sql(`DELETE FROM bym."user" WHERE userid IN (${SEARCHED})`);
+    });
+
+    test("an exact name comes first, in any case and with spaces around it", async () => {
+      for (const query of ["Smash_N_Dash", "smash_n_dash", "SMASH_N_DASH", "  Smash_N_Dash  "]) {
+        expect((await ids(query))[0]).toBe(SMASH);
+      }
+    });
+
+    test("an exact name is never pushed out by ten names that sort before it", async () => {
+      const found = await ids("smash_n_dash");
+      expect(found).toHaveLength(10);
+      expect(found[0]).toBe(SMASH);
+    });
+
+    test("an underscore is an underscore, not any letter", async () => {
+      expect(await ids("Smash_N_Dash")).not.toContain(WILDCARD);
+      expect(await ids("SmashXNXDash")).toEqual([WILDCARD]);
+    });
+
+    test("spaces, dashes or no underscores at all still find the name", async () => {
+      for (const query of ["Smash N Dash", "smash-n-dash", "Smash.N.Dash"]) {
+        expect((await ids(query))[0]).toBe(SMASH);
+      }
+      // The lookalike's own exact name first, the same name with underscores next.
+      expect((await ids("SmashNDash")).slice(0, 2)).toEqual([LOOKALIKE, SMASH]);
+    });
+
+    test("a name copied from chat or with an @ in front", async () => {
+      for (const query of ["@Smash_N_Dash", "[12] Smash_N_Dash", "“Smash_N_Dash”"]) {
+        expect((await ids(query))[0]).toBe(SMASH);
+      }
+    });
+
+    test("part of a name from the middle", async () => {
+      expect(await ids("N_Dash")).toContain(SMASH);
+    });
+
+    test("a player who has since changed their name, by the name on an old bug report", async () => {
+      const [found] = await searchPlayers(orm.em.fork(), "old_smasher");
+      expect(found).toEqual(expect.objectContaining({ userid: RENAMED, username: "supporttest_renamed", formerName: "Old_Smasher" }));
+      expect((await searchPlayers(orm.em.fork(), "supporttest_renamed"))[0]!.formerName).toBeNull();
+    });
+
+    test("by account number; bots left out, seeded dev players kept", async () => {
+      expect((await ids(String(OTHER)))[0]).toBe(OTHER);
+      expect(await ids("supporttest_smash_bot")).toEqual([]);
+      expect(await ids("supporttest_smash_seed")).toEqual([SEEDED]);
+      expect(await searchPlayers(orm.em.fork(), "   ")).toEqual([]);
+      expect(await searchPlayers(orm.em.fork(), "%")).toEqual([]);
+    });
   });
 });
