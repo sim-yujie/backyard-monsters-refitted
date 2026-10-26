@@ -423,13 +423,21 @@ export const describeOutcome = (
  * What the attack screen calls its target: "Kozu Tribe's camp", "Ann's
  * outpost", "Bob's yard" (#187). The guided start's practice camp (issue
  * #227) is a camp by name already: "The practice camp", or "the practice
- * camp" inside a sentence.
+ * camp" inside a sentence. A Moloch tribe is named for its band already:
+ * "Moloch's Minions" (Inferno WP 2.10).
  */
 export const targetLabel = (
-  target: { readonly baseid: string; readonly kind: AttackTargetKind; readonly name: string; readonly mapversion?: number },
+  target: {
+    readonly baseid: string;
+    readonly kind: AttackTargetKind;
+    readonly name: string;
+    readonly mapversion?: number;
+    readonly infernoTribe?: boolean;
+  },
   sentenceStart = true,
 ): string => {
   if (isPracticeCamp(target)) return sentenceStart ? "The practice camp" : "the practice camp";
+  if (target.infernoTribe) return target.name;
   const noun = target.kind === "wild" ? "camp" : target.kind === "outpost" ? "outpost" : "yard";
   return `${target.name}'s ${noun}`;
 };

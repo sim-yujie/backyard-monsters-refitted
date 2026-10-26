@@ -450,6 +450,10 @@ describe("the pieces", () => {
     expect(targetLabel({ ...practice, mapversion: 2 })).toBe("Practice camp's camp");
     expect(targetLabel({ baseid: "9", kind: "outpost", name: "Ann" })).toBe("Ann's outpost");
     expect(targetLabel({ baseid: "8", kind: "main", name: "Bob" })).toBe("Bob's yard");
+    // A Moloch tribe is named for its band: no "Moloch's Minions's camp".
+    expect(targetLabel({ baseid: "214", kind: "wild", name: "Moloch's Minions", infernoTribe: true })).toBe(
+      "Moloch's Minions",
+    );
   });
 
   it("summarises the ended session for the panel", () => {

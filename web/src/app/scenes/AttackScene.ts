@@ -50,7 +50,7 @@ import { Hud } from "@/ui/Hud";
 import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
-import { RESOURCE_KEYS, resourceAmount, setResourceRealm } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@/ui/resourceIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
 import { ATTACK_CONFIRM_CLASS } from "@/ui/attack/attackDialogs";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
@@ -970,12 +970,13 @@ export class AttackScene implements Scene {
       this.damage.textContent = `${readout.damage}%`;
     }
     if (this.loot) {
-      const { r1, r2, r3, r4 } = readout.loot;
       RESOURCE_KEYS.forEach((key, index) => {
         const value = this.lootValues[index];
         if (value) value.textContent = formatAmount(readout.loot[key]);
       });
-      this.loot.title = `Twigs ${r1}, pebbles ${r2}, putty ${r3}, goo ${r4}`;
+      // Bone, Coal, Sulfur and Magma in an Inferno fight, as the strip's icons.
+      const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
+      this.loot.title = RESOURCE_KEYS.map((key) => `${resourceName(key, realm)} ${readout.loot[key]}`).join(", ");
     }
     const skipping = this.session?.skipping ?? false;
     for (const [value, button] of this.speedButtons) {
