@@ -1,4 +1,5 @@
-import { loadInfernoState, type MolochGroup } from "@/api/inferno";
+import { loadInfernoState, loadInfernoYard, type MolochGroup } from "@/api/inferno";
+import { transferActions } from "@/api/infernoTransfer";
 import { raidApi } from "@/api/raid";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { screenShakeOn } from "@/game/attack/juice";
@@ -16,8 +17,9 @@ import { CaveSprite } from "@/game/inferno/CaveSprite";
 import { playEmergence, playStagePassed, type EmergenceView } from "@/game/inferno/emergenceFlow";
 import { holdForEmergence } from "@/game/inferno/emergenceHold";
 import { enterDescent } from "@/game/inferno/descentEntry";
-import { TRANSFER_NOT_YET } from "@/game/inferno/emergenceText";
 import { isMolochRaid, startMolochRaid } from "@/game/inferno/molochRaid";
+import { academyLevel, housingSummary } from "@/game/monsters/housing";
+import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { consumeRaidResult, setRaidRun } from "@/game/raid/raidSession";
 import { raidWatch } from "@/game/raid/raidWatch";
 import {
@@ -29,6 +31,7 @@ import {
   molochWarning,
   stagePassed,
 } from "@/ui/inferno/EmergenceScreens";
+import { AscendDialog } from "@/ui/inferno/AscendDialog";
 import { INFERNO_YARD, MAIN_YARD } from "../ownYards";
 import { YardView } from "../YardRenderer";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
@@ -198,6 +201,24 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
       openAttack: (target) => scene.openAttack(target),
     });
   };
+  // Transfer Monsters: Inferno monsters up from the Compound into this
+  // yard's Housing (WP 2.6, `INFERNOPORTAL.AscendMonsters`).
+  const transfer = (): void => {
+    const actions = transferActions(store);
+    new AscendDialog({
+      load: async () => (await loadInfernoYard()).monsters?.housed ?? {},
+      room: () => {
+        const { used, total } = housingSummary(store.save, store.now());
+        return { used, capacity: total };
+      },
+      sizeOf: (id) => housingSpace(id, academyLevel(store.save.academy, id)) ?? 0,
+      send: async (picked) => {
+        const result = await actions.transfer(picked);
+        return result.ok ? null : result.refusal.message;
+      },
+      onDone: notice,
+    }).mount(overlay.modal);
+  };
   const view: EmergenceView = {
     setCaveLevel: (next) => {
       level = Math.max(next, 0);
@@ -235,7 +256,7 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
     if (!alive) return;
     const tap = caveTap(level, townHall(), raidRunning);
     if (tap.kind === "menu") {
-      caveMenu(overlay.modal, { enter, transfer: () => notice(TRANSFER_NOT_YET) });
+      caveMenu(overlay.modal, hasYard ? { enter, transfer } : { enter });
     } else if (tap.kind === "note") {
       const hall = store.yard.townHall;
       caveNote(overlay.modal, tap.text, tap.upgrade && hall ? () => scene.focusBuilding(hall.id) : null);

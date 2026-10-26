@@ -386,3 +386,127 @@
     translate: -50% calc(-100% - 2rem);
   }
 }
+
+/* ── Transfer Monsters from the cave (WP 2.6, `INFERNO_ASCENSION_POPUP`) ── */
+
+.ascend-dialog {
+  width: min(92vw, 32rem);
+}
+
+.ascend-dialog [hidden] {
+  display: none;
+}
+
+.ascend-dialog__action {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.ascend-dialog__lead,
+.ascend-dialog__free,
+.ascend-dialog__note {
+  margin: 0;
+  color: var(--colour-text-secondary);
+}
+
+.ascend-dialog__free {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.ascend-dialog__capacity {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.ascend-dialog__capacity-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.ascend-dialog__capacity-name {
+  color: var(--colour-text-secondary);
+}
+
+.ascend-dialog__figure {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Housed, then the picks after them, as Flash's `mcBar` and `mcBarB`. */
+.ascend-bar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-input);
+}
+
+.ascend-bar__stored {
+  background: var(--colour-meter);
+}
+
+.ascend-bar__queued {
+  background: var(--colour-danger);
+}
+
+.ascend-dialog__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(40vh, 340px);
+  overflow-y: auto;
+}
+
+.ascend-dialog__list:empty {
+  display: none;
+}
+
+.ascend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.ascend-row__picture {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.ascend-row__label {
+  flex: 1 1 110px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ascend-row__name {
+  font-weight: 700;
+}
+
+.ascend-row__have {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ascend-dialog__status {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.ascend-dialog__status--failed {
+  color: var(--colour-warning);
+}

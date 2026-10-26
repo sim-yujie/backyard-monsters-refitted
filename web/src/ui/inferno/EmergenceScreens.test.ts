@@ -90,6 +90,12 @@ describe("the open cave's menu", () => {
     expect(transfer).toHaveBeenCalledTimes(1);
     expect(enter).toHaveBeenCalledTimes(1);
   });
+
+  it("offers Enter Cavern alone before the Descent is passed, as Flash's menu did", () => {
+    const modal = host();
+    caveMenu(modal, { enter: vi.fn() });
+    expect(labels(modal)).toEqual([ENTER_CAVERN]);
+  });
 });
 
 describe("after a raid", () => {

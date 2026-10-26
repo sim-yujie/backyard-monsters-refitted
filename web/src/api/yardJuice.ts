@@ -25,6 +25,10 @@ export interface JuiceReport {
   goo: number;
   /** Goo the storage cap turned away. */
   lost: number;
+  /** Magma that landed in the Inferno purse, from Inferno monsters juiced on the main yard. */
+  magma?: number;
+  /** Magma the Inferno cap turned away. */
+  magmaLost?: number;
   /** The Juicer's rate that applied. */
   rate: number;
 }

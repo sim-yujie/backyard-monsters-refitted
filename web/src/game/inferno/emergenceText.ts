@@ -59,12 +59,6 @@ export const EXIT_CAVERN = "Exit Cavern";
 export const TRANSFER_MONSTERS = "Transfer Monsters";
 export const UPGRADE_NOW = "Upgrade Now";
 
-/**
- * Ours, not Flash's: the monster transfer (S2) is not built yet, so its
- * button says so instead of doing nothing.
- */
-export const TRANSFER_NOT_YET = "Moving monsters into the Inferno comes with the Inferno monsters, in a coming update.";
-
 /** `ai_inferno_popupwarning_title`: Moloch's warning before each raid (`INFERNO_EMERGENCE_ATTACKPOPUP.as`). */
 export const MOLOCH_ALERT_TITLE = "INFERNO MONSTER ALERT";
 
