@@ -1,0 +1,13 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+base.png is the approved TIER 3 (the black-and-gold tower) picture of a tower from a cartoon building game. Make ONE change to it and keep everything else exactly the same.
+
+The change: REMOVE THE TURNING TOP from the top deck: the armoured many-sided dome with its round porthole and the two long tubes sticking out of it. Nothing of it may remain, not even its shadow or reflection. In its place show the EMPTY round turntable it stands on: a flat round black steel plate with a polished gold rim set into the top deck, centred where the dome was, with a small round pivot hub and a ring of bolts in its middle. The moving part will be drawn on top of it later, so the plate must be flat and empty. The small box with the red and blue hoses at the back corner of the deck stays.
+
+Everything else stays exactly as in base.png: the body and its storeys, the stripes, the panels, the wires, the legs and feet, the top deck and its rim, the colours and materials, the camera, the size and position of the tower in the picture, and the painting finish.
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Input 1, base.png: the approved picture to edit.
+
+Output: ONE image, 1024x1536, the tower alone, at the same size and in the same place as in base.png. Background everywhere: flat pure green #00FF00. No ground, no grass, no shadow on the ground, no text, no labels. The painting itself must contain no bright pure green.

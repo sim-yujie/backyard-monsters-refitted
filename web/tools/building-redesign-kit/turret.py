@@ -96,11 +96,11 @@ TOWER = {
                "round they point changes, so on the picture they always also rise."),
         away="(seen from behind, the raised tubes rising straight up the picture)",
         toward="(the tube ends facing us, foreshortened, rising a little above the dome)",
-        remove=("REMOVE THE TURNING TOP from the top deck: the armoured many-sided dome with its round porthole and the two long "
-                "tubes sticking out of it"),
+        remove=("REMOVE THE ROUND DOMED TOP from the top deck: the many-sided metal dome with its round porthole and the two long "
+                "thin poles on it"),
         hold=" The small box with the red and blue hoses at the back corner of the deck stays.",
         plate="set into the top deck, centred where the dome was",
-        brush=0.05, cells=32, heading=lambda k: 12 * k + 6,
+        brush=0.09, fit=1, cells=32, heading=lambda k: 12 * k + 6,
         rule="cell k = trunc(bearing / 12) (towerFx.ts facingCell, BUILDING115.as): only cells 0-29 are reached; cell k shows "
              "the heading nearest 12k + 6"),
     "railgun": dict(
@@ -120,7 +120,7 @@ TOWER = {
         remove=("REMOVE THE TURNING TOP: the round housing with the two gold coil posts, the two long square rails with the "
                 "glowing blue cores, and the short grey pipe at its back"),
         hold="", plate="on the top of the stand, centred where the housing was",
-        brush=0.06, cells=32, heading=lambda k: 12 * k - 24,
+        brush=0.13, fit=1, cells=32, heading=lambda k: 12 * k - 24,
         rule="cell k = trunc(((bearing + 30) mod 360) / 12) (towerFx.ts facingCell, BUILDING118.as): only cells 0-29 are "
              "reached; cell k shows the heading nearest 12k - 24"),
 }
@@ -231,11 +231,11 @@ Output: ONE square image, 1024x1024, laid out as a 3x3 grid of nine equal cells,
     print("dir", d.as_posix())
 
 
-def band(a, thr=128):
-    """(left, right, bottom, top) of the alpha shape, left/right over its bottom 30% (as finish.py)."""
+def band(a, thr=128, part=0.3):
+    """(left, right, bottom, top) of the alpha shape, left/right over its bottom 30% (as finish.py), or over all of it (part=1)."""
     ys, xs = np.where(a >= thr)
     top, bot = ys.min(), ys.max() + 1
-    sel = ys >= bot - 0.3 * (bot - top)
+    sel = ys >= bot - part * (bot - top)
     return xs[sel].min(), xs[sel].max() + 1, bot, top
 
 
@@ -245,8 +245,9 @@ def cut_body(tw, t):
     cut = key(np.asarray(Image.open(d / "sample-new.png").convert("RGB")))
     cut.save(d / "sample-cut.png")
     ref = Image.open(RED / tw / TIER[t] / "new-4x.png")
-    l0, r0, b0, _ = band(np.asarray(ref)[..., 3])
-    l1, r1, b1, _ = band(np.asarray(cut)[..., 3])
+    part = TOWER[tw].get("fit", 0.3)                     # a low, wide stand: its bottom 30% is only the front leg, so fit it whole
+    l0, r0, b0, _ = band(np.asarray(ref)[..., 3], part=part)
+    l1, r1, b1, _ = band(np.asarray(cut)[..., 3], part=part)
     k = (r0 - l0) / (r1 - l1)
     bb = cut.getbbox()
     crop = resize_pm(cut.crop(bb), (round((bb[2] - bb[0]) * k), round((bb[3] - bb[1]) * k)))
@@ -351,7 +352,8 @@ def sheet(tw):
     """Per tier: the game's strip at 2x + strip.json; per tower: the still sheet (each tier at 32 headings, 2x, rows of 8) and the
     turning GIF (three tiers side by side, 3x, one full turn), both cropped tight."""
     o = out(tw)
-    tiers = [t for t in TIER if (o / t / "body" / "body-4x.png").exists() and (o / t / "turret" / "pivot.json").exists()]
+    tiers = [t for t in TIER if (o / t / "body" / "body-4x.png").exists() and (o / t / "turret" / "pivot.json").exists()
+             and t in PIVOT.get(tw, {})]
     hs = {t: headings(tw, t) for t in tiers}
     cells = game_cells(tw)
     for t in tiers:                                      # the game's strip at 2x: square cells, pivot in the middle of each
@@ -425,6 +427,8 @@ PIVOT = {
     "sniper": {"T1": (331, 458, 115, {"as": {21: 19}, "away2": True}), "T2": (331, 909, 115, {"as": {21: 19}, "away2": True}),
                "T3": (332, 840, 115, {"as": {21: None}, "away2": True})},
     "laser": {"T1": (300, 447, 112, {}), "T2": (300, 902, 106, {}), "T3": (300, 838, 106, {})},
+    "aerial": {"T1": (333, 450, 118, {}), "T2": (333, 861, 118, {}), "T3": (333, 813, 118, {})},
+    "railgun": {"T1": (361, 380, 115, {})},
 }
 
 if __name__ == "__main__":

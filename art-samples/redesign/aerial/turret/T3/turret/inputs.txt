@@ -1,0 +1,3 @@
+look.png
+guide.png
+t1sheet.png

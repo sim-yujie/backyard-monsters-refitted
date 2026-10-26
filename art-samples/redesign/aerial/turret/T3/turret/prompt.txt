@@ -1,0 +1,24 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint a SPRITE SHEET of a tower's turning top with two raised tubes turning round, TIER 3 (the black-and-gold tower).
+
+Input 1, look.png: the turning top as painted on the approved tower: the armoured many-sided dome with the round porthole on its front, and the two long parallel tubes with ringed ends sticking out of its front, raised into the sky. Ignore the deck, the box and hoses beside the dome, and everything below the dome.
+Input 2, guide.png: a 3x3 grid of the OLD game's version at the same nine headings. From each cell copy ONLY which way it points and how foreshortened it looks. Do not copy its look and ignore any deck under it.
+Input 3, t1sheet.png: the approved tier 1 sheet at these same nine headings. Copy its layout, the headings, the size and the place of the object in each cell exactly; only the materials change to those of look.png.
+
+Output: ONE square image, 1024x1024, laid out as a 3x3 grid of nine equal cells, in the same order as guide.png (do not draw the grid lines). In every cell paint the SAME object as look.png (same parts, shapes, colours, materials, size, painting finish, light from the upper left), turned on its vertical axis so that:
+- row 1, cell 1: the two tubes point straight AWAY from the viewer; on flat ground that is toward 12:00 on a clock face laid over the picture (seen from behind, the raised tubes rising straight up the picture)
+- row 1, cell 2: the two tubes point between straight AWAY from the viewer and to the back right, half way; on flat ground that is toward 1:19 on a clock face laid over the picture
+- row 1, cell 3: the two tubes point to the back right, along the back-right edge of the ground diamond; on flat ground that is toward 2:07 on a clock face laid over the picture
+- row 2, cell 1: the two tubes point between to the back right and straight to the RIGHT, half way; on flat ground that is toward 2:37 on a clock face laid over the picture
+- row 2, cell 2: the two tubes point straight to the RIGHT; on flat ground that is toward 3:00 on a clock face laid over the picture
+- row 2, cell 3: the two tubes point between straight to the RIGHT and to the front right, half way; on flat ground that is toward 3:23 on a clock face laid over the picture
+- row 3, cell 1: the two tubes point to the front right, along the front-right edge of the ground diamond; on flat ground that is toward 3:53 on a clock face laid over the picture
+- row 3, cell 2: the two tubes point between to the front right and straight TOWARD the viewer, half way; on flat ground that is toward 4:41 on a clock face laid over the picture
+- row 3, cell 3: the two tubes point straight TOWARD the viewer; on flat ground that is toward 6:00 on a clock face laid over the picture (the tube ends facing us, foreshortened, rising a little above the dome)
+
+Only the dome and its two tubes turn. The two tubes are ALWAYS raised into the sky at the same steep angle as in look.png, in every cell; only which way round they point changes, so on the picture they always also rise. The camera never moves: every cell is seen from the same fixed isometric camera, from the front, looking down at about 30 degrees. The dome sits on a short round collar; it stays the same round shape and size in every cell, CENTRED in its cell and at the same height in every cell, so the object turns about the centre of its collar. Every object the same size, about two thirds of the width of its cell, tubes included, nothing touching the cell edges or another cell. No deck, no plate, no tower, no ground.
+
+It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
+
+Background everywhere: flat pure green #00FF00. No ground, no grass, no shadow on the ground, no text, no labels. The painting itself must contain no bright pure green. No numbers, arrows or grid lines.
