@@ -1,0 +1,15 @@
+{
+ "cells": 32,
+ "cell_w": 171,
+ "cell_h": 171,
+ "degrees_per_cell": 11.25,
+ "pivot_in_body_4x": [
+  332,
+  840
+ ],
+ "body_4x_size": [
+  724,
+  1404
+ ],
+ "note": "cell c = cartesian bearing / 11.25 (BUILDING21.as); pivot = middle of each cell"
+}
