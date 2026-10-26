@@ -271,9 +271,16 @@ export const instantCost = (step: CostStep): number => {
  * or above the required level and compare against the required count.
  * `yard.buildings` reports a building still under construction as level 0, so a
  * half-built Town Hall does not unlock anything.
+ *
+ * The Under Hall entry (999, the main yard's Inferno buildings, WP 6.1) is
+ * met by the Inferno yard's Under Hall level, `underHall` (`BASE.as:3762-3765`).
  */
-export const requirementsMet = (re: readonly CostRequirement[], yard: Yard): boolean =>
+/** `surfaceInferno.ts`'s `UNDER_HALL_REQUIREMENT`, here so this module imports nothing of it. */
+const UNDER_HALL_ENTRY = 999;
+
+export const requirementsMet = (re: readonly CostRequirement[], yard: Yard, underHall = 0): boolean =>
   re.every(([type, count, level]) => {
+    if (type === UNDER_HALL_ENTRY) return underHall >= level;
     let have = 0;
     for (const building of yard.buildings) {
       if (building.type === type && building.level >= level) have++;

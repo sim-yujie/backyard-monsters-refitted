@@ -21,7 +21,8 @@ import { typeName } from "@/game/yard/planner/summary";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
-import { costAmounts, resourceAmount } from "@/ui/resourceIcon";
+import { costAmounts, resourceAmount, type ResourceRealm } from "@/ui/resourceIcon";
+import { INFERNO_LOCKED_MESSAGE, purseFunds } from "@/game/yard/surfaceInferno";
 import { BUILD_BLURBS, INFERNO_BUILD_BLURBS } from "./buildBlurbs";
 import { costFactChips } from "./costFactChips";
 import { ShinyButton } from "./ShinyButton";
@@ -113,18 +114,27 @@ const WORKER = ["M12 4a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z", "M5 20c0-3.5 3-6 7
 /** The hall of a yard of `kind`: the Under Hall in the Inferno (WP 1.19). */
 export const hallWord = (kind: YardKind = "main"): string => (kind === "inferno" ? "Under Hall" : "Town Hall");
 
+/** The hall an offer counts by: a main-yard Inferno building's is the Under Hall (WP 6.1). */
+const offerHall = (offer: Pick<BuildOffer, "inferno">, kind: YardKind): string =>
+  offer.inferno ? "Under Hall" : hallWord(kind);
+
+/** The realm an offer's price is drawn in: a main-yard Inferno building's is the Inferno's. */
+const offerRealm = (offer: Pick<BuildOffer, "inferno">): ResourceRealm | undefined =>
+  offer.inferno ? "inferno" : undefined;
+
 /** "2 of 3 built" and the like: what a tile says under its name. */
 export const tileLine = (offer: BuildOffer, kind: YardKind = "main"): string => {
   if (offer.stored !== null) return `${offer.stored} in storage`;
-  const hall = hallWord(kind);
+  const hall = offerHall(offer, kind);
   switch (offer.status) {
     case "locked": {
       const gate = offer.gate;
+      if (gate?.reason === "infernoLocked") return "Capture an Inferno base first";
       if (gate?.reason === "townHall") {
-        return gate.have <= 0 ? `Needs a ${hall}` : `Unlocks at ${hall} ${gate.need}`;
+        return gate.have <= 0 ? `Needs a${/^[AEIOU]/.test(hall) ? "n" : ""} ${hall}` : `Unlocks at ${hall} ${gate.need}`;
       }
       const need = offer.needs.find((one) => !one.met);
-      return need ? `Needs ${needText(need, kind)}` : "Not yet";
+      return need ? `Needs ${needText(need, kind, hall)}` : "Not yet";
     }
     case "maxed":
       return `${offer.owned} of ${offer.most} · all built`;
@@ -140,9 +150,12 @@ const plural = (name: string): string => {
   return `${name}s`;
 };
 
-/** One line of the needs list, as words. On an outpost the core is the hall. */
-export const needText = (need: BuildNeed, kind: YardKind = "main"): string => {
-  if (need.kind === "townHall") return kind === "outpost" ? "an Outpost core" : `${hallWord(kind)} level ${need.level}`;
+/**
+ * One line of the needs list, as words. On an outpost the core is the hall;
+ * `hall` names it otherwise (the Under Hall for a main-yard Inferno building).
+ */
+export const needText = (need: BuildNeed, kind: YardKind = "main", hall: string = hallWord(kind)): string => {
+  if (need.kind === "townHall") return kind === "outpost" ? "an Outpost core" : `${hall} level ${need.level}`;
   const name = typeName(need.type, kind);
   const which =
     need.count === 1 ? `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}` : `${need.count} ${plural(name)}`;
@@ -579,7 +592,7 @@ export class BuildMenu {
       const state = document.createElement("span");
       state.className = "u-visually-hidden";
       state.textContent = need.met ? "Done: " : "Not yet: ";
-      const words = needText(need, kind);
+      const words = needText(need, kind, offerHall(offer, kind));
       line.append(mark, state, words.charAt(0).toUpperCase() + words.slice(1));
       list.append(line);
     }
@@ -588,7 +601,9 @@ export class BuildMenu {
     const facts = document.createElement("ul");
     facts.className = "build-info__facts";
     facts.setAttribute("aria-label", "Cost");
-    facts.append(...costFactChips(offer.cost, this.binding.store.resources));
+    // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
+    const held = offer.inferno ? purseFunds(this.binding.store.save).resources : this.binding.store.resources;
+    facts.append(...costFactChips(offer.cost, held, offerRealm(offer)));
     const time = document.createElement("li");
     time.className = "build-info__fact";
     time.append(glyph(CLOCK, "build-info__fact-icon"), offer.atOnce ? "At once" : formatCountdown(offer.seconds));
@@ -604,7 +619,7 @@ export class BuildMenu {
     const reasonId = `build-gate-${offer.type}`;
     const saysWhy = gate !== null && gate.reason !== "townHall" && gate.reason !== "requirements";
     if (gate && saysWhy) {
-      const reason = gateLine(gate, kind);
+      const reason = gateLine(gate, kind, offer.inferno);
       reason.id = reasonId;
       nodes.push(reason);
     }
@@ -619,7 +634,7 @@ export class BuildMenu {
     tutTarget(build, TutTarget.BUILD_GO);
     build.textContent = "Build · then pick a spot";
     build.disabled = gate !== null && gate.reason !== "workers";
-    build.setAttribute("aria-label", `Build ${name}` + (gate ? `. ${gateSentence(gate, kind)}` : ""));
+    build.setAttribute("aria-label", `Build ${name}` + (gate ? `. ${gateSentence(gate, kind, offer.inferno)}` : ""));
     if (saysWhy) build.setAttribute("aria-describedby", reasonId);
     // Every worker busy still picks the building up: the "all workers busy"
     // box comes once a spot is chosen, and the build goes on there (#345).
@@ -722,10 +737,16 @@ const picture = (offer: BuildOffer, className: string, kind: YardKind): HTMLElem
   return box;
 };
 
-/** Why a building cannot be built, as plain words (a button's accessible name, the info's reason). */
-export const gateSentence = (gate: BuildGate, kind: YardKind = "main"): string => {
-  const hall = hallWord(kind);
+/**
+ * Why a building cannot be built, as plain words (a button's accessible name,
+ * the info's reason). `inferno`: a main-yard Inferno building, counted by the
+ * Under Hall and paid from the Inferno purse.
+ */
+export const gateSentence = (gate: BuildGate, kind: YardKind = "main", inferno = false): string => {
+  const hall = offerHall({ inferno }, kind);
   switch (gate.reason) {
+    case "infernoLocked":
+      return INFERNO_LOCKED_MESSAGE;
     case "townHall":
       return gate.have <= 0 ? `Build a ${hall} first.` : `Needs ${hall} ${gate.need}.`;
     case "limit":
@@ -737,6 +758,7 @@ export const gateSentence = (gate: BuildGate, kind: YardKind = "main"): string =
         .map(([type, count, level]) => needText({ kind: "building", type, count, level, met: false }, kind))
         .join(", ")}.`;
     case "shortfall":
+      if (inferno) return gate.overCap ? "More than your Inferno storage holds." : "Not enough Inferno resources.";
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
@@ -746,11 +768,11 @@ export const gateSentence = (gate: BuildGate, kind: YardKind = "main"): string =
 };
 
 /** The one line that says why a building cannot be built, amounts with their icons. */
-export const gateLine = (gate: BuildGate, kind: YardKind = "main"): HTMLElement => {
+export const gateLine = (gate: BuildGate, kind: YardKind = "main", inferno = false): HTMLElement => {
   const line = document.createElement("p");
   line.className = "build-info__gate";
   if (gate.reason === "shortfall" && !gate.overCap) {
-    line.append("Need ", costAmounts(gate.shortfall) ?? "", " more.");
+    line.append("Need ", costAmounts(gate.shortfall, undefined, inferno ? { realm: "inferno" } : {}) ?? "", " more.");
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
   } else {
@@ -781,6 +803,8 @@ export interface PlacementBarOptions {
   readonly instant: boolean;
   readonly instantPrice: number;
   readonly cost: BuildOffer["cost"];
+  /** The realm the cost is drawn in: the Inferno's for a main-yard Inferno building. */
+  readonly realm?: ResourceRealm;
   /** How long it takes, already spelled ("15m 0s", "At once"). */
   readonly time?: string;
   readonly onCancel: () => void;
@@ -826,7 +850,7 @@ export class PlacementBar {
     if (options.instant) {
       price.append("Finished at once for ", resourceAmount("shiny", formatAmount(options.instantPrice)));
     } else {
-      price.append(costAmounts(options.cost) ?? "Free");
+      price.append(costAmounts(options.cost, undefined, options.realm ? { realm: options.realm } : {}) ?? "Free");
       if (options.time) {
         const time = document.createElement("span");
         time.className = "build-placing__time";

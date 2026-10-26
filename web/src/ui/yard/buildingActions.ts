@@ -25,6 +25,12 @@ import { GENERAL_STORE_TYPE } from "@/game/yard/shop";
 import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
 import { siteOfType } from "@/game/siege/siege";
+import {
+  isSurfaceInferno,
+  purseFunds,
+  surfaceInfernoStanding,
+  UNDER_HALL_REQUIREMENT,
+} from "@/game/yard/surfaceInferno";
 import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE } from "@/game/yard/championModel";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 import { availableAgainText, outpostCountOf, randomMoveWait } from "@/game/maproom/randomMove";
@@ -118,6 +124,8 @@ export type UpgradeGate =
   | { readonly reason: "training" }
   | { readonly reason: "damaged" }
   | { readonly reason: "townHall"; readonly have: number; readonly need: number }
+  /** A main-yard Inferno building's step needs a bigger Inferno Under Hall (WP 6.1). */
+  | { readonly reason: "underHall"; readonly have: number; readonly need: number }
   | { readonly reason: "maxLevel"; readonly level: number }
   | { readonly reason: "requirements"; readonly requirements: readonly CostRequirement[] }
   | {
@@ -146,6 +154,8 @@ export interface UpgradeOffer {
   readonly gate: UpgradeGate | null;
   /** Why Instant is disabled: the same gates minus resources and workers, plus Shiny. */
   readonly instantGate: UpgradeGate | null;
+  /** A main-yard Inferno building: `cost` is from the Inferno purse, in Bone, Coal, Sulfur and Magma. */
+  readonly inferno: boolean;
 }
 
 /** One Shiny speed-up on a running job. */
@@ -320,6 +330,30 @@ const nodeOf = (building: YardBuilding, damaged: boolean): PlanNode => {
 };
 
 /**
+ * What a building's prices are held against: the yard's resources and caps,
+ * or the Inferno purse's for a main-yard Inferno building (WP 6.1).
+ */
+export const fundsFor = (
+  type: number,
+  context: Pick<PanelContext, "yard" | "save" | "resources" | "caps">,
+): { readonly resources: Resources; readonly caps: ResourceCaps | null } =>
+  isSurfaceInferno(type, context.yard.kind) ? purseFunds(context.save) : context;
+
+/**
+ * A main-yard Inferno building's step requirements, read against the Inferno
+ * Under Hall as the server reads them (`planOneUpgrade`); null when met. The
+ * planner's ladder cannot see the Under Hall, so it is not asked.
+ */
+const infernoStepGate = (type: number, from: number, context: PanelContext): UpgradeGate | null => {
+  const re = costOf(type, from, context.yard.kind)?.[5] ?? [];
+  const { underHall } = surfaceInfernoStanding(context.save);
+  const unmet = re.filter((entry) => !requirementsMet([entry], context.yard, underHall));
+  if (unmet.length === 0) return null;
+  const hall = unmet.find(([required]) => required === UNDER_HALL_REQUIREMENT);
+  return hall ? { reason: "underHall", have: underHall, need: hall[2] } : { reason: "requirements", requirements: unmet };
+};
+
+/**
  * The next upgrade step and its gates, or null when the panel offers no
  * Upgrade for this building at all.
  */
@@ -347,6 +381,7 @@ export const upgradeOffer = (
       instant: type !== MAP_ROOM_TYPE,
       gate: { reason: "maxLevel", level: from },
       instantGate: { reason: "maxLevel", level: from },
+      inferno: isSurfaceInferno(type, context.yard.kind),
     };
   }
 
@@ -357,6 +392,8 @@ export const upgradeOffer = (
 
   // The gates both buttons share, in the server's order.
   const hall = townHallLevel(context.yard);
+  const inferno = isSurfaceInferno(type, context.yard.kind);
+  const funds = fundsFor(type, context);
   let common: UpgradeGate | null = null;
   // The Lab is not upgraded while it researches (`MONSTERLAB.as:241-247`; the server's `isBusy`).
   if (building.type === LAB_TYPE && researchOn(building)) common = { reason: "busy" };
@@ -364,6 +401,7 @@ export const upgradeOffer = (
   else if (building.type === ACADEMY_TYPE && building.raw["upg"]) common = { reason: "training" };
   else if (damaged) common = { reason: "damaged" };
   else if (hall <= 0) common = { reason: "townHall", have: 0, need: 1 };
+  else if (inferno) common = infernoStepGate(type, from, context);
   else if (step.firstStepGated && step.gate) {
     common = step.gate.townHall
       ? { reason: "townHall", have: step.gate.townHall.have, need: step.gate.townHall.need }
@@ -376,11 +414,11 @@ export const upgradeOffer = (
     let short = false;
     let overCap = false;
     for (const key of KEYS) {
-      const missing = cost[key] - held(context.resources, key);
+      const missing = cost[key] - held(funds.resources, key);
       if (missing > 0) {
         shortfall[key] = missing;
         short = true;
-        if (overCapOf(cost[key], context.caps?.[key])) overCap = true;
+        if (overCapOf(cost[key], funds.caps?.[key])) overCap = true;
       }
     }
     if (short) gate = { reason: "shortfall", shortfall, overCap };
@@ -404,6 +442,7 @@ export const upgradeOffer = (
     instant: type !== MAP_ROOM_TYPE,
     gate,
     instantGate,
+    inferno,
   };
 };
 
@@ -450,11 +489,13 @@ export const cancelOffer = (building: YardBuilding, context: PanelContext): Canc
   const cost: UpgradeCost = step
     ? { r1: step[0], r2: step[1], r3: step[2], r4: step[3] }
     : { ...ZERO };
+  // A main-yard Inferno building's refund goes to the Inferno purse, up to its caps.
+  const funds = fundsFor(building.type, context);
   const refund = { ...ZERO };
   const lost = { ...ZERO };
   for (const key of KEYS) {
-    const have = held(context.resources, key);
-    const cap = context.caps?.[key];
+    const have = held(funds.resources, key);
+    const cap = funds.caps?.[key];
     const credited =
       typeof cap === "number" ? Math.max(have, Math.min(have + cost[key], cap)) - have : cost[key];
     refund[key] = credited;
@@ -654,11 +695,8 @@ const baiterBlocked = (building: YardBuilding, context: PanelContext): string | 
 /** The Town Hall is never recycled, so the panel does not offer it. */
 const TOWN_HALL_TYPE = 14;
 
-const recycleOfferFor = (building: YardBuilding, context: PanelContext): RecycleOffer =>
-  recycleOffer(
-    { ...building.raw, id: building.id },
-    context.save,
-    context.resources,
-    context.caps,
-    context.now(),
-  );
+const recycleOfferFor = (building: YardBuilding, context: PanelContext): RecycleOffer => {
+  // A main-yard Inferno building's refund goes to the Inferno purse (WP 6.1).
+  const funds = fundsFor(building.type, context);
+  return recycleOffer({ ...building.raw, id: building.id }, context.save, funds.resources, funds.caps, context.now());
+};

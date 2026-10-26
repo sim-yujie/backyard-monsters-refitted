@@ -35,6 +35,12 @@ export const BUILD_BLURBS: Readonly<Record<number, string>> = {
   117: "Hidden until one of the strongest monsters steps on it, then hits everything nearby.",
   118: "High damage in a straight line through everything, but a short reach.",
   119: "Keeps spare Champions safely frozen while one is active.",
+  // The main yard's Inferno buildings (Inferno WP 6.1): `bi_quaketower_desc`,
+  // `bi_magmatower_desc`, `b_siegefactory_desc`, `b_siegeworks_desc`.
+  129: "Creates an earthquake that does damage to all monsters in a certain area.",
+  132: "Fires bursts of molten rock that do massive damage.",
+  133: "Construct and launch Chaos Weapons to destroy your enemies.",
+  134: "Research Chaos Weapons to unleash more mayhem on your enemies.",
 };
 
 /**

@@ -24,6 +24,7 @@ import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { predictHatches, type HatchPrediction } from "@/game/monsters/hatchPredict";
 import { siegeSlices, type SiegeSite } from "@/game/siege/siege";
+import { isSurfaceInferno, purseFunds } from "@/game/yard/surfaceInferno";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
 import { IncomePrediction, overdriveEndOf } from "./outpostIncome";
 import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
@@ -926,12 +927,18 @@ const upgradeRefusal = (
   if (!step) return refuse("maxLevel", "That building is at its highest level.");
   const [r1, r2, r3, r4] = step;
   const cost = { r1, r2, r3, r4 };
+  // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
+  const inferno = isSurfaceInferno(building.type, kind);
+  const held = inferno ? purseFunds(store.save).resources : store.resources;
   const shortfall: Record<string, number> = {};
   let short = false;
   for (const key of ["r1", "r2", "r3", "r4"] as const) {
-    const missing = cost[key] - (Number(store.resources[key]) || 0);
+    const missing = cost[key] - (Number(held[key]) || 0);
     shortfall[key] = Math.max(0, missing);
     if (missing > 0) short = true;
+  }
+  if (short && inferno) {
+    return refuse("shortfall", "You do not have enough Inferno resources for that.", { shortfall, purse: "inferno" });
   }
   if (short) {
     return refuse("shortfall", "You do not have enough resources for that.", { shortfall });

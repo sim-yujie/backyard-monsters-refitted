@@ -421,7 +421,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * yard-state field (that shape is frozen), so the store patches them from
  * the two places they ride: each `completed` entry of kind `siege` (`detail:
  * { building, level, quantity }`) and a siege route's `report`, whose
- * `siege` and `purse` are the weapons and the purse after it.
+ * `siege` and `purse` are the weapons and the purse after it. A build,
+ * upgrade, cancel or recycle of a main-yard Inferno building reports the
+ * `purse` too (Inferno WP 6.1), so any report's `purse` is taken.
  */
 export const siegeSlices = (
   save: Pick<BaseLoadResponse, "siege" | "iresources">,
@@ -450,16 +452,16 @@ export const siegeSlices = (
         touch()[weapon.id] = { ...(touch()[weapon.id] ?? {}), level: Number(stock["level"]), quantity: Number(stock["quantity"]) };
       }
     }
-    const purse = report["purse"];
-    if (isRecord(purse)) {
-      const caps = isRecord(purse["caps"]) ? purse["caps"] : {};
-      const next: InfernoResourcesData = { ...(save.iresources ?? {}) };
-      for (const key of PURSE_KEYS) {
-        if (Number.isFinite(Number(purse[key]))) next[key] = Number(purse[key]);
-        if (Number.isFinite(Number(caps[key]))) next[`${key}max`] = Number(caps[key]);
-      }
-      slices.iresources = next;
+  }
+  const purse = isRecord(report) ? report["purse"] : undefined;
+  if (isRecord(purse)) {
+    const caps = isRecord(purse["caps"]) ? purse["caps"] : {};
+    const next: InfernoResourcesData = { ...(save.iresources ?? {}) };
+    for (const key of PURSE_KEYS) {
+      if (Number.isFinite(Number(purse[key]))) next[key] = Number(purse[key]);
+      if (Number.isFinite(Number(caps[key]))) next[`${key}max`] = Number(caps[key]);
     }
+    slices.iresources = next;
   }
   if (patched.siege) slices.siege = patched.siege;
   return slices;

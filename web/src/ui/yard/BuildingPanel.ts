@@ -36,7 +36,8 @@ import { icon } from "@/ui/icons";
 import { HousingJuice } from "@/ui/monsters/HousingJuice";
 import { HousingView } from "@/ui/monsters/HousingView";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
-import { costAmounts, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
+import { costAmounts, resourceAmount, resourceIcon, type ResourceIconOptions } from "@/ui/resourceIcon";
+import { isSurfaceInferno, purseFunds } from "@/game/yard/surfaceInferno";
 import { costFactChips } from "./costFactChips";
 import {
   jobOffer,
@@ -844,8 +845,13 @@ export class BuildingPanel {
    * as it does picking a new building. `Free` in words when there is nothing
    * to pay, as the Map Room's single-currency steps sometimes have.
    */
-  private costFactsLine(cost: UpgradeOffer["cost"], resources: Resources): HTMLElement {
-    const chips = costFactChips(cost, resources);
+  /** Whether `building` is one of the main yard's Inferno buildings, priced in the Inferno purse (WP 6.1). */
+  private infernoBuilding(building: YardBuilding): boolean {
+    return isSurfaceInferno(building.type, this.yard?.store.kind ?? "main");
+  }
+
+  private costFactsLine(cost: UpgradeOffer["cost"], resources: Resources, inferno = false): HTMLElement {
+    const chips = costFactChips(cost, resources, inferno ? "inferno" : undefined);
     if (chips.length === 0) {
       const line = document.createElement("p");
       line.className = "building-panel__cost";
@@ -881,10 +887,12 @@ export class BuildingPanel {
     head.append(title, time);
     block.append(head);
 
-    block.append(this.costFactsLine(offer.cost, resources));
+    // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
+    const held = offer.inferno && this.yard ? purseFunds(this.yard.store.save).resources : resources;
+    block.append(this.costFactsLine(offer.cost, held, offer.inferno));
 
     if (offer.gate) {
-      const line = gateLine(offer.gate, this.yard?.store.kind);
+      const line = gateLine(offer.gate, this.yard?.store.kind, offer.inferno);
       line.id = this.gateId(building);
       block.append(line);
     }
@@ -1099,14 +1107,15 @@ export class BuildingPanel {
     wrap.setAttribute("aria-label", "Confirm cancel");
     const question = document.createElement("p");
     question.className = "building-cancel__question";
-    const refund = costAmounts(offer.refund);
+    const icons = realmIcons(this.infernoBuilding(building));
+    const refund = costAmounts(offer.refund, undefined, icons);
     question.append(
       fortifying ? "Stop fortifying and get back " : "Cancel and get back ",
       refund ?? "nothing",
       "? Progress is lost.",
     );
     wrap.append(question);
-    const lost = costAmounts(offer.lost);
+    const lost = costAmounts(offer.lost, undefined, icons);
     if (lost) {
       const warning = document.createElement("p");
       warning.className = "building-cancel__lost";
@@ -1177,7 +1186,7 @@ export class BuildingPanel {
     if (offer.toStorage) {
       question.append(`Put this ${building.name} in storage? You can place it again later.`);
     } else {
-      const refund = costAmounts(offer.refund);
+      const refund = costAmounts(offer.refund, undefined, realmIcons(this.infernoBuilding(building)));
       question.append(
         `Recycle this ${building.name} and get back `,
         refund ?? "nothing",
@@ -1185,7 +1194,7 @@ export class BuildingPanel {
       );
     }
     wrap.append(question);
-    const lost = costAmounts(offer.lost);
+    const lost = costAmounts(offer.lost, undefined, realmIcons(this.infernoBuilding(building)));
     if (lost) {
       const warning = document.createElement("p");
       warning.className = "building-recycle__warning";
@@ -1343,7 +1352,7 @@ export class BuildingPanel {
         return;
       }
       // The building is gone, and this panel with it: the refund goes to the notices.
-      const refund = costAmounts(result.report.refund);
+      const refund = costAmounts(result.report.refund, undefined, reportIcons(result.report));
       const text = document.createElement("span");
       text.append(...(refund ? ["Build cancelled. Got back ", refund, "."] : ["Build cancelled."]));
       this.yard?.notices.show("build-cancel", text, { level: "info", timeoutMs: 6_000 });
@@ -1351,7 +1360,7 @@ export class BuildingPanel {
     }
     const result = await store.cancelUpgrade(id);
     this.report(id, result, (report) => {
-      const refund = costAmounts(report.refund);
+      const refund = costAmounts(report.refund, undefined, reportIcons(report));
       return refund ? ["Upgrade cancelled. Got back ", refund, "."] : ["Upgrade cancelled."];
     });
   }
@@ -1743,6 +1752,12 @@ const gateText = (text: string): HTMLElement => {
   return paragraph;
 };
 
+/** Icons for a main-yard Inferno building's amounts: Bone, Coal, Sulfur and Magma (WP 6.1). */
+const realmIcons = (inferno: boolean): ResourceIconOptions => (inferno ? { realm: "inferno" } : {});
+
+/** A report with a `purse` went to the Inferno purse, so its amounts are the Inferno's. */
+const reportIcons = (report: object): ResourceIconOptions => realmIcons("purse" in report);
+
 /** "2 × Monster Locker at level 3", or "a Monster Locker at level 3" for one. */
 const requirementText = ([type, count, level]: readonly [number, number, number], kind: YardKind): string =>
   `${count === 1 ? "a" : `${count} ×`} ${typeName(type, kind)} at level ${level}`;
@@ -1751,9 +1766,11 @@ const requirementText = ([type, count, level]: readonly [number, number, number]
  * Why a gate stops the upgrade, as plain words: what a disabled button's
  * tooltip and accessible name carry, where no icon can go.
  */
-export const gateSentence = (gate: UpgradeGate, kind: YardKind = "main"): string => {
+export const gateSentence = (gate: UpgradeGate, kind: YardKind = "main", inferno = false): string => {
   const hall = hallWord(kind);
   switch (gate.reason) {
+    case "underHall":
+      return `Needs Under Hall ${gate.need}.`;
     case "busy":
       return "Busy with another job.";
     case "training":
@@ -1767,6 +1784,7 @@ export const gateSentence = (gate: UpgradeGate, kind: YardKind = "main"): string
     case "requirements":
       return `Needs ${gate.requirements.map((entry) => requirementText(entry, kind)).join(", ")}.`;
     case "shortfall":
+      if (inferno) return gate.overCap ? "More than your Inferno storage holds." : "Not enough Inferno resources.";
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
@@ -1775,15 +1793,18 @@ export const gateSentence = (gate: UpgradeGate, kind: YardKind = "main"): string
   }
 };
 
-/** The one line under the cost that says why Upgrade is disabled, amounts drawn with their icons. */
-export const gateLine = (gate: UpgradeGate, kind: YardKind = "main"): HTMLElement => {
+/**
+ * The one line under the cost that says why Upgrade is disabled, amounts
+ * drawn with their icons: the Inferno's for a main-yard Inferno building.
+ */
+export const gateLine = (gate: UpgradeGate, kind: YardKind = "main", inferno = false): HTMLElement => {
   const line = gateText("");
   if (gate.reason === "shortfall" && !gate.overCap) {
-    line.append("Need ", costAmounts(gate.shortfall) ?? "", " more.");
+    line.append("Need ", costAmounts(gate.shortfall, undefined, realmIcons(inferno)) ?? "", " more.");
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
   } else {
-    line.textContent = gateSentence(gate, kind);
+    line.textContent = gateSentence(gate, kind, inferno);
   }
   return line;
 };
@@ -1827,11 +1848,11 @@ export const recycledMessage = (
     line.append(`${name} put in storage. Place it again from Build, Decorations.`);
     return line;
   }
-  const refund = costAmounts(report.refund);
+  const refund = costAmounts(report.refund, undefined, reportIcons(report));
   line.append(`${name} recycled`);
   if (refund) line.append(" for ", refund);
   line.append(".");
-  const lost = costAmounts(report.lost);
+  const lost = costAmounts(report.lost, undefined, reportIcons(report));
   if (lost) line.append(" ", lost, " did not fit in storage.");
   const culled = cullText(report.culled);
   if (culled) line.append(` Housing shrank: ${culled} lost.`);

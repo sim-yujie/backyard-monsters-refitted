@@ -1845,6 +1845,7 @@ export class YardScene implements Scene {
       instant,
       instantPrice: offer.instantPrice,
       cost: offer.cost,
+      ...(offer.inferno && { realm: "inferno" as const }),
       time: offer.atOnce ? "At once" : formatCountdown(offer.seconds),
       onCancel: () => this.endPlacement(),
       onBuildHere: () => placement.dropHere(),

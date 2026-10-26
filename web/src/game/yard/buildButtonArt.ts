@@ -17,8 +17,18 @@ import type { YardKind } from "./buildingCosts";
 /** Where the game server keeps the art. Proxied in development. */
 const ROOT = "/assets/buildingbuttons/";
 
-/** Types whose button is not simply `<type>.jpg`. */
-const BUTTON_FILE: Readonly<Record<number, string>> = { 17: "17.1.jpg", 121: "121.bb1.jpg" };
+/**
+ * Types whose button is not simply `<type>.jpg`, the main yard's Inferno
+ * buildings among them (`YARD_PROPS.as` `buildingbuttons`, Inferno WP 6.1).
+ */
+const BUTTON_FILE: Readonly<Record<number, string>> = {
+  17: "17.1.jpg",
+  121: "121.bb1.jpg",
+  129: "quake_tower.v2.jpg",
+  132: "magma_tower.v2.jpg",
+  133: "seige_factory.jpg",
+  134: "siege_lab.jpg",
+};
 
 /** The silhouettes that exist, by type (`YARD_PROPS.as` `silhouette_img`). */
 export const SILHOUETTE_FILE: Readonly<Record<number, string>> = {
@@ -42,6 +52,8 @@ export const SILHOUETTE_FILE: Readonly<Record<number, string>> = {
   117: "117.silhouette.jpg",
   118: "118.silhouette.jpg",
   119: "119.silhouette.jpg",
+  129: "quake_tower.v2.silhouette.jpg",
+  132: "magma_tower.v2.silhouette.jpg",
 };
 
 /**

@@ -266,14 +266,16 @@ export interface ResourceCost {
  * or null when it all costs nothing so the caller can say so in its own words.
  *
  * Amounts are in full by default; pass `formatCompact` where the row has no
- * room for them.
+ * room for them. `options.realm` draws a realm's icons whatever the screen's
+ * is: a main-yard Inferno building's price in Bone, Coal, Sulfur and Magma.
  */
 export const costAmounts = (
   cost: ResourceCost,
   format: (value: number) => string = formatAmount,
+  options: ResourceIconOptions = {},
 ): HTMLElement | null => {
   const parts = RESOURCE_KEYS.filter((key) => (cost[key] ?? 0) > 0).map((key) =>
-    resourceAmount(key, format(cost[key] ?? 0)),
+    resourceAmount(key, format(cost[key] ?? 0), options),
   );
   if (parts.length === 0) return null;
   const list = document.createElement("span");

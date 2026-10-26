@@ -31,6 +31,12 @@ export interface InfernoState {
     readonly passed: boolean;
   };
   readonly hasYard: boolean;
+  /**
+   * The Inferno yard's Under Hall level, 0 with none or before the Descent is
+   * passed: the hall the main yard's Inferno buildings count by (WP 6.1).
+   * Absent from a server that predates it, read as 0.
+   */
+  readonly underHall?: number;
   readonly korathNotice: boolean;
 }
 

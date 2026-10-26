@@ -209,6 +209,11 @@ describe("siege: keeping the save right", () => {
     expect(slices.siege).toEqual(report.siege);
     expect(slices.iresources).toEqual({ r1: 5, r2: 6, r3: 7, r4: 0, r1max: 10, r2max: 10, r3max: 10, r4max: 10 });
     expect(siegeSlices(save, [], { monster: "C3" })).toEqual({});
+    // A build, upgrade, cancel or recycle of a main-yard Inferno building reports its purse too (WP 6.1).
+    const built = { id: 30, t: 129, purse: { r1: 1, r2: 2, r3: 3, r4: 4, caps: { r1: 9, r2: 9, r3: 9, r4: 9 } } };
+    expect(siegeSlices(save, [], built)).toEqual({
+      iresources: { r1: 1, r2: 2, r3: 3, r4: 4, r1max: 9, r2max: 9, r3max: 9, r4max: 9 },
+    });
   });
 
   it("the job list carries each running job; its prediction adds a level or makes the weapon", () => {
