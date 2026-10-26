@@ -1,0 +1,49 @@
+{
+ "cells": 32,
+ "cell_w": 277,
+ "cell_h": 277,
+ "pivot_in_body_4x": [
+  361,
+  382
+ ],
+ "body_4x_size": [
+  708,
+  520
+ ],
+ "rule": "cell k = trunc(((bearing + 30) mod 360) / 12) (towerFx.ts facingCell, BUILDING118.as): only cells 0-29 are reached; cell k shows the heading nearest 12k - 24",
+ "heading_of_cell": [
+  337.5,
+  348.75,
+  0.0,
+  11.25,
+  22.5,
+  33.75,
+  45.0,
+  56.25,
+  67.5,
+  78.75,
+  101.25,
+  112.5,
+  123.75,
+  135.0,
+  146.25,
+  157.5,
+  168.75,
+  180.0,
+  191.25,
+  202.5,
+  213.75,
+  225.0,
+  236.25,
+  247.5,
+  258.75,
+  281.25,
+  292.5,
+  303.75,
+  315.0,
+  326.25,
+  337.5,
+  348.75
+ ],
+ "note": "pivot = middle of each cell; heading = ground bearing in degrees (0 down-right on screen, 45 at the viewer)"
+}
