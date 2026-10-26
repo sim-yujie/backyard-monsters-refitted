@@ -804,7 +804,8 @@ export class Hud {
       ...(full ? [this.fullNote] : []),
     ];
     readout.button.title = [text, ...notes].join("\n");
-    readout.button.setAttribute("aria-label", [text, ...notes].join(". "));
+    // The notes end in a full stop already: "Bone: 1 of 2. Making 720 an hour. Full: ..."
+    readout.button.setAttribute("aria-label", notes.length ? [`${text}.`, ...notes].join(" ") : text);
   }
 
   /** The own yard's Shop door, or null where there is no Shop (the map, an attack, a visit). */

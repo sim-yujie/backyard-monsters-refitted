@@ -421,6 +421,8 @@ describe("the yard's corner layout (#171)", () => {
     // Full, it names the Inferno's storage, the Resource Pod.
     expect(r1.title).toBe(`Bone: 1,600 of 1,600\nMaking 0 an hour.\n${INFERNO_FULL_NOTE}`);
     expect(r2.title).toBe("Coal: 1,200 of 1,600\nMaking 1,440 an hour.");
+    // Spoken, each sentence ends once (no "an hour.." before the full note).
+    expect(r1.getAttribute("aria-label")).toBe(`Bone: 1,600 of 1,600. Making 0 an hour. ${INFERNO_FULL_NOTE}`);
     expect(r1.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("inferno");
     // The income line of the Inferno's own harvesters (Flash's bubble gave the Inferno's rate).
     const rate = r2.querySelector<HTMLElement>(".hud__rate")!;
