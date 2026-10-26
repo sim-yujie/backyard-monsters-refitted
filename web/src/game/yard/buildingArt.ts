@@ -19,7 +19,8 @@ import { tierArtFor } from "./buildingArtTiers";
  *
  * The repainted defensive towers and Town Hall are the exception: unless the
  * player chose the old (Flash) art, each tier or level takes a new picture
- * from `buildingArtTiers.ts` instead of the Flash row.
+ * from `buildingArtTiers.ts` instead of the Flash row; a tower whose turret
+ * turns takes a body and a turret strip, like the Flash tower it replaces.
  *
  * Two buildings have a lower maximum on Map Room 2 than the art table knows
  * about, and the client clamps the level before looking the art up
@@ -243,6 +244,12 @@ export interface ResolvedArt {
    * both would show cell 0 through the transparent parts of every other cell.
    */
   readonly topIsAnim: boolean;
+  /**
+   * The whole building in one picture, for an icon, when `top` is only part
+   * of it: a repainted tower whose turret turns has its body as `top` and the
+   * turret in `anims`, and keeps the tier's painted picture here.
+   */
+  readonly still?: ResolvedImage;
 }
 
 const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
@@ -288,20 +295,23 @@ export const resolveArt = (type: number, level: number, state: ArtState): Resolv
   // it shows the level 1 art.
   const wanted = effective <= 0 ? 1 : effective;
 
-  // A repainted tier or Town Hall level, unless the old art is on: one still picture
-  // for default and damaged alike; a destroyed one falls through to the Flash rubble.
+  // A repainted tier or Town Hall level, unless the old art is on: the same art for
+  // default and damaged alike; a destroyed one falls through to the Flash rubble.
+  // A tower whose turret turns is its body with the turret's strip over it.
   const tier = state === ArtState.DESTROYED ? null : tierArtFor(type, wanted);
   if (tier) {
-    const top = imageOf(row.folder, tier.top);
-    if (top) {
+    const still = imageOf(row.folder, tier.top);
+    const top = tier.turret ? imageOf(row.folder, tier.turret.body) : still;
+    if (top && still) {
       return {
         name: row.name,
         folder: row.folder,
         level: tier.from,
         top,
         shadow: imageOf(row.folder, tier.shadow),
-        anims: [],
+        anims: tier.turret ? [animOf(row.folder, tier.turret.strip)] : [],
         topIsAnim: false,
+        ...(tier.turret ? { still } : {}),
       };
     }
   }

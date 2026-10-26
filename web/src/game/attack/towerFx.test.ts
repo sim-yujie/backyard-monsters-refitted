@@ -54,7 +54,7 @@ import {
  * heights, and the effects object turning a gun through a stub host.
  *
  * The strips these turn are the Flash towers', the default; the new tower
- * art's towers are still pictures (the repainted-tier test below).
+ * art's turrets turn by the same rule over strips of their own (below).
  */
 
 afterEach(() => {
@@ -200,7 +200,7 @@ describe("towersOf", () => {
     expect(towersOf(readYard(yardOf(24)))).toHaveLength(0);
   });
 
-  it("gives a repainted tier no gun strip and lifts its muzzle with the picture", () => {
+  it("gives a repainted tier its turning turret's strip and lifts its muzzle with the picture", () => {
     const yard = yardOf(21);
     yard.buildingdata = { "1": { id: 1, t: 21, l: 7, X: 0, Y: 0 } };
     // The new tower art is off unless turned on: the Flash turret, not lifted.
@@ -209,11 +209,17 @@ describe("towersOf", () => {
     setNewTowerArt(true);
     setClassicBuildingArt(true);
     expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
-    // The new tower art: no strip, and the muzzle stands higher than tier 1's.
+    // The new tower art: the new turret's cells, and the muzzle stands higher than tier 1's.
     setClassicBuildingArt(false);
     const [sniper] = towersOf(readYard(yard));
-    expect(sniper?.frames).toBe(0);
+    expect(sniper?.frames).toBe(32);
     expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);
+    expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(54);
+    expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(30);
+    expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(30);
+    // The Cannon and Tesla tiers stay still pictures.
+    expect(towersOf(readYard(yardOf(20)))[0]?.frames).toBe(0);
+    expect(towersOf(readYard(yardOf(25)))[0]?.frames).toBe(0);
   });
 });
 
@@ -254,6 +260,25 @@ describe("TowerFx", () => {
     fx.update(10 + FACING_HOLD_TICKS + 1, () => south);
     expect(frames.get(1)).toBe(0);
     fx.destroy();
+  });
+
+  it("turns the new art's sniper by the same rule, onto the cells near due east the Flash strip lacked", () => {
+    const flash = setUp(21);
+    setNewTowerArt(true);
+    const fresh = setUp(21);
+    const south = creepAt(35, 235);
+    // 350 degrees from the tower's (35, 35) centre.
+    const east = (350 * Math.PI) / 180;
+    const nearEast = creepAt(35 + 200 * Math.cos(east), 35 + 200 * Math.sin(east));
+    for (const { fx } of [flash, fresh]) {
+      fx.onShot({ tick: 10, towerId: 1, creepId: 9, ix: south.ix, iy: south.iy }, south);
+      fx.update(10, () => south);
+      fx.update(11, () => nearEast);
+    }
+    expect(flash.frames.get(1)).toBe(29);
+    expect(fresh.frames.get(1)).toBe(31);
+    flash.fx.destroy();
+    fresh.fx.destroy();
   });
 
   it("does not turn a gun the yard's tower has no strip for", () => {
