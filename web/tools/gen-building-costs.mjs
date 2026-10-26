@@ -78,17 +78,27 @@ const readAmount = (step, key) => {
   return Number(hit[1] ?? hit[2]);
 };
 
+/**
+ * The class constants a `re` entry may name instead of a type number. The
+ * main table's Inferno buildings (the Quake and Magma Towers, the Siege Lab and
+ * Factory, the Spurtz Cannons) require `INFERNOQUAKETOWER.UNDERHALL_ID`, 999: not
+ * a building on the yard but the player's Inferno Under Hall level
+ * (`client/scripts/INFERNOQUAKETOWER.as:15`, read at `BASE.as:3757-3788`); the
+ * Siege Factory also requires the Siege Lab (`com/monsters/siege/SiegeLab.as:7`).
+ */
+const REQUIREMENT_IDS = { "INFERNOQUAKETOWER.UNDERHALL_ID": 999, "SiegeLab.ID": 134 };
+
 /** `"re": [[14, 1, 2], [8, 1, 1]]` -> `[[14, 1, 2], [8, 1, 1]]`. */
 const readRequirements = (step) => {
   const hit = /"re"\s*:\s*\[/.exec(step);
   if (!hit) return [];
   const open = hit.index + hit[0].length - 1;
   const body = step.slice(open, matchBrace(step, open) + 1);
-  return [...body.matchAll(/\[\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\]/g)].map((one) => [
-    Number(one[1]),
-    Number(one[2]),
-    Number(one[3]),
-  ]);
+  return [...body.matchAll(/\[\s*(-?\d+|[A-Za-z_.]+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\]/g)].map((one) => {
+    const type = /^-?\d+$/.test(one[1]) ? Number(one[1]) : REQUIREMENT_IDS[one[1]];
+    if (type === undefined) throw new Error(`Unknown requirement id ${one[1]}; add it to REQUIREMENT_IDS.`);
+    return [type, Number(one[2]), Number(one[3])];
+  });
 };
 
 /** The `{ ... }` steps of a `costs` array, in order. */

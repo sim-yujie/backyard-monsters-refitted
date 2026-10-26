@@ -11,6 +11,7 @@ import {
 } from "../monsters/transferRules.js";
 import { hallName, TOWN_HALL_TYPE, yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import { MAP_ROOM_TYPE } from "./buildingJobs.js";
+import { fundPurse, isSurfaceInferno, purseReport } from "./surfaceInferno.js";
 import { academyLevels, isMapRoom3Monsters } from "./catchUpMonsters.js";
 import { fitCredit } from "./credit.js";
 import { storeDecoration, storedCount } from "./decor.js";
@@ -98,6 +99,8 @@ export interface RecycleSave extends StorageCapSave {
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
+  /** The Inferno purse, which a main-yard Inferno building's refund goes to. */
+  iresources?: JsonObject | null;
   monsters?: JsonObject | null;
   academy?: JsonObject | null;
   lockerdata?: JsonObject | null;
@@ -120,6 +123,12 @@ export interface RecycleReport {
   stored: { type: number; count: number } | null;
   /** Monsters removed because housing shrank, per type. */
   culled: Record<string, number>;
+  /**
+   * A main-yard Inferno building's (Inferno WP 6.1): the Inferno purse after
+   * it, which takes the refund up to its caps (`BFOUNDATION.RecycleB`,
+   * `client/scripts/BFOUNDATION.as:2556-2567`).
+   */
+  purse?: ReturnType<typeof purseReport>;
 }
 
 /** The champion roster as an array, whatever shape the column holds. */
@@ -307,15 +316,33 @@ export const planRecycle = (save: RecycleSave, id: number, now: number) => {
     }
   }
 
-  const report: RecycleReport = { id, t: type, refund: fit.credited, lost: fit.overflow, stored, culled };
+  const slices = {
+    buildingdata,
+    buildinghealthdata,
+    ...(researchdata && { researchdata }),
+    ...(monsters && { monsters }),
+  };
+  // A main-yard Inferno building's refund goes to the Inferno purse, up to its caps.
+  const purse = owed && isSurfaceInferno(save, type) ? fundPurse(save.iresources, owed) : null;
+  const report: RecycleReport = purse
+    ? {
+        id,
+        t: type,
+        refund: purse.credited,
+        lost: {
+          r1: (owed?.r1 ?? 0) - purse.credited.r1,
+          r2: (owed?.r2 ?? 0) - purse.credited.r2,
+          r3: (owed?.r3 ?? 0) - purse.credited.r3,
+          r4: (owed?.r4 ?? 0) - purse.credited.r4,
+        },
+        stored,
+        culled,
+        purse: purseReport(purse.iresources),
+      }
+    : { id, t: type, refund: fit.credited, lost: fit.overflow, stored, culled };
   return {
     report,
-    slices: {
-      buildingdata,
-      buildinghealthdata,
-      ...(researchdata && { researchdata }),
-      ...(monsters && { monsters }),
-    },
-    ...(owed && { credit: owed }),
+    slices: { ...slices, ...(purse && { iresources: purse.iresources }) },
+    ...(owed && !purse && { credit: owed }),
   };
 };

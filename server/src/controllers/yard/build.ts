@@ -7,6 +7,7 @@ import {
 } from "../../services/onboarding/guidedStart.js";
 import { guideOpen, readOnboarding } from "../../services/onboarding/state.js";
 import { planBuild, planCancelBuild, planInstantBuild } from "../../services/yard/build.js";
+import { withInfernoStanding } from "../../services/yard/surfaceInferno.js";
 import { yardRefusedErr } from "../../services/yard/yardErrors.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -24,14 +25,18 @@ import { defineYardAction } from "./yardAction.js";
  *
  * A Block or Heavy Trap placed finished counts as built for the
  * achievements (issue #204); one that starts a countdown counts when it ends.
+ *
+ * A main-yard Inferno building (Quake or Magma Tower, Siege Factory or Lab)
+ * reads the player's Inferno standing first and is paid from the Inferno
+ * purse (`services/yard/surfaceInferno.ts`, Inferno WP 6.1).
  */
 export const yardBuildAction = defineYardAction({
   schema: YardBuildSchema,
-  run: ({ save, body, now }) => {
+  run: async ({ save, user, body, now, em }) => {
     const onboarding = readOnboarding(save);
     const built = (finished: boolean) => (finished ? placedFinishedEvents(body.type) : undefined);
     if (!isGuidedBuild(save, onboarding, body.type)) {
-      const plan = planBuild(save, body, now);
+      const plan = planBuild(await withInfernoStanding(em, user.userid, save, body.type), body, now);
       return { ...plan, achievementEvents: built(plan.report.finished) };
     }
     const { onboarding: guided, slices, ...plan } = planGuidedBuild(save, onboarding, body, now);
@@ -72,8 +77,8 @@ export const yardCancelBuildAction = defineYardAction({
  */
 export const yardInstantBuildAction = defineYardAction({
   schema: YardBuildSchema,
-  run: ({ save, body, now }) => ({
-    ...planInstantBuild(save, body, now),
+  run: async ({ save, user, body, now, em }) => ({
+    ...planInstantBuild(await withInfernoStanding(em, user.userid, save, body.type), body, now),
     achievementEvents: placedFinishedEvents(body.type),
   }),
   outposts: "allow",

@@ -1,4 +1,5 @@
 import { YardCancelUpgradeSchema, YardUpgradeSchema } from "../../schemas/YardSchemas.js";
+import { withInfernoStanding } from "../../services/yard/surfaceInferno.js";
 import { planCancelUpgrade, planUpgradeAction } from "../../services/yard/upgrade.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -6,11 +7,18 @@ import { defineYardAction } from "./yardAction.js";
  * `POST /bm/yard/upgrade` — start the next upgrade step of one building as a
  * countdown holding a worker, however short (`docs/design/yard-buildings.md`
  * §3.2, #137). The rules are
- * `services/yard/upgrade.ts`; the wrapper charges the step and writes.
+ * `services/yard/upgrade.ts`; the wrapper charges the step and writes. A
+ * main-yard Inferno building reads the player's Inferno standing first
+ * (`services/yard/surfaceInferno.ts`, Inferno WP 6.1).
  */
 export const yardUpgradeAction = defineYardAction({
   schema: YardUpgradeSchema,
-  run: ({ save, body, now }) => planUpgradeAction(save, body.id, now),
+  run: async ({ save, user, body, now, em }) =>
+    planUpgradeAction(
+      await withInfernoStanding(em, user.userid, save, Number(save.buildingdata?.[String(body.id)]?.t)),
+      body.id,
+      now
+    ),
   outposts: "allow",
   inferno: "allow",
 });

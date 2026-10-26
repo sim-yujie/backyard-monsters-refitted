@@ -9,6 +9,13 @@ import { BaseType } from "../../enums/Base.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 
 /**
+ * The `re` entry type that stands for the player's Inferno Under Hall
+ * (`INFERNOQUAKETOWER.UNDERHALL_ID`, `client/scripts/INFERNOQUAKETOWER.as:15`):
+ * every main-yard Inferno building requires `[999, 1, 1]`.
+ */
+export const UNDER_HALL_REQUIREMENT = 999;
+
+/**
  * Reading the building cost table, server-side.
  *
  * The batch routes the Yard Planner calls are the first place this server
@@ -171,14 +178,21 @@ export const countOfType = (
  * or above the required level, and compare against the required count. A
  * building still counting its initial build down is level 0 here, so it unlocks
  * nothing.
+ *
+ * An {@link UNDER_HALL_REQUIREMENT} entry (999, the main yard's Inferno
+ * buildings) is no building on the yard: it is met when the player's Inferno
+ * Under Hall, `underHall`, is at the level or above (`BASE.as:3762-3765`).
+ * Left out, it reads 0, so the entry is unmet.
  */
 export const requirementsMet = (
   re: readonly CostRequirement[],
-  buildingdata: BuildingDataMap | null | undefined
+  buildingdata: BuildingDataMap | null | undefined,
+  underHall = 0
 ): boolean => {
   if (re.length === 0) return true;
   const buildings = buildingsOf(buildingdata);
   return re.every(([type, count, level]) => {
+    if (type === UNDER_HALL_REQUIREMENT) return underHall >= level;
     let have = 0;
     for (const building of buildings) {
       if (Number(building.t) === type && levelOf(building) >= level) have++;

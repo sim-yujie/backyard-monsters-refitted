@@ -35,6 +35,18 @@ import { busyWorkers, sharperToolsMultiplier, workerCount } from "../yardplanner
 import { buildingOrThrow, finishBuildingJob } from "./buildingJobs.js";
 import { fitCredit } from "./credit.js";
 import { instantBuildPrice } from "./shiny.js";
+import {
+  chargePurse,
+  fundPurse,
+  isSurfaceInferno,
+  purseReport,
+  purseShortfall,
+  purseShortfallErr,
+  standingUnderHall,
+  surfaceInfernoHall,
+  underHallErr,
+  type SurfaceInfernoSave,
+} from "./surfaceInferno.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /**
@@ -51,10 +63,12 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  *
  * {@link BUILDABLE_TYPES}: every main-yard type the original build menu listed
  * (`group` 1 to 3 without `block`, `client/scripts/BUILDINGSPOPUP.as:124`),
- * less what this project leaves out: the Radio (D15, §5.7), every Inferno type
- * (D19: the Quake and Magma Towers, the Siege Factory and Works, the Spurtz
- * Cannons) and the Map Room 3 structures (Stronghold, Resource Outpost,
- * Outpost Defender). The Town Hall and the legacy Stone Block are `block`ed in
+ * less what this project leaves out: the Radio (D15, §5.7), the Spurtz Cannons
+ * and the Map Room 3 structures (Stronghold, Resource Outpost, Outpost
+ * Defender). The main yard's four Inferno buildings, the Quake and Magma
+ * Towers, the Siege Factory and the Siege Lab, were left out too (D19) until
+ * Inferno WP 6.1: they are listed, and their own gates come first
+ * (`surfaceInferno.ts`). The Town Hall and the legacy Stone Block are `block`ed in
  * the props table itself (`client/scripts/YARD_PROPS.as:1310`, `:1842`).
  * Decorations come from the shop and the inventory (Phase 6, §8.3), not from
  * here. The web's build menu lists the same types
@@ -73,7 +87,11 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * `BASE.CanBuild` (`client/scripts/BASE.as:3640-3800`) first, then where the
  * building goes, then who builds it:
  *
- * 1. `400 notBuildable`: a type not in {@link BUILDABLE_TYPES}.
+ * 1. `400 notBuildable`: a type not in {@link BUILDABLE_TYPES}. A main-yard
+ *    Inferno building then needs the Descent passed (`409 infernoLocked`) and
+ *    counts gates 2 to 4 by the Inferno Under Hall (`409 underHall {have,
+ *    need}` in place of `townHall`), and gate 5 is the Inferno purse
+ *    (`409 shortfall` with `purse: "inferno"`; `surfaceInferno.ts`).
  * 2. `409 townHall {have, need}`: the Town Hall allows none of this type yet
  *    (`quantity[hall]` is 0; `need` is the first hall that allows one).
  * 3. `409 limit {have, allowed, next}`: the yard already holds as many as its
@@ -123,6 +141,8 @@ export const BUILDABLE_TYPES: ReadonlySet<number> = new Set([
   8, 9, 13, 15, 16, 26, 114, 116, 119,
   // Defences.
   17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
+  // The main yard's Inferno buildings (Inferno WP 6.1): Quake and Magma Towers, Siege Factory and Lab.
+  129, 132, 133, 134,
 ]);
 
 /** The Yard Planner, which an outpost no longer builds (owner decision 2026-09-30). */
@@ -167,7 +187,7 @@ export const buildableTypesOf = (kind: YardKind): ReadonlySet<number> =>
 const AT_ONCE_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
 /** The parts of a `Save` the build routes read. */
-export interface BuildSave extends StorageCapSave {
+export interface BuildSave extends StorageCapSave, SurfaceInfernoSave {
   /** `BaseType`: an outpost or the Inferno yard builds from its own table. */
   type?: string;
   buildingdata?: BuildingDataMap | null;
@@ -199,6 +219,8 @@ export interface BuildReport {
   cost: ResourceAmounts;
   /** Empire points awarded now: a finished wall or trap's; 0 while building. */
   points: number;
+  /** A main-yard Inferno building's: the Inferno purse after it (`surfaceInferno.ts`). */
+  purse?: ReturnType<typeof purseReport>;
 }
 
 /** `report` of `POST /bm/yard/build/instant`. */
@@ -219,6 +241,8 @@ export interface CancelBuildReport {
   t: number;
   /** What came back: `costs[0]`, less whatever the storage cap turned away. */
   refund: ResourceAmounts;
+  /** A main-yard Inferno building's: the Inferno purse after it, which took the refund. */
+  purse?: ReturnType<typeof purseReport>;
 }
 
 /** `quantity[hall]`, the last entry standing in for any hall past the end (`BASE.as:3717`). */
@@ -262,11 +286,16 @@ export const buildGates =(save: BuildSave, request: BuildRequest): CostStep => {
   }
 
   const buildings = save.buildingdata ?? {};
-  const hall = townHallLevel(buildings, kind);
-  const hallLabel = hallName(kind);
+  // A main-yard Inferno building counts by the Inferno Under Hall, once the
+  // Descent is passed (`surfaceInferno.ts`).
+  const inferno = isSurfaceInferno(save, type);
+  const townHall = townHallLevel(buildings, kind);
+  const hall = inferno ? surfaceInfernoHall(save) : townHall;
+  const hallLabel = inferno ? "Under Hall" : hallName(kind);
   const allowed = allowedAt(row.quantity, hall);
   if (allowed <= 0) {
     const need = nextHallAllowing(row.quantity, Math.max(hall, 0), 0) ?? 1;
+    if (inferno) throw underHallErr({ have: hall, need });
     throw yardRefusedErr(
       "townHall",
       hall <= 0
@@ -289,8 +318,9 @@ export const buildGates =(save: BuildSave, request: BuildRequest): CostStep => {
     );
   }
 
-  const unmet = requirementDetail(step[5], buildings, hall, hallTypeOf(kind));
+  const unmet = requirementDetail(step[5], buildings, townHall, hallTypeOf(kind), standingUnderHall(save));
   if (unmet) {
+    if (unmet.underHall) throw underHallErr(unmet.underHall as { have: number; need: number });
     const gate = unmet.townHall as { have: number; need: number } | undefined;
     if (gate) {
       throw yardRefusedErr("townHall", `That needs a level ${gate.need} ${hallLabel}.`, {
@@ -371,8 +401,11 @@ export const planBuild = (save: BuildSave, request: BuildRequest, now: number) =
   const step = buildGates(save, request);
   const cost = stepAmounts(step);
 
-  const missing = shortfall(save.resources, cost);
+  // A main-yard Inferno building is paid from the Inferno purse (`surfaceInferno.ts`).
+  const inferno = isSurfaceInferno(save, request.type);
+  const missing = inferno ? purseShortfall(save.iresources, cost) : shortfall(save.resources, cost);
   if (isShort(missing)) {
+    if (inferno) throw purseShortfallErr(missing);
     throw yardRefusedErr("shortfall", "You do not have enough resources for that.", {
       shortfall: missing,
     });
@@ -421,11 +454,12 @@ export const planBuild = (save: BuildSave, request: BuildRequest, now: number) =
     cost,
     points: 0,
   };
-  return {
-    report,
-    slices: { buildingdata: { ...buildings, [String(id)]: newBuilding(id, request, seconds) } },
-    debit: cost,
-  };
+  const buildingdata = { ...buildings, [String(id)]: newBuilding(id, request, seconds) };
+  if (inferno) {
+    const iresources = chargePurse(save.iresources, cost);
+    return { report: { ...report, purse: purseReport(iresources) }, slices: { buildingdata, iresources } };
+  }
+  return { report, slices: { buildingdata }, debit: cost };
 };
 
 /**
@@ -482,12 +516,23 @@ export const planCancelBuild = (save: BuildSave, id: number) => {
   const refund = cancelRefund(type, 0, yardKindOf(save));
   const { [String(id)]: _gone, ...buildingdata } = save.buildingdata ?? {};
 
-  const slices: { buildingdata: BuildingDataMap; buildinghealthdata?: BuildingHealthData } = {
+  const slices: {
+    buildingdata: BuildingDataMap;
+    buildinghealthdata?: BuildingHealthData;
+    iresources?: JsonObject;
+  } = {
     buildingdata,
   };
   if (save.buildinghealthdata && String(id) in save.buildinghealthdata) {
     const { [String(id)]: _health, ...health } = save.buildinghealthdata;
     slices.buildinghealthdata = health;
+  }
+
+  // A main-yard Inferno building's price goes back to the Inferno purse, up to its caps.
+  if (isSurfaceInferno(save, type)) {
+    const { iresources, credited } = fundPurse(save.iresources, refund);
+    const report: CancelBuildReport = { id, t: type, refund: credited, purse: purseReport(iresources) };
+    return { report, slices: { ...slices, iresources } };
   }
 
   // What the wrapper's clamp will let through (`credit.ts`, T3), measured

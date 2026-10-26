@@ -89,7 +89,7 @@ const TYPE_OF: Readonly<Record<SiegeSite, number>> = { lab: SIEGE_LAB_TYPE, fact
 /** Flash's own names for them (`english.json`). */
 const NAME_OF: Readonly<Record<SiegeSite, string>> = { lab: "Chaos Lab", factory: "Chaos Factory" };
 
-const PURSE_KEYS = ["r1", "r2", "r3", "r4"] as const;
+export const PURSE_KEYS = ["r1", "r2", "r3", "r4"] as const;
 type PurseKey = (typeof PURSE_KEYS)[number];
 
 /** Inferno resources, r1..r4 (Bone, Coal, Sulfur, Magma). */
@@ -175,7 +175,7 @@ export const purseOf = (iresources: JsonObject | null | undefined): PurseAmounts
 };
 
 /** The purse's caps, `int(rNmax)` (`BASE.as:910-913`); 0 when unreadable. */
-const capsOf = (iresources: JsonObject | null | undefined): PurseAmounts => {
+export const capsOf = (iresources: JsonObject | null | undefined): PurseAmounts => {
   const cap = (key: PurseKey): number => {
     const value = Math.trunc(Number(iresources?.[`${key}max`]));
     return Number.isFinite(value) && value > 0 ? value : 0;
@@ -184,7 +184,7 @@ const capsOf = (iresources: JsonObject | null | undefined): PurseAmounts => {
 };
 
 /** `iresources` with new holdings, its caps and anything else kept. */
-const withPurse = (iresources: JsonObject | null | undefined, purse: PurseAmounts): JsonObject => ({
+export const withPurse = (iresources: JsonObject | null | undefined, purse: PurseAmounts): JsonObject => ({
   ...(iresources ?? {}),
   ...purse,
 });
@@ -194,7 +194,7 @@ const withPurse = (iresources: JsonObject | null | undefined, purse: PurseAmount
  * (`BASE.as:4483-4530`): floored, up to the cap; nothing to a purse already
  * at or over it.
  */
-const funded = (held: number, cap: number, amount: number): number => {
+export const funded = (held: number, cap: number, amount: number): number => {
   if (held >= cap) return held;
   return Math.min(held + Math.max(0, Math.floor(amount)), cap);
 };

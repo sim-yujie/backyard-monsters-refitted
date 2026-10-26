@@ -3,6 +3,7 @@ import type { BuildingData, BuildingDataMap } from "../../../types/BuildingData.
 import {
   FREE_FINISH_SECONDS,
   TOWN_HALL_TYPE,
+  UNDER_HALL_REQUIREMENT,
   pointsForBuild,
   pointsForUpgrade,
   requirementsMet,
@@ -125,13 +126,17 @@ export const requirementDetail = (
   re: readonly CostRequirement[],
   buildings: BuildingDataMap,
   hall: number,
-  hallType: number = TOWN_HALL_TYPE
+  hallType: number = TOWN_HALL_TYPE,
+  underHall = 0
 ): Record<string, unknown> | null => {
-  if (requirementsMet(re, buildings)) return null;
+  if (requirementsMet(re, buildings, underHall)) return null;
 
-  const unmet = re.filter((entry) => !requirementsMet([entry], buildings));
+  const unmet = re.filter((entry) => !requirementsMet([entry], buildings, underHall));
   const townHall = unmet.find(([type]) => type === hallType);
   if (townHall) return { townHall: { have: hall, need: townHall[2] } };
+  // A main-yard Inferno building's Under Hall entry (Inferno WP 6.1).
+  const inferno = unmet.find(([type]) => type === UNDER_HALL_REQUIREMENT);
+  if (inferno) return { underHall: { have: underHall, need: inferno[2] } };
 
   return { requirements: unmet.map((entry) => [...entry]) };
 };

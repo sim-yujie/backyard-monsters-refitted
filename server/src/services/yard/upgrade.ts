@@ -9,6 +9,14 @@ import {
 } from "../yardplanner/startUpgrades.js";
 import { fitCredit } from "./credit.js";
 import { siegeUpgradeMessage } from "./siege.js";
+import {
+  chargePurse,
+  fundPurse,
+  isSurfaceInferno,
+  purseReport,
+  purseShortfallErr,
+  underHallErr,
+} from "./surfaceInferno.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /**
@@ -28,6 +36,10 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  *
  * On an outpost both read the outpost table (`yardKindOf`); its core never
  * levels up ("The outpost can not be upgraded.", `OUTPOST_YARD_PROPS.as`).
+ *
+ * A main-yard Inferno building (Inferno WP 6.1, `surfaceInferno.ts`) needs the
+ * Under Hall its steps name (`409 underHall`) and is paid from, and refunded
+ * to, the Inferno purse; its report carries the purse after it.
  */
 
 /** The parts of a `Save` the two actions read. */
@@ -44,6 +56,8 @@ export interface UpgradeReport {
   seconds: number;
   /** What the step cost: the ladder's `costs[from]`. */
   cost: ResourceAmounts;
+  /** A main-yard Inferno building's: the Inferno purse after it. */
+  purse?: ReturnType<typeof purseReport>;
 }
 
 /** `report` of `POST /bm/yard/upgrade/cancel`. */
@@ -51,6 +65,8 @@ export interface CancelUpgradeReport {
   id: number;
   /** What came back: the step's full price, less whatever the storage cap turned away. */
   refund: ResourceAmounts;
+  /** A main-yard Inferno building's: the Inferno purse after it, which took the refund. */
+  purse?: ReturnType<typeof purseReport>;
 }
 
 /**
@@ -112,10 +128,12 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
         }
       );
     case "requirements":
+      if (refusal.underHall) return underHallErr(refusal.underHall);
       return yardRefusedErr("requirements", "That upgrade needs other buildings first.", {
         requirements: refusal.requirements,
       });
     case "shortfall":
+      if (refusal.purse === "inferno") return purseShortfallErr(refusal.shortfall!);
       return yardRefusedErr("shortfall", "You do not have enough resources for that.", {
         shortfall: refusal.shortfall,
       });
@@ -172,11 +190,12 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
     cost: step.cost,
   };
 
-  return {
-    report,
-    slices: { buildingdata: { ...save.buildingdata, [String(id)]: step.building } },
-    debit: step.cost,
-  };
+  const buildingdata = { ...save.buildingdata, [String(id)]: step.building };
+  if (isSurfaceInferno(save, step.t)) {
+    const iresources = chargePurse(save.iresources, step.cost);
+    return { report: { ...report, purse: purseReport(iresources) }, slices: { buildingdata, iresources } };
+  }
+  return { report, slices: { buildingdata }, debit: step.cost };
 };
 
 /**
@@ -201,12 +220,14 @@ export const planCancelUpgrade = (save: UpgradeActionSave, id: number) => {
 
   const { cU: _cancelled, cL: _length, hl: _helpers, ...rest } = building;
   const refund = cancelRefund(Number(building.t), levelOf(building), yardKindOf(save));
+  const buildingdata = { ...save.buildingdata, [String(id)]: rest as BuildingData };
+  if (isSurfaceInferno(save, Number(building.t))) {
+    const { iresources, credited } = fundPurse(save.iresources, refund);
+    const report: CancelUpgradeReport = { id, refund: credited, purse: purseReport(iresources) };
+    return { report, slices: { buildingdata, iresources } };
+  }
   // What the wrapper's clamp will let through (`credit.ts`, T3), for the report.
   const report: CancelUpgradeReport = { id, refund: fitCredit(save, refund).credited };
 
-  return {
-    report,
-    slices: { buildingdata: { ...save.buildingdata, [String(id)]: rest as BuildingData } },
-    credit: refund,
-  };
+  return { report, slices: { buildingdata }, credit: refund };
 };
