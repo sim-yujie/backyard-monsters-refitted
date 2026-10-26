@@ -28,10 +28,20 @@ type Row = Record<string, unknown>;
 
 const db = { row: null as Row | null };
 
+/**
+ * What the Inferno lookups find (`withInfernoStanding`): the Descent passed,
+ * and an Inferno yard whose Under Hall is level 3, so the Lab may be upgraded.
+ */
+const INFERNO_BASEID = "9001";
+const progressRow = { userid: 2, descent_passed_at: 1, inferno_baseid: INFERNO_BASEID };
+const infernoRow = { baseid: INFERNO_BASEID, type: "inferno", buildingdata: { "0": { id: 0, t: 14, l: 3 } } };
+
 const em = {
   async transactional<T>(cb: (fork: unknown) => Promise<T>): Promise<T> {
     const entity = db.row && structuredClone(db.row);
-    const fork = { findOne: async () => entity, flush: async () => {} };
+    const findOne = async (_entity: unknown, where: Record<string, unknown>) =>
+      where.type === "inferno" ? infernoRow : "basesaveid" in where || "baseid" in where ? entity : progressRow;
+    const fork = { findOne, flush: async () => {} };
     const result = await cb(fork);
     db.row = entity;
     return result;
@@ -233,10 +243,34 @@ describe("upgrade and recycle refused while busy", () => {
     expect(upgrade.body).toMatchObject({ reason: "siegeBusy", hold: "holding" });
   });
 
-  test("an idle Lab is upgraded as usual", async () => {
-    const upgrade = await call(yardUpgradeAction, { id: String(LAB) });
-    expect(upgrade.status).toBe(200);
-    expect(building(LAB)).toMatchObject({ cU: expect.any(Number) });
+  test("an idle Lab is upgraded as usual, from the purse, once the Under Hall allows", async () => {
+    const before = process.env.INFERNO_ENABLED;
+    process.env.INFERNO_ENABLED = "on";
+    const many = 5_000_000;
+    db.row = rowOf({ iresources: { r1: many, r2: many, r3: many, r4: many, r1max: 2 * many, r2max: 2 * many, r3max: 2 * many, r4max: 2 * many } });
+    try {
+      const upgrade = await call(yardUpgradeAction, { id: String(LAB) });
+      expect(upgrade.status).toBe(200);
+      expect(building(LAB)).toMatchObject({ cU: expect.any(Number) });
+      expect(purse().r1).toBeLessThan(many);
+      expect(db.row!.resources).toEqual({ r1: 1e9, r2: 1e9, r3: 1e9, r4: 1e9 });
+    } finally {
+      if (before === undefined) delete process.env.INFERNO_ENABLED;
+      else process.env.INFERNO_ENABLED = before;
+    }
+  });
+
+  test("with the new Inferno off, the Lab's upgrade waits for an Under Hall", async () => {
+    const before = process.env.INFERNO_ENABLED;
+    process.env.INFERNO_ENABLED = "off";
+    try {
+      const upgrade = await call(yardUpgradeAction, { id: String(LAB) });
+      expect(upgrade.status).toBe(409);
+      expect(upgrade.body).toMatchObject({ reason: "underHall" });
+    } finally {
+      if (before === undefined) delete process.env.INFERNO_ENABLED;
+      else process.env.INFERNO_ENABLED = before;
+    }
   });
 });
 
