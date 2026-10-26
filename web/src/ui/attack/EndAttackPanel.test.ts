@@ -22,6 +22,7 @@ const summary = (over: Partial<AttackSummary> = {}): AttackSummary => ({
   loot: { r1: 12_500, r2: 0, r3: 800, r4: 0 },
   lootTaken: { r1: 12_500, r2: 0, r3: 800, r4: 0 },
   inferno: false,
+  infernoTribe: false,
   monstersSent: 45,
   monstersBorn: 0,
   monstersLost: 9,

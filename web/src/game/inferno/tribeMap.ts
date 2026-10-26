@@ -174,6 +174,53 @@ export const TRIBE_START_OFFLINE = "Could not reach the server to start the atta
  */
 export const ATTACK_FORCE = "Attack Force";
 
+/* ── The result ── */
+
+/** The Inferno yard's Town Hall, the Under Hall (`BUILDING14`). */
+export const UNDER_HALL_TYPE = 14;
+
+/**
+ * Whether the tribe's Under Hall has fallen, which wins the attack: the
+ * server's `underHallFallen` (`infernoTribes.ts`, Flash's wild-monster rule,
+ * `ATTACK.as:957-967`), over the yard as loaded and the battle's health map,
+ * where a building it does not name is whole.
+ */
+export const underHallFallen = (
+  buildingdata: Readonly<Record<string, unknown>> | null | undefined,
+  health: Readonly<Record<string, number>>,
+): boolean =>
+  Object.entries(buildingdata ?? {}).some(([key, row]) => {
+    const building = row as { t?: unknown; id?: unknown } | null;
+    if (Number(building?.t) !== UNDER_HALL_TYPE) return false;
+    const left = health[String(building?.id ?? key)] ?? health[key];
+    return left !== undefined && left <= 0;
+  });
+
+/** The end panel's heading, line and tone for a tribe attack. */
+export interface TribeOutcome {
+  readonly title: string;
+  readonly outcome: string;
+  readonly tone: "win" | "lose";
+}
+
+/**
+ * Flash's words at the end of a tribe attack (`popup_attackend`): won, "Base
+ * Destroyed!" (`newmap_destroyed`) and `inf_newmap_des_wm2`; lost, "Attack
+ * Ended" (`popup_attackended_title`) and `inf_popup_attackended_failedWMTH`.
+ */
+export const tribeOutcome = (won: boolean): TribeOutcome =>
+  won
+    ? {
+        title: "Base Destroyed!",
+        outcome: "You have destroyed the Under Hall of this Inferno yard! They won't be bothering you for a while.",
+        tone: "win",
+      }
+    : {
+        title: "Attack Ended",
+        outcome: "You failed to destroy the Under Hall of this Inferno Yard, rebuild your monsters and try again.",
+        tone: "lose",
+      };
+
 /**
  * What a refused tribe start says (`controllers/inferno/tribeAttack.ts`),
  * and whether the map should be asked again (the tribe moved on, or fell).

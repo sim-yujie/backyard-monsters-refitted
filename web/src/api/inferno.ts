@@ -187,6 +187,36 @@ export const descentLandingOf = (response: unknown): DescentLanding | null => {
   return typeof value.won === "boolean" && typeof value.level === "number" ? (value as DescentLanding) : null;
 };
 
+/**
+ * What the save's answer says of a landed Moloch tribe attack, under `tribe`
+ * (WP 2.8, `services/inferno/infernoTribeLanding.ts`). Only the final save
+ * carries it.
+ */
+export interface TribeLanding {
+  /** The Under Hall fell. */
+  readonly won: boolean;
+  /** The server's damage, 0-100. */
+  readonly damage: number;
+  /** The loot the tribe gave up. */
+  readonly loot: InfernoAmounts;
+  /** What of it the Inferno purse took, up to its caps. */
+  readonly lootcredited: InfernoAmounts;
+  /** The purse after it. */
+  readonly total: InfernoAmounts;
+  /** When the tribe is back, unix seconds, once it fell; 0 while it stands. */
+  readonly respawnat: number;
+}
+
+/** The `tribe` block of a save's answer, when it carries one. */
+export const tribeLandingOf = (response: unknown): TribeLanding | null => {
+  const tribe = (response as { tribe?: unknown } | null)?.tribe;
+  if (typeof tribe !== "object" || tribe === null) return null;
+  const value = tribe as Partial<TribeLanding>;
+  return typeof value.won === "boolean" && typeof value.lootcredited === "object" && value.lootcredited !== null
+    ? (value as TribeLanding)
+    : null;
+};
+
 /* ── The Inferno map: Moloch's tribes (WP 2.7-2.9) ── */
 
 /** One Moloch tribe as `GET /bm/inferno/map` answers it (`services/inferno/infernoTribeMap.ts`). */

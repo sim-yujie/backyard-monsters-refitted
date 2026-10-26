@@ -17,6 +17,7 @@ const summary: AttackSummary = {
   loot: { r1: 0, r2: 0, r3: 0, r4: 0 },
   lootTaken: { r1: 0, r2: 0, r3: 0, r4: 0 },
   inferno: false,
+  infernoTribe: false,
   monstersSent: 0,
   monstersBorn: 0,
   monstersLost: 0,

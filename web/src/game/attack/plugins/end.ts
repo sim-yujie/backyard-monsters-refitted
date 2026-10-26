@@ -1,7 +1,7 @@
 import { guideBus } from "@/game/guide/guideBus";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { saveAttack } from "@/api/base";
-import { descentLandingOf, type DescentLanding } from "@/api/inferno";
+import { descentLandingOf, tribeLandingOf, type DescentLanding, type InfernoAmounts } from "@/api/inferno";
 import { ApiError, NetworkError, getAuthToken } from "@/api/http";
 import { declineTakeover, getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
 import type {
@@ -17,6 +17,7 @@ import type { AttackTarget } from "@/game/attack/attackTarget";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import { playDescentResult } from "@/game/inferno/descentResult";
 import { RETURN_HOME } from "@/game/inferno/descentText";
+import { tribeOutcome, type TribeOutcome } from "@/game/inferno/tribeMap";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { takeoverGrantOf, type TakeoverKind } from "@/game/maproom/takeover";
 import { INFERNO_YARD, MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
@@ -96,6 +97,13 @@ type SaveShown =
       readonly credited: ResourceAmounts | null;
       /** The takeover the panel offers, when the attack earned one. */
       readonly takeover: TakeoverChance | null;
+      /** A Moloch tribe's landing (WP 2.10): its result, loot taken, comeback and the purse after. */
+      readonly tribe?: {
+        readonly result: TribeOutcome;
+        readonly taken: ResourceAmounts;
+        readonly backAt: number | null;
+        readonly purse: InfernoAmounts;
+      };
     }
   | { readonly kind: "failed"; readonly failure: SaveFailure }
   | { readonly kind: "pending"; readonly message: string }
@@ -111,6 +119,9 @@ const showOn = (panel: EndAttackPanel, shown: SaveShown): void => {
         protectedUntil: shown.protectedUntil,
         now: shown.now,
         credited: shown.credited,
+        ...(shown.tribe
+          ? { result: shown.tribe.result, taken: shown.tribe.taken, backAt: shown.tribe.backAt }
+          : {}),
       });
       return;
     case "failed":
@@ -293,6 +304,11 @@ export const describeSaveFailure = (caught: unknown, isTribe = false): SaveFailu
  */
 export const creditedOf = (response: BaseSaveResponse, descent = false): ResourceAmounts | null => {
   const value: unknown = descent ? descentLandingOf(response)?.loot : response.lootcredited;
+  return amountsOf(value);
+};
+
+/** Four whole amounts from an answer's loot block; null when it is not one. */
+const amountsOf = (value: unknown): ResourceAmounts | null => {
   if (typeof value !== "object" || value === null) return null;
   const read = (key: string): number => {
     const amount = Number((value as Record<string, unknown>)[key]);
@@ -363,8 +379,17 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      * is sent again once; a Map Room 2 attack is landed by the server's
      * finaliser.
      */
-    const isTribe = combatKind(target) === "tribe" || descent;
+    /**
+     * A Moloch tribe from the Inferno map (WP 2.10): nothing lands it later
+     * either, its result is in the landing's `tribe` block, and its ways out
+     * are the Inferno map (the scene's `goToMap`) and, Flash's Return Home,
+     * the Inferno yard.
+     */
+    const infernoTribe = target.infernoTribe === true;
+    const isTribe = combatKind(target) === "tribe" || descent || infernoTribe;
     const inferno = combatKind(target) === "inferno";
+    /** The tribe's purse after the landing has gone onto the HUD; it goes once. */
+    let pursed = false;
 
     /**
      * The HUD takes the banked loot when the panel shows a landed save (#168),
@@ -373,6 +398,11 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      * yard's pool the HUD shows here.
      */
     const creditHud = (): void => {
+      // A tribe's HUD shows the Inferno purse: the landing's total is what it now holds.
+      if (infernoTribe && !pursed && panel && shown?.kind === "saved" && shown.tribe) {
+        pursed = true;
+        mounts.showResources({ ...shown.tribe.purse });
+      }
       if (inferno || credited || !panel || shown?.kind !== "saved" || !shown.credited) return;
       credited = true;
       creditLoot(shown.credited);
@@ -465,12 +495,23 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     const savedFrom = (response: BaseSaveResponse): SaveShown => {
       playDescent(response);
       const takeover = takeoverChanceOf(target, response, payload);
+      const landing = infernoTribe ? tribeLandingOf(response) : null;
       return {
         kind: "saved",
         protectedUntil: takeover?.grant ? null : protectedUntilOf(response),
         now: now() / 1000,
-        credited: creditedOf(response, descent),
+        credited: landing ? amountsOf(landing.lootcredited) : creditedOf(response, descent),
         takeover,
+        ...(landing
+          ? {
+              tribe: {
+                result: tribeOutcome(landing.won),
+                taken: amountsOf(landing.loot) ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
+                backAt: landing.respawnat > 0 ? landing.respawnat : null,
+                purse: amountsOf(landing.total) ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
+              },
+            }
+          : {}),
       };
     };
 
@@ -576,6 +617,8 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       panel = new EndAttackPanel({
         summary: summariseAttack(session),
         ...(descent ? { returnLabel: RETURN_HOME } : {}),
+        // Flash's Return Home went to the Inferno yard; Return to map opens the Inferno map over it.
+        ...(infernoTribe ? { home: { label: RETURN_HOME, onHome: () => goToOutpost(INFERNO_YARD) } } : {}),
         onReturn: () => {
           offer?.declineOnLeave(false);
           returnToMap();

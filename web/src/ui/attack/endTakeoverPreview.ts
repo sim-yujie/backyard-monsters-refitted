@@ -45,6 +45,7 @@ export const previewEndTakeover = (modal: HTMLElement, options: EndTakeoverPrevi
       loot: { r1: 120_000, r2: 80_000, r3: 40_000, r4: 0 },
       lootTaken: { r1: 120_000, r2: 80_000, r3: 40_000, r4: 0 },
       inferno: false,
+      infernoTribe: false,
       monstersSent: 40,
       monstersBorn: 0,
       monstersLost: 12,

@@ -1,4 +1,5 @@
 import { isPracticeCamp } from "@/game/guide/practiceBox";
+import { tribeOutcome, underHallFallen } from "@/game/inferno/tribeMap";
 import type {
   AttackSavePayload,
   BuildingDataMap,
@@ -335,8 +336,19 @@ export interface AttackSummary {
   readonly targetName: string;
   readonly kind: AttackTargetKind;
   readonly endReason: AttackEndReason | null;
+  /**
+   * The end panel's heading when the attack has its own (Flash's "Base
+   * Destroyed!" or "Attack Ended" after a Moloch tribe); absent, the panel's
+   * plain one.
+   */
+  readonly title?: string;
   readonly outcome: string;
   readonly tone: OutcomeTone;
+  /**
+   * A Moloch tribe from the Inferno map (Inferno WP 2.10): won on its Under
+   * Hall, with Flash's words for the result.
+   */
+  readonly infernoTribe: boolean;
   readonly damagePercent: number;
   readonly buildingsDestroyed: number;
   readonly buildingsTotal: number;
@@ -427,6 +439,11 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
   const state = session.state();
   const { kind, name, roster } = session.target;
   const inferno = combatKind(session.target) === "inferno";
+  const infernoTribe = session.target.infernoTribe === true;
+  // A tribe is won on its Under Hall, not the damage (WP 2.10); the landing has the last word.
+  const outcome = infernoTribe
+    ? tribeOutcome(underHallFallen(load.buildingdata, session.battle()?.state().health ?? {}))
+    : describeOutcome(kind, name, state.damagePercent, isPracticeCamp(session.target));
   // The report's monster rows, without the champions' (#22): the engine's
   // own kill count takes in a champion at no health, which was never flung
   // as a monster, and the Minis and zombies born on the field.
@@ -437,7 +454,8 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
     targetName: name,
     kind,
     endReason: state.endReason,
-    ...describeOutcome(kind, name, state.damagePercent, isPracticeCamp(session.target)),
+    ...outcome,
+    infernoTribe,
     damagePercent: state.damagePercent,
     buildingsDestroyed: state.buildingsDestroyed,
     // Traps left out, as on the status line (#72).
