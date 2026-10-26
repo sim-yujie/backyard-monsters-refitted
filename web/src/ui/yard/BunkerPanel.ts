@@ -490,7 +490,7 @@ export class BunkerPanel {
     const question = document.createElement("p");
     question.className = "bunker__question";
     const what = `${formatAmount(count)} ${monster.name}`;
-    if (juices) {
+    if (juices && juicer.ok) {
       const goo = juiceGoo(this.store.save, id, count, juicer.rate);
       question.append(`Juice ${what} for `, resourceAmount("r4", formatAmount(goo)), "? They are gone for good.");
     } else {
