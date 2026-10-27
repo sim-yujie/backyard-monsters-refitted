@@ -42,8 +42,8 @@ SUN = (150, 42)
 PAINTED = {1: dict(body=(-33, -29, 68, 81), pivot=(2, -20)),
            2: dict(body=(-33, -54, 68, 106), pivot=(2, -44)),
            3: dict(body=(-33, -71, 68, 123), pivot=(2, -60))}
-TILT = 20.0                           # the head's raise, degrees
-HEAD_SCALE = 1.15
+TILT = 8.0                           # the head's raise, degrees
+HEAD_SCALE = 1.06
 
 # ------------------------------------------------------------------------------------------------------------- tiers
 # the parts every tier shares keep their size (base, tyres, head); the box grows by sections
@@ -53,13 +53,17 @@ RING_UP, TOP_UP = 0.48, 0.40          # the cage ring above the box, the turning
 BOX_A = 0.70                          # the box's half side (its corners point at bearings 45, 135, 225, 315)
 TIERS = {
     1: dict(secs=[1.0], band=0.0),
-    2: dict(secs=[0.86, 0.86], band=0.07),
-    3: dict(secs=[0.74, 0.74, 0.74], band=0.07),
+    2: dict(secs=[1.1, 1.1], band=0.12),
+    3: dict(secs=[1.0, 1.0, 1.0], band=0.12),
 }
 
 
 # --------------------------------------------------------------------------------------------------------- materials
-def m_metal(name, lo, hi, wear=None, spec=0.7, rough=0.3, spec_col=(1, 0.97, 0.9, 1), scratch=None, nscale=3.0, metal=True):
+# gold keeps warm in its shade (the cool shade of the shared look turns it grey-brown)
+WARM = [(0.0, (0.42, 0.28, 0.2, 1)), (0.15, (0.52, 0.38, 0.28, 1)), (0.5, (0.8, 0.72, 0.6, 1)), (1.0, (1.0, 0.96, 0.86, 1))]
+
+def m_metal(name, lo, hi, wear=None, spec=0.7, rough=0.3, spec_col=(1, 0.97, 0.9, 1), scratch=None, nscale=3.0, metal=True,
+            shade=None, upk=None):
     p = Paint(name)
     base = p.ramp(p.noise(nscale, 4.0), [(0.3, srgb(*lo)), (0.7, srgb(*hi))])
     if scratch:
@@ -68,7 +72,13 @@ def m_metal(name, lo, hi, wear=None, spec=0.7, rough=0.3, spec_col=(1, 0.97, 0.9
     if wear:
         w = p.ramp(p.noise(2.2, 4.0, 0.6), [(0.32, srgb(*wear)), (0.62, (1, 1, 1, 1))])
         base = p.mix(base, w, 1.0, 'MULTIPLY')
-    return p.finish(base, spec=spec, spec_rough=rough, spec_col=spec_col, metal=metal)
+    if upk:   # lighter where the surface tips up to the sky, darker tipping down (painted black armour's facets)
+        geo = p.N.new("ShaderNodeNewGeometry")
+        sep = p.N.new("ShaderNodeSeparateXYZ")
+        p.link(geo.outputs["Normal"], sep.inputs[0])
+        k = p.ramp(sep.outputs[2], [(0.3, (upk[0],) * 3 + (1,)), (0.7, (upk[1],) * 3 + (1,))])
+        base = p.mix(base, k, 1.0, 'MULTIPLY')
+    return p.finish(base, spec=spec, spec_rough=rough, spec_col=spec_col, metal=metal, shade=shade)
 
 
 def m_stripes(c0, c1, n=11):
@@ -103,7 +113,7 @@ def m_lens(name, cx, cz, rad, stops):
         dz = p.math("SUBTRACT", sep.outputs[2], oz)
         return p.math("DIVIDE", p.math("SQRT", p.math("ADD", p.math("MULTIPLY", dx, dx), p.math("MULTIPLY", dz, dz))), r)
     col = p.ramp(dist(cx, cz, rad), [(pos, srgb(*c)) for pos, c in stops])
-    glint = p.ramp(dist(cx - rad * 0.38, cz + rad * 0.42, rad * 0.22), [(0.0, (0.9, 0.95, 1, 1)), (1.0, (0, 0, 0, 1))])
+    glint = p.ramp(dist(cx - rad * 0.42, cz + rad * 0.45, rad * 0.16), [(0.0, (0.5, 0.55, 0.6, 1)), (1.0, (0, 0, 0, 1))])
     col = p.mix(col, glint, 1.0, 'ADD')
     em = p.N.new("ShaderNodeEmission")
     p.link(col, em.inputs["Color"])
@@ -145,27 +155,29 @@ def m_glow(name, edge, mid, core, power=1.6):
 
 def materials(tier):
     M = {}
-    M["tyre"] = m_metal("tyre", (46, 46, 52), (64, 64, 72), spec=0.16, rough=0.5, spec_col=(0.85, 0.88, 1, 1), nscale=5)
+    M["tyre"] = m_metal("tyre", (54, 54, 62), (74, 74, 84), spec=0.2, rough=0.45, spec_col=(0.85, 0.88, 1, 1), nscale=5,
+                        metal=False)
     M["hose_b"] = m_flat("hose_b", (40, 110, 230), spec=0.8, rough=0.2)
     M["hose_r"] = m_flat("hose_r", (210, 40, 36), spec=0.7, rough=0.2)
     M["sign"] = m_flat("sign", (246, 206, 30), spec=0.2)
     M["ink"] = m_flat("ink", (24, 22, 20), spec=0.1)
     M["amber"] = m_glow("amber", (200, 70, 0), (255, 150, 30), (255, 240, 170))
-    gold = m_metal("gold", (206, 148, 34), (238, 186, 64), wear=(150, 96, 22), spec=0.95, rough=0.22,
-                   spec_col=(1.0, 0.92, 0.6, 1))
+    gold = m_metal("gold", (240, 166, 20), (255, 208, 56), wear=(206, 132, 30), spec=0.95, rough=0.22, shade=WARM,
+                   spec_col=(1.0, 0.82, 0.4, 1))
     brass = m_metal("brass", (176, 118, 40), (204, 148, 58), wear=(130, 84, 30), spec=0.9, rough=0.25,
                     spec_col=(1.0, 0.9, 0.62, 1))
+    darksteel = m_metal("darksteel1", (78, 86, 94), (100, 108, 116), spec=0.6, rough=0.3, spec_col=(0.95, 0.97, 1, 1))
     steel = m_metal("steel", (100, 110, 120), (128, 138, 148), spec=0.7, rough=0.25, spec_col=(0.95, 0.97, 1, 1),
                     scratch=(186, 192, 198))
     if tier == 1:
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
         M["box"] = m_metal("box", (112, 116, 102), (140, 144, 128), metal=False, spec=0.35, rough=0.32, spec_col=(0.95, 0.97, 1, 1),
                            scratch=(140, 142, 134), wear=(84, 74, 60))
-        M["plate"] = steel
+        M["plate"] = darksteel
         M["bar"] = steel
         M["column"] = brass
-        M["ring"] = steel
-        M["trim"] = steel
+        M["ring"] = darksteel
+        M["trim"] = darksteel
         M["rivet"] = m_flat("rivet", (200, 146, 70), spec=0.9, rough=0.25, metal=True)
         M["head"] = m_metal("head", (104, 110, 116), (130, 136, 142), spec=0.7, rough=0.25, spec_col=(0.95, 0.97, 1, 1),
                             scratch=(182, 186, 190))
@@ -174,14 +186,15 @@ def materials(tier):
         M["thread"] = brass
     elif tier == 2:
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
-        M["box"] = gold
+        M["box"] = m_metal("goldbox", (246, 168, 18), (255, 202, 44), wear=(220, 150, 40), spec=0.6, rough=0.25,
+                           shade=WARM, metal=False, spec_col=(1.0, 0.78, 0.3, 1), nscale=1.5)
         for k in ("plate", "bar", "column", "ring", "trim", "head", "rim", "yoke", "thread"):
             M[k] = gold
         M["rivet"] = m_flat("rivet", (176, 112, 26), spec=0.9, rough=0.25, metal=True)
     else:
         M["stripes"] = m_stripes((30, 30, 34), (236, 178, 40))
-        black = m_metal("black", (34, 34, 40), (52, 52, 60), spec=0.75, rough=0.25, spec_col=(0.8, 0.85, 1, 1),
-                        scratch=(80, 80, 90))
+        black = m_metal("black", (60, 62, 72), (84, 86, 98), spec=1.0, rough=0.25, spec_col=(0.8, 0.85, 1, 1),
+                        scratch=(80, 80, 90), upk=(0.7, 1.9))
         M["box"] = black
         M["plate"] = gold
         M["bar"] = m_metal("darksteel", (60, 62, 70), (84, 86, 96), spec=0.85, rough=0.25, spec_col=(0.9, 0.93, 1, 1),
@@ -218,7 +231,7 @@ def tyre(bm, c, R=0.15, rw=0.17, rh=0.15, n=40, k=16, mat=0):
             f.material_index = mat
 
 
-def shield(w, h, n=40, bottom=0.42, top=0.18):
+def shield(w, h, n=40, bottom=0.5, top=0.16):
     """The head's section: a rounded square, more rounded at the bottom; (x, z) points round it, centred on 0."""
     pts = []
     hw, hh = w / 2, h / 2
@@ -327,6 +340,7 @@ def build(tier):
     zb = z1
     bm = bmesh.new()
     trim = bmesh.new()
+    fac = bmesh.new()
     riv = bmesh.new()
     faces = [(Vector((1, 0, 0)), Vector((0, 1, 0))), (Vector((0, 1, 0)), Vector((-1, 0, 0))),
              (Vector((-1, 0, 0)), Vector((0, -1, 0))), (Vector((0, -1, 0)), Vector((1, 0, 0)))]   # (normal, along)
@@ -344,13 +358,13 @@ def build(tier):
                 for s in (-1, 1):
                     studs(riv, [nrm * a + u * (a * 0.88 * s) + Vector((0, 0, zz))], [nrm], r=0.036)
             if tier == 3:
-                facet_panel(bm, nrm * a + Vector((0, 0, zb + h / 2)), u, Vector((0, 0, 1)), a * 0.78, h / 2 - 0.1,
-                            nrm, 0.06)
+                facet_panel(fac, nrm * a + Vector((0, 0, zb + h / 2)), u, Vector((0, 0, 1)), a * 0.78, h / 2 - 0.1,
+                            nrm, 0.22)
         zb += h
         if si < len(T["secs"]) - 1 or tier > 1:
             bh = T["band"] or 0.05
             if si < len(T["secs"]) - 1:
-                rbox(trim, (2 * a + 0.06, 2 * a + 0.06, bh), Matrix.Translation((0, 0, zb - bh / 2)), bevel=0.02, segs=2)
+                rbox(trim, (2 * a + 0.1, 2 * a + 0.1, bh), Matrix.Translation((0, 0, zb - bh / 2)), bevel=0.02, segs=2)
                 for nrm, u in faces:
                     for t in np.linspace(-0.85, 0.85, 6):
                         studs(riv, [nrm * (a + 0.03) + u * (a * t) + Vector((0, 0, zb))], [nrm], r=0.022)
@@ -360,6 +374,9 @@ def build(tier):
     if tier > 1:   # a trim round the bottom
         rbox(trim, (2 * a + 0.05, 2 * a + 0.05, 0.06), Matrix.Translation((0, 0, z1)), bevel=0.02, segs=2)
     bx = obj_from_bm("box", bm, [M["box"]], parent=body, sharp=30)
+    if tier == 3:
+        fc = obj_from_bm("facets", fac, [M["box"]], parent=body, smooth=False)
+        add_outline(fc, line_box, LINE * 0.6)
     add_outline(bx, line_box)
     tr = obj_from_bm("box_trim", trim, [M["trim"]], parent=body, sharp=30)
     add_outline(tr, LN["warm"], LINE * 0.8)
@@ -368,12 +385,12 @@ def build(tier):
     # the warning sign on the front-left face (+X), on the top section
     zs0, zs1 = sec_z[-1]
     bm = bmesh.new()
-    cpos = Vector((a + 0.005, -0.05, zs0 + (zs1 - zs0) * (0.42 if tier == 1 else 0.5)))
-    plate_tri(bm, cpos, Vector((0, -1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), 0.62, 0.02)
+    cpos = Vector((a + (0.235 if tier == 3 else 0.005), -0.05, zs0 + (zs1 - zs0) * (0.42 if tier == 1 else 0.5)))
+    plate_tri(bm, cpos, Vector((0, -1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), 0.72, 0.02)
     sg = obj_from_bm("sign", bm, [M["sign"]], parent=body, smooth=False)
     add_outline(sg, LN["cool"], LINE * 0.9)
     bm = bmesh.new()
-    plate_tri(bm, cpos + Vector((0.02, 0, -0.02)), Vector((0, -1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), 0.2, 0.012)
+    plate_tri(bm, cpos + Vector((0.02, 0, -0.02)), Vector((0, -1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), 0.24, 0.012)
     obj_from_bm("sign_ink", bm, [M["ink"]], parent=body, smooth=False)
 
     # ---- the column, its collar and the cage ring
@@ -409,7 +426,7 @@ def build(tier):
         pts = [pts[0] + (pts[1] - pts[0]) * t for t in np.linspace(0, 1, 8)][:-1]
         pts += bezier(bear(b, dc, box_top - 0.05), bear(b, dc, box_top + 0.22), bear(b, rr + 0.25, rz + 0.04),
                       bear(b, rr + 0.02, rz), n=12)
-        tube(bm, pts, [0.085] * len(pts), sides=14)
+        tube(bm, pts, [0.085 if tier == 1 else 0.095] * len(pts), sides=14)
     cage = obj_from_bm("cage", bm, [M["bar"]], parent=body)
     add_outline(cage, LN["cool"] if tier != 2 else LN["warm"])
     # amber lamps on the ring where the left and right bars meet it
@@ -444,18 +461,20 @@ def build(tier):
     tur.location = (0, 0, top)
     tur.scale = (HEAD_SCALE,) * 3
     post = lathe("post", [
-        [(0.24, 0.0), (0.25, 0.02), (0.25, 0.04), (0.23, 0.05), (0.24, 0.06), (0.24, 0.08), (0.2, 0.09), (0.0, 0.09)],
+        [(0.27, 0.0), (0.28, 0.02), (0.28, 0.06), (0.24, 0.07), (0.25, 0.09), (0.25, 0.12), (0.23, 0.13), (0.24, 0.15),
+         (0.24, 0.18), (0.22, 0.19), (0.23, 0.21), (0.23, 0.24), (0.26, 0.25), (0.27, 0.27), (0.27, 0.30), (0.2, 0.31),
+         (0.0, 0.31)],
     ], [M["thread"]], parent=tur, sharp=30)
     add_outline(post, LN["warm"])
-    AXZ = 0.40                                   # the tilt axis' height
+    AXZ = 0.66                                   # the tilt axis' height
     bm = bmesh.new()
-    rbox(bm, (0.98, 0.2, 0.08), Matrix.Translation((0, -0.02, 0.07)), bevel=0.02)       # the cross bar
+    rbox(bm, (0.92, 0.2, 0.08), Matrix.Translation((0, -0.02, 0.28)), bevel=0.02)       # the cross bar
     for sx in (-1, 1):
-        rbox(bm, (0.08, 0.3, AXZ - 0.02), Matrix.Translation((sx * 0.47, -0.02, 0.07)), bevel=0.025)
-        bmesh.ops.create_cone(bm, cap_ends=True, segments=28, radius1=0.15, radius2=0.15, depth=0.08,
-                              matrix=Matrix.Translation((sx * 0.47, -0.02, AXZ)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
-        bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=0.09, radius2=0.075, depth=0.07,
-                              matrix=Matrix.Translation((sx * 0.535, -0.02, AXZ)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
+        rbox(bm, (0.08, 0.3, AXZ - 0.24), Matrix.Translation((sx * 0.44, -0.02, 0.28)), bevel=0.025)
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=28, radius1=0.13, radius2=0.13, depth=0.08,
+                              matrix=Matrix.Translation((sx * 0.44, -0.02, AXZ)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=0.08, radius2=0.065, depth=0.07,
+                              matrix=Matrix.Translation((sx * 0.505, -0.02, AXZ)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
     yk = obj_from_bm("yoke", bm, [M["yoke"]], parent=tur, sharp=35)
     add_outline(yk, LN["warm"])
     lamp = bpy.data.objects.new("LAMP", None)
@@ -463,8 +482,8 @@ def build(tier):
     lamp.parent = tur
     lamp.location = (0, -0.02, AXZ)
     lamp.rotation_euler = (math.radians(TILT), 0, 0)
-    hw, hh, zc = 0.86, 0.80, 0.16                 # housing width, height, its centre above the axis
-    y0, y1 = -0.50, 0.62
+    hw, hh, zc = 0.82, 0.92, 0.10                 # housing width, height, its centre above the axis
+    y0, y1 = -0.42, 0.44
     sec = shield(hw, hh)
     bm = bmesh.new()
     prism(bm, [(x, z + zc) for x, z in sec], y0, y1, Matrix())
@@ -476,10 +495,10 @@ def build(tier):
     rim = obj_from_bm("rim", bm, [M["rim"]], parent=lamp, sharp=35)
     add_outline(rim, LN["warm"], LINE * 0.8)
     bm = bmesh.new()   # the lens, a low dome inside the rim
-    inner = [(x * 0.86, z * 0.86 + zc) for x, z in sec]
+    inner = [(x * 0.92, z * 0.92 + zc) for x, z in sec]
     prism(bm, inner, y1, y1 + 0.075, Matrix(), bevel=0.05)
-    lens_m = m_lens("lens", 0.0, zc, hh * 0.42, [(0.0, (210, 245, 255)), (0.3, (60, 170, 255)), (0.75, (16, 80, 230)),
-                                              (1.0, (6, 26, 130))])
+    lens_m = m_lens("lens", 0.0, zc, hh * 0.46, [(0.0, (225, 250, 255)), (0.3, (110, 215, 255)), (0.62, (30, 130, 252)),
+                                              (0.85, (14, 70, 220)), (1.0, (8, 36, 150))])
     obj_from_bm("lens", bm, [lens_m], parent=lamp)
     bm = bmesh.new()   # rivets along the housing's side and top edges
     for yy in np.linspace(y0 + 0.08, y1 - 0.08, 6):
@@ -621,7 +640,7 @@ def main():
             shot(out / "head-4x" / f"h{k:02d}.png", tur_obs, cut=body_obs)
     elif what == "cells54":
         (out / "cell54-4x").mkdir(exist_ok=True)
-        for i in range(54):
+        for i in ([int(x) for x in argv[2:]] or range(54)):
             turn(cell54_bearing(i))
             shot(out / "cell54-4x" / f"c{i:02d}.png", tur_obs, cut=body_obs)
     print("DONE", tier, what, "box", [round(v, 1) for v in box], "want", want, "pivot", round(px, 1), round(py, 1),
