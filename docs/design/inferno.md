@@ -424,9 +424,9 @@ check. Owner screenshots before merge for any screen.
 
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
-| 4.1 | 38 Inferno quests data + rule checks | per-rule tests | 1.16 | M |
-| 4.2 | Quest rewards into the purse; monster rewards need housing; small Shiny prizes on 5 quests (2.8, R12) | tests (Shiny paid once, to the shared Shiny) | 4.1, 2.3 | S |
-| 4.3 | Achievements 18-21 on; client Inferno quests panel | tests + screenshots | 4.1, 1.12 | S |
+| 4.1 | 38 Inferno quests data + rule checks (done 27 Oct: `server/src/game-data/infernoGoals.ts`, read out of `INFERNO_QUESTS.as`; checked on the server against the Inferno yard's own buildings and Strongbox, records on the main save's `onboarding.infernoGoals`; no prereq gating, as Flash's Quests window; Flash's quirks kept: IUC5 "Unlock Valgos" reads Balthazar, IS2 "Level 3" reads level 2; the bank quests read their own `infernoBestBank`, the most one Inferno bank paid, all four resources together; every Inferno yard action marks the quests met, as Flash's `QUESTS.Check`. Report `agent-handoffs/reports/inferno-s2.md` "Slice 4") | per-rule tests | 1.16 | M |
+| 4.2 | Quest rewards into the purse; monster rewards need housing; small Shiny prizes on 5 quests (2.8, R12) (done 27 Oct: `goals/state` and `goals/claim` open on the Inferno yard; rewards into the Inferno purse up to the Inferno cap, the rest reported turned away; points on the Inferno row; monsters into the Compound (Housing Bunkers), refused whole with Flash's "Make room in your Compound for this quest's monsters first." when there is no room; IQT1 10, IT3 10, IS5 15, IUT3 25, IQT3 25 Shiny paid once to the shared Shiny, a second claim `409 alreadyClaimed`) | tests (Shiny paid once, to the shared Shiny) | 4.1, 2.3 | S |
+| 4.3 | Achievements 18-21 on; client Inferno quests panel (done 27 Oct: 20 and 21 switched on with the Inferno; 20 reads the Under Hall's level after every Inferno yard action, 21 the Inferno quests met, claimed or not (Flash's `amountCompleted`). The Inferno yard's dock has a Quests button badged with the quests ready and Flash's Quests list: ready first, then open, 13 rows; Shiny shown on the five; no guide) | tests + screenshots | 4.1, 1.12 | S |
 
 ### S5 — Korath (2)
 
