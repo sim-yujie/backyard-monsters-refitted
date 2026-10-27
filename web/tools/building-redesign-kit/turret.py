@@ -5,8 +5,9 @@
   python turret.py cut <tower> <T1|T2|T3> <body|turret|turret2>     cut the painting out (body: fitted onto the approved tier
                                                                      picture; turret sheets: nine frames, pivot in the middle)
   python turret.py sheet <tower>                                    the game's strips, strip.json, the still sheet and the GIF
+  python turret.py check <tower>                                    how far each strip cell's collar is off the others' (mount.py)
 
-Towers: sniper, laser, aerial, railgun. Painted per tier: the body WITHOUT its turning part (an edit of the approved tier
+Towers: sniper, laser, aerial, railgun, cannon. Painted per tier: the body WITHOUT its turning part (an edit of the approved tier
 picture), and the turning part at 32 headings, one per 11.25 degrees of ground bearing (the cartesian bearing of BTOWER.Rotate:
 heading 0 points down-right on screen, 4 at the viewer, 12 left, 20 away, 28 right). Two 3x3 sheets per tier paint the right
 half: `turret` = headings 20, 22 ... 30, 0, 2, 4 and `turret2` = 21, 23 ... 31, 1, 3 plus a second try at 20. The rest is
@@ -123,6 +124,32 @@ TOWER = {
         brush=0.13, fit=1, cells=32, heading=lambda k: 12 * k - 24,
         rule="cell k = trunc(((bearing + 30) mod 360) / 12) (towerFx.ts facingCell, BUILDING118.as): only cells 0-29 are "
              "reached; cell k shows the heading nearest 12k - 24"),
+    # The Flash Cannon Tower never turned; the guide is the Inferno Cannon's strip (same 11.25 degrees a cell). Its headings
+    # are also moved so their collars agree (`mount.py`, align=True), as export.py does for the others.
+    "cannon": dict(
+        flash=("icannontower/anim.1.v2.png", 74, 64, 30, 4, lambda b: round(b / 11.25) % 32),
+        look={"T1": (300, 100, 900, 660), "T2": (260, 60, 1000, 620), "T3": (260, 10, 1000, 560)},
+        what="a tower's turning steel barrel on its swivel mount",
+        parts=("the turning part as painted on the approved tower: the big steel barrel with its polished brass muzzle ring and "
+               "riveted brass bands, the two side brackets that hold it by its round side pivots, the short round swivel collar "
+               "under the brackets, and the small lamp on top if there is one. Ignore the ring, its posts and curved prongs, the "
+               "drum and everything below the swivel collar."),
+        points="the barrel's open muzzle points", turns="The barrel, its brackets and the swivel collar turn together.",
+        foot="At the bottom there is the short round swivel collar",
+        size="about two thirds of the width of its cell when the barrel points sideways",
+        extra=("The barrel is ALWAYS raised at the same angle as in look.png (tilted up about 20 degrees), in every cell; only which "
+               "way round it points changes."),
+        away="(seen from behind: the barrel's closed back end toward us, the barrel rising away up the picture, the muzzle hidden)",
+        toward="(the round open muzzle facing us full on, the barrel foreshortened)",
+        remove=("REMOVE THE BIG STEEL TUBE AND ITS SWIVEL MOUNT from the top of the tower: the steel barrel with its brass muzzle "
+                "ring and brass bands, the two brackets that hold it, the round swivel collar under them, and the small lamp on "
+                "it if there is one"),
+        hold=(" The ring around the top, its posts and ALL of its curved prongs stay exactly as they are, including the prongs in "
+              "front of where the barrel was."),
+        plate="inside the ring on the top of the drum, centred where the swivel collar was",
+        brush=None, cells=32, heading=lambda k: 11.25 * k, align=True,
+        rule="cell k = trunc(bearing / 11.25) (like the Sniper; the Cannon has no rule in towerFx.ts yet); cell k shows heading "
+             "11.25k"),
 }
 PLATE = {"T1": "a flat round dark steel plate",
          "T2": "a flat round dark steel plate with a polished gold rim",
@@ -331,7 +358,21 @@ def headings(tw, t):
     for j in range(32):                                  # only sheet A so far: the odd headings repeat the next even one
         if j not in hs:
             hs[j] = hs[(j + 1) % 32]
-    return [hs[j] for j in range(32)]
+    # One frame size for all 32 (the two sheets come out at different sizes), a multiple of 4, each heading centred on it.
+    S = -(-max(h.width for h in hs.values()) // 4) * 4
+    shift = [(0, 0)] * 32
+    if TOWER[tw].get("align"):                           # move each heading so its collar lands where the others' do
+        from mount import centres
+        halves = [resize_pm(hs[j], (hs[j].width // 2, hs[j].height // 2)) for j in range(32)]
+        off = np.array([(x * hs[j].width / g.width - hs[j].width / 2, y * hs[j].height / g.height - hs[j].height / 2)
+                        for j, ((x, y), g) in enumerate(zip(centres(tw, [np.asarray(g)[..., 3] for g in halves]), halves))])
+        shift = [(round(dx), round(dy)) for dx, dy in np.median(off, 0) - off]
+    res = []
+    for j in range(32):
+        f = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        f.alpha_composite(hs[j], ((S - hs[j].width) // 2 + shift[j][0], (S - hs[j].height) // 2 + shift[j][1]))
+        res.append(f)
+    return res
 
 
 def tower(tw, t, frame):
@@ -339,6 +380,9 @@ def tower(tw, t, frame):
     b = Image.open(out(tw) / t / "body" / "body-4x.png").copy()
     px, py = PIVOT[tw][t][:2]
     b.alpha_composite(frame, (round(px - frame.width / 2), round(py - frame.height / 2)))
+    front = out(tw) / t / "body" / "front-4x.png"         # parts of the body standing in front of the turning part
+    if front.exists():
+        b.alpha_composite(Image.open(front))
     return b
 
 
@@ -375,6 +419,16 @@ def sheet(tw):
     for t in tiers:
         bbs = [im.getbbox() for im in full[t]]
         box[t] = (min(b[0] for b in bbs) - 8, min(b[1] for b in bbs) - 8, max(b[2] for b in bbs) + 8, max(b[3] for b in bbs) + 8)
+    _previews(tw, tiers, full, box, "")
+    if len(tiers) > 1 and TOWER[tw].get("align"):          # and each tier on its own
+        for t in tiers:
+            _previews(tw, [t], full, box, f"-{t}")
+    print("sheet", o.as_posix(), tiers, "distinct game cells", len(set(cells)))
+
+
+def _previews(tw, tiers, full, box, sfx):
+    """headings<sfx>-2x.png (each tier at 32 headings, 2x, rows of 8) and turning<sfx>-3x.gif (the tiers side by side, 3x)."""
+    o = out(tw)
     font = ImageFont.truetype("arial.ttf", 22)
     lab = 36
     tiles = {t: [resize_pm(im.crop(box[t]), ((box[t][2] - box[t][0]) // 2, (box[t][3] - box[t][1]) // 2)) for im in full[t]]
@@ -396,7 +450,7 @@ def sheet(tw):
         for j, im in enumerate(tiles[t]):
             g.alpha_composite(im, (6 + (j % 8) * (cw + 6) + (cw - w_) // 2, y + (j // 8) * (h_ + 6)))
         y += 4 * (h_ + 6)
-    g.convert("RGB").save(o / "headings-2x.png", optimize=True)
+    g.convert("RGB").save(o / f"headings{sfx}-2x.png", optimize=True)
     # the GIF: three tiers side by side at 3x, bottoms lined up, one full turn (32 headings, order 0 .. 31)
     sc = 3
     big = {t: [resize_pm(im.crop(box[t]), ((box[t][2] - box[t][0]) * sc // UP, (box[t][3] - box[t][1]) * sc // UP))
@@ -414,9 +468,49 @@ def sheet(tw):
             f.alpha_composite(im, (x, pad + Hm - im.height))
             x += im.width + pad
         fr.append(f.convert("RGB").quantize(colors=255, method=Image.MEDIANCUT, dither=Image.NONE))
-    fr[0].save(o / "turning-3x.gif", save_all=True, append_images=fr[1:], duration=90, loop=0, disposal=1)
-    print("sheet", (o / "headings-2x.png").as_posix(), (o / "turning-3x.gif").as_posix(), tiers,
-          "distinct game cells", len(set(cells)))
+    fr[0].save(o / f"turning{sfx}-3x.gif", save_all=True, append_images=fr[1:], duration=90, loop=0, disposal=1)
+
+
+
+def front(tw, t):
+    """body/front-4x.png: the parts of the body that stand in front of the turning part (the turntable's rim and everything
+    below its front edge, inside the plate's width, and the prongs in front), cut from body-4x.png to be drawn over it.
+    FRONT[tw][t] = (plate centre x, y, half width, half height) on body-4x.png and the prongs' outlines, traced by eye."""
+    (cx, cy, rx, ry), prongs = FRONT[tw][t]
+    b = Image.open(out(tw) / t / "body" / "body-4x.png")
+    a = np.asarray(b)
+    yy, xx = np.mgrid[:a.shape[0], :a.shape[1]].astype(float) + 0.5
+    u = np.clip((xx - cx) / rx, -1, 1)
+    m = (np.abs(xx - cx) <= rx) & (yy > cy + ry * np.sqrt(1 - u * u))
+    pm = Image.new("L", b.size, 0)
+    for poly in prongs:
+        ImageDraw.Draw(pm).polygon([tuple(p) for p in poly], fill=255)
+    keep = np.maximum(m * 255, np.asarray(pm)).astype(float) / 255
+    keep = ndi.uniform_filter(keep, 2)                   # a soft edge where the cut crosses the plate
+    f = a.copy()
+    f[..., 3] = (a[..., 3] * keep).astype("uint8")
+    Image.fromarray(f, "RGBA").save(out(tw) / t / "body" / "front-4x.png")
+    print("front", tw, t)
+
+
+def check(tw, limit=2.0):
+    """The collar of every cell of each tier's strip@2x.png (`mount.py`, as check_turrets.py does for the shipped strips):
+    prints how far the furthest cell is from the others' middle, in game px; fails over `limit` (check_turrets.py's 2 px)."""
+    from mount import centres
+    bad = 0
+    for t in TIER:
+        p = out(tw) / t / "strip@2x.png"
+        if not p.exists():
+            continue
+        info = json.loads((out(tw) / t / "strip.json").read_text())
+        a = np.asarray(Image.open(p).convert("RGBA"))[..., 3]
+        w = info["cell_w"]
+        pts = np.array(centres(tw, [a[:, w * i:w * (i + 1)] for i in range(info["cells"])])) / 2
+        off = np.hypot(*(pts - np.median(pts, 0)).T)
+        bad += off.max() > limit
+        print(f"{'ok ' if off.max() <= limit else 'BAD'} {tw} {t}: collar spread {off.max():.2f} px (cell {int(np.argmax(off))}), "
+              f"mean {off.mean():.2f} px, game px")
+    return bad
 
 
 # the turning part's pivot on each body (the foot of its collar on the turntable) and the approved part's width (as `head`
@@ -429,6 +523,29 @@ PIVOT = {
     "laser": {"T1": (300, 447, 112, {}), "T2": (300, 902, 106, {}), "T3": (300, 838, 106, {})},
     "aerial": {"T1": (333, 450, 118, {}), "T2": (333, 861, 118, {}), "T3": (333, 813, 118, {})},
     "railgun": {"T1": (361, 382, 128, {}), "T2": (350, 682, 128, {}), "T3": (347, 652, 128, {})},
+    "cannon": {"T1": (293, 422, 156, {"turret2": 1.02})},
+}
+# the turntable plate (its dark disc) and the prongs standing in front of the turning part, on body-4x.png (see `front`)
+FRONT = {
+    "cannon": {
+        "T1": ((291.5, 400, 45.5, 19.5),
+               [[(299.5, 399), (297, 402.5), (294.5, 410), (293, 420), (292, 430), (291.5, 445), (309.5, 445), (309, 430),
+                 (308, 420), (306, 410), (303, 402.5)]]),
+        "T2": ((293.5, 653.5, 57, 30),
+               [[(299.25, 660), (295.5, 666), (292.5, 676), (290.5, 686), (289.25, 703), (310.5, 703), (308.75, 686),
+                 (306.75, 676), (303, 666)],
+                [(234.25, 647), (243, 652.25), (249.25, 663.5), (253, 676), (251.75, 693), (230.5, 693.5), (229.25, 678.5),
+                 (230.5, 666), (233, 651)],
+                [(389.25, 629.5), (390.5, 636), (385.5, 651), (379.25, 666), (375.5, 686), (360.5, 686), (359.25, 671),
+                 (363, 656), (373, 641)]]),
+        "T3": ((293, 595.5, 65, 34.5),
+               [[(298, 601), (294.25, 607.5), (291, 620), (288.5, 635), (287.5, 654), (309.5, 654), (308.5, 635),
+                 (306, 620), (302.25, 607.5)],
+                [(228, 585), (238, 588.75), (244.25, 600), (248.5, 615), (249.25, 637), (221.75, 637), (222.5, 620),
+                 (224.25, 605), (226.75, 591.25)],
+                [(386.75, 577.5), (388, 582.5), (384.25, 600), (380, 617.5), (378, 636), (359.25, 636), (360, 615),
+                 (364.25, 600), (373, 585)]]),
+    },
 }
 
 if __name__ == "__main__":
@@ -439,3 +556,7 @@ if __name__ == "__main__":
         cut_body(sys.argv[2], sys.argv[3]) if sys.argv[4] == "body" else cut_turret(sys.argv[2], sys.argv[3], sys.argv[4])
     elif cmd == "sheet":
         sheet(sys.argv[2])
+    elif cmd == "front":
+        front(sys.argv[2], sys.argv[3])
+    elif cmd == "check":
+        sys.exit(1 if check(sys.argv[2]) else 0)
