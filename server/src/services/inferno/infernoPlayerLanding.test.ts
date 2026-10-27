@@ -634,7 +634,7 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
 
   test("an honest End Attack with nothing flung, past the grace: the army is kept, a 0-damage attack lands", async () => {
     // The client's End Attack with no fling: the log is there, its only event the retreat.
-    for (const extra of [
+    for (const extra of <Array<Record<string, string>>>[
       { flinglog: JSON.stringify({ v: 1, seed: 7, events: [{ kind: "retreat", t: 40 }] }) },
       { flinglog: JSON.stringify({ v: 1, seed: 7, events: [] }), left: "1" },
     ]) {
