@@ -1,11 +1,14 @@
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { UpgradeCost, YardResponse } from "./types";
+import { yardBody } from "./yard";
 
 /**
  * The Goals routes (`docs/design/tutorial.md` §6, §8.3, issue #227). All are
  * yard actions on the main yard (`server/src/controllers/yard/goals.ts`) and
- * refuse on an outpost:
+ * refuse on an outpost; `state` and `claim` also answer on the Inferno yard,
+ * with its 38 quests (`docs/design/inferno.md` WP 4.1-4.3), when the request
+ * names it by `baseid`:
  *
  *   POST /api/:apiVersion/bm/yard/goals/state            the list
  *   POST /api/:apiVersion/bm/yard/goals/claim  id        pay one goal
@@ -39,6 +42,8 @@ export interface GoalView {
   name: string;
   description: string;
   reward: UpgradeCost;
+  /** Shiny on top of the reward (five Inferno quests). */
+  shiny?: number;
   monsters?: GoalMonsters;
   siege?: GoalSiege;
   status: "open" | "ready" | "claimed";
@@ -64,6 +69,8 @@ export interface GoalClaimReport {
   credited: UpgradeCost;
   /** What the cap turned away. */
   overflow: UpgradeCost;
+  /** Shiny paid to the shared Shiny. */
+  shiny?: number;
   monsters?: { id: string; count: number };
   /** The siege weapon made in the Chaos Factory. */
   siegeReward?: { id: string; count: number };
@@ -72,16 +79,16 @@ export interface GoalClaimReport {
   points: number;
 }
 
-export const goalsState = (): Promise<YardResponse<GoalsStateReport>> =>
-  post<YardResponse<GoalsStateReport>>(`${GOALS_PATH}/state`);
+export const goalsState = (baseid?: string): Promise<YardResponse<GoalsStateReport>> =>
+  post<YardResponse<GoalsStateReport>>(`${GOALS_PATH}/state`, yardBody({}, baseid));
 
 /**
  * Pays one goal. Refusals: 400 `unknownGoal`; 409 `alreadyClaimed`,
  * `goalHidden`, `notMet`, `mapRoom3`, `housing { monster, count, need, free }`,
  * `siegeRoom { weapon }`.
  */
-export const claimGoal = (id: string): Promise<YardResponse<GoalClaimReport>> =>
-  post<YardResponse<GoalClaimReport>>(`${GOALS_PATH}/claim`, { id });
+export const claimGoal = (id: string, baseid?: string): Promise<YardResponse<GoalClaimReport>> =>
+  post<YardResponse<GoalClaimReport>>(`${GOALS_PATH}/claim`, yardBody({ id }, baseid));
 
 /** A Baiter practice run's token, issued as the run starts. Refusal: 409 `noBaiter`. */
 export const baiterStart = (): Promise<YardResponse<{ token: string }>> =>
@@ -110,8 +117,12 @@ export interface GoalsActions {
   claim(id: string): Promise<YardActionResult<GoalClaimReport>>;
 }
 
-/** The Goals routes through the store's one-at-a-time queue, which merges each answer. */
+/**
+ * The Goals routes through the store's one-at-a-time queue, which merges each
+ * answer. They name the store's yard: none on the main yard, the Inferno
+ * yard's `baseid` there (the panel is not mounted on an outpost).
+ */
 export const goalsActions = (store: Pick<YardStore, "run">, api: GoalsApi = goalsApi): GoalsActions => ({
-  state: () => store.run({ key: GoalsKey.STATE, send: () => api.state() }),
-  claim: (id) => store.run({ key: GoalsKey.claim(id), send: () => api.claim(id) }),
+  state: () => store.run({ key: GoalsKey.STATE, send: (_api, ...yard) => api.state(...yard) }),
+  claim: (id) => store.run({ key: GoalsKey.claim(id), send: (_api, ...yard) => api.claim(id, ...yard) }),
 });

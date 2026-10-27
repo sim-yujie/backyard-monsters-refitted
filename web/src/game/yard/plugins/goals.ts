@@ -7,7 +7,14 @@ import { startBank, type AnswerBank, type BankShowFx, type BankShowHud } from "@
 import type { HarvestKey } from "@/game/yard/harvest";
 import { claimFigure, REWARD_KEYS, type ClaimFigure } from "@/ui/goals/claimFigure";
 import { goalsArt } from "@/ui/goals/goalsArt";
-import { GoalsPanel, monstersText, type GoalsPanelView } from "@/ui/goals/GoalsPanel";
+import {
+  GOAL_WORDS,
+  GoalsPanel,
+  INFERNO_QUEST_WORDS,
+  monstersText,
+  type GoalsPanelView,
+  type GoalsPanelWords,
+} from "@/ui/goals/GoalsPanel";
 import { dockButton } from "@/ui/yard/YardDock";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 
@@ -32,11 +39,46 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  * - **Guide.** Opening the panel emits `screen` ("goals") and closing it
  *   `screenClosed`, for the guided start's last step and the tips.
  *
- * Main yard only: an outpost has no Goals (the routes refuse there).
+ * Main yard and Inferno yard: an outpost has no Goals (the routes refuse
+ * there). On the Inferno yard the button and panel are Flash's Quests
+ * (`docs/design/inferno.md` WP 4.3): the 38 Inferno quests, the badge counting
+ * those ready, monster rewards moving into the Compound, and no guide.
  */
 
 /** The notice key for claim results. */
 const GOALS_NOTICE = "goals";
+
+/** What the door calls its goals, on the button and the badge. */
+interface DoorWords {
+  readonly panel: GoalsPanelWords;
+  /** "goal" or "quest". */
+  readonly one: string;
+  readonly hint: string;
+  /** Where monster rewards land, for the notice: "Housing", "the Compound". */
+  readonly housing: string;
+  /** Whether the guided start and the tips follow the panel (the surface only). */
+  readonly guide: boolean;
+  /** Whether monster rewards walk in to a Housing (the Inferno yard has none). */
+  readonly walkIn: boolean;
+}
+
+const SURFACE_DOOR: DoorWords = {
+  panel: GOAL_WORDS,
+  one: "goal",
+  hint: "what to do next, and the rewards",
+  housing: "Housing",
+  guide: true,
+  walkIn: true,
+};
+
+const INFERNO_DOOR: DoorWords = {
+  panel: INFERNO_QUEST_WORDS,
+  one: "quest",
+  hint: "the Inferno's quests, and the rewards",
+  housing: "the Compound",
+  guide: false,
+  walkIn: false,
+};
 
 /** Where the Goals button sits, as a world point for the balls to leave from. */
 const buttonWorldPoint = (mounts: YardMounts, button: HTMLElement): { x: number; y: number } | null => {
@@ -79,6 +121,7 @@ export class GoalsDoor {
   private readonly badge: HTMLElement;
   private readonly mounts: YardMounts;
   private readonly actions: GoalsActions;
+  private readonly words: DoorWords;
   private panel: GoalsPanel | null = null;
   private goals: readonly GoalView[] | null = null;
   private claiming: string | null = null;
@@ -92,7 +135,8 @@ export class GoalsDoor {
   constructor(mounts: YardMounts, actions: GoalsActions = goalsActions(mounts.store)) {
     this.mounts = mounts;
     this.actions = actions;
-    const { element, disc } = dockButton("goals", "Goals", goalsArt(29), () => this.toggle());
+    this.words = mounts.store.kind === "inferno" ? INFERNO_DOOR : SURFACE_DOOR;
+    const { element, disc } = dockButton("goals", this.words.panel.title, goalsArt(29), () => this.toggle());
     this.button = element;
     this.badge = document.createElement("span");
     this.badge.className = "yard-dock__badge goals-badge";
@@ -127,18 +171,20 @@ export class GoalsDoor {
       this.panel.close();
       return;
     }
+    const { guide } = this.words;
     this.panel = new GoalsPanel({
       onClaim: (goal) => void this.claim(goal),
       onRetry: () => void this.reload(),
       onClose: () => {
         this.panel = null;
         this.refusal = null;
-        guideBus.emit("screenClosed", { id: GuideScreen.GOALS });
+        if (guide) guideBus.emit("screenClosed", { id: GuideScreen.GOALS });
       },
+      words: this.words.panel,
     }).mount(this.mounts.overlay.content);
     this.render();
     // The guided start waits for the panel (step 17); the tips can attach to it.
-    guideBus.emit("screen", { id: GuideScreen.GOALS, root: this.panel.element, header: this.panel.header });
+    if (guide) guideBus.emit("screen", { id: GuideScreen.GOALS, root: this.panel.element, header: this.panel.header });
     void this.reload();
   }
 
@@ -185,9 +231,10 @@ export class GoalsDoor {
     const count = this.ready;
     this.badge.hidden = count === 0;
     this.badge.textContent = count > 99 ? "99+" : String(count);
-    const words = count === 1 ? "1 goal ready to claim" : `${count} goals ready to claim`;
-    this.button.setAttribute("aria-label", count > 0 ? `Goals. ${words}` : "Goals");
-    this.button.title = count > 0 ? `Goals: ${words}` : "Goals: what to do next, and the rewards";
+    const { one, hint, panel } = this.words;
+    const words = count === 1 ? `1 ${one} ready to claim` : `${count} ${one}s ready to claim`;
+    this.button.setAttribute("aria-label", count > 0 ? `${panel.title}. ${words}` : panel.title);
+    this.button.title = count > 0 ? `${panel.title}: ${words}` : `${panel.title}: ${hint}`;
   }
 
   private async claim(goal: GoalView): Promise<void> {
@@ -209,13 +256,13 @@ export class GoalsDoor {
     if (result.ok) {
       const { monsters } = result.report;
       if (monsters && goal.monsters) {
-        notices.show(GOALS_NOTICE, `${monstersText(monsters.count, goal.monsters.name)} moved into Housing.`, {
+        notices.show(GOALS_NOTICE, `${monstersText(monsters.count, goal.monsters.name)} moved into ${this.words.housing}.`, {
           level: "info",
           timeoutMs: 5_000,
         });
         // They walk in from the yard's edge, as Bob's Pokeys do (the guided
         // start's walk-in), and join the pen when they get there (#228).
-        if (!prefersReducedMotion()) {
+        if (!prefersReducedMotion() && this.words.walkIn) {
           this.walkIn?.destroy();
           const { renderer } = this.mounts;
           const release = renderer.holdLife(monsters.id, housedCount(store.save, monsters.id) - monsters.count);
@@ -250,7 +297,7 @@ export class GoalsDoor {
 }
 
 export const goalsPlugin: YardPlugin = (mounts) => {
-  if (mounts.store.kind !== "main") return;
+  if (mounts.store.kind !== "main" && mounts.store.kind !== "inferno") return;
   const door = new GoalsDoor(mounts);
   void door.load();
   return () => door.destroy();

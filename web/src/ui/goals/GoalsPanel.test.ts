@@ -3,7 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import type { GoalView } from "@/api/goals";
 import { spokenText } from "@/ui/resourceIcon";
 import { claimFigure } from "./claimFigure";
-import { GoalsPanel, monstersText, NEXT_COUNT, SIEGE_ROOM_NOTE, siegeText, type GoalsPanelView } from "./GoalsPanel";
+import {
+  GoalsPanel,
+  INFERNO_QUEST_WORDS,
+  monstersText,
+  NEXT_COUNT,
+  SIEGE_ROOM_NOTE,
+  siegeText,
+  type GoalsPanelView,
+} from "./GoalsPanel";
 
 /** The Goals panel (#227, `docs/design/tutorial.md` §6.3). */
 
@@ -30,11 +38,49 @@ const listView = (goals: GoalView[], resources = {}, extra: Partial<ListView> = 
   ...extra,
 });
 
-const mounted = () => {
-  const options = { onClaim: vi.fn(), onRetry: vi.fn(), onClose: vi.fn() };
+const mounted = (inferno = false) => {
+  const options = {
+    onClaim: vi.fn(),
+    onRetry: vi.fn(),
+    onClose: vi.fn(),
+    ...(inferno && { words: INFERNO_QUEST_WORDS }),
+  };
   const panel = new GoalsPanel(options).mount(document.body);
   return { panel, options };
 };
+
+describe("GoalsPanel on the Inferno yard (Flash's Quests window)", () => {
+  it("is titled Quests and lists the ready quests, then open ones, 13 rows in all", () => {
+    const { panel } = mounted(true);
+    const ready = Array.from({ length: 4 }, (_, index) => goal(`R${index}`, "ready"));
+    const open = Array.from({ length: 20 }, (_, index) => goal(`O${index}`, "open"));
+    panel.render(listView([...ready, ...open]));
+    expect(panel.element.textContent).toContain("Quests");
+    expect(panel.element.querySelectorAll(".goals-row--ready")).toHaveLength(4);
+    expect(panel.element.querySelectorAll(".goals-row:not(.goals-row--ready)")).toHaveLength(9);
+    panel.close();
+  });
+
+  it("a Shiny quest shows its Shiny in the reward and on the Claim button", () => {
+    const { panel } = mounted(true);
+    panel.render(listView([goal("IQT1", "ready", { shiny: 10 }), goal("IT3", "open", { shiny: 10 })]));
+    const button = panel.element.querySelector<HTMLButtonElement>(".goals-claim")!;
+    expect(spokenText(button)).toContain("Shiny +10");
+    const open = panel.element.querySelector('.goals-row[data-goal="IT3"] .goals-reward')!;
+    expect(spokenText(open as HTMLElement)).toContain("Shiny 10");
+    panel.close();
+  });
+
+  it("a monster quest with no room says to make room in your Compound", () => {
+    const { panel } = mounted(true);
+    const monsters = { id: "IC2", name: "Zagnoid", count: 10 };
+    panel.render(listView([goal("IUC2", "ready", { monsters, room: false })]));
+    expect(panel.element.querySelector(".goals-row__note")!.textContent).toBe(
+      "Make room in your Compound for 10 Zagnoids",
+    );
+    panel.close();
+  });
+});
 
 describe("GoalsPanel", () => {
   it("lists ready goals first with Claim, then the next five, then claimed folded", () => {
