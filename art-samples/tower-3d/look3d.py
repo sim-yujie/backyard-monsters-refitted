@@ -608,7 +608,9 @@ def add_outline(ob, line_mat, w=None):
 
 
 # ------------------------------------------------------------------------------------------------------------ camera/light
-def setup_render(samples=64):
+def setup_render(samples=64, el=None):
+    """el: camera elevation in degrees for this tower (default EL, read at call time, so L.EL = 30 before the call works too)."""
+    el = EL if el is None else el
     sc = bpy.context.scene
     sc.render.engine = 'BLENDER_EEVEE'
     sc.render.resolution_x, sc.render.resolution_y = W, H
@@ -638,7 +640,7 @@ def setup_render(samples=64):
     cam_d.clip_start, cam_d.clip_end = 0.05, 40
     cam = bpy.data.objects.new("cam", cam_d)
     sc.collection.objects.link(cam)
-    view = bear(45, math.cos(math.radians(EL)), math.sin(math.radians(EL)))   # toward the viewer, up
+    view = bear(45, math.cos(math.radians(el)), math.sin(math.radians(el)))   # toward the viewer, up
     cam.location = Vector((0, 0, 1.0)) + view * 16
     cam.rotation_euler = (-view).to_track_quat('-Z', 'Y').to_euler()
     sc.camera = cam
