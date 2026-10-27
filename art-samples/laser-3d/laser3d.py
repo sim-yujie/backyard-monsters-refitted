@@ -25,63 +25,61 @@ from pathlib import Path
 import bmesh
 import bpy
 import numpy as np
-from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Matrix, Vector
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tower-3d"))
-from look_fallback import (LINE, Paint, add_outline, bear, bezier, diag, lathe, obj_from_bm, outline_mat, rbox,  # noqa: E402
-                           ring_of, setup_render, srgb, studs, tube)
+import look3d as L  # noqa: E402
+from look3d import Paint, bear, bezier, diag, lathe, obj_from_bm, rbox, ring_of, srgb, studs, tube  # noqa: E402
 
 W, H = 400, 640                       # 4x canvas
 AX, AY = 200, 400                     # the building's anchor on it
-EL = float(os.environ.get("LASER_EL", "30"))   # camera elevation (cannon3d.py: 23)
-SUN = (150, 42)
+if os.environ.get("LASER_EL"):        # a check only: the shared camera angle is look3d.EL
+    L.EL = float(os.environ["LASER_EL"])
 # the painted tiers (buildingArtTiers.ts, 23 Laser Tower): body picture [x, y, w, h] and pivot, game px from the anchor
 PAINTED = {1: dict(body=(-33, -29, 68, 81), pivot=(2, -20)),
            2: dict(body=(-33, -54, 68, 106), pivot=(2, -44)),
            3: dict(body=(-33, -71, 68, 123), pivot=(2, -60))}
-TILT = 8.0                           # the head's raise, degrees
+TILT = 8.0                            # the head's raise, degrees
 HEAD_SCALE = 1.06
 
 # ------------------------------------------------------------------------------------------------------------- tiers
 # the parts every tier shares keep their size (base, tyres, head); the box grows by sections
 BASE_H = 0.95                         # striped base
-PLATE = (0.95, 1.03)
-RING_UP, TOP_UP = 0.48, 0.40          # the cage ring above the box, the turning point above the ring                  # the plate on it
+PLATE = (0.95, 1.03)                  # the plate on it
+RING_UP, TOP_UP = 0.48, 0.40          # the cage ring above the box, the turning point above the ring
 BOX_A = 0.70                          # the box's half side (its corners point at bearings 45, 135, 225, 315)
 TIERS = {
-    1: dict(secs=[1.0], band=0.0),
-    2: dict(secs=[1.1, 1.1], band=0.12),
-    3: dict(secs=[1.0, 1.0, 1.0], band=0.12),
+    1: dict(secs=[1.0], band=0.0, line="cool"),
+    2: dict(secs=[1.1, 1.1], band=0.12, line="gold"),
+    3: dict(secs=[1.0, 1.0, 1.0], band=0.12, line="cool"),
 }
 
 
 # --------------------------------------------------------------------------------------------------------- materials
-# gold keeps warm in its shade (the cool shade of the shared look turns it grey-brown)
-WARM = [(0.0, (0.42, 0.28, 0.2, 1)), (0.15, (0.52, 0.38, 0.28, 1)), (0.5, (0.8, 0.72, 0.6, 1)), (1.0, (1.0, 0.96, 0.86, 1))]
-
-def m_metal(name, lo, hi, wear=None, spec=0.7, rough=0.3, spec_col=(1, 0.97, 0.9, 1), scratch=None, nscale=3.0, metal=True,
-            shade=None, upk=None):
+def m_paint(name, lo, hi, wear=None, spec=0.7, rough=0.3, spec_col=(1, 0.97, 0.9, 1), scratch=None, nscale=3.0,
+            metal=True, shade=None, upk=None, edge_dark=0.5):
+    """A painted surface with its own colour noise (lo..hi), pale scratches, darker wear patches; upk lightens faces
+    that tip up to the sky and darkens those tipping down (the black armour's facets)."""
     p = Paint(name)
     base = p.ramp(p.noise(nscale, 4.0), [(0.3, srgb(*lo)), (0.7, srgb(*hi))])
     if scratch:
-        s = p.ramp(p.noise(14.0, 6.0, 0.7), [(0.66, (0, 0, 0, 1)), (0.7, (1, 1, 1, 1))])
-        base = p.mix(base, srgb(*scratch), s)
+        sc_ = p.ramp(p.noise(14.0, 6.0, 0.7), [(0.66, (0, 0, 0, 1)), (0.7, (1, 1, 1, 1))])
+        base = p.mix(base, srgb(*scratch), sc_)
     if wear:
         w = p.ramp(p.noise(2.2, 4.0, 0.6), [(0.32, srgb(*wear)), (0.62, (1, 1, 1, 1))])
         base = p.mix(base, w, 1.0, 'MULTIPLY')
-    if upk:   # lighter where the surface tips up to the sky, darker tipping down (painted black armour's facets)
+    if upk:
         geo = p.N.new("ShaderNodeNewGeometry")
         sep = p.N.new("ShaderNodeSeparateXYZ")
         p.link(geo.outputs["Normal"], sep.inputs[0])
         k = p.ramp(sep.outputs[2], [(0.3, (upk[0],) * 3 + (1,)), (0.7, (upk[1],) * 3 + (1,))])
         base = p.mix(base, k, 1.0, 'MULTIPLY')
-    return p.finish(base, spec=spec, spec_rough=rough, spec_col=spec_col, metal=metal, shade=shade)
+    return p.finish(base, spec=spec, spec_rough=rough, spec_col=spec_col, metal=metal, shade=shade, edge_dark=edge_dark)
 
 
 def m_stripes(c0, c1, n=11):
+    """The base's hazard stripes: diagonal, as painted (look3d's stripes stand nearly upright)."""
     p = Paint("stripes")
     sep = p.N.new("ShaderNodeSeparateXYZ")
     p.link(p.tc.outputs["Object"], sep.inputs[0])
@@ -97,13 +95,9 @@ def m_stripes(c0, c1, n=11):
     return p.finish(col, spec=0.35, spec_rough=0.3)
 
 
-def m_flat(name, col, spec=0.3, rough=0.35, metal=False, emit=None):
-    return Paint(name).finish(srgb(*col), spec=spec, spec_rough=rough, metal=metal, emit=srgb(*emit) if emit else None)
-
-
 def m_lens(name, cx, cz, rad, stops):
-    """A lit lens: flat emission, a radial ramp from a hot middle to a deep rim (object x, z round cx, cz), plus a
-    small white glint up and to the left."""
+    """The laser's lens, lit from inside: flat emission, a radial ramp from a hot middle to a deep rim (object x, z round
+    cx, cz), a small pale glint up and to the left."""
     p = Paint(name)
     sep = p.N.new("ShaderNodeSeparateXYZ")
     p.link(p.tc.outputs["Object"], sep.inputs[0])
@@ -122,91 +116,55 @@ def m_lens(name, cx, cz, rad, stops):
     return p.m
 
 
-def m_glow(name, edge, mid, core, power=1.6):
-    """A lit lens: flat emission, deep at the rim, bright where it faces the camera, a white hot spot."""
-    m = bpy.data.materials.new(name)
-    m.use_nodes = True
-    nt = m.node_tree
-    for n in list(nt.nodes):
-        nt.nodes.remove(n)
-    lw = nt.nodes.new("ShaderNodeLayerWeight")
-    lw.inputs["Blend"].default_value = 0.5
-    inv = nt.nodes.new("ShaderNodeMath")
-    inv.operation = 'POWER'
-    one = nt.nodes.new("ShaderNodeMath")
-    one.operation = 'SUBTRACT'
-    one.inputs[0].default_value = 1.0
-    nt.links.new(lw.outputs["Facing"], one.inputs[1])
-    nt.links.new(one.outputs[0], inv.inputs[0])
-    inv.inputs[1].default_value = power
-    r = nt.nodes.new("ShaderNodeValToRGB")
-    el = r.color_ramp.elements
-    el[0].position, el[0].color = 0.0, srgb(*edge)
-    el[1].position, el[1].color = 1.0, srgb(*core)
-    e = el.new(0.55)
-    e.color = srgb(*mid)
-    nt.links.new(inv.outputs[0], r.inputs[0])
-    em = nt.nodes.new("ShaderNodeEmission")
-    nt.links.new(r.outputs[0], em.inputs[0])
-    out = nt.nodes.new("ShaderNodeOutputMaterial")
-    nt.links.new(em.outputs[0], out.inputs[0])
-    return m
-
-
 def materials(tier):
     M = {}
-    M["tyre"] = m_metal("tyre", (54, 54, 62), (74, 74, 84), spec=0.2, rough=0.45, spec_col=(0.85, 0.88, 1, 1), nscale=5,
+    M["tyre"] = m_paint("tyre", (54, 54, 62), (74, 74, 84), spec=0.2, rough=0.45, spec_col=(0.85, 0.88, 1, 1), nscale=5,
                         metal=False)
-    M["hose_b"] = m_flat("hose_b", (40, 110, 230), spec=0.8, rough=0.2)
-    M["hose_r"] = m_flat("hose_r", (210, 40, 36), spec=0.7, rough=0.2)
-    M["sign"] = m_flat("sign", (246, 206, 30), spec=0.2)
-    M["ink"] = m_flat("ink", (24, 22, 20), spec=0.1)
-    M["amber"] = m_glow("amber", (200, 70, 0), (255, 150, 30), (255, 240, 170))
-    gold = m_metal("gold", (240, 166, 20), (255, 208, 56), wear=(206, 132, 30), spec=0.95, rough=0.22, shade=WARM,
-                   spec_col=(1.0, 0.82, 0.4, 1))
-    brass = m_metal("brass", (176, 118, 40), (204, 148, 58), wear=(130, 84, 30), spec=0.9, rough=0.25,
-                    spec_col=(1.0, 0.9, 0.62, 1))
-    darksteel = m_metal("darksteel1", (78, 86, 94), (100, 108, 116), spec=0.6, rough=0.3, spec_col=(0.95, 0.97, 1, 1))
-    steel = m_metal("steel", (100, 110, 120), (128, 138, 148), spec=0.7, rough=0.25, spec_col=(0.95, 0.97, 1, 1),
-                    scratch=(186, 192, 198))
+    M["hose_b"] = L.mat_flat("hose_b", (40, 110, 230), spec=0.8, spec_rough=0.2)
+    M["hose_r"] = L.mat_flat("hose_r", (210, 40, 36), spec=0.7, spec_rough=0.2)
+    M["sign"] = L.mat_flat("sign", (246, 206, 30), spec=0.2)
+    M["ink"] = L.mat_flat("ink", (24, 22, 20), spec=0.1)
+    M["amber"] = L.mat_glass_lamp("amber")
+    M["amber_glow"] = L.mat_halo("amber_glow")
+    M["lens_glow"] = L.mat_halo("lens_glow", col=(80, 180, 255), strength=0.5)
+    gold = L.mat_metal("gold", spec=1.0)
+    brass = L.mat_metal("brass")
+    steel = L.mat_metal("steel")
+    gunmetal = L.mat_metal("gunmetal")
     if tier == 1:
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
-        M["box"] = m_metal("box", (112, 116, 102), (140, 144, 128), metal=False, spec=0.35, rough=0.32, spec_col=(0.95, 0.97, 1, 1),
-                           scratch=(140, 142, 134), wear=(84, 74, 60))
-        M["plate"] = darksteel
+        M["box"] = m_paint("box", (112, 116, 102), (140, 144, 128), metal=False, spec=0.35, rough=0.32,
+                           spec_col=(0.95, 0.97, 1, 1), scratch=(140, 142, 134), wear=(84, 74, 60))
+        M["plate"] = gunmetal
         M["bar"] = steel
         M["column"] = brass
-        M["ring"] = darksteel
-        M["trim"] = darksteel
-        M["rivet"] = m_flat("rivet", (200, 146, 70), spec=0.9, rough=0.25, metal=True)
-        M["head"] = m_metal("head", (104, 110, 116), (130, 136, 142), spec=0.7, rough=0.25, spec_col=(0.95, 0.97, 1, 1),
-                            scratch=(182, 186, 190))
+        M["ring"] = steel
+        M["trim"] = gunmetal
+        M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)
+        M["head"] = steel
         M["rim"] = gold
-        M["yoke"] = m_metal("yoke", (110, 112, 104), (136, 138, 130), spec=0.6, rough=0.3)
+        M["yoke"] = gunmetal
         M["thread"] = brass
     elif tier == 2:
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
-        M["box"] = m_metal("goldbox", (246, 168, 18), (255, 202, 44), wear=(220, 150, 40), spec=0.6, rough=0.25,
-                           shade=WARM, metal=False, spec_col=(1.0, 0.78, 0.3, 1), nscale=1.5)
-        for k in ("plate", "bar", "column", "ring", "trim", "head", "rim", "yoke", "thread"):
+        for k in ("box", "plate", "bar", "column", "ring", "trim", "head", "rim", "yoke", "thread"):
             M[k] = gold
-        M["rivet"] = m_flat("rivet", (176, 112, 26), spec=0.9, rough=0.25, metal=True)
+        M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)
     else:
         M["stripes"] = m_stripes((30, 30, 34), (236, 178, 40))
-        black = m_metal("black", (60, 62, 72), (84, 86, 98), spec=1.0, rough=0.25, spec_col=(0.8, 0.85, 1, 1),
-                        scratch=(80, 80, 90), upk=(0.7, 1.9))
-        M["box"] = black
+        dark, mid, light, hi = L.METALS["black"]
+        M["box"] = m_paint("armour", (255, 255, 255), (235, 235, 240), spec=1.0, rough=0.22, spec_col=hi,
+                           scratch=(255, 255, 255), upk=(0.75, 1.6), shade=L.metal_ramp(dark, mid, light))
         M["plate"] = gold
-        M["bar"] = m_metal("darksteel", (60, 62, 70), (84, 86, 96), spec=0.85, rough=0.25, spec_col=(0.9, 0.93, 1, 1),
-                           scratch=(130, 132, 140))
-        M["column"] = black
+        M["bar"] = gunmetal
+        M["column"] = L.mat_metal("black")
         M["ring"] = gold
         M["trim"] = gold
-        M["head"] = black
+        M["head"] = L.mat_metal("black")
         M["rim"] = gold
         M["yoke"] = gold
         M["thread"] = gold
-        M["rivet"] = m_flat("rivet", (232, 178, 56), spec=0.9, rough=0.25, metal=True)
+        M["rivet"] = L.mat_metal("rivet", "gold", spec=1.0, spec_rough=0.2, wear=0)
     return M
 
 
