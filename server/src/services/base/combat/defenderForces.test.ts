@@ -43,3 +43,27 @@ describe("servedDefenderForces: the caged champion's health", () => {
     expect(forces.defenderChampions[0]!.hp).toBe(1_200 + 20 * 12);
   });
 });
+
+describe("servedDefenderForces: an Inferno yard's Housing Bunkers", () => {
+  /** An Inferno yard with one Housing Bunker (type 128) standing. */
+  const inferno = (monsters: unknown) =>
+    ({
+      type: "inferno",
+      buildingdata: { 5: { id: 5, t: 128, l: 1, X: 0, Y: 0 } },
+      buildinghealthdata: {},
+      academy: {},
+      savetime: NOW,
+      champion: [],
+      monsters,
+    }) as never;
+
+  test("a player's yard defends with what it keeps under `housed`", async () => {
+    const forces = await servedDefenderForces(inferno({ housed: { IC1: 6 } }), null, NOW);
+    expect(forces.bunkers[5]).toEqual({ IC1: 6 });
+  });
+
+  test("a data-file yard's flat list still defends", async () => {
+    const forces = await servedDefenderForces(inferno({ IC1: 10 }), null, NOW);
+    expect(forces.bunkers[5]).toEqual({ IC1: 10 });
+  });
+});

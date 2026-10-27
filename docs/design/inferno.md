@@ -414,7 +414,7 @@ check. Owner screenshots before merge for any screen.
 
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
-| 3.1 | Neighbours route (`findInfernoNeighbours.ts`), real players only (R10; bots later, #383) | tests | 2.7 | S |
+| 3.1 | Neighbours route (`findInfernoNeighbours.ts`), real players only (R10; bots later, #383) (done 27 Oct: `GET /bm/inferno/neighbours` lists real players' Inferno yards within 7 levels of the player's, from the 150 most recently changed, at most 25, all worlds, never a bot's and only the yard the owner plays; kept in `maproom_inferno` and searched again by the Map Room 1 rules (2 weeks, or 30 minutes while thin), keeping the attack counters and everyone with revenge left; each one's level, protection, attack in progress, online (the main yard's rule, owner to confirm) and friend flag read fresh, with Flash's attack codes. Also: a player's Inferno yard now defends with the monsters it keeps under `housed`. Report `agent-handoffs/reports/inferno-s2.md` # Slice 3) | tests | 2.7 | S |
 | 3.2 | `attack/start` kind player + defender forces from the Inferno yard; same bunker attack size as 2.8 | tests (protected, out of range refused) | 3.1, 2.8 | M |
 | 3.3 | Landing: Inferno loot, protection (`damageProtection.ts`), revenge | tests | 3.2 | M |
 | 3.4 | Defender notice + view | screenshots | 3.3 | S |
