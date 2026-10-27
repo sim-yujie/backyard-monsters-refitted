@@ -9,7 +9,14 @@ import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { attackNotBoundErr, noInfernoYardErr } from "../../errors/errors.js";
-import { HOUSING_BUNKER_TYPE, RESOURCE_KEYS, type FlingLog, type ResourceAmounts } from "../../game-rules/combat/index.js";
+import {
+  HOUSING_BUNKER_TYPE,
+  LOW_LEVEL_LOOT_CEILING,
+  RESOURCE_KEYS,
+  lowLevelLootBonus,
+  type FlingLog,
+  type ResourceAmounts,
+} from "../../game-rules/combat/index.js";
 import { BaseSaveSchema } from "../../schemas/BaseSaveSchema.js";
 import { postgres } from "../../server.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -65,10 +72,10 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * the start served. What lands, in one transaction, the attacker's rows
  * locked first, then the defender's, each main row before its Inferno yard:
  * - the monsters that fought leave the attacker's Housing Bunkers;
- * - the loot (`attackLootOf`, the client's claim held to the replay's) goes
- *   into the attacker's Inferno purse up to its caps, and the defender's
- *   purse loses at least what was credited and at most what the replay took,
- *   never below 0;
+ * - the loot (`attackLootOf`, the client's claim held to the replay's): the
+ *   defender's purse loses at least what was credited and at most what the
+ *   replay took, never below 0, and the attacker's Inferno purse gains no
+ *   more than the defender's really gave up (`creditPaidFor`), up to its caps;
  * - the defender's yard keeps the replay's health, damage, fired traps and
  *   report; each Housing Bunker still standing keeps the monsters the battle
  *   left it, one that fell loses all it housed (`housedAfterBattle`); the
@@ -237,10 +244,12 @@ export const writePlayerLanding = async (
     // The loot: out of the defender's purse, into the attacker's up to its caps.
     const loss: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
     for (const key of RESOURCE_KEYS) loss[key] = -Math.min(0, loot.defenderDelta[key]);
-    const looted = lootPurse(defenderMain?.iresources, loss);
-    if (defenderMain) defenderMain.iresources = looted.iresources;
+    // No defender's main row, no purse to take from: nothing is credited.
+    const looted = defenderMain ? lootPurse(defenderMain.iresources, loss) : null;
+    if (defenderMain && looted) defenderMain.iresources = looted.iresources;
+    const lost: ResourceAmounts = looted?.lost ?? { r1: 0, r2: 0, r3: 0, r4: 0 };
     syncInfernoCap(main, inferno);
-    const funded = fundPurse(main.iresources, loot.credit);
+    const funded = fundPurse(main.iresources, creditPaidFor(loot.credit, lost, attack.session.attackerlevel));
     main.iresources = funded.iresources;
 
     // The defender's yard as the battle left it.
@@ -276,7 +285,7 @@ export const writePlayerLanding = async (
     await tx.flush();
     return {
       credited: funded.credited,
-      lost: looted.lost,
+      lost,
       total: purseAmounts(main.iresources),
       housedLost,
       target,
@@ -310,6 +319,26 @@ export const writePlayerLanding = async (
       housedlost: landed.housedLost,
     },
   };
+};
+
+/**
+ * The credit, held to what the defender's purse really gave up at landing:
+ * `loot.credit` is reckoned over the purse the start froze, and the purse may
+ * have been spent since (or the defender's main row be gone), so no loot is
+ * made from nothing. Flash's one multiplier stays: `ATTACK.Loot`
+ * (`ATTACK.as:678-680`) raises every gain of a player below level 20 by 3% a
+ * level, Inferno storage included (`BSTORAGE.as` calls it), so such a player
+ * may bank up to that much more than the defender lost.
+ */
+export const creditPaidFor = (
+  credit: ResourceAmounts,
+  lost: ResourceAmounts,
+  attackerLevel: number | undefined
+): ResourceAmounts => {
+  const bonus = lowLevelLootBonus(attackerLevel ?? LOW_LEVEL_LOOT_CEILING);
+  const paid: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
+  for (const key of RESOURCE_KEYS) paid[key] = Math.max(0, Math.min(credit[key], Math.floor(lost[key] * bonus)));
+  return paid;
 };
 
 /** The garrisons of the Monster Bunkers alone: a Housing Bunker's monsters are the yard's housed ones. */

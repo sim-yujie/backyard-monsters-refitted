@@ -394,6 +394,29 @@ describe("landing", () => {
     expect(await run(ctx)).toBeNull();
     expect(defenderMain.iresources.r1).toBe(0);
     expect(ctx.body.player!.loot.r1).toBe(500);
+    // The credit was worked out over the 5,000 the start froze; only the 500 the purse gave up is banked.
+    expect(ctx.body.player!.lootcredited.r1).toBe(500);
+    expect(userSave.iresources.r1).toBe(500);
+  });
+
+  test("no loot is made from nothing: with the defender's main row gone, nothing is credited", async () => {
+    startSession();
+    defenderMain = null as never;
+    canned = { damage: 20, attackloot: { r1: 2_000, r2: 100, r3: 0, r4: 0 }, defenderDelta: { r1: -2_000, r2: -100, r3: 0, r4: 0 } };
+    const ctx = finalSave({ attackloot: JSON.stringify({ r1: 2_000, r2: 100 }), resources: JSON.stringify({ r1: -2_000, r2: -100 }) });
+    expect(await run(ctx)).toBeNull();
+    expect(ctx.body.player!.loot).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(ctx.body.player!.lootcredited).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(userSave.iresources).toMatchObject({ r1: 0, r2: 0 });
+  });
+
+  test("a player below level 20 keeps Flash's low-level bonus, on what the defender really lost", async () => {
+    const { creditPaidFor } = await import("./infernoPlayerLanding.js");
+    const lost = { r1: 1_000, r2: 0, r3: 0, r4: 0 };
+    // Level 10: 30% more (`ATTACK.as:678-680`), never more than the credit asked.
+    expect(creditPaidFor({ r1: 2_000, r2: 50, r3: 0, r4: 0 }, lost, 10)).toEqual({ r1: 1_300, r2: 0, r3: 0, r4: 0 });
+    expect(creditPaidFor({ r1: 1_100, r2: 0, r3: 0, r4: 0 }, lost, 10).r1).toBe(1_100);
+    expect(creditPaidFor({ r1: 2_000, r2: 0, r3: 0, r4: 0 }, lost, 40).r1).toBe(1_000);
   });
 
   test("50% damage gives the defender 36 hours' protection", async () => {
@@ -488,6 +511,16 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(JSON.parse(store.get(INFERNO_PLAYER_ATTACKS)!)).toEqual([]);
     // The defender gets the usual notice.
     expect(notices.map((one) => [one.targetid, one.subject])).toEqual([[DEFENDER, "raider attacked your Inferno yard"]]);
+  });
+
+  test("a closed attack banks no more than the defender's purse gave up since the start", async () => {
+    startSession();
+    await checkpoint(900);
+    defenderMain.iresources.r1 = 300; // spent since the attack began
+    canned = { damage: 30, attackloot: { r1: 1_000, r2: 0, r3: 0, r4: 0 }, defenderDelta: { r1: -1_000, r2: 0, r3: 0, r4: 0 } };
+    expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
+    expect(defenderMain.iresources.r1).toBe(0);
+    expect(userSave.iresources.r1).toBe(300);
   });
 
   test("the closed attack cannot be saved afterwards, nor closed twice", async () => {
