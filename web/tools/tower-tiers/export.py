@@ -21,10 +21,17 @@ each level keeps Flash's own painted `shadow.<N>.jpg`, which fits the same footp
 
 `turrets` exports the turning turrets (codex-art Part 15) for the Sniper, Laser, Aerial Defense and Railgun: per tier,
 `body.t<N>@2x.webp` (`<tower>/turret/T<N>/body/body-4x.png`, the tier picture with its turret taken off, on the same
-canvas as `new-4x.png`) and `turret.t<N>@2x.webp`, the game's strip (`strip@2x.png`, one cell per facing the game reaches, the
-turret's pivot in the middle of each) with every cell cut to what any cell covers and set on whole 1x pixels so its
-top-left lands on the body's pivot (`strip.json`). It prints the body's offset and the strip's `[file, x, y, width,
-height, frames]` and the pivot in 1x px from the building's origin, as `buildingArtTiers.ts` holds them.
+canvas as `new-4x.png`) and `turret.t<N>@2x.webp`, the game's strip: one cell per facing the game reaches (the kit's
+`turret.py` `game_cells`), each the painted heading (`headings`, 4x, pivot in the middle) centred in its cell, then every
+cell cut to what any cell covers and set on whole 1x pixels so its top-left lands on the body's pivot (`strip.json`). It
+prints the body's offset and the strip's `[file, x, y, width, height, frames]` and the pivot in 1x px from the building's
+origin, as `buildingArtTiers.ts` holds them.
+
+The strip is rebuilt here rather than read from the kit's `strip@2x.png`: the two sheets a tier is painted on come out
+at different sizes, and that file pastes every heading at its cell's top-left, so each odd heading's pivot sat off the
+even ones' by half the size difference (1.9 to 7.9 px at 1x, up-left or down-right): the turret wobbled as it turned.
+Each heading is also moved so its collar lands where the other headings' do (`mount.py`): the kit centred each painting
+on its outline, which leans towards the barrel. `check_turrets.py` checks the result.
 """
 import json
 import sys
@@ -36,8 +43,11 @@ from PIL import Image, ImageFilter
 KIT = Path(sys.argv[1]).resolve()
 sys.path.insert(0, str(KIT / "web" / "tools" / "tower-sample-kit"))
 sys.path.insert(0, str(KIT / "web" / "tools" / "building-redesign-kit"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import TOWERS, old_rgba, resize_pm  # noqa: E402
 from finish import canvas  # noqa: E402
+import turret as kit  # noqa: E402  (building-redesign-kit/turret.py)
+from mount import COLLAR, centres  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parents[3] / "server" / "public" / "assets" / "buildings"
 SAMPLES = KIT / "art-samples" / "redesign"
@@ -132,10 +142,29 @@ def turret(b, tier):
                                                               method=6)
 
     info = json.loads((src / "strip.json").read_text())
-    strip = Image.open(src / "strip@2x.png").convert("RGBA")
-    cw, ch, cells = info["cell_w"], info["cell_h"], info["cells"]
-    assert strip.size == (cw * cells, ch), (b, tier, strip.size)
-    cells = REACHED.get(b, cells)
+    hs = kit.headings(b, f"T{tier}")
+    which = kit.game_cells(b)
+    assert len(which) == info["cells"], (b, tier)
+    # Every heading centred in a square cell a multiple of 4 across at 4x, so the pivot is a whole 2x pixel; then moved
+    # so its collar lands where the other headings' do (`mount.py`; not the Railgun, whose housing is not round and whose
+    # headings already agree to half a pixel).
+    S = -(-max(h.width for h in hs) // 4) * 4
+    cw = ch = S // 2
+    shift = [(0, 0)] * len(hs)
+    if b in COLLAR:
+        halves = [resize_pm(h, (h.width // 2, h.height // 2)) for h in hs]
+        off = np.array([(x * h.width / g.width - h.width / 2, y * h.height / g.height - h.height / 2)
+                        for (x, y), h, g in zip(centres(b, [np.asarray(g)[..., 3] for g in halves]), hs, halves)])
+        mid = np.median(off, 0)
+        shift = [(round(dx), round(dy)) for dx, dy in mid - off]
+        print(f"# {b} T{tier} collar moves at 4x per heading:", [list(d) for d in shift], file=sys.stderr)
+        assert max(max(abs(dx), abs(dy)) for dx, dy in shift) <= 24, (b, tier, shift)
+    strip = Image.new("RGBA", (cw * len(which), ch), (0, 0, 0, 0))
+    for i, j in enumerate(which):
+        c = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        c.alpha_composite(hs[j], ((S - hs[j].width) // 2 + shift[j][0], (S - hs[j].height) // 2 + shift[j][1]))
+        strip.alpha_composite(resize_pm(c, (cw, ch)), (i * cw, 0))
+    cells = REACHED.get(b, info["cells"])
     # The cell's top-left at 2x from the origin: the pivot (4x on the body's canvas) less half a cell.
     px, py = info["pivot_in_body_4x"]
     tx, ty = round(px / 2 - cw / 2 - 2 * cx0), round(py / 2 - ch / 2 - 2 * cy0)

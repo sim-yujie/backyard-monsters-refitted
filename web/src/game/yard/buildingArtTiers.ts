@@ -182,11 +182,11 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 21 Sniper Tower
   21: [
     { from: 1, top: ["top.t1@2x.webp", -40, -45], shadow: ["shadow.t1.jpg", -37, 12], lift: 1,
-      turret: { body: ["body.t1@2x.webp", -40, -37], strip: ["turret.t1@2x.webp", -28, -55, 53, 38, 32], pivot: [0, -20] } },
+      turret: { body: ["body.t1@2x.webp", -40, -37], strip: ["turret.t1@2x.webp", -27, -53, 53, 36, 32], pivot: [0, -20] } },
     { from: 4, top: ["top.t2@2x.webp", -40, -75], shadow: ["shadow.t2.jpg", -37, 2], lift: 31,
-      turret: { body: ["body.t2@2x.webp", -40, -70], strip: ["turret.t2@2x.webp", -25, -83, 49, 36, 32], pivot: [0, -50] } },
+      turret: { body: ["body.t2@2x.webp", -40, -70], strip: ["turret.t2@2x.webp", -26, -83, 52, 35, 32], pivot: [0, -50] } },
     { from: 7, top: ["top.t3@2x.webp", -40, -92], shadow: ["shadow.t3.jpg", -38, -4], lift: 48,
-      turret: { body: ["body.t3@2x.webp", -40, -86], strip: ["turret.t3@2x.webp", -27, -101, 52, 36, 32], pivot: [0, -67] } },
+      turret: { body: ["body.t3@2x.webp", -40, -86], strip: ["turret.t3@2x.webp", -27, -99, 53, 35, 32], pivot: [0, -67] } },
   ],
   // 22 Monster Bunker: five levels, so 1-2, 3-4 and 5
   22: [
@@ -197,11 +197,11 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 23 Laser Tower
   23: [
     { from: 1, top: ["top.t1@2x.webp", -33, -48], shadow: ["shadow.t1.jpg", -31, 10], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -33, -29], strip: ["turret.t1@2x.webp", -17, -57, 36, 39, 54], pivot: [2, -20] } },
+      turret: { body: ["body.t1@2x.webp", -33, -29], strip: ["turret.t1@2x.webp", -15, -55, 34, 37, 54], pivot: [2, -20] } },
     { from: 4, top: ["top.t2@2x.webp", -33, -73], shadow: ["shadow.t2.jpg", -31, 2], lift: 23,
-      turret: { body: ["body.t2@2x.webp", -33, -54], strip: ["turret.t2@2x.webp", -16, -78, 34, 35, 54], pivot: [2, -44] } },
+      turret: { body: ["body.t2@2x.webp", -33, -54], strip: ["turret.t2@2x.webp", -14, -78, 33, 35, 54], pivot: [2, -44] } },
     { from: 7, top: ["top.t3@2x.webp", -33, -89], shadow: ["shadow.t3.jpg", -31, -4], lift: 39,
-      turret: { body: ["body.t3@2x.webp", -33, -71], strip: ["turret.t3@2x.webp", -14, -93, 34, 36, 54], pivot: [2, -60] } },
+      turret: { body: ["body.t3@2x.webp", -33, -71], strip: ["turret.t3@2x.webp", -14, -96, 32, 37, 54], pivot: [2, -60] } },
   ],
   // 25 Tesla Tower
   25: [
@@ -212,20 +212,20 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 115 Aerial Defense Tower
   115: [
     { from: 1, top: ["top.t1@2x.webp", -39, -15], shadow: ["shadow.t1.jpg", -36, 26], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -39, 4], strip: ["turret.t1@2x.webp", -28, -18, 53, 45, 30], pivot: [0, 24] } },
+      turret: { body: ["body.t1@2x.webp", -39, 4], strip: ["turret.t1@2x.webp", -27, -17, 54, 43, 30], pivot: [0, 24] } },
     { from: 4, top: ["top.t2@2x.webp", -39, -20], shadow: ["shadow.t2.jpg", -35, 25], lift: 4,
-      turret: { body: ["body.t2@2x.webp", -39, -1], strip: ["turret.t2@2x.webp", -29, -22, 58, 43, 30], pivot: [0, 19] } },
+      turret: { body: ["body.t2@2x.webp", -39, -1], strip: ["turret.t2@2x.webp", -28, -21, 57, 43, 30], pivot: [0, 19] } },
     { from: 7, top: ["top.t3@2x.webp", -39, -31], shadow: ["shadow.t3.jpg", -35, 20], lift: 16,
-      turret: { body: ["body.t3@2x.webp", -39, -13], strip: ["turret.t3@2x.webp", -27, -36, 52, 45, 30], pivot: [0, 7] } },
+      turret: { body: ["body.t3@2x.webp", -39, -13], strip: ["turret.t3@2x.webp", -25, -33, 51, 42, 30], pivot: [0, 7] } },
   ],
   // 118 Railgun
   118: [
     { from: 1, top: ["top.t1@2x.webp", -36, -1], shadow: ["shadow.t1.jpg", -33, 30], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -36, 10], strip: ["turret.t1@2x.webp", -39, -10, 79, 60, 30], pivot: [2, 32] } },
+      turret: { body: ["body.t1@2x.webp", -36, 10], strip: ["turret.t1@2x.webp", -36, -7, 77, 57, 30], pivot: [2, 32] } },
     { from: 4, top: ["top.t2@2x.webp", -36, -12], shadow: ["shadow.t2.jpg", -33, 27], lift: 9,
-      turret: { body: ["body.t2@2x.webp", -36, -2], strip: ["turret.t2@2x.webp", -39, -24, 75, 60, 30], pivot: [0, 18] } },
+      turret: { body: ["body.t2@2x.webp", -36, -2], strip: ["turret.t2@2x.webp", -38, -21, 75, 57, 30], pivot: [0, 18] } },
     { from: 7, top: ["top.t3@2x.webp", -36, -23], shadow: ["shadow.t3.jpg", -33, 23], lift: 20,
-      turret: { body: ["body.t3@2x.webp", -36, -9], strip: ["turret.t3@2x.webp", -44, -36, 81, 65, 30], pivot: [-1, 10] } },
+      turret: { body: ["body.t3@2x.webp", -36, -9], strip: ["turret.t3@2x.webp", -40, -29, 77, 59, 30], pivot: [-1, 10] } },
   ],
 };
 
