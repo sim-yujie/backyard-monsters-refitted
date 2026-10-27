@@ -38,8 +38,8 @@ CANVAS = {
     2: dict(size=(620, 960), box=(163, 576, 421, 897), pivot=(295, 680)),
     3: dict(size=(620, 960), box=(163, 515, 421, 897), pivot=(291, 621)),
 }
-TILT = 20.0                       # the barrel's raise, degrees
-TURRET_SCALE = 1.42              # the turning part, against the drum
+TILT = 22.0                       # the barrel's raise, degrees
+TURRET_SCALE = 1.5              # the turning part, against the drum
 SECTION = 0.84                    # one more striped section (stripes + band) per tier
 
 # per tier: the extra sections and what each part is made of
@@ -51,15 +51,15 @@ TIERS = {
     "t2": dict(tier=2, extra=1, band="gold", turn="gold", wood="gold", strut="gold", gun="gunmetal", gunband="gold",
                lamps=False, stripes=((222, 18, 20), (236, 232, 238)), line="gold", plate="steel"),
     "t3": dict(tier=3, extra=2, band="gold", turn="gold", wood="black", strut="black", gun="black", gunband="gold",
-               lamps=False, stripes=((40, 38, 50), (236, 176, 40)), line="cool", plate="black"),
+               lamps=False, stripes=((40, 38, 50), (236, 176, 40)), line="cool", plate="black", n_stripes=7, ratio=0.72, bands_n=4),
 }
 
 # all sizes in drum radii; heights from the ground (tier 1; taller tiers add SECTION per extra section)
 LIFT = 0.3                        # the drum stands this high on its feet (the painting draws it so)
 FOOT_DEPTH = 0.6         # a foot's width, depth, height
-FEET = {45: (45, 1.62, 0.8, 0.86), 165: (110, 1.42, 0.68, 0.76), 285: (340, 1.42, 0.68, 0.76)}
+FEET = {45: (45, 1.6, 0.8, 0.76), 152: (62, 1.36, 0.7, 0.74), 298: (28, 1.36, 0.7, 0.74)}
 # three feet: bearing -> (the way its lamp faces, distance, width, height)
-RING_R, RING_W = 1.12, 0.16       # the ring's middle radius and half width
+RING_R, RING_W = 1.12, 0.18       # the ring's middle radius and half width
 STRIPES, STRIPE_PHASE = 4, 0.375
 
 
@@ -67,9 +67,10 @@ def build(cfg):
     sc = bpy.context.scene
     L.clear_scene()
     up = SECTION * cfg["extra"]
-    M = dict(stripes=L.mat_stripes("stripes", *cfg["stripes"], STRIPES, STRIPE_PHASE, chips=cfg["tier"] < 3),
+    M = dict(stripes=L.mat_stripes("stripes", *cfg["stripes"], cfg.get("n_stripes", STRIPES), STRIPE_PHASE,
+                                   chips=cfg["tier"] < 3, ratio=cfg.get("ratio", 0.5)),
              steel=L.mat_metal("steel"), gunmetal=L.mat_metal("gunmetal"), brass=L.mat_metal("brass"),
-             gold=L.mat_metal("gold", spec=1.0), black=L.mat_metal("black", wear=0.35),
+             gold=L.mat_metal("gold", spec=1.0), black=L.mat_metal("black", wear=0.35, sheen=0.3),
              wood=L.mat_wood("wood"),
              bore=L.mat_flat("bore", (30, 28, 32), spec=0.1),
              lens=L.mat_glass_lamp("lens"), glow=L.mat_halo("glow"))
@@ -83,6 +84,9 @@ def build(cfg):
     body = L.empty("BODY")
     n_sec = 1 + cfg["extra"]
     stripe_h = SECTION - 0.14
+    tall = n_sec * stripe_h + (n_sec - 1) * 0.16 + 0.2      # the striped drum's height, bands included
+    n_sec = cfg.get("bands_n", n_sec)                        # tier 3: one more gold band in the same height (as painted)
+    stripe_h = (tall - (n_sec - 1) * 0.16 - 0.2) / n_sec
     z = 0.0
     segs, mats = [], []
 
@@ -91,18 +95,18 @@ def build(cfg):
         return 1.0 - 0.09 * min(max(zz - LIFT, 0) / top, 1.0)
 
     bands = []
-    segs.append([(0.0, 0.0), (0.8, 0.0), (0.84, 0.04), (0.84, LIFT - 0.02), (r_at(0) - 0.01, LIFT)])   # plinth
-    mats.append(2)
-    segs.append(L.band(r_at(0) - 0.01, r_at(0) + 0.05, LIFT, LIFT + 0.2))
+    segs.append([(0.0, 0.0), (0.8, 0.0), (0.84, 0.04), (0.84, LIFT - 0.02), (r_at(0) - 0.01, LIFT)])   # plinth: the bottom band's metal, so it reads as a base band
     mats.append(0)
-    bands.append((LIFT + 0.1, r_at(0.1) + 0.05))
-    z = LIFT + 0.2
+    segs.append(L.band(r_at(0) - 0.01, r_at(0) + 0.055, LIFT, LIFT + 0.24))
+    mats.append(0)
+    bands.append((LIFT + 0.12, r_at(0.1) + 0.055))
+    z = LIFT + 0.24
     for i in range(n_sec):
         z1 = z + stripe_h + (0.0 if i == n_sec - 1 else 0)
         segs.append([(r_at(z), z), (r_at(z) + 0.012, z + stripe_h * 0.3), (r_at(z1) + 0.008, z + stripe_h * 0.75), (r_at(z1), z1)])
         mats.append(1)
         z = z1
-        bh = 0.14 if i < n_sec - 1 else 0.18
+        bh = 0.16 if i < n_sec - 1 else 0.2
         segs.append(L.band(r_at(z) - 0.01, r_at(z) + 0.05, z, z + bh))
         mats.append(0)
         bands.append((z + bh / 2, r_at(z) + 0.05))
@@ -142,7 +146,7 @@ def build(cfg):
     for fb, (fc, fdist, fw, fh) in FEET.items():
         rot = Matrix.Rotation(-math.radians(fb), 4, 'Z')
         base = bear(fb, fdist)
-        rbox(feet, (fw, fd, fh), Matrix.Translation(base) @ rot, bevel=0.1, segs=3, taper=0.88)
+        rbox(feet, (fw, fd, fh), Matrix.Translation(base) @ rot, bevel=0.17, segs=4, taper=0.6 if cfg["tier"] == 3 else 0.74)   # flared, rounded (tier 3: pointed, as painted)
         # the metal cap on the foot's top, where the strut stands
         rbox(caps, (fw * 0.66, fd * 0.62, 0.16), Matrix.Translation(bear(fb, fdist - 0.04, fh - 0.06)) @ rot, bevel=0.04,
              segs=2, taper=0.9)
@@ -156,27 +160,29 @@ def build(cfg):
         else:
             p = [bear(fb, fdist - 0.08, z0), bear(fb, fdist - 0.1, z0 + (ring_z - z0) * 0.4),
                  bear(fb, RING_R + 0.02, ring_z - (ring_z - z0) * 0.3), bear(fb, RING_R, ring_z)]
-        rr = 0.12 if cfg["tier"] == 1 else 0.11
+        rr = 0.12 if cfg["tier"] == 1 else 0.135
         tube(struts, bezier(*p, n=14), [rr + 0.02 * (1 - i / 13) for i in range(14)], sides=16, flat=0.8)
         if cfg["tier"] >= 2:   # a metal collar half way up the post
             zc = (z0 + ring_z) / 2
             L.add_mesh(caps, _cyl(0.15, 0.12), Matrix.Translation(bear(fb, (fdist - 0.1 + RING_R) / 2, zc - 0.06)))
-        c = bear(fb, fdist - 0.04) + bear(fc, fd * 0.31 + 0.02) + Vector((0, 0, fh * 0.62))
+        # the lamp sits on the foot's face that looks the lamp's way (its outer face, or a side face), near its top
+        half = (fd if fc == fb else fw) / 2 * (0.95 if fc == fb else 0.92)
+        c = bear(fb, fdist) + bear(fc, half) + Vector((0, 0, fh * 0.6))
         if cfg["lamps"]:
             face = bear(fc, 1.0)
             q = Vector((0, 0, 1)).rotation_difference(face)
             mm = Matrix.Translation(c) @ q.to_matrix().to_4x4()
-            bmesh.ops.create_cone(lamps, cap_ends=True, segments=24, radius1=0.15, radius2=0.13, depth=0.08, matrix=mm)
-            bmesh.ops.create_uvsphere(glass, u_segments=20, v_segments=10, radius=0.105,
+            bmesh.ops.create_cone(lamps, cap_ends=True, segments=24, radius1=0.17, radius2=0.15, depth=0.08, matrix=mm)
+            bmesh.ops.create_uvsphere(glass, u_segments=20, v_segments=10, radius=0.125,
                                       matrix=mm @ Matrix.Translation((0, 0, 0.04)) @ diag(1, 1, 1.05))
-            bmesh.ops.create_uvsphere(glow, u_segments=20, v_segments=10, radius=0.19,
+            bmesh.ops.create_uvsphere(glow, u_segments=20, v_segments=10, radius=0.24,
                                       matrix=mm @ Matrix.Translation((0, 0, 0.06)) @ diag(1, 1, 0.8))
         else:   # no lamp: a big rivet on the cap instead
             studs(caps, [bear(fb, fdist - 0.04 + fd * 0.31 * 0.62, fh + 0.03) + Vector((0, 0, 0))], [bear(fb, 1.0)], r=0.05)
     # the ring (tier 3: a solid lid with a raised edge)
     rmat = 0
     rings = bmesh.new()
-    _torus(rings, RING_R, RING_W, 0.07, ring_z)
+    _torus(rings, RING_R, RING_W, 0.085, ring_z)
     if cfg["tier"] == 3:
         lid = L.lathe("lid", [[(RING_R + RING_W * 0.6, ring_z - 0.06), (RING_R + RING_W, ring_z - 0.04),
                                (RING_R + RING_W, ring_z + 0.04), (RING_R, ring_z + 0.05), (rim_r + 0.05, ring_z + 0.05),
@@ -187,11 +193,11 @@ def build(cfg):
     horn_z = ring_z + 0.05
     for pb, h, out, r0, lean in ((158, 0.72, 0.32, 0.17, -14), (180, 0.95, 0.4, 0.19, -8), (202, 0.8, 0.34, 0.17, -2),
                                  (250, 0.8, 0.34, 0.17, 2), (272, 0.97, 0.4, 0.19, 8), (294, 0.74, 0.32, 0.17, 14)):
-        _horn(prongs, (RING_R, horn_z - 0.05), horn_z + h, RING_R + out, pb, r0, flat=0.55, lean=lean)
+        _horn(prongs, (RING_R, horn_z - 0.05), horn_z + h, RING_R + out, pb, r0 * 1.15, flat=0.55, lean=lean)
     _horn(prongs, (RING_R + 0.02, ring_z - 0.25), horn_z + 0.5, RING_R + 0.04, 45, 0.13, flat=0.8, tip=0.02)   # front
     for pb in (95, 355):   # short rounded tabs either side of the front
-        _horn(prongs, (RING_R - 0.03, horn_z - 0.05), horn_z + 0.34, RING_R - 0.02, pb, 0.11, flat=0.55, tip=0.07)
-    for name, b, mat, w in (("feet", feet, wood, None), ("struts", struts, strut, None), ("ring", rings, wood, None),
+        _horn(prongs, (RING_R - 0.03, horn_z - 0.05), horn_z + 0.5, RING_R + 0.08, pb, 0.14, flat=0.55, tip=0.05)
+    for name, b, mat, w in (("feet", feet, wood, None), ("struts", struts, strut, None), ("ring", rings, band if cfg["tier"] == 3 else wood, None),
                             ("prongs", prongs, wood, None), ("caps", caps, band, L.LINE * 0.8)):
         ob = L.obj_from_bm(name, b, [mat], parent=body, sharp=50)
         L.add_outline(ob, LN, w)
@@ -215,8 +221,8 @@ def build(cfg):
     bm = bmesh.new()
     for sx in (-1, 1):   # the two brackets with their round tops and trunnion caps
         rbox(bm, (0.1, 0.42, 0.28), Matrix.Translation((sx * 0.38, 0.0, 0.1)), bevel=0.03)
-        L.add_mesh(bm, _cyl(0.2, 0.1, 28), Matrix.Translation((sx * 0.43, 0, 0.4)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
-        L.add_mesh(bm, _cyl(0.12, 0.08, 24, 0.1), Matrix.Translation((sx * 0.51, 0, 0.4)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
+        L.add_mesh(bm, _cyl(0.15, 0.1, 28), Matrix.Translation((sx * 0.43, 0, 0.4)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
+        L.add_mesh(bm, _cyl(0.09, 0.08, 24, 0.1), Matrix.Translation((sx * 0.51, 0, 0.4)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
     yoke = L.obj_from_bm("yoke", bm, [gb_m], parent=tur, sharp=35)
     L.add_outline(yoke, LN)
     bm = bmesh.new()
@@ -230,21 +236,21 @@ def build(cfg):
     gun = L.empty("GUN", parent=tur, loc=(0, 0, 0.4))
     gun.rotation_euler = (math.radians(TILT), 0, 0)
     # barrel along its local +Z (turned to +Y): rear knob, rear band, tube, middle band, tube, muzzle ring, bore
-    br = 0.30
+    br = 0.31
     barrel = L.lathe("barrel", [
-        [(0.0, -0.74), (0.13, -0.73), (0.24, -0.68), (0.30, -0.6)],              # rear knob
-        L.band(br - 0.01, br + 0.045, -0.62, -0.48),                               # rear band
-        [(br, -0.49), (br - 0.005, 0.1)],                                          # tube
-        L.band(br - 0.01, br + 0.04, 0.08, 0.22),                                  # middle band
-        [(br - 0.005, 0.21), (br - 0.02, 0.76)],                                   # tube, a little narrower to the muzzle
-        L.band(br - 0.02, br + 0.085, 0.74, 0.92, bev=0.03),                       # muzzle ring, outside
-        [(br + 0.085, 0.92), (br + 0.03, 0.935), (0.22, 0.92)],                    # muzzle face
-        [(0.22, 0.92), (0.215, 0.3), (0.0, 0.3)],                                  # bore
+        [(0.0, -0.66), (0.13, -0.65), (0.24, -0.6), (0.30, -0.52)],              # rear knob
+        L.band(br - 0.01, br + 0.045, -0.54, -0.38),                               # rear band
+        [(br, -0.39), (br - 0.005, 0.2)],                                          # tube
+        L.band(br - 0.01, br + 0.04, 0.18, 0.34),                                  # middle band
+        [(br - 0.005, 0.33), (br - 0.02, 0.92)],                                   # tube, a little narrower to the muzzle
+        L.band(br - 0.02, br + 0.085, 0.88, 1.08, bev=0.035),                       # muzzle ring, outside
+        [(br + 0.085, 1.08), (br + 0.035, 1.095), (0.24, 1.08)],                     # muzzle face
+        [(0.24, 1.08), (0.235, 0.4), (0.0, 0.4)],                                  # bore
     ], [gun_m, gb_m, M["bore"]], mat_of_seg=[1, 1, 0, 1, 0, 1, 1, 2], parent=gun, sharp=35)
     barrel.rotation_euler = (-math.pi / 2, 0, 0)
     L.add_outline(barrel, LNC if cfg["gun"] in ("steel", "gunmetal", "black") else LN)
     bm = bmesh.new()
-    for z, r, n in ((-0.55, br + 0.045, 12), (0.15, br + 0.04, 12), (0.83, br + 0.085, 14)):
+    for z, r, n in ((-0.46, br + 0.045, 12), (0.26, br + 0.04, 12), (0.98, br + 0.085, 14)):
         c, nn = ring_of(n, r, z, 0.5)
         studs(bm, c, nn, r=0.028)
     riv = L.obj_from_bm("rivets_gun", bm, [M["rivet"]], parent=gun)
