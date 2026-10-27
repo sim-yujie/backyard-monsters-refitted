@@ -1,0 +1,29 @@
+{
+ "tier": 1,
+ "cells": 32,
+ "cell_w_2x": 132,
+ "cell_h_2x": 87,
+ "pivot_in_cell_2x": [
+  66,
+  64
+ ],
+ "body_entry": [
+  "body.t1@2x.png",
+  -40,
+  -37
+ ],
+ "strip_entry": [
+  "turret.t1@2x.png",
+  -33.0,
+  -52.0,
+  66.0,
+  43.5,
+  32
+ ],
+ "pivot": [
+  0,
+  -20
+ ],
+ "rule": "cell k = heading 11.25k (0 down-right on screen, 45 at the viewer), as the painted strip",
+ "note": "body@2x.png is on the painted body.t1@2x.webp canvas with the pivot on the same pixel; the turret cells are bigger than the painted 53 x 36 because the 3D gun reaches further down when it points at the viewer. Nothing of the body stands in front of the turret, so no front layer."
+}

@@ -27,6 +27,7 @@ GAME = {1: dict(body=(-40, -37), strip=(-27, -53, 53, 36), pivot=-20, top=(-40, 
         2: dict(body=(-40, -70), strip=(-26, -83, 52, 35), pivot=-50, top=(-40, -75)),
         3: dict(body=(-40, -86), strip=(-27, -99, 53, 35), pivot=-67, top=(-40, -92))}
 T_PIV4 = (160, 210)        # the turret renders' pivot (sniper3d.py turret: 320 x 300 canvas)
+GIFBG = (92, 136, 60, 255)  # flat grass green for the GIFs (the grass texture makes them too big)
 REST = 0                   # the heading of the still pictures (gun down-right, as the painted tops)
 
 
@@ -161,7 +162,7 @@ def main():
     # ---- tiers-turning-3x.gif: the three 3D tiers, 3x game size
     pad = 8
     W2 = 3 * bw + 2 * pad
-    bg = grass(W2 + 2 * pad, bh + 2 * pad, seed=5).convert("RGBA")
+    bg = Image.new("RGBA", (W2 + 2 * pad, bh + 2 * pad), GIFBG)
     frames = []
     for k in range(32):
         f = bg.copy()
@@ -172,7 +173,7 @@ def main():
 
     # ---- compare-turning-3x.gif: painted row above, 3D row below
     lab2 = 26
-    bg = grass(W2 + 2 * pad, 2 * bh + 3 * pad, seed=9).convert("RGBA")
+    bg = Image.new("RGBA", (W2 + 2 * pad, 2 * bh + 3 * pad), GIFBG)
     frames = []
     for k in range(32):
         f = bg.copy()

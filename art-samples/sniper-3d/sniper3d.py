@@ -49,7 +49,7 @@ P = PAINTED[TIER]
 # ---------------------------------------------------------------------------------------------------------------- the shape
 R = 1.0                        # body hexagon corner radius
 FRONT = 45.0                   # the corner at the viewer
-Z0 = 0.60                      # the body's bottom (it stands on three ball feet)
+Z0 = 0.80                      # the body's bottom (it stands on three ball feet)
 PLATE_T = 0.24                 # the top plate's thickness
 PLATE_R = 1.12                 # the top plate's corner radius (it overhangs the body)
 DISC_R = 0.64                  # the turntable
@@ -59,9 +59,17 @@ TOP = TOP1 + (PAINTED[1]["game_y"] - P["game_y"]) * 2 / (S2 * math.cos(math.radi
 SECTIONS = TIER                # 1, 2 or 3 stacked sections
 FEET = (45.0, 45.0 + 112, 45.0 - 112)
 FOOT_D, FOOT_R = 1.12, 0.28
-TURRET_SCALE = 1.0
-STRETCH = 1.25                 # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
-PLATE_STRETCH = 1.2            # the painted one (the body is only ever seen from this one side)
+FRONT_FOOT_D = 1.42            # the front foot stands out in front of the (drawn-out) front corner, as painted
+TURRET_SCALE = 1.12
+DISC_STRETCH = 1.35            # the turntable too (the turret on it stays round: it turns)
+STRETCH = 1.9                  # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
+PLATE_STRETCH = 1.6            # the painted one (the body is only ever seen from this one side)
+
+
+def drawn(p, k):
+    """Point p drawn out toward the viewer by k."""
+    v = bear(FRONT)
+    return p + v * ((k - 1) * p.dot(v))
 
 
 def hexpts(r, z=0.0, k=None):
@@ -142,8 +150,11 @@ def cyl(bm, r, depth, mat_world, segs=24, r2=None, mat=0):
 
 
 # -------------------------------------------------------------------------------------------------------------- materials
+WARM = [(0.0, (0.42, 0.28, 0.2, 1)), (0.15, (0.52, 0.38, 0.28, 1)), (0.5, (0.86, 0.76, 0.62, 1)), (1.0, (1.06, 1.0, 0.88, 1))]
+
+
 def mat_metal(name, lo, hi, wear_col=None, spec=0.9, spec_rough=0.24, spec_col=(0.95, 0.72, 0.36, 1), scratch=None,
-              wear=0.32):
+              wear=0.32, shade=None):
     p = Paint(name)
     base = p.ramp(p.noise(4.0, 3.0), [(0.3, srgb(*lo)), (0.7, srgb(*hi))])
     if wear_col:
@@ -152,7 +163,7 @@ def mat_metal(name, lo, hi, wear_col=None, spec=0.9, spec_rough=0.24, spec_col=(
     if scratch:
         s = p.ramp(p.noise(14.0, 6.0, 0.7), [(0.66, (0, 0, 0, 1)), (0.7, (1, 1, 1, 1))])
         base = p.mix(base, srgb(*scratch), s)
-    return p.finish(base, spec=spec, spec_rough=spec_rough, spec_col=spec_col, metal=True)
+    return p.finish(base, spec=spec, spec_rough=spec_rough, spec_col=spec_col, metal=True, shade=shade)
 
 
 def mat_stripes(kind):
@@ -203,19 +214,19 @@ def mat_lens(name, core, edge):
 
 def materials():
     if TIER == 1:
-        skin = mat_metal("skin", (178, 100, 26), (216, 142, 50), wear_col=(124, 74, 30), spec=0.9, spec_rough=0.26)
-        trim = mat_metal("trim", (212, 140, 44), (240, 180, 78), wear_col=(156, 100, 40), spec=1.0)
+        skin = mat_metal("skin", (204, 118, 36), (238, 158, 66), wear_col=(140, 84, 34), spec=0.9, spec_rough=0.26, shade=WARM)
+        trim = mat_metal("trim", (222, 150, 48), (248, 190, 86), wear_col=(160, 104, 42), spec=1.0, shade=WARM)
     elif TIER == 2:
         skin = mat_metal("skin", (250, 190, 30), (255, 230, 96), wear_col=(214, 150, 40), spec=1.1, spec_rough=0.2,
-                         wear=0.2, spec_col=(1.0, 0.85, 0.4, 1))
+                         wear=0.2, spec_col=(1.0, 0.85, 0.4, 1), shade=WARM)
         trim = mat_metal("trim", (238, 166, 26), (255, 208, 70), wear_col=(190, 120, 30), spec=1.1, spec_rough=0.2,
-                         spec_col=(1.0, 0.85, 0.4, 1))
+                         spec_col=(1.0, 0.85, 0.4, 1), shade=WARM)
     else:
         skin = mat_metal("skin", (26, 26, 32), (44, 44, 52), scratch=(74, 74, 84), spec=2.6, spec_rough=0.22,
                          spec_col=(0.14, 0.15, 0.19, 1))      # dim sky sheen, so black tops stay black
         trim = mat_metal("trim", (240, 170, 28), (255, 212, 72), wear_col=(190, 122, 30), spec=1.1, spec_rough=0.2,
-                         wear=0.2, spec_col=(1.0, 0.85, 0.4, 1))
-    brass = mat_metal("brass", (200, 136, 40), (232, 176, 66), wear_col=(150, 96, 36), spec=0.95)
+                         wear=0.2, spec_col=(1.0, 0.85, 0.4, 1), shade=WARM)
+    brass = mat_metal("brass", (214, 146, 40), (244, 190, 72), wear_col=(156, 100, 36), spec=0.95, shade=WARM)
     panel = mat_metal("panel", (176, 180, 192), (210, 214, 224), scratch=(236, 238, 244), spec=0.6, spec_rough=0.3,
                       spec_col=(0.95, 0.97, 1.0, 1))
     steel = mat_metal("steel", (92, 94, 108), (124, 126, 140), scratch=(150, 150, 162), spec=0.6, spec_rough=0.3,
@@ -223,7 +234,7 @@ def materials():
     dark = mat_metal("dark", (40, 40, 48), (58, 58, 68), scratch=(84, 84, 94), spec=0.35, spec_rough=0.3,
                      spec_col=(0.95, 0.97, 1.0, 1))
     if TIER < 3:
-        dome = mat_metal("dome", (96, 128, 178), (150, 184, 228), scratch=(196, 212, 236), spec=1.1, spec_rough=0.18,
+        dome = mat_metal("dome", (70, 112, 178), (128, 172, 228), scratch=(196, 212, 236), spec=1.1, spec_rough=0.18,
                          spec_col=(0.95, 0.98, 1.0, 1))
         ring = steel
     else:
@@ -317,9 +328,9 @@ def build():
         ends = [face_frame("R", zb - 0.1, u=-0.42, out=0.0).translation,
                 face_frame("R", p0 + ph * 0.6, u=-0.44, out=0.0).translation]
         for (a, e, m) in ((sock[0], ends[0], "blue"), (sock[1], ends[1], "red")):
-            pts = bezier(a, a + tn * 0.5 + nn * 0.08 - up * 0.04, e + tn * 0.62 + nn * 0.2 + up * 0.02, e, n=20)
+            pts = bezier(a, a + tn * 0.42 + nn * 0.06 - up * 0.04, e + tn * 0.5 + nn * 0.14 + up * 0.02, e, n=20)
             cab = bmesh.new()
-            tube(cab, pts, [0.048] * len(pts), sides=12)
+            tube(cab, pts, [0.038] * len(pts), sides=12)
             ob = obj_from_bm(f"cable_{m}_{s}", cab, [M[m]], parent=body)
             add_outline(ob, LN["cool"], LINE * 0.8)
         # rivets along the joints on the faces we see
@@ -330,8 +341,8 @@ def build():
     if TIER == 1:   # the amber lamp at the top left of the door face
         lamp, glow = bmesh.new(), bmesh.new()
         f = face_frame("L", top_body - 0.14, u=0.4, out=0.0)
-        cyl(lamp, 0.105, 0.08, f @ Matrix.Translation((0, 0.04, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), segs=20)
-        bmesh.ops.create_uvsphere(glow, u_segments=20, v_segments=10, radius=0.085,
+        cyl(lamp, 0.12, 0.08, f @ Matrix.Translation((0, 0.04, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), segs=20)
+        bmesh.ops.create_uvsphere(glow, u_segments=20, v_segments=10, radius=0.1,
                                   matrix=f @ Matrix.Translation((0, 0.09, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X') @ diag(1, 1, 0.8))
         add_outline(obj_from_bm("lamp_rim", lamp, [M["brass"]], parent=body), LN["warm"], LINE * 0.7)
         obj_from_bm("lens_lamp", glow, [M["lens_amber"]], parent=body)
@@ -360,31 +371,34 @@ def build():
         [(DISC_R + 0.04, TOP - 0.035), (DISC_R + 0.04, TOP + 0.005), (DISC_R, TOP + 0.025), (DISC_R - 0.05, TOP + 0.005)],
         [(DISC_R - 0.05, TOP), (0.0, TOP)],
     ], [M["trim"] if TIER > 1 else M["dark"], M["disc"]], mat_of_seg=[0, 1], parent=body)
+    disc.rotation_euler = (0, 0, -math.radians(FRONT))     # its local +Y toward the viewer, then drawn out along it
+    disc.scale = (1, DISC_STRETCH, 1)
     add_outline(disc, LN["cool"])
     hub = bmesh.new()
     cyl(hub, 0.14, 0.05, Matrix.Translation((0, 0, TOP + 0.02)), segs=24)
     cyl(hub, 0.06, 0.05, Matrix.Translation((0, 0, TOP + 0.06)), segs=6)
     add_outline(obj_from_bm("hub", hub, [M["steel"]], parent=body, sharp=35), LN["cool"], LINE * 0.7)
     cc, nn = ring_of(8, 0.26, TOP + 0.005, 0.5)
-    studs(rivets, cc, [Vector((0, 0, 1))] * 8, r=0.028)
+    studs(rivets, [drawn(p, DISC_STRETCH) for p in cc], [Vector((0, 0, 1))] * 8, r=0.028)
     cc, nn = ring_of(20, DISC_R + 0.0, TOP + 0.02, 0.5)
+    cc = [drawn(p, DISC_STRETCH) for p in cc]
     studs(rivets, cc, [Vector((0, 0, 1))] * 20, r=0.022)
 
     # ---- three steel ball feet with a brass belt, on short brass struts from the body's foot
     balls, belts, struts = bmesh.new(), bmesh.new(), bmesh.new()
     for fb in FEET:
-        cpos = bear(fb, FOOT_D, FOOT_R)
+        cpos = bear(fb, FRONT_FOOT_D if fb == FRONT else FOOT_D, FOOT_R)
         bmesh.ops.create_uvsphere(balls, u_segments=32, v_segments=16, radius=FOOT_R, matrix=Matrix.Translation(cpos))
         cyl(belts, FOOT_R * 1.035, 0.07, Matrix.Translation(cpos), segs=32)
         cyl(belts, FOOT_R * 0.98, 0.03, Matrix.Translation(cpos + Vector((0, 0, -0.06))), segs=32)
         corner = min((FRONT + 60 * k for k in range(6)), key=lambda b: abs(((b - fb + 180) % 360) - 180))
-        a = bear(corner, R * 0.8, Z0 + 0.04)
+        a = drawn(bear(corner, R * 0.8, Z0 + 0.04), STRETCH)
         e = cpos + Vector((0, 0, FOOT_R * 0.7)) + (bear(fb) * -0.08)
         tube(struts, bezier(a, a + Vector((0, 0, -0.12)), e + (a - e) * 0.3, e, n=10), [0.065] * 10, sides=14)
         cyl(struts, 0.09, 0.06, Matrix.Translation(e + Vector((0, 0, 0.0))), segs=16)
     hole = bmesh.new()
     for fb in FEET:
-        cyl(hole, 0.045, 0.01, Matrix.Translation(bear(fb, FOOT_D, 2 * FOOT_R - 0.002)), segs=16)
+        cyl(hole, 0.045, 0.01, Matrix.Translation(bear(fb, FRONT_FOOT_D if fb == FRONT else FOOT_D, 2 * FOOT_R - 0.002)), segs=16)
     add_outline(obj_from_bm("balls", balls, [M["ball"]], parent=body), LN["cool"])
     add_outline(obj_from_bm("belts", belts, [M["brass"]], parent=body), LN["warm"], LINE * 0.7)
     add_outline(obj_from_bm("struts", struts, [M["brass"]], parent=body), LN["warm"], LINE * 0.8)
@@ -588,7 +602,7 @@ def main():
         if lenses:          # a soft halo round each lit lens, over everything (and a little past the edge)
             g = px[2]
             k = np.stack([blur(g[..., c] * g[..., 3], 7.0) for c in range(3)] + [blur(g[..., 3], 7.0)], -1).clip(0, None)
-            ha = (k[..., 3:4] * 1.1).clip(0, 0.85)
+            ha = (k[..., 3:4] * 2.6).clip(0, 0.9)
             hc = k[..., :3] / np.maximum(k[..., 3:4], 1e-6)
             prem = rgb * aa
             prem = prem + hc * ha * (1 - 0.5 * aa)       # added light on the tower, a faint glow off it
