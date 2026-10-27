@@ -46,14 +46,14 @@ HEAD_SCALE = 0.9
 
 # ------------------------------------------------------------------------------------------------------------- tiers
 # the parts every tier shares keep their size (base, tyres, head); the box grows by sections
-BASE_H = 0.95                         # striped base
-PLATE = (0.95, 1.03)                  # the plate on it
-RING_UP, TOP_UP = 0.48, 0.40          # the cage ring above the box, the turning point above the ring
+BASE_H = 0.95                         # striped base (tier 1; the painted tiers 2 and 3 have a lower one), a plate 0.08 on it
+RING_UP, TOP_UP = 0.48, 0.54          # the cage ring above the box, the head's seat above the ring (the painted strip's
+                                      # heads sit this high: their boxes match the 3D ones within a pixel at 4x)
 BOX_A = 0.70                          # the box's half side (its corners point at bearings 45, 135, 225, 315)
 TIERS = {
     1: dict(secs=[1.0], band=0.0, line="cool"),
-    2: dict(secs=[1.1, 1.1], band=0.12, line="gold"),
-    3: dict(secs=[1.0, 1.0, 1.0], band=0.12, line="cool"),
+    2: dict(secs=[1.22, 1.22], band=0.12, line="gold", base=0.70),
+    3: dict(secs=[1.13, 1.13, 1.13], band=0.17, line="cool", base=0.55),
 }
 
 
@@ -120,7 +120,8 @@ def m_lens(name, cx, cz, rad, stops):
 # the Laser's own metals (look3d's ramps): a darker, cooler steel than the shared one (the painted Laser's steel is dark
 # with bright edges), and a deeper gold for tier 2's big flat box faces (the shared gold's pale top washes them out)
 L.METALS["lsteel"] = ((28, 32, 38), (92, 98, 102), (168, 174, 178), (0.92, 0.96, 1.0, 1))
-L.METALS["lgold"] = ((92, 50, 6), (206, 142, 22), (248, 208, 92), (1.0, 0.92, 0.6, 1))
+L.METALS["lblack"] = ((12, 12, 18), (40, 40, 50), (92, 94, 112), (0.85, 0.9, 1.0, 1))
+L.METALS["lgold"] = ((84, 40, 4), (198, 124, 14), (244, 192, 70), (1.0, 0.9, 0.55, 1))
 
 
 def materials(tier):
@@ -137,16 +138,18 @@ def materials(tier):
     gold = L.mat_metal("gold", spec=1.0)
     brass = L.mat_metal("brass")
     steel = L.mat_metal("lsteel")
+    plate_dark = L.mat_flat("plate_top", (50, 48, 52), spec=0.25)
     gunmetal = L.mat_metal("gunmetal")
     if tier == 1:
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
         M["box"] = m_paint("box", (92, 96, 82), (118, 122, 106), metal=False, spec=0.35, rough=0.32,
                            spec_col=(0.95, 0.97, 1, 1), scratch=(140, 142, 134), wear=(84, 74, 60))
         M["plate"] = gunmetal
-        M["plate_top"] = L.mat_metal("plate_top", "black", wear=0.3)
-        M["bar"] = steel
+        M["plate_top"] = plate_dark
+        M["lid"] = gunmetal
+        M["bar"] = L.mat_metal("steel")
         M["column"] = brass
-        M["ring"] = steel
+        M["ring"] = M["bar"]
         M["trim"] = gunmetal
         M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)
         M["head"] = L.mat_metal("head", "lsteel", wear=1.0)
@@ -158,20 +161,22 @@ def materials(tier):
         for k in ("plate", "bar", "column", "ring", "trim", "rim", "yoke", "thread"):
             M[k] = gold
         M["box"] = M["head"] = L.mat_metal("lgold", spec=1.0)
-        M["plate_top"] = L.mat_metal("plate_top", "brass", wear=0.3)
+        M["plate_top"] = L.mat_flat("plate_top", (92, 58, 18), spec=0.3)
+        M["lid"] = M["box"]
         M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)
     else:
         M["stripes"] = m_stripes((30, 30, 34), (236, 178, 40))
         dark, mid, light, hi = L.METALS["black"]
         M["box"] = m_paint("armour", (255, 255, 255), (235, 235, 240), spec=1.0, rough=0.22, spec_col=hi,
-                           scratch=(255, 255, 255), upk=(0.75, 1.6), shade=L.metal_ramp(dark, mid, light))
+                           scratch=(255, 255, 255), upk=(0.7, 1.3), shade=L.metal_ramp(dark, mid, light))
         M["plate"] = gold
-        M["plate_top"] = L.mat_metal("plate_top", "black", wear=0.3)
+        M["plate_top"] = plate_dark
+        M["lid"] = L.mat_metal("lblack")
         M["bar"] = gunmetal
         M["column"] = L.mat_metal("black")
         M["ring"] = gold
         M["trim"] = gold
-        M["head"] = L.mat_metal("black")
+        M["head"] = L.mat_metal("lblack", wear=1.0)
         M["rim"] = gold
         M["yoke"] = gold
         M["thread"] = gold
@@ -200,8 +205,9 @@ def tyre(bm, c, R=0.15, rw=0.17, rh=0.15, n=40, k=16, mat=0):
             f.material_index = mat
 
 
-def shield(w, h, n=40, bottom=0.5, top=0.3):
-    """The head's section: a rounded square, more rounded at the bottom; (x, z) points round it, centred on 0."""
+def shield(w, h, n=40, bottom=0.5, top=0.22):
+    """The head's section: a square with its top corners cut off flat and its bottom corners rounded, as painted; (x, z)
+    points round it, centred on 0."""
     pts = []
     hw, hh = w / 2, h / 2
     corners = [(hw, -hh, bottom), (hw, hh, top), (-hw, hh, top), (-hw, -hh, bottom)]
@@ -211,7 +217,7 @@ def shield(w, h, n=40, bottom=0.5, top=0.3):
         ox = cx - math.copysign(r, cx)
         oz = cz - math.copysign(r, cz)
         a0 = [-90, 0, 90, 180][ci]
-        for s in range(n // 4 + 1):
+        for s in (range(n // 4 + 1) if ci in (0, 3) else (0, n // 4)):
             a = math.radians(a0 + 90 * s / (n // 4))
             pts.append((ox + r * math.cos(a), oz + r * math.sin(a)))
     return pts
@@ -282,10 +288,11 @@ def build(tier):
     sc.collection.objects.link(body)
 
     # ---- striped base with its plate
-    z0, z1 = PLATE
+    base_h = T.get("base", BASE_H)
+    z0, z1 = base_h, base_h + 0.08
     base = lathe("base", [
-        [(0.97, 0.0), (1.0, 0.03), (1.0, BASE_H - 0.03), (0.98, BASE_H)],
-        [(0.98, BASE_H), (1.02, z0 + 0.01), (1.03, z0 + 0.03), (1.03, z1 - 0.02), (1.01, z1), (0.97, z1)],
+        [(0.97, 0.0), (1.0, 0.03), (1.0, base_h - 0.03), (0.98, base_h)],
+        [(0.98, base_h), (1.02, z0 + 0.01), (1.03, z0 + 0.03), (1.03, z1 - 0.02), (1.01, z1), (0.97, z1)],
         [(0.97, z1), (0.0, z1)],
     ], [M["stripes"], M["plate"], M["plate_top"]], mat_of_seg=[0, 1, 2], parent=body)
     L.add_outline(base, L.line("warm"))
@@ -338,7 +345,9 @@ def build(tier):
                         studs(riv, [nrm * (a + 0.03) + u * (a * t) + Vector((0, 0, zb))], [nrm], r=0.022)
     box_top = zb
     # the lid: a thin plate on the box
-    rbox(trim, (2 * a + 0.02, 2 * a + 0.02, 0.05), Matrix.Translation((0, 0, box_top - 0.02)), bevel=0.02, segs=2)
+    lid = bmesh.new()
+    rbox(lid, (2 * a + 0.02, 2 * a + 0.02, 0.05), Matrix.Translation((0, 0, box_top - 0.02)), bevel=0.02, segs=2)
+    L.add_outline(obj_from_bm("lid", lid, [M["lid"]], parent=body, sharp=30), line_box, L.LINE * 0.8)
     if tier > 1:   # a trim round the bottom
         rbox(trim, (2 * a + 0.05, 2 * a + 0.05, 0.06), Matrix.Translation((0, 0, z1)), bevel=0.02, segs=2)
     bx = obj_from_bm("box", bm, [M["box"]], parent=body, sharp=30)
@@ -443,7 +452,7 @@ def build(tier):
     bm = bmesh.new()
     rbox(bm, (0.92, 0.2, 0.08), Matrix.Translation((0, -0.02, 0.28)), bevel=0.02)       # the cross bar
     for sx in (-1, 1):
-        rbox(bm, (0.08, 0.3, AXZ - 0.24), Matrix.Translation((sx * 0.44, -0.02, 0.28)), bevel=0.025)
+        rbox(bm, (0.08, 0.4, AXZ - 0.24), Matrix.Translation((sx * 0.44, -0.02, 0.28)), bevel=0.025)
         bmesh.ops.create_cone(bm, cap_ends=True, segments=28, radius1=0.13, radius2=0.13, depth=0.08,
                               matrix=Matrix.Translation((sx * 0.44, -0.02, AXZ)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
         bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=0.08, radius2=0.065, depth=0.07,
@@ -455,8 +464,8 @@ def build(tier):
     lamp.parent = tur
     lamp.location = (0, -0.02, AXZ)
     lamp.rotation_euler = (math.radians(TILT), 0, 0)
-    hw, hh, zc = 0.82, 0.92, 0.10                 # housing width, height, its centre above the axis
-    y0, y1 = -0.42, 0.44
+    hw, hh, zc = 0.88, 0.82, 0.08                 # housing width, height, its centre above the axis
+    y0, y1 = -0.58, 0.44
     sec = shield(hw, hh)
     bm = bmesh.new()
     prism(bm, [(x, z + zc) for x, z in sec], y0, y1, Matrix())
@@ -476,7 +485,7 @@ def build(tier):
     bm = bmesh.new()   # rivets along the housing's side and top edges
     for yy in np.linspace(y0 + 0.08, y1 - 0.08, 6):
         for sx in (-1, 1):
-            for zz in (zc + hh * 0.36, zc - hh * 0.3):
+            for zz in (zc + 0.1, zc - 0.0):
                 studs(bm, [(sx * hw / 2, yy, zz)], [(sx, 0, 0)], r=0.022)
     obj_from_bm("rivets_head", bm, [M["rivet"]], parent=lamp)
     return body, tur, dict(top=top, box_top=box_top, ring_z=ring_z)
@@ -502,11 +511,15 @@ def main():
     cam = L.setup_render()
     body_obs, tur_obs = L.objs_under(body), L.objs_under(tur)
     box = L.fit(cam, body_obs)
-    px, py = L.to_px(cam, (0, 0, dims["top"]))
+    # the turning point: on the turning axis, at the height where the painted pivot is drawn (the head turns about a
+    # vertical axis, so any point on it will do; this one lines the strip's cells up with the painted strip's)
     gp = PAINTED[tier]["pivot"]
+    px, seat_y = L.to_px(cam, (0, 0, dims["top"]))
+    py = AY + 4 * gp[1]
     (out / "camera.json").write_text(json.dumps(dict(
         tier=tier, elevation=L.EL, tilt=TILT, ortho_scale=cam.data.ortho_scale, shift=[cam.data.shift_x, cam.data.shift_y],
         body_box=[round(v, 1) for v in box], painted_body_box=want, pivot_4x=[round(px, 2), round(py, 2)],
+        head_seat_4x=[round(px, 2), round(seat_y, 2)],
         painted_pivot_4x=[AX + 4 * gp[0], AY + 4 * gp[1]], canvas=[W, H], anchor_4x=[AX, AY], dims=dims), indent=1))
     if what == "save":
         bpy.ops.wm.save_as_mainfile(filepath=str(HERE / f"laser-t{tier}.blend"))
@@ -535,7 +548,7 @@ def main():
     if what == "cells54":
         heads("cell54-4x", [(f"c{i:02d}.png", cell54_bearing(i)) for i in ([int(x) for x in argv[2:]] or range(54))])
     print("DONE", tier, what, "box", [round(v, 1) for v in box], "want", want, "pivot", round(px, 1), round(py, 1),
-          "painted pivot", AX + 4 * gp[0], AY + 4 * gp[1])
+          "seat", round(seat_y, 1), "painted pivot", AX + 4 * gp[0], AY + 4 * gp[1])
 
 
 main()

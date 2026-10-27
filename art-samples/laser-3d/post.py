@@ -29,7 +29,8 @@ UP = 4
 TOP = {1: (-33, -48), 2: (-33, -73), 3: (-33, -89)}
 BODY = {1: (-33, -29), 2: (-33, -54), 3: (-33, -71)}
 STRIP = {1: (-15, -55, 34, 37), 2: (-14, -78, 33, 35), 3: (-14, -96, 32, 37)}
-CELL32 = 120                   # strip32's square cell at 2x (60 game px)
+STILL_CELL = 53               # the strip cell the painted stills (top.tT) show: lens to the right, a little toward us
+CELL32 = 140                   # strip32's square cell at 2x (70 game px), the pivot in its middle
 
 
 def resize_pm(im, size):
@@ -71,8 +72,22 @@ def union_box(ims, pad=8):
             max(b[3] for b in bbs) + pad)
 
 
-def gif(frames, path, ms=90):
-    q = [f.convert("RGB").quantize(colors=255, method=Image.MEDIANCUT, dither=Image.NONE) for f in frames]
+def gif(frames, path, ms=90, bg=None):
+    """One palette for all frames, so the still grass keeps the same pixels and the GIF only stores what moves: 48
+    colours for the grass (bg), the rest for whatever differs from it in a sample of frames (the towers)."""
+    rgb = [f.convert("RGB") for f in frames]
+    if bg is None:
+        bg = rgb[0]
+    b = np.asarray(bg.convert("RGB"))
+    fg = [np.asarray(f)[np.any(np.asarray(f) != b, -1)] for f in rgb[::max(1, len(rgb) // 12)]]
+    fg = np.concatenate(fg)
+    side = int(np.ceil(np.sqrt(len(fg))))
+    fg = np.concatenate([fg, np.repeat(fg[:1], side * side - len(fg), 0)]).reshape(side, side, 3)
+    pa = bg.convert("RGB").quantize(colors=48, method=Image.MEDIANCUT, dither=Image.NONE).getpalette()[:48 * 3]
+    pb = Image.fromarray(fg).quantize(colors=207, method=Image.MEDIANCUT, dither=Image.NONE).getpalette()[:207 * 3]
+    pal = Image.new("P", (1, 1))
+    pal.putpalette(pa + pb + [0, 0, 0] * (256 - 255))
+    q = [f.quantize(palette=pal, dither=Image.NONE) for f in rgb]
     q[0].save(path, save_all=True, append_images=q[1:], duration=ms, loop=0, disposal=1, optimize=True)
     return path.stat().st_size
 
@@ -81,21 +96,6 @@ def painted_cells(t):
     s = Image.open(P / f"turret.t{t}@2x.webp").convert("RGBA")
     cw = s.width // 54
     return [s.crop((i * cw, 0, (i + 1) * cw, s.height)) for i in range(54)]
-
-
-def best_cell(t, cells):
-    """The strip cell the painted still (top.tT) shows: the one closest to the still's head, pixel by pixel."""
-    top = on4x(Image.open(P / f"top.t{t}@2x.webp").convert("RGBA"), TOP[t])
-    x, y, w, h = STRIP[t]
-    box = (AX + UP * x, AY + UP * y, AX + UP * (x + w), AY + UP * (y + h))
-    ref = np.asarray(top.crop(box)).astype(np.float32)
-    errs = []
-    for c in cells:
-        m = np.asarray(scale(c, 2)).astype(np.float32)
-        m = m[:ref.shape[0], :ref.shape[1]]
-        a = m[..., 3:4] / 255
-        errs.append(float((np.abs(ref[..., :3] - m[..., :3]) * a).mean() + np.abs(ref[..., 3] - m[..., 3]).mean()))
-    return int(np.argmin(errs))
 
 
 def tier_pieces(t):
@@ -175,10 +175,8 @@ def main():
         return f
 
     # ---- tiers-compare.png: the painted still above, the 3D tower at the same strip cell below, 3x; game size below
-    picks = {t: best_cell(t, pcs[t]) for t in (1, 2, 3)}
-    print("painted stills show cells", picks)
     paint = {t: on4x(Image.open(P / f"top.t{t}@2x.webp").convert("RGBA"), TOP[t]) for t in (1, 2, 3)}
-    three = {t: mine(t, T[t]["cells"][picks[t]]) for t in (1, 2, 3)}
+    three = {t: mine(t, T[t]["cells"][STILL_CELL]) for t in (1, 2, 3)}
     box = union_box([paint[t] for t in (1, 2, 3)] + [three[t] for t in (1, 2, 3)], pad=10)
     big = {t: [scale(im.crop(box), 0.75) for im in (paint[t], three[t])] for t in (1, 2, 3)}
     one = {t: [scale(im.crop(box), 0.25) for im in (paint[t], three[t])] for t in (1, 2, 3)}
@@ -219,7 +217,7 @@ def main():
         for i, t in enumerate((1, 2, 3)):
             f.alpha_composite(sm[t][k], (gap + i * (w + gap), lab + gap))
         frames.append(f)
-    n1 = gif(frames, HERE / "tiers-turning-3x.gif")
+    n1 = gif(frames, HERE / "tiers-turning-3x.gif", bg=bg)
 
     # ---- compare-turning-3x.gif: painted above, 3D below, the game's 54 laser cells, 3x
     pf = {t: [painted_frame(t, i) for i in range(54)] for t in (1, 2, 3)}
@@ -242,8 +240,8 @@ def main():
             d.rectangle((0, y0, 74, y0 + 30), fill=(20, 20, 20, 255))
             d.text((8, y0 + 4), tx, fill=(255, 255, 255, 255), font=small)
         frames.append(f)
-    n2 = gif(frames, HERE / "compare-turning-3x.gif", ms=70)
-    print("tiers-compare", g.size, "tiers-turning", frames[0].size, n1, "compare-turning", n2,
+    n2 = gif(frames, HERE / "compare-turning-3x.gif", ms=70, bg=bg)
+    print("tiers-compare", g.size, "tiers-turning", n1, "compare-turning", n2,
           {t: T[t]["rect"] for t in (1, 2, 3)})
 
 

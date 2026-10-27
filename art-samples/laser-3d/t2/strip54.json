@@ -1,0 +1,18 @@
+{
+ "cells": 54,
+ "cell_w": 70,
+ "cell_h": 70,
+ "rect_game_px": [
+  -16.0,
+  -78.0,
+  35.0,
+  35.0
+ ],
+ "painted_rect_game_px": [
+  -14,
+  -78,
+  33,
+  35
+ ],
+ "rule": "cell i shows the beam's screen angle 25 + 6.66 i degrees (0 = right, 90 = down), as turret.tT@2x.webp"
+}
