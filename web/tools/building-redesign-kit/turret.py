@@ -523,7 +523,8 @@ PIVOT = {
     "laser": {"T1": (300, 447, 112, {}), "T2": (300, 902, 106, {}), "T3": (300, 838, 106, {})},
     "aerial": {"T1": (333, 450, 118, {}), "T2": (333, 861, 118, {}), "T3": (333, 813, 118, {})},
     "railgun": {"T1": (361, 382, 128, {}), "T2": (350, 682, 128, {}), "T3": (347, 652, 128, {})},
-    "cannon": {"T1": (293, 422, 156, {"turret2": 1.02})},
+    "cannon": {"T1": (293, 422, 156, {"turret2": 1.02}), "T2": (295, 680, 175, {"turret2": 0.98}),
+               "T3": (291, 621, 175, {"turret2": 1.02})},
 }
 # the turntable plate (its dark disc) and the prongs standing in front of the turning part, on body-4x.png (see `front`)
 FRONT = {
