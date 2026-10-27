@@ -1,0 +1,49 @@
+{
+ "cells": 32,
+ "cell_w": 212,
+ "cell_h": 212,
+ "pivot_in_body_4x": [
+  291,
+  621
+ ],
+ "body_4x_size": [
+  620,
+  960
+ ],
+ "rule": "cell k = trunc(bearing / 11.25) (like the Sniper; the Cannon has no rule in towerFx.ts yet); cell k shows heading 11.25k",
+ "heading_of_cell": [
+  0.0,
+  11.25,
+  22.5,
+  33.75,
+  45.0,
+  56.25,
+  67.5,
+  78.75,
+  90.0,
+  101.25,
+  112.5,
+  123.75,
+  135.0,
+  146.25,
+  157.5,
+  168.75,
+  180.0,
+  191.25,
+  202.5,
+  213.75,
+  225.0,
+  236.25,
+  247.5,
+  258.75,
+  270.0,
+  281.25,
+  292.5,
+  303.75,
+  315.0,
+  326.25,
+  337.5,
+  348.75
+ ],
+ "note": "pivot = middle of each cell; heading = ground bearing in degrees (0 down-right on screen, 45 at the viewer)"
+}
