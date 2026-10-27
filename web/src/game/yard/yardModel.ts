@@ -292,6 +292,13 @@ export interface ReadYardOptions {
    * yard. A `type: "tribe"` response is foreign whether or not this is set.
    */
   readonly foreign?: boolean;
+  /**
+   * A Moloch yard (the Descent's or a tribe's on the Inferno map), fought on
+   * the plot `WMBASE.Setup` grows, as a `type: "tribe"` camp is: Flash opens
+   * it in its Inferno wild-monster mode (`IWMATTACK`, `BASE.as:1067-1068`)
+   * though its load reads as an Inferno yard.
+   */
+  readonly wild?: boolean;
 }
 
 /** The `type` a wild monster camp's save carries (`server/src/enums/Base.ts`). */
@@ -322,7 +329,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
   // A wild monster camp's save has no store purchases, so the store's rule
   // would put it on the smallest plot; its buildings were laid out for the
   // plot `WMBASE.Setup` grows it to. See `wildYardSize`.
-  const wild = response.type === TRIBE_TYPE;
+  const wild = response.type === TRIBE_TYPE || options.wild === true;
   const foreign = wild || options.foreign === true;
   const outpost = response.type === OUTPOST_TYPE;
   const inferno = response.type === INFERNO_TYPE;

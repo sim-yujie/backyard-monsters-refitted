@@ -1,4 +1,6 @@
+import { monsterWords } from "@/game/monsters/realm";
 import { GOALS_CLAIM_TARGET } from "@/ui/goals/GoalsPanel";
+import { resourceRealm, type ResourceRealm } from "@/ui/resourceIcon";
 import type { ArrowSide } from "@/ui/guide/GuideArrow";
 import { GuideScreen } from "./guideBus";
 import { TutTarget } from "./targets";
@@ -11,7 +13,9 @@ import { TutTarget } from "./targets";
  * The wording is a draft for the owner and all of it lives here. A line says
  * `{Tap}` / `{tap}` where a desktop player clicks and a phone player taps;
  * {@link tipWording} fills it in for the screen in hand, as the planner's help
- * card does for #45.
+ * card does for #45. A building or resource the Inferno yard names its own
+ * way is a token too (`{Town Hall}`, `{goo}`, ...: {@link REALM_WORDS}), so
+ * Bob says "Under Hall" and "Magma" down there.
  */
 
 /**
@@ -55,7 +59,7 @@ export const TIPS: Readonly<Partial<Record<GuideScreen, readonly Tip[]>>> = {
       target: TutTarget.COLLECT_ALL,
     },
     {
-      text: "Build opens every building you can add. More unlock as your Town Hall grows.",
+      text: "Build opens every building you can add. More unlock as your {Town Hall} grows.",
       target: TutTarget.DOCK_BUILD,
     },
     {
@@ -69,7 +73,7 @@ export const TIPS: Readonly<Partial<Record<GuideScreen, readonly Tip[]>>> = {
       target: TutTarget.BUILD_INSTANT,
     },
     {
-      text: "Greyed-out buildings say what they need, usually a bigger Town Hall.",
+      text: "Greyed-out buildings say what they need, usually a bigger {Town Hall}.",
       target: { selector: ".build-tile--locked" },
     },
   ],
@@ -106,29 +110,29 @@ export const TIPS: Readonly<Partial<Record<GuideScreen, readonly Tip[]>>> = {
   ],
   [GuideScreen.MONSTERS_UNLOCK]: [
     {
-      text: "Unlock new kinds of monster here. It takes putty and time, one at a time.",
+      text: "Unlock new kinds of monster here. It takes {putty} and time, one at a time.",
       target: [{ selector: ".locker-row--available" }, { selector: ".locker__list" }],
     },
   ],
   [GuideScreen.MONSTERS_HATCH]: [
     {
-      text: "Hatcheries turn goo into monsters. Queue several and come back later.",
+      text: "{Hatcheries} turn {goo} into monsters. Queue several and come back later.",
       target: { selector: ".hatch-lines" },
     },
     {
-      text: "Hatched monsters move into Housing. When it's full, hatching waits.",
+      text: "Hatched monsters move into {Housing}. When it's full, hatching waits.",
       target: { selector: ".hatch-housing" },
     },
   ],
   [GuideScreen.MONSTERS_HOUSING]: [
     {
-      text: "This is your army. Juicing a monster turns it back into goo.",
+      text: "This is your army. Juicing a monster turns it back into {goo}.",
       target: { selector: ".housing-juice" },
     },
   ],
   [GuideScreen.MONSTERS_TRAIN]: [
     {
-      text: "The Monster Academy trains a monster type to a higher level: more health, more damage.",
+      text: "The {Monster Academy} trains a monster type to a higher level: more health, more damage.",
       target: [{ selector: ".train__slots .train-slot" }, { selector: ".train__slots" }],
     },
   ],
@@ -168,7 +172,7 @@ export const TIPS: Readonly<Partial<Record<GuideScreen, readonly Tip[]>>> = {
   ],
   [GuideScreen.ATTACK]: [
     {
-      text: "Pick your army here. Fill all loads as many as your Flinger can carry.",
+      text: "Pick your army here. Fill all loads as many as your {Flinger} can carry.",
       target: TutTarget.FILL_ALL,
     },
     { text: "{Tap} open ground to drop. A red ring means too close to a building." },
@@ -212,6 +216,35 @@ export const tipsFor = (screen: GuideScreen): readonly Tip[] => TIPS[screen] ?? 
 export const targetsOf = (tip: Tip): readonly TipTarget[] =>
   tip.target === undefined ? [] : Array.isArray(tip.target) ? tip.target : [tip.target as TipTarget];
 
-/** Fills in `{Tap}` / `{tap}`: a tap on a touch screen, a click everywhere else. */
-export const tipWording = (text: string, touch: boolean): string =>
-  text.replaceAll("{Tap}", touch ? "Tap" : "Click").replaceAll("{tap}", touch ? "tap" : "click");
+/** The surface's words a tip may say, by token, as the Inferno yard says them. */
+const realmWords = (realm: ResourceRealm): Readonly<Record<string, string>> => {
+  const words = monsterWords(realm);
+  const inferno = realm === "inferno";
+  return {
+    "Town Hall": inferno ? "Under Hall" : "Town Hall",
+    // An attack from the Inferno yard flings what its Housing Bunkers hold (Inferno R11).
+    Flinger: inferno ? "Housing Bunkers" : "Flinger",
+    Hatcheries: words.hatcheries,
+    Housing: words.housing,
+    "Monster Academy": words.academy,
+    goo: words.goo,
+    putty: words.putty,
+  };
+};
+
+/** Each realm's words, for the tokens of {@link tipWording}. */
+export const REALM_WORDS: Readonly<Record<ResourceRealm, Readonly<Record<string, string>>>> = {
+  surface: realmWords("surface"),
+  inferno: realmWords("inferno"),
+};
+
+/**
+ * Fills in `{Tap}` / `{tap}` (a tap on a touch screen, a click everywhere
+ * else) and the realm's words: the surface's, or the Inferno's while the
+ * screen shows the Inferno yard or an attack from it (`resourceRealm`).
+ */
+export const tipWording = (text: string, touch: boolean, realm: ResourceRealm = resourceRealm()): string =>
+  text
+    .replaceAll("{Tap}", touch ? "Tap" : "Click")
+    .replaceAll("{tap}", touch ? "tap" : "click")
+    .replace(/\{([^}]+)\}/g, (token, word: string) => REALM_WORDS[realm][word] ?? token);

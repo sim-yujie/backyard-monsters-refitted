@@ -31,6 +31,7 @@ import {
   molochWarning,
   stagePassed,
 } from "@/ui/inferno/EmergenceScreens";
+import { bobOnScreen } from "@/ui/guide/BobBubble";
 import { AscendDialog } from "@/ui/inferno/AscendDialog";
 import { INFERNO_YARD, MAIN_YARD } from "../ownYards";
 import { YardView } from "../YardRenderer";
@@ -229,7 +230,10 @@ export const infernoYardPlugin: YardPlugin = (mounts) => {
       scene.closePanel();
       scene.centreOn(centre.x, centre.y);
     },
-    busy: () => popupOpen() || scene.plannerOpen() || scene.carrying() || scene.selectedBuilding() !== null,
+    // Bob's bubble sits on the guide layer, above Moloch's words: the guided
+    // start or Help's tour finishes first (Flash's cave waited for the tutorial).
+    busy: () =>
+      popupOpen() || bobOnScreen() || scene.plannerOpen() || scene.carrying() || scene.selectedBuilding() !== null,
     moloch: (text) => closing((done) => molochDialogue(overlay.modal, text, done)),
     earthquake: () => {
       const banner = earthquakeBanner(overlay.content);

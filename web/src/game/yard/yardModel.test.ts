@@ -4,7 +4,7 @@ import { caveYardMargin } from "@/game/inferno/cave";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { artStateFor, BuildingCondition, readYard, TOWN_HALL_TYPE } from "./yardModel";
 import { ArtState } from "./buildingArt";
-import { depthKey, footprintOf, FOREIGN_YARD_MARGIN, YARD_MARGIN } from "./YardGrid";
+import { depthKey, footprintOf, FOREIGN_YARD_MARGIN, YARD_MARGIN, yardFitRect } from "./YardGrid";
 
 const yard = readYard(fixture as unknown as BaseLoadResponse);
 
@@ -107,6 +107,40 @@ describe("whose yard it is", () => {
     const wall = camp.buildings[0]!;
     expect(wall.box.x).toBeGreaterThan(0);
     expect(wall.box.y).toBeGreaterThan(0);
+  });
+
+  it("puts a Moloch yard, read as an Inferno yard, on the grown plot too, so Fit frames all of Descent yard 3", () => {
+    // Descent yard 3 (base 203) reaches x -700..660, y -550..545 (molochTribes.ts).
+    const corners = {
+      "1": { X: -700, Y: -550, t: 17, id: 1 },
+      "2": { X: 660, Y: 545, t: 17, id: 2 },
+      "3": { X: -700, Y: 545, t: 17, id: 3 },
+      "4": { X: 660, Y: -550, t: 17, id: 4 },
+    };
+    const load = (wild: boolean) =>
+      readYard(
+        {
+          error: 0,
+          baseid: "203",
+          type: "inferno",
+          storedata: {},
+          currenttime: 1_000_000,
+          savetime: 1_000_000,
+          buildingdata: corners,
+        } as unknown as BaseLoadResponse,
+        { foreign: true, wild },
+      );
+    expect(load(false).bounds.yardWidth).toBe(1000);
+    const moloch = load(true);
+    expect(moloch.bounds.yardWidth).toBe(1840);
+    expect(moloch.bounds.yardHeight).toBe(1500);
+    const fit = yardFitRect(moloch.bounds);
+    for (const wall of moloch.buildings) {
+      expect(wall.worldX).toBeGreaterThanOrEqual(fit.x);
+      expect(wall.worldX).toBeLessThanOrEqual(fit.x + fit.width);
+      expect(wall.worldY).toBeGreaterThanOrEqual(fit.y);
+      expect(wall.worldY).toBeLessThanOrEqual(fit.y + fit.height);
+    }
   });
 
   it("keeps a visited player's plot but gives it the wider margin and no edge", () => {
