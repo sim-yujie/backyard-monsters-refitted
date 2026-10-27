@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type z from "zod";
+import { achievementConfig } from "../../config/AchievementConfig.js";
 import type { User } from "../../database/models/user.model.js";
 import { siloCapacity } from "../../game-data/buildingCosts.js";
 import { infernoGoalById } from "../../game-data/infernoGoals.js";
@@ -358,6 +359,37 @@ describe("achievements 20 and 21", () => {
     await inInferno(yardStateAction);
     expect(Object.keys(infernoRecords()).length).toBeGreaterThanOrEqual(10);
     expect(achieved()["21"]).toBeDefined();
+  });
+
+  test("with rewards on, 20 and 21 pay their 15 Shiny each once, to the main row's Shiny", async () => {
+    // The browser check: entering this yard took the Shiny from 980,381 to 980,411.
+    const rewards = achievementConfig.rewards;
+    achievementConfig.rewards = true;
+    try {
+      // A record already worked out, with the main yard's own unlocks (its Town Hall 10) paid long ago.
+      const paid = (shiny: number) => ({ at: 1, shiny });
+      const c = { "1": paid(5), "2": paid(10), "3": paid(15), "6": paid(10), "22": paid(25) };
+      db.rows.set(MAIN, mainRow({ achievements: { v: 1, s: {}, c, backfilledAt: 1 } }));
+      db.rows.set(
+        INFERNO,
+        infernoRow([UNDER_HALL(5), SHARPSHOOTER, COMPOUND, QUAKE_TOWER], { lockerdata: { IC2: { t: 2 }, IC3: { t: 2 } } })
+      );
+      const first = await inInferno(yardStateAction);
+      expect(first.status).toBe(200);
+      expect(achieved()["20"]).toMatchObject({ shiny: 15 });
+      expect(achieved()["21"]).toMatchObject({ shiny: 15 });
+      expect(achieved()["20"]).not.toHaveProperty("unpaid");
+      expect(achieved()["21"]).not.toHaveProperty("unpaid");
+      expect(mainSave().credits).toBe(SHINY + 30);
+      expect(infernoSave().credits).toBe(0);
+
+      // Later Inferno actions find both already unlocked and pay nothing more.
+      await inInferno(yardStateAction);
+      await inInferno(yardStateAction);
+      expect(mainSave().credits).toBe(SHINY + 30);
+    } finally {
+      achievementConfig.rewards = rewards;
+    }
   });
 
   test("with the Inferno switched off neither is offered", async () => {
