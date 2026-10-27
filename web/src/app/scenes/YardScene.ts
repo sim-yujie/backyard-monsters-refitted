@@ -1,7 +1,13 @@
 import { getSession, logout } from "@/api/auth";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
-import { INFERNO_CLOSED_TEXT, isInfernoClosed, loadInfernoYard } from "@/api/inferno";
+import {
+  INFERNO_CLOSED_TEXT,
+  infernoRefusalOf,
+  isInfernoClosed,
+  loadInfernoYard,
+  viewInfernoYard,
+} from "@/api/inferno";
 import { ApiError, NetworkError } from "@/api/http";
 import { ELSEWHERE } from "@/api/presence";
 import {
@@ -49,6 +55,7 @@ import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import { openInfernoMap } from "@/game/inferno/tribeEntry";
+import { backToInferno } from "@/game/inferno/tribeReturn";
 import {
   blueprintBlock,
   PlannerAccess,
@@ -192,6 +199,8 @@ export interface YardLoaders {
   loadFriendYard: (userid: number) => Promise<BaseLoadResponse>;
   /** The player's Inferno yard (WP 1.18). */
   loadInfernoYard: typeof loadInfernoYard;
+  /** Another player's Inferno yard, to look at only (WP 3.4). */
+  viewInfernoYard: (baseid: string) => Promise<BaseLoadResponse>;
 }
 
 /**
@@ -208,6 +217,7 @@ export const loadYardFor = (
     viewBase,
     loadFriendYard: (userid) => loadFriendYard(userid),
     loadInfernoYard,
+    viewInfernoYard,
   },
   own: OwnYardTarget = MAIN_YARD,
 ): Promise<BaseLoadResponse> =>
@@ -219,9 +229,24 @@ export const loadYardFor = (
         : api.loadOwnYard()
     : target.kind === "friend"
       ? api.loadFriendYard(target.friend ?? 0)
-      : target.mapversion === undefined
+      : target.inferno
+        ? api.viewInfernoYard(target.baseid)
+        : target.mapversion === undefined
         ? api.viewBase(target.baseid, target.kind)
         : api.viewBase(target.baseid, target.kind, { mapversion: target.mapversion });
+
+/**
+ * Why another player's Inferno yard did not open (WP 3.4): attacked right
+ * now (`targetUnderAttack`, when Flash greyed View out), no longer theirs or
+ * not a player's, or the server out of reach.
+ */
+export const infernoViewFailureText = (name: string, caught: unknown): string => {
+  if (caught instanceof NetworkError) return `Could not reach the server to look at ${name}'s Inferno yard.`;
+  const reason = infernoRefusalOf(caught);
+  if (reason === "targetUnderAttack") return `${name}'s Inferno yard is under attack. Look again when it is over.`;
+  if (reason === "notInfernoPlayer") return `${name}'s Inferno yard cannot be looked at any more.`;
+  return `Could not load ${name}'s Inferno yard.`;
+};
 
 /**
  * What an outpost holding nothing but its core says, with a way to the
@@ -561,7 +586,11 @@ export class YardScene implements Scene {
     this.dock = new YardDock(
       yardDockOptions(target, {
         map: () => this.openMap(),
-        home: () => context.goTo(SceneName.YARD),
+        home: () => {
+          // A look at another player's Inferno yard goes home to the own Inferno yard (WP 3.4).
+          if (target?.inferno) backToInferno(false);
+          context.goTo(SceneName.YARD);
+        },
         layout: () => this.togglePlanner(),
         build: () => this.toggleBuildMenu(),
         yardSelect: (next) => this.openOwnYard(next),
@@ -841,6 +870,8 @@ export class YardScene implements Scene {
       // Flash client drew it outside BUILD mode. The own yard keeps its edge,
       // and is held by a store from here on.
       const store = target ? null : this.startStore(response, context);
+      // Another player's Inferno yard is looked at from the Inferno: its HUD shows the own purse.
+      if (target?.inferno) setResourceRealm("inferno");
       const yard = store ? store.yard : readYard(response, { foreign: true });
       this.yard = yard;
       this.save = response;
@@ -924,6 +955,13 @@ export class YardScene implements Scene {
       // server down) sends the player home, saying why (#372).
       if (target?.kind === "friend") {
         setYardIntent({ kind: "notice", text: visitFailureText(target.name, caught) });
+        context.goTo(SceneName.YARD);
+        return;
+      }
+      // Another player's Inferno yard that will not open: back to the own Inferno yard, saying why (WP 3.4).
+      if (target?.inferno) {
+        setYardIntent({ kind: "notice", text: infernoViewFailureText(target.name, caught) });
+        backToInferno(false);
         context.goTo(SceneName.YARD);
         return;
       }
@@ -1744,6 +1782,12 @@ export class YardScene implements Scene {
     const context = this.context;
     if (!context) return;
     const store = this.store;
+    // A look at another player's Inferno yard: back to the Inferno map, over the own Inferno yard (WP 3.4).
+    if (this.target?.inferno) {
+      backToInferno(true);
+      context.goTo(SceneName.YARD);
+      return;
+    }
     if (this.target || !store) {
       context.goTo(SceneName.MAP);
       return;
@@ -2440,7 +2484,7 @@ export class YardScene implements Scene {
 
   /** "your yard", "your outpost" or "Name's yard", for the loading lines. */
   private whose(): string {
-    if (this.target) return `${this.target.name}'s yard`;
+    if (this.target) return `${this.target.name}'s ${this.target.inferno ? "Inferno yard" : "yard"}`;
     return this.own.kind === "outpost" ? "your outpost" : this.own.kind === "inferno" ? "your Inferno yard" : "your yard";
   }
 

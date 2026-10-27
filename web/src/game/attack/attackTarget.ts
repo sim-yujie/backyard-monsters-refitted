@@ -169,7 +169,23 @@ export interface AttackTarget {
    * serves it and its landing replays it. Absent for anything else.
    */
   readonly infernoTribe?: boolean;
+  /**
+   * Another player's Inferno yard from the Inferno map (Inferno WP 3.5),
+   * fought as an Inferno yard with the Inferno yard's Housing Bunker army, as
+   * a tribe is. Once started it counts (owner, 27 Oct), so it is saved even
+   * when nothing was flung. Absent for anything else.
+   */
+  readonly infernoPlayer?: boolean;
 }
+
+/**
+ * Whether the attack is fought from the Inferno yard: a Moloch tribe or
+ * another player's Inferno yard from the Inferno map. Its HUD shows the
+ * Inferno purse and its ways out lead back to the Inferno yard.
+ */
+export const fromInfernoYard = (
+  target: Pick<AttackTarget, "infernoTribe" | "infernoPlayer"> | null | undefined,
+): boolean => target?.infernoTribe === true || target?.infernoPlayer === true;
 
 /** A foreign cell the yard scene is about to show read-only. */
 export interface ViewTarget {
@@ -187,6 +203,12 @@ export interface ViewTarget {
    * tribe (`baseModeView.ts:20-21`).
    */
   readonly mapversion?: number;
+  /**
+   * Another player's Inferno yard from the Inferno map (WP 3.4): loaded with
+   * `POST /bm/inferno/view`, to look at only (Flash's `iview`), and its Home
+   * and Map lead back to the own Inferno yard and its map. Absent elsewhere.
+   */
+  readonly inferno?: boolean;
   /**
    * The attack this look could turn into, or null when the map's preconditions
    * refuse it — in which case the yard shows no Attack button at all (§4.1).

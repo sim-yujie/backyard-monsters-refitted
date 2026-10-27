@@ -278,7 +278,9 @@ export const startTribeAttack = (baseid: string): Promise<TribeAttackStart> =>
   post<TribeAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "tribe", baseid });
 
 /** The tribe start as the attack scene reads an attack load, an Inferno yard as the Descent's is. */
-export const tribeAttackLoad = (start: TribeAttackStart): BaseLoadResponse =>
+export const tribeAttackLoad = (
+  start: Pick<TribeAttackStart, "base" | "attackid" | "defenderforces" | "attackeracademy" | "attackerlevel" | "attpowerups">,
+): BaseLoadResponse =>
   ({
     ...start.base,
     type: "inferno",
@@ -288,3 +290,106 @@ export const tribeAttackLoad = (start: TribeAttackStart): BaseLoadResponse =>
     ...(start.attackerlevel === undefined ? {} : { attackerlevel: start.attackerlevel }),
     ...(start.attpowerups === undefined ? {} : { attpowerups: start.attpowerups }),
   }) as BaseLoadResponse;
+
+/* ── The Inferno map: other players (PvP, WP 3.1-3.5) ── */
+
+/**
+ * One player of the Inferno map as `GET /bm/inferno/neighbours` answers it
+ * (`services/inferno/infernoNeighbours.ts`): Flash's `maproom_inferno`
+ * player row.
+ */
+export interface InfernoNeighbourView {
+  readonly userid: number;
+  /** Their Inferno yard's base id: what an attack or a look names. */
+  readonly baseid: string;
+  readonly name: string;
+  readonly pic: string;
+  /** Their Inferno yard's level. */
+  readonly level: number;
+  /** 1 while they are playing anywhere in the game, when they cannot be attacked. */
+  readonly online: 0 | 1;
+  readonly friend: 0 | 1;
+  /**
+   * What the player may do to them now, Flash's codes (`PlayerHandler.as`):
+   * 1 attack, 2 attack a higher level, 3 level too far apart, 4 revenge,
+   * 5 damage protection, 7 under attack.
+   */
+  readonly attackpermitted: number;
+  /** When their damage protection ends, unix seconds; 0 without any. */
+  readonly protecteduntil: number;
+  /** Who is attacking them now, while they are attacked. */
+  readonly attacker: string;
+  readonly attacksfrom: number;
+  readonly attacksto: number;
+  /** Revenge attacks left on them. */
+  readonly vengeance: number;
+}
+
+/** `GET /bm/inferno/neighbours`: the players whose Inferno yards the player's faces. */
+export interface InfernoNeighboursResponse extends ApiEnvelope {
+  /** The server's clock, unix seconds. */
+  readonly currenttime: number;
+  /** The player's own Inferno yard level. */
+  readonly level: number;
+  readonly neighbours: readonly InfernoNeighbourView[];
+}
+
+export const loadInfernoNeighbours = (): Promise<InfernoNeighboursResponse> =>
+  get<InfernoNeighboursResponse>("/api/:apiVersion/bm/inferno/neighbours");
+
+/**
+ * `POST /bm/inferno/attack/start` with `kind: "player"` (WP 3.2,
+ * `controllers/inferno/playerAttack.ts`): another player's Inferno yard and
+ * the Inferno yard's army it is fought with, as a tribe's. Refused (409) with
+ * `reason` `notInfernoPlayer`, `protected` (with `protectedUntil`),
+ * `targetUnderAttack` (with `attacker`), `outOfRange`, `ownerOnline`,
+ * `noMonsters`, `noInfernoYard` or `underAttack`.
+ */
+export interface PlayerAttackStart extends ApiEnvelope {
+  readonly kind: "player";
+  readonly yardkind: "inferno";
+  readonly attackid: number;
+  /** The defender's Inferno yard level. */
+  readonly level: number;
+  /** The defender's name. */
+  readonly ownername: string;
+  readonly base: Partial<BaseLoadResponse>;
+  readonly defenderforces: unknown;
+  /** The own Inferno yard's base id: the army's yard. */
+  readonly armybaseid: string;
+  /** What the own Inferno yard's Housing Bunkers hold: everything the attack can fling. */
+  readonly army: Readonly<Record<string, number>>;
+  /** Infernal Academy levels by monster id. */
+  readonly attackeracademy: Readonly<Record<string, number>>;
+  readonly attackerlevel?: number;
+  readonly attpowerups?: unknown[];
+  /** What one fling may carry: a Housing Bunker's load (R11). */
+  readonly flingercapacity: number;
+}
+
+export const startPlayerAttack = (baseid: string): Promise<PlayerAttackStart> =>
+  post<PlayerAttackStart>("/api/:apiVersion/bm/inferno/attack/start", { kind: "player", baseid });
+
+/**
+ * The player start as the attack scene reads an attack load. It carries the
+ * yard's `basesaveid`, so the attack's checkpoints go to the server: an
+ * attack left without its final save is closed from the last one, and one
+ * with none past its first seconds counts its whole army as used.
+ */
+export const playerAttackLoad = (start: PlayerAttackStart): BaseLoadResponse =>
+  ({
+    ...tribeAttackLoad(start),
+    basesaveid: Number(start.base.basesaveid),
+  }) as BaseLoadResponse;
+
+/** `POST /bm/inferno/view` (WP 3.4): another player's Inferno yard, to look at only. */
+export interface InfernoViewResponse extends BaseLoadResponse {
+  readonly currenttime: number;
+  /** The yard's Inferno level. */
+  readonly level: number;
+  readonly ownername: string;
+}
+
+/** Refused (409) with `notInfernoPlayer`, or `targetUnderAttack` while it is attacked. */
+export const viewInfernoYard = (baseid: string): Promise<InfernoViewResponse> =>
+  post<InfernoViewResponse>("/api/:apiVersion/bm/inferno/view", { baseid });

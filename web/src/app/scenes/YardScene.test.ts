@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import { ApiError, NetworkError } from "@/api/http";
 import type { BaseLoadResponse } from "@/api/types";
 import type { ViewTarget } from "@/game/attack/attackTarget";
 import { INFERNO_YARD, MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
@@ -7,6 +8,7 @@ import { PlannerAccess } from "@/game/yard/planner/access";
 import { dockButtonsFor } from "@/ui/yard/YardDock";
 import {
   hudPoolFor,
+  infernoViewFailureText,
   loadYardFor,
   plannerAccessFor,
   refusalNotice,
@@ -23,6 +25,7 @@ const api = () => ({
   viewBase: vi.fn(() => Promise.resolve(response)),
   loadFriendYard: vi.fn((_userid: number) => Promise.resolve(response)),
   loadInfernoYard: vi.fn(() => Promise.resolve(response)),
+  viewInfernoYard: vi.fn((_baseid: string) => Promise.resolve(response)),
 });
 
 const visit = (kind: ViewTarget["kind"]): ViewTarget => ({
@@ -57,6 +60,14 @@ describe("loadYardFor", () => {
     expect(loaders.loadInfernoYard).toHaveBeenCalledTimes(1);
     expect(loaders.loadOwnYard).not.toHaveBeenCalled();
     expect(loaders.loadOwnBase).not.toHaveBeenCalled();
+  });
+
+  it("looks at another player's Inferno yard with the Inferno view, never the surface one (WP 3.4)", async () => {
+    const loaders = api();
+    await loadYardFor({ ...visit("main"), baseid: "5005", inferno: true }, loaders, INFERNO_YARD);
+    expect(loaders.viewInfernoYard.mock.calls).toEqual([["5005"]]);
+    expect(loaders.viewBase).not.toHaveBeenCalled();
+    expect(loaders.loadInfernoYard).not.toHaveBeenCalled();
   });
 
   it("views a foreign target even when an own outpost was asked for", async () => {
@@ -177,5 +188,23 @@ describe("the planner on a visit (2026-10-22)", () => {
     const attack = { baseid: "21970243208", kind: "wild" } as unknown as NonNullable<ViewTarget["attack"]>;
     const options = yardDockOptions({ ...visit("wild"), attack, refusal: null }, actions());
     expect(dockButtonsFor(options, null)).toMatchObject({ home: true, attack: true, build: false, layout: false });
+  });
+});
+
+describe("infernoViewFailureText", () => {
+  const refused = (reason: string) =>
+    new ApiError("refused", { status: 409, details: { data: { reason } } });
+
+  it("says why another player's Inferno yard did not open (WP 3.4)", () => {
+    expect(infernoViewFailureText("Bob", refused("targetUnderAttack"))).toBe(
+      "Bob's Inferno yard is under attack. Look again when it is over.",
+    );
+    expect(infernoViewFailureText("Bob", refused("notInfernoPlayer"))).toBe(
+      "Bob's Inferno yard cannot be looked at any more.",
+    );
+    expect(infernoViewFailureText("Bob", new NetworkError("down", null))).toBe(
+      "Could not reach the server to look at Bob's Inferno yard.",
+    );
+    expect(infernoViewFailureText("Bob", new Error("?"))).toBe("Could not load Bob's Inferno yard.");
   });
 });
