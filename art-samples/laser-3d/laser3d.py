@@ -34,14 +34,15 @@ from look3d import Paint, bear, bezier, diag, lathe, obj_from_bm, rbox, ring_of,
 
 W, H = 400, 640                       # 4x canvas
 AX, AY = 200, 400                     # the building's anchor on it
-if os.environ.get("LASER_EL"):        # a check only: the shared camera angle is look3d.EL
+L.EL = 30.0                           # the painted Laser is drawn from about 30 degrees up (lead, 27 Oct: each tower
+if os.environ.get("LASER_EL"):        # keeps its own painting's camera height; the Cannon's 23 is too flat for it)
     L.EL = float(os.environ["LASER_EL"])
 # the painted tiers (buildingArtTiers.ts, 23 Laser Tower): body picture [x, y, w, h] and pivot, game px from the anchor
 PAINTED = {1: dict(body=(-33, -29, 68, 81), pivot=(2, -20)),
            2: dict(body=(-33, -54, 68, 106), pivot=(2, -44)),
            3: dict(body=(-33, -71, 68, 123), pivot=(2, -60))}
 TILT = 8.0                            # the head's raise, degrees
-HEAD_SCALE = 1.06
+HEAD_SCALE = 0.9
 
 # ------------------------------------------------------------------------------------------------------------- tiers
 # the parts every tier shares keep their size (base, tyres, head); the box grows by sections
@@ -116,6 +117,12 @@ def m_lens(name, cx, cz, rad, stops):
     return p.m
 
 
+# the Laser's own metals (look3d's ramps): a darker, cooler steel than the shared one (the painted Laser's steel is dark
+# with bright edges), and a deeper gold for tier 2's big flat box faces (the shared gold's pale top washes them out)
+L.METALS["lsteel"] = ((28, 32, 38), (92, 98, 102), (168, 174, 178), (0.92, 0.96, 1.0, 1))
+L.METALS["lgold"] = ((92, 50, 6), (206, 142, 22), (248, 208, 92), (1.0, 0.92, 0.6, 1))
+
+
 def materials(tier):
     M = {}
     M["tyre"] = m_paint("tyre", (54, 54, 62), (74, 74, 84), spec=0.2, rough=0.45, spec_col=(0.85, 0.88, 1, 1), nscale=5,
@@ -129,26 +136,29 @@ def materials(tier):
     M["lens_glow"] = L.mat_halo("lens_glow", col=(80, 180, 255), strength=0.5)
     gold = L.mat_metal("gold", spec=1.0)
     brass = L.mat_metal("brass")
-    steel = L.mat_metal("steel")
+    steel = L.mat_metal("lsteel")
     gunmetal = L.mat_metal("gunmetal")
     if tier == 1:
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
-        M["box"] = m_paint("box", (112, 116, 102), (140, 144, 128), metal=False, spec=0.35, rough=0.32,
+        M["box"] = m_paint("box", (92, 96, 82), (118, 122, 106), metal=False, spec=0.35, rough=0.32,
                            spec_col=(0.95, 0.97, 1, 1), scratch=(140, 142, 134), wear=(84, 74, 60))
         M["plate"] = gunmetal
+        M["plate_top"] = L.mat_metal("plate_top", "black", wear=0.3)
         M["bar"] = steel
         M["column"] = brass
         M["ring"] = steel
         M["trim"] = gunmetal
         M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)
-        M["head"] = steel
-        M["rim"] = gold
-        M["yoke"] = gunmetal
+        M["head"] = L.mat_metal("head", "lsteel", wear=1.0)
+        M["rim"] = brass
+        M["yoke"] = steel
         M["thread"] = brass
     elif tier == 2:
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
-        for k in ("box", "plate", "bar", "column", "ring", "trim", "head", "rim", "yoke", "thread"):
+        for k in ("plate", "bar", "column", "ring", "trim", "rim", "yoke", "thread"):
             M[k] = gold
+        M["box"] = M["head"] = L.mat_metal("lgold", spec=1.0)
+        M["plate_top"] = L.mat_metal("plate_top", "brass", wear=0.3)
         M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)
     else:
         M["stripes"] = m_stripes((30, 30, 34), (236, 178, 40))
@@ -156,6 +166,7 @@ def materials(tier):
         M["box"] = m_paint("armour", (255, 255, 255), (235, 235, 240), spec=1.0, rough=0.22, spec_col=hi,
                            scratch=(255, 255, 255), upk=(0.75, 1.6), shade=L.metal_ramp(dark, mid, light))
         M["plate"] = gold
+        M["plate_top"] = L.mat_metal("plate_top", "black", wear=0.3)
         M["bar"] = gunmetal
         M["column"] = L.mat_metal("black")
         M["ring"] = gold
@@ -189,7 +200,7 @@ def tyre(bm, c, R=0.15, rw=0.17, rh=0.15, n=40, k=16, mat=0):
             f.material_index = mat
 
 
-def shield(w, h, n=40, bottom=0.5, top=0.16):
+def shield(w, h, n=40, bottom=0.5, top=0.3):
     """The head's section: a rounded square, more rounded at the bottom; (x, z) points round it, centred on 0."""
     pts = []
     hw, hh = w / 2, h / 2
@@ -265,8 +276,7 @@ def build(tier):
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o)
     M = materials(tier)
-    LN = dict(warm=outline_mat("line_warm", srgb(52, 32, 16)), cool=outline_mat("line_cool", srgb(22, 22, 28)))
-    line_box = LN["cool"] if tier != 2 else LN["warm"]
+    line_box = L.line(T["line"])
 
     body = bpy.data.objects.new("BODY", None)
     sc.collection.objects.link(body)
@@ -275,10 +285,10 @@ def build(tier):
     z0, z1 = PLATE
     base = lathe("base", [
         [(0.97, 0.0), (1.0, 0.03), (1.0, BASE_H - 0.03), (0.98, BASE_H)],
-        [(0.98, BASE_H), (1.02, z0 + 0.01), (1.03, z0 + 0.03), (1.03, z1 - 0.02), (1.0, z1), (0.9, z1)],
-        [(0.9, z1), (0.0, z1)],
-    ], [M["stripes"], M["plate"]], mat_of_seg=[0, 1, 1], parent=body)
-    add_outline(base, LN["warm"])
+        [(0.98, BASE_H), (1.02, z0 + 0.01), (1.03, z0 + 0.03), (1.03, z1 - 0.02), (1.01, z1), (0.97, z1)],
+        [(0.97, z1), (0.0, z1)],
+    ], [M["stripes"], M["plate"], M["plate_top"]], mat_of_seg=[0, 1, 2], parent=body)
+    L.add_outline(base, L.line("warm"))
     bm = bmesh.new()
     c, nn = ring_of(30, 1.03, (z0 + z1) / 2, 0.5)
     studs(bm, c, nn, r=0.03)
@@ -291,7 +301,7 @@ def build(tier):
         for i in range(3):
             tyre(bm, (p.x, p.y, 0.15 + 0.29 * i))
     ty = obj_from_bm("tyres", bm, [M["tyre"]], parent=body)
-    add_outline(ty, LN["cool"])
+    L.add_outline(ty, L.line("cool"))
 
     # ---- the box, in sections with bands between
     a = BOX_A
@@ -334,10 +344,10 @@ def build(tier):
     bx = obj_from_bm("box", bm, [M["box"]], parent=body, sharp=30)
     if tier == 3:
         fc = obj_from_bm("facets", fac, [M["box"]], parent=body, smooth=False)
-        add_outline(fc, line_box, LINE * 0.6)
-    add_outline(bx, line_box)
+        L.add_outline(fc, line_box, L.LINE * 0.6)
+    L.add_outline(bx, line_box)
     tr = obj_from_bm("box_trim", trim, [M["trim"]], parent=body, sharp=30)
-    add_outline(tr, LN["warm"], LINE * 0.8)
+    L.add_outline(tr, L.line("warm"), L.LINE * 0.8)
     obj_from_bm("rivets_box", riv, [M["rivet"]], parent=body)
 
     # the warning sign on the front-left face (+X), on the top section
@@ -346,7 +356,7 @@ def build(tier):
     cpos = Vector((a + (0.235 if tier == 3 else 0.005), -0.05, zs0 + (zs1 - zs0) * (0.42 if tier == 1 else 0.5)))
     plate_tri(bm, cpos, Vector((0, -1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), 0.72, 0.02)
     sg = obj_from_bm("sign", bm, [M["sign"]], parent=body, smooth=False)
-    add_outline(sg, LN["cool"], LINE * 0.9)
+    L.add_outline(sg, L.line("cool"), L.LINE * 0.9)
     bm = bmesh.new()
     plate_tri(bm, cpos + Vector((0.02, 0, -0.02)), Vector((0, -1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), 0.24, 0.012)
     obj_from_bm("sign_ink", bm, [M["ink"]], parent=body, smooth=False)
@@ -363,7 +373,7 @@ def build(tier):
          (0.29, rz1 + 0.12), (0.29, top - 0.04), (0.27, top), (0.22, top)],
         [(0.22, top), (0.0, top)],
     ], [M["ring"], M["column"], M["thread"]], mat_of_seg=[0, 1, 0, 2, 0], parent=body)
-    add_outline(col, LN["warm"])
+    L.add_outline(col, L.line("warm"))
     # the cage: four bars up the box's corners, bending in to a ring round the column
     bm = bmesh.new()
     rr, rz = 0.60, ring_z
@@ -386,7 +396,7 @@ def build(tier):
                       bear(b, rr + 0.02, rz), n=12)
         tube(bm, pts, [0.085 if tier == 1 else 0.095] * len(pts), sides=14)
     cage = obj_from_bm("cage", bm, [M["bar"]], parent=body)
-    add_outline(cage, LN["cool"] if tier != 2 else LN["warm"])
+    L.add_outline(cage, line_box)
     # amber lamps on the ring where the left and right bars meet it
     bm = bmesh.new()
     glow = bmesh.new()
@@ -397,21 +407,26 @@ def build(tier):
         bmesh.ops.create_uvsphere(glow, u_segments=16, v_segments=8, radius=0.105,
                                   matrix=Matrix.Translation(p + Vector((0, 0, 0.08))) @ diag(1, 1, 1.15))
     lb = obj_from_bm("lamp_caps", bm, [M["trim"]], parent=body)
-    add_outline(lb, LN["warm"], LINE * 0.7)
+    L.add_outline(lb, L.line("warm"), L.LINE * 0.7)
     lg = obj_from_bm("lamps", glow, [M["amber"]], parent=body)
-    add_outline(lg, LN["warm"], LINE * 0.7)
+    L.add_outline(lg, L.line("warm"), L.LINE * 0.7)
+    bm = bmesh.new()
+    for b in (135, 315):
+        bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=8, radius=0.19,
+                                  matrix=Matrix.Translation(bear(b, rr, rz + 0.14)) @ diag(1, 1, 1.1))
+    obj_from_bm("lamps_glow", bm, [M["amber_glow"]], parent=body)
     # the hoses at the back right: a red pipe up and a blue loop back down
     bm = bmesh.new()
     pr0, pr1 = bear(285, 0.66, rz - 0.04), bear(285, 0.66, top + 0.38)
     tube(bm, [pr0 + (pr1 - pr0) * t for t in np.linspace(0, 1, 6)], [0.05] * 6, sides=12)
     hr = obj_from_bm("hose_red", bm, [M["hose_r"]], parent=body)
-    add_outline(hr, LN["cool"], LINE * 0.8)
+    L.add_outline(hr, L.line("cool"), L.LINE * 0.8)
     bm = bmesh.new()
     pb = bezier(pr1 - Vector((0, 0, 0.06)), pr1 + Vector((0, 0, 0.28)), bear(318, 0.86, top + 0.4), bear(318, 0.86, top + 0.05), n=14)
     pb += [bear(318, 0.86, top - 0.1 - 0.12 * i) for i in range(1, 4)]
     tube(bm, pb, [0.055] * len(pb), sides=12)
     hb = obj_from_bm("hose_blue", bm, [M["hose_b"]], parent=body)
-    add_outline(hb, LN["cool"], LINE * 0.8)
+    L.add_outline(hb, L.line("cool"), L.LINE * 0.8)
 
     # ---- the head: threaded post, yoke, lamp housing with its lens. Built facing +Y, turned about Z by -heading.
     tur = bpy.data.objects.new("TURRET", None)
@@ -423,7 +438,7 @@ def build(tier):
          (0.24, 0.18), (0.22, 0.19), (0.23, 0.21), (0.23, 0.24), (0.26, 0.25), (0.27, 0.27), (0.27, 0.30), (0.2, 0.31),
          (0.0, 0.31)],
     ], [M["thread"]], parent=tur, sharp=30)
-    add_outline(post, LN["warm"])
+    L.add_outline(post, L.line("warm"))
     AXZ = 0.66                                   # the tilt axis' height
     bm = bmesh.new()
     rbox(bm, (0.92, 0.2, 0.08), Matrix.Translation((0, -0.02, 0.28)), bevel=0.02)       # the cross bar
@@ -434,7 +449,7 @@ def build(tier):
         bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=0.08, radius2=0.065, depth=0.07,
                               matrix=Matrix.Translation((sx * 0.505, -0.02, AXZ)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
     yk = obj_from_bm("yoke", bm, [M["yoke"]], parent=tur, sharp=35)
-    add_outline(yk, LN["warm"])
+    L.add_outline(yk, L.line("warm"))
     lamp = bpy.data.objects.new("LAMP", None)
     sc.collection.objects.link(lamp)
     lamp.parent = tur
@@ -446,14 +461,14 @@ def build(tier):
     bm = bmesh.new()
     prism(bm, [(x, z + zc) for x, z in sec], y0, y1, Matrix())
     hs = obj_from_bm("housing", bm, [M["head"]], parent=lamp, sharp=35)
-    add_outline(hs, LN["cool"] if tier != 2 else LN["warm"])
+    L.add_outline(hs, line_box)
     bm = bmesh.new()   # the front rim, a frame round the lens
     outer = [(x * 1.03, z * 1.03 + zc) for x, z in sec]
     prism(bm, outer, y1 - 0.02, y1 + 0.06, Matrix(), bevel=0.02)
     rim = obj_from_bm("rim", bm, [M["rim"]], parent=lamp, sharp=35)
-    add_outline(rim, LN["warm"], LINE * 0.8)
+    L.add_outline(rim, L.line("warm"), L.LINE * 0.8)
     bm = bmesh.new()   # the lens, a low dome inside the rim
-    inner = [(x * 0.92, z * 0.92 + zc) for x, z in sec]
+    inner = [(x * 0.95, z * 0.95 + zc) for x, z in sec]
     prism(bm, inner, y1, y1 + 0.075, Matrix(), bevel=0.05)
     lens_m = m_lens("lens", 0.0, zc, hh * 0.46, [(0.0, (225, 250, 255)), (0.3, (110, 215, 255)), (0.62, (30, 130, 252)),
                                               (0.85, (14, 70, 220)), (1.0, (8, 36, 150))])
@@ -467,64 +482,11 @@ def build(tier):
     return body, tur, dict(top=top, box_top=box_top, ring_z=ring_z)
 
 
-# ------------------------------------------------------------------------------------------------------------- camera
-def objs_under(root):
-    out = []
-    for o in bpy.data.objects:
-        p = o.parent
-        while p is not None and p != root:
-            p = p.parent
-        if o.type == 'MESH' and p == root:
-            out.append(o)
-    return out
-
-
-def screen_box(cam, obs):
-    sc = bpy.context.scene
-    dg = bpy.context.evaluated_depsgraph_get()
-    xs, ys = [], []
-    for o in obs:
-        if o.name.endswith("_line"):
-            continue
-        ev = o.evaluated_get(dg)
-        me = ev.to_mesh()
-        mw = ev.matrix_world
-        for v in me.vertices:
-            p = world_to_camera_view(sc, cam, mw @ v.co)
-            xs.append(p.x * W)
-            ys.append((1 - p.y) * H)
-        ev.to_mesh_clear()
-    return min(xs), min(ys), max(xs), max(ys)
-
-
-def fit(cam, body, tier):
-    """Scale and shift the camera so the body's box matches the painted body's box in width, middle and bottom."""
-    bx, by, bw, bh = PAINTED[tier]["body"]
-    want = (AX + 4 * bx, AY + 4 * by, AX + 4 * (bx + bw), AY + 4 * (by + bh))
-    obs = objs_under(body)
-    for _ in range(3):
-        bpy.context.view_layer.update()
-        x0, y0, x1, y1 = screen_box(cam, obs)
-        cam.data.ortho_scale *= (x1 - x0) / (want[2] - want[0])
-        bpy.context.view_layer.update()
-        x0, y0, x1, y1 = screen_box(cam, obs)
-        big = max(W, H)
-        cam.data.shift_x += ((x0 + x1) / 2 - (want[0] + want[2]) / 2) / big
-        cam.data.shift_y -= (y1 - want[3]) / big
-    bpy.context.view_layer.update()
-    return screen_box(cam, obs), want
-
-
-def to_px(cam, p):
-    q = world_to_camera_view(bpy.context.scene, cam, Vector(p))
-    return q.x * W, (1 - q.y) * H
-
-
 # 54 facings of the game's laser strip (towerFx.ts laserCell): cell i shows the beam's screen angle 25 + 6.66 i degrees
 # (0 = right, 90 = down). The ground bearing that looks that way on screen, for a camera at EL:
 def cell54_bearing(i):
     th = math.radians(25 + 6.66 * i)
-    r, t = math.cos(th), math.sin(th) / math.sin(math.radians(EL))
+    r, t = math.cos(th), math.sin(th) / math.sin(math.radians(L.EL))
     return (315 + math.degrees(math.atan2(t, r))) % 360
 
 
@@ -532,75 +494,46 @@ def cell54_bearing(i):
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["1", "body"]
     tier, what = int(argv[0]), argv[1]
-    body, tur, dims = build(tier)
-    cam = setup_render(W, H, EL, SUN, look_at_z=1.5)
-    box, want = fit(cam, body, tier)
-    px, py = to_px(cam, (0, 0, dims["top"]))
     out = HERE / "render" / f"t{tier}"
-    out.mkdir(parents=True, exist_ok=True)
+    bx, by, bw, bh = PAINTED[tier]["body"]
+    want = (AX + 4 * bx, AY + 4 * by, AX + 4 * (bx + bw), AY + 4 * (by + bh))
+    L.canvas(W, H, want, out)
+    body, tur, dims = build(tier)
+    cam = L.setup_render()
+    body_obs, tur_obs = L.objs_under(body), L.objs_under(tur)
+    box = L.fit(cam, body_obs)
+    px, py = L.to_px(cam, (0, 0, dims["top"]))
     gp = PAINTED[tier]["pivot"]
     (out / "camera.json").write_text(json.dumps(dict(
-        tier=tier, elevation=EL, tilt=TILT, ortho_scale=cam.data.ortho_scale, shift=[cam.data.shift_x, cam.data.shift_y],
+        tier=tier, elevation=L.EL, tilt=TILT, ortho_scale=cam.data.ortho_scale, shift=[cam.data.shift_x, cam.data.shift_y],
         body_box=[round(v, 1) for v in box], painted_body_box=want, pivot_4x=[round(px, 2), round(py, 2)],
         painted_pivot_4x=[AX + 4 * gp[0], AY + 4 * gp[1]], canvas=[W, H], anchor_4x=[AX, AY], dims=dims), indent=1))
-    sc = bpy.context.scene
-    body_obs, tur_obs = objs_under(body), objs_under(tur)
     if what == "save":
         bpy.ops.wm.save_as_mainfile(filepath=str(HERE / f"laser-t{tier}.blend"))
         return
-
-    def shot(path, seen, cut=()):
-        """Two passes laid over each other: the paint without outline shells, then the shells alone with every solid
-        part as a holdout (as cannon3d.py). Parts in cut are holdouts in both."""
-        tmp = [out / "_paint.png", out / "_lines.png"]
-        for i, f in enumerate(tmp):
-            for o in seen + list(cut):
-                line = o.name.endswith("_line")
-                o.hide_render = (line and i == 0)
-                o.is_holdout = (o in cut) or (i == 1 and not line)
-            for o in bpy.data.objects:
-                if o.type == 'MESH' and o not in seen and o not in cut:
-                    o.hide_render = True
-            sc.render.filepath = str(f)
-            bpy.ops.render.render(write_still=True)
-        a, b = (bpy.data.images.load(str(f)) for f in tmp)
-        n = W * H * 4
-        pa, pb = np.empty(n, np.float32), np.empty(n, np.float32)
-        a.pixels.foreach_get(pa)
-        b.pixels.foreach_get(pb)
-        pa, pb = pa.reshape(-1, 4), pb.reshape(-1, 4)
-        ab = pb[:, 3:4]
-        aa = ab + pa[:, 3:4] * (1 - ab)
-        rgb = (pb[:, :3] * ab + pa[:, :3] * pa[:, 3:4] * (1 - ab)) / np.maximum(aa, 1e-6)
-        im = bpy.data.images.new("out", W, H, alpha=True)
-        im.pixels.foreach_set(np.concatenate([rgb, aa], 1).ravel())
-        im.filepath_raw = str(path)
-        im.file_format = 'PNG'
-        im.save()
-        for x in (a, b, im):
-            bpy.data.images.remove(x)
-        for f in tmp:
-            f.unlink()
+    line_col = L.LINE_COLS[TIERS[tier]["line"]]
 
     def turn(bearing):
         tur.rotation_euler = (0, 0, -math.radians(bearing))
 
-    if what == "body":
-        shot(out / "body-4x.png", body_obs)
-    elif what == "full":
-        turn(11.25 * int(argv[2]))
-        shot(out / f"full-h{int(argv[2]):02d}.png", body_obs + tur_obs)
-    elif what == "head":
-        heads = [int(x) for x in argv[2:]] or list(range(32))
-        (out / "head-4x").mkdir(exist_ok=True)
-        for k in heads:
-            turn(11.25 * k)
-            shot(out / "head-4x" / f"h{k:02d}.png", tur_obs, cut=body_obs)
-    elif what == "cells54":
-        (out / "cell54-4x").mkdir(exist_ok=True)
-        for i in ([int(x) for x in argv[2:]] or range(54)):
-            turn(cell54_bearing(i))
-            shot(out / "cell54-4x" / f"c{i:02d}.png", tur_obs, cut=body_obs)
+    def heads(folder, bearings):
+        (out / folder).mkdir(exist_ok=True)
+        avoid = L.load_alpha(out / "body-4x.png")
+        for name, b in bearings:
+            turn(b)
+            L.shot(out / folder / name, tur_obs, cut=body_obs, avoid=avoid, outer_col=line_col)
+
+    if what in ("body", "all"):
+        L.shot(out / "body-4x.png", body_obs, outer_col=line_col)
+    if what == "full":
+        for h in argv[2:]:
+            turn(11.25 * int(h))
+            L.shot(out / f"full-h{int(h):02d}.png", body_obs + tur_obs, outer_col=line_col)
+    if what in ("head", "all"):
+        ks = [int(x) for x in argv[2:]] if what == "head" and argv[2:] else range(32)
+        heads("head-4x", [(f"h{k:02d}.png", 11.25 * k) for k in ks])
+    if what == "cells54":
+        heads("cell54-4x", [(f"c{i:02d}.png", cell54_bearing(i)) for i in ([int(x) for x in argv[2:]] or range(54))])
     print("DONE", tier, what, "box", [round(v, 1) for v in box], "want", want, "pivot", round(px, 1), round(py, 1),
           "painted pivot", AX + 4 * gp[0], AY + 4 * gp[1])
 
