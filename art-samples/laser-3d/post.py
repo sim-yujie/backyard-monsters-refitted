@@ -19,6 +19,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tower-3d"))
+import aim_fields  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 R = HERE / "render"
 REPO = HERE.parents[1]
@@ -130,6 +134,8 @@ def tier_pieces(t):
         rule="cell k = ground bearing 11.25k (0 = down-right on screen, 45 = at the viewer); pivot in each cell's middle",
         note="body parts standing in front of the head are already cut out of each cell, so no front layer is needed"),
         indent=1))
+    aim = json.loads((src / "aim.json").read_text())
+    aim_fields.merge(out / "strip32.json", aim["h32"])
     # strip54: the game's laser layout; the cell rect grows past the painted one only if the 3D head needs it
     x, y, w, h = STRIP[t]
     r = [AX + UP * x, AY + UP * y, AX + UP * (x + w), AY + UP * (y + h)]
@@ -147,6 +153,7 @@ def tier_pieces(t):
         cells=54, cell_w=cw, cell_h=ch, rect_game_px=rect, painted_rect_game_px=list(STRIP[t]),
         rule="cell i shows the beam's screen angle 25 + 6.66 i degrees (0 = right, 90 = down), as turret.tT@2x.webp"),
         indent=1))
+    aim_fields.merge(out / "strip54.json", aim["c54"])
     return dict(body=body, heads=heads, cells=cells, rect=rect)
 
 

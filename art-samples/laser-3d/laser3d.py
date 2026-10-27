@@ -552,6 +552,14 @@ def main():
     if what in ("head", "all"):
         ks = [int(x) for x in argv[2:]] if what == "head" and argv[2:] else range(32)
         heads("head-4x", [(f"h{k:02d}.png", 11.25 * k) for k in ks])
+    if what == "aim":       # render/tT/aim.json: the lens' on-screen direction and place per heading (no pictures)
+        lamp = bpy.data.objects["LAMP"]
+
+        def base_tip():     # the beam's line: through the lens' middle, along the housing
+            return lamp.matrix_world @ Vector((0, -0.58, 0.08)), lamp.matrix_world @ Vector((0, 0.515, 0.08))
+        data = dict(h32=L.aim(cam, (px, py), turn, [11.25 * k for k in range(32)], base_tip),
+                    c54=L.aim(cam, (px, py), turn, [cell54_bearing(i) for i in range(54)], base_tip))
+        (out / "aim.json").write_text(json.dumps(data))
     if what == "cells54":
         heads("cell54-4x", [(f"c{i:02d}.png", cell54_bearing(i)) for i in ([int(x) for x in argv[2:]] or range(54))])
     print("DONE", tier, what, "box", [round(v, 1) for v in box], "want", want, "pivot", round(px, 1), round(py, 1),

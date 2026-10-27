@@ -22,6 +22,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tower-3d"))
+import aim_fields  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 R = HERE / "render"
 REPO = HERE.parents[1]
@@ -132,6 +136,7 @@ def pieces(name):
         note="pivot = middle of each cell; heading = ground bearing in degrees (0 down-right on screen, 45 at the viewer). "
              "Rendered from cannon3d.py: the body's parts that stand in front of the barrel are already cut out of each "
              "cell, so no front layer is needed."), indent=1))
+    aim_fields.merge(out / "strip.json", json.loads((R / name / "aim.json").read_text()))
     full = []
     for b in barrels:
         f = body.copy()

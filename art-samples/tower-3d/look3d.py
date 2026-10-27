@@ -713,6 +713,32 @@ def to_px(cam, p):
     return q.x * W, (1 - q.y) * H
 
 
+def aim(cam, pivot_4x, set_heading, headings, base_tip, up=4):
+    """The game's aim data (tower-3d-game-brief, 28 Oct), measured from the model: for each heading, set_heading(h) turns
+    the turret, base_tip() gives the barrel's (or the lens') base and tip in world space. Per heading:
+      aim_deg   the on-screen direction from base to tip, degrees (0 = right, 90 = down: atan2(dy, dx) in screen px)
+      muzzle    [dx, dy] in game px (1x) from the turning point (pivot_4x, on the 4x canvas) to the tip on screen
+      ground_deg the on-screen direction of the heading itself on the ground (the way the turret faces, ignoring the
+                barrel's raise)
+      aim_len   the base-to-tip length on screen, game px (short = the barrel points nearly at or away from the viewer,
+                and aim_deg is then a poor guide)"""
+    out = dict(aim_deg=[], muzzle=[], ground_deg=[], aim_len=[])
+    px, py = pivot_4x
+    for h in headings:
+        set_heading(h)
+        bpy.context.view_layer.update()
+        b, t = base_tip()
+        bx, by = to_px(cam, b)
+        tx, ty = to_px(cam, t)
+        gx0, gy0 = to_px(cam, (0, 0, 0))
+        gx1, gy1 = to_px(cam, bear(h, 1.0))
+        out["aim_deg"].append(round(math.degrees(math.atan2(ty - by, tx - bx)) % 360, 1))
+        out["muzzle"].append([round((tx - px) / up, 2), round((ty - py) / up, 2)])
+        out["ground_deg"].append(round(math.degrees(math.atan2(gy1 - gy0, gx1 - gx0)) % 360, 1))
+        out["aim_len"].append(round(math.hypot(tx - bx, ty - by) / up, 2))
+    return out
+
+
 # ------------------------------------------------------------------------------------------------------------------ render
 def _disk_max(a, r):
     """The max of a over a disk of radius r (pixels) round each pixel."""

@@ -328,6 +328,16 @@ def main():
     if what == "save":
         bpy.ops.wm.save_as_mainfile(filepath=str(HERE / f"cannon-{name}.blend"))
         return
+    if what == "aim":   # render/TIER/aim.json: the barrel's on-screen direction and muzzle per heading (no pictures)
+        barrel = bpy.data.objects["barrel"]
+
+        def turn(h):
+            tur.rotation_euler = (0, 0, -math.radians(h))
+        data = L.aim(cam, (px, py), turn, [11.25 * k for k in range(32)],
+                     lambda: (barrel.matrix_world @ Vector((0, 0, 0)), barrel.matrix_world @ Vector((0, 0, 1.09))))
+        (out / "aim.json").write_text(json.dumps(data))
+        print("DONE", name, "aim")
+        return
     line_col = L.LINE_COLS[cfg["line"]]
 
     def body_shot():

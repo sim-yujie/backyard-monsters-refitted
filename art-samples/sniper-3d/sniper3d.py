@@ -505,7 +505,16 @@ def main():
         for k in heads:
             tur.rotation_euler = (0, 0, -math.radians(11.25 * k))
             shot(OUT / "turret-4x" / f"h{k:02d}.png", tur_obs, cut=body_obs, col=warm if TIER == 3 else cool)
-    old = json.loads((OUT / "camera.json").read_text()) if (OUT / "camera.json").exists() else {}
+    elif what == "aim":      # render/tN/aim.json: the gun's on-screen direction and muzzle per heading (no pictures)
+        piv = frame(cam, 320, 300, 160, 210)
+        gun = bpy.data.objects["gun"]
+
+        def turn(h):
+            tur.rotation_euler = (0, 0, -math.radians(h))
+        data = L.aim(cam, piv, turn, [11.25 * k for k in range(32)],
+                     lambda: (gun.matrix_world @ Vector((0, 0, 0)), gun.matrix_world @ Vector((0, 0, 0.97))))
+        (OUT / "aim.json").write_text(json.dumps(data))
+    old =json.loads((OUT / "camera.json").read_text()) if (OUT / "camera.json").exists() else {}
     old.update(info)
     (OUT / "camera.json").write_text(json.dumps(old, indent=1))
     print("DONE", what, info)

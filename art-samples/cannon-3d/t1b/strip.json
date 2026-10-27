@@ -2,18 +2,47 @@
  "cells": 32,
  "cell_w": 200,
  "cell_h": 200,
- "pivot_in_body_4x": [
-  292.0,
-  422.0
- ],
- "body_4x_size": [
-  620,
-  640
- ],
- "painted_pivot_in_body_4x": [
-  293,
-  422
- ],
+ "pivot_in_body_4x": [292.0, 422.0],
+ "body_4x_size": [620, 640],
+ "painted_pivot_in_body_4x": [293, 422],
  "rule": "cell k = trunc(bearing / 11.25); cell k shows heading 11.25k (the same 32 headings as the painted strip)",
- "note": "pivot = middle of each cell; heading = ground bearing in degrees (0 down-right on screen, 45 at the viewer). Rendered from cannon3d.py: the body's parts that stand in front of the barrel are already cut out of each cell, so no front layer is needed."
+ "note": "pivot = middle of each cell; heading = ground bearing in degrees (0 down-right on screen, 45 at the viewer). Rendered from cannon3d.py: the body's parts that stand in front of the barrel are already cut out of each cell, so no front layer is needed.",
+ "aim_deg": [352.3, 355.2, 358.4, 3.3, 90.0, 176.7, 181.6, 184.8, 187.7, 190.5, 193.5, 196.8, 200.4, 204.6, 209.4, 215.3, 222.5, 231.4, 242.4, 255.5, 270.0, 284.5, 297.6, 308.6, 317.5, 324.7, 330.6, 335.4, 339.6, 343.2, 346.5, 349.5],
+ "muzzle": [
+  [21.01, -19.26],
+  [16.5, -17.82],
+  [11.37, -16.74],
+  [5.8, -16.08],
+  [0.0, -15.86],
+  [-5.8, -16.08],
+  [-11.37, -16.74],
+  [-16.5, -17.82],
+  [-21.01, -19.26],
+  [-24.7, -21.02],
+  [-27.44, -23.02],
+  [-29.14, -25.2],
+  [-29.71, -27.47],
+  [-29.14, -29.73],
+  [-27.44, -31.91],
+  [-24.7, -33.92],
+  [-21.01, -35.67],
+  [-16.5, -37.12],
+  [-11.37, -38.19],
+  [-5.8, -38.85],
+  [0.0, -39.07],
+  [5.8, -38.85],
+  [11.37, -38.19],
+  [16.5, -37.12],
+  [21.01, -35.67],
+  [24.7, -33.92],
+  [27.44, -31.91],
+  [29.14, -29.73],
+  [29.71, -27.47],
+  [29.14, -25.2],
+  [27.44, -23.02],
+  [24.7, -21.02]
+ ],
+ "ground_deg": [21.3, 30.3, 43.3, 63.0, 90.0, 117.0, 136.7, 149.7, 158.7, 165.4, 170.8, 175.6, 180.0, 184.4, 189.2, 194.6, 201.3, 210.3, 223.3, 243.0, 270.0, 297.0, 316.7, 329.7, 338.7, 345.4, 350.8, 355.6, 0.0, 4.4, 9.2, 14.6],
+ "aim_len": [21.2, 16.56, 11.37, 5.81, 0.56, 5.81, 11.37, 16.56, 21.2, 25.12, 28.23, 30.43, 31.69, 32.03, 31.51, 30.27, 28.5, 26.47, 24.56, 23.17, 22.66, 23.17, 24.56, 26.47, 28.5, 30.27, 31.51, 32.03, 31.69, 30.43, 28.23, 25.12],
+ "aim_note": "aim_deg: on-screen direction the barrel points (0 = right, 90 = down), measured from the 3D model; muzzle: [dx, dy] game px from the pivot to the muzzle tip on screen; ground_deg: on-screen direction of the cell's heading on the ground; aim_len: barrel length on screen in game px (short = pointing at or away from the viewer)."
 }
