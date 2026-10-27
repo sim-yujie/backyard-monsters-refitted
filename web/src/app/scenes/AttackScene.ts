@@ -443,8 +443,9 @@ export class AttackScene implements Scene {
     // An attack target is always somebody else's yard: open grass, no plot
     // edge, and room around the camp to drop on (issue #62). A practice
     // attack's wild monsters come from far outside the plot, so it is drawn
-    // the same way.
-    const yard = readYard(response, { foreign: true });
+    // the same way. A Moloch yard lies on the grown plot of a wild camp.
+    const molochYard = this.target?.descentYard !== undefined || this.target?.infernoTribe === true;
+    const yard = readYard(response, { foreign: true, wild: molochYard });
     this.yard = yard;
     // The defender's harvesters, hatcheries and the rest animate only while
     // working (#255).
