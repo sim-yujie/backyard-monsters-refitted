@@ -42,7 +42,11 @@ if os.environ.get("LASER_EL"):        # keeps its own painting's camera height; 
 PAINTED = {1: dict(body=(-33, -29, 68, 81), pivot=(2, -20), opaque=(1, 1, 134, 160)),
            2: dict(body=(-33, -54, 68, 106), pivot=(2, -44), opaque=(2, 1, 134, 210)),
            3: dict(body=(-33, -71, 68, 123), pivot=(2, -60), opaque=(2, 2, 134, 245))}
-TILT = 8.0                            # the head's raise, degrees
+TILT = 8.0                            # the head's raise, degrees (the 32- and 54-cell strips)
+PITCHES = [12, 24, 36, 48, 60]        # the tilt strip's rows, degrees down (owner, 28 Oct: the head aims up and down). The
+                                      # lens stands 83-129 game px up (tiers 1-3) and reaches 160-180 screen px (up to twice
+                                      # that on the ground, straight up or down the screen): 14-36 degrees down at full reach,
+                                      # 60-73 right next to the tower
 HEAD_SCALE = 0.94
 
 # ------------------------------------------------------------------------------------------------------------- tiers
@@ -560,6 +564,41 @@ def main():
         data = dict(h32=L.aim(cam, (px, py), turn, [11.25 * k for k in range(32)], base_tip),
                     c54=L.aim(cam, (px, py), turn, [cell54_bearing(i) for i in range(54)], base_tip))
         (out / "aim.json").write_text(json.dumps(data))
+    lamp = bpy.data.objects["LAMP"]
+
+    def pitch(p):           # the head tilted p degrees down (the 32/54 strips keep TILT degrees up)
+        lamp.rotation_euler = (math.radians(-p), 0, 0)
+
+    def lens_line():        # the beam's line: through the lens' middle, along the housing
+        return lamp.matrix_world @ Vector((0, -0.58, 0.08)), lamp.matrix_world @ Vector((0, 0.515, 0.08))
+
+    if what == "tilts":     # render/tT/tilt-4x/pP_hNN.png: the head at each tilt in PITCHES and 32 headings, + aim_tilt.json
+        (out / "tilt-4x").mkdir(exist_ok=True)
+        avoid = L.load_alpha(out / "body-4x.png")
+        rows = []
+        only = [tuple(int(v) for v in a.split(":")) for a in argv[2:]]   # tilts P:K ... renders just those cells
+        for p in PITCHES:
+            pitch(p)
+            rows.append(L.aim(cam, (px, py), turn, [11.25 * k for k in range(32)], lens_line))
+            for k in range(32):
+                if only and (p, k) not in only:
+                    continue
+                turn(11.25 * k)
+                L.shot(out / "tilt-4x" / f"p{p:02d}_h{k:02d}.png", tur_obs, cut=body_obs, avoid=avoid, outer_col=line_col)
+        pitch(0)
+        bpy.context.view_layer.update()
+        lz = lens_line()[1].z                    # the lens' middle above the ground, level head, in model units
+        ppu = abs(L.to_px(cam, bear(135, 1.0))[0] - L.to_px(cam, (0, 0, 0))[0]) / 4      # game px per model unit
+        gy = L.to_px(cam, (0, 0, 0))[1]
+        (out / "aim_tilt.json").write_text(json.dumps(dict(
+            pitch_deg=PITCHES, rows=rows, lens_height_px=round(lz * ppu, 1),
+            lens_height_screen_px=round(lz * ppu * math.cos(math.radians(L.EL)), 1),
+            ground_below_pivot_px=round((gy - py) / 4, 2), elevation_deg=L.EL)))
+    if what == "tiltfull":  # render/tT/full-hH-pP.png: everything, heading H, tilt P down (for checks)
+        for h in argv[2:-1]:
+            turn(11.25 * int(h))
+            pitch(float(argv[-1]))
+            L.shot(out / f"full-h{int(h):02d}-p{argv[-1]}.png", body_obs + tur_obs, outer_col=line_col)
     if what == "cells54":
         heads("cell54-4x", [(f"c{i:02d}.png", cell54_bearing(i)) for i in ([int(x) for x in argv[2:]] or range(54))])
     print("DONE", tier, what, "box", [round(v, 1) for v in box], "want", want, "pivot", round(px, 1), round(py, 1),

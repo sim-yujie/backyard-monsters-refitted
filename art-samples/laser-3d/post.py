@@ -250,6 +250,93 @@ def main():
     n2 = gif(frames, HERE / "compare-turning-3x.gif", ms=70, bg=bg)
     print("tiers-compare", g.size, "tiers-turning", n1, "compare-turning", n2,
           {t: T[t]["rect"] for t in (1, 2, 3)})
+    tilt_main({t: T[t]["body"] for t in (1, 2, 3)})
 
 
-main()
+# ------------------------------------------------------------------------------------------------- the tilting head
+TILT_GIF_TIER = 2
+TILT_SIDE = (12, 4, 28, 20)    # the headings the tilt GIF stops at to nod the head: left, at the viewer, right, away
+
+
+def tilt_pieces(t):
+    """tT/strip.json + strip@2x.png: the head at every tilt (rows, laser3d.py PITCHES, degrees down) and 32 headings
+    (cell k = ground bearing 11.25k), square cells with the pivot in the middle, as strip32. Returns the 4x heads by
+    [tilt][heading] and the tilts."""
+    src = R / f"t{t}"
+    out = HERE / f"t{t}"
+    cam = json.loads((src / "camera.json").read_text())
+    tl = json.loads((src / "aim_tilt.json").read_text())
+    px, py = cam["pivot_4x"]
+    pitches = tl["pitch_deg"]
+    heads = [[Image.open(src / "tilt-4x" / f"p{p:02d}_h{k:02d}.png").convert("RGBA") for k in range(32)] for p in pitches]
+    c4 = CELL32 * 2
+    x0, y0 = round(px - c4 / 2), round(py - c4 / 2)
+    strip = Image.new("RGBA", (CELL32 * 32, CELL32 * len(pitches)))
+    for r, row in enumerate(heads):
+        for k, hd in enumerate(row):
+            bb = hd.getbbox()
+            assert bb[0] >= x0 and bb[1] >= y0 and bb[2] <= x0 + c4 and bb[3] <= y0 + c4, f"t{t} tilt {r} heading {k} leaves its cell"
+            cell = Image.new("RGBA", (c4, c4))
+            cell.alpha_composite(hd, (-x0, -y0))
+            strip.alpha_composite(resize_pm(cell, (CELL32, CELL32)), (k * CELL32, r * CELL32))
+    strip.save(out / "strip@2x.png", optimize=True)
+    (out / "strip.json").write_text(json.dumps(dict(
+        cells=32, rows=len(pitches), cell_w=CELL32, cell_h=CELL32, pivot_4x=[round(px, 2), round(py, 2)], anchor_4x=[AX, AY],
+        cell_origin_game_px=[(x0 - AX) / UP, (y0 - AY) / UP], pitch_deg=pitches,
+        rule="row r = the head tilted pitch_deg[r] degrees down; cell k in a row = ground bearing 11.25k (0 = down-right on "
+             "screen, 45 = at the viewer); pivot in each cell's middle. aim_deg, muzzle, ground_deg, aim_len are [row][cell].",
+        lens_height_px=tl["lens_height_px"], lens_height_screen_px=tl["lens_height_screen_px"],
+        ground_below_pivot_px=tl["ground_below_pivot_px"], elevation_deg=tl["elevation_deg"],
+        tilt_rule="lens_height_px: the lens' middle above the ground (level head), in game px measured like a ground distance "
+                  "(lens_height_screen_px is how tall that looks on screen). To pick the row for a target: from the turret's "
+                  "ground point (pivot + [0, ground_below_pivot_px]) to the target's feet on screen (dx, dy), the ground "
+                  "distance is hypot(dx, dy / sin(elevation_deg)); want = atan2(lens_height_px, distance) in degrees; take the "
+                  "row whose pitch_deg is closest. Then the cell whose aim_deg (in that row) is closest to the screen angle from "
+                  "pivot + muzzle to the target.",
+        note="body parts standing in front of the head are already cut out of each cell, so no front layer is needed. The "
+             "older strip32 (32 headings, head raised 8 degrees) and strip54 (the game's 54 laser cells) stay as they were."),
+        indent=1))
+    rows = tl["rows"]
+    aim_fields.merge(out / "strip.json", {k: [r[k] for r in rows] for k in aim_fields.KEYS})
+    return heads, pitches
+
+
+def tilt_main(bodies=None):
+    """The tilt strips of all tiers, and tilt-turning-3x.gif: one tier (TILT_GIF_TIER) turning through the 32 headings at
+    a middle tilt, then nodding through every tilt at a few headings, 3x."""
+    font = ImageFont.truetype("arialbd.ttf", 20)
+    T = {t: tilt_pieces(t) for t in (1, 2, 3)}
+    t = TILT_GIF_TIER
+    heads, pitches = T[t]
+    body = (bodies or {}).get(t) or Image.open(R / f"t{t}" / "body-4x.png").convert("RGBA")
+    mid = len(pitches) // 2
+    nod = list(range(len(pitches))) + list(range(len(pitches) - 2, 0, -1))
+    seq = [(mid, k) for k in range(32)] + [(r, k) for k in TILT_SIDE for r in nod + nod]
+    frames4 = []
+    for r, k in seq:
+        f = body.copy()
+        f.alpha_composite(heads[r][k])
+        frames4.append(f)
+    box = union_box(frames4, pad=10)
+    sm = [scale(f.crop(box), 0.75) for f in frames4]
+    w, h = sm[0].size
+    lab = 34
+    bg = grass(w + 20, h + lab + 10, seed=5)
+    frames = []
+    for (r, k), im in zip(seq, sm):
+        f = bg.copy()
+        f.alpha_composite(im, (10, lab))
+        d = ImageDraw.Draw(f)
+        d.rectangle((0, 0, f.width, lab - 4), fill=(20, 20, 20, 255))
+        d.text((8, 5), f"Tier {t}: tilt {pitches[r]}° down", fill=(255, 255, 255, 255), font=font)
+        frames.append(f)
+    n = gif(frames, HERE / "tilt-turning-3x.gif", ms=110, bg=bg)
+    print("tilt strips", {u: len(T[u][1]) for u in T}, "tilt gif", n, "frames", len(frames))
+
+
+if __name__ == "__main__":
+    import sys as _sys
+    if _sys.argv[1:] == ["tilt"]:
+        tilt_main()
+    else:
+        main()
