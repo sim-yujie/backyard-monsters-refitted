@@ -13,6 +13,7 @@ import {
   ENTER_CAVERN,
   EXIT_CAVERN,
   MOLOCH_ALERT_TITLE,
+  MOLOCH_INTRO,
   TRANSFER_MONSTERS,
 } from "@/game/inferno/emergenceText";
 import { consumeRaidResult, consumeRaidRun, setRaidResult } from "@/game/raid/raidSession";
@@ -339,6 +340,23 @@ describe("the earthquake on a raise", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(engageButton(modal).disabled).toBe(false);
     expect(emergencePlaying()).toBe(true);
+    teardown?.();
+  });
+
+  it("waits for Bob to finish before Moloch's first words, so his bubble never covers Next", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // The guided start's Bob, talking as the yard opens.
+    const bob = document.createElement("section");
+    bob.className = "guide-bob";
+    document.body.append(bob);
+    const { modal, scene, teardown } = mount(loadState(1, 1));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(scene.centreOn).not.toHaveBeenCalled();
+    expect(modal.textContent).not.toContain(MOLOCH_INTRO);
+    bob.hidden = true;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(scene.centreOn).toHaveBeenCalledTimes(1);
+    expect(modal.textContent).toContain(MOLOCH_INTRO);
     teardown?.();
   });
 
