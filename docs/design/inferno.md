@@ -56,8 +56,8 @@ Contents:
   them from the 3rd base on; the burn waits for the status-icon job (`feat/status-icons`); siege
   weapons are a whole new system; lots of new art (portraits, icons, build pictures, map art) needs
   your approval.
-- **Questions for you:** none open (all answered 2026-10-24, 2.1). The burn strength and the
-  Shiny quest amounts are suggestions to check in play tests.
+- **Questions for you:** none open (all answered 2026-10-24, 2.1). The burn strength is a
+  suggestion to check in play tests; the Shiny quest amounts were approved on 2026-10-27.
 
 ---
 
@@ -97,7 +97,7 @@ Second round (I13-I16, R1-R12). Anything not listed is exact Flash:
 | R9 | Quake Towers in the Descent at full Flash strength | WP 1.3, 1.6 (no softening) |
 | R10 | No computer-run neighbours on the Inferno map now | Ticket #383; WP 3.1 real players only |
 | R11 | Attack size from the Inferno yard = what the Housing Bunkers hold | **[OWNER]** 2.5; WP 2.8, 3.2 |
-| R12 | A few small Shiny prizes in Inferno quests | **[OWNER]** 2.8 (amounts are a suggestion); WP 4.2 |
+| R12 | A few small Shiny prizes in Inferno quests | **[OWNER]** 2.8 (amounts approved 27 Oct); WP 4.2 |
 
 ### 2.2 The cave and the emergence
 
@@ -236,8 +236,9 @@ Quake/Magma Tower code today (only Korath's quake), `server/src/game-rules/comba
 |---|---|---|
 | Quests | 38; rewards Bone/Coal/Sulfur/Magma (totals 358,000/298,000/248,000/239,000), no Shiny; checks `bNlvl`, `UNLOCK`, `singleclickbank`; paid into the Inferno purse | `INFERNO_QUESTS.as`, `QUESTS.as:1784-1792` |
 | Monster rewards | e.g. IUC2 10 IC2, IUC3 10 IC3, IUC5 2 IC4, IUC6 15 IC6, IC15 20 IC4, IUC10 20 IC5, IUC11 5 IC7, IC16 5 IC7, IUC12 2 IC8; need free housing | `QUESTS.as:1759-1768` |
-| Shiny prizes **[OWNER R12]** | Flash gives none. Add a few small ones on top of the resource prizes. Suggested `[PLACEHOLDER]` (the five biggest resource quests): IQT1 10, IT3 10, IS5 15, IUT3 25, IQT3 25 = 85 Shiny in all. Paid to the shared Shiny | `INFERNO_QUESTS.as` |
-| Flash quirks kept | `prereq` is never read (no gating); IUC10 repeats IC5 | `QUESTS.as` |
+| Shiny prizes **[OWNER R12]** | Flash gives none. Add a few small ones on top of the resource prizes. The five biggest resource quests: IQT1 10, IT3 10, IS5 15, IUT3 25, IQT3 25 = 85 Shiny in all (owner approved 27 Oct). Paid to the shared Shiny | `INFERNO_QUESTS.as` |
+| Flash quirks kept | `prereq` is never read (no gating) | `QUESTS.as` |
+| Flash slips fixed **[OWNER 27 Oct]** | IUC5 "Unlock Valgos" checks Valgos (IC4); Flash checked Balthazar (IC5), as IUC10 does. IS2 is named "Upgrade Resource Pod to Level 2" (it checks level 2); Flash called it Level 3, the same as IS3 | `INFERNO_QUESTS.as:268,491` |
 | Achievements | ids 18-21 (now `available:false`): Descent level 1 (granted after the first Descent attack, win or lose), Descent level 14, Under Hall level 5, 10 Inferno quests | `server/src/game-data/achievements.ts:255-300`, `ACHIEVEMENTS.as:51`, `ATTACK.as:975`, `QUESTS.as:1651` |
 | Surface siege quests | SW4-SW12 dropped from `server/src/game-data/goals.ts`; return with siege | — |
 
@@ -424,7 +425,7 @@ check. Owner screenshots before merge for any screen.
 
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
-| 4.1 | 38 Inferno quests data + rule checks (done 27 Oct: `server/src/game-data/infernoGoals.ts`, read out of `INFERNO_QUESTS.as`; checked on the server against the Inferno yard's own buildings and Strongbox, records on the main save's `onboarding.infernoGoals`; no prereq gating, as Flash's Quests window; Flash's quirks kept: IUC5 "Unlock Valgos" reads Balthazar, IS2 "Level 3" reads level 2; the bank quests read their own `infernoBestBank`, the most one Inferno bank paid, all four resources together; every Inferno yard action marks the quests met, as Flash's `QUESTS.Check`. Report `agent-handoffs/reports/inferno-s2.md` "Slice 4") | per-rule tests | 1.16 | M |
+| 4.1 | 38 Inferno quests data + rule checks (done 27 Oct: `server/src/game-data/infernoGoals.ts`, read out of `INFERNO_QUESTS.as`; checked on the server against the Inferno yard's own buildings and Strongbox, records on the main save's `onboarding.infernoGoals`; no prereq gating, as Flash's Quests window; two Flash slips fixed (owner, 27 Oct): IUC5 "Unlock Valgos" reads Valgos, not Balthazar, and IS2 is named Level 2, as it checks; the bank quests read their own `infernoBestBank`, the most one Inferno bank paid, all four resources together; every Inferno yard action marks the quests met, as Flash's `QUESTS.Check`. Report `agent-handoffs/reports/inferno-s2.md` "Slice 4") | per-rule tests | 1.16 | M |
 | 4.2 | Quest rewards into the purse; monster rewards need housing; small Shiny prizes on 5 quests (2.8, R12) (done 27 Oct: `goals/state` and `goals/claim` open on the Inferno yard; rewards into the Inferno purse up to the Inferno cap, the rest reported turned away; points on the Inferno row; monsters into the Compound (Housing Bunkers), refused whole with Flash's "Make room in your Compound for this quest's monsters first." when there is no room; IQT1 10, IT3 10, IS5 15, IUT3 25, IQT3 25 Shiny paid once to the shared Shiny, a second claim `409 alreadyClaimed`) | tests (Shiny paid once, to the shared Shiny) | 4.1, 2.3 | S |
 | 4.3 | Achievements 18-21 on; client Inferno quests panel (done 27 Oct: 20 and 21 switched on with the Inferno; 20 reads the Under Hall's level after every Inferno yard action, 21 the Inferno quests met, claimed or not (Flash's `amountCompleted`). The Inferno yard's dock has a Quests button badged with the quests ready and Flash's Quests list: ready first, then open, 13 rows; Shiny shown on the five; no guide) | tests + screenshots | 4.1, 1.12 | S |
 
@@ -463,8 +464,8 @@ the Korath redraw from the champion plan. S3-S6 can run in parallel after S1 (S6
 
 ## 6. Open questions
 
-None. I13-I16 and R1-R12 were answered on 2026-10-24 (2.1). Two numbers are suggestions to settle in
-play tests: the burn strength (2.4) and the Shiny quest prizes (2.8).
+None. I13-I16 and R1-R12 were answered on 2026-10-24 (2.1). One number is a suggestion to settle in
+play tests: the burn strength (2.4). The Shiny quest prizes (2.8) were approved on 2026-10-27.
 
 ## 7. Later ideas
 

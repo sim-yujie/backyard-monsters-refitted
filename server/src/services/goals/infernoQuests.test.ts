@@ -59,7 +59,7 @@ describe("the data", () => {
     expect(total).toEqual({ r1: 358_000, r2: 298_000, r3: 248_000, r4: 239_000 });
   });
 
-  test("Shiny on five quests, 85 in all (R12)", () => {
+  test("Shiny on five quests, 85 in all (R12, owner approved 27 Oct)", () => {
     const shiny = Object.fromEntries(INFERNO_GOALS.filter((one) => one.shiny).map((one) => [one.id, one.shiny]));
     expect(shiny).toEqual({ IQT1: 10, IT3: 10, IS5: 15, IUT3: 25, IQT3: 25 });
     expect(Object.values(shiny).reduce((sum: number, amount) => sum + (amount ?? 0), 0)).toBe(85);
@@ -92,12 +92,15 @@ describe("the data", () => {
     }
   });
 
-  test("Flash's quirks kept: IUC5 'Unlock Valgos' reads Balthazar, IS2 'Level 3' reads level 2", () => {
+  test("Flash's slips fixed (owner, 27 Oct): IUC5 'Unlock Valgos' reads Valgos, IS2 says Level 2", () => {
     expect(quest("IUC5").name).toBe("Unlock Valgos");
-    expect(quest("IUC5").condition).toEqual({ kind: "unlocked", monster: "IC5" });
+    expect(quest("IUC5").condition).toEqual({ kind: "unlocked", monster: "IC4" });
+    expect(quest("IUC5").monsters).toEqual({ id: "IC4", count: 2 });
     expect(quest("IUC10").condition).toEqual({ kind: "unlocked", monster: "IC5" });
-    expect(quest("IS2").name).toBe("Upgrade Resource Pod to Level 3");
+    expect(quest("IS2").name).toBe("Upgrade Resource Pod to Level 2");
+    expect(quest("IS2").description).toBe("Upgrade Resource Pod to Level 2.");
     expect(quest("IS2").condition).toEqual({ kind: "building", type: 6, level: 2 });
+    expect(quest("IS3").name).toBe("Upgrade Resource Pod to Level 3");
   });
 });
 
@@ -152,12 +155,12 @@ describe("the rules on the Inferno yard", () => {
     expect(goalMet(quest("IUC2"), inferno([], { IC2: UNLOCKED }), fresh(), INFERNO_QUESTS)).toBe(true);
   });
 
-  test("Balthazar (IC5) completes both IUC5 and IUC10; Valgos (IC4) completes neither", () => {
+  test("Valgos (IC4) completes IUC5, Balthazar (IC5) IUC10", () => {
     const valgos = inferno([], { IC4: UNLOCKED });
-    expect(goalMet(quest("IUC5"), valgos, fresh(), INFERNO_QUESTS)).toBe(false);
+    expect(goalMet(quest("IUC5"), valgos, fresh(), INFERNO_QUESTS)).toBe(true);
     expect(goalMet(quest("IUC10"), valgos, fresh(), INFERNO_QUESTS)).toBe(false);
     const balthazar = inferno([], { IC5: UNLOCKED });
-    expect(goalMet(quest("IUC5"), balthazar, fresh(), INFERNO_QUESTS)).toBe(true);
+    expect(goalMet(quest("IUC5"), balthazar, fresh(), INFERNO_QUESTS)).toBe(false);
     expect(goalMet(quest("IUC10"), balthazar, fresh(), INFERNO_QUESTS)).toBe(true);
   });
 

@@ -15,18 +15,19 @@ import type { GoalDef } from "./goals.js";
  * (`server/public/gamestage/assets/english.json`), "Build a Incubator" said
  * "Build an Incubator".
  *
- * Kept as Flash had them (§2.8):
- * - **No prereq gating.** Flash's Quests window lists every quest not yet
- *   claimed (`QUESTSPOPUP.as:174-183`), so `prereq` is not carried (three
- *   name quests that do not exist: IS1, IUC9, IUC13). Each entry's comment
- *   says what Flash had.
- * - **IUC5 and IUC10 both read Balthazar (IC5).** IUC5 is "Unlock Valgos"
- *   but checks IC5 and pays 2 Valgos (IC4); unlocking Valgos completes no
- *   quest.
- * - **IS2 reads "Level 3" and checks Level 2** (its `v2` is "3", its rule
- *   `b6lvl: 2`), so it and IS3 share a name.
+ * Kept as Flash had it (§2.8): **no prereq gating.** Flash's Quests window
+ * lists every quest not yet claimed (`QUESTSPOPUP.as:174-183`), so `prereq`
+ * is not carried (three name quests that do not exist: IS1, IUC9, IUC13).
+ * Each entry's comment says what Flash had.
  *
- * **Shiny (owner decision R12, amounts `[PLACEHOLDER]`).** Flash gives none;
+ * Fixed (owner approved 27 Oct):
+ * - **IUC5 "Unlock Valgos" checks Valgos (IC4).** Flash checked Balthazar
+ *   (IC5), as IUC10 does, so unlocking Valgos completed no quest. It still
+ *   pays 2 Valgos.
+ * - **IS2 reads "Level 2".** Flash's `v2` said "3" while its rule checked
+ *   `b6lvl: 2`, so it and IS3 shared a name.
+ *
+ * **Shiny (owner decision R12, owner approved 27 Oct).** Flash gives none;
  * the five biggest resource quests add a few, 85 in all, paid once to the
  * player's shared Shiny with the claim.
  *
@@ -153,12 +154,12 @@ const LIST: readonly GoalDef[] = [
     reward: { r1: 0, r2: 0, r3: 0, r4: 2_000 },
     condition: { kind: "building", type: 4, level: 3 },
   },
-  // INFERNO_QUESTS.as:268; Flash prereq IS1, never read
+  // INFERNO_QUESTS.as:268; Flash prereq IS1, never read; Flash's name said Level 3
   {
     id: "IS2",
     order: 16,
-    name: "Upgrade Resource Pod to Level 3",
-    description: "Upgrade Resource Pod to Level 3.",
+    name: "Upgrade Resource Pod to Level 2",
+    description: "Upgrade Resource Pod to Level 2.",
     reward: { r1: 4_000, r2: 4_000, r3: 2_000, r4: 2_000 },
     condition: { kind: "building", type: 6, level: 2 },
   },
@@ -253,7 +254,7 @@ const LIST: readonly GoalDef[] = [
     reward: { r1: 0, r2: 0, r3: 5_000, r4: 0 },
     condition: { kind: "building", type: 26, level: 1 },
   },
-  // INFERNO_QUESTS.as:491; Flash prereq IC14, never read
+  // INFERNO_QUESTS.as:491; Flash prereq IC14, never read; Flash checked IC5
   {
     id: "IUC5",
     order: 27,
@@ -261,7 +262,7 @@ const LIST: readonly GoalDef[] = [
     description: "Unlock Valgos in the Strongbox.",
     reward: { r1: 0, r2: 0, r3: 0, r4: 0 },
     monsters: { id: "IC4", count: 2 },
-    condition: { kind: "unlocked", monster: "IC5" },
+    condition: { kind: "unlocked", monster: "IC4" },
   },
   // INFERNO_QUESTS.as:510; Flash prereq IUC5, never read
   {
