@@ -1,0 +1,19 @@
+{
+ "cells": 32,
+ "cell_w": 140,
+ "cell_h": 140,
+ "pivot_4x": [
+  204.0,
+  160
+ ],
+ "anchor_4x": [
+  200,
+  400
+ ],
+ "cell_origin_game_px": [
+  -34.0,
+  -95.0
+ ],
+ "rule": "cell k = ground bearing 11.25k (0 = down-right on screen, 45 = at the viewer); pivot in each cell's middle",
+ "note": "body parts standing in front of the head are already cut out of each cell, so no front layer is needed"
+}
