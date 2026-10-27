@@ -123,27 +123,28 @@ def main():
     sbox = appr.getbbox()
     mb = mine.getbbox()
     sbox = (min(sbox[0], mb[0]) - 12, min(sbox[1], mb[1]) - 12, max(sbox[2], mb[2]) + 12, max(sbox[3], mb[3]) + 12)
-    one = [resize_pm(im.crop(sbox), ((sbox[2] - sbox[0]) // UP, (sbox[3] - sbox[1]) // UP)) for im in (appr, mine)]
-    three = [resize_pm(im.crop(sbox), ((sbox[2] - sbox[0]) * 3 // UP, (sbox[3] - sbox[1]) * 3 // UP)) for im in (appr, mine)]
-    w3, h3 = three[0].size
+    # big pictures first (the 4x renders as they are, the sharpest size), game size below; one short label per panel
+    big = [im.crop(sbox) for im in (appr, mine)]
+    one = [resize_pm(im, (im.width // UP, im.height // UP)) for im in big]
+    wb, hb = big[0].size
     w1, h1 = one[0].size
-    lab = 30
-    Wd = 2 * w3 + 3 * 12
-    Hd = lab + h1 + 20 + lab + h3 + 12
+    lab, gap = 34, 16
+    Wd = 2 * wb + 3 * gap
+    Hd = lab + hb + gap + lab + h1 + gap
     g = grass(Wd, Hd, seed=7).convert("RGBA")
     d = ImageDraw.Draw(g)
-    font = ImageFont.truetype("arial.ttf", 18)
-    names = ("Approved painted tier 1", "3D model tier 1 (heading 7)")
+    font = ImageFont.truetype("arialbd.ttf", 20)
+    white = (255, 255, 255, 255)
     d.rectangle((0, 0, Wd, lab), fill=(20, 20, 20, 255))
-    d.text((8, 5), "Game size (1x)", fill=(255, 255, 255, 255), font=font)
-    for i, im in enumerate(one):
-        g.alpha_composite(im, (12 + i * (w3 + 12) + (w3 - w1) // 2, lab + 10))
-    y = lab + h1 + 20
+    for i, n in enumerate(("Painted (approved)", "3D model")):
+        d.text((gap + i * (wb + gap), 6), n, fill=white, font=font)
+    for i, im in enumerate(big):
+        g.alpha_composite(im, (gap + i * (wb + gap), lab))
+    y = lab + hb + gap
     d.rectangle((0, y, Wd, y + lab), fill=(20, 20, 20, 255))
-    for i, n in enumerate(names):
-        d.text((12 + i * (w3 + 12), y + 5), n + ", 3x", fill=(255, 255, 255, 255), font=font)
-    for i, im in enumerate(three):
-        g.alpha_composite(im, (12 + i * (w3 + 12), y + lab + 4))
+    d.text((gap, y + 6), "Game size: painted left, 3D right", fill=white, font=font)
+    for i, im in enumerate(one):
+        g.alpha_composite(im, (gap + i * (wb + gap) + (wb - w1) // 2, y + lab + gap // 2))
     g.convert("RGB").save(HERE / "still-compare.png", optimize=True)
     print("box", box, "gif", frames[0].size, "compare", cmp_[0].size, "still", g.size)
 

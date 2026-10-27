@@ -296,8 +296,11 @@ class Paint:
             for i in range(3):
                 self.link(k, kk.inputs[i])
             sh = self.mix(sh, kk.outputs[0], 1.0, 'MULTIPLY')
-        col = self.mix(albedo if not isinstance(albedo, tuple) else albedo, sh, 1.0, 'MULTIPLY') \
-            if not isinstance(albedo, tuple) else self.mix(albedo, sh, 1.0, 'MULTIPLY')
+            sky = self.ramp(sep.outputs[2], [(0.45, (0, 0, 0, 1)), (0.9, (1, 1, 1, 1))])
+            sky = self.mix(sky, tuple(c * 0.35 for c in spec_col[:3]) + (1,), 1.0, 'MULTIPLY')
+        col = self.mix(albedo, sh, 1.0, 'MULTIPLY')
+        if metal:   # a soft sky sheen on faces that look up, as painted metal has
+            col = self.mix(col, sky, 1.0, 'ADD')
         if spec > 0:
             gl = self.N.new("ShaderNodeBsdfGlossy")
             gl.inputs["Color"].default_value = (1, 1, 1, 1)
@@ -356,6 +359,8 @@ def mat_stone():
 def mat_brass():
     p = Paint("brass")
     base = p.ramp(p.noise(4.0, 3.0), [(0.3, srgb(200, 128, 38)), (0.7, srgb(226, 160, 60))])
+    wear = p.ramp(p.noise(2.2, 4.0, 0.6), [(0.32, srgb(150, 92, 34)), (0.62, (1, 1, 1, 1))])   # painted wear
+    base = p.mix(base, wear, 1.0, 'MULTIPLY')
     return p.finish(base, spec=0.95, spec_rough=0.22, spec_col=(1.0, 0.9, 0.62, 1), metal=True)
 
 
@@ -449,10 +454,10 @@ def add_outline(ob, line_mat, w=None):
 # all sizes in drum radii; heights from the ground
 TOP = 1.36          # the turntable's top, where the turning part stands (its pivot)
 RING_R, RING_Z = 1.11, 1.45
-FOOT_D = 1.22
+FOOT_D = 1.17
 FEET = {45: 45, 155: 108, 295: 342}   # three feet (as the Flash tower): bearing -> the way its lamp faces
 STRIPES, STRIPE_PHASE = 3, 0.375     # three red and three white, a white one facing the viewer
-TURRET_SCALE = 1.25
+TURRET_SCALE = 1.3
 
 
 def horn(bm, base, top_z, out_d, bearing, r0, flat=0.72, n=14, tip=0.025, lean=0.0):
@@ -507,14 +512,14 @@ def build():
         fc = FEET[fb]                                   # the bearing the foot's lamp face looks along
         rot = Matrix.Rotation(-math.radians(fc), 4, 'Z')
         base = bear(fb, FOOT_D)
-        rbox(stone, (0.64, 0.62, 0.80), Matrix.Translation(base) @ rot, bevel=0.05, segs=2, taper=0.92)
-        rbox(stone, (0.44, 0.42, 0.2), Matrix.Translation(bear(fb, FOOT_D - 0.05, 0.76)) @ rot, bevel=0.04, segs=2, taper=0.85)
+        rbox(stone, (0.56, 0.54, 0.76), Matrix.Translation(base) @ rot, bevel=0.05, segs=2, taper=0.92)
+        rbox(stone, (0.40, 0.38, 0.2), Matrix.Translation(bear(fb, FOOT_D - 0.05, 0.72)) @ rot, bevel=0.04, segs=2, taper=0.85)
         p = [bear(fb, FOOT_D - 0.06, 0.88), bear(fb, FOOT_D + 0.02, 1.08), bear(fb, FOOT_D - 0.04, 1.30), bear(fb, RING_R, RING_Z)]
         tube(stone, bezier(*p, n=12), [0.15 - 0.035 * i / 11 for i in range(12)], sides=16, flat=0.85)
         if fb == 45:   # the front post goes on up through the ring as the tall front prong
             horn(stone, (RING_R, RING_Z - 0.05), RING_Z + 0.78, RING_R + 0.1, fb, 0.12, flat=0.85)
         face = bear(fc, 1.0)                            # a lamp on that face, near its top
-        c = base + face * 0.30 + Vector((0, 0, 0.58))
+        c = base + face * 0.265 + Vector((0, 0, 0.55))
         q = Vector((0, 0, 1)).rotation_difference(face)
         mm = Matrix.Translation(c) @ q.to_matrix().to_4x4()
         bmesh.ops.create_cone(lamps, cap_ends=True, segments=24, radius1=0.15, radius2=0.13, depth=0.08, matrix=mm)
