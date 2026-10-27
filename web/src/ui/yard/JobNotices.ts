@@ -175,6 +175,7 @@ const SERVER_NOTICES: Readonly<Record<string, string>> = {
   outpostAttacked: "One of your outposts was attacked",
   outpostTaken: "One of your outposts was taken",
   yardAttacked: "Your yard was attacked",
+  infernoAttacked: "Your Inferno yard was attacked",
 };
 
 const isServerNotice = (job: CompletedJob): boolean => Object.hasOwn(SERVER_NOTICES, job.kind);

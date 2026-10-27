@@ -307,6 +307,13 @@ describe("yard defence notices (#242)", () => {
     expect(awayNoticeText(groupCompletedJobs([defended()]))).toBe("Your yard was attacked");
   });
 
+  it("an attack on the Inferno yard is told the same way (Inferno WP 3.4)", () => {
+    const inferno = (text?: string): CompletedJob => ({ ...defended(text), kind: "infernoAttacked" });
+    const text = "Bramble attacked your Inferno yard. It was left 30% damaged, and 1,200 Bone were looted";
+    expect(awayNoticeText(groupCompletedJobs([inferno(`${text}.`)]))).toBe(text);
+    expect(awayNoticeText(groupCompletedJobs([inferno()]))).toBe("Your Inferno yard was attacked");
+  });
+
   it("is never counted as a finished job", () => {
     expect(groupCompletedJobs([defended("X attacked your yard.")])).toEqual([
       { kind: "yardAttacked", heading: "X attacked your yard", items: [], tail: "", standalone: true },

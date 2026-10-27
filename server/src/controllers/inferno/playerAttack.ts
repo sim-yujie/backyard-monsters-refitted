@@ -78,7 +78,7 @@ export interface InfernoPlayerAttackStart {
  * The yard `baseid` names when it is another real player's live Inferno
  * yard, read without a lock; else `notInfernoPlayer`.
  */
-const targetYard = async (em: EntityManager, user: User, baseid: string): Promise<{ yard: Save; main: Save }> => {
+export const targetYard = async (em: EntityManager, user: User, baseid: string): Promise<{ yard: Save; main: Save }> => {
   const yard = /^\d+$/.test(baseid) ? await em.findOne(Save, { baseid }) : null;
   if (!yard || yard.type !== BaseType.INFERNO || yard.userid === user.userid) {
     throw infernoAttackRefusedErr("notInfernoPlayer");

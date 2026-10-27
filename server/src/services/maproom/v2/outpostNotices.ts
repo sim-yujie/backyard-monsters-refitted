@@ -34,14 +34,21 @@ export const OUTPOST_TAKEN = "outposttaken";
  * "Show on map" for it.
  */
 export const YARD_ATTACKED = "yardattacked";
+/**
+ * Another player attacked the player's Inferno yard (`docs/design/inferno.md`
+ * §2.7, WP 3.4): written by the landing, or by the server closing an attack
+ * its attacker left (`services/inferno/infernoPlayerLanding.ts`). No cell.
+ */
+export const INFERNO_ATTACKED = "infernoattacked";
 
 /** The notices' kinds in the away notice, the load's `completed` list. */
-export type OutpostNoticeKind = "outpostAttacked" | "outpostTaken" | "yardAttacked";
+export type OutpostNoticeKind = "outpostAttacked" | "outpostTaken" | "yardAttacked" | "infernoAttacked";
 
 const KIND_OF: Readonly<Record<string, OutpostNoticeKind>> = {
   [OUTPOST_ATTACKED]: "outpostAttacked",
   [OUTPOST_TAKEN]: "outpostTaken",
   [YARD_ATTACKED]: "yardAttacked",
+  [INFERNO_ATTACKED]: "infernoAttacked",
 };
 
 /** A resource amount per key, as the loot is counted. */
@@ -54,11 +61,19 @@ const RESOURCE_NAMES: Readonly<Record<string, string>> = {
   r4: "Goo",
 };
 
+/** The Inferno's own resources, in the same keys (`docs/design/inferno.md` §2.3). */
+const INFERNO_RESOURCE_NAMES: Readonly<Record<string, string>> = {
+  r1: "Bone",
+  r2: "Coal",
+  r3: "Sulfur",
+  r4: "Magma",
+};
+
 /** "1,234 Twigs and 500 Goo", or "" when nothing was taken. */
-const amountsText = (amounts: ResourceAmounts): string => {
+const amountsText = (amounts: ResourceAmounts, names = RESOURCE_NAMES): string => {
   const parts = (["r1", "r2", "r3", "r4"] as const).flatMap((key) => {
     const amount = Math.floor(Number(amounts[key] ?? 0));
-    return amount > 0 ? [`${amount.toLocaleString("en-GB")} ${RESOURCE_NAMES[key]}`] : [];
+    return amount > 0 ? [`${amount.toLocaleString("en-GB")} ${names[key]}`] : [];
   });
   if (parts.length <= 1) return parts.join("");
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
@@ -99,9 +114,24 @@ export const yardAttackNoticeText = (
   message: costText(damage, loot, housedLost),
 });
 
+/**
+ * "Bramble attacked your Inferno yard" and what it cost, in Inferno words:
+ * "It was left 30% damaged, 1,200 Bone and 300 Coal were looted, and 4
+ * housed monsters were lost." (WP 3.4).
+ */
+export const infernoAttackNoticeText = (
+  attacker: string,
+  damage: number,
+  loot: ResourceAmounts,
+  housedLost = 0,
+): { subject: string; message: string } => ({
+  subject: `${attacker} attacked your Inferno yard`,
+  message: costText(damage, loot, housedLost, INFERNO_RESOURCE_NAMES),
+});
+
 /** "It was left 63% damaged, and 1,234 Twigs were looted.", and the housed monsters lost, if any. */
-const costText = (damage: number, loot: ResourceAmounts, housedLost: number): string => {
-  const taken = amountsText(loot);
+const costText = (damage: number, loot: ResourceAmounts, housedLost: number, names = RESOURCE_NAMES): string => {
+  const taken = amountsText(loot, names);
   const looted = taken === "" ? "nothing was looted" : `${taken} were looted`;
   const lost = Math.max(0, Math.floor(housedLost));
   return (
@@ -119,7 +149,12 @@ export const takenNoticeText = (taker: string, cell: OutpostCell): { subject: st
 });
 
 /** The notices about an attack or a takeover, which name the player who did it (`byuserid`, #378). */
-export const ATTACK_NOTICE_TYPES: ReadonlySet<string> = new Set([OUTPOST_ATTACKED, OUTPOST_TAKEN, YARD_ATTACKED]);
+export const ATTACK_NOTICE_TYPES: ReadonlySet<string> = new Set([
+  OUTPOST_ATTACKED,
+  OUTPOST_TAKEN,
+  YARD_ATTACKED,
+  INFERNO_ATTACKED,
+]);
 
 export interface OutpostNoticeInput {
   /** The outpost's owner, who is told. */
@@ -197,7 +232,7 @@ export const takeOutpostNotices = async (em: EntityManager, userid: number): Pro
       targetid: userid,
       userid: SYSTEM_SENDER,
       targetUnread: 1,
-      messagetype: { $in: [OUTPOST_ATTACKED, OUTPOST_TAKEN, YARD_ATTACKED] },
+      messagetype: { $in: [...ATTACK_NOTICE_TYPES] },
     },
     { orderBy: { updatetime: "ASC" } },
   );
@@ -313,4 +348,35 @@ const lootTaken = (defenderDelta: ResourceAmounts | null | undefined): ResourceA
     if (Number.isFinite(delta) && delta < 0) loot[key] = Math.min(-delta, MAX_LOOT_PER_RESOURCE);
   }
   return loot;
+};
+
+/**
+ * At the end of an attack on a player's Inferno yard, landed by the final
+ * save or closed by the server (WP 3.4): tells its owner who attacked it, the
+ * damage it was left at, what was looted from their Inferno purse and the
+ * housed monsters lost with fallen Housing Bunkers. There are no replays of
+ * an Inferno attack (owner, 27 Oct); the notice names the attacker, so the
+ * mailbox offers Add friend.
+ */
+export const noticeInfernoAttack = async (
+  em: EntityManager,
+  input: {
+    yard: Pick<Save, "baseid" | "saveuserid" | "damage">;
+    attacker: { userid: number; username: string };
+    /** What the defender's purse really lost, whole units. */
+    loot: ResourceAmounts;
+    housedLost: number;
+    now: number;
+  },
+): Promise<void> => {
+  const { yard, attacker, loot, housedLost, now } = input;
+  await writeOutpostNotice(em, {
+    ownerId: yard.saveuserid,
+    byUserId: attacker.userid,
+    type: INFERNO_ATTACKED,
+    text: infernoAttackNoticeText(attacker.username, Number(yard.damage) || 0, loot, housedLost),
+    cell: null,
+    baseid: yard.baseid,
+    now,
+  });
 };

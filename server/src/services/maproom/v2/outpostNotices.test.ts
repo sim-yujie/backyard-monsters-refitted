@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import {
+  INFERNO_ATTACKED,
   OUTPOST_ATTACKED,
   OUTPOST_TAKEN,
   YARD_ATTACKED,
   attackNoticeText,
+  infernoAttackNoticeText,
+  noticeInfernoAttack,
   noticeOutpostAttack,
   noticeYardAttack,
   takeOutpostNotices,
@@ -285,5 +288,45 @@ describe("on the owner's next load", () => {
     expect(await takeOutpostNotices(em, ATTACKER)).toEqual([]);
     expect(await takeOutpostNotices(em, OTHER)).toEqual([]);
     expect(messages[0]).toMatchObject({ targetUnread: 1 });
+  });
+});
+
+describe("an attack on a player's Inferno yard (Inferno WP 3.4)", () => {
+  test("the words name the Inferno yard and its own resources", () => {
+    expect(infernoAttackNoticeText("Bramble", 30.2, { r1: 1200, r2: 300 }, 4)).toEqual({
+      subject: "Bramble attacked your Inferno yard",
+      message: "It was left 30% damaged, 1,200 Bone and 300 Coal were looted, and 4 housed monsters were lost.",
+    });
+    expect(infernoAttackNoticeText("Bramble", 5, { r3: 10, r4: 2 }).message).toBe(
+      "It was left 5% damaged, and 10 Sulfur and 2 Magma were looted.",
+    );
+  });
+
+  test("the owner is told once in the away notice, and the mailbox keeps it with the attacker named", async () => {
+    await noticeInfernoAttack(em, {
+      yard: { baseid: "7000", saveuserid: OWNER, damage: 30 } as never,
+      attacker: { userid: ATTACKER, username: "Bramble" },
+      loot: { r1: 1200 },
+      housedLost: 0,
+      now: 1_000,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ messagetype: INFERNO_ATTACKED, coords: null, baseid: "7000", byuserid: ATTACKER });
+
+    const jobs = await takeOutpostNotices(em, OWNER);
+    expect(jobs.map((job) => [job.kind, job.id, job.detail.x])).toEqual([["infernoAttacked", "7000", null]]);
+    expect(jobs[0]!.detail.text).toBe("Bramble attacked your Inferno yard. It was left 30% damaged, and 1,200 Bone were looted.");
+    expect(await takeOutpostNotices(em, OWNER)).toEqual([]);
+  });
+
+  test("an attacker on their own yard is told nothing", async () => {
+    await noticeInfernoAttack(em, {
+      yard: { baseid: "7000", saveuserid: OWNER, damage: 30 } as never,
+      attacker: { userid: OWNER, username: "Self" },
+      loot: {},
+      housedLost: 0,
+      now: 1_000,
+    });
+    expect(messages).toHaveLength(0);
   });
 });

@@ -31,6 +31,8 @@ let defenderMain: Record<string, any>;
 let maprooms: Map<number, Record<string, any>>;
 let transactions = 0;
 const nativeUpdates: { where: Record<string, unknown>; data: Record<string, unknown> }[] = [];
+/** The defender's notices (WP 3.4), as the mail rows were made. */
+const notices: Record<string, any>[] = [];
 
 const em = {
   populate: async (user: Record<string, unknown>) => {
@@ -49,7 +51,12 @@ const em = {
     if (String(where.baseid) === TARGET_BASEID) return target;
     return String(where.baseid) === INFERNO_BASEID ? inferno : null;
   },
-  create: (entity: new () => object, data: object) => Object.assign(new entity(), data),
+  create: (entity: new () => object, data: object) => {
+    if (entity.name === "Message") notices.push(data);
+    return Object.assign(new entity(), data);
+  },
+  // The notice is written in a context of its own.
+  fork: () => em,
   persist: (entity: Record<string, any>) => {
     if (entity?.constructor?.name === "InfernoMaproom") maprooms.set(entity.userid, entity);
   },
@@ -227,6 +234,7 @@ beforeEach(() => {
   store.clear();
   transactions = 0;
   nativeUpdates.length = 0;
+  notices.length = 0;
   userSave = {
     userid: ATTACKER,
     baseid: "5000",
@@ -354,6 +362,15 @@ describe("landing", () => {
     expect(transactions).toBe(1);
     expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
     expect(store.has(infernoPlayerFinalLockKey(TARGET_SAVEID))).toBe(false);
+    // The defender is told, in Inferno words (WP 3.4).
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      targetid: DEFENDER,
+      messagetype: "infernoattacked",
+      byuserid: ATTACKER,
+      subject: "raider attacked your Inferno yard",
+      message: "It was left 30% damaged, and 2,000 Bone and 100 Coal were looted.",
+    });
   });
 
   test("a fallen Housing Bunker loses all it housed; the standing one keeps what the battle left it", async () => {
@@ -469,6 +486,8 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
     expect(store.has(infernoPlayerCheckpointKey(TARGET_SAVEID))).toBe(false);
     expect(JSON.parse(store.get(INFERNO_PLAYER_ATTACKS)!)).toEqual([]);
+    // The defender gets the usual notice.
+    expect(notices.map((one) => [one.targetid, one.subject])).toEqual([[DEFENDER, "raider attacked your Inferno yard"]]);
   });
 
   test("the closed attack cannot be saved afterwards, nor closed twice", async () => {
@@ -513,6 +532,7 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(nativeUpdates).toEqual([{ where: { basesaveid: TARGET_SAVEID, attackid: ATTACK_ID }, data: { attackid: 0 } }]);
     expect(inferno.monsters.housed).toEqual(ARMY);
     expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
+    expect(notices).toEqual([]);
   });
 
   test("the sweep closes it only once the window (the fight's limit and a margin) has closed", async () => {

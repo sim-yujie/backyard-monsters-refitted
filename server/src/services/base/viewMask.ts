@@ -39,8 +39,9 @@ export const masksFor = (save: Pick<Save, "type" | "userid">, viewer: number): b
 /** The share of full health below which the client draws a building damaged (`yardModel.ts`). */
 const DAMAGED_AT = 0.5;
 
-/** The health table a yard of this type reads (`stats.ts` `hpLadder`). */
-const kindOf = (type: string): CombatTargetKind => (type === BaseType.OUTPOST ? "outpost" : "main");
+/** The health table a yard of this type reads (`stats.ts` `hpLadder`): an Inferno yard its own. */
+const kindOf = (type: string): CombatTargetKind =>
+  type === BaseType.OUTPOST ? "outpost" : type === BaseType.INFERNO ? "inferno" : "main";
 
 /** A building's stored level: absent means 1, as the client reads it. */
 const levelOf = (building: BuildingData): number => (typeof building.l === "number" ? building.l : 1);

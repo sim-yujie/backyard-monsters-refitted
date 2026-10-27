@@ -28,6 +28,7 @@ import { isAttackActive } from "../base/isAttackActive.js";
 import { storedDamage } from "../base/storedDamage.js";
 import { createNeighbourData } from "../maproom/createNeighbourData.js";
 import { damageProtection } from "../maproom/v2/damageProtection.js";
+import { noticeInfernoAttack } from "../maproom/v2/outpostNotices.js";
 import { countsOf, flungPerYard, subtractHoused, type Counts } from "../yard/attackRoster.js";
 import { catchUpYard } from "../yard/catchUp.js";
 import { fundPurse, lootPurse } from "../yard/surfaceInferno.js";
@@ -78,6 +79,8 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * - the revenge counters: one more attack from the attacker on the
  *   defender's list, one more on the defender on the attacker's, paid back
  *   when it was out of range (`withAttackFrom`, `withAttackOn`).
+ * Then the defender is told (`noticeInfernoAttack`, WP 3.4): who attacked,
+ * the damage, the loot and the housed monsters lost.
  */
 
 /** What the landing answers about the attack, for the client. */
@@ -282,6 +285,20 @@ export const writePlayerLanding = async (
 
   // Spent: the lock is still held, so a copy of this save finds nothing.
   await endInfernoPlayerSession(yard.basesaveid);
+
+  // The defender's notice (WP 3.4), in a context of its own so it flushes
+  // nothing of the request's. A notice that fails costs the attack nothing.
+  try {
+    await noticeInfernoAttack(postgres.em.fork(), {
+      yard: landed.target,
+      attacker: { userid: user.userid, username: user.username },
+      loot: landed.lost,
+      housedLost: Object.values(landed.housedLost).reduce((sum, count) => sum + count, 0),
+      now,
+    });
+  } catch (err) {
+    logger.error(`The Inferno attack notice for yard ${yard.baseid} failed: ${err}`);
+  }
 
   return {
     save: landed.target,

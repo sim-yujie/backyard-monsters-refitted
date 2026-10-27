@@ -73,6 +73,7 @@ import { infernoLoad } from "./controllers/inferno/infernoLoad.js";
 import { infernoTransferAction } from "./controllers/inferno/transfer.js";
 import { infernoMap } from "./controllers/inferno/infernoMap.js";
 import { infernoNeighbours } from "./controllers/inferno/infernoNeighbours.js";
+import { infernoView } from "./controllers/inferno/infernoView.js";
 import { yardRoute } from "./controllers/yard/yardRoute.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
@@ -208,6 +209,7 @@ router.get("/api/:apiVersion/bm/inferno/state", apiVersion, verifyUserAuth, veri
 router.post("/api/:apiVersion/bm/inferno/attack/start", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, infernoAttackStart);
 router.get("/api/:apiVersion/bm/inferno/map", apiVersion, verifyUserAuth, verifyAccountStatus, infernoMap);
 router.get("/api/:apiVersion/bm/inferno/neighbours", apiVersion, verifyUserAuth, verifyAccountStatus, infernoNeighbours);
+router.post("/api/:apiVersion/bm/inferno/view", apiVersion, verifyUserAuth, verifyAccountStatus, infernoView);
 router.post("/api/:apiVersion/bm/inferno/load", apiVersion, verifyUserAuth, verifyAccountStatus, infernoLoad);
 router.post("/api/:apiVersion/bm/inferno/transfer", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, yardRoute(infernoTransferAction));
 // The web client's Map Room 1 screen (issue #132); re-read while the map is open, so not echoed by logRequest.
