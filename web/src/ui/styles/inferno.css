@@ -60,6 +60,27 @@
   border-radius: var(--radius-md);
 }
 
+/* ── "Korath unlocked" (WP 5.2): his portrait (176 px square), Flash's line ── */
+
+.inferno-korath__art {
+  justify-self: center;
+  width: min(60vw, 11rem);
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+.inferno-korath__lead {
+  margin: 0;
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+.inferno-korath__line {
+  text-align: center;
+}
+
 /* ── Moloch's warning: Moloch beside his army, a card per group ─────────── */
 
 .inferno-popup--warning {

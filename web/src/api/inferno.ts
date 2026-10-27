@@ -37,6 +37,12 @@ export interface InfernoState {
    * Absent from a server that predates it, read as 0.
    */
   readonly underHall?: number;
+  /**
+   * Korath is unlocked: the player owns an Inferno yard, so the Champion Cage
+   * raises him (WP 5.1, owner I10). Absent from a server that predates it, read as false.
+   */
+  readonly korathUnlocked?: boolean;
+  /** Korath is unlocked and the player has not been shown "Korath unlocked" yet. */
   readonly korathNotice: boolean;
 }
 
@@ -67,6 +73,12 @@ export type InfernoStateResponse = ApiEnvelope & InfernoState;
 
 export const loadInfernoState = (): Promise<InfernoStateResponse> =>
   get<InfernoStateResponse>("/api/:apiVersion/bm/inferno/state");
+
+/**
+ * `POST /bm/inferno/korath/seen` (WP 5.2): "Korath unlocked" has been shown, so
+ * the main yard's next load no longer asks for it.
+ */
+export const markKorathSeen = (): Promise<ApiEnvelope> => post<ApiEnvelope>("/api/:apiVersion/bm/inferno/korath/seen");
 
 /**
  * `POST /bm/inferno/load` (WP 1.14): the caller's own Inferno yard, caught up,
