@@ -17,7 +17,7 @@ import { isBot } from "../../services/bots/isBot.js";
 import { purseAmounts } from "../../services/inferno/descent.js";
 import { attackedAt } from "../../services/inferno/infernoNeighbours.js";
 import { closeExpiredInfernoPlayerAttackOn } from "../../services/inferno/infernoPlayerFinalise.js";
-import { startInfernoPlayerSession } from "../../services/inferno/infernoPlayerSession.js";
+import { endInfernoPlayerSession, startInfernoPlayerSession } from "../../services/inferno/infernoPlayerSession.js";
 import { infernoAttackPermission, permitsAttack, vengeanceLeft } from "../../services/inferno/infernoPvp.js";
 import { infernoTribeFlingCapacity, infernoYardLevel } from "../../services/inferno/infernoTribes.js";
 import { ATTACK_ONLINE_SECONDS, isPlayerOnline } from "../../services/user/online.js";
@@ -41,7 +41,10 @@ import { caughtUpInfernoYard } from "./tribeAttack.js";
  * rule, #271, where Flash looked only at the Inferno yard's last 62 seconds,
  * `PlayerHandler.as:217`; owner to confirm); or no monsters in the Housing
  * Bunkers (`noMonsters`). `409 noInfernoYard` without an Inferno yard of
- * one's own, `409 underAttack` while it is attacked.
+ * one's own, `409 underAttack` while it is attacked. One attack per yard,
+ * failing closed: `targetUnderAttack` too while the yard's last attack is
+ * still open, or past its window but could not be closed, and the session is
+ * minted under the yard's lock, never over another's (SET NX).
  *
  * The attack is fought as a tribe attack is (`tribeAttack.ts`): the Inferno
  * yard's Housing Bunker army only, at its Infernal Academy's levels, a
@@ -119,7 +122,12 @@ export const startInfernoPlayerAttack = async (
 
   const target = await targetYard(em, user, baseid);
   // The yard's last attack, if its window closed without a save, lands first.
-  await closeExpiredInfernoPlayerAttackOn(target.yard.basesaveid, "superseded");
+  // One still open, or that could not be closed, keeps the yard attacked:
+  // never two attacks on one yard at once (fail closed).
+  const closed = await closeExpiredInfernoPlayerAttackOn(target.yard.basesaveid, "superseded");
+  if (closed !== "none" && closed !== "landed" && closed !== "released" && closed !== "stale") {
+    throw infernoAttackRefusedErr("targetUnderAttack", { attacker: target.yard.attacks?.at(-1)?.name ?? "" });
+  }
   const maproom = await em.findOne(InfernoMaproom, { userid: user.userid });
   const vengeance = vengeanceLeft(maproom?.neighbors?.find((entry) => entry.userid === target.yard.userid));
 
@@ -149,7 +157,15 @@ export const startInfernoPlayerAttack = async (
   const flingerCapacity = infernoTribeFlingCapacity(inferno.buildingdata, declareWar);
   if (Object.keys(army).length === 0 || flingerCapacity <= 0) throw infernoAttackRefusedErr("noMonsters");
 
-  const yard = await em.transactional(async (tx) => {
+  const attackerAcademy = academyLevels(inferno.academy);
+  const attackerLevel = playerLevelOf(main);
+  const purse = purseAmounts(target.main.iresources);
+
+  // The session is minted under the yard's lock, never over another attack's
+  // (SET NX): of two starts at once, only one gets the yard. Should the mark
+  // then fail to commit, the session goes with it.
+  let minted: number | null = null;
+  const marked = em.transactional(async (tx) => {
     const locked = await tx.findOne(
       Save,
       { basesaveid: target.yard.basesaveid },
@@ -163,6 +179,7 @@ export const startInfernoPlayerAttack = async (
     // The defender's yard as it is now, then marked as attacked.
     catchUpYard(locked, now);
     if (locked.attacks.length > 3) locked.attacks = locked.attacks.slice(-2);
+    const lastAttacker = locked.attacks.at(-1)?.name ?? "";
     const attack: AttackDetails = {
       fbid: "",
       name: user.username,
@@ -174,36 +191,39 @@ export const startInfernoPlayerAttack = async (
     };
     locked.attacks = [...locked.attacks, attack];
     locked.attackid = Math.floor(Math.random() * 99999) + 1;
+
+    const defenderForces = await servedDefenderForces(locked, main, now);
+    const started = await startInfernoPlayerSession(locked.basesaveid, {
+      baseid: locked.baseid,
+      flingerCapacity,
+      session: newAttackSession(
+        user.userid,
+        locked.attackid,
+        { [inferno.baseid]: army },
+        purse,
+        attackerLevel,
+        undefined,
+        defenderForces,
+        undefined,
+        attackerAcademy,
+        declareWar
+      ),
+    });
+    if (!started) throw infernoAttackRefusedErr("targetUnderAttack", { attacker: lastAttacker });
+    minted = locked.attackid;
+
     await tx.flush();
-    return locked;
+    return { yard: locked, defenderForces };
+  });
+  const { yard, defenderForces } = await marked.catch(async (err) => {
+    if (minted !== null) await endInfernoPlayerSession(target.yard.basesaveid, minted);
+    throw err;
   });
 
   // Attacking anyone ends one's own Inferno protection (`map_msg_protection`).
   if (Number(inferno.protected) > 0) {
     await em.nativeUpdate(Save, { basesaveid: inferno.basesaveid }, { protected: 0 });
   }
-
-  const defenderForces = await servedDefenderForces(yard, main, now);
-  const attackerAcademy = academyLevels(inferno.academy);
-  const attackerLevel = playerLevelOf(main);
-  const purse = purseAmounts(target.main.iresources);
-
-  await startInfernoPlayerSession(yard.basesaveid, {
-    baseid: yard.baseid,
-    flingerCapacity,
-    session: newAttackSession(
-      user.userid,
-      yard.attackid,
-      { [inferno.baseid]: army },
-      purse,
-      attackerLevel,
-      undefined,
-      defenderForces,
-      undefined,
-      attackerAcademy,
-      declareWar
-    ),
-  });
 
   const owner = await em.findOne(User, { userid: yard.userid }, { fields: ["username"] });
   const base = await mapSaveData(yard, user, { attack: true });

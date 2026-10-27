@@ -65,7 +65,7 @@ const closeLocked = async (basesaveid: number, trigger: string): Promise<Inferno
   const yard = await em.findOne(Save, { basesaveid });
   // The row moved on (another attack holds it) or is gone: nothing of this one can land.
   if (!yard || yard.type !== BaseType.INFERNO || Number(yard.attackid) !== attack.session.attackid) {
-    await endInfernoPlayerSession(basesaveid);
+    await endInfernoPlayerSession(basesaveid, attack.session.attackid);
     return "stale";
   }
 
@@ -80,7 +80,7 @@ const closeLocked = async (basesaveid: number, trigger: string): Promise<Inferno
   if (!input || !user) {
     // Nothing was flung: the mark goes, nothing else is written.
     await em.nativeUpdate(Save, { basesaveid, attackid: attack.session.attackid }, { attackid: 0 });
-    await endInfernoPlayerSession(basesaveid);
+    await endInfernoPlayerSession(basesaveid, attack.session.attackid);
     logger.info("Released an Inferno player attack left with nothing fought", {
       event: "inferno-attack-released",
       basesaveid,
@@ -176,17 +176,25 @@ export const closeBeforeInfernoLoad = async (userid: number): Promise<void> => {
 
 /**
  * Before anyone attacks the yard: its attack, once the window has closed
- * without a save. Never throws.
+ * without a save. Never throws: a close that failed answers "failed", and the
+ * caller must then treat the yard as still attacked (fail closed).
  *
  * @param basesaveid - The Inferno yard.
  * @param trigger - What asked, for the log line.
+ * @returns "open" when the yard's attack is still within its window.
  */
-export const closeExpiredInfernoPlayerAttackOn = async (basesaveid: number, trigger: string): Promise<void> => {
+export const closeExpiredInfernoPlayerAttackOn = async (
+  basesaveid: number,
+  trigger: string
+): Promise<InfernoCloseOutcome | "open" | "failed"> => {
   try {
     const attack = await readInfernoPlayerSession(basesaveid);
-    if (attack && expired(attack, getCurrentDateTime())) await closeInfernoPlayerAttack(basesaveid, trigger);
+    if (!attack) return "none";
+    if (!expired(attack, getCurrentDateTime())) return "open";
+    return await closeInfernoPlayerAttack(basesaveid, trigger);
   } catch (err) {
     logger.error(`Closing the expired Inferno player attack on ${basesaveid} failed: ${err}`);
+    return "failed";
   }
 };
 

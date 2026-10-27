@@ -30,6 +30,8 @@ let target: Record<string, any>;
 let defenderMain: Record<string, any>;
 let maprooms: Map<number, Record<string, any>>;
 let transactions = 0;
+/** Runs as a transaction begins: another request's write landing in between. */
+let onTransaction: (() => void) | null = null;
 const nativeUpdates: { where: Record<string, unknown>; data: Record<string, unknown> }[] = [];
 /** The defender's notices (WP 3.4), as the mail rows were made. */
 const notices: Record<string, any>[] = [];
@@ -69,6 +71,7 @@ const em = {
   find: async () => [],
   transactional: async (run: (tx: unknown) => Promise<unknown>) => {
     transactions += 1;
+    onTransaction?.();
     return run(em);
   },
   // `isBot`, on a second attack's start.
@@ -233,6 +236,7 @@ beforeEach(() => {
   inputs.length = 0;
   store.clear();
   transactions = 0;
+  onTransaction = null;
   nativeUpdates.length = 0;
   notices.length = 0;
   userSave = {
@@ -330,6 +334,35 @@ describe("binding", () => {
 });
 
 describe("landing", () => {
+  test("a yard another attack took between the binding and the lock lands nothing, and keeps that attack's session", async () => {
+    startSession();
+    canned = { damage: 30, attackloot: { r1: 1_000, r2: 0, r3: 0, r4: 0 }, defenderDelta: { r1: -1_000, r2: 0, r3: 0, r4: 0 } };
+    onTransaction = () => {
+      target.attackid = 999;
+      const other = JSON.parse(store.get(infernoPlayerSessionKey(TARGET_SAVEID))!);
+      other.session = serialiseAttackSession({ attackerid: 8888, attackid: 999, startedat: now() });
+      store.set(infernoPlayerSessionKey(TARGET_SAVEID), JSON.stringify(other));
+    };
+    const err = await run(finalSave({ attackloot: JSON.stringify({ r1: 1_000 }) }));
+    expect(err?.data?.reason).toBe("superseded");
+    expect(defenderMain.iresources.r1).toBe(5_000);
+    expect(userSave.iresources.r1).toBe(0);
+    expect(target.attackid).toBe(999);
+    expect(notices).toEqual([]);
+    // The newer attack's session is not ended by the older one's save.
+    const { readInfernoPlayerSession } = await import("./infernoPlayerSession.js");
+    expect((await readInfernoPlayerSession(TARGET_SAVEID))?.session.attackid).toBe(999);
+  });
+
+  test("ending an attack leaves a session another attack holds", async () => {
+    const { endInfernoPlayerSession } = await import("./infernoPlayerSession.js");
+    startSession();
+    expect(await endInfernoPlayerSession(TARGET_SAVEID, 1)).toBe(false);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(true);
+    expect(await endInfernoPlayerSession(TARGET_SAVEID, ATTACK_ID)).toBe(true);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
+  });
+
   test("the loot moves purse to purse, up to the attacker's caps; the army and the mark settle", async () => {
     startSession();
     const cap = infernoStorageCap(inferno as never);

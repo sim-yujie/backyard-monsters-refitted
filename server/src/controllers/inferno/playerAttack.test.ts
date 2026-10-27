@@ -59,8 +59,14 @@ mock.module("../../server.js", () => ({
       store.set(key, value);
       return "OK";
     },
-    // `isPlayerOnline`: a presence mark and a real action now, or nothing.
-    get: async (key: string) => (onlineNow && !key.startsWith("presence-challenge") ? String(Date.now() / 1000) : null),
+    set: async (key: string, value: string, ...options: string[]) => {
+      if (options.includes("NX") && store.has(key)) return null;
+      store.set(key, value);
+      return "OK";
+    },
+    // A stored key, else `isPlayerOnline`'s presence mark and a real action now, or nothing.
+    get: async (key: string) =>
+      store.get(key) ?? (onlineNow && !key.startsWith("presence-challenge") ? String(Date.now() / 1000) : null),
     del: async (key: string) => (store.delete(key) ? 1 : 0),
     // The open player attacks (`INFERNO_PLAYER_ATTACKS`): none to close here.
     sadd: async () => 1,
@@ -82,7 +88,8 @@ mock.module("../../services/alliance/powerups.js", () => ({
 }));
 
 const { infernoAttackStart } = await import("./descentAttack.js");
-const { infernoPlayerSessionKey } = await import("../../services/inferno/infernoPlayerSession.js");
+const { infernoPlayerFinalLockKey, infernoPlayerSessionKey } = await import("../../services/inferno/infernoPlayerSession.js");
+const { serialiseAttackSession } = await import("../../services/base/attackSession.js");
 const { parseDescentSession } = await import("../../services/inferno/descentSession.js");
 const { infernoStartBuildingData } = await import("../../services/inferno/infernoYard.js");
 const { experiencePoints } = await import("../../game-data/stats/experiencePoints.js");
@@ -241,5 +248,55 @@ describe("a started attack", () => {
   test("a second attack while the first runs is refused", async () => {
     await start({ kind: "player", baseid: TARGET_BASEID });
     expect(await refusalOf()).toEqual({ reason: "targetUnderAttack", attacker: "attacker" });
+  });
+});
+
+describe("one attack per yard, failing closed", () => {
+  /** An attack session another player left on the target, `age` seconds old. */
+  const openSession = (age: number, attackid = 4242) => {
+    const value = JSON.stringify({
+      baseid: TARGET_BASEID,
+      flingerCapacity: 200,
+      session: serialiseAttackSession({ attackerid: 777, attackid, startedat: getCurrentDateTime() - age }),
+    });
+    store.set(infernoPlayerSessionKey(70), value);
+    return value;
+  };
+
+  test("an expired attack that could not be closed keeps the yard attacked", async () => {
+    target.attackid = 4242;
+    target.attacks = [{ name: "first", starttime: getCurrentDateTime() - 600 }];
+    const before = openSession(600);
+    // The close cannot run (its final lock is held, and the stand-in has no ORM): it fails.
+    store.set(infernoPlayerFinalLockKey(70), "1");
+    expect(await refusalOf()).toEqual({ reason: "targetUnderAttack", attacker: "first" });
+    expect(target.attackid).toBe(4242);
+    expect(store.get(infernoPlayerSessionKey(70))).toBe(before);
+  });
+
+  test("an open session is never overwritten, even when the yard's mark says otherwise", async () => {
+    // The row shows no attack (as after a lost write), but a session is open.
+    const before = openSession(30);
+    expect(await refusalOf()).toEqual({ reason: "targetUnderAttack", attacker: "" });
+    expect(store.get(infernoPlayerSessionKey(70))).toBe(before);
+  });
+
+  test("of two starts at once only one gets the yard; the other is refused under the lock", async () => {
+    // The second start finds the first's session minted between its checks and its lock.
+    const realFindOne = em.findOne;
+    let raced = false;
+    em.findOne = async (entity: { name: string }, where: Record<string, unknown>) => {
+      if (!raced && where.basesaveid === 70 && entity.name === "Save") {
+        raced = true;
+        openSession(1, 5151);
+      }
+      return realFindOne(entity, where);
+    };
+    try {
+      expect(await refusalOf()).toEqual({ reason: "targetUnderAttack", attacker: "" });
+    } finally {
+      em.findOne = realFindOne;
+    }
+    expect(parseDescentSession(store.get(infernoPlayerSessionKey(70)))?.session.attackid).toBe(5151);
   });
 });

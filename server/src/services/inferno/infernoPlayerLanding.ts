@@ -229,6 +229,9 @@ export const writePlayerLanding = async (
       { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }
     );
     const target = await lockRow(tx, { basesaveid: yard.basesaveid });
+    // Under the lock: the yard must still be this attack's. One another attack
+    // has taken over since (or that has been cleared) lands nothing of this one.
+    if (Number(target.attackid) !== attack.session.attackid) throw attackNotBoundErr("superseded");
 
     // The monsters that fought leave the attacker's Housing Bunkers, as caught
     // up now, capped by what they held at the start (`entryHoused`).
@@ -293,7 +296,7 @@ export const writePlayerLanding = async (
   });
 
   // Spent: the lock is still held, so a copy of this save finds nothing.
-  await endInfernoPlayerSession(yard.basesaveid);
+  await endInfernoPlayerSession(yard.basesaveid, attack.session.attackid);
 
   // The defender's notice (WP 3.4), in a context of its own so it flushes
   // nothing of the request's. A notice that fails costs the attack nothing.

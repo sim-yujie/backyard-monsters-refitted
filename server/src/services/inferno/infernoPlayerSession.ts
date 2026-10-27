@@ -43,29 +43,48 @@ export const INFERNO_PLAYER_ATTACKS = "attack-sessions:inferno-player";
 /** The lock that lets exactly one save end that attack (issue #138's rule). */
 export const infernoPlayerFinalLockKey = (basesaveid: number) => `attack-final:inferno-player:${basesaveid}`;
 
-export const startInfernoPlayerSession = async (basesaveid: number, attack: InfernoPlayerSession): Promise<void> => {
-  // A checkpoint left by an earlier attack on this yard is not this one's.
-  await redis.del(infernoPlayerCheckpointKey(basesaveid));
-  await redis.setex(
+/**
+ * Mints the attack's session, never over another's: one open attack per yard.
+ *
+ * @returns False, writing nothing, when the yard already has an open attack.
+ */
+export const startInfernoPlayerSession = async (basesaveid: number, attack: InfernoPlayerSession): Promise<boolean> => {
+  const set = await redis.set(
     infernoPlayerSessionKey(basesaveid),
-    ATTACK_CHECKPOINT_TTL,
     JSON.stringify({
       baseid: attack.baseid,
       flingerCapacity: attack.flingerCapacity,
       session: serialiseAttackSession(attack.session),
-    })
+    }),
+    "EX",
+    String(ATTACK_CHECKPOINT_TTL),
+    "NX"
   );
+  if (set !== "OK") return false;
+  // A checkpoint left by an earlier attack on this yard is not this one's.
+  await redis.del(infernoPlayerCheckpointKey(basesaveid));
   await redis.sadd(INFERNO_PLAYER_ATTACKS, String(basesaveid));
+  return true;
 };
 
 export const readInfernoPlayerSession = async (basesaveid: number): Promise<InfernoPlayerSession | null> =>
   parseDescentSession(await redis.get(infernoPlayerSessionKey(basesaveid)));
 
-/** Ends the attack on that yard: landed or closed, it can be neither saved nor closed again. */
-export const endInfernoPlayerSession = async (basesaveid: number): Promise<void> => {
+/**
+ * Ends the attack `attackid` on that yard: landed or closed, it can be neither
+ * saved nor closed again. A session another attack holds by now is left alone.
+ * Every caller but a start undoing its own session holds the final lock, so
+ * nothing lands or closes between the look and the delete.
+ *
+ * @returns False when the yard's session (if any) is not that attack's.
+ */
+export const endInfernoPlayerSession = async (basesaveid: number, attackid: number): Promise<boolean> => {
+  const stored = await readInfernoPlayerSession(basesaveid);
+  if (stored && stored.session.attackid !== attackid) return false;
   await redis.del(infernoPlayerSessionKey(basesaveid));
   await redis.del(infernoPlayerCheckpointKey(basesaveid));
   await redis.srem(INFERNO_PLAYER_ATTACKS, String(basesaveid));
+  return true;
 };
 
 export const storeInfernoPlayerCheckpoint = async (basesaveid: number, checkpoint: AttackCheckpoint): Promise<void> => {
