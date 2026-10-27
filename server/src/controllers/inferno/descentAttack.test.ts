@@ -132,7 +132,7 @@ describe("starting a Descent attack", () => {
   });
 
   test("the player kind is not built yet; a tribe attack on a Descent yard is refused", async () => {
-    expect(await refusalOf({ kind: "player", baseid: "201" })).toBe("kindNotReady");
+    expect(await refusalOf({ kind: "raid", baseid: "201" })).toBe("kindNotReady");
     expect(await refusalOf({ baseid: "201" })).toBe("kindNotReady");
     expect(await refusalOf({ kind: "tribe", baseid: "201" })).toBe("notInfernoTribe");
     expect(calls).toEqual([]);

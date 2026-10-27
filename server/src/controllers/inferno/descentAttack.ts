@@ -30,6 +30,7 @@ import { readInfernoProgress } from "../../services/inferno/infernoProgress.js";
 import { catchUpArmiesForAttack } from "../../services/yard/armies.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { startInfernoPlayerAttack, type InfernoPlayerAttackStart } from "./playerAttack.js";
 import { startInfernoTribeAttack, type InfernoTribeAttackStart } from "./tribeAttack.js";
 
 /**
@@ -157,14 +158,15 @@ export const startDescentAttack = async (
   };
 };
 
-/** Kind `"descent"` here, kind `"tribe"` in `tribeAttack.ts`; `"player"` is WP 3.2. */
+/** Kind `"descent"` here, kind `"tribe"` in `tribeAttack.ts`, kind `"player"` in `playerAttack.ts`. */
 export const infernoAttackStart: KoaController = async (ctx) => {
   requireInfernoEnabled();
   const body = (ctx.request.body ?? {}) as { kind?: unknown; baseid?: unknown };
   const baseid = String(body.baseid ?? "");
-  let start: DescentAttackStart | InfernoTribeAttackStart;
+  let start: DescentAttackStart | InfernoTribeAttackStart | InfernoPlayerAttackStart;
   if (body.kind === "descent") start = await startDescentAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
   else if (body.kind === "tribe") start = await startInfernoTribeAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
+  else if (body.kind === "player") start = await startInfernoPlayerAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
   else throw infernoAttackRefusedErr("kindNotReady");
 
   ctx.status = Status.OK;

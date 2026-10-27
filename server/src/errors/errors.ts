@@ -912,6 +912,11 @@ export type InfernoAttackRefusal =
   | "notYourTribe"
   | "tribeDestroyed"
   | "noMonsters"
+  | "notInfernoPlayer"
+  | "protected"
+  | "targetUnderAttack"
+  | "outOfRange"
+  | "ownerOnline"
   | "kindNotReady";
 
 const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
@@ -924,6 +929,14 @@ const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
   tribeDestroyed: "That tribe is still in ruins.",
   // Flash's `infmap_msg_nomonsters` (`maproom_inferno/PlayerHandler.as:308`); its text is not in our `english.json`.
   noMonsters: "You need monsters in your Housing Bunkers to attack.",
+  notInfernoPlayer: "That is not another player's Inferno yard.",
+  // Flash's words (`map_msg_dp`, `map_msg_inprogress`, `map_msg_leveltoolow`,
+  // `map_msg_ownerinyard`), with "this player" for the name.
+  protected: "This player was recently DESTROYED and is under protection for a few hours to give them a chance to rebuild.",
+  targetUnderAttack: "This player is under attack! Please wait a few minutes then try again",
+  outOfRange:
+    "You can't attack this person because their level is too low compared to yours. You will receive better loot for attacking someone closer to your level.",
+  ownerOnline: "This player is currently in their yard. Try attacking later when the coast is clear.",
   kindNotReady: "That kind of Inferno attack is not open yet.",
 };
 
@@ -932,7 +945,9 @@ const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
  * has not come up all five levels, the Descent is passed, the base is not a
  * Descent yard or not the next one; the base is not a Moloch tribe, not one
  * of the player's seven, or still wrecked, or the Inferno yard houses no
- * monsters (WP 2.8); or the kind of attack is not built yet.
+ * monsters (WP 2.8); the base is not another player's live Inferno yard, or
+ * that player is protected, being attacked, out of range or playing (WP
+ * 3.2); or the kind of attack is not built yet.
  *
  * @param reason - Which rule refused it.
  * @param detail - Figures for the client, e.g. `next`, the base id that can be attacked.

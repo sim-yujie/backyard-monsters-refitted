@@ -70,7 +70,7 @@ export interface InfernoTribeAttackStart {
 }
 
 /** The caller's Inferno yard, caught up to `now` and written under its lock, with the main yard's caps synced. */
-const caughtUpInfernoYard = async (em: EntityManager, user: User, main: Save, now: number): Promise<Save> =>
+export const caughtUpInfernoYard = async (em: EntityManager, user: User, main: Save, now: number): Promise<Save> =>
   em.transactional(async (tx) => {
     const lockedMain =
       (await tx.findOne(Save, { basesaveid: main.basesaveid }, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true })) ??
