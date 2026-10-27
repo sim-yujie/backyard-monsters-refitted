@@ -483,6 +483,9 @@ describe("the 13th win: the Descent is passed", () => {
     expect(row!.descent_destroyed!.every((flag) => flag === 1)).toBe(true);
     expect(row!.descent_passed_at).toBeInstanceOf(Date);
     expect(row!.inferno_baseid).toBe(NEW_YARD_BASEID);
+    // Owning the yard unlocks Korath; the main yard tells the player on its next load (WP 5.1).
+    expect(row!.korath_unlocked_at).toEqual(row!.descent_passed_at);
+    expect(row!.korath_notice_at ?? null).toBeNull();
 
     const yard = persisted.find(
       (entity) => (entity as { type?: unknown }).type === BaseType.INFERNO

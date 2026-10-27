@@ -6,6 +6,7 @@ import { postgres } from "../../server.js";
 import { EMERGENCE_LEVELS, caveShown, nextEmergenceAt, type CaveSave } from "../../services/inferno/emergence.js";
 import type { EmergenceOnLoad } from "../../services/inferno/emergenceOnLoad.js";
 import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
+import { korathNoticeDue, korathUnlocked, markKorathNoticeSeen } from "../../services/inferno/korath.js";
 import {
   DESCENT_YARDS,
   readInfernoProgress,
@@ -57,6 +58,8 @@ export interface InfernoStateBody {
    * Factory and Lab count by (WP 6.1).
    */
   underHall: number;
+  /** Korath is unlocked: the player owns an Inferno yard, so the cage raises him (owner I10). */
+  korathUnlocked: boolean;
   /** Korath is unlocked and the player has not been told yet (owner I10). */
   korathNotice: boolean;
 }
@@ -88,7 +91,8 @@ export const infernoStateAnswer = (
     },
     hasYard: progress.infernoBaseid !== null,
     underHall,
-    korathNotice: progress.korathUnlockedAt !== null && progress.korathNoticeAt === null,
+    korathUnlocked: korathUnlocked(progress),
+    korathNotice: korathNoticeDue(progress),
   };
 };
 
@@ -115,6 +119,19 @@ export const infernoState: KoaController = async (ctx) => {
   requireInfernoEnabled();
   ctx.status = Status.OK;
   ctx.body = await readInfernoState(postgres.em, ctx.authUser, getCurrentDateTime());
+};
+
+/**
+ * `POST /bm/inferno/korath/seen` (WP 5.2): the player has been shown "Korath
+ * unlocked", so the main yard's load stops asking for it (`korathNotice`).
+ * Answers `{ error: 0 }` whether or not this call was the one that marked it;
+ * `403 infernoOff` while the new Inferno is switched off.
+ */
+export const korathSeen: KoaController = async (ctx) => {
+  requireInfernoEnabled();
+  await markKorathNoticeSeen(postgres.em, ctx.authUser.userid, getCurrentDateTime());
+  ctx.status = Status.OK;
+  ctx.body = { error: 0 };
 };
 
 /**

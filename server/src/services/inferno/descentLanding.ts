@@ -181,6 +181,8 @@ const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises:
       const infernoYard = await createInfernoYard(em, user, userSave);
       infernobaseid = infernoYard.baseid;
       row.inferno_baseid = infernobaseid;
+      // Owning the yard unlocks Korath on the surface (owner I10, WP 5.1).
+      row.korath_unlocked_at ??= new Date(now * 1000);
     }
   }
 

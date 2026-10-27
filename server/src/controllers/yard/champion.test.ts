@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import type { User } from "../../database/models/user.model.js";
@@ -28,13 +28,15 @@ import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js
 
 type Row = Record<string, unknown>;
 
-const db = { row: null as Row | null };
+/** The save row, and the player's `inferno_progress` row (Korath, owner I10). */
+const db = { row: null as Row | null, progress: null as Row | null };
 
 const em = {
   async transactional<T>(cb: (fork: unknown) => Promise<T>): Promise<T> {
     let entity: Row | null = null;
     const fork = {
-      async findOne() {
+      async findOne(entityClass?: { name?: string }) {
+        if (entityClass?.name === "InfernoProgress") return db.progress;
         entity = db.row && structuredClone(db.row);
         return entity;
       },
@@ -88,6 +90,7 @@ const championOf = (row: Row | null) => (row!.champion as Row[])[0]!;
 describe("champion routes", () => {
   beforeEach(() => {
     db.row = rowOf();
+    db.progress = null;
   });
 
   test("raise lays an egg, and the answer carries it in the state", async () => {
@@ -262,5 +265,54 @@ describe("champion eggs through the routes", () => {
     expect(planFriendSpeedup(cage, 99)).toEqual({ reason: "nothingToHelp" });
     const offered = previewHelp(db.row as never, 99, now, null);
     expect(offered["3"]?.speedup).not.toBe(true);
+  });
+});
+
+describe("raising Korath (Inferno WP 5.1, owner I10)", () => {
+  const saved = process.env.INFERNO_ENABLED;
+  const owner = { userid: 2505, inferno_baseid: "88001", korath_unlocked_at: new Date() };
+
+  beforeEach(() => {
+    db.row = rowOf();
+    db.progress = null;
+    process.env.INFERNO_ENABLED = "on";
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env.INFERNO_ENABLED;
+    else process.env.INFERNO_ENABLED = saved;
+  });
+
+  test("is refused before the player owns an Inferno yard, and nothing is written", async () => {
+    const before = structuredClone(db.row);
+    const answer = await run(yardChampionRaiseAction, { type: "4" });
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "notRaisable" });
+    expect(db.row).toEqual(before);
+  });
+
+  test("lays his egg once they own one: free, hatching in a day", async () => {
+    db.progress = owner;
+    const now = getCurrentDateTime();
+    const answer = await run(yardChampionRaiseAction, { type: "4" });
+    expect(answer.status).toBe(200);
+    expect(championOf(db.row)).toMatchObject({ t: 4, l: 1, hp: 28_000, pl: 0, status: 3 });
+    expect(Number(championOf(db.row).ft)).toBeGreaterThanOrEqual(now + 24 * HOUR);
+    expect(db.row!.credits).toBe(500);
+  });
+
+  test("keeps one basic champion at a time", async () => {
+    db.progress = owner;
+    db.row = rowOf({ champion: [{ t: 1, hp: 40_000, l: 1, ft: getCurrentDateTime() + HOUR, fd: 0, fb: 0, pl: 1, status: 0 }] });
+    const answer = await run(yardChampionRaiseAction, { type: "4" });
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "championInCage" });
+  });
+
+  test("is refused while the new Inferno is switched off, yard or not", async () => {
+    db.progress = owner;
+    delete process.env.INFERNO_ENABLED;
+    const answer = await run(yardChampionRaiseAction, { type: "4" });
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "notRaisable" });
   });
 });

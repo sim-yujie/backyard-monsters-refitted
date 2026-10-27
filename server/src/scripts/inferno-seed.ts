@@ -124,6 +124,7 @@ const seed = async (args: SeedArgs) => {
         ? await em.findOneOrFail(Save, { baseid: String(main.baseid_inferno) })
         : await createInfernoYard(em, user, main);
       row.inferno_baseid = yard.baseid;
+      row.korath_unlocked_at ??= now;
 
       if (Object.keys(args.monsters).length) {
         yard.buildingdata = withRoomFor(yard as HousingYard, args.monsters);

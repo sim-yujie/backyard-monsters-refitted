@@ -22,10 +22,17 @@ const em = {
     calls.push("findOne");
     return row;
   },
+  execute: async (query: string, params: unknown[]) => {
+    calls.push("execute");
+    executed.push({ query, params });
+    return executed.length === 1 ? [{ userid: 7 }] : [];
+  },
 };
+/** The SQL the route ran, in order. */
+const executed: { query: string; params: unknown[] }[] = [];
 mock.module("../../server.js", () => ({ postgres: { em }, redis: {} }));
 
-const { infernoLoadState, infernoState, infernoStateAnswer } = await import("./infernoState.js");
+const { infernoLoadState, infernoState, infernoStateAnswer, korathSeen } = await import("./infernoState.js");
 
 const NOW = 1_800_000_000;
 const hall = (level: number): BuildingDataMap => ({ "1": { id: 1, t: 14, l: level, x: 0, y: 0 } as BuildingData });
@@ -84,6 +91,18 @@ describe("the Inferno state answer", () => {
     const unlocked = { ...NO_INFERNO_PROGRESS, korathUnlockedAt: NOW };
     expect(infernoStateAnswer(unlocked, yard(5), NOW, false).korathNotice).toBe(true);
     expect(infernoStateAnswer({ ...unlocked, korathNoticeAt: NOW }, yard(5), NOW, false).korathNotice).toBe(false);
+  });
+
+  test("Korath is unlocked by owning an Inferno yard (owner I10), and told once", () => {
+    expect(infernoStateAnswer(NO_INFERNO_PROGRESS, yard(5), NOW, false)).toMatchObject({
+      korathUnlocked: false,
+      korathNotice: false,
+    });
+    // A yard from before WP 5.1 (or the dev seed) has no unlock time: the yard counts.
+    const owner = { ...NO_INFERNO_PROGRESS, infernoBaseid: "1234", descentPassedAt: NOW };
+    expect(infernoStateAnswer(owner, yard(5), NOW, false)).toMatchObject({ korathUnlocked: true, korathNotice: true });
+    const told = { ...owner, korathUnlockedAt: NOW, korathNoticeAt: NOW + 5 };
+    expect(infernoStateAnswer(told, yard(5), NOW, false)).toMatchObject({ korathUnlocked: true, korathNotice: false });
   });
 
   test("no main yard, no cave", () => {
@@ -220,5 +239,48 @@ describe("GET /bm/inferno/state", () => {
     const body = ctx.body as ReturnType<typeof infernoStateAnswer>;
     expect(body.cave.level).toBe(0);
     expect(body.emergence.nextAt).toBe(0);
+  });
+});
+
+describe("POST /bm/inferno/korath/seen", () => {
+  const saved = process.env.INFERNO_ENABLED;
+  const ctxOf = () => ({ authUser: { userid: 7 }, status: 0, body: undefined }) as unknown as Context;
+
+  beforeEach(() => {
+    calls.length = 0;
+    executed.length = 0;
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env.INFERNO_ENABLED;
+    else process.env.INFERNO_ENABLED = saved;
+  });
+
+  test("switched off, it is refused with 403 infernoOff and writes nothing", async () => {
+    delete process.env.INFERNO_ENABLED;
+    const refusal = await korathSeen(ctxOf()).then(
+      () => null,
+      (err) => err
+    );
+    expect(refusal?.status).toBe(403);
+    expect(calls).toEqual([]);
+  });
+
+  test("marks the notice told once, only for a player with Korath unlocked", async () => {
+    process.env.INFERNO_ENABLED = "on";
+    const ctx = ctxOf();
+    await korathSeen(ctx);
+    expect(ctx.status).toBe(200);
+    expect(ctx.body).toEqual({ error: 0 });
+    expect(executed).toHaveLength(1);
+    const { query, params } = executed[0]!;
+    expect(query).toContain("korath_notice_at IS NULL");
+    expect(query).toContain("inferno_baseid IS NOT NULL OR korath_unlocked_at IS NOT NULL");
+    expect(query).toContain("COALESCE(korath_unlocked_at");
+    expect(params.at(-1)).toBe(7);
+
+    // Asked again (a second tab, a retry): the same answer; the row is left as it is.
+    const again = ctxOf();
+    await korathSeen(again);
+    expect(again.body).toEqual({ error: 0 });
   });
 });

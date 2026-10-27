@@ -67,7 +67,7 @@ import { getNewMap } from "./controllers/maproom/getNewMap.js";
 import { setMapVersion } from "./controllers/maproom/setMapVersion.js";
 import { infernoSave } from "./controllers/inferno/infernoSave.js";
 import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
-import { infernoState } from "./controllers/inferno/infernoState.js";
+import { infernoState, korathSeen } from "./controllers/inferno/infernoState.js";
 import { infernoAttackStart } from "./controllers/inferno/descentAttack.js";
 import { infernoLoad } from "./controllers/inferno/infernoLoad.js";
 import { infernoTransferAction } from "./controllers/inferno/transfer.js";
@@ -206,6 +206,7 @@ router.post("/api/:apiVersion/bm/base/infernomonsters", apiVersion, verifyUserAu
 router.post("/api/:apiVersion/bm/neighbours/get", apiVersion, verifyUserAuth, logRequest, getNeighbours);
 // The new Inferno (docs/design/inferno.md §3.2), refused while `infernoConfig.enabled` is off.
 router.get("/api/:apiVersion/bm/inferno/state", apiVersion, verifyUserAuth, verifyAccountStatus, infernoState);
+router.post("/api/:apiVersion/bm/inferno/korath/seen", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, korathSeen);
 router.post("/api/:apiVersion/bm/inferno/attack/start", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, infernoAttackStart);
 router.get("/api/:apiVersion/bm/inferno/map", apiVersion, verifyUserAuth, verifyAccountStatus, infernoMap);
 router.get("/api/:apiVersion/bm/inferno/neighbours", apiVersion, verifyUserAuth, verifyAccountStatus, infernoNeighbours);

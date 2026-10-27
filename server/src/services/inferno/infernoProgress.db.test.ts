@@ -6,6 +6,7 @@ import { AddDescentYardsToInfernoProgress } from "../../database/migrations/2026
 import ormConfig from "../../mikro-orm.config.js";
 import { raiseEmergence } from "./emergenceOnLoad.js";
 import { readInfernoProgress } from "./infernoProgress.js";
+import { korathNoticeDue, korathRaisable, markKorathNoticeSeen } from "./korath.js";
 
 /**
  * `bym.inferno_progress` against a real Postgres: the migration (shape, run
@@ -161,5 +162,29 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     await sql(`INSERT INTO bym.inferno_progress (userid, popups_seen) VALUES (?, '{"x":1}'::jsonb)`, [A]);
     expect(await raiseEmergence(em(), A, 0, 1_800_000_000)).toBe(1);
     expect((await readInfernoProgress(em(), A)).popupsSeen).toEqual({ x: 1 });
+  });
+
+  test("Korath's notice (WP 5.1): marked once, only once he is unlocked", async () => {
+    const NOW = 1_800_000_000;
+    // No row, or a row without an Inferno yard: nothing to tell, nothing written.
+    expect(await markKorathNoticeSeen(em(), A, NOW)).toBe(false);
+    await sql(`INSERT INTO bym.inferno_progress (userid) VALUES (?)`, [A]);
+    expect(await markKorathNoticeSeen(em(), A, NOW)).toBe(false);
+    expect(await korathRaisable(em(), A, true)).toBe(false);
+
+    // A yard from before WP 5.1: no unlock time, still unlocked; the mark fills it in.
+    await sql(`UPDATE bym.inferno_progress SET inferno_baseid = '42' WHERE userid = ?`, [A]);
+    expect(korathNoticeDue(await readInfernoProgress(em(), A))).toBe(true);
+    expect(await korathRaisable(em(), A, true)).toBe(true);
+    expect(await korathRaisable(em(), A, false)).toBe(false);
+    expect(await markKorathNoticeSeen(em(), A, NOW)).toBe(true);
+    const told = await readInfernoProgress(em(), A);
+    expect(told.korathNoticeAt).toBe(NOW);
+    expect(told.korathUnlockedAt).toBe(NOW);
+    expect(korathNoticeDue(told)).toBe(false);
+
+    // Told already: a second mark (a retry, a second tab) changes nothing.
+    expect(await markKorathNoticeSeen(em(), A, NOW + 60)).toBe(false);
+    expect((await readInfernoProgress(em(), A)).korathNoticeAt).toBe(NOW);
   });
 });
