@@ -38,7 +38,9 @@ import {
 import { raidFighting } from "../../services/raids/raidLock.js";
 import { yardState } from "../../services/yard/yardState.js";
 import { onboardingSummary } from "../../services/onboarding/summary.js";
-import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
+import { updateOnboarding } from "../../services/onboarding/state.js";
+import { INFERNO_QUESTS, markDone } from "../../services/goals/goalRules.js";
+import { townHallLevel, type ResourceAmounts } from "../../services/yardplanner/costs.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 
@@ -560,6 +562,18 @@ export const catchUpLockedOutpost = async (
     return { save: yard.outpost, completed };
   });
 
+/**
+ * Marks the Inferno quests met now done on the Inferno yard's view, writing
+ * the account's `onboarding` (on the main row) only when one changed.
+ */
+const markInfernoQuestsDone = (save: Save, now: number): void => {
+  let changed = false;
+  const onboarding = updateOnboarding(save, (record) => {
+    changed = markDone(save, record, now, INFERNO_QUESTS);
+  });
+  if (changed) save.onboarding = onboarding;
+};
+
 /** What {@link runYardAction} answers: the HTTP status and the body. */
 export interface YardAnswer {
   status: number;
@@ -644,11 +658,18 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       // An instant or paid repair shows on the map now, not at the next catch-up (#182 B).
       catchUpDamage(save);
       save.savetime = now;
+      // The Inferno quests met by now are marked done, as Flash's
+      // `QUESTS.Check` did on every tick there (`docs/design/inferno.md`
+      // WP 4.1): the badge counts them and achievement 21 reads them.
+      if (yard.inferno) markInfernoQuestsDone(save, now);
       // The account's, so on the main row from an outpost too (issue #204).
-      // Nothing built in the Inferno counts (the achievements' Blocks and
-      // Heavy Traps are the surface's; Flash's Inferno builds were not
-      // checked against them, `docs/design/inferno.md` §5).
-      const events = yard.inferno ? {} : addEvents(builtEvents(completed), outcome.achievementEvents);
+      // Nothing built in the Inferno counts towards the surface's stats (the
+      // Blocks and Heavy Traps are the surface's; Flash's Inferno builds were
+      // not checked against them, `docs/design/inferno.md` §5); the Under
+      // Hall's level is achievement 20's (`BUILDING14.Constructed`).
+      const events = yard.inferno
+        ? { underhall: townHallLevel(save.buildingdata, "inferno") }
+        : addEvents(builtEvents(completed), outcome.achievementEvents);
       await recordAchievements(tx, yard.main, now, events, yard.outpost);
       const report = action.reportAfterAchievements
         ? action.reportAfterAchievements(save)
@@ -662,8 +683,9 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         report,
         playerlevel: playerLevelOf(yard.main),
         playerpoints: playerPointsOf(yard.main),
-        // The account's, so from the main row on an outpost's answer too.
-        onboarding: onboardingSummary(yard.main),
+        // The account's, so from the main row on an outpost's answer too. On
+        // the Inferno the badge counts the Inferno quests (`goalBookOf`).
+        onboarding: onboardingSummary(yard.inferno ? save : yard.main),
         achievements: unseenAchievements(yard.main),
         outpost: yard.outpost ? String(yard.outpost.baseid) : null,
       };

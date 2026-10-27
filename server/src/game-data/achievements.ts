@@ -287,8 +287,9 @@ const LIST: readonly AchievementDef[] = [
     shiny: 15,
     rules: [{ stat: "underhall", target: 5 }],
     mode: "all",
-    // Waits for the Inferno yard; Flash's intent inferred from BUILDING14.as:138.
-    available: false,
+    // Inferno WP 4.3: the Under Hall's level, raised by every Inferno yard action.
+    available: true,
+    inferno: true,
     flash: "ACHIEVEMENTS.as:51; BUILDING14.as:138",
   },
   {
@@ -298,8 +299,9 @@ const LIST: readonly AchievementDef[] = [
     shiny: 15,
     rules: [{ stat: "infernoquests", target: 10 }],
     mode: "all",
-    // Waits for Inferno quests.
-    available: false,
+    // Inferno WP 4.3: the Inferno quests met (`done`), claimed or not.
+    available: true,
+    inferno: true,
     flash: "ACHIEVEMENTS.as:51; QUESTS.as:1652",
   },
   {

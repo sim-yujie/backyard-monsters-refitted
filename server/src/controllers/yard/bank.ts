@@ -23,8 +23,8 @@ const TUTORIAL_END_STAGE = 205;
  * Inferno purse, up to the Inferno cap, and the points onto the Inferno row.
  * Flash sets the tutorial to its end stage there (`BASE.as:1072-1074`), so
  * banking pays half its amount in points. The surface's bank goals (BK1-BK4)
- * do not count it: the Inferno has quests of its own (`docs/design/inferno.md`
- * WP 4.1).
+ * do not count it: it counts the Inferno quests' own `infernoBestBank`
+ * (IBK1-IBK4, `docs/design/inferno.md` WP 4.1), by the same rule.
  */
 export const yardBankAction = defineYardAction({
   schema: YardBankSchema,
@@ -35,9 +35,8 @@ export const yardBankAction = defineYardAction({
       body.ids ? { ids: body.ids } : { all: true },
       inferno || devConfig.skipTutorial ? TUTORIAL_END_STAGE : Number(save.tutorialstage) || 0
     );
-    if (inferno) return plan;
-    // Goals BK1-BK4: the most one tap has banked (#227).
-    const onboarding = countBank(save, plan.report.banked);
+    // Goals BK1-BK4, or the Inferno's IBK1-IBK4: the most one tap has banked (#227).
+    const onboarding = countBank(save, plan.report.banked, inferno ? "infernoBestBank" : "bestBank");
     return onboarding ? { ...plan, slices: { ...plan.slices, onboarding } } : plan;
   },
   // An outpost's harvesters show a disabled "Auto-Banking" button

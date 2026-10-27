@@ -135,7 +135,8 @@ const standingEverywhere = (view: AchievementView, type: number): number =>
  * can read are present.
  */
 export const deriveStats = (view: AchievementView): Partial<AchievementStats> => {
-  const counters = readOnboarding({ onboarding: view.onboarding }).counters;
+  const onboarding = readOnboarding({ onboarding: view.onboarding });
+  const counters = onboarding.counters;
   const stats: Partial<AchievementStats> = {
     thlevel: townHallLevel(view.buildingdata, "main"),
     map2:
@@ -148,6 +149,9 @@ export const deriveStats = (view: AchievementView): Partial<AchievementStats> =>
     wm2hall: counters.tribes.kozu > 0 ? 1 : 0,
     unlock_monster: unlockedMonsters(view.lockerdata),
     stockpile: stockpiled(view.resources) ? 1 : 0,
+    // Flash's `QUESTS.amountCompleted`: Inferno quests met, claimed or not
+    // (`QUESTS.as:33-40`, `:1651`), from the server's own sticky `done`.
+    infernoquests: Object.values(onboarding.infernoGoals).filter((record) => record.done !== undefined).length,
   };
   for (const [stat, type] of CHAMPION_STATS) {
     stats[stat] = championLevel(view.champion, type) >= CHAMPION_TOP_LEVEL ? 1 : 0;
@@ -173,10 +177,12 @@ const SNAPSHOT_STATS = Object.keys(backfillStats({})) as AchievementStat[];
 
 /**
  * Event stats that are a level the event reports, not a count to add: Flash's
- * Descent counter after each Descent attack (`ATTACK.as:975`, Inferno WP 1.12),
- * which `ACHIEVEMENTS.Check` sets, never adds to. They raise.
+ * Descent counter after each Descent attack (`ATTACK.as:975`, Inferno WP 1.12)
+ * and the Under Hall's level after each Inferno yard action
+ * (`BUILDING14.Constructed`, WP 4.3), which `ACHIEVEMENTS.Check` sets, never
+ * adds to. They raise.
  */
-const LEVEL_STATS: readonly AchievementStat[] = ["descent"];
+const LEVEL_STATS: readonly AchievementStat[] = ["descent", "underhall"];
 
 /** Raises each stat to `stats`' value where that is higher. */
 const raise = (into: AchievementStats, stats: Partial<AchievementStats>): void => {

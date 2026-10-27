@@ -561,8 +561,10 @@ describe("banking in the Inferno (POST /bm/yard/bank)", () => {
     expect(infernoPoints()).toBe(250);
     expect(mainSave().points).toBe("100");
     expect(mainSave().resources).toEqual(POOL);
-    // The surface bank goals (BK1-BK4) do not count it.
-    expect(mainSave().onboarding).toBeUndefined();
+    // The surface bank goals (BK1-BK4) do not count it; the Inferno quests' IBK1-IBK4 do (WP 4.1).
+    const counters = (mainSave().onboarding as { counters: Record<string, number> }).counters;
+    expect(counters.bestBank).toBe(0);
+    expect(counters.infernoBestBank).toBe(500);
     expect(infernoSave().onboarding).toBeUndefined();
   });
 

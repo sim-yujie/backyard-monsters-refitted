@@ -16,11 +16,11 @@ describe("the achievements catalogue", () => {
     expect(ACHIEVEMENTS.reduce((sum, entry) => sum + entry.shiny, 0)).toBe(300);
   });
 
-  test("the three tied to missing features stay hidden; the Descent's two wait on the Inferno switch", () => {
+  test("the one tied to a missing feature stays hidden; the Inferno's four wait on the Inferno switch", () => {
     const hidden = ACHIEVEMENTS.filter((entry) => !entry.available).map((entry) => entry.id);
-    expect(hidden).toEqual([14, 20, 21]);
+    expect(hidden).toEqual([14]);
     const inferno = ACHIEVEMENTS.filter((entry) => entry.inferno).map((entry) => entry.id);
-    expect(inferno).toEqual([18, 19]);
+    expect(inferno).toEqual([18, 19, 20, 21]);
     expect(AVAILABLE_ACHIEVEMENTS.map((entry) => entry.id)).not.toContain(18);
   });
 

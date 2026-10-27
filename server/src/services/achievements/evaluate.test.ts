@@ -257,6 +257,36 @@ describe("the Descent achievements, 18 and 19 (Inferno WP 1.12)", () => {
       expect(evaluation.unlocked).toEqual([]);
     });
   });
+
+  test("the Under Hall at level 5 earns 20; its level only rises", () => {
+    withInferno(true, () => {
+      const four = evaluateAchievements(worked(), {}, NOW, { underhall: 4 });
+      expect(ids(four)).toEqual([]);
+      // Reported again at the same level, it is not added up to 8.
+      const again = evaluateAchievements(four.record, {}, NOW, { underhall: 4 });
+      expect(again.record.s.underhall).toBe(4);
+      expect(ids(again)).toEqual([]);
+      expect(ids(evaluateAchievements(again.record, {}, NOW, { underhall: 5 }))).toEqual([20]);
+    });
+  });
+
+  test("10 Inferno quests met, claimed or not, earn 21 (Flash's amountCompleted)", () => {
+    const infernoGoals = (count: number, claimed = 0) =>
+      Object.fromEntries(
+        Array.from({ length: count }, (_, i) => [`IQ${i}`, i < claimed ? { done: 1, claimed: 2 } : { done: 1 }])
+      );
+    withInferno(true, () => {
+      const nine = evaluateAchievements(worked(), { onboarding: { v: 1, infernoGoals: infernoGoals(9) } }, NOW);
+      expect(nine.record.s.infernoquests).toBe(9);
+      expect(ids(nine)).toEqual([]);
+      const ten = evaluateAchievements(nine.record, { onboarding: { v: 1, infernoGoals: infernoGoals(10, 3) } }, NOW);
+      expect(ids(ten)).toEqual([21]);
+    });
+    withInferno(false, () => {
+      const off = evaluateAchievements(worked(), { onboarding: { v: 1, infernoGoals: infernoGoals(10) } }, NOW);
+      expect(off.unlocked).toEqual([]);
+    });
+  });
 });
 
 describe("the backfill (§8)", () => {

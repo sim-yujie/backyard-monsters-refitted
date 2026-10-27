@@ -31,10 +31,13 @@ export const countMushroom = (save: OnboardingSave, golden: boolean): Onboarding
  * was). Null when this bank is no bigger.
  *
  * @param banked - What the bank credited, per resource.
+ * @param counter - `bestBank` on the surface, `infernoBestBank` for the
+ *   Inferno quests IBK1-IBK4 (`docs/design/inferno.md` WP 4.1).
  */
 export const countBank = (
   save: OnboardingSave,
   banked: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>,
+  counter: "bestBank" | "infernoBestBank" = "bestBank",
 ): Onboarding | null => {
   const total = ["r1", "r2", "r3", "r4"].reduce((sum, key) => {
     const amount = Number(banked[key as keyof typeof banked]);
@@ -42,8 +45,8 @@ export const countBank = (
   }, 0);
   let changed = false;
   const onboarding = updateOnboarding(save, ({ counters }) => {
-    if (total <= counters.bestBank) return;
-    counters.bestBank = total;
+    if (total <= counters[counter]) return;
+    counters[counter] = total;
     changed = true;
   });
   return changed ? onboarding : null;

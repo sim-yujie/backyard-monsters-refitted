@@ -37,7 +37,7 @@ const fresh = (change: (onboarding: Onboarding) => void = () => {}): Onboarding 
 /** The Inferno yard as its yard actions see it: `type` inferno, its own buildings and Strongbox. */
 const inferno = (buildings: { t: number; l?: number; cB?: number }[] = [], lockerdata: GoalSave["lockerdata"] = {}): GoalSave => ({
   type: "inferno",
-  buildingdata: Object.fromEntries(buildings.map((building, id) => [String(id), { id, X: 0, Y: 0, ...building }])),
+  buildingdata: Object.fromEntries(buildings.map((building, id) => [String(id), { id, x: 0, y: 0, X: 0, Y: 0, ...building }])),
   lockerdata,
 });
 
@@ -62,7 +62,7 @@ describe("the data", () => {
   test("Shiny on five quests, 85 in all (R12)", () => {
     const shiny = Object.fromEntries(INFERNO_GOALS.filter((one) => one.shiny).map((one) => [one.id, one.shiny]));
     expect(shiny).toEqual({ IQT1: 10, IT3: 10, IS5: 15, IUT3: 25, IQT3: 25 });
-    expect(Object.values(shiny).reduce((sum, amount) => sum + amount!, 0)).toBe(85);
+    expect(Object.values(shiny).reduce((sum: number, amount) => sum + (amount ?? 0), 0)).toBe(85);
   });
 
   test("Flash's monster rewards", () => {

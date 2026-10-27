@@ -73,6 +73,8 @@ export interface GoalView {
   name: string;
   description: string;
   reward: GoalReward;
+  /** Shiny paid on top of the reward (an Inferno quest's, R12). */
+  shiny?: number;
   monsters?: GoalMonsters;
   siege?: GoalSiege;
   status: "open" | "ready" | "claimed";
@@ -98,6 +100,8 @@ export interface GoalClaimReport {
   credited: ResourceAmounts;
   /** What the cap turned away. */
   overflow: ResourceAmounts;
+  /** Shiny paid to the account's shared Shiny. */
+  shiny?: number;
   /** Monsters housed. */
   monsters?: { id: string; count: number };
   /** The siege weapon made in the Chaos Factory. */
@@ -112,6 +116,12 @@ export interface GoalClaimReport {
 export const SIEGE_ROOM_MESSAGE =
   "You cannot collect this reward now. You may need to build a Chaos Factory first. " +
   "Otherwise, your Chaos Factory is building a Chaos Weapon, or currently has one stored.";
+
+/** The housing refusal: the Inferno's in Flash's words (`msg_questi_housing`), the surface's own. */
+const HOUSING_MESSAGE = {
+  surface: "Make room in Housing for this goal's monsters first.",
+  inferno: "Make room in your Compound for this quest's monsters first.",
+} as const;
 
 /** Brings the record up to date: the baseline if pending (the surface's only), then sticky `done`. */
 const refreshed = (save: Save, now: number, book: GoalBook): { onboarding: Onboarding; changed: boolean } => {
@@ -167,6 +177,7 @@ export const goalViews = (
       name: goal.name,
       description: goal.description,
       reward: goal.reward,
+      ...(goal.shiny && { shiny: goal.shiny }),
       ...(monsters && { monsters }),
       ...(siege && { siege }),
       status,
@@ -196,7 +207,8 @@ export const planGoalsState = (save: Save, now: number) => {
  * Refusals: `400 unknownGoal`; `409 goalHidden` (prereq not claimed, or a Map
  * Room 1 goal on Map Room 2); `409 alreadyClaimed` (the baseline's included);
  * `409 notMet`; `409 mapRoom3` for monsters on a Map Room 3 yard;
- * `409 housing { monster, count, need, free }` when Housing cannot take
+ * `409 housing { monster, count, need, free }` when Housing (the Inferno's
+ * Compound) cannot take
  * every monster; `409 siegeRoom` when the Chaos Factory cannot take the
  * weapon (none built, making one, or holding one).
  */
@@ -227,7 +239,7 @@ export const planGoalClaim = (save: Save, id: string, now: number) => {
     const need = spaceNeeded(goal, levels);
     const free = freeHousing(save, housed, levels, now);
     if (free < need) {
-      throw yardRefusedErr("housing", "Make room in Housing for this goal's monsters first.", {
+      throw yardRefusedErr("housing", HOUSING_MESSAGE[book.surface ? "surface" : "inferno"], {
         monster: goal.monsters.id,
         count: goal.monsters.count,
         need,
@@ -255,6 +267,7 @@ export const planGoalClaim = (save: Save, id: string, now: number) => {
     id: goal.id,
     credited: fit.credited,
     overflow: fit.overflow,
+    ...(goal.shiny && { shiny: goal.shiny }),
     ...(goal.monsters && { monsters: { id: goal.monsters.id, count: goal.monsters.count } }),
     ...(goal.siege && siege && { siegeReward: { id: goal.siege, count: 1 as const }, siege: siegeView(siege) }),
     points,
@@ -263,6 +276,9 @@ export const planGoalClaim = (save: Save, id: string, now: number) => {
     report,
     slices: { onboarding, ...(monsters && { monsters }), ...(siege && { siege }) },
     credit,
+    // To the shared Shiny: the wrapper's `credits` is the main row's on the
+    // Inferno too (`infernoView`). The `claimed` mark above makes it once.
+    ...(goal.shiny && { grantShiny: goal.shiny }),
     points,
   };
 };
