@@ -47,10 +47,11 @@ HEAD_SCALE = 0.94
 
 # ------------------------------------------------------------------------------------------------------------- tiers
 # the parts every tier shares keep their size (base, tyres, head); the box grows by sections
+BASE_R = 0.94                         # the striped base's radius (the painted base is a little inside the tyre stacks)
 BASE_H = 0.95                         # striped base (tier 1; the painted tiers 2 and 3 have a lower one), a plate 0.08 on it
 RING_UP, TOP_UP = 0.48, 0.62          # the cage ring above the box, the head's seat above the ring (the painted strip's
                                       # heads sit this high: their boxes match the 3D ones within a pixel at 4x)
-BOX_A = 0.76                          # the box's half side (its corners point at bearings 45, 135, 225, 315)
+BOX_A = 0.74                          # the box's half side (its corners point at bearings 45, 135, 225, 315)
 TIERS = {
     1: dict(secs=[1.0], band=0.0, line="cool"),
     2: dict(secs=[1.26, 1.26], band=0.12, line="gold", base=0.70),
@@ -122,6 +123,7 @@ def m_lens(name, cx, cz, rad, stops):
 # with bright edges), and a deeper gold for tier 2's big flat box faces (the shared gold's pale top washes them out)
 L.METALS["lsteel"] = ((28, 32, 38), (92, 98, 102), (168, 174, 178), (0.92, 0.96, 1.0, 1))
 L.METALS["lblack"] = ((12, 12, 18), (40, 40, 50), (92, 94, 112), (0.85, 0.9, 1.0, 1))
+L.METALS["olsteel"] = ((38, 42, 34), (112, 118, 102), (184, 190, 172), (0.92, 0.96, 0.9, 1))   # tier 1's olive steel
 L.METALS["lgold"] = ((100, 56, 0), (216, 146, 12), (252, 206, 80), (1.0, 0.9, 0.55, 1))
 
 
@@ -148,7 +150,7 @@ def materials(tier):
         M["plate"] = gunmetal
         M["plate_top"] = plate_dark
         M["lid"] = gunmetal
-        M["bar"] = L.mat_metal("steel")
+        M["bar"] = L.mat_metal("olsteel")
         M["column"] = brass
         M["ring"] = M["bar"]
         M["trim"] = gunmetal
@@ -291,20 +293,20 @@ def build(tier):
     # ---- striped base with its plate
     base_h = T.get("base", BASE_H)
     z0, z1 = base_h, base_h + 0.08
-    base = lathe("base", [
+    base = lathe("base", [[(r * BASE_R, z) for r, z in seg] for seg in [
         [(0.97, 0.0), (1.0, 0.03), (1.0, base_h - 0.03), (0.98, base_h)],
         [(0.98, base_h), (1.02, z0 + 0.01), (1.03, z0 + 0.03), (1.03, z1 - 0.02), (1.01, z1), (0.97, z1)],
         [(0.97, z1), (0.0, z1)],
-    ], [M["stripes"], M["plate"], M["plate_top"]], mat_of_seg=[0, 1, 2], parent=body)
+    ]], [M["stripes"], M["plate"], M["plate_top"]], mat_of_seg=[0, 1, 2], parent=body)
     L.add_outline(base, L.line("warm"))
     bm = bmesh.new()
-    c, nn = ring_of(30, 1.03, (z0 + z1) / 2, 0.5)
+    c, nn = ring_of(30, 1.03 * BASE_R, (z0 + z1) / 2, 0.5)
     studs(bm, c, nn, r=0.03)
     obj_from_bm("rivets_base", bm, [M["rivet"]], parent=body)
 
     # ---- tyre stacks at the four corners
     bm = bmesh.new()
-    for b in (45, 128, 225, 322):
+    for b in (45, 140, 225, 310):
         p = bear(b, 1.1 if b == 45 else 1.18)
         for i in range(3):
             tyre(bm, (p.x, p.y, 0.15 + 0.29 * i))
@@ -322,7 +324,7 @@ def build(tier):
              (Vector((-1, 0, 0)), Vector((0, -1, 0))), (Vector((0, -1, 0)), Vector((1, 0, 0)))]   # (normal, along)
     sec_z = []
     for si, h in enumerate(T["secs"]):
-        rbox(bm, (2 * a, 2 * a, h), Matrix.Translation((0, 0, zb)), bevel=0.03, segs=2)
+        rbox(bm, (2 * a, 2 * a, h), Matrix.Translation((0, 0, zb)), bevel=0.012, segs=1)   # crisp corners, as painted
         sec_z.append((zb, zb + h))
         for nrm, u in faces:
             # rivets round the face's edge
@@ -347,7 +349,7 @@ def build(tier):
     box_top = zb
     # the lid: a thin plate on the box
     lid = bmesh.new()
-    rbox(lid, (2 * a + 0.02, 2 * a + 0.02, 0.05), Matrix.Translation((0, 0, box_top - 0.02)), bevel=0.02, segs=2)
+    rbox(lid, (2 * a + 0.02, 2 * a + 0.02, 0.05), Matrix.Translation((0, 0, box_top - 0.02)), bevel=0.01, segs=1)
     L.add_outline(obj_from_bm("lid", lid, [M["lid"]], parent=body, sharp=30), line_box, L.LINE * 0.8)
     if tier > 1:   # a trim round the bottom
         rbox(trim, (2 * a + 0.05, 2 * a + 0.05, 0.06), Matrix.Translation((0, 0, z1)), bevel=0.02, segs=2)
@@ -398,13 +400,13 @@ def build(tier):
         p_, q_ = rings[i], rings[(i + 1) % n]
         for j in range(k):
             bm.faces.new((p_[j], q_[j], q_[(j + 1) % k], p_[(j + 1) % k]))
-    dc = a * math.sqrt(2) + 0.035
+    dc = a * math.sqrt(2) + 0.06                 # just outside the box's corners, which show inside them
     for b in (45, 135, 225, 315):
         pts = [bear(b, dc, z1 - 0.02), bear(b, dc, box_top - 0.05)]
         pts = [pts[0] + (pts[1] - pts[0]) * t for t in np.linspace(0, 1, 8)][:-1]
-        pts += bezier(bear(b, dc, box_top - 0.05), bear(b, dc, box_top + 0.22), bear(b, rr + 0.25, rz + 0.04),
+        pts += bezier(bear(b, dc, box_top - 0.05), bear(b, dc, box_top + 0.32), bear(b, rr + 0.32, rz + 0.06),
                       bear(b, rr + 0.02, rz), n=12)
-        tube(bm, pts, [0.085 if tier == 1 else 0.095] * len(pts), sides=14)
+        tube(bm, pts, [0.065 if tier == 1 else 0.075] * len(pts), sides=14)
     cage = obj_from_bm("cage", bm, [M["bar"]], parent=body)
     L.add_outline(cage, line_box)
     # amber lamps on the ring where the left and right bars meet it
@@ -427,13 +429,14 @@ def build(tier):
     obj_from_bm("lamps_glow", bm, [M["amber_glow"]], parent=body)
     # the hoses at the back right: a red pipe up and a blue loop back down
     bm = bmesh.new()
-    pr0, pr1 = bear(285, 0.66, rz - 0.04), bear(285, 0.66, top + 0.38)
+    pr0, pr1 = bear(285, 0.66, rz - 0.04), bear(285, 0.66, top + 0.2)
     tube(bm, [pr0 + (pr1 - pr0) * t for t in np.linspace(0, 1, 6)], [0.05] * 6, sides=12)
     hr = obj_from_bm("hose_red", bm, [M["hose_r"]], parent=body)
     L.add_outline(hr, L.line("cool"), L.LINE * 0.8)
     bm = bmesh.new()
-    pb = bezier(pr1 - Vector((0, 0, 0.06)), pr1 + Vector((0, 0, 0.28)), bear(318, 0.86, top + 0.4), bear(318, 0.86, top + 0.05), n=14)
-    pb += [bear(318, 0.86, top - 0.1 - 0.12 * i) for i in range(1, 4)]
+    pb = bezier(pr1 - Vector((0, 0, 0.06)), pr1 + Vector((0, 0, 0.14)), bear(318, 0.86, top + 0.2), bear(318, 0.86, top - 0.02),
+                n=14)   # a low loop, as painted
+    pb += [bear(318, 0.86, top - 0.12 - 0.12 * i) for i in range(1, 4)]
     tube(bm, pb, [0.055] * len(pb), sides=12)
     hb = obj_from_bm("hose_blue", bm, [M["hose_b"]], parent=body)
     L.add_outline(hb, L.line("cool"), L.LINE * 0.8)
