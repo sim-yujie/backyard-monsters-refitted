@@ -351,9 +351,18 @@ export const noticeText = (group: JobNoticeGroup): string => {
 /** What goes after a sentence before the next: ". ", or a space after one that ends itself ("…hatched!"). */
 const after = (text: string): string => (/[.!?]$/.test(text) ? " " : ". ");
 
-/** Sentences joined by {@link after}. */
-const sentences = (texts: readonly string[]): string =>
-  texts.reduce((line, text, index) => (index === 0 ? text : line + after(line) + text), "");
+/**
+ * The full stop a line of several sentences ends with ("Bramble attacked your
+ * Inferno yard. It was left 30% damaged, and 1,200 Bone were looted."), or ""
+ * for a line of one, which reads as a list row ("Upgrade finished: Silo 7").
+ */
+const finalStop = (text: string): string => (/[.!?] /.test(text) && !/[.!?]$/.test(text) ? "." : "");
+
+/** Sentences joined by {@link after}, a line of several closed by {@link finalStop}. */
+const sentences = (texts: readonly string[]): string => {
+  const line = texts.reduce((joined, text, index) => (index === 0 ? text : joined + after(joined) + text), "");
+  return line + finalStop(line);
+};
 
 /** A heading after the away lead-in, where it no longer starts the sentence. */
 const awayHeading = (group: JobNoticeGroup): JobNoticeGroup => ({
@@ -412,6 +421,7 @@ export const jobLine = (
       appendGroup(line, awayHeading(group), select);
     });
   }
+  line.append(finalStop(line.textContent ?? ""));
   return line;
 };
 
