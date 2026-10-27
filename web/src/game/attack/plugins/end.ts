@@ -555,7 +555,10 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         ...(player
           ? {
               inferno: {
-                result: { title: PLAYER_RESULT_TITLE, ...describeOutcome("main", target.name, player.damage) },
+                result: {
+                  title: PLAYER_RESULT_TITLE,
+                  ...describeOutcome("main", target.name, player.damage, false, true),
+                },
                 taken: playerTaken(amountsOf(player.loot) ?? none, session.state().loot),
                 backAt: null,
                 purse: amountsOf(player.total) ?? none,

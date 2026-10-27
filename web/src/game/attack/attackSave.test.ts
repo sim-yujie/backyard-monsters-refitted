@@ -454,6 +454,8 @@ describe("the pieces", () => {
     expect(targetLabel({ baseid: "214", kind: "wild", name: "Moloch's Minions", infernoTribe: true })).toBe(
       "Moloch's Minions",
     );
+    // Another player's Inferno yard says so (WP 3.5).
+    expect(targetLabel({ baseid: "4139", kind: "main", name: "Bob", infernoPlayer: true })).toBe("Bob's Inferno yard");
   });
 
   it("summarises the ended session for the panel", () => {

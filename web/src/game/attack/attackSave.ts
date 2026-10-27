@@ -392,13 +392,15 @@ const MAIN_PROTECTION_DAMAGE = 50;
  * "destroyed" (#152).
  *
  * The guided start's practice camp (issue #227) is a camp by name already,
- * so it is "The practice camp", not "Practice camp's camp".
+ * so it is "The practice camp", not "Practice camp's camp". Another player's
+ * Inferno yard (WP 3.5) is "Bob's Inferno yard".
  */
 export const describeOutcome = (
   kind: AttackTargetKind,
   name: string,
   damagePercent: number,
   practice = false,
+  infernoYard = false,
 ): { outcome: string; tone: OutcomeTone } => {
   const damage = Math.floor(damagePercent);
   if (kind === "wild" || kind === "outpost") {
@@ -414,9 +416,10 @@ export const describeOutcome = (
           tone: "lose",
         };
   }
+  const yard = `${name}'s ${infernoYard ? "Inferno yard" : "yard"}`;
   return damagePercent >= MAIN_PROTECTION_DAMAGE
-    ? { outcome: `Heavy damage: ${damage}% of ${name}'s yard.`, tone: "win" }
-    : { outcome: `${damage}% damage dealt to ${name}'s yard.`, tone: "neutral" };
+    ? { outcome: `Heavy damage: ${damage}% of ${yard}.`, tone: "win" }
+    : { outcome: `${damage}% damage dealt to ${yard}.`, tone: "neutral" };
 };
 
 /**
@@ -424,7 +427,8 @@ export const describeOutcome = (
  * outpost", "Bob's yard" (#187). The guided start's practice camp (issue
  * #227) is a camp by name already: "The practice camp", or "the practice
  * camp" inside a sentence. A Moloch tribe is named for its band already:
- * "Moloch's Minions" (Inferno WP 2.10).
+ * "Moloch's Minions" (Inferno WP 2.10). Another player's Inferno yard is
+ * "Bob's Inferno yard" (WP 3.5).
  */
 export const targetLabel = (
   target: {
@@ -433,11 +437,13 @@ export const targetLabel = (
     readonly name: string;
     readonly mapversion?: number;
     readonly infernoTribe?: boolean;
+    readonly infernoPlayer?: boolean;
   },
   sentenceStart = true,
 ): string => {
   if (isPracticeCamp(target)) return sentenceStart ? "The practice camp" : "the practice camp";
   if (target.infernoTribe) return target.name;
+  if (target.infernoPlayer) return `${target.name}'s Inferno yard`;
   const noun = target.kind === "wild" ? "camp" : target.kind === "outpost" ? "outpost" : "yard";
   return `${target.name}'s ${noun}`;
 };
@@ -451,7 +457,7 @@ export const summariseAttack = (session: AttackSession): AttackSummary => {
   // A tribe is won on its Under Hall, not the damage (WP 2.10); the landing has the last word.
   const outcome = infernoTribe
     ? tribeOutcome(underHallFallen(load.buildingdata, session.battle()?.state().health ?? {}))
-    : describeOutcome(kind, name, state.damagePercent, isPracticeCamp(session.target));
+    : describeOutcome(kind, name, state.damagePercent, isPracticeCamp(session.target), session.target.infernoPlayer);
   // The report's monster rows, without the champions' (#22): the engine's
   // own kill count takes in a champion at no health, which was never flung
   // as a monster, and the Minis and zombies born on the field.

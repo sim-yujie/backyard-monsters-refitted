@@ -125,7 +125,7 @@ describe("an Inferno player attack's end", () => {
     expect(payload.monsterupdate).toEqual([{ baseid: "9001", m: { housed: { IC1: 3 } } }]);
     expect(modal.querySelector(".attack-end__status--unsent")).toBeNull();
     expect(modal.querySelector(".panel__title")?.textContent).toBe(PLAYER_RESULT_TITLE);
-    expect(modal.querySelector(".attack-end__outcome")?.textContent).toBe("0% damage dealt to Bob's yard.");
+    expect(modal.querySelector(".attack-end__outcome")?.textContent).toBe("0% damage dealt to Bob's Inferno yard.");
   });
 
   it("leaving the screen before anything was flung sends it as the page goes", async () => {
@@ -149,7 +149,7 @@ describe("an Inferno player attack's end", () => {
     session.appendFling({ x: -100, y: -100, monsters: { IC1: 1 } });
     session.retreat();
     await flush();
-    expect(modal.querySelector(".attack-end__outcome")?.textContent).toBe("Heavy damage: 55% of Bob's yard.");
+    expect(modal.querySelector(".attack-end__outcome")?.textContent).toBe("Heavy damage: 55% of Bob's Inferno yard.");
     expect(showResources).toHaveBeenCalledWith({ r1: 900, r2: 60, r3: 0, r4: 0 });
     const home = [...modal.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === RETURN_HOME)!;
     home.click();
