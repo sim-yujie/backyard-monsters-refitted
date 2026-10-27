@@ -85,9 +85,12 @@ export interface GoalsPanelOptions {
   words?: GoalsPanelWords;
 }
 
-/** "10 Octo-oozes" (Flash's names take an s). */
+/**
+ * "10 Octo-oozes" (Flash's names take an s). A name already ending in s or x
+ * stays as it is: "20 Valgos", "5 Sabnox", not "Valgoss" or "Sabnoxs".
+ */
 export const monstersText = (count: number, name: string): string =>
-  `${formatAmount(count)} ${count === 1 ? name : `${name}s`}`;
+  `${formatAmount(count)} ${count === 1 || /[sx]$/i.test(name) ? name : `${name}s`}`;
 
 /** A siege weapon reward as Flash's reward popup listed it: "1 Marilyn Monstroe" (`QUESTS.as:1846-1847`). */
 export const siegeText = (count: number, name: string): string => `${formatAmount(count)} ${name}`;

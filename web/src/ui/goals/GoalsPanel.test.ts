@@ -173,5 +173,7 @@ describe("GoalsPanel", () => {
   it("names monsters as Flash did", () => {
     expect(monstersText(1, "Brain")).toBe("1 Brain");
     expect(monstersText(2, "D.A.V.E.")).toBe("2 D.A.V.E.s");
+    expect(monstersText(20, "Valgos")).toBe("20 Valgos");
+    expect(monstersText(5, "Sabnox")).toBe("5 Sabnox");
   });
 });
