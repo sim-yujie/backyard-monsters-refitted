@@ -34,6 +34,8 @@ from mathutils import Matrix, Vector
 EL = 23.0                   # camera elevation: the Flash renders' ellipses (ring 0.38 tall for 1 wide) say 22-24
 SUN = (112, 46)             # the light comes from bearing 112 (screen left, a little toward the viewer), 46 degrees up
 LINE = 0.024                # inside outline width, in model units (the Cannon's drum radius = 1: about 2 px at 4x)
+GLINT = tuple(Vector((math.sin(math.radians(75)) * 0.82, math.cos(math.radians(75)) * 0.82, 0.57)).normalized())
+                            # the painted window highlight faces this way (toward the viewer's left, up)
 OUTER = 1.0                 # the silhouette's extra outline, in 4x pixels, on top of the inside line
 DEBUG_LIGHT = bool(os.environ.get('LOOK3D_DEBUG_LIGHT'))   # draw only the sun's light, for checks
 
@@ -288,7 +290,7 @@ class Paint:
         return t.outputs[0]
 
     def finish(self, albedo, spec=0.3, spec_rough=0.35, spec_col=(1.0, 0.97, 0.9, 1), metal=False, bump=None,
-               shade=None, ao_k=0.45, emit=None, edge_dark=0.5, sheen=0.35):
+               shade=None, ao_k=0.45, emit=None, edge_dark=0.5, sheen=0.35, glint=0.0):
         """albedo: an RGBA tuple (linear) or a socket. shade: the light ramp's stops (default cool shade to warm light).
         metal: brighter facing up (the sky), darker facing down and at the rims (edge_dark), plus a sky sheen."""
         normal = None
@@ -323,7 +325,7 @@ class Paint:
             geo = self.N.new("ShaderNodeNewGeometry")
             sep = self.N.new("ShaderNodeSeparateXYZ")
             self.link(geo.outputs["Normal"], sep.inputs[0])
-            up = self.math("MULTIPLY_ADD", sep.outputs[2], 0.45, 0.8)
+            up = self.math("MULTIPLY_ADD", sep.outputs[2], 0.3, 0.92)
             lw = self.N.new("ShaderNodeLayerWeight")
             lw.inputs["Blend"].default_value = 0.35
             edge = self.math("MULTIPLY_ADD", lw.outputs["Facing"], -edge_dark, 1.0)
@@ -337,6 +339,14 @@ class Paint:
         col = self.mix(albedo, sh, 1.0, 'MULTIPLY')
         if metal:   # a soft sky sheen on faces that look up, as painted metal has
             col = self.mix(col, sky, 1.0, 'ADD')
+        if metal and glint:   # a painted window highlight: a bright streak where the surface faces GLINT (front left, up)
+            dp = self.N.new("ShaderNodeVectorMath")
+            dp.operation = 'DOT_PRODUCT'
+            self.link(geo.outputs["Normal"], dp.inputs[0])
+            dp.inputs[1].default_value = GLINT
+            gl_ = self.ramp(dp.outputs["Value"], [(0.88, (0, 0, 0, 1)), (0.95, (1, 1, 1, 1)), (0.985, (0.5, 0.5, 0.5, 1))])
+            gl_ = self.mix(gl_, tuple(c * glint for c in spec_col[:3]) + (1,), 1.0, 'MULTIPLY')
+            col = self.mix(col, gl_, 1.0, 'ADD')
         if spec > 0:
             gl = self.N.new("ShaderNodeBsdfGlossy")
             gl.inputs["Color"].default_value = (1, 1, 1, 1)
@@ -347,7 +357,7 @@ class Paint:
             self.link(gl.outputs[0], s2.inputs[0])
             l2 = self.node("ShaderNodeRGBToBW")
             self.link(s2.outputs[0], l2.inputs[0])
-            hi = self.ramp(l2.outputs[0], [(0.25, (0, 0, 0, 1)), (0.9, (1, 1, 1, 1))])
+            hi = self.ramp(l2.outputs[0], [(0.4, (0, 0, 0, 1)), (1.0, (1, 1, 1, 1))])
             hi = self.mix(hi, tuple(c * spec for c in spec_col[:3]) + (1,), 1.0, 'MULTIPLY')
             col = self.mix(col, hi, 1.0, 'ADD')
         if emit is not None:
@@ -364,20 +374,20 @@ def metal_ramp(dark, mid, light):
     """A metal's own light ramp (albedo white): dark edge colour in shade, its colour in the light, a pale top."""
     def lerp(t):
         return srgb(*[round(a + (b - a) * t) for a, b in zip(dark, mid)])
-    return [(0.0, lerp(0.3)), (0.3, lerp(0.75)), (0.62, srgb(*mid)), (1.0, srgb(*light))]
+    return [(0.0, lerp(0.3)), (0.22, lerp(0.8)), (0.48, srgb(*mid)), (0.9, srgb(*light))]
 
 
 # Metals: (shade, colour, light), highlight colour. Gold and brass get gold highlights and dark brown edges.
 METALS = dict(
-    brass=((92, 48, 14), (214, 140, 44), (255, 214, 120), (1.0, 0.92, 0.6, 1)),
-    gold=((110, 62, 8), (236, 172, 30), (255, 238, 140), (1.0, 0.95, 0.65, 1)),
-    steel=((50, 52, 66), (138, 140, 154), (214, 218, 228), (0.95, 0.97, 1.0, 1)),
+    brass=((92, 48, 14), (218, 142, 44), (252, 200, 100), (1.0, 0.86, 0.52, 1)),
+    gold=((128, 62, 0), (248, 178, 20), (255, 226, 92), (1.0, 0.9, 0.5, 1)),
+    steel=((52, 54, 68), (150, 152, 166), (204, 208, 220), (0.95, 0.97, 1.0, 1)),
     gunmetal=((26, 26, 36), (78, 78, 94), (150, 152, 172), (0.92, 0.95, 1.0, 1)),
     black=((14, 14, 20), (48, 48, 60), (112, 114, 134), (0.85, 0.9, 1.0, 1)),
 )
 
 
-def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.55, sheen=0.35):
+def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.62, sheen=0.35, glint=0.16):
     """A painted metal: its own dark-to-light ramp, gold/steel highlights, dark rims, a little wear (pale scratches, dark
     specks) so it does not look factory-clean."""
     dark, mid, light, hi = METALS[kind or name]
@@ -389,7 +399,7 @@ def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.
         speck = p.ramp(p.noise(9.0, 6.0, 0.65), [(0.30, (1 - wear * 0.5,) * 3 + (1,)), (0.34, (1, 1, 1, 1))])
         tone = p.mix(tone, speck, 1.0, 'MULTIPLY')
     return p.finish(tone, spec=spec, spec_rough=spec_rough, spec_col=hi, metal=True, shade=metal_ramp(dark, mid, light),
-                    edge_dark=edge_dark, sheen=sheen)
+                    edge_dark=edge_dark, sheen=sheen, glint=glint)
 
 
 def mat_flat(name, col, spec=0.3, spec_rough=0.35, metal=False, emit=None):
@@ -455,9 +465,14 @@ def mat_halo(name, col=(255, 190, 60), strength=0.55):
     return m
 
 
-def mat_stripes(name, a, b, n, phase=0.0, chips=True, metal_b=False, spec=0.35):
+# a warmer light ramp than Paint's default, for pale paint and wood (the default's cool shade turns them grey-lilac)
+WARM_SHADE = [(0.0, (0.40, 0.31, 0.32, 1)), (0.18, (0.50, 0.42, 0.42, 1)), (0.5, (0.80, 0.75, 0.70, 1)),
+              (1.0, (1.0, 0.97, 0.9, 1))]
+
+
+def mat_stripes(name, a, b, n, phase=0.0, chips=True, ratio=0.5, spec=0.35):
     """Vertical painted stripes round the Z axis: n of colour a, n of colour b (0-255 sRGB), leaning a little, wobbly,
-    with chipped paint on colour a."""
+    with chipped paint on colour a. ratio: colour a's share of each pair."""
     p = Paint(name)
     sep = p.N.new("ShaderNodeSeparateXYZ")
     p.link(p.tc.outputs["Object"], sep.inputs[0])
@@ -465,7 +480,7 @@ def mat_stripes(name, a, b, n, phase=0.0, chips=True, metal_b=False, spec=0.35):
     wob = p.math("MULTIPLY", p.math("SUBTRACT", p.noise(2.5, 2.0), 0.5), 0.14)
     twist = p.math("MULTIPLY", sep.outputs[2], 0.06)
     u = p.math("ADD", p.math("ADD", p.math("MULTIPLY", ang, n / (2 * math.pi)), wob), twist)
-    bnd = p.math("GREATER_THAN", p.math("FRACT", p.math("ADD", u, phase)), 0.5)
+    bnd = p.math("GREATER_THAN", p.math("FRACT", p.math("ADD", u, phase)), ratio)
     paint = p.mix(srgb(*a), srgb(*b), bnd)
     if chips:
         chip = p.ramp(p.noise(7.0, 8.0, 0.62), [(0.64, (0, 0, 0, 1)), (0.665, (1, 1, 1, 1))])
@@ -473,10 +488,10 @@ def mat_stripes(name, a, b, n, phase=0.0, chips=True, metal_b=False, spec=0.35):
         paint = p.mix(paint, srgb(*[min(255, c + 60) for c in b]), chip)
     grime = p.ramp(p.noise(2.0, 3.0), [(0.3, (0.84, 0.82, 0.82, 1)), (0.7, (1, 1, 1, 1))])
     col = p.mix(paint, grime, 1.0, 'MULTIPLY')
-    return p.finish(col, spec=spec, spec_rough=0.3)
+    return p.finish(col, spec=spec, spec_rough=0.3, shade=WARM_SHADE)
 
 
-def mat_wood(name, light=(236, 204, 130), dark=(196, 150, 82), crack=(120, 82, 40)):
+def mat_wood(name, light=(242, 204, 118), dark=(210, 152, 70), crack=(120, 78, 34)):
     """Pale painted wood/bone (the Cannon's ring, prongs and feet): long grain, a few dark cracks."""
     p = Paint(name)
     grain = p.noise(4.0, 6.0, 0.6, stretch=(1.0, 1.0, 0.18))
@@ -489,8 +504,7 @@ def mat_wood(name, light=(236, 204, 130), dark=(196, 150, 82), crack=(120, 82, 4
     mask = p.ramp(p.noise(1.5, 2.0), [(0.58, (1, 1, 1, 1)), (0.62, (0, 0, 0, 1))])
     cm = p.math("MAXIMUM", cr, mask)
     col = p.mix(srgb(*crack), base, cm)
-    shade = [(0.0, (0.36, 0.30, 0.34, 1)), (0.18, (0.46, 0.40, 0.42, 1)), (0.5, (0.78, 0.74, 0.70, 1)),
-             (1.0, (1.0, 0.97, 0.9, 1))]
+    shade = WARM_SHADE
     return p.finish(col, spec=0.18, spec_rough=0.45, bump=(p.noise(6.0, 6.0), 0.2), shade=shade)
 
 

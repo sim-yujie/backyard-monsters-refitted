@@ -1,0 +1,19 @@
+{
+ "cells": 32,
+ "cell_w": 196,
+ "cell_h": 196,
+ "pivot_in_body_4x": [
+  292.0,
+  680.0
+ ],
+ "body_4x_size": [
+  620,
+  960
+ ],
+ "painted_pivot_in_body_4x": [
+  295,
+  680
+ ],
+ "rule": "cell k = trunc(bearing / 11.25); cell k shows heading 11.25k (the same 32 headings as the painted strip)",
+ "note": "pivot = middle of each cell; heading = ground bearing in degrees (0 down-right on screen, 45 at the viewer). Rendered from cannon3d.py: the body's parts that stand in front of the barrel are already cut out of each cell, so no front layer is needed."
+}
