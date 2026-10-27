@@ -433,8 +433,8 @@ check. Owner screenshots before merge for any screen.
 
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
-| 5.1 | Korath raisable once `inferno_baseid` exists; `korath_notice_at` | tests | 1.12 | S |
-| 5.2 | Client: "Korath unlocked" message on the next surface visit + cage entry | screenshots | 5.1 | S |
+| 5.1 | Korath raisable once `inferno_baseid` exists; `korath_notice_at` (done 27 Oct: `server/src/services/inferno/korath.ts`; Korath (champion type 4) can be raised once the player owns an Inferno yard or `korath_unlocked_at` is set (the Descent capture and the seed set it); the one-champion rule is unchanged; he hatches at power level 0, so no Breath of Fire or Fists of Doom (I13); refused with the Inferno switch off; `infernostate` carries `korathUnlocked` and `korathNotice`, and `POST /bm/inferno/korath/seen` marks the notice seen once) | tests | 1.12 | S |
+| 5.2 | Client: "Korath unlocked" message on the next surface visit + cage entry (done 27 Oct: on the next main-yard load, once no other popup, Bob or guide is up, a "Korath unlocked" popup shows once with his level 6 painted portrait, Flash's line "Korath is now one of your own!" and the next step (build, open or finish the Champion Cage, wait for the egg, open the chamber), then posts the seen route; the Champion Cage lists Korath as a fourth choice; the cage card and egg use painted art, Korath on the yard and in battle still uses Flash's sprite sheets (open question, section 6). Report `agent-handoffs/reports/inferno-s2.md` "Slice 5") | screenshots | 5.1 | S |
 
 ### S6 — Surface Quake/Magma Towers and siege (8)
 
@@ -464,8 +464,14 @@ the Korath redraw from the champion plan. S3-S6 can run in parallel after S1 (S6
 
 ## 6. Open questions
 
-None. I13-I16 and R1-R12 were answered on 2026-10-24 (2.1). One number is a suggestion to settle in
+I13-I16 and R1-R12 were answered on 2026-10-24 (2.1). One number is a suggestion to settle in
 play tests: the burn strength (2.4). The Shiny quest prizes (2.8) were approved on 2026-10-27.
+
+Korath's on-hit flame (asked 27 Oct). Flash's base Korath leaves a flame (burn) on every monster he hits,
+whatever his power level, and our engine copies this. I13 left out the event prize called "Burn",
+which in Flash's code switched nothing on. The flame is kept for now; owner to decide whether it
+stays. Also: Korath on the yard and in battle still uses Flash's sprite sheets, while the other
+champions have been redrawn; see the Slice 5 pictures.
 
 ## 7. Later ideas
 
