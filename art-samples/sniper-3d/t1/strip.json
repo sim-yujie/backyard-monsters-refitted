@@ -25,5 +25,5 @@
   -20
  ],
  "rule": "cell k = heading 11.25k (0 down-right on screen, 45 at the viewer), as the painted strip",
- "note": "body@2x.png is on the painted body.t1@2x.webp canvas with the pivot on the same pixel; the turret cells are bigger than the painted 53 x 36 because the 3D gun reaches further down when it points at the viewer. Nothing of the body stands in front of the turret, so no front layer."
+ "note": "body@2x.png is on the painted body.t1@2x.webp canvas with the pivot on the same pixel; the turret cells (sized to fit every heading) are a little bigger than the painted 53 x 36. Nothing of the body stands in front of the turret, so no front layer."
 }

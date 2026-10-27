@@ -72,9 +72,9 @@ FEET = (45.0, 45.0 + 112, 45.0 - 112)
 FOOT_D, FOOT_R = 1.12, 0.28
 FRONT_FOOT_D = 1.42            # the front foot stands out in front of the (drawn-out) front corner, as painted
 TURRET_SCALE = 1.12
-DISC_STRETCH = 1.35            # the turntable too (the turret on it stays round: it turns)
-STRETCH = 1.9                  # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
-PLATE_STRETCH = 1.6            # the painted one (the body is only ever seen from this one side)
+DISC_STRETCH = 1.2             # the turntable too (the turret on it stays round: it turns)
+STRETCH = 1.6                  # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
+PLATE_STRETCH = 1.4            # the painted one (the body is only ever seen from this one side)
 if os.environ.get("SNIPER_STRETCH"):     # for camera-angle tests: body, plate, turntable
     STRETCH, PLATE_STRETCH, DISC_STRETCH = (float(v) for v in os.environ["SNIPER_STRETCH"].split(","))
 

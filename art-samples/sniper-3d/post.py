@@ -103,8 +103,7 @@ class Tier:
             pivot=[0, g["pivot"]],
             rule="cell k = heading 11.25k (0 down-right on screen, 45 at the viewer), as the painted strip",
             note="body@2x.png is on the painted body.t%d@2x.webp canvas with the pivot on the same pixel; the turret "
-                 "cells are bigger than the painted 53 x 36 because the 3D gun reaches further down when it points at "
-                 "the viewer. Nothing of the body stands in front of the turret, so no front layer." % t), indent=1))
+                 "cells (sized to fit every heading) are a little bigger than the painted 53 x 36. Nothing of the body stands in front of the turret, so no front layer." % t), indent=1))
         # painted pieces
         self.pbody = Image.open(PA / f"body.t{t}@2x.webp").convert("RGBA")
         ps = Image.open(PA / f"turret.t{t}@2x.webp").convert("RGBA")
