@@ -14,7 +14,7 @@ import type { User } from "../../database/models/user.model.js";
 const dbName = process.env.FRIENDS_TEST_DB;
 
 const postgres = { em: null as unknown };
-mock.module("../../server.js", () => ({ postgres }));
+mock.module("../../server.js", () => ({ postgres, redis: {} }));
 
 const { friendsAmong, mayVisit } = await import("./friendFlags.js");
 const { baseModeHelp } = await import("../../controllers/base/load/modes/baseModeHelp.js");
