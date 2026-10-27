@@ -9,7 +9,7 @@ import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { attackNotBoundErr, noInfernoYardErr } from "../../errors/errors.js";
-import { HOUSING_BUNKER_TYPE, RESOURCE_KEYS, type ResourceAmounts } from "../../game-rules/combat/index.js";
+import { HOUSING_BUNKER_TYPE, RESOURCE_KEYS, type FlingLog, type ResourceAmounts } from "../../game-rules/combat/index.js";
 import { BaseSaveSchema } from "../../schemas/BaseSaveSchema.js";
 import { postgres } from "../../server.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -18,8 +18,8 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { parseFlingLog } from "../base/attackCheckpoint.js";
 import { checkAttackBinding } from "../base/attackSession.js";
-import { buildingDataWithout } from "../base/combat/abandonedAttack.js";
-import { attackLootOf } from "../base/combat/attackLoot.js";
+import { buildingDataWithout, type AbandonedInput, type AbandonedOutcome } from "../base/combat/abandonedAttack.js";
+import { attackLootOf, type AttackLoot } from "../base/combat/attackLoot.js";
 import { battleReplayInput, battleTick, foughtLoot } from "../base/combat/battle.js";
 import { garrisonsAfterBattle } from "../base/combat/bunkerGarrison.js";
 import { housedDefenders } from "../base/combat/defenderForces.js";
@@ -55,9 +55,8 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * this caller (`infernoPlayerSession.ts`, the row's `attackid`): anything else
  * is refused before anything is written, and only the save carrying `over`
  * lands, once, under a lock. A save without `over` writes nothing. An attack
- * left without a final save lands nothing (the defender keeps everything,
- * as after a tribe or Descent attack; owner to confirm) and its mark runs out
- * after seven minutes.
+ * left without a final save is closed by the server from its last checkpoint
+ * (`infernoPlayerFinalise.ts`, owner 27 Oct), through the same landing.
  *
  * The battle is the server's: the fling log cut to what the attack can do (no
  * bombs, no siege, each fling within a Housing Bunker's load), replayed over
@@ -127,17 +126,59 @@ const land = async (
   yard: Save,
   finalises: boolean
 ): Promise<InfernoPlayerLanding> => {
-  const em = postgres.em;
   const now = getCurrentDateTime();
   const attack = await requirePlayerBinding(ctx, user, saveData, yard, now);
   if (!finalises) return { save: yard, player: null };
 
   const battle = await playerBattle(ctx, user, saveData, attack, yard);
+  const loot = playerLoot(
+    attack,
+    yard,
+    { sent: saveData.attackloot, reported: saveData.resources, flinglog: saveData.flinglog },
+    battle
+  );
+  return writePlayerLanding(user, attack, yard, battle, loot, now);
+};
+
+/** The fightable part of a fling log, replayed over the yard as an Inferno yard (see the file comment). */
+export const playerReplayInput = (
+  attack: InfernoPlayerSession,
+  yard: Save,
+  log: FlingLog,
+  tick: number,
+  left: boolean | undefined
+): AbandonedInput | null =>
+  battleReplayInput({
+    flinglog: descentFightableLog(log, attack.flingerCapacity, attack.session.attackerAcademy),
+    session: attack.session,
+    defender: {
+      type: String(yard.type),
+      kind: "inferno",
+      buildingdata: yard.buildingdata as JsonObject | undefined,
+      buildinghealthdata: (yard.buildinghealthdata ?? {}) as JsonObject,
+      resources: null,
+    },
+    // The Inferno yard has no champion, catapult or siege.
+    attacker: { champion: [], catapult: 0, siege: null },
+    tick,
+    declareWar: attack.session.declareWar ?? false,
+    left,
+  });
+
+/**
+ * The loot by the surface save's rule (`attackLootOf`): the client's claim
+ * (or the replay's own figures, for an attack closed from its checkpoint)
+ * held to the server's battle, over the purse the start froze.
+ */
+export const playerLoot = (
+  attack: InfernoPlayerSession,
+  yard: Save,
+  claim: { sent: unknown; reported: unknown; flinglog: unknown },
+  battle: AbandonedOutcome | null
+): AttackLoot => {
   const purseAtStart = attack.session.defenderResources ?? { r1: 0, r2: 0, r3: 0, r4: 0 };
-  const loot = attackLootOf({
-    sent: saveData.attackloot,
-    reported: saveData.resources,
-    flinglog: saveData.flinglog,
+  return attackLootOf({
+    ...claim,
     session: attack.session,
     defender: {
       type: String(yard.type),
@@ -149,7 +190,26 @@ const land = async (
     mapRoom3: false,
     fought: battle ? foughtLoot(battle) : null,
   });
+};
 
+/**
+ * Lands the attack (see the file comment) and ends its session: the final
+ * save's path, and the finaliser's for an attack its attacker left
+ * (`infernoPlayerFinalise.ts`). The caller holds the attack's final lock.
+ *
+ * @param user - The attacker, with their main save.
+ * @param yard - The defender's Inferno yard.
+ * @param battle - The server's battle, or null when there was none to fight.
+ */
+export const writePlayerLanding = async (
+  user: User,
+  attack: InfernoPlayerSession,
+  yard: Save,
+  battle: AbandonedOutcome | null,
+  loot: AttackLoot,
+  now: number
+): Promise<InfernoPlayerLanding> => {
+  const em = postgres.em;
   const landed = await em.transactional(async (tx) => {
     const main = await lockRow(tx, { basesaveid: user.save!.basesaveid });
     const inferno = await lockArmyYard(tx, user, main);
@@ -315,30 +375,14 @@ const playerBattle = async (
   attack: InfernoPlayerSession,
   yard: Save
 ) => {
-  const { session } = attack;
   const log = parseFlingLog(saveData.flinglog);
-  if (!session.entryHoused || !log) return null;
+  if (!attack.session.entryHoused || !log) return null;
 
-  const input = battleReplayInput({
-    flinglog: descentFightableLog(log, attack.flingerCapacity, session.attackerAcademy),
-    session,
-    defender: {
-      type: String(yard.type),
-      kind: "inferno",
-      buildingdata: yard.buildingdata as JsonObject | undefined,
-      buildinghealthdata: (yard.buildinghealthdata ?? {}) as JsonObject,
-      resources: null,
-    },
-    // The Inferno yard has no champion, catapult or siege.
-    attacker: { champion: [], catapult: 0, siege: null },
-    tick: battleTick(saveData.tick),
-    declareWar: session.declareWar ?? false,
-    left: saveData.left,
-  });
+  const input = playerReplayInput(attack, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
   const base = { baseid: String(saveData.baseid) };
-  const battle = await replayBattleForSave(ctx, user, base, input, "an Inferno player attack has no finaliser, so nothing lands");
+  const battle = await replayBattleForSave(ctx, user, base, input, "the attack is closed from its last checkpoint");
 
   await recordBattleMismatches(
     ctx,

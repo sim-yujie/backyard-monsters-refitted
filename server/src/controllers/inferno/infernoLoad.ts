@@ -8,6 +8,7 @@ import { noInfernoYardErr } from "../../errors/errors.js";
 import { postgres } from "../../server.js";
 import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
+import { closeBeforeInfernoLoad } from "../../services/inferno/infernoPlayerFinalise.js";
 import {
   infernoPurse,
   infernoStorageCap,
@@ -92,6 +93,9 @@ export const loadInfernoYard = async (em: EntityManager, user: User, now: number
 
 export const infernoLoad: KoaController = async (ctx) => {
   requireInfernoEnabled();
+  // An attack the player left, or one on their yard whose window closed, lands
+  // before the yard is read (`infernoPlayerFinalise.ts`).
+  await closeBeforeInfernoLoad(ctx.authUser.userid);
   ctx.status = Status.OK;
   ctx.body = await loadInfernoYard(postgres.em, ctx.authUser, getCurrentDateTime());
 };

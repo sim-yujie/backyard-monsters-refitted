@@ -57,6 +57,8 @@ import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
 import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
+import { infernoConfig } from "../../../config/InfernoConfig.js";
+import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
 import type { AcademyLevels, AcademyRanks, ChampionBrains } from "../../../services/base/attackSession.js";
@@ -98,6 +100,8 @@ export const baseLoad: KoaController = async (ctx) => {
   const attacking = type === BaseMode.ATTACK || type === BaseMode.WMATTACK;
   if (type === BaseMode.BUILD || ATTACK_MODES.has(type)) {
     await finaliseBeforeLoad(user.userid, type, baseid, attacking);
+    // So is an Inferno player attack they left (`infernoPlayerFinalise.ts`).
+    if (infernoConfig.enabled) await closeInfernoPlayerAttacksOf(user.userid, type);
   }
 
   await postgres.em.populate(user, INFERNO_SAVE_MODES.has(type) ? ["save", "infernosave"] : ["save"]);

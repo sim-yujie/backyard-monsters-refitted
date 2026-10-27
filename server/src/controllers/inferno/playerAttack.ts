@@ -16,6 +16,7 @@ import { mapSaveData } from "../../services/base/mapSaveData.js";
 import { isBot } from "../../services/bots/isBot.js";
 import { purseAmounts } from "../../services/inferno/descent.js";
 import { attackedAt } from "../../services/inferno/infernoNeighbours.js";
+import { closeExpiredInfernoPlayerAttackOn } from "../../services/inferno/infernoPlayerFinalise.js";
 import { startInfernoPlayerSession } from "../../services/inferno/infernoPlayerSession.js";
 import { infernoAttackPermission, permitsAttack, vengeanceLeft } from "../../services/inferno/infernoPvp.js";
 import { infernoTribeFlingCapacity, infernoYardLevel } from "../../services/inferno/infernoTribes.js";
@@ -117,6 +118,8 @@ export const startInfernoPlayerAttack = async (
   if (!(Number(main.baseid_inferno) > 0)) throw noInfernoYardErr();
 
   const target = await targetYard(em, user, baseid);
+  // The yard's last attack, if its window closed without a save, lands first.
+  await closeExpiredInfernoPlayerAttackOn(target.yard.basesaveid, "superseded");
   const maproom = await em.findOne(InfernoMaproom, { userid: user.userid });
   const vengeance = vengeanceLeft(maproom?.neighbors?.find((entry) => entry.userid === target.yard.userid));
 

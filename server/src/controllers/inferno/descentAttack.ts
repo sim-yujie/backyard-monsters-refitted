@@ -30,6 +30,7 @@ import { readInfernoProgress } from "../../services/inferno/infernoProgress.js";
 import { catchUpArmiesForAttack } from "../../services/yard/armies.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { closeInfernoPlayerAttacksOf } from "../../services/inferno/infernoPlayerFinalise.js";
 import { startInfernoPlayerAttack, type InfernoPlayerAttackStart } from "./playerAttack.js";
 import { startInfernoTribeAttack, type InfernoTribeAttackStart } from "./tribeAttack.js";
 
@@ -164,6 +165,9 @@ export const infernoAttackStart: KoaController = async (ctx) => {
   const body = (ctx.request.body ?? {}) as { kind?: unknown; baseid?: unknown };
   const baseid = String(body.baseid ?? "");
   let start: DescentAttackStart | InfernoTribeAttackStart | InfernoPlayerAttackStart;
+  // A player attack the caller left is closed first: a new attack never
+  // undoes the last one (`infernoPlayerFinalise.ts`).
+  await closeInfernoPlayerAttacksOf(ctx.authUser.userid, `attack-start:${String(body.kind)}`);
   if (body.kind === "descent") start = await startDescentAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
   else if (body.kind === "tribe") start = await startInfernoTribeAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());
   else if (body.kind === "player") start = await startInfernoPlayerAttack(postgres.em, ctx.authUser, baseid, getCurrentDateTime());

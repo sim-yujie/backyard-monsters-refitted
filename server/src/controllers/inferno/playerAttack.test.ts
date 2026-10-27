@@ -61,6 +61,11 @@ mock.module("../../server.js", () => ({
     },
     // `isPlayerOnline`: a presence mark and a real action now, or nothing.
     get: async (key: string) => (onlineNow && !key.startsWith("presence-challenge") ? String(Date.now() / 1000) : null),
+    del: async (key: string) => (store.delete(key) ? 1 : 0),
+    // The open player attacks (`INFERNO_PLAYER_ATTACKS`): none to close here.
+    sadd: async () => 1,
+    srem: async () => 1,
+    smembers: async () => [],
   },
 }));
 

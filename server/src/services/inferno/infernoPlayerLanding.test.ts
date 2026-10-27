@@ -30,6 +30,7 @@ let target: Record<string, any>;
 let defenderMain: Record<string, any>;
 let maprooms: Map<number, Record<string, any>>;
 let transactions = 0;
+const nativeUpdates: { where: Record<string, unknown>; data: Record<string, unknown> }[] = [];
 
 const em = {
   populate: async (user: Record<string, unknown>) => {
@@ -37,10 +38,15 @@ const em = {
   },
   findOne: async (entity: { name: string }, where: Record<string, any>) => {
     if (entity.name === "InfernoMaproom") return maprooms.get(where.userid) ?? null;
-    if (entity.name === "User") return { userid: where.userid, username: "defender", pic_square: "" };
+    if (entity.name === "User") {
+      return where.userid === ATTACKER
+        ? { userid: ATTACKER, username: "raider", pic_square: "", alliance_id: null, save: userSave }
+        : { userid: where.userid, username: "defender", pic_square: "" };
+    }
     if (where.basesaveid === userSave.basesaveid) return userSave;
     if (where.basesaveid === TARGET_SAVEID) return target;
     if (where.type === "main") return where.userid === DEFENDER ? defenderMain : null;
+    if (String(where.baseid) === TARGET_BASEID) return target;
     return String(where.baseid) === INFERNO_BASEID ? inferno : null;
   },
   create: (entity: new () => object, data: object) => Object.assign(new entity(), data),
@@ -49,16 +55,24 @@ const em = {
   },
   flush: async () => {},
   count: async () => 0,
-  nativeUpdate: async () => 1,
+  nativeUpdate: async (_entity: unknown, where: Record<string, unknown>, data: Record<string, unknown>) => {
+    nativeUpdates.push({ where, data });
+    return 1;
+  },
   find: async () => [],
   transactional: async (run: (tx: unknown) => Promise<unknown>) => {
     transactions += 1;
     return run(em);
   },
+  // `isBot`, on a second attack's start.
+  getContext: () => ({ global: true, findOne: em.findOne }),
 };
 
+/** The stand-in ORM's entity manager: only it skips the request context. */
+const fakeOrmEm = {};
+
 mock.module("../../server.js", () => ({
-  postgres: { em },
+  postgres: { em, orm: { em: fakeOrmEm } },
   redis: {
     get: async (key: string) => store.get(key) ?? null,
     setex: async (key: string, _ttl: number, value: string) => {
@@ -71,7 +85,30 @@ mock.module("../../server.js", () => ({
       return "OK";
     },
     del: async (key: string) => (store.delete(key) ? 1 : 0),
+    sadd: async (key: string, member: string) => {
+      const set = new Set(JSON.parse(store.get(key) ?? "[]") as string[]).add(member);
+      store.set(key, JSON.stringify([...set]));
+      return 1;
+    },
+    srem: async (key: string, member: string) => {
+      const set = new Set(JSON.parse(store.get(key) ?? "[]") as string[]);
+      set.delete(member);
+      store.set(key, JSON.stringify([...set]));
+      return 1;
+    },
+    smembers: async (key: string) => JSON.parse(store.get(key) ?? "[]") as string[],
   },
+}));
+
+const core = await import("@mikro-orm/core");
+const RealRequestContext = core.RequestContext;
+const realCreate = core.RequestContext.create.bind(core.RequestContext);
+mock.module("@mikro-orm/core", () => ({
+  ...core,
+  // As in `finaliseAttack.test.ts`: only the stand-in's entity manager skips the context.
+  RequestContext: Object.assign(Object.create(RealRequestContext), {
+    create: (orm: unknown, next: () => unknown) => (orm === fakeOrmEm ? next() : realCreate(orm as never, next as never)),
+  }),
 }));
 
 const warn = mock((..._args: unknown[]) => {});
@@ -106,6 +143,13 @@ const { infernoPlayerFinalLockKey, infernoPlayerSessionKey } = await import("./i
 const { infernoStartBuildingData } = await import("./infernoYard.js");
 const { infernoStorageCap } = await import("./infernoLoad.js");
 const { BaseType } = await import("../../enums/Base.js");
+const { attackCheckpoint } = await import("../../controllers/base/attackCheckpoint.js");
+const { infernoAttackStart } = await import("../../controllers/inferno/descentAttack.js");
+const { infernoPlayerCheckpointKey, INFERNO_PLAYER_ATTACKS } = await import("./infernoPlayerSession.js");
+const { attackCheckpointKey } = await import("../base/attackCheckpoint.js");
+const { closeExpiredInfernoPlayerAttacks, closeInfernoPlayerAttack, closeInfernoPlayerAttacksOf } = await import(
+  "./infernoPlayerFinalise.js"
+);
 
 const outcome = (part: Partial<AbandonedOutcome>): AbandonedOutcome => ({
   tick: 2_400,
@@ -129,7 +173,7 @@ const outcome = (part: Partial<AbandonedOutcome>): AbandonedOutcome => ({
 const now = () => Math.floor(Date.now() / 1000);
 
 /** The attack the start mints on the defender's yard, with their purse frozen. */
-const startSession = (purse = { r1: 5_000, r2: 400, r3: 0, r4: 0 }) => {
+const startSession = (purse = { r1: 5_000, r2: 400, r3: 0, r4: 0 }, startedat = now()) => {
   target.attackid = ATTACK_ID;
   target.attacks = [{ name: "raider", starttime: now() }];
   store.set(
@@ -140,7 +184,7 @@ const startSession = (purse = { r1: 5_000, r2: 400, r3: 0, r4: 0 }) => {
       session: serialiseAttackSession({
         attackerid: ATTACKER,
         attackid: ATTACK_ID,
-        startedat: now(),
+        startedat,
         entryHoused: { [INFERNO_BASEID]: { ...ARMY } },
         defenderForces: FORCES as never,
         defenderResources: purse,
@@ -148,6 +192,7 @@ const startSession = (purse = { r1: 5_000, r2: 400, r3: 0, r4: 0 }) => {
       }),
     })
   );
+  store.set(INFERNO_PLAYER_ATTACKS, JSON.stringify([String(TARGET_SAVEID)]));
 };
 
 const SCRATCH = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { IC1: 6 } }] };
@@ -181,6 +226,7 @@ beforeEach(() => {
   inputs.length = 0;
   store.clear();
   transactions = 0;
+  nativeUpdates.length = 0;
   userSave = {
     userid: ATTACKER,
     baseid: "5000",
@@ -233,7 +279,7 @@ beforeEach(() => {
     storedata: {},
     resources: {},
   };
-  defenderMain = { userid: DEFENDER, type: "main", iresources: { r1: 5_000, r2: 400, r3: 0, r4: 0 } };
+  defenderMain = { userid: DEFENDER, type: "main", baseid_inferno: TARGET_BASEID, iresources: { r1: 5_000, r2: 400, r3: 0, r4: 0 } };
   maprooms = new Map();
 });
 
@@ -369,5 +415,140 @@ describe("landing", () => {
     expect(input.defender.resources).toEqual({ r1: 5_000, r2: 400, r3: 0, r4: 0 });
     expect(input.defence?.bunkers).toEqual(FORCES.bunkers);
     expect(ctx.body.player).toBeDefined();
+  });
+});
+
+/** The client's checkpoint of the attack as it runs (`/base/checkpoint`). */
+const checkpoint = async (tick = 900, log = SCRATCH) => {
+  const ctx = {
+    authUser: { userid: ATTACKER, username: "raider" },
+    request: {
+      body: {
+        basesaveid: String(TARGET_SAVEID),
+        attackid: String(ATTACK_ID),
+        tick: String(tick),
+        flinglog: JSON.stringify(log),
+        sources: JSON.stringify([INFERNO_BASEID]),
+      },
+    },
+  } as unknown as Context & { body: { stored?: boolean } };
+  await attackCheckpoint(ctx, async () => {});
+  return ctx.body;
+};
+
+describe("an attack left without its final save (owner, 27 Oct)", () => {
+  test("its checkpoints are kept under the Inferno key, never the surface finaliser's", async () => {
+    startSession();
+    expect((await checkpoint()).stored).toBe(true);
+    expect(store.has(infernoPlayerCheckpointKey(TARGET_SAVEID))).toBe(true);
+    expect(store.has(attackCheckpointKey(TARGET_SAVEID))).toBe(false);
+  });
+
+  test("a refresh closes it: what the checkpoint recorded lands, the flung monsters are spent, the session ends", async () => {
+    startSession();
+    await checkpoint(900);
+    canned = {
+      damage: 30,
+      flung: { IC1: 6 },
+      attackloot: { r1: 1_000, r2: 0, r3: 0, r4: 0 },
+      defenderDelta: { r1: -1_000, r2: 0, r3: 0, r4: 0 },
+      buildinghealthdata: { "50": 400 },
+      bunkerGarrisons: { 50: { IC1: 3 }, 51: { IC1: 3 } },
+    };
+    // The reloaded page's yard load (`baseLoad.ts`) asks for the attacker's attacks.
+    expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
+
+    // Fought to the checkpoint's moment, as an attack its attacker left.
+    expect(inputs[0]!.tick).toBe(900);
+    expect(inputs[0]!.left).toBe(true);
+    expect(inferno.monsters.housed).toEqual({ IC1: 4 });
+    expect(target).toMatchObject({ attackid: 0, damage: 30, buildinghealthdata: { "50": 400 } });
+    expect(defenderMain.iresources.r1).toBe(4_000);
+    expect(userSave.iresources.r1).toBe(1_000);
+    expect(maprooms.get(DEFENDER)!.neighbors.map((one: { attacksfrom: number }) => one.attacksfrom)).toEqual([1]);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
+    expect(store.has(infernoPlayerCheckpointKey(TARGET_SAVEID))).toBe(false);
+    expect(JSON.parse(store.get(INFERNO_PLAYER_ATTACKS)!)).toEqual([]);
+  });
+
+  test("the closed attack cannot be saved afterwards, nor closed twice", async () => {
+    startSession();
+    await checkpoint();
+    canned = { damage: 10 };
+    await closeInfernoPlayerAttacksOf(ATTACKER, "build");
+    expect(transactions).toBe(1);
+    // The same attack's final save, sent late, finds no attack to bind to.
+    target.attackid = ATTACK_ID;
+    expect((await run(finalSave()))?.data?.reason).toBeDefined();
+    expect(await closeInfernoPlayerAttack(TARGET_SAVEID, "again")).toBe("none");
+    expect(transactions).toBe(1);
+  });
+
+  test("a new attack/start closes it first, and the second attack meets the usual rules: no free retry", async () => {
+    startSession();
+    await checkpoint();
+    canned = { damage: 55, flung: { IC1: 6 } };
+    let refusal: unknown = "none";
+    try {
+      await infernoAttackStart(
+        {
+          authUser: { userid: ATTACKER, username: "raider", alliance_id: null },
+          request: { body: { kind: "player", baseid: TARGET_BASEID } },
+        } as never,
+        async () => {}
+      );
+    } catch (err) {
+      refusal = (err as { data?: { reason?: string } }).data?.reason ?? String(err);
+    }
+    // The first attack landed: the army it flung is gone and its damage gave the yard 36 hours.
+    expect(inferno.monsters.housed).toEqual({ IC1: 4 });
+    expect(target.damage).toBe(55);
+    expect(refusal).toBe("protected");
+  });
+
+  test("with no checkpoint nothing was flung: the mark is cleared and nothing else is written", async () => {
+    startSession();
+    expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
+    expect(transactions).toBe(0);
+    expect(nativeUpdates).toEqual([{ where: { basesaveid: TARGET_SAVEID, attackid: ATTACK_ID }, data: { attackid: 0 } }]);
+    expect(inferno.monsters.housed).toEqual(ARMY);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
+  });
+
+  test("the sweep closes it only once the window (the fight's limit and a margin) has closed", async () => {
+    startSession();
+    await checkpoint();
+    canned = { damage: 10 };
+    expect(await closeExpiredInfernoPlayerAttacks()).toBe(0);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(true);
+
+    // The same attack, its window now closed.
+    const startedat = now() - 421;
+    startSession(undefined, startedat);
+    store.set(
+      infernoPlayerCheckpointKey(TARGET_SAVEID),
+      JSON.stringify({
+        attackerid: ATTACKER,
+        defenderid: DEFENDER,
+        attackid: ATTACK_ID,
+        startedat,
+        at: startedat + 100,
+        tick: 600,
+        flinglog: SCRATCH,
+        sources: [INFERNO_BASEID],
+      })
+    );
+    expect(await closeExpiredInfernoPlayerAttacks()).toBe(1);
+    expect(inferno.monsters.housed).toEqual({ IC1: 4 });
+    expect(target.attackid).toBe(0);
+  });
+
+  test("a yard another attack has since taken over is not written to", async () => {
+    startSession();
+    await checkpoint();
+    target.attackid = 999;
+    expect(await closeInfernoPlayerAttack(TARGET_SAVEID, "test")).toBe("stale");
+    expect(transactions).toBe(0);
+    expect(target.attackid).toBe(999);
   });
 });
