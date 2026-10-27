@@ -54,6 +54,35 @@ describe("tipWording", () => {
     expect(tipWording("{Tap} it, then {tap} again.", false)).toBe("Click it, then click again.");
   });
 
+  it("says the Inferno yard's own words there: Under Hall, Magma, Sulfur, Incubators, Compound", () => {
+    const hatch = tipsFor(GuideScreen.MONSTERS_HATCH).map((tip) => tipWording(tip.text, false, "inferno"));
+    expect(hatch).toEqual([
+      "Incubators turn Magma into monsters. Queue several and come back later.",
+      "Hatched monsters move into Compound. When it's full, hatching waits.",
+    ]);
+    expect(tipWording(tipsFor(GuideScreen.MONSTERS_UNLOCK)[0]!.text, false, "inferno")).toContain("Sulfur");
+    expect(tipWording(tipsFor(GuideScreen.BUILD)[1]!.text, false, "inferno")).toBe(
+      "Greyed-out buildings say what they need, usually a bigger Under Hall.",
+    );
+    expect(tipWording(tipsFor(GuideScreen.BUILD)[1]!.text, false, "surface")).toBe(
+      "Greyed-out buildings say what they need, usually a bigger Town Hall.",
+    );
+  });
+
+  it("leaves no token unfilled, and no surface word outside one, in either realm", () => {
+    const surfaceWords = /\b(Town Hall|Flinger|Hatcher(y|ies)|Housing|Monster Academy|goo|putty|Twigs|Pebbles|Putty|Goo)\b/;
+    for (const screen of SCREENS) {
+      for (const tip of tipsFor(screen)) {
+        for (const realm of ["surface", "inferno"] as const) {
+          expect(tipWording(tip.text, false, realm), tip.text).not.toMatch(/[{}]/);
+        }
+        // The surface's two Map Rooms never show over the Inferno.
+        if (screen === GuideScreen.MR1 || screen === GuideScreen.MR2) continue;
+        expect(tip.text.replace(/\{[^}]+\}/g, ""), tip.text).not.toMatch(surfaceWords);
+      }
+    }
+  });
+
   it("no tip says click or tap except through the token", () => {
     for (const screen of SCREENS) {
       for (const tip of tipsFor(screen)) {
