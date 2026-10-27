@@ -37,6 +37,9 @@ export const infernoPlayerSessionKey = (basesaveid: number) => `attack-session:i
 /** The last checkpoint of the attack on that yard (`/base/checkpoint`). */
 export const infernoPlayerCheckpointKey = (basesaveid: number) => `attack-checkpoint:inferno-player:${basesaveid}`;
 
+/** How many times closing the attack on that yard has failed (`infernoPlayerFinalise.ts`). */
+export const infernoPlayerCloseFailuresKey = (basesaveid: number) => `attack-close-failures:inferno-player:${basesaveid}`;
+
 /** Every Inferno yard with an open player attack, for the finaliser. */
 export const INFERNO_PLAYER_ATTACKS = "attack-sessions:inferno-player";
 
@@ -61,8 +64,9 @@ export const startInfernoPlayerSession = async (basesaveid: number, attack: Infe
     "NX"
   );
   if (set !== "OK") return false;
-  // A checkpoint left by an earlier attack on this yard is not this one's.
+  // A checkpoint (or a failed close) left by an earlier attack on this yard is not this one's.
   await redis.del(infernoPlayerCheckpointKey(basesaveid));
+  await redis.del(infernoPlayerCloseFailuresKey(basesaveid));
   await redis.sadd(INFERNO_PLAYER_ATTACKS, String(basesaveid));
   return true;
 };
@@ -83,9 +87,20 @@ export const endInfernoPlayerSession = async (basesaveid: number, attackid: numb
   if (stored && stored.session.attackid !== attackid) return false;
   await redis.del(infernoPlayerSessionKey(basesaveid));
   await redis.del(infernoPlayerCheckpointKey(basesaveid));
+  await redis.del(infernoPlayerCloseFailuresKey(basesaveid));
   await redis.srem(INFERNO_PLAYER_ATTACKS, String(basesaveid));
   return true;
 };
+
+/** Counts one more failed close of the attack on that yard. @returns The count now. */
+export const countInfernoPlayerCloseFailure = async (basesaveid: number): Promise<number> => {
+  const count = Number(await redis.incr(infernoPlayerCloseFailuresKey(basesaveid)));
+  await redis.expire(infernoPlayerCloseFailuresKey(basesaveid), ATTACK_CHECKPOINT_TTL);
+  return count;
+};
+
+export const readInfernoPlayerCloseFailures = async (basesaveid: number): Promise<number> =>
+  Number(await redis.get(infernoPlayerCloseFailuresKey(basesaveid))) || 0;
 
 export const storeInfernoPlayerCheckpoint = async (basesaveid: number, checkpoint: AttackCheckpoint): Promise<void> => {
   await redis.setex(infernoPlayerCheckpointKey(basesaveid), ATTACK_CHECKPOINT_TTL, serialiseCheckpoint(checkpoint));

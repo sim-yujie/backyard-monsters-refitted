@@ -10,9 +10,11 @@ import { ATTACK_SESSION_WINDOW } from "../base/attackSession.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
 import {
   acquireInfernoPlayerFinalLock,
+  countInfernoPlayerCloseFailure,
   endInfernoPlayerSession,
   listInfernoPlayerAttacks,
   readInfernoPlayerCheckpoint,
+  readInfernoPlayerCloseFailures,
   readInfernoPlayerSession,
   releaseInfernoPlayerFinalLock,
   type InfernoPlayerSession,
@@ -41,14 +43,16 @@ import { playerLoot, playerReplayInput, writePlayerLanding } from "./infernoPlay
  * When it runs:
  * - the attacker's next yard load (`/base/load`, `/bm/inferno/load`) and next
  *   `attack/start` of any kind: they have plainly left that battle;
- * - the defender's own Inferno yard load (any attack whose window has closed),
- *   and an `attack/start` on that yard, once the window has closed (the
- *   attacker could still save before);
+ * - the defender's own Inferno yard load, and an `attack/start` on that yard,
+ *   once the window has closed (the attacker could still save before);
+ *   a load never closes anybody else's attack;
  * - a sweep every minute, once the window (420 s: the fight's limit and a
  *   margin) has closed.
  *
  * Exactly once: the final save and this take the same lock, and whichever
- * comes second finds the session gone.
+ * comes second finds the session gone. A close that fails
+ * {@link INFERNO_CLOSE_ATTEMPTS} times is given up and released, not retried
+ * for the session's 7 days.
  */
 
 export type InfernoCloseOutcome = "landed" | "released" | "none" | "busy" | "stale";
@@ -56,6 +60,18 @@ export type InfernoCloseOutcome = "landed" | "released" | "none" | "busy" | "sta
 /** Whether the attack's window has closed, so its attacker can no longer save it. */
 const expired = (attack: InfernoPlayerSession, now: number): boolean =>
   now - attack.session.startedat >= ATTACK_SESSION_WINDOW;
+
+/** How many failed closes an attack gets before it is given up. */
+export const INFERNO_CLOSE_ATTEMPTS = 3;
+
+/** Clears the yard's mark (only if it is still this attack's) and ends the session; nothing else is written. */
+const release = async (basesaveid: number, attack: InfernoPlayerSession, trigger: string, event: string): Promise<void> => {
+  await postgres.em.nativeUpdate(Save, { basesaveid, attackid: attack.session.attackid }, { attackid: 0 });
+  await endInfernoPlayerSession(basesaveid, attack.session.attackid);
+  const facts = { event, basesaveid, attackerid: attack.session.attackerid, trigger };
+  if (event === "inferno-attack-released") logger.info("Released an Inferno player attack left with nothing fought", facts);
+  else logger.error("Gave up closing an Inferno player attack; released it", facts);
+};
 
 const closeLocked = async (basesaveid: number, trigger: string): Promise<InfernoCloseOutcome> => {
   const em = postgres.em;
@@ -79,22 +95,27 @@ const closeLocked = async (basesaveid: number, trigger: string): Promise<Inferno
 
   if (!input || !user) {
     // Nothing was flung: the mark goes, nothing else is written.
-    await em.nativeUpdate(Save, { basesaveid, attackid: attack.session.attackid }, { attackid: 0 });
-    await endInfernoPlayerSession(basesaveid, attack.session.attackid);
-    logger.info("Released an Inferno player attack left with nothing fought", {
-      event: "inferno-attack-released",
-      basesaveid,
-      attackerid: attack.session.attackerid,
-      trigger,
-    });
+    await release(basesaveid, attack, trigger, "inferno-attack-released");
+    return "released";
+  }
+
+  // A close that keeps failing is given up, not retried until the session's
+  // 7 days run out: the mark goes, as for an attack with nothing fought.
+  if ((await readInfernoPlayerCloseFailures(basesaveid)) >= INFERNO_CLOSE_ATTEMPTS) {
+    await release(basesaveid, attack, trigger, "inferno-attack-given-up");
     return "released";
   }
 
   // In a worker, off the event loop; a replay past its deadline throws and the
-  // attack stays for the next pass.
-  const battle = await replayAbandonedInWorker(input);
-  const loot = playerLoot(attack, yard, { sent: battle.attackloot, reported: battle.defenderDelta, flinglog: log!.flinglog }, battle);
-  await writePlayerLanding(user, attack, yard, battle, loot, getCurrentDateTime());
+  // attack stays for the next pass, counted.
+  try {
+    const battle = await replayAbandonedInWorker(input);
+    const loot = playerLoot(attack, yard, { sent: battle.attackloot, reported: battle.defenderDelta, flinglog: log!.flinglog }, battle);
+    await writePlayerLanding(user, attack, yard, battle, loot, getCurrentDateTime());
+  } catch (err) {
+    await countInfernoPlayerCloseFailure(basesaveid);
+    throw err;
+  }
 
   logger.info("Closed an Inferno player attack its attacker left", {
     event: "inferno-attack-closed",
@@ -160,15 +181,26 @@ export const closeInfernoPlayerAttacksOf = async (userid: number, trigger: strin
 };
 
 /**
- * Before the player loads their Inferno yard: the attacks they left, and any
- * whose window has closed, their own yard's among them. Never throws.
+ * Before the player loads their Inferno yard: the attacks they left, and the
+ * one on their own yard once its window has closed. Nobody else's: other
+ * players' expired attacks are the minute sweep's work, never a load's.
+ * Never throws.
  *
  * @param userid - The player loading.
  */
 export const closeBeforeInfernoLoad = async (userid: number): Promise<void> => {
   try {
     const now = getCurrentDateTime();
-    await closeWhere((_, attack) => attack.session.attackerid === userid || expired(attack, now), "inferno-load");
+    // Read in a context of its own: the close writes this row in another.
+    const main = await postgres.em
+      .fork()
+      .findOne(Save, { userid, type: BaseType.MAIN }, { fields: ["baseid_inferno"] });
+    const ownYard = Number(main?.baseid_inferno) > 0 ? String(main!.baseid_inferno) : null;
+    await closeWhere(
+      (_, attack) =>
+        attack.session.attackerid === userid || (ownYard !== null && attack.baseid === ownYard && expired(attack, now)),
+      "inferno-load"
+    );
   } catch (err) {
     logger.error(`Closing Inferno player attacks before ${userid}'s Inferno load failed: ${err}`);
   }

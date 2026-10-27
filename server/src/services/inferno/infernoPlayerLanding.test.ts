@@ -95,6 +95,12 @@ mock.module("../../server.js", () => ({
       return "OK";
     },
     del: async (key: string) => (store.delete(key) ? 1 : 0),
+    incr: async (key: string) => {
+      const count = Number(store.get(key) ?? 0) + 1;
+      store.set(key, String(count));
+      return count;
+    },
+    expire: async () => 1,
     sadd: async (key: string, member: string) => {
       const set = new Set(JSON.parse(store.get(key) ?? "[]") as string[]).add(member);
       store.set(key, JSON.stringify([...set]));
@@ -135,11 +141,14 @@ mock.module("../base/reportManager.js", () => ({
 const REAL_RUNNER = "../base/combat/replayRunner.ts?real";
 const realRunner = (await import(REAL_RUNNER)) as typeof import("../base/combat/replayRunner.js");
 let canned: Partial<AbandonedOutcome> | null = null;
+/** The replay runs past its deadline. */
+let replayFails = false;
 const inputs: AbandonedInput[] = [];
 mock.module("../base/combat/replayRunner.js", () => ({
   ...realRunner,
   replayAbandonedInWorker: async (...args: Parameters<typeof realRunner.replayAbandonedInWorker>) => {
     inputs.push(args[0]);
+    if (replayFails) throw new Error("the replay ran past its deadline");
     if (canned) return outcome(canned);
     return realRunner.replayAbandonedInWorker(...args);
   },
@@ -157,9 +166,13 @@ const { attackCheckpoint } = await import("../../controllers/base/attackCheckpoi
 const { infernoAttackStart } = await import("../../controllers/inferno/descentAttack.js");
 const { infernoPlayerCheckpointKey, INFERNO_PLAYER_ATTACKS } = await import("./infernoPlayerSession.js");
 const { attackCheckpointKey } = await import("../base/attackCheckpoint.js");
-const { closeExpiredInfernoPlayerAttacks, closeInfernoPlayerAttack, closeInfernoPlayerAttacksOf } = await import(
-  "./infernoPlayerFinalise.js"
-);
+const {
+  closeBeforeInfernoLoad,
+  closeExpiredInfernoPlayerAttacks,
+  closeInfernoPlayerAttack,
+  closeInfernoPlayerAttacksOf,
+  INFERNO_CLOSE_ATTEMPTS,
+} = await import("./infernoPlayerFinalise.js");
 
 const outcome = (part: Partial<AbandonedOutcome>): AbandonedOutcome => ({
   tick: 2_400,
@@ -233,6 +246,7 @@ beforeEach(() => {
   process.env.INFERNO_ENABLED = "on";
   (combatConfig as { mode: typeof MODE }).mode = "log";
   canned = null;
+  replayFails = false;
   inputs.length = 0;
   store.clear();
   transactions = 0;
@@ -627,6 +641,39 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(await closeExpiredInfernoPlayerAttacks()).toBe(1);
     expect(inferno.monsters.housed).toEqual({ IC1: 4 });
     expect(target.attackid).toBe(0);
+  });
+
+  test("a load closes the caller's own attacks and their own yard's, never anybody else's", async () => {
+    startSession(undefined, now() - 421);
+    canned = { damage: 10 };
+    // A third player's load: neither their attack nor their yard.
+    await closeBeforeInfernoLoad(5555);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(true);
+    expect(target.attackid).toBe(ATTACK_ID);
+    // The defender's own load closes the expired attack on their yard.
+    await closeBeforeInfernoLoad(DEFENDER);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
+  });
+
+  test("the defender's load leaves an attack on their yard whose window is still open", async () => {
+    startSession();
+    await closeBeforeInfernoLoad(DEFENDER);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(true);
+  });
+
+  test("a close that keeps failing is given up after a few tries, not retried for 7 days", async () => {
+    startSession();
+    await checkpoint();
+    replayFails = true;
+    for (let tries = 0; tries < INFERNO_CLOSE_ATTEMPTS; tries++) {
+      expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(0);
+      expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(true);
+    }
+    expect(await closeInfernoPlayerAttack(TARGET_SAVEID, "build")).toBe("released");
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
+    expect(nativeUpdates).toEqual([{ where: { basesaveid: TARGET_SAVEID, attackid: ATTACK_ID }, data: { attackid: 0 } }]);
+    // The count goes with the session.
+    expect([...store.keys()].some((key) => key.startsWith("attack-close-failures"))).toBe(false);
   });
 
   test("a yard another attack has since taken over is not written to", async () => {
