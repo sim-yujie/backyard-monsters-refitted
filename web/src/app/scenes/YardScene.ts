@@ -2425,7 +2425,10 @@ export class YardScene implements Scene {
         this.endPlacement();
         this.buildMenu?.close();
       },
-      focusBuilding: (id) => this.focusBuilding(id),
+      focusBuilding: (id, champion) => {
+        this.focusBuilding(id);
+        if (champion && this.selected?.id === id) this.panel?.openChampion();
+      },
       closePanel: () => this.select(null),
       selectedBuilding: () => this.selected?.id ?? null,
       openMap: () => this.openMap(),

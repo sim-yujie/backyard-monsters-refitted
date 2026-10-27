@@ -1512,6 +1512,15 @@ export class BuildingPanel {
     this.bunkerSlot.hidden = true;
   }
 
+  /** Opens the Champion Cage's or Chamber's controls when this panel is on one (the "Korath unlocked" popup). */
+  openChampion(): void {
+    const building = this.building;
+    const store = this.yard?.store;
+    if (this.champion || !building || !store) return;
+    const model = panelModel(building, store);
+    if (model.open === "cage" || model.open === "chamber") this.toggleChampion(model.open);
+  }
+
   /** Opens or closes the Champion Cage's or Chamber's controls under the actions. */
   private toggleChampion(target: "cage" | "chamber"): void {
     const store = this.yard?.store;

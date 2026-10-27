@@ -440,6 +440,17 @@ describe("BuildingPanel: the Champion Cage (§7.2)", () => {
     buttonNamed(element, "Close chamber")!.click();
     expect(element.querySelector(".chamber")).toBeNull();
   });
+
+  it("openChampion opens the cage's controls once, and does nothing on another building (Inferno WP 5.2)", () => {
+    const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
+    panel.openChampion();
+    panel.openChampion();
+    expect(element.querySelectorAll(".champion")).toHaveLength(1);
+    expect(buttonNamed(element, "Close cage")).not.toBeNull();
+    panel.show(store.building(1)!);
+    panel.openChampion();
+    expect(element.querySelector(".champion")).toBeNull();
+  });
 });
 
 describe("BuildingPanel: a building under construction (§5.3)", () => {

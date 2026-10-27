@@ -70,10 +70,10 @@ export const korathPlugin = (
           break;
         case "openCage":
         case "egg":
-          scene.focusBuilding(step.cage);
+          scene.focusBuilding(step.cage, true);
           break;
         case "openChamber":
-          scene.focusBuilding(step.chamber);
+          scene.focusBuilding(step.chamber, true);
           break;
         case "cageBuilding":
           break;

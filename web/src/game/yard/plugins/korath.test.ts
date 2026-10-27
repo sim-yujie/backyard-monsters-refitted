@@ -117,7 +117,7 @@ describe("the Korath plugin", () => {
 
     const open = [...modal.querySelectorAll("button")].find((one) => one.textContent === "Open Cage");
     open!.click();
-    expect(scene.focusBuilding).toHaveBeenCalledWith(3);
+    expect(scene.focusBuilding).toHaveBeenCalledWith(3, true);
     expect(modal.querySelector(".popup-backdrop")).toBeNull();
 
     // The same tab opening the yard again on the same load: not again.
