@@ -28,9 +28,13 @@
  *   `towerFx.ts` turns it by the same cell rule (`facingCell`, `laserCell`)
  *   and at the same moments as the Flash turret. The tier's whole picture
  *   stays its still (`ResolvedArt.still`), for the icons.
- * - **A still picture** for the others: the Cannon has no turning part, and
- *   the Tesla's coil and the Bunker's door are painted in, so those tiers
- *   ship no animation strips and the Flash strips are not drawn over them.
+ * - **The Cannon turns too** (owner, 27 Oct 2026: "cannon ok"), although
+ *   the Flash one never did: its barrel at 32 headings, 11.25 degrees a cell
+ *   like the Sniper (codex-art Part 16). The ring's front prongs stand in
+ *   front of the barrel, so its tiers carry a `front` layer drawn over it.
+ * - **A still picture** for the others: the Tesla's coil and the Bunker's
+ *   door are painted in, so those tiers ship no animation strips and the
+ *   Flash strips are not drawn over them.
  * - **Damaged** keeps the tier's picture and lets the yard's damage tint tell
  *   the story; **destroyed** is the Flash rubble, shared by every tier
  *   (the redesign brief: one rubble pile per building).
@@ -141,7 +145,8 @@ export type TierImage = readonly [file: string, x: number, y: number];
 
 /**
  * A tier's turret that turns, drawn in place of its whole picture: the body,
- * then the strip over it (`web/tools/tower-tiers/export.py turrets`).
+ * then the strip over it, then its front layer if it has one
+ * (`web/tools/tower-tiers/export.py turrets`).
  */
 export interface TierTurret {
   /** The tier's picture with the turret taken off, an empty turntable left. */
@@ -155,6 +160,12 @@ export interface TierTurret {
   readonly strip: ArtAnim;
   /** The point on the turntable the turret turns about, from the building's origin. */
   readonly pivot: readonly [x: number, y: number];
+  /**
+   * The parts of the body that stand in front of the turret (the Cannon's
+   * front prongs and the turntable's front rim), drawn over the strip: a
+   * one-cell `ArtAnim`, so it stacks, tints and hides with the strip.
+   */
+  readonly front?: ArtAnim;
 }
 
 export interface TierArt {
@@ -175,9 +186,15 @@ export interface TierArt {
 export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 20 Cannon Tower
   20: [
-    { from: 1, top: ["top.t1@2x.webp", -33, -19], shadow: ["shadow.t1.jpg", -31, 22], lift: 0 },
-    { from: 4, top: ["top.t2@2x.webp", -33, -33], shadow: ["shadow.t2.jpg", -31, 17], lift: 10 },
-    { from: 7, top: ["top.t3@2x.webp", -33, -46], shadow: ["shadow.t3.jpg", -31, 12], lift: 23 },
+    { from: 1, top: ["top.t1@2x.webp", -33, -19], shadow: ["shadow.t1.jpg", -31, 22], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -33, -11], strip: ["turret.t1@2x.webp", -27, -28, 53, 44, 32], pivot: [0, 14],
+        front: ["front.t1@2x.webp", -12, 8, 24, 46, 1] } },
+    { from: 4, top: ["top.t2@2x.webp", -33, -33], shadow: ["shadow.t2.jpg", -31, 17], lift: 10,
+      turret: { body: ["body.t2@2x.webp", -33, -27], strip: ["turret.t2@2x.webp", -29, -47, 60, 48, 32], pivot: [1, -1],
+        front: ["front.t2@2x.webp", -16, -14, 40, 68, 1] } },
+    { from: 7, top: ["top.t3@2x.webp", -33, -46], shadow: ["shadow.t3.jpg", -31, 12], lift: 23,
+      turret: { body: ["body.t3@2x.webp", -33, -43], strip: ["turret.t3@2x.webp", -28, -61, 57, 47, 32], pivot: [0, -16],
+        front: ["front.t3@2x.webp", -18, -27, 42, 81, 1] } },
   ],
   // 21 Sniper Tower
   21: [

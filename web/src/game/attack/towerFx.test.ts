@@ -217,8 +217,8 @@ describe("towersOf", () => {
     expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(54);
     expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(30);
     expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(30);
-    // The Cannon and Tesla tiers stay still pictures.
-    expect(towersOf(readYard(yardOf(20)))[0]?.frames).toBe(0);
+    // The new Cannon's barrel turns too, though the Flash one never did; the Tesla tiers stay still pictures.
+    expect(towersOf(readYard(yardOf(20)))[0]?.frames).toBe(32);
     expect(towersOf(readYard(yardOf(25)))[0]?.frames).toBe(0);
   });
 });
@@ -600,6 +600,8 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
   const shakes: { tick: number; amp: number }[] = [];
   const nudges: { dx: number; dy: number }[] = [];
   const frames = new Map<number, number>();
+  /** The animation layers the effects turned or kicked. */
+  const layers = new Set<number>();
   /** What the battle screen was told of each round reaching its creep, in order. */
   const hits: string[] = [];
   const heading: { x: number; y: number }[] = [];
@@ -607,8 +609,14 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
     new Graphics(),
     towersOf(yard),
     {
-      setAnimFrame: (id, _layer, frame) => frames.set(id, frame),
-      nudge: (_id, _layer, dx, dy) => nudges.push({ dx, dy }),
+      setAnimFrame: (id, layer, frame) => {
+        layers.add(layer);
+        frames.set(id, frame);
+      },
+      nudge: (_id, layer, dx, dy) => {
+        layers.add(layer);
+        nudges.push({ dx, dy });
+      },
       landed: (_key, tick) => hits.push(`landed@${tick}`),
       struck: (id, tick, dirX, dirY) => {
         hits.push(`struck ${id}@${tick}`);
@@ -620,7 +628,7 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
   );
   // The sheet comes in on the next turn of the event loop.
   await new Promise((resolve) => setTimeout(resolve, 0));
-  return { fx, sparks, shakes, nudges, frames, hits, heading };
+  return { fx, sparks, shakes, nudges, frames, layers, hits, heading };
 };
 
 describe("TowerFx's new look", () => {
@@ -660,6 +668,35 @@ describe("TowerFx's new look", () => {
     expect(fx.sparkCount).toBeGreaterThan(0);
     for (let tick = 6; tick <= 400; tick += 1) fx.update(tick, () => target);
     expect(shakes).toHaveLength(1);
+    fx.destroy();
+  });
+
+  it("turns the new Cannon's barrel onto a creep in range and kicks it back, leaving its front prongs be", async () => {
+    setNewTowerArt(true);
+    const { fx, frames, layers, nudges } = await newLookSetUp(20);
+    // Due south, 90 degrees: cell 8 of 32 at 11.25 a cell, turned onto a little a tick.
+    const near = creepAt(35, 235);
+    fx.update(1, () => near, [near]);
+    expect(frames.get(1)).toBeDefined();
+    for (let tick = 2; tick <= 80; tick += 1) fx.update(tick, () => near, [near]);
+    expect(frames.get(1)).toBe(8);
+    shoot(fx, 81);
+    for (let tick = 81; tick <= 81 + RECOIL_TICKS + 2; tick += 1) fx.update(tick, () => near, [near]);
+    expect(nudges.some(({ dx, dy }) => dx !== 0 || dy !== 0)).toBe(true);
+    expect(nudges[nudges.length - 1]).toEqual({ dx: 0, dy: 0 });
+    // Only the barrel's strip (layer 0) moves; the front layer over it stays put.
+    expect([...layers]).toEqual([0]);
+    fx.destroy();
+  });
+
+  it("leaves the Flash Cannon still: no strip to turn, no barrel to kick", async () => {
+    const { fx, frames, nudges } = await newLookSetUp(20);
+    const near = creepAt(35, 235);
+    for (let tick = 1; tick <= 40; tick += 1) fx.update(tick, () => near, [near]);
+    shoot(fx, 41);
+    for (let tick = 41; tick <= 60; tick += 1) fx.update(tick, () => near, [near]);
+    expect(frames.size).toBe(0);
+    expect(nudges).toHaveLength(0);
     fx.destroy();
   });
 

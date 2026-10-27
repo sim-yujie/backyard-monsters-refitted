@@ -2,7 +2,7 @@
 
     python -I web/tools/tower-tiers/check_turrets.py
 
-For the Sniper, Laser and Aerial Defense, reads each tier's strip as `buildingArtTiers.ts` places it, finds the collar
+For the Sniper, Laser, Aerial Defense and Cannon, reads each tier's strip as `buildingArtTiers.ts` places it, finds the collar
 in every cell (`mount.py`) and fails if any cell's collar is more than 2 px (game size) from the others'. The first
 export (5f3fea39) was 2.6 to 6 px out, enough to see the head slide on its mount as it turned. The Railgun's housing
 is not round, so it is not measured here; check it by eye (its headings agree to half a pixel).
@@ -20,7 +20,8 @@ from mount import centres  # noqa: E402
 ROOT = Path(__file__).resolve().parents[3]
 ASSETS = ROOT / "server" / "public" / "assets" / "buildings"
 TABLE = (ROOT / "web" / "src" / "game" / "yard" / "buildingArtTiers.ts").read_text(encoding="utf-8")
-TOWERS = {21: ("sniper", "snipertower"), 23: ("laser", "lasertower"), 115: ("aerial", "flaktower")}
+TOWERS = {21: ("sniper", "snipertower"), 23: ("laser", "lasertower"), 115: ("aerial", "flaktower"),
+          20: ("cannon", "cannontower")}
 LIMIT = 2.0
 
 ROW = re.compile(r'strip: \["(turret\.t(\d)@2x\.webp)", (-?\d+), (-?\d+), (\d+), (\d+), (\d+)\]')

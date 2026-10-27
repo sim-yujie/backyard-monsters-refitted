@@ -297,9 +297,12 @@ export const resolveArt = (type: number, level: number, state: ArtState): Resolv
 
   // A repainted tier or Town Hall level, unless the old art is on: the same art for
   // default and damaged alike; a destroyed one falls through to the Flash rubble.
-  // A tower whose turret turns is its body with the turret's strip over it.
+  // A tower whose turret turns is its body with the turret's strip over it, and
+  // the parts of the body in front of the turret (the Cannon's prongs) over that.
   const tier = state === ArtState.DESTROYED ? null : tierArtFor(type, wanted);
   if (tier) {
+    const turret = tier.turret;
+    const layers = turret ? (turret.front ? [turret.strip, turret.front] : [turret.strip]) : [];
     const still = imageOf(row.folder, tier.top);
     const top = tier.turret ? imageOf(row.folder, tier.turret.body) : still;
     if (top && still) {
@@ -309,7 +312,7 @@ export const resolveArt = (type: number, level: number, state: ArtState): Resolv
         level: tier.from,
         top,
         shadow: imageOf(row.folder, tier.shadow),
-        anims: tier.turret ? [animOf(row.folder, tier.turret.strip)] : [],
+        anims: layers.map((anim) => animOf(row.folder, anim)),
         topIsAnim: false,
         ...(tier.turret ? { still } : {}),
       };

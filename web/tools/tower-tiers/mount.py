@@ -16,7 +16,8 @@ import numpy as np
 # Per tower at 2x px: the collar's half width range, and how far up the picture (a share of its height) points count.
 COLLAR = {"sniper": dict(amin=14, amax=40, band=0.45),
           "laser": dict(amin=5, amax=16, band=0.25),
-          "aerial": dict(amin=25, amax=50, band=0.5)}
+          "aerial": dict(amin=25, amax=50, band=0.5),
+          "cannon": dict(amin=14, amax=50, band=0.45)}
 
 
 def _bottom(alpha):

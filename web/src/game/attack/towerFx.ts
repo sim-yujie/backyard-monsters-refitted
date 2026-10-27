@@ -50,7 +50,9 @@ import { ShellSprites } from "./spurtzShell";
  * `Track`), and the Tesla Tower plays a charge, a firing loop and a wind-down
  * (`BUILDING25.as:84-200`), starting on the engine's `charge` event and
  * looping while its zaps come (issue #266), with a glow on the coil as it
- * charges. The Cannon Tower has no animated layer.
+ * charges. The Flash Cannon Tower has no animated layer; the new art's
+ * Cannon turns its barrel at 11.25 a cell like the Sniper (owner, 27 Oct
+ * 2026), though the Flash one never did.
  *
  * ## Projectiles
  *
@@ -143,6 +145,9 @@ interface FacingRule {
 
 /** The classes whose cell is a bearing, with their divisor and offset. */
 const FACING: Readonly<Record<number, FacingRule>> = {
+  // The Flash Cannon has no strip, so no cells and it never turns; the new
+  // art's barrel is painted at 32 headings, cell k at 11.25k.
+  20: { degreesPerCell: 11.25, offsetDegrees: 0 },
   21: { degreesPerCell: 11.25, offsetDegrees: 0 },
   115: { degreesPerCell: 12, offsetDegrees: 0 },
   118: { degreesPerCell: 12, offsetDegrees: 30 },
@@ -338,7 +343,7 @@ const SPURTZ_SHELL = 0xf3f0dc;
 /** The towers drawn the new way (beta.5): Cannon, Sniper, Laser, Tesla, Aerial Defense, Railgun. */
 const NEW_LOOK_TYPES: ReadonlySet<number> = new Set([20, 21, 23, 25, 115, 118]);
 /** The new look's guns that turn onto a creep as soon as it is in range: every one with a turning gun. */
-const AIMING_TYPES: ReadonlySet<number> = new Set([21, 23, 115, 118]);
+const AIMING_TYPES: ReadonlySet<number> = new Set([20, 21, 23, 115, 118]);
 /** The new look's bullets that fly as painted tracers: the Sniper's round and the flak shell. */
 const TRACER_TYPES: ReadonlySet<number> = new Set([21, 115]);
 /** The new look's laser: an orange glow, an amber band, a white-hot core. */
@@ -910,7 +915,7 @@ export class TowerFx {
     });
     this.flashes.push({ at: from, tick: event.tick, type });
     if (this.painted) {
-      if (type === 20) this.cannonFx(event.tick, from, aim);
+      if (type === 20) this.cannonFx(event.tick, tower, from, aim);
       else if (type === 21) this.sniperFx(event.tick, tower, from, aim);
       else if (type === 115) this.flakVolley(event.tick, tower, from, aim, aimLift(target), Math.max(speed, 1), barrel);
     }
@@ -2109,10 +2114,14 @@ export class TowerFx {
   }
 
   /** The Cannon fires: a flash of flame out of the muzzle and a puff of smoke. */
-  private cannonFx(tick: number, muzzle: Point, aim: Point): void {
+  private cannonFx(tick: number, tower: TowerState, muzzle: Point, aim: Point): void {
+    const heading = Math.atan2(aim.y - muzzle.y, aim.x - muzzle.x);
+    // The new art's turning barrel kicks back; the Flash Cannon has none to move.
+    if (tower.info.frames > 0) {
+      tower.recoil = { tick, dx: -Math.cos(heading) * RECOIL_PX, dy: -Math.sin(heading) * RECOIL_PX };
+    }
     const sparks = this.sparks;
     if (!sparks) return;
-    const heading = Math.atan2(aim.y - muzzle.y, aim.x - muzzle.x);
     const ahead = { x: muzzle.x + Math.cos(heading) * 9, y: muzzle.y + Math.sin(heading) * 9 };
     sparks.emit(tick, {
       look: "muzzle",

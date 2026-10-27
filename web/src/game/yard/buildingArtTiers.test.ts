@@ -24,8 +24,10 @@ const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import
 
 const TOWERS = [20, 21, 22, 23, 25, 115, 118];
 
-/** The towers whose turret turns: Sniper, Laser, Aerial Defense, Railgun. */
-const TURRETS = [21, 23, 115, 118];
+/** The towers whose turret turns: Cannon, Sniper, Laser, Aerial Defense, Railgun. */
+const TURRETS = [20, 21, 23, 115, 118];
+/** The ones whose Flash art turned too; the Flash Cannon never did. */
+const FLASH_TURRETS = [21, 23, 115, 118];
 
 /** A WebP's size in pixels, from its `VP8X` header (every picture with alpha has one). */
 const webpSize = (url: string): { width: number; height: number } => {
@@ -130,7 +132,7 @@ describe("the hidden new tower art switch", () => {
   it("shows the towers' tiers for the page", () => {
     setNewTowerArt(true);
     try {
-      expect(resolveArt(20, 1, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.t1@2x.webp");
+      expect(resolveArt(20, 1, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/cannontower/top.t1@2x.webp");
     } finally {
       setNewTowerArt(false);
     }
@@ -168,16 +170,16 @@ describe("the repainted tower tiers", () => {
   it("show tier 1 at levels 0-3 and switch at 4 and 7", () => {
     for (const level of [0, 1, 2, 3]) {
       const art = resolveArt(20, level, ArtState.DEFAULT);
-      expect(art?.top.url).toBe("/assets/buildings/cannontower/top.t1@2x.webp");
+      expect(art?.still?.url).toBe("/assets/buildings/cannontower/top.t1@2x.webp");
       expect(art?.level).toBe(1);
     }
     for (const level of [4, 5, 6]) {
       const art = resolveArt(20, level, ArtState.DEFAULT);
-      expect(art?.top.url).toBe("/assets/buildings/cannontower/top.t2@2x.webp");
+      expect(art?.still?.url).toBe("/assets/buildings/cannontower/top.t2@2x.webp");
       expect(art?.level).toBe(4);
     }
     for (const level of [7, 8, 9, 10, 99]) {
-      expect(resolveArt(20, level, ArtState.DEFAULT)?.top.url).toBe(
+      expect(resolveArt(20, level, ArtState.DEFAULT)?.still?.url).toBe(
         "/assets/buildings/cannontower/top.t3@2x.webp",
       );
     }
@@ -190,8 +192,8 @@ describe("the repainted tower tiers", () => {
     expect(resolveArt(22, 5, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t3@2x.webp");
   });
 
-  it("are still pictures for the Cannon, Bunker and Tesla: no strips, the moving part painted in", () => {
-    for (const type of [20, 22, 25]) {
+  it("are still pictures for the Bunker and Tesla: no strips, the moving part painted in", () => {
+    for (const type of [22, 25]) {
       for (const level of [1, 4, 7]) {
         const art = resolveArt(type, level, ArtState.DEFAULT);
         expect(art?.anims, `type ${type} level ${level}`).toEqual([]);
@@ -282,9 +284,9 @@ describe("the turning turrets", () => {
   afterEach(() => setNewTowerArt(false));
 
   /** Cells per strip: the Flash strip's order, up to the last cell the game picks. */
-  const FRAMES: Record<number, number> = { 21: 32, 23: 54, 115: 30, 118: 30 };
+  const FRAMES: Record<number, number> = { 20: 32, 21: 32, 23: 54, 115: 30, 118: 30 };
 
-  it("draw the Sniper, Laser, Aerial and Railgun tiers as a body with the turret strip over it", () => {
+  it("draw the Cannon, Sniper, Laser, Aerial and Railgun tiers as a body with the turret strip over it", () => {
     for (const type of TURRETS) {
       const folder = artFolder(type);
       [1, 4, 7].forEach((level, i) => {
@@ -295,12 +297,35 @@ describe("the turning turrets", () => {
         expect(art?.topIsAnim).toBe(false);
         expect(art?.still?.url).toBe(`/assets/${folder}top.t${n}@2x.webp`);
         expect(art?.shadow?.url).toBe(`/assets/${folder}shadow.t${n}.jpg`);
-        expect(art?.anims).toHaveLength(1);
+        // The Cannon's front prongs go over its barrel; the others have nothing in front of the turret.
+        expect(art?.anims).toHaveLength(type === 20 ? 2 : 1);
         expect(art?.anims[0]).toMatchObject({
           url: `/assets/${folder}turret.t${n}@2x.webp`,
           frames: FRAMES[type],
         });
       });
+    }
+  });
+
+  it("draw the Cannon's front layer over its barrel: one cell, cut from the body, reaching below the pivot", () => {
+    [1, 4, 7].forEach((level, i) => {
+      const n = i + 1;
+      const turret = TOWER_TIER_ART[20]?.[i]?.turret;
+      const art = resolveArt(20, level, ArtState.DEFAULT);
+      const front = art?.anims[1];
+      if (!turret?.front || !art || !front) throw new Error(`cannon tier ${n} has no front layer`);
+      expect(front).toMatchObject({ url: `/assets/buildings/cannontower/front.t${n}@2x.webp`, frames: 1 });
+      expect(webpSize(front.url), front.url).toEqual({ width: front.width * 2, height: front.height * 2 });
+      const body = webpSize(art.top.url);
+      const [, bx, by] = turret.body;
+      const where = `tier ${n}`;
+      expect(front.x >= bx && front.y >= by, where).toBe(true);
+      expect(front.x + front.width <= bx + body.width / 2, where).toBe(true);
+      expect(front.y + front.height <= by + body.height / 2, where).toBe(true);
+      expect(front.y + front.height, where).toBeGreaterThan(turret.pivot[1]);
+    });
+    for (const type of FLASH_TURRETS) {
+      for (const tier of TOWER_TIER_ART[type] ?? []) expect(tier.turret?.front, `type ${type}`).toBeUndefined();
     }
   });
 
@@ -344,7 +369,7 @@ describe("the turning turrets", () => {
   });
 
   it("turn by the Flash rule and reach every cell, without the Flash Sniper's clamp near due east", () => {
-    for (const type of [21, 115, 118]) {
+    for (const type of [20, 21, 115, 118]) {
       const frames = resolveArt(type, 8, ArtState.DEFAULT)?.anims[0]?.frames ?? 0;
       const seen = new Set<number>();
       for (let bearing = 0; bearing < 360; bearing += 0.25) {
@@ -389,7 +414,7 @@ describe("the turret towers with the new tower art off", () => {
 
   it("draw exactly the Flash art at every level and state, as before the turrets", () => {
     expect(newTowerArt()).toBe(false);
-    for (const type of TURRETS) {
+    for (const type of FLASH_TURRETS) {
       const [strip, frames, damagedStrip] = FLASH[type] ?? ["", 0, ""];
       for (let level = 0; level <= 10; level++) {
         const where = `type ${type} level ${level}`;
@@ -409,6 +434,18 @@ describe("the turret towers with the new tower art off", () => {
         const classic = STATES.map((state) => resolveArt(type, level, state));
         setClassicBuildingArt(false);
         expect(off, where).toEqual(classic);
+      }
+    }
+  });
+
+  it("keep the Flash Cannon still: its own picture, no barrel strip and no front layer", () => {
+    for (let level = 0; level <= 10; level++) {
+      for (const state of STATES) {
+        const art = resolveArt(20, level, state);
+        const where = `level ${level} ${state}`;
+        expect(art?.top.url, where).toMatch(/\/cannontower\/top\.\d(\.\w+)?\.png$/);
+        expect(art?.anims, where).toEqual([]);
+        expect(JSON.stringify(art), where).not.toMatch(/body\.t|turret\.t|front\.t|top\.t\d@2x/);
       }
     }
   });
