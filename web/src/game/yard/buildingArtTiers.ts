@@ -30,8 +30,14 @@
  *   stays its still (`ResolvedArt.still`), for the icons.
  * - **The Cannon turns too** (owner, 27 Oct 2026: "cannon ok"), although
  *   the Flash one never did: its barrel at 32 headings, 11.25 degrees a cell
- *   like the Sniper (codex-art Part 16). The ring's front prongs stand in
- *   front of the barrel, so its tiers carry a `front` layer drawn over it.
+ *   like the Sniper (codex-art Part 16).
+ * - **The Cannon, Sniper and Laser are 3D** (owner, 28 Oct 2026: "I much
+ *   prefer the 3D variant"; the Cannon's tier 1 has steel bands): rendered
+ *   models from branch art/towers-3d (`web/tools/tower-tiers/export3d.py`),
+ *   32 headings each, with the parts of the body in front of the turret cut
+ *   out of every cell, so none needs a `front` layer. Each carries `aim`:
+ *   the cell shown is the one whose barrel points along the shot, and the
+ *   shot leaves its muzzle (`turretAim.ts`).
  * - **A still picture** for the others: the Tesla's coil and the Bunker's
  *   door are painted in, so those tiers ship no animation strips and the
  *   Flash strips are not drawn over them.
@@ -51,6 +57,8 @@
  */
 
 import type { ArtAnim } from "./buildingArtData";
+import type { TurretAim } from "./turretAim";
+import { TURRET_AIM } from "./turretAimData";
 
 /** Where this browser keeps the choice of the old (Flash) building art ("1" is on). */
 export const CLASSIC_BUILDING_ART_KEY = "bymr.classicBuildingArt";
@@ -161,11 +169,23 @@ export interface TierTurret {
   /** The point on the turntable the turret turns about, from the building's origin. */
   readonly pivot: readonly [x: number, y: number];
   /**
-   * The parts of the body that stand in front of the turret (the Cannon's
-   * front prongs and the turntable's front rim), drawn over the strip: a
+   * The parts of the body that stand in front of the turret (the painted
+   * Cannon's front prongs and turntable rim), drawn over the strip: a
    * one-cell `ArtAnim`, so it stacks, tints and hides with the strip.
    */
   readonly front?: ArtAnim;
+  /**
+   * Cells in a row of the strip, for a strip of several rows (the 3D Laser:
+   * a row of headings per tilt of its head); one row without it.
+   */
+  readonly columns?: number;
+  /**
+   * Where each cell's barrel points on screen and where its muzzle is, for
+   * the 3D towers (`turretAim.ts`): the tower shows the cell that points
+   * along its shot, and the shot leaves from its muzzle. Without it the
+   * cell is picked by the Flash rule (`facingCell`, `laserCell`).
+   */
+  readonly aim?: TurretAim;
 }
 
 export interface TierArt {
@@ -184,26 +204,29 @@ export interface TierArt {
 
 /** The three tiers of each tower, by type, lowest first. */
 export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
-  // 20 Cannon Tower
+  // 20 Cannon Tower: 3D, tier 1 the steel bands (owner, 28 Oct 2026)
   20: [
-    { from: 1, top: ["top.t1@2x.webp", -33, -19], shadow: ["shadow.t1.jpg", -31, 22], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -33, -11], strip: ["turret.t1@2x.webp", -27, -28, 53, 44, 32], pivot: [0, 14],
-        front: ["front.t1@2x.webp", -12, 8, 24, 46, 1] } },
-    { from: 4, top: ["top.t2@2x.webp", -33, -33], shadow: ["shadow.t2.jpg", -31, 17], lift: 10,
-      turret: { body: ["body.t2@2x.webp", -33, -27], strip: ["turret.t2@2x.webp", -29, -47, 60, 48, 32], pivot: [1, -1],
-        front: ["front.t2@2x.webp", -16, -14, 40, 68, 1] } },
-    { from: 7, top: ["top.t3@2x.webp", -33, -46], shadow: ["shadow.t3.jpg", -31, 12], lift: 23,
-      turret: { body: ["body.t3@2x.webp", -33, -43], strip: ["turret.t3@2x.webp", -28, -61, 57, 47, 32], pivot: [0, -16],
-        front: ["front.t3@2x.webp", -18, -27, 42, 81, 1] } },
+    { from: 1, top: ["top.t1@2x.webp", -34, -17], shadow: ["shadow.t1.jpg", -31, 22], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -34, -17], strip: ["turret.t1@2x.webp", -37, -36, 74, 53, 32], pivot: [0, 14.5],
+        aim: TURRET_AIM["20.t1"] } },
+    { from: 4, top: ["top.t2@2x.webp", -34, -33], shadow: ["shadow.t2.jpg", -31, 17], lift: 10,
+      turret: { body: ["body.t2@2x.webp", -34, -33], strip: ["turret.t2@2x.webp", -37, -52, 74, 53, 32], pivot: [0, -1],
+        aim: TURRET_AIM["20.t2"] } },
+    { from: 7, top: ["top.t3@2x.webp", -33, -44], shadow: ["shadow.t3.jpg", -31, 12], lift: 23,
+      turret: { body: ["body.t3@2x.webp", -33, -44], strip: ["turret.t3@2x.webp", -35, -63, 70, 50, 32], pivot: [0, -15.75],
+        aim: TURRET_AIM["20.t3"] } },
   ],
-  // 21 Sniper Tower
+  // 21 Sniper Tower: 3D
   21: [
-    { from: 1, top: ["top.t1@2x.webp", -40, -45], shadow: ["shadow.t1.jpg", -37, 12], lift: 1,
-      turret: { body: ["body.t1@2x.webp", -40, -37], strip: ["turret.t1@2x.webp", -27, -53, 53, 36, 32], pivot: [0, -20] } },
-    { from: 4, top: ["top.t2@2x.webp", -40, -75], shadow: ["shadow.t2.jpg", -37, 2], lift: 31,
-      turret: { body: ["body.t2@2x.webp", -40, -70], strip: ["turret.t2@2x.webp", -26, -83, 52, 35, 32], pivot: [0, -50] } },
-    { from: 7, top: ["top.t3@2x.webp", -40, -92], shadow: ["shadow.t3.jpg", -38, -4], lift: 48,
-      turret: { body: ["body.t3@2x.webp", -40, -86], strip: ["turret.t3@2x.webp", -27, -99, 53, 35, 32], pivot: [0, -67] } },
+    { from: 1, top: ["top.t1@2x.webp", -40, -47], shadow: ["shadow.t1.jpg", -37, 12], lift: 1,
+      turret: { body: ["body.t1@2x.webp", -40, -37], strip: ["turret.t1@2x.webp", -28, -52, 56, 40, 32], pivot: [0, -20],
+        aim: TURRET_AIM["21.t1"] } },
+    { from: 4, top: ["top.t2@2x.webp", -40, -77], shadow: ["shadow.t2.jpg", -37, 2], lift: 31,
+      turret: { body: ["body.t2@2x.webp", -40, -70], strip: ["turret.t2@2x.webp", -28, -82, 56, 40, 32], pivot: [0, -50],
+        aim: TURRET_AIM["21.t2"] } },
+    { from: 7, top: ["top.t3@2x.webp", -40, -94], shadow: ["shadow.t3.jpg", -38, -4], lift: 48,
+      turret: { body: ["body.t3@2x.webp", -40, -86], strip: ["turret.t3@2x.webp", -28, -99, 56, 40, 32], pivot: [0, -67],
+        aim: TURRET_AIM["21.t3"] } },
   ],
   // 22 Monster Bunker: five levels, so 1-2, 3-4 and 5
   22: [
@@ -211,14 +234,17 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
     { from: 3, top: ["top.t2@2x.webp", -45, -30], shadow: ["shadow.t2.jpg", -43, 27], lift: 20 },
     { from: 5, top: ["top.t3@2x.webp", -45, -47], shadow: ["shadow.t3.jpg", -42, 21], lift: 38 },
   ],
-  // 23 Laser Tower
+  // 23 Laser Tower: 3D, a row of 32 headings for each of 5 tilts of the head
   23: [
-    { from: 1, top: ["top.t1@2x.webp", -33, -48], shadow: ["shadow.t1.jpg", -31, 10], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -33, -29], strip: ["turret.t1@2x.webp", -15, -55, 34, 37, 54], pivot: [2, -20] } },
-    { from: 4, top: ["top.t2@2x.webp", -33, -73], shadow: ["shadow.t2.jpg", -31, 2], lift: 23,
-      turret: { body: ["body.t2@2x.webp", -33, -54], strip: ["turret.t2@2x.webp", -14, -78, 33, 35, 54], pivot: [2, -44] } },
-    { from: 7, top: ["top.t3@2x.webp", -33, -89], shadow: ["shadow.t3.jpg", -31, -4], lift: 39,
-      turret: { body: ["body.t3@2x.webp", -33, -71], strip: ["turret.t3@2x.webp", -14, -96, 32, 37, 54], pivot: [2, -60] } },
+    { from: 1, top: ["top.t1@2x.webp", -33, -53], shadow: ["shadow.t1.jpg", -31, 10], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -33, -29], strip: ["turret.t1@2x.webp", -16, -53, 34, 35, 160], columns: 32, pivot: [0.75, -20],
+        aim: TURRET_AIM["23.t1"] } },
+    { from: 4, top: ["top.t2@2x.webp", -33, -76], shadow: ["shadow.t2.jpg", -31, 2], lift: 23,
+      turret: { body: ["body.t2@2x.webp", -33, -54], strip: ["turret.t2@2x.webp", -16, -76, 34, 34, 160], columns: 32, pivot: [1, -44],
+        aim: TURRET_AIM["23.t2"] } },
+    { from: 7, top: ["top.t3@2x.webp", -33, -92], shadow: ["shadow.t3.jpg", -31, -4], lift: 39,
+      turret: { body: ["body.t3@2x.webp", -33, -71], strip: ["turret.t3@2x.webp", -16, -92, 34, 34, 160], columns: 32, pivot: [1, -60],
+        aim: TURRET_AIM["23.t3"] } },
   ],
   // 25 Tesla Tower
   25: [

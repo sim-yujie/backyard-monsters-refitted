@@ -174,10 +174,15 @@ export interface ResolvedAnim {
   /** Top-left of cell 0 relative to the building's isometric origin. */
   readonly x: number;
   readonly y: number;
-  /** One cell. Cell `i` is the rectangle `(i * width, 0, width, height)`. */
+  /**
+   * One cell. Cell `i` is the rectangle `(i * width, 0, width, height)`, or
+   * with `columns`, `((i % columns) * width, floor(i / columns) * height)`.
+   */
   readonly width: number;
   readonly height: number;
   readonly frames: number;
+  /** Cells in a row, for a strip of several rows (the 3D Laser's tilts); one row without it. */
+  readonly columns?: number;
 }
 
 /**
@@ -263,13 +268,14 @@ const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
   };
 };
 
-const animOf = (folder: string, entry: ArtAnim): ResolvedAnim => ({
+const animOf = (folder: string, entry: ArtAnim, columns?: number): ResolvedAnim => ({
   url: `${ASSET_ROOT}${folder}${entry[0]}`,
   x: entry[1],
   y: entry[2],
   width: entry[3],
   height: entry[4],
   frames: entry[5],
+  ...(columns ? { columns } : {}),
 });
 
 /** Indices into an `ArtLevel` tuple for the default, damaged and destroyed art. */
@@ -312,7 +318,7 @@ export const resolveArt = (type: number, level: number, state: ArtState): Resolv
         level: tier.from,
         top,
         shadow: imageOf(row.folder, tier.shadow),
-        anims: layers.map((anim) => animOf(row.folder, anim)),
+        anims: layers.map((anim) => animOf(row.folder, anim, anim === turret?.strip ? turret.columns : undefined)),
         topIsAnim: false,
         ...(tier.turret ? { still } : {}),
       };

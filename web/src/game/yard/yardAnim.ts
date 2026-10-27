@@ -212,6 +212,8 @@ export interface StripCells {
   readonly width: number;
   readonly height: number;
   readonly frames: number;
+  /** Cells in a row, for a strip of several rows. */
+  readonly columns?: number;
 }
 
 /**
@@ -235,12 +237,21 @@ export interface StripCells {
  * `frames` of them and the rest are leftovers.
  */
 export const stripCells = (
-  anim: { readonly width: number; readonly height: number; readonly frames: number },
+  anim: {
+    readonly width: number;
+    readonly height: number;
+    readonly frames: number;
+    readonly columns?: number;
+  },
   sourceWidth: number,
   sourceHeight: number,
 ): StripCells => {
   const width = Math.max(1, Math.min(anim.width, sourceWidth));
   const height = Math.max(1, Math.min(anim.height, sourceHeight));
   const fit = Math.max(1, Math.floor(sourceWidth / width));
-  return { width, height, frames: Math.max(1, Math.min(anim.frames, fit)) };
+  if (!anim.columns) return { width, height, frames: Math.max(1, Math.min(anim.frames, fit)) };
+  // A strip of several rows (the 3D Laser's tilts): whole rows that fit.
+  const columns = Math.min(anim.columns, fit);
+  const rows = Math.max(1, Math.floor(sourceHeight / height));
+  return { width, height, frames: Math.max(1, Math.min(anim.frames, columns * rows)), columns };
 };

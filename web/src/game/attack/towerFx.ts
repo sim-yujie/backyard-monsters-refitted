@@ -21,7 +21,8 @@ import {
   type LobLine,
 } from "@/game/combat/rules";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
-import { tierLift } from "@/game/yard/buildingArtTiers";
+import { tierArtFor, tierLift } from "@/game/yard/buildingArtTiers";
+import { aimCell, cellAim, muzzleOffset, tiltRow, type TurretAim } from "@/game/yard/turretAim";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { blastNoise, tintAt } from "./blastFx";
@@ -115,6 +116,15 @@ const DEFAULT_MUZZLE = -30;
 export const muzzleOf = (type: number, worldX: number, worldY: number): Point => ({
   x: worldX,
   y: worldY + (TOWER_MUZZLE[type] ?? DEFAULT_MUZZLE),
+});
+
+/** Screen degrees from one world point to another, 0 right, 90 down. */
+const degreesFrom = (from: Point, to: Point): number => Math.atan2(to.y - from.y, to.x - from.x) * (180 / Math.PI);
+
+/** The point a 3D turret turns about, world px; the origin for a tower without one. */
+const pivotOf = (info: Pick<TowerInfo, "worldX" | "worldY" | "pivot">): Point => ({
+  x: info.worldX + (info.pivot?.x ?? 0),
+  y: info.worldY + (info.pivot?.y ?? 0),
 });
 
 /** Half the 70-unit footprint `Rotate` adds to the origin (`BTOWER.as:456`). */
@@ -252,7 +262,22 @@ export interface TowerInfo {
    * its muzzle and coil by as much (`buildingArtTiers.ts`); 0 with the Flash art.
    */
   readonly lift: number;
+  /**
+   * A 3D turret's aim (`turretAim.ts`): where each cell's barrel points on
+   * screen and where its muzzle is. The tower then shows the cell that
+   * points along its shot, which leaves from that muzzle.
+   */
+  readonly aim?: TurretAim;
+  /** The point the 3D turret turns about, world px from the origin. */
+  readonly pivot?: Point;
 }
+
+/** A tower's 3D turret aim and pivot, or nothing for a tower without one. */
+const turretOf = (type: number, level: number): Pick<TowerInfo, "aim" | "pivot"> => {
+  const turret = tierArtFor(type, level)?.turret;
+  if (!turret?.aim) return {};
+  return { aim: turret.aim, pivot: { x: turret.pivot[0], y: turret.pivot[1] } };
+};
 
 /** Every tower in a yard, with what its facing and shots need. */
 export const towersOf = (yard: Yard): TowerInfo[] =>
@@ -268,6 +293,7 @@ export const towersOf = (yard: Yard): TowerInfo[] =>
       worldY: building.worldY,
       frames: resolveArt(building.type, building.level, ArtState.DEFAULT)?.anims[0]?.frames ?? 0,
       lift: tierLift(building.type, building.level),
+      ...turretOf(building.type, building.level),
     }));
 
 /* ── The effects ────────────────────────────────────────────────────────── */
@@ -798,6 +824,12 @@ export class TowerFx {
     return this.towers.get(id)?.cell ?? null;
   }
 
+  /** Where a tower's shots leave from right now, world px, or null for a tower this does not know. */
+  muzzleAt(id: number): Point | null {
+    const tower = this.towers.get(id);
+    return tower ? this.muzzle(tower) : null;
+  }
+
   /**
    * Records a shot and starts its projectile. `target` is the creep hit.
    *
@@ -812,7 +844,6 @@ export class TowerFx {
     tower.lastShotTick = event.tick;
     tower.targetCreep = event.creepId;
 
-    const from = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY - tower.info.lift);
     const aim = this.aimAt(target, event.ix, event.iy);
     const type = tower.info.type;
 
@@ -824,6 +855,8 @@ export class TowerFx {
         ? this.groundAt(sweep.fromIx, sweep.fromIy)
         : { x: tower.info.worldX, y: tower.info.worldY + LASER_DROP };
       const end = sweep ? this.groundAt(sweep.toIx, sweep.toIy) : { x: aim.x, y: aim.y + BODY_HEIGHT };
+      // A 3D head looks at where the beam first burns, so it lights from the lens.
+      if (tower.info.aim) this.lookAt(tower, end, true);
       this.beams.push({
         towerId: tower.info.id,
         bornTick: event.tick,
@@ -833,6 +866,10 @@ export class TowerFx {
       });
       return null;
     }
+    // A 3D barrel is put on the cell that points along the shot, which leaves its muzzle.
+    if (tower.info.aim) this.lookAt(tower, aim, false);
+    const from = this.muzzle(tower);
+
     if (type === 25) {
       // `BUILDING25.as:150`: the bolt leaves from 50 px above the origin.
       const coil = { x: tower.info.worldX, y: tower.info.worldY - tower.info.lift - COIL_HEIGHT };
@@ -1027,14 +1064,22 @@ export class TowerFx {
       for (const candidate of this.beams) if (candidate.towerId === info.id) beam = candidate;
       const end = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
       if (!beam || !end) return;
+      if (info.aim) {
+        this.lookAt(tower, end, true);
+        return;
+      }
       const degrees = Math.atan2(end.y - beam.sweep.ay, end.x - beam.sweep.ax) * DEGREES;
       this.setCell(tower, laserCell(degrees, info.frames));
       return;
     }
 
-    if (!facesTarget(info.type) || !recent) return;
+    if (!(facesTarget(info.type) || info.aim) || !recent) return;
     const creep = creepAt(tower.targetCreep);
     if (!creep) return;
+    if (info.aim) {
+      this.lookAt(tower, this.aimAt(creep, creep.ix, creep.iy), false);
+      return;
+    }
     const cell = facingCell(
       info.type,
       bearingDegrees({ x: info.x, y: info.y }, { x: creep.ix, y: creep.iy }),
@@ -1059,6 +1104,10 @@ export class TowerFx {
     creeps: readonly CreepSnapshot[],
   ): void {
     const { info } = tower;
+    if (info.aim) {
+      this.aim3d(tower, info.aim, tick, elapsed, creepAt, creeps);
+      return;
+    }
     let wanted: number | null = null;
     let speed = CATCH_UP_DEGREES_PER_TICK;
     if (info.type === 23) {
@@ -1087,6 +1136,82 @@ export class TowerFx {
     const cell =
       info.type === 23 ? laserCell(tower.heading, info.frames) : facingCell(info.type, tower.heading, info.frames);
     if (cell !== null) this.setCell(tower, cell);
+  }
+
+  /**
+   * `aim` for a 3D turret: the same turn onto a creep in range and the same
+   * catch-up once it fires, but in screen degrees, from its muzzle to the
+   * point its shot is drawn to (the creep's body, or where the beam burns),
+   * showing the cell whose barrel points nearest that way. A Laser's head
+   * also takes the tilt that looks at the spot.
+   */
+  private aim3d(
+    tower: TowerState,
+    aim: TurretAim,
+    tick: number,
+    elapsed: number,
+    creepAt: (id: number) => CreepSnapshot | undefined,
+    creeps: readonly CreepSnapshot[],
+  ): void {
+    const { info } = tower;
+    let target: Point | null = null;
+    let speed = CATCH_UP_DEGREES_PER_TICK;
+    if (info.type === 23) {
+      let beam: Beam | undefined;
+      for (const candidate of this.beams) if (candidate.towerId === info.id) beam = candidate;
+      target = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
+    } else if (tick - tower.lastShotTick <= FACING_HOLD_TICKS) {
+      const creep = creepAt(tower.targetCreep);
+      if (creep) target = this.aimAt(creep, creep.ix, creep.iy);
+    }
+    if (target === null) {
+      const creep = this.nearestInRange(info, creeps);
+      if (!creep) return;
+      speed = TURN_DEGREES_PER_TICK;
+      target = info.type === 23 ? this.groundAt(creep.ix, creep.iy) : this.aimAt(creep, creep.ix, creep.iy);
+    }
+    const row = info.type === 23 ? this.tiltToward(info, aim, target) : 0;
+    const wanted = degreesFrom(this.muzzle(tower), target);
+    tower.heading = stepDegrees(tower.heading ?? cellAim(aim, tower.cell ?? 0), wanted, speed * Math.max(1, elapsed));
+    this.setCell(tower, aimCell(aim, tower.heading, row));
+  }
+
+  /**
+   * Puts a 3D turret straight onto the cell that points at `target` (world
+   * px) from its muzzle: for a shot, and for the Flash look's facing.
+   * `ground` is a spot on the ground a Laser burns, which also picks the
+   * tilt of its head.
+   */
+  private lookAt(tower: TowerState, target: Point, ground: boolean): void {
+    const { info } = tower;
+    const aim = info.aim;
+    if (!aim) return;
+    const row = ground ? this.tiltToward(info, aim, target) : 0;
+    // From the pivot, then again from that cell's muzzle: the line the shot is drawn on.
+    let cell = aimCell(aim, degreesFrom(pivotOf(info), target), row);
+    cell = aimCell(aim, degreesFrom(this.muzzle(tower, cell), target), row);
+    tower.heading = degreesFrom(this.muzzle(tower, cell), target);
+    this.setCell(tower, cell);
+  }
+
+  /** The tilt row of a 3D head that looks at a spot on the ground, from how far it is from under the head. */
+  private tiltToward(info: TowerInfo, aim: TurretAim, spot: Point): number {
+    // The ground under its head: the art says how far below the pivot, else the middle of the footprint.
+    const pivot = pivotOf(info);
+    const under = { x: pivot.x, y: aim.ground === undefined ? info.worldY + LASER_DROP : pivot.y + aim.ground };
+    return tiltRow(aim, spot.x - under.x, spot.y - under.y);
+  }
+
+  /**
+   * Where a tower's shots leave from, world px: a 3D turret's muzzle tip on
+   * `cell` (the one it shows), or the Flash class's muzzle lifted by its tier.
+   */
+  private muzzle(tower: TowerState, cell: number | null = tower.cell): Point {
+    const { info } = tower;
+    const offset = info.aim && cell !== null ? muzzleOffset(info.aim, cell) : null;
+    if (!offset) return muzzleOf(info.type, info.worldX, info.worldY - info.lift);
+    const pivot = pivotOf(info);
+    return { x: pivot.x + offset[0], y: pivot.y + offset[1] };
   }
 
   /**
@@ -1364,7 +1489,9 @@ export class TowerFx {
       if (!end) continue;
       const { ax, ay } = beam.sweep;
       const along = Math.hypot(end.x - ax, end.y - ay) || 1;
-      const start = {
+      // A 3D head's beam leaves its lens, on the cell the head shows.
+      const tower = this.towers.get(beam.towerId);
+      const start = tower?.info.aim?.muzzle ? this.muzzle(tower) : {
         x: ax + ((end.x - ax) / along) * 8,
         y: ay + ((end.y - ay) / along) * 8 - LASER_HEIGHT,
       };
@@ -1819,7 +1946,7 @@ export class TowerFx {
       const rate = towerStats(tower.info.type, tower.info.level)?.rate ?? 160;
       const charge = railCharge(tick - tower.lastShotTick, rate);
       if (charge <= 0) continue;
-      const at = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY - tower.info.lift);
+      const at = this.muzzle(tower);
       const flicker = 0.85 + blastNoise(tick, 17) * 0.15;
       sparks.lamp(tower, {
         look: "orb",
@@ -2285,7 +2412,7 @@ export class TowerFx {
       }
       if (!creep || strength === null) continue;
       const dot = this.aimAt(creep, creep.ix, creep.iy);
-      const muzzle = muzzleOf(info.type, info.worldX, info.worldY - info.lift);
+      const muzzle = this.muzzle(tower);
       const distance = Math.hypot(dot.x - muzzle.x, dot.y - muzzle.y) || 1;
       const tip = {
         x: muzzle.x + ((dot.x - muzzle.x) / distance) * 12,

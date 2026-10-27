@@ -283,8 +283,13 @@ describe("the turning turrets", () => {
   beforeEach(() => setNewTowerArt(true));
   afterEach(() => setNewTowerArt(false));
 
-  /** Cells per strip: the Flash strip's order, up to the last cell the game picks. */
-  const FRAMES: Record<number, number> = { 20: 32, 21: 32, 23: 54, 115: 30, 118: 30 };
+  /**
+   * Cells per strip: the Flash strip's order, up to the last cell the game
+   * picks; the 3D towers' 32 headings, the Laser's for each of its 5 tilts.
+   */
+  const FRAMES: Record<number, number> = { 20: 32, 21: 32, 23: 160, 115: 30, 118: 30 };
+  /** The 3D towers (owner, 28 Oct 2026), which carry where each cell points. */
+  const TOWERS_3D = [20, 21, 23];
 
   it("draw the Cannon, Sniper, Laser, Aerial and Railgun tiers as a body with the turret strip over it", () => {
     for (const type of TURRETS) {
@@ -297,8 +302,8 @@ describe("the turning turrets", () => {
         expect(art?.topIsAnim).toBe(false);
         expect(art?.still?.url).toBe(`/assets/${folder}top.t${n}@2x.webp`);
         expect(art?.shadow?.url).toBe(`/assets/${folder}shadow.t${n}.jpg`);
-        // The Cannon's front prongs go over its barrel; the others have nothing in front of the turret.
-        expect(art?.anims).toHaveLength(type === 20 ? 2 : 1);
+        // The 3D Cannon's prongs are cut out of each barrel cell, so no tower has a front layer now.
+        expect(art?.anims).toHaveLength(1);
         expect(art?.anims[0]).toMatchObject({
           url: `/assets/${folder}turret.t${n}@2x.webp`,
           frames: FRAMES[type],
@@ -307,25 +312,40 @@ describe("the turning turrets", () => {
     }
   });
 
-  it("draw the Cannon's front layer over its barrel: one cell, cut from the body, reaching below the pivot", () => {
-    [1, 4, 7].forEach((level, i) => {
-      const n = i + 1;
-      const turret = TOWER_TIER_ART[20]?.[i]?.turret;
-      const art = resolveArt(20, level, ArtState.DEFAULT);
-      const front = art?.anims[1];
-      if (!turret?.front || !art || !front) throw new Error(`cannon tier ${n} has no front layer`);
-      expect(front).toMatchObject({ url: `/assets/buildings/cannontower/front.t${n}@2x.webp`, frames: 1 });
-      expect(webpSize(front.url), front.url).toEqual({ width: front.width * 2, height: front.height * 2 });
-      const body = webpSize(art.top.url);
-      const [, bx, by] = turret.body;
-      const where = `tier ${n}`;
-      expect(front.x >= bx && front.y >= by, where).toBe(true);
-      expect(front.x + front.width <= bx + body.width / 2, where).toBe(true);
-      expect(front.y + front.height <= by + body.height / 2, where).toBe(true);
-      expect(front.y + front.height, where).toBeGreaterThan(turret.pivot[1]);
-    });
-    for (const type of FLASH_TURRETS) {
+  it("draw the 3D towers with no front layer, and ship no painted Cannon front pictures", () => {
+    for (const type of TURRETS) {
       for (const tier of TOWER_TIER_ART[type] ?? []) expect(tier.turret?.front, `type ${type}`).toBeUndefined();
+    }
+    for (const n of [1, 2, 3]) expect(existsSync(`${ASSETS}cannontower/front.t${n}@2x.webp`)).toBe(false);
+  });
+
+  it("give the 3D towers an aim for every cell, and a muzzle and tilts where the art measured them", () => {
+    for (const type of TOWERS_3D) {
+      for (const tier of TOWER_TIER_ART[type] ?? []) {
+        const where = `type ${type} tier from ${tier.from}`;
+        const turret = tier.turret;
+        const aim = turret?.aim;
+        if (!turret || !aim) throw new Error(`${where} has no aim`);
+        expect(aim.headings, where).toBe(32);
+        expect(aim.aim, where).toHaveLength(turret.strip[5]);
+        expect(turret.columns ?? turret.strip[5], where).toBe(aim.headings);
+        for (const degrees of aim.aim) expect(degrees >= 0 && degrees < 360, where).toBe(true);
+        expect(aim.muzzle, where).toHaveLength(turret.strip[5] * 2);
+        // Every muzzle on the turret as drawn: inside its cell, give or take a px.
+        const [, sx, sy, width, height] = turret.strip;
+        const [px, py] = turret.pivot;
+        for (let i = 0; i < (aim.muzzle?.length ?? 0); i += 2) {
+          const x = px + (aim.muzzle?.[i] ?? 0);
+          const y = py + (aim.muzzle?.[i + 1] ?? 0);
+          expect(x >= sx - 1 && x <= sx + width + 1 && y >= sy - 1 && y <= sy + height + 1, `${where} cell ${i / 2}`).toBe(true);
+        }
+        if (type === 23) {
+          expect(aim.pitch, where).toHaveLength(5);
+          expect(aim.lensHeight, where).toBeGreaterThan(20);
+        } else {
+          expect(aim.pitch, where).toBeUndefined();
+        }
+      }
     }
   });
 
@@ -336,9 +356,10 @@ describe("the turning turrets", () => {
         const strip = art?.anims[0];
         if (!art || !strip) throw new Error(`type ${type} tier from ${tier.from}`);
         // `stripCells` would quietly cut a strip that disagrees with its file; these must not need it.
+        const columns = strip.columns ?? strip.frames;
         expect(webpSize(strip.url), strip.url).toEqual({
-          width: strip.width * strip.frames * 2,
-          height: strip.height * 2,
+          width: strip.width * columns * 2,
+          height: strip.height * Math.ceil(strip.frames / columns) * 2,
         });
         const body = webpSize(art.top.url);
         expect((body.width % 2) + (body.height % 2), art.top.url).toBe(0);
@@ -370,6 +391,7 @@ describe("the turning turrets", () => {
 
   it("turn by the Flash rule and reach every cell, without the Flash Sniper's clamp near due east", () => {
     for (const type of [20, 21, 115, 118]) {
+      // The 3D towers pick their cell by `aim` instead, but their strips keep the rule's order.
       const frames = resolveArt(type, 8, ArtState.DEFAULT)?.anims[0]?.frames ?? 0;
       const seen = new Set<number>();
       for (let bearing = 0; bearing < 360; bearing += 0.25) {
