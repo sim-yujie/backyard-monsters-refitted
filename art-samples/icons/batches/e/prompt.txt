@@ -1,0 +1,14 @@
+Use your image generation tool (one call) to create a new image and save it as sheet.png in the current folder. Do not write code and do not copy or composite pixels from the input.
+
+These are UI icons for the cartoon strategy game Backyard Monsters. They sit next to numbers in the game's panels (like "heart 480") and must read clearly at a tiny 24-32 pixel size.
+
+Input 1, style.png: the game's APPROVED painted art. Top two rows: resource piles (twigs, pebbles, putty, goo, bone, coal, sulfur, magma). Third row: status sticker icons (burning, enraged, frozen, loot boosted, poisoned, puttied, slowed, stunned). Bottom right: a worker monster. STYLE ONLY: copy their look exactly: chunky simple shapes, a bold dark outline around every shape, bright saturated cartoon colours, soft painted shading with a glossy white highlight, and, like the sticker icons, a thin clean white rim just outside the dark outline. Do not copy their subjects.
+
+Output: ONE square image, 1024x1024, with FOUR separate icons on a 2 x 2 grid, each centred in its own quarter and filling about 70% of that quarter, with clear empty space between them (they must not touch each other or the image edge):
+- TOP-LEFT: LAST ARMY (simpler): ONE big round red cartoon monster head with two small horns and a grin, and a thick bright-blue U-turn arrow curving over the top of its head and pointing back down to the left.
+- TOP-RIGHT: PRODUCTION PER HOUR (simpler): a round alarm-clock face with a thick gold rim, white face and two dark hands, and a fat bright green upward arrow badge overlapping its bottom right.
+- BOTTOM-LEFT: YARD DAMAGE (simpler): a short section of red brick wall, three rows high, broken in the middle by a big V-shaped gap with a few loose bricks tumbling out.
+- BOTTOM-RIGHT: MONSTERS LOST (simpler): one round green cartoon monster head with X X eyes, its tongue sticking out, and a small golden halo floating above it.
+
+Each icon: one simple bold silhouette that still reads at 24 pixels, few big shapes, no tiny details, no text, no letters, no numbers (except where an exclamation mark is asked for), front view, no perspective tricks, no drop shadow on the ground.
+Background everywhere: flat pure magenta #FF00FF, no gradient, no grid lines, no frames, no labels. The icons themselves must contain no pink or magenta.

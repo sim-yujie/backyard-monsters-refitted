@@ -1,0 +1,1 @@
+shield,production,swords,fist
