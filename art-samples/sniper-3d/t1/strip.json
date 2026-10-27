@@ -1,11 +1,11 @@
 {
  "tier": 1,
  "cells": 32,
- "cell_w_2x": 132,
- "cell_h_2x": 87,
+ "cell_w_2x": 110,
+ "cell_h_2x": 78,
  "pivot_in_cell_2x": [
-  66,
-  64
+  55,
+  63
  ],
  "body_entry": [
   "body.t1@2x.png",
@@ -14,10 +14,10 @@
  ],
  "strip_entry": [
   "turret.t1@2x.png",
-  -33.0,
-  -52.0,
-  66.0,
-  43.5,
+  -27.5,
+  -51.5,
+  55.0,
+  39.0,
   32
  ],
  "pivot": [

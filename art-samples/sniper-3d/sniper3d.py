@@ -14,7 +14,7 @@ heading: 0 = down-right on screen, 45 = at the viewer, 135 = left, 225 = away, 3
 front-right (cable plugs). The camera is the Cannon sample's (orthographic, EL degrees down, from bearing 45, light from the
 upper left), scaled to the painted art and shifted so the turret's turning point lands on the painted one.
 
-The look (painted-look materials, outline, light) comes from ../tower-3d/look3d.py when it is there, else look_local.py.
+The look (painted-look materials, outline, light, camera) is the shared one in ../tower-3d/look3d.py.
 """
 import json
 import math
@@ -24,14 +24,25 @@ from pathlib import Path
 
 import bmesh
 import bpy
-import numpy as np
 from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Matrix, Vector
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-from look_local import (EL, LINE, Paint, add_outline, bear, bezier, diag, lathe, mat_flat, obj_from_bm, outline_mat,  # noqa
-                        rbox, ring_of, srgb, studs, tube)
+sys.path.insert(0, str(HERE.parent / "tower-3d"))
+import look3d as L  # noqa: E402
+L.EL = float(os.environ.get("SNIPER_EL", 23.0))   # the Sniper's own camera elevation (set before setup_render; see the report for why 23)
+from look3d import (LINE, Paint, add_outline, bear, bezier, diag, lathe, mat_flat, obj_from_bm, rbox, ring_of, srgb,  # noqa
+                    studs, tube)
+EL = L.EL
+# the Sniper's own metals, on top of the shared ones: (shade, colour, light), highlight
+L.METALS.update(
+    bronze=((70, 32, 10), (178, 94, 34), (232, 156, 84), (1.0, 0.82, 0.52, 1)),      # tier 1's copper-bronze skin
+    dbronze=((52, 24, 8), (146, 76, 30), (212, 140, 76), (1.0, 0.8, 0.5, 1)),        # its darker bands
+    sgold=((120, 64, 6), (232, 160, 24), (255, 214, 92), (1.0, 0.9, 0.55, 1)),       # a deeper gold than the shared one
+    bluesteel=((22, 36, 76), (86, 124, 188), (206, 228, 255), (0.9, 0.95, 1.0, 1)),
+    pblack=((8, 8, 12), (30, 30, 38), (78, 80, 96), (0.8, 0.86, 1.0, 1)),           # tier 3's skin: blacker than "black"
+    panel=((72, 76, 90), (178, 182, 196), (238, 240, 248), (0.95, 0.97, 1.0, 1)),
+)
 
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["1", "body"]
 TIER = int(ARGS[0])
@@ -50,9 +61,9 @@ P = PAINTED[TIER]
 R = 1.0                        # body hexagon corner radius
 FRONT = 45.0                   # the corner at the viewer
 Z0 = 0.80                      # the body's bottom (it stands on three ball feet)
-PLATE_T = 0.24                 # the top plate's thickness
+PLATE_T = 0.19                 # the top plate's thickness
 PLATE_R = 1.12                 # the top plate's corner radius (it overhangs the body)
-DISC_R = 0.64                  # the turntable
+DISC_R = 0.70                  # the turntable
 TOP1 = 2.31                    # tier 1's turning point height (painted: 91 px above the ground's middle at @2x)
 # each tier's turning point stands as much higher as the painted one does (game px x2, seen at EL)
 TOP = TOP1 + (PAINTED[1]["game_y"] - P["game_y"]) * 2 / (S2 * math.cos(math.radians(EL)))
@@ -64,6 +75,8 @@ TURRET_SCALE = 1.12
 DISC_STRETCH = 1.35            # the turntable too (the turret on it stays round: it turns)
 STRETCH = 1.9                  # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
 PLATE_STRETCH = 1.6            # the painted one (the body is only ever seen from this one side)
+if os.environ.get("SNIPER_STRETCH"):     # for camera-angle tests: body, plate, turntable
+    STRETCH, PLATE_STRETCH, DISC_STRETCH = (float(v) for v in os.environ["SNIPER_STRETCH"].split(","))
 
 
 def drawn(p, k):
@@ -150,22 +163,6 @@ def cyl(bm, r, depth, mat_world, segs=24, r2=None, mat=0):
 
 
 # -------------------------------------------------------------------------------------------------------------- materials
-WARM = [(0.0, (0.42, 0.28, 0.2, 1)), (0.15, (0.52, 0.38, 0.28, 1)), (0.5, (0.86, 0.76, 0.62, 1)), (1.0, (1.06, 1.0, 0.88, 1))]
-
-
-def mat_metal(name, lo, hi, wear_col=None, spec=0.9, spec_rough=0.24, spec_col=(0.95, 0.72, 0.36, 1), scratch=None,
-              wear=0.32, shade=None):
-    p = Paint(name)
-    base = p.ramp(p.noise(4.0, 3.0), [(0.3, srgb(*lo)), (0.7, srgb(*hi))])
-    if wear_col:
-        w = p.ramp(p.noise(2.2, 4.0, 0.6), [(wear, srgb(*wear_col)), (wear + 0.3, (1, 1, 1, 1))])   # painted wear
-        base = p.mix(base, w, 1.0, 'MULTIPLY')
-    if scratch:
-        s = p.ramp(p.noise(14.0, 6.0, 0.7), [(0.66, (0, 0, 0, 1)), (0.7, (1, 1, 1, 1))])
-        base = p.mix(base, srgb(*scratch), s)
-    return p.finish(base, spec=spec, spec_rough=spec_rough, spec_col=spec_col, metal=True, shade=shade)
-
-
 def mat_stripes(kind):
     """The painted band down the front corner: red-and-white chevrons (V, point down), or black-and-gold slants."""
     p = Paint("stripes")
@@ -191,75 +188,34 @@ def mat_stripes(kind):
     return p.finish(col, spec=0.35, spec_rough=0.3)
 
 
-def mat_lens(name, core, edge):
-    """Glowing glass: a hot middle fading to a deeper edge, with a glint; drawn at full strength (no shade)."""
-    m = bpy.data.materials.new(name)
-    m.use_nodes = True
-    nt = m.node_tree
-    for n in list(nt.nodes):
-        nt.nodes.remove(n)
-    lw = nt.nodes.new("ShaderNodeLayerWeight")
-    lw.inputs["Blend"].default_value = 0.45
-    r = nt.nodes.new("ShaderNodeValToRGB")
-    r.color_ramp.elements[0].position, r.color_ramp.elements[0].color = 0.0, srgb(*core)
-    r.color_ramp.elements[1].position, r.color_ramp.elements[1].color = 0.4, srgb(*edge)
-    nt.links.new(lw.outputs["Facing"], r.inputs[0])
-    em = nt.nodes.new("ShaderNodeEmission")
-    em.inputs["Strength"].default_value = 1.0
-    nt.links.new(r.outputs[0], em.inputs["Color"])
-    out = nt.nodes.new("ShaderNodeOutputMaterial")
-    nt.links.new(em.outputs[0], out.inputs[0])
-    return m
-
-
 def materials():
-    if TIER == 1:
-        skin = mat_metal("skin", (204, 118, 36), (238, 158, 66), wear_col=(140, 84, 34), spec=0.9, spec_rough=0.26, shade=WARM)
-        trim = mat_metal("trim", (222, 150, 48), (248, 190, 86), wear_col=(160, 104, 42), spec=1.0, shade=WARM)
-    elif TIER == 2:
-        skin = mat_metal("skin", (250, 190, 30), (255, 230, 96), wear_col=(214, 150, 40), spec=1.1, spec_rough=0.2,
-                         wear=0.2, spec_col=(1.0, 0.85, 0.4, 1), shade=WARM)
-        trim = mat_metal("trim", (238, 166, 26), (255, 208, 70), wear_col=(190, 120, 30), spec=1.1, spec_rough=0.2,
-                         spec_col=(1.0, 0.85, 0.4, 1), shade=WARM)
-    else:
-        skin = mat_metal("skin", (26, 26, 32), (44, 44, 52), scratch=(74, 74, 84), spec=2.6, spec_rough=0.22,
-                         spec_col=(0.14, 0.15, 0.19, 1))      # dim sky sheen, so black tops stay black
-        trim = mat_metal("trim", (240, 170, 28), (255, 212, 72), wear_col=(190, 122, 30), spec=1.1, spec_rough=0.2,
-                         wear=0.2, spec_col=(1.0, 0.85, 0.4, 1), shade=WARM)
-    brass = mat_metal("brass", (214, 146, 40), (244, 190, 72), wear_col=(156, 100, 36), spec=0.95, shade=WARM)
-    panel = mat_metal("panel", (176, 180, 192), (210, 214, 224), scratch=(236, 238, 244), spec=0.6, spec_rough=0.3,
-                      spec_col=(0.95, 0.97, 1.0, 1))
-    steel = mat_metal("steel", (92, 94, 108), (124, 126, 140), scratch=(150, 150, 162), spec=0.6, spec_rough=0.3,
-                      spec_col=(0.95, 0.97, 1.0, 1))
-    dark = mat_metal("dark", (40, 40, 48), (58, 58, 68), scratch=(84, 84, 94), spec=0.35, spec_rough=0.3,
-                     spec_col=(0.95, 0.97, 1.0, 1))
-    if TIER < 3:
-        dome = mat_metal("dome", (70, 112, 178), (128, 172, 228), scratch=(196, 212, 236), spec=1.1, spec_rough=0.18,
-                         spec_col=(0.95, 0.98, 1.0, 1))
-        ring = steel
-    else:
-        dome = mat_metal("dome", (30, 32, 40), (50, 52, 62), scratch=(84, 86, 98), spec=1.0, spec_rough=0.18,
-                         spec_col=(0.5, 0.56, 0.68, 1))
-        ring = trim
+    met = L.mat_metal
+    skin = met("skin", {1: "bronze", 2: "sgold", 3: "pblack"}[TIER], spec=0.6 if TIER == 3 else 0.9,
+               wear=0.35 if TIER == 3 else 0.5, sheen=0.06 if TIER == 3 else 0.15)   # little sky sheen: dark tops
+    trim = met("trim", "dbronze" if TIER == 1 else "sgold", spec=1.0, sheen=0.2)
+    steel = met("steel", "steel", spec=0.6, spec_rough=0.3)
     p = Paint("disc")                          # the turntable: dark worn steel, no sky sheen (it faces straight up)
     base = p.ramp(p.noise(3.0, 4.0), [(0.3, srgb(*((54, 54, 62) if TIER < 3 else (30, 30, 36)))),
                                       (0.7, srgb(*((80, 80, 90) if TIER < 3 else (46, 46, 54))))])
     sc_ = p.ramp(p.noise(14.0, 6.0, 0.7), [(0.66, (0, 0, 0, 1)), (0.7, (1, 1, 1, 1))])
     disc = p.finish(p.mix(base, srgb(110, 110, 122), sc_), spec=0.5, spec_rough=0.3, spec_col=(0.9, 0.93, 1.0, 1))
-    return dict(disc=disc, skin=skin, trim=trim, brass=brass, panel=panel, steel=steel, dark=dark, dome=dome, ring=ring,
+    return dict(disc=disc, skin=skin, trim=trim, steel=steel,
+                brass=met("brass", "brass" if TIER == 1 else "sgold"),
+                panel=met("panel", "panel", spec=0.6, spec_rough=0.3),
+                dark=met("dark", "gunmetal", spec=0.35, spec_rough=0.3),
+                dome=met("dome", "bluesteel", spec=1.0, spec_rough=0.18, sheen=0.2) if TIER < 3 else met("dome", "black", wear=0.35, sheen=0.15),
+                ring=steel if TIER < 3 else trim,
                 stripes=mat_stripes("chevron" if TIER < 3 else "hazard"),
-                ball=mat_metal("ball", (70, 70, 80) if TIER < 3 else (30, 30, 36), (98, 98, 110) if TIER < 3 else (50, 50, 58),
-                               scratch=(130, 130, 140) if TIER < 3 else (80, 80, 90), spec=0.8, spec_rough=0.22,
-                               spec_col=(0.95, 0.97, 1.0, 1) if TIER < 3 else (0.5, 0.55, 0.65, 1)),
+                ball=met("ball", "gunmetal" if TIER < 3 else "black", spec=0.8, spec_rough=0.22),
                 bore=mat_flat("bore", (30, 28, 32), spec=0.1),
-                rivet=mat_flat("rivet", (214, 196, 150) if TIER > 1 else (200, 190, 170), spec=0.9, spec_rough=0.25,
-                               metal=True),
+                rivet=met("rivet", "steel" if TIER == 1 else "sgold", spec=1.0, spec_rough=0.2, wear=0),
                 blue=mat_flat("blue", (40, 96, 236), spec=0.6, spec_rough=0.25),
                 red=mat_flat("red", (226, 30, 30), spec=0.6, spec_rough=0.25),
-                lens_red=mat_lens("lens_red", (255, 120, 110), (200, 0, 16)),
-                light=mat_metal("light", (150, 158, 176), (190, 198, 214), scratch=(220, 226, 236), spec=0.9, spec_rough=0.22,
-                                spec_col=(0.95, 0.97, 1.0, 1)),
-                lens_amber=mat_lens("lens_amber", (255, 220, 120), (240, 96, 0)))
+                light=met("light", "panel", spec=0.9, spec_rough=0.22),
+                lens_red=L.mat_glass_lamp("lens_red", core=(255, 150, 140), mid=(226, 16, 26), rim=(120, 0, 10)),
+                lens_amber=L.mat_glass_lamp("lens_amber", core=(255, 214, 110), mid=(255, 128, 16), rim=(196, 56, 0)),
+                halo_red=L.mat_halo("halo_red", (255, 40, 30), strength=0.4),
+                halo_amber=L.mat_halo("halo_amber"))
 
 
 # ------------------------------------------------------------------------------------------------------------------ model
@@ -268,7 +224,7 @@ def build():
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o)
     M = materials()
-    LN = dict(warm=outline_mat("line_warm", srgb(52, 30, 12)), cool=outline_mat("line_cool", srgb(24, 24, 30)))
+    LN = dict(warm=L.line("warm"), cool=L.line("cool"))
     body = bpy.data.objects.new("BODY", None)
     sc.collection.objects.link(body)
 
@@ -277,7 +233,7 @@ def build():
     NL, NR = face_axes("L")[2], face_axes("R")[2]   # the outward normals of the two faces we see
 
     # ---- the hexagonal sections, a trim band at each joint, corner strips, the striped front corner
-    skin, trim, stripe, panel, brass = (bmesh.new() for _ in range(5))
+    skin, trim, stripe, panel, brass, slots = (bmesh.new() for _ in range(6))
     rivets = bmesh.new()
     for s in range(SECTIONS):
         za, zb = Z0 + s * hs, Z0 + (s + 1) * hs
@@ -303,6 +259,8 @@ def build():
         h0 = za + (hs - dh) / 2 + 0.01
         rbox(panel, (0.6, 0.08, dh), face_frame("L", h0, u=0.04), bevel=0.035)
         rbox(panel, (0.5, 0.06, dh - 0.2), face_frame("L", h0 + 0.1, u=0.04, out=0.03), bevel=0.02)
+        for i in range(3):                     # the hatch's vent slots, as painted
+            rbox(slots, (0.34, 0.03, 0.04), face_frame("L", h0 + dh * (0.42 + 0.13 * i), u=0.04, out=0.062), bevel=0.01)
         rbox(panel, (0.58, 0.2, 0.06), face_frame("L", h0 + dh - 0.05, u=0.04, out=0.05) @ Matrix.Rotation(math.radians(-25), 4, 'X'),
              bevel=0.02)
         for uu in (-0.16, 0.24):
@@ -340,15 +298,19 @@ def build():
                       r=0.024)
     if TIER == 1:   # the amber lamp at the top left of the door face
         lamp, glow = bmesh.new(), bmesh.new()
-        f = face_frame("L", top_body - 0.14, u=0.4, out=0.0)
+        f = face_frame("L", top_body - 0.16, u=0.3, out=0.0)
         cyl(lamp, 0.12, 0.08, f @ Matrix.Translation((0, 0.04, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), segs=20)
         bmesh.ops.create_uvsphere(glow, u_segments=20, v_segments=10, radius=0.1,
                                   matrix=f @ Matrix.Translation((0, 0.09, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X') @ diag(1, 1, 0.8))
         add_outline(obj_from_bm("lamp_rim", lamp, [M["brass"]], parent=body), LN["warm"], LINE * 0.7)
         obj_from_bm("lens_lamp", glow, [M["lens_amber"]], parent=body)
+        halo = bmesh.new()
+        bmesh.ops.create_uvsphere(halo, u_segments=20, v_segments=10, radius=0.2, matrix=f @ Matrix.Translation((0, 0.09, 0)))
+        obj_from_bm("lamp_glow", halo, [M["halo_amber"]], parent=body)
 
     for name, bm_, mat, line in (("skin", skin, "skin", "warm"), ("trim", trim, "trim", "warm"), ("stripe", stripe, "stripes", "warm"),
-                                 ("panels", panel, "panel", "cool"), ("sockets", brass, "brass", "warm")):
+                                 ("panels", panel, "panel", "cool"), ("sockets", brass, "brass", "warm"),
+                                 ("slots", slots, "dark", "cool")):
         ob = obj_from_bm(name, bm_, [M[mat]], parent=body, sharp=35)
         if name != "stripe":
             add_outline(ob, LN[line])
@@ -411,12 +373,13 @@ def build():
     tur.location = (0, 0, TOP)
     tur.scale = (TURRET_SCALE,) * 3
     DR = 0.37                                   # dome radius
+    GUN_Z = 0.3                                 # the gun comes out of the dome's middle, as painted
     skirt = lathe("skirt", [[(0.43, 0.0), (0.44, 0.015), (0.44, 0.07), (0.42, 0.09)], [(0.42, 0.09), (DR, 0.095)]],
                   [M["ring"]], parent=tur)
     add_outline(skirt, LN["warm"] if TIER == 3 else LN["cool"])
-    prof = [(DR, 0.09)] + [(DR * math.cos(a) ** 0.85, 0.1 + DR * 1.3 * math.sin(a) ** 1.15) for a in
+    prof = [(DR, 0.09)] + [(DR * math.cos(a) ** 0.85, 0.1 + DR * 1.36 * math.sin(a) ** 1.15) for a in
                            (math.radians(d) for d in (5, 18, 32, 46, 58, 68, 76, 83, 88))]
-    prof += [(0.0, prof[-1][1] + 0.06)]         # the blunt point on top
+    prof += [(0.0, prof[-1][1] + 0.1)]          # the point on top (painted: an onion tip)
     dome = lathe("dome", [prof], [M["dome"]], parent=tur, sharp=60)
     add_outline(dome, LN["cool"])
     bm = bmesh.new()
@@ -442,15 +405,16 @@ def build():
         [(0.075, 0.96), (0.07, 0.6), (0.0, 0.6)],
     ], [M["light"] if TIER < 3 else M["steel"], M["brass"], M["bore"]], mat_of_seg=[0, 0, 1 if TIER > 1 else 0, 1 if TIER > 1 else 0, 2], parent=tur, sharp=35)
     gun.rotation_euler = (-math.pi / 2, 0, 0)
-    gun.location = (0, 0, 0.22)
+    gun.location = (0, 0, GUN_Z)
+    gun.scale = (1, 1, 0.82)                    # shorter, as painted
     add_outline(gun, LN["cool"])
     collar = lathe("collar", [[(0.14, 0.27), (0.155, 0.29), (0.155, 0.4), (0.14, 0.42)], [(0.14, 0.42), (0.105, 0.43)]],
                    [M["brass"]], parent=tur, sharp=35)
     collar.rotation_euler = (-math.pi / 2, 0, 0)
-    collar.location = (0, 0, 0.22)
+    collar.location = (0, 0, GUN_Z)
     add_outline(collar, LN["warm"])
     # the scope: a ribbed tube on top along the gun, its red lens to the front
-    zt = 0.68
+    zt = 0.72
     scope = lathe("scope", [
         [(0.0, -0.22), (0.075, -0.22), (0.085, -0.2)],
         [(0.085, -0.2), (0.085, 0.2)],
@@ -472,63 +436,25 @@ def build():
                               matrix=Matrix.Translation((0, 0.28, 0)) @ diag(1, 0.5, 1))
     lens = obj_from_bm("lens_scope", bm, [M["lens_red"]], parent=tur)
     lens.location = (0, 0.12, zt)
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=20, v_segments=10, radius=0.12, matrix=Matrix.Translation((0, 0.29, 0)))
+    halo = obj_from_bm("lens_scope_glow", bm, [M["halo_red"]], parent=tur)
+    halo.location = (0, 0.12, zt)
     return body, tur
 
 
 # ------------------------------------------------------------------------------------------------------------ camera/light
-SUN = (150, 42)      # the light comes from bearing 150 (screen left, a little behind), 42 degrees up
-
-
 def setup_render():
-    sc = bpy.context.scene
-    sc.render.engine = 'BLENDER_EEVEE'
-    sc.render.resolution_percentage = 100
-    sc.render.film_transparent = True
-    sc.render.image_settings.file_format = 'PNG'
-    sc.render.image_settings.color_mode = 'RGBA'
-    sc.view_settings.view_transform = 'Standard'
-    sc.view_settings.look = 'None'
-    sc.render.filter_size = 1.2
-    ee = sc.eevee
-    ee.taa_render_samples = 64
-    for k, v in (("use_shadows", True), ("shadow_ray_count", 3), ("shadow_step_count", 10), ("use_fast_gi", False),
-                 ("use_raytracing", False), ("shadow_resolution_scale", 1.0)):
-        try:
-            setattr(ee, k, v)
-        except Exception:
-            pass
-    world = bpy.data.worlds.new("none")
-    sc.world = world
-    world.use_nodes = True
-    world.node_tree.nodes.get("Background").inputs[1].default_value = 0.0
-    cam_d = bpy.data.cameras.new("cam")
-    cam_d.type = 'ORTHO'
-    cam_d.sensor_fit = 'HORIZONTAL'
-    cam_d.clip_start, cam_d.clip_end = 0.05, 40
-    cam = bpy.data.objects.new("cam", cam_d)
-    sc.collection.objects.link(cam)
-    view = bear(45, math.cos(math.radians(EL)), math.sin(math.radians(EL)))
-    cam.location = Vector((0, 0, TOP)) + view * 15
-    cam.rotation_euler = (-view).to_track_quat('-Z', 'Y').to_euler()
-    sc.camera = cam
-    sun_d = bpy.data.lights.new("sun", 'SUN')
-    sun_d.energy = math.pi
-    sun_d.angle = math.radians(6)
-    for k, v in (("shadow_maximum_resolution", 0.002), ("use_shadow_jitter", False), ("shadow_filter_radius", 1.0)):
-        try:
-            setattr(sun_d, k, v)
-        except Exception:
-            pass
-    sun = bpy.data.objects.new("sun", sun_d)
-    sc.collection.objects.link(sun)
-    frm = bear(SUN[0], math.cos(math.radians(SUN[1])), math.sin(math.radians(SUN[1])))
-    sun.rotation_euler = (-frm).to_track_quat('-Z', 'Y').to_euler()
+    """The shared camera and light (look3d), our canvas fit: the width decides the scale (see frame)."""
+    cam = L.setup_render()
+    cam.data.sensor_fit = 'HORIZONTAL'
     return cam
 
 
 def frame(cam, w, h, px, py):
     """Canvas w x h at our scale, the turning point at pixel (px, py)."""
     sc = bpy.context.scene
+    L.canvas(w, h, (0, 0, w, h), OUT)
     sc.render.resolution_x, sc.render.resolution_y = w, h
     cam.data.ortho_scale = w / PPU
     cam.data.shift_x = cam.data.shift_y = 0.0
@@ -542,81 +468,23 @@ def frame(cam, w, h, px, py):
     return p.x * w, (1 - p.y) * h
 
 
-def objs_under(root):
-    out = []
-    for o in bpy.data.objects:
-        q = o.parent
-        while q is not None and q != root:
-            q = q.parent
-        if q == root and o.type == 'MESH':
-            out.append(o)
-    return out
-
-
-def blur(a, sigma):
-    """Gaussian blur of an h x w array (numpy FFT)."""
-    h, w = a.shape
-    fy = np.fft.fftfreq(h)[:, None]
-    fx = np.fft.fftfreq(w)[None, :]
-    g = np.exp(-2 * (math.pi * sigma) ** 2 * (fx * fx + fy * fy))
-    return np.real(np.fft.ifft2(np.fft.fft2(a) * g))
-
-
 def main():
     what = ARGS[1]
     body, tur = build()
     cam = setup_render()
     sc = bpy.context.scene
-    body_obs, tur_obs = objs_under(body), objs_under(tur)
+    body_obs, tur_obs = L.objs_under(body), L.objs_under(tur)
     OUT.mkdir(parents=True, exist_ok=True)
     if what == "save":
+        tw, th = P["top"]
+        frame(cam, tw * 2, th * 2, P["top_pivot"][0] * 2, P["top_pivot"][1] * 2)
         bpy.ops.wm.save_as_mainfile(filepath=str(HERE / f"sniper-t{TIER}.blend"))
         return
 
-    def shot(path, seen, cut=()):
-        """Render the objects in seen, with those in cut as holdouts. Passes laid over each other: the paint without the
-        outline shells, the shells alone (every solid part a holdout), and the glowing lenses alone, blurred into a halo."""
-        w, h = sc.render.resolution_x, sc.render.resolution_y
-        lenses = [o for o in seen if o.name.startswith("lens")]
-        tmp = [OUT / "_paint.png", OUT / "_lines.png"] + ([OUT / "_glow.png"] if lenses else [])
-        for i, f in enumerate(tmp):
-            for o in seen + list(cut):
-                line = o.name.endswith("_line")
-                o.hide_render = (line and i != 1)
-                o.is_holdout = (o in cut) or (i == 1 and not line) or (i == 2 and o not in lenses)
-            for o in bpy.data.objects:
-                if o.type == 'MESH' and o not in seen and o not in cut:
-                    o.hide_render = True
-            sc.render.filepath = str(f)
-            bpy.ops.render.render(write_still=True)
-        ims = [bpy.data.images.load(str(f)) for f in tmp]
-        px = []
-        for im in ims:
-            a = np.empty(w * h * 4, np.float32)
-            im.pixels.foreach_get(a)
-            px.append(a.reshape(h, w, 4))
-        pa, pb = px[0], px[1]
-        ab = pb[..., 3:4]
-        aa = ab + pa[..., 3:4] * (1 - ab)
-        rgb = (pb[..., :3] * ab + pa[..., :3] * pa[..., 3:4] * (1 - ab)) / np.maximum(aa, 1e-6)
-        if lenses:          # a soft halo round each lit lens, over everything (and a little past the edge)
-            g = px[2]
-            k = np.stack([blur(g[..., c] * g[..., 3], 7.0) for c in range(3)] + [blur(g[..., 3], 7.0)], -1).clip(0, None)
-            ha = (k[..., 3:4] * 2.6).clip(0, 0.9)
-            hc = k[..., :3] / np.maximum(k[..., 3:4], 1e-6)
-            prem = rgb * aa
-            prem = prem + hc * ha * (1 - 0.5 * aa)       # added light on the tower, a faint glow off it
-            aa = np.maximum(aa, ha * 0.6)
-            rgb = (prem / np.maximum(aa, 1e-6)).clip(0, 1)
-        out = bpy.data.images.new("out", w, h, alpha=True)
-        out.pixels.foreach_set(np.concatenate([rgb, aa], -1).astype(np.float32).ravel())
-        out.filepath_raw = str(path)
-        out.file_format = 'PNG'
-        out.save()
-        for im in ims + [out]:
-            bpy.data.images.remove(im)
-        for f in tmp:
-            f.unlink()
+    warm, cool = L.LINE_COLS["warm"], L.LINE_COLS["cool"]
+
+    def shot(path, seen, cut=(), col=warm):
+        L.shot(path, seen, cut=cut, outer_col=col)
 
     info = dict(tier=TIER, elevation=EL, px_per_unit_4x=PPU, top=TOP)
     if what == "body":
@@ -634,7 +502,7 @@ def main():
         (OUT / "turret-4x").mkdir(exist_ok=True)
         for k in heads:
             tur.rotation_euler = (0, 0, -math.radians(11.25 * k))
-            shot(OUT / "turret-4x" / f"h{k:02d}.png", tur_obs, cut=body_obs)
+            shot(OUT / "turret-4x" / f"h{k:02d}.png", tur_obs, cut=body_obs, col=warm if TIER == 3 else cool)
     old = json.loads((OUT / "camera.json").read_text()) if (OUT / "camera.json").exists() else {}
     old.update(info)
     (OUT / "camera.json").write_text(json.dumps(old, indent=1))

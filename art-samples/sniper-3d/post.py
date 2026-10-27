@@ -52,8 +52,15 @@ def grass(w, h, seed=3):
     return g
 
 
-def gif(frames, path, ms=90):
-    q = [f.quantize(colors=255, method=Image.MEDIANCUT, dither=Image.NONE) for f in frames]
+def gif(frames, path, ms=90, colors=160):
+    """One palette for every frame (made from every 4th frame side by side): smaller files and no colour flicker."""
+    w, h = frames[0].size
+    some = frames[::4]
+    m = Image.new("RGB", (w * len(some), h))
+    for i, f in enumerate(some):
+        m.paste(f, (i * w, 0))
+    pal = m.quantize(colors=colors, method=Image.MEDIANCUT, dither=Image.NONE)
+    q = [f.quantize(palette=pal, dither=Image.NONE) for f in frames]
     q[0].save(path, save_all=True, append_images=q[1:], duration=ms, loop=0, disposal=1, optimize=True)
 
 
