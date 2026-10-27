@@ -632,6 +632,38 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(maprooms.get(DEFENDER)!.neighbors.map((one: { attacksfrom: number }) => one.attacksfrom)).toEqual([1]);
   });
 
+  test("an honest End Attack with nothing flung, past the grace: the army is kept, a 0-damage attack lands", async () => {
+    // The client's End Attack with no fling: the log is there, its only event the retreat.
+    for (const extra of [
+      { flinglog: JSON.stringify({ v: 1, seed: 7, events: [{ kind: "retreat", t: 40 }] }) },
+      { flinglog: JSON.stringify({ v: 1, seed: 7, events: [] }), left: "1" },
+    ]) {
+      startSession(undefined, now() - 30);
+      inferno.monsters.housed = { ...ARMY };
+      inputs.length = 0;
+      notices.length = 0;
+      maprooms = new Map();
+      target.protected = 0;
+      target.damage = 0;
+      const ctx = finalSave(extra);
+      expect(await run(ctx)).toBeNull();
+      // A real replay ran (not the spend-all path), and nothing it fought was flung.
+      expect(inputs).toHaveLength(1);
+      expect(inferno.monsters.housed).toEqual(ARMY);
+      expect(ctx.body.player).toMatchObject({ damage: 0, loot: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+      expect(defenderMain.iresources).toMatchObject({ r1: 5_000, r2: 400 });
+      expect(userSave.iresources).toMatchObject({ r1: 0, r2: 0 });
+      expect(target).toMatchObject({ attackid: 0, damage: 0 });
+      // No protection beyond the damage rule: a first attack with no damage gives none.
+      expect(target.protected).toBe(0);
+      // It still counts as an attack: both revenge lists, and the defender is told.
+      expect(maprooms.get(DEFENDER)!.neighbors.map((one: { attacksfrom: number }) => one.attacksfrom)).toEqual([1]);
+      expect(maprooms.get(ATTACKER)!.neighbors.map((one: { attacksto: number }) => one.attacksto)).toEqual([1]);
+      expect(notices.map((one) => [one.targetid, one.subject])).toEqual([[DEFENDER, "raider attacked your Inferno yard"]]);
+      expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
+    }
+  });
+
   test("a final save with no fling log inside the grace keeps the army", async () => {
     startSession();
     expect(await run(finalSave({ flinglog: "" }))).toBeNull();
