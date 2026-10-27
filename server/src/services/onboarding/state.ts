@@ -112,6 +112,12 @@ export interface OnboardingCounters {
   baiterRuns: number;
   /** Wild monster raids held to a good defence, 90% or more (goal N1, #226 WP5). */
   raidsSurvived: number;
+  /**
+   * The most one bank on the Inferno yard paid, all four together (Inferno
+   * quests IBK1-IBK4, `docs/design/inferno.md` WP 4.1). `bestBank` never
+   * counts the Inferno's banks.
+   */
+  infernoBestBank: number;
   tribes: Record<TribeCounterName, number>;
 }
 
@@ -124,6 +130,12 @@ export interface Onboarding {
   raidSeen?: number;
   camp: CampRecord;
   goals: Record<string, GoalRecord>;
+  /**
+   * The Inferno quests' records (`game-data/infernoGoals.ts`), apart from
+   * {@link goals}: Flash kept the Inferno yard's quests on its own save.
+   * No baseline ever marks them.
+   */
+  infernoGoals: Record<string, GoalRecord>;
   /**
    * The Goals baseline (decision Q1): `"pending"` until the Goals package has
    * marked the goals this save already met as claimed without a reward, then
@@ -143,6 +155,7 @@ export const emptyCounters = (): OnboardingCounters => ({
   juiced: 0,
   baiterRuns: 0,
   raidsSurvived: 0,
+  infernoBestBank: 0,
   tribes: { legionnaire: 0, kozu: 0, abunakki: 0, dreadnaut: 0 },
 });
 
@@ -210,6 +223,7 @@ const readCounters = (raw: unknown): OnboardingCounters => {
   counters.juiced = count(raw.juiced);
   counters.baiterRuns = count(raw.baiterRuns);
   counters.raidsSurvived = count(raw.raidsSurvived);
+  counters.infernoBestBank = count(raw.infernoBestBank);
   const tribes = isRecord(raw.tribes) ? raw.tribes : {};
   for (const name of Object.keys(counters.tribes) as TribeCounterName[]) {
     counters.tribes[name] = count(tribes[name]);
@@ -262,6 +276,7 @@ export const readOnboarding = (save: OnboardingSave): Onboarding => {
     grants: isRecord(raw.grants) ? (structuredClone(raw.grants) as GrantLedger) : {},
     camp: readCamp(raw.camp),
     goals: readGoals(raw.goals),
+    infernoGoals: readGoals(raw.infernoGoals),
     counters: readCounters(raw.counters),
     tips: readNumberMap(raw.tips),
   };

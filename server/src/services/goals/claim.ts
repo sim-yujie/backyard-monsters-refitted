@@ -1,4 +1,4 @@
-import { GOALS, goalById, type GoalDef, type GoalReward } from "../../game-data/goals.js";
+import type { GoalDef, GoalReward } from "../../game-data/goals.js";
 import { siegeData, type SiegeId } from "../../game-rules/combat/siege.js";
 import { hatchCost, housingSpace, monsterEntry } from "../../game-data/monsterCatalogue.js";
 import type { Save } from "../../database/models/save.model.js";
@@ -11,12 +11,14 @@ import { yardBadRequestErr, yardRefusedErr } from "../yard/yardErrors.js";
 import type { ResourceAmounts } from "../yardplanner/costs.js";
 import {
   applyBaseline,
+  goalBookOf,
   goalMet,
   goalStatus,
   isClaimed,
   goalVisible,
   markDone,
   progressOf,
+  type GoalBook,
   type GoalProgress,
 } from "./goalRules.js";
 
@@ -41,6 +43,13 @@ import {
  * (SW4-SW12) needs room in the Chaos Factory, as Flash's `hasRoom`
  * (`QUESTS.as:1772-1777`): the claim is refused unless a Factory is built,
  * making nothing and holding nothing.
+ *
+ * **On the Inferno yard** (`docs/design/inferno.md` WP 4.1-4.2) both routes
+ * answer the Inferno's quests instead ({@link goalBookOf}): the yard action
+ * wrapper hands them the Inferno yard's view, so the conditions read its
+ * buildings and Strongbox, the rewards land in the Inferno purse under the
+ * Inferno cap, monsters in its Housing Bunkers and points on the Inferno
+ * row. There is no baseline there.
  */
 
 /** One monster reward as the panel shows it. */
@@ -104,12 +113,12 @@ export const SIEGE_ROOM_MESSAGE =
   "You cannot collect this reward now. You may need to build a Chaos Factory first. " +
   "Otherwise, your Chaos Factory is building a Chaos Weapon, or currently has one stored.";
 
-/** Brings the record up to date: the baseline if pending, then sticky `done`. */
-const refreshed = (save: Save, now: number): { onboarding: Onboarding; changed: boolean } => {
+/** Brings the record up to date: the baseline if pending (the surface's only), then sticky `done`. */
+const refreshed = (save: Save, now: number, book: GoalBook): { onboarding: Onboarding; changed: boolean } => {
   let changed = false;
   const onboarding = updateOnboarding(save, (record) => {
-    changed = applyBaseline(save, record, now);
-    changed = markDone(save, record, now) || changed;
+    if (book.surface) changed = applyBaseline(save, record, now);
+    changed = markDone(save, record, now, book) || changed;
   });
   return { onboarding, changed };
 };
@@ -137,11 +146,17 @@ const monstersView = (goal: GoalDef): GoalMonsters | undefined =>
 const siegeRewardView = (goal: GoalDef): GoalSiege | undefined =>
   goal.siege && { id: goal.siege, name: siegeData(goal.siege)?.name ?? goal.siege, count: 1 };
 
-/** Every shown goal, in order. */
-export const goalViews = (save: Save, onboarding: Onboarding, now: number): GoalView[] => {
+/** Every shown goal of the yard's book, in order. */
+export const goalViews = (
+  save: Save,
+  onboarding: Onboarding,
+  now: number,
+  book: GoalBook = goalBookOf(save),
+): GoalView[] => {
   const views: GoalView[] = [];
-  for (const goal of GOALS) {
-    const status = goalStatus(goal, save, onboarding);
+  const records = book.records(onboarding);
+  for (const goal of book.goals) {
+    const status = goalStatus(goal, save, onboarding, book);
     if (status === "hidden") continue;
     const monsters = monstersView(goal);
     const siege = siegeRewardView(goal);
@@ -155,7 +170,7 @@ export const goalViews = (save: Save, onboarding: Onboarding, now: number): Goal
       ...(monsters && { monsters }),
       ...(siege && { siege }),
       status,
-      ...(onboarding.goals[goal.id]?.claimed === "baseline" && { baseline: true as const }),
+      ...(records[goal.id]?.claimed === "baseline" && { baseline: true as const }),
       ...(progress && status === "open" && { progress }),
       ...(monsters && status === "ready" && { room: hasRoom(save, goal, now) }),
       ...(siege && status === "ready" && { room: siegeRewardRoom(save) }),
@@ -169,8 +184,9 @@ export const goalViews = (save: Save, onboarding: Onboarding, now: number): Goal
  * and returns every shown goal. Writes the record only when it changed.
  */
 export const planGoalsState = (save: Save, now: number) => {
-  const { onboarding, changed } = refreshed(save, now);
-  const report: GoalsStateReport = { goals: goalViews(save, onboarding, now) };
+  const book = goalBookOf(save);
+  const { onboarding, changed } = refreshed(save, now, book);
+  const report: GoalsStateReport = { goals: goalViews(save, onboarding, now, book) };
   return { report, ...(changed && { slices: { onboarding } }) };
 };
 
@@ -185,17 +201,18 @@ export const planGoalsState = (save: Save, now: number) => {
  * weapon (none built, making one, or holding one).
  */
 export const planGoalClaim = (save: Save, id: string, now: number) => {
-  const goal = goalById(id);
+  const book = goalBookOf(save);
+  const goal = book.byId(id);
   if (!goal) throw yardBadRequestErr("There is no such goal.", { id }, "unknownGoal");
 
-  const { onboarding } = refreshed(save, now);
-  if (isClaimed(onboarding, goal.id)) {
+  const { onboarding } = refreshed(save, now, book);
+  if (isClaimed(onboarding, goal.id, book)) {
     throw yardRefusedErr("alreadyClaimed", "That goal's reward has already been collected.", { id });
   }
-  if (!goalVisible(goal, save, onboarding)) {
+  if (!goalVisible(goal, save, onboarding, book)) {
     throw yardRefusedErr("goalHidden", "That goal is not open to you yet.", { id });
   }
-  if (!goalMet(goal, save, onboarding)) {
+  if (!goalMet(goal, save, onboarding, book)) {
     throw yardRefusedErr("notMet", "That goal is not finished yet.", { id });
   }
 
@@ -229,7 +246,8 @@ export const planGoalClaim = (save: Save, id: string, now: number) => {
     siege = withRewardWeapon(save.siege, goal.siege);
   }
 
-  onboarding.goals[goal.id] = { ...onboarding.goals[goal.id], claimed: now };
+  const records = book.records(onboarding);
+  records[goal.id] = { ...records[goal.id], claimed: now };
   const credit: ResourceAmounts = { ...goal.reward };
   const fit = fitCredit(save, credit);
   const points = Math.ceil(value / 50);

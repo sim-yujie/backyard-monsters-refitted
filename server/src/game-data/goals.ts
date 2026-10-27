@@ -27,7 +27,15 @@ import type { TribeCounterName } from "../services/onboarding/state.js";
  */
 
 /** The server-side counters a goal can read (`OnboardingCounters`). */
-export type GoalCounter = "mushrooms" | "goldMushrooms" | "bestBank" | "juiced" | "baiterRuns" | "raidsSurvived";
+export type GoalCounter =
+  | "mushrooms"
+  | "goldMushrooms"
+  | "bestBank"
+  | "juiced"
+  | "baiterRuns"
+  | "raidsSurvived"
+  /** The Inferno quests IBK1-IBK4 (`game-data/infernoGoals.ts`). */
+  | "infernoBestBank";
 
 /** What has to be true for a goal to be met (§6.2). */
 export type GoalCondition =
@@ -67,6 +75,11 @@ export interface GoalDef {
   readonly name: string;
   readonly description: string;
   readonly reward: GoalReward;
+  /**
+   * Shiny the claim adds to the player's Shiny, once. Only five Inferno
+   * quests have any (owner decision R12, `game-data/infernoGoals.ts`).
+   */
+  readonly shiny?: number;
   /** Monsters the goal houses, which need room in Housing for all of them (Q10). */
   readonly monsters?: { readonly id: string; readonly count: number };
   /** Shown only once this goal is claimed. */
