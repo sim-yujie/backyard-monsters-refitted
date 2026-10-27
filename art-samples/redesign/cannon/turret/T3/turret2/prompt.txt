@@ -24,5 +24,3 @@ The barrel, its brackets and the swivel collar turn together. The barrel is ALWA
 It is for the isometric strategy game Backyard Monsters (cartoony, colourful monster world), seen from the game's fixed isometric camera (from the front, looking down at about 30 degrees, the ground diamond's corners pointing left, right, up and down).
 
 Background everywhere: flat pure green #00FF00. No ground, no grass, no shadow on the ground, no text, no labels. The painting itself must contain no bright pure green. No numbers, arrows or grid lines.
-
-NOTE: Row 3, cell 2 matters most this time. Its muzzle points toward 5:17: mostly toward the viewer but clearly turned a little to the RIGHT. We see the open muzzle as a slightly narrowed oval, turned a little to the right, with a short strip of the barrel's left side showing behind it. It must sit exactly half way between sheetA's row 3, cell 2 (turned clearly right) and sheetA's row 3, cell 3 (muzzle full on, perfectly round): not full on, and not as far right as sheetA's row 3, cell 2.
