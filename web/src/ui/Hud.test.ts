@@ -439,6 +439,19 @@ describe("the yard's corner layout (#171)", () => {
     hud.destroy();
   });
 
+  it("draws the Inferno's four with no yard bound when built in the Inferno realm (a look at a player's Inferno yard, WP 3.4)", () => {
+    setResourceRealm("inferno");
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 1_600, r2: 1_600, r3: 0, r4: 0 });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    const r4 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r4"]')!;
+    expect(r1.title).toBe("Bone: 1,600");
+    expect(r4.title).toBe("Magma: 0");
+    expect(r1.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("inferno");
+    setResourceRealm("surface");
+    hud.destroy();
+  });
+
   it("uses short amounts on a phone, where the readouts share a row of four", () => {
     const matchMedia = vi.fn((query: string) => ({ matches: query === "(width <= 620px)" }));
     vi.stubGlobal("matchMedia", matchMedia);

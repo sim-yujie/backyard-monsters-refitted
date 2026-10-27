@@ -13,6 +13,7 @@ import {
   plannerAccessFor,
   refusalNotice,
   storageText,
+  whoseYard,
   yardDockOptions,
   type YardDockActions,
 } from "./YardScene";
@@ -206,5 +207,14 @@ describe("infernoViewFailureText", () => {
       "Could not reach the server to look at Bob's Inferno yard.",
     );
     expect(infernoViewFailureText("Bob", new Error("?"))).toBe("Could not load Bob's Inferno yard.");
+  });
+});
+
+describe("whoseYard", () => {
+  it("names another player's Inferno yard as one, for the status line of a look (WP 3.4)", () => {
+    expect(whoseYard({ ...visit("main"), inferno: true }, MAIN_YARD)).toBe("Abunakki's Inferno yard");
+    expect(whoseYard(visit("main"), MAIN_YARD)).toBe("Abunakki's yard");
+    expect(whoseYard(null, INFERNO_YARD)).toBe("your Inferno yard");
+    expect(whoseYard(null, MAIN_YARD)).toBe("your yard");
   });
 });

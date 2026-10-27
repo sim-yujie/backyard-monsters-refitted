@@ -248,6 +248,12 @@ export const infernoViewFailureText = (name: string, caught: unknown): string =>
   return `Could not load ${name}'s Inferno yard.`;
 };
 
+/** "your yard", "your outpost", "your Inferno yard", "Name's yard" or "Name's Inferno yard" (WP 3.4). */
+export const whoseYard = (target: ViewTarget | null, own: OwnYardTarget): string => {
+  if (target) return `${target.name}'s ${target.inferno ? "Inferno yard" : "yard"}`;
+  return own.kind === "outpost" ? "your outpost" : own.kind === "inferno" ? "your Inferno yard" : "your yard";
+};
+
 /**
  * What an outpost holding nothing but its core says, with a way to the
  * Starter Kits, as Flash's help popup offered them there
@@ -531,6 +537,10 @@ export class YardScene implements Scene {
     this.own = this.target ? MAIN_YARD : (own ?? MAIN_YARD);
     this.takenOver = this.target ? null : (own?.takenOver ?? null);
     const whose = this.whose();
+    // Another player's Inferno yard is looked at from the Inferno: its HUD
+    // shows the own purse as Bone, Coal, Sulfur and Magma, so the realm is
+    // set before the HUD draws its icons.
+    if (this.target?.inferno) setResourceRealm("inferno");
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
 
@@ -870,8 +880,6 @@ export class YardScene implements Scene {
       // Flash client drew it outside BUILD mode. The own yard keeps its edge,
       // and is held by a store from here on.
       const store = target ? null : this.startStore(response, context);
-      // Another player's Inferno yard is looked at from the Inferno: its HUD shows the own purse.
-      if (target?.inferno) setResourceRealm("inferno");
       const yard = store ? store.yard : readYard(response, { foreign: true });
       this.yard = yard;
       this.save = response;
@@ -2487,10 +2495,9 @@ export class YardScene implements Scene {
 
   /* ── Own yards ──────────────────────────────────────────────────────── */
 
-  /** "your yard", "your outpost" or "Name's yard", for the loading lines. */
+  /** Whose yard this is ({@link whoseYard}), for the loading lines and the status line. */
   private whose(): string {
-    if (this.target) return `${this.target.name}'s ${this.target.inferno ? "Inferno yard" : "yard"}`;
-    return this.own.kind === "outpost" ? "your outpost" : this.own.kind === "inferno" ? "your Inferno yard" : "your yard";
+    return whoseYard(this.target, this.own);
   }
 
   /**
@@ -2784,7 +2791,7 @@ export class YardScene implements Scene {
     // #56); the counts, the plot, the frame time and the selected id are a
     // developer's (#150).
     const parts = [
-      ...(this.target ? [`${this.target.name}'s yard, read-only`] : []),
+      ...(this.target ? [`${this.whose()}, read-only`] : []),
       ...(this.hint ? [this.hint] : []),
       ...(devDetails()
         ? [
