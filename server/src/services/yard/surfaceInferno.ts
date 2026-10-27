@@ -173,6 +173,29 @@ export const purseShortfallErr = (shortfall: ResourceAmounts) =>
     purse: "inferno",
   });
 
+/**
+ * `iresources` less what an attack looted (`loss`, each amount at least 0),
+ * never below 0, and what it really lost: a purse that holds less than the
+ * loot gives up what it holds.
+ */
+export const lootPurse = (
+  iresources: JsonObject | null | undefined,
+  loss: Partial<ResourceAmounts>
+): { iresources: JsonObject; lost: ResourceAmounts } => {
+  const held = purseOf(iresources);
+  const lost = { r1: 0, r2: 0, r3: 0, r4: 0 };
+  for (const key of PURSE_KEYS) lost[key] = Math.min(held[key], Math.max(0, Math.floor(Number(loss[key] ?? 0))));
+  return {
+    iresources: withPurse(iresources, {
+      r1: held.r1 - lost.r1,
+      r2: held.r2 - lost.r2,
+      r3: held.r3 - lost.r3,
+      r4: held.r4 - lost.r4,
+    }),
+    lost,
+  };
+};
+
 /** `iresources` less `cost`, or `409 shortfall` when it holds less. */
 export const chargePurse = (iresources: JsonObject | null | undefined, cost: ResourceAmounts): JsonObject => {
   const short = purseShortfall(iresources, cost);

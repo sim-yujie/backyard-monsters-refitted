@@ -42,6 +42,7 @@ import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
 import { isDescentBaseid } from "../../../services/inferno/descent.js";
 import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
+import { landInfernoPlayerAttack } from "../../../services/inferno/infernoPlayerLanding.js";
 import { landInfernoTribeAttack } from "../../../services/inferno/infernoTribeLanding.js";
 import { isInfernoTribeBaseid } from "../../../services/inferno/infernoTribes.js";
 import { economyConfig } from "../../../config/EconomyConfig.js";
@@ -95,6 +96,7 @@ import { discardDefenceReplayLoad } from "../../../services/defences/defenceRepl
 import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
 import { INFERNO_SAVE_TYPES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
+import { infernoConfig } from "../../../config/InfernoConfig.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -152,6 +154,18 @@ export const baseSave: KoaController = async (ctx) => {
   }
 
   if (!baseSave) throw saveFailureErr();
+
+  // Another player's Inferno yard, attacked through the new Inferno: its
+  // attack is bound to its row (`services/inferno/infernoPlayerLanding.ts`).
+  // The owner's own saves of it stay on the old, closed route below.
+  if (baseSave.type === BaseType.INFERNO && baseSave.saveuserid !== user.userid && infernoConfig.enabled) {
+    const { save: yardSave, player } = await landInfernoPlayerAttack(ctx, user, saveData, baseSave);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(player && { player }) };
+    return;
+  }
 
   const isOwner = baseSave.saveuserid === user.userid;
   const isOutpostOwner = isOwner && baseSave.type === BaseType.OUTPOST;
