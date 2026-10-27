@@ -58,23 +58,25 @@ PAINTED = {1: dict(body=(160, 182), pivot=(80, 34), top=(160, 198), top_pivot=(8
 P = PAINTED[TIER]
 
 # ---------------------------------------------------------------------------------------------------------------- the shape
-R = 1.0                        # body hexagon corner radius
+R = 0.9                        # body hexagon corner radius (fitted to the painted outline, see measure.py)
 FRONT = 45.0                   # the corner at the viewer
-Z0 = 0.80                      # the body's bottom (it stands on three ball feet)
+Z0 = {1: 0.86, 2: 0.82, 3: 0.74}[TIER]   # the body's bottom (it stands on three ball feet), fitted per tier
 PLATE_T = 0.19                 # the top plate's thickness
-PLATE_R = 1.12                 # the top plate's corner radius (it overhangs the body)
+PLATE_R = 1.06                 # the top plate's corner radius (it overhangs the body)
 DISC_R = 0.70                  # the turntable
 TOP1 = 2.31                    # tier 1's turning point height (painted: 91 px above the ground's middle at @2x)
 # each tier's turning point stands as much higher as the painted one does (game px x2, seen at EL)
 TOP = TOP1 + (PAINTED[1]["game_y"] - P["game_y"]) * 2 / (S2 * math.cos(math.radians(EL)))
 SECTIONS = TIER                # 1, 2 or 3 stacked sections
 FEET = (45.0, 45.0 + 112, 45.0 - 112)
-FOOT_D, FOOT_R = 1.12, 0.28
+FOOT_D, FOOT_R = 1.14, 0.26
 FRONT_FOOT_D = 1.42            # the front foot stands out in front of the (drawn-out) front corner, as painted
 TURRET_SCALE = 1.12
 DISC_STRETCH = 1.2             # the turntable too (the turret on it stays round: it turns)
 STRETCH = 1.6                  # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
 PLATE_STRETCH = 1.4            # the painted one (the body is only ever seen from this one side)
+if os.environ.get("SNIPER_SHAPE"):       # for fit tests: body radius, plate radius, feet distance and radius, front foot, bottom
+    R, PLATE_R, FOOT_D, FOOT_R, FRONT_FOOT_D, Z0 = (float(v) for v in os.environ["SNIPER_SHAPE"].split(","))
 if os.environ.get("SNIPER_STRETCH"):     # for camera-angle tests: body, plate, turntable
     STRETCH, PLATE_STRETCH, DISC_STRETCH = (float(v) for v in os.environ["SNIPER_STRETCH"].split(","))
 
