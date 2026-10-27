@@ -366,13 +366,13 @@ export const servedHeight = (raw: unknown): number =>
  * Map Room 1 tribe, which the map hands over as `wild`, is the rules' `tribe`:
  * Flash's lower loot for a wild monster camp is Map Room 2's alone
  * (`BSTORAGE.as:77`, `:111`, `:117`). A Descent yard and a Moloch tribe of
- * the Inferno map are fought as Inferno yards (`docs/design/inferno.md` §2.4
+ * the Inferno map and another player's Inferno yard (WP 3.5) are fought as Inferno yards (`docs/design/inferno.md` §2.4
  * "Yard kind"), as the server replays them.
  */
 export const combatKind = (
-  target: Pick<AttackTarget, "kind" | "mapversion" | "descentYard" | "infernoTribe">,
+  target: Pick<AttackTarget, "kind" | "mapversion" | "descentYard" | "infernoTribe" | "infernoPlayer">,
 ): CombatTargetKind =>
-  target.descentYard !== undefined || target.infernoTribe === true
+  target.descentYard !== undefined || target.infernoTribe === true || target.infernoPlayer === true
     ? "inferno"
     : target.kind === "wild" && target.mapversion === 1
       ? "tribe"

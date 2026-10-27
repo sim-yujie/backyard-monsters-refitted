@@ -1792,8 +1792,9 @@ export class YardScene implements Scene {
       context.goTo(SceneName.MAP);
       return;
     }
-    // The Inferno's own map, Moloch's tribes (`MAPROOM_INFERNO`, WP 2.9):
-    // no Map Room, and the surface map is no way out of the Inferno.
+    // The Inferno's own map, Moloch's tribes and the other players
+    // (`MAPROOM_INFERNO`, WP 2.9, 3.5): no Map Room, and the surface map is
+    // no way out of the Inferno.
     if (store.kind === "inferno") {
       void openInfernoMap({
         modal: context.overlay.modal,
@@ -1802,6 +1803,10 @@ export class YardScene implements Scene {
         openAttack: (target) => {
           setAttackTarget(target);
           context.goTo(SceneName.ATTACK);
+        },
+        openView: (target) => {
+          setViewTarget(target);
+          context.goTo(SceneName.YARD);
         },
       });
       return;

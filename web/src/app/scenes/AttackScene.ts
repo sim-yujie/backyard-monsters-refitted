@@ -19,7 +19,7 @@ import {
   type AttackSessionState,
   type AttackSpeed,
 } from "@/game/attack/AttackSession";
-import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarget";
+import { consumeAttackTarget, fromInfernoYard, type AttackTarget } from "@/game/attack/attackTarget";
 import { targetLabel } from "@/game/attack/attackSave";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
 import {
@@ -227,9 +227,10 @@ export class AttackScene implements Scene {
     this.renderer.attach(context.renderer);
     this.renderer.root.addChild(this.battleLayer);
 
-    // A Moloch tribe is fought from the Inferno yard for its purse: Bone,
-    // Coal, Sulfur and Magma on the HUD and every panel (Inferno WP 2.10).
-    setResourceRealm(this.target?.infernoTribe ? "inferno" : "surface");
+    // A Moloch tribe or another player's Inferno yard is fought from the
+    // Inferno yard for its purse: Bone, Coal, Sulfur and Magma on the HUD and
+    // every panel (Inferno WP 2.10, 3.5).
+    setResourceRealm(fromInfernoYard(this.target) ? "inferno" : "surface");
 
     // A raid has no HUD: nothing on it may be left until it is over.
     if (!this.raiding) {
@@ -521,8 +522,8 @@ export class AttackScene implements Scene {
       battleLayer: this.battleLayer,
       notices: this.notices,
       goToMap: () => {
-        // A Moloch tribe's map is the Inferno's, over the Inferno yard (WP 2.10).
-        if (target.infernoTribe) {
+        // A Moloch tribe's or an Inferno player's map is the Inferno's, over the Inferno yard (WP 2.10, 3.5).
+        if (fromInfernoYard(target)) {
           backToInferno(true);
           context.goTo(SceneName.YARD);
           return;
@@ -1092,13 +1093,16 @@ export class AttackScene implements Scene {
       context.goTo(scene);
       return;
     }
-    if (session?.hasActed() && (phase === "running" || phase === "loaded")) {
+    // An Inferno player attack counts once started (WP 3.5): it is retreated
+    // too, so its save lands before the Inferno yard's load could close it.
+    const counts = session?.hasActed() || this.target?.infernoPlayer === true;
+    if (counts && (phase === "running" || phase === "loaded")) {
       this.askRetreat(undefined, scene === SceneName.MAP ? undefined : destinationName(scene));
       return;
     }
     before?.();
-    // A Moloch tribe is left for the Inferno: its yard, or its map over it (WP 2.10).
-    if (this.target?.infernoTribe && (scene === SceneName.MAP || scene === SceneName.YARD)) {
+    // A Moloch tribe or an Inferno player is left for the Inferno: its yard, or its map over it (WP 2.10, 3.5).
+    if (fromInfernoYard(this.target) && (scene === SceneName.MAP || scene === SceneName.YARD)) {
       backToInferno(scene === SceneName.MAP);
       context.goTo(SceneName.YARD);
       return;

@@ -9,6 +9,8 @@ import {
   sortTribeRows,
   type TribeRow,
 } from "@/game/inferno/tribeMap";
+import { avatarOf, avatarUrl } from "@/game/avatars";
+import { playerStatus, type PlayerRow } from "@/game/inferno/playerMap";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/inferno.css";
 
@@ -28,12 +30,25 @@ import "@/ui/styles/inferno.css";
  * looked at the tribe's yard first; no route serves that look, so it is left
  * out, as on the Descent map. Flash's minimap and drag are the map's own
  * scrolling. The tribe markers and the card are stand-ins until the Inferno
- * map art (A3) is approved. The real players of the Inferno map (PvP, WP 3.5)
- * go into this screen beside the tribes: the list's section and the map's
- * markers take a second kind of row.
+ * map art (A3) is approved.
+ *
+ * The other players of the Inferno map (PvP, WP 3.5) are its Players tab: a
+ * row each (`maproom_inferno/PlayerHandler.as`) with their level, Playing
+ * Now or Offline, Flash's extra status (protection, under attack, level,
+ * revenge) and View and Attack, each off when Flash's was. Flash put them on
+ * the map too; here they are a list until the map art is approved.
  */
 
 export type InfernoMapView = "map" | "list";
+export type InfernoMapTab = "tribes" | "players";
+
+/** What the Players tab's buttons do. */
+export interface InfernoPlayerActions {
+  /** Attack on a player. Resolves once the attack scene opens, or it was called off or refused. */
+  readonly attack: (row: PlayerRow) => Promise<void> | void;
+  /** View: their Inferno yard, to look at only. */
+  readonly view: (row: PlayerRow) => void;
+}
 
 export interface InfernoMapActions {
   /** Attack on a tribe. Resolves once the attack scene opens or the start failed. */
@@ -43,6 +58,8 @@ export interface InfernoMapActions {
   /** The server's clock, unix seconds. */
   readonly now: () => number;
   readonly onClose?: () => void;
+  /** The Players tab (WP 3.5); left out, the screen shows the tribes alone. */
+  readonly players?: InfernoPlayerActions;
 }
 
 const PHONE_QUERY = "(width <= 620px)";
@@ -52,18 +69,22 @@ const isPhone = (): boolean =>
 
 /** The view the screen last showed, for the session. */
 let lastView: InfernoMapView | null = null;
+/** The tab the screen last showed, for the session. */
+let lastTab: InfernoMapTab = "tribes";
 /** The list's order, for the session (Flash's `mrls`, `mrlsr`). */
 let lastSort: { sort: TribeSort; reversed: boolean } = { sort: TribeSort.DEFAULT, reversed: false };
 
 /** Forgets the remembered view and order, for tests. */
 export const resetInfernoMapScreen = (): void => {
   lastView = null;
+  lastTab = "tribes";
   lastSort = { sort: TribeSort.DEFAULT, reversed: false };
 };
 
 export const INFERNO_MAP_TITLE = "Inferno Map";
 const RETURN_HOME = "Return Home";
 const ATTACK = "Attack";
+const VIEW = "View";
 
 const element = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -108,8 +129,16 @@ export class InfernoMapScreen {
   private readonly sortButton: HTMLButtonElement;
   private readonly rowsBox: HTMLElement;
   private readonly status: HTMLElement;
+  private readonly toggle: HTMLElement;
+  private readonly tribesTab: HTMLButtonElement | null = null;
+  private readonly playersTab: HTMLButtonElement | null = null;
+  private readonly playersPane: HTMLElement;
+  private readonly playersBox: HTMLElement;
+  private readonly playersStatus: HTMLElement;
 
   private view: InfernoMapView;
+  private tab: InfernoMapTab;
+  private players: readonly PlayerRow[] = [];
   private rows: readonly TribeRow[] = [];
   private selected: string | null = null;
   private card: HTMLElement | null = null;
@@ -123,6 +152,7 @@ export class InfernoMapScreen {
     private readonly actions: InfernoMapActions,
   ) {
     this.view = lastView ?? (isPhone() ? "list" : "map");
+    this.tab = actions.players ? lastTab : "tribes";
     this.popup = new Popup({
       title: INFERNO_MAP_TITLE,
       className: "inferno-popup inferno-map",
@@ -139,6 +169,20 @@ export class InfernoMapScreen {
     this.mapButton = button("Map", "inferno-map__toggle-button", () => this.setView("map"));
     this.listButton = button("List", "inferno-map__toggle-button", () => this.setView("list"));
     toggle.append(this.mapButton, this.listButton);
+    this.toggle = toggle;
+
+    // Moloch's tribes or the other players (PvP, WP 3.5).
+    const bar = element("div", "inferno-map__bar");
+    if (actions.players) {
+      const tabs = element("div", "inferno-map__toggle inferno-map__tabs");
+      tabs.setAttribute("role", "group");
+      tabs.setAttribute("aria-label", "Attack");
+      this.tribesTab = button("Tribes", "inferno-map__toggle-button", () => this.setTab("tribes"));
+      this.playersTab = button("Players", "inferno-map__toggle-button", () => this.setTab("players"));
+      tabs.append(this.tribesTab, this.playersTab);
+      bar.append(tabs);
+    }
+    bar.append(toggle);
 
     this.mapPane = element("div", "inferno-map__scroll");
     this.map = element("div", "inferno-map__map");
@@ -167,12 +211,20 @@ export class InfernoMapScreen {
 
     this.status = element("p", "inferno-map__status", "Loading the Inferno map…");
 
+    this.playersPane = element("section", "inferno-map__list inferno-map__players");
+    this.playersPane.setAttribute("aria-labelledby", "inferno-map-players");
+    const playersHeading = element("h2", "inferno-map__heading", "Players");
+    playersHeading.id = "inferno-map-players";
+    this.playersBox = element("div", "inferno-map__rows");
+    this.playersStatus = element("p", "inferno-map__status", "Loading the players…");
+    this.playersPane.append(playersHeading, this.playersStatus, this.playersBox);
+
     const body = element("div", "inferno-map__body");
-    body.append(this.mapPane, this.listPane, this.status);
+    body.append(this.mapPane, this.listPane, this.status, this.playersPane);
 
     const footer = element("div", "inferno-popup__actions");
     footer.append(button(RETURN_HOME, "btn", () => this.popup.close()));
-    this.popup.setContent(toggle, body, footer);
+    this.popup.setContent(bar, body, footer);
     this.popup.mount(host);
     this.applyView();
     this.timer = setInterval(() => this.tick(), 1000);
@@ -197,11 +249,24 @@ export class InfernoMapScreen {
     this.render();
   }
 
-  /** Lets Attack be pressed again, after a start that failed. */
+  /** The players (WP 3.5), as rows made at the server's clock now. */
+  setPlayers(rows: readonly PlayerRow[]): void {
+    this.players = rows;
+    this.setPlayersStatus(rows.length === 0 ? "No other players' Inferno yards face yours right now." : null);
+    this.renderPlayers();
+  }
+
+  /** Shows "Loading…" or a failure in place of the players, or clears it. */
+  setPlayersStatus(text: string | null): void {
+    this.playersStatus.textContent = text ?? "";
+    this.playersStatus.hidden = text === null;
+  }
+
+  /** Lets Attack be pressed again, after a start that failed or was called off. */
   enableAttack(): void {
     this.busy = false;
     for (const go of this.popup.element.querySelectorAll<HTMLButtonElement>("[data-attack]")) {
-      go.disabled = go.dataset["wrecked"] === "1";
+      go.disabled = go.dataset["off"] === "1";
     }
   }
 
@@ -236,12 +301,27 @@ export class InfernoMapScreen {
     this.applyView();
   }
 
+  private setTab(tab: InfernoMapTab): void {
+    if (tab === this.tab) return;
+    this.tab = tab;
+    lastTab = tab;
+    this.select(null);
+    this.applyView();
+  }
+
   private applyView(): void {
-    const onMap = this.view === "map";
+    const players = this.tab === "players";
+    const onMap = !players && this.view === "map";
     this.mapPane.hidden = !onMap;
-    this.listPane.hidden = onMap;
-    this.mapButton.setAttribute("aria-pressed", String(onMap));
-    this.listButton.setAttribute("aria-pressed", String(!onMap));
+    this.listPane.hidden = players || onMap;
+    this.toggle.hidden = players;
+    this.playersPane.hidden = !players;
+    // The tribes' "Loading…" or failure is theirs: the Players tab has its own.
+    this.status.classList.toggle("inferno-map__status--away", players);
+    this.tribesTab?.setAttribute("aria-pressed", String(!players));
+    this.playersTab?.setAttribute("aria-pressed", String(players));
+    this.mapButton.setAttribute("aria-pressed", String(this.view === "map"));
+    this.listButton.setAttribute("aria-pressed", String(this.view !== "map"));
     if (onMap) this.centre();
   }
 
@@ -341,7 +421,7 @@ export class InfernoMapScreen {
       void this.actions.attack(row);
     });
     go.dataset["attack"] = row.baseid;
-    go.dataset["wrecked"] = wrecked ? "1" : "0";
+    go.dataset["off"] = wrecked ? "1" : "0";
     go.disabled = wrecked || this.busy;
     go.setAttribute("aria-label", `Attack ${row.listName}`);
     return go;
@@ -371,6 +451,60 @@ export class InfernoMapScreen {
           words.append(back);
         }
         item.append(portrait("inferno-row__portrait"), words, this.attackButton(row, "btn btn--primary inferno-row__attack"));
+        return item;
+      }),
+    );
+  }
+
+  /** A row per player (`PlayerHandler.configure`): who, their level, their state, View and Attack. */
+  private renderPlayers(): void {
+    const actions = this.actions.players;
+    if (!actions) return;
+    this.playersBox.replaceChildren(
+      ...this.players.map((row) => {
+        const status = playerStatus(row);
+        const item = element("div", "inferno-row inferno-player");
+        item.dataset["player"] = row.baseid;
+        const picture = element("img", "inferno-row__portrait inferno-player__portrait");
+        picture.src = avatarUrl(avatarOf(row.pic, row.userid), "small");
+        picture.alt = "";
+        picture.decoding = "async";
+
+        const words = element("div", "inferno-row__words");
+        words.append(
+          element("span", "inferno-row__name", row.name),
+          element("span", "inferno-player__level", `Level ${row.level}`),
+          element(
+            "span",
+            `inferno-player__presence${row.online ? " inferno-player__presence--online" : ""}`,
+            status.presence,
+          ),
+        );
+        if (status.extra) {
+          words.append(
+            element("span", `inferno-player__extra${status.alarm ? " inferno-player__extra--alarm" : ""}`, status.extra),
+          );
+        }
+
+        const view = button(VIEW, "btn inferno-player__view", () => actions.view(row));
+        view.disabled = !status.canView;
+        view.setAttribute("aria-label", `View ${row.name}'s Inferno yard`);
+        const go = button(ATTACK, "btn btn--primary inferno-player__attack", () => {
+          if (this.busy) return;
+          this.busy = true;
+          for (const other of this.popup.element.querySelectorAll<HTMLButtonElement>("[data-attack]")) {
+            other.disabled = true;
+          }
+          void actions.attack(row);
+        });
+        go.dataset["attack"] = row.baseid;
+        go.dataset["off"] = status.canAttack ? "0" : "1";
+        go.disabled = !status.canAttack || this.busy;
+        go.setAttribute("aria-label", `Attack ${row.name}`);
+        const buttons = element("div", "inferno-player__actions");
+        buttons.append(view, go);
+
+        item.append(picture, words, buttons);
         return item;
       }),
     );

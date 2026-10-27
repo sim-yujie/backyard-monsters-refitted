@@ -393,3 +393,31 @@ export interface InfernoViewResponse extends BaseLoadResponse {
 /** Refused (409) with `notInfernoPlayer`, or `targetUnderAttack` while it is attacked. */
 export const viewInfernoYard = (baseid: string): Promise<InfernoViewResponse> =>
   post<InfernoViewResponse>("/api/:apiVersion/bm/inferno/view", { baseid });
+
+/**
+ * What the save's answer says of a landed attack on another player's Inferno
+ * yard, under `player` (WP 3.3, `services/inferno/infernoPlayerLanding.ts`).
+ * Only the final save carries it.
+ */
+export interface PlayerLanding {
+  /** The server's damage, 0-100. */
+  readonly damage: number;
+  /** What the attack took from the defender's purse. */
+  readonly loot: InfernoAmounts;
+  /** What of it the Inferno purse took, up to its caps. */
+  readonly lootcredited: InfernoAmounts;
+  /** The purse after it. */
+  readonly total: InfernoAmounts;
+  /** The housed monsters the defender lost with their fallen Housing Bunkers. */
+  readonly housedlost: Readonly<Record<string, number>>;
+}
+
+/** The `player` block of a save's answer, when it carries one. */
+export const playerLandingOf = (response: unknown): PlayerLanding | null => {
+  const player = (response as { player?: unknown } | null)?.player;
+  if (typeof player !== "object" || player === null) return null;
+  const value = player as Partial<PlayerLanding>;
+  return typeof value.damage === "number" && typeof value.lootcredited === "object" && value.lootcredited !== null
+    ? (value as PlayerLanding)
+    : null;
+};
