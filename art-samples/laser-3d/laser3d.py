@@ -38,22 +38,23 @@ L.EL = 30.0                           # the painted Laser is drawn from about 30
 if os.environ.get("LASER_EL"):        # keeps its own painting's camera height; the Cannon's 23 is too flat for it)
     L.EL = float(os.environ["LASER_EL"])
 # the painted tiers (buildingArtTiers.ts, 23 Laser Tower): body picture [x, y, w, h] and pivot, game px from the anchor
-PAINTED = {1: dict(body=(-33, -29, 68, 81), pivot=(2, -20)),
-           2: dict(body=(-33, -54, 68, 106), pivot=(2, -44)),
-           3: dict(body=(-33, -71, 68, 123), pivot=(2, -60))}
+# and the opaque box inside the body picture, 2x px (x0, y0, x1, y1)
+PAINTED = {1: dict(body=(-33, -29, 68, 81), pivot=(2, -20), opaque=(1, 1, 134, 160)),
+           2: dict(body=(-33, -54, 68, 106), pivot=(2, -44), opaque=(2, 1, 134, 210)),
+           3: dict(body=(-33, -71, 68, 123), pivot=(2, -60), opaque=(2, 2, 134, 245))}
 TILT = 8.0                            # the head's raise, degrees
-HEAD_SCALE = 0.9
+HEAD_SCALE = 0.94
 
 # ------------------------------------------------------------------------------------------------------------- tiers
 # the parts every tier shares keep their size (base, tyres, head); the box grows by sections
 BASE_H = 0.95                         # striped base (tier 1; the painted tiers 2 and 3 have a lower one), a plate 0.08 on it
-RING_UP, TOP_UP = 0.48, 0.54          # the cage ring above the box, the head's seat above the ring (the painted strip's
+RING_UP, TOP_UP = 0.48, 0.62          # the cage ring above the box, the head's seat above the ring (the painted strip's
                                       # heads sit this high: their boxes match the 3D ones within a pixel at 4x)
-BOX_A = 0.70                          # the box's half side (its corners point at bearings 45, 135, 225, 315)
+BOX_A = 0.76                          # the box's half side (its corners point at bearings 45, 135, 225, 315)
 TIERS = {
     1: dict(secs=[1.0], band=0.0, line="cool"),
-    2: dict(secs=[1.22, 1.22], band=0.12, line="gold", base=0.70),
-    3: dict(secs=[1.13, 1.13, 1.13], band=0.17, line="cool", base=0.55),
+    2: dict(secs=[1.26, 1.26], band=0.12, line="gold", base=0.70),
+    3: dict(secs=[1.41, 1.06, 1.1], band=0.17, line="cool", base=0.55),
 }
 
 
@@ -79,7 +80,7 @@ def m_paint(name, lo, hi, wear=None, spec=0.7, rough=0.3, spec_col=(1, 0.97, 0.9
     return p.finish(base, spec=spec, spec_rough=rough, spec_col=spec_col, metal=metal, shade=shade, edge_dark=edge_dark)
 
 
-def m_stripes(c0, c1, n=11):
+def m_stripes(c0, c1, n=8):
     """The base's hazard stripes: diagonal, as painted (look3d's stripes stand nearly upright)."""
     p = Paint("stripes")
     sep = p.N.new("ShaderNodeSeparateXYZ")
@@ -121,7 +122,7 @@ def m_lens(name, cx, cz, rad, stops):
 # with bright edges), and a deeper gold for tier 2's big flat box faces (the shared gold's pale top washes them out)
 L.METALS["lsteel"] = ((28, 32, 38), (92, 98, 102), (168, 174, 178), (0.92, 0.96, 1.0, 1))
 L.METALS["lblack"] = ((12, 12, 18), (40, 40, 50), (92, 94, 112), (0.85, 0.9, 1.0, 1))
-L.METALS["lgold"] = ((84, 40, 4), (198, 124, 14), (244, 192, 70), (1.0, 0.9, 0.55, 1))
+L.METALS["lgold"] = ((100, 56, 0), (216, 146, 12), (252, 206, 80), (1.0, 0.9, 0.55, 1))
 
 
 def materials(tier):
@@ -142,7 +143,7 @@ def materials(tier):
     gunmetal = L.mat_metal("gunmetal")
     if tier == 1:
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
-        M["box"] = m_paint("box", (92, 96, 82), (118, 122, 106), metal=False, spec=0.35, rough=0.32,
+        M["box"] = m_paint("box", (104, 108, 92), (130, 134, 116), metal=False, spec=0.35, rough=0.32,
                            spec_col=(0.95, 0.97, 1, 1), scratch=(140, 142, 134), wear=(84, 74, 60))
         M["plate"] = gunmetal
         M["plate_top"] = plate_dark
@@ -504,8 +505,11 @@ def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["1", "body"]
     tier, what = int(argv[0]), argv[1]
     out = HERE / "render" / f"t{tier}"
+    # the painted body's opaque box (its picture has a 1-2 px clear margin at 2x), less the 3D outline (about 3 px at
+    # 4x, drawn outside the mesh box that L.fit measures)
     bx, by, bw, bh = PAINTED[tier]["body"]
-    want = (AX + 4 * bx, AY + 4 * by, AX + 4 * (bx + bw), AY + 4 * (by + bh))
+    ox0, oy0, ox1, oy1 = PAINTED[tier]["opaque"]
+    want = (AX + 4 * bx + 2 * ox0 + 3, AY + 4 * by + 2 * oy0 + 3, AX + 4 * bx + 2 * ox1 - 3, AY + 4 * by + 2 * oy1 - 3)
     L.canvas(W, H, want, out)
     body, tur, dims = build(tier)
     cam = L.setup_render()

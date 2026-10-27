@@ -3,7 +3,7 @@
  "cell_w": 140,
  "cell_h": 140,
  "pivot_4x": [
-  204.0,
+  203.0,
   320
  ],
  "anchor_4x": [
@@ -11,7 +11,7 @@
   400
  ],
  "cell_origin_game_px": [
-  -34.0,
+  -34.25,
   -55.0
  ],
  "rule": "cell k = ground bearing 11.25k (0 = down-right on screen, 45 = at the viewer); pivot in each cell's middle",
