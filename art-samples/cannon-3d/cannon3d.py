@@ -95,8 +95,8 @@ def build(cfg):
         return 1.0 - 0.09 * min(max(zz - LIFT, 0) / top, 1.0)
 
     bands = []
-    segs.append([(0.0, 0.0), (0.8, 0.0), (0.84, 0.04), (0.84, LIFT - 0.02), (r_at(0) - 0.01, LIFT)])   # plinth
-    mats.append(2)
+    segs.append([(0.0, 0.0), (0.8, 0.0), (0.84, 0.04), (0.84, LIFT - 0.02), (r_at(0) - 0.01, LIFT)])   # plinth: the bottom band's metal, so it reads as a base band
+    mats.append(0)
     segs.append(L.band(r_at(0) - 0.01, r_at(0) + 0.055, LIFT, LIFT + 0.24))
     mats.append(0)
     bands.append((LIFT + 0.12, r_at(0.1) + 0.055))
@@ -243,14 +243,14 @@ def build(cfg):
         [(br, -0.39), (br - 0.005, 0.2)],                                          # tube
         L.band(br - 0.01, br + 0.04, 0.18, 0.34),                                  # middle band
         [(br - 0.005, 0.33), (br - 0.02, 0.92)],                                   # tube, a little narrower to the muzzle
-        L.band(br - 0.02, br + 0.11, 0.88, 1.08, bev=0.035),                       # muzzle ring, outside
-        [(br + 0.11, 1.08), (br + 0.04, 1.095), (0.24, 1.08)],                     # muzzle face
+        L.band(br - 0.02, br + 0.085, 0.88, 1.08, bev=0.035),                       # muzzle ring, outside
+        [(br + 0.085, 1.08), (br + 0.035, 1.095), (0.24, 1.08)],                     # muzzle face
         [(0.24, 1.08), (0.235, 0.4), (0.0, 0.4)],                                  # bore
     ], [gun_m, gb_m, M["bore"]], mat_of_seg=[1, 1, 0, 1, 0, 1, 1, 2], parent=gun, sharp=35)
     barrel.rotation_euler = (-math.pi / 2, 0, 0)
     L.add_outline(barrel, LNC if cfg["gun"] in ("steel", "gunmetal", "black") else LN)
     bm = bmesh.new()
-    for z, r, n in ((-0.46, br + 0.045, 12), (0.26, br + 0.04, 12), (0.98, br + 0.11, 14)):
+    for z, r, n in ((-0.46, br + 0.045, 12), (0.26, br + 0.04, 12), (0.98, br + 0.085, 14)):
         c, nn = ring_of(n, r, z, 0.5)
         studs(bm, c, nn, r=0.028)
     riv = L.obj_from_bm("rivets_gun", bm, [M["rivet"]], parent=gun)
