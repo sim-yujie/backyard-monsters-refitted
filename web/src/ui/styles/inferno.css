@@ -719,7 +719,8 @@
   border: 1px solid var(--colour-warning-line);
   border-radius: var(--radius-md);
   background: var(--colour-warning-soft);
-  color: var(--colour-warning-text);
+  /* The amber wash's light text; `--colour-warning-text` is the ink for a solid amber fill. */
+  color: var(--colour-warning-bright);
   font-weight: 600;
 }
 
