@@ -156,6 +156,48 @@ describe("an Inferno player attack's end", () => {
     expect(goToOutpost).toHaveBeenCalledWith(INFERNO_YARD);
   });
 
+  /** The session as if its battle had taken `loot`. */
+  const tookLoot = (session: AttackSession, loot: { r1: number; r2: number; r3: number; r4: number }) => {
+    const real = session.state.bind(session);
+    vi.spyOn(session, "state").mockImplementation(() => ({ ...real(), loot }));
+  };
+  const storageNote = () => modal.querySelector<HTMLElement>(".attack-end__storage");
+
+  it("the defender losing more than the attacker took is no full storage (the surface loot rule)", async () => {
+    const { session } = mount({
+      ...landed,
+      player: {
+        ...landed.player,
+        damage: 100,
+        loot: { r1: 4_837, r2: 4_546, r3: 1_650, r4: 1_141 },
+        lootcredited: { r1: 4_701, r2: 4_442, r3: 1_562, r4: 1_037 },
+      },
+    });
+    session.appendFling({ x: -100, y: -100, monsters: { IC1: 1 } });
+    tookLoot(session, { r1: 4_701, r2: 4_442, r3: 1_562, r4: 1_037 });
+    session.retreat();
+    await flush();
+    expect(storageNote()?.hidden).toBe(true);
+  });
+
+  it("loot the Inferno purse had no room for still says so", async () => {
+    const { session } = mount({
+      ...landed,
+      player: {
+        ...landed.player,
+        damage: 100,
+        loot: { r1: 4_837, r2: 0, r3: 0, r4: 0 },
+        lootcredited: { r1: 1_000, r2: 0, r3: 0, r4: 0 },
+      },
+    });
+    session.appendFling({ x: -100, y: -100, monsters: { IC1: 1 } });
+    tookLoot(session, { r1: 4_701, r2: 0, r3: 0, r4: 0 });
+    session.retreat();
+    await flush();
+    expect(storageNote()?.hidden).toBe(false);
+    expect(storageNote()?.textContent).toBe("Your Inferno storage was full, so some loot was lost.");
+  });
+
   it("its checkpoints name the yard's basesaveid, so the server can close it from the last one", () => {
     const { session } = mount();
     session.appendFling({ x: -100, y: -100, monsters: { IC1: 1 } });

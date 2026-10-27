@@ -330,6 +330,19 @@ const amountsOf = (value: unknown): ResourceAmounts | null => {
   return { r1: read("r1"), r2: read("r2"), r3: read("r3"), r4: read("r4") };
 };
 
+/**
+ * What a player attack's own battle took, as far as the defender paid for it
+ * (WP 3.5). The defender's loss (`player.loot`) can be more than the attacker
+ * took (the surface loot rule, `attackLoot.ts`), so it is no measure of what
+ * the purse had no room for.
+ */
+const playerTaken = (defenderLost: ResourceAmounts, took: ResourceAmounts): ResourceAmounts => ({
+  r1: Math.min(defenderLost.r1, took.r1),
+  r2: Math.min(defenderLost.r2, took.r2),
+  r3: Math.min(defenderLost.r3, took.r3),
+  r4: Math.min(defenderLost.r4, took.r4),
+});
+
 /** The defender's protection expiry from the save's envelope, if it has one. */
 const protectedUntilOf = (response: BaseSaveResponse): number | null => {
   const value = (response as { protected?: unknown }).protected;
@@ -543,7 +556,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
           ? {
               inferno: {
                 result: { title: PLAYER_RESULT_TITLE, ...describeOutcome("main", target.name, player.damage) },
-                taken: amountsOf(player.loot) ?? none,
+                taken: playerTaken(amountsOf(player.loot) ?? none, session.state().loot),
                 backAt: null,
                 purse: amountsOf(player.total) ?? none,
               },
