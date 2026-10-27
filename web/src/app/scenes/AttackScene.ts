@@ -52,7 +52,7 @@ import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@/ui/resourceIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
-import { ATTACK_CONFIRM_CLASS } from "@/ui/attack/attackDialogs";
+import { ATTACK_CONFIRM_CLASS, retreatNote } from "@/ui/attack/attackDialogs";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
@@ -172,6 +172,8 @@ export class AttackScene implements Scene {
   private retreatButton: HTMLButtonElement | null = null;
   private menu: AttackMenu | null = null;
   private confirm: Panel | null = null;
+  /** The open Retreat question's damage line and where it was going, told again as the fight goes on. */
+  private retreatLine: { element: HTMLElement; goingTo?: string } | null = null;
 
   private dock: HTMLElement | null = null;
   private dockBody: HTMLElement | null = null;
@@ -910,6 +912,12 @@ export class AttackScene implements Scene {
     if (state.phase === "ended") {
       this.confirm?.close();
       this.confirm = null;
+      return;
+    }
+    // The fight goes on behind the Retreat question: its damage keeps up with the strip's.
+    if (this.retreatLine) {
+      const { element, goingTo } = this.retreatLine;
+      element.textContent = retreatNote(this.presentation.damageShown(state), goingTo);
     }
   }
 
@@ -1048,11 +1056,7 @@ export class AttackScene implements Scene {
     this.confirm = confirmPanel({
       title: "Retreat?",
       message: "Retreating ends the attack now and cannot be undone.",
-      note:
-        `${Math.max(0, Math.floor(state.damagePercent))}% damage dealt so far will be kept.` +
-        (goingTo
-          ? ` The result is saved on the end screen first, which leads back to the map, not straight to ${goingTo}.`
-          : ""),
+      note: retreatNote(this.presentation.damageShown(state), goingTo),
       confirmLabel: "Retreat",
       onConfirm: () => {
         this.confirm?.close();
@@ -1061,9 +1065,13 @@ export class AttackScene implements Scene {
       },
       onClose: () => {
         this.confirm = null;
+        this.retreatLine = null;
       },
     });
     this.confirm.element.classList.add(ATTACK_CONFIRM_CLASS);
+    // `confirmPanel` writes its note as its one muted line.
+    const note = this.confirm.element.querySelector<HTMLElement>(".u-muted");
+    this.retreatLine = note ? { element: note, ...(goingTo ? { goingTo } : {}) } : null;
     this.confirm.mount(context.overlay.modal);
   }
 
