@@ -68,7 +68,9 @@ def build(cfg):
     L.clear_scene()
     up = SECTION * cfg["extra"]
     M = dict(stripes=L.mat_stripes("stripes", *cfg["stripes"], cfg.get("n_stripes", STRIPES), STRIPE_PHASE,
-                                   chips=cfg["tier"] < 3, ratio=cfg.get("ratio", 0.5)),
+                                   chips=cfg["tier"] < 3, ratio=cfg.get("ratio", 0.5)) if cfg["tier"] < 3 else
+             L.mat_polished_stripes("stripes", "black", "gold", cfg["n_stripes"], STRIPE_PHASE, cfg["ratio"]),   # polished
+
              steel=L.mat_metal("steel"), gunmetal=L.mat_metal("gunmetal"), brass=L.mat_metal("brass"),
              gold=L.mat_metal("gold", spec=1.0), black=L.mat_metal("black", wear=0.35, sheen=0.3),
              wood=L.mat_wood("wood"),

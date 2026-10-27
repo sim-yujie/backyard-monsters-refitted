@@ -38,9 +38,9 @@ EL = L.EL
 L.METALS.update(
     bronze=((70, 32, 10), (178, 94, 34), (232, 156, 84), (1.0, 0.82, 0.52, 1)),      # tier 1's copper-bronze skin
     dbronze=((52, 24, 8), (146, 76, 30), (212, 140, 76), (1.0, 0.8, 0.5, 1)),        # its darker bands
-    sgold=((120, 64, 6), (232, 160, 24), (255, 214, 92), (1.0, 0.9, 0.55, 1)),       # a deeper gold than the shared one
+    sgold=L.METALS["gold"],                                                          # the shared polished gold (28 Oct)
     bluesteel=((22, 36, 76), (86, 124, 188), (206, 228, 255), (0.9, 0.95, 1.0, 1)),
-    pblack=((8, 8, 12), (30, 30, 38), (78, 80, 96), (0.8, 0.86, 1.0, 1)),           # tier 3's skin: blacker than "black"
+    pblack=((8, 6, 10), (34, 30, 38), (80, 76, 96), (0.8, 0.86, 1.0, 1)),           # tier 3's skin: blacker than "black"
     panel=((72, 76, 90), (178, 182, 196), (238, 240, 248), (0.95, 0.97, 1.0, 1)),
 )
 

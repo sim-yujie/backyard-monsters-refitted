@@ -379,17 +379,17 @@ def metal_ramp(dark, mid, light):
 
 # Metals: (shade, colour, light), highlight colour. Gold and brass get gold highlights and dark brown edges.
 METALS = dict(
-    brass=((92, 48, 14), (218, 142, 44), (252, 200, 100), (1.0, 0.86, 0.52, 1)),
-    gold=((128, 62, 0), (248, 178, 20), (255, 226, 92), (1.0, 0.9, 0.5, 1)),
-    steel=((52, 54, 68), (150, 152, 166), (204, 208, 220), (0.95, 0.97, 1.0, 1)),
-    gunmetal=((26, 26, 36), (78, 78, 94), (150, 152, 172), (0.92, 0.95, 1.0, 1)),
-    black=((14, 14, 22), (50, 52, 68), (118, 126, 156), (0.82, 0.9, 1.0, 1)),   # blue-grey highlights, as painted
+    brass=((80, 40, 8), (205, 130, 40), (245, 195, 95), (1.0, 0.86, 0.52, 1)),
+    gold=((100, 46, 0), (229, 140, 2), (255, 198, 30), (1.0, 0.92, 0.55, 1)),       # as the painted gold measures (28 Oct)
+    steel=((34, 36, 48), (112, 116, 136), (176, 184, 206), (0.95, 0.97, 1.0, 1)),
+    gunmetal=((18, 18, 26), (70, 72, 88), (150, 156, 180), (0.92, 0.95, 1.0, 1)),
+    black=((14, 10, 14), (44, 38, 48), (90, 84, 104), (0.82, 0.9, 1.0, 1)),       # purple-grey shine, as painted
 )
 
 
-def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.62, sheen=0.35, glint=0.16):
+def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.62, sheen=0.35, glint=0.16, polish=None):
     """A painted metal: its own dark-to-light ramp, gold/steel highlights, dark rims, a little wear (pale scratches, dark
-    specks) so it does not look factory-clean."""
+    specks) so it does not look factory-clean. Polished (the default since 28 Oct, see mat_polished) unless polish=0."""
     dark, mid, light, hi = METALS[kind or name]
     p = Paint(name)
     tone = p.ramp(p.noise(3.5, 3.0), [(0.3, (0.88, 0.88, 0.88, 1)), (0.7, (1.04, 1.04, 1.04, 1))])
@@ -398,8 +398,139 @@ def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.
         tone = p.mix(tone, (1.35, 1.3, 1.2, 1), scratch)
         speck = p.ramp(p.noise(9.0, 6.0, 0.65), [(0.30, (1 - wear * 0.5,) * 3 + (1,)), (0.34, (1, 1, 1, 1))])
         tone = p.mix(tone, speck, 1.0, 'MULTIPLY')
+    if polish != 0 and not os.environ.get('LOOK3D_OLD_METAL'):   # LOOK3D_OLD_METAL=1: the look before 28 Oct
+        return mat_polished(p, tone, kind or name, polish=1.0 if polish is None else polish,
+                            spec=spec, spec_rough=spec_rough, edge_dark=edge_dark)
     return p.finish(tone, spec=spec, spec_rough=spec_rough, spec_col=hi, metal=True, shade=metal_ramp(dark, mid, light),
                     edge_dark=edge_dark, sheen=sheen, glint=glint)
+
+
+# ---------------------------------------------------------------------------------------------------- polished metal
+# Owner, 28 Oct: "the Cannon's barrel feels like a PVC pipe; tier 2 lacks the polished-gold feel; tier 3 lacks the
+# polished black-and-gold feel". Polished metal shows what it reflects more than its own shade: the ground below the
+# horizon, a bright band at the horizon, the sky above, and two big bright windows (one on the sun's side, a dimmer one
+# behind on the right) that draw the bright streaks down round parts. That reflection's brightness, times the sun's light
+# (with cast shadows), the ground shade, ambient occlusion and dark rims, is ONE number per pixel, read through the metal's
+# own ramp (deep shadow colour, colour, light, near-white): so shade stays the metal's own deep hue (brown for gold, blue-
+# black for steel) instead of going grey, and the brightest reflections go near-white.
+ENV = [(0.0, 0.25), (0.3, 0.42), (0.45, 0.6), (0.48, 1.3), (0.53, 1.3), (0.58, 0.86), (0.75, 0.64), (1.0, 0.56)]
+                                        # brightness by the reflected ray's height, (z + 1) / 2: the ground, darkest straight
+                                        # down; a bright band at the horizon; the sky, darker toward the top (a studio sky)
+WINDOWS = [(SUN[0] - 10, 0.86, 0.7), (330, 0.92, 0.45)]   # (bearing, cos of the half width, brightness added)
+LIGHT = [(0.0, 0.42), (0.3, 0.72), (0.75, 1.0)]            # the sun's light (0-1) to a brightness factor
+WAVE = 0.35                             # how much the reflection's surface waves (see mat_polished)
+POLISH = dict(black=(0.2, 0.88), pblack=(0.2, 0.88), lblack=(0.2, 0.88))   # per metal kind: (w1, w2) for metal_stops
+                                        # (black lacquer: dark all the way up, then a sharp jump to near-white)
+
+
+def metal_stops(dark, mid, light, w1=0.3, w2=0.7):
+    """A polished metal's ramp, from the brightness 0 (deepest shade) to 1 (the brightest reflection): its shade colour,
+    colour and light colour, then toward white (w1 of the way, then w2)."""
+    def mixc(a, b, t):
+        return srgb(*[min(255, round(x + (y - x) * t)) for x, y in zip(a, b)])
+    return [(0.0, mixc((0, 0, 0), dark, 0.5)), (0.12, srgb(*dark)), (0.28, mixc(dark, mid, 0.55)), (0.45, srgb(*mid)),
+            (0.62, srgb(*light)), (0.8, mixc(light, (255, 255, 255), w1)), (1.0, mixc(light, (255, 255, 255), w2))]
+
+
+def _bw(p, col):
+    n = p.node("ShaderNodeRGBToBW")
+    p.link(col, n.inputs[0])
+    return n.outputs[0]
+
+
+def mat_polished(p, tone, kind, polish=1.0, spec=0.9, spec_rough=0.22, edge_dark=0.62, kind2=None, mask=None):
+    """kind2, mask: a second metal where mask (a socket, 0-1) is 1 (two-metal stripes, see mat_polished_stripes)."""
+    dark, mid, light, hi = METALS[kind]
+    stops = metal_stops(dark, mid, light, *POLISH.get(kind, ()))
+    geo = p.N.new("ShaderNodeNewGeometry")
+    view = p.N.new("ShaderNodeVectorMath")
+    view.operation = 'SCALE'
+    view.inputs["Scale"].default_value = -1.0
+    p.link(geo.outputs["Incoming"], view.inputs[0])
+    ref = p.N.new("ShaderNodeVectorMath")
+    ref.operation = 'REFLECT'
+    p.link(view.outputs[0], ref.inputs[0])
+    # the reflection sees a gently waved surface (big soft waves), so a flat panel shows a streak or a gradient, never one
+    # flat colour (a whole facet lit white by the horizon band looks like white paint)
+    wave = p.node("ShaderNodeBump", Strength=WAVE, Distance=0.1)
+    p.link(p.noise(1.4, 2.0, 0.5), wave.inputs["Height"])
+    p.link(wave.outputs[0], ref.inputs[1])
+    rs = p.N.new("ShaderNodeSeparateXYZ")
+    p.link(ref.outputs[0], rs.inputs[0])
+    t = p.math("MULTIPLY_ADD", rs.outputs[2], 0.5, 0.5)
+    env = _bw(p, p.ramp(t, [(pos, (v / 2, v / 2, v / 2, 1)) for pos, v in ENV]))        # halved: a ramp stores 0-1
+    env = p.math("MULTIPLY", env, 2.0)
+    # the windows: where the reflected ray points (on the ground plan) at a bright window, low in the sky or just below it
+    flat = p.N.new("ShaderNodeCombineXYZ")
+    p.link(rs.outputs[0], flat.inputs[0])
+    p.link(rs.outputs[1], flat.inputs[1])
+    nf = p.N.new("ShaderNodeVectorMath")
+    nf.operation = 'NORMALIZE'
+    p.link(flat.outputs[0], nf.inputs[0])
+    band = _bw(p, p.ramp(t, [(0.2, (0, 0, 0, 1)), (0.28, (1, 1, 1, 1)), (0.78, (1, 1, 1, 1)), (0.86, (0, 0, 0, 1))]))
+    for b, cw, k in WINDOWS:
+        dp = p.N.new("ShaderNodeVectorMath")
+        dp.operation = 'DOT_PRODUCT'
+        p.link(nf.outputs[0], dp.inputs[0])
+        d = bear(b)
+        dp.inputs[1].default_value = (d.x, d.y, 0.0)
+        w = _bw(p, p.ramp(dp.outputs["Value"], [(cw - 0.025, (0, 0, 0, 1)), (cw + 0.01, (k, k, k, 1))]))
+        env = p.math("ADD", env, p.math("MULTIPLY", w, band))
+    # the sun's light on a white surface (with cast shadows), as Paint.finish reads it
+    dif = p.N.new("ShaderNodeBsdfDiffuse")
+    s2r = p.N.new("ShaderNodeShaderToRGB")
+    p.link(dif.outputs[0], s2r.inputs[0])
+    lum = _bw(p, s2r.outputs[0])
+    v = p.math("MULTIPLY", env, _bw(p, p.ramp(lum, [(a, (b, b, b, 1)) for a, b in LIGHT])))
+    v = p.math("MULTIPLY", v, _bw(p, tone))
+    gp = p.N.new("ShaderNodeSeparateXYZ")
+    p.link(geo.outputs["Position"], gp.inputs[0])
+    v = p.math("MULTIPLY", v, _bw(p, p.ramp(gp.outputs[2], [(0.0, (0.7, 0.7, 0.7, 1)), (0.35, (0.88, 0.88, 0.88, 1)),
+                                                           (1.0, (1, 1, 1, 1))])))
+    ao = p.N.new("ShaderNodeAmbientOcclusion")
+    ao.samples = 16
+    ao.inputs["Distance"].default_value = 0.35
+    v = p.math("MULTIPLY", v, _bw(p, p.ramp(ao.outputs["AO"], [(0.0, (0.55, 0.55, 0.55, 1)), (1.0, (1, 1, 1, 1))])))
+    lw = p.N.new("ShaderNodeLayerWeight")       # dark rims where the surface turns away (sides only: from this low
+    lw.inputs["Blend"].default_value = 0.35     # camera every top face is at a grazing angle, and tops stay bright)
+    nz = p.N.new("ShaderNodeSeparateXYZ")
+    p.link(geo.outputs["Normal"], nz.inputs[0])
+    side = p.math("SUBTRACT", 1.0, p.math("MAXIMUM", nz.outputs[2], 0.0))
+    v = p.math("MULTIPLY", v, p.math("MULTIPLY_ADD", p.math("MULTIPLY", lw.outputs["Facing"], side), -edge_dark * 0.55, 1.0))
+    v = p.math("MINIMUM", v, 1.0)
+    col = p.ramp(v, stops)
+    if kind2:
+        col = p.mix(col, p.ramp(v, metal_stops(*METALS[kind2][:3], *POLISH.get(kind2, ()))), mask)
+    if polish < 1:   # partly the painted shade (the look before 28 Oct)
+        col = p.mix(p.ramp(lum, metal_ramp(dark, mid, light)), col, polish)
+    if spec > 0:     # the sun's own highlight: small, crisp, near-white
+        gl = p.N.new("ShaderNodeBsdfGlossy")
+        gl.inputs["Roughness"].default_value = spec_rough * 0.6
+        s2 = p.N.new("ShaderNodeShaderToRGB")
+        p.link(gl.outputs[0], s2.inputs[0])
+        h = p.ramp(_bw(p, s2.outputs[0]), [(0.5, (0, 0, 0, 1)), (0.9, (1, 1, 1, 1))])
+        col = p.mix(col, p.mix(h, tuple(min(1.0, c * spec) for c in hi[:3]) + (1,), 1.0, 'MULTIPLY'), 1.0, 'ADD')
+    em = p.N.new("ShaderNodeEmission")
+    p.link(lum if DEBUG_LIGHT else col, em.inputs["Color"])
+    out = p.N.new("ShaderNodeOutputMaterial")
+    p.link(em.outputs[0], out.inputs[0])
+    return p.m
+
+
+def mat_polished_stripes(name, kind_a, kind_b, n, phase=0.0, ratio=0.5, wear=0.35):
+    """Upright stripes of two polished metals round the Z axis (the tier 3 drum's black and gold): n pairs, kind_a on
+    `ratio` of each pair, leaning and wobbling a little as mat_stripes does."""
+    p = Paint(name)
+    sep = p.N.new("ShaderNodeSeparateXYZ")
+    p.link(p.tc.outputs["Object"], sep.inputs[0])
+    ang = p.math("ARCTAN2", sep.outputs[1], sep.outputs[0])
+    wob = p.math("MULTIPLY", p.math("SUBTRACT", p.noise(2.5, 2.0), 0.5), 0.1)
+    u = p.math("ADD", p.math("ADD", p.math("MULTIPLY", ang, n / (2 * math.pi)), wob), p.math("MULTIPLY", sep.outputs[2], 0.06))
+    bnd = p.math("GREATER_THAN", p.math("FRACT", p.math("ADD", u, phase)), ratio)
+    tone = p.ramp(p.noise(3.5, 3.0), [(0.3, (0.9, 0.9, 0.9, 1)), (0.7, (1.03, 1.03, 1.03, 1))])
+    scratch = p.ramp(p.noise(16.0, 7.0, 0.72), [(0.67, (0, 0, 0, 1)), (0.70, (wear * 0.5,) * 3 + (1,))])
+    tone = p.mix(tone, (1.35, 1.3, 1.2, 1), scratch)
+    return mat_polished(p, tone, kind_a, spec=1.0, kind2=kind_b, mask=bnd)
 
 
 def mat_flat(name, col, spec=0.3, spec_rough=0.35, metal=False, emit=None):

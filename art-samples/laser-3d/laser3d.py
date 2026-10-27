@@ -126,9 +126,9 @@ def m_lens(name, cx, cz, rad, stops):
 # the Laser's own metals (look3d's ramps): a darker, cooler steel than the shared one (the painted Laser's steel is dark
 # with bright edges), and a deeper gold for tier 2's big flat box faces (the shared gold's pale top washes them out)
 L.METALS["lsteel"] = ((28, 32, 38), (92, 98, 102), (168, 174, 178), (0.92, 0.96, 1.0, 1))
-L.METALS["lblack"] = ((12, 12, 18), (40, 40, 50), (92, 94, 112), (0.85, 0.9, 1.0, 1))
+L.METALS["lblack"] = L.METALS["black"]          # polished black and gold (owner, 28 Oct): the shared ones
 L.METALS["olsteel"] = ((38, 42, 34), (112, 118, 102), (184, 190, 172), (0.92, 0.96, 0.9, 1))   # tier 1's olive steel
-L.METALS["lgold"] = ((100, 56, 0), (216, 146, 12), (252, 206, 80), (1.0, 0.9, 0.55, 1))
+L.METALS["lgold"] = L.METALS["gold"]
 
 
 def materials(tier):
@@ -173,9 +173,7 @@ def materials(tier):
         M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)
     else:
         M["stripes"] = m_stripes((30, 30, 34), (236, 178, 40))
-        dark, mid, light, hi = L.METALS["black"]
-        M["box"] = m_paint("armour", (255, 255, 255), (235, 235, 240), spec=1.0, rough=0.22, spec_col=hi,
-                           scratch=(255, 255, 255), upk=(0.7, 1.3), shade=L.metal_ramp(dark, mid, light))
+        M["box"] = L.mat_metal("armour", "black", spec=1.0, wear=0.6)     # glossy black lacquer (owner, 28 Oct)
         M["plate"] = gold
         M["plate_top"] = plate_dark
         M["lid"] = L.mat_metal("lblack")
