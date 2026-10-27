@@ -416,7 +416,7 @@ describe("landing", () => {
       messagetype: "infernoattacked",
       byuserid: ATTACKER,
       subject: "raider attacked your Inferno yard",
-      message: "It was left 30% damaged, and 2,000 Bone and 100 Coal were looted.",
+      message: "It was left 30% damaged. 2,000 Bone and 100 Coal were looted.",
     });
   });
 

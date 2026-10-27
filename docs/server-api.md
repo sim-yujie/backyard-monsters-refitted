@@ -798,7 +798,7 @@ open or could not be closed, the session is minted with SET NX, and a load close
 own attacks and the expired one on their own yard. The attacker banks no more loot than the
 defender's purse gave up at landing (plus Flash's low-level bonus). Each landing leaves the
 defender an `infernoattacked` notice ("Bramble attacked your Inferno yard. It was left 30%
-damaged, and 1,200 Bone were looted."), shown once in the away notice (kind `infernoAttacked`) and
+damaged. 1,200 Bone were looted."), shown once in the away notice (kind `infernoAttacked`) and
 kept in the mailbox with the attacker named for Add friend.
 
 **Moloch's emergence** (`services/inferno/emergence.ts`, `emergenceOnLoad.ts`; plan §2.2). The
@@ -1800,8 +1800,8 @@ the player was away; the web client shows it as one "While you were away: …" n
 The owner's **main** yard load also appends, after the jobs, any unshown **outpost notices**
 (outposts WP8, #187): `{ kind: "outpostAttacked" | "outpostTaken", id: <outpost baseid>, t: null,
 at, detail: { text, x, y } }`, where `text` is the whole sentence ("Bramble attacked your outpost
-at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted."; when a fallen Housing cost
-the outpost housed monsters, "It was left 63% damaged, 1,234 Twigs were looted, and 4 housed
+at (243, 206). It was left 63% damaged. 1,234 Twigs were looted."; when a fallen Housing cost
+the outpost housed monsters, "It was left 63% damaged. 1,234 Twigs were looted, and 4 housed
 monsters were lost.", issue #160). They are mailbox messages
 (below) handed back once and marked read as they are (`services/maproom/v2/outpostNotices.ts`).
 Any such load counts, including the map screen's (it loads the own yard to find the home cell), so

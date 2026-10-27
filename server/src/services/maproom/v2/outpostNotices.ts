@@ -116,7 +116,7 @@ export const yardAttackNoticeText = (
 
 /**
  * "Bramble attacked your Inferno yard" and what it cost, in Inferno words:
- * "It was left 30% damaged, 1,200 Bone and 300 Coal were looted, and 4
+ * "It was left 30% damaged. 1,200 Bone and 300 Coal were looted, and 4
  * housed monsters were lost." (WP 3.4).
  */
 export const infernoAttackNoticeText = (
@@ -129,16 +129,19 @@ export const infernoAttackNoticeText = (
   message: costText(damage, loot, housedLost, INFERNO_RESOURCE_NAMES),
 });
 
-/** "It was left 63% damaged, and 1,234 Twigs were looted.", and the housed monsters lost, if any. */
+/**
+ * "It was left 63% damaged. 1,234 Twigs were looted.", and the housed monsters
+ * lost, if any: "..., and 4 housed monsters were lost.". The damage is a
+ * sentence of its own, so a list of resources never runs on after it (S3
+ * browser check: "100% damaged, 4,837 Bone, 4,546 Coal, ... were looted").
+ */
 const costText = (damage: number, loot: ResourceAmounts, housedLost: number, names = RESOURCE_NAMES): string => {
   const taken = amountsText(loot, names);
-  const looted = taken === "" ? "nothing was looted" : `${taken} were looted`;
+  const looted = taken === "" ? "Nothing was looted" : `${taken} were looted`;
   const lost = Math.max(0, Math.floor(housedLost));
   return (
-    `It was left ${Math.max(0, Math.round(damage))}% damaged` +
-    (lost === 0
-      ? `, and ${looted}.`
-      : `, ${looted}, and ${lost} housed ${lost === 1 ? "monster was" : "monsters were"} lost.`)
+    `It was left ${Math.max(0, Math.round(damage))}% damaged. ${looted}` +
+    (lost === 0 ? "." : `, and ${lost} housed ${lost === 1 ? "monster was" : "monsters were"} lost.`)
   );
 };
 
