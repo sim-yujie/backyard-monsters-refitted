@@ -788,8 +788,15 @@ lootcredited, total, housedlost }`). An attack left without that save is closed 
 `/bm/inferno/load`, before their next `attack/start` of any kind, on the defender's Inferno load or
 an attack start on the yard once the 420 s window has closed, and by a minute sweep: it lands from
 the last checkpoint through the same landing (flung monsters spent, that moment's damage and loot,
-protection, revenge), or, with no checkpoint, only clears the yard's `attackid`. Either way the
-session ends, so the same attack can be neither saved nor started again. Each landing leaves the
+protection, revenge). With no battle the server can fight (no checkpoint, none usable, or a final
+save with its fling log left out), an attack past a 10 s grace lands as having used its whole army
+(every monster committed at the start spent, no damage or loot, protection, revenge, notice); one
+left inside the grace only clears the yard's `attackid`. A replay that fails 3 times is given up the
+same way. Either way the session ends, so the same attack can be neither saved nor started again.
+One attack per yard: `attack/start` is refused `targetUnderAttack` while the yard's last attack is
+open or could not be closed, the session is minted with SET NX, and a load closes only the caller's
+own attacks and the expired one on their own yard. The attacker banks no more loot than the
+defender's purse gave up at landing (plus Flash's low-level bonus). Each landing leaves the
 defender an `infernoattacked` notice ("Bramble attacked your Inferno yard. It was left 30%
 damaged, and 1,200 Bone were looted."), shown once in the away notice (kind `infernoAttacked`) and
 kept in the mailbox with the attacker named for Add friend.

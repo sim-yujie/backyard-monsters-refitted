@@ -62,7 +62,9 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * Bound to the attack `POST /bm/inferno/attack/start` minted on this yard for
  * this caller (`infernoPlayerSession.ts`, the row's `attackid`): anything else
  * is refused before anything is written, and only the save carrying `over`
- * lands, once, under a lock. A save without `over` writes nothing. An attack
+ * lands, once, under a lock. A save without `over` writes nothing. A final
+ * save with no battle the server can fight, past a 10-second grace, lands as
+ * having used its whole army (`spendsWholeArmy`: no free look). An attack
  * left without a final save is closed by the server from its last checkpoint
  * (`infernoPlayerFinalise.ts`, owner 27 Oct), through the same landing.
  *
@@ -141,6 +143,11 @@ const land = async (
   if (!finalises) return { save: yard, player: null };
 
   const battle = await playerBattle(ctx, user, saveData, attack, yard);
+  // No battle the server can fight, past the grace: the army is used all the
+  // same, or a save with its log left out would be a free look (owner, 27 Oct).
+  if (!battle && spendsWholeArmy(attack, now)) {
+    return writePlayerLanding(user, attack, yard, null, NO_LOOT, now, true);
+  }
   const loot = playerLoot(
     attack,
     yard,
@@ -148,6 +155,33 @@ const land = async (
     battle
   );
   return writePlayerLanding(user, attack, yard, battle, loot, now);
+};
+
+/**
+ * How long an attack may run with no battle the server can fight (no
+ * checkpoint, no usable fling log) and still end as if it never began: a
+ * disconnect in the first seconds, before anything could be flung.
+ */
+export const INFERNO_NO_BATTLE_GRACE = 10;
+
+/**
+ * Whether an attack with no battle the server can fight is landed as having
+ * used its whole army (owner, 27 Oct: an abandoned attack counts, no free
+ * retry). The client's own word on what it flung cannot be checked, so once
+ * the grace is over the server takes the worst case: every monster committed
+ * at the start was flung.
+ */
+export const spendsWholeArmy = (attack: InfernoPlayerSession, now: number): boolean =>
+  Boolean(attack.session.entryHoused) && now - attack.session.startedat >= INFERNO_NO_BATTLE_GRACE;
+
+/** An attack that took nothing. */
+export const NO_LOOT: AttackLoot = {
+  credit: { r1: 0, r2: 0, r3: 0, r4: 0 },
+  cap: { r1: 0, r2: 0, r3: 0, r4: 0 },
+  defenderDelta: { r1: 0, r2: 0, r3: 0, r4: 0 },
+  basis: "no-log",
+  krallenBuff: 0,
+  fallen: null,
 };
 
 /** The fightable part of a fling log, replayed over the yard as an Inferno yard (see the file comment). */
@@ -210,6 +244,8 @@ export const playerLoot = (
  * @param user - The attacker, with their main save.
  * @param yard - The defender's Inferno yard.
  * @param battle - The server's battle, or null when there was none to fight.
+ * @param spendAll - With no battle: the whole army committed at the start is
+ *   spent ({@link spendsWholeArmy}).
  */
 export const writePlayerLanding = async (
   user: User,
@@ -217,7 +253,8 @@ export const writePlayerLanding = async (
   yard: Save,
   battle: AbandonedOutcome | null,
   loot: AttackLoot,
-  now: number
+  now: number,
+  spendAll = false
 ): Promise<InfernoPlayerLanding> => {
   const em = postgres.em;
   const landed = await em.transactional(async (tx) => {
@@ -240,7 +277,7 @@ export const writePlayerLanding = async (
       cells: [{ baseid: inferno.baseid, housed: countsOf(inferno.monsters?.housed) }],
       sent: {},
       entryHoused: attack.session.entryHoused,
-      logged: battle?.flung ?? null,
+      logged: battle?.flung ?? (spendAll ? committedArmy(attack) : null),
     });
     inferno.monsters = subtractHoused(inferno.monsters, taken[inferno.baseid]);
 
@@ -342,6 +379,15 @@ export const creditPaidFor = (
   const paid: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
   for (const key of RESOURCE_KEYS) paid[key] = Math.max(0, Math.min(credit[key], Math.floor(lost[key] * bonus)));
   return paid;
+};
+
+/** Every monster the start committed, from every yard it drew on. */
+const committedArmy = (attack: InfernoPlayerSession): Counts => {
+  const army: Counts = {};
+  for (const counts of Object.values(attack.session.entryHoused ?? {})) {
+    for (const [id, count] of Object.entries(counts ?? {})) army[id] = (army[id] ?? 0) + Number(count);
+  }
+  return army;
 };
 
 /** The garrisons of the Monster Bunkers alone: a Housing Bunker's monsters are the yard's housed ones. */

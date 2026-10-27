@@ -605,7 +605,40 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(refusal).toBe("protected");
   });
 
-  test("with no checkpoint nothing was flung: the mark is cleared and nothing else is written", async () => {
+  test("no checkpoint past the 10-second grace: the attack counts, its whole army spent (no free retry)", async () => {
+    startSession(undefined, now() - 11);
+    expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
+    expect(inputs).toHaveLength(0);
+    expect(transactions).toBe(1);
+    // Every monster committed at the start is spent; nothing was taken or damaged.
+    expect(inferno.monsters.housed).toEqual({ IC1: 0 });
+    expect(defenderMain.iresources).toMatchObject({ r1: 5_000, r2: 400 });
+    expect(userSave.iresources).toMatchObject({ r1: 0, r2: 0 });
+    expect(target).toMatchObject({ attackid: 0, damage: 0 });
+    // Both revenge lists count it, and the defender is told.
+    expect(maprooms.get(DEFENDER)!.neighbors.map((one: { attacksfrom: number }) => one.attacksfrom)).toEqual([1]);
+    expect(maprooms.get(ATTACKER)!.neighbors.map((one: { attacksto: number }) => one.attacksto)).toEqual([1]);
+    expect(notices.map((one) => [one.targetid, one.subject])).toEqual([[DEFENDER, "raider attacked your Inferno yard"]]);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
+  });
+
+  test("a final save with its fling log left out, past the grace, spends the whole army too", async () => {
+    startSession(undefined, now() - 30);
+    const ctx = finalSave({ flinglog: "" });
+    expect(await run(ctx)).toBeNull();
+    expect(inputs).toHaveLength(0);
+    expect(inferno.monsters.housed).toEqual({ IC1: 0 });
+    expect(ctx.body.player).toMatchObject({ damage: 0, loot: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+    expect(maprooms.get(DEFENDER)!.neighbors.map((one: { attacksfrom: number }) => one.attacksfrom)).toEqual([1]);
+  });
+
+  test("a final save with no fling log inside the grace keeps the army", async () => {
+    startSession();
+    expect(await run(finalSave({ flinglog: "" }))).toBeNull();
+    expect(inferno.monsters.housed).toEqual(ARMY);
+  });
+
+  test("with no checkpoint inside the grace nothing was flung: the mark is cleared and nothing else is written", async () => {
     startSession();
     expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(1);
     expect(transactions).toBe(0);
@@ -669,11 +702,25 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
       expect(await closeInfernoPlayerAttacksOf(ATTACKER, "build")).toBe(0);
       expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(true);
     }
-    expect(await closeInfernoPlayerAttack(TARGET_SAVEID, "build")).toBe("released");
+    // Given up on the replay, the attack still counts: it lands with no battle, its army spent.
+    expect(await closeInfernoPlayerAttack(TARGET_SAVEID, "build")).toBe("landed");
+    expect(inputs).toHaveLength(INFERNO_CLOSE_ATTEMPTS);
+    expect(inferno.monsters.housed).toEqual({ IC1: 0 });
+    expect(target.attackid).toBe(0);
     expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
-    expect(nativeUpdates).toEqual([{ where: { basesaveid: TARGET_SAVEID, attackid: ATTACK_ID }, data: { attackid: 0 } }]);
     // The count goes with the session.
     expect([...store.keys()].some((key) => key.startsWith("attack-close-failures"))).toBe(false);
+  });
+
+  test("an attack that cannot land even with no battle is released after as many more tries", async () => {
+    const { infernoPlayerCloseFailuresKey } = await import("./infernoPlayerSession.js");
+    startSession();
+    await checkpoint();
+    store.set(infernoPlayerCloseFailuresKey(TARGET_SAVEID), String(2 * INFERNO_CLOSE_ATTEMPTS));
+    expect(await closeInfernoPlayerAttack(TARGET_SAVEID, "build")).toBe("released");
+    expect(transactions).toBe(0);
+    expect(nativeUpdates).toEqual([{ where: { basesaveid: TARGET_SAVEID, attackid: ATTACK_ID }, data: { attackid: 0 } }]);
+    expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(false);
   });
 
   test("a yard another attack has since taken over is not written to", async () => {

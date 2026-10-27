@@ -19,7 +19,7 @@ import {
   releaseInfernoPlayerFinalLock,
   type InfernoPlayerSession,
 } from "./infernoPlayerSession.js";
-import { playerLoot, playerReplayInput, writePlayerLanding } from "./infernoPlayerLanding.js";
+import { NO_LOOT, playerLoot, playerReplayInput, spendsWholeArmy, writePlayerLanding } from "./infernoPlayerLanding.js";
 
 /**
  * Closes an Inferno player attack its attacker left without the final save
@@ -34,11 +34,15 @@ import { playerLoot, playerReplayInput, writePlayerLanding } from "./infernoPlay
  * was last seen, as the surface finaliser does (`finaliseAttack.ts`): the
  * monsters flung by then are spent, the damage and loot of that moment land,
  * the defender is protected by the usual rule and both revenge lists count
- * it. An attack with no checkpoint flung nothing (the client sends one the
- * moment anything is flung), so, as on the surface
- * (`releaseUnfoughtAttackOf`), nothing is written but the yard's attack mark
- * cleared. Either way the session ends, so the same attack can be neither
- * saved nor started again.
+ * it. An attack with no battle the server can fight (no checkpoint, or none
+ * usable) cannot be taken at its word that nothing was flung: a client may
+ * simply withhold them. So past a short grace (`INFERNO_NO_BATTLE_GRACE`,
+ * 10 s) it lands as having used its whole army: every monster committed at
+ * the start is spent, no damage or loot, the defender is protected by the
+ * usual rule, the revenge lists count it and the defender is told. Left
+ * within the grace, as on the surface (`releaseUnfoughtAttackOf`), only the
+ * yard's attack mark is cleared. Either way the session ends, so the same
+ * attack can be neither saved nor started again.
  *
  * When it runs:
  * - the attacker's next yard load (`/base/load`, `/bm/inferno/load`) and next
@@ -50,9 +54,10 @@ import { playerLoot, playerReplayInput, writePlayerLanding } from "./infernoPlay
  *   margin) has closed.
  *
  * Exactly once: the final save and this take the same lock, and whichever
- * comes second finds the session gone. A close that fails
- * {@link INFERNO_CLOSE_ATTEMPTS} times is given up and released, not retried
- * for the session's 7 days.
+ * comes second finds the session gone. A replay that fails
+ * {@link INFERNO_CLOSE_ATTEMPTS} times is given up (the attack lands with no
+ * battle, its army spent), and an attack that cannot land even so is released
+ * after as many more: never retried for the session's 7 days.
  */
 
 export type InfernoCloseOutcome = "landed" | "released" | "none" | "busy" | "stale";
@@ -85,46 +90,63 @@ const closeLocked = async (basesaveid: number, trigger: string): Promise<Inferno
     return "stale";
   }
 
+  const now = getCurrentDateTime();
   const checkpoint = await readInfernoPlayerCheckpoint(basesaveid);
   const log = checkpoint?.attackid === attack.session.attackid ? checkpoint : null;
-  const user = log ? await em.findOne(User, { userid: attack.session.attackerid }, { populate: ["save"] }) : null;
+  const user = await em.findOne(User, { userid: attack.session.attackerid }, { populate: ["save"] });
   const input =
     log && user?.save && attack.session.entryHoused
       ? playerReplayInput(attack, yard, log.flinglog, log.tick, true)
       : null;
 
-  if (!input || !user) {
-    // Nothing was flung: the mark goes, nothing else is written.
-    await release(basesaveid, attack, trigger, "inferno-attack-released");
-    return "released";
-  }
-
   // A close that keeps failing is given up, not retried until the session's
-  // 7 days run out: the mark goes, as for an attack with nothing fought.
-  if ((await readInfernoPlayerCloseFailures(basesaveid)) >= INFERNO_CLOSE_ATTEMPTS) {
+  // 7 days run out: after a few failed replays the attack lands as one with no
+  // battle, and should even that keep failing, it is released.
+  const failures = await readInfernoPlayerCloseFailures(basesaveid);
+  if (failures >= 2 * INFERNO_CLOSE_ATTEMPTS) {
     await release(basesaveid, attack, trigger, "inferno-attack-given-up");
     return "released";
   }
 
-  // In a worker, off the event loop; a replay past its deadline throws and the
-  // attack stays for the next pass, counted.
   try {
-    const battle = await replayAbandonedInWorker(input);
-    const loot = playerLoot(attack, yard, { sent: battle.attackloot, reported: battle.defenderDelta, flinglog: log!.flinglog }, battle);
-    await writePlayerLanding(user, attack, yard, battle, loot, getCurrentDateTime());
+    if (input && user && failures < INFERNO_CLOSE_ATTEMPTS) {
+      // In a worker, off the event loop; a replay past its deadline throws and
+      // the attack stays for the next pass, counted.
+      const battle = await replayAbandonedInWorker(input);
+      const loot = playerLoot(attack, yard, { sent: battle.attackloot, reported: battle.defenderDelta, flinglog: log!.flinglog }, battle);
+      await writePlayerLanding(user, attack, yard, battle, loot, now);
+      logger.info("Closed an Inferno player attack its attacker left", {
+        event: "inferno-attack-closed",
+        basesaveid,
+        attackerid: attack.session.attackerid,
+        tick: log!.tick,
+        trigger,
+      });
+      return "landed";
+    }
+
+    // No battle to fight (no checkpoint, none usable, or a replay given up):
+    // past the grace the attack is used all the same, its whole army spent
+    // (`spendsWholeArmy`), so withholding checkpoints is no free retry.
+    if (user?.save && (input || spendsWholeArmy(attack, now))) {
+      await writePlayerLanding(user, attack, yard, null, NO_LOOT, now, true);
+      logger.info("Closed an Inferno player attack left with no battle; its army is spent", {
+        event: "inferno-attack-spent",
+        basesaveid,
+        attackerid: attack.session.attackerid,
+        failures,
+        trigger,
+      });
+      return "landed";
+    }
   } catch (err) {
     await countInfernoPlayerCloseFailure(basesaveid);
     throw err;
   }
 
-  logger.info("Closed an Inferno player attack its attacker left", {
-    event: "inferno-attack-closed",
-    basesaveid,
-    attackerid: attack.session.attackerid,
-    tick: log!.tick,
-    trigger,
-  });
-  return "landed";
+  // Left in the first seconds with nothing flung: the mark goes, nothing else is written.
+  await release(basesaveid, attack, trigger, "inferno-attack-released");
+  return "released";
 };
 
 /**
