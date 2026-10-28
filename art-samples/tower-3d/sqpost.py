@@ -125,7 +125,10 @@ class Tier:
                  "body is drawn in front of the turret: its parts in front are cut out of every cell, so no front layer.")))
         aim_fields.merge(out / "strip.json", json.loads((R / "aim.json").read_text()),
                          dict(camera_elevation_deg=cam["elevation"]))
-        # the painted pieces
+        self.load_painted(cfg, t)
+
+    def load_painted(self, cfg, t):
+        """The painted body, its place, the painted turret cells and the strip's place (game px)."""
         folder = ASSETS / cfg["folder"]
         (pbx, pby), (psx, psy, pw, ph, pn) = cfg["painted"][t]
         self.pbody, self.pbody_at = Image.open(folder / f"body.t{t}@2x.webp").convert("RGBA"), (pbx, pby)
@@ -241,4 +244,5 @@ def main():
         print(T.t, "body", T.body_at, "pivot", T.pivot, "strip", [round(v, 2) for v in T.strip_at], T.cells[0].size)
 
 
-main()
+if __name__ == "__main__":
+    main()
