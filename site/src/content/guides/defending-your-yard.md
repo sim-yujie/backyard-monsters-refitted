@@ -26,6 +26,8 @@ Upgrade towers to make them stronger.
 
 Walls and traps don't need a worker: they finish as soon as you place them.
 
+To raise a whole wall at once, see [Upgrade many walls at once](/guides/upgrade-many-walls/).
+
 ## The Monster Bunker
 
 A **Monster Bunker** holds some of your monsters as defenders. Move monsters in from Housing, and they will help fight off attackers.
