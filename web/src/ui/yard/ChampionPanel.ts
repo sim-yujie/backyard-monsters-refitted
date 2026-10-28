@@ -1219,7 +1219,7 @@ const stagePicture = (entry: ChampionEntry, level: number, label: string): HTMLE
 };
 
 /** The few words under a locked Freeze; the hover keeps {@link freezeGate}'s sentence. */
-const FREEZE_SHORT: Readonly<Record<FreezeProblem, string>> = {
+export const FREEZE_SHORT: Readonly<Record<FreezeProblem, string>> = {
   noChamber: "Needs a Chamber",
   chamberBuilding: "Chamber being built",
   hurt: "Heal it first",
@@ -1235,7 +1235,7 @@ const JUICE_SHORT: Readonly<Record<JuicerProblem, string>> = {
 };
 
 /** Where a tap on a locked tile says why, under the row. */
-const actHint = (): HTMLElement => {
+export const actHint = (): HTMLElement => {
   const hint = gateLine("");
   hint.classList.add("champion__act-hint");
   hint.setAttribute("aria-live", "polite");
@@ -1243,8 +1243,8 @@ const actHint = (): HTMLElement => {
   return hint;
 };
 
-interface ActTileOptions {
-  readonly act: "freeze" | "juice";
+export interface ActTileOptions {
+  readonly act: "freeze" | "juice" | "thaw";
   /** The building that does it, whose picture the tile shows. */
   readonly type: number;
   readonly kind: YardKind;
@@ -1261,11 +1261,11 @@ interface ActTileOptions {
 }
 
 /**
- * One of the cage's Freeze / Juice pictures. A locked one is `aria-disabled`
- * rather than disabled, so hovering it still shows why and a tap (a phone has
+ * One of the cage's Freeze / Juice pictures, or the chamber's Freeze / Thaw.
+ * A locked one is `aria-disabled` rather than disabled, so hovering it still shows why and a tap (a phone has
  * no hover) writes the reason under the row.
  */
-const actTile = (options: ActTileOptions): HTMLButtonElement => {
+export const actTile = (options: ActTileOptions): HTMLButtonElement => {
   const tile = document.createElement("button");
   tile.type = "button";
   tile.className = `champion-act champion-act--${options.act}`;
