@@ -6,6 +6,7 @@ import {
   mushroomAt,
   MushroomPicker,
   mushroomPickAction,
+  mushroomZIndex,
   ORDINARY_QUIPS,
   PUMPKIN_QUIPS,
   pumpkinsFound,
@@ -15,7 +16,7 @@ import {
 } from "./mushroomPick";
 import { YardStore } from "./YardStore";
 import { onPumpkins } from "@/game/events/pumpkinHunt";
-import { readYard, type YardMushroom } from "./yardModel";
+import { readYard, type YardBuilding, type YardMushroom } from "./yardModel";
 
 /**
  * Picking a mushroom (`docs/design/yard-buildings.md` §5.6): the tap box, the
@@ -127,6 +128,36 @@ describe("mushroomAt", () => {
   it("misses outside the box", () => {
     expect(mushroomAt(mushrooms, first.worldX + 40, first.worldY)).toBeNull();
     expect(mushroomAt(mushrooms, first.worldX, first.worldY + 20)).toBeNull();
+  });
+
+  it("where two overlap, the one drawn in front wins, whatever the list order", () => {
+    const front = { ...first, id: 0, worldY: first.worldY + 5, depth: first.depth + 1 };
+    const back = { ...first, id: 1 };
+    expect(mushroomAt([front, back], first.worldX, first.worldY)).toBe(front);
+    expect(mushroomAt([back, front], first.worldX, first.worldY)).toBe(front);
+  });
+});
+
+describe("mushroomZIndex (owner bug, 28 Oct 2026)", () => {
+  // Buildings sort at `depth * 8` (`YardBuildings.resortByDepth`).
+  // Wall blocks north and south of a pumpkin grown flush against the first.
+  const yard = readYard({
+    ...loadWith(),
+    buildingdata: {
+      "1": { id: 1, t: 17, X: 0, Y: 300, l: 1 },
+      "2": { id: 2, t: 17, X: 0, Y: 350, l: 1 },
+    },
+    mushrooms: { l: [[1, 0, 320]], s: 0 },
+  } as BaseLoadResponse);
+  const [behind, inFront] = yard.buildings as [YardBuilding, YardBuilding];
+  const [pumpkin] = yard.mushrooms as [YardMushroom];
+
+  it("draws a pumpkin over the wall block behind it", () => {
+    expect(mushroomZIndex(pumpkin)).toBeGreaterThan(behind.depth * 8);
+  });
+
+  it("and under the wall block in front of it", () => {
+    expect(mushroomZIndex(pumpkin)).toBeLessThan(inFront.depth * 8);
   });
 });
 

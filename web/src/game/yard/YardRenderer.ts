@@ -19,7 +19,7 @@ import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
 import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
-import { mushroomAt, mushroomKey } from "./mushroomPick";
+import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
 import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
 
@@ -65,7 +65,6 @@ export class YardRenderer {
 
   private readonly ground = new YardGround();
   private readonly buildings = new YardBuildings();
-  private readonly mushroomLayer = new Container();
   /** Each mushroom's sprite by `mushroomKey`, rebuilt with every `show`. */
   private readonly mushroomSprites = new Map<string, Sprite>();
   /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
@@ -147,13 +146,11 @@ export class YardRenderer {
   private zoomWatcher: ((zoom: number) => void) | null = null;
 
   constructor() {
-    this.mushroomLayer.eventMode = "none";
     this.isoDecals.eventMode = "none";
     this.root.addChild(
       this.ground.root,
       this.isoDecals,
       this.buildings.shadows,
-      this.mushroomLayer,
       this.buildings.tops,
       this.collect.root,
       this.blueprint.root,
@@ -260,7 +257,10 @@ export class YardRenderer {
       else sprite.anchor.set(0.5, 0.85);
       sprite.scale.set(this.mushroomSize());
       sprite.position.set(mushroom.worldX, mushroom.worldY);
-      this.mushroomLayer.addChild(sprite);
+      // Among the buildings, by depth: a wall behind it no longer covers it.
+      sprite.eventMode = "none";
+      sprite.zIndex = mushroomZIndex(mushroom);
+      this.buildings.addGuest(sprite);
       this.mushroomSprites.set(key, sprite);
       keys.add(key);
     }
@@ -323,7 +323,6 @@ export class YardRenderer {
       this.ground.root,
       this.isoDecals,
       this.buildings.shadows,
-      this.mushroomLayer,
       this.buildings.tops,
       this.collect.root,
       this.buildings.markers,
@@ -938,7 +937,10 @@ export class YardRenderer {
   }
 
   private clearMushrooms(): void {
-    for (const child of this.mushroomLayer.removeChildren()) child.destroy();
+    for (const sprite of this.mushroomSprites.values()) {
+      this.buildings.removeGuest(sprite);
+      sprite.destroy();
+    }
     this.mushroomSprites.clear();
   }
 

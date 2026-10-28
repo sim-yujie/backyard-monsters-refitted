@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
-import { overlaps, rectOf, yardSize } from "../yardplanner/layoutGeometry.js";
+import { overlaps, rectOf, yardSize, type FootprintRect } from "../yardplanner/layoutGeometry.js";
 import {
   GOLDEN_BIG,
   GOLDEN_SMALL,
   MUSHROOM_CAP,
+  MUSHROOM_CLEARANCE,
   MUSHROOM_STORED_CAP,
   moveMushroomsOffBuildings,
   planMushroomPick,
@@ -28,7 +29,29 @@ const sequence = (...values: number[]): Random => {
   return () => values[Math.min(index++, values.length - 1)]!;
 };
 
+/**
+ * Plays the draws that put a new mushroom's origin at each `[X, Y]` in turn,
+ * round and round; a frame draw takes the next X's.
+ */
+const spots = (...points: [number, number][]): Random => {
+  const [width, height] = yardSize(0);
+  // Half a unit in, so the spawn's floor lands on the point itself.
+  const draw = (coord: number, size: number) => (coord + size / 2 + 0.5) / (size - 30);
+  const values = points.flatMap(([x, y]) => [draw(x, width), draw(y, height)]);
+  let index = 0;
+  return () => values[index++ % values.length]!;
+};
+
+/** A footprint grown by `by` on every side. */
+const grownBy = (rect: FootprintRect, by: number): FootprintRect => ({
+  x: rect.x - by,
+  y: rect.y - by,
+  w: rect.w + 2 * by,
+  h: rect.h + 2 * by,
+});
+
 const HALL = 14;
+const WALL = 17;
 
 /** A Town Hall at the origin and one worker, nothing else. */
 const yard = (overrides: Partial<MushroomYardSave> = {}): MushroomYardSave => ({
@@ -115,6 +138,42 @@ describe("spawnMushrooms", () => {
 
     expect(spawnMushrooms(save, existing, 3, () => 0)).toEqual(existing);
   });
+
+  test("keeps a gap from every wall block: never grows touching one (owner bug, 28 Oct 2026)", () => {
+    // A wall line across the plot, a block every 20 units, as in a real yard.
+    const walls: BuildingDataMap = {};
+    for (let i = 0; i < 40; i++) {
+      walls[String(i)] = { id: i, t: WALL, X: -400 + i * 20, Y: 0, x: -400 + i * 20, y: 0 } as BuildingDataMap[string];
+    }
+    const save = yard({ buildingdata: walls, mushrooms: { l: [], s: 0 } });
+
+    const list = spawnMushrooms(save, [], 10, Math.random);
+
+    expect(list).toHaveLength(10);
+    const blocks = Object.values(walls).map((wall) => rectOf(WALL, Number(wall.X), Number(wall.Y)));
+    for (const [, x, y] of list) {
+      const around = grownBy(rectOf(7, x, y), MUSHROOM_CLEARANCE);
+      for (const block of blocks) expect(overlaps(around, block)).toBe(false);
+    }
+  });
+
+  test("a spot flush against a wall is passed over for a clear one", () => {
+    const save = yard({ buildingdata: { "0": { id: 0, t: WALL, X: 0, Y: 0, x: 0, y: 0 } } as BuildingDataMap });
+
+    // The first draw touches the wall's west face; the second is open ground.
+    const [entry] = spawnMushrooms(save, [], 1, spots([-30, 0], [300, -300]));
+
+    expect(entry!.slice(1)).toEqual([300, -300]);
+  });
+
+  test("a plot with no clear spot left still grows on free ground", () => {
+    const save = yard({ buildingdata: { "0": { id: 0, t: WALL, X: 0, Y: 0, x: 0, y: 0 } } as BuildingDataMap });
+
+    // Every draw touches the wall: free, but never clear.
+    const [entry] = spawnMushrooms(save, [], 1, spots([-30, 0]));
+
+    expect(entry!.slice(1)).toEqual([-30, 0]);
+  });
 });
 
 describe("moveMushroomsOffBuildings (#263)", () => {
@@ -167,6 +226,41 @@ describe("moveMushroomsOffBuildings (#263)", () => {
 
     expect(moveMushroomsOffBuildings(save, () => 0)).toBe(1);
     expect(save.mushrooms).toEqual({ l: [[1, -500, -400]], s: 9 });
+  });
+
+  test("a pumpkin that grew flush against a wall moves to clear ground (owner bug, 28 Oct 2026)", () => {
+    // A wall block at (0, 300); the second mushroom touches its south face.
+    const save = yard({
+      buildingdata: {
+        "0": { id: 0, t: HALL, X: 0, Y: 0, x: 0, y: 0 },
+        "1": { id: 1, t: WALL, X: 0, Y: 300, x: 0, y: 300 },
+      } as BuildingDataMap,
+      mushrooms: { l: [[2, 300, 200], [5, 0, 320]], s: 7 },
+    });
+
+    expect(moveMushroomsOffBuildings(save, Math.random)).toBe(1);
+
+    const { l, s } = readMushrooms(save.mushrooms);
+    expect(s).toBe(7);
+    expect(l[0]).toEqual([2, 300, 200]);
+    const [frame, x, y] = l[1]!;
+    expect(frame).toBe(5);
+    const around = grownBy(rectOf(7, x, y), MUSHROOM_CLEARANCE);
+    expect(overlaps(around, rectOf(WALL, 0, 300))).toBe(false);
+    expect(overlaps(around, rectOf(HALL, 0, 0))).toBe(false);
+    expect(overlaps(rectOf(7, x, y), rectOf(7, 300, 200))).toBe(false);
+  });
+
+  test("one only too close stays put when no clear spot turns up: nothing written", () => {
+    const save = yard({
+      buildingdata: { "1": { id: 1, t: WALL, X: 0, Y: 300, x: 0, y: 300 } } as BuildingDataMap,
+      mushrooms: { l: [[1, -500, -400], [5, 0, 320]], s: 7 },
+    });
+    const before = save.mushrooms;
+
+    // Every draw lands on the first mushroom's spot.
+    expect(moveMushroomsOffBuildings(save, () => 0)).toBe(0);
+    expect(save.mushrooms).toBe(before);
   });
 });
 
