@@ -119,6 +119,7 @@ body {
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: var(--colour-surface-control);
+  box-shadow: var(--shadow-control);
   color: var(--colour-text);
   cursor: pointer;
   transition:
@@ -154,6 +155,7 @@ body {
 .btn--primary {
   background: var(--colour-accent);
   border-color: var(--colour-accent);
+  box-shadow: var(--shadow-control-primary);
   color: var(--colour-accent-text);
 }
 
@@ -170,6 +172,7 @@ body {
 .btn--ghost {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
   color: var(--colour-text-secondary);
 }
 
@@ -184,6 +187,7 @@ body {
 
 .btn--outline {
   background: transparent;
+  box-shadow: none;
   border-color: var(--colour-border-strong);
   color: var(--colour-text);
 }
@@ -292,7 +296,7 @@ body {
   flex-direction: column;
   min-width: 240px;
   max-width: min(92vw, 560px);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-lg);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -307,6 +311,7 @@ body {
   gap: var(--space-3);
   padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-titlebar);
 }
 
 .panel__title {
@@ -573,7 +578,7 @@ body {
   gap: var(--space-3);
   height: var(--hud-bar-height);
   padding: 0 var(--space-2) 0 var(--space-4);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-lg);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -880,7 +885,7 @@ body {
   gap: var(--space-1);
   min-width: 12rem;
   padding: var(--space-1);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -1607,7 +1612,7 @@ body {
   left: var(--space-4);
   bottom: var(--space-4);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -1629,7 +1634,7 @@ body {
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
   backdrop-filter: var(--blur-panel);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   color: var(--colour-text-muted);
   font-size: var(--text-sm);
   pointer-events: none;

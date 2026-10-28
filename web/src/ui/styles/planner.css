@@ -20,7 +20,7 @@
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
   backdrop-filter: var(--blur-panel);
-  border-block: 1px solid var(--colour-border);
+  border-block: var(--panel-edge);
   box-shadow: var(--shadow-panel);
   pointer-events: auto;
   z-index: var(--z-hud);
@@ -114,7 +114,7 @@
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
   backdrop-filter: var(--blur-panel);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-panel);
 }
@@ -822,7 +822,7 @@
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -1288,7 +1288,7 @@
   z-index: var(--z-popup);
   max-width: 232px;
   padding: var(--space-2);
-  border: 1px solid var(--colour-border-strong);
+  border: var(--panel-edge-strong);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);

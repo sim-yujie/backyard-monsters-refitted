@@ -50,7 +50,7 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: 0 var(--space-5) var(--space-4);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-lg);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);

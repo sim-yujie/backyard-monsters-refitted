@@ -203,6 +203,14 @@
   --shadow-dome-edge: inset 0 2px 0 rgb(255 255 255 / 12%);
   --shadow-bubble-drop: 0 10px 26px rgb(0 0 0 / 45%);
   --blur-panel: blur(16px);
+  /* A floating panel's outer edge (every panel that also takes `--blur-panel`),
+     its title band and the depth of a button. The default look keeps them
+     quiet; a palette in palettes.css gives them weight. */
+  --panel-edge: 1px solid var(--colour-border);
+  --panel-edge-strong: 1px solid var(--colour-border-strong);
+  --colour-surface-titlebar: transparent;
+  --shadow-control: none;
+  --shadow-control-primary: none;
 
   --focus-ring: 0 0 0 2px var(--colour-surface-base), 0 0 0 4px var(--colour-accent);
 

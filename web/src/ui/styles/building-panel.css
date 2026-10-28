@@ -496,7 +496,7 @@
   gap: var(--space-1);
   min-width: 14rem;
   padding: var(--space-1);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);

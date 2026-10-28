@@ -19,7 +19,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-lg);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -196,7 +196,7 @@
   gap: var(--space-2);
   margin: 0;
   padding: var(--space-3);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -237,7 +237,7 @@
   gap: var(--space-1);
   min-width: 10rem;
   padding: var(--space-1);
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-radius: var(--radius-md);
   background: var(--colour-surface-raised);
   -webkit-backdrop-filter: var(--blur-panel);
@@ -349,7 +349,7 @@
     background: var(--colour-surface-raised);
     -webkit-backdrop-filter: var(--blur-panel);
     backdrop-filter: var(--blur-panel);
-    border-top: 1px solid var(--colour-border);
+    border-top: var(--panel-edge);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     box-shadow: var(--shadow-panel);
     z-index: var(--z-hud);
@@ -498,7 +498,7 @@
     width: var(--control-height);
     height: var(--control-height);
     padding: 0;
-    border: 1px solid var(--colour-border);
+    border: var(--panel-edge);
     border-radius: var(--radius-md);
     background: var(--colour-surface-raised);
     -webkit-backdrop-filter: var(--blur-panel);

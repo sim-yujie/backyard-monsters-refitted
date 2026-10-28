@@ -15,7 +15,7 @@
   left: 0;
   z-index: var(--z-popup);
   padding: var(--space-2) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
-  border: 1px solid var(--colour-border);
+  border: var(--panel-edge);
   border-bottom: 0;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--colour-surface-raised);

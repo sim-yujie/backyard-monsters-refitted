@@ -1,0 +1,228 @@
+/*
+ * Panel palettes (proposal, branch feat/ui-colors).
+ *
+ * Three ways to move the Modern panels off the default slate glass, each one
+ * nothing but a re-declaration of tokens.css, picked by `data-palette` on
+ * <html> (`palette.ts`: `?palette=toolshed|sticker|charcoal`, remembered).
+ * With no `data-palette` the game looks exactly as before.
+ *
+ * What all three share, and the slate glass does not:
+ * - Solid panels. No blur, no yard showing through, so a panel reads as a
+ *   thing on top of the game rather than a tint over it.
+ * - A dark ink outline round every floating panel, the way the yard's art is
+ *   outlined, and a hard drop under it.
+ * - A title band of its own, so the name of the window is a place, not a line.
+ * - Buttons with a lip (a darker bottom edge, a lit top edge) that look like
+ *   they can be pressed.
+ * - A primary colour taken from the game, not cyan.
+ *
+ * Gain/loss stay green/red and warning/danger stay amber/red in every
+ * palette; where the primary is yellow, warning moves to orange and danger to
+ * a stronger red so the three never meet.
+ */
+
+/* ── Toolshed: dark walnut panels, gold buttons ─────────────────────────── */
+
+:root[data-palette="toolshed"] {
+  --colour-surface-base: #22170f;
+  --colour-surface-raised: #3a2818;
+  --colour-surface-titlebar: #533a22;
+  --colour-surface-overlay: rgb(255 230 200 / 12%);
+  --colour-surface-sunken: rgb(20 10 4 / 30%);
+  --colour-surface-input: rgb(20 10 4 / 45%);
+  --colour-surface-control: #5e4229;
+  --colour-surface-control-hover: #6e4f31;
+  --colour-surface-selected: rgb(255 214 150 / 18%);
+
+  --colour-border: rgb(255 226 190 / 14%);
+  --colour-border-subtle: rgb(255 226 190 / 9%);
+  --colour-border-strong: rgb(255 226 190 / 26%);
+
+  --colour-text: #fbf0e1;
+  --colour-text-strong: #ffffff;
+  --colour-text-secondary: #ecd9c1;
+  --colour-text-muted: #d6c1a4;
+  --colour-text-disabled: #c8b194;
+  --colour-text-inverse: #22170f;
+
+  --colour-accent: #ffc83a;
+  --colour-accent-hover: #ffd76a;
+  --colour-accent-pressed: #f0b21a;
+  --colour-accent-text: #2b1a00;
+  --colour-accent-soft: rgb(255 200 58 / 20%);
+  --colour-accent-line: rgb(255 200 58 / 60%);
+
+  --colour-warning: #ff9a4a;
+  --colour-warning-text: #2b1200;
+  --colour-warning-soft: rgb(255 154 74 / 14%);
+  --colour-warning-line: rgb(255 154 74 / 55%);
+  --colour-warning-bright: #ffd2ad;
+  --colour-danger: #ff6f61;
+  --colour-danger-soft: rgb(255 111 97 / 12%);
+
+  --colour-dome-top: #6a4a2c;
+  --colour-dome-bottom: #2c1d11;
+  --colour-dome-build-top: #7a5a1c;
+  --colour-dome-build-bottom: #33230a;
+  --colour-dome-collect-top: #5f4424;
+  --colour-dome-collect-bottom: #261809;
+  --colour-dome-rim: #120a04;
+  --colour-dome-label: rgb(28 18 10 / 92%);
+  --colour-dome-ring-track: rgb(255 226 190 / 16%);
+  --colour-avatar-ground: #4a3320;
+  --colour-badge-ground: #1a1009;
+  --colour-tile-glow: rgb(255 226 190 / 10%);
+  --colour-tile-ground: rgb(255 226 190 / 3%);
+  --colour-border-dashed: rgb(255 226 190 / 28%);
+  --colour-scrim: rgb(14 8 4 / 60%);
+
+  --panel-edge: 3px solid #120a04;
+  --panel-edge-strong: 3px solid #120a04;
+  --blur-panel: none;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-float: 0 4px 0 rgb(0 0 0 / 30%), 0 10px 26px rgb(0 0 0 / 35%);
+  --shadow-panel: 0 5px 0 rgb(0 0 0 / 35%), 0 16px 36px rgb(0 0 0 / 40%);
+  --shadow-popup: 0 6px 0 rgb(0 0 0 / 35%), 0 20px 50px rgb(0 0 0 / 45%);
+  --shadow-control: inset 0 -3px 0 rgb(0 0 0 / 30%), inset 0 1px 0 rgb(255 240 220 / 16%);
+  --shadow-control-primary: inset 0 -3px 0 rgb(120 70 0 / 55%), inset 0 2px 0 rgb(255 255 255 / 45%);
+}
+
+/* ── Sticker: bright panels with a black outline, green buttons ────────────
+ * The closest to the Flash windows: light, flat, outlined like a sticker on
+ * the yard. Words and states come from the light set (tokens.css). */
+
+:root[data-palette="sticker"] {
+  --colour-surface-base: #e9eee3;
+  --colour-surface-raised: #fbfcf8;
+  --colour-surface-titlebar: #dfe8d3;
+  --colour-surface-overlay: rgb(20 30 10 / 9%);
+  --colour-surface-sunken: rgb(20 30 10 / 5%);
+  --colour-surface-input: #ffffff;
+  --colour-surface-control: #e3e8db;
+  --colour-surface-control-hover: #d5ddca;
+  --colour-surface-selected: rgb(20 30 10 / 11%);
+
+  --colour-border: rgb(20 30 10 / 14%);
+  --colour-border-subtle: rgb(20 30 10 / 9%);
+  --colour-border-strong: rgb(20 30 10 / 28%);
+
+  --colour-text: #171c12;
+  --colour-text-strong: #000000;
+  --colour-text-secondary: #384230;
+  --colour-text-muted: #4f5a45;
+  --colour-text-disabled: #646e5a;
+  --colour-text-inverse: #ffffff;
+
+  --colour-accent: #287f18;
+  --colour-accent-hover: #2f8f1d;
+  --colour-accent-pressed: #216b13;
+  --colour-accent-text: #ffffff;
+  --colour-accent-soft: rgb(40 127 24 / 16%);
+  --colour-accent-line: rgb(40 127 24 / 60%);
+
+  --colour-warning: #a65000;
+  --colour-warning-text: #ffffff;
+  --colour-warning-soft: rgb(230 140 20 / 14%);
+  --colour-warning-line: rgb(166 80 0 / 50%);
+  --colour-warning-bright: #7a3a00;
+  --colour-danger: #c42b2b;
+  --colour-danger-soft: rgb(196 43 43 / 10%);
+  --colour-success: #1f7a3a;
+  --colour-info: #2a55c4;
+  --colour-gain: #176b31;
+  --colour-loss: #b42323;
+  --colour-change-halo: rgb(255 255 255 / 75%);
+  --colour-meter: #56624b;
+  --colour-tribe: #c2410c;
+  --colour-tribe-text: #9a3412;
+  --colour-pin-protected: #6a7382;
+  --colour-online: #1f7a3a;
+
+  --colour-dome-top: #ffffff;
+  --colour-dome-bottom: #dfe6d6;
+  --colour-dome-build-top: #5cc23e;
+  --colour-dome-build-bottom: #287f18;
+  --colour-dome-collect-top: #ffe27a;
+  --colour-dome-collect-bottom: #e8b400;
+  --colour-dome-rim: #111509;
+  --colour-dome-label: rgb(251 252 248 / 94%);
+  --colour-dome-ring-track: rgb(20 30 10 / 18%);
+  --colour-avatar-ground: #dfe8d3;
+  --colour-art-shadow: rgb(20 30 10 / 30%);
+  --colour-badge-ground: #171c12;
+  --colour-shade: rgb(20 30 10 / 8%);
+  --colour-shade-strong: rgb(20 30 10 / 14%);
+  --colour-tile-glow: rgb(255 255 255 / 90%);
+  --colour-tile-ground: rgb(20 30 10 / 5%);
+  --colour-border-dashed: rgb(20 30 10 / 30%);
+  --colour-scrim: rgb(20 24 16 / 45%);
+
+  --panel-edge: 3px solid #111509;
+  --panel-edge-strong: 3px solid #111509;
+  --blur-panel: none;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --shadow-float: 0 4px 0 rgb(17 21 9 / 55%);
+  --shadow-panel: 0 6px 0 rgb(17 21 9 / 55%), 0 16px 32px rgb(0 0 0 / 25%);
+  --shadow-popup: 0 6px 0 rgb(17 21 9 / 55%), 0 20px 48px rgb(0 0 0 / 30%);
+  --shadow-control: inset 0 -3px 0 rgb(20 30 10 / 16%);
+  --shadow-control-primary: inset 0 -3px 0 rgb(10 50 0 / 45%), inset 0 2px 0 rgb(255 255 255 / 30%);
+
+  color-scheme: light;
+}
+
+/* ── Charcoal: the same dark, made solid and neutral; lime buttons ─────────
+ * The smallest step from today: no blue in the grey, no glass, the lime of
+ * the goo for the thing to do. */
+
+:root[data-palette="charcoal"] {
+  --colour-surface-base: #121311;
+  --colour-surface-raised: #1f201d;
+  --colour-surface-titlebar: #2b2c28;
+  --colour-surface-overlay: rgb(255 255 245 / 10%);
+  --colour-surface-sunken: rgb(0 0 0 / 28%);
+  --colour-surface-input: rgb(0 0 0 / 40%);
+  --colour-surface-control: #363733;
+  --colour-surface-control-hover: #42433e;
+  --colour-surface-selected: rgb(255 255 245 / 12%);
+
+  --colour-border: rgb(255 255 245 / 10%);
+  --colour-border-subtle: rgb(255 255 245 / 6%);
+  --colour-border-strong: rgb(255 255 245 / 18%);
+
+  --colour-text: #f1f1ea;
+  --colour-text-secondary: #d0d0c6;
+  --colour-text-muted: #b4b4a9;
+  --colour-text-disabled: #a7a79c;
+  --colour-text-inverse: #121311;
+
+  --colour-accent: #9be04b;
+  --colour-accent-hover: #b2ea73;
+  --colour-accent-pressed: #84c835;
+  --colour-accent-text: #132300;
+  --colour-accent-soft: rgb(155 224 75 / 18%);
+  --colour-accent-line: rgb(155 224 75 / 55%);
+
+  --colour-dome-top: #3a3b36;
+  --colour-dome-bottom: #171815;
+  --colour-dome-build-top: #3f5a24;
+  --colour-dome-build-bottom: #18240c;
+  --colour-dome-collect-top: #33352f;
+  --colour-dome-collect-bottom: #121310;
+  --colour-dome-rim: #000000;
+  --colour-dome-label: rgb(14 15 13 / 90%);
+  --colour-avatar-ground: #2b2c28;
+  --colour-badge-ground: #0c0d0b;
+  --colour-scrim: rgb(8 8 6 / 58%);
+
+  --panel-edge: 2px solid #000000;
+  --panel-edge-strong: 2px solid #000000;
+  --blur-panel: none;
+  --radius-lg: 14px;
+  --shadow-float: 0 3px 0 rgb(0 0 0 / 45%), 0 10px 26px rgb(0 0 0 / 35%);
+  --shadow-panel: 0 4px 0 rgb(0 0 0 / 45%), 0 16px 36px rgb(0 0 0 / 40%);
+  --shadow-popup: 0 5px 0 rgb(0 0 0 / 45%), 0 20px 50px rgb(0 0 0 / 45%);
+  --shadow-control: inset 0 -3px 0 rgb(0 0 0 / 35%), inset 0 1px 0 rgb(255 255 255 / 10%);
+  --shadow-control-primary: inset 0 -3px 0 rgb(30 70 0 / 50%), inset 0 2px 0 rgb(255 255 255 / 40%);
+}
