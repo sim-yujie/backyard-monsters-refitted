@@ -68,12 +68,16 @@ describe("EndAttackPanel", () => {
     expect(text).toContain("9 of 45 sent");
     // Each amount is drawn with its resource's icon, which still says the name (#93).
     const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
-    expect(items.map(spokenText)).toEqual(["Twigs 12,500", "Pebbles 0", "Putty 800", "Goo 0"]);
+    expect(items.map(spokenText)).toEqual(["Twigs 12,500 gained", "Pebbles 0", "Putty 800 gained", "Goo 0"]);
     expect(items.map((item) => item.querySelector(".res-icon")?.getAttribute("role"))).toEqual([
       "img", "img", "img", "img",
     ]);
-    expect(items[0]?.textContent).toBe("12,500");
-    expect(items[0]?.title).toBe("Twigs: 12,500");
+    expect(items[0]?.querySelector(".res-amount__value")?.textContent).toBe("+12,500");
+    expect(items[0]?.title).toBe("Twigs: 12,500 gained");
+    // Won: green with a plus (owner, 28 Oct); nothing won stays a plain 0.
+    expect(items[0]?.querySelector(".res-amount--gain")).not.toBeNull();
+    expect(items[1]?.querySelector(".res-amount__value")?.textContent).toBe("0");
+    expect(items[1]?.querySelector(".res-amount--gain")).toBeNull();
     expect(panel.panel.element.classList.contains("attack-end--win")).toBe(true);
     expect(panel.panel.element.getAttribute("aria-modal")).toBe("true");
   });
@@ -84,11 +88,11 @@ describe("EndAttackPanel", () => {
       lootTaken: { r1: 12_500, r2: 300, r3: 800, r4: 0 },
     });
     const items = [...full.panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
-    expect(items.map(spokenText)).toEqual(["Twigs 2,000", "Pebbles 0", "Putty 800", "Goo 0"]);
+    expect(items.map(spokenText)).toEqual(["Twigs 2,000 gained", "Pebbles 0", "Putty 800 gained", "Goo 0"]);
     expect(items[0]?.title).toBe(
-      "Twigs: 2,000 of 12,500 taken; the rest did not fit in your storage",
+      "Twigs: 2,000 gained of 12,500 taken; the rest did not fit in your storage",
     );
-    expect(items[2]?.title).toBe("Putty: 800");
+    expect(items[2]?.title).toBe("Putty: 800 gained");
     const note = full.query(".attack-end__storage");
     expect(note.hidden).toBe(false);
     expect(note.textContent).toBe("Your storage was full, so some loot was lost.");
@@ -103,7 +107,7 @@ describe("EndAttackPanel", () => {
     const { panel, query } = mountPanel();
     panel.setSaved({ credited: { r1: 10_000, r2: 0, r3: 800, r4: 0 } });
     const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
-    expect(items.map(spokenText)).toEqual(["Twigs 10,000", "Pebbles 0", "Putty 800", "Goo 0"]);
+    expect(items.map(spokenText)).toEqual(["Twigs 10,000 gained", "Pebbles 0", "Putty 800 gained", "Goo 0"]);
     expect(query(".attack-end__storage").hidden).toBe(false);
   });
 
@@ -140,13 +144,13 @@ describe("EndAttackPanel", () => {
       lootTaken: { r1: 3_823, r2: 120, r3: 0, r4: 0 },
     });
     const items = (): HTMLElement[] => [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
-    expect(items().map(spokenText)).toEqual(["Bone 3,823", "Coal 120", "Sulfur 0", "Magma 0"]);
+    expect(items().map(spokenText)).toEqual(["Bone 3,823 gained", "Coal 120 gained", "Sulfur 0", "Magma 0"]);
     expect(items()[0]?.querySelector<HTMLElement>(".res-icon")?.dataset["realm"]).toBe("inferno");
     // The screen around it stays the surface's.
     expect(resourceName("r1")).toBe("Twigs");
     panel.setSaved({ credited: { r1: 3_407, r2: 100, r3: 0, r4: 0 } });
-    expect(items().map(spokenText)).toEqual(["Bone 3,407", "Coal 100", "Sulfur 0", "Magma 0"]);
-    expect(items()[0]?.title).toBe("Bone: 3,407");
+    expect(items().map(spokenText)).toEqual(["Bone 3,407 gained", "Coal 100 gained", "Sulfur 0", "Magma 0"]);
+    expect(items()[0]?.title).toBe("Bone: 3,407 gained");
     // The Inferno purse takes it in full: no storage note.
     expect(query(".attack-end__storage").hidden).toBe(true);
   });
@@ -259,8 +263,8 @@ describe("EndAttackPanel", () => {
       expect(back.hidden).toBe(false);
       expect(back.textContent).toBe("Moloch's Minions will be back in 1 h.");
       const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
-      expect(items.map(spokenText)).toEqual(["Bone 400", "Coal 300", "Sulfur 0", "Magma 0"]);
-      expect(items[0]?.title).toBe("Bone: 400 of 900 taken; the rest did not fit in your storage");
+      expect(items.map(spokenText)).toEqual(["Bone 400 gained", "Coal 300 gained", "Sulfur 0", "Magma 0"]);
+      expect(items[0]?.title).toBe("Bone: 400 gained of 900 taken; the rest did not fit in your storage");
       expect(query(".attack-end__storage").hidden).toBe(false);
       expect(query(".attack-end__storage").textContent).toBe("Your Inferno storage was full, so some loot was lost.");
       panel.close();

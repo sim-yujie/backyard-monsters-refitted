@@ -348,7 +348,12 @@ describe("attack notices with their numbers (less-text job 3)", () => {
     expect(block!.querySelector(".attack-notice__subject")!.textContent).toBe("Bramble attacked your yard");
     expect(block!.querySelector('[data-icon="yarddamage2"]')).not.toBeNull();
     // The words are on the icons: the wall, then each pile.
-    expect(spokenText(block!.querySelector(".attack-stats")!)).toBe("Yard damage 63% Twigs 1,234 Goo 500");
+    expect(spokenText(block!.querySelector(".attack-stats")!)).toBe("Yard damage 63% Twigs 1,234 lost Goo 500 lost");
+    // The loot was taken from this player: red with a minus (owner, 28 Oct); the damage stays plain.
+    const twigs = block!.querySelector<HTMLElement>('.res-amount[data-resource="r1"]')!;
+    expect(twigs.dataset["change"]).toBe("loss");
+    expect(twigs.querySelector(".res-amount__value")?.textContent).toBe("−1,234");
+    expect(block!.querySelector(".icon-amount")?.hasAttribute("data-change")).toBe(false);
     // The housed monsters lost are not told (owner, 27 Oct).
     expect(block!.textContent).not.toContain("7");
     expect(rest!.textContent).toBe(`While you were away: upgrade finished: ${typeName(CANNON)} 5`);
@@ -360,7 +365,7 @@ describe("attack notices with their numbers (less-text job 3)", () => {
 
   it("an Inferno yard's loot shows the Inferno's piles", () => {
     const line = jobLine("away", [numbered("infernoAttacked", "Bramble attacked your Inferno yard")], null);
-    expect(spokenText(line.querySelector(".attack-stats")!)).toBe("Yard damage 63% Bone 1,234 Magma 500");
+    expect(spokenText(line.querySelector(".attack-stats")!)).toBe("Yard damage 63% Bone 1,234 lost Magma 500 lost");
     expect(line.querySelector(".attack-notice__rest")).toBeNull();
   });
 

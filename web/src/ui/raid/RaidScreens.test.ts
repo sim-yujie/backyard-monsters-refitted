@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RaidResult, RaidView } from "@/api/raid";
 import { RaidYardUi, raidFrequencyPopup, raidResultPopup, spottedLine } from "./RaidScreens";
+import { spokenText } from "@/ui/resourceIcon";
 
 /** The raid's screens on the own yard (issue #226 WP4), as the DOM shows them. */
 
@@ -132,6 +133,9 @@ describe("raid result popup", () => {
     expect(popup.textContent).toContain("Yard defended!");
     expect(popup.textContent).toContain("95%");
     expect(popup.querySelector(".raid-result__reward")!.textContent).toContain("+10");
+    // A reward is a gain: green, said as gained (owner, 28 Oct).
+    expect(popup.querySelector(".raid-result__reward .res-amount")!.getAttribute("data-change")).toBe("gain");
+    expect(spokenText(popup.querySelector(".raid-result__reward")!)).toBe("Reward: Shiny 10 gained");
     expect(popup.querySelector(".raid-result__repair")).toBeNull();
   });
 
@@ -142,7 +146,11 @@ describe("raid result popup", () => {
     raidResultPopup(result(false), { price: 50, blocked: null, buy }, onClose).mount(modal);
     const popup = modal.querySelector(".raid-result--poor")!;
     expect(popup.textContent).toContain("Damn those Wild Monsters!");
-    expect(popup.querySelector(".raid-result__stolen")!.textContent).toContain("1,200");
+    expect(popup.querySelector(".raid-result__stolen")!.textContent).toContain("−1,200");
+    // What the raiders took is a loss: red with a minus, said as lost (owner, 28 Oct).
+    expect(spokenText(popup.querySelector(".raid-result__stolen .res-list")!)).toContain("Twigs 1,200 lost");
+    // The repair price is a price, not a change: plain.
+    expect(popup.querySelector(".raid-result__repair .res-amount")!.hasAttribute("data-change")).toBe(false);
     expect(popup.textContent).toContain("2 damaged buildings are repairing now.");
     expect(popup.textContent).toContain("1 housed monster was lost");
 

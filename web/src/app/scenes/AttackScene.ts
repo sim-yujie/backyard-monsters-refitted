@@ -46,6 +46,7 @@ import { setYardIntent } from "@/game/yard/yardIntent";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount } from "@/ui/format";
+import { AMOUNT_CHANGE_WORDS, writeAmount, type AmountChange } from "@/ui/amountChange";
 import { Hud } from "@/ui/Hud";
 import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
@@ -174,7 +175,7 @@ export class AttackScene implements Scene {
   private damage: HTMLElement | null = null;
   private loot: HTMLElement | null = null;
   /** The loot readout's four amounts, twigs to goo. */
-  private lootValues: HTMLElement[] = [];
+  private lootAmounts: HTMLElement[] = [];
   private hudSlot: HTMLElement | null = null;
   private speedButtons = new Map<AttackSpeed, HTMLButtonElement>();
   private retreatButton: HTMLButtonElement | null = null;
@@ -354,7 +355,7 @@ export class AttackScene implements Scene {
     this.clock = null;
     this.damage = null;
     this.loot = null;
-    this.lootValues = [];
+    this.lootAmounts = [];
     this.hudSlot = null;
     this.speedButtons.clear();
     this.retreatButton = null;
@@ -707,16 +708,18 @@ export class AttackScene implements Scene {
 
     // One icon-and-amount per resource (#93), with no "Loot" before them
     // (less-text job 8); an Inferno fight takes Bone, Coal, Sulfur and Magma
-    // (Inferno WP 1.13). The row's tooltip names each.
+    // (Inferno WP 1.13). The row's tooltip names each. Loot won is green
+    // "+1,500"; a defence replay's is the yard's loss, red "−1,500" (owner,
+    // 28 Oct). Nothing yet is a plain "0".
     const loot = document.createElement("span");
     loot.className = "attack-strip__readout attack-strip__loot";
     const amounts = document.createElement("span");
     amounts.className = "res-list";
     const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
-    this.lootValues = RESOURCE_KEYS.map((key) => {
-      const amount = resourceAmount(key, "0", { realm });
+    this.lootAmounts = RESOURCE_KEYS.map((key) => {
+      const amount = resourceAmount(key, 0, { realm, change: this.lootChange() });
       amounts.append(amount);
-      return amount.querySelector<HTMLElement>(".res-amount__value")!;
+      return amount;
     });
     const lootWord = document.createElement("span");
     lootWord.className = "u-visually-hidden";
@@ -990,12 +993,15 @@ export class AttackScene implements Scene {
     }
     if (this.loot) {
       RESOURCE_KEYS.forEach((key, index) => {
-        const value = this.lootValues[index];
-        if (value) value.textContent = formatAmount(readout.loot[key]);
+        const amount = this.lootAmounts[index];
+        if (amount) writeAmount(amount, "res-amount", readout.loot[key], { change: this.lootChange(), tooltip: false });
       });
       // Bone, Coal, Sulfur and Magma in an Inferno fight, as the strip's icons.
       const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
-      this.loot.title = RESOURCE_KEYS.map((key) => `${resourceName(key, realm)} ${readout.loot[key]}`).join(", ");
+      const word = AMOUNT_CHANGE_WORDS[this.lootChange()];
+      this.loot.title = RESOURCE_KEYS.map(
+        (key) => `${resourceName(key, realm)} ${formatAmount(readout.loot[key])}${readout.loot[key] >= 1 ? ` ${word}` : ""}`,
+      ).join(", ");
     }
     const skipping = this.session?.skipping ?? false;
     for (const [value, button] of this.speedButtons) {
@@ -1005,6 +1011,11 @@ export class AttackScene implements Scene {
     if (this.retreatButton) {
       this.retreatButton.disabled = state.phase !== "running" && state.phase !== "loaded";
     }
+  }
+
+  /** The loot readout's side: won by the attacker, or the yard's loss in a defence replay. */
+  private lootChange(): AmountChange {
+    return isDefenceWatch(this.watchRun) ? "loss" : "gain";
   }
 
   private refreshStatus(state: AttackSessionState): void {

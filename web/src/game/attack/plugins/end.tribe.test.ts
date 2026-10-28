@@ -133,8 +133,8 @@ describe("a Moloch tribe attack's end", () => {
     expect(back.textContent).toBe("Moloch's Minions will be back in 1 h.");
     const items = [...modal.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
     expect(items.map((item) => item.title)).toEqual([
-      "Bone: 400 of 900 taken; the rest did not fit in your storage",
-      "Coal: 80",
+      "Bone: 400 gained of 900 taken; the rest did not fit in your storage",
+      "Coal: 80 gained",
       "Sulfur: 0",
       "Magma: 0",
     ]);
