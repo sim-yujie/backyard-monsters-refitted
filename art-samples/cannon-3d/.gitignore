@@ -3,3 +3,4 @@ __pycache__/
 *.blend1
 render-before/
 render-c4d/
+ai-models/

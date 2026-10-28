@@ -3,9 +3,11 @@
 
   blender -b --factory-startup -P ai_render.py -- MODEL.glb TIER OUT.png [TURN_DEG]
 
-TURN_DEG turns the model about its upright axis (the generators face it any way they like).
+TURN_DEG turns the model about its upright axis (the generators face it any way they like). AI_AMBIENT: the grey sky's
+strength (default 0.6).
 """
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -18,6 +20,7 @@ import look3d as L  # noqa: E402
 argv = sys.argv[sys.argv.index("--") + 1:]
 glb, tier, out = Path(argv[0]), argv[1], Path(argv[2])
 turn = float(argv[3]) if len(argv) > 3 else 0.0
+AMBIENT = float(os.environ.get("AI_AMBIENT", 0.6))
 L.EL = 30.0
 CANVAS = {"t1": 1, "t1b": 1, "t2": 2, "t3": 3}
 cv = {1: dict(size=(620, 640), box=(163, 323, 421, 577)), 2: dict(size=(620, 960), box=(163, 576, 421, 897)),
@@ -38,6 +41,11 @@ pts = [o.matrix_world @ v.co for o in obs for v in o.data.vertices]
 cx, cy, z0 = (min(p.x for p in pts) + max(p.x for p in pts)) / 2, (min(p.y for p in pts) + max(p.y for p in pts)) / 2, min(p.z for p in pts)
 root.location = (-cx, -cy, -z0)
 cam = L.setup_render()
+# our materials make their own shade (the world is black); a generated model's plain PBR materials need some sky light,
+# or the side away from the sun goes black. Same sun, plus a grey sky and our ink outline
+bpy.context.scene.world.node_tree.nodes.get("Background").inputs[1].default_value = AMBIENT
+for o in obs:
+    L.add_outline(o, L.line("warm"))
 print("BOX", [round(v, 1) for v in L.fit(cam, obs)])
 L.shot(out, obs)
 print("DONE", out)
