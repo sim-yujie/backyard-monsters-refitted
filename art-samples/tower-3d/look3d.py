@@ -614,16 +614,17 @@ WARM_SHADE = [(0.0, (0.40, 0.31, 0.32, 1)), (0.18, (0.50, 0.42, 0.42, 1)), (0.5,
               (1.0, (1.0, 0.97, 0.9, 1))]
 
 
-def mat_stripes(name, a, b, n, phase=0.0, chips=True, ratio=0.5, spec=0.35):
+def mat_stripes(name, a, b, n, phase=0.0, chips=True, ratio=0.5, spec=0.35, twist=0.06):
     """Vertical painted stripes round the Z axis: n of colour a, n of colour b (0-255 sRGB), leaning a little, wobbly,
-    with chipped paint on colour a. ratio: colour a's share of each pair."""
+    with chipped paint on colour a. ratio: colour a's share of each pair. twist: how far the stripes lean (stripe pairs
+    per unit of height; the Flash Cannon's drum leans more)."""
     p = Paint(name)
     sep = p.N.new("ShaderNodeSeparateXYZ")
     p.link(p.tc.outputs["Object"], sep.inputs[0])
     ang = p.math("ARCTAN2", sep.outputs[1], sep.outputs[0])     # 0 along +X (bearing 90)
     wob = p.math("MULTIPLY", p.math("SUBTRACT", p.noise(2.5, 2.0), 0.5), 0.14)
-    twist = p.math("MULTIPLY", sep.outputs[2], 0.06)
-    u = p.math("ADD", p.math("ADD", p.math("MULTIPLY", ang, n / (2 * math.pi)), wob), twist)
+    tw = p.math("MULTIPLY", sep.outputs[2], twist)
+    u = p.math("ADD", p.math("ADD", p.math("MULTIPLY", ang, n / (2 * math.pi)), wob), tw)
     bnd = p.math("GREATER_THAN", p.math("FRACT", p.math("ADD", u, phase)), ratio)
     paint = p.mix(srgb(*a), srgb(*b), bnd)
     if chips:
