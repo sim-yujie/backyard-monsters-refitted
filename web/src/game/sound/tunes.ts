@@ -29,6 +29,9 @@
  * (`BUILDING27.as:86-87`, `CUSTOMATTACKS.as:88-89`); nothing attacks the own
  * Inferno yard on screen in this game, so it is not listed.
  */
+
+import { classicLook } from "@/game/classicLook";
+
 export type Tune = "yard" | "attack" | "underAttack" | "infernoYard" | "infernoAttack";
 
 export interface TuneFile {
@@ -51,6 +54,18 @@ export const TUNES: Readonly<Record<Tune, TuneFile>> = {
   infernoYard: { url: "/assets/sounds/infernomusic/Music_IBuild.mp3", volume: 0.6 },
   infernoAttack: { url: "/assets/sounds/infernomusic/Music_IAttack.mp3", volume: 0.7 },
 };
+
+/**
+ * The tunes the revamp replaced, as Flash had them, for the Classic look
+ * (`game/classicLook.ts`): Flash's own yard tune, `Music_Building.mp3`.
+ */
+export const FLASH_TUNES: Readonly<Partial<Record<Tune, TuneFile>>> = {
+  yard: { url: "/assets/sounds/music/Music_Building.mp3", volume: 0.6 },
+};
+
+/** A tune's file: Flash's own in the Classic look where the revamp replaced it. */
+export const tuneFile = (tune: Tune, classic: boolean = classicLook()): TuneFile =>
+  (classic ? FLASH_TUNES[tune] : undefined) ?? TUNES[tune];
 
 /** The file to stream: the Ogg copy where the browser can play it, else the MP3. */
 export const tuneUrl = (file: TuneFile, canPlayOgg: boolean): string =>

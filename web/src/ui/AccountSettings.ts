@@ -12,7 +12,7 @@ import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
-import { saveClassicArt, savedClassicArt } from "@/game/classicArt";
+import { saveClassicLook, savedClassicLook } from "@/game/classicLook";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { Popup } from "@/ui/Popup";
 
@@ -44,11 +44,13 @@ export const SETTINGS_TEXT = {
   qualityFull: "Full",
   qualityLow: "Low",
   qualityHint: "Low draws fewer sparks and glows, for slower phones. Phones start on Low.",
-  artTitle: "Art",
-  classicArtLabel: "Classic art (original Flash look)",
-  classicArtHint: "Buildings, monsters and champions as they looked in the original game.",
-  classicArtSaved: "Saved. Reload the page to see the change.",
-  classicArtFailed: "Could not save this in your browser. Check that site data is allowed.",
+  lookTitle: "Look and sound",
+  lookLabel: "Style",
+  lookModern: "Modern",
+  lookClassic: "Classic (original Flash)",
+  lookHint: "Classic shows and plays the game as the original did.",
+  lookSaved: "Saved. Reload the page to see the change.",
+  lookFailed: "Could not save this in your browser. Check that site data is allowed.",
 } as const;
 
 /** "You can change your username again on 3 Mar 2027." for the cooldown line. */
@@ -90,8 +92,8 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
         usernameSection(account, options),
         shinySection(account),
         privacySection(account.privacy),
+        lookSection(),
         effectsSection(),
-        artSection(),
       );
       popup.focusFirst();
     },
@@ -99,7 +101,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
       // Kept in this browser, so they work without the server.
-      body.append(effectsSection(), artSection());
+      body.append(lookSection(), effectsSection());
     },
   );
   return popup;
@@ -329,36 +331,44 @@ const effectsSection = (): HTMLElement => {
 };
 
 /**
- * Art: "Classic art" brings back the Flash look for everything the revamp
- * repainted, buildings, monsters, champions and their portraits (owner, 28 Oct
- * 2026; `game/classicArt.ts`). The yard is already drawn, so the choice shows
- * from the next load.
+ * Look and sound (owner, 28 Oct 2026): Modern, or Classic, the game as Flash
+ * looked and sounded wherever Flash had a version (`game/classicLook.ts`).
+ * The yard is already drawn, so the choice shows from the next load.
  */
-const artSection = (): HTMLElement => {
+const lookSection = (): HTMLElement => {
   const section = document.createElement("div");
   section.className = "account-settings__section";
   const heading = document.createElement("h3");
   heading.className = "account-settings__heading";
-  heading.textContent = SETTINGS_TEXT.artTitle;
+  heading.textContent = SETTINGS_TEXT.lookTitle;
 
   const row = document.createElement("label");
   row.className = "account-settings__toggle";
-  const classic = document.createElement("input");
-  classic.type = "checkbox";
-  classic.id = "settings-classic-art";
-  classic.checked = savedClassicArt();
   const words = document.createElement("span");
-  words.textContent = SETTINGS_TEXT.classicArtLabel;
-  row.append(classic, words);
+  words.textContent = SETTINGS_TEXT.lookLabel;
+  const look = document.createElement("select");
+  look.id = "settings-look";
+  look.className = "account-settings__select";
+  for (const [value, text] of [
+    ["modern", SETTINGS_TEXT.lookModern],
+    ["classic", SETTINGS_TEXT.lookClassic],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    look.append(option);
+  }
+  look.value = savedClassicLook() ? "classic" : "modern";
+  row.append(words, look);
   const hint = document.createElement("p");
   hint.className = "field__hint";
-  hint.id = "settings-classic-art-hint";
+  hint.id = "settings-look-hint";
   hint.setAttribute("aria-live", "polite");
-  hint.textContent = SETTINGS_TEXT.classicArtHint;
-  classic.setAttribute("aria-describedby", hint.id);
-  classic.addEventListener("change", () => {
-    const saved = saveClassicArt(classic.checked);
-    hint.textContent = saved ? SETTINGS_TEXT.classicArtSaved : SETTINGS_TEXT.classicArtFailed;
+  hint.textContent = SETTINGS_TEXT.lookHint;
+  look.setAttribute("aria-describedby", hint.id);
+  look.addEventListener("change", () => {
+    const saved = saveClassicLook(look.value === "classic");
+    hint.textContent = saved ? SETTINGS_TEXT.lookSaved : SETTINGS_TEXT.lookFailed;
     hint.classList.toggle("field__hint--error", !saved);
   });
 

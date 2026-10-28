@@ -38,7 +38,7 @@ import {
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
-import { BlastFx } from "./blastFx";
+import { BlastFx, type PunchyStrength } from "./blastFx";
 import { RingFx } from "./ringFx";
 import {
   BANDITO_PUNCHY,
@@ -48,6 +48,7 @@ import {
   splashLook,
 } from "./punchyMoments";
 import { dirtFor, surfaceHop } from "./burrowFx";
+import { classicLook } from "@/game/classicLook";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { StatusIconRow, statusesOf } from "./statusIcons";
@@ -251,6 +252,8 @@ export interface CreepPose {
 
 export interface LayoutOptions {
   readonly reducedMotion: boolean;
+  /** The Classic look: no walking hop, which Flash never had. */
+  readonly classic?: boolean;
 }
 
 /**
@@ -343,7 +346,7 @@ export const layoutCreep = (
   } else if (creep.flying) {
     altitude = flyerAltitude(creep.monsterId);
     y += options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
-  } else if (pose.moving && !options.reducedMotion && singlePose(sheet)) {
+  } else if (pose.moving && !options.reducedMotion && !options.classic && singlePose(sheet)) {
     y -= Math.abs(Math.sin((pose.age / HOP_PERIOD_TICKS) * Math.PI)) * HOP_HEIGHT;
   }
 
@@ -572,6 +575,11 @@ export interface AttackBattleLayerOptions {
   readonly reducedMotion?: boolean;
   /** How big the effects are drawn; the player's setting when left out (feat/attack-juice-demo). */
   readonly juice?: JuiceLevel;
+  /**
+   * The Classic look (`game/classicLook.ts`); the player's choice when left
+   * out. It draws the battle as Flash did, whatever `juice` says.
+   */
+  readonly classic?: boolean;
   /** The "Screen shake" switch; the player's setting when left out (beta.5). */
   readonly screenShake?: boolean;
   /** "Effects: full / low" for the towers' shots; the player's setting or the screen size when left out. */
@@ -844,6 +852,8 @@ export class AttackBattleLayer {
 
   /* The bigger effects trial (feat/attack-juice-demo); drawing only. */
   private readonly juice: JuiceLevel;
+  /** The Classic look: Flash's battle, without the new effects (`game/classicLook.ts`). */
+  private readonly classic: boolean;
   /** Wall-clock ms the picture holds still until, for a hit-stop; the battle runs on. */
   private holdUntil = Number.NEGATIVE_INFINITY;
   /** Whether the attack-ending blow plays its last moments in slow motion. */
@@ -860,7 +870,8 @@ export class AttackBattleLayer {
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
     this.textures = options.textures ?? new MonsterSheetTextures();
     this.now = options.now ?? (() => performance.now());
-    this.juice = options.juice ?? juiceLevel();
+    this.classic = options.classic ?? classicLook();
+    this.juice = this.classic ? "off" : (options.juice ?? juiceLevel());
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -878,7 +889,7 @@ export class AttackBattleLayer {
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.shells, this.shotGlow, this.shotSparks, this.bars);
     // The "Screen shake" switch stills every shake, the blasts' and the towers'.
-    const shakeOn = options.screenShake ?? screenShakeOn();
+    const shakeOn = !this.classic && (options.screenShake ?? screenShakeOn());
     this.blastFx = new BlastFx(
       {
         air: this.blastAir,
@@ -923,6 +934,7 @@ export class AttackBattleLayer {
       },
       this.reducedMotion,
       this.juice !== "off",
+      !this.classic,
     );
     this.overlay.addChild(this.fx.root);
 
@@ -1744,6 +1756,7 @@ export class AttackBattleLayer {
     if (sheet) {
       const layout = layoutCreep(creep, sheet, pose, this.origin, {
         reducedMotion: this.reducedMotion,
+        classic: this.classic,
       });
       const cell = this.textures.frame(sheet, layout.column, layout.row);
       if (cell) {
@@ -2305,13 +2318,13 @@ export class AttackBattleLayer {
       // Eye-ra's blast is a fireball (feat/eyera-explosion); a Bandito's
       // rings come with a flash (feat/punchy-trial); the rest keep the rings.
       const at = groundWorld(event.ix, event.iy, this.origin);
-      const look = splashLook(event.moveId);
+      const look = splashLook(event.moveId, this.classic);
       if (look === "fiery") {
         this.blastFx.fiery(event.tick, at, event.radius);
         return;
       }
       this.spawnRing(event.tick, at, event.radius, SPLASH_COLOUR);
-      if (look === "rings-flash") this.blastFx.punchy(event.tick, at, event.radius, BANDITO_PUNCHY);
+      if (look === "rings-flash") this.punchy(event.tick, at, event.radius, BANDITO_PUNCHY);
       return;
     }
     if (event.kind === "blink") {
@@ -2343,7 +2356,7 @@ export class AttackBattleLayer {
       view.surfaceTick = tick;
       // Up out of the ground to bite: a light punchy blast (feat/punchy-trial);
       // not when it comes up to walk, home or to a foe close by.
-      if (creep.state === "attacking") this.blastFx.punchy(tick, ground, SURFACE_BLAST_RADIUS, SURFACE_PUNCHY);
+      if (creep.state === "attacking") this.punchy(tick, ground, SURFACE_BLAST_RADIUS, SURFACE_PUNCHY);
     }
     view.burrowed = under;
     view.dirtTick = tick;
@@ -2442,7 +2455,12 @@ export class AttackBattleLayer {
   private spawnQuake(tick: number, at: Point, radius: number): void {
     this.spawnRing(tick, at, radius, QUAKE_COLOUR);
     // And the stomp itself, a punchy blast inside the reach (feat/punchy-trial).
-    this.blastFx.punchy(tick, at, radius * 0.9, QUAKE_PUNCHY);
+    this.punchy(tick, at, radius * 0.9, QUAKE_PUNCHY);
+  }
+
+  /** A punchy blast (feat/punchy-trial), new with the revamp, so never in the Classic look. */
+  private punchy(tick: number, at: Point, radius: number, strength: PunchyStrength): void {
+    if (!this.classic) this.blastFx.punchy(tick, at, radius, strength);
   }
 
   /** Three fading rings on the ground, radius wide: a quake, or a special move's burst. */

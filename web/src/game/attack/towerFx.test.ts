@@ -3,7 +3,7 @@ import { Container, Graphics, Texture, TextureSource, TilingSprite } from "pixi.
 import type { Sprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
-import { setClassicArt } from "@/game/classicArt";
+import { setClassicLook } from "@/game/classicLook";
 import { setNewTowerArt } from "@/game/yard/buildingArtTiers";
 import { angleGap, cellBearing, muzzleOffset, rowOf } from "@/game/yard/turretAim";
 import { readYard } from "@/game/yard/yardModel";
@@ -62,7 +62,7 @@ import {
 
 afterEach(() => {
   setNewTowerArt(false);
-  setClassicArt(false);
+  setClassicLook(false);
 });
 
 describe("bearings", () => {
@@ -210,10 +210,10 @@ describe("towersOf", () => {
     expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
     // The player's old-art choice wins over the switch.
     setNewTowerArt(true);
-    setClassicArt(true);
+    setClassicLook(true);
     expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
     // The new tower art: the new turret's cells, and the muzzle stands higher than tier 1's.
-    setClassicArt(false);
+    setClassicLook(false);
     const [sniper] = towersOf(readYard(yard));
     expect(sniper?.frames).toBe(32);
     expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);

@@ -1,4 +1,4 @@
-import { TUNES, tuneUrl, type Tune } from "./tunes";
+import { tuneFile, tuneUrl, type Tune } from "./tunes";
 
 /**
  * Plays one tune at a time, looping, the way Flash's music did
@@ -141,7 +141,7 @@ export class MusicPlayer {
   private element(tune: Tune): AudioLike {
     let audio = this.elements.get(tune);
     if (!audio) {
-      audio = this.createAudio(tuneUrl(TUNES[tune], this.canPlayOgg));
+      audio = this.createAudio(tuneUrl(tuneFile(tune), this.canPlayOgg));
       audio.loop = true;
       this.elements.set(tune, audio);
     }
@@ -152,7 +152,7 @@ export class MusicPlayer {
     const audio = this.element(tune);
     // A tune still fading out from a moment ago starts over at full volume.
     this.cancelFade(audio);
-    audio.volume = TUNES[tune].volume;
+    audio.volume = tuneFile(tune).volume;
     audio.currentTime = 0;
     this.attempt(tune);
   }

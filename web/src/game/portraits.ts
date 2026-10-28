@@ -15,12 +15,12 @@
  *
  * Every portrait carries the original file as its fallback, shown if the
  * painted one fails to load ({@link showPortrait}), and the only picture with
- * the player's "Classic art" on (`game/classicArt.ts`). The folder is outside
+ * the player's Classic look on (`game/classicLook.ts`). The folder is outside
  * `/assets` because the dev server proxies that prefix to the game server
  * (see `game/maproom/tribeAvatars.ts`).
  */
 
-import { classicArt } from "./classicArt";
+import { classicLook } from "./classicLook";
 
 /** The monsters with a painting: C1-C17, C19 and the Inferno ones IC1-IC8. */
 export const PAINTED_MONSTERS: ReadonlySet<string> = new Set([
@@ -62,7 +62,7 @@ export const championEggUrl = (id: string, where: "window" | "yard"): string =>
 const painted = (file: string): string => `${import.meta.env.BASE_URL}portraits/${file}.webp`;
 
 const portrait = (paintedFile: string | null, original: string): Portrait =>
-  paintedFile === null || classicArt() ? { src: original, fallback: null } : { src: painted(paintedFile), fallback: original };
+  paintedFile === null || classicLook() ? { src: original, fallback: null } : { src: painted(paintedFile), fallback: original };
 
 /** A monster's portrait; the originals are `-portrait.jpg` (180x120) and `-small.png` (45x40). */
 export const monsterPortrait = (id: string, size: PortraitSize): Portrait =>

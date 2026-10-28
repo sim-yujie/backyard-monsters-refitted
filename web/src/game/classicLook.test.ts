@@ -10,15 +10,17 @@ import {
   spriteFor,
 } from "@/game/attack/monsterSprites";
 import { championPortrait, monsterPortrait } from "@/game/portraits";
+import { splashLook } from "@/game/attack/punchyMoments";
+import { TUNES, tuneFile } from "@/game/sound/tunes";
 import { tierArtFor } from "@/game/yard/buildingArtTiers";
 import {
-  CLASSIC_ART_KEY,
-  OLD_CLASSIC_ART_KEY,
-  classicArt,
-  saveClassicArt,
-  savedClassicArt,
-  setClassicArt,
-} from "./classicArt";
+  CLASSIC_LOOK_KEY,
+  OLD_CLASSIC_LOOK_KEYS,
+  classicLook,
+  saveClassicLook,
+  savedClassicLook,
+  setClassicLook,
+} from "./classicLook";
 
 /** A browser's site data, kept in memory. */
 const memoryStore = (): Storage => {
@@ -47,35 +49,43 @@ const SHEETS = Object.values(MONSTER_SPRITES);
 const REPAINTED = SHEETS.filter((sheet) => REPAINTED_SHEETS[sheet.file] !== undefined);
 const RELAID = SHEETS.filter((sheet) => REPAINT_LAYOUTS[sheet.file] !== undefined);
 
-afterEach(() => setClassicArt(false));
+afterEach(() => setClassicLook(false));
 
 describe("the saved choice", () => {
   it("is off by default and is what Account Settings saved, read at the next load", () => {
     const store = memoryStore();
-    expect(classicArt()).toBe(false);
-    expect(savedClassicArt(store)).toBe(false);
-    expect(saveClassicArt(true, store)).toBe(true);
-    expect(store.getItem(CLASSIC_ART_KEY)).toBe("1");
-    expect(savedClassicArt(store)).toBe(true);
-    expect(saveClassicArt(false, store)).toBe(true);
-    expect(savedClassicArt(store)).toBe(false);
+    expect(classicLook()).toBe(false);
+    expect(savedClassicLook(store)).toBe(false);
+    expect(saveClassicLook(true, store)).toBe(true);
+    expect(store.getItem(CLASSIC_LOOK_KEY)).toBe("classic");
+    expect(savedClassicLook(store)).toBe(true);
+    expect(saveClassicLook(false, store)).toBe(true);
+    expect(savedClassicLook(store)).toBe(false);
     // Saving does not redraw the page that is open.
-    expect(classicArt()).toBe(false);
+    expect(classicLook()).toBe(false);
   });
 
-  it("still reads the old building-only key, and turning it off clears that too", () => {
-    const store = memoryStore();
-    store.setItem(OLD_CLASSIC_ART_KEY, "1");
-    expect(savedClassicArt(store)).toBe(true);
-    expect(saveClassicArt(false, store)).toBe(true);
-    expect(store.getItem(OLD_CLASSIC_ART_KEY)).toBeNull();
-    expect(savedClassicArt(store)).toBe(false);
-  });
+  it.each(OLD_CLASSIC_LOOK_KEYS)(
+    "still reads the old key %s, and turning Classic off clears it",
+    (key) => {
+      const store = memoryStore();
+      store.setItem(key, "1");
+      expect(savedClassicLook(store)).toBe(true);
+      expect(saveClassicLook(true, store)).toBe(true);
+      // Saving moves the choice to the new key.
+      expect(store.getItem(key)).toBeNull();
+      expect(store.getItem(CLASSIC_LOOK_KEY)).toBe("classic");
+      store.setItem(key, "1");
+      expect(saveClassicLook(false, store)).toBe(true);
+      expect(store.getItem(key)).toBeNull();
+      expect(savedClassicLook(store)).toBe(false);
+    },
+  );
 
   it("reads as off when site data is blocked, and says it could not save", () => {
-    expect(saveClassicArt(true, blockedStore())).toBe(false);
-    expect(saveClassicArt(true, null)).toBe(false);
-    expect(savedClassicArt(blockedStore())).toBe(false);
+    expect(saveClassicLook(true, blockedStore())).toBe(false);
+    expect(saveClassicLook(true, null)).toBe(false);
+    expect(savedClassicLook(blockedStore())).toBe(false);
   });
 });
 
@@ -86,7 +96,8 @@ describe("monsters and champions", () => {
   });
 
   it("draw the repaint and its layout with Classic art off", () => {
-    for (const sheet of REPAINTED) expect(sheetUrl(sheet)).toBe(`/assets/${REPAINTED_SHEETS[sheet.file]}`);
+    for (const sheet of REPAINTED)
+      expect(sheetUrl(sheet)).toBe(`/assets/${REPAINTED_SHEETS[sheet.file]}`);
     for (const sheet of RELAID) {
       const drawn = spriteFor(sheet.key);
       const layout = REPAINT_LAYOUTS[sheet.file];
@@ -97,7 +108,7 @@ describe("monsters and champions", () => {
   });
 
   it("draw the Flash sheet with the Flash table row with Classic art on", () => {
-    setClassicArt(true);
+    setClassicLook(true);
     for (const sheet of SHEETS) {
       expect(sheetUrl(sheet)).toBe(`/assets/${sheet.file}`);
       // The table row itself: Flash's cells, anchor, rows and cycles, no strike frame.
@@ -110,13 +121,13 @@ describe("monsters and champions", () => {
     const ichi = SHEETS.find((sheet) => MIRRORED_HEADINGS.has(sheet.file))!;
     const flash = directionColumn(0, ichi.directions, ichi.directionOffset);
     expect(sheetColumn(ichi, 0)).not.toBe(flash);
-    setClassicArt(true);
+    setClassicLook(true);
     expect(sheetColumn(ichi, 0)).toBe(flash);
   });
 
   it("pick a champion's level sheet the same way either way", () => {
     const off = spriteFor("G1", 3);
-    setClassicArt(true);
+    setClassicLook(true);
     expect(spriteFor("G1", 3)?.key).toBe(off?.key);
   });
 });
@@ -125,14 +136,37 @@ describe("the other repainted art", () => {
   it("shows the original portraits with Classic art on", () => {
     expect(monsterPortrait("C1", "card").src).toContain("/portraits/");
     expect(championPortrait("G1", 2, "icon").src).toContain("/portraits/");
-    setClassicArt(true);
-    expect(monsterPortrait("C1", "card")).toEqual({ src: "/assets/monsters/C1-portrait.jpg", fallback: null });
-    expect(championPortrait("G1", 2, "icon")).toEqual({ src: "/assets/monsters/G1_L2-small.png", fallback: null });
+    setClassicLook(true);
+    expect(monsterPortrait("C1", "card")).toEqual({
+      src: "/assets/monsters/C1-portrait.jpg",
+      fallback: null,
+    });
+    expect(championPortrait("G1", 2, "icon")).toEqual({
+      src: "/assets/monsters/G1_L2-small.png",
+      fallback: null,
+    });
   });
 
   it("shows the Flash Town Hall with Classic art on", () => {
     expect(tierArtFor(14, 6)).not.toBeNull();
-    setClassicArt(true);
+    setClassicLook(true);
     expect(tierArtFor(14, 6)).toBeNull();
+  });
+});
+
+describe("battle effects and music", () => {
+  it("gives every splash Flash's rings, Eye-ra's fireball included", () => {
+    expect(splashLook("C5")).toBe("fiery");
+    expect(splashLook("C5", true)).toBe("rings");
+  });
+
+  it("plays Flash's own yard tune, and the same attack tune either way", () => {
+    expect(tuneFile("yard", false)).toBe(TUNES.yard);
+    expect(tuneFile("yard", false).url).toContain("yard-theme");
+    expect(tuneFile("yard", true).url).toBe("/assets/sounds/music/Music_Building.mp3");
+    expect(tuneFile("yard", true).ogg).toBeUndefined();
+    expect(tuneFile("attack", true)).toBe(tuneFile("attack", false));
+    setClassicLook(true);
+    expect(tuneFile("yard").url).toContain("Music_Building");
   });
 });

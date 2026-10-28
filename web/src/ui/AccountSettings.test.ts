@@ -183,28 +183,34 @@ describe("AccountSettings", () => {
     expect(localStorage.getItem("bymr.effectsQuality")).toBe("low");
   });
 
-  it("offers Classic art, off by default, kept in this browser for the next load", async () => {
+  it("offers one Look and sound choice, Modern by default, kept in this browser for the next load", async () => {
     localStorage.clear();
     await open({});
-    const box = document.querySelector<HTMLInputElement>("#settings-classic-art")!;
-    expect(box.closest("label")!.textContent).toBe(SETTINGS_TEXT.classicArtLabel);
-    expect(box.checked).toBe(false);
-    box.checked = true;
-    box.dispatchEvent(new Event("change"));
-    expect(localStorage.getItem("bymr.classicArt")).toBe("1");
-    expect(document.body.textContent).toContain(SETTINGS_TEXT.classicArtSaved);
-    box.checked = false;
-    box.dispatchEvent(new Event("change"));
-    expect(localStorage.getItem("bymr.classicArt")).toBeNull();
+    const look = document.querySelector<HTMLSelectElement>("#settings-look")!;
+    expect(look.closest("label")!.textContent).toContain(SETTINGS_TEXT.lookLabel);
+    expect([...look.options].map((option) => option.textContent)).toEqual([
+      SETTINGS_TEXT.lookModern,
+      SETTINGS_TEXT.lookClassic,
+    ]);
+    expect(look.value).toBe("modern");
+    look.value = "classic";
+    look.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.look")).toBe("classic");
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.lookSaved);
+    look.value = "modern";
+    look.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.look")).toBeNull();
+    // The old art checkbox is gone: one choice covers it.
+    expect(document.querySelector("#settings-classic-art")).toBeNull();
   });
 
-  it("shows the Classic art choice saved under its old building-only key, even when the account fails to load", async () => {
+  it("shows Classic for a player who had Classic building art on, even when the account fails to load", async () => {
     localStorage.clear();
     localStorage.setItem("bymr.classicBuildingArt", "1");
     api.fetchAccount.mockRejectedValue(new Error("down"));
     openAccountSettings({ container: document.body });
     await settle();
-    expect(document.querySelector<HTMLInputElement>("#settings-classic-art")!.checked).toBe(true);
+    expect(document.querySelector<HTMLSelectElement>("#settings-look")!.value).toBe("classic");
     localStorage.clear();
   });
 });

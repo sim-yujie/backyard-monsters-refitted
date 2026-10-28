@@ -171,6 +171,12 @@ describe("headings and cells", () => {
       reducedMotion: true,
     });
     expect(calm.y).toBe(standing.y);
+    // The Classic look walks it flat, as Flash did.
+    const flash = layoutCreep(creepOf(), pokey, { heading: 0, moving: true, age: 6 }, ORIGIN, {
+      reducedMotion: false,
+      classic: true,
+    });
+    expect(flash.y).toBe(standing.y);
   });
 
   it("chooses the animation from the creep's state", () => {

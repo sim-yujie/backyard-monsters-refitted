@@ -17,7 +17,7 @@
  *
  * - **Off unless asked for** (owner, 26 Oct 2026: not until the turrets
  *   turn): the towers show only in a browser that turned on their hidden
- *   switch (`newTowerArt`, `?towers=new`), and the player's "Classic art"
+ *   switch (`newTowerArt`, `?towers=new`), and the player's Classic look
  *   choice still wins over it. The server's matching setting,
  *   `TOWER_TIER_ART` (off by default), sends viewers the tier of someone
  *   else's tower (`buildingArtLevels.ts`).
@@ -51,12 +51,12 @@
  * per level (`TOWN_HALL_ART`), each painted from that level's Flash picture
  * (approved 26 Oct 2026, codex-art Part 13), on Flash's own shadow for that
  * level, which fits the same footprint. Flash's Town Hall has no animation
- * strips, so nothing moving is lost. The player's "Classic art"
- * choice in Account Settings (`game/classicArt.ts`) brings back the Flash
+ * strips, so nothing moving is lost. The player's Classic look
+ * choice in Account Settings (`game/classicLook.ts`) brings back the Flash
  * look for every repainted building, the towers too once they are on.
  */
 
-import { classicArt } from "@/game/classicArt";
+import { classicLook } from "@/game/classicLook";
 import type { ArtAnim } from "./buildingArtData";
 import type { TurretAim } from "./turretAim";
 import { TURRET_AIM } from "./turretAimData";
@@ -258,7 +258,7 @@ const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_AR
  * type without new art.
  */
 export const tierArtFor = (type: number, level: number): TierArt | null => {
-  if (classicArt()) return null;
+  if (classicLook()) return null;
   if (!newTowerArtOn && type in TOWER_TIER_ART) return null;
   let chosen: TierArt | null = null;
   for (const tier of NEW_ART[type] ?? []) {

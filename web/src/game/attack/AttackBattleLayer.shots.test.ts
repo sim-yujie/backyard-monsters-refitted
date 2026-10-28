@@ -86,6 +86,7 @@ const setUp = (
   buildings: BuildingRow[],
   monsters?: Record<string, number>,
   juice: JuiceLevel = "off",
+  classic = false,
 ) => {
   const session = new AttackSession({ target: targetOf(monsters), seed: 1 });
   const response = yardOf(buildings);
@@ -99,6 +100,7 @@ const setUp = (
     reducedMotion: false,
     textures: new MonsterSheetTextures(blankSheet),
     juice,
+    classic,
     effectsQuality: "full",
     shotSheet: () =>
       Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1728 }) })),
@@ -253,6 +255,23 @@ describe("the new look's Sniper round striking a creep", () => {
       for (let step = 0; step < 8; step += 1) frame(session, layer);
       expect(layer.bodyOf(id)?.glint).toBe(0);
       expect(layer.bodyOf(id)?.felled).toBe(false);
+      layer.destroy();
+    }
+  });
+
+  it("shoots Flash's shots in the Classic look, whatever the effects setting says", async () => {
+    for (const classic of [false, true]) {
+      const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }], undefined, "full", classic);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      session.appendFling({ x: -150, y: -150, monsters: { C1: 1 } });
+      let sparks = 0;
+      for (let step = 0; step < TICKS_PER_SECOND * 10 && !session.ended; step += 1) {
+        frame(session, layer);
+        sparks = Math.max(sparks, layer.towerEffects.sparkCount);
+        if (classic) expect(layer.creepEffects.labelCount).toBe(0);
+      }
+      if (classic) expect(sparks).toBe(0);
+      else expect(sparks).toBeGreaterThan(0);
       layer.destroy();
     }
   });
