@@ -196,7 +196,7 @@ export interface ResolvedAnim {
   readonly width: number;
   readonly height: number;
   readonly frames: number;
-  /** Cells in a row, for a strip of several rows (the 3D Laser's tilts); one row without it. */
+  /** Cells in a row, for a strip of several rows; one row without it (every tower's today). */
   readonly columns?: number;
 }
 
