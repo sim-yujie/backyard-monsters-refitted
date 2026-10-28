@@ -135,7 +135,6 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/base/load", when: isAttackLoad },
   { method: "POST", path: "/api/:apiVersion/bm/base/load", when: isAttackLoad },
   { method: "POST", path: "/base/save" },
-  { method: "POST", path: "/api/:apiVersion/bm/base/save" },
   // Moving the main yard.
   { method: "POST", path: "/base/migrate" },
   { method: "POST", path: "/base/migratetofriend" },

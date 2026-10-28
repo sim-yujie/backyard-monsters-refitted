@@ -454,7 +454,7 @@ check. Owner screenshots before merge for any screen.
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
 | 7.1 | Delete old Inferno routes, `legacyRoutesOpen`, their tests (done 28 Oct: `/api/:v/bm/base/save` (`infernoSave.ts`) and `infernomonsters` deleted with the four `infernoMode*` loaders and the old map helpers only they used; `legacyRoutesOpen` gone; the Inferno modes on `/base/load` and `/base/updatesaved`, an old-style `/base/save` of an Inferno row and `neighbours/get type: inferno` are refused for good (`refuseOldInferno`, `403 infernoClosed`); the refusal tests kept, the deleted routes' tests gone; report `agent-handoffs/reports/inferno-s6.md`) | full test run | S1-S6 | S |
-| 7.2 | Inferno music/sounds hook (when the sound system exists) | manual | sound plan | S |
+| 7.2 | Inferno music/sounds hook (when the sound system exists) (done 28 Oct: `game/sound/tunes.ts` `infernoYard` (Music_IBuild) on the own and a viewed Inferno yard, `infernoAttack` (Music_IAttack) in every Inferno fight (Descent, Moloch tribe, Inferno player); the collect balls play `ibankfire`/`ibankland` in the Inferno (`CollectFxLayer`); checked in the game 28 Oct: `__sound.playing` read `infernoYard` in the Inferno yard and `infernoAttack` attacking Moloch's Minions, Collect all played 8 `ibankfire` + 8 `ibankland`; Music_IDefense not used, nothing attacks the own Inferno yard on screen; report `agent-handoffs/reports/inferno-s6.md`) | manual | sound plan | S |
 
 Totals: S1 23, S2 11, S3 5, S4 3, S5 2, S6 8, S7 2 = **54**, plus art track A4 (IC repaints) and
 the Korath redraw from the champion plan. S3-S6 can run in parallel after S1 (S6 only needs
