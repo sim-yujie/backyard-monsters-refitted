@@ -46,18 +46,18 @@ CANVAS = {
     3: dict(size=(620, 960), box=(163, 515, 421, 897), pivot=(291, 621)),
 }
 TILT = 22.0                       # the barrel's raise, degrees (the 32-heading strip)
-PITCHES = [-22, -14, -6, 2, 8]    # the tilt strip's rows, degrees DOWN (negative = raised) (owner, 28 Oct: the barrel tilts
+PITCHES = [-22, -12, -2, 8, 18]   # the tilt strip's rows, degrees DOWN (negative = raised) (owner, 28 Oct: the barrel tilts
                                   # with the target's distance, as the Laser's head does): row 0 is the 22 degrees up of the
                                   # still and the 32-heading strip (the far shot, and the game's still picture), the last row
-                                  # points down at a creep next to the tower. Much more up and the breech sinks into the collar;
-                                  # more than 8 down and the barrel goes into the ring (was 18 down: owner, 28 Oct, the muzzle
-                                  # passed through the spikes and the ring; see `clash` and `limits` below).
+                                  # points down at a creep next to the tower. Much more up and the breech sinks into the collar.
+                                  # The ring of spikes sits below the barrel's swing (RING_DZ), so it clears all of these at
+                                  # every heading (see `clash` and `limits` below).
 TURRET_SCALE = 1.5              # the turning part, against the drum
 GUN_Z = 0.4 + float(os.environ.get("CANNON_GUN_LIFT", 0.1))   # the trunnions' height in the turning part (its units):
-                                  # 0.1 higher than first built, so the barrel clears the ring down to 8 degrees
-HORN_H = float(os.environ.get("CANNON_HORN_H", 1))          # the back horns' height, times
-SPIKES = ("prongs", "horns")      # always drawn behind the barrel (as the painted turret is laid over its body): the barrel
-                                  # swings through them at most headings and tilts, and no barrel height clears them
+                                  # 0.1 higher than first built, which leaves the lowered ring more room
+RING_DZ = float(os.environ.get("CANNON_RING_DZ", -0.26))     # the spiked ring's height against the drum's top (owner,
+                                  # 28 Oct: the ring of spikes moved down, below where the barrel swings; it was +0.16, with
+                                  # the spikes standing up round the barrel, which passed through them)
 SECTION = 0.84                    # one more striped section (stripes + band) per tier
 
 # per tier: the extra sections and what each part is made of
@@ -161,7 +161,7 @@ def build(cfg):
     caps = bmesh.new()
     struts = bmesh.new()
     lamps, glass, glow = bmesh.new(), bmesh.new(), bmesh.new()
-    ring_z = drum_top + 0.16
+    ring_z = drum_top + RING_DZ
     fd = FOOT_DEPTH
     for fb, (fc, fdist, fw, fh) in FEET.items():
         rot = Matrix.Rotation(-math.radians(fb), 4, 'Z')
@@ -208,15 +208,15 @@ def build(cfg):
                                (RING_R + RING_W, ring_z + 0.04), (RING_R, ring_z + 0.05), (rim_r + 0.05, ring_z + 0.05),
                                (rim_r + 0.05, ring_z - 0.06)]], [wood], parent=body)
         L.add_outline(lid, LN)
-    # the prongs: a tall one in front, short tabs to the sides, and two clusters of curved horns at the back
+    # the prongs: a big claw in front, smaller ones to the sides, and two clusters of claws at the back. They reach out
+    # from the ring and curl up past the barrel's muzzle, so the barrel never passes through them
     prongs, horns = bmesh.new(), bmesh.new()
-    horn_z = ring_z + 0.05
-    for pb, h, out, r0, lean in ((158, 0.72, 0.32, 0.17, -14), (180, 0.95, 0.4, 0.19, -8), (202, 0.8, 0.34, 0.17, -2),
-                                 (250, 0.8, 0.34, 0.17, 2), (272, 0.97, 0.4, 0.19, 8), (294, 0.74, 0.32, 0.17, 14)):
-        _horn(horns, (RING_R, horn_z - 0.05), horn_z + h * HORN_H, RING_R + out, pb, r0 * 1.15, flat=0.55, lean=lean)
-    _horn(prongs, (RING_R + 0.02, ring_z - 0.25), horn_z + 0.5, RING_R + 0.04, 45, 0.13, flat=0.8, tip=0.02)   # front
-    for pb in (95, 355):   # short rounded tabs either side of the front
-        _horn(prongs, (RING_R - 0.03, horn_z - 0.05), horn_z + 0.5, RING_R + 0.08, pb, 0.14, flat=0.55, tip=0.05)
+    for pb, h, out, r0, lean in ((158, 0.5, 0.5, 0.15, -14), (180, 0.62, 0.55, 0.16, -8), (202, 0.54, 0.52, 0.15, -2),
+                                 (250, 0.54, 0.52, 0.15, 2), (272, 0.64, 0.55, 0.16, 8), (294, 0.5, 0.5, 0.15, 14)):
+        _claw(horns, ring_z, RING_R + out, ring_z + h, pb, r0, lean=lean)
+    _claw(prongs, ring_z - 0.04, RING_R + 0.5, ring_z + 0.46, 45, 0.14, flat=0.8, tip=0.02)   # front
+    for pb in (95, 355):   # smaller claws either side of the front
+        _claw(prongs, ring_z, RING_R + 0.44, ring_z + 0.34, pb, 0.13, tip=0.04)
     for name, b, mat, w in (("feet", feet, wood, None), ("struts", struts, strut, None), ("ring", rings, band if cfg["tier"] == 3 else wood, None),
                             ("prongs", prongs, wood, None), ("horns", horns, wood, None), ("caps", caps, band, L.LINE * 0.8)):
         ob = L.obj_from_bm(name, b, [mat], parent=body, sharp=50)
@@ -317,13 +317,11 @@ def _torus(bm, R, hw, hh, z, n=128, k=20):
             bm.faces.new((a[j], b2[j], b2[(j + 1) % k], a[(j + 1) % k]))
 
 
-def _horn(bm, base, top_z, out_d, bearing, r0, flat=0.72, n=14, tip=0.025, lean=0.0):
-    """A curved prong: from base (d, z) up and bending outward to (out_d, top_z), tapering to a blunt tip; thick at the
-    root (a claw, not a spike)."""
-    d0, z0 = base
-    p = [bear(bearing, d0, z0), bear(bearing, d0 + 0.02, z0 + 0.5 * (top_z - z0)),
-         bear(bearing + lean * 0.5, d0 + 0.45 * (out_d - d0), z0 + 0.88 * (top_z - z0)),
-         bear(bearing + lean, out_d, top_z)]
+def _claw(bm, z0, out_d, top_z, bearing, r0, flat=0.55, n=16, tip=0.025, lean=0.0):
+    """A claw on the ring: from the ring (RING_R, z0) out nearly level, then curling up to (out_d, top_z), tapering to a
+    blunt tip; thick at the root."""
+    p = [bear(bearing, RING_R, z0), bear(bearing, RING_R + 0.2, z0 + 0.02),
+         bear(bearing + lean * 0.5, out_d - 0.02, z0 + 0.12 * (top_z - z0) / 0.45), bear(bearing + lean, out_d, top_z)]
     tube(bm, bezier(*p, n=n), [(r0 - tip) * (1 - i / (n - 1)) ** 0.7 + tip for i in range(n)], sides=14, flat=flat)
 
 
@@ -362,7 +360,6 @@ def main():
         print("DONE", name, "aim")
         return
     line_col = L.LINE_COLS[cfg["line"]]
-    in_front = [o for o in body_obs if not o.name.startswith(SPIKES)]   # body parts that may hide the barrel
 
     def body_shot():
         L.shot(out / "body-4x.png", body_obs, outer_col=line_col)
@@ -372,7 +369,7 @@ def main():
         avoid = L.load_alpha(out / "body-4x.png")
         for k in heads:
             tur.rotation_euler = (0, 0, -math.radians(11.25 * k))
-            L.shot(out / "barrel-4x" / f"h{k:02d}.png", tur_obs, cut=in_front, avoid=avoid, outer_col=line_col)
+            L.shot(out / "barrel-4x" / f"h{k:02d}.png", tur_obs, cut=body_obs, avoid=avoid, outer_col=line_col)
 
     gun = bpy.data.objects["GUN"]
     barrel = bpy.data.objects["barrel"]
@@ -444,7 +441,7 @@ def main():
                 if only and (r, k) not in only:
                     continue
                 turn(11.25 * k)
-                L.shot(out / "tilt-4x" / f"r{r}_h{k:02d}.png", tur_obs, cut=in_front, avoid=avoid, outer_col=line_col)
+                L.shot(out / "tilt-4x" / f"r{r}_h{k:02d}.png", tur_obs, cut=body_obs, avoid=avoid, outer_col=line_col)
         pitch(0)
         turn(0)
         bpy.context.view_layer.update()

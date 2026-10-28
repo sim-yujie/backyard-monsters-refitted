@@ -1,8 +1,8 @@
 {
  "cells": 32,
- "cell_w": 224,
- "cell_h": 224,
- "pivot_in_body_4x": [292.0, 680.0],
+ "cell_w": 220,
+ "cell_h": 220,
+ "pivot_in_body_4x": [291.64, 680.0],
  "body_4x_size": [620, 960],
  "painted_pivot_in_body_4x": [295, 680],
  "rule": "cell k = trunc(bearing / 11.25); cell k shows heading 11.25k (the same 32 headings as the painted strip)",

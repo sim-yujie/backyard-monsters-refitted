@@ -1,5 +1,5 @@
 """contact.py : all 32 headings of one tilt row, body and barrel laid together as the game draws them, on grass green, 4 a
-row, each cell cropped to the top of the tower (turret, ring and spikes; the drum never changes) and enlarged (owner, 28 Oct:
+row, each cell cropped to the top of the tower (turret, ring and spikes; the drum and feet never change) and enlarged (owner, 28 Oct:
 the barrel passing through the spikes; this shows every heading at once).
 
   python contact.py TIER ROW [OUT.png] [SRC]      SRC: the render folder (default render; render-before for the old ones)
@@ -11,7 +11,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = Path(__file__).resolve().parent
-GRASS, PAD, COLS, SCALE, TOP = (96, 150, 64, 255), 12, 4, 1.2, 0.6
+GRASS, PAD, COLS, SCALE, TOP = (96, 150, 64, 255), 12, 4, 1.2, 0.78
 
 
 def cells(tier, row, src):
