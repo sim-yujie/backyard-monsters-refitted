@@ -36,6 +36,8 @@ export interface MapRoom1UiHandlers {
   readonly onSignOut: () => void;
   /** The Friends list's Visit (#372): the scene opens the friend's yard. */
   readonly onVisitFriend?: (friend: Friend) => void;
+  /** The Friends list's Message: the scene's mailbox writes to the friend. */
+  readonly onMessageFriend?: (friend: Friend) => void;
   readonly onClose: () => void;
   readonly onView: (target: Mr1Target) => void;
   readonly onAttack: (target: Mr1Target) => void;
@@ -96,6 +98,7 @@ export class MapRoom1Ui {
       // card: the card goes first, as Map Room 2's cell panel does.
       onAchievementsOpen: () => this.select(null),
       ...(handlers.onVisitFriend ? { onVisitFriend: handlers.onVisitFriend } : {}),
+      ...(handlers.onMessageFriend ? { onMessageFriend: handlers.onMessageFriend } : {}),
     });
     this.hud.setActiveScene(activeScene);
 

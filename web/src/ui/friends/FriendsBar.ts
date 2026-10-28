@@ -93,6 +93,8 @@ export const helpNote = (count: number): string => (count === 1 ? "1 can use you
 export interface FriendsBarOptions {
   /** Takes the player to this friend's yard. Without it the card has no Visit. */
   readonly onVisit?: (friend: Friend) => void;
+  /** Opens the mailbox on a new message to this friend. Without it the card has no Message. */
+  readonly onMessage?: (friend: Friend) => void;
   /** The store, for a test. */
   readonly store?: FriendsStore;
   /** Opens the Friends screen; the shared opener by default. */
@@ -317,6 +319,13 @@ export class FriendsBar {
       add("Visit", () => {
         this.closeCard();
         onVisit(friend);
+      });
+    }
+    const { onMessage } = this.options;
+    if (onMessage) {
+      add("Message", () => {
+        this.closeCard();
+        onMessage(friend);
       });
     }
     add(

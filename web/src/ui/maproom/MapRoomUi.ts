@@ -65,6 +65,8 @@ export interface MapRoomUiHandlers {
   onAchievementsOpen?: () => void;
   /** The Friends list's Visit (#372): the scene opens the friend's yard. */
   onVisitFriend?: (friend: Friend) => void;
+  /** The Friends list's Message: the scene's mailbox writes to the friend. */
+  onMessageFriend?: (friend: Friend) => void;
   onHome: () => void;
   onRefresh: () => void;
   onJump: (cell: OffsetCell) => void;
@@ -155,6 +157,7 @@ export class MapRoomUi {
       onSignOut: handlers.onSignOut,
       ...(handlers.onAchievementsOpen ? { onAchievementsOpen: handlers.onAchievementsOpen } : {}),
       ...(handlers.onVisitFriend ? { onVisitFriend: handlers.onVisitFriend } : {}),
+      ...(handlers.onMessageFriend ? { onMessageFriend: handlers.onMessageFriend } : {}),
     });
     this.hud.setActiveScene(activeScene);
 

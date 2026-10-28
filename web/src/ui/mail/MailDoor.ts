@@ -1,5 +1,7 @@
 import type { MailApi } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
+import { friendsStore } from "@/game/friends/friendsStore";
+import type { MailContact } from "@/game/mail/mailbox";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { MailButton, type MailButtonStyle } from "./MailButton";
 import { MailboxScreen, type ComposeTarget, type InviteTarget, type TruceTarget } from "./MailboxScreen";
@@ -35,7 +37,15 @@ export interface MailDoorOptions {
   readonly onOpenDefences?: () => void;
   /** The mail routes, for a test. */
   readonly api?: MailApi;
+  /** The player's friends, offered as recipients; the shared friends list's by default. */
+  readonly friends?: () => Promise<readonly MailContact[]>;
 }
+
+/** The shared friends list, fetched afresh, as mail recipients. */
+const listedFriends = async (): Promise<readonly MailContact[]> => {
+  await friendsStore.refresh();
+  return friendsStore.friends.map((friend) => ({ userid: friend.userid, name: friend.username }));
+};
 
 export class MailDoor {
   readonly button: MailButton;
@@ -68,7 +78,7 @@ export class MailDoor {
     await this.ensureScreen().open();
   }
 
-  /** A new message to a player the map named (their yard's Message). */
+  /** A new message to a player the map or the Friends screen named (their Message). */
   async openCompose(to: ComposeTarget): Promise<void> {
     this.options.onOpen?.();
     await this.ensureScreen().openCompose(to);
@@ -105,6 +115,7 @@ export class MailDoor {
       ...(this.options.onInviteChanged ? { onInviteChanged: this.options.onInviteChanged } : {}),
       ...(this.options.onWatchDefence ? { onWatchDefence: this.options.onWatchDefence } : {}),
       ...(this.options.onOpenDefences ? { onOpenDefences: this.options.onOpenDefences } : {}),
+      friends: this.options.friends ?? listedFriends,
       addFriend: (userid) => addFriendButton({ userid, className: "btn btn--outline mail-message__add-friend" }),
       onUnreadChange: (count) => {
         this.mailboxCount = count;

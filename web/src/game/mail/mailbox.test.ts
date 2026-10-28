@@ -143,6 +143,18 @@ describe("contactsOf", () => {
       { userid: 77, name: "Bramblefoot" },
     ]);
   });
+
+  it("offers a friend never written to (the beta 4.1 report)", () => {
+    expect(contactsOf({}, [{ userid: 3119, name: "Dmtwo" }])).toEqual([{ userid: 3119, name: "Dmtwo" }]);
+  });
+
+  it("lists a friend who is also a past contact once, by the friends list's name", () => {
+    expect(contactsOf(targets, [{ userid: 88, name: "Acorn2" }, { userid: 99, name: "Clover" }])).toEqual([
+      { userid: 88, name: "Acorn2" },
+      { userid: 77, name: "Bramblefoot" },
+      { userid: 99, name: "Clover" },
+    ]);
+  });
 });
 
 describe("words", () => {

@@ -59,9 +59,9 @@ import "@/ui/styles/mail.css";
  *   player, which asks once more before it blocks.
  * - The game's notices (an outpost attacked or taken, #187) read as notices:
  *   no reply, no block, and "Show on map" when they name a cell.
- * - New message writes to a past contact, or to the player whose yard the map
- *   opened it from (`openCompose`). There is no player search: the server has
- *   no route for one.
+ * - New message writes to a friend or a past contact (`friends`), or to the
+ *   player the map or the Friends screen opened it for (`openCompose`). There
+ *   is no player search: the server has no route for one.
  * - Truces (#203): "Propose truce" in a player thread, or from the map on the
  *   player's yard (`openTruce`, the server's `requesttruce`). The thread's
  *   request carries a card with its state (waiting, active, ended, lapsed,
@@ -111,6 +111,13 @@ export interface MailboxScreenOptions {
    * game's other notices, nor on older notices that name no one.
    */
   readonly addFriend?: (userid: number) => HTMLElement;
+  /**
+   * The player's friends, offered as recipients beside past contacts: a
+   * friend not yet written to has no thread, so the mail targets leave them
+   * out. Asked with every refresh; a failure offers past contacts only.
+   * Absent: past contacts only.
+   */
+  readonly friends?: () => Promise<readonly MailContact[]>;
 }
 
 /** A new message's recipient when the map opened it: the player whose yard it was. */
@@ -183,6 +190,7 @@ export class MailboxScreen {
 
   private threads: MailThread[] = [];
   private targets: Record<string, MailTarget> = {};
+  private friends: readonly MailContact[] = [];
   private view: View = { kind: "none" };
   private opened = false;
   private destroyed = false;
@@ -336,9 +344,14 @@ export class MailboxScreen {
     const generation = ++this.generation;
     this.list.classList.add("mail-list--loading");
     try {
-      const [threads, targets] = await Promise.all([this.api.threads(), this.api.targets()]);
+      const [threads, targets, friends] = await Promise.all([
+        this.api.threads(),
+        this.api.targets(),
+        this.loadFriends(),
+      ]);
       if (this.destroyed || generation !== this.generation) return;
       this.targets = targets;
+      this.friends = friends;
       this.threads = threadList(threads, targets);
       if (this.loadFailed) this.setStatus(null);
     } catch {
@@ -350,6 +363,18 @@ export class MailboxScreen {
     }
     this.renderList();
     this.reportUnread();
+    // A new message opened before the recipients came shows "no one to write to": offer them now.
+    const waiting = this.view.kind === "compose" || this.view.kind === "invite";
+    if (waiting && !this.pane.querySelector(".mail-compose__to, .mail-compose__fixed")) this.renderPane();
+  }
+
+  /** The player's friends as recipients; none when there is no list to ask or it fails. */
+  private async loadFriends(): Promise<readonly MailContact[]> {
+    try {
+      return (await this.options.friends?.()) ?? [];
+    } catch {
+      return [];
+    }
   }
 
   /** Opens a thread: its messages fetched, which marks it read on the server. */
@@ -819,14 +844,14 @@ export class MailboxScreen {
       form.append(make("p", "mail-compose__fixed", `To ${to.name}`));
       recipient = () => ({ userid: to.userid, name: to.name });
     } else {
-      const contacts = contactsOf(this.targets);
+      const contacts = contactsOf(this.targets, this.friends);
       if (contacts.length === 0) {
         this.pane.replaceChildren(
           head,
           make(
             "p",
             "mail-pane__empty",
-            "You have no one to invite yet. Invite a player from their yard's panel on the map, or write to them first.",
+            "You have no one to invite yet. Add friends, or invite a player from their yard's panel on the map.",
           ),
         );
         return;
@@ -996,14 +1021,14 @@ export class MailboxScreen {
       form.append(make("p", "mail-compose__fixed", `To ${to.name}`));
       recipient = () => ({ userid: to.userid, name: to.name });
     } else {
-      const contacts = contactsOf(this.targets);
+      const contacts = contactsOf(this.targets, this.friends);
       if (contacts.length === 0) {
         this.pane.replaceChildren(
           head,
           make(
             "p",
             "mail-pane__empty",
-            "You have no one to write to yet. To write to a player, open their yard's panel on the map and press Message.",
+            "You have no one to write to yet. Add friends, or open a player's yard panel on the map and press Message.",
           ),
         );
         return;

@@ -280,6 +280,8 @@ export class MapRoom2Scene implements Scene {
           );
           context.goTo(SceneName.YARD);
         },
+        // The Friends list's Message: a new message to them.
+        onMessageFriend: (friend) => void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
         onHome: () => this.goHome(),
         onRefresh: () => this.refreshNow(),
         onJump: (cell) => this.jumpTo(cell),
