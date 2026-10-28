@@ -1,5 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
-import { loadEnv, type ProxyOptions } from "vite";
+import { loadEnv, type Plugin, type ProxyOptions } from "vite";
 // vitest/config re-exports Vite's defineConfig with the `test` block typed.
 import { defineConfig } from "vitest/config";
 
@@ -28,6 +29,29 @@ const SERVER_PATHS = [
   "/templates",
 ];
 
+/**
+ * PREVIEW ONLY (branch preview/towers-3d): serves this checkout's own 3D tower
+ * pictures, so the page shows them while every other request still goes to
+ * the game server on 3001, which serves another checkout's files.
+ */
+const previewTowerArt = (): Plugin => ({
+  name: "preview-tower-art",
+  configureServer(server) {
+    const root = fileURLToPath(new URL("../server/public", import.meta.url));
+    server.middlewares.use((req, res, next) => {
+      const path = (req.url ?? "").split("?")[0] ?? "";
+      if (!/^\/assets\/buildings\/(cannontower|snipertower|lasertower)\/[\w.@-]+$/.test(path))
+        return next();
+      const file = root + decodeURIComponent(path);
+      if (!existsSync(file)) return next();
+      const type = file.endsWith(".webp") ? "image/webp" : file.endsWith(".png") ? "image/png" : "image/jpeg";
+      res.setHeader("Content-Type", type);
+      res.setHeader("Cache-Control", "no-store");
+      res.end(readFileSync(file));
+    });
+  },
+});
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   const target = env["VITE_PROXY_TARGET"] ?? "http://localhost:3001";
@@ -46,6 +70,7 @@ export default defineConfig(({ mode }) => {
     // exactly (not "TURNSTILE_") keeps TURNSTILE_SECRET_KEY out of the bundle
     // even if someone puts it in this .env.
     envPrefix: ["VITE_", "TURNSTILE_SITE_KEY"],
+    plugins: [previewTowerArt()],
     resolve: {
       alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },

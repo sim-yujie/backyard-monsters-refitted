@@ -98,7 +98,9 @@ export const readNewTowerArt = (search: string = addressSearch(), store: Storage
   }
 };
 
-let newTowerArtOn = readNewTowerArt();
+// PREVIEW ONLY (branch preview/towers-3d, never for players): the 3D towers are on unless `?towers=classic`.
+let newTowerArtOn =
+  readNewTowerArt() || new URLSearchParams(addressSearch()).get("towers") !== "classic";
 
 /** Whether the new tower art is on, read once when the game loads. */
 export const newTowerArt = (): boolean => newTowerArtOn;
