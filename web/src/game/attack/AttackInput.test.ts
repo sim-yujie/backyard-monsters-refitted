@@ -196,11 +196,11 @@ describe("overlap rule", () => {
     expect(judgeDrop(decoyZone, near, obstacles, []).legal).toBe(true);
   });
 
-  it("refuses Jars over no defence, keeping the jar, and caps only the defence beside one", () => {
+  it("refuses Jars over no jar tower, keeping the jar, and caps only the defence beside one", () => {
     const load = fixtureLoad();
     const jarsZone = dropZoneOf({ kind: "siege", weapon: siegeWeapon("jars")!, level: 1 }, 100);
-    // The Monster Bunker, the Spurtz Cannons, the Stronghold, the Champion Cage.
-    for (const t of [22, 136, 137, 138, 114]) {
+    // The Monster Bunker, the Stronghold, the Champion Cage.
+    for (const t of [22, 138, 114]) {
       const other = { id: 3, t, l: 1, X: 0, Y: 0 };
       const alone = obstaclesOf(readYard({ ...load, buildingdata: { "3": other } } as BaseLoadResponse));
       expect(judgeDrop(jarsZone, { x: 0, y: 0 }, alone, [])).toEqual({
@@ -216,6 +216,14 @@ describe("overlap rule", () => {
       const verdict = judgeDrop(jarsZone, { x: 0, y: 0 }, obstaclesOf(beside), []);
       expect(verdict.legal).toBe(true);
       expect(verdict.touching.map((obstacle) => obstacle.id)).toEqual([1]);
+    }
+    // The Spurtz Cannons take a jar too (owner).
+    for (const t of [136, 137]) {
+      const spurtz = { id: 3, t, l: 1, X: 0, Y: 0 };
+      const alone = obstaclesOf(readYard({ ...load, buildingdata: { "3": spurtz } } as BaseLoadResponse));
+      const verdict = judgeDrop(jarsZone, { x: 0, y: 0 }, alone, []);
+      expect(verdict.legal).toBe(true);
+      expect(verdict.touching.map((obstacle) => obstacle.id)).toEqual([3]);
     }
   });
 
