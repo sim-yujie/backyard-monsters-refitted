@@ -2813,6 +2813,26 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return dx * dx + dy * dy <= range * range;
   };
 
+  /**
+   * The basic caged champion, waiting in its cage within the range, comes out
+   * to be pulled with the rest (owner's choice, 28 Oct), measured from where
+   * it stands in the cage. `getDefendingCreepsInRange` lists
+   * `CREATURES._guardian` whatever it is doing (`Decoy.as:341-345`), though
+   * Flash's `updateDecoy` then passes it over (`is CreepBase`, `:246`; a
+   * `ChampionBase` is not one) and only its blast reaches it. The Krallen is
+   * not `_guardian`, and stays in.
+   */
+  const callFromCage = (drop: Cart, range: number): void => {
+    for (const slot of cageSlots) {
+      const pen = slot.pen;
+      if (!pen || championByType(slot.caged.t) === KRALLEN_ID) continue;
+      const at = screenPointOf(pen.ix, pen.iy);
+      const dx = at.x - drop.x;
+      const dy = at.y - drop.y;
+      if (dx * dx + dy * dy <= range * range) leaveCage(slot, pen);
+    }
+  };
+
   /** `changeModeDecoy`: it stops fighting and walks to stand by the Decoy. */
   const pullToDecoy = (creep: Creep, drop: Cart, before: Map<number, Behaviour>): void => {
     if (creep.behaviour !== "decoy") before.set(creep.id, creep.behaviour);
@@ -2945,6 +2965,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if ((tick - live.plan.landsAt) % DECOY_FRAME_TICKS !== 0) return;
     const { drop, pulled, before } = live;
     const range = live.plan.range;
+    callFromCage(drop, range);
     const held = new Set<number>();
     for (const creep of creeps) {
       if (!decoyHolds(creep, drop, range)) continue;
@@ -5840,6 +5861,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       pen.frame = frame;
       return;
     }
+    const champion = leaveCage(slot, pen);
+    if (champion) takeFoe(champion, foe);
+  };
+
+  /**
+   * A caged champion steps out of its cage onto the field, the first time or
+   * again, as it does for a foe it found or when the Decoy calls it
+   * (`Decoy.as:341-345`).
+   */
+  const leaveCage = (slot: CageSlot, pen: CagePen): Creep | null => {
     // Its own tick this step counts the frame, as `tickState` does before `tickBPen`.
     let champion = slot.champion;
     if (champion) {
@@ -5853,13 +5884,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       champion = releaseChampion(slot.caged, pen);
     }
     slot.pen = null;
-    if (!champion) return;
+    if (!champion) return null;
     slot.champion = champion;
     champion.born = tick;
     champion.homing = false;
     champion.attacking = false;
     champion.atTarget = false;
-    takeFoe(champion, foe);
+    return champion;
   };
 
   const tickCage = (): void => {

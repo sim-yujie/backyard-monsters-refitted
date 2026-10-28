@@ -270,6 +270,57 @@ describe("the Decoy in a fight", () => {
     expect(battle.state().bunkerGarrisons[1]).toEqual({ C6: 3 });
   });
 
+  it("calls the basic caged champion out of its cage, not the Krallen (owner's choice, 28 Oct)", () => {
+    // A Champion Cage under the Decoy and the Town Hall far off, with a Pokey
+    // at it out of the champions' sight, so neither comes out on its own.
+    const caged = createBattle(
+      buildEngineYard({
+        buildingdata: {
+          "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+          "2": { id: 2, t: 14, l: 1, X: 1400, Y: 1400 },
+        },
+        buildinghealthdata: {},
+        resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+      }),
+      {
+        seed: 3,
+        siege: { decoy: 1 },
+        defenderChampions: [
+          { t: 5, l: 2, hp: 6000, pl: 1 },
+          { t: 1, l: 2, hp: 5000, pl: 1 },
+        ],
+      },
+    );
+    for (const event of [
+      { kind: "fling", t: 0, x: 1380, y: 1380, r: 0, monsters: { C1: 1 } },
+      decoyAt,
+    ] satisfies AttackEvent[]) {
+      caged.apply(event);
+    }
+    const out = () => caged.creeps().filter((creep) => creep.champion && creep.friendly);
+    caged.runTo(plan.landsAt - 1);
+    expect(out()).toHaveLength(0);
+    caged.runTo(plan.landsAt);
+    expect(out().map((creep) => creep.monsterId)).toEqual(["G1"]);
+
+    caged.runTo(plan.explodesAt - 1);
+    const spot = { x: drop.x, y: drop.y + DECOY_STAND_DROP };
+    const gorgo = out()[0]!;
+    expect(out()).toHaveLength(1);
+    expect(screenGap(gorgo, spot)).toBeLessThan(40 * 1.7 + 5 * Math.SQRT2 + 2);
+    expect(gorgo).toMatchObject({ targetCreep: -1, hp: 5000 });
+
+    // The blast takes its share, and the Krallen, still in, takes none.
+    caged.runTo(plan.explodesAt);
+    const dealt = linearAreaDamage(plan.damage, plan.range, 0, screenGap(gorgo, drop))!;
+    expect(out()[0]?.hp).toBe(5000 - dealt);
+    expect(caged.state().defenderChampions.map((one) => one.hp)).toEqual([6000, 5000 - dealt]);
+
+    // Let go with nobody to fight, it walks back into its cage.
+    caged.runTo(plan.explodesAt + 1200);
+    expect(out()).toHaveLength(0);
+  });
+
   it("never pulls the attacker's own champion: it fights on exactly as without a Decoy", () => {
     const champion: AttackEvent = {
       kind: "fling",
