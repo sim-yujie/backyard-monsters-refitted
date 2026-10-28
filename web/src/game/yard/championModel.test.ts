@@ -7,6 +7,7 @@ import {
   freezeGate,
   predictedHealth,
   thawGate,
+  thawProblem,
   withChampionsHealed,
 } from "./championModel";
 import { championEntry } from "./championCatalogue";
@@ -214,6 +215,19 @@ describe("the Champion Chamber (#125)", () => {
     expect(thawGate(view)).toMatch(/damaged/);
     expect(thawGate(chamberView(withChamber([gorgo({ status: 1 })]), NOW))).toBeNull();
     expect(chamberView(saveOf([]), NOW).kind).toBe("noChamber");
+  });
+
+  it("names each thaw problem as a key, in thawGate's order, and gives frozen champions their stats", () => {
+    const full = chamberView(withChamber([gorgo(), gorgo({ t: 3, status: 1, ft: HOUR, l: 3 })]), NOW);
+    expect(thawProblem(full)).toBe("cageFull");
+    expect(thawProblem(full, true)).toBeNull();
+    const damaged = chamberView(withChamber([gorgo(), gorgo({ t: 3, status: 1 })], { hp: 10 }), NOW);
+    expect(thawProblem(damaged)).toBe("damaged");
+    expect(thawProblem(chamberView(saveOf([]), NOW))).toBe("noChamber");
+    if (full.kind !== "ready") throw new Error(full.kind);
+    const [frozen] = full.frozen;
+    expect(frozen!.stats.health).toBe(frozen!.maxHealth);
+    expect(frozen!.stats.damage).toBeGreaterThan(0);
   });
 });
 

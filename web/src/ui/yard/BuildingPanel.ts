@@ -56,7 +56,7 @@ import { BaiterPanel } from "./BaiterPanel";
 import { BunkerPanel } from "./BunkerPanel";
 import { ChamberPanel } from "./ChamberPanel";
 import { ChampionPanel } from "./ChampionPanel";
-import { CHAMPION_CAGE_TYPE, withChampionsHealed } from "@/game/yard/championModel";
+import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE, withChampionsHealed } from "@/game/yard/championModel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
@@ -162,13 +162,19 @@ const SPEEDUP_LABEL: Readonly<Record<SpeedupItem, string>> = {
 
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
 
-/** The Champion Cage's two tabs: its champion, then the building's own card. */
+/** The Champion Cage's and Chamber's two tabs: its champion(s), then the building's own card. */
 type CageTab = "champion" | "building";
 
 const CAGE_TABS: ReadonlyArray<readonly [CageTab, string]> = [
   ["champion", "Champion"],
   ["building", "Building"],
 ];
+
+/** A building that opens on its champions: the cage on its one, the chamber on all it holds. */
+type ChampionHome = "cage" | "chamber";
+
+/** The first tab's word: the cage holds one champion, the chamber several. */
+const CHAMPION_TAB: Readonly<Record<ChampionHome, string>> = { cage: "Champion", chamber: "Champions" };
 
 /** The live parts of the job block, refreshed every second without a redraw. */
 interface JobRefs {
@@ -200,7 +206,8 @@ export class BuildingPanel {
   /**
    * A built Champion Cage on the own yard opens straight on its champion
    * (owner, 28 Oct: no second click), in a wider panel; the building's own
-   * card (upgrade, repair, details) is the second tab.
+   * card (upgrade, repair, details) is the second tab. The Champion Chamber
+   * does the same with its frozen champions (owner, 28 Oct: "the same treatment").
    */
   private readonly cageTabs: HTMLElement;
   private cageTab: CageTab = "champion";
@@ -482,19 +489,23 @@ export class BuildingPanel {
     this.renderDetails(building);
   }
 
-  /** A built cage on the own yard: always on its champion, with the building a tab away. */
-  private isCage(building: YardBuilding): boolean {
-    return this.yard !== undefined && building.type === CHAMPION_CAGE_TYPE && building.level > 0;
+  /** A built cage or chamber on the own yard: always on its champions, with the building a tab away. */
+  private championHome(building: YardBuilding): ChampionHome | null {
+    if (this.yard === undefined || building.level <= 0) return null;
+    if (building.type === CHAMPION_CAGE_TYPE) return "cage";
+    if (building.type === CHAMPION_CHAMBER_TYPE) return "chamber";
+    return null;
   }
 
   /**
-   * The cage's tabs and which half shows: the champion, or the plain card's
-   * kind line, numbers, actions and Details. The champion's window is made
-   * here, so clicking the cage is all it takes.
+   * The cage's or chamber's tabs and which half shows: the champions, or the
+   * plain card's kind line, numbers, actions and Details. The champions'
+   * window is made here, so clicking the building is all it takes.
    */
   private renderCage(building: YardBuilding): void {
     const store = this.yard?.store;
-    const on = this.isCage(building) && store !== undefined;
+    const home = store ? this.championHome(building) : null;
+    const on = home !== null && store !== undefined;
     this.element.classList.toggle("building-panel--cage", on);
     this.cageTabs.hidden = !on;
     if (!on) {
@@ -502,9 +513,12 @@ export class BuildingPanel {
       return;
     }
     if (!this.champion) {
-      this.champion = new ChampionPanel({ store });
+      this.champion = home === "cage" ? new ChampionPanel({ store }) : new ChamberPanel({ store });
       this.championSlot.append(this.champion.element);
     }
+    this.cageTabs.setAttribute("aria-label", home === "cage" ? "Champion Cage" : "Champion Chamber");
+    const first = this.cageTabs.querySelector<HTMLElement>('[data-tab="champion"]');
+    if (first) first.textContent = CHAMPION_TAB[home];
     const tab = this.cageTab;
     this.element.dataset["cageTab"] = tab;
     for (const button of this.cageTabs.querySelectorAll<HTMLButtonElement>(".building-panel__tab")) {
@@ -512,7 +526,7 @@ export class BuildingPanel {
       button.setAttribute("aria-selected", String(selected));
       button.tabIndex = selected ? 0 : -1;
     }
-    // A cage that needs repair says so on its Building tab.
+    // A cage or chamber that needs repair says so on its Building tab.
     const repair = repairOffer(building.id, store.save, store.credits, store.now()) !== null;
     this.cageTabs.querySelector<HTMLElement>('[data-tab="building"]')?.classList.toggle("building-panel__tab--alert", repair);
     const onChampion = tab === "champion";
@@ -530,7 +544,7 @@ export class BuildingPanel {
     if (this.cageTab === tab) return;
     this.cageTab = tab;
     this.render();
-    if (tab === "champion" && this.champion) {
+    if (tab === "champion" && this.champion instanceof ChampionPanel) {
       guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
     }
     this.cageTabs.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.focus();
@@ -836,14 +850,7 @@ export class BuildingPanel {
       button.setAttribute("aria-expanded", String(open));
       return button;
     }
-    // The cage needs no Open: it opens on its champion, this card a tab away.
-    if (model?.open === "chamber" && this.yard) {
-      const open = this.champion !== null;
-      const button = actionButton(open ? "Close chamber" : "Open chamber", () => this.toggleChamber(), "btn--primary");
-      button.classList.add("building-panel__planner");
-      button.setAttribute("aria-expanded", String(open));
-      return button;
-    }
+    // The cage and chamber need no Open: they open on their champions, this card a tab away.
     const scene = this.yard?.scene;
     if (model?.open === "shop" && scene?.openShop) {
       const openShop = scene.openShop.bind(scene);
@@ -1613,25 +1620,7 @@ export class BuildingPanel {
     const building = this.building;
     const store = this.yard?.store;
     if (!building || !store) return;
-    if (this.isCage(building)) {
-      this.showCageTab("champion");
-      return;
-    }
-    if (!this.champion && panelModel(building, store).open === "chamber") this.toggleChamber();
-  }
-
-  /** Opens or closes the Champion Chamber's controls under the actions. */
-  private toggleChamber(): void {
-    const store = this.yard?.store;
-    if (this.champion || !this.building || !store) {
-      this.closeChampion();
-    } else {
-      this.champion = new ChamberPanel({ store });
-      this.championSlot.append(this.champion.element);
-      this.championSlot.hidden = false;
-    }
-    this.render();
-    this.champion?.element.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+    if (this.championHome(building)) this.showCageTab("champion");
   }
 
   private closeChampion(): void {

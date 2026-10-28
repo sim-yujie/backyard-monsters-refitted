@@ -455,12 +455,25 @@ describe("BuildingPanel: the Champion Cage (§7.2)", () => {
     expect(element.querySelector(".champion")).toBe(champion);
   });
 
-  it("Open chamber shows the chamber's controls (#125)", () => {
+  it("opens the Champion Chamber straight on its champions too, with Building a tab away (#125; owner, 28 Oct)", () => {
     const { element } = setup([HALL, building(2, 119, 1)], 2);
-    buttonNamed(element, "Open chamber")!.click();
+    expect(element.classList.contains("building-panel--cage")).toBe(true);
     expect(element.querySelector(".chamber")).not.toBeNull();
-    buttonNamed(element, "Close chamber")!.click();
-    expect(element.querySelector(".chamber")).toBeNull();
+    expect(buttonNamed(element, "Open chamber")).toBeUndefined();
+    const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
+      ["Champions", "true"],
+      ["Building", "false"],
+    ]);
+    expect(element.querySelector('[role="tablist"]')!.getAttribute("aria-label")).toBe("Champion Chamber");
+    tabNamed(element, "building").click();
+    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
+  });
+
+  it("puts a red dot on a damaged chamber's Building tab", () => {
+    const { element } = setup([HALL, { ...building(2, 119, 1), hp: 100 }], 2);
+    expect(tabNamed(element, "building").classList.contains("building-panel__tab--alert")).toBe(true);
   });
 
   it("openChampion brings back the champion tab once, and does nothing on another building (Inferno WP 5.2)", () => {
