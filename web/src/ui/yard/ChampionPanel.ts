@@ -408,9 +408,10 @@ export class ChampionPanel {
 
   /**
    * Flash's two pages in one (`CHAMPIONCAGEPOPUP.as:151-152`): the champion
-   * (big picture, level, health and stats), then its evolution (this level's
-   * picture, the feeds bar, the next level's picture) with the feed under it,
-   * then Freeze and Juice as two pictures, and how it fights last.
+   * (big picture, level, health, Freeze and Juice beside it, stats under it),
+   * then its evolution (this level's picture, the feeds bar and hunger clock,
+   * the next level's picture) with the feed under it, and how it fights last.
+   * It all fits a 1280x800 screen without scrolling (lead, 28 Oct).
    */
   private championBlocks(view: ChampionView): HTMLElement[] {
     const now = this.store.now();
@@ -430,7 +431,7 @@ export class ChampionPanel {
     this.live = { health, healthFill, healthBar, hunger };
     this.drawHealth(view, now);
     this.drawHunger(view, now);
-    return [this.header(view), this.growthBlock(view), this.feedBlock(view), this.actsBlock(view), brainBlock(view)];
+    return [this.header(view), this.growthBlock(view), this.feedBlock(view), brainBlock(view)];
   }
 
   private header(view: ChampionView): HTMLElement {
@@ -473,9 +474,13 @@ export class ChampionPanel {
     health.className = "champion__health";
     if (live) health.append(live.health, live.healthBar);
     health.append(this.heal.element);
-    words.append(level, health, statsBlock(view));
+    words.append(level, health);
 
-    header.append(portrait(view.entry, view.level, "champion__picture"), words);
+    // The next level's picture on the feeds bar says what the arrows mean: the words for screen readers only.
+    const stats = statsBlock(view);
+    const arrows = stats.querySelector<HTMLElement>(".champion__note--arrows");
+    if (arrows) unseen(arrows);
+    header.append(portrait(view.entry, view.level, "champion__picture"), words, stats, ...this.acts(view));
     return header;
   }
 
@@ -607,14 +612,15 @@ export class ChampionPanel {
     middle.append(line, bar);
     const track = document.createElement("div");
     track.className = "champion__track";
+    // The hunger clock under the bar: the Evolution heading is for screen readers only.
+    if (this.live) middle.append(this.live.hunger);
     track.append(stagePicture(view.entry, view.level, `Level ${view.level}`), middle);
     if (!view.top) {
       const next = stagePicture(view.entry, view.level + 1, `Level ${view.level + 1}`);
       next.classList.add("champion__stage--next");
       track.append(next);
     }
-    block.append(heading(view.top ? "Food bonus" : "Evolution"), track);
-    if (this.live) block.append(this.live.hunger);
+    block.append(unseen(heading(view.top ? "Food bonus" : "Evolution")), track);
     return block;
   }
 
@@ -675,8 +681,9 @@ export class ChampionPanel {
       buttons.append(this.evolve.element);
     }
 
-    const parts: HTMLElement[] = [heading(view.top ? "Daily feed" : "Feed"), list, buttons];
-    if (gate && view.hunger !== "fed") parts.push(gateLine(gate));
+    const parts: HTMLElement[] = [unseen(heading(view.top ? "Daily feed" : "Feed")), list, buttons];
+    // What is short is the recipe's amber "you have" already; the sentence is the Feed button's hover.
+    if (gate && view.hunger !== "fed") parts.push(unseen(gateLine(gate)));
     if (view.top && view.feedShiny !== null && view.hunger === "fed") {
       parts.push(note("Not hungry yet: a food bonus bought now costs double."));
     }
@@ -767,18 +774,14 @@ export class ChampionPanel {
   }
 
   /**
-   * Freeze and Juice as two pictures side by side (owner, 28 Oct: no
-   * sentences): the building that does it, a one-word action and a few words
-   * on what it does or what it needs. The full sentence stays for hover and
-   * screen readers, and a tap on a locked one says it under the row.
+   * Freeze and Juice as two pictures (owner, 28 Oct: no sentences) beside the
+   * champion's picture, a row under it on a phone: the building that does it,
+   * a one-word action and a few words on what it does or what it needs. The
+   * full sentence stays for hover and screen readers, and a tap on a locked
+   * one says it under the champion. Juice's question takes their place.
    */
-  private actsBlock(view: ChampionView): HTMLElement {
-    const block = document.createElement("div");
-    block.className = "champion__part champion__part--acts";
-    if (this.confirmingJuice) {
-      block.append(this.juiceConfirm(view));
-      return block;
-    }
+  private acts(view: ChampionView): HTMLElement[] {
+    if (this.confirmingJuice) return [this.juiceConfirm(view)];
     const hint = actHint();
     const freeze = this.freezeTile(view, hint, () => void this.runFreeze(view));
     freeze.disabled = this.store.isRunning(ChampionKey.freeze);
@@ -786,8 +789,7 @@ export class ChampionPanel {
     const row = document.createElement("div");
     row.className = "champion__acts";
     row.append(freeze, this.juiceTile(view, hint));
-    block.append(row, hint);
-    return block;
+    return [row, hint];
   }
 
   /** Freeze into the Champion Chamber (#125): reversible, so one tap. */
@@ -984,9 +986,12 @@ export const brainBlock = (view: ChampionView): HTMLElement => {
     item.textContent = text;
     list.append(item);
   }
+  // The heading on the tendencies' own line, to keep the cage on one screen.
+  const row = document.createElement("div");
+  row.className = "champion__brain-row";
+  row.append(heading("How it fights"), list);
   block.append(
-    heading("How it fights"),
-    list,
+    row,
     note(`${learnedFromText(summary)} Each attack teaches it by its Mode's goal.`),
   );
   return block;
@@ -1057,7 +1062,11 @@ export const statsBlock = (view: ChampionView): HTMLElement => {
       wrap.append(note(`Next food-bonus rank (${view.foodBonus + 1} of 3): ${parts.join(", ")}.`));
     }
   }
-  if (view.nextStats) wrap.append(note(`Arrows show level ${view.level + 1}.`));
+  if (view.nextStats) {
+    const arrows = note(`Arrows show level ${view.level + 1}.`);
+    arrows.classList.add("champion__note--arrows");
+    wrap.append(arrows);
+  }
   return wrap;
 };
 
@@ -1151,6 +1160,12 @@ const heading = (text: string): HTMLElement => {
   return element;
 };
 
+/** Kept for screen readers, not drawn: what it labels shows for itself. */
+const unseen = (element: HTMLElement): HTMLElement => {
+  element.classList.add("u-visually-hidden");
+  return element;
+};
+
 const gateLine = (text: string): HTMLElement => {
   const element = document.createElement("p");
   element.className = "champion__gate";
@@ -1205,7 +1220,7 @@ const stagePicture = (entry: ChampionEntry, level: number, label: string): HTMLE
 
 /** The few words under a locked Freeze; the hover keeps {@link freezeGate}'s sentence. */
 const FREEZE_SHORT: Readonly<Record<FreezeProblem, string>> = {
-  noChamber: "Needs Champion Chamber",
+  noChamber: "Needs a Chamber",
   chamberBuilding: "Chamber being built",
   hurt: "Heal it first",
   hungry: "Feed it first",
@@ -1213,7 +1228,7 @@ const FREEZE_SHORT: Readonly<Record<FreezeProblem, string>> = {
 
 /** The few words under a locked Juice; the hover keeps `juicerProblemText`'s sentence. */
 const JUICE_SHORT: Readonly<Record<JuicerProblem, string>> = {
-  noJuicer: "Needs Monster Juicer",
+  noJuicer: "Needs a Juicer",
   building: "Juicer being built",
   upgrading: "Juicer upgrading",
   damaged: "Repair the Juicer",

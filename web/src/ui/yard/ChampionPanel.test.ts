@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, ChampionSaveEntry, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
@@ -288,7 +291,7 @@ describe("ChampionPanel: rename and juice", () => {
     const none = setup([gorgo()]);
     const locked = buttonNamed(none.element, "Juice")!;
     expect(locked.getAttribute("aria-disabled")).toBe("true");
-    expect(textOf(locked, ".champion-act__short")).toBe("Needs Monster Juicer");
+    expect(textOf(locked, ".champion-act__short")).toBe("Needs a Juicer");
     expect(locked.title).toContain("Build a Monster Juicer");
     locked.click();
     expect(none.spies.juice).not.toHaveBeenCalled();
@@ -302,6 +305,47 @@ describe("ChampionPanel: rename and juice", () => {
     expect(element.textContent).toContain("gone for good and gives no goo");
     buttonNamed(element, "Yes, juice Gorgo")!.click();
     expect(spies.juice).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ChampionPanel: one screen at 1280x800 (lead, 28 Oct)", () => {
+  // jsdom lays nothing out: these pin the order and the rules that keep the
+  // cage on one desktop screen; the screenshots show it at 1280x800 and 390x844.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const css = readFileSync(resolve(here, "../styles/champion.css"), "utf8").replace(/\r\n/g, "\n");
+
+  it("puts Freeze and Juice beside the champion's picture and the hunger clock under the feeds bar", () => {
+    const { element } = setup([gorgo()], [CAGE, JUICER]);
+    const hero = element.querySelector<HTMLElement>(".champion__header--hero")!;
+    const order = [".champion__picture", ".champion__who", ".champion__stats-wrap", ".champion__acts", ".champion__act-hint"];
+    expect([...hero.children].map((child, i) => child.matches(order[i] ?? "-"))).toEqual(order.map(() => true));
+    expect(element.querySelectorAll(".champion-act")).toHaveLength(2);
+    expect(element.querySelector(".champion__part--acts")).toBeNull();
+    expect(element.querySelector(".champion__track-bar > .champion__hunger")).not.toBeNull();
+    // Evolution and Feed name their parts for screen readers only.
+    const shown = [...element.querySelectorAll<HTMLElement>(".champion__heading")].filter(
+      (heading) => !heading.classList.contains("u-visually-hidden"),
+    );
+    expect(shown.map((heading) => heading.textContent)).toEqual(["How it fights"]);
+  });
+
+  it("asks about Juice across the champion's full width", () => {
+    const { element } = setup([gorgo()], [CAGE, JUICER]);
+    buttonNamed(element, "Juice")!.click();
+    expect(element.querySelector(".champion__header--hero > .champion__confirm")).not.toBeNull();
+    expect(element.querySelector(".champion__header--hero > .champion__acts")).toBeNull();
+  });
+
+  it("lays the champion out in three columns, Freeze and Juice in a row under it on a phone", () => {
+    expect(css).toMatch(
+      /\.champion__header--hero \{\s*display: grid;\s*grid-template-columns: 128px minmax\(0, 1fr\) 184px;/,
+    );
+    expect(css).toMatch(/\.champion__header--hero > \.champion__acts \{\s*grid-row: 1;\s*grid-column: 3;/);
+    const phone = css.slice(css.indexOf("@media (width <= 620px)"));
+    expect(phone).toMatch(/\.champion__header--hero \{\s*grid-template-columns: 104px minmax\(0, 1fr\);/);
+    expect(phone).toMatch(
+      /\.champion__header--hero > \.champion__acts \{\s*grid-row: auto;\s*grid-column: 1 \/ -1;\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+    );
   });
 });
 
@@ -326,7 +370,7 @@ describe("ChampionPanel: freeze (#125)", () => {
     expect(freeze.querySelector<HTMLImageElement>(".champion-act__art")!.getAttribute("src")).toBe(
       "/assets/buildingbuttons/119.silhouette.jpg",
     );
-    expect(textOf(freeze, ".champion-act__short")).toBe("Needs Champion Chamber");
+    expect(textOf(freeze, ".champion-act__short")).toBe("Needs a Chamber");
     expect(freeze.title).toContain("Build a Champion Chamber");
     expect(textOf(freeze, ".u-visually-hidden")).toContain("Build a Champion Chamber");
     const hint = element.querySelector<HTMLElement>(".champion__act-hint")!;
