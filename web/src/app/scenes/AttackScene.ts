@@ -46,13 +46,22 @@ import { setYardIntent } from "@/game/yard/yardIntent";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount } from "@/ui/format";
+import { AMOUNT_CHANGE_WORDS, writeAmount, type AmountChange } from "@/ui/amountChange";
 import { Hud } from "@/ui/Hud";
 import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@/ui/resourceIcon";
+import { gameIcon } from "@/ui/gameIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
-import { ATTACK_CONFIRM_CLASS, retreatNote } from "@/ui/attack/attackDialogs";
+import {
+  ATTACK_CONFIRM_CLASS,
+  KEEP_FIGHTING,
+  keptText,
+  RETREAT_TITLE,
+  retreatKeptLine,
+  retreatMessage,
+} from "@/ui/attack/attackDialogs";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
@@ -166,14 +175,14 @@ export class AttackScene implements Scene {
   private damage: HTMLElement | null = null;
   private loot: HTMLElement | null = null;
   /** The loot readout's four amounts, twigs to goo. */
-  private lootValues: HTMLElement[] = [];
+  private lootAmounts: HTMLElement[] = [];
   private hudSlot: HTMLElement | null = null;
   private speedButtons = new Map<AttackSpeed, HTMLButtonElement>();
   private retreatButton: HTMLButtonElement | null = null;
   private menu: AttackMenu | null = null;
   private confirm: Panel | null = null;
-  /** The open Retreat question's damage line and where it was going, told again as the fight goes on. */
-  private retreatLine: { element: HTMLElement; goingTo?: string } | null = null;
+  /** The open Retreat question's "35% kept", told again as the fight goes on. */
+  private retreatLine: HTMLElement | null = null;
 
   private dock: HTMLElement | null = null;
   private dockBody: HTMLElement | null = null;
@@ -346,7 +355,7 @@ export class AttackScene implements Scene {
     this.clock = null;
     this.damage = null;
     this.loot = null;
-    this.lootValues = [];
+    this.lootAmounts = [];
     this.hudSlot = null;
     this.speedButtons.clear();
     this.retreatButton = null;
@@ -688,31 +697,34 @@ export class AttackScene implements Scene {
     clock.setAttribute("aria-live", "off");
     clock.textContent = "—:——";
 
-    // The number alone on the narrowest phones (#381): the word gives way so
-    // Retreat stays on the one row.
+    // The broken wall and "37%" (less-text job 8): no word, so Retreat stays
+    // on the one row even on the narrowest phones (#381). The wall says "Yard
+    // damage" on hover and to screen readers.
     const damage = document.createElement("span");
-    damage.className = "attack-strip__readout";
-    damage.title = "Damage";
+    damage.className = "attack-strip__readout attack-strip__damage";
     const damageValue = document.createElement("span");
     damageValue.textContent = "0%";
-    const damageWord = document.createElement("span");
-    damageWord.className = "attack-strip__word";
-    damageWord.textContent = " damage";
-    damage.append(damageValue, damageWord);
+    damage.append(gameIcon("yarddamage2", { size: 24, label: "Yard damage" }), damageValue);
 
-    // "Loot" and one icon-and-amount per resource (#93); an Inferno fight
-    // takes Bone, Coal, Sulfur and Magma (Inferno WP 1.13).
+    // One icon-and-amount per resource (#93), with no "Loot" before them
+    // (less-text job 8); an Inferno fight takes Bone, Coal, Sulfur and Magma
+    // (Inferno WP 1.13). The row's tooltip names each. Loot won is green
+    // "+1,500"; a defence replay's is the yard's loss, red "−1,500" (owner,
+    // 28 Oct). Nothing yet is a plain "0".
     const loot = document.createElement("span");
     loot.className = "attack-strip__readout attack-strip__loot";
     const amounts = document.createElement("span");
     amounts.className = "res-list";
     const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
-    this.lootValues = RESOURCE_KEYS.map((key) => {
-      const amount = resourceAmount(key, "0", { realm });
+    this.lootAmounts = RESOURCE_KEYS.map((key) => {
+      const amount = resourceAmount(key, 0, { realm, change: this.lootChange() });
       amounts.append(amount);
-      return amount.querySelector<HTMLElement>(".res-amount__value")!;
+      return amount;
     });
-    loot.append("Loot ", amounts);
+    const lootWord = document.createElement("span");
+    lootWord.className = "u-visually-hidden";
+    lootWord.textContent = "Loot ";
+    loot.append(lootWord, amounts);
     // Nothing is taken in practice; a raid's losses show when it has landed.
     loot.hidden = this.practice || this.raiding;
     // A raid has no countdown: it runs until the server's fight ended.
@@ -919,10 +931,7 @@ export class AttackScene implements Scene {
       return;
     }
     // The fight goes on behind the Retreat question: its damage keeps up with the strip's.
-    if (this.retreatLine) {
-      const { element, goingTo } = this.retreatLine;
-      element.textContent = retreatNote(this.presentation.damageShown(state), goingTo);
-    }
+    if (this.retreatLine) this.retreatLine.textContent = keptText(this.presentation.damageShown(state));
   }
 
   /**
@@ -984,12 +993,15 @@ export class AttackScene implements Scene {
     }
     if (this.loot) {
       RESOURCE_KEYS.forEach((key, index) => {
-        const value = this.lootValues[index];
-        if (value) value.textContent = formatAmount(readout.loot[key]);
+        const amount = this.lootAmounts[index];
+        if (amount) writeAmount(amount, "res-amount", readout.loot[key], { change: this.lootChange(), tooltip: false });
       });
       // Bone, Coal, Sulfur and Magma in an Inferno fight, as the strip's icons.
       const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
-      this.loot.title = RESOURCE_KEYS.map((key) => `${resourceName(key, realm)} ${readout.loot[key]}`).join(", ");
+      const word = AMOUNT_CHANGE_WORDS[this.lootChange()];
+      this.loot.title = RESOURCE_KEYS.map(
+        (key) => `${resourceName(key, realm)} ${formatAmount(readout.loot[key])}${readout.loot[key] >= 1 ? ` ${word}` : ""}`,
+      ).join(", ");
     }
     const skipping = this.session?.skipping ?? false;
     for (const [value, button] of this.speedButtons) {
@@ -999,6 +1011,11 @@ export class AttackScene implements Scene {
     if (this.retreatButton) {
       this.retreatButton.disabled = state.phase !== "running" && state.phase !== "loaded";
     }
+  }
+
+  /** The loot readout's side: won by the attacker, or the yard's loss in a defence replay. */
+  private lootChange(): AmountChange {
+    return isDefenceWatch(this.watchRun) ? "loss" : "gain";
   }
 
   private refreshStatus(state: AttackSessionState): void {
@@ -1057,11 +1074,15 @@ export class AttackScene implements Scene {
       after?.();
       return;
     }
+    // "Retreat now?", "The attack ends now.", the wall and "35% kept"
+    // (less-text job 8), "Keep fighting" or "Retreat".
+    const kept = retreatKeptLine(this.presentation.damageShown(state));
     this.confirm = confirmPanel({
-      title: "Retreat?",
-      message: "Retreating ends the attack now and cannot be undone.",
-      note: retreatNote(this.presentation.damageShown(state), goingTo),
+      title: RETREAT_TITLE,
+      message: retreatMessage(goingTo),
+      note: kept.line,
       confirmLabel: "Retreat",
+      cancelLabel: KEEP_FIGHTING,
       onConfirm: () => {
         this.confirm?.close();
         session.retreat();
@@ -1073,9 +1094,7 @@ export class AttackScene implements Scene {
       },
     });
     this.confirm.element.classList.add(ATTACK_CONFIRM_CLASS);
-    // `confirmPanel` writes its note as its one muted line.
-    const note = this.confirm.element.querySelector<HTMLElement>(".u-muted");
-    this.retreatLine = note ? { element: note, ...(goingTo ? { goingTo } : {}) } : null;
+    this.retreatLine = kept.value;
     this.confirm.mount(context.overlay.modal);
   }
 

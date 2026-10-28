@@ -119,9 +119,10 @@ describe("a real defender", () => {
     expect(jobs).toEqual([]);
   });
 
-  test("hears of housed monsters lost", async () => {
+  test("keeps the housed monsters lost in the notice's numbers, not its words (owner, 27 Oct)", async () => {
     await afterYardDefended(request, defence({ housedLost: 3, defenderDelta: null }));
-    expect(messages[0]!.message).toBe("It was left 47% damaged. Nothing was looted, and 3 housed monsters were lost.");
+    expect(messages[0]!.message).toBe("It was left 47% damaged. Nothing was looted.");
+    expect(messages[0]!.attackstats).toEqual({ damage: 47, loot: {}, housedLost: 3 });
   });
 });
 

@@ -123,6 +123,29 @@ describe("threadItems", () => {
     expect(items.map((one) => one.byUserId)).toEqual([77, null, null, null, null, null]);
   });
 
+  it("reads an attack notice's numbers, in the Inferno's resources for an Inferno yard (less-text job 3)", () => {
+    const stats = { damage: 63.4, loot: { r1: 1234, r2: 0, r4: "500" }, housedLost: 6 };
+    const items = threadItems(
+      [
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "s", attackstats: stats }),
+        message({ userid: 0, messagetype: "infernoattacked", message: "s", attackstats: { damage: 140, loot: {} } }),
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "older" }),
+        message({ userid: 0, messagetype: YARD_ATTACKED, message: "bad", attackstats: { loot: { r1: 5 } } }),
+        message({ userid: 77, messagetype: "message", message: "forged", attackstats: stats }),
+      ],
+      2505,
+    );
+    expect(items.map((one) => one.attack)).toEqual([
+      { stats: { damage: 63, loot: { r1: 1234, r4: 500 } }, realm: "surface" },
+      { stats: { damage: 100, loot: {} }, realm: "inferno" },
+      null,
+      null,
+      null,
+    ]);
+    const [thread] = threadList([message({ userid: 0, messagetype: YARD_ATTACKED, attackstats: stats })], {});
+    expect(thread!.attack).toEqual({ stats: { damage: 63, loot: { r1: 1234, r4: 500 } }, realm: "surface" });
+  });
+
   it("gives a notice without whole coordinates no cell", () => {
     expect(noticeCell({ coords: null })).toBeNull();
     expect(noticeCell({ coords: [1.5, 2] })).toBeNull();

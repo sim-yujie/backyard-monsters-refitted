@@ -157,7 +157,7 @@ describe("the end plugin", () => {
     session.retreat();
     await flush();
     const items = [...modal.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
-    expect(items.map((item) => item.textContent)).toEqual(["7", "0", "0", "0"]);
+    expect(items.map((item) => item.querySelector(".res-amount__value")?.textContent)).toEqual(["+7", "0", "0", "0"]);
   });
 
   it("puts the banked loot on the HUD once, as the panel shows the landed save (#168)", async () => {

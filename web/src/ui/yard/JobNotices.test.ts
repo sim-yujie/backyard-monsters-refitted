@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompletedJob } from "@/api/types";
 import { typeName } from "@/game/yard/planner/summary";
+import { spokenText } from "@/ui/resourceIcon";
 import { awayNoticeText, groupCompletedJobs, jobLine, jobLineText, noticeText } from "./JobNotices";
 
 /**
@@ -321,6 +322,65 @@ describe("yard defence notices (#242)", () => {
     expect(groupCompletedJobs([defended("X attacked your yard.")])).toEqual([
       { kind: "yardAttacked", heading: "X attacked your yard", items: [], tail: "", standalone: true },
     ]);
+  });
+});
+
+describe("attack notices with their numbers (less-text job 3)", () => {
+  const SENTENCE = "Bramble attacked your yard. It was left 63% damaged. 1,234 Twigs and 500 Goo were looted.";
+  const numbered = (kind = "yardAttacked", subject = "Bramble attacked your yard"): CompletedJob => ({
+    kind,
+    id: "1234",
+    t: null,
+    at: 70,
+    detail: {
+      text: SENTENCE,
+      x: null,
+      y: null,
+      subject,
+      stats: { damage: 63, loot: { r1: 1234, r4: 500 }, housedLost: 7 },
+    },
+  });
+
+  it("shows who attacked, then the damage and loot as icons, first in the line", () => {
+    const line = jobLine("away", [upgrade(1, CANNON, 5), numbered()], null);
+    const [block, rest] = [...line.children] as HTMLElement[];
+    expect(block!.className).toBe("attack-notice");
+    expect(block!.querySelector(".attack-notice__subject")!.textContent).toBe("Bramble attacked your yard");
+    expect(block!.querySelector('[data-icon="yarddamage2"]')).not.toBeNull();
+    // The words are on the icons: the wall, then each pile.
+    expect(spokenText(block!.querySelector(".attack-stats")!)).toBe("Yard damage 63% Twigs 1,234 lost Goo 500 lost");
+    // The loot was taken from this player: red with a minus (owner, 28 Oct); the damage stays plain.
+    const twigs = block!.querySelector<HTMLElement>('.res-amount[data-resource="r1"]')!;
+    expect(twigs.dataset["change"]).toBe("loss");
+    expect(twigs.querySelector(".res-amount__value")?.textContent).toBe("−1,234");
+    expect(block!.querySelector(".icon-amount")?.hasAttribute("data-change")).toBe(false);
+    // The housed monsters lost are not told (owner, 27 Oct).
+    expect(block!.textContent).not.toContain("7");
+    expect(rest!.textContent).toBe(`While you were away: upgrade finished: ${typeName(CANNON)} 5`);
+  });
+
+  it("keeps the whole sentence as the plain text the row's tooltip uses", () => {
+    expect(jobLineText("away", [numbered()])).toBe(SENTENCE);
+  });
+
+  it("an Inferno yard's loot shows the Inferno's piles", () => {
+    const line = jobLine("away", [numbered("infernoAttacked", "Bramble attacked your Inferno yard")], null);
+    expect(spokenText(line.querySelector(".attack-stats")!)).toBe("Yard damage 63% Bone 1,234 lost Magma 500 lost");
+    expect(line.querySelector(".attack-notice__rest")).toBeNull();
+  });
+
+  it("an older notice, with no numbers, keeps its sentence", () => {
+    const job = numbered();
+    const old = { ...job, detail: { text: SENTENCE, x: null, y: null } } as CompletedJob;
+    const line = jobLine("away", [old], null);
+    expect(line.querySelector(".attack-notice")).toBeNull();
+    expect(line.textContent).toBe(SENTENCE);
+  });
+
+  it("nothing taken is the damage alone", () => {
+    const job = numbered();
+    const line = jobLine("away", [{ ...job, detail: { ...job.detail, stats: { damage: 12, loot: {} } } }], null);
+    expect(spokenText(line.querySelector(".attack-stats")!)).toBe("Yard damage 12%");
   });
 });
 

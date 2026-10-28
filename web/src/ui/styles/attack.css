@@ -71,6 +71,24 @@
   color: var(--colour-text-muted);
 }
 
+/* The broken wall and "37%" (less-text job 8). */
+.attack-strip__damage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 700;
+}
+
+/* The Retreat question's "[wall] 35% kept" (less-text job 8). */
+.attack-confirm__kept {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text);
+}
+
 /* The shop boosts this battle is fought with (beta.4): a small glowing chip. */
 .attack-strip__boosts {
   display: inline-flex;
@@ -820,6 +838,35 @@
 .attack-army__hint {
   margin: 0;
   font-size: var(--text-xs);
+}
+
+/* One tap's drop as pictures (less-text job 4): "[Pokey] ×30 [Fink] ×5 Tap ground". */
+.attack-army__hint:has(.attack-army__hint-item) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.attack-army__hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.attack-army__hint-item .attack-army__icon {
+  width: 24px;
+  height: 24px;
+}
+
+.attack-army__hint-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text);
+}
+
+.attack-army__hint-tap {
+  margin-left: var(--space-1);
 }
 
 /* Phone: the sheet is short, so the rows go tighter and the targets bigger. */

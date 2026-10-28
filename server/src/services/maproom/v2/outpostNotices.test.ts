@@ -6,6 +6,7 @@ import {
   OUTPOST_TAKEN,
   YARD_ATTACKED,
   attackNoticeText,
+  attackStats,
   infernoAttackNoticeText,
   noticeInfernoAttack,
   noticeOutpostAttack,
@@ -82,16 +83,13 @@ describe("the words", () => {
     );
   });
 
-  test("an attack whose fallen Housings cost housed monsters says how many (#160)", () => {
-    expect(attackNoticeText("Bramble", { x: 1, y: 2 }, 40, { r4: 500 }, 4).message).toBe(
-      "It was left 40% damaged. 500 Goo were looted, and 4 housed monsters were lost.",
-    );
-    expect(attackNoticeText("Bramble", { x: 1, y: 2 }, 40, {}, 1).message).toBe(
-      "It was left 40% damaged. Nothing was looted, and 1 housed monster was lost.",
-    );
-    expect(attackNoticeText("Bramble", { x: 1, y: 2 }, 40, {}, 0).message).toBe(
-      "It was left 40% damaged. Nothing was looted.",
-    );
+  test("the numbers: whole damage, whole loot, nothing for a resource not taken, housed monsters kept", () => {
+    expect(attackStats(63.4, { r1: 1234.7, r2: 0, r4: 500 }, 4)).toEqual({
+      damage: 63,
+      loot: { r1: 1234, r4: 500 },
+      housedLost: 4,
+    });
+    expect(attackStats(-3, {})).toEqual({ damage: 0, loot: {}, housedLost: 0 });
   });
 
   test("a takeover: who and where", () => {
@@ -101,14 +99,12 @@ describe("the words", () => {
     });
   });
 
-  test("a Map Room 1 yard attack: who, the damage, the loot and housed monsters, no cell (#241)", () => {
+  test("a Map Room 1 yard attack: who, the damage and the loot, no cell (#241)", () => {
     expect(yardAttackNoticeText("Bramble", 63.4, { r1: 1234, r4: 500 })).toEqual({
       subject: "Bramble attacked your yard",
       message: "It was left 63% damaged. 1,234 Twigs and 500 Goo were looted.",
     });
-    expect(yardAttackNoticeText("Bramble", 40, {}, 2).message).toBe(
-      "It was left 40% damaged. Nothing was looted, and 2 housed monsters were lost.",
-    );
+    expect(yardAttackNoticeText("Bramble", 40, {}).message).toBe("It was left 40% damaged. Nothing was looted.");
   });
 });
 
@@ -128,7 +124,8 @@ describe("a Map Room 1 yard's defence (#241)", () => {
         messagetype: YARD_ATTACKED,
         targetUnread: 1,
         subject: "Bramble attacked your yard",
-        message: "It was left 52% damaged. 1,234 Twigs and 10,000,000 Putty were looted, and 1 housed monster was lost.",
+        message: "It was left 52% damaged. 1,234 Twigs and 10,000,000 Putty were looted.",
+        attackstats: { damage: 52, loot: { r1: 1234, r3: 10_000_000 }, housedLost: 1 },
         coords: null,
         baseid: "1234",
         updatetime: 40,
@@ -136,7 +133,17 @@ describe("a Map Room 1 yard's defence (#241)", () => {
     ]);
     expect(unread.get(OWNER)).toBe(1);
     const [notice] = await takeOutpostNotices(em, OWNER);
-    expect(notice).toMatchObject({ kind: "yardAttacked", id: "1234", detail: { x: null, y: null } });
+    expect(notice).toMatchObject({
+      kind: "yardAttacked",
+      id: "1234",
+      detail: {
+        x: null,
+        y: null,
+        text: "Bramble attacked your yard. It was left 52% damaged. 1,234 Twigs and 10,000,000 Putty were looted.",
+        subject: "Bramble attacked your yard",
+        stats: { damage: 52, loot: { r1: 1234, r3: 10_000_000 } },
+      },
+    });
   });
 });
 
@@ -168,7 +175,13 @@ describe("a Map Room 2 yard's defence (#361)", () => {
         id: "1234",
         t: null,
         at: 50,
-        detail: { text: "Bramble attacked your yard. It was left 35% damaged. 800 Pebbles were looted.", x: null, y: null },
+        detail: {
+          text: "Bramble attacked your yard. It was left 35% damaged. 800 Pebbles were looted.",
+          x: null,
+          y: null,
+          subject: "Bramble attacked your yard",
+          stats: { damage: 35, loot: { r2: 800 }, housedLost: 0 },
+        },
       },
     ]);
     // Kept in the mailbox, read, with its replay.
@@ -197,6 +210,7 @@ describe("at attack end", () => {
         message: "It was left 63% damaged. 1,234 Twigs and 10,000,000 Putty were looted.",
         coords: [243, 206],
         baseid: OUTPOST,
+        attackstats: { damage: 63, loot: { r1: 1234, r3: 10_000_000 }, housedLost: 0 },
       }),
     ]);
     expect(threads).toEqual([expect.objectContaining({ userid: 0, targetid: OWNER, messagecount: 1 })]);
@@ -242,6 +256,9 @@ describe("on the owner's next load", () => {
     ]);
     expect(first[0]).toMatchObject({ kind: "outpostAttacked", id: OUTPOST, t: null, at: 10 });
     expect(first[0]!.detail).toMatchObject({ x: 1, y: 2 });
+    // Written with no numbers, as a notice from before 28 Oct: only its sentence.
+    expect(first[0]!.detail).not.toHaveProperty("stats");
+    expect(first[0]!.detail).not.toHaveProperty("subject");
     expect(unread.get(OWNER)).toBe(0);
     // Kept in the mailbox, read.
     expect(messages.every((message) => message.targetUnread === 0)).toBe(true);
@@ -293,18 +310,13 @@ describe("on the owner's next load", () => {
 
 describe("an attack on a player's Inferno yard (Inferno WP 3.4)", () => {
   test("the words name the Inferno yard and its own resources", () => {
-    expect(infernoAttackNoticeText("Bramble", 30.2, { r1: 1200, r2: 300 }, 4)).toEqual({
+    expect(infernoAttackNoticeText("Bramble", 30.2, { r1: 1200, r2: 300 })).toEqual({
       subject: "Bramble attacked your Inferno yard",
-      message: "It was left 30% damaged. 1,200 Bone and 300 Coal were looted, and 4 housed monsters were lost.",
+      message: "It was left 30% damaged. 1,200 Bone and 300 Coal were looted.",
     });
     // Loot only: the damage is its own sentence, so the resource list never runs on after it (S3 browser check).
     expect(infernoAttackNoticeText("Bramble", 100, { r1: 4837, r2: 4546, r3: 1650, r4: 1141 }).message).toBe(
       "It was left 100% damaged. 4,837 Bone, 4,546 Coal, 1,650 Sulfur and 1,141 Magma were looted.",
-    );
-    // Loot and housed monsters.
-    expect(infernoAttackNoticeText("Bramble", 100, { r1: 4837, r2: 4546, r3: 1650, r4: 1141 }, 6).message).toBe(
-      "It was left 100% damaged. 4,837 Bone, 4,546 Coal, 1,650 Sulfur and 1,141 Magma were looted, " +
-        "and 6 housed monsters were lost.",
     );
     expect(infernoAttackNoticeText("Bramble", 5, { r3: 10, r4: 2 }).message).toBe(
       "It was left 5% damaged. 10 Sulfur and 2 Magma were looted.",
@@ -316,15 +328,21 @@ describe("an attack on a player's Inferno yard (Inferno WP 3.4)", () => {
       yard: { baseid: "7000", saveuserid: OWNER, damage: 30 } as never,
       attacker: { userid: ATTACKER, username: "Bramble" },
       loot: { r1: 1200 },
-      housedLost: 0,
+      housedLost: 6,
       now: 1_000,
     });
     expect(messages).toHaveLength(1);
+    // The housed monsters are kept in the numbers, not told (owner, 27 Oct).
+    expect(messages[0]).toMatchObject({
+      message: "It was left 30% damaged. 1,200 Bone were looted.",
+      attackstats: { damage: 30, loot: { r1: 1200 }, housedLost: 6 },
+    });
     expect(messages[0]).toMatchObject({ messagetype: INFERNO_ATTACKED, coords: null, baseid: "7000", byuserid: ATTACKER });
 
     const jobs = await takeOutpostNotices(em, OWNER);
     expect(jobs.map((job) => [job.kind, job.id, job.detail.x])).toEqual([["infernoAttacked", "7000", null]]);
     expect(jobs[0]!.detail.text).toBe("Bramble attacked your Inferno yard. It was left 30% damaged. 1,200 Bone were looted.");
+    expect(jobs[0]!.detail).toMatchObject({ subject: "Bramble attacked your Inferno yard", stats: { damage: 30 } });
     expect(await takeOutpostNotices(em, OWNER)).toEqual([]);
   });
 

@@ -177,6 +177,8 @@ export class ArmyPanel {
   private readonly rows: Row[] = [];
   private readonly champions: ChampionRow[] = [];
   private readonly hint: HTMLElement;
+  /** The hint's words as last drawn, so a refresh that changes nothing redraws no pictures. */
+  private hintWords = "";
   private readonly unsubscribe: () => void;
   private readonly observer: ResizeObserver | null;
   private readonly radioName = `attack-champion-${Math.random().toString(36).slice(2, 9)}`;
@@ -524,11 +526,38 @@ export class ArmyPanel {
     }
     this.refreshRetreat();
 
-    this.hint.textContent = !live
-      ? "The attack is over."
+    this.refreshHint(live);
+  }
+
+  /**
+   * The line under the rows (less-text job 4): what one tap drops, as the
+   * monsters' pictures with their counts, "[Pokey] ×30 [Fink] ×5 [Krallen]
+   * Tap ground". The words in full stay for hover and screen readers: "Tap the
+   * yard to drop 30 Pokey and 5 Fink with Krallen."
+   */
+  private refreshHint(live: boolean): void {
+    const bucket = this.bucket;
+    const words = !live
+      ? ATTACK_OVER_HINT
       : bucket.isEmpty()
-        ? "Set how many to send, then tap the yard to drop them."
+        ? EMPTY_HINT
         : `Tap the yard to drop ${describeComposition(bucket)}.`;
+    if (words === this.hintWords) return;
+    this.hintWords = words;
+    this.hint.title = "";
+    if (!live || bucket.isEmpty()) {
+      this.hint.textContent = words;
+      return;
+    }
+    const spoken = document.createElement("span");
+    spoken.className = "u-visually-hidden";
+    spoken.textContent = words;
+    const tap = document.createElement("span");
+    tap.className = "attack-army__hint-tap";
+    tap.setAttribute("aria-hidden", "true");
+    tap.textContent = "Tap ground";
+    this.hint.replaceChildren(spoken, ...compositionPictures(bucket), tap);
+    this.hint.title = words;
   }
 
   /**
@@ -561,6 +590,39 @@ export class ArmyPanel {
 
 /** Bucket units, exact with a thousands separator: "2,150", never "2.2K". */
 const units = (value: number): string => Math.round(value).toLocaleString("en-US");
+
+/** What the hint says with nothing set to send, and once the attack is over. */
+export const EMPTY_HINT = "Pick monsters, then tap ground";
+export const ATTACK_OVER_HINT = "The attack is over.";
+
+/**
+ * One tap's drop as pictures, for the hint line: each monster's portrait and
+ * "×30", then each picked champion's portrait. Hidden from screen readers,
+ * which read the hint's words instead.
+ */
+const compositionPictures = (bucket: Bucket): HTMLElement[] => {
+  const composition = bucket.composition();
+  const monsters = Object.entries(composition.monsters).map(([id, count]) => {
+    const item = document.createElement("span");
+    item.className = "attack-army__hint-item";
+    item.setAttribute("aria-hidden", "true");
+    const times = document.createElement("span");
+    times.className = "attack-army__hint-count";
+    times.textContent = `×${formatAmount(count)}`;
+    item.append(portrait(monsterPortrait(id, "icon"), monsterName(id)), times);
+    return item;
+  });
+  const champions = [composition.champion, composition.second]
+    .filter((one) => one !== undefined)
+    .map((one) => {
+      const item = document.createElement("span");
+      item.className = "attack-army__hint-item";
+      item.setAttribute("aria-hidden", "true");
+      item.append(portrait(championPortrait(championByType(one.t) ?? `G${one.t}`, one.l, "icon"), championName(one.t)));
+      return item;
+    });
+  return [...monsters, ...champions];
+};
 
 /** "30 Pokey and 5 Fink with Krallen", for the hint line. */
 const describeComposition = (bucket: Bucket): string => {

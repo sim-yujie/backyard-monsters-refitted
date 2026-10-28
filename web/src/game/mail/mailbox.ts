@@ -1,5 +1,7 @@
 import type { MailMessage, MailTarget } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
+import { attackNoticeRealm, attackNoticeStatsOf, type AttackNoticeStats } from "@/game/attack/attackNoticeStats";
+import type { ResourceRealm } from "@/ui/resourceIcon";
 
 /**
  * What the mailbox screen shows (#193), worked out from what the mail routes
@@ -64,6 +66,14 @@ export interface MailThread {
   readonly truce: ThreadTruce | null;
   /** The thread's latest invitation to move, as the server keeps it, or null for none (#205). */
   readonly invite: ThreadTruce | null;
+  /** When the last message is the game's attack notice with its numbers, those (less-text job 3); else null. */
+  readonly attack: MailAttack | null;
+}
+
+/** An attack notice's numbers and the resources they count in, shown as icons instead of its sentence. */
+export interface MailAttack {
+  readonly stats: AttackNoticeStats;
+  readonly realm: ResourceRealm;
 }
 
 /**
@@ -107,6 +117,12 @@ export interface MailItem {
    * its Add friend (friends WP11, #378); null on anything else and on older notices.
    */
   readonly byUserId: number | null;
+  /**
+   * On the game's attack notice written since 28 Oct, its numbers, which the
+   * mailbox shows as icons with {@link text} kept as their words; null on
+   * anything else and on older notices.
+   */
+  readonly attack: MailAttack | null;
 }
 
 /** A past contact, for a new message's recipient list. */
@@ -155,6 +171,7 @@ export const threadList = (
         ? { status: last.trucestate, until: Number(last.truceexpire) > 0 ? Number(last.truceexpire) : null }
         : null,
       invite: last.migratestate ? inviteOf(last) : null,
+      attack: Number(last.userid) === SYSTEM_SENDER ? attackOf(last) : null,
     }))
     .sort((one, other) => other.time - one.time || other.threadid - one.threadid);
 
@@ -195,6 +212,12 @@ export const byUserIdOf = (message: Pick<MailMessage, "byuserid">, myId: number)
   return message.byuserid != null && Number.isInteger(id) && id > 0 && id !== myId ? id : null;
 };
 
+/** A game notice's attack numbers (`attackstats`), or null when it has none. */
+export const attackOf = (message: Pick<MailMessage, "attackstats" | "messagetype">): MailAttack | null => {
+  const stats = attackNoticeStatsOf(message.attackstats);
+  return stats && { stats, realm: attackNoticeRealm(message.messagetype) };
+};
+
 /** An open thread, oldest first, each message the player's or the other side's. */
 export const threadItems = (messages: readonly MailMessage[], myId: number): MailItem[] =>
   messages.map((message) => {
@@ -211,6 +234,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
       invite: message.messagetype === "migraterequest" ? inviteOf(message) : null,
       defenceId: notice && message.messagetype === YARD_ATTACKED ? defenceIdOf(message) : null,
       byUserId: notice ? byUserIdOf(message, myId) : null,
+      attack: notice ? attackOf(message) : null,
     };
   });
 

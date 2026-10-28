@@ -2,7 +2,6 @@ import { tutTarget, TutTarget } from "@/game/guide/targets";
 import type { AttackSummary, OutcomeTone } from "@/game/attack/attackSave";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import { championName } from "@/ui/attack/ArmyPanel";
-import { formatAmount } from "@/ui/format";
 import { RESOURCE_KEYS, resourceAmount, resourceName, type ResourceRealm } from "@/ui/resourceIcon";
 import { Panel } from "@/ui/Panel";
 
@@ -432,6 +431,8 @@ export class EndAttackPanel {
    * purse in full, so it has no such note (Inferno WP 1.13); a Moloch
    * tribe's stops at the purse's caps (`ATTACK.as:703-708`), and the
    * server's `taken` says what the battle took (WP 2.10).
+   *
+   * What was won shows green with a plus, "+1,500" (owner, 28 Oct).
    */
   private showLoot(kept: ResourceAmounts, takenByServer: ResourceAmounts | null = null): void {
     const whole = (value: number): string => Math.floor(value).toLocaleString("en-US");
@@ -445,11 +446,11 @@ export class EndAttackPanel {
       const taken = inferno ? Math.max(amount, takenByServer?.[key] ?? 0) : Math.max(amount, lootTaken[key]);
       const name = resourceName(key, realm);
       item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
-      item.append(resourceAmount(key, formatAmount(amount), { realm }));
+      item.append(resourceAmount(key, amount, { realm, change: "gain", tooltip: false }));
       const lost = Math.floor(taken) > Math.floor(amount);
       item.title = lost
-        ? `${name}: ${whole(amount)} of ${whole(taken)} taken; the rest did not fit in your storage`
-        : `${name}: ${whole(amount)}`;
+        ? `${name}: ${whole(amount)} gained of ${whole(taken)} taken; the rest did not fit in your storage`
+        : `${name}: ${whole(amount)}${amount >= 1 ? " gained" : ""}`;
       if (lost) spilled = true;
       this.loot.append(item);
     }

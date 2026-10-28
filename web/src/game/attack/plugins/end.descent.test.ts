@@ -151,7 +151,7 @@ describe("a Descent attack's end", () => {
   it("the end panel shows the landing's loot as Bone, Coal, Sulfur and Magma, and leaves the HUD's pool alone", async () => {
     const { creditLoot } = await run(targetOf(7), landing(true));
     const items = [...modal.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
-    expect(items.map((item) => item.title)).toEqual(["Bone: 120", "Coal: 80", "Sulfur: 0", "Magma: 0"]);
+    expect(items.map((item) => item.title)).toEqual(["Bone: 120 gained", "Coal: 80 gained", "Sulfur: 0", "Magma: 0"]);
     expect(items.map((item) => item.querySelector<HTMLElement>(".res-icon")?.dataset["realm"])).toEqual([
       "inferno", "inferno", "inferno", "inferno",
     ]);
