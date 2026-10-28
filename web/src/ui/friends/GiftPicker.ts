@@ -18,10 +18,13 @@ export const GIFT_TEXT = {
   title: "Send a gift",
   lead: (name: string): string => `Pick what to send ${name}. Gifts are free: one a day for each friend.`,
   sending: "Sending…",
-  /** "Sent to Bob · [putty] 300": the name in words, the gift as its icon and amount. */
+  /**
+   * "Sent to Bob · [putty] −300": the name in words, the gift as its icon and
+   * amount, red with a minus as it left the yard (owner, 28 Oct).
+   */
   sent: (gift: Gift, name: string): HTMLElement => {
     const line = document.createElement("span");
-    line.append(`Sent to ${name} · `, resourceAmount(gift.resource, gift.amount));
+    line.append(`Sent to ${name} · `, resourceAmount(gift.resource, gift.amount, { change: "loss" }));
     return line;
   },
   cancel: "Cancel",

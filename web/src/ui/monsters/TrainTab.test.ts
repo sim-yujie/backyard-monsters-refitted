@@ -176,7 +176,7 @@ describe("TrainTab: Train and Instant", () => {
     await Promise.resolve();
     const status = element.querySelector<HTMLElement>(".monsters-status")!;
     expect(status.hidden).toBe(false);
-    expect(spokenText(status)).toBe("Training Octo-ooze to level 4: Putty 24,000 spent.");
+    expect(spokenText(status)).toBe("Training Octo-ooze to level 4: Putty 24,000 lost.");
   });
 });
 

@@ -2,7 +2,7 @@ import { friendRefusal, type FriendsApi, type Gift, type GiftResource, type Reso
 import type { FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool, type PlayerPool } from "@/game/friends/friendsView";
 import { formatAmount } from "@/ui/format";
-import { costAmounts, RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
 import { openGiftPicker, type GiftTarget } from "./GiftPicker";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
 
@@ -80,10 +80,20 @@ export const GIFTS_TEXT = {
   sentBack: "Gift sent today",
   left: (count: number): string =>
     count > 0 ? `You can collect ${count} more ${count === 1 ? "gift" : "gifts"} today.` : "You have collected all you can today. The rest will wait.",
-  /** "Collected · [twig] 1,000 [goo] 500". */
+  /** "Collected · [twig] +1,000 [goo] +500", green with a plus as gains (owner, 28 Oct). */
   collected: (amounts: ResourceAmounts): HTMLElement => {
     const line = document.createElement("span");
-    line.append("Collected · ", costAmounts(amounts) ?? "nothing");
+    const gained = RESOURCE_KEYS.filter((key) => (amounts[key] ?? 0) >= 1).map((key) =>
+      resourceAmount(key, amounts[key] ?? 0, { change: "gain" }),
+    );
+    if (gained.length === 0) {
+      line.append("Collected · nothing");
+      return line;
+    }
+    const list = document.createElement("span");
+    list.className = "res-list";
+    list.append(...gained);
+    line.append("Collected · ", list);
     return line;
   },
   collectedNothing: "Your storage is full, so nothing was added.",
@@ -175,7 +185,7 @@ export class GiftsTab implements FriendsTabView {
         actions: [collect, back],
       });
       row.dataset["giftid"] = String(gift.id);
-      row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { className: "gift-amount" }));
+      row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { change: "gain", className: "gift-amount" }));
       return row;
     });
     this.body.replaceChildren(section(GIFTS_TEXT.waiting, rows, GIFTS_TEXT.none));

@@ -234,7 +234,9 @@ describe("LockerTab: after an action", () => {
     await Promise.resolve();
     const status = element.querySelector<HTMLElement>(".monsters-status")!;
     expect(status.hidden).toBe(false);
-    expect(spokenText(status)).toBe("Unlocking Bolt: Putty 64,000 spent.");
+    // Spent: red with a minus (owner, 28 Oct).
+    expect(spokenText(status)).toBe("Unlocking Bolt: Putty 64,000 lost.");
+    expect(status.querySelector(".res-amount__value")?.textContent).toBe("−64,000");
   });
 });
 

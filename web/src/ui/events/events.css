@@ -299,6 +299,15 @@
   white-space: nowrap;
 }
 
+/* A claimed reward's resources and Shiny: a gain, "+10K" in green (owner,
+ * 28 Oct; the colours and halo of `amountChange.ts`, ui.css). */
+.events-reward--gain .events-reward__figure {
+  color: var(--colour-gain);
+  text-shadow:
+    0 0 2px var(--colour-change-halo),
+    0 1px 1px var(--colour-change-halo);
+}
+
 .events-claim {
   display: flex;
   flex-direction: column;
