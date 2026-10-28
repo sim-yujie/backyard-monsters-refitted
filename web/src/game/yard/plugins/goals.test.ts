@@ -170,7 +170,11 @@ describe("on the Inferno yard (Inferno WP 4.3)", () => {
     await settle();
     mounts.overlay.content.querySelector<HTMLButtonElement>('.goals-claim[data-goal="IUC2"]')!.click();
     await settle();
-    expect(notices.show).toHaveBeenCalledWith("goals", "10 Zagnoids moved into the Compound.", expect.anything());
+    const [key, line] = notices.show.mock.calls[0] as [string, HTMLElement];
+    expect(key).toBe("goals");
+    expect(line.textContent).toBe("10 Zagnoids → Compound");
+    expect(line.getAttribute("aria-label")).toBe("10 Zagnoids moved into the Compound");
+    expect(line.querySelector("img")!.getAttribute("src")).toContain("IC2");
     door.destroy();
   });
 });
@@ -276,7 +280,7 @@ describe("Claim", () => {
     expect(actions.claim).toHaveBeenCalledWith("SW4");
     expect(notices.show).toHaveBeenCalledWith(
       "goals",
-      "Marilyn Monstroe is built and waiting in your Chaos Factory.",
+      "Marilyn Monstroe ready · Chaos Factory",
       expect.objectContaining({ level: "info" }),
     );
     door.destroy();

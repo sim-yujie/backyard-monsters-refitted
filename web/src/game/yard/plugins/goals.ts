@@ -3,6 +3,7 @@ import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { walkIntoHousing, type MonsterWalkIn } from "@/game/guide/MonsterWalkIn";
 import { housedCount } from "@/game/monsters/housing";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { startBank, type AnswerBank, type BankShowFx, type BankShowHud } from "@/game/yard/bankShow";
 import type { HarvestKey } from "@/game/yard/harvest";
 import { claimFigure, REWARD_KEYS, type ClaimFigure } from "@/ui/goals/claimFigure";
@@ -256,7 +257,7 @@ export class GoalsDoor {
     if (result.ok) {
       const { monsters } = result.report;
       if (monsters && goal.monsters) {
-        notices.show(GOALS_NOTICE, `${monstersText(monsters.count, goal.monsters.name)} moved into ${this.words.housing}.`, {
+        notices.show(GOALS_NOTICE, monsterRewardLine(monsters.id, monstersText(monsters.count, goal.monsters.name), this.words.housing), {
           level: "info",
           timeoutMs: 5_000,
         });
@@ -272,7 +273,7 @@ export class GoalsDoor {
       }
       // A siege weapon (SW4-SW12) waits in the Chaos Factory for the next attack.
       if (result.report.siegeReward && goal.siege) {
-        notices.show(GOALS_NOTICE, `${goal.siege.name} is built and waiting in your Chaos Factory.`, {
+        notices.show(GOALS_NOTICE, `${goal.siege.name} ready · Chaos Factory`, {
           level: "info",
           timeoutMs: 5_000,
         });
@@ -304,3 +305,22 @@ export const goalsPlugin: YardPlugin = (mounts) => {
 };
 
 YARD_PLUGINS.push(goalsPlugin);
+
+/**
+ * A monster reward's notice: the monster's picture, "10 Zagnoids → Compound"
+ * (was "10 Zagnoids moved into the Compound."). `place` is the yard's word
+ * for its housing, "Housing" or "the Compound".
+ */
+export const monsterRewardLine = (id: string, monsters: string, place: string): HTMLElement => {
+  const line = document.createElement("span");
+  line.className = "goals-reward-line";
+  const picture = document.createElement("img");
+  picture.className = "goals-reward-line__picture";
+  picture.alt = "";
+  picture.width = 24;
+  picture.height = 24;
+  showPortrait(picture, monsterPortrait(id, "icon"));
+  line.append(picture, `${monsters} → ${place.replace(/^the /, "")}`);
+  line.setAttribute("aria-label", `${monsters} moved into ${place}`);
+  return line;
+};

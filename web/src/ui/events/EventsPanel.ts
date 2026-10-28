@@ -85,6 +85,22 @@ const decorationName = (type: number): string => typeName(type);
 export const rewardsText = (rewards: readonly EventReward[]): string =>
   rewards.map((reward) => rewardText(reward, decorationName)).join(" + ");
 
+/**
+ * A claim's notice: "Day 3 claimed" and the rewards as the panel's own
+ * pictures and short figures, "[twig][pebble] 1K"; the full words
+ * ("Day 3 claimed: 1,000 Twigs + 1,000 Pebbles") on hover and for a screen
+ * reader.
+ */
+export const claimedLine = (title: string, rewards: readonly EventReward[]): HTMLElement => {
+  const words = rewards.length > 0 ? `${title}: ${rewardsText(rewards)}` : title;
+  const line = el("span", "events-claimed");
+  line.setAttribute("role", "img");
+  line.setAttribute("aria-label", words);
+  line.title = words;
+  line.append(el("span", "events-claimed__title", title), ...rewards.map(rewardBadge));
+  return line;
+};
+
 /** A small picture for one reward, and its short figure. */
 const rewardBadge = (reward: EventReward): HTMLElement => {
   const badge = el("span", `events-reward events-reward--${reward.kind}`);
