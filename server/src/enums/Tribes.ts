@@ -1,4 +1,3 @@
-import type { TribeScaleConfig } from "../services/maproom/inferno/createInfernoTribes.js";
 import type { MR1TribeScaleConfig } from "../services/maproom/v1/createMR1Tribes.js";
 
 /**
@@ -56,6 +55,14 @@ export const MR1_TRIBES: MR1TribeScaleConfig = {
   [TribeScale.TH5]: { maxLevel: 5 },
   [TribeScale.HIGH]: { maxLevel: Infinity }
 };
+
+/** One band of Moloch tribes: its first tribe id and the highest player level it serves. */
+export interface TribeDetails {
+  minTribeId: number;
+  maxLevel: number;
+}
+
+export type TribeScaleConfig = Record<InfernoTribeScale, TribeDetails>;
 
 export const INFERNO_TRIBES: TribeScaleConfig = {
   [InfernoTribeScale.LOW]: {

@@ -6,6 +6,7 @@ import {
   levelOf,
   sumCosts,
   upgradeSteps,
+  yardKindOf,
   type ResourceAmounts,
 } from "../../yardplanner/costs.js";
 import { bufferCeiling, isHarvester } from "./production.js";
@@ -267,11 +268,12 @@ export const outpostAllowance = (
  * (`client/scripts/BFOUNDATION.as:2526-2530`, `:2639-2664`).
  *
  * Recycling is the player's right and never a violation, so this only ever
- * feeds the delta budget.
+ * feeds the delta budget. An Inferno building is priced from the Inferno table
+ * (`kind`), and its refund goes to the Inferno purse (`BFOUNDATION.as:2557`).
  */
-export const refundOf = (building: BuildingData): ResourceAmounts => {
+export const refundOf = (building: BuildingData, kind: YardKind = "main"): ResourceAmounts => {
   const type = pricingType(Number(building.t));
-  const row = costOf(type);
+  const row = costOf(type, kind);
   if (!row) return noAmounts();
   if (row.kind === "decoration") return noAmounts();
 
@@ -282,7 +284,7 @@ export const refundOf = (building: BuildingData): ResourceAmounts => {
     return first ? stepAmounts(first) : noAmounts();
   }
 
-  const paid = sumCosts(upgradeSteps(type, 0, level));
+  const paid = sumCosts(upgradeSteps(type, 0, level, kind));
   return {
     r1: Math.floor(paid.r1 * 0.5),
     r2: Math.floor(paid.r2 * 0.5),
@@ -314,6 +316,8 @@ export const OUTPOST_STORAGE = 2000000;
 
 /** The parts of a `Save` the storage cap is derived from. */
 export interface StorageCapSave {
+  /** `BaseType`: the Inferno yard's Resource Pods hold the Inferno table's figures. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   storedata?: JsonObject | null;
   outposts?: readonly unknown[] | null;
@@ -334,18 +338,27 @@ export const packingMultiplier = (storedata: JsonObject | null | undefined): num
  *
  * A silo still counting its build down is level 0 and adds nothing, which
  * {@link levelOf} already says.
+ *
+ * The Inferno yard (`isMainYardOrInfernoMainYard`) counts its Resource Pods
+ * at the Inferno table's capacities and no outposts, and its purse, the main
+ * save's `iresources`, has this one cap for all four resources. Its Improved
+ * Packing Skills are its own `storedata`'s, as in Flash, where the multiplier
+ * comes from the loaded yard's store data (`STORE.Data`, `BASE.as:1082`;
+ * the Inferno shop sells `BIP` too, `STORE.as:210`).
  */
 export const storageCap = (save: StorageCapSave): number => {
+  const kind = yardKindOf(save);
   let capacity = BASE_STORAGE;
 
   for (const building of Object.values(save.buildingdata ?? {})) {
-    if (Number(building.t) !== SILO_TYPE) continue;
+    if (Number(building?.t) !== SILO_TYPE) continue;
     const level = levelOf(building);
     if (level <= 0) continue;
-    capacity += siloCapacity(level);
+    capacity += siloCapacity(level, kind === "inferno" ? "inferno" : "main");
   }
 
   const packed = Math.floor(capacity * packingMultiplier(save.storedata));
+  if (kind === "inferno") return packed;
   const outposts = Array.isArray(save.outposts) ? save.outposts.length : 0;
 
   return packed + outposts * OUTPOST_STORAGE;
@@ -364,14 +377,16 @@ const BASE_VALUE_EXCLUDED = new Set(["decoration", "enemy", "immovable", "trap"]
  *
  * `basevalue` drives the empire level alongside `points`
  * (`services/base/calculateBaseLevel.ts:11-20`), which is why the server
- * derives it rather than storing whatever arrives.
+ * derives it rather than storing whatever arrives. `kind` picks the price
+ * table: an Inferno yard is valued at the Inferno prices, as Flash's
+ * `_buildingProps` there are `INFERNOYARDPROPS`.
  */
-export const baseValueOf = (buildingdata: BuildingDataMap | null | undefined): number => {
+export const baseValueOf = (buildingdata: BuildingDataMap | null | undefined, kind: YardKind = "main"): number => {
   let total = 0;
 
   for (const building of Object.values(buildingdata ?? {})) {
     const type = pricingType(Number(building.t));
-    const row = costOf(type);
+    const row = costOf(type, kind);
     if (!row || BASE_VALUE_EXCLUDED.has(row.kind)) continue;
 
     const level = pricingLevel(building);

@@ -4,6 +4,7 @@ import {
   deriveHousingCapacity,
   housingUsed,
 } from "../monsters/transferRules.js";
+import { yardKindOf } from "../yardplanner/costs.js";
 
 /**
  * Monster Housing on the server (`docs/design/yard-buildings.md` §4.5,
@@ -16,10 +17,16 @@ import {
  * building part-way through an upgrade counts at its old level, because `l`
  * only moves when the upgrade finishes (§10 Q4): starting an upgrade never
  * culls.
+ *
+ * On the Inferno yard the housing is its Housing Bunkers (128, capacity
+ * 200/300/520/780/1140/1820, `HOUSING.as:65` `HOUSINGBUNKER`) and the
+ * expansion is the Inferno shop's `EXHI` (`docs/design/inferno.md` WP 2.3).
  */
 
 /** The parts of a yard housing reads. */
 export interface HousingYard {
+  /** `BaseType`: the Inferno yard houses in its Housing Bunkers. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   /** Where `EXH` is looked up; a player's buffs live on their main yard. */
@@ -44,6 +51,7 @@ export const housingCapacity = (
     buildingData: yard.buildingdata,
     healthData: yard.buildinghealthdata,
     housingExpansionActive: expansion,
+    inferno: yardKindOf(yard) === "inferno",
     minHealth,
   });
 

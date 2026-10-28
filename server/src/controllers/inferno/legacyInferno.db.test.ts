@@ -9,9 +9,11 @@ import { PLACEHOLDER_PIC_SQUARE } from "../../game-data/avatars.js";
 import { memoryRedis } from "../../testing/memoryRedis.js";
 
 /**
- * The old Flash Inferno routes, closed until the new Inferno ships
- * (`config/InfernoConfig.ts`). Each test sends requests those routes used to
- * accept; each must now be refused, and leave both yards as they were.
+ * What is left of the Flash Inferno on the shared routes, refused for good
+ * (`services/inferno/infernoGate.ts`; its own routes, `/api/:v/bm/base/save`
+ * and `infernomonsters`, are gone, WP 7.1). Each test sends requests those
+ * routes used to accept; each must now be refused, and leave both yards as
+ * they were.
  *
  * The real routes run against a real Postgres, as a player's requests would.
  * The player signed up and loaded their yard; a Flash-era Inferno yard is made
@@ -66,15 +68,13 @@ const FLASH_KEYS = { points: "0", basevalue: "0", empirevalue: "0" };
 type Controller = (ctx: Context) => Promise<void>;
 type Body = Record<string, unknown>;
 
-describe.skipIf(!enabled)("the old Inferno routes refuse every cheat on a real database", () => {
+describe.skipIf(!enabled)("what is left of the Flash Inferno refuses every cheat on a real database", () => {
   const db = orm!;
   const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => db.em.fork().execute<R[]>(query, params);
 
   let routes: {
     baseLoad: Controller;
     baseSave: Controller;
-    infernoSave: Controller;
-    infernoMonsters: Controller;
     updateSaved: Controller;
     getNeighbours: Controller;
   };
@@ -144,8 +144,6 @@ describe.skipIf(!enabled)("the old Inferno routes refuse every cheat on a real d
     routes = {
       baseLoad: (await import("../base/load/baseLoad.js")).baseLoad,
       baseSave: (await import("../base/save/baseSave.js")).baseSave,
-      infernoSave: (await import("./infernoSave.js")).infernoSave,
-      infernoMonsters: (await import("./infernoMonsters.js")).infernoMonsters,
       updateSaved: (await import("../base/save/updateSaved.js")).updateSaved,
       getNeighbours: (await import("../maproom/getNeighbours.js")).getNeighbours,
     };
@@ -190,15 +188,6 @@ describe.skipIf(!enabled)("the old Inferno routes refuse every cheat on a real d
 
     expectClosed(await load("idescent"));
     expectClosed(await load("iwmview", "201"));
-    expectClosed(
-      await call(routes.infernoSave, {
-        baseid: "201",
-        basesaveid: "999999999",
-        ...FLASH_KEYS,
-        attackcreatures: JSON.stringify({ C12: 250 }),
-        destroyed: "0",
-      }),
-    );
 
     const after = await rows();
     expect(after.main).toEqual(before.main);
@@ -211,7 +200,6 @@ describe.skipIf(!enabled)("the old Inferno routes refuse every cheat on a real d
     const before = await rows();
     const forged = { lockerdata: JSON.stringify({ C19: 1, IC5: 1 }), academy: JSON.stringify({ IC5: { level: 6 } }) };
 
-    expectClosed(await call(routes.infernoSave, { baseid: infernoBaseid, basesaveid: String(infernoBasesaveid), ...FLASH_KEYS, ...forged }));
     expectClosed(await call(routes.baseSave, { baseid: infernoBaseid, basesaveid: String(infernoBasesaveid), ...FLASH_KEYS, ...forged }));
     expectClosed(await load("ibuild"));
 
@@ -221,48 +209,10 @@ describe.skipIf(!enabled)("the old Inferno routes refuse every cheat on a real d
     expect((after.main?.lockerdata ?? {}).C19).toBeUndefined();
   });
 
-  test("the Inferno save and monsters routes write nothing", async () => {
-    const before = await rows();
-
-    expectClosed(
-      await call(routes.infernoSave, {
-        baseid: infernoBaseid,
-        basesaveid: String(infernoBasesaveid),
-        ...FLASH_KEYS,
-        resources: JSON.stringify({ r1: 50_000_000, r2: 50_000_000, r3: 50_000_000, r4: 50_000_000 }),
-        buildingdata: JSON.stringify({ "1": { t: 14, X: 0, Y: 0, l: 10 } }),
-        purchase: JSON.stringify(["IC1", 50]),
-      }),
-    );
-    expectClosed(await call(routes.infernoMonsters, { type: "set", imonsters: JSON.stringify({ IC1: 500 }) }));
-    expectClosed(await call(routes.infernoMonsters, { type: "get" }));
-
-    const after = await rows();
-    expect(after.main).toEqual(before.main);
-    expect(after.inferno).toEqual(before.inferno);
-  });
-
   test("every other Inferno mode and the Inferno neighbour list are refused too", async () => {
     for (const mode of ["iview", "iattack", "iwmattack", "ihelp"]) expectClosed(await load(mode, infernoBaseid));
     expectClosed(await call(routes.updateSaved, { type: "iview", baseid: infernoBaseid, version: "1", lastupdate: "0", mapversion: "1" }));
     expectClosed(await call(routes.updateSaved, { type: "iattack", baseid: infernoBaseid, version: "1", lastupdate: "0", mapversion: "1" }));
     expectClosed(await call(routes.getNeighbours, { type: "inferno" }));
-  });
-
-  test("the Inferno save route writes no main yard either", async () => {
-    const before = await rows();
-    const [{ basesaveid }] = await sql<{ basesaveid: number }>(
-      `SELECT basesaveid FROM bym.save WHERE userid = ? AND type = 'main'`,
-      [player.userid],
-    );
-    expectClosed(
-      await call(routes.infernoSave, {
-        baseid: "0",
-        basesaveid: String(basesaveid),
-        ...FLASH_KEYS,
-        lockerdata: JSON.stringify({ C19: 1 }),
-      }),
-    );
-    expect((await rows()).main).toEqual(before.main);
   });
 });

@@ -186,3 +186,19 @@ describe("planRecycle: refusals", () => {
     expect(planRecycle(yardOf([locker], { lockerdata: { C5: { t: 2 } } }), 1, NOW).report.id).toBe(1);
   });
 });
+
+describe("planRecycle: a main-yard Inferno building (Inferno WP 6.1)", () => {
+  test("a level 1 Quake Tower's half comes back to the Inferno purse, up to its caps", () => {
+    // costs[0] 312,500 / 187,500 / 125,000: half is 156,250 / 93,750 / 62,500.
+    const save = yardOf([building(1, 129, { l: 1 })], {
+      type: "main",
+      iresources: { r1: 0, r2: 0, r3: 0, r4: 0, r1max: 100_000, r2max: 1_000_000, r3max: 1_000_000, r4max: 1_000_000 },
+    });
+    const plan = planRecycle(save, 1, NOW);
+    expect(plan).not.toHaveProperty("credit");
+    expect(plan.report.refund).toEqual({ r1: 100_000, r2: 93_750, r3: 62_500, r4: 0 });
+    expect(plan.report.lost).toEqual({ r1: 56_250, r2: 0, r3: 0, r4: 0 });
+    expect(plan.slices.iresources).toMatchObject({ r1: 100_000, r2: 93_750, r3: 62_500, r4: 0 });
+    expect(plan.slices.buildingdata["1"]).toBeUndefined();
+  });
+});

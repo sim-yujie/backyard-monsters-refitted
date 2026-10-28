@@ -1,11 +1,12 @@
 import {
   activeOverdrive,
   HATCHERY_OVERDRIVES,
+  INFERNO_HATCHERY_OVERDRIVES,
   MAX_ADD,
   type HatchTarget,
   type OverdriveItem,
 } from "@/game/monsters/hatchPlan";
-import { isListed } from "@/game/monsters/monsterCatalogue";
+import { isListedIn, monsterRealmOf, monsterWords } from "@/game/monsters/realm";
 import {
   actionKey,
   type YardActionResult,
@@ -138,7 +139,7 @@ export const HatcheryKey = {
 /** Every hatchery key, the overdrive buys included, for disabling the tab's buttons while one runs. */
 export const HATCHERY_KEYS: readonly string[] = [
   ...Object.values(HatcheryKey),
-  ...HATCHERY_OVERDRIVES.map(({ item }) => actionKey("buy", item)),
+  ...[...HATCHERY_OVERDRIVES, ...INFERNO_HATCHERY_OVERDRIVES].map(({ item }) => actionKey("buy", item)),
 ];
 
 /** What the Hatch tab can do, each a queued store action that never throws. */
@@ -161,11 +162,15 @@ const refuse = (
   detail: Record<string, unknown> = {},
 ): YardRefusal => ({ reason, message, detail, local: true });
 
-/** The add's checks the client can see: an obtainable, unlocked monster and a sane count. */
+/**
+ * The add's checks the client can see: an obtainable, unlocked monster of the
+ * yard's realm (the Inferno roster in an Incubator) and a sane count.
+ */
 const addRefusal = (reader: YardStoreReader, monster: string, count: number): YardRefusal | null => {
-  if (!isListed(monster)) return refuse("badRequest", "That monster cannot be hatched.", { monster });
+  const realm = monsterRealmOf(reader.kind);
+  if (!isListedIn(monster, realm)) return refuse("badRequest", "That monster cannot be hatched.", { monster });
   if (Number(reader.save.lockerdata?.[monster]?.t) !== 2) {
-    return refuse("locked", "Unlock that monster in the Monster Locker first.", { monster });
+    return refuse("locked", `Unlock that monster in the ${monsterWords(realm).locker} first.`, { monster });
   }
   if (!(Number.isInteger(count) && count >= 1 && count <= MAX_ADD)) {
     return refuse("badRequest", `Add between 1 and ${MAX_ADD} at a time.`, { count });

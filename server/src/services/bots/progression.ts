@@ -4,6 +4,7 @@ import { mulberry32, type Rng } from "../../game-rules/combat/rng.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import { BaseType } from "../../enums/Base.js";
 import { BUILDABLE_TYPES, buildGates } from "../yard/build.js";
+import { SURFACE_INFERNO_TYPES } from "../yard/surfaceInferno.js";
 import { LOCKER_TYPE } from "../yard/locker.js";
 import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
@@ -345,8 +346,14 @@ const EARLY_TOP_HALL = 2;
 /** Kinds that add nothing to base value (`BASE_VALUE_EXCLUDED`, `economy/resourceBudget.ts`). */
 const VALUE_EXCLUDED_KINDS: ReadonlySet<string> = new Set(["decoration", "enemy", "immovable", "trap"]);
 
-/** Every type the progression may build: the build menu (`BUILDABLE_TYPES`). */
-const PROGRESSION_TYPES: readonly number[] = [...BUILDABLE_TYPES].sort((a, b) => a - b);
+/**
+ * Every type the progression may build: the build menu (`BUILDABLE_TYPES`),
+ * less the main yard's Inferno buildings, which need an Inferno a bot does not
+ * have (`yard/surfaceInferno.ts`).
+ */
+const PROGRESSION_TYPES: readonly number[] = [...BUILDABLE_TYPES]
+  .filter((type) => !SURFACE_INFERNO_TYPES.has(type))
+  .sort((a, b) => a - b);
 
 /** A pool deep enough that the upgrade gate never reports a shortfall. */
 const BOTTOMLESS = { r1: 1e15, r2: 1e15, r3: 1e15, r4: 1e15 };

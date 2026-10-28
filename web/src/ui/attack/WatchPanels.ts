@@ -1,5 +1,6 @@
 import type { AttackSessionState } from "@/game/attack/AttackSession";
 import type { AttackSummary } from "@/game/attack/attackSave";
+import { championsText, monstersLostText } from "@/ui/attack/EndAttackPanel";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 
@@ -84,7 +85,10 @@ export class WatchSummaryPanel {
     };
     stat("Damage", `${Math.floor(summary.damagePercent)}%`);
     stat("Buildings destroyed", `${summary.buildingsDestroyed} of ${summary.buildingsTotal}`);
-    stat("Monsters lost", `${summary.monstersLost} of ${summary.monstersSent} sent`);
+    stat("Monsters lost", monstersLostText(summary));
+    if (summary.champions.length > 0) {
+      stat(summary.champions.length === 1 ? "Champion" : "Champions", championsText(summary));
+    }
 
     const note = document.createElement("p");
     note.className = "u-muted";

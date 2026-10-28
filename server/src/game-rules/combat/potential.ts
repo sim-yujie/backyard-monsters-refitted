@@ -366,7 +366,7 @@ export const bombPotential = (bomb: BombStats, yard: CombatYard): number => {
     const edge = squashedEllipse(propsSizeOf(building.type)).rx;
     targets.push({
       x: at.x,
-      y: at.y + footprintOf(building.type).h * 0.5,
+      y: at.y + footprintOf(building.type, yard.kind).h * 0.5,
       reach: Math.sqrt(blast * blast + edge * edge),
       most,
     });

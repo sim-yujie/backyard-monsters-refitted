@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EFFECTS, EffectsPlayer, MIN_GAP_MS, type EffectsBackend } from "./EffectsPlayer";
 import type { GestureTarget } from "./MusicPlayer";
@@ -69,7 +71,7 @@ const setup = (opened = true) => {
   return { page, card, clock, player, made: () => made };
 };
 
-/** A player with sound effects on and both files loaded. */
+/** A player with sound effects on and every file loaded. */
 const ready = async () => {
   const world = setup();
   world.player.setEnabled(true);
@@ -83,7 +85,7 @@ describe("EffectsPlayer", () => {
     const { card, player } = await ready();
     expect(player.play("bankfire")).toBe(true);
     expect(card.starts).toEqual([{ sound: `decoded ${EFFECTS.bankfire.url}`, volume: 0.8 }]);
-    expect(card.loads).toEqual([EFFECTS.bankfire.url, EFFECTS.bankland.url]);
+    expect(card.loads).toEqual(Object.values(EFFECTS).map((effect) => effect.url));
   });
 
   it("stays silent, and opens no sound card, with sound effects off", () => {
@@ -195,5 +197,12 @@ describe("EffectsPlayer", () => {
     page.press();
     expect(player.play("bankfire")).toBe(false);
     expect(page.listening()).toBe(0);
+  });
+
+  it("every effect's file is on the game server, the Inferno's pair too", () => {
+    const serverPublic = fileURLToPath(new URL("../../../../server/public", import.meta.url));
+    for (const { url } of Object.values(EFFECTS)) expect(existsSync(serverPublic + url), url).toBe(true);
+    expect(EFFECTS.ibankfire.url).toBe("/assets/sounds/infernosounds/sound_ibankfire.mp3");
+    expect(EFFECTS.ibankland.url).toBe("/assets/sounds/infernosounds/sound_ibankland.mp3");
   });
 });

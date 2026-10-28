@@ -6,6 +6,7 @@ import {
   type HousingBuildingRow,
 } from "./housing";
 import { housingSpace, monsterEntry, type MonsterEntry } from "./monsterCatalogue";
+import { monsterWords, type MonsterRealm } from "./realm";
 
 /**
  * The figures of the Housing panel (#170, mock-up R-Housing): the space bar
@@ -106,10 +107,13 @@ const listOf = (items: readonly string[]): string =>
     ? (items[0] ?? "")
     : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 
-/** The waiting card's heading and sentence, or null when nothing waits. */
+/** The waiting card's heading and sentence, or null when nothing waits ("incubator" in the Inferno). */
 export const waitingText = (
   waiting: readonly WaitingMonster[],
+  realm: MonsterRealm = "surface",
 ): { readonly title: string; readonly text: string } | null => {
+  const hatchery = monsterWords(realm).hatchery.toLowerCase();
+  const hatcheries = monsterWords(realm).hatcheries.toLowerCase();
   const monsters = waiting.reduce((sum, entry) => sum + entry.count, 0);
   if (monsters === 0) return null;
   const space = waiting.reduce((sum, entry) => sum + entry.each * entry.count, 0);
@@ -118,12 +122,12 @@ export const waitingText = (
   if (monsters === 1) {
     return {
       title: "1 monster is waiting for room",
-      text: `${sentence} has hatched. It moves in by itself once ${space} spaces are free. Until then its hatchery is paused.`,
+      text: `${sentence} has hatched. It moves in by itself once ${space} spaces are free. Until then its ${hatchery} is paused.`,
     };
   }
   return {
     title: `${monsters} monsters are waiting for room`,
-    text: `${sentence} have hatched. They move in by themselves once ${space} spaces are free. Until then those ${monsters} hatcheries are paused.`,
+    text: `${sentence} have hatched. They move in by themselves once ${space} spaces are free. Until then those ${monsters} ${hatcheries} are paused.`,
   };
 };
 

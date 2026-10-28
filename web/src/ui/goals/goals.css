@@ -97,7 +97,8 @@
 .goals-row__note {
   margin: 0;
   font-size: var(--text-sm);
-  color: var(--colour-warning-text);
+  /* Amber on the card (warning-text is the dark ink for an amber fill). */
+  color: var(--colour-warning);
 }
 
 .goals-row__note--refused {

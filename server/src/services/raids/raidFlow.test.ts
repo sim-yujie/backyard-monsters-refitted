@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } fr
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
+import { InfernoProgress } from "../../database/models/infernoprogress.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { experiencePoints } from "../../game-data/stats/experiencePoints.js";
 import { memoryRedis } from "../../testing/memoryRedis.js";
@@ -54,11 +55,14 @@ const { WARNING_SECONDS, cancelRaidOnYardLoad, readOpenRaid, recordRaidScreen, u
 );
 const { challengeKey, lastActionKey, lastSeenKey } = await import("../user/online.js");
 const { damagedBuildings } = await import("../yard/repair.js");
+const { openEmergenceRaid } = await import("../inferno/emergenceRaid.js");
 
 type Row = Record<string, unknown>;
 
 const db = {
   row: null as Row | null,
+  /** The player's `inferno_progress` row, or none. */
+  inferno: null as Row | null,
   tail: Promise.resolve() as Promise<void>,
   /** Unlocked reads of the whole row (no `fields`), and locked reads. */
   fullReads: 0,
@@ -75,7 +79,9 @@ const acquire = (): Promise<() => void> => {
 };
 
 const em = {
-  async findOne(_entity: unknown, _where: unknown, options?: { fields?: unknown }) {
+  async findOne(entity: unknown, _where: unknown, options?: { fields?: unknown }) {
+    // The Inferno emergence's progress row (`emergenceHoldsRaids`).
+    if (entity === InfernoProgress) return db.inferno;
     if (!options?.fields) db.fullReads++;
     return db.row && structuredClone(db.row);
   },
@@ -236,6 +242,7 @@ const finishOnTime = async (id: string, finishFrom: number) => {
 beforeEach(() => {
   redis.clear();
   db.row = rowOf();
+  db.inferno = null;
   db.fullReads = 0;
   db.locks = 0;
   standIn.slot = null;
@@ -294,6 +301,24 @@ describe("the warning", () => {
 
     expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
     expect(touchedYard()).toBe(false);
+  });
+
+  test("Moloch's emergence holds wild raids back until its fifth raid (Inferno on, Town Hall 5+)", async () => {
+    const saved = process.env.INFERNO_ENABLED;
+    process.env.INFERNO_ENABLED = "on";
+    try {
+      db.row = rowOf({ thlevel: 10, tutorialstage: 205 });
+      db.inferno = { userid: USER, emergence_level: 2 };
+      await present(NOW);
+      expect(await raidOnPing(em, user, YARD, NOW)).toBeUndefined();
+      expect(touchedYard()).toBe(false);
+
+      db.inferno = { userid: USER, emergence_level: 5 };
+      expect(await raidOnPing(em, user, YARD, NOW)).toMatchObject({ phase: "warning" });
+    } finally {
+      if (saved === undefined) delete process.env.INFERNO_ENABLED;
+      else process.env.INFERNO_ENABLED = saved;
+    }
   });
 
   test("a repair not done yet is left to finish; once it is, the ping catches it up and warns", async () => {
@@ -709,6 +734,79 @@ describe("bought protection (owner, 2026-10-23)", () => {
       const seen = await raidOnPing(em, user, YARD, NOW);
       expect(seen?.id).toBe(start.raid.id);
       expect(seen?.phase).toBe("fighting");
+    },
+    FIGHT_TIMEOUT_MS
+  );
+});
+
+describe("Moloch's emergence raid (docs/design/inferno.md §2.3, owner I14/R5)", () => {
+  /** The wild raids' timetable as stored. */
+  const timetable = () => {
+    const { lastattack, nextAttack, sessionsSinceLastAttack, attackPreference, lastOpenedAt } = readSchedule(db.row!.aiattacks);
+    return { lastattack, nextAttack, sessionsSinceLastAttack, attackPreference, lastOpenedAt };
+  };
+
+  /** Moloch's raid for cave level 1, opened as the load that raised the cave opens it, then started. */
+  const molochFight = async () => {
+    const raid = (await openEmergenceRaid(USER, db.row as never, 1, NOW))!;
+    await present(NOW);
+    const start = await startRaid(em, user, raid.id, NOW);
+    return { id: raid.id, start, finishFrom: start.raid.finishFrom! };
+  };
+
+  test("its warning is due at once, the ping shows it, and no wild raid opens beside it", async () => {
+    const raid = (await openEmergenceRaid(USER, db.row as never, 1, NOW))!;
+    await present(NOW);
+    const seen = await raidOnPing(em, user, YARD, NOW);
+    expect(seen).toMatchObject({ id: raid.id, phase: "warning", tribe: "moloch", attackAt: NOW });
+    expect(seen?.monsters).toEqual({ IC1: 2 });
+    expect(timetable().lastOpenedAt).toBeUndefined();
+  });
+
+  test(
+    "fought and landed through the raid routes: no Shiny, and the wild raids' timetable as it was",
+    async () => {
+      const before = timetable();
+      const { id, start, finishFrom } = await molochFight();
+      expect(start.raid).toMatchObject({ id, phase: "fighting", tribe: "moloch" });
+      const result = await finishOnTime(id, finishFrom);
+      expect(result).toMatchObject({ id, tribe: "moloch", shiny: 0 });
+      expect(db.row!.credits).toBe(100);
+      expect(timetable()).toEqual(before);
+      const schedule = readSchedule(db.row!.aiattacks);
+      expect(schedule.fight).toBeUndefined();
+      expect(schedule.lastRaidId).toBe(id);
+      expect(schedule.recent[0]).toMatchObject({ id, tribe: "moloch" });
+      expect(await readOpenRaid(USER)).toBeNull();
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "bought protection stops neither the warning nor the start (Flash's UpgradePortal never looked)",
+    async () => {
+      db.row = rowOf({ protected: NOW + DAY, storedata: { PRO1: { q: 1, s: NOW, e: NOW + DAY } } });
+      const raid = (await openEmergenceRaid(USER, db.row as never, 1, NOW))!;
+      await present(NOW);
+      expect((await raidOnPing(em, user, YARD, NOW))?.id).toBe(raid.id);
+      const start = await startRaid(em, user, raid.id, NOW);
+      expect(start.raid.phase).toBe("fighting");
+    },
+    FIGHT_TIMEOUT_MS
+  );
+
+  test(
+    "quitting during the fight calls the raid off with nothing landed and the timetable as it was",
+    async () => {
+      const before = structuredClone(db.row!);
+      const { id, finishFrom } = await molochFight();
+      at(finishFrom);
+      await redis.del(lastSeenKey(USER));
+      expect(await refusal(finishRaid(em, user, id, finishFrom))).toEqual({ reason: "cancelled" });
+      expect(db.row!.resources).toEqual(before.resources);
+      expect(readSchedule(db.row!.aiattacks)).toMatchObject({ recent: [], nextAttack: NOW - 10, sessionsSinceLastAttack: 4 });
+      expect(fightLock()).toBeUndefined();
+      expect(await readOpenRaid(USER)).toBeNull();
     },
     FIGHT_TIMEOUT_MS
   );

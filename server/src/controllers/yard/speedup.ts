@@ -47,4 +47,5 @@ export const yardSpeedupAction = defineYardAction({
     };
   },
   outposts: "allow",
+  inferno: "allow",
 });

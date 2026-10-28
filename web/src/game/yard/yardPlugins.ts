@@ -1,4 +1,5 @@
 import type { Camera } from "@/game/Camera";
+import type { AttackTarget } from "@/game/attack/attackTarget";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { Hud } from "@/ui/Hud";
@@ -6,6 +7,7 @@ import type { Overlay } from "@/ui/overlay";
 import type { YardDock } from "@/ui/yard/YardDock";
 import type { YardRenderer } from "./YardRenderer";
 import type { YardStore, YardUiBinding } from "./YardStore";
+import type { OwnYardTarget } from "./ownYards";
 
 /**
  * The registry the own yard mounts the new-player tutorial's packages from
@@ -31,8 +33,8 @@ export interface YardSceneControls {
   openBuildMenu(type?: number): void;
   /** Closes the Build menu and puts down any building in hand. */
   closeBuildMenu(): void;
-  /** Pans to a building and opens its panel. */
-  focusBuilding(id: number): void;
+  /** Pans to a building and opens its panel; with `champion`, the Cage's or Chamber's controls too. */
+  focusBuilding(id: number, champion?: boolean): void;
   /** Closes the building panel. */
   closePanel(): void;
   /** The building whose panel is open, or null. */
@@ -49,6 +51,10 @@ export interface YardSceneControls {
   carrying(): boolean;
   /** Opens the raid scene on the fight handed over with `setRaidRun` (#226). */
   openRaid(): void;
+  /** Opens the attack scene on `target`: Moloch's Descent, from the cave (Inferno WP 1.13). */
+  openAttack(target: AttackTarget): void;
+  /** Opens another of the player's own yards: the cave's way between the main yard and the Inferno. */
+  openYard(target: OwnYardTarget): void;
   /** Opens this own yard afresh, as the server has it now. */
   reload(): void;
 }

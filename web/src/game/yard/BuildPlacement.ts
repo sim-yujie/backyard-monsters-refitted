@@ -1,6 +1,7 @@
 import { AlphaFilter, Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Camera } from "@/game/Camera";
 import { ArtState, resolveArt, restingLayers, type ResolvedImage } from "./buildingArt";
+import type { YardKind } from "./buildingCostData";
 import { nearbyArea, NEARBY_STROKE } from "./nearbyFootprints";
 import {
   inBounds,
@@ -70,8 +71,8 @@ export interface NearbyFootprint {
 }
 
 /** A footprint as the occupancy grid takes one. */
-const nodeOf = (id: number, type: number, x: number, y: number): PlanNode => {
-  const [width, height] = footprintOf(type);
+const nodeOf = (id: number, type: number, x: number, y: number, kind: YardKind = "main"): PlanNode => {
+  const [width, height] = footprintOf(type, kind);
   return {
     id,
     type,
@@ -101,6 +102,8 @@ export class PlacementGrid {
   private readonly pending = new Map<number, PlanNode>();
   private nextPending = PENDING_ID_BASE;
   private yard: Yard | null = null;
+  /** The yard's props table, for the footprints that differ in the Inferno. */
+  private kind: YardKind = "main";
   private byId = new Map<number, YardBuilding>();
   private changes = 0;
 
@@ -119,12 +122,13 @@ export class PlacementGrid {
   /** Restamps from a yard the server has just answered with. Pending drops stay. */
   rebase(yard: Yard): void {
     this.yard = yard;
+    this.kind = yard.kind;
     this.changes++;
     this.plot = plotBounds(yard.expansionLevel);
     this.occupancy.clear();
     this.byId = new Map(yard.buildings.map((building) => [building.id, building]));
     for (const building of yard.buildings) {
-      this.occupancy.stamp(nodeOf(building.id, building.type, building.x, building.y));
+      this.occupancy.stamp(nodeOf(building.id, building.type, building.x, building.y, this.kind));
     }
     for (const node of this.pending.values()) this.occupancy.stamp(node);
   }
@@ -134,13 +138,13 @@ export class PlacementGrid {
    * units: the footprint centred on the pointer and snapped to the 5-unit grid.
    */
   spotAt(type: number, x: number, y: number): Point {
-    const [width, height] = footprintOf(type);
+    const [width, height] = footprintOf(type, this.kind);
     return { x: snap(x - width / 2), y: snap(y - height / 2) };
   }
 
   /** Whether a building of `type` fits with its footprint's origin at `(x, y)`. */
   check(type: number, x: number, y: number): SpotCheck {
-    const node = nodeOf(0, type, x, y);
+    const node = nodeOf(0, type, x, y, this.kind);
     if (!inBounds(node, x, y, this.plot)) {
       return { x, y, problem: "outOfBounds", blockedBy: null };
     }
@@ -163,7 +167,7 @@ export class PlacementGrid {
    * all (#263).
    */
   nearby(type: number, x: number, y: number): NearbyFootprint[] {
-    const [width, height] = footprintOf(type);
+    const [width, height] = footprintOf(type, this.kind);
     const found: NearbyFootprint[] = [];
     for (const id of this.occupancy.occupantsIn([nearbyArea(x, y, width, height)])) {
       if (id >= PENDING_ID_BASE) {
@@ -180,7 +184,7 @@ export class PlacementGrid {
   /** Holds a spot for a drop the server has not answered yet. Returns its handle. */
   hold(type: number, x: number, y: number): number {
     const handle = this.nextPending++;
-    const node = nodeOf(handle, type, x, y);
+    const node = nodeOf(handle, type, x, y, this.kind);
     this.pending.set(handle, node);
     this.occupancy.stamp(node);
     this.changes++;
@@ -199,8 +203,13 @@ export class PlacementGrid {
 }
 
 /** Whether a yard point lies inside a building's footprint placed at `spot`. */
-export const insideFootprint = (type: number, spot: Point, point: Point): boolean => {
-  const [width, height] = footprintOf(type);
+export const insideFootprint = (
+  type: number,
+  spot: Point,
+  point: Point,
+  kind: YardKind = "main",
+): boolean => {
+  const [width, height] = footprintOf(type, kind);
   return point.x >= spot.x && point.x < spot.x + width && point.y >= spot.y && point.y < spot.y + height;
 };
 
@@ -344,7 +353,7 @@ export class BuildPlacement {
    * Sniper Tower without its rifle and a Railgun without its gun.
    */
   private async loadArt(): Promise<void> {
-    const art = resolveArt(this.options.type, 1, ArtState.DEFAULT);
+    const art = resolveArt(this.options.type, 1, ArtState.DEFAULT, this.yard.kind);
     if (!art) return;
     const layers = restingLayers(art);
     try {
@@ -408,7 +417,7 @@ export class BuildPlacement {
     this.nearby.visible = !this.pinned;
     if (this.fade) this.fade.alpha = this.pinned ? 1 : GHOST_ALPHA;
     this.drawNearby(check.x, check.y);
-    const corners = footprintCorners(this.yard.bounds, this.options.type, check.x, check.y);
+    const corners = footprintCorners(this.yard.bounds, this.options.type, check.x, check.y, this.yard.kind);
     const [top, right, bottom, left] = corners;
     const g = this.outline;
     g.clear();
@@ -446,7 +455,7 @@ export class BuildPlacement {
     if (found.length === 0) return;
     // One path and one stroke for the lot, as the planner's overlay does.
     for (const one of found) {
-      const corners = footprintCorners(this.yard.bounds, one.type, one.x, one.y);
+      const corners = footprintCorners(this.yard.bounds, one.type, one.x, one.y, this.yard.kind);
       g.poly(corners.flatMap((point) => [point.x, point.y]));
     }
     g.stroke(NEARBY_STROKE);

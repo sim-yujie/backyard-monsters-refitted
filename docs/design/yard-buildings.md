@@ -1031,8 +1031,10 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
   `:683-700` on save). Capacity uses the Map Room 2 table 380/450/540/660/800 (MH §6.3).
 - **Bunker panel** (in the building panel, not the Monsters screen, per D4): two columns, "Housing"
   and "Bunker", both built from the `QuantityStepper`; a From Housing / Buy switch; one **Move to
-  bunker** button for the whole selection. Only `BUNKERABLE_MONSTERS` (C1–C13, C17) are offered
-  (`client/scripts/MONSTERBUNKERPOPUP.as:48-69`); the Buy prices are `BUYABLE_MONSTERS` (`:30-46`).
+  bunker** button for the whole selection. Only `BUNKERABLE_MONSTERS` (C1–C13, C17, and the
+  Inferno IC1–IC8 once moved to the main yard's housing, Inferno WP 2.5) are offered
+  (`client/scripts/MONSTERBUNKERPOPUP.as:48-69`); the Buy prices are `BUYABLE_MONSTERS` (`:30-46`),
+  without the Inferno ones. An Inferno monster taken out is deleted, never juiced (`:701-702`).
 - Routes: `POST /bm/yard/bunker/fill` `bunker`, `monsters` (JSON `{id: n}`), `source` =
   `housing` (putty `cResource × 0.5 × n`, monsters leave housing) or `buy` (Shiny, monster must be
   unlocked); capacity checked against `cStorage` sum. `bunker/remove` `bunker`, `monster`, `count`

@@ -116,6 +116,11 @@ export interface ArmyPanelOptions {
    * (§4.3). Not called in a browser without `ResizeObserver`.
    */
   readonly onResize?: () => void;
+  /**
+   * The panel's name, "Army" when absent: a Moloch tribe attack's is Flash's
+   * "Attack Force" (Inferno WP 2.10). The capacity bar is named after it.
+   */
+  readonly title?: string;
 }
 
 /**
@@ -187,14 +192,14 @@ export class ArmyPanel {
     panels.set(bucket, this);
     this.onRetreatChampion = options.onRetreatChampion ?? null;
     this.onStanceChange = options.onStanceChange ?? null;
-    this.panel = new Panel({ title: "Army", closable: false, className: "map-panel attack-army" });
+    this.panel = new Panel({ title: options.title ?? "Army", closable: false, className: "map-panel attack-army" });
     this.element = this.panel.element;
 
     // The capacity bar: bucket cost against the flinger's payload.
     this.meter = document.createElement("div");
     this.meter.className = "attack-army__meter";
     this.meter.setAttribute("role", "meter");
-    this.meter.setAttribute("aria-label", "Flinger capacity");
+    this.meter.setAttribute("aria-label", options.title ? `${options.title} capacity` : "Flinger capacity");
     this.meter.setAttribute("aria-valuemin", "0");
     this.meterFill = document.createElement("span");
     this.meterFill.className = "attack-army__meter-fill";

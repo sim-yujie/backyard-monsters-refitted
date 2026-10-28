@@ -826,14 +826,38 @@ export const monsterTransferRejectedErr = (
   });
 
 /**
- * An old Flash Inferno route, refused until the new Inferno ships
- * (`config/InfernoConfig.ts`). The web client never calls one.
+ * What is left of the Flash Inferno on the shared routes, refused for good
+ * (`services/inferno/infernoGate.ts`). The web client never calls one.
  */
 export const infernoClosedErr = () =>
   new ClientSafeError({
-    message: "The Inferno is closed for now. It will open again in a later update.",
+    message: "The old Inferno is closed.",
     status: Status.FORBIDDEN,
     data: { reason: "infernoClosed" },
+    isClientFriendly: true,
+  });
+
+/**
+ * A new Inferno route (`/bm/inferno/*`) while the new Inferno is switched off
+ * (`infernoConfig.enabled`, `INFERNO_ENABLED`). The client shows no cave then.
+ */
+export const infernoOffErr = () =>
+  new ClientSafeError({
+    message: "The Inferno is not open yet.",
+    status: Status.FORBIDDEN,
+    data: { reason: "infernoOff" },
+    isClientFriendly: true,
+  });
+
+/**
+ * `POST /bm/inferno/load` from a player with no Inferno yard: the server makes
+ * it when the 13th Descent yard falls (`services/inferno/infernoYard.ts`).
+ */
+export const noInfernoYardErr = () =>
+  new ClientSafeError({
+    message: "You have no Inferno yard yet. Beat all 13 yards of Moloch's Descent to win one.",
+    status: Status.CONFLICT,
+    data: { reason: "noInfernoYard" },
     isClientFriendly: true,
   });
 
@@ -873,6 +897,64 @@ const MR1_TRIBE_REFUSAL_MESSAGES: Record<MR1TribeRefusal, string> = {
 export const mr1TribeRefusedErr = (reason: MR1TribeRefusal, detail: object = {}) =>
   new ClientSafeError({
     message: MR1_TRIBE_REFUSAL_MESSAGES[reason],
+    status: Status.CONFLICT,
+    data: { reason, ...detail },
+    isClientFriendly: true,
+  });
+
+/** Why an Inferno attack cannot start (`POST /bm/inferno/attack/start`, `docs/design/inferno.md` §3.2). */
+export type InfernoAttackRefusal =
+  | "caveClosed"
+  | "descentPassed"
+  | "notDescentBase"
+  | "notNextBase"
+  | "notInfernoTribe"
+  | "notYourTribe"
+  | "tribeDestroyed"
+  | "noMonsters"
+  | "notInfernoPlayer"
+  | "protected"
+  | "targetUnderAttack"
+  | "outOfRange"
+  | "ownerOnline"
+  | "kindNotReady";
+
+const INFERNO_ATTACK_REFUSAL_MESSAGES: Record<InfernoAttackRefusal, string> = {
+  caveClosed: "Moloch's cave has not opened all the way yet.",
+  descentPassed: "You have already fought your way down the Descent.",
+  notDescentBase: "That is not a Descent yard.",
+  notNextBase: "Only the next yard down the Descent can be attacked.",
+  notInfernoTribe: "That is not a Moloch tribe.",
+  notYourTribe: "That tribe is not on your Inferno map.",
+  tribeDestroyed: "That tribe is still in ruins.",
+  // Flash's `infmap_msg_nomonsters` (`maproom_inferno/PlayerHandler.as:308`); its text is not in our `english.json`.
+  noMonsters: "You need monsters in your Housing Bunkers to attack.",
+  notInfernoPlayer: "That is not another player's Inferno yard.",
+  // Flash's words (`map_msg_dp`, `map_msg_inprogress`, `map_msg_leveltoolow`,
+  // `map_msg_ownerinyard`), with "this player" for the name.
+  protected: "This player was recently DESTROYED and is under protection for a few hours to give them a chance to rebuild.",
+  targetUnderAttack: "This player is under attack! Please wait a few minutes then try again",
+  outOfRange:
+    "You can't attack this person because their level is too low compared to yours. You will receive better loot for attacking someone closer to your level.",
+  ownerOnline: "This player is currently in their yard. Try attacking later when the coast is clear.",
+  kindNotReady: "That kind of Inferno attack is not open yet.",
+};
+
+/**
+ * An Inferno attack refused before anything is written (WP 1.11): the cave
+ * has not come up all five levels, the Descent is passed, the base is not a
+ * Descent yard or not the next one; the base is not a Moloch tribe, not one
+ * of the player's seven, or still wrecked, or the Inferno yard houses no
+ * monsters (WP 2.8); the base is not another player's live Inferno yard, or
+ * that player is protected, being attacked, out of range or playing (WP
+ * 3.2); or the kind of attack is not built yet.
+ *
+ * @param reason - Which rule refused it.
+ * @param detail - Figures for the client, e.g. `next`, the base id that can be attacked.
+ */
+export const infernoAttackRefusedErr = (reason: InfernoAttackRefusal, detail: object = {}) =>
+  new ClientSafeError({
+    message: INFERNO_ATTACK_REFUSAL_MESSAGES[reason],
     status: Status.CONFLICT,
     data: { reason, ...detail },
     isClientFriendly: true,

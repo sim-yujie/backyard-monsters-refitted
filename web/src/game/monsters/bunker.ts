@@ -12,16 +12,18 @@ import { compareListOrder, hatchCost, housingSpace, monsterEntry, type MonsterEn
  * room 380 / 450 / 540 / 660 / 800 by level, measured in `cStorage` at each
  * monster's academy level; nothing while it is being built. From housing
  * costs `floor(cResource × 0.5 × n)` putty per type; bought costs the
- * original's Shiny per monster. Only C1–C13 and C17 go in. The route charges
+ * original's Shiny per monster. Only C1–C13, C17 and the Inferno IC1–IC8 go in,
+ * the Inferno ones from housing only (they are not on the buy list). The route charges
  * its own figures; these are for the labels and the steppers' limits.
  */
 
 /** Monster Bunker type id (`client/scripts/YARD_PROPS.as:2410`). */
 export const BUNKER_TYPE = 22;
 
-/** Monsters a Map Room 2 bunker takes (`client/scripts/MONSTERBUNKERPOPUP.as:48-69`, Inferno left out). */
+/** Monsters a Map Room 2 bunker takes (`client/scripts/MONSTERBUNKERPOPUP.as:48-69`). */
 export const BUNKERABLE_MONSTERS: readonly string[] = [
   "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C17",
+  "IC1", "IC2", "IC3", "IC4", "IC5", "IC6", "IC7", "IC8",
 ];
 
 /** Shiny per monster bought straight into a bunker (`MONSTERBUNKERPOPUP.as:30-46`). */

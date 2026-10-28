@@ -1,5 +1,6 @@
 import { buildOffer, type BuildGate } from "@/game/yard/buildCatalogue";
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
+import { INFERNO_LOCKED_MESSAGE } from "@/game/yard/surfaceInferno";
 import { post } from "./http";
 import type { UpgradeCost, YardResponse } from "./types";
 import { yardBody, type YardRefusal } from "./yard";
@@ -109,25 +110,36 @@ const refuse = (reason: string, message: string): YardRefusal => ({
   local: true,
 });
 
-/** A gate as the sentence a local refusal carries. */
-const gateMessage = (gate: BuildGate): string => {
+/**
+ * A gate as the sentence a local refusal carries. A main-yard Inferno
+ * building's (`inferno`) hall is the Under Hall and its price the purse's,
+ * in the server's words for them (`server/src/services/yard/surfaceInferno.ts`).
+ */
+const gateMessage = (gate: BuildGate, inferno = false): string => {
   switch (gate.reason) {
+    case "infernoLocked":
+      return INFERNO_LOCKED_MESSAGE;
     case "townHall":
+      if (inferno) return `Under Hall Level ${Math.max(gate.need, 1)} required.`;
       return gate.have <= 0 ? "Build a Town Hall first." : `That needs a level ${gate.need} Town Hall.`;
     case "limit":
       return gate.next === null
         ? `You already have ${gate.have}, the most a yard can hold.`
-        : `You already have ${gate.have}. Upgrade your Town Hall to level ${gate.next} to build more.`;
+        : `You already have ${gate.have}. Upgrade your ${inferno ? "Under Hall" : "Town Hall"} to level ${gate.next} to build more.`;
     case "requirements":
       return "That needs other buildings first.";
     case "shortfall":
-      return "You do not have enough resources for that.";
+      return inferno ? "You do not have enough Inferno resources for that." : "You do not have enough resources for that.";
     case "workers":
       return "All your workers are busy.";
     case "credits":
       return "You do not have enough Shiny for that.";
   }
 };
+
+/** The server's reason for a gate: a main-yard Inferno building's hall gate is `underHall`. */
+const reasonOf = (gate: BuildGate, inferno: boolean): string =>
+  inferno && gate.reason === "townHall" ? "underHall" : gate.reason;
 
 export interface BuildActions {
   /** Places a building of `type` with its footprint at `(x, y)`. */
@@ -150,7 +162,7 @@ export const buildActions = (store: YardStore, api: BuildApi = buildApi): BuildA
       check: (reader) => {
         const offer = buildOffer(type, reader);
         if (!offer) return refuse("notBuildable", "That cannot be built here.");
-        return offer.gate ? refuse(offer.gate.reason, gateMessage(offer.gate)) : null;
+        return offer.gate ? refuse(reasonOf(offer.gate, offer.inferno), gateMessage(offer.gate, offer.inferno)) : null;
       },
       send: (_api, ...yard) => api.build(type, x, y, ...yard),
     }),
@@ -161,7 +173,7 @@ export const buildActions = (store: YardStore, api: BuildApi = buildApi): BuildA
         const offer = buildOffer(type, reader);
         if (!offer) return refuse("notBuildable", "That cannot be built here.");
         return offer.instantGate
-          ? refuse(offer.instantGate.reason, gateMessage(offer.instantGate))
+          ? refuse(reasonOf(offer.instantGate, offer.inferno), gateMessage(offer.instantGate, offer.inferno))
           : null;
       },
       send: (_api, ...yard) => api.instant(type, x, y, ...yard),

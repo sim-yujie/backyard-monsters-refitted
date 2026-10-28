@@ -1,5 +1,6 @@
 import { YardInstantUpgradeSchema } from "../../schemas/YardSchemas.js";
 import { planInstantUpgrade } from "../../services/yard/instantUpgrade.js";
+import { withInfernoStanding } from "../../services/yard/surfaceInferno.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -11,8 +12,10 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardInstantUpgradeAction = defineYardAction({
   schema: YardInstantUpgradeSchema,
-  run: ({ save, body, now }) => {
-    const plan = planInstantUpgrade(save, body.id, now);
+  run: async ({ save, user, body, now, em }) => {
+    // A main-yard Inferno building needs the player's Under Hall (Inferno WP 6.1).
+    const type = Number(save.buildingdata?.[String(body.id)]?.t);
+    const plan = planInstantUpgrade(await withInfernoStanding(em, user.userid, save, type), body.id, now);
     return {
       report: plan.report,
       slices: { buildingdata: plan.buildingdata },
@@ -21,4 +24,5 @@ export const yardInstantUpgradeAction = defineYardAction({
     };
   },
   outposts: "allow",
+  inferno: "allow",
 });

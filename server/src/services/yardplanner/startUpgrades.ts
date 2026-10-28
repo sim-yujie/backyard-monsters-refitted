@@ -16,6 +16,14 @@ import { withoutHelpers } from "../friends/helpList.js";
 import { requirementDetail } from "../base/economy/transitions.js";
 import { ACADEMY_TYPE } from "../yard/academy.js";
 import { LAB_TYPE, labResearch } from "../yard/lab.js";
+import { siegeHold, type SiegeHold } from "../yard/siege.js";
+import {
+  isSurfaceInferno,
+  purseShortfall,
+  standingUnderHall,
+  type SurfaceInfernoSave,
+} from "../yard/surfaceInferno.js";
+import type { SiegeId } from "../../game-rules/combat/siege.js";
 import {
   FREE_FINISH_SECONDS,
   isShort,
@@ -23,6 +31,7 @@ import {
   pointsForUpgrade,
   shortfall,
   townHallLevel,
+  UNDER_HALL_REQUIREMENT,
   yardKindOf,
   type ResourceAmounts,
 } from "./costs.js";
@@ -98,13 +107,15 @@ import { busyWorkers, sharperToolsMultiplier, workerCount } from "./workers.js";
  */
 
 /** The parts of a `Save` the walk reads. */
-export interface UpgradeWalkSave {
+export interface UpgradeWalkSave extends SurfaceInfernoSave {
   /** `BaseType`: an outpost walks the outpost table. */
   type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
   storedata?: JsonObject | null;
+  /** The siege weapons: a Siege Factory holding one may not be upgraded. */
+  siege?: JsonObject | null;
 }
 
 /** Why the walk could not start a planned upgrade (§3.2). */
@@ -277,6 +288,16 @@ export interface OneUpgradeRefusal {
   workers?: { total: number; busy: number };
   /** `busy` on an Academy that is training: the monster, for the panel's own words. */
   training?: string;
+  /** `busy` on a Siege Lab or Factory at work or holding a weapon (`siegeHold`). */
+  siege?: { hold: SiegeHold; weapon: SiegeId };
+  /**
+   * `requirements` on a main-yard Inferno building whose Under Hall entry is
+   * unmet (Inferno WP 6.1): the Under Hall it has and needs. The walk, which
+   * never reads the player's standing, reports it as plain `requirements`.
+   */
+  underHall?: { have: number; need: number };
+  /** `shortfall` from the Inferno purse, not the yard's resources. */
+  purse?: "inferno";
 }
 
 /** The next step of one building, taken. */
@@ -354,6 +375,10 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
     const training = academyTraining(building);
     return refuse("busy", "building", training ? { training } : {});
   }
+  // The Siege Lab researching, the Siege Factory making or holding a weapon
+  // (`SiegeLab.Upgrade`, `SiegeFactory.Upgrade`).
+  const siege = siegeHold(building, save.siege);
+  if (siege) return refuse("busy", "building", { siege });
   if (isDamaged(building, save.buildinghealthdata)) return refuse("damaged", "building");
 
   const hall = townHallLevel(buildings, kind);
@@ -362,8 +387,18 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
   const step = row.costs[from];
   if (!step) return refuse("maxLevel", "building");
 
-  const unmet = requirementDetail(step[5], buildings, hall, hallTypeOf(kind));
+  // A main-yard Inferno building reads the Inferno Under Hall and pays from
+  // the Inferno purse (`yard/surfaceInferno.ts`).
+  const inferno = isSurfaceInferno(save, t);
+  const unmet = requirementDetail(step[5], buildings, hall, hallTypeOf(kind), standingUnderHall(save));
   if (unmet) {
+    const underHall = unmet.underHall as { have: number; need: number } | undefined;
+    if (underHall) {
+      return refuse("requirements", "step", {
+        requirements: step[5].filter(([type]) => type === UNDER_HALL_REQUIREMENT).map((entry) => [...entry] as CostRequirement),
+        underHall,
+      });
+    }
     const gate = unmet.townHall as { have: number; need: number } | undefined;
     return gate
       ? refuse("townHall", "step", { townHall: gate })
@@ -373,8 +408,10 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
   }
 
   const cost = stepCost(step);
-  const missing = shortfall(save.resources, cost);
-  if (isShort(missing)) return refuse("shortfall", "step", { shortfall: missing });
+  const missing = inferno ? purseShortfall(save.iresources, cost) : shortfall(save.resources, cost);
+  if (isShort(missing)) {
+    return refuse("shortfall", "step", { shortfall: missing, ...(inferno && { purse: "inferno" as const }) });
+  }
 
   if (!finishesAtOnce(row.kind, step)) {
     // A job needs a worker of its own, and there is no queue.

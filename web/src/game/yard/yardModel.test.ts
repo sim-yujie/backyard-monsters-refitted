@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
+import { caveYardMargin } from "@/game/inferno/cave";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { artStateFor, BuildingCondition, readYard, TOWN_HALL_TYPE } from "./yardModel";
 import { ArtState } from "./buildingArt";
-import { depthKey, footprintOf, FOREIGN_YARD_MARGIN, YARD_MARGIN } from "./YardGrid";
+import { depthKey, footprintOf, FOREIGN_YARD_MARGIN, YARD_MARGIN, yardFitRect } from "./YardGrid";
 
 const yard = readYard(fixture as unknown as BaseLoadResponse);
 
@@ -108,6 +109,40 @@ describe("whose yard it is", () => {
     expect(wall.box.y).toBeGreaterThan(0);
   });
 
+  it("puts a Moloch yard, read as an Inferno yard, on the grown plot too, so Fit frames all of Descent yard 3", () => {
+    // Descent yard 3 (base 203) reaches x -700..660, y -550..545 (molochTribes.ts).
+    const corners = {
+      "1": { X: -700, Y: -550, t: 17, id: 1 },
+      "2": { X: 660, Y: 545, t: 17, id: 2 },
+      "3": { X: -700, Y: 545, t: 17, id: 3 },
+      "4": { X: 660, Y: -550, t: 17, id: 4 },
+    };
+    const load = (wild: boolean) =>
+      readYard(
+        {
+          error: 0,
+          baseid: "203",
+          type: "inferno",
+          storedata: {},
+          currenttime: 1_000_000,
+          savetime: 1_000_000,
+          buildingdata: corners,
+        } as unknown as BaseLoadResponse,
+        { foreign: true, wild },
+      );
+    expect(load(false).bounds.yardWidth).toBe(1000);
+    const moloch = load(true);
+    expect(moloch.bounds.yardWidth).toBe(1840);
+    expect(moloch.bounds.yardHeight).toBe(1500);
+    const fit = yardFitRect(moloch.bounds);
+    for (const wall of moloch.buildings) {
+      expect(wall.worldX).toBeGreaterThanOrEqual(fit.x);
+      expect(wall.worldX).toBeLessThanOrEqual(fit.x + fit.width);
+      expect(wall.worldY).toBeGreaterThanOrEqual(fit.y);
+      expect(wall.worldY).toBeLessThanOrEqual(fit.y + fit.height);
+    }
+  });
+
   it("keeps a visited player's plot but gives it the wider margin and no edge", () => {
     const visit = readYard(fixture as unknown as BaseLoadResponse, { foreign: true });
     expect(visit.foreign).toBe(true);
@@ -119,6 +154,35 @@ describe("whose yard it is", () => {
     const shift = FOREIGN_YARD_MARGIN - YARD_MARGIN;
     expect(visit.townHall!.worldX).toBe(yard.townHall!.worldX + shift);
     expect(visit.townHall!.worldY).toBe(yard.townHall!.worldY + shift);
+  });
+
+  it("grows the own main yard's grass to hold Moloch's cave only while the cave shows (Inferno WP 1.10)", () => {
+    const inferno = (shown: boolean) => ({ infernostate: { cave: { shown, level: 1, maxLevel: 5 } } }) as Partial<BaseLoadResponse>;
+    const withCave = yardWith({}, inferno(true));
+    expect(withCave.bounds.margin).toBe(caveYardMargin(0));
+    expect(withCave.bounds.margin).toBeGreaterThan(YARD_MARGIN);
+    expect(yardWith({}, inferno(false)).bounds.margin).toBe(YARD_MARGIN);
+    expect(yardWith({}, { ...inferno(true), type: "outpost" }).bounds.margin).toBe(YARD_MARGIN);
+    const visit = readYard({ ...(fixture as unknown as BaseLoadResponse), ...inferno(true) }, { foreign: true });
+    expect(visit.bounds.margin).toBe(FOREIGN_YARD_MARGIN);
+  });
+
+  it("reads an Inferno yard with its own More Yardage and Inferno buildings (WP 1.18)", () => {
+    const hell = yardWith(
+      { "1": { X: 0, Y: 0, t: 14, id: 1, l: 1 }, "2": { X: 200, Y: 0, t: 26, id: 2, l: 1 } },
+      { type: "inferno", storedata: { ENLI: { q: 1 } } } as Partial<BaseLoadResponse>,
+    );
+    expect(hell.kind).toBe("inferno");
+    expect(hell.foreign).toBe(false);
+    // ENL + ENLI, as STORE.as:2346 adds them in the Inferno.
+    expect(hell.expansionLevel).toBe(1);
+    expect(hell.bounds.margin).toBe(caveYardMargin(1));
+    const underHall = hell.buildings.find((building) => building.type === 14)!;
+    expect(underHall.name).toBe("Under Hall");
+    expect(underHall.footprint).toEqual([160, 160]);
+    expect(hell.buildings.find((building) => building.type === 26)!.footprint).toEqual([80, 80]);
+    // The main yard does not count the Inferno's yardage.
+    expect(yardWith({}, { storedata: { ENLI: { q: 1 } } } as Partial<BaseLoadResponse>).expansionLevel).toBe(0);
   });
 });
 

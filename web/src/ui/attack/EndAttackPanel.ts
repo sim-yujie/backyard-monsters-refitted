@@ -1,9 +1,9 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
-import type { AttackSummary } from "@/game/attack/attackSave";
+import type { AttackSummary, OutcomeTone } from "@/game/attack/attackSave";
 import type { ResourceAmounts } from "@/game/combat/rules";
 import { championName } from "@/ui/attack/ArmyPanel";
 import { formatAmount } from "@/ui/format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceName, type ResourceRealm } from "@/ui/resourceIcon";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -28,6 +28,14 @@ export interface EndAttackPanelOptions {
   readonly summary: AttackSummary;
   /** Return to map, after a successful save. */
   readonly onReturn: () => void;
+  /** The return button's words, when it does not go to the map: Moloch's Descent goes home. */
+  readonly returnLabel?: string;
+  /**
+   * A second way out beside the return, open when it is: a Moloch tribe
+   * attack's Return Home to the Inferno yard, its return being the Inferno
+   * map (Inferno WP 2.10).
+   */
+  readonly home?: { readonly label: string; readonly onHome: () => void };
   /** Send the save again. */
   readonly onRetry: () => void;
   /** Leave with the result unsaved; called only after the second confirmation. */
@@ -47,6 +55,15 @@ export interface SaveFailure {
 export interface SavedInfo {
   /** What the server banked of the loot (`lootcredited`), when it said. */
   readonly credited?: ResourceAmounts | null;
+  /**
+   * What the battle took, when the server says and it can be more than was
+   * banked: a Moloch tribe's loot the Inferno purse had no room for (WP 2.10).
+   */
+  readonly taken?: ResourceAmounts | null;
+  /** The result as the server landed it, when it has its own (a Moloch tribe's Under Hall, WP 2.10). */
+  readonly result?: { readonly title: string; readonly outcome: string; readonly tone: OutcomeTone } | null;
+  /** Unix seconds when the target is back, for a Moloch tribe left wrecked (WP 2.10). */
+  readonly backAt?: number | null;
   /** Unix seconds until which the defender is now protected, if the server said so. */
   readonly protectedUntil?: number | null;
   /** Unix seconds now, for the protection line. */
@@ -63,7 +80,36 @@ export const formatSpan = (seconds: number): string => {
   return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
 };
 
+/**
+ * The monsters line: those that died of those sent, and of those born on the
+ * field when any were, so the first figure never tops the second. Champions
+ * have their own line ({@link championsText}).
+ */
+export const monstersLostText = (
+  summary: Pick<AttackSummary, "monstersSent" | "monstersBorn" | "monstersLost">,
+): string => {
+  const { monstersSent: sent, monstersBorn: born, monstersLost: lost } = summary;
+  if (sent + born === 0) return "None sent";
+  return born === 0 ? `${lost} of ${sent} sent` : `${lost} of ${sent + born} (${sent} sent, ${born} born in the fight)`;
+};
+
+/**
+ * Each champion sent, as Flash's attack log put one beaten: "Level 2 Gorgo
+ * retreated." (`ChampionBase.as:783`), at no health; otherwise the health it
+ * came back with.
+ */
+export const championsText = (summary: Pick<AttackSummary, "champions">): string =>
+  summary.champions
+    .map(({ t, l, hp }) => {
+      const champion = `Level ${l} ${championName(t)}`;
+      const left = Math.max(0, Math.floor(hp));
+      return left === 0 ? `${champion} retreated` : `${champion}, ${left.toLocaleString("en-US")} health left`;
+    })
+    .join("; ");
+
 const endReasonText = (summary: AttackSummary): string => {
+  // A tribe's Flash line already says what fell (WP 2.10).
+  if (summary.infernoTribe && summary.endReason === "destroyed") return "";
   switch (summary.endReason) {
     case "destroyed":
       // The session also ends here when only walls, traps and the like are
@@ -88,6 +134,7 @@ export class EndAttackPanel {
   readonly element: HTMLElement;
   readonly panel: Panel;
 
+  private readonly outcome: HTMLElement;
   private readonly loot: HTMLElement;
   private readonly storageNote: HTMLElement;
   private readonly status: HTMLElement;
@@ -96,6 +143,7 @@ export class EndAttackPanel {
   private readonly returnButton: HTMLButtonElement;
   private readonly retryButton: HTMLButtonElement;
   private readonly leaveButton: HTMLButtonElement;
+  private readonly homeButton: HTMLButtonElement | null;
   private readonly leaveConfirm: HTMLElement;
   /** Repeats this attack at once (issue #221); shown once the result is saved. */
   private readonly againButton: HTMLButtonElement;
@@ -114,7 +162,7 @@ export class EndAttackPanel {
     this.element.className = "popup-backdrop attack-end__backdrop";
 
     this.panel = new Panel({
-      title: "Attack over",
+      title: summary.title ?? "Attack over",
       closable: false,
       className: `map-panel attack-end attack-end--${summary.tone}`,
     });
@@ -124,32 +172,28 @@ export class EndAttackPanel {
     const outcome = document.createElement("p");
     outcome.className = "attack-end__outcome";
     outcome.textContent = summary.outcome;
+    this.outcome = outcome;
 
     const reason = document.createElement("p");
     reason.className = "u-muted attack-end__reason";
     reason.textContent = endReasonText(summary);
+    reason.hidden = reason.textContent === "";
 
     const stats = document.createElement("dl");
     stats.className = "attack-end__stats";
-    const stat = (label: string, value: string, title?: string): void => {
+    const stat = (label: string, value: string): void => {
       const dt = document.createElement("dt");
       dt.textContent = label;
       const dd = document.createElement("dd");
       dd.textContent = value;
-      if (title) dd.title = title;
       stats.append(dt, dd);
     };
     stat("Damage", `${Math.floor(summary.damagePercent)}%`);
     stat("Buildings destroyed", `${summary.buildingsDestroyed} of ${summary.buildingsTotal}`);
-    stat(
-      "Monsters lost",
-      `${summary.monstersLost} of ${summary.monstersSent} sent`,
-      summary.champions.length === 0
-        ? undefined
-        : summary.champions
-            .map(({ t, hp }) => `${championName(t)} health left: ${Math.max(0, Math.floor(hp))}`)
-            .join("; "),
-    );
+    stat("Monsters lost", monstersLostText(summary));
+    if (summary.champions.length > 0) {
+      stat(summary.champions.length === 1 ? "Champion" : "Champions", championsText(summary));
+    }
 
     this.loot = document.createElement("ul");
     this.loot.className = "attack-end__loot";
@@ -174,7 +218,7 @@ export class EndAttackPanel {
     this.returnButton.type = "button";
     this.returnButton.className = "btn btn--primary attack-end__return";
     tutTarget(this.returnButton, TutTarget.ATTACK_HOME);
-    this.returnButton.textContent = "Return to map";
+    this.returnButton.textContent = options.returnLabel ?? "Return to map";
     this.returnButton.disabled = true;
     this.returnButton.addEventListener("click", () => {
       if (this.status_ === "saved" || this.status_ === "unsent") this.options.onReturn();
@@ -219,9 +263,24 @@ export class EndAttackPanel {
     this.againButton.hidden = true;
     this.againButton.addEventListener("click", () => this.again?.());
 
+    this.homeButton = null;
+    if (options.home) {
+      const home = options.home;
+      this.homeButton = document.createElement("button");
+      this.homeButton.type = "button";
+      this.homeButton.className = "btn btn--ghost attack-end__home";
+      this.homeButton.textContent = home.label;
+      this.homeButton.disabled = true;
+      this.homeButton.addEventListener("click", () => {
+        if (this.canLeave()) home.onHome();
+      });
+    }
+
     const actions = document.createElement("div");
     actions.className = "attack-end__actions";
-    actions.append(this.leaveButton, this.retryButton, this.againButton, this.returnButton);
+    actions.append(this.leaveButton, this.retryButton, this.againButton);
+    if (this.homeButton) actions.append(this.homeButton);
+    actions.append(this.returnButton);
     this.actions = actions;
 
     this.panel.setContent(
@@ -283,26 +342,37 @@ export class EndAttackPanel {
     this.retryButton.hidden = true;
     this.leaveButton.hidden = true;
     this.hideLeave();
-    this.returnButton.disabled = true;
+    this.setReturnOpen(false);
   }
 
   /** The server has the result; Return to map opens. */
   setSaved(info: SavedInfo = {}): void {
-    if (info.credited) this.showLoot(info.credited);
+    if (info.credited) this.showLoot(info.credited, info.taken ?? null);
+    if (info.result) {
+      this.panel.setTitle(info.result.title);
+      this.outcome.textContent = info.result.outcome;
+      this.panel.element.classList.remove("attack-end--win", "attack-end--lose", "attack-end--neutral");
+      this.panel.element.classList.add(`attack-end--${info.result.tone}`);
+    }
     this.status_ = "saved";
     this.setStatus("saved", "Result saved.");
     this.retryButton.hidden = true;
     this.leaveButton.hidden = true;
     this.hideLeave();
-    this.returnButton.disabled = false;
+    this.setReturnOpen(true);
     this.againButton.hidden = this.again === null;
 
     const now = info.now ?? Date.now() / 1000;
     const until = info.protectedUntil ?? 0;
+    const backAt = info.backAt ?? 0;
     if (until > now) {
       this.protection.textContent =
         `${this.options.summary.targetName} is now under damage protection for ` +
         `${formatSpan(until - now)}.`;
+      this.protection.hidden = false;
+    } else if (backAt > now) {
+      // A wrecked Moloch tribe's comeback (WP 2.10): the map shows the rest.
+      this.protection.textContent = `${this.options.summary.targetName} will be back in ${formatSpan(backAt - now)}.`;
       this.protection.hidden = false;
     } else {
       this.protection.hidden = true;
@@ -320,7 +390,7 @@ export class EndAttackPanel {
     this.retryButton.hidden = true;
     this.leaveButton.hidden = true;
     this.hideLeave();
-    this.returnButton.disabled = false;
+    this.setReturnOpen(true);
     this.protection.hidden = true;
     this.focusPrimary();
   }
@@ -336,7 +406,7 @@ export class EndAttackPanel {
     this.retryButton.hidden = true;
     this.leaveButton.hidden = true;
     this.hideLeave();
-    this.returnButton.disabled = false;
+    this.setReturnOpen(true);
     this.protection.hidden = true;
     this.focusPrimary();
   }
@@ -347,7 +417,7 @@ export class EndAttackPanel {
     this.setStatus("failed", failure.message);
     this.retryButton.hidden = !failure.canRetry;
     this.leaveButton.hidden = false;
-    this.returnButton.disabled = true;
+    this.setReturnOpen(false);
     this.focusPrimary();
   }
 
@@ -356,28 +426,47 @@ export class EndAttackPanel {
    * the battle took did not fit in their storage (issue #166). Flash banked
    * only what fit without saying so (`ATTACK.as:703-710`); the note is the
    * one line that explains a figure below the battle's.
+   *
+   * An Inferno fight's loot is Bone, Coal, Sulfur and Magma, drawn so though
+   * the attack screen shows the surface's. A Descent's goes to the Inferno
+   * purse in full, so it has no such note (Inferno WP 1.13); a Moloch
+   * tribe's stops at the purse's caps (`ATTACK.as:703-708`), and the
+   * server's `taken` says what the battle took (WP 2.10).
    */
-  private showLoot(kept: ResourceAmounts): void {
+  private showLoot(kept: ResourceAmounts, takenByServer: ResourceAmounts | null = null): void {
     const whole = (value: number): string => Math.floor(value).toLocaleString("en-US");
-    const { lootTaken } = this.options.summary;
+    const { lootTaken, inferno } = this.options.summary;
+    const realm: ResourceRealm = inferno ? "inferno" : "surface";
     let spilled = false;
     this.loot.replaceChildren();
     for (const key of RESOURCE_KEYS) {
       const item = document.createElement("li");
       const amount = kept[key];
-      const taken = Math.max(amount, lootTaken[key]);
+      const taken = inferno ? Math.max(amount, takenByServer?.[key] ?? 0) : Math.max(amount, lootTaken[key]);
+      const name = resourceName(key, realm);
       item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
-      item.append(resourceAmount(key, formatAmount(amount)));
+      item.append(resourceAmount(key, formatAmount(amount), { realm }));
       const lost = Math.floor(taken) > Math.floor(amount);
       item.title = lost
-        ? `${RESOURCE_NAMES[key]}: ${whole(amount)} of ${whole(taken)} taken; ` +
-          "the rest did not fit in your storage"
-        : `${RESOURCE_NAMES[key]}: ${whole(amount)}`;
+        ? `${name}: ${whole(amount)} of ${whole(taken)} taken; the rest did not fit in your storage`
+        : `${name}: ${whole(amount)}`;
       if (lost) spilled = true;
       this.loot.append(item);
     }
-    this.storageNote.textContent = spilled ? "Your storage was full, so some loot was lost." : "";
+    const storage = inferno ? "Your Inferno storage" : "Your storage";
+    this.storageNote.textContent = spilled ? `${storage} was full, so some loot was lost.` : "";
     this.storageNote.hidden = !spilled;
+  }
+
+  /** Opens or shuts the ways out: the return, and the second one when there is one. */
+  private setReturnOpen(open: boolean): void {
+    this.returnButton.disabled = !open;
+    if (this.homeButton) this.homeButton.disabled = !open;
+  }
+
+  /** The return's own rule: the result is saved, or there was nothing to save. */
+  private canLeave(): boolean {
+    return this.status_ === "saved" || this.status_ === "unsent";
   }
 
   private setStatus(kind: EndAttackSaveStatus, text: string): void {

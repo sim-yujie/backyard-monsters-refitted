@@ -9,7 +9,6 @@ import {
   activeOverdrive,
   batchSeconds,
   fillLimits,
-  HATCHERY_OVERDRIVES,
   HATCHERY_TYPE,
   HCC_STACKS,
   hatcheryNumbers,
@@ -17,6 +16,7 @@ import {
   housedSpace,
   housingWarning,
   lineSeconds,
+  overdrivesOf,
   pendingSpace,
   previewAdd,
   previewFinish,
@@ -36,6 +36,7 @@ import {
   type QueueStack,
 } from "@/game/monsters/hatchPlan";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { monsterRealmOf, monsterWords, type MonsterRealm, type MonsterWords } from "@/game/monsters/realm";
 import { maxLevel, quantityOf, townHallLevel } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
@@ -136,12 +137,13 @@ const statNumber = (value: number): string =>
   Number.isInteger(value) ? formatAmount(value) : String(Number(value.toFixed(2)));
 
 /** Why Finish now cannot be pressed, as its visible line. */
-const FINISH_TEXT: Readonly<Record<FinishBlock, string>> = {
-  busy: "Still being built",
-  damaged: "Repair it first",
-  nothingToFinish: "Nothing to finish",
-  housingFull: "Housing full",
-};
+const finishText = (block: FinishBlock, words: MonsterWords): string =>
+  ({
+    busy: "Still being built",
+    damaged: "Repair it first",
+    nothingToFinish: "Nothing to finish",
+    housingFull: `${words.housing} full`,
+  })[block];
 
 /** Where the chosen batch would land, as the slots draw it. */
 interface SlotPreview {
@@ -279,7 +281,7 @@ export class HatchTab implements MonstersTab {
       inputLabel: "How many to add",
       fewerLabel: "One fewer",
       moreLabel: "One more",
-      fillTitle: "As many as the queue and your goo allow",
+      fillTitle: `As many as the queue and your ${monsterWords(monsterRealmOf(context.binding.store.kind)).goo} allow`,
       jumps: JUMPS,
       value: () => this.count,
       set: (value) => this.setCount(value),
@@ -320,6 +322,15 @@ export class HatchTab implements MonstersTab {
 
   private get store() {
     return this.context.binding.store;
+  }
+
+  /** The Inferno yard's Incubators hatch the Inferno monsters (WP 2.4). */
+  private get realm(): MonsterRealm {
+    return monsterRealmOf(this.store.kind);
+  }
+
+  private get words(): MonsterWords {
+    return monsterWords(this.realm);
   }
 
   show(focus: MonstersFocus): void {
@@ -394,7 +405,7 @@ export class HatchTab implements MonstersTab {
       if (!still?.monster) this.confirming = null;
     }
 
-    const monsters = hatchMonsters(store.save);
+    const monsters = hatchMonsters(store.save, this.realm);
     if (!this.selected || !monsters.some((row) => row.monster.id === this.selected)) {
       this.selected =
         monsters.find((row) => row.state.kind === "ready")?.monster.id ?? monsters[0]?.monster.id ?? null;
@@ -428,7 +439,7 @@ export class HatchTab implements MonstersTab {
 
   /** "Hatchery 2", by the number the line and the yard show. */
   private hatcheryName(id: number): string {
-    return `Hatchery ${this.numbers.get(id) ?? ""}`.trim();
+    return `${this.words.hatchery} ${this.numbers.get(id) ?? ""}`.trim();
   }
 
   /**
@@ -466,7 +477,7 @@ export class HatchTab implements MonstersTab {
       yard && row && ready && this.count > 0 ? housingWarning(yard, row.monster.id, this.count) : null;
     this.warningLine.textContent = warning ?? "";
     this.warningLine.hidden = warning === null;
-    const note = limits && row ? maxNote(limits, row, target) : null;
+    const note = limits && row ? maxNote(limits, row, target, this.words) : null;
     this.noteLine.textContent = note ?? "";
     this.noteLine.hidden = note === null || !ready;
 
@@ -530,7 +541,7 @@ export class HatchTab implements MonstersTab {
       const seconds = batchSeconds(yard, row.monster.id, preview.added, store.save.storedata, store.now());
       parts.push(` · ${duration(seconds)}`);
     }
-    parts.push(` · ${formatAmount(preview.added * row.space)} housing`);
+    parts.push(` · ${formatAmount(preview.added * row.space)} ${this.realm === "inferno" ? "space" : "housing"}`);
     this.sumLine.replaceChildren(...parts);
   }
 
@@ -546,7 +557,7 @@ export class HatchTab implements MonstersTab {
     if (yard.hatcheries.length === 0) {
       const note = document.createElement("p");
       note.className = "hatch__none";
-      note.textContent = "Build a Hatchery to hatch monsters.";
+      note.textContent = `Build ${article(this.words.hatchery)} to hatch monsters.`;
       this.lines.replaceChildren(note);
       return;
     }
@@ -610,7 +621,9 @@ export class HatchTab implements MonstersTab {
       pick.dataset["focusKey"] = `pick-${hatchery.id}`;
       pick.setAttribute("aria-pressed", String(isTarget));
       pick.textContent = title;
-      pick.title = isTarget ? "Monsters are added to this Hatchery" : "Add monsters to this Hatchery";
+      pick.title = isTarget
+        ? `Monsters are added to this ${this.words.hatchery}`
+        : `Add monsters to this ${this.words.hatchery}`;
       pick.addEventListener("click", () => this.chooseHatchery(hatchery.id));
       head.append(pick);
       if (isTarget) {
@@ -685,7 +698,7 @@ export class HatchTab implements MonstersTab {
     if (yard.hatcheries.length < allowed) {
       const more = document.createElement("div");
       more.className = "hatch-now hatch-now--more";
-      more.textContent = "Build another Hatchery to hatch more at once";
+      more.textContent = `Build another ${this.words.hatchery} to hatch more at once`;
       now.append(more);
     }
 
@@ -791,7 +804,7 @@ export class HatchTab implements MonstersTab {
     button.dataset["focusKey"] = `now-${hatchery.id}`;
     button.setAttribute(
       "aria-label",
-      `${compact ? `${where}: ` : ""}${nameOf(monster)} hatching now. Cancel it and get the goo back`,
+      `${compact ? `${where}: ` : ""}${nameOf(monster)} hatching now. Cancel it and get the ${this.words.goo} back`,
     );
     button.addEventListener("click", () => {
       this.confirming = hatchery.id;
@@ -833,7 +846,7 @@ export class HatchTab implements MonstersTab {
       card.append(bar);
       this.clocks.push({ node: time, endsAt: hatchery.endsAt, fill, total, suffix: compact ? "" : " left" });
     } else {
-      time.textContent = BUSY_TEXT[state] ?? "";
+      time.textContent = (state === "stalled" && this.realm === "inferno" ? "Waiting for room" : BUSY_TEXT[state]) ?? "";
     }
     return card;
   }
@@ -852,7 +865,7 @@ export class HatchTab implements MonstersTab {
     button.dataset["slot"] = String(slot);
     button.dataset["focusKey"] = `slot-${String(target)}-${slot}`;
     const name = nameOf(id);
-    button.setAttribute("aria-label", `${name}, ${count} waiting. Take one out and get its goo back`);
+    button.setAttribute("aria-label", `${name}, ${count} waiting. Take one out and get its ${this.words.goo} back`);
     button.title = `Take one ${name} out`;
     button.addEventListener("click", () => void this.runRemove(target, slot, 1));
     this.plainButtons.push(button);
@@ -895,13 +908,13 @@ export class HatchTab implements MonstersTab {
     lock.setAttribute("aria-hidden", "true");
     const words = document.createElement("span");
     words.className = "hatch-slot__why";
-    words.textContent = `Upgrade the Hatchery for a ${ordinal(hatchery.stackLimit + 1)} slot`;
+    words.textContent = `Upgrade the ${this.words.hatchery} for a ${ordinal(hatchery.stackLimit + 1)} slot`;
     const upgrade = document.createElement("button");
     upgrade.type = "button";
     upgrade.className = "btn btn--outline hatch-slot__upgrade";
     upgrade.textContent = "Upgrade";
     upgrade.dataset["focusKey"] = `upgrade-${hatchery.id}`;
-    upgrade.setAttribute("aria-label", `Upgrade the Hatchery for a ${ordinal(hatchery.stackLimit + 1)} slot`);
+    upgrade.setAttribute("aria-label", `Upgrade the ${this.words.hatchery} for a ${ordinal(hatchery.stackLimit + 1)} slot`);
     upgrade.addEventListener("click", () => this.context.binding.scene.selectBuilding(hatchery.id));
     slot.append(lock, words, upgrade);
     return slot;
@@ -955,7 +968,7 @@ export class HatchTab implements MonstersTab {
   /* ── The message and the housing bar ────────────────────────────────── */
 
   private renderMessage(yard: HatchYard, adding: number): void {
-    const { title, tone } = lineSentence(yard, this.target, this.selectedRow());
+    const { title, tone } = lineSentence(yard, this.target, this.selectedRow(), this.words);
     const words = document.createElement("div");
     words.className = "hatch-message__words";
     const main = document.createElement("span");
@@ -963,8 +976,7 @@ export class HatchTab implements MonstersTab {
     main.textContent = title;
     const detail = document.createElement("span");
     detail.className = "hatch-message__detail";
-    detail.textContent =
-      "Each monster moves into Housing the moment it hatches. With Housing full it still hatches, then waits in its Hatchery until there is room.";
+    detail.textContent = `Each monster moves into ${housingNoun(this.words)} the moment it hatches. With ${housingNoun(this.words)} full it still hatches, then waits in its ${this.words.hatchery} until there is room.`;
     words.append(main, detail);
 
     const housed = housedSpace(yard);
@@ -977,7 +989,7 @@ export class HatchTab implements MonstersTab {
     top.className = "hatch-housing__top";
     const label = document.createElement("span");
     label.className = "hatch-housing__label";
-    label.textContent = adding > 0 ? "Housing after this add" : "Housing after this line";
+    label.textContent = `${this.words.housing} after this ${adding > 0 ? "add" : "line"}`;
     const value = document.createElement("span");
     value.className = "hatch-housing__value";
     value.textContent = `${formatAmount(after)} / ${formatAmount(yard.capacity)}`;
@@ -1025,7 +1037,7 @@ export class HatchTab implements MonstersTab {
     if (after > yard.capacity) {
       const over = document.createElement("span");
       over.className = "hatch-housing__over";
-      over.textContent = `Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the Hatchery for room.`;
+      over.textContent = `Over by ${formatAmount(after - yard.capacity)}: the rest hatch and wait in the ${this.words.hatchery} for room.`;
       housing.append(over);
     }
 
@@ -1074,11 +1086,11 @@ export class HatchTab implements MonstersTab {
     lock.setAttribute("aria-hidden", "true");
     const text = document.createElement("p");
     text.className = "hatch-pick__locked-text";
-    text.textContent = "Grey monsters are locked. Unlock them at the Monster Locker, then hatch them here.";
+    text.textContent = `Grey monsters are locked. Unlock them at the ${this.words.locker}, then hatch them here.`;
     const go = document.createElement("button");
     go.type = "button";
     go.className = "btn btn--outline hatch-pick__go";
-    go.textContent = "Go to Monster Locker";
+    go.textContent = `Go to ${this.words.locker}`;
     go.addEventListener("click", () => this.context.showTab(MonstersTabId.UNLOCK, {}));
     this.lockedNote.replaceChildren(lock, text, go);
   }
@@ -1115,7 +1127,7 @@ export class HatchTab implements MonstersTab {
     this.infoEach.replaceChildren(
       "Each: ",
       resourceAmount("r4", row.price),
-      ` · ${duration(row.seconds)} · ${row.space} housing`,
+      ` · ${duration(row.seconds)} · ${row.space} ${this.realm === "inferno" ? "space" : "housing"}`,
     );
 
     const damage = monsterStat(monster.id, "damage", row.level);
@@ -1123,8 +1135,8 @@ export class HatchTab implements MonstersTab {
       ["Speed", statNumber(monsterStat(monster.id, "speed", row.level))],
       ["Health", statNumber(monsterStat(monster.id, "health", row.level))],
       damage < 0 ? ["Heals", statNumber(-damage)] : ["Damage", statNumber(damage)],
-      ["Goo each", resourceAmount("r4", row.price)],
-      ["Housing each", String(row.space)],
+      [`${capitalised(this.words.goo)} each`, resourceAmount("r4", row.price)],
+      [this.realm === "inferno" ? "Space each" : "Housing each", String(row.space)],
       ["Time each", duration(row.seconds)],
     ];
     this.stats.replaceChildren(
@@ -1150,20 +1162,20 @@ export class HatchTab implements MonstersTab {
 
   /** Why Add cannot be pressed, as nodes, or none. */
   private addGate(yard: HatchYard | null, row: HatchMonster | null, limits: FillLimits | null): (Node | string)[] {
-    if (!yard || this.target === null) return ["Build a Hatchery first."];
+    if (!yard || this.target === null) return [`Build ${article(this.words.hatchery)} first.`];
     if (!row) return [];
     if (row.state.kind !== "ready") {
       const go = document.createElement("button");
       go.type = "button";
       go.className = "btn btn--outline hatch-add__unlock";
-      go.textContent = "Go to Monster Locker";
+      go.textContent = `Go to ${this.words.locker}`;
       go.addEventListener("click", () =>
         this.context.showTab(MonstersTabId.UNLOCK, { monster: row.monster.id }),
       );
       const words =
         row.state.kind === "unlocking"
           ? `${row.monster.name} is still unlocking.`
-          : `Unlock ${row.monster.name} in the Monster Locker first.`;
+          : `Unlock ${row.monster.name} in the ${this.words.locker} first.`;
       return [words, " ", go];
     }
     if (!limits) return [];
@@ -1208,11 +1220,11 @@ export class HatchTab implements MonstersTab {
       label.className = "hatch-boosts__label";
       label.textContent = "Overdrive, 1 hour:";
       overdrive.append(label);
-      for (const { item, power, price } of HATCHERY_OVERDRIVES) {
+      for (const { item, power, price } of overdrivesOf(this.realm)) {
         const key = `overdrive-${item}`;
         used.add(key);
         const button = this.shinyButton(key, `${power}x`, () => void this.runOverdrive(item));
-        button.element.title = `Every hatchery works ${power} times as fast for an hour.`;
+        button.element.title = `Every ${this.words.hatchery.toLowerCase()} works ${power} times as fast for an hour.`;
         button.setPrice(price);
         button.setBlocked(this.store.credits < price ? "Not enough Shiny." : null);
         overdrive.append(button.element);
@@ -1231,12 +1243,12 @@ export class HatchTab implements MonstersTab {
     const preview = previewFinish(yard, target, this.store.save, this.store.now());
     button.setPrice(preview.price);
     const blocked = preview.blocked
-      ? FINISH_TEXT[preview.blocked]
+      ? finishText(preview.blocked, this.words)
       : this.store.credits < preview.price
         ? "Not enough Shiny"
         : null;
     button.setBlocked(blocked ? `${blocked}.` : null);
-    reason.textContent = blocked ?? (preview.finishedAll ? "" : "Housing fits only part of it");
+    reason.textContent = blocked ?? (preview.finishedAll ? "" : `${housingNoun(this.words, true)} fits only part of it`);
     reason.hidden = reason.textContent === "";
   }
 
@@ -1246,7 +1258,7 @@ export class HatchTab implements MonstersTab {
     const now = this.store.now();
     const running = activeOverdrive(this.store.save.storedata, now);
     node.textContent = running
-      ? `Overdrive ${running.power}x: every hatchery works ${running.power} times as fast for ${duration(running.endsAt - now)}.`
+      ? `Overdrive ${running.power}x: every ${this.words.hatchery.toLowerCase()} works ${running.power} times as fast for ${duration(running.endsAt - now)}.`
       : "The Overdrive has run out.";
   }
 
@@ -1284,7 +1296,7 @@ export class HatchTab implements MonstersTab {
   /* ── Count and selection ────────────────────────────────────────────── */
 
   private selectedRow(): HatchMonster | null {
-    return hatchMonsters(this.store.save).find((row) => row.monster.id === this.selected) ?? null;
+    return hatchMonsters(this.store.save, this.realm).find((row) => row.monster.id === this.selected) ?? null;
   }
 
   private select(id: string, redraw = true): void {
@@ -1344,10 +1356,10 @@ export class HatchTab implements MonstersTab {
           preview.stoppedBy === "goo"
             ? overCap(price, this.store.caps?.r4)
               ? NEED_MORE_SILOS
-              : `Not enough goo for a ${nameOf(monster)}.`
+              : `Not enough ${this.words.goo} for a ${nameOf(monster)}.`
             : target === "hcc"
               ? "The shared queue is full."
-              : "This Hatchery's queue is full.",
+              : `This ${this.words.hatchery}'s queue is full.`,
         ],
       });
       return;
@@ -1357,7 +1369,7 @@ export class HatchTab implements MonstersTab {
       const name = plural(nameOf(report.monster), report.added);
       const cost = report.cost.r4 > 0 ? [": ", resourceAmount("r4", report.cost.r4), " spent."] : ["."];
       if (report.added === report.requested) return [`Added ${formatAmount(report.added)} ${name}`, ...cost];
-      const why = report.stoppedBy === "goo" ? "out of goo" : "the queue is full";
+      const why = report.stoppedBy === "goo" ? `out of ${this.words.goo}` : "the queue is full";
       return [
         `Added ${formatAmount(report.added)} of ${formatAmount(report.requested)} ${plural(nameOf(report.monster), report.requested)} — ${why}`,
         ...cost,
@@ -1384,15 +1396,17 @@ export class HatchTab implements MonstersTab {
       return [
         `Hatched ${housed}`,
         ...(report.credits > 0 ? [" for ", resourceAmount("shiny", report.credits)] : []),
-        report.finishedAll ? "." : ". Housing is full; the rest will wait.",
+        report.finishedAll ? "." : `. ${housingNoun(this.words, true)} is full; the rest will wait.`,
       ];
     });
   }
 
   private async runOverdrive(item: OverdriveItem): Promise<void> {
-    const power = HATCHERY_OVERDRIVES.find((one) => one.item === item)?.power ?? 0;
+    const power = overdrivesOf(this.realm).find((one) => one.item === item)?.power ?? 0;
     const result = await this.actions.overdrive(item);
-    this.report(result, () => [`Overdrive on: every hatchery works ${power} times as fast for an hour.`]);
+    this.report(result, () => [
+      `Overdrive on: every ${this.words.hatchery.toLowerCase()} works ${power} times as fast for an hour.`,
+    ]);
   }
 
   private report<Report>(
@@ -1483,6 +1497,16 @@ const previewSlot = (monster: string, count: number): HTMLElement => {
   return slot;
 };
 
+/** "an Incubator", "a Hatchery". */
+const article = (noun: string): string => `${/^[AEIOU]/.test(noun) ? "an" : "a"} ${noun}`;
+
+/** "Magma", "Goo": a resource word to start a label with. */
+const capitalised = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
+
+/** Housing as a sentence names it: "Housing", or "the Compound" ("The Compound" to start one). */
+const housingNoun = (words: MonsterWords, start = false): string =>
+  words.housing === "Housing" ? "Housing" : `${start ? "The" : "the"} ${words.housing}`;
+
 /** Words in bold, for "Adding to **Hatchery 2**". */
 const strong = (text: string): HTMLElement => {
   const node = document.createElement("strong");
@@ -1503,12 +1527,17 @@ const chevron = (): HTMLElement => {
  * The line under Max: why it stops where it does, in the words of the
  * limit that stopped it.
  */
-const maxNote = (limits: FillLimits, row: HatchMonster, target: HatchTarget | null): string | null => {
+const maxNote = (
+  limits: FillLimits,
+  row: HatchMonster,
+  target: HatchTarget | null,
+  words: MonsterWords,
+): string | null => {
   const fill = limits.fill;
   if (fill === 0) return null;
   const many = `${formatAmount(fill)} more ${plural(row.monster.name, fill)}`;
   return limits.limitedBy === "goo"
-    ? `Max is ${formatAmount(fill)}: your goo pays for ${many}.`
+    ? `Max is ${formatAmount(fill)}: your ${words.goo} pays for ${many}.`
     : `Max is ${formatAmount(fill)}: ${target === "hcc" ? "the shared queue" : "the queue"} has room for ${many}.`;
 };
 
@@ -1521,14 +1550,16 @@ export const lineSentence = (
   yard: HatchYard,
   target: HatchTarget | null,
   row: HatchMonster | null,
+  words: MonsterWords = monsterWords("surface"),
 ): { title: string; tone: "plain" | "warning" } => {
   const tip = " Choose a monster and how many, then press Add.";
-  if (target === null) return { title: "Build a Hatchery to hatch monsters.", tone: "plain" };
+  const build = { title: `Build ${article(words.hatchery)} to hatch monsters.`, tone: "plain" } as const;
+  if (target === null) return build;
   const full = row?.state.kind === "ready" && fillLimits(yard, target, row.monster.id).queue === 0;
   const tail = full ? " The queue is full." : tip;
   const names = (ids: readonly string[]): string => {
-    const words = [...new Set(ids)].map((id) => plural(nameOf(id), 2));
-    return words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+    const each = [...new Set(ids)].map((id) => plural(nameOf(id), 2));
+    return each.length <= 1 ? (each[0] ?? "") : `${each.slice(0, -1).join(", ")} and ${each.at(-1)}`;
   };
 
   if (target === "hcc") {
@@ -1543,29 +1574,29 @@ export const lineSentence = (
     // Waiting monsters first: they are what a player cannot otherwise see (#169).
     if (stalled.length > 0) {
       return {
-        title: `Housing is full: ${stalled.length === 1 ? "a hatched monster waits" : `${formatAmount(stalled.length)} hatched monsters wait`} in the Hatcheries for room.`,
+        title: `${housingNoun(words, true)} is full: ${stalled.length === 1 ? "a hatched monster waits" : `${formatAmount(stalled.length)} hatched monsters wait`} in the ${words.hatcheries} for room.`,
         tone: "warning",
       };
     }
     if (producing.length > 0) return { title: `Hatching ${names(producing.map((one) => one.monster!))}.${tail}`, tone: "plain" };
-    if (yard.shared.length > 0) return { title: `Waiting for a free Hatchery.${tail}`, tone: "plain" };
+    if (yard.shared.length > 0) return { title: `Waiting for a free ${words.hatchery}.${tail}`, tone: "plain" };
     return { title: `Nothing is hatching.${tip}`, tone: "plain" };
   }
 
   const hatchery = yard.hatcheries.find((one) => one.id === target);
-  if (!hatchery) return { title: "Build a Hatchery to hatch monsters.", tone: "plain" };
+  if (!hatchery) return build;
   switch (hatchery.state) {
     case "building":
-      return { title: "This Hatchery is still being built: it starts hatching when it is done.", tone: "warning" };
+      return { title: `This ${words.hatchery} is still being built: it starts hatching when it is done.`, tone: "warning" };
     case "damaged":
-      return { title: "This Hatchery is damaged: repair it to hatch again.", tone: "warning" };
+      return { title: `This ${words.hatchery} is damaged: repair it to hatch again.`, tone: "warning" };
     case "stalled":
       return {
-        title: `Housing is full: the hatched ${nameOf(hatchery.monster ?? "")} waits in this Hatchery for room.`,
+        title: `${housingNoun(words, true)} is full: the hatched ${nameOf(hatchery.monster ?? "")} waits in this ${words.hatchery} for room.`,
         tone: "warning",
       };
     case "upgrading":
-      return { title: `Paused while the Hatchery upgrades.${tail}`, tone: "warning" };
+      return { title: `Paused while the ${words.hatchery} upgrades.${tail}`, tone: "warning" };
     case "producing":
       return { title: `Hatching ${names([hatchery.monster ?? ""])}.${tail}`, tone: "plain" };
     default:

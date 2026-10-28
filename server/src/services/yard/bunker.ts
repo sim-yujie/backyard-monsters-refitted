@@ -1,4 +1,4 @@
-import { hatchCost, housingSpace } from "../../game-data/monsterCatalogue.js";
+import { hatchCost, housingSpace, isInfernoMonster } from "../../game-data/monsterCatalogue.js";
 import { capacity } from "../../game-rules/combat/stats.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -32,14 +32,17 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  *   `:30-46`), the monster unlocked in the locker (`CheckID`, `:627-629`); it
  *   was charged as the store item `BUNK`.
  *
- * Only `BUNKERABLE_MONSTERS` go in (`:48-69`): C1-C13 and C17. The Inferno
- * ids on that list are left out with Inferno itself (D19). Room is checked
- * against everything already in the bunker plus the whole selection
- * (`CheckID`, `:595-615`).
+ * Only `BUNKERABLE_MONSTERS` go in (`:48-69`): C1-C13, C17 and the Inferno
+ * monsters IC1-IC8, which reach the main yard's housing through the Inferno
+ * transfer (Inferno WP 2.5). The Inferno ones come from housing only: the
+ * buy list leaves them out, as their unlock is the Inferno yard's
+ * (`CheckID`, `:627-633`). Room is checked against everything already in the
+ * bunker plus the whole selection (`CheckID`, `:595-615`).
  *
  * **Remove** (D11, the Map Room 2 rule): nothing goes back to housing. A
  * monster taken out is juiced for goo when a Juicer works (the Juicer's own
- * rule, `juice.ts`), else simply deleted (`BunkerJuiceById`, `:698-745`).
+ * rule, `juice.ts`), else simply deleted (`BunkerJuiceById`, `:698-745`). An
+ * Inferno monster is always deleted, Juicer or not (`:701-702`).
  * The putty or Shiny it cost is never refunded.
  *
  * Pure: the wrapper hands in the caught-up save, charges the putty or the
@@ -49,9 +52,10 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 /** Monster Bunker type id (`client/scripts/YARD_PROPS.as:2410`). */
 export const BUNKER_TYPE = 22;
 
-/** Monsters a Map Room 2 bunker takes (`MONSTERBUNKERPOPUP.as:48-69`, Inferno ids left out). */
+/** Monsters a Map Room 2 bunker takes (`MONSTERBUNKERPOPUP.as:48-69`). */
 export const BUNKERABLE_MONSTERS: readonly string[] = [
   "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C17",
+  "IC1", "IC2", "IC3", "IC4", "IC5", "IC6", "IC7", "IC8",
 ];
 
 /** Shiny per monster bought straight into a bunker (`MONSTERBUNKERPOPUP.as:30-46`, Inferno ids left out). */
@@ -203,7 +207,7 @@ export const planBunkerFill = (
 
   const wanted: Record<string, number> = {};
   for (const [raw, count] of Object.entries(monsters)) {
-    const id = /^C\d+$/.test(raw) ? monsterIdOf(raw) : null;
+    const id = /^I?C\d+$/.test(raw) ? monsterIdOf(raw) : null;
     if (!id) throw yardBadRequestErr("That is not a monster.", { monster: raw });
     if (!BUNKERABLE_MONSTERS.includes(id)) {
       throw yardRefusedErr("notBunkerable", "That monster cannot go in a Monster Bunker.", {
@@ -302,7 +306,8 @@ export interface BunkerRemoveReport {
 
 /**
  * `POST /bm/yard/bunker/remove`: takes monsters out of a bunker for good —
- * juiced when a Juicer works, else deleted; never back to housing (D11).
+ * juiced when a Juicer works (never an Inferno monster), else deleted;
+ * never back to housing (D11).
  *
  * Refusals: `409 noBunker { id }`; `409 mapRoom3`; `400 badRequest` for an id
  * that is not a monster; `409 notInBunker { monster }` when the bunker holds
@@ -319,7 +324,7 @@ export const planBunkerRemove = (
   const { key, building } = bunkerOrThrow(save, bunkerId);
   if (building.m && Object.values(building.m as JsonObject).some(Array.isArray)) throw mapRoom3Err();
 
-  const id = /^C\d+$/.test(monster) ? monsterIdOf(monster) : null;
+  const id = /^I?C\d+$/.test(monster) ? monsterIdOf(monster) : null;
   if (!id) throw yardBadRequestErr("That is not a monster.", { monster });
 
   const contents = readBunker(building);
@@ -331,7 +336,8 @@ export const planBunkerRemove = (
   contents[id] = have - removed;
   if (contents[id] === 0) delete contents[id];
 
-  const juicer = workingJuicer(save);
+  // An Inferno monster is never juiced out of a bunker (`BunkerJuiceById`, `:701-702`).
+  const juicer = isInfernoMonster(id) ? null : workingJuicer(save);
   const goo = juicer ? juiceGoo(id, removed, academyLevels(save.academy), juicer.rate) : 0;
   const fit = fitCredit(save, { r4: goo });
 

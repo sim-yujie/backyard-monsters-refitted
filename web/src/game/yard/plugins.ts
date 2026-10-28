@@ -3,7 +3,8 @@
  * `yardPlugins.ts`). One file per tutorial package under ./plugins/ so the
  * agents building them in parallel never edit the same file, and one each for
  * the Hatchery walk-out (#228), the achievement unlock pop-up (#204), wild
- * monster raids (#226) and events (the Events button, "What's new").
+ * monster raids (#226), events (the Events button, "What's new"), Moloch's
+ * cave (the Inferno, WP 1.10) and "Korath unlocked" (Inferno WP 5.2).
  * Imported once by YardScene.ts.
  */
 import "./plugins/achievements";
@@ -11,5 +12,7 @@ import "./plugins/events";
 import "./plugins/goals";
 import "./plugins/guidedStart";
 import "./plugins/hatchWalkOut";
+import "./plugins/inferno";
+import "./plugins/korath";
 import "./plugins/raid";
 import "./plugins/tips";

@@ -1,6 +1,7 @@
 import type { JsonObject } from "../../types/JsonObject.js";
 import {
   CLOD_EXTRA_SECONDS,
+  monsterRealmOf,
   overdriveOverlap,
   overdriveWindow,
   runningUnlock,
@@ -45,6 +46,8 @@ export interface UnlockJob {
 
 /** The slice of a save this step reads and writes. */
 export interface CatchUpLockerSave {
+  /** `BaseType`: the Inferno yard runs the Inferno roster's unlock (`locker.ts`). */
+  type?: string;
   lockerdata?: JsonObject | null;
   academy?: JsonObject | null;
   storedata?: JsonObject | null;
@@ -59,7 +62,7 @@ export interface CatchUpLockerSave {
  * @param now - The moment to advance to.
  */
 export const catchUpLocker = (save: CatchUpLockerSave, from: number, now: number): UnlockJob[] => {
-  const running = runningUnlock(save.lockerdata);
+  const running = runningUnlock(save.lockerdata, monsterRealmOf(save));
   const e = Number(running?.entry.e);
   if (!running || !Number.isFinite(e)) return [];
 
@@ -88,11 +91,12 @@ export const catchUpLocker = (save: CatchUpLockerSave, from: number, now: number
  * Catch-up step: the Pokey is always unlocked (issue #218), as Flash's load
  * made it (`CREATURELOCKER.as:63-65`). A save from before new saves started
  * with it gets it here, on its next owner load or yard action, so no migration
- * is needed. Writes only when it was missing.
+ * is needed. Writes only when it was missing. The Inferno yard's is Spurtz
+ * (`IC1`, `CREATURELOCKER.as:58-66`).
  *
  * @param save - The yard, mutated in place: `lockerdata` may change.
  */
 export const unlockStarterMonster = (save: CatchUpLockerSave): void => {
-  const lockerdata = withStarterUnlocked(save.lockerdata);
+  const lockerdata = withStarterUnlocked(save.lockerdata, monsterRealmOf(save));
   if (lockerdata !== save.lockerdata) save.lockerdata = lockerdata;
 };

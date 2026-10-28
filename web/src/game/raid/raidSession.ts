@@ -43,9 +43,14 @@ export const setRaidResult = (result: RaidResult): void => {
   pendingResult = result;
 };
 
-/** Takes what the last raid landed, clearing it: the yard shows it once. */
-export const consumeRaidResult = (): RaidResult | null => {
+/**
+ * Takes what the last raid landed, clearing it: the yard shows it once. With
+ * `which`, only a result it accepts is taken; any other is left for its own
+ * taker (Moloch's raids for the Inferno's plugin, the rest for the raid's).
+ */
+export const consumeRaidResult = (which: (result: RaidResult) => boolean = () => true): RaidResult | null => {
   const result = pendingResult;
+  if (result === null || !which(result)) return null;
   pendingResult = null;
   return result;
 };

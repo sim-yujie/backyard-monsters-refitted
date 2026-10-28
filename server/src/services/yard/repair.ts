@@ -1,6 +1,7 @@
 import { REPAIR_CAP_SECONDS, repairTimeOf } from "../../game-data/repairTimes.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
+import type { YardKind } from "../../game-data/buildingCosts.js";
 import { levelOf, yardKindOf } from "../yardplanner/costs.js";
 import { harvesterHealth } from "./catchUpHarvesters.js";
 import { repairAllPrice } from "./shiny.js";
@@ -63,10 +64,12 @@ export interface Damage {
  * Health a repairing building heals per second:
  * `ceil(max / min(3600, repairTime[lvl − 1]))` (`BFOUNDATION.as:1367-1370`).
  * A building still under construction reads `repairTime[0]`, as the original's
- * level 0 does.
+ * level 0 does. The Inferno yard's `repairTime` is its own props table's.
  */
-export const repairRate = (type: number, level: number, max: number): number =>
-  Math.max(1, Math.ceil(max / Math.max(1, Math.min(REPAIR_CAP_SECONDS, repairTimeOf(type, level)))));
+export const repairRate = (type: number, level: number, max: number, kind: YardKind = "main"): number => {
+  const time = repairTimeOf(type, level, kind === "inferno" ? "inferno" : "main");
+  return Math.max(1, Math.ceil(max / Math.max(1, Math.min(REPAIR_CAP_SECONDS, time))));
+};
 
 /**
  * Seconds a repair has left, as the original counted them for the `FIX` price
@@ -88,7 +91,8 @@ export const damageOf = (save: RepairSave, key: string, building: BuildingData):
   if (health === undefined) return null;
   const type = Number(building.t);
   const level = levelOf(building);
-  const max = maxHp(type, level, yardKindOf(save));
+  const kind = yardKindOf(save);
+  const max = maxHp(type, level, kind);
   if (!(max > 0) || health >= max) return null;
   return {
     key,
@@ -96,7 +100,7 @@ export const damageOf = (save: RepairSave, key: string, building: BuildingData):
     type,
     health: Math.max(0, Math.floor(health)),
     max,
-    rate: repairRate(type, level, max),
+    rate: repairRate(type, level, max, kind),
     repairing: Boolean(building.rE),
   };
 };

@@ -34,7 +34,8 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * every action here works on that one.
  *
  * **Raise** (`CHAMPIONSELECTPOPUP.RaiseGuard`, `CHAMPIONSELECTPOPUP.as:72-90`)
- * is free and only for Gorgo, Drull and Fomor (D17). It lays an EGG (owner,
+ * is free and for Gorgo, Drull and Fomor (D17), and Korath once the player
+ * owns an Inferno yard (owner I10, `services/inferno/korath.ts`). It lays an EGG (owner,
  * 2026-10-20): status 3, `ft` the hatch time a full day ahead, every time,
  * with no way to hurry it (no Shiny, item or friend help: those all work on
  * building countdowns, never on the champion list). The catch-up hatches it
@@ -83,6 +84,9 @@ export const CHAMPION_CHAMBER_TYPE = 119;
 
 /** `ChampionBase` statuses (`client/scripts/com/monsters/monsters/champions/ChampionBase.as:26-36`). */
 export const CHAMPION_STATUS = { ACTIVE: 0, FROZEN: 1, JUICED: 2, EGG: 3 } as const;
+
+/** Korath's champion type (`G4`): raised once the player owns an Inferno yard (owner I10). */
+export const KORATH_TYPE = 4;
 
 /** How long an egg takes to hatch: one day, every time (owner, 2026-10-20). */
 export const EGG_HATCH_SECONDS = 24 * 60 * 60;
@@ -242,7 +246,8 @@ const evolved = (champion: ChampionData, entry: ChampionEntry, level: number, no
  * `POST /bm/yard/champion/raise`: lay a champion's egg in the cage; it hatches
  * {@link EGG_HATCH_SECONDS} later.
  *
- * Refusals, in order: `409 notRaisable { type }` (Korath and Krallen, D17);
+ * Refusals, in order: `409 notRaisable { type }` (Krallen, D17, and Korath
+ * until `unlocked.korath`: the player owns an Inferno yard, owner I10);
  * `409 noCage` / `409 busy`; `409 championInCage` while a champion is in the
  * cage; `409 eggInCage { type, hatchAt }` while an egg is; `409 frozen { type }`
  * while that champion is frozen in the Chamber
@@ -250,10 +255,17 @@ const evolved = (champion: ChampionData, entry: ChampionEntry, level: number, no
  *
  * @param type - Champion type 1..5.
  * @param now - Unix seconds.
+ * @param unlocked - Champions this player has unlocked beyond the catalogue's
+ *   three: `korath` once they own an Inferno yard.
  */
-export const planChampionRaise = (save: ChampionSave, type: number, now: number) => {
+export const planChampionRaise = (
+  save: ChampionSave,
+  type: number,
+  now: number,
+  unlocked: { readonly korath?: boolean } = {}
+) => {
   const entry = championEntry(type);
-  if (!entry?.raisable) {
+  if (!entry || !(entry.raisable || (entry.t === KORATH_TYPE && unlocked.korath === true))) {
     throw yardRefusedErr("notRaisable", "That champion cannot be raised at the cage.", { type });
   }
   cageOrThrow(save);

@@ -1,6 +1,7 @@
 import { ColorMatrixFilter, Container, Sprite, Text, Texture } from "pixi.js";
 import { ArtState, resolveArt, type ResolvedArt } from "./buildingArt";
 import { fortArtFor, type FortArt } from "./fortArt";
+import type { YardKind } from "./buildingCostData";
 import {
   applyArt,
   fillBox,
@@ -203,6 +204,8 @@ export class YardBuildings {
   private readonly textures: YardTextures;
   private views: BuildingView[] = [];
   private readonly byId = new Map<number, BuildingView>();
+  /** Which props table the shown yard's art comes from: the Inferno's on an Inferno yard. */
+  private kind: YardKind = "main";
   /** Set when art has arrived and the sprites need another resolution pass. */
   private pending = true;
   /** Buildings drawn highlighted, and the one filter they all share (#88). */
@@ -238,11 +241,12 @@ export class YardBuildings {
    */
   show(yard: Yard, atlas: YardArtAtlas, work: WorkMap = NO_WORK): void {
     this.clear();
+    this.kind = yard.kind;
 
     let labels = 0;
 
     for (const building of yard.buildings) {
-      const art = artFor(building);
+      const art = artFor(building, yard.kind);
 
       const fortArt = fortArtFor(building.type, building.fortification);
       let fort: FortOverlay | null = null;
@@ -559,7 +563,7 @@ export class YardBuildings {
 
     const state =
       step >= 4 ? ArtState.DESTROYED : step >= 2 ? ArtState.DAMAGED : ArtState.DEFAULT;
-    const wanted = resolveArt(view.building.type, view.building.level, state);
+    const wanted = resolveArt(view.building.type, view.building.level, state, this.kind);
     const current = view.swap ?? view.art;
     if (!wanted || wanted === current || wanted.top.url === current?.top.url) {
       // Same picture as now (a type with one state, or a wall at every level):

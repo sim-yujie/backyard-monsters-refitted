@@ -16,7 +16,7 @@ import { modalLayer, openWhatsNew } from "./events/WhatsNewDialog";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { formatAmount, formatCompact } from "./format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
 
 /**
@@ -43,7 +43,10 @@ import { DamageBanner } from "./yard/DamageBanner";
  * amounts alone. On the main yard each resource also carries what the player
  * makes of it an hour, "+12,400/h" (#280, `incomeRate.ts`), dimmed with
  * "full" while its silo is full, since that income is lost. In an outpost the amounts and caps are the main yard's pool,
- * as the server sends them.
+ * as the server sends them. On the Inferno yard the four are Bone, Coal,
+ * Sulfur and Magma, with the Inferno purse and its cap (WP 1.19,
+ * `resourceIcon.ts`'s realm), and the income line of its own harvesters at
+ * the Inferno's rates (Flash's resource bubble gave the Inferno's rate too).
  *
  * The yard lays it out as its `corner` (the HUD redesign, #171, option B:
  * "a game, not a dashboard"): no brand and no screen tabs, the readouts and
@@ -77,6 +80,9 @@ const FIT_ORDER: readonly HudFit[] = [HudFit.FULL, HudFit.NO_BRAND, HudFit.NO_CA
 
 /** What a full silo's readout says on hover and in its bubble (design §3.1). */
 export const FULL_NOTE = "Full: new income is lost. Build or upgrade Storage Silos.";
+
+/** {@link FULL_NOTE} on the Inferno yard, whose storage is the Resource Pod. */
+export const INFERNO_FULL_NOTE = "Full: new income is lost. Build or upgrade Resource Pods.";
 
 /** "+12,400/h", or "+12.4K/h" short: a resource's income an hour (#280). */
 export const formatRate = (perHour: number, compact = false): string =>
@@ -229,6 +235,8 @@ export class Hud {
   private bubbleTimer: number | undefined;
   private readonly floats = new Set<HTMLElement>();
   private yardBinding: YardUiBinding | null = null;
+  /** What a full readout says: {@link INFERNO_FULL_NOTE} while the Inferno yard is bound. */
+  private fullNote = FULL_NOTE;
   private unsubscribeYard: (() => void) | null = null;
   /** The post-attack "N buildings damaged [Repair all]" line, while bound (§5.5). */
   private damageBanner: DamageBanner | null = null;
@@ -729,10 +737,18 @@ export class Hud {
     const caps: ResourceCaps | null = store?.caps ?? null;
     // An outpost's save has the outpost's harvesters, which pay by the
     // outposts' own rule, and not the main yard's: the rate is the main yard's.
-    const rates = store?.kind === "main" ? incomePerHour(store.save, store.now()) : null;
+    // The Inferno yard's are its own, at the Inferno's rates (WP 1.19).
+    const rates =
+      store?.kind === "main" || store?.kind === "inferno"
+        ? incomePerHour(store.save, store.now(), store.kind)
+        : null;
+    this.fullNote = store?.kind === "inferno" ? INFERNO_FULL_NOTE : FULL_NOTE;
     for (const key of RESOURCE_KEYS) {
       const readout = this.readouts.get(key);
       if (!readout) continue;
+      // Bone, Coal, Sulfur and Magma while the Inferno yard is bound (WP 1.19).
+      const icon = readout.button.querySelector<HTMLElement>(".res-icon");
+      if (icon) restyleIcon(icon, key);
       readout.cap = caps?.[key];
       readout.perHour = rates?.[key];
       this.render(readout);
@@ -785,10 +801,11 @@ export class Hud {
     const full = capState(readout.amount, readout.cap)?.full === true;
     const notes = [
       ...(readout.perHour === undefined ? [] : [rateNote(readout.perHour)]),
-      ...(full ? [FULL_NOTE] : []),
+      ...(full ? [this.fullNote] : []),
     ];
     readout.button.title = [text, ...notes].join("\n");
-    readout.button.setAttribute("aria-label", [text, ...notes].join(". "));
+    // The notes end in a full stop already: "Bone: 1 of 2. Making 720 an hour. Full: ..."
+    readout.button.setAttribute("aria-label", notes.length ? [`${text}.`, ...notes].join(" ") : text);
   }
 
   /** The own yard's Shop door, or null where there is no Shop (the map, an attack, a visit). */
@@ -867,7 +884,7 @@ export class Hud {
     if (capState(amount, cap)?.full) {
       const note = document.createElement("p");
       note.className = "hud__exact-note";
-      note.textContent = FULL_NOTE;
+      note.textContent = this.fullNote;
       this.bubble.append(note);
     }
   }

@@ -1,9 +1,8 @@
 import type { YardRefusal } from "@/api/yard";
 import {
   expansionEndsAt,
-  HOUSING_EXPANSION,
-  HOUSING_TYPE,
   housingBuildings,
+  housingExpansionOf,
   housingSummary,
   type HousedRow,
   type HousingBuildingRow,
@@ -16,7 +15,7 @@ import {
   waitingText,
   type WaitingMonster,
 } from "@/game/monsters/housingPanel";
-import { nameOf } from "@/game/yard/buildingCosts";
+import { monsterRealmOf, monsterWords, type MonsterWords } from "@/game/monsters/realm";
 import { actionKey, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { icon } from "@/ui/icons";
@@ -41,6 +40,9 @@ import { MonstersTabId } from "./monstersTab";
  * A block is the way to that Housing in the yard; a picture opens its
  * monster's card on the Unlock tab (the first tab on an outpost, which has
  * none).
+ *
+ * On the Inferno yard every Housing is a Compound, the juice is Magma and the
+ * expansion is the Compound Expansion (`EXHI`, Inferno WP 2.4).
  */
 
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
@@ -58,9 +60,6 @@ export interface HousingViewOptions {
    */
   readonly onStatus?: (status: Status) => void;
 }
-
-/** The store's queue key for the expansion purchase. */
-const BUY_KEY = actionKey("buy", HOUSING_EXPANSION.item);
 
 /** How many of the waiting monsters' pictures the card stacks. */
 const WAITING_PICTURES = 2;
@@ -120,6 +119,16 @@ export class HousingView {
     return this.options.binding.store;
   }
 
+  /** The words for this yard's buildings: "Housing", or "Compound" in the Inferno. */
+  private get words(): MonsterWords {
+    return monsterWords(monsterRealmOf(this.store.kind));
+  }
+
+  /** The expansion this yard sells: `EXH`, or `EXHI` in the Inferno. */
+  private get offer() {
+    return housingExpansionOf(this.store.save);
+  }
+
   /** The Housing to ring as "This one", or null for none. */
   setFocus(id: number | null): void {
     this.focus = id;
@@ -149,7 +158,7 @@ export class HousingView {
   }
 
   syncPending(): void {
-    this.buyButton?.setBusy(this.store.isRunning(BUY_KEY));
+    this.buyButton?.setBusy(this.store.isRunning(actionKey("buy", this.offer.item)));
   }
 
   destroy(): void {
@@ -187,11 +196,11 @@ export class HousingView {
     free.textContent = freeText(used, total);
     head.append(figures, free);
 
-    const name = nameOf(HOUSING_TYPE) || "Housing";
+    const name = this.words.housing;
     const bar = document.createElement("div");
     bar.className = "housing-space__bar";
     bar.setAttribute("role", "group");
-    bar.setAttribute("aria-label", `Housing space: ${formatAmount(used)} of ${formatAmount(total)} used`);
+    bar.setAttribute("aria-label", `${name} space: ${formatAmount(used)} of ${formatAmount(total)} used`);
     const blocks = housingBlocks(buildings, used);
     blocks.forEach((block, index) => {
       const row = buildings[index]!;
@@ -252,7 +261,7 @@ export class HousingView {
       const clock = document.createElement("strong");
       clock.textContent = formatCountdown(ends - now);
       this.expansionClock = clock;
-      on.append("Housing Expansion on: every Housing houses 25% more for ", clock, ".");
+      on.append(`${this.words.expansion} on: every ${name} houses 25% more for `, clock, ".");
       parts.push(on);
     }
     this.space.replaceChildren(...parts);
@@ -261,7 +270,7 @@ export class HousingView {
   /* ── Waiting for room ───────────────────────────────────────────────── */
 
   private renderWaiting(waiting: readonly WaitingMonster[]): void {
-    const words = waitingText(waiting);
+    const words = waitingText(waiting, monsterRealmOf(this.store.kind));
     this.waiting.hidden = words === null;
     if (!words) {
       this.buyButton?.destroy();
@@ -298,7 +307,7 @@ export class HousingView {
     juice.type = "button";
     juice.className = "btn housing-waiting__juice";
     juice.append(icon("drop", 16), "Juice some");
-    juice.title = "Turn some of your monsters into goo to make room";
+    juice.title = `Turn some of your monsters into ${this.words.goo} to make room`;
     juice.addEventListener("click", () => this.options.onJuice());
     buttons.append(juice);
 
@@ -310,10 +319,10 @@ export class HousingView {
           onSpend: () => void this.runBuy(),
           className: "housing-waiting__expand",
         });
-        this.buyButton.element.title = "Housing Expansion: every Housing houses 25% more for 24 hours";
+        this.buyButton.element.title = `${this.words.expansion}: every ${this.words.housing} houses 25% more for 24 hours`;
       }
-      this.buyButton.setPrice(HOUSING_EXPANSION.price);
-      this.buyButton.setBlocked(this.store.credits < HOUSING_EXPANSION.price ? "Not enough Shiny." : null);
+      this.buyButton.setPrice(this.offer.price);
+      this.buyButton.setBlocked(this.store.credits < this.offer.price ? "Not enough Shiny." : null);
       buttons.append(this.buyButton.element);
     } else {
       this.buyButton?.destroy();
@@ -325,12 +334,12 @@ export class HousingView {
 
   private async runBuy(): Promise<void> {
     const onStatus = this.options.onStatus;
-    const result = await this.store.buy(HOUSING_EXPANSION.item);
+    const result = await this.store.buy(this.offer.item);
     if (result.ok) {
       onStatus?.({
         tone: "good",
         content: [
-          "Housing Expansion on for 24 hours: ",
+          `${this.words.expansion} on for 24 hours: `,
           resourceAmount("shiny", result.report.credits),
           " spent.",
         ],

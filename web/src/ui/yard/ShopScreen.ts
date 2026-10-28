@@ -31,7 +31,9 @@ import "@/ui/styles/shop.css";
  * a Repairs card offers Repair everything now (`FIX`, the `repair/instant`
  * route). Under Building, a Walls section sells the four wall upgrades,
  * priced from the yard's Blocks. Docked like the Monsters screen and, like it, not a modal and open
- * after every purchase.
+ * after every purchase. On the Inferno yard it is the Inferno's store (WP 1.17
+ * items, `shop.ts` `INFERNO_SHOP_ITEMS`): its two walls, its overdrives and
+ * its protection, bought for the Inferno yard with the one Shiny purse.
  *
  * What the rows say comes from `game/yard/shop.ts`; the server prices and
  * refuses every purchase itself.
@@ -86,11 +88,17 @@ export const offerMeta = (offer: ShopOffer, now: number): string => {
 export const boostsNote = (kind: YardKind): string =>
   kind === "outpost"
     ? "Tower Overdrive works when this outpost is attacked. Buying it again restarts it; time left is not added."
-    : "Monster boosts work in your attacks and when your yard is attacked. Buying one again restarts it; time left is not added.";
+    : kind === "inferno"
+      ? "Tower Overdrive works when your Inferno yard is attacked. Buying it again restarts it; time left is not added."
+      : "Monster boosts work in your attacks and when your yard is attacked. Buying one again restarts it; time left is not added.";
 
 /** The line under the Walls heading: how the price adds up. */
 export const WALLS_NOTE =
   "Each Block costs 3 Shiny to reach stone, then 6 more for metal, 10 more for gold and 15 more for black diamond. Blocks still being built or upgraded are finished.";
+
+/** {@link WALLS_NOTE} on the Inferno yard, which sells two. */
+export const INFERNO_WALLS_NOTE =
+  "Each Block costs 3 Shiny to reach granite, then 6 more for forged steel. Blocks still being built or upgraded are finished.";
 
 /** The line under a wall upgrade's blurb. */
 export const wallMeta = (offer: WallOffer): string => {
@@ -100,11 +108,17 @@ export const wallMeta = (offer: WallOffer): string => {
   return `${formatAmount(blocks)} ${blocks === 1 ? "Block" : "Blocks"} to raise`;
 };
 
-/** The line under the Protection heading: how long the yard is still protected. */
-export const protectionText = (until: number | null, now: number): string =>
-  until === null
-    ? "Your yard is not protected. Protection you buy starts now."
-    : `Your yard is protected for ${formatCountdown(until - now)}. Protection you buy is added on top.`;
+/** The line under the Protection heading: how long the yard (the Inferno's, on `kind` "inferno") is still protected. */
+export const protectionText = (
+  until: number | null,
+  now: number,
+  kind: YardKind = "main",
+): string => {
+  const yard = kind === "inferno" ? "Your Inferno yard" : "Your yard";
+  return until === null
+    ? `${yard} is not protected. Protection you buy starts now.`
+    : `${yard} is protected for ${formatCountdown(until - now)}. Protection you buy is added on top.`;
+};
 
 const refusalText = (refusal: YardRefusal): string =>
   refusal.reason === "network"
@@ -245,24 +259,28 @@ export class ShopScreen {
           SHOP_SECTION_TITLES[section],
           offers.map((offer) => this.offerCard(offer, now)),
           section === ShopSection.PROTECTION
-            ? protectionText(model.protectedUntil, now)
+            ? protectionText(model.protectedUntil, now, store.kind)
             : section === ShopSection.BOOSTS
               ? boostsNote(store.kind)
               : null,
         ),
       );
       if (section === ShopSection.BUILDING) {
-        sections.push(this.section("walls", "Walls", model.walls.map((offer) => this.wallCard(offer)), WALLS_NOTE));
+        const note = store.kind === "inferno" ? INFERNO_WALLS_NOTE : WALLS_NOTE;
+        sections.push(this.section("walls", "Walls", model.walls.map((offer) => this.wallCard(offer)), note));
       }
     }
     if (model.repair) sections.push(this.section("repairs", "Repairs", [this.repairCard(model.repair)]));
-    this.comingLater ??= this.section(
-      "later",
-      "Coming later",
-      COMING_LATER.map((one) => this.laterCard(one.items[0] ?? one.name, one.name, one.blurb)),
-      "Not sold yet: this game does not do what they did.",
-    );
-    sections.push(this.comingLater);
+    // Flash's Inferno store never listed the Shiny decorations.
+    if (store.kind !== "inferno") {
+      this.comingLater ??= this.section(
+        "later",
+        "Coming later",
+        COMING_LATER.map((one) => this.laterCard(one.items[0] ?? one.name, one.name, one.blurb)),
+        "Not sold yet: this game does not do what they did.",
+      );
+      sections.push(this.comingLater);
+    }
     this.list.replaceChildren(...sections);
     this.syncPending();
   }

@@ -30,6 +30,7 @@ import { ChatReport } from "./database/models/chatReport.model.js";
 import { DefenceReplay } from "./database/models/defencereplay.model.js";
 import { Friend } from "./database/models/friend.model.js";
 import { FriendRequest } from "./database/models/friendrequest.model.js";
+import { InfernoProgress } from "./database/models/infernoprogress.model.js";
 
 /**
  * List of entities to be used with MikroORM.
@@ -63,6 +64,7 @@ const entities = [
   DefenceReplay,
   Friend,
   FriendRequest,
+  InfernoProgress,
 ];
 
 /**

@@ -1,6 +1,7 @@
 import type { BaseLoadResponse } from "@/api/types";
 import { noAmounts, RESOURCE_KEYS, type ResourceAmounts } from "@/game/combat/rules";
 import { AUTOBANK_OVERDRIVE, AUTOBANK_TICK } from "@/game/maproom/rules/autobank";
+import type { YardKind } from "./buildingCostData";
 import { harvesterPerHour } from "./harvest";
 import { outpostIncomeOf, overdriveEndOf } from "./outpostIncome";
 
@@ -20,6 +21,10 @@ import { outpostIncomeOf, overdriveEndOf } from "./outpostIncome";
  *
  * Production Overdrive doubles both while it runs at `now`. The figure is
  * what is made, not what fits: a full silo loses it, which the HUD shows.
+ *
+ * On the Inferno yard (WP 1.19) only its own harvesters count, at the Inferno
+ * table's rates: Flash's resource bubble there gave the Inferno's
+ * `r{n}Rate` (`UI_TOP.as:716-719`), and no outpost pays into the Inferno.
  */
 
 const TICKS_PER_HOUR = 3600 / AUTOBANK_TICK;
@@ -29,18 +34,20 @@ const TICKS_PER_HOUR = 3600 / AUTOBANK_TICK;
  *
  * @param save - The main yard's merged save (`YardStore.save`).
  * @param now - The server's clock, unix seconds.
+ * @param kind - "inferno" for the Inferno yard's save; the main yard's otherwise.
  */
 export const incomePerHour = (
   save: Pick<BaseLoadResponse, "buildingdata" | "buildinghealthdata" | "storedata" | "buildingresources">,
   now: number,
+  kind: Exclude<YardKind, "outpost"> = "main",
 ): ResourceAmounts => {
   const rate = noAmounts();
   for (const building of Object.values(save.buildingdata ?? {})) {
-    const one = building && harvesterPerHour(building, save, now);
+    const one = building && harvesterPerHour(building, save, now, kind);
     if (one) rate[one.resource] += one.perHour;
   }
 
-  const outposts = outpostIncomeOf(save.buildingresources);
+  const outposts = kind === "main" ? outpostIncomeOf(save.buildingresources) : null;
   if (outposts) {
     const podEnd = overdriveEndOf(save);
     const power = podEnd !== undefined && now < podEnd ? AUTOBANK_OVERDRIVE : 1;

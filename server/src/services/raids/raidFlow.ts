@@ -12,6 +12,8 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { extractTownHall } from "../../utils/extractTownHall.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
+import { emergenceHoldsRaids } from "../inferno/emergenceOnLoad.js";
+import { isEmergenceRaid } from "../inferno/emergenceRaid.js";
 import { noteTribeRaid } from "../stats/activity.js";
 import { catchUpLockedRow, catchUpLockedYard } from "../../controllers/yard/yardAction.js";
 import { notifyAndCount } from "../notifications/notifications.js";
@@ -141,6 +143,9 @@ const SCHEDULE_FIELDS = [
   "attacks",
   "protected",
   "storedata",
+  // The Inferno emergence's pause (`emergenceHoldsRaids`).
+  "thlevel",
+  "tutorialstage",
 ] as const;
 
 /**
@@ -160,10 +165,11 @@ const raidCampsOf = async (em: EntityManager, save: Save, now: number): Promise<
  * Flash held such a raid back until the protection ended (`WMATTACK.as:304`,
  * `:317`); here a raid never outlives its warning, so it is cancelled and,
  * its schedule untouched, comes again once the protection is over. A fight
- * already started goes on.
+ * already started goes on. Moloch's emergence raid is not paused: Flash's
+ * `UpgradePortal` never looked at protection (`emergenceRaid.ts`).
  */
 const cancelWarningUnderProtection = async (em: EntityManager, user: User, raid: OpenRaid, now: number): Promise<boolean> => {
-  if (raid.phase !== "warning") return false;
+  if (raid.phase !== "warning" || isEmergenceRaid(raid)) return false;
   const basesaveid = user.save?.basesaveid;
   if (basesaveid == null) return false;
   const save = await em.findOne(Save, { basesaveid }, { fields: ["basesaveid", "protected", "storedata"], refresh: true });
@@ -241,6 +247,9 @@ export const raidOnPing = async (
     raidOpen: false,
   });
   if (early !== null) return undefined;
+  // Moloch's emergence holds wild raids back until its five raids are done
+  // (`docs/design/inferno.md` §2.2, Flash `WMATTACK.as:327`).
+  if (await emergenceHoldsRaids(em, user.userid, scheduled)) return undefined;
 
   const stored = await em.findOne(Save, { basesaveid }, { refresh: true });
   if (!stored) return undefined;
@@ -353,8 +362,9 @@ const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: nu
   const frozen = await em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     if (isAttackActive(locked)) throw raidRefusedErr("underAttack");
-    // Protection bought during the warning: the raid is called off (`startRaid`).
-    if (boughtProtection(locked, now)) return null;
+    // Protection bought during the warning: the raid is called off (`startRaid`),
+    // but not Moloch's (`cancelWarningUnderProtection`).
+    if (boughtProtection(locked, now) && !isEmergenceRaid(raid)) return null;
     // A second start of this raid, sent before the first answered: both read
     // the warning, but the first already holds the yard.
     if (readFightLock(readSchedule(locked.aiattacks).fight)?.id === raid.id && raidFighting(locked, now)) {

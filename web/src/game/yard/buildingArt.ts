@@ -1,5 +1,7 @@
-import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel } from "./buildingArtData";
+import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel, type ArtRow } from "./buildingArtData";
+import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
 import { tierArtFor } from "./buildingArtTiers";
+import type { YardKind } from "./buildingCostData";
 
 /**
  * Resolving a building to its art.
@@ -68,12 +70,24 @@ interface ArtRowIndex {
   readonly size: number;
 }
 
-const ROWS = new Map<number, ArtRowIndex>(
-  BUILDING_ART_ROWS.map((row) => [
-    row[0],
-    { name: row[1], folder: row[2], levels: row[3], hp: row[4], size: row[5] },
-  ]),
-);
+const indexOf = (rows: readonly ArtRow[]): Map<number, ArtRowIndex> =>
+  new Map(
+    rows.map((row) => [row[0], { name: row[1], folder: row[2], levels: row[3], hp: row[4], size: row[5] }]),
+  );
+
+const ROWS = indexOf(BUILDING_ART_ROWS);
+
+/**
+ * The Inferno yard's rows: the types whose art or health differs there
+ * (`INFERNOYARDPROPS.as`, `buildingArtInfernoData.ts`). Flash swaps that
+ * table in for the whole props table on an Inferno yard; every type it does
+ * not change reads the main row.
+ */
+const INFERNO_ROWS = indexOf(INFERNO_ART_ROWS);
+
+/** A type's row in the props table this kind of yard reads. */
+const rowFor = (type: number, kind: YardKind): ArtRowIndex | undefined =>
+  (kind === "inferno" ? INFERNO_ROWS.get(type) : undefined) ?? ROWS.get(type);
 
 /**
  * Prefixes the props table hangs on a string key: `bdg_` for a decoration,
@@ -102,8 +116,8 @@ export const prettifyArtKey = (key: string): string =>
     .join(" ");
 
 /** The display name from the game's own string table, or null. */
-export const buildingName = (type: number): string | null => {
-  const name = ROWS.get(type)?.name;
+export const buildingName = (type: number, kind: YardKind = "main"): string | null => {
+  const name = rowFor(type, kind)?.name;
   if (name === undefined) return null;
   return name.includes("_") ? prettifyArtKey(name) : name;
 };
@@ -115,7 +129,8 @@ export const hasArt = (type: number): boolean => ROWS.has(type);
 export const artTypes = (): number[] => [...ROWS.keys()].sort((a, b) => a - b);
 
 /** The asset folder for a type, exactly as the props table spells it. */
-export const artFolder = (type: number): string | null => ROWS.get(type)?.folder ?? null;
+export const artFolder = (type: number, kind: YardKind = "main"): string | null =>
+  rowFor(type, kind)?.folder ?? null;
 
 /**
  * Maximum health at a level, from the props table's `hp` ladder.
@@ -126,8 +141,8 @@ export const artFolder = (type: number): string | null => ROWS.get(type)?.folder
  * Room 3 needs. Null when the type has no ladder at all, which is every
  * decoration.
  */
-export const maxHealth = (type: number, level: number): number | null => {
-  const ladder = ROWS.get(type)?.hp;
+export const maxHealth = (type: number, level: number, kind: YardKind = "main"): number | null => {
+  const ladder = rowFor(type, kind)?.hp;
   if (!ladder || ladder.length === 0) return null;
   const index = Math.min(Math.max(level - 1, 0), ladder.length - 1);
   return ladder[index] ?? null;
@@ -277,11 +292,16 @@ const ANIM_INDEX: Record<ArtState, 7 | 8 | null> = { "": 7, damaged: 8, destroye
  * `level` is the building's own level; 0 (under construction) and anything
  * above the table's ceiling are handled here.
  */
-export const resolveArt = (type: number, level: number, state: ArtState): ResolvedArt | null => {
-  const row = ROWS.get(type);
+export const resolveArt = (
+  type: number,
+  level: number,
+  state: ArtState,
+  kind: YardKind = "main",
+): ResolvedArt | null => {
+  const row = rowFor(type, kind);
   if (!row) return null;
 
-  const cap = MAP_ROOM_2_MAX_LEVEL[type];
+  const cap = kind === "inferno" ? undefined : MAP_ROOM_2_MAX_LEVEL[type];
   const effective = cap === undefined ? level : Math.min(level, cap);
 
   // Level 0 is a building whose foundation is down but which is not finished;
@@ -290,7 +310,9 @@ export const resolveArt = (type: number, level: number, state: ArtState): Resolv
 
   // A repainted tier or Town Hall level, unless the old art is on: one still picture
   // for default and damaged alike; a destroyed one falls through to the Flash rubble.
-  const tier = state === ArtState.DESTROYED ? null : tierArtFor(type, wanted);
+  // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art.
+  const ownInfernoArt = kind === "inferno" && row.folder !== ROWS.get(type)?.folder;
+  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted);
   if (tier) {
     const top = imageOf(row.folder, tier.top);
     if (top) {

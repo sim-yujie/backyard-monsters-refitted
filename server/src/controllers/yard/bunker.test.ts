@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
-import { bunkerCapacity, bunkerPutty, readBunker } from "../../services/yard/bunker.js";
+import { bunkerCapacity, bunkerPutty, bunkerSpace, readBunker } from "../../services/yard/bunker.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { readOnboarding } from "../../services/onboarding/state.js";
 import { yardBunkerFillAction, yardBunkerRemoveAction } from "./bunker.js";
@@ -192,6 +192,29 @@ describe("POST /bm/yard/bunker/fill", () => {
     }
   });
 
+  test("Inferno monsters moved to the main yard go in from housing, but cannot be bought", async () => {
+    // MONSTERBUNKERPOPUP.as:48-56 lists IC1-IC8; Flash charged the same half hatch cost (`GetCost`, :467).
+    db.row = rowOf({ monsters: { housed: { C1: 5, IC1: 6, IC2: 2 }, saved: getCurrentDateTime() } });
+    const answer = await fill({ IC1: 4, IC2: 2 });
+    expect(answer.status).toBe(200);
+    const putty = bunkerPutty("IC1", 4, {}) + bunkerPutty("IC2", 2, {});
+    expect(answer.body.report).toMatchObject({
+      added: { IC1: 4, IC2: 2 },
+      cost: { r3: putty },
+      used: bunkerSpace({ IC1: 4, IC2: 2 }, {}),
+    });
+    const row = db.row!;
+    expect(contentsOf(row)).toEqual({ IC1: 4, IC2: 2 });
+    expect((row.monsters as Row).housed).toEqual({ C1: 5, IC1: 2 });
+    expect(row.resources).toMatchObject({ r3: 10_000 - putty });
+
+    // Their unlock is the Inferno yard's, so the buy list leaves them out.
+    const before = structuredClone(db.row);
+    const bought = await fill({ IC1: 1 }, "buy");
+    expect(bought.body).toMatchObject({ reason: "notBuyable", monster: "IC1" });
+    expect(db.row).toEqual(before);
+  });
+
   test("a locked account cannot buy", async () => {
     const locked = { ...user, shiny_locked: true } as unknown as User;
     const answer = await runYardAction(em as unknown as EntityManager, locked, yardBunkerFillAction, {
@@ -257,6 +280,16 @@ describe("POST /bm/yard/bunker/remove", () => {
       // Deleted, not juiced: Goals count nothing.
       expect(readOnboarding({ onboarding: db.row!.onboarding }).counters.juiced).toBe(0);
     }
+  });
+
+  test("an Inferno monster is deleted even with a working Juicer (BunkerJuiceById, :701-702)", async () => {
+    db.row = rowOf(bunkerAt({ m: { C1: 2, IC1: 5 } }, JUICER));
+    const answer = await remove("IC1", 2);
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toEqual({ bunker: 8, monster: "IC1", removed: 2, juiced: false, goo: 0, lost: 0 });
+    expect(contentsOf(db.row!)).toEqual({ C1: 2, IC1: 3 });
+    expect(db.row!.resources).toMatchObject({ r4: 1_000 });
+    expect(readOnboarding({ onboarding: db.row!.onboarding }).counters.juiced).toBe(0);
   });
 
   test("the goo cap swallows what does not fit", async () => {

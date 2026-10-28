@@ -5,6 +5,7 @@ import {
   CHAMPION_STATUS,
   EGG_HATCH_SECONDS,
   healPriceOf,
+  KORATH_TYPE,
   planChampionCancelEgg,
   planChampionEvolve,
   planChampionFeed,
@@ -77,9 +78,40 @@ describe("champion/raise", () => {
     expect(again).toEqual({ status: 409, reason: "eggInCage" });
   });
 
-  test("offers only Gorgo, Drull and Fomor (D17)", () => {
+  test("offers only Gorgo, Drull and Fomor (D17) until Korath is unlocked", () => {
     expect(refusal(() => planChampionRaise(yard({ champion: [] }), 4, NOW)).reason).toBe("notRaisable");
+    expect(refusal(() => planChampionRaise(yard({ champion: [] }), 4, NOW, { korath: false })).reason).toBe(
+      "notRaisable"
+    );
     expect(refusal(() => planChampionRaise(yard({ champion: [] }), 5, NOW)).reason).toBe("notRaisable");
+  });
+
+  test("raises Korath once he is unlocked (owner I10): free, a one-day egg, level 1, no event powers (I13)", () => {
+    const outcome = planChampionRaise(yard({ champion: [] }), KORATH_TYPE, NOW, { korath: true });
+    expect(outcome.slices.champion).toEqual([
+      { t: 4, hp: 28_000, l: 1, ft: NOW + 24 * 3600, fd: 0, fb: 0, pl: 0, status: CHAMPION_STATUS.EGG },
+    ]);
+    expect(outcome).not.toHaveProperty("shiny");
+    // Krallen stays out of the cage whatever is unlocked.
+    expect(refusal(() => planChampionRaise(yard({ champion: [] }), 5, NOW, { korath: true })).reason).toBe(
+      "notRaisable"
+    );
+  });
+
+  test("Korath keeps the one-champion rule: refused beside a champion, an egg, or while frozen", () => {
+    const unlocked = { korath: true };
+    expect(refusal(() => planChampionRaise(yard(), KORATH_TYPE, NOW, unlocked)).reason).toBe("championInCage");
+    const egg = planChampionRaise(yard({ champion: [] }), 1, NOW).slices.champion;
+    expect(refusal(() => planChampionRaise(yard({ champion: egg }), KORATH_TYPE, NOW, unlocked)).reason).toBe(
+      "eggInCage"
+    );
+    const korathEgg = planChampionRaise(yard({ champion: [] }), KORATH_TYPE, NOW, unlocked).slices.champion;
+    expect(refusal(() => planChampionRaise(yard({ champion: korathEgg }), 2, NOW)).reason).toBe("eggInCage");
+    const frozen = yard({ champion: [gorgo({ t: 4, status: 1, ft: 3_600 })] });
+    expect(refusal(() => planChampionRaise(frozen, KORATH_TYPE, NOW, unlocked)).reason).toBe("frozen");
+    expect(refusal(() => planChampionRaise(yard({ champion: [], buildingdata: {} }), KORATH_TYPE, NOW, unlocked)).reason).toBe(
+      "noCage"
+    );
   });
 
   test("needs a finished cage", () => {

@@ -18,7 +18,12 @@
  * file is the main yard's, and an entry's `repairTime` sits after its `costs`,
  * so the owning entry is the nearest `"id"` before the array — the same rule
  * `gen-building-costs.mjs` uses for `costs`. The Map Room 2 overrides
- * (`client/scripts/GLOBAL.as:615-714`) change no `repairTime`.
+ * (`client/scripts/GLOBAL.as:615-714`) change no `repairTime`. The Inferno yard
+ * runs on `client/scripts/INFERNOYARDPROPS.as` in place of the main table
+ * (`GLOBAL.SetBuildingProps`, `GLOBAL.as:716-719`), read the same way into a
+ * second table: its Housing Bunker and Inferno Cannon, which the main table
+ * has no row for, heal faster than the hour a missing row gets
+ * (`docs/design/inferno.md` §5, WP 1.16).
  *
  * Two files are written, with identical rows:
  *
@@ -37,48 +42,57 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
 
 const PROPS = resolve(repo, "client/scripts/YARD_PROPS.as");
+const INFERNO_PROPS = resolve(repo, "client/scripts/INFERNOYARDPROPS.as");
 const WEB_OUT = resolve(here, "../src/game/yard/repairTimeData.ts");
 const SERVER_OUT = resolve(repo, "server/src/game-data/repairTimes.ts");
 
-const { source } = readPropsSource(PROPS);
-const lineOf = lineCounter(source);
-
 /* ── Parse ────────────────────────────────────────────────────────────────── */
 
-const rows = [];
-const seen = new Set();
+/** Every `repairTime` row of the props file at `path`, in id order; at least 100. */
+const readTimes = (path, name) => {
+  const { source } = readPropsSource(path);
+  const lineOf = lineCounter(source);
+  const rows = [];
+  const seen = new Set();
 
-const marker = /"repairTime"\s*:\s*\[/g;
-for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
-  const before = source.slice(0, hit.index);
-  const idHit = [...before.matchAll(/"id"\s*:\s*(\d+)/g)].pop();
-  if (!idHit) continue;
+  const marker = /"repairTime"\s*:\s*\[/g;
+  for (let hit = marker.exec(source); hit; hit = marker.exec(source)) {
+    const before = source.slice(0, hit.index);
+    const idHit = [...before.matchAll(/"id"\s*:\s*(\d+)/g)].pop();
+    if (!idHit) continue;
 
-  const id = Number(idHit[1]);
-  // As `_buildingProps[id - 1]`: were an id to appear twice, the first wins.
-  if (seen.has(id)) continue;
-  seen.add(id);
+    const id = Number(idHit[1]);
+    // As `_buildingProps[id - 1]`: were an id to appear twice, the first wins.
+    if (seen.has(id)) continue;
+    seen.add(id);
 
-  const times = readIntArray(source.slice(hit.index), "repairTime");
-  if (times.length === 0 || times.some((one) => !(one > 0))) {
-    throw new Error(`YARD_PROPS.as:${lineOf(hit.index)}: id ${id} has an unreadable repairTime`);
+    const times = readIntArray(source.slice(hit.index), "repairTime");
+    if (times.length === 0 || times.some((one) => !(one > 0))) {
+      throw new Error(`${name}:${lineOf(hit.index)}: id ${id} has an unreadable repairTime`);
+    }
+    rows.push({ id, times, line: lineOf(hit.index) });
   }
-  rows.push({ id, times, line: lineOf(hit.index) });
-}
 
-rows.sort((a, b) => a.id - b.id);
-if (rows.length < 100) throw new Error(`Only ${rows.length} repairTime entries read; re-read the file.`);
+  rows.sort((a, b) => a.id - b.id);
+  if (rows.length < 100) throw new Error(`Only ${rows.length} repairTime entries read from ${name}; re-read the file.`);
+  return rows;
+};
+
+const rows = readTimes(PROPS, "YARD_PROPS.as");
+const infernoRows = readTimes(INFERNO_PROPS, "INFERNOYARDPROPS.as");
 
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
-const body = rows
-  .map((row) => `  ${row.id}: [${row.times.join(", ")}], // YARD_PROPS.as:${row.line}`)
-  .join("\n");
+const bodyOf = (table, name) =>
+  table.map((row) => `  ${row.id}: [${row.times.join(", ")}], // ${name}:${row.line}`).join("\n");
+const body = bodyOf(rows, "YARD_PROPS.as");
+const infernoBody = bodyOf(infernoRows, "INFERNOYARDPROPS.as");
 
 const file = `/**
  * Building repair times, per type and level. GENERATED — do not edit by hand.
  *
- * Source: the \`repairTime\` array of each entry in \`client/scripts/YARD_PROPS.as\`.
+ * Source: the \`repairTime\` array of each entry in \`client/scripts/YARD_PROPS.as\`,
+ * and for the Inferno yard in \`client/scripts/INFERNOYARDPROPS.as\`.
  * Regenerate with \`node tools/gen-repair-times.mjs\` from \`web/\`.
  *
  * A repairing building heals \`ceil(maxHealth / min(3600, repairTime[lvl - 1]))\`
@@ -94,16 +108,25 @@ export const REPAIR_TIMES: Readonly<Record<number, readonly number[]>> = {
 ${body}
 };
 
+/**
+ * The Inferno yard's, from its own props table, which replaces the main one
+ * there (\`GLOBAL.SetBuildingProps\`, \`client/scripts/GLOBAL.as:716-719\`).
+ */
+export const INFERNO_REPAIR_TIMES: Readonly<Record<number, readonly number[]>> = {
+${infernoBody}
+};
+
 /** No repair takes longer than this (\`BFOUNDATION.as:1369\`). */
 export const REPAIR_CAP_SECONDS = 3600;
 
 /**
  * A type's \`repairTime\` at a level: \`[0]\` for level 0 (a building still under
  * construction), the last entry past the top of the ladder, and the one-hour
- * cap for a type the table does not have.
+ * cap for a type the table does not have. \`table\` is the yard's: the Inferno
+ * yard reads its own.
  */
-export const repairTimeOf = (type: number, level: number): number => {
-  const times = REPAIR_TIMES[type];
+export const repairTimeOf = (type: number, level: number, table: "main" | "inferno" = "main"): number => {
+  const times = (table === "inferno" ? INFERNO_REPAIR_TIMES : REPAIR_TIMES)[type];
   if (!times || times.length === 0) return REPAIR_CAP_SECONDS;
   const index = Math.min(Math.max(Math.floor(level) - 1, 0), times.length - 1);
   return times[index] ?? REPAIR_CAP_SECONDS;
@@ -112,4 +135,6 @@ export const repairTimeOf = (type: number, level: number): number => {
 
 writeFileSync(WEB_OUT, file);
 writeFileSync(SERVER_OUT, file);
-console.log(`Wrote ${rows.length} repair-time rows to ${WEB_OUT} and ${SERVER_OUT}`);
+console.log(
+  `Wrote ${rows.length} + ${infernoRows.length} Inferno repair-time rows to ${WEB_OUT} and ${SERVER_OUT}`,
+);

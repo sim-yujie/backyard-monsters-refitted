@@ -1,5 +1,7 @@
 import type { CompletedJob } from "@/api/types";
 import { labAbility, monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { siegeData } from "@/game/combat/rules/siege";
+import { SIEGE_LAB_TYPE } from "@/game/yard/jobs";
 import { championEntry } from "@/game/yard/championCatalogue";
 import { typeName } from "@/game/yard/planner/summary";
 import { formatAmount } from "@/ui/format";
@@ -77,6 +79,7 @@ const NOUNS: Readonly<Record<string, readonly [string, string]>> = {
   train: ["training", "trainings"],
   research: ["research", "researches"],
   repair: ["repair", "repairs"],
+  siege: ["Chaos weapon", "Chaos weapons"],
 };
 
 const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
@@ -172,6 +175,7 @@ const SERVER_NOTICES: Readonly<Record<string, string>> = {
   outpostAttacked: "One of your outposts was attacked",
   outpostTaken: "One of your outposts was taken",
   yardAttacked: "Your yard was attacked",
+  infernoAttacked: "Your Inferno yard was attacked",
 };
 
 const isServerNotice = (job: CompletedJob): boolean => Object.hasOwn(SERVER_NOTICES, job.kind);
@@ -275,6 +279,16 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
       buildingId: typeof detail.lab === "number" ? detail.lab : null,
     };
   }
+  if (job.kind === "siege") {
+    // "Marilyn Monstroe level 2" from the Chaos Lab, "Marilyn Monstroe ready" from the Factory (WP 6.3).
+    const id = String(job.id);
+    const detail = job.detail as { level?: unknown; building?: unknown };
+    const name = siegeData(id)?.name ?? id;
+    return {
+      label: job.t === SIEGE_LAB_TYPE && typeof detail.level === "number" ? `${name} level ${detail.level}` : `${name} ready`,
+      buildingId: typeof detail.building === "number" ? detail.building : null,
+    };
+  }
   const buildingId = typeof job.id === "number" ? job.id : null;
   const name = job.t === null ? String(job.id) : typeName(job.t);
   const detail = job.detail as { level?: unknown; fort?: unknown };
@@ -337,9 +351,18 @@ export const noticeText = (group: JobNoticeGroup): string => {
 /** What goes after a sentence before the next: ". ", or a space after one that ends itself ("…hatched!"). */
 const after = (text: string): string => (/[.!?]$/.test(text) ? " " : ". ");
 
-/** Sentences joined by {@link after}. */
-const sentences = (texts: readonly string[]): string =>
-  texts.reduce((line, text, index) => (index === 0 ? text : line + after(line) + text), "");
+/**
+ * The full stop a line of several sentences ends with ("Bramble attacked your
+ * Inferno yard. It was left 30% damaged, and 1,200 Bone were looted."), or ""
+ * for a line of one, which reads as a list row ("Upgrade finished: Silo 7").
+ */
+const finalStop = (text: string): string => (/[.!?] /.test(text) && !/[.!?]$/.test(text) ? "." : "");
+
+/** Sentences joined by {@link after}, a line of several closed by {@link finalStop}. */
+const sentences = (texts: readonly string[]): string => {
+  const line = texts.reduce((joined, text, index) => (index === 0 ? text : joined + after(joined) + text), "");
+  return line + finalStop(line);
+};
 
 /** A heading after the away lead-in, where it no longer starts the sentence. */
 const awayHeading = (group: JobNoticeGroup): JobNoticeGroup => ({
@@ -398,6 +421,7 @@ export const jobLine = (
       appendGroup(line, awayHeading(group), select);
     });
   }
+  line.append(finalStop(line.textContent ?? ""));
   return line;
 };
 

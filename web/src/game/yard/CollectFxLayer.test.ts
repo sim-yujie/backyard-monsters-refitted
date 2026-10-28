@@ -99,6 +99,14 @@ describe("CollectFxLayer", () => {
     expect(sound).toHaveBeenCalledTimes(6);
   });
 
+  it("pops the Inferno's own pair on the Inferno yard, as Flash did", () => {
+    const sound = vi.fn();
+    const layer = new CollectFxLayer({ art: art(), sound, inferno: () => true });
+    layer.launch(flights(100), () => {});
+    for (let frame = 0; frame < 60 * 4 && layer.flying > 0; frame++) layer.update(1 / 60);
+    expect(sound.mock.calls).toEqual([["ibankfire"], ["ibankland"]]);
+  });
+
   it("makes no sound for balls landed at once or taken away", () => {
     const sound = vi.fn();
     const layer = new CollectFxLayer({ art: art(), sound });

@@ -265,6 +265,16 @@ describe("footprints", () => {
     expect(footprintOf(9999)).toEqual([40, 40]);
   });
 
+  it("gives the Inferno's bigger Under Hall and smaller Academy", () => {
+    // BUILDING14.as:18 and BUILDING26.as:22 switch the footprint in the Inferno.
+    expect(footprintOf(14, "inferno")).toEqual([160, 160]); // Under Hall
+    expect(footprintOf(26, "inferno")).toEqual([80, 80]); // Inferno Academy
+    expect(footprintOf(14, "main")).toEqual([130, 130]);
+    expect(footprintOf(26, "main")).toEqual([100, 100]);
+    // Types without an Inferno entry keep their main footprint.
+    expect(footprintOf(6, "inferno")).toEqual([80, 80]);
+  });
+
   it("puts the box around the whole diamond", () => {
     const bounds = yardBounds(0);
     const box = footprintBox(bounds, 14, 0, 0);

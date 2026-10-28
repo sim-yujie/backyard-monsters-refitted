@@ -23,6 +23,8 @@ import type { HatcheryMarks } from "./YardHatchMarks";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { predictHatches, type HatchPrediction } from "@/game/monsters/hatchPredict";
+import { siegeSlices, type SiegeSite } from "@/game/siege/siege";
+import { isSurfaceInferno, purseFunds } from "@/game/yard/surfaceInferno";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
 import { IncomePrediction, overdriveEndOf } from "./outpostIncome";
 import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
@@ -232,6 +234,11 @@ export interface YardSceneHooks {
    * monster building's Open button use it. Absent where there is no screen.
    */
   openMonsters?(tab: MonstersTabId, focus?: MonstersFocus): void;
+  /**
+   * Opens the Siege screen on its Chaos Lab or Chaos Factory tab (Inferno WP
+   * 6.4): a Siege Lab's or Factory's Open button uses it. Absent where there is no screen.
+   */
+  openSiege?(site: SiegeSite): void;
   /** Starts a Wild Monster Baiter practice attack (#126). Absent where there is none. */
   runBaiter?(run: BaiterRun): void;
   /** Plays a finished Baiter test back (#22, WP5, `testHistory.ts`). Absent where there is none. */
@@ -775,6 +782,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerlevel === "number") slices.playerlevel = response.playerlevel;
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
+    // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
+    Object.assign(slices, siegeSlices(this.current, response.completed, response.report));
     this.applied = Math.max(this.applied, number);
     this.syncClock(response.currenttime);
     this.setSave({ ...this.current, ...slices });
@@ -893,7 +902,10 @@ const upgradeRefusal = (
 ): YardRefusal | null => {
   const building = store.building(id);
   if (!building) return refuse("badRequest", "That building is not in your yard.");
-  if (WALL_TYPES.includes(building.type) || TRAP_TYPES.includes(building.type)) {
+  // The Inferno has no planner, so a wall there upgrades on its own, as the
+  // server allows it in the Inferno only (WP 1.16, `BASE.as:1072`).
+  const infernoWall = store.yard.kind === "inferno" && WALL_TYPES.includes(building.type);
+  if (!infernoWall && (WALL_TYPES.includes(building.type) || TRAP_TYPES.includes(building.type))) {
     return refuse("useBatchRoute", "Walls and traps are upgraded from the layout planner.");
   }
   if (options.instant && building.type === MAP_ROOM_TYPE) {
@@ -915,12 +927,18 @@ const upgradeRefusal = (
   if (!step) return refuse("maxLevel", "That building is at its highest level.");
   const [r1, r2, r3, r4] = step;
   const cost = { r1, r2, r3, r4 };
+  // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
+  const inferno = isSurfaceInferno(building.type, kind);
+  const held = inferno ? purseFunds(store.save).resources : store.resources;
   const shortfall: Record<string, number> = {};
   let short = false;
   for (const key of ["r1", "r2", "r3", "r4"] as const) {
-    const missing = cost[key] - (Number(store.resources[key]) || 0);
+    const missing = cost[key] - (Number(held[key]) || 0);
     shortfall[key] = Math.max(0, missing);
     if (missing > 0) short = true;
+  }
+  if (short && inferno) {
+    return refuse("shortfall", "You do not have enough Inferno resources for that.", { shortfall, purse: "inferno" });
   }
   if (short) {
     return refuse("shortfall", "You do not have enough resources for that.", { shortfall });

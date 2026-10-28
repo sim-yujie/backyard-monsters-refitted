@@ -11,16 +11,18 @@ import { repairActions } from "@/api/yardRepair";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { RecordedTest } from "@/game/baiter/testHistory";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
-import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES } from "@/game/yard/buildingCosts";
-import { HOUSING_TYPE, housingBuildings } from "@/game/monsters/housing";
+import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES, type YardKind } from "@/game/yard/buildingCosts";
+import { housingBuildings, housingTypeOf } from "@/game/monsters/housing";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { SITE_NAME, siteOfType } from "@/game/siege/siege";
 import { harvesterNow, isHarvester } from "@/game/yard/harvest";
 import type { RecycleOffer } from "@/game/yard/recycle";
-import { NEED_MORE_SILOS } from "@/game/yard/storage";
+import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
 import { repairOffer, type RepairOffer } from "@/game/yard/repair";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
+import { hallWord } from "./BuildMenu";
 import {
   actionKey,
   YardChangeReason,
@@ -34,7 +36,8 @@ import { icon } from "@/ui/icons";
 import { HousingJuice } from "@/ui/monsters/HousingJuice";
 import { HousingView } from "@/ui/monsters/HousingView";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
-import { costAmounts, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
+import { costAmounts, resourceAmount, resourceIcon, type ResourceIconOptions } from "@/ui/resourceIcon";
+import { isSurfaceInferno, purseFunds } from "@/game/yard/surfaceInferno";
 import { costFactChips } from "./costFactChips";
 import {
   jobOffer,
@@ -439,10 +442,15 @@ export class BuildingPanel {
   /**
    * A Housing on the own yard: the Housing panel (#170), not the plain card.
    * Still on its first build, it has no working window yet (#281): the plain
-   * card's construction info shows instead, as for any other building.
+   * card's construction info shows instead, as for any other building. On the
+   * Inferno yard it is a Compound (the Housing Bunker type, Inferno WP 2.4).
    */
   private isHousing(building: YardBuilding): boolean {
-    return building.type === HOUSING_TYPE && this.yard !== undefined && building.level > 0;
+    return (
+      this.yard !== undefined &&
+      building.type === housingTypeOf(this.yard.store.save) &&
+      building.level > 0
+    );
   }
 
   /**
@@ -479,7 +487,7 @@ export class BuildingPanel {
     const count = housingBuildings(store.save, store.now()).length;
     this.blurb.textContent =
       count > 1
-        ? `Where your monsters live. Your ${count} Housings share one space: bigger space, bigger army.`
+        ? `Where your monsters live. Your ${count} ${store.kind === "inferno" ? "Compounds" : "Housings"} share one space: bigger space, bigger army.`
         : "Where your monsters live. Its space is your army's: bigger space, bigger army.";
 
     if (!this.housing) {
@@ -748,6 +756,14 @@ export class BuildingPanel {
       button.title = "Spend Shiny on workers, boosts and more";
       return button;
     }
+    const site = model?.open === "siege" ? siteOfType(building.type) : null;
+    if (site && scene?.openSiege) {
+      // Flash's Open button on these two, named for the popup's tab (`BUILDINGINFO.as:240-245`).
+      const button = actionButton(SITE_NAME[site], () => scene.openSiege?.(site), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.title = site === "lab" ? "Research Chaos Weapons" : "Build Chaos Weapons";
+      return button;
+    }
     if (model?.open === "monsters" && model.monstersTab && scene?.openMonsters) {
       const tab = model.monstersTab;
       const button = actionButton(
@@ -834,8 +850,13 @@ export class BuildingPanel {
    * as it does picking a new building. `Free` in words when there is nothing
    * to pay, as the Map Room's single-currency steps sometimes have.
    */
-  private costFactsLine(cost: UpgradeOffer["cost"], resources: Resources): HTMLElement {
-    const chips = costFactChips(cost, resources);
+  /** Whether `building` is one of the main yard's Inferno buildings, priced in the Inferno purse (WP 6.1). */
+  private infernoBuilding(building: YardBuilding): boolean {
+    return isSurfaceInferno(building.type, this.yard?.store.kind ?? "main");
+  }
+
+  private costFactsLine(cost: UpgradeOffer["cost"], resources: Resources, inferno = false): HTMLElement {
+    const chips = costFactChips(cost, resources, inferno ? "inferno" : undefined);
     if (chips.length === 0) {
       const line = document.createElement("p");
       line.className = "building-panel__cost";
@@ -871,10 +892,12 @@ export class BuildingPanel {
     head.append(title, time);
     block.append(head);
 
-    block.append(this.costFactsLine(offer.cost, resources));
+    // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
+    const held = offer.inferno && this.yard ? purseFunds(this.yard.store.save).resources : resources;
+    block.append(this.costFactsLine(offer.cost, held, offer.inferno));
 
     if (offer.gate) {
-      const line = gateLine(offer.gate);
+      const line = gateLine(offer.gate, this.yard?.store.kind, offer.inferno);
       line.id = this.gateId(building);
       block.append(line);
     }
@@ -901,7 +924,7 @@ export class BuildingPanel {
       );
       tutTarget(instant.element, TutTarget.INSTANT);
       instant.setPrice(offer.instantPrice);
-      instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate) : null);
+      instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate, this.yard?.store.kind) : null);
       row.append(instant.element);
       this.pendingButtons.push({ key: actionKey("instant", building.id), button: instant });
     }
@@ -942,7 +965,7 @@ export class BuildingPanel {
 
     const gateId = `${this.gateId(building)}-fortify`;
     if (offer.gate) {
-      const line = gateLine(offer.gate);
+      const line = gateLine(offer.gate, this.yard?.store.kind);
       line.id = gateId;
       block.append(line);
     } else if (!NON_TOWER_FORTIFY_TYPES.has(building.type)) {
@@ -1089,14 +1112,15 @@ export class BuildingPanel {
     wrap.setAttribute("aria-label", "Confirm cancel");
     const question = document.createElement("p");
     question.className = "building-cancel__question";
-    const refund = costAmounts(offer.refund);
+    const icons = realmIcons(this.infernoBuilding(building));
+    const refund = costAmounts(offer.refund, undefined, icons);
     question.append(
       fortifying ? "Stop fortifying and get back " : "Cancel and get back ",
       refund ?? "nothing",
       "? Progress is lost.",
     );
     wrap.append(question);
-    const lost = costAmounts(offer.lost);
+    const lost = costAmounts(offer.lost, undefined, icons);
     if (lost) {
       const warning = document.createElement("p");
       warning.className = "building-cancel__lost";
@@ -1167,7 +1191,7 @@ export class BuildingPanel {
     if (offer.toStorage) {
       question.append(`Put this ${building.name} in storage? You can place it again later.`);
     } else {
-      const refund = costAmounts(offer.refund);
+      const refund = costAmounts(offer.refund, undefined, realmIcons(this.infernoBuilding(building)));
       question.append(
         `Recycle this ${building.name} and get back `,
         refund ?? "nothing",
@@ -1175,7 +1199,7 @@ export class BuildingPanel {
       );
     }
     wrap.append(question);
-    const lost = costAmounts(offer.lost);
+    const lost = costAmounts(offer.lost, undefined, realmIcons(this.infernoBuilding(building)));
     if (lost) {
       const warning = document.createElement("p");
       warning.className = "building-recycle__warning";
@@ -1333,7 +1357,7 @@ export class BuildingPanel {
         return;
       }
       // The building is gone, and this panel with it: the refund goes to the notices.
-      const refund = costAmounts(result.report.refund);
+      const refund = costAmounts(result.report.refund, undefined, reportIcons(result.report));
       const text = document.createElement("span");
       text.append(...(refund ? ["Build cancelled. Got back ", refund, "."] : ["Build cancelled."]));
       this.yard?.notices.show("build-cancel", text, { level: "info", timeoutMs: 6_000 });
@@ -1341,7 +1365,7 @@ export class BuildingPanel {
     }
     const result = await store.cancelUpgrade(id);
     this.report(id, result, (report) => {
-      const refund = costAmounts(report.refund);
+      const refund = costAmounts(report.refund, undefined, reportIcons(report));
       return refund ? ["Upgrade cancelled. Got back ", refund, "."] : ["Upgrade cancelled."];
     });
   }
@@ -1486,6 +1510,15 @@ export class BuildingPanel {
     this.bunker?.destroy();
     this.bunker = null;
     this.bunkerSlot.hidden = true;
+  }
+
+  /** Opens the Champion Cage's or Chamber's controls when this panel is on one (the "Korath unlocked" popup). */
+  openChampion(): void {
+    const building = this.building;
+    const store = this.yard?.store;
+    if (this.champion || !building || !store) return;
+    const model = panelModel(building, store);
+    if (model.open === "cage" || model.open === "chamber") this.toggleChampion(model.open);
   }
 
   /** Opens or closes the Champion Cage's or Chamber's controls under the actions. */
@@ -1733,16 +1766,25 @@ const gateText = (text: string): HTMLElement => {
   return paragraph;
 };
 
+/** Icons for a main-yard Inferno building's amounts: Bone, Coal, Sulfur and Magma (WP 6.1). */
+const realmIcons = (inferno: boolean): ResourceIconOptions => (inferno ? { realm: "inferno" } : {});
+
+/** A report with a `purse` went to the Inferno purse, so its amounts are the Inferno's. */
+const reportIcons = (report: object): ResourceIconOptions => realmIcons("purse" in report);
+
 /** "2 × Monster Locker at level 3", or "a Monster Locker at level 3" for one. */
-const requirementText = ([type, count, level]: readonly [number, number, number]): string =>
-  `${count === 1 ? "a" : `${count} ×`} ${typeName(type)} at level ${level}`;
+const requirementText = ([type, count, level]: readonly [number, number, number], kind: YardKind): string =>
+  `${count === 1 ? "a" : `${count} ×`} ${typeName(type, kind)} at level ${level}`;
 
 /**
  * Why a gate stops the upgrade, as plain words: what a disabled button's
  * tooltip and accessible name carry, where no icon can go.
  */
-export const gateSentence = (gate: UpgradeGate): string => {
+export const gateSentence = (gate: UpgradeGate, kind: YardKind = "main", inferno = false): string => {
+  const hall = hallWord(kind);
   switch (gate.reason) {
+    case "underHall":
+      return `Needs Under Hall ${gate.need}.`;
     case "busy":
       return "Busy with another job.";
     case "training":
@@ -1750,12 +1792,14 @@ export const gateSentence = (gate: UpgradeGate): string => {
     case "damaged":
       return "Repair first.";
     case "townHall":
-      return gate.have <= 0 ? "Build a Town Hall first." : `Needs Town Hall ${gate.need}.`;
+      return gate.have <= 0 ? `Build a ${hall} first.` : `Needs ${hall} ${gate.need}.`;
     case "maxLevel":
       return "Max level.";
     case "requirements":
-      return `Needs ${gate.requirements.map(requirementText).join(", ")}.`;
+      return `Needs ${gate.requirements.map((entry) => requirementText(entry, kind)).join(", ")}.`;
     case "shortfall":
+      if (inferno) return gate.overCap ? NEED_MORE_PODS : "Not enough Inferno resources.";
+      if (kind === "inferno") return gate.overCap ? NEED_MORE_PODS : "Not enough resources.";
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
@@ -1764,15 +1808,18 @@ export const gateSentence = (gate: UpgradeGate): string => {
   }
 };
 
-/** The one line under the cost that says why Upgrade is disabled, amounts drawn with their icons. */
-export const gateLine = (gate: UpgradeGate): HTMLElement => {
+/**
+ * The one line under the cost that says why Upgrade is disabled, amounts
+ * drawn with their icons: the Inferno's for a main-yard Inferno building.
+ */
+export const gateLine = (gate: UpgradeGate, kind: YardKind = "main", inferno = false): HTMLElement => {
   const line = gateText("");
   if (gate.reason === "shortfall" && !gate.overCap) {
-    line.append("Need ", costAmounts(gate.shortfall) ?? "", " more.");
+    line.append("Need ", costAmounts(gate.shortfall, undefined, realmIcons(inferno)) ?? "", " more.");
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
   } else {
-    line.textContent = gateSentence(gate);
+    line.textContent = gateSentence(gate, kind, inferno);
   }
   return line;
 };
@@ -1816,11 +1863,11 @@ export const recycledMessage = (
     line.append(`${name} put in storage. Place it again from Build, Decorations.`);
     return line;
   }
-  const refund = costAmounts(report.refund);
+  const refund = costAmounts(report.refund, undefined, reportIcons(report));
   line.append(`${name} recycled`);
   if (refund) line.append(" for ", refund);
   line.append(".");
-  const lost = costAmounts(report.lost);
+  const lost = costAmounts(report.lost, undefined, reportIcons(report));
   if (lost) line.append(" ", lost, " did not fit in storage.");
   const culled = cullText(report.culled);
   if (culled) line.append(` Housing shrank: ${culled} lost.`);

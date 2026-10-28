@@ -2327,12 +2327,13 @@ describe("the Housing Bunker (issue #143)", () => {
     return { yard, pokey, defenders };
   };
 
-  it("stands with its health and sends a defender at a creep within 500", () => {
+  it("stands with its health and sends its defenders at a creep within 500", () => {
     const { yard, pokey, defenders } = battleOf(400);
     expect(yard.buildings[0]?.hp).toBe(4000);
     expect(Math.hypot(pokey.ix - 80, pokey.iy - 80)).toBeLessThan(500);
-    expect(defenders).toHaveLength(1);
-    expect(defenders[0]?.targetCreep).toBe(pokey.id);
+    // All of them at once (`HOUSINGBUNKER.as:289-298`, Inferno WP 1.6).
+    expect(defenders).toHaveLength(2);
+    for (const defender of defenders) expect(defender.targetCreep).toBe(pokey.id);
   });
 
   it("sends nothing at a creep beyond its range", () => {
