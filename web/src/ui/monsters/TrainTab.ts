@@ -513,12 +513,16 @@ export class TrainTab implements MonstersTab {
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
+  // What an action spent is red with a minus ("Putty −64,000", no "spent"),
+  // what a cancel gave back green with a plus (owner, 28 Oct); the prices on
+  // the buttons stay plain.
+
   private async runTrain(id: string): Promise<void> {
     const result = await this.actions.train(id);
     this.report(result, (report) => [
       `Training ${nameOf(report.monster)} to level ${report.to}: `,
-      resourceAmount("r3", report.cost.r3),
-      " spent.",
+      resourceAmount("r3", report.cost.r3, { change: "loss" }),
+      ".",
     ]);
   }
 
@@ -526,7 +530,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.instant(id);
     this.report(result, (report) => [
       `${nameOf(report.monster)} is level ${report.level}, for `,
-      resourceAmount("shiny", report.credits),
+      resourceAmount("shiny", report.credits, { change: "loss" }),
       ".",
     ]);
   }
@@ -535,7 +539,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.finish(id);
     this.report(result, (report) => [
       `${nameOf(report.monster)} is level ${report.level}`,
-      ...(report.credits > 0 ? [", for ", resourceAmount("shiny", report.credits)] : []),
+      ...(report.credits > 0 ? [", for ", resourceAmount("shiny", report.credits, { change: "loss" })] : []),
       ".",
     ]);
   }
@@ -544,7 +548,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.cancel(id);
     this.report(result, (report) =>
       report.refund.r3 > 0
-        ? ["Training cancelled. Got back ", resourceAmount("r3", report.refund.r3), "."]
+        ? ["Training cancelled. Got back ", resourceAmount("r3", report.refund.r3, { change: "gain" }), "."]
         : ["Training cancelled."],
     );
   }

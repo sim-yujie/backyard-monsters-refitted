@@ -93,7 +93,8 @@ describe("collecting", () => {
     await settle();
     expect(calls).toContainEqual(["collect", 1]);
     expect(row(tab, 1)).toBeNull();
-    expect(tab.statusText).toBe("Collected · Twigs 300");
+    // Collected is a gain: green with a plus (owner, 28 Oct).
+    expect(tab.statusText).toBe("Collected · Twigs 300 gained");
     expect(store.snapshot.giftsWaiting).toBe(1);
     expect(refresh).toHaveBeenCalledOnce();
     expect(tab.element.textContent).toContain(GIFTS_TEXT.left(4));
@@ -113,7 +114,7 @@ describe("collecting", () => {
     buttonIn(row(tab, 1), GIFTS_TEXT.collectAnyway).click();
     await settle();
     expect(calls).toContainEqual(["collect", 1]);
-    expect(tab.statusText).toBe("Collected · Twigs 100");
+    expect(tab.statusText).toBe("Collected · Twigs 100 gained");
   });
 
   it("Collect all collects what today allows and fetches the list again", async () => {
@@ -123,7 +124,7 @@ describe("collecting", () => {
     await settle();
     expect(calls).toContainEqual(["collect", "all"]);
     expect(calls.filter(([method]) => method === "gifts")).toHaveLength(2);
-    expect(tab.statusText).toBe("Collected · Twigs 300 Goo 500");
+    expect(tab.statusText).toBe("Collected · Twigs 300 gained Goo 500 gained");
   });
 
   it("says the daily limit and turns Collect off", async () => {

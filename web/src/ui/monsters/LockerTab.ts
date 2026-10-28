@@ -483,12 +483,16 @@ export class LockerTab implements MonstersTab {
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
+  // What an action spent is red with a minus ("Putty −64,000", no "spent"),
+  // what a cancel gave back green with a plus (owner, 28 Oct); the prices on
+  // the buttons stay plain.
+
   private async runStart(id: string): Promise<void> {
     const result = await this.actions.start(id);
     this.report(result, (report) => [
       `Unlocking ${monsterEntry(report.monster)?.name ?? report.monster}: `,
-      resourceAmount("r3", report.cost.r3),
-      " spent.",
+      resourceAmount("r3", report.cost.r3, { change: "loss" }),
+      ".",
     ]);
   }
 
@@ -496,7 +500,7 @@ export class LockerTab implements MonstersTab {
     const result = await this.actions.instant(id);
     this.report(result, (report) => [
       `${monsterEntry(report.monster)?.name ?? report.monster} unlocked for `,
-      resourceAmount("shiny", report.credits),
+      resourceAmount("shiny", report.credits, { change: "loss" }),
       ".",
     ]);
   }
@@ -505,7 +509,7 @@ export class LockerTab implements MonstersTab {
     const result = await this.actions.finish();
     this.report(result, (report) => [
       `${monsterEntry(report.monster)?.name ?? report.monster} unlocked`,
-      ...(report.credits > 0 ? [" for ", resourceAmount("shiny", report.credits)] : []),
+      ...(report.credits > 0 ? [" for ", resourceAmount("shiny", report.credits, { change: "loss" })] : []),
       ".",
     ]);
   }
@@ -514,7 +518,7 @@ export class LockerTab implements MonstersTab {
     const result = await this.actions.cancel();
     this.report(result, (report) =>
       report.refund.r3 > 0
-        ? ["Unlock cancelled. Got back ", resourceAmount("r3", report.refund.r3), "."]
+        ? ["Unlock cancelled. Got back ", resourceAmount("r3", report.refund.r3, { change: "gain" }), "."]
         : ["Unlock cancelled."],
     );
   }

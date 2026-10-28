@@ -242,10 +242,22 @@ describe("EventsPanel: the Krallen Hunt", () => {
 describe("claimedLine: a claim's notice", () => {
   it("shows the rewards as badges, the full words on hover and for a screen reader", () => {
     const line = claimedLine("Day 1 claimed", DAYS!.days[0]!);
-    expect(line.getAttribute("aria-label")).toBe("Day 1 claimed: 10,000 Twigs, 10,000 Pebbles");
+    expect(line.getAttribute("aria-label")).toBe("Day 1 claimed, gained 10,000 Twigs, 10,000 Pebbles");
     expect(line.title).toBe(line.getAttribute("aria-label"));
     expect(line.querySelector(".events-claimed__title")!.textContent).toBe("Day 1 claimed");
     expect(line.querySelectorAll(".events-reward .res-icon")).toHaveLength(2);
-    expect(line.querySelector(".events-reward__figure")!.textContent).toBe("10K");
+    // Claimed is a gain: "+10K" in green (owner, 28 Oct).
+    expect(line.querySelector(".events-reward__figure")!.textContent).toBe("+10K");
+    expect(line.querySelector(".events-reward--gain")).not.toBeNull();
+  });
+
+  it("leaves the calendar's rewards on offer plain, with no sign", () => {
+    const { panel } = mounted();
+    panel.render(list([event()]));
+    const figures = [...panel.element.querySelectorAll(".events-reward__figure")].map((figure) => figure.textContent);
+    expect(figures.length).toBeGreaterThan(0);
+    expect(figures.every((figure) => !figure?.startsWith("+"))).toBe(true);
+    expect(panel.element.querySelector(".events-reward--gain")).toBeNull();
+    panel.close();
   });
 });
