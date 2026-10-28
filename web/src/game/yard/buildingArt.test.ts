@@ -15,12 +15,12 @@ import {
   stripCrop,
 } from "./buildingArt";
 import { stripCells } from "./yardAnim";
-import { setClassicBuildingArt } from "./buildingArtTiers";
+import { setClassicArt } from "@/game/classicArt";
 
 // These tests read the Flash art table, its strips and its files, so they run on the old building art
 // (the new Town Hall is the default; buildingArtTiers.test.ts covers it).
-beforeAll(() => setClassicBuildingArt(true));
-afterAll(() => setClassicBuildingArt(false));
+beforeAll(() => setClassicArt(true));
+afterAll(() => setClassicArt(false));
 
 /**
  * The art table against the art that is actually on the game server.
@@ -120,12 +120,12 @@ describe("the Inferno art", () => {
 
   it("keeps the Under Hall's own picture when the new tower and Town Hall art is on", () => {
     const classic = resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url;
-    setClassicBuildingArt(false);
+    setClassicArt(false);
     try {
       expect(resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url).toBe(classic);
       expect(resolveArt(14, 3, ArtState.DEFAULT)?.top.url).not.toBe(classic);
     } finally {
-      setClassicBuildingArt(true);
+      setClassicArt(true);
     }
   });
 

@@ -12,7 +12,7 @@ import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
-import { saveClassicBuildingArt, savedClassicBuildingArt } from "@/game/yard/buildingArtTiers";
+import { saveClassicArt, savedClassicArt } from "@/game/classicArt";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { Popup } from "@/ui/Popup";
 
@@ -44,9 +44,9 @@ export const SETTINGS_TEXT = {
   qualityFull: "Full",
   qualityLow: "Low",
   qualityHint: "Low draws fewer sparks and glows, for slower phones. Phones start on Low.",
-  artTitle: "Building art",
-  classicArtLabel: "Classic building art (original Flash look)",
-  classicArtHint: "Shows repainted buildings, like the Town Hall, as they looked in the original game.",
+  artTitle: "Art",
+  classicArtLabel: "Classic art (original Flash look)",
+  classicArtHint: "Buildings, monsters and champions as they looked in the original game.",
   classicArtSaved: "Saved. Reload the page to see the change.",
   classicArtFailed: "Could not save this in your browser. Check that site data is allowed.",
 } as const;
@@ -329,9 +329,9 @@ const effectsSection = (): HTMLElement => {
 };
 
 /**
- * Building art: "Classic building art" brings back the Flash look for every
- * repainted building (the new art is the default, owner 26 Oct 2026: the Town
- * Hall now, the towers later). The yard is already drawn, so the choice shows
+ * Art: "Classic art" brings back the Flash look for everything the revamp
+ * repainted, buildings, monsters, champions and their portraits (owner, 28 Oct
+ * 2026; `game/classicArt.ts`). The yard is already drawn, so the choice shows
  * from the next load.
  */
 const artSection = (): HTMLElement => {
@@ -346,7 +346,7 @@ const artSection = (): HTMLElement => {
   const classic = document.createElement("input");
   classic.type = "checkbox";
   classic.id = "settings-classic-art";
-  classic.checked = savedClassicBuildingArt();
+  classic.checked = savedClassicArt();
   const words = document.createElement("span");
   words.textContent = SETTINGS_TEXT.classicArtLabel;
   row.append(classic, words);
@@ -357,7 +357,7 @@ const artSection = (): HTMLElement => {
   hint.textContent = SETTINGS_TEXT.classicArtHint;
   classic.setAttribute("aria-describedby", hint.id);
   classic.addEventListener("change", () => {
-    const saved = saveClassicBuildingArt(classic.checked);
+    const saved = saveClassicArt(classic.checked);
     hint.textContent = saved ? SETTINGS_TEXT.classicArtSaved : SETTINGS_TEXT.classicArtFailed;
     hint.classList.toggle("field__hint--error", !saved);
   });

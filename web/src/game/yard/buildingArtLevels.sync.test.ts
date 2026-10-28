@@ -6,7 +6,8 @@ import {
 } from "../../../../server/src/game-data/buildingArtLevels";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { ArtState, resolveArt } from "./buildingArt";
-import { setClassicBuildingArt, setNewTowerArt, TOWER_TIER_ART, TOWN_HALL_ART } from "./buildingArtTiers";
+import { setClassicArt } from "@/game/classicArt";
+import { setNewTowerArt, TOWER_TIER_ART, TOWN_HALL_ART } from "./buildingArtTiers";
 
 /**
  * The server sends someone else's yard with only the level each building's
@@ -67,12 +68,12 @@ describe("the server's art levels match the web art table", () => {
   });
 
   it("picks the picture the client draws with the old art", () => {
-    setClassicBuildingArt(true);
+    setClassicArt(true);
     try {
       const { drawn, sent } = drawnAndSent(false);
       expect(sent).toEqual(drawn);
     } finally {
-      setClassicBuildingArt(false);
+      setClassicArt(false);
     }
   });
 

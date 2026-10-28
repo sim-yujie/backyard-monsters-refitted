@@ -183,7 +183,7 @@ describe("AccountSettings", () => {
     expect(localStorage.getItem("bymr.effectsQuality")).toBe("low");
   });
 
-  it("offers Classic building art, off by default, kept in this browser for the next load", async () => {
+  it("offers Classic art, off by default, kept in this browser for the next load", async () => {
     localStorage.clear();
     await open({});
     const box = document.querySelector<HTMLInputElement>("#settings-classic-art")!;
@@ -191,14 +191,14 @@ describe("AccountSettings", () => {
     expect(box.checked).toBe(false);
     box.checked = true;
     box.dispatchEvent(new Event("change"));
-    expect(localStorage.getItem("bymr.classicBuildingArt")).toBe("1");
+    expect(localStorage.getItem("bymr.classicArt")).toBe("1");
     expect(document.body.textContent).toContain(SETTINGS_TEXT.classicArtSaved);
     box.checked = false;
     box.dispatchEvent(new Event("change"));
-    expect(localStorage.getItem("bymr.classicBuildingArt")).toBeNull();
+    expect(localStorage.getItem("bymr.classicArt")).toBeNull();
   });
 
-  it("shows the saved Classic building art choice, even when the account fails to load", async () => {
+  it("shows the Classic art choice saved under its old building-only key, even when the account fails to load", async () => {
     localStorage.clear();
     localStorage.setItem("bymr.classicBuildingArt", "1");
     api.fetchAccount.mockRejectedValue(new Error("down"));

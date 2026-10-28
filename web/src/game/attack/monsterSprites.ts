@@ -1,3 +1,4 @@
+import { classicArt } from "@/game/classicArt";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet, type RowCycle } from "./monsterSpriteData";
 import { windUpFrame } from "./juice";
 
@@ -129,7 +130,9 @@ export interface AnimatedSheet extends MonsterSheet {
 /**
  * Animation layouts for repainted sheets, by original file (the same key as
  * `REPAINTED_SHEETS`). A sheet with no entry is drawn exactly as the table
- * says. Add an entry only together with the matching repaint entry.
+ * says, and so is every sheet with the player's "Classic art" on (the Flash
+ * sheet needs the Flash row). Add an entry only together with the matching
+ * repaint entry.
  */
 export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
   // Bandito: 41x40 cells (the old 29x28 cell plus 6 px each side and 12 px on
@@ -491,7 +494,8 @@ export function applyLayout(
   return result;
 }
 
-const withLayout = (sheet: MonsterSheet): AnimatedSheet => applyLayout(sheet);
+/** The sheet as drawn: its repaint layout, or the Flash table row with the Flash art on. */
+const withLayout = (sheet: MonsterSheet): AnimatedSheet => (classicArt() ? sheet : applyLayout(sheet));
 
 /** Champion families and their sheets in level order, built once on first use. */
 let familyIndex: ReadonlyMap<string, readonly MonsterSheet[]> | null = null;
@@ -573,7 +577,7 @@ export function directionColumn(angleRadians: number, directions: number, offset
  * the middle column right, while straight down and straight up are where
  * they belong. Read without correction, the monster walks one way facing the
  * other. The held animated sheets were built from the same frames, so the
- * entry stays right for them.
+ * entry stays right for them. The Flash sheets ("Classic art") face true.
  */
 export const MIRRORED_HEADINGS: ReadonlySet<string> = new Set([
   "monsters/ichi.png", // Ichi repaint and its animated sheet
@@ -587,7 +591,7 @@ export const MIRRORED_HEADINGS: ReadonlySet<string> = new Set([
  */
 export function sheetColumn(sheet: MonsterSheet, angleRadians: number): number {
   const column = directionColumn(angleRadians, sheet.directions, sheet.directionOffset);
-  if (!MIRRORED_HEADINGS.has(sheet.file)) return column;
+  if (classicArt() || !MIRRORED_HEADINGS.has(sheet.file)) return column;
   return (sheet.directions / 2 - column + sheet.directions) % sheet.directions;
 }
 
@@ -759,7 +763,7 @@ export function flyerAltitude(creatureId: string): number {
  * the resolution, so the table's 1x cell rectangles still frame it. Art trial: the Pokey
  * (`gen-pokey-sprite.py`), the Teratorn (`gen-teratorn-sprite.py`) the Bolt (`gen-bolt-sprite.py`) and the Octo-ooze (`gen-octo-sprite.py`).
  * Remove an entry to go back to the original sheet; empty the table to
- * switch the trial off.
+ * switch the trial off. A player with "Classic art" on gets every original.
  */
 export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/14.v1.png": "monsters/teratorn-anim@4x.png", // Teratorn animated repaint (3 flap rows + 5 attack rows)
@@ -808,8 +812,8 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
 export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+$/.test(url);
 
-/** The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint. */
+/** The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint unless "Classic art" is on. */
 export function sheetUrl(sheet: MonsterSheet | string): string {
   const file = typeof sheet === "string" ? sheet : sheet.file;
-  return `${ASSET_ROOT}${REPAINTED_SHEETS[file] ?? file}`;
+  return `${ASSET_ROOT}${(classicArt() ? undefined : REPAINTED_SHEETS[file]) ?? file}`;
 }

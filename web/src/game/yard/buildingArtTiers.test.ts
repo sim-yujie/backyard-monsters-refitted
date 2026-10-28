@@ -3,17 +3,13 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { facingCell, laserCell } from "@/game/attack/towerFx";
 import { ArtState, artFolder, resolveArt } from "./buildingArt";
+import { classicArt, setClassicArt } from "@/game/classicArt";
 import {
-  CLASSIC_BUILDING_ART_KEY,
   NEW_TOWER_ART_KEY,
   TOWER_TIER_ART,
   TOWN_HALL_ART,
-  classicBuildingArt,
   newTowerArt,
   readNewTowerArt,
-  saveClassicBuildingArt,
-  savedClassicBuildingArt,
-  setClassicBuildingArt,
   setNewTowerArt,
   tierArtFor,
   tierLift,
@@ -61,7 +57,7 @@ const blockedStore = (): Storage =>
 
 describe("the defaults", () => {
   it("show the new Town Hall and the Flash towers", () => {
-    expect(classicBuildingArt()).toBe(false);
+    expect(classicArt()).toBe(false);
     expect(newTowerArt()).toBe(false);
     expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new6@2x.webp");
     expect(resolveArt(20, 8, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
@@ -75,7 +71,7 @@ describe("the defaults", () => {
 
 describe("the old-art option", () => {
   it("brings back the Flash Town Hall, and the Flash towers even with the tower switch on", () => {
-    setClassicBuildingArt(true);
+    setClassicArt(true);
     setNewTowerArt(true);
     try {
       expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.6.png");
@@ -83,28 +79,10 @@ describe("the old-art option", () => {
       expect(resolveArt(20, 8, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/cannontower/top.3.png");
       for (const type of TOWERS) expect(tierArtFor(type, 8)).toBeNull();
     } finally {
-      setClassicBuildingArt(false);
+      setClassicArt(false);
       setNewTowerArt(false);
     }
     expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new6@2x.webp");
-  });
-
-  it("is what Account Settings saved, read at the next load", () => {
-    const store = memoryStore();
-    expect(savedClassicBuildingArt(store)).toBe(false);
-    expect(saveClassicBuildingArt(true, store)).toBe(true);
-    expect(store.getItem(CLASSIC_BUILDING_ART_KEY)).toBe("1");
-    expect(savedClassicBuildingArt(store)).toBe(true);
-    expect(saveClassicBuildingArt(false, store)).toBe(true);
-    expect(savedClassicBuildingArt(store)).toBe(false);
-    // Saving does not redraw the page that is open.
-    expect(classicBuildingArt()).toBe(false);
-  });
-
-  it("reads as off when site data is blocked, and says it could not save", () => {
-    expect(saveClassicBuildingArt(true, blockedStore())).toBe(false);
-    expect(saveClassicBuildingArt(true, null)).toBe(false);
-    expect(savedClassicBuildingArt(blockedStore())).toBe(false);
   });
 });
 
@@ -252,9 +230,9 @@ describe("the repainted Town Hall", () => {
   });
 
   it("stands where Flash's does at every level", () => {
-    setClassicBuildingArt(true);
+    setClassicArt(true);
     const flash = TOWN_HALL_ART.map((level) => resolveArt(14, level.from, ArtState.DEFAULT)?.top);
-    setClassicBuildingArt(false);
+    setClassicArt(false);
     TOWN_HALL_ART.forEach((level, i) => {
       // Same left edge give or take a pixel or two; at most 15% taller, so the top moves a little at most.
       expect(Math.abs(level.top[1] - (flash[i]?.x ?? 0)), `level ${level.from}`).toBeLessThanOrEqual(2);
@@ -263,9 +241,9 @@ describe("the repainted Town Hall", () => {
   });
 
   it("stands on Flash's own shadow for each level", () => {
-    setClassicBuildingArt(true);
+    setClassicArt(true);
     const flash = TOWN_HALL_ART.map((level) => resolveArt(14, level.from, ArtState.DEFAULT)?.shadow);
-    setClassicBuildingArt(false);
+    setClassicArt(false);
     TOWN_HALL_ART.forEach((level, i) => {
       expect(flash[i]?.url).toBe(`/assets/buildings/townhall/shadow.${level.from}.jpg`);
       expect(resolveArt(14, level.from, ArtState.DEFAULT)?.shadow, `level ${level.from}`).toEqual(flash[i]);
@@ -452,9 +430,9 @@ describe("the turret towers with the new tower art off", () => {
           expect(JSON.stringify(resolved), where).not.toMatch(/body\.t|turret\.t|top\.t\d@2x/);
         }
         // The same as the player's old-art choice gives.
-        setClassicBuildingArt(true);
+        setClassicArt(true);
         const classic = STATES.map((state) => resolveArt(type, level, state));
-        setClassicBuildingArt(false);
+        setClassicArt(false);
         expect(off, where).toEqual(classic);
       }
     }
