@@ -8,6 +8,7 @@ import type { LockerActions } from "@/api/yardMonsters";
 import { INFERNO_YARD } from "@/game/yard/ownYards";
 import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
+import { spokenText } from "@/ui/resourceIcon";
 import { HatchTab } from "./HatchTab";
 import { LockerTab } from "./LockerTab";
 import { MonstersTabId, type MonstersTabContext } from "./monstersTab";
@@ -134,7 +135,7 @@ describe("Inferno monster screens: Hatch", () => {
     const { element } = setup();
     const text = element.textContent ?? "";
     expect(text).toContain("Incubator 1");
-    expect(text).toContain("Magma each");
+    expect(spokenText(element)).toMatch(/Magma [\d,]+ · Time each/);
     expect(text).toContain("Go to Strongbox");
     expect(text).toContain("Each monster moves into the Compound the moment it hatches.");
     expect(text).not.toMatch(/Hatchery|Monster Locker|goo/i);
@@ -192,7 +193,7 @@ describe("Inferno monster screens: Unlock", () => {
       (one) => one.dataset["monster"],
     );
     expect([...ids].sort()).toEqual(["IC1", "IC2", "IC3", "IC4", "IC5", "IC6", "IC7", "IC8"]);
-    expect(element.textContent).toContain("Strongbox level");
+    expect(element.textContent).toContain("Strongbox Lv");
     expect(element.textContent).not.toContain("Overdrive 4 h");
   });
 });
@@ -212,7 +213,7 @@ describe("Inferno monster screens: Train", () => {
       (one) => one.dataset["monster"],
     );
     expect(ids).toEqual(["IC1", "IC2"]);
-    expect(tab.element.textContent).toContain("Magma");
+    expect(spokenText(tab.element)).toContain("Magma");
     expect(tab.element.textContent).toContain("Infernal Academy 1");
     expect(tab.element.textContent).not.toMatch(/\bgoo\b/);
   });

@@ -362,17 +362,19 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(text(element, ".hatch-info__level")).toBe("Level 1");
     expect(text(element, ".hatch-info__blurb")).toContain("Bolt is fast as lightning");
     const stats = [...element.querySelectorAll<HTMLElement>(".hatch-info__stat")].map(
-      (stat) => `${stat.querySelector("dt")!.textContent} ${spokenText(stat.querySelector("dd")!)}`,
+      (stat) => `${spokenText(stat.querySelector("dt")!)} ${spokenText(stat.querySelector("dd")!)}`,
     );
     expect(stats).toEqual([
       `Speed ${monsterStat("C3", "speed", 1)}`,
       `Health ${monsterStat("C3", "health", 1).toLocaleString("en-US")}`,
       `Damage ${monsterStat("C3", "damage", 1).toLocaleString("en-US")}`,
-      "Goo each Goo 350",
+      "Goo 350",
       "Housing each 15",
       "Time each 23s",
     ]);
-    expect(text(element, ".hatch-info__each")).toBe("Each: Goo 350 · 23s · 15 housing");
+    // Icons, not words: the stat names are only on hover and for a screen reader.
+    expect(element.querySelector(".hatch-info__stats")!.textContent).not.toMatch(/[A-Za-z]{3}/);
+    expect(spokenText(element.querySelector(".hatch-info__each")!)).toBe("Goo 350 · Time each 23s · Housing each 15");
   });
 
   it("offers Max, explains it, previews the batch dashed and adds it in one request", async () => {

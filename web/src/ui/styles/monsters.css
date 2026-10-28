@@ -426,8 +426,25 @@
   font-variant-numeric: tabular-nums;
 }
 
-.locker-detail__stats {
-  color: var(--colour-text-muted);
+/* The monster's numbers as painted icons (`statGrid` in monsterNumbers.ts):
+   three to a row, a number the next level changes picked out in green. */
+.monster-stats {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--colour-text);
+  font-weight: 700;
+}
+
+.monster-stats__item--up {
+  color: var(--colour-success);
+}
+
+.monster-stats .res-amount > .res-icon {
+  height: 24px;
 }
 
 .locker-detail__action {
