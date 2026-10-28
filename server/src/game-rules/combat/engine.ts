@@ -3156,7 +3156,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * `Jars.onActivation` (`Jars.as:190-200`, `:219-230`): a jar on every tower
    * the drop's range touches (`BASE.GetBuildingOverlap`, the Decoy's test),
-   * fallen or busy ones too, each untargetable from now (`ApplyJar`).
+   * fallen or busy ones too, each untargetable from now (`ApplyJar`). Only
+   * `JAR_TOWER_TYPES` (owner): the Stronghold fights on.
    */
   const startJars = (drop: Cart): void => {
     const plan = jarsPlan(options.siege?.jars ?? 0, tick);
