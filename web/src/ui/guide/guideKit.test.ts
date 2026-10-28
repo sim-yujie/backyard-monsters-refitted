@@ -91,6 +91,19 @@ describe("BobBubble", () => {
     expect(skip).toHaveBeenCalledOnce();
   });
 
+  it("leads the line with the cue's picture, hidden from a screen reader, and drops it on the next line", () => {
+    const bubble = new BobBubble().mount(document.body);
+    bubble.show({ text: "Tap Build.", cue: { kind: "icon", name: "build" } });
+    const cue = bubble.element.querySelector<HTMLElement>(".guide-bob__line > .guide-cue")!;
+    expect(cue.dataset["cue"]).toBe("icon");
+    expect(cue.getAttribute("aria-hidden")).toBe("true");
+    expect(cue.querySelector("svg")).not.toBeNull();
+    expect(cue.nextElementSibling).toBe(bubble.element.querySelector(".guide-bob__text"));
+    expect(bubble.element.querySelector(".guide-bob__text")?.textContent).toBe("Tap Build.");
+    bubble.show({ text: "Nice!" });
+    expect(bubble.element.querySelector(".guide-cue")).toBeNull();
+  });
+
   it("a tip shows Bob's head and no controls row when there is nothing to press", () => {
     const bubble = new BobBubble().mount(document.body);
     bubble.show({ text: "Collect all banks everything.", icon: true });

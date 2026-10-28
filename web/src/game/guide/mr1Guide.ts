@@ -5,7 +5,7 @@ import { GuideOverlay, type GuideStep } from "@/ui/guide/GuideOverlay";
 import "@/ui/styles/guide-start.css";
 import { guideBus } from "./guideBus";
 import { PRACTICE_CAMP_BASEID } from "./practiceBox";
-import { dotsFor, isGuideStep, LINES, type GuideStepName } from "./steps";
+import { CUES, dotsFor, isGuideStep, LINES, type GuideStepName } from "./steps";
 import { findTarget, TutTarget } from "./targets";
 
 /**
@@ -114,6 +114,7 @@ export class Mr1Guide {
         key: "lost",
         step: this.line("attack-result", {
           text: LINES.lost,
+          cue: CUES.lost!,
           mood: "worried",
           actions: [{ label: "Try again", primary: true, onClick: () => void this.retry() }],
         }),
@@ -124,7 +125,10 @@ export class Mr1Guide {
       case "pick-camp": {
         const carded = this.picked === PRACTICE_CAMP_BASEID && findTarget(TutTarget.TARGET_ATTACK) !== null;
         return carded
-          ? { key: "attack", step: this.line("pick-camp", { text: LINES.tapAttack, target: TutTarget.TARGET_ATTACK }) }
+          ? {
+              key: "attack",
+              step: this.line("pick-camp", { text: LINES.tapAttack, cue: CUES.tapAttack!, target: TutTarget.TARGET_ATTACK }),
+            }
           : { key: "camp", step: this.line("pick-camp", { text: LINES.pickCamp, target: TutTarget.MR1_PRACTICE }) };
       }
       case "attack":

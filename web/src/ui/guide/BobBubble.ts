@@ -1,10 +1,13 @@
+import type { GuideCue } from "@/game/guide/steps";
 import { bobBust, BOB_ICON, type BobMood } from "./guideArt";
+import { guideCue } from "./guideCue";
 import "@/ui/styles/guide.css";
 
 /**
  * Bob's speech bubble (issue #227, `docs/design/tutorial.md` §2.1, §3): his
  * painted bust (or, for a screen tip, his head), a cream bubble with what he
- * says, the step's buttons, the step dots, and Skip.
+ * says, led by a picture of the button or building it is about (`cue`, the
+ * text cut), the step's buttons, the step dots, and Skip.
  *
  * Bottom left on a desktop, above the dock; a strip above the dock on a
  * phone (`guide.css`, at or below 620 px, the attack scene's phone width).
@@ -24,6 +27,8 @@ export interface BobAction {
 export interface BobLine {
   /** What Bob says. A string is set as text; a node goes in as it is. */
   text: string | Node;
+  /** The picture before the words: what to tap, or what the line is about (`guideCue.ts`). */
+  cue?: GuideCue;
   /** The bust's mood; ignored when `icon` is set. */
   mood?: BobMood;
   /** The small head instead of the bust (screen tips). */
@@ -54,6 +59,8 @@ export class BobBubble {
   readonly element: HTMLElement;
   private readonly portrait: HTMLImageElement;
   private readonly speech: HTMLElement;
+  /** The cue and the words, side by side. */
+  private readonly line: HTMLElement;
   private readonly text: HTMLElement;
   private readonly controls: HTMLElement;
 
@@ -69,9 +76,11 @@ export class BobBubble {
     this.portrait.decoding = "async";
 
     this.speech = el("div", "guide-bob__speech");
+    this.line = el("div", "guide-bob__line");
     this.text = el("p", "guide-bob__text");
+    this.line.append(this.text);
     this.controls = el("div", "guide-bob__controls");
-    this.speech.append(this.text, this.controls);
+    this.speech.append(this.line, this.controls);
     this.element.append(this.portrait, this.speech);
   }
 
@@ -92,6 +101,7 @@ export class BobBubble {
     this.portrait.dataset.mood = icon ? "icon" : (line.mood ?? "happy");
 
     this.text.replaceChildren(typeof line.text === "string" ? document.createTextNode(line.text) : line.text);
+    this.line.replaceChildren(...(line.cue ? [guideCue(line.cue)] : []), this.text);
 
     const controls: HTMLElement[] = [];
     if (line.skip) {

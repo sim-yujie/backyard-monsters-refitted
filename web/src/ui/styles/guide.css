@@ -157,6 +157,65 @@
   overflow-wrap: anywhere;
 }
 
+/* The cue and the words side by side: the picture of what to tap, then
+   Bob's one line about it (the text cut, 28 Oct). */
+.guide-bob__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.guide-bob__line .guide-bob__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.guide-cue {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+/* A yard button: a small dome with the dock's own icon, as on the dock. */
+.guide-cue--icon,
+.guide-cue--goals {
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-dome-rim);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+  box-shadow: var(--shadow-dome-edge);
+  color: var(--colour-text);
+}
+
+.guide-cue__building {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.guide-cue--pokeys {
+  gap: 2px;
+}
+
+.guide-cue__monster {
+  width: 40px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.guide-cue__count {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.guide-cue--resource .res-icon {
+  height: 32px;
+}
+
 .guide-bob__controls {
   display: flex;
   flex-wrap: wrap;
@@ -242,6 +301,10 @@
   .guide-bob__speech {
     flex: 1;
     font-size: var(--text-sm);
+  }
+
+  .guide-bob__line {
+    gap: var(--space-2);
   }
 }
 

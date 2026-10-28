@@ -7,6 +7,7 @@ import { StagedRaidLayer } from "@/game/guide/StagedRaidLayer";
 import { SPAWN_DISTANCE } from "@/game/guide/stagedRaid";
 import {
   buildMicroStep,
+  CUES,
   dotsFor,
   FREE_POKEYS,
   guideBuildOf,
@@ -43,7 +44,7 @@ import "@/ui/styles/guide-start.css";
  */
 
 /** The place line where the building follows the pointer and a click builds it. */
-const PLACE_BY_CLICK = "Move it onto open grass, then click to build it there. You can drag the yard to find space.";
+const PLACE_BY_CLICK = "Move it onto the grass and click to build it there.";
 
 /** How often the screen is looked at again for the micro step, ms. */
 const POLL_MS = 250;
@@ -297,7 +298,8 @@ export class GuidedStartRunner {
         return {
           key: `map:${step}`,
           step: this.line(step, {
-            text: step === "open-map" ? LINES.openMap : "Back to the map: tap Map.",
+            text: step === "open-map" ? LINES.openMap : LINES.mapAgain,
+            cue: CUES.openMap!,
             target: TutTarget.DOCK_MAP,
           }),
         };
@@ -308,6 +310,7 @@ export class GuidedStartRunner {
           key: "finish-now",
           step: this.line(step, {
             text: LINES.finishNow,
+            cue: CUES.finishNow!,
             target: TutTarget.HUD_SHINY,
             actions: this.next("Next", () => this.advance("finish-now")),
           }),
@@ -317,6 +320,7 @@ export class GuidedStartRunner {
           key: "protection",
           step: this.line(step, {
             text: LINES.protection,
+            cue: CUES.protection!,
             actions: this.next("Finish", () => this.advance("protection")),
           }),
         };
@@ -329,6 +333,7 @@ export class GuidedStartRunner {
         key: "collect:done",
         step: this.line("collect", {
           text: LINES.collected,
+          cue: CUES.collected!,
           actions: this.next("Next", () => this.advance("collect")),
         }),
       };
@@ -342,6 +347,7 @@ export class GuidedStartRunner {
       key: `collect:${stuck ? "stuck" : "wait"}`,
       step: this.line("collect", {
         text: LINES.collect,
+        cue: CUES.collect!,
         target: TutTarget.COLLECT_ALL,
         ...(stuck && { actions: this.next("Next", () => this.advance("collect")) }),
       }),
@@ -366,6 +372,7 @@ export class GuidedStartRunner {
       key: `${step}:${micro.key}:${here}`,
       step: this.line(step, {
         text: here ? micro.text : PLACE_BY_CLICK,
+        cue: micro.cue,
         target: here ? micro.target : TutTarget.CARRY_GHOST,
         block: micro.block,
       }),
@@ -374,19 +381,21 @@ export class GuidedStartRunner {
 
   private finishView(step: GuideStepName): View {
     const build = guideBuildOf(step)!;
+    const buildingCue = { kind: "building", type: build.type } as const;
     const id =
       this.onboarding()?.guide.building ??
       this.mounts.store.yard.buildings.find((one) => one.type === build.type && one.countdown?.kind === "build")?.id;
     const building = this.building(id);
     if (!building || id === undefined) {
       // The answer is on its way, or the yard is behind: read it again.
-      return { key: `${step}:wait`, step: this.line(step, { text: build.lines.finishTap }) };
+      return { key: `${step}:wait`, step: this.line(step, { text: build.lines.finishTap, cue: buildingCue }) };
     }
     if (this.mounts.scene.selectedBuilding() !== id) {
       return {
         key: `${step}:tap:${id}`,
         step: this.line(step, {
           text: build.lines.finishTap,
+          cue: buildingCue,
           target: `${TutTarget.BUILDING}${id}`,
         }),
         after: () => {
@@ -399,6 +408,7 @@ export class GuidedStartRunner {
       key: `${step}:finish:${id}`,
       step: this.line(step, {
         text: build.lines.finishNow,
+        cue: build.finishCue,
         target: GUIDE_FINISH,
         // From the right, so the hand does not cover Bob's own words.
         side: "right",
@@ -476,6 +486,7 @@ export class GuidedStartRunner {
         key: "pokeys:line",
         step: this.line("pokeys", {
           text: LINES.pokeys,
+          cue: CUES.pokeys!,
           target: this.walkIn?.worldBox() ? GUIDE_SCENE : this.walkInTarget(),
           actions: this.next("Next", () => {
             this.pokeysLine = false;
@@ -486,7 +497,7 @@ export class GuidedStartRunner {
       };
     }
     if (!this.busy && !this.armyTried) void this.army();
-    return { key: "pokeys:wait", step: this.line("pokeys", { text: LINES.pokeys }) };
+    return { key: "pokeys:wait", step: this.line("pokeys", { text: LINES.pokeys, cue: CUES.pokeys! }) };
   }
 
   private walkInTarget(): string | null {
@@ -502,13 +513,14 @@ export class GuidedStartRunner {
         key: "goals:nobutton",
         step: this.line("home-goals", {
           text: LINES.homeGoalsNoButton,
+          cue: CUES.homeGoalsNoButton!,
           actions: this.next("Next", () => this.advance("home-goals")),
         }),
       };
     }
     return {
       key: "goals:point",
-      step: this.line("home-goals", { text: LINES.homeGoals, target: TutTarget.DOCK_GOALS }),
+      step: this.line("home-goals", { text: LINES.homeGoals, cue: CUES.homeGoals!, target: TutTarget.DOCK_GOALS }),
     };
   }
 
@@ -653,6 +665,7 @@ export class GuidedStartRunner {
     this.shownKey = `tour:${index}`;
     this.overlay.show({
       text: stop.text,
+      ...(stop.cue && { cue: stop.cue }),
       target: stop.target && findTarget(stop.target) ? stop.target : null,
       block: false,
       dots: { index, count: TOUR.length },
