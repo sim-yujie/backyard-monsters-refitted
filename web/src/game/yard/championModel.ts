@@ -419,6 +419,8 @@ export interface FrozenView {
   readonly maxHealth: number;
   /** Seconds of feeding it has left once thawed (its relative `ft`); 0 or less is hungry at once. */
   readonly fedFor: number;
+  /** Its stats at its level and food-bonus rank (Flash's chamber showed them for the champion under the pointer). */
+  readonly stats: ChampionStats;
 }
 
 /** Whether a building's save entry counts as damaged (the server's `isDamaged`). */
@@ -458,6 +460,7 @@ export const chamberView = (save: BaseLoadResponse, now: number): ChamberView =>
         health: numberOf(champion.hp),
         maxHealth: championMaxHealth(entry, level, foodBonusOf(champion)),
         fedFor: numberOf(champion.ft),
+        stats: statsAt(entry, level, foodBonusOf(champion)),
       };
     }),
   };
@@ -495,15 +498,51 @@ export const freezeProblem = (save: BaseLoadResponse, view: ChampionView): Freez
   return null;
 };
 
+/** What stands in the way of thawing, in {@link thawGate}'s order. */
+export type ThawProblem =
+  | "noChamber"
+  | "chamberBuilding"
+  | "damaged"
+  | "noCage"
+  | "cageBuilding"
+  | "cageFull"
+  | "egg";
+
+/** {@link thawGate}'s reason as a key, for the chamber's short labels; null when it can be thawed. */
+export const thawProblem = (view: ChamberView, special = false): ThawProblem | null => {
+  if (view.kind !== "ready") return view.kind === "building" ? "chamberBuilding" : "noChamber";
+  if (view.damaged) return "damaged";
+  if (view.cage === "none") return "noCage";
+  if (view.cage === "building") return "cageBuilding";
+  if (view.active && !special) return "cageFull";
+  if (view.egg && !special) return "egg";
+  return null;
+};
+
 /** Why a frozen champion cannot be thawed now, or null (`ThawGuardian`, `:143-221`). */
 export const thawGate = (view: ChamberView, special = false): string | null => {
-  if (view.kind !== "ready") return view.kind === "building" ? "Your Champion Chamber is still being built." : "Build a Champion Chamber first.";
-  if (view.damaged) return "Your Champion Chamber is damaged. Repair it before you thaw a champion.";
-  if (view.cage === "none") return "Build a Champion Cage first.";
-  if (view.cage === "building") return "Your Champion Cage is still being built.";
-  if (view.active && !special) return `Freeze ${view.active.name} first: the cage holds one champion at a time.`;
-  if (view.egg && !special) return `Your cage holds a ${view.egg.entry.name} egg. Cancel it before you thaw a champion.`;
-  return null;
+  switch (thawProblem(view, special)) {
+    case "noChamber":
+      return "Build a Champion Chamber first.";
+    case "chamberBuilding":
+      return "Your Champion Chamber is still being built.";
+    case "damaged":
+      return "Your Champion Chamber is damaged. Repair it before you thaw a champion.";
+    case "noCage":
+      return "Build a Champion Cage first.";
+    case "cageBuilding":
+      return "Your Champion Cage is still being built.";
+    case "cageFull":
+      return view.kind === "ready" && view.active
+        ? `Freeze ${view.active.name} first: the cage holds one champion at a time.`
+        : null;
+    case "egg":
+      return view.kind === "ready" && view.egg
+        ? `Your cage holds a ${view.egg.entry.name} egg. Cancel it before you thaw a champion.`
+        : null;
+    case null:
+      return null;
+  }
 };
 
 /** The portrait at a level, clamped to the champion's levels: painted, else the original (`game/portraits.ts`). */
