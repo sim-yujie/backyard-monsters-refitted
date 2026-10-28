@@ -1,6 +1,8 @@
 import { classicLook } from "@/game/classicLook";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet, type RowCycle } from "./monsterSpriteData";
 import { windUpFrame } from "./juice";
+import { SHEET_VERSIONS } from "./sheetVersions";
+import { sheetAtQuality } from "@/game/quality";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -816,11 +818,20 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/korath_6.png": "monsters/korath_6-repaint@3x.png", // Korath level 6 repaint at 3x (the 4x sheet would be over 12,000 px), walk + attack + stomp
 };
 
-/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`). */
-export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+$/.test(url);
+/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`, `name@2x.png?v=…`). */
+export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+(\?.*)?$/.test(url);
 
-/** The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint unless Classic look is on. */
+/**
+ * The URL the sheet is served from: `/assets/monsters/<file>`, or, unless the
+ * Classic look is on, its repaint in the copy the Quality setting asks for
+ * (`game/quality.ts`), with that file's version so a repaint is fetched
+ * afresh (`sheetVersions.ts`).
+ */
 export function sheetUrl(sheet: MonsterSheet | string): string {
   const file = typeof sheet === "string" ? sheet : sheet.file;
-  return `${ASSET_ROOT}${(classicLook() ? undefined : REPAINTED_SHEETS[file]) ?? file}`;
+  const repaint = classicLook() ? undefined : REPAINTED_SHEETS[file];
+  if (!repaint) return `${ASSET_ROOT}${file}`;
+  const copy = sheetAtQuality(repaint);
+  const version = SHEET_VERSIONS[copy];
+  return `${ASSET_ROOT}${copy}${version ? `?v=${version}` : ""}`;
 }

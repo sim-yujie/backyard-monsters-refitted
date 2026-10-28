@@ -320,4 +320,6 @@ for (c, row), cell in placed.items():
     sheet.paste(cell, (c * cw, row * ch))
 sheet.save(ASSETS / f"{NAME}-repaint@{UP}x.png", optimize=True)
 sheet.resize((COLS * CELL[0], ROWS * CELL[1]), Image.LANCZOS).save(ASSETS / f"{NAME}-repaint.png", optimize=True)
+# The Quality setting's half-size copy (web/tools/sheet_copies.py).
+__import__("subprocess").run([sys.executable, str(Path(__file__).resolve().with_name("sheet_copies.py")), str(ASSETS / f"{NAME}-repaint@{UP}x.png")], check=True)
 print(f"wrote {NAME}-repaint@{UP}x.png and {NAME}-repaint.png", file=sys.stderr)

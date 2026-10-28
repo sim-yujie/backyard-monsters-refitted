@@ -1,5 +1,6 @@
 import { getSession } from "@/api/auth";
 import { fetchSoundSwitches, saveSoundSwitches, type SoundSwitches } from "@/api/sound";
+import { musicHeld, noteMusicTurnedOn, onQualityChange } from "@/game/quality";
 
 /**
  * The signed-in player's music and effects switches (beta.5), as the server
@@ -10,6 +11,10 @@ import { fetchSoundSwitches, saveSoundSwitches, type SoundSwitches } from "@/api
  * music the server starts off, never hears a note before the answer comes.
  * A change shows at once and is saved behind it; if the save fails, the
  * switch goes back to what the server holds and the caller is told.
+ *
+ * On the Medium and Low Quality settings (`game/quality.ts`) the music shows
+ * as off, and so is neither played nor downloaded, until the player turns it
+ * on; the server's switch is left as it is, so another device is not touched.
  */
 
 export type { SoundSwitches };
@@ -37,14 +42,29 @@ let loading: Promise<void> | null = null;
 /** Moves on every change and every account switch, so a late answer cannot undo a newer one. */
 let version = 0;
 const listeners = new Set<Listener>();
+/** Whether the Quality setting holds the music off on this page; decided on first use. */
+let held: boolean | null = null;
+
+const holding = (): boolean => (held ??= musicHeld());
+
+/** The switches as the game plays them: the music off while held. */
+const shown = (switches: SoundSwitches | null): SoundSwitches | null =>
+  switches?.music && holding() ? { ...switches, music: false } : switches;
 
 const publish = (next: SoundSwitches | null): void => {
   state = next;
-  for (const listener of listeners) listener(next);
+  const view = shown(next);
+  for (const listener of listeners) listener(view);
 };
 
+// Picking Low stops the music now; picking High lets it play again.
+onQualityChange(() => {
+  held = musicHeld();
+  publish(state);
+});
+
 /** The switches, or null while not known yet. */
-export const soundSwitches = (): SoundSwitches | null => state;
+export const soundSwitches = (): SoundSwitches | null => shown(state);
 
 /** Calls `listener` on every change; returns the unsubscribe. */
 export const onSoundSwitches = (listener: Listener): (() => void) => {
@@ -94,6 +114,10 @@ export const loadSoundSwitches = (): Promise<void> => {
  */
 export const setSoundSwitch = async (which: keyof SoundSwitches, on: boolean): Promise<SoundSwitches> => {
   const before = state;
+  if (which === "music" && on) {
+    held = false;
+    noteMusicTurnedOn();
+  }
   version += 1;
   const mine = version;
   loading = null;
@@ -116,5 +140,6 @@ export const resetSoundSwitchesForTest = (next: SoundSwitchesApi = defaultApi): 
   owner = null;
   loading = null;
   version = 0;
+  held = null;
   listeners.clear();
 };

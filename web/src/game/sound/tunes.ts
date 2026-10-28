@@ -50,11 +50,22 @@ export interface TuneFile {
   readonly ogg?: string;
   /** Flash's own volume for it (`SOUNDS.as:131-138`). */
   readonly volume: number;
+  /**
+   * A lighter copy (64 kbit/s), played on the Medium and Low Quality settings
+   * (`game/quality.ts`); only the new yard tune is big enough to need one.
+   */
+  readonly lite?: { readonly url: string; readonly ogg?: string };
 }
 
 export const TUNES: Readonly<Record<Tune, TuneFile>> = {
   // As loud as Flash's yard tune (-16 against -16.7 LUFS), so Flash's volume holds.
-  yard: { url: "/assets/sounds/music/yard-theme.mp3", ogg: "/assets/sounds/music/yard-theme.ogg", volume: 0.6 },
+  // 112 kbit/s (1.8 MB), and the 64 kbit/s copy (1 MB) for Medium and Low.
+  yard: {
+    url: "/assets/sounds/music/yard-theme.mp3",
+    ogg: "/assets/sounds/music/yard-theme.ogg",
+    volume: 0.6,
+    lite: { url: "/assets/sounds/music/yard-theme-lite.mp3", ogg: "/assets/sounds/music/yard-theme-lite.ogg" },
+  },
   attack: { url: "/assets/sounds/music/Music_Attack.mp3", volume: 0.7 },
   underAttack: { url: "/assets/sounds/music/Music_UnderAttack.mp3", volume: 0.7 },
   infernoYard: { url: "/assets/sounds/infernomusic/Music_IBuild.mp3", volume: 0.6 },
@@ -73,9 +84,14 @@ export const FLASH_TUNES: Readonly<Partial<Record<Tune, TuneFile>>> = {
 export const tuneFile = (tune: Tune, classic: boolean = classicLook()): TuneFile =>
   (classic ? FLASH_TUNES[tune] : undefined) ?? TUNES[tune];
 
-/** The file to stream: the Ogg copy where the browser can play it, else the MP3. */
-export const tuneUrl = (file: TuneFile, canPlayOgg: boolean): string =>
-  canPlayOgg && file.ogg ? file.ogg : file.url;
+/**
+ * The file to stream: the Ogg copy where the browser can play it, else the
+ * MP3; the lighter copy of either when `light` and the tune has one.
+ */
+export const tuneUrl = (file: TuneFile, canPlayOgg: boolean, light = false): string => {
+  const pick = (light && file.lite) || file;
+  return canPlayOgg && pick.ogg ? pick.ogg : pick.url;
+};
 
 /**
  * The map rooms' tune. Flash had none of its own: no map room file starts

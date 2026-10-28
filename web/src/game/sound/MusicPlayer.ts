@@ -1,3 +1,4 @@
+import { lightMusic } from "@/game/quality";
 import { tuneFile, tuneUrl, type Tune } from "./tunes";
 
 /**
@@ -42,6 +43,8 @@ export interface MusicPlayerOptions {
   readonly createAudio?: (url: string) => AudioLike;
   /** Whether the browser plays Ogg Vorbis; asked of the browser when left out. */
   readonly canPlayOgg?: boolean;
+  /** Whether to stream a tune's lighter copy: the Quality setting's, when left out. */
+  readonly light?: () => boolean;
   readonly gestures?: GestureTarget;
   readonly setInterval?: (run: () => void, ms: number) => unknown;
   readonly clearInterval?: (handle: unknown) => void;
@@ -75,6 +78,7 @@ interface Fading {
 export class MusicPlayer {
   private readonly createAudio: (url: string) => AudioLike;
   private readonly canPlayOgg: boolean;
+  private readonly light: () => boolean;
   private readonly gestures: GestureTarget | null;
   private readonly startTimer: (run: () => void, ms: number) => unknown;
   private readonly stopTimer: (handle: unknown) => void;
@@ -90,6 +94,7 @@ export class MusicPlayer {
   constructor(options: MusicPlayerOptions = {}) {
     this.createAudio = options.createAudio ?? defaultAudio;
     this.canPlayOgg = options.canPlayOgg ?? browserPlaysOgg();
+    this.light = options.light ?? (() => lightMusic());
     this.gestures = options.gestures ?? (typeof document === "undefined" ? null : document);
     this.startTimer = options.setInterval ?? ((run, ms) => setInterval(run, ms));
     this.stopTimer = options.clearInterval ?? ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
@@ -141,7 +146,8 @@ export class MusicPlayer {
   private element(tune: Tune): AudioLike {
     let audio = this.elements.get(tune);
     if (!audio) {
-      audio = this.createAudio(tuneUrl(tuneFile(tune), this.canPlayOgg));
+      // The copy is picked once a page: a Quality change shows from the next visit.
+      audio = this.createAudio(tuneUrl(tuneFile(tune), this.canPlayOgg, this.light()));
       audio.loop = true;
       this.elements.set(tune, audio);
     }

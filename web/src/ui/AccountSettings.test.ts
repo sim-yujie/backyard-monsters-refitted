@@ -183,6 +183,33 @@ describe("AccountSettings", () => {
     expect(localStorage.getItem("bymr.effectsQuality")).toBe("low");
   });
 
+  it("offers Quality: High / Medium / Low, High by default, kept in this browser", async () => {
+    localStorage.clear();
+    await open({});
+    const select = document.querySelector<HTMLSelectElement>("#settings-quality")!;
+    expect(select.closest("label")!.textContent).toContain(SETTINGS_TEXT.downloadLabel);
+    expect([...select.options].map((option) => option.value)).toEqual(["high", "medium", "low"]);
+    expect(select.value).toBe("high");
+    const hint = document.querySelector("#settings-quality-hint")!;
+    expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHint.high);
+    select.value = "low";
+    select.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.quality")).toBe("low");
+    expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.low);
+    expect(hint.textContent).toContain(SETTINGS_TEXT.downloadSaved);
+    localStorage.clear();
+  });
+
+  it("shows the saved Quality, even when the account fails to load", async () => {
+    localStorage.clear();
+    localStorage.setItem("bymr.quality", "medium");
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.querySelector<HTMLSelectElement>("#settings-quality")!.value).toBe("medium");
+    localStorage.clear();
+  });
+
   it("offers one Look and sound choice, Modern by default, kept in this browser for the next load", async () => {
     localStorage.clear();
     await open({});

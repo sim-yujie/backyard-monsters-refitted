@@ -10,6 +10,7 @@ import {
 import type { BaseLoadResponse } from "@/api/types";
 import { setAttackTarget, setViewTarget, type AttackTarget } from "@/game/attack/attackTarget";
 import { visitFriend } from "@/game/friends/friendVisit";
+import { mapRefreshSeconds } from "@/game/quality";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { Mr1Guide } from "@/game/guide/mr1Guide";
@@ -155,7 +156,8 @@ export class MapRoom1Scene implements Scene {
     }
     if (document.visibilityState !== "visible") return;
     this.sinceRefresh += deltaSeconds;
-    if (this.sinceRefresh >= REFRESH_SECONDS) void this.refresh();
+    // A third as often on the Low Quality setting.
+    if (this.sinceRefresh >= mapRefreshSeconds(REFRESH_SECONDS)) void this.refresh();
   }
 
   private now(): number {
@@ -311,7 +313,7 @@ export class MapRoom1Scene implements Scene {
   }
 
   private readonly onVisibility = (): void => {
-    if (document.visibilityState === "visible" && this.sinceRefresh >= REFRESH_SECONDS / 2)
+    if (document.visibilityState === "visible" && this.sinceRefresh >= mapRefreshSeconds(REFRESH_SECONDS) / 2)
       void this.refresh();
   };
 }
