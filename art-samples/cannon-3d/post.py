@@ -7,12 +7,18 @@ Per tier (t1 steel, t1b brass with lamps, t2, t3), in <tier>/ next to this file,
   body/body-4x.png            the body without its barrel on the painted tier's 4x canvas
   barrel-4x/hNN.png           the barrel alone at heading NN on the same canvas, body parts in front of it already cut out
                               (so no front layer is needed)
-  strip@2x.png + strip.json   the 32 headings at 2x, square cells with the turning point in the middle of each
+  strip32@2x.png + strip32.json   the 32 headings at 2x (barrel raised 22 degrees), square cells with the turning point
+                              in the middle of each
+  strip@2x.png + strip.json   the tilting barrel (all tiers): 5 rows (cannon3d.py PITCHES, 22 up to 18 down) x 32
+                              headings, the same kind of cells, with the aim fields per [row][heading] (owner, 28 Oct)
 Pictures for the owner, next to this file:
   tiers-compare.png           tiers 1-3: painted above, 3D below, 3x; game size underneath
   tiers-turning-3x.gif        the three 3D tiers turning together through the 32 headings, 3x
   compare-turning-3x.gif      painted (today's game files) above, 3D below, all three tiers turning, 3x
   t1-steel-vs-brass.png       the two tier 1 versions side by side, large, game size underneath
+  tilt-turning-3x.gif         tier 2 turning at a middle tilt, then raising and lowering its barrel at a few headings, 3x
+
+  python post.py tilt         only the tilt strips and tilt-turning-3x.gif
 """
 import json
 import shutil
@@ -128,15 +134,15 @@ def pieces(name):
         c = Image.new("RGBA", (c4, c4), (0, 0, 0, 0))
         c.alpha_composite(b, (-x0, -y0))
         strip.alpha_composite(resize_pm(c, (cell, cell)), (k * cell, 0))
-    strip.save(out / "strip@2x.png", optimize=True)
-    (out / "strip.json").write_text(json.dumps(dict(
+    strip.save(out / "strip32@2x.png", optimize=True)
+    (out / "strip32.json").write_text(json.dumps(dict(
         cells=32, cell_w=cell, cell_h=cell, pivot_in_body_4x=[round(px, 2), round(py, 2)],
         body_4x_size=[body.width, body.height], painted_pivot_in_body_4x=cam["painted_pivot_4x"],
         rule="cell k = trunc(bearing / 11.25); cell k shows heading 11.25k (the same 32 headings as the painted strip)",
         note="pivot = middle of each cell; heading = ground bearing in degrees (0 down-right on screen, 45 at the viewer). "
              "Rendered from cannon3d.py: the body's parts that stand in front of the barrel are already cut out of each "
              "cell, so no front layer is needed."), indent=1))
-    aim_fields.merge(out / "strip.json", json.loads((R / name / "aim.json").read_text()),
+    aim_fields.merge(out / "strip32.json", json.loads((R / name / "aim.json").read_text()),
                      dict(camera_elevation_deg=cam["elevation"]))
     full = []
     for b in barrels:
@@ -270,9 +276,102 @@ def main():
     g.convert("RGB").save(HERE / "t1-steel-vs-brass.png", optimize=True)
 
     for n in data:
-        print(n, "cell", json.loads((HERE / n / "strip.json").read_text())["cell_w"], "pivot", data[n][0]["pivot_4x"],
+        print(n, "cell", json.loads((HERE / n / "strip32.json").read_text())["cell_w"], "pivot", data[n][0]["pivot_4x"],
               "painted", data[n][0]["painted_pivot_4x"])
     print("gifs", size1 // 1024, "KB", size2 // 1024, "KB")
+    tilt_main({n: data[n][1] for n in data})
 
 
-main()
+# ------------------------------------------------------------------------------------------------- the tilting barrel
+TILT_GIF_TIER = "t2"
+TILT_SIDE = (12, 4, 28, 20)    # the headings the tilt GIF stops at to raise and lower the barrel: left, at the viewer, right, away
+
+
+def tilt_pieces(name):
+    """tT/strip.json + strip@2x.png: the barrel at every tilt (rows, cannon3d.py PITCHES, degrees down, negative = raised)
+    and 32 headings, square cells with the pivot in the middle, laid out as strip32. Returns the 4x barrels by
+    [tilt][heading], the tilts and the 2x cell size."""
+    src, out = R / name, HERE / name
+    cam = json.loads((src / "camera.json").read_text())
+    tl = json.loads((src / "aim_tilt.json").read_text())
+    px, py = cam["pivot_4x"]
+    pitches = tl["pitch_deg"]
+    heads = [[Image.open(src / "tilt-4x" / f"r{r}_h{k:02d}.png").convert("RGBA") for k in range(32)]
+             for r in range(len(pitches))]
+    reach = max(max(abs(b[0] - px), abs(b[2] - px), abs(b[1] - py), abs(b[3] - py))
+                for row in heads for b in (h.getbbox() for h in row))
+    c4 = int(-(-(2 * reach + 8) // 8) * 8)
+    cell = c4 // 2
+    x0, y0 = round(px - c4 / 2), round(py - c4 / 2)
+    strip = Image.new("RGBA", (cell * 32, cell * len(pitches)), (0, 0, 0, 0))
+    for r, row in enumerate(heads):
+        for k, b in enumerate(row):
+            c = Image.new("RGBA", (c4, c4), (0, 0, 0, 0))
+            c.alpha_composite(b, (-x0, -y0))
+            strip.alpha_composite(resize_pm(c, (cell, cell)), (k * cell, r * cell))
+    strip.save(out / "strip@2x.png", optimize=True)
+    body = Image.open(src / "body-4x.png")
+    (out / "strip.json").write_text(json.dumps(dict(
+        cells=32, rows=len(pitches), cell_w=cell, cell_h=cell, pivot_in_body_4x=[round(px, 2), round(py, 2)],
+        body_4x_size=[body.width, body.height], painted_pivot_in_body_4x=cam["painted_pivot_4x"], pitch_deg=pitches,
+        rule="row r = the barrel tilted pitch_deg[r] degrees DOWN (negative = raised); cell k in a row = ground bearing "
+             "11.25k (0 = down-right on screen, 45 = at the viewer); pivot in each cell's middle. aim_deg, muzzle, "
+             "ground_deg, aim_len are [row][cell]. Row 0 (22 up, the same as strip32 and the still) is for the farthest shots.",
+        muzzle_height_px=tl["muzzle_height_px"], muzzle_height_screen_px=tl["muzzle_height_screen_px"],
+        ground_below_pivot_px=tl["ground_below_pivot_px"], elevation_deg=tl["elevation_deg"],
+        tilt_rule="A cannon lobs: the farther the target, the higher the barrel. From the turret's ground point (pivot + "
+                  "[0, ground_below_pivot_px]) to the target's feet on screen (dx, dy), the ground distance is "
+                  "d = hypot(dx, dy / sin(30)) (the game's ground); f = clamp((d - 0.2 range) / (0.8 range), 0, 1) with "
+                  "range the tower's range; want = 18 - 40 f degrees down; take the row whose pitch_deg is closest (that is "
+                  "row round((1 - f) * 4)). Then the cell whose aim_deg (in that row) is closest to the screen angle from "
+                  "pivot + muzzle to the target. muzzle_height_px (the muzzle above the ground, level barrel, game px "
+                  "measured like a ground distance) is there for a straight-aim rule, but is deliberately not called "
+                  "lens_height_px: the Laser's straight aim would only ever pick the lowest row.",
+        note="body parts standing in front of the barrel are already cut out of each cell, so no front layer is needed. "
+             "strip32 (32 headings, barrel raised 22 degrees, one row) stays as it was."), indent=1))
+    rows = tl["rows"]
+    aim_fields.merge(out / "strip.json", {k: [r[k] for r in rows] for k in aim_fields.KEYS},
+                     dict(camera_elevation_deg=tl["elevation_deg"]))
+    return heads, pitches, cell
+
+
+def tilt_main(bodies=None):
+    """The tilt strips of every tier rendered with tilts, and tilt-turning-3x.gif: TILT_GIF_TIER turning through the 32
+    headings at a middle tilt, then raising and lowering its barrel at a few headings, 3x."""
+    font = ImageFont.truetype(FONT, 20)
+    T = {n: tilt_pieces(n) for n in ("t1", "t1b", "t2", "t3") if (R / n / "aim_tilt.json").exists()}
+    heads, pitches, _ = T[TILT_GIF_TIER]
+    body = (bodies or {}).get(TILT_GIF_TIER) or Image.open(R / TILT_GIF_TIER / "body-4x.png").convert("RGBA")
+    mid = len(pitches) // 2
+    nod = list(range(len(pitches))) + list(range(len(pitches) - 2, 0, -1))
+    seq = [(mid, k) for k in range(32)] + [(r, k) for k in TILT_SIDE for r in nod + nod]
+    frames4 = []
+    for r, k in seq:
+        f = body.copy()
+        f.alpha_composite(heads[r][k])
+        frames4.append(f)
+    box = union([f.getbbox() for f in frames4], 10)
+    sm = [scale(f.crop(box), 3 / UP) for f in frames4]
+    w, h = sm[0].size
+    lab = 34
+    bg = grass(w + 20, h + lab + 10, seed=5)
+    frames = []
+    for (r, k), im in zip(seq, sm):
+        f = bg.copy()
+        f.alpha_composite(im, (10, lab))
+        d = ImageDraw.Draw(f)
+        d.rectangle((0, 0, f.width, lab - 4), fill=(20, 20, 20, 255))
+        p = pitches[r]
+        way = "up" if p < 0 else "down" if p > 0 else "level"
+        d.text((8, 5), f"Tier {TILT_GIF_TIER[1]}: barrel {abs(p)}° {way}" if p else f"Tier {TILT_GIF_TIER[1]}: barrel level",
+               fill=(255, 255, 255, 255), font=font)
+        frames.append(f)
+    n = gif(frames, HERE / "tilt-turning-3x.gif", ms=110)
+    print("tilt strips", {u: (len(T[u][1]), T[u][2]) for u in T}, "tilt gif", n // 1024, "KB", len(frames), "frames")
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["tilt"]:
+        tilt_main()
+    else:
+        main()

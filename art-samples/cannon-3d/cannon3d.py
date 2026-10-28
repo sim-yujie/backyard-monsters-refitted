@@ -42,10 +42,10 @@ CANVAS = {
     3: dict(size=(620, 960), box=(163, 515, 421, 897), pivot=(291, 621)),
 }
 TILT = 22.0                       # the barrel's raise, degrees (the 32-heading strip)
-PITCHES = [-30, -20, -10, 0, 10]  # the tilt strip's rows, degrees DOWN (negative = raised) (owner, 28 Oct: the barrel tilts
-                                  # with the target's distance, as the Laser's head does): row 0 lobs at the far edge of the
-                                  # range, the last row points a little down at a creep next to the tower. More than 30 up
-                                  # the breech sinks into the collar; more than 10 down the muzzle meets the ring and horns.
+PITCHES = [-22, -12, -2, 8, 18]   # the tilt strip's rows, degrees DOWN (negative = raised) (owner, 28 Oct: the barrel tilts
+                                  # with the target's distance, as the Laser's head does): row 0 is the 22 degrees up of the
+                                  # still and the 32-heading strip (the far shot, and the game's still picture), the last row
+                                  # points down at a creep next to the tower. Much more up and the breech sinks into the collar.
 TURRET_SCALE = 1.5              # the turning part, against the drum
 SECTION = 0.84                    # one more striped section (stripes + band) per tier
 
