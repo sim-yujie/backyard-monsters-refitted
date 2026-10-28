@@ -330,6 +330,66 @@ describe("the mailbox screen", () => {
     expect(api.sent[0]).toEqual({ threadid: 0, targetid: 123, subject: "Truce?", message: "Shall we?" });
   });
 
+  // The owner's report (beta 4.1): a friend never written to was not on the list.
+  it("writes a new message to a friend who has no thread yet", async () => {
+    const api = fakeApi([[]], {}, {});
+    api.sendResult = { ok: true, threadid: 9 };
+    const friends = vi.fn(async () => [{ userid: 3119, name: "Dmtwo" }]);
+    const { host } = await openScreen(api, { friends });
+
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    const to = host.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => option.textContent)).toEqual(["Dmtwo"]);
+    type(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")!, "Hello friend");
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+    expect(api.sent).toEqual([{ threadid: 0, targetid: 3119, subject: "(no subject)", message: "Hello friend" }]);
+  });
+
+  it("offers friends and past contacts together, each once", async () => {
+    const api = fakeApi([[message()]], {});
+    const friends = async () => [
+      { userid: 88, name: "Acorn" },
+      { userid: 99, name: "Clover" },
+    ];
+    const { host } = await openScreen(api, { friends });
+
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    const to = host.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => option.textContent)).toEqual(["Acorn", "Bramblefoot", "Clover"]);
+  });
+
+  it("still offers past contacts when the friends list cannot load", async () => {
+    const api = fakeApi([[message()]], {});
+    const { host } = await openScreen(api, { friends: () => Promise.reject(new Error("offline")) });
+
+    expect(rows(host)).toHaveLength(1);
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    const to = host.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => option.textContent)).toEqual(["Acorn", "Bramblefoot"]);
+  });
+
+  it("offers the friends once they arrive to a new message opened before them", async () => {
+    const api = fakeApi([[]], {}, {});
+    let arrive: (friends: { userid: number; name: string }[]) => void = () => undefined;
+    const friends = () => new Promise<{ userid: number; name: string }[]>((resolve) => (arrive = resolve));
+    const host = document.createElement("div");
+    document.body.append(host);
+    hosts.push(host);
+    const screen = new MailboxScreen({ api, myId: () => ME, now: () => NOW, friends }).mount(host);
+    void screen.openCompose();
+    await settle();
+    expect(host.querySelector(".mail-compose__to")).toBeNull();
+
+    arrive([{ userid: 3119, name: "Dmtwo" }]);
+    await settle();
+    const to = host.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => option.textContent)).toEqual(["Dmtwo"]);
+  });
+
   it("says who to write to when there is no one yet", async () => {
     const api = fakeApi([[]], {}, {});
     const { host } = await openScreen(api);

@@ -4,6 +4,8 @@ import type { MailApi, MailMessage } from "@/api/mail";
 import { MailButton, unreadText } from "./MailButton";
 import { MailDoor } from "./MailDoor";
 import { YardDock } from "@/ui/yard/YardDock";
+import { friendsStore } from "@/game/friends/friendsStore";
+import { fixtureFriend } from "@/game/friends/friendsFixture";
 
 /** The Mail button's badge, and the door that decides what it says (#193). */
 
@@ -91,6 +93,22 @@ describe("MailDoor", () => {
     expect(container.querySelector(".mail-compose__fixed")?.textContent).toBe("To Thistle");
     door.close();
     expect(door.isOpen).toBe(false);
+  });
+
+  it("offers the shared friends list's friends as recipients of a new message", async () => {
+    const refresh = vi.spyOn(friendsStore, "refresh").mockResolvedValue(undefined);
+    const listed = vi.spyOn(friendsStore, "friends", "get").mockReturnValue([fixtureFriend(3119, { username: "Dmtwo" })]);
+    const container = document.createElement("div");
+    const door = new MailDoor({ style: "dock", container, api: api([]) });
+    await door.open();
+    await settle();
+    container.querySelector<HTMLButtonElement>(".mail-list__new")!.click();
+    const to = container.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => [option.value, option.textContent])).toEqual([["3119", "Dmtwo"]]);
+    expect(refresh).toHaveBeenCalled();
+    refresh.mockRestore();
+    listed.mockRestore();
+    door.destroy();
   });
 });
 

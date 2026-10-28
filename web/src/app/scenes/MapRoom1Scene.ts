@@ -87,6 +87,8 @@ export class MapRoom1Scene implements Scene {
           visitFriend(friend, save ? { resources: save.resources ?? null, credits: save.credits } : undefined);
           context.goTo(SceneName.YARD);
         },
+        // The Friends list's Message: a new message to them.
+        onMessageFriend: (friend) => void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
         onView: (target) => this.view(target),
         onAttack: (target) => this.attack(target),
         onAction: (action) => this.act(action),

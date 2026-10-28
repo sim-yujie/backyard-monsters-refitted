@@ -570,6 +570,11 @@ export class YardScene implements Scene {
       },
       // The Friends list's Visit (#372).
       onVisitFriend: (friend) => this.visitFriendYard(friend),
+      // The Friends list's Message: a new message to them. Only the own yard has the mailbox.
+      ...(!this.target && {
+        onMessageFriend: (friend: Friend) =>
+          void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
+      }),
     });
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
@@ -623,9 +628,10 @@ export class YardScene implements Scene {
       this.dock.setAttack({ disabled: true, title: `Attack ${target.name}'s yard` });
     }
     if (!target) {
-      this.friendsBar = new FriendsBar({ onVisit: (friend) => this.visitFriendYard(friend) }).mount(
-        context.overlay.content,
-      );
+      this.friendsBar = new FriendsBar({
+        onVisit: (friend) => this.visitFriendYard(friend),
+        onMessage: (friend) => void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
+      }).mount(context.overlay.content);
       // A collected gift lands in this pool; the Gifts tab warns against its caps.
       this.clearPlayerPool = setPlayerPool({
         read: () => (this.store ? { resources: this.store.resources, caps: this.store.caps } : null),

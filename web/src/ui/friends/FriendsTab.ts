@@ -9,8 +9,8 @@ import { button, make, playerRow, section, StatusLine, type FriendsTabView, type
  * #370): "12 of 100 friends", then a row per friend with their critter,
  * name, level and how recently they were about, online first, then highest
  * level. Each row has Remove (asked twice, it is silent and at once for
- * both); Visit, Send gift and Block show when a later package hands their
- * action in (WP5, WP8, WP9).
+ * both); Visit, Message, Send gift and Block show when the screen's opener
+ * hands their action in (WP5, WP8, WP9; Message opens the mailbox).
  *
  * The rows come from the store, which this tab refreshes when it comes
  * forward; a removal takes the row off at once.
@@ -26,6 +26,8 @@ export interface FriendActions {
   readonly onVisit?: (friend: Friend) => void;
   /** Send them a gift (WP8). */
   readonly onGift?: (friend: Friend) => void;
+  /** Write to them: the mailbox opens a new message to them. */
+  readonly onMessage?: (friend: Friend) => void;
   /** Block them (WP9). */
 }
 
@@ -47,6 +49,8 @@ export const FRIENDS_TEXT = {
   cancel: "Keep",
   removed: (name: string): string => `${name} is no longer your friend.`,
   visit: "Visit",
+  message: "Message",
+  messageTitle: "Write to this friend",
   gift: "Gift",
   giftSent: "Sent",
   giftTitle: "Send gift",
@@ -237,8 +241,13 @@ export class FriendsTab implements FriendsTabView {
       return row;
     }
     const actions: HTMLElement[] = [];
-    const { onVisit, onGift } = this.options;
+    const { onVisit, onGift, onMessage } = this.options;
     if (onVisit) actions.push(button(FRIENDS_TEXT.visit, () => onVisit(friend), "primary"));
+    if (onMessage) {
+      const message = button(FRIENDS_TEXT.message, () => onMessage(friend));
+      message.title = FRIENDS_TEXT.messageTitle;
+      actions.push(message);
+    }
     if (onGift) {
       const gift = button(friend.giftSentToday ? FRIENDS_TEXT.giftSent : FRIENDS_TEXT.gift, () => onGift(friend));
       gift.disabled = friend.giftSentToday;

@@ -209,6 +209,17 @@ describe("the card", () => {
     expect(onVisit).toHaveBeenCalledWith(expect.objectContaining({ userid: 9 }));
   });
 
+  it("hands the friend to onMessage, after Visit, and closes", async () => {
+    const onMessage = vi.fn();
+    await setup([friend(9, { username: "Vi" })], { onVisit: vi.fn(), onMessage });
+    slots()[0]!.click();
+    const buttons = [...document.querySelectorAll<HTMLElement>(".friends-bar__card-button")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["Visit", "Message", "Send gift", "Friends list"]);
+    buttons[1]!.click();
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ userid: 9 }));
+    expect(document.querySelector(".friends-bar__card")).toBeNull();
+  });
+
   it("closes on a second press of the same portrait", async () => {
     await setup();
     slots()[0]!.click();

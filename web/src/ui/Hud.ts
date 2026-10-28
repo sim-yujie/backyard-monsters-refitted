@@ -143,6 +143,11 @@ export interface HudOptions {
    * Without it the list has no Visit button.
    */
   onVisitFriend?: (friend: Friend) => void;
+  /**
+   * The Friends list's Message: the scene opens its mailbox on a new message
+   * to the friend. Without it the list has no Message button.
+   */
+  onMessageFriend?: (friend: Friend) => void;
 }
 
 /** At or under this width the corner layout is the phone's (`yard-hud.css`). */
@@ -413,6 +418,7 @@ export class Hud {
         onClosedWithFocus: () => this.accountMenu?.focus(),
         onCount: (waiting) => this.accountMenu?.setFriendsCount(waiting),
         ...(options.onVisitFriend && { onVisit: options.onVisitFriend }),
+        ...(options.onMessageFriend && { onMessage: options.onMessageFriend }),
       });
       this.friendsDoor = friends;
       this.accountMenu = new AccountMenu({

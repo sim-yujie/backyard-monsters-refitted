@@ -142,6 +142,26 @@ describe("FriendsTab", () => {
     expect(calls).toContainEqual(["block", 4]);
   });
 
+  // The owner's report (beta 4.1): no way to write to a friend from the list.
+  it("shows Message when the opener hands it in, and hands the friend over", async () => {
+    const bare = setup();
+    await bare.tab.show();
+    expect(bare.tab.element.textContent).not.toContain(FRIENDS_TEXT.message);
+    bare.tab.destroy();
+
+    const { api, store } = (() => {
+      const made = fixtureApi({ list: fixtureList([fixtureFriend(6, { username: "Eve" })]) });
+      return { api: made.api, store: new FriendsStore({ api: made.api }) };
+    })();
+    const onMessage = vi.fn();
+    const tab = new FriendsTab({ api, store, onFind: vi.fn(), onMessage });
+    document.body.append(tab.element);
+    await tab.show();
+    const eve = tab.element.querySelector('[data-userid="6"]');
+    buttonIn(eve, FRIENDS_TEXT.message).click();
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ userid: 6, username: "Eve" }));
+  });
+
   it("wears the bar's wrench and gift marks", async () => {
     const { tab } = setup({
       list: {

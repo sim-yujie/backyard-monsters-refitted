@@ -219,18 +219,31 @@ export const teamAnswerable = (items: readonly MailItem[]): boolean =>
   items.some((item) => item.team && item.type === TEAM_MESSAGE);
 
 /**
- * Everyone the player has written with, by name, the game and deleted
- * accounts left out: the recipients a new message offers.
+ * The recipients a new message offers, by name: the player's friends and
+ * everyone they have written with, each once, the game and deleted accounts
+ * left out. Friends count even before the first message: the mail targets
+ * only name players with a thread, so a new friend was missing from the list.
  */
-export const contactsOf = (targets: Readonly<Record<string, MailTarget>>): MailContact[] =>
-  Object.entries(targets)
-    .filter(([, target]) => !target.deleted)
-    .map(([userid, target]) => ({ userid: Number(userid), name: target.first_name || `Player ${userid}` }))
+export const contactsOf = (
+  targets: Readonly<Record<string, MailTarget>>,
+  friends: readonly MailContact[] = [],
+): MailContact[] => {
+  const contacts = new Map<number, MailContact>();
+  for (const { userid, name } of friends) {
+    contacts.set(userid, { userid, name: name || `Player ${userid}` });
+  }
+  for (const [key, target] of Object.entries(targets)) {
+    const userid = Number(key);
+    if (target.deleted || contacts.has(userid)) continue;
+    contacts.set(userid, { userid, name: target.first_name || `Player ${key}` });
+  }
+  return [...contacts.values()]
     .filter(
       (contact) =>
         Number.isSafeInteger(contact.userid) && contact.userid !== SYSTEM_SENDER && contact.userid !== SUPPORT_SENDER,
     )
     .sort((one, other) => one.name.localeCompare(other.name) || one.userid - other.userid);
+};
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 

@@ -85,6 +85,7 @@ export class FriendsScreen {
         store: this.store,
         onFind: () => void this.open("find"),
         ...(options.onVisit && { onVisit: options.onVisit }),
+        ...(options.onMessage && { onMessage: options.onMessage }),
         onGift:
           options.onGift ??
           ((friend) => void openGiftPicker(friend, this.element.parentElement, { api, store: this.store })),

@@ -1,5 +1,5 @@
 import { getSession } from "@/api/auth";
-import type { FriendsApi } from "@/api/friends";
+import type { Friend, FriendsApi } from "@/api/friends";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { setFriendsOpener } from "@/game/friends/friendsView";
 import type { FriendActions } from "./FriendsTab";
@@ -74,12 +74,19 @@ export class FriendsDoor {
     if (this.screen) return this.screen;
     const container = this.options.container();
     if (!container) return null;
-    const { onVisit, onGift, api } = this.options;
+    const { onVisit, onGift, onMessage, api } = this.options;
     this.screen = new FriendsScreen({
       store: this.store,
       ...(api && { api }),
       ...(onVisit && { onVisit }),
       ...(onGift && { onGift }),
+      // The mailbox docks where this screen does: it makes way.
+      ...(onMessage && {
+        onMessage: (friend: Friend) => {
+          this.close();
+          onMessage(friend);
+        },
+      }),
       onClose: (hadFocus) => {
         if (hadFocus) this.options.onClosedWithFocus?.();
       },
