@@ -366,7 +366,7 @@ describe("attack notices with their numbers (less-text job 3)", () => {
 
   it("an older notice, with no numbers, keeps its sentence", () => {
     const job = numbered();
-    const old = { ...job, detail: { text: job.detail.text, x: null, y: null } } as CompletedJob;
+    const old = { ...job, detail: { text: SENTENCE, x: null, y: null } } as CompletedJob;
     const line = jobLine("away", [old], null);
     expect(line.querySelector(".attack-notice")).toBeNull();
     expect(line.textContent).toBe(SENTENCE);
