@@ -808,8 +808,8 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/korath_2.png": "monsters/korath_2-repaint@4x.png", // Korath level 2 repaint (all 16 headings, walk + attack, ground shadow)
   "monsters/korath_3.png": "monsters/korath_3-repaint@4x.png", // Korath level 3 repaint (all 16 headings, walk + attack, ground shadow)
   "monsters/korath_4.png": "monsters/korath_4-repaint@4x.png", // Korath level 4 repaint (all 16 headings, walk + attack, ground shadow)
-  "monsters/korath_5.png": "monsters/korath_5-repaint@3x.png", // Korath level 5 repaint at 3x (the 4x sheet would be over 12,000 px), no stomp rows
-  "monsters/korath_6.png": "monsters/korath_6-repaint@3x.png", // Korath level 6 repaint at 3x (the 4x sheet would be over 12,000 px), no stomp rows
+  "monsters/korath_5.png": "monsters/korath_5-repaint@3x.png", // Korath level 5 repaint at 3x (the 4x sheet would be over 12,000 px), walk + attack + stomp
+  "monsters/korath_6.png": "monsters/korath_6-repaint@3x.png", // Korath level 6 repaint at 3x (the 4x sheet would be over 12,000 px), walk + attack + stomp
 };
 
 /** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`). */
