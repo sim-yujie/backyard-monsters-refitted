@@ -283,7 +283,13 @@ export class TipRunner {
   private onScreen({ id, root, header }: GuideEvents["screen"]): void {
     this.prune();
     const ref: ScreenRef = { screen: id, root };
-    this.recent = [ref, ...this.recent.filter((one) => one.screen !== id)].slice(0, RECENT);
+    // A scene's screen means the scene before it is gone. The yard, the attack
+    // and Map Room 2 all hand over the overlay's content layer, which stays on
+    // the page, so the attack's would otherwise still look open on the yard
+    // and its tips would start there when the guided start ends.
+    const gone = (one: ScreenRef): boolean =>
+      one.screen === id || (SCENE_SCREENS.has(id) && SCENE_SCREENS.has(one.screen));
+    this.recent = [ref, ...this.recent.filter((one) => !gone(one))].slice(0, RECENT);
     this.attachHelp(ref, header);
     this.offer(ref);
   }

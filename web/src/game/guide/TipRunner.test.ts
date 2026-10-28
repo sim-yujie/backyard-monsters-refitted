@@ -78,6 +78,7 @@ const TEST_TIPS: Partial<Record<GuideScreen, readonly Tip[]>> = {
   ],
   [GuideScreen.MR2]: [{ text: "Range.", target: TutTarget.MR2_RANGE }],
   [GuideScreen.SHOP]: [{ text: "Workers.", target: TutTarget.SHOP_WORKERS, side: "below" }],
+  [GuideScreen.ATTACK]: [{ text: "Drop on open ground." }],
 };
 
 const setup = (options: { touch?: boolean; send?: (screen: GuideScreen) => Promise<unknown> } = {}) => {
@@ -265,6 +266,20 @@ describe("when tips show by themselves", () => {
     tips.setOnboarding(onboarding("skipped"));
     await settle();
     expect(view()!.shown).toMatchObject({ text: "Click Collect all." });
+  });
+
+  it("does not start the attack's tips on the yard when the guided start ends there", async () => {
+    const { bus, view, runner: tips } = setup();
+    tips.setOnboarding(onboarding("active"));
+    // The attack and the yard both hand over the overlay's content layer, which stays on the page.
+    const layer = yard();
+    bus.emit("screen", { id: GuideScreen.ATTACK, root: layer, header: null });
+    bus.emit("screen", { id: GuideScreen.YARD, root: layer, header: null });
+    await settle();
+
+    tips.setOnboarding(onboarding("done"));
+    await settle();
+    expect(view()?.shown ?? null).toBeNull();
   });
 
   it("stops unseen tips when the guided start begins", async () => {
