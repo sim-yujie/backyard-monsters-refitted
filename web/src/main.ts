@@ -12,15 +12,20 @@ import "@/ui/styles/repair.css";
 import "@/ui/styles/recycle.css";
 import "@/ui/styles/takeover.css";
 import "@/ui/styles/moveyards.css";
+import "@/ui/styles/skin-flash.css";
 
 import { App } from "@/app/App";
 import { installErrorLog } from "@/game/bugReport/errorLog";
 import { installErrorReporter } from "@/game/bugReport/errorReporter";
+import { applySkin } from "@/ui/skin";
 
 // The bug report's list of recent errors, from the very start, and the
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
 installErrorLog();
 installErrorReporter();
+
+// Trial window skins (`?skin=flash`).
+applySkin();
 
 const host = document.querySelector<HTMLElement>("#game-root");
 

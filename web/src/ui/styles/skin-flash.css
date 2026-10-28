@@ -1,0 +1,201 @@
+/*
+ * Skin "Flash refreshed" (trial, `?skin=flash`, see skin.ts): the old Flash
+ * game's light pop-ups redrawn as painted art. Every `.panel` becomes a cream
+ * parchment window with a bone-cornered 9-slice frame (frame.webp), its title a
+ * red ribbon, its close button a red disc; tabs and buttons use the same kit.
+ * Art: web/public/ui/skin/flash/ (from worktrees/ui-skin/mockups, Codex paintings).
+ * The panel's own tokens are swapped for warm dark-on-cream ones, so what is
+ * inside keeps working without its own rules.
+ */
+
+:root[data-skin="flash"] .panel {
+  --skin: url("/ui/skin/flash/");
+  --colour-surface-raised: transparent;
+  --colour-surface-overlay: rgb(120 80 30 / 10%);
+  --colour-surface-sunken: rgb(120 80 30 / 10%);
+  --colour-surface-input: #fffaf0;
+  --colour-surface-control: rgb(120 80 30 / 12%);
+  --colour-surface-control-hover: rgb(120 80 30 / 20%);
+  --colour-surface-selected: rgb(120 80 30 / 18%);
+  --colour-border: rgb(90 55 20 / 25%);
+  --colour-border-subtle: rgb(90 55 20 / 16%);
+  --colour-border-strong: rgb(90 55 20 / 40%);
+  --colour-border-dashed: rgb(90 55 20 / 35%);
+  --colour-tile-glow: rgb(255 255 255 / 45%);
+  --colour-tile-ground: rgb(120 80 30 / 6%);
+  --colour-text: #3d2410;
+  --colour-text-strong: #2a1606;
+  --colour-text-secondary: #6a4626;
+  --colour-text-muted: #7a5a3a;
+  --colour-text-disabled: #8a7356;
+  --colour-text-inverse: #fff8e8;
+  --colour-accent: #e07a12;
+  --colour-accent-hover: #f08c22;
+  --colour-accent-pressed: #c86a0a;
+  --colour-accent-text: #ffffff;
+  --colour-accent-soft: rgb(224 122 18 / 16%);
+  --colour-accent-line: rgb(224 122 18 / 60%);
+  --colour-warning: #9a5b00;
+  --colour-warning-soft: rgb(154 91 0 / 10%);
+  --colour-danger: #c42b2b;
+  --colour-success: #1f7a3a;
+  --colour-info: #2a55c4;
+  --colour-gain: #176b31;
+  --colour-loss: #b42323;
+  --colour-change-halo: rgb(255 255 255 / 70%);
+  --colour-meter: #6a5236;
+  --skin-outline: #5a2a0a;
+
+  color: var(--colour-text);
+  background: none;
+  border-style: solid;
+  border-width: 26px;
+  border-radius: 0;
+  border-image: url("/ui/skin/flash/frame.webp") 95 fill / 47.5px / 0 round;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  overflow: visible;
+  filter: drop-shadow(0 10px 14px rgb(0 0 0 / 45%));
+  color-scheme: light;
+}
+
+/* Title: a red ribbon riding on the top edge; the close button a red disc on the corner. */
+:root[data-skin="flash"] .panel__titlebar {
+  position: relative;
+  justify-content: center;
+  min-height: 34px;
+  margin: -44px 0 2px;
+  padding: 0 var(--space-3);
+  border-bottom: 0;
+}
+
+:root[data-skin="flash"] .panel__title {
+  flex: none;
+  max-width: calc(100% - 40px);
+  min-width: 160px;
+  height: 58px;
+  padding: 0 4px 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-style: solid;
+  border-width: 0 58px;
+  border-image: url("/ui/skin/flash/title.webp") 0 130 fill / 0 58px / 0 stretch;
+  color: #fff6dc;
+  font-size: 22px;
+  text-shadow:
+    0 2px 0 #6b1010, 2px 0 0 #6b1010, -2px 0 0 #6b1010, 0 -2px 0 #6b1010,
+    2px 2px 0 #6b1010, -2px 2px 0 #6b1010, 2px -2px 0 #6b1010, -2px -2px 0 #6b1010;
+}
+
+:root[data-skin="flash"] .panel__titlebar > .btn[aria-label="Close"] {
+  position: absolute;
+  top: 6px;
+  right: -40px;
+  width: 46px;
+  min-width: 0;
+  height: 46px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: url("/ui/skin/flash/close.webp") center / contain no-repeat;
+  color: transparent;
+  font-size: 0;
+  filter: drop-shadow(0 3px 2px rgb(0 0 0 / 35%));
+}
+
+:root[data-skin="flash"] .panel__titlebar > .btn[aria-label="Close"]:hover:not(:disabled) {
+  background: url("/ui/skin/flash/close.webp") center / contain no-repeat;
+  filter: drop-shadow(0 3px 2px rgb(0 0 0 / 35%)) brightness(1.08);
+}
+
+/* Buttons: the one thing to do is the chunky orange-yellow pill; a second choice the green one. */
+:root[data-skin="flash"] .panel .btn--primary,
+:root[data-skin="flash"] .panel .btn--outline {
+  min-height: 46px;
+  padding: 0 2px 5px;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 26px;
+  border-radius: 0;
+  border-image: url("/ui/skin/flash/button.webp") 0 63 fill / 0 26px / 0 stretch;
+  background: none;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-shadow:
+    0 2px 0 var(--skin-outline), 2px 0 0 var(--skin-outline), -2px 0 0 var(--skin-outline), 0 -2px 0 var(--skin-outline),
+    1.5px 1.5px 0 var(--skin-outline), -1.5px 1.5px 0 var(--skin-outline), 1.5px -1.5px 0 var(--skin-outline), -1.5px -1.5px 0 var(--skin-outline);
+}
+
+:root[data-skin="flash"] .panel .btn--outline {
+  --skin-outline: #245a0c;
+
+  border-width: 0 22px;
+  border-image: url("/ui/skin/flash/button-small.webp") 0 50 fill / 0 22px / 0 stretch;
+}
+
+:root[data-skin="flash"] .panel .btn--primary:hover:not(:disabled),
+:root[data-skin="flash"] .panel .btn--outline:hover:not(:disabled) {
+  background: none;
+  filter: brightness(1.07);
+}
+
+:root[data-skin="flash"] .panel .btn--primary:active:not(:disabled) {
+  background: none;
+  border-image-source: url("/ui/skin/flash/button-pressed.webp");
+  transform: translateY(2px);
+}
+
+:root[data-skin="flash"] .panel .btn--primary:disabled,
+:root[data-skin="flash"] .panel .btn--outline:disabled {
+  background: none;
+  color: #fbf3e2;
+  filter: grayscale(0.9) brightness(0.92);
+}
+
+/* Tabs: parchment tabs with bone ends; the chosen one light, the rest khaki. */
+:root[data-skin="flash"] .panel .tabs {
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  align-items: flex-end;
+}
+
+:root[data-skin="flash"] .panel .tabs__tab {
+  min-height: 42px;
+  padding: 3px 2px 0;
+  border-style: solid;
+  border-width: 0 19px;
+  border-radius: 0;
+  border-image: url("/ui/skin/flash/tab-off.webp") 0 45 fill / 0 19px / 0 stretch;
+  background: none;
+  color: #7a5a36;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+}
+
+:root[data-skin="flash"] .panel .tabs__tab:hover {
+  background: none;
+  color: #4a2a10;
+}
+
+:root[data-skin="flash"] .panel .tabs__tab[aria-selected="true"],
+:root[data-skin="flash"] .panel .tabs__tab[aria-current="true"],
+:root[data-skin="flash"] .panel .tabs__tab[aria-pressed="true"] {
+  min-height: 46px;
+  border-image-source: url("/ui/skin/flash/tab-on.webp");
+  background: none;
+  color: #3d2410;
+  box-shadow: none;
+}
+
+/* A modal's frame already casts its shadow. */
+:root[data-skin="flash"] .popup-backdrop > .panel {
+  box-shadow: none;
+}
