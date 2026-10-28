@@ -133,9 +133,11 @@ export interface ConfirmPanelOptions {
   title: string;
   /** What is about to happen, in one sentence the player can act on. */
   message: string;
-  /** A second line, for the reassurance that nothing is permanent yet. */
-  note?: string;
+  /** A second line, for the reassurance that nothing is permanent yet; an element is put in as it is. */
+  note?: string | HTMLElement;
   confirmLabel: string;
+  /** The way out's words; "Cancel" when not given. */
+  cancelLabel?: string;
   onConfirm: () => void;
   onClose: () => void;
 }
@@ -168,7 +170,7 @@ export const confirmPanel = (options: ConfirmPanelOptions): Panel => {
   if (options.note) {
     const note = document.createElement("p");
     note.className = "u-muted";
-    note.textContent = options.note;
+    note.append(options.note);
     children.push(note);
   }
 
@@ -181,7 +183,7 @@ export const confirmPanel = (options: ConfirmPanelOptions): Panel => {
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = "btn btn--ghost";
-  cancel.textContent = "Cancel";
+  cancel.textContent = options.cancelLabel ?? "Cancel";
   cancel.addEventListener("click", () => panel.close());
 
   const actions = document.createElement("div");

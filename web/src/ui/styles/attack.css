@@ -71,6 +71,24 @@
   color: var(--colour-text-muted);
 }
 
+/* The broken wall and "37%" (less-text job 8). */
+.attack-strip__damage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 700;
+}
+
+/* The Retreat question's "[wall] 35% kept" (less-text job 8). */
+.attack-confirm__kept {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text);
+}
+
 /* The shop boosts this battle is fought with (beta.4): a small glowing chip. */
 .attack-strip__boosts {
   display: inline-flex;

@@ -2,7 +2,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttackSummary } from "@/game/attack/attackSave";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
-import { ATTACK_CONFIRM_CLASS, isAttackDialogOpen, retreatNote } from "./attackDialogs";
+import { spokenText } from "@/ui/resourceIcon";
+import {
+  ATTACK_CONFIRM_CLASS,
+  isAttackDialogOpen,
+  KEEP_FIGHTING,
+  keptText,
+  RETREAT_TITLE,
+  retreatKeptLine,
+  retreatMessage,
+} from "./attackDialogs";
 import { EndAttackPanel } from "./EndAttackPanel";
 
 const summary: AttackSummary = {
@@ -53,32 +62,39 @@ describe("isAttackDialogOpen", () => {
   });
 });
 
-describe("retreatNote", () => {
-  it("tells the damage the strip shows, floored and never below 0", () => {
-    expect(retreatNote(37.9)).toBe("37% damage dealt so far will be kept.");
-    expect(retreatNote(-0.2)).toBe("0% damage dealt so far will be kept.");
+describe("the Retreat question (less-text job 8)", () => {
+  it("keeps the damage the strip shows, floored and never below 0", () => {
+    expect(keptText(37.9)).toBe("37% kept");
+    expect(keptText(-0.2)).toBe("0% kept");
   });
 
-  it("says where a HUD switch leads first", () => {
-    expect(retreatNote(28, "the yard")).toBe(
-      "28% damage dealt so far will be kept. The result is saved on the end screen first, which leads back to the map, not straight to the yard.",
+  it("says the attack ends now, and where a HUD switch leads first", () => {
+    expect(retreatMessage()).toBe("The attack ends now.");
+    expect(retreatMessage("the yard")).toBe(
+      "The attack ends now. The end screen saves the result first, then leads to the map, not straight to the yard.",
     );
   });
 
-  it("the question's line is told again as the fight goes on (Inferno S3 browser check)", () => {
+  it("asks \"Retreat now?\" with the wall and \"35% kept\", Keep fighting or Retreat, told again as the fight goes on", () => {
+    const kept = retreatKeptLine(28);
     const confirm = confirmPanel({
-      title: "Retreat?",
-      message: "Retreating ends the attack now and cannot be undone.",
-      note: retreatNote(28),
+      title: RETREAT_TITLE,
+      message: retreatMessage(),
+      note: kept.line,
       confirmLabel: "Retreat",
+      cancelLabel: KEEP_FIGHTING,
       onConfirm: () => confirm.close(),
       onClose: () => {},
     });
-    // The scene finds the line as `confirmPanel` writes it, its one muted line.
-    const line = confirm.element.querySelector<HTMLElement>(".u-muted");
-    expect(line?.textContent).toBe("28% damage dealt so far will be kept.");
-    line!.textContent = retreatNote(37);
-    expect(confirm.element.textContent).toContain("37% damage dealt so far will be kept.");
+    expect(confirm.element.textContent).toContain("Retreat now?");
+    const line = confirm.element.querySelector<HTMLElement>(".u-muted")!;
+    expect(spokenText(line)).toBe("Yard damage 28% kept");
+    expect(line.querySelector('img[src*="yarddamage2"]')).not.toBeNull();
+    expect([...confirm.element.querySelectorAll("button")].map((one) => one.textContent)).toEqual(
+      expect.arrayContaining(["Keep fighting", "Retreat"]),
+    );
+    kept.value.textContent = keptText(37);
+    expect(spokenText(line)).toBe("Yard damage 37% kept");
     expect(confirm.element.querySelectorAll(".u-muted")).toHaveLength(1);
   });
 });
