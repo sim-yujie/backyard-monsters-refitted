@@ -35,11 +35,13 @@ L.METALS.update(
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["1", "body"]
 TIER = int(ARGS[0])
 STEPS = TIER                                # the pyramid's steps
-TOP = {1: 0.47, 2: 0.62, 3: 1.1}[TIER]      # the turntable's height (fitted to the painted drum tops)
-DRUM_H = 0.13
-DRUM_R = 0.52
-D_TOP = {1: 0.62, 2: 0.62, 3: 0.58}[TIER]   # the pyramid's half diagonal under the drum
-TURRET_SCALE = float(os.environ.get("RAILGUN_TSCALE", 1.12))
+TOP = {1: 0.42, 2: 0.57, 3: 1.05}[TIER]     # the turntable's height (the painted turret discs sit right on the body)
+DRUM_H = 0.08
+DRUM_R = {1: 0.52, 2: 0.52, 3: 0.47}[TIER]
+BASE = {1: 1.0, 2: 1.0, 3: 0.82}[TIER]      # the foot's half diagonal: the painted tier 3 is narrower and taller
+D_TOP = {1: 0.62, 2: 0.62, 3: 0.42}[TIER]    # the pyramid's half diagonal under the drum
+STEP_IN = {1: -0.05, 2: -0.05, 3: 0.05}[TIER]   # each step's foot this far in from the one below's top (< 0: out)
+TURRET_SCALE = float(os.environ.get("RAILGUN_TSCALE", 1.0))
 
 
 def materials():
@@ -76,14 +78,15 @@ def build():
     base_top = TOP - DRUM_H
     stripes, ledges, brackets, rivets = (bmesh.new() for _ in range(4))
     hs = base_top / STEPS
-    drop = (1.0 - D_TOP + 0.05 * (STEPS - 1)) / STEPS   # each step narrows by this; the next stands 0.05 out on its ledge
-    f0 = 1.0
+    drop = (BASE - D_TOP - STEP_IN * (STEPS - 1)) / STEPS   # each step narrows by this
+    f0 = BASE
     for s in range(STEPS):
         z0, z1 = s * hs, (s + 1) * hs
         f1 = f0 - drop                                   # the step's top (its foot is f0)
         frustum(stripes, f0, f1, z0, z1)
         if s < STEPS - 1:                                # the ledge the next step stands on
-            frustum(ledges, f1 + 0.07, f1 + 0.07, z1 - 0.02, z1 + 0.03, bevel=0.012)
+            lip = f1 + max(0.03, 0.02 - STEP_IN)
+            frustum(ledges, lip, lip, z1 - 0.02, z1 + 0.03, bevel=0.012)
         # a bracket up each corner: a riveted wedge that wraps the corner, steeper than the slope, its top proud of it
         for k in range(4):
             b = Q.FRONT + 90 * k
@@ -104,7 +107,7 @@ def build():
                 y = f0 + 0.05 + (ft + 0.02 - f0 - 0.05) * t_
                 z = z0 + (zt - 0.03 - z0) * t_
                 studs(rivets, [m @ Vector((x, y + 0.012, z)) for x in (-0.05, 0.05)], [m.to_3x3() @ out] * 2, r=0.022)
-        f0 = f1 + 0.05
+        f0 = f1 - STEP_IN
     add_outline(obj_from_bm("stripes", stripes, [M["stripes"]], parent=body, sharp=35), LN["warm"])
     if STEPS > 1:
         add_outline(obj_from_bm("ledges", ledges, [M["ledge"]], parent=body, sharp=35), LN["warm"], L.LINE * 0.8)
@@ -121,72 +124,77 @@ def build():
     studs(rivets, cc, [Vector((0, 0, 1))] * 16, r=0.018)
     obj_from_bm("rivets_body", rivets, [M["rivet"]], parent=body)
 
-    # ---- the turret, built facing +Y (bearing 0) and turned about z by -heading
-    tur = L.empty("TURRET", loc=(0, 0, TOP))
+    # ---- the turret, built facing +Y (bearing 0) and turned about z by -heading: a thick disc (the painted turret is a
+    # drum, not a plate), two square rails lying on it and clamped at its front edge, the counterweight out of its back
+    # at mid height, the coil stacks standing on its back half
+    tur = L.empty("TURRET", loc=(0, 0, TOP + 0.004))   # a hair above the turntable: no touching faces
     tur.scale = (TURRET_SCALE,) * 3
-    td = lathe("tdisc", [[(0.48, 0.0), (0.5, 0.015), (0.5, 0.09), (0.48, 0.105)], [(0.48, 0.105), (0.0, 0.105)]],
+    DR, DH = 0.45, 0.22
+    td = lathe("tdisc", [[(DR - 0.02, 0.0), (DR, 0.02), (DR, DH - 0.03), (DR - 0.03, DH)], [(DR - 0.03, DH), (0.0, DH)]],
                [M["tdisc"]], parent=tur, sharp=35)
     add_outline(td, LN["warm"])
     bm = bmesh.new()
-    cc, nn = L.ring_of(16, 0.502, 0.055, 0.5)
-    studs(bm, cc, nn, r=0.018)
+    for z in (0.05, DH - 0.05):
+        cc, nn = L.ring_of(18, DR + 0.002, z, 0.5)
+        studs(bm, cc, nn, r=0.017)
     obj_from_bm("rivets_turret", bm, [M["rivet"] if TIER < 3 else M["band"]], parent=tur)
-    trim = lathe("tdisc_rim", [L.band(0.495, 0.51, 0.0, 0.03)], [M["trim"]], parent=tur, sharp=35)
+    trim = lathe("tdisc_rim", [L.band(DR - 0.01, DR + 0.015, 0.0, 0.035)], [M["trim"]], parent=tur, sharp=35)
     add_outline(trim, LN["warm"], L.LINE * 0.6)
-    # the cradle: a red block on the disc the rails sit in, the counterweight out of its back
-    bm = bmesh.new()
-    rbox(bm, (0.44, 0.5, 0.12), Matrix.Translation((0, -0.02, 0.1)), bevel=0.04)
-    add_outline(obj_from_bm("cradle", bm, [M["red"] if TIER < 3 else M["tdisc"]], parent=tur, sharp=35), LN["warm"])
-    w = lathe("weight", [[(0.0, -0.75), (0.1, -0.75), (0.115, -0.73)], [(0.115, -0.73), (0.115, -0.2)]],
+    w = lathe("weight", [[(0.0, -0.74), (0.09, -0.74), (0.105, -0.72)], [(0.105, -0.72), (0.105, -0.3)]],
               [M["weight"]], parent=tur, sharp=35)
-    w.matrix_basis = Matrix.Translation((0, 0, 0.17)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')   # lathe z -> +Y: out the back
+    w.matrix_basis = Matrix.Translation((0, 0, 0.11)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')   # lathe z -> +Y: out the back
     add_outline(w, LN["cool"])
-    # the coil stacks, either side of the cradle
+    # the coil stacks on the disc's back half
     for sx in (-1, 1):
         prof = []
-        z = 0.22
-        for i, r in enumerate((0.13, 0.12, 0.11, 0.1, 0.085)):
+        z = DH
+        for i, r in enumerate((0.14, 0.13, 0.12, 0.105, 0.09)):
             prof += [(r - 0.02, z), (r, z + 0.008), (r, z + 0.035), (r - 0.02, z + 0.043)]
             z += 0.046
-        coil = lathe(f"coil_{'lr'[sx > 0]}", [[(0.0, 0.2), (0.11, 0.2)], prof, [(0.06, z), (0.0, z)]], [M["coil"]],
+        coil = lathe(f"coil_{'lr'[sx > 0]}", [[(0.0, DH), (0.12, DH)], prof, [(0.06, z), (0.0, z)]], [M["coil"]],
                      parent=tur, sharp=35)
-        coil.location = (sx * 0.27, -0.1, 0.0)
+        coil.location = (sx * 0.24, -0.16, 0.0)
         add_outline(coil, LN["warm"], L.LINE * 0.8)
         bm = bmesh.new()
-        Q.ball(bm, (0, 0, z + 0.04), 0.055, segs=16)
+        Q.ball(bm, (0, 0, z + 0.04), 0.06, segs=16)
         lamp = obj_from_bm(f"lens_coil_{'lr'[sx > 0]}", bm, [M["glass"]], parent=tur)
         lamp.location = coil.location
         bm = bmesh.new()
-        Q.ball(bm, (0, 0, z + 0.1), 0.025, segs=10)
-        add_outline(obj_from_bm(f"knob_{'lr'[sx > 0]}", bm, [M["coil"]], parent=tur), LN["warm"], L.LINE * 0.6)
-        bpy.data.objects[f"knob_{'lr'[sx > 0]}"].location = coil.location
-        cyl_post = bmesh.new()
-        cyl(cyl_post, 0.1, 0.12, Matrix.Translation((0, 0, 0.16)), segs=20)
-        p = obj_from_bm(f"coil_foot_{'lr'[sx > 0]}", cyl_post, [M["red"] if TIER < 3 else M["tdisc"]], parent=tur, sharp=35)
-        p.location = coil.location
-        add_outline(p, LN["warm"], L.LINE * 0.7)
-    # the rails: two square bars, level, gold bands, a blue cell along the top of each, blue tips
-    LR = 1.0                       # from the pivot to the tips
-    RZ = 0.22                        # the rails' middle height
+        Q.ball(bm, (0, 0, z + 0.11), 0.028, segs=10)
+        knob = obj_from_bm(f"knob_{'lr'[sx > 0]}", bm, [M["coil"]], parent=tur)
+        knob.location = coil.location
+        add_outline(knob, LN["warm"], L.LINE * 0.6)
+    # the rails: two square bars lying on the disc from its middle out past its front, a clamp block over each at the
+    # disc's edge, gold bands, a blue cell along the top of each, blue tips
+    LR = 1.2                        # from the pivot to the tips
+    RW = 0.15
+    RZ = DH + RW / 2 - 0.02         # the rails' middle height: lying on the disc
+    R0 = -0.12                      # the rails' back ends
     for sx in (-1, 1):
+        x = sx * 0.12
         bm = bmesh.new()
-        rbox(bm, (0.15, LR + 0.2, 0.15), Matrix.Translation((sx * 0.14, (LR - 0.2) / 2, RZ - 0.075)), bevel=0.025)
+        rbox(bm, (RW, LR - R0, RW), Matrix.Translation((x, (LR + R0) / 2, RZ - RW / 2)), bevel=0.025)
         add_outline(obj_from_bm(f"rail_{'lr'[sx > 0]}", bm, [M["rail"]], parent=tur, sharp=35), LN["cool"])
         bm = bmesh.new()
-        for y0, ln in ((0.12, 0.08), (LR - 0.1, 0.1)):
-            rbox(bm, (0.17, ln, 0.17), Matrix.Translation((sx * 0.14, y0 + ln / 2, RZ - 0.085)), bevel=0.02)
+        rbox(bm, (RW + 0.06, 0.14, RW + 0.05), Matrix.Translation((x, DR - 0.04, RZ - RW / 2 - 0.02)), bevel=0.025)
+        add_outline(obj_from_bm(f"clamp_{'lr'[sx > 0]}", bm, [M["weight"] if TIER < 3 else M["tdisc"]], parent=tur,
+                                sharp=35), LN["cool"])
+        bm = bmesh.new()
+        for y0, ln in ((DR + 0.2, 0.06), (LR - 0.1, 0.08)):
+            rbox(bm, (RW + 0.02, ln, RW + 0.02), Matrix.Translation((x, y0 + ln / 2, RZ - RW / 2 - 0.01)), bevel=0.015)
         add_outline(obj_from_bm(f"rail_bands_{'lr'[sx > 0]}", bm, [M["band"]], parent=tur, sharp=35), LN["warm"], L.LINE * 0.7)
         bm = bmesh.new()
-        rbox(bm, (0.07, LR - 0.36, 0.05), Matrix.Translation((sx * 0.12, 0.21 + (LR - 0.36) / 2, RZ + 0.06)), bevel=0.02)
-        rbox(bm, (0.09, 0.04, 0.09), Matrix.Translation((sx * 0.14, LR + 0.0, RZ - 0.045)), bevel=0.015)
+        c0, c1 = DR + 0.3, LR - 0.14
+        rbox(bm, (0.06, c1 - c0, 0.04), Matrix.Translation((x - sx * 0.025, (c0 + c1) / 2, RZ + RW / 2 - 0.015)), bevel=0.018)
+        rbox(bm, (0.1, 0.03, 0.1), Matrix.Translation((x, LR + 0.005, RZ - 0.05)), bevel=0.014)
         obj_from_bm(f"lens_cell_{'lr'[sx > 0]}", bm, [M["glass"]], parent=tur, sharp=35)
-    # the charge between the rails: a blue drop of light, its point forward
+    # the charge between the rails, just out of the clamps: a blue drop of light, its point forward
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=10, radius=0.05,
-                              matrix=Matrix.Translation((0, 0.42, RZ)) @ L.diag(1, 2.0, 1))
+    bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=10, radius=0.055,
+                              matrix=Matrix.Translation((0, DR + 0.12, RZ)) @ L.diag(1, 2.0, 1))
     obj_from_bm("lens_charge", bm, [M["glass"]], parent=tur)
     bm = bmesh.new()
-    Q.ball(bm, (0, 0.42, RZ), 0.1, segs=16)
+    Q.ball(bm, (0, DR + 0.12, RZ), 0.11, segs=16)
     obj_from_bm("charge_glow", bm, [M["halo"]], parent=tur)
     L.empty("muzzle_base", parent=tur, loc=(0, 0.0, RZ))
     L.empty("muzzle_tip", parent=tur, loc=(0, LR + 0.02, RZ))

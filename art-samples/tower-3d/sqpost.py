@@ -12,6 +12,7 @@ Writes into <tower>-3d/:
                       building's origin), the cell size and the pivot in a cell, and the aim fields (aim_fields.py)
   tN/body-4x.png, tN/turret-4x/hNN.png   the raw 4x renders
   tiers-compare.png   painted (above) and 3D (below), tiers 1-3, 3x game size; game size under them
+  large-tN.png        painted | 3D, 6x game size, cropped to the tower
   contact-tN.png      the 3D tower at all 32 headings, 3x game size
   tiers-turning-3x.gif, compare-turning-3x.gif
 """
@@ -186,6 +187,19 @@ def main():
             im = resize_pm(T.frame(rest, painted).crop(crop), (cw // 2, chh // 2))
             g.alpha_composite(im, (x + bw // 2 - cw // 2 - 4 + j * (cw // 2 + 8), y + lab + gap // 2))
     g.convert("RGB").save(base / "tiers-compare.png", optimize=True)
+
+    # ---- large-tN.png: painted | 3D at 6x game size, cropped to the tower, barrels down-right (heading 1)
+    for T in tiers:
+        a, b = T.frame(1, True), T.frame(1)
+        ba, bb_ = a.getbbox(), b.getbbox()
+        bx = (min(ba[0], bb_[0]) - 8, min(ba[1], bb_[1]) - 8, max(ba[2], bb_[2]) + 8, max(ba[3], bb_[3]) + 8)
+        w, h = (bx[2] - bx[0]) * 3, (bx[3] - bx[1]) * 3
+        g = Image.new("RGBA", (2 * w + gap, h + lab), GIFBG)
+        d = ImageDraw.Draw(g)
+        for i, (im, name) in enumerate(((a, "painted"), (b, "3D"))):
+            g.alpha_composite(resize_pm(im.crop(bx), (w, h)), (i * (w + gap), lab))
+            d.text((i * (w + gap) + 8, 6), f"Tier {T.t} {name}", fill=white, font=font, stroke_width=2, stroke_fill=(0, 0, 0))
+        g.convert("RGB").save(base / f"large-t{T.t}.png", optimize=True)
 
     # ---- contact-tN.png: all 32 headings, 8 a row
     for T in tiers:
