@@ -13,6 +13,9 @@ import { AchievementsDoor } from "./achievements/AchievementsDoor";
 import { friendsStore } from "@/game/friends/friendsStore";
 import { FriendsDoor } from "./friends/FriendsDoor";
 import { modalLayer, openWhatsNew } from "./events/WhatsNewDialog";
+import { dismissAnnouncement, fetchAnnouncements } from "@/api/announcements";
+import { openNews } from "./announcements/AnnouncementDialog";
+import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { formatAmount, formatCompact } from "./format";
@@ -409,6 +412,15 @@ export class Hud {
         onFriends: () => void friends.open(),
         onLeaderboard: () => void openLeaderboard({ container: modalLayer(), userId: session?.userId ?? null }),
         onWhatsNew: () => void openWhatsNew({ container: modalLayer() }),
+        onNews: () =>
+          void openNews({
+            container: modalLayer(),
+            load: async () => (await fetchAnnouncements()).announcements,
+            onSeen: (ids) => {
+              markShownOnThisPage(ids);
+              for (const id of ids) void dismissAnnouncement(id).catch(() => undefined);
+            },
+          }),
         onReportBug: () => void openBugReport({ container: modalLayer(), signedIn: true }),
         name: options.accountName === undefined ? session?.username : options.accountName,
         onSignOut: options.onSignOut,

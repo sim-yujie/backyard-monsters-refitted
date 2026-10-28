@@ -3,10 +3,12 @@
  * `yardPlugins.ts`). One file per tutorial package under ./plugins/ so the
  * agents building them in parallel never edit the same file, and one each for
  * the Hatchery walk-out (#228), the achievement unlock pop-up (#204), wild
- * monster raids (#226) and events (the Events button, "What's new").
+ * monster raids (#226), events (the Events button, "What's new") and the
+ * owner's announcements.
  * Imported once by YardScene.ts.
  */
 import "./plugins/achievements";
+import "./plugins/announcements";
 import "./plugins/events";
 import "./plugins/goals";
 import "./plugins/guidedStart";
