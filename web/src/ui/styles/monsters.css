@@ -427,10 +427,11 @@
 }
 
 /* The monster's numbers as painted icons (`statGrid` in monsterNumbers.ts):
-   three to a row, a number the next level changes picked out in green. */
+   in rows that wrap when "10s → 8s" would not fit, a number the next level
+   changes picked out in green. */
 .monster-stats {
-  display: grid;
-  grid-template-columns: repeat(3, max-content);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
   margin: var(--space-1) 0 0;
   padding: 0;
