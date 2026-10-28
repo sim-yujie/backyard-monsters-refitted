@@ -645,9 +645,10 @@
   font-size: var(--text-sm);
 }
 
-/* A tribe camp's damage (less-text job 5): the broken wall, a bar with a
- * notch where the camp is wrecked, and the percent. */
-.mr1-damage {
+/* A tribe camp's health left (less-text job 5; owner, 28 Oct): the heart, a
+ * bar that shrinks from full as the camp is damaged, a notch at 10% where it
+ * is wrecked, and the percent. Green, then amber, then red near the notch. */
+.mr1-health {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -656,7 +657,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.mr1-damage__bar {
+.mr1-health__bar {
   position: relative;
   flex: 1;
   height: 8px;
@@ -666,13 +667,21 @@
   overflow: hidden;
 }
 
-.mr1-damage__fill {
+.mr1-health__fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: linear-gradient(90deg, var(--colour-warning), var(--colour-danger));
+  background: var(--colour-success);
 }
 
-.mr1-damage__notch {
+.mr1-health[data-level="mid"] .mr1-health__fill {
+  background: var(--colour-warning);
+}
+
+.mr1-health[data-level="low"] .mr1-health__fill {
+  background: var(--colour-danger);
+}
+
+.mr1-health__notch {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -682,7 +691,7 @@
   opacity: 0.7;
 }
 
-.mr1-damage__value {
+.mr1-health__value {
   min-width: 3.5ch;
   text-align: right;
 }

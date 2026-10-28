@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { mapRoom1Fixture } from "@/game/maproom1/mr1Fixture";
 import { readMapRoom1, type Mr1Own } from "@/game/maproom1/mr1Model";
-import { avatar, targetCard, type CardHandlers } from "./TargetCard";
+import { avatar, healthMeter, targetCard, type CardHandlers } from "./TargetCard";
 import { Mr1ListView } from "./Mr1ListView";
 
 const NOW = 1_800_000_000;
@@ -98,22 +98,36 @@ describe("targetCard", () => {
     }
   });
 
-  it("shows how damaged a standing tribe's camp is: wall, bar and percent, words on hover", () => {
+  it("shows how much of a standing tribe's camp is left: heart, shrinking bar and percent, words on hover", () => {
     const tribe = { ...find("tribe-11"), damage: 35.4 } as ReturnType<typeof find>;
-    const meter = targetCard(tribe, { world, own, now: NOW }, handlers(), "sheet").querySelector<HTMLElement>(".mr1-damage")!;
+    const meter = targetCard(tribe, { world, own, now: NOW }, handlers(), "sheet").querySelector<HTMLElement>(".mr1-health")!;
     expect(meter.getAttribute("role")).toBe("meter");
-    expect(meter.getAttribute("aria-valuenow")).toBe("35");
-    expect(meter.title).toBe("Yard damage 35%, wrecked at 90%");
-    expect(meter.querySelector('img[src*="yarddamage2"]')).not.toBeNull();
-    expect(meter.querySelector<HTMLElement>(".mr1-damage__fill")!.style.width).toBe("35%");
-    expect(meter.querySelector<HTMLElement>(".mr1-damage__notch")!.style.left).toBe("90%");
-    expect(meter.querySelector(".mr1-damage__value")?.textContent).toBe("35%");
-    // An untouched camp is 0%; a wrecked one says so under Attack instead.
+    expect(meter.getAttribute("aria-valuenow")).toBe("65");
+    expect(meter.getAttribute("aria-valuetext")).toBe("65% health left");
+    expect(meter.title).toBe("65% health left");
+    expect(meter.dataset["level"]).toBe("high");
+    expect(meter.querySelector('img[src*="health"]')).not.toBeNull();
+    expect(meter.querySelector<HTMLElement>(".mr1-health__fill")!.style.width).toBe("65%");
+    // Wrecked at 90% damage: the notch sits at 10% health left.
+    expect(meter.querySelector<HTMLElement>(".mr1-health__notch")!.style.left).toBe("10%");
+    expect(meter.querySelector(".mr1-health__value")?.textContent).toBe("65%");
+    // An untouched camp is a full bar; a wrecked one says so under Attack instead.
     const fresh = { ...find("tribe-11"), damage: null } as ReturnType<typeof find>;
-    expect(targetCard(fresh, { world, own, now: NOW }, handlers(), "panel").querySelector(".mr1-damage__value")?.textContent).toBe("0%");
-    expect(targetCard(find("tribe-21"), { world, own, now: NOW }, handlers(), "panel").querySelector(".mr1-damage")).toBeNull();
+    const full = targetCard(fresh, { world, own, now: NOW }, handlers(), "panel").querySelector<HTMLElement>(".mr1-health")!;
+    expect(full.querySelector(".mr1-health__value")?.textContent).toBe("100%");
+    expect(full.querySelector<HTMLElement>(".mr1-health__fill")!.style.width).toBe("100%");
+    expect(targetCard(find("tribe-21"), { world, own, now: NOW }, handlers(), "panel").querySelector(".mr1-health")).toBeNull();
     // No player card has one.
-    expect(targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel").querySelector(".mr1-damage")).toBeNull();
+    expect(targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel").querySelector(".mr1-health")).toBeNull();
+  });
+
+  it("turns the camp's bar amber, then red, as it nears the notch", () => {
+    const level = (damage: number) => healthMeter(damage).dataset["level"];
+    expect(level(50)).toBe("mid");
+    expect(level(74)).toBe("mid");
+    expect(level(75)).toBe("low");
+    expect(level(120)).toBe("low");
+    expect(healthMeter(120).querySelector(".mr1-health__value")?.textContent).toBe("0%");
   });
 
   it("offers View and Attack on a standing tribe, with its blurb and what you can send", () => {

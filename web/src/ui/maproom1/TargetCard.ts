@@ -40,7 +40,7 @@ import { button, el, icon, type IconName } from "./icons";
  * Fewer words (less-text job 5, the owner's version, 27 Oct): no rule
  * sentences ("Deal 90% damage to wreck it", "The camp comes back 10 minutes
  * later", "Attacking a tribe keeps your protection"); a tribe's camp shows how
- * damaged it is as the broken wall, a bar and "35%"; an online player has only
+ * much health it has left as the heart, a bar and "65%"; an online player has only
  * the green dot by the name and a greyed Attack, no sentence under it.
  */
 
@@ -186,28 +186,32 @@ const reasonLine = (
 };
 
 /**
- * How damaged a tribe's camp is: the broken wall, a bar with a notch where
- * the camp is wrecked (`VICTORY_THRESHOLD`), and "35%". The words are on hover
- * and for screen readers: "Yard damage 35%, wrecked at 90%".
+ * How much of a tribe's camp is left standing (owner, 28 Oct: "health left",
+ * not damage done): the heart, a bar that is full on an untouched camp and
+ * shrinks as it is damaged, a notch where the camp is wrecked (10% left, the
+ * `VICTORY_THRESHOLD` of 90% damage), and "65%". The bar turns amber, then
+ * red, as the camp nears the notch. The words are on hover and for screen
+ * readers: "65% health left".
  */
-export const damageMeter = (damage: number): HTMLElement => {
-  const percent = Math.min(100, Math.max(0, Math.round(damage)));
-  const meter = el("div", "mr1-damage");
-  const words = `Yard damage ${percent}%, wrecked at ${VICTORY_THRESHOLD}%`;
+export const healthMeter = (damage: number): HTMLElement => {
+  const health = 100 - Math.min(100, Math.max(0, Math.round(damage)));
+  const meter = el("div", "mr1-health");
+  const words = `${health}% health left`;
   meter.setAttribute("role", "meter");
-  meter.setAttribute("aria-label", "Yard damage");
+  meter.setAttribute("aria-label", "Health left");
   meter.setAttribute("aria-valuemin", "0");
   meter.setAttribute("aria-valuemax", "100");
-  meter.setAttribute("aria-valuenow", String(percent));
+  meter.setAttribute("aria-valuenow", String(health));
   meter.setAttribute("aria-valuetext", words);
   meter.title = words;
-  const bar = el("span", "mr1-damage__bar");
-  const fill = el("span", "mr1-damage__fill");
-  fill.style.width = `${percent}%`;
-  const notch = el("span", "mr1-damage__notch");
-  notch.style.left = `${VICTORY_THRESHOLD}%`;
+  meter.dataset["level"] = health > 50 ? "high" : health > 25 ? "mid" : "low";
+  const bar = el("span", "mr1-health__bar");
+  const fill = el("span", "mr1-health__fill");
+  fill.style.width = `${health}%`;
+  const notch = el("span", "mr1-health__notch");
+  notch.style.left = `${100 - VICTORY_THRESHOLD}%`;
   bar.append(fill, notch);
-  meter.append(gameIcon("yarddamage2", { size: 16, decorative: true }), bar, el("span", "mr1-damage__value", `${percent}%`));
+  meter.append(gameIcon("health", { size: 16, decorative: true }), bar, el("span", "mr1-health__value", `${health}%`));
   return meter;
 };
 
@@ -263,7 +267,7 @@ export const targetCard = (
   if (target.kind === "tribe") {
     card.append(el("p", "mr1-card__blurb", tribeInfo(target.tribe).blurb));
     // A wrecked camp says so under its greyed Attack, with its countdown.
-    if (respawnIn(target, state.now) === null) card.append(damageMeter(target.damage ?? 0));
+    if (respawnIn(target, state.now) === null) card.append(healthMeter(target.damage ?? 0));
   } else {
     const line = handlers.achievementsLine?.(target);
     if (line) card.append(line);
