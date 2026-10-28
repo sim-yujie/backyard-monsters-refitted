@@ -82,4 +82,5 @@ def main():
     print("wrote", out, g.size)
 
 
-main()
+if __name__ == "__main__":
+    main()

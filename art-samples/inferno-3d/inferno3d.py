@@ -164,7 +164,7 @@ def blast_roles(M):
     gold like the Gold Blocks, 3 black diamond with gold trim like the Black Diamond Blocks)."""
     if LOOK == 2:
         return dict(skirt="stripes_gold", stake="stake", tip="gold", staves="staves_clean", staves_dark="staves_dark_clean",
-                    hoop="gold", plate="iron_dirty", rope="rope", bolt="gold", collar="gold", cap="gold", ball="iron_head",
+                    hoop="gold", plate="iron_dirty", rope="rope", bolt="gold", collar="gold", cap="gold", ball="gold",
                     trim="gold", barrel="iron_w", band="gold")
     if LOOK == 3:
         return dict(skirt="stripes_black", stake="crystal", tip="gold", staves="crystal", staves_dark="crystal",

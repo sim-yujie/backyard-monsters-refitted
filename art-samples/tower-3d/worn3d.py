@@ -326,7 +326,7 @@ def mat_worn_diag(name, a, b, n=6, lean=1.6, under=(104, 66, 40), edge=(232, 210
 
 
 def mat_iron(name, base=(86, 70, 60), dark=(42, 33, 29), rust=(160, 82, 34), edge=(184, 164, 144), rust_k=0.8,
-             soot=0.0, dents=1.0, dirt=0.3, spec=0.12):
+             soot=0.0, dents=1.0, dirt=0.3, spec=0.12, spec_col=(1.0, 0.86, 0.7, 1), edge_k=0.8):
     """Old iron: dark brown-grey, hammered (soft dents), rust patches (more in crevices), bright worn edges."""
     p = L.Paint(name)
     col = p.ramp(p.noise(2.5, 4.0, 0.6), [(0.3, srgb(*dark)), (0.7, srgb(*base))])
@@ -339,10 +339,10 @@ def mat_iron(name, base=(86, 70, 60), dark=(42, 33, 29), rust=(160, 82, 34), edg
     col = p.mix(col, srgb(*[int(c * 0.45) for c in dark]), p.math("MULTIPLY", _bw(p, pit), 0.7))
     dent = _voronoi(p, 9.0)
     col = p.mix(col, p.ramp(dent, [(0.05, _grey(0.8)), (0.4, _grey(1.08))]), 1.0, 'MULTIPLY')   # hammered: each dent its shade
-    col = weather(p, col, edge=edge, edge_k=0.8, cavity=0.6, dirt=dirt, soot=soot, streaks=0.18)
+    col = weather(p, col, edge=edge, edge_k=edge_k, cavity=0.6, dirt=dirt, soot=soot, streaks=0.18)
     h = p.math("MULTIPLY", p.math("ADD", p.math("MULTIPLY", dent, dents), p.math("MULTIPLY", _bw(p, pit), -0.15)), 2.5)
     shade = [(0.0, (0.34, 0.30, 0.32, 1)), (0.18, (0.46, 0.42, 0.42, 1)), (0.5, (0.82, 0.78, 0.74, 1)), (1.0, (1.0, 0.97, 0.9, 1))]
-    return p.finish(col, spec=spec, spec_rough=0.45, spec_col=(1.0, 0.86, 0.7, 1), metal=True, bump=(h, 0.8), shade=shade,
+    return p.finish(col, spec=spec, spec_rough=0.45, spec_col=spec_col, metal=True, bump=(h, 0.8), shade=shade,
                     edge_dark=0.45, sheen=0.06)
 
 
@@ -403,7 +403,8 @@ def mat_worn_panels(name, n=8, ratio=0.32, cream=(226, 206, 168), red=(116, 20, 
 # The owner's tier rule (from the wall blocks): tier 2 "more gold", like the Gold Blocks; tier 3 "black diamond with gold
 # trim", like the Black Diamond Blocks. Colours from walls/top.4.v2.png (gold: shade 150,86,10, face 232,162,40, light
 # 255,214,90) and walls/top.5.png (black diamond: 16-90 grey, faceted, white glints).
-GOLD = dict(base=(232, 162, 40), dark=(150, 86, 10), rust=(120, 72, 14), edge=(255, 236, 150))
+GOLD = dict(base=(218, 138, 22), dark=(140, 76, 8), rust=(96, 56, 12), edge=(255, 206, 80), spec_col=(1.0, 0.74, 0.32, 1),
+            edge_k=0.55)
 
 
 def mat_gold(name, rust_k=0.18, dirt=0.12, spec=0.6, dents=0.45):
@@ -411,8 +412,8 @@ def mat_gold(name, rust_k=0.18, dirt=0.12, spec=0.6, dents=0.45):
     return mat_iron(name, rust_k=rust_k, dirt=dirt, spec=spec, dents=dents, **GOLD)
 
 
-def mat_black_crystal(name, scale=6.0, glow=(255, 92, 20), glow_k=0.55, sparkle=1.0, dark=(14, 14, 20),
-                      light=(84, 84, 104)):
+def mat_black_crystal(name, scale=6.0, glow=(255, 92, 20), glow_k=0.3, sparkle=1.0, dark=(10, 10, 14),
+                      light=(66, 66, 80)):
     """Black diamond plating: cut facets (each its own shade, edged by sharp ridges), white glints like the Black
     Diamond Blocks, and a faint fire glowing in the seams between facets (the Inferno's)."""
     p = L.Paint(name)
@@ -428,11 +429,11 @@ def mat_black_crystal(name, scale=6.0, glow=(255, 92, 20), glow_k=0.55, sparkle=
                                               (1.0, srgb(*light))])
     gl = p.ramp(p.noise(38.0, 2.0, 0.5), [(0.74, BLACK), (0.78, _grey(sparkle))])
     col = p.mix(col, srgb(235, 238, 255), gl)
-    col = weather(p, col, edge=(170, 170, 196), edge_k=0.7, cavity=0.45, dirt=0.25, streaks=0.0, vary=0.08)
+    col = weather(p, col, edge=(150, 150, 172), edge_k=0.35, cavity=0.45, dirt=0.25, streaks=0.0, vary=0.08)
     seam = p.ramp(e.outputs["Distance"], [(0.0, WHITE), (0.05, BLACK)])
     emit = p.mix(srgb(*glow), BLACK, p.math("SUBTRACT", 1.0, p.math("MULTIPLY", _bw(p, seam), glow_k)))
     col = p.mix(col, srgb(10, 6, 6), p.math("MULTIPLY", _bw(p, seam), 0.7))
     h = p.math("MULTIPLY", v.outputs["Distance"], 3.0)
-    shade = [(0.0, (0.4, 0.4, 0.48, 1)), (0.2, (0.55, 0.55, 0.64, 1)), (0.5, (0.86, 0.86, 0.92, 1)), (1.0, (1.0, 1.0, 1.0, 1))]
-    return p.finish(col, spec=1.0, spec_rough=0.12, spec_col=(0.92, 0.95, 1.0, 1), metal=True, bump=(h, 0.9), shade=shade,
-                    emit=emit, edge_dark=0.4, sheen=0.35, glint=0.25)
+    shade = [(0.0, (0.36, 0.36, 0.42, 1)), (0.2, (0.5, 0.5, 0.58, 1)), (0.5, (0.78, 0.78, 0.84, 1)), (1.0, (0.95, 0.95, 1.0, 1))]
+    return p.finish(col, spec=0.7, spec_rough=0.12, spec_col=(0.92, 0.95, 1.0, 1), metal=True, bump=(h, 0.9), shade=shade,
+                    emit=emit, edge_dark=0.4, sheen=0.12, glint=0.3)
