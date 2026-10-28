@@ -37,6 +37,7 @@ import {
 } from "@/game/monsters/hatchPlan";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { monsterRealmOf, monsterWords, type MonsterRealm, type MonsterWords } from "@/game/monsters/realm";
+import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { maxLevel, quantityOf, townHallLevel } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
@@ -45,6 +46,14 @@ import { QuantityStepper } from "@/ui/QuantityStepper";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
+import {
+  hatcheryTabs,
+  hatchTabKey,
+  loadHatchTab,
+  saveHatchTab,
+  tabAfterKey,
+  type HatcheryTab,
+} from "./hatcheryTabs";
 import { describe, monsterPicture } from "./LockerTab";
 import {
   MonstersTabId,
@@ -60,10 +69,14 @@ import {
  *
  * Top to bottom:
  *
- * - **The line**, one per hatchery, numbered as the yard numbers them while
- *   the tab is open (#268: oldest is 1, `hatcheryNumbers`): the chosen
- *   line wears a thick outline and "Adding here", the rest are dimmed and a
- *   tap on one chooses it. On each: the monster hatching now (picture, time
+ * - **The tabs**, one per hatchery when there are several (owner, 28 Oct:
+ *   the stacked lines were too long to scroll), numbered as the yard
+ *   numbers them while the tab is open (#268: oldest is 1,
+ *   `hatcheryNumbers`). Each shows the hatchery's picture, level, a light
+ *   for what it is doing with the countdown when busy, and how many wait;
+ *   a tap or an arrow key chooses one, and the choice is remembered per
+ *   yard (`hatcheryTabs.ts`).
+ * - **The line** of the chosen hatchery: the monster hatching now (picture, time
  *   left, progress; a tap cancels it for its goo, after a confirm), then one
  *   slot per waiting stack with its ×N (a tap takes one out), as many slots
  *   as the hatchery's level allows (`1 + level`), and the next locked slot
@@ -334,13 +347,20 @@ export class HatchTab implements MonstersTab {
     return monsterWords(this.realm);
   }
 
+  /** Where this yard's last hatchery tab is remembered. */
+  private get tabKey(): string {
+    return hatchTabKey(this.store.kind, this.store.baseid);
+  }
+
   show(focus: MonstersFocus): void {
     const yard = readHatchYard(this.store.save, this.store.now());
-    if (focus.buildingId !== undefined) {
-      if (yard.hcc) this.target = "hcc";
-      else if (yard.hatcheries.some((one) => one.id === focus.buildingId)) {
-        this.target = focus.buildingId;
-      }
+    if (focus.buildingId !== undefined && yard.hcc) this.target = "hcc";
+    else if (focus.buildingId !== undefined && yard.hatcheries.some((one) => one.id === focus.buildingId)) {
+      // The hatchery tapped in the yard is the tab chosen, and the one remembered.
+      this.target = focus.buildingId;
+      saveHatchTab(this.tabKey, focus.buildingId);
+    } else if (this.target === null) {
+      this.target = loadHatchTab(this.tabKey);
     }
     if (focus.monster && monsterEntry(focus.monster)?.blocked === false) this.select(focus.monster, false);
     this.render();
@@ -552,9 +572,6 @@ export class HatchTab implements MonstersTab {
     this.plainButtons = [];
     this.clocks = [];
     this.totals = [];
-    // Several lines stack: each is drawn a little shorter so the grid stays near.
-    const several = !yard.hcc && yard.hatcheries.length > 1;
-    this.lines.classList.toggle("hatch-lines--several", several);
     if (yard.hatcheries.length === 0) {
       const note = document.createElement("p");
       note.className = "hatch__none";
@@ -566,78 +583,135 @@ export class HatchTab implements MonstersTab {
       this.lines.replaceChildren(this.hccLine(yard, preview));
       return;
     }
-    // By number, as the yard shows them: oldest first.
-    const ordered = [...yard.hatcheries].sort(
-      (a, b) => (this.numbers.get(a.id) ?? 0) - (this.numbers.get(b.id) ?? 0),
-    );
-    this.lines.replaceChildren(
-      ...ordered.map((hatchery) => {
-        const isTarget = hatchery.id === this.target;
-        return this.hatcheryLine(yard, hatchery, several, isTarget ? preview : null, isTarget ? added : null);
-      }),
-    );
+    // Several hatcheries are tabs (owner, 28 Oct): only the chosen one's line is drawn.
+    const tabs = hatcheryTabs(yard, this.numbers);
+    const chosen = yard.hatcheries.find((one) => one.id === this.target) ?? yard.hatcheries[0]!;
+    const line = this.hatcheryLine(yard, chosen, tabs.length > 0, preview, added);
+    this.lines.replaceChildren(...(tabs.length > 0 ? [this.tabStrip(tabs, chosen.id), line] : [line]));
   }
 
   /**
-   * One hatchery's line: its number, now, its stacks, the next locked slot,
-   * the totals. With several, the chosen one stands out (#268, A) and a tap
-   * anywhere on another chooses that one and does nothing else, so a slot
-   * on a dimmed line is never emptied by the tap meant to pick it.
+   * One tab per hatchery: its picture and number, its level, a light for
+   * what it is doing (the monster hatching and its countdown when busy) and
+   * how many wait. A tap, or an arrow key, chooses it and shows its line.
+   */
+  private tabStrip(tabs: readonly HatcheryTab[], chosen: number): HTMLElement {
+    const strip = document.createElement("div");
+    strip.className = "hatch-tabs";
+    strip.setAttribute("role", "tablist");
+    strip.setAttribute("aria-label", `Choose ${article(this.words.hatchery)}`);
+    const ids = tabs.map((tab) => tab.id);
+    const now = this.store.now();
+    for (const tab of tabs) {
+      const isChosen = tab.id === chosen;
+      const name = this.hatcheryName(tab.id);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `hatch-tab hatch-tab--${tab.light}`;
+      button.id = `hatch-tab-${tab.id}`;
+      button.dataset["hatchery"] = String(tab.id);
+      button.dataset["focusKey"] = `tab-${tab.id}`;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", String(isChosen));
+      button.setAttribute("aria-controls", "hatch-panel");
+      button.tabIndex = isChosen ? 0 : -1;
+      button.title = `${name} · Level ${tab.level}`;
+
+      const picture = document.createElement("img");
+      picture.className = "hatch-tab__picture";
+      picture.src = buttonUrl(HATCHERY_TYPE, this.store.kind);
+      picture.alt = "";
+      picture.decoding = "async";
+      picture.draggable = false;
+      const number = document.createElement("span");
+      number.className = "hatch-tab__number";
+      number.textContent = String(tab.number);
+      const art = document.createElement("span");
+      art.className = "hatch-tab__art";
+      art.setAttribute("aria-hidden", "true");
+      art.append(picture, number);
+
+      const level = document.createElement("span");
+      level.className = "hatch-tab__level";
+      level.textContent = `Lv ${tab.level}`;
+      const status = document.createElement("span");
+      status.className = "hatch-tab__status";
+      status.setAttribute("aria-hidden", "true");
+      const light = document.createElement("span");
+      light.className = "hatch-tab__light";
+      status.append(light);
+      const entry = tab.monster && tab.light === "busy" ? monsterEntry(tab.monster) : undefined;
+      if (entry) status.append(monsterPicture(entry, "small", "hatch-tab__monster"));
+      const state = document.createElement("span");
+      state.className = "hatch-tab__state";
+      if (tab.endsAt !== null) {
+        state.textContent = duration(tab.endsAt - now);
+        this.clocks.push({ node: state, endsAt: tab.endsAt });
+      } else {
+        state.textContent = TAB_STATE[tab.state];
+      }
+      status.append(state);
+      const body = document.createElement("span");
+      body.className = "hatch-tab__body";
+      body.setAttribute("aria-hidden", "true");
+      body.append(level, status);
+      button.append(art, body);
+      if (tab.waiting > 0) {
+        const waiting = document.createElement("span");
+        waiting.className = "hatch-tab__waiting";
+        waiting.setAttribute("aria-hidden", "true");
+        waiting.textContent = `×${formatAmount(tab.waiting)}`;
+        button.append(waiting);
+      }
+      const doing = entry ? `${entry.name} hatching` : TAB_STATE[tab.state];
+      button.setAttribute(
+        "aria-label",
+        `${name}, Level ${tab.level}: ${doing}, ${formatAmount(tab.waiting)} waiting`,
+      );
+      button.addEventListener("click", () => this.chooseHatchery(tab.id));
+      button.addEventListener("keydown", (event) => {
+        const next = tabAfterKey(ids, tab.id, event.key);
+        if (next === null) return;
+        event.preventDefault();
+        this.chooseHatchery(next);
+      });
+      strip.append(button);
+    }
+    return strip;
+  }
+
+  /**
+   * One hatchery's line: now, its stacks, the next locked slot, the totals.
+   * Alone, it carries the hatchery's number and name; as a tab's panel the
+   * tab above says those.
    */
   private hatcheryLine(
     yard: HatchYard,
     hatchery: HatcheryView,
-    several: boolean,
+    tabbed: boolean,
     preview: SlotPreview | null,
     added: AddPreview | null,
   ): HTMLElement {
     const line = document.createElement("div");
-    const isTarget = hatchery.id === this.target;
-    line.className = `hatch-line${several ? (isTarget ? " hatch-line--target" : " hatch-line--dim") : ""}`;
+    line.className = `hatch-line${tabbed ? " hatch-line--tabbed" : ""}`;
     line.dataset["hatchery"] = String(hatchery.id);
-    if (several && !isTarget) {
-      line.addEventListener(
-        "click",
-        (event) => {
-          event.stopPropagation();
-          event.preventDefault();
-          this.chooseHatchery(hatchery.id);
-        },
-        { capture: true },
-      );
+    if (tabbed) {
+      line.id = "hatch-panel";
+      line.setAttribute("role", "tabpanel");
+      line.setAttribute("aria-labelledby", `hatch-tab-${hatchery.id}`);
     }
 
     const head = document.createElement("div");
     head.className = "hatch-line__head";
-    const number = document.createElement("span");
-    number.className = "hatch-line__number";
-    number.setAttribute("aria-hidden", "true");
-    number.textContent = String(this.numbers.get(hatchery.id) ?? "");
-    head.append(number);
-    const title = `${this.hatcheryName(hatchery.id)} · Level ${hatchery.level}`;
-    if (several) {
-      const pick = document.createElement("button");
-      pick.type = "button";
-      pick.className = "hatch-line__pick";
-      pick.dataset["focusKey"] = `pick-${hatchery.id}`;
-      pick.setAttribute("aria-pressed", String(isTarget));
-      pick.textContent = title;
-      pick.title = isTarget
-        ? `Monsters are added to this ${this.words.hatchery}`
-        : `Add monsters to this ${this.words.hatchery}`;
-      pick.addEventListener("click", () => this.chooseHatchery(hatchery.id));
-      head.append(pick);
-      if (isTarget) {
-        const here = document.createElement("span");
-        here.className = "hatch-line__here";
-        here.textContent = "Adding here";
-        head.append(here);
-      }
-    } else {
+    if (!tabbed) {
+      const number = document.createElement("span");
+      number.className = "hatch-line__number";
+      number.setAttribute("aria-hidden", "true");
+      number.textContent = String(this.numbers.get(hatchery.id) ?? "");
       const name = document.createElement("h3");
       name.className = "hatch-line__title";
-      name.textContent = title;
-      head.append(name);
+      name.textContent = `${this.hatcheryName(hatchery.id)} · Level ${hatchery.level}`;
+      head.append(number, name);
     }
     const waiting = document.createElement("span");
     waiting.className = "hatch-line__waiting";
@@ -669,7 +743,7 @@ export class HatchTab implements MonstersTab {
     if (hatchery.level > 0 && hatchery.level < maxLevel(HATCHERY_TYPE, this.store.kind)) {
       slots.append(this.lockedSlot(hatchery));
     }
-    slots.append(this.lineTotals(yard, hatchery.id, isTarget));
+    slots.append(this.lineTotals(yard, hatchery.id, true));
     line.append(head, slots);
     return line;
   }
@@ -1323,13 +1397,14 @@ export class HatchTab implements MonstersTab {
     this.select(row.monster.id);
   }
 
-  /** A line's tap: monsters go to this hatchery now, and the yard's outline moves to it. */
+  /** A tab's tap: its line shows, monsters go to it, the yard's outline moves to it, and it is remembered. */
   private chooseHatchery(id: number): void {
     if (this.target === id) return;
     this.target = id;
+    saveHatchTab(this.tabKey, id);
     this.render();
-    // The tap was on a line that has just been redrawn: keep the focus on its name.
-    this.element.querySelector<HTMLElement>(`[data-focus-key="pick-${id}"]`)?.focus();
+    // The strip has just been redrawn: keep the focus on the tab chosen.
+    this.element.querySelector<HTMLElement>(`[data-focus-key="tab-${id}"]`)?.focus();
   }
 
   private setCount(value: number): void {
@@ -1442,6 +1517,16 @@ const IDLE_TEXT: Partial<Record<HatcheryView["state"], string>> = {
   building: "Being built",
   damaged: "Damaged: repair it",
   idle: "Nothing hatching",
+};
+
+/** What a tab says beside its light when nothing counts down. */
+const TAB_STATE: Readonly<Record<HatcheryView["state"], string>> = {
+  producing: "Hatching",
+  idle: "Idle",
+  stalled: "Full",
+  upgrading: "Upgrading",
+  building: "Building",
+  damaged: "Damaged",
 };
 
 /** What a card with a monster says when it is not counting down. */

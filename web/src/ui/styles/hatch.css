@@ -1,8 +1,9 @@
 /*
  * The Hatch tab (`web/src/ui/monsters/HatchTab.ts`, issue #156): the
- * original's hatchery popup in style B. The line of each hatchery (or the
- * HCC's hatcheries and shared queue) on top, the message and housing bar,
- * then the monster grid beside the info panel with the batch add. On a phone
+ * original's hatchery popup in style B. A tab per hatchery and the chosen
+ * one's line (or the HCC's hatcheries and shared queue) on top, the message
+ * and housing bar, then the monster grid beside the info panel with the
+ * batch add. On a phone
  * the same order, with the add controls in a bar fixed to the sheet's bottom.
  *
  * Same rule as ui.css: every value comes from tokens.css. The frame, the
@@ -81,40 +82,177 @@
   gap: var(--space-1);
 }
 
-/* With several hatcheries each line is a card (#268, A): the one a batch
-   goes to wears a thick accent outline, the rest are dimmed and a tap on
-   one chooses it. */
-.hatch-lines--several {
-  gap: var(--space-2);
+/* ── The tabs: one per hatchery, the chosen one's line under them ──────── */
+
+.hatch-tabs {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 2px;
 }
 
-.hatch-lines--several .hatch-line {
+.hatch-tab {
+  position: relative;
+  flex: 0 1 176px;
+  min-width: 132px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing);
+}
+
+.hatch-tab:hover {
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text);
+}
+
+.hatch-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.hatch-tab[aria-selected="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--colour-accent);
+  color: var(--colour-text-strong);
+}
+
+.hatch-tab__art {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 48px;
+}
+
+.hatch-tab__picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+/* The number the yard shows over this hatchery while the tab is open. */
+.hatch-tab__number {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hatch-tab[aria-selected="true"] .hatch-tab__number {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.hatch-tab__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hatch-tab__level {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: var(--display-tracking);
+}
+
+.hatch-tab__status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Green hatching, grey idle, amber held up (full, upgrading, building), red damaged. */
+.hatch-tab__light {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--colour-text-muted);
+}
+
+.hatch-tab--busy .hatch-tab__light {
+  background: var(--colour-success);
+  box-shadow: 0 0 6px var(--colour-success);
+}
+
+.hatch-tab--held .hatch-tab__light {
+  background: var(--colour-warning);
+}
+
+.hatch-tab--broken .hatch-tab__light {
+  background: var(--colour-danger);
+}
+
+.hatch-tab--idle .hatch-tab__state {
+  color: var(--colour-text-muted);
+}
+
+.hatch-tab--held .hatch-tab__state {
+  color: var(--colour-warning);
+}
+
+.hatch-tab--broken .hatch-tab__state {
+  color: var(--colour-danger);
+}
+
+.hatch-tab__monster {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+/* Monsters waiting in its queue. */
+.hatch-tab__waiting {
+  margin-left: auto;
+  align-self: flex-start;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-text);
+  color: var(--colour-text-inverse);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The chosen tab's line, framed so it reads as that tab's. */
+.hatch-line--tabbed {
   padding: var(--space-2);
   border-radius: var(--radius-lg);
-  box-shadow: inset 0 0 0 1px var(--colour-border-subtle);
-  transition: opacity var(--motion-fast) var(--easing);
-}
-
-.hatch-line--target {
-  background: var(--colour-accent-soft);
-}
-
-.hatch-lines--several .hatch-line--target {
-  box-shadow: inset 0 0 0 2px var(--colour-accent);
-}
-
-.hatch-line--dim {
-  opacity: 0.55;
-  cursor: pointer;
-}
-
-.hatch-line--dim:hover,
-.hatch-line--dim:focus-within {
-  opacity: 0.8;
-}
-
-.hatch-line--dim button {
-  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--colour-accent-line);
 }
 
 /* The number the yard shows over this hatchery while the tab is open. */
@@ -133,22 +271,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.hatch-line--target .hatch-line__number {
-  background: var(--colour-accent);
-  color: var(--colour-accent-text);
-}
-
-.hatch-line__here {
-  padding: 3px var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--colour-accent);
-  color: var(--colour-accent-text);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
 .hatch-line__head {
   display: flex;
   flex-wrap: wrap;
@@ -162,35 +284,6 @@
   font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: var(--display-tracking);
-}
-
-.hatch-line__pick {
-  min-height: var(--control-height-compact);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-pill);
-  background: var(--colour-surface-control);
-  color: var(--colour-text-secondary);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.hatch-line__pick:hover {
-  background: var(--colour-surface-control-hover);
-  color: var(--colour-text);
-}
-
-.hatch-line__pick[aria-pressed="true"] {
-  border-color: var(--colour-accent-line);
-  background: var(--colour-accent-soft);
-  color: var(--colour-text-strong);
-}
-
-.hatch-line__pick:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
 }
 
 .hatch-line__waiting {
@@ -229,10 +322,10 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   width: 208px;
-  min-height: 120px;
-  padding: var(--space-3);
+  min-height: 100px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-lg);
   background: var(--colour-surface-sunken);
@@ -278,8 +371,8 @@ button.hatch-now:disabled {
 
 .hatch-now__picture {
   flex: none;
-  width: 56px;
-  height: 56px;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
 }
 
@@ -428,7 +521,7 @@ button.hatch-now:disabled {
   justify-content: center;
   gap: 2px;
   width: 124px;
-  min-height: 120px;
+  min-height: 100px;
   padding: var(--space-2);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-lg);
@@ -487,42 +580,10 @@ button.hatch-slot:disabled {
 }
 
 .hatch-slot__picture {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   margin-top: var(--space-3);
   object-fit: contain;
-}
-
-/* Several hatcheries stack their lines: each a little shorter, so the grid
-   and the add stay near. */
-.hatch-lines--several .hatch-now,
-.hatch-lines--several .hatch-slot {
-  min-height: 100px;
-}
-
-.hatch-lines--several .hatch-now {
-  gap: var(--space-1);
-  padding-block: var(--space-2);
-}
-
-.hatch-lines--several .hatch-now__picture,
-.hatch-lines--several .hatch-slot__picture {
-  width: 44px;
-  height: 44px;
-}
-
-.hatch-lines--several .hatch-slot--locked {
-  gap: var(--space-1);
-}
-
-/* The HCC has two rows to fit: its slots are a little shorter. */
-.hatch-line--hcc .hatch-slot {
-  min-height: 100px;
-}
-
-.hatch-line--hcc .hatch-slot__picture {
-  width: 44px;
-  height: 44px;
 }
 
 .hatch-slot__name {
@@ -1262,6 +1323,41 @@ button.hatch-slot:disabled {
 /* ── A phone: the same order, the add controls in a bar at the bottom ─── */
 
 @container hatch (width < 560px) {
+  /* Every tab fits across: the picture over the level and the light. */
+  .hatch-tab {
+    flex: 1 1 0;
+    min-width: 62px;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-1) 2px;
+    text-align: center;
+  }
+
+  .hatch-tab__art {
+    width: 27px;
+    height: 36px;
+  }
+
+  .hatch-tab__body {
+    align-items: center;
+  }
+
+  .hatch-tab__monster {
+    display: none;
+  }
+
+  .hatch-tab__waiting {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    margin: 0;
+    padding: 0 4px;
+  }
+
+  .hatch-line--tabbed {
+    padding: var(--space-1);
+  }
+
   .hatch-line__slots,
   .hatch-line__now {
     display: grid;
