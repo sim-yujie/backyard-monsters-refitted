@@ -4,7 +4,14 @@ import { caveYardMargin } from "@/game/inferno/cave";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { artStateFor, BuildingCondition, readYard, TOWN_HALL_TYPE } from "./yardModel";
 import { ArtState } from "./buildingArt";
-import { depthKey, footprintOf, FOREIGN_YARD_MARGIN, YARD_MARGIN, yardFitRect } from "./YardGrid";
+import {
+  depthKey,
+  footprintOf,
+  FOREIGN_YARD_MARGIN,
+  YARD_MARGIN,
+  yardFitRect,
+  yardToWorld,
+} from "./YardGrid";
 
 const yard = readYard(fixture as unknown as BaseLoadResponse);
 
@@ -313,6 +320,28 @@ describe("mushrooms", () => {
       expect(mushroom.worldX).toBeGreaterThan(0);
       expect(mushroom.worldY).toBeGreaterThan(0);
     });
+  });
+
+  it("stands each one in the middle of its 30 x 30 ground, sorted with the buildings (owner bug, 28 Oct 2026)", () => {
+    // A wall block at (0, 300) and a mushroom grown flush against its south face.
+    const yard = yardWith(
+      { "1": { id: 1, t: 17, X: 0, Y: 300, l: 1 } },
+      { mushrooms: { l: [[1, 0, 320]], s: 0 } },
+    );
+    const [wall] = yard.buildings;
+    const [mushroom] = yard.mushrooms;
+
+    // Not the footprint's north corner, where it used to stand and lean into
+    // the block, but its centre: 15 px further down the screen.
+    expect(footprintOf(7)).toEqual([30, 30]);
+    const centre = yardToWorld(yard.bounds, 15, 335);
+    const corner = yardToWorld(yard.bounds, 0, 320);
+    expect([mushroom!.worldX, mushroom!.worldY]).toEqual([centre.x, centre.y]);
+    expect([centre.x, centre.y]).toEqual([corner.x, corner.y + 15]);
+    expect(mushroom!.depth).toBe(depthKey(centre.x, centre.y, 0));
+
+    // The wall behind it sorts first, so the pumpkin is drawn over it.
+    expect(wall!.depth).toBeLessThan(mushroom!.depth);
   });
 
   it("still reads an object entry, and carries no golden guess", () => {

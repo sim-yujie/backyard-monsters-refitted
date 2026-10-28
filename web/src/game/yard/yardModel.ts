@@ -1,4 +1,5 @@
 import type { BaseLoadResponse, BuildingData, Resources } from "@/api/types";
+import { MUSHROOM_TYPE } from "@/game/combat/rules/damagePercent";
 import { caveState, caveYardMargin } from "@/game/inferno/cave";
 import { ArtState, buildingName, maxHealth, resolveArt } from "./buildingArt";
 import { OUTPOST_CORE_TYPE, type YardKind } from "./buildingCostData";
@@ -98,8 +99,10 @@ export interface YardMushroom {
   readonly id: number;
   readonly x: number;
   readonly y: number;
+  /** Where it stands: the centre of its footprint, in world px. */
   readonly worldX: number;
   readonly worldY: number;
+  /** Its draw order among the buildings: `depthKey` of where it stands. */
   readonly depth: number;
   /**
    * Which of the five art variants this mushroom shows, 1..5, as the save
@@ -409,14 +412,18 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
   const mushroomList = outpost ? [] : (response.mushrooms?.l ?? []);
   const mushrooms: YardMushroom[] = mushroomList.map((entry, index) => {
     const { frame, x, y } = mushroomEntry(entry);
-    const world = yardToWorld(bounds, x, y);
+    // It stands in the middle of its 30 x 30 ground, as a building's art
+    // does, not on the footprint's north corner, where it leaned into the
+    // wall it had grown against (owner bug, 28 Oct 2026). It sorts by that
+    // point too, as a building sorts by its centre (#270).
+    const centre = footprintCentre(bounds, MUSHROOM_TYPE, x, y);
     return {
       id: index,
       x,
       y,
-      worldX: world.x,
-      worldY: world.y,
-      depth: depthKey(world.x, world.y, index),
+      worldX: centre.x,
+      worldY: centre.y,
+      depth: depthKey(centre.x, centre.y, index),
       variant: Number.isInteger(frame) && frame >= 1 && frame <= 5 ? frame : 1,
     };
   });
