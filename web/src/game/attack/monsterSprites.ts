@@ -115,6 +115,14 @@ export interface SheetLayoutOverride {
   readonly anchorX?: number;
   readonly anchorY?: number;
   readonly rows?: number;
+  /**
+   * Cells to a sheet row when the repaint packs its cells rather than giving
+   * each heading its own column: cell `(heading c, frame r)` is the
+   * `(r × directions + c)`th, counted along each sheet row. A square-ish sheet
+   * keeps a tall one (Korath 5 and 6: 30 frames of 16 headings) within the
+   * 8192 px many graphics cards cannot pass. `rows` still counts frames.
+   */
+  readonly columns?: number;
   readonly animations?: Readonly<Partial<Record<MonsterAnimation, RowCycle>>>;
   /**
    * Which frame of the `attack` cycle is the blow itself (0-based). When set,
@@ -127,6 +135,8 @@ export interface SheetLayoutOverride {
 /** A sheet as the game draws it: the Flash table row plus any repaint layout. */
 export interface AnimatedSheet extends MonsterSheet {
   readonly strikeFrame?: number;
+  /** Cells to a sheet row for a packed repaint (`SheetLayoutOverride.columns`); see `frameRect`. */
+  readonly packedColumns?: number;
 }
 
 /**
@@ -463,6 +473,12 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Korath 5 and 6: the Flash cells, one transparent pixel row (6) or column (5)
+  // added so every cell edge falls on a whole pixel in the @1.5x copy, and the
+  // 480 cells (30 frames of 16 headings) packed 20 to a row. In the Flash
+  // layout, 16 wide and 30 tall, even the 2x sheet passed 8192 px.
+  "monsters/korath_5.png": { frameWidth: 200, columns: 20 },
+  "monsters/korath_6.png": { frameHeight: 168, columns: 20 },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -480,17 +496,19 @@ export function applyLayout(
   const frameWidth = override.frameWidth ?? sheet.frameWidth;
   const frameHeight = override.frameHeight ?? sheet.frameHeight;
   const rows = override.rows ?? sheet.rows;
+  const packed = override.columns;
   const result: AnimatedSheet = {
     ...sheet,
     frameWidth,
     frameHeight,
     rows,
-    width: frameWidth * sheet.columns,
-    height: frameHeight * rows,
+    width: frameWidth * (packed ?? sheet.columns),
+    height: frameHeight * (packed ? Math.ceil((rows * sheet.directions) / packed) : rows),
     anchorX: override.anchorX ?? sheet.anchorX,
     anchorY: override.anchorY ?? sheet.anchorY,
     animations: override.animations ?? sheet.animations,
     ...(override.strikeFrame !== undefined ? { strikeFrame: override.strikeFrame } : {}),
+    ...(packed ? { packedColumns: packed } : {}),
   };
   if (cacheable) layoutCache.set(sheet, result);
   return result;
@@ -685,11 +703,16 @@ export interface SwingTiming {
   readonly strike?: number;
 }
 
-/** The pixel rectangle of cell `(column, row)` in the sheet (`SPRITES.as:379-380`). */
-export function frameRect(sheet: MonsterSheet, column: number, row: number): FrameRect {
+/**
+ * The pixel rectangle of cell `(column, row)` in the sheet (`SPRITES.as:379-380`),
+ * or, in a packed repaint, of that heading and frame where the packing put it.
+ */
+export function frameRect(sheet: AnimatedSheet, column: number, row: number): FrameRect {
+  const packed = sheet.packedColumns;
+  const cell = packed ? row * sheet.directions + column : 0;
   return {
-    x: column * sheet.frameWidth,
-    y: row * sheet.frameHeight,
+    x: (packed ? cell % packed : column) * sheet.frameWidth,
+    y: (packed ? Math.floor(cell / packed) : row) * sheet.frameHeight,
     width: sheet.frameWidth,
     height: sheet.frameHeight,
   };
@@ -761,9 +784,9 @@ export function flyerAltitude(creatureId: string): number {
 
 /**
  * Sheets repainted for the revamp, by original file. Each is the original
- * layout drawn at four times the size (three for the two biggest Korath
- * sheets); the `@4x` or `@3x` in the name is how Pixi knows
- * the resolution, so the table's 1x cell rectangles still frame it. Art trial: the Pokey
+ * layout drawn at four times the size (three for Korath 4, two for Korath 5
+ * and 6, whose packed sheets would pass 8192 px at any more); the `@4x`,
+ * `@3x` or `@2x` in the name is how Pixi knows the resolution, so the table's 1x cell rectangles still frame it. Art trial: the Pokey
  * (`gen-pokey-sprite.py`), the Teratorn (`gen-teratorn-sprite.py`) the Bolt (`gen-bolt-sprite.py`) and the Octo-ooze (`gen-octo-sprite.py`).
  * Remove an entry to go back to the original sheet; empty the table to
  * switch the trial off. A player with Classic look on gets every original.
@@ -813,13 +836,13 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/korath_1.png": "monsters/korath_1-repaint@4x.png", // Korath level 1 repaint (all 16 headings, walk + attack, ground shadow)
   "monsters/korath_2.png": "monsters/korath_2-repaint@4x.png", // Korath level 2 repaint (all 16 headings, walk + attack, ground shadow)
   "monsters/korath_3.png": "monsters/korath_3-repaint@4x.png", // Korath level 3 repaint (all 16 headings, walk + attack, ground shadow)
-  "monsters/korath_4.png": "monsters/korath_4-repaint@4x.png", // Korath level 4 repaint (all 16 headings, walk + attack, ground shadow)
-  "monsters/korath_5.png": "monsters/korath_5-repaint@3x.png", // Korath level 5 repaint at 3x (the 4x sheet would be over 12,000 px), walk + attack + stomp
-  "monsters/korath_6.png": "monsters/korath_6-repaint@3x.png", // Korath level 6 repaint at 3x (the 4x sheet would be over 12,000 px), walk + attack + stomp
+  "monsters/korath_4.png": "monsters/korath_4-repaint@3x.png", // Korath level 4 repaint at 3x (at 4x it was 9840 px tall), walk + attack, ground shadow
+  "monsters/korath_5.png": "monsters/korath_5-repaint@2x.png", // Korath level 5 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
+  "monsters/korath_6.png": "monsters/korath_6-repaint@2x.png", // Korath level 6 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
 };
 
-/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`, `name@2x.png?v=…`). */
-export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+(\?.*)?$/.test(url);
+/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`, `name@1.5x.png?v=…`). */
+export const isHighResolutionSheet = (url: string): boolean => /@\d+(\.\d+)?x\.\w+(\?.*)?$/.test(url);
 
 /**
  * The URL the sheet is served from: `/assets/monsters/<file>`, or, unless the

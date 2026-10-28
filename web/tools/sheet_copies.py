@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Make the smaller copies of every painted monster and champion sheet, for the Quality setting.
 
-Each repaint is painted at three or four times the game's size (`name@4x.png`, `name@3x.png`).
-The Quality setting (Account settings, `web/src/game/quality.ts`) picks which copy a player downloads:
+Each repaint is painted at three or four times the game's size (`name@4x.png`, `name@3x.png`); Korath 5
+and 6 at two (`name@2x.png`), as more would pass the 8192 px many graphics cards cannot hold. The Quality
+setting (Account settings, `web/src/game/quality.ts`) picks which copy a player downloads:
 
-  High    name@4x.png  (or @3x)  as painted
-  Medium  name@2x.png             half the painted size (two thirds for a @3x sheet), about a quarter of the bytes
-  Low     name.png                the size Flash drew it, about a tenth of the bytes
+  High    name@4x.png  (or @3x, @2x)  as painted
+  Medium  name@2x.png                 half the painted size (two thirds for a @3x sheet), about a quarter of the bytes;
+                                      name@1.5x.png for a sheet painted at 2x
+  Low     name.png                    the size Flash drew it, about a tenth of the bytes
 
-This writes `name@2x.png` from the painted sheet, and `name.png` too when it is missing. A
+This writes the Medium copy from the painted sheet, and `name.png` too when it is missing. A
 `name.png` the sheet's own builder wrote next to the painted sheet (they all do) is never touched:
 it is already the 1x copy. Each copy written here is quantised to 256 colours like the sheets
 themselves and carries a `bymr-copy-of` note naming the painted sheet and its byte size, so
@@ -28,6 +30,7 @@ Quantising uses libimagequant when it is installed (`uv run --no-project --with 
 """
 import argparse
 import importlib.util
+from fractions import Fraction
 import re
 import struct
 import sys
@@ -52,17 +55,29 @@ def repaints():
     src = SPRITES_TS.read_text(encoding="utf8")
     table = src[src.index("export const REPAINTED_SHEETS"):]
     table = table[: table.index("};")]
-    return [p for p in re.findall(r':\s*"([^"]+)"', table) if PAINTED.search(p)]
-
-
-def copy_paths(painted):
-    """(half, quarter): `name@2x.png` and `name.png` beside `name@Nx.png`."""
-    painted = Path(painted)
-    return painted.with_name(PAINTED.sub("@2x.png", painted.name)), painted.with_name(PAINTED.sub(".png", painted.name))
+    return [p for p in re.findall(r':\s*"([^"]+)"', table) if scale_of(p) >= 2]
 
 
 def scale_of(painted):
-    return int(PAINTED.search(Path(painted).name).group(1))
+    found = PAINTED.search(Path(painted).name)
+    return int(found.group(1)) if found else 1
+
+
+def medium_scale(painted):
+    """The Medium copy's scale: 2, or 1.5 for a sheet painted at only 2x (as `sheetCopies` in quality.ts)."""
+    return Fraction(2) if scale_of(painted) >= 3 else Fraction(3, 2)
+
+
+def copy_paths(painted):
+    """(half, quarter): `name@2x.png` (`name@1.5x.png`) and `name.png` beside `name@Nx.png`."""
+    painted = Path(painted)
+    tag = "@2x.png" if medium_scale(painted) == 2 else "@1.5x.png"
+    return painted.with_name(PAINTED.sub(tag, painted.name)), painted.with_name(PAINTED.sub(".png", painted.name))
+
+
+def copy_scales(painted):
+    """The scales of `copy_paths`: the Medium copy's, then 1."""
+    return medium_scale(painted), Fraction(1)
 
 
 # ── PNG text chunks, read and written without touching the pixels ──────────────────────────
@@ -148,7 +163,7 @@ def stale(painted):
     """The copies of a painted sheet that are missing, the wrong size, or made from an older painting."""
     want = stamp(painted)
     out = []
-    for path, scale in zip(copy_paths(painted), (2, 1)):
+    for path, scale in zip(copy_paths(painted), copy_scales(painted)):
         if not path.exists():
             out.append(path)
         elif texts(path).get(MARK) != want and not (scale == 1 and builders_copy(painted, path)):
@@ -164,15 +179,16 @@ def make_copies(painted, versions=True):
     notes = {k: v for k, v in texts(painted).items() if k != MARK}  # e.g. Krallen's ground-shadow mark
     big = None
     written = []
-    for path, scale in zip(copy_paths(painted), (2, 1)):
+    for path, scale in zip(copy_paths(painted), copy_scales(painted)):
         if path.exists() and texts(path).get(MARK) == want:
             continue
         if scale == 1 and path.exists() and builders_copy(painted, path):
             continue  # the builder's own 1x copy, written with the painting: left byte for byte
         if big is None:
             big = Image.open(painted).convert("RGBA")
-        w, h = big.width * scale // n, big.height * scale // n
-        assert (w * n, h * n) == (big.width * scale, big.height * scale), f"{painted.name}: {big.size} does not divide by {n}"
+        w, h = big.width * scale / n, big.height * scale / n
+        assert w.denominator == h.denominator == 1, f"{painted.name}: {big.size} does not scale by {scale}/{n} to whole pixels"
+        w, h = int(w), int(h)
         # Pillow resizes RGBA with the alpha premultiplied, so no dark fringes.
         quantise(big.resize((w, h), Image.LANCZOS), path)
         set_texts(path, {**notes, MARK: want})

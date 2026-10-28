@@ -49,9 +49,15 @@ describe("sheetAtQuality", () => {
     expect(sheetAtQuality("monsters/korath@3x.png", "medium")).toBe("monsters/korath@2x.png");
   });
 
+  it("asks for the @1.5x copy on Medium of a sheet painted at 2x (Korath 5 and 6)", () => {
+    expect(sheetAtQuality("monsters/korath_5-repaint@2x.png", "high")).toBe("monsters/korath_5-repaint@2x.png");
+    expect(sheetAtQuality("monsters/korath_5-repaint@2x.png", "medium")).toBe("monsters/korath_5-repaint@1.5x.png");
+    expect(sheetAtQuality("monsters/korath_5-repaint@2x.png", "low")).toBe("monsters/korath_5-repaint.png");
+  });
+
   it("leaves a sheet that is not a big painting alone", () => {
     expect(sheetAtQuality("monsters/spurtz.png", "low")).toBe("monsters/spurtz.png");
-    expect(sheetAtQuality("monsters/small@2x.png", "low")).toBe("monsters/small@2x.png");
+    expect(sheetAtQuality("monsters/small@1x.png", "low")).toBe("monsters/small@1x.png");
   });
 });
 

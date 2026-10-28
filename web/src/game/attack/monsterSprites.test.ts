@@ -247,7 +247,7 @@ describe("spriteFor", () => {
     }
   });
 
-  it("draws every Korath level from its repaint, levels 5 and 6 at 3x", () => {
+  it("draws every Korath level from its repaint, level 4 at 3x and levels 5 and 6 at 2x", () => {
     const urls = [1, 2, 3, 4, 5, 6].map((level) => {
       const one = spriteFor("G4", level);
       return one && bare(sheetUrl(one));
@@ -256,9 +256,9 @@ describe("spriteFor", () => {
       "/assets/monsters/korath_1-repaint@4x.png",
       "/assets/monsters/korath_2-repaint@4x.png",
       "/assets/monsters/korath_3-repaint@4x.png",
-      "/assets/monsters/korath_4-repaint@4x.png",
-      "/assets/monsters/korath_5-repaint@3x.png",
-      "/assets/monsters/korath_6-repaint@3x.png",
+      "/assets/monsters/korath_4-repaint@3x.png",
+      "/assets/monsters/korath_5-repaint@2x.png",
+      "/assets/monsters/korath_6-repaint@2x.png",
     ]);
   });
 

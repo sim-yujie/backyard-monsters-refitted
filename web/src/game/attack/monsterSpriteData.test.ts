@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { MONSTER_SPRITES, type MonsterSheet } from "./monsterSpriteData";
-import { REPAINT_LAYOUTS, REPAINTED_SHEETS } from "./monsterSprites";
+import { applyLayout, REPAINTED_SHEETS } from "./monsterSprites";
 import { SHEET_VERSIONS } from "./sheetVersions";
+import { sheetCopies } from "@/game/quality";
 
 /**
  * The generated sprite table, checked against the PNGs on the game server's
@@ -57,15 +58,16 @@ const pngNotes = (path: string): Record<string, string> => {
   return notes;
 };
 
-/** The painted sheets (`name@4x.png`, `name@3x.png`) and their Quality copies: `name@2x.png`, `name.png`. */
-const paintings = Object.values(REPAINTED_SHEETS)
-  .filter((file) => Number(/@(\d+)x\.png$/.exec(file)?.[1] ?? 0) >= 3)
-  .map((file) => ({
-    file,
-    scale: Number(/@(\d+)x\.png$/.exec(file)?.[1]),
-    half: file.replace(/@\d+x\.png$/, "@2x.png"),
-    one: file.replace(/@\d+x\.png$/, ".png"),
-  }));
+/**
+ * The painted sheets (`name@4x.png`, `name@3x.png`, Korath 5 and 6 `name@2x.png`)
+ * and their Quality copies: `name@2x.png` (`name@1.5x.png`), `name.png`.
+ */
+const paintings = Object.values(REPAINTED_SHEETS).flatMap((file) => {
+  const copies = sheetCopies(file);
+  if (!copies) return [];
+  const scaleOf = (name: string): number => Number(/@([\d.]+)x\.png$/.exec(name)?.[1] ?? 1);
+  return [{ file, scale: scaleOf(file), half: copies.medium, halfScale: scaleOf(copies.medium), one: copies.low }];
+});
 
 /**
  * Sheets whose size is not a whole multiple of the frame size, with the
@@ -235,15 +237,10 @@ describe("MONSTER_SPRITES", () => {
     for (const [original, repaint] of Object.entries(REPAINTED_SHEETS)) {
       const sheet = sheets.find((one) => one.file === original);
       expect(sheet, original).toBeDefined();
+      if (!sheet) continue;
       const scale = Number(/@(\d+)x\./.exec(repaint)?.[1] ?? 1);
-      // A repaint with its own layout (more or fewer rows, taller cells) sizes by that layout.
-      const layout = REPAINT_LAYOUTS[original];
-      const columns = sheet?.columns ?? 1;
-      const width = layout?.frameWidth ? layout.frameWidth * columns : sheet?.width ?? 0;
-      const height =
-        layout?.frameHeight || layout?.rows
-          ? (layout.frameHeight ?? sheet?.frameHeight ?? 0) * (layout.rows ?? sheet?.rows ?? 1)
-          : sheet?.height ?? 0;
+      // A repaint with its own layout (more or fewer rows, taller cells, packed) sizes by that layout.
+      const { width, height } = applyLayout(sheet);
       expect(pngSize(`${ASSETS}${repaint}`), repaint).toEqual({
         width: width * scale,
         height: height * scale,
@@ -256,9 +253,9 @@ describe("MONSTER_SPRITES", () => {
   // makes them, and the animated kits' `shrink-sheet.py` runs it.
   it("has a half-size and a 1x copy beside every painted sheet", () => {
     expect(paintings.length).toBeGreaterThan(30);
-    for (const { file, scale, half, one } of paintings) {
+    for (const { file, scale, half, halfScale, one } of paintings) {
       const painted = pngSize(`${ASSETS}${file}`);
-      for (const [copy, times] of [[half, 2], [one, 1]] as const) {
+      for (const [copy, times] of [[half, halfScale], [one, 1]] as const) {
         expect(existsSync(`${ASSETS}${copy}`), `${copy} is missing: run python web/tools/sheet_copies.py`).toBe(true);
         expect(pngSize(`${ASSETS}${copy}`), copy).toEqual({
           width: (painted.width * times) / scale,
@@ -290,7 +287,8 @@ describe("MONSTER_SPRITES", () => {
     for (const key of keys) {
       const repaint = REPAINTED_SHEETS[MONSTER_SPRITES[key]?.file ?? ""];
       expect(repaint, key).toBeDefined();
-      for (const file of [repaint ?? "", (repaint ?? "").replace(/@\dx\./, "@2x."), (repaint ?? "").replace(/@\dx\./, ".")]) {
+      const copies = sheetCopies(repaint ?? "");
+      for (const file of [repaint ?? "", copies?.medium ?? "", copies?.low ?? ""]) {
         const head = Buffer.alloc(256);
         const handle = openSync(`${ASSETS}${file}`, "r");
         try {
