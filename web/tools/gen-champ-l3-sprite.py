@@ -1,7 +1,7 @@
 """
 Build the repainted level 3 batch champion sheets (Gorgo ape_3, Drull dragon_3, Fomor fly_3, Krallen looks 2 and 3 krallen_2_rev_65,
 krallen_3_rev_65) and the level 4-6 sheets (ape_4..6, dragon_4..6, fly_4..6, columns 2..10 painted, the rest mirrored) from Codex-painted
-frames. Usage (from the repo root):
+frames, and the six Korath sheets (korath_1..6, web/tools/korath-kit, columns 2..10 painted, the rest mirrored). Usage (from the repo root):
 
     pip install pillow numpy scipy
     python web/tools/gen-champ-l3-sprite.py <sheet> <source folder>      e.g.  ape_3 art-trials/champions/gorgo/L3/full
@@ -45,7 +45,15 @@ for _name, _cell in {"ape_4": (148, 127), "ape_5": (160, 137), "ape_6": (140, 12
                          nudge_in=True)
 for _name, _cell in {"fly_4": (120, 92), "fly_5": (133, 105), "fly_6": (124, 105)}.items():
     SHEETS[_name] = dict(cell=_cell, rows=7, painted=range(2, 11), calls={"A": list(range(7))}, hold_walk=False, nudge_in=True)
-UP = 4
+# Korath levels 1-6 (web/tools/korath-kit): walk from row 0 (its first frame is the idle), the attack right after it, columns 2..10
+# painted and the rest mirrored. The Flash sheets of levels 5 and 6 also carry a 10-row stomp (rows 20-29) that the game never plays
+# (AttackBattleLayer.animationFor): their repaints stop after the attack (20 rows, REPAINT_LAYOUTS in monsterSprites.ts) and are
+# drawn at 3x, as their big cells at 4x would make a sheet twice the size of any other.
+for _lv, (_cell, _walk, _atk) in {1: ((72, 49), 8, 9), 2: ((119, 81), 8, 9), 3: ((128, 102), 9, 9),
+                                  4: ((153, 123), 10, 10), 5: ((199, 162), 10, 10), 6: ((202, 167), 10, 10)}.items():
+    SHEETS[f"korath_{_lv}"] = dict(cell=_cell, rows=_walk + _atk, painted=range(2, 11),
+                                   calls={"A": list(range(_walk)), "B": [0, *range(_walk, _walk + _atk)]}, hold_walk=True, nudge_in=True,
+                                   cut_hue=True, up=3 if _lv >= 5 else 4)
 AREA = 1.05                       # new row-0 silhouette area / old row-0 body area
 WALK_HOLD = 0.04                  # a held walk frame may differ from row 0's size by this much
 FIT_SHRINK = 0.15                 # a frame that would be cut by the cell edge may be shrunk by up to this much to fit
@@ -54,6 +62,7 @@ if len(sys.argv) != 3 or sys.argv[1] not in SHEETS:
     sys.exit(__doc__)
 NAME, SOURCE = sys.argv[1], Path(sys.argv[2])
 SPEC = SHEETS[NAME]
+UP = SPEC.get("up", 4)
 CELL, ROWS, COLS = SPEC["cell"], SPEC["rows"], 16
 PAINTED = list(SPEC["painted"])
 if os.environ.get("PARTIAL"):     # a test run before every heading is painted: only those with every call painted
@@ -130,6 +139,9 @@ def key_cell(rgb):
         # a yellow creature has no magenta of its own: ground painted between the legs blended into shading (not pure enough for a
         # pocket above) is cut too. Pink pads and mouth have more green or far less blue; the purple spines are darker.
         keep &= ~ndi.binary_dilation((b > 0.75 * r) & (r > 140) & (g < b - 60), iterations=1)
+    if SPEC.get("cut_hue"):
+        # Korath (rock, lava and steel) has no pink or purple at all: any magenta-hued pocket is ground seen through a gap
+        keep &= ~ndi.binary_dilation(((r - g) > 40) & ((b - g) > 40), iterations=1)
     keep = ndi.binary_erosion(keep, iterations=2)
     alpha = np.asarray(Image.fromarray((keep * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(1.2))).astype(float)
     # despill the magenta fringe on the rim only: a pixel close to #FF00FF next to the ground is spill (Fomor's purple body is far darker)
@@ -143,7 +155,7 @@ def key_cell(rgb):
 
 def grid_cells(path, n):
     im = Image.open(path).convert("RGB")
-    gc = 4 if n <= 8 else 5
+    gc = 4 if n <= 8 else 5 if n <= 10 else 6
     w, h = im.size
     cw, ch = w // gc, h // 2
     return [key_cell(np.asarray(im.crop(((i % gc) * cw, (i // gc) * ch, (i % gc + 1) * cw, (i // gc + 1) * ch)))) for i in range(n)]
@@ -298,13 +310,13 @@ def grade_column(c):
         placed[key] = Image.fromarray(a.round().astype("uint8"), "RGBA")
 
 
-if not os.environ.get("NO_GRADE"):
+if not os.environ.get("NO_GRADE") and NAME in SKIN:
     for c in COLUMNS:
         grade_column(c)
 
 sheet = Image.new("RGBA", (COLS * cw, ROWS * ch))
 for (c, row), cell in placed.items():
     sheet.paste(cell, (c * cw, row * ch))
-sheet.save(ASSETS / f"{NAME}-repaint@4x.png", optimize=True)
-sheet.resize(ORIGINAL.size, Image.LANCZOS).save(ASSETS / f"{NAME}-repaint.png", optimize=True)
-print(f"wrote {NAME}-repaint@4x.png and {NAME}-repaint.png", file=sys.stderr)
+sheet.save(ASSETS / f"{NAME}-repaint@{UP}x.png", optimize=True)
+sheet.resize((COLS * CELL[0], ROWS * CELL[1]), Image.LANCZOS).save(ASSETS / f"{NAME}-repaint.png", optimize=True)
+print(f"wrote {NAME}-repaint@{UP}x.png and {NAME}-repaint.png", file=sys.stderr)

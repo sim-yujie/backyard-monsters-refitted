@@ -200,13 +200,14 @@ describe("MONSTER_SPRITES", () => {
       const sheet = sheets.find((one) => one.file === original);
       expect(sheet, original).toBeDefined();
       const scale = Number(/@(\d+)x\./.exec(repaint)?.[1] ?? 1);
-      // A repaint with its own layout (more rows, taller cells) sizes by that layout.
+      // A repaint with its own layout (more or fewer rows, taller cells) sizes by that layout.
       const layout = REPAINT_LAYOUTS[original];
       const columns = sheet?.columns ?? 1;
       const width = layout?.frameWidth ? layout.frameWidth * columns : sheet?.width ?? 0;
-      const height = layout?.frameHeight
-        ? layout.frameHeight * (layout.rows ?? sheet?.rows ?? 1)
-        : sheet?.height ?? 0;
+      const height =
+        layout?.frameHeight || layout?.rows
+          ? (layout.frameHeight ?? sheet?.frameHeight ?? 0) * (layout.rows ?? sheet?.rows ?? 1)
+          : sheet?.height ?? 0;
       expect(pngSize(`${ASSETS}${repaint}`), repaint).toEqual({
         width: width * scale,
         height: height * scale,
