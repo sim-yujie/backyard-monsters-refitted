@@ -65,7 +65,10 @@ describe("GoalsPanel on the Inferno yard (Flash's Quests window)", () => {
     const { panel } = mounted(true);
     panel.render(listView([goal("IQT1", "ready", { shiny: 10 }), goal("IT3", "open", { shiny: 10 })]));
     const button = panel.element.querySelector<HTMLButtonElement>(".goals-claim")!;
-    expect(spokenText(button)).toContain("Shiny +10");
+    expect(spokenText(button)).toContain("Shiny 10 gained");
+    const shiny = button.querySelector('.goals-claim__amount[data-resource="shiny"]')!;
+    expect(shiny.classList.contains("res-amount--gain")).toBe(true);
+    expect(shiny.querySelector(".res-amount__value")!.textContent).toBe("+10");
     const open = panel.element.querySelector('.goals-row[data-goal="IT3"] .goals-reward')!;
     expect(spokenText(open as HTMLElement)).toContain("Shiny 10");
     panel.close();
@@ -102,8 +105,14 @@ describe("GoalsPanel", () => {
     const { panel, options } = mounted();
     panel.render(listView([goal("T1", "ready")], { r1: 9000, r2: 0 }));
     const button = panel.element.querySelector<HTMLButtonElement>(".goals-claim")!;
-    expect(spokenText(button)).toBe("Claim Twigs +1,000 Pebbles +2,000 (storage full)");
-    expect(button.querySelector(".goals-claim__amount--capped")).not.toBeNull();
+    expect(spokenText(button)).toBe("Claim Twigs 1,000 gained Pebbles 2,000 gained (storage full)");
+    // A gain: green "+1,000" (owner, 28 Oct), the capped one keeping its own title.
+    const values = [...button.querySelectorAll(".goals-claim__amount.res-amount--gain > .res-amount__value")];
+    expect(values.map((value) => value.textContent)).toEqual(["+1,000", "+2,000"]);
+    expect(values[1]!.getAttribute("title")).toBe("2,000 gained");
+    const capped = button.querySelector<HTMLElement>(".goals-claim__amount--capped")!;
+    expect(capped.title).toBe("2,000 reward, 1,000 fits in storage");
+    expect(capped.querySelector(".res-amount__value")!.hasAttribute("title")).toBe(false);
     expect(button.getAttribute("data-tut")).toBe("goals-claim");
     button.click();
     expect(options.onClaim).toHaveBeenCalledWith(expect.objectContaining({ id: "T1" }), button);

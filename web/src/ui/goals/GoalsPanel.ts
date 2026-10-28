@@ -153,8 +153,9 @@ const rewardRow = (goal: GoalView): HTMLElement => {
 };
 
 /**
- * The Claim button: "Claim" and what will land per resource, "+1,000"; a
- * resource the cap cuts is marked and the button ends "(storage full)".
+ * The Claim button: "Claim" and what will land per resource, "+1,000" in
+ * green as a gain (`amountChange.ts`); a resource the cap cuts is marked and
+ * the button ends "(storage full)".
  */
 export const claimButton = (goal: GoalView, figure: ClaimFigure | undefined): HTMLButtonElement => {
   const button = tutTarget(el("button", "btn btn--primary goals-claim"), GOALS_CLAIM_TARGET);
@@ -166,7 +167,12 @@ export const claimButton = (goal: GoalView, figure: ClaimFigure | undefined): HT
     const reward = goal.reward[key];
     if (reward <= 0) continue;
     const credited = figure?.credited[key] ?? reward;
-    const chip = resourceAmount(key, `+${formatAmount(credited)}`, { className: "goals-claim__amount" });
+    // A capped chip's own title says more than "800 gained".
+    const chip = resourceAmount(key, credited, {
+      className: "goals-claim__amount",
+      change: "gain",
+      tooltip: credited >= reward,
+    });
     if (credited < reward) {
       chip.classList.add("goals-claim__amount--capped");
       chip.title = `${formatAmount(reward)} reward, ${formatAmount(credited)} fits in storage`;
@@ -175,7 +181,7 @@ export const claimButton = (goal: GoalView, figure: ClaimFigure | undefined): HT
   }
   // Shiny has no cap: it always arrives whole.
   if (goal.shiny) {
-    amounts.append(resourceAmount("shiny", `+${formatAmount(goal.shiny)}`, { className: "goals-claim__amount" }));
+    amounts.append(resourceAmount("shiny", goal.shiny, { className: "goals-claim__amount", change: "gain" }));
   }
   if (goal.monsters) {
     amounts.append(el("span", "goals-claim__amount", `+${monstersText(goal.monsters.count, goal.monsters.name)}`));

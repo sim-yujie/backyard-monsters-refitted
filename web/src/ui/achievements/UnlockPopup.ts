@@ -1,6 +1,5 @@
 import type { UnlockCard, UnlockInbox } from "@/game/achievements/unlockInbox";
 import { summaryHeading, nameList, shinyText } from "@/game/achievements/unlockText";
-import { formatAmount } from "@/ui/format";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/achievement-popup.css";
 
@@ -139,7 +138,7 @@ export class UnlockPopup {
       body.append(names);
     }
     if (card.shiny > 0) {
-      const shiny = resourceAmount("shiny", `+${formatAmount(card.shiny)}`, { className: "ach-card__shiny" });
+      const shiny = resourceAmount("shiny", card.shiny, { className: "ach-card__shiny", change: "gain" });
       shiny.setAttribute("aria-label", shinyText(card.shiny));
       body.append(shiny);
     }

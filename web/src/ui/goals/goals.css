@@ -150,6 +150,15 @@
   gap: var(--space-1) var(--space-3);
 }
 
+/* The green "+1,000" (`.res-amount--gain`, `ui.css`) is made for a panel, not
+   the cyan button: it sits on a small panel-coloured chip, as the yard's
+   collect float does, so it reads in both themes. */
+.goals-claim__amount.res-amount--gain {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--colour-surface-base) 80%, transparent);
+}
+
 .goals-claim__amount--capped .res-amount__value {
   text-decoration: underline dotted;
   text-underline-offset: 3px;

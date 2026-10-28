@@ -36,8 +36,11 @@ describe("UnlockPopup", () => {
     inbox.add([live(2, 10)]);
     expect(text(".ach-card__kicker")).toBe(EARNED_TEXT);
     expect(text(".ach-card__name")).toBe("Ach 2");
-    expect(text(".ach-card__shiny")).toContain("+10");
-    expect(popup.element.querySelector(".ach-card__shiny")!.getAttribute("aria-label")).toBe("+10 Shiny");
+    const shiny = popup.element.querySelector(".ach-card__shiny")!;
+    expect(shiny.getAttribute("aria-label")).toBe("+10 Shiny");
+    // A gain: green "+10" (owner, 28 Oct).
+    expect(shiny.classList.contains("res-amount--gain")).toBe(true);
+    expect(shiny.querySelector(".res-amount__value")!.textContent).toBe("+10");
     expect(shown).toHaveLength(1);
     expect(popup.element.getAttribute("role")).toBe("status");
   });
