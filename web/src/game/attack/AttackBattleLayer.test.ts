@@ -179,6 +179,23 @@ describe("headings and cells", () => {
     expect(animationFor(creepOf(), false)).toBe("idle");
   });
 
+  it("plays Korath's stomp while he quakes, the slam on row 26 as the quake lands (Korath.as:146-149, :174-178)", () => {
+    for (const level of [5, 6]) {
+      const korath = creepOf({ monsterId: "G4", level, champion: true, state: "attacking", quaking: true });
+      expect(animationFor(korath, false)).toBe("stomp");
+      expect(animationFor({ ...korath, quaking: false }, false)).toBe("attack");
+      // The stomp's clock starts with the quake, whatever the creep's age:
+      // frame 48 (the engine's QUAKE_STRIKE_FRAME) is row 26, frame 72 row 29.
+      // The repaint keeps the Flash sheet's 30 rows, so both draw these rows.
+      const sheet = sheetOf("G4", level);
+      expect(sheet).toBe(MONSTER_SPRITES[`G4_${level}`]);
+      expect(sheetUrl(sheet)).toBe(`/assets/monsters/korath_${level}-repaint@3x.png`);
+      const rowAt = (quakeAge: number): number =>
+        layoutCreep(korath, sheet, { heading: 0, moving: false, age: 1003, quakeAge }, ORIGIN, STILL).row;
+      expect([0, 8, 47, 48, 55, 72].map(rowAt)).toEqual([20, 21, 25, 26, 26, 29]);
+    }
+  });
+
   it("keeps a flyer that is standing still flapping, never in its folded-wing pose (#206)", () => {
     const fomor = sheetOf("G3", 6);
     const flyer = creepOf({ monsterId: "G3", level: 6, champion: true, friendly: true, flying: true });

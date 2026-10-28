@@ -46,14 +46,15 @@ for _name, _cell in {"ape_4": (148, 127), "ape_5": (160, 137), "ape_6": (140, 12
 for _name, _cell in {"fly_4": (120, 92), "fly_5": (133, 105), "fly_6": (124, 105)}.items():
     SHEETS[_name] = dict(cell=_cell, rows=7, painted=range(2, 11), calls={"A": list(range(7))}, hold_walk=False, nudge_in=True)
 # Korath levels 1-6 (web/tools/korath-kit): walk from row 0 (its first frame is the idle), the attack right after it, columns 2..10
-# painted and the rest mirrored. The Flash sheets of levels 5 and 6 also carry a 10-row stomp (rows 20-29) that the game never plays
-# (AttackBattleLayer.animationFor): their repaints stop after the attack (20 rows, REPAINT_LAYOUTS in monsterSprites.ts) and are
-# drawn at 3x, as their big cells at 4x would make a sheet twice the size of any other.
+# painted and the rest mirrored. Levels 5 and 6 also have the 10-row stomp (rows 20-29, call C), the quake Korath plays after three
+# swings, and are drawn at 3x, as their big cells at 4x would make a sheet over 12,000 px wide.
 for _lv, (_cell, _walk, _atk) in {1: ((72, 49), 8, 9), 2: ((119, 81), 8, 9), 3: ((128, 102), 9, 9),
                                   4: ((153, 123), 10, 10), 5: ((199, 162), 10, 10), 6: ((202, 167), 10, 10)}.items():
-    SHEETS[f"korath_{_lv}"] = dict(cell=_cell, rows=_walk + _atk, painted=range(2, 11),
-                                   calls={"A": list(range(_walk)), "B": [0, *range(_walk, _walk + _atk)]}, hold_walk=True, nudge_in=True,
-                                   cut_hue=True, up=3 if _lv >= 5 else 4)
+    _calls = {"A": list(range(_walk)), "B": [0, *range(_walk, _walk + _atk)]}
+    if _lv >= 5:
+        _calls["C"] = [0, *range(20, 30)]
+    SHEETS[f"korath_{_lv}"] = dict(cell=_cell, rows=30 if _lv >= 5 else _walk + _atk, painted=range(2, 11), calls=_calls,
+                                   hold_walk=True, nudge_in=True, cut_hue=True, up=3 if _lv >= 5 else 4)
 AREA = 1.05                       # new row-0 silhouette area / old row-0 body area
 WALK_HOLD = 0.04                  # a held walk frame may differ from row 0's size by this much
 FIT_SHRINK = 0.15                 # a frame that would be cut by the cell edge may be shrunk by up to this much to fit
@@ -232,7 +233,7 @@ for c in COLUMNS:
             ob = old_body(c, row)
             dx = xref(ob) - old_x0
             dy = 0.0 if hold else feet(ob)[1] - old_ground
-            if mode == "B":       # an attack keeps still unless the old frame clearly moves
+            if mode in ("B", "C"):       # an attack (or Korath's stomp) keeps still unless the old frame clearly moves
                 dy = 0.0 if abs(dy) < 2 else dy
                 dx = 0.0 if abs(dx) < 1.5 else dx
         X, Y, xr = x0 + dx, old_ground + dy, xref(s)

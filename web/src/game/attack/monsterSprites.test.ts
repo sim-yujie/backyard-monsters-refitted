@@ -242,6 +242,21 @@ describe("spriteFor", () => {
     }
   });
 
+  it("draws every Korath level from its repaint, levels 5 and 6 at 3x", () => {
+    const urls = [1, 2, 3, 4, 5, 6].map((level) => {
+      const one = spriteFor("G4", level);
+      return one && sheetUrl(one);
+    });
+    expect(urls).toEqual([
+      "/assets/monsters/korath_1-repaint@4x.png",
+      "/assets/monsters/korath_2-repaint@4x.png",
+      "/assets/monsters/korath_3-repaint@4x.png",
+      "/assets/monsters/korath_4-repaint@4x.png",
+      "/assets/monsters/korath_5-repaint@3x.png",
+      "/assets/monsters/korath_6-repaint@3x.png",
+    ]);
+  });
+
   it("is undefined for an unknown id", () => {
     expect(spriteFor("C99")).toBeUndefined();
     expect(spriteFor("G9", 1)).toBeUndefined();

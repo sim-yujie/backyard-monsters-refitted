@@ -6,7 +6,8 @@ end=$(( $(date +%s) + 36000 ))
 while [ $(date +%s) -lt $end ]; do
   for i in 1 2 3 4 5 6; do bash chain.sh korath_$i "$@" & done; wait
   missing=0
-  for i in 1 2 3 4 5 6; do for c in "$@"; do for m in A B; do
+  for i in 1 2 3 4 5 6; do modes=$(python -c "from spec import SPECS; print(' '.join(SPECS['korath_$i']['calls']))")
+    for c in "$@"; do for m in $modes; do
     [ -f /d/Coding/BYMR/art-trials/champions/korath/L$i/full/$m$c/frames-new.png ] || missing=$((missing+1)); done; done; done
   echo "$(date +%H:%M) pass done, missing $missing" >> chain.log
   [ $missing -eq 0 ] && { echo "$(date +%H:%M) ALLDONE $*" >> chain.log; exit 0; }

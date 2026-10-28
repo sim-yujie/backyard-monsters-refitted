@@ -1,4 +1,6 @@
-"""prep_b.py <sheet> <col>... : key the A call's idle cell into A<col>/idle.png and set up the B call of that column with it as the extra view."""
+"""prep_b.py <sheet> <col>... : key the A call's idle cell into A<col>/idle.png and set up the B call (or the call named by $MODE, e.g. C
+for the stomp) of that column with it as the extra view."""
+import os
 import subprocess
 import sys
 import numpy as np
@@ -12,4 +14,4 @@ for col in sys.argv[2:]:
     rows = SPECS[n]["calls"]["A"]; gc = grid_cols(len(rows))
     im = Image.open(d / f"A{col}" / "frames-new.png").convert("RGB"); w, h = im.size
     tight(key_cell(np.asarray(im.crop((0, 0, w // gc, h // 2))))).save(d / f"A{col}" / "idle.png")
-    subprocess.run([sys.executable, "make_batch.py", n, "B", col, str(d / f"A{col}" / "idle.png")], check=True)
+    subprocess.run([sys.executable, "make_batch.py", n, os.environ.get("MODE", "B"), col, str(d / f"A{col}" / "idle.png")], check=True)

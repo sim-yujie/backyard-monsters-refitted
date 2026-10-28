@@ -42,7 +42,7 @@ COLUMNS = 16
 # Each cycle gets its own ellipse, so a lunge keeps the shadow under her.
 _KRALLEN = {"run": range(0, 10), "attack": range(10, 16)}
 # name: (1x cell width, 1x cell height, cycles, scale of the repaint), as in monsterSpriteData.ts
-# (Korath, G4_1-G4_6: walk from row 0, then the attack; its 5 and 6 repaints are 3x and stop after the attack).
+# (Korath, G4_1-G4_6: walk from row 0, then the attack; levels 5 and 6 also stomp, rows 20-29, and their repaints are 3x).
 SHEETS = {
     "krallen_1_rev_65": (130, 80, _KRALLEN, 4),
     "krallen_2_rev_65": (131, 90, _KRALLEN, 4),
@@ -51,8 +51,8 @@ SHEETS = {
     "korath_2": (119, 81, {"walk": range(0, 8), "attack": range(8, 17)}, 4),
     "korath_3": (128, 102, {"walk": range(0, 9), "attack": range(9, 18)}, 4),
     "korath_4": (153, 123, {"walk": range(0, 10), "attack": range(10, 20)}, 4),
-    "korath_5": (199, 162, {"walk": range(0, 10), "attack": range(10, 20)}, 3),
-    "korath_6": (202, 167, {"walk": range(0, 10), "attack": range(10, 20)}, 3),
+    "korath_5": (199, 162, {"walk": range(0, 10), "attack": range(10, 20), "stomp": range(20, 30)}, 3),
+    "korath_6": (202, 167, {"walk": range(0, 10), "attack": range(10, 20), "stomp": range(20, 30)}, 3),
 }
 
 # Shadow look, in 1x pixels: a little darker than the creep repaints' shadows,

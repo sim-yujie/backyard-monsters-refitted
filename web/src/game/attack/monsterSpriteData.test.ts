@@ -215,15 +215,16 @@ describe("MONSTER_SPRITES", () => {
     }
   });
 
-  it("paints Krallen's ground shadow into every look, once", () => {
+  it("paints Krallen's and Korath's ground shadow into every sheet, once", () => {
     // Without the Flash sheets' baked shadow she looked as if she floated
     // (owner, 2026-10-25). `web/tools/add-champ-ground-shadow.py` marks a sheet
     // it has shadowed with a tEXt chunk ahead of the pixels, and refuses one
     // already marked.
-    for (const key of ["G5_1", "G5_2", "G5_3"]) {
+    const keys = ["G5_1", "G5_2", "G5_3", "G4_1", "G4_2", "G4_3", "G4_4", "G4_5", "G4_6"];
+    for (const key of keys) {
       const repaint = REPAINTED_SHEETS[MONSTER_SPRITES[key]?.file ?? ""];
       expect(repaint, key).toBeDefined();
-      for (const file of [repaint ?? "", (repaint ?? "").replace("@4x", "")]) {
+      for (const file of [repaint ?? "", (repaint ?? "").replace(/@\dx\./, ".")]) {
         const head = Buffer.alloc(256);
         const handle = openSync(`${ASSETS}${file}`, "r");
         try {

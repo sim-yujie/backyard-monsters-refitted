@@ -14,8 +14,8 @@ ASSETS = Path(os.environ.get("BYM_REPO", "D:/Coding/BYMR/worktrees/korath-art"))
 CH = Path("D:/Coding/BYMR/art-trials/champions")
 COLOUR = {"korath": KCOLOUR}
 
-# (cell w, h, walk rows, attack rows). Walk starts at row 0 (= idle); levels 5 and 6 also have 10 stomp rows (20-29) that the
-# game never plays (AttackBattleLayer.animationFor has no stomp): the sheet builder fills them with the painted attack.
+# (cell w, h, walk rows, attack rows). Walk starts at row 0 (= idle); levels 5 and 6 also have 10 stomp rows (20-29), the quake
+# Korath.as plays after three swings (owner, 28 Oct: keep them): painted by a third call, C.
 _DIMS = {1: (72, 49, 8, 9), 2: (119, 81, 8, 9), 3: (128, 102, 9, 9), 4: (153, 123, 10, 10), 5: (199, 162, 10, 10), 6: (202, 167, 10, 10)}
 _ROWS = {1: 17, 2: 17, 3: 18, 4: 20, 5: 30, 6: 30}
 _WALK = {1: "CRAWL cycle frames (the molten blob oozes forward: it stretches out, the front lifts and flows, the back end follows)",
@@ -24,6 +24,8 @@ _ATK = {1: "ATTACK frames (the blob rears its front end up off the ground and sl
         2: "ATTACK frames (it lifts one big rock fist high and pounds it down onto the target, then settles back on both fists)"}
 _ATK_APE = ("ATTACK frames (Korath rears up, raises one huge rock fist high overhead and smashes it down onto the target in front, "
             "then settles back onto its knuckles)")
+_STOMP = ("STOMP (ground quake) frames (Korath rises up onto its short hind legs to its full height with both arms raised, then drops "
+          "forward and slams both huge fists into the ground so the earth shakes, then settles back onto its knuckles)")
 SPECS = {}
 for _lv, (_w, _h, _wc, _ac) in _DIMS.items():
     _walk = list(range(_wc)); _atk = list(range(_wc, _wc + _ac))
@@ -31,6 +33,9 @@ for _lv, (_w, _h, _wc, _ac) in _DIMS.items():
                                   painted=list(range(2, 11)), calls={"A": _walk, "B": [0] + _atk},
                                   what={"A": _WALK.get(_lv, "WALK cycle frames (a heavy knuckle-walk: the big fists and the short hind legs step in turn, body bobbing)"),
                                         "B": _ATK.get(_lv, _ATK_APE)})
+    if _ROWS[_lv] == 30:
+        SPECS[f"korath_{_lv}"]["calls"]["C"] = [0] + list(range(20, 30))
+        SPECS[f"korath_{_lv}"]["what"]["C"] = _STOMP
 
 FACING = {
     0: "three-quarter front view turned about 45 degrees to screen RIGHT: mostly facing the viewer, head pointing to the lower right",
