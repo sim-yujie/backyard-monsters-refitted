@@ -278,3 +278,17 @@
     max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
   }
 }
+
+/* A monster reward's notice: the monster's picture, "10 Zagnoids → Compound". */
+.goals-reward-line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.goals-reward-line__picture {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}

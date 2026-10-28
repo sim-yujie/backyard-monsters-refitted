@@ -42,6 +42,7 @@ import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { QuantityStepper } from "@/ui/QuantityStepper";
+import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { describe, monsterPicture } from "./LockerTab";
@@ -1124,27 +1125,34 @@ export class HatchTab implements MonstersTab {
     heading.append(level, name, blurb);
     this.infoHead.replaceChildren(portrait, heading);
 
+    // The phone bar's line: what one costs, takes and fills, as icons.
     this.infoEach.replaceChildren(
-      "Each: ",
-      resourceAmount("r4", row.price),
-      ` · ${duration(row.seconds)} · ${row.space} ${this.realm === "inferno" ? "space" : "housing"}`,
+      resourceAmount("r4", row.price, { realm: this.realm }),
+      " · ",
+      iconAmount("time", duration(row.seconds), { label: "Time each" }),
+      " · ",
+      iconAmount("housing", row.space, { label: this.realm === "inferno" ? "Space each" : "Housing each" }),
     );
 
+    // Each number under its painted icon, the word kept for a screen reader
+    // and on hover: [shoe] 16, [heart] 480, [claw] 30 (a healer's heart +60).
     const damage = monsterStat(monster.id, "damage", row.level);
-    const stats: [string, Node | string][] = [
-      ["Speed", statNumber(monsterStat(monster.id, "speed", row.level))],
-      ["Health", statNumber(monsterStat(monster.id, "health", row.level))],
-      damage < 0 ? ["Heals", statNumber(-damage)] : ["Damage", statNumber(damage)],
-      [`${capitalised(this.words.goo)} each`, resourceAmount("r4", row.price)],
-      [this.realm === "inferno" ? "Space each" : "Housing each", String(row.space)],
-      ["Time each", duration(row.seconds)],
+    const stats: [Node, Node | string][] = [
+      [gameIcon("speed"), statNumber(monsterStat(monster.id, "speed", row.level))],
+      [gameIcon("health"), statNumber(monsterStat(monster.id, "health", row.level))],
+      damage < 0
+        ? [gameIcon("health", { label: "Heals" }), `+${statNumber(-damage)}`]
+        : [gameIcon("damage"), statNumber(damage)],
+      [resourceIcon("r4", { realm: this.realm }), formatAmount(row.price)],
+      [gameIcon("housing", { label: this.realm === "inferno" ? "Space each" : "Housing each" }), String(row.space)],
+      [gameIcon("time", { label: "Time each" }), duration(row.seconds)],
     ];
     this.stats.replaceChildren(
       ...stats.map(([term, value]) => {
         const item = document.createElement("div");
         item.className = "hatch-info__stat";
         const dt = document.createElement("dt");
-        dt.textContent = term;
+        dt.append(term);
         const dd = document.createElement("dd");
         dd.append(value);
         item.append(dt, dd);
@@ -1499,9 +1507,6 @@ const previewSlot = (monster: string, count: number): HTMLElement => {
 
 /** "an Incubator", "a Hatchery". */
 const article = (noun: string): string => `${/^[AEIOU]/.test(noun) ? "an" : "a"} ${noun}`;
-
-/** "Magma", "Goo": a resource word to start a label with. */
-const capitalised = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** Housing as a sentence names it: "Housing", or "the Compound" ("The Compound" to start one). */
 const housingNoun = (words: MonsterWords, start = false): string =>

@@ -1,7 +1,6 @@
 import { ACADEMY_KEYS, academyActions, type AcademyActions } from "@/api/yardAcademy";
 import type { YardRefusal } from "@/api/yard";
-import { monsterStat } from "@/game/combat/rules";
-import { hatchCost, housingSpace, monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import {
   academyFor,
   academySlots,
@@ -23,7 +22,7 @@ import { monsterRealmOf, monsterWords, type MonsterRealm } from "@/game/monsters
 import { progressFraction } from "@/game/yard/jobs";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
-import { hatchTimeText, speedText } from "./monsterNumbers";
+import { monsterStats, statGrid } from "./monsterNumbers";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/train.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
@@ -418,9 +417,8 @@ export class TrainTab implements MonstersTab {
     const facts = document.createElement("p");
     facts.className = "locker-detail__facts";
     facts.textContent = `Level ${level} of ${max}`;
-    const stats = document.createElement("p");
-    stats.className = "locker-detail__stats";
-    stats.textContent = statLine(monster.id, level, step ? level + 1 : null, this.realm);
+    const stats = statGrid(monsterStats(monster.id, level, step ? level + 1 : null), this.realm);
+    stats.classList.add("locker-detail__stats");
     heading.append(name, facts, stats);
     head.append(heading);
 
@@ -515,12 +513,16 @@ export class TrainTab implements MonstersTab {
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
+  // What an action spent is red with a minus ("Putty −64,000", no "spent"),
+  // what a cancel gave back green with a plus (owner, 28 Oct); the prices on
+  // the buttons stay plain.
+
   private async runTrain(id: string): Promise<void> {
     const result = await this.actions.train(id);
     this.report(result, (report) => [
       `Training ${nameOf(report.monster)} to level ${report.to}: `,
-      resourceAmount("r3", report.cost.r3),
-      " spent.",
+      resourceAmount("r3", report.cost.r3, { change: "loss" }),
+      ".",
     ]);
   }
 
@@ -528,7 +530,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.instant(id);
     this.report(result, (report) => [
       `${nameOf(report.monster)} is level ${report.level}, for `,
-      resourceAmount("shiny", report.credits),
+      resourceAmount("shiny", report.credits, { change: "loss" }),
       ".",
     ]);
   }
@@ -537,7 +539,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.finish(id);
     this.report(result, (report) => [
       `${nameOf(report.monster)} is level ${report.level}`,
-      ...(report.credits > 0 ? [", for ", resourceAmount("shiny", report.credits)] : []),
+      ...(report.credits > 0 ? [", for ", resourceAmount("shiny", report.credits, { change: "loss" })] : []),
       ".",
     ]);
   }
@@ -546,7 +548,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.cancel(id);
     this.report(result, (report) =>
       report.refund.r3 > 0
-        ? ["Training cancelled. Got back ", resourceAmount("r3", report.refund.r3), "."]
+        ? ["Training cancelled. Got back ", resourceAmount("r3", report.refund.r3, { change: "gain" }), "."]
         : ["Training cancelled."],
     );
   }
@@ -591,40 +593,6 @@ const slotTitle = (title: string, level: number | null): HTMLElement => {
     heading.append(small);
   }
   return heading;
-};
-
-/**
- * What the next level changes: "Health 400 → 480 · Damage 30 → 36 · Space 1".
- * A negative damage is a healer's (Vorg). Hatch cost is included when it moves.
- */
-export const statLine = (
-  id: string,
-  level: number,
-  next: number | null,
-  realm: MonsterRealm = "surface",
-): string => {
-  const pair = (now: number, then: number | null): string =>
-    then === null || then === now ? formatAmount(now) : `${formatAmount(now)} → ${formatAmount(then)}`;
-  const health = pair(monsterStat(id, "health", level), next && monsterStat(id, "health", next));
-  const damageNow = monsterStat(id, "damage", level);
-  const damageNext = next && monsterStat(id, "damage", next);
-  const damage =
-    damageNow < 0
-      ? `Heals ${pair(-damageNow, damageNext === null ? null : -damageNext)}`
-      : `Damage ${pair(damageNow, damageNext)}`;
-  const speedNow = monsterStat(id, "speed", level);
-  const speedNext = next && monsterStat(id, "speed", next);
-  const speed =
-    speedNext === null || speedNext === speedNow
-      ? speedText(id, level)
-      : `${speedText(id, level)} → ${speedText(id, next ?? level)}`;
-  const space = pair(housingSpace(id, level) ?? 0, next && (housingSpace(id, next) ?? 0));
-  const goo = pair(hatchCost(id, level) ?? 0, next && (hatchCost(id, next) ?? 0));
-  const time =
-    next === null || hatchTimeText(id, next) === hatchTimeText(id, level)
-      ? hatchTimeText(id, level)
-      : `${hatchTimeText(id, level)} → ${hatchTimeText(id, next)}`;
-  return [`Health ${health}`, damage, `Speed ${speed}`, `Space ${space}`, `Hatch ${goo} ${monsterWords(realm).goo}`, `Hatch time ${time}`].join(" · ");
 };
 
 /** The one line that says why Train is disabled; a putty (Sulfur) shortfall with its icon. */

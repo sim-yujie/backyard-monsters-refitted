@@ -36,7 +36,14 @@ import { icon } from "@/ui/icons";
 import { HousingJuice } from "@/ui/monsters/HousingJuice";
 import { HousingView } from "@/ui/monsters/HousingView";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
-import { costAmounts, resourceAmount, resourceIcon, type ResourceIconOptions } from "@/ui/resourceIcon";
+import { gameIcon, iconAmount, type GameIconName } from "@/ui/gameIcon";
+import {
+  costAmounts,
+  RESOURCE_KEYS,
+  resourceAmount,
+  resourceIcon,
+  type ResourceIconOptions,
+} from "@/ui/resourceIcon";
 import { isSurfaceInferno, purseFunds } from "@/game/yard/surfaceInferno";
 import { costFactChips } from "./costFactChips";
 import {
@@ -51,7 +58,8 @@ import {
   type UpgradeGate,
   type UpgradeOffer,
 } from "./buildingActions";
-import { buildingHealthLabel, buildingInfo, type InfoValue } from "./buildingInfo";
+import { buildingHealthLabel, buildingInfo, unlockText, type InfoRow, type InfoValue } from "./buildingInfo";
+import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { BaiterPanel } from "./BaiterPanel";
 import { BunkerPanel } from "./BunkerPanel";
 import { ChamberPanel } from "./ChamberPanel";
@@ -180,6 +188,8 @@ export class BuildingPanel {
   private readonly swatch: HTMLElement;
   private readonly info: HTMLDListElement;
   private readonly unlocks: HTMLElement;
+  /** The info rows the next level changes, drawn beside Upgrade; none when there is no upgrade to offer. */
+  private gains: readonly InfoRow[] = [];
   private readonly actions: HTMLElement;
   /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
   private readonly bunkerSlot: HTMLElement;
@@ -600,23 +610,16 @@ export class BuildingPanel {
     const { rows, list } = this.yard
       ? buildingInfo(building, this.yard.store.kind, this.yard.store.yard.cellHeight)
       : { rows: [], list: null };
+    // With an upgrade to offer, what it changes sits beside the Upgrade
+    // button instead (`upgradeGains`); these rows then read as they are now.
+    this.gains = this.yard && panelModel(building, this.yard.store).upgrade ? rows.filter((row) => row.next) : [];
+    const withNext = this.gains.length === 0;
     this.info.replaceChildren();
     for (const row of rows) {
       const term = document.createElement("dt");
-      term.textContent = row.label;
+      term.append(infoLabel(row.label));
       const definition = document.createElement("dd");
-      definition.append(infoValue(row.now));
-      if (row.next) {
-        const arrow = document.createElement("span");
-        arrow.className = "building-panel__arrow";
-        arrow.textContent = " → ";
-        const next = document.createElement("span");
-        next.className = row.down
-          ? "building-panel__next building-panel__next--down"
-          : "building-panel__next";
-        next.append(infoValue(row.next));
-        definition.append(arrow, next);
-      }
+      definition.append(...infoChange(row, withNext));
       this.info.append(term, definition);
     }
     this.info.hidden = rows.length === 0;
@@ -624,14 +627,46 @@ export class BuildingPanel {
     this.unlocks.replaceChildren();
     this.unlocks.hidden = list === null;
     if (list) {
+      // "Lv 3 unlocks", then each building's picture with its name and a
+      // "+1" or NEW badge; the words whole on hover and for a screen reader.
       const heading = document.createElement("p");
       heading.className = "building-panel__label";
       heading.textContent = list.label;
+      heading.title = list.title;
+      if (list.items.length === 0) {
+        const none = document.createElement("p");
+        none.className = "building-panel__none";
+        none.textContent = "No new buildings";
+        this.unlocks.append(heading, none);
+        return;
+      }
+      const kind = this.yard?.store.kind ?? "main";
       const items = document.createElement("ul");
-      items.className = "building-panel__list";
-      for (const text of list.items) {
+      items.className = "building-panel__unlock-list";
+      items.setAttribute("aria-label", list.title);
+      for (const unlock of list.items) {
+        const words = unlockText(unlock);
         const item = document.createElement("li");
-        item.textContent = text;
+        item.className = unlock.isNew ? "unlock-tile unlock-tile--new" : "unlock-tile";
+        item.title = words;
+        item.setAttribute("aria-label", words);
+        const picture = document.createElement("img");
+        picture.className = "unlock-tile__picture";
+        picture.src = buttonUrl(unlock.type, kind);
+        picture.alt = "";
+        picture.width = 60;
+        picture.height = 80;
+        picture.decoding = "async";
+        picture.draggable = false;
+        const badge = document.createElement("span");
+        badge.className = unlock.isNew ? "unlock-tile__badge chip chip--accent" : "unlock-tile__badge chip";
+        badge.setAttribute("aria-hidden", "true");
+        badge.textContent = unlock.isNew ? "NEW" : `+${unlock.added}`;
+        const name = document.createElement("span");
+        name.className = "unlock-tile__name";
+        name.setAttribute("aria-hidden", "true");
+        name.textContent = unlock.name;
+        item.append(picture, badge, name);
         items.append(item);
       }
       this.unlocks.append(heading, items);
@@ -880,21 +915,20 @@ export class BuildingPanel {
     block.className = "building-panel__block building-upgrade";
     block.setAttribute("aria-label", `Upgrade to level ${offer.to}`);
 
+    // "Lv 2 → 3", the clock, the cost, then what the level brings.
     const head = document.createElement("div");
     head.className = "building-panel__head";
     const title = document.createElement("h3");
     title.className = "building-panel__heading";
-    title.textContent = `Upgrade to ${offer.to}`;
-    const time = document.createElement("span");
-    time.className = "building-panel__time";
-    time.textContent = describeSeconds(offer.seconds);
-    time.title = "How long the upgrade takes. It holds one worker until it finishes.";
-    head.append(title, time);
+    title.textContent = `Lv ${offer.from} → ${offer.to}`;
+    title.title = `Upgrade to level ${offer.to}`;
+    head.append(title, stepTime(offer.seconds, "Upgrade time · 1 worker"));
     block.append(head);
 
     // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
     const held = offer.inferno && this.yard ? purseFunds(this.yard.store.save).resources : resources;
     block.append(this.costFactsLine(offer.cost, held, offer.inferno));
+    if (this.gains.length > 0) block.append(upgradeGains(this.gains));
 
     if (offer.gate) {
       const line = gateLine(offer.gate, this.yard?.store.kind, offer.inferno);
@@ -954,11 +988,7 @@ export class BuildingPanel {
     title.className = "building-panel__heading";
     title.textContent = `Fortify to F${offer.to}`;
     title.title = `Fortified F${offer.from} of ${offer.max}.`;
-    const time = document.createElement("span");
-    time.className = "building-panel__time";
-    time.textContent = describeSeconds(offer.seconds);
-    time.title = "How long the fortification takes. It holds a worker until it finishes.";
-    head.append(title, time);
+    head.append(title, stepTime(offer.seconds, "Fortify time · 1 worker"));
     block.append(head);
 
     block.append(this.costFactsLine(offer.cost, resources));
@@ -1824,20 +1854,88 @@ export const gateLine = (gate: UpgradeGate, kind: YardKind = "main", inferno = f
   return line;
 };
 
-/** An info value: text, an amount with its icon, or a row of icons. */
-const infoValue = (value: InfoValue): Node => {
+/**
+ * An info value: text, an amount with its icon (all four icons for an
+ * amount of every resource, a silo's "+7,500"), or a row of icons. `icons`
+ * false leaves them off, for the "→ next" half whose "now" already has them.
+ */
+const infoValue = (value: InfoValue, icons = true): Node => {
   if ("text" in value) return document.createTextNode(value.text);
   if ("resources" in value) {
-    const icons = document.createElement("span");
-    icons.className = "building-panel__icons";
-    if (value.resources.length === 0) icons.textContent = "None";
-    for (const key of value.resources) icons.append(resourceIcon(key));
-    return icons;
+    const row = document.createElement("span");
+    row.className = "building-panel__icons";
+    if (value.resources.length === 0) row.textContent = "None";
+    for (const key of value.resources) row.append(resourceIcon(key));
+    return row;
   }
-  const text = `${formatAmount(value.amount)}${value.suffix ?? ""}`;
-  return value.resource
-    ? resourceAmount(value.resource, text)
-    : document.createTextNode(text);
+  const text = `${value.prefix ?? ""}${formatAmount(value.amount)}${value.suffix ?? ""}`;
+  if (!icons) return document.createTextNode(text);
+  if (value.resource) return resourceAmount(value.resource, text);
+  const all = document.createElement("span");
+  all.className = "building-panel__all";
+  const row = document.createElement("span");
+  row.className = "building-panel__icons";
+  row.append(...RESOURCE_KEYS.map((key) => resourceIcon(key)));
+  all.append(row, text);
+  return all;
+};
+
+/** The rows whose word a painted icon says: health and damage. */
+const LABEL_ICONS: Readonly<Record<string, GameIconName>> = {
+  Health: "health",
+  "Cage health": "health",
+  Damage: "damage",
+  "Damage per shot": "damage",
+};
+
+/** A row's name: its painted icon where it has one (the word on hover), or the word. */
+const infoLabel = (label: string): Node => {
+  const name = LABEL_ICONS[label];
+  return name ? gameIcon(name, { size: 16, label }) : document.createTextNode(label);
+};
+
+/**
+ * A row's value now and, when `withNext`, "→ next", the gain in green.
+ * `nowIcons` false draws "now" without its icons too.
+ */
+const infoChange = (row: InfoRow, withNext = true, nowIcons = true): Node[] => {
+  if (!withNext || !row.next) return [infoValue(row.now, nowIcons)];
+  const arrow = document.createElement("span");
+  arrow.className = "building-panel__arrow";
+  arrow.textContent = " → ";
+  const next = document.createElement("span");
+  next.className = row.down ? "building-panel__next building-panel__next--down" : "building-panel__next";
+  next.append(infoValue(row.next, "resources" in row.next));
+  return [infoValue(row.now, nowIcons), arrow, next];
+};
+
+/**
+ * What an upgrade brings, beside its button: each changed row as its icon
+ * (or word) and "now → next", "[claw] 30/s → 36/s · Range 190 → 200".
+ */
+const upgradeGains = (rows: readonly InfoRow[]): HTMLElement => {
+  const list = document.createElement("ul");
+  list.className = "building-upgrade__gains";
+  list.setAttribute("aria-label", "Next level");
+  for (const row of rows) {
+    const item = document.createElement("li");
+    item.className = "building-upgrade__gain";
+    item.dataset["row"] = row.label;
+    // A silo's four icons are on its row above: here just "+7,500 → +15,000".
+    const everyResource = "amount" in row.now && !row.now.resource;
+    item.append(infoLabel(row.label), " ", ...infoChange(row, true, !everyResource));
+    list.append(item);
+  }
+  return list;
+};
+
+/** A step's time beside its heading: the hourglass and "4h 0m", the rest on hover. */
+const stepTime = (seconds: number, words: string): HTMLElement => {
+  const time = document.createElement("span");
+  time.className = "building-panel__time";
+  time.title = words;
+  time.append(iconAmount("time", describeSeconds(seconds), { label: words, tooltip: false }));
+  return time;
 };
 
 /** "3 × Pokey, 1 × Octo-ooze", or null for none. */

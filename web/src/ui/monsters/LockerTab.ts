@@ -1,6 +1,5 @@
 import { LOCKER_KEYS, lockerActions, type LockerActions } from "@/api/yardMonsters";
 import type { YardRefusal } from "@/api/yard";
-import { monsterStat } from "@/game/combat/rules";
 import { academyLevel } from "@/game/monsters/housingSummary";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
 import {
@@ -19,14 +18,15 @@ import {
   type RunningUnlock,
   type UnlockGate,
 } from "@/game/monsters/lockerModel";
-import { hatchCost, housingSpace, monsterEntry, type MonsterEntry } from "@/game/monsters/monsterCatalogue";
+import { monsterEntry, type MonsterEntry } from "@/game/monsters/monsterCatalogue";
 import { monsterRealmOf, monsterWords, type MonsterRealm, type MonsterWords } from "@/game/monsters/realm";
 import { progressFraction } from "@/game/yard/jobs";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { iconAmount } from "@/ui/gameIcon";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
-import { hatchTimeText, speedText } from "./monsterNumbers";
+import { monsterStats, statGrid } from "./monsterNumbers";
 import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabContext } from "./monstersTab";
 
 /**
@@ -390,22 +390,13 @@ export class LockerTab implements MonstersTab {
     const facts = document.createElement("p");
     facts.className = "locker-detail__facts";
     facts.append(
-      `${this.realm === "inferno" ? this.words.locker : "Locker"} level ${monster.level} · `,
+      `${this.realm === "inferno" ? this.words.locker : "Locker"} Lv ${monster.level} · `,
       resourceAmount("r3", monster.resource),
-      ` · ${duration(monster.time)}`,
+      " · ",
+      iconAmount("time", duration(monster.time), { label: "Unlock time" }),
     );
-    const stats = document.createElement("p");
-    stats.className = "locker-detail__stats";
-    // A negative damage is a healer's: Vorg mends the monsters around it.
-    const damage = monsterStat(monster.id, "damage", level);
-    stats.textContent = [
-      `Health ${formatAmount(monsterStat(monster.id, "health", level))}`,
-      damage < 0 ? `Heals ${formatAmount(-damage)}` : `Damage ${formatAmount(damage)}`,
-      `Speed ${speedText(monster.id, level)}`,
-      `Space ${housingSpace(monster.id, level) ?? 0}`,
-      `Hatch ${formatAmount(hatchCost(monster.id, level) ?? 0)} ${this.words.goo}`,
-      `Hatch time ${hatchTimeText(monster.id, level)}`,
-    ].join(" · ");
+    const stats = statGrid(monsterStats(monster.id, level), this.realm);
+    stats.classList.add("locker-detail__stats");
     heading.append(name, facts, stats);
     head.append(heading);
 
@@ -492,12 +483,16 @@ export class LockerTab implements MonstersTab {
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
+  // What an action spent is red with a minus ("Putty −64,000", no "spent"),
+  // what a cancel gave back green with a plus (owner, 28 Oct); the prices on
+  // the buttons stay plain.
+
   private async runStart(id: string): Promise<void> {
     const result = await this.actions.start(id);
     this.report(result, (report) => [
       `Unlocking ${monsterEntry(report.monster)?.name ?? report.monster}: `,
-      resourceAmount("r3", report.cost.r3),
-      " spent.",
+      resourceAmount("r3", report.cost.r3, { change: "loss" }),
+      ".",
     ]);
   }
 
@@ -505,7 +500,7 @@ export class LockerTab implements MonstersTab {
     const result = await this.actions.instant(id);
     this.report(result, (report) => [
       `${monsterEntry(report.monster)?.name ?? report.monster} unlocked for `,
-      resourceAmount("shiny", report.credits),
+      resourceAmount("shiny", report.credits, { change: "loss" }),
       ".",
     ]);
   }
@@ -514,7 +509,7 @@ export class LockerTab implements MonstersTab {
     const result = await this.actions.finish();
     this.report(result, (report) => [
       `${monsterEntry(report.monster)?.name ?? report.monster} unlocked`,
-      ...(report.credits > 0 ? [" for ", resourceAmount("shiny", report.credits)] : []),
+      ...(report.credits > 0 ? [" for ", resourceAmount("shiny", report.credits, { change: "loss" })] : []),
       ".",
     ]);
   }
@@ -523,7 +518,7 @@ export class LockerTab implements MonstersTab {
     const result = await this.actions.cancel();
     this.report(result, (report) =>
       report.refund.r3 > 0
-        ? ["Unlock cancelled. Got back ", resourceAmount("r3", report.refund.r3), "."]
+        ? ["Unlock cancelled. Got back ", resourceAmount("r3", report.refund.r3, { change: "gain" }), "."]
         : ["Unlock cancelled."],
     );
   }

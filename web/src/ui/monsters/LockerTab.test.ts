@@ -101,16 +101,18 @@ describe("LockerTab: the list", () => {
     expect(card.querySelector(".locker-detail__name")!.textContent).toBe("Vorg");
     expect(card.querySelector("img")!.getAttribute("src")).toBe("/portraits/C16.webp");
     expect(spokenText(card.querySelector(".locker-detail__facts")!)).toBe(
-      "Locker level 2 · Putty 384,000 · 1d 12h",
+      "Locker Lv 2 · Putty 384,000 · Unlock time 1d 12h",
     );
     // Vorg's damage is negative: it heals.
-    expect(card.querySelector(".locker-detail__stats")!.textContent).toMatch(
-      /^Health 750 · Heals 60 · Speed [\d.]+ · Space 60 · Hatch [\d,]+ goo · Hatch time .+$/,
+    expect(spokenText(card.querySelector(".locker-detail__stats")!)).toMatch(
+      /^Health 750 Heals \+60 Speed [\d.]+ Housing space 60 Goo [\d,]+ Hatch time .+$/,
     );
     row(element, "C3").click();
-    expect(card.querySelector(".locker-detail__stats")!.textContent).toMatch(
-      /^Health [\d,]+ · Damage [\d,]+ · Speed [\d.]+ · Space 15 · Hatch [\d,]+ goo · Hatch time .+$/,
+    expect(spokenText(card.querySelector(".locker-detail__stats")!)).toMatch(
+      /^Health [\d,]+ Damage [\d,]+ Speed [\d.]+ Housing space 15 Goo [\d,]+ Hatch time .+$/,
     );
+    // Painted icons, no stat words on screen: only numbers are text.
+    expect(card.querySelector(".locker-detail__stats")!.textContent).not.toMatch(/[A-Za-z]{3}/);
   });
 });
 
@@ -232,7 +234,9 @@ describe("LockerTab: after an action", () => {
     await Promise.resolve();
     const status = element.querySelector<HTMLElement>(".monsters-status")!;
     expect(status.hidden).toBe(false);
-    expect(spokenText(status)).toBe("Unlocking Bolt: Putty 64,000 spent.");
+    // Spent: red with a minus (owner, 28 Oct).
+    expect(spokenText(status)).toBe("Unlocking Bolt: Putty 64,000 lost.");
+    expect(status.querySelector(".res-amount__value")?.textContent).toBe("−64,000");
   });
 });
 

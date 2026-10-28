@@ -59,7 +59,7 @@ describe("NotificationPanel friend lines (#370)", () => {
   });
 
   it("words a friend's event as plain text", () => {
-    expect(lineText(friendRow(1, { event: "accepted", userid: 7, username: "Bob" }))).toBe("Bob is now your friend.");
+    expect(lineText(friendRow(1, { event: "accepted", userid: 7, username: "Bob" }))).toBe("Now friends with Bob");
     const panel = new NotificationPanel({ onRead: vi.fn(), onReadAll: vi.fn(), selectFor: () => vi.fn(), now: () => NOW });
     panel.mount(document.body);
     panel.show([friendRow(2, { event: "helpRepair", userid: 7, username: "Bob", building: "Cannon Tower" })]);
