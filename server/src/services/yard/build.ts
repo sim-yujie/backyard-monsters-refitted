@@ -503,17 +503,27 @@ export const planInstantBuild = (save: BuildSave, request: BuildRequest, now: nu
  * price comes back, clamped to the storage cap by the wrapper (BB §5 "Cancel
  * and refund"). Shiny spent speeding it up is not refunded.
  *
+ * `paidByGuide` is what Bob's guided start paid towards it (`fund:<type>`):
+ * that part does not come back, so cancelling after a skip cannot turn his
+ * gift into resources.
+ *
  * Refuses `400 badRequest` for no such building, `409 notBuilding` when no
  * `cB` is running on it.
  */
-export const planCancelBuild = (save: BuildSave, id: number) => {
+export const planCancelBuild = (save: BuildSave, id: number, paidByGuide?: Partial<ResourceAmounts>) => {
   const building = buildingOrThrow(save.buildingdata, id);
   if (!(Number(building.cB) > 0)) {
     throw yardRefusedErr("notBuilding", "That building is not under construction.");
   }
 
   const type = Number(building.t);
-  const refund = cancelRefund(type, 0, yardKindOf(save));
+  const price = cancelRefund(type, 0, yardKindOf(save));
+  const refund: ResourceAmounts = {
+    r1: Math.max(0, price.r1 - (paidByGuide?.r1 ?? 0)),
+    r2: Math.max(0, price.r2 - (paidByGuide?.r2 ?? 0)),
+    r3: Math.max(0, price.r3 - (paidByGuide?.r3 ?? 0)),
+    r4: Math.max(0, price.r4 - (paidByGuide?.r4 ?? 0)),
+  };
   const { [String(id)]: _gone, ...buildingdata } = save.buildingdata ?? {};
 
   const slices: {

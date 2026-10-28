@@ -120,7 +120,7 @@ Built in WP0 beyond this table, for the tips: `build-instant`, `build-cancel-car
 ### 2.3 The steps
 
 Lines are adapted from Flash's `tut_*` strings (`server/public/gamestage/assets/english.json`); the
-Flash key is in brackets. "On me" means the server pays the shortfall (§2.4).
+Flash key is in brackets. "On me" means the server pays the whole cost (§2.4).
 
 | # | Macro step (`guide.step`) | Bob says | Pointer | Advances when | Server grants / validates | Rewind, reload |
 |---|---|---|---|---|---|---|
@@ -150,20 +150,21 @@ tips 90 s).
 
 ### 2.4 What the guided start pays for
 
-"Top up to the exact cost" works as Flash's `BASE.Fund` before a tutorial build
-(`client/scripts/TUTORIAL.as:396-400`, `:484-488`, `:604-608`, `:682-686`): if the player holds less
-than the cost, the tutorial adds the difference, then the full cost is charged. The server does it
-in one step without ever handing resources over: the build debits `min(held, cost)` per resource
-and records the difference as the grant. The player cannot pull the top-up out by cancelling,
-because cancelling a guided-start building is refused while the guide is active (Flash locked
-recycling during its tutorial, `tut_recycle_locked`).
+Bob says "This one's on me", so the guide pays the whole cost and the player's own resources are not
+touched. **Changed 2026-10-28** (owner playtest: the player's Twigs and Pebbles still dropped to 0).
+Flash's `BASE.Fund` before a tutorial build (`client/scripts/TUTORIAL.as:396-400`, `:484-488`,
+`:604-608`, `:682-686`) only added the shortfall and then charged the full cost, which spent the
+player's savings. The server does it in one step without ever handing resources over: the build
+debits nothing and records the cost as the grant. The player cannot pull the grant out by cancelling:
+cancelling a guided-start building is refused while the guide is active (Flash locked recycling
+during its tutorial, `tut_recycle_locked`), and after a skip the grant is kept back from the refund.
 
 | Grant | Most it can be | Once per account |
 |---|---|---|
-| Sniper Tower top-up | 1,500 twigs, 2,000 pebbles, 500 putty | `grants["fund:21"]` |
-| Housing top-up | 2,160 twigs, 2,160 pebbles | `grants["fund:15"]` |
-| Map Room top-up | 2,000 twigs, 2,000 pebbles | `grants["fund:11"]` |
-| Flinger top-up | 1,000 twigs, 1,000 pebbles, 500 putty | `grants["fund:5"]` |
+| Sniper Tower | 1,500 twigs, 2,000 pebbles, 500 putty | `grants["fund:21"]` |
+| Housing | 2,160 twigs, 2,160 pebbles | `grants["fund:15"]` |
+| Map Room | 2,000 twigs, 2,000 pebbles | `grants["fund:11"]` |
+| Flinger | 1,000 twigs, 1,000 pebbles, 500 putty | `grants["fund:5"]` |
 | Four free finishes | the four constructions above | `grants["finish:<type>"]` |
 | Pokeys | housed Pokeys topped up to 15 (never above) | `grants["army"]`, a list; each entry records how many were added. Only in steps `pokeys` and `attack-result` |
 | Protection | `protected = max(protected, now + 7 days)` | at `done` or `skipped` |
