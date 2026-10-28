@@ -343,6 +343,19 @@ describe("the save that ends a Descent attack", () => {
     );
   });
 
+  test("no siege weapon in the Descent (owner: siege is for the overworld): the Decoy is cut and none is spent", async () => {
+    const stock = { decoy: { level: 1, quantity: 2 } };
+    userSave.siege = structuredClone(stock);
+    startSession();
+    canned = { damage: 40 };
+    const log = { ...SCRATCH, events: [...SCRATCH.events, { kind: "siege", t: 60, x: 300, y: 150, weapon: "decoy" }] };
+    await run(finalSave("201", { flinglog: JSON.stringify(log) }));
+    const [input] = inputs;
+    expect(input!.log.events.map((event) => event.kind)).toEqual(["fling"]);
+    expect(input!.attacker.siege).toBeNull();
+    expect(userSave.siege).toEqual(stock);
+  });
+
   test("a win at 90% beats the yard and puts the loot in the Inferno purse, with no cap", async () => {
     startSession();
     // A purse well past any storage: the Descent's loot is never cut to fit (Flash).

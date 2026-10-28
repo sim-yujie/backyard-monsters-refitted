@@ -270,6 +270,89 @@ describe("the Decoy in a fight", () => {
     expect(battle.state().bunkerGarrisons[1]).toEqual({ C6: 3 });
   });
 
+  /**
+   * A Champion Cage under the Decoy holding the Krallen and a Gorgo (the basic
+   * champion, `CREATURES._guardian`), with the Town Hall far off. `near` puts
+   * Pokeys by the cage, so the Gorgo comes out to fight them; else one Pokey
+   * hits the Town Hall out of the champions' sight, and neither comes out.
+   */
+  const cagedBattle = (decoy: boolean, near: boolean) => {
+    const battle = createBattle(
+      buildEngineYard({
+        buildingdata: {
+          "1": { id: 1, t: 114, l: 1, X: 0, Y: 0 },
+          "2": { id: 2, t: 14, l: 1, X: 1400, Y: 1400 },
+        },
+        buildinghealthdata: {},
+        resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+      }),
+      {
+        seed: 3,
+        siege: decoy ? { decoy: 1 } : {},
+        defenderChampions: [
+          { t: 5, l: 2, hp: 6000, pl: 1 },
+          { t: 1, l: 2, hp: 5000, pl: 1 },
+        ],
+      },
+    );
+    const pokeys: AttackEvent = near
+      ? { kind: "fling", t: 0, x: 140, y: 140, r: 0, monsters: { C1: 8 } }
+      : { kind: "fling", t: 0, x: 1380, y: 1380, r: 0, monsters: { C1: 1 } };
+    battle.apply(pokeys);
+    if (decoy) battle.apply(decoyAt);
+    const out = () => battle.creeps().filter((creep) => creep.champion && creep.friendly);
+    return { battle, out };
+  };
+
+  it("leaves the caged champion in its cage: Flash pulls a `CreepBase` only (`Decoy.as:246`, `ChampionBase.as:24`)", () => {
+    const { battle, out } = cagedBattle(true, false);
+    for (let at = plan.landsAt; at < plan.explodesAt; at += DECOY_FRAME_TICKS) {
+      battle.runTo(at);
+      expect(out()).toHaveLength(0);
+    }
+    expect(battle.state().defenderChampions.map((one) => one.hp)).toEqual([6000, 5000]);
+  });
+
+  it("blasts the basic champion in its cage, not the Krallen (`Decoy.as:283-289`, `:341-345`)", () => {
+    const { battle, out } = cagedBattle(true, false);
+    battle.runTo(plan.explodesAt);
+    expect(out()).toHaveLength(0);
+    const [krallen, gorgo] = battle.state().defenderChampions.map((one) => one.hp);
+    expect(krallen).toBe(6000);
+    // The linear blast from where it stands in the cage, a few px off the anchor.
+    expect(gorgo).toBeLessThan(5000);
+    expect(gorgo).toBeGreaterThanOrEqual(5000 - plan.damage);
+    expect(5000 - gorgo!).toBeGreaterThan(plan.damage / 2);
+
+    // Without the Decoy it keeps its health.
+    const { battle: plain } = cagedBattle(false, false);
+    plain.runTo(plan.explodesAt);
+    expect(plain.state().defenderChampions.map((one) => one.hp)).toEqual([6000, 5000]);
+  });
+
+  it("never pulls the basic champion out fighting either; only the blast reaches it", () => {
+    const withDecoy = cagedBattle(true, true);
+    const without = cagedBattle(false, true);
+    // Both came out at the Pokeys, the Gorgo well inside the Decoy's range.
+    const gorgoOf = (one: typeof without) => one.out().find((creep) => creep.monsterId === "G1")!;
+    const krallenOf = (one: typeof without) => one.out().find((creep) => creep.monsterId === "G5")!;
+    withDecoy.battle.runTo(240);
+    expect(withDecoy.out().map((creep) => creep.monsterId).sort()).toEqual(["G1", "G5"]);
+    expect(screenGap(gorgoOf(withDecoy), drop)).toBeLessThan(plan.range / 2);
+    // Up to the blast they fight exactly as without a Decoy.
+    for (const battle of [withDecoy.battle, without.battle]) battle.runTo(plan.explodesAt - 1);
+    expect(withDecoy.battle.creeps()).toEqual(without.battle.creeps());
+    expect(screenGap(gorgoOf(withDecoy), drop)).toBeLessThan(plan.range);
+
+    // The blast takes its share off the Gorgo, and none off the Krallen.
+    withDecoy.battle.runTo(plan.explodesAt);
+    without.battle.runTo(plan.explodesAt);
+    const hit = gorgoOf(withDecoy);
+    const dealt = linearAreaDamage(plan.damage, plan.range, 0, screenGap(hit, drop))!;
+    expect(hit.hp).toBe(gorgoOf(without).hp - dealt);
+    expect(krallenOf(withDecoy).hp).toBe(krallenOf(without).hp);
+  });
+
   it("never pulls the attacker's own champion: it fights on exactly as without a Decoy", () => {
     const champion: AttackEvent = {
       kind: "fling",

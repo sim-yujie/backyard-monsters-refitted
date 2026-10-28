@@ -125,6 +125,18 @@ describe("the drop plugin's pickers in the dock", () => {
     expect(hasButton("Siege")).toBe(false);
   });
 
+  it("offers no Siege button on a Moloch tribe or another player's Inferno yard: siege is for the overworld (owner)", () => {
+    for (const extra of [{ infernoTribe: true }, { infernoPlayer: true }] as const) {
+      mount(target({ decoy: { level: 1, quantity: 1 } }, extra));
+      expect(hasButton("Siege")).toBe(false);
+      teardown?.();
+      document.body.replaceChildren();
+    }
+    // The same stock on a surface yard shows it.
+    mount(target({ decoy: { level: 1, quantity: 1 } }));
+    expect(hasButton("Siege")).toBe(true);
+  });
+
   it("offers no Catapult in the Descent, as Flash's Inferno yard showed none (UI_TOP.as:296)", () => {
     mount(target(null, { descentYard: 1 }));
     expect(hasButton("Catapult")).toBe(false);

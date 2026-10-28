@@ -2495,10 +2495,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * The caged champion comes out for the first time (issues #195, #260): from
-   * where it stood in its cage, at its stored health, its stats at its level
-   * plus its food bonus, with the frame it counted in there.
+   * where it stood in its cage, at its health (the stored one, less any
+   * Decoy blast it took in there), its stats at its level plus its food
+   * bonus, with the frame it counted in there.
    */
-  const releaseChampion = (caged: DefenderChampion, at: CagePen): Creep | null => {
+  const releaseChampion = (
+    caged: DefenderChampion,
+    at: CagePen,
+    health: number,
+  ): Creep | null => {
     const id = championByType(caged.t);
     if (!id) return null;
     const level = Math.max(1, Math.floor(caged.l));
@@ -2517,7 +2522,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       iy: at.iy,
       x: at.x,
       y: at.y,
-      hp: Math.min(cagedHealth(caged), maxHp),
+      hp: Math.min(health, maxHp),
       maxHp,
       baseSpeed: championStatWithFood(id, "speed", level, food) / 4,
       damage: championStatWithFood(id, "damage", level, food),
@@ -2799,11 +2804,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /**
    * `getDefendingCreepsInRange` (`Decoy.as:332-357`): a defender on the field
    * within the range of the drop, on screen. Flash looks only in `CREATURES`,
-   * the defending side, so the attacker's own champion is never pulled; of the
-   * caged champions it looks only at the basic one (`CREATURES._guardian`),
-   * so the Krallen is not either.
+   * the defending side, so the attacker's own champion is never in it; of the
+   * caged champions it looks only at the basic one (`CREATURES._guardian`,
+   * `:341-345`), so the Krallen is not either. This is what the blast hits.
    */
-  const decoyHolds = (creep: Creep, drop: Cart, range: number): boolean => {
+  const decoyReaches = (creep: Creep, drop: Cart, range: number): boolean => {
     if (!creep.friendly || creep.hp <= 0 || creep.gone || creep.monsterId === KRALLEN_ID) {
       return false;
     }
@@ -2811,6 +2816,47 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const dx = at.x - drop.x;
     const dy = at.y - drop.y;
     return dx * dx + dy * dy <= range * range;
+  };
+
+  /**
+   * Who the Decoy pulls (`updateDecoy`, `Decoy.as:241-262`): of that list only
+   * a `CreepBase` (`:246`). A champion is a `ChampionBase`, which is not one
+   * (`ChampionBase.as:24`), so the basic champion is never pulled, in its cage
+   * or out of it; only the blast reaches it (owner, 28 Oct: "refer to flash").
+   */
+  const decoyPulls = (creep: Creep, drop: Cart, range: number): boolean =>
+    !creep.champion && decoyReaches(creep, drop, range);
+
+  /**
+   * The basic champion waiting in its cage within the range, measured from
+   * where it stands in there: `getDefendingCreepsInRange` lists
+   * `CREATURES._guardian` whatever it is doing (`Decoy.as:341-345`), so the
+   * blast reaches it there too (`:283-289`). Not the Krallen.
+   */
+  const cagedInReach = (drop: Cart, range: number): { slot: CageSlot; away: number }[] => {
+    const found: { slot: CageSlot; away: number }[] = [];
+    for (const slot of cageSlots) {
+      const pen = slot.pen;
+      if (!pen || championByType(slot.caged.t) === KRALLEN_ID) continue;
+      const at = screenPointOf(pen.ix, pen.iy);
+      const away = Math.hypot(at.x - drop.x, at.y - drop.y);
+      if (away <= range) found.push({ slot, away });
+    }
+    return found;
+  };
+
+  /**
+   * The blast on a champion in its cage: off its health where it stands, the
+   * Monster Defensive Buff taken off as on the field. It comes out later with
+   * what is left. One brought to nothing dies in there: its pen goes, so it
+   * never comes out.
+   */
+  const damageCaged = (slot: CageSlot, raw: number): void => {
+    const dealt = defenderBuffs.monsterArmour ? raw * (1 - MONSTER_ARMOUR_BUFF) : raw;
+    const hp = Math.max(0, slot.report.hp - dealt);
+    slot.report.hp = hp;
+    if (slot.champion) slot.champion.hp = hp;
+    if (hp <= 0) slot.pen = null;
   };
 
   /** `changeModeDecoy`: it stops fighting and walks to stand by the Decoy. */
@@ -2908,12 +2954,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     decoy = null;
     const { drop, before } = live;
     const { range, damage } = live.plan;
-    const hit = creeps.filter((creep) => decoyHolds(creep, drop, range));
+    const hit = creeps.filter((creep) => decoyReaches(creep, drop, range));
     const reach = range * DECOY_BUILDING_REACH;
     for (const creep of hit) {
       const at = screenPointOf(creep.ix, creep.iy);
       const dealt = linearAreaDamage(damage, range, 0, Math.hypot(at.x - drop.x, at.y - drop.y));
       if (dealt !== undefined && !creep.gone) damageCreep(creep, dealt);
+    }
+    for (const { slot, away } of cagedInReach(drop, range)) {
+      const dealt = linearAreaDamage(damage, range, 0, away);
+      if (dealt !== undefined) damageCaged(slot, dealt);
     }
     for (const building of yard.buildings) {
       if (building.hp <= 0 || building.kind === "mushroom") continue;
@@ -2947,7 +2997,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const range = live.plan.range;
     const held = new Set<number>();
     for (const creep of creeps) {
-      if (!decoyHolds(creep, drop, range)) continue;
+      if (!decoyPulls(creep, drop, range)) continue;
       held.add(creep.id);
       if (!pulled.has(creep.id)) {
         pulled.add(creep.id);
@@ -5850,7 +5900,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creeps.splice(after < 0 ? creeps.length : after, 0, champion);
       byCreepId.set(champion.id, champion);
     } else {
-      champion = releaseChampion(slot.caged, pen);
+      champion = releaseChampion(slot.caged, pen, slot.report.hp);
     }
     slot.pen = null;
     if (!champion) return;

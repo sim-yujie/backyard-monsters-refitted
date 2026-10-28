@@ -25,9 +25,15 @@
  * know the yard is the Inferno's (`YardScene`, `AttackScene`). The Moloch
  * raid out of the cave plays the ordinary "under attack" tune, as Flash's did
  * (`INFERNO_EMERGENCE_EVENT.as:193`). Flash's third, `Music_IDefense.mp3`
- * (`musicipanic`), played while monsters attacked an Inferno yard
- * (`BUILDING27.as:86-87`, `CUSTOMATTACKS.as:88-89`); nothing attacks the own
- * Inferno yard on screen in this game, so it is not listed.
+ * (`musicipanic`), took the "under attack" tune's place on an Inferno yard
+ * (`BASE.isInfernoMainYardOrOutpost`) at three moments only: the Trojan Horse
+ * springing (`BUILDING27.as:83-93`), the tutorial's raid
+ * (`CUSTOMATTACKS.as:84-93`) and a Monster Invasion wave
+ * (`MonsterInvasion.as:155-162`). None of them can happen on an Inferno yard
+ * in this game (checked 28 Oct, the owner asked for Flash's behaviour): the
+ * horse is placed and sprung on the main yard only (`trojanHorse.ts`), the
+ * tutorial's raid is on the main yard, and there are no Monster Invasions.
+ * So it is not listed.
  */
 
 import { classicLook } from "@/game/classicLook";

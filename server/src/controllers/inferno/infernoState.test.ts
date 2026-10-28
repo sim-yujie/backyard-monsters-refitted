@@ -59,7 +59,7 @@ describe("the Inferno state answer", () => {
     const progress = { ...NO_INFERNO_PROGRESS, emergenceLevel: 2, emergenceLastAt: NOW - 100 };
     const body = infernoStateAnswer(progress, yard(4), NOW, false);
     expect(body.cave).toEqual({ shown: true, level: 2, maxLevel: 5 });
-    expect(body.emergence).toEqual({ lastAt: NOW - 100, nextAt: NOW - 100 + 43_200, done: false });
+    expect(body.emergence).toEqual({ lastAt: NOW - 100, nextAt: NOW - 100 + 82_800, done: false });
   });
 
   test("after the fifth raid there is no next one", () => {
@@ -136,7 +136,7 @@ describe("the load answer's infernostate", () => {
     expect(state).not.toHaveProperty("error");
     expect(state.raised).toBe(1);
     expect(state.cave.level).toBe(1);
-    expect(state.emergence.nextAt).toBe(NOW + 43_200);
+    expect(state.emergence.nextAt).toBe(NOW + 82_800);
     // Moloch's raid, as the raid routes show it (never its plan's log or
     // outcome), with its groups one card each for the warning screen.
     expect(state.raid).toEqual({

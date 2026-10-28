@@ -25,7 +25,7 @@ Contents:
 ## 1. Summary for the owner
 
 - **How you get in (as in Flash).** At Town Hall 5 a cave appears on your yard. Over five
-  earthquakes, at least 12 hours apart, Moloch's monsters burst out and raid you. Win or lose, each
+  earthquakes, at least 23 hours apart (owner's rule; Flash's 12), Moloch's monsters burst out and raid you. Win or lose, each
   raid counts. After the fifth, you can go down: the **Descent** is 13 Moloch yards in a row; beat
   each one (90% damage) to reach the next. After the 13th you capture your own **Inferno yard**.
 - **The Inferno yard.** A second yard on lava with its own four resources (Bone, Coal, Sulfur,
@@ -33,7 +33,7 @@ Contents:
   250/500/1,000/2,000; Flash allowed only 1), and its own eight monsters. Shiny is shared with the
   surface.
 - **Prices and times.** Exactly Flash: costs (Juicer included), build/upgrade and training times
-  (King Wormzer 48 days), entry raids 12 h apart with no reward, Descent prizes, Moloch yard loot,
+  (King Wormzer 48 days), entry raids 23 h apart (owner, 28 Oct; Flash 12 h) with no reward, Descent prizes, Moloch yard loot,
   full-strength Quake Towers in the Descent ("weak armies shouldn't start the Inferno").
 - **Owner changes to Flash.** From Descent yard 7 the toxicity is a real **burn** that hurts
   surface monsters only (Inferno monsters and Korath are immune), shown with the new status icons;
@@ -91,7 +91,7 @@ Second round (I13-I16, R1-R12). Anything not listed is exact Flash:
 | I15, R8 | Descent toxicity becomes a real **burn**, surface monsters only; Inferno monsters and Korath immune; uses the status-icon system | **[OWNER]** 2.4; WP 1.21 |
 | I16, R1, R2 | All Inferno prices exact Flash, Juicer L1 1M/1M/1M included | 2.5 |
 | R3, R4 | Build/upgrade and academy times exact Flash (King Wormzer 48 days) | 2.5, 2.6 |
-| R5 | Entry raids exact Flash: 12 h apart, no reward | 2.2, 2.3 |
+| R5 | Entry raids as Flash, but 23 h apart (owner, 28 Oct; Flash 12 h), no reward | 2.2, 2.3 |
 | R6 | Descent rewards exact Flash (no extra per-yard or milestone prizes) | 2.4 |
 | R7 | Moloch map yard loot exact Flash | 2.7; smooth loot + daily bonus in section 7 |
 | R9 | Quake Towers in the Descent at full Flash strength | WP 1.3, 1.6 (no softening) |
@@ -107,8 +107,8 @@ Second round (I13-I16, R1-R12). Anything not listed is exact Flash:
 | Below TH5 | Cave answers with an RSVP note (`cavern_pop1/2`) | `INFERNO_EMERGENCE_POPUPS.as` |
 | Cave building | id 127, fixed grid point (-1200,-150), 190x160, not movable/exported; level = emergence level | `INFERNOPORTAL.as:200-215` |
 | Levels | 5 (one per raid) | `INFERNO_EMERGENCE_EVENT.as:53-55` |
-| Gap | 12 h (43,200 s) since the last level-up, checked on a main-yard load | `:49-51`, `:111-119` |
-| Yard health | Must be > 10% for a raid (`isBaseReadyForAttack`, `:197-210`). Raids 2-5: checked with the 12 h before the cave grows, so a yard at 10% or less keeps its cave as it is until a later load finds it mended (`SetupPortal`, `:98`). First raise (level 0): no check before it, so the cave goes up to 1 and its time is saved, and only then is the raid skipped (`UpgradePortal`, `:172-176`): no earthquake, no warning, no "stage passed" (only `ATTACK.as:1026`, `:1053` show it, after a fight), and the stage counts, so the next raid (12 h on) is raid 2 | `:91-101`, `:166-181` |
+| Gap | **[OWNER, 28 Oct]** 23 h (82,800 s) since the last level-up, checked on a main-yard load. Flash: 12 h (43,200 s) | `:49-51`, `:111-119` |
+| Yard health | Must be > 10% for a raid (`isBaseReadyForAttack`, `:197-210`). Raids 2-5: checked with the 23 h gap before the cave grows, so a yard at 10% or less keeps its cave as it is until a later load finds it mended (`SetupPortal`, `:98`). First raise (level 0): no check before it, so the cave goes up to 1 and its time is saved, and only then is the raid skipped (`UpgradePortal`, `:172-176`): no earthquake, no warning, no "stage passed" (only `ATTACK.as:1026`, `:1053` show it, after a fight), and the stage counts, so the next raid (12 h on) is raid 2 | `:91-101`, `:166-181` |
 | Level 0 | Moloch intro dialogue, then level 1 and raid at once | `ai_moloch_intro` |
 | Order | Level and time are **saved before** the raid starts | `UpgradePortal` |
 | Warning | "EARTHQUAKE !" text + screen shake 100 | same file |
@@ -132,7 +132,7 @@ base value) applies (`WMATTACK.as:723-753`). Source: `INFERNO_PORTAL_ATTACK.as:8
 | 4 | IC2 ceil(65f), IC6 floor(30f), IC3 ceil(40f), IC5 floor(20f), IC7 floor(20f) |
 | 5 | IC2 ceil(70f), IC7 floor(30f), IC5 ceil(20f), IC6 ceil(30f), IC8 floor(25f) |
 
-**[OWNER I14, R5]** These raids keep the Flash rules: 12 h gap, each raid counts win or lose
+**[OWNER I14, R5]** These raids keep the Flash rules, except the gap: 23 h (owner, 28 Oct; Flash 12 h), each raid counts win or lose
 (quitting does not cancel it), Flash raid strength 0.4-0.9, no reward, only needs 10% yard health
 (the first raise grows the cave even below it and only skips the raid, as Flash did; see 2.2).
 Before the fight Flash shows Moloch's warning, "INFERNO MONSTER ALERT", with his portrait, one card
@@ -279,7 +279,7 @@ test; those dirs are pinned LF).
 | Route | Does | Checks on the server |
 |---|---|---|
 | `GET /bm/inferno/state` | Cave level, next raid due, Descent progress, has-yard, Korath notice | — |
-| main-yard load hook | Decides "emergence raid due" and runs it through `services/raids/raidFlow.ts` | TH5, tutorial, level < 5, 12 h gap, yard health > 10%; saves level + time first |
+| main-yard load hook | Decides "emergence raid due" and runs it through `services/raids/raidFlow.ts` | TH5, tutorial, level < 5, 23 h gap, yard health > 10%; saves level + time first |
 | `GET /bm/inferno/descent` | 13 bases, which is next | — |
 | `POST /bm/inferno/attack/start` | kind `descent` / `tribe` / `player`; mints the attack session (`docs/server-api.md:336+`) | Target allowed (next Descent base only; tribe in the player's 7; neighbour in range, not protected); army from the right yard and within capacity |
 | landing | Existing replay + `finaliseAttack.ts` / `replayWorker.ts` | Re-simulated on the server; loot, Descent progress, capture, protection, achievements written only from the server result |
@@ -378,7 +378,7 @@ check. Owner screenshots before merge for any screen.
 | 1.5 | Engine: IC specials audit + fill (Spurtz, Balthazar, Sabnox, Wormzer) | per-monster unit tests | 1.2 | L |
 | 1.6 | Engine: Housing Bunker defenders; replay smoke over the 13 Descent yards + Moloch tribe yards | every yard simulates without error | 1.3-1.5 | M |
 | 1.7 | `inferno_progress` migration + entity, `infernoConfig.enabled`, `GET /bm/inferno/state` | route tests incl. switch off | — | S |
-| 1.8 | Emergence "due" rule on main-yard load (2.2, Flash rules I14: 12 h, 10% health) + pause wild raids | unit tests for each gate | 1.7 | M |
+| 1.8 | Emergence "due" rule on main-yard load (2.2, Flash rules I14: 12 h, now 23 h by the owner's 28 Oct rule, 10% health) + pause wild raids | unit tests for each gate | 1.7 | M |
 | 1.9 | Emergence raid army (2.3) + run through `raidFlow`, stage counts win or lose, quit does not cancel, no reward | army snapshot per level/L; flow test | 1.8, 1.5 | M |
 | 1.10 | Client: cave sprite, tap menu, emergence popups + earthquake | screenshots phone/desktop | 1.7 | M |
 | 1.11 | Descent state + `attack/start` kind descent (next base only, main army, flinger capacity); the Descent yard is fought as yard kind `"inferno"` with its housed monsters defending from its Housing Bunkers (2.4 "Yard kind", `PlayerHandler.as:333`) | route tests (wrong base refused; Descent fight uses Inferno numbers and Housing Bunker defenders) | 1.7, 1.6 | M |

@@ -13,7 +13,7 @@ import { korathNoticeDue, korathRaisable, markKorathNoticeSeen } from "./korath.
  * twice, its checks, the foreign key) and the entity reading what it wrote.
  *
  * Then the emergence's level-up statement (`raiseEmergence`): it raises the
- * cave once however many loads race, and never inside the 12 hours.
+ * cave once however many loads race, and never inside the 23 hours.
  *
  * Opt-in: runs only when INFERNO_TEST_DB names a throwaway database with the
  * `bym` schema and the migrations applied, and refuses the shared `bym`.
@@ -143,12 +143,12 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     expect((await readInfernoProgress(em(), A)).emergenceLevel).toBe(1);
   });
 
-  test("not within 12 hours of the last; from 12 hours on, the next", async () => {
+  test("not within 23 hours of the last; from 23 hours on, the next", async () => {
     const NOW = 1_800_000_000;
     await raiseEmergence(em(), A, 0, NOW);
-    expect(await raiseEmergence(em(), A, 1, NOW + 43_199)).toBeNull();
-    expect(await raiseEmergence(em(), A, 1, NOW + 43_200)).toBe(2);
-    expect((await readInfernoProgress(em(), A)).emergenceLastAt).toBe(NOW + 43_200);
+    expect(await raiseEmergence(em(), A, 1, NOW + 82_799)).toBeNull();
+    expect(await raiseEmergence(em(), A, 1, NOW + 82_800)).toBe(2);
+    expect((await readInfernoProgress(em(), A)).emergenceLastAt).toBe(NOW + 82_800);
   });
 
   test("a stale level read loses: the cave is not raised twice from the same level", async () => {
