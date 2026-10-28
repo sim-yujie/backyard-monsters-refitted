@@ -4,6 +4,7 @@ import type { Sprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { setClassicBuildingArt, setNewTowerArt } from "@/game/yard/buildingArtTiers";
+import { angleGap, cellBearing, muzzleOffset, rowOf } from "@/game/yard/turretAim";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
@@ -19,6 +20,7 @@ import {
   TowerFx,
   bearingDegrees,
   AIM_WATCH_MARGIN,
+  BODY_HEIGHT,
   CATCH_UP_DEGREES_PER_TICK,
   cellHeading,
   facingCell,
@@ -54,7 +56,7 @@ import {
  * heights, and the effects object turning a gun through a stub host.
  *
  * The strips these turn are the Flash towers', the default; the new tower
- * art's towers are still pictures (the repainted-tier test below).
+ * art's turrets turn by the same rule over strips of their own (below).
  */
 
 afterEach(() => {
@@ -200,7 +202,7 @@ describe("towersOf", () => {
     expect(towersOf(readYard(yardOf(24)))).toHaveLength(0);
   });
 
-  it("gives a repainted tier no gun strip and lifts its muzzle with the picture", () => {
+  it("gives a repainted tier its turning turret's strip and lifts its muzzle with the picture", () => {
     const yard = yardOf(21);
     yard.buildingdata = { "1": { id: 1, t: 21, l: 7, X: 0, Y: 0 } };
     // The new tower art is off unless turned on: the Flash turret, not lifted.
@@ -209,11 +211,22 @@ describe("towersOf", () => {
     setNewTowerArt(true);
     setClassicBuildingArt(true);
     expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
-    // The new tower art: no strip, and the muzzle stands higher than tier 1's.
+    // The new tower art: the new turret's cells, and the muzzle stands higher than tier 1's.
     setClassicBuildingArt(false);
     const [sniper] = towersOf(readYard(yard));
-    expect(sniper?.frames).toBe(0);
+    expect(sniper?.frames).toBe(32);
     expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);
+    // The 3D Laser: 32 headings for each of 5 tilts of its head.
+    expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(160);
+    expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(30);
+    expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(30);
+    // The new Cannon's barrel turns too, though the Flash one never did; the Tesla tiers stay still pictures.
+    expect(towersOf(readYard(yardOf(20)))[0]?.frames).toBe(32);
+    expect(towersOf(readYard(yardOf(25)))[0]?.frames).toBe(0);
+    // The 3D towers know where each cell points and turn about their pivot; the painted ones do not.
+    for (const type of [20, 21, 23]) expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeDefined();
+    expect(towersOf(readYard(yardOf(20)))[0]?.pivot).toEqual({ x: 0, y: 14.5 });
+    for (const type of [115, 118]) expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeUndefined();
   });
 });
 
@@ -235,6 +248,29 @@ const setUp = (type: number) => {
   return { yard, frames, graphics, fx };
 };
 
+describe("the towers with the new tower art off", () => {
+  it("have no 3D aim, pivot or lift at any level, so every shot leaves the Flash muzzle", () => {
+    for (const type of [20, 21, 23, 25, 115, 118]) {
+      for (let level = 1; level <= 10; level++) {
+        const where = `type ${type} level ${level}`;
+        const yard = yardOf(type);
+        yard.buildingdata = { "1": { id: 1, t: type, l: level, X: 0, Y: 0 } };
+        const [tower] = towersOf(readYard(yard));
+        expect(tower?.aim, where).toBeUndefined();
+        expect(tower?.pivot, where).toBeUndefined();
+        expect(tower?.lift, where).toBe(0);
+      }
+      const { fx, yard } = setUp(type);
+      const [info] = towersOf(yard);
+      const creep = creepAt(35, 235);
+      fx.onShot({ tick: 10, towerId: 1, creepId: 9, ix: creep.ix, iy: creep.iy }, creep);
+      fx.update(10, () => creep, [creep]);
+      expect(fx.muzzleAt(1), `type ${type}`).toEqual(muzzleOf(type, info?.worldX ?? 0, info?.worldY ?? 0));
+      fx.destroy();
+    }
+  });
+});
+
 describe("TowerFx", () => {
   it("turns a sniper toward the creep it shot, keeps following it, and holds after the shot is old", () => {
     const { frames, fx } = setUp(21);
@@ -253,6 +289,124 @@ describe("TowerFx", () => {
     // Past the hold the gun stays where it was, whatever the creep does.
     fx.update(10 + FACING_HOLD_TICKS + 1, () => south);
     expect(frames.get(1)).toBe(0);
+    fx.destroy();
+  });
+
+  /** A creep `distance` yard units from a tower's (35, 35) centre, at `bearing` degrees. */
+  const around = (bearing: number, distance = 200): CreepSnapshot => {
+    const radians = (bearing * Math.PI) / 180;
+    return creepAt(35 + distance * Math.cos(radians), 35 + distance * Math.sin(radians));
+  };
+  /** The screen degrees from a point to where a shot at `creep` is drawn to: its body, or `lift` above its feet. */
+  const towardCreep = (yard: ReturnType<typeof readYard>, from: { x: number; y: number }, creep: CreepSnapshot, lift = BODY_HEIGHT) =>
+    (Math.atan2(
+      (creep.ix + creep.iy) / 2 + yard.bounds.originY - lift - from.y,
+      creep.ix - creep.iy + yard.bounds.originX - from.x,
+    ) * 180) / Math.PI;
+
+  it("turns a 3D sniper onto the cell that faces its target on the ground, and fires from that muzzle", () => {
+    setNewTowerArt(true);
+    const { yard, fx } = setUp(21);
+    const [info] = towersOf(yard);
+    const aim = info?.aim;
+    if (!info || !aim || !info.pivot) throw new Error("no 3D sniper");
+    const seen = new Set<number>();
+    for (let bearing = 0; bearing < 360; bearing += 15) {
+      const creep = around(bearing);
+      fx.onShot({ tick: bearing + 1, towerId: 1, creepId: 9, ix: creep.ix, iy: creep.iy }, creep);
+      const cell = fx.cellOf(1) ?? -1;
+      const offset = muzzleOffset(aim, cell);
+      // The shot leaves the muzzle tip of the cell shown, not a fixed point on the tower.
+      expect(fx.muzzleAt(1)).toEqual({
+        x: info.worldX + info.pivot.x + (offset?.[0] ?? Number.NaN),
+        y: info.worldY + info.pivot.y + (offset?.[1] ?? Number.NaN),
+      });
+      // And it faces the creep on the ground: the nearest of its 32 headings.
+      expect(angleGap(cellBearing(aim, cell), bearing), `bearing ${bearing}`).toBeLessThanOrEqual(360 / 64);
+      // Its barrel then points roughly along the line its shot is drawn on: within half a cell, the
+      // 3D camera's 23 degrees against the yard's 30 (up to 7), and the climb to the creep's body.
+      const line = towardCreep(yard, fx.muzzleAt(1) ?? { x: 0, y: 0 }, creep);
+      expect(angleGap(aim.aim[cell] ?? 0, line), `bearing ${bearing}`).toBeLessThan(25);
+      seen.add(cell);
+    }
+    // Round the compass it turns through a cell for every 15 degrees.
+    expect(seen.size).toBe(24);
+    fx.destroy();
+  });
+
+  it("turns a 3D Cannon onto the cell that faces its target on the ground, even below it where its raised barrel looks up", () => {
+    setNewTowerArt(true);
+    const { yard, fx } = setUp(20);
+    const [info] = towersOf(yard);
+    const aim = info?.aim;
+    if (!info || !aim || !info.pivot) throw new Error("no 3D cannon");
+    for (let bearing = 0; bearing < 360; bearing += 15) {
+      const creep = around(bearing);
+      fx.onShot({ tick: bearing + 1, towerId: 1, creepId: 9, ix: creep.ix, iy: creep.iy }, creep);
+      const cell = fx.cellOf(1) ?? -1;
+      expect(angleGap(cellBearing(aim, cell), bearing), `bearing ${bearing}`).toBeLessThanOrEqual(360 / 64);
+      const offset = muzzleOffset(aim, cell);
+      expect(fx.muzzleAt(1)).toEqual({
+        x: info.worldX + info.pivot.x + (offset?.[0] ?? Number.NaN),
+        y: info.worldY + info.pivot.y + (offset?.[1] ?? Number.NaN),
+      });
+    }
+    fx.destroy();
+  });
+
+  it("starts a painted turret's shots where they always did, lifted with its tier", () => {
+    setNewTowerArt(true);
+    const { yard, fx } = setUp(118);
+    const [info] = towersOf(yard);
+    if (!info) throw new Error("no railgun");
+    expect(fx.muzzleAt(1)).toEqual(muzzleOf(118, info.worldX, info.worldY - info.lift));
+    fx.destroy();
+  });
+
+  it("starts a 3D turret's shots where they always did while the art has not measured its muzzle", () => {
+    setNewTowerArt(true);
+    const [info] = towersOf(readYard(yardOf(21)));
+    const aim = info?.aim;
+    if (!info || !aim) throw new Error("no 3D sniper");
+    const { muzzle: _measured, ...unmeasured } = aim;
+    const frames = new Map<number, number>();
+    const fx = new TowerFx(new Graphics(), [{ ...info, aim: unmeasured }], {
+      setAnimFrame: (id, _layer, frame) => frames.set(id, frame),
+    }, { x: 0, y: 0 });
+    const creep = around(90);
+    fx.onShot({ tick: 1, towerId: 1, creepId: 9, ix: creep.ix, iy: creep.iy }, creep);
+    expect(frames.get(1)).toBeDefined();
+    expect(fx.muzzleAt(1)).toEqual(muzzleOf(21, info.worldX, info.worldY - info.lift));
+    fx.destroy();
+  });
+
+  it("tilts a 3D Laser's head further down the nearer the spot it burns, and lights the beam at its lens", () => {
+    setNewTowerArt(true);
+    const { yard, fx } = setUp(23);
+    const [info] = towersOf(yard);
+    const aim = info?.aim;
+    if (!info || !aim || !info.pivot) throw new Error("no 3D laser");
+    const rowFor = (distance: number) => {
+      const creep = around(90, distance);
+      fx.onShot({ tick: distance, towerId: 1, creepId: 9, ix: creep.ix, iy: creep.iy }, creep);
+      const cell = fx.cellOf(1) ?? -1;
+      const offset = muzzleOffset(aim, cell);
+      expect(fx.muzzleAt(1)).toEqual({
+        x: info.worldX + info.pivot!.x + (offset?.[0] ?? Number.NaN),
+        y: info.worldY + info.pivot!.y + (offset?.[1] ?? Number.NaN),
+      });
+      // It faces the spot on the ground, and its lens looks along the beam to the creep's feet.
+      expect(angleGap(cellBearing(aim, cell), 90), `distance ${distance}`).toBeLessThanOrEqual(360 / 64);
+      const line = towardCreep(yard, fx.muzzleAt(1) ?? { x: 0, y: 0 }, creep, 0);
+      expect(angleGap(aim.aim[cell] ?? 0, line), `distance ${distance}`).toBeLessThan(20);
+      return rowOf(aim, cell);
+    };
+    const near = rowFor(60);
+    const middle = rowFor(140);
+    const far = rowFor(400);
+    expect(near).toBeGreaterThan(middle);
+    expect(middle).toBeGreaterThanOrEqual(far);
+    expect(far).toBe(0);
     fx.destroy();
   });
 
@@ -575,6 +729,8 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
   const shakes: { tick: number; amp: number }[] = [];
   const nudges: { dx: number; dy: number }[] = [];
   const frames = new Map<number, number>();
+  /** The animation layers the effects turned or kicked. */
+  const layers = new Set<number>();
   /** What the battle screen was told of each round reaching its creep, in order. */
   const hits: string[] = [];
   const heading: { x: number; y: number }[] = [];
@@ -582,8 +738,14 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
     new Graphics(),
     towersOf(yard),
     {
-      setAnimFrame: (id, _layer, frame) => frames.set(id, frame),
-      nudge: (_id, _layer, dx, dy) => nudges.push({ dx, dy }),
+      setAnimFrame: (id, layer, frame) => {
+        layers.add(layer);
+        frames.set(id, frame);
+      },
+      nudge: (_id, layer, dx, dy) => {
+        layers.add(layer);
+        nudges.push({ dx, dy });
+      },
       landed: (_key, tick) => hits.push(`landed@${tick}`),
       struck: (id, tick, dirX, dirY) => {
         hits.push(`struck ${id}@${tick}`);
@@ -595,7 +757,7 @@ const newLookSetUp = async (type: number, look: "full" | "low" | "classic" = "fu
   );
   // The sheet comes in on the next turn of the event loop.
   await new Promise((resolve) => setTimeout(resolve, 0));
-  return { fx, sparks, shakes, nudges, frames, hits, heading };
+  return { fx, sparks, shakes, nudges, frames, layers, hits, heading };
 };
 
 describe("TowerFx's new look", () => {
@@ -635,6 +797,39 @@ describe("TowerFx's new look", () => {
     expect(fx.sparkCount).toBeGreaterThan(0);
     for (let tick = 6; tick <= 400; tick += 1) fx.update(tick, () => target);
     expect(shakes).toHaveLength(1);
+    fx.destroy();
+  });
+
+  it("turns the 3D Cannon's barrel onto a creep in range, pointing along its shot, and kicks it back", async () => {
+    setNewTowerArt(true);
+    const { fx, frames, layers, nudges } = await newLookSetUp(20);
+    const near = creepAt(35, 235);
+    fx.update(1, () => near, [near]);
+    expect(frames.get(1)).toBeDefined();
+    const first = frames.get(1);
+    for (let tick = 2; tick <= 80; tick += 1) fx.update(tick, () => near, [near]);
+    // Turned a little a tick onto the cell the shot will snap to: firing does not move it.
+    const settled = frames.get(1);
+    expect(settled).not.toBe(first);
+    shoot(fx, 80);
+    expect(fx.cellOf(1)).toBe(settled);
+    shoot(fx, 81);
+    for (let tick = 81; tick <= 81 + RECOIL_TICKS + 2; tick += 1) fx.update(tick, () => near, [near]);
+    expect(nudges.some(({ dx, dy }) => dx !== 0 || dy !== 0)).toBe(true);
+    expect(nudges[nudges.length - 1]).toEqual({ dx: 0, dy: 0 });
+    // Only the barrel's strip (layer 0) moves.
+    expect([...layers]).toEqual([0]);
+    fx.destroy();
+  });
+
+  it("leaves the Flash Cannon still: no strip to turn, no barrel to kick", async () => {
+    const { fx, frames, nudges } = await newLookSetUp(20);
+    const near = creepAt(35, 235);
+    for (let tick = 1; tick <= 40; tick += 1) fx.update(tick, () => near, [near]);
+    shoot(fx, 41);
+    for (let tick = 41; tick <= 60; tick += 1) fx.update(tick, () => near, [near]);
+    expect(frames.size).toBe(0);
+    expect(nudges).toHaveLength(0);
     fx.destroy();
   });
 

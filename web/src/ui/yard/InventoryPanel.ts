@@ -532,15 +532,17 @@ const renderIcon = (group: SearchGroup): HTMLElement => {
     return swatch;
   }
 
+  // A repainted tower whose turret turns keeps its whole picture as its still.
+  const picture = art.still ?? art.top;
   const icon = document.createElement("img");
-  icon.src = art.top.url;
+  icon.src = picture.url;
   icon.alt = group.name;
   // Set as attributes: the properties do not reflect in jsdom, and the whole
   // point is that the browser sees them before it fetches.
   icon.setAttribute("loading", "lazy");
   icon.setAttribute("decoding", "async");
 
-  const crop = art.top.frame ? stripCrop(art.top.frame, ICON_PX) : null;
+  const crop = picture.frame ? stripCrop(picture.frame, ICON_PX) : null;
   if (!crop) {
     icon.className = "planner-inventory__icon";
     icon.width = ICON_PX;

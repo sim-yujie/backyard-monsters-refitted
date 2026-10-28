@@ -102,7 +102,7 @@ export class YardTextures {
    * them is cheaper than the alternative of thirty base textures.
    */
   strip(anim: ResolvedAnim): Texture[] | null {
-    const key = `${anim.url}#${anim.width}x${anim.height}x${anim.frames}`;
+    const key = `${anim.url}#${anim.width}x${anim.height}x${anim.frames}x${anim.columns ?? 0}`;
 
     const cached = this.strips.get(key);
     if (cached) return cached;
@@ -116,11 +116,12 @@ export class YardTextures {
           // table describe an image the server does not have. See `stripCells`.
           const cut = stripCells(anim, texture.source.width, texture.source.height);
           const cells: Texture[] = [];
+          const columns = cut.columns ?? cut.frames;
           for (let i = 0; i < cut.frames; i++) {
             cells.push(
               new Texture({
                 source: texture.source,
-                frame: new Rectangle(i * cut.width, 0, cut.width, cut.height),
+                frame: new Rectangle((i % columns) * cut.width, Math.floor(i / columns) * cut.height, cut.width, cut.height),
               }),
             );
           }

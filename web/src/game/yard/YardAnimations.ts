@@ -72,7 +72,8 @@ export const buildAnimLayers = (building: YardBuilding, art: ResolvedArt): AnimL
       anim,
       sprite,
       policy,
-      progress: startFrame(policy, anim.frames, building.id),
+      // A strip of several rows (the 3D Laser's tilts) starts in its first, the head nearest level.
+      progress: startFrame(policy, anim.columns ?? anim.frames, building.id),
       resolved: false,
     };
   });
