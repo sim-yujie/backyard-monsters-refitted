@@ -9,7 +9,7 @@ Per tier (t1 steel, t1b brass with lamps, t2, t3), in <tier>/ next to this file,
                               (so no front layer is needed)
   strip32@2x.png + strip32.json   the 32 headings at 2x (barrel raised 22 degrees), square cells with the turning point
                               in the middle of each
-  strip@2x.png + strip.json   the tilting barrel (all tiers): 5 rows (cannon3d.py PITCHES, 22 up to 18 down) x 32
+  strip@2x.png + strip.json   the tilting barrel (all tiers): 5 rows (cannon3d.py PITCHES, 22 up to 8 down) x 32
                               headings, the same kind of cells, with the aim fields per [row][heading] (owner, 28 Oct)
 Pictures for the owner, next to this file:
   tiers-compare.png           tiers 1-3: painted above, 3D below, 3x; game size underneath
@@ -322,12 +322,14 @@ def tilt_pieces(name):
         tilt_rule="A cannon lobs: the farther the target, the higher the barrel. From the turret's ground point (pivot + "
                   "[0, ground_below_pivot_px]) to the target's feet on screen (dx, dy), the ground distance is "
                   "d = hypot(dx, dy / sin(30)) (the game's ground); f = clamp((d - 0.2 range) / (0.8 range), 0, 1) with "
-                  "range the tower's range; want = 18 - 40 f degrees down; take the row whose pitch_deg is closest (that is "
+                  f"range the tower's range; want = {pitches[-1]} - {pitches[-1] - pitches[0]} f degrees down; take the row whose "
+                  "pitch_deg is closest (that is "
                   "row round((1 - f) * 4)). Then the cell whose aim_deg (in that row) is closest to the screen angle from "
                   "pivot + muzzle to the target. muzzle_height_px (the muzzle above the ground, level barrel, game px "
                   "measured like a ground distance) is there for a straight-aim rule, but is deliberately not called "
                   "lens_height_px: the Laser's straight aim would only ever pick the lowest row.",
-        note="body parts standing in front of the barrel are already cut out of each cell, so no front layer is needed. "
+        note="body parts standing in front of the barrel are already cut out of each cell, so no front layer is needed; "
+             "the spikes (prongs, horns) are always behind the barrel, as on the painted turret. "
              "strip32 (32 headings, barrel raised 22 degrees, one row) stays as it was."), indent=1))
     rows = tl["rows"]
     aim_fields.merge(out / "strip.json", {k: [r[k] for r in rows] for k in aim_fields.KEYS},

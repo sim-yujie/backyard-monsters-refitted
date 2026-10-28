@@ -30,6 +30,7 @@ from pathlib import Path
 import bmesh
 import bpy
 from mathutils import Matrix, Vector
+from mathutils.bvhtree import BVHTree
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "tower-3d"))
@@ -45,11 +46,18 @@ CANVAS = {
     3: dict(size=(620, 960), box=(163, 515, 421, 897), pivot=(291, 621)),
 }
 TILT = 22.0                       # the barrel's raise, degrees (the 32-heading strip)
-PITCHES = [-22, -12, -2, 8, 18]   # the tilt strip's rows, degrees DOWN (negative = raised) (owner, 28 Oct: the barrel tilts
+PITCHES = [-22, -14, -6, 2, 8]    # the tilt strip's rows, degrees DOWN (negative = raised) (owner, 28 Oct: the barrel tilts
                                   # with the target's distance, as the Laser's head does): row 0 is the 22 degrees up of the
                                   # still and the 32-heading strip (the far shot, and the game's still picture), the last row
-                                  # points down at a creep next to the tower. Much more up and the breech sinks into the collar.
+                                  # points down at a creep next to the tower. Much more up and the breech sinks into the collar;
+                                  # more than 8 down and the barrel goes into the ring (was 18 down: owner, 28 Oct, the muzzle
+                                  # passed through the spikes and the ring; see `clash` and `limits` below).
 TURRET_SCALE = 1.5              # the turning part, against the drum
+GUN_Z = 0.4 + float(os.environ.get("CANNON_GUN_LIFT", 0.1))   # the trunnions' height in the turning part (its units):
+                                  # 0.1 higher than first built, so the barrel clears the ring down to 8 degrees
+HORN_H = float(os.environ.get("CANNON_HORN_H", 1))          # the back horns' height, times
+SPIKES = ("prongs", "horns")      # always drawn behind the barrel (as the painted turret is laid over its body): the barrel
+                                  # swings through them at most headings and tilts, and no barrel height clears them
 SECTION = 0.84                    # one more striped section (stripes + band) per tier
 
 # per tier: the extra sections and what each part is made of
@@ -201,16 +209,16 @@ def build(cfg):
                                (rim_r + 0.05, ring_z - 0.06)]], [wood], parent=body)
         L.add_outline(lid, LN)
     # the prongs: a tall one in front, short tabs to the sides, and two clusters of curved horns at the back
-    prongs = bmesh.new()
+    prongs, horns = bmesh.new(), bmesh.new()
     horn_z = ring_z + 0.05
     for pb, h, out, r0, lean in ((158, 0.72, 0.32, 0.17, -14), (180, 0.95, 0.4, 0.19, -8), (202, 0.8, 0.34, 0.17, -2),
                                  (250, 0.8, 0.34, 0.17, 2), (272, 0.97, 0.4, 0.19, 8), (294, 0.74, 0.32, 0.17, 14)):
-        _horn(prongs, (RING_R, horn_z - 0.05), horn_z + h, RING_R + out, pb, r0 * 1.15, flat=0.55, lean=lean)
+        _horn(horns, (RING_R, horn_z - 0.05), horn_z + h * HORN_H, RING_R + out, pb, r0 * 1.15, flat=0.55, lean=lean)
     _horn(prongs, (RING_R + 0.02, ring_z - 0.25), horn_z + 0.5, RING_R + 0.04, 45, 0.13, flat=0.8, tip=0.02)   # front
     for pb in (95, 355):   # short rounded tabs either side of the front
         _horn(prongs, (RING_R - 0.03, horn_z - 0.05), horn_z + 0.5, RING_R + 0.08, pb, 0.14, flat=0.55, tip=0.05)
     for name, b, mat, w in (("feet", feet, wood, None), ("struts", struts, strut, None), ("ring", rings, band if cfg["tier"] == 3 else wood, None),
-                            ("prongs", prongs, wood, None), ("caps", caps, band, L.LINE * 0.8)):
+                            ("prongs", prongs, wood, None), ("horns", horns, wood, None), ("caps", caps, band, L.LINE * 0.8)):
         ob = L.obj_from_bm(name, b, [mat], parent=body, sharp=50)
         L.add_outline(ob, LN, w)
     if cfg["lamps"]:
@@ -235,20 +243,20 @@ def build(cfg):
     L.add_outline(collar, LN)
     bm = bmesh.new()
     for sx in (-1, 1):   # the two brackets with their round tops and trunnion caps
-        rbox(bm, (0.1, 0.42, 0.28), Matrix.Translation((sx * 0.38, 0.0, 0.1)), bevel=0.03)
-        L.add_mesh(bm, _cyl(0.15, 0.1, 28), Matrix.Translation((sx * 0.43, 0, 0.4)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
-        L.add_mesh(bm, _cyl(0.09, 0.08, 24, 0.1), Matrix.Translation((sx * 0.51, 0, 0.4)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
+        rbox(bm, (0.1, 0.42, GUN_Z - 0.12), Matrix.Translation((sx * 0.38, 0.0, 0.1)), bevel=0.03)
+        L.add_mesh(bm, _cyl(0.15, 0.1, 28), Matrix.Translation((sx * 0.43, 0, GUN_Z)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
+        L.add_mesh(bm, _cyl(0.09, 0.08, 24, 0.1), Matrix.Translation((sx * 0.51, 0, GUN_Z)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
     yoke = L.obj_from_bm("yoke", bm, [gb_m], parent=tur, sharp=35)
     L.add_outline(yoke, LN)
     bm = bmesh.new()
     c, nn = ring_of(14, 0.5, 0.05)
     studs(bm, c, nn, r=0.03)
     for sx in (-1, 1):
-        studs(bm, [(sx * 0.595, 0, 0.4)], [(sx, 0, 0)], r=0.04)
+        studs(bm, [(sx * 0.595, 0, GUN_Z)], [(sx, 0, 0)], r=0.04)
         studs(bm, [(sx * 0.435, y, z) for y, z in ((-0.15, 0.2), (0.15, 0.2))], [(sx, 0, 0)] * 2, r=0.025)
     L.obj_from_bm("rivets_yoke", bm, [M["rivet"]], parent=tur)
 
-    gun = L.empty("GUN", parent=tur, loc=(0, 0, 0.4))
+    gun = L.empty("GUN", parent=tur, loc=(0, 0, GUN_Z))
     gun.rotation_euler = (math.radians(TILT), 0, 0)
     # barrel along its local +Z (turned to +Y): rear knob, rear band, tube, middle band, tube, muzzle ring, bore
     br = 0.31
@@ -354,6 +362,7 @@ def main():
         print("DONE", name, "aim")
         return
     line_col = L.LINE_COLS[cfg["line"]]
+    in_front = [o for o in body_obs if not o.name.startswith(SPIKES)]   # body parts that may hide the barrel
 
     def body_shot():
         L.shot(out / "body-4x.png", body_obs, outer_col=line_col)
@@ -363,7 +372,7 @@ def main():
         avoid = L.load_alpha(out / "body-4x.png")
         for k in heads:
             tur.rotation_euler = (0, 0, -math.radians(11.25 * k))
-            L.shot(out / "barrel-4x" / f"h{k:02d}.png", tur_obs, cut=body_obs, avoid=avoid, outer_col=line_col)
+            L.shot(out / "barrel-4x" / f"h{k:02d}.png", tur_obs, cut=in_front, avoid=avoid, outer_col=line_col)
 
     gun = bpy.data.objects["GUN"]
     barrel = bpy.data.objects["barrel"]
@@ -377,6 +386,52 @@ def main():
     def turn(h):
         tur.rotation_euler = (0, 0, -math.radians(h))
 
+    # the barrel against the body's outer parts (prongs, ring, lid, struts, feet; its back sinking into the drum is meant)
+    solid = [o for o in body_obs if o.name in ("prongs", "horns", "ring", "lid", "struts", "feet", "caps")
+             and o.name not in os.environ.get("CANNON_IGNORE", "").split(",")]
+    moving = [o for o in L.objs_under(gun) if not o.name.endswith(("_line", "_glow"))]
+
+    def tree(o):
+        m = o.matrix_world
+        return BVHTree.FromPolygons([m @ v.co for v in o.data.vertices], [p.vertices[:] for p in o.data.polygons])
+
+    def clashes(p, h):
+        """The barrel's parts passing through the body at p degrees down, heading h: (part, body part, along the barrel,
+        bearings hit)."""
+        pitch(p)
+        turn(h)
+        bpy.context.view_layer.update()
+        found = []
+        for mo in moving:
+            t = tree(mo)
+            for o, st in solid_trees:
+                pairs = t.overlap(st)
+                if pairs:
+                    mz = [mo.data.polygons[i].center.z for i, _ in pairs]      # along the barrel: muzzle ring 0.88-1.1
+                    wc = [o.matrix_world @ o.data.polygons[j].center for _, j in pairs]
+                    found.append((mo.name, o.name, [round(min(mz), 2), round(max(mz), 2)],
+                                  sorted({round(math.degrees(math.atan2(c.x, c.y)) % 360) // 10 * 10 for c in wc})))
+        return found
+
+    if what in ("clash", "limits"):
+        bpy.context.view_layer.update()
+        solid_trees = [(o, tree(o)) for o in solid]
+    if what == "clash":     # render/TIER/clash.json, per tilt row and heading. Extra arguments: tilts to test instead of PITCHES
+        hits = []
+        for r, p in enumerate([float(a) for a in argv[2:]] or PITCHES):
+            for k in range(32):
+                for mo, bo, along, brg in clashes(p, 11.25 * k):
+                    hits.append(dict(row=r, pitch=p, heading=k, moving=mo, body=bo, along=along, bearings=brg))
+        (out / "clash.json").write_text(json.dumps(hits, indent=0))
+        print("CLASH", name, len(hits), "cells", len({(h["row"], h["heading"]) for h in hits}))
+        return
+    if what == "limits":    # per heading, the tilts (2 degree steps, 30 up to 20 down) where the barrel passes through the body
+        lim = {}
+        for k in range(32):
+            lim[k] = [p for p in range(-30, 21, 2) if clashes(p, 11.25 * k)]
+        (out / "limits.json").write_text(json.dumps(lim))
+        print("LIMITS", name, json.dumps(lim))
+        return
     if what == "tilts":
         (out / "tilt-4x").mkdir(exist_ok=True)
         avoid = L.load_alpha(out / "body-4x.png")
@@ -389,7 +444,7 @@ def main():
                 if only and (r, k) not in only:
                     continue
                 turn(11.25 * k)
-                L.shot(out / "tilt-4x" / f"r{r}_h{k:02d}.png", tur_obs, cut=body_obs, avoid=avoid, outer_col=line_col)
+                L.shot(out / "tilt-4x" / f"r{r}_h{k:02d}.png", tur_obs, cut=in_front, avoid=avoid, outer_col=line_col)
         pitch(0)
         turn(0)
         bpy.context.view_layer.update()
