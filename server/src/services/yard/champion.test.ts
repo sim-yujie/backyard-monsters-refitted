@@ -3,10 +3,9 @@ import type { ClientSafeError } from "../../middleware/clientSafeError.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import {
   CHAMPION_STATUS,
-  EGG_HATCH_SECONDS,
+  hatchDueEgg,
   healPriceOf,
   KORATH_TYPE,
-  planChampionCancelEgg,
   planChampionEvolve,
   planChampionFeed,
   planChampionHeal,
@@ -61,20 +60,31 @@ const refusal = (plan: () => unknown): { status: number; reason: unknown } => {
   throw new Error("expected a refusal");
 };
 
+/** One feeding interval of champion `type`. */
+const feedTime = (type: number): number => championEntry(type)!.feedTime;
+
+/** An older save's egg (eggs are no longer laid, owner 2026-10-28). */
+const egg = (overrides: Partial<ChampionData> = {}): ChampionData =>
+  gorgo({ t: 2, hp: 12_000, ft: NOW + 600, status: CHAMPION_STATUS.EGG, ...overrides });
+
 describe("champion/raise", () => {
-  test("lays an egg that hatches in a day, holding a level 1 champion at full health, free", () => {
+  test("puts a level 1 champion at full health in the cage straight away, fed for one interval, free", () => {
     const outcome = planChampionRaise(yard({ champion: [] }), 2, NOW);
-    expect(EGG_HATCH_SECONDS).toBe(24 * 3600);
     expect(outcome.slices.champion).toEqual([
-      { t: 2, hp: 12_000, l: 1, ft: NOW + 24 * 3600, fd: 0, fb: 0, pl: 1, status: CHAMPION_STATUS.EGG },
+      { t: 2, hp: 12_000, l: 1, ft: NOW + feedTime(2), fd: 0, fb: 0, pl: 1, status: CHAMPION_STATUS.ACTIVE },
     ]);
-    expect(outcome.report.champion.status).toBe(3);
+    expect(outcome.report.champion.status).toBe(CHAMPION_STATUS.ACTIVE);
     expect(outcome).not.toHaveProperty("shiny");
   });
 
-  test("refuses while an egg is in the cage", () => {
-    const laid = planChampionRaise(yard({ champion: [] }), 2, NOW).slices.champion;
-    const again = refusal(() => planChampionRaise(yard({ champion: laid }), 3, NOW + 60));
+  test("the raised champion can be renamed at once, and fills the cage (no wait)", () => {
+    const raised = yard({ champion: planChampionRaise(yard({ champion: [] }), 1, NOW).slices.champion });
+    expect(planChampionRename(raised, "Rex").report.champion.nm).toBe("Rex");
+    expect(refusal(() => planChampionRaise(raised, 3, NOW + 60))).toEqual({ status: 409, reason: "championInCage" });
+  });
+
+  test("refuses while an older save's egg is still in the cage", () => {
+    const again = refusal(() => planChampionRaise(yard({ champion: [egg()] }), 3, NOW + 60));
     expect(again).toEqual({ status: 409, reason: "eggInCage" });
   });
 
@@ -86,10 +96,10 @@ describe("champion/raise", () => {
     expect(refusal(() => planChampionRaise(yard({ champion: [] }), 5, NOW)).reason).toBe("notRaisable");
   });
 
-  test("raises Korath once he is unlocked (owner I10): free, a one-day egg, level 1, no event powers (I13)", () => {
+  test("raises Korath once he is unlocked (owner I10): free, straight away, level 1, no event powers (I13)", () => {
     const outcome = planChampionRaise(yard({ champion: [] }), KORATH_TYPE, NOW, { korath: true });
     expect(outcome.slices.champion).toEqual([
-      { t: 4, hp: 28_000, l: 1, ft: NOW + 24 * 3600, fd: 0, fb: 0, pl: 0, status: CHAMPION_STATUS.EGG },
+      { t: 4, hp: 28_000, l: 1, ft: NOW + feedTime(KORATH_TYPE), fd: 0, fb: 0, pl: 0, status: CHAMPION_STATUS.ACTIVE },
     ]);
     expect(outcome).not.toHaveProperty("shiny");
     // Krallen stays out of the cage whatever is unlocked.
@@ -101,12 +111,11 @@ describe("champion/raise", () => {
   test("Korath keeps the one-champion rule: refused beside a champion, an egg, or while frozen", () => {
     const unlocked = { korath: true };
     expect(refusal(() => planChampionRaise(yard(), KORATH_TYPE, NOW, unlocked)).reason).toBe("championInCage");
-    const egg = planChampionRaise(yard({ champion: [] }), 1, NOW).slices.champion;
-    expect(refusal(() => planChampionRaise(yard({ champion: egg }), KORATH_TYPE, NOW, unlocked)).reason).toBe(
+    expect(refusal(() => planChampionRaise(yard({ champion: [egg()] }), KORATH_TYPE, NOW, unlocked)).reason).toBe(
       "eggInCage"
     );
-    const korathEgg = planChampionRaise(yard({ champion: [] }), KORATH_TYPE, NOW, unlocked).slices.champion;
-    expect(refusal(() => planChampionRaise(yard({ champion: korathEgg }), 2, NOW)).reason).toBe("eggInCage");
+    const korath = planChampionRaise(yard({ champion: [] }), KORATH_TYPE, NOW, unlocked).slices.champion;
+    expect(refusal(() => planChampionRaise(yard({ champion: korath }), 2, NOW)).reason).toBe("championInCage");
     const frozen = yard({ champion: [gorgo({ t: 4, status: 1, ft: 3_600 })] });
     expect(refusal(() => planChampionRaise(frozen, KORATH_TYPE, NOW, unlocked)).reason).toBe("frozen");
     expect(refusal(() => planChampionRaise(yard({ champion: [], buildingdata: {} }), KORATH_TYPE, NOW, unlocked)).reason).toBe(
@@ -132,22 +141,12 @@ describe("champion/raise", () => {
     expect(planChampionRaise(frozen, 3, NOW).slices.champion).toHaveLength(2);
   });
 
-  test("replaces a juiced champion of the same type", () => {
+  test("replaces a champion juiced before juicing was turned off, of the same type", () => {
     const juiced = yard({ champion: [gorgo({ status: 2, l: 5, nm: "Old" })] });
     const outcome = planChampionRaise(juiced, 1, NOW);
     expect(outcome.slices.champion).toEqual([
-      { t: 1, hp: 40_000, l: 1, ft: NOW + 24 * 3600, fd: 0, fb: 0, pl: 1, status: 3 },
+      { t: 1, hp: 40_000, l: 1, ft: NOW + feedTime(1), fd: 0, fb: 0, pl: 1, status: CHAMPION_STATUS.ACTIVE },
     ]);
-  });
-
-  test("juicing a hurt champion and raising again gives an egg, not a fresh champion (the exploit)", () => {
-    const hurt = yard({ champion: [gorgo({ t: 2, hp: 1_000, l: 4 })], buildingdata: { ...CAGE, ...JUICER } });
-    const juiced = planChampionJuice(hurt).slices.champion;
-    const raised = planChampionRaise(yard({ champion: juiced }), 2, NOW).slices.champion;
-    expect(raised).toEqual([{ t: 2, hp: 12_000, l: 1, ft: NOW + EGG_HATCH_SECONDS, fd: 0, fb: 0, pl: 1, status: 3 }]);
-    // Nothing is in the cage to fight, feed or heal until it hatches.
-    const after = yard({ champion: raised });
-    expect(refusal(() => planChampionHeal(after)).reason).toBe("eggInCage");
   });
 
   test("a Krallen beside the cage does not count as the cage's champion", () => {
@@ -272,56 +271,43 @@ describe("champion/rename", () => {
 });
 
 describe("champion/juice", () => {
-
-  test("juices the champion for good, for no goo", () => {
-    const outcome = planChampionJuice(yard({ buildingdata: { ...CAGE, ...JUICER } }));
-    expect(outcome.slices.champion[0]!.status).toBe(CHAMPION_STATUS.JUICED);
-    expect(outcome).not.toHaveProperty("credit");
+  test("is refused: champions can no longer be juiced (owner, 2026-10-28)", () => {
+    const withJuicer = yard({ buildingdata: { ...CAGE, ...JUICER } });
+    expect(refusal(() => planChampionJuice(withJuicer))).toEqual({ status: 409, reason: "juiceDisabled" });
+    expect(refusal(() => planChampionJuice(yard())).reason).toBe("juiceDisabled");
+    expect(refusal(() => planChampionJuice(yard({ champion: [] }))).reason).toBe("juiceDisabled");
   });
 
-  test("needs a working Juicer", () => {
-    expect(refusal(() => planChampionJuice(yard())).reason).toBe("noJuicer");
-    const upgrading = { ...CAGE, "5": { ...JUICER["5"], cU: 100 } };
-    expect(refusal(() => planChampionJuice(yard({ buildingdata: upgrading }))).reason).toBe("busy");
-  });
-
-  test("keeps every other entry as it was", () => {
-    const frozen = gorgo({ t: 3, status: 1, ft: 5_000 });
-    const outcome = planChampionJuice(
-      yard({ buildingdata: { ...CAGE, ...JUICER }, champion: [frozen, gorgo()] })
-    );
-    expect(outcome.slices.champion[0]).toEqual(frozen);
+  test("leaves the champion as it was, so the hurt-champion swap is closed", () => {
+    const hurt = yard({ champion: [gorgo({ t: 2, hp: 1_000, l: 4 })], buildingdata: { ...CAGE, ...JUICER } });
+    const before = structuredClone(hurt.champion);
+    refusal(() => planChampionJuice(hurt));
+    expect(hurt.champion).toEqual(before);
+    expect(refusal(() => planChampionRaise(hurt, 2, NOW)).reason).toBe("championInCage");
   });
 });
 
-
-describe("champion eggs", () => {
-  const egg = (overrides: Partial<ChampionData> = {}): ChampionData =>
-    gorgo({ t: 2, hp: 12_000, ft: NOW + 600, status: CHAMPION_STATUS.EGG, ...overrides });
-
-  test("cancel takes the egg out; the next egg takes its own full day", () => {
-    const frozen = gorgo({ status: 1, ft: 3_600 });
-    const cancelled = planChampionCancelEgg(yard({ champion: [frozen, egg()] }));
-    expect(cancelled.slices.champion).toEqual([frozen]);
-    expect(cancelled.report.champion.t).toBe(2);
-    const later = NOW + 5_000;
-    const raised = planChampionRaise(yard({ champion: cancelled.slices.champion }), 3, later).slices.champion;
-    expect(raised[1]).toMatchObject({ t: 3, status: 3, ft: later + EGG_HATCH_SECONDS });
+describe("champion eggs (older saves only)", () => {
+  test("an egg hatches at once, even before its old hatch time", () => {
+    const champions = [egg({ ft: NOW + 20 * 3600 })];
+    const hatch = hatchDueEgg(champions, NOW);
+    expect(hatch?.at).toBe(NOW);
+    expect(champions[0]).toMatchObject({ t: 2, l: 1, status: CHAMPION_STATUS.ACTIVE, ft: NOW + feedTime(2) });
   });
 
-  test("cancel needs an egg and a finished cage", () => {
-    expect(refusal(() => planChampionCancelEgg(yard()))).toEqual({ status: 409, reason: "noEgg" });
-    expect(refusal(() => planChampionCancelEgg(yard({ champion: [egg()], buildingdata: {} }))).reason).toBe("noCage");
+  test("an egg past its hatch time hatches at that time", () => {
+    const champions = [egg({ ft: NOW - 100 })];
+    expect(hatchDueEgg(champions, NOW)?.at).toBe(NOW - 100);
+    expect(champions[0]).toMatchObject({ status: CHAMPION_STATUS.ACTIVE, ft: NOW - 100 + feedTime(2) });
   });
 
-  test("while it waits, the cage has no champion to feed, evolve, heal, rename or juice", () => {
+  test("until the catch-up hatches it, the cage has no champion to feed, evolve, heal or rename", () => {
     const waiting = yard({ champion: [egg()], buildingdata: { ...CAGE, ...JUICER } });
     expect(refusal(() => planChampionFeed(waiting, "monsters", NOW)).reason).toBe("eggInCage");
     expect(refusal(() => planChampionFeed(waiting, "shiny", NOW)).reason).toBe("eggInCage");
     expect(refusal(() => planChampionEvolve(waiting, NOW)).reason).toBe("eggInCage");
     expect(refusal(() => planChampionHeal(waiting)).reason).toBe("eggInCage");
     expect(refusal(() => planChampionRename(waiting, "Eggy")).reason).toBe("eggInCage");
-    expect(refusal(() => planChampionJuice(waiting)).reason).toBe("eggInCage");
   });
 
   test("Krallen beside the cage is still his own: healing him works while an egg waits", () => {

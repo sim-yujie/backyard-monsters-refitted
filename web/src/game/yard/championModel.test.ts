@@ -86,14 +86,9 @@ describe("cageView", () => {
   });
 });
 
-describe("the egg (owner 2026-10-20)", () => {
-  it("is the cage's state while it waits, with the time left, never below 0", () => {
-    const view = cageView(saveOf([gorgo({ t: 3, status: 3, ft: NOW + 5 * HOUR })]), NOW);
-    expect(view.kind).toBe("egg");
-    if (view.kind !== "egg") return;
-    expect([view.egg.entry.id, view.egg.hatchAt, view.egg.left]).toEqual(["G3", NOW + 5 * HOUR, 5 * HOUR]);
-    const due = cageView(saveOf([gorgo({ t: 3, status: 3, ft: NOW - 10 })]), NOW);
-    expect(due.kind === "egg" && due.egg.left).toBe(0);
+describe("no eggs (owner 2026-10-28)", () => {
+  it("never shows an egg: an older save's egg is not a champion, and the server hatches it", () => {
+    expect(cageView(saveOf([gorgo({ t: 3, status: 3, ft: NOW + 5 * HOUR })]), NOW).kind).toBe("empty");
   });
 });
 
@@ -200,14 +195,12 @@ describe("the Champion Chamber (#125)", () => {
     expect(thawGate(view, true)).toBeNull();
   });
 
-  it("thaws no champion while an egg waits in the cage, but Krallen may", () => {
+  it("does not block a thaw on an older save's egg (the server hatches it first and says why)", () => {
     const egg = gorgo({ t: 2, status: 3, ft: NOW + HOUR });
-    const view = chamberView(withChamber([egg, gorgo({ status: 1 }), gorgo({ t: 5, l: 5, status: 1, ft: HOUR })]), NOW);
+    const view = chamberView(withChamber([egg, gorgo({ status: 1 })]), NOW);
     if (view.kind !== "ready") throw new Error(view.kind);
-    expect(view.egg?.entry.id).toBe("G2");
     expect(view.active).toBeNull();
-    expect(thawGate(view)).toBe("Your cage holds a Drull egg. Cancel it before you thaw a champion.");
-    expect(thawGate(view, true)).toBeNull();
+    expect(thawGate(view)).toBeNull();
   });
 
   it("thaws nothing while the chamber is damaged", () => {

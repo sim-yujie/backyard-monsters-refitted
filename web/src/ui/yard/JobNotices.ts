@@ -133,8 +133,9 @@ const STARTER_BASE = "starterBase";
 const STARVED = "starve";
 
 /**
- * A champion's egg hatched, a day after it was raised (owner 2026-10-20;
- * `server/src/services/yard/catchUpChampions.ts`): "Your Drull has hatched!",
+ * An older save's champion egg hatched (eggs were removed on 2026-10-28; the
+ * server's catch-up hatches any left, `server/src/services/yard/catchUpChampions.ts`):
+ * "Your Drull has hatched!",
  * a sentence of its own, ahead of what finished.
  */
 const CHAMPION_HATCH = "championHatch";

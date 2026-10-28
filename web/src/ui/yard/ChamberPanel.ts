@@ -54,7 +54,6 @@ export const THAW_SHORT: Readonly<Record<ThawProblem, string>> = {
   noCage: "Needs a Cage",
   cageBuilding: "Cage being built",
   cageFull: "Cage is full",
-  egg: "Egg in the cage",
 };
 
 export class ChamberPanel {
@@ -212,7 +211,6 @@ const shapeOf = (view: ChamberView): string => {
   return [
     view.damaged,
     view.cage,
-    view.egg?.entry.id ?? "-",
     view.active ? `${view.active.entry.id}:${view.active.hunger}:${view.active.health >= view.active.maxHealth}` : "-",
     view.frozen.map((one) => one.entry.id).join(),
   ].join("|");
