@@ -38,7 +38,8 @@ import {
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { monsterRealmOf, monsterWords, type MonsterRealm, type MonsterWords } from "@/game/monsters/realm";
 import { buttonUrl } from "@/game/yard/buildButtonArt";
-import { maxLevel, quantityOf, townHallLevel } from "@/game/yard/buildingCosts";
+import { ArtState, resolveArt } from "@/game/yard/buildingArt";
+import { maxLevel, quantityOf, townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -619,7 +620,7 @@ export class HatchTab implements MonstersTab {
 
       const picture = document.createElement("img");
       picture.className = "hatch-tab__picture";
-      picture.src = buttonUrl(HATCHERY_TYPE, this.store.kind);
+      picture.src = hatcheryPicture(tab.level, this.store.kind);
       picture.alt = "";
       picture.decoding = "async";
       picture.draggable = false;
@@ -1049,10 +1050,7 @@ export class HatchTab implements MonstersTab {
     const main = document.createElement("span");
     main.className = `hatch-message__title hatch-message__title--${tone}`;
     main.textContent = title;
-    const detail = document.createElement("span");
-    detail.className = "hatch-message__detail";
-    detail.textContent = `Each monster moves into ${housingNoun(this.words)} the moment it hatches. With ${housingNoun(this.words)} full it still hatches, then waits in its ${this.words.hatchery} until there is room.`;
-    words.append(main, detail);
+    words.append(main);
 
     const housed = housedSpace(yard);
     const pending = pendingSpace(yard);
@@ -1517,6 +1515,16 @@ const IDLE_TEXT: Partial<Record<HatcheryView["state"], string>> = {
   building: "Being built",
   damaged: "Damaged: repair it",
   idle: "Nothing hatching",
+};
+
+/**
+ * The hatchery as the yard draws it at this level (owner, 28 Oct): the Flash
+ * art changes at each level and has no repaint, so Classic and Modern agree.
+ * The build-menu picture stands in should the art table ever lack the type.
+ */
+const hatcheryPicture = (level: number, kind: YardKind): string => {
+  const art = resolveArt(HATCHERY_TYPE, level, ArtState.DEFAULT, kind);
+  return (art?.still ?? art?.top)?.url ?? buttonUrl(HATCHERY_TYPE, kind);
 };
 
 /** What a tab says beside its light when nothing counts down. */

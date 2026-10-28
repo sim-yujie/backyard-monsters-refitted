@@ -202,15 +202,27 @@ describe("HatchTab: each hatchery's line", () => {
     expect(shown(tab(element, 10), ".hatch-tab__state")).toBe("12s");
     expect(shown(tab(element, 10), ".hatch-tab__waiting")).toBe("×25");
     expect(tab(element, 10).getAttribute("aria-label")).toBe("Hatchery 1, Level 3: Bolt hatching, 25 waiting");
-    expect(tab(element, 10).querySelector<HTMLImageElement>(".hatch-tab__picture")!.getAttribute("src")).toBe(
-      "/assets/buildingbuttons/13.jpg",
-    );
     // Idle: a grey light, no picture, nothing waiting.
     expect(tab(element, 11).className).toBe("hatch-tab hatch-tab--idle");
     expect(shown(tab(element, 11), ".hatch-tab__state")).toBe("Idle");
     expect(tab(element, 11).querySelector(".hatch-tab__monster")).toBeNull();
     expect(tab(element, 11).querySelector(".hatch-tab__waiting")).toBeNull();
     expect(tab(element, 11).getAttribute("aria-label")).toBe("Hatchery 2, Level 2: Idle, 0 waiting");
+  });
+
+  it("pictures each hatchery as the yard draws it at its level (owner, 28 Oct)", () => {
+    const save = loadOf(
+      {
+        monsters: { saved: T0, housed: {}, hid: [10, 11, 12], h: [["", 0, []], ["", 0, []], ["", 0, []]], hstage: [0, 0, 0] },
+      },
+      [building(10, 13, 1), building(11, 13, 2), building(12, 13, 3)],
+    );
+    const { element } = setup(save);
+    expect(tabs(element).map((one) => one.querySelector<HTMLImageElement>(".hatch-tab__picture")!.getAttribute("src"))).toEqual([
+      "/assets/buildings/hatchery/top.2.png",
+      "/assets/buildings/hatchery/top.3.png",
+      "/assets/buildings/hatchery/top.4.png",
+    ]);
   });
 
   it("counts a busy tab down each second without a redraw", () => {

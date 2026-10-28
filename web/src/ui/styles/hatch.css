@@ -137,12 +137,13 @@
   height: 48px;
 }
 
+/* The hatchery as the yard draws it at this level. */
 .hatch-tab__picture {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: var(--radius-sm);
-  object-fit: cover;
+  object-fit: contain;
+  object-position: bottom;
 }
 
 /* The number the yard shows over this hatchery while the tab is open. */
@@ -829,12 +830,6 @@ button.hatch-slot:disabled {
 
 .hatch-message__title--warning {
   color: var(--colour-warning);
-}
-
-.hatch-message__detail {
-  font-size: var(--text-sm);
-  color: var(--colour-text-secondary);
-  text-wrap: pretty;
 }
 
 .hatch-housing {

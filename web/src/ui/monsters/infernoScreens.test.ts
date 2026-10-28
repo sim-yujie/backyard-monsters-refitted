@@ -137,7 +137,7 @@ describe("Inferno monster screens: Hatch", () => {
     expect(text).toContain("Incubator 1");
     expect(spokenText(element)).toMatch(/Magma [\d,]+ · Time each/);
     expect(text).toContain("Go to Strongbox");
-    expect(text).toContain("Each monster moves into the Compound the moment it hatches.");
+    expect(text).toContain("Compound after this add");
     expect(text).not.toMatch(/Hatchery|Monster Locker|goo/i);
   });
 
