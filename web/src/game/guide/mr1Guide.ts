@@ -127,7 +127,13 @@ export class Mr1Guide {
         return carded
           ? {
               key: "attack",
-              step: this.line("pick-camp", { text: LINES.tapAttack, cue: CUES.tapAttack!, target: TutTarget.TARGET_ATTACK }),
+              // From below, so the hand leaves the card's lines (the army, the protection) readable.
+              step: this.line("pick-camp", {
+                text: LINES.tapAttack,
+                cue: CUES.tapAttack!,
+                target: TutTarget.TARGET_ATTACK,
+                side: "below",
+              }),
             }
           : { key: "camp", step: this.line("pick-camp", { text: LINES.pickCamp, target: TutTarget.MR1_PRACTICE }) };
       }
@@ -169,7 +175,12 @@ export class Mr1Guide {
       const answer = await this.api.advance(from);
       const step = this.stepOf(answer);
       this.outcome = step === "attack-result" ? "lost" : "won";
-      if (this.outcome === "won") this.step = null;
+      if (this.outcome === "won") {
+        this.step = null;
+        // The win removed the camp on the server ("gone once you win"): read
+        // the map again so its pin goes now, not on the next visit.
+        this.hooks.refresh();
+      }
     } catch {
       this.hooks.refresh();
     } finally {

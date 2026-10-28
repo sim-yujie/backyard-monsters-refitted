@@ -1,3 +1,4 @@
+import { guideRunning } from "@/game/announcements/announcementQueue";
 import { levelProgress, type LevelProgress } from "@/game/yard/experience";
 import { SHOP_ITEMS, protectedUntil, shopOffer } from "@/game/yard/shop";
 import type { YardStore, YardUiBinding } from "@/game/yard/YardStore";
@@ -11,6 +12,9 @@ import "@/ui/styles/yard-status.css";
  * yard stays protected, the player's level with a bar to the next, and the
  * boosts that are running with the time they have left. A level gained while
  * the yard is open also opens a small "Level N" box (`BASE.as:4895-4912`).
+ * While Bob's guided start runs the box waits, since its scrim would cover the
+ * button Bob points at and his pane its OK; it opens for the level reached
+ * once the guide is over or skipped.
  */
 
 /** One running boost: a timed Shop item that is still going. */
@@ -74,6 +78,8 @@ export class HudStatus {
   private readonly unsubscribe: () => void;
   private readonly timer: ReturnType<typeof setInterval>;
   private shownLevel: number | null;
+  /** A level gained while the guided start ran, announced once it is over. */
+  private heldLevel: number | null = null;
   private model: HudStatusModel;
 
   constructor(binding: YardUiBinding) {
@@ -123,10 +129,19 @@ export class HudStatus {
     this.model = hudStatusModel(this.store);
     const level = this.store.playerLevel;
     if (level !== null) {
-      if (this.shownLevel !== null && level > this.shownLevel) this.announce(level);
+      if (this.shownLevel !== null && level > this.shownLevel) this.heldLevel = level;
       this.shownLevel = level;
     }
+    this.releaseLevelUp();
     this.render();
+  }
+
+  /** Opens the waiting level-up box, unless the guided start still has the yard. */
+  private releaseLevelUp(): void {
+    if (this.heldLevel === null || guideRunning(this.store.save.onboarding?.guide.state)) return;
+    const level = this.heldLevel;
+    this.heldLevel = null;
+    this.announce(level);
   }
 
   /** The clock moving on: the countdowns, and a boost or protection that ran out. */
@@ -136,6 +151,7 @@ export class HudStatus {
     if ((until !== null && until <= now) || boosts.some((boost) => boost.endsAt <= now)) {
       this.model = hudStatusModel(this.store);
     }
+    this.releaseLevelUp();
     this.render();
   }
 

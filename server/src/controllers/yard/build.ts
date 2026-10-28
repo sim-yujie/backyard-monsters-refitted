@@ -1,6 +1,7 @@
 import { YardBuildSchema, YardCancelBuildSchema } from "../../schemas/YardSchemas.js";
 import { placedFinishedEvents } from "../../services/achievements/record.js";
 import {
+  fundGrantFor,
   fundedBuildingIds,
   isGuidedBuild,
   planGuidedBuild,
@@ -50,8 +51,9 @@ export const yardBuildAction = defineYardAction({
  * `POST /bm/yard/build/cancel` — take down a building still under
  * construction and refund its full build price, clamped to the storage cap
  * (§5.3). A building the guided start paid for cannot be cancelled while the
- * guide runs, so its top-up cannot be taken out as a refund (§8.4 rule 4;
- * Flash locked recycling during its tutorial, `tut_recycle_locked`).
+ * guide runs (§8.4 rule 4; Flash locked recycling during its tutorial,
+ * `tut_recycle_locked`), and once it is over (a skip between the build and
+ * the free finish) Bob's share is kept back from the refund.
  */
 export const yardCancelBuildAction = defineYardAction({
   schema: YardCancelBuildSchema,
@@ -62,7 +64,7 @@ export const yardCancelBuildAction = defineYardAction({
         id: body.id,
       });
     }
-    return planCancelBuild(save, body.id);
+    return planCancelBuild(save, body.id, fundGrantFor(onboarding, body.id));
   },
   // `msg_stopconstructionoutpostbuilding` (`client/scripts/BFOUNDATION.as:2511-2517`).
   outposts: { refuse: "You cannot stop the construction of a building in your Outposts." },
