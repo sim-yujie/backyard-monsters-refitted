@@ -21,6 +21,7 @@ import { tribeInfo } from "@/game/maproom1/tribes";
 import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { monsterName } from "@/ui/attack/ArmyPanel";
+import { gameIcon } from "@/ui/gameIcon";
 import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon, type IconName } from "./icons";
 
@@ -35,6 +36,12 @@ import { button, el, icon, type IconName } from "./icons";
  * while protected says so on the card before the tap, in place of Flash's
  * confirm box. Message and Truce sit in a row of their own on a neighbour
  * (not a tribe), as on the Map Room 2 cell panel; the scene opens the mailbox.
+ *
+ * Fewer words (less-text job 5, the owner's version, 27 Oct): no rule
+ * sentences ("Deal 90% damage to wreck it", "The camp comes back 10 minutes
+ * later", "Attacking a tribe keeps your protection"); a tribe's camp shows how
+ * damaged it is as the broken wall, a bar and "35%"; an online player has only
+ * the green dot by the name and a greyed Attack, no sentence under it.
  */
 
 export type CardAction = NonNullable<Mr1Reason["action"]>;
@@ -162,11 +169,7 @@ const reasonLine = (
 ): HTMLElement => {
   const line = el("p", "mr1-reason");
   line.id = id;
-  if (reason.key === ReasonKey.PLAYING) {
-    line.append(onlineDot("", true));
-  } else {
-    line.append(icon(REASON_ICONS[reason.key] ?? "lock", 16, "mr1-icon mr1-reason__icon"));
-  }
+  line.append(icon(REASON_ICONS[reason.key] ?? "lock", 16, "mr1-icon mr1-reason__icon"));
   const words = el("span");
   words.append(el("strong", undefined, `${reason.title}.`), " ");
   if (
@@ -180,6 +183,32 @@ const reasonLine = (
   }
   line.append(words);
   return line;
+};
+
+/**
+ * How damaged a tribe's camp is: the broken wall, a bar with a notch where
+ * the camp is wrecked (`VICTORY_THRESHOLD`), and "35%". The words are on hover
+ * and for screen readers: "Yard damage 35%, wrecked at 90%".
+ */
+export const damageMeter = (damage: number): HTMLElement => {
+  const percent = Math.min(100, Math.max(0, Math.round(damage)));
+  const meter = el("div", "mr1-damage");
+  const words = `Yard damage ${percent}%, wrecked at ${VICTORY_THRESHOLD}%`;
+  meter.setAttribute("role", "meter");
+  meter.setAttribute("aria-label", "Yard damage");
+  meter.setAttribute("aria-valuemin", "0");
+  meter.setAttribute("aria-valuemax", "100");
+  meter.setAttribute("aria-valuenow", String(percent));
+  meter.setAttribute("aria-valuetext", words);
+  meter.title = words;
+  const bar = el("span", "mr1-damage__bar");
+  const fill = el("span", "mr1-damage__fill");
+  fill.style.width = `${percent}%`;
+  const notch = el("span", "mr1-damage__notch");
+  notch.style.left = `${VICTORY_THRESHOLD}%`;
+  bar.append(fill, notch);
+  meter.append(gameIcon("yarddamage2", { size: 16, decorative: true }), bar, el("span", "mr1-damage__value", `${percent}%`));
+  return meter;
 };
 
 const actionButton = (label: string, name: IconName, className: string): HTMLButtonElement => {
@@ -214,13 +243,7 @@ export const targetCard = (
   titleRow.append(el("span", "chip", `Level ${target.level}`));
   titles.append(titleRow);
   if (target.kind === "tribe") {
-    titles.append(
-      el(
-        "span",
-        "mr1-card__sub mr1-card__sub--tribe",
-        variant === "sheet" ? "Wild monsters · keeps your protection" : "Wild monsters",
-      ),
-    );
+    titles.append(el("span", "mr1-card__sub mr1-card__sub--tribe", "Wild monsters"));
   } else {
     const seen = presenceText(target, state.now);
     const battles = battleIcons(target);
@@ -239,33 +262,8 @@ export const targetCard = (
 
   if (target.kind === "tribe") {
     card.append(el("p", "mr1-card__blurb", tribeInfo(target.tribe).blurb));
-    if (variant !== "sheet") {
-      const facts = el("div", "mr1-card__facts");
-      const left = respawnIn(target, state.now);
-      const fact = (name: IconName, text: string): HTMLElement => {
-        const line = el("span", "mr1-card__fact");
-        line.append(icon(name, 16), text);
-        return line;
-      };
-      facts.append(
-        fact(
-          "respawn",
-          target.practice
-            ? // The guided start's practice camp (#227) never respawns: a win removes it.
-              `Deal ${VICTORY_THRESHOLD}% damage to win. It is yours alone to practise on, and it is gone once you win.`
-            : left === null
-              ? // The camp is wrecked at 90% damage (`VICTORY_THRESHOLD`,
-                // `derivedDestroyed`), not by its Town Hall alone.
-                `Deal ${VICTORY_THRESHOLD}% damage to wreck it. The camp comes back 10 minutes later.`
-              : "You wrecked this camp. It is rebuilding.",
-        ),
-        fact("shield", "Attacking a tribe keeps your protection."),
-      );
-      if (target.damage !== null && target.damage > 0 && left === null) {
-        facts.append(fact("attack", `Already ${Math.round(target.damage)}% damaged by you.`));
-      }
-      card.append(facts);
-    }
+    // A wrecked camp says so under its greyed Attack, with its countdown.
+    if (respawnIn(target, state.now) === null) card.append(damageMeter(target.damage ?? 0));
   } else {
     const line = handlers.achievementsLine?.(target);
     if (line) card.append(line);
@@ -297,9 +295,12 @@ export const targetCard = (
     "btn btn--primary mr1-card__button",
   );
   tutTarget(attack, TutTarget.TARGET_ATTACK);
+  // An online player: the green dot by the name says why, and no sentence does.
+  const online = gate.reason?.key === ReasonKey.PLAYING;
   if (gate.reason) {
     attack.disabled = true;
-    attack.setAttribute("aria-describedby", `mr1-why-${serial}`);
+    if (online) attack.title = gate.reason.title;
+    else attack.setAttribute("aria-describedby", `mr1-why-${serial}`);
   } else {
     attack.addEventListener("click", () => handlers.onAttack(target));
   }
@@ -331,7 +332,7 @@ export const targetCard = (
     }
   }
 
-  if (gate.reason) {
+  if (gate.reason && !online) {
     const why = el("div", "mr1-card__why");
     why.append(reasonLine(gate.reason, target, state, `mr1-why-${serial}`));
     const action = gate.reason.action;

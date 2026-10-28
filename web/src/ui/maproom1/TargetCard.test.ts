@@ -79,7 +79,7 @@ describe("targetCard", () => {
     expect(targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel").querySelector(".ach-line")).toBeNull();
   });
 
-  it("tells the truth about the guided start's practice camp: it does not come back (#227)", () => {
+  it("never says the guided start's practice camp comes back (#227)", () => {
     const practice = readMapRoom1(
       { ...mapRoom1Fixture(NOW), practice: { baseid: "1", name: "Practice camp", level: 1, step: "pick-camp" } } as never,
       NOW,
@@ -87,11 +87,33 @@ describe("targetCard", () => {
     const card = targetCard(practice, { world, own, now: NOW }, handlers(), "panel");
     expect(card.querySelector("h2")?.textContent).toBe("Practice camp");
     expect(card.textContent).not.toContain("comes back");
-    expect(card.textContent).toContain("it is gone once you win");
-    // An ordinary tribe still says when it comes back.
-    expect(targetCard(find("tribe-11"), { world, own, now: NOW }, handlers(), "panel").textContent).toContain(
-      "The camp comes back 10 minutes later.",
-    );
+  });
+
+  it("drops the rule sentences from a tribe's card, in every layout (less-text job 5)", () => {
+    for (const variant of ["float", "panel", "sheet"] as const) {
+      const text = targetCard(find("tribe-11"), { world, own, now: NOW }, handlers(), variant).textContent ?? "";
+      expect(text).not.toContain("to wreck it");
+      expect(text).not.toContain("comes back");
+      expect(text).not.toContain("protection");
+    }
+  });
+
+  it("shows how damaged a standing tribe's camp is: wall, bar and percent, words on hover", () => {
+    const tribe = { ...find("tribe-11"), damage: 35.4 } as ReturnType<typeof find>;
+    const meter = targetCard(tribe, { world, own, now: NOW }, handlers(), "sheet").querySelector<HTMLElement>(".mr1-damage")!;
+    expect(meter.getAttribute("role")).toBe("meter");
+    expect(meter.getAttribute("aria-valuenow")).toBe("35");
+    expect(meter.title).toBe("Yard damage 35%, wrecked at 90%");
+    expect(meter.querySelector('img[src*="yarddamage2"]')).not.toBeNull();
+    expect(meter.querySelector<HTMLElement>(".mr1-damage__fill")!.style.width).toBe("35%");
+    expect(meter.querySelector<HTMLElement>(".mr1-damage__notch")!.style.left).toBe("90%");
+    expect(meter.querySelector(".mr1-damage__value")?.textContent).toBe("35%");
+    // An untouched camp is 0%; a wrecked one says so under Attack instead.
+    const fresh = { ...find("tribe-11"), damage: null } as ReturnType<typeof find>;
+    expect(targetCard(fresh, { world, own, now: NOW }, handlers(), "panel").querySelector(".mr1-damage__value")?.textContent).toBe("0%");
+    expect(targetCard(find("tribe-21"), { world, own, now: NOW }, handlers(), "panel").querySelector(".mr1-damage")).toBeNull();
+    // No player card has one.
+    expect(targetCard(find("player-901"), { world, own, now: NOW }, handlers(), "panel").querySelector(".mr1-damage")).toBeNull();
   });
 
   it("offers View and Attack on a standing tribe, with its blurb and what you can send", () => {
@@ -183,6 +205,16 @@ describe("targetCard online status", () => {
     expect(dot?.getAttribute("title")).toBe("Online");
     expect(card.textContent).not.toContain("Last seen");
     expect(card.textContent).not.toContain("Playing now");
+  });
+
+  it("greys Attack on an online player with no sentence under it, the reason on hover (less-text job 5)", () => {
+    const card = targetCard(find("player-902"), { world, own, now: NOW }, handlers(), "panel");
+    const attack = buttonNamed(card, "Attack");
+    expect(attack.disabled).toBe(true);
+    expect(attack.title).toBe("Online now");
+    expect(attack.hasAttribute("aria-describedby")).toBe(false);
+    expect(card.querySelector(".mr1-card__why")).toBeNull();
+    expect(card.textContent).not.toContain("Try again");
   });
 
   it("gives an offline player no dot and no \"Offline\", only when they were last seen", () => {
