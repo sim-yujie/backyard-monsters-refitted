@@ -101,6 +101,12 @@
   --colour-danger-soft: rgb(255 138 138 / 8%);
   --colour-success: #9fe0b0;
   --colour-info: #9cb9ff;
+  /* Resources that changed hands (`amountChange.ts`): "+300" won, "−300"
+     taken. A shade brighter than success and danger, with a halo that keeps
+     the number readable where a panel's backdrop shows a light patch. */
+  --colour-gain: #8ff0a8;
+  --colour-loss: #ff9090;
+  --colour-change-halo: rgb(0 0 0 / 60%);
   /* A plain amount in a bar (storage, housing): neither good nor bad. */
   --colour-meter: #d6dee8;
 
@@ -270,6 +276,9 @@
   --colour-danger: #c42b2b;
   --colour-success: #1f7a3a;
   --colour-info: #2a55c4;
+  --colour-gain: #176b31;
+  --colour-loss: #b42323;
+  --colour-change-halo: rgb(255 255 255 / 70%);
   --colour-meter: #5b6778;
   --colour-tribe: #c2410c;
   --colour-tribe-text: #9a3412;

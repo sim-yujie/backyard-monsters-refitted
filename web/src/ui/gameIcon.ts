@@ -1,4 +1,4 @@
-import { formatAmount, formatCompact } from "./format";
+import { writeAmount, type AmountChange } from "./amountChange";
 
 /**
  * The painted icons that stand in for words on screen (owner, 28 Oct: "icons
@@ -121,6 +121,12 @@ export interface IconAmountOptions extends GameIconOptions {
   readonly compact?: boolean;
   /** Draw it as a `.chip`: the rounded label of a level or a count. */
   readonly chip?: boolean;
+  /**
+   * Something that happened, not a price or a level: "+300" in green for a
+   * gain, "−300" in red for a loss, said as "300 gained" / "300 lost"
+   * (`amountChange.ts`).
+   */
+  readonly change?: AmountChange;
 }
 
 /**
@@ -129,7 +135,8 @@ export interface IconAmountOptions extends GameIconOptions {
  * The icon is 16 px unless `size` says otherwise.
  *
  * A number is spelled in full unless `compact` asks otherwise. A string is
- * taken as already spelled, for "400 → 480", "35%" or "0/3".
+ * taken as already spelled, for "400 → 480", "35%" or "0/3". `change` signs
+ * and colours it as a gain or a loss.
  */
 export const iconAmount = (
   name: GameIconName,
@@ -139,17 +146,14 @@ export const iconAmount = (
   const wrapper = document.createElement("span");
   wrapper.className = ["icon-amount", options.chip ? "chip" : "", options.className ?? ""].filter(Boolean).join(" ");
   wrapper.dataset["icon"] = name;
-  const value = document.createElement("span");
-  value.className = "icon-amount__value";
-  value.textContent =
-    typeof amount === "string" ? amount : (options.compact ? formatCompact : formatAmount)(amount);
   const icon = gameIcon(name, {
     size: options.size ?? 16,
     ...(options.label === undefined ? {} : { label: options.label }),
     ...(options.decorative === undefined ? {} : { decorative: options.decorative }),
     ...(options.tooltip === undefined ? {} : { tooltip: options.tooltip }),
   });
-  wrapper.append(icon, value);
+  wrapper.append(icon);
+  writeAmount(wrapper, "icon-amount", amount, options);
   return wrapper;
 };
 

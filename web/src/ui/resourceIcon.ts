@@ -1,4 +1,5 @@
-import { formatAmount, formatCompact } from "./format";
+import { writeAmount, type AmountChange } from "./amountChange";
+import { formatAmount } from "./format";
 
 /**
  * The resource icons every amount on screen is drawn with (issue #93).
@@ -222,6 +223,12 @@ export interface ResourceAmountOptions extends ResourceIconOptions {
    * default, issue #134). Only for a control with no room to grow.
    */
   readonly compact?: boolean;
+  /**
+   * Resources that changed hands, not a price or a stock: "+300" in green
+   * for loot won or a gift received, "−300" in red for loot taken or a gift
+   * sent, said as "300 gained" / "300 lost" (`amountChange.ts`).
+   */
+  readonly change?: AmountChange;
 }
 
 /**
@@ -229,6 +236,7 @@ export interface ResourceAmountOptions extends ResourceIconOptions {
  *
  * A number is spelled in full unless `compact` asks otherwise. A string is
  * taken as already spelled, for "12,500 of 40,000" or a placeholder dash.
+ * `change` signs and colours it as a gain or a loss.
  */
 export const resourceAmount = (
   key: ResourceKey,
@@ -238,11 +246,8 @@ export const resourceAmount = (
   const wrapper = document.createElement("span");
   wrapper.className = options.className ? `res-amount ${options.className}` : "res-amount";
   wrapper.dataset["resource"] = key;
-  const value = document.createElement("span");
-  value.className = "res-amount__value";
-  value.textContent =
-    typeof amount === "string" ? amount : (options.compact ? formatCompact : formatAmount)(amount);
-  wrapper.append(resourceIcon(key, options), value);
+  wrapper.append(resourceIcon(key, options));
+  writeAmount(wrapper, "res-amount", amount, options);
   return wrapper;
 };
 
