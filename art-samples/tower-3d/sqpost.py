@@ -40,7 +40,7 @@ TOWERS = {
     "railgun": dict(folder="railguntower", rest=28, turret_canvas=(260, 260),
                     painted={1: ((-36, 10), (-36, -7, 77, 57, 30)), 2: ((-36, -2), (-38, -21, 75, 57, 30)),
                              3: ((-36, -9), (-40, -29, 77, 59, 30))},
-                    cell=lambda b: min(int(((b + 30) % 360) // 12), 29)),
+                    cell=lambda b: min(int((b % 360) // 12), 29)),   # as drawn (towerFx's +30 is Flash's aim quirk)
 }
 GIFBG = (92, 136, 60, 255)
 OX, OY, CW, CH = 160, 260, 320, 420     # the 2x picture canvas: the building's origin at (OX, OY)
