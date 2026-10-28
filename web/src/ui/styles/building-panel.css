@@ -518,3 +518,77 @@
     display: none;
   }
 }
+
+/* ── The Champion Cage (owner, 28 Oct: one click, a bigger window) ─────────
+ * A built cage on the own yard opens on its champion (champion.css) in a
+ * wider panel, as Flash's cage popup did; the building's own card is the
+ * second tab. The plain card's parts step aside while the champion shows
+ * (their own classes set a display the hidden attribute alone does not beat). */
+
+.map-dock--right:has(> .building-panel--cage) {
+  width: min(560px, calc(100vw - 2 * var(--space-4)));
+}
+
+.building-panel--cage {
+  max-height: calc(100vh - var(--hud-height) - var(--space-6));
+}
+
+.building-panel__tabs[hidden] {
+  display: none;
+}
+
+.building-panel__tab {
+  flex: 1;
+}
+
+/* The cage needs repair: a dot on its Building tab. */
+.building-panel__tab--alert::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: var(--space-2);
+  border-radius: 50%;
+  background: var(--colour-danger);
+  vertical-align: middle;
+}
+
+.building-panel--cage[data-cage-tab="champion"] :is(.cell-kind, .building-panel__info, .building-panel__unlocks, .building-panel__actions, .building-panel__details) {
+  display: none;
+}
+
+.building-panel--cage[data-cage-tab="building"] .building-panel__champion {
+  display: none;
+}
+
+/* The champion fills the panel: no second frame inside the first. */
+.building-panel--cage .champion {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* The Monsters screen beside the wider panel, not over it. */
+.overlay__layer:has(> .map-dock--right > .building-panel--cage) > .monsters-screen--beside-panel {
+  right: calc(560px + 2 * var(--space-4));
+  width: min(760px, calc(100vw - 560px - 4 * var(--space-4)));
+}
+
+@media (width <= 1080px) {
+  .overlay__layer:has(> .map-dock--right > .building-panel--cage) > .monsters-screen--beside-panel {
+    right: var(--space-4);
+    width: min(760px, calc(100vw - 2 * var(--space-4)));
+  }
+}
+
+/* A phone: the sheet may rise higher than other buildings' for the champion. */
+@media (width <= 620px) {
+  .map-dock--right:has(> .building-panel--cage) {
+    width: auto;
+    max-height: calc(100vh - 160px);
+  }
+
+  .building-panel--cage {
+    max-height: none;
+  }
+}

@@ -7,16 +7,20 @@ import {
   type ChampionFeedReport,
   type FeedMode,
 } from "@/api/yardChampion";
-import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
+import { JUICER_TYPE, juicerProblemText, juicerStatus, type JuicerProblem } from "@/game/monsters/juice";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
-import { championEggUrl, showPortrait } from "@/game/portraits";
+import { championEggUrl, championPortrait, showPortrait } from "@/game/portraits";
+import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
+import type { YardKind } from "@/game/yard/buildingCosts";
 import { brainSummary, learnedFromText, tendenciesText } from "@/game/yard/championBrain";
 import type { ChampionEntry } from "@/game/yard/championCatalogue";
 import {
+  CHAMPION_CHAMBER_TYPE,
   CHAMPION_NAME_MAX,
   cageView,
   championPicture,
   freezeGate,
+  freezeProblem,
   specialChampion,
   ChampionStatus,
   championView,
@@ -24,10 +28,12 @@ import {
   type ChampionStats,
   type EggView,
   type ChampionView,
+  type FreezeProblem,
   type RaiseChoice,
 } from "@/game/yard/championModel";
 import type { YardStore } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { monsterPicture } from "@/ui/monsters/LockerTab";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/champion.css";
@@ -251,9 +257,8 @@ export class ChampionPanel {
     if (this.juiceYes) this.juiceYes.disabled = store.isRunning(ChampionKey.juice);
     if (this.cancelYes) this.cancelYes.disabled = store.isRunning(ChampionKey.cancelEgg);
     if (this.cancelButton) this.cancelButton.disabled = store.isRunning(ChampionKey.cancelEgg);
-    if (this.freezeButton && view) {
-      this.freezeButton.disabled = freezeGate(store.save, view) !== null || store.isRunning(ChampionKey.freeze);
-    }
+    // A locked Freeze stays pressable (it says why); only a running freeze disables it.
+    if (this.freezeButton) this.freezeButton.disabled = store.isRunning(ChampionKey.freeze);
     if (this.renameSave) this.renameSave.disabled = store.isRunning(ChampionKey.rename);
   }
 
@@ -401,22 +406,36 @@ export class ChampionPanel {
 
   /* ── A champion in the cage ───────────────────────────────────────── */
 
+  /**
+   * Flash's two pages in one (`CHAMPIONCAGEPOPUP.as:151-152`): the champion
+   * (big picture, level, health and stats), then its evolution (this level's
+   * picture, the feeds bar, the next level's picture) with the feed under it,
+   * then Freeze and Juice as two pictures, and how it fights last.
+   */
   private championBlocks(view: ChampionView): HTMLElement[] {
     const now = this.store.now();
-    return [
-      this.header(view),
-      brainBlock(view),
-      this.healthBlock(view, now),
-      this.growthBlock(view),
-      this.feedBlock(view),
-      this.freezeBlock(view),
-      this.juiceBlock(view),
-    ];
+    const health = document.createElement("p");
+    health.className = "champion__line champion__line--health";
+    const healthBar = document.createElement("div");
+    healthBar.className = "monsters-bar champion__bar champion__bar--health";
+    healthBar.setAttribute("role", "meter");
+    healthBar.setAttribute("aria-label", healthLabel(view));
+    healthBar.setAttribute("aria-valuemin", "0");
+    const healthFill = document.createElement("div");
+    healthFill.className = "monsters-bar__fill";
+    healthBar.append(healthFill);
+    const hunger = document.createElement("p");
+    hunger.className = "champion__hunger";
+    hunger.setAttribute("aria-live", "polite");
+    this.live = { health, healthFill, healthBar, hunger };
+    this.drawHealth(view, now);
+    this.drawHunger(view, now);
+    return [this.header(view), this.growthBlock(view), this.feedBlock(view), this.actsBlock(view), brainBlock(view)];
   }
 
   private header(view: ChampionView): HTMLElement {
     const header = document.createElement("div");
-    header.className = "champion__header";
+    header.className = "champion__header champion__header--hero";
     const words = document.createElement("div");
     words.className = "champion__who";
 
@@ -449,7 +468,12 @@ export class ChampionPanel {
       `${view.entry.name !== view.name ? `${view.entry.name} · ` : ""}` +
       `Level ${view.level} of ${view.entry.levels}` +
       (view.entry.role ? ` · ${view.entry.role}` : "");
-    words.append(level, statsBlock(view));
+    const live = this.live;
+    const health = document.createElement("div");
+    health.className = "champion__health";
+    if (live) health.append(live.health, live.healthBar);
+    health.append(this.heal.element);
+    words.append(level, health, statsBlock(view));
 
     header.append(portrait(view.entry, view.level, "champion__picture"), words);
     return header;
@@ -502,35 +526,14 @@ export class ChampionPanel {
     return form;
   }
 
-  private healthBlock(view: ChampionView, now: number): HTMLElement {
-    const block = document.createElement("div");
-    block.className = "champion__part";
-    const line = document.createElement("p");
-    line.className = "champion__line";
-    const bar = document.createElement("div");
-    bar.className = "monsters-bar champion__bar champion__bar--health";
-    bar.setAttribute("role", "meter");
-    bar.setAttribute("aria-label", healthLabel(view));
-    bar.setAttribute("aria-valuemin", "0");
-    const fill = document.createElement("div");
-    fill.className = "monsters-bar__fill";
-    bar.append(fill);
-    const hunger = document.createElement("p");
-    hunger.className = "champion__hunger";
-    hunger.setAttribute("aria-live", "polite");
-    this.live = { health: line, healthFill: fill, healthBar: bar, hunger };
-    this.drawHealth(view, now);
-    this.drawHunger(view, now);
-    block.append(line, bar, this.heal.element, hunger);
-    return block;
-  }
-
   private drawHealth(view: ChampionView, now: number): void {
     const live = this.live;
     if (!live) return;
     const full = view.health >= view.maxHealth;
     live.health.replaceChildren(
-      strong(`${healthLabel(view)} ${formatAmount(Math.floor(view.health))} / ${formatAmount(view.maxHealth)}`),
+      gameIcon("health", { size: 16, label: healthLabel(view) }),
+      " ",
+      strong(`${formatAmount(Math.floor(view.health))} / ${formatAmount(view.maxHealth)}`),
       full
         ? " · full"
         : view.fullAt !== null
@@ -555,16 +558,26 @@ export class ChampionPanel {
     if (!live) return;
     const text = hungerText(view, now);
     live.hunger.className = `champion__hunger champion__hunger--${view.hunger}`;
-    live.hunger.replaceChildren(strong(text.title), ` ${text.detail}`);
+    live.hunger.replaceChildren(
+      gameIcon("time", { size: 16, decorative: true }),
+      " ",
+      strong(text.title),
+      ` ${text.detail}`,
+    );
   }
 
+  /**
+   * Flash's evolution page (`CHAMPIONCAGEPOPUP.as:152`): this level's picture,
+   * the feeds bar, the next level's picture, then the hunger clock. At the top
+   * level the bar is the food bonus and there is no next picture.
+   */
   private growthBlock(view: ChampionView): HTMLElement {
     const block = document.createElement("div");
-    block.className = "champion__part";
+    block.className = "champion__part champion__part--growth";
     const line = document.createElement("p");
     line.className = "champion__line";
     const bar = document.createElement("div");
-    bar.className = "monsters-bar champion__bar";
+    bar.className = "monsters-bar champion__bar champion__bar--growth";
     bar.setAttribute("role", "meter");
     bar.setAttribute("aria-valuemin", "0");
     const fill = document.createElement("div");
@@ -575,25 +588,33 @@ export class ChampionPanel {
     if (view.top) {
       done = view.foodBonus;
       of = 3;
-      line.replaceChildren(
-        strong("Fully evolved"),
-        ` · food bonus ${done} of ${of}. Each daily feed adds one, up to three; missing a day takes one away.`,
-      );
+      line.replaceChildren(strong("Fully evolved"), ` · food bonus ${done} / ${of}`);
+      line.title = "Each daily feed adds one food bonus, up to three; missing a day takes one away.";
       bar.setAttribute("aria-label", "Food bonus");
     } else {
       done = view.feeds;
       of = view.feedCount;
-      line.replaceChildren(
-        strong(`Feeds ${done} / ${of}`),
-        ` to level ${view.level + 1}`,
-      );
+      line.replaceChildren(strong(`Feeds ${done} / ${of}`), ` to level ${view.level + 1}`);
       bar.setAttribute("aria-label", "Feeds to the next level");
     }
     bar.setAttribute("aria-valuemax", String(of));
     bar.setAttribute("aria-valuenow", String(done));
     bar.setAttribute("aria-valuetext", `${done} of ${of}`);
     fill.style.width = `${of > 0 ? +((Math.min(done, of) / of) * 100).toFixed(2) : 0}%`;
-    block.append(line, bar);
+
+    const middle = document.createElement("div");
+    middle.className = "champion__track-bar";
+    middle.append(line, bar);
+    const track = document.createElement("div");
+    track.className = "champion__track";
+    track.append(stagePicture(view.entry, view.level, `Level ${view.level}`), middle);
+    if (!view.top) {
+      const next = stagePicture(view.entry, view.level + 1, `Level ${view.level + 1}`);
+      next.classList.add("champion__stage--next");
+      track.append(next);
+    }
+    block.append(heading(view.top ? "Food bonus" : "Evolution"), track);
+    if (this.live) block.append(this.live.hunger);
     return block;
   }
 
@@ -608,6 +629,7 @@ export class ChampionPanel {
       item.className = "champion__recipe-row";
       const short = row.have < row.need;
       item.classList.toggle("champion__recipe-row--short", short);
+      item.title = `${formatAmount(row.need)} ${row.name}: you have ${formatAmount(row.have)}`;
       const monster = monsterEntry(row.monster);
       if (monster) item.append(monsterPicture(monster, "small", "champion__recipe-picture"));
       const words = document.createElement("span");
@@ -630,6 +652,8 @@ export class ChampionPanel {
     this.feedButton = feed;
     const gate = feedGate(view);
     feed.disabled = gate !== null;
+    // "Not hungry yet" is what the hunger clock above already says: on hover only.
+    if (gate) feed.title = gate;
 
     const buttons = document.createElement("div");
     buttons.className = "champion__buttons";
@@ -643,24 +667,19 @@ export class ChampionPanel {
     if (view.evolveShiny !== null) {
       this.evolve.setPrice(view.evolveShiny);
       this.evolve.setBlocked(this.store.credits < view.evolveShiny ? "Not enough Shiny." : null);
+      if (view.hunger === "fed") {
+        this.evolve.element.title = "Evolve now buys every feed left at this level at double the Shiny price.";
+      } else {
+        this.evolve.element.removeAttribute("title");
+      }
       buttons.append(this.evolve.element);
     }
 
     const parts: HTMLElement[] = [heading(view.top ? "Daily feed" : "Feed"), list, buttons];
-    if (gate) {
-      const line = document.createElement("p");
-      line.className = "champion__gate";
-      line.textContent = gate;
-      parts.push(line);
+    if (gate && view.hunger !== "fed") parts.push(gateLine(gate));
+    if (view.top && view.feedShiny !== null && view.hunger === "fed") {
+      parts.push(note("Not hungry yet: a food bonus bought now costs double."));
     }
-    const explain = view.top
-      ? view.feedShiny !== null && view.hunger === "fed"
-        ? "Not hungry yet: a food bonus bought now costs double."
-        : null
-      : view.hunger === "fed"
-        ? "Evolve now buys every feed left at this level at double the Shiny price."
-        : null;
-    if (explain) parts.push(note(explain));
     block.append(...parts);
     return block;
   }
@@ -703,16 +722,15 @@ export class ChampionPanel {
       this.healSpecial.setBlocked(this.store.credits < view.healShiny ? "Not enough Shiny." : null);
       block.append(this.healSpecial.element);
     }
-    const freeze = document.createElement("button");
-    freeze.type = "button";
-    freeze.className = "btn champion__freeze champion__freeze--special";
-    freeze.textContent = "Freeze in the Chamber";
-    const gate = freezeGate(this.store.save, view);
-    freeze.disabled = gate !== null || this.store.isRunning(ChampionKey.freezeSpecial);
-    freeze.addEventListener("click", () => void this.runSpecial("freeze"));
+    const hint = actHint();
+    const freeze = this.freezeTile(view, hint, () => void this.runSpecial("freeze"));
+    freeze.classList.add("champion-act--special");
+    freeze.disabled = this.store.isRunning(ChampionKey.freezeSpecial);
     this.freezeSpecialButton = freeze;
-    block.append(freeze);
-    if (gate) block.append(gateLine(gate));
+    const row = document.createElement("div");
+    row.className = "champion__acts";
+    row.append(freeze);
+    block.append(row, hint);
     return [block];
   }
 
@@ -748,85 +766,106 @@ export class ChampionPanel {
     this.show();
   }
 
-  /** Freeze into the Champion Chamber (#125): reversible, so one tap. */
-  private freezeBlock(view: ChampionView): HTMLElement {
+  /**
+   * Freeze and Juice as two pictures side by side (owner, 28 Oct: no
+   * sentences): the building that does it, a one-word action and a few words
+   * on what it does or what it needs. The full sentence stays for hover and
+   * screen readers, and a tap on a locked one says it under the row.
+   */
+  private actsBlock(view: ChampionView): HTMLElement {
     const block = document.createElement("div");
-    block.className = "champion__part champion__part--freeze";
-    const freeze = document.createElement("button");
-    freeze.type = "button";
-    freeze.className = "btn champion__freeze";
-    freeze.textContent = "Freeze in the Chamber";
-    const gate = freezeGate(this.store.save, view);
-    freeze.disabled = gate !== null || this.store.isRunning(ChampionKey.freeze);
-    freeze.addEventListener("click", () => void this.runFreeze(view));
+    block.className = "champion__part champion__part--acts";
+    if (this.confirmingJuice) {
+      block.append(this.juiceConfirm(view));
+      return block;
+    }
+    const hint = actHint();
+    const freeze = this.freezeTile(view, hint, () => void this.runFreeze(view));
+    freeze.disabled = this.store.isRunning(ChampionKey.freeze);
     this.freezeButton = freeze;
-    block.append(
-      freeze,
-      gate
-        ? gateLine(gate)
-        : note("Frozen champions keep their level and do not get hungry. Thaw it from the Champion Chamber."),
-    );
+    const row = document.createElement("div");
+    row.className = "champion__acts";
+    row.append(freeze, this.juiceTile(view, hint));
+    block.append(row, hint);
     return block;
   }
 
-  private juiceBlock(view: ChampionView): HTMLElement {
-    const block = document.createElement("div");
-    block.className = "champion__part champion__part--juice";
-    const juicer = juicerStatus(this.store.save);
-    if (this.confirmingJuice) {
-      const wrap = document.createElement("div");
-      wrap.className = "champion__confirm";
-      wrap.setAttribute("role", "group");
-      wrap.setAttribute("aria-label", "Confirm juice");
-      const question = document.createElement("p");
-      question.className = "champion__question";
-      question.textContent = `Juice ${view.name}? It is gone for good and gives no goo. You can raise a new champion afterwards.`;
-      const yes = document.createElement("button");
-      yes.type = "button";
-      yes.className = "btn btn--danger champion__juice-yes";
-      yes.textContent = `Yes, juice ${view.name}`;
-      yes.addEventListener("click", () => void this.runJuice(view));
-      this.juiceYes = yes;
-      const keep = document.createElement("button");
-      keep.type = "button";
-      keep.className = "btn";
-      keep.textContent = "Keep it";
-      const stop = (): void => {
-        this.confirmingJuice = false;
-        this.show();
-        this.element.querySelector<HTMLButtonElement>(".champion__juice")?.focus();
-      };
-      keep.addEventListener("click", stop);
-      wrap.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        event.stopPropagation();
-        stop();
-      });
-      const row = document.createElement("div");
-      row.className = "map-row";
-      row.append(yes, keep);
-      wrap.append(question, row);
-      block.append(wrap);
-      return block;
-    }
-    const juice = document.createElement("button");
-    juice.type = "button";
-    juice.className = "btn btn--ghost champion__juice";
-    juice.textContent = "Juice champion";
-    juice.disabled = !juicer.ok;
-    juice.addEventListener("click", () => {
-      this.confirmingJuice = true;
-      this.show();
-      this.juiceYes?.focus();
+  /** Freeze into the Champion Chamber (#125): reversible, so one tap. */
+  private freezeTile(view: ChampionView, hint: HTMLElement, onFreeze: () => void): HTMLButtonElement {
+    const problem = freezeProblem(this.store.save, view);
+    return actTile({
+      act: "freeze",
+      type: CHAMPION_CHAMBER_TYPE,
+      kind: this.store.kind,
+      word: "Freeze",
+      short: problem ? FREEZE_SHORT[problem] : "Keeps its level",
+      sentence:
+        freezeGate(this.store.save, view) ??
+        "Freeze in the Chamber: frozen champions keep their level and do not get hungry. Thaw it from the Champion Chamber.",
+      locked: problem !== null,
+      missing: problem === "noChamber",
+      hint,
+      onPress: onFreeze,
     });
-    block.append(juice);
-    if (!juicer.ok) {
-      const gate = document.createElement("p");
-      gate.className = "champion__gate";
-      gate.textContent = juicerProblemText(juicer.problem);
-      block.append(gate);
-    }
-    return block;
+  }
+
+  private juiceTile(view: ChampionView, hint: HTMLElement): HTMLButtonElement {
+    const juicer = juicerStatus(this.store.save);
+    const tile = actTile({
+      act: "juice",
+      type: JUICER_TYPE,
+      kind: this.store.kind,
+      word: "Juice",
+      short: juicer.ok ? "Gone for good" : JUICE_SHORT[juicer.problem],
+      sentence: juicer.ok
+        ? `Juice ${view.name}: it is gone for good and gives no goo.`
+        : juicerProblemText(juicer.problem),
+      locked: !juicer.ok,
+      missing: !juicer.ok && juicer.problem === "noJuicer",
+      hint,
+      onPress: () => {
+        this.confirmingJuice = true;
+        this.show();
+        this.juiceYes?.focus();
+      },
+    });
+    return tile;
+  }
+
+  private juiceConfirm(view: ChampionView): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "champion__confirm";
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-label", "Confirm juice");
+    const question = document.createElement("p");
+    question.className = "champion__question";
+    question.textContent = `Juice ${view.name}? It is gone for good and gives no goo. You can raise a new champion afterwards.`;
+    const yes = document.createElement("button");
+    yes.type = "button";
+    yes.className = "btn btn--danger champion__juice-yes";
+    yes.textContent = `Yes, juice ${view.name}`;
+    yes.addEventListener("click", () => void this.runJuice(view));
+    this.juiceYes = yes;
+    const keep = document.createElement("button");
+    keep.type = "button";
+    keep.className = "btn";
+    keep.textContent = "Keep it";
+    const stop = (): void => {
+      this.confirmingJuice = false;
+      this.show();
+      this.element.querySelector<HTMLButtonElement>(".champion-act--juice")?.focus();
+    };
+    keep.addEventListener("click", stop);
+    wrap.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      stop();
+    });
+    const row = document.createElement("div");
+    row.className = "map-row";
+    row.append(yes, keep);
+    wrap.append(question, row);
+    return wrap;
   }
 
   /* ── Requests ─────────────────────────────────────────────────────── */
@@ -976,21 +1015,32 @@ export const statsBlock = (view: ChampionView): HTMLElement => {
   const list = document.createElement("ul");
   list.className = "champion__stats";
   list.setAttribute("aria-label", "Stats");
-  const rows: ReadonlyArray<readonly [string, keyof ChampionStats, (value: number) => string]> = [
-    ["Damage", "damage", formatAmount],
-    ["Max health", "health", formatAmount],
-    ["Speed", "speed", (value) => String(Math.round(value * 10) / 10)],
-    ["Range", "range", formatAmount],
-    ["Buff", "buff", (value) => `${value}%`],
+  // A painted icon where there is one; Range and Buff have none yet, so keep their word.
+  const rows: ReadonlyArray<
+    readonly [string, keyof ChampionStats, (value: number) => string, GameIconName | null]
+  > = [
+    ["Damage", "damage", formatAmount, "damage"],
+    ["Max health", "health", formatAmount, "health"],
+    ["Speed", "speed", (value) => String(Math.round(value * 10) / 10), "speed"],
+    ["Range", "range", formatAmount, null],
+    ["Buff", "buff", (value) => `${value}%`, null],
   ];
-  for (const [label, key, spell] of rows) {
+  for (const [label, key, spell, icon] of rows) {
     const now = view.stats[key];
     if (key === "buff" && now <= 0) continue;
     const item = document.createElement("li");
     item.className = "champion__stat";
+    item.dataset["stat"] = key;
     const next = view.nextStats?.[key];
-    item.append(`${label} `, strong(spell(now)));
-    if (next !== undefined && next !== now) item.append(` → ${spell(next)}`);
+    const grows = next !== undefined && next !== now;
+    item.title = `${label} ${spell(now)}${grows ? ` → ${spell(next)}` : ""}`;
+    item.append(icon ? gameIcon(icon, { size: 16, label, tooltip: false }) : `${label} `, strong(spell(now)));
+    if (grows) {
+      const after = document.createElement("span");
+      after.className = "champion__stat-next";
+      after.textContent = ` → ${spell(next)}`;
+      item.append(after);
+    }
     list.append(item);
   }
   wrap.append(list);
@@ -1131,4 +1181,108 @@ const portrait = (entry: ChampionEntry, level: number, className: string): HTMLI
   image.height = 150;
   image.decoding = "async";
   return image;
+};
+
+/** A champion at a level, small, for the two ends of the evolution bar (Flash's `mcCurrGuardian`, `mcNextGuardian`). */
+const stagePicture = (entry: ChampionEntry, level: number, label: string): HTMLElement => {
+  const at = Math.min(Math.max(level, 1), entry.levels);
+  const wrap = document.createElement("span");
+  wrap.className = "champion__stage";
+  const image = document.createElement("img");
+  image.className = "champion__stage-picture";
+  showPortrait(image, championPortrait(entry.id, at, "icon"));
+  image.alt = "";
+  image.width = 56;
+  image.height = 56;
+  image.decoding = "async";
+  const badge = document.createElement("span");
+  badge.className = "champion__stage-level";
+  badge.textContent = `L${at}`;
+  badge.setAttribute("aria-label", label);
+  wrap.append(image, badge);
+  return wrap;
+};
+
+/** The few words under a locked Freeze; the hover keeps {@link freezeGate}'s sentence. */
+const FREEZE_SHORT: Readonly<Record<FreezeProblem, string>> = {
+  noChamber: "Needs Champion Chamber",
+  chamberBuilding: "Chamber being built",
+  hurt: "Heal it first",
+  hungry: "Feed it first",
+};
+
+/** The few words under a locked Juice; the hover keeps `juicerProblemText`'s sentence. */
+const JUICE_SHORT: Readonly<Record<JuicerProblem, string>> = {
+  noJuicer: "Needs Monster Juicer",
+  building: "Juicer being built",
+  upgrading: "Juicer upgrading",
+  damaged: "Repair the Juicer",
+};
+
+/** Where a tap on a locked tile says why, under the row. */
+const actHint = (): HTMLElement => {
+  const hint = gateLine("");
+  hint.classList.add("champion__act-hint");
+  hint.setAttribute("aria-live", "polite");
+  hint.hidden = true;
+  return hint;
+};
+
+interface ActTileOptions {
+  readonly act: "freeze" | "juice";
+  /** The building that does it, whose picture the tile shows. */
+  readonly type: number;
+  readonly kind: YardKind;
+  readonly word: string;
+  /** What it does, or what it needs while locked: a few words. */
+  readonly short: string;
+  /** The whole sentence, for hover and screen readers. */
+  readonly sentence: string;
+  readonly locked: boolean;
+  /** The building is not in the yard at all: its dark silhouette, as in the build menu. */
+  readonly missing: boolean;
+  readonly hint: HTMLElement;
+  readonly onPress: () => void;
+}
+
+/**
+ * One of the cage's Freeze / Juice pictures. A locked one is `aria-disabled`
+ * rather than disabled, so hovering it still shows why and a tap (a phone has
+ * no hover) writes the reason under the row.
+ */
+const actTile = (options: ActTileOptions): HTMLButtonElement => {
+  const tile = document.createElement("button");
+  tile.type = "button";
+  tile.className = `champion-act champion-act--${options.act}`;
+  tile.classList.toggle("champion-act--locked", options.locked);
+  tile.title = options.sentence;
+  if (options.locked) tile.setAttribute("aria-disabled", "true");
+  const art = document.createElement("img");
+  art.className = "champion-act__art";
+  art.src = (options.missing ? silhouetteUrl(options.type, options.kind) : null) ?? buttonUrl(options.type, options.kind);
+  art.alt = "";
+  art.width = 60;
+  art.height = 80;
+  art.decoding = "async";
+  art.draggable = false;
+  const word = document.createElement("span");
+  word.className = "champion-act__word";
+  word.textContent = options.word;
+  const short = document.createElement("span");
+  short.className = "champion-act__short";
+  short.textContent = options.short;
+  short.setAttribute("aria-hidden", "true");
+  const spoken = document.createElement("span");
+  spoken.className = "u-visually-hidden";
+  spoken.textContent = `. ${options.sentence}`;
+  tile.append(art, word, short, spoken);
+  tile.addEventListener("click", () => {
+    if (!options.locked) {
+      options.onPress();
+      return;
+    }
+    options.hint.textContent = options.sentence;
+    options.hint.hidden = false;
+  });
+  return tile;
 };

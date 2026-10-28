@@ -100,6 +100,9 @@ const buttons = (root: HTMLElement): HTMLButtonElement[] => [
 ];
 const buttonNamed = (root: HTMLElement, text: string): HTMLButtonElement | undefined =>
   buttons(root).find((one) => one.textContent?.startsWith(text));
+/** One of the Champion Cage's two tabs. */
+const tabNamed = (root: HTMLElement, tab: "champion" | "building"): HTMLButtonElement =>
+  root.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${tab}"]`)!;
 
 const HALL = building(1, 14, 5);
 
@@ -420,17 +423,36 @@ describe("BuildingPanel: the Wild Monster Baiter (#126, #22, #308)", () => {
 });
 
 describe("BuildingPanel: the Champion Cage (§7.2)", () => {
-  it("Open cage shows the cage's controls under the actions, and Close cage hides them", () => {
+  it("opens straight on the champion, in the wider panel, with no Open cage (owner, 28 Oct)", () => {
     const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
-    expect(element.querySelector(".champion")).toBeNull();
-    buttonNamed(element, "Open cage")!.click();
+    expect(element.classList.contains("building-panel--cage")).toBe(true);
     expect(element.querySelector(".champion .champion-card")).not.toBeNull();
-    expect(buttonNamed(element, "Close cage")!.getAttribute("aria-expanded")).toBe("true");
-    buttonNamed(element, "Close cage")!.click();
-    expect(element.querySelector(".champion")).toBeNull();
-    buttonNamed(element, "Open cage")!.click();
+    expect(buttonNamed(element, "Open cage")).toBeUndefined();
+    const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
+      ["Champion", "true"],
+      ["Building", "false"],
+    ]);
+    expect(element.dataset["cageTab"]).toBe("champion");
+    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(false);
+    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(true);
     panel.show(store.building(1)!);
     expect(element.querySelector(".champion")).toBeNull();
+    expect(element.classList.contains("building-panel--cage")).toBe(false);
+    expect(element.querySelector<HTMLElement>(".building-panel__tabs")!.hidden).toBe(true);
+  });
+
+  it("keeps the building's card a tab away, and the champion's window open behind it", () => {
+    const { element } = setup([HALL, building(2, 114, 1)], 2);
+    const champion = element.querySelector(".champion");
+    tabNamed(element, "building").click();
+    expect(element.dataset["cageTab"]).toBe("building");
+    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
+    expect(element.querySelector(".building-panel__actions")!.childElementCount).toBeGreaterThan(0);
+    tabNamed(element, "champion").click();
+    expect(element.dataset["cageTab"]).toBe("champion");
+    expect(element.querySelector(".champion")).toBe(champion);
   });
 
   it("Open chamber shows the chamber's controls (#125)", () => {
@@ -441,12 +463,13 @@ describe("BuildingPanel: the Champion Cage (§7.2)", () => {
     expect(element.querySelector(".chamber")).toBeNull();
   });
 
-  it("openChampion opens the cage's controls once, and does nothing on another building (Inferno WP 5.2)", () => {
+  it("openChampion brings back the champion tab once, and does nothing on another building (Inferno WP 5.2)", () => {
     const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
+    tabNamed(element, "building").click();
     panel.openChampion();
     panel.openChampion();
     expect(element.querySelectorAll(".champion")).toHaveLength(1);
-    expect(buttonNamed(element, "Close cage")).not.toBeNull();
+    expect(element.dataset["cageTab"]).toBe("champion");
     panel.show(store.building(1)!);
     panel.openChampion();
     expect(element.querySelector(".champion")).toBeNull();

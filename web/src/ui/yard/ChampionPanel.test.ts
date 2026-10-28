@@ -157,11 +157,14 @@ describe("ChampionPanel: whose health each number is", () => {
   it("names the champion's live health and calls the card's figure its max health", () => {
     // Level 1 Gorgo, hurt: the live line is its own, the card's 40,000 → 80,000 its full health now and at level 2.
     const { element } = setup([gorgo({ hp: 1_200, nm: "Gorgy" })]);
-    expect(textOf(element, ".champion__line strong")).toBe("Gorgy's health 1,200 / 40,000");
+    // The heart says whose health it is, for hover and screen readers; the line shows the numbers.
+    const line = element.querySelector(".champion__line--health")!;
+    expect(line.querySelector(".game-icon--health")!.getAttribute("aria-label")).toBe("Gorgy's health");
+    expect(textOf(element, ".champion__line--health strong")).toBe("1,200 / 40,000");
     expect(element.querySelector(".champion__bar--health")!.getAttribute("aria-label")).toBe("Gorgy's health");
-    const stats = [...element.querySelectorAll(".champion__stat")].map((item) => item.textContent);
+    const stats = [...element.querySelectorAll<HTMLElement>(".champion__stat")].map((item) => item.title);
     expect(stats).toContain("Max health 40,000 → 80,000");
-    expect(stats.some((line) => line?.startsWith("Health"))).toBe(false);
+    expect(stats.some((line) => line.startsWith("Health"))).toBe(false);
   });
 });
 
@@ -171,15 +174,18 @@ describe("ChampionPanel: a fed champion", () => {
     expect(textOf(element, ".champion__name")).toBe("Gorgo");
     expect(textOf(element, ".champion__level")).toBe("Level 1 of 6 · High Defense");
     expect(element.querySelector(".champion__picture")!.getAttribute("src")).toBe("/portraits/G1-L1.webp");
-    expect(element.textContent).toContain("Gorgo's health 20,000 / 40,000");
+    expect(textOf(element, ".champion__line--health")).toContain("20,000 / 40,000");
     expect(element.textContent).toContain("Feeds 1 / 3 to level 2");
-    expect(textOf(element, ".champion__hunger")).toBe("Fed. Hungry in 14h 0m.");
+    expect(textOf(element, ".champion__hunger").trim()).toBe("Fed. Hungry in 14h 0m.");
   });
 
   it("Feed now waits for hunger; Evolve now is on offer at the doubled price", () => {
     const { element } = setup([gorgo()]);
-    expect(buttonNamed(element, "Feed now")!.disabled).toBe(true);
-    expect(element.textContent).toContain("Not hungry yet.");
+    const feed = buttonNamed(element, "Feed now")!;
+    expect(feed.disabled).toBe(true);
+    // The hunger clock already says when: the reason is on hover, not another line.
+    expect(feed.title).toContain("Not hungry yet.");
+    expect(element.textContent).not.toContain("Not hungry yet.");
     expect(buttonNamed(element, "Feed with Shiny")).toBeUndefined();
     expect(buttonNamed(element, "Evolve now")!.textContent).toContain("104");
   });
@@ -248,7 +254,7 @@ describe("ChampionPanel: how it fights (#219)", () => {
 describe("ChampionPanel: a hungry champion", () => {
   it("says it is hungry and when it starves, and feeds from housing", () => {
     const { element, spies } = setup([gorgo({ ft: T0 - HOUR })]);
-    expect(textOf(element, ".champion__hunger")).toBe("Hungry! Feed it within 23h 0m or it loses a feed.");
+    expect(textOf(element, ".champion__hunger").trim()).toBe("Hungry! Feed it within 23h 0m or it loses a feed.");
     expect(element.querySelector(".champion__hunger--hungry")).not.toBeNull();
     expect(textOf(element, ".champion__recipe")).toBe("15 Octo-oozeyou have 40");
     const feed = buttonNamed(element, "Feed now")!;
@@ -280,11 +286,18 @@ describe("ChampionPanel: rename and juice", () => {
 
   it("juices only after a confirmation, and only with a working Juicer", () => {
     const none = setup([gorgo()]);
-    expect(buttonNamed(none.element, "Juice champion")!.disabled).toBe(true);
-    expect(none.element.textContent).toContain("Build a Monster Juicer");
+    const locked = buttonNamed(none.element, "Juice")!;
+    expect(locked.getAttribute("aria-disabled")).toBe("true");
+    expect(textOf(locked, ".champion-act__short")).toBe("Needs Monster Juicer");
+    expect(locked.title).toContain("Build a Monster Juicer");
+    locked.click();
+    expect(none.spies.juice).not.toHaveBeenCalled();
+    expect(none.element.querySelector(".champion__confirm")).toBeNull();
 
     const { element, spies } = setup([gorgo()], [CAGE, JUICER]);
-    buttonNamed(element, "Juice champion")!.click();
+    const juice = buttonNamed(element, "Juice")!;
+    expect(juice.hasAttribute("aria-disabled")).toBe(false);
+    juice.click();
     expect(spies.juice).not.toHaveBeenCalled();
     expect(element.textContent).toContain("gone for good and gives no goo");
     buttonNamed(element, "Yes, juice Gorgo")!.click();
@@ -297,17 +310,41 @@ describe("ChampionPanel: freeze (#125)", () => {
 
   it("freezes a fed, healthy champion in one tap when there is a chamber", () => {
     const { element, spies } = setup([gorgo()], [CAGE, CHAMBER]);
-    const freeze = buttonNamed(element, "Freeze in the Chamber")!;
-    expect(freeze.disabled).toBe(false);
+    const freeze = buttonNamed(element, "Freeze")!;
+    expect(freeze.hasAttribute("aria-disabled")).toBe(false);
+    expect(freeze.querySelector<HTMLImageElement>(".champion-act__art")!.getAttribute("src")).toBe(
+      "/assets/buildingbuttons/119.jpg",
+    );
     freeze.click();
     expect(spies.freeze).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the Chamber's silhouette and a few words while there is none, the sentence on hover and tap", () => {
+    const { element, spies } = setup([gorgo()]);
+    const freeze = buttonNamed(element, "Freeze")!;
+    expect(freeze.getAttribute("aria-disabled")).toBe("true");
+    expect(freeze.querySelector<HTMLImageElement>(".champion-act__art")!.getAttribute("src")).toBe(
+      "/assets/buildingbuttons/119.silhouette.jpg",
+    );
+    expect(textOf(freeze, ".champion-act__short")).toBe("Needs Champion Chamber");
+    expect(freeze.title).toContain("Build a Champion Chamber");
+    expect(textOf(freeze, ".u-visually-hidden")).toContain("Build a Champion Chamber");
+    const hint = element.querySelector<HTMLElement>(".champion__act-hint")!;
+    expect(hint.hidden).toBe(true);
+    freeze.click();
+    expect(spies.freeze).not.toHaveBeenCalled();
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toContain("Build a Champion Chamber");
+  });
+
   it("says what stands in the way", () => {
-    expect(setup([gorgo()]).element.textContent).toContain("Build a Champion Chamber");
     const hurt = setup([gorgo({ hp: 10 })], [CAGE, CHAMBER]);
-    expect(buttonNamed(hurt.element, "Freeze in the Chamber")!.disabled).toBe(true);
-    expect(hurt.element.textContent).toContain("Heal Gorgo to full health before you freeze it.");
+    const freeze = buttonNamed(hurt.element, "Freeze")!;
+    expect(freeze.getAttribute("aria-disabled")).toBe("true");
+    expect(textOf(freeze, ".champion-act__short")).toBe("Heal it first");
+    expect(freeze.title).toBe("Heal Gorgo to full health before you freeze it.");
+    freeze.click();
+    expect(hurt.spies.freeze).not.toHaveBeenCalled();
   });
 });
 
@@ -343,10 +380,12 @@ describe("ChampionPanel: stats and Krallen", () => {
 
   it("shows speed and range with a level preview on the champion's card", () => {
     const { element } = setup([gorgo()]);
-    const text = element.querySelector(".champion__stats")!.textContent ?? "";
-    expect(text).toMatch(/Speed/);
-    expect(text).toMatch(/Range/);
-    expect(text).toMatch(/→/);
+    const stats = element.querySelector(".champion__stats")!;
+    expect(stats.querySelector(".game-icon--speed")!.getAttribute("aria-label")).toBe("Speed");
+    expect(stats.querySelector<HTMLElement>('[data-stat="speed"]')!.title).toMatch(/^Speed .+ → /);
+    // Range has no painted icon yet: it keeps its word.
+    expect(stats.textContent).toMatch(/Range/);
+    expect(stats.textContent).toMatch(/→/);
     expect(element.textContent).toMatch(/Arrows show level 2/);
   });
 
@@ -356,13 +395,20 @@ describe("ChampionPanel: stats and Krallen", () => {
   });
 
   it("shows Krallen under the cage and heals him with the special action", () => {
-    const { element, spies } = setup([gorgo(), krallen()]);
+    const { element, spies } = setup([gorgo(), krallen()], [CAGE, { id: 4, t: 119, l: 1, X: 400, Y: 0 }]);
     const card = element.querySelector<HTMLElement>(".champion__part--special")!;
     expect(card.textContent).toMatch(/Krallen/);
     expect(card.textContent).toMatch(/Level 5 of 5/);
     expect(card.querySelector(".champion__heal--special")).not.toBeNull();
-    buttonNamed(card, "Freeze")!.click();
-    expect(spies.freezeSpecial).toHaveBeenCalled();
+    // Hurt, he cannot be frozen yet: the tile says so and does nothing.
+    const locked = buttonNamed(card, "Freeze")!;
+    expect(textOf(locked, ".champion-act__short")).toBe("Heal it first");
+    locked.click();
+    expect(spies.freezeSpecial).not.toHaveBeenCalled();
+
+    const healed = setup([gorgo(), krallen({ hp: 10_000_000 })], [CAGE, { id: 4, t: 119, l: 1, X: 400, Y: 0 }]);
+    buttonNamed(healed.element.querySelector<HTMLElement>(".champion__part--special")!, "Freeze")!.click();
+    expect(healed.spies.freezeSpecial).toHaveBeenCalled();
   });
 
   it("says a frozen Krallen waits in the Chamber", () => {
