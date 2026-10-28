@@ -699,7 +699,7 @@ describe("a fallen Housing's monsters through the save (issue #160)", () => {
     expect(lines.at(-1)).toStartWith("Result:");
   });
 
-  test("a Map Room 2 outpost loses its own housed monsters, and its owner is told", async () => {
+  test("a Map Room 2 outpost loses its own housed monsters, and its owner's notice keeps the count", async () => {
     armed("outpost");
     // The outpost's base id carries its cell (`rangeCheck.ts`).
     defender.baseid = "1000243206";
@@ -709,7 +709,9 @@ describe("a fallen Housing's monsters through the save (issue #160)", () => {
 
     expect(defender.monsters.housed).toEqual({ C1: 5 });
     expect(notices).toHaveLength(1);
-    expect(String(notices[0]!.message)).toEndWith(", and 6 housed monsters were lost.");
+    // Kept in the numbers, not told in the words (owner, 27 Oct).
+    expect(String(notices[0]!.message)).toEndWith("Nothing was looted.");
+    expect(notices[0]!.attackstats).toMatchObject({ housedLost: 6 });
   });
 
   test("a Housing repaired before its owner's next load still lost them", async () => {
