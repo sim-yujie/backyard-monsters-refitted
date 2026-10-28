@@ -42,16 +42,52 @@
   color: var(--colour-text-muted);
 }
 
-.building-panel__list {
+/* Town Hall unlocks: each building's build-menu picture, its name under it
+   and a "+1" or NEW badge on its corner. */
+.building-panel__unlock-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: var(--space-2);
   margin: 0;
-  padding-left: var(--space-4);
-  font-size: var(--text-sm);
-  columns: 2;
-  column-gap: var(--space-4);
+  padding: 0;
+  list-style: none;
 }
 
-.building-panel__list li {
-  break-inside: avoid;
+.unlock-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.unlock-tile__picture {
+  width: 60px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.unlock-tile__badge {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  font-weight: 800;
+}
+
+.unlock-tile__name {
+  max-width: 100%;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  text-align: center;
+  color: var(--colour-text-secondary);
+}
+
+.building-panel__none {
+  margin: 0;
+  font-size: var(--text-sm);
 }
 
 /* ── Action blocks ──────────────────────────────────────────────────────── */

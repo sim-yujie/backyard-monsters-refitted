@@ -51,7 +51,8 @@ import {
   type UpgradeGate,
   type UpgradeOffer,
 } from "./buildingActions";
-import { buildingHealthLabel, buildingInfo, type InfoValue } from "./buildingInfo";
+import { buildingHealthLabel, buildingInfo, unlockText, type InfoValue } from "./buildingInfo";
+import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { BaiterPanel } from "./BaiterPanel";
 import { BunkerPanel } from "./BunkerPanel";
 import { ChamberPanel } from "./ChamberPanel";
@@ -624,14 +625,46 @@ export class BuildingPanel {
     this.unlocks.replaceChildren();
     this.unlocks.hidden = list === null;
     if (list) {
+      // "Lv 3 unlocks", then each building's picture with its name and a
+      // "+1" or NEW badge; the words whole on hover and for a screen reader.
       const heading = document.createElement("p");
       heading.className = "building-panel__label";
       heading.textContent = list.label;
+      heading.title = list.title;
+      if (list.items.length === 0) {
+        const none = document.createElement("p");
+        none.className = "building-panel__none";
+        none.textContent = "No new buildings";
+        this.unlocks.append(heading, none);
+        return;
+      }
+      const kind = this.yard?.store.kind ?? "main";
       const items = document.createElement("ul");
-      items.className = "building-panel__list";
-      for (const text of list.items) {
+      items.className = "building-panel__unlock-list";
+      items.setAttribute("aria-label", list.title);
+      for (const unlock of list.items) {
+        const words = unlockText(unlock);
         const item = document.createElement("li");
-        item.textContent = text;
+        item.className = unlock.isNew ? "unlock-tile unlock-tile--new" : "unlock-tile";
+        item.title = words;
+        item.setAttribute("aria-label", words);
+        const picture = document.createElement("img");
+        picture.className = "unlock-tile__picture";
+        picture.src = buttonUrl(unlock.type, kind);
+        picture.alt = "";
+        picture.width = 60;
+        picture.height = 80;
+        picture.decoding = "async";
+        picture.draggable = false;
+        const badge = document.createElement("span");
+        badge.className = unlock.isNew ? "unlock-tile__badge chip chip--accent" : "unlock-tile__badge chip";
+        badge.setAttribute("aria-hidden", "true");
+        badge.textContent = unlock.isNew ? "NEW" : `+${unlock.added}`;
+        const name = document.createElement("span");
+        name.className = "unlock-tile__name";
+        name.setAttribute("aria-hidden", "true");
+        name.textContent = unlock.name;
+        item.append(picture, badge, name);
         items.append(item);
       }
       this.unlocks.append(heading, items);

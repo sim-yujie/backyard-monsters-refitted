@@ -303,6 +303,22 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
     }
   });
 
+  it("an own Town Hall shows the next level's unlocks as pictures with +1 or NEW", () => {
+    const { element } = setup([building(1, 14, 1)], 1);
+    const unlocks = element.querySelector<HTMLElement>(".building-panel__unlocks")!;
+    expect(unlocks.hidden).toBe(false);
+    expect(unlocks.querySelector(".building-panel__label")!.textContent).toBe("Lv 2 unlocks");
+    expect(unlocks.querySelector(".building-panel__label")!.getAttribute("title")).toBe("Town Hall 2 unlocks");
+    const silo = [...unlocks.querySelectorAll<HTMLElement>(".unlock-tile")].find(
+      (tile) => tile.getAttribute("aria-label") === "Storage Silo +1",
+    )!;
+    expect(silo.querySelector("img")!.getAttribute("src")).toBe("/assets/buildingbuttons/6.jpg");
+    expect(silo.querySelector(".unlock-tile__badge")!.textContent).toBe("+1");
+    expect(silo.querySelector(".unlock-tile__name")!.textContent).toBe("Storage Silo");
+    const fresh = unlocks.querySelector<HTMLElement>(".unlock-tile--new");
+    if (fresh) expect(fresh.querySelector(".unlock-tile__badge")!.textContent).toBe("NEW");
+  });
+
   it("a foreign Town Hall lists no unlocks and a running upgrade shows no countdown", () => {
     const { element } = setup([building(1, 14, 5, { cU: 3_600 })], 1, { own: false });
     expect(element.querySelector(".panel__title")?.textContent).toBe("Town Hall");
