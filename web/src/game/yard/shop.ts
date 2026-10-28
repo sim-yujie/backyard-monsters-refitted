@@ -45,6 +45,21 @@ export const SHOP_SECTION_TITLES: Readonly<Record<ShopSection, string>> = {
   protection: "Protection",
 };
 
+/**
+ * What a boost does as a painted icon and a number (the text cut, 28 Oct):
+ * the red claw and "+25%" for Tower Overdrive. The card shows these and the
+ * clock with how long it lasts in place of the sentence, which stays for
+ * hover and a screen reader.
+ */
+export interface ShopEffect {
+  /** A painted icon (`ui/gameIcon.ts`). */
+  readonly icon: "damage" | "speed" | "housing";
+  /** "+25%", "−30% taken". */
+  readonly amount: string;
+  /** What the icon means here: "Tower damage". */
+  readonly label: string;
+}
+
 /** One item the Shop sells through `shop/buy`. */
 export interface ShopItem {
   /** The store code `shop/buy` takes. */
@@ -52,6 +67,8 @@ export interface ShopItem {
   readonly name: string;
   /** What it does, in a sentence. */
   readonly blurb: string;
+  /** What it does as icons and numbers, drawn in place of the blurb. */
+  readonly effects?: readonly ShopEffect[];
   readonly section: ShopSection;
   /** The price of each step, cheapest first; one entry for an item bought once at a time. */
   readonly prices: readonly number[];
@@ -165,6 +182,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "EXH",
     name: "Housing Expansion",
     blurb: "Monster Housing holds 25% more for 24 hours.",
+    effects: [{ icon: "housing", amount: "+25%", label: "Housing space" }],
     section: ShopSection.MONSTERS,
     prices: [375],
     seconds: DAY,
@@ -178,6 +196,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "TOD",
     name: "Tower Overdrive",
     blurb: "This yard's towers do 25% more damage for 24 hours.",
+    effects: [{ icon: "damage", amount: "+25%", label: "Tower damage" }],
     section: ShopSection.BOOSTS,
     prices: [600],
     seconds: DAY,
@@ -188,6 +207,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "MOD",
     name: "Monster Overdrive",
     blurb: "Your monsters do 25% more damage for 24 hours, in your attacks and at home.",
+    effects: [{ icon: "damage", amount: "+25%", label: "Monster damage" }],
     section: ShopSection.BOOSTS,
     prices: [500],
     seconds: DAY,
@@ -198,6 +218,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "MDOD",
     name: "Monster Defensive Buff",
     blurb: "Your monsters take 30% less damage for 24 hours, in your attacks and at home.",
+    effects: [{ icon: "damage", amount: "−30% taken", label: "Damage your monsters take" }],
     section: ShopSection.BOOSTS,
     prices: [500],
     seconds: DAY,
@@ -208,6 +229,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "MSOD",
     name: "Monster Speed Buff",
     blurb: "Your monsters move and attack 50% faster for 24 hours, in your attacks and at home.",
+    effects: [{ icon: "speed", amount: "+50%", label: "Monster speed" }],
     section: ShopSection.BOOSTS,
     prices: [500],
     seconds: DAY,
@@ -318,6 +340,7 @@ export const INFERNO_SHOP_ITEMS: readonly ShopItem[] = [
     item: "EXHI",
     name: "Housing Expansion",
     blurb: "Compounds hold 25% more monsters for 24 hours.",
+    effects: [{ icon: "housing", amount: "+25%", label: "Housing space" }],
     section: ShopSection.MONSTERS,
     prices: [375],
     seconds: DAY,
@@ -327,6 +350,7 @@ export const INFERNO_SHOP_ITEMS: readonly ShopItem[] = [
     item: "TODI",
     name: "Tower Overdrive",
     blurb: "Your Inferno towers do 25% more damage for 24 hours.",
+    effects: [{ icon: "damage", amount: "+25%", label: "Tower damage" }],
     section: ShopSection.BOOSTS,
     prices: [600],
     seconds: DAY,

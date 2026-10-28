@@ -196,7 +196,7 @@ describe("ShopScreen", () => {
     ).toEqual(["BST", "BLK2", "BLK3", "BLK4", "BLK5", "POD", "HOD", "HOD2", "HOD3", "EXH", "TOD"]);
     expect(element.querySelector('[data-section="protection"]')).toBeNull();
     expect(element.querySelector('[data-section="boosts"] .shop-section__note')!.textContent).toBe(
-      "Tower Overdrive works when this outpost is attacked. Buying it again restarts it; time left is not added.",
+      "Tower Overdrive: when this outpost is attacked. Buying again restarts it; time left is not added.",
     );
   });
 
@@ -257,7 +257,7 @@ describe("ShopScreen", () => {
     expect(
       element.querySelector('[data-section="boosts"] .shop-section__note')!.textContent,
     ).toBe(
-      "Tower Overdrive works when your Inferno yard is attacked. Buying it again restarts it; time left is not added.",
+      "Tower Overdrive: when your Inferno yard is attacked. Buying again restarts it; time left is not added.",
     );
     expect(card("ENLI")!.querySelector(".shop-card__meta")!.textContent).toBe("0 of 5 bought");
 
@@ -288,20 +288,42 @@ describe("ShopScreen", () => {
 
     expect(card("MOD")!.dataset["state"]).toBe("buy");
     expect(card("MOD")!.querySelector(".shop-card__meta")!.textContent).toBe(
-      "Running: 5h 30m left. Buy again to restart at 24 hours",
+      "Running: 5h 30m left. Buying again restarts it",
     );
     expect(card("MOD")!.classList.contains("shop-card--boosted")).toBe(true);
     expect(button("MOD").hidden).toBe(false);
     expect(button("MOD").disabled).toBe(false);
     expect(card("TOD")!.classList.contains("shop-card--boosted")).toBe(false);
-    expect(card("TOD")!.querySelector(".shop-card__meta")!.textContent).toBe("Lasts 24 hours");
+    // Not running: the clock chip says how long, so no line under it.
+    expect(card("TOD")!.querySelector<HTMLElement>(".shop-card__meta")!.hidden).toBe(true);
+  });
+
+  it("shows a boost as its painted icon and number with the clock, the sentence kept for hover and a screen reader", () => {
+    const { card } = setup();
+    const blurb = (item: string): HTMLElement => card(item)!.querySelector<HTMLElement>(".shop-card__blurb")!;
+    const chips = (item: string): string[] =>
+      [...blurb(item).querySelectorAll<HTMLElement>(".shop-card__effects .icon-amount")].map(
+        (chip) => `${chip.dataset["icon"]} ${chip.textContent}`,
+      );
+
+    expect(chips("TOD")).toEqual(["damage +25%", "time 24h"]);
+    expect(chips("MOD")).toEqual(["damage +25%", "time 24h"]);
+    expect(chips("MDOD")).toEqual(["damage −30% taken", "time 24h"]);
+    expect(chips("MSOD")).toEqual(["speed +50%", "time 24h"]);
+    expect(chips("EXH")).toEqual(["housing +25%", "time 24h"]);
+    const tod = blurb("TOD");
+    expect(tod.title).toBe("This yard's towers do 25% more damage for 24 hours.");
+    expect(tod.querySelector(".u-visually-hidden")!.textContent).toBe(tod.title);
+    expect(tod.querySelector(".shop-card__effects")!.getAttribute("aria-hidden")).toBe("true");
+    // An item without effects keeps its sentence.
+    expect(blurb("BEW").textContent).toContain("One more worker");
   });
 
   it("says under Battle boosts where they work and that they restart", () => {
     const { element } = setup();
 
     expect(element.querySelector('[data-section="boosts"] .shop-section__note')!.textContent).toBe(
-      "Monster boosts work in your attacks and when your yard is attacked. Buying one again restarts it; time left is not added.",
+      "Monster boosts: in your attacks and at home. Buying again restarts it; time left is not added.",
     );
   });
 
