@@ -427,10 +427,10 @@ describe("the yard's corner layout (#171)", () => {
     // Not full: the amount alone, no mark.
     expect(button("r3").textContent).toBe("10");
     expect(mark("r3").hidden).toBe(true);
-    // All three workers busy: "0/3" and the clock.
+    // All three workers busy: "0/3", no clock (the number says it).
     const workers = hud.element.querySelector<HTMLButtonElement>(".hud__workers-button")!;
     expect(workers.textContent).toBe("Workers0/3");
-    expect(workers.querySelector<HTMLElement>(".hud__workers-clock")!.hidden).toBe(false);
+    expect(workers.querySelector(".hud__workers-clock")).toBeNull();
     expect(workers.getAttribute("aria-label")).toBe(
       "Workers: none of 3 free. Click to go to the job that finishes soonest.",
     );
@@ -705,8 +705,6 @@ describe("the HUD on the player's own yard", () => {
     hud.bindYard(binding);
     expect(hud.element.querySelector<HTMLElement>(".hud__workers")!.hidden).toBe(false);
     expect(workers().textContent).toBe("Workers3/5");
-    // A job runs: the clock is up.
-    expect(workers().querySelector<HTMLElement>(".hud__workers-clock")!.hidden).toBe(false);
     expect(workers().title).toBe(workersText(3, 5).label);
     expect(workers().getAttribute("aria-disabled")).toBe("false");
     workers().click();
@@ -716,7 +714,6 @@ describe("the HUD on the player's own yard", () => {
     store.jobList = [];
     store.emit({ reason: "predicted" });
     expect(workers().textContent).toBe("Workers5/5");
-    expect(workers().querySelector<HTMLElement>(".hud__workers-clock")!.hidden).toBe(true);
     expect(workers().getAttribute("aria-disabled")).toBe("true");
     workers().click();
     expect(selectBuilding).toHaveBeenCalledTimes(1);

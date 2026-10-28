@@ -42,7 +42,7 @@ import { DamageBanner } from "./yard/DamageBanner";
  * resource's storage cap as "amount / cap" with a thin fill bar that turns
  * amber when the silo is full, with the painted "storage full" mark on the
  * pile and, in the corner, "15M/15M" (the text cut, 28 Oct); a Workers
- * control (the worker, "free/total", and a clock while a job runs) that goes
+ * control (the worker and "free/total") that goes
  * to the job finishing soonest; and the post-attack "N buildings damaged
  * [Repair all]" line in the notice dock (`DamageBanner`, design §5.5). The
  * map, the attack screen and a foreign yard have no binding and show the
@@ -265,8 +265,6 @@ export class Hud {
   private readonly workersButton: HTMLButtonElement;
   private readonly workersName: HTMLElement;
   private readonly workersValue: HTMLElement;
-  /** The clock beside "0/3": a job is running, and a press goes to it. */
-  private readonly workersClock: HTMLElement;
   /** The yard's corner layout (#171) rather than the bar. */
   private readonly corner: boolean;
   private accountMenu: AccountMenu | null = null;
@@ -381,10 +379,7 @@ export class Hud {
     this.workersName.textContent = "Workers";
     this.workersValue = document.createElement("span");
     this.workersValue.className = "hud__resource-value";
-    // The button's label says it in words; the clock is a picture only.
-    this.workersClock = gameIcon("time", { size: 16, decorative: true, className: "hud__workers-clock" });
-    this.workersClock.hidden = true;
-    this.workersButton.append(workerIcon, this.workersName, this.workersValue, this.workersClock);
+    this.workersButton.append(workerIcon, this.workersName, this.workersValue);
     this.workersButton.addEventListener("click", () => this.goToNextJob());
     this.workers.append(this.workersButton);
     // The corner's Workers is the icon and "5/5", as the mock-up draws it.
@@ -808,7 +803,6 @@ export class Hud {
       this.workersButton.title = text.label;
       this.workersButton.setAttribute("aria-label", text.label);
       this.workersButton.setAttribute("aria-disabled", String(free >= total));
-      this.workersClock.hidden = free >= total;
     }
     this.fit();
   }

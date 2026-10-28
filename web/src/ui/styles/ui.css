@@ -705,11 +705,6 @@ body {
   background: center / contain no-repeat;
 }
 
-/* The clock beside "0/3" while a job runs: a press goes to it. */
-.hud__workers-clock {
-  margin-left: calc(-1 * var(--space-1) / 2);
-}
-
 .hud__workers-name {
   color: var(--colour-text-muted);
   font-size: var(--text-sm);
