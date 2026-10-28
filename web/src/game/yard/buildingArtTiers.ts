@@ -135,8 +135,8 @@ export interface TierTurret {
    */
   readonly front?: ArtAnim;
   /**
-   * Cells in a row of the strip, for a strip of several rows; one row
-   * without it (every tower's today).
+   * Cells in a row of the strip, for a strip of several rows (the 3D Laser:
+   * a row of headings per tilt of its head); one row without it.
    */
   readonly columns?: number;
   /**
@@ -194,16 +194,16 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
     { from: 3, top: ["top.t2@2x.webp", -45, -30], shadow: ["shadow.t2.jpg", -43, 27], lift: 20 },
     { from: 5, top: ["top.t3@2x.webp", -45, -47], shadow: ["shadow.t3.jpg", -42, 21], lift: 38 },
   ],
-  // 23 Laser Tower: 3D, the head tilted 36 degrees down at every heading
+  // 23 Laser Tower: 3D, a row of 32 headings for each of 5 tilts of the head (its head tilts; only the Cannon keeps one)
   23: [
     { from: 1, top: ["top.t1@2x.webp", -33, -53], shadow: ["shadow.t1.jpg", -31, 10], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -33, -29], strip: ["turret.t1@2x.webp", -16, -53, 34, 35, 32], pivot: [0.75, -20],
+      turret: { body: ["body.t1@2x.webp", -33, -29], strip: ["turret.t1@2x.webp", -16, -53, 34, 35, 160], columns: 32, pivot: [0.75, -20],
         aim: TURRET_AIM["23.t1"] } },
     { from: 4, top: ["top.t2@2x.webp", -33, -76], shadow: ["shadow.t2.jpg", -31, 2], lift: 23,
-      turret: { body: ["body.t2@2x.webp", -33, -54], strip: ["turret.t2@2x.webp", -16, -76, 34, 34, 32], pivot: [1, -44],
+      turret: { body: ["body.t2@2x.webp", -33, -54], strip: ["turret.t2@2x.webp", -16, -76, 34, 34, 160], columns: 32, pivot: [1, -44],
         aim: TURRET_AIM["23.t2"] } },
     { from: 7, top: ["top.t3@2x.webp", -33, -92], shadow: ["shadow.t3.jpg", -31, -4], lift: 39,
-      turret: { body: ["body.t3@2x.webp", -33, -71], strip: ["turret.t3@2x.webp", -16, -92, 34, 34, 32], pivot: [1, -60],
+      turret: { body: ["body.t3@2x.webp", -33, -71], strip: ["turret.t3@2x.webp", -16, -92, 34, 34, 160], columns: 32, pivot: [1, -60],
         aim: TURRET_AIM["23.t3"] } },
   ],
   // 25 Tesla Tower

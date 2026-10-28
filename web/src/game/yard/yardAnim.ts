@@ -250,7 +250,7 @@ export const stripCells = (
   const height = Math.max(1, Math.min(anim.height, sourceHeight));
   const fit = Math.max(1, Math.floor(sourceWidth / width));
   if (!anim.columns) return { width, height, frames: Math.max(1, Math.min(anim.frames, fit)) };
-  // A strip of several rows: whole rows that fit.
+  // A strip of several rows (the 3D Laser's tilts): whole rows that fit.
   const columns = Math.min(anim.columns, fit);
   const rows = Math.max(1, Math.floor(sourceHeight / height));
   return { width, height, frames: Math.max(1, Math.min(anim.frames, columns * rows)), columns };

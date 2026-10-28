@@ -8,20 +8,20 @@ steel bands) and writes, per tower and tier, into `server/public/assets/building
 - `body.t<N>@2x.webp`: the tower with its turret taken off. The Cannon's `body/body-4x.png` sits on the painted
   canvas (the kit's `canvas("cannon")`: origin 73 px from the left, 69 px above the bottom), so it is cut and halved
   here; the Sniper's and Laser's `body@2x.png` already stand where the painted `body.t<N>@2x.webp` did.
-- `turret.t<N>@2x.webp`: the turret strip, every cell cut to what any cell covers and set on whole 1x pixels: one row
-  of headings at one fixed tilt (owner, 28 Oct 2026: "Rather than overcomplicating the cannon barrel, can't we do
-  calculation and modify the projectile direction rather than turning the head up and down"). The Cannon's art is
-  rendered at its one tilt; the Laser's is rendered at several, and the row at `FIXED_TILT` is kept.
+- `turret.t<N>@2x.webp`: the turret strip, every cell cut to what any cell covers and set on whole 1x pixels. One row
+  of headings at one fixed tilt (the Cannon, owner 28 Oct 2026: "Rather than overcomplicating the cannon barrel, can't
+  we do calculation and modify the projectile direction rather than turning the head up and down"), or for a Laser
+  rendered at several tilts one row per tilt, the head nearest level first (`columns` is then the headings in a row).
 - `top.t<N>@2x.webp`: the whole tower in one picture (body and turret at its resting heading), for the icons.
 
 It prints one line of JSON per tier with the rows `buildingArtTiers.ts` holds (`body`, `strip` as `[file, x, y, width,
-height, cells]`, `pivot`, `top`), in 1x px from the building's origin, and writes `turretAimData.ts`: for every cell
-the screen angle its barrel points (`aim_deg`; until the art measures it, its ground bearing as the camera sees it)
-and, when the art's `strip.json` has them, the muzzle's place from the pivot (`muzzle`) and the tilt (`tilt`, degrees
-down: `pitch_deg`, or minus `barrel_elevation_deg` for a barrel rendered at one lean). The game picks the cell that
-faces the target on the ground, starts the shot at its muzzle (`turretAim.ts`) and works out the shot's path from there
-(a Cannon shell's arc from its raised barrel). The Cannon has no front layer: the parts of its body in front of the
-barrel are cut out of each cell.
+height, cells]`, `columns`, `pivot`, `top`), in 1x px from the building's origin, and writes `turretAimData.ts`: for
+every cell the screen angle its barrel points (`aim_deg`; until the art measures it, its ground bearing as the camera
+sees it) and, when the art's `strip.json` has them, the muzzle's place from the pivot (`muzzle`), the Laser's tilts
+(`pitch_deg`, `lens_height_px`) and a one-row strip's one tilt (`tilt`, its `pitch_deg`). The game picks the cell whose
+barrel points where the shot goes and starts the shot at its muzzle (`turretAim.ts`), and works out a Cannon shell's
+arc from its raised barrel. The Cannon has no front layer: the parts of its body in front of the barrel are cut out of
+each cell.
 
 The painted shadows (`shadow.t<N>.jpg`) and lifts are kept: each 3D tier was fitted to its painted one.
 """
@@ -44,9 +44,6 @@ PAINTED_BODY = {"sniper": {1: (-40, -37), 2: (-40, -70), 3: (-40, -86)},
 CANNON_X, CANNON_UP = 73, 69
 # The heading a tower rests on in its still picture: the barrel down and to the left, as most painted stills.
 REST_AIM = 120.0
-# The one tilt kept from art rendered at several (degrees down): the Laser's head at a middle tilt, which looks at the
-# middle of its range.
-FIXED_TILT = {"laser": 36}
 # Each tower's camera height in the 3D renders, degrees, for a `strip.json` that does not say.
 ELEVATION = {"cannon": 23.0, "sniper": 23.0, "laser": 30.0}
 
@@ -120,20 +117,16 @@ def read(tower, tier):
         in_cell = info.get("pivot_in_cell_2x", (cw / 2, ch / 2))
         (px, py), (ax, ay) = info["pivot_4x"], info["anchor_4x"]
         pivot = ((px - ax) / 4, (py - ay) / 4)
-    pitch = info.get("pitch_deg") or [None]
-    rows, cols = len(pitch), info["cells"]
-    assert sheet.width >= cols * cw and sheet.height >= rows * ch, (tower, tier, sheet.size, rows, cols, cw, ch)
-    # The one row kept: the only one, or the one at the tower's fixed tilt.
-    keep = pitch.index(FIXED_TILT[tower]) if rows > 1 else 0
-    # A barrel rendered at one lean says how far it is raised instead (the Flash Cannon's tube: 70 up).
-    tilt = pitch[keep] if pitch[keep] is not None or "barrel_elevation_deg" not in info else -info["barrel_elevation_deg"]
-
-    def row(value, depth):
-        return None if value is None else [by_tilt(value, depth)[keep]]
-
-    return dict(body=body, body_at=body_at, cells=[cells_of(sheet, cw, ch, rows, cols)[keep]], in_cell=in_cell,
-                pivot=pivot, aim=row(info.get("aim_deg"), 1), muzzle=row(info.get("muzzle"), 2), tilt=tilt,
-                ground_deg=row(info.get("ground_deg"), 1),
+    pitch = info.get("pitch_deg")
+    rows = len(pitch) if pitch else 1
+    cols = sheet.width // cw
+    assert cols >= info["cells"] or rows > 1, (tower, tier, cols, info["cells"])
+    cols = info["cells"] if rows == 1 else cols
+    assert sheet.height >= rows * ch, (tower, tier, sheet.size, rows, ch)
+    return dict(body=body, body_at=body_at, cells=cells_of(sheet, cw, ch, rows, cols), in_cell=in_cell, pivot=pivot,
+                aim=by_tilt(info.get("aim_deg"), 1), muzzle=by_tilt(info.get("muzzle"), 2), pitch=pitch,
+                ground_deg=by_tilt(info.get("ground_deg"), 1),
+                lens=info.get("lens_height_px"), ground=info.get("ground_below_pivot_px"),
                 elevation=info.get("camera_elevation_deg") or info.get("elevation_deg"))
 
 
@@ -142,7 +135,7 @@ def export(tower, tier):
     out = ASSETS / folder
     p = read(tower, tier)
     cells = p["cells"]
-    cols = len(cells[0])
+    rows, cols = len(cells), len(cells[0])
     cw, ch = cells[0][0].size
     # Each cell's top-left at 2x from the origin, on a whole 2x pixel: the pivot less its place in the cell.
     tx = round(2 * p["pivot"][0] - p["in_cell"][0])
@@ -155,9 +148,10 @@ def export(tower, tier):
     bx0 -= (tx + bx0) % 2
     by0 -= (ty + by0) % 2
     w, h = bx1 - bx0 + (bx1 - bx0) % 2, by1 - by0 + (by1 - by0) % 2
-    strip = Image.new("RGBA", (w * cols, h), (0, 0, 0, 0))
-    for c, cell in enumerate(cells[0]):
-        strip.alpha_composite(cell.crop((bx0, by0, bx0 + w, by0 + h)), (c * w, 0))
+    strip = Image.new("RGBA", (w * cols, h * rows), (0, 0, 0, 0))
+    for r, row in enumerate(cells):
+        for c, cell in enumerate(row):
+            strip.alpha_composite(cell.crop((bx0, by0, bx0 + w, by0 + h)), (c * w, r * h))
     turret_name = f"turret.t{tier}@2x.webp"
     strip.save(out / turret_name, "WEBP", quality=85, alpha_quality=100, method=6)
     sx, sy = (tx + bx0) // 2, (ty + by0) // 2
@@ -166,7 +160,7 @@ def export(tower, tier):
     p["body"].save(out / body_name, "WEBP", quality=90, alpha_quality=100, method=6)
     bx, by = p["body_at"]
 
-    # The still: the body with the turret at the resting heading over it.
+    # The still: the body with the level row's turret at the resting heading over it.
     aim0 = p["aim"][0] if p["aim"] else None
     rest = min(range(cols), key=lambda i: abs((aim0[i] - REST_AIM + 180) % 360 - 180)) if aim0 else cols * 6 // 32
     x0, y0 = min(2 * bx, 2 * sx), min(2 * by, 2 * sy)
@@ -185,7 +179,8 @@ def export(tower, tier):
     row = dict(tower=tower, type=type_, tier=tier, folder=folder,
                top=[top_name, (x0 + cx0) // 2, (y0 + cy0) // 2],
                body=[body_name, bx, by],
-               strip=[turret_name, sx, sy, w // 2, h // 2, cols],
+               strip=[turret_name, sx, sy, w // 2, h // 2, rows * cols],
+               **({"columns": cols} if rows > 1 else {}),
                pivot=pivot,
                bytes=sum((out / n).stat().st_size for n in (top_name, body_name, turret_name)))
     elevation = p["elevation"] or ELEVATION[tower]
@@ -196,16 +191,22 @@ def export(tower, tier):
         gap = max(abs((g - w + 180) % 360 - 180) for g, w in zip(r, want))
         assert len(r) == cols and gap < 1, (tower, tier, "ground_deg is not cell k = bearing 360k/cells", gap)
     if p["aim"]:
-        assert len(p["aim"][0]) == cols, (tower, tier)
-        aim = dict(headings=cols, aim=[round(a % 360, 1) for a in p["aim"][0]])
+        assert len(p["aim"]) == rows and all(len(a) == cols for a in p["aim"]), (tower, tier)
+        aim = dict(headings=cols, aim=[round(a % 360, 1) for r in p["aim"] for a in r])
     else:
-        assert cols == 32, (tower, tier, cols)
+        assert rows == 1 and cols == 32, (tower, tier, rows, cols)
         aim = dict(headings=cols, aim=[round(a, 1) for a in bearing_aim(cols, elevation)])
     if p["muzzle"]:
-        assert len(p["muzzle"][0]) == cols, (tower, tier)
-        aim["muzzle"] = [round(v, 1) for m in p["muzzle"][0] for v in m]
-    if p["tilt"] is not None:
-        aim["tilt"] = round(p["tilt"], 1)
+        assert len(p["muzzle"]) == rows and all(len(m) == cols for m in p["muzzle"]), (tower, tier)
+        aim["muzzle"] = [round(v, 1) for r in p["muzzle"] for m in r for v in m]
+    if p["pitch"] and rows == 1:
+        # A barrel rendered at one tilt (the Cannon's, raised): the game lobs its shell in an arc from it.
+        aim["tilt"] = round(p["pitch"][0], 1)
+    elif p["pitch"]:
+        aim["pitch"] = [round(v, 1) for v in p["pitch"]]
+        aim["lensHeight"] = round(p["lens"], 1)
+        if p["ground"] is not None:
+            aim["ground"] = round(p["ground"], 1)
     aim["elevation"] = elevation
     return row, aim
 

@@ -265,7 +265,7 @@ describe("the turning turrets", () => {
    * Cells per strip: the Flash strip's order, up to the last cell the game
    * picks; the 3D towers' 32 headings, the Laser's for each of its 5 tilts.
    */
-  const FRAMES: Record<number, number> = { 20: 32, 21: 32, 23: 32, 115: 30, 118: 30 };
+  const FRAMES: Record<number, number> = { 20: 32, 21: 32, 23: 160, 115: 30, 118: 30 };
   /** The 3D towers (owner, 28 Oct 2026), which carry where each cell points. */
   const TOWERS_3D = [20, 21, 23];
 
@@ -297,7 +297,7 @@ describe("the turning turrets", () => {
     for (const n of [1, 2, 3]) expect(existsSync(`${ASSETS}cannontower/front.t${n}@2x.webp`)).toBe(false);
   });
 
-  it("give the 3D towers an aim for every cell, a muzzle, and one tilt each", () => {
+  it("give the 3D towers an aim for every cell, a muzzle, the Laser its tilts and the Cannon one", () => {
     for (const type of TOWERS_3D) {
       for (const tier of TOWER_TIER_ART[type] ?? []) {
         const where = `type ${type} tier from ${tier.from}`;
@@ -317,9 +317,18 @@ describe("the turning turrets", () => {
           const y = py + (aim.muzzle?.[i + 1] ?? 0);
           expect(x >= sx - 1 && x <= sx + width + 1 && y >= sy - 1 && y <= sy + height + 1, `${where} cell ${i / 2}`).toBe(true);
         }
-        // One row of headings at one tilt (owner, 28 Oct 2026): the Cannon's barrel raised, the Laser's head down.
-        expect(turret.columns, where).toBeUndefined();
-        expect(aim.tilt, where).toBe({ 20: -22, 21: undefined, 23: 36 }[type]);
+        if (type === 23) {
+          // The Laser's head tilts: a row of 32 headings for each of its 5 tilts.
+          expect(turret.columns, where).toBe(32);
+          expect(aim.pitch, where).toHaveLength(5);
+          expect(aim.lensHeight, where).toBeGreaterThan(20);
+          expect(aim.tilt, where).toBeUndefined();
+        } else {
+          // One row of headings at one tilt (owner, 28 Oct 2026): the Cannon's barrel raised 22 degrees.
+          expect(turret.columns, where).toBeUndefined();
+          expect(aim.pitch, where).toBeUndefined();
+          expect(aim.tilt, where).toBe({ 20: -22, 21: undefined }[type]);
+        }
       }
     }
   });

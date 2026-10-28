@@ -5,7 +5,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { setClassicLook } from "@/game/classicLook";
 import { setNewTowerArt } from "@/game/yard/buildingArtTiers";
-import { angleGap, cellBearing, muzzleOffset } from "@/game/yard/turretAim";
+import { angleGap, cellBearing, muzzleOffset, rowOf } from "@/game/yard/turretAim";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
@@ -217,8 +217,8 @@ describe("towersOf", () => {
     const [sniper] = towersOf(readYard(yard));
     expect(sniper?.frames).toBe(32);
     expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);
-    // The 3D Laser: 32 headings, its head at one tilt.
-    expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(32);
+    // The 3D Laser: 32 headings for each of 5 tilts of its head (only the Cannon keeps one tilt).
+    expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(160);
     expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(30);
     expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(30);
     // The new Cannon's barrel turns too, though the Flash one never did; the Tesla tiers stay still pictures.
@@ -424,7 +424,7 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 
-  it("keeps a 3D Laser's head at its one tilt however far the spot it burns, and lights the beam at its lens", () => {
+  it("tilts a 3D Laser's head further down the nearer the spot it burns, and lights the beam at its lens", () => {
     setNewTowerArt(true);
     const { yard, fx } = setUp(23);
     const [info] = towersOf(yard);
@@ -439,16 +439,21 @@ describe("TowerFx", () => {
         x: info.worldX + info.pivot!.x + (offset?.[0] ?? Number.NaN),
         y: info.worldY + info.pivot!.y + (offset?.[1] ?? Number.NaN),
       });
-      // It faces the spot on the ground, and its lens looks roughly along the beam to the creep's feet:
-      // with one tilt the head's line on screen is up to some 21 degrees off the beam's for a far spot.
+      // It faces the spot on the ground, and its lens looks along the beam to the creep's feet.
       expect(angleGap(cellBearing(aim, cell), 90), `distance ${distance}`).toBeLessThanOrEqual(360 / 64);
       const line = towardCreep(yard, fx.muzzleAt(1) ?? { x: 0, y: 0 }, creep, 0);
-      expect(angleGap(aim.aim[cell] ?? 0, line), `distance ${distance}`).toBeLessThan(25);
-      return cell;
+      expect(angleGap(aim.aim[cell] ?? 0, line), `distance ${distance}`).toBeLessThan(20);
+      return rowOf(aim, cell);
     };
-    // One row of headings: the same cell near and far.
-    expect(aim.aim).toHaveLength(aim.headings);
-    expect(new Set([rowFor(60), rowFor(140), rowFor(400)]).size).toBe(1);
+    // Its head tilts (owner): a row of headings per tilt, unlike the Cannon's one-tilt barrel.
+    expect(aim.aim).toHaveLength(5 * aim.headings);
+    expect(aim.tilt).toBeUndefined();
+    const near = rowFor(60);
+    const middle = rowFor(140);
+    const far = rowFor(400);
+    expect(near).toBeGreaterThan(middle);
+    expect(middle).toBeGreaterThanOrEqual(far);
+    expect(far).toBe(0);
     fx.destroy();
   });
 
