@@ -24,6 +24,11 @@ describe("tunes", () => {
     expect(tuneUrl(TUNES.attack, true)).toBe(TUNES.attack.url);
   });
 
+  it("the Inferno plays Flash's Inferno tunes at Flash's volumes (`SOUNDS.as:122-138`)", () => {
+    expect(TUNES.infernoYard).toEqual({ url: "/assets/sounds/infernomusic/Music_IBuild.mp3", volume: 0.6 });
+    expect(TUNES.infernoAttack).toEqual({ url: "/assets/sounds/infernomusic/Music_IAttack.mp3", volume: 0.7 });
+  });
+
   it("Flash's yard tune stays on the server in case it has to come back", () => {
     expect(existsSync(`${serverPublic}/assets/sounds/music/Music_Building.mp3`)).toBe(true);
   });

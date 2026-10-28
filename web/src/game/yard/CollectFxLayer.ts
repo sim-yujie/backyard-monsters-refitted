@@ -1,6 +1,7 @@
 import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import type { Effect } from "@/game/sound/EffectsPlayer";
 import { playEffect } from "@/game/sound/sound";
+import { resourceRealm } from "@/ui/resourceIcon";
 import { flightPose, type Flight } from "./collectFx";
 import type { HarvestKey } from "./harvest";
 
@@ -21,7 +22,8 @@ import type { HarvestKey } from "./harvest";
  * bank the server refused after its balls were already thrown (#208).
  *
  * Each ball makes Flash's sounds (`ResourcePackage.as:36-43,97-103`): a pop
- * as it leaves (`bankfire`) and another as it lands (`bankland`). The effects
+ * as it leaves (`bankfire`) and another as it lands (`bankland`); on the
+ * Inferno yard the Inferno's own pair, `ibankfire` and `ibankland`. The effects
  * player keeps a big bank from rattling (`sound/EffectsPlayer.ts`). Balls
  * landed all at once by {@link finish}, or taken away, make none: the yard
  * is going or the bank was refused.
@@ -175,6 +177,8 @@ export interface CollectFxOptions {
   readonly art?: CollectFxArt;
   /** Plays a sound effect; the game's effects player when left out. */
   readonly sound?: (effect: Effect) => void;
+  /** Whether the yard is the Inferno's; the screen's resource realm when left out. */
+  readonly inferno?: () => boolean;
 }
 
 export class CollectFxLayer {
@@ -184,6 +188,7 @@ export class CollectFxLayer {
   private readonly dots = new Container();
   private readonly art: CollectFxArt;
   private readonly sound: (effect: Effect) => void;
+  private readonly inferno: () => boolean;
   private readonly balls: Ball[] = [];
   private readonly freeDots: Sprite[] = [];
   private readonly freeShadows: Sprite[] = [];
@@ -192,6 +197,7 @@ export class CollectFxLayer {
   constructor(options: CollectFxOptions = {}) {
     this.art = options.art ?? packageArt();
     this.sound = options.sound ?? playEffect;
+    this.inferno = options.inferno ?? (() => resourceRealm() === "inferno");
     this.root.eventMode = "none";
     this.root.addChild(this.shadows, this.dots);
   }
@@ -240,13 +246,13 @@ export class CollectFxLayer {
       const pose = flightPose(ball.flight, ball.elapsed);
       if (pose.visible && !ball.thrown) {
         ball.thrown = true;
-        this.sound("bankfire");
+        this.sound(this.inferno() ? "ibankfire" : "bankfire");
       }
       if (pose.landed) {
         this.release(ball);
         balls[index] = balls[balls.length - 1]!;
         balls.pop();
-        this.sound("bankland");
+        this.sound(this.inferno() ? "ibankland" : "bankland");
         ball.onLand(ball.flight.resource, ball.flight.share);
         continue;
       }

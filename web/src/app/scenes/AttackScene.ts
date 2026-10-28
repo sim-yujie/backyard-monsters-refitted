@@ -223,6 +223,9 @@ export class AttackScene implements Scene {
       this.target = this.raidRun ? raidTarget(this.raidRun) : null;
     } else {
       this.target = consumeAttackTarget();
+      // A Descent yard, a Moloch tribe or another player's Inferno yard is
+      // fought to the Inferno's attack tune (`game/sound/tunes.ts`, WP 7.2).
+      if (this.target && combatKind(this.target) === "inferno") setScreenTune("infernoAttack");
     }
 
     context.stage.addChild(this.renderer.root);

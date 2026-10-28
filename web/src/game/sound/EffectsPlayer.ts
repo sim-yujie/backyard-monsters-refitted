@@ -9,7 +9,10 @@ import { GESTURE_EVENTS, type GestureTarget } from "./MusicPlayer";
  * resource ball a bank throws pops as it leaves the harvester (`bankfire`)
  * and plops as it lands on the Town Hall (`bankland`), from
  * `ResourcePackage.as:36-43,97-103`. The files are Flash's own, which the
- * game server already serves under `/assets/sounds/uisounds/`.
+ * game server already serves under `/assets/sounds/uisounds/`. On the
+ * Inferno yard the balls make the Inferno's own pair (`ibankfire`,
+ * `ibankland`, under `/assets/sounds/infernosounds/`), as Flash's did on
+ * `BASE.isInfernoMainYardOrOutpost` (Inferno WP 7.2).
  *
  * **Not a burst.** Flash let one sound start at most three times at once and
  * then about once a frame (`SOUNDS.as:245-246,258-262`), so Collect all on a
@@ -26,7 +29,7 @@ import { GESTURE_EVENTS, type GestureTarget } from "./MusicPlayer";
  * not saved up, so nothing goes off late in a heap.
  */
 
-export type Effect = "bankfire" | "bankland";
+export type Effect = "bankfire" | "bankland" | "ibankfire" | "ibankland";
 
 export interface EffectFile {
   readonly url: string;
@@ -37,6 +40,8 @@ export interface EffectFile {
 export const EFFECTS: Readonly<Record<Effect, EffectFile>> = {
   bankfire: { url: "/assets/sounds/uisounds/sound_bankfire.mp3", volume: 0.8 },
   bankland: { url: "/assets/sounds/uisounds/sound_bankland.mp3", volume: 0.8 },
+  ibankfire: { url: "/assets/sounds/infernosounds/sound_ibankfire.mp3", volume: 0.8 },
+  ibankland: { url: "/assets/sounds/infernosounds/sound_ibankland.mp3", volume: 0.8 },
 };
 
 /** The least time between two starts of one effect: two Flash frames at 40 fps. */

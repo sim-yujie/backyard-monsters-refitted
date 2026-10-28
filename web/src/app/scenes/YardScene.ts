@@ -121,6 +121,7 @@ import {
 } from "@/ui/monsters/monstersTab";
 import { monstersTabsFor } from "@/ui/monsters/tabs";
 import { resourceAmount, setResourceRealm } from "@/ui/resourceIcon";
+import { setScreenTune } from "@/game/sound/sound";
 import { TestReportPanel } from "@/ui/attack/TestReport";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
@@ -540,7 +541,11 @@ export class YardScene implements Scene {
     // Another player's Inferno yard is looked at from the Inferno: its HUD
     // shows the own purse as Bone, Coal, Sulfur and Magma, so the realm is
     // set before the HUD draws its icons.
-    if (this.target?.inferno) setResourceRealm("inferno");
+    if (this.target?.inferno) {
+      setResourceRealm("inferno");
+      // Flash's `iview` played the Inferno yard tune (`game/sound/tunes.ts`, WP 7.2).
+      setScreenTune("infernoYard");
+    }
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
 
@@ -2337,8 +2342,10 @@ export class YardScene implements Scene {
       },
     });
     this.store = store;
-    // Bone, Coal, Sulfur and Magma on the Inferno yard, in every panel (WP 1.19).
+    // Bone, Coal, Sulfur and Magma on the Inferno yard, in every panel (WP 1.19),
+    // and the Inferno yard tune (`game/sound/tunes.ts`, WP 7.2).
     setResourceRealm(store.kind === "inferno" ? "inferno" : "surface");
+    setScreenTune(store.kind === "inferno" ? "infernoYard" : "yard");
     this.unsubscribeStore = store.subscribe((change) => this.onStoreChange(change));
     this.binding = {
       store,
