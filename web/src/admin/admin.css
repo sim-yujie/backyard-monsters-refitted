@@ -2144,6 +2144,8 @@ tbody th {
 
 .ann-form {
   display: grid;
+  /* Without minmax the fields keep their natural width and run under the preview. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-width: 0;
 }
@@ -2155,6 +2157,11 @@ tbody th {
 .ann-times {
   display: grid;
   gap: 16px;
+}
+
+/* Date boxes have a wide natural size; let them shrink to their column. */
+.ann-times > .field {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .ann-thumbs {
@@ -2204,7 +2211,7 @@ tbody th {
 
 @media (min-width: 720px) {
   .ann-times {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
