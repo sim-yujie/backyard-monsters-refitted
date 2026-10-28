@@ -8,6 +8,9 @@ Run with Blender 5.2 in the background (it builds the whole scene from nothing, 
                                                                            default all 32)
   blender -b --factory-startup -P cannon3d.py -- TIER full H               render/TIER/full-hH.png (everything, for checks)
   blender -b --factory-startup -P cannon3d.py -- TIER all                  body, then all 32 headings
+  blender -b --factory-startup -P cannon3d.py -- TIER tilts [r:h ...]     render/TIER/tilt-4x/rR_hNN.png (row R of PITCHES,
+                                                                           heading NN; default all) + aim_tilt.json
+  blender -b --factory-startup -P cannon3d.py -- TIER tiltfull H.. P       render/TIER/full-hH-pP.png (P degrees down)
   blender -b --factory-startup -P cannon3d.py -- TIER save                 cannon-TIER.blend (the scene, to open by hand)
 
 TIER: t1 (steel bands, no lamps: the game's still picture), t1b (the same tower with brass bands and lamps: the game's
@@ -38,7 +41,11 @@ CANVAS = {
     2: dict(size=(620, 960), box=(163, 576, 421, 897), pivot=(295, 680)),
     3: dict(size=(620, 960), box=(163, 515, 421, 897), pivot=(291, 621)),
 }
-TILT = 22.0                       # the barrel's raise, degrees
+TILT = 22.0                       # the barrel's raise, degrees (the 32-heading strip)
+PITCHES = [-30, -20, -10, 0, 10]  # the tilt strip's rows, degrees DOWN (negative = raised) (owner, 28 Oct: the barrel tilts
+                                  # with the target's distance, as the Laser's head does): row 0 lobs at the far edge of the
+                                  # range, the last row points a little down at a creep next to the tower. More than 30 up
+                                  # the breech sinks into the collar; more than 10 down the muzzle meets the ring and horns.
 TURRET_SCALE = 1.5              # the turning part, against the drum
 SECTION = 0.84                    # one more striped section (stripes + band) per tier
 
@@ -214,7 +221,10 @@ def build(cfg):
 
     # ---- the turning part: collar, yoke, barrel (and the lamp on the brass tier 1). Built pointing at +Y (bearing 0),
     # turned about Z by -heading.
-    gun_m, gb_m = M[cfg["gun"]], M[cfg["gunband"]]
+    # the barrel's tube: turned gun metal, crisp streaks along it (owner, 28 Oct: it looked like a PVC pipe)
+    gun_m = L.mat_metal("gun", cfg["gun"], spec=1.0, spec_rough=0.16, wear=0.3, top=0.94, env=L.ENV_TURNED, wave=0.12,
+                         whites=(0.45, 0.85) if cfg["gun"] in ("gunmetal", "black") else None)
+    gb_m = M[cfg["gunband"]]
     tur = L.empty("TURRET", loc=(0, 0, top + 0.02))
     tur.scale = (TURRET_SCALE,) * 3
     collar = L.lathe("collar", [L.band(0.0, 0.5, 0.0, 0.1, bev=0.03), [(0.45, 0.1), (0.32, 0.13), (0.0, 0.13)]],
@@ -352,7 +362,47 @@ def main():
             tur.rotation_euler = (0, 0, -math.radians(11.25 * k))
             L.shot(out / "barrel-4x" / f"h{k:02d}.png", tur_obs, cut=body_obs, avoid=avoid, outer_col=line_col)
 
-    if what == "body":
+    gun = bpy.data.objects["GUN"]
+    barrel = bpy.data.objects["barrel"]
+
+    def pitch(p):           # the barrel tilted p degrees down (negative: raised)
+        gun.rotation_euler = (math.radians(-p), 0, 0)
+
+    def muzzle_line():
+        return barrel.matrix_world @ Vector((0, 0, 0)), barrel.matrix_world @ Vector((0, 0, 1.09))
+
+    def turn(h):
+        tur.rotation_euler = (0, 0, -math.radians(h))
+
+    if what == "tilts":
+        (out / "tilt-4x").mkdir(exist_ok=True)
+        avoid = L.load_alpha(out / "body-4x.png")
+        only = [tuple(int(v) for v in a.split(":")) for a in argv[2:]]   # r:h ... renders just those cells
+        rows = []
+        for r, p in enumerate(PITCHES):
+            pitch(p)
+            rows.append(L.aim(cam, (px, py), turn, [11.25 * k for k in range(32)], muzzle_line))
+            for k in range(32):
+                if only and (r, k) not in only:
+                    continue
+                turn(11.25 * k)
+                L.shot(out / "tilt-4x" / f"r{r}_h{k:02d}.png", tur_obs, cut=body_obs, avoid=avoid, outer_col=line_col)
+        pitch(0)
+        turn(0)
+        bpy.context.view_layer.update()
+        mz = muzzle_line()[1].z                  # the muzzle's middle above the ground, level barrel, in model units
+        ppu = abs(L.to_px(cam, bear(135, 1.0))[0] - L.to_px(cam, (0, 0, 0))[0]) / 4      # game px per model unit
+        gy = L.to_px(cam, (0, 0, 0))[1]
+        (out / "aim_tilt.json").write_text(json.dumps(dict(
+            pitch_deg=PITCHES, rows=rows, muzzle_height_px=round(mz * ppu, 1),
+            muzzle_height_screen_px=round(mz * ppu * math.cos(math.radians(L.EL)), 1),
+            ground_below_pivot_px=round((gy - py) / 4, 2), elevation_deg=L.EL)))
+    elif what == "tiltfull":
+        for h in argv[2:-1]:
+            turn(11.25 * int(h))
+            pitch(float(argv[-1]))
+            L.shot(out / f"full-h{int(h):02d}-p{argv[-1]}.png", body_obs + tur_obs, outer_col=line_col)
+    elif what == "body":
         body_shot()
     elif what == "all":
         body_shot()

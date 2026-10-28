@@ -388,7 +388,7 @@ METALS = dict(
 
 
 def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.62, sheen=0.35, glint=0.16, polish=None,
-              top=1.0):
+              top=1.0, env=None, wave=None, whites=None):
     """A painted metal: its own dark-to-light ramp, gold/steel highlights, dark rims, a little wear (pale scratches, dark
     specks) so it does not look factory-clean. Polished (the default since 28 Oct, see mat_polished) unless polish=0."""
     dark, mid, light, hi = METALS[kind or name]
@@ -401,7 +401,7 @@ def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.
         tone = p.mix(tone, speck, 1.0, 'MULTIPLY')
     if polish != 0 and not os.environ.get('LOOK3D_OLD_METAL'):   # LOOK3D_OLD_METAL=1: the look before 28 Oct
         return mat_polished(p, tone, kind or name, polish=1.0 if polish is None else polish,
-                            spec=spec, spec_rough=spec_rough, edge_dark=edge_dark, top=top)
+                            spec=spec, spec_rough=spec_rough, edge_dark=edge_dark, top=top, env=env, wave=wave, whites=whites)
     return p.finish(tone, spec=spec, spec_rough=spec_rough, spec_col=hi, metal=True, shade=metal_ramp(dark, mid, light),
                     edge_dark=edge_dark, sheen=sheen, glint=glint)
 
@@ -420,6 +420,11 @@ ENV = [(0.0, 0.25), (0.3, 0.42), (0.45, 0.6), (0.48, 1.3), (0.53, 1.3), (0.58, 0
 WINDOWS = [(SUN[0] - 10, 0.86, 0.7), (330, 0.92, 0.45)]   # (bearing, cos of the half width, brightness added)
 LIGHT = [(0.0, 0.42), (0.3, 0.72), (0.75, 1.0)]            # the sun's light (0-1) to a brightness factor
 WAVE = 0.35                             # how much the reflection's surface waves (see mat_polished)
+ENV_TURNED = [(0.0, 0.16), (0.3, 0.3), (0.44, 0.5), (0.47, 1.45), (0.52, 1.45), (0.55, 0.22), (0.62, 0.22), (0.65, 1.05),
+              (0.74, 1.05), (0.78, 0.42), (1.0, 0.5)]
+                                        # a lathe-turned gun barrel (owner, 28 Oct: "looks like PVC"): the same studio, but a
+                                        # dark band between the horizon and a second bright band, so a long round part shows
+                                        # crisp bright-dark-bright streaks along its length, as chrome and gun steel do
 POLISH = dict(black=(0.2, 0.88), pblack=(0.2, 0.88), lblack=(0.2, 0.88))   # per metal kind: (w1, w2) for metal_stops
                                         # (black lacquer: dark all the way up, then a sharp jump to near-white)
 
@@ -439,12 +444,15 @@ def _bw(p, col):
     return n.outputs[0]
 
 
-def mat_polished(p, tone, kind, polish=1.0, spec=0.9, spec_rough=0.22, edge_dark=0.62, kind2=None, mask=None, top=1.0):
+def mat_polished(p, tone, kind, polish=1.0, spec=0.9, spec_rough=0.22, edge_dark=0.62, kind2=None, mask=None, top=1.0,
+                 env=None, wave=None, whites=None):
     """kind2, mask: a second metal where mask (a socket, 0-1) is 1 (two-metal stripes, see mat_polished_stripes).
+    env, wave: another reflected studio (ENV_TURNED for gun barrels) and surface wave (less for a turned barrel).
+    whites: (w1, w2) for metal_stops instead of the kind's POLISH ones.
     top < 1: the brightest reflections are eased down to top (for big flat facets, which otherwise turn near-white
     wherever they catch the horizon band or a window)."""
     dark, mid, light, hi = METALS[kind]
-    stops = metal_stops(dark, mid, light, *POLISH.get(kind, ()))
+    stops = metal_stops(dark, mid, light, *(whites or POLISH.get(kind, ())))
     geo = p.N.new("ShaderNodeNewGeometry")
     view = p.N.new("ShaderNodeVectorMath")
     view.operation = 'SCALE'
@@ -455,13 +463,13 @@ def mat_polished(p, tone, kind, polish=1.0, spec=0.9, spec_rough=0.22, edge_dark
     p.link(view.outputs[0], ref.inputs[0])
     # the reflection sees a gently waved surface (big soft waves), so a flat panel shows a streak or a gradient, never one
     # flat colour (a whole facet lit white by the horizon band looks like white paint)
-    wave = p.node("ShaderNodeBump", Strength=WAVE, Distance=0.1)
+    wave = p.node("ShaderNodeBump", Strength=WAVE if wave is None else wave, Distance=0.1)
     p.link(p.noise(1.4, 2.0, 0.5), wave.inputs["Height"])
     p.link(wave.outputs[0], ref.inputs[1])
     rs = p.N.new("ShaderNodeSeparateXYZ")
     p.link(ref.outputs[0], rs.inputs[0])
     t = p.math("MULTIPLY_ADD", rs.outputs[2], 0.5, 0.5)
-    env = _bw(p, p.ramp(t, [(pos, (v / 2, v / 2, v / 2, 1)) for pos, v in ENV]))        # halved: a ramp stores 0-1
+    env = _bw(p, p.ramp(t, [(pos, (v / 2, v / 2, v / 2, 1)) for pos, v in (env or ENV)]))        # halved: a ramp stores 0-1
     env = p.math("MULTIPLY", env, 2.0)
     # the windows: where the reflected ray points (on the ground plan) at a bright window, low in the sky or just below it
     flat = p.N.new("ShaderNodeCombineXYZ")
