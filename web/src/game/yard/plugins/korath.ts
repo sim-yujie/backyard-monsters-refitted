@@ -69,7 +69,6 @@ export const korathPlugin = (
           scene.openBuildMenu(CHAMPION_CHAMBER_TYPE);
           break;
         case "openCage":
-        case "egg":
           scene.focusBuilding(step.cage, true);
           break;
         case "openChamber":

@@ -149,9 +149,6 @@ export const CHAMPION_CHAMBER_TYPE = 119;
 /** A frozen champion's `status` (`champions/ChampionBase.as:26-36`). */
 const FROZEN_STATUS = 1;
 
-/** A champion's egg waiting in the cage (owner 2026-10-20; `championModel.ts`). */
-const EGG_STATUS = 3;
-
 /**
  * A champion's speed on a trip to or from the Chamber against its pacing
  * speed: behaviour `housing`, a monster heading home, over `pen`.
@@ -254,12 +251,6 @@ export interface YardLife {
   readonly cage: LifePen | null;
   /** Ids (`G1`..`G5`) of the champions frozen in the Chamber (#314). */
   readonly frozen: readonly string[];
-  /**
-   * The egg waiting in the cage (owner 2026-10-20): its champion's id (`G1`..`G4`)
-   * and the middle of the cage's footprint in yard units, where it stands; null
-   * when there is none, or on an attacked yard.
-   */
-  readonly egg: LifeEgg | null;
   /** The Champion Chamber's footprint, or null when the yard has none. */
   readonly chamber: LifeArea | null;
   readonly workers: number;
@@ -272,13 +263,6 @@ export interface YardLife {
   readonly footprints: readonly LifeArea[];
 }
 
-/** An egg in the cage, and where it stands. */
-export interface LifeEgg {
-  readonly id: string;
-  readonly x: number;
-  readonly y: number;
-}
-
 /** Nothing alive at all. */
 export const EMPTY_LIFE: YardLife = {
   groups: [],
@@ -287,7 +271,6 @@ export const EMPTY_LIFE: YardLife = {
   champions: [],
   cage: null,
   frozen: [],
-  egg: null,
   chamber: null,
   workers: 0,
   jobs: [],
@@ -328,7 +311,6 @@ export const yardLifeOf = (
 
   const pens: LifePen[] = [];
   let cage: LifePen | null = null;
-  let cageMiddle: YardPoint | null = null;
   let chamber: LifeArea | null = null;
   const jobs: LifeJob[] = [];
   const footprints: LifeArea[] = [];
@@ -340,7 +322,6 @@ export const yardLifeOf = (
     }
     if (building.type === CHAMPION_CAGE_TYPE && cage === null) {
       cage = { id: building.id, x: building.x, y: building.y };
-      cageMiddle = { x: building.x + width / 2, y: building.y + height / 2 };
     }
     if (building.type === CHAMPION_CHAMBER_TYPE && chamber === null) {
       chamber = { x: building.x, y: building.y, width, height };
@@ -354,14 +335,12 @@ export const yardLifeOf = (
 
   const champions: LifeChampion[] = [];
   const frozen: string[] = [];
-  let egg: string | null = null;
   for (const entry of view === "attack" ? [] : (save.champion ?? [])) {
     if (!entry) continue;
     const t = Math.floor(Number(entry.t));
     if (!(t >= 1)) continue;
     const status = Number(entry.status ?? 0);
     if (status === FROZEN_STATUS) frozen.push(`G${t}`);
-    if (status === EGG_STATUS && egg === null) egg = `G${t}`;
     if (status !== 0) continue;
     const level = Math.max(1, Math.floor(Number(entry.l)) || 1);
     champions.push({ id: `G${t}`, level, sheetLevel: level });
@@ -375,7 +354,6 @@ export const yardLifeOf = (
     champions,
     cage,
     frozen,
-    egg: egg && cageMiddle ? { id: egg, ...cageMiddle } : null,
     chamber,
     workers: workless ? 0 : yard.workers.total,
     jobs: workless ? [] : jobs,

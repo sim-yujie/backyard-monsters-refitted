@@ -13,7 +13,7 @@ import { cageView } from "@/game/yard/championModel";
 /**
  * The Champion Cage's controls as a player meets them: the raise cards, the
  * champion's health, growth and hunger in plain words, the feed recipe and
- * its buttons, rename and juice behind a confirmation. The rules are
+ * its buttons, rename, and Freeze as the only act (no Juice). The rules are
  * `game/yard/championModel.test.ts`'s; this checks the drawing and the wiring.
  */
 
@@ -67,12 +67,10 @@ const setup = (
   });
   const spies = {
     raise: vi.fn(actions.raise ?? (() => never())),
-    cancelEgg: vi.fn(actions.cancelEgg ?? (() => never())),
     feed: vi.fn(actions.feed ?? (() => never())),
     evolve: vi.fn(actions.evolve ?? (() => never())),
     heal: vi.fn(actions.heal ?? (() => never())),
     rename: vi.fn(actions.rename ?? (() => never())),
-    juice: vi.fn(actions.juice ?? (() => never())),
     freeze: vi.fn(actions.freeze ?? (() => never())),
     thaw: vi.fn(actions.thaw ?? (() => never())),
     healSpecial: vi.fn(actions.healSpecial ?? (() => never())),
@@ -102,10 +100,26 @@ describe("ChampionPanel: no champion", () => {
     expect(spies.raise).toHaveBeenCalledWith(2);
   });
 
-  it("says each one hatches in 1 day", () => {
+  it("says nothing about eggs or hatching: raising is instant (owner, 2026-10-28)", () => {
     const { element } = setup([]);
-    expect(element.textContent).toContain("lays an egg that hatches in 1 day");
-    expect(textOf(element, ".champion-card__hatch")).toBe("Hatches in 1 day");
+    expect(element.textContent).toContain("Raising is free.");
+    expect(element.textContent).not.toMatch(/egg|hatch/i);
+    expect(element.querySelector(".champion-card__hatch")).toBeNull();
+  });
+
+  it("says the champion is in the cage once raised", async () => {
+    const raised = gorgo({ t: 2, hp: 12_000 });
+    const answer = { ok: true, report: { champion: raised } } as never;
+    const { element } = setup([], undefined, { raise: () => Promise.resolve(answer) });
+    buttonNamed(element, "Raise Drull")!.click();
+    await new Promise((done) => setTimeout(done, 0));
+    expect(textOf(element, ".champion__status")).toBe("Drull is in your cage.");
+  });
+
+  it("shows no egg card for an older save's egg (the server hatches it before any answer)", () => {
+    const { element } = setup([gorgo({ t: 2, status: 3, ft: T0 + HOUR })]);
+    expect(element.querySelector(".champion__egg-picture")).toBeNull();
+    expect(buttonNamed(element, "Cancel egg")).toBeUndefined();
   });
 
   it("says a frozen champion must be thawed instead", () => {
@@ -117,42 +131,6 @@ describe("ChampionPanel: no champion", () => {
   it("says so while the cage is being built", () => {
     const { element } = setup([], [{ ...CAGE, l: 0, cB: 500 }]);
     expect(element.textContent).toContain("once it is built");
-  });
-});
-
-describe("ChampionPanel: an egg", () => {
-  const egg = (left: number) => gorgo({ t: 2, status: 3, ft: T0 + left });
-
-  it("shows the egg and the time to hatching, and none of a champion's buttons", () => {
-    const { element } = setup([egg(23 * HOUR + 12 * 60 + 5)], [CAGE, JUICER]);
-    expect(textOf(element, ".champion__name")).toBe("Drull egg");
-    expect(textOf(element, ".champion__egg-time")).toBe("Hatches in 23h 12m");
-    expect(element.querySelector(".champion__egg-picture")!.getAttribute("src")).toBe("/eggs/G2-egg.webp");
-    for (const name of ["Feed", "Heal", "Evolve", "Juice", "Freeze", "Rename", "Raise"]) {
-      expect(buttonNamed(element, name)).toBeUndefined();
-    }
-  });
-
-  it("cancels only after the confirmation, and Keep it goes back", () => {
-    const { element, spies } = setup([egg(HOUR)]);
-    buttonNamed(element, "Cancel egg")!.click();
-    expect(textOf(element, ".champion__question")).toBe(
-      "Cancel the egg? You can pick again, but the new egg takes a full day.",
-    );
-    buttonNamed(element, "Keep it")!.click();
-    expect(spies.cancelEgg).not.toHaveBeenCalled();
-    buttonNamed(element, "Cancel egg")!.click();
-    buttonNamed(element, "Yes, cancel the egg")!.click();
-    expect(spies.cancelEgg).toHaveBeenCalledTimes(1);
-  });
-
-  it("says Hatching… at 0 and asks the server once", () => {
-    const { element, panel, store } = setup([egg(0)]);
-    const refresh = vi.spyOn(store, "refresh").mockResolvedValue(undefined as never);
-    expect(textOf(element, ".champion__egg-time")).toBe("Hatching…");
-    panel.tick();
-    panel.tick();
-    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -275,7 +253,7 @@ describe("ChampionPanel: a hungry champion", () => {
   });
 });
 
-describe("ChampionPanel: rename and juice", () => {
+describe("ChampionPanel: rename, and no juice", () => {
   it("renames inline", () => {
     const { element, spies } = setup([gorgo()]);
     buttonNamed(element, "Rename")!.click();
@@ -287,24 +265,11 @@ describe("ChampionPanel: rename and juice", () => {
     expect(spies.rename).toHaveBeenCalledWith("Kong");
   });
 
-  it("juices only after a confirmation, and only with a working Juicer", () => {
-    const none = setup([gorgo()]);
-    const locked = buttonNamed(none.element, "Juice")!;
-    expect(locked.getAttribute("aria-disabled")).toBe("true");
-    expect(textOf(locked, ".champion-act__short")).toBe("Needs a Juicer");
-    expect(locked.title).toContain("Build a Monster Juicer");
-    locked.click();
-    expect(none.spies.juice).not.toHaveBeenCalled();
-    expect(none.element.querySelector(".champion__confirm")).toBeNull();
-
-    const { element, spies } = setup([gorgo()], [CAGE, JUICER]);
-    const juice = buttonNamed(element, "Juice")!;
-    expect(juice.hasAttribute("aria-disabled")).toBe(false);
-    juice.click();
-    expect(spies.juice).not.toHaveBeenCalled();
-    expect(element.textContent).toContain("gone for good and gives no goo");
-    buttonNamed(element, "Yes, juice Gorgo")!.click();
-    expect(spies.juice).toHaveBeenCalledTimes(1);
+  it("offers no Juice tile, even with a working Juicer (owner, 2026-10-28)", () => {
+    const { element } = setup([gorgo()], [CAGE, JUICER]);
+    expect(buttonNamed(element, "Juice")).toBeUndefined();
+    expect(element.querySelector(".champion-act--juice")).toBeNull();
+    expect(element.textContent).not.toMatch(/juice/i);
   });
 });
 
@@ -314,12 +279,12 @@ describe("ChampionPanel: one screen at 1280x800 (lead, 28 Oct)", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const css = readFileSync(resolve(here, "../styles/champion.css"), "utf8").replace(/\r\n/g, "\n");
 
-  it("puts Freeze and Juice beside the champion's picture and the hunger clock under the feeds bar", () => {
+  it("puts Freeze beside the champion's picture and the hunger clock under the feeds bar", () => {
     const { element } = setup([gorgo()], [CAGE, JUICER]);
     const hero = element.querySelector<HTMLElement>(".champion__header--hero")!;
     const order = [".champion__picture", ".champion__who", ".champion__stats-wrap", ".champion__acts", ".champion__act-hint"];
     expect([...hero.children].map((child, i) => child.matches(order[i] ?? "-"))).toEqual(order.map(() => true));
-    expect(element.querySelectorAll(".champion-act")).toHaveLength(2);
+    expect(element.querySelectorAll(".champion-act")).toHaveLength(1);
     expect(element.querySelector(".champion__part--acts")).toBeNull();
     expect(element.querySelector(".champion__track-bar > .champion__hunger")).not.toBeNull();
     // Evolution and Feed name their parts for screen readers only.
@@ -329,14 +294,7 @@ describe("ChampionPanel: one screen at 1280x800 (lead, 28 Oct)", () => {
     expect(shown.map((heading) => heading.textContent)).toEqual(["How it fights"]);
   });
 
-  it("asks about Juice across the champion's full width", () => {
-    const { element } = setup([gorgo()], [CAGE, JUICER]);
-    buttonNamed(element, "Juice")!.click();
-    expect(element.querySelector(".champion__header--hero > .champion__confirm")).not.toBeNull();
-    expect(element.querySelector(".champion__header--hero > .champion__acts")).toBeNull();
-  });
-
-  it("lays the champion out in three columns, Freeze and Juice in a row under it on a phone", () => {
+  it("lays the champion out in three columns, Freeze in a row under it on a phone", () => {
     expect(css).toMatch(
       /\.champion__header--hero \{\s*display: grid;\s*grid-template-columns: 128px minmax\(0, 1fr\) 184px;/,
     );
@@ -344,7 +302,7 @@ describe("ChampionPanel: one screen at 1280x800 (lead, 28 Oct)", () => {
     const phone = css.slice(css.indexOf("@media (width <= 620px)"));
     expect(phone).toMatch(/\.champion__header--hero \{\s*grid-template-columns: 104px minmax\(0, 1fr\);/);
     expect(phone).toMatch(
-      /\.champion__header--hero > \.champion__acts \{\s*grid-row: auto;\s*grid-column: 1 \/ -1;\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+      /\.champion__header--hero > \.champion__acts \{\s*grid-row: auto;\s*grid-column: 1 \/ -1;\s*grid-template-columns: minmax\(0, 1fr\);/,
     );
   });
 });

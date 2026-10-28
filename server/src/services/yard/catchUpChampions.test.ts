@@ -163,10 +163,11 @@ describe("catchUpChampions: eggs", () => {
   const egg = (overrides: Partial<ChampionData> = {}): ChampionData =>
     gorgo({ t: 2, hp: 12_000, ft: NOW, status: 3, ...overrides });
 
-  test("nothing hatches before the day is up: no champion in the cage", () => {
-    const save = { champion: [egg({ ft: NOW + 1 })] };
-    expect(catchUpChampions(save, NOW - DAY + 1, NOW)).toEqual([]);
-    expect((save.champion as ChampionData[])[0]).toMatchObject({ status: 3, ft: NOW + 1 });
+  test("an older save's egg hatches now, before its old hatch time (eggs removed, owner 2026-10-28)", () => {
+    const save = { champion: [egg({ ft: NOW + 20 * HOUR })] };
+    const jobs = catchUpChampions(save, NOW - DAY + 1, NOW);
+    expect(jobs).toEqual([{ kind: "championHatch", id: "G2", t: null, at: NOW, detail: {} }]);
+    expect((save.champion as ChampionData[])[0]).toMatchObject({ status: 0, l: 1, ft: NOW + 23 * HOUR });
   });
 
   test("hatches at its hatch time: level 1, full health, fed for 23 hours from the hatch", () => {

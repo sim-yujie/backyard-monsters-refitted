@@ -2,7 +2,6 @@ import type { BaseLoadResponse } from "@/api/types";
 import {
   activeChampion,
   buildingOfType,
-  cageEgg,
   CHAMPION_CAGE_TYPE,
   CHAMPION_CHAMBER_TYPE,
   entryOfChampion,
@@ -19,8 +18,9 @@ import {
  * (`MonsterMadnessPopupInfoGoal1Complete.getCopy`): no cage, a champion in it
  * with or without a Champion Chamber, or a free cage
  * (`mm_goal1_completed1`..`4`). The same four steps here, cut short (the
- * owner wants little text), plus the egg and the cage still being built,
- * which Flash did not have.
+ * owner wants little text), plus the cage still being built, which Flash did
+ * not have. Champions cannot be juiced (owner, 2026-10-28), so with a champion
+ * in the cage the only way to make room is to freeze it in a Chamber.
  */
 
 /** What the player does next to raise Korath, and where the button goes. */
@@ -30,7 +30,6 @@ export type KorathStep =
   | { readonly kind: "cageBuilding" }
   /** `mm_goal1_completed3`: the cage is free. */
   | { readonly kind: "openCage"; readonly cage: number }
-  | { readonly kind: "egg"; readonly cage: number }
   /** `mm_goal1_completed4`: a champion in the cage, and a Chamber to freeze it in. */
   | { readonly kind: "openChamber"; readonly chamber: number; readonly champion: string }
   /** `mm_goal1_completed2`: a champion in the cage and no Chamber. */
@@ -47,7 +46,6 @@ export const korathStep = (save: BaseLoadResponse): KorathStep => {
     const chamber = buildingOfType(save, CHAMPION_CHAMBER_TYPE);
     return chamber ? { kind: "openChamber", chamber: chamber.id, champion } : { kind: "buildChamber", champion };
   }
-  if (cageEgg(save)) return { kind: "egg", cage: cage.id };
   return { kind: "openCage", cage: cage.id };
 };
 
@@ -67,8 +65,6 @@ export const korathStepText = (step: KorathStep): { readonly line: string; reado
     case "openCage":
       // `btn_opencage`.
       return { line: "Open your Champion Cage to raise him.", button: "Open Cage" };
-    case "egg":
-      return { line: "Your cage holds an egg. Cancel it to raise him.", button: "Open Cage" };
     case "openChamber":
       return { line: `${step.champion} is in your cage. Freeze it in the Champion Chamber first.`, button: "Open Chamber" };
     case "buildChamber":
