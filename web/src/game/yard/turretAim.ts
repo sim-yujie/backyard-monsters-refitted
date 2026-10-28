@@ -5,9 +5,13 @@
  *
  * The 3D art measures, for every cell, the screen direction its barrel points
  * (base to tip, projected) and the muzzle tip's place from the turret's
- * pivot (`turretAimData.ts`, from `export3d.py`). A tower then shows the cell
- * whose barrel points along the line its shot is drawn on, and the shot
- * leaves from that cell's muzzle. The Laser's head is also rendered tilted
+ * pivot (`turretAimData.ts`, from `export3d.py`). Cell k of a row is the
+ * turret turned to ground bearing `360 k / headings` (0 down-right on screen,
+ * 45 at the viewer, as the yard's +x and +y). A tower shows the cell nearest
+ * the bearing from it to its target on the ground, which the yard knows
+ * exactly (a raised barrel's screen angle jumps near "facing the viewer", so
+ * picking by it could show a barrel 40 degrees off), and the shot leaves from
+ * that cell's muzzle. The Laser's head is also rendered tilted
  * down by several steps, a row of headings per tilt: it takes the tilt that
  * points its lens at the spot it burns, from how high the lens is and how far
  * away the spot is on the ground.
@@ -20,7 +24,10 @@
 export interface TurretAim {
   /** Cells in one row (one tilt). */
   readonly headings: number;
-  /** Screen degrees each cell's barrel points, base to tip: 0 right, 90 down. */
+  /**
+   * Screen degrees each cell's barrel points, base to tip: 0 right, 90 down.
+   * As the art measured it; the game picks cells by ground bearing.
+   */
   readonly aim: readonly number[];
   /**
    * Game px from the pivot to each cell's muzzle tip on screen, `[dx, dy]`
@@ -56,26 +63,23 @@ export const angleGap = (a: number, b: number): number => {
 export const tiltRows = (aim: TurretAim): number =>
   Math.max(1, Math.floor(aim.aim.length / aim.headings));
 
-/**
- * The cell in tilt row `row` whose barrel points nearest `degrees` on screen;
- * the lower cell on a tie.
- */
-export const aimCell = (aim: TurretAim, degrees: number, row = 0): number => {
-  const first = Math.min(Math.max(0, row), tiltRows(aim) - 1) * aim.headings;
-  let best = first;
-  let bestGap = Number.POSITIVE_INFINITY;
-  for (let cell = first; cell < first + aim.headings; cell += 1) {
-    const gap = angleGap(aim.aim[cell] ?? 0, degrees);
-    if (gap < bestGap) {
-      bestGap = gap;
-      best = cell;
-    }
-  }
-  return best;
-};
+/** The tilt row a cell is in. */
+export const rowOf = (aim: TurretAim, cell: number): number => Math.floor(cell / aim.headings);
 
-/** The screen degrees a cell's barrel points. */
-export const cellAim = (aim: TurretAim, cell: number): number => aim.aim[cell] ?? 0;
+/** The ground bearing a cell's turret faces, degrees: cell k of a row at `360 k / headings`. */
+export const cellBearing = (aim: TurretAim, cell: number): number =>
+  ((cell % aim.headings) * 360) / aim.headings;
+
+/**
+ * The cell in tilt row `row` whose turret faces nearest ground bearing
+ * `degrees` (0 down-right on screen, 45 at the viewer); the higher heading on
+ * a tie.
+ */
+export const bearingCell = (aim: TurretAim, degrees: number, row = 0): number => {
+  const first = Math.min(Math.max(0, row), tiltRows(aim) - 1) * aim.headings;
+  const turned = (((degrees % 360) + 360) % 360) * (aim.headings / 360);
+  return first + (Math.round(turned) % aim.headings);
+};
 
 /** Game px from the pivot to a cell's muzzle tip, or null when the art has not measured it. */
 export const muzzleOffset = (

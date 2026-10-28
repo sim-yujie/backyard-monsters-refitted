@@ -123,6 +123,7 @@ def read(tower, tier):
     assert sheet.height >= rows * ch, (tower, tier, sheet.size, rows, ch)
     return dict(body=body, body_at=body_at, cells=cells_of(sheet, cw, ch, rows, cols), in_cell=in_cell, pivot=pivot,
                 aim=by_tilt(info.get("aim_deg"), 1), muzzle=by_tilt(info.get("muzzle"), 2), pitch=pitch,
+                ground_deg=by_tilt(info.get("ground_deg"), 1),
                 lens=info.get("lens_height_px"), ground=info.get("ground_below_pivot_px"),
                 elevation=info.get("camera_elevation_deg") or info.get("elevation_deg"))
 
@@ -181,6 +182,12 @@ def export(tower, tier):
                pivot=pivot,
                bytes=sum((out / n).stat().st_size for n in (top_name, body_name, turret_name)))
     elevation = p["elevation"] or ELEVATION[tower]
+    # The game shows cell k of a row for ground bearing 360k / cols (`turretAim.bearingCell`): the art's measured
+    # ground directions must be those bearings seen from its camera.
+    for r in p["ground_deg"] or []:
+        want = bearing_aim(cols, elevation)
+        gap = max(abs((g - w + 180) % 360 - 180) for g, w in zip(r, want))
+        assert len(r) == cols and gap < 1, (tower, tier, "ground_deg is not cell k = bearing 360k/cells", gap)
     if p["aim"]:
         assert len(p["aim"]) == rows and all(len(a) == cols for a in p["aim"]), (tower, tier)
         aim = dict(headings=cols, aim=[round(a % 360, 1) for r in p["aim"] for a in r])

@@ -98,6 +98,18 @@ describe("fitting a strip to its file", () => {
     expect(stripCells({ width: 89, height: 114, frames: 42 }, 4005, 114).frames).toBe(42);
   });
 
+  it("cuts a strip of several rows into whole rows of its columns", () => {
+    // The 3D Laser: 5 tilts of 32 headings, 160 cells of 70 x 70 on a 2240 x 350 sheet.
+    expect(stripCells({ width: 70, height: 70, frames: 160, columns: 32 }, 2240, 350)).toEqual({
+      width: 70,
+      height: 70,
+      frames: 160,
+      columns: 32,
+    });
+    // A sheet a row short plays the rows it has.
+    expect(stripCells({ width: 70, height: 70, frames: 160, columns: 32 }, 2240, 280).frames).toBe(128);
+  });
+
   it("trims a cell taller than its file", () => {
     // Lightning Tower's damaged strip claims cells 57 tall of a 27-tall file.
     expect(stripCells({ width: 30, height: 57, frames: 55 }, 1650, 27)).toEqual({

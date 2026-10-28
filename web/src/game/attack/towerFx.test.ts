@@ -4,7 +4,7 @@ import type { Sprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { setClassicBuildingArt, setNewTowerArt } from "@/game/yard/buildingArtTiers";
-import { angleGap, muzzleOffset, rowOf } from "@/game/yard/turretAim";
+import { angleGap, cellBearing, muzzleOffset, rowOf } from "@/game/yard/turretAim";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
@@ -281,7 +281,7 @@ describe("TowerFx", () => {
       creep.ix - creep.iy + yard.bounds.originX - from.x,
     ) * 180) / Math.PI;
 
-  it("turns a 3D sniper onto the cell whose barrel points along its shot, and fires from that muzzle", () => {
+  it("turns a 3D sniper onto the cell that faces its target on the ground, and fires from that muzzle", () => {
     setNewTowerArt(true);
     const { yard, fx } = setUp(21);
     const [info] = towersOf(yard);
@@ -298,16 +298,36 @@ describe("TowerFx", () => {
         x: info.worldX + info.pivot.x + (offset?.[0] ?? Number.NaN),
         y: info.worldY + info.pivot.y + (offset?.[1] ?? Number.NaN),
       });
-      // And the barrel points along the line the shot is drawn on: no cell points nearer.
-      const muzzle = fx.muzzleAt(1) ?? { x: 0, y: 0 };
-      const line = towardCreep(yard, muzzle, creep);
-      const gap = angleGap(aim.aim[cell] ?? 0, line);
-      for (const other of aim.aim) expect(gap, `bearing ${bearing}`).toBeLessThanOrEqual(angleGap(other, line) + 1);
-      expect(gap, `bearing ${bearing}`).toBeLessThan(20);
+      // And it faces the creep on the ground: the nearest of its 32 headings.
+      expect(angleGap(cellBearing(aim, cell), bearing), `bearing ${bearing}`).toBeLessThanOrEqual(360 / 64);
+      // Its barrel then points roughly along the line its shot is drawn on: within half a cell, the
+      // 3D camera's 23 degrees against the yard's 30 (up to 7), and the climb to the creep's body.
+      const line = towardCreep(yard, fx.muzzleAt(1) ?? { x: 0, y: 0 }, creep);
+      expect(angleGap(aim.aim[cell] ?? 0, line), `bearing ${bearing}`).toBeLessThan(25);
       seen.add(cell);
     }
-    // Round the compass it turns through most of its cells.
-    expect(seen.size).toBeGreaterThan(18);
+    // Round the compass it turns through a cell for every 15 degrees.
+    expect(seen.size).toBe(24);
+    fx.destroy();
+  });
+
+  it("turns a 3D Cannon onto the cell that faces its target on the ground, even below it where its raised barrel looks up", () => {
+    setNewTowerArt(true);
+    const { yard, fx } = setUp(20);
+    const [info] = towersOf(yard);
+    const aim = info?.aim;
+    if (!info || !aim || !info.pivot) throw new Error("no 3D cannon");
+    for (let bearing = 0; bearing < 360; bearing += 15) {
+      const creep = around(bearing);
+      fx.onShot({ tick: bearing + 1, towerId: 1, creepId: 9, ix: creep.ix, iy: creep.iy }, creep);
+      const cell = fx.cellOf(1) ?? -1;
+      expect(angleGap(cellBearing(aim, cell), bearing), `bearing ${bearing}`).toBeLessThanOrEqual(360 / 64);
+      const offset = muzzleOffset(aim, cell);
+      expect(fx.muzzleAt(1)).toEqual({
+        x: info.worldX + info.pivot.x + (offset?.[0] ?? Number.NaN),
+        y: info.worldY + info.pivot.y + (offset?.[1] ?? Number.NaN),
+      });
+    }
     fx.destroy();
   });
 
@@ -352,7 +372,8 @@ describe("TowerFx", () => {
         x: info.worldX + info.pivot!.x + (offset?.[0] ?? Number.NaN),
         y: info.worldY + info.pivot!.y + (offset?.[1] ?? Number.NaN),
       });
-      // Its lens looks along the beam to the creep's feet.
+      // It faces the spot on the ground, and its lens looks along the beam to the creep's feet.
+      expect(angleGap(cellBearing(aim, cell), 90), `distance ${distance}`).toBeLessThanOrEqual(360 / 64);
       const line = towardCreep(yard, fx.muzzleAt(1) ?? { x: 0, y: 0 }, creep, 0);
       expect(angleGap(aim.aim[cell] ?? 0, line), `distance ${distance}`).toBeLessThan(20);
       return rowOf(aim, cell);
