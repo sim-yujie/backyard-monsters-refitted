@@ -47,12 +47,13 @@ import { resourceKeyOf, type ResourceKey } from "@/ui/resourceIcon";
 
 /**
  * A value on a row: plain text; an amount (of one resource when `resource` is
- * set, of every resource when not), spelled by the panel with the shared
- * helper; or a set of resources, drawn as their icons.
+ * set, of every resource when not, drawn after the four icons), spelled by
+ * the panel with the shared helper; or a set of resources, drawn as their
+ * icons.
  */
 export type InfoValue =
   | { readonly text: string }
-  | { readonly amount: number; readonly resource?: ResourceKey; readonly suffix?: string }
+  | { readonly amount: number; readonly resource?: ResourceKey; readonly suffix?: string; readonly prefix?: string }
   | { readonly resources: readonly ResourceKey[] };
 
 export interface InfoRow {
@@ -291,8 +292,8 @@ const economyRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
     const now = at(stats.capacity, level);
     if (now === undefined) return [];
     const next = at(stats.capacity, nextLevel);
-    // Room in every pool at once, so no one resource's icon.
-    const value = (amount: number): InfoValue => ({ amount, suffix: " to each resource" });
+    // Room in every pool at once: the panel draws all four icons, "+7,500".
+    const value = (amount: number): InfoValue => ({ amount, prefix: "+" });
     return [row("Storage added", value(now), next !== undefined ? value(next) : null)];
   }
 
