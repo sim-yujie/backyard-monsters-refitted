@@ -354,3 +354,38 @@ def mat_dirt(name, a=(70, 42, 28), b=(118, 72, 44), burnt=(30, 20, 16)):
     col = p.mix(col, srgb(150, 60, 34), p.ramp(p.noise(12.0, 3.0), [(0.66, BLACK), (0.72, _grey(0.6))]))
     col = weather(p, col, edge=(150, 110, 80), edge_k=0.5, cavity=0.6, dirt=0.0, streaks=0.0)
     return p.finish(col, spec=0.05, spec_rough=0.6, bump=(p.noise(14.0, 5.0), 0.6), shade=L.WARM_SHADE, ao_k=0.6)
+
+
+def mat_lava(name, hot=(255, 236, 150), mid=(255, 128, 20), deep=(178, 34, 0), crust=(60, 24, 12)):
+    """Glowing molten glass behind a window (the Magma's lava): mottled, hot where it faces the viewer, dark crusts."""
+    p = L.Paint(name)
+    lw = p.N.new("ShaderNodeLayerWeight")
+    lw.inputs["Blend"].default_value = 0.5
+    n = p.noise(7.0, 6.0, 0.62)
+    v = p.math("ADD", p.math("MULTIPLY", n, 0.8), p.math("MULTIPLY", lw.outputs["Facing"], -0.5))
+    col = p.ramp(v, [(0.05, srgb(*deep)), (0.3, srgb(*mid)), (0.5, srgb(*hot))])
+    col = p.mix(col, srgb(*crust), p.ramp(p.noise(12.0, 4.0), [(0.64, BLACK), (0.7, _grey(0.8))]))
+    em = p.N.new("ShaderNodeEmission")
+    p.link(col, em.inputs["Color"])
+    out = p.N.new("ShaderNodeOutputMaterial")
+    p.link(em.outputs[0], out.inputs[0])
+    return p.m
+
+
+def mat_worn_panels(name, n=8, ratio=0.32, cream=(226, 206, 168), red=(116, 20, 22), scrawl=(92, 70, 56), edge=(240, 226, 196)):
+    """Upright panels round Z (the Sharpshooter's drum): cream parchment with dark scrawl, between mottled dark red ones;
+    stained, torn at the edges, dusty toward the ground."""
+    p = L.Paint(name)
+    sep = p.N.new("ShaderNodeSeparateXYZ")
+    p.link(p.tc.outputs["Object"], sep.inputs[0])
+    ang = p.math("ARCTAN2", sep.outputs[1], sep.outputs[0])
+    u = p.math("ADD", p.math("MULTIPLY", ang, n / (2 * math.pi)), p.math("MULTIPLY", p.math("SUBTRACT", p.noise(6.0, 4.0), 0.5), 0.05))
+    panel = p.math("GREATER_THAN", p.math("FRACT", u), ratio)
+    sc = p.ramp(p.noise(16.0, 7.0, 0.72, stretch=(1.0, 1.0, 2.6)), [(0.6, WHITE), (0.66, srgb(*scrawl))])
+    cr = p.mix(srgb(*cream), sc, 1.0, 'MULTIPLY')
+    stain = p.ramp(p.noise(3.0, 5.0, 0.6), [(0.4, WHITE), (0.7, (0.8, 0.66, 0.52, 1))])
+    cr = p.mix(cr, stain, 1.0, 'MULTIPLY')
+    rd = p.mix(srgb(*red), p.ramp(p.noise(8.0, 6.0, 0.65), [(0.3, _grey(0.6)), (0.7, _grey(1.25))]), 1.0, 'MULTIPLY')
+    col = p.mix(rd, cr, panel)
+    col = weather(p, col, edge=edge, edge_k=0.6, cavity=0.6, dirt=0.7, dirt_top=0.45, streaks=0.3)
+    return p.finish(col, spec=0.12, spec_rough=0.5, bump=(p.noise(16.0, 7.0, 0.72), 0.25), shade=L.WARM_SHADE)

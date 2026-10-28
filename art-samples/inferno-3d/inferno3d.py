@@ -89,6 +89,19 @@ def common():
         iron_w=W.mat_iron("iron_w"),
         iron_dirty=W.mat_iron("iron_dirty", base=(76, 60, 50), dark=(36, 28, 24), rust_k=0.8, soot=0.5, dirt=0.0),
         iron_head=W.mat_iron("iron_head"),
+        panels=W.mat_worn_panels("panels", ratio=0.4),
+        lamp_red=L.mat_glass_lamp("lamp_red", core=(255, 220, 180), mid=(230, 40, 30), rim=(120, 10, 10)),
+        brass_w=W.mat_iron("brass_w", base=(200, 150, 60), dark=(120, 80, 24), rust=(110, 90, 40), edge=(250, 220, 150),
+                           rust_k=0.4, spec=0.3),
+        copper_w=W.mat_iron("copper_w", base=(214, 136, 82), dark=(140, 72, 36), rust=(110, 60, 34), edge=(250, 206, 160),
+                            rust_k=0.45, dents=0.5, spec=0.3),
+        steel_w=W.mat_iron("steel_w", base=(170, 166, 160), dark=(96, 92, 88), rust=(140, 84, 44), edge=(230, 226, 218),
+                           rust_k=0.35, spec=0.35),
+        lava=W.mat_lava("lava"),
+        bronze_w=W.mat_iron("bronze_w", base=(112, 76, 48), dark=(60, 38, 24), rust=(150, 74, 30), edge=(200, 160, 116),
+                            rust_k=0.6),
+        bronze_head=W.mat_iron("bronze_head", base=(132, 92, 62), dark=(70, 46, 30), rust=(150, 76, 32), edge=(214, 176, 130),
+                               rust_k=0.6),
         iron_hoop=W.mat_iron("iron_hoop", base=(74, 58, 48), dark=(38, 29, 25), edge=(150, 128, 108), rust_k=0.85),
         iron_sooty=W.mat_iron("iron_sooty", rust_k=0.6, soot=0.6),
     )
@@ -231,36 +244,76 @@ def build_blast(M, LN, body):
 
 
 # ---------------------------------------------------------------------------------------------------- 2: Sharpshooter
+def on_cone(r0, z0, r1, z1, z):
+    """The radius and outward normal (as (cos, sin)-free slope) of a cone from (r0, z0) to (r1, z1) at height z."""
+    t = (z - z0) / (z1 - z0)
+    return r0 + (r1 - r0) * t, (z1 - z0, -(r1 - r0))
+
+
 def build_sharp(M, LN, body):
     z1 = 0.8
-    drum = lathe("drum", [[(0.86, 0.0), (0.88, 0.04), (0.74, z1 - 0.04), (0.7, z1)], [(0.7, z1), (0.0, z1)]],
-                 [M["parch"], M["iron"]], mat_of_seg=[0, 1], parent=body, sharp=35)
+    drum = W.lathe("drum", [[(0.86, 0.0), (0.88, 0.04), (0.74, z1 - 0.04), (0.7, z1)], [(0.7, z1), (0.0, z1)]],
+                   [M["panels"], M["iron_dirty"]], mat_of_seg=[0, 1], wob=0.012, parent=body, sharp=35)
     add_outline(drum, LN["warm"])
-    trim = lathe("trim", [L.band(0.86, 0.9, 0.0, 0.06), L.band(0.7, 0.74, z1 - 0.05, z1 + 0.01)], [M["iron"]], parent=body,
-                 sharp=35)
-    add_outline(trim, LN["cool"], L.LINE * 0.6)
-    # the dark socket on top, posts round it with a wire between
-    sock = lathe("socket", [[(0.56, z1), (0.58, z1 + 0.02), (0.58, z1 + 0.2), (0.5, z1 + 0.24), (0.36, z1 + 0.24),
-                             (0.34, z1 + 0.1), (0.0, z1 + 0.1)]], [M["iron"]], parent=body, sharp=35)
+    strap("trim_low", M, LN, body, 0.875, 0.0, 0.09, 20, rivet_r=0.034)
+    strap("trim_top", M, LN, body, 0.715, z1 - 0.06, z1 + 0.01, 16, rivet_r=0.03, phase=0.5)
+    # rivets at the parchment panels' corners
+    bm = bmesh.new()
+    pts, nrm = [], []
+    for k in range(8):
+        for f in (0.0, 0.4):
+            a = 2 * math.pi * (k + f) / 8 + (0.04 if f == 0 else -0.04)
+            for z in (0.2, 0.6):
+                r, (nr, nz) = on_cone(0.88, 0.04, 0.74, z1 - 0.04, z)
+                pts.append(Vector((r * math.cos(a), r * math.sin(a), z)))
+                nrm.append(Vector((nr * math.cos(a), nr * math.sin(a), nz)))
+    W.rivets(bm, pts, nrm, r=0.03)
+    W.obj("panelrivets", bm, [M["iron_hoop"]], parent=body)
+    # the dark socket on top, bolted; posts round it with red lamps on top and a twisted wire between
+    sock = W.lathe("socket", [[(0.56, z1), (0.58, z1 + 0.02), (0.58, z1 + 0.2), (0.5, z1 + 0.24), (0.36, z1 + 0.24),
+                               (0.34, z1 + 0.1), (0.0, z1 + 0.1)]], [M["iron_dirty"]], wob=0.008, parent=body, sharp=35)
     add_outline(sock, LN["cool"])
-    posts, knobs = bmesh.new(), bmesh.new()
+    bm = bmesh.new()
+    pts, nrm = L.ring_of(10, 0.43, z1 + 0.24, 0.5)
+    W.bolts(bm, pts, [(0, 0, 1)] * 10, r=0.035)
+    add_outline(W.obj("sockbolts", bm, [M["iron_w"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.5)
+    posts, knobs, rings = bmesh.new(), bmesh.new(), bmesh.new()
     tops = []
     for b in (100, 200, 330):
         c = bear(b, 0.62, z1)
-        Q.cyl(posts, 0.03, 0.62, Matrix.Translation(c + Vector((0, 0, 0.31))), segs=10)
-        Q.ball(knobs, c + Vector((0, 0, 0.64)), 0.05, segs=10)
+        Q.cyl(posts, 0.032, 0.58, Matrix.Translation(c + Vector((0, 0, 0.29))), segs=10)
+        Q.cyl(posts, 0.06, 0.05, Matrix.Translation(c + Vector((0, 0, 0.025))), segs=12)      # its foot
+        Q.ball(knobs, c + Vector((0, 0, 0.64)), 0.065, segs=12)
+        Q.cyl(rings, 0.075, 0.03, Matrix.Translation(c + Vector((0, 0, 0.6))), segs=16)       # the lamp's brass cup
         tops.append(c + Vector((0, 0, 0.56)))
-    add_outline(obj_from_bm("posts", posts, [M["iron"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
-    obj_from_bm("knobs", knobs, [M["copper"]], parent=body)
+    add_outline(W.obj("posts", posts, [M["iron_w"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+    add_outline(W.obj("knobs", knobs, [M["lamp_red"]], parent=body), LN["warm"], L.LINE * 0.5)
+    add_outline(W.obj("cups", rings, [M["brass_w"]], parent=body, sharp=35), LN["warm"], L.LINE * 0.5)
     w = bmesh.new()
     for a, b in zip(tops, tops[1:] + tops[:1]):
         mid = (a + b) / 2 - Vector((0, 0, 0.08))
-        tube(w, L.bezier(a, mid, mid, b, n=10), [0.012] * 10, sides=6)
-    obj_from_bm("wire", w, [M["wire"]], parent=body)
-    # the coil post: a tapered wooden post, a copper ribbon wound round it
+        path = L.bezier(a, mid, mid, b, n=40)
+        for s in (0, 1):        # two strands twisted round each other
+            pts = []
+            for i, p in enumerate(path):
+                t = path[min(i + 1, len(path) - 1)] - path[max(i - 1, 0)]
+                side = t.cross(Vector((0, 0, 1))).normalized()
+                ph = i * 0.9 + s * math.pi
+                pts.append(p + (side * math.cos(ph) + Vector((0, 0, 1)) * math.sin(ph)) * 0.01)
+            L.tube(w, pts, [0.011] * len(pts), sides=5)
+    W.obj("wire", w, [M["brass_w"]], parent=body)
+    # the coil post: stacked turned segments, a worn copper ribbon wound round it
     zc0, top = z1 + 0.1, 2.6
-    post = lathe("post", [[(0.2, zc0), (0.16, top - 0.1), (0.2, top - 0.05), (0.2, top)], [(0.2, top), (0.0, top)]],
-                 [M["wood"], M["iron"]], mat_of_seg=[0, 1], parent=body, sharp=35)
+    prof = [(0.2, zc0)]
+    z = zc0
+    for i, h in enumerate((0.26, 0.22, 0.3, 0.24, 0.28, 0.2, 0.24)):
+        r = 0.17 + 0.03 * ((i * 0.61) % 1.0)
+        prof += [(r + 0.04, z + 0.02), (r + 0.04, z + 0.06), (r, z + 0.08), (r, z + h - 0.02)]
+        z += h
+        if z > top - 0.15:
+            break
+    prof += [(0.2, top - 0.05), (0.2, top), (0.0, top)]
+    post = W.lathe("post", [prof], [M["staves_dark"]], wob=0.008, parent=body, sharp=35)
     add_outline(post, LN["warm"])
     pts, radii = [], []
     n = 260
@@ -269,25 +322,47 @@ def build_sharp(M, LN, body):
         a = 2 * math.pi * 3.5 * t
         r = 0.44 - 0.1 * t
         pts.append((r * math.sin(a), r * math.cos(a), zc0 + 0.1 + (top - zc0 - 0.25) * t))
-        radii.append(0.1)
+        radii.append(0.1 * (1.0 + 0.12 * math.sin(i * 0.37)))
     coil = bmesh.new()
-    tube(coil, pts, radii, sides=12, flat=0.28)
-    add_outline(obj_from_bm("coil", coil, [M["copper"]], parent=body, sharp=60), LN["warm"])
-    # the head: a black box gun, a tube barrel out of its front, a lens at its back
+    L.tube(coil, pts, radii, sides=12, flat=0.28)
+    co = W.obj("coil", coil, [M["copper_w"]], parent=body, sharp=60)
+    W.wobble(co, 0.025, 2.5, 6.0)
+    W.finish(co)
+    add_outline(co, LN["warm"])
+    # the head: a cast iron box gun, bolted, a dial on its side, a perforated steel barrel out of its front, a lens behind
     tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
     bm = bmesh.new()
-    rbox(bm, (0.54, 0.7, 0.42), Matrix.Translation((0, -0.06, 0.05)), bevel=0.05)
-    add_outline(obj_from_bm("head", bm, [M["iron"]], parent=tur, sharp=35), LN["cool"])
+    L.rbox(bm, (0.54, 0.7, 0.42), Matrix.Translation((0, -0.06, 0.05)), bevel=0.05)
+    head = W.obj("head", bm, [M["iron_head"]], parent=tur, sharp=35)
+    W.wobble(head, 0.01, 4.0, 7.0, radial=False)
+    W.finish(head)
+    add_outline(head, LN["cool"])
+    bm = bmesh.new()
+    cs = [(x, y, 0.47) for x in (-0.21, 0.21) for y in (-0.35, 0.23)]
+    W.bolts(bm, cs, [(0, 0, 1)] * 4, r=0.035)
+    for sx in (-1, 1):       # the dials on its sides, a bolt in each
+        Q.cyl(bm, 0.1, 0.04, Matrix.Translation((sx * 0.28, -0.08, 0.26)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'), segs=24)
+        W.bolts(bm, [(sx * 0.3, -0.08, 0.26)], [(sx, 0, 0)], r=0.035, washer=False)
+    add_outline(W.obj("headbolts", bm, [M["iron_w"]], parent=tur, sharp=35), LN["cool"], L.LINE * 0.5)
     bm = bmesh.new()
     Q.cyl(bm, 0.12, 0.08, Matrix.Translation((0, 0, 0.045)), segs=24)
-    add_outline(obj_from_bm("neck", bm, [M["iron"]], parent=tur, sharp=35), LN["cool"])
+    add_outline(W.obj("neck_h", bm, [M["iron_w"]], parent=tur, sharp=35), LN["cool"])
     HZ = 0.27
-    bar = ridged_barrel("barrel", tur, M, 0.2, 0.84, 0.1, HZ, (0.2, 0.8), mat="bronze", mouth=1.3)
-    add_outline(bar, LN["warm"])
+    bar = ridged_barrel("barrel", tur, M, 0.2, 0.84, 0.1, HZ, (0.2, 0.8), mat="steel_w", mouth=1.3)
+    W.finish(bar)
+    add_outline(bar, LN["cool"])
+    bm = bmesh.new()      # the barrel's holes
+    for j in range(3):
+        for k in range(8):
+            a = 2 * math.pi * (k + 0.5 * (j % 2)) / 8
+            c = Vector((0.1 * math.cos(a), 0.42 + 0.12 * j, HZ + 0.1 * math.sin(a)))
+            m = Matrix.Translation(c) @ Vector((0, 0, 1)).rotation_difference(Vector((math.cos(a), 0, math.sin(a)))).to_matrix().to_4x4()
+            Q.cyl(bm, 0.022, 0.012, m, segs=8)
+    L.obj_from_bm("holes", bm, [M["bore"]], parent=tur)
     bm = bmesh.new()
     m = Matrix.Translation((0, -0.42, HZ)) @ Matrix.Rotation(math.pi / 2, 4, 'X')
     Q.cyl(bm, 0.1, 0.04, m, segs=20)
-    obj_from_bm("lens_back", bm, [M["lens"]], parent=tur)
+    L.obj_from_bm("lens_back", bm, [M["lens"]], parent=tur)
     L.empty("muzzle_base", parent=tur, loc=(0, 0, HZ))
     L.empty("muzzle_tip", parent=tur, loc=(0, 0.84, HZ))
     return tur, top, ("post", "coil", "posts", "socket")
@@ -295,36 +370,65 @@ def build_sharp(M, LN, body):
 
 # ----------------------------------------------------------------------------------------------------- 3: Magma Tower
 def build_magma(M, LN, body):
-    # the foot: a dark iron ring with glowing windows, the striped column, a glowing collar, three chain legs
-    foot = lathe("foot", [[(0.58, 0.0), (0.6, 0.03), (0.6, 0.3), (0.52, 0.34)], [(0.52, 0.34), (0.0, 0.34)]],
-                 [M["iron"], M["iron"]], mat_of_seg=[0, 1], parent=body, sharp=35)
+    # the foot: a riveted iron ring with lava windows, the striped column, a lava collar in a cage, three chain legs
+    foot = W.lathe("foot", [[(0.58, 0.0), (0.6, 0.03), (0.6, 0.3), (0.52, 0.34)], [(0.52, 0.34), (0.0, 0.34)]],
+                   [M["iron_w"], M["iron_dirty"]], mat_of_seg=[0, 1], wob=0.01, parent=body, sharp=35)
     add_outline(foot, LN["cool"])
     win = bmesh.new()
     for i in range(10):
         b = 360 * i / 10
         n_, t_ = bear(b), bear(b + 90)
         m = Matrix.Translation(bear(b, 0.6, 0.165)) @ Matrix((t_, Vector((0, 0, 1)), n_)).transposed().to_4x4()
-        rbox(win, (0.27, 0.2, 0.02), m, bevel=0.01)
-    obj_from_bm("windows_foot", win, [M["glow"]], parent=body)
+        L.rbox(win, (0.27, 0.2, 0.02), m, bevel=0.01)
+    L.obj_from_bm("windows_foot", win, [M["lava"]], parent=body)
+    bm = bmesh.new()
+    for z in (0.035, 0.295):
+        pts, nrm = L.ring_of(20, 0.605, z, 0.5)
+        W.rivets(bm, pts, nrm, r=0.028)
+    W.obj("footrivets", bm, [M["iron_hoop"]], parent=body)
     zc0, zc1 = 0.34, 1.25
-    col = lathe("column", [[(0.44, zc0), (0.44, zc1)]], [M["stripes"]], parent=body, sharp=35)
+    col = W.lathe("column", [[(0.44, zc0), (0.44, zc1)]], [M["stripes_w"]], bev=0, wob=0.012, parent=body, sharp=35)
     add_outline(col, LN["warm"])
-    bands = lathe("bands", [L.band(0.44, 0.48, zc0, zc0 + 0.06), L.band(0.44, 0.48, zc1 - 0.06, zc1)], [M["iron"]],
-                  parent=body, sharp=35)
-    add_outline(bands, LN["cool"], L.LINE * 0.6)
+    strap("bands", M, LN, body, 0.45, zc0, zc0 + 0.07, 14, rivet_r=0.03)
+    strap("bands2", M, LN, body, 0.45, zc1 - 0.07, zc1, 14, rivet_r=0.03, phase=0.5)
     cz0, cz1 = zc1, zc1 + 0.36
-    cage = lathe("collar", [[(0.44, cz0), (0.5, cz0 + 0.02), (0.5, cz1 - 0.02), (0.44, cz1)], [(0.44, cz1), (0.0, cz1)]],
-                 [M["glow"], M["iron"]], mat_of_seg=[0, 1], parent=body)
+    cage = W.lathe("collar", [[(0.44, cz0), (0.5, cz0 + 0.02), (0.5, cz1 - 0.02), (0.44, cz1)], [(0.44, cz1), (0.0, cz1)]],
+                   [M["lava"], M["iron_dirty"]], mat_of_seg=[0, 1], bev=0, parent=body)
     bars = bmesh.new()
     for i in range(10):
-        Q.cyl(bars, 0.03, cz1 - cz0, Matrix.Translation(bear(36 * i, 0.51, (cz0 + cz1) / 2)), segs=8)
+        L.rbox(bars, (0.06, 0.035, cz1 - cz0), Matrix.Translation(bear(36 * i, 0.515, cz0)) @ Matrix.Rotation(-math.radians(36 * i), 4, 'Z'),
+               bevel=0.01)
     for z in (cz0, cz1):
-        Q.cyl(bars, 0.54, 0.05, Matrix.Translation((0, 0, z)), segs=40)
-    add_outline(obj_from_bm("cagebars", bars, [M["iron"]], parent=body, sharp=35), LN["cool"])
-    # the chain legs: links from the column's middle out and down to round iron feet
-    links, feet = bmesh.new(), bmesh.new()
+        Q.cyl(bars, 0.545, 0.06, Matrix.Translation((0, 0, z)), segs=48)
+    add_outline(W.obj("cagebars", bars, [M["iron_w"]], parent=body, sharp=35), LN["cool"])
+    bm = bmesh.new()
+    for z in (cz0, cz1):
+        pts, nrm = L.ring_of(10, 0.548, z, 0.5)
+        W.rivets(bm, pts, nrm, r=0.03)
+    W.obj("cagerivets", bm, [M["iron_hoop"]], parent=body)
+    # on top: a raised boss round the neck, riveted straps out to the rim; a clasp strap down the front
+    lid = W.lathe("lid", [[(0.5, cz1 + 0.03), (0.26, cz1 + 0.06), (0.22, cz1 + 0.1), (0.0, cz1 + 0.1)]], [M["iron_hoop"]],
+                  parent=body, sharp=35)
+    add_outline(lid, LN["cool"], L.LINE * 0.6)
+    st, rv = bmesh.new(), bmesh.new()
+    for i in range(5):
+        b = 72 * i + 45
+        L.rbox(st, (0.07, 0.3, 0.035), Matrix.Translation(bear(b, 0.38, cz1 + 0.035)) @ Matrix.Rotation(-math.radians(b), 4, 'Z'),
+               bevel=0.012)
+        W.rivets(rv, [bear(b, 0.3, cz1 + 0.07), bear(b, 0.46, cz1 + 0.07)], [(0, 0, 1)] * 2, r=0.026)
+    L.rbox(st, (0.14, 0.05, 0.5), Matrix.Translation(bear(45, 0.53, cz0 - 0.08)) @ Matrix.Rotation(-math.radians(45), 4, 'Z'),
+           bevel=0.015)
+    L.rbox(st, (0.2, 0.08, 0.12), Matrix.Translation(bear(45, 0.56, cz0 + 0.02)) @ Matrix.Rotation(-math.radians(45), 4, 'Z'),
+           bevel=0.02)
+    add_outline(W.obj("lidstraps", st, [M["iron_hoop"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+    W.obj("lidrivets", rv, [M["iron_w"]], parent=body)
+    # the chain legs: links from hubs on the column's side out and down to round bronze feet
+    links, feet, hubs = bmesh.new(), bmesh.new(), bmesh.new()
     for b in (125, 245, 5):
         a, d = bear(b, 0.5, cz0 + 0.1), bear(b, 0.95, 0.0)
+        hm = Matrix.Translation(bear(b, 0.55, cz0 + 0.1)) @ Vector((0, 0, 1)).rotation_difference(bear(b)).to_matrix().to_4x4()
+        Q.cyl(hubs, 0.12, 0.08, hm, segs=20)
+        Q.cyl(hubs, 0.06, 0.12, hm @ Matrix.Translation((0, 0, 0.04)), segs=12)
         path = L.bezier(a, bear(b, 0.9, cz0), bear(b, 1.0, 0.5), d + Vector((0, 0, 0.14)), n=12)
         for i, p in enumerate(path[:-1]):
             q = path[i + 1]
@@ -334,23 +438,34 @@ def build_magma(M, LN, body):
             sub = bmesh.new()
             bmesh.ops.create_circle(sub, segments=12, radius=1.0)
             ring = [v.co.copy() for v in sub.verts]
-            tube(links, [m @ Vector((0.045 * c.x, 0, dv.length * 0.62 * c.y)) for c in ring + ring[:1]],
-                 [0.022] * (len(ring) + 1), sides=6, cap=False)
+            L.tube(links, [m @ Vector((0.05 * c.x, 0, dv.length * 0.64 * c.y)) for c in ring + ring[:1]],
+                   [0.026] * (len(ring) + 1), sides=6, cap=False)
         Q.cyl(feet, 0.16, 0.12, Matrix.Translation(d + Vector((0, 0, 0.06))), segs=24, r2=0.13)
+        Q.cyl(feet, 0.175, 0.03, Matrix.Translation(d + Vector((0, 0, 0.015))), segs=24)
         Q.cyl(feet, 0.05, 0.08, Matrix.Translation(d + Vector((0, 0, 0.14))), segs=12)
-    add_outline(obj_from_bm("chains", links, [M["bronze"]], parent=body, sharp=60), LN["cool"], L.LINE * 0.7)
-    add_outline(obj_from_bm("feet", feet, [M["bronze"]], parent=body, sharp=35), LN["warm"])
+    add_outline(W.obj("hubs", hubs, [M["bronze_w"]], parent=body, sharp=35), LN["warm"])
+    ch = W.obj("chains", links, [M["bronze_w"]], parent=body, sharp=60)
+    add_outline(ch, LN["cool"], L.LINE * 0.7)
+    add_outline(W.obj("feet", feet, [M["bronze_w"]], parent=body, sharp=35), LN["warm"])
     top = cz1 + 0.05
-    # the head: a squat bronze nozzle on a short neck, its mouth forward
+    # the head: a squat cast bronze nozzle on a short neck, a strap round it, its mouth forward
     tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
     bm = bmesh.new()
     Q.cyl(bm, 0.14, 0.14, Matrix.Translation((0, 0, 0.07)), segs=24)
-    add_outline(obj_from_bm("neck", bm, [M["iron"]], parent=tur, sharp=35), LN["cool"])
+    add_outline(W.obj("neck_h", bm, [M["iron_w"]], parent=tur, sharp=35), LN["cool"])
     bm = bmesh.new()
-    rbox(bm, (0.36, 0.42, 0.26), Matrix.Translation((0, -0.06, 0.12)), bevel=0.1)
-    add_outline(obj_from_bm("head", bm, [M["bronze"]], parent=tur, sharp=35), LN["warm"])
+    L.rbox(bm, (0.36, 0.42, 0.26), Matrix.Translation((0, -0.06, 0.12)), bevel=0.1)
+    hd = W.obj("head", bm, [M["bronze_head"]], parent=tur, sharp=35)
+    W.wobble(hd, 0.012, 4.0, 9.0, radial=False)
+    W.finish(hd)
+    add_outline(hd, LN["warm"])
+    bm = bmesh.new()
+    L.rbox(bm, (0.4, 0.07, 0.3), Matrix.Translation((0, -0.12, 0.1)), bevel=0.02)
+    W.bolts(bm, [(sx * 0.2, -0.12, 0.25) for sx in (-1, 1)], [(sx, 0, 0) for sx in (-1, 1)], r=0.03, washer=False)
+    add_outline(W.obj("headstrap", bm, [M["iron_hoop"]], parent=tur, sharp=35), LN["cool"], L.LINE * 0.6)
     HZ = 0.25
-    bar = ridged_barrel("barrel", tur, M, 0.1, 0.56, 0.1, HZ, (0.5,), mouth=1.35)
+    bar = ridged_barrel("barrel", tur, M, 0.1, 0.56, 0.1, HZ, (0.5,), mat="bronze_head", mouth=1.35)
+    W.finish(bar)
     add_outline(bar, LN["warm"])
     L.empty("muzzle_base", parent=tur, loc=(0, 0, HZ))
     L.empty("muzzle_tip", parent=tur, loc=(0, 0.56, HZ))
