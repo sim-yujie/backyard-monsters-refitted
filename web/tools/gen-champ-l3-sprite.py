@@ -47,14 +47,15 @@ for _name, _cell in {"fly_4": (120, 92), "fly_5": (133, 105), "fly_6": (124, 105
     SHEETS[_name] = dict(cell=_cell, rows=7, painted=range(2, 11), calls={"A": list(range(7))}, hold_walk=False, nudge_in=True)
 # Korath levels 1-6 (web/tools/korath-kit): walk from row 0 (its first frame is the idle), the attack right after it, columns 2..10
 # painted and the rest mirrored. Levels 5 and 6 also have the 10-row stomp (rows 20-29, call C), the quake Korath plays after three
-# swings, and are drawn at 3x, as their big cells at 4x would make a sheet over 12,000 px wide.
+# swings. Levels 4-6 are drawn at 3x, as at 4x their sheets pass the 8192 px many graphics cards cannot hold; 5 and 6 pass it even at
+# 3x, so once shadowed (add-champ-ground-shadow.py) they are packed into the 2x sheet the game draws (pack-sheet.py).
 for _lv, (_cell, _walk, _atk) in {1: ((72, 49), 8, 9), 2: ((119, 81), 8, 9), 3: ((128, 102), 9, 9),
                                   4: ((153, 123), 10, 10), 5: ((199, 162), 10, 10), 6: ((202, 167), 10, 10)}.items():
     _calls = {"A": list(range(_walk)), "B": [0, *range(_walk, _walk + _atk)]}
     if _lv >= 5:
         _calls["C"] = [0, *range(20, 30)]
     SHEETS[f"korath_{_lv}"] = dict(cell=_cell, rows=30 if _lv >= 5 else _walk + _atk, painted=range(2, 11), calls=_calls,
-                                   hold_walk=True, nudge_in=True, cut_hue=True, up=3 if _lv >= 5 else 4)
+                                   hold_walk=True, nudge_in=True, cut_hue=True, up=3 if _lv >= 4 else 4)
 AREA = 1.05                       # new row-0 silhouette area / old row-0 body area
 WALK_HOLD = 0.04                  # a held walk frame may differ from row 0's size by this much
 FIT_SHRINK = 0.15                 # a frame that would be cut by the cell edge may be shrunk by up to this much to fit

@@ -61,7 +61,7 @@ describe("applyLayout", () => {
     expect(applyLayout(POKEY, {})).toBe(POKEY);
   });
 
-  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul and Slimeattikus (big and mini) layouts, so every other sheet is exactly the Flash table", () => {
+  it("ships only the Bandito, Pokey, Bolt, Fink, Eye-ra, Fang, Ichi, Crabatron, Brain, D.A.V.E. (both skins), Project X, Wormzer, Zafreeti, Vorg, Teratorn, Octo-ooze, Rezghul, Slimeattikus (big and mini) and Korath 5 and 6 layouts, so every other sheet is exactly the Flash table", () => {
     expect(Object.keys(REPAINT_LAYOUTS).sort()).toEqual([
       "monsters/13.png",
       "monsters/14.v1.png",
@@ -72,6 +72,8 @@ describe("applyLayout", () => {
       "monsters/fang.png",
       "monsters/fink.png",
       "monsters/ichi.png",
+      "monsters/korath_5.png",
+      "monsters/korath_6.png",
       "monsters/octoooze.png",
       "monsters/rezghul.png",
       "monsters/slimeattikus_anim.png",
@@ -519,6 +521,21 @@ describe("applyLayout", () => {
     });
     // A taller cell moves its top-left up by the extra height above the feet.
     expect(anchorOffset(sheet)).toEqual({ x: -POKEY.anchorX, y: -31 });
+  });
+
+  it("finds each heading and frame of a packed sheet where the packing put it (Korath 5, 20 cells to a row)", () => {
+    const flash = MONSTER_SPRITES["G4_5"];
+    if (!flash) throw new Error("no G4_5");
+    const sheet = applyLayout(flash);
+    expect(sheet.packedColumns).toBe(20);
+    // 30 frames of 16 headings, 20 to a row: 24 rows of 200 x 162 cells.
+    expect([sheet.rows, sheet.width, sheet.height]).toEqual([30, 4000, 3888]);
+    expect(frameRect(sheet, 3, 0)).toEqual({ x: 600, y: 0, width: 200, height: 162 });
+    // Heading 4 of frame 1 is cell 20: the first of the second row.
+    expect(frameRect(sheet, 4, 1)).toEqual({ x: 0, y: 162, width: 200, height: 162 });
+    // The last cell, heading 15 of frame 29, is cell 479: the end of row 23.
+    expect(frameRect(sheet, 15, 29)).toEqual({ x: 3800, y: 23 * 162, width: 200, height: 162 });
+    expect(anchorOffset(sheet)).toEqual(anchorOffset(flash));
   });
 
   it("does not change the shared table", () => {

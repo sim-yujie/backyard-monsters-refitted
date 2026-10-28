@@ -192,10 +192,12 @@ describe("headings and cells", () => {
       expect(animationFor({ ...korath, quaking: false }, false)).toBe("attack");
       // The stomp's clock starts with the quake, whatever the creep's age:
       // frame 48 (the engine's QUAKE_STRIKE_FRAME) is row 26, frame 72 row 29.
-      // The repaint keeps the Flash sheet's 30 rows, so both draw these rows.
+      // The repaint keeps the Flash sheet's 30 frames (packed 20 cells to a
+      // sheet row), so both draw these rows.
       const sheet = sheetOf("G4", level);
-      expect(sheet).toBe(MONSTER_SPRITES[`G4_${level}`]);
-      expect(sheetUrl(sheet).replace(/\?v=.*$/, "")).toBe(`/assets/monsters/korath_${level}-repaint@3x.png`);
+      expect(sheet.key).toBe(`G4_${level}`);
+      expect(sheet.rows).toBe(30);
+      expect(sheetUrl(sheet).replace(/\?v=.*$/, "")).toBe(`/assets/monsters/korath_${level}-repaint@2x.png`);
       const rowAt = (quakeAge: number): number =>
         layoutCreep(korath, sheet, { heading: 0, moving: false, age: 1003, quakeAge }, ORIGIN, STILL).row;
       expect([0, 8, 47, 48, 55, 72].map(rowAt)).toEqual([20, 21, 25, 26, 26, 29]);
@@ -795,15 +797,29 @@ describe("AttackBattleLayer over a session", () => {
     expect(fast.y).toBeGreaterThan(slow.y);
   });
 
-  it("cuts an oversized sheet through a canvas rather than framing it, and says so", () => {
+  it("cuts an oversized sheet through a canvas rather than framing it, by the picture's real size", () => {
     const textures = new MonsterSheetTextures(() => new Promise(() => {}), 4096);
-    const korath = MONSTER_SPRITES["G4_5"];
-    const gorgo = MONSTER_SPRITES["G1_1"];
-    if (!korath || !gorgo) throw new Error("champion sheets missing");
+    const korath = spriteFor("G4", 5);
+    const worker = MONSTER_SPRITES["worker"];
+    if (!korath || !worker) throw new Error("sheets missing");
+    // Korath 5's packed 2x repaint: 4000 x 3888 cells, 8000 x 7776 pixels.
+    expect([korath.width, korath.height]).toEqual([4000, 3888]);
     expect(textures.oversized(korath)).toBe(true);
-    expect(textures.oversized(gorgo)).toBe(false);
+    expect(textures.oversized(worker)).toBe(false);
+    // Once loaded, the picture itself says.
+    expect(textures.oversized(worker, { pixelWidth: 4097, pixelHeight: 10 })).toBe(true);
     textures.setMaxTextureSize(8192);
     expect(textures.oversized(korath)).toBe(false);
+    textures.destroy();
+  });
+
+  it("fits every Korath sheet within 8192 px, even at High", () => {
+    const textures = new MonsterSheetTextures(() => new Promise(() => {}), 8192);
+    for (const level of [1, 2, 3, 4, 5, 6]) {
+      const korath = spriteFor("G4", level);
+      if (!korath) throw new Error(`no Korath ${level}`);
+      expect(textures.oversized(korath), `Korath ${level}`).toBe(false);
+    }
     textures.destroy();
   });
 });

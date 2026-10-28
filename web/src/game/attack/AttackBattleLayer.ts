@@ -1,5 +1,6 @@
 import {
   Assets,
+  CanvasSource,
   Container,
   Graphics,
   Rectangle,
@@ -49,6 +50,7 @@ import {
 } from "./punchyMoments";
 import { dirtFor, surfaceHop } from "./burrowFx";
 import { classicLook } from "@/game/classicLook";
+import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { StatusIconRow, statusesOf } from "./statusIcons";
@@ -216,6 +218,7 @@ const CHAMPION_BAR = { width: 40, height: 5, gap: 8 } as const;
 
 /** The GPU texture limit assumed until the renderer says otherwise. */
 export const DEFAULT_MAX_TEXTURE_SIZE = 4096;
+
 
 /** How a creep should be drawn this frame, with no Pixi in it. */
 export interface CreepLayout {
@@ -400,9 +403,14 @@ const loadSheet: SheetLoader = (url) =>
  * Mirrors `YardTextures`: `frame` never blocks and never throws; it starts the
  * fetch on the first ask, returns null until the sheet is in, and remembers a
  * failure so a missing file is asked for once. Cells of a sheet within the
- * texture limit are `Texture`s framed over the one source. Cells of a sheet
- * over the limit are copied through a canvas into their own small source, so
- * the oversized image is never bound to the GPU.
+ * texture limit are `Texture`s framed over the one source. A painted sheet
+ * bigger than the limit is fetched as a smaller copy that fits (`sheetUrl`),
+ * so it is never downloaded and decoded whole. As a last resort, cells of a
+ * sheet still over the limit are copied through a canvas into their own small
+ * source, so the oversized image is never bound to the GPU: WebGL refuses a
+ * picture wider or taller than the limit, and Pixi would draw nothing for it.
+ * The limit is the picture's real size, so a `@4x` repaint counts four times
+ * the table's cells.
  */
 export class MonsterSheetTextures {
   private readonly sources = new Map<string, Texture>();
@@ -411,13 +419,14 @@ export class MonsterSheetTextures {
   private readonly cells = new Map<string, Texture>();
   /** Cells that own their source (canvas copies) and must be destroyed fully. */
   private readonly owned = new Set<Texture>();
-  private limit: number;
+  /** The limit given or set; null to go by the device's, once a layer has read it. */
+  private limit: number | null;
 
   constructor(
     private readonly load: SheetLoader = loadSheet,
-    maxTextureSize = DEFAULT_MAX_TEXTURE_SIZE,
+    maxTextureSize?: number,
   ) {
-    this.limit = maxTextureSize;
+    this.limit = maxTextureSize ?? null;
   }
 
   /** The GPU's texture limit, once the renderer has said what it is. */
@@ -426,12 +435,19 @@ export class MonsterSheetTextures {
   }
 
   get maxTextureSize(): number {
-    return this.limit;
+    return this.limit ?? deviceTextureLimit() ?? DEFAULT_MAX_TEXTURE_SIZE;
   }
 
-  /** Whether a sheet needs cutting through a canvas rather than framing. */
-  oversized(sheet: MonsterSheet): boolean {
-    return sheet.width > this.limit || sheet.height > this.limit;
+  /**
+   * Whether a sheet needs cutting through a canvas rather than framing: the
+   * loaded picture's size in pixels, or before it is in, the table's size
+   * times the resolution its URL names.
+   */
+  oversized(sheet: MonsterSheet, source?: Pick<TextureSource, "pixelWidth" | "pixelHeight">): boolean {
+    const scale = source ? 1 : sheetResolution(sheetUrl(sheet));
+    const width = source?.pixelWidth ?? sheet.width * scale;
+    const height = source?.pixelHeight ?? sheet.height * scale;
+    return width > this.maxTextureSize || height > this.maxTextureSize;
   }
 
   /** Starts fetching a sheet, so its first cell is ready sooner. */
@@ -450,7 +466,7 @@ export class MonsterSheetTextures {
     const rect = frameRect(sheet, column, row);
 
     let cell: Texture | null;
-    if (this.oversized(sheet)) {
+    if (this.oversized(sheet, source.source)) {
       cell = copyCell(source.source, rect);
       if (!cell) return null;
       this.owned.add(cell);
@@ -500,7 +516,8 @@ export class MonsterSheetTextures {
 
 /**
  * One cell of an oversized sheet, copied through a canvas into a texture of
- * its own. Null where there is no canvas to draw with, or nothing drawable
+ * its own at the sheet's resolution (`rect` is in 1x units, the picture `@4x`
+ * or so). Null where there is no canvas to draw with, or nothing drawable
  * behind the source, in which case the caller shows its marker instead.
  */
 const copyCell = (
@@ -510,40 +527,45 @@ const copyCell = (
   if (typeof document === "undefined") return null;
   const image = (source as { resource?: unknown }).resource;
   if (!image || typeof image !== "object") return null;
+  const scale = source.resolution > 0 ? source.resolution : 1;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(rect.width);
-  canvas.height = Math.ceil(rect.height);
+  canvas.width = Math.ceil(rect.width * scale);
+  canvas.height = Math.ceil(rect.height * scale);
   const context = canvas.getContext("2d");
   if (!context) return null;
   try {
     context.drawImage(
       image as CanvasImageSource,
-      rect.x,
-      rect.y,
-      rect.width,
-      rect.height,
+      rect.x * scale,
+      rect.y * scale,
+      rect.width * scale,
+      rect.height * scale,
       0,
       0,
-      rect.width,
-      rect.height,
+      rect.width * scale,
+      rect.height * scale,
     );
   } catch {
     return null;
   }
-  return Texture.from(canvas);
+  return new Texture({ source: new CanvasSource({ resource: canvas, resolution: scale }) });
 };
 
 /** The GPU texture limit a Pixi renderer reports, or null when it does not say. */
 export const gpuTextureLimit = (renderer: Renderer): number | null => {
   const gl = (renderer as { gl?: WebGLRenderingContext }).gl;
-  if (gl && typeof gl.getParameter === "function") {
-    const size: unknown = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    if (typeof size === "number" && size > 0) return size;
+  let size: unknown = null;
+  if (gl && typeof gl.getParameter === "function") size = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  if (typeof size !== "number" || size <= 0) {
+    const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
+      .device;
+    size = device?.limits?.maxTextureDimension2D;
   }
-  const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
-    .device;
-  const size = device?.limits?.maxTextureDimension2D;
-  return typeof size === "number" && size > 0 ? size : null;
+  if (typeof size !== "number" || size <= 0) return null;
+  // Remembered for every sheet cutter (the guide's walk-ins too, which have no
+  // renderer of their own) and for picking a copy the card can hold (`sheetUrl`).
+  setDeviceTextureLimit(size);
+  return size;
 };
 
 /* ── The layer ──────────────────────────────────────────────────────────── */

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { setQuality } from "@/game/quality";
+import { setDeviceTextureLimit, setQuality } from "@/game/quality";
 import { buildEngineYard, createBattle } from "@/game/combat/rules";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
 import {
@@ -247,7 +247,7 @@ describe("spriteFor", () => {
     }
   });
 
-  it("draws every Korath level from its repaint, levels 5 and 6 at 3x", () => {
+  it("draws every Korath level from its repaint, level 4 at 3x and levels 5 and 6 at 2x", () => {
     const urls = [1, 2, 3, 4, 5, 6].map((level) => {
       const one = spriteFor("G4", level);
       return one && bare(sheetUrl(one));
@@ -256,9 +256,9 @@ describe("spriteFor", () => {
       "/assets/monsters/korath_1-repaint@4x.png",
       "/assets/monsters/korath_2-repaint@4x.png",
       "/assets/monsters/korath_3-repaint@4x.png",
-      "/assets/monsters/korath_4-repaint@4x.png",
-      "/assets/monsters/korath_5-repaint@3x.png",
-      "/assets/monsters/korath_6-repaint@3x.png",
+      "/assets/monsters/korath_4-repaint@3x.png",
+      "/assets/monsters/korath_5-repaint@2x.png",
+      "/assets/monsters/korath_6-repaint@2x.png",
     ]);
   });
 
@@ -333,6 +333,21 @@ describe("sheetUrl", () => {
     expect(isHighResolutionSheet("/assets/monsters/pokey-anim@2x.png?v=4xkz")).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("C1")))).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("IC1")))).toBe(false);
+  });
+
+  it("asks for a smaller copy where the graphics card cannot hold the painting", () => {
+    try {
+      // Gorgo 5 at 4x is 10240 px wide: an 8192 card gets the @2x copy, a 4096 card the 1x.
+      setDeviceTextureLimit(8192);
+      expect(bare(sheetUrl(sheet("G1_5")))).toBe("/assets/monsters/ape_5-repaint@2x.png");
+      setDeviceTextureLimit(4096);
+      expect(bare(sheetUrl(sheet("G1_5")))).toBe("/assets/monsters/ape_5-repaint.png");
+      // Korath 5's packed 2x sheet, 8000 px, fits an 8192 card as it is.
+      setDeviceTextureLimit(8192);
+      expect(bare(sheetUrl(sheet("G4_5")))).toBe("/assets/monsters/korath_5-repaint@2x.png");
+    } finally {
+      setDeviceTextureLimit(null);
+    }
   });
 
   describe("at each Quality setting", () => {

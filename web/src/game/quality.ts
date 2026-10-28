@@ -4,11 +4,12 @@
  * Classic look and the effects settings.
  *
  * - `high` (the default): the game as painted. Monster and champion sheets at
- *   their painted size (`@4x`, Korath's biggest `@3x`), the yard tune at full
+ *   their painted size (`@4x`, `@3x`, Korath 5 and 6 `@2x`), the yard tune at full
  *   quality, ready as soon as the yard opens.
  * - `medium`: the sheets' `@2x` copies (half size, about a quarter of the
- *   bytes), the lighter yard tune, and music off until the player turns it on
- *   once in this browser: nothing is downloaded for it until then.
+ *   bytes; Korath 5 and 6 `@1.5x`), the lighter yard tune, and music off
+ *   until the player turns it on once in this browser: nothing is downloaded
+ *   for it until then.
  * - `low`: the sheets' 1x copies (the size Flash drew them, about a tenth of the
  *   bytes), the lighter yard tune, music off at the start of every visit until
  *   the player turns it on, and the map rooms asking the server again a third
@@ -70,15 +71,74 @@ export const setQuality = (level: Quality, store: Storage | null = storage()): v
 };
 
 /**
+ * The Quality copies of a painted sheet, or null for a sheet that is not a big
+ * painting (no `@2x` or more in its name). Medium is the `@2x` copy of a sheet
+ * painted at 3x or 4x; Korath 5 and 6 are painted at only 2x, as any more would
+ * pass the 8192 px many graphics cards cannot hold, so theirs is the `@1.5x`
+ * copy. Low is always the 1x copy, the size Flash drew it.
+ */
+export const sheetCopies = (file: string): { medium: string; low: string } | null => {
+  const painted = /@(\d+)x(\.\w+)$/.exec(file);
+  const scale = Number(painted?.[1] ?? 0);
+  if (!painted || scale < 2) return null;
+  const name = file.slice(0, painted.index);
+  const ext = painted[2] ?? "";
+  return { medium: `${name}@${scale >= 3 ? 2 : 1.5}x${ext}`, low: `${name}${ext}` };
+};
+
+/**
  * The copy of a painted sheet to download: `monsters/pokey-anim@4x.png` as it
  * is on High, `monsters/pokey-anim@2x.png` on Medium, `monsters/pokey-anim.png`
- * on Low. A sheet that is not a big painting (no `@3x` or more) is left alone.
+ * on Low (`sheetCopies`). A sheet that is not a big painting is left alone.
  */
 export const sheetAtQuality = (file: string, level: Quality = quality()): string => {
-  const painted = /@(\d+)x(\.\w+)$/.exec(file);
-  if (!painted || Number(painted[1]) < 3 || level === "high") return file;
-  const ext = painted[2] ?? "";
-  return `${file.slice(0, painted.index)}${level === "medium" ? `@2x${ext}` : ext}`;
+  const copies = level === "high" ? null : sheetCopies(file);
+  if (!copies) return file;
+  return level === "medium" ? copies.medium : copies.low;
+};
+
+/**
+ * The biggest picture this device's graphics card can hold, in pixels a side,
+ * once a renderer has said (`gpuTextureLimit` in `attack/AttackBattleLayer.ts`);
+ * null until then. Many phones and older PCs hold 4096 or 8192, and WebGL
+ * refuses anything bigger: the monster would not be drawn.
+ */
+let textureLimit: number | null = null;
+
+export const deviceTextureLimit = (): number | null => textureLimit;
+
+/** Remembers the device's texture limit; null forgets it (tests). */
+export const setDeviceTextureLimit = (size: number | null): void => {
+  textureLimit = size !== null && Number.isFinite(size) && size > 0 ? size : null;
+};
+
+/** The resolution a sheet file names (`@4x`, `@1.5x`), as Pixi reads it; 1 without one. */
+export const sheetResolution = (file: string): number => Number(/@(\d+(?:\.\d+)?)x\./.exec(file)?.[1] ?? 1);
+
+/**
+ * `sheetAtQuality`, stepping down to a smaller copy when the one asked for is
+ * bigger than the graphics card can hold (`limit`): a `@4x` painting 9,000 px
+ * wide on a card that holds 8192 is fetched as its `@2x` copy, so the phone
+ * never downloads and decodes the big one. `size` is the sheet's 1x size (its
+ * table row, with any repaint layout). When even the 1x copy is too big, or the
+ * limit is not known yet, the copy asked for (or the 1x) is returned and the
+ * sheet cutter copes (`MonsterSheetTextures`).
+ */
+export const sheetForDevice = (
+  file: string,
+  size: { readonly width: number; readonly height: number },
+  limit: number | null = deviceTextureLimit(),
+  level: Quality = quality(),
+): string => {
+  const chosen = sheetAtQuality(file, level);
+  const copies = sheetCopies(file);
+  if (!copies || limit === null) return chosen;
+  const ladder = [file, copies.medium, copies.low];
+  for (const copy of ladder.slice(ladder.indexOf(chosen))) {
+    const scale = sheetResolution(copy);
+    if (size.width * scale <= limit && size.height * scale <= limit) return copy;
+  }
+  return copies.low;
 };
 
 /** Whether the yard tune is the lighter copy (Medium and Low). */

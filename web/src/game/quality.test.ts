@@ -9,6 +9,7 @@ import {
   qualityChoice,
   setQuality,
   sheetAtQuality,
+  sheetForDevice,
 } from "./quality";
 
 /** A stand-in for the browser's storage. */
@@ -49,9 +50,33 @@ describe("sheetAtQuality", () => {
     expect(sheetAtQuality("monsters/korath@3x.png", "medium")).toBe("monsters/korath@2x.png");
   });
 
+  it("asks for the @1.5x copy on Medium of a sheet painted at 2x (Korath 5 and 6)", () => {
+    expect(sheetAtQuality("monsters/korath_5-repaint@2x.png", "high")).toBe("monsters/korath_5-repaint@2x.png");
+    expect(sheetAtQuality("monsters/korath_5-repaint@2x.png", "medium")).toBe("monsters/korath_5-repaint@1.5x.png");
+    expect(sheetAtQuality("monsters/korath_5-repaint@2x.png", "low")).toBe("monsters/korath_5-repaint.png");
+  });
+
+  it("steps down to a copy the graphics card can hold", () => {
+    // Gorgo 5's painting: 2560 x 2192 at 1x, so 10240 px wide at 4x.
+    const gorgo = { width: 2560, height: 2192 };
+    const file = "monsters/ape_5-repaint@4x.png";
+    expect(sheetForDevice(file, gorgo, 16384, "high")).toBe(file);
+    expect(sheetForDevice(file, gorgo, 8192, "high")).toBe("monsters/ape_5-repaint@2x.png");
+    expect(sheetForDevice(file, gorgo, 4096, "high")).toBe("monsters/ape_5-repaint.png");
+    // Never up: Low stays Low however big the card.
+    expect(sheetForDevice(file, gorgo, 16384, "low")).toBe("monsters/ape_5-repaint.png");
+    // Too big even at 1x, or the card not known yet: the copy asked for (the sheet cutter copes).
+    expect(sheetForDevice(file, gorgo, 2048, "high")).toBe("monsters/ape_5-repaint.png");
+    expect(sheetForDevice(file, gorgo, null, "high")).toBe(file);
+    // Korath 5, packed (4000 x 3888 at 1x): its 2x High fits 8192, not 4096.
+    const korath = { width: 4000, height: 3888 };
+    expect(sheetForDevice("monsters/korath_5-repaint@2x.png", korath, 8192, "high")).toBe("monsters/korath_5-repaint@2x.png");
+    expect(sheetForDevice("monsters/korath_5-repaint@2x.png", korath, 4096, "high")).toBe("monsters/korath_5-repaint.png");
+  });
+
   it("leaves a sheet that is not a big painting alone", () => {
     expect(sheetAtQuality("monsters/spurtz.png", "low")).toBe("monsters/spurtz.png");
-    expect(sheetAtQuality("monsters/small@2x.png", "low")).toBe("monsters/small@2x.png");
+    expect(sheetAtQuality("monsters/small@1x.png", "low")).toBe("monsters/small@1x.png");
   });
 });
 

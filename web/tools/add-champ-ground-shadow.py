@@ -18,12 +18,14 @@ Korath (korath_1..6) gets the same: like her, its Flash sheets had the shadow
 baked in and its repaints are painted without one (owner, 2026-10-28).
 
 Run it once, on a sheet that has no shadow yet (it refuses a sheet it has
-already shadowed). Both the @4x (Korath 5 and 6: @3x) sheet and its 1x copy are rewritten, quantised
-with libimagequant like the other repaints:
+already shadowed). Both the @4x (Korath 4-6: @3x) sheet and its 1x copy are rewritten, quantised
+with libimagequant like the other repaints; Korath 5 and 6 are then packed into the 2x sheet the game
+draws (`pack-sheet.py`):
 
   uv run --no-project --with imagequant --with pillow --with numpy --with scipy \
     python web/tools/add-champ-ground-shadow.py krallen_1_rev_65
 """
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -42,7 +44,7 @@ COLUMNS = 16
 # Each cycle gets its own ellipse, so a lunge keeps the shadow under her.
 _KRALLEN = {"run": range(0, 10), "attack": range(10, 16)}
 # name: (1x cell width, 1x cell height, cycles, scale of the repaint), as in monsterSpriteData.ts
-# (Korath, G4_1-G4_6: walk from row 0, then the attack; levels 5 and 6 also stomp, rows 20-29, and their repaints are 3x).
+# (Korath, G4_1-G4_6: walk from row 0, then the attack; levels 5 and 6 also stomp, rows 20-29; levels 4-6 are painted at 3x).
 SHEETS = {
     "krallen_1_rev_65": (130, 80, _KRALLEN, 4),
     "krallen_2_rev_65": (131, 90, _KRALLEN, 4),
@@ -50,7 +52,7 @@ SHEETS = {
     "korath_1": (72, 49, {"walk": range(0, 8), "attack": range(8, 17)}, 4),
     "korath_2": (119, 81, {"walk": range(0, 8), "attack": range(8, 17)}, 4),
     "korath_3": (128, 102, {"walk": range(0, 9), "attack": range(9, 18)}, 4),
-    "korath_4": (153, 123, {"walk": range(0, 10), "attack": range(10, 20)}, 4),
+    "korath_4": (153, 123, {"walk": range(0, 10), "attack": range(10, 20)}, 3),
     "korath_5": (199, 162, {"walk": range(0, 10), "attack": range(10, 20), "stomp": range(20, 30)}, 3),
     "korath_6": (202, 167, {"walk": range(0, 10), "attack": range(10, 20), "stomp": range(20, 30)}, 3),
 }
@@ -130,7 +132,13 @@ def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import sheet_copies
 
-    sheet_copies.make_copies(OUT / path4.name)
+    spec = importlib.util.spec_from_file_location("pack_sheet", Path(__file__).resolve().with_name("pack-sheet.py"))
+    packer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(packer)
+    if name in packer.PACKS and OUT == ASSETS:
+        packer.pack(name)  # Korath 5 and 6: packed into the 2x sheet the game draws, with its copies
+    else:
+        sheet_copies.make_copies(OUT / path4.name)
 
 
 if __name__ == "__main__":
