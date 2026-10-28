@@ -505,6 +505,48 @@ export const planHatcheryRemove = (
   };
 };
 
+/** `report` of `POST /bm/yard/hatchery/clear`. */
+export interface HatcheryClearReport {
+  hatchery: HatcheryTarget;
+  /** Monsters taken out, by id. */
+  removed: Record<string, number>;
+  /** Goo actually returned, after the storage cap. */
+  refund: { r4: number };
+}
+
+/**
+ * Clear all: empties every waiting stack of a hatchery's queue, or the HCC's
+ * shared queue, as `remove` with `count=all` on each stack would. Each stack
+ * refunds its paid level; the total is clamped to the cap once, which is what
+ * the one-by-one credits add up to. The monsters in production keep hatching
+ * (their own × cancels them). Refusals: the target's (a hatchery id with an
+ * HCC is `useHcc`), then `409 emptyQueue` when nothing waits.
+ */
+export const planHatcheryClear = (save: HatcherySave, target: HatcheryTarget, now: number) => {
+  const { model } = modelOf(save);
+  const resolved = targetOf(save, model, target);
+  const queue = resolved.hcc ? model.hcc : resolved.hatchery.queue;
+  if (queue.length === 0) throw yardRefusedErr("emptyQueue", "Nothing is waiting in that queue.");
+
+  const removed: Record<string, number> = {};
+  let goo = 0;
+  for (const [monster, count, level] of queue.splice(0)) {
+    removed[monster] = (removed[monster] ?? 0) + count;
+    goo += count * gooOf(monster, level);
+  }
+
+  const report: HatcheryClearReport = {
+    hatchery: target,
+    removed,
+    refund: { r4: fitCredit(save, { r4: goo }).credited.r4 },
+  };
+  return {
+    report,
+    slices: { monsters: writeProduction(save.monsters, model, now) },
+    credit: { r4: goo },
+  };
+};
+
 /** Free housing space right now (`HOUSING._housingSpace`): capacity, EXH included, less the army. */
 export const freeHousing = (
   save: HatcherySave,

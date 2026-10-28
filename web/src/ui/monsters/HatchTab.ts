@@ -22,6 +22,7 @@ import {
   previewFinish,
   priceOf,
   queuedCount,
+  queueRefund,
   readHatchYard,
   secondsOf,
   STACK_SIZE,
@@ -83,7 +84,10 @@ import {
  *   as the hatchery's level allows (`1 + level`), and the next locked slot
  *   saying the upgrade that opens it. With an HCC, one row of each
  *   hatchery's monster in production and the shared queue's seven slots
- *   under it (`HATCHERYCCPOPUP.as:431-460`). Beside the line, how long it
+ *   under it (`HATCHERYCCPOPUP.as:431-460`). Above the slots, Clear all
+ *   (owner, 28 Oct: too many added by accident) asks "Clear 44?" with the
+ *   goo back, then empties the waiting stacks in one request; the monster
+ *   in production keeps hatching. Beside the line, how long it
  *   takes to empty and the one small "Finish now or speed up" link, which
  *   opens Finish now and the Overdrive.
  * - **The message**: what the hatchery is doing, in a sentence
@@ -206,6 +210,8 @@ export class HatchTab implements MonstersTab {
   private count = DEFAULT_COUNT;
   /** The hatchery whose monster in production is waiting on "Cancel it?". */
   private confirming: number | null = null;
+  /** The queue (a hatchery, or `hcc`) waiting on "Clear 44?". */
+  private clearing: HatchTarget | null = null;
   /** Finish now and the Overdrive, opened by the small link. */
   private boostsOpen = false;
   /** On a phone, the bar's blurb and numbers. */
@@ -425,6 +431,13 @@ export class HatchTab implements MonstersTab {
     if (this.confirming !== null) {
       const still = yard.hatcheries.find((one) => one.id === this.confirming);
       if (!still?.monster) this.confirming = null;
+    }
+    if (this.clearing !== null) {
+      const queue =
+        this.clearing === "hcc"
+          ? yard.shared
+          : yard.hatcheries.find((one) => one.id === this.clearing)?.queue;
+      if (!queue?.length || (this.clearing === "hcc") !== (yard.hcc !== null)) this.clearing = null;
     }
 
     const monsters = hatchMonsters(store.save, this.realm);
@@ -729,6 +742,8 @@ export class HatchTab implements MonstersTab {
       waiting.textContent = `${formatAmount(before)} waiting${of}`;
     }
     head.append(waiting);
+    const clear = this.clearControl(hatchery.id, hatchery.queue);
+    if (clear) head.append(clear);
 
     const slots = document.createElement("div");
     slots.className = "hatch-line__slots";
@@ -763,6 +778,8 @@ export class HatchTab implements MonstersTab {
     waiting.className = "hatch-line__waiting";
     waiting.textContent = `${formatAmount(queuedCount(yard.shared))} waiting of ${formatAmount(HCC_STACKS * STACK_SIZE)}`;
     head.append(title, waiting);
+    const clear = this.clearControl("hcc", yard.shared);
+    if (clear) head.append(clear);
 
     const now = document.createElement("div");
     now.className = "hatch-line__now";
@@ -925,6 +942,73 @@ export class HatchTab implements MonstersTab {
       time.textContent = (state === "stalled" && this.realm === "inferno" ? "Waiting for room" : BUSY_TEXT[state]) ?? "";
     }
     return card;
+  }
+
+  /**
+   * Clear all for a queue with anything waiting: a tap asks "Clear 44?" with
+   * the goo back, and Clear empties every waiting stack in one request
+   * (`hatchery/clear`); Keep, or a tap elsewhere that redraws, leaves it be.
+   */
+  private clearControl(target: HatchTarget, queue: readonly QueueStack[]): HTMLElement | null {
+    const waiting = queuedCount(queue);
+    if (waiting === 0) return null;
+    const key = String(target);
+
+    if (this.clearing === target) {
+      const box = document.createElement("span");
+      box.className = "hatch-clear hatch-clear--confirm";
+      box.setAttribute("role", "group");
+      box.setAttribute("aria-label", `Clear all ${formatAmount(waiting)} waiting?`);
+      const question = document.createElement("span");
+      question.className = "hatch-clear__question";
+      question.textContent = `Clear ${formatAmount(waiting)}?`;
+      const back = document.createElement("span");
+      back.className = "hatch-clear__refund";
+      back.append(resourceAmount("r4", queueRefund(queue)), " back");
+      const yes = document.createElement("button");
+      yes.type = "button";
+      yes.className = "btn btn--danger hatch-clear__yes";
+      yes.textContent = "Clear";
+      yes.dataset["focusKey"] = `clear-yes-${key}`;
+      yes.addEventListener("click", () => {
+        this.clearing = null;
+        void this.runClear(target);
+      });
+      this.plainButtons.push(yes);
+      const no = document.createElement("button");
+      no.type = "button";
+      no.className = "btn btn--ghost hatch-clear__no";
+      no.textContent = "Keep";
+      no.dataset["focusKey"] = `clear-no-${key}`;
+      no.addEventListener("click", () => {
+        this.clearing = null;
+        this.render();
+        this.element.querySelector<HTMLElement>(`[data-focus-key="clear-${key}"]`)?.focus();
+      });
+      box.append(question, " ", back, " ", yes, " ", no);
+      return box;
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn--ghost hatch-clear";
+    button.dataset["focusKey"] = `clear-${key}`;
+    button.setAttribute(
+      "aria-label",
+      `Clear all ${formatAmount(waiting)} waiting and get the ${this.words.goo} back`,
+    );
+    const cross = document.createElement("span");
+    cross.className = "hatch-clear__cross";
+    cross.setAttribute("aria-hidden", "true");
+    cross.textContent = "×";
+    button.append(cross, "Clear all");
+    button.addEventListener("click", () => {
+      this.clearing = target;
+      this.render();
+      this.element.querySelector<HTMLElement>(`[data-focus-key="clear-no-${key}"]`)?.focus();
+    });
+    this.plainButtons.push(button);
+    return button;
   }
 
   /** A waiting stack: ×N, the monster, and a tap takes one out (`HATCHERYPOPUP.as:300-319`). */
@@ -1464,6 +1548,17 @@ export class HatchTab implements MonstersTab {
       `${slot === 0 ? "Cancelled" : "Took out"} ${formatAmount(report.removed)} ${plural(nameOf(report.monster), report.removed)}`,
       ...(report.refund.r4 > 0 ? [": ", resourceAmount("r4", report.refund.r4), " back."] : ["."]),
     ]);
+  }
+
+  private async runClear(target: HatchTarget): Promise<void> {
+    const result = await this.actions.clear(target);
+    this.report(result, (report) => {
+      const taken = Object.values(report.removed).reduce((total, n) => total + n, 0);
+      return [
+        `Cleared ${formatAmount(taken)} waiting`,
+        ...(report.refund.r4 > 0 ? [": ", resourceAmount("r4", report.refund.r4), " back."] : ["."]),
+      ];
+    });
   }
 
   private async runFinish(): Promise<void> {

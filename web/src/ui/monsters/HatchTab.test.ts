@@ -99,6 +99,9 @@ const setup = (
     remove: vi.fn((hatchery: number | "hcc", slot: number, count: number | "all") =>
       ok({ hatchery, slot, monster: slot === 0 ? "C3" : "C1", removed: count === "all" ? 20 : 1, refund: { r4: slot === 0 ? 350 : 250 } }),
     ),
+    clear: vi.fn((hatchery: number | "hcc") =>
+      ok({ hatchery, removed: { C1: 25 }, refund: { r4: 25 * 250 } }),
+    ),
     finish: vi.fn((hatchery: number | "hcc") => ok({ hatchery, housed: { C3: 1, C1: 25 }, credits: 12, finishedAll: true })),
     overdrive: vi.fn((item: string) => ok({ item, credits: 30, q: 1, endsAt: T0 + 3600 })),
   } satisfies HatcheryActions;
@@ -337,6 +340,30 @@ describe("HatchTab: each hatchery's line", () => {
     await flush();
     expect(actions.remove).toHaveBeenCalledWith(10, 0, 1);
     expect(text(element, ".monsters-status")).toBe("Cancelled 1 Bolt: Goo 350 back.");
+  });
+
+  it("asks before Clear all, then empties the waiting stacks in one request for their goo", async () => {
+    const { element, actions } = setup();
+    const clear = line(element, 10).querySelector<HTMLButtonElement>(".hatch-clear")!;
+    expect(clear.getAttribute("aria-label")).toBe("Clear all 25 waiting and get the goo back");
+    clear.click();
+    expect(text(element, ".hatch-clear--confirm")).toBe("Clear 25? Goo 6,250 back Clear Keep");
+    buttonNamed(element, "Keep")!.click();
+    expect(element.querySelector(".hatch-clear--confirm")).toBeNull();
+    expect(actions.clear).not.toHaveBeenCalled();
+
+    line(element, 10).querySelector<HTMLButtonElement>(".hatch-clear")!.click();
+    element.querySelector<HTMLButtonElement>(".hatch-clear__yes")!.click();
+    await flush();
+    expect(actions.clear).toHaveBeenCalledOnce();
+    expect(actions.clear).toHaveBeenCalledWith(10);
+    expect(actions.remove).not.toHaveBeenCalled();
+    expect(text(element, ".monsters-status")).toBe("Cleared 25 waiting: Goo 6,250 back.");
+  });
+
+  it("offers no Clear all on a queue with nothing waiting", () => {
+    const { element } = setup(twoHatcheries(), { buildingId: 11 });
+    expect(line(element, 11).querySelector(".hatch-clear")).toBeNull();
   });
 
   it("takes one out of a stack per tap, one request each", async () => {
@@ -667,6 +694,13 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
     buttonNamed(element, "Cancel it")!.click();
     await flush();
     expect(actions.remove).toHaveBeenLastCalledWith(10, 0, 1);
+
+    // Clear all empties the shared queue; each hatchery's own monster is not asked about.
+    hcc.querySelector<HTMLButtonElement>(".hatch-clear")!.click();
+    expect(text(element, ".hatch-clear--confirm")).toBe("Clear 4? Goo 1,400 back Clear Keep");
+    element.querySelector<HTMLButtonElement>(".hatch-clear__yes")!.click();
+    await flush();
+    expect(actions.clear).toHaveBeenLastCalledWith("hcc");
 
     type(box(element), "3");
     expect(text(element, ".hatch-add__to")).toBe("Adding to the shared queue");

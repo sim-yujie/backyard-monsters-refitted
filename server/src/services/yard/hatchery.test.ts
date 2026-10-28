@@ -9,6 +9,7 @@ import {
   hatcheryIds,
   overdriveGate,
   planHatcheryAdd,
+  planHatcheryClear,
   planHatcheryFinish,
   planHatcheryRemove,
   type HatcherySave,
@@ -351,6 +352,73 @@ describe("hatchery/add — with a Hatchery Control Centre", () => {
     const held = planHatcheryAdd(idle, "hcc", "C1", 5, NOW);
     expect(held.slices?.monsters?.hcc).toEqual([["C1", 5, 1]]);
     expect(hOf(held.slices?.monsters, 1)).toEqual(["", 0, []]);
+  });
+});
+
+describe("hatchery/clear", () => {
+  const mixed = () =>
+    yardOf({
+      academy: { C1: { level: 3 }, C2: { level: 1 } },
+      monsters: monstersOf([
+        "C2",
+        9,
+        [
+          ["C1", 20, 1],
+          ["C2", 5, 1],
+          ["C1", 2, 3],
+        ],
+        1,
+      ]),
+    });
+
+  test("empties every waiting stack, refunding what one-by-one removal would", () => {
+    const plan = planHatcheryClear(mixed(), 1, NOW);
+    const oneByOne =
+      planHatcheryRemove(mixed(), 1, 1, "all", NOW).credit.r4 +
+      planHatcheryRemove(mixed(), 1, 2, "all", NOW).credit.r4 +
+      planHatcheryRemove(mixed(), 1, 3, "all", NOW).credit.r4;
+    expect(plan.credit).toEqual({ r4: 20 * 250 + 5 * 500 + 2 * 675 });
+    expect(plan.credit.r4).toBe(oneByOne);
+    expect(plan.report).toEqual({
+      hatchery: 1,
+      removed: { C1: 22, C2: 5 },
+      refund: { r4: 20 * 250 + 5 * 500 + 2 * 675 },
+    });
+    // The monster in production keeps hatching.
+    expect(hOf(plan.slices?.monsters, 1)).toEqual(["C2", 9, [], 1]);
+  });
+
+  test("an empty queue is 409 emptyQueue", () => {
+    expect(refusal(() => planHatcheryClear(yardOf({ monsters: monstersOf(["C2", 9, [], 1]) }), 1, NOW))).toEqual([
+      409,
+      "emptyQueue",
+      { reason: "emptyQueue" },
+    ]);
+  });
+
+  test("with an HCC: `hcc` empties the shared queue; a hatchery id is useHcc", () => {
+    const save = hccYard({
+      monsters: monstersOf(
+        ["C4", 70, [], 1],
+        ["C2", 3, [], 1],
+        [
+          ["C1", 6, 1],
+          ["C2", 2, 1],
+        ]
+      ),
+    });
+    const plan = planHatcheryClear(save, "hcc", NOW);
+    expect(plan.report).toEqual({ hatchery: "hcc", removed: { C1: 6, C2: 2 }, refund: { r4: 6 * 250 + 2 * 500 } });
+    expect(plan.slices?.monsters?.hcc).toEqual([]);
+    expect(hOf(plan.slices?.monsters, 1)).toEqual(["C4", 70, [], 1]);
+    expect(refusal(() => planHatcheryClear(save, 1, NOW))[1]).toBe("useHcc");
+    expect(refusal(() => planHatcheryClear(yardOf(), "hcc", NOW))[1]).toBe("noHcc");
+  });
+
+  test("the report says what actually came back under the storage cap", () => {
+    const cap = storageCap(yardOf());
+    const full = yardOf({ resources: { r4: cap - 100 }, monsters: mixed().monsters });
+    expect(planHatcheryClear(full, 1, NOW).report.refund).toEqual({ r4: 100 });
   });
 });
 
