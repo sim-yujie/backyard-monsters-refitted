@@ -104,6 +104,11 @@ export const YardHatcheryRemoveSchema = z.object({
   count: z.union([z.literal("all"), z.coerce.number().int().min(1)]).default(1),
 });
 
+/** `POST /bm/yard/hatchery/clear`: a hatchery, or `hcc` for the shared queue (Clear all). */
+export const YardHatcheryClearSchema = z.object({
+  hatchery: HatcheryTargetField,
+});
+
 /** `POST /bm/yard/hatchery/finish`: a hatchery, or `hcc` for everything the HCC feeds. */
 export const YardHatcheryFinishSchema = z.object({
   hatchery: HatcheryTargetField,

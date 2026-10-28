@@ -24,6 +24,7 @@ import { yardBody, type YardRefusal } from "./yard";
  *
  *   POST /api/:apiVersion/bm/yard/hatchery/add      hatchery, monster, count
  *   POST /api/:apiVersion/bm/yard/hatchery/remove   hatchery, slot, count
+ *   POST /api/:apiVersion/bm/yard/hatchery/clear    hatchery
  *   POST /api/:apiVersion/bm/yard/hatchery/finish   hatchery
  *   POST /api/:apiVersion/bm/yard/shop/buy          item=HOD|HOD2|HOD3
  *
@@ -56,6 +57,15 @@ export interface HatcheryRemoveReport {
   slot: number;
   monster: string;
   removed: number;
+  /** Goo actually returned, after the storage cap. */
+  refund: { r4: number };
+}
+
+/** `report` of `hatchery/clear`. */
+export interface HatcheryClearReport {
+  hatchery: HatchTarget;
+  /** Monsters taken out, by id. */
+  removed: Record<string, number>;
   /** Goo actually returned, after the storage cap. */
   refund: { r4: number };
 }
@@ -104,6 +114,20 @@ export const hatcheryRemove = (
   );
 
 /**
+ * Clear all: empties every waiting stack for the goo paid, as `remove` with
+ * `all` on each would; the monsters in production keep hatching. Refusals: the
+ * add's target ones, `emptyQueue`.
+ */
+export const hatcheryClear = (
+  hatchery: HatchTarget,
+  baseid?: string,
+): Promise<YardResponse<HatcheryClearReport>> =>
+  post<YardResponse<HatcheryClearReport>>(
+    `${HATCHERY_PATH}/clear`,
+    yardBody({ hatchery: String(hatchery) }, baseid),
+  );
+
+/**
  * Houses what fits now for Shiny. Refusals: the add's target ones, `busy`,
  * `damaged`, `nothingToFinish`, `housingFull { free }`, `shinyLocked`, `credits`.
  */
@@ -120,12 +144,14 @@ export const hatcheryFinish = (
 export interface HatcheryApi {
   add: typeof hatcheryAdd;
   remove: typeof hatcheryRemove;
+  clear: typeof hatcheryClear;
   finish: typeof hatcheryFinish;
 }
 
 export const hatcheryApi: HatcheryApi = {
   add: hatcheryAdd,
   remove: hatcheryRemove,
+  clear: hatcheryClear,
   finish: hatcheryFinish,
 };
 
@@ -133,6 +159,7 @@ export const hatcheryApi: HatcheryApi = {
 export const HatcheryKey = {
   ADD: actionKey("hatchery", "add"),
   REMOVE: actionKey("hatchery", "remove"),
+  CLEAR: actionKey("hatchery", "clear"),
   FINISH: actionKey("hatchery", "finish"),
 } as const;
 
@@ -150,6 +177,8 @@ export interface HatcheryActions {
     slot: number,
     count: number | "all",
   ): Promise<YardActionResult<HatcheryRemoveReport>>;
+  /** Clear all: every waiting stack of the target's queue. */
+  clear(target: HatchTarget): Promise<YardActionResult<HatcheryClearReport>>;
   finish(target: HatchTarget): Promise<YardActionResult<HatcheryFinishReport>>;
   /** Buys a Hatchery Overdrive through the store's shop route. */
   overdrive(item: OverdriveItem): Promise<YardActionResult<ShopBuyReport>>;
@@ -198,6 +227,8 @@ export const hatcheryActions = (
       key: HatcheryKey.REMOVE,
       send: (_api, ...yard) => api.remove(target, slot, count, ...yard),
     }),
+  clear: (target) =>
+    store.run({ key: HatcheryKey.CLEAR, send: (_api, ...yard) => api.clear(target, ...yard) }),
   finish: (target) =>
     store.run({ key: HatcheryKey.FINISH, send: (_api, ...yard) => api.finish(target, ...yard) }),
   overdrive: (item) => {
