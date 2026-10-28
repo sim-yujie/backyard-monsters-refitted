@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
@@ -337,6 +340,21 @@ describe("BuildMenu", () => {
     const strip = menu.element.querySelector(".build-menu__tabs")!;
     strip.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     expect(menu.activeTab).toBe(BuildCategory.DECORATIONS);
+  });
+
+  it("keeps the Build button on screen when the info is taller than the window", () => {
+    // At 1280x800 the Defensive tab's info ran past the window and took the
+    // button with it, out of reach while Bob's guide pointed at it. jsdom lays
+    // nothing out, so the rule that pins the button to the window's foot is
+    // checked instead, on every screen size, with a solid ground under it.
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../styles/build-menu.css"), "utf8");
+    const rules = [...css.matchAll(/\.build-info__actions \{([^}]*)\}/g)].map((match) => match[1]!);
+    expect(rules[0]).toMatch(/position: sticky;\s*bottom: 0;/);
+    expect(rules[0]).toMatch(/background: [^;]*var\(--colour-surface-base\);/);
+    // The phone layouts clear the info's own ground; the bar keeps one.
+    expect(rules.slice(1)).toHaveLength(2);
+    for (const rule of rules.slice(1)) expect(rule).toMatch(/background: var\(--colour-surface-base\);/);
+    expect(css).not.toMatch(/\.build-info__actions \{[^}]*position: (static|relative)/);
   });
 });
 
