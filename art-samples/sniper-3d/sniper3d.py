@@ -30,7 +30,7 @@ from mathutils import Matrix, Vector
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "tower-3d"))
 import look3d as L  # noqa: E402
-L.EL = float(os.environ.get("SNIPER_EL", 23.0))   # the Sniper's own camera elevation (set before setup_render; see the report for why 23)
+L.EL = float(os.environ.get("SNIPER_EL", 30.0))   # owner, 28 Oct: 30, the game's ground angle (was 23)   # the Sniper's own camera elevation (set before setup_render; see the report for why 23)
 from look3d import (LINE, Paint, add_outline, bear, bezier, diag, lathe, mat_flat, obj_from_bm, rbox, ring_of, srgb,  # noqa
                     studs, tube)
 EL = L.EL

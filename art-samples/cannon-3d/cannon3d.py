@@ -23,6 +23,7 @@ on its 4x canvas (CANVAS), and the turning point is reported on the turning axis
 """
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -34,6 +35,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "tower-3d"))
 import look3d as L  # noqa: E402
 from look3d import bear, bezier, diag, rbox, ring_of, studs, tube  # noqa: E402
+L.EL = float(os.environ.get("CANNON_EL", 30.0))   # owner, 28 Oct: the game's ground angle (2:1), as the Laser;
+                                                   # 23 (the Flash ellipses) before. CANNON_EL=23 for the old camera
 
 # The painted tiers (codex-art Part 16 kits, turret/T<n>/body): canvas, body box, turning point, all at 4x
 CANVAS = {
