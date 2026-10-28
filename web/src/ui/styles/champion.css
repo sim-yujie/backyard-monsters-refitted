@@ -629,9 +629,11 @@
  * (`CHAMPIONCHAMBERPOPUP.as:42-110`): the big picture, then name, stats and
  * its one action. A frozen champion's picture sits in ice. */
 
+/* Two or three a row, centred: no empty column beside one or two cards. */
 .chamber__cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(156px, 200px));
+  justify-content: center;
   gap: var(--space-2);
   margin: 0;
   padding: 0;
