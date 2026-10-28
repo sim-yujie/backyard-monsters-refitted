@@ -38,6 +38,8 @@ import {
   allianceCreateEditLimiter,
   bugReportLimiter,
   clientErrorLimiter,
+  announcementsLimiter,
+  announcementImageLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -124,7 +126,9 @@ import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
-import { mountAdminRoutes } from "./controllers/admin/routes.js";
+import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
+import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
+import { postgres } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
@@ -391,6 +395,17 @@ router.post("/api/:apiVersion/clienterrors/guest", apiVersion, clientErrorLimite
 * 📦 The owner's dashboard (`controllers/admin/routes.ts`): 404 to anyone not in ADMIN_USER_IDS.
 * ──────────────────────────────────────────────── */
 mountAdminRoutes(router);
+
+/**  ────────────────────────────────────────────────
+* 📦 Announcements: the owner writes them on the dashboard, the game pops them up
+* (`controllers/announcements/routes.ts`). Not echoed by logRequest: the writes carry pictures.
+* ──────────────────────────────────────────────── */
+mountAnnouncementRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, verifyAccountStatus, announcementsLimiter],
+  adminOnly,
+  imageLimiter: announcementImageLimiter,
+});
 
 /**  ────────────────────────────────────────────────
 * 📦 Debug

@@ -33,6 +33,9 @@
  * With `onWhatsNew` it has a "What's new" item, which opens the newest
  * release's cards again (`ui/events/WhatsNewDialog.ts`).
  *
+ * With `onNews` it has a "News" item, which shows the owner's current
+ * announcements again (`ui/announcements/AnnouncementDialog.ts`).
+ *
  * With `onReportBug` it has a "Report a bug" item, which opens the bug report
  * form (`ui/bugReport/BugReportDialog.ts`). After it, always, "Join the
  * Discord" opens the community invite in a new tab.
@@ -85,6 +88,8 @@ export interface AccountMenuOptions {
   readonly onLeaderboard?: () => void;
   /** The "What's new" item's action; without it there is no such item. */
   readonly onWhatsNew?: () => void;
+  /** The "News" item's action; without it there is no such item. */
+  readonly onNews?: () => void;
   /** The "Report a bug" item's action; without it there is no such item. */
   readonly onReportBug?: () => void;
 }
@@ -329,6 +334,20 @@ export class AccountMenu {
         onWhatsNew();
       });
       this.list.append(whatsNew);
+    }
+    if (options.onNews) {
+      const onNews = options.onNews;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const news = document.createElement("button");
+      news.type = "button";
+      news.className = "btn btn--ghost account-menu__help account-menu__news";
+      news.setAttribute("role", "menuitem");
+      news.textContent = "News";
+      news.addEventListener("click", () => {
+        this.toggle(false);
+        onNews();
+      });
+      this.list.append(news);
     }
     if (options.onReportBug) {
       const onReportBug = options.onReportBug;

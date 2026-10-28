@@ -1,0 +1,115 @@
+/*
+ * The owner's announcements (`ui/announcements/AnnouncementDialog.ts`): a
+ * popup (the shared `.panel` on a scrim) with the pictures on top, the words
+ * under them and "Got it" at the foot. The words and pictures
+ * (`.announcement`) are drawn the same in the dashboard's preview.
+ */
+
+.announcement-popup {
+  width: min(520px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+}
+
+.announcement-popup .panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  max-height: none;
+}
+
+.announcement {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.announcement__picture {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #24384a, #121b26);
+}
+
+.announcement__image {
+  display: block;
+  width: 100%;
+  max-height: min(42vh, 320px);
+  object-fit: contain;
+}
+
+.announcement__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.announcement__paragraph {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.announcement__link {
+  color: var(--colour-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.announcement-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.announcement-dialog__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.announcement-dialog__step {
+  margin-right: auto;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.announcement-dialog__done {
+  min-width: 128px;
+}
+
+.announcement-news__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.announcement-news__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.announcement-news__item + .announcement-news__item {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+.announcement-news__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 400;
+  color: var(--colour-text-strong);
+}
+
+.announcement-news__note {
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+@media (width <= 620px) {
+  .announcement-dialog__done {
+    flex: 1;
+  }
+}

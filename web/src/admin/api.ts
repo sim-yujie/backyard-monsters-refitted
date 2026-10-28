@@ -6,6 +6,7 @@ import {
   get,
   getAuthToken,
   postJson,
+  send,
   type FormBody,
   type JsonBody,
 } from "@/api/http";
@@ -389,5 +390,71 @@ export const fetchReportImage = async (
   let response = await load();
   if (response.status === 404 && adoptNewerSignIn()) response = await load();
   if (!response.ok) throw new Error(`The ${which} could not be loaded (${response.status}).`);
+  return URL.createObjectURL(await response.blob());
+};
+
+/** The owner's in-game announcements (server `controllers/announcements/routes.ts`). */
+export type AnnouncementStatus = "draft" | "published";
+
+export interface AdminAnnouncement {
+  id: number;
+  title: string;
+  body: string;
+  status: AnnouncementStatus;
+  startsAt: string | null;
+  endsAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  imageIds: number[];
+  /** Whether players see it now. */
+  live: boolean;
+  /** How many players pressed "Got it". */
+  dismissals: number;
+}
+
+export interface AnnouncementLimits {
+  titleMax: number;
+  bodyMax: number;
+  images: number;
+  imageBytesMax: number;
+}
+
+/** What Save sends: a picture already saved by id, or a new one as a data URL. */
+export interface AnnouncementForm {
+  title: string;
+  body: string;
+  status: AnnouncementStatus;
+  startsAt: string | null;
+  endsAt: string | null;
+  images: ({ keep: number } | { data: string })[];
+}
+
+export const fetchAnnouncements = (): Promise<
+  Envelope<{ announcements: AdminAnnouncement[]; limits: AnnouncementLimits }>
+> => adminGet(`${ADMIN}/announcements`);
+
+export const saveAnnouncement = (
+  id: number | null,
+  form: AnnouncementForm,
+): Promise<Envelope<{ announcement: AdminAnnouncement }>> =>
+  id === null
+    ? adminPost(`${ADMIN}/announcements`, { ...form })
+    : signedIn(() => send("PUT", `${ADMIN}/announcements/${id}`, { json: { ...form } }));
+
+export const deleteAnnouncement = (id: number): Promise<Envelope<{ id: number }>> =>
+  signedIn(() => send("DELETE", `${ADMIN}/announcements/${id}`));
+
+/** A saved picture (drafts' too), as a blob URL; the caller revokes it. */
+export const fetchAnnouncementImage = async (id: number): Promise<string> => {
+  const load = (): Promise<Response> => {
+    const token = getAuthToken();
+    return fetch(apiUrl(`${ADMIN}/announcements/images/${id}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  };
+  let response = await load();
+  if (response.status === 404 && adoptNewerSignIn()) response = await load();
+  if (!response.ok) throw new Error(`The picture could not be loaded (${response.status}).`);
   return URL.createObjectURL(await response.blob());
 };

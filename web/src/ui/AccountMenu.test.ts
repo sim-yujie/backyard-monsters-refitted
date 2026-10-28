@@ -267,6 +267,26 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
+  describe("the News item", () => {
+    it("is there only when asked for, just after What's new, and opens the announcements", () => {
+      const { button } = build();
+      button.click();
+      expect(menu!.element.querySelector(".account-menu__news")).toBeNull();
+      menu!.destroy();
+
+      const onNews = vi.fn();
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onWhatsNew: vi.fn(), onNews });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__news")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("News");
+      expect(item.previousElementSibling?.classList.contains("account-menu__whats-new")).toBe(true);
+      item.click();
+      expect(onNews).toHaveBeenCalledOnce();
+      expect(menu.open).toBe(false);
+    });
+  });
   describe("the Leaderboard item", () => {
     it("is there only when asked for, just before What's new, and opens the board", () => {
       const { button } = build();

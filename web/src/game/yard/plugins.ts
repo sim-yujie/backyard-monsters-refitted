@@ -4,10 +4,12 @@
  * agents building them in parallel never edit the same file, and one each for
  * the Hatchery walk-out (#228), the achievement unlock pop-up (#204), wild
  * monster raids (#226), events (the Events button, "What's new"), Moloch's
- * cave (the Inferno, WP 1.10) and "Korath unlocked" (Inferno WP 5.2).
+ * cave (the Inferno, WP 1.10), "Korath unlocked" (Inferno WP 5.2) and the
+ * owner's announcements.
  * Imported once by YardScene.ts.
  */
 import "./plugins/achievements";
+import "./plugins/announcements";
 import "./plugins/events";
 import "./plugins/goals";
 import "./plugins/guidedStart";

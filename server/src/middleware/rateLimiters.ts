@@ -568,3 +568,33 @@ export const clientErrorLimiter = spamLimiter("client-errors", SPAM_LIMITS.clien
   ctx.status = Status.TOO_MANY_REQUESTS;
   ctx.body = { error: "Too many error reports.", reason: "rateLimited" };
 });
+
+/**
+ * The game's announcement reads and "Got it" (`controllers/announcements/routes.ts`):
+ * 30 a minute per user. The client reads them once a yard visit and from the
+ * Account menu.
+ */
+export const announcementsLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "announcements",
+  keyGenerator: byUser("announcements"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/**
+ * An announcement's pictures (`controllers/announcements/routes.ts`), which
+ * need no sign-in: 120 a minute per IP. Browsers keep them a day.
+ */
+export const announcementImageLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 120,
+  prefixKey: "announcement-images",
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please try again shortly." };
+  },
+});

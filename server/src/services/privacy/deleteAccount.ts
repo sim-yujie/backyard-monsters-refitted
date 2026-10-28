@@ -202,6 +202,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "Inferno progress", table: "inferno_progress", where: `userid = ?`, params: [u] },
   { label: "Shiny the game team gave them", table: "shiny_award", where: `userid = ?`, params: [u] },
   { label: "bug reports they sent", table: "bug_report", where: `userid = ?`, params: [u] },
+  { label: "announcements they pressed \"Got it\" on", table: "announcement_dismissal", where: `userid = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
   { label: "saves (yards, outposts, inferno)", table: "save", where: `userid = ?`, params: [u] },
@@ -294,6 +295,14 @@ const updateSteps = (u: number, username: string): UpdateStep[] => [
     setParams: [],
     where: `awarded_by = ?`,
     params: [u],
+  },
+  {
+    label: "announcements written from their account (account number removed)",
+    table: "announcement",
+    set: `created_by = CASE WHEN created_by = ? THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = ? THEN NULL ELSE updated_by END`,
+    setParams: [u, u],
+    where: `created_by = ? OR updated_by = ?`,
+    params: [u, u],
   },
 ];
 
