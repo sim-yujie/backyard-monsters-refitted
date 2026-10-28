@@ -44,7 +44,7 @@ def dumps(d):
 def main():
     A = HERE.parent
     for t in ("t1", "t1b", "t2", "t3"):
-        merge(A / "cannon-3d" / t / "strip.json", json.loads((A / "cannon-3d/render" / t / "aim.json").read_text()))
+        merge(A / "cannon-3d" / t / "strip32.json", json.loads((A / "cannon-3d/render" / t / "aim.json").read_text()))
     for t in ("t1", "t2", "t3"):
         merge(A / "sniper-3d" / t / "strip.json", json.loads((A / "sniper-3d/render" / t / "aim.json").read_text()))
         aim = json.loads((A / "laser-3d/render" / t / "aim.json").read_text())

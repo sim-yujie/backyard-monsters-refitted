@@ -167,7 +167,8 @@ def materials(tier):
         M["stripes"] = m_stripes((214, 30, 30), (236, 232, 228))
         for k in ("plate", "bar", "column", "ring", "trim", "rim", "yoke", "thread"):
             M[k] = gold
-        M["box"] = M["head"] = L.mat_metal("lgold", spec=1.0)
+        M["head"] = L.mat_metal("lgold", spec=1.0)
+        M["box"] = L.mat_metal("lgold", spec=1.0, wave=0.1)   # big flat panels: smooth polish, not crinkled foil
         M["plate_top"] = L.mat_flat("plate_top", (92, 58, 18), spec=0.3)
         M["lid"] = M["box"]
         M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)

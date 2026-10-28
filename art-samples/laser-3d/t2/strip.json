@@ -207,5 +207,6 @@
   [22.18, 22.06, 21.9, 21.76, 21.71, 21.76, 21.9, 22.06, 22.18, 22.17, 21.95, 21.44, 20.61, 19.42, 17.87, 15.99, 13.85, 11.57, 9.35, 7.58, 6.86, 7.58, 9.35, 11.57, 13.85, 15.99, 17.87, 19.42, 20.61, 21.44, 21.95, 22.17],
   [22.02, 22.14, 22.18, 22.2, 22.2, 22.2, 22.18, 22.14, 22.02, 21.78, 21.39, 20.8, 20.01, 18.99, 17.78, 16.41, 14.95, 13.52, 12.28, 11.41, 11.1, 11.41, 12.28, 13.52, 14.95, 16.41, 17.78, 18.99, 20.01, 20.8, 21.39, 21.78]
  ],
- "aim_note": "aim_deg: on-screen direction the barrel points (0 = right, 90 = down), measured from the 3D model; muzzle: [dx, dy] game px from the pivot to the muzzle tip on screen; ground_deg: on-screen direction of the cell's heading on the ground; aim_len: barrel length on screen in game px (short = pointing at or away from the viewer)."
+ "aim_note": "aim_deg: on-screen direction the barrel points (0 = right, 90 = down), measured from the 3D model; muzzle: [dx, dy] game px from the pivot to the muzzle tip on screen; ground_deg: on-screen direction of the cell's heading on the ground; aim_len: barrel length on screen in game px (short = pointing at or away from the viewer).",
+ "camera_elevation_deg": 30.0
 }

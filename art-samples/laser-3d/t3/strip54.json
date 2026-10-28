@@ -64,5 +64,6 @@
  ],
  "ground_deg": [25.0, 31.7, 38.3, 45.0, 51.6, 58.3, 65.0, 71.6, 78.3, 84.9, 91.6, 98.3, 104.9, 111.6, 118.2, 124.9, 131.6, 138.2, 144.9, 151.5, 158.2, 164.9, 171.5, 178.2, 184.8, 191.5, 198.2, 204.8, 211.5, 218.1, 224.8, 231.5, 238.1, 244.8, 251.4, 258.1, 264.8, 271.4, 278.1, 284.7, 291.4, 298.1, 304.7, 311.4, 318.0, 324.7, 331.4, 338.0, 344.7, 351.3, 358.0, 4.7, 11.3, 18.0],
  "aim_len": [16.78, 15.03, 13.48, 12.16, 11.06, 10.16, 9.46, 8.93, 8.56, 8.36, 8.32, 8.44, 8.72, 9.16, 9.77, 10.57, 11.56, 12.77, 14.2, 15.85, 17.67, 19.5, 21.07, 22.03, 22.14, 21.47, 20.34, 19.06, 17.85, 16.8, 15.93, 15.24, 14.7, 14.29, 14.0, 13.8, 13.69, 13.67, 13.73, 13.87, 14.11, 14.45, 14.91, 15.51, 16.28, 17.22, 18.35, 19.6, 20.85, 21.83, 22.2, 21.71, 20.45, 18.73],
- "aim_note": "aim_deg: on-screen direction the barrel points (0 = right, 90 = down), measured from the 3D model; muzzle: [dx, dy] game px from the pivot to the muzzle tip on screen; ground_deg: on-screen direction of the cell's heading on the ground; aim_len: barrel length on screen in game px (short = pointing at or away from the viewer)."
+ "aim_note": "aim_deg: on-screen direction the barrel points (0 = right, 90 = down), measured from the 3D model; muzzle: [dx, dy] game px from the pivot to the muzzle tip on screen; ground_deg: on-screen direction of the cell's heading on the ground; aim_len: barrel length on screen in game px (short = pointing at or away from the viewer).",
+ "camera_elevation_deg": 30.0
 }
