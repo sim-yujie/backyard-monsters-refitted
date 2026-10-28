@@ -148,7 +148,7 @@ def rope_ring(bm, R, z, r=0.045, strands=3, pitch=0.11, sides=6, mat=0):
         L.tube(bm, pts, [r * 0.56] * len(pts), sides=sides, cap=False, mat=mat)
 
 
-def stake(bm, uv, base, tip, r, sides=7, twist=0.0, mat=0, bulge=0.15):
+def stake(bm, uv, base, tip, r, sides=7, twist=0.0, mat=0, bulge=0.15, tip_mat=None):
     """A rough wooden stake from base to tip: a faceted, slightly bulging cone, with a UV whose v runs along it (grain)."""
     d = tip - base
     q = Vector((0, 0, 1)).rotation_difference(d)
@@ -162,7 +162,7 @@ def stake(bm, uv, base, tip, r, sides=7, twist=0.0, mat=0, bulge=0.15):
     for i in range(len(rings) - 1):
         for j in range(sides):
             f = bm.faces.new((rings[i][j], rings[i][(j + 1) % sides], rings[i + 1][(j + 1) % sides], rings[i + 1][j]))
-            f.material_index = mat
+            f.material_index = tip_mat if (tip_mat is not None and i >= len(rings) - 3) else mat
             for lp, (jj, ii) in zip(f.loops, ((j, i), (j + 1, i), (j + 1, i + 1), (j, i + 1))):
                 lp[uv].uv = (jj / sides, rows[ii][0] * d.length)
     f = bm.faces.new(list(reversed(rings[0])))
@@ -297,9 +297,11 @@ def mat_raw_wood(name, light=(210, 146, 90), dark=(140, 84, 46), crack=(56, 30, 
     return p.finish(col, spec=0.1, spec_rough=0.5, bump=(h, 0.45), shade=L.WARM_SHADE)
 
 
-def mat_worn_diag(name, a, b, n=6, lean=1.6, under=(104, 66, 40), edge=(232, 210, 172), soot=0.5, dirt=0.75, dirt_top=0.55):
+def mat_worn_diag(name, a, b, n=6, lean=1.6, under=(104, 66, 40), edge=(232, 210, 172), soot=0.5, dirt=0.75, dirt_top=0.55,
+                  trim=None, trim_w=0.045, chips=0.6, streaks=0.3):
     """Diagonal painted stripes wound round Z (the Inferno's red and cream), badly worn: chipped to the wood beneath,
-    paler where the folds stand out, scorched and dusty toward the ground."""
+    paler where the folds stand out, scorched and dusty toward the ground. trim: a colour painted along each stripe's
+    edge (the upper tiers' gold), trim_w wide (in stripe pairs); chips: the chip threshold (higher, fewer chips)."""
     p = L.Paint(name)
     sep = p.N.new("ShaderNodeSeparateXYZ")
     p.link(p.tc.outputs["Object"], sep.inputs[0])
@@ -308,11 +310,17 @@ def mat_worn_diag(name, a, b, n=6, lean=1.6, under=(104, 66, 40), edge=(232, 210
     u = p.math("ADD", u, p.math("MULTIPLY", p.math("SUBTRACT", p.noise(3.0, 3.0), 0.5), 0.12))   # hand-painted edges
     bnd = p.math("GREATER_THAN", p.math("FRACT", u), 0.5)
     paint = p.mix(srgb(*a), srgb(*b), bnd)
-    chip = p.ramp(p.noise(6.0, 9.0, 0.66), [(0.6, BLACK), (0.625, WHITE)])
+    if trim:
+        f = p.math("FRACT", p.math("MULTIPLY", u, 2.0))                # 0 at every stripe edge
+        d = p.math("MINIMUM", f, p.math("SUBTRACT", 1.0, f))
+        tm = p.ramp(d, [(trim_w, WHITE), (trim_w * 1.3, BLACK)])
+        gl = p.ramp(d, [(0.0, srgb(*[min(255, c + 30) for c in trim])), (trim_w, srgb(*[int(c * 0.7) for c in trim]))])
+        paint = p.mix(paint, gl, tm)
+    chip = p.ramp(p.noise(6.0, 9.0, 0.66), [(chips, BLACK), (chips + 0.025, WHITE)])
     paint = p.mix(paint, srgb(*under), chip)
-    scr = p.ramp(p.noise(14.0, 4.0, 0.5, stretch=(1.0, 1.0, 0.15)), [(0.66, BLACK), (0.7, _grey(0.5))])
+    scr = p.ramp(p.noise(14.0, 4.0, 0.5, stretch=(1.0, 1.0, 0.15)), [(chips + 0.06, BLACK), (chips + 0.1, _grey(0.5))])
     paint = p.mix(paint, srgb(*under), scr)
-    col = weather(p, paint, edge=edge, edge_k=0.6, cavity=0.7, dirt=dirt, dirt_top=dirt_top, soot=soot, streaks=0.3)
+    col = weather(p, paint, edge=edge, edge_k=0.6, cavity=0.7, dirt=dirt, dirt_top=dirt_top, soot=soot, streaks=streaks)
     return p.finish(col, spec=0.18, spec_rough=0.45, bump=(p.math("MULTIPLY", _bw(p, chip), -1.0), 0.35),
                     shade=L.WARM_SHADE)
 
@@ -389,3 +397,42 @@ def mat_worn_panels(name, n=8, ratio=0.32, cream=(226, 206, 168), red=(116, 20, 
     col = p.mix(rd, cr, panel)
     col = weather(p, col, edge=edge, edge_k=0.6, cavity=0.6, dirt=0.7, dirt_top=0.45, streaks=0.3)
     return p.finish(col, spec=0.12, spec_rough=0.5, bump=(p.noise(16.0, 7.0, 0.72), 0.25), shade=L.WARM_SHADE)
+
+
+# ------------------------------------------------------------------------------------------------------------ tiers
+# The owner's tier rule (from the wall blocks): tier 2 "more gold", like the Gold Blocks; tier 3 "black diamond with gold
+# trim", like the Black Diamond Blocks. Colours from walls/top.4.v2.png (gold: shade 150,86,10, face 232,162,40, light
+# 255,214,90) and walls/top.5.png (black diamond: 16-90 grey, faceted, white glints).
+GOLD = dict(base=(232, 162, 40), dark=(150, 86, 10), rust=(120, 72, 14), edge=(255, 236, 150))
+
+
+def mat_gold(name, rust_k=0.18, dirt=0.12, spec=0.6, dents=0.45):
+    """Worn gold: the Gold Blocks' warm yellow-orange, cleaner than iron, a little tarnish in its crevices."""
+    return mat_iron(name, rust_k=rust_k, dirt=dirt, spec=spec, dents=dents, **GOLD)
+
+
+def mat_black_crystal(name, scale=6.0, glow=(255, 92, 20), glow_k=0.55, sparkle=1.0, dark=(14, 14, 20),
+                      light=(84, 84, 104)):
+    """Black diamond plating: cut facets (each its own shade, edged by sharp ridges), white glints like the Black
+    Diamond Blocks, and a faint fire glowing in the seams between facets (the Inferno's)."""
+    p = L.Paint(name)
+    v = p.N.new("ShaderNodeTexVoronoi")
+    v.feature = 'F1'
+    v.inputs["Scale"].default_value = scale
+    p.link(p.tc.outputs["Object"], v.inputs["Vector"])
+    e = p.N.new("ShaderNodeTexVoronoi")
+    e.feature = 'DISTANCE_TO_EDGE'
+    e.inputs["Scale"].default_value = scale
+    p.link(p.tc.outputs["Object"], e.inputs["Vector"])
+    col = p.ramp(_bw(p, v.outputs["Color"]), [(0.0, srgb(*dark)), (0.55, srgb(*[(a + b) // 2 for a, b in zip(dark, light)])),
+                                              (1.0, srgb(*light))])
+    gl = p.ramp(p.noise(38.0, 2.0, 0.5), [(0.74, BLACK), (0.78, _grey(sparkle))])
+    col = p.mix(col, srgb(235, 238, 255), gl)
+    col = weather(p, col, edge=(170, 170, 196), edge_k=0.7, cavity=0.45, dirt=0.25, streaks=0.0, vary=0.08)
+    seam = p.ramp(e.outputs["Distance"], [(0.0, WHITE), (0.05, BLACK)])
+    emit = p.mix(srgb(*glow), BLACK, p.math("SUBTRACT", 1.0, p.math("MULTIPLY", _bw(p, seam), glow_k)))
+    col = p.mix(col, srgb(10, 6, 6), p.math("MULTIPLY", _bw(p, seam), 0.7))
+    h = p.math("MULTIPLY", v.outputs["Distance"], 3.0)
+    shade = [(0.0, (0.4, 0.4, 0.48, 1)), (0.2, (0.55, 0.55, 0.64, 1)), (0.5, (0.86, 0.86, 0.92, 1)), (1.0, (1.0, 1.0, 1.0, 1))]
+    return p.finish(col, spec=1.0, spec_rough=0.12, spec_col=(0.92, 0.95, 1.0, 1), metal=True, bump=(h, 0.9), shade=shade,
+                    emit=emit, edge_dark=0.4, sheen=0.35, glint=0.25)

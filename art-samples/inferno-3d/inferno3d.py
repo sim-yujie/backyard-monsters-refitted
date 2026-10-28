@@ -33,6 +33,7 @@ L.METALS.update(
 )
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["1", "body"]
 TIER = int(ARGS[0])
+LOOK = int(os.environ.get("INFERNO_LOOK", 1))   # the Blast Tower's level look (1-3, see blast_roles): render/t1-lookN
 
 
 def mat_diag(name, a, b, n=6, lean=1.6, period=1.0):
@@ -104,6 +105,17 @@ def common():
                                rust_k=0.6),
         iron_hoop=W.mat_iron("iron_hoop", base=(74, 58, 48), dark=(38, 29, 25), edge=(150, 128, 108), rust_k=0.85),
         iron_sooty=W.mat_iron("iron_sooty", rust_k=0.6, soot=0.6),
+        # the upper levels' looks (see blast_roles)
+        gold=W.mat_gold("gold"),
+        staves_clean=W.mat_planks("staves_clean", n=16, light=(204, 146, 94), dark=(160, 104, 62), dirt=0.25, cavity=0.45),
+        staves_dark_clean=W.mat_planks("staves_dark_clean", n=14, light=(160, 102, 60), dark=(112, 68, 38), dirt=0.25,
+                                       cavity=0.45),
+        stripes_gold=W.mat_worn_diag("stripes_gold", (196, 22, 16), (232, 204, 156), trim=(236, 168, 40), chips=0.68,
+                                     dirt=0.45, soot=0.25, streaks=0.18),
+        stripes_black=W.mat_worn_diag("stripes_black", (168, 14, 12), (30, 28, 36), under=(16, 14, 18),
+                                      edge=(110, 110, 130), trim=(236, 168, 40), chips=0.72, dirt=0.35, soot=0.0,
+                                      streaks=0.1),
+        crystal=W.mat_black_crystal("crystal"),
     )
 
 
@@ -137,16 +149,46 @@ def pleat(ob, n, amp, z0, z1, phase):
 
 def strap(name, M, LN, parent, r, z0, z1, n_rivets, rivet_r=0.034, phase=0.0, mat="iron_hoop"):
     """An iron hoop round a round part, riveted on."""
-    hoop = W.lathe(name, [L.band(r - 0.02, r + 0.03, z0, z1, bev=0.012)], [M[mat]], bev=0, parent=parent, sharp=35)
+    mat = M[mat] if isinstance(mat, str) else mat
+    hoop = W.lathe(name, [L.band(r - 0.02, r + 0.03, z0, z1, bev=0.012)], [mat], bev=0, parent=parent, sharp=35)
     add_outline(hoop, LN["cool"], L.LINE * 0.6)
     bm = bmesh.new()
     pts, nrm = L.ring_of(n_rivets, r + 0.03, (z0 + z1) / 2, phase)
     W.rivets(bm, pts, nrm, r=rivet_r)
-    W.obj(name + "_rivets", bm, [M[mat]], parent=parent)
+    W.obj(name + "_rivets", bm, [mat], parent=parent)
     return hoop
 
 
+def blast_roles(M):
+    """The Blast Tower's material key for each role, by LOOK (the owner's tier rule from the wall blocks: 1 worn, 2 more
+    gold like the Gold Blocks, 3 black diamond with gold trim like the Black Diamond Blocks)."""
+    if LOOK == 2:
+        return dict(skirt="stripes_gold", stake="stake", tip="gold", staves="staves_clean", staves_dark="staves_dark_clean",
+                    hoop="gold", plate="iron_dirty", rope="rope", bolt="gold", collar="gold", cap="gold", ball="iron_head",
+                    trim="gold", barrel="iron_w", band="gold")
+    if LOOK == 3:
+        return dict(skirt="stripes_black", stake="crystal", tip="gold", staves="crystal", staves_dark="crystal",
+                    hoop="gold", plate="crystal", rope="gold", bolt="gold", collar="gold", cap="crystal", ball="crystal",
+                    trim="gold", barrel="crystal", band="gold")
+    return dict(skirt="stripes_w", stake="stake", tip="stake", staves="staves", staves_dark="staves_dark", hoop="iron_hoop",
+                plate="iron_dirty", rope="rope", bolt="iron_w", collar="iron_w", cap="iron_w", ball="iron_head",
+                trim="iron_head", barrel="iron_sooty", band=None)
+
+
+def barrel_bands(tur, M, LN, y0, y1, r, z, rings, mat, mouth=1.25):
+    """Bands over a ridged barrel's rings and mouth (the upper looks' gold)."""
+    L_ = y1 - y0
+    segs = [L.band(r, r * 1.25 + 0.012, L_ * f - 0.04, L_ * f + 0.04, bev=0.01) for f in rings]
+    segs.append(L.band(r, r * mouth + 0.014, L_ - 0.09, L_ - 0.005, bev=0.01))
+    b = W.lathe("bands", segs, [M[mat]], bev=0, parent=tur, sharp=35, n=40)
+    b.matrix_basis = Matrix.Translation((0, y0, z)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')
+    add_outline(b, LN["cool"], L.LINE * 0.6)
+    return b
+
+
 def build_blast(M, LN, body):
+    R = {k: M[v] if v else None for k, v in blast_roles(M).items()}
+    faceted = LOOK == 3
     # the scorched rubble round the foot
     mound = W.lathe("mound", [[(1.14, 0.0), (1.04, 0.05), (0.92, 0.1), (0.8, 0.1), (0.66, 0.06)]], [M["dirt"]], bev=0,
                     parent=body, n=128)
@@ -157,7 +199,7 @@ def build_blast(M, LN, body):
     W.clods(cl, [bear(360 * i / 22 + 9 * (i % 3), 0.86 + 0.2 * ((i * 0.37) % 1.0), 0.05) for i in range(22)], r=0.075)
     add_outline(W.obj("clods", cl, [M["dirt"]], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
     # the skirt: a striped canvas cone in folds, worn and scorched toward the ground
-    sk = W.lathe("skirt", [[(0.88, 0.0), (0.87, 0.05), (0.58, 0.8), (0.54, 0.84)]], [M["stripes_w"]], bev=0, parent=body,
+    sk = W.lathe("skirt", [[(0.88, 0.0), (0.87, 0.05), (0.58, 0.8), (0.54, 0.84)]], [R["skirt"]], bev=0, parent=body,
                  sharp=50, n=160)
     pleat(sk, 10, 0.06, 0.0, 0.84, math.radians(90 - 18) + math.pi / 10)
     W.wobble(sk, 0.02, 2.0, 2.0)
@@ -170,74 +212,78 @@ def build_blast(M, LN, body):
         b = 360 * i / 10 + 18 + (7 if i % 2 else -5)
         lean = 0.34 + 0.14 * ((i * 0.53) % 1.0)
         h = 0.66 + 0.2 * ((i * 0.71) % 1.0)
-        W.stake(st, uv, bear(b, 0.8, 0.0), bear(b + (6 if i % 3 else -6), 0.8 + lean, h), 0.15, sides=8, twist=i * 0.7)
-    add_outline(W.obj("stakes", st, [M["stake"]], parent=body, sharp=55), LN["warm"])
+        W.stake(st, uv, bear(b, 0.8, 0.0), bear(b + (6 if i % 3 else -6), 0.8 + lean, h), 0.15, sides=5 if faceted else 8,
+                twist=i * 0.7, tip_mat=1 if LOOK > 1 else None)
+    add_outline(W.obj("stakes", st, [R["stake"], R["tip"]], parent=body, sharp=20 if faceted else 55), LN["warm"])
     # the stave neck above the skirt, an iron strap round its foot
     z1 = 1.58
-    neck = W.lathe("neck", [[(0.5, 0.78), (0.53, 0.98), (0.51, 1.17)]], [M["staves_dark"]], bev=0, wob=0.012,
-                   parent=body, sharp=35)
+    neck = W.lathe("neck", [[(0.5, 0.78), (0.53, 0.98), (0.51, 1.17)]], [R["staves_dark"]], bev=0, wob=0.012,
+                   parent=body, sharp=20 if faceted else 35, n=14 if faceted else 96)
     add_outline(neck, LN["warm"])
-    strap("neckstrap", M, LN, body, 0.51, 0.84, 0.92, 12, phase=0.25)
+    strap("neckstrap", M, LN, body, 0.51, 0.84, 0.92, 12, phase=0.25, mat=R["hoop"])
     # the tub: light staves, an iron hoop, a rope laid round its rim, a recessed iron plate with bolts in it
     tub = W.lathe("drum", [[(0.5, 1.12), (0.6, 1.16), (0.63, 1.36), (0.62, z1 - 0.04), (0.585, z1)],
                            [(0.585, z1), (0.53, z1), (0.52, z1 - 0.06)]],
-                  [M["staves"], M["staves_dark"]], mat_of_seg=[0, 1], wob=0.012, seed=3.0, parent=body, sharp=35)
+                  [R["staves"], R["staves_dark"]], mat_of_seg=[0, 1], wob=0.012, seed=3.0, parent=body,
+                  sharp=20 if faceted else 35, n=16 if faceted else 96)
     add_outline(tub, LN["warm"])
-    strap("tubhoop", M, LN, body, 0.605, 1.19, 1.27, 14, rivet_r=0.036)
-    W.lathe("plate", [[(0.53, z1 - 0.06), (0.0, z1 - 0.06)]], [M["iron_dirty"]], bev=0, parent=body)
+    strap("tubhoop", M, LN, body, 0.605, 1.19, 1.27, 14, rivet_r=0.036, mat=R["hoop"])
+    W.lathe("plate", [[(0.53, z1 - 0.06), (0.0, z1 - 0.06)]], [R["plate"]], bev=0, parent=body)
     rp = bmesh.new()
     W.rope_ring(rp, 0.6, z1 + 0.01, r=0.07, pitch=0.13)
-    add_outline(W.obj("rope", rp, [M["rope"]], parent=body, sharp=70), LN["warm"], L.LINE * 0.6)
+    add_outline(W.obj("rope", rp, [R["rope"]], parent=body, sharp=70), LN["warm"], L.LINE * 0.6)
     bm = bmesh.new()
     pts, nrm = L.ring_of(8, 0.45, z1 - 0.06, 0.5)
     W.bolts(bm, pts, [(0, 0, 1)] * 8, r=0.04)
-    add_outline(W.obj("platebolts", bm, [M["iron_w"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.5)
+    add_outline(W.obj("platebolts", bm, [R["bolt"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.5)
     # the iron collar the head sits on, a glowing slit under its bolted cap
-    col = W.lathe("collar", [[(0.3, z1 - 0.07), (0.31, z1 + 0.03), (0.27, z1 + 0.06)]], [M["iron_w"]], parent=body, sharp=35)
+    col = W.lathe("collar", [[(0.3, z1 - 0.07), (0.31, z1 + 0.03), (0.27, z1 + 0.06)]], [R["collar"]], parent=body, sharp=35)
     add_outline(col, LN["cool"])
     lathe("glowring", [[(0.3, z1 + 0.04), (0.3, z1 + 0.11), (0.27, z1 + 0.12)]], [M["glow"]], parent=body)
-    rim = W.lathe("glowcap", [L.band(0.0, 0.37, z1 + 0.11, z1 + 0.17)], [M["iron_w"]], bev=0, parent=body, sharp=35)
+    rim = W.lathe("glowcap", [L.band(0.0, 0.37, z1 + 0.11, z1 + 0.17)], [R["cap"]], bev=0, parent=body, sharp=35)
     add_outline(rim, LN["cool"])
     bm = bmesh.new()
     pts, nrm = L.ring_of(8, 0.345, z1 + 0.14, 0.5)
     W.bolts(bm, pts, nrm, r=0.032, washer=False)
-    add_outline(W.obj("capbolts", bm, [M["iron_w"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.5)
+    add_outline(W.obj("capbolts", bm, [R["bolt"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.5)
     top = z1 + 0.17
     # the head: a hammered iron ball with a riveted seam, a ridged barrel out of its side, level
     tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
     RB, HZ = 0.3, 0.3
     bm = bmesh.new()
-    Q.ball(bm, (0, 0, HZ), RB, segs=32)
-    ball = W.obj("ball", bm, [M["iron_head"]], parent=tur)
+    Q.ball(bm, (0, 0, HZ), RB, segs=10 if faceted else 32)
+    ball = W.obj("ball", bm, [R["ball"]], parent=tur, smooth=not faceted)
     W.wobble(ball, 0.008, 6.0, 4.0, radial=False)
     W.finish(ball)
     add_outline(ball, LN["cool"])
-    seam = W.lathe("seam", [L.band(RB - 0.02, RB + 0.02, HZ - 0.03, HZ + 0.03, bev=0.01)], [M["iron_head"]], bev=0,
+    seam = W.lathe("seam", [L.band(RB - 0.02, RB + 0.02, HZ - 0.03, HZ + 0.03, bev=0.01)], [R["trim"]], bev=0,
                    parent=tur, sharp=35)
     add_outline(seam, LN["cool"], L.LINE * 0.6)
     bm = bmesh.new()
     pts, nrm = L.ring_of(14, RB + 0.02, HZ, 0.5)
     W.rivets(bm, pts, nrm, r=0.032)
-    W.obj("seamrivets", bm, [M["iron_head"]], parent=tur)
+    W.obj("seamrivets", bm, [R["trim"]], parent=tur)
     bm = bmesh.new()
     Q.cyl(bm, 0.23, 0.07, Matrix.Translation((0, 0, 0.035)), segs=32)
-    add_outline(W.obj("neck_h", bm, [M["iron_w"]], parent=tur, sharp=35), LN["cool"])
+    add_outline(W.obj("neck_h", bm, [R["trim"]], parent=tur, sharp=35), LN["cool"])
     bm = bmesh.new()
     pts, nrm = L.ring_of(6, 0.2, 0.07, 0.5)
     W.bolts(bm, pts, [(0, 0, 1)] * 6, r=0.03, washer=False)
-    W.obj("neckbolts", bm, [M["iron_w"]], parent=tur, sharp=35)
-    bar = ridged_barrel("barrel", tur, M, RB * 0.5, RB + 0.5, 0.14, HZ, (0.35, 0.65), mat="iron_sooty")
+    W.obj("neckbolts", bm, [R["bolt"]], parent=tur, sharp=35)
+    bar = ridged_barrel("barrel", tur, M, RB * 0.5, RB + 0.5, 0.14, HZ, (0.35, 0.65), mat=blast_roles(M)["barrel"])
     W.finish(bar)
     add_outline(bar, LN["cool"])
+    if LOOK > 1:
+        barrel_bands(tur, M, LN, RB * 0.5, RB + 0.5, 0.14, HZ, (0.35, 0.65), blast_roles(M)["band"])
     bm = bmesh.new()      # the flange where the barrel leaves the ball, bolted
     m = Matrix.Translation((0, RB * 0.86, HZ)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')
     Q.cyl(bm, 0.21, 0.05, m, segs=32)
-    add_outline(W.obj("flange", bm, [M["iron_head"]], parent=tur, sharp=35), LN["cool"], L.LINE * 0.6)
+    add_outline(W.obj("flange", bm, [R["trim"]], parent=tur, sharp=35), LN["cool"], L.LINE * 0.6)
     bm = bmesh.new()
     pts = [Vector((0.175 * math.cos(2 * math.pi * (k + 0.5) / 6), RB * 0.86 + 0.026,
                    HZ + 0.175 * math.sin(2 * math.pi * (k + 0.5) / 6))) for k in range(6)]
     W.bolts(bm, pts, [(0, 1, 0)] * 6, r=0.026, washer=False)
-    W.obj("flangebolts", bm, [M["iron_w"]], parent=tur, sharp=35)
+    W.obj("flangebolts", bm, [R["bolt"]], parent=tur, sharp=35)
     L.empty("muzzle_base", parent=tur, loc=(0, 0, HZ))
     L.empty("muzzle_tip", parent=tur, loc=(0, RB + 0.5, HZ))
     return tur, top, ("skirt", "drum", "glowcap")
@@ -482,4 +528,4 @@ def build():
 
 
 SOLID = {1: ("skirt", "drum", "glowcap", "collar", "rope", "capbolts"), 2: ("post", "coil", "posts", "socket"), 3: ("column", "collar", "cagebars")}
-Q.run("inferno", build, TIER, HERE, turret_canvas=(400, 360, 200, 200), args=ARGS[1:], solid=SOLID[TIER])
+Q.run("inferno", build, TIER if LOOK == 1 else f"{TIER}-look{LOOK}", HERE, turret_canvas=(400, 360, 200, 200), args=ARGS[1:], solid=SOLID[TIER])
