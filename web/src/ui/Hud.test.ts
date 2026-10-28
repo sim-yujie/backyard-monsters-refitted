@@ -423,8 +423,7 @@ describe("the yard's corner layout (#171)", () => {
     expect(button("r2").textContent).toBe("23.1M/23.1M");
     expect(mark("r1").hidden).toBe(false);
     expect(mark("r1").dataset["icon"]).toBe("storagefull");
-    expect(button("r1").title).toBe(`Twigs: 15,000,000 of 15,000,000
-${FULL_NOTE}`);
+    expect(button("r1").title).toBe(`Twigs: 15,000,000 of 15,000,000\n${FULL_NOTE}`);
     // Not full: the amount alone, no mark.
     expect(button("r3").textContent).toBe("10");
     expect(mark("r3").hidden).toBe(true);
