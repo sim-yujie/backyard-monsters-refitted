@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
 import {
   directionColumn,
+  frameRow,
   MIRRORED_HEADINGS,
   REPAINT_LAYOUTS,
   REPAINTED_SHEETS,
@@ -123,6 +124,28 @@ describe("monsters and champions", () => {
     expect(sheetColumn(ichi, 0)).not.toBe(flash);
     setClassicLook(true);
     expect(sheetColumn(ichi, 0)).toBe(flash);
+  });
+
+  it("draw Korath from Flash's sheets in Classic, stomping only with Flash's own rows", () => {
+    const korath = [1, 2, 3, 4, 5, 6].map((level) => MONSTER_SPRITES[`G4_${level}`]!);
+    for (const sheet of korath) expect(REPAINTED_SHEETS[sheet.file], sheet.key).toMatch(/-repaint@\dx\.png$/);
+    setClassicLook(true);
+    for (const [index, sheet] of korath.entries()) {
+      const level = index + 1;
+      expect(spriteFor("G4", level), sheet.key).toBe(sheet);
+      expect(sheetUrl(sheet)).toBe(`/assets/monsters/korath_${level}.png`);
+      if (level > 4) {
+        // Only levels 5 and 6 quake (`hasQuake`), and Flash's own sheet
+        // carries the stomp: rows 20-29 of its 30 (`Korath.as:146-149`).
+        expect(sheet.animations.stomp).toEqual({ first: 20, count: 10, ticksPerFrame: 8 });
+        expect(sheet.rows * sheet.frameHeight).toBe(sheet.height);
+        expect([0, 48, 72].map((tick) => frameRow(sheet, "stomp", tick))).toEqual([20, 26, 29]);
+      } else {
+        // No stomp in Flash's sheet, so none is drawn: it keeps walking.
+        expect(sheet.animations.stomp, sheet.key).toBeUndefined();
+        expect(frameRow(sheet, "stomp", 48)).toBe(frameRow(sheet, "walk", 48));
+      }
+    }
   });
 
   it("pick a champion's level sheet the same way either way", () => {
