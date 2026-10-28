@@ -46,7 +46,7 @@
    and a "+1" or NEW badge on its corner. */
 .building-panel__unlock-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   gap: var(--space-2);
   margin: 0;
   padding: 0;
@@ -63,18 +63,28 @@
 }
 
 .unlock-tile__picture {
-  width: 60px;
-  height: 80px;
+  width: 48px;
+  height: 64px;
   object-fit: cover;
   border-radius: var(--radius-sm);
   background: var(--colour-surface-sunken);
 }
 
+/* Solid, so "+1" reads over any picture; NEW in the accent. */
 .unlock-tile__badge {
   position: absolute;
   top: -4px;
   right: 0;
+  border: 1px solid var(--colour-border-strong);
+  background: var(--colour-surface-raised);
+  color: var(--colour-text-strong);
   font-weight: 800;
+}
+
+.unlock-tile--new .unlock-tile__badge {
+  border-color: transparent;
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
 }
 
 .unlock-tile__name {
@@ -144,9 +154,9 @@
 
 .building-upgrade__gain {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.3em;
-  white-space: nowrap;
 }
 
 .building-upgrade__gain > .building-panel__arrow {
@@ -577,4 +587,14 @@
   .building-panel--housing .building-panel__blurb {
     display: none;
   }
+}
+
+/* A silo's room in every pool: the four icons, then "+7,500", free to wrap
+   between them in a narrow column. */
+.building-panel__all {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em;
+  font-variant-numeric: tabular-nums;
 }

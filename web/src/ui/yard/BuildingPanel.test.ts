@@ -125,7 +125,7 @@ describe("BuildingPanel: a tower at rest", () => {
     const silo = setup([HALL, building(2, 6, 1)], 2).element;
     expect(infoLines(silo)).toContain("Storage added Twigs Pebbles Putty Goo +7,500");
     expect(spokenText(silo.querySelector(".building-upgrade__gains")!)).toBe(
-      "Storage added Twigs Pebbles Putty Goo +7,500 → +15,000",
+      "Storage added +7,500 → +15,000",
     );
   });
 

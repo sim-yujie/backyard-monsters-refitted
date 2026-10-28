@@ -1872,11 +1872,11 @@ const infoValue = (value: InfoValue, icons = true): Node => {
   if (!icons) return document.createTextNode(text);
   if (value.resource) return resourceAmount(value.resource, text);
   const all = document.createElement("span");
-  all.className = "res-amount";
+  all.className = "building-panel__all";
   const row = document.createElement("span");
   row.className = "building-panel__icons";
   row.append(...RESOURCE_KEYS.map((key) => resourceIcon(key)));
-  all.append(row, ` ${text}`);
+  all.append(row, text);
   return all;
 };
 
@@ -1894,16 +1894,19 @@ const infoLabel = (label: string): Node => {
   return name ? gameIcon(name, { size: 16, label }) : document.createTextNode(label);
 };
 
-/** A row's value now and, when `withNext`, "→ next", the gain in green. */
-const infoChange = (row: InfoRow, withNext = true): Node[] => {
-  if (!withNext || !row.next) return [infoValue(row.now)];
+/**
+ * A row's value now and, when `withNext`, "→ next", the gain in green.
+ * `nowIcons` false draws "now" without its icons too.
+ */
+const infoChange = (row: InfoRow, withNext = true, nowIcons = true): Node[] => {
+  if (!withNext || !row.next) return [infoValue(row.now, nowIcons)];
   const arrow = document.createElement("span");
   arrow.className = "building-panel__arrow";
   arrow.textContent = " → ";
   const next = document.createElement("span");
   next.className = row.down ? "building-panel__next building-panel__next--down" : "building-panel__next";
   next.append(infoValue(row.next, "resources" in row.next));
-  return [infoValue(row.now), arrow, next];
+  return [infoValue(row.now, nowIcons), arrow, next];
 };
 
 /**
@@ -1918,7 +1921,9 @@ const upgradeGains = (rows: readonly InfoRow[]): HTMLElement => {
     const item = document.createElement("li");
     item.className = "building-upgrade__gain";
     item.dataset["row"] = row.label;
-    item.append(infoLabel(row.label), " ", ...infoChange(row));
+    // A silo's four icons are on its row above: here just "+7,500 → +15,000".
+    const everyResource = "amount" in row.now && !row.now.resource;
+    item.append(infoLabel(row.label), " ", ...infoChange(row, true, !everyResource));
     list.append(item);
   }
   return list;
