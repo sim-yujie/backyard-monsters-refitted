@@ -205,7 +205,7 @@ def materials():
                 brass=met("brass", "brass" if TIER == 1 else "sgold"),
                 panel=met("panel", "panel", spec=0.6, spec_rough=0.3),
                 dark=met("dark", "gunmetal", spec=0.35, spec_rough=0.3),
-                dome=met("dome", "bluesteel", spec=1.0, spec_rough=0.18, sheen=0.2) if TIER < 3 else met("dome", "black", wear=0.35, sheen=0.15),
+                dome=met("dome", "bluesteel", spec=1.0, spec_rough=0.18, sheen=0.2) if TIER < 3 else met("dome", "black", wear=0.35, sheen=0.15, top=0.8),
                 ring=steel if TIER < 3 else trim,
                 stripes=mat_stripes("chevron" if TIER < 3 else "hazard"),
                 ball=met("ball", "gunmetal" if TIER < 3 else "black", spec=0.8, spec_rough=0.22),

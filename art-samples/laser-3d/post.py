@@ -135,7 +135,7 @@ def tier_pieces(t):
         note="body parts standing in front of the head are already cut out of each cell, so no front layer is needed"),
         indent=1))
     aim = json.loads((src / "aim.json").read_text())
-    aim_fields.merge(out / "strip32.json", aim["h32"])
+    aim_fields.merge(out / "strip32.json", aim["h32"], dict(camera_elevation_deg=cam["elevation"]))
     # strip54: the game's laser layout; the cell rect grows past the painted one only if the 3D head needs it
     x, y, w, h = STRIP[t]
     r = [AX + UP * x, AY + UP * y, AX + UP * (x + w), AY + UP * (y + h)]
@@ -153,7 +153,7 @@ def tier_pieces(t):
         cells=54, cell_w=cw, cell_h=ch, rect_game_px=rect, painted_rect_game_px=list(STRIP[t]),
         rule="cell i shows the beam's screen angle 25 + 6.66 i degrees (0 = right, 90 = down), as turret.tT@2x.webp"),
         indent=1))
-    aim_fields.merge(out / "strip54.json", aim["c54"])
+    aim_fields.merge(out / "strip54.json", aim["c54"], dict(camera_elevation_deg=cam["elevation"]))
     return dict(body=body, heads=heads, cells=cells, rect=rect)
 
 
@@ -297,7 +297,8 @@ def tilt_pieces(t):
              "older strip32 (32 headings, head raised 8 degrees) and strip54 (the game's 54 laser cells) stay as they were."),
         indent=1))
     rows = tl["rows"]
-    aim_fields.merge(out / "strip.json", {k: [r[k] for r in rows] for k in aim_fields.KEYS})
+    aim_fields.merge(out / "strip.json", {k: [r[k] for r in rows] for k in aim_fields.KEYS},
+                     dict(camera_elevation_deg=tl["elevation_deg"]))
     return heads, pitches
 
 

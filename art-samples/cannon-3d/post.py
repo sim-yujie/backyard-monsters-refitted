@@ -136,7 +136,8 @@ def pieces(name):
         note="pivot = middle of each cell; heading = ground bearing in degrees (0 down-right on screen, 45 at the viewer). "
              "Rendered from cannon3d.py: the body's parts that stand in front of the barrel are already cut out of each "
              "cell, so no front layer is needed."), indent=1))
-    aim_fields.merge(out / "strip.json", json.loads((R / name / "aim.json").read_text()))
+    aim_fields.merge(out / "strip.json", json.loads((R / name / "aim.json").read_text()),
+                     dict(camera_elevation_deg=cam["elevation"]))
     full = []
     for b in barrels:
         f = body.copy()

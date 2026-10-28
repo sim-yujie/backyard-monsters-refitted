@@ -380,14 +380,15 @@ def metal_ramp(dark, mid, light):
 # Metals: (shade, colour, light), highlight colour. Gold and brass get gold highlights and dark brown edges.
 METALS = dict(
     brass=((80, 40, 8), (205, 130, 40), (245, 195, 95), (1.0, 0.86, 0.52, 1)),
-    gold=((100, 46, 0), (229, 140, 2), (255, 198, 30), (1.0, 0.92, 0.55, 1)),       # as the painted gold measures (28 Oct)
+    gold=((128, 66, 4), (234, 150, 8), (255, 206, 44), (1.0, 0.92, 0.55, 1)),     # the painted gold, shade a little less brown
     steel=((34, 36, 48), (112, 116, 136), (176, 184, 206), (0.95, 0.97, 1.0, 1)),
     gunmetal=((18, 18, 26), (70, 72, 88), (150, 156, 180), (0.92, 0.95, 1.0, 1)),
     black=((14, 10, 14), (44, 38, 48), (90, 84, 104), (0.82, 0.9, 1.0, 1)),       # purple-grey shine, as painted
 )
 
 
-def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.62, sheen=0.35, glint=0.16, polish=None):
+def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.62, sheen=0.35, glint=0.16, polish=None,
+              top=1.0):
     """A painted metal: its own dark-to-light ramp, gold/steel highlights, dark rims, a little wear (pale scratches, dark
     specks) so it does not look factory-clean. Polished (the default since 28 Oct, see mat_polished) unless polish=0."""
     dark, mid, light, hi = METALS[kind or name]
@@ -400,7 +401,7 @@ def mat_metal(name, kind=None, spec=0.9, spec_rough=0.22, wear=0.5, edge_dark=0.
         tone = p.mix(tone, speck, 1.0, 'MULTIPLY')
     if polish != 0 and not os.environ.get('LOOK3D_OLD_METAL'):   # LOOK3D_OLD_METAL=1: the look before 28 Oct
         return mat_polished(p, tone, kind or name, polish=1.0 if polish is None else polish,
-                            spec=spec, spec_rough=spec_rough, edge_dark=edge_dark)
+                            spec=spec, spec_rough=spec_rough, edge_dark=edge_dark, top=top)
     return p.finish(tone, spec=spec, spec_rough=spec_rough, spec_col=hi, metal=True, shade=metal_ramp(dark, mid, light),
                     edge_dark=edge_dark, sheen=sheen, glint=glint)
 
@@ -438,8 +439,10 @@ def _bw(p, col):
     return n.outputs[0]
 
 
-def mat_polished(p, tone, kind, polish=1.0, spec=0.9, spec_rough=0.22, edge_dark=0.62, kind2=None, mask=None):
-    """kind2, mask: a second metal where mask (a socket, 0-1) is 1 (two-metal stripes, see mat_polished_stripes)."""
+def mat_polished(p, tone, kind, polish=1.0, spec=0.9, spec_rough=0.22, edge_dark=0.62, kind2=None, mask=None, top=1.0):
+    """kind2, mask: a second metal where mask (a socket, 0-1) is 1 (two-metal stripes, see mat_polished_stripes).
+    top < 1: the brightest reflections are eased down to top (for big flat facets, which otherwise turn near-white
+    wherever they catch the horizon band or a window)."""
     dark, mid, light, hi = METALS[kind]
     stops = metal_stops(dark, mid, light, *POLISH.get(kind, ()))
     geo = p.N.new("ShaderNodeNewGeometry")
@@ -498,6 +501,8 @@ def mat_polished(p, tone, kind, polish=1.0, spec=0.9, spec_rough=0.22, edge_dark
     side = p.math("SUBTRACT", 1.0, p.math("MAXIMUM", nz.outputs[2], 0.0))
     v = p.math("MULTIPLY", v, p.math("MULTIPLY_ADD", p.math("MULTIPLY", lw.outputs["Facing"], side), -edge_dark * 0.55, 1.0))
     v = p.math("MINIMUM", v, 1.0)
+    if top < 1:
+        v = _bw(p, p.ramp(v, [(0.0, (0, 0, 0, 1)), (0.5, (0.5, 0.5, 0.5, 1)), (1.0, (top, top, top, 1))]))
     col = p.ramp(v, stops)
     if kind2:
         col = p.mix(col, p.ramp(v, metal_stops(*METALS[kind2][:3], *POLISH.get(kind2, ()))), mask)

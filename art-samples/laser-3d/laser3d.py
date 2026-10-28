@@ -173,7 +173,7 @@ def materials(tier):
         M["rivet"] = L.mat_metal("rivet", "brass", spec=1.0, spec_rough=0.2, wear=0)
     else:
         M["stripes"] = m_stripes((30, 30, 34), (236, 178, 40))
-        M["box"] = L.mat_metal("armour", "black", spec=1.0, wear=0.6)     # glossy black lacquer (owner, 28 Oct)
+        M["box"] = L.mat_metal("armour", "black", spec=1.0, wear=0.6, top=0.7)    # glossy black lacquer (owner, 28 Oct)
         M["plate"] = gold
         M["plate_top"] = plate_dark
         M["lid"] = L.mat_metal("lblack")

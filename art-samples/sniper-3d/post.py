@@ -108,7 +108,8 @@ class Tier:
             rule="cell k = heading 11.25k (0 down-right on screen, 45 at the viewer), as the painted strip",
             note="body@2x.png is on the painted body.t%d@2x.webp canvas with the pivot on the same pixel; the turret "
                  "cells (sized to fit every heading) are a little bigger than the painted 53 x 36. Nothing of the body stands in front of the turret, so no front layer." % t), indent=1))
-        aim_fields.merge(out / "strip.json", json.loads((R / "aim.json").read_text()))
+        aim_fields.merge(out / "strip.json", json.loads((R / "aim.json").read_text()),
+                         dict(camera_elevation_deg=json.loads((R / "camera.json").read_text())["elevation"]))
         # painted pieces
         self.pbody = Image.open(PA / f"body.t{t}@2x.webp").convert("RGBA")
         ps = Image.open(PA / f"turret.t{t}@2x.webp").convert("RGBA")
