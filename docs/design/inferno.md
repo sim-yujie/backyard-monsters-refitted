@@ -441,12 +441,12 @@ check. Owner screenshots before merge for any screen.
 | WP | Work | Test | Depends | Size |
 |---|---|---|---|---|
 | 6.1 | Quake/Magma on the main yard (costs, counts by Under Hall, Descent gate) + build menu (done 26 Oct: the Quake Tower, Magma Tower, Siege Factory and Siege Lab are in the main build menu once the cave is at level 5, locked until the Descent is passed (`409 infernoLocked`), counted by the Inferno Under Hall (`409 underHall`, `infernostate.underHall`) and paid from the Inferno purse (`shortfall` with `purse: "inferno"`, reports carry `purse`); the upgrade panel follows the same rules; Spurtz Cannons left out, fortify unchanged, the Yard Planner skips them; report `agent-handoffs/reports/inferno-wp61.md`) | tests + screenshots | 1.3, 1.4, 1.12 | M |
-| 6.2 | Siege weapon data both sides (Decoy, Vacuum, Jars, 10 levels) | golden + sync tests | — | S |
-| 6.3 | Siege Lab + Factory server (build, research, make weapons) | action tests | 6.2, 6.1 | M |
-| 6.4 | Client: Siege Lab/Factory screens | screenshots | 6.3 | M |
-| 6.5 | Engine: Decoy | engine tests | 6.2 | M |
-| 6.6 | Engine: Vacuum (loot bonus) | engine tests | 6.2 | M |
-| 6.7 | Engine: Jars | engine tests | 6.2 | M |
+| 6.2 | Siege weapon data both sides (Decoy, Vacuum, Jars, 10 levels) (done 25 Oct, 2a1ac47b: `game-rules/combat/siege.ts` both sides, every figure held to the Flash files by `siege.test.ts`; checked 28 Oct, report `agent-handoffs/reports/inferno-s6.md`) | golden + sync tests | — | S |
+| 6.3 | Siege Lab + Factory server (build, research, make weapons) (done 25 Oct, 5acf0707: eight `/bm/yard/siege/{lab,factory}/{start,cancel,finish,instant}` routes paid from the Inferno purse, catch-up completes jobs; building them came with 6.1; report `archive/old-handoffs/reports/inferno-siege-6.3.md`) | action tests | 6.2, 6.1 | M |
+| 6.4 | Client: Siege Lab/Factory screens (done 25 Oct, 440b4bff-8317c6a9: the "Chaos Weapons" screen with Lab and Factory tabs, phone sheet and desktop dock; report `agent-handoffs/reports/inferno-siege-6.4.md`; fresh pictures 28 Oct in `inferno-s6.md`) | screenshots | 6.3 | M |
+| 6.5 | Engine: Decoy (done 25 Oct, 2ce24cbf, 0bb1fd12: `rules/decoy.ts`, tests vs Flash; report `archive/old-handoffs/reports/inferno-siege.md`) | engine tests | 6.2 | M |
+| 6.6 | Engine: Vacuum (loot bonus) (done 25 Oct, fe607e33: `rules/vacuum.ts`, tests vs Flash; same report) | engine tests | 6.2 | M |
+| 6.7 | Engine: Jars (done 25 Oct, cacff245: `rules/jars.ts`, tests vs Flash; same report) | engine tests | 6.2 | M |
 | 6.8 | Siege picker in the attack screen (un-hide) + session/landing use; SW4-SW12 quests back (done 26 Oct: the Siege button shows in an attack when a weapon is held, not on Descent or Inferno yards; Flash's one-weapon popup (Fire, then Cancel and a hint for the Decoy and Jars, the Vacuum fires at once and needs a Town Hall standing), time left or health after firing; the Decoy, Vacuum hose and loot stream, and Jars drawn on the field; the abandoned-attack replay fights the held weapon and spends it. SW4-SW12 are back as Flash had them (unlock each weapon after C16, then Levels 5 and 10), shown only with `INFERNO_ENABLED` on; each pays one weapon made in the Chaos Factory, refused (`409 siegeRoom`, Flash's `msg_quest_noroomsiegeweapon`) unless a Factory is built, idle and empty; report `agent-handoffs/reports/inferno-wp68.md`) | tests + screenshots | 6.5-6.7 | M |
 
 ### S7 — Wrap-up (2)
