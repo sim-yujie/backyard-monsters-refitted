@@ -12,7 +12,7 @@ import "@/ui/styles/repair.css";
 import "@/ui/styles/recycle.css";
 import "@/ui/styles/takeover.css";
 import "@/ui/styles/moveyards.css";
-import "@/ui/styles/skin-flash.css";
+import "@/ui/styles/skin.css";
 
 import { App } from "@/app/App";
 import { installErrorLog } from "@/game/bugReport/errorLog";
@@ -24,7 +24,7 @@ import { applySkin } from "@/ui/skin";
 installErrorLog();
 installErrorReporter();
 
-// Trial window skins (`?skin=flash`).
+// Painted windows: steel in Modern, Flash parchment in Classic (`?skin=` to test).
 applySkin();
 
 const host = document.querySelector<HTMLElement>("#game-root");
