@@ -2,12 +2,10 @@ import z from "zod";
 import type { KoaController } from "../../utils/KoaController.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { User } from "../../database/models/user.model.js";
-import { InfernoMaproom } from "../../database/models/infernomaproom.model.js";
 import { Maproom } from "../../database/models/maproom.model.js";
 import { postgres } from "../../server.js";
 import { BaseType } from "../../enums/Base.js";
-import { findInfernoNeighbours } from "../../services/maproom/inferno/findInfernoNeighbours.js";
-import { requireInfernoOpen } from "../../services/inferno/infernoGate.js";
+import { refuseOldInferno } from "../../services/inferno/infernoGate.js";
 import { findOverworldNeighbours } from "../../services/maproom/v1/findOverworldNeighbours.js";
 import { updateNeighbourData } from "../../services/maproom/updateNeighbourData.js";
 import {
@@ -27,7 +25,8 @@ const GetNeighboursSchema = z.object({ type: z.string().optional() });
  * Controller to get neighbours for PvP matchmaking.
  * Branches on the type request body param:
  * 
- * 1. inferno - Inferno map room neighbours (cached, level-ranged, cross-world)
+ * 1. inferno - the Flash Inferno's list, refused for good: the new Inferno's
+ *    is `GET /bm/inferno/neighbours` (WP 7.1)
  * 2. absent/other - MR1 overworld neighbours (cached, level-ranged, global)
  *
  * @param {Context} ctx - Koa context object containing authenticated user and request/response
@@ -36,53 +35,8 @@ const GetNeighboursSchema = z.object({ type: z.string().optional() });
 export const getNeighbours: KoaController = async (ctx) => {
   const { type } = GetNeighboursSchema.parse(ctx.request.body);
 
-  if (type === BaseType.INFERNO) {
-    // Closed until the new Inferno ships (`config/InfernoConfig.ts`).
-    requireInfernoOpen(ctx, ctx.authUser, "neighbours inferno");
-    return getInfernoNeighbours(ctx);
-  } else {
-    return getOverworldNeighbours(ctx);
-  }
-};
-
-/**
- * Handles neighbour lookups for the Inferno Map Room.
- *
- * Serves the cached neighbour list if fresh; otherwise re-runs the search.
- * Uses a short 30-minute retry window when fewer than 10 neighbours are cached,
- * and the full 2-week TTL once the list is healthy.
- *
- * @param {Context} ctx - Koa context containing the authenticated user
- * @returns {Promise<void>} - Sets response body with inferno neighbour data
- */
-const getInfernoNeighbours: KoaController = async (ctx) => {
-  const user: User = ctx.authUser;
-
-  await postgres.em.populate(user, ["infernosave"]);
-
-  const infernoMaproom = await postgres.em.findOne(InfernoMaproom, { userid: user.userid });
-
-  if (!infernoMaproom) throw new Error("Inferno maproom not found.");
-
-  const currentDate = new Date();
-
-  const getNewNeighbours = needsNewNeighbours(infernoMaproom, currentDate);
-
-  if (getNewNeighbours) {
-    const foundNeighbours = await findInfernoNeighbours(user);
-
-    // Preserve previous attack data on attackers who may have attacked before defender seeded
-    infernoMaproom.neighbors = carryAttackCounters(infernoMaproom.neighbors, foundNeighbours);
-
-    infernoMaproom.neighborsLastCalculated = currentDate;
-    postgres.em.persist(infernoMaproom);
-    await postgres.em.flush();
-  }
-
-  const neighbours = await updateNeighbourData(infernoMaproom.neighbors, BaseType.INFERNO, undefined, user.userid);
-
-  ctx.status = Status.OK;
-  ctx.body = { error: 0, wmbases: [], bases: neighbours };
+  if (type === BaseType.INFERNO) refuseOldInferno(ctx, ctx.authUser, "neighbours inferno");
+  return getOverworldNeighbours(ctx);
 };
 
 /**

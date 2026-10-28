@@ -25,11 +25,7 @@ import { baseModeHelp } from "./modes/baseModeHelp.js";
 import { helpBlockFor } from "../../../services/friends/helpHook.js";
 import { baseModeBuild } from "./modes/baseModeBuild.js";
 import { baseModeAttack } from "./modes/baseModeAttack.js";
-import { infernoModeDescent } from "./modes/infernoModeDescent.js";
-import { infernoModeView } from "./modes/infernoModeView.js";
-import { infernoModeAttack } from "./modes/infernoModeAttack.js";
-import { infernoModeBuild } from "./modes/infernoModeBuild.js";
-import { INFERNO_MODES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
+import { INFERNO_MODES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { validateAttack } from "../../../services/maproom/validateAttack.js";
 import { playerMapVersion } from "../../../services/maproom/playerMapVersion.js";
 import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
@@ -77,8 +73,6 @@ type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
 const STRONGHOLD_FIELDS = ["level", "cell.x", "cell.y"] as const;
 
-const INFERNO_SAVE_MODES = new Set<string>([BaseMode.IBUILD, BaseMode.IATTACK, BaseMode.IWMATTACK]);
-
 /**
  * Controller responsible for loading base modes based on the user's request.
  *
@@ -90,8 +84,8 @@ export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const { baseid, type, mapversion: requestedVersion, attackData, attackcost } = BaseLoadSchema.parse(ctx.request.body);
 
-  // The old Inferno modes are closed until the new Inferno ships (`config/InfernoConfig.ts`).
-  if (INFERNO_MODES.has(type)) requireInfernoOpen(ctx, user, `load ${type}`);
+  // The Flash Inferno's modes are gone: the Inferno loads through `/bm/inferno/*` (WP 7.1).
+  if (INFERNO_MODES.has(type)) refuseOldInferno(ctx, user, `load ${type}`);
 
   // An attack the player left without saving is finished before anything
   // below reads a row it writes — the player's own save above all — so their
@@ -104,7 +98,7 @@ export const baseLoad: KoaController = async (ctx) => {
     if (infernoConfig.enabled) await closeInfernoPlayerAttacksOf(user.userid, type);
   }
 
-  await postgres.em.populate(user, INFERNO_SAVE_MODES.has(type) ? ["save", "infernosave"] : ["save"]);
+  await postgres.em.populate(user, ["save"]);
 
   // The player's Map Room is the one their own save records, not the
   // request's: every rule below follows it, the attack's range check above
@@ -143,7 +137,6 @@ export const baseLoad: KoaController = async (ctx) => {
       break;
 
     case BaseMode.VIEW:
-    case BaseMode.IVIEW:
       baseSave = await baseModeView(baseid, mapversion, user.save!.worldid, user);
       break;
 
@@ -163,32 +156,6 @@ export const baseLoad: KoaController = async (ctx) => {
         attackCost: attackcost,
         attackerLevel,
       }));
-      break;
-
-    case BaseMode.IDESCENT:
-      baseSave = await infernoModeDescent(user);
-      break;
-
-    case BaseMode.IBUILD:
-      baseSave = await infernoModeBuild(user);
-      break;
-
-    case BaseMode.IWMVIEW:
-      baseSave = await infernoModeView(user, baseid);
-      break;
-
-    case BaseMode.IATTACK:
-      if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
-
-      await validateAttack(user, attackData, mapversion);
-      baseSave = await infernoModeAttack(user, baseid);
-      break;
-
-    case BaseMode.IWMATTACK:
-      if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
-      
-      await validateAttack(user, attackData, mapversion);
-      baseSave = await infernoModeAttack(user, baseid);
       break;
 
     case BaseMode.WMVIEW:
@@ -319,7 +286,7 @@ export const baseLoad: KoaController = async (ctx) => {
     await invalidateSightIfFlingerChanged(user, flingerBefore, baseSave.flinger);
   }
 
-  // An attack load is committed by now (`baseModeAttack`, `infernoModeAttack`):
+  // An attack load is committed by now (`baseModeAttack`):
   // its attacker gets the whole yard; a view, a visit or a help gets it masked.
   const filteredSave = await mapSaveData(baseSave, user, { attack: isAttack });
   const isTutorialEnabled = devConfig.skipTutorial ? 205 : filteredSave.tutorialstage;
@@ -555,14 +522,6 @@ export const baseLoad: KoaController = async (ctx) => {
   if (type === BaseMode.ATTACK && mapversion === MapRoomVersion.V3) {
     if (totalStrongholdBonus > 0) response.attackingplayer = { buffs: { 5: totalStrongholdBonus } };
     if (totalDefenderStrongholdBonus > 0) response.defendingplayer = { buffs: { 6: totalDefenderStrongholdBonus } };
-  }
-
-  // Only send descent tribe IDs (201-213) to the client
-  if (type === BaseMode.IDESCENT) {
-    const wmstatus = (filteredSave.wmstatus ?? []).filter(baseid => baseid[0] >= 201 && baseid[0] <= 213);
-
-    response.resources = filteredSave.iresources;
-    response.wmstatus = wmstatus;
   }
 
   // The yard as this attack is served it, kept for the defender's replay of

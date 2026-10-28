@@ -27,9 +27,4 @@ describe("INFERNO_ENABLED", () => {
     process.env.INFERNO_ENABLED = "off";
     expect(infernoConfig.enabled).toBe(false);
   });
-
-  test("never opens the old Flash routes", () => {
-    process.env.INFERNO_ENABLED = "on";
-    expect(infernoConfig.legacyRoutesOpen).toBe(false);
-  });
 });

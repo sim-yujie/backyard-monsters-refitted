@@ -826,12 +826,12 @@ export const monsterTransferRejectedErr = (
   });
 
 /**
- * An old Flash Inferno route, refused until the new Inferno ships
- * (`config/InfernoConfig.ts`). The web client never calls one.
+ * What is left of the Flash Inferno on the shared routes, refused for good
+ * (`services/inferno/infernoGate.ts`). The web client never calls one.
  */
 export const infernoClosedErr = () =>
   new ClientSafeError({
-    message: "The Inferno is closed for now. It will open again in a later update.",
+    message: "The old Inferno is closed.",
     status: Status.FORBIDDEN,
     data: { reason: "infernoClosed" },
     isClientFriendly: true,

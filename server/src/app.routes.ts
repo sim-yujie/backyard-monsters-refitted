@@ -65,8 +65,6 @@ import { migrateToFriend, rejectMigrateToFriend } from "./controllers/maproom/v2
 
 import { getNewMap } from "./controllers/maproom/getNewMap.js";
 import { setMapVersion } from "./controllers/maproom/setMapVersion.js";
-import { infernoSave } from "./controllers/inferno/infernoSave.js";
-import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
 import { infernoState, korathSeen } from "./controllers/inferno/infernoState.js";
 import { infernoAttackStart } from "./controllers/inferno/descentAttack.js";
 import { infernoLoad } from "./controllers/inferno/infernoLoad.js";
@@ -200,9 +198,7 @@ router.post("/base/checkpoint", verifyUserAuth, attackCheckpoint);
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/bm/getnewmap", apiVersion, verifyUserAuth, logRequest, getNewMap);
 router.post("/api/:apiVersion/bm/base/load", apiVersion, verifyUserAuth, logRequest, baseLoad);
-router.post("/api/:apiVersion/bm/base/save", apiVersion, verifyUserAuth, logRequest, infernoSave);
 router.post("/api/:apiVersion/bm/base/updatesaved", verifyUserAuth, logRequest, updateSaved);
-router.post("/api/:apiVersion/bm/base/infernomonsters", apiVersion, verifyUserAuth, logRequest, infernoMonsters);
 router.post("/api/:apiVersion/bm/neighbours/get", apiVersion, verifyUserAuth, logRequest, getNeighbours);
 // The new Inferno (docs/design/inferno.md §3.2), refused while `infernoConfig.enabled` is off.
 router.get("/api/:apiVersion/bm/inferno/state", apiVersion, verifyUserAuth, verifyAccountStatus, infernoState);
