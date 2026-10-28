@@ -69,7 +69,8 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--colour-warning-text);
+  /* Amber on the dark panel; `--colour-warning-text` is the ink for a solid amber fill. */
+  color: var(--colour-warning);
 }
 
 .ach-card__name {

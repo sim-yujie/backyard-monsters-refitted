@@ -140,14 +140,20 @@ describe("UnlockPopup", () => {
 describe("the card's look", () => {
   // jsdom never applies a stylesheet, so the rule is read from the CSS text
   // (by path: under jsdom the global URL is jsdom's, which readFileSync refuses).
-  const card = (): string => {
+  const rule = (selector: string): string => {
     const file = resolve(dirname(fileURLToPath(import.meta.url)), "../styles/achievement-popup.css");
-    return /^\.ach-card \{([^}]*)\}/m.exec(readFileSync(file, "utf8"))?.[1] ?? "";
+    const text = readFileSync(file, "utf8");
+    return text.split(`\n${selector} {`)[1]?.split("}")[0] ?? "";
   };
+  const card = () => rule(".ach-card");
 
   it("sits on a solid pop-up panel, not a see-through wash over the yard", () => {
     expect(card()).toMatch(/background: var\(--colour-surface-raised\);/);
     expect(card()).toMatch(/backdrop-filter: var\(--blur-panel\);/);
     expect(card()).not.toMatch(/--colour-surface-overlay/);
+  });
+
+  it("writes its kicker in amber, not the dark ink meant for an amber fill", () => {
+    expect(rule(".ach-card__kicker")).toMatch(/color: var\(--colour-warning\);/);
   });
 });
