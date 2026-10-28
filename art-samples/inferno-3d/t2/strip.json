@@ -21,7 +21,7 @@
  "top_entry": [
   "top.t2@2x.png",
   -37,
-  -76
+  -77
  ],
  "rule": "cell k = ground bearing 11.25k (0 down-right on screen, 45 at the viewer); the barrels at one fixed raise; the game picks the cell by aim_deg and starts the shot at muzzle",
  "note": "all entries game px from the building's origin; body@2x.png and the cells are @2x. Nothing of the body is drawn in front of the turret: its parts in front are cut out of every cell, so no front layer.",

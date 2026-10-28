@@ -6,7 +6,7 @@
  "pivot_in_cell_2x": [66.0, 66.0],
  "body_entry": [
   "body.t1@2x.png",
-  -41,
+  -47,
   -30
  ],
  "strip_entry": [
@@ -20,7 +20,7 @@
  "pivot": [0.0, -20.83],
  "top_entry": [
   "top.t1@2x.png",
-  -41,
+  -47,
   -45
  ],
  "rule": "cell k = ground bearing 11.25k (0 down-right on screen, 45 at the viewer); the barrels at one fixed raise; the game picks the cell by aim_deg and starts the shot at muzzle",
