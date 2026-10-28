@@ -822,6 +822,35 @@
   font-size: var(--text-xs);
 }
 
+/* One tap's drop as pictures (less-text job 4): "[Pokey] ×30 [Fink] ×5 Tap ground". */
+.attack-army__hint:has(.attack-army__hint-item) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.attack-army__hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.attack-army__hint-item .attack-army__icon {
+  width: 24px;
+  height: 24px;
+}
+
+.attack-army__hint-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text);
+}
+
+.attack-army__hint-tap {
+  margin-left: var(--space-1);
+}
+
 /* Phone: the sheet is short, so the rows go tighter and the targets bigger. */
 @media (width <= 620px) {
   .attack-army__row {

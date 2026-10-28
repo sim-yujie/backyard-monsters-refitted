@@ -616,6 +616,49 @@ describe("ArmyPanel after a drop", () => {
   });
 });
 
+describe("ArmyPanel drop hint (less-text job 4)", () => {
+  it("asks for monsters while none are set", () => {
+    const { panel } = mount();
+    expect(control(panel.element, ".attack-army__hint").textContent).toBe("Pick monsters, then tap ground");
+  });
+
+  it("shows one tap's drop as pictures and counts, the full words kept for hover and screen readers", () => {
+    const { panel, bucket } = mount();
+    bucket.setCount("C14", 20);
+    bucket.setCount("C15", 2);
+    const [krallen] = radios(panel);
+    krallen?.click();
+
+    const hint = control(panel.element, ".attack-army__hint");
+    const items = [...hint.querySelectorAll(".attack-army__hint-item")];
+    // Two monsters, then the champion.
+    expect(items).toHaveLength(3);
+    expect(items.map((item) => item.querySelector(".attack-army__hint-count")?.textContent ?? "")).toEqual([
+      "×20",
+      "×2",
+      "",
+    ]);
+    expect(items.every((item) => item.querySelector("img, .attack-army__icon") !== null)).toBe(true);
+    expect(hint.querySelector(".attack-army__hint-tap")?.textContent).toBe("Tap ground");
+    const words = hint.querySelector(".u-visually-hidden")?.textContent ?? "";
+    expect(words).toMatch(/^Tap the yard to drop 20 .+ and 2 .+ with .+\.$/);
+    expect(hint.title).toBe(words);
+    // Pictures are not read out twice: the words carry them.
+    expect(items.every((item) => item.getAttribute("aria-hidden") === "true")).toBe(true);
+  });
+
+  it("redraws only when the drop changes", () => {
+    const { panel, bucket } = mount();
+    bucket.setCount("C14", 3);
+    const hint = control(panel.element, ".attack-army__hint");
+    const first = hint.querySelector(".attack-army__hint-item");
+    bucket.setCount("C14", 3);
+    expect(hint.querySelector(".attack-army__hint-item")).toBe(first);
+    bucket.setCount("C14", 4);
+    expect(hint.querySelector(".attack-army__hint-count")?.textContent).toBe("×4");
+  });
+});
+
 describe("ArmyPanel last army", () => {
   it("recalls the saved army, and says so when there is none", () => {
     const map = new Map<string, string>();
