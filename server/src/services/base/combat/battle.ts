@@ -81,6 +81,7 @@ export const battleReplayInput = ({
   tick,
   declareWar,
   left,
+  descentYard,
 }: {
   flinglog: unknown;
   session: AttackSession | null;
@@ -89,6 +90,8 @@ export const battleReplayInput = ({
   tick: number;
   declareWar: boolean;
   left?: boolean;
+  /** The Descent yard fought, 1 to 13 (`AbandonedInput.descentYard`); absent outside the Descent. */
+  descentYard?: number;
 }): AbandonedInput | null => {
   const log = parseFlingLog(flinglog);
   if (!log) return null;
@@ -127,6 +130,7 @@ export const battleReplayInput = ({
     ...(left !== undefined && { left }),
     // The defence the attack load served (issue #195).
     ...(session?.defenderForces && { defence: session.defenderForces }),
+    ...(descentYard !== undefined && { descentYard }),
   };
 };
 

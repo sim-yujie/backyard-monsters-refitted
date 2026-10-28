@@ -52,6 +52,7 @@ import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./mon
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { StatusIconRow, statusesOf } from "./statusIcons";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
+import { SiegeFx, type SiegeArt } from "./siegeFx";
 import { TrapReveal } from "./trapReveal";
 import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
 import {
@@ -578,6 +579,8 @@ export interface AttackBattleLayerOptions {
   readonly textures?: MonsterSheetTextures;
   /** The bomb sheets; a test hands in its own (#87). */
   readonly bombArt?: BombArt;
+  /** The siege weapons' sheets; a test hands in its own (Inferno WP 6.8). */
+  readonly siegeArt?: SiegeArt;
   /** The towers' shot sheet; a test hands in its own. */
   readonly shotSheet?: (url: string) => Promise<Texture>;
   /** The bomb rain's randomness; `Math.random` unless a test fixes it. */
@@ -802,6 +805,8 @@ export class AttackBattleLayer {
 
   /* Resource bombs (#87): the rain, and the health its particles still carry. */
   private readonly bombFx: BombFx;
+  /** The Decoy, the Vacuum's hose and the Jars (Inferno WP 6.8), in the bombs' air layer. */
+  private readonly siegeFx: SiegeFx;
   /** Falling particles, above the buildings and the bars, under the shots; made on the first bomb. */
   private air: Container | null = null;
   /** Landed debris, on the ground under the buildings; made on the first bomb. */
@@ -894,6 +899,18 @@ export class AttackBattleLayer {
         reducedMotion: this.reducedMotion,
         ...(options.bombArt ? { art: options.bombArt } : {}),
         ...(options.random ? { random: options.random } : {}),
+      },
+    );
+    const buildingOf = new Map(options.yard.buildings.map((building) => [building.id, building]));
+    this.siegeFx = new SiegeFx(
+      {
+        air: () => this.airLayer(),
+        world: (x, y) => groundWorld(x, y, this.origin),
+        building: (id) => buildingOf.get(id) ?? null,
+      },
+      {
+        reducedMotion: this.reducedMotion,
+        ...(options.siegeArt ? { art: options.siegeArt } : {}),
       },
     );
     this.fx = new CreepFx(
@@ -1006,6 +1023,7 @@ export class AttackBattleLayer {
     this.blastFx.update(shown);
     this.fx.update(shown);
     this.bombFx.update(shown);
+    this.siegeFx.update(battle.siege(), shown);
     this.showBombNumbers(shown);
 
     if (this.damageDirty) {
@@ -1273,6 +1291,7 @@ export class AttackBattleLayer {
     this.lastJump.clear();
     this.fx.destroy();
     this.bombFx.destroy();
+    this.siegeFx.destroy();
     this.heldBombHp.clear();
     this.rains.clear();
     this.bombNumbers.clear();

@@ -17,10 +17,13 @@ export const goalsActions = (tokens: BaiterTokenStore) => ({
   state: defineYardAction({
     schema: z.object({}),
     run: ({ save, now }) => planGoalsState(save, now),
+    // The Inferno's quests there (`docs/design/inferno.md` WP 4.1).
+    inferno: "allow",
   }),
   claim: defineYardAction({
     schema: GoalClaimSchema,
     run: ({ save, body, now }) => planGoalClaim(save, body.id, now),
+    inferno: "allow",
   }),
   baiterStart: defineYardAction({
     schema: z.object({}),

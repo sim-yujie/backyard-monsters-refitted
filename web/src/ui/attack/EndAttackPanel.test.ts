@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { spokenText } from "@/ui/resourceIcon";
+import { resourceName, spokenText } from "@/ui/resourceIcon";
 import type { AttackSummary } from "@/game/attack/attackSave";
 import { EndAttackPanel, formatSpan } from "./EndAttackPanel";
 
@@ -21,9 +21,12 @@ const summary = (over: Partial<AttackSummary> = {}): AttackSummary => ({
   buildingsTotal: 14,
   loot: { r1: 12_500, r2: 0, r3: 800, r4: 0 },
   lootTaken: { r1: 12_500, r2: 0, r3: 800, r4: 0 },
+  inferno: false,
+  infernoTribe: false,
   monstersSent: 45,
+  monstersBorn: 0,
   monstersLost: 9,
-  champions: [{ t: 5, hp: 41_000 }],
+  champions: [{ t: 5, l: 1, hp: 41_000 }],
   elapsedSeconds: 140,
   ...over,
 });
@@ -104,10 +107,48 @@ describe("EndAttackPanel", () => {
     expect(query(".attack-end__storage").hidden).toBe(false);
   });
 
-  it("names each champion sent with the health it has left", () => {
-    const { panel } = mountPanel({ champions: [{ t: 3, hp: 1200.7 }, { t: 5, hp: 0 }] });
-    const titled = [...panel.element.querySelectorAll<HTMLElement>("dd[title]")].map((dd) => dd.title);
-    expect(titled).toContain("Fomor health left: 1200; Krallen health left: 0");
+  /** The panel's stats as label: value, one per line. */
+  const statsOf = (panel: EndAttackPanel): Record<string, string> => {
+    const terms = [...panel.element.querySelectorAll(".attack-end__stats dt")];
+    return Object.fromEntries(terms.map((dt) => [dt.textContent, dt.nextElementSibling?.textContent ?? ""]));
+  };
+
+  it("names each champion sent on its own line, one at no health retreated as Flash's log said", () => {
+    const { panel } = mountPanel({ champions: [{ t: 3, l: 2, hp: 1200.7 }, { t: 5, l: 4, hp: 0 }] });
+    expect(statsOf(panel)["Champions"]).toBe("Level 2 Fomor, 1,200 health left; Level 4 Krallen retreated");
+    panel.close();
+    const one = mountPanel();
+    expect(statsOf(one.panel)["Champion"]).toBe("Level 1 Krallen, 41,000 health left");
+    one.panel.close();
+    const none = mountPanel({ champions: [] });
+    expect(Object.keys(statsOf(none.panel))).toEqual(["Damage", "Buildings destroyed", "Monsters lost"]);
+  });
+
+  it("never counts more monsters lost than went out: a champion is not one, and the born are said", () => {
+    // A champion-only attack used to read "2 of 0 sent".
+    const alone = mountPanel({ monstersSent: 0, monstersLost: 0, champions: [{ t: 1, l: 3, hp: 0 }] });
+    expect(statsOf(alone.panel)).toMatchObject({ "Monsters lost": "None sent", Champion: "Level 3 Gorgo retreated" });
+    alone.panel.close();
+    const split = mountPanel({ monstersSent: 4, monstersBorn: 6, monstersLost: 9 });
+    expect(statsOf(split.panel)["Monsters lost"]).toBe("9 of 10 (4 sent, 6 born in the fight)");
+  });
+
+  it("draws an Inferno fight's loot as Bone, Coal, Sulfur and Magma, in full, then as the landing credited it", () => {
+    const { panel, query } = mountPanel({
+      inferno: true,
+      loot: { r1: 3_823, r2: 120, r3: 0, r4: 0 },
+      lootTaken: { r1: 3_823, r2: 120, r3: 0, r4: 0 },
+    });
+    const items = (): HTMLElement[] => [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
+    expect(items().map(spokenText)).toEqual(["Bone 3,823", "Coal 120", "Sulfur 0", "Magma 0"]);
+    expect(items()[0]?.querySelector<HTMLElement>(".res-icon")?.dataset["realm"]).toBe("inferno");
+    // The screen around it stays the surface's.
+    expect(resourceName("r1")).toBe("Twigs");
+    panel.setSaved({ credited: { r1: 3_407, r2: 100, r3: 0, r4: 0 } });
+    expect(items().map(spokenText)).toEqual(["Bone 3,407", "Coal 100", "Sulfur 0", "Magma 0"]);
+    expect(items()[0]?.title).toBe("Bone: 3,407");
+    // The Inferno purse takes it in full: no storage note.
+    expect(query(".attack-end__storage").hidden).toBe(true);
   });
 
   it("opens saving, with Return to map disabled and no way out yet", () => {
@@ -143,6 +184,100 @@ describe("EndAttackPanel", () => {
     expect(query(".attack-end__protection").hidden).toBe(true);
     panel.setSaved({ protectedUntil: 900, now: 1_000 });
     expect(query(".attack-end__protection").hidden).toBe(true);
+  });
+
+  describe("after a Moloch tribe (Inferno WP 2.10)", () => {
+    const tribe = {
+      targetName: "Moloch's Minions",
+      endReason: "destroyed" as const,
+      damagePercent: 100,
+      title: "Attack Ended",
+      outcome: "You failed to destroy the Under Hall of this Inferno Yard, rebuild your monsters and try again.",
+      tone: "lose" as const,
+      inferno: true,
+      infernoTribe: true,
+      loot: { r1: 900, r2: 300, r3: 0, r4: 0 },
+      lootTaken: { r1: 900, r2: 300, r3: 0, r4: 0 },
+    };
+    const mountTribe = () => {
+      const onHome = vi.fn();
+      const onReturn = vi.fn();
+      const host = document.createElement("div");
+      document.body.append(host);
+      const panel = new EndAttackPanel({
+        summary: summary(tribe),
+        home: { label: "Return Home", onHome },
+        onReturn,
+        onRetry: vi.fn(),
+        onLeave: vi.fn(),
+      }).mount(host);
+      const query = <T extends HTMLElement>(selector: string): T => panel.element.querySelector<T>(selector)!;
+      return { panel, query, onHome, onReturn };
+    };
+
+    it("heads with Flash's words, and leaves out the yard-destroyed reason", () => {
+      const { panel, query } = mountTribe();
+      expect(query(".panel__title").textContent).toBe("Attack Ended");
+      expect(query(".attack-end__outcome").textContent).toBe(tribe.outcome);
+      expect(query(".attack-end__reason").hidden).toBe(true);
+      expect(panel.panel.element.classList.contains("attack-end--lose")).toBe(true);
+      panel.close();
+    });
+
+    it("opens Return Home, beside Return to map, only once the result is saved", () => {
+      const { panel, query, onHome, onReturn } = mountTribe();
+      const home = query<HTMLButtonElement>(".attack-end__home");
+      expect(home.textContent).toBe("Return Home");
+      expect(home.nextElementSibling).toBe(query(".attack-end__return"));
+      expect(home.disabled).toBe(true);
+      home.click();
+      expect(onHome).not.toHaveBeenCalled();
+      panel.setFailed({ message: "Could not reach the server to save the result.", canRetry: true });
+      expect(home.disabled).toBe(true);
+      panel.setSaved({});
+      expect(home.disabled).toBe(false);
+      home.click();
+      expect(onHome).toHaveBeenCalledTimes(1);
+      expect(onReturn).not.toHaveBeenCalled();
+      panel.close();
+    });
+
+    it("takes the landed result, says when the tribe is back, and what the full purse turned away", () => {
+      const { panel, query } = mountTribe();
+      panel.setSaved({
+        result: { title: "Base Destroyed!", outcome: "The Under Hall fell.", tone: "win" },
+        credited: { r1: 400, r2: 300, r3: 0, r4: 0 },
+        taken: { r1: 900, r2: 300, r3: 0, r4: 0 },
+        backAt: 1_000 + 3600,
+        now: 1_000,
+      });
+      expect(query(".panel__title").textContent).toBe("Base Destroyed!");
+      expect(query(".attack-end__outcome").textContent).toBe("The Under Hall fell.");
+      expect(panel.panel.element.classList.contains("attack-end--win")).toBe(true);
+      expect(panel.panel.element.classList.contains("attack-end--lose")).toBe(false);
+      const back = query(".attack-end__protection");
+      expect(back.hidden).toBe(false);
+      expect(back.textContent).toBe("Moloch's Minions will be back in 1 h.");
+      const items = [...panel.element.querySelectorAll<HTMLElement>(".attack-end__loot-item")];
+      expect(items.map(spokenText)).toEqual(["Bone 400", "Coal 300", "Sulfur 0", "Magma 0"]);
+      expect(items[0]?.title).toBe("Bone: 400 of 900 taken; the rest did not fit in your storage");
+      expect(query(".attack-end__storage").hidden).toBe(false);
+      expect(query(".attack-end__storage").textContent).toBe("Your Inferno storage was full, so some loot was lost.");
+      panel.close();
+    });
+
+    it("says no comeback while the tribe still stands", () => {
+      const { panel, query } = mountTribe();
+      panel.setSaved({ backAt: null, now: 1_000 });
+      expect(query(".attack-end__protection").hidden).toBe(true);
+      panel.close();
+    });
+  });
+
+  it("has no Return Home outside a tribe attack", () => {
+    const { panel } = mountPanel();
+    expect(panel.element.querySelector(".attack-end__home")).toBeNull();
+    panel.close();
   });
 
   it("on a failure shows the error with Retry, and Retry re-enters saving", () => {

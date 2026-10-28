@@ -110,6 +110,60 @@ describe("the art table", () => {
   });
 });
 
+describe("the Inferno art", () => {
+  it("draws the Under Hall and the Inferno Academy from their own folders", () => {
+    expect(resolveArt(14, 1, ArtState.DEFAULT, "inferno")?.folder).toBe("buildings/itownhall/");
+    expect(resolveArt(26, 1, ArtState.DEFAULT, "inferno")?.folder).toBe("buildings/iacademy/");
+    expect(artFolder(14, "inferno")).toBe("buildings/itownhall/");
+    expect(buildingName(14, "inferno")).toBe("Under Hall");
+  });
+
+  it("keeps the Under Hall's own picture when the new tower and Town Hall art is on", () => {
+    const classic = resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url;
+    setClassicBuildingArt(false);
+    try {
+      expect(resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url).toBe(classic);
+      expect(resolveArt(14, 3, ArtState.DEFAULT)?.top.url).not.toBe(classic);
+    } finally {
+      setClassicBuildingArt(true);
+    }
+  });
+
+  it("keeps the main art outside the Inferno", () => {
+    expect(resolveArt(14, 1, ArtState.DEFAULT)?.folder).not.toBe("buildings/itownhall/");
+    expect(buildingName(14)).not.toBe("Under Hall");
+  });
+
+  it("falls back to the main row for a type with no Inferno row", () => {
+    // The siege factory's Inferno row names files that are not on disk, so the
+    // generator drops it and the main art is used.
+    expect(resolveArt(133, 1, ArtState.DEFAULT, "inferno")?.folder).toBe(
+      resolveArt(133, 1, ArtState.DEFAULT)?.folder,
+    );
+  });
+
+  it("lists the Inferno files the props name but the disk lacks", () => {
+    expect(manifest.infernoMissing).toEqual([
+      "1 buildings/iboneharvester/top.2.damaged.png",
+      "1 buildings/iboneharvester/top.2.destroyed.png",
+      "100 buildings/decorations/statue-eiffeltower/shadow.jpg",
+      "100 buildings/decorations/statue-eiffeltower/top.png",
+      "113 buildings/radiotower/shadow.destroyed.jpg",
+      "113 buildings/radiotower/top.destroyed.png",
+      "127 buildings/iportal/shadow.v2.4.jpg",
+      "133 buildings/siegefactory/anim.1.png",
+      "133 buildings/siegefactory/top.1.damaged.png",
+      "133 buildings/siegefactory/top.1.png",
+      "134 buildings/siegelab/anim.1.png",
+      "134 buildings/siegelab/top.1.damaged.png",
+      "134 buildings/siegelab/top.1.png",
+      "2 buildings/icoalproducer/shadow.2.destroyed.jpg",
+      "8 buildings/imonsterlab/top.1.damaged.v2.png",
+      "8 buildings/imonsterlab/top.1.destroyed.v2.png",
+    ]);
+  });
+});
+
 describe("the captured yard", () => {
   it("uses 31 building types", () => {
     expect(fixtureTypes).toEqual([

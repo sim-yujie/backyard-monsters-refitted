@@ -11,9 +11,11 @@ import { championsAfterDefence } from "../base/combat/defenderChampion.js";
 import { landHousingLoss, lostCount } from "../base/combat/housingLoss.js";
 import { storedDamage } from "../base/storedDamage.js";
 import { damagedBuildings } from "../yard/repair.js";
+import { MOLOCH_TRIBE } from "../inferno/emergenceRaid.js";
 import type { RaidFightOutcome } from "./raidFight.js";
 import {
   readSchedule,
+  recordEmergenceFinished,
   recordRaidFinished,
   recordTrojanFinished,
   scheduleColumn,
@@ -59,6 +61,11 @@ import {
  * afterwards either way; and the schedule's wait is not retimed
  * (`recordTrojanFinished`) — only the session count resets and the
  * once-per-account flag is marked done.
+ *
+ * Moloch's emergence raid lands the same way too (`tribe === "moloch"`,
+ * {@link MOLOCH_TRIBE}, `docs/design/inferno.md` §2.3), with no reward of any
+ * kind (owner R5: no Shiny, no goal credit) and the wild raids' schedule left
+ * as it was (`recordEmergenceFinished`).
  *
  * Pure apart from mutating the save it is handed.
  */
@@ -159,6 +166,7 @@ const withoutTrojanHorse = (buildingdata: BuildingDataMap): BuildingDataMap => {
 export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: number): RaidResult => {
   const { outcome } = raid;
   const isTrojan = raid.tribe === TROJAN_TRIBE;
+  const isMoloch = raid.tribe === MOLOCH_TRIBE;
   const healthBefore = save.buildinghealthdata;
 
   buildingDataHandler(buildingDataWithout(save.buildingdata as JsonObject, outcome.firedTraps), save as Save);
@@ -206,9 +214,10 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
   if (isTrojan) save.buildingdata = withoutTrojanHorse(save.buildingdata as BuildingDataMap);
 
   const defended = outcome.healthShare >= GOOD_DEFENCE_SHARE;
-  const shiny = defended && !isTrojan ? GOOD_DEFENCE_SHINY : 0;
+  const rewarded = defended && !isTrojan && !isMoloch;
+  const shiny = rewarded ? GOOD_DEFENCE_SHINY : 0;
   if (shiny > 0) save.credits = amount(save.credits) + shiny;
-  if (defended && !isTrojan) save.onboarding = countRaidSurvived(save);
+  if (rewarded) save.onboarding = countRaidSurvived(save);
 
   const share = Math.round(outcome.healthShare * 1000) / 1000;
   const record: RaidRecord = {
@@ -220,10 +229,13 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
     shiny,
     defended,
   };
+  const schedule = readSchedule(save.aiattacks);
   save.aiattacks = scheduleColumn(
     isTrojan
-      ? recordTrojanFinished(readSchedule(save.aiattacks), record, now)
-      : recordRaidFinished(readSchedule(save.aiattacks), record)
+      ? recordTrojanFinished(schedule, record, now)
+      : isMoloch
+        ? recordEmergenceFinished(schedule, record)
+        : recordRaidFinished(schedule, record)
   );
 
   return {

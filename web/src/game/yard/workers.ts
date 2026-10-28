@@ -82,7 +82,8 @@ export const sharperToolsMultiplier = (
 
 /**
  * How many workers this yard has: one, plus every extra worker bought, capped
- * at {@link WORKER_CAP}; an outpost has {@link OUTPOST_WORKERS}.
+ * at {@link WORKER_CAP}; an outpost has {@link OUTPOST_WORKERS}. The Inferno
+ * yard counts its own `storedata.BEW` (owner decision I3, Inferno WP 1.17).
  *
  * A yard with no `storedata`, or none that reads as a number, has the one
  * worker every yard starts with.

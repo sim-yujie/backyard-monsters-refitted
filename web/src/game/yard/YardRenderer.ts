@@ -230,7 +230,13 @@ export class YardRenderer {
 
     // The base seed keeps one yard's grass the same between visits. Somebody
     // else's yard sits on open grass with no plot edge (see `Yard.foreign`).
-    this.ground.layout(yard.bounds, yard.savedAt || 1, yard.foreign ? "open" : "plot");
+    // An Inferno yard stands on lava (`BASE.as:1493-1495`).
+    this.ground.layout(
+      yard.bounds,
+      yard.savedAt || 1,
+      yard.foreign ? "open" : "plot",
+      yard.kind === "inferno" ? "lava" : "grass",
+    );
     void this.ground.loadTiles();
 
     // The creatures outlive a redraw: out of the containers the yard is about

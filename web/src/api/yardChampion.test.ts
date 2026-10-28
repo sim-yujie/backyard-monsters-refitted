@@ -62,9 +62,14 @@ describe("champion routes", () => {
 
 const T0 = 2_000_000;
 
-const setup = (champion: ChampionSaveEntry[], housed: Record<string, number> = { C2: 40 }) => {
+const setup = (
+  champion: ChampionSaveEntry[],
+  housed: Record<string, number> = { C2: 40 },
+  extra: Partial<BaseLoadResponse> = {},
+) => {
   const store = new YardStore({
     save: {
+      ...extra,
       error: 0,
       currenttime: T0,
       savetime: T0,
@@ -118,6 +123,16 @@ describe("championActions: local checks", () => {
     expect(reasonOf(await frozen.actions.raise(4))).toBe("notRaisable");
     expect((await frozen.actions.raise(2)).ok).toBe(true);
     expect(frozen.api.raise).toHaveBeenCalledWith(2);
+  });
+
+  it("raise: Korath once the load says he is unlocked (Inferno WP 5.1), and still one at a time", async () => {
+    const unlocked = { infernostate: { korathUnlocked: true } } as unknown as Partial<BaseLoadResponse>;
+    const empty = setup([], undefined, unlocked);
+    expect((await empty.actions.raise(4)).ok).toBe(true);
+    expect(empty.api.raise).toHaveBeenCalledWith(4);
+    expect(reasonOf(await setup([], undefined, unlocked).actions.raise(5))).toBe("notRaisable");
+    expect(reasonOf(await setup([gorgo()], undefined, unlocked).actions.raise(4))).toBe("championInCage");
+    expect(reasonOf(await setup([]).actions.raise(4))).toBe("notRaisable");
   });
 
   it("raise: not while an egg waits in the cage; cancelEgg needs one", async () => {

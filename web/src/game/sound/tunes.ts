@@ -15,10 +15,21 @@
  * player's own yard under attack, so it plays the "under attack" tune too
  * (`AttackScene`), and an auto-attack's replay the attack tune.
  *
- * The three Inferno tunes (`infernomusic/`) are left out on purpose: there is
- * no Inferno in this game.
+ * The Inferno has tunes of its own (`infernomusic/`, Inferno WP 7.2), chosen
+ * by the same Flash switch: the Inferno yard tune (`musicibuild`) on an
+ * Inferno yard, the player's own or another player's looked at
+ * (`ibuild`, `iview`), and the Inferno attack tune (`musiciattack`) in every
+ * Inferno fight: a Descent yard (Flash loaded it as `iwmattack`,
+ * `maproom_inferno/PlayerHandler.as:293-334`), a Moloch tribe and another
+ * player's Inferno yard. The yard and attack screens switch to them once they
+ * know the yard is the Inferno's (`YardScene`, `AttackScene`). The Moloch
+ * raid out of the cave plays the ordinary "under attack" tune, as Flash's did
+ * (`INFERNO_EMERGENCE_EVENT.as:193`). Flash's third, `Music_IDefense.mp3`
+ * (`musicipanic`), played while monsters attacked an Inferno yard
+ * (`BUILDING27.as:86-87`, `CUSTOMATTACKS.as:88-89`); nothing attacks the own
+ * Inferno yard on screen in this game, so it is not listed.
  */
-export type Tune = "yard" | "attack" | "underAttack";
+export type Tune = "yard" | "attack" | "underAttack" | "infernoYard" | "infernoAttack";
 
 export interface TuneFile {
   /** An MP3, which every browser plays, iPhones included. */
@@ -37,6 +48,8 @@ export const TUNES: Readonly<Record<Tune, TuneFile>> = {
   yard: { url: "/assets/sounds/music/yard-theme.mp3", ogg: "/assets/sounds/music/yard-theme.ogg", volume: 0.6 },
   attack: { url: "/assets/sounds/music/Music_Attack.mp3", volume: 0.7 },
   underAttack: { url: "/assets/sounds/music/Music_UnderAttack.mp3", volume: 0.7 },
+  infernoYard: { url: "/assets/sounds/infernomusic/Music_IBuild.mp3", volume: 0.6 },
+  infernoAttack: { url: "/assets/sounds/infernomusic/Music_IAttack.mp3", volume: 0.7 },
 };
 
 /** The file to stream: the Ogg copy where the browser can play it, else the MP3. */

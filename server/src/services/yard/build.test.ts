@@ -36,6 +36,9 @@ const LOCKER = 8;
 const SILO = 6;
 const RADIO = 113;
 const QUAKE = 129;
+const MAGMA = 132;
+const FACTORY = 133;
+const SIEGE_LAB = 134;
 
 const RICH = { r1: 10_000_000, r2: 10_000_000, r3: 10_000_000, r4: 10_000_000 };
 
@@ -139,8 +142,8 @@ describe("build", () => {
   });
 
   describe("refusals, in order", () => {
-    test("400 notBuildable: the Radio, an Inferno tower, the Town Hall, a decoration, an unknown type", () => {
-      for (const type of [RADIO, QUAKE, HALL, 28, 7, 999]) {
+    test("400 notBuildable: the Radio, a Spurtz Cannon, the Town Hall, a decoration, an unknown type", () => {
+      for (const type of [RADIO, 136, HALL, 28, 7, 999]) {
         const [status, data] = refusedWith(() => planBuild(yard(), { type, x: 300, y: -300 }, NOW));
         expect(status).toBe(400);
         expect(data.reason).toBe("notBuildable");
@@ -365,15 +368,100 @@ describe("nextBuildingId", () => {
 });
 
 describe("BUILDABLE_TYPES", () => {
-  test("every type has a build step and a hall allowance, and none is Inferno, Radio or Map Room 3", () => {
+  test("every type has a build step and a hall allowance, and none is a Spurtz Cannon, the Radio or Map Room 3", () => {
     for (const type of BUILDABLE_TYPES) {
       const row = COSTS[type];
       expect(row?.costs[0]).toBeDefined();
       expect(Math.max(...row!.quantity)).toBeGreaterThan(0);
       expect(["decoration", "enemy", "placeholder", "mushroom", "taunt"]).not.toContain(row!.kind);
     }
-    for (const excluded of [14, 18, 113, 129, 132, 133, 134, 136, 137, 138, 139, 140]) {
+    for (const excluded of [14, 18, 113, 136, 137, 138, 139, 140]) {
       expect(BUILDABLE_TYPES.has(excluded)).toBe(false);
     }
+  });
+
+  test("the main yard's Inferno buildings are listed (Inferno WP 6.1)", () => {
+    for (const type of [QUAKE, MAGMA, FACTORY, SIEGE_LAB]) expect(BUILDABLE_TYPES.has(type)).toBe(true);
+  });
+});
+
+/**
+ * The main yard's Inferno buildings (Inferno WP 6.1, `surfaceInferno.ts`):
+ * the Descent, then the Under Hall, then the Inferno purse. Quake Tower
+ * `costs[0]` = 312,500 / 187,500 / 125,000 Inferno, 18,000 s, `quantity`
+ * by Under Hall `[0,1,1,2,2,4,...]`; the Factory also needs the Lab.
+ */
+describe("main-yard Inferno buildings", () => {
+  const PURSE = { r1: 5_000_000, r2: 5_000_000, r3: 5_000_000, r4: 5_000_000 };
+  const CAPS = { r1max: 10_000_000, r2max: 10_000_000, r3max: 10_000_000, r4max: 10_000_000 };
+
+  /** The main yard with the standing given and a full purse. */
+  const infernoYard = (underHall: number, descentPassed = true, overrides: Partial<BuildSave> = {}): BuildSave =>
+    yard({
+      type: "main",
+      iresources: { ...PURSE, ...CAPS },
+      infernoStanding: { descentPassed, underHall },
+      ...overrides,
+    });
+
+  test("the Descent not passed: 409 infernoLocked, before anything else", () => {
+    const [status, data] = refusedWith(() => planBuild(infernoYard(3, false), { type: QUAKE, x: 300, y: -300 }, NOW));
+    expect(status).toBe(409);
+    expect(data.reason).toBe("infernoLocked");
+  });
+
+  test("no standing at all (a route that did not read it) refuses the same way", () => {
+    const save = yard({ type: "main", iresources: { ...PURSE, ...CAPS } });
+    expect(refusedWith(() => planBuild(save, { type: MAGMA, x: 300, y: -300 }, NOW))[1].reason).toBe("infernoLocked");
+  });
+
+  test("no Under Hall: 409 underHall {have 0, need 1}", () => {
+    const [status, data] = refusedWith(() => planBuild(infernoYard(0), { type: QUAKE, x: 300, y: -300 }, NOW));
+    expect(status).toBe(409);
+    expect(data).toMatchObject({ reason: "underHall", underHall: { have: 0, need: 1 } });
+  });
+
+  test("the count is by the Under Hall, not the Town Hall: one Quake Tower at Under Hall 1, two at 3", () => {
+    const one = infernoYard(1);
+    one.buildingdata!["7"] = { id: 7, t: QUAKE, X: 300, Y: 300, l: 1 } as never;
+    const [, data] = refusedWith(() => planBuild(one, { type: QUAKE, x: 300, y: -300 }, NOW));
+    expect(data).toMatchObject({ reason: "limit", limit: { have: 1, allowed: 1, next: 3 } });
+    expect(refusal(() => planBuild(one, { type: QUAKE, x: 300, y: -300 }, NOW)).message).toContain("Under Hall");
+
+    const three = infernoYard(3, true, { buildingdata: one.buildingdata });
+    expect(planBuild(three, { type: QUAKE, x: 300, y: -300 }, NOW).report.t).toBe(QUAKE);
+  });
+
+  test("the Siege Factory needs the Siege Lab: 409 requirements", () => {
+    const [status, data] = refusedWith(() => planBuild(infernoYard(1), { type: FACTORY, x: 300, y: -300 }, NOW));
+    expect(status).toBe(409);
+    expect(data).toMatchObject({ reason: "requirements" });
+    expect(data.requirements).toEqual([[SIEGE_LAB, 1, 1]]);
+  });
+
+  test("a build is paid from the purse: no debit, the purse reported", () => {
+    const outcome = planBuild(infernoYard(1), { type: QUAKE, x: 300, y: -300 }, NOW);
+    expect(outcome).not.toHaveProperty("debit");
+    expect(outcome.report).toMatchObject({ seconds: 18_000, cost: { r1: 312_500, r2: 187_500, r3: 125_000, r4: 0 } });
+    expect(outcome.slices.iresources).toMatchObject({ r1: 4_687_500, r2: 4_812_500, r3: 4_875_000, r4: 5_000_000 });
+    expect((outcome.report as { purse?: unknown }).purse).toMatchObject({ r1: 4_687_500, caps: { r1: 10_000_000 } });
+  });
+
+  test("a purse short of the price: 409 shortfall with purse inferno, whatever the surface holds", () => {
+    const save = infernoYard(1, true, { iresources: { r1: 1000, r2: 1000, r3: 1000, r4: 0, ...CAPS } });
+    const [, data] = refusedWith(() => planBuild(save, { type: QUAKE, x: 300, y: -300 }, NOW));
+    expect(data).toMatchObject({ reason: "shortfall", purse: "inferno", shortfall: { r1: 311_500, r4: 0 } });
+  });
+
+  test("cancelling gives costs[0] back to the purse, not the surface", () => {
+    const started = planBuild(infernoYard(1), { type: QUAKE, x: 300, y: -300 }, NOW);
+    const after = infernoYard(1, true, {
+      buildingdata: started.slices.buildingdata,
+      iresources: started.slices.iresources as BuildSave["iresources"],
+    });
+    const cancelled = planCancelBuild(after, started.report.id);
+    expect(cancelled).not.toHaveProperty("credit");
+    expect(cancelled.slices.iresources).toMatchObject(PURSE);
+    expect(cancelled.report.purse).toMatchObject(PURSE);
   });
 });

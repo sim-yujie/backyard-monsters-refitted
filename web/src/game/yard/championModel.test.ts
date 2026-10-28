@@ -65,6 +65,21 @@ describe("cageView", () => {
     ]);
   });
 
+  it("offers Korath too once he is unlocked (Inferno WP 5.1): the load's infernostate says so", () => {
+    const names = (save: BaseLoadResponse) => {
+      const view = cageView(save, NOW);
+      return view.kind === "empty" ? view.choices.map((one) => one.entry.name) : [];
+    };
+    const state = (korathUnlocked?: boolean) =>
+      ({ infernostate: { korathUnlocked } }) as unknown as Partial<BaseLoadResponse>;
+    expect(names(saveOf([]))).toEqual(["Gorgo", "Drull", "Fomor"]);
+    expect(names(saveOf([], state(false)))).toEqual(["Gorgo", "Drull", "Fomor"]);
+    expect(names(saveOf([], state(undefined)))).toEqual(["Gorgo", "Drull", "Fomor"]);
+    expect(names(saveOf([], state(true)))).toEqual(["Gorgo", "Drull", "Fomor", "Korath"]);
+    // One champion at a time: with Gorgo in the cage there is nothing to pick.
+    expect(cageView(saveOf([gorgo()], state(true)), NOW).kind).toBe("active");
+  });
+
   it("a juiced champion leaves the cage empty", () => {
     expect(cageView(saveOf([gorgo({ status: 2 })]), NOW).kind).toBe("empty");
   });

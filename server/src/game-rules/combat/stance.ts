@@ -4,6 +4,9 @@ import {
   LASER_PULSE_TICKS,
   LASER_TICKS,
   LASER_TYPE,
+  QUAKE_ANIM_FRAMES,
+  QUAKE_FRAME_TICKS,
+  QUAKE_TOWER_TYPE,
   TESLA_CHARGE_END,
   TESLA_LOOP_END,
   TESLA_TICKS_PER_FRAME,
@@ -316,13 +319,33 @@ const laserPerTick = (
 };
 
 /**
+ * The share of a quake that a creep takes, on average over where it can stand
+ * in the tower's reach: linear to nothing at the edge, but no less than a
+ * third (`quakeDamage`), spread evenly over the disc, comes to 35/81.
+ */
+export const QUAKE_REACH_SHARE = 35 / 81;
+
+/**
+ * The Quake Tower's damage per tick (Inferno plan WP 1.3): one quake every
+ * reload (`rate × rearm`) and the wind-up after it, ({@link QUAKE_ANIM_FRAMES}
+ * - 4) × {@link QUAKE_FRAME_TICKS} ticks once the first is past, worth
+ * {@link QUAKE_REACH_SHARE} of its damage. Its own health does not weaken it.
+ */
+const quakePerTick = (damage: number, rate: number, rearm: number): number => {
+  if (rate <= 0 || damage <= 0) return 0;
+  const cycle = rate * rearm + (QUAKE_ANIM_FRAMES - 4) * QUAKE_FRAME_TICKS;
+  return (Math.trunc(damage) * QUAKE_REACH_SHARE) / cycle;
+};
+
+/**
  * A tower's damage per tick, scaled by its own health like its shot
  * ({@link towerShotDamage}). Most towers fire one shot every `rate × rearm`
  * ticks (`BTOWER.as:184-220`, {@link plainTowerPerTick}); the three the
  * champion used to underrate (issue #276) read their own real cycle instead:
  * the Aerial Defense's salvo ({@link aerialDefensePerTick}, issue #265), the
  * Tesla's charge-and-zap ({@link teslaPerTick}, issue #266), and the Laser's
- * sweep-and-pulse ({@link laserPerTick}, issue #267).
+ * sweep-and-pulse ({@link laserPerTick}, issue #267); and the Quake Tower its
+ * quake after a wind-up ({@link quakePerTick}).
  */
 export const towerPerTick = (
   type: number,
@@ -338,6 +361,7 @@ export const towerPerTick = (
   }
   if (type === TESLA_TYPE) return teslaPerTick(damage, rate, rearm, hp, maxHp);
   if (type === LASER_TYPE) return laserPerTick(damage, rate, rearm, hp, maxHp);
+  if (type === QUAKE_TOWER_TYPE) return quakePerTick(damage, rate, rearm);
   return plainTowerPerTick(damage, rate, rearm, hp, maxHp);
 };
 

@@ -1,4 +1,5 @@
 import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
+import { monsterRealmOf } from "@/game/monsters/realm";
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { YardResponse } from "./types";
@@ -24,6 +25,10 @@ export interface JuiceReport {
   goo: number;
   /** Goo the storage cap turned away. */
   lost: number;
+  /** Magma that landed in the Inferno purse, from Inferno monsters juiced on the main yard. */
+  magma?: number;
+  /** Magma the Inferno cap turned away. */
+  magmaLost?: number;
   /** The Juicer's rate that applied. */
   rate: number;
 }
@@ -77,7 +82,7 @@ export const juiceActions = (store: YardStore, api: JuiceApi = juiceApi): JuiceA
         if (!status.ok) {
           const reason =
             status.problem === "building" || status.problem === "upgrading" ? "busy" : status.problem;
-          return refuse(reason, juicerProblemText(status.problem));
+          return refuse(reason, juicerProblemText(status.problem, monsterRealmOf(reader.kind)));
         }
         const entries = Object.entries(monsters).filter(([, n]) => n > 0);
         if (entries.length === 0) return refuse("badRequest", "Pick at least one monster to juice.");

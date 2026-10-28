@@ -134,7 +134,7 @@ describe("MonstersScreen: the frame", () => {
   });
 
   it("knows each monster building's Town Hall", () => {
-    expect([8, 13, 15, 16, 26, 116].map(townHallFor)).toEqual([2, 1, 1, 3, 3, 5]);
+    expect([8, 13, 15, 16, 26, 116].map((type) => townHallFor(type))).toEqual([2, 1, 1, 3, 3, 5]);
   });
 
   it("switches tabs from the strip, by click and by arrow keys", () => {

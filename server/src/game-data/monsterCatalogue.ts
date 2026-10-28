@@ -9,8 +9,10 @@
  * `server/public/gamestage/assets/english.json`. Decision D7
  * (`docs/design/yard-buildings.md` §4.8) is applied on top: Vorg (C16),
  * Slimeattikus (C17) and Rezghul (C19) are obtainable, Rezghul in locker slot
- * page 4 / order 4; Slimeattikus Mini (C18) stays blocked as C17's spawn. C200
- * and the Inferno roster are not included.
+ * page 4 / order 4; Slimeattikus Mini (C18) stays blocked as C17's spawn. The
+ * Inferno roster (IC1-IC8) is its own list, `INFERNO_MONSTER_CATALOGUE`, priced
+ * in Sulfur (unlock, training) and Magma (hatching) on the Inferno yard
+ * (`docs/design/inferno.md` §2.6). C200 is not included.
  *
  * This file exists twice, byte for byte: `web/src/game/monsters/monsterCatalogue.ts`
  * (what the Monsters screen shows) and `server/src/game-data/monsterCatalogue.ts`
@@ -20,12 +22,12 @@
  * combat rules and `server/src/game-data/stats/monsterStats.ts`.
  */
 
-/** One paid step: `[putty, seconds]`. */
+/** One paid step: `[putty, seconds]` (Sulfur for an Inferno monster). */
 export type PaidStep = readonly [putty: number, seconds: number];
 
-/** One surface monster. */
+/** One monster: a surface one, or an Inferno one (`IC…`). */
 export interface MonsterEntry {
-  /** Roster id, `C1`..`C19`. */
+  /** Roster id, `C1`..`C19` or `IC1`..`IC8`. */
   readonly id: string;
   readonly name: string;
   /** The game's own blurb; contains `<br>` and `<b>` markup. */
@@ -430,6 +432,157 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
   },
 ];
 
+/**
+ * The Inferno roster, `IC1`..`IC8`: unlocked in the Inferno's Monster Locker
+ * and trained in its Academy for Sulfur, hatched in its Incubators for Magma.
+ */
+export const INFERNO_MONSTER_CATALOGUE: readonly MonsterEntry[] = [
+  // IC1 Spurtz — CREATURELOCKER.as:604
+  {
+    id: "IC1",
+    name: "Spurtz",
+    description: "Born in the magma pits that dot the Inferno landscape, Spurtz is a hothead who will attack anything in its path.",
+    page: 1,
+    order: 1,
+    index: 1,
+    resource: 2400,
+    time: 3600,
+    level: 1,
+    blocked: false,
+    spawnedBy: null,
+    trainingCosts: [[2400, 3600], [4800, 7200], [7200, 10800], [9600, 14400], [14400, 21600]],
+    cResource: [500, 1000, 2000, 4000, 6000, 10000],
+    cTime: [15, 10, 8, 7, 6, 5],
+    cStorage: [15],
+  },
+  // IC2 Zagnoid — CREATURELOCKER.as:629
+  {
+    id: "IC2",
+    name: "Zagnoid",
+    description: "Zagnoid may look like a science experiment gone wrong, but it's actually highly adapted to the sulfuric fumes that permeate Inferno. It has a keen sense of smell that leads it directly to defensive towers.",
+    page: 1,
+    order: 2,
+    index: 2,
+    resource: 4800,
+    time: 14400,
+    level: 1,
+    blocked: false,
+    spawnedBy: null,
+    trainingCosts: [[4800, 14400], [9600, 28800], [14400, 43200], [19200, 57600], [28800, 86400]],
+    cResource: [2500, 4000, 8000, 12000, 16000, 20000],
+    cTime: [15, 16, 16, 16, 16, 16],
+    cStorage: [15],
+  },
+  // IC3 Malphus — CREATURELOCKER.as:679
+  {
+    id: "IC3",
+    name: "Malphus",
+    description: "The \"sneaker\" of Inferno, Malphus always looks like it's plotting someone's demise. Its multiple legs enable it to move fast and leap over walls. Protect your harvesters and Resource Pods from this one.",
+    page: 2,
+    order: 2,
+    index: 4,
+    resource: 76800,
+    time: 64800,
+    level: 2,
+    blocked: false,
+    spawnedBy: null,
+    trainingCosts: [[76800, 64800], [153600, 129600], [230400, 194400], [307200, 259200], [460800, 388800]],
+    cResource: [3000, 3500, 4100, 4800, 5500, 7000],
+    cTime: [100, 100, 90, 90, 90, 90],
+    cStorage: [15],
+  },
+  // IC4 Valgos — CREATURELOCKER.as:653
+  {
+    id: "IC4",
+    name: "Valgos",
+    description: "Valgos is made for burrowing through the ashy debris of Inferno. Its massive jaws enable it to crunch through and swallow walls with little effort.",
+    page: 2,
+    order: 1,
+    index: 3,
+    resource: 38400,
+    time: 64800,
+    level: 2,
+    blocked: false,
+    spawnedBy: null,
+    trainingCosts: [[38400, 64800], [76800, 129600], [115200, 194400], [153600, 259200], [230400, 388800]],
+    cResource: [31000, 35000, 39000, 44000, 50000, 55000],
+    cTime: [450, 350, 250, 225, 195, 195],
+    cStorage: [30],
+  },
+  // IC5 Balthazar — CREATURELOCKER.as:704
+  {
+    id: "IC5",
+    name: "Balthazar",
+    description: "Nocturnal by nature, Balthazar thrives in the dark caverns of Inferno. Its wings give it the ability to swoop in on unsuspecting enemies to land deadly attacks.",
+    page: 3,
+    order: 1,
+    index: 5,
+    resource: 614400,
+    time: 86400,
+    level: 3,
+    blocked: false,
+    spawnedBy: null,
+    trainingCosts: [[614400, 86400], [1228800, 172800], [1843200, 259200], [2457600, 345600], [3686400, 518400]],
+    cResource: [88000, 104000, 161000, 249000, 327000, 487000],
+    cTime: [1800, 1920, 2040, 2160, 2280, 2400],
+    cStorage: [40],
+  },
+  // IC6 Grokus — CREATURELOCKER.as:731
+  {
+    id: "IC6",
+    name: "Grokus",
+    description: "Grokus is easily identified by the crystalline structures that protrude from the top of its head. Slow-moving, but powerful, it uses its tentacles to efficiently suck resources from Pods and producers.",
+    page: 3,
+    order: 2,
+    index: 6,
+    resource: 1228800,
+    time: 86400,
+    level: 3,
+    blocked: false,
+    spawnedBy: null,
+    trainingCosts: [[1228800, 86400], [2457600, 172800], [3686400, 259200], [4915200, 345600], [7372800, 518400]],
+    cResource: [80000, 105000, 135000, 175000, 210000, 325000],
+    cTime: [1800, 1800, 1800, 1800, 1800, 1800],
+    cStorage: [50],
+  },
+  // IC7 Sabnox — CREATURELOCKER.as:755
+  {
+    id: "IC7",
+    name: "Sabnox",
+    description: "With heat resistant skin and an aerodynamic body, Sabnox can traverse the magma flows of Inferno as easily as the ashy terrain. Its ability to spit fire from a distance makes it deadly to defensive towers.",
+    page: 3,
+    order: 3,
+    index: 7,
+    resource: 2457600,
+    time: 172800,
+    level: 3,
+    blocked: false,
+    spawnedBy: null,
+    trainingCosts: [[2457600, 172800], [4915200, 345600], [7372800, 518400], [9830400, 691200], [14745600, 1036800]],
+    cResource: [60000, 90000, 145000, 200000, 330000, 450000],
+    cTime: [1384, 1384, 1384, 1384, 1384, 1384],
+    cStorage: [80],
+  },
+  // IC8 King Wormzer — CREATURELOCKER.as:781
+  {
+    id: "IC8",
+    name: "King Wormzer",
+    description: "A highly evolved version of the Wormzer, King Wormzer is uglier and meaner than its cousins. Its burrowing abilities and armored body make it deadly to anything that has the misfortune to get in its way.",
+    page: 4,
+    order: 1,
+    index: 8,
+    resource: 4915200,
+    time: 259200,
+    level: 4,
+    blocked: false,
+    spawnedBy: null,
+    trainingCosts: [[4915200, 259200], [7268000, 518400], [9296000, 777600], [13624000, 1036800], [19248000, 1555200]],
+    cResource: [425000, 476000, 580000, 700000, 910000, 1204000],
+    cTime: [2700],
+    cStorage: [100],
+  },
+];
+
 export const LAB_ABILITIES: readonly LabAbility[] = [
   // C3 Bolt — MONSTERLAB.as:78
   {
@@ -544,14 +697,17 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
 ];
 
 const MONSTERS_BY_ID: ReadonlyMap<string, MonsterEntry> = new Map(
-  MONSTER_CATALOGUE.map((entry) => [entry.id, entry]),
+  [...MONSTER_CATALOGUE, ...INFERNO_MONSTER_CATALOGUE].map((entry) => [entry.id, entry]),
 );
 
 const ABILITIES_BY_ID: ReadonlyMap<string, LabAbility> = new Map(
   LAB_ABILITIES.map((ability) => [ability.id, ability]),
 );
 
-/** The catalogue entry for `id`, or undefined for an id not in it (C200, Inferno, junk). */
+/**
+ * The catalogue entry for `id`, surface or Inferno, or undefined for an id in
+ * neither (C200, junk).
+ */
 export const monsterEntry = (id: string): MonsterEntry | undefined => MONSTERS_BY_ID.get(id);
 
 /** The lab ability for `id`, or undefined for the monsters that have none. */
@@ -569,8 +725,21 @@ export const LISTED_MONSTERS: readonly MonsterEntry[] = MONSTER_CATALOGUE.filter
   (entry) => !entry.blocked,
 ).sort(compareListOrder);
 
-/** True for a monster a player can unlock, hatch and house. */
-export const isListed = (id: string): boolean => monsterEntry(id)?.blocked === false;
+/** True for a surface monster a player can unlock, hatch and house. */
+export const isListed = (id: string): boolean =>
+  !isInfernoMonster(id) && monsterEntry(id)?.blocked === false;
+
+/** True for an Inferno roster id (`IC…`), known to the catalogue or not. */
+export const isInfernoMonster = (id: string): boolean => /^IC\d+$/.test(id);
+
+/** Every Inferno monster, in list order (`index`). */
+export const INFERNO_LISTED_MONSTERS: readonly MonsterEntry[] = [
+  ...INFERNO_MONSTER_CATALOGUE,
+].sort(compareListOrder);
+
+/** True for an Inferno monster a player can unlock, hatch and house in the Inferno. */
+export const isInfernoListed = (id: string): boolean =>
+  isInfernoMonster(id) && monsterEntry(id) !== undefined;
 
 /**
  * The value of a per-level ladder at academy `level`: `ladder[level - 1]`,

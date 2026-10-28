@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResourceCaps } from "@/api/types";
 import type { YardJob } from "@/game/yard/jobs";
 import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
-import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, Hud, workersText } from "./Hud";
+import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, Hud, INFERNO_FULL_NOTE, workersText } from "./Hud";
 import { Notices } from "./maproom/Notices";
-import { spokenText } from "./resourceIcon";
+import { setResourceRealm, spokenText } from "./resourceIcon";
 
 /**
  * The HUD's readouts: icons for the words (#93), and every change visible
@@ -365,6 +365,7 @@ describe("the yard's corner layout (#171)", () => {
       playerLevel: 42,
       jobs: () => [],
       save: {},
+      yard: { kind: "main" },
       now: () => 0,
       isRunning: () => false,
       subscribe: () => () => undefined,
@@ -384,6 +385,7 @@ describe("the yard's corner layout (#171)", () => {
       workers: { total: 5, busy: 0 },
       jobs: () => [],
       save: {},
+      yard: { kind: "main" },
       now: () => 0,
       isRunning: () => false,
       subscribe: () => () => undefined,
@@ -397,6 +399,56 @@ describe("the yard's corner layout (#171)", () => {
     const workers = hud.element.querySelector<HTMLButtonElement>(".hud__workers-button")!;
     expect(workers.textContent).toBe("Workers5 / 5");
     expect(workers.querySelector<HTMLElement>(".hud__workers-name")!.hidden).toBe(true);
+    hud.destroy();
+  });
+
+  it("shows the Inferno's four, its purse and its cap on the Inferno yard (WP 1.19)", () => {
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    const store = {
+      kind: "inferno",
+      caps: { r1: 1_600, r2: 1_600, r3: 1_600, r4: 1_600 },
+      workers: { total: 1, busy: 0 },
+      jobs: () => [],
+      // A level 2 Coal Extractor: 1,440 Coal an hour by the Inferno table.
+      save: { buildingdata: { "1": { id: 1, t: 2, l: 2, X: 0, Y: 0 } } },
+      yard: { kind: "inferno" },
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.setResources({ r1: 1_600, r2: 1_200 });
+    setResourceRealm("inferno");
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    const r2 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r2"]')!;
+    // Full, it names the Inferno's storage, the Resource Pod.
+    expect(r1.title).toBe(`Bone: 1,600 of 1,600\nMaking 0 an hour.\n${INFERNO_FULL_NOTE}`);
+    expect(r2.title).toBe("Coal: 1,200 of 1,600\nMaking 1,440 an hour.");
+    // Spoken, each sentence ends once (no "an hour.." before the full note).
+    expect(r1.getAttribute("aria-label")).toBe(`Bone: 1,600 of 1,600. Making 0 an hour. ${INFERNO_FULL_NOTE}`);
+    expect(r1.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("inferno");
+    // The income line of the Inferno's own harvesters (Flash's bubble gave the Inferno's rate).
+    const rate = r2.querySelector<HTMLElement>(".hud__rate")!;
+    expect(rate.hidden).toBe(false);
+    expect(rate.textContent).toBe("+1,440/h");
+    // Back on the surface the same readouts are Twigs and Pebbles again.
+    setResourceRealm("surface");
+    hud.bindYard(null);
+    expect(r2.title).toBe("Pebbles: 1,200");
+    expect(r2.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("surface");
+    hud.destroy();
+  });
+
+  it("draws the Inferno's four with no yard bound when built in the Inferno realm (a look at a player's Inferno yard, WP 3.4)", () => {
+    setResourceRealm("inferno");
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 1_600, r2: 1_600, r3: 0, r4: 0 });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    const r4 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r4"]')!;
+    expect(r1.title).toBe("Bone: 1,600");
+    expect(r4.title).toBe("Magma: 0");
+    expect(r1.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("inferno");
+    setResourceRealm("surface");
     hud.destroy();
   });
 
@@ -480,6 +532,7 @@ describe("the HUD on the player's own yard", () => {
       },
       jobs: () => store.jobList,
       // Collect all reads these; an empty yard keeps it hidden (`CollectAll.test.ts`).
+      yard: { kind: "main" },
       save: {},
       now: () => 0,
       isRunning: () => false,
@@ -674,6 +727,7 @@ describe("the HUD's income an hour", () => {
       workers: { total: 5, busy: 0 },
       jobs: () => [],
       save,
+      yard: { kind },
       now: () => 1_000,
       isRunning: () => false,
       subscribe: () => () => undefined,

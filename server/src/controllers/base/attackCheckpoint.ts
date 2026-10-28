@@ -14,6 +14,12 @@ import {
   parseCheckpoint,
 } from "../../services/base/attackCheckpoint.js";
 import { readCheckpoint, storeCheckpoint } from "../../services/base/attackCheckpointStore.js";
+import { BaseType } from "../../enums/Base.js";
+import {
+  readInfernoPlayerCheckpoint,
+  readInfernoPlayerSession,
+  storeInfernoPlayerCheckpoint,
+} from "../../services/inferno/infernoPlayerSession.js";
 
 /**
  * `POST /base/checkpoint`: the web client's running record of an attack
@@ -28,6 +34,10 @@ import { readCheckpoint, storeCheckpoint } from "../../services/base/attackCheck
  *
  * An attack with nothing dropped yet has nothing to keep (#79), so an empty
  * log is answered `stored: false` rather than refused.
+ *
+ * An attack on another player's Inferno yard is bound to its own session and
+ * kept under its own key (`infernoPlayerSession.ts`), for the Inferno
+ * finaliser (`infernoPlayerFinalise.ts`), never the surface one.
  */
 export const attackCheckpoint: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
@@ -37,12 +47,15 @@ export const attackCheckpoint: KoaController = async (ctx) => {
   const baseSave = await postgres.em.findOne(
     Save,
     { basesaveid },
-    { fields: ["basesaveid", "attackid", "saveuserid"] }
+    { fields: ["basesaveid", "attackid", "saveuserid", "type", "baseid"] }
   );
   if (!baseSave || baseSave.attackid === 0 || baseSave.saveuserid === user.userid) throw permissionErr();
 
   const now = getCurrentDateTime();
-  const session = await readAttackSession(basesaveid);
+  const inferno = baseSave.type === BaseType.INFERNO;
+  const infernoAttack = inferno ? await readInfernoPlayerSession(basesaveid) : null;
+  const session =
+    inferno ? (infernoAttack?.baseid === baseSave.baseid ? infernoAttack.session : null) : await readAttackSession(basesaveid);
   const binding = checkAttackBinding({
     session,
     callerid: user.userid,
@@ -61,11 +74,13 @@ export const attackCheckpoint: KoaController = async (ctx) => {
   }
 
   // One left by an earlier attack on this row belongs to that attack, not this one.
-  const stored = await readCheckpoint(basesaveid);
+  const stored = inferno ? await readInfernoPlayerCheckpoint(basesaveid) : await readCheckpoint(basesaveid);
   const refusal = checkpointExtends(stored?.attackid === session.attackid ? stored : null, input);
   if (refusal) throw attackCheckpointRefusedErr(refusal);
 
-  await storeCheckpoint(basesaveid, newCheckpoint(session, baseSave.saveuserid, input, now));
+  const checkpoint = newCheckpoint(session, baseSave.saveuserid, input, now);
+  if (inferno) await storeInfernoPlayerCheckpoint(basesaveid, checkpoint);
+  else await storeCheckpoint(basesaveid, checkpoint);
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, stored: true, tick: input.tick };

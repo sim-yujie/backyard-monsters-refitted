@@ -40,6 +40,11 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
+import { isDescentBaseid } from "../../../services/inferno/descent.js";
+import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
+import { landInfernoPlayerAttack } from "../../../services/inferno/infernoPlayerLanding.js";
+import { landInfernoTribeAttack } from "../../../services/inferno/infernoTribeLanding.js";
+import { isInfernoTribeBaseid } from "../../../services/inferno/infernoTribes.js";
 import { economyConfig } from "../../../config/EconomyConfig.js";
 import {
   auditEconomySave,
@@ -90,7 +95,8 @@ import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanSt
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
-import { INFERNO_SAVE_TYPES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
+import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
+import { infernoConfig } from "../../../config/InfernoConfig.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -125,7 +131,41 @@ export const baseSave: KoaController = async (ctx) => {
     return;
   }
 
+  // A Descent yard has no row either: its attack is bound to the attacker
+  // (`POST /bm/inferno/attack/start`, `services/inferno/descentLanding.ts`).
+  if (!baseSave && isDescentBaseid(saveData.baseid)) {
+    const { save: yardSave, descent } = await landDescentAttack(ctx, user, saveData);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(descent && { descent }) };
+    return;
+  }
+
+  // Nor does a Moloch tribe of the Inferno map: its attack is bound to the
+  // attacker too (`services/inferno/infernoTribeLanding.ts`).
+  if (!baseSave && isInfernoTribeBaseid(saveData.baseid)) {
+    const { save: yardSave, tribe } = await landInfernoTribeAttack(ctx, user, saveData);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(tribe && { tribe }) };
+    return;
+  }
+
   if (!baseSave) throw saveFailureErr();
+
+  // Another player's Inferno yard, attacked through the new Inferno: its
+  // attack is bound to its row (`services/inferno/infernoPlayerLanding.ts`).
+  // The owner's own saves of it stay on the old, closed route below.
+  if (baseSave.type === BaseType.INFERNO && baseSave.saveuserid !== user.userid && infernoConfig.enabled) {
+    const { save: yardSave, player } = await landInfernoPlayerAttack(ctx, user, saveData, baseSave);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(player && { player }) };
+    return;
+  }
 
   const isOwner = baseSave.saveuserid === user.userid;
   const isOutpostOwner = isOwner && baseSave.type === BaseType.OUTPOST;
@@ -134,9 +174,9 @@ export const baseSave: KoaController = async (ctx) => {
   // Not the owner and not in an attack
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
 
-  // An Inferno yard or a Moloch tribe row is the old Inferno's, closed until
-  // the new Inferno ships (`config/InfernoConfig.ts`).
-  if (INFERNO_SAVE_TYPES.has(baseSave.type)) requireInfernoOpen(ctx, user, `base/save on ${baseSave.type}`);
+  // Any other save of an Inferno yard or a Moloch tribe row is the Flash
+  // Inferno's: the new one changes them through its own routes (WP 7.1).
+  if (INFERNO_SAVE_TYPES.has(baseSave.type)) refuseOldInferno(ctx, user, `base/save on ${baseSave.type}`);
 
   // Owner saves of a main yard (issue #101) or an outpost (outposts plan WP0b)
   // are retired: yards change through the server's action routes now, and this

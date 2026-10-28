@@ -1351,28 +1351,107 @@
   }
 }
 
-/* Siege tiles (#76): name and count share a line, the hint sits under them small. */
-.attack-siege .attack-picker__tile {
+/* The siege popup (Inferno WP 6.8): the weapon's picture, its level and Fire
+ * on one line; where to tap, the time left and the health bar under them. */
+.attack-siege__head {
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  gap: 2px var(--space-2);
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.attack-siege .attack-picker__name {
-  grid-column: 1;
-  grid-row: 1;
+.attack-siege__image {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
 }
 
-.attack-siege .attack-picker__cost {
-  grid-column: 2;
-  grid-row: 1;
+.attack-siege__level {
+  margin: 0;
+  font-weight: 700;
 }
 
-.attack-siege .attack-picker__effect,
-.attack-siege .attack-picker__tile-note {
-  grid-column: 1 / -1;
-  font-size: var(--text-xs);
+.attack-siege__fire {
+  min-width: 88px;
+  min-height: 44px;
+}
+
+.attack-siege__fire[hidden] {
+  display: none;
+}
+
+.attack-siege__fire--armed {
+  background: var(--colour-surface-raised);
+  border-color: var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+/* Cancel keeps its own colours when hovered or pressed: the primary
+   button's cyan hover would sit under the red words, and on a phone the
+   hover sticks after the tap that armed it. The tints stay light enough
+   for the words to pass 4.5:1 in both themes. */
+.btn.attack-siege__fire--armed:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--colour-danger) 8%, var(--colour-surface-raised));
+  border-color: var(--colour-danger);
+}
+
+.btn.attack-siege__fire--armed:active:not(:disabled) {
+  background: color-mix(in srgb, var(--colour-danger) 12%, var(--colour-surface-raised));
+  border-color: var(--colour-danger);
+}
+
+.attack-siege__hint {
+  margin: 0;
+  font-weight: 700;
+  color: var(--colour-accent);
+}
+
+.attack-siege__hint:empty {
+  display: none;
+}
+
+.attack-siege__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.attack-siege__status[hidden],
+.attack-siege__time[hidden],
+.attack-siege__bar[hidden] {
+  display: none;
+}
+
+.attack-siege__time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Flash glowed the seconds red under ten (`updateTimeRemaining`). */
+.attack-siege__time--low {
+  color: var(--colour-danger);
+}
+
+.attack-siege__bar {
+  flex: 1 1 auto;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.attack-siege__bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--colour-success);
+}
+
+.attack-siege__stats {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
 }
 
 /* end WP4 drop, catapult, siege */

@@ -19,7 +19,11 @@ const T0 = 2_000_000;
 
 const never = <R>() => new Promise<R>(() => undefined);
 
-const setup = (extra: Partial<BaseLoadResponse> = {}, kind: "main" | "outpost" = "main") => {
+const setup = (
+  extra: Partial<BaseLoadResponse> = {},
+  kind: "main" | "outpost" | "inferno" = "main",
+  api: Partial<YardApi> = {},
+) => {
   const store = new YardStore({
     save: {
       error: 0,
@@ -33,8 +37,8 @@ const setup = (extra: Partial<BaseLoadResponse> = {}, kind: "main" | "outpost" =
       lockerdata: {},
       ...extra,
     } as unknown as BaseLoadResponse,
-    ...(kind === "outpost" ? { target: { baseid: "9", kind: "outpost" } as const } : {}),
-    api: { state: vi.fn(() => never<YardResponse<null>>()) } as unknown as YardApi,
+    ...(kind === "main" ? {} : { target: { baseid: "9", kind } as const }),
+    api: { state: vi.fn(() => never<YardResponse<null>>()), ...api } as unknown as YardApi,
     clock: () => T0,
     timers: { set: () => 0, clear: () => undefined },
   });
@@ -194,6 +198,73 @@ describe("ShopScreen", () => {
     expect(element.querySelector('[data-section="boosts"] .shop-section__note')!.textContent).toBe(
       "Tower Overdrive works when this outpost is attacked. Buying it again restarts it; time left is not added.",
     );
+  });
+
+  it("the Inferno yard shows the Inferno's store (WP 1.17) and buys through shop/buy with its baseid", async () => {
+    const shopBuy = vi.fn(() => never<YardResponse<ShopBuyReport>>());
+    const { element, card, button } = setup(
+      {
+        buildingdata: {
+          "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 },
+          "1": { id: 1, t: 17, X: 50, Y: 50, l: 1 },
+        },
+      },
+      "inferno",
+      { shopBuy },
+    );
+
+    expect(
+      [...element.querySelectorAll(".shop-section__title")].map((one) => one.textContent),
+    ).toEqual([
+      "Building",
+      "Walls",
+      "Storage and production",
+      "Monsters",
+      "Battle boosts",
+      "Protection",
+    ]);
+    expect(
+      [...element.querySelectorAll<HTMLElement>(".shop-card")].map(
+        (one) => one.dataset["item"],
+      ),
+    ).toEqual([
+      "BEW",
+      "BLK2I",
+      "BLK3I",
+      "ENLI",
+      "BIP",
+      "HODI",
+      "HOD2I",
+      "HOD3I",
+      "EXHI",
+      "TODI",
+      "PRO1",
+      "PRO2",
+      "PRO3",
+    ]);
+    expect(card("BLK2I")!.querySelector(".shop-card__name")!.textContent).toBe(
+      "Granite Blocks",
+    );
+    expect(card("BLK3I")!.querySelector(".shop-card__gate")!.textContent).toBe(
+      "Needs Under Hall level 4.",
+    );
+    expect(
+      element.querySelector('[data-section="walls"] .shop-section__note')!.textContent,
+    ).toContain("granite");
+    expect(
+      element.querySelector('[data-section="protection"] .shop-section__note')!.textContent,
+    ).toBe("Your Inferno yard is not protected. Protection you buy starts now.");
+    expect(
+      element.querySelector('[data-section="boosts"] .shop-section__note')!.textContent,
+    ).toBe(
+      "Tower Overdrive works when your Inferno yard is attacked. Buying it again restarts it; time left is not added.",
+    );
+    expect(card("ENLI")!.querySelector(".shop-card__meta")!.textContent).toBe("0 of 5 bought");
+
+    button("ENLI").click();
+    button("ENLI").click();
+    await settle();
+    expect(shopBuy).toHaveBeenCalledWith("ENLI", "9");
   });
 
   it("sells protection on top of what is left, and says how much is left", () => {

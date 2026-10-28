@@ -6,7 +6,7 @@ import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { postgres } from "../../server.js";
 import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
 import { catchUpYard } from "../../services/yard/catchUp.js";
-import { notInOutpostErr } from "../../services/yard/yardErrors.js";
+import { notInInfernoErr, notInOutpostErr } from "../../services/yard/yardErrors.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { lockOwnYard } from "../yard/yardAction.js";
 
@@ -28,6 +28,9 @@ import { lockOwnYard } from "../yard/yardAction.js";
  * Saving, loading and deleting layouts is refused for an outpost: Flash's
  * planner could not save or load templates there
  * (`client/scripts/com/monsters/baseplanner/BasePlanner.as:41`).
+ *
+ * The Inferno yard's `baseid` is refused (`409 notInInferno`): the planner is
+ * not yet checked against Flash's Inferno rules (`docs/design/inferno.md` §5).
  */
 
 /**
@@ -81,6 +84,7 @@ export const onPlannerYard = async <T>(
 
   const result = await postgres.em.transactional(async (tx) => {
     const yard = await lockOwnYard(tx, user, baseid);
+    if (yard.inferno) throw notInInfernoErr();
     const now = getCurrentDateTime();
     const flingerBefore = yard.save.flinger;
     catchUpYard(yard.save, now);

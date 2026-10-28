@@ -248,6 +248,29 @@ const setUp = (type: number) => {
   return { yard, frames, graphics, fx };
 };
 
+describe("the towers with the new tower art off", () => {
+  it("have no 3D aim, pivot or lift at any level, so every shot leaves the Flash muzzle", () => {
+    for (const type of [20, 21, 23, 25, 115, 118]) {
+      for (let level = 1; level <= 10; level++) {
+        const where = `type ${type} level ${level}`;
+        const yard = yardOf(type);
+        yard.buildingdata = { "1": { id: 1, t: type, l: level, X: 0, Y: 0 } };
+        const [tower] = towersOf(readYard(yard));
+        expect(tower?.aim, where).toBeUndefined();
+        expect(tower?.pivot, where).toBeUndefined();
+        expect(tower?.lift, where).toBe(0);
+      }
+      const { fx, yard } = setUp(type);
+      const [info] = towersOf(yard);
+      const creep = creepAt(35, 235);
+      fx.onShot({ tick: 10, towerId: 1, creepId: 9, ix: creep.ix, iy: creep.iy }, creep);
+      fx.update(10, () => creep, [creep]);
+      expect(fx.muzzleAt(1), `type ${type}`).toEqual(muzzleOf(type, info?.worldX ?? 0, info?.worldY ?? 0));
+      fx.destroy();
+    }
+  });
+});
+
 describe("TowerFx", () => {
   it("turns a sniper toward the creep it shot, keeps following it, and holds after the shot is old", () => {
     const { frames, fx } = setUp(21);

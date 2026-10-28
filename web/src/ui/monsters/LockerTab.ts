@@ -20,6 +20,7 @@ import {
   type UnlockGate,
 } from "@/game/monsters/lockerModel";
 import { hatchCost, housingSpace, monsterEntry, type MonsterEntry } from "@/game/monsters/monsterCatalogue";
+import { monsterRealmOf, monsterWords, type MonsterRealm, type MonsterWords } from "@/game/monsters/realm";
 import { progressFraction } from "@/game/yard/jobs";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -43,6 +44,11 @@ import { MonstersTabId, type MonstersFocus, type MonstersTab, type MonstersTabCo
  * (`lockerActions`, `api/yardMonsters.ts`). Shiny spends are
  * {@link ShinyButton}s (tap, then tap again); Cancel opens one inline
  * confirmation stating the refund, capped as the server caps it.
+ *
+ * On the Inferno yard it is the Strongbox (Inferno WP 2.4): the Inferno roster,
+ * priced in Sulfur, worded as Flash's Inferno popup ("Strongbox Level",
+ * "Produce in your Incubator"). The Inferno shop sells no Locker Overdrive,
+ * so there is none to buy there.
  */
 
 /** Seconds as the list and the card spell a duration: "2d 4h", "10m 0s". */
@@ -109,6 +115,14 @@ export class LockerTab implements MonstersTab {
 
   private get store() {
     return this.context.binding.store;
+  }
+
+  private get realm(): MonsterRealm {
+    return monsterRealmOf(this.store.kind);
+  }
+
+  private get words(): MonsterWords {
+    return monsterWords(this.realm);
   }
 
   show(focus: MonstersFocus): void {
@@ -218,12 +232,15 @@ export class LockerTab implements MonstersTab {
     finish.setBlocked(this.store.credits < price ? "Not enough Shiny." : null);
     row.append(finish.element);
 
-    used.add("overdrive");
-    const boost = this.shinyButton("overdrive", "Overdrive 4 h", () => void this.runOverdrive());
-    boost.element.title = "Unlocks five times as fast for four hours.";
-    boost.setPrice(LOCKER_OVERDRIVE.price);
-    boost.setBlocked(overdriveBlocked(this.store));
-    row.append(boost.element);
+    // The Inferno shop sells no Locker Overdrive (`INFERNO_SHOP_ITEMS`).
+    if (this.realm !== "inferno") {
+      used.add("overdrive");
+      const boost = this.shinyButton("overdrive", "Overdrive 4 h", () => void this.runOverdrive());
+      boost.element.title = "Unlocks five times as fast for four hours.";
+      boost.setPrice(LOCKER_OVERDRIVE.price);
+      boost.setBlocked(overdriveBlocked(this.store));
+      row.append(boost.element);
+    }
 
     block.append(head, bar, overdrive, row, this.cancelControl(running));
     this.running.replaceChildren(block);
@@ -342,7 +359,7 @@ export class LockerTab implements MonstersTab {
           );
           break;
         case "locked":
-          state.textContent = `Needs Locker ${row.state.need}`;
+          state.textContent = `Needs ${this.realm === "inferno" ? this.words.locker : "Locker"} ${row.state.need}`;
           break;
       }
       // The space keeps name and state two words for a screen reader; the grid ignores it.
@@ -373,7 +390,7 @@ export class LockerTab implements MonstersTab {
     const facts = document.createElement("p");
     facts.className = "locker-detail__facts";
     facts.append(
-      `Locker level ${monster.level} · `,
+      `${this.realm === "inferno" ? this.words.locker : "Locker"} level ${monster.level} · `,
       resourceAmount("r3", monster.resource),
       ` · ${duration(monster.time)}`,
     );
@@ -386,7 +403,7 @@ export class LockerTab implements MonstersTab {
       damage < 0 ? `Heals ${formatAmount(-damage)}` : `Damage ${formatAmount(damage)}`,
       `Speed ${speedText(monster.id, level)}`,
       `Space ${housingSpace(monster.id, level) ?? 0}`,
-      `Hatch ${formatAmount(hatchCost(monster.id, level) ?? 0)} goo`,
+      `Hatch ${formatAmount(hatchCost(monster.id, level) ?? 0)} ${this.words.goo}`,
       `Hatch time ${hatchTimeText(monster.id, level)}`,
     ].join(" · ");
     heading.append(name, facts, stats);
@@ -402,7 +419,11 @@ export class LockerTab implements MonstersTab {
     if (state.kind === "unlocked") {
       const note = document.createElement("p");
       note.className = "locker-detail__note";
-      note.textContent = `${monster.name} is unlocked.`;
+      // Flash's Inferno line: "Unlocked. Produce in your Incubator." (`inf_mon_infounlocked`).
+      note.textContent =
+        this.realm === "inferno"
+          ? `${monster.name} is unlocked. Produce in your ${this.words.hatchery}.`
+          : `${monster.name} is unlocked.`;
       const hatch = plainButton("Hatch", () =>
         this.context.showTab(MonstersTabId.HATCH, { monster: monster.id }),
       );
@@ -415,18 +436,18 @@ export class LockerTab implements MonstersTab {
     } else {
       const gate = startGate(monster, store);
       const lockedInstant = instantGate(monster, store);
-      if (gate) action.append(gateLine(gate));
+      if (gate) action.append(gateLine(gate, this.realm));
       const row = document.createElement("div");
       row.className = "map-row map-row--wrap locker-detail__buttons";
       const start = plainButton("Start unlocking", () => void this.runStart(monster.id), "btn--primary");
       start.dataset["focusKey"] = "start";
       start.disabled = gate !== null;
-      if (gate) start.title = `${gateText(gate)}.`;
+      if (gate) start.title = `${gateText(gate, this.realm)}.`;
       this.plainButtons.push(start);
       used.add("instant");
       const instant = this.shinyButton("instant", "Instant", () => void this.runInstant(monster.id));
       instant.setPrice(instantPrice(monster));
-      instant.setBlocked(lockedInstant ? `${gateText(lockedInstant)}.` : null);
+      instant.setBlocked(lockedInstant ? `${gateText(lockedInstant, this.realm)}.` : null);
       row.append(start, instant.element);
       action.append(row);
     }
@@ -585,14 +606,14 @@ export const describe = (markup: string): Node[] => {
   return nodes;
 };
 
-/** The one line that says why Start is disabled; a putty shortfall with its icon. */
-const gateLine = (gate: UnlockGate): HTMLElement => {
+/** The one line that says why Start is disabled; a putty (Sulfur) shortfall with its icon. */
+const gateLine = (gate: UnlockGate, realm: MonsterRealm): HTMLElement => {
   const line = document.createElement("p");
   line.className = "monsters-gate";
   if (gate.reason === "shortfall" && !gate.overCap) {
     line.append("Need ", resourceAmount("r3", gate.need), " more");
   }
-  else line.textContent = gateText(gate);
+  else line.textContent = gateText(gate, realm);
   return line;
 };
 

@@ -6,7 +6,9 @@ import {
   YardChampionStanceSchema,
   YardChampionTypedSchema,
 } from "../../schemas/YardSchemas.js";
+import { korathRaisable } from "../../services/inferno/korath.js";
 import {
+  KORATH_TYPE,
   planChampionCancelEgg,
   planChampionEvolve,
   planChampionFeed,
@@ -25,10 +27,17 @@ import { defineYardAction } from "./yardAction.js";
  * before any of these runs. The wrapper charges the Shiny and writes once.
  */
 
-/** `POST /bm/yard/champion/raise` — lay Gorgo's, Drull's or Fomor's egg in the cage, free; it hatches in a day. */
+/**
+ * `POST /bm/yard/champion/raise` — lay Gorgo's, Drull's or Fomor's egg in the
+ * cage, free; it hatches in a day. Korath's too once the player owns an
+ * Inferno yard and the new Inferno is on (owner I10, `services/inferno/korath.ts`).
+ */
 export const yardChampionRaiseAction = defineYardAction({
   schema: YardChampionRaiseSchema,
-  run: ({ save, body, now }) => planChampionRaise(save, body.type, now),
+  run: async ({ save, body, now, em, user }) =>
+    planChampionRaise(save, body.type, now, {
+      korath: body.type === KORATH_TYPE && (await korathRaisable(em, user.userid)),
+    }),
 });
 
 /** `POST /bm/yard/champion/cancel-egg` — take the egg out of the cage, to pick again. */

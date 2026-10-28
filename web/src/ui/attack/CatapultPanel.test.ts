@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { spokenText } from "@/ui/resourceIcon";
 import { BOMBS, type BombStats } from "@/game/combat/rules";
 import { CatapultPanel, defaultTier, puttyText } from "./CatapultPanel";
-import { SiegePanel } from "./SiegePanel";
 
-/** The two pickers: what is offered, what is greyed, what arming looks like. */
+/** The Catapult picker: what is offered, what is greyed, what arming looks like. */
 
 const tiles = (panel: { element: HTMLElement }, attr: string): HTMLButtonElement[] =>
   [...panel.element.querySelectorAll<HTMLButtonElement>(`button[data-${attr}]`)];
@@ -171,37 +170,5 @@ describe("CatapultPanel", () => {
     expect(tiles(panel, "bomb")).toHaveLength(0);
     expect(panel.element.textContent).toContain("no Catapult");
     panel.destroy();
-  });
-});
-
-describe("SiegePanel", () => {
-  it("lists the weapons the attacker owns with what is left, and none when there are none", () => {
-    const onPick = vi.fn();
-    const panel = new SiegePanel({
-      stock: [
-        { id: "decoy", level: 2, quantity: 2 },
-        { id: "jars", level: 1, quantity: 0 },
-      ],
-      onPick,
-    }).mount(document.body);
-    panel.update({ used: { decoy: 1 }, live: true, armed: null });
-    const buttons = tiles(panel, "weapon");
-    expect(buttons.map((button) => button.dataset["weapon"])).toEqual(["decoy", "jars"]);
-    expect(buttons[0]!.textContent).toContain("1 left");
-    expect(buttons[0]!.disabled).toBe(false);
-    expect(buttons[1]!.disabled).toBe(true);
-    // No promised effect: "no effect yet" is the tile's main text (#152).
-    for (const button of buttons) {
-      expect(button.querySelector(".attack-picker__effect")!.textContent).toMatch(/^No effect yet: /);
-    }
-    expect(buttons[1]!.textContent).toContain("Goes on a tower.");
-    buttons[0]!.click();
-    expect(onPick).toHaveBeenCalledWith({ spec: expect.objectContaining({ id: "decoy" }), level: 2 });
-    panel.destroy();
-
-    const empty = new SiegePanel({ stock: [], onPick }).mount(document.body);
-    expect(tiles(empty, "weapon")).toHaveLength(0);
-    expect(empty.element.textContent).toContain("no siege weapons");
-    empty.destroy();
   });
 });

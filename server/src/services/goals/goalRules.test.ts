@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { GOALS, goalById, type GoalDef } from "../../game-data/goals.js";
 import { readOnboarding, type Onboarding } from "../onboarding/state.js";
 import {
@@ -32,12 +32,12 @@ const yardOf = (...buildings: { t: number; l?: number; cB?: number }[]): GoalSav
 });
 
 describe("the list", () => {
-  test("65 of Flash's quests and 3 new ones, with unique ids and known prereqs", () => {
-    expect(GOALS).toHaveLength(68);
+  test("74 of Flash's quests and 3 new ones, with unique ids and known prereqs", () => {
+    expect(GOALS).toHaveLength(77);
     const ids = new Set(GOALS.map((one) => one.id));
-    expect(ids.size).toBe(68);
+    expect(ids.size).toBe(77);
     for (const one of GOALS) if (one.prereq) expect(ids.has(one.prereq)).toBe(true);
-    for (const dropped of ["C0", "C1", "C8", "EM1", "FAN", "INVITE1", "GA1", "SW4", "SW12"]) {
+    for (const dropped of ["C0", "C1", "C8", "EM1", "FAN", "INVITE1", "GA1"]) {
       expect(ids.has(dropped)).toBe(false);
     }
   });
@@ -61,6 +61,37 @@ describe("the list", () => {
     expect(goal("UC12").monsters).toEqual({ id: "C12", count: 2 });
     expect(goal("C15").monsters).toEqual({ id: "C9", count: 20 });
     expect(goal("C16").monsters).toEqual({ id: "C14", count: 5 });
+  });
+
+  test("SW4-SW12 follow QUESTS.as: a weapon each, unlock after C16, then Levels 5 and 10", () => {
+    const sw = GOALS.filter((one) => one.id.startsWith("SW"));
+    expect(sw.map((one) => [one.id, one.order, one.prereq, one.siege, one.condition])).toEqual([
+      ["SW4", 59, "C16", "decoy", { kind: "siegeLevel", weapon: "decoy", level: 1 }],
+      ["SW5", 60, "C16", "vacuum", { kind: "siegeLevel", weapon: "vacuum", level: 1 }],
+      ["SW6", 61, "C16", "jars", { kind: "siegeLevel", weapon: "jars", level: 1 }],
+      ["SW7", 62, "SW4", "decoy", { kind: "siegeLevel", weapon: "decoy", level: 5 }],
+      ["SW8", 63, "SW5", "vacuum", { kind: "siegeLevel", weapon: "vacuum", level: 5 }],
+      ["SW9", 64, "SW6", "jars", { kind: "siegeLevel", weapon: "jars", level: 5 }],
+      ["SW10", 65, "SW7", "decoy", { kind: "siegeLevel", weapon: "decoy", level: 10 }],
+      ["SW11", 66, "SW8", "vacuum", { kind: "siegeLevel", weapon: "vacuum", level: 10 }],
+      ["SW12", 67, "SW9", "jars", { kind: "siegeLevel", weapon: "jars", level: 10 }],
+    ]);
+    for (const one of sw) {
+      expect(one.reward).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+      expect(one.inferno).toBe(true);
+    }
+    expect([goal("SW4").name, goal("SW4").description]).toEqual([
+      "Unlock Marilyn Monstroe",
+      "Unlock the Marilyn Monstroe weapon.",
+    ]);
+    expect([goal("SW11").name, goal("SW11").description]).toEqual([
+      "Upgrade Loot-O-Tron 5000",
+      "Upgrade the Loot-O-Tron 5000 weapon to Level 10.",
+    ]);
+    expect(goal("SW9").name).toBe("Upgrade Candy Jars");
+    // Ties keep Flash's push order: its own order-59 quest comes first.
+    const at59 = GOALS.filter((one) => one.order === 59).map((one) => one.id);
+    expect(at59[at59.length - 1]).toBe("SW4");
   });
 });
 
@@ -118,6 +149,15 @@ describe("conditions", () => {
     expect(conditionMet(goal("D1").condition, {}, none)).toBe(false);
   });
 
+  test("a siege weapon at a level in the Chaos Lab", () => {
+    const sw7 = goal("SW7").condition;
+    expect(conditionMet(sw7, { siege: { decoy: { level: 5, quantity: 0 } } }, none)).toBe(true);
+    expect(conditionMet(sw7, { siege: { decoy: { level: 4, quantity: 1 } } }, none)).toBe(false);
+    expect(conditionMet(sw7, { siege: { vacuum: { level: 10, quantity: 0 } } }, none)).toBe(false);
+    expect(conditionMet(goal("SW4").condition, { siege: null }, none)).toBe(false);
+    expect(conditionMet(goal("SW6").condition, { siege: { jars: { level: 1 } } }, none)).toBe(true);
+  });
+
   test("a saved layout meets N2", () => {
     expect(conditionMet(goal("N2").condition, { savetemplate: [] }, none)).toBe(false);
     expect(conditionMet(goal("N2").condition, { savetemplate: [{ slotid: 0, name: "A", data: "{}" }] }, none)).toBe(
@@ -142,6 +182,31 @@ describe("status and the badge", () => {
     expect(goalStatus(goal("WM1"), { mapversion: 1 }, onboarding)).toBe("ready");
     expect(goalStatus(goal("WM1"), { mapversion: 2 }, onboarding)).toBe("hidden");
     expect(goalStatus(goal("WM1"), { mapversion: 3 }, onboarding)).toBe("hidden");
+  });
+
+  describe("SW4-SW12 show only with the new Inferno on", () => {
+    const saved = process.env.INFERNO_ENABLED;
+    afterEach(() => {
+      if (saved === undefined) delete process.env.INFERNO_ENABLED;
+      else process.env.INFERNO_ENABLED = saved;
+    });
+    const met = { siege: { decoy: { level: 1, quantity: 0 } } };
+    const afterC16 = () => fresh((record) => (record.goals.C16 = { done: 1, claimed: 2 }));
+
+    test("on: after C16, and ready once researched", () => {
+      process.env.INFERNO_ENABLED = "on";
+      expect(goalStatus(goal("SW4"), {}, fresh())).toBe("hidden");
+      expect(goalStatus(goal("SW4"), {}, afterC16())).toBe("open");
+      expect(goalStatus(goal("SW4"), met, afterC16())).toBe("ready");
+      expect(goalStatus(goal("SW7"), met, afterC16())).toBe("hidden");
+      expect(goalsReadyCount(met, afterC16())).toBe(1);
+    });
+
+    test("off: hidden and not counted, even when met", () => {
+      process.env.INFERNO_ENABLED = "off";
+      expect(goalStatus(goal("SW4"), met, afterC16())).toBe("hidden");
+      expect(goalsReadyCount(met, afterC16())).toBe(0);
+    });
   });
 
   test("done is sticky: a recycled building keeps its goal", () => {

@@ -13,4 +13,5 @@ export const yardRecycleAction = defineYardAction({
   run: ({ save, body, now }) => planRecycle(save, body.id, now),
   // `msg_recycleoutpostbuilding` (`client/scripts/BFOUNDATION.as:2536-2540`).
   outposts: { refuse: "You cannot Recycle buildings in Outposts." },
+  inferno: "allow",
 });

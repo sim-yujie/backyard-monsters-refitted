@@ -320,6 +320,24 @@ describe("ArmyPanel capacity bar", () => {
     expect(control<HTMLButtonElement>(panel.element, ".attack-army__fill-all").disabled).toBe(true);
   });
 
+  it("is the Attack Force in a Moloch tribe attack, over the server's Housing Bunker load (Inferno WP 2.10)", () => {
+    const session = sessionWith({ ...sandboxRoster(), flingCapacity: 780 });
+    const bucket = new Bucket(session, { storage: null, playerKey: "test" });
+    const panel = new ArmyPanel(bucket, { title: "Attack Force" }).mount(document.body);
+    panels.push(panel);
+    expect(control(panel.element, ".panel__title").textContent).toBe("Attack Force");
+    expect(panel.capacityText).toBe("0 / 780");
+    const meter = control(panel.element, ".attack-army__meter");
+    expect(meter.getAttribute("aria-label")).toBe("Attack Force capacity");
+    expect(meter.getAttribute("aria-valuemax")).toBe("780");
+  });
+
+  it("is the Army otherwise", () => {
+    const { panel } = mount();
+    expect(control(panel.element, ".panel__title").textContent).toBe("Army");
+    expect(control(panel.element, ".attack-army__meter").getAttribute("aria-label")).toBe("Flinger capacity");
+  });
+
   it("empties on Clear", () => {
     const { panel, bucket } = mount();
     const clear = control<HTMLButtonElement>(panel.element, ".attack-army__clear");

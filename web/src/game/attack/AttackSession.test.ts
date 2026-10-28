@@ -591,6 +591,21 @@ describe("AttackSession events and the fling log", () => {
     expect(session.flingLog().events.map((event) => event.kind)).toEqual(["bomb", "siege"]);
   });
 
+  it("fights a siege weapon at the roster's Lab level only while one is held (WP 6.8)", () => {
+    const roster = targetOf().roster;
+    const held = sessionOf({ roster: { ...roster, siege: { jars: { level: 1, quantity: 1 } } } });
+    held.start();
+    held.appendSiege({ x: 0, y: 0, weapon: "jars" });
+    expect(held.battle()?.siege()).toMatchObject({ active: "jars", jars: [{ buildingId: 1, durability: 2000 }] });
+
+    for (const siege of [null, { jars: { level: 1, quantity: 0 } }]) {
+      const none = sessionOf({ roster: { ...roster, siege } });
+      none.start();
+      none.appendSiege({ x: 0, y: 0, weapon: "jars" });
+      expect(none.battle()?.siege().active).toBeNull();
+    }
+  });
+
   it("refuses events once the attack has ended", () => {
     const session = sessionOf();
     session.start();

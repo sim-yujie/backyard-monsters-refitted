@@ -222,3 +222,40 @@ describe("goal N1, survive a tribe attack (WP5)", () => {
     expect(n1(claimed)).toBe("claimed");
   });
 });
+
+describe("Moloch's emergence raid (tribe moloch, docs/design/inferno.md §2.3, owner R5)", () => {
+  const landMoloch = (save: LandingSave, outcome: Outcome) =>
+    landRaid(save, { id: "r_moloch", tribe: "moloch", startedAt: STARTED, outcome }, NOW);
+
+  test("a good defence pays no Shiny and no goal credit", () => {
+    const save = saveOf({ onboarding: { v: 1, guide: { state: "done" }, goals: {}, counters: {} } });
+    const result = landMoloch(save, outcomeOf({ healthShare: 0.98 }));
+    expect(result.defended).toBe(true);
+    expect(result.shiny).toBe(0);
+    expect(save.credits).toBe(100);
+    expect(readOnboarding(save).counters.raidsSurvived ?? 0).toBe(0);
+  });
+
+  test("it steals and damages as any raid does", () => {
+    const save = saveOf();
+    const result = landMoloch(save, outcomeOf({ healthShare: 0.4, bankLoss: { r1: 400, r2: 0, r3: 0, r4: 0 }, health: { "2": 0 } }));
+    expect(result.defended).toBe(false);
+    expect(save.resources).toMatchObject({ r1: 600 });
+    expect(result.damaged).toContain(2);
+  });
+
+  test("the wild raids' timetable is left as it was; the fight lock is lifted and the raid kept in recent", () => {
+    const save = saveOf();
+    const before = readSchedule(save.aiattacks);
+    landMoloch(save, outcomeOf({ healthShare: 0.95 }));
+    const schedule = readSchedule(save.aiattacks);
+    expect(schedule.fight).toBeUndefined();
+    expect(schedule.lastattack).toBe(before.lastattack);
+    expect(schedule.nextAttack).toBe(before.nextAttack);
+    expect(schedule.sessionsSinceLastAttack).toBe(before.sessionsSinceLastAttack);
+    expect(schedule.attackPreference).toBe(before.attackPreference);
+    expect(schedule.lastRaidId).toBe("r_moloch");
+    expect(schedule.recent[0]).toMatchObject({ id: "r_moloch", tribe: "moloch", shiny: 0 });
+    expect(landedResult(save.aiattacks, "r_moloch")).toMatchObject({ tribe: "moloch", shiny: 0, defended: true });
+  });
+});

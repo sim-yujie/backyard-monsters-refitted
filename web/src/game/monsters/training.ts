@@ -10,14 +10,8 @@ import { JobKind, trainingEndsAt as absoluteEnd, type YardJob } from "@/game/yar
 import { NEED_MORE_SILOS_PHRASE, overCap } from "@/game/yard/storage";
 import type { Yard, YardBuilding } from "@/game/yard/yardModel";
 import { academyLevel } from "./housing";
-import {
-  LISTED_MONSTERS,
-  maxTrainingLevel,
-  monsterEntry,
-  trainingStep,
-  type MonsterEntry,
-  type PaidStep,
-} from "./monsterCatalogue";
+import { monsterEntry, trainingStep, type MonsterEntry, type PaidStep } from "./monsterCatalogue";
+import { listedMonstersOf, monsterRealmOf, monsterWords, topTrainingLevel, type MonsterRealm } from "./realm";
 
 /**
  * What the Train tab shows, as data (`docs/design/yard-buildings.md` §6
@@ -37,6 +31,10 @@ import {
  *
  * Prices are the server's formulas, recomputed here for the label only: the
  * route charges its own figure (`server/src/services/yard/shiny.ts`).
+ *
+ * On the Inferno yard (Inferno WP 2.4) the Infernal Academy trains the
+ * Inferno roster for Sulfur, to level 5 at most (`topTrainingLevel`,
+ * `realm.ts`), as the server does.
  */
 
 /** Monster Academy type id (`client/scripts/ACADEMY.as:8`). */
@@ -95,7 +93,7 @@ export interface TrainRow {
   readonly monster: MonsterEntry;
   /** Its academy level now, 1..6. */
   readonly level: number;
-  /** The top of its ladder: 5 for Zafreeti (C15), 6 for the rest. */
+  /** The top of its ladder: 5 for Zafreeti (C15) and every Inferno monster, 6 for the rest. */
   readonly max: number;
   /** What the next level costs, `[putty, seconds]`; null at the top. */
   readonly step: PaidStep | null;
@@ -206,10 +204,11 @@ const unlocked = (context: TrainingContext, id: string): boolean =>
   Number(context.save.lockerdata?.[id]?.t) === 2;
 
 /** Every unlocked monster in list order, each with its level and next step. */
-export const trainRows = (context: TrainingContext): TrainRow[] =>
-  LISTED_MONSTERS.filter((monster) => unlocked(context, monster.id)).map((monster) => {
+export const trainRows = (context: TrainingContext): TrainRow[] => {
+  const realm = monsterRealmOf(context.yard.kind);
+  return listedMonstersOf(realm).filter((monster) => unlocked(context, monster.id)).map((monster) => {
     const level = academyLevel(context.save.academy, monster.id);
-    const max = maxTrainingLevel(monster.id);
+    const max = topTrainingLevel(monster.id, realm);
     return {
       monster,
       level,
@@ -218,6 +217,7 @@ export const trainRows = (context: TrainingContext): TrainRow[] =>
       training: runningTraining(context, monster.id),
     };
   });
+};
 
 /**
  * The academy the server will train `level` → `level + 1` at: of the idle
@@ -238,7 +238,7 @@ const commonGate = (monster: MonsterEntry, context: TrainingContext): TrainGate 
   if (runningTraining(context, monster.id)) return { reason: "training" };
   if (!unlocked(context, monster.id)) return { reason: "locked" };
   const level = academyLevel(context.save.academy, monster.id);
-  if (level >= maxTrainingLevel(monster.id) || !trainingStep(monster.id, level)) {
+  if (level >= topTrainingLevel(monster.id, monsterRealmOf(context.yard.kind)) || !trainingStep(monster.id, level)) {
     return { reason: "maxLevel" };
   }
   const idle = slots.filter((slot) => slot.state.kind === "idle");
@@ -304,25 +304,26 @@ export const cancelRefund = (
   return { refund, lost: price - refund };
 };
 
-/** A gate as its reason line: "Needs Monster Academy level 3". */
-export const gateText = (gate: TrainGate): string => {
+/** A gate as its reason line: "Needs Monster Academy level 3" ("Infernal Academy" in the Inferno). */
+export const gateText = (gate: TrainGate, realm: MonsterRealm = "surface"): string => {
+  const words = monsterWords(realm);
   switch (gate.reason) {
     case "noAcademy":
-      return "Build a Monster Academy";
+      return `Build a ${words.academy}`;
     case "training":
       return "Already training";
     case "locked":
-      return "Unlock it in the Monster Locker first";
+      return `Unlock it in the ${words.locker} first`;
     case "maxLevel":
       return "Fully trained";
     case "academyBusy":
       return "Every academy is busy";
     case "academyLevel":
-      return `Needs Monster Academy level ${gate.need}`;
+      return `Needs ${words.academy} level ${gate.need}`;
     case "shortfall":
       return gate.overCap
         ? NEED_MORE_SILOS_PHRASE
-        : `Need ${gate.need.toLocaleString("en-US")} more putty`;
+        : `Need ${gate.need.toLocaleString("en-US")} more ${words.putty}`;
     case "credits":
       return "Not enough Shiny";
   }

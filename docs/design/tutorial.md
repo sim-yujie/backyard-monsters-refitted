@@ -439,7 +439,7 @@ refers to §6.2; "B" is a building check.
 | 57 | UG3 | Fomor the Fearless | Fomor at level 6 | 0 / 0 / 0 / 800,000 | HG3 | keep | champion G3 |
 | 58 | BK4 | Resource Mogul | bank 500,000 in one tap | 50,000 each | BK3 | keep | counter |
 | 59 | BL2 | Monster Smoothie | juice 100 | 0 / 0 / 10,000 / 10,000 | BL1 | keep | counter |
-| 59-67 | SW4-SW12 | Siege weapons: decoy, vacuum and jars to levels 1, 5 and 10 | Siege Lab levels | a siege weapon each | C16, then chains | drop (no Siege Factory or Siege Lab in the web) | — |
+| 59-67 | SW4-SW12 | Siege weapons: decoy, vacuum and jars to levels 1, 5 and 10 | Siege Lab levels | a siege weapon each | C16, then chains | **kept since Inferno WP 6.8**, shown only with `INFERNO_ENABLED` on; the weapon is made in the Chaos Factory, refused unless it is built, idle and empty | B: `siege[id].level` |
 | 60 | BL3 | Monster Milkshake | juice 1,000 | 0 / 0 / 100,000 / 100,000 | BL2 | keep | counter |
 | 61 | BL4 | Monster Margarita | juice 5,000 | 0 / 0 / 1,000,000 / 1,000,000 | BL3 | keep | counter |
 | 62 | M4 | Golden Mushroom Booty | 5 golden mushrooms | 1,000 / 1,000 / 500 / 500 | M1 | keep | counter `goldMushrooms >= 5` |
@@ -458,6 +458,7 @@ refers to §6.2; "B" is a building check.
 | 82 | N3 | Into the Wild | move to Map Room 2 (Map Room level 2) | 10,000 each [PLACEHOLDER] | C14 | **new** | B: type 11 `l >= 2` |
 
 Counts: Flash has 85 quests; 65 are kept (12 of them monster unlocks), 20 dropped, and 3 are new.
+Since Inferno WP 6.8 the nine siege quests SW4-SW12 are back too (74 kept, 11 dropped), behind the Inferno switch; they pay no resources.
 The kept list pays 373,300 twigs, 343,900 pebbles,
 1,398,000 putty and 3,816,500 goo in all, most of it in the champion and juice goals at the far end.
 The first thirteen (orders 4 to 16) pay about 33,300 / 33,900 / 13,500 / 17,500, roughly 48 hours of

@@ -78,17 +78,27 @@ const readAmount = (step, key) => {
   return Number(hit[1] ?? hit[2]);
 };
 
+/**
+ * The class constants a `re` entry may name instead of a type number. The
+ * main table's Inferno buildings (the Quake and Magma Towers, the Siege Lab and
+ * Factory, the Spurtz Cannons) require `INFERNOQUAKETOWER.UNDERHALL_ID`, 999: not
+ * a building on the yard but the player's Inferno Under Hall level
+ * (`client/scripts/INFERNOQUAKETOWER.as:15`, read at `BASE.as:3757-3788`); the
+ * Siege Factory also requires the Siege Lab (`com/monsters/siege/SiegeLab.as:7`).
+ */
+const REQUIREMENT_IDS = { "INFERNOQUAKETOWER.UNDERHALL_ID": 999, "SiegeLab.ID": 134 };
+
 /** `"re": [[14, 1, 2], [8, 1, 1]]` -> `[[14, 1, 2], [8, 1, 1]]`. */
 const readRequirements = (step) => {
   const hit = /"re"\s*:\s*\[/.exec(step);
   if (!hit) return [];
   const open = hit.index + hit[0].length - 1;
   const body = step.slice(open, matchBrace(step, open) + 1);
-  return [...body.matchAll(/\[\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\]/g)].map((one) => [
-    Number(one[1]),
-    Number(one[2]),
-    Number(one[3]),
-  ]);
+  return [...body.matchAll(/\[\s*(-?\d+|[A-Za-z_.]+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\]/g)].map((one) => {
+    const type = /^-?\d+$/.test(one[1]) ? Number(one[1]) : REQUIREMENT_IDS[one[1]];
+    if (type === undefined) throw new Error(`Unknown requirement id ${one[1]}; add it to REQUIREMENT_IDS.`);
+    return [type, Number(one[2]), Number(one[3])];
+  });
 };
 
 /** The `{ ... }` steps of a `costs` array, in order. */
@@ -475,6 +485,64 @@ const outposts = readTable(
   }
 }
 
+/* ── Inferno ──────────────────────────────────────────────────────────────────
+ *
+ * The Inferno yard runs on `INFERNOYARDPROPS._infernoYardProps` in place of the
+ * main table (`client/scripts/GLOBAL.as:718-719`), wholesale, as an outpost
+ * does, and with none of the Map Room 2 overrides (`:724-747`). The same two
+ * readings are made: a cost row and a trait row per entry with `costs`.
+ *
+ * The Under Hall is type 14, as the Town Hall is, so every `re` names `[14, 1,
+ * level]` and `quantity[level]` is read at the Under Hall's level, 0 to 6
+ * (`docs/design/inferno.md` §2.5). It is `block`ed: never built, only upgraded,
+ * because the server places it with the Flash start layout
+ * (`client/scripts/BASE.as:1616-1656`).
+ *
+ * The Flinger (5), Monster Housing (15) and the mushroom are present but
+ * blocked; the Housing Bunker (128) stands in for both Housing and the
+ * Flinger (`docs/design/inferno.md` §2.5, owner decision R11).
+ */
+const INFERNO_PROPS = resolve(repo, "client/scripts/INFERNOYARDPROPS.as");
+const UNDER_HALL = 14;
+
+/**
+ * Whether the Inferno build menu can offer a type: filed under one of the four
+ * menu tabs, not `block`ed, and allowed at least one at some Under Hall level.
+ */
+const inInfernoMenu = (entry) =>
+  entry.group >= 1 && entry.group <= 4 && !entry.blocked && entry.quantity.some((one) => one > 0);
+
+const infernos = readTable(
+  INFERNO_PROPS,
+  "INFERNOYARDPROPS.as",
+  (key) => language.core[key] ?? language.game[key] ?? key.replaceAll("#", ""),
+);
+
+{
+  const hall = infernos.find((one) => one.id === UNDER_HALL);
+  if (!hall) throw new Error(`INFERNOYARDPROPS.as: no Under Hall (${UNDER_HALL}) entry`);
+  if (hall.steps.length !== 6) {
+    throw new Error(`INFERNOYARDPROPS.as:${hall.line}: the Under Hall has ${hall.steps.length} steps, not 6`);
+  }
+  if (!hall.blocked) throw new Error(`INFERNOYARDPROPS.as:${hall.line}: the Under Hall is no longer blocked`);
+  // A buildable type may only require the Under Hall or another buildable type;
+  // anything else could never be met in the Inferno.
+  const buildable = new Set(infernos.filter(inInfernoMenu).map((one) => one.id));
+  for (const entry of infernos) {
+    if (!buildable.has(entry.id)) continue;
+    for (const one of [...entry.steps, ...entry.fortify]) {
+      for (const [type] of one.re) {
+        if (type !== UNDER_HALL && !buildable.has(type)) {
+          throw new Error(
+            `INFERNOYARDPROPS.as:${entry.line}: id ${entry.id} requires type ${type}, ` +
+              "which the Inferno cannot hold",
+          );
+        }
+      }
+    }
+  }
+}
+
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
 const re = (list) => `[${list.map((one) => `[${one.join(",")}]`).join(",")}]`;
@@ -528,11 +596,12 @@ const OUTPOST_SECTION = `
 /* ── Outposts ───────────────────────────────────────────────────────────────── */
 
 /**
- * Which props table a yard builds from: a player's main yard, or one of their
+ * Which props table a yard builds from: a player's main yard, one of their
  * Map Room 2 outposts, which swaps in \`OUTPOST_YARD_PROPS._outpostProps\` for the
- * whole table (\`client/scripts/GLOBAL.as:716-723\`).
+ * whole table (\`client/scripts/GLOBAL.as:716-723\`), or their Inferno yard, which
+ * swaps in \`INFERNOYARDPROPS._infernoYardProps\` the same way (\`:718-719\`).
  */
-export type YardKind = "main" | "outpost";
+export type YardKind = "main" | "outpost" | "inferno";
 
 /**
  * The outpost core, the outpost's Town Hall.
@@ -599,6 +668,54 @@ ${entries
   .map((one) => `  [${one.id}, [\n${one.fortify.map((one) => `    ${step(one)},`).join("\n")}\n  ]],`)
   .join("\n")}
 ];
+`;
+
+const INFERNO_SECTION = `
+/* ── Inferno ────────────────────────────────────────────────────────────────── */
+
+/**
+ * The Under Hall, the Inferno yard's Town Hall. It shares the Town Hall's type
+ * id, so every \`re\` names \`[14, 1, level]\` and \`quantity[level]\` is read at
+ * its level, 0 to 6. It is never built, only upgraded: the server places it
+ * with the Flash start layout (\`client/scripts/BASE.as:1616-1656\`).
+ */
+export const UNDER_HALL_TYPE = ${UNDER_HALL};
+
+/**
+ * The Inferno yard's rows, in the same shape as {@link BUILDING_COST_ROWS}.
+ *
+ * Source: \`client/scripts/INFERNOYARDPROPS.as\`, read exactly as the main table
+ * is, with none of the Map Room 2 overrides: \`GLOBAL.SetBuildingProps\` swaps
+ * this table in wholesale for an Inferno yard (\`client/scripts/GLOBAL.as:718-719\`).
+ * Prices and times are Flash's, the Juicer's 1M/1M/1M included (owner
+ * decisions I16, R1-R4, \`docs/design/inferno.md\` §2.1). \`r1\`..\`r4\` are Bone,
+ * Coal, Sulfur and Magma here.
+ *
+ * Not every row is buildable: see {@link INFERNO_BUILDABLE_TYPES}.
+ */
+export const INFERNO_COST_ROWS: readonly CostRow[] = [
+${costRows(infernos, "INFERNOYARDPROPS.as")}
+];
+
+/**
+ * \`[type, blocked, hp, fortify, capacity]\`, one per Inferno row, in the shape of
+ * {@link OUTPOST_TRAIT_ROWS}. \`capacity\` is the Housing Bunker's monster room
+ * (\`[200, 300, 520, 780, 1140, 1820]\`) and the blocked Flinger's and Housing's.
+ */
+export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
+${traitRows(infernos)}
+];
+
+/**
+ * The types the Inferno build menu may offer: filed under one of the four menu
+ * tabs (\`client/scripts/BUILDINGSPOPUP.as:28-35\`), not \`block\`ed (\`:132\`), and
+ * allowed at least one at some Under Hall level. Everything else in
+ * {@link INFERNO_COST_ROWS} (the Under Hall, Flinger, Housing, …) is blocked.
+ */
+export const INFERNO_BUILDABLE_TYPES: readonly number[] = [${infernos
+  .filter(inInfernoMenu)
+  .map((one) => one.id)
+  .join(", ")}];
 `;
 
 const header = `/**
@@ -725,6 +842,14 @@ export const OUTPOST_COSTS: Record<number, BuildingCost> = Object.fromEntries(
   ])
 );
 
+/** Every row of {@link INFERNO_COST_ROWS}, keyed by type id. */
+export const INFERNO_COSTS: Record<number, BuildingCost> = Object.fromEntries(
+  INFERNO_COST_ROWS.map(([type, name, kind, group, costs, quantity, stats]) => [
+    type,
+    { name, kind, group, costs, quantity, stats },
+  ])
+);
+
 /** One outpost type's {@link OutpostTraitRow}, keyed. */
 export interface OutpostTraits {
   /** Kept out of the build menu whatever \`quantity\` says. */
@@ -745,12 +870,21 @@ export const OUTPOST_TRAITS: Record<number, OutpostTraits> = Object.fromEntries(
   ])
 );
 
+/** Every row of {@link INFERNO_TRAIT_ROWS}, keyed by type id. */
+export const INFERNO_TRAITS: Record<number, OutpostTraits> = Object.fromEntries(
+  INFERNO_TRAIT_ROWS.map(([type, blocked, hp, fortify, capacity]) => [
+    type,
+    { blocked, hp, fortify, capacity },
+  ])
+);
+
 /**
- * The cost table a yard of \`kind\` builds from: the main yard's, or the
- * outpost's, which replaces it wholesale (\`client/scripts/GLOBAL.as:716-723\`).
+ * The cost table a yard of \`kind\` builds from: the main yard's, the outpost's or
+ * the Inferno's, each of which replaces the main one wholesale
+ * (\`client/scripts/GLOBAL.as:716-723\`).
  */
 export const propsFor = (kind: YardKind): Record<number, BuildingCost> =>
-  kind === "outpost" ? OUTPOST_COSTS : COSTS;
+  kind === "outpost" ? OUTPOST_COSTS : kind === "inferno" ? INFERNO_COSTS : COSTS;
 
 /** The costs for a building type, or undefined for a type this table has no row for. */
 export const costOf = (type: number, kind: YardKind = "main"): BuildingCost | undefined =>
@@ -779,10 +913,10 @@ export const productionOf = (type: number, kind: YardKind = "main"): BuildingSta
  * \`level\` is the building's own level, 1 to 10, matching the \`capacity[l - 1]\`
  * lookup the client makes (\`client/scripts/BASE.as:4705-4828\`). A silo still
  * counting its initial build down is level 0 and adds nothing, which is what
- * the 0 for an out-of-range level says.
+ * the 0 for an out-of-range level says. The Inferno silo has a ladder of its own.
  */
-export const siloCapacity = (level: number): number =>
-  COSTS[STORAGE_SILO_TYPE]?.stats?.capacity[level - 1] ?? 0;
+export const siloCapacity = (level: number, kind: YardKind = "main"): number =>
+  (kind === "inferno" ? INFERNO_COSTS : COSTS)[STORAGE_SILO_TYPE]?.stats?.capacity[level - 1] ?? 0;
 
 /**
  * The highest level a type can reach, which is the number of cost steps it has
@@ -796,15 +930,22 @@ export const maxLevel = (type: number, kind: YardKind = "main"): number =>
 /*** The fortify ladder of a type in a yard of \`kind\`, empty when it has none.
  *
  * The main yard's (Storage Silo, Town Hall, six towers) is {@link MAIN_FORTIFY_ROWS};
- * an outpost's is its trait row's. Walls, harvesters, housing and the bunker have none.
+ * an outpost's and the Inferno's are their trait rows'. Walls, harvesters, housing
+ * and the bunker have none.
  */
 export const fortifyStepsOf = (type: number, kind: YardKind): readonly CostStep[] =>
   kind === "outpost"
     ? (OUTPOST_TRAITS[type]?.fortify ?? [])
-    : (MAIN_FORTIFY_ROWS.find(([one]) => one === type)?.[1] ?? []);
+    : kind === "inferno"
+      ? (INFERNO_TRAITS[type]?.fortify ?? [])
+      : (MAIN_FORTIFY_ROWS.find(([one]) => one === type)?.[1] ?? []);
 
-/** The hall type of a yard: the Town Hall, or the core on an outpost. */
-export const hallTypeOf = (kind: YardKind): number => (kind === "outpost" ? OUTPOST_CORE_TYPE : 14);
+/**
+ * The hall type of a yard: the Town Hall, the core on an outpost, or the Under
+ * Hall in the Inferno, which shares the Town Hall's id.
+ */
+export const hallTypeOf = (kind: YardKind): number =>
+  kind === "outpost" ? OUTPOST_CORE_TYPE : kind === "inferno" ? UNDER_HALL_TYPE : 14;
 
 /**
  * The wall types.
@@ -819,7 +960,7 @@ export const WALL_TYPES: readonly number[] = [17, 18];
 export const TRAP_TYPES: readonly number[] = [24, 117];
 `;
 
-const body = `${header}${rows}\n];\n${OUTPOST_SECTION}`;
+const body = `${header}${rows}\n];\n${OUTPOST_SECTION}${INFERNO_SECTION}`;
 
 writeFileSync(WEB_OUT, body, "utf8");
 writeFileSync(SERVER_OUT, `${body}${SERVER_FOOTER}`, "utf8");
@@ -849,6 +990,17 @@ console.log(
       .map((one) => `${one.id}x${one.quantity[1]}/L${one.steps.length}`)
       .join(" ")}, ` +
     `fortify on ${outposts
+      .filter((one) => one.fortify.length > 0)
+      .map((one) => one.id)
+      .join(", ")}`,
+);
+console.log(
+  `inferno: ${infernos.length} types, ` +
+    `buildable ${infernos
+      .filter(inInfernoMenu)
+      .map((one) => `${one.id}x[${one.quantity}]/L${one.steps.length}`)
+      .join(" ")}, ` +
+    `fortify on ${infernos
       .filter((one) => one.fortify.length > 0)
       .map((one) => one.id)
       .join(", ")}`,

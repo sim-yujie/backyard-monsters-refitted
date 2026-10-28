@@ -4,6 +4,7 @@ import {
   CHAMPION_MAX_FOOD_BONUS,
   CHAMPION_MAX_POWER_LEVEL,
   DECLARE_WAR_COUNTDOWN_SECONDS,
+  DESCENT_YARDS,
   RETREAT_GRACE_SECONDS,
   TICKS_PER_SECOND,
   buildEngineYard,
@@ -12,6 +13,7 @@ import {
   createBattle,
   damagePercent,
   dropRadius,
+  felledCount,
   battleDefence,
   flingCost,
   healthOf,
@@ -37,6 +39,7 @@ import {
   type Roster,
   type ChampionStance,
 } from "@/game/combat/rules";
+import { siegeLevelsOf } from "@/game/combat/rules/siege";
 import { hasDeclareWar } from "./attackEntry";
 import type { AttackTarget } from "./attackTarget";
 
@@ -259,9 +262,32 @@ export interface AttackSessionOptions {
    * limit, and played back from the server's waves (`playScript`).
    */
   readonly raid?: boolean;
+  /**
+   * The Descent yard attacked, 1 to 13 (Inferno WP 1.21): from yard 7 the
+   * fight's burn takes health from every surface monster, as the server's
+   * replay of it does. Absent: the target's own `descentYard`, which is
+   * absent outside the Descent.
+   */
+  readonly descentYard?: number;
   /** The clock {@link AttackSession.skipToEnd} budgets a frame by, in ms; `performance.now` by default. */
   readonly now?: () => number;
 }
+
+/**
+ * A dev build's `?descentYard=N` (Inferno WP 1.21): the Descent yard, 1 to
+ * 13, a practice fight burns as; nothing for anything else.
+ */
+export const devDescentYard = (search: string): { descentYard?: number } =>
+  descentYardOf({ descentYard: Number(new URLSearchParams(search).get("descentYard")) });
+
+/**
+ * A target's Descent yard as session options (Inferno WP 1.21): the yard, 1
+ * to 13, the server's attack start named; nothing outside the Descent.
+ */
+export const descentYardOf = (target: Pick<AttackTarget, "descentYard">): { descentYard?: number } => {
+  const yard = target.descentYard;
+  return yard !== undefined && Number.isInteger(yard) && yard >= 1 && yard <= DESCENT_YARDS ? { descentYard: yard } : {};
+};
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
 export const mintSeed = (): number => {
@@ -339,10 +365,18 @@ export const servedHeight = (raw: unknown): number =>
  * The target kind as the rules module spells it. The two agree by name, but a
  * Map Room 1 tribe, which the map hands over as `wild`, is the rules' `tribe`:
  * Flash's lower loot for a wild monster camp is Map Room 2's alone
- * (`BSTORAGE.as:77`, `:111`, `:117`).
+ * (`BSTORAGE.as:77`, `:111`, `:117`). A Descent yard and a Moloch tribe of
+ * the Inferno map and another player's Inferno yard (WP 3.5) are fought as Inferno yards (`docs/design/inferno.md` §2.4
+ * "Yard kind"), as the server replays them.
  */
-export const combatKind = (target: Pick<AttackTarget, "kind" | "mapversion">): CombatTargetKind =>
-  target.kind === "wild" && target.mapversion === 1 ? "tribe" : target.kind;
+export const combatKind = (
+  target: Pick<AttackTarget, "kind" | "mapversion" | "descentYard" | "infernoTribe" | "infernoPlayer">,
+): CombatTargetKind =>
+  target.descentYard !== undefined || target.infernoTribe === true || target.infernoPlayer === true
+    ? "inferno"
+    : target.kind === "wild" && target.mapversion === 1
+      ? "tribe"
+      : target.kind;
 
 /** Housed monsters minus what has been flung, only the positive counts. */
 const subtractRoster = (housed: Roster, flung: Roster): Roster => {
@@ -412,6 +446,7 @@ export class AttackSession {
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
   private readonly raid: boolean;
+  private readonly descentYard: number | undefined;
   /** The academy levels the battle is fought at: the load's, else the roster's. */
   private levels_: MonsterLevels;
   /** The Lab ranks the battle is fought at: the load's, else the roster's (issue #352). */
@@ -420,6 +455,8 @@ export class AttackSession {
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? false;
+    // The option (the dev practice's `?descentYard`), else the Descent target's own yard.
+    this.descentYard = options.descentYard ?? descentYardOf(options.target).descentYard;
     this.seed = options.seed ?? mintSeed();
     this.levels_ = options.target.roster.levels;
     this.ranks_ = options.target.roster.ranks ?? {};
@@ -483,12 +520,18 @@ export class AttackSession {
       this.notify();
       return;
     }
+    // The Lab level of each siege weapon the attacker holds one of, as the
+    // server's replay reads the same save (Inferno WP 6.8). None against an
+    // Inferno yard, the Descent's included (`UI_TOP.as:289`).
+    const siege = kind === "inferno" ? {} : siegeLevelsOf(this.target.roster.siege);
     this.battle_ = createBattle(yard, {
       seed: this.seed,
       levels: this.levels_,
       ...(Object.keys(this.ranks_).length > 0 ? { ranks: this.ranks_ } : {}),
+      ...(Object.keys(siege).length > 0 ? { siege } : {}),
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
+      ...(this.descentYard === undefined ? {} : { descentYard: this.descentYard }),
       // The defence the server replays the battle against (issue #195).
       ...defence,
     });
@@ -801,9 +844,10 @@ export class AttackSession {
   }
 
   /**
-   * Appends a siege weapon at the current tick. The engine accepts and
-   * ignores it today (`engine.ts` fidelity note 8); the log carries it so a
-   * later engine replays it (§F4).
+   * Appends a siege weapon at the current tick. The battle fights the Decoy,
+   * the Vacuum or the Jars at the attacker's Siege Lab level, read off the
+   * roster's `siege` stock at load (`BattleOptions.siege`, Inferno WP 6.5 to
+   * 6.8); a weapon the attacker holds none of does nothing.
    */
   appendSiege(input: SiegeInput): Extract<FlingEvent, { kind: "siege" }> {
     const battle = this.requireLive("siege");
@@ -925,6 +969,14 @@ export class AttackSession {
   }
 
   /**
+   * The attacker's report rows (issue #22): each monster type and champion
+   * sent, born on the field and lost. Empty before the battle starts.
+   */
+  attackersAfter(): BattleState["attackers"] {
+    return this.battle_?.state().attackers ?? [];
+  }
+
+  /**
    * Why the champion of type `t` cannot be sent now, or null when it can.
    *
    * Flash's rule (`client/scripts/UI_TOP.as:328-356`): the army list offers
@@ -980,7 +1032,7 @@ export class AttackSession {
       declareWar: this.declareWar_,
       speed: this.speed_,
       damagePercent: battleState ? this.damageOf(battleState) : 0,
-      buildingsDestroyed: battleState?.destroyedIds.length ?? 0,
+      buildingsDestroyed: battleState ? this.destroyedOf(battleState) : 0,
       loot: battleState?.loot ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
       defenderLoss: battleState?.defenderLoss ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
       creepsFlung: battleState?.creepsFlung ?? 0,
@@ -1046,6 +1098,12 @@ export class AttackSession {
   private afterEvent(battle: Battle): void {
     this.checkEnd(battle);
     this.notify();
+  }
+
+  /** The felled buildings "N of M" counts: no walls, as `countedBuildings` leaves them out of M. */
+  private destroyedOf(battleState: BattleState): number {
+    const yard = this.combatYard;
+    return yard ? felledCount(yard, battleState.destroyedIds) : battleState.destroyedIds.length;
   }
 
   private damageOf(battleState: BattleState): number {

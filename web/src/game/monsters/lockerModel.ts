@@ -3,7 +3,8 @@ import { timeCost } from "@/game/yard/buildingCosts";
 import { JobKind, type YardJob } from "@/game/yard/jobs";
 import { NEED_MORE_SILOS_PHRASE, overCap } from "@/game/yard/storage";
 import type { Yard } from "@/game/yard/yardModel";
-import { LISTED_MONSTERS, monsterEntry, type MonsterEntry } from "./monsterCatalogue";
+import { monsterEntry, type MonsterEntry } from "./monsterCatalogue";
+import { inRealm, listedMonstersOf, monsterRealmOf, monsterWords, type MonsterRealm } from "./realm";
 
 /**
  * What the Unlock tab shows, as data (`docs/design/yard-buildings.md` §4.3).
@@ -17,6 +18,10 @@ import { LISTED_MONSTERS, monsterEntry, type MonsterEntry } from "./monsterCatal
  *
  * Prices are the server's formulas, recomputed here for the label only: the
  * route charges its own figure (`server/src/services/yard/shiny.ts`).
+ *
+ * On the Inferno yard (`yard.kind` `inferno`, Inferno WP 2.4) the same rules
+ * run for the Inferno roster in its Strongbox, priced in Sulfur (`r3`); each
+ * yard sees only its own realm's unlock (`realm.ts`).
  */
 
 /** Monster Locker type id (`client/scripts/YARD_PROPS.as:901`). */
@@ -97,13 +102,14 @@ export const lockerLevel = (yard: Yard): number => {
 };
 
 /**
- * The running surface unlock: the first `t: 1` entry with a `C` id, as the
- * server takes it. Its end is the store's unlock job when there is one, so an
+ * The running unlock of the yard's realm: the first `t: 1` entry with a `C`
+ * id (an `IC` one on the Inferno yard), as the server takes it. Its end is the store's unlock job when there is one, so an
  * Overdrive the job model counts is counted here too; otherwise the stored `e`.
  */
 export const runningUnlock = (context: LockerContext): RunningUnlock | null => {
+  const realm = monsterRealmOf(context.yard.kind);
   for (const [id, entry] of Object.entries(context.save.lockerdata ?? {})) {
-    if (!id.startsWith("C") || Number(entry?.t) !== 1) continue;
+    if (!inRealm(id, realm) || Number(entry?.t) !== 1) continue;
     const monster = monsterEntry(id);
     if (!monster) continue;
     const job = context.jobs().find((one) => one.kind === JobKind.UNLOCK && one.id === id);
@@ -133,11 +139,11 @@ export const rowState = (
   return { kind: "available" };
 };
 
-/** Every listed monster in list order (never C18), each with its state. */
+/** Every listed monster of the yard's realm in list order (never C18), each with its state. */
 export const lockerRows = (context: LockerContext): LockerRow[] => {
   const running = runningUnlock(context);
   const level = lockerLevel(context.yard);
-  return LISTED_MONSTERS.map((monster) => ({
+  return listedMonstersOf(monsterRealmOf(context.yard.kind)).map((monster) => ({
     monster,
     state: rowState(monster, context, running, level),
   }));
@@ -225,21 +231,22 @@ export const overdriveBlocked = (context: LockerContext): string | null => {
   return null;
 };
 
-/** A gate as its §4.3 reason line: "Needs Monster Locker level 3". */
-export const gateText = (gate: UnlockGate): string => {
+/** A gate as its §4.3 reason line: "Needs Monster Locker level 3" ("Strongbox" in the Inferno). */
+export const gateText = (gate: UnlockGate, realm: MonsterRealm = "surface"): string => {
+  const words = monsterWords(realm);
   switch (gate.reason) {
     case "alreadyUnlocked":
       return "Already unlocked";
     case "unlockRunning":
       return "Another unlock is running";
     case "noLocker":
-      return "Build a Monster Locker";
+      return `Build a ${words.locker}`;
     case "lockerLevel":
-      return `Needs Monster Locker level ${gate.need}`;
+      return `Needs ${words.locker} level ${gate.need}`;
     case "shortfall":
       return gate.overCap
         ? NEED_MORE_SILOS_PHRASE
-        : `Need ${gate.need.toLocaleString("en-US")} more putty`;
+        : `Need ${gate.need.toLocaleString("en-US")} more ${words.putty}`;
     case "credits":
       return "Not enough Shiny";
   }

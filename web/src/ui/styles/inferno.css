@@ -1,0 +1,919 @@
+/*
+ * Moloch's emergence on the main yard (WP 1.10, `ui/inferno/EmergenceScreens.ts`,
+ * design `docs/design/inferno.md` §2.2, §4): Moloch's popups, the cave's note
+ * and menu, his warning with his army (WP 1.9), and the EARTHQUAKE banner. Every value comes from tokens.css.
+ */
+
+.inferno-popup {
+  width: min(92vw, 30rem);
+  border: 2px solid var(--colour-danger);
+}
+
+.inferno-popup .panel__body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Moloch beside his line; stacked on a narrow phone. */
+.inferno-says {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.inferno-says__portrait {
+  width: 100%;
+  aspect-ratio: 237 / 260;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+.inferno-says__line,
+.inferno-complete__line {
+  margin: 0;
+  line-height: var(--leading-normal);
+}
+
+.inferno-popup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.inferno-menu__art {
+  justify-self: center;
+  width: min(100%, 15rem);
+  aspect-ratio: 363 / 335;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+/* A tall card (230 x 303): kept short enough that the words show under it. */
+.inferno-complete__art {
+  justify-self: center;
+  width: auto;
+  max-width: 100%;
+  height: min(32vh, 15rem);
+  aspect-ratio: 230 / 303;
+  border-radius: var(--radius-md);
+}
+
+/* ── "Korath unlocked" (WP 5.2): his portrait (176 px square), Flash's line ── */
+
+.inferno-korath__art {
+  justify-self: center;
+  width: min(60vw, 11rem);
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+.inferno-korath__lead {
+  margin: 0;
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+.inferno-korath__line {
+  text-align: center;
+}
+
+/* ── Moloch's warning: Moloch beside his army, a card per group ─────────── */
+
+.inferno-popup--warning {
+  width: min(92vw, 36rem);
+}
+
+.inferno-warning {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.inferno-warning__portrait {
+  width: 100%;
+  aspect-ratio: 237 / 260;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 var(--colour-art-shadow));
+}
+
+.inferno-army {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inferno-army__card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+  cursor: pointer;
+}
+
+.inferno-army__card:focus-visible {
+  outline: 2px solid var(--colour-danger);
+  outline-offset: 2px;
+}
+
+.inferno-army__card.is-shown {
+  border-color: var(--colour-danger);
+}
+
+.inferno-army__portrait {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.inferno-army__name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.inferno-army__count {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.inferno-warning__army {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* The line of the card last pointed at (Flash showed it on mouse-over). */
+.inferno-army__about {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+@media (max-width: 30rem) {
+  .inferno-warning {
+    grid-template-columns: 1fr;
+  }
+
+  .inferno-warning__portrait {
+    justify-self: center;
+    width: 5rem;
+  }
+
+  .inferno-says {
+    grid-template-columns: 5rem minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .inferno-popup__actions > .btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* ── The earthquake ───────────────────────────────────────────────────── */
+
+/* Clear of the HUD and of Bob's tips, which share the top of a phone. */
+.inferno-quake {
+  position: absolute;
+  top: max(calc(var(--hud-height) + var(--space-3)), 26vh);
+  left: 50%;
+  z-index: var(--z-hud);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-danger);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/*
+ * Moloch's Descent (WP 1.13, `ui/inferno/DescentScreens.ts`): the map of his
+ * 13 yards, his lines, the battle report and the capture.
+ */
+
+/* Flash set his Descent lines in italics (`FormatTextFieldForDialog`). */
+.inferno-says__line--descent {
+  font-style: italic;
+}
+
+.descent-map {
+  width: min(96vw, 46rem);
+}
+
+/* Only the map scrolls; Return Home stays in sight under it. */
+.descent-map .panel__body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* The map scrolls down inside the popup, as Flash's 700 x 560 window did. */
+.descent-map__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(70vh, 40rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.descent-map__map {
+  position: relative;
+  width: 100%;
+}
+
+.descent-map__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Stand-in for Flash's fog (`MapViewDescent_Fog_Shroud`, vector art never
+ * exported): the map below the next yard fades into darkness.
+ */
+.descent-map__fog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-top: 2.5rem;
+  background: linear-gradient(to bottom, transparent, var(--colour-shade-strong) 6rem);
+  pointer-events: none;
+}
+
+/*
+ * Stand-ins for Flash's seven yard pictures (`descentBase_images_355`, vector
+ * art in `assets.swf`): a numbered disc, larger for the headquarters.
+ */
+.descent-yard {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  translate: -50% -50%;
+  padding: 0;
+  border: 3px solid var(--colour-danger);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--colour-warning-bright), var(--colour-danger) 60%, var(--colour-shade-strong));
+  color: var(--colour-text-inverse);
+  font: 700 var(--text-md) / 1 var(--font-display);
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+}
+
+.descent-yard--art7 {
+  width: 4rem;
+  height: 4rem;
+}
+
+.descent-yard--dark {
+  filter: grayscale(0.8) brightness(0.45);
+  cursor: default;
+}
+
+.descent-yard--next {
+  outline: 3px solid var(--colour-warning-bright);
+  outline-offset: 3px;
+}
+
+.descent-yard__number {
+  text-shadow: 0 1px 0 var(--colour-art-shadow);
+}
+
+/* The next yard's card (`DescentBasePopup`), above and beside its marker. */
+.descent-card {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-2);
+  width: 11rem;
+  translate: 2rem -50%;
+  padding: var(--space-3);
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+
+.descent-card--left {
+  translate: calc(-100% - 2rem) -50%;
+}
+
+.descent-card__depth {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  font-weight: 700;
+}
+
+.descent-card__bar {
+  height: 0.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  overflow: hidden;
+}
+
+.descent-card__fill {
+  display: block;
+  height: 100%;
+  background: var(--colour-danger);
+}
+
+.descent-card__warning {
+  margin: 0;
+  color: var(--colour-danger);
+  font-weight: 700;
+}
+
+.descent-report__heading {
+  margin: 0;
+  font-weight: 700;
+}
+
+.descent-report__total {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.descent-report__box {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+.descent-report__name {
+  font-weight: 700;
+}
+
+.descent-report__value {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 30rem) {
+  .descent-report__total {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .descent-yard {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: var(--text-sm);
+  }
+
+  .descent-yard--art7 {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  /* No room beside the marker on a phone: the card sits under it, or over it low on the map. */
+  .descent-card,
+  .descent-card--left {
+    width: 9.5rem;
+    translate: -50% 2rem;
+  }
+
+  .descent-card--up {
+    translate: -50% calc(-100% - 2rem);
+  }
+}
+
+/* ── The Inferno map: Moloch's tribes (WP 2.9, `ui/inferno/InfernoMapScreen.ts`) ── */
+
+.inferno-map {
+  width: min(96vw, 56rem);
+  max-width: none;
+}
+
+/* Only the view scrolls; the toggle and Return Home stay in sight. */
+.inferno-map .panel__body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.inferno-map [hidden] {
+  display: none;
+}
+
+/* Flash's Map / List buttons, as Map Room 1's toggle. */
+.inferno-map__toggle {
+  display: flex;
+  align-self: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.inferno-map__toggle-button {
+  height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inferno-map__toggle-button:hover {
+  background: var(--colour-surface-control);
+}
+
+.inferno-map__toggle-button[aria-pressed="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+}
+
+.inferno-map__toggle-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.inferno-map__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.inferno-map__status {
+  margin: 0;
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--colour-text-secondary);
+}
+
+/* The map pans both ways in its window, as Flash's 700 x 385 one did. */
+.inferno-map__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: min(62vh, 34rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.inferno-map__map {
+  position: relative;
+  width: 75rem;
+}
+
+.inferno-map__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Stand-ins for Flash's tribe marker (`WildMonsterBaseInferno_CLIP`, vector
+ * art in `assets.swf`): Moloch's picture in a round frame, the level on it,
+ * the name under it in capitals (`WildMonsterBase.Setup`).
+ */
+.inferno-tribe {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  translate: -50% -50%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.inferno-tribe__frame {
+  position: relative;
+  display: block;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 3px solid var(--colour-danger);
+  border-radius: 50%;
+  background: var(--colour-shade-strong);
+  box-shadow: var(--shadow-float);
+}
+
+.inferno-tribe__portrait {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.inferno-tribe__level {
+  position: absolute;
+  right: -0.5rem;
+  bottom: -0.25rem;
+  min-width: 1.5rem;
+  padding: 0 var(--space-1);
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  font: 700 var(--text-sm) / 1.25 var(--font-display);
+  text-align: center;
+}
+
+.inferno-tribe__name,
+.inferno-tribe__back {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-float);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inferno-tribe__name {
+  text-transform: uppercase;
+}
+
+.inferno-tribe--wrecked .inferno-tribe__frame {
+  filter: grayscale(0.9) brightness(0.55);
+}
+
+.inferno-tribe__back,
+.inferno-card__back,
+.inferno-row__back {
+  font-variant-numeric: tabular-nums;
+}
+
+.inferno-tribe[aria-expanded="true"] .inferno-tribe__frame {
+  outline: 3px solid var(--colour-warning-bright);
+  outline-offset: 2px;
+}
+
+.inferno-tribe:focus-visible {
+  outline: none;
+}
+
+.inferno-tribe:focus-visible .inferno-tribe__frame {
+  box-shadow: var(--focus-ring);
+}
+
+/* The tribe's card (`MapBasePopup`), beside its marker. */
+.inferno-card {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-2);
+  width: 12rem;
+  translate: 2.5rem -50%;
+  padding: var(--space-3);
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+
+.inferno-card--left {
+  translate: calc(-100% - 2.5rem) -50%;
+}
+
+.inferno-card__name,
+.inferno-card__back {
+  margin: 0;
+}
+
+.inferno-card__name {
+  font-weight: 700;
+}
+
+.inferno-card__back {
+  color: var(--colour-text-secondary);
+}
+
+/* The list (`ListView`, `WMListViewItem`): a row per tribe with its own Attack. */
+.inferno-map__list {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 0;
+  max-height: min(62vh, 34rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.inferno-map__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.inferno-map__heading {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.inferno-map__rows {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.inferno-row {
+  display: grid;
+  grid-template-columns: 3.125rem minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+}
+
+.inferno-row__portrait {
+  display: block;
+  width: 3.125rem;
+  height: 3.125rem;
+  border: 2px solid var(--colour-danger);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.inferno-row__words {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.inferno-row__name {
+  font-weight: 700;
+}
+
+.inferno-row__back {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.inferno-row--wrecked .inferno-row__portrait {
+  filter: grayscale(0.9) brightness(0.6);
+}
+
+/* The bar over the views: Tribes / Players (WP 3.5), and Map / List for the tribes. */
+.inferno-map__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* The tribes' "Loading…" or failure stays with the tribes. */
+.inferno-map__status--away {
+  display: none;
+}
+
+/* A player's row (`PlayerHandler.configure`): who, level, state, View and Attack. */
+.inferno-player .inferno-row__portrait {
+  border-color: var(--colour-border);
+}
+
+.inferno-player__level,
+.inferno-player__presence {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.inferno-player__presence--online {
+  color: var(--colour-success);
+  font-weight: 600;
+}
+
+.inferno-player__extra {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.inferno-player__extra--alarm {
+  color: var(--colour-danger);
+}
+
+.inferno-player__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* The warning before a player attack starts (owner, 27 Oct). */
+.inferno-attack-confirm__counts {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-md);
+  background: var(--colour-warning-soft);
+  /* The amber wash's light text; `--colour-warning-text` is the ink for a solid amber fill. */
+  color: var(--colour-warning-bright);
+  font-weight: 600;
+}
+
+@media (max-width: 38.75rem) {
+  .inferno-map__map {
+    width: 50rem;
+  }
+
+  .inferno-tribe__frame {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .inferno-card,
+  .inferno-card--left {
+    width: 10rem;
+    translate: -50% 2.75rem;
+  }
+
+  .inferno-card--up {
+    translate: -50% calc(-100% - 2.75rem);
+  }
+
+  .inferno-map__toggle {
+    align-self: stretch;
+  }
+
+  .inferno-map__toggle-button {
+    flex: 1 1 0;
+  }
+}
+
+/* ── Transfer Monsters from the cave (WP 2.6, `INFERNO_ASCENSION_POPUP`) ── */
+
+.ascend-dialog {
+  width: min(92vw, 32rem);
+}
+
+.ascend-dialog [hidden] {
+  display: none;
+}
+
+.ascend-dialog__action {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.ascend-dialog__lead,
+.ascend-dialog__free,
+.ascend-dialog__note {
+  margin: 0;
+  color: var(--colour-text-secondary);
+}
+
+.ascend-dialog__free {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.ascend-dialog__capacity {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.ascend-dialog__capacity-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.ascend-dialog__capacity-name {
+  color: var(--colour-text-secondary);
+}
+
+.ascend-dialog__figure {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Housed, then the picks after them, as Flash's `mcBar` and `mcBarB`. */
+.ascend-bar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-input);
+}
+
+.ascend-bar__stored {
+  background: var(--colour-meter);
+}
+
+.ascend-bar__queued {
+  background: var(--colour-danger);
+}
+
+.ascend-dialog__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(40vh, 340px);
+  overflow-y: auto;
+}
+
+.ascend-dialog__list:empty {
+  display: none;
+}
+
+.ascend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.ascend-row__picture {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.ascend-row__label {
+  flex: 1 1 110px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ascend-row__name {
+  font-weight: 700;
+}
+
+.ascend-row__have {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ascend-dialog__status {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.ascend-dialog__status--failed {
+  color: var(--colour-warning);
+}
+
+/* The body scrolls when the dialog is taller than the screen: Transfer
+   Monsters stays pinned to its foot, and on a phone the list scrolls with the
+   body rather than in a box of its own. */
+.ascend-dialog .inferno-popup__actions {
+  position: sticky;
+  bottom: calc(-1 * var(--space-4));
+  margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  /* Solid: the raised surface is see-through, and the rows pass under it. */
+  background: var(--colour-surface-base);
+  border-top: 1px solid var(--colour-border);
+}
+
+@media (max-width: 30rem) {
+  .ascend-dialog__list {
+    max-height: none;
+    overflow-y: visible;
+  }
+}

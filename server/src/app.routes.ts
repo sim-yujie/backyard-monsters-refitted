@@ -65,8 +65,14 @@ import { migrateToFriend, rejectMigrateToFriend } from "./controllers/maproom/v2
 
 import { getNewMap } from "./controllers/maproom/getNewMap.js";
 import { setMapVersion } from "./controllers/maproom/setMapVersion.js";
-import { infernoSave } from "./controllers/inferno/infernoSave.js";
-import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
+import { infernoState, korathSeen } from "./controllers/inferno/infernoState.js";
+import { infernoAttackStart } from "./controllers/inferno/descentAttack.js";
+import { infernoLoad } from "./controllers/inferno/infernoLoad.js";
+import { infernoTransferAction } from "./controllers/inferno/transfer.js";
+import { infernoMap } from "./controllers/inferno/infernoMap.js";
+import { infernoNeighbours } from "./controllers/inferno/infernoNeighbours.js";
+import { infernoView } from "./controllers/inferno/infernoView.js";
+import { yardRoute } from "./controllers/yard/yardRoute.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
@@ -192,10 +198,17 @@ router.post("/base/checkpoint", verifyUserAuth, attackCheckpoint);
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/bm/getnewmap", apiVersion, verifyUserAuth, logRequest, getNewMap);
 router.post("/api/:apiVersion/bm/base/load", apiVersion, verifyUserAuth, logRequest, baseLoad);
-router.post("/api/:apiVersion/bm/base/save", apiVersion, verifyUserAuth, logRequest, infernoSave);
 router.post("/api/:apiVersion/bm/base/updatesaved", verifyUserAuth, logRequest, updateSaved);
-router.post("/api/:apiVersion/bm/base/infernomonsters", apiVersion, verifyUserAuth, logRequest, infernoMonsters);
 router.post("/api/:apiVersion/bm/neighbours/get", apiVersion, verifyUserAuth, logRequest, getNeighbours);
+// The new Inferno (docs/design/inferno.md §3.2), refused while `infernoConfig.enabled` is off.
+router.get("/api/:apiVersion/bm/inferno/state", apiVersion, verifyUserAuth, verifyAccountStatus, infernoState);
+router.post("/api/:apiVersion/bm/inferno/korath/seen", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, korathSeen);
+router.post("/api/:apiVersion/bm/inferno/attack/start", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, infernoAttackStart);
+router.get("/api/:apiVersion/bm/inferno/map", apiVersion, verifyUserAuth, verifyAccountStatus, infernoMap);
+router.get("/api/:apiVersion/bm/inferno/neighbours", apiVersion, verifyUserAuth, verifyAccountStatus, infernoNeighbours);
+router.post("/api/:apiVersion/bm/inferno/view", apiVersion, verifyUserAuth, verifyAccountStatus, infernoView);
+router.post("/api/:apiVersion/bm/inferno/load", apiVersion, verifyUserAuth, verifyAccountStatus, infernoLoad);
+router.post("/api/:apiVersion/bm/inferno/transfer", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, yardRoute(infernoTransferAction));
 // The web client's Map Room 1 screen (issue #132); re-read while the map is open, so not echoed by logRequest.
 router.get("/api/:apiVersion/bm/maproom1", apiVersion, verifyUserAuth, getMapRoom1);
 // The web client's presence ping (#242), every 30 s while its tab is visible, so not echoed by logRequest.

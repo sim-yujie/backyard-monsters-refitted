@@ -11,6 +11,7 @@ import {
   upgradeSteps,
   WALL_TYPES,
   type CostTotals,
+  type YardKind,
 } from "../buildingCosts";
 import type { Yard } from "../yardModel";
 import type { PlanNode } from "./placement";
@@ -103,10 +104,11 @@ const TOWN_HALL_TYPE = 14;
  *
  * The art table is the first source because it is the one the rest of the yard
  * screen reads from; the cost table's own copy covers a type with no art, and
- * the type id covers a type in neither.
+ * the type id covers a type in neither. On the Inferno yard (`kind`) the
+ * Inferno's names: Bone Cruncher, Under Hall.
  */
-export const typeName = (type: number): string =>
-  buildingName(type) || nameOf(type) || `Type ${type}`;
+export const typeName = (type: number, kind: YardKind = "main"): string =>
+  buildingName(type, kind) || nameOf(type, kind) || `Type ${type}`;
 
 /** The four resources a yard holds, with absent fields read as zero. */
 export const heldResources = (resources: Resources): ResourceAmounts => ({

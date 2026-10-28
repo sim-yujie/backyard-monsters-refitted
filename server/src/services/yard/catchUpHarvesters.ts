@@ -1,3 +1,4 @@
+import type { YardKind } from "../../game-data/buildingCosts.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -137,8 +138,9 @@ const repairOf = (completed: readonly unknown[], id: number): RepairJob | undefi
   );
 
 /**
- * Runs one harvester from `start` to `now`, overdriven until `podEnd`.
- * Returns the new buffer, or null when the harvester does not produce.
+ * Runs one harvester from `start` to `now`, overdriven until `podEnd`, at
+ * the rates of its yard's table (`kind`). Returns the new buffer, or null when
+ * the harvester does not produce.
  */
 export const advanceHarvester = (
   save: CatchUpHarvestersSave,
@@ -146,7 +148,8 @@ export const advanceHarvester = (
   building: BuildingData,
   start: number,
   now: number,
-  podEnd: number | undefined
+  podEnd: number | undefined,
+  kind: YardKind = "main"
 ): HarvesterBuffer | null => {
   const type = Number(building.t);
   if (!isHarvester(type) || counting(building)) return null;
@@ -154,10 +157,10 @@ export const advanceHarvester = (
   if (level <= 0) return null;
 
   const health = harvesterHealth(save, key, building);
-  const max = maxHp(type, level) || undefined;
+  const max = maxHp(type, level, kind) || undefined;
   if (!canProduce(health, max)) return null;
 
-  const rates = harvesterRates(type, level, health, max);
+  const rates = harvesterRates(type, level, health, max, kind);
   if (!rates) return null;
 
   let buffer = bufferOf(building);
@@ -178,16 +181,17 @@ const advanceAcrossRepair = (
   start: number,
   now: number,
   podEnd: number | undefined,
-  repair: RepairJob
+  repair: RepairJob,
+  kind: YardKind
 ): HarvesterBuffer | null => {
   const damaged = repair.detail.from;
   const before: CatchUpHarvestersSave = {
     ...save,
     buildinghealthdata: { ...(save.buildinghealthdata ?? {}), [String(building.id ?? key)]: damaged },
   };
-  const first = advanceHarvester(before, key, { ...building, hp: damaged }, start, repair.at, podEnd);
+  const first = advanceHarvester(before, key, { ...building, hp: damaged }, start, repair.at, podEnd, kind);
   const mid = first ? withBuffer(building, first) : building;
-  return advanceHarvester(save, key, mid, repair.at, now, podEnd) ?? first;
+  return advanceHarvester(save, key, mid, repair.at, now, podEnd, kind) ?? first;
 };
 
 /**
@@ -200,12 +204,15 @@ const advanceAcrossRepair = (
  * @param completed - What the earlier steps finished in this window, for the
  *   building completions and repairs that split it and the Production
  *   Overdrive's end.
+ * @param kind - The yard's table: the Inferno yard's harvesters (Bone,
+ *   Coal, Sulfur, Magma) run at their own rates (`inferno/infernoLoad.ts`).
  */
 export const catchUpHarvesters = (
   save: CatchUpHarvestersSave,
   from: number,
   now: number,
-  completed: readonly unknown[]
+  completed: readonly unknown[],
+  kind: YardKind = "main"
 ): void => {
   const buildings = save.buildingdata;
   if (!buildings) return;
@@ -221,8 +228,8 @@ export const catchUpHarvesters = (
     const repair = repairOf(completed, id);
     const buffer =
       repair && repair.at > start
-        ? advanceAcrossRepair(save, key, building, start, now, podEnd, repair)
-        : advanceHarvester(save, key, building, start, now, podEnd);
+        ? advanceAcrossRepair(save, key, building, start, now, podEnd, repair, kind)
+        : advanceHarvester(save, key, building, start, now, podEnd, kind);
     if (!buffer) continue;
 
     const before = bufferOf(building);

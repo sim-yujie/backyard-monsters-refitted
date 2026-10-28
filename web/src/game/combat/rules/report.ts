@@ -1,3 +1,4 @@
+import { siegeData } from "./siege.js";
 import { TICKS_PER_SECOND } from "./stats.js";
 import { RESOURCE_KEYS, type FlingEvent, type ResourceAmounts } from "./types.js";
 
@@ -85,8 +86,11 @@ export const reportLine = (
     }
     case "bomb":
       return `${when} Fired a ${bombName(event.id)} ${at(event.x, event.y)}`;
-    case "siege":
-      return `${when} Deployed ${event.weapon} ${at(event.x, event.y)}`;
+    case "siege": {
+      // By the weapon's Flash name (`#w_<id>#`), as `attack_log_siege` gave it.
+      const name = siegeData(event.weapon)?.name ?? event.weapon;
+      return `${when} Deployed ${name} ${at(event.x, event.y)}`;
+    }
     case "retreat":
       return `${when} Retreated`;
     case "championRetreat":

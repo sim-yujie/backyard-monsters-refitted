@@ -92,9 +92,10 @@ describe("groupCompletedJobs", () => {
     expect(groups.map((group) => group.kind)).toEqual(["starterBase", "mapRoomAdded"]);
     expect(noticeText(groups[0]!)).toBe(READY_WITH_GRANT);
     expect(groups[0]!.items[0]!.buildingId).toBe(1);
-    expect(awayNoticeText(groupCompletedJobs([starter()]))).toBe(READY_WITH_GRANT);
+    // A line of several sentences ends with a full stop; a line of one reads as a list row.
+    expect(awayNoticeText(groupCompletedJobs([starter()]))).toBe(`${READY_WITH_GRANT}.`);
     expect(awayNoticeText(groups)).toBe(
-      `${READY_WITH_GRANT}. While you were away: a Map Room was added to your yard`,
+      `${READY_WITH_GRANT}. While you were away: a Map Room was added to your yard.`,
     );
   });
 
@@ -177,10 +178,10 @@ describe("groupCompletedJobs", () => {
     expect(noticeText(group!)).toBe("Your Drull has hatched!");
     expect(jobLineText("jobs", [hatch])).toBe("Your Drull has hatched!");
     expect(jobLineText("away", [hatch, upgrade(1, CANNON, 5)])).toBe(
-      `Your Drull has hatched! While you were away: upgrade finished: ${typeName(CANNON)} 5`,
+      `Your Drull has hatched! While you were away: upgrade finished: ${typeName(CANNON)} 5.`,
     );
     expect(jobLine("away", [hatch, upgrade(1, CANNON, 5)], null).textContent).toBe(
-      `Your Drull has hatched! While you were away: upgrade finished: ${typeName(CANNON)} 5`,
+      `Your Drull has hatched! While you were away: upgrade finished: ${typeName(CANNON)} 5.`,
     );
   });
 
@@ -263,13 +264,13 @@ describe("outpost notices (#187)", () => {
     expect(awayNoticeText(groupCompletedJobs([upgrade(1, CANNON, 5), attacked, taken]))).toBe(
       "Bramble attacked your outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted. " +
         "Bramble took your outpost at (243, 206). It is theirs now, with every building on it. " +
-        `While you were away: upgrade finished: ${typeName(CANNON)} 5`,
+        `While you were away: upgrade finished: ${typeName(CANNON)} 5.`,
     );
   });
 
-  it("stands alone when nothing else happened", () => {
+  it("stands alone when nothing else happened, its full stop kept", () => {
     expect(awayNoticeText(groupCompletedJobs([attacked]))).toBe(
-      "Bramble attacked your outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted",
+      "Bramble attacked your outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were looted.",
     );
   });
 
@@ -299,12 +300,21 @@ describe("yard defence notices (#242)", () => {
       ),
     ).toBe(
       "Kai_Builds attacked your yard. It was left 40% damaged, and 500 Goo were looted. " +
-        `While you were away: upgrade finished: ${typeName(CANNON)} 5`,
+        `While you were away: upgrade finished: ${typeName(CANNON)} 5.`,
     );
   });
 
   it("says the yard was attacked when the server sent no text", () => {
     expect(awayNoticeText(groupCompletedJobs([defended()]))).toBe("Your yard was attacked");
+  });
+
+  it("an attack on the Inferno yard is told the same way (Inferno WP 3.4)", () => {
+    const inferno = (text?: string): CompletedJob => ({ ...defended(text), kind: "infernoAttacked" });
+    const text = "Bramble attacked your Inferno yard. It was left 30% damaged, and 1,200 Bone were looted.";
+    expect(awayNoticeText(groupCompletedJobs([inferno(text)]))).toBe(text);
+    // Two attacks in one row: each sentence ends with its full stop, the last one too (S3 browser check).
+    expect(jobLine("away", [inferno(text), inferno(text)], null).textContent).toBe(`${text} ${text}`);
+    expect(awayNoticeText(groupCompletedJobs([inferno()]))).toBe("Your Inferno yard was attacked");
   });
 
   it("is never counted as a finished job", () => {
@@ -366,7 +376,7 @@ describe("jobLine", () => {
 
   it("puts the starter base first in the away line, its Town Hall a button that selects it", () => {
     const line = jobLine("away", [upgrade(7, CANNON, 2), starter()], select);
-    expect(line.textContent).toBe(`${READY_WITH_GRANT}. While you were away: upgrade finished: ${typeName(CANNON)} 2`);
+    expect(line.textContent).toBe(`${READY_WITH_GRANT}. While you were away: upgrade finished: ${typeName(CANNON)} 2.`);
     expect(buttons(line).map((one) => one.textContent)).toEqual(["Town Hall", `${typeName(CANNON)} 2`]);
     buttons(line)[0]!.click();
     expect(select).toHaveBeenCalledWith(1);

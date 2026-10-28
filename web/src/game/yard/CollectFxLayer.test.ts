@@ -80,4 +80,40 @@ describe("CollectFxLayer", () => {
     other.destroy();
     expect(late).toHaveBeenCalledWith("r2", 50);
   });
+
+  it("pops as each ball leaves and as it lands, as Flash's balls did", () => {
+    const sound = vi.fn();
+    const layer = new CollectFxLayer({ art: art(), sound });
+    layer.launch(flights(300), () => {});
+    layer.update(0.05);
+    // One ball out so far; the other two wait their turn.
+    expect(sound.mock.calls).toEqual([["bankfire"]]);
+    layer.update(0.1);
+    expect(sound.mock.calls.filter(([effect]) => effect === "bankfire")).toHaveLength(2);
+    for (let frame = 0; frame < 60 * 4 && layer.flying > 0; frame++) layer.update(1 / 60);
+    const effects = sound.mock.calls.map(([effect]) => effect as string);
+    expect(effects.filter((effect) => effect === "bankfire")).toHaveLength(3);
+    expect(effects.filter((effect) => effect === "bankland")).toHaveLength(3);
+    // Each ball pops once on the way out, never again in flight.
+    layer.update(1);
+    expect(sound).toHaveBeenCalledTimes(6);
+  });
+
+  it("pops the Inferno's own pair on the Inferno yard, as Flash did", () => {
+    const sound = vi.fn();
+    const layer = new CollectFxLayer({ art: art(), sound, inferno: () => true });
+    layer.launch(flights(100), () => {});
+    for (let frame = 0; frame < 60 * 4 && layer.flying > 0; frame++) layer.update(1 / 60);
+    expect(sound.mock.calls).toEqual([["ibankfire"], ["ibankland"]]);
+  });
+
+  it("makes no sound for balls landed at once or taken away", () => {
+    const sound = vi.fn();
+    const layer = new CollectFxLayer({ art: art(), sound });
+    const group = layer.launch(flights(500), () => {});
+    layer.launch(flights(500), () => {});
+    layer.cancel(group);
+    layer.finish();
+    expect(sound).not.toHaveBeenCalled();
+  });
 });

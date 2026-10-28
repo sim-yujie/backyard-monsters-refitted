@@ -69,6 +69,24 @@ const statusOf = (champion: ChampionSaveEntry): number => numberOf(champion.stat
 export const entryOfChampion = (champion: ChampionSaveEntry): ChampionEntry | undefined =>
   championEntry(Math.trunc(numberOf(champion.t)));
 
+/** Korath's champion type (`G4`): raised once the player owns an Inferno yard (Inferno WP 5.1, owner I10). */
+export const KORATH_TYPE = 4;
+
+/**
+ * Whether Korath is unlocked: the main yard's load says so (`infernostate`,
+ * sent only with the new Inferno on, `korathUnlocked` once the player owns an
+ * Inferno yard). The server's `services/inferno/korath.ts` decides.
+ */
+export const korathUnlocked = (save: Pick<BaseLoadResponse, "infernostate">): boolean =>
+  save.infernostate?.korathUnlocked === true;
+
+/**
+ * Whether the cage offers a champion to raise: Gorgo, Drull and Fomor
+ * (`raisable`), and Korath once unlocked.
+ */
+export const canRaise = (entry: ChampionEntry, save: Pick<BaseLoadResponse, "infernostate">): boolean =>
+  entry.raisable || (entry.t === KORATH_TYPE && korathUnlocked(save));
+
 /** The basic champion in the cage, if any (`CHAMPIONCAGE.hasBasicChampion`, `:309-319`). */
 export const activeChampion = (save: BaseLoadResponse): ChampionSaveEntry | null =>
   championsOf(save).find(
@@ -367,7 +385,7 @@ export const cageView = (save: BaseLoadResponse, now: number): CageView => {
   const frozen = new Set(frozenChampions(save).map((champion) => Math.trunc(numberOf(champion.t))));
   return {
     kind: "empty",
-    choices: CHAMPION_CATALOGUE.filter((entry) => entry.raisable).map((entry) => ({
+    choices: CHAMPION_CATALOGUE.filter((entry) => canRaise(entry, save)).map((entry) => ({
       entry,
       frozen: frozen.has(entry.t),
     })),

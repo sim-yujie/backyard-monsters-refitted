@@ -36,6 +36,14 @@ export interface BobLine {
   skip?: { label: string; onClick: () => void };
 }
 
+/**
+ * Whether any Bob is talking on screen: the guided start's, Help's tour of it
+ * or a screen tip. Moloch's emergence waits for him (`plugins/inferno.ts`),
+ * as Flash's cave waited for the tutorial to end.
+ */
+export const bobOnScreen = (): boolean =>
+  [...document.querySelectorAll<HTMLElement>(".guide-bob")].some((bubble) => !bubble.hidden);
+
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] => {
   const element = document.createElement(tag);
   element.className = className;

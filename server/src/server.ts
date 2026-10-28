@@ -27,6 +27,7 @@ import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfi
 import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
+import { startInfernoPlayerFinaliser } from "./services/inferno/infernoPlayerFinalise.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
 import { startAlertSweep } from "./services/alerts/alertSweep.js";
 import { startDailySummary } from "./services/alerts/dailySummary.js";
@@ -130,7 +131,11 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // Finishes attacks whose window closed without a save (issue #138).
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing
   // the same database, such as a second development server.
-  if (process.env.ATTACK_FINALISER_SWEEP !== "off") startAttackFinaliser();
+  if (process.env.ATTACK_FINALISER_SWEEP !== "off") {
+    startAttackFinaliser();
+    // Inferno player attacks left without a save (`infernoPlayerFinalise.ts`).
+    startInfernoPlayerFinaliser();
+  }
 
   // Deletes mail, battle records and chat reports past their retention limits,
   // once a UTC day (`config/RetentionConfig.ts`, the Privacy Policy). Two

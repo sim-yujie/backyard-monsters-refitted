@@ -26,7 +26,9 @@ import type { JsonObject } from "../../types/JsonObject.js";
  * legitimate save never reaches the cap from below, but a save that somehow
  * holds more is clamped rather than trusted. An outpost has one worker whatever
  * its store data says (`QUEUE.as:31-52`): {@link workerCount} takes the yard
- * kind for that.
+ * kind for that. The Inferno yard counts the same way off its own store data:
+ * Flash gave it one worker and sold none, but the owner's decision I3 sells it
+ * four of its own (`docs/design/inferno.md` §5, WP 1.17).
  *
  * ## Busy
  *
@@ -41,7 +43,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 /** The most workers a main yard can ever have (`QUEUE.as:42-53`). */
 export const WORKER_CAP = 5;
 
-/** An outpost's workers: one, bought workers ignored (`QUEUE.as:31-52`). */
+/** An outpost's workers: one, bought workers ignored (`QUEUE.as:31-52`, `!BASE.isMainYard`). */
 export const OUTPOST_WORKERS = 1;
 
 /**
@@ -61,7 +63,8 @@ const running = (raw: unknown): boolean => (finite(raw) ?? 0) > 0;
 
 /**
  * How many workers this yard has: one, plus every extra worker bought, capped
- * at {@link WORKER_CAP}; an outpost has {@link OUTPOST_WORKERS}.
+ * at {@link WORKER_CAP}; an outpost has {@link OUTPOST_WORKERS}. The Inferno
+ * yard's `storedata` is its own row's, so its bought workers are its own.
  *
  * A save with no `storedata` at all, or none that reads as a number, has the
  * one worker every yard starts with.

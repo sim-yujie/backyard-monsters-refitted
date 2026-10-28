@@ -4,6 +4,7 @@ import { championEntry } from "@/game/yard/championCatalogue";
 import {
   activeChampion,
   cageEgg,
+  canRaise,
   cageView,
   chamberView,
   specialChampion,
@@ -218,7 +219,9 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
       key: ChampionKey.raise,
       check: (reader) => {
         const entry = championEntry(type);
-        if (!entry?.raisable) return refuse("notRaisable", "That champion cannot be raised at the cage.");
+        if (!entry || !canRaise(entry, reader.save)) {
+          return refuse("notRaisable", "That champion cannot be raised at the cage.");
+        }
         const cage = cageView(reader.save, reader.now());
         if (cage.kind === "noCage") return refuse("noCage", "Build a Champion Cage first.");
         if (cage.kind === "building") return refuse("busy", "Your Champion Cage is still being built.");

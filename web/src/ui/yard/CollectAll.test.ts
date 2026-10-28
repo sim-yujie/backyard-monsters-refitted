@@ -4,10 +4,11 @@ import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import type { BankReport } from "@/api/yardBank";
 import type { YardActionResult, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
-import { spokenText } from "@/ui/resourceIcon";
+import { setResourceRealm, spokenText } from "@/ui/resourceIcon";
 import {
   COLLECT_EMPTY_LABEL,
   COLLECT_FULL_NOTE,
+  INFERNO_COLLECT_FULL_NOTE,
   CollectAll,
   collectRing,
   CollectState,
@@ -164,6 +165,23 @@ describe("CollectAll", () => {
     expect(collect.state).toBe(CollectState.FULL);
     expect(button().title).toContain(COLLECT_FULL_NOTE);
     expect(button().getAttribute("aria-label")).toContain(COLLECT_FULL_NOTE);
+  });
+
+  it("names the Resource Pods when the Inferno purse is full", () => {
+    (binding.store as unknown as { resources: Record<string, number> }).resources = {
+      r1: 1_000,
+      r2: 0,
+      r3: 0,
+      r4: 0,
+    };
+    setResourceRealm("inferno");
+    try {
+      collect.bind(binding);
+      expect(button().title).toContain(INFERNO_COLLECT_FULL_NOTE);
+      expect(button().getAttribute("aria-label")).toContain(INFERNO_COLLECT_FULL_NOTE);
+    } finally {
+      setResourceRealm("surface");
+    }
   });
 
   it("banks everything in one request and says what was collected", async () => {

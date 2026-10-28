@@ -12,7 +12,7 @@ import type { YardActionResult, YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { formatAmount, formatCompact } from "@/ui/format";
 import { icon } from "@/ui/icons";
-import { RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_NAMES, resourceAmount, resourceRealm } from "@/ui/resourceIcon";
 
 /**
  * The yard's Collect all button (`docs/design/yard-buildings.md` §5.1,
@@ -57,6 +57,15 @@ export const collectAllTitle = (amounts: Readonly<Record<HarvestKey, number>>): 
 /** What the tooltip adds while a silo the bank would fill is full. */
 export const COLLECT_FULL_NOTE =
   "Storage is full: what does not fit stays in your harvesters. Build or upgrade Storage Silos.";
+
+/** The same in the Inferno, where Resource Pods hold the purse. */
+export const INFERNO_COLLECT_FULL_NOTE =
+  "Storage is full: what does not fit stays in your harvesters. Build or upgrade Resource Pods.";
+
+/** What raises the cap in the realm on screen. */
+const storageName = (): string => (resourceRealm() === "inferno" ? "Resource Pods" : "Storage Silos");
+const collectFullNote = (): string =>
+  resourceRealm() === "inferno" ? INFERNO_COLLECT_FULL_NOTE : COLLECT_FULL_NOTE;
 
 /** What the empty bubble says. */
 export const COLLECT_EMPTY_LABEL =
@@ -151,7 +160,7 @@ export const showBankResult = (notices: Notices, result: YardActionResult<BankRe
     if (got) message.append(" ");
     message.append(
       kept,
-      " stayed in your harvesters: storage is full. Build or upgrade Storage Silos.",
+      ` stayed in your harvesters: storage is full. Build or upgrade ${storageName()}.`,
     );
   }
   if (!got && !kept) return;
@@ -251,11 +260,11 @@ export class CollectAll {
     this.icons.hidden = false;
     this.amount.textContent = formatCompact(ring.total);
     const full = ring.state === CollectState.FULL;
-    this.button.title = collectAllTitle(ring.amounts) + (full ? `\n${COLLECT_FULL_NOTE}` : "");
+    this.button.title = collectAllTitle(ring.amounts) + (full ? `\n${collectFullNote()}` : "");
     this.button.setAttribute(
       "aria-label",
       `Collect all: ${formatAmount(ring.total)} waiting in your harvesters.` +
-        (full ? ` ${COLLECT_FULL_NOTE}` : ""),
+        (full ? ` ${collectFullNote()}` : ""),
     );
     this.button.disabled = store.isRunning(BankKey.ALL);
   }

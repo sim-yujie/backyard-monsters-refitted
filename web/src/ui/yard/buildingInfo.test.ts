@@ -63,6 +63,12 @@ describe("towers", () => {
     });
   });
 
+  it("the Siege Works shoots nothing, so it shows no Range, though its stats block has one", () => {
+    expect(row({ t: 134, l: 1 }, "Range")).toBeUndefined();
+    // A Monster Bunker's range is where it sends its monsters: kept.
+    expect(row({ t: 22, l: 1 }, "Range")).toBeDefined();
+  });
+
   it("Tesla Tower: damage per shot and shots per charge, as its own text (#266)", () => {
     expect(row({ t: 25, l: 1 }, "Damage per shot")).toEqual({
       label: "Damage per shot",
@@ -191,6 +197,25 @@ describe("Town Hall", () => {
 
   it("a Town Hall at the top has no list", () => {
     expect(buildingInfo(one({ t: 14, l: 10 })).list).toBeNull();
+  });
+});
+
+describe("Under Hall (WP 1.19)", () => {
+  it("lists the Inferno table's unlocks by the Inferno's names", () => {
+    const items = townHallUnlocks(1, "inferno");
+    expect(items).toContain("Bone Cruncher +1");
+    expect(items).toContain("Sharpshooter +1");
+    expect(items).toContain("Booby Trap (new)");
+    // Not the surface list: no Twig Snapper, no Storage Silo, no Monster Locker.
+    expect(items.some((item) => item.startsWith("Twig Snapper"))).toBe(false);
+    expect(items.some((item) => item.startsWith("Storage Silo"))).toBe(false);
+    expect(items.some((item) => item.startsWith("Monster Locker"))).toBe(false);
+  });
+
+  it("the panel titles the list with the Under Hall's next level", () => {
+    const info = buildingInfo(one({ t: 14, l: 1 }), "inferno");
+    expect(info.list?.label).toBe("Under Hall 2 unlocks");
+    expect(info.list?.items).toContain("Magma Pump +1");
   });
 });
 
