@@ -18,6 +18,7 @@ import { openNews } from "./announcements/AnnouncementDialog";
 import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
+import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
 import { formatAmount, formatCompact } from "./format";
 import { gameIcon } from "./gameIcon";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, restyleIcon, type ResourceKey } from "./resourceIcon";
@@ -184,11 +185,12 @@ export const COUNT_MS = 500;
 const OFFSET_PX = 8;
 
 /**
- * "−5.0M" or "+120": a change as the float shows it. U+2212, not a hyphen.
- * Short on purpose: it is on screen for a second and only says how big.
+ * "−5.0M" or "+120": a change as the float shows it, signed like every other
+ * gain or loss (`amountChange.ts`, U+2212 rather than a hyphen). Short on
+ * purpose: it is on screen for a second and only says how big.
  */
 export const formatDelta = (delta: number): string =>
-  `${delta < 0 ? "−" : "+"}${formatCompact(Math.abs(delta))}`;
+  `${AMOUNT_CHANGE_SIGNS[delta < 0 ? "loss" : "gain"]}${formatCompact(Math.abs(delta))}`;
 
 /** "11,158,040,000": an amount in full, the same in every locale (`formatAmount`). */
 export const formatExact = (amount: number): string => formatAmount(amount);

@@ -98,7 +98,7 @@ import type { HatcheryMarks } from "@/game/yard/YardHatchMarks";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { CompareView, pointerInPlanPane } from "@/game/yard/CompareView";
 import { YardInput } from "@/game/yard/YardInput";
-import { formatAmount, formatCountdown } from "@/ui/format";
+import { formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
 import { Notices } from "@/ui/maproom/Notices";
 import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
@@ -120,13 +120,13 @@ import {
   type MonstersFocus,
 } from "@/ui/monsters/monstersTab";
 import { monstersTabsFor } from "@/ui/monsters/tabs";
-import { resourceAmount, setResourceRealm } from "@/ui/resourceIcon";
+import { setResourceRealm } from "@/ui/resourceIcon";
 import { setScreenTune } from "@/game/sound/sound";
 import { TestReportPanel } from "@/ui/attack/TestReport";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
 import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
-import { showBankResult } from "@/ui/yard/CollectAll";
+import { bankFloat, showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
 import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { FriendsBar } from "@/ui/friends/FriendsBar";
@@ -1351,7 +1351,7 @@ export class YardScene implements Scene {
     return startBank(predicted, this.renderer, hud);
   }
 
-  /** "+720" with the resource's icon, rising off a building and fading (`harvest.css`). */
+  /** "+720" with the resource's icon (`bankFloat`), rising off a building and fading. */
   private floatBanked(id: number, resource: HarvestKey, amount: number): void {
     const camera = this.camera;
     const context = this.context;
@@ -1360,11 +1360,7 @@ export class YardScene implements Scene {
 
     const screen = camera.worldToScreen({ x: building.centreX, y: building.centreY });
     const canvas = context.canvas.getBoundingClientRect();
-    const float = resourceAmount(resource, `+${formatAmount(amount)}`, {
-      className: "yard-bank-float",
-      decorative: true,
-    });
-    float.setAttribute("aria-hidden", "true");
+    const float = bankFloat(resource, amount);
     float.style.left = `${Math.round(canvas.left + screen.x)}px`;
     float.style.top = `${Math.round(canvas.top + screen.y)}px`;
     document.body.append(float);

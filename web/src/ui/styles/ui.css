@@ -763,7 +763,8 @@ body {
 }
 
 /* A change of amount, floating off the readout (#92). Downwards for a spend,
-   upwards for a gain; a plain fade when motion is reduced. */
+   upwards for a gain; a plain fade when motion is reduced. Red and green as
+   every other gain or loss (`.res-amount--gain/--loss` above). */
 .hud__delta {
   position: fixed;
   z-index: var(--z-popup);
@@ -774,18 +775,21 @@ body {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: var(--leading-tight);
+  text-shadow:
+    0 0 2px var(--colour-change-halo),
+    0 1px 1px var(--colour-change-halo);
   white-space: nowrap;
   pointer-events: none;
   animation: hud-delta 1.6s var(--easing) forwards;
 }
 
 .hud__delta--down {
-  color: var(--colour-danger);
+  color: var(--colour-loss);
   --hud-delta-drift: 8px;
 }
 
 .hud__delta--up {
-  color: var(--colour-success);
+  color: var(--colour-gain);
   --hud-delta-drift: -8px;
 }
 
