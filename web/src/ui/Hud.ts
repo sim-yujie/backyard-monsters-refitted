@@ -687,12 +687,14 @@ export class Hud {
     const state = capState(shown, readout.cap);
     const full = state?.full === true;
     // The corner draws the cap as the fill bar alone, the figure kept for the
-    // tooltip and the tap bubble, until the silo is full: then "15M/15M".
+    // tooltip and the tap bubble, until the silo is full: then "15M/15M". A
+    // phone's quarter-width cell has no room for "23.1M/23.1M", so there the
+    // short amount and the full mark say it.
     readout.value.textContent =
-      this.corner && full && readout.cap !== undefined
-        ? fullText(shown, readout.cap)
-        : this.fitted === HudFit.COMPACT
-          ? formatCompact(shown)
+      this.fitted === HudFit.COMPACT
+        ? formatCompact(shown)
+        : this.corner && full && readout.cap !== undefined
+          ? fullText(shown, readout.cap)
           : formatAmount(shown);
     const showCap =
       !this.corner &&

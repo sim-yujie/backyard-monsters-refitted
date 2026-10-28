@@ -497,6 +497,29 @@ describe("the yard's corner layout (#171)", () => {
     hud.destroy();
     vi.unstubAllGlobals();
   });
+
+  it("keeps a full silo to the short amount and the full mark on a phone, where 23.1M/23.1M would not fit", () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(width <= 620px)" })));
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    const store = {
+      caps: { r1: 23_050_000, r2: 20, r3: 20, r4: 20 },
+      workers: { total: 3, busy: 0 },
+      jobs: () => [],
+      save: {},
+      yard: { kind: "main" },
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.setResources({ r1: 23_050_000, r2: 10 });
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    expect(r1.textContent).toBe("23.1M");
+    expect(r1.querySelector<HTMLElement>(".hud__full-mark")!.hidden).toBe(false);
+    expect(r1.title).toBe(`Twigs: 23,050,000 of 23,050,000\n${FULL_NOTE}`);
+    hud.destroy();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("the HUD's spellings", () => {
