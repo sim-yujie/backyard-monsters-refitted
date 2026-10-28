@@ -46,12 +46,14 @@ CANVAS = {
     3: dict(size=(620, 960), box=(163, 515, 421, 897), pivot=(291, 621)),
 }
 TILT = 22.0                       # the barrel's raise, degrees (the 32-heading strip)
-PITCHES = [-22, -12, -2, 8, 18]   # the tilt strip's rows, degrees DOWN (negative = raised) (owner, 28 Oct: the barrel tilts
-                                  # with the target's distance, as the Laser's head does): row 0 is the 22 degrees up of the
-                                  # still and the 32-heading strip (the far shot, and the game's still picture), the last row
-                                  # points down at a creep next to the tower. Much more up and the breech sinks into the collar.
-                                  # The ring of spikes sits below the barrel's swing (RING_DZ), so it clears all of these at
-                                  # every heading (see `clash` and `limits` below).
+PITCHES = [-22]                   # the tilt strip's rows, degrees DOWN (negative = raised). One fixed tilt (owner, 28 Oct:
+                                  # "Rather than overcomplicating the cannon barrel, can't we do calculation and modify the
+                                  # projectile direction rather than turning the head up and down"): the barrel stays 22 up,
+                                  # as the still and the 32-heading strip, turns only left and right, and the game works out
+                                  # the shell's arc from the muzzle to the target. It was [-22, -12, -2, 8, 18], one row per
+                                  # distance. The ring of spikes sits below the barrel's swing (RING_DZ), so it clears this
+                                  # tilt at every heading; the upright spikes of c4d709e8 do not (`limits`: the back horns
+                                  # cut the barrel at every tilt from 30 up to 20 down at some heading).
 TURRET_SCALE = 1.5              # the turning part, against the drum
 GUN_Z = 0.4 + float(os.environ.get("CANNON_GUN_LIFT", 0.1))   # the trunnions' height in the turning part (its units):
                                   # 0.1 higher than first built, which leaves the lowered ring more room

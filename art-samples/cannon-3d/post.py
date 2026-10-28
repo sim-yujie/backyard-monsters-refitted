@@ -316,20 +316,14 @@ def tilt_pieces(name):
         body_4x_size=[body.width, body.height], painted_pivot_in_body_4x=cam["painted_pivot_4x"], pitch_deg=pitches,
         rule="row r = the barrel tilted pitch_deg[r] degrees DOWN (negative = raised); cell k in a row = ground bearing "
              "11.25k (0 = down-right on screen, 45 = at the viewer); pivot in each cell's middle. aim_deg, muzzle, "
-             "ground_deg, aim_len are [row][cell]. Row 0 (22 up, the same as strip32 and the still) is for the farthest shots.",
+             "ground_deg, aim_len are [row][cell]. Row 0 (22 up, the same as strip32 and the still) is the fixed tilt.",
         muzzle_height_px=tl["muzzle_height_px"], muzzle_height_screen_px=tl["muzzle_height_screen_px"],
         ground_below_pivot_px=tl["ground_below_pivot_px"], elevation_deg=tl["elevation_deg"],
-        tilt_rule="A cannon lobs: the farther the target, the higher the barrel. From the turret's ground point (pivot + "
-                  "[0, ground_below_pivot_px]) to the target's feet on screen (dx, dy), the ground distance is "
-                  "d = hypot(dx, dy / sin(30)) (the game's ground); f = clamp((d - 0.2 range) / (0.8 range), 0, 1) with "
-                  f"range the tower's range; want = {pitches[-1]} - {pitches[-1] - pitches[0]} f degrees down; take the row whose "
-                  "pitch_deg is closest (that is "
-                  "row round((1 - f) * 4)). Then the cell whose aim_deg (in that row) is closest to the screen angle from "
-                  "pivot + muzzle to the target. muzzle_height_px (the muzzle above the ground, level barrel, game px "
-                  "measured like a ground distance) is there for a straight-aim rule, but is deliberately not called "
-                  "lens_height_px: the Laser's straight aim would only ever pick the lowest row.",
+        aim_rule="The barrel keeps one tilt (owner, 28 Oct) and turns only left and right: the game shows the cell whose "
+                 "ground bearing is nearest the target's, and works out the shell's arc from that cell's muzzle to the "
+                 "target, so the shot does not have to leave along the barrel's line.",
         note="body parts standing in front of the barrel are already cut out of each cell, so no front layer is needed; "
-             "the ring of spikes sits below the barrel's swing, so it never passes through them. "
+             "the ring of spikes sits below the barrel, so it never passes through them. "
              "strip32 (32 headings, barrel raised 22 degrees, one row) stays as it was."), indent=1))
     rows = tl["rows"]
     aim_fields.merge(out / "strip.json", {k: [r[k] for r in rows] for k in aim_fields.KEYS},
