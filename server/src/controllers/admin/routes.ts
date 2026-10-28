@@ -32,7 +32,8 @@ import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
  * this once. Nothing here goes through `logRequest`.
  */
 
-const adminOnly = makeAdminGuard(verifyUserAuth, (userid) => isAdminUser(userid), (ctx) => {
+/** The owner-only check, also in front of the announcements' dashboard routes (`controllers/announcements/routes.ts`). */
+export const adminOnly = makeAdminGuard(verifyUserAuth, (userid) => isAdminUser(userid), (ctx) => {
   if (ctx.authUser) logger.warn(`Dashboard: refused user ${ctx.authUser.userid} on ${ctx.method} ${ctx.path}`);
 });
 
