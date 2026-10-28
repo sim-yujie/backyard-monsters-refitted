@@ -2,7 +2,7 @@ import { friendRefusal, type FriendsApi, type Gift, type GiftResource, type Reso
 import type { FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool, type PlayerPool } from "@/game/friends/friendsView";
 import { formatAmount } from "@/ui/format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { costAmounts, RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
 import { openGiftPicker, type GiftTarget } from "./GiftPicker";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
 
@@ -80,7 +80,12 @@ export const GIFTS_TEXT = {
   sentBack: "Gift sent today",
   left: (count: number): string =>
     count > 0 ? `You can collect ${count} more ${count === 1 ? "gift" : "gifts"} today.` : "You have collected all you can today. The rest will wait.",
-  collected: (amounts: ResourceAmounts): string => `Collected ${amountsText(amounts)}.`,
+  /** "Collected · [twig] 1,000 [goo] 500". */
+  collected: (amounts: ResourceAmounts): HTMLElement => {
+    const line = document.createElement("span");
+    line.append("Collected · ", costAmounts(amounts) ?? "nothing");
+    return line;
+  },
   collectedNothing: "Your storage is full, so nothing was added.",
   short: (lost: ResourceAmounts): string =>
     `Your storage is too full: ${amountsText(lost)} would be lost. Press again to collect anyway.`,

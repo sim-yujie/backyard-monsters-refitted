@@ -22,9 +22,9 @@ describe("friend words", () => {
 
 describe("friend notification lines", () => {
   it("words each event", () => {
-    expect(friendNoticeText({ event: "request", userid: 7, username: "Bob" })).toBe("Bob wants to be your friend.");
-    expect(friendNoticeText({ event: "accepted", userid: 7, username: "Bob" })).toBe("Bob is now your friend.");
-    expect(friendNoticeText({ event: "gift", userid: 7, username: "Bob" })).toBe("Bob sent you a gift.");
+    expect(friendNoticeText({ event: "request", userid: 7, username: "Bob" })).toBe("Friend request from Bob");
+    expect(friendNoticeText({ event: "accepted", userid: 7, username: "Bob" })).toBe("Now friends with Bob");
+    expect(friendNoticeText({ event: "gift", userid: 7, username: "Bob" })).toBe("Gift from Bob");
     expect(friendNoticeText({ event: "helpSpeedup", username: "Bob", seconds: 390, building: "Storage Silo" })).toBe(
       "Bob took 6m 30s off your Storage Silo.",
     );
@@ -41,9 +41,13 @@ describe("friend notification lines", () => {
 
   it("has a general line for an event it does not know, and for no name", () => {
     expect(friendNoticeText({ event: "taunt", username: "Bob" })).toBe("News from Bob.");
-    expect(friendNoticeText({ event: "request" })).toBe("Someone wants to be your friend.");
+    expect(friendNoticeText({ event: "request" })).toBe("Friend request");
+    expect(friendNoticeText({ event: "gift" })).toBe("Gift from a friend");
     expect(friendNoticeText({ event: "taunt" })).toBe("News from your friends.");
     expect(friendLineText([])).toBe("News from your friends.");
-    expect(friendLineText([{ event: "accepted", username: "Cat" }])).toBe("Cat is now your friend.");
+    expect(friendLineText([{ event: "accepted", username: "Cat" }])).toBe("Now friends with Cat");
+    expect(friendLineText([{ event: "gift", username: "Cat" }, { event: "helpRepair", username: "Cat" }])).toBe(
+      "Gift from Cat · Cat repaired a building in your yard.",
+    );
   });
 });

@@ -40,7 +40,7 @@ describe("the gift picker", () => {
     const { picker, store, calls, onSent } = await setup();
     await picker.send("r3");
     expect(calls).toContainEqual(["sendGift", 7, "r3"]);
-    expect(picker.statusText).toBe("You sent Bob 300 Putty.");
+    expect(picker.statusText).toBe("Sent to Bob · Putty 300");
     expect(store.friends[0]!.giftSentToday).toBe(true);
     expect(onSent).toHaveBeenCalledOnce();
     expect(choice("r1").disabled).toBe(true);

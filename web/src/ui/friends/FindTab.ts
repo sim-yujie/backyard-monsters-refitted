@@ -38,8 +38,8 @@ export const FIND_TEXT = {
   requested: "Request sent",
   friend: "Friends",
   self: "That's you",
-  sent: (name: string): string => `Friend request sent to ${name}.`,
-  accepted: (name: string): string => `${name} is now your friend.`,
+  sent: (name: string): string => `Request sent to ${name}`,
+  accepted: (name: string): string => `Now friends with ${name}`,
 } as const;
 
 const DEBOUNCE_MS = 400;

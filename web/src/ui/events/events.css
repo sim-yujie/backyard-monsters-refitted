@@ -587,3 +587,15 @@
     aspect-ratio: 7 / 1;
   }
 }
+
+/* A claim's notice: "Day 3 claimed" and the rewards' own badges in a row. */
+.events-claimed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.events-claimed__title {
+  font-weight: 700;
+}

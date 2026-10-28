@@ -1,8 +1,7 @@
 import { friendRefusal, friendsApi, type FriendsApi, type Gift, type GiftResource } from "@/api/friends";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
-import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceIcon } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { make, StatusLine } from "./rows";
 import "./friends.css";
 
@@ -19,8 +18,12 @@ export const GIFT_TEXT = {
   title: "Send a gift",
   lead: (name: string): string => `Pick what to send ${name}. Gifts are free: one a day for each friend.`,
   sending: "Sending…",
-  sent: (gift: Gift, name: string): string =>
-    `You sent ${name} ${formatAmount(gift.amount)} ${RESOURCE_NAMES[gift.resource]}.`,
+  /** "Sent to Bob · [putty] 300": the name in words, the gift as its icon and amount. */
+  sent: (gift: Gift, name: string): HTMLElement => {
+    const line = document.createElement("span");
+    line.append(`Sent to ${name} · `, resourceAmount(gift.resource, gift.amount));
+    return line;
+  },
   cancel: "Cancel",
   done: "Done",
 } as const;

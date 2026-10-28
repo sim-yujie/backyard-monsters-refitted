@@ -47,12 +47,13 @@ import { resourceKeyOf, type ResourceKey } from "@/ui/resourceIcon";
 
 /**
  * A value on a row: plain text; an amount (of one resource when `resource` is
- * set, of every resource when not), spelled by the panel with the shared
- * helper; or a set of resources, drawn as their icons.
+ * set, of every resource when not, drawn after the four icons), spelled by
+ * the panel with the shared helper; or a set of resources, drawn as their
+ * icons.
  */
 export type InfoValue =
   | { readonly text: string }
-  | { readonly amount: number; readonly resource?: ResourceKey; readonly suffix?: string }
+  | { readonly amount: number; readonly resource?: ResourceKey; readonly suffix?: string; readonly prefix?: string }
   | { readonly resources: readonly ResourceKey[] };
 
 export interface InfoRow {
@@ -64,10 +65,30 @@ export interface InfoRow {
   readonly down?: true;
 }
 
-/** A list row: Town Hall unlocks, which do not fit "now → next". */
+/**
+ * One thing a Town Hall level lets the yard build: the type (for its
+ * picture), its name, and how many more of it; `added` counts from none
+ * when `isNew`.
+ */
+export interface UnlockItem {
+  readonly type: number;
+  readonly name: string;
+  readonly added: number;
+  readonly isNew: boolean;
+}
+
+/** An unlock as words, for a screen reader and the hover: "Cannon Tower +1", "Flinger new". */
+export const unlockText = (item: UnlockItem): string => `${item.name} ${item.isNew ? "new" : `+${item.added}`}`;
+
+/**
+ * A list row: Town Hall unlocks, which do not fit "now → next". `label` is
+ * short ("Lv 3 unlocks"); `title` says whose level it is ("Town Hall 3
+ * unlocks"). No items means the level brings no new buildings.
+ */
 export interface InfoList {
   readonly label: string;
-  readonly items: readonly string[];
+  readonly title: string;
+  readonly items: readonly UnlockItem[];
 }
 
 export interface BuildingInfo {
@@ -271,8 +292,8 @@ const economyRows = (building: YardBuilding, kind: YardKind): InfoRow[] => {
     const now = at(stats.capacity, level);
     if (now === undefined) return [];
     const next = at(stats.capacity, nextLevel);
-    // Room in every pool at once, so no one resource's icon.
-    const value = (amount: number): InfoValue => ({ amount, suffix: " to each resource" });
+    // Room in every pool at once: the panel draws all four icons, "+7,500".
+    const value = (amount: number): InfoValue => ({ amount, prefix: "+" });
     return [row("Storage added", value(now), next !== undefined ? value(next) : null)];
   }
 
@@ -308,13 +329,13 @@ const COUNTED_KINDS: ReadonlySet<string> = new Set([
 
 /**
  * What raising the Town Hall from `level` lets the yard build: every type
- * whose cap rises, as "Cannon Tower +1", or "Flinger (new)" when the type was
- * not allowed at all before. On the Inferno yard (`yard`), what raising the
+ * whose cap rises, by how many ("Cannon Tower +1"), or marked new when the
+ * type was not allowed at all before ("Flinger new"). On the Inferno yard (`yard`), what raising the
  * Under Hall lets it build, from the Inferno table, by the Inferno's names
  * (WP 1.19); only what its build menu offers, as its other rows are blocked.
  */
-export const townHallUnlocks = (level: number, yard: YardKind = "main"): string[] => {
-  const items: string[] = [];
+export const townHallUnlocks = (level: number, yard: YardKind = "main"): UnlockItem[] => {
+  const items: UnlockItem[] = [];
   const inferno = yard === "inferno";
   for (const [type, name, kind] of inferno ? INFERNO_COST_ROWS : BUILDING_COST_ROWS) {
     if (!COUNTED_KINDS.has(kind) || type === TOWN_HALL_TYPE) continue;
@@ -323,7 +344,7 @@ export const townHallUnlocks = (level: number, yard: YardKind = "main"): string[
     const after = quantityOf(type, level + 1, yard);
     if (after <= before) continue;
     const shown = inferno ? typeName(type, yard) : name;
-    items.push(before === 0 ? `${shown} (new)` : `${shown} +${after - before}`);
+    items.push({ type, name: shown, added: after - before, isNew: before === 0 });
   }
   return items;
 };
@@ -377,10 +398,11 @@ export const buildingInfo = (
 
   let list: InfoList | null = null;
   if (building.type === TOWN_HALL_TYPE && nextLevelOf(building, kind) !== null) {
-    const items = townHallUnlocks(shownLevel(building), kind);
+    const next = shownLevel(building) + 1;
     list = {
-      label: `${kind === "inferno" ? "Under Hall" : "Town Hall"} ${shownLevel(building) + 1} unlocks`,
-      items: items.length > 0 ? items : ["No new buildings"],
+      label: `Lv ${next} unlocks`,
+      title: `${kind === "inferno" ? "Under Hall" : "Town Hall"} ${next} unlocks`,
+      items: townHallUnlocks(shownLevel(building), kind),
     };
   }
 

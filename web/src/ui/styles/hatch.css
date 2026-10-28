@@ -1119,18 +1119,23 @@ button.hatch-slot:disabled {
   margin: 0;
 }
 
+/* A painted icon (the word on hover and for a screen reader) and its number. */
 .hatch-info__stat {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: 6px;
   padding: 5px 10px;
   border-radius: var(--radius-sm);
   background: var(--colour-surface-sunken);
 }
 
 .hatch-info__stat dt {
-  font-size: var(--text-xs);
-  color: var(--colour-text-muted);
+  display: flex;
+  flex: none;
+}
+
+.hatch-info__stat dt > .res-icon {
+  height: 24px;
 }
 
 .hatch-info__stat dd {
