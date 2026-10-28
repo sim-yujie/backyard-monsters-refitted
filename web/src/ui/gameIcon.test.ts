@@ -133,4 +133,28 @@ describe("iconAmount and iconChip", () => {
     expect(chip.classList).toContain("chip--accent");
     expect(spokenText(chip)).toBe("Speed 64");
   });
+
+  it("signs and colours a loss or a gain, and says it in words", () => {
+    const lost = iconAmount("yarddamage2", 300, { change: "loss" });
+    expect(lost.classList).toContain("icon-amount--loss");
+    expect(lost.dataset["change"]).toBe("loss");
+    const shown = lost.querySelector(".icon-amount__value");
+    expect(shown?.textContent).toBe("−300");
+    expect(shown?.getAttribute("aria-hidden")).toBe("true");
+    expect(shown?.getAttribute("title")).toBe("300 lost");
+    expect(spokenText(lost)).toBe("Yard damage 300 lost");
+
+    const won = iconChip("levelup", "35%", { change: "gain", tooltip: false });
+    expect(won.classList).toContain("icon-amount--gain");
+    expect(won.querySelector(".icon-amount__value")?.textContent).toBe("+35%");
+    expect(won.querySelector(".icon-amount__value")?.hasAttribute("title")).toBe(false);
+    expect(spokenText(won)).toBe("Level up 35% gained");
+  });
+
+  it("leaves an amount that did not change plain", () => {
+    const plain = iconAmount("health", 480);
+    expect(plain.dataset["change"]).toBeUndefined();
+    expect(plain.className).toBe("icon-amount");
+    expect(plain.querySelector(".u-visually-hidden")).toBeNull();
+  });
 });

@@ -393,6 +393,28 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* A gain or a loss (`amountChange.ts`): "+300" green, "−300" red, for a
+ * resource or an icon amount alike. The sign says it without the colour. */
+.icon-amount--gain > .icon-amount__value,
+.res-amount--gain > .res-amount__value,
+.icon-amount--loss > .icon-amount__value,
+.res-amount--loss > .res-amount__value {
+  font-weight: 700;
+  text-shadow:
+    0 0 2px var(--colour-change-halo),
+    0 1px 1px var(--colour-change-halo);
+}
+
+.icon-amount--gain > .icon-amount__value,
+.res-amount--gain > .res-amount__value {
+  color: var(--colour-gain);
+}
+
+.icon-amount--loss > .icon-amount__value,
+.res-amount--loss > .res-amount__value {
+  color: var(--colour-loss);
+}
+
 /* ── Quantity stepper (`QuantityStepper.ts`) ───────────────────────────────
  * `−`, a number box, `+`, optional `+5` / `+10`, and Fill, the same wherever it is used (the Army
  * panel, Hatch, the bunker, juicing). A screen's own `<block>__controls`
