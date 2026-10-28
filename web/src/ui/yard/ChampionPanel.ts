@@ -8,7 +8,7 @@ import {
   type FeedMode,
 } from "@/api/yardChampion";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
-import { championPortrait, showPortrait } from "@/game/portraits";
+import { championPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import type { YardKind } from "@/game/yard/buildingCosts";
 import { brainSummary, learnedFromText, tendenciesText } from "@/game/yard/championBrain";
@@ -250,7 +250,9 @@ export class ChampionPanel {
     const card = document.createElement("li");
     card.className = "champion-card";
     card.dataset["champion"] = entry.id;
-    const picture = portrait(entry, 1, "champion-card__picture");
+    // The icon, cut to the creature: the whole frame keeps each champion's
+    // own level-1 size, which left Fomor a speck beside Gorgo and Drull.
+    const picture = portrait(championPortrait(entry.id, 1, "icon"), "champion-card__picture");
     const words = document.createElement("div");
     words.className = "champion-card__words";
     const name = document.createElement("strong");
@@ -357,7 +359,7 @@ export class ChampionPanel {
     const stats = statsBlock(view);
     const arrows = stats.querySelector<HTMLElement>(".champion__note--arrows");
     if (arrows) unseen(arrows);
-    header.append(portrait(view.entry, view.level, "champion__picture"), words, stats, ...this.acts(view));
+    header.append(portrait(championPicture(view.entry, view.level), "champion__picture"), words, stats, ...this.acts(view));
     return header;
   }
 
@@ -590,7 +592,7 @@ export class ChampionPanel {
     level.className = "champion__level";
     level.textContent = `Level ${view.level} of ${view.entry.levels}${frozen ? " · frozen in the Chamber" : ""}`;
     words.append(name, level, statsBlock(view));
-    header.append(portrait(view.entry, view.level, "champion__picture"), words);
+    header.append(portrait(championPicture(view.entry, view.level), "champion__picture"), words);
     block.append(heading("Your second champion"), header);
     if (frozen) {
       block.append(note("Krallen is asleep in the Champion Chamber. Thaw him from there."));
@@ -978,11 +980,11 @@ const strong = (text: string): HTMLElement => {
   return element;
 };
 
-/** The champion's picture at a level, from the game's own art. */
-const portrait = (entry: ChampionEntry, level: number, className: string): HTMLImageElement => {
+/** A champion's picture, from the game's own art. */
+const portrait = (picture: Portrait, className: string): HTMLImageElement => {
   const image = document.createElement("img");
   image.className = className;
-  showPortrait(image, championPicture(entry, level));
+  showPortrait(image, picture);
   image.alt = "";
   image.width = 150;
   image.height = 150;

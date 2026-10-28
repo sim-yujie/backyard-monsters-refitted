@@ -95,7 +95,9 @@ describe("ChampionPanel: no champion", () => {
     const { element, spies } = setup([]);
     const cards = [...element.querySelectorAll<HTMLElement>(".champion-card")];
     expect(cards.map((card) => card.dataset["champion"])).toEqual(["G1", "G2", "G3"]);
-    expect(cards[1]!.querySelector("img")!.getAttribute("src")).toBe("/portraits/G2-L1.webp");
+    // The creature-cut icon, so Fomor shows as big as Gorgo and Drull.
+    expect(cards[1]!.querySelector("img")!.getAttribute("src")).toBe("/portraits/G2-L1-icon.webp");
+    expect(cards[2]!.querySelector("img")!.getAttribute("src")).toBe("/portraits/G3-L1-icon.webp");
     buttonNamed(element, "Raise Drull")!.click();
     expect(spies.raise).toHaveBeenCalledWith(2);
   });

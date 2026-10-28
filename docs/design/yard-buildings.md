@@ -1079,8 +1079,8 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
     the feed time), with the completed job `championHatch` ("Your Drull has hatched!"). Until that
     catch-up, cage actions and thawing answer `409 eggInCage`. `champion/cancel-egg` answers
     `410 eggsRemoved`. Champions juiced earlier stay `status` 2; raising that type replaces them.
-  - Client: no egg card, Cancel egg, "Hatches in 1 day" or egg on the yard. The egg pictures in
-    `web/public/eggs/` are no longer used.
+  - Client: no egg card, Cancel egg, "Hatches in 1 day" or egg on the yard. The egg pictures
+    (`web/public/eggs/`, their generator and the beta 4 "What's new" egg card) were removed.
 
 ### 7.3 Monster Juicer (D10)
 

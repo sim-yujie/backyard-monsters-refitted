@@ -29,7 +29,7 @@ export const BUILD_BLURBS: Readonly<Record<number, string>> = {
   25: "Fries any monster that comes within range. Upgrades add shocks, damage and range.",
   26: "Trains your monsters to higher levels.",
   51: "A siege weapon that hurls Twigs at enemy yards to damage buildings.",
-  114: "Hatch and evolve a Champion to attack with and to defend your yard.",
+  114: "Raise and evolve a Champion to attack with and to defend your yard.",
   115: "A fast-firing gun against flying monsters.",
   116: "Research secret abilities for your monsters.",
   117: "Hidden until one of the strongest monsters steps on it, then hits everything nearby.",

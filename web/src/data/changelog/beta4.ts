@@ -21,11 +21,6 @@ export const BETA_4: ChangelogRelease = {
       text: "The new Events button shows what's on now and what's coming next. Log in each day of Halloween for 14 days of treats, free speed-ups included!",
     },
     {
-      image: "/whats-new/beta4-champion-eggs.webp",
-      title: "Champions hatch from eggs",
-      text: "Raising a champion now gives you a special egg. One day later, out pops your new champion!",
-    },
-    {
       image: "/whats-new/beta4-friends.webp",
       title: "Friends list upgrade",
       text: "Find friends fast with search and filters, and see at a glance who you can help or send a gift to.",
