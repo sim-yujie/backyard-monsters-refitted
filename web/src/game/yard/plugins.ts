@@ -5,7 +5,7 @@
  * the Hatchery walk-out (#228), the achievement unlock pop-up (#204), wild
  * monster raids (#226), events (the Events button, "What's new"), Moloch's
  * cave (the Inferno, WP 1.10), "Korath unlocked" (Inferno WP 5.2) and the
- * owner's announcements.
+ * owner's announcements, and the one-time "Slow internet?" suggestion.
  * Imported once by YardScene.ts.
  */
 import "./plugins/achievements";
@@ -17,4 +17,5 @@ import "./plugins/hatchWalkOut";
 import "./plugins/inferno";
 import "./plugins/korath";
 import "./plugins/raid";
+import "./plugins/slowInternet";
 import "./plugins/tips";

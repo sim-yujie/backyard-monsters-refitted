@@ -116,6 +116,11 @@ def main():
     for img, path in ((sheet, OUT / path4.name), (sheet.resize((fw * COLUMNS, fh * ROWS), Image.LANCZOS), OUT / f"{name}-repaint.png")):
         imagequant.quantize_pil_image(img, max_quality=95, min_quality=60).save(path, optimize=True, pnginfo=info)
         print("wrote", path.name, f"{path.stat().st_size / 1e6:.1f} MB")
+    # The Quality setting's half-size copy, from the shadowed sheet (the 1x above is the other).
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import sheet_copies
+
+    sheet_copies.make_copies(OUT / path4.name)
 
 
 if __name__ == "__main__":

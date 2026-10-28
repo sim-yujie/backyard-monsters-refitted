@@ -30,6 +30,7 @@ import {
   type TakeoverQuoteResponse,
 } from "@/api/types";
 import { CELL_HEIGHT, CELL_WIDTH, DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
+import { mapRefreshSeconds } from "@/game/quality";
 import {
   attackRefusal,
   hasDeclareWar,
@@ -501,7 +502,8 @@ export class MapRoom2Scene implements Scene {
       this.sinceStaleCheck += deltaSeconds;
       if (this.sinceStaleCheck >= STALE_CHECK_INTERVAL_SECONDS) {
         this.sinceStaleCheck = 0;
-        this.store.refreshStale(ZONE_STALE_SECONDS);
+        // Every minute; every 3 on the Low Quality setting.
+        this.store.refreshStale(mapRefreshSeconds(ZONE_STALE_SECONDS));
       }
     }
 

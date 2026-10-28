@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setQuality } from "@/game/quality";
 import { buildEngineYard, createBattle } from "@/game/combat/rules";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
 import {
@@ -19,6 +20,7 @@ import {
   sheetUrl,
   spriteFor,
 } from "./monsterSprites";
+import { SHEET_VERSIONS } from "./sheetVersions";
 
 const sheet = (key: string) => {
   const found = MONSTER_SPRITES[key];
@@ -27,6 +29,9 @@ const sheet = (key: string) => {
 };
 
 const degrees = (value: number) => (value * Math.PI) / 180;
+
+/** A sheet URL without its `?v=` version. */
+const bare = (url: string | undefined) => url?.replace(/\?.*$/, "");
 
 describe("directionColumn", () => {
   it("maps the four cardinal headings on a 30-column sheet (SPRITES.as:369)", () => {
@@ -215,7 +220,7 @@ describe("spriteFor", () => {
   it("draws every Krallen look from its repaint, look 3 at level 5 included", () => {
     const urls = [1, 3, 5].map((level) => {
       const one = spriteFor("G5", level);
-      return one && sheetUrl(one);
+      return one && bare(sheetUrl(one));
     });
     expect(urls).toEqual([
       "/assets/monsters/krallen_1_rev_65-repaint@4x.png",
@@ -238,7 +243,7 @@ describe("spriteFor", () => {
     ];
     for (const [id, level, name] of repainted) {
       const one = spriteFor(id, level);
-      expect(one && sheetUrl(one)).toBe(`/assets/monsters/${name}-repaint@4x.png`);
+      expect(one && bare(sheetUrl(one))).toBe(`/assets/monsters/${name}-repaint@4x.png`);
     }
   });
 
@@ -303,13 +308,53 @@ describe("sheetUrl", () => {
     expect(sheetUrl("monsters/flyingshadow.png")).toBe("/assets/monsters/flyingshadow.png");
   });
 
-  it("serves a repainted sheet in place of the original", () => {
+  it("serves a repainted sheet in place of the original, with its version", () => {
     for (const one of Object.values(MONSTER_SPRITES)) {
       const repaint = REPAINTED_SHEETS[one.file];
-      expect(sheetUrl(one)).toBe(`/assets/${repaint ?? one.file}`);
+      expect(bare(sheetUrl(one))).toBe(`/assets/${repaint ?? one.file}`);
+      if (repaint) expect(sheetUrl(one)).toBe(`/assets/${repaint}?v=${SHEET_VERSIONS[repaint]}`);
     }
     expect(isHighResolutionSheet("/assets/monsters/14-repaint@4x.png")).toBe(true);
+    expect(isHighResolutionSheet("/assets/monsters/pokey-anim@2x.png?v=4xkz")).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("C1")))).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("IC1")))).toBe(false);
+  });
+
+  describe("at each Quality setting", () => {
+    // The choice is kept in the browser's storage; a stand-in for it here.
+    beforeEach(() => {
+      const kept = new Map<string, string>();
+      vi.stubGlobal("window", {
+        localStorage: { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => kept.set(key, value) },
+      });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("asks for the painted sheet on High, its half-size copy on Medium and its 1x copy on Low", () => {
+      const urls = (["high", "medium", "low"] as const).map((level) => {
+        setQuality(level);
+        return sheetUrl(sheet("C1"));
+      });
+      expect(urls.map(bare)).toEqual([
+        "/assets/monsters/pokey-anim@4x.png",
+        "/assets/monsters/pokey-anim@2x.png",
+        "/assets/monsters/pokey-anim.png",
+      ]);
+      // Each with its own version, so a week in the browser's cache never serves an old painting.
+      expect(urls.map((url) => url.split("?v=")[1])).toEqual([
+        SHEET_VERSIONS["monsters/pokey-anim@4x.png"],
+        SHEET_VERSIONS["monsters/pokey-anim@2x.png"],
+        SHEET_VERSIONS["monsters/pokey-anim.png"],
+      ]);
+      // Low's copy is drawn at 1x, like the Flash sheet it stands in for.
+      expect(isHighResolutionSheet(urls[2] ?? "")).toBe(false);
+    });
+
+    it("leaves a sheet with no repaint alone at every level", () => {
+      for (const level of ["high", "medium", "low"] as const) {
+        setQuality(level);
+        expect(sheetUrl(sheet("IC1"))).toBe("/assets/monsters/spurtz.png");
+      }
+    });
   });
 });

@@ -9,7 +9,7 @@ const serverPublic = fileURLToPath(new URL("../../../../server/public", import.m
 describe("tunes", () => {
   it("every tune file is on the game server", () => {
     for (const file of Object.values(TUNES)) {
-      for (const url of [file.url, file.ogg]) {
+      for (const url of [file.url, file.ogg, file.lite?.url, file.lite?.ogg]) {
         if (url) expect(existsSync(serverPublic + url), url).toBe(true);
       }
     }
@@ -18,6 +18,15 @@ describe("tunes", () => {
   it("the yard plays the new yard theme, Ogg first with an MP3 for iPhones", () => {
     expect(tuneUrl(TUNES.yard, true)).toBe("/assets/sounds/music/yard-theme.ogg");
     expect(tuneUrl(TUNES.yard, false)).toBe("/assets/sounds/music/yard-theme.mp3");
+  });
+
+  it("the yard tune's lighter copy plays on Medium and Low (`game/quality.ts`)", () => {
+    expect(tuneUrl(TUNES.yard, true, true)).toBe("/assets/sounds/music/yard-theme-lite.ogg");
+    expect(tuneUrl(TUNES.yard, false, true)).toBe("/assets/sounds/music/yard-theme-lite.mp3");
+  });
+
+  it("a tune with no lighter copy plays as it is when one is asked for", () => {
+    expect(tuneUrl(TUNES.attack, true, true)).toBe(TUNES.attack.url);
   });
 
   it("a tune with no Ogg copy plays its MP3 everywhere", () => {

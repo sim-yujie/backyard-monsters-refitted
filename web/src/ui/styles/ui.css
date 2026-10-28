@@ -1646,6 +1646,22 @@ body {
   color: var(--colour-text-strong);
 }
 
+/* The one-time "Slow internet?" suggestion (ui/quality/SlowInternetDialog.ts). */
+.slow-internet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 340px;
+}
+.slow-internet p {
+  margin: 0;
+}
+.slow-internet__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
 .account-settings__blocked {
   display: flex;
   flex-direction: column;

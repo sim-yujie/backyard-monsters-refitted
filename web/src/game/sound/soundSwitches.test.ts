@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { setQuality } from "@/game/quality";
 import {
   loadSoundSwitches,
   onSoundSwitches,
@@ -109,5 +110,70 @@ describe("soundSwitches", () => {
     expect(soundSwitches()).toBeNull();
     await loadSoundSwitches();
     expect(soundSwitches()).toEqual({ music: true, effects: true });
+  });
+});
+
+describe("soundSwitches on the Quality setting (`game/quality.ts`)", () => {
+  /** A stand-in for the browser's storage, where the Quality is kept. */
+  const keep = (entries: Record<string, string>): Map<string, string> => {
+    const kept = new Map(Object.entries(entries));
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => kept.get(key) ?? null,
+        setItem: (key: string, value: string) => kept.set(key, value),
+      },
+    });
+    return kept;
+  };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("plays the music the server holds on High", async () => {
+    keep({});
+    fake({ music: true, effects: true });
+    await loadSoundSwitches();
+    expect(soundSwitches()).toEqual({ music: true, effects: true });
+  });
+
+  it("holds the music off on Low every visit until the player turns it on, without touching the server", async () => {
+    keep({ "bymr.quality": "low" });
+    const server = fake({ music: true, effects: true });
+    await loadSoundSwitches();
+    expect(soundSwitches()).toEqual({ music: false, effects: true });
+    expect(server.saves).toEqual([]);
+    await setSoundSwitch("music", true);
+    expect(soundSwitches()).toEqual({ music: true, effects: true });
+    // The next visit holds it again.
+    resetSoundSwitchesForTest();
+    fake({ music: true, effects: true });
+    await loadSoundSwitches();
+    expect(soundSwitches()?.music).toBe(false);
+  });
+
+  it("holds the music off on Medium only until the player has once turned it on in this browser", async () => {
+    const kept = keep({ "bymr.quality": "medium" });
+    fake({ music: true, effects: true });
+    await loadSoundSwitches();
+    expect(soundSwitches()?.music).toBe(false);
+    await setSoundSwitch("music", true);
+    expect(kept.get("bymr.quality.mediumMusic")).toBe("1");
+    resetSoundSwitchesForTest();
+    fake({ music: true, effects: true });
+    await loadSoundSwitches();
+    expect(soundSwitches()?.music).toBe(true);
+  });
+
+  it("stops the music at once when the player picks Low, and lets it play again on High", async () => {
+    keep({});
+    fake({ music: true, effects: true });
+    await loadSoundSwitches();
+    const heard: (SoundSwitches | null)[] = [];
+    onSoundSwitches((switches) => heard.push(switches));
+    setQuality("low");
+    setQuality("high");
+    expect(heard).toEqual([
+      { music: false, effects: true },
+      { music: true, effects: true },
+    ]);
   });
 });

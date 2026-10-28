@@ -1,5 +1,7 @@
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet, type RowCycle } from "./monsterSpriteData";
 import { windUpFrame } from "./juice";
+import { SHEET_VERSIONS } from "./sheetVersions";
+import { sheetAtQuality } from "@/game/quality";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -805,11 +807,19 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/krallen_3_rev_65.png": "monsters/krallen_3_rev_65-repaint@4x.png", // Krallen look 3 repaint (all 16 headings, run + attack, ground shadow)
 };
 
-/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
-export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+$/.test(url);
+/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@2x.png?v=…`). */
+export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+(\?.*)?$/.test(url);
 
-/** The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint. */
+/**
+ * The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint
+ * in the copy the Quality setting asks for (`game/quality.ts`), with that
+ * file's version so a repaint is fetched afresh (`sheetVersions.ts`).
+ */
 export function sheetUrl(sheet: MonsterSheet | string): string {
   const file = typeof sheet === "string" ? sheet : sheet.file;
-  return `${ASSET_ROOT}${REPAINTED_SHEETS[file] ?? file}`;
+  const repaint = REPAINTED_SHEETS[file];
+  if (!repaint) return `${ASSET_ROOT}${file}`;
+  const copy = sheetAtQuality(repaint);
+  const version = SHEET_VERSIONS[copy];
+  return `${ASSET_ROOT}${copy}${version ? `?v=${version}` : ""}`;
 }

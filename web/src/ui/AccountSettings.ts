@@ -14,6 +14,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
 import { saveClassicBuildingArt, savedClassicBuildingArt } from "@/game/yard/buildingArtTiers";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
+import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
 import { Popup } from "@/ui/Popup";
 
 export const SETTINGS_TEXT = {
@@ -44,6 +45,16 @@ export const SETTINGS_TEXT = {
   qualityFull: "Full",
   qualityLow: "Low",
   qualityHint: "Low draws fewer sparks and glows, for slower phones. Phones start on Low.",
+  downloadLabel: "Quality",
+  downloadHigh: "High",
+  downloadMedium: "Medium",
+  downloadLow: "Low",
+  downloadHint: {
+    high: "Sharpest monsters. Music plays at once.",
+    medium: "Lighter monsters and music. Music waits until you turn it on.",
+    low: "For slow internet: lightest monsters, music off, slower map updates.",
+  },
+  downloadSaved: "Saved. Monsters already on screen change after a reload.",
   artTitle: "Building art",
   classicArtLabel: "Classic building art (original Flash look)",
   classicArtHint: "Shows repainted buildings, like the Town Hall, as they looked in the original game.",
@@ -273,7 +284,11 @@ const privacyToggle = (
 const osReducedMotion = (): boolean =>
   typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** Game effects (beta.5 tower attack effects): the "Screen shake" switch and "Effects: Full / Low". */
+/**
+ * Game effects (beta.5 tower attack effects): the "Screen shake" switch and
+ * "Effects: Full / Low"; and "Quality: High / Medium / Low", how much the game
+ * downloads (`game/quality.ts`, owner 28 Oct 2026).
+ */
 const effectsSection = (): HTMLElement => {
   const section = document.createElement("div");
   section.className = "account-settings__section";
@@ -324,8 +339,43 @@ const effectsSection = (): HTMLElement => {
   quality.setAttribute("aria-describedby", qualityHint.id);
   quality.addEventListener("change", () => setEffectsQuality(quality.value as EffectsQuality));
 
-  section.append(heading, shakeRow, shakeHint, qualityRow, qualityHint);
+  section.append(heading, shakeRow, shakeHint, qualityRow, qualityHint, ...downloadRow());
   return section;
+};
+
+/** "Quality: High / Medium / Low", with a line saying what the chosen level does. */
+const downloadRow = (): HTMLElement[] => {
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.downloadLabel;
+  const select = document.createElement("select");
+  select.id = "settings-quality";
+  select.className = "account-settings__select";
+  for (const [value, text] of [
+    ["high", SETTINGS_TEXT.downloadHigh],
+    ["medium", SETTINGS_TEXT.downloadMedium],
+    ["low", SETTINGS_TEXT.downloadLow],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    select.append(option);
+  }
+  select.value = downloadQuality();
+  row.append(words, select);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-quality-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.downloadHint[select.value as Quality];
+  select.setAttribute("aria-describedby", hint.id);
+  select.addEventListener("change", () => {
+    const level = select.value as Quality;
+    setQuality(level);
+    hint.textContent = `${SETTINGS_TEXT.downloadHint[level]} ${SETTINGS_TEXT.downloadSaved}`;
+  });
+  return [row, hint];
 };
 
 /**
