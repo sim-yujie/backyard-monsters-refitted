@@ -503,6 +503,23 @@ describe("landing", () => {
     expect(input.defence?.bunkers).toEqual(FORCES.bunkers);
     expect(ctx.body.player).toBeDefined();
   });
+
+  test("no siege weapon in an Inferno attack (owner: siege is for the overworld): the Decoy is cut and none is spent", async () => {
+    // The attacker holds a Decoy on the surface, and a doctored log drops it.
+    const stock = { decoy: { level: 1, quantity: 2 } };
+    userSave.siege = structuredClone(stock);
+    startSession();
+    const log = {
+      ...SCRATCH,
+      events: [...SCRATCH.events, { kind: "siege", t: 60, x: 300, y: 150, weapon: "decoy" }],
+    };
+    const ctx = finalSave({ flinglog: JSON.stringify(log) });
+    expect(await run(ctx)).toBeNull();
+    const input = inputs[0]!;
+    expect(input.log.events.map((event) => event.kind)).toEqual(["fling"]);
+    expect(input.attacker.siege).toBeNull();
+    expect(userSave.siege).toEqual(stock);
+  });
 });
 
 /** The client's checkpoint of the attack as it runs (`/base/checkpoint`). */

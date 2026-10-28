@@ -362,4 +362,16 @@ describe("landing", () => {
     expect(bucketCost(fling.monsters, {})).toBeLessThanOrEqual(200);
     expect(ctx.body.tribe).toBeDefined();
   });
+
+  test("no siege weapon on a Moloch tribe (owner: siege is for the overworld): the Decoy is cut and none is spent", async () => {
+    const stock = { decoy: { level: 1, quantity: 2 } };
+    userSave.siege = structuredClone(stock);
+    startSession();
+    const log = { ...SCRATCH, events: [...SCRATCH.events, { kind: "siege", t: 60, x: 300, y: 150, weapon: "decoy" }] };
+    expect(await run(finalSave("214", { flinglog: JSON.stringify(log) }))).toBeNull();
+    const input = inputs[0]!;
+    expect(input.log.events.map((event) => event.kind)).toEqual(["fling"]);
+    expect(input.attacker.siege).toBeNull();
+    expect(userSave.siege).toEqual(stock);
+  });
 });
