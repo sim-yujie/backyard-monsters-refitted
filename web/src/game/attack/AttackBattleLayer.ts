@@ -50,6 +50,7 @@ import {
 } from "./punchyMoments";
 import { dirtFor, surfaceHop } from "./burrowFx";
 import { classicLook } from "@/game/classicLook";
+import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { StatusIconRow, statusesOf } from "./statusIcons";
@@ -218,11 +219,6 @@ const CHAMPION_BAR = { width: 40, height: 5, gap: 8 } as const;
 /** The GPU texture limit assumed until the renderer says otherwise. */
 export const DEFAULT_MAX_TEXTURE_SIZE = 4096;
 
-/** This device's GPU texture limit, once any layer has read it from its renderer (`gpuTextureLimit`). */
-let deviceTextureLimit: number | null = null;
-
-/** The resolution a sheet URL names (`@4x`, `@1.5x`), as Pixi reads it; 1 without one. */
-const urlResolution = (url: string): number => Number(/@(\d+(?:\.\d+)?)x\./.exec(url)?.[1] ?? 1);
 
 /** How a creep should be drawn this frame, with no Pixi in it. */
 export interface CreepLayout {
@@ -407,12 +403,14 @@ const loadSheet: SheetLoader = (url) =>
  * Mirrors `YardTextures`: `frame` never blocks and never throws; it starts the
  * fetch on the first ask, returns null until the sheet is in, and remembers a
  * failure so a missing file is asked for once. Cells of a sheet within the
- * texture limit are `Texture`s framed over the one source. Cells of a sheet
- * over the limit are copied through a canvas into their own small source, so
- * the oversized image is never bound to the GPU: WebGL refuses a picture wider
- * or taller than the limit, and Pixi would draw nothing (or black) for it. The
- * limit is the picture's real size, so a `@4x` repaint counts four times the
- * table's cells.
+ * texture limit are `Texture`s framed over the one source. A painted sheet
+ * bigger than the limit is fetched as a smaller copy that fits (`sheetUrl`),
+ * so it is never downloaded and decoded whole. As a last resort, cells of a
+ * sheet still over the limit are copied through a canvas into their own small
+ * source, so the oversized image is never bound to the GPU: WebGL refuses a
+ * picture wider or taller than the limit, and Pixi would draw nothing for it.
+ * The limit is the picture's real size, so a `@4x` repaint counts four times
+ * the table's cells.
  */
 export class MonsterSheetTextures {
   private readonly sources = new Map<string, Texture>();
@@ -437,7 +435,7 @@ export class MonsterSheetTextures {
   }
 
   get maxTextureSize(): number {
-    return this.limit ?? deviceTextureLimit ?? DEFAULT_MAX_TEXTURE_SIZE;
+    return this.limit ?? deviceTextureLimit() ?? DEFAULT_MAX_TEXTURE_SIZE;
   }
 
   /**
@@ -446,7 +444,7 @@ export class MonsterSheetTextures {
    * times the resolution its URL names.
    */
   oversized(sheet: MonsterSheet, source?: Pick<TextureSource, "pixelWidth" | "pixelHeight">): boolean {
-    const scale = source ? 1 : urlResolution(sheetUrl(sheet));
+    const scale = source ? 1 : sheetResolution(sheetUrl(sheet));
     const width = source?.pixelWidth ?? sheet.width * scale;
     const height = source?.pixelHeight ?? sheet.height * scale;
     return width > this.maxTextureSize || height > this.maxTextureSize;
@@ -564,8 +562,9 @@ export const gpuTextureLimit = (renderer: Renderer): number | null => {
     size = device?.limits?.maxTextureDimension2D;
   }
   if (typeof size !== "number" || size <= 0) return null;
-  // Remembered for every sheet cutter, the guide's walk-ins too, which have no renderer of their own.
-  deviceTextureLimit = size;
+  // Remembered for every sheet cutter (the guide's walk-ins too, which have no
+  // renderer of their own) and for picking a copy the card can hold (`sheetUrl`).
+  setDeviceTextureLimit(size);
   return size;
 };
 

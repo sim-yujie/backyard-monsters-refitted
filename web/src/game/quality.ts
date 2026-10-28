@@ -97,6 +97,50 @@ export const sheetAtQuality = (file: string, level: Quality = quality()): string
   return level === "medium" ? copies.medium : copies.low;
 };
 
+/**
+ * The biggest picture this device's graphics card can hold, in pixels a side,
+ * once a renderer has said (`gpuTextureLimit` in `attack/AttackBattleLayer.ts`);
+ * null until then. Many phones and older PCs hold 4096 or 8192, and WebGL
+ * refuses anything bigger: the monster would not be drawn.
+ */
+let textureLimit: number | null = null;
+
+export const deviceTextureLimit = (): number | null => textureLimit;
+
+/** Remembers the device's texture limit; null forgets it (tests). */
+export const setDeviceTextureLimit = (size: number | null): void => {
+  textureLimit = size !== null && Number.isFinite(size) && size > 0 ? size : null;
+};
+
+/** The resolution a sheet file names (`@4x`, `@1.5x`), as Pixi reads it; 1 without one. */
+export const sheetResolution = (file: string): number => Number(/@(\d+(?:\.\d+)?)x\./.exec(file)?.[1] ?? 1);
+
+/**
+ * `sheetAtQuality`, stepping down to a smaller copy when the one asked for is
+ * bigger than the graphics card can hold (`limit`): a `@4x` painting 9,000 px
+ * wide on a card that holds 8192 is fetched as its `@2x` copy, so the phone
+ * never downloads and decodes the big one. `size` is the sheet's 1x size (its
+ * table row, with any repaint layout). When even the 1x copy is too big, or the
+ * limit is not known yet, the copy asked for (or the 1x) is returned and the
+ * sheet cutter copes (`MonsterSheetTextures`).
+ */
+export const sheetForDevice = (
+  file: string,
+  size: { readonly width: number; readonly height: number },
+  limit: number | null = deviceTextureLimit(),
+  level: Quality = quality(),
+): string => {
+  const chosen = sheetAtQuality(file, level);
+  const copies = sheetCopies(file);
+  if (!copies || limit === null) return chosen;
+  const ladder = [file, copies.medium, copies.low];
+  for (const copy of ladder.slice(ladder.indexOf(chosen))) {
+    const scale = sheetResolution(copy);
+    if (size.width * scale <= limit && size.height * scale <= limit) return copy;
+  }
+  return copies.low;
+};
+
 /** Whether the yard tune is the lighter copy (Medium and Low). */
 export const lightMusic = (level: Quality = quality()): boolean => level !== "high";
 
