@@ -18,9 +18,10 @@ It prints one line of JSON per tier with the rows `buildingArtTiers.ts` holds (`
 height, cells]`, `pivot`, `top`), in 1x px from the building's origin, and writes `turretAimData.ts`: for every cell
 the screen angle its barrel points (`aim_deg`; until the art measures it, its ground bearing as the camera sees it)
 and, when the art's `strip.json` has them, the muzzle's place from the pivot (`muzzle`) and the tilt (`tilt`, degrees
-down, from `pitch_deg`). The game picks the cell that faces the target on the ground, starts the shot at its muzzle
-(`turretAim.ts`) and works out the shot's path from there (a Cannon shell's arc from its raised barrel). The Cannon has no front layer:
-the parts of its body in front of the barrel are cut out of each cell.
+down: `pitch_deg`, or minus `barrel_elevation_deg` for a barrel rendered at one lean). The game picks the cell that
+faces the target on the ground, starts the shot at its muzzle (`turretAim.ts`) and works out the shot's path from there
+(a Cannon shell's arc from its raised barrel). The Cannon has no front layer: the parts of its body in front of the
+barrel are cut out of each cell.
 
 The painted shadows (`shadow.t<N>.jpg`) and lifts are kept: each 3D tier was fitted to its painted one.
 """
@@ -124,12 +125,14 @@ def read(tower, tier):
     assert sheet.width >= cols * cw and sheet.height >= rows * ch, (tower, tier, sheet.size, rows, cols, cw, ch)
     # The one row kept: the only one, or the one at the tower's fixed tilt.
     keep = pitch.index(FIXED_TILT[tower]) if rows > 1 else 0
+    # A barrel rendered at one lean says how far it is raised instead (the Flash Cannon's tube: 70 up).
+    tilt = pitch[keep] if pitch[keep] is not None or "barrel_elevation_deg" not in info else -info["barrel_elevation_deg"]
 
     def row(value, depth):
         return None if value is None else [by_tilt(value, depth)[keep]]
 
     return dict(body=body, body_at=body_at, cells=[cells_of(sheet, cw, ch, rows, cols)[keep]], in_cell=in_cell,
-                pivot=pivot, aim=row(info.get("aim_deg"), 1), muzzle=row(info.get("muzzle"), 2), tilt=pitch[keep],
+                pivot=pivot, aim=row(info.get("aim_deg"), 1), muzzle=row(info.get("muzzle"), 2), tilt=tilt,
                 ground_deg=row(info.get("ground_deg"), 1),
                 elevation=info.get("camera_elevation_deg") or info.get("elevation_deg"))
 
