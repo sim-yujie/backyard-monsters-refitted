@@ -66,6 +66,29 @@ export const handBox = (place: ArrowPlacement): TargetRect => {
   return { left: place.x - width / 2, top: place.y - height / 2, width, height };
 };
 
+/**
+ * {@link placeArrow} on `side`, unless the hand would leave the screen there
+ * (the practice camp's card is a sheet at the bottom of a phone): then the
+ * first other side it fits on, the left first, so it covers a neighbouring
+ * button rather than the words above. With no side named, the usual choice.
+ */
+export const fitArrow = (
+  rect: TargetRect,
+  side: ArrowSide | undefined,
+  screen: { width: number; height: number },
+): ArrowPlacement => {
+  if (!side) return placeArrow(rect);
+  const fits = (place: ArrowPlacement): boolean => {
+    const box = handBox(place);
+    return box.left >= 0 && box.top >= 0 && box.left + box.width <= screen.width && box.top + box.height <= screen.height;
+  };
+  for (const one of [side, "left", "right", "above", "below"] as const) {
+    const place = placeArrow(rect, one);
+    if (fits(place)) return place;
+  }
+  return placeArrow(rect, side);
+};
+
 export class GuideArrow {
   readonly element: HTMLElement;
 
@@ -94,7 +117,7 @@ export class GuideArrow {
       this.element.hidden = true;
       return null;
     }
-    const place = placeArrow(rect, side);
+    const place = fitArrow(rect, side, { width: window.innerWidth, height: window.innerHeight });
     const style = this.element.style;
     style.left = `${Math.round(place.x - HAND_WIDTH / 2)}px`;
     style.top = `${Math.round(place.y - HAND_HEIGHT / 2)}px`;
