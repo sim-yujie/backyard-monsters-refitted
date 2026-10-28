@@ -200,13 +200,14 @@ describe("MONSTER_SPRITES", () => {
       const sheet = sheets.find((one) => one.file === original);
       expect(sheet, original).toBeDefined();
       const scale = Number(/@(\d+)x\./.exec(repaint)?.[1] ?? 1);
-      // A repaint with its own layout (more rows, taller cells) sizes by that layout.
+      // A repaint with its own layout (more or fewer rows, taller cells) sizes by that layout.
       const layout = REPAINT_LAYOUTS[original];
       const columns = sheet?.columns ?? 1;
       const width = layout?.frameWidth ? layout.frameWidth * columns : sheet?.width ?? 0;
-      const height = layout?.frameHeight
-        ? layout.frameHeight * (layout.rows ?? sheet?.rows ?? 1)
-        : sheet?.height ?? 0;
+      const height =
+        layout?.frameHeight || layout?.rows
+          ? (layout.frameHeight ?? sheet?.frameHeight ?? 0) * (layout.rows ?? sheet?.rows ?? 1)
+          : sheet?.height ?? 0;
       expect(pngSize(`${ASSETS}${repaint}`), repaint).toEqual({
         width: width * scale,
         height: height * scale,
@@ -214,15 +215,16 @@ describe("MONSTER_SPRITES", () => {
     }
   });
 
-  it("paints Krallen's ground shadow into every look, once", () => {
+  it("paints Krallen's and Korath's ground shadow into every sheet, once", () => {
     // Without the Flash sheets' baked shadow she looked as if she floated
     // (owner, 2026-10-25). `web/tools/add-champ-ground-shadow.py` marks a sheet
     // it has shadowed with a tEXt chunk ahead of the pixels, and refuses one
     // already marked.
-    for (const key of ["G5_1", "G5_2", "G5_3"]) {
+    const keys = ["G5_1", "G5_2", "G5_3", "G4_1", "G4_2", "G4_3", "G4_4", "G4_5", "G4_6"];
+    for (const key of keys) {
       const repaint = REPAINTED_SHEETS[MONSTER_SPRITES[key]?.file ?? ""];
       expect(repaint, key).toBeDefined();
-      for (const file of [repaint ?? "", (repaint ?? "").replace("@4x", "")]) {
+      for (const file of [repaint ?? "", (repaint ?? "").replace(/@\dx\./, ".")]) {
         const head = Buffer.alloc(256);
         const handle = openSync(`${ASSETS}${file}`, "r");
         try {

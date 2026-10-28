@@ -248,6 +248,12 @@ export interface CreepPose {
   readonly swingAge?: number;
   /** When its next blow is expected, for the juiced wind-up; absent draws it as before. */
   readonly swing?: SwingTiming;
+  /**
+   * Ticks since Korath began his quake: the stomp's clock, which Flash starts
+   * at 0 with the quake (`Korath.as:183-185`), so the slam lands with the
+   * quake. Absent when he is not quaking.
+   */
+  readonly quakeAge?: number;
 }
 
 export interface LayoutOptions {
@@ -292,7 +298,9 @@ export const headingBetween = (from: Point, to: Point): number | null => {
 };
 
 /**
- * Which row cycle a creep shows: attacking, walking, or standing.
+ * Which row cycle a creep shows: Korath's stomp while he quakes
+ * (`Korath.getNextSprite`, `Korath.as:146-149`), else attacking, walking, or
+ * standing.
  *
  * A flyer never stands: it is in the air, and the only flyer sheets with a
  * standing row are Fomor's (`fly_3` to `fly_6`), whose row 0 has the wings
@@ -302,6 +310,7 @@ export const headingBetween = (from: Point, to: Point): number | null => {
  * waiting in the air keeps flapping (#206).
  */
 export const animationFor = (creep: CreepSnapshot, moving: boolean): MonsterAnimation => {
+  if (creep.quaking) return "stomp";
   if (creep.state === "attacking") return "attack";
   return moving || creep.flying ? "walk" : "idle";
 };
@@ -333,7 +342,7 @@ export const layoutCreep = (
   const row =
     animation === "attack"
       ? attackRow(sheet, pose.swingAge, pose.age, pose.swing)
-      : frameRow(sheet, animation, pose.age);
+      : frameRow(sheet, animation, animation === "stomp" ? (pose.quakeAge ?? pose.age) : pose.age);
   const anchor = anchorOffset(sheet);
 
   let y = ground.y + anchor.y;
@@ -627,6 +636,8 @@ interface CreepView {
   swingTick: number;
   /** Ticks expected from its last hit to the next, for the juiced wind-up. */
   swingGap: number;
+  /** The tick Korath was first seen quaking, the stomp's clock; -Infinity while he is not. */
+  quakeTick: number;
   lungeX: number;
   lungeY: number;
   /** The tick the creep was last hurt, for the red tint (#68). */
@@ -1555,6 +1566,7 @@ export class AttackBattleLayer {
     view.lungeTick = Number.NEGATIVE_INFINITY;
     view.swingTick = Number.NEGATIVE_INFINITY;
     view.swingGap = expectedSwingGap(creep.monsterId, creep.level, creep.champion);
+    view.quakeTick = Number.NEGATIVE_INFINITY;
     view.lungeX = 0;
     view.lungeY = 0;
     view.hurtTick = Number.NEGATIVE_INFINITY;
@@ -1613,6 +1625,7 @@ export class AttackBattleLayer {
       lungeTick: Number.NEGATIVE_INFINITY,
       swingTick: Number.NEGATIVE_INFINITY,
       swingGap: 60,
+      quakeTick: Number.NEGATIVE_INFINITY,
       lungeX: 0,
       lungeY: 0,
       hurtTick: Number.NEGATIVE_INFINITY,
@@ -1707,26 +1720,31 @@ export class AttackBattleLayer {
 
     const sheet = view.sheet;
     const swing = this.swingTiming(view);
+    if (!creep.quaking) view.quakeTick = Number.NEGATIVE_INFINITY;
+    else if (view.quakeTick === Number.NEGATIVE_INFINITY) view.quakeTick = tick;
     const pose: CreepPose = {
       heading: view.heading,
       moving: view.moving,
       age: tick - view.bornTick,
       swingAge: tick - view.swingTick,
       ...(swing ? { swing } : {}),
+      ...(creep.quaking ? { quakeAge: tick - view.quakeTick } : {}),
     };
     const body = view.body;
 
     // A melee hit nudges the body toward what it struck and back (#63). The
     // wound's tint (#68) and the health bar wait for `paintCreeps`, after
     // this frame's bullets have landed (#77). Juiced, it snaps further, and
-    // the body leans back as it winds up and squashes and stretches.
+    // the body leans back as it winds up and squashes and stretches; not
+    // while Korath stamps out his quake, which has its own frames.
     const sinceHit = tick - view.swingTick;
+    const swinging = creep.state === "attacking" && !creep.quaking;
     const windUp =
-      swing && sheet && creep.state === "attacking" && !view.moving
+      swing && sheet && swinging && !view.moving
         ? this.windUpOf(sheet, sinceHit, swing)
         : null;
     const squash =
-      swing && !this.reducedMotion && creep.state === "attacking" && !creep.flying
+      swing && !this.reducedMotion && swinging && !creep.flying
         ? squashScale(sinceHit, windUp, swing.strike ?? 2)
         : { x: 1, y: 1 };
     const lunge = this.reducedMotion

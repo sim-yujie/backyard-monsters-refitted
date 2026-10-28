@@ -759,7 +759,8 @@ export function flyerAltitude(creatureId: string): number {
 
 /**
  * Sheets repainted for the revamp, by original file. Each is the original
- * layout drawn at four times the size; the `@4x` in the name is how Pixi knows
+ * layout drawn at four times the size (three for the two biggest Korath
+ * sheets); the `@4x` or `@3x` in the name is how Pixi knows
  * the resolution, so the table's 1x cell rectangles still frame it. Art trial: the Pokey
  * (`gen-pokey-sprite.py`), the Teratorn (`gen-teratorn-sprite.py`) the Bolt (`gen-bolt-sprite.py`) and the Octo-ooze (`gen-octo-sprite.py`).
  * Remove an entry to go back to the original sheet; empty the table to
@@ -807,9 +808,15 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/krallen_1_rev_65.png": "monsters/krallen_1_rev_65-repaint@4x.png", // Krallen look 1 repaint (all 16 headings, run + attack, ground shadow)
   "monsters/krallen_2_rev_65.png": "monsters/krallen_2_rev_65-repaint@4x.png", // Krallen look 2 repaint (all 16 headings, run + attack, ground shadow)
   "monsters/krallen_3_rev_65.png": "monsters/krallen_3_rev_65-repaint@4x.png", // Krallen look 3 repaint (all 16 headings, run + attack, ground shadow)
+  "monsters/korath_1.png": "monsters/korath_1-repaint@4x.png", // Korath level 1 repaint (all 16 headings, walk + attack, ground shadow)
+  "monsters/korath_2.png": "monsters/korath_2-repaint@4x.png", // Korath level 2 repaint (all 16 headings, walk + attack, ground shadow)
+  "monsters/korath_3.png": "monsters/korath_3-repaint@4x.png", // Korath level 3 repaint (all 16 headings, walk + attack, ground shadow)
+  "monsters/korath_4.png": "monsters/korath_4-repaint@4x.png", // Korath level 4 repaint (all 16 headings, walk + attack, ground shadow)
+  "monsters/korath_5.png": "monsters/korath_5-repaint@3x.png", // Korath level 5 repaint at 3x (the 4x sheet would be over 12,000 px), walk + attack + stomp
+  "monsters/korath_6.png": "monsters/korath_6-repaint@3x.png", // Korath level 6 repaint at 3x (the 4x sheet would be over 12,000 px), walk + attack + stomp
 };
 
-/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
+/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`). */
 export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+$/.test(url);
 
 /** The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint unless Classic look is on. */
