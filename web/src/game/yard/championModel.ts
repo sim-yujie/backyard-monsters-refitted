@@ -468,11 +468,30 @@ export const chamberView = (save: BaseLoadResponse, now: number): ChamberView =>
  * (`CHAMPIONCHAMBER.FreezeGuardian`, `CHAMPIONCHAMBER.as:103-141`).
  */
 export const freezeGate = (save: BaseLoadResponse, view: ChampionView): string | null => {
+  switch (freezeProblem(save, view)) {
+    case "noChamber":
+      return "Build a Champion Chamber to keep a champion on ice while you raise another.";
+    case "chamberBuilding":
+      return "Your Champion Chamber is still being built.";
+    case "hurt":
+      return `Heal ${view.name} to full health before you freeze it.`;
+    case "hungry":
+      return `Feed ${view.name} before you freeze it.`;
+    case null:
+      return null;
+  }
+};
+
+/** What stands in the way of freezing, in {@link freezeGate}'s order. */
+export type FreezeProblem = "noChamber" | "chamberBuilding" | "hurt" | "hungry";
+
+/** {@link freezeGate}'s reason as a key, for the cage's short labels; null when it can be frozen. */
+export const freezeProblem = (save: BaseLoadResponse, view: ChampionView): FreezeProblem | null => {
   const chamber = buildingOfType(save, CHAMPION_CHAMBER_TYPE);
-  if (!chamber) return "Build a Champion Chamber to keep a champion on ice while you raise another.";
-  if (chamber.building) return "Your Champion Chamber is still being built.";
-  if (view.health < view.maxHealth) return `Heal ${view.name} to full health before you freeze it.`;
-  if (view.hunger !== "fed") return `Feed ${view.name} before you freeze it.`;
+  if (!chamber) return "noChamber";
+  if (chamber.building) return "chamberBuilding";
+  if (view.health < view.maxHealth) return "hurt";
+  if (view.hunger !== "fed") return "hungry";
   return null;
 };
 
