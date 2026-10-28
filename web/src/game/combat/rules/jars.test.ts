@@ -11,6 +11,7 @@ import {
   JAR_FRAMES,
   JAR_QUAKE_TYPE,
   JAR_SHOT_MULTIPLIER,
+  JAR_STRONGHOLD_TYPE,
   JAR_TOWER_TYPES,
   jarFrame,
   jarShot,
@@ -93,7 +94,12 @@ describe("the Jars' figures against Flash", () => {
     const towers = Array.from({ length: 200 }, (_, type) => type).filter(
       (type) => buildingClass(type) === "tower",
     );
-    expect(JAR_TOWER_TYPES).toEqual(towers.filter((type) => !isBunker(type)));
+    // The Stronghold is a BTOWER, but the owner keeps jars off it.
+    expect(JAR_STRONGHOLD_TYPE).toBe(138);
+    expect(towers).toContain(JAR_STRONGHOLD_TYPE);
+    expect(JAR_TOWER_TYPES).toEqual(
+      towers.filter((type) => !isBunker(type) && type !== JAR_STRONGHOLD_TYPE),
+    );
     expect(isBunker(22) && isBunker(128)).toBe(true);
     expect(JAR_TOWER_TYPES.filter(isSpurtzCannon)).toEqual([136, 137]);
   });
@@ -300,20 +306,28 @@ describe("the Jars in a fight", () => {
     expect(report.damageDealt).toBeGreaterThan(0);
   });
 
-  it("never breaks on a Stronghold, which fires on; the Jars then hold the weapon slot", () => {
+  it("never lands on a Stronghold, which fires on and can still be hit (owner)", () => {
     const stronghold = { "2": { id: 2, t: 138, l: 1, X: 700, Y: 700 } };
-    const built = battleOf(stronghold, { siege: { jars: 1, vacuum: 1 } }, [
-      pokeys,
-      jarsAt(),
-      { kind: "siege", t: 0, x: 100, y: 100, weapon: "vacuum" },
-    ]);
-    built.battle.runTo(1200);
+    const built = battleOf(stronghold);
     const tower = built.yard.buildings.find((building) => building.id === 2)!;
-    expect(tower.jarred).toBe(true);
-    expect(
-      built.battle.state().towers.find((entry) => entry.id === 2)?.damageDealt,
-    ).toBeGreaterThan(0);
-    expect(built.battle.state().loot.r1).toBe(0);
+    for (const tick of [1, landsAt, landsAt + 1, 1200]) {
+      built.battle.runTo(tick);
+      expect(tower.jarred).toBe(false);
+    }
+    const report = built.battle.state().towers.find((entry) => entry.id === 2)!;
+    expect(report.damageDealt).toBeGreaterThan(0);
+  });
+
+  it("caps the other towers a drop touches but leaves the Stronghold beside them alone", () => {
+    const both = {
+      "2": { id: 2, t: 138, l: 1, X: 700, Y: 700 },
+      "3": { id: 3, t: 21, l: 4, X: 720, Y: 720 },
+    };
+    const built = battleOf(both);
+    built.battle.runTo(landsAt + 1);
+    const jarred = (id: number) => built.yard.buildings.find((building) => building.id === id)!.jarred;
+    expect(jarred(3)).toBe(true);
+    expect(jarred(2)).toBe(false);
   });
 
   it("lands on a fallen tower too, and that jar never breaks", () => {

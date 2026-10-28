@@ -196,6 +196,29 @@ describe("overlap rule", () => {
     expect(judgeDrop(decoyZone, near, obstacles, []).legal).toBe(true);
   });
 
+  it("refuses Jars over the Stronghold alone, keeping the jar, and caps only the other tower beside it", () => {
+    const load = fixtureLoad();
+    const stronghold = { id: 3, t: 138, l: 1, X: 0, Y: 0 };
+    const jarsZone = dropZoneOf({ kind: "siege", weapon: siegeWeapon("jars")!, level: 1 }, 100);
+
+    const alone = readYard({ ...load, buildingdata: { "3": stronghold } } as BaseLoadResponse);
+    const lone = obstaclesOf(alone);
+    expect(lone[0]).toMatchObject({ type: 138, tower: true });
+    expect(judgeDrop(jarsZone, { x: 0, y: 0 }, lone, [])).toEqual({
+      legal: false,
+      reason: "Jars can't cap the Stronghold.",
+      touching: [],
+    });
+
+    const beside = readYard({
+      ...load,
+      buildingdata: { ...load.buildingdata, "3": stronghold },
+    } as BaseLoadResponse);
+    const verdict = judgeDrop(jarsZone, { x: 0, y: 0 }, obstaclesOf(beside), []);
+    expect(verdict.legal).toBe(true);
+    expect(verdict.touching.map((obstacle) => obstacle.id)).toEqual([1]);
+  });
+
   it("draws a damage bomb's ring as the blast the engine applies (#75)", () => {
     for (const bomb of BOMBS.filter((one) => one.damage > 0)) {
       const ring = dropZoneOf({ kind: "bomb", bomb }, 100).ring;
