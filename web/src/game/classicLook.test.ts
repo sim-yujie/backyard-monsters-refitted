@@ -98,7 +98,7 @@ describe("monsters and champions", () => {
 
   it("draw the repaint and its layout with Classic art off", () => {
     for (const sheet of REPAINTED)
-      expect(sheetUrl(sheet)).toBe(`/assets/${REPAINTED_SHEETS[sheet.file]}`);
+      expect(sheetUrl(sheet).replace(/\?v=.*$/, "")).toBe(`/assets/${REPAINTED_SHEETS[sheet.file]}`);
     for (const sheet of RELAID) {
       const drawn = spriteFor(sheet.key);
       const layout = REPAINT_LAYOUTS[sheet.file];

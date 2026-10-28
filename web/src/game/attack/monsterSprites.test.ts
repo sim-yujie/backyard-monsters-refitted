@@ -250,7 +250,7 @@ describe("spriteFor", () => {
   it("draws every Korath level from its repaint, levels 5 and 6 at 3x", () => {
     const urls = [1, 2, 3, 4, 5, 6].map((level) => {
       const one = spriteFor("G4", level);
-      return one && sheetUrl(one);
+      return one && bare(sheetUrl(one));
     });
     expect(urls).toEqual([
       "/assets/monsters/korath_1-repaint@4x.png",

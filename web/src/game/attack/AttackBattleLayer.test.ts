@@ -195,7 +195,7 @@ describe("headings and cells", () => {
       // The repaint keeps the Flash sheet's 30 rows, so both draw these rows.
       const sheet = sheetOf("G4", level);
       expect(sheet).toBe(MONSTER_SPRITES[`G4_${level}`]);
-      expect(sheetUrl(sheet)).toBe(`/assets/monsters/korath_${level}-repaint@3x.png`);
+      expect(sheetUrl(sheet).replace(/\?v=.*$/, "")).toBe(`/assets/monsters/korath_${level}-repaint@3x.png`);
       const rowAt = (quakeAge: number): number =>
         layoutCreep(korath, sheet, { heading: 0, moving: false, age: 1003, quakeAge }, ORIGIN, STILL).row;
       expect([0, 8, 47, 48, 55, 72].map(rowAt)).toEqual([20, 21, 25, 26, 26, 29]);
