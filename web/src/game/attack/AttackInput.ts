@@ -15,7 +15,7 @@ import {
   type BombStats,
   type Ellipse,
 } from "@/game/combat/rules";
-import { JAR_STRONGHOLD_TYPE } from "@/game/combat/rules/jars";
+import { JAR_TOWER_TYPES } from "@/game/combat/rules/jars";
 import { DECOY, JARS, VACUUM, type SiegeId } from "@/game/combat/rules/siege";
 import type { Point } from "@/game/yard/YardGrid";
 import { toIso } from "@/game/yard/YardGrid";
@@ -415,16 +415,14 @@ export const judgeDrop = (
         : { legal: false, reason: "A bomb has to land on a building.", touching };
     }
     case "tower": {
-      // No jar lands on the Stronghold (`JAR_STRONGHOLD_TYPE`, owner), so a
-      // drop over it and no other tower is refused and the jar kept.
-      const towers = overlappingBuildings(point, zone.size, obstacles).filter(
-        (obstacle) => obstacle.tower,
+      // Jars cap only the defences (`JAR_TOWER_TYPES`, owner), so a drop
+      // touching none is refused and the jar kept.
+      const touching = overlappingBuildings(point, zone.size, obstacles).filter((obstacle) =>
+        JAR_TOWER_TYPES.includes(obstacle.type),
       );
-      const touching = towers.filter((obstacle) => obstacle.type !== JAR_STRONGHOLD_TYPE);
-      if (touching.length > 0) return { legal: true, reason: "", touching };
-      const reason =
-        towers.length > 0 ? "Jars can't cap the Stronghold." : "Jars have to land on a tower.";
-      return { legal: false, reason, touching };
+      return touching.length > 0
+        ? { legal: true, reason: "", touching }
+        : { legal: false, reason: "Jars only cap defences.", touching };
     }
     case "monsters":
       // `CREEPS.CreepOverlap` wants a creep under the zone (issue #147). The

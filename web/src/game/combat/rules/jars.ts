@@ -19,29 +19,21 @@ import { JARS, siegeLevel, siegeValue } from "./siege.js";
 import { TICKS_PER_SECOND, towerHealthScale } from "./stats.js";
 
 /**
- * The building types a jar lands on: Flash keeps only the `BTOWER`s of what
- * the drop touches (`Jars.as:219-230`). `BUILDING20`, `21`, `23`, `25`, `115`,
- * `118`, the Quake Tower (129), the Inferno Cannon (130), the Magma Tower
- * (132) and the Spurtz Cannons (136, and 137 through `SpurtzCannon`). Neither
- * bunker is one: the Monster Bunker (22) and the Housing Bunker (128) are
- * `Bunker`s.
+ * The building types a jar lands on: the defences, each tower a player builds
+ * from a Defensive tab (owner, 28 Oct: "jars can only cover defensive
+ * buildings"). `BUILDING20`, `21`, `23`, `25`, `115`, `118`, the Quake Tower
+ * (129), the Inferno Cannon (130) and the Magma Tower (132).
  *
- * The Stronghold ({@link JAR_STRONGHOLD_TYPE}) is a `BTOWER` too, but is
- * left out: see there.
+ * Flash put a jar on every `BTOWER` the drop touched (`Jars.as:219-230`), so
+ * also on the Spurtz Cannons of Map Room 3 strongholds (136, and 137 through
+ * `SpurtzCannon`) and the Stronghold itself (`GuardTower`, 138), none of them
+ * a defence a player builds; no jar lands on those here. (The Stronghold has no jar
+ * branch: in Flash it fired on, its jar never broke and the Jars held the
+ * weapon slot for good.) Neither bunker ever was one: the Monster Bunker (22)
+ * and the Housing Bunker (128) are `Bunker`s. A drop touching no defence is
+ * refused before the jar is spent (`judgeDrop`).
  */
-export const JAR_TOWER_TYPES: readonly number[] = [
-  20, 21, 23, 25, 115, 118, 129, 130, 132, 136, 137,
-];
-
-/**
- * The Map Room 3 Stronghold (`GuardTower`, 138), which no jar lands on (owner,
- * 28 Oct: "It shouldn't be able to cap over stronghold"). Flash gave it a jar
- * like any `BTOWER`, but it has no jar branch: it fired on, its jar never
- * broke and the Jars held the weapon slot for good, so the jar was wasted.
- * Here a drop touching it leaves it alone, and a drop touching no other
- * tower is refused before it is spent (`judgeDrop`).
- */
-export const JAR_STRONGHOLD_TYPE = 138;
+export const JAR_TOWER_TYPES: readonly number[] = [20, 21, 23, 25, 115, 118, 129, 130, 132];
 
 /**
  * The fall, 1 s: `TweenLite.from(..., 1, ...)` with `RENDERER_ON`, which is
@@ -70,8 +62,9 @@ export const JAR_FRAMES = 23;
  * for the Sniper, the Tesla's zap, the Aerial Defense and the Magma Tower
  * (`BUILDING21.as:48`, `BUILDING25.as:131`, `BUILDING115.as:132`,
  * `INFERNO_MAGMA_TOWER.as:69`). The Inferno Cannon and the Stronghold have
- * no jar branch: they fire on as ever and their jars never break (and no jar
- * lands on the Stronghold here, {@link JAR_STRONGHOLD_TYPE}).
+ * no jar branch: they fire on as ever and their jars never break. The
+ * Spurtz Cannons keep Flash's figure, though no jar lands on them here
+ * ({@link JAR_TOWER_TYPES}).
  */
 export const JAR_SHOT_MULTIPLIER: Readonly<Record<number, number>> = {
   20: 6,

@@ -11,13 +11,18 @@ import {
   JAR_FRAMES,
   JAR_QUAKE_TYPE,
   JAR_SHOT_MULTIPLIER,
-  JAR_STRONGHOLD_TYPE,
   JAR_TOWER_TYPES,
   jarFrame,
   jarShot,
   jarsPlan,
 } from "./jars";
 import { buildEngineYard, buildingClass } from "./yard";
+import {
+  BUILD_CATALOGUE,
+  BuildCategory,
+  INFERNO_BUILD_CATALOGUE,
+  OUTPOST_BUILD_CATALOGUE,
+} from "@/game/yard/buildCatalogue";
 import type { CombatBuildingDataMap } from "./types";
 
 /**
@@ -70,7 +75,7 @@ describe("the Jars' figures against Flash", () => {
     );
   });
 
-  it("land on the BTOWERs the drop touches, never on a bunker", () => {
+  it("land only on the defences among the BTOWERs the drop touches, never on a bunker", () => {
     expect(jars).toMatch(/if \(_loc5_ is BTOWER\) \{\s+_loc4_\.push\(_loc5_\);/);
     const files: Record<number, string> = {
       20: "BUILDING20.as",
@@ -90,18 +95,25 @@ describe("the Jars' figures against Flash", () => {
     expect(read("BUILDING22.as")).toContain("extends Bunker");
     expect(read("HOUSINGBUNKER.as")).toContain("extends Bunker");
     expect(read("Bunker.as")).toContain("class Bunker extends BFOUNDATION");
-    // Every tower the yard knows but the two bunkers, and only those.
+    // Flash: every tower the yard knows but the two bunkers.
     const towers = Array.from({ length: 200 }, (_, type) => type).filter(
       (type) => buildingClass(type) === "tower",
     );
-    // The Stronghold is a BTOWER, but the owner keeps jars off it.
-    expect(JAR_STRONGHOLD_TYPE).toBe(138);
-    expect(towers).toContain(JAR_STRONGHOLD_TYPE);
+    expect(towers.filter((type) => !isBunker(type))).toEqual([
+      ...JAR_TOWER_TYPES,
+      136,
+      137,
+      138,
+    ]);
+    // The owner keeps jars to the defences: each tower on a Defensive tab.
+    const defensive = [BUILD_CATALOGUE, OUTPOST_BUILD_CATALOGUE, INFERNO_BUILD_CATALOGUE]
+      .flatMap((catalogue) => catalogue.filter((tab) => tab.id === BuildCategory.DEFENSIVE))
+      .flatMap((tab) => tab.types);
     expect(JAR_TOWER_TYPES).toEqual(
-      towers.filter((type) => !isBunker(type) && type !== JAR_STRONGHOLD_TYPE),
+      towers.filter((type) => defensive.includes(type) && !isBunker(type)),
     );
     expect(isBunker(22) && isBunker(128)).toBe(true);
-    expect(JAR_TOWER_TYPES.filter(isSpurtzCannon)).toEqual([136, 137]);
+    expect(JAR_TOWER_TYPES.filter(isSpurtzCannon)).toEqual([]);
   });
 
   it("take each tower's shot times its own multiple; the Inferno Cannon and Stronghold none", () => {
@@ -280,7 +292,6 @@ describe("the Jars in a fight", () => {
     ["Railgun", 118, 3],
     ["Quake Tower", 129, 1],
     ["Magma Tower", 132, 3],
-    ["Spurtz Cannon", 136, 1],
   ])("takes a %s's shots times its multiple till it breaks", (_name, type, level) => {
     const tower = { "2": { id: 2, t: type, l: level, X: 700, Y: 700 } };
     const damage = towerStats(type, level)?.damage ?? 0;
@@ -290,8 +301,8 @@ describe("the Jars in a fight", () => {
     expect(run.shots).toBe(shots);
     expect(run.dealt).toBe(0);
     // The strip breaks on from the cell its last `Fire` set. The Tesla's zaps
-    // and the Spurtz's shells do not set it; their reloads do.
-    if (type === 25 || isSpurtzCannon(type)) return;
+    // do not set it; its reloads do.
+    if (type === 25) return;
     const cell = jarFrame(2000 - (shots - 1) * each, 2000);
     expect(run.freedAt - run.lastShotAt).toBe(JAR_FRAMES - cell);
   });
@@ -306,28 +317,35 @@ describe("the Jars in a fight", () => {
     expect(report.damageDealt).toBeGreaterThan(0);
   });
 
-  it("never lands on a Stronghold, which fires on and can still be hit (owner)", () => {
-    const stronghold = { "2": { id: 2, t: 138, l: 1, X: 700, Y: 700 } };
-    const built = battleOf(stronghold);
-    const tower = built.yard.buildings.find((building) => building.id === 2)!;
-    for (const tick of [1, landsAt, landsAt + 1, 1200]) {
-      built.battle.runTo(tick);
-      expect(tower.jarred).toBe(false);
+  // The towers Flash jarred that are no defence a player builds (owner).
+  const NOT_DEFENCES = [136, 137, 138];
+
+  it("never lands on a Spurtz Cannon or the Stronghold, which fire on and can still be hit", () => {
+    for (const t of NOT_DEFENCES) {
+      const built = battleOf({ "2": { id: 2, t, l: 1, X: 700, Y: 700 } });
+      const tower = built.yard.buildings.find((building) => building.id === 2)!;
+      for (const tick of [1, landsAt, landsAt + 1, 1200]) {
+        built.battle.runTo(tick);
+        expect(tower.jarred).toBe(false);
+      }
+      const report = built.battle.state().towers.find((entry) => entry.id === 2)!;
+      expect(report.damageDealt).toBeGreaterThan(0);
     }
-    const report = built.battle.state().towers.find((entry) => entry.id === 2)!;
-    expect(report.damageDealt).toBeGreaterThan(0);
   });
 
-  it("caps the other towers a drop touches but leaves the Stronghold beside them alone", () => {
-    const both = {
-      "2": { id: 2, t: 138, l: 1, X: 700, Y: 700 },
-      "3": { id: 3, t: 21, l: 4, X: 720, Y: 720 },
-    };
-    const built = battleOf(both);
-    built.battle.runTo(landsAt + 1);
-    const jarred = (id: number) => built.yard.buildings.find((building) => building.id === id)!.jarred;
-    expect(jarred(3)).toBe(true);
-    expect(jarred(2)).toBe(false);
+  it("caps the defences a drop touches but leaves any other tower beside them alone", () => {
+    for (const t of NOT_DEFENCES) {
+      const both = {
+        "2": { id: 2, t, l: 1, X: 700, Y: 700 },
+        "3": { id: 3, t: 21, l: 4, X: 720, Y: 720 },
+      };
+      const built = battleOf(both);
+      built.battle.runTo(landsAt + 1);
+      const jarred = (id: number) =>
+        built.yard.buildings.find((building) => building.id === id)!.jarred;
+      expect(jarred(3)).toBe(true);
+      expect(jarred(2)).toBe(false);
+    }
   });
 
   it("lands on a fallen tower too, and that jar never breaks", () => {
