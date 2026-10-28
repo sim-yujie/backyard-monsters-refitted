@@ -5,7 +5,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { setClassicLook } from "@/game/classicLook";
 import { setNewTowerArt } from "@/game/yard/buildingArtTiers";
-import { angleGap, cellBearing, muzzleOffset, rowOf } from "@/game/yard/turretAim";
+import { angleGap, cellBearing, muzzleOffset } from "@/game/yard/turretAim";
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
@@ -217,8 +217,8 @@ describe("towersOf", () => {
     const [sniper] = towersOf(readYard(yard));
     expect(sniper?.frames).toBe(32);
     expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);
-    // The 3D Laser: 32 headings for each of 5 tilts of its head.
-    expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(160);
+    // The 3D Laser: 32 headings, its head at one tilt.
+    expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(32);
     expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(30);
     expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(30);
     // The new Cannon's barrel turns too, though the Flash one never did; the Tesla tiers stay still pictures.
@@ -355,6 +355,49 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 
+  it("lobs a 3D Cannon's shell up out of its raised barrel and down onto the creep, landing on the same tick", () => {
+    setNewTowerArt(true);
+    const yard = readYard(yardOf(20));
+    const [info] = towersOf(yard);
+    const aim = info?.aim;
+    if (!info || !aim) throw new Error("no 3D cannon");
+    expect(aim.tilt).toBeLessThan(0);
+    const { tilt: _tilt, ...straight } = aim;
+    /** The ball's place each tick (the Flash ball is drawn as a 4.5 px circle) and the landing ticks. */
+    const fly = (turret: typeof aim) => {
+      const graphics = new Graphics();
+      const balls: { x: number; y: number }[] = [];
+      const circle = graphics.circle.bind(graphics);
+      graphics.circle = (x: number, y: number, radius: number) => {
+        if (radius === 4.5) balls.push({ x, y });
+        return circle(x, y, radius);
+      };
+      const landings: number[] = [];
+      const fx = new TowerFx(
+        graphics,
+        [{ ...info, aim: turret }],
+        { setAnimFrame: () => {}, landed: (_key, tick) => landings.push(tick) },
+        { x: yard.bounds.originX, y: yard.bounds.originY },
+      );
+      const target = creepAt(35, 235);
+      fx.onShot({ tick: 1, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+      for (let tick = 1; tick <= 400; tick += 1) fx.update(tick, () => target);
+      fx.destroy();
+      return { balls, landings };
+    };
+    const lobbed = fly(aim);
+    const flat = fly(straight);
+    expect(lobbed.landings).toHaveLength(1);
+    expect(lobbed.landings).toEqual(flat.landings);
+    expect(lobbed.balls.length).toBe(flat.balls.length);
+    expect(lobbed.balls.length).toBeGreaterThan(4);
+    // The same way along the ground, higher on screen in mid-flight, and down on its target.
+    const middle = Math.floor(lobbed.balls.length / 2);
+    for (const [index, ball] of lobbed.balls.entries()) expect(ball.x).toBeCloseTo(flat.balls[index]?.x ?? Number.NaN);
+    expect(lobbed.balls[middle]!.y).toBeLessThan(flat.balls[middle]!.y - 5);
+    expect(lobbed.balls.at(-1)!.y).toBeCloseTo(flat.balls.at(-1)!.y, 0);
+  });
+
   it("starts a painted turret's shots where they always did, lifted with its tier", () => {
     setNewTowerArt(true);
     const { yard, fx } = setUp(118);
@@ -381,7 +424,7 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 
-  it("tilts a 3D Laser's head further down the nearer the spot it burns, and lights the beam at its lens", () => {
+  it("keeps a 3D Laser's head at its one tilt however far the spot it burns, and lights the beam at its lens", () => {
     setNewTowerArt(true);
     const { yard, fx } = setUp(23);
     const [info] = towersOf(yard);
@@ -396,18 +439,16 @@ describe("TowerFx", () => {
         x: info.worldX + info.pivot!.x + (offset?.[0] ?? Number.NaN),
         y: info.worldY + info.pivot!.y + (offset?.[1] ?? Number.NaN),
       });
-      // It faces the spot on the ground, and its lens looks along the beam to the creep's feet.
+      // It faces the spot on the ground, and its lens looks roughly along the beam to the creep's feet:
+      // with one tilt the head's line on screen is up to some 21 degrees off the beam's for a far spot.
       expect(angleGap(cellBearing(aim, cell), 90), `distance ${distance}`).toBeLessThanOrEqual(360 / 64);
       const line = towardCreep(yard, fx.muzzleAt(1) ?? { x: 0, y: 0 }, creep, 0);
-      expect(angleGap(aim.aim[cell] ?? 0, line), `distance ${distance}`).toBeLessThan(20);
-      return rowOf(aim, cell);
+      expect(angleGap(aim.aim[cell] ?? 0, line), `distance ${distance}`).toBeLessThan(25);
+      return cell;
     };
-    const near = rowFor(60);
-    const middle = rowFor(140);
-    const far = rowFor(400);
-    expect(near).toBeGreaterThan(middle);
-    expect(middle).toBeGreaterThanOrEqual(far);
-    expect(far).toBe(0);
+    // One row of headings: the same cell near and far.
+    expect(aim.aim).toHaveLength(aim.headings);
+    expect(new Set([rowFor(60), rowFor(140), rowFor(400)]).size).toBe(1);
     fx.destroy();
   });
 

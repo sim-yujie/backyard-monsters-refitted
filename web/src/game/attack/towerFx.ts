@@ -22,7 +22,7 @@ import {
 } from "@/game/combat/rules";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { tierArtFor, tierLift } from "@/game/yard/buildingArtTiers";
-import { bearingCell, cellBearing, muzzleOffset, tiltRow, type TurretAim } from "@/game/yard/turretAim";
+import { arcLift, bearingCell, cellBearing, muzzleOffset, shellArc, type TurretAim } from "@/game/yard/turretAim";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { blastNoise, tintAt } from "./blastFx";
@@ -619,6 +619,8 @@ interface Bullet {
   lift?: number;
   /** World px across its flight a flak shell is drawn off the muzzle, out of one of the twin barrels (new look). */
   readonly barrel?: Point | undefined;
+  /** How high a 3D Cannon's shell is drawn over its straight line, as `shellArc`: lobbed from the raised barrel. */
+  readonly arc?: number;
 }
 
 /**
@@ -852,8 +854,8 @@ export class TowerFx {
         ? this.groundAt(sweep.fromIx, sweep.fromIy)
         : { x: tower.info.worldX, y: tower.info.worldY + LASER_DROP };
       const end = sweep ? this.groundAt(sweep.toIx, sweep.toIy) : { x: aim.x, y: aim.y + BODY_HEIGHT };
-      // A 3D head looks at where the beam first burns, so it lights from the lens.
-      if (tower.info.aim) this.lookAt(tower, this.yardAt(end), end);
+      // A 3D head faces where the beam first burns, so it lights from the lens.
+      if (tower.info.aim) this.lookAt(tower, this.yardAt(end));
       this.beams.push({
         towerId: tower.info.id,
         bornTick: event.tick,
@@ -864,7 +866,7 @@ export class TowerFx {
       return null;
     }
     // A 3D barrel is put on the cell that points along the shot, which leaves its muzzle.
-    if (tower.info.aim) this.lookAt(tower, { x: target?.ix ?? event.ix, y: target?.iy ?? event.iy }, null);
+    if (tower.info.aim) this.lookAt(tower, { x: target?.ix ?? event.ix, y: target?.iy ?? event.iy });
     const from = this.muzzle(tower);
 
     if (type === 25) {
@@ -929,6 +931,12 @@ export class TowerFx {
     // The flak's twin barrels take turns: its shell is drawn out of one of them.
     const barrel = type === 115 && this.painted ? this.barrelOf(tower, from, aim) : undefined;
     const flies = type === 21 && this.painted ? SNIPER_ROUND_SPEED : speed;
+    // A 3D Cannon keeps its barrel raised and lobs its shell: up out of the muzzle and down on the creep.
+    const tilt = type === 20 ? tower.info.aim?.tilt : undefined;
+    const arc =
+      tilt === undefined
+        ? 0
+        : this.arcOf(tower, tilt, from, target?.ix ?? event.ix, target?.iy ?? event.iy, aimLift(target));
     this.bullets.push({
       key,
       type,
@@ -946,10 +954,12 @@ export class TowerFx {
       from,
       lift: aimLift(target),
       barrel,
+      ...(arc > 0 ? { arc } : {}),
     });
     this.flashes.push({ at: from, tick: event.tick, type });
     if (this.painted) {
-      if (type === 20) this.cannonFx(event.tick, tower, from, aim);
+      // A lobbed shell leaves along the barrel, `arc` above its straight line at the start.
+      if (type === 20) this.cannonFx(event.tick, tower, from, { x: aim.x, y: aim.y - arc });
       else if (type === 21) this.sniperFx(event.tick, tower, from, aim);
       else if (type === 115) this.flakVolley(event.tick, tower, from, aim, aimLift(target), Math.max(speed, 1), barrel);
     }
@@ -1062,7 +1072,7 @@ export class TowerFx {
       const end = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
       if (!beam || !end) return;
       if (info.aim) {
-        this.lookAt(tower, this.yardAt(end), end);
+        this.lookAt(tower, this.yardAt(end));
         return;
       }
       const degrees = Math.atan2(end.y - beam.sweep.ay, end.x - beam.sweep.ax) * DEGREES;
@@ -1074,7 +1084,7 @@ export class TowerFx {
     const creep = creepAt(tower.targetCreep);
     if (!creep) return;
     if (info.aim) {
-      this.lookAt(tower, { x: creep.ix, y: creep.iy }, null);
+      this.lookAt(tower, { x: creep.ix, y: creep.iy });
       return;
     }
     const cell = facingCell(
@@ -1139,8 +1149,7 @@ export class TowerFx {
    * `aim` for a 3D turret: the same turn onto a creep in range and the same
    * catch-up once it fires, by the bearing on the ground from the tower to
    * its target (the creep, or where the beam burns), showing the cell that
-   * faces nearest that way. A Laser's head also takes the tilt that looks at
-   * the spot.
+   * faces nearest that way. Its barrel or head keeps its one tilt.
    */
   private aim3d(
     tower: TowerState,
@@ -1151,14 +1160,13 @@ export class TowerFx {
     creeps: readonly CreepSnapshot[],
   ): void {
     const { info } = tower;
-    // The target in yard units, and for a Laser the spot it burns, world px.
+    // The target in yard units: the creep, or where a Laser's beam burns.
     let yard: Point | null = null;
-    let spot: Point | null = null;
     let speed = CATCH_UP_DEGREES_PER_TICK;
     if (info.type === 23) {
       let beam: Beam | undefined;
       for (const candidate of this.beams) if (candidate.towerId === info.id) beam = candidate;
-      spot = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
+      const spot = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
       if (spot) yard = this.yardAt(spot);
     } else if (tick - tower.lastShotTick <= FACING_HOLD_TICKS) {
       const creep = creepAt(tower.targetCreep);
@@ -1169,35 +1177,23 @@ export class TowerFx {
       if (!creep) return;
       speed = TURN_DEGREES_PER_TICK;
       yard = { x: creep.ix, y: creep.iy };
-      if (info.type === 23) spot = this.groundAt(creep.ix, creep.iy);
     }
-    const row = spot ? this.tiltToward(info, aim, spot) : 0;
     const wanted = bearingDegrees({ x: info.x, y: info.y }, yard);
     const from = tower.heading ?? cellBearing(aim, tower.cell ?? 0);
     tower.heading = stepDegrees(from, wanted, speed * Math.max(1, elapsed));
-    this.setCell(tower, bearingCell(aim, tower.heading, row));
+    this.setCell(tower, bearingCell(aim, tower.heading));
   }
 
   /**
    * Puts a 3D turret straight onto the cell that faces `yard` (yard units)
-   * on the ground: for a shot, and for the Flash look's facing. `spot` is
-   * where a Laser burns, world px, which also picks the tilt of its head.
+   * on the ground: for a shot, and for the Flash look's facing.
    */
-  private lookAt(tower: TowerState, yard: Point, spot: Point | null): void {
+  private lookAt(tower: TowerState, yard: Point): void {
     const { info } = tower;
     const aim = info.aim;
     if (!aim) return;
-    const row = spot ? this.tiltToward(info, aim, spot) : 0;
     tower.heading = bearingDegrees({ x: info.x, y: info.y }, yard);
-    this.setCell(tower, bearingCell(aim, tower.heading, row));
-  }
-
-  /** The tilt row of a 3D head that looks at a spot on the ground, from how far it is from under the head. */
-  private tiltToward(info: TowerInfo, aim: TurretAim, spot: Point): number {
-    // The ground under its head: the art says how far below the pivot, else the middle of the footprint.
-    const pivot = pivotOf(info);
-    const under = { x: pivot.x, y: aim.ground === undefined ? info.worldY + LASER_DROP : pivot.y + aim.ground };
-    return tiltRow(aim, spot.x - under.x, spot.y - under.y);
+    this.setCell(tower, bearingCell(aim, tower.heading));
   }
 
   /**
@@ -1373,7 +1369,7 @@ export class TowerFx {
       if (bullet.type === 20 && bullet.ticks % 5 === 0 && this.look === "full" && this.painted) {
         // A thin wisp of smoke behind the cannon ball.
         this.sparks?.emit(stepTick, {
-          look: "wisp", at: { x: bullet.x, y: bullet.y }, life: 26, size0: 6, size1: 14,
+          look: "wisp", at: this.drawnAt(bullet), life: 26, size0: 6, size1: 14,
           vz: 0.15, peak: 0.32, rotation: blastNoise(stepTick, 3) * 6.28, colours: SMOKE_TINTS,
         });
       }
@@ -1400,15 +1396,37 @@ export class TowerFx {
     }
   }
 
+  /**
+   * `shellArc` for a shell fired `tilt` degrees down from `from` (a 3D
+   * turret's muzzle) at a creep at yard `ix`, `iy`, `lift` world px above
+   * the ground there.
+   */
+  private arcOf(tower: TowerState, tilt: number, from: Point, ix: number, iy: number, lift: number): number {
+    const { info } = tower;
+    const under = this.groundAt(info.x + TOWER_CENTRE, info.y + TOWER_CENTRE);
+    const lands = this.groundAt(ix, iy);
+    const ground = Math.hypot(lands.x - under.x, 2 * (lands.y - under.y));
+    return shellArc(tilt, ground, under.y - from.y - lift);
+  }
+
+  /** Where a bullet is drawn, world px: on its straight line, or a lobbed shell over it on its arc. */
+  private drawnAt(bullet: Bullet): Point {
+    if (!bullet.arc || !bullet.from) return { x: bullet.x, y: bullet.y };
+    const gone = Math.hypot(bullet.x - bullet.from.x, bullet.y - bullet.from.y);
+    const left = Math.hypot(bullet.aim.x - bullet.x, bullet.aim.y - bullet.y);
+    return { x: bullet.x, y: bullet.y - arcLift(bullet.arc, gone / (gone + left || 1)) };
+  }
+
   private drawRound(bullet: Bullet): void {
     const graphics = this.graphics;
     if (this.painted && bullet.type === 21 && this.drawSniperRound(bullet)) return;
     if (this.painted && bullet.type === 115 && this.drawFlakRound(bullet)) return;
     if (bullet.type === 20) {
       // Flash's cannon ball, a slow heavy round.
-      graphics.circle(bullet.x, bullet.y, 4.5).fill({ color: CANNON_BALL });
-      graphics.circle(bullet.x - 1, bullet.y - 1, 2.8).fill({ color: CANNON_BALL_LIT });
-      graphics.circle(bullet.x - 1.6, bullet.y - 1.6, 1).fill({ color: 0x6e6e6e });
+      const { x, y } = this.drawnAt(bullet);
+      graphics.circle(x, y, 4.5).fill({ color: CANNON_BALL });
+      graphics.circle(x - 1, y - 1, 2.8).fill({ color: CANNON_BALL_LIT });
+      graphics.circle(x - 1.6, y - 1.6, 1).fill({ color: 0x6e6e6e });
       return;
     }
     if (bullet.type === 21) {
