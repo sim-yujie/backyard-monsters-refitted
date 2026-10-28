@@ -150,8 +150,11 @@
   font-size: var(--text-sm);
 }
 
+/* A done action reads in plain text: only its amounts carry the red/green
+   of a loss or gain ("Unlocking Vorg: −384,000"), so the words around them
+   do not take a colour of their own. */
 .monsters-status--good {
-  color: var(--colour-success);
+  color: var(--colour-text);
 }
 
 .monsters-status--bad {

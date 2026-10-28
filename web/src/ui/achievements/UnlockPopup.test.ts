@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UnlockInbox, type UnlockCard } from "@/game/achievements/unlockInbox";
 import { CARD_MS, EARNED_MANY_TEXT, EARNED_TEXT, GAP_MS, UnlockPopup } from "./UnlockPopup";
@@ -131,5 +134,26 @@ describe("UnlockPopup", () => {
     popup.destroy();
     inbox.add([live(1)]);
     expect(shown).toHaveLength(0);
+  });
+});
+
+describe("the card's look", () => {
+  // jsdom never applies a stylesheet, so the rule is read from the CSS text
+  // (by path: under jsdom the global URL is jsdom's, which readFileSync refuses).
+  const rule = (selector: string): string => {
+    const file = resolve(dirname(fileURLToPath(import.meta.url)), "../styles/achievement-popup.css");
+    const text = readFileSync(file, "utf8");
+    return text.split(`\n${selector} {`)[1]?.split("}")[0] ?? "";
+  };
+  const card = () => rule(".ach-card");
+
+  it("sits on a solid pop-up panel, not a see-through wash over the yard", () => {
+    expect(card()).toMatch(/background: var\(--colour-surface-raised\);/);
+    expect(card()).toMatch(/backdrop-filter: var\(--blur-panel\);/);
+    expect(card()).not.toMatch(/--colour-surface-overlay/);
+  });
+
+  it("writes its kicker in amber, not the dark ink meant for an amber fill", () => {
+    expect(rule(".ach-card__kicker")).toMatch(/color: var\(--colour-warning\);/);
   });
 });

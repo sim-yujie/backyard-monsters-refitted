@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
@@ -237,6 +240,16 @@ describe("LockerTab: after an action", () => {
     // Spent: red with a minus (owner, 28 Oct).
     expect(spokenText(status)).toBe("Unlocking Bolt: Putty 64,000 lost.");
     expect(status.querySelector(".res-amount__value")?.textContent).toBe("−64,000");
+    expect(status.classList.contains("monsters-status--good")).toBe(true);
+  });
+
+  it("writes the words of a done action plain, so only the amount is red or green", () => {
+    // jsdom never applies a stylesheet, so the rule is read from the CSS text
+    // (by path: under jsdom the global URL is jsdom's, which readFileSync refuses).
+    const file = resolve(dirname(fileURLToPath(import.meta.url)), "../styles/monsters.css");
+    const good = /^\.monsters-status--good \{([^}]*)\}/m.exec(readFileSync(file, "utf8"))?.[1] ?? "";
+    expect(good).toMatch(/color: var\(--colour-text\);/);
+    expect(good).not.toMatch(/--colour-success/);
   });
 });
 

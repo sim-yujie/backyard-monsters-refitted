@@ -27,7 +27,11 @@
   padding: var(--space-3);
   border: 1px solid var(--colour-warning-line);
   border-radius: var(--radius-lg);
-  background: var(--colour-surface-overlay);
+  /* A panel over the yard, like the other pop-ups: the yard must not show
+     through the words. */
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-popup);
   color: var(--colour-text);
   animation: ach-card-in var(--motion-normal) var(--easing) both;
@@ -65,7 +69,8 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--colour-warning-text);
+  /* Amber on the dark panel; `--colour-warning-text` is the ink for a solid amber fill. */
+  color: var(--colour-warning);
 }
 
 .ach-card__name {
