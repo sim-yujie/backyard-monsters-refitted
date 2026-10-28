@@ -69,11 +69,11 @@ describe("the emergence due rule", () => {
     expect(emergenceDueCheck(facts({ progress }))).toBe("done");
   });
 
-  test("tooSoon: 12 hours from the last level-up, to the second", () => {
+  test("tooSoon: 23 hours from the last level-up, to the second (owner's rule; Flash's 12)", () => {
     const progress = { ...NO_INFERNO_PROGRESS, emergenceLevel: 2, emergenceLastAt: NOW - EMERGENCE_GAP_SECONDS + 1 };
     expect(emergenceDueCheck(facts({ progress }))).toBe("tooSoon");
     expect(emergenceDueCheck(facts({ progress: { ...progress, emergenceLastAt: NOW - EMERGENCE_GAP_SECONDS } }))).toBeNull();
-    expect(EMERGENCE_GAP_SECONDS).toBe(12 * HOUR);
+    expect(EMERGENCE_GAP_SECONDS).toBe(23 * HOUR);
   });
 
   test("underAttack: an attack running on the yard", () => {
@@ -138,9 +138,9 @@ describe("the cave", () => {
     expect(caveShown({ buildingdata: yardOf(6), thlevel: 0, tutorialstage: 205 }, NO_INFERNO_PROGRESS, false)).toBe(true);
   });
 
-  test("the next level-up: any time at first, then 12 hours after the last, none after the fifth", () => {
+  test("the next level-up: any time at first, then 23 hours after the last, none after the fifth", () => {
     expect(nextEmergenceAt(NO_INFERNO_PROGRESS)).toBe(0);
-    expect(nextEmergenceAt({ emergenceLevel: 1, emergenceLastAt: NOW })).toBe(NOW + 12 * HOUR);
+    expect(nextEmergenceAt({ emergenceLevel: 1, emergenceLastAt: NOW })).toBe(NOW + 23 * HOUR);
     expect(nextEmergenceAt({ emergenceLevel: 5, emergenceLastAt: NOW })).toBeNull();
   });
 });

@@ -10,7 +10,8 @@ import type { InfernoProgressRecord } from "./infernoProgress.js";
  * The cave on the main yard and Moloch's emergence (`docs/design/inferno.md`
  * §2.2), by Flash's rules (`client/scripts/INFERNO_EMERGENCE_EVENT.as`, owner
  * I14): at Town Hall 5 the cave shows; it goes up one level per emergence
- * raid, at least 12 hours apart, five in all. Pure.
+ * raid, at least 23 hours apart (owner's rule, 28 Oct; Flash's was 12),
+ * five in all. Pure.
  */
 
 /** The cave shows from this Town Hall level (`INFERNO_EMERGENCE_EVENT.as:13`). */
@@ -19,8 +20,11 @@ export const CAVE_TOWN_HALL = 5;
 /** The cave's top level: one per raid (`:53-55`). */
 export const EMERGENCE_LEVELS = 5;
 
-/** Seconds from one level-up to the next (`:49-51`, `:111-119`). */
-export const EMERGENCE_GAP_SECONDS = 43_200;
+/**
+ * Seconds from one level-up to the next: 23 hours, the owner's rule (28 Oct).
+ * Flash waited 12 hours (`:49-51`, `:111-119`).
+ */
+export const EMERGENCE_GAP_SECONDS = 23 * 60 * 60;
 
 /** Flash's "tutorial over": `TUTORIAL._stage > 200` (`:212`). */
 export const TUTORIAL_OVER_STAGE = 200;
@@ -64,8 +68,8 @@ export const emergenceDone = (progress: Pick<InfernoProgressRecord, "emergenceLe
   progress.emergenceLevel >= EMERGENCE_LEVELS;
 
 /**
- * The earliest the next level-up may come, unix seconds: 12 hours after the
- * last; none yet means any time (0). Null once all five are done.
+ * The earliest the next level-up may come, unix seconds: 23 hours after the
+ * last ({@link EMERGENCE_GAP_SECONDS}); none yet means any time (0). Null once all five are done.
  */
 export const nextEmergenceAt = (
   progress: Pick<InfernoProgressRecord, "emergenceLevel" | "emergenceLastAt">
@@ -135,12 +139,12 @@ export interface EmergenceFacts {
  * 2. The player's main yard.
  * 3. The cave shows ({@link caveShown}: Town Hall 5, tutorial over).
  * 4. Fewer than five raids so far.
- * 5. 12 hours since the last level-up (`IsBelowMaxLevel`, `:111-119`); the
- *    first has no wait.
+ * 5. 23 hours since the last level-up ({@link EMERGENCE_GAP_SECONDS}; Flash's
+ *    12, `IsBelowMaxLevel`, `:111-119`); the first has no wait.
  * 6. No attack running on the yard and no wild monster raid open: the
  *    raid waits for the next load.
  * 7. From the second raid on, the yard above 10% of its full health
- *    (`isBaseReadyForAttack`, checked with the 12 hours before the cave is
+ *    (`isBaseReadyForAttack`, checked with the wait before the cave is
  *    raised, `SetupPortal`, `INFERNO_EMERGENCE_EVENT.as:98`): a yard at 10%
  *    or less keeps its cave as it is until a load finds it mended. Not our
  *    wild raids' "nothing damaged" rule (I14). The first raise has no such
@@ -166,7 +170,7 @@ export const emergenceDueCheck = (facts: EmergenceFacts): EmergenceNotDue | null
  * full health or less. Flash saved the new level and its time first, then
  * left the attack out (`UpgradePortal`, `INFERNO_EMERGENCE_EVENT.as:172-176`):
  * no earthquake, no warning, no fight and no "stage passed", yet the level
- * stands, so the next raid is the next level's, 12 hours on. Only the first
+ * stands, so the next raid is the next level's, 23 hours on. Only the first
  * raise gets here ({@link emergenceDueCheck}, rule 7).
  */
 export const emergenceRaidSkipped = (save: Pick<EmergenceSave, "buildingdata" | "buildinghealthdata">): boolean =>

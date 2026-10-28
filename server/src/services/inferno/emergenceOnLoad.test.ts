@@ -73,16 +73,16 @@ describe("the emergence on a main-yard load", () => {
     expect(result.notDue).toBeNull();
     expect(result.progress.emergenceLevel).toBe(1);
     expect(result.progress.emergenceLastAt).toBe(NOW);
-    // userid, the new level, now, the level it was read at, now - 12 h.
-    expect(db.raises).toEqual([[USER, 1, NOW, 0, NOW - 43_200]]);
+    // userid, the new level, now, the level it was read at, now - 23 h.
+    expect(db.raises).toEqual([[USER, 1, NOW, 0, NOW - 82_800]]);
   });
 
-  test("12 hours after the last, the next level", async () => {
-    db.row = { userid: USER, emergence_level: 2, emergence_last_at: new Date((NOW - 43_200) * 1000) };
+  test("23 hours after the last, the next level", async () => {
+    db.row = { userid: USER, emergence_level: 2, emergence_last_at: new Date((NOW - 82_800) * 1000) };
     db.raiseAnswer = 3;
     const result = (await emergenceOnLoad(em, USER, save(), NOW, true))!;
     expect(result.raised).toBe(3);
-    expect(db.raises).toEqual([[USER, 3, NOW, 2, NOW - 43_200]]);
+    expect(db.raises).toEqual([[USER, 3, NOW, 2, NOW - 82_800]]);
   });
 
   test("too soon: nothing written, and the reason told", async () => {
@@ -101,7 +101,7 @@ describe("the emergence on a main-yard load", () => {
   });
 
   test("from the second raid, a yard at 10% health or less waits, its cave as it was", async () => {
-    db.row = { userid: USER, emergence_level: 1, emergence_last_at: new Date((NOW - 43_200) * 1000) };
+    db.row = { userid: USER, emergence_level: 1, emergence_last_at: new Date((NOW - 82_800) * 1000) };
     const result = (await emergenceOnLoad(em, USER, save({ buildinghealthdata: { "1": 0 } }), NOW, true))!;
     expect(result).toMatchObject({ raised: null, notDue: "damaged", raid: null });
     expect(db.raises).toEqual([]);
@@ -113,12 +113,12 @@ describe("the emergence on a main-yard load", () => {
     const result = (await emergenceOnLoad(em, USER, save({ buildinghealthdata: { "1": 0 } }), NOW, true))!;
     expect(result).toMatchObject({ raised: 1, notDue: null, raid: null });
     expect(result.progress).toMatchObject({ emergenceLevel: 1, emergenceLastAt: NOW });
-    expect(db.raises).toEqual([[USER, 1, NOW, 0, NOW - 43_200]]);
+    expect(db.raises).toEqual([[USER, 1, NOW, 0, NOW - 82_800]]);
     expect(await readOpenRaid(USER)).toBeNull();
   });
 
   test("a raise opens Moloch's raid for the new level, in its warning and due at once", async () => {
-    db.row = { userid: USER, emergence_level: 2, emergence_last_at: new Date((NOW - 43_200) * 1000) };
+    db.row = { userid: USER, emergence_level: 2, emergence_last_at: new Date((NOW - 82_800) * 1000) };
     db.raiseAnswer = 3;
     const result = (await emergenceOnLoad(em, USER, save({ points: "0", basevalue: "0" }), NOW, true))!;
     const open = await readOpenRaid(USER);

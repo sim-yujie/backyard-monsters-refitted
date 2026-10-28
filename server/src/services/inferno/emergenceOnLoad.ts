@@ -47,7 +47,7 @@ export interface EmergenceOnLoad {
 
 /**
  * Raises the cave from level `from` to `from + 1` at `now`, if it is still
- * at `from` and its 12 hours are up: one statement, so two loads at once
+ * at `from` and its 23 hours are up: one statement, so two loads at once
  * raise it once. Makes the row for a player who has none.
  *
  * @returns The new level, or null when another request got there first.
