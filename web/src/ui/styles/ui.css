@@ -665,7 +665,7 @@ body {
 }
 
 /* The main yard's income an hour (#280): "+12,400/h" in a quiet voice under
-   the amount, dimmed with "full" while the silo is full, as that income is lost. */
+   the amount, dimmed while the silo is full, as that income is lost. */
 .hud__rate {
   color: var(--colour-text-muted);
   font-size: var(--text-xs);
@@ -677,9 +677,10 @@ body {
   opacity: 0.6;
 }
 
-.hud__rate-full {
-  color: var(--colour-warning);
-  font-weight: 600;
+/* A full silo's painted "storage full" mark (the text cut, 28 Oct); the
+   corner lays it on the pile's shoulder (yard-hud.css). */
+.hud__full-mark {
+  margin-left: var(--space-1);
 }
 
 /* Workers, free / total; a press goes to the job that finishes soonest. */
@@ -702,6 +703,11 @@ body {
   height: 22px;
   aspect-ratio: 140 / 116;
   background: center / contain no-repeat;
+}
+
+/* The clock beside "0/3" while a job runs: a press goes to it. */
+.hud__workers-clock {
+  margin-left: calc(-1 * var(--space-1) / 2);
 }
 
 .hud__workers-name {

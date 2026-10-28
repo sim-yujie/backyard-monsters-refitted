@@ -19,6 +19,7 @@ import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { formatAmount, formatCompact } from "./format";
+import { gameIcon } from "./gameIcon";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
 
@@ -39,13 +40,15 @@ import { DamageBanner } from "./yard/DamageBanner";
  * On the player's own yard the scene hands over a binding (`bindYard`), and
  * the bar adds what only that yard knows (issue #100, design §3.1): each
  * resource's storage cap as "amount / cap" with a thin fill bar that turns
- * amber when the silo is full, a Workers control ("free / total") that goes
- * to the job finishing soonest, and the post-attack "N buildings damaged
+ * amber when the silo is full, with the painted "storage full" mark on the
+ * pile and, in the corner, "15M/15M" (the text cut, 28 Oct); a Workers
+ * control (the worker, "free/total", and a clock while a job runs) that goes
+ * to the job finishing soonest; and the post-attack "N buildings damaged
  * [Repair all]" line in the notice dock (`DamageBanner`, design §5.5). The
  * map, the attack screen and a foreign yard have no binding and show the
  * amounts alone. On the main yard each resource also carries what the player
- * makes of it an hour, "+12,400/h" (#280, `incomeRate.ts`), dimmed with
- * "full" while its silo is full, since that income is lost. In an outpost the amounts and caps are the main yard's pool,
+ * makes of it an hour, "+12,400/h" (#280, `incomeRate.ts`), dimmed while
+ * its silo is full, since that income is lost. In an outpost the amounts and caps are the main yard's pool,
  * as the server sends them. On the Inferno yard the four are Bone, Coal,
  * Sulfur and Magma, with the Inferno purse and its cap (WP 1.19,
  * `resourceIcon.ts`'s realm), and the income line of its own harvesters at
@@ -86,6 +89,17 @@ export const FULL_NOTE = "Full: new income is lost. Build or upgrade Storage Sil
 
 /** {@link FULL_NOTE} on the Inferno yard, whose storage is the Resource Pod. */
 export const INFERNO_FULL_NOTE = "Full: new income is lost. Build or upgrade Resource Pods.";
+
+/**
+ * "15M/15M": a full silo's readout on the yard (the text cut, 28 Oct). Both
+ * figures are the cap, so the digits say nothing the fill bar does not; the
+ * exact amounts stay in the tooltip and the tap bubble. A whole ".0" is
+ * dropped ("15M", not "15.0M") to keep it short on a phone.
+ */
+export const fullText = (amount: number, cap: number): string => {
+  const short = (value: number): string => formatCompact(value).replace(/\.0+(?=[KMB]$)/, "");
+  return `${short(amount)}/${short(cap)}`;
+};
 
 /** "+12,400/h", or "+12.4K/h" short: a resource's income an hour (#280). */
 export const formatRate = (perHour: number, compact = false): string =>
@@ -189,9 +203,9 @@ export const exactLabel = (key: ResourceKey, amount: number | undefined, cap?: n
 /** "Making 12,400 an hour.", the income line's part of the tooltip and the bubble (#280). */
 export const rateNote = (perHour: number): string => `Making ${formatExact(perHour)} an hour.`;
 
-/** "2 / 5" free of total, and the Workers control's tooltip. */
+/** "2/5" free of total, and the Workers control's tooltip. */
 export const workersText = (free: number, total: number): { value: string; label: string } => ({
-  value: `${free} / ${total}`,
+  value: `${free}/${total}`,
   label:
     free >= total
       ? `Workers: all ${total} free.`
@@ -209,6 +223,8 @@ interface Readout {
   readonly fill: HTMLElement;
   /** "+12,400/h" under the amount; hidden off the main yard (#280). */
   readonly rate: HTMLElement;
+  /** The painted "storage full" mark on the pile, shown while the silo is full. */
+  readonly fullMark: HTMLElement;
   amount: number | undefined;
   cap: number | undefined;
   /** Income an hour, on the main yard only. */
@@ -249,6 +265,8 @@ export class Hud {
   private readonly workersButton: HTMLButtonElement;
   private readonly workersName: HTMLElement;
   private readonly workersValue: HTMLElement;
+  /** The clock beside "0/3": a job is running, and a press goes to it. */
+  private readonly workersClock: HTMLElement;
   /** The yard's corner layout (#171) rather than the bar. */
   private readonly corner: boolean;
   private accountMenu: AccountMenu | null = null;
@@ -305,7 +323,11 @@ export class Hud {
       rate.className = "hud__rate";
       rate.setAttribute("aria-hidden", "true");
       rate.hidden = true;
-      button.append(amount, capText, bar, rate);
+      // The button's own label says "Full: new income is lost", so the mark is
+      // a picture only.
+      const fullMark = gameIcon("storagefull", { size: 16, decorative: true, className: "hud__full-mark" });
+      fullMark.hidden = true;
+      button.append(amount, capText, fullMark, bar, rate);
       // On the own yard the Shiny counter is the Shop's door (§8.2); the
       // Shop's header then shows the exact balance.
       button.addEventListener("click", () => {
@@ -328,6 +350,7 @@ export class Hud {
         bar,
         fill,
         rate,
+        fullMark,
         amount: undefined,
         cap: undefined,
         perHour: undefined,
@@ -358,10 +381,13 @@ export class Hud {
     this.workersName.textContent = "Workers";
     this.workersValue = document.createElement("span");
     this.workersValue.className = "hud__resource-value";
-    this.workersButton.append(workerIcon, this.workersName, this.workersValue);
+    // The button's label says it in words; the clock is a picture only.
+    this.workersClock = gameIcon("time", { size: 16, decorative: true, className: "hud__workers-clock" });
+    this.workersClock.hidden = true;
+    this.workersButton.append(workerIcon, this.workersName, this.workersValue, this.workersClock);
     this.workersButton.addEventListener("click", () => this.goToNextJob());
     this.workers.append(this.workersButton);
-    // The corner's Workers is the icon and "5 / 5", as the mock-up draws it.
+    // The corner's Workers is the icon and "5/5", as the mock-up draws it.
     this.workersName.hidden = this.corner;
 
     const spacer = document.createElement("div");
@@ -658,30 +684,30 @@ export class Hud {
   private render(readout: Readout): void {
     const shown = readout.shown ?? this.target(readout);
     if (shown === undefined) return;
+    const state = capState(shown, readout.cap);
+    const full = state?.full === true;
+    // The corner draws the cap as the fill bar alone, the figure kept for the
+    // tooltip and the tap bubble, until the silo is full: then "15M/15M".
     readout.value.textContent =
-      this.fitted === HudFit.COMPACT ? formatCompact(shown) : formatAmount(shown);
-    // The corner draws the cap as the fill bar alone; the figure is in the
-    // tooltip and the tap bubble.
+      this.corner && full && readout.cap !== undefined
+        ? fullText(shown, readout.cap)
+        : this.fitted === HudFit.COMPACT
+          ? formatCompact(shown)
+          : formatAmount(shown);
     const showCap =
       !this.corner &&
       readout.cap !== undefined &&
       (this.fitted === HudFit.FULL || this.fitted === HudFit.NO_BRAND);
     readout.capText.textContent = showCap ? ` / ${formatAmount(readout.cap)}` : "";
-    const state = capState(shown, readout.cap);
     readout.bar.hidden = state === null;
     readout.fill.style.width = state === null ? "" : `${+(state.fraction * 100).toFixed(2)}%`;
-    readout.button.classList.toggle("hud__resource-button--full", state?.full === true);
+    readout.button.classList.toggle("hud__resource-button--full", full);
+    readout.fullMark.hidden = !full;
     readout.rate.hidden = readout.perHour === undefined;
     if (readout.perHour !== undefined) {
       readout.rate.textContent = formatRate(readout.perHour, this.fitted === HudFit.COMPACT);
-      // Still made, but lost while the silo is full: dimmed, and said.
-      readout.rate.classList.toggle("hud__rate--full", state?.full === true);
-      if (state?.full) {
-        const tag = document.createElement("span");
-        tag.className = "hud__rate-full";
-        tag.textContent = "full";
-        readout.rate.append(" ", tag);
-      }
+      // Still made, but lost while the silo is full: dimmed, the pile marked full.
+      readout.rate.classList.toggle("hud__rate--full", full);
     }
   }
 
@@ -780,6 +806,7 @@ export class Hud {
       this.workersButton.title = text.label;
       this.workersButton.setAttribute("aria-label", text.label);
       this.workersButton.setAttribute("aria-disabled", String(free >= total));
+      this.workersClock.hidden = free >= total;
     }
     this.fit();
   }

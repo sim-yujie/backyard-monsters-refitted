@@ -96,6 +96,22 @@
   grid-column: 2;
 }
 
+/* A full silo's mark sits on the pile's top right corner, over the icon.
+   The icon is placed in column 1 outright so the two may share the cell. */
+.hud--corner .hud__resource-button .res-icon {
+  grid-column: 1;
+}
+
+.hud--corner .hud__full-mark {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  align-self: start;
+  z-index: 1;
+  margin: -6px -8px 0 0;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.45));
+}
+
 /* Shiny has no silo: its figure sits in the middle. */
 .hud--corner .hud__resource--shiny .res-icon {
   height: 24px;
