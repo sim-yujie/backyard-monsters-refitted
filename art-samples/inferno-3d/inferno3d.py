@@ -616,14 +616,309 @@ def build_magma(M, LN, body):
     return tur, top, ("column", "collar", "cagebars")
 
 
+# ------------------------------------------------------------- 3: the Magma Tower's two new directions (MAGMA_DIR=A|B)
+# Owner, 29 Oct: the Magma looked too much like the Blast Tower (the same red and cream stripes, a drum, a ball cannon).
+# A "Furnace" and B "Volcanic", level 1 only for now, each with the Flash Magma's chain legs and anchor weights.
+MAGMA_DIR = os.environ.get("MAGMA_DIR", "").upper()
+
+
+def chain_anchors(M, LN, body, hubs, foot_r, mat):
+    """The chain legs: from a hub at each (bearing, radius, height) a chain sags out and down to an anchor weight on the
+    ground foot_r out."""
+    links, feet, hb = bmesh.new(), bmesh.new(), bmesh.new()
+    for b, r, z in hubs:
+        a, d = bear(b, r - 0.05, z), bear(b, foot_r, 0.0)
+        hm = Matrix.Translation(bear(b, r, z)) @ Vector((0, 0, 1)).rotation_difference(bear(b)).to_matrix().to_4x4()
+        Q.cyl(hb, 0.12, 0.08, hm, segs=20)
+        Q.cyl(hb, 0.06, 0.12, hm @ Matrix.Translation((0, 0, 0.04)), segs=12)
+        path = L.bezier(a, bear(b, r + 0.35, z - 0.1), bear(b, foot_r + 0.05, min(0.5, z * 0.6)), d + Vector((0, 0, 0.2)), n=12)
+        for i, p in enumerate(path[:-1]):
+            q = path[i + 1]
+            dv = q - p
+            m = Matrix.Translation((p + q) / 2) @ Vector((0, 0, 1)).rotation_difference(dv).to_matrix().to_4x4() @ \
+                Matrix.Rotation(math.pi / 2 * (i % 2), 4, 'Z')
+            sub = bmesh.new()
+            bmesh.ops.create_circle(sub, segments=12, radius=1.0)
+            ring = [v.co.copy() for v in sub.verts]
+            L.tube(links, [m @ Vector((0.05 * c.x, 0, dv.length * 0.64 * c.y)) for c in ring + ring[:1]],
+                   [0.026] * (len(ring) + 1), sides=6, cap=False)
+        Q.cyl(feet, 0.17, 0.15, Matrix.Translation(d + Vector((0, 0, 0.075))), segs=24, r2=0.12)     # a squat bell weight
+        Q.cyl(feet, 0.19, 0.035, Matrix.Translation(d + Vector((0, 0, 0.0175))), segs=24)
+        Q.cyl(feet, 0.05, 0.1, Matrix.Translation(d + Vector((0, 0, 0.19))), segs=12)
+    add_outline(W.obj("hubs", hb, [mat], parent=body, sharp=35), LN["warm"])
+    add_outline(W.obj("chains", links, [mat], parent=body, sharp=60), LN["cool"], L.LINE * 0.7)
+    add_outline(W.obj("feet", feet, [mat], parent=body, sharp=35), LN["warm"])
+
+
+def lava_runs(bm, runs, r=0.045):
+    """Lava running down a surface (each run a list of points, top to bottom): thinning, a drop at its end."""
+    for pts in runs:
+        n = len(pts)
+        L.tube(bm, pts, [r * (1.0 - 0.35 * i / (n - 1)) for i in range(n)], sides=8)
+        Q.ball(bm, pts[-1] - Vector((0, 0, r * 0.4)), r * 0.95, segs=10)
+
+
+def prof_r(prof, z):
+    """A lathe profile's radius at height z (linear between its points)."""
+    for (r0, z0), (r1, z1) in zip(prof, prof[1:]):
+        if min(z0, z1) <= z <= max(z0, z1) and z1 != z0:
+            return r0 + (r1 - r0) * (z - z0) / (z1 - z0)
+    return prof[-1][0]
+
+
+def build_magma_a(M, LN, body):
+    """A, "Furnace": a soot-black riveted boiler on three squat legs (the ground glows under it), a glowing seam round its
+    waist leaking lava, a barred fire door, two glass tanks of lava strapped to its belly, a crucible of molten lava on
+    top with a smoke stack behind; the head a lava sprayer (a valve block, a valve wheel, a flat fan nozzle)."""
+    soot = W.mat_iron("iron_soot", base=(60, 52, 50), dark=(22, 19, 18), rust=(120, 62, 32), edge=(156, 140, 128),
+                      rust_k=0.35, soot=0.7)
+    trim = W.mat_iron("iron_trim", base=(84, 70, 62), dark=(34, 28, 26), edge=(176, 154, 134), rust_k=0.6, soot=0.3)
+    lava = M["lava_hot"]
+    CHAINS, TANKS, STACK, SR = (125, 245, 5), (95, 335), 215, 0.92
+    # the ground: scorched earth, a pool of lava glowing under the boiler
+    add_outline(W.lathe("ground", [[(0.92, 0.0), (0.86, 0.03), (0.6, 0.045), (0.0, 0.045)]], [M["dirt"]], bev=0, wob=0.03,
+                        parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+    W.lathe("firebed", [[(0.44, 0.05), (0.0, 0.05)]], [lava], bev=0, wob=0.04, wob_scale=4.0, parent=body)
+    # the boiler: a lower and an upper belly, two riveted flanges round the waist with molten lava glowing between them
+    low = [(0.3, 0.16), (0.44, 0.17), (0.54, 0.26), (0.59, 0.4), (0.6, 0.5)]
+    up = [(0.6, 0.62), (0.59, 0.72), (0.54, 0.86), (0.45, 0.96), (0.34, 1.02), (0.3, 1.06)]
+    belly = W.lathe("belly", [[(0.0, 0.16), (0.3, 0.16)], low, up], [soot], wob=0.008, parent=body, sharp=35)
+    add_outline(belly, LN["cool"])
+    W.lathe("seam", [[(0.585, 0.49), (0.585, 0.63)]], [lava], bev=0, parent=body)
+    fl = W.lathe("flanges", [L.band(0.58, 0.64, 0.48, 0.525, bev=0.012), L.band(0.58, 0.64, 0.595, 0.64, bev=0.012)], [trim],
+                 bev=0, parent=body, sharp=35)
+    add_outline(fl, LN["cool"], L.LINE * 0.6)
+    rv = bmesh.new()
+    for z in (0.502, 0.618):
+        pts, nrm = L.ring_of(24, 0.642, z, 0.5)
+        W.rivets(rv, pts, nrm, r=0.022)
+    for z in (0.3, 0.8):         # rows of rivets on the plates
+        pts, nrm = L.ring_of(20, prof_r(low + up, z) + 0.004, z, 0.25)
+        W.rivets(rv, pts, [n + Vector((0, 0, 0.3 if z > 0.6 else -0.3)) for n in nrm], r=0.02)
+    W.obj("bellyrivets", rv, [trim], parent=body)
+    # the squat legs, under the tanks and the stack
+    lg = bmesh.new()
+    for b in TANKS + (STACK,):
+        L.tube(lg, [bear(b, 0.34, 0.2), bear(b, 0.46, 0.1), bear(b, 0.56, 0.04)], [0.075, 0.08, 0.09], sides=10)
+        Q.cyl(lg, 0.12, 0.045, Matrix.Translation(bear(b, 0.57, 0.0225)), segs=16)
+    add_outline(W.obj("legs", lg, [soot], parent=body, sharp=35), LN["cool"])
+    # the fire door at the front: a frame and bars over lava
+    fm = Matrix.Translation(bear(45, 0.56, 0.2)) @ Matrix.Rotation(-math.radians(45), 4, 'Z') @ \
+        Matrix.Rotation(-math.radians(14), 4, 'X')
+    dl, dr = bmesh.new(), bmesh.new()
+    L.rbox(dl, (0.27, 0.03, 0.24), fm @ Matrix.Translation((0, -0.005, 0.0)), bevel=0.01)
+    L.rbox(dr, (0.34, 0.05, 0.05), fm @ Matrix.Translation((0, 0.02, -0.02)), bevel=0.012)
+    L.rbox(dr, (0.34, 0.05, 0.05), fm @ Matrix.Translation((0, 0.02, 0.24)), bevel=0.012)
+    for x in (-0.15, -0.075, 0.0, 0.075, 0.15):
+        L.rbox(dr, (0.035, 0.045, 0.26), fm @ Matrix.Translation((x, 0.025, 0.0)), bevel=0.01)
+    L.obj_from_bm("doorlava", dl, [lava], parent=body)
+    add_outline(W.obj("door", dr, [trim], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+    # the lava tanks: glass cylinders in iron caps and bars, a pipe from each into the boiler
+    tg, tk = bmesh.new(), bmesh.new()
+    for b in TANKS:
+        c = bear(b, 0.72)
+        Q.cyl(tg, 0.12, 0.6, Matrix.Translation(c + Vector((0, 0, 0.53))), segs=24)
+        for z in (0.21, 0.85):
+            Q.cyl(tk, 0.15, 0.08, Matrix.Translation(c + Vector((0, 0, z))), segs=24)
+            Q.cyl(tk, 0.135, 0.11, Matrix.Translation(c + Vector((0, 0, z))), segs=24)
+        for k in (-50, 0, 50):
+            L.rbox(tk, (0.03, 0.03, 0.62), Matrix.Translation(bear(b + 0, 0.72) + bear(b + k, 0.125, 0.22)) @
+                   Matrix.Rotation(-math.radians(b + k), 4, 'Z'), bevel=0.008)
+        L.tube(tk, L.bezier(c + Vector((0, 0, 0.88)), c + Vector((0, 0, 1.0)), bear(b, 0.55, 1.0), bear(b, 0.4, 0.98), n=10),
+               [0.045] * 10, sides=10)
+        L.tube(tk, [bear(b, 0.5, 0.36), bear(b, 0.64, 0.36)], [0.04, 0.04], sides=10)      # a bracket
+    L.obj_from_bm("tankglass", tg, [lava], parent=body)
+    tko = W.obj("tanks", tk, [trim], parent=body, sharp=35)
+    add_outline(tko, LN["cool"], L.LINE * 0.7)
+    # the crucible on top, full of molten lava; a hub stands in it for the head
+    cru = [[(0.3, 1.04), (0.42, 1.12), (0.56, 1.24), (0.65, 1.36), (0.67, 1.44)], [(0.67, 1.44), (0.58, 1.45)],
+           [(0.58, 1.45), (0.56, 1.36)]]
+    add_outline(W.lathe("crucible", cru, [trim], wob=0.01, parent=body, sharp=35), LN["cool"])
+    W.lathe("pool", [[(0.565, 1.37), (0.18, 1.37)]], [lava], bev=0, parent=body)
+    top = 1.48
+    add_outline(W.lathe("hub", [[(0.2, 1.3), (0.2, 1.44), (0.17, top), (0.0, top)]], [soot], parent=body, sharp=35), LN["cool"],
+                L.LINE * 0.6)
+    lu, rv = bmesh.new(), bmesh.new()
+    for b in (135, 315):           # the crucible's lifting lugs
+        L.rbox(lu, (0.1, 0.12, 0.12), Matrix.Translation(bear(b, 0.66, 1.3)) @ Matrix.Rotation(-math.radians(b), 4, 'Z'),
+               bevel=0.03)
+    L.rbox(lu, (0.16, 0.2, 0.04), Matrix.Translation(bear(75, 0.68, 1.41)) @ Matrix.Rotation(-math.radians(75), 4, 'Z'),
+           bevel=0.015)            # a pour lip
+    pts, nrm = L.ring_of(18, 0.66, 1.4, 0.3)
+    W.rivets(rv, pts, [n + Vector((0, 0, -0.5)) for n in nrm], r=0.022)
+    add_outline(W.obj("lugs", lu, [trim], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+    W.obj("crucrivets", rv, [trim], parent=body)
+    # lava: dripping off the crucible's lip and the pour lip, leaking from the waist seam down the lower belly
+    dr = bmesh.new()
+    lava_runs(dr, [[bear(b, 0.675, 1.43), bear(b, 0.69, 1.38), bear(b, 0.69, 1.38 - ln)]
+                   for b, ln in ((20, 0.1), (160, 0.07), (290, 0.12), (345, 0.06))], r=0.035)
+    lava_runs(dr, [[bear(75, 0.76, 1.43), bear(75, 0.79, 1.36), bear(75, 0.79, 1.2)]], r=0.04)
+    lava_runs(dr, [[bear(b, prof_r(low, z) + 0.025, z) for z in [0.5 - k * (0.5 - z1) / 5 for k in range(6)]]
+                   for b, z1 in ((15, 0.3), (75, 0.24), (290, 0.34))], r=0.035)
+    L.obj_from_bm("lavaruns", dr, [lava], parent=body)
+    # the smoke stack behind: a pipe out of the boiler's back and up, its mouth glowing
+    sk = bmesh.new()
+    path = L.bezier(bear(STACK, 0.5, 0.78), bear(STACK, SR, 0.78), bear(STACK, SR, 0.78), bear(STACK, SR, 1.1), n=10)
+    L.tube(sk, path + [bear(STACK, SR, 2.0)], [0.085] * 11, sides=16)
+    Q.cyl(sk, 0.12, 0.12, Matrix.Translation(bear(STACK, SR, 2.04)), segs=20, r2=0.13)     # a flared mouth
+    for z in (1.2, 1.6):
+        Q.cyl(sk, 0.1, 0.04, Matrix.Translation(bear(STACK, SR, z)), segs=20)
+    add_outline(W.obj("chimney", sk, [soot], parent=body, sharp=35), LN["cool"])
+    sm = bmesh.new()
+    Q.cyl(sm, 0.1, 0.01, Matrix.Translation(bear(STACK, SR, 2.08)), segs=20)
+    L.obj_from_bm("stackglow", sm, [lava], parent=body)
+    chain_anchors(M, LN, body, [(b, prof_r(up, 0.75) + 0.03, 0.75) for b in CHAINS], 1.0, trim)
+    # the head: a lava sprayer: a swivel and riser, a riveted valve block with a valve wheel, a copper pressure tank
+    # behind, a nozzle pipe ending in a flat fan mouth glowing with lava
+    tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
+    tur.scale = (1.2, 1.2, 1.2)
+    HZ = 0.24
+    bm = bmesh.new()
+    Q.cyl(bm, 0.17, 0.06, Matrix.Translation((0, 0, 0.03)), segs=32)
+    Q.cyl(bm, 0.075, 0.12, Matrix.Translation((0, 0, 0.12)), segs=16)
+    L.rbox(bm, (0.22, 0.24, 0.16), Matrix.Translation((0, 0.0, 0.16)), bevel=0.04)
+    W.bolts(bm, [(sx * 0.11, sy * 0.08, 0.27) for sx in (-1, 1) for sy in (-1, 1)], [(sx, 0, 0) for sx in (-1, 1) for _ in (0, 1)],
+            r=0.025, washer=False)
+    add_outline(W.obj("valve", bm, [trim], parent=tur, sharp=35), LN["cool"])
+    bm = bmesh.new()
+    Q.cyl(bm, 0.025, 0.08, Matrix.Translation((0, 0, 0.35)), segs=10)
+    ring = [Vector((0.11 * math.cos(2 * math.pi * k / 24), 0.11 * math.sin(2 * math.pi * k / 24), 0.39)) for k in range(25)]
+    L.tube(bm, ring, [0.02] * 25, sides=8, cap=False)
+    for k in range(4):
+        a = math.pi / 4 + k * math.pi / 2
+        L.tube(bm, [Vector((0, 0, 0.39)), Vector((0.11 * math.cos(a), 0.11 * math.sin(a), 0.39))], [0.012] * 2, sides=6)
+    add_outline(W.obj("wheel", bm, [M["brass_w"]], parent=tur, sharp=35), LN["warm"], L.LINE * 0.6)
+    bm = bmesh.new()
+    Q.cyl(bm, 0.095, 0.24, Matrix.Translation((0, -0.24, 0.2)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=24)
+    for y in (-0.15, -0.33):
+        Q.cyl(bm, 0.105, 0.03, Matrix.Translation((0, y, 0.2)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=24)
+    add_outline(W.obj("ptank", bm, [M["copper_w"]], parent=tur, sharp=35), LN["warm"])
+    bm = bmesh.new()
+    L.tube(bm, [Vector((0, 0.1, HZ)), Vector((0, 0.42, HZ))], [0.06, 0.055], sides=16)
+    for y in (0.16, 0.38):
+        Q.cyl(bm, 0.075, 0.035, Matrix.Translation((0, y, HZ)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=16)
+    L.rbox(bm, (0.12, 0.09, 0.2), Matrix.Translation((0, 0.4, HZ)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), bevel=0.02,
+           taper=2.1, taper_y=0.65)
+    add_outline(W.obj("nozzle", bm, [trim], parent=tur, sharp=35), LN["cool"])
+    bm = bmesh.new()
+    L.rbox(bm, (0.23, 0.035, 0.02), Matrix.Translation((0, 0.598, HZ)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), bevel=0.008)
+    lava_runs(bm, [[Vector((0.05, 0.6, HZ - 0.02)), Vector((0.05, 0.61, HZ - 0.07)), Vector((0.05, 0.61, HZ - 0.12))]], r=0.025)
+    L.obj_from_bm("nozzlelava", bm, [lava], parent=tur)
+    L.empty("muzzle_base", parent=tur, loc=(0, 0.1, HZ))
+    L.empty("muzzle_tip", parent=tur, loc=(0, 0.62, HZ))
+    return tur, top, ("belly", "crucible", "hub", "chimney", "tanks")
+
+
+def basalt_column(bm, c, r, h, rot, tilt=(0.0, 0.0), lean=(0.0, 0.0)):
+    """A basalt column: a six-sided prism standing at c, its top cut on a slant (tilt: rise per unit x and y), leaning."""
+    sub = bmesh.new()
+    bmesh.ops.create_cone(sub, cap_ends=True, segments=6, radius1=r, radius2=r * 0.95, depth=h,
+                          matrix=Matrix.Translation((0, 0, h / 2)))
+    for v in sub.verts:
+        if v.co.z > h / 2:
+            v.co.z += tilt[0] * v.co.x + tilt[1] * v.co.y
+            v.co.x += lean[0]
+            v.co.y += lean[1]
+    bmesh.ops.bevel(sub, geom=list(sub.edges), offset=0.025, segments=2, affect='EDGES', profile=0.5)
+    L.add_mesh(bm, sub, Matrix.Translation(Vector(c)) @ Matrix.Rotation(rot, 4, 'Z'))
+
+
+def build_magma_b(M, LN, body):
+    """B, "Volcanic": a cluster of cut basalt columns, each its own height, lava glowing between them and in their
+    cracks and running down their faces into a glowing basin at the foot; two iron bands hold them, the chains and
+    anchor weights hold the bands. The head a cast pot of lava with a long goose-neck spout."""
+    basalt = W.mat_brimstone("basalt", scale=4.0, crust=((20, 20, 26), (82, 78, 86)), fire=(255, 112, 24),
+                             hot=(255, 214, 130), glow_k=1.3, low=1.7)
+    obsid = W.mat_black_crystal("obsidian", scale=5.0, glow_k=0.6)
+    band = W.mat_iron("iron_band", base=(80, 66, 58), dark=(34, 28, 26), edge=(176, 154, 134), rust_k=0.7, soot=0.35)
+    lava = M["lava_hot"]
+    CHAINS = (125, 245, 5)
+    # the basin: a rough rim of rock round a pool of lava
+    W.lathe("basin", [[(0.93, 0.035), (0.0, 0.035)]], [lava], bev=0, parent=body)
+    rim = W.lathe("rim", [[(1.0, 0.0), (1.03, 0.06), (0.97, 0.11), (0.91, 0.08), (0.9, 0.02)]], [basalt], wob=0.04, wob_scale=3.0,
+                  parent=body, sharp=50)
+    add_outline(rim, LN["warm"], L.LINE * 0.7)
+    cl = bmesh.new()
+    W.clods(cl, [bear(360 * i / 20 + 7 * (i % 3), 0.97 + 0.03 * ((i * 0.37) % 1.0), 0.08) for i in range(20)], r=0.1)
+    add_outline(W.obj("rimrocks", cl, [basalt], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+    # the lava core the columns stand round (it glows in the gaps between them)
+    W.lathe("core", [[(0.45, 0.0), (0.45, 0.95), (0.0, 0.95)]], [lava], bev=0, parent=body)
+    co = bmesh.new()
+    top = 1.55
+    basalt_column(co, (0, 0, 0), 0.3, top, 0.2)
+    HS = (1.22, 0.7, 1.0, 0.76, 1.28, 0.88, 0.68)
+    for i, h in enumerate(HS):
+        b = 360 * i / len(HS) + 12
+        basalt_column(co, bear(b, 0.5), 0.2, h, 0.37 * i, tilt=(0.12 * ((i % 3) - 1), 0.1 * ((i % 2) * 2 - 1)),
+                      lean=tuple(bear(b, 0.02))[:2])
+    for i, (b, h) in enumerate(((40, 0.24), (100, 0.16), (165, 0.3), (285, 0.2), (335, 0.27))):   # broken stubs in the pool
+        basalt_column(co, bear(b, 0.8), 0.11, h, 0.9 * i, tilt=(0.25, -0.2))
+    co.normal_update()
+    for f in co.faces:             # the cut tops: glassy obsidian
+        f.material_index = 1 if f.normal.z > 0.8 else 0
+    add_outline(W.obj("columns", co, [basalt, obsid], parent=body, sharp=30), LN["warm"])
+    # lava running down the front columns' faces into the basin
+    rn = bmesh.new()
+    lava_runs(rn, [[bear(b + 3 * math.sin(k), 0.69 + 0.012 * (k % 2), HS[i] - 0.03 - k * (HS[i] - 0.06) / 6) for k in range(7)]
+                   for i, b in ((0, 12), (1, 63.4), (6, 320.6))], r=0.04)
+    lava_runs(rn, [[bear(b, 0.29, top - 0.01), bear(b, 0.315, top - 0.06), bear(b, 0.315, top - ln)]     # down its corners
+                   for b, ln in ((18.5, 0.45), (78.5, 0.3))], r=0.035)
+    L.obj_from_bm("lavaruns", rn, [lava], parent=body)
+    # two iron bands round the cluster
+    strap("bands", M, LN, body, 0.71, 0.2, 0.28, 18, rivet_r=0.03, mat=band)
+    strap("bands2", M, LN, body, 0.71, 0.54, 0.62, 18, rivet_r=0.03, phase=0.5, mat=band)
+    chain_anchors(M, LN, body, [(b, 0.76, 0.58) for b in CHAINS], 1.12, band)
+    # the head: a cast pot of lava on a swivel, banded, two ring handles, a goose-neck spout out the front
+    tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
+    tur.scale = (1.2, 1.2, 1.2)
+    pot_m = W.mat_iron("iron_cast", base=(66, 58, 56), dark=(26, 22, 21), rust=(120, 62, 32), edge=(160, 146, 136),
+                       rust_k=0.4, soot=0.4)
+    bm = bmesh.new()
+    Q.cyl(bm, 0.2, 0.05, Matrix.Translation((0, 0, 0.025)), segs=32)
+    add_outline(W.obj("swivel", bm, [band], parent=tur, sharp=35), LN["cool"], L.LINE * 0.6)
+    pot = W.lathe("pot", [[(0.1, 0.05), (0.2, 0.07), (0.25, 0.16), (0.25, 0.26), (0.22, 0.33), (0.245, 0.35), (0.245, 0.375)],
+                          [(0.245, 0.375), (0.2, 0.375), (0.19, 0.33)]], [pot_m], wob=0.006, parent=tur, sharp=35)
+    add_outline(pot, LN["cool"])
+    W.lathe("potlava", [[(0.195, 0.335), (0.0, 0.335)]], [lava], bev=0, parent=tur)
+    strap("potband", M, LN, tur, 0.25, 0.18, 0.23, 12, rivet_r=0.022, mat=band)
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        ring = [Vector((sx * (0.27 + 0.06 * (1 - math.cos(2 * math.pi * k / 16))), 0.0, 0.3 + 0.06 * math.sin(2 * math.pi * k / 16)))
+                for k in range(17)]
+        L.tube(bm, ring, [0.018] * 17, sides=8, cap=False)
+    path = L.bezier((0, 0.16, 0.17), (0, 0.42, 0.14), (0, 0.42, 0.46), (0, 0.66, 0.44), n=16)
+    L.tube(bm, path, [0.075 - 0.03 * k / 15 for k in range(16)], sides=14)
+    d = (path[-1] - path[-2]).normalized()
+    mq = Vector((0, 0, 1)).rotation_difference(d).to_matrix().to_4x4()
+    Q.cyl(bm, 0.05, 0.06, Matrix.Translation(path[-1]) @ mq, segs=16, r2=0.068)          # the flared tip
+    Q.cyl(bm, 0.06, 0.03, Matrix.Translation(path[7]) @ Vector((0, 0, 1)).rotation_difference(path[8] - path[6]).to_matrix().to_4x4(),
+          segs=16)
+    L.tube(bm, [Vector((0, 0.2, 0.36)), Vector((0, 0.36, 0.33))], [0.02, 0.02], sides=6)      # a stay to the neck
+    add_outline(W.obj("spout", bm, [M["bronze_w"]], parent=tur, sharp=35), LN["warm"])
+    bm = bmesh.new()
+    Q.cyl(bm, 0.05, 0.01, Matrix.Translation(path[-1] + d * 0.031) @ mq, segs=16)
+    tip = path[-1] + d * 0.03
+    lava_runs(bm, [[tip + Vector((0, -0.01, -0.03)), tip + Vector((0, 0.0, -0.08)), tip + Vector((0, 0.0, -0.13))]], r=0.022)
+    L.obj_from_bm("spoutlava", bm, [lava], parent=tur)
+    L.empty("muzzle_base", parent=tur, loc=(0, 0.16, 0.17))
+    L.empty("muzzle_tip", parent=tur, loc=tuple(tip))
+    return tur, top, ("columns", "core")
+
+
 def build():
     L.clear_scene()
     M = common()
     LN = dict(warm=L.line("warm"), cool=L.line("cool"))
     body = L.empty("BODY")
-    tur, top, _ = {1: build_blast, 2: build_sharp, 3: build_magma}[TIER](M, LN, body)
+    magma = {"A": build_magma_a, "B": build_magma_b}.get(MAGMA_DIR, build_magma)
+    tur, top, _ = {1: build_blast, 2: build_sharp, 3: magma}[TIER](M, LN, body)
     return body, tur, top
 
 
 SOLID = {1: ("skirt", "drum", "glowcap", "collar", "rope", "capbolts", "crown"), 2: ("post", "coil", "posts", "socket"), 3: ("column", "collar", "cagebars", "crown")}
-Q.run("inferno", build, TIER if LOOK == 1 else f"{TIER}-look{LOOK}", HERE, turret_canvas=(400, 360, 200, 200), args=ARGS[1:], solid=SOLID[TIER])
+if TIER == 3 and MAGMA_DIR == "A":
+    SOLID[3] = ("belly", "crucible", "hub", "chimney", "tanks", "lugs")
+elif TIER == 3 and MAGMA_DIR == "B":
+    SOLID[3] = ("columns", "rim", "rimrocks")
+TAG = f"3-dir{MAGMA_DIR}" if TIER == 3 and MAGMA_DIR in ("A", "B") else TIER if LOOK == 1 else f"{TIER}-look{LOOK}"
+Q.run("inferno", build, TAG, HERE, turret_canvas=(400, 360, 200, 200), args=ARGS[1:], solid=SOLID[TIER])
