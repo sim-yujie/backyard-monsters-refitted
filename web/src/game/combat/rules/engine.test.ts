@@ -507,6 +507,37 @@ describe("the Tesla Tower's charge and zaps (issue #266)", () => {
     expect(charges[1]! - lastZap.tick).toBeLessThanOrEqual(92 + 20);
   });
 
+  it("says when it stops zapping, and by when it charges again while it still has a target", () => {
+    const battle = teslaBattle({ C15: 1 });
+    const charges: number[] = [];
+    const rests: { tick: number; rearmBy: number | null }[] = [];
+    for (let step = 0; step < 700 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "charge") charges.push(event.tick);
+        if (event.kind === "coilRest") rests.push({ tick: event.tick, rearmBy: event.rearmBy });
+      }
+    }
+    expect(charges.length).toBeGreaterThanOrEqual(2);
+    // Its 10 zaps spent, it rests between its charges, and the next comes by `rearmBy`.
+    const rest = rests.find((one) => one.tick > charges[0]! && one.tick < charges[1]!)!;
+    expect(rest.rearmBy).not.toBeNull();
+    expect(charges[1]!).toBeLessThanOrEqual(rest.rearmBy!);
+    expect(charges[1]!).toBeGreaterThan(rest.tick);
+  });
+
+  it("rests for want of a target once its last target is dead", () => {
+    const battle = teslaBattle({ C1: 1 });
+    const rests: (number | null)[] = [];
+    for (let step = 0; step < 600 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "coilRest") rests.push(event.rearmBy);
+      }
+    }
+    expect(rests.at(-1)).toBeNull();
+  });
+
   it("kills a clump of Pokeys, a charge at a time", () => {
     const battle = teslaBattle({ C1: 4 });
     const { zaps } = timeline(battle, 1200);

@@ -909,6 +909,17 @@ export type BattleVisualEvent =
       readonly towerId: number;
     }
   | {
+      /**
+       * A Tesla Tower stopped zapping and winds down (drawing only). `rearmBy`
+       * is the latest tick its next charge can begin if a target is still in
+       * reach, its charge spent; null when it stopped for want of a target.
+       */
+      readonly kind: "coilRest";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly rearmBy: number | null;
+    }
+  | {
       /** A bunker sent a monster out: a Monster Bunker's shutters roll up (drawing only). */
       readonly kind: "release";
       readonly tick: number;
@@ -5514,6 +5525,23 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     visual.push({ kind: "charge", tick, towerId: tower.building.id });
   };
 
+  /**
+   * The Tesla leaves its zaps for the wind-down (drawing only, {@link BattleVisualEvent}
+   * `coilRest`). Spent, it can charge again once the wind-down is over, a cell
+   * every second frame, at the first `Fire` after, one a reload apart.
+   */
+  const restCoil = (tower: Tower, rate: number, spent: boolean): void => {
+    tower.stage = 3;
+    const windTicks = ((TESLA_WIND_END - tower.charge) * 2 + 1) * TESLA_TICKS_PER_FRAME;
+    const reload = Math.max(rate * TOWER_REARM_MULTIPLIER, TOWER_ACQUIRE_TICKS);
+    visual.push({
+      kind: "coilRest",
+      tick,
+      towerId: tower.building.id,
+      rearmBy: spent ? tick + windTicks + reload : null,
+    });
+  };
+
   /** The Tesla's `TickFast`, once a frame: charge, zaps, wind-down (`BUILDING25.as:98-203`). */
   const tickZaps = (tower: Tower, damage: number, rate: number): void => {
     if (tower.frame % TESLA_TICKS_PER_FRAME !== 0) return;
@@ -5569,7 +5597,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     tower.shotsFired += 1;
     if (tower.shotsFired >= rate) {
-      tower.stage = 3;
+      restCoil(tower, rate, true);
       return;
     }
     // On the hose it stays on it while it can reach it, else it looks for creeps
@@ -5577,7 +5605,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (tower.onHose) {
       if (hoseInReach(tower)) return;
       findTowerTargets(tower, scanOf(tower), 1);
-      if (tower.targets.length === 0) tower.stage = 3;
+      if (tower.targets.length === 0) restCoil(tower, rate, false);
       return;
     }
     if (target && target.hp > 0 && target.targetable) return;
@@ -5587,7 +5615,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     const scan = scanOf(tower);
     findTowerTargets(tower, scan, 1);
-    if (tower.targets.length === 0) tower.stage = 3;
+    if (tower.targets.length === 0) restCoil(tower, rate, false);
   };
 
 

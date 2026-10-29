@@ -2354,6 +2354,10 @@ export class AttackBattleLayer {
       this.towerFx.onCharge(event.towerId, event.tick);
       return;
     }
+    if (event.kind === "coilRest") {
+      this.towerFx.onCoilRest(event.towerId, event.tick, event.rearmBy);
+      return;
+    }
     if (event.kind === "release") {
       this.towerFx.onRelease(event.buildingId, event.tick);
       return;

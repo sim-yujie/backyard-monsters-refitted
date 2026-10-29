@@ -697,6 +697,13 @@ interface TowerState {
   /** The tick the Tesla's latest charge began; a charge not yet shown starts the strip. */
   chargeTick: number;
   chargePending: boolean;
+  /**
+   * The tick the Tesla last stopped zapping (`coilRest`), and the tick by
+   * which its next charge comes if it still has a target: until then the new
+   * look keeps its film rolling. Below `chargeTick` while it is charging or zapping.
+   */
+  restTick: number;
+  rearmBy: number;
   /** The charge the Tesla's last zap belonged to, so the first of each is told (new look). */
   zapCharge: number;
   /** The gun's kick after a shot (new look): when, and how far back at most, world px. */
@@ -802,6 +809,8 @@ export class TowerFx {
         cell: null,
         tesla: TESLA_IDLE,
         chargeTick: Number.NEGATIVE_INFINITY,
+        restTick: Number.NEGATIVE_INFINITY,
+        rearmBy: Number.NEGATIVE_INFINITY,
         chargePending: false,
         zapCharge: Number.NaN,
         recoil: null,
@@ -830,6 +839,18 @@ export class TowerFx {
     if (!tower) return;
     tower.chargeTick = tick;
     tower.chargePending = true;
+  }
+
+  /**
+   * A Tesla Tower stopped zapping on `tick`; `rearmBy` is the latest tick it
+   * charges again if it still has a target, null if it has none. The new look
+   * keeps its film rolling till then, the old one has wound down already.
+   */
+  onCoilRest(towerId: number, tick: number, rearmBy: number | null): void {
+    const tower = this.towers.get(towerId);
+    if (!tower) return;
+    tower.restTick = tick;
+    tower.rearmBy = rearmBy ?? Number.NEGATIVE_INFINITY;
   }
 
   /**
@@ -1050,6 +1071,8 @@ export class TowerFx {
       tower.targetCreep = -1;
       tower.chargePending = false;
       tower.chargeTick = Number.NEGATIVE_INFINITY;
+      tower.restTick = Number.NEGATIVE_INFINITY;
+      tower.rearmBy = Number.NEGATIVE_INFINITY;
       tower.tesla = TESLA_IDLE;
       if (tower.info.type === 25 && tower.info.frames > 0) this.setCell(tower, TESLA_IDLE.cell);
       tower.released = Number.NEGATIVE_INFINITY;
@@ -1304,6 +1327,10 @@ export class TowerFx {
    * engine's charge, loops while zaps keep coming, then winds down.
    */
   private stepCoil(tower: TowerState, tick: number, elapsed: number): void {
+    if (this.look !== "classic") {
+      this.rollFilm(tower, tick, elapsed);
+      return;
+    }
     let state = tower.tesla;
     for (let at = tick - elapsed + 1; at <= tick; at += 1) {
       if (at % TESLA_TICKS_PER_FRAME !== 0) continue;
@@ -1319,6 +1346,42 @@ export class TowerFx {
       state = teslaTick(state, zapping);
     }
     tower.tesla = state;
+  }
+
+  /**
+   * The new look's Tesla (owner, beta.5): it charges on its first charge, then
+   * its film rolls without a break for as long as it keeps firing — through
+   * the engine's own wind-downs and recharges between charges, and through
+   * zaps at a target already dead — and winds down only once it stops for
+   * want of a target, or no new charge comes by the tick one would
+   * ({@link onCoilRest}). A charge during the wind-down rolls it on again.
+   */
+  private rollFilm(tower: TowerState, tick: number, elapsed: number): void {
+    let state = tower.tesla;
+    for (let at = tick - elapsed + 1; at <= tick; at += 1) {
+      if (at % TESLA_TICKS_PER_FRAME !== 0) continue;
+      const charged = tower.chargePending && at >= tower.chargeTick;
+      if (charged) tower.chargePending = false;
+      if (state.phase === "idle" || state.phase === "charge") {
+        if (state.phase === "idle" && !charged) continue;
+        state = teslaTick(state, true);
+        continue;
+      }
+      if (charged && state.phase === "wind") {
+        state = { phase: "loop", cell: TESLA_CHARGE_END, windTicks: 0 };
+        continue;
+      }
+      state = teslaTick(state, this.coilFiring(tower, at));
+    }
+    tower.tesla = state;
+  }
+
+  /** Whether a Tesla is still firing on `at` (new look): charging, zapping, or due to charge again. */
+  private coilFiring(tower: TowerState, at: number): boolean {
+    if (at - tower.lastShotTick <= TESLA_HOLD_TICKS) return true;
+    const resting = tower.restTick >= tower.chargeTick && at >= tower.restTick;
+    if (!resting) return at >= tower.chargeTick;
+    return at <= tower.rearmBy;
   }
 
   /**

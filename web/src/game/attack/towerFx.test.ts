@@ -1240,6 +1240,45 @@ describe("TowerFx's new look", () => {
     }
   });
 
+  it("rolls the 3D Tesla's film without a break while it keeps firing, and winds it down once it stops (owner, beta.5)", async () => {
+    // The engine's own timeline: a charge of 10 zaps, a rest that will charge
+    // again, a second charge with a gap where its target is already dead,
+    // then a rest for want of a target.
+    const play = (fx: TowerFx, frames: Map<number, number>) => {
+      const cells: number[] = [];
+      const shots = new Set([64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 294, 302, 342, 350, 358]);
+      for (let tick = 0; tick <= 600; tick += 1) {
+        if (tick === 0 || tick === 230) fx.onCharge(1, tick);
+        if (shots.has(tick)) shoot(fx, tick);
+        if (tick === 136) fx.onCoilRest(1, tick, 246);
+        if (tick === 366) fx.onCoilRest(1, tick, null);
+        fx.update(tick, () => target);
+        cells.push(frames.get(1) ?? 0);
+      }
+      return cells;
+    };
+    const looping = (cell: number) => cell >= TESLA_CHARGE_END && cell < TESLA_LOOP_END;
+
+    const modern = await newLookSetUp(25);
+    const cells = play(modern.fx, modern.frames);
+    // Charging first, then rolling every frame from the end of the charge to the last zap.
+    expect(cells[10]).toBeGreaterThan(0);
+    expect(cells[10]).toBeLessThan(TESLA_CHARGE_END);
+    const rolling = cells.slice(66, 367);
+    expect(rolling.every(looping)).toBe(true);
+    expect(new Set(rolling).size).toBe(TESLA_LOOP_END - TESLA_CHARGE_END);
+    // Then it winds down at once, a cell every second frame past the loop, and is back at rest.
+    expect(cells.slice(367, 470).some((cell) => cell >= TESLA_LOOP_END)).toBe(true);
+    expect(cells[600]).toBe(0);
+    modern.fx.destroy();
+
+    // Classic keeps the Flash timeline: it winds down between the charges.
+    const classic = await newLookSetUp(25, "classic");
+    const flash = play(classic.fx, classic.frames);
+    expect(flash.slice(66, 367).every(looping)).toBe(false);
+    classic.fx.destroy();
+  });
+
   it("clears every bit when the battle stands down", async () => {
     const { fx, sparks } = await newLookSetUp(25);
     fx.onCharge(1, 0);
