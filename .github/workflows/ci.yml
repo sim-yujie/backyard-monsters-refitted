@@ -9,9 +9,7 @@
 # variable names a throwaway database. Here Postgres and Redis run as
 # services, the database is built the way `bun run db:init` builds a new one
 # (schema:create, then the migrations), and every *_TEST_DB points at it, so
-# they run. Tests that already failed on revamp when this was added are
-# skipped with `knownFailing` (server/src/testing/knownFailing.ts); the last
-# step lists them.
+# they run.
 name: CI
 
 on:
@@ -88,6 +86,8 @@ jobs:
       DB_PASSWORD: ci-only
       DB_NAME: bym_ci
       REDIS_URL: redis://localhost:6379
+      # Test-only; the server refuses to start without one (StartupSafety.ts).
+      SECRET_KEY: ci-only-test-key
       # The opt-in database suites (see the top of this file).
       BOTS_TEST_DB: bym_ci
       BUG_REPORT_TEST_DB: bym_ci
@@ -121,6 +121,3 @@ jobs:
           bun --bun x mikro-orm migration:up
       - name: Tests
         run: bun test
-      - name: Known-failing tests (skipped above; see server/src/testing/knownFailing.ts)
-        if: always()
-        run: grep -rn "knownFailing(" src --include=*.test.ts || echo "none"
