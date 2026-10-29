@@ -7,7 +7,6 @@ import { readOnboarding } from "../../services/onboarding/state.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { mushroomPickAction } from "./mushrooms.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
-import { knownFailing } from "../../testing/knownFailing.js";
 
 /**
  * `POST /bm/yard/mushroom/pick` through the real wrapper, with the database
@@ -78,8 +77,9 @@ const sequence = (...values: number[]): Random => {
   return () => values[Math.min(index++, values.length - 1)]!;
 };
 
+/** A pick outside every event: the pumpkin hunt's clock is pinned off, so the date the suite runs on does not matter. */
 const pick = (body: Row, random: Random, user = userOf()): Promise<YardAnswer> =>
-  runYardAction(em as unknown as EntityManager, user, mushroomPickAction(random), body);
+  runYardAction(em as unknown as EntityManager, user, mushroomPickAction(random, undefined, () => false), body);
 
 beforeEach(() => {
   db.row = rowOf();
@@ -97,11 +97,7 @@ afterAll(() => {
 });
 
 describe("POST /bm/yard/mushroom/pick", () => {
-  // Known failing (audit 2026-10-29, testing/knownFailing.ts): these three use the
-  // real clock, so during the Halloween pumpkin hunt (28 Oct - 11 Nov 2026) the pick
-  // counts a pumpkin through the SQL progress store, and the fake entity manager
-  // above has no `execute`. They pass again outside the event.
-  knownFailing("a golden mushroom goes and its Shiny is credited", async () => {
+  test("a golden mushroom goes and its Shiny is credited", async () => {
     const answer = await pick({ id: "1", x: "-300", y: "40" }, sequence(0.1, 0.5));
 
     expect(answer.status).toBe(200);
@@ -115,7 +111,7 @@ describe("POST /bm/yard/mushroom/pick", () => {
     expect(readOnboarding({ onboarding: db.row!.onboarding }).counters).toMatchObject({ mushrooms: 1, goldMushrooms: 1 });
   });
 
-  knownFailing("an ordinary mushroom goes and gives nothing", async () => {
+  test("an ordinary mushroom goes and gives nothing", async () => {
     const answer = await pick({ id: 0 }, sequence(0.9));
 
     expect(answer.body).toMatchObject({ credits: 10, report: { golden: false, shiny: 0 } });
@@ -123,7 +119,7 @@ describe("POST /bm/yard/mushroom/pick", () => {
     expect(readOnboarding({ onboarding: db.row!.onboarding }).counters).toMatchObject({ mushrooms: 1, goldMushrooms: 0 });
   });
 
-  knownFailing("a Shiny-locked account still gets the reward", async () => {
+  test("a Shiny-locked account still gets the reward", async () => {
     const answer = await pick({ id: 0 }, sequence(0.0, 0.0), userOf(true));
 
     expect(answer.status).toBe(200);
