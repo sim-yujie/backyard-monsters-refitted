@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
 import { applySkin, pickSkin, SKIN_KEY } from "./skin";
@@ -70,5 +73,14 @@ describe("applySkin", () => {
   it("still follows the switch when site data is blocked", () => {
     const root = document.createElement("html");
     expect(applySkin(root, null)).toBe("scrap");
+  });
+});
+
+describe("skin.css", () => {
+  // The title sign's line-height is calc(height - pad): with a bare `0` that is
+  // "48px - 0", which is invalid, so the words rode at the top of the steel sign.
+  it("writes every --skin- length with its unit, never a bare 0", () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles/skin.css"), "utf8");
+    expect(css.match(/--skin-[\w-]+:\s*0\s*;/g) ?? []).toEqual([]);
   });
 });

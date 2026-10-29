@@ -29,7 +29,9 @@
   --skin-title-cap: 26px;
   --skin-title-height: 48px;
   --skin-title-lift: 38px;
-  --skin-title-pad: 0;
+  /* A length, never a bare 0: it goes in the title's calc(), where "48px - 0"
+     is invalid and the words ride at the top of the sign. */
+  --skin-title-pad: 0px;
   --skin-title-ink: #2c1a04;
   --skin-title-stroke: rgb(255 226 120 / 85%);
   --skin-close: url("/ui/skin/scrap/close.webp");
@@ -188,6 +190,11 @@
 :root[data-skin] .popup-backdrop > .panel {
   min-width: min(300px, 92vw);
   box-shadow: none;
+}
+
+/* The level-up box, one line and an OK, sits centred under its centred sign. */
+:root[data-skin] .level-up > .panel__body {
+  text-align: center;
 }
 
 /* ── Title: a sign riding on the top edge; the close button a disc on the corner ── */
