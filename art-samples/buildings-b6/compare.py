@@ -31,6 +31,17 @@ def crop(im, pad=16):
     return im.crop((box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)) if box else im
 
 
+def crop_all(ims, pad=16):
+    """Crop every frame of a loop to the same box (all their subjects together), so still parts stay put: cropping each
+    frame to its own subject shifts the whole picture a pixel whenever a moving part changes the outline's size."""
+    boxes = [b for b in (im.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox() for im in ims) if b]
+    if not boxes:
+        return ims
+    box = (min(b[0] for b in boxes) - pad, min(b[1] for b in boxes) - pad, max(b[2] for b in boxes) + pad,
+           max(b[3] for b in boxes) + pad)
+    return [im.crop(box) for im in ims]
+
+
 UP = 4                              # 4, or 8 when the 3D pictures are the x2 renders
 
 
@@ -80,8 +91,8 @@ if __name__ == "__main__":
         fl, lv = flash_im(tid, level)
         nf = F.frames_of(lv)
         n = max(n3, nf)
-        fa = [crop(flash_im(tid, level, k * nf // n)[0]) for k in range(n)]
-        fb = [crop(load3d(rd / f"anim-L{level}" / f"f{k * n3 // n:02d}.png")) for k in range(n)]
+        fa = crop_all([flash_im(tid, level, k * nf // n)[0] for k in range(n)])
+        fb = crop_all([load3d(rd / f"anim-L{level}" / f"f{k * n3 // n:02d}.png") for k in range(n)])
         cw = round(max(x.width for x in fa + fb) * ZOOM)
         ch = round(max(x.height for x in fa + fb) * ZOOM)
         fr = [pair(a, b, f"{F.rows()[tid]['name']} level {level}: producing", cw, ch) for a, b in zip(fa, fb)]

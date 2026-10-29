@@ -10,7 +10,8 @@ scattered round its foot.
   L3   wider, four rings, a stone spout (the pebbles' way out) on the left
   L6   taller, five rings, more pebbles
   L10  + a spiked crusher drum on the roof's peak and a spiked iron ball on a post at the right
-Producing: the rings of blocks grind round, each the other way from the one under it; the drum and the ball spin.
+Producing: as Flash, only the middle ring(s) of blocks grind round (two the other way from each other); the L10 drum
+and ball spin. The legs, the other rings and the roof stay still.
 """
 import math
 import random
@@ -82,6 +83,7 @@ def build(level):
     bh = 0.25 if lk == 1 else 0.26                     # a ring's height
     leg_h = 0.3 if lk == 1 else 0.32
     movers = []
+    turning = {1: (1,), 3: (1,), 6: (1, 2), 10: (1, 2)}[lk]   # the rings Flash turns: the top of two, else the middle
 
     # ---- the core behind the blocks (dark: it shows between them), from the legs' top to the roof
     zs = [0.0, leg_h] + [leg_h + bh * (i + 1) for i in range(nr - 1)]
@@ -110,7 +112,8 @@ def build(level):
         tilt = math.degrees(math.atan2(rad(z0 + bh) - rad(z0), bh)) * -1
         block_ring(bm, nb, rz, z0 + 0.005, bh - 0.012, 0.17, seed=10 + i, phase=0.5 * (i % 2), tilt=tilt)
         B.part(f"ring{i}", bm, M["stone"], piv)
-        movers.append((piv, (1 if i % 2 == 0 else -1) * 2 / nb))   # two blocks a loop
+        if i in turning:                               # only Flash's turning rings (the middle ones) go round
+            movers.append((piv, (1 if i % 2 == 0 else -1) * 2 / nb))   # two blocks a loop
 
     # ---- the roof: a cone of pale wooden shingles, its eave a little ragged
     re = rad(ztop) + 0.12

@@ -9,7 +9,8 @@ blade (white teeth, purple disc) on its front-right face, a steel horn on a gree
   L3   taller, on four stilts, a curved pagoda roof with pale ribs and a twig finial, a green band round the middle
   L6   + a brass gear wheel on an arm at the right, a pale chimney behind, brass corners on the tray, brass stilt bands
   L10  + a guillotine frame up through the roof (its green blade chops), bird-claw feet, twigs out of the chimney
-Producing: the saw spins, the roller turns, the brass gear turns back, the guillotine blade rises and drops.
+Producing (as Flash): the saw spins and the small brass cog above it turns with it; the rest stays still.
+  L6/L10 trays hold black lumps on the twigs, as Flash's.
 """
 import math
 import sys
@@ -44,6 +45,7 @@ def materials():
         dark=L.mat_flat("dark", (24, 16, 12), spec=0.05),
         roller=W.mat_iron("roller", base=(54, 50, 52), dark=(22, 20, 22), rust_k=0.0, edge=(120, 114, 112), spec=0.3),
         iron=W.mat_iron("iron"),
+        coal=W.mat_iron("coal", base=(34, 32, 36), dark=(10, 10, 12), rust_k=0.0, edge=(110, 110, 124), spec=0.5),
         steel=L.mat_metal("steel", "steel", polish=0.4),
         hornm=L.mat_metal("hornm", "steel", polish=0, spec=1.0),
         brass=L.mat_metal("brass", "brass"),
@@ -173,6 +175,19 @@ def build(level):
             a, b = b, a
         W.stake(bm, uv, a, b, 0.022, sides=6, twist=rnd.random(), bulge=0.0)
     B.part("tray_twigs", bm, M["twig"], root, k=0.6)
+    if lk >= 6:                                      # black lumps on the twigs, as Flash's tray
+        bm = bmesh.new()
+        for k in range(8):
+            c = Vector((tx0 + 0.07 + (tx1 - tx0 - 0.14) * rnd.random(), au + (rnd.random() - 0.5) * (2 * ty - 0.12),
+                        tz0 + 0.21 + 0.03 * rnd.random()))
+            sub = bmesh.new()
+            bmesh.ops.create_icosphere(sub, subdivisions=1, radius=1.0)
+            for v in sub.verts:
+                v.co *= 1 + 0.22 * math.sin(v.co.x * 3 + k) * math.cos(v.co.y * 4 + k * 2)
+            r = 0.055 + 0.025 * rnd.random()
+            L.add_mesh(bm, sub, Matrix.Translation(c) @ Matrix.Rotation(rnd.random() * 3, 4, 'Z') @
+                       Matrix.Diagonal((r, r * 0.9, r * 0.75, 1)))
+        B.part("tray_lumps", bm, M["coal"], root, k=0.6, sharp=30)
 
     # ---- the saw on the front-right (+Y) face, spinning about its axle
     sr = 0.21 if lk == 1 else 0.28
@@ -206,6 +221,22 @@ def build(level):
     B.box(bm, c.x - 0.05, c.x + 0.05, S - 0.01, c.y - 0.02, c.z - 0.05, c.z + 0.05, bevel=0.012)
     B.part("saw_bracket", bm, M["steel"], root, line="cool", k=0.7)
     movers["saw"] = piv
+    # the small brass cog above the saw's right (its left is behind the corner post), meshing with it (Flash turns it with the saw)
+    cr = 0.085 if lk == 1 else 0.1
+    cc = B.face_m('Y', S, su - sr * 1.0, sz + sr * 0.98, out=0.045).translation
+    piv = B.mover("cog_pivot", root, cc, axis=(0, 1, 0))
+    bm = bmesh.new()
+    B.toothed(bm, cr * 0.78, cr, 10, 0.03, Matrix(), saw=False)
+    B.disc(bm, cr * 0.8, 0.026, Matrix(), segs=24)
+    B.part("cog", bm, M["brass"], piv, line="cool", k=0.6)
+    bm = bmesh.new()
+    B.disc(bm, cr * 0.3, 0.05, Matrix.Translation((0, 0, 0.01)), segs=16)
+    W.bolts(bm, [Vector((cr * 0.55, 0, 0.016))], [(0, 0, 1)], r=0.012, washer=False)
+    B.part("cog_hub", bm, M["steel"], piv, line="cool", k=0.5)
+    bm = bmesh.new()
+    B.box(bm, cc.x - 0.03, cc.x + 0.03, S - 0.01, cc.y - 0.01, cc.z - 0.03, cc.z + 0.03, bevel=0.01)
+    B.part("cog_bracket", bm, M["steel"], root, line="cool", k=0.6)
+    movers["cog"] = piv
 
     # ---- the horn: a green pipe up the back-left (-Y) face, a steel bell on top facing up and out
     hx = S * 0.55
@@ -329,14 +360,10 @@ def build(level):
     def animate(phase):
         # each turn per loop is a whole number of the part's repeats (24 teeth and 6 bolts, 14 ribs, 16 teeth and
         # 4 spokes), so the loop is seamless, and small per frame against a tooth's width, so it does not strobe
+        # only Flash's moving parts move: the saw and the small cog meshing with it (12 teeth a loop each); the roller,
+        # the side gear and the guillotine blade stay still
         B.spin(movers["saw"], 'Z', -0.5 * phase)
-        B.spin(movers["roller"], 'Z', 0.5 * phase)
-        if "gear" in movers:
-            B.spin(movers["gear"], 'Z', 0.25 * phase)
-        if "blade" in movers:
-            k = phase * 2 % 1.0                      # two chops a loop: up slowly, down fast
-            h = (k / 0.75) if k < 0.75 else (1 - (k - 0.75) / 0.25)
-            B.slide(movers["blade"], (0, 0, 0.32 * (0.5 - 0.5 * math.cos(math.pi * h))))
+        B.spin(movers["cog"], 'Z', 1.2 * phase)
     return root, animate
 
 

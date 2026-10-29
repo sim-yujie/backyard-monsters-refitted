@@ -11,7 +11,8 @@ The Flash building: an orange vat of green goo under a dark steel funnel cap, a 
        steel bands on the pencils
   L10  + a tall brass column at the left with goo on top, a stack of brass pipes at the right, a brass pipe ring on the
        ground round the foot
-Producing: lumps of goo travel up the front pipes (the pipes swell round them), as Flash's animation; the goo bubbles.
+Producing: lumps of goo travel up the front pipes (the pipes swell round them), as Flash's animation; the goo only
+bubbles a little.
 """
 import math
 import random
@@ -207,7 +208,7 @@ def build(level):
         for k, (b, d) in enumerate(((60, 0.18), (250, 0.25), (150, 0.1))):
             piv = B.mover(f"bubble{k}", root, L.bear(b, d, ZR + 0.03 + 0.12 * (1 - (d / VR) ** 2) ** 0.7))
             bm = bmesh.new()
-            bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=8, radius=0.07)
+            bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=8, radius=0.045)
             B.part(f"bubble{k}_ball", bm, M["goo"], piv, line="cool", k=0.4)
             bubbles.append(piv)
         NZ0, DZ, DR = ZR + 0.1, ZR + 0.6, 0.24                   # the funnel: neck foot, cap's underside, cap's radius
@@ -349,7 +350,7 @@ def build(level):
         for k, p in enumerate(pipes):                  # a lump goes up each front pipe once a loop
             swell(p, -0.15 + 1.3 * ((phase + 0.5 * k) % 1.0), amp=0.45 if lk < 6 else 0.5)
         for k, piv in enumerate(lumps):                # the dome's lumps swell and sink, each in its own time
-            s = 1 + 0.12 * math.sin(2 * math.pi * (phase * (1 + k % 2) + k * 0.37))
+            s = 1 + 0.04 * math.sin(2 * math.pi * (phase * (1 + k % 2) + k * 0.37))
             piv.scale = (s, s, s)
         for k, piv in enumerate(bubbles):              # the bubbles grow, then burst
             t = (phase + k / 3) % 1.0

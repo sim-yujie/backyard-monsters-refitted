@@ -7,7 +7,7 @@ The Flash building: a sooty orange-gold pot of purple putty, a pale press block 
 side, a brass arm out to a test tube of purple putty.
   L1   the pot on the ground, a gold crank stirrer in it, the test tube standing beside it
   L3   on a purple frame on four pale log stumps; two pale arched squisher arms over the pot; the tube hangs on the frame
-  L6   + a hub on the arms, a bigger gold hand wheel, a glass tube with a purple bulb and a wire hook on top
+  L6   + a hub on the arms with a purple flask (glass neck) and a gold valve wheel on it, a bigger gold hand wheel
   L10  + a big gold wheel with purple spokes and putty on them, behind at the right; a steel coil with a bulb at the
        left; the stumps stand in steel springs
 Producing: the gold stirrer goes round in the putty (every look, as Flash), the arms squish down and lift, the hand
@@ -244,24 +244,24 @@ def build(level):
             bm = bmesh.new()
             B.disc(bm, 0.045, 0.32, Matrix.Translation(dl * span * 0.5 + up * arch_h), segs=14)
             B.part("arms_hub_eye", bm, M["dark"], piv, line=None)
+            hc = dl * span * 0.5 + up * arch_h
+            # on the hub, as Flash: a purple flask with a straight glass neck on top, a gold valve wheel on its front end
+            bm = bmesh.new()
+            bmesh.ops.create_uvsphere(bm, u_segments=20, v_segments=10, radius=0.075,
+                                      matrix=Matrix.Translation(hc + up * 0.15 - dl * 0.03))
+            B.part("flask", bm, M["putty"], piv, line="cool", k=0.6)
+            bm = bmesh.new()
+            n0 = hc + up * 0.2 - dl * 0.03
+            L.tube(bm, [n0, n0 + up * 0.24], [0.026, 0.026], sides=12)
+            B.disc(bm, 0.034, 0.04, Matrix.Translation(n0 + up * 0.25) @ B.along(up), segs=14, mat=1)
+            B.part("flask_neck", bm, [M["glass"], M["steel"]], piv, line="cool", k=0.5)
+            bm = bmesh.new()
+            L.tube(bm, [hc + sl * 0.14, hc + sl * 0.21], [0.02, 0.02], sides=8)
+            B.part("valve_axle", bm, M["brass"], piv, line="cool", k=0.5)
+            bm = bmesh.new()
+            handwheel(bm, 0.13, Matrix.Translation(hc + sl * 0.21) @ B.along(sl))
+            B.part("valve_wheel", bm, M["gold"], piv, line="cool", k=0.6)
         movers["arms"] = piv
-
-        if lk >= 6:
-            # ---- the glass tube with a purple bulb and a wire hook, standing up out of the pot's back
-            gc = L.bear(225, PR * 0.4, ZR)
-            g = W.lathe("gtube", [[(0.04, 0.0), (0.04, 0.42), (0.03, 0.46)]], [M["glass"]], parent=root, n=24, bev=0)
-            g.matrix_basis = Matrix.Translation(gc)
-            L.add_outline(g, L.line("cool"))
-            bm = bmesh.new()
-            bmesh.ops.create_uvsphere(bm, u_segments=20, v_segments=10, radius=0.08,
-                                      matrix=Matrix.Translation(gc + Vector((0, 0, 0.28))))
-            B.part("bulb", bm, M["putty"], root, line="cool", k=0.6)
-            bm = bmesh.new()
-            top = gc + Vector((0, 0, 0.46))
-            hook = [top + Vector((0.05 * math.sin(t), 0.0, 0.1 + 0.08 * (1 - math.cos(t)))) for t in
-                    (i * math.pi * 1.3 / 14 for i in range(15))]
-            L.tube(bm, [top] + hook, [0.014] * 16, sides=6)
-            B.part("hook", bm, M["steel"], root, line="cool", k=0.5)
 
         if lk == 10:
             # ---- the big gold wheel behind at the right, purple spokes with putty on them, turning
