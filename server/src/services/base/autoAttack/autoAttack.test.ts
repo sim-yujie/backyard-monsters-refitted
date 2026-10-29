@@ -90,6 +90,7 @@ const reset = () => {
     resources: { r1: 5_000_000, r2: 5_000_000, r3: 5_000_000, r4: 5_000_000 },
   };
   userSave = {
+    basesaveid: 6,
     baseid: HOME,
     worldid: WORLD,
     mapversion: 2,
@@ -120,6 +121,8 @@ mock.module("../../../server.js", () => ({
             ? planRow
             : null;
         }
+        // The attacker's main row, locked with the camp's as the attack lands (audit P1, P2).
+        if (where.basesaveid === userSave.basesaveid) return userSave;
         return where.basesaveid === BASESAVEID || where.baseid === camp.baseid ? camp : null;
       },
       find: async () => [],
@@ -128,6 +131,12 @@ mock.module("../../../server.js", () => ({
       remove: () => {},
       upsert,
       flush,
+      // The transaction an attack lands in (audit P1, P2): the stand-in rows change
+      // in place, so there is nothing to commit or roll back.
+      begin: async () => {},
+      commit: async () => {},
+      rollback: async () => {},
+      getTransactionContext: () => undefined,
     },
   },
 }));
