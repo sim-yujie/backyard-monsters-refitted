@@ -31,7 +31,7 @@ def look_of(level):
 
 def materials():
     return dict(
-        pot=W.mat_iron("pot", rust_k=0.25, soot=0.45, dents=0.7, dirt=0.2, **W.GOLD),
+        pot=W.mat_gold("pot", rust_k=0.1, dirt=0.15, dents=0.7),
         brass=L.mat_metal("brass", "brass"),
         gold=L.mat_metal("gold", "gold", polish=0.7),
         putty=B.mat_goo("putty", col=(160, 84, 204), deep=(70, 26, 104), hi=(246, 214, 255)),
@@ -39,7 +39,7 @@ def materials():
         bone=B.mat_paint("bone", (218, 194, 148), under=(140, 112, 80), edge=(246, 232, 200), soot=0.35, chips=0.7,
                          spec=0.2),
         dark=L.mat_flat("dark", (34, 22, 20), spec=0.05),
-        stump=W.mat_raw_wood("stump", light=(232, 200, 182), dark=(186, 146, 128), coord="Object",
+        stump=W.mat_raw_wood("stump", light=(252, 228, 212), dark=(216, 182, 162), coord="Object",
                              stretch=(5.0, 5.0, 0.3)),
         steel=L.mat_metal("steel", "steel", polish=0.4),
         glass=L.mat_flat("glass", (236, 228, 244), spec=0.9),
