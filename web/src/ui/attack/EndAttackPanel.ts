@@ -93,16 +93,17 @@ export const monstersLostText = (
 };
 
 /**
- * Each champion sent, as Flash's attack log put one beaten: "Level 2 Gorgo
- * retreated." (`ChampionBase.as:783`), at no health; otherwise the health it
- * came back with.
+ * Each champion sent, with the health it came back with. One at no health was
+ * beaten, not called back: Flash's attacker log said "retreated." there
+ * (`ChampionBase.as:783`), which read as a recall, so this uses its log for a
+ * beaten champion instead: "was critically injured" (`attacklog_champ_injured`).
  */
 export const championsText = (summary: Pick<AttackSummary, "champions">): string =>
   summary.champions
     .map(({ t, l, hp }) => {
       const champion = `Level ${l} ${championName(t)}`;
       const left = Math.max(0, Math.floor(hp));
-      return left === 0 ? `${champion} retreated` : `${champion}, ${left.toLocaleString("en-US")} health left`;
+      return left === 0 ? `${champion} was critically injured` : `${champion}, ${left.toLocaleString("en-US")} health left`;
     })
     .join("; ");
 
