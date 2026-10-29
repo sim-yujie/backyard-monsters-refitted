@@ -17,9 +17,10 @@ import {
  * and starve while the player is away (`docs/design/yard-buildings.md` §7.2
  * "Catch-up", decision D11).
  *
- * - **Hatching** (owner, 2026-10-20): an egg (status 3) whose hatch time `ft`
- *   has come becomes the level-1 champion it holds, fed until one interval
- *   after the hatch (`champion.ts` `hatchDueEgg`), and the answer says so
+ * - **Hatching**: an older save's egg (status 3; eggs are no longer laid,
+ *   owner 2026-10-28) becomes the level-1 champion it holds at once, at its
+ *   hatch time or now if that is later, fed until one interval after the
+ *   hatch (`champion.ts` `hatchDueEgg`), and the answer says so
  *   (`championHatch`). It then heals and starves below like any champion
  *   from that moment.
  *

@@ -1714,11 +1714,11 @@ export class YardScene implements Scene {
       }
       const refusal = friendRefusal(caught);
       const known = refusal.reason !== "unknown" && refusal.reason !== "network";
-      const text = known ? helpRefusalText(refusal.reason) : refusal.message;
+      const text = known ? helpRefusalText(refusal.reason, refusal) : refusal.message;
       if (refusal.reason === "dailyCap") {
         this.helpBlock = afterHelp(this.helpBlock, -1, kind, 0);
       } else if (known && refusal.reason !== "underAttack" && refusal.reason !== "notFriends") {
-        this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason);
+        this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
       }
       this.showHelpBlock();
       this.helpPanel?.setMessage(text, "error");

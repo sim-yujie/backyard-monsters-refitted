@@ -337,6 +337,13 @@ export const queueOf = (yard: HatchYard, target: HatchTarget): QueueStack[] | nu
 export const queuedCount = (queue: readonly QueueStack[]): number =>
   queue.reduce((total, stack) => total + stack[1], 0);
 
+/**
+ * The goo Clear all gives back for a queue: each stack at its paid level, as
+ * taking every stack out one by one would (`hatchery/clear`), before the cap.
+ */
+export const queueRefund = (queue: readonly QueueStack[]): number =>
+  queue.reduce((total, [id, count, level]) => total + count * priceOf(id, level), 0);
+
 /* ── Housing ───────────────────────────────────────────────────────────── */
 
 /** Space the housed army takes. */

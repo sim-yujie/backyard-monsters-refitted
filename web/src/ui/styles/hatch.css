@@ -298,6 +298,59 @@
   color: var(--colour-accent);
 }
 
+/* Clear all, at the right of the line's head; its "Clear 44?" in its place. */
+.hatch-clear {
+  margin-inline-start: auto;
+}
+
+.btn.hatch-clear {
+  gap: var(--space-1);
+  min-height: var(--control-height-compact);
+  padding: var(--space-1) var(--space-2);
+  border-color: var(--colour-border-strong);
+  font-size: var(--text-sm);
+}
+
+.btn.hatch-clear:hover:not(:disabled) {
+  border-color: var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+.hatch-clear__cross {
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--colour-danger);
+}
+
+.hatch-clear--confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-danger);
+  border-radius: var(--radius-md);
+  background: var(--colour-danger-soft);
+}
+
+.hatch-clear__question {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hatch-clear__refund {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+  white-space: nowrap;
+}
+
+.hatch-clear--confirm > .btn {
+  min-height: var(--control-height-compact);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
 .hatch-line__slots,
 .hatch-line__now {
   display: flex;

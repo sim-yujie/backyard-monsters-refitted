@@ -12,6 +12,7 @@ import {
   lineSeconds,
   previewAdd,
   previewFinish,
+  queueRefund,
   queueRoom,
   readHatchYard,
 } from "./hatchPlan";
@@ -485,5 +486,18 @@ describe("overdrive and the monster grid", () => {
     const rows = hatchMonsters(saveOf({ lockerdata: { C1: { t: 2 } } }));
     expect(rows.filter((row) => row.state.kind === "ready").map((row) => row.monster.id)).toEqual(["C1"]);
     expect(rows.filter((row) => row.state.kind === "locked")).toHaveLength(rows.length - 1);
+  });
+});
+
+describe("queueRefund", () => {
+  it("adds up every stack at its paid level, as taking each out would", () => {
+    expect(
+      queueRefund([
+        ["C1", 20, 1],
+        ["C3", 2, 1],
+        ["C1", 3, 6],
+      ]),
+    ).toBe(20 * 250 + 2 * 350 + 3 * 1_250);
+    expect(queueRefund([])).toBe(0);
   });
 });

@@ -50,15 +50,6 @@ export interface Portrait {
 /** `card` for the big picture on a monster's card, `icon` for a row or a slot. */
 export type PortraitSize = "card" | "icon";
 
-/**
- * A champion's egg (owner 2026-10-20: raising lays an egg that hatches in a
- * day): `eggs/G<n>-egg.webp`, 240 px square, for the cage window, and
- * `eggs/G<n>-egg-yard.webp`, 96 x 120, stood in the cage on the yard at half
- * size. Painted eggs; their full-size options are kept outside the repo.
- */
-export const championEggUrl = (id: string, where: "window" | "yard"): string =>
-  `${import.meta.env.BASE_URL}eggs/${id}-egg${where === "yard" ? "-yard" : ""}.webp`;
-
 const painted = (file: string): string => `${import.meta.env.BASE_URL}portraits/${file}.webp`;
 
 const portrait = (paintedFile: string | null, original: string): Portrait =>
@@ -80,6 +71,16 @@ export const paintedChampionFile = (id: string, level: number): string | null =>
 };
 
 /**
+ * The champions whose original art is one picture for every level, as the
+ * only files the server has: Krallen's are `G5_L6-150.png` (the cage's
+ * `_kothPreviewURL`, `client/scripts/CHAMPIONCAGEPOPUP.as:122`) and
+ * `G5_L5-small.png`.
+ */
+export const ORIGINAL_CHAMPION_LEVEL: Readonly<Record<string, Readonly<Record<PortraitSize, number>>>> = {
+  G5: { card: 6, icon: 5 },
+};
+
+/**
  * A champion's portrait at a level (below 1, or not a number, counts as 1);
  * the originals are `G1_L3-150.png` and `G1_L3-small.png`. The caller clamps
  * the level to the champion's top one where it knows it.
@@ -87,9 +88,10 @@ export const paintedChampionFile = (id: string, level: number): string | null =>
 export const championPortrait = (id: string, level: number, size: PortraitSize): Portrait => {
   const at = Math.max(1, Math.trunc(level) || 1);
   const file = paintedChampionFile(id, at);
+  const original = ORIGINAL_CHAMPION_LEVEL[id]?.[size] ?? at;
   return portrait(
     file === null ? null : size === "card" ? file : `${file}-icon`,
-    `/assets/monsters/${id}_L${at}-${size === "card" ? "150" : "small"}.png`,
+    `/assets/monsters/${id}_L${original}-${size === "card" ? "150" : "small"}.png`,
   );
 };
 

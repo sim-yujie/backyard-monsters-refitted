@@ -16,6 +16,8 @@
  *   shots (no painted shots, tower shake or turret aiming), no punchy blasts,
  *   Eye-ra's yellow rings rather than the fireball, and no damage numbers.
  * - **Music**: Flash's yard tune rather than the new one (`game/sound/tunes.ts`).
+ * - **Windows**: every panel dressed as the Flash pop-ups, refreshed (cream
+ *   parchment, red ribbon), rather than Modern's riveted steel (`ui/skin.ts`).
  *
  * New things with no Flash version stay as they are (the new panels, Bob,
  * eggs, announcements, icons), and so do the comfort settings (volume,

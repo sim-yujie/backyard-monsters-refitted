@@ -427,18 +427,12 @@ describe("trips to and from the Champion Chamber (#314)", () => {
     expect(yardLifeOf({ ...save, champion } as unknown as BaseLoadResponse, yard, "attack").frozen).toEqual([]);
   });
 
-  it("reads the egg waiting in the cage, but not on an attacked yard", () => {
+  it("puts nothing in the cage for an older save's egg (eggs removed, owner 2026-10-28)", () => {
     const yard = readYard(save);
     const champion = [{ t: 2, l: 1, status: 3, ft: 99 }];
     const life = yardLifeOf({ ...save, champion } as unknown as BaseLoadResponse, yard);
-    const cage = yard.buildings.find((one) => one.type === 114)!;
-    expect(life.egg).toEqual({
-      id: "G2",
-      x: cage.x + cage.footprint[0] / 2,
-      y: cage.y + cage.footprint[1] / 2,
-    });
     expect(life.champions).toEqual([]);
-    expect(yardLifeOf({ ...save, champion } as unknown as BaseLoadResponse, yard, "attack").egg).toBeNull();
+    expect(life).not.toHaveProperty("egg");
   });
 
   it("finds the Chamber's footprint among the buildings", () => {

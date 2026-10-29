@@ -1,10 +1,12 @@
 import {
   YardHatcheryAddSchema,
+  YardHatcheryClearSchema,
   YardHatcheryFinishSchema,
   YardHatcheryRemoveSchema,
 } from "../../schemas/YardSchemas.js";
 import {
   planHatcheryAdd,
+  planHatcheryClear,
   planHatcheryFinish,
   planHatcheryRemove,
 } from "../../services/yard/hatchery.js";
@@ -32,6 +34,14 @@ export const yardHatcheryAddAction = defineYardAction({
 export const yardHatcheryRemoveAction = defineYardAction({
   schema: YardHatcheryRemoveSchema,
   run: ({ save, body, now }) => planHatcheryRemove(save, body.hatchery, body.slot, body.count, now),
+  outposts: "allow",
+  inferno: "allow",
+});
+
+/** `POST /bm/yard/hatchery/clear` — Clear all: empty a queue's waiting stacks for the goo paid (capped). */
+export const yardHatcheryClearAction = defineYardAction({
+  schema: YardHatcheryClearSchema,
+  run: ({ save, body, now }) => planHatcheryClear(save, body.hatchery, now),
   outposts: "allow",
   inferno: "allow",
 });

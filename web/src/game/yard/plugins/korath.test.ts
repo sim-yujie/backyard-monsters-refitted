@@ -41,9 +41,9 @@ describe("korathStep: where the popup sends the player (Flash's mm_goal1_complet
     expect(korathStep(saveOf([{ ...CAGE, cB: 500 }]))).toEqual({ kind: "cageBuilding" });
   });
 
-  it("a free cage: open it; an egg in it: open it to cancel", () => {
+  it("a free cage: open it; an older save's egg is no step of its own (eggs removed, owner 2026-10-28)", () => {
     expect(korathStep(saveOf([CAGE]))).toEqual({ kind: "openCage", cage: 3 });
-    expect(korathStep(saveOf([CAGE], [gorgo({ status: 3 })]))).toEqual({ kind: "egg", cage: 3 });
+    expect(korathStep(saveOf([CAGE], [gorgo({ status: 3 })]))).toEqual({ kind: "openCage", cage: 3 });
     // A juiced or frozen champion leaves the cage free.
     expect(korathStep(saveOf([CAGE], [gorgo({ status: 2 })]))).toEqual({ kind: "openCage", cage: 3 });
   });

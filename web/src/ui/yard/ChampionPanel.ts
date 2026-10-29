@@ -7,9 +7,8 @@ import {
   type ChampionFeedReport,
   type FeedMode,
 } from "@/api/yardChampion";
-import { JUICER_TYPE, juicerProblemText, juicerStatus, type JuicerProblem } from "@/game/monsters/juice";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
-import { championEggUrl, championPortrait, showPortrait } from "@/game/portraits";
+import { championPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import type { YardKind } from "@/game/yard/buildingCosts";
 import { brainSummary, learnedFromText, tendenciesText } from "@/game/yard/championBrain";
@@ -26,7 +25,6 @@ import {
   championView,
   type CageView,
   type ChampionStats,
-  type EggView,
   type ChampionView,
   type FreezeProblem,
   type RaiseChoice,
@@ -46,20 +44,17 @@ import { ShinyButton } from "./ShinyButton";
  * Opened by the panel's **Open cage**. With no champion in the cage: one card
  * each for Gorgo, Drull and Fomor (Korath and Krallen are not offered), each
  * with **Raise** (free), or a note when that one is frozen in the Chamber.
- * Raising lays an egg that hatches a day later (owner 2026-10-20): while it
- * waits the cage shows the egg, the time to hatching and **Cancel egg**
- * (confirmed inline; picking again lays a new egg with a full day to go), and
- * nothing else: no feeding, healing, evolving, freezing or juicing. Nothing
- * speeds an egg up. At 0 it says "Hatching…" and asks the server, whose
- * catch-up hatches it.
+ * Raising puts the champion in the cage straight away, as in the original
+ * (owner 2026-10-28: no eggs, no juicing).
  * With a champion: its picture, name (**Rename**), level, how it fights (the
  * tendencies its learning brain picked up, #219), health with the
  * time to full and **Heal** (Shiny), its evolution (feeds so far of the
  * level's count; the food bonus at the top level), its hunger in plain words
  * with the time to the next feeding or to starving, the feed recipe against
  * what housing holds, **Feed**, **Feed with Shiny**, **Evolve now**,
- * **Freeze in the Chamber** (#125; one tap, it can be thawed), and **Juice**
- * (confirmed inline: it cannot be undone and gives no goo).
+ * and **Freeze in the Chamber** (#125; one tap, it can be thawed). Champions
+ * cannot be juiced (owner, 2026-10-28), so a player without a Chamber keeps
+ * the champion they raised.
  *
  * The original closed the whole popup after every feed
  * (`CHAMPIONCAGEPOPUP.as:175-178`); this stays open and redraws from the
@@ -103,20 +98,12 @@ export class ChampionPanel {
   private live: LiveRefs | null = null;
   private feedButton: HTMLButtonElement | null = null;
   private raiseButtons = new Map<number, HTMLButtonElement>();
-  private juiceYes: HTMLButtonElement | null = null;
   private freezeButton: HTMLButtonElement | null = null;
   private freezeSpecialButton: HTMLButtonElement | null = null;
   private specialHealth: HTMLElement | null = null;
   private renameSave: HTMLButtonElement | null = null;
   private renaming = false;
   private nameDraft = "";
-  private confirmingJuice = false;
-  private confirmingCancel = false;
-  private cancelYes: HTMLButtonElement | null = null;
-  private cancelButton: HTMLButtonElement | null = null;
-  private eggTime: HTMLElement | null = null;
-  /** Set once a due egg asked the server for its state, so it asks once. */
-  private refreshedHatch = false;
   /** Set once a starving champion asked the server for its state, so it asks once. */
   private refreshedStarving = false;
 
@@ -172,10 +159,6 @@ export class ChampionPanel {
     this.shape = shapeOf(this.view) + specialShapeOf(this.store.save, now);
     this.live = null;
     this.feedButton = null;
-    this.juiceYes = null;
-    this.cancelYes = null;
-    this.cancelButton = null;
-    this.eggTime = null;
     this.freezeButton = null;
     this.freezeSpecialButton = null;
     this.specialHealth = null;
@@ -183,12 +166,7 @@ export class ChampionPanel {
     this.raiseButtons.clear();
 
     const view = this.view;
-    if (view.kind !== "active") {
-      this.renaming = false;
-      this.confirmingJuice = false;
-    }
-    if (view.kind !== "egg") this.confirmingCancel = false;
-    if (view.kind !== "egg" || view.egg.left > 0) this.refreshedHatch = false;
+    if (view.kind !== "active") this.renaming = false;
     switch (view.kind) {
       case "noCage":
         this.body.replaceChildren(note("This Champion Cage is gone."));
@@ -198,9 +176,6 @@ export class ChampionPanel {
         break;
       case "empty":
         this.body.replaceChildren(...this.raiseCards(view.choices), ...this.specialBlocks(now));
-        break;
-      case "egg":
-        this.body.replaceChildren(...this.eggBlocks(view.egg), ...this.specialBlocks(now));
         break;
       case "active":
         this.refreshedStarving = view.view.hunger === "starving" && this.refreshedStarving;
@@ -220,15 +195,6 @@ export class ChampionPanel {
     }
     this.view = view;
     this.drawSpecialHealth(now);
-    if (view.kind === "egg") {
-      if (this.eggTime) this.eggTime.textContent = eggTimeText(view.egg);
-      if (view.egg.left <= 0 && !this.refreshedHatch) {
-        // The server hatches it on its next answer; ask for it now.
-        this.refreshedHatch = true;
-        void this.store.refresh();
-      }
-      return;
-    }
     if (view.kind !== "active" || !this.live) return;
     const champion = view.view;
     this.drawHealth(champion, now);
@@ -254,9 +220,6 @@ export class ChampionPanel {
       this.feedButton.disabled = feedGate(view) !== null || store.isRunning(ChampionKey.feed("monsters"));
     }
     for (const button of this.raiseButtons.values()) button.disabled = store.isRunning(ChampionKey.raise);
-    if (this.juiceYes) this.juiceYes.disabled = store.isRunning(ChampionKey.juice);
-    if (this.cancelYes) this.cancelYes.disabled = store.isRunning(ChampionKey.cancelEgg);
-    if (this.cancelButton) this.cancelButton.disabled = store.isRunning(ChampionKey.cancelEgg);
     // A locked Freeze stays pressable (it says why); only a running freeze disables it.
     if (this.freezeButton) this.freezeButton.disabled = store.isRunning(ChampionKey.freeze);
     if (this.renameSave) this.renameSave.disabled = store.isRunning(ChampionKey.rename);
@@ -274,7 +237,7 @@ export class ChampionPanel {
 
   private raiseCards(choices: readonly RaiseChoice[]): HTMLElement[] {
     const intro = note(
-      "Raise a champion to guard your yard and join your attacks. Raising is free: it lays an egg that hatches in 1 day. One champion lives in the cage at a time.",
+      "Raise a champion to guard your yard and join your attacks. Raising is free. One champion lives in the cage at a time.",
     );
     const list = document.createElement("ul");
     list.className = "champion__cards";
@@ -287,7 +250,9 @@ export class ChampionPanel {
     const card = document.createElement("li");
     card.className = "champion-card";
     card.dataset["champion"] = entry.id;
-    const picture = portrait(entry, 1, "champion-card__picture");
+    // The icon, cut to the creature: the whole frame keeps each champion's
+    // own level-1 size, which left Fomor a speck beside Gorgo and Drull.
+    const picture = portrait(championPortrait(entry.id, 1, "icon"), "champion-card__picture");
     const words = document.createElement("div");
     words.className = "champion-card__words";
     const name = document.createElement("strong");
@@ -299,10 +264,7 @@ export class ChampionPanel {
     const blurb = document.createElement("p");
     blurb.className = "champion-card__blurb";
     blurb.textContent = entry.description;
-    const hatch = document.createElement("span");
-    hatch.className = "champion-card__hatch";
-    hatch.textContent = "Hatches in 1 day";
-    words.append(name, role, blurb, hatch);
+    words.append(name, role, blurb);
     card.append(picture, words);
     if (frozen) {
       const gate = document.createElement("p");
@@ -321,94 +283,11 @@ export class ChampionPanel {
     return card;
   }
 
-  /* ── An egg in the cage ───────────────────────────────────────────── */
-
-  private eggBlocks(egg: EggView): HTMLElement[] {
-    const header = document.createElement("div");
-    header.className = "champion__header champion__header--egg";
-    const picture = document.createElement("img");
-    picture.className = "champion__egg-picture";
-    picture.src = championEggUrl(egg.entry.id, "window");
-    picture.alt = "";
-    picture.width = 120;
-    picture.height = 120;
-    picture.decoding = "async";
-    const words = document.createElement("div");
-    words.className = "champion__who";
-    const name = document.createElement("h4");
-    name.className = "champion__name";
-    name.textContent = `${egg.entry.name} egg`;
-    const time = document.createElement("p");
-    time.className = "champion__egg-time";
-    time.textContent = eggTimeText(egg);
-    this.eggTime = time;
-    words.append(
-      name,
-      time,
-      note(`It hatches into a level 1 ${egg.entry.name}. Until then it cannot fight, eat or be frozen, and nothing speeds it up.`),
-    );
-    header.append(picture, words);
-    return [header, this.cancelEggBlock(egg)];
-  }
-
-  private cancelEggBlock(egg: EggView): HTMLElement {
-    const block = document.createElement("div");
-    block.className = "champion__part champion__part--cancel-egg";
-    if (this.confirmingCancel) {
-      const wrap = document.createElement("div");
-      wrap.className = "champion__confirm";
-      wrap.setAttribute("role", "group");
-      wrap.setAttribute("aria-label", "Confirm cancel egg");
-      const question = document.createElement("p");
-      question.className = "champion__question";
-      question.textContent = "Cancel the egg? You can pick again, but the new egg takes a full day.";
-      const yes = document.createElement("button");
-      yes.type = "button";
-      yes.className = "btn btn--danger champion__cancel-egg-yes";
-      yes.textContent = "Yes, cancel the egg";
-      yes.addEventListener("click", () => void this.runCancelEgg(egg));
-      this.cancelYes = yes;
-      const keep = document.createElement("button");
-      keep.type = "button";
-      keep.className = "btn";
-      keep.textContent = "Keep it";
-      const stop = (): void => {
-        this.confirmingCancel = false;
-        this.show();
-        this.element.querySelector<HTMLButtonElement>(".champion__cancel-egg")?.focus();
-      };
-      keep.addEventListener("click", stop);
-      wrap.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        event.stopPropagation();
-        stop();
-      });
-      const row = document.createElement("div");
-      row.className = "map-row";
-      row.append(yes, keep);
-      wrap.append(question, row);
-      block.append(wrap);
-      return block;
-    }
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.className = "btn btn--ghost champion__cancel-egg";
-    cancel.textContent = "Cancel egg";
-    cancel.addEventListener("click", () => {
-      this.confirmingCancel = true;
-      this.show();
-      this.cancelYes?.focus();
-    });
-    this.cancelButton = cancel;
-    block.append(cancel);
-    return block;
-  }
-
   /* ── A champion in the cage ───────────────────────────────────────── */
 
   /**
    * Flash's two pages in one (`CHAMPIONCAGEPOPUP.as:151-152`): the champion
-   * (big picture, level, health, Freeze and Juice beside it, stats under it),
+   * (big picture, level, health, Freeze beside it, stats under it),
    * then its evolution (this level's picture, the feeds bar and hunger clock,
    * the next level's picture) with the feed under it, and how it fights last.
    * It all fits a 1280x800 screen without scrolling (lead, 28 Oct).
@@ -480,7 +359,7 @@ export class ChampionPanel {
     const stats = statsBlock(view);
     const arrows = stats.querySelector<HTMLElement>(".champion__note--arrows");
     if (arrows) unseen(arrows);
-    header.append(portrait(view.entry, view.level, "champion__picture"), words, stats, ...this.acts(view));
+    header.append(portrait(championPicture(view.entry, view.level), "champion__picture"), words, stats, ...this.acts(view));
     return header;
   }
 
@@ -713,7 +592,7 @@ export class ChampionPanel {
     level.className = "champion__level";
     level.textContent = `Level ${view.level} of ${view.entry.levels}${frozen ? " · frozen in the Chamber" : ""}`;
     words.append(name, level, statsBlock(view));
-    header.append(portrait(view.entry, view.level, "champion__picture"), words);
+    header.append(portrait(championPicture(view.entry, view.level), "champion__picture"), words);
     block.append(heading("Your second champion"), header);
     if (frozen) {
       block.append(note("Krallen is asleep in the Champion Chamber. Thaw him from there."));
@@ -774,21 +653,20 @@ export class ChampionPanel {
   }
 
   /**
-   * Freeze and Juice as two pictures (owner, 28 Oct: no sentences) beside the
-   * champion's picture, a row under it on a phone: the building that does it,
-   * a one-word action and a few words on what it does or what it needs. The
-   * full sentence stays for hover and screen readers, and a tap on a locked
-   * one says it under the champion. Juice's question takes their place.
+   * Freeze as a picture (owner, 28 Oct: no sentences) beside the champion's
+   * picture, under it on a phone: the building that does it, a one-word action
+   * and a few words on what it does or what it needs. The full sentence stays
+   * for hover and screen readers, and a tap on a locked one says it under the
+   * champion. Juice is gone (owner, 2026-10-28).
    */
   private acts(view: ChampionView): HTMLElement[] {
-    if (this.confirmingJuice) return [this.juiceConfirm(view)];
     const hint = actHint();
     const freeze = this.freezeTile(view, hint, () => void this.runFreeze(view));
     freeze.disabled = this.store.isRunning(ChampionKey.freeze);
     this.freezeButton = freeze;
     const row = document.createElement("div");
     row.className = "champion__acts";
-    row.append(freeze, this.juiceTile(view, hint));
+    row.append(freeze);
     return [row, hint];
   }
 
@@ -811,84 +689,14 @@ export class ChampionPanel {
     });
   }
 
-  private juiceTile(view: ChampionView, hint: HTMLElement): HTMLButtonElement {
-    const juicer = juicerStatus(this.store.save);
-    const tile = actTile({
-      act: "juice",
-      type: JUICER_TYPE,
-      kind: this.store.kind,
-      word: "Juice",
-      short: juicer.ok ? "Gone for good" : JUICE_SHORT[juicer.problem],
-      sentence: juicer.ok
-        ? `Juice ${view.name}: it is gone for good and gives no goo.`
-        : juicerProblemText(juicer.problem),
-      locked: !juicer.ok,
-      missing: !juicer.ok && juicer.problem === "noJuicer",
-      hint,
-      onPress: () => {
-        this.confirmingJuice = true;
-        this.show();
-        this.juiceYes?.focus();
-      },
-    });
-    return tile;
-  }
-
-  private juiceConfirm(view: ChampionView): HTMLElement {
-    const wrap = document.createElement("div");
-    wrap.className = "champion__confirm";
-    wrap.setAttribute("role", "group");
-    wrap.setAttribute("aria-label", "Confirm juice");
-    const question = document.createElement("p");
-    question.className = "champion__question";
-    question.textContent = `Juice ${view.name}? It is gone for good and gives no goo. You can raise a new champion afterwards.`;
-    const yes = document.createElement("button");
-    yes.type = "button";
-    yes.className = "btn btn--danger champion__juice-yes";
-    yes.textContent = `Yes, juice ${view.name}`;
-    yes.addEventListener("click", () => void this.runJuice(view));
-    this.juiceYes = yes;
-    const keep = document.createElement("button");
-    keep.type = "button";
-    keep.className = "btn";
-    keep.textContent = "Keep it";
-    const stop = (): void => {
-      this.confirmingJuice = false;
-      this.show();
-      this.element.querySelector<HTMLButtonElement>(".champion-act--juice")?.focus();
-    };
-    keep.addEventListener("click", stop);
-    wrap.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      stop();
-    });
-    const row = document.createElement("div");
-    row.className = "map-row";
-    row.append(yes, keep);
-    wrap.append(question, row);
-    return wrap;
-  }
-
   /* ── Requests ─────────────────────────────────────────────────────── */
 
   private async runRaise(entry: ChampionEntry): Promise<void> {
     const result = await this.actions.raise(entry.t);
     this.setStatus(
       result.ok
-        ? { tone: "good", content: [`${entry.name}'s egg is in your cage. It hatches in 1 day.`] }
+        ? { tone: "good", content: [`${entry.name} is in your cage.`] }
         : { tone: "bad", content: [refusalText(result.refusal)] },
-    );
-    this.show();
-  }
-
-  private async runCancelEgg(egg: EggView): Promise<void> {
-    const result = await this.actions.cancelEgg();
-    this.confirmingCancel = false;
-    this.setStatus(
-      result.ok
-        ? { tone: "good", content: [`The ${egg.entry.name} egg is gone. Pick a champion to raise.`] }
-        : bad(result.refusal),
     );
     this.show();
   }
@@ -946,15 +754,6 @@ export class ChampionPanel {
       result.ok
         ? { tone: "good", content: [`${view.name} is frozen in the Champion Chamber. The cage is free to raise another.`] }
         : bad(result.refusal),
-    );
-    this.show();
-  }
-
-  private async runJuice(view: ChampionView): Promise<void> {
-    const result = await this.actions.juice();
-    this.confirmingJuice = false;
-    this.setStatus(
-      result.ok ? { tone: "good", content: [`${view.name} went into the Juicer.`] } : bad(result.refusal),
     );
     this.show();
   }
@@ -1072,7 +871,6 @@ export const statsBlock = (view: ChampionView): HTMLElement => {
 
 /** What the tick compares to decide whether the body must be rebuilt. */
 const shapeOf = (view: CageView): string => {
-  if (view.kind === "egg") return `egg:${view.egg.entry.id}:${view.egg.hatchAt}:${view.egg.left > 0}`;
   if (view.kind !== "active") {
     return view.kind === "empty"
       ? `empty:${view.choices.map((one) => `${one.entry.id}${one.frozen ? "f" : ""}`).join()}`
@@ -1094,10 +892,6 @@ const shapeOf = (view: CageView): string => {
     brainSummary(champion.champion).attacks,
   ].join(":");
 };
-
-/** The egg's clock: "Hatches in 23h 12m", or "Hatching…" once its time has come. */
-export const eggTimeText = (egg: EggView): string =>
-  egg.left > 0 ? `Hatches in ${formatCountdown(egg.left)}` : "Hatching…";
 
 /** The hunger line: a short state and what happens next. */
 export const hungerText = (view: ChampionView, now: number): { title: string; detail: string } => {
@@ -1186,11 +980,11 @@ const strong = (text: string): HTMLElement => {
   return element;
 };
 
-/** The champion's picture at a level, from the game's own art. */
-const portrait = (entry: ChampionEntry, level: number, className: string): HTMLImageElement => {
+/** A champion's picture, from the game's own art. */
+const portrait = (picture: Portrait, className: string): HTMLImageElement => {
   const image = document.createElement("img");
   image.className = className;
-  showPortrait(image, championPicture(entry, level));
+  showPortrait(image, picture);
   image.alt = "";
   image.width = 150;
   image.height = 150;
@@ -1226,14 +1020,6 @@ export const FREEZE_SHORT: Readonly<Record<FreezeProblem, string>> = {
   hungry: "Feed it first",
 };
 
-/** The few words under a locked Juice; the hover keeps `juicerProblemText`'s sentence. */
-const JUICE_SHORT: Readonly<Record<JuicerProblem, string>> = {
-  noJuicer: "Needs a Juicer",
-  building: "Juicer being built",
-  upgrading: "Juicer upgrading",
-  damaged: "Repair the Juicer",
-};
-
 /** Where a tap on a locked tile says why, under the row. */
 export const actHint = (): HTMLElement => {
   const hint = gateLine("");
@@ -1244,7 +1030,7 @@ export const actHint = (): HTMLElement => {
 };
 
 export interface ActTileOptions {
-  readonly act: "freeze" | "juice" | "thaw";
+  readonly act: "freeze" | "thaw";
   /** The building that does it, whose picture the tile shows. */
   readonly type: number;
   readonly kind: YardKind;
@@ -1261,7 +1047,7 @@ export interface ActTileOptions {
 }
 
 /**
- * One of the cage's Freeze / Juice pictures, or the chamber's Freeze / Thaw.
+ * The cage's Freeze picture, or the chamber's Freeze / Thaw.
  * A locked one is `aria-disabled` rather than disabled, so hovering it still shows why and a tap (a phone has
  * no hover) writes the reason under the row.
  */

@@ -8,8 +8,8 @@ import {
 } from "../../schemas/YardSchemas.js";
 import { korathRaisable } from "../../services/inferno/korath.js";
 import {
+  championCancelEggGoneErr,
   KORATH_TYPE,
-  planChampionCancelEgg,
   planChampionEvolve,
   planChampionFeed,
   planChampionHeal,
@@ -28,9 +28,9 @@ import { defineYardAction } from "./yardAction.js";
  */
 
 /**
- * `POST /bm/yard/champion/raise` — lay Gorgo's, Drull's or Fomor's egg in the
- * cage, free; it hatches in a day. Korath's too once the player owns an
- * Inferno yard and the new Inferno is on (owner I10, `services/inferno/korath.ts`).
+ * `POST /bm/yard/champion/raise` — put Gorgo, Drull or Fomor in the cage at
+ * level 1, free, straight away. Korath too once the player owns an Inferno
+ * yard and the new Inferno is on (owner I10, `services/inferno/korath.ts`).
  */
 export const yardChampionRaiseAction = defineYardAction({
   schema: YardChampionRaiseSchema,
@@ -40,10 +40,12 @@ export const yardChampionRaiseAction = defineYardAction({
     }),
 });
 
-/** `POST /bm/yard/champion/cancel-egg` — take the egg out of the cage, to pick again. */
+/** `POST /bm/yard/champion/cancel-egg` — gone with the eggs (owner, 2026-10-28): `410 eggsRemoved`. */
 export const yardChampionCancelEggAction = defineYardAction({
   schema: YardChampionSchema,
-  run: ({ save }) => planChampionCancelEgg(save),
+  run: () => {
+    throw championCancelEggGoneErr();
+  },
 });
 
 /** `POST /bm/yard/champion/feed` — feed the champion from housing (`monsters`) or with Shiny. */
@@ -70,7 +72,7 @@ export const yardChampionRenameAction = defineYardAction({
   run: ({ save, body }) => planChampionRename(save, body.name),
 });
 
-/** `POST /bm/yard/champion/juice` — put the champion into the Juicer for good (no goo). */
+/** `POST /bm/yard/champion/juice` — refused: champions can no longer be juiced (`409 juiceDisabled`, owner 2026-10-28). */
 export const yardChampionJuiceAction = defineYardAction({
   schema: YardChampionSchema,
   run: ({ save }) => planChampionJuice(save),

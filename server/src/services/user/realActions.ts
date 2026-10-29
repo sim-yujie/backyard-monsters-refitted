@@ -51,6 +51,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "locker/instant",
   "hatchery/add",
   "hatchery/remove",
+  "hatchery/clear",
   "hatchery/finish",
   // Collecting: the bank and the mushrooms.
   "bank",
