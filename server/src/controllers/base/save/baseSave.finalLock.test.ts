@@ -41,7 +41,7 @@ mock.module("../../../server.js", () => ({
       begin: async () => {},
       commit: async () => {},
       rollback: async () => {},
-      isInTransaction: () => false,
+      getTransactionContext: () => undefined,
     },
   },
   redis: {

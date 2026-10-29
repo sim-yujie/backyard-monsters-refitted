@@ -118,6 +118,8 @@ mock.module("../../server.js", () => ({
       },
       findOne: async (entity: { name: string }, where: Record<string, unknown>) => {
         if (entity.name === "User") return where.userid === ATTACKER ? attacker() : null;
+        // The attacker's main row, locked with the defender's as the attack lands (audit P1, P2).
+        if (where.basesaveid === userSave.basesaveid) return userSave;
         return where.basesaveid === BASESAVEID || where.baseid === defender.baseid ? defender : null;
       },
       find: async (entity: { name: string }, where: { baseid: { $in: string[] } }) =>
@@ -132,6 +134,12 @@ mock.module("../../server.js", () => ({
       persist: () => {},
       upsert,
       flush,
+      // The transaction an attack lands in (audit P1, P2): the stand-in rows change
+      // in place, so there is nothing to commit or roll back.
+      begin: async () => {},
+      commit: async () => {},
+      rollback: async () => {},
+      getTransactionContext: () => undefined,
       // Only the event counter's SQL is answered; anything else fails as with no database.
       execute: async (sql: string, params: unknown[]) => {
         if (!sql.includes("event_progress")) throw new Error("no database");
@@ -976,6 +984,21 @@ describe("the defence replay an abandoned attack lands (issue #359)", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     expect(replays[0]).toMatchObject({ replay: null });
+  }, REPLAY_TIMEOUT_MS);
+
+  // The stand-in rows change in place and cannot roll back, so the next pass,
+  // which lands it once, is `baseSave.landing.db.test.ts`'s, on a real database.
+  test("a landing that fails before its commit records none, and tells nobody", async () => {
+    await asPlayerYard();
+    await arm();
+    // The landing's write fails: it rolls back, and nothing of it may stay.
+    flush.mockImplementationOnce(async () => {
+      throw new Error("connection reset");
+    });
+
+    await expect(finaliseAbandonedAttack(BASESAVEID, "test")).rejects.toThrow("connection reset");
+    expect(replays).toEqual([]);
+    expect(notices).toEqual([]);
   }, REPLAY_TIMEOUT_MS);
 
   // Map Room 1, outposts and own yards are refused by the same gate on the
