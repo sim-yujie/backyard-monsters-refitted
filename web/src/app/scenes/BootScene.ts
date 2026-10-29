@@ -1,7 +1,7 @@
 import { loginWithToken, logout, restoreStoredSession } from "@/api/auth";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 import { resetTokenFromLocation } from "./passwordReset";
 
 /**

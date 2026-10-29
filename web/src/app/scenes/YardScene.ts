@@ -141,7 +141,7 @@ import { ZoomControl } from "@/ui/ZoomControl";
 import { YardPlanner, type AppliedStorage, type CompareVisuals } from "./YardPlanner";
 import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
 import { trojanApi } from "@/api/trojan";
 import { setRaidRun } from "@/game/raid/raidSession";

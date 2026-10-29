@@ -18,10 +18,16 @@ interface Rewrite {
   destination: string;
 }
 
+interface HeaderRule {
+  source: string;
+  headers: Array<{ key: string; value: string }>;
+}
+
 interface VercelConfig {
   buildCommand: string;
   cleanUrls: boolean;
   rewrites: Rewrite[];
+  headers: HeaderRule[];
 }
 
 const config: VercelConfig = JSON.parse(
@@ -69,5 +75,39 @@ describe("vercel.json", () => {
 
   it("opens the emailed reset link on the game page", () => {
     expect(config.rewrites).toContainEqual({ source: RESET_PATH, destination: "/index.html" });
+  });
+});
+
+/**
+ * The Content-Security-Policy (security audit 2026-10-29, L5), report-only
+ * for now: the browser lists in the console what it would have blocked, and
+ * blocks nothing.
+ */
+describe("vercel.json Content-Security-Policy", () => {
+  const rule = config.headers.find((entry) => entry.source === "/(.*)");
+  const header = rule?.headers.find((entry) => entry.key.startsWith("Content-Security-Policy"));
+  const directives = new Map(
+    (header?.value ?? "").split(";").map((part) => {
+      const [name, ...sources] = part.trim().split(/\s+/);
+      return [name, sources] as const;
+    }),
+  );
+
+  it("covers every page, the game and /admin included, and only reports", () => {
+    expect(header?.key).toBe("Content-Security-Policy-Report-Only");
+  });
+
+  it("lets the game reach its server, over https and the chat's wss", () => {
+    const host = serverOrigin!.replace(/^https:\/\//, "");
+    expect(directives.get("connect-src")).toEqual(["'self'", `https://${host}`, `wss://${host}`]);
+    expect(directives.get("img-src")).toContain(serverOrigin);
+  });
+
+  it("allows scripts only from the page itself and the sign-up bot check, never inline", () => {
+    const scripts = directives.get("script-src") ?? [];
+    expect(scripts).not.toContain("'unsafe-inline'");
+    expect(scripts.filter((source) => source.startsWith("https:"))).toEqual(["https://challenges.cloudflare.com"]);
+    expect(directives.get("frame-src")).toEqual(["https://challenges.cloudflare.com"]);
+    expect(directives.get("object-src")).toEqual(["'none'"]);
   });
 });

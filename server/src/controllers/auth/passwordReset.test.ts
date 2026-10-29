@@ -28,6 +28,8 @@ const em = {
 };
 
 let deletedKeys: string[];
+let failedFrom: string[];
+let pausedNetworks: string[];
 
 mock.module("../../server.js", () => ({
   postgres: { em },
@@ -37,6 +39,14 @@ mock.module("../../server.js", () => ({
       deletedKeys.push(...keys);
       return keys.length;
     },
+    // The addresses with wrong passwords for the email (`services/auth/loginBackoff.ts`).
+    // and the networks paused for it.
+    smembers: async (key: string) =>
+      key === "login-failure-ips:player@example.com"
+        ? failedFrom
+        : key === "login-network-pauses:player@example.com"
+          ? pausedNetworks
+          : [],
   },
 }));
 mock.module("../../config/MailConfig.js", () => ({
@@ -85,6 +95,8 @@ beforeEach(() => {
   mailsSent = 0;
   mailFails = false;
   deletedKeys = [];
+  failedFrom = [];
+  pausedNetworks = [];
 });
 
 afterEach(() => {
@@ -173,7 +185,27 @@ describe("a reset logs the account out everywhere (issue #318)", () => {
     const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
     user!.resetToken = hashResetToken(token);
     expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(200);
-    expect(deletedKeys.sort()).toEqual([`chat-token:7`, `user-token:game:${EMAIL}`, `user-token:launcher:${EMAIL}`]);
+    const sessions = deletedKeys.filter((key) => !key.startsWith("login-"));
+    expect(sessions.sort()).toEqual([`chat-token:7`, `user-token:game:${EMAIL}`, `user-token:launcher:${EMAIL}`]);
+  });
+
+  test("and every sign-in pause on the email is lifted (security audit 2026-10-29, L2)", async () => {
+    failedFrom = ["127.0.0.1", "203.0.113.9"];
+    pausedNetworks = ["198.51.100.0/24"];
+    const token = JWT.sign({ user: { email: EMAIL } }, process.env.SECRET_KEY!, { expiresIn: "20m" });
+    user!.resetToken = hashResetToken(token);
+    expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(200);
+    expect(deletedKeys.filter((key) => key.startsWith("login-")).sort()).toEqual([
+      `login-account-failures:${EMAIL}`,
+      `login-failure-ips:${EMAIL}`,
+      `login-failures:${EMAIL}|127.0.0.1`,
+      `login-failures:${EMAIL}|203.0.113.9`,
+      `login-network-failures:${EMAIL}`,
+      `login-network-pause:${EMAIL}|198.51.100.0/24`,
+      `login-network-pauses:${EMAIL}`,
+      `login-pause:${EMAIL}|127.0.0.1`,
+      `login-pause:${EMAIL}|203.0.113.9`,
+    ]);
   });
 
   test("a refused reset logs no one out", async () => {

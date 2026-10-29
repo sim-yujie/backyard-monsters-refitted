@@ -7,6 +7,20 @@ import { isShinyLocked } from "../../../../services/user/shinyLock.js";
 import { isShinyGain } from "../../../../game-data/store/purchaseKeys.js";
 import { shinyLockedErr } from "../../../../errors/errors.js";
 import type { JsonObject } from "../../../../types/JsonObject.js";
+import { logger } from "../../../../utils/logger.js";
+
+/**
+ * Whether a client's purchase is an item key and a whole, positive count.
+ * Anything else (a negative or fractional count, NaN, a string) is dropped
+ * before it reaches the save: a negative count would take back protection
+ * time or store stock, and a fractional one would cost a fraction
+ * (security audit 2026-10-29, I1).
+ */
+export const isValidPurchase = (purchaseData: unknown): purchaseData is [string, number] =>
+  Array.isArray(purchaseData) &&
+  typeof purchaseData[0] === "string" &&
+  Number.isSafeInteger(purchaseData[1]) &&
+  purchaseData[1] > 0;
 
 /**
  * Applies a purchase to the save: grants the item, sets any expiry, then settles the cost.
@@ -18,6 +32,11 @@ import type { JsonObject } from "../../../../types/JsonObject.js";
  */
 export const purchaseHandler = (ctx: Context, purchaseData: [string, number], save: Save) => {
   if (!purchaseData) return;
+
+  if (!isValidPurchase(purchaseData)) {
+    logger.warn("Invalid purchase dropped", { userid: ctx.authUser?.userid, purchaseData });
+    return;
+  }
 
   const [item, quantity] = purchaseData;
 

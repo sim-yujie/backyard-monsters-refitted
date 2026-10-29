@@ -15,6 +15,7 @@ import { discardDefenceReplayLoad } from "../defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../defences/recordDefenceReplay.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
 import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
+import { beginAttackLanding, commitAttackLanding, rollbackAttackLanding } from "./attackLanding.js";
 import { checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
 import {
   acquireFinalLock,
@@ -250,6 +251,28 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     fought: foughtLoot(outcome),
   });
 
+  // Read first, in a fork and so on a connection of its own, which a landing
+  // holding one already must not wait on.
+  const housingOwner = await getHousingOwner(defender);
+
+  // From here on in one transaction, on the rows locked and read afresh, as
+  // the save lands its attack (`beginAttackLanding`, audit 2026-10-29): the
+  // loot commits with `attackid = 0` or not at all, so a failure part-way
+  // leaves the checkpoint for the next pass to land once.
+  await beginAttackLanding(userSave, defender, outpostOwnerSave);
+  if (defender.attackid !== checkpoint.attackid) {
+    await rollbackAttackLanding();
+    await discardCheckpoint(basesaveid);
+    logger.warn("Abandoned attack on {basesaveid} could not be finalised: the row moved on", {
+      event: "attack-finalise-stale",
+      basesaveid,
+      trigger,
+      attackid: checkpoint.attackid,
+      storedAttackId: defender.attackid,
+    });
+    return { status: "stale" };
+  }
+
   // The attacker: what was flung leaves its cells for good, and the rest of
   // the attacker's keys land as the save would land them (`baseSave.ts`).
   const { cells, rows } = await sourceCells(checkpoint, attacker, userSave, now);
@@ -310,7 +333,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   const housingLoss = landHousingLoss(
     defender,
     { before: storedHealthData, after: outcome.buildinghealthdata },
-    await getHousingOwner(defender),
+    housingOwner,
     now
   );
   (defender as unknown as { attackreport: unknown }).attackreport = reportWithHousingLoss(
@@ -335,31 +358,11 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
       housedLost: lostCount(housingLoss),
       now,
     });
-    // A Map Room 2 main yard's defence replay, ending where the attacker
-    // left, recorded before the notice so the notice can open it (#359).
-    const replayId = await recordDefenceReplay(postgres.em, {
-      yard: defender,
-      attacker,
-      session,
-      input,
-      report: (defender as unknown as { attackreport: unknown }).attackreport,
-      damageBefore,
-      damageAfter: defender.damage ?? 0,
-      defenderDelta: loot.defenderDelta,
-      housedLost: lostCount(housingLoss),
-      now,
-    });
-    // And a Map Room 1 or 2 main yard's, the same (#361); an attacked Map
-    // Room 1 bot books its repair and maybe a revenge (bot neighbours, #241).
-    await afterYardDefended(postgres.em, {
-      yard: defender,
-      attacker,
-      defenderDelta: loot.defenderDelta,
-      housedLost: lostCount(housingLoss),
-      now,
-      replayId,
-    });
   }
+
+  // As they stood before the timers below, for the defence replay after the commit.
+  const landedReport = (defender as unknown as { attackreport: unknown }).attackreport;
+  const landedDamage = defender.damage ?? 0;
 
   defender.attackid = 0;
   if (defender.buildingdata) {
@@ -369,12 +372,50 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   defender.savetime = now;
   postgres.em.persist(defender);
   await postgres.em.flush();
+  // The loot on both sides and `attackid = 0` together.
+  await commitAttackLanding();
 
-  // Event loot (the monthly Krallen Hunt), before the cap, once: still under the final lock.
+  // Event loot (the monthly Krallen Hunt), before the cap, once: still under
+  // the final lock, and after the commit, so a counter that fails to write
+  // (logged and lost) cannot take the landing down with it.
   await countAttackLoot(postgres.em, attacker.userid, userSave, loot.credit, now);
 
   await endAttackSession(basesaveid);
   await discardCheckpoint(basesaveid);
+
+  // The defence replay is written on a connection of its own, so only once
+  // the landing has committed: a landing rolled back leaves none behind.
+  // Landed, a notice that fails costs the attack nothing.
+  if (!isMR3Structure(defender.wmid)) {
+    try {
+      // A Map Room 2 main yard's defence replay, ending where the attacker
+      // left, recorded before the notice so the notice can open it (#359).
+      const replayId = await recordDefenceReplay(postgres.em, {
+        yard: defender,
+        attacker,
+        session,
+        input,
+        report: landedReport,
+        damageBefore,
+        damageAfter: landedDamage,
+        defenderDelta: loot.defenderDelta,
+        housedLost: lostCount(housingLoss),
+        now,
+      });
+      // And a Map Room 1 or 2 main yard's, the same (#361); an attacked Map
+      // Room 1 bot books its repair and maybe a revenge (bot neighbours, #241).
+      await afterYardDefended(postgres.em, {
+        yard: defender,
+        attacker,
+        defenderDelta: loot.defenderDelta,
+        housedLost: lostCount(housingLoss),
+        now,
+        replayId,
+      });
+    } catch (err) {
+      logger.error(`The defence notice for yard ${defender.baseid} failed: ${err}`);
+    }
+  }
   await discardDefenceReplayLoad(basesaveid);
 
   // An attack played by hand on a Map Room 2 camp is the attacker's plan for
@@ -457,6 +498,11 @@ export const landCheckpointedAttack = (
     if (!(await acquireFinalLock(basesaveid))) return { status: "busy" as const };
     try {
       return await finaliseLocked(basesaveid, trigger, options);
+    } catch (err) {
+      // A landing that failed part-way leaves nothing behind, and its
+      // checkpoint for the next pass (`beginAttackLanding`).
+      await rollbackAttackLanding();
+      throw err;
     } finally {
       await releaseFinalLock(basesaveid);
     }

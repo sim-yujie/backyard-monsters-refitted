@@ -86,6 +86,27 @@ export default defineConfig({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   pool: { min: 2, max: 10 },
+  // Tables whose migration owns their shape (CHECKs, defaults, index order,
+  // column order) that the entity cannot carry. `db:init` runs
+  // `schema:create` before the migrations, so without this a new install
+  // would get the entity's looser table and the migration's
+  // `CREATE TABLE IF NOT EXISTS` would skip it. Left out here, the migration
+  // builds the live table. The other tables a migration creates (alliance*,
+  // api_consumer, job_run, maproom, truce) stay with `schema:create`: the
+  // live database got them from the entity, not from their migration.
+  schemaGenerator: {
+    skipTables: [
+      "attack_plan",
+      "bot",
+      "bot_job",
+      "chat_report",
+      "defence_replay",
+      "friend",
+      "friend_request",
+      "inferno_progress",
+      "notification",
+    ],
+  },
   migrations: {
     path: path.join(import.meta.dirname, "./database/migrations"),
     pathTs: path.join(import.meta.dirname, "./database/migrations"),

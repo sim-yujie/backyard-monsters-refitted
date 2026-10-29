@@ -117,8 +117,11 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     return ctx.body as Body;
   };
 
+  /** An attack load carries the attack payload, as the client sends it (`web/src/api/base.ts`); outside ENV=local the server refuses one without (`validateAttack.ts`). */
+  const NO_ARMY = JSON.stringify({ monsters: [], champions: [] });
+
   const load = (email: string, type: string, baseid: string) =>
-    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1" });
+    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1", ...(type === "attack" ? { attackData: NO_ARMY } : {}) });
 
   /** A player as sign-up makes one (`register.ts`), then their first yard load and a look at Map Room 1. */
   const signUp = async (name: string) => {

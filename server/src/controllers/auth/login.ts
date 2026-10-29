@@ -11,6 +11,7 @@ import {
   discordVerifyErr,
   userPermaBannedErr,
   tokenAuthFailureErr,
+  loginBackoffErr,
 } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
 import { type JwtClaims, verifyJwtToken } from "../../middleware/auth.js";
@@ -22,6 +23,12 @@ import { requiresDiscordVerification } from "../../config/AccountConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
 import { sessionTokenKey } from "../../services/auth/sessions.js";
 import { maskEmail } from "../../utils/maskEmail.js";
+import {
+  clearLoginFailures,
+  loginPausedFor,
+  recordLoginFailure,
+  rememberAddress,
+} from "../../services/auth/loginBackoff.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -83,10 +90,21 @@ export const login: KoaController = async (ctx) => {
   }
 
   if (!user) {
+    // Wrong passwords are counted per email and address, and per email; a run
+    // of them pauses the email briefly, from that address or from addresses
+    // it has not signed in from (security audit 2026-10-29, L2).
+    const paused = email ? await loginPausedFor(email, ctx.ip) : 0;
+    if (paused > 0) throw loginBackoffErr(paused);
+
     user = await postgres.em.findOne(User, { email });
 
     const isMatch = await bcrypt.compare(password ?? "", user?.password ?? (await missingAccountHash));
-    if (!user || !isMatch) throw emailPasswordErr();
+    if (!user || !isMatch) {
+      if (email) await recordLoginFailure(email, ctx.ip);
+      throw emailPasswordErr();
+    }
+
+    if (email) await clearLoginFailures(email, ctx.ip);
   }
 
   // A bot's account cannot be entered (issue #235); it reads as a wrong
@@ -123,6 +141,9 @@ export const login: KoaController = async (ctx) => {
   );
 
   await redis.set(sessionTokenKey(sessionType, user.email), newToken);
+  // A known address gets past the account-wide sign-in pause; the game's token
+  // sign-in on each start keeps the player's own fresh.
+  await rememberAddress(user.email, ctx.ip);
   postgres.em.persist(user);
   await postgres.em.flush();
 

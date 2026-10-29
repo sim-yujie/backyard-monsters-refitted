@@ -3,7 +3,7 @@ import { ApiError, NetworkError } from "@/api/http";
 import { MapRoomChoice, mapRoomOf, primeOwnYard } from "@/game/maproom/mapRoute";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 
 /**
  * The door to "the map" when nothing on screen knows yet which one that is

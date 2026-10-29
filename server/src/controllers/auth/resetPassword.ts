@@ -11,6 +11,7 @@ import { ResetPasswordSchema } from "../../schemas/AuthSchemas.js";
 import { isBot } from "../../services/bots/isBot.js";
 import { endAllSessions } from "../../services/auth/sessions.js";
 import { resetTokenMatches } from "../../services/auth/resetToken.js";
+import { clearAllLoginFailures } from "../../services/auth/loginBackoff.js";
 
 const { JsonWebTokenError, TokenExpiredError } = jwt;
 
@@ -54,6 +55,9 @@ export const resetPassword: KoaController = async (ctx) => {
 
     // Logs out every session the old password let in (issue #318).
     await endAllSessions(user);
+    // Whoever reset the password holds the email: lift every sign-in pause
+    // on it (security audit 2026-10-29, L2).
+    await clearAllLoginFailures(user.email);
 
     ctx.status = Status.OK;
     ctx.body = {

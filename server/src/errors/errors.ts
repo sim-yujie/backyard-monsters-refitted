@@ -103,6 +103,21 @@ export const invalidBugReportErr = (message: string, field: string) =>
     isClientFriendly: true,
   });
 
+/**
+ * Too many wrong passwords for one email from one address in a row
+ * (security audit 2026-10-29, L2). The pause is short and the same whether or
+ * not the email has an account (`services/auth/loginBackoff.ts`).
+ */
+export const loginBackoffErr = (retryAfterSeconds: number) => {
+  const minutes = Math.ceil(retryAfterSeconds / 60);
+  return new ClientSafeError({
+    message: `Too many wrong passwords for this email. Please wait ${minutes} minute${minutes === 1 ? "" : "s"} and try again, or reset your password.`,
+    status: Status.TOO_MANY_REQUESTS,
+    data: { reason: "loginBackoff", retryAfter: retryAfterSeconds },
+    isClientFriendly: true,
+  });
+};
+
 /** The daily cap on bug reports (`config/BugReportConfig.ts`) is reached. Nothing is saved. */
 export const bugReportLimitErr = (perDay: number) =>
   new ClientSafeError({
@@ -481,6 +496,19 @@ export const cannotLeaveMapRoom2Err = () =>
     message: "Your yard is on Map Room 2 and cannot go back to Map Room 1.",
     status: Status.CONFLICT,
     data: { reason: "mapRoom2Final" },
+    isClientFriendly: true,
+  });
+
+/**
+ * Map Room 3 is closed (security audit 2026-10-29, C1): no player may join it,
+ * and a save already on it may not start an attack, whose cost and result
+ * Map Room 3 took from the client.
+ */
+export const mapRoom3ClosedErr = () =>
+  new ClientSafeError({
+    message: "Map Room 3 is closed.",
+    status: Status.CONFLICT,
+    data: { reason: "mapRoom3Closed" },
     isClientFriendly: true,
   });
 

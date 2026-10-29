@@ -1,5 +1,5 @@
 import { SESSION_STORAGE_KEY } from "@/config";
-import { ApiError, get, post, setAuthToken } from "./http";
+import { ApiError, get, getAuthToken, post, setAuthToken } from "./http";
 import {
   SessionType,
   type LoginRequest,
@@ -168,13 +168,23 @@ export const restoreStoredSession = (): Session | null => {
 };
 
 /**
- * Clears the session locally.
+ * Signs out on the server: POST /api/:apiVersion/player/logout with the
+ * session's token, which the server then drops, so a copy of the token stops
+ * working at once (security audit 2026-10-29, L4).
+ */
+const LOGOUT_PATH = "/api/:apiVersion/player/logout";
+
+/**
+ * Clears the session locally and asks the server to end it.
  *
- * There is no server-side logout: the Redis token entry is only replaced by a
- * new login or dropped when the JWT expires. Forgetting the token here is the
- * whole of what a client can do.
+ * The server call is best effort and not waited for: the player is signed
+ * out here whether or not it arrives, and a token it misses still ends at
+ * the next sign-in or when it expires.
  */
 export const logout = (): void => {
+  const token = current?.token ?? getAuthToken();
+  if (token) void post(LOGOUT_PATH, {}, { token, keepalive: true }).catch(() => undefined);
+
   current = null;
   lastBookmarks = undefined;
   setAuthToken(null);
