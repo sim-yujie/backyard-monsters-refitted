@@ -8,7 +8,8 @@ import {
   changeUsernameLimiter,
   debugDataLimiter,
   getAreaLimiter,
-  getCellsLimiter,
+  attackLogsLimiter,
+  purchasePowerupLimiter,
   sightLimiter,
   loginLimiter,
   forgotPasswordEmailLimiter,
@@ -47,6 +48,7 @@ import { init } from "./controllers/init.js";
 import { supportedLangs } from "./controllers/supportedLangs.js";
 
 import { login } from "./controllers/auth/login.js";
+import { logout } from "./controllers/auth/logout.js";
 import { register } from "./controllers/auth/register.js";
 import { signUpOptions } from "./controllers/auth/signUpOptions.js";
 import { forgotPassword } from "./controllers/auth/forgotPassword.js";
@@ -93,10 +95,6 @@ import { autoAttack, autoAttackPlan, autoAttackReplay } from "./controllers/mapr
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
 import { saveBookmarks } from "./controllers/maproom/v2/saveBookmarks.js";
 
-import { initialPlayerCellData } from "./controllers/maproom/v3/initialPlayerCellData.js";
-import { getMapRoomCells } from "./controllers/maproom/v3/getCells.js";
-import { relocate } from "./controllers/maproom/v3/relocate.js";
-import { getFriendInfo } from "./controllers/maproom/v3/getFriendInfo.js";
 
 import { getMessageTargets } from "./controllers/mail/getMessageTargets.js";
 import { getMessageThreads } from "./controllers/mail/getMessageThreads.js";
@@ -171,6 +169,7 @@ router.get("/connection", (ctx) => (ctx.status = Status.OK));
 * 📦 Auth
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/player/getinfo", apiVersion, loginLimiter, logRequest, login);
+router.post("/api/:apiVersion/player/logout", apiVersion, verifyUserAuth, logRequest, logout);
 router.post("/api/:apiVersion/player/register", apiVersion, registerLimiter, logRequest, register);
 router.get("/api/:apiVersion/player/signupoptions", apiVersion, signUpOptions);
 router.post("/api/:apiVersion/player/forgotPassword", apiVersion, forgotPasswordIpLimiter, forgotPasswordEmailLimiter, forgotPassword);
@@ -266,13 +265,10 @@ router.post("/api/:apiVersion/player/savebookmarks", apiVersion, verifyUserAuth,
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 3
 * ──────────────────────────────────────────────── */
-router.post("/worldmapv3/initworldmap", verifyUserAuth, verifyAccountStatus, logRequest, initialPlayerCellData);
-router.get("/worldmapv3/initworldmap", verifyUserAuth, verifyAccountStatus, logRequest, initialPlayerCellData);
-router.post("/worldmapv3/getcells", verifyUserAuth, verifyAccountStatus, getCellsLimiter, logRequest, getMapRoomCells);
-router.get("/worldmapv3/relocate", verifyUserAuth, verifyAccountStatus, logRequest, relocate);
-router.get("/worldmapv3/getfriendinfo", verifyUserAuth, verifyAccountStatus, getFriendInfo);
-router.get("/worldmapv3/setmapversion", verifyUserAuth, verifyAccountStatus, logRequest, setMapVersion);
-router.post("/worldmapv3/setmapversion", verifyUserAuth, verifyAccountStatus, logRequest, setMapVersion);
+// None of it is mounted (security audit 2026-10-29, C1 and M2): the web client
+// never had Map Room 3, which took an attack's cost and result from the client,
+// and `/worldmapv3/relocate` moved any player off their Map Room 2 world for
+// free. `setmapversion` refuses version 3 on the Map Room 2 route above.
 
 /**  ────────────────────────────────────────────────
 * 📦 Mail
@@ -346,7 +342,7 @@ router.get("/api/:apiVersion/worlds", publicReadLimiter, getAvailableWorlds);
 router.get("/api/:apiVersion/leaderboards", publicReadLimiter, getLeaderboards);
 // The leaderboard by empire points (beta.4, `services/leaderboard/empireBoard.ts`): the top 100 and the caller's own row.
 router.get("/api/:apiVersion/leaderboards/empire", apiVersion, verifyUserAuth, verifyAccountStatus, leaderboardLimiter, getEmpireBoard);
-router.get("/api/:apiVersion/attacklogs", verifyUserAuth, getAttackLogs);
+router.get("/api/:apiVersion/attacklogs", verifyUserAuth, attackLogsLimiter, getAttackLogs);
 
 /**  ────────────────────────────────────────────────
 * 📦 Alliances
@@ -362,7 +358,7 @@ router.post("/alliance/requestjoin", verifyUserAuth, allianceJoinRequestLimiter,
 router.post("/alliance/inviteuser", verifyUserAuth, allianceInviteLimiter, logRequest, inviteUser);
 router.get("/alliance/getpowerups", verifyUserAuth, logRequest, getPowerups);
 router.post("/alliance/activatepowerup", verifyUserAuth, logRequest, activatePowerup);
-router.post("/alliance/purchasepowerup", verifyUserAuth, logRequest, purchasePowerup);
+router.post("/alliance/purchasepowerup", verifyUserAuth, purchasePowerupLimiter, logRequest, purchasePowerup);
 router.post("/alliance/changeinvitestatus", verifyUserAuth, logRequest, changeInviteStatus);
 router.get("/alliance/getmessages", verifyUserAuth, logRequest, getMessages);
 router.post("/alliance/deletemessages", verifyUserAuth, logRequest, deleteMessages);

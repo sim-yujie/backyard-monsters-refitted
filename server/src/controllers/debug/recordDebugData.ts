@@ -26,8 +26,8 @@ interface DebugData {
 /**
  * Controller to record debug data.
  *
- * This controller logs debug information sent from the client. It logs either an
- * error or info message depending on the key provided by the client. 
+ * This controller logs debug information sent from the client. It logs either a
+ * warning or an info message depending on the key provided by the client.
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -47,8 +47,11 @@ export const recordDebugData: KoaController = async (ctx) => {
       details: clip(body.value, MAX_DETAILS_LENGTH),
     };
 
+    // Logged as a warning, never an error: anyone may call this, and an error
+    // lands in the owner's error list and counts towards the error-rate alert
+    // (security audit 2026-10-29, L1).
     if (body.key === LOG_LEVEL.ERROR) {
-      logger.error("ERROR logged for basesaveid {saveid}. Details: {details}", properties);
+      logger.warn("Client ERROR logged for basesaveid {saveid}. Details: {details}", properties);
     } else {
       logger.info("INFO logged for basesaveid {saveid}. Details: {details}", properties);
     }

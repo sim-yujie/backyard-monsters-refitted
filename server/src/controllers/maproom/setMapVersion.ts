@@ -10,11 +10,11 @@ import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { Env } from "../../enums/Env.js";
-import { joinNewWorldMap } from "../../services/maproom/v3/joinNewWorldMap.js";
 import { extractTownHall } from "../../utils/extractTownHall.js";
 import {
   cannotLeaveMapRoom2Err,
   discordAgeErr,
+  mapRoom3ClosedErr,
   mustLeaveAllianceToChangeWorldErr,
   townHallLevelErr,
 } from "../../errors/errors.js";
@@ -41,7 +41,9 @@ const SetMapVersionSchema = z.object({
  * touched. The Flash client sent NONE when an upgraded Map Room was recycled
  * (`client/scripts/BUILDING11.as:216-226`); the revamp refuses that recycle too.
  * - V2:   Requires Town Hall level 6. Joins or creates an MR2 world and marks mr2upgraded.
- * - V3:   Requires Town Hall level 6. Joins the MR3 world map.
+ * - V3:   Refused (`mapRoom3ClosedErr`, security audit 2026-10-29, C1). Map
+ *         Room 3 took an attack's cost and result from the client, and the web
+ *         client never had it. A save already on it can still leave with NONE.
  *
  * @param {Context} ctx - The Koa context object
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -53,6 +55,8 @@ export const setMapVersion: KoaController = async (ctx) => {
   const save = user.save!;
 
   const { version } = SetMapVersionSchema.parse(ctx.request.body);
+
+  if (version === MapRoomVersion.V3) throw mapRoom3ClosedErr();
 
   if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
 
@@ -106,23 +110,6 @@ export const setMapVersion: KoaController = async (ctx) => {
       if (maproom1) postgres.em.remove(maproom1);
       break;
     }
-
-    case MapRoomVersion.V3:
-      if (user.alliance_id) throw mustLeaveAllianceToChangeWorldErr();
-
-      await clearPendingInvites(user.userid);
-
-      const townHall = extractTownHall(save.buildingdata ?? {});
-
-      if (!save.mr2upgraded && (!townHall || townHall.l < 6)) throw townHallLevelErr();
-
-      await joinNewWorldMap(user, save);
-      save.mapversion = MapRoomVersion.V3;
-
-      const maproom1 = await postgres.em.findOne(Maproom, { userid: user.userid });
-
-      if (maproom1) postgres.em.remove(maproom1);
-      break;
   }
   postgres.em.persist(save);
   await postgres.em.flush();

@@ -3,6 +3,7 @@ import { Env } from "../enums/Env.js";
 import { Status } from "../enums/StatusCodes.js";
 import type { Context } from "koa";
 import { SPAM_LIMITS, type SpamLimit } from "../config/SpamLimitConfig.js";
+import { addressBucket } from "../utils/addressBucket.js";
 
 /**
  * Keys a limiter by account, falling back to IP only for unauthenticated routes.
@@ -125,16 +126,33 @@ export const alliancesLimiter = RateLimit.middleware({
 });
 
 /**
- * Rate limit for MR3 getcells - 60 requests per minute per user.
+ * Rate limit for the attack log - 30 requests per minute per user (security
+ * audit 2026-10-29, M3). Each answer can hold 50 full attack reports.
  */
-export const getCellsLimiter = RateLimit.middleware({
+export const attackLogsLimiter = RateLimit.middleware({
   interval: { min: 1 },
-  max: 60,
-  prefixKey: "getcells",
-  keyGenerator: byUser("getcells"),
+  max: 30,
+  prefixKey: "attacklogs",
+  keyGenerator: byUser("attacklogs"),
   handler: async (ctx: Context) => {
     ctx.status = Status.TOO_MANY_REQUESTS;
-    ctx.body = { error: "Too many cell requests. Please slow down." };
+    ctx.body = { error: "Too many attack log requests. Please slow down." };
+  },
+});
+
+/**
+ * Rate limit for buying alliance power-up hours with Shiny - 20 per minute per
+ * user (security audit 2026-10-29, M1). A purchase is a click in the alliance
+ * window, so this is far above normal play.
+ */
+export const purchasePowerupLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "purchasepowerup",
+  keyGenerator: byUser("purchasepowerup"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many power-up purchases. Please slow down." };
   },
 });
 
@@ -229,12 +247,14 @@ export const changeUsernameLimiter = RateLimit.middleware({
 });
 
 /**
- * Rate limit for login - 30 requests per 5 minutes in prod, 30 per minute in dev.
+ * Rate limit for login - 30 requests per 5 minutes in prod, 30 per minute in dev,
+ * per address, an IPv6 address counted by its /64 (`utils/addressBucket.ts`).
  */
 export const loginLimiter = RateLimit.middleware({
   interval: { min: process.env.ENV === Env.PROD ? 5 : 1 },
   max: 30,
   prefixKey: "login",
+  keyGenerator: async (ctx: Context) => `login|${addressBucket(ctx.ip)}`,
   handler: async (ctx: Context) => {
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = { error: "Too many login attempts. Please try again later." };

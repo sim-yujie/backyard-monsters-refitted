@@ -36,10 +36,7 @@ export const BaseLoadSchema = z.object({
    */
   attackData: optionalJsonField<AttackData>("attackData"),
 
-  /**
-   * The MR3 out-of-range attack cost, sent by the client when attacking outside
-   * the player's range. Either resource amounts or a shiny cost.
-   * @type {{ resources?: number[]; shiny?: number } | undefined}
-   */
-  attackcost: optionalJsonField<{ resources?: number[]; shiny?: number }>("attackcost"),
+  // No `attackcost`: Map Room 3 took its attack cost from here, and a negative
+  // one paid the attacker (security audit 2026-10-29, C1). A field sent anyway
+  // is dropped by the parse.
 });
