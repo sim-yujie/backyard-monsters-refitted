@@ -15,9 +15,14 @@ describe("cacheControlFor", () => {
     expect(cacheControlFor("/assets/sounds/music/yard-theme.mp3", true)).toBe("public, max-age=3600");
   });
 
-  test("keeps nothing from the API, or from a local server", () => {
+  test("keeps nothing from the API", () => {
     expect(cacheControlFor("/api/v2.0.0/bm/getnewmap.png", true)).toBe("no-cache, no-store, must-revalidate");
-    expect(cacheControlFor("/assets/monsters/pokey-anim@2x.png", false)).toBe("no-cache, no-store, must-revalidate");
+    expect(cacheControlFor("/api/v2.0.0/bm/getnewmap.png", false)).toBe("no-cache, no-store, must-revalidate");
+  });
+
+  test("has a local server's files checked every time", () => {
+    expect(cacheControlFor("/assets/monsters/pokey-anim@2x.png", false)).toBe("no-cache");
+    expect(cacheControlFor("/assets/sounds/music/yard-theme.mp3", false)).toBe("no-cache");
   });
 });
 

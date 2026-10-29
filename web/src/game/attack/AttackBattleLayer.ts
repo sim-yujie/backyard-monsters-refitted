@@ -392,7 +392,7 @@ export type SheetLoader = (url: string) => Promise<Texture>;
  * drawn at a quarter of its size or less at the usual zoom, and without them
  * it shimmers.
  */
-const loadSheet: SheetLoader = (url) =>
+export const loadSheet: SheetLoader = (url) =>
   Assets.load<Texture>(
     isHighResolutionSheet(url) ? { src: url, data: { autoGenerateMipmaps: true } } : url,
   );

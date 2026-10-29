@@ -30,7 +30,10 @@ export class YardTextures {
   /** Extra listeners added by `watch`, alongside the one the owner passed in. */
   private readonly watchers = new Set<(key: string) => void>();
 
-  /** Called once per texture that arrives, so the renderer knows to redraw. */
+  /**
+   * Called once per texture that arrives, and once per one that fails, so the
+   * renderer knows to redraw: a failed picture gets its building's name.
+   */
   constructor(private readonly onReady: (key: string) => void) {}
 
   /**
@@ -85,6 +88,7 @@ export class YardTextures {
         .catch((caught: unknown) => {
           console.warn(`Building art ${image.url} did not load; drawing a placeholder.`, caught);
           this.failed.add(key);
+          this.announce(key);
         })
         .finally(() => {
           this.pending.delete(key);
@@ -131,6 +135,7 @@ export class YardTextures {
         .catch((caught: unknown) => {
           console.warn(`Building animation ${anim.url} did not load; skipping the layer.`, caught);
           this.failed.add(key);
+          this.announce(key);
         })
         .finally(() => {
           this.pending.delete(key);

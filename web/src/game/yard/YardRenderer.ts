@@ -12,7 +12,7 @@ import { YardLifeLayer } from "./YardLifeLayer";
 import { holdBack, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
 import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
-import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
+import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
@@ -84,8 +84,24 @@ export class YardRenderer {
   private readonly hatchMarks = new YardHatchMarks((id) => this.hatchMarkAnchor(id));
   /** The wrenches over a friend's yard on a visit (#374); see `YardHelpMarks`. */
   private readonly helpMarks = new YardHelpMarks((id) => this.hatchMarkAnchor(id));
+  /** Opens {@link sheetsAllowed}; see there. */
+  private allowSheets: () => void = () => {};
+  /**
+   * Settles once the first yard shown has every building's picture, or after
+   * {@link SHEET_HOLD_MS} at most. The creatures' sheets wait for it: a
+   * painted monster sheet is up to 10 MB, three of them came to 24 MB on a
+   * full yard, and fetched alongside the building pictures they held those
+   * back for seconds on a slow link. Once open it stays open.
+   */
+  private readonly sheetsAllowed = new Promise<void>((resolve) => {
+    this.allowSheets = resolve;
+  });
+  private sheetHold: ReturnType<typeof setTimeout> | null = null;
   /** What lives on the yard (#158, #159): scenery, never in the battle. */
-  private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
+  private readonly life = new YardLifeLayer({
+    reducedMotion: prefersReducedMotion(),
+    textures: new MonsterSheetTextures((url) => this.sheetsAllowed.then(() => loadSheet(url))),
+  });
   /** The planner is open: the creatures step out of the way until it closes. */
   private lifeHidden = false;
   /** The life last set, before {@link lifeHolds} cut it. */
@@ -146,6 +162,7 @@ export class YardRenderer {
   private zoomWatcher: ((zoom: number) => void) | null = null;
 
   constructor() {
+    this.buildings.onArtReady(() => this.openSheets());
     this.isoDecals.eventMode = "none";
     this.root.addChild(
       this.ground.root,
@@ -235,6 +252,7 @@ export class YardRenderer {
       yard.kind === "inferno" ? "lava" : "grass",
     );
     void this.ground.loadTiles();
+    this.sheetHold ??= setTimeout(() => this.openSheets(), SHEET_HOLD_MS);
 
     // The creatures outlive a redraw: out of the containers the yard is about
     // to empty, and back in once it has refilled them.
@@ -834,7 +852,14 @@ export class YardRenderer {
     if (sprite && mushroom) sprite.position.set(mushroom.worldX, mushroom.worldY);
   }
 
+  /** Lets the creatures' sheets load; see {@link sheetsAllowed}. */
+  private openSheets(): void {
+    this.allowSheets();
+    if (this.sheetHold !== null) clearTimeout(this.sheetHold);
+  }
+
   destroy(): void {
+    this.openSheets();
     this.unwatchSeason?.();
     this.unwatchSeason = null;
     this.collect.destroy();
@@ -999,6 +1024,13 @@ export class YardRenderer {
 const PUMPKIN_ART = "/assets/buildings/decorations/pumpkins/top.png";
 const PUMPKIN_BASE = 0.9;
 const PUMPKIN_SCALE = 1.3;
+
+/**
+ * The longest the creatures' sheets wait for the building pictures, in
+ * milliseconds: a building picture that never answers must not keep the
+ * yard empty of monsters.
+ */
+const SHEET_HOLD_MS = 4000;
 
 /** How far a hatchery's number is raised over a job bar and its time, world pixels at zoom 1. */
 const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;
