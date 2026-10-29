@@ -188,6 +188,38 @@ describe("yardLifeOf on somebody else's yard (#159)", () => {
   });
 });
 
+describe("yardLifeOf on the Inferno", () => {
+  // The same yard with its Housing turned into Housing Bunkers, as an Inferno has them.
+  const inferno = {
+    ...save,
+    type: "inferno",
+    buildingdata: Object.fromEntries(
+      Object.entries(save.buildingdata ?? {}).map(([key, row]) => [
+        key,
+        Number(row?.t) === 15 ? { ...row, t: 128 } : row,
+      ]),
+    ),
+  } as BaseLoadResponse;
+
+  it("pens the monsters in its Housing Bunkers (`HOUSING.as:211`)", () => {
+    const life = yardLifeOf(inferno, readYard(inferno));
+    expect(life.pens.map((pen) => pen.id)).toEqual([82, 584, 585, 586]);
+    expect(walkerSpecs(life, seeded()).length).toBeGreaterThan(0);
+  });
+
+  it("is no pen for Monster Housing there, nor a Bunker on the main yard", () => {
+    const mixed = { ...inferno, buildingdata: save.buildingdata } as BaseLoadResponse;
+    expect(yardLifeOf(mixed, readYard(mixed)).pens).toEqual([]);
+    const main = { ...inferno, type: save.type } as BaseLoadResponse;
+    expect(yardLifeOf(main, readYard(main)).pens).toEqual([]);
+  });
+
+  it("leaves the pens to the combat engine's defenders on an attack", () => {
+    expect(yardLifeOf(inferno, readYard(inferno, { foreign: true }), "attack").pens).toEqual([]);
+    expect(yardLifeOf(inferno, readYard(inferno, { foreign: true }), "visit").pens).toHaveLength(4);
+  });
+});
+
 describe("holdBack (#228)", () => {
   const life = lifeWith({
     groups: [

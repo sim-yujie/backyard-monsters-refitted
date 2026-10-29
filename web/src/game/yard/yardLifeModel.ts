@@ -6,7 +6,7 @@ import {
   monsterMovement,
   monsterTickSpeed,
 } from "@/game/combat/rules";
-import { academyLevel } from "@/game/monsters/housing";
+import { academyLevel, HOUSING_BUNKER_TYPE, housingTypeOf } from "@/game/monsters/housing";
 import { footprintOf, fromIso } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
@@ -56,6 +56,13 @@ import type { Yard, YardBuilding } from "./yardModel";
  * its pen (`CreepBase.as:260`), so it stands on the ground over its shadow,
  * which the owner kept (#211) when the flyers went higher on the attack
  * screen.
+ *
+ * On the Inferno the pens are its Compounds, the Housing Bunker (type 128):
+ * `Populate` takes `HOUSINGBUNKER` there instead of `BUILDING15`
+ * (`HOUSING.as:211`), with the same 160 x 160 footprint and `PointInHouse`. On
+ * an attacked Inferno yard the bunkers' monsters are the combat engine's to
+ * draw, as the defenders they send out (`housedGarrisons`), so the pens stay
+ * empty there rather than show each of them twice.
  *
  * Flash drew every one. A big army is thousands, so this draws a sample:
  * {@link sampleArmy} keeps every type present and shares at most
@@ -135,8 +142,7 @@ export const MAX_TICKS_PER_FRAME = 20;
 /** The most housed monsters drawn at once across the whole yard. */
 export const MAX_HOUSED_DRAWN = 150;
 
-/** Housing's type id and its pen (`HOUSING.as:237-240`). */
-export const HOUSING_TYPE = 15;
+/** Housing's pen (`HOUSING.as:237-240`); the Inferno's Housing Bunker has the same. */
 const PEN = { inset: 40, size: 80 } as const;
 
 /** The Champion Cage's type id and its pen (`CHAMPIONCAGE.as:280-283`). */
@@ -290,6 +296,7 @@ const TRIBE_TYPE = "tribe";
  *
  * Pens are the Housing buildings with health above zero, as `Populate` takes
  * them (`HOUSING.as:212-215`); one still being built counts, as it did there.
+ * On the Inferno they are its Housing Bunkers, and none on an attacked one.
  * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`), and is
  * empty on an attacked yard; a wild monster camp has no workers.
  *
@@ -309,6 +316,8 @@ export const yardLifeOf = (
     groups.push({ id, level: academyLevel(save.academy, id), count });
   }
 
+  const housing = housingTypeOf(save);
+  const penned = !(housing === HOUSING_BUNKER_TYPE && view === "attack");
   const pens: LifePen[] = [];
   let cage: LifePen | null = null;
   let chamber: LifeArea | null = null;
@@ -317,7 +326,7 @@ export const yardLifeOf = (
   for (const building of yard.buildings) {
     const [width, height] = building.footprint;
     footprints.push({ x: building.x, y: building.y, width, height });
-    if (building.type === HOUSING_TYPE && standing(building)) {
+    if (penned && building.type === housing && standing(building)) {
       pens.push({ id: building.id, x: building.x, y: building.y });
     }
     if (building.type === CHAMPION_CAGE_TYPE && cage === null) {
