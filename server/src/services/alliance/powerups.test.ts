@@ -7,7 +7,9 @@ import { POWERUP_RULES } from "../../config/AllianceConfig.js";
 /**
  * Buying power-up hours with Shiny is safe against two requests sent at once
  * (security audit 2026-10-29, M1): both used to pass the balance check and
- * only one charge stuck. Drives `reducePowerupCharge` over a stand-in
+ * only one charge stuck. Starting a power-up is too (wave 2): both starts
+ * passed the "charged" check and both were announced. Drives
+ * `reducePowerupCharge` and `startPowerup` over a stand-in
  * database whose transactions each work on their own copies of the rows,
  * write every row they read back whole on flush (as an absolute write does),
  * and wait on a row another transaction holds `FOR UPDATE`.
@@ -98,7 +100,7 @@ mock.module("./allianceMessages.js", () => ({
   },
 }));
 
-const { reducePowerupCharge } = await import("./powerups.js");
+const { reducePowerupCharge, startPowerup } = await import("./powerups.js");
 
 const ARMAMENT = POWERUP_RULES[0]!;
 
@@ -176,5 +178,42 @@ describe("buying power-up hours with Shiny (security audit 2026-10-29, M1)", () 
     expect(await purchase).toEqual({ ok: false, message: "You do not have enough Shiny for that." });
     expect(saveRow.credits).toBe(50);
     expect(armament().end_time).toBe(chargedUntil);
+  });
+});
+
+const start = () =>
+  startPowerup({ allianceId: ALLIANCE, author: { userid: 1 } as never, powerupId: ARMAMENT.powerup_id }).then(
+    () => ({ ok: true as const }),
+    (error: Error) => ({ ok: false as const, message: error.message })
+  );
+
+describe("starting a power-up (security audit 2026-10-29, wave 2)", () => {
+  test("a charged power-up starts and runs for its running time", async () => {
+    armament().end_time = now() - 1;
+
+    expect(await start()).toEqual({ ok: true });
+    expect(armament().active).toBe(true);
+    expect(armament().end_time as number).toBeGreaterThanOrEqual(now() + ARMAMENT.running_time - 1);
+    expect(shouts).toEqual([ARMAMENT.type]);
+  });
+
+  test("two starts at once: one goes through, the other finds it running", async () => {
+    armament().end_time = now() - 1;
+
+    const outcomes = await Promise.all([start(), start()]);
+
+    expect(outcomes.filter((outcome) => outcome.ok)).toHaveLength(1);
+    expect(outcomes.filter((outcome) => !outcome.ok)).toEqual([
+      { ok: false, message: "This Power-Up is already active." },
+    ]);
+    expect(armament().active).toBe(true);
+    expect(shouts).toHaveLength(1);
+  });
+
+  test("a power-up still charging is refused and left as it was", async () => {
+    expect(await start()).toEqual({ ok: false, message: "This Power-Up is not ready to activate." });
+    expect(armament().active).toBe(false);
+    expect(armament().end_time).toBe(chargedUntil);
+    expect(shouts).toEqual([]);
   });
 });

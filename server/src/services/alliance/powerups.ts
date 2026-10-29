@@ -97,42 +97,54 @@ export const alliancePowerup = async (
 /**
  * Starts a charged power-up, buffing every member of the alliance for its running time.
  *
+ * The charge is read, checked and written inside one transaction holding the
+ * alliance's power-up rows' lock, as {@link reducePowerupCharge} does. Read
+ * outside it, two starts sent at once both passed the "charged" check and
+ * both announced the start (security audit 2026-10-29, wave 2).
+ *
  * @param {number} allianceId - The alliance starting it.
  * @param {number} powerupId - Which power-up, from the getpowerups rows.
  * @returns {Promise<Powerup[]>} All the alliance's power-ups, the started one updated.
  * @throws {ClientSafeError} When the id is unknown, or it is already running or still charging.
  */
 export const startPowerup = async ({ allianceId, author, powerupId }: PowerupActivation): Promise<Powerup[]> => {
-  const powerups: Powerup[] = await alliancePowerup(allianceId);
+  // A power-up the alliance has never held is seeded first, outside the lock.
+  await alliancePowerup(allianceId);
 
-  const powerup = powerups.find(({ rules }) => rules.powerup_id === powerupId);
-  
-  if (!powerup) throw powerupUnknownErr();
+  const outcome = await postgres.em.transactional(async (em) => {
+    const powerups = await alliancePowerup(allianceId, em, true);
 
-  const { rules, status } = powerup;
-  const now = getCurrentDateTime();
+    const powerup = powerups.find(({ rules }) => rules.powerup_id === powerupId);
 
-  if (status.active) throw powerupRunningErr();
-  if (status.end_time > now) throw powerupNotReadyErr();
+    if (!powerup) throw powerupUnknownErr();
 
-  status.active = true;
-  status.end_time = now + rules.running_time;
+    const { rules, status } = powerup;
+    const now = getCurrentDateTime();
 
-  await postgres.em.flush();
+    if (status.active) throw powerupRunningErr();
+    if (status.end_time > now) throw powerupNotReadyErr();
+
+    status.active = true;
+    status.end_time = now + rules.running_time;
+
+    await em.flush();
+
+    return { powerups, type: rules.type };
+  });
 
   // Declare War's +2 reach changes every member's Map Room 2 fog of war
   // sight; a cache built before this start is missing it (issue #329,
   // `docs/design/fog-of-war.md` §9).
-  if (rules.type === AlliancePowerupType.DECLARE_WAR) await invalidateAllianceSight(allianceId);
+  if (outcome.type === AlliancePowerupType.DECLARE_WAR) await invalidateAllianceSight(allianceId);
 
   await announceShout({
     allianceId,
     author,
     type: AllianceMessageType.POWERUP_ACTIVATED,
-    body: rules.type,
+    body: outcome.type,
   });
 
-  return powerups;
+  return outcome.powerups;
 };
 
 /**
