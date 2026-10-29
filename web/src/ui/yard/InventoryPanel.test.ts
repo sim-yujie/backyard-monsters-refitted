@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { setClassicLook } from "@/game/classicLook";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { InventoryPanel } from "./InventoryPanel";
 
@@ -33,6 +34,7 @@ const node = (over: Partial<PlanNode> & { id: number }): PlanNode => ({
 const panels: InventoryPanel[] = [];
 
 afterEach(() => {
+  setClassicLook(false);
   while (panels.length > 0) panels.pop()?.close();
   document.body.replaceChildren();
 });
@@ -224,9 +226,11 @@ describe("the inventory drawer", () => {
   });
 
   it("crops an animation strip to its first cell rather than squeezing it in", () => {
-    // The Monster Bunker ships no still picture: its `top` is a 1350 x 83
-    // strip of fifteen 90 x 83 cells. Fitting the whole file into 28 pixels
-    // draws a 28 x 2 smear, which is what "no icon" looked like.
+    // The Flash Monster Bunker (the Classic look's) ships no still picture:
+    // its `top` is a 1350 x 83 strip of fifteen 90 x 83 cells. Fitting the
+    // whole file into 28 pixels draws a 28 x 2 smear, which is what "no icon"
+    // looked like.
+    setClassicLook(true);
     const panel = mount();
     panel.setNodes([node({ id: 1, type: 22, level: 1, width: 90, height: 90 })]);
 

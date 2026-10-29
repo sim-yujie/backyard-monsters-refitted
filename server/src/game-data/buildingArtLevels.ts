@@ -28,16 +28,21 @@ export const BUILDING_ART_LEVELS: Readonly<Record<number, readonly number[]>> = 
 };
 
 /**
- * The tiers of the 3D towers players see with the Modern look, the Cannon,
- * Sniper and Laser (`MODERN_TOWERS` in `web/src/game/yard/buildingArtTiers.ts`):
- * tiers 2 and 3 from levels 4 and 7. The Flash towers, and the Classic look,
- * have one picture for every level. The towers whose painted tiers players
- * do not see yet are not named, so they still read 1 and give nothing away.
+ * The tiers of the towers players see with the Modern look
+ * (`MODERN_TOWERS` in `web/src/game/yard/buildingArtTiers.ts`): tiers 2 and 3
+ * from levels 4 and 7, the Monster Bunker's (five levels) from 3 and 5. The
+ * Flash towers, and the Classic look, have one picture for every level. A
+ * viewer is sent only the tier's first level, never the exact level.
+ * Always on: the old `TOWER_TIER_ART` env switch is removed.
  */
 export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   20: [1, 4, 7],
   21: [1, 4, 7],
+  22: [1, 3, 5],
   23: [1, 4, 7],
+  25: [1, 4, 7],
+  115: [1, 4, 7],
+  118: [1, 4, 7],
 };
 
 /**

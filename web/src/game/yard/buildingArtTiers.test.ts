@@ -11,7 +11,6 @@ import {
   TOWN_HALL_ART,
   forgetOldTowerSwitch,
   newTowerArt,
-  setPaintedTowerArt,
   tierArtFor,
   tierLift,
 } from "./buildingArtTiers";
@@ -21,7 +20,7 @@ const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import
 
 const TOWERS = [20, 21, 22, 23, 25, 115, 118];
 
-/** The towers whose painted tiers players do not see yet: Bunker, Tesla, Aerial Defense, Railgun. */
+/** The towers with painted (not 3D) tiers: Bunker, Tesla, Aerial Defense, Railgun. */
 const PAINTED = [22, 25, 115, 118];
 
 /** The towers whose turret turns: Cannon, Sniper, Laser, Aerial Defense, Railgun. */
@@ -60,26 +59,26 @@ const blockedStore = (): Storage =>
   }) as unknown as Storage;
 
 describe("the defaults", () => {
-  it("show the Modern look: the new Town Hall, the 3D Cannon, Sniper and Laser, the other towers as Flash", () => {
+  it("show the Modern look: the new Town Hall and the new tiers of all seven towers", () => {
     expect(classicLook()).toBe(false);
     expect(newTowerArt()).toBe(true);
-    expect(MODERN_TOWERS).toEqual([20, 21, 23]);
+    expect(MODERN_TOWERS).toEqual(TOWERS);
     expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new6@2x.webp");
     expect(resolveArt(20, 8, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/cannontower/top.t3@2x.webp");
     expect(resolveArt(21, 5, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/snipertower/top.t2@2x.webp");
     expect(resolveArt(23, 1, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/lasertower/top.t1@2x.webp");
-    for (const type of MODERN_TOWERS) expect(tierArtFor(type, 8)).not.toBeNull();
-    for (const type of PAINTED) {
-      expect(tierArtFor(type, 8)).toBeNull();
-      expect(tierLift(type, 8)).toBe(0);
-    }
+    expect(resolveArt(22, 5, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/bunker/top.t3@2x.webp");
+    expect(resolveArt(25, 4, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/lightningtower/top.t2@2x.webp");
+    expect(resolveArt(115, 7, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/flaktower/top.t3@2x.webp");
+    expect(resolveArt(118, 1, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/railguntower/top.t1@2x.webp");
+    for (const type of TOWERS) expect(tierArtFor(type, 8)).not.toBeNull();
+    for (const type of PAINTED) expect(tierLift(type, 8)).toBeGreaterThan(0);
   });
 });
 
 describe("the Classic look", () => {
-  it("brings back the Flash Town Hall and every Flash tower, the painted ones even when shown", () => {
+  it("brings back the Flash Town Hall and every Flash tower", () => {
     setClassicLook(true);
-    setPaintedTowerArt(true);
     try {
       expect(newTowerArt()).toBe(false);
       expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.6.png");
@@ -91,7 +90,6 @@ describe("the Classic look", () => {
       }
     } finally {
       setClassicLook(false);
-      setPaintedTowerArt(false);
     }
     expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new6@2x.webp");
   });
@@ -109,9 +107,6 @@ describe("the old hidden tower switch", () => {
 });
 
 describe("the repainted tower tiers", () => {
-  beforeEach(() => setPaintedTowerArt(true));
-  afterEach(() => setPaintedTowerArt(false));
-
   it("cover all seven defensive towers, three tiers each", () => {
     expect(Object.keys(TOWER_TIER_ART).map(Number)).toEqual(TOWERS);
     for (const type of TOWERS) {
@@ -248,9 +243,6 @@ describe("the repainted Town Hall", () => {
 });
 
 describe("the turning turrets", () => {
-  beforeEach(() => setPaintedTowerArt(true));
-  afterEach(() => setPaintedTowerArt(false));
-
   /**
    * Cells per strip: the Flash strip's order, up to the last cell the game
    * picks; the 3D towers' 32 headings, the Laser's for each of its 5 tilts.
@@ -427,13 +419,6 @@ describe("the turret towers with the Classic look", () => {
         for (const resolved of off) {
           expect(resolved?.still, where).toBeUndefined();
           expect(JSON.stringify(resolved), where).not.toMatch(/body\.t|turret\.t|top\.t\d@2x/);
-        }
-        // A painted tower not shown to players yet looks the same with Modern.
-        if (PAINTED.includes(type)) {
-          setClassicLook(false);
-          const modern = STATES.map((state) => resolveArt(type, level, state));
-          setClassicLook(true);
-          expect(modern, where).toEqual(off);
         }
       }
     }
