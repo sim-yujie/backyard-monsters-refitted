@@ -19,7 +19,7 @@ export const INFERNO_ART_ROWS: readonly ArtRow[] = [
   ], [500,950,1800,3400,6500,12000,24000,45000,85000,165000], 100],
   // 2 Coal Extractor (resource) — INFERNOYARDPROPS.as:216
   [2, "Coal Extractor", "buildings/icoalproducer/", [
-    [1,["top.1.v2.png",-32,-40],["top.1.damaged.v2.png",-34,-42],["top.1.destroyed.v2.png",-44,-4],["shadow.1.jpg",-40,14],["shadow.1.damaged.v2.jpg",-64,4],["shadow.1.destroyed.v2.jpg",-50,-2],[["anim.1.v2.png",-21,-45,40,18,47],["anim.2.v2.png",-39,-9,39,63,47]]],
+    [1,["top.1.v2.png",-32,-40],["top.1.damaged.v2.png",-34,-42],["top.1.destroyed.v2.png",-44,-4],["shadow.1.jpg",-40,14],["shadow.1.damaged.v2.jpg",-64,4],["shadow.1.destroyed.v2.jpg",-50,-2],[["anim.1.v2.png",-21,-45,40,18,47],["anim.2.v2.png",-39,-9,39,63,47],["anim.3.v2.png",-3,8.9,31,18,47]]],
     [3,["top.2.png",-40,-50],["top.2.damaged.png",-39,-52],["top.2.destroyed.png",-43,-9],["shadow.2.jpg",-42,7],["shadow.2.damaged.jpg",-43,5],null,[["anim.1.2.png",-40,-52,74,105,45]]],
   ], [500,950,1800,3400,6500,12000,24000,45000,85000,165000], 100],
   // 3 Sulfur Swirler (resource) — INFERNOYARDPROPS.as:337
@@ -29,8 +29,8 @@ export const INFERNO_ART_ROWS: readonly ArtRow[] = [
   ], [500,950,1800,3400,6500,12000,24000,45000,85000,165000], 100],
   // 4 Magma Pump (resource) — INFERNOYARDPROPS.as:458
   [4, "Magma Pump", "buildings/imagmaproducer/", [
-    [1,["top.1.v2.png",-35,-15],["top.1.damaged.v2.png",-39,-36],["top.1.destroyed.v2.png",-37,-2],["shadow.1.v2.jpg",-36,4],["shadow.1.damaged.v2.jpg",-49,2],["shadow.1.destroyed.v2.jpg",-41,6],[["anim.2.v2.png",-32,9,36,26,49],["anim.3.v2.png",-18,-60,34,58,49]]],
-    [3,["top.1.v2.png",-35,-15],["top.1.damaged.v2.png",-39,-36],["top.1.destroyed.v2.png",-37,-2],["shadow.1.v2.jpg",-36,4],["shadow.1.damaged.v2.jpg",-49,2],["shadow.1.destroyed.v2.jpg",-41,6],[["anim.2.v2.png",-32,9,36,26,49],["anim.3.v2.png",-18,-60,34,58,49]]],
+    [1,["top.1.v2.png",-35,-15],["top.1.damaged.v2.png",-39,-36],["top.1.destroyed.v2.png",-37,-2],["shadow.1.v2.jpg",-36,4],["shadow.1.damaged.v2.jpg",-49,2],["shadow.1.destroyed.v2.jpg",-41,6],[["anim.1.v2.png",9.2,12.6,25,31,49],["anim.2.v2.png",-32,9,36,26,49],["anim.3.v2.png",-18,-60,34,58,49]]],
+    [3,["top.1.v2.png",-35,-15],["top.1.damaged.v2.png",-39,-36],["top.1.destroyed.v2.png",-37,-2],["shadow.1.v2.jpg",-36,4],["shadow.1.damaged.v2.jpg",-49,2],["shadow.1.destroyed.v2.jpg",-41,6],[["anim.1.v2.png",9.2,12.6,25,31,49],["anim.2.v2.png",-32,9,36,26,49],["anim.3.v2.png",-18,-60,34,58,49]]],
   ], [500,950,1800,3400,6500,12000,24000,45000,85000,165000], 100],
   // 5 Flinger (special) — INFERNOYARDPROPS.as:547
   [5, "Flinger", "buildings/flinger/", [
@@ -53,7 +53,7 @@ export const INFERNO_ART_ROWS: readonly ArtRow[] = [
   ], [5000,10000], 120],
   // 13 Incubator (special) — INFERNOYARDPROPS.as:1042
   [13, "Incubator", "buildings/ihatchery/", [
-    [1,["top.1.v2.png",-55,-28],["top.1.damaged.v2.png",-50,-22],["top.1.destroyed.v2.png",-40,13],["shadow.1.v2.jpg",-77,15],["shadow.1.damaged.v2.jpg",-75,16],["shadow.1.destroyed.v2.jpg",-58,18],[["anim.1.v2.png",-48,-45,33,78,50]]],
+    [1,["top.1.v2.png",-55,-28],["top.1.damaged.v2.png",-50,-22],["top.1.destroyed.v2.png",-40,13],["shadow.1.v2.jpg",-77,15],["shadow.1.damaged.v2.jpg",-75,16],["shadow.1.destroyed.v2.jpg",-58,18],[["anim.1.v2.png",-48,-45,33,78,50],["anim.2.v2.png",4,13.5,27,31,50]]],
   ], [4000,16000,32000], 120],
   // 14 Under Hall (special) — INFERNOYARDPROPS.as:1151
   [14, "Under Hall", "buildings/itownhall/", [
@@ -67,8 +67,8 @@ export const INFERNO_ART_ROWS: readonly ArtRow[] = [
   ], [4000,14000,25000,43000,75000,130000], 200],
   // 17 Block (wall) — INFERNOYARDPROPS.as:1365
   [17, "Block", "buildings/iwalls/", [
-    [1,["top.1.v2.png",-24,-5],["top.1.damaged.v2.png",-24,-5],["top.1.destroyed.v2.png",-24,-5],null,null,null],
-    [2,["top.2.v2.png",-20,-9],["top.2.damaged.v2.png",-20,-9],["top.2.destroyed.v2.png",-20,-9],null,null,null],
+    [1,["top.1.v2.png",-24,-5],["top.1.damaged.v2.png",-24,-5],["top.1.destroyed.v2.png",-24,-5],["shadow.1.v2.jpg",-20,0.8],["shadow.1.damaged.v2.jpg",-20,0.8],["shadow.1.destroyed.v2.jpg",-20,0.8]],
+    [2,["top.2.v2.png",-20,-9],["top.2.damaged.v2.png",-20,-9],["top.2.destroyed.v2.png",-20,-9],["shadow.2.v2.jpg",-20,-0.9],["shadow.2.v2.jpg",-20,-0.9],["shadow.2.v2.jpg",-20,-0.9]],
     [3,["top.3.v2.png",-20,-27],["top.3.damaged.v2.png",-20,-27],["top.3.destroyed.v2.png",-18,-8],["shadow.3.v2.jpg",-20,-1],["shadow.3.v2.jpg",-20,-1],["shadow.3.v2.jpg",-20,-1]],
   ], [1000,2300,5750,18000,27000], 50],
   // 20 Blast Tower (tower) — INFERNOYARDPROPS.as:1667

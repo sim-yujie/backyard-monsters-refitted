@@ -1142,6 +1142,17 @@ body {
   padding: var(--space-4);
 }
 
+/* The login screen keeps the game's name, the panel and the footer inside the
+   window: on a short window the panel shrinks and scrolls inside itself, so
+   no form's bottom is ever cut off. Auto margins centre the stack without
+   pushing its top out of reach. */
+.scene-centre--login {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+}
+
 /* The game's name and beta warning over the sign-in panel. */
 .login-stack {
   display: flex;
@@ -1149,6 +1160,21 @@ body {
   align-items: center;
   gap: var(--space-4);
   max-width: 100%;
+  max-height: 100%;
+  margin-block: auto;
+}
+
+.login-stack > .login-brand,
+.login-stack > .login-footer {
+  flex-shrink: 0;
+}
+
+/* Too short even for a shrunk panel (a phone held sideways): the whole
+   screen scrolls instead. */
+@media (max-height: 480px) {
+  .login-stack {
+    max-height: none;
+  }
 }
 
 .login-brand {
@@ -1216,12 +1242,36 @@ body {
   flex: 1 1 auto;
 }
 
-/* The sign-in and sign-up panel may use nearly the whole screen height, so
-   the sign-up form (four fields, the bot check, the terms line) fits without
-   scrolling inside the panel on an 800 px tall screen (issue #213), less the
-   game's name and beta line above it. */
+/* "Have an account? Sign in" at the top of the sign-up form. */
+.login-form__have-account {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--colour-border);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.login-form__have-account-button {
+  padding-inline: var(--space-1);
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* The sign-in and sign-up panel takes whatever height the game's name and
+   the footer leave (issue #213) and scrolls inside itself past that. The
+   body's own height cap would otherwise cut it off above the window's bottom. */
+.panel--login {
+  min-height: 0;
+}
+
 .panel--login .panel__body {
-  max-height: min(calc(88vh - 72px), 760px);
+  max-height: none;
+  min-height: 0;
 }
 
 /* The Terms, Privacy and age line under Create account (issue #213). */

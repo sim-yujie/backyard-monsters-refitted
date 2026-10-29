@@ -78,6 +78,14 @@ describe("walkOutOfHatchery (#228)", () => {
     expect(hatcheryWalk(yard([far, hatchery, { ...near, hp: 0 }]), 4)?.to).toEqual({ x: -560, y: 40 });
   });
 
+  it("heads for a Housing Bunker on the Inferno, where Monster Housing is no home", () => {
+    const bunker = { id: 7, type: 128, x: 300, y: 0, footprint: [160, 160] as const };
+    const inferno = (buildings: object[]) => ({ ...yard(buildings), kind: "inferno" as const });
+    expect(hatcheryWalk(inferno([near, hatchery, bunker]), 4)?.to).toEqual({ x: 380, y: 80 });
+    expect(hatcheryWalk(inferno([near, hatchery]), 4)).toBeNull();
+    expect(hatcheryWalk(yard([hatchery, bunker]), 4)).toBeNull();
+  });
+
   it("does nothing without that Hatchery, a Housing, or anybody to walk", () => {
     expect(hatcheryWalk(yard([far, near]), 4)).toBeNull();
     expect(hatcheryWalk(yard([hatchery]), 4)).toBeNull();

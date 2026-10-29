@@ -111,6 +111,27 @@ const switchRow = (question: string, action: string, onClick: () => void): HTMLE
   return row;
 };
 
+/**
+ * The short "Have an account? Sign in" line at the top of the sign-up form, so
+ * a player who pressed Create account by mistake sees the way back at once.
+ */
+const backToSignInLine = (onClick: () => void): HTMLElement => {
+  const row = document.createElement("p");
+  row.className = "login-form__have-account";
+
+  const words = document.createElement("span");
+  words.textContent = "Have an account?";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn--ghost login-form__have-account-button";
+  button.textContent = "Sign in";
+  button.addEventListener("click", onClick);
+
+  row.append(words, button);
+  return row;
+};
+
 /** A link that opens in a new tab, so the half-filled form stays where it is. */
 const newTabLink = (href: string, words: string, rel = "noopener"): HTMLAnchorElement => {
   const link = document.createElement("a");
@@ -245,7 +266,7 @@ export class LoginScene implements Scene {
     clearTestHistory();
     unlockInbox.clear();
     this.wrapper = document.createElement("div");
-    this.wrapper.className = "scene-centre";
+    this.wrapper.className = "scene-centre scene-centre--login";
 
     this.panel = new Panel({ title: "Sign in", closable: false, className: "panel--login" });
 
@@ -491,15 +512,17 @@ export class LoginScene implements Scene {
     const submit = primaryButton("Create account");
     const sandboxStart = sandboxStartBox();
 
-    const toSignIn = switchRow("", "I already have an account", () =>
-      this.showSignIn(context, { email: fields.email.input.value.trim() }),
-    );
+    const backToSignIn = (): void =>
+      this.showSignIn(context, { email: fields.email.input.value.trim() });
+    const haveAccount = backToSignInLine(backToSignIn);
+    const toSignIn = switchRow("", "I already have an account", backToSignIn);
 
     this.dropBotCheck();
     const botCheck = this.turnstileSiteKey ? new BotCheck(this.turnstileSiteKey) : null;
     this.botCheck = botCheck;
 
     form.append(
+      haveAccount,
       ...SIGN_UP_FIELDS.map((name) => fields[name].wrapper),
       sandboxStart.row,
       ...(botCheck ? [botCheck.element] : []),

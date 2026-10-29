@@ -1048,6 +1048,7 @@
         "anim.1.2.png",
         "anim.1.v2.png",
         "anim.2.v2.png",
+        "anim.3.v2.png",
         "shadow.1.damaged.v2.jpg",
         "shadow.1.destroyed.v2.jpg",
         "shadow.1.jpg",
@@ -1085,6 +1086,7 @@
     "buildings/imagmaproducer/": {
       "exists": true,
       "files": [
+        "anim.1.v2.png",
         "anim.2.v2.png",
         "anim.3.v2.png",
         "shadow.1.damaged.v2.jpg",
@@ -1117,6 +1119,7 @@
       "exists": true,
       "files": [
         "anim.1.v2.png",
+        "anim.2.v2.png",
         "shadow.1.damaged.v2.jpg",
         "shadow.1.destroyed.v2.jpg",
         "shadow.1.v2.jpg",
@@ -1151,6 +1154,10 @@
     "buildings/iwalls/": {
       "exists": true,
       "files": [
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v2.jpg",
+        "shadow.1.v2.jpg",
+        "shadow.2.v2.jpg",
         "shadow.3.v2.jpg",
         "top.1.damaged.v2.png",
         "top.1.destroyed.v2.png",
@@ -1563,6 +1570,10 @@
       "width": 1833,
       "height": 63
     },
+    "buildings/icoalproducer/anim.3.v2.png": {
+      "width": 1457,
+      "height": 18
+    },
     "buildings/icoalproducer/anim.1.2.png": {
       "width": 3330,
       "height": 105
@@ -1583,6 +1594,10 @@
       "width": 2700,
       "height": 118
     },
+    "buildings/imagmaproducer/anim.1.v2.png": {
+      "width": 1225,
+      "height": 31
+    },
     "buildings/imagmaproducer/anim.2.v2.png": {
       "width": 1764,
       "height": 26
@@ -1598,6 +1613,10 @@
     "buildings/ihatchery/anim.1.v2.png": {
       "width": 1650,
       "height": 78
+    },
+    "buildings/ihatchery/anim.2.v2.png": {
+      "width": 1350,
+      "height": 31
     },
     "buildings/icannontower/anim.1.v2.png": {
       "width": 2220,
@@ -1625,6 +1644,7 @@
     "113 buildings/radiotower/shadow.destroyed.jpg",
     "113 buildings/radiotower/top.destroyed.png",
     "127 buildings/iportal/shadow.v2.4.jpg",
+    "132 buildings/imagmatower/anim.1.damaged.v2.png",
     "133 buildings/siegefactory/anim.1.png",
     "133 buildings/siegefactory/top.1.damaged.png",
     "133 buildings/siegefactory/top.1.png",
