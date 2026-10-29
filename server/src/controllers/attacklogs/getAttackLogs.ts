@@ -14,6 +14,18 @@ import { User } from "../../database/models/user.model.js";
  */
 const AL_CACHE_TTL = 1800;
 
+const FILTERS = new Set<string>(Object.values(AttackLogFilter));
+
+/**
+ * The attack log filter a request asks for: one of `AttackLogFilter`, and
+ * `both` for anything else, an absent or repeated `filter` included.
+ *
+ * @param {unknown} filter - The raw `filter` query value.
+ * @returns {AttackLogFilter} The filter to read and cache by.
+ */
+export const attackLogFilterOf = (filter: unknown): AttackLogFilter =>
+  typeof filter === "string" && FILTERS.has(filter) ? (filter as AttackLogFilter) : AttackLogFilter.BOTH;
+
 /**
  * Controller to handle the retrieval of attack logs based on authenticated user ID and filter type.
  *
@@ -24,8 +36,11 @@ export const getAttackLogs: KoaController = async (ctx) => {
   const { filter } = ctx.query;
   const { userid }: User = ctx.authUser;
 
-  const filterType = (filter as string) || "both";
-  const cacheKey = `attackLogs:${userid}:${filter}`;
+  // The cache key is built from the checked filter only, one of three values:
+  // the raw query made a new key, each holding up to 50 full reports, for
+  // every value a player sent (security audit 2026-10-29, M3).
+  const filterType = attackLogFilterOf(filter);
+  const cacheKey = `attackLogs:${userid}:${filterType}`;
 
   try {
     const cachedAttackLogs = await redis.get(cacheKey);
@@ -48,7 +63,6 @@ export const getAttackLogs: KoaController = async (ctx) => {
         break;
 
       case AttackLogFilter.BOTH:
-      default:
         whereCondition = {
           $or: [
             { attacker_userid: userid },

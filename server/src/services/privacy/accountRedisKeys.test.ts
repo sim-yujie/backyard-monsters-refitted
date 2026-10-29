@@ -50,7 +50,7 @@ const OWNERS: [file: string, template: string][] = [
   ["services/defences/defenceReplayLoad.ts", "`defence-replay-load:${basesaveid}`"],
   ["services/maproom/v1/mr1TribeSession.ts", "`attack-session:mr1:${userid}:${baseid}`"],
   ["services/maproom/v1/mr1TribeSession.ts", "`attack-final:mr1:${userid}:${baseid}`"],
-  ["controllers/attacklogs/getAttackLogs.ts", "`attackLogs:${userid}:${filter}`"],
+  ["controllers/attacklogs/getAttackLogs.ts", "`attackLogs:${userid}:${filterType}`"],
   ["chat/chatHistory.ts", "`history:${channel}`"],
   ["controllers/leaderboards/getLeaderboards.ts", "`leaderboards_${worldid}_v${version}_nodiscord`"],
   ["services/leaderboard/empireBoard.ts", `BOARD_KEY = "leaderboards_empire_board"`],
