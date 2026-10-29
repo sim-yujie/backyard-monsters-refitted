@@ -1,5 +1,4 @@
 import Koa, { type Next } from "koa";
-import bodyParser from "koa-bodyparser";
 import serve from "koa-static";
 import ormConfig from "./mikro-orm.config.js";
 import router from "./app.routes.js";
@@ -11,6 +10,7 @@ import { LOG_BASE, LOG_DIR, logger } from "./utils/logger.js";
 import { ascii_node } from "./utils/ascii_art.js";
 import { ErrorInterceptor } from "./middleware/clientSafeError.js";
 import { onAppError } from "./middleware/appErrors.js";
+import { bodyParsers } from "./middleware/bodyLimits.js";
 import { jsonBodyCompat } from "./middleware/jsonBody.js";
 import { realActionTracker } from "./middleware/realAction.js";
 import { processLanguagesFile } from "./middleware/processLanguageFile.js";
@@ -88,7 +88,8 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
   app.use(clientIp());
   app.use(corsCacheControl);
-  app.use(bodyParser({ enableTypes: ["json", "form"], jsonLimit: "8mb", formLimit: "8mb"}));
+  // 2 MB, and 8 MB only on the routes that carry pictures (`bodyLimits.ts`).
+  app.use(bodyParsers());
 
   // Flattens a native JSON body to the flat, string-field shape every schema
   // and service downstream expects. A form body never reaches it (issue #28).
