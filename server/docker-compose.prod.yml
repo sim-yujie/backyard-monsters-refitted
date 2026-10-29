@@ -138,10 +138,19 @@ services:
       timeout: 5s
       retries: 3
 
+  # Redis stops at 160 MB, well under the container's 256 MB so a background
+  # save (which forks) is not killed for memory (security audit 2026-10-29).
+  # When full it drops only keys that expire anyway (volatile-lru): caches,
+  # presence, replays. Sign-in tokens, chat ignore lists and the attack and
+  # alert indexes have no expiry and are never dropped; allkeys-lru could drop
+  # a player's sign-in token and sign them out. If only those were left, new
+  # writes would fail instead; the health page shows Redis's memory against
+  # this cap.
   redis:
     logging: *logging
     image: redis:8.10.1
     restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "160mb", "--maxmemory-policy", "volatile-lru"]
     volumes:
       - redis:/data
     networks:
