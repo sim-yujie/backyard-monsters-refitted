@@ -33,7 +33,8 @@ const kept = new Map<string, { value: string; ttl: number }>();
 mock.module("../../server.js", () => ({
   postgres: { em },
   redis: {
-    get: async () => null,
+    get: async (key: string) => kept.get(key)?.value ?? null,
+    exists: async (key: string) => kept.has(key),
     set: async (key: string, value: string, ex?: string, seconds?: string) => {
       if (ex === "EX") kept.set(key, { value, ttl: Number(seconds) });
       return "OK";
@@ -231,7 +232,7 @@ describe("sign-in back-off per email and address (security audit 2026-10-29, L2)
 
     expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
     expect((await run(PASSWORD, EMAIL, STRANGER)).status).toBe(200);
-    expect([...kept.keys()].filter((key) => key.includes(EMAIL))).toEqual([]);
+    expect([...kept.keys()].filter((key) => key.includes(EMAIL) && !key.startsWith("login-known:"))).toEqual([]);
   });
 
   test("a try during the pause is not counted, and skips the password check", async () => {
@@ -272,5 +273,57 @@ describe("sign-in back-off per email and address (security audit 2026-10-29, L2)
   test("one email's pause does not touch another's", async () => {
     for (let at = 0; at < 5; at++) await wrong(HOME, "other@example.com");
     expect((await run()).status).toBe(200);
+  });
+});
+
+describe("account-wide sign-in pause (security audit 2026-10-29, L2)", () => {
+  const EMAIL = "player@example.com";
+  const HOME = "127.0.0.1";
+  /** Ten addresses, five wrong passwords each: the account-wide 50 in an hour. */
+  const sprayFromTenAddresses = async () => {
+    for (let address = 1; address <= 10; address++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
+    }
+  };
+
+  test("many addresses trip it: a new address is refused even with the right password", async () => {
+    await sprayFromTenAddresses();
+    expect(kept.get(`login-account-failures:${EMAIL}`)?.value).toBe("50");
+
+    const stranger = await run(PASSWORD, EMAIL, "203.0.113.50");
+    expect(stranger.status).toBe(429);
+    expect(stranger.message).toContain("60 minutes");
+  });
+
+  test("an address the player signed in from still gets in with the right password", async () => {
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
+    await sprayFromTenAddresses();
+
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(429);
+  });
+
+  test("below the line nobody is refused, and other emails are untouched", async () => {
+    for (let address = 1; address <= 9; address++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
+    }
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+
+    await sprayFromTenAddresses();
+    expect((await run(PASSWORD, "other@example.com", "203.0.113.50")).status).toBe(200);
+  });
+
+  test("a password reset lifts it", async () => {
+    await sprayFromTenAddresses();
+    await clearAllLoginFailures(EMAIL);
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+  });
+
+  test("IPv6 addresses in one /64 share a count; another /64 does not", async () => {
+    for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `2001:db8:1:2::${at + 1}`);
+
+    expect((await run(PASSWORD, EMAIL, "2001:db8:1:2:ffff:ffff:ffff:ffff")).status).toBe(429);
+    expect((await run(PASSWORD, EMAIL, "2001:db8:1:3::1")).status).toBe(200);
+    expect(kept.has(`login-pause:${EMAIL}|2001:db8:1:2::/64`)).toBe(true);
   });
 });

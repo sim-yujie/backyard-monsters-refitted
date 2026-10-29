@@ -3,6 +3,7 @@ import { Env } from "../enums/Env.js";
 import { Status } from "../enums/StatusCodes.js";
 import type { Context } from "koa";
 import { SPAM_LIMITS, type SpamLimit } from "../config/SpamLimitConfig.js";
+import { addressBucket } from "../utils/addressBucket.js";
 
 /**
  * Keys a limiter by account, falling back to IP only for unauthenticated routes.
@@ -246,12 +247,14 @@ export const changeUsernameLimiter = RateLimit.middleware({
 });
 
 /**
- * Rate limit for login - 30 requests per 5 minutes in prod, 30 per minute in dev.
+ * Rate limit for login - 30 requests per 5 minutes in prod, 30 per minute in dev,
+ * per address, an IPv6 address counted by its /64 (`utils/addressBucket.ts`).
  */
 export const loginLimiter = RateLimit.middleware({
   interval: { min: process.env.ENV === Env.PROD ? 5 : 1 },
   max: 30,
   prefixKey: "login",
+  keyGenerator: async (ctx: Context) => `login|${addressBucket(ctx.ip)}`,
   handler: async (ctx: Context) => {
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = { error: "Too many login attempts. Please try again later." };

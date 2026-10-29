@@ -42,6 +42,7 @@ mock.module("../../server.js", () => ({
     expire: async () => 1,
     sadd: async () => 1,
     srem: async () => 0,
+    exists: async () => false,
     del: async () => 0,
   },
 }));

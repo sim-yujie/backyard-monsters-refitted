@@ -23,7 +23,12 @@ import { requiresDiscordVerification } from "../../config/AccountConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
 import { sessionTokenKey } from "../../services/auth/sessions.js";
 import { maskEmail } from "../../utils/maskEmail.js";
-import { clearLoginFailures, loginPausedFor, recordLoginFailure } from "../../services/auth/loginBackoff.js";
+import {
+  clearLoginFailures,
+  loginPausedFor,
+  recordLoginFailure,
+  rememberAddress,
+} from "../../services/auth/loginBackoff.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -85,8 +90,9 @@ export const login: KoaController = async (ctx) => {
   }
 
   if (!user) {
-    // Wrong passwords are counted per email and address, and a run of them
-    // pauses that email from that address briefly (security audit 2026-10-29, L2).
+    // Wrong passwords are counted per email and address, and per email; a run
+    // of them pauses the email briefly, from that address or from addresses
+    // it has not signed in from (security audit 2026-10-29, L2).
     const paused = email ? await loginPausedFor(email, ctx.ip) : 0;
     if (paused > 0) throw loginBackoffErr(paused);
 
@@ -135,6 +141,9 @@ export const login: KoaController = async (ctx) => {
   );
 
   await redis.set(sessionTokenKey(sessionType, user.email), newToken);
+  // A known address gets past the account-wide sign-in pause; the game's token
+  // sign-in on each start keeps the player's own fresh.
+  await rememberAddress(user.email, ctx.ip);
   postgres.em.persist(user);
   await postgres.em.flush();
 

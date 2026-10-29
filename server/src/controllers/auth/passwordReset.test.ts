@@ -187,6 +187,7 @@ describe("a reset logs the account out everywhere (issue #318)", () => {
     user!.resetToken = hashResetToken(token);
     expect((await call(resetPassword, { password: "NewPassword1!", token })).status).toBe(200);
     expect(deletedKeys.filter((key) => key.startsWith("login-")).sort()).toEqual([
+      `login-account-failures:${EMAIL}`,
       `login-failure-ips:${EMAIL}`,
       `login-failures:${EMAIL}|127.0.0.1`,
       `login-failures:${EMAIL}|203.0.113.9`,
