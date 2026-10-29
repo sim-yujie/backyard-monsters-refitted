@@ -323,12 +323,6 @@ const TESLA_HOLD_TICKS = 12;
  * the engine keeps 80 ticks a second.
  */
 const BUNKER_TICKS_PER_CELL = 2;
-/**
- * Ticks a Bunker's shutters stay up after it last sent a monster out: it
- * sends one every 30 of its ticks while foes are in range, so they stay up
- * through a stream of them and come down a second after the last.
- */
-const BUNKER_HOLD_TICKS = 80;
 /** World px the coil sits above the origin, where the bolts leave (`BUILDING25.as:140-150`). */
 const COIL_HEIGHT = 50;
 /** `PROJECTILE.Move`: half the stat speed per tick, re-aimed every fifth. */
@@ -732,15 +726,13 @@ interface TowerState {
   salvo: number;
   /** The tick a Quake Tower's quake went off, so it shakes for a few ticks after. */
   quake: number;
-  /** The tick a Monster Bunker last sent a monster out, which rolls its shutters up. */
-  released: number;
   /**
-   * Where its shutters are: 0 down, the strip's last cell up. The Classic
-   * door counts one past it, as the Flash `_animTick` reached 15 on a strip
+   * Where a Monster Bunker's shutters are: 0 down, the strip's last cell up.
+   * It counts one past that, as the Flash `_animTick` reached 15 on a strip
    * of 15 cells, and holds there a frame before it comes down.
    */
   door: number;
-  /** The Classic door's way (`bunkerDoor`): open or shut, and since which tick. */
+  /** Its door's way (`bunkerDoor`): open or shut, and since which tick. */
   doorOpen: boolean;
   doorSince: number;
 }
@@ -844,7 +836,6 @@ export class TowerFx {
         heading: null,
         salvo: 0,
         quake: Number.NEGATIVE_INFINITY,
-        released: Number.NEGATIVE_INFINITY,
         door: 0,
         doorOpen: false,
         doorSince: Number.NEGATIVE_INFINITY,
@@ -905,17 +896,9 @@ export class TowerFx {
   }
 
   /**
-   * A bunker sent a monster out on `tick` (the engine's `release`): a Monster
-   * Bunker's shutters roll up, and down again once it has stopped.
-   */
-  onRelease(buildingId: number, tick: number): void {
-    const tower = this.towers.get(buildingId);
-    if (tower) tower.released = Math.max(tower.released, tick);
-  }
-
-  /**
    * A Monster Bunker's door opened or shut on `tick` (the engine's
-   * `bunkerDoor`): the Classic look moves its Flash door by it.
+   * `bunkerDoor`): the Classic door and the 3D shutters both move by it, so
+   * they are fully up before the first monster comes out.
    */
   onDoor(buildingId: number, tick: number, open: boolean): void {
     const tower = this.towers.get(buildingId);
@@ -1138,7 +1121,6 @@ export class TowerFx {
       tower.wound = false;
       tower.tesla = TESLA_IDLE;
       if (tower.info.type === 25 && tower.info.frames > 0) this.setCell(tower, TESLA_IDLE.cell);
-      tower.released = Number.NEGATIVE_INFINITY;
       tower.door = 0;
       tower.doorOpen = false;
       tower.doorSince = Number.NEGATIVE_INFINITY;
@@ -1471,21 +1453,19 @@ export class TowerFx {
 
   /**
    * A Monster Bunker's shutters over the ticks since the last update: a cell
-   * up every frame while it is sending monsters out, a cell down every frame
-   * once it has stopped, as `BUILDING22.TickFast` (`:433-455`) moves them.
+   * up every frame while its door is open, a cell down every frame once it
+   * has shut, as `BUILDING22.TickFast` (`:433-455`) moves them.
    */
   private stepDoor(tower: TowerState, tick: number, elapsed: number): void {
     const top = tower.info.frames - 1;
-    const classic = this.look === "classic";
     // The Flash door counts to 15 on its strip of 15 cells (`BUILDING22.as:440-443`).
-    const most = classic ? top + 1 : top;
+    const most = top + 1;
     for (let at = tick - elapsed + 1; at <= tick; at += 1) {
       if (at % BUNKER_TICKS_PER_CELL !== 0) continue;
-      const open = classic
-        ? at >= tower.doorSince
+      const open =
+        at >= tower.doorSince
           ? tower.doorOpen
-          : !tower.doorOpen && Number.isFinite(tower.doorSince)
-        : at >= tower.released && at - tower.released <= BUNKER_HOLD_TICKS;
+          : !tower.doorOpen && Number.isFinite(tower.doorSince);
       tower.door = Math.max(0, Math.min(most, tower.door + (open ? 1 : -1)));
     }
     this.setCell(tower, Math.min(tower.door, top));

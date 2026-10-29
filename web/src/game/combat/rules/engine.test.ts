@@ -5,6 +5,7 @@ import {
   bucketCost,
   bunkerGarrisons,
   bunkerLossRecord,
+  BUNKER_DOOR_FRAMES,
   createBattle,
   dropRadius,
   flingCost,
@@ -1897,7 +1898,8 @@ describe("a bunker's reach (issue #91)", () => {
    * A level 1 Monster Bunker (range 300, 90 x 90) at the origin scans from the
    * middle of its footprint, (45, 45) (`HOUSINGBUNKER.as:156`,
    * `BUILDING22.as:90`). A Pokey dropped by a harvester off to the south-east
-   * stops at it and swings; the bunker's first look is on tick 30.
+   * stops at it and swings. The bunker's first look is on tick 30, but its door
+   * is not fully up till after that, so it sends nothing out before tick 60.
    */
   const battleOf = (harvesterAt: number) => {
     const yard = yardOf({
@@ -1915,7 +1917,7 @@ describe("a bunker's reach (issue #91)", () => {
     });
     run(battle, 29);
     const pokey = battle.creeps()[0]!;
-    run(battle, 1);
+    run(battle, 31);
     const defenders = battle.creeps().filter((creep) => creep.friendly);
     return { pokey, defenders };
   };
@@ -1941,10 +1943,10 @@ describe("a bunker's reach (issue #91)", () => {
       });
       const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
       battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
-      run(battle, 30);
+      run(battle, 60);
       return battle.recentEvents(-1).filter((event) => event.kind === "release");
     };
-    expect(sent(290)).toEqual([{ kind: "release", tick: 30, buildingId: 1 }]);
+    expect(sent(290)).toEqual([{ kind: "release", tick: 60, buildingId: 1 }]);
     expect(sent(350)).toEqual([]);
   });
 
@@ -1969,16 +1971,35 @@ describe("a bunker's reach (issue #91)", () => {
       return { out, released };
     };
     const { out, released } = doors(290);
-    // It opens as the attacker comes in range, by the time the first defender comes out.
+    // It opens as the attacker comes in range, and the first defender comes out
+    // only once it is fully up, 15 frames on (`BUILDING22.as:344`).
     expect(out[0]?.open).toBe(true);
-    expect(out[0]!.tick).toBeLessThanOrEqual(released);
+    expect(released).toBeGreaterThan(out[0]!.tick + (BUNKER_DOOR_FRAMES - 1) * 2);
+    expect(released).toBeLessThan(Infinity);
     // Never shut while one of its monsters is out.
     for (const change of out) if (!change.open) expect(change.defenders).toBe(0);
     // Out of range, it stays shut till the attacker walks in.
     const far = doors(350);
     expect(far.out[0]?.open).toBe(true);
     expect(far.out[0]!.tick).toBeGreaterThan(30);
-    expect(far.out[0]!.tick).toBeLessThanOrEqual(far.released);
+    expect(far.released).toBeGreaterThan(far.out[0]!.tick + (BUNKER_DOOR_FRAMES - 1) * 2);
+  });
+
+  it("sends nothing out on its 30-tick look while the door is still rising, and the next look sends it", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 290, Y: 290 },
+    });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+    battle.apply({ kind: "fling", t: 0, x: 270, y: 270, r: 0, monsters: { C1: 1 } });
+    run(battle, 30);
+    const opened = battle.recentEvents(-1).find((event) => event.kind === "bunkerDoor");
+    // Open before the first look on tick 30, but not yet fully up by it.
+    expect(opened).toMatchObject({ open: true });
+    expect(opened!.tick + (BUNKER_DOOR_FRAMES - 1) * 2).toBeGreaterThanOrEqual(30);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
+    run(battle, 30);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(1);
   });
 });
 
@@ -2065,7 +2086,7 @@ describe("the fight-back (issue #195)", () => {
     const battle = bunkerBattle();
     const far = battle.creeps().find((creep) => creep.ix > 1000)!;
     run(battle, 1);
-    run(battle, 29);
+    run(battle, 59);
     const [defender] = battle.creeps().filter((creep) => creep.friendly);
     expect(defender).toMatchObject({ monsterId: "C8", level: 6 });
     for (let step = 0; step < 300; step += 1) {
@@ -2083,11 +2104,28 @@ describe("the fight-back (issue #195)", () => {
     expect(battle.state().bunkerGarrisons).toEqual({ 1: { C8: 1 } });
   });
 
-  it("sends it out again at the next attacker to come near", () => {
+  it("sends it out again at the next attacker to come near, once its shut door is back up", () => {
     const battle = bunkerBattle();
-    run(battle, 600);
+    let shut = false;
+    for (let step = 0; step < 600; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "bunkerDoor") shut = !event.open;
+      }
+    }
+    expect(shut).toBe(true);
     battle.apply({ kind: "fling", t: 600, x: 140, y: 140, r: 0, monsters: { C1: 1 } });
-    run(battle, 60);
+    let opened = -1;
+    let sent = -1;
+    for (let step = 0; step < 90; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "bunkerDoor" && event.open && opened < 0) opened = event.tick;
+        if (event.kind === "release" && sent < 0) sent = event.tick;
+      }
+    }
+    expect(opened).toBeGreaterThanOrEqual(600);
+    expect(sent).toBeGreaterThan(opened + (BUNKER_DOOR_FRAMES - 1) * 2);
     expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(1);
   });
 

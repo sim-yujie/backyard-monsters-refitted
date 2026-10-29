@@ -1377,23 +1377,29 @@ describe("the Inferno towers in battle", () => {
 });
 
 describe("the Monster Bunker's shutters", () => {
-  it("roll up a cell a frame as it sends monsters out, and down again a second after the last", () => {
+  it("roll up a cell a frame as the door opens, fully up before the bunker's first monster out, and down as it shuts", () => {
     const { frames, fx } = setUp(22, "full");
     fx.update(0, () => undefined);
     expect(frames.get(1)).toBe(0);
-    // Sent out on tick 10: the shutters start up then, a cell every frame (two ticks), and stop at the top.
-    fx.onRelease(1, 10);
+    // The door opens on tick 10: the shutters start up then, a cell every frame (two ticks).
+    fx.onDoor(1, 10, true);
     fx.update(10, () => undefined);
     expect(frames.get(1)).toBe(1);
     fx.update(20, () => undefined);
     expect(frames.get(1)).toBe(6);
-    fx.update(60, () => undefined);
+    // Fully up on its 14th frame (tick 36), a frame before the engine's door
+    // reaches 15 (tick 38) and the bunker may let a monster out.
+    fx.update(34, () => undefined);
+    expect(frames.get(1)).toBe(13);
+    fx.update(36, () => undefined);
     expect(frames.get(1)).toBe(14);
-    // Another out on tick 70 keeps them up a second past it, then they come down a cell a frame.
-    fx.onRelease(1, 70);
     fx.update(150, () => undefined);
     expect(frames.get(1)).toBe(14);
+    // Shut on tick 160: held a frame at the top, then down a cell a frame.
+    fx.onDoor(1, 160, false);
     fx.update(160, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    fx.update(170, () => undefined);
     expect(frames.get(1)).toBe(9);
     fx.update(400, () => undefined);
     expect(frames.get(1)).toBe(0);
@@ -1402,8 +1408,6 @@ describe("the Monster Bunker's shutters", () => {
   it("move the Flash bunker's door as the Flash one moved, with the Classic look, and shut it when the battle ends", () => {
     setClassicLook(true);
     const { frames, fx } = setUp(22);
-    // A monster out moves nothing by itself: the door follows the engine's door.
-    fx.onRelease(1, 0);
     fx.update(40, () => undefined);
     expect(frames.get(1)).toBe(0);
     // Open on tick 50 (attackers in range): a cell a frame up to the strip's last, 14.

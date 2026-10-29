@@ -2370,10 +2370,8 @@ export class AttackBattleLayer {
       this.towerFx.onCoilRest(event.towerId, event.tick, event.rearmBy);
       return;
     }
-    if (event.kind === "release") {
-      this.towerFx.onRelease(event.buildingId, event.tick);
-      return;
-    }
+    // A monster out moves nothing: the shutters follow the door (`bunkerDoor`).
+    if (event.kind === "release") return;
     if (event.kind === "bunkerDoor") {
       this.towerFx.onDoor(event.buildingId, event.tick, event.open);
       return;
