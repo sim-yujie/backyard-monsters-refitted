@@ -28,6 +28,12 @@ import { addressBucket, networkBucket } from "../../utils/addressBucket.js";
  * hour. The hour runs from the first wrong password, so the pause never lasts
  * longer than that, and a password reset lifts it at once.
  *
+ * Per email and network: a wrong password past a network's
+ * {@link NETWORK_MAX_FAILURES} in the hour is not free either. It pauses the
+ * email for that whole network (again only for addresses not known for it),
+ * doubling from {@link FIRST_PAUSE_SECONDS} up to an hour, so rotating through
+ * the /64s of one /48 earns nothing, while other networks are not touched.
+ *
  * Trade-off left open: a botnet spread over many networks can still pause
  * sign-ins from new addresses on someone's email for up to an hour. The real
  * fix is a CAPTCHA or an emailed sign-in link, after beta 5.
@@ -42,6 +48,7 @@ export const FORGET_AFTER_SECONDS = 15 * 60;
 export const ACCOUNT_MAX_FAILURES = 50;
 export const ACCOUNT_WINDOW_SECONDS = 60 * 60;
 export const NETWORK_MAX_FAILURES = 10;
+export const MAX_NETWORK_PAUSE_SECONDS = 60 * 60;
 export const KNOWN_ADDRESS_SECONDS = 30 * 24 * 60 * 60;
 
 const failuresKey = (email: string, bucket: string) => `login-failures:${email}|${bucket}`;
@@ -51,15 +58,24 @@ const addressesKey = (email: string) => `login-failure-ips:${email}`;
 const accountFailuresKey = (email: string) => `login-account-failures:${email}`;
 /** How many wrong passwords each network has added to the account-wide count, in this hour. */
 const networkFailuresKey = (email: string) => `login-network-failures:${email}`;
+const networkPauseKey = (email: string, network: string) => `login-network-pause:${email}|${network}`;
+/** The networks paused for the email, so a reset can lift them all. */
+const pausedNetworksKey = (email: string) => `login-network-pauses:${email}`;
 const knownKey = (email: string, bucket: string) => `login-known:${email}|${bucket}`;
 
 /** The pause after the given number of wrong passwords in a row, in seconds (0 for none). */
 export const pauseAfter = (failures: number): number =>
   failures < FREE_TRIES ? 0 : Math.min(FIRST_PAUSE_SECONDS * 2 ** (failures - FREE_TRIES), MAX_PAUSE_SECONDS);
 
+/** The network-wide pause after a network's given number of wrong passwords in the hour, in seconds (0 for none). */
+export const networkPauseAfter = (failures: number): number =>
+  failures <= NETWORK_MAX_FAILURES
+    ? 0
+    : Math.min(FIRST_PAUSE_SECONDS * 2 ** (failures - NETWORK_MAX_FAILURES - 1), MAX_NETWORK_PAUSE_SECONDS);
+
 /**
  * How long the email's sign-in from this address is paused for, in seconds
- * (0 when it is not), by either layer.
+ * (0 when it is not), by any layer.
  *
  * @param email - The email as it is looked up (trimmed and lowercased).
  * @param ip - The address signing in.
@@ -69,8 +85,12 @@ export const loginPausedFor = async (email: string, ip: string): Promise<number>
   const ttl = await redis.ttl(pauseKey(email, bucket));
   if (ttl > 0) return ttl;
 
+  if (await redis.exists(knownKey(email, bucket))) return 0;
+  const networkLeft = await redis.ttl(networkPauseKey(email, networkBucket(ip)));
+  if (networkLeft > 0) return networkLeft;
+
   const failures = Number((await redis.get(accountFailuresKey(email))) ?? 0);
-  if (failures < ACCOUNT_MAX_FAILURES || (await redis.exists(knownKey(email, bucket)))) return 0;
+  if (failures < ACCOUNT_MAX_FAILURES) return 0;
   const windowLeft = await redis.ttl(accountFailuresKey(email));
   return windowLeft > 0 ? windowLeft : 0;
 };
@@ -92,7 +112,8 @@ export const recordLoginFailure = async (email: string, ip: string): Promise<num
   // The account-wide count runs in fixed hours from its first wrong password.
   // The expiry is set whenever the key has none, not only on the first
   // count, so a lost EXPIRE can never leave a pause with no end.
-  const netCount = await redis.hincrby(networkFailuresKey(email), networkBucket(ip), 1);
+  const network = networkBucket(ip);
+  const netCount = await redis.hincrby(networkFailuresKey(email), network, 1);
   if ((await redis.ttl(networkFailuresKey(email))) < 0) {
     await redis.expire(networkFailuresKey(email), ACCOUNT_WINDOW_SECONDS);
   }
@@ -101,6 +122,12 @@ export const recordLoginFailure = async (email: string, ip: string): Promise<num
     if ((await redis.ttl(accountFailuresKey(email))) < 0) {
       await redis.expire(accountFailuresKey(email), ACCOUNT_WINDOW_SECONDS);
     }
+  }
+  const networkPause = networkPauseAfter(netCount);
+  if (networkPause > 0) {
+    await redis.set(networkPauseKey(email, network), "1", "EX", String(networkPause));
+    await redis.sadd(pausedNetworksKey(email), network);
+    await redis.expire(pausedNetworksKey(email), MAX_NETWORK_PAUSE_SECONDS);
   }
 
   const pause = pauseAfter(failures);
@@ -136,16 +163,19 @@ export const rememberAddress = async (email: string, ip: string): Promise<void> 
 
 /**
  * Forgets the email's wrong passwords and pauses, from every address and
- * account-wide, after a password reset: whoever reset it holds the email.
+ * network and account-wide, after a password reset: whoever reset it holds the email.
  *
  * @param email - The account's email.
  */
 export const clearAllLoginFailures = async (email: string): Promise<void> => {
   const buckets = await redis.smembers(addressesKey(email));
+  const networks = await redis.smembers(pausedNetworksKey(email));
   await redis.del(
     ...buckets.flatMap((bucket) => [failuresKey(email, bucket), pauseKey(email, bucket)]),
+    ...networks.map((network) => networkPauseKey(email, network)),
     addressesKey(email),
     accountFailuresKey(email),
-    networkFailuresKey(email)
+    networkFailuresKey(email),
+    pausedNetworksKey(email)
   );
 };

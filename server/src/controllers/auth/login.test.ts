@@ -257,6 +257,7 @@ describe("sign-in back-off per email and address (security audit 2026-10-29, L2)
       await wrong();
       pauses.push(kept.get(PAUSE)?.ttl ?? 0);
       kept.delete(PAUSE); // the pause runs out
+      kept.delete(`login-network-pause:${EMAIL}|127.0.0.0/24`); // and so does the network's, past 10
     }
     expect(pauses).toEqual([0, 0, 0, 0, 30, 60, 120, 240, 480, 900, 900, 900]);
     expect(kept.get(FAILURES)?.ttl).toBe(15 * 60);
@@ -350,15 +351,46 @@ describe("account-wide sign-in pause (security audit 2026-10-29, L2)", () => {
     expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
   });
 
-  test("a password reset also forgets each network's share", async () => {
-    for (let address = 1; address <= 2; address++) {
+  test("a password reset also forgets each network's share and lifts its pause", async () => {
+    for (let address = 1; address <= 3; address++) {
       for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
     }
+    expect((await run(PASSWORD, EMAIL, "198.51.100.4")).status).toBe(429);
     await clearAllLoginFailures(EMAIL);
     expect(kept.has(`login-network-failures:${EMAIL}`)).toBe(false);
+    expect(kept.has(`login-network-pause:${EMAIL}|198.51.100.0/24`)).toBe(false);
 
     for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, "198.51.100.3");
     expect(kept.get(ACCOUNT)?.value).toBe("5");
+  });
+
+  test("past its 10, rotating /64s inside one /48 pauses that whole network", async () => {
+    const KNOWN_IN_NETWORK = "2001:db8:5:ffff::1";
+    expect((await run(PASSWORD, EMAIL, KNOWN_IN_NETWORK)).status).toBe(200);
+    for (let net = 1; net <= 10; net++) await run("not-the-password", EMAIL, `2001:db8:5:${net}::1`);
+    expect(kept.has(`login-network-pause:${EMAIL}|2001:db8:5::/48`)).toBe(false);
+
+    await run("not-the-password", EMAIL, "2001:db8:5:11::1");
+    expect(kept.get(`login-network-pause:${EMAIL}|2001:db8:5::/48`)?.ttl).toBe(30);
+    const fresh = await run(PASSWORD, EMAIL, "2001:db8:5:12::1");
+    expect(fresh.status).toBe(429);
+    expect(fresh.message).toContain("wait 1 minute and");
+
+    expect((await run(PASSWORD, EMAIL, KNOWN_IN_NETWORK)).status).toBe(200);
+    expect((await run(PASSWORD, EMAIL, "2001:db8:6:1::1")).status).toBe(200);
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+  });
+
+  test("each wrong password past a network's 10 doubles its pause, up to an hour", async () => {
+    const NETWORK_PAUSE = `login-network-pause:${EMAIL}|2001:db8:5::/48`;
+    const pauses: number[] = [];
+    for (let net = 1; net <= 19; net++) {
+      await run("not-the-password", EMAIL, `2001:db8:5:${net}::1`);
+      pauses.push(kept.get(NETWORK_PAUSE)?.ttl ?? 0);
+      kept.delete(NETWORK_PAUSE); // the pause runs out
+    }
+    expect(pauses).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30, 60, 120, 240, 480, 960, 1920, 3600, 3600]);
+    expect(kept.get(ACCOUNT)?.value).toBe("10");
   });
 
   test("the pause lasts at most an hour from the first wrong password", async () => {
