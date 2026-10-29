@@ -726,20 +726,66 @@ describe("walls and traps in the Inferno", () => {
     });
   }
 
-  test("a wall upgrades on its own there (no planner): it waits for the Under Hall, then is paid from the purse", async () => {
-    const wall = { "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 } };
-    yardWith(layout(2, wall));
-    const gated = await inInferno(yardUpgradeAction, { id: 6 });
-    expect(gated.status).toBe(409);
-    expect(body(gated).townHall).toEqual({ have: 2, need: 3 });
+  test("a wall or trap does not upgrade on its own: the Yard Planner's batch, as on the main yard (owner decision 2026-10-29)", async () => {
+    const yard = {
+      "6": { id: 6, t: WALL, X: 200, Y: 200, l: 1 },
+      "7": { id: 7, t: TRAP, X: 300, Y: 200, l: 1 },
+    };
+    yardWith(layout(3, yard));
+    const before = structuredClone(infernoSave());
+    for (const id of [6, 7]) {
+      const answer = await inInferno(yardUpgradeAction, { id });
+      expect(answer.status).toBe(400);
+      expect(body(answer).reason).toBe("useBatchRoute");
+    }
+    expect(infernoSave().buildingdata).toEqual(before.buildingdata);
+    expect(purse()).toEqual(PURSE);
+  });
+});
 
-    yardWith(layout(3, wall));
-    const answer = await inInferno(yardUpgradeAction, { id: 6 });
+const YARD_PLANNER = 10;
+
+describe("the Yard Planner in the Inferno (owner decision 2026-10-29)", () => {
+  const RICH = { r1: 600_000, r2: 600_000, r3: 600_000, r4: 600_000 };
+  /** Three level 6 Resource Pods: room for the planner's 250,000 Bone and Coal. */
+  const pods = {
+    "20": { id: 20, t: 6, X: 300, Y: -300, l: 6 },
+    "21": { id: 21, t: 6, X: 300, Y: -200, l: 6 },
+    "22": { id: 22, t: 6, X: 300, Y: -100, l: 6 },
+  };
+  const withoutStartPods = (uhLevel: number) => {
+    const yard = layout(uhLevel, pods) as Record<string, Row>;
+    for (const [key, one] of Object.entries(yard)) if (one.t === 6 && !(key in pods)) delete yard[key];
+    return yard as unknown as Record<string, BuildingData>;
+  };
+
+  test("waits for Under Hall 3, then is built from the Inferno purse at Flash's price: 250,000 Bone and Coal, 12 hours", async () => {
+    db.rows.set(MAIN, mainRow({ iresources: { ...RICH } }));
+    yardWith(withoutStartPods(2));
+    const gated = await inInferno(yardBuildAction, { type: YARD_PLANNER, x: 200, y: 200 });
+    expect(gated.status).toBe(409);
+    expect(body(gated)).toMatchObject({ reason: "townHall", townHall: { have: 2, need: 3 } });
+    expect(purse()).toEqual(RICH);
+
+    yardWith(withoutStartPods(3));
+    const step = stepOf(YARD_PLANNER);
+    expect(step).toEqual({ r1: 250_000, r2: 250_000, r3: 0, r4: 0, time: 43_200 });
+    const answer = await inInferno(yardBuildAction, { type: YARD_PLANNER, x: 200, y: 200 });
     expect(answer.status).toBe(200);
-    expect(purse().r2).toBe(PURSE.r2 - stepOf(WALL, 1).r2);
-    // A wall's step finishes at once, as on the surface's planner walk: no worker held.
-    expect(buildings(infernoSave())["6"]).toMatchObject({ l: 2 });
-    expect(buildings(infernoSave())["6"]!.cU).toBeUndefined();
+    expect(purse()).toEqual({ ...RICH, r1: RICH.r1 - 250_000, r2: RICH.r2 - 250_000 });
+    // The main yard's pool is untouched.
+    expect(mainSave().resources).toEqual(POOL);
+    const built = Object.values(buildings(infernoSave())).find((b) => b.t === YARD_PLANNER)!;
+    expect(built.cB).toBeDefined();
+  });
+
+  test("one per Inferno yard", async () => {
+    db.rows.set(MAIN, mainRow({ iresources: { ...RICH } }));
+    yardWith({ ...withoutStartPods(6), "30": { id: 30, t: YARD_PLANNER, X: 200, Y: 200, l: 1 } } as unknown as Record<string, BuildingData>);
+    const answer = await inInferno(yardBuildAction, { type: YARD_PLANNER, x: -300, y: 300 });
+    expect(answer.status).toBe(409);
+    expect(body(answer)).toMatchObject({ reason: "limit", limit: { have: 1, allowed: 1 } });
+    expect(purse()).toEqual(RICH);
   });
 });
 

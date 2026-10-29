@@ -171,7 +171,7 @@ export const summariseSelection = (
     if (node.fixed) continue;
 
     const type = ladderType(node.type);
-    const step = costOf(type, effectiveLevel(node));
+    const step = costOf(type, effectiveLevel(node), yard.kind);
     if (!step) {
       maxed++;
       continue;
@@ -198,7 +198,7 @@ export const summariseSelection = (
   const byType: SelectionTypeCost[] = [...perType.entries()]
     .map(([type, entry]) => ({
       type,
-      name: typeName(type),
+      name: typeName(type, yard.kind),
       count: entry.count,
       needed: { r1: entry.r1, r2: entry.r2, r3: entry.r3, r4: entry.r4 },
     }))
@@ -247,7 +247,7 @@ export const wallBatchPreview = (
     }
 
     eligible.push(node.id);
-    for (const step of upgradeSteps(ladderType(node.type), level, target)) {
+    for (const step of upgradeSteps(ladderType(node.type), level, target, yard.kind)) {
       steps.push(step);
       for (const [type, , required] of step[5]) {
         if (type === TOWN_HALL_TYPE && required > need) need = required;
@@ -271,15 +271,16 @@ export const wallBatchPreview = (
 
 /**
  * The target levels a wall batch may be asked for, 2 up to the top of the
- * ladder, with the Town Hall level each one needs.
+ * ladder of a yard of `kind` (the Inferno's stops at 3), with the hall level
+ * each one needs.
  *
  * The panel draws a button per entry and disables the ones the yard has not
  * earned, so the reason is in the data rather than in the panel's arithmetic.
  */
-export const wallTargets = (): readonly { level: number; need: number }[] => {
+export const wallTargets = (kind: YardKind = "main"): readonly { level: number; need: number }[] => {
   const targets: { level: number; need: number }[] = [];
-  for (let level = 2; level <= maxLevel(17); level++) {
-    const step = costOf(17, level - 1);
+  for (let level = 2; level <= maxLevel(17, kind); level++) {
+    const step = costOf(17, level - 1, kind);
     let need = 0;
     for (const [type, , required] of step?.[5] ?? []) {
       if (type === TOWN_HALL_TYPE && required > need) need = required;

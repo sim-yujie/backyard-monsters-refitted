@@ -2396,7 +2396,7 @@ export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
   [6, false, [750,1400,2550,4750,8800,16250,30000,55600,105000,190000], [], []],
   [8, false, [4000,16000,32000,64000], [], []],
   [9, false, [16000,32000,64000], [], []],
-  [10, true, [16000], [], []],
+  [10, false, [16000], [], []],
   [11, true, [5000,10000], [], []],
   [12, true, [4000], [], []],
   [13, false, [4000,16000,32000], [], []],
@@ -2520,4 +2520,4 @@ export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
  * allowed at least one at some Under Hall level. Everything else in
  * {@link INFERNO_COST_ROWS} (the Under Hall, Flinger, Housing, …) is blocked.
  */
-export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 13, 17, 21, 24, 26, 128, 129, 130, 132];
+export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 10, 13, 17, 21, 24, 26, 128, 129, 130, 132];

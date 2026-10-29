@@ -44,10 +44,11 @@ export const normaliseLayoutName = (name: string): string =>
 
 /*
  * Every call below takes the yard it acts on last, as the `yard*.ts` calls do
- * (`yardBody`): an outpost's `baseid`, or nothing for the main yard. Apply,
- * the wall upgrade and the trap re-arm then act on that outpost; the layout
- * slots are refused there (`409 notInOutpost`, `plannerYard.ts`), as Flash's
- * planner could not save or load layouts in an outpost.
+ * (`yardBody`): an outpost's or the Inferno yard's `baseid`, or nothing for
+ * the main yard. Apply, the wall upgrade and the trap re-arm then act on that
+ * yard. The layout slots are the Inferno yard's own there, and refused in an
+ * outpost (`409 notInOutpost`, `plannerYard.ts`), as Flash's planner could not
+ * save or load layouts in an outpost.
  */
 
 /** Every saved layout, with the number of slots the account has. */

@@ -227,9 +227,10 @@ export interface YardPlannerOptions {
    */
   blueprintBlocked?: string | null;
   /**
-   * The outpost this planner is over (outposts WP5): Apply, the wall upgrade
-   * and the trap re-arm act on it, charged to the main pool. Undefined on the
-   * main yard.
+   * The outpost or Inferno yard this planner is over (outposts WP5): Apply,
+   * the wall upgrade and the trap re-arm act on it, an outpost's charged to
+   * the main pool and the Inferno's to the Inferno purse; the Inferno's
+   * layout slots are its own. Undefined on the main yard.
    */
   baseid?: string;
 }
@@ -380,7 +381,8 @@ export class YardPlanner {
       session: this.session,
       dock: this.dock,
       // An outpost has no layout slots (`BasePlanner.as:41`, #191): no panel, no Ctrl+S.
-      readOnly: this.readOnly || options.baseid !== undefined,
+      // The Inferno yard has its own (owner decision 2026-10-29).
+      readOnly: this.readOnly || options.yard.kind === "outpost",
       ...(options.baseid !== undefined ? { baseid: options.baseid } : {}),
       onLoad: (layout) => this.loadLayout(layout, false),
       onPreview: (layout) => this.loadLayout(layout, true),
@@ -740,6 +742,7 @@ export class YardPlanner {
     const panel =
       this.inventory ??
       new InventoryPanel({
+        kind: this.yard.kind,
         onPlace: (id) => this.session.startPlacing(id),
         onPutBack: () => this.session.putBack(),
         onClose: () => {
@@ -1233,6 +1236,7 @@ export class YardPlanner {
       return;
     }
     const panel = new SearchPanel({
+      kind: this.yard.kind,
       onSelect: (ids) => this.selectAndFrame(ids),
       onClose: () => {
         this.search = null;
@@ -1462,7 +1466,7 @@ export class YardPlanner {
     this.selectAll.hidden = all === null;
     if (all) {
       this.selectAll.textContent = `Select all ${all.ids.length}`;
-      this.selectAll.title = `Select every ${typeName(all.type)} on the yard`;
+      this.selectAll.title = `Select every ${typeName(all.type, this.yard.kind)} on the yard`;
     }
     // Two or more to mirror or align: with fewer every one of them is off,
     // and a row of dead buttons is worse than none.

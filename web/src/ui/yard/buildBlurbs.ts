@@ -56,6 +56,8 @@ export const INFERNO_BUILD_BLURBS: Readonly<Record<number, string>> = {
   6: "Stores Bones, Coal, Sulfur, and Magma for future use.",
   8: "Unlocks new monsters that can be created in the Incubator.",
   9: "Recycles monsters you no longer want, to make room for bigger and better things.",
+  // Not built in Flash's Inferno; the surface's words (owner decision 2026-10-29).
+  10: "Gives you a bird's-eye view of the yard, so moving buildings or remodelling it is a snap.",
   13: "Converts Magma into flesh and blood monsters to do your bidding.",
   17: "A simple block for walls that protect buildings and lead attackers into traps or closer to towers. Upgrades from Brimstone to Granite to Forged Steel.",
   21: "Long-range tower great for picking off monsters one by one.",

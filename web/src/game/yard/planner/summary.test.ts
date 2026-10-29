@@ -220,4 +220,8 @@ describe("wallTargets", () => {
       { level: 5, need: 6 },
     ]);
   });
+
+  it("stops the Inferno's ladder at 3, gated by the Under Hall", () => {
+    expect(wallTargets("inferno").map(({ level }) => level)).toEqual([2, 3]);
+  });
 });

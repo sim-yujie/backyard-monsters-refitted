@@ -902,10 +902,8 @@ const upgradeRefusal = (
 ): YardRefusal | null => {
   const building = store.building(id);
   if (!building) return refuse("badRequest", "That building is not in your yard.");
-  // The Inferno has no planner, so a wall there upgrades on its own, as the
-  // server allows it in the Inferno only (WP 1.16, `BASE.as:1072`).
-  const infernoWall = store.yard.kind === "inferno" && WALL_TYPES.includes(building.type);
-  if (!infernoWall && (WALL_TYPES.includes(building.type) || TRAP_TYPES.includes(building.type))) {
+  // On every yard, the Inferno's too (owner decision 2026-10-29).
+  if (WALL_TYPES.includes(building.type) || TRAP_TYPES.includes(building.type)) {
     return refuse("useBatchRoute", "Walls and traps are upgraded from the layout planner.");
   }
   if (options.instant && building.type === MAP_ROOM_TYPE) {

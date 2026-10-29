@@ -606,7 +606,7 @@ export const rearmPanel = (options: RearmPanelOptions): Panel => {
     .filter((entry) => entry.check.reason !== null);
 
   const steps = options.traps
-    .map((trap) => costOf(trap.t, 0))
+    .map((trap) => costOf(trap.t, 0, options.yard.kind))
     .filter((step): step is NonNullable<typeof step> => step !== null);
   const cost = sumCosts(steps);
   const held = heldResources(options.yard.resources);
@@ -624,7 +624,7 @@ export const rearmPanel = (options: RearmPanelOptions): Panel => {
           ...counts.entries(),
         ]
           .sort((a, b) => a[0] - b[0])
-          .map(([type, count]) => `${count} × ${typeName(type)}`)
+          .map(([type, count]) => `${count} × ${typeName(type, options.yard.kind)}`)
           .join(", ")}.`;
 
   const costList = document.createElement("dl");
@@ -644,7 +644,7 @@ export const rearmPanel = (options: RearmPanelOptions): Panel => {
     const item = document.createElement("li");
 
     const text = document.createElement("span");
-    text.textContent = `${typeName(trap.t)} at ${trap.x}, ${trap.y} — ${
+    text.textContent = `${typeName(trap.t, options.yard.kind)} at ${trap.x}, ${trap.y} — ${
       check.reason === PlaceBlock.BOUNDS
         ? "outside your yard at its current size"
         : "something is standing there"

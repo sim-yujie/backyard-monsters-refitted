@@ -260,9 +260,6 @@ export const whoseYard = (target: ViewTarget | null, own: OwnYardTarget): string
  * Starter Kits, as Flash's help popup offered them there
  * (`client/scripts/BASE.as:2321-2324`, `newmap_sk_hlp`; outposts WP9).
  */
-/** The Layout button's tooltip in the Inferno, which has no planner (`BASE.as:1072`). */
-export const NO_PLANNER_IN_INFERNO = "The Inferno has no layout planner";
-
 export const EMPTY_OUTPOST_HINT =
   "This outpost has only its core. Open Kits for a ready-made layout, or Build to add buildings one at a time; both are paid from your main yard's storage.";
 
@@ -899,9 +896,9 @@ export class YardScene implements Scene {
       const chat = target ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
       if (chat) worldChat.configure(chat);
 
-      // The planner's entry rule: the own yard's, never a visit's.
-      // The Inferno has no planner (`BASE.as:1072`).
-      this.access = !target && this.own.kind === "inferno" ? PlannerAccess.LOCKED : plannerAccessFor(target);
+      // The planner's entry rule: the own yard's, never a visit's. The
+      // Inferno yard has one too (owner decision 2026-10-29), unlike Flash's.
+      this.access = plannerAccessFor(target);
       this.refreshPlannerButton();
 
       // Bars over running jobs are the own yard's alone (#139), on the
@@ -2117,11 +2114,7 @@ export class YardScene implements Scene {
       disabled: this.access === PlannerAccess.LOCKED,
       open,
       label: open ? "Close layout" : "Layout",
-      title: open
-        ? "Leave the layout planner (P)"
-        : !this.target && this.own.kind === "inferno"
-          ? NO_PLANNER_IN_INFERNO
-          : plannerEntryTooltip(this.access),
+      title: open ? "Leave the layout planner (P)" : plannerEntryTooltip(this.access),
     });
     // Outside the planner the zoom is the rail on the right edge (#171); the
     // planner keeps the slider, Fit and the minimap along its bottom bar.
@@ -2134,11 +2127,12 @@ export class YardScene implements Scene {
    * The yard the planner works on: the store's, plus every decoration in
    * storage as a building its drawer holds (#128,
    * `decorStorage.ts` `withStoredDecorations`). The store's own yard when
-   * nothing is stored, or in an outpost, which has no storage.
+   * nothing is stored, or in an outpost or the Inferno, whose plans take
+   * nothing out of the main yard's storage.
    */
   private plannerYard(): Yard | null {
     const store = this.store;
-    if (!store || store.kind === "outpost") return this.yard;
+    if (!store || store.kind !== "main") return this.yard;
     const save = withStoredDecorations(store.save);
     return save === store.save ? store.yard : readYard(save);
   }

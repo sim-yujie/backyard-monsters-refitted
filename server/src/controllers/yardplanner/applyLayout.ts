@@ -81,7 +81,9 @@ import { debitOf } from "./upgradeWalls.js";
  * lift a flag into the drawer and put a stored flag down elsewhere.
  *
  * With a `baseid` naming one of the caller's Map Room 2 outposts it applies
- * the layout to that outpost, charging the main pool (`plannerYard.ts`).
+ * the layout to that outpost, charging the main pool (`plannerYard.ts`); with
+ * the caller's Inferno `baseid`, to the Inferno yard, its planned upgrades
+ * paid from the Inferno purse.
  *
  * The upgrade half is **partial by design**. Moves are still all or nothing —
  * any placement fault throws before a byte is written — but a planned upgrade
@@ -114,14 +116,19 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
   const unplaced = unplacedBuildings(payload.nodes, save.buildingdata);
   if (unplaced.length > 0) throw layoutUnplacedErr(unplaced);
 
-  const expansion = currentExpansion(save.storedata);
-  checkNodePlacement(payload.nodes, expansion, save.buildingdata);
+  // The Inferno yard's own yardage (`ENLI`) and footprints (Under Hall 160,
+  // Academy 80).
+  const kind = yardKindOf(save);
+  const expansion = currentExpansion(save.storedata, kind);
+  checkNodePlacement(payload.nodes, expansion, save.buildingdata, kind);
 
+  // Decoration storage is the main yard's alone: an outpost or the Inferno
+  // takes nothing out of it.
   const fromStorage = payload.fromStorage ?? [];
-  if (fromStorage.length > 0 && yardKindOf(save) === "outpost") {
+  if (fromStorage.length > 0 && kind !== "main") {
     throw layoutInvalidErr("Decorations go in your main yard.", { fromStorage: fromStorage.length });
   }
-  checkStoragePlacements(fromStorage, payload.nodes, expansion);
+  checkStoragePlacements(fromStorage, payload.nodes, expansion, kind);
 
   // Bring the countdowns forward before `savetime` moves, or every running job
   // is handed the elapsed time a second time when the base is next loaded. Same

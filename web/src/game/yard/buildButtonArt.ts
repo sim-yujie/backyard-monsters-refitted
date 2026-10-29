@@ -60,7 +60,9 @@ export const SILHOUETTE_FILE: Readonly<Record<number, string>> = {
  * The Inferno yard's buttons (Inferno WP 1.19): every Inferno type's own
  * `buildingbuttons[0]` (`client/scripts/INFERNOYARDPROPS.as`), all of which
  * are on disk. The Block's first is Brimstone, `coal_wall.v3`. The Monster
- * Juicer names none, so it shows `9.jpg`, as on the surface.
+ * Juicer names none, so it shows `9.jpg`, as on the surface. The Yard
+ * Planner, which Flash never let the Inferno build, has a painted one in the
+ * style of the others (29 Oct 2026, beside its `buildings/iyardplanner/`).
  */
 export const INFERNO_BUTTON_FILE: Readonly<Record<number, string>> = {
   1: "bone_crusher.v2.jpg",
@@ -69,6 +71,7 @@ export const INFERNO_BUTTON_FILE: Readonly<Record<number, string>> = {
   4: "magma_producer.v2.jpg",
   6: "sillo.v2.jpg",
   8: "monster_locker.v2.jpg",
+  10: "yard_planner.v2.jpg",
   13: "hatchery.v2.jpg",
   17: "coal_wall.v3.jpg",
   21: "sniper_tower.v2.jpg",

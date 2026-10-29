@@ -17,9 +17,11 @@ import {
  * same rows, so the price shown is the price charged.
  */
 describe("the Inferno cost table", () => {
-  it("offers design §2.5's sixteen buildings", () => {
+  it("offers design §2.5's sixteen buildings and the Yard Planner", () => {
+    // The Yard Planner (10) is the owner's addition of 29 Oct 2026; Flash
+    // blocked it in the Inferno.
     expect([...INFERNO_BUILDABLE_TYPES]).toEqual([
-      1, 2, 3, 4, 6, 8, 9, 13, 17, 21, 24, 26, 128, 129, 130, 132,
+      1, 2, 3, 4, 6, 8, 9, 10, 13, 17, 21, 24, 26, 128, 129, 130, 132,
     ]);
   });
 

@@ -129,17 +129,19 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
 );
 
 /**
- * The Inferno yard's build menu (Inferno WP 1.19): the sixteen types the
+ * The Inferno yard's build menu (Inferno WP 1.19): the seventeen types the
  * Inferno props table offers (`client/scripts/INFERNOYARDPROPS.as`, its
  * `group` 1 to 3 without `block`; the server's `INFERNO_BUILDABLE_TYPES`), in
  * that table's `order` within each tab. The Under Hall is the hall. The
  * Housing Bunker (128) is filed under Buildings, as its `group` 2 files it.
+ * The Yard Planner (10) is this project's (owner decision 2026-10-29: Flash
+ * `block`ed it there), placed before the Juicer as in the main menu.
  * Decorations are not built there, and the storage they come from is the main
  * yard's, so the tab is empty, as an outpost's.
  */
 export const INFERNO_BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
-  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [8, 26, 128, 13, 9] },
+  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [8, 26, 128, 13, 10, 9] },
   { id: BuildCategory.DEFENSIVE, label: "Defensive", types: [21, 129, 130, 132, 24, 17] },
   { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
 ];

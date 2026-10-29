@@ -1246,7 +1246,7 @@ to the copy the web client shows them from; the rules live in `services/yardplan
 `trapRearm.ts` and `startUpgrades.ts`. All three award empire points the way the Flash client's
 `Upgraded()`/`Constructed()` do and answer a rejection in the same flattened shape. The two batch
 routes are all-or-nothing: `400` means the request names something wrong (`unknown`, `notWalls`,
-`alreadyAtLevel`, `busy`, `damaged`, `level`, `notTraps`, `offGrid`, `outOfBounds`,
+`alreadyAtLevel`, `busy`, `damaged`, `level`, `notTraps`, `notBuildable`, `offGrid`, `outOfBounds`,
 `overlapping`); `409` means the yard cannot do it yet (`shortfall`, `townHall`, `requirements`,
 `capReached`). Apply's upgrade walk is **partial by design** and reports the same conditions
 instead of refusing the request.

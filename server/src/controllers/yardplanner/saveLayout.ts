@@ -9,10 +9,9 @@ import {
   parsePayload,
   parseSlot,
 } from "../../services/yardplanner/validateLayout.js";
-import { postgres } from "../../server.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
-import { refuseOutpostLayouts } from "./plannerYard.js";
+import { onLayoutYard } from "./plannerYard.js";
 
 /**
  * `PUT /bm/yardplanner/layouts/:slot` — store one layout, overwriting the slot.
@@ -36,31 +35,36 @@ import { refuseOutpostLayouts } from "./plannerYard.js";
  * same ownership rules as the placed nodes, and Apply still refuses anything
  * a layout leaves off the plot.
  *
+ * With the caller's Inferno `baseid` the layout goes into the Inferno yard's
+ * own slots, checked with the Inferno's footprints and ladders
+ * (`plannerYard.ts`, `onLayoutYard`); an outpost's is refused.
+ *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
  */
 export const saveLayout: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  await postgres.em.populate(user, ["save"]);
-  const save = user.save!;
-  // Flash's planner could not save layouts in an outpost (`BasePlanner.as:41`).
-  refuseOutpostLayouts(user, ctx.request.body);
-
   const slot = parseSlot(ctx.params.slot);
   const body = SaveLayoutSchema.parse(ctx.request.body ?? {});
   const name = parseName(body.name);
   const payload = parsePayload(body.data);
 
-  const stored = payload.stored ?? [];
-  checkNodesOwned([...payload.nodes, ...stored], save.buildingdata);
-  checkPlans(payload.nodes, save.buildingdata, { refuseCaughtUp: true });
-  checkNodePlacement(payload.nodes, payload.expansion, save.buildingdata);
+  // Flash's planner could not save layouts in an outpost (`BasePlanner.as:41`).
+  const layout = await onLayoutYard(
+    user,
+    ctx.request.body,
+    (save, kind) => {
+      const stored = payload.stored ?? [];
+      checkNodesOwned([...payload.nodes, ...stored], save.buildingdata);
+      checkPlans(payload.nodes, save.buildingdata, { refuseCaughtUp: true, kind });
+      checkNodePlacement(payload.nodes, payload.expansion, save.buildingdata, kind);
 
-  const layout = makeLayout(slot, name, payload.expansion, payload.nodes, stored);
-  save.savetemplate = writeLayout(save.savetemplate, layout);
-
-  postgres.em.persist(save);
-  await postgres.em.flush();
+      const made = makeLayout(slot, name, payload.expansion, payload.nodes, stored);
+      save.savetemplate = writeLayout(save.savetemplate, made);
+      return made;
+    },
+    true
+  );
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, layout };

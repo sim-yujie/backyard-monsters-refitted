@@ -62,7 +62,7 @@ const SKIPPED: ReadonlySet<string> = new Set(["shortfall", "workers"]);
  * is at, or throws the refusal the upgrade route would.
  *
  * Refusals, in order: `400 badRequest` unknown id; `400 useBatchRoute` wall
- * or trap (not on the Inferno yard); `409 mapRoom`; then `planOneUpgrade`'s: `400 badRequest` no ladder
+ * or trap (the Inferno's too, owner decision 2026-10-29); `409 mapRoom`; then `planOneUpgrade`'s: `400 badRequest` no ladder
  * (decoration, mushroom, placeholder), `409 busy` (`409 training` for an
  * Academy that is training, #145), `409 damaged`,
  * `409 townHall {have: 0, need: 1}`, `409 maxLevel {level, max}`,
@@ -78,7 +78,7 @@ export const instantUpgradeGate = (
   const yard = yardKindOf(save);
 
   const kind = costOf(type, yard)?.kind;
-  if (kind && BATCH_KINDS.has(kind) && yard !== "inferno") {
+  if (kind && BATCH_KINDS.has(kind)) {
     throw yardBadRequestErr(
       "Walls and traps are upgraded from the Yard Planner.",
       { id },

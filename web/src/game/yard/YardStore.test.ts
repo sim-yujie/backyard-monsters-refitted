@@ -510,9 +510,8 @@ describe("the action queue", () => {
     expect(api.cancelUpgrade).not.toHaveBeenCalled();
   });
 
-  it("sends an Inferno wall's upgrade, since the Inferno has no planner", async () => {
-    const pending = deferred<YardResponse<unknown>>();
-    const api = stubApi({ upgrade: vi.fn(() => pending.promise) });
+  it("sends an Inferno wall to the planner's batch, as on the main yard", async () => {
+    const api = stubApi();
     const { store } = storeWith(
       loadWith({
         type: "inferno",
@@ -520,10 +519,11 @@ describe("the action queue", () => {
       }),
       api,
     );
-    void store.upgrade(6);
-    await flush();
-    // WP 1.16: the server takes a wall upgrade in the Inferno only (BASE.as:1072).
-    expect(api.upgrade).toHaveBeenCalledTimes(1);
+    const result = await store.upgrade(6);
+    // Owner decision 29 Oct 2026: the Inferno has the planner, so its walls
+    // upgrade only through the batch, like the main yard's (D13).
+    expect(result.ok ? "ok" : result.refusal.reason).toBe("useBatchRoute");
+    expect(api.upgrade).not.toHaveBeenCalled();
   });
 
   it("reports a server refusal and fetches the state it was refused against", async () => {

@@ -47,6 +47,10 @@ export const INFERNO_ART_ROWS: readonly ArtRow[] = [
   [8, "Strongbox", "buildings/imonsterlab/", [
     [1,["top.1.v2.png",-56,8],null,null,null,null,null,[["anim.1.v2.png",-42,-41,86,88,31]]],
   ], [4000,16000,32000,64000], 120],
+  // 10 Yard Planner (special) — INFERNO_ADDED, after INFERNOYARDPROPS.as:900
+  [10, "Yard Planner", "buildings/iyardplanner/", [
+    [1,["top.1.png",-45,-42],["top.1.damaged.png",-58,-29],["top.1.destroyed.png",-52,6],["shadow.1.jpg",-57,16],["shadow.1.damaged.jpg",-46,23],["shadow.1.destroyed.jpg",-50,32]],
+  ], [16000], 120],
   // 11 Map Room (special) — INFERNOYARDPROPS.as:943
   [11, "Map Room", "buildings/maproom/", [
     [1,["top.1.png",-58,-67],["top.1.damaged.png",-73,-44],["top.1.destroyed.png",-70,0],["shadow.1.jpg",-68,15],["shadow.1.damaged.jpg",-67,23],["shadow.1.destroyed.jpg",-67,27]],

@@ -1,3 +1,4 @@
+import type { YardKind } from "@/game/yard/buildingCosts";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import {
   countByKind,
@@ -41,6 +42,8 @@ export interface SearchPanelActions {
   /** Selects these buildings and puts the camera on the first. */
   onSelect: (ids: number[]) => void;
   onClose: () => void;
+  /** The yard's kind, for the Inferno's names. Main when absent. */
+  kind?: YardKind;
 }
 
 export class SearchPanel {
@@ -129,7 +132,7 @@ export class SearchPanel {
   }
 
   private renderChips(): void {
-    const counts = countByKind(this.nodes);
+    const counts = countByKind(this.nodes, this.actions.kind);
     const chips: HTMLElement[] = [];
 
     for (const kind of KIND_ORDER) {
@@ -166,7 +169,7 @@ export class SearchPanel {
 
   private render(): void {
     const query = this.input.value;
-    this.groups = searchNodes(this.nodes, query, this.kinds);
+    this.groups = searchNodes(this.nodes, query, this.kinds, this.actions.kind);
 
     const rows = this.groups.map((group) => this.renderRow(group));
     this.list.replaceChildren(...rows);

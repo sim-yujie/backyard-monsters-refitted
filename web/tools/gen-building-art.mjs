@@ -522,10 +522,40 @@ const onDisk = (entry) => {
   return levels.every((one) => one.top !== null) ? { ...entry, levels } : null;
 };
 
-const infernoEntries = entriesOf(readBlocks(infernoSource, "INFERNOYARDPROPS.as"))
+/**
+ * Inferno art Flash never had. The Yard Planner could not be built in the
+ * Inferno, so `INFERNOYARDPROPS.as` points it at the surface folder; its own
+ * picture is a painting (owner's pick, 29 Oct 2026, option C in
+ * `art-samples/inferno-yardplanner/`) on the surface footprint. Each is the
+ * Inferno entry with its folder swapped and the offsets of the files that
+ * moved: a taller painting stands on the same base, so its y goes up.
+ */
+const INFERNO_ADDED = {
+  10: {
+    baseurl: "buildings/iyardplanner/",
+    offsets: { "top.1.png": [-45, -42], "top.1.damaged.png": [-58, -29] },
+  },
+};
+
+const infernoAll = entriesOf(readBlocks(infernoSource, "INFERNOYARDPROPS.as"));
+const infernoEntries = infernoAll
   .filter((entry) => mainRows.get(entry.id) !== rowText(entry))
   .map(onDisk)
   .filter((entry) => entry !== null);
+
+for (const [id, { baseurl, offsets }] of Object.entries(INFERNO_ADDED)) {
+  const entry = infernoAll.find((one) => one.id === Number(id));
+  if (!entry || infernoEntries.some((one) => one.id === entry.id)) {
+    throw new Error(`INFERNOYARDPROPS.as: type ${id} has changed; review INFERNO_ADDED`);
+  }
+  const moved = (image) =>
+    image && offsets[image.file] ? { ...image, x: offsets[image.file][0], y: offsets[image.file][1] } : image;
+  const levels = entry.levels.map((one) => ({ ...one, top: moved(one.top), damaged: moved(one.damaged) }));
+  const added = onDisk({ ...entry, baseurl, levels, file: "INFERNO_ADDED, after INFERNOYARDPROPS.as" });
+  if (!added) throw new Error(`INFERNO_ADDED: ${baseurl} has no default picture`);
+  infernoEntries.push(added);
+}
+infernoEntries.sort((a, b) => a.id - b.id);
 
 writeFileSync(
   INFERNO_OUT,

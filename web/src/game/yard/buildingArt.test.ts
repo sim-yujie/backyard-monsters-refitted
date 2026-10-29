@@ -141,6 +141,14 @@ describe("the Inferno art", () => {
     expect(resolveArt(3, 1, ArtState.DEFAULT, "inferno")?.anims).toHaveLength(3);
   });
 
+  it("draws the Yard Planner from its own painted folder, which Flash never had", () => {
+    const planner = resolveArt(10, 1, ArtState.DEFAULT, "inferno");
+    expect(planner?.folder).toBe("buildings/iyardplanner/");
+    expect([fileOf(planner?.top.url ?? ""), planner?.top.x, planner?.top.y]).toEqual(["top.1.png", -45, -42]);
+    expect(folders["buildings/iyardplanner/"]?.files).toContain("top.1.destroyed.png");
+    expect(resolveArt(10, 1, ArtState.DEFAULT)?.folder).toBe("buildings/yardplanner/");
+  });
+
   it("keeps the main art outside the Inferno", () => {
     expect(resolveArt(14, 1, ArtState.DEFAULT)?.folder).not.toBe("buildings/itownhall/");
     expect(buildingName(14)).not.toBe("Under Hall");

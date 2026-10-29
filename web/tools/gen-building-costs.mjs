@@ -518,6 +518,20 @@ const infernos = readTable(
   (key) => language.core[key] ?? language.game[key] ?? key.replaceAll("#", ""),
 );
 
+/**
+ * The Yard Planner (10) is buildable in the Inferno: owner decision
+ * 2026-10-29, overriding Flash, which `block`ed it there
+ * (`INFERNOYARDPROPS.as:890`) and had no planner in the Inferno
+ * (`client/scripts/BASE.as:1072`). Its row is Flash's own and matches the main
+ * yard's: 250,000 Bone and 250,000 Coal, 12 hours, one from Under Hall 3.
+ */
+const INFERNO_YARD_PLANNER = 10;
+{
+  const planner = infernos.find((one) => one.id === INFERNO_YARD_PLANNER);
+  if (!planner) throw new Error(`INFERNOYARDPROPS.as: no Yard Planner (${INFERNO_YARD_PLANNER}) entry`);
+  planner.blocked = false;
+}
+
 {
   const hall = infernos.find((one) => one.id === UNDER_HALL);
   if (!hall) throw new Error(`INFERNOYARDPROPS.as: no Under Hall (${UNDER_HALL}) entry`);
@@ -927,7 +941,8 @@ export const siloCapacity = (level: number, kind: YardKind = "main"): number =>
 export const maxLevel = (type: number, kind: YardKind = "main"): number =>
   propsFor(kind)[type]?.costs.length ?? 0;
 
-/*** The fortify ladder of a type in a yard of \`kind\`, empty when it has none.
+/**
+* The fortify ladder of a type in a yard of \`kind\`, empty when it has none.
  *
  * The main yard's (Storage Silo, Town Hall, six towers) is {@link MAIN_FORTIFY_ROWS};
  * an outpost's and the Inferno's are their trait rows'. Walls, harvesters, housing

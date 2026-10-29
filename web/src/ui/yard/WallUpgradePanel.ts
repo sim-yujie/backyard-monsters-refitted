@@ -50,8 +50,11 @@ const WALL_LADDER_TYPE = 17;
 export const wallUpgradePanel = (options: WallUpgradePanelOptions): Panel => {
   const walls = options.nodes.filter((node) => !node.fixed && WALL_TYPES.includes(node.type));
   const hall = townHallLevel(options.yard);
-  const targets = wallTargets();
-  const top = maxLevel(WALL_LADDER_TYPE);
+  // The Inferno's walls climb the Inferno table, counted by the Under Hall.
+  const kind = options.yard.kind;
+  const hallWord = kind === "inferno" ? "Under Hall" : "Town Hall";
+  const targets = wallTargets(kind);
+  const top = maxLevel(WALL_LADDER_TYPE, kind);
 
   const panel = new Panel({
     title: "Upgrade walls",
@@ -113,7 +116,7 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): Panel => {
     const gated = entry.need > hall;
     element.disabled = gated;
     element.title = gated
-      ? `Needs Town Hall ${entry.need}; yours is ${hall === 0 ? "missing" : `level ${hall}`}.`
+      ? `Needs ${hallWord} ${entry.need}; yours is ${hall === 0 ? "missing" : `level ${hall}`}.`
       : `Take every selected wall to level ${entry.level}.`;
 
     element.addEventListener("click", () => {
@@ -129,7 +132,7 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): Panel => {
   if (targets.every((entry) => entry.need > hall)) {
     const none = document.createElement("span");
     none.className = "u-muted";
-    none.textContent = "Your Town Hall is not high enough for any wall upgrade yet.";
+    none.textContent = `Your ${hallWord} is not high enough for any wall upgrade yet.`;
     levelRow.append(none);
   }
 
@@ -153,7 +156,7 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): Panel => {
       result.eligible.length === 0 || isShort(result.shortfall) || result.gate !== null;
     confirm.disabled = blocked;
     confirm.title = result.gate
-      ? `Needs Town Hall ${result.gate.need}.`
+      ? `Needs ${hallWord} ${result.gate.need}.`
       : result.eligible.length === 0
         ? "Nothing selected would change."
         : isShort(result.shortfall)

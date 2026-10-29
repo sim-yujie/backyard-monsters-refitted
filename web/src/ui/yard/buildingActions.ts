@@ -293,11 +293,10 @@ export const isDamaged = (building: YardBuilding, save: BaseLoadResponse): boole
   (save.buildinghealthdata != null && String(building.id) in save.buildinghealthdata);
 
 /**
- * Walls and traps upgrade through the planner's batch routes, except a wall
- * in the Inferno, which has no planner: it upgrades on its own (WP 1.16).
+ * Walls and traps upgrade through the planner's batch routes, on every yard:
+ * the Inferno has the planner too (owner decision 2026-10-29).
  */
-export const isBatchType = (type: number, kind: YardKind = "main"): boolean =>
-  (WALL_TYPES.includes(type) && kind !== "inferno") || TRAP_TYPES.includes(type);
+export const isBatchType = (type: number): boolean => WALL_TYPES.includes(type) || TRAP_TYPES.includes(type);
 
 /**
  * Whether a type has a ladder the panel could climb at all: in the Inferno
@@ -362,7 +361,7 @@ export const upgradeOffer = (
   context: PanelContext,
 ): UpgradeOffer | null => {
   const { type } = building;
-  if (isBatchType(type, context.yard.kind) || !hasLadder(type, context.yard.kind)) return null;
+  if (isBatchType(type) || !hasLadder(type, context.yard.kind)) return null;
   // A building on a job shows the job instead.
   if (building.countdown) return null;
 
@@ -584,7 +583,7 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
         : open === "baiter"
           ? baiterBlocked(building, context)
           : null,
-    batch: isBatchType(building.type, context.yard.kind),
+    batch: isBatchType(building.type),
     recycle:
       building.type === TOWN_HALL_TYPE || context.yard.kind === "outpost"
         ? null

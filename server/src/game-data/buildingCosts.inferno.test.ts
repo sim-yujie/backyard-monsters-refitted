@@ -33,6 +33,8 @@ const INFERNO_BUILDABLE: readonly (readonly [number, readonly number[], number])
   [6, [0, 2, 2, 3, 4, 5, 5], 10],
   [8, [0, 1, 1, 1, 1, 1, 1], 4],
   [9, [0, 0, 0, 1, 1, 1, 1], 3],
+  // Flash blocked it; buildable by owner decision 2026-10-29 (Flash's own row).
+  [10, [0, 0, 0, 1, 1, 1, 1], 1],
   [13, [0, 1, 2, 3, 4, 5, 5], 3],
   [17, [0, 0, 30, 60, 120, 200, 220], 3],
   [21, [0, 2, 3, 3, 4, 4, 6], 7],
@@ -57,13 +59,14 @@ describe("the Inferno cost table", () => {
   });
 
   test("blocks the surface-only types and the Under Hall", () => {
-    for (const type of [5, 10, 11, 12, 14, 15, 16, 19, 20, 22, 23, 25, 51, 113, 114, 115, 116, 118, 119]) {
+    for (const type of [5, 11, 12, 14, 15, 16, 19, 20, 22, 23, 25, 51, 113, 114, 115, 116, 118, 119]) {
       expect(INFERNO_BUILDABLE_TYPES, `${type}`).not.toContain(type);
     }
     expect(INFERNO_TRAITS[5]?.blocked).toBe(true);
     expect(INFERNO_TRAITS[14]?.blocked).toBe(true);
     expect(INFERNO_TRAITS[15]?.blocked).toBe(true);
     expect(INFERNO_TRAITS[128]?.blocked).toBe(false);
+    expect(INFERNO_TRAITS[10]?.blocked).toBe(false);
   });
 
   test("the Under Hall is type 14 with Flash's six steps (INFERNOYARDPROPS.as:1079)", () => {

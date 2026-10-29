@@ -150,8 +150,9 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
  * only by the player's own free `SP1` (`services/yard/speedup.ts`).
  *
  * Refuses, in this order: `400 badRequest` (no such building, or one with no
- * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps, not
- * on the Inferno yard),
+ * ladder: decorations, mushrooms), `400 useBatchRoute` (walls and traps, on
+ * every yard: the Inferno's go through the Yard Planner too, owner decision
+ * 2026-10-29),
  * then `409` `busy` (`training { monster }` for an Academy that is training,
  * #145), `damaged`, `townHall`, `maxLevel`, `requirements`,
  * `shortfall`, `workers`.
@@ -172,7 +173,7 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
   const yard = yardKindOf(save);
 
   const kind = costOf(Number(building.t), yard)?.kind;
-  if (kind && BATCH_KINDS.has(kind) && yard !== "inferno") {
+  if (kind && BATCH_KINDS.has(kind)) {
     throw yardBadRequestErr(
       "Walls and traps are upgraded from the Yard Planner.",
       { id },

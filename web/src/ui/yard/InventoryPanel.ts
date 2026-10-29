@@ -1,3 +1,4 @@
+import type { YardKind } from "@/game/yard/buildingCosts";
 import { ArtState, resolveArt, stripCrop } from "@/game/yard/buildingArt";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import {
@@ -91,6 +92,8 @@ export interface InventoryPanelActions {
   /** The armed row was clicked again: put the building in hand back. */
   onPutBack: () => void;
   onClose: () => void;
+  /** The yard's kind, for the Inferno's names. Main when absent. */
+  kind?: YardKind;
 }
 
 /** A stack, as the session names the one it is placing from. */
@@ -289,7 +292,7 @@ export class InventoryPanel {
 
   /** One chip per kind the drawer holds, badged with how many it holds. */
   private renderChips(): void {
-    const counts = countByKind(this.nodes);
+    const counts = countByKind(this.nodes, this.actions.kind);
     const chips: HTMLElement[] = [];
 
     for (const kind of KIND_ORDER) {
@@ -340,7 +343,7 @@ export class InventoryPanel {
     const [type, level] = (this.armed ?? "").split(":").map(Number);
     const left = this.nodes.filter((node) => node.type === type && node.level === level).length;
     this.stripName.textContent =
-      this.armed === null ? "" : `${typeName(type ?? -1)} L${level ?? 0} × ${left}`;
+      this.armed === null ? "" : `${typeName(type ?? -1, this.actions.kind)} L${level ?? 0} × ${left}`;
   }
 
   /** The list: what the box and the chips leave, under its headers. */
@@ -353,7 +356,7 @@ export class InventoryPanel {
     this.input.hidden = !searchable;
 
     const query = this.input.value;
-    this.groups = searchNodes(this.nodes, query, this.kinds);
+    this.groups = searchNodes(this.nodes, query, this.kinds, this.actions.kind);
     this.categories = categorise(this.groups);
 
     this.list.replaceChildren(...this.categories.map((section) => this.renderSection(section)));
@@ -437,7 +440,7 @@ export class InventoryPanel {
     count.className = "planner-search__count";
     count.textContent = `× ${group.ids.length}`;
 
-    pick.append(renderIcon(group), name, level, count);
+    pick.append(renderIcon(group, this.actions.kind), name, level, count);
     pick.addEventListener("click", () => {
       // A second click on the armed row is the stop, not another pick-up:
       // the building in hand is already the next one off this stack.
@@ -522,8 +525,8 @@ export class InventoryPanel {
  * around an oversized image instead; `stripCrop` has the arithmetic and the
  * reasoning.
  */
-const renderIcon = (group: SearchGroup): HTMLElement => {
-  const art = resolveArt(group.type, group.level, ArtState.DEFAULT);
+const renderIcon = (group: SearchGroup, kind?: YardKind): HTMLElement => {
+  const art = resolveArt(group.type, group.level, ArtState.DEFAULT, kind);
   if (!art) {
     const swatch = document.createElement("span");
     swatch.className = "planner-inventory__icon planner-inventory__swatch";
