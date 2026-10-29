@@ -490,6 +490,9 @@ export type FlingEvent =
        * was flung in (issue #220, `stance.ts`); a log with none fights it as
        * Hybrid, which is the Flash champion. `b` is its learned brain as the
        * attack froze it at launch (issue #219, `brain.ts`); none is a zero brain.
+       * `hp` is the health it comes out with, the stored health the attack
+       * froze at launch, as Flash spawned it (`ATTACK.as:532`,
+       * `CREEPS.SpawnGuardian(..., hp, fb, pl)`); none is full health.
        */
       readonly champion?: {
         readonly t: number;
@@ -498,6 +501,7 @@ export type FlingEvent =
         readonly fb?: number;
         readonly s?: ChampionStance;
         readonly b?: Partial<BrainWeights>;
+        readonly hp?: number;
       };
     }
   | {

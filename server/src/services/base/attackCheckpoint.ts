@@ -137,7 +137,9 @@ const isEvent = (value: unknown): value is FlingEvent => {
     (value.champion.s === undefined || isChampionStance(value.champion.s)) &&
     // Its brain (issue #219): read only to be replaced by the session's frozen
     // copy (`fightableLog`), but a client's log carries it, so it must parse.
-    (value.champion.b === undefined || isBrainRecord(value.champion.b))
+    (value.champion.b === undefined || isBrainRecord(value.champion.b)) &&
+    // Its health, replaced the same way by the session's frozen figure.
+    (value.champion.hp === undefined || (typeof value.champion.hp === "number" && Number.isFinite(value.champion.hp)))
   );
 };
 
@@ -259,6 +261,7 @@ export const newCheckpoint = (
   ...(session.attackerlevel !== undefined && { attackerlevel: session.attackerlevel }),
   ...(session.defenderForces && { defenderForces: session.defenderForces }),
   ...(session.championBrains && { championBrains: session.championBrains }),
+  ...(session.championHealth && { championHealth: session.championHealth }),
   ...(session.attackerAcademy && { attackerAcademy: session.attackerAcademy }),
   ...(session.attackerRanks && { attackerRanks: session.attackerRanks }),
   ...(session.declareWar !== undefined && { declareWar: session.declareWar }),
@@ -316,6 +319,7 @@ export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession =
   ...(checkpoint.attackerlevel !== undefined && { attackerlevel: checkpoint.attackerlevel }),
   ...(checkpoint.defenderForces && { defenderForces: checkpoint.defenderForces }),
   ...(checkpoint.championBrains && { championBrains: checkpoint.championBrains }),
+  ...(checkpoint.championHealth && { championHealth: checkpoint.championHealth }),
   ...(checkpoint.attackerAcademy && { attackerAcademy: checkpoint.attackerAcademy }),
   ...(checkpoint.attackerRanks && { attackerRanks: checkpoint.attackerRanks }),
   ...(checkpoint.declareWar !== undefined && { declareWar: checkpoint.declareWar }),

@@ -25,7 +25,7 @@ import { requireAttackableMR1Tribe } from "../../../../services/maproom/v1/mr1Tr
 import { startMR1TribeSession } from "../../../../services/maproom/v1/mr1TribeSession.js";
 import { servedDefenderForces } from "../../../../services/base/combat/defenderForces.js";
 import { isShinyLocked } from "../../../../services/user/shinyLock.js";
-import { brainsOf, newAttackSession } from "../../../../services/base/attackSession.js";
+import { brainsOf, healthOf, newAttackSession } from "../../../../services/base/attackSession.js";
 import { startAttackSession } from "../../../../services/base/attackSessionStore.js";
 import { catchUpArmiesForAttack } from "../../../../services/yard/armies.js";
 import { getOutpostOwnerSave } from "../../../../services/base/getOutpostOwnerSave.js";
@@ -70,7 +70,8 @@ interface BaseModeAttack {
  *
  * @param {BaseModeAttack} options - Attack options
  * @returns The base being attacked, the defence it fights with (issue #195),
- *   the attacker's champions' brains the battle is frozen with (issue #219),
+ *   the attacker's champions' brains the battle is frozen with (issue #219)
+ *   and their health,
  *   and the attacker's academy levels it is fought at (issue #201)
  */
 export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, attackerLevel }: BaseModeAttack) => {
@@ -258,6 +259,9 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
   // landed any attack they left (issue #219): frozen into the session, served
   // to the client, and the only brains this battle is ever fought with.
   const championBrains = brainsOf(userSave.champion);
+  // Their health the same way: each goes out at what it has now, never at a
+  // health a client claims (`ATTACK.as:532`).
+  const championHealth = healthOf(userSave.champion);
   // The attacker's academy levels after that catch-up, and whether Declare War
   // runs for them: frozen into the session and served to the client, so the
   // battle is fought with these however either moves meanwhile (issue #201).
@@ -281,7 +285,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         championBrains,
         attackerAcademy,
         declareWar,
-        attackerRanks
+        attackerRanks,
+        championHealth
       )
     );
   } else if (save.basesaveid) {
@@ -303,7 +308,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
         championBrains,
         attackerAcademy,
         declareWar,
-        attackerRanks
+        attackerRanks,
+        championHealth
       )
     );
   }
@@ -320,5 +326,5 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
     await createAttackLog(user, defender, save)
   }
 
-  return { save, defenderForces, championBrains, attackerAcademy, attackerRanks };
+  return { save, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks };
 };

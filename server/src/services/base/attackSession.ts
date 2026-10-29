@@ -109,6 +109,16 @@ export interface AttackSession {
    */
   championBrains?: ChampionBrains;
   /**
+   * Each of the attacker's champions' health at attack start, by type, after
+   * the load caught their yard up. The battle sends a champion out at this
+   * and nothing else, as Flash sent it at its stored `hp` (`ATTACK.as:532`):
+   * the attack load serves it to the client as `attackerhealth`, and every
+   * replay stamps it on the log's champions (`fightableLog`), so a champion
+   * hurt in one attack is still hurt in the next, and a log cannot heal it.
+   * Absent on a session minted before it, whose battle sent each at full.
+   */
+  championHealth?: ChampionHealth;
+  /**
    * The attacker's academy levels at attack start, monster id → level, after
    * the load caught their yard up (issue #201). The attack load serves them to
    * the client as `attackeracademy` and every replay fights at these, so a
@@ -144,6 +154,27 @@ export type AcademyRanks = Readonly<Record<string, number>>;
 
 /** Champion type → brain, as {@link AttackSession.championBrains} keeps it. */
 export type ChampionBrains = Readonly<Record<string, BrainWeights>>;
+
+/** Champion type → health, as {@link AttackSession.championHealth} keeps it. */
+export type ChampionHealth = Readonly<Record<string, number>>;
+
+/**
+ * The health to freeze from the attacker's stored champions: each one's
+ * whole `hp`, at least 0, by type; undefined when there are none.
+ *
+ * @param champions - The attacker's `champion` list as stored.
+ */
+export const healthOf = (champions: unknown): ChampionHealth | undefined => {
+  if (!Array.isArray(champions)) return undefined;
+  const out: Record<string, number> = {};
+  for (const champion of champions) {
+    const t = (champion as { t?: unknown } | null)?.t;
+    if (typeof t !== "number" || !Number.isInteger(t) || t < 1 || t > 5) continue;
+    const hp = Number((champion as { hp?: unknown }).hp);
+    out[String(t)] = Number.isFinite(hp) ? Math.max(0, Math.floor(hp)) : 0;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
 
 /**
  * The brains to freeze from the attacker's stored champions: each non-zero
@@ -196,6 +227,7 @@ export const serialiseAttackSession = (session: AttackSession): string =>
   session.attackerResources ||
   session.defenderForces ||
   session.championBrains ||
+  session.championHealth ||
   session.attackerAcademy ||
   session.attackerRanks ||
   session.declareWar !== undefined ||
@@ -253,6 +285,7 @@ export type AttackSessionFacts = Pick<
   | "attackerlevel"
   | "defenderForces"
   | "championBrains"
+  | "championHealth"
   | "attackerAcademy"
   | "attackerRanks"
   | "declareWar"
@@ -273,6 +306,9 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
   const championBrains = isRecord(parsed.championBrains)
     ? brainsOf(Object.entries(parsed.championBrains).map(([t, b]) => ({ t: Number(t), b })))
     : undefined;
+  const championHealth = isRecord(parsed.championHealth)
+    ? healthOf(Object.entries(parsed.championHealth).map(([t, hp]) => ({ t: Number(t), hp })))
+    : undefined;
   const attackerAcademy = academyLevelsOf(parsed.attackerAcademy);
   const attackerRanks = academyRanksOf(parsed.attackerRanks);
   const { attackerlevel, declareWar } = parsed;
@@ -282,6 +318,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     ...(defenderResources && { defenderResources }),
     ...(attackerResources && { attackerResources }),
     ...(championBrains && { championBrains }),
+    ...(championHealth && { championHealth }),
     ...(Number.isSafeInteger(attackerlevel) &&
       (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
     ...(attackerAcademy && { attackerAcademy }),
@@ -407,6 +444,7 @@ const academyRanksOf = (raw: unknown): AcademyRanks | undefined => {
  * @param {AcademyLevels} [attackerAcademy] - The attacker's academy levels, which the attack load serves too (#201).
  * @param {boolean} [declareWar] - Whether Declare War was running for the attacker (#201).
  * @param {AcademyRanks} [attackerRanks] - The attacker's Monster Lab ranks, frozen (#352).
+ * @param {ChampionHealth} [championHealth] - The attacker's champions' health, frozen.
  */
 export const newAttackSession = (
   attackerid: number,
@@ -419,7 +457,8 @@ export const newAttackSession = (
   championBrains?: ChampionBrains,
   attackerAcademy?: AcademyLevels,
   declareWar?: boolean,
-  attackerRanks?: AcademyRanks
+  attackerRanks?: AcademyRanks,
+  championHealth?: ChampionHealth
 ): AttackSession => ({
   attackerid,
   attackid,
@@ -430,6 +469,7 @@ export const newAttackSession = (
   ...(attackerResources && { attackerResources }),
   ...(attackerlevel !== undefined && { attackerlevel }),
   ...(championBrains && { championBrains }),
+  ...(championHealth && { championHealth }),
   ...(attackerAcademy && { attackerAcademy }),
   ...(attackerRanks && Object.keys(attackerRanks).length > 0 && { attackerRanks }),
   ...(declareWar !== undefined && { declareWar }),

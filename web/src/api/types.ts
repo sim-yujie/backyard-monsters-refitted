@@ -726,6 +726,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   attackerbrains?: unknown;
   /**
+   * Attack modes only: the attacker's champions' health, by type, as the
+   * server froze it into this attack at launch. A flung champion comes out at
+   * this (`ATTACK.as:532`), which is what the server replays.
+   */
+  attackerhealth?: unknown;
+  /**
    * Attack modes only: the attacker's academy levels, by monster id, as the
    * server froze them into this attack at launch after catching their yard up
    * (issue #201). The battle is fought at these, which the server replays.

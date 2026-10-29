@@ -14,6 +14,7 @@ import {
   servedAcademy,
   servedRanks,
   servedBrain,
+  servedHealth,
   servedHeight,
 } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
@@ -432,6 +433,31 @@ describe("AttackSession events and the fling log", () => {
     session.start();
     const event = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 1 } });
     expect(event.champion).toEqual({ t: 1, l: 1 });
+  });
+
+  it("sends a hurt champion out at the health the attack load froze, as Flash did (ATTACK.as:532)", () => {
+    expect(servedHealth(undefined, 1)).toBeNull();
+    expect(servedHealth({ "1": 512.9 }, 1)).toBe(512);
+    expect(servedHealth({ "1": -3 }, 1)).toBe(0);
+    expect(servedHealth({ "2": 500 }, 1)).toBeNull();
+    // The roster's copy is stale on purpose (full): the load's is what the server replays.
+    const champion = { t: 1, hp: 99_999, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    const roster = { monsters: {}, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null };
+    const session = new AttackSession({ target: targetOf({ roster }), seed: 1 });
+    session.load({ ...towerYard(), attackerhealth: { "1": 40 } } as BaseLoadResponse);
+    session.start();
+    const event = session.appendFling({ x: -100, y: -100, monsters: {}, champion: { t: 1, l: 1 } });
+    expect(event.champion).toEqual({ t: 1, l: 1, hp: 40 });
+    expect(session.championsHpAfter()[1]).toBeLessThanOrEqual(40);
+  });
+
+  it("will not send a champion the attack load froze with no health left", () => {
+    const champion = { t: 1, hp: 99_999, l: 1, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    const roster = { monsters: {}, levels: {}, champions: [champion], flingerLevel: 4, catapultLevel: 0, sources: [], siege: null, resources: null };
+    const session = new AttackSession({ target: targetOf({ roster }), seed: 1 });
+    session.load({ ...towerYard(), attackerhealth: { "1": 0 } } as BaseLoadResponse);
+    session.start();
+    expect(session.championBlock(1)).toBe("hurt");
   });
 
   it("logs a radius that counts the champion's bucket (#143)", () => {
