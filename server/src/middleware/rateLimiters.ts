@@ -125,6 +125,37 @@ export const alliancesLimiter = RateLimit.middleware({
 });
 
 /**
+ * Rate limit for the attack log - 30 requests per minute per user (security
+ * audit 2026-10-29, M3). Each answer can hold 50 full attack reports.
+ */
+export const attackLogsLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "attacklogs",
+  keyGenerator: byUser("attacklogs"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many attack log requests. Please slow down." };
+  },
+});
+
+/**
+ * Rate limit for buying alliance power-up hours with Shiny - 20 per minute per
+ * user (security audit 2026-10-29, M1). A purchase is a click in the alliance
+ * window, so this is far above normal play.
+ */
+export const purchasePowerupLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "purchasepowerup",
+  keyGenerator: byUser("purchasepowerup"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many power-up purchases. Please slow down." };
+  },
+});
+
+/**
  * Rate limit for the MR2 takeover quote - 60 requests per minute per user.
  *
  * The map asks once per camp or outpost the player selects, and again when

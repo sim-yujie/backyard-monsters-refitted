@@ -8,6 +8,8 @@ import {
   changeUsernameLimiter,
   debugDataLimiter,
   getAreaLimiter,
+  attackLogsLimiter,
+  purchasePowerupLimiter,
   sightLimiter,
   loginLimiter,
   forgotPasswordEmailLimiter,
@@ -338,7 +340,7 @@ router.get("/api/:apiVersion/worlds", publicReadLimiter, getAvailableWorlds);
 router.get("/api/:apiVersion/leaderboards", publicReadLimiter, getLeaderboards);
 // The leaderboard by empire points (beta.4, `services/leaderboard/empireBoard.ts`): the top 100 and the caller's own row.
 router.get("/api/:apiVersion/leaderboards/empire", apiVersion, verifyUserAuth, verifyAccountStatus, leaderboardLimiter, getEmpireBoard);
-router.get("/api/:apiVersion/attacklogs", verifyUserAuth, getAttackLogs);
+router.get("/api/:apiVersion/attacklogs", verifyUserAuth, attackLogsLimiter, getAttackLogs);
 
 /**  ────────────────────────────────────────────────
 * 📦 Alliances
@@ -354,7 +356,7 @@ router.post("/alliance/requestjoin", verifyUserAuth, allianceJoinRequestLimiter,
 router.post("/alliance/inviteuser", verifyUserAuth, allianceInviteLimiter, logRequest, inviteUser);
 router.get("/alliance/getpowerups", verifyUserAuth, logRequest, getPowerups);
 router.post("/alliance/activatepowerup", verifyUserAuth, logRequest, activatePowerup);
-router.post("/alliance/purchasepowerup", verifyUserAuth, logRequest, purchasePowerup);
+router.post("/alliance/purchasepowerup", verifyUserAuth, purchasePowerupLimiter, logRequest, purchasePowerup);
 router.post("/alliance/changeinvitestatus", verifyUserAuth, logRequest, changeInviteStatus);
 router.get("/alliance/getmessages", verifyUserAuth, logRequest, getMessages);
 router.post("/alliance/deletemessages", verifyUserAuth, logRequest, deleteMessages);
