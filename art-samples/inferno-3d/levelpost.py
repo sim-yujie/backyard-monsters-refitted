@@ -38,7 +38,8 @@ def main():
     levels = [LevelTier(cfg, t, look) for look in (1, 2, 3)]
     heads = list(range(0, 32, 4))
     boxes = [T.frame(k).getbbox() for T in levels for k in heads]
-    crop = (min(b[0] for b in boxes) - 6, min(b[1] for b in boxes) - 6, max(b[2] for b in boxes) + 6, max(b[3] for b in boxes) + 6)
+    m = 24                                            # room round each cell, so no spike tip meets the next cell
+    crop = (min(b[0] for b in boxes) - m, min(b[1] for b in boxes) - m, max(b[2] for b in boxes) + m, max(b[3] for b in boxes) + m)
     cw, ch = crop[2] - crop[0], crop[3] - crop[1]
     bw, bh = int(cw * 1.5), int(ch * 1.5)            # 3x game size (1.5 x the @2x)
     font, small = ImageFont.truetype("arialbd.ttf", 26), ImageFont.truetype("arialbd.ttf", 18)
