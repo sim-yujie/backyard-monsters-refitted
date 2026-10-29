@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 import { MikroORM, type EntityManager } from "@mikro-orm/postgresql";
-import { knownFailing } from "../../testing/knownFailing.js";
 
 import ormConfig from "../../mikro-orm.config.js";
 import { User } from "../../database/models/user.model.js";
@@ -118,8 +117,11 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     return ctx.body as Body;
   };
 
+  /** An attack load carries the attack payload, as the client sends it (`web/src/api/base.ts`); outside ENV=local the server refuses one without (`validateAttack.ts`). */
+  const NO_ARMY = JSON.stringify({ monsters: [], champions: [] });
+
   const load = (email: string, type: string, baseid: string) =>
-    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1" });
+    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1", ...(type === "attack" ? { attackData: NO_ARMY } : {}) });
 
   /** A player as sign-up makes one (`register.ts`), then their first yard load and a look at Map Room 1. */
   const signUp = async (name: string) => {
@@ -232,11 +234,7 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     }
   });
 
-  // Known failing (audit 2026-10-29, testing/knownFailing.ts): fails both on a fresh
-  // `db:init` database (CI) and on a copy of bym_sound. The attack load answers 404
-  // "We could not load the requested data", and the attack logs miss the real
-  // player's log. Cause not yet found.
-  knownFailing("the attack load", async () => {
+  test("the attack load", async () => {
     // Two attackers, so neither attack load finds the other attack running.
     const onReal = await load(viewer.email, "attack", (await saveOf(real.userid)).baseid);
     const onBot = await load(rival.email, "attack", bot.baseid);
@@ -245,7 +243,7 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     expectSameShape(byType(onBot), byType(onReal));
   });
 
-  knownFailing("the attack logs", async () => {
+  test("the attack logs", async () => {
     const ofReal = (await call(routes.getAttackLogs, viewer.email, {}, { filter: "both" })).attackLogs as Body[];
     const ofBot = (await call(routes.getAttackLogs, rival.email, {}, { filter: "both" })).attackLogs as Body[];
     expect(ofReal.find((log) => log.defender_userid === real.userid)).toBeDefined();
