@@ -109,4 +109,5 @@ def main():
         print(T.t, "body", T.body_at, "pivot", T.pivot, "strip", [round(v, 2) for v in T.strip_at], T.cells[0].size)
 
 
-main()
+if __name__ == "__main__":
+    main()
