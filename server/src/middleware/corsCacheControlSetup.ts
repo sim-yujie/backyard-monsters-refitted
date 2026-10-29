@@ -19,6 +19,13 @@ const PICTURE = /\.(png|jpe?g|gif|webp|svg)$/i;
 
 const NO_STORE = "no-cache, no-store, must-revalidate";
 
+/**
+ * A local server's files are kept but checked every time: an artist's new
+ * picture shows on the next reload, while one that has not changed comes back
+ * as an empty 304 (`notModified.ts`) instead of the whole file again.
+ */
+const REVALIDATE = "no-cache";
+
 const STATIC_CACHE_CONTROL = `public, max-age=${STATIC_MAX_AGE}`;
 
 const PICTURE_CACHE_CONTROL = `public, max-age=${PICTURE_MAX_AGE}`;
@@ -27,14 +34,16 @@ const cacheStaticAssets = process.env.ENV !== Env.LOCAL;
 
 /**
  * The Cache-Control for a request: a week for a picture in public/, an hour
- * for any other file there, and nothing kept for the API.
+ * for any other file there, checked every time on a local server, and nothing
+ * kept for the API.
  *
  * @param {string} path - The request path.
- * @param {boolean} [cacheable] - Whether static files may be kept at all (not on a local server).
+ * @param {boolean} [cacheable] - Whether static files may be kept without asking (not on a local server).
  * @returns {string} The header's value.
  */
 export const cacheControlFor = (path: string, cacheable = cacheStaticAssets): string => {
-  if (!cacheable || !isStaticPath(path)) return NO_STORE;
+  if (!isStaticPath(path)) return NO_STORE;
+  if (!cacheable) return REVALIDATE;
   return PICTURE.test(path) ? PICTURE_CACHE_CONTROL : STATIC_CACHE_CONTROL;
 };
 
