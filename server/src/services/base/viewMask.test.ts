@@ -85,11 +85,18 @@ describe("someone else's yard, only looked at", () => {
     expect(sent["7"]!.cB).toBe(120);
   });
 
-  test("a tower whose new art players do not see yet still reads 1", () => {
+  test("the painted towers read their tier, never their level", () => {
     const TESLA = 25;
     const BUNKER = 22;
-    expect(artLevelOf(TESLA, 8)).toBe(1);
-    expect(artLevelOf(BUNKER, 5)).toBe(1);
+    const AERIAL = 115;
+    const RAILGUN = 118;
+    expect(artLevelOf(TESLA, 8)).toBe(7);
+    expect(artLevelOf(TESLA, 6)).toBe(4);
+    expect(artLevelOf(BUNKER, 2)).toBe(1);
+    expect(artLevelOf(BUNKER, 4)).toBe(3);
+    expect(artLevelOf(BUNKER, 5)).toBe(5);
+    expect(artLevelOf(AERIAL, 9)).toBe(7);
+    expect(artLevelOf(RAILGUN, 3)).toBe(1);
     // Without the tiers, the Flash steps alone: a tower has one picture.
     expect(artLevelOf(CANNON, 8, false)).toBe(1);
   });
