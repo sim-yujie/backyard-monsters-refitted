@@ -35,6 +35,8 @@ mock.module("../../server.js", () => ({
     ttl: async () => -2,
     incr: async () => 1,
     expire: async () => 1,
+    sadd: async () => 1,
+    srem: async () => 0,
   },
 }));
 mock.module("../../utils/logger.js", () => ({

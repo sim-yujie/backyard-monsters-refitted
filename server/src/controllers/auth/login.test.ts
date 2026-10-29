@@ -51,9 +51,17 @@ mock.module("../../server.js", () => ({
       return entry ? 1 : 0;
     },
     ttl: async (key: string) => kept.get(key)?.ttl ?? -2,
-    sadd: async () => 1,
-    srem: async () => 1,
-    smembers: async () => [],
+    sadd: async (key: string, member: string) => {
+      const members = new Set((kept.get(key)?.value ?? "").split(",").filter(Boolean)).add(member);
+      kept.set(key, { value: [...members].join(","), ttl: kept.get(key)?.ttl ?? -1 });
+      return 1;
+    },
+    srem: async (key: string, member: string) => {
+      const entry = kept.get(key);
+      if (entry) entry.value = entry.value.split(",").filter((one) => one && one !== member).join(",");
+      return 1;
+    },
+    smembers: async (key: string) => (kept.get(key)?.value ?? "").split(",").filter(Boolean),
   },
 }));
 mock.module("../../utils/logger.js", () => ({
@@ -61,6 +69,7 @@ mock.module("../../utils/logger.js", () => ({
 }));
 
 const { login } = await import("./login.js");
+const { clearAllLoginFailures } = await import("../../services/auth/loginBackoff.js");
 
 const PASSWORD = "hunter22!";
 const HASH = await bcrypt.hash(PASSWORD, 4);
@@ -68,10 +77,10 @@ const HASH = await bcrypt.hash(PASSWORD, 4);
 const saved: Record<string, string | undefined> = {};
 const SWITCHES = ["ENV", "REQUIRE_DISCORD_VERIFICATION", "DISCORD_TOKEN", "SECRET_KEY"];
 
-const run = async (password = PASSWORD, email = "player@example.com") => {
+const run = async (password = PASSWORD, email = "player@example.com", ip = "127.0.0.1") => {
   const ctx = {
     request: { body: { email, password } },
-    ip: "127.0.0.1",
+    ip,
     get: () => "test",
   } as unknown as Context & { body: Row };
   try {
@@ -185,11 +194,16 @@ describe("login does not say which emails have an account (issue #317)", () => {
   });
 });
 
-describe("sign-in back-off per email (security audit 2026-10-29, L2)", () => {
-  const PAUSE = "login-pause:player@example.com";
+describe("sign-in back-off per email and address (security audit 2026-10-29, L2)", () => {
+  const EMAIL = "player@example.com";
+  const HOME = "127.0.0.1";
+  const STRANGER = "203.0.113.9";
+  const PAUSE = `login-pause:${EMAIL}|${HOME}`;
+  const FAILURES = `login-failures:${EMAIL}|${HOME}`;
+  const wrong = (ip = HOME, email = EMAIL) => run("not-the-password", email, ip);
 
   test("five wrong passwords, then a short pause that refuses even the right one", async () => {
-    for (let at = 0; at < 5; at++) expect((await run("not-the-password")).status).toBe(409);
+    for (let at = 0; at < 5; at++) expect((await wrong()).status).toBe(409);
 
     const paused = await run();
     expect(paused.status).toBe(429);
@@ -197,43 +211,66 @@ describe("sign-in back-off per email (security audit 2026-10-29, L2)", () => {
     expect(kept.get(PAUSE)?.ttl).toBe(30);
   });
 
+  test("a stranger pausing the email does not stop the player on their own connection", async () => {
+    for (let at = 0; at < 12; at++) await wrong(STRANGER);
+    expect((await run(PASSWORD, EMAIL, STRANGER)).status).toBe(429);
+
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
+    // And the player's sign-in does not lift the stranger's pause.
+    expect((await run(PASSWORD, EMAIL, STRANGER)).status).toBe(429);
+  });
+
+  test("a password reset lifts the pause from every address", async () => {
+    for (let at = 0; at < 5; at++) {
+      await wrong(HOME);
+      await wrong(STRANGER);
+    }
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(429);
+
+    await clearAllLoginFailures(EMAIL);
+
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
+    expect((await run(PASSWORD, EMAIL, STRANGER)).status).toBe(200);
+    expect([...kept.keys()].filter((key) => key.includes(EMAIL))).toEqual([]);
+  });
+
   test("a try during the pause is not counted, and skips the password check", async () => {
-    for (let at = 0; at < 5; at++) await run("not-the-password");
+    for (let at = 0; at < 5; at++) await wrong();
     const compare = spyOn(bcrypt, "compare");
-    await run("not-the-password");
-    await run("not-the-password");
+    await wrong();
+    await wrong();
     expect(compare).not.toHaveBeenCalled();
     compare.mockRestore();
-    expect(kept.get("login-failures:player@example.com")?.value).toBe("5");
+    expect(kept.get(FAILURES)?.value).toBe("5");
   });
 
   test("each wrong password after a pause doubles it, up to 15 minutes", async () => {
     const pauses: number[] = [];
     for (let at = 0; at < 12; at++) {
-      await run("not-the-password");
+      await wrong();
       pauses.push(kept.get(PAUSE)?.ttl ?? 0);
       kept.delete(PAUSE); // the pause runs out
     }
     expect(pauses).toEqual([0, 0, 0, 0, 30, 60, 120, 240, 480, 900, 900, 900]);
-    expect(kept.get("login-failures:player@example.com")?.ttl).toBe(15 * 60);
+    expect(kept.get(FAILURES)?.ttl).toBe(15 * 60);
   });
 
-  test("the right password forgets the wrong ones", async () => {
-    for (let at = 0; at < 4; at++) await run("not-the-password");
+  test("the right password forgets the wrong ones from that address", async () => {
+    for (let at = 0; at < 4; at++) await wrong();
     expect((await run()).status).toBe(200);
-    expect(kept.has("login-failures:player@example.com")).toBe(false);
-    for (let at = 0; at < 4; at++) await run("not-the-password");
+    expect(kept.has(FAILURES)).toBe(false);
+    for (let at = 0; at < 4; at++) await wrong();
     expect((await run()).status).toBe(200);
   });
 
   test("an email with no account is paused the same way, so the pause says nothing", async () => {
     user = null as unknown as Row;
-    for (let at = 0; at < 5; at++) await run("not-the-password", "nobody@example.com");
+    for (let at = 0; at < 5; at++) await wrong(HOME, "nobody@example.com");
     expect((await run(PASSWORD, "nobody@example.com")).status).toBe(429);
   });
 
   test("one email's pause does not touch another's", async () => {
-    for (let at = 0; at < 5; at++) await run("not-the-password", "other@example.com");
+    for (let at = 0; at < 5; at++) await wrong(HOME, "other@example.com");
     expect((await run()).status).toBe(200);
   });
 });

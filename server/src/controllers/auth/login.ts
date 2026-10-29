@@ -85,20 +85,20 @@ export const login: KoaController = async (ctx) => {
   }
 
   if (!user) {
-    // Wrong passwords are counted per email, and a run of them pauses the
-    // email's sign-in briefly (security audit 2026-10-29, L2).
-    const paused = email ? await loginPausedFor(email) : 0;
+    // Wrong passwords are counted per email and address, and a run of them
+    // pauses that email from that address briefly (security audit 2026-10-29, L2).
+    const paused = email ? await loginPausedFor(email, ctx.ip) : 0;
     if (paused > 0) throw loginBackoffErr(paused);
 
     user = await postgres.em.findOne(User, { email });
 
     const isMatch = await bcrypt.compare(password ?? "", user?.password ?? (await missingAccountHash));
     if (!user || !isMatch) {
-      if (email) await recordLoginFailure(email);
+      if (email) await recordLoginFailure(email, ctx.ip);
       throw emailPasswordErr();
     }
 
-    if (email) await clearLoginFailures(email);
+    if (email) await clearLoginFailures(email, ctx.ip);
   }
 
   // A bot's account cannot be entered (issue #235); it reads as a wrong

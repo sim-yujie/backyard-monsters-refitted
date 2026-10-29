@@ -104,9 +104,9 @@ export const invalidBugReportErr = (message: string, field: string) =>
   });
 
 /**
- * Too many wrong passwords for one email in a row (security audit
- * 2026-10-29, L2). The pause is short and the same whether or not the email
- * has an account (`services/auth/loginBackoff.ts`).
+ * Too many wrong passwords for one email from one address in a row
+ * (security audit 2026-10-29, L2). The pause is short and the same whether or
+ * not the email has an account (`services/auth/loginBackoff.ts`).
  */
 export const loginBackoffErr = (retryAfterSeconds: number) => {
   const minutes = Math.ceil(retryAfterSeconds / 60);
