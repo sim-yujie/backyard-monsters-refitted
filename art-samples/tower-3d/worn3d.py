@@ -326,10 +326,16 @@ def mat_worn_diag(name, a, b, n=6, lean=1.6, under=(104, 66, 40), edge=(232, 210
 
 
 def mat_iron(name, base=(86, 70, 60), dark=(42, 33, 29), rust=(160, 82, 34), edge=(184, 164, 144), rust_k=0.8,
-             soot=0.0, dents=1.0, dirt=0.3, spec=0.12, spec_col=(1.0, 0.86, 0.7, 1), edge_k=0.8):
-    """Old iron: dark brown-grey, hammered (soft dents), rust patches (more in crevices), bright worn edges."""
+             soot=0.0, dents=1.0, dirt=0.3, spec=0.12, spec_col=(1.0, 0.86, 0.7, 1), edge_k=0.8, seams=0):
+    """Old iron: dark brown-grey, hammered (soft dents), rust patches (more in crevices), bright worn edges. seams: that
+    many plates round Z, each its own shade, dark joins between (plating on a drum)."""
     p = L.Paint(name)
     col = p.ramp(p.noise(2.5, 4.0, 0.6), [(0.3, srgb(*dark)), (0.7, srgb(*base))])
+    if seams:
+        idx, f, _ = _stave(p, seams, wob=0.0)
+        col = p.mix(col, p.ramp(_white(p, idx), [(0.0, _grey(0.8)), (1.0, _grey(1.12))]), 1.0, 'MULTIPLY')
+        d = p.math("MINIMUM", f, p.math("SUBTRACT", 1.0, f))
+        col = p.mix(col, srgb(*[int(c * 0.35) for c in dark]), p.ramp(d, [(0.02, WHITE), (0.045, BLACK)]))
     convex, concave = _attr(p)
     rn = p.math("ADD", p.noise(4.0, 8.0, 0.66), p.math("MULTIPLY", concave, 0.3))
     rm = p.ramp(rn, [(0.54, BLACK), (0.6, _grey(rust_k))])
@@ -437,3 +443,67 @@ def mat_black_crystal(name, scale=6.0, glow=(255, 92, 20), glow_k=0.3, sparkle=1
     shade = [(0.0, (0.36, 0.36, 0.42, 1)), (0.2, (0.5, 0.5, 0.58, 1)), (0.5, (0.78, 0.78, 0.84, 1)), (1.0, (0.95, 0.95, 1.0, 1))]
     return p.finish(col, spec=0.7, spec_rough=0.12, spec_col=(0.92, 0.95, 1.0, 1), metal=True, bump=(h, 0.9), shade=shade,
                     emit=emit, edge_dark=0.4, sheen=0.12, glint=0.3)
+
+
+# The Inferno's blocks go Brimstone -> Granite -> Forged Steel (english.json infernoblock_desc); their colours are from
+# buildings/iwalls/top.1-3.v2.png: brimstone a black-brown crust (18-70) cracked over orange fire (247,130,63); granite a
+# warm grey-tan (81,74,61 to 158,146,128); forged steel a warm dark gunmetal (59,50,49 to 125,110,108), white glints.
+FORGED = dict(base=(92, 84, 84), dark=(44, 40, 42), rust=(96, 70, 54), edge=(214, 206, 202), spec_col=(0.95, 0.95, 1.0, 1),
+              rust_k=0.08, dirt=0.1, spec=0.55, dents=0.5, edge_k=0.75)
+
+
+def mat_forged(name, seams=0, **kw):
+    """Forged steel: dark warm gunmetal, hammered, bright-edged, a cool shine."""
+    return mat_iron(name, seams=seams, **{**FORGED, **kw})
+
+
+def mat_brimstone(name, scale=5.0, crust=((18, 15, 14), (74, 46, 32)), fire=(255, 118, 30), hot=(255, 196, 120),
+                  glow_k=1.0, low=0.4):
+    """Brimstone: a charred black-brown crust in lumps, cracked open over glowing fire (hotter toward the ground,
+    like the Inferno's first block)."""
+    p = L.Paint(name)
+    v = p.N.new("ShaderNodeTexVoronoi")
+    v.inputs["Scale"].default_value = scale
+    p.link(p.tc.outputs["Object"], v.inputs["Vector"])
+    e = p.N.new("ShaderNodeTexVoronoi")
+    e.feature = 'DISTANCE_TO_EDGE'
+    e.inputs["Scale"].default_value = scale
+    p.link(p.tc.outputs["Object"], e.inputs["Vector"])
+    col = p.ramp(_bw(p, v.outputs["Color"]), [(0.0, srgb(*crust[0])), (1.0, srgb(*crust[1]))])
+    col = p.mix(col, p.ramp(p.noise(14.0, 5.0, 0.6), [(0.35, _grey(0.6)), (0.65, _grey(1.15))]), 1.0, 'MULTIPLY')
+    col = weather(p, col, edge=(120, 84, 62), edge_k=0.45, cavity=0.5, dirt=0.0, streaks=0.0, vary=0.1)
+    crack = p.math("ADD", e.outputs["Distance"], p.math("MULTIPLY", p.noise(9.0, 3.0), 0.04))
+    seam = _bw(p, p.ramp(crack, [(0.018, WHITE), (0.06, BLACK)]))
+    seam = p.math("MULTIPLY", seam, _bw(p, p.ramp(p.noise(3.0, 3.0, 0.6), [(0.32, BLACK), (0.48, WHITE)])))
+    geo = p.N.new("ShaderNodeNewGeometry")
+    gz = p.N.new("ShaderNodeSeparateXYZ")
+    p.link(geo.outputs["Position"], gz.inputs[0])
+    lowk = p.math("ADD", 0.35, p.math("MULTIPLY", _bw(p, p.ramp(gz.outputs[2], [(0.0, WHITE), (low, BLACK)])), 0.75))
+    fc = p.ramp(crack, [(0.0, srgb(*hot)), (0.05, srgb(*fire))])
+    emit = p.mix(BLACK, fc, p.math("MULTIPLY", p.math("MULTIPLY", seam, lowk), glow_k))
+    col = p.mix(col, srgb(*fire), p.math("MULTIPLY", seam, 0.75))
+    h = p.math("ADD", p.math("MULTIPLY", v.outputs["Distance"], 1.5), p.math("MULTIPLY", seam, -1.0))
+    return p.finish(col, spec=0.15, spec_rough=0.5, bump=(h, 0.8), shade=L.WARM_SHADE, emit=emit, edge_dark=0.3, sheen=0.0)
+
+
+def mat_granite(name, seams=0, light=(166, 154, 134), dark=(104, 96, 82), fleck_d=(40, 36, 34), fleck_l=(232, 226, 214),
+                edge=(214, 204, 186), dirt=0.35, soot=0.25):
+    """Granite: warm grey-tan stone with dark and pale flecks, chunky chisel shading, chipped pale edges, sooty
+    crevices. seams: that many cut blocks round Z with mortar joins between (a drum built of stone)."""
+    p = L.Paint(name)
+    col = p.ramp(p.noise(2.0, 4.0, 0.55), [(0.3, srgb(*dark)), (0.7, srgb(*light))])
+    if seams:
+        idx, f, sep = _stave(p, seams, wob=0.0)
+        col = p.mix(col, p.ramp(_white(p, idx), [(0.0, _grey(0.85)), (1.0, _grey(1.1))]), 1.0, 'MULTIPLY')
+        d = p.math("MINIMUM", f, p.math("SUBTRACT", 1.0, f))
+        joint = p.ramp(d, [(0.03, WHITE), (0.06, BLACK)])
+        col = p.mix(col, srgb(*[int(c * 0.4) for c in dark]), joint)
+    col = p.mix(col, srgb(*fleck_d), p.ramp(p.noise(40.0, 2.0, 0.5), [(0.66, BLACK), (0.7, _grey(0.85))]))
+    col = p.mix(col, srgb(*fleck_l), p.ramp(p.noise(34.0, 2.0, 0.5, coord="Generated"), [(0.7, BLACK), (0.74, _grey(0.7))]))
+    chisel = _voronoi(p, 7.0)
+    col = p.mix(col, p.ramp(chisel, [(0.05, _grey(0.86)), (0.5, _grey(1.06))]), 1.0, 'MULTIPLY')
+    col = weather(p, col, edge=edge, edge_k=0.7, cavity=0.65, dirt=dirt, soot=soot, streaks=0.2)
+    h = p.math("MULTIPLY", chisel, 1.4)
+    if seams:
+        h = p.math("ADD", h, p.math("MULTIPLY", _bw(p, joint), -1.5))
+    return p.finish(col, spec=0.1, spec_rough=0.6, bump=(h, 0.7), shade=L.WARM_SHADE)

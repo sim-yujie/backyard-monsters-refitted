@@ -105,17 +105,20 @@ def common():
                                rust_k=0.6),
         iron_hoop=W.mat_iron("iron_hoop", base=(74, 58, 48), dark=(38, 29, 25), edge=(150, 128, 108), rust_k=0.85),
         iron_sooty=W.mat_iron("iron_sooty", rust_k=0.6, soot=0.6),
-        # the upper levels' looks (see blast_roles)
-        gold=W.mat_gold("gold"),
-        staves_clean=W.mat_planks("staves_clean", n=16, light=(204, 146, 94), dark=(160, 104, 62), dirt=0.25, cavity=0.45),
-        staves_dark_clean=W.mat_planks("staves_dark_clean", n=14, light=(160, 102, 60), dark=(112, 68, 38), dirt=0.25,
-                                       cavity=0.45),
-        stripes_gold=W.mat_worn_diag("stripes_gold", (196, 22, 16), (232, 204, 156), trim=(236, 168, 40), chips=0.68,
-                                     dirt=0.45, soot=0.25, streaks=0.18),
-        stripes_black=W.mat_worn_diag("stripes_black", (168, 14, 12), (30, 28, 36), under=(16, 14, 18),
-                                      edge=(110, 110, 130), trim=(236, 168, 40), chips=0.72, dirt=0.35, soot=0.0,
-                                      streaks=0.1),
-        crystal=W.mat_black_crystal("crystal"),
+        # the levels' looks after the Inferno's blocks: Brimstone, Granite, Forged Steel (see blast_roles)
+        brimstone=W.mat_brimstone("brimstone"),
+        granite=W.mat_granite("granite", light=(132, 122, 104), dark=(84, 76, 64), edge=(196, 186, 168)),
+        granite_blocks=W.mat_granite("granite_blocks", seams=16),
+        granite_blocks_dark=W.mat_granite("granite_blocks_dark", seams=14, light=(138, 128, 112), dark=(86, 78, 66)),
+        stripes_granite=W.mat_worn_diag("stripes_granite", (180, 20, 14), (138, 128, 112), under=(70, 64, 56),
+                                        edge=(220, 210, 192), chips=0.66, dirt=0.55, soot=0.35, streaks=0.22),
+        forged=W.mat_forged("forged"),
+        forged_dark=W.mat_forged("forged_dark", base=(70, 64, 64), dark=(34, 31, 33), edge=(168, 162, 158), edge_k=0.55,
+                                 spec=0.4),
+        forged_plates=W.mat_forged("forged_plates", seams=16),
+        forged_plates_dark=W.mat_forged("forged_plates_dark", seams=14, base=(70, 64, 64), dark=(34, 31, 33)),
+        stripes_forged=W.mat_worn_diag("stripes_forged", (172, 16, 12), (56, 50, 50), under=(28, 26, 26),
+                                       edge=(168, 160, 156), chips=0.72, dirt=0.3, soot=0.15, streaks=0.12),
     )
 
 
@@ -160,23 +163,27 @@ def strap(name, M, LN, parent, r, z0, z1, n_rivets, rivet_r=0.034, phase=0.0, ma
 
 
 def blast_roles(M):
-    """The Blast Tower's material key for each role, by LOOK (the owner's tier rule from the wall blocks: 1 worn, 2 more
-    gold like the Gold Blocks, 3 black diamond with gold trim like the Black Diamond Blocks)."""
+    """The Blast Tower's material key for each role, by LOOK, after the Inferno's blocks (the owner's rule: a tower's
+    levels follow its world's wall blocks; in the Inferno Brimstone, Granite, Forged Steel): 1 the approved worn tower
+    with brimstone stakes and rubble, 2 granite (cut stone drum, neck and stakes, red and granite stripes, dark iron),
+    3 forged steel (dark steel plating, head and spikes, red and steel stripes)."""
     if LOOK == 2:
-        return dict(skirt="stripes_gold", stake="stake", tip="gold", staves="staves_clean", staves_dark="staves_dark_clean",
-                    hoop="gold", plate="iron_dirty", rope="rope", bolt="gold", collar="gold", cap="gold", ball="gold",
-                    trim="gold", barrel="iron_w", band="gold")
+        return dict(skirt="stripes_granite", stake="granite", tip="granite", staves="granite_blocks",
+                    staves_dark="granite_blocks_dark", hoop="iron_hoop", plate="iron_dirty", rope="rope", bolt="iron_w",
+                    collar="iron_w", cap="iron_w", ball="iron_head", trim="iron_head", barrel="iron_sooty", band=None,
+                    clod="dirt")
     if LOOK == 3:
-        return dict(skirt="stripes_black", stake="crystal", tip="gold", staves="crystal", staves_dark="crystal",
-                    hoop="gold", plate="crystal", rope="gold", bolt="gold", collar="gold", cap="crystal", ball="crystal",
-                    trim="gold", barrel="crystal", band="gold")
-    return dict(skirt="stripes_w", stake="stake", tip="stake", staves="staves", staves_dark="staves_dark", hoop="iron_hoop",
-                plate="iron_dirty", rope="rope", bolt="iron_w", collar="iron_w", cap="iron_w", ball="iron_head",
-                trim="iron_head", barrel="iron_sooty", band=None)
+        return dict(skirt="stripes_forged", stake="forged", tip="forged", staves="forged_plates",
+                    staves_dark="forged_plates_dark", hoop="forged_dark", plate="forged_plates_dark",
+                    rope="forged_dark", bolt="forged", collar="forged", cap="forged", ball="forged_dark", trim="forged",
+                    barrel="forged_dark", band="forged", clod="dirt")
+    return dict(skirt="stripes_w", stake="brimstone", tip="brimstone", staves="staves", staves_dark="staves_dark",
+                hoop="iron_hoop", plate="iron_dirty", rope="rope", bolt="iron_w", collar="iron_w", cap="iron_w",
+                ball="iron_head", trim="iron_head", barrel="iron_sooty", band=None, clod="brimstone")
 
 
 def barrel_bands(tur, M, LN, y0, y1, r, z, rings, mat, mouth=1.25):
-    """Bands over a ridged barrel's rings and mouth (the upper looks' gold)."""
+    """Bands over a ridged barrel's rings and mouth (the forged steel look's)."""
     L_ = y1 - y0
     segs = [L.band(r, r * 1.25 + 0.012, L_ * f - 0.04, L_ * f + 0.04, bev=0.01) for f in rings]
     segs.append(L.band(r, r * mouth + 0.014, L_ - 0.09, L_ - 0.005, bev=0.01))
@@ -188,7 +195,7 @@ def barrel_bands(tur, M, LN, y0, y1, r, z, rings, mat, mouth=1.25):
 
 def build_blast(M, LN, body):
     R = {k: M[v] if v else None for k, v in blast_roles(M).items()}
-    faceted = LOOK == 3
+    faceted = LOOK > 1        # cut stone and forged steel: flat-sided tub, neck and stakes
     # the scorched rubble round the foot
     mound = W.lathe("mound", [[(1.14, 0.0), (1.04, 0.05), (0.92, 0.1), (0.8, 0.1), (0.66, 0.06)]], [M["dirt"]], bev=0,
                     parent=body, n=128)
@@ -197,7 +204,7 @@ def build_blast(M, LN, body):
     add_outline(mound, LN["warm"], L.LINE * 0.7)
     cl = bmesh.new()
     W.clods(cl, [bear(360 * i / 22 + 9 * (i % 3), 0.86 + 0.2 * ((i * 0.37) % 1.0), 0.05) for i in range(22)], r=0.075)
-    add_outline(W.obj("clods", cl, [M["dirt"]], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+    add_outline(W.obj("clods", cl, [R["clod"]], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
     # the skirt: a striped canvas cone in folds, worn and scorched toward the ground
     sk = W.lathe("skirt", [[(0.88, 0.0), (0.87, 0.05), (0.58, 0.8), (0.54, 0.84)]], [R["skirt"]], bev=0, parent=body,
                  sharp=50, n=160)
@@ -251,8 +258,8 @@ def build_blast(M, LN, body):
     tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
     RB, HZ = 0.3, 0.3
     bm = bmesh.new()
-    Q.ball(bm, (0, 0, HZ), RB, segs=10 if faceted else 32)
-    ball = W.obj("ball", bm, [R["ball"]], parent=tur, smooth=not faceted)
+    Q.ball(bm, (0, 0, HZ), RB, segs=32)
+    ball = W.obj("ball", bm, [R["ball"]], parent=tur)
     W.wobble(ball, 0.008, 6.0, 4.0, radial=False)
     W.finish(ball)
     add_outline(ball, LN["cool"])
@@ -273,7 +280,7 @@ def build_blast(M, LN, body):
     bar = ridged_barrel("barrel", tur, M, RB * 0.5, RB + 0.5, 0.14, HZ, (0.35, 0.65), mat=blast_roles(M)["barrel"])
     W.finish(bar)
     add_outline(bar, LN["cool"])
-    if LOOK > 1:
+    if blast_roles(M)["band"]:
         barrel_bands(tur, M, LN, RB * 0.5, RB + 0.5, 0.14, HZ, (0.35, 0.65), blast_roles(M)["band"])
     bm = bmesh.new()      # the flange where the barrel leaves the ball, bolted
     m = Matrix.Translation((0, RB * 0.86, HZ)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')

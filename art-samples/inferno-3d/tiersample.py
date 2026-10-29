@@ -1,5 +1,5 @@
-"""tiersample.py : the Blast Tower's three level looks side by side for the owner (buildings-3d-4, 29 Oct 2026): tier 1 (worn) |
-tier 2 (gold) | tier 3 (black diamond with gold trim), large and at game size, from the full renders render/t1/full-hHH.png,
+"""tiersample.py : the Blast Tower's three level looks side by side for the owner (buildings-3d-4, 29 Oct 2026), after the
+Inferno's blocks: tier 1 (Brimstone) | tier 2 (Granite) | tier 3 (Forged Steel), large and at game size, from the full renders render/t1/full-hHH.png,
 render/t1-look2/ and render/t1-look3/ (made with INFERNO_LOOK=2|3).
 
   python tiersample.py [H] [OUT]      -> tiers-sample.png (or OUT)
@@ -18,7 +18,7 @@ def main():
     h = int(sys.argv[1]) if len(sys.argv) > 1 else 30
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else HERE / "tiers-sample.png"
     ims = [Image.open(HERE / "render" / d / f"full-h{h:02d}.png").convert("RGBA") for d in ("t1", "t1-look2", "t1-look3")]
-    labels = ["Tier 1: worn", "Tier 2: gold", "Tier 3: black diamond"]
+    labels = ["Tier 1: Brimstone", "Tier 2: Granite", "Tier 3: Forged Steel"]
     boxes = [im.getbbox() for im in ims]
     crop = (min(b[0] for b in boxes) - 12, min(b[1] for b in boxes) - 12, max(b[2] for b in boxes) + 12,
             max(b[3] for b in boxes) + 12)
@@ -32,7 +32,7 @@ def main():
     g = Image.new("RGBA", (3 * w + 4 * gap, lab + hh + lab + small_h + gap), BG)
     d = ImageDraw.Draw(g)
     d.rectangle((0, 0, g.width, lab), fill=dark)
-    d.text((gap, 9), "Inferno Blast Tower levels: tier 1 | tier 2 | tier 3 (6x game size)", fill=white, font=font)
+    d.text((gap, 9), "Inferno Blast Tower levels, after the Inferno blocks (6x game size)", fill=white, font=font)
     for i, (im, label) in enumerate(zip(ims, labels)):
         x = gap + i * (w + gap)
         g.alpha_composite(resize_pm(im.crop(crop), (w, hh)), (x, lab))
