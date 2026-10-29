@@ -1317,9 +1317,12 @@ describe("the Inferno towers in battle", () => {
     expect(facingCell(132, 359, 32)).toBe(31);
   });
 
-  it("knows the Inferno Blast Tower's 30 headings on an Inferno yard, the only table it is in", () => {
+  it("knows the Inferno Blast Tower's headings on an Inferno yard, the only table it is in: Flash's 30, the 3D one's 32", () => {
     const inferno = { ...yardOf(130), type: "inferno" } as BaseLoadResponse;
+    setClassicLook(true);
     expect(towersOf(readYard(inferno))[0]?.frames).toBe(30);
+    setClassicLook(false);
+    expect(towersOf(readYard(inferno))[0]?.frames).toBe(32);
   });
 
   it("turns a Magma Tower toward the creep it shot", () => {
