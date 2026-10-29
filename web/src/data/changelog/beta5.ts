@@ -28,7 +28,7 @@ export const BETA_5: ChangelogRelease = {
     {
       image: "/whats-new/beta5-siege.webp",
       title: "Siege weapons",
-      text: "Marilyn Monstroe lures defenders away, the Loot-O-Tron 5000 sucks out extra loot, and Candy Jars trap enemy towers.",
+      text: "Take one into an attack: the Loot-O-Tron 5000 sucks extra loot out of the Town Hall, Marilyn Monstroe lures defenders away, or Candy Jars trap enemy towers.",
     },
     {
       image: "/whats-new/beta5-music.webp",
