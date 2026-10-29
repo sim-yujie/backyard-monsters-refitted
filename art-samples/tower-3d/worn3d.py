@@ -370,7 +370,7 @@ def mat_dirt(name, a=(70, 42, 28), b=(118, 72, 44), burnt=(30, 20, 16)):
     return p.finish(col, spec=0.05, spec_rough=0.6, bump=(p.noise(14.0, 5.0), 0.6), shade=L.WARM_SHADE, ao_k=0.6)
 
 
-def mat_lava(name, hot=(255, 236, 150), mid=(255, 128, 20), deep=(178, 34, 0), crust=(60, 24, 12)):
+def mat_lava(name, hot=(255, 236, 150), mid=(255, 128, 20), deep=(178, 34, 0), crust=(60, 24, 12), strength=1.0):
     """Glowing molten glass behind a window (the Magma's lava): mottled, hot where it faces the viewer, dark crusts."""
     p = L.Paint(name)
     lw = p.N.new("ShaderNodeLayerWeight")
@@ -381,6 +381,7 @@ def mat_lava(name, hot=(255, 236, 150), mid=(255, 128, 20), deep=(178, 34, 0), c
     col = p.mix(col, srgb(*crust), p.ramp(p.noise(12.0, 4.0), [(0.64, BLACK), (0.7, _grey(0.8))]))
     em = p.N.new("ShaderNodeEmission")
     p.link(col, em.inputs["Color"])
+    em.inputs["Strength"].default_value = strength
     out = p.N.new("ShaderNodeOutputMaterial")
     p.link(em.outputs[0], out.inputs[0])
     return p.m
