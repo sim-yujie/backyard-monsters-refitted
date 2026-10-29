@@ -295,7 +295,8 @@ export const towersOf = (yard: Yard): TowerInfo[] =>
       y: building.y,
       worldX: building.worldX,
       worldY: building.worldY,
-      frames: resolveArt(building.type, building.level, ArtState.DEFAULT)?.anims[0]?.frames ?? 0,
+      // An Inferno yard draws its towers from its own table: the Blast Tower is only there.
+      frames: resolveArt(building.type, building.level, ArtState.DEFAULT, yard.kind)?.anims[0]?.frames ?? 0,
       lift: tierLift(building.type, building.level),
       ...turretOf(building.type, building.level),
     }));
