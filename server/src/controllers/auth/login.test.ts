@@ -27,13 +27,30 @@ const em = {
   fork: () => ({ findOne: async () => null, flush: async () => {} }),
 };
 
+/** Redis keys the sign-in back-off keeps: key -> value and seconds left. */
+const kept = new Map<string, { value: string; ttl: number }>();
+
 mock.module("../../server.js", () => ({
   postgres: { em },
   redis: {
     get: async () => null,
-    set: async () => "OK",
+    set: async (key: string, value: string, ex?: string, seconds?: string) => {
+      if (ex === "EX") kept.set(key, { value, ttl: Number(seconds) });
+      return "OK";
+    },
     setex: async () => "OK",
-    del: async () => 0,
+    del: async (...keys: string[]) => keys.filter((key) => kept.delete(key)).length,
+    incr: async (key: string) => {
+      const next = Number(kept.get(key)?.value ?? 0) + 1;
+      kept.set(key, { value: String(next), ttl: kept.get(key)?.ttl ?? -1 });
+      return next;
+    },
+    expire: async (key: string, seconds: number) => {
+      const entry = kept.get(key);
+      if (entry) entry.ttl = seconds;
+      return entry ? 1 : 0;
+    },
+    ttl: async (key: string) => kept.get(key)?.ttl ?? -2,
     sadd: async () => 1,
     srem: async () => 1,
     smembers: async () => [],
@@ -51,9 +68,9 @@ const HASH = await bcrypt.hash(PASSWORD, 4);
 const saved: Record<string, string | undefined> = {};
 const SWITCHES = ["ENV", "REQUIRE_DISCORD_VERIFICATION", "DISCORD_TOKEN", "SECRET_KEY"];
 
-const run = async (password = PASSWORD) => {
+const run = async (password = PASSWORD, email = "player@example.com") => {
   const ctx = {
-    request: { body: { email: "player@example.com", password } },
+    request: { body: { email, password } },
     ip: "127.0.0.1",
     get: () => "test",
   } as unknown as Context & { body: Row };
@@ -83,6 +100,7 @@ beforeEach(() => {
     discord_id: null,
   };
   botIds = [];
+  kept.clear();
 });
 
 afterEach(() => {
@@ -164,5 +182,58 @@ describe("login does not say which emails have an account (issue #317)", () => {
     const wrongPassword = await run("not-the-password");
     const none = await run("");
     expect(none.message).toBe(wrongPassword.message);
+  });
+});
+
+describe("sign-in back-off per email (security audit 2026-10-29, L2)", () => {
+  const PAUSE = "login-pause:player@example.com";
+
+  test("five wrong passwords, then a short pause that refuses even the right one", async () => {
+    for (let at = 0; at < 5; at++) expect((await run("not-the-password")).status).toBe(409);
+
+    const paused = await run();
+    expect(paused.status).toBe(429);
+    expect(paused.message).toContain("1 minute");
+    expect(kept.get(PAUSE)?.ttl).toBe(30);
+  });
+
+  test("a try during the pause is not counted, and skips the password check", async () => {
+    for (let at = 0; at < 5; at++) await run("not-the-password");
+    const compare = spyOn(bcrypt, "compare");
+    await run("not-the-password");
+    await run("not-the-password");
+    expect(compare).not.toHaveBeenCalled();
+    compare.mockRestore();
+    expect(kept.get("login-failures:player@example.com")?.value).toBe("5");
+  });
+
+  test("each wrong password after a pause doubles it, up to 15 minutes", async () => {
+    const pauses: number[] = [];
+    for (let at = 0; at < 12; at++) {
+      await run("not-the-password");
+      pauses.push(kept.get(PAUSE)?.ttl ?? 0);
+      kept.delete(PAUSE); // the pause runs out
+    }
+    expect(pauses).toEqual([0, 0, 0, 0, 30, 60, 120, 240, 480, 900, 900, 900]);
+    expect(kept.get("login-failures:player@example.com")?.ttl).toBe(15 * 60);
+  });
+
+  test("the right password forgets the wrong ones", async () => {
+    for (let at = 0; at < 4; at++) await run("not-the-password");
+    expect((await run()).status).toBe(200);
+    expect(kept.has("login-failures:player@example.com")).toBe(false);
+    for (let at = 0; at < 4; at++) await run("not-the-password");
+    expect((await run()).status).toBe(200);
+  });
+
+  test("an email with no account is paused the same way, so the pause says nothing", async () => {
+    user = null as unknown as Row;
+    for (let at = 0; at < 5; at++) await run("not-the-password", "nobody@example.com");
+    expect((await run(PASSWORD, "nobody@example.com")).status).toBe(429);
+  });
+
+  test("one email's pause does not touch another's", async () => {
+    for (let at = 0; at < 5; at++) await run("not-the-password", "other@example.com");
+    expect((await run()).status).toBe(200);
   });
 });

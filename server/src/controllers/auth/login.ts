@@ -11,6 +11,7 @@ import {
   discordVerifyErr,
   userPermaBannedErr,
   tokenAuthFailureErr,
+  loginBackoffErr,
 } from "../../errors/errors.js";
 import { logger } from "../../utils/logger.js";
 import { type JwtClaims, verifyJwtToken } from "../../middleware/auth.js";
@@ -22,6 +23,7 @@ import { requiresDiscordVerification } from "../../config/AccountConfig.js";
 import { isBot } from "../../services/bots/isBot.js";
 import { sessionTokenKey } from "../../services/auth/sessions.js";
 import { maskEmail } from "../../utils/maskEmail.js";
+import { clearLoginFailures, loginPausedFor, recordLoginFailure } from "../../services/auth/loginBackoff.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -83,10 +85,20 @@ export const login: KoaController = async (ctx) => {
   }
 
   if (!user) {
+    // Wrong passwords are counted per email, and a run of them pauses the
+    // email's sign-in briefly (security audit 2026-10-29, L2).
+    const paused = email ? await loginPausedFor(email) : 0;
+    if (paused > 0) throw loginBackoffErr(paused);
+
     user = await postgres.em.findOne(User, { email });
 
     const isMatch = await bcrypt.compare(password ?? "", user?.password ?? (await missingAccountHash));
-    if (!user || !isMatch) throw emailPasswordErr();
+    if (!user || !isMatch) {
+      if (email) await recordLoginFailure(email);
+      throw emailPasswordErr();
+    }
+
+    if (email) await clearLoginFailures(email);
   }
 
   // A bot's account cannot be entered (issue #235); it reads as a wrong

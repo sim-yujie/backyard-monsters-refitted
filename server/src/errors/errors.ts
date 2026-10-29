@@ -103,6 +103,21 @@ export const invalidBugReportErr = (message: string, field: string) =>
     isClientFriendly: true,
   });
 
+/**
+ * Too many wrong passwords for one email in a row (security audit
+ * 2026-10-29, L2). The pause is short and the same whether or not the email
+ * has an account (`services/auth/loginBackoff.ts`).
+ */
+export const loginBackoffErr = (retryAfterSeconds: number) => {
+  const minutes = Math.ceil(retryAfterSeconds / 60);
+  return new ClientSafeError({
+    message: `Too many wrong passwords for this email. Please wait ${minutes} minute${minutes === 1 ? "" : "s"} and try again, or reset your password.`,
+    status: Status.TOO_MANY_REQUESTS,
+    data: { reason: "loginBackoff", retryAfter: retryAfterSeconds },
+    isClientFriendly: true,
+  });
+};
+
 /** The daily cap on bug reports (`config/BugReportConfig.ts`) is reached. Nothing is saved. */
 export const bugReportLimitErr = (perDay: number) =>
   new ClientSafeError({
