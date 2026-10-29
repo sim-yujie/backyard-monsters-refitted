@@ -13,6 +13,7 @@ import {
   type HelpFacts,
   type HelpKind,
   type HelpPreviewSave,
+  type HelpRefusal,
   type HelpSide,
 } from "./helpRules.js";
 
@@ -46,7 +47,7 @@ export const readSides = async (em: EntityManager, userids: readonly number[]): 
   if (userids.length === 0) return new Map();
   const rows = await em.execute<(HelpSideRow & { userid: number | string })[]>(
     `SELECT u.userid, u.username, u.banned, u.blocked_users, u.save_basesaveid AS basesaveid,
-            coalesce(s.createtime, 0) AS createtime, s.points, s.basevalue
+            s.points, s.basevalue
        FROM bym."user" u LEFT JOIN bym.save s ON s.basesaveid = u.save_basesaveid
       WHERE u.userid IN (${placeholders(userids)})`,
     [...userids]
@@ -116,6 +117,8 @@ export const recordHelp = (tx: EntityManager, record: HelpRecord) =>
 export interface HelpBlock {
   helpsLeft: number;
   buildings: BuildingHelp;
+  /** When the age or level gates refuse (`tooNew`): which holds and when it lifts, for the panel's words. */
+  gate?: HelpRefusal;
 }
 
 /** The owner's main yard as the preview reads it. */
@@ -137,7 +140,9 @@ export const helpBlock = async (em: EntityManager, helper: number, ownerSave: Ow
   const facts = await helpFactsFor(em, helper, owner, now);
   const helpsLeft = helpsLeftOf(facts?.helpsToday ?? (await helpsToday(em, helper, now)));
   if (!facts || helper === owner || ownerSave.type !== BaseType.MAIN) return { helpsLeft, buildings: {} };
-  return { helpsLeft, buildings: previewHelp(ownerSave, helper, now, gateRefusal(facts, now)) };
+  const gate = gateRefusal(facts, now);
+  const buildings = previewHelp(ownerSave, helper, now, gate);
+  return gate?.reason === "tooNew" ? { helpsLeft, buildings, gate } : { helpsLeft, buildings };
 };
 
 /**

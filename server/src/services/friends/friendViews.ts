@@ -32,7 +32,7 @@ export interface FriendView {
   since: number;
   /** Gifts arrive with WP8; false until then. */
   giftSentToday: boolean;
-  /** When the 24-hour friendship rule clears, unix seconds; null once it has. */
+  /** When the 12-hour friendship rule clears, unix seconds; null once it has (the level gate is not in it). */
   canGiftFrom: number | null;
   /** Whether you could help them now; null when the help gates refuse (`GET /bm/friends` fills it, WP6). */
   help: { speedup: boolean; repair: boolean } | null;

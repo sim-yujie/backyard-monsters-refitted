@@ -1,4 +1,13 @@
-import { REFUSAL_TEXT, type HelpBlock, type HelpKind, type HelpOffer, type HelpResult, type ResourceAmounts } from "@/api/friends";
+import {
+  REFUSAL_TEXT,
+  tooNewText,
+  type GateHold,
+  type HelpBlock,
+  type HelpKind,
+  type HelpOffer,
+  type HelpResult,
+  type ResourceAmounts,
+} from "@/api/friends";
 import type { BuildingData } from "@/api/types";
 import type { YardBuilding } from "@/game/yard/yardModel";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -32,11 +41,10 @@ export interface BuildingHelpView {
 
 /**
  * A help refusal in words. The shared refusal table words them for the
- * whole friends screen; a few read better said about helping.
+ * whole friends screen; a few read better said about helping. `tooNew` says
+ * which gate holds and when it lifts (`tooNewText`).
  */
 export const HELP_REFUSAL_TEXT: Readonly<Record<string, string>> = {
-  tooNew:
-    "Helping opens once you have been friends for a day, both accounts are 3 days old and both players are level 5 or more.",
   dailyCap: "You have used all your helps for today. More tomorrow.",
   nothingToHelp: "There is nothing left to help with here.",
   alreadyHelped: "You have already sped up this job.",
@@ -46,25 +54,36 @@ export const HELP_REFUSAL_TEXT: Readonly<Record<string, string>> = {
   cannotSend: "You can't help this player.",
 };
 
-/** A refusal reason as the help panel says it. */
-export const helpRefusalText = (reason: string): string =>
-  HELP_REFUSAL_TEXT[reason] ??
-  (Object.prototype.hasOwnProperty.call(REFUSAL_TEXT, reason)
-    ? REFUSAL_TEXT[reason as keyof typeof REFUSAL_TEXT]
-    : "That can't be done right now.");
+/**
+ * A refusal reason as the help panel says it; a `tooNew` with the gate that
+ * holds it (`hold`, from the help block or the refusal) says which and when.
+ *
+ * @param now - Unix seconds
+ */
+export const helpRefusalText = (reason: string, hold?: GateHold, now?: number): string =>
+  reason === "tooNew"
+    ? tooNewText(hold, now)
+    : (HELP_REFUSAL_TEXT[reason] ??
+      (Object.prototype.hasOwnProperty.call(REFUSAL_TEXT, reason)
+        ? REFUSAL_TEXT[reason as keyof typeof REFUSAL_TEXT]
+        : "That can't be done right now."));
 
-const choiceOf = (offer: true | string | undefined): HelpChoice | undefined => {
+const choiceOf = (offer: true | string | undefined, hold: GateHold | undefined, now?: number): HelpChoice | undefined => {
   if (offer === undefined) return undefined;
   if (offer === true) return { allowed: true };
-  return { allowed: false, reason: offer, text: helpRefusalText(offer) };
+  return { allowed: false, reason: offer, text: helpRefusalText(offer, hold, now) };
 };
 
-/** One building's entry of the help block, or null when the block says nothing about it. */
-export const buildingHelp = (block: HelpBlock | null, id: number): BuildingHelpView | null => {
+/**
+ * One building's entry of the help block, or null when the block says nothing about it.
+ *
+ * @param now - Unix seconds, for how long a `tooNew` has left
+ */
+export const buildingHelp = (block: HelpBlock | null, id: number, now?: number): BuildingHelpView | null => {
   const offer: HelpOffer | undefined = block?.buildings[String(id)];
   if (!offer) return null;
-  const speedup = choiceOf(offer.speedup);
-  const repair = choiceOf(offer.repair);
+  const speedup = choiceOf(offer.speedup, block?.gate, now);
+  const repair = choiceOf(offer.repair, block?.gate, now);
   if (!speedup && !repair) return null;
   return { ...(speedup && { speedup }), ...(repair && { repair }) };
 };
@@ -201,13 +220,18 @@ export const afterHelp = (block: HelpBlock, id: number, kind: HelpKind, helpsLef
 
 /**
  * The help block after a help was refused: the reason now stands for that
- * kind on that building, so the panel and the wrench agree with the server.
+ * kind on that building, so the panel and the wrench agree with the server;
+ * a `tooNew`'s gate (`hold`) is kept so the panel says which and when.
  * A refusal about the whole visit (not friends, the daily cap, the yard under
  * attack) is left to the caller.
  */
-export const afterRefusal = (block: HelpBlock, id: number, kind: HelpKind, reason: string): HelpBlock => {
+export const afterRefusal = (block: HelpBlock, id: number, kind: HelpKind, reason: string, hold?: GateHold): HelpBlock => {
   const key = String(id);
   const offer = block.buildings[key];
   if (!offer) return block;
-  return { ...block, buildings: { ...block.buildings, [key]: { ...offer, [kind]: reason } } };
+  const gate =
+    reason === "tooNew" && hold
+      ? { gate: { reason, ...(hold.from !== undefined && { from: hold.from }), ...(hold.rule && { rule: hold.rule }) } }
+      : {};
+  return { ...block, ...gate, buildings: { ...block.buildings, [key]: { ...offer, [kind]: reason } } };
 };

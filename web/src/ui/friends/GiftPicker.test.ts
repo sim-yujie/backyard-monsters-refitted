@@ -59,7 +59,7 @@ describe("the gift picker", () => {
   it("says a refusal and lets the player try again", async () => {
     const { picker } = await setup({ sendGift: refused("tooNew") });
     await picker.send("r1");
-    expect(picker.statusText).toContain("isn't possible yet");
+    expect(picker.statusText).toContain("Not yet");
     expect(choice("r2").disabled).toBe(false);
   });
 
