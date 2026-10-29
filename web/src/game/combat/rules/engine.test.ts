@@ -1901,6 +1901,21 @@ describe("a bunker's reach (issue #91)", () => {
     expect(Math.hypot(pokey.ix - 45, pokey.iy - 45)).toBeGreaterThan(300);
     expect(defenders).toHaveLength(0);
   });
+
+  it("tells the renderer each defender it sends, to roll the shutters up (drawing only)", () => {
+    const sent = (harvesterAt: number) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+      });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+      battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
+      run(battle, 30);
+      return battle.recentEvents(-1).filter((event) => event.kind === "release");
+    };
+    expect(sent(290)).toEqual([{ kind: "release", tick: 30, buildingId: 1 }]);
+    expect(sent(350)).toEqual([]);
+  });
 });
 
 describe("a bunker's losses (issue #130)", () => {

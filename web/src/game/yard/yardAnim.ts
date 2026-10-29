@@ -163,7 +163,9 @@ const POLICIES = new Map<number, AnimPolicy>([
   [19, STATIC_FIXED],
   // Towers. The cell is a facing, set only when something is being shot at.
   [21, STATIC],
-  [22, STATIC],
+  // Monster Bunker: its strip is its shutters, down (cell 0) at rest; its `TickFast` brings them down
+  // straight away when nothing calls them up (`BUILDING22.as:446-452`), so a random cell never shows.
+  [22, STATIC_FIXED],
   [23, STATIC],
   [25, STATIC_FIXED],
   [115, STATIC],

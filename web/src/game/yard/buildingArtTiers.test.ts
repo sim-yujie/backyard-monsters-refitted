@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { facingCell, laserCell } from "@/game/attack/towerFx";
+import { facingCell, laserCell, TESLA_WIND_END } from "@/game/attack/towerFx";
 import { ArtState, artFolder, resolveArt } from "./buildingArt";
 import { classicLook, setClassicLook } from "@/game/classicLook";
 import type { TierArt } from "./buildingArtTiers";
@@ -26,8 +26,8 @@ const TOWERS = [20, 21, 22, 23, 25, 115, 118, 132];
 /** The Spurtz Cannons: one 3D look for every level. */
 const ONE_LOOK = [136, 137];
 
-/** The towers with painted (not 3D) tiers: Bunker, Tesla. */
-const PAINTED = [22, 25];
+/** The 3D towers without a turret, which move by a strip of their own: Bunker, Tesla. */
+const ANIMATED = [22, 25];
 
 /** The towers whose turret turns, every one of them 3D. */
 const TURRETS = [20, 21, 23, 115, 118, 132, 136, 137];
@@ -73,12 +73,12 @@ describe("the defaults", () => {
     expect(resolveArt(20, 8, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/cannontower/top.t3@2x.webp");
     expect(resolveArt(21, 5, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/snipertower/top.t2@2x.webp");
     expect(resolveArt(23, 1, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/lasertower/top.t1@2x.webp");
-    expect(resolveArt(22, 5, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/bunker/top.t3@2x.webp");
+    expect(resolveArt(22, 5, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/bunker/top.t3@2x.webp");
     expect(resolveArt(25, 4, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/lightningtower/top.t2@2x.webp");
     expect(resolveArt(115, 7, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/flaktower/top.t3@2x.webp");
     expect(resolveArt(118, 1, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/railguntower/top.t1@2x.webp");
     for (const type of MODERN_TOWERS) expect(tierArtFor(type, 8, type === 130 ? "inferno" : "main")).not.toBeNull();
-    for (const type of PAINTED) expect(tierLift(type, 8)).toBeGreaterThan(0);
+    for (const type of ANIMATED) expect(tierLift(type, 8)).toBeGreaterThan(0);
   });
 });
 
@@ -156,10 +156,10 @@ describe("the repainted tower tiers", () => {
   });
 
   it("split the five-level Monster Bunker 1-2, 3-4 and 5", () => {
-    expect(resolveArt(22, 2, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t1@2x.webp");
-    expect(resolveArt(22, 3, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t2@2x.webp");
-    expect(resolveArt(22, 4, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t2@2x.webp");
-    expect(resolveArt(22, 5, ArtState.DEFAULT)?.top.url).toContain("bunker/top.t3@2x.webp");
+    expect(resolveArt(22, 2, ArtState.DEFAULT)?.still?.url).toContain("bunker/top.t1@2x.webp");
+    expect(resolveArt(22, 3, ArtState.DEFAULT)?.still?.url).toContain("bunker/top.t2@2x.webp");
+    expect(resolveArt(22, 4, ArtState.DEFAULT)?.still?.url).toContain("bunker/top.t2@2x.webp");
+    expect(resolveArt(22, 5, ArtState.DEFAULT)?.still?.url).toContain("bunker/top.t3@2x.webp");
   });
 
   it("split the six-level Magma Tower 1-2, 3-4 and 5-6, and keep the Spurtz Cannons' one look at every level", () => {
@@ -172,15 +172,40 @@ describe("the repainted tower tiers", () => {
     }
   });
 
-  it("are still pictures for the Bunker and Tesla: no strips, the moving part painted in", () => {
-    for (const type of [22, 25]) {
-      for (const level of [1, 4, 7]) {
-        const art = resolveArt(type, level, ArtState.DEFAULT);
-        expect(art?.anims, `type ${type} level ${level}`).toEqual([]);
-        expect(art?.topIsAnim).toBe(false);
-        expect(art?.top.frame).toBeNull();
-        expect(art?.top.url).toMatch(/\/top\.t[123]@2x\.webp$/);
-        expect(art?.still).toBeUndefined();
+  it("play the Tesla's film over its still, 55 cells as Flash's strip, cell 0 the film at rest", () => {
+    for (const level of [1, 4, 7]) {
+      const art = resolveArt(25, level, ArtState.DEFAULT);
+      expect(art?.top.url).toMatch(/lightningtower\/top\.t[123]@2x\.webp$/);
+      expect(art?.topIsAnim).toBe(false);
+      expect(art?.still).toBeUndefined();
+      expect(art?.anims).toHaveLength(1);
+      expect(art?.anims[0]?.url).toBe(art?.top.url.replace("top.", "anim."));
+      expect(art?.anims[0]?.frames).toBe(TESLA_WIND_END);
+    }
+  });
+
+  it("draw the Bunker from its shutters' strip, 15 cells as Flash's door, cell 0 shut", () => {
+    for (const level of [1, 3, 5]) {
+      const art = resolveArt(22, level, ArtState.DEFAULT);
+      const strip = art?.anims[0];
+      expect(art?.anims).toHaveLength(1);
+      expect(strip?.frames).toBe(15);
+      expect(art?.topIsAnim).toBe(true);
+      expect(art?.top).toEqual({ url: strip?.url, x: strip?.x, y: strip?.y, frame: { width: strip?.width, height: strip?.height } });
+      expect(art?.still?.url).toBe(strip?.url.replace("anim.", "top."));
+    }
+  });
+
+  it("ship every strip the Tesla and Bunker name, as big as its cells", () => {
+    for (const type of ANIMATED) {
+      for (const tier of TOWER_TIER_ART[type] ?? []) {
+        const [file, , , width, height, frames] = tier.anim?.strip ?? ["", 0, 0, 0, 0, 0];
+        const path = `${ASSETS}${artFolder(type) ?? ""}${file}`;
+        expect(existsSync(path), path).toBe(true);
+        // A WebP with alpha is a VP8X file: its canvas's width and height less one, 24-bit, at bytes 24 and 27.
+        const head = readFileSync(path).subarray(0, 30);
+        expect(head.toString("ascii", 12, 16), path).toBe("VP8X");
+        expect([head.readUIntLE(24, 3) + 1, head.readUIntLE(27, 3) + 1], path).toEqual([2 * width * frames, 2 * height]);
       }
     }
   });

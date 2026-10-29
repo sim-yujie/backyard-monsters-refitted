@@ -2354,6 +2354,10 @@ export class AttackBattleLayer {
       this.towerFx.onCharge(event.towerId, event.tick);
       return;
     }
+    if (event.kind === "release") {
+      this.towerFx.onRelease(event.buildingId, event.tick);
+      return;
+    }
     if (event.kind === "splash") {
       // Eye-ra's blast is a fireball (feat/eyera-explosion); a Bandito's
       // rings come with a flash (feat/punchy-trial); the rest keep the rings.

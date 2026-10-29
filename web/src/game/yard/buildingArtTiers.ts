@@ -19,8 +19,8 @@
  *   the Classic/Modern choice in Account Settings is the one setting for the
  *   yard's look): with Modern, the default, every tower in `MODERN_TOWERS`
  *   shows its new tiers (owner: "make all of them": the 3D Cannon, Sniper,
- *   Laser, Aerial Defense, Railgun, Magma Tower, Spurtz Cannons and Inferno
- *   towers, and the painted Bunker and Tesla until their 3D art is in);
+ *   Laser, Aerial Defense, Railgun, Magma Tower, Spurtz Cannons, Inferno
+ *   towers, Monster Bunker and Tesla);
  *   with Classic, the Flash towers. The server sends viewers the tier of
  *   someone else's Modern towers (`buildingArtLevels.ts`).
  * - **Turrets that turn** (owner, 26 Oct 2026: "Turrets: wire in"): the
@@ -47,9 +47,15 @@
  *   Sharpshooter, which share the Cannon's and Sniper's types, from
  *   `INFERNO_TOWER_TIER_ART` in an Inferno yard. The towers never painted
  *   stand on their Flash shadow.
- * - **A still picture** for the others: the Tesla's coil and the Bunker's
- *   door are painted in, so those tiers ship no animation strips and the
- *   Flash strips are not drawn over them.
+ * - **The Tesla and the Monster Bunker are 3D** (owner, 29 Oct 2026,
+ *   branch art/tesla-bunker-3d, `web/tools/tower-tiers/export3d_static.py`)
+ *   and move as the Flash ones did, each with a strip of its own (`anim`):
+ *   the Tesla's film rolls up its face through the 55 cells of Flash's
+ *   charge, zap loop and wind-down (`towerFx.ts` teslaTick); the Bunker's
+ *   shutters roll up into the deck, 15 cells as Flash's door, when it lets
+ *   its monsters out in a battle, and down again after (`towerFx.ts`
+ *   `onRelease`). At rest each shows cell 0. The Flash strips are not drawn
+ *   over them.
  * - **Damaged** keeps the tier's picture and lets the yard's damage tint tell
  *   the story; **destroyed** is the Flash rubble, shared by every tier
  *   (the redesign brief: one rubble pile per building).
@@ -74,8 +80,8 @@ import { TURRET_AIM } from "./turretAimData";
 /**
  * The towers whose new art players see with the Modern look: the 3D Cannon
  * (20), Sniper (21), Laser (23), Aerial Defense (115), Railgun (118), Magma
- * Tower (132) and Spurtz Cannons (136, 137), the painted Monster Bunker (22)
- * and Tesla (25), and in an Inferno yard the 3D Blast Tower (20 and 130) and
+ * Tower (132), Spurtz Cannons (136, 137), Monster Bunker (22) and Tesla
+ * (25), and in an Inferno yard the 3D Blast Tower (20 and 130) and
  * Sharpshooter (21, `INFERNO_TOWER_TIER_ART`). A tower in `TOWER_TIER_ART`
  * but not here keeps its Flash look. The server's `TOWER_TIER_ART_LEVELS`
  * names the same.
@@ -147,6 +153,24 @@ export interface TierTurret {
   readonly aim?: TurretAim;
 }
 
+/**
+ * A tier's moving part, played as the Flash tower's `anim` layer was
+ * (`web/tools/tower-tiers/export3d_static.py`): cell 0 is the tier at rest.
+ */
+export interface TierAnim {
+  /** The strip, an `ArtAnim`: `[file, x, y, width, height, frames]`. */
+  readonly strip: ArtAnim;
+  /** Cells in a row, for a strip of several rows; one row without it. */
+  readonly columns?: number;
+  /**
+   * Each cell is the whole building (the 3D Bunker: its open shutters leave
+   * holes where `top` has them), so the strip stands in for `top`, which is
+   * then only the still for the icons. Without it the cells are only the
+   * part that moves (the 3D Tesla's film), drawn over `top`.
+   */
+  readonly whole?: boolean;
+}
+
 export interface TierArt {
   /** The first level that shows this picture. */
   readonly from: number;
@@ -159,6 +183,8 @@ export interface TierArt {
   readonly lift: number;
   /** The turret that turns, for a tower with one; `top` is then only its still picture. */
   readonly turret?: TierTurret;
+  /** The part that moves, for a tower without a turret whose 3D tiers animate (the Tesla, the Bunker). */
+  readonly anim?: TierAnim;
 }
 
 /** The three tiers of each tower, by type, lowest first. */
@@ -187,11 +213,14 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
       turret: { body: ["body.t3@2x.webp", -40, -86], strip: ["turret.t3@2x.webp", -28, -99, 56, 42, 32], pivot: [0, -67],
         aim: TURRET_AIM["21.t3"] } },
   ],
-  // 22 Monster Bunker: five levels, so 1-2, 3-4 and 5
+  // 22 Monster Bunker: 3D, five levels, so 1-2, 3-4 and 5; its shutters roll up into the deck as it lets its monsters out
   22: [
-    { from: 1, top: ["top.t1@2x.webp", -45, -8], shadow: ["shadow.t1.jpg", -43, 35], lift: 0 },
-    { from: 3, top: ["top.t2@2x.webp", -45, -30], shadow: ["shadow.t2.jpg", -43, 27], lift: 20 },
-    { from: 5, top: ["top.t3@2x.webp", -45, -47], shadow: ["shadow.t3.jpg", -42, 21], lift: 38 },
+    { from: 1, top: ["top.t1@2x.webp", -42, -20], shadow: ["shadow.t1.jpg", -43, 35], lift: 5,
+      anim: { strip: ["anim.t1@2x.webp", -42, -20, 84, 86, 15], whole: true } },
+    { from: 3, top: ["top.t2@2x.webp", -44, -32], shadow: ["shadow.t2.jpg", -43, 27], lift: 17,
+      anim: { strip: ["anim.t2@2x.webp", -44, -32, 88, 99, 15], whole: true } },
+    { from: 5, top: ["top.t3@2x.webp", -45, -43], shadow: ["shadow.t3.jpg", -42, 21], lift: 28,
+      anim: { strip: ["anim.t3@2x.webp", -45, -43, 90, 110, 15], whole: true } },
   ],
   // 23 Laser Tower: 3D, a row of 32 headings for each of 5 tilts of the head (its head tilts; only the Cannon keeps one)
   23: [
@@ -205,11 +234,14 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
       turret: { body: ["body.t3@2x.webp", -33, -71], strip: ["turret.t3@2x.webp", -16, -92, 34, 34, 160], columns: 32, pivot: [1, -60],
         aim: TURRET_AIM["23.t3"] } },
   ],
-  // 25 Tesla Tower
+  // 25 Tesla Tower: 3D; its film rolls up the face as Flash's strip played, charging, zapping and winding down
   25: [
-    { from: 1, top: ["top.t1@2x.webp", -33, -56], shadow: ["shadow.t1.jpg", -31, 8], lift: 0 },
-    { from: 4, top: ["top.t2@2x.webp", -33, -82], shadow: ["shadow.t2.jpg", -31, -1], lift: 26 },
-    { from: 7, top: ["top.t3@2x.webp", -33, -102], shadow: ["shadow.t3.jpg", -32, -8], lift: 45 },
+    { from: 1, top: ["top.t1@2x.webp", -35, -62], shadow: ["shadow.t1.jpg", -31, 8], lift: 5,
+      anim: { strip: ["anim.t1@2x.webp", -19, -20, 13, 52, 55] } },
+    { from: 4, top: ["top.t2@2x.webp", -35, -85], shadow: ["shadow.t2.jpg", -31, -1], lift: 28,
+      anim: { strip: ["anim.t2@2x.webp", -19, -41, 13, 73, 55] } },
+    { from: 7, top: ["top.t3@2x.webp", -35, -106], shadow: ["shadow.t3.jpg", -32, -8], lift: 49,
+      anim: { strip: ["anim.t3@2x.webp", -19, -61, 13, 93, 55] } },
   ],
   // 115 Aerial Defense Tower: 3D, 32 headings
   115: [

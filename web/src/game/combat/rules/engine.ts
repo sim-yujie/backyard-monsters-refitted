@@ -909,6 +909,12 @@ export type BattleVisualEvent =
       readonly towerId: number;
     }
   | {
+      /** A bunker sent a monster out: a Monster Bunker's shutters roll up (drawing only). */
+      readonly kind: "release";
+      readonly tick: number;
+      readonly buildingId: number;
+    }
+  | {
       /** A creep landed a swing on a building or on another creep. */
       readonly kind: "hit";
       readonly tick: number;
@@ -2915,6 +2921,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         bunker.dispatched += 1;
         const sentBy = bunkerReports.get(building.id);
         if (sentBy) sentBy.sent += 1;
+        visual.push({ kind: "release", tick, buildingId: building.id });
         const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
         const defender = spawnCreep(
           monsterId,
@@ -5829,6 +5836,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     bunker.dispatched += 1;
     const sentBy = bunkerReports.get(building.id);
     if (sentBy) sentBy.sent += 1;
+    visual.push({ kind: "release", tick, buildingId: building.id });
     const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
     const defender = spawnCreep(
       monsterId,

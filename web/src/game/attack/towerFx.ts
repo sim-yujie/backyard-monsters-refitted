@@ -20,6 +20,7 @@ import {
   type LaserSweep,
   type LobLine,
 } from "@/game/combat/rules";
+import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { tierArtFor, tierLift } from "@/game/yard/buildingArtTiers";
 import type { YardKind } from "@/game/yard/buildingCostData";
@@ -305,6 +306,18 @@ export const FACING_HOLD_TICKS = 30;
 const TESLA_HOLD_TICKS = 12;
 /** Ticks from a charge's start to its first possible zap: the 32 frames of charge. */
 const TESLA_CHARGE_TICKS = TESLA_CHARGE_END * TESLA_TICKS_PER_FRAME;
+/**
+ * Ticks between steps of a Monster Bunker's shutters: its `TickFast` moves
+ * them a cell each frame of the 40 fps stage (`BUILDING22.as:433-455`), and
+ * the engine keeps 80 ticks a second.
+ */
+const BUNKER_TICKS_PER_CELL = 2;
+/**
+ * Ticks a Bunker's shutters stay up after it last sent a monster out: it
+ * sends one every 30 of its ticks while foes are in range, so they stay up
+ * through a stream of them and come down a second after the last.
+ */
+const BUNKER_HOLD_TICKS = 80;
 /** World px the coil sits above the origin, where the bolts leave (`BUILDING25.as:140-150`). */
 const COIL_HEIGHT = 50;
 /** `PROJECTILE.Move`: half the stat speed per tick, re-aimed every fifth. */
@@ -694,6 +707,10 @@ interface TowerState {
   heading: number | null;
   /** Shells the flak tower has fired (new look), so its twin barrels take turns. */
   salvo: number;
+  /** The tick a Monster Bunker last sent a monster out, which rolls its shutters up. */
+  released: number;
+  /** The cell its shutters are on: 0 down, the strip's last up. */
+  door: number;
 }
 
 /** What the effects ask of the yard renderer. */
@@ -791,6 +808,8 @@ export class TowerFx {
         crackle: Number.NEGATIVE_INFINITY,
         heading: null,
         salvo: 0,
+        released: Number.NEGATIVE_INFINITY,
+        door: 0,
       });
     }
   }
@@ -811,6 +830,15 @@ export class TowerFx {
     if (!tower) return;
     tower.chargeTick = tick;
     tower.chargePending = true;
+  }
+
+  /**
+   * A bunker sent a monster out on `tick` (the engine's `release`): a Monster
+   * Bunker's shutters roll up, and down again once it has stopped.
+   */
+  onRelease(buildingId: number, tick: number): void {
+    const tower = this.towers.get(buildingId);
+    if (tower) tower.released = Math.max(tower.released, tick);
   }
 
   /** A tower's splash radius in cartesian units: 0 for none, or a tower this does not know. */
@@ -1024,6 +1052,9 @@ export class TowerFx {
       tower.chargeTick = Number.NEGATIVE_INFINITY;
       tower.tesla = TESLA_IDLE;
       if (tower.info.type === 25 && tower.info.frames > 0) this.setCell(tower, TESLA_IDLE.cell);
+      tower.released = Number.NEGATIVE_INFINITY;
+      tower.door = 0;
+      if (tower.info.type === BUNKER_TYPE && tower.info.frames > 1) this.setCell(tower, 0);
       if (tower.recoil) this.host.nudge?.(tower.info.id, 0, 0, 0);
       tower.recoil = null;
     }
@@ -1057,6 +1088,10 @@ export class TowerFx {
     if (info.type === 25) {
       this.stepCoil(tower, tick, elapsed);
       if (info.frames > 0) this.setCell(tower, tower.tesla.cell);
+      return;
+    }
+    if (info.type === BUNKER_TYPE) {
+      if (info.frames > 1) this.stepDoor(tower, tick, elapsed);
       return;
     }
     if (tower.recoil) this.kick(tower, tick);
@@ -1284,6 +1319,21 @@ export class TowerFx {
       state = teslaTick(state, zapping);
     }
     tower.tesla = state;
+  }
+
+  /**
+   * A Monster Bunker's shutters over the ticks since the last update: a cell
+   * up every frame while it is sending monsters out, a cell down every frame
+   * once it has stopped, as `BUILDING22.TickFast` (`:433-455`) moves them.
+   */
+  private stepDoor(tower: TowerState, tick: number, elapsed: number): void {
+    const top = tower.info.frames - 1;
+    for (let at = tick - elapsed + 1; at <= tick; at += 1) {
+      if (at % BUNKER_TICKS_PER_CELL !== 0) continue;
+      const open = at >= tower.released && at - tower.released <= BUNKER_HOLD_TICKS;
+      tower.door = Math.max(0, Math.min(top, tower.door + (open ? 1 : -1)));
+    }
+    this.setCell(tower, tower.door);
   }
 
   private setCell(tower: TowerState, cell: number): void {

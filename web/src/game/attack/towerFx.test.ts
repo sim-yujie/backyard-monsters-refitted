@@ -17,6 +17,7 @@ import {
   TESLA_CHARGE_END,
   TESLA_IDLE,
   TESLA_LOOP_END,
+  TESLA_WIND_END,
   TowerFx,
   bearingDegrees,
   AIM_WATCH_MARGIN,
@@ -219,9 +220,11 @@ describe("towersOf", () => {
     expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(160);
     expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(32);
     expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(32);
-    // The new Cannon's barrel turns too, though the Flash one never did; the Tesla tiers stay still pictures.
+    // The new Cannon's barrel turns too, though the Flash one never did; the 3D Tesla plays its film through
+    // Flash's 55 cells and the 3D Bunker its 15 cells of shutters.
     expect(towersOf(readYard(yardOf(20)))[0]?.frames).toBe(32);
-    expect(towersOf(readYard(yardOf(25)))[0]?.frames).toBe(0);
+    expect(towersOf(readYard(yardOf(25)))[0]?.frames).toBe(TESLA_WIND_END);
+    expect(towersOf(readYard(yardOf(22)))[0]?.frames).toBe(15);
     // The 3D towers know where each cell points and turn about their pivot.
     for (const type of [20, 21, 23, 115, 118, 132, 136, 137]) {
       expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeDefined();
@@ -1246,5 +1249,39 @@ describe("TowerFx's new look", () => {
     expect(fx.sparkCount).toBe(0);
     expect(sparks.children.filter((child) => child.visible)).toHaveLength(0);
     fx.destroy();
+  });
+});
+
+describe("the Monster Bunker's shutters", () => {
+  it("roll up a cell a frame as it sends monsters out, and down again a second after the last", () => {
+    const { frames, fx } = setUp(22);
+    fx.update(0, () => undefined);
+    expect(frames.get(1)).toBe(0);
+    // Sent out on tick 10: the shutters start up then, a cell every frame (two ticks), and stop at the top.
+    fx.onRelease(1, 10);
+    fx.update(10, () => undefined);
+    expect(frames.get(1)).toBe(1);
+    fx.update(20, () => undefined);
+    expect(frames.get(1)).toBe(6);
+    fx.update(60, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    // Another out on tick 70 keeps them up a second past it, then they come down a cell a frame.
+    fx.onRelease(1, 70);
+    fx.update(150, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    fx.update(160, () => undefined);
+    expect(frames.get(1)).toBe(9);
+    fx.update(400, () => undefined);
+    expect(frames.get(1)).toBe(0);
+  });
+
+  it("move the Flash bunker's door the same way with the Classic look, and shut it when the battle ends", () => {
+    setClassicLook(true);
+    const { frames, fx } = setUp(22);
+    fx.onRelease(1, 0);
+    fx.update(40, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    fx.standDown();
+    expect(frames.get(1)).toBe(0);
   });
 });
