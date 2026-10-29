@@ -67,7 +67,7 @@ import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
 import { ZoomControl } from "@/ui/ZoomControl";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 import { setScreenTune } from "@/game/sound/sound";
 
 /**

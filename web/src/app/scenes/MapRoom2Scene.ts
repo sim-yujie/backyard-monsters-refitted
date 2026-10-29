@@ -98,7 +98,7 @@ import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 import { isPhoneLayout } from "@/ui/phoneLayout";
 
 /**

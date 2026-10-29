@@ -15,7 +15,6 @@ const auth = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/auth", () => auth);
-vi.mock("../App", () => ({ SceneName: { YARD: "yard" } }));
 
 const { LoginScene } = await import("./LoginScene");
 

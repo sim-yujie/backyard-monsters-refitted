@@ -1,0 +1,123 @@
+# The checks every push and pull request to revamp or main must pass: the web
+# client's typecheck, lint and tests, the combat-rules copies being in sync,
+# and the server's typecheck and tests, the database tests included (audit
+# 2026-10-29: agent-handoffs/reports/audit-metrics-2026-10-29.md, fix #1).
+#
+# Every step is a command that runs the same way on a developer's machine.
+#
+# Server: the `*.db.test.ts` suites skip themselves unless their *_TEST_DB
+# variable names a throwaway database. Here Postgres and Redis run as
+# services, the database is built the way `bun run db:init` builds a new one
+# (schema:create, then the migrations), and every *_TEST_DB points at it, so
+# they run.
+name: CI
+
+on:
+  push:
+    branches: [revamp, main]
+  pull_request:
+    branches: [revamp, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npx vitest run
+      - name: Combat-rules copies in the server match the web originals
+        run: node tools/sync-combat-rules.mjs --check
+
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:18.1
+        env:
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: bym_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:8.10.1
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ci-only
+      DB_NAME: bym_ci
+      REDIS_URL: redis://localhost:6379
+      # Test-only; the server refuses to start without one (StartupSafety.ts).
+      SECRET_KEY: ci-only-test-key
+      # The opt-in database suites (see the top of this file).
+      BOTS_TEST_DB: bym_ci
+      BUG_REPORT_TEST_DB: bym_ci
+      DASHBOARD_TEST_DB: bym_ci
+      DEFENCES_TEST_DB: bym_ci
+      EVENTS_TEST_DB: bym_ci
+      FRIENDS_TEST_DB: bym_ci
+      HEALTH_TEST_DB: bym_ci
+      INFERNO_TEST_DB: bym_ci
+      NEIGHBOURS_TEST_DB: bym_ci
+      NOTICES_TEST_DB: bym_ci
+      NOTIF_TEST_DB: bym_ci
+      PRIVACY_TEST_DB: bym_ci
+      BOTS_TEST_REDIS: redis://localhost:6379
+      HEALTH_TEST_REDIS: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Build the test database (as db:init does)
+        env:
+          # Quiets the ORM's query log (mikro-orm.config.ts).
+          ENV: prod
+        run: |
+          bun --bun x mikro-orm schema:create -r
+          bun --bun x mikro-orm migration:up
+      - name: Tests
+        run: bun test

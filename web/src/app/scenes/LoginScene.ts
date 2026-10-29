@@ -8,7 +8,7 @@ import { openBugReport } from "@/ui/bugReport/BugReportDialog";
 import { modalLayer } from "@/ui/events/WhatsNewDialog";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 import {
   BOT_CHECK_PENDING,
   SANDBOX_START_LABEL,
