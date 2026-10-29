@@ -942,8 +942,10 @@ export type BattleVisualEvent =
     }
   | {
       /**
-       * A Monster Bunker's door opens or shuts (drawing only), as the Flash
-       * one's `TickFast` drove it (`BUILDING22.as:433-455`).
+       * A Monster Bunker's door starts to open or to shut (drawing only), as
+       * the Flash one's `TickFast` drove it (`BUILDING22.as:433-455`). It is
+       * fully up {@link BUNKER_DOOR_FRAMES} frames after it starts to open,
+       * and only then does the bunker send a monster out.
        */
       readonly kind: "bunkerDoor";
       readonly tick: number;
@@ -951,7 +953,7 @@ export type BattleVisualEvent =
       readonly open: boolean;
     }
   | {
-      /** A bunker sent a monster out: a Monster Bunker's shutters roll up (drawing only). */
+      /** A bunker sent a monster out (drawing only). */
       readonly kind: "release";
       readonly tick: number;
       readonly buildingId: number;
@@ -1520,7 +1522,18 @@ interface Bunker {
   tickNumber: number;
   /** Whether its door is open, for the drawing ({@link BattleVisualEvent} `bunkerDoor`). */
   doorOpen: boolean;
+  /**
+   * `_animTick`, how far up a Monster Bunker's door is, in frames: 0 shut,
+   * {@link BUNKER_DOOR_FRAMES} fully open. It sends nothing out until then.
+   */
+  door: number;
 }
+
+/**
+ * Frames a Monster Bunker's door takes to open; it sends a monster out only once
+ * it is fully up (`_animTick >= 15`, `BUILDING22.as:204`, `:344`).
+ */
+export const BUNKER_DOOR_FRAMES = 15;
 
 /** The drop radius a payload earns: `max(200, bucket / 4) / 2` (`ATTACK.as:667-671`). */
 export const dropRadius = (bucketTotal: number): number =>
@@ -1788,7 +1801,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           if (count > 0) pool.set(id, count);
         }
       }
-      bunkers.push({ building, pool, dispatched: 0, tickNumber: 0, doorOpen: false });
+      bunkers.push({ building, pool, dispatched: 0, tickNumber: 0, doorOpen: false, door: 0 });
       bunkerReports.set(building.id, {
         id: building.id,
         level: building.level,
@@ -2969,6 +2982,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const bunker of bunkers) {
       const building = bunker.building;
       if (building.hp <= 0 || building.type === HOUSING_BUNKER_TYPE) continue;
+      // Only through a door that is fully up (`_animTick >= 15`, `:204`).
+      if (bunker.door < BUNKER_DOOR_FRAMES) continue;
       const at = screenOf(building.x, building.y);
       const dx = at.x - drop.x;
       const dy = at.y + building.middle - drop.y;
@@ -3092,10 +3107,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
-   * The Monster Bunkers' doors, once a frame (drawing only, {@link BattleVisualEvent}
-   * `bunkerDoor`): as `BUILDING22.TickFast` (`:433-455`), a door is open while
-   * its bunker has monsters, in or out, and has attackers in its range, monsters
-   * out, or a Decoy over it, and shut otherwise. Only a change is told.
+   * The Monster Bunkers' doors, once a frame: as `BUILDING22.TickFast`
+   * (`:433-455`), a door opens while its bunker has monsters, in or out, and
+   * has attackers in its range, monsters out, or a Decoy over it, and shuts
+   * otherwise, a frame of {@link BUNKER_DOOR_FRAMES} at a time. The bunker
+   * sends monsters out only through a door that is fully up. Only a change of
+   * way is told ({@link BattleVisualEvent} `bunkerDoor`).
    */
   const tickBunkerDoors = (): void => {
     if (tick % 2 !== 0) return;
@@ -3124,6 +3141,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
             decoyOver(building);
         }
       }
+      bunker.door = open
+        ? Math.min(BUNKER_DOOR_FRAMES, bunker.door + 1)
+        : Math.max(0, bunker.door - 1);
       if (open === bunker.doorOpen) continue;
       bunker.doorOpen = open;
       visual.push({ kind: "bunkerDoor", tick, buildingId: building.id, open });
@@ -5883,7 +5903,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const building = bunker.building;
     if (building.hp <= 0) return;
     bunker.tickNumber += 1;
-    if (bunker.tickNumber % 30 !== 0) return;
+    // Only through a door that is fully up (`_animTick >= 15`, `BUILDING22.as:344`).
+    if (bunker.tickNumber % 30 !== 0 || bunker.door < BUNKER_DOOR_FRAMES) return;
     let left = 0;
     for (const count of bunker.pool.values()) left += count;
     if (left === 0) return;

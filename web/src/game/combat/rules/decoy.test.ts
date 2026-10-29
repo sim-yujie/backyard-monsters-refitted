@@ -11,7 +11,7 @@ import {
   decoyStandPoint,
   decoyTouchesBuilding,
 } from "./decoy";
-import { createBattle } from "./engine";
+import { BUNKER_DOOR_FRAMES, createBattle } from "./engine";
 import type { AttackEvent, BattleOptions } from "./engine";
 import type { Rng } from "./rng";
 import { TICKS_PER_SECOND } from "./stats";
@@ -202,13 +202,19 @@ describe("the Decoy in a fight", () => {
     expect(plain.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
   });
 
-  it("empties the bunker it touches on landing, one of a kind a frame, and stands them round it", () => {
+  it("empties the bunker it touches once its door is up, one of a kind a frame, and stands them round it", () => {
     const { battle } = battleOf({ siege: { decoy: 1 } }, [pokey, decoyAt]);
-    battle.runTo(plan.landsAt - 1);
+    // The landing opens the door; nothing comes out till it is fully up (`BUILDING22.as:204`).
+    const opened = plan.landsAt + (plan.landsAt % 2);
+    const up = opened + (BUNKER_DOOR_FRAMES - 1) * 2;
+    battle.runTo(up);
+    expect(battle.recentEvents(-1).filter((event) => event.kind === "bunkerDoor")).toEqual([
+      { kind: "bunkerDoor", tick: opened, buildingId: 1, open: true },
+    ]);
     expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
-    battle.runTo(plan.landsAt);
+    battle.runTo(up + DECOY_FRAME_TICKS);
     expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(1);
-    battle.runTo(plan.landsAt + 2 * DECOY_FRAME_TICKS);
+    battle.runTo(up + 3 * DECOY_FRAME_TICKS);
     expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(3);
     expect(battle.state().bunkers[0]?.sent).toBe(3);
 

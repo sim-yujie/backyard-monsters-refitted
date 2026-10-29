@@ -52,9 +52,9 @@
  *   and move as the Flash ones did, each with a strip of its own (`anim`):
  *   the Tesla's film rolls up its face through the 55 cells of Flash's
  *   charge, zap loop and wind-down (`towerFx.ts` teslaTick); the Bunker's
- *   shutters roll up into the deck, 15 cells as Flash's door, when it lets
- *   its monsters out in a battle, and down again after (`towerFx.ts`
- *   `onRelease`). At rest each shows cell 0. The Flash strips are not drawn
+ *   shutters roll up into the deck, 15 cells as Flash's door, as its door
+ *   opens in a battle, before its monsters come out, and down again after
+ *   (`towerFx.ts` `onDoor`). At rest each shows cell 0. The Flash strips are not drawn
  *   over them.
  * - **Damaged** keeps the tier's picture and lets the yard's damage tint tell
  *   the story; **destroyed** is the Flash rubble, shared by every tier
