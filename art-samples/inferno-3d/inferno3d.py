@@ -105,13 +105,8 @@ def common():
                                rust_k=0.6),
         iron_hoop=W.mat_iron("iron_hoop", base=(74, 58, 48), dark=(38, 29, 25), edge=(150, 128, 108), rust_k=0.85),
         iron_sooty=W.mat_iron("iron_sooty", rust_k=0.6, soot=0.6),
-        # the levels' looks after the Inferno's blocks: Brimstone, Granite, Forged Steel (see blast_roles)
+        # the upper levels' looks after the Inferno's blocks (see blast_roles)
         brimstone=W.mat_brimstone("brimstone"),
-        granite=W.mat_granite("granite", light=(132, 122, 104), dark=(84, 76, 64), edge=(196, 186, 168)),
-        granite_blocks=W.mat_granite("granite_blocks", seams=16),
-        granite_blocks_dark=W.mat_granite("granite_blocks_dark", seams=14, light=(138, 128, 112), dark=(86, 78, 66)),
-        stripes_granite=W.mat_worn_diag("stripes_granite", (180, 20, 14), (138, 128, 112), under=(70, 64, 56),
-                                        edge=(220, 210, 192), chips=0.66, dirt=0.55, soot=0.35, streaks=0.22),
         forged=W.mat_forged("forged"),
         forged_dark=W.mat_forged("forged_dark", base=(70, 64, 64), dark=(34, 31, 33), edge=(168, 162, 158), edge_k=0.55,
                                  spec=0.4),
@@ -163,23 +158,22 @@ def strap(name, M, LN, parent, r, z0, z1, n_rivets, rivet_r=0.034, phase=0.0, ma
 
 
 def blast_roles(M):
-    """The Blast Tower's material key for each role, by LOOK, after the Inferno's blocks (the owner's rule: a tower's
-    levels follow its world's wall blocks; in the Inferno Brimstone, Granite, Forged Steel): 1 the approved worn tower
-    with brimstone stakes and rubble, 2 granite (cut stone drum, neck and stakes, red and granite stripes, dark iron),
-    3 forged steel (dark steel plating, head and spikes, red and steel stripes)."""
+    """The Blast Tower's material key for each role, by LOOK (the owner, 29 Oct: a tower's levels follow its world's
+    blocks, in the Inferno Brimstone and Forged Steel): 1 the approved worn tower, 2 the same with charred brimstone
+    spikes and rubble glowing in their cracks, 3 forged steel (dark steel plating, head and spikes, red and steel
+    stripes). Each level also stands taller than the last (see RISE in build_blast)."""
     if LOOK == 2:
-        return dict(skirt="stripes_granite", stake="granite", tip="granite", staves="granite_blocks",
-                    staves_dark="granite_blocks_dark", hoop="iron_hoop", plate="iron_dirty", rope="rope", bolt="iron_w",
-                    collar="iron_w", cap="iron_w", ball="iron_head", trim="iron_head", barrel="iron_sooty", band=None,
-                    clod="dirt")
+        return dict(skirt="stripes_w", stake="brimstone", tip="brimstone", staves="staves", staves_dark="staves_dark",
+                    hoop="iron_hoop", plate="iron_dirty", rope="rope", bolt="iron_w", collar="iron_w", cap="iron_w",
+                    ball="iron_head", trim="iron_head", barrel="iron_sooty", band=None, clod="brimstone")
     if LOOK == 3:
         return dict(skirt="stripes_forged", stake="forged", tip="forged", staves="forged_plates",
                     staves_dark="forged_plates_dark", hoop="forged_dark", plate="forged_plates_dark",
                     rope="forged_dark", bolt="forged", collar="forged", cap="forged", ball="forged_dark", trim="forged",
                     barrel="forged_dark", band="forged", clod="dirt")
-    return dict(skirt="stripes_w", stake="brimstone", tip="brimstone", staves="staves", staves_dark="staves_dark",
+    return dict(skirt="stripes_w", stake="stake", tip="stake", staves="staves", staves_dark="staves_dark",
                 hoop="iron_hoop", plate="iron_dirty", rope="rope", bolt="iron_w", collar="iron_w", cap="iron_w",
-                ball="iron_head", trim="iron_head", barrel="iron_sooty", band=None, clod="brimstone")
+                ball="iron_head", trim="iron_head", barrel="iron_sooty", band=None, clod="dirt")
 
 
 def barrel_bands(tur, M, LN, y0, y1, r, z, rings, mat, mouth=1.25):
@@ -195,7 +189,9 @@ def barrel_bands(tur, M, LN, y0, y1, r, z, rings, mat, mouth=1.25):
 
 def build_blast(M, LN, body):
     R = {k: M[v] if v else None for k, v in blast_roles(M).items()}
-    faceted = LOOK > 1        # cut stone and forged steel: flat-sided tub, neck and stakes
+    faceted = LOOK == 3       # forged steel: flat-sided tub, neck and spikes
+    RISE = (0.0, 0.25, 0.5)[LOOK - 1]     # each level stands taller than the last (reads as a longer range)
+    SPIKE = (1.0, 1.3, 1.6)[LOOK - 1]     # and its spikes are bigger
     # the scorched rubble round the foot
     mound = W.lathe("mound", [[(1.14, 0.0), (1.04, 0.05), (0.92, 0.1), (0.8, 0.1), (0.66, 0.06)]], [M["dirt"]], bev=0,
                     parent=body, n=128)
@@ -215,30 +211,43 @@ def build_blast(M, LN, body):
     # the stakes round the foot: rough wooden planks standing in the rubble, leaning out like petals
     st = bmesh.new()
     uv = st.loops.layers.uv.new("UVMap")
-    for i in range(10):
-        b = 360 * i / 10 + 18 + (7 if i % 2 else -5)
-        lean = 0.34 + 0.14 * ((i * 0.53) % 1.0)
-        h = 0.66 + 0.2 * ((i * 0.71) % 1.0)
-        W.stake(st, uv, bear(b, 0.8, 0.0), bear(b + (6 if i % 3 else -6), 0.8 + lean, h), 0.15, sides=5 if faceted else 8,
+    ns = 12 if LOOK == 3 else 10
+    for i in range(ns):
+        b = 360 * i / ns + 18 + (7 if i % 2 else -5)
+        lean = (0.34 + 0.14 * ((i * 0.53) % 1.0)) * (1 + 0.25 * (SPIKE - 1))
+        h = (0.66 + 0.2 * ((i * 0.71) % 1.0)) * SPIKE
+        W.stake(st, uv, bear(b, 0.8, 0.0), bear(b + (6 if i % 3 else -6), 0.8 + lean, h), 0.15 * (1 + 0.3 * (SPIKE - 1)),
+                sides=5 if faceted else 8,
                 twist=i * 0.7, tip_mat=1 if LOOK > 1 else None)
     add_outline(W.obj("stakes", st, [R["stake"], R["tip"]], parent=body, sharp=20 if faceted else 55), LN["warm"])
     # the stave neck above the skirt, an iron strap round its foot
-    z1 = 1.58
-    neck = W.lathe("neck", [[(0.5, 0.78), (0.53, 0.98), (0.51, 1.17)]], [R["staves_dark"]], bev=0, wob=0.012,
+    z1 = 1.58 + RISE
+    neck = W.lathe("neck", [[(0.5, 0.78), (0.53, 0.98 + RISE / 2), (0.51, 1.17 + RISE)]], [R["staves_dark"]], bev=0,
+                   wob=0.012,
                    parent=body, sharp=20 if faceted else 35, n=14 if faceted else 96)
     add_outline(neck, LN["warm"])
     strap("neckstrap", M, LN, body, 0.51, 0.84, 0.92, 12, phase=0.25, mat=R["hoop"])
+    for k in range(1, LOOK):     # a strap more round the longer neck per level
+        zc = 0.88 + k * (RISE + 0.24) / LOOK
+        strap(f"neckstrap{k}", M, LN, body, 0.525, zc - 0.04, zc + 0.04, 12, phase=0.25 + k * 0.3, mat=R["hoop"])
     # the tub: light staves, an iron hoop, a rope laid round its rim, a recessed iron plate with bolts in it
-    tub = W.lathe("drum", [[(0.5, 1.12), (0.6, 1.16), (0.63, 1.36), (0.62, z1 - 0.04), (0.585, z1)],
+    tub = W.lathe("drum", [[(0.5, 1.12 + RISE), (0.6, 1.16 + RISE), (0.63, 1.36 + RISE), (0.62, z1 - 0.04), (0.585, z1)],
                            [(0.585, z1), (0.53, z1), (0.52, z1 - 0.06)]],
                   [R["staves"], R["staves_dark"]], mat_of_seg=[0, 1], wob=0.012, seed=3.0, parent=body,
                   sharp=20 if faceted else 35, n=16 if faceted else 96)
     add_outline(tub, LN["warm"])
-    strap("tubhoop", M, LN, body, 0.605, 1.19, 1.27, 14, rivet_r=0.036, mat=R["hoop"])
+    strap("tubhoop", M, LN, body, 0.605, 1.19 + RISE, 1.27 + RISE, 14, rivet_r=0.036, mat=R["hoop"])
     W.lathe("plate", [[(0.53, z1 - 0.06), (0.0, z1 - 0.06)]], [R["plate"]], bev=0, parent=body)
     rp = bmesh.new()
     W.rope_ring(rp, 0.6, z1 + 0.01, r=0.07, pitch=0.13)
     add_outline(W.obj("rope", rp, [R["rope"]], parent=body, sharp=70), LN["warm"], L.LINE * 0.6)
+    if LOOK == 3:     # a crown of short steel spikes round the rim, under the barrel's sweep
+        cr = bmesh.new()
+        cuv = cr.loops.layers.uv.new("UVMap")
+        for i in range(10):
+            b = 360 * i / 10 + 9
+            W.stake(cr, cuv, bear(b, 0.6, z1 - 0.02), bear(b, 0.84, z1 + 0.24), 0.075, sides=5, twist=i * 0.5)
+        add_outline(W.obj("crown", cr, [R["stake"]], parent=body, sharp=20), LN["cool"], L.LINE * 0.6)
     bm = bmesh.new()
     pts, nrm = L.ring_of(8, 0.45, z1 - 0.06, 0.5)
     W.bolts(bm, pts, [(0, 0, 1)] * 8, r=0.04)
@@ -534,5 +543,5 @@ def build():
     return body, tur, top
 
 
-SOLID = {1: ("skirt", "drum", "glowcap", "collar", "rope", "capbolts"), 2: ("post", "coil", "posts", "socket"), 3: ("column", "collar", "cagebars")}
+SOLID = {1: ("skirt", "drum", "glowcap", "collar", "rope", "capbolts", "crown"), 2: ("post", "coil", "posts", "socket"), 3: ("column", "collar", "cagebars")}
 Q.run("inferno", build, TIER if LOOK == 1 else f"{TIER}-look{LOOK}", HERE, turret_canvas=(400, 360, 200, 200), args=ARGS[1:], solid=SOLID[TIER])
