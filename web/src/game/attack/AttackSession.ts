@@ -319,6 +319,19 @@ export const servedBrain = (raw: unknown, t: number): BrainWeights | null => {
 };
 
 /**
+ * A champion's health from the load's `attackerhealth`: what the server froze
+ * into this attack at launch, after catching the attacker's yard up, and sends
+ * it out at in the replay (`ATTACK.as:532`); null when the load has none (a
+ * practice fight on the own yard), which sends it out at full health. The
+ * own-yard load's copy is not read: a champion heals in its cage meanwhile.
+ */
+export const servedHealth = (raw: unknown, t: number): number | null => {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const hp = (raw as Record<string, unknown>)[String(t)];
+  return typeof hp === "number" && Number.isFinite(hp) ? Math.max(0, Math.floor(hp)) : null;
+};
+
+/**
  * The academy levels from the load's `attackeracademy` (issue #201): the ones
  * the server froze into this attack at launch, after catching the attacker's
  * yard up, and replays with; null when the load has none (an older server),
@@ -807,8 +820,9 @@ export class AttackSession {
    * level (issue #202) and food-bonus rank its roster entry holds, which it
    * fights at and the server checks against the attacker's stored champion
    * (the food bonus adds the stats its cage card shows), and the Mode the
-   * player picked (issue #220), which the server replays it in, and its
-   * learned brain as the attack load froze it (issue #219, {@link servedBrain}).
+   * player picked (issue #220), which the server replays it in, its
+   * learned brain as the attack load froze it (issue #219, {@link servedBrain}),
+   * and the health the attack load froze it at ({@link servedHealth}).
    */
   private flungChampion(champion: NonNullable<FlingInput["champion"]>): {
     t: number;
@@ -817,11 +831,13 @@ export class AttackSession {
     fb?: number;
     s?: ChampionStance;
     b?: BrainWeights;
+    hp?: number;
   } {
     const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
     const pl = Number(entry?.pl);
     const fb = Number(entry?.fb);
     const brain = servedBrain(this.response?.attackerbrains, champion.t);
+    const hp = servedHealth(this.response?.attackerhealth, champion.t);
     return {
       t: champion.t,
       l: champion.l,
@@ -829,8 +845,10 @@ export class AttackSession {
       ...(Number.isInteger(fb) && fb > 0 ? { fb: Math.min(fb, CHAMPION_MAX_FOOD_BONUS) } : {}),
       ...(isChampionStance(champion.s) ? { s: champion.s } : {}),
       ...(brain ? { b: brain } : {}),
+      ...(hp !== null ? { hp } : {}),
     };
   }
+
 
   /** Appends a resource bomb at the current tick and hands it to the battle. */
   appendBomb(input: BombInput): BombDrop {
@@ -993,7 +1011,7 @@ export class AttackSession {
     const champions = this.target.roster.champions;
     const entry = champions.find((champion) => champion.t === t);
     if (!entry) return "unknown";
-    if (entry.hp <= 0) return "hurt";
+    if ((servedHealth(this.response?.attackerhealth, t) ?? entry.hp) <= 0) return "hurt";
     if (entry.status !== 0) return "away";
     if (this.championsFlung.has(t)) return "flung";
     if (t === KRALLEN_TYPE) return null;

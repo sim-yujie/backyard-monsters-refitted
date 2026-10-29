@@ -8,7 +8,7 @@ import { infernoAttackRefusedErr } from "../../errors/errors.js";
 import { academyRanks, type DefenderForces } from "../../game-rules/combat/index.js";
 import { postgres } from "../../server.js";
 import { isDeclareWarRunning, runningPowerups } from "../../services/alliance/powerups.js";
-import { brainsOf, newAttackSession } from "../../services/base/attackSession.js";
+import { brainsOf, healthOf, newAttackSession } from "../../services/base/attackSession.js";
 import { academyLevels } from "../../services/base/combat/abandonedAttack.js";
 import { poolAmounts } from "../../services/base/combat/attackLoot.js";
 import { servedDefenderForces } from "../../services/base/combat/defenderForces.js";
@@ -70,6 +70,8 @@ export interface DescentAttackStart {
   base: Partial<Save>;
   defenderforces: DefenderForces;
   attackerbrains: ReturnType<typeof brainsOf>;
+  /** Each champion's health now, which it goes out at (`ATTACK.as:532`). */
+  attackerhealth?: ReturnType<typeof healthOf>;
   attackeracademy: Record<string, number>;
   attackerranks?: ReturnType<typeof academyRanks>;
   /** The alliance powers running for the attacker (Declare War's countdown). */
@@ -117,6 +119,7 @@ export const startDescentAttack = async (
 
   const defenderForces = await servedDefenderForces(yard, userSave, now);
   const championBrains = brainsOf(userSave.champion);
+  const championHealth = healthOf(userSave.champion);
   const attackerAcademy = academyLevels(userSave.academy);
   const attackerRanks = academyRanks(userSave.academy);
   const declareWar = await isDeclareWarRunning(user.alliance_id);
@@ -136,7 +139,8 @@ export const startDescentAttack = async (
       championBrains,
       attackerAcademy,
       declareWar,
-      attackerRanks
+      attackerRanks,
+      championHealth
     ),
   });
 
@@ -151,6 +155,7 @@ export const startDescentAttack = async (
     base: await mapSaveData(yard, user, { attack: true }),
     defenderforces: defenderForces,
     attackerbrains: championBrains,
+    ...(championHealth && { attackerhealth: championHealth }),
     attackeracademy: attackerAcademy,
     ...(Object.keys(attackerRanks).length > 0 && { attackerranks: attackerRanks }),
     attpowerups: await runningPowerups(user.alliance_id),

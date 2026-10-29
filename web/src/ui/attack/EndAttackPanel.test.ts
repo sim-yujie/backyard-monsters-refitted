@@ -117,9 +117,9 @@ describe("EndAttackPanel", () => {
     return Object.fromEntries(terms.map((dt) => [dt.textContent, dt.nextElementSibling?.textContent ?? ""]));
   };
 
-  it("names each champion sent on its own line, one at no health retreated as Flash's log said", () => {
+  it("names each champion sent on its own line, one beaten to no health as critically injured, not retreated", () => {
     const { panel } = mountPanel({ champions: [{ t: 3, l: 2, hp: 1200.7 }, { t: 5, l: 4, hp: 0 }] });
-    expect(statsOf(panel)["Champions"]).toBe("Level 2 Fomor, 1,200 health left; Level 4 Krallen retreated");
+    expect(statsOf(panel)["Champions"]).toBe("Level 2 Fomor, 1,200 health left; Level 4 Krallen was critically injured");
     panel.close();
     const one = mountPanel();
     expect(statsOf(one.panel)["Champion"]).toBe("Level 1 Krallen, 41,000 health left");
@@ -131,7 +131,7 @@ describe("EndAttackPanel", () => {
   it("never counts more monsters lost than went out: a champion is not one, and the born are said", () => {
     // A champion-only attack used to read "2 of 0 sent".
     const alone = mountPanel({ monstersSent: 0, monstersLost: 0, champions: [{ t: 1, l: 3, hp: 0 }] });
-    expect(statsOf(alone.panel)).toMatchObject({ "Monsters lost": "None sent", Champion: "Level 3 Gorgo retreated" });
+    expect(statsOf(alone.panel)).toMatchObject({ "Monsters lost": "None sent", Champion: "Level 3 Gorgo was critically injured" });
     alone.panel.close();
     const split = mountPanel({ monstersSent: 4, monstersBorn: 6, monstersLost: 9 });
     expect(statsOf(split.panel)["Monsters lost"]).toBe("9 of 10 (4 sent, 6 born in the fight)");

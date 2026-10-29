@@ -1,33 +1,26 @@
-import type { InfernoAmounts } from "@/api/inferno";
 import {
   ATTACK,
-  BATTLE_REPORT_TITLE,
-  BATTLE_REPORT_TOTAL,
   CAPTURE_BODY,
   CAPTURE_BUTTON,
   CAPTURE_TITLE,
-  CLOSE,
   DEPTH,
   DESCENT_MAP_ART,
   DESCENT_MAP_SIZE,
   DESCENT_TITLE,
   DESCENT_YARD_COUNT,
   DESCENT_YARD_SPOTS,
-  MOLOCH_NEUTRAL,
   RETURN_HOME,
-  battleReportLine,
   depthPercent,
   depthWarning,
   descentYardArt,
 } from "@/game/inferno/descentText";
-import { INFERNO_RESOURCE_NAMES, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { Popup } from "@/ui/Popup";
 import "@/ui/styles/inferno.css";
 
 /**
  * The screens of Moloch's Descent (WP 1.13, `docs/design/inferno.md` §2.4 and
  * §4): the map of his 13 yards with the next one to attack, his lines as a
- * yard opens and after the fight, the battle report and the capture. A popup
+ * yard opens and after the fight, and the capture. A popup
  * on a phone, centred on a desktop. The map and Moloch's three faces are
  * Flash's own pictures; the yard markers and the fog over the yards below are
  * stand-ins (`.descent-yard`, `.descent-map__fog`), Flash's being vector art
@@ -86,48 +79,6 @@ export const descentDialogue = (
     element("p", "inferno-says__line inferno-says__line--descent", line.moloch),
   );
   popup.setContent(head, actions(button(line.reply, "btn btn--primary", () => popup.close())));
-  return popup.mount(host);
-};
-
-/* ── The battle report ── */
-
-const amountsOf = (amounts: InfernoAmounts): [number, number, number, number] => [
-  Math.trunc(amounts.r1) || 0,
-  Math.trunc(amounts.r2) || 0,
-  Math.trunc(amounts.r3) || 0,
-  Math.trunc(amounts.r4) || 0,
-];
-
-/**
- * The report after a yard is beaten (`ShowBattleReport`, Moloch's face beside
- * it): this attack's loot, then the Descent's running total in four boxes.
- * Flash's Brag button at yards 1, 4 and 7 posted to Facebook and is gone.
- */
-export const descentBattleReport = (
-  host: HTMLElement,
-  loot: InfernoAmounts,
-  total: InfernoAmounts,
-  onClose: () => void = () => {},
-): Popup => {
-  const popup = new Popup({ title: BATTLE_REPORT_TITLE, className: "inferno-popup descent-report", onClose });
-  const head = element("div", "inferno-says");
-  head.append(
-    picture(MOLOCH_NEUTRAL, "inferno-says__portrait", "Moloch"),
-    element("p", "inferno-says__line", battleReportLine(amountsOf(loot))),
-  );
-  const boxes = element("dl", "descent-report__total");
-  const totals = amountsOf(total);
-  RESOURCE_KEYS.forEach((key, index) => {
-    const box = element("div", "descent-report__box");
-    box.append(element("dt", "descent-report__name", INFERNO_RESOURCE_NAMES[key]), element("dd", "descent-report__value", totals[index]!.toLocaleString("en-US")));
-    boxes.append(box);
-  });
-  popup.setContent(
-    head,
-    element("p", "descent-report__heading", BATTLE_REPORT_TOTAL),
-    boxes,
-    actions(button(CLOSE, "btn btn--primary", () => popup.close())),
-  );
   return popup.mount(host);
 };
 

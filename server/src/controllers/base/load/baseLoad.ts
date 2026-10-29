@@ -57,7 +57,7 @@ import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
-import type { AcademyLevels, AcademyRanks, ChampionBrains } from "../../../services/base/attackSession.js";
+import type { AcademyLevels, AcademyRanks, ChampionBrains, ChampionHealth } from "../../../services/base/attackSession.js";
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
 import { noteActivePlayer } from "../../../services/stats/activity.js";
 import { logger } from "../../../utils/logger.js";
@@ -116,6 +116,8 @@ export const baseLoad: KoaController = async (ctx) => {
   let defenderForces: DefenderForces | undefined;
   /** The attacker's champions' brains, as the attack froze them (issue #219), served to the client. */
   let championBrains: ChampionBrains | undefined;
+  /** Their health, as the attack froze it, served to the client: each goes out at this. */
+  let championHealth: ChampionHealth | undefined;
   /** The attacker's academy levels, as the attack froze them (issue #201), served to the client. */
   let attackerAcademy: AcademyLevels | undefined;
   /** The attacker's Monster Lab ranks, frozen with it (issue #352), served to the client. */
@@ -154,7 +156,7 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
 
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces, championBrains, attackerAcademy, attackerRanks } =
+      ({ save: baseSave, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks } =
         await baseModeAttack({
         user,
         baseid,
@@ -171,7 +173,7 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid)) throw discordAgeErr();
       
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces, championBrains, attackerAcademy, attackerRanks } =
+      ({ save: baseSave, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks } =
         await baseModeAttack({
         user,
         baseid,
@@ -496,6 +498,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(championBrains && { attackerbrains: championBrains }),
+    ...(championHealth && { attackerhealth: championHealth }),
     ...(attackerAcademy && { attackeracademy: attackerAcademy }),
     ...(attackerRanks && Object.keys(attackerRanks).length > 0 && { attackerranks: attackerRanks }),
     ...(completed && { completed }),

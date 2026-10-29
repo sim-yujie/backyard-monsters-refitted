@@ -53,7 +53,10 @@ import { ShellSprites } from "./spurtzShell";
  * looping while its zaps come (issue #266), with a glow on the coil as it
  * charges. The Flash Cannon Tower has no animated layer; the new art's
  * Cannon turns its barrel at 11.25 a cell like the Sniper (owner, 27 Oct
- * 2026), though the Flash one never did.
+ * 2026), though the Flash one never did. The Inferno Blast and Magma Towers
+ * turn at 11.25 a cell too (`INFERNO_CANNON_TOWER.as`, `INFERNO_MAGMA_TOWER.as`).
+ * The Quake Tower raises its hammer cell by cell on the engine's `towerCell`
+ * and shakes for ten ticks on its `towerQuake` (`INFERNOQUAKETOWER.as`).
  *
  * ## Projectiles
  *
@@ -158,6 +161,10 @@ const FACING: Readonly<Record<number, FacingRule>> = {
   21: { degreesPerCell: 11.25, offsetDegrees: 0 },
   115: { degreesPerCell: 12, offsetDegrees: 0 },
   118: { degreesPerCell: 12, offsetDegrees: 30 },
+  // The Inferno Blast and Magma Towers turn by `BTOWER.Rotate`'s 11.25° cells
+  // while they fight (`INFERNO_CANNON_TOWER.as`, `INFERNO_MAGMA_TOWER.as`).
+  130: { degreesPerCell: 11.25, offsetDegrees: 0 },
+  132: { degreesPerCell: 11.25, offsetDegrees: 0 },
 };
 
 /** Whether a type turns its gun toward its target. */
@@ -288,7 +295,8 @@ export const towersOf = (yard: Yard): TowerInfo[] =>
       y: building.y,
       worldX: building.worldX,
       worldY: building.worldY,
-      frames: resolveArt(building.type, building.level, ArtState.DEFAULT)?.anims[0]?.frames ?? 0,
+      // An Inferno yard draws its towers from its own table: the Blast Tower is only there.
+      frames: resolveArt(building.type, building.level, ArtState.DEFAULT, yard.kind)?.anims[0]?.frames ?? 0,
       lift: tierLift(building.type, building.level),
       ...turretOf(building.type, building.level),
     }));
@@ -297,6 +305,11 @@ export const towersOf = (yard: Yard): TowerInfo[] =>
 
 /** Ticks a turret keeps tracking after its last shot before holding still. */
 export const FACING_HOLD_TICKS = 30;
+
+/** Ticks a Quake Tower shakes after its quake (`INFERNOQUAKETOWER.as`, `_shake = 10`). */
+export const QUAKE_SHAKE_TICKS = 10;
+/** How far it shakes each way, px (`Math.random() * 4 - 2`). */
+const QUAKE_SHAKE_PX = 2;
 /**
  * Ticks the Tesla keeps its loop going after its last zap: a zap comes every
  * 4 frames (8 ticks), so a gap past this means the charge is spent.
@@ -693,6 +706,8 @@ interface TowerState {
   heading: number | null;
   /** Shells the flak tower has fired (new look), so its twin barrels take turns. */
   salvo: number;
+  /** The tick a Quake Tower's quake went off, so it shakes for a few ticks after. */
+  quake: number;
 }
 
 /** What the effects ask of the yard renderer. */
@@ -790,6 +805,7 @@ export class TowerFx {
         crackle: Number.NEGATIVE_INFINITY,
         heading: null,
         salvo: 0,
+        quake: Number.NEGATIVE_INFINITY,
       });
     }
   }
@@ -810,6 +826,28 @@ export class TowerFx {
     if (!tower) return;
     tower.chargeTick = tick;
     tower.chargePending = true;
+  }
+
+  /**
+   * A Quake Tower's wind-up drew strip cell `cell` (`INFERNOQUAKETOWER.TickAttack`):
+   * its hammer goes up a cell at a time.
+   */
+  onTowerCell(towerId: number, cell: number): void {
+    const tower = this.towers.get(towerId);
+    if (!tower || tower.info.frames <= 0) return;
+    this.setCell(tower, Math.min(cell, tower.info.frames - 1));
+  }
+
+  /**
+   * A Quake Tower's quake went off on `tick` (`DelayedFire`): it shakes for
+   * {@link QUAKE_SHAKE_TICKS}. Returns the world point under its middle, where
+   * the rings start, or null for a tower this does not know.
+   */
+  onTowerQuake(towerId: number, tick: number): Point | null {
+    const tower = this.towers.get(towerId);
+    if (!tower) return null;
+    tower.quake = tick;
+    return this.groundAt(tower.info.x + TOWER_CENTRE, tower.info.y + TOWER_CENTRE);
   }
 
   /** A tower's splash radius in cartesian units: 0 for none, or a tower this does not know. */
@@ -1023,8 +1061,9 @@ export class TowerFx {
       tower.chargeTick = Number.NEGATIVE_INFINITY;
       tower.tesla = TESLA_IDLE;
       if (tower.info.type === 25 && tower.info.frames > 0) this.setCell(tower, TESLA_IDLE.cell);
-      if (tower.recoil) this.host.nudge?.(tower.info.id, 0, 0, 0);
+      if (tower.recoil || tower.quake > Number.NEGATIVE_INFINITY) this.host.nudge?.(tower.info.id, 0, 0, 0);
       tower.recoil = null;
+      tower.quake = Number.NEGATIVE_INFINITY;
     }
     this.graphics.clear();
     this.glow.clear();
@@ -1059,6 +1098,7 @@ export class TowerFx {
       return;
     }
     if (tower.recoil) this.kick(tower, tick);
+    if (tower.quake > Number.NEGATIVE_INFINITY) this.quakeShake(tower, tick);
     if (info.frames <= 0) return;
     if (this.look !== "classic" && AIMING_TYPES.has(info.type)) {
       this.aim(tower, tick, elapsed, creepAt, creeps);
@@ -1260,6 +1300,22 @@ export class TowerFx {
     }
     const share = recoilKick(age);
     this.host.nudge?.(tower.info.id, 0, recoil.dx * share, recoil.dy * share);
+  }
+
+  /**
+   * A Quake Tower's shake after its quake (`INFERNOQUAKETOWER._shake`): ten
+   * ticks of up to 2 px each way, then back in place.
+   */
+  private quakeShake(tower: TowerState, tick: number): void {
+    const age = tick - tower.quake;
+    if (age >= QUAKE_SHAKE_TICKS || age < 0) {
+      tower.quake = Number.NEGATIVE_INFINITY;
+      this.host.nudge?.(tower.info.id, 0, 0, 0);
+      return;
+    }
+    const dx = Math.floor(jitter(tick, tower.info.id) * (QUAKE_SHAKE_PX * 2 + 1)) - QUAKE_SHAKE_PX;
+    const dy = Math.floor(jitter(tick, tower.info.id + 1) * (QUAKE_SHAKE_PX * 2 + 1)) - QUAKE_SHAKE_PX;
+    this.host.nudge?.(tower.info.id, 0, dx, dy);
   }
 
   /**

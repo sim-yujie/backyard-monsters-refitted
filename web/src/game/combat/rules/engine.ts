@@ -909,6 +909,27 @@ export type BattleVisualEvent =
       readonly towerId: number;
     }
   | {
+      /**
+       * A Quake Tower's wind-up drew strip cell `cell` (`INFERNOQUAKETOWER.TickAttack`,
+       * `:107-122`): a cell every 6 ticks, the last few every tick, as it raises its
+       * hammer. Drawing only.
+       */
+      readonly kind: "towerCell";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly cell: number;
+    }
+  | {
+      /**
+       * A Quake Tower's quake went off (`DelayedFire`, `:137-159`): rings out to
+       * `radius` round the tower (`QuakeGraphic`) and the tower shakes. Drawing only.
+       */
+      readonly kind: "towerQuake";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly radius: number;
+    }
+  | {
       /** A creep landed a swing on a building or on another creep. */
       readonly kind: "hit";
       readonly tick: number;
@@ -2409,6 +2430,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     foodBonus = 0,
     stance?: ChampionStance,
     brain?: Partial<BrainWeights>,
+    startHealth?: number,
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
@@ -2416,6 +2438,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // (`ChampionBase.as:123-155`); a log with no `fb` gives 0, which adds
     // nothing. Its power level gates its abilities alone (issue #202).
     const health = championStatWithFood(id, "health", level, foodBonus);
+    // It comes out at the health it has, never above full: Flash spawned it
+    // at its stored `hp` (`ATTACK.as:532`), so a champion hurt in one attack
+    // is still hurt in the next. A log with none sends it at full health.
+    const hp =
+      startHealth !== undefined && Number.isFinite(startHealth) && startHealth >= 1
+        ? Math.min(Math.floor(startHealth), health)
+        : health;
     // A `fly` rung puts the champion in the air exactly as it does a monster:
     // altitude 108 and the flying defence flag (`ChampionBase.as:181-188`), so
     // walls never stop it and only air-capable towers can shoot it.
@@ -2431,7 +2460,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       iy: at.y,
       x: cart.x,
       y: cart.y,
-      hp: health,
+      hp,
       maxHp: health,
       baseSpeed: championStatWithFood(id, "speed", level, foodBonus) / 4,
       damage: championStatWithFood(id, "damage", level, foodBonus),
@@ -2643,6 +2672,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         event.champion.fb ?? 0,
         event.champion.s,
         event.champion.b,
+        event.champion.hp,
       );
     }
   };
@@ -5153,6 +5183,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tower.quakeFrame % QUAKE_FRAME_TICKS === 0 || tower.charge >= QUAKE_ANIM_FRAMES - 4;
     if (!step) return;
     if (tower.charge < QUAKE_ANIM_FRAMES) {
+      // `AnimFrame(false)` draws the cell before the tick moves on.
+      visual.push({ kind: "towerCell", tick, towerId: tower.building.id, cell: tower.charge });
       tower.charge += 1;
       return;
     }
@@ -5171,6 +5203,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const quakeTower = (tower: Tower, power: number): void => {
     countShot(tower.report);
+    visual.push({ kind: "towerQuake", tick, towerId: tower.building.id, radius: tower.range });
     const scan = towerScanPoint(tower.building);
     for (const hit of index.inRange(tower.range, scan.x, scan.y, QUAKE_TARGETS)) {
       const creep = hit.creep;

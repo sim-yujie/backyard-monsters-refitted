@@ -15,7 +15,7 @@ import { END_PANEL_MAX_WAIT_MS, createEndPlugin } from "./end";
 /**
  * A Descent attack's end (Inferno WP 1.13): the save names the yard and
  * sends no `destroyed` (the server's Inferno yard derives none), Moloch's
- * word follows the server's landing (whimper, report, capture; or gloat),
+ * word follows the server's landing (whimper, capture; or gloat),
  * and Return Home goes back to the main yard. His taunt opens the attack.
  */
 
@@ -109,17 +109,15 @@ describe("a Descent attack's end", () => {
     expect(payload.destroyed).toBeUndefined();
   });
 
-  it("a beaten yard: whimper, then the report with the running total, then home", async () => {
+  it("a beaten yard: whimper, then home, with no second loot screen over the end panel's", async () => {
     const { save } = await run(targetOf(7), landing(true));
     expect(save).toHaveBeenCalledTimes(1);
     expect(modal.textContent).toContain(DESCENT_WHIMPERS[6]!.moloch);
     buttonNamed(modal, DESCENT_WHIMPERS[6]!.reply)!.click();
     await flush();
-    expect(modal.textContent).toContain("You just looted one of Moloch's bases for  120 Bone, 80 Coal, 0 Sulfur, and 0 Magma.");
-    const values = [...modal.querySelectorAll(".descent-report__value")].map((one) => one.textContent);
-    expect(values).toEqual(["1,120", "580", "10", "0"]);
-    buttonNamed(modal, "Close")!.click();
-    await flush();
+    expect(modal.textContent).not.toContain("You just looted one of Moloch's bases");
+    expect(modal.querySelector(".descent-report")).toBeNull();
+    expect(modal.querySelectorAll(".inferno-popup")).toHaveLength(0);
     expect(modal.querySelector(".descent-capture")).toBeNull();
     const home = modal.querySelector<HTMLButtonElement>(".attack-end__return")!;
     expect(home.textContent).toBe(RETURN_HOME);
@@ -171,8 +169,6 @@ describe("a Descent attack's end", () => {
   it("the 13th win: the capture's Start Building! opens the Inferno yard", async () => {
     await run(targetOf(13), landing(true, true));
     buttonNamed(modal, DESCENT_WHIMPERS[12]!.reply)!.click();
-    await flush();
-    buttonNamed(modal, "Close")!.click();
     await flush();
     expect(modal.textContent).toContain("You Defeated Moloch!");
     buttonNamed(modal, "Start Building!")!.click();

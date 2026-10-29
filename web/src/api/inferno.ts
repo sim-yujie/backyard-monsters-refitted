@@ -141,6 +141,7 @@ export interface DescentAttackStart extends ApiEnvelope {
   readonly base: Partial<BaseLoadResponse>;
   readonly defenderforces: unknown;
   readonly attackerbrains?: unknown;
+  readonly attackerhealth?: unknown;
   readonly attackeracademy?: unknown;
   readonly attackerranks?: unknown;
   readonly attpowerups?: unknown[];
@@ -166,6 +167,7 @@ export const descentAttackLoad = (start: DescentAttackStart): BaseLoadResponse =
     attackid: start.attackid,
     defenderforces: start.defenderforces,
     ...(start.attackerbrains === undefined ? {} : { attackerbrains: start.attackerbrains }),
+    ...(start.attackerhealth === undefined ? {} : { attackerhealth: start.attackerhealth }),
     ...(start.attackeracademy === undefined ? {} : { attackeracademy: start.attackeracademy }),
     ...(start.attackerranks === undefined ? {} : { attackerranks: start.attackerranks }),
     ...(start.attpowerups === undefined ? {} : { attpowerups: start.attpowerups }),

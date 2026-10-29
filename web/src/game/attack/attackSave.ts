@@ -374,7 +374,7 @@ export interface AttackSummary {
   readonly monstersLost: number;
   /**
    * Each champion sent, by type and level, with its health at the end; empty
-   * when none was. One at no health retreated (`ChampionBase.as:778-785`).
+   * when none was. One at no health was beaten (`ChampionBase.as:778-785`).
    */
   readonly champions: readonly { readonly t: number; readonly l: number; readonly hp: number }[];
   readonly elapsedSeconds: number;
