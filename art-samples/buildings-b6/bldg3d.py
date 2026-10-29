@@ -6,7 +6,8 @@
 
     blender -b --factory-startup -P <building>3d.py -- LEVEL still        render/L<level>.png        the idle building
     blender -b --factory-startup -P <building>3d.py -- LEVEL anim [N]    render/anim-L<level>/fNN.png  N frames (default
-                                                                         24) of one loop of the producing state
+                                                                         36) of one loop of the producing state
+    (pictures go in render/<name>/; with B3D_SCALE=2 in render/<name>/x2/ at twice the size, for the sample sheets)
     blender -b --factory-startup -P <building>3d.py -- LEVEL save        <name>-L<level>.blend
 
 Same camera as the 3D towers: orthographic, 30 degrees up, from bearing 45, the towers' sun. Same scale: 75 px per unit
@@ -19,6 +20,7 @@ import os
 import sys
 from pathlib import Path
 
+import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
@@ -29,7 +31,7 @@ L.EL = 30.0
 import square3d as Q  # noqa: E402
 import worn3d as W  # noqa: E402
 
-CANVAS = (720, 760, 360, 600)      # 4x canvas: w, h, and the ground middle's pixel
+CANVAS = (900, 760, 360, 600)      # 4x canvas: w, h, and the ground middle's pixel
 FRONT_FACE, SIDE_FACE = 90.0, 0.0  # outward bearings of the two faces we see: front-left (+X), front-right (+Y)
 
 
@@ -40,31 +42,86 @@ def args():
 
 def run(name, build, here, canvas=None):
     level, mode, rest = args()
-    out = here / "render"
+    out = here / "render" / name
     out.mkdir(parents=True, exist_ok=True)
     L.OUT = out
     root, animate = build(level)
     samples = int(os.environ.get("B3D_SAMPLES", 64 if mode == "still" else 32))
     cam = L.setup_render(samples=samples)
-    w, h, gx, gy = canvas or CANVAS
+    k = float(os.environ.get("B3D_SCALE", 1))       # B3D_SCALE=2: the sample sheets' 8x pictures (the game's are 4x)
+    if k != 1:
+        out = out / f"x{k:g}"
+        out.mkdir(exist_ok=True)
+        L.OUT = out
+        Q.PPU *= k
+        L.OUTER *= k
+    w, h, gx, gy = (round(v * k) for v in (canvas or CANVAS))
     Q.frame(cam, w, h, gx, gy, (0, 0, 0))
     obs = L.objs_under(root)
     warm = L.LINE_COLS["warm"]
+    plane = ground_catcher()
+
+    def both(path):
+        """The building (path), then its shadow on the ground alone (path-shadow.png: black, the shade as alpha)."""
+        L.shot(path, obs, outer_col=warm)
+        L.shot(path.with_name(path.stem + "-shadow.png"), [plane], cut=obs, outer=0)
+
     if mode == "save":
         bpy.ops.wm.save_as_mainfile(filepath=str(here / f"{name}-L{level}.blend"))
     elif mode == "still":
         if animate:
             animate(0.0)
-        L.shot(out / f"L{level}.png", obs, outer_col=warm)
+        both(out / f"L{level}.png")
     elif mode == "anim":
-        n = int(rest[0]) if rest else 24
+        n = int(rest[0]) if rest else 36
         d = out / f"anim-L{level}"
         d.mkdir(exist_ok=True)
         for k in range(n):
             animate(k / n)
             bpy.context.view_layer.update()
-            L.shot(d / f"f{k:02d}.png", obs, outer_col=warm)
+            both(d / f"f{k:02d}.png")
     print("DONE", name, level, mode)
+
+
+def ground_catcher(size=8.0, dark=0.38):
+    """A ground plane that draws only the building's cast shadow: black, its alpha `dark` where fully shaded."""
+    me = bpy.data.meshes.new("ground")
+    bm = bmesh.new()
+    bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=size / 2)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new("ground", me)
+    bpy.context.scene.collection.objects.link(ob)
+    m = bpy.data.materials.new("ground")
+    m.use_nodes = True
+    N, lk = m.node_tree.nodes, m.node_tree.links.new
+    for n in list(N):
+        N.remove(n)
+    dif = N.new("ShaderNodeBsdfDiffuse")
+    s2r = N.new("ShaderNodeShaderToRGB")
+    bw = N.new("ShaderNodeRGBToBW")
+    lit = math.sin(math.radians(L.SUN[1]))            # what the open ground reads in the sun
+    mp = N.new("ShaderNodeMapRange")
+    mp.inputs["From Min"].default_value, mp.inputs["From Max"].default_value = 0.0, lit * 0.78
+    mp.inputs["To Min"].default_value, mp.inputs["To Max"].default_value = dark, 0.0
+    em = N.new("ShaderNodeEmission")
+    em.inputs["Color"].default_value = (0, 0, 0, 1)
+    tr = N.new("ShaderNodeBsdfTransparent")
+    mix = N.new("ShaderNodeMixShader")
+    out = N.new("ShaderNodeOutputMaterial")
+    lk(dif.outputs[0], s2r.inputs[0])
+    lk(s2r.outputs[0], bw.inputs[0])
+    lk(bw.outputs[0], mp.inputs["Value"])
+    lk(mp.outputs[0], mix.inputs[0])
+    lk(tr.outputs[0], mix.inputs[1])
+    lk(em.outputs[0], mix.inputs[2])
+    lk(mix.outputs[0], out.inputs[0])
+    try:
+        m.surface_render_method = 'BLENDED'
+    except Exception:
+        m.blend_method = 'BLEND'
+    me.materials.append(m)
+    return ob
 
 
 # ------------------------------------------------------------------------------------------------------------ helpers
@@ -173,3 +230,165 @@ def outline(ob, kind="warm", k=1.0):
     W.finish(ob) if "wear" not in ob.data.color_attributes else None
     L.add_outline(ob, L.line(kind), L.LINE * k)
     return ob
+
+
+def part(name, bm, mat, parent, line="warm", k=1.0, sharp=40):
+    """A finished mesh (the wear attribute) with its outline shell. mat: one material or a list."""
+    ob = W.obj(name, bm, mat if isinstance(mat, list) else [mat], parent=parent, sharp=sharp)
+    if line:
+        L.add_outline(ob, L.line(line), L.LINE * k)
+    return ob
+
+
+# ------------------------------------------------------------------------------------------------------------- shapes
+def box(bm, x0, x1, y0, y1, z0, z1, bevel=0.03, mat=0, taper=1.0):
+    """A rounded box between the given bounds (square to X and Y)."""
+    L.rbox(bm, (x1 - x0, y1 - y0, z1 - z0), Matrix.Translation(((x0 + x1) / 2, (y0 + y1) / 2, z0)), bevel=bevel, segs=2,
+           taper=taper, mat=mat)
+
+
+def face_m(axis, s, u, z, out=0.0):
+    """A frame on a box side: axis 'X' (the +X face, front-left on screen) or 'Y' (the +Y face, front-right) at distance s
+    from the middle; local x along the face toward the screen's LEFT (so the frame stays right-handed), y out of it, z up."""
+    if axis == 'X':
+        t, n = Vector((0, -1, 0)), Vector((1, 0, 0))
+    else:
+        t, n = Vector((1, 0, 0)), Vector((0, 1, 0))
+    c = n * (s + out) + t * u + Vector((0, 0, z))
+    return Matrix.Translation(c) @ Matrix((t, n, Vector((0, 0, 1)))).transposed().to_4x4()
+
+
+def prism(bm, pts2d, depth, m, mat=0):
+    """A flat shape (points in its local x/z plane) given a depth along local y (0 to depth), transformed by m."""
+    sub = bmesh.new()
+    lo = [sub.verts.new((x, 0.0, z)) for x, z in pts2d]
+    hi = [sub.verts.new((x, depth, z)) for x, z in pts2d]
+    sub.faces.new(lo)
+    sub.faces.new(list(reversed(hi)))
+    n = len(pts2d)
+    for i in range(n):
+        sub.faces.new((lo[i], lo[(i + 1) % n], hi[(i + 1) % n], hi[i]))
+    bmesh.ops.recalc_face_normals(sub, faces=sub.faces)
+    L.add_mesh(bm, sub, m, mat)
+
+
+def arch_pts(w, h, n=12):
+    """An arched doorway's outline, counter-clockwise: w wide, h tall to the top of its round head, base on z=0."""
+    r = w / 2
+    pts = [(-r, 0.0), (r, 0.0)]
+    for i in range(n + 1):
+        a = math.pi * i / n
+        pts.append((r * math.cos(a), h - r + r * math.sin(a)))
+    return pts
+
+
+def toothed(bm, r_in, r_out, teeth, depth, m, mat=0, saw=True):
+    """A toothed ring's outline (saw teeth leaning one way, or square gear teeth) with a depth along local z, by m."""
+    pts = []
+    da = 2 * math.pi / teeth
+    for k in range(teeth):
+        a0 = da * k
+        if saw:
+            pts += [(r_in, a0), (r_out, a0 + da * 0.85)]
+        else:
+            pts += [(r_in, a0 + da * 0.15), (r_out, a0 + da * 0.3), (r_out, a0 + da * 0.7), (r_in, a0 + da * 0.85)]
+    sub = bmesh.new()
+    lo = [sub.verts.new((r * math.cos(a), r * math.sin(a), -depth / 2)) for r, a in pts]
+    hi = [sub.verts.new((r * math.cos(a), r * math.sin(a), depth / 2)) for r, a in pts]
+    sub.faces.new(list(reversed(lo)))
+    sub.faces.new(hi)
+    n = len(pts)
+    for i in range(n):
+        sub.faces.new((lo[i], lo[(i + 1) % n], hi[(i + 1) % n], hi[i]))
+    bmesh.ops.recalc_face_normals(sub, faces=sub.faces)
+    L.add_mesh(bm, sub, m, mat)
+
+
+def disc(bm, r, depth, m, segs=40, mat=0, r2=None):
+    """A cylinder along local z, centred, by m."""
+    sub = bmesh.new()
+    bmesh.ops.create_cone(sub, cap_ends=True, segments=segs, radius1=r, radius2=r if r2 is None else r2, depth=depth)
+    L.add_mesh(bm, sub, m, mat)
+
+
+def along(axis_vec):
+    """A rotation taking local z to axis_vec."""
+    return Vector((0, 0, 1)).rotation_difference(Vector(axis_vec).normalized()).to_matrix().to_4x4()
+
+
+def pagoda(bm, h0, h1, z0, z1, n=10, side=8, sag=0.35, lift=0.12, mat=0, thick=0.04):
+    """A square roof (square to X and Y) from half side h0 at the eaves (z0) to h1 at the top (z1): its sides sag
+    (concave), its corners turn up at the eaves by `lift`. A thin underside closes it. Returns the rows of points."""
+    cs = Vector((1, 1, 0)), Vector((-1, 1, 0)), Vector((-1, -1, 0)), Vector((1, -1, 0))
+    rows = []
+    for i in range(n + 1):
+        t = i / n
+        h = h0 + (h1 - h0) * (1 - (1 - t) ** (1 + sag * 2))      # wide low, pulled in fast: concave, flared
+        z = z0 + (z1 - z0) * t
+        ring = []
+        for k in range(4):
+            a, b = cs[k], cs[(k + 1) % 4]
+            for j in range(side):
+                f = j / side
+                p = a.lerp(b, f)
+                corner = max(0.0, 1 - 2 * min(f, 1 - f)) ** 3        # 1 at a corner, 0 mid side
+                ring.append(Vector((p.x * h, p.y * h, z + lift * corner * (1 - t) ** 2)))
+        rows.append(ring)
+    m = len(rows[0])
+    sub = bmesh.new()
+    vs = [[sub.verts.new(p) for p in r] for r in rows]
+    under = [sub.verts.new(p - Vector((0, 0, thick))) for p in rows[0]]
+    for i in range(n):
+        for j in range(m):
+            sub.faces.new((vs[i][j], vs[i][(j + 1) % m], vs[i + 1][(j + 1) % m], vs[i + 1][j]))
+    for j in range(m):
+        sub.faces.new((under[j], under[(j + 1) % m], vs[0][(j + 1) % m], vs[0][j]))
+    sub.faces.new(list(reversed(under)))
+    top = sub.verts.new((0, 0, z1 + 0.01))
+    for j in range(m):
+        sub.faces.new((vs[n][j], vs[n][(j + 1) % m], top))
+    bmesh.ops.recalc_face_normals(sub, faces=sub.faces)
+    L.add_mesh(bm, sub, Matrix(), mat)
+    return rows
+
+
+def claw(bm, base, heading, r=0.07, toes=3, spread=50, length=0.26, mat=0):
+    """A bird's foot: toes curling down onto the ground from base, fanned round the outward bearing `heading`."""
+    for k in range(toes):
+        b = heading + spread * (k - (toes - 1) / 2)
+        d = L.bear(b)
+        p0 = Vector(base)
+        p3 = Vector((p0.x + d.x * length, p0.y + d.y * length, 0.02))
+        pts = L.bezier(p0, p0 + d * length * 0.35 + Vector((0, 0, 0.03)), p3 + Vector((0, 0, 0.06)) - d * 0.06, p3, 10)
+        L.tube(bm, pts, [r * (1.0 - 0.55 * i / 9) for i in range(10)], sides=8, mat=mat)
+        tip = L.bezier(p3 - d * 0.02, p3 + d * 0.03, p3 + d * 0.06, p3 + d * 0.08 - Vector((0, 0, 0.015)), 5)
+        L.tube(bm, tip, [r * 0.42, r * 0.34, r * 0.24, r * 0.14, r * 0.03], sides=6, mat=mat)
+
+
+def twigs(bm, uv, centre, n, r, length, spread=0.5, seed=0.0, mat=0, rise=1.0):
+    """A bundle of twigs: n stakes from round `centre`, leaning out, about `length` long."""
+    import random
+    rnd = random.Random(seed)
+    c = Vector(centre)
+    for k in range(n):
+        a = 2 * math.pi * (k + rnd.random() * 0.6) / n
+        out = Vector((math.cos(a), math.sin(a), 0))
+        d = (out * spread * (0.5 + rnd.random() * 0.6) + Vector((0, 0, rise))).normalized()
+        base = c + out * r * 1.2
+        W.stake(bm, uv, base, base + d * length * (0.7 + 0.5 * rnd.random()), r * (0.8 + 0.5 * rnd.random()),
+                sides=6, twist=rnd.random(), mat=mat, bulge=0.05)
+
+
+def mover(name, parent, loc, axis=(0, 0, 1)):
+    """A pivot for a moving part: its local z is `axis` (in the parent's space). Build the part's meshes in the pivot's
+    own space with parent=pivot (their outline shells follow); animate with spin(pivot, 'Z', turns) or slide()."""
+    e = L.empty(name, parent=parent, loc=loc)
+    e.rotation_euler = Vector((0, 0, 1)).rotation_difference(Vector(axis).normalized()).to_euler()
+    return e
+
+
+def slide(ob, d):
+    """Move ob by d (a vector, in its parent's space) from where it was built."""
+    if "rest_loc" not in ob:
+        ob["rest_loc"] = list(ob.location)
+    ob.location = Vector(ob["rest_loc"]) + Vector(d)
