@@ -3042,3 +3042,27 @@ describe("an Eye-ra with no wall to break", () => {
     expect(events.find((event) => event.kind === "splash")).toMatchObject({ moveId: "C5", hits: 1 });
   });
 });
+
+describe("the Quake Tower's drawing events (INFERNOQUAKETOWER.as)", () => {
+  it("draws its 33 strip cells as it winds up, then tells of the quake once, at the tower's reach", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 14, l: 1, X: 820, Y: 820 },
+      "2": { id: 2, t: 129, l: 3, X: 760, Y: 760 },
+    });
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({ kind: "fling", t: 0, x: 790, y: 790, r: 0, monsters: { C1: 4 } });
+    const cells: number[] = [];
+    const quakes: { tick: number; radius: number }[] = [];
+    for (let step = 0; step < 400 && !battle.over() && quakes.length === 0; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "towerCell" && event.towerId === 2) cells.push(event.cell);
+        if (event.kind === "towerQuake" && event.towerId === 2) quakes.push(event);
+      }
+    }
+    expect(cells).toEqual(Array.from({ length: 33 }, (_, cell) => cell));
+    expect(quakes).toHaveLength(1);
+    expect(quakes[0]?.radius).toBe(180);
+    expect(battle.state().towers.find((tower) => tower.id === 2)?.shots).toBe(1);
+  });
+});

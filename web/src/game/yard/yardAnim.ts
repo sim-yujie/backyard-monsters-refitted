@@ -169,6 +169,7 @@ const POLICIES = new Map<number, AnimPolicy>([
   [115, STATIC],
   [118, STATIC],
   [129, STATIC_FIXED],
+  [130, STATIC],
   [132, STATIC],
   [136, STATIC_FIXED],
   [137, STATIC_FIXED],

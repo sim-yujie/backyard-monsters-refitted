@@ -732,6 +732,8 @@ const SHADOW_ALPHA = 0.8;
 const SPLAT_COLOUR = 0x5da832;
 /** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
 const QUAKE_COLOUR = 0xf28500;
+/** The Quake Tower's `QuakeGraphic` line colour (`INFERNOQUAKETOWER.as`). */
+const TOWER_QUAKE_COLOUR = 0x6666cc;
 /** The special moves' bursts (issue #352): a splash, a Bolt's hop. */
 const SPLASH_COLOUR = 0xe8d44d;
 const BLINK_COLOUR = 0x9fd4ff;
@@ -2352,6 +2354,16 @@ export class AttackBattleLayer {
     }
     if (event.kind === "charge") {
       this.towerFx.onCharge(event.towerId, event.tick);
+      return;
+    }
+    if (event.kind === "towerCell") {
+      this.towerFx.onTowerCell(event.towerId, event.cell);
+      return;
+    }
+    if (event.kind === "towerQuake") {
+      // The Quake Tower's `QuakeGraphic`: rings out to its reach, in its blue.
+      const at = this.towerFx.onTowerQuake(event.towerId, event.tick);
+      if (at) this.spawnRing(event.tick, at, event.radius, TOWER_QUAKE_COLOUR);
       return;
     }
     if (event.kind === "splash") {

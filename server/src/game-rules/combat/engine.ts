@@ -909,6 +909,27 @@ export type BattleVisualEvent =
       readonly towerId: number;
     }
   | {
+      /**
+       * A Quake Tower's wind-up drew strip cell `cell` (`INFERNOQUAKETOWER.TickAttack`,
+       * `:107-122`): a cell every 6 ticks, the last few every tick, as it raises its
+       * hammer. Drawing only.
+       */
+      readonly kind: "towerCell";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly cell: number;
+    }
+  | {
+      /**
+       * A Quake Tower's quake went off (`DelayedFire`, `:137-159`): rings out to
+       * `radius` round the tower (`QuakeGraphic`) and the tower shakes. Drawing only.
+       */
+      readonly kind: "towerQuake";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly radius: number;
+    }
+  | {
       /** A creep landed a swing on a building or on another creep. */
       readonly kind: "hit";
       readonly tick: number;
@@ -5162,6 +5183,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tower.quakeFrame % QUAKE_FRAME_TICKS === 0 || tower.charge >= QUAKE_ANIM_FRAMES - 4;
     if (!step) return;
     if (tower.charge < QUAKE_ANIM_FRAMES) {
+      // `AnimFrame(false)` draws the cell before the tick moves on.
+      visual.push({ kind: "towerCell", tick, towerId: tower.building.id, cell: tower.charge });
       tower.charge += 1;
       return;
     }
@@ -5180,6 +5203,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const quakeTower = (tower: Tower, power: number): void => {
     countShot(tower.report);
+    visual.push({ kind: "towerQuake", tick, towerId: tower.building.id, radius: tower.range });
     const scan = towerScanPoint(tower.building);
     for (const hit of index.inRange(tower.range, scan.x, scan.y, QUAKE_TARGETS)) {
       const creep = hit.creep;

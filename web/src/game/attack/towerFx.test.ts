@@ -9,6 +9,7 @@ import { angleGap, cellBearing, muzzleOffset, rowOf } from "@/game/yard/turretAi
 import { readYard } from "@/game/yard/yardModel";
 import {
   FACING_HOLD_TICKS,
+  QUAKE_SHAKE_TICKS,
   LASER_IGNITE_TICKS,
   LASER_REACH_TICKS,
   RAIL_CHARGE_TICKS,
@@ -1227,6 +1228,65 @@ describe("TowerFx's new look", () => {
     fx.standDown();
     expect(fx.sparkCount).toBe(0);
     expect(sparks.children.filter((child) => child.visible)).toHaveLength(0);
+    fx.destroy();
+  });
+});
+
+describe("the Inferno towers in battle", () => {
+  it("turns the Inferno Blast and Magma Towers at 11.25 degrees a cell, as BTOWER.Rotate does", () => {
+    expect(facingCell(130, 0, 32)).toBe(0);
+    expect(facingCell(130, 90, 32)).toBe(8);
+    expect(facingCell(132, 180, 32)).toBe(16);
+    expect(facingCell(132, 359, 32)).toBe(31);
+  });
+
+  it("turns a Magma Tower toward the creep it shot", () => {
+    const { frames, fx } = setUp(132);
+    const south = creepAt(35, 235);
+    fx.onShot({ tick: 10, towerId: 1, creepId: 9, ix: south.ix, iy: south.iy }, south);
+    fx.update(10, () => south);
+    expect(frames.get(1)).toBe(8);
+    fx.destroy();
+  });
+
+  it("raises a Quake Tower's hammer cell by cell, then shakes it for ten ticks after its quake", () => {
+    const yard = readYard(yardOf(129));
+    const frames = new Map<number, number>();
+    const nudges: { tick: number; dx: number; dy: number }[] = [];
+    let now = 0;
+    const [info] = towersOf(yard);
+    if (!info) throw new Error("no quake tower");
+    expect(info.frames).toBeGreaterThan(0);
+    const fx = new TowerFx(
+      new Graphics(),
+      [info],
+      {
+        setAnimFrame: (id, _layer, frame) => frames.set(id, frame),
+        nudge: (_id, _layer, dx, dy) => nudges.push({ tick: now, dx, dy }),
+      },
+      { x: yard.bounds.originX, y: yard.bounds.originY },
+    );
+    fx.onTowerCell(1, 5);
+    expect(frames.get(1)).toBe(5);
+    fx.onTowerCell(1, 999);
+    expect(frames.get(1)).toBe(info.frames - 1);
+
+    const centre = fx.onTowerQuake(1, 100);
+    expect(centre).toEqual({
+      x: info.x + 35 - (info.y + 35) + yard.bounds.originX,
+      y: (info.x + 35 + info.y + 35) / 2 + yard.bounds.originY,
+    });
+    for (now = 100; now <= 100 + QUAKE_SHAKE_TICKS + 2; now += 1) fx.update(now, () => undefined);
+    const shaking = nudges.filter((nudge) => nudge.tick < 100 + QUAKE_SHAKE_TICKS);
+    expect(shaking).toHaveLength(QUAKE_SHAKE_TICKS);
+    for (const nudge of shaking) {
+      expect(Math.abs(nudge.dx)).toBeLessThanOrEqual(2);
+      expect(Math.abs(nudge.dy)).toBeLessThanOrEqual(2);
+    }
+    expect(shaking.some((nudge) => nudge.dx !== 0 || nudge.dy !== 0)).toBe(true);
+    // Then back in place, once, and still.
+    expect(nudges.slice(QUAKE_SHAKE_TICKS)).toEqual([{ tick: 100 + QUAKE_SHAKE_TICKS, dx: 0, dy: 0 }]);
+    expect(fx.onTowerQuake(42, 1)).toBeNull();
     fx.destroy();
   });
 });
