@@ -138,14 +138,22 @@ services:
       timeout: 5s
       retries: 3
 
-  # Redis stops at 160 MB, well under the container's 256 MB so a background
-  # save (which forks) is not killed for memory (security audit 2026-10-29).
-  # When full it drops only keys that expire anyway (volatile-lru): caches,
-  # presence, replays. Sign-in tokens, chat ignore lists and the attack and
-  # alert indexes have no expiry and are never dropped; allkeys-lru could drop
-  # a player's sign-in token and sign them out. If only those were left, new
-  # writes would fail instead; the health page shows Redis's memory against
-  # this cap.
+  # Redis stops at 160 MB (security audit 2026-10-29). That is 62% of the
+  # container's 256 MB: maxmemory counts only the data, and a background save
+  # forks, so the copy of pages written meanwhile, client buffers and
+  # fragmentation need the rest, or Docker kills Redis for memory.
+  #
+  # When full it drops only keys that expire (volatile-lru), least recently
+  # used first: stale caches, presence and old replays go long before a
+  # count still in use. Keys with no expiry (sign-in tokens, chat ignore
+  # lists, the attack and alert indexes) are never dropped; allkeys-lru could
+  # drop a player's sign-in token and sign them out. The trade-off: the
+  # sign-in back-off counts expire too, so under real memory pressure one
+  # could be dropped and that count start again. noeviction would avoid that
+  # but make every write fail once full, which stops logins and saves. The
+  # alert check warns at 75% of this cap and on any dropped key
+  # (services/alerts/alerts.ts). The request rate limits are kept in the game
+  # server's own memory, not here.
   redis:
     logging: *logging
     image: redis:8.10.1
