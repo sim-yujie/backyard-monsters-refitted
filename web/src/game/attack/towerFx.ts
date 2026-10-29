@@ -304,8 +304,6 @@ export const FACING_HOLD_TICKS = 30;
  * 4 frames (8 ticks), so a gap past this means the charge is spent.
  */
 const TESLA_HOLD_TICKS = 12;
-/** Ticks from a charge's start to its first possible zap: the 32 frames of charge. */
-const TESLA_CHARGE_TICKS = TESLA_CHARGE_END * TESLA_TICKS_PER_FRAME;
 /**
  * Ticks between steps of a Monster Bunker's shutters: its `TickFast` moves
  * them a cell each frame of the 40 fps stage (`BUILDING22.as:433-455`), and
@@ -704,6 +702,11 @@ interface TowerState {
    */
   restTick: number;
   rearmBy: number;
+  /**
+   * The Classic Tesla wound down to rest: the Flash one leaves its last
+   * wind-down cell up then, drawing nothing for cell 0 (`BUILDING25.as:199-201`).
+   */
+  wound: boolean;
   /** The charge the Tesla's last zap belonged to, so the first of each is told (new look). */
   zapCharge: number;
   /** The gun's kick after a shot (new look): when, and how far back at most, world px. */
@@ -716,8 +719,15 @@ interface TowerState {
   salvo: number;
   /** The tick a Monster Bunker last sent a monster out, which rolls its shutters up. */
   released: number;
-  /** The cell its shutters are on: 0 down, the strip's last up. */
+  /**
+   * Where its shutters are: 0 down, the strip's last cell up. The Classic
+   * door counts one past it, as the Flash `_animTick` reached 15 on a strip
+   * of 15 cells, and holds there a frame before it comes down.
+   */
   door: number;
+  /** The Classic door's way (`bunkerDoor`): open or shut, and since which tick. */
+  doorOpen: boolean;
+  doorSince: number;
 }
 
 /** What the effects ask of the yard renderer. */
@@ -811,6 +821,7 @@ export class TowerFx {
         chargeTick: Number.NEGATIVE_INFINITY,
         restTick: Number.NEGATIVE_INFINITY,
         rearmBy: Number.NEGATIVE_INFINITY,
+        wound: false,
         chargePending: false,
         zapCharge: Number.NaN,
         recoil: null,
@@ -819,6 +830,8 @@ export class TowerFx {
         salvo: 0,
         released: Number.NEGATIVE_INFINITY,
         door: 0,
+        doorOpen: false,
+        doorSince: Number.NEGATIVE_INFINITY,
       });
     }
   }
@@ -860,6 +873,17 @@ export class TowerFx {
   onRelease(buildingId: number, tick: number): void {
     const tower = this.towers.get(buildingId);
     if (tower) tower.released = Math.max(tower.released, tick);
+  }
+
+  /**
+   * A Monster Bunker's door opened or shut on `tick` (the engine's
+   * `bunkerDoor`): the Classic look moves its Flash door by it.
+   */
+  onDoor(buildingId: number, tick: number, open: boolean): void {
+    const tower = this.towers.get(buildingId);
+    if (!tower) return;
+    tower.doorOpen = open;
+    tower.doorSince = tick;
   }
 
   /** A tower's splash radius in cartesian units: 0 for none, or a tower this does not know. */
@@ -1073,10 +1097,13 @@ export class TowerFx {
       tower.chargeTick = Number.NEGATIVE_INFINITY;
       tower.restTick = Number.NEGATIVE_INFINITY;
       tower.rearmBy = Number.NEGATIVE_INFINITY;
+      tower.wound = false;
       tower.tesla = TESLA_IDLE;
       if (tower.info.type === 25 && tower.info.frames > 0) this.setCell(tower, TESLA_IDLE.cell);
       tower.released = Number.NEGATIVE_INFINITY;
       tower.door = 0;
+      tower.doorOpen = false;
+      tower.doorSince = Number.NEGATIVE_INFINITY;
       if (tower.info.type === BUNKER_TYPE && tower.info.frames > 1) this.setCell(tower, 0);
       if (tower.recoil) this.host.nudge?.(tower.info.id, 0, 0, 0);
       tower.recoil = null;
@@ -1110,7 +1137,7 @@ export class TowerFx {
     const { info } = tower;
     if (info.type === 25) {
       this.stepCoil(tower, tick, elapsed);
-      if (info.frames > 0) this.setCell(tower, tower.tesla.cell);
+      if (info.frames > 0) this.setCell(tower, tower.wound ? TESLA_WIND_END - 1 : tower.tesla.cell);
       return;
     }
     if (info.type === BUNKER_TYPE) {
@@ -1337,13 +1364,15 @@ export class TowerFx {
       if (state.phase === "idle") {
         if (!tower.chargePending || at < tower.chargeTick) continue;
         tower.chargePending = false;
+        tower.wound = false;
         state = teslaTick(state, true);
         continue;
       }
-      const zapping =
-        at - tower.lastShotTick <= TESLA_HOLD_TICKS ||
-        at - tower.chargeTick <= TESLA_CHARGE_TICKS + TESLA_HOLD_TICKS;
-      state = teslaTick(state, zapping);
+      // The Flash strip is the engine's own: it loops until the engine stops zapping.
+      const zapping = !(tower.restTick >= tower.chargeTick && at > tower.restTick);
+      const next = teslaTick(state, zapping);
+      if (state.phase === "wind" && next.phase === "idle") tower.wound = true;
+      state = next;
     }
     tower.tesla = state;
   }
@@ -1391,12 +1420,19 @@ export class TowerFx {
    */
   private stepDoor(tower: TowerState, tick: number, elapsed: number): void {
     const top = tower.info.frames - 1;
+    const classic = this.look === "classic";
+    // The Flash door counts to 15 on its strip of 15 cells (`BUILDING22.as:440-443`).
+    const most = classic ? top + 1 : top;
     for (let at = tick - elapsed + 1; at <= tick; at += 1) {
       if (at % BUNKER_TICKS_PER_CELL !== 0) continue;
-      const open = at >= tower.released && at - tower.released <= BUNKER_HOLD_TICKS;
-      tower.door = Math.max(0, Math.min(top, tower.door + (open ? 1 : -1)));
+      const open = classic
+        ? at >= tower.doorSince
+          ? tower.doorOpen
+          : !tower.doorOpen && Number.isFinite(tower.doorSince)
+        : at >= tower.released && at - tower.released <= BUNKER_HOLD_TICKS;
+      tower.door = Math.max(0, Math.min(most, tower.door + (open ? 1 : -1)));
     }
-    this.setCell(tower, tower.door);
+    this.setCell(tower, Math.min(tower.door, top));
   }
 
   private setCell(tower: TowerState, cell: number): void {

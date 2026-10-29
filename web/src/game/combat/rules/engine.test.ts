@@ -1947,6 +1947,39 @@ describe("a bunker's reach (issue #91)", () => {
     expect(sent(290)).toEqual([{ kind: "release", tick: 30, buildingId: 1 }]);
     expect(sent(350)).toEqual([]);
   });
+
+  it("tells the renderer when the Flash door opens and shuts: open while attackers are in range or its monsters are out (drawing only)", () => {
+    const doors = (harvesterAt: number) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+      });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+      battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
+      const out: { tick: number; open: boolean; defenders: number }[] = [];
+      let released = Infinity;
+      for (let step = 0; step < 1500 && !battle.over(); step += 1) {
+        battle.step();
+        const defenders = battle.creeps().filter((creep) => creep.friendly).length;
+        for (const event of battle.recentEvents(battle.tick - 1)) {
+          if (event.kind === "release") released = Math.min(released, event.tick);
+          if (event.kind === "bunkerDoor") out.push({ tick: event.tick, open: event.open, defenders });
+        }
+      }
+      return { out, released };
+    };
+    const { out, released } = doors(290);
+    // It opens as the attacker comes in range, by the time the first defender comes out.
+    expect(out[0]?.open).toBe(true);
+    expect(out[0]!.tick).toBeLessThanOrEqual(released);
+    // Never shut while one of its monsters is out.
+    for (const change of out) if (!change.open) expect(change.defenders).toBe(0);
+    // Out of range, it stays shut till the attacker walks in.
+    const far = doors(350);
+    expect(far.out[0]?.open).toBe(true);
+    expect(far.out[0]!.tick).toBeGreaterThan(30);
+    expect(far.out[0]!.tick).toBeLessThanOrEqual(far.released);
+  });
 });
 
 describe("a bunker's losses (issue #130)", () => {

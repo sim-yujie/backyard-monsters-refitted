@@ -920,6 +920,16 @@ export type BattleVisualEvent =
       readonly rearmBy: number | null;
     }
   | {
+      /**
+       * A Monster Bunker's door opens or shuts (drawing only), as the Flash
+       * one's `TickFast` drove it (`BUILDING22.as:433-455`).
+       */
+      readonly kind: "bunkerDoor";
+      readonly tick: number;
+      readonly buildingId: number;
+      readonly open: boolean;
+    }
+  | {
       /** A bunker sent a monster out: a Monster Bunker's shutters roll up (drawing only). */
       readonly kind: "release";
       readonly tick: number;
@@ -1479,6 +1489,8 @@ interface Bunker {
   pool: Map<string, number>;
   dispatched: number;
   tickNumber: number;
+  /** Whether its door is open, for the drawing ({@link BattleVisualEvent} `bunkerDoor`). */
+  doorOpen: boolean;
 }
 
 /** The drop radius a payload earns: `max(200, bucket / 4) / 2` (`ATTACK.as:667-671`). */
@@ -1747,7 +1759,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           if (count > 0) pool.set(id, count);
         }
       }
-      bunkers.push({ building, pool, dispatched: 0, tickNumber: 0 });
+      bunkers.push({ building, pool, dispatched: 0, tickNumber: 0, doorOpen: false });
       bunkerReports.set(building.id, {
         id: building.id,
         level: building.level,
@@ -3029,6 +3041,55 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (creep) releaseFromDecoy(creep, before);
     }
     ejectForDecoy(drop, range, before);
+  };
+
+  /** Whether a landed Decoy reaches `building` (`BUILDING22.DecoyInRange`, `:241-254`). */
+  const decoyOver = (building: EngineBuilding): boolean => {
+    const live = decoy;
+    if (!live || tick < live.plan.landsAt || tick >= live.plan.explodesAt) return false;
+    const at = screenOf(building.x, building.y);
+    const dx = at.x - live.drop.x;
+    const dy = at.y + building.middle - live.drop.y;
+    return decoyTouchesBuilding(live.plan.range, dx, dy, propsSizeOf(building.type));
+  };
+
+  /**
+   * The Monster Bunkers' doors, once a frame (drawing only, {@link BattleVisualEvent}
+   * `bunkerDoor`): as `BUILDING22.TickFast` (`:433-455`), a door is open while
+   * its bunker has monsters, in or out, and has attackers in its range, monsters
+   * out, or a Decoy over it, and shut otherwise. Only a change is told.
+   */
+  const tickBunkerDoors = (): void => {
+    if (tick % 2 !== 0) return;
+    let out: Map<number, number> | null = null;
+    for (const bunker of bunkers) {
+      const building = bunker.building;
+      if (building.type === HOUSING_BUNKER_TYPE) continue;
+      let open = false;
+      if (building.hp > 0) {
+        if (!out) {
+          out = new Map();
+          for (const creep of creeps) {
+            if (creep.homeBunker < 0 || creep.gone || creep.hp <= 0) continue;
+            out.set(creep.homeBunker, (out.get(creep.homeBunker) ?? 0) + 1);
+          }
+        }
+        const outside = out.get(building.id) ?? 0;
+        let inside = 0;
+        for (const count of bunker.pool.values()) inside += count;
+        if (outside > 0) open = true;
+        else if (inside > 0) {
+          const range = towerStats(building.type, building.level, yard.kind)?.range ?? 0;
+          const scan = towerScanPoint(building);
+          open =
+            (range > 0 && index.inRange(range, scan.x, scan.y, oldStyleTargets(1)).length > 0) ||
+            decoyOver(building);
+        }
+      }
+      if (open === bunker.doorOpen) continue;
+      bunker.doorOpen = open;
+      visual.push({ kind: "bunkerDoor", tick, buildingId: building.id, open });
+    }
   };
 
   /* ── The Vacuum (Inferno WP 6.6, `vacuum.ts`) ──────────────────────────── */
@@ -6146,6 +6207,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     tickPutty();
     tickDecoy();
+    tickBunkerDoors();
     tickVacuum();
     for (const creep of creeps) {
       tickCreep(creep);

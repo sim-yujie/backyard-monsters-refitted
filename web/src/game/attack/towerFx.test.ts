@@ -248,7 +248,7 @@ describe("towersOf", () => {
 const drawn = (graphics: Graphics): number =>
   (graphics.context as unknown as { instructions: unknown[] }).instructions.length;
 
-const setUp = (type: number) => {
+const setUp = (type: number, look?: "full" | "low") => {
   const yard = readYard(yardOf(type));
   const frames = new Map<number, number>();
   const graphics = new Graphics();
@@ -258,6 +258,7 @@ const setUp = (type: number) => {
     info,
     { setAnimFrame: (id, _layer, frame) => frames.set(id, frame) },
     { x: yard.bounds.originX, y: yard.bounds.originY },
+    look ? { look } : undefined,
   );
   return { yard, frames, graphics, fx };
 };
@@ -492,17 +493,32 @@ describe("TowerFx", () => {
     // A frame is two ticks: ten ticks on, five cells on.
     fx.update(20, () => target);
     expect(frames.get(1)).toBe(6);
-    // The charge is done 32 frames in; the zaps keep the loop going.
-    for (let tick = 74; tick <= 120; tick += 8) {
-      fx.onShot({ tick, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+    // The charge is done 32 frames in; the loop runs as long as the engine
+    // zaps, through zaps at a target already dead that show no bolt (78-110).
+    for (let tick = 74; tick <= 120; tick += 2) {
+      if (tick === 74 || tick >= 112) {
+        if (tick % 8 === 2) fx.onShot({ tick, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+      }
       fx.update(tick, () => target);
       const looping = frames.get(1) ?? -1;
       expect(looping).toBeGreaterThanOrEqual(TESLA_CHARGE_END);
       expect(looping).toBeLessThan(TESLA_LOOP_END);
     }
-    // Long after the last zap the wind-down has run out and the cell is 0.
+    // The engine stops zapping on tick 122; the strip winds down a cell every second frame.
+    fx.onCoilRest(1, 122, 300);
+    fx.update(122, () => target);
+    const last = frames.get(1) ?? -1;
+    fx.update(126, () => undefined);
+    expect(frames.get(1)).toBe(last);
+    fx.update(130, () => undefined);
+    expect(frames.get(1)).toBe(last + 1);
+    // Wound down, the Flash Tesla leaves its last cell up (it draws nothing for cell 0).
     fx.update(300, () => undefined);
-    expect(frames.get(1)).toBe(0);
+    expect(frames.get(1)).toBe(TESLA_WIND_END - 1);
+    // Its next charge starts the strip again from cell 1.
+    fx.onCharge(1, 310);
+    fx.update(310, () => undefined);
+    expect(frames.get(1)).toBe(1);
     fx.destroy();
   });
 
@@ -513,6 +529,7 @@ describe("TowerFx", () => {
     fx.onCharge(1, 2);
     fx.update(30, () => undefined);
     expect(drawn(graphics)).toBeGreaterThan(0);
+    fx.onCoilRest(1, 100, null);
     fx.update(400, () => undefined);
     expect(drawn(graphics)).toBe(0);
     fx.destroy();
@@ -1293,7 +1310,7 @@ describe("TowerFx's new look", () => {
 
 describe("the Monster Bunker's shutters", () => {
   it("roll up a cell a frame as it sends monsters out, and down again a second after the last", () => {
-    const { frames, fx } = setUp(22);
+    const { frames, fx } = setUp(22, "full");
     fx.update(0, () => undefined);
     expect(frames.get(1)).toBe(0);
     // Sent out on tick 10: the shutters start up then, a cell every frame (two ticks), and stop at the top.
@@ -1314,12 +1331,32 @@ describe("the Monster Bunker's shutters", () => {
     expect(frames.get(1)).toBe(0);
   });
 
-  it("move the Flash bunker's door the same way with the Classic look, and shut it when the battle ends", () => {
+  it("move the Flash bunker's door as the Flash one moved, with the Classic look, and shut it when the battle ends", () => {
     setClassicLook(true);
     const { frames, fx } = setUp(22);
+    // A monster out moves nothing by itself: the door follows the engine's door.
     fx.onRelease(1, 0);
     fx.update(40, () => undefined);
+    expect(frames.get(1)).toBe(0);
+    // Open on tick 50 (attackers in range): a cell a frame up to the strip's last, 14.
+    fx.onDoor(1, 50, true);
+    fx.update(50, () => undefined);
+    expect(frames.get(1)).toBe(1);
+    fx.update(76, () => undefined);
     expect(frames.get(1)).toBe(14);
+    fx.update(200, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    // Shut on tick 202: Flash's count stood at 15 past the strip, so the first frame still shows 14.
+    fx.onDoor(1, 202, false);
+    fx.update(202, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    fx.update(204, () => undefined);
+    expect(frames.get(1)).toBe(13);
+    fx.update(300, () => undefined);
+    expect(frames.get(1)).toBe(0);
+    fx.onDoor(1, 310, true);
+    fx.update(320, () => undefined);
+    expect(frames.get(1)).toBe(6);
     fx.standDown();
     expect(frames.get(1)).toBe(0);
   });
