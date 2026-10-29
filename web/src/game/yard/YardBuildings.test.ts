@@ -349,7 +349,8 @@ describe("YardBuildings: loading the pictures", () => {
 
       buildings.draw(everywhere);
       const tops = asked.slice(0, 3);
-      expect(tops.every((url) => /\/top\.\d/.test(url))).toBe(true);
+      // A 3D tower's own picture is its body (`body.t1@2x.webp`), not a `top`.
+      expect(tops.every((url) => /\/(top\.\d|body\.t\d)/.test(url))).toBe(true);
       expect(asked.length).toBeGreaterThan(3);
       buildings.destroy();
     } finally {
