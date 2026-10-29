@@ -1,13 +1,17 @@
-"""Exports the 3D Cannon, Sniper and Laser tiers (owner, 28 Oct 2026: "I much prefer the 3D variant") into the game.
+"""Exports the 3D towers' tiers (owner, 28 Oct 2026: "I much prefer the 3D variant") into the game.
 
-    python -I web/tools/tower-tiers/export3d.py <towers-3d worktree>
+    python -I web/tools/tower-tiers/export3d.py <3D art worktree> [tower ...]
 
-Reads `art-samples/<tower>-3d/t1|t2|t3/` from the 3D worktree (branch art/towers-3d; the Cannon's tier 1 is `t1/`, the
-steel bands) and writes, per tower and tier, into `server/public/assets/buildings/<folder>/`:
+Reads each tier's pieces from `art-samples/<set>-3d/` in the 3D worktree (branch art/buildings-3d, which holds the
+Cannon, Sniper and Laser of art/towers-3d too; `SETS` names each tier's folder: the Cannon's tier 1 is `t1/`, the steel
+bands; the Inferno Blast Tower's levels are `inferno-3d/t1`, `t1-look2` and `t1-look3`) and writes, per tower and tier,
+into `server/public/assets/buildings/<folder>/`. Naming towers writes only theirs; `turretAimData.ts` is always written
+whole.
 
 - `body.t<N>@2x.webp`: the tower with its turret taken off. The Cannon's `body/body-4x.png` sits on the painted
   canvas (the kit's `canvas("cannon")`: origin 73 px from the left, 69 px above the bottom), so it is cut and halved
-  here; the Sniper's and Laser's `body@2x.png` already stand where the painted `body.t<N>@2x.webp` did.
+  here; the Sniper's and Laser's `body@2x.png` already stand where the painted `body.t<N>@2x.webp` did, and the later
+  sets' (Aerial Defense, Railgun, Spurtz, Inferno) where their `strip.json`'s `body_entry` says.
 - `turret.t<N>@2x.webp`: the turret strip, every cell cut to what any cell covers and set on whole 1x pixels. One row
   of headings at one fixed tilt (the Cannon, owner 28 Oct 2026: "Rather than overcomplicating the cannon barrel, can't
   we do calculation and modify the projectile direction rather than turning the head up and down"), or for a Laser
@@ -23,7 +27,9 @@ barrel points where the shot goes and starts the shot at its muzzle (`turretAim.
 arc from its raised barrel. The Cannon has no front layer: the parts of its body in front of the barrel are cut out of
 each cell.
 
-The painted shadows (`shadow.t<N>.jpg`) and lifts are kept: each 3D tier was fitted to its painted one.
+The painted shadows (`shadow.t<N>.jpg`) and lifts are kept: each 3D tier was fitted to its painted one. The towers
+never painted (Spurtz, Inferno) stand on their Flash shadow. The Inferno's Blast Tower and Sharpshooter share their
+types with the Cannon and Sniper, so their aims are keyed `i<type>.t<tier>`.
 """
 import json
 import sys
@@ -36,7 +42,21 @@ ART = Path(sys.argv[1]).resolve() / "art-samples"
 ROOT = Path(__file__).resolve().parents[3]
 ASSETS = ROOT / "server" / "public" / "assets" / "buildings"
 AIM_TS = ROOT / "web" / "src" / "game" / "yard" / "turretAimData.ts"
-TOWERS = {"cannon": (20, "cannontower"), "sniper": (21, "snipertower"), "laser": (23, "lasertower")}
+# Each tower: its type, the folder its art goes to, and the key of its aims (`<type>`, or `i<type>` in the Inferno).
+TOWERS = {"cannon": (20, "cannontower", "20"), "sniper": (21, "snipertower", "21"), "laser": (23, "lasertower", "23"),
+          "aerial": (115, "flaktower", "115"), "railgun": (118, "railguntower", "118"),
+          "spurtz": (136, "spurtztower", "136"), "blackspurtz": (137, "blackspurtztower", "137"),
+          "blast": (20, "icannontower", "i20"), "sharpshooter": (21, "isnipertower", "i21"),
+          "magma": (132, "imagmatower", "132")}
+# Where each tower's tiers are in the 3D worktree: its `<set>-3d` folder and each tier's folder in it. The Spurtz
+# Cannons have one look for every level; the Inferno's three towers one per tier (`inferno-3d/LEVELS.md`).
+TIERS3 = {1: "t1", 2: "t2", 3: "t3"}
+SETS = {"cannon": ("cannon", TIERS3), "sniper": ("sniper", TIERS3), "laser": ("laser", TIERS3),
+        "aerial": ("aerial", TIERS3), "railgun": ("railgun", TIERS3),
+        "spurtz": ("spurtz", {1: "t1"}), "blackspurtz": ("spurtz", {1: "t2"}),
+        "blast": ("inferno", {1: "t1", 2: "t1-look2", 3: "t1-look3"}),
+        "sharpshooter": ("inferno", {1: "t2", 2: "t2-look2", 3: "t2-look3"}),
+        "magma": ("inferno", {1: "t3", 2: "t3-look2", 3: "t3-look3"})}
 # The painted bodies the Sniper's and Laser's `body@2x.png` stand on, 1x from the origin (`buildingArtTiers.ts`).
 PAINTED_BODY = {"sniper": {1: (-40, -37), 2: (-40, -70), 3: (-40, -86)},
                 "laser": {1: (-33, -29), 2: (-33, -54), 3: (-33, -71)}}
@@ -87,7 +107,9 @@ def by_tilt(value, depth):
 def read(tower, tier):
     """The tier's pieces: body (2x picture, 1x top-left), cells [row][heading] (2x), the pivot in a cell (2x) and from
     the origin (1x), and what `strip.json` says of where each cell points."""
-    src = ART / f"{tower}-3d" / f"t{tier}"
+    folder, tiers = SETS[tower]
+    src = ART / f"{folder}-3d" / tiers[tier]
+    entry = json.loads((src / "strip.json").read_text()) if (src / "strip.json").exists() else {}
     if tower == "cannon":
         info = json.loads((src / "strip.json").read_text())
         sheet = Image.open(src / "strip@2x.png").convert("RGBA")
@@ -105,6 +127,14 @@ def read(tower, tier):
         info = json.loads((src / "strip.json").read_text())
         sheet = Image.open(src / ("strip@2x.png" if (src / "strip@2x.png").exists() else "turret@2x.png")).convert("RGBA")
         body, body_at = Image.open(src / "body@2x.png").convert("RGBA"), PAINTED_BODY[tower][tier]
+        cw, ch = info["cell_w_2x"], info["cell_h_2x"]
+        in_cell = info["pivot_in_cell_2x"]
+        pivot = tuple(info["pivot"])
+    elif "body_entry" in entry:
+        # The later sets: the body stands where `body_entry` says, the cells cut as the Sniper's.
+        info = entry
+        sheet = Image.open(src / "strip@2x.png").convert("RGBA")
+        body, body_at = Image.open(src / "body@2x.png").convert("RGBA"), tuple(entry["body_entry"][1:3])
         cw, ch = info["cell_w_2x"], info["cell_h_2x"]
         in_cell = info["pivot_in_cell_2x"]
         pivot = tuple(info["pivot"])
@@ -130,8 +160,9 @@ def read(tower, tier):
                 elevation=info.get("camera_elevation_deg") or info.get("elevation_deg"))
 
 
-def export(tower, tier):
-    type_, folder = TOWERS[tower]
+def export(tower, tier, write=True):
+    """The tier's row and aims; its files are written only with `write`."""
+    type_, folder, _ = TOWERS[tower]
     out = ASSETS / folder
     p = read(tower, tier)
     cells = p["cells"]
@@ -153,11 +184,13 @@ def export(tower, tier):
         for c, cell in enumerate(row):
             strip.alpha_composite(cell.crop((bx0, by0, bx0 + w, by0 + h)), (c * w, r * h))
     turret_name = f"turret.t{tier}@2x.webp"
-    strip.save(out / turret_name, "WEBP", quality=85, alpha_quality=100, method=6)
+    if write:
+        strip.save(out / turret_name, "WEBP", quality=85, alpha_quality=100, method=6)
     sx, sy = (tx + bx0) // 2, (ty + by0) // 2
 
     body_name = f"body.t{tier}@2x.webp"
-    p["body"].save(out / body_name, "WEBP", quality=90, alpha_quality=100, method=6)
+    if write:
+        p["body"].save(out / body_name, "WEBP", quality=90, alpha_quality=100, method=6)
     bx, by = p["body_at"]
 
     # The still: the body with the level row's turret at the resting heading over it.
@@ -173,7 +206,8 @@ def export(tower, tier):
     cx0, cy0 = cx0 - cx0 % 2, cy0 - cy0 % 2
     cx1, cy1 = cx1 + cx1 % 2, cy1 + cy1 % 2
     top_name = f"top.t{tier}@2x.webp"
-    still.crop((cx0, cy0, cx1, cy1)).save(out / top_name, "WEBP", quality=90, alpha_quality=100, method=6)
+    if write:
+        still.crop((cx0, cy0, cx1, cy1)).save(out / top_name, "WEBP", quality=90, alpha_quality=100, method=6)
 
     pivot = [round(v, 2) for v in p["pivot"]]
     row = dict(tower=tower, type=type_, tier=tier, folder=folder,
@@ -182,8 +216,8 @@ def export(tower, tier):
                strip=[turret_name, sx, sy, w // 2, h // 2, rows * cols],
                **({"columns": cols} if rows > 1 else {}),
                pivot=pivot,
-               bytes=sum((out / n).stat().st_size for n in (top_name, body_name, turret_name)))
-    elevation = p["elevation"] or ELEVATION[tower]
+               **({"bytes": sum((out / n).stat().st_size for n in (top_name, body_name, turret_name))} if write else {}))
+    elevation = p["elevation"] or ELEVATION.get(tower, 30.0)
     # The game shows cell k of a row for ground bearing 360k / cols (`turretAim.bearingCell`): the art's measured
     # ground directions must be those bearings seen from its camera.
     for r in p["ground_deg"] or []:
@@ -214,7 +248,8 @@ def export(tower, tier):
 AIM_HEAD = '''/**
  * Where each cell of the 3D towers' turret strips points, and where its muzzle
  * is: written by `web/tools/tower-tiers/export3d.py` from the 3D art's
- * `strip.json` (branch art/towers-3d), keyed by `<type>.t<tier>`. Do not edit
+ * `strip.json` (branch art/buildings-3d), keyed by `<type>.t<tier>` (the
+ * Inferno's Blast Tower and Sharpshooter by `i<type>.t<tier>`). Do not edit
  * by hand. `turretAim.ts` reads it.
  */
 
@@ -224,12 +259,15 @@ export const TURRET_AIM = {
 '''
 
 if __name__ == "__main__":
+    chosen = sys.argv[2:] or list(TOWERS)
+    assert all(name in TOWERS for name in chosen), chosen
     lines = []
     for name in TOWERS:
-        for tier in (1, 2, 3):
-            row, aim = export(name, tier)
-            print(json.dumps(row))
-            lines.append(f'  "{TOWERS[name][0]}.t{tier}": {json.dumps(aim, separators=(", ", ": "))},')
+        for tier in SETS[name][1]:
+            row, aim = export(name, tier, write=name in chosen)
+            if name in chosen:
+                print(json.dumps(row))
+            lines.append(f'  "{TOWERS[name][2]}.t{tier}": {json.dumps(aim, separators=(", ", ": "))},')
     AIM_TS.write_text(AIM_HEAD + "\n".join(lines) + "\n} satisfies Readonly<Record<string, TurretAim>>;\n",
                       encoding="utf-8")
     print(f"# wrote {AIM_TS.name}; run prettier on it", file=sys.stderr)

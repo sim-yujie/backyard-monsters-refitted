@@ -220,15 +220,27 @@ describe("towersOf", () => {
     expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);
     // The 3D Laser: 32 headings for each of 5 tilts of its head (only the Cannon keeps one tilt).
     expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(160);
-    expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(30);
-    expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(30);
+    expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(32);
+    expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(32);
     // The new Cannon's barrel turns too, though the Flash one never did; the Tesla tiers stay still pictures.
     expect(towersOf(readYard(yardOf(20)))[0]?.frames).toBe(32);
     expect(towersOf(readYard(yardOf(25)))[0]?.frames).toBe(0);
-    // The 3D towers know where each cell points and turn about their pivot; the painted ones do not.
-    for (const type of [20, 21, 23]) expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeDefined();
+    // The 3D towers know where each cell points and turn about their pivot.
+    for (const type of [20, 21, 23, 115, 118, 132, 136, 137]) {
+      expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeDefined();
+    }
     expect(towersOf(readYard(yardOf(20)))[0]?.pivot).toEqual({ x: 0, y: 14.5 });
-    for (const type of [115, 118]) expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeUndefined();
+  });
+
+  it("gives the Inferno's Blast Tower and Sharpshooter their own 3D turret, not the Cannon's and Sniper's", () => {
+    for (const type of [20, 21]) {
+      const [top] = towersOf(readYard(yardOf(type)));
+      const [inferno] = towersOf(readYard({ ...yardOf(type), type: "inferno" }));
+      expect(inferno?.frames, `type ${type}`).toBe(32);
+      expect(inferno?.aim, `type ${type}`).toBeDefined();
+      expect(inferno?.aim, `type ${type}`).not.toBe(top?.aim);
+      expect(inferno?.pivot, `type ${type}`).not.toEqual(top?.pivot);
+    }
   });
 });
 
@@ -567,7 +579,8 @@ describe("TowerFx", () => {
     const whole = fired({ fromIx: 15, fromIy: 15, toIx: 1615, toIy: 1615 });
     expect(whole.height).toBeGreaterThanOrEqual(1600);
     expect(whole.height).toBeLessThan(1620);
-    expect(whole.width).toBeLessThan(40);
+    // Narrow: the beam, and beside it the muzzle flash at the 3D barrel's tip, turned onto the creep.
+    expect(whole.width).toBeLessThan(50);
     // Without one, the trail stops just past its target.
     expect(fired().height).toBeLessThan(400);
   });
@@ -913,6 +926,8 @@ describe("TowerFx's new look", () => {
   });
 
   it("turns the Railgun onto a creep as it comes into range, a little a tick, before any shot", async () => {
+    // The Flash strip (the Classic look's art) under the new look's effects: the 3D one turns by its aim.
+    setClassicLook(true);
     const { fx, frames } = await newLookSetUp(118);
     // Well out of range (300 at level 1, watched to 300 + AIM_WATCH_MARGIN): the gun stays put.
     const far = creepAt(35, 35 + 400);

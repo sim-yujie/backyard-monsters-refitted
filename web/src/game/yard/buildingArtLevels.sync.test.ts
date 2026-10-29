@@ -7,7 +7,12 @@ import {
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { ArtState, resolveArt } from "./buildingArt";
 import { setClassicLook } from "@/game/classicLook";
-import { MODERN_TOWERS, TOWER_TIER_ART, TOWN_HALL_ART } from "./buildingArtTiers";
+import {
+  INFERNO_TOWER_TIER_ART,
+  MODERN_TOWERS,
+  TOWER_TIER_ART,
+  TOWN_HALL_ART,
+} from "./buildingArtTiers";
 
 /**
  * The server sends someone else's yard with only the level each building's
@@ -53,9 +58,18 @@ describe("the server's art levels match the web art table", () => {
 
   it("names the same tower tiers, for the towers the Modern look shows", () => {
     const tiers = Object.fromEntries(
-      MODERN_TOWERS.map((type) => [type, (TOWER_TIER_ART[type] ?? []).map((tier) => tier.from)]),
+      MODERN_TOWERS.map((type) => [
+        type,
+        (TOWER_TIER_ART[type] ?? INFERNO_TOWER_TIER_ART[type] ?? []).map((tier) => tier.from),
+      ]),
     );
     expect(TOWER_TIER_ART_LEVELS).toEqual(tiers);
+  });
+
+  it("splits an Inferno tower that shares a type as its namesake up top does", () => {
+    for (const [type, inferno] of Object.entries(INFERNO_TOWER_TIER_ART)) {
+      expect(inferno.map((tier) => tier.from)).toEqual(TOWER_TIER_ART_LEVELS[Number(type)]);
+    }
   });
 
   it("needs no tiers for the new Town Hall: it has a picture at every Flash step", () => {

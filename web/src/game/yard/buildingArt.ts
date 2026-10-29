@@ -1,6 +1,6 @@
 import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel, type ArtRow } from "./buildingArtData";
 import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
-import { tierArtFor } from "./buildingArtTiers";
+import { hasInfernoTiers, tierArtFor } from "./buildingArtTiers";
 import type { YardKind } from "./buildingCostData";
 
 /**
@@ -325,9 +325,11 @@ export const resolveArt = (
   // default and damaged alike; a destroyed one falls through to the Flash rubble.
   // A tower whose turret turns is its body with the turret's strip over it, and
   // the parts of the body in front of the turret (the Cannon's prongs) over that.
-  // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art.
-  const ownInfernoArt = kind === "inferno" && row.folder !== ROWS.get(type)?.folder;
-  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted);
+  // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art,
+  // unless the Inferno has tiers of its own for it (the Blast Tower, the Sharpshooter).
+  const ownInfernoArt =
+    kind === "inferno" && row.folder !== ROWS.get(type)?.folder && !hasInfernoTiers(type, kind);
+  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted, kind);
   if (tier) {
     const turret = tier.turret;
     const layers = turret ? (turret.front ? [turret.strip, turret.front] : [turret.strip]) : [];

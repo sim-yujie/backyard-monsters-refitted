@@ -28,16 +28,25 @@ export const BUILDING_ART_LEVELS: Readonly<Record<number, readonly number[]>> = 
 };
 
 /**
- * The tiers of the 3D towers players see with the Modern look, the Cannon,
- * Sniper and Laser (`MODERN_TOWERS` in `web/src/game/yard/buildingArtTiers.ts`):
- * tiers 2 and 3 from levels 4 and 7. The Flash towers, and the Classic look,
- * have one picture for every level. The towers whose painted tiers players
- * do not see yet are not named, so they still read 1 and give nothing away.
+ * The tiers of the 3D towers players see with the Modern look
+ * (`MODERN_TOWERS` in `web/src/game/yard/buildingArtTiers.ts`): tiers 2 and 3
+ * from levels 4 and 7, the six-level Magma Tower's from 3 and 5, and one
+ * picture for every level of the Spurtz Cannons. The Inferno's Blast Tower
+ * and Sharpshooter (20 and 21 there, and 130) split as the Cannon and Sniper
+ * do. The Flash towers, and the Classic look, have one picture for every
+ * level. The towers whose painted tiers players do not see yet are not
+ * named, so they still read 1 and give nothing away.
  */
 export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   20: [1, 4, 7],
   21: [1, 4, 7],
   23: [1, 4, 7],
+  115: [1, 4, 7],
+  118: [1, 4, 7],
+  130: [1, 4, 7],
+  132: [1, 3, 5],
+  136: [1],
+  137: [1],
 };
 
 /**

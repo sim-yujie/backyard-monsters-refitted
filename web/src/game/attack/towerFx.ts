@@ -22,6 +22,7 @@ import {
 } from "@/game/combat/rules";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { tierArtFor, tierLift } from "@/game/yard/buildingArtTiers";
+import type { YardKind } from "@/game/yard/buildingCostData";
 import { arcLift, bearingCell, cellBearing, muzzleOffset, shellArc, tiltRow, type TurretAim } from "@/game/yard/turretAim";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -270,8 +271,8 @@ export interface TowerInfo {
 }
 
 /** A tower's 3D turret aim and pivot, or nothing for a tower without one. */
-const turretOf = (type: number, level: number): Pick<TowerInfo, "aim" | "pivot"> => {
-  const turret = tierArtFor(type, level)?.turret;
+const turretOf = (type: number, level: number, kind: YardKind): Pick<TowerInfo, "aim" | "pivot"> => {
+  const turret = tierArtFor(type, level, kind)?.turret;
   if (!turret?.aim) return {};
   return { aim: turret.aim, pivot: { x: turret.pivot[0], y: turret.pivot[1] } };
 };
@@ -288,9 +289,9 @@ export const towersOf = (yard: Yard): TowerInfo[] =>
       y: building.y,
       worldX: building.worldX,
       worldY: building.worldY,
-      frames: resolveArt(building.type, building.level, ArtState.DEFAULT)?.anims[0]?.frames ?? 0,
-      lift: tierLift(building.type, building.level),
-      ...turretOf(building.type, building.level),
+      frames: resolveArt(building.type, building.level, ArtState.DEFAULT, yard.kind)?.anims[0]?.frames ?? 0,
+      lift: tierLift(building.type, building.level, yard.kind),
+      ...turretOf(building.type, building.level, yard.kind),
     }));
 
 /* ── The effects ────────────────────────────────────────────────────────── */
