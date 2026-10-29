@@ -26,6 +26,7 @@ import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
 import { AwayScene } from "./scenes/AwayScene";
 import { SceneName } from "./sceneName";
+import { guardTick } from "./guardedTick";
 import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
 import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 import { makeRaidDue } from "@/api/raid";
@@ -270,9 +271,10 @@ export class App {
       this.resizeObserver.observe(this.host);
     }
 
-    this.pixi.ticker.add((ticker) => {
-      this.scenes?.tick(ticker.deltaMS / 1000);
-    });
+    // Guarded: one throw in a scene's update must not stop Pixi asking for
+    // the next frame (`guardedTick.ts`).
+    const tick = guardTick((deltaSeconds) => this.scenes?.tick(deltaSeconds));
+    this.pixi.ticker.add((ticker) => tick.run(ticker.deltaMS / 1000));
 
     await this.scenes.start(SceneName.BOOT);
   }
