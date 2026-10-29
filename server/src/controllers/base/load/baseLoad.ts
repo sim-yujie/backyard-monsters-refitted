@@ -29,7 +29,7 @@ import { INFERNO_MODES, refuseOldInferno } from "../../../services/inferno/infer
 import { validateAttack } from "../../../services/maproom/validateAttack.js";
 import { playerMapVersion } from "../../../services/maproom/playerMapVersion.js";
 import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
-import { baseNotFoundErr, discordAgeErr } from "../../../errors/errors.js";
+import { baseNotFoundErr, discordAgeErr, mapRoom3ClosedErr } from "../../../errors/errors.js";
 import { EnumBaseRelationship } from "../../../enums/EnumBaseRelationship.js";
 import { canAttack } from "../../../services/base/canAttack.js";
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
@@ -82,7 +82,7 @@ const STRONGHOLD_FIELDS = ["level", "cell.x", "cell.y"] as const;
  */
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { baseid, type, mapversion: requestedVersion, attackData, attackcost } = BaseLoadSchema.parse(ctx.request.body);
+  const { baseid, type, mapversion: requestedVersion, attackData } = BaseLoadSchema.parse(ctx.request.body);
 
   // The Flash Inferno's modes are gone: the Inferno loads through `/bm/inferno/*` (WP 7.1).
   if (INFERNO_MODES.has(type)) refuseOldInferno(ctx, user, `load ${type}`);
@@ -104,6 +104,12 @@ export const baseLoad: KoaController = async (ctx) => {
   // request's: every rule below follows it, the attack's range check above
   // all, which a forged 3 or 1 used to skip (issue #165, `playerMapVersion.ts`).
   const mapversion = playerMapVersion(user.save);
+
+  // Map Room 3 is closed (security audit 2026-10-29, C1): a save still on it
+  // loads, views and builds its yard as before, but starts no attack, whose
+  // cost and result Map Room 3 took from the client. With no attack load there
+  // is no attack binding, so no Map Room 3 attack save is taken either.
+  if (attacking && mapversion === MapRoomVersion.V3) throw mapRoom3ClosedErr();
 
   let baseSave: Save | null = null;
   /** The defence an attack is fought against (issue #195), served beside the yard. */
@@ -153,7 +159,6 @@ export const baseLoad: KoaController = async (ctx) => {
         user,
         baseid,
         mapversion,
-        attackCost: attackcost,
         attackerLevel,
       }));
       break;
@@ -171,7 +176,6 @@ export const baseLoad: KoaController = async (ctx) => {
         user,
         baseid,
         mapversion,
-        attackCost: attackcost,
         attackerLevel,
       }));
       break;

@@ -11,12 +11,10 @@ import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { validateRange } from "../../../../services/maproom/v2/validateRange.js";
 import { cellCoordsFromBaseId } from "../../../../services/maproom/v2/rangeCheck.js";
 import { generateBaseId } from "../../../../utils/generateBaseId.js";
-import { getGeneratedCells, cellKey } from "../../../../services/maproom/v3/generateCells.js";
 import { createAttackLog } from "../../../../services/base/createAttackLog.js";
-import { updateResources, Operation } from "../../../../services/base/updateResources.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
 import { raidFighting } from "../../../../services/raids/raidLock.js";
-import { baseNotFoundErr, baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, shinyLockedErr } from "../../../../errors/errors.js";
+import { baseNotFoundErr, baseUnderAttackErr, baseProtectedErr, userOnlineErr, truceActiveErr, mapRoom3ClosedErr } from "../../../../errors/errors.js";
 import { ATTACK_ONLINE_SECONDS, isPlayerOnline } from "../../../../services/user/online.js";
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
@@ -24,7 +22,6 @@ import { registerAttacker } from "../../../../services/maproom/v1/registerAttack
 import { requireAttackableMR1Tribe } from "../../../../services/maproom/v1/mr1TribeAttack.js";
 import { startMR1TribeSession } from "../../../../services/maproom/v1/mr1TribeSession.js";
 import { servedDefenderForces } from "../../../../services/base/combat/defenderForces.js";
-import { isShinyLocked } from "../../../../services/user/shinyLock.js";
 import { brainsOf, newAttackSession } from "../../../../services/base/attackSession.js";
 import { startAttackSession } from "../../../../services/base/attackSessionStore.js";
 import { catchUpArmiesForAttack } from "../../../../services/yard/armies.js";
@@ -53,7 +50,6 @@ interface BaseModeAttack {
   user: User;
   baseid: string;
   mapversion?: MapRoomVersion;
-  attackCost?: { resources?: number[]; shiny?: number };
   /**
    * The attacker's player level (`playerLevelOf`), which the load also serves
    * as `attackerlevel`; kept in the attack session for the loot replay.
@@ -73,7 +69,12 @@ interface BaseModeAttack {
  *   the attacker's champions' brains the battle is frozen with (issue #219),
  *   and the attacker's academy levels it is fought at (issue #201)
  */
-export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, attackerLevel }: BaseModeAttack) => {
+export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }: BaseModeAttack) => {
+  // Map Room 3 is closed (security audit 2026-10-29, C1): it took the attack's
+  // cost and result from the client. The load refuses it first; this is the
+  // same rule for any other caller.
+  if (mapversion === MapRoomVersion.V3) throw mapRoom3ClosedErr();
+
   const userSave = user.save!;
   let save: Save | null = null;
 
@@ -199,42 +200,18 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackCost, att
 
       if (!world) throw new Error("No world found.");
 
-      if (mapversion === MapRoomVersion.V3) {
-        const genCell = getGeneratedCells().get(cellKey(cellX, cellY));
+      const noise = generateNoise(world.uuid);
+      const terrainHeight = getTerrainHeight(noise, cellX, cellY);
 
-        attackCell = new WorldMapCell(world, cellX, cellY, genCell?.altitude ?? 0);
-        attackCell.uid = save.saveuserid;
-        attackCell.base_type = genCell?.type ?? save.wmid;
-        attackCell.map_version = MapRoomVersion.V3;
-        attackCell.baseid = baseid;
-      } else {
-        const noise = generateNoise(world.uuid);
-        const terrainHeight = getTerrainHeight(noise, cellX, cellY);
-
-        attackCell = new WorldMapCell(world, cellX, cellY, terrainHeight);
-        attackCell.uid = save.saveuserid;
-        attackCell.base_type = MapRoomCell.WM;
-        attackCell.map_version = MapRoomVersion.V2;
-        attackCell.baseid = baseid;
-      }
+      attackCell = new WorldMapCell(world, cellX, cellY, terrainHeight);
+      attackCell.uid = save.saveuserid;
+      attackCell.base_type = MapRoomCell.WM;
+      attackCell.map_version = MapRoomVersion.V2;
+      attackCell.baseid = baseid;
     }
 
     save.cell = attackCell;
     postgres.em.persist(attackCell);
-  }
-
-  // Handle attack cost for MR3 attack range
-  if (mapversion === MapRoomVersion.V3 && attackCost) {
-    if (attackCost.resources) {
-      const [r1, r2, r3] = attackCost.resources;
-      updateResources({ r1, r2, r3 }, userSave.resources!, Operation.SUBTRACT);
-    } else if (attackCost.shiny) {
-      const shinyLocked = isShinyLocked(user);
-
-      if (shinyLocked) throw shinyLockedErr();
-      
-      userSave.credits = Math.max(0, userSave.credits - attackCost.shiny);
-    }
   }
 
   const isMR1Tribe = mapversion === MapRoomVersion.V1 && save.type === BaseType.TRIBE;

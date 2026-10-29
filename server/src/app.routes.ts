@@ -8,7 +8,6 @@ import {
   changeUsernameLimiter,
   debugDataLimiter,
   getAreaLimiter,
-  getCellsLimiter,
   sightLimiter,
   loginLimiter,
   forgotPasswordEmailLimiter,
@@ -93,10 +92,6 @@ import { autoAttack, autoAttackPlan, autoAttackReplay } from "./controllers/mapr
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
 import { saveBookmarks } from "./controllers/maproom/v2/saveBookmarks.js";
 
-import { initialPlayerCellData } from "./controllers/maproom/v3/initialPlayerCellData.js";
-import { getMapRoomCells } from "./controllers/maproom/v3/getCells.js";
-import { relocate } from "./controllers/maproom/v3/relocate.js";
-import { getFriendInfo } from "./controllers/maproom/v3/getFriendInfo.js";
 
 import { getMessageTargets } from "./controllers/mail/getMessageTargets.js";
 import { getMessageThreads } from "./controllers/mail/getMessageThreads.js";
@@ -266,13 +261,10 @@ router.post("/api/:apiVersion/player/savebookmarks", apiVersion, verifyUserAuth,
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 3
 * ──────────────────────────────────────────────── */
-router.post("/worldmapv3/initworldmap", verifyUserAuth, verifyAccountStatus, logRequest, initialPlayerCellData);
-router.get("/worldmapv3/initworldmap", verifyUserAuth, verifyAccountStatus, logRequest, initialPlayerCellData);
-router.post("/worldmapv3/getcells", verifyUserAuth, verifyAccountStatus, getCellsLimiter, logRequest, getMapRoomCells);
-router.get("/worldmapv3/relocate", verifyUserAuth, verifyAccountStatus, logRequest, relocate);
-router.get("/worldmapv3/getfriendinfo", verifyUserAuth, verifyAccountStatus, getFriendInfo);
-router.get("/worldmapv3/setmapversion", verifyUserAuth, verifyAccountStatus, logRequest, setMapVersion);
-router.post("/worldmapv3/setmapversion", verifyUserAuth, verifyAccountStatus, logRequest, setMapVersion);
+// None of it is mounted (security audit 2026-10-29, C1 and M2): the web client
+// never had Map Room 3, which took an attack's cost and result from the client,
+// and `/worldmapv3/relocate` moved any player off their Map Room 2 world for
+// free. `setmapversion` refuses version 3 on the Map Room 2 route above.
 
 /**  ────────────────────────────────────────────────
 * 📦 Mail

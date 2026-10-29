@@ -484,6 +484,19 @@ export const cannotLeaveMapRoom2Err = () =>
     isClientFriendly: true,
   });
 
+/**
+ * Map Room 3 is closed (security audit 2026-10-29, C1): no player may join it,
+ * and a save already on it may not start an attack, whose cost and result
+ * Map Room 3 took from the client.
+ */
+export const mapRoom3ClosedErr = () =>
+  new ClientSafeError({
+    message: "Map Room 3 is closed.",
+    status: Status.CONFLICT,
+    data: { reason: "mapRoom3Closed" },
+    isClientFriendly: true,
+  });
+
 export const mustLeaveAllianceToAcceptErr = () =>
   new ClientSafeError({
     message: "You must leave your current alliance before accepting the invite.",

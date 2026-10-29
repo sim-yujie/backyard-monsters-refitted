@@ -125,20 +125,6 @@ export const alliancesLimiter = RateLimit.middleware({
 });
 
 /**
- * Rate limit for MR3 getcells - 60 requests per minute per user.
- */
-export const getCellsLimiter = RateLimit.middleware({
-  interval: { min: 1 },
-  max: 60,
-  prefixKey: "getcells",
-  keyGenerator: byUser("getcells"),
-  handler: async (ctx: Context) => {
-    ctx.status = Status.TOO_MANY_REQUESTS;
-    ctx.body = { error: "Too many cell requests. Please slow down." };
-  },
-});
-
-/**
  * Rate limit for the MR2 takeover quote - 60 requests per minute per user.
  *
  * The map asks once per camp or outpost the player selects, and again when
