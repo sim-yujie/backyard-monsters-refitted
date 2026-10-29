@@ -65,6 +65,11 @@ const CULL_MARGIN = 160;
  */
 const MAX_PLACEHOLDER_LABELS = 60;
 
+/** Performance marks around the wait for a yard's pictures; see `markArtReady`. */
+const YARD_ART_SHOWN = "yard-art-shown";
+const YARD_ART_READY = "yard-art-ready";
+const YARD_ART_WAIT = "yard-art";
+
 interface FortOverlay {
   readonly art: FortArt;
   readonly back: Sprite;
@@ -208,6 +213,8 @@ export class YardBuildings {
   private kind: YardKind = "main";
   /** Set when art has arrived and the sprites need another resolution pass. */
   private pending = true;
+  /** True until every building of the shown yard has its picture; see `markArtReady`. */
+  private awaitingArt = false;
   /** Buildings drawn highlighted, and the one filter they all share (#88). */
   private readonly highlighted = new Set<number>();
   private highlightFilter: ColorMatrixFilter | null = null;
@@ -242,6 +249,12 @@ export class YardBuildings {
   show(yard: Yard, atlas: YardArtAtlas, work: WorkMap = NO_WORK): void {
     this.clear();
     this.kind = yard.kind;
+    // Only the latest pair is kept: the yard is shown again after every save.
+    performance.clearMarks(YARD_ART_SHOWN);
+    performance.clearMarks(YARD_ART_READY);
+    performance.clearMeasures(YARD_ART_WAIT);
+    performance.mark(YARD_ART_SHOWN);
+    this.awaitingArt = true;
 
     let labels = 0;
 
@@ -778,6 +791,20 @@ export class YardBuildings {
         }
       }
     }
+    this.markArtReady();
+  }
+
+  /**
+   * Marks the moment the last building's picture went on, as the performance
+   * entry `yard-art` (from `show` to here): how long a player looks at
+   * placeholders. Read in the browser's performance panel, or by a load test.
+   */
+  private markArtReady(): void {
+    if (!this.awaitingArt) return;
+    if (this.views.some((view) => view.art !== null && !view.resolved && !this.textures.isMissing(view.art.top))) return;
+    this.awaitingArt = false;
+    performance.mark(YARD_ART_READY);
+    performance.measure(YARD_ART_WAIT, YARD_ART_SHOWN, YARD_ART_READY);
   }
 
   /** Puts a fortification's back and front pictures on their sprites as they arrive. */
