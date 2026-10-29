@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { setClassicLook } from "./classicLook";
+import { CHAMPION_CATALOGUE } from "./yard/championCatalogue";
 import {
   PAINTED_CHAMPION_LEVELS,
   PAINTED_MONSTERS,
@@ -64,7 +66,8 @@ describe("championPortrait", () => {
       expect(championPortrait("G5", level, "card").src).toBe("/portraits/G5.webp");
       expect(championPortrait("G5", level, "icon").src).toBe("/portraits/G5-icon.webp");
     }
-    expect(championPortrait("G5", 5, "card").fallback).toBe("/assets/monsters/G5_L5-150.png");
+    expect(championPortrait("G5", 5, "card").fallback).toBe("/assets/monsters/G5_L6-150.png");
+    expect(championPortrait("G5", 1, "icon").fallback).toBe("/assets/monsters/G5_L5-small.png");
   });
 
   it("reads a level below 1 or not a number as level 1", () => {
@@ -76,6 +79,32 @@ describe("championPortrait", () => {
   it("knows no painting for a champion it does not list", () => {
     expect(paintedChampionFile("G9", 1)).toBeNull();
     expect(championPortrait("G9", 1, "card")).toEqual({ src: "/assets/monsters/G9_L1-150.png", fallback: null });
+  });
+});
+
+describe("with the Classic look on", () => {
+  afterEach(() => setClassicLook(false));
+
+  it("shows only the original, for monsters and for champions at every level", () => {
+    setClassicLook(true);
+    expect(monsterPortrait("C1", "card")).toEqual({ src: "/assets/monsters/C1-portrait.jpg", fallback: null });
+    expect(championPortrait("G2", 4, "card")).toEqual({ src: "/assets/monsters/G2_L4-150.png", fallback: null });
+    expect(championPortrait("G4", 6, "icon")).toEqual({ src: "/assets/monsters/G4_L6-small.png", fallback: null });
+    expect(championPortrait("G5", 2, "card")).toEqual({ src: "/assets/monsters/G5_L6-150.png", fallback: null });
+  });
+});
+
+describe("the original champion files", () => {
+  it("are all on the game server, card and icon, at every level", () => {
+    const serverFile = (src: string): string => fileURLToPath(new URL(`../../../server/public${src}`, import.meta.url));
+    setClassicLook(true);
+    const sources = CHAMPION_CATALOGUE.flatMap((entry) =>
+      Array.from({ length: entry.levels }, (_, i) =>
+        (["card", "icon"] as const).map((size) => championPortrait(entry.id, i + 1, size).src),
+      ).flat(),
+    );
+    setClassicLook(false);
+    expect(sources.filter((src) => !existsSync(serverFile(src)))).toEqual([]);
   });
 });
 

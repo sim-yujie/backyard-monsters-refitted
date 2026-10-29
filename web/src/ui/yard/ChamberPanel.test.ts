@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, ChampionSaveEntry, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import type { ChampionActions } from "@/api/yardChampion";
+import { setClassicLook } from "@/game/classicLook";
 import { YardStore } from "@/game/yard/YardStore";
 import { ChamberPanel } from "./ChamberPanel";
 
@@ -60,6 +61,7 @@ const setup = (champion: ChampionSaveEntry[], buildings: BuildingData[] = [CAGE,
 
 afterEach(() => {
   document.body.replaceChildren();
+  setClassicLook(false);
 });
 
 /** A card's Freeze or Thaw tile. */
@@ -112,6 +114,16 @@ describe("ChamberPanel", () => {
     expect(button.querySelector(".champion-act__short")!.textContent).toBe("Back to the cage");
     button.click();
     expect(thaw).toHaveBeenCalledWith(2);
+  });
+
+  it("shows Flash's own champion pictures with the Classic look on", () => {
+    setClassicLook(true);
+    const { element } = setup([champ({ l: 3 }), champ({ t: 2, status: 1, ft: HOUR, hp: 12_000, l: 5 })]);
+    const picture = (champion: string) =>
+      element.querySelector(`[data-champion="${champion}"] .chamber-card__picture`)!.getAttribute("src");
+    expect(picture("G1")).toBe("/assets/monsters/G1_L3-150.png");
+    expect(picture("G2")).toBe("/assets/monsters/G2_L5-150.png");
+    expect(element.querySelector('img[src*="/portraits/"]')).toBeNull();
   });
 
   it("lists the caged champion first, then the frozen ones", () => {
