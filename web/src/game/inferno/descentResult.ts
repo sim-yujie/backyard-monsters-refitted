@@ -1,9 +1,5 @@
 import type { DescentLanding } from "@/api/inferno";
-import {
-  descentBattleReport,
-  descentCapture,
-  descentDialogue,
-} from "@/ui/inferno/DescentScreens";
+import { descentCapture, descentDialogue } from "@/ui/inferno/DescentScreens";
 import type { Popup } from "@/ui/Popup";
 import {
   DESCENT_GLOATS,
@@ -16,9 +12,10 @@ import {
 /**
  * Moloch's word after a Descent attack (`INFERNO_DESCENT_POPUPS.ShowPostAttackPopup`),
  * over the attack's end panel, once the server has landed it (WP 1.12): a
- * yard beaten, his whimper, the battle report and, after the 13th, the
- * capture; an attack lost, his gloat. `yard` is the yard fought, 1-13, which
- * picks his lines. Returns the way to take whatever is still open down.
+ * yard beaten, his whimper and, after the 13th, the capture; an attack lost,
+ * his gloat. `yard` is the yard fought, 1-13, which picks his lines. Flash's
+ * battle report after a win is gone: the end panel already shows the loot.
+ * Returns the way to take whatever is still open down.
  */
 export const playDescentResult = (
   modal: HTMLElement,
@@ -43,7 +40,6 @@ export const playDescentResult = (
       return;
     }
     await next((done) => descentDialogue(modal, MOLOCH_WHIMPER, lineFor(DESCENT_WHIMPERS, yard), done));
-    await next((done) => descentBattleReport(modal, landing.loot, landing.total, done));
     // Flash: the 13th win (`_descentLvlMax - 1`); the server says so.
     if (landing.captured && !stopped) open = descentCapture(modal, startBuilding);
   };

@@ -350,41 +350,7 @@
   font-weight: 700;
 }
 
-.descent-report__heading {
-  margin: 0;
-  font-weight: 700;
-}
-
-.descent-report__total {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-2);
-  margin: 0;
-}
-
-.descent-report__box {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--colour-surface-sunken);
-  text-align: center;
-}
-
-.descent-report__name {
-  font-weight: 700;
-}
-
-.descent-report__value {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-}
-
 @media (max-width: 30rem) {
-  .descent-report__total {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .descent-yard {
     width: 2.25rem;
     height: 2.25rem;

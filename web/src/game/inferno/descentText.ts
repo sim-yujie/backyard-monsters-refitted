@@ -140,21 +140,7 @@ export const DESCENT_WHIMPERS: readonly Line[] = [
 export const lineFor = (lines: readonly Line[], yard: number): Line =>
   lines[Math.min(Math.max(Math.trunc(yard), 1), lines.length) - 1]!;
 
-/* ── The battle report and the capture ── */
-
-/** `pop_youlooted_title`. */
-export const BATTLE_REPORT_TITLE = "Battle Report";
-
-/**
- * `descent_battlereport`: this attack's loot, Bone, Coal, Sulfur, Magma. Its
- * closing "Total:" heads the four boxes of the running total.
- */
-export const battleReportLine = (loot: readonly [number, number, number, number]): string =>
-  `You just looted one of Moloch's bases for  ${loot[0]} Bone, ${loot[1]} Coal, ${loot[2]} Sulfur, and ${loot[3]} Magma.`;
-export const BATTLE_REPORT_TOTAL = "Total:";
-
-/** `btn_close`. */
-export const CLOSE = "Close";
+/* ── The capture ── */
 
 /** `descent_pop_victory_*`: after the 13th win (`ShowCapturePopup`). */
 export const CAPTURE_TITLE = "You Defeated Moloch!";
