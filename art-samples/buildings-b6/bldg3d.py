@@ -32,6 +32,7 @@ import square3d as Q  # noqa: E402
 import worn3d as W  # noqa: E402
 
 CANVAS = (900, 760, 360, 600)      # 4x canvas: w, h, and the ground middle's pixel
+SHADOW_EL = 62.0                   # the ground shadow's sun: higher than the paint's (46), so the shadow is short as Flash's
 FRONT_FACE, SIDE_FACE = 90.0, 0.0  # outward bearings of the two faces we see: front-left (+X), front-right (+Y)
 
 
@@ -64,7 +65,12 @@ def run(name, build, here, canvas=None):
     def both(path):
         """The building (path), then its shadow on the ground alone (path-shadow.png: black, the shade as alpha)."""
         L.shot(path, obs, outer_col=warm)
+        sun = bpy.data.objects["sun"]
+        keep = sun.rotation_euler.copy()
+        frm = L.bear(L.SUN[0], math.cos(math.radians(SHADOW_EL)), math.sin(math.radians(SHADOW_EL)))
+        sun.rotation_euler = (-frm).to_track_quat('-Z', 'Y').to_euler()
         L.shot(path.with_name(path.stem + "-shadow.png"), [plane], cut=obs, outer=0)
+        sun.rotation_euler = keep
 
     if mode == "save":
         bpy.ops.wm.save_as_mainfile(filepath=str(here / f"{name}-L{level}.blend"))
@@ -100,7 +106,7 @@ def ground_catcher(size=8.0, dark=0.38):
     dif = N.new("ShaderNodeBsdfDiffuse")
     s2r = N.new("ShaderNodeShaderToRGB")
     bw = N.new("ShaderNodeRGBToBW")
-    lit = math.sin(math.radians(L.SUN[1]))            # what the open ground reads in the sun
+    lit = math.sin(math.radians(SHADOW_EL))           # what the open ground reads in the (shadow pass) sun
     mp = N.new("ShaderNodeMapRange")
     mp.inputs["From Min"].default_value, mp.inputs["From Max"].default_value = 0.0, lit * 0.78
     mp.inputs["To Min"].default_value, mp.inputs["To Max"].default_value = dark, 0.0

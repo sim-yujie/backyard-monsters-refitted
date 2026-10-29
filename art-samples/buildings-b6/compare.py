@@ -5,6 +5,7 @@
 The 3D renders are at 4x (150 px per unit), or 8x from render/<name>/x2/ when that exists; the Flash art is scaled up
 to the same size.
 """
+import subprocess
 import sys
 from pathlib import Path
 
@@ -84,9 +85,18 @@ if __name__ == "__main__":
         cw = round(max(x.width for x in fa + fb) * ZOOM)
         ch = round(max(x.height for x in fa + fb) * ZOOM)
         fr = [pair(a, b, f"{F.rows()[tid]['name']} level {level}: producing", cw, ch) for a, b in zip(fa, fb)]
-        fr[0].save(HERE / f"{name}-anim-L{level}.gif", save_all=True, append_images=fr[1:], duration=round(1000 / 24),
-                   loop=0)
-        print("saved", HERE / f"{name}-anim-L{level}.gif", len(fr), "frames")
+        tmp = HERE / "render" / name / "_mp4"
+        tmp.mkdir(exist_ok=True)
+        for k, f in enumerate(fr):
+            f.save(tmp / f"f{k:03d}.png")
+        mp4 = HERE / f"{name}-anim-L{level}.mp4"       # the large one: three loops, H.264
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "2", "-framerate", "24", "-i",
+                        str(tmp / "f%03d.png"), "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
+                        "-pix_fmt", "yuv420p", "-crf", "18", str(mp4)], check=True)
+        small = [f.resize((f.width // 2, f.height // 2), Image.LANCZOS) for f in fr]   # a small gif for quick looks
+        small[0].save(HERE / f"{name}-anim-L{level}.gif", save_all=True, append_images=small[1:],
+                      duration=round(1000 / 24), loop=0)
+        print("saved", mp4, "and the gif,", len(fr), "frames")
     else:
         rows = []
         for lev in [int(a) for a in sys.argv[3:]]:
