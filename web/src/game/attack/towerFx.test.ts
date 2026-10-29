@@ -1,10 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Container, Graphics, Texture, TextureSource, TilingSprite } from "pixi.js";
 import type { Sprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { setClassicLook } from "@/game/classicLook";
-import { setNewTowerArt } from "@/game/yard/buildingArtTiers";
 import { angleGap, cellBearing, muzzleOffset, rowOf } from "@/game/yard/turretAim";
 import { readYard } from "@/game/yard/yardModel";
 import {
@@ -19,6 +18,7 @@ import {
   TESLA_CHARGE_END,
   TESLA_IDLE,
   TESLA_LOOP_END,
+  TESLA_WIND_END,
   TowerFx,
   bearingDegrees,
   AIM_WATCH_MARGIN,
@@ -57,12 +57,12 @@ import {
  * per tower class, the Tesla Tower's charge / loop / wind-down, the muzzle
  * heights, and the effects object turning a gun through a stub host.
  *
- * The strips these turn are the Flash towers', the default; the new tower
- * art's turrets turn by the same rule over strips of their own (below).
+ * The strips these turn are the Flash towers' (the Classic look); the new
+ * tower art's turrets, the Modern default, turn by the same rule over strips
+ * of their own (below).
  */
 
 afterEach(() => {
-  setNewTowerArt(false);
   setClassicLook(false);
 });
 
@@ -192,6 +192,7 @@ const creepAt = (ix: number, iy: number): CreepSnapshot => ({
 
 describe("towersOf", () => {
   it("lists a yard's towers with the cells of their gun strip", () => {
+    setClassicLook(true);
     const sniper = towersOf(readYard(yardOf(21)));
     expect(sniper).toHaveLength(1);
     expect(sniper[0]?.type).toBe(21);
@@ -207,11 +208,9 @@ describe("towersOf", () => {
   it("gives a repainted tier its turning turret's strip and lifts its muzzle with the picture", () => {
     const yard = yardOf(21);
     yard.buildingdata = { "1": { id: 1, t: 21, l: 7, X: 0, Y: 0 } };
-    // The new tower art is off unless turned on: the Flash turret, not lifted.
-    expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
-    // The player's old-art choice wins over the switch.
-    setNewTowerArt(true);
+    // The Classic look: the Flash turret, not lifted, even with the painted tiers shown.
     setClassicLook(true);
+    expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
     expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
     // The new tower art: the new turret's cells, and the muzzle stands higher than tier 1's.
     setClassicLook(false);
@@ -220,15 +219,29 @@ describe("towersOf", () => {
     expect(sniper?.lift).toBeGreaterThan(towersOf(readYard(yardOf(21)))[0]?.lift ?? 0);
     // The 3D Laser: 32 headings for each of 5 tilts of its head (only the Cannon keeps one tilt).
     expect(towersOf(readYard(yardOf(23)))[0]?.frames).toBe(160);
-    expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(30);
-    expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(30);
-    // The new Cannon's barrel turns too, though the Flash one never did; the Tesla tiers stay still pictures.
+    expect(towersOf(readYard(yardOf(115)))[0]?.frames).toBe(32);
+    expect(towersOf(readYard(yardOf(118)))[0]?.frames).toBe(32);
+    // The new Cannon's barrel turns too, though the Flash one never did; the 3D Tesla plays its film through
+    // Flash's 55 cells and the 3D Bunker its 15 cells of shutters.
     expect(towersOf(readYard(yardOf(20)))[0]?.frames).toBe(32);
-    expect(towersOf(readYard(yardOf(25)))[0]?.frames).toBe(0);
-    // The 3D towers know where each cell points and turn about their pivot; the painted ones do not.
-    for (const type of [20, 21, 23]) expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeDefined();
+    expect(towersOf(readYard(yardOf(25)))[0]?.frames).toBe(TESLA_WIND_END);
+    expect(towersOf(readYard(yardOf(22)))[0]?.frames).toBe(15);
+    // The 3D towers know where each cell points and turn about their pivot.
+    for (const type of [20, 21, 23, 115, 118, 132, 136, 137]) {
+      expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeDefined();
+    }
     expect(towersOf(readYard(yardOf(20)))[0]?.pivot).toEqual({ x: 0, y: 14.5 });
-    for (const type of [115, 118]) expect(towersOf(readYard(yardOf(type)))[0]?.aim, `type ${type}`).toBeUndefined();
+  });
+
+  it("gives the Inferno's Blast Tower and Sharpshooter their own 3D turret, not the Cannon's and Sniper's", () => {
+    for (const type of [20, 21]) {
+      const [top] = towersOf(readYard(yardOf(type)));
+      const [inferno] = towersOf(readYard({ ...yardOf(type), type: "inferno" }));
+      expect(inferno?.frames, `type ${type}`).toBe(32);
+      expect(inferno?.aim, `type ${type}`).toBeDefined();
+      expect(inferno?.aim, `type ${type}`).not.toBe(top?.aim);
+      expect(inferno?.pivot, `type ${type}`).not.toEqual(top?.pivot);
+    }
   });
 });
 
@@ -236,7 +249,7 @@ describe("towersOf", () => {
 const drawn = (graphics: Graphics): number =>
   (graphics.context as unknown as { instructions: unknown[] }).instructions.length;
 
-const setUp = (type: number) => {
+const setUp = (type: number, look?: "full" | "low") => {
   const yard = readYard(yardOf(type));
   const frames = new Map<number, number>();
   const graphics = new Graphics();
@@ -246,11 +259,14 @@ const setUp = (type: number) => {
     info,
     { setAnimFrame: (id, _layer, frame) => frames.set(id, frame) },
     { x: yard.bounds.originX, y: yard.bounds.originY },
+    look ? { look } : undefined,
   );
   return { yard, frames, graphics, fx };
 };
 
-describe("the towers with the new tower art off", () => {
+describe("the towers with the Classic look", () => {
+  beforeEach(() => setClassicLook(true));
+
   it("have no 3D aim, pivot or lift at any level, so every shot leaves the Flash muzzle", () => {
     for (const type of [20, 21, 23, 25, 115, 118]) {
       for (let level = 1; level <= 10; level++) {
@@ -307,7 +323,6 @@ describe("TowerFx", () => {
     ) * 180) / Math.PI;
 
   it("turns a 3D sniper onto the cell that faces its target on the ground, and fires from that muzzle", () => {
-    setNewTowerArt(true);
     const { yard, fx } = setUp(21);
     const [info] = towersOf(yard);
     const aim = info?.aim;
@@ -337,7 +352,6 @@ describe("TowerFx", () => {
   });
 
   it("turns a 3D Cannon onto the cell that faces its target on the ground, even below it where its raised barrel looks up", () => {
-    setNewTowerArt(true);
     const { yard, fx } = setUp(20);
     const [info] = towersOf(yard);
     const aim = info?.aim;
@@ -357,7 +371,6 @@ describe("TowerFx", () => {
   });
 
   it("lobs a 3D Cannon's shell up out of its raised barrel and down onto the creep, landing on the same tick", () => {
-    setNewTowerArt(true);
     const yard = readYard(yardOf(20));
     const [info] = towersOf(yard);
     const aim = info?.aim;
@@ -400,7 +413,6 @@ describe("TowerFx", () => {
   });
 
   it("starts a painted turret's shots where they always did, lifted with its tier", () => {
-    setNewTowerArt(true);
     const { yard, fx } = setUp(118);
     const [info] = towersOf(yard);
     if (!info) throw new Error("no railgun");
@@ -409,7 +421,6 @@ describe("TowerFx", () => {
   });
 
   it("starts a 3D turret's shots where they always did while the art has not measured its muzzle", () => {
-    setNewTowerArt(true);
     const [info] = towersOf(readYard(yardOf(21)));
     const aim = info?.aim;
     if (!info || !aim) throw new Error("no 3D sniper");
@@ -426,7 +437,6 @@ describe("TowerFx", () => {
   });
 
   it("tilts a 3D Laser's head further down the nearer the spot it burns, and lights the beam at its lens", () => {
-    setNewTowerArt(true);
     const { yard, fx } = setUp(23);
     const [info] = towersOf(yard);
     const aim = info?.aim;
@@ -459,6 +469,8 @@ describe("TowerFx", () => {
   });
 
   it("does not turn a gun the yard's tower has no strip for", () => {
+    // The Flash Cannon, the Classic look's.
+    setClassicLook(true);
     const { frames, fx } = setUp(20);
     const target = creepAt(35, 235);
     fx.onShot({ tick: 1, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
@@ -468,6 +480,8 @@ describe("TowerFx", () => {
   });
 
   it("charges the Tesla's strip on the engine's charge, a cell a frame, and winds it down after the zaps (#266)", () => {
+    // The Flash Tesla, the Classic look's: the painted tiers' coil is a still picture.
+    setClassicLook(true);
     const { frames, fx } = setUp(25);
     const target = creepAt(35, 235);
     fx.update(0, () => target);
@@ -480,17 +494,32 @@ describe("TowerFx", () => {
     // A frame is two ticks: ten ticks on, five cells on.
     fx.update(20, () => target);
     expect(frames.get(1)).toBe(6);
-    // The charge is done 32 frames in; the zaps keep the loop going.
-    for (let tick = 74; tick <= 120; tick += 8) {
-      fx.onShot({ tick, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+    // The charge is done 32 frames in; the loop runs as long as the engine
+    // zaps, through zaps at a target already dead that show no bolt (78-110).
+    for (let tick = 74; tick <= 120; tick += 2) {
+      if (tick === 74 || tick >= 112) {
+        if (tick % 8 === 2) fx.onShot({ tick, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
+      }
       fx.update(tick, () => target);
       const looping = frames.get(1) ?? -1;
       expect(looping).toBeGreaterThanOrEqual(TESLA_CHARGE_END);
       expect(looping).toBeLessThan(TESLA_LOOP_END);
     }
-    // Long after the last zap the wind-down has run out and the cell is 0.
+    // The engine stops zapping on tick 122; the strip winds down a cell every second frame.
+    fx.onCoilRest(1, 122, 300);
+    fx.update(122, () => target);
+    const last = frames.get(1) ?? -1;
+    fx.update(126, () => undefined);
+    expect(frames.get(1)).toBe(last);
+    fx.update(130, () => undefined);
+    expect(frames.get(1)).toBe(last + 1);
+    // Wound down, the Flash Tesla leaves its last cell up (it draws nothing for cell 0).
     fx.update(300, () => undefined);
-    expect(frames.get(1)).toBe(0);
+    expect(frames.get(1)).toBe(TESLA_WIND_END - 1);
+    // Its next charge starts the strip again from cell 1.
+    fx.onCharge(1, 310);
+    fx.update(310, () => undefined);
+    expect(frames.get(1)).toBe(1);
     fx.destroy();
   });
 
@@ -501,6 +530,7 @@ describe("TowerFx", () => {
     fx.onCharge(1, 2);
     fx.update(30, () => undefined);
     expect(drawn(graphics)).toBeGreaterThan(0);
+    fx.onCoilRest(1, 100, null);
     fx.update(400, () => undefined);
     expect(drawn(graphics)).toBe(0);
     fx.destroy();
@@ -520,6 +550,8 @@ describe("TowerFx", () => {
     expect(drawn(sniper.graphics)).toBe(0);
     sniper.fx.destroy();
 
+    // The Flash Tesla, the Classic look's, which has a strip to put back.
+    setClassicLook(true);
     const tesla = setUp(25);
     tesla.fx.onCharge(1, 0);
     tesla.fx.update(20, () => target);
@@ -563,7 +595,8 @@ describe("TowerFx", () => {
     const whole = fired({ fromIx: 15, fromIy: 15, toIx: 1615, toIy: 1615 });
     expect(whole.height).toBeGreaterThanOrEqual(1600);
     expect(whole.height).toBeLessThan(1620);
-    expect(whole.width).toBeLessThan(40);
+    // Narrow: the beam, and beside it the muzzle flash at the 3D barrel's tip, turned onto the creep.
+    expect(whole.width).toBeLessThan(50);
     // Without one, the trail stops just past its target.
     expect(fired().height).toBeLessThan(400);
   });
@@ -849,7 +882,6 @@ describe("TowerFx's new look", () => {
   });
 
   it("turns the 3D Cannon's barrel onto a creep in range, pointing along its shot, and kicks it back", async () => {
-    setNewTowerArt(true);
     const { fx, frames, layers, nudges } = await newLookSetUp(20);
     const near = creepAt(35, 235);
     fx.update(1, () => near, [near]);
@@ -871,6 +903,8 @@ describe("TowerFx's new look", () => {
   });
 
   it("leaves the Flash Cannon still: no strip to turn, no barrel to kick", async () => {
+    // The Flash art (the Classic look's) under the new look's effects.
+    setClassicLook(true);
     const { fx, frames, nudges } = await newLookSetUp(20);
     const near = creepAt(35, 235);
     for (let tick = 1; tick <= 40; tick += 1) fx.update(tick, () => near, [near]);
@@ -907,6 +941,8 @@ describe("TowerFx's new look", () => {
   });
 
   it("turns the Railgun onto a creep as it comes into range, a little a tick, before any shot", async () => {
+    // The Flash strip (the Classic look's art) under the new look's effects: the 3D one turns by its aim.
+    setClassicLook(true);
     const { fx, frames } = await newLookSetUp(118);
     // Well out of range (300 at level 1, watched to 300 + AIM_WATCH_MARGIN): the gun stays put.
     const far = creepAt(35, 35 + 400);
@@ -937,6 +973,8 @@ describe("TowerFx's new look", () => {
   });
 
   it("turns the Laser onto a creep in range before its beam, and follows the beam without a jump", async () => {
+    // The Flash Laser's 54 cells (the Classic look's art) under the new look's effects.
+    setClassicLook(true);
     const { fx, frames } = await newLookSetUp(23);
     const near = creepAt(35, 135);
     fx.update(1, () => near, [near]);
@@ -1220,6 +1258,45 @@ describe("TowerFx's new look", () => {
     }
   });
 
+  it("rolls the 3D Tesla's film without a break while it keeps firing, and winds it down once it stops (owner, beta.5)", async () => {
+    // The engine's own timeline: a charge of 10 zaps, a rest that will charge
+    // again, a second charge with a gap where its target is already dead,
+    // then a rest for want of a target.
+    const play = (fx: TowerFx, frames: Map<number, number>) => {
+      const cells: number[] = [];
+      const shots = new Set([64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 294, 302, 342, 350, 358]);
+      for (let tick = 0; tick <= 600; tick += 1) {
+        if (tick === 0 || tick === 230) fx.onCharge(1, tick);
+        if (shots.has(tick)) shoot(fx, tick);
+        if (tick === 136) fx.onCoilRest(1, tick, 246);
+        if (tick === 366) fx.onCoilRest(1, tick, null);
+        fx.update(tick, () => target);
+        cells.push(frames.get(1) ?? 0);
+      }
+      return cells;
+    };
+    const looping = (cell: number) => cell >= TESLA_CHARGE_END && cell < TESLA_LOOP_END;
+
+    const modern = await newLookSetUp(25);
+    const cells = play(modern.fx, modern.frames);
+    // Charging first, then rolling every frame from the end of the charge to the last zap.
+    expect(cells[10]).toBeGreaterThan(0);
+    expect(cells[10]).toBeLessThan(TESLA_CHARGE_END);
+    const rolling = cells.slice(66, 367);
+    expect(rolling.every(looping)).toBe(true);
+    expect(new Set(rolling).size).toBe(TESLA_LOOP_END - TESLA_CHARGE_END);
+    // Then it winds down at once, a cell every second frame past the loop, and is back at rest.
+    expect(cells.slice(367, 470).some((cell) => cell >= TESLA_LOOP_END)).toBe(true);
+    expect(cells[600]).toBe(0);
+    modern.fx.destroy();
+
+    // Classic keeps the Flash timeline: it winds down between the charges.
+    const classic = await newLookSetUp(25, "classic");
+    const flash = play(classic.fx, classic.frames);
+    expect(flash.slice(66, 367).every(looping)).toBe(false);
+    classic.fx.destroy();
+  });
+
   it("clears every bit when the battle stands down", async () => {
     const { fx, sparks } = await newLookSetUp(25);
     fx.onCharge(1, 0);
@@ -1293,5 +1370,59 @@ describe("the Inferno towers in battle", () => {
     expect(nudges.slice(QUAKE_SHAKE_TICKS)).toEqual([{ tick: 100 + QUAKE_SHAKE_TICKS, dx: 0, dy: 0 }]);
     expect(fx.onTowerQuake(42, 1)).toBeNull();
     fx.destroy();
+  });
+});
+
+describe("the Monster Bunker's shutters", () => {
+  it("roll up a cell a frame as it sends monsters out, and down again a second after the last", () => {
+    const { frames, fx } = setUp(22, "full");
+    fx.update(0, () => undefined);
+    expect(frames.get(1)).toBe(0);
+    // Sent out on tick 10: the shutters start up then, a cell every frame (two ticks), and stop at the top.
+    fx.onRelease(1, 10);
+    fx.update(10, () => undefined);
+    expect(frames.get(1)).toBe(1);
+    fx.update(20, () => undefined);
+    expect(frames.get(1)).toBe(6);
+    fx.update(60, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    // Another out on tick 70 keeps them up a second past it, then they come down a cell a frame.
+    fx.onRelease(1, 70);
+    fx.update(150, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    fx.update(160, () => undefined);
+    expect(frames.get(1)).toBe(9);
+    fx.update(400, () => undefined);
+    expect(frames.get(1)).toBe(0);
+  });
+
+  it("move the Flash bunker's door as the Flash one moved, with the Classic look, and shut it when the battle ends", () => {
+    setClassicLook(true);
+    const { frames, fx } = setUp(22);
+    // A monster out moves nothing by itself: the door follows the engine's door.
+    fx.onRelease(1, 0);
+    fx.update(40, () => undefined);
+    expect(frames.get(1)).toBe(0);
+    // Open on tick 50 (attackers in range): a cell a frame up to the strip's last, 14.
+    fx.onDoor(1, 50, true);
+    fx.update(50, () => undefined);
+    expect(frames.get(1)).toBe(1);
+    fx.update(76, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    fx.update(200, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    // Shut on tick 202: Flash's count stood at 15 past the strip, so the first frame still shows 14.
+    fx.onDoor(1, 202, false);
+    fx.update(202, () => undefined);
+    expect(frames.get(1)).toBe(14);
+    fx.update(204, () => undefined);
+    expect(frames.get(1)).toBe(13);
+    fx.update(300, () => undefined);
+    expect(frames.get(1)).toBe(0);
+    fx.onDoor(1, 310, true);
+    fx.update(320, () => undefined);
+    expect(frames.get(1)).toBe(6);
+    fx.standDown();
+    expect(frames.get(1)).toBe(0);
   });
 });

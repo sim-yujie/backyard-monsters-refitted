@@ -28,14 +28,15 @@ export const BUILDING_ART_LEVELS: Readonly<Record<number, readonly number[]>> = 
 };
 
 /**
- * The tiers of the repainted defensive towers (`web/src/game/yard/buildingArtTiers.ts`):
- * tiers 2 and 3 from levels 4 and 7, the five-level Monster Bunker's from 3
- * and 5. The Flash towers have one picture for every level.
- *
- * Sent only while `TOWER_TIER_ART=on`. The new tower art is off in the live
- * game until the owner decides, so by default every tower still reads 1, as
- * before, and gives nothing more away; a browser with the new art on then
- * shows someone else's towers as tier 1.
+   * The tiers of the towers players see with the Modern look
+   * (`MODERN_TOWERS` in `web/src/game/yard/buildingArtTiers.ts`): tiers 2 and 3
+   * from levels 4 and 7, the Monster Bunker's and the six-level Magma Tower's
+   * from 3 and 5, and one picture for every level of the Spurtz Cannons. The
+   * Inferno's Blast Tower and Sharpshooter (20 and 21 there, and 130) split as
+   * the Cannon and Sniper do. The Flash towers, and the Classic look, have one
+   * picture for every level. A viewer is sent only the tier's first level,
+   * never the exact level. Always on: the old `TOWER_TIER_ART` env switch is
+   * removed.
  */
 export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
   20: [1, 4, 7],
@@ -45,19 +46,20 @@ export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> 
   25: [1, 4, 7],
   115: [1, 4, 7],
   118: [1, 4, 7],
+  130: [1, 4, 7],
+  132: [1, 3, 5],
+  136: [1],
+  137: [1],
 };
-
-/** Whether viewers are sent the tier of someone else's towers: `TOWER_TIER_ART=on`. Read on each call, for tests. */
-export const towerTierArtOn = (env: Record<string, string | undefined> = process.env): boolean =>
-  env.TOWER_TIER_ART === "on";
 
 /**
  * The level whose picture a building at `level` shows: the highest art level
  * at or below it, and 1 for a type with one picture. A level of 0 or less (a
  * foundation still being built) is kept as it is; it says nothing.
- * `towerTiers` adds the tower tiers (`TOWER_TIER_ART_LEVELS`).
+ * `towerTiers` adds the tower tiers (`TOWER_TIER_ART_LEVELS`), on unless a
+ * caller asks for the Flash steps alone.
  */
-export const artLevelOf = (type: number, level: number, towerTiers: boolean = towerTierArtOn()): number => {
+export const artLevelOf = (type: number, level: number, towerTiers: boolean = true): number => {
   if (!(level > 0)) return level;
   let chosen = 1;
   const steps = (towerTiers ? TOWER_TIER_ART_LEVELS[type] : undefined) ?? BUILDING_ART_LEVELS[type] ?? [];

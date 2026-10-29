@@ -930,6 +930,33 @@ export type BattleVisualEvent =
       readonly radius: number;
     }
   | {
+      /**
+       * A Tesla Tower stopped zapping and winds down (drawing only). `rearmBy`
+       * is the latest tick its next charge can begin if a target is still in
+       * reach, its charge spent; null when it stopped for want of a target.
+       */
+      readonly kind: "coilRest";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly rearmBy: number | null;
+    }
+  | {
+      /**
+       * A Monster Bunker's door opens or shuts (drawing only), as the Flash
+       * one's `TickFast` drove it (`BUILDING22.as:433-455`).
+       */
+      readonly kind: "bunkerDoor";
+      readonly tick: number;
+      readonly buildingId: number;
+      readonly open: boolean;
+    }
+  | {
+      /** A bunker sent a monster out: a Monster Bunker's shutters roll up (drawing only). */
+      readonly kind: "release";
+      readonly tick: number;
+      readonly buildingId: number;
+    }
+  | {
       /** A creep landed a swing on a building or on another creep. */
       readonly kind: "hit";
       readonly tick: number;
@@ -1491,6 +1518,8 @@ interface Bunker {
   pool: Map<string, number>;
   dispatched: number;
   tickNumber: number;
+  /** Whether its door is open, for the drawing ({@link BattleVisualEvent} `bunkerDoor`). */
+  doorOpen: boolean;
 }
 
 /** The drop radius a payload earns: `max(200, bucket / 4) / 2` (`ATTACK.as:667-671`). */
@@ -1759,7 +1788,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           if (count > 0) pool.set(id, count);
         }
       }
-      bunkers.push({ building, pool, dispatched: 0, tickNumber: 0 });
+      bunkers.push({ building, pool, dispatched: 0, tickNumber: 0, doorOpen: false });
       bunkerReports.set(building.id, {
         id: building.id,
         level: building.level,
@@ -2953,6 +2982,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         bunker.dispatched += 1;
         const sentBy = bunkerReports.get(building.id);
         if (sentBy) sentBy.sent += 1;
+        visual.push({ kind: "release", tick, buildingId: building.id });
         const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
         const defender = spawnCreep(
           monsterId,
@@ -3049,6 +3079,55 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (creep) releaseFromDecoy(creep, before);
     }
     ejectForDecoy(drop, range, before);
+  };
+
+  /** Whether a landed Decoy reaches `building` (`BUILDING22.DecoyInRange`, `:241-254`). */
+  const decoyOver = (building: EngineBuilding): boolean => {
+    const live = decoy;
+    if (!live || tick < live.plan.landsAt || tick >= live.plan.explodesAt) return false;
+    const at = screenOf(building.x, building.y);
+    const dx = at.x - live.drop.x;
+    const dy = at.y + building.middle - live.drop.y;
+    return decoyTouchesBuilding(live.plan.range, dx, dy, propsSizeOf(building.type));
+  };
+
+  /**
+   * The Monster Bunkers' doors, once a frame (drawing only, {@link BattleVisualEvent}
+   * `bunkerDoor`): as `BUILDING22.TickFast` (`:433-455`), a door is open while
+   * its bunker has monsters, in or out, and has attackers in its range, monsters
+   * out, or a Decoy over it, and shut otherwise. Only a change is told.
+   */
+  const tickBunkerDoors = (): void => {
+    if (tick % 2 !== 0) return;
+    let out: Map<number, number> | null = null;
+    for (const bunker of bunkers) {
+      const building = bunker.building;
+      if (building.type === HOUSING_BUNKER_TYPE) continue;
+      let open = false;
+      if (building.hp > 0) {
+        if (!out) {
+          out = new Map();
+          for (const creep of creeps) {
+            if (creep.homeBunker < 0 || creep.gone || creep.hp <= 0) continue;
+            out.set(creep.homeBunker, (out.get(creep.homeBunker) ?? 0) + 1);
+          }
+        }
+        const outside = out.get(building.id) ?? 0;
+        let inside = 0;
+        for (const count of bunker.pool.values()) inside += count;
+        if (outside > 0) open = true;
+        else if (inside > 0) {
+          const range = towerStats(building.type, building.level, yard.kind)?.range ?? 0;
+          const scan = towerScanPoint(building);
+          open =
+            (range > 0 && index.inRange(range, scan.x, scan.y, oldStyleTargets(1)).length > 0) ||
+            decoyOver(building);
+        }
+      }
+      if (open === bunker.doorOpen) continue;
+      bunker.doorOpen = open;
+      visual.push({ kind: "bunkerDoor", tick, buildingId: building.id, open });
+    }
   };
 
   /* ── The Vacuum (Inferno WP 6.6, `vacuum.ts`) ──────────────────────────── */
@@ -5548,6 +5627,23 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     visual.push({ kind: "charge", tick, towerId: tower.building.id });
   };
 
+  /**
+   * The Tesla leaves its zaps for the wind-down (drawing only, {@link BattleVisualEvent}
+   * `coilRest`). Spent, it can charge again once the wind-down is over, a cell
+   * every second frame, at the first `Fire` after, one a reload apart.
+   */
+  const restCoil = (tower: Tower, rate: number, spent: boolean): void => {
+    tower.stage = 3;
+    const windTicks = ((TESLA_WIND_END - tower.charge) * 2 + 1) * TESLA_TICKS_PER_FRAME;
+    const reload = Math.max(rate * TOWER_REARM_MULTIPLIER, TOWER_ACQUIRE_TICKS);
+    visual.push({
+      kind: "coilRest",
+      tick,
+      towerId: tower.building.id,
+      rearmBy: spent ? tick + windTicks + reload : null,
+    });
+  };
+
   /** The Tesla's `TickFast`, once a frame: charge, zaps, wind-down (`BUILDING25.as:98-203`). */
   const tickZaps = (tower: Tower, damage: number, rate: number): void => {
     if (tower.frame % TESLA_TICKS_PER_FRAME !== 0) return;
@@ -5603,7 +5699,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     tower.shotsFired += 1;
     if (tower.shotsFired >= rate) {
-      tower.stage = 3;
+      restCoil(tower, rate, true);
       return;
     }
     // On the hose it stays on it while it can reach it, else it looks for creeps
@@ -5611,7 +5707,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (tower.onHose) {
       if (hoseInReach(tower)) return;
       findTowerTargets(tower, scanOf(tower), 1);
-      if (tower.targets.length === 0) tower.stage = 3;
+      if (tower.targets.length === 0) restCoil(tower, rate, false);
       return;
     }
     if (target && target.hp > 0 && target.targetable) return;
@@ -5621,7 +5717,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     const scan = scanOf(tower);
     findTowerTargets(tower, scan, 1);
-    if (tower.targets.length === 0) tower.stage = 3;
+    if (tower.targets.length === 0) restCoil(tower, rate, false);
   };
 
 
@@ -5870,6 +5966,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     bunker.dispatched += 1;
     const sentBy = bunkerReports.get(building.id);
     if (sentBy) sentBy.sent += 1;
+    visual.push({ kind: "release", tick, buildingId: building.id });
     const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
     const defender = spawnCreep(
       monsterId,
@@ -6151,6 +6248,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     tickPutty();
     tickDecoy();
+    tickBunkerDoors();
     tickVacuum();
     for (const creep of creeps) {
       tickCreep(creep);

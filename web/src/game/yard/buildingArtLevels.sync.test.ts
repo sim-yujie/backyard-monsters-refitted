@@ -7,16 +7,21 @@ import {
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { ArtState, resolveArt } from "./buildingArt";
 import { setClassicLook } from "@/game/classicLook";
-import { setNewTowerArt, TOWER_TIER_ART, TOWN_HALL_ART } from "./buildingArtTiers";
+import {
+  INFERNO_TOWER_TIER_ART,
+  MODERN_TOWERS,
+  TOWER_TIER_ART,
+  TOWN_HALL_ART,
+} from "./buildingArtTiers";
 
 /**
  * The server sends someone else's yard with only the level each building's
  * art needs (`server/src/services/base/viewMask.ts`), read from its own copy
  * of the levels at which the art changes. If that copy falls behind this
  * table, a viewer sees the wrong picture, or the real level leaks again.
- * The repainted towers' tiers have their own copy, sent only while the
- * server's `TOWER_TIER_ART` is on, as the new tower art is only shown here
- * while its hidden switch is on. The new Town Hall, the default, needs none.
+ * The 3D towers' tiers, which the Modern look shows, have their own copy;
+ * the painted towers players do not see yet have none. The new Town Hall,
+ * the default, needs none.
  */
 
 /** The art levels of every type whose Flash art changes, as this table has them. */
@@ -51,11 +56,20 @@ describe("the server's art levels match the web art table", () => {
     expect(BUILDING_ART_LEVELS).toEqual(webArtLevels());
   });
 
-  it("names the same tower tiers", () => {
+  it("names the same tower tiers, for the towers the Modern look shows", () => {
     const tiers = Object.fromEntries(
-      Object.entries(TOWER_TIER_ART).map(([type, list]) => [type, list.map((tier) => tier.from)]),
+      MODERN_TOWERS.map((type) => [
+        type,
+        (TOWER_TIER_ART[type] ?? INFERNO_TOWER_TIER_ART[type] ?? []).map((tier) => tier.from),
+      ]),
     );
     expect(TOWER_TIER_ART_LEVELS).toEqual(tiers);
+  });
+
+  it("splits an Inferno tower that shares a type as its namesake up top does", () => {
+    for (const [type, inferno] of Object.entries(INFERNO_TOWER_TIER_ART)) {
+      expect(inferno.map((tier) => tier.from)).toEqual(TOWER_TIER_ART_LEVELS[Number(type)]);
+    }
   });
 
   it("needs no tiers for the new Town Hall: it has a picture at every Flash step", () => {
@@ -63,27 +77,17 @@ describe("the server's art levels match the web art table", () => {
   });
 
   it("picks the picture the client draws for every level up to 20, as both sides start", () => {
-    const { drawn, sent } = drawnAndSent(false);
+    const { drawn, sent } = drawnAndSent(true);
     expect(sent).toEqual(drawn);
   });
 
-  it("picks the picture the client draws with the old art", () => {
+  it("picks the picture the client draws with the Classic look", () => {
     setClassicLook(true);
-    try {
-      const { drawn, sent } = drawnAndSent(false);
-      expect(sent).toEqual(drawn);
-    } finally {
-      setClassicLook(false);
-    }
-  });
-
-  it("picks the tier the client draws with the new tower art on both sides", () => {
-    setNewTowerArt(true);
     try {
       const { drawn, sent } = drawnAndSent(true);
       expect(sent).toEqual(drawn);
     } finally {
-      setNewTowerArt(false);
+      setClassicLook(false);
     }
   });
 });

@@ -15,12 +15,14 @@
  * building's isometric origin like every row in `buildingArtData.ts`. Its
  * base stands where the Flash tower's does, so a taller tier grows upward.
  *
- * - **Off unless asked for** (owner, 26 Oct 2026: not until the turrets
- *   turn): the towers show only in a browser that turned on their hidden
- *   switch (`newTowerArt`, `?towers=new`), and the player's Classic look
- *   choice still wins over it. The server's matching setting,
- *   `TOWER_TIER_ART` (off by default), sends viewers the tier of someone
- *   else's tower (`buildingArtLevels.ts`).
+ * - **The look setting decides** (owner, 29 Oct 2026: no address switch;
+ *   the Classic/Modern choice in Account Settings is the one setting for the
+ *   yard's look): with Modern, the default, every tower in `MODERN_TOWERS`
+ *   shows its new tiers (owner: "make all of them": the 3D Cannon, Sniper,
+ *   Laser, Aerial Defense, Railgun, Magma Tower, Spurtz Cannons, Inferno
+ *   towers, Monster Bunker and Tesla);
+ *   with Classic, the Flash towers. The server sends viewers the tier of
+ *   someone else's Modern towers (`buildingArtLevels.ts`).
  * - **Turrets that turn** (owner, 26 Oct 2026: "Turrets: wire in"): the
  *   Sniper, Laser, Aerial Defense and Railgun draw each tier as a body with
  *   its turret taken off plus the turret painted at every facing
@@ -38,9 +40,22 @@
  *   out of every cell, so none needs a `front` layer. Each carries `aim`:
  *   the cell shown is the one whose barrel points along the shot, and the
  *   shot leaves its muzzle (`turretAim.ts`).
- * - **A still picture** for the others: the Tesla's coil and the Bunker's
- *   door are painted in, so those tiers ship no animation strips and the
- *   Flash strips are not drawn over them.
+ * - **The Aerial Defense, Railgun, Spurtz Cannons and the Inferno's towers
+ *   are 3D too** (branch art/buildings-3d, the same exporter): the Spurtz
+ *   Cannons one look for every level, the Magma Tower's six levels split
+ *   1-2, 3-4 and 5-6 as the Bunker's are, and the Inferno's Blast Tower and
+ *   Sharpshooter, which share the Cannon's and Sniper's types, from
+ *   `INFERNO_TOWER_TIER_ART` in an Inferno yard. The towers never painted
+ *   stand on their Flash shadow.
+ * - **The Tesla and the Monster Bunker are 3D** (owner, 29 Oct 2026,
+ *   branch art/tesla-bunker-3d, `web/tools/tower-tiers/export3d_static.py`)
+ *   and move as the Flash ones did, each with a strip of its own (`anim`):
+ *   the Tesla's film rolls up its face through the 55 cells of Flash's
+ *   charge, zap loop and wind-down (`towerFx.ts` teslaTick); the Bunker's
+ *   shutters roll up into the deck, 15 cells as Flash's door, when it lets
+ *   its monsters out in a battle, and down again after (`towerFx.ts`
+ *   `onRelease`). At rest each shows cell 0. The Flash strips are not drawn
+ *   over them.
  * - **Damaged** keeps the tier's picture and lets the yard's damage tint tell
  *   the story; **destroyed** is the Flash rubble, shared by every tier
  *   (the redesign brief: one rubble pile per building).
@@ -53,24 +68,28 @@
  * level, which fits the same footprint. Flash's Town Hall has no animation
  * strips, so nothing moving is lost. The player's Classic look
  * choice in Account Settings (`game/classicLook.ts`) brings back the Flash
- * look for every repainted building, the towers too once they are on.
+ * look for every repainted building, the towers too.
  */
 
 import { classicLook } from "@/game/classicLook";
 import type { ArtAnim } from "./buildingArtData";
+import type { YardKind } from "./buildingCostData";
 import type { TurretAim } from "./turretAim";
 import { TURRET_AIM } from "./turretAimData";
 
-/** Where this browser keeps the hidden switch for the new tower art, for testing ("1" is on). */
-export const NEW_TOWER_ART_KEY = "bymr.newTowerArt";
+/**
+ * The towers whose new art players see with the Modern look: the 3D Cannon
+ * (20), Sniper (21), Laser (23), Aerial Defense (115), Railgun (118), Magma
+ * Tower (132), Spurtz Cannons (136, 137), Monster Bunker (22) and Tesla
+ * (25), and in an Inferno yard the 3D Blast Tower (20 and 130) and
+ * Sharpshooter (21, `INFERNO_TOWER_TIER_ART`). A tower in `TOWER_TIER_ART`
+ * but not here keeps its Flash look. The server's `TOWER_TIER_ART_LEVELS`
+ * names the same.
+ */
+export const MODERN_TOWERS: readonly number[] = [20, 21, 22, 23, 25, 115, 118, 130, 132, 136, 137];
 
-const addressSearch = (): string => {
-  try {
-    return window.location.search;
-  } catch {
-    return ""; // No page address (a test, a worker).
-  }
-};
+/** Where a browser kept the old hidden tower switch (`?towers=new`, "1" on); cleared when the game loads. */
+export const OLD_NEW_TOWER_ART_KEY = "bymr.newTowerArt";
 
 const storage = (): Storage | null => {
   try {
@@ -80,33 +99,19 @@ const storage = (): Storage | null => {
   }
 };
 
-/**
- * Whether this page shows the new tower art: off unless this browser turned
- * it on. `?towers=new` in the address turns it on and remembers that;
- * `?towers=classic` turns it off again. Not for players yet: the new
- * towers' turrets do not turn.
- */
-export const readNewTowerArt = (search: string = addressSearch(), store: Storage | null = storage()): boolean => {
-  const asked = new URLSearchParams(search).get("towers");
+/** Forgets the old hidden tower switch, which nothing reads any more. */
+export const forgetOldTowerSwitch = (store: Storage | null = storage()): void => {
   try {
-    if (asked === "new") store?.setItem(NEW_TOWER_ART_KEY, "1");
-    else if (asked === "classic") store?.removeItem(NEW_TOWER_ART_KEY);
-    return asked === "new" || (asked !== "classic" && store?.getItem(NEW_TOWER_ART_KEY) === "1");
+    store?.removeItem(OLD_NEW_TOWER_ART_KEY);
   } catch {
-    // Site data blocked: the address still decides for this page.
-    return asked === "new";
+    // Site data blocked: there is nothing kept to forget.
   }
 };
 
-let newTowerArtOn = readNewTowerArt();
+forgetOldTowerSwitch();
 
-/** Whether the new tower art is on, read once when the game loads. */
-export const newTowerArt = (): boolean => newTowerArtOn;
-
-/** Turns the new tower art on or off for this page; for tests. */
-export const setNewTowerArt = (on: boolean): void => {
-  newTowerArtOn = on;
-};
+/** Whether the new tower art shows: with the Modern look, as read when the game loads (`classicLook`). */
+export const newTowerArt = (): boolean => !classicLook();
 
 /** `[file, offsetX, offsetY]` from the building's origin, as in `ArtImage`. */
 export type TierImage = readonly [file: string, x: number, y: number];
@@ -148,6 +153,24 @@ export interface TierTurret {
   readonly aim?: TurretAim;
 }
 
+/**
+ * A tier's moving part, played as the Flash tower's `anim` layer was
+ * (`web/tools/tower-tiers/export3d_static.py`): cell 0 is the tier at rest.
+ */
+export interface TierAnim {
+  /** The strip, an `ArtAnim`: `[file, x, y, width, height, frames]`. */
+  readonly strip: ArtAnim;
+  /** Cells in a row, for a strip of several rows; one row without it. */
+  readonly columns?: number;
+  /**
+   * Each cell is the whole building (the 3D Bunker: its open shutters leave
+   * holes where `top` has them), so the strip stands in for `top`, which is
+   * then only the still for the icons. Without it the cells are only the
+   * part that moves (the 3D Tesla's film), drawn over `top`.
+   */
+  readonly whole?: boolean;
+}
+
 export interface TierArt {
   /** The first level that shows this picture. */
   readonly from: number;
@@ -160,6 +183,8 @@ export interface TierArt {
   readonly lift: number;
   /** The turret that turns, for a tower with one; `top` is then only its still picture. */
   readonly turret?: TierTurret;
+  /** The part that moves, for a tower without a turret whose 3D tiers animate (the Tesla, the Bunker). */
+  readonly anim?: TierAnim;
 }
 
 /** The three tiers of each tower, by type, lowest first. */
@@ -188,11 +213,14 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
       turret: { body: ["body.t3@2x.webp", -40, -86], strip: ["turret.t3@2x.webp", -28, -99, 56, 42, 32], pivot: [0, -67],
         aim: TURRET_AIM["21.t3"] } },
   ],
-  // 22 Monster Bunker: five levels, so 1-2, 3-4 and 5
+  // 22 Monster Bunker: 3D, five levels, so 1-2, 3-4 and 5; its shutters roll up into the deck as it lets its monsters out
   22: [
-    { from: 1, top: ["top.t1@2x.webp", -45, -8], shadow: ["shadow.t1.jpg", -43, 35], lift: 0 },
-    { from: 3, top: ["top.t2@2x.webp", -45, -30], shadow: ["shadow.t2.jpg", -43, 27], lift: 20 },
-    { from: 5, top: ["top.t3@2x.webp", -45, -47], shadow: ["shadow.t3.jpg", -42, 21], lift: 38 },
+    { from: 1, top: ["top.t1@2x.webp", -42, -20], shadow: ["shadow.t1.jpg", -43, 35], lift: 5,
+      anim: { strip: ["anim.t1@2x.webp", -42, -20, 84, 86, 15], whole: true } },
+    { from: 3, top: ["top.t2@2x.webp", -44, -32], shadow: ["shadow.t2.jpg", -43, 27], lift: 17,
+      anim: { strip: ["anim.t2@2x.webp", -44, -32, 88, 99, 15], whole: true } },
+    { from: 5, top: ["top.t3@2x.webp", -45, -43], shadow: ["shadow.t3.jpg", -42, 21], lift: 28,
+      anim: { strip: ["anim.t3@2x.webp", -45, -43, 90, 110, 15], whole: true } },
   ],
   // 23 Laser Tower: 3D, a row of 32 headings for each of 5 tilts of the head (its head tilts; only the Cannon keeps one)
   23: [
@@ -206,29 +234,98 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
       turret: { body: ["body.t3@2x.webp", -33, -71], strip: ["turret.t3@2x.webp", -16, -92, 34, 34, 160], columns: 32, pivot: [1, -60],
         aim: TURRET_AIM["23.t3"] } },
   ],
-  // 25 Tesla Tower
+  // 25 Tesla Tower: 3D; its film rolls up the face as Flash's strip played, charging, zapping and winding down
   25: [
-    { from: 1, top: ["top.t1@2x.webp", -33, -56], shadow: ["shadow.t1.jpg", -31, 8], lift: 0 },
-    { from: 4, top: ["top.t2@2x.webp", -33, -82], shadow: ["shadow.t2.jpg", -31, -1], lift: 26 },
-    { from: 7, top: ["top.t3@2x.webp", -33, -102], shadow: ["shadow.t3.jpg", -32, -8], lift: 45 },
+    { from: 1, top: ["top.t1@2x.webp", -35, -62], shadow: ["shadow.t1.jpg", -31, 8], lift: 5,
+      anim: { strip: ["anim.t1@2x.webp", -19, -20, 13, 52, 55] } },
+    { from: 4, top: ["top.t2@2x.webp", -35, -85], shadow: ["shadow.t2.jpg", -31, -1], lift: 28,
+      anim: { strip: ["anim.t2@2x.webp", -19, -41, 13, 73, 55] } },
+    { from: 7, top: ["top.t3@2x.webp", -35, -106], shadow: ["shadow.t3.jpg", -32, -8], lift: 49,
+      anim: { strip: ["anim.t3@2x.webp", -19, -61, 13, 93, 55] } },
   ],
-  // 115 Aerial Defense Tower
+  // 115 Aerial Defense Tower: 3D, 32 headings
   115: [
-    { from: 1, top: ["top.t1@2x.webp", -39, -15], shadow: ["shadow.t1.jpg", -36, 26], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -39, 4], strip: ["turret.t1@2x.webp", -27, -17, 54, 43, 30], pivot: [0, 24] } },
-    { from: 4, top: ["top.t2@2x.webp", -39, -20], shadow: ["shadow.t2.jpg", -35, 25], lift: 4,
-      turret: { body: ["body.t2@2x.webp", -39, -1], strip: ["turret.t2@2x.webp", -28, -21, 57, 43, 30], pivot: [0, 19] } },
-    { from: 7, top: ["top.t3@2x.webp", -39, -31], shadow: ["shadow.t3.jpg", -35, 20], lift: 16,
-      turret: { body: ["body.t3@2x.webp", -39, -13], strip: ["turret.t3@2x.webp", -25, -33, 51, 42, 30], pivot: [0, 7] } },
+    { from: 1, top: ["top.t1@2x.webp", -39, -4], shadow: ["shadow.t1.jpg", -36, 26], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -39, -1], strip: ["turret.t1@2x.webp", -33, -27, 66, 52, 32], pivot: [0, 16.39],
+        aim: TURRET_AIM["115.t1"] } },
+    { from: 4, top: ["top.t2@2x.webp", -39, -9], shadow: ["shadow.t2.jpg", -35, 25], lift: 6,
+      turret: { body: ["body.t2@2x.webp", -39, -6], strip: ["turret.t2@2x.webp", -33, -32, 66, 51, 32], pivot: [0, 10.87],
+        aim: TURRET_AIM["115.t2"] } },
+    { from: 7, top: ["top.t3@2x.webp", -39, -23], shadow: ["shadow.t3.jpg", -35, 20], lift: 19,
+      turret: { body: ["body.t3@2x.webp", -39, -19], strip: ["turret.t3@2x.webp", -33, -46, 66, 52, 32], pivot: [0, -2.45],
+        aim: TURRET_AIM["115.t3"] } },
   ],
-  // 118 Railgun
+  // 118 Railgun: 3D, 32 headings
   118: [
-    { from: 1, top: ["top.t1@2x.webp", -36, -1], shadow: ["shadow.t1.jpg", -33, 30], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -36, 10], strip: ["turret.t1@2x.webp", -36, -7, 77, 57, 30], pivot: [2, 32] } },
-    { from: 4, top: ["top.t2@2x.webp", -36, -12], shadow: ["shadow.t2.jpg", -33, 27], lift: 9,
-      turret: { body: ["body.t2@2x.webp", -36, -2], strip: ["turret.t2@2x.webp", -38, -21, 75, 57, 30], pivot: [0, 18] } },
-    { from: 7, top: ["top.t3@2x.webp", -36, -23], shadow: ["shadow.t3.jpg", -33, 23], lift: 20,
-      turret: { body: ["body.t3@2x.webp", -36, -9], strip: ["turret.t3@2x.webp", -40, -29, 77, 59, 30], pivot: [-1, 10] } },
+    { from: 1, top: ["top.t1@2x.webp", -41, -2], shadow: ["shadow.t1.jpg", -33, 30], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -41, 11], strip: ["turret.t1@2x.webp", -48, -12, 96, 54, 32], pivot: [0, 23.86],
+        aim: TURRET_AIM["118.t1"] } },
+    { from: 4, top: ["top.t2@2x.webp", -41, -7], shadow: ["shadow.t2.jpg", -33, 27], lift: 5,
+      turret: { body: ["body.t2@2x.webp", -41, 6], strip: ["turret.t2@2x.webp", -48, -17, 96, 54, 32], pivot: [0, 18.99],
+        aim: TURRET_AIM["118.t2"] } },
+    { from: 7, top: ["top.t3@2x.webp", -34, -22], shadow: ["shadow.t3.jpg", -33, 23], lift: 20,
+      turret: { body: ["body.t3@2x.webp", -34, -7], strip: ["turret.t3@2x.webp", -48, -33, 96, 55, 32], pivot: [0, 3.4],
+        aim: TURRET_AIM["118.t3"] } },
+  ],
+  // 132 Magma Tower: 3D, the Volcanic look (owner, 29 Oct 2026); six levels, so 1-2, 3-4 and 5-6
+  132: [
+    { from: 1, top: ["top.t1@2x.webp", -48, -44], shadow: ["shadow.1.v2.jpg", -31, 10], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -48, -26], strip: ["turret.t1@2x.webp", -31, -59, 66, 45, 32], pivot: [2, -20.34],
+        aim: TURRET_AIM["132.t1"] } },
+    { from: 3, top: ["top.t2@2x.webp", -48, -52], shadow: ["shadow.1.v2.jpg", -31, 10], lift: 8,
+      turret: { body: ["body.t2@2x.webp", -48, -34], strip: ["turret.t2@2x.webp", -31, -67, 66, 45, 32], pivot: [2, -28.46],
+        aim: TURRET_AIM["132.t2"] } },
+    { from: 5, top: ["top.t3@2x.webp", -48, -60], shadow: ["shadow.1.v2.jpg", -31, 10], lift: 16,
+      turret: { body: ["body.t3@2x.webp", -48, -44], strip: ["turret.t3@2x.webp", -31, -75, 66, 45, 32], pivot: [2, -36.58],
+        aim: TURRET_AIM["132.t3"] } },
+  ],
+  // 136 Spurtz Cannon: 3D, one look for its five levels
+  136: [
+    { from: 1, top: ["top.t1@2x.webp", -38, -48], shadow: ["normal_damaged_shadow.jpg", -31, 10], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -38, -34], strip: ["turret.t1@2x.webp", -30, -60, 57, 46, 32], pivot: [-1.5, -28.7],
+        aim: TURRET_AIM["136.t1"] } },
+  ],
+  // 137 Black Spurtz Cannon: 3D, one look for its five levels
+  137: [
+    { from: 1, top: ["top.t1@2x.webp", -40, -47], shadow: ["normal_damaged_shadow.jpg", -31, 10], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -40, -34], strip: ["turret.t1@2x.webp", -30, -59, 57, 46, 32], pivot: [-1.5, -27.65],
+        aim: TURRET_AIM["137.t1"] } },
+  ],
+};
+
+/** The Inferno's Blast Tower: 3D, worn, Brimstone, Forged Steel (owner, 29 Oct 2026). */
+const BLAST_TOWER_TIERS: readonly TierArt[] = [
+  { from: 1, top: ["top.t1@2x.webp", -47, -45], shadow: ["shadow.1.v2.jpg", -48, 11], lift: 0,
+    turret: { body: ["body.t1@2x.webp", -47, -30], strip: ["turret.t1@2x.webp", -33, -54, 66, 46, 32], pivot: [0, -20.83],
+      aim: TURRET_AIM["i20.t1"] } },
+  { from: 4, top: ["top.t2@2x.webp", -48, -53], shadow: ["shadow.1.v2.jpg", -48, 11], lift: 8,
+    turret: { body: ["body.t2@2x.webp", -48, -40], strip: ["turret.t2@2x.webp", -33, -62, 66, 46, 32], pivot: [0, -28.95],
+      aim: TURRET_AIM["i20.t2"] } },
+  { from: 7, top: ["top.t3@2x.webp", -47, -61], shadow: ["shadow.1.v2.jpg", -48, 11], lift: 16,
+    turret: { body: ["body.t3@2x.webp", -47, -56], strip: ["turret.t3@2x.webp", -33, -70, 66, 46, 32], pivot: [0, -37.07],
+      aim: TURRET_AIM["i20.t3"] } },
+];
+
+/**
+ * The Inferno's towers that share a type with a tower up top, the Blast Tower
+ * (20, like the Cannon) and the Sharpshooter (21, like the Sniper): in an
+ * Inferno yard these tiers show, from the Inferno's folders. 130 is the
+ * Inferno's other Blast Tower, drawn from the same folder.
+ */
+export const INFERNO_TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  20: BLAST_TOWER_TIERS,
+  130: BLAST_TOWER_TIERS,
+  // 21 Sharpshooter: 3D, worn, Brimstone, Forged Steel
+  21: [
+    { from: 1, top: ["top.t1@2x.webp", -37, -78], shadow: ["shadow.1.v2.jpg", -50, 12], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -37, -56], strip: ["turret.t1@2x.webp", -36, -83, 68, 45, 32], pivot: [-2, -51.44],
+        aim: TURRET_AIM["i21.t1"] } },
+    { from: 4, top: ["top.t2@2x.webp", -51, -86], shadow: ["shadow.1.v2.jpg", -50, 12], lift: 8,
+      turret: { body: ["body.t2@2x.webp", -51, -64], strip: ["turret.t2@2x.webp", -36, -91, 68, 45, 32], pivot: [-2, -59.56],
+        aim: TURRET_AIM["i21.t2"] } },
+    { from: 7, top: ["top.t3@2x.webp", -50, -94], shadow: ["shadow.1.v2.jpg", -50, 12], lift: 16,
+      turret: { body: ["body.t3@2x.webp", -50, -72], strip: ["turret.t3@2x.webp", -36, -99, 68, 45, 32], pivot: [-2, -67.68],
+        aim: TURRET_AIM["i21.t3"] } },
   ],
 };
 
@@ -252,16 +349,21 @@ export const TOWN_HALL_ART: readonly TierArt[] = [
 /** Every type with new art the old-art switch turns back: the towers, then the Town Hall (14). */
 const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART };
 
+/** Whether an Inferno yard's `type` has tiers of its own (`INFERNO_TOWER_TIER_ART`). */
+export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
+  kind === "inferno" && type in INFERNO_TOWER_TIER_ART;
+
 /**
- * The new picture a building shows at `level`, or null with the old art on,
- * for a tower while the new tower art is off, below level 1 and for every
- * type without new art.
+ * The new picture a building shows at `level` in a `kind` yard, or null with
+ * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1 and for
+ * every type without new art.
  */
-export const tierArtFor = (type: number, level: number): TierArt | null => {
-  if (classicLook()) return null;
-  if (!newTowerArtOn && type in TOWER_TIER_ART) return null;
+export const tierArtFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
+  if (!newTowerArt()) return null;
+  const inferno = hasInfernoTiers(type, kind);
+  if ((inferno || type in TOWER_TIER_ART) && !MODERN_TOWERS.includes(type)) return null;
   let chosen: TierArt | null = null;
-  for (const tier of NEW_ART[type] ?? []) {
+  for (const tier of (inferno ? INFERNO_TOWER_TIER_ART[type] : NEW_ART[type]) ?? []) {
     if (tier.from > level) break;
     chosen = tier;
   }
@@ -269,4 +371,5 @@ export const tierArtFor = (type: number, level: number): TierArt | null => {
 };
 
 /** World px a tower's gun stands above the Flash tower's at this level; 0 with the old art. */
-export const tierLift = (type: number, level: number): number => tierArtFor(type, level)?.lift ?? 0;
+export const tierLift = (type: number, level: number, kind: YardKind = "main"): number =>
+  tierArtFor(type, level, kind)?.lift ?? 0;

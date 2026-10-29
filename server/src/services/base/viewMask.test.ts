@@ -4,7 +4,7 @@ import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { maxHp } from "../../game-rules/combat/index.js";
-import { artLevelOf, towerTierArtOn } from "../../game-data/buildingArtLevels.js";
+import { artLevelOf } from "../../game-data/buildingArtLevels.js";
 import { buildSaveData } from "./mapSaveData.js";
 import { maskedHp } from "./viewMask.js";
 import { previewHelp } from "../friends/helpRules.js";
@@ -74,15 +74,31 @@ describe("someone else's yard, only looked at", () => {
   test("each building carries the level its picture needs, not its own", () => {
     const sent = asViewer(yardOf(BaseType.MAIN)).buildingdata as Wire;
 
-    // Towers have one picture for every level (the new tower art is off).
-    expect(sent["2"]!.l).toBe(1);
-    expect(sent["3"]!.l).toBe(1);
+    // The 3D Cannon and Sniper change at levels 4 and 7, so 8 and 9 show 7's.
+    expect(sent["2"]!.l).toBe(7);
+    expect(sent["3"]!.l).toBe(7);
     // A Twig Snapper's picture changes at 1, 3, 6 and 10; level 8 shows 6's.
     expect(sent["4"]!.l).toBe(6);
     // The Town Hall's picture is its level: nothing more is given away.
     expect(sent["1"]!.l).toBe(7);
     // A foundation still building keeps its countdown and says nothing more.
     expect(sent["7"]!.cB).toBe(120);
+  });
+
+  test("the painted towers read their tier, never their level", () => {
+    const TESLA = 25;
+    const BUNKER = 22;
+    const AERIAL = 115;
+    const RAILGUN = 118;
+    expect(artLevelOf(TESLA, 8)).toBe(7);
+    expect(artLevelOf(TESLA, 6)).toBe(4);
+    expect(artLevelOf(BUNKER, 2)).toBe(1);
+    expect(artLevelOf(BUNKER, 4)).toBe(3);
+    expect(artLevelOf(BUNKER, 5)).toBe(5);
+    expect(artLevelOf(AERIAL, 9)).toBe(7);
+    expect(artLevelOf(RAILGUN, 3)).toBe(1);
+    // Without the tiers, the Flash steps alone: a tower has one picture.
+    expect(artLevelOf(CANNON, 8, false)).toBe(1);
   });
 
   test("a running upgrade keeps its countdown but not its length, which names the level", () => {
@@ -96,42 +112,14 @@ describe("someone else's yard, only looked at", () => {
     const sent = asViewer(yardOf(BaseType.MAIN));
     const buildings = sent.buildingdata as Wire;
     const health = sent.buildinghealthdata as Record<string, number>;
-    const shown = maxHp(SNIPER, 1);
+    const shown = maxHp(SNIPER, 7);
 
     // 30,000 of a level 9 Sniper's 75,500: damaged, under half.
     expect(buildings["3"]!.hp).toBeLessThan(shown / 2);
     expect(buildings["3"]!.hp).toBeGreaterThan(0);
     expect(health["3"]).toBe(buildings["3"]!.hp as number);
     // 80,000 is over a level 8 Cannon's 58,000: full health of the art level.
-    expect(health["2"]).toBe(maxHp(CANNON, 1));
-  });
-
-  test("TOWER_TIER_ART is off unless set to on: the new towers are not for players yet", () => {
-    expect(towerTierArtOn({})).toBe(false);
-    expect(towerTierArtOn({ TOWER_TIER_ART: "" })).toBe(false);
-    expect(towerTierArtOn({ TOWER_TIER_ART: "off" })).toBe(false);
-    expect(towerTierArtOn({ TOWER_TIER_ART: "on" })).toBe(true);
-  });
-
-  test("with TOWER_TIER_ART=on, a tower carries its tier: levels 4 and 7, so 8 and 9 show 7's", () => {
-    const before = process.env.TOWER_TIER_ART;
-    process.env.TOWER_TIER_ART = "on";
-    try {
-      const sent = asViewer(yardOf(BaseType.MAIN));
-      const buildings = sent.buildingdata as Wire;
-      const health = sent.buildinghealthdata as Record<string, number>;
-      expect(buildings["2"]!.l).toBe(7);
-      expect(buildings["3"]!.l).toBe(7);
-      // Everything else is as with it off.
-      expect(buildings["4"]!.l).toBe(6);
-      expect(buildings["1"]!.l).toBe(7);
-      // Health is measured against the tier's full health instead.
-      expect(buildings["3"]!.hp).toBeLessThan(maxHp(SNIPER, 7) / 2);
-      expect(health["2"]).toBe(maxHp(CANNON, 7));
-    } finally {
-      if (before === undefined) delete process.env.TOWER_TIER_ART;
-      else process.env.TOWER_TIER_ART = before;
-    }
+    expect(health["2"]).toBe(maxHp(CANNON, 7));
   });
 
   test("the owner's Shiny count is not sent", () => {

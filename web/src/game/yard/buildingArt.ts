@@ -1,6 +1,6 @@
 import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel, type ArtRow } from "./buildingArtData";
 import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
-import { tierArtFor } from "./buildingArtTiers";
+import { hasInfernoTiers, tierArtFor } from "./buildingArtTiers";
 import type { YardKind } from "./buildingCostData";
 
 /**
@@ -325,14 +325,25 @@ export const resolveArt = (
   // default and damaged alike; a destroyed one falls through to the Flash rubble.
   // A tower whose turret turns is its body with the turret's strip over it, and
   // the parts of the body in front of the turret (the Cannon's prongs) over that.
-  // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art.
-  const ownInfernoArt = kind === "inferno" && row.folder !== ROWS.get(type)?.folder;
-  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted);
+  // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art,
+  // unless the Inferno has tiers of its own for it (the Blast Tower, the Sharpshooter).
+  const ownInfernoArt =
+    kind === "inferno" && row.folder !== ROWS.get(type)?.folder && !hasInfernoTiers(type, kind);
+  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted, kind);
+  // A tier whose moving part is a strip (the 3D Tesla's film, the Bunker's shutters) has it over its top,
+  // or, when each cell is the whole building, in its place: its top is then the strip's cell 0.
   if (tier) {
-    const turret = tier.turret;
-    const layers = turret ? (turret.front ? [turret.strip, turret.front] : [turret.strip]) : [];
+    const { turret, anim } = tier;
+    const layers = turret ? (turret.front ? [turret.strip, turret.front] : [turret.strip]) : anim ? [anim.strip] : [];
+    const columnsOf = (layer: ArtAnim): number | undefined =>
+      layer === turret?.strip ? turret.columns : layer === anim?.strip ? anim.columns : undefined;
     const still = imageOf(row.folder, tier.top);
-    const top = tier.turret ? imageOf(row.folder, tier.turret.body) : still;
+    const whole = !turret && anim?.whole === true;
+    const top = turret
+      ? imageOf(row.folder, turret.body)
+      : whole && anim
+        ? imageOf(row.folder, [anim.strip[0], anim.strip[1], anim.strip[2], anim.strip[3], anim.strip[4]])
+        : still;
     if (top && still) {
       return {
         name: row.name,
@@ -340,9 +351,9 @@ export const resolveArt = (
         level: tier.from,
         top,
         shadow: imageOf(row.folder, tier.shadow),
-        anims: layers.map((anim) => animOf(row.folder, anim, anim === turret?.strip ? turret.columns : undefined)),
-        topIsAnim: false,
-        ...(tier.turret ? { still } : {}),
+        anims: layers.map((layer) => animOf(row.folder, layer, columnsOf(layer))),
+        topIsAnim: whole,
+        ...(turret || whole ? { still } : {}),
       };
     }
   }

@@ -2366,6 +2366,18 @@ export class AttackBattleLayer {
       if (at) this.spawnRing(event.tick, at, event.radius, TOWER_QUAKE_COLOUR);
       return;
     }
+    if (event.kind === "coilRest") {
+      this.towerFx.onCoilRest(event.towerId, event.tick, event.rearmBy);
+      return;
+    }
+    if (event.kind === "release") {
+      this.towerFx.onRelease(event.buildingId, event.tick);
+      return;
+    }
+    if (event.kind === "bunkerDoor") {
+      this.towerFx.onDoor(event.buildingId, event.tick, event.open);
+      return;
+    }
     if (event.kind === "splash") {
       // Eye-ra's blast is a fireball (feat/eyera-explosion); a Bandito's
       // rings come with a flash (feat/punchy-trial); the rest keep the rings.

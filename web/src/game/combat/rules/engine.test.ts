@@ -507,6 +507,37 @@ describe("the Tesla Tower's charge and zaps (issue #266)", () => {
     expect(charges[1]! - lastZap.tick).toBeLessThanOrEqual(92 + 20);
   });
 
+  it("says when it stops zapping, and by when it charges again while it still has a target", () => {
+    const battle = teslaBattle({ C15: 1 });
+    const charges: number[] = [];
+    const rests: { tick: number; rearmBy: number | null }[] = [];
+    for (let step = 0; step < 700 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "charge") charges.push(event.tick);
+        if (event.kind === "coilRest") rests.push({ tick: event.tick, rearmBy: event.rearmBy });
+      }
+    }
+    expect(charges.length).toBeGreaterThanOrEqual(2);
+    // Its 10 zaps spent, it rests between its charges, and the next comes by `rearmBy`.
+    const rest = rests.find((one) => one.tick > charges[0]! && one.tick < charges[1]!)!;
+    expect(rest.rearmBy).not.toBeNull();
+    expect(charges[1]!).toBeLessThanOrEqual(rest.rearmBy!);
+    expect(charges[1]!).toBeGreaterThan(rest.tick);
+  });
+
+  it("rests for want of a target once its last target is dead", () => {
+    const battle = teslaBattle({ C1: 1 });
+    const rests: (number | null)[] = [];
+    for (let step = 0; step < 600 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "coilRest") rests.push(event.rearmBy);
+      }
+    }
+    expect(rests.at(-1)).toBeNull();
+  });
+
   it("kills a clump of Pokeys, a charge at a time", () => {
     const battle = teslaBattle({ C1: 4 });
     const { zaps } = timeline(battle, 1200);
@@ -1900,6 +1931,54 @@ describe("a bunker's reach (issue #91)", () => {
     const { pokey, defenders } = battleOf(350);
     expect(Math.hypot(pokey.ix - 45, pokey.iy - 45)).toBeGreaterThan(300);
     expect(defenders).toHaveLength(0);
+  });
+
+  it("tells the renderer each defender it sends, to roll the shutters up (drawing only)", () => {
+    const sent = (harvesterAt: number) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+      });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+      battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
+      run(battle, 30);
+      return battle.recentEvents(-1).filter((event) => event.kind === "release");
+    };
+    expect(sent(290)).toEqual([{ kind: "release", tick: 30, buildingId: 1 }]);
+    expect(sent(350)).toEqual([]);
+  });
+
+  it("tells the renderer when the Flash door opens and shuts: open while attackers are in range or its monsters are out (drawing only)", () => {
+    const doors = (harvesterAt: number) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+      });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+      battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
+      const out: { tick: number; open: boolean; defenders: number }[] = [];
+      let released = Infinity;
+      for (let step = 0; step < 1500 && !battle.over(); step += 1) {
+        battle.step();
+        const defenders = battle.creeps().filter((creep) => creep.friendly).length;
+        for (const event of battle.recentEvents(battle.tick - 1)) {
+          if (event.kind === "release") released = Math.min(released, event.tick);
+          if (event.kind === "bunkerDoor") out.push({ tick: event.tick, open: event.open, defenders });
+        }
+      }
+      return { out, released };
+    };
+    const { out, released } = doors(290);
+    // It opens as the attacker comes in range, by the time the first defender comes out.
+    expect(out[0]?.open).toBe(true);
+    expect(out[0]!.tick).toBeLessThanOrEqual(released);
+    // Never shut while one of its monsters is out.
+    for (const change of out) if (!change.open) expect(change.defenders).toBe(0);
+    // Out of range, it stays shut till the attacker walks in.
+    const far = doors(350);
+    expect(far.out[0]?.open).toBe(true);
+    expect(far.out[0]!.tick).toBeGreaterThan(30);
+    expect(far.out[0]!.tick).toBeLessThanOrEqual(far.released);
   });
 });
 
