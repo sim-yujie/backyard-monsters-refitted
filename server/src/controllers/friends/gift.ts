@@ -38,8 +38,8 @@ import type { FriendsBody } from "./friends.js";
  *   once per friend per UTC day, worth 3% of the lower of the two storage
  *   caps, fixed when sent. Refusals in order: `self`, `noSuchPlayer`,
  *   `notFriends`, `cannotSend` (so a stranger learns nothing more), `tooNew`
- *   (the help gates: 12 hours of friendship, both accounts 3 days old, both
- *   level 5; `from` and `rule` say which holds), then `giftSentToday`. Nothing is taken from the sender.
+ *   (the help gates: 12 hours of friendship, both level 5; `rule` says
+ *   which holds, `from` when the friendship's age lifts), then `giftSentToday`. Nothing is taken from the sender.
  * - `GET /bm/friends/gifts`: the gifts waiting, oldest first, and how many
  *   more can be collected today.
  * - `POST /bm/friends/gifts/collect` `{ giftid }` or `{ all: true }`: credits

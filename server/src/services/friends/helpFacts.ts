@@ -47,7 +47,7 @@ export const readSides = async (em: EntityManager, userids: readonly number[]): 
   if (userids.length === 0) return new Map();
   const rows = await em.execute<(HelpSideRow & { userid: number | string })[]>(
     `SELECT u.userid, u.username, u.banned, u.blocked_users, u.save_basesaveid AS basesaveid,
-            coalesce(s.createtime, 0) AS createtime, s.points, s.basevalue
+            s.points, s.basevalue
        FROM bym."user" u LEFT JOIN bym.save s ON s.basesaveid = u.save_basesaveid
       WHERE u.userid IN (${placeholders(userids)})`,
     [...userids]

@@ -81,7 +81,7 @@ export interface Friend {
   /** Friends since; null when the server sent none. */
   readonly since: number | null;
   readonly giftSentToday: boolean;
-  /** When the 12-hour friendship rule lets a gift or a help go; null once it has (the account and level gates may still hold). */
+  /** When the 12-hour friendship rule lets a gift or a help go; null once it has (the level gate may still hold). */
   readonly canGiftFrom: number | null;
   /** Whether the player could help them today; null until help lands (WP6). */
   readonly help: { readonly speedup: boolean; readonly repair: boolean } | null;
@@ -270,19 +270,18 @@ export interface FriendRefusal {
   readonly rule?: GateRule;
 }
 
-/** Which gate holds a `tooNew`: the friendship's age, an account's age, or a level (the server's `rule`). */
-export type GateRule = "friendship" | "account" | "level";
+/** Which gate holds a `tooNew`: the friendship's age or a level (the server's `rule`). */
+export type GateRule = "friendship" | "level";
 
-/** Who may help or send a gift, as the server's `FRIEND_GATES` (12 hours of friendship since 2026-10-29). */
-export const FRIEND_GATES = { friendshipAgeHours: 12, accountAgeDays: 3, minLevel: 5 } as const;
+/** Who may help or send a gift, as the server's `FRIEND_GATES` (owner 2026-10-29: 12 hours, no account age). */
+export const FRIEND_GATES = { friendshipAgeHours: 12, minLevel: 5 } as const;
 
-const GATE_RULES: readonly GateRule[] = ["friendship", "account", "level"];
+const GATE_RULES: readonly GateRule[] = ["friendship", "level"];
 const isGateRule = (value: unknown): value is GateRule => GATE_RULES.includes(value as GateRule);
 
 /** Why the gate holds, in a few words. */
 const GATE_TEXT: Readonly<Record<GateRule, string>> = {
   friendship: `friends for ${FRIEND_GATES.friendshipAgeHours} hours first`,
-  account: `accounts must be ${FRIEND_GATES.accountAgeDays} days old`,
   level: `each player must be level ${FRIEND_GATES.minLevel}`,
 };
 
@@ -311,7 +310,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   requestsOff: "This player isn't taking friend requests.",
   declinedRecently: "You can't ask this player again yet.",
   cannotSend: "You can't send that to this player.",
-  tooNew: `Not yet: friends for ${FRIEND_GATES.friendshipAgeHours} hours, accounts ${FRIEND_GATES.accountAgeDays} days old, each player level ${FRIEND_GATES.minLevel}.`,
+  tooNew: `Not yet: friends for ${FRIEND_GATES.friendshipAgeHours} hours and each player level ${FRIEND_GATES.minLevel}.`,
   dailyCap: "You have done that as many times as you can today.",
   giftSentToday: "You have already sent this friend a gift today.",
   collectLimit: "You have collected as many gifts as you can today. The rest will wait.",

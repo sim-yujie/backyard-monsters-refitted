@@ -250,9 +250,8 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     await befriend(H1, STRANGER, T0 - 3600);
     expect(await refusalOf(help(H1, 1, "speedup", T0, STRANGER))).toEqual({ reason: "tooNew", from: T0 - 3600 + 12 * 60 * 60, rule: "friendship" });
 
-    await setYard(OWNER, { createtime: T0 - DAY });
-    expect(await refusalOf(help(H1, 1, "speedup"))).toEqual({ reason: "tooNew", from: T0 + 2 * DAY, rule: "account" });
-    await setYard(OWNER, { createtime: T0 - 30 * DAY, points: "100" });
+    // A day-old account is no bar (owner 2026-10-29): only its low level is named.
+    await setYard(OWNER, { createtime: T0 - DAY, points: "100" });
     expect(await refusalOf(help(H1, 1, "speedup"))).toEqual({ reason: "tooNew", rule: "level" });
 
     expect(await helpRows()).toHaveLength(0);

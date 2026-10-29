@@ -27,8 +27,8 @@ export type HelpKind = "speedup" | "repair";
 const HELP_COUNTDOWNS = ["cB", "cU", "cF"] as const;
 export type HelpCountdown = (typeof HELP_COUNTDOWNS)[number];
 
-/** Which `tooNew` gate holds: the friendship's age, an account's age, or a level. */
-export type GateRule = "friendship" | "account" | "level";
+/** Which `tooNew` gate holds: the friendship's age or a level. */
+export type GateRule = "friendship" | "level";
 
 /** A refusal and, when known, the unix second it lifts and the gate that holds it. */
 export interface HelpRefusal {
@@ -48,8 +48,6 @@ export interface HelpSide {
   userid: number;
   banned: boolean;
   blocked_users: unknown;
-  /** The main save's `createtime`, unix seconds: the account's age. */
-  createtime: number;
   points: string | null;
   basevalue: string | null;
 }
@@ -65,7 +63,6 @@ export interface HelpFacts {
 }
 
 const HOUR = 60 * 60;
-const DAY = 24 * HOUR;
 
 const levelOf = (side: HelpSide): number => calculateBaseLevel(side.points ?? "0", side.basevalue ?? "0");
 
@@ -73,9 +70,8 @@ const levelOf = (side: HelpSide): number => calculateBaseLevel(side.points ?? "0
  * Why the helper may not help the owner at all today, or null when they may
  * (§4 "Who may help", §7 rules 1, 2 and 8). In this order: not friends; a
  * block either way or either account banned (the neutral `cannotSend`); the
- * age and level gates (`tooNew`, with `rule` naming the gate that holds and
- * `from` when time alone will lift it: the later of the friendship and
- * account ages, named after whichever lifts last); the daily cap.
+ * level and friendship-age gates (`tooNew`, with `rule` naming the gate that
+ * holds and, for the friendship's age, `from` when it lifts); the daily cap.
  */
 export const gateRefusal = (facts: HelpFacts, now: number): HelpRefusal | null => {
   const { helper, owner } = facts;
@@ -90,10 +86,8 @@ export const gateRefusal = (facts: HelpFacts, now: number): HelpRefusal | null =
   }
 
   const friendshipClears = facts.friendsSince + FRIEND_GATES.friendshipAgeHours * HOUR;
-  const accountClears = Math.max(Number(helper.createtime), Number(owner.createtime)) + FRIEND_GATES.accountAgeDays * DAY;
   const levelsOk = levelOf(helper) >= FRIEND_GATES.minLevel && levelOf(owner) >= FRIEND_GATES.minLevel;
   if (!levelsOk) return { reason: "tooNew", rule: "level" };
-  if (accountClears > now && accountClears >= friendshipClears) return { reason: "tooNew", from: accountClears, rule: "account" };
   if (friendshipClears > now) return { reason: "tooNew", from: friendshipClears, rule: "friendship" };
 
   if (facts.helpsToday >= HELP_RULES.dailyHelps) return { reason: "dailyCap" };

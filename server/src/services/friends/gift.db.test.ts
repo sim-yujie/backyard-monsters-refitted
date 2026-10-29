@@ -290,7 +290,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     expect((await list(B)).gifts).toHaveLength(1);
   });
 
-  test("the gates: self, unknown, not friends, hidden accounts, blocks, bans, the 24 hours, account age and level", async () => {
+  test("the gates: self, unknown, not friends, hidden accounts, blocks, bans, the 12 hours and level (no account age)", async () => {
     expect(await reasonOf(send(A, A))).toBe("self");
     expect(await reasonOf(send(A, 994_999))).toBe("noSuchPlayer");
     expect(await reasonOf(send(A, STRANGER))).toBe("notFriends");
@@ -310,9 +310,8 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
 
     await unfriend(A, B);
     await befriend(A, B);
-    await setSave(B, { createtime: T0 - DAY });
-    expect(await refusalOf(send(A, B))).toEqual({ reason: "tooNew", from: T0 + 2 * DAY, rule: "account" });
-    await setSave(B, { createtime: T0 - 30 * DAY, points: "0" });
+    // A day-old account is no bar (owner 2026-10-29): only its low level is named.
+    await setSave(B, { createtime: T0 - DAY, points: "0" });
     expect(await refusalOf(send(A, B))).toEqual({ reason: "tooNew", rule: "level" });
 
     expect(await giftRows(A)).toHaveLength(0);

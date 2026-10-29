@@ -274,14 +274,13 @@ describe("friendRefusal", () => {
     expect(friendship).toMatchObject({ reason: "tooNew", rule: "friendship", from: now + 5 * 3600 - 30 });
     expect(friendship.message).toMatch(/^Opens in 4h 59m|^Opens in 5h 0m/);
     expect(friendship.message).toContain("(friends for 12 hours first)");
-    // An account 2 days old: a day and a bit to go.
-    const account = refused({ reason: "tooNew", from: now + 28 * 3600 + 120, rule: "account" });
-    expect(account.message).toBe("Opens in 1d 4h (accounts must be 3 days old).");
     expect(refused({ reason: "tooNew", rule: "level" }).message).toBe("Not yet: each player must be level 5.");
     // An older server with no rule: still the time left; an unknown rule is dropped.
     expect(refused({ reason: "tooNew", from: now + 600 + 30 }).message).toMatch(/^Opens in 10m \d+s\.$/);
     expect(refused({ reason: "tooNew", rule: "moon" })).toEqual({ reason: "tooNew", message: REFUSAL_TEXT.tooNew });
-    expect(REFUSAL_TEXT.tooNew).toBe("Not yet: friends for 12 hours, accounts 3 days old, each player level 5.");
+    // The dropped account-age rule (owner 2026-10-29) is not read either.
+    expect(refused({ reason: "tooNew", rule: "account" })).toEqual({ reason: "tooNew", message: REFUSAL_TEXT.tooNew });
+    expect(REFUSAL_TEXT.tooNew).toBe("Not yet: friends for 12 hours and each player level 5.");
   });
 
   it("tooNewText: a gate whose time has passed is named without a countdown", () => {

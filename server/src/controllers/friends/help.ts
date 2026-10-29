@@ -127,8 +127,8 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
     const [since, today] = await Promise.all([friendsSince(tx, helper, [owner]), helpsToday(tx, helper, now)]);
     const gate = gateRefusal(
       {
-        helper: { ...mySide, createtime: mine.createtime, points: mine.points, basevalue: mine.basevalue },
-        owner: { ...theirSide, createtime: theirs.createtime, points: theirs.points, basevalue: theirs.basevalue },
+        helper: { ...mySide, points: mine.points, basevalue: mine.basevalue },
+        owner: { ...theirSide, points: theirs.points, basevalue: theirs.basevalue },
         friendsSince: since.get(owner) ?? null,
         helpsToday: today,
       },
