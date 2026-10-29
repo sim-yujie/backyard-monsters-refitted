@@ -191,10 +191,18 @@ const OUTPOST_ONLY_TYPES = new Set([112]);
   blocks.push(...extra);
 }
 
+/**
+ * An offset: Flash writes most as whole numbers but a few as decimals
+ * (`new Rectangle(4, 13.5, 27, 31)` on the Inferno Incubator, `INFERNOYARDPROPS.as:1046`).
+ * Matching only digits silently dropped those entries, and with them the part
+ * of the building they draw.
+ */
+const NUM = "(-?\\d+(?:\\.\\d+)?)";
+
 /** `["file.png", new Point(-30, -19)]` -> `{ file, x, y }`. */
 const readImage = (level, key) => {
   const hit = new RegExp(
-    `"${key}"\\s*:\\s*\\[\\s*"([^"]+)"\\s*,\\s*new Point\\(\\s*(-?\\d+)\\s*,\\s*(-?\\d+)\\s*\\)`,
+    `"${key}"\\s*:\\s*\\[\\s*"([^"]+)"\\s*,\\s*new Point\\(\\s*${NUM}\\s*,\\s*${NUM}\\s*\\)`,
   ).exec(level);
   if (!hit) return null;
   return { file: hit[1], x: Number(hit[2]), y: Number(hit[3]), w: 0, h: 0 };
@@ -213,7 +221,7 @@ const readImage = (level, key) => {
  */
 const readStrip = (level, key) => {
   const hit = new RegExp(
-    `"${key}"\\s*:\\s*\\[\\s*"([^"]+)"\\s*,\\s*new Rectangle\\(\\s*(-?\\d+)\\s*,\\s*(-?\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)`,
+    `"${key}"\\s*:\\s*\\[\\s*"([^"]+)"\\s*,\\s*new Rectangle\\(\\s*${NUM}\\s*,\\s*${NUM}\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)`,
   ).exec(level);
   if (!hit) return null;
   return {
@@ -240,7 +248,7 @@ const readTop = (level, suffix) =>
  */
 const readAnim = (level, key) => {
   const hit = new RegExp(
-    `"${key}"\\s*:\\s*\\[\\s*"([^"]+)"\\s*,\\s*new Rectangle\\(\\s*(-?\\d+)\\s*,\\s*(-?\\d+)\\s*,` +
+    `"${key}"\\s*:\\s*\\[\\s*"([^"]+)"\\s*,\\s*new Rectangle\\(\\s*${NUM}\\s*,\\s*${NUM}\\s*,` +
       `\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*,\\s*(\\d+)`,
   ).exec(level);
   if (!hit) return null;

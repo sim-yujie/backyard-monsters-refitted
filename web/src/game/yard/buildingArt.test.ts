@@ -129,6 +129,18 @@ describe("the Inferno art", () => {
     }
   });
 
+  it("keeps the layers Flash places at a fractional offset", () => {
+    // The Incubator's top has a hole where its glass window goes, and the window
+    // is an `anim2` at `new Rectangle(4, 13.5, 27, 31)` (`INFERNOYARDPROPS.as:1046`).
+    // Reading only whole numbers dropped it and left the hole showing.
+    const incubator = resolveArt(13, 1, ArtState.DEFAULT, "inferno");
+    expect(incubator?.anims.map((a) => [a.url.split("/").pop(), a.x, a.y])).toEqual([
+      ["anim.1.v2.png", -48, -45],
+      ["anim.2.v2.png", 4, 13.5],
+    ]);
+    expect(resolveArt(3, 1, ArtState.DEFAULT, "inferno")?.anims).toHaveLength(3);
+  });
+
   it("keeps the main art outside the Inferno", () => {
     expect(resolveArt(14, 1, ArtState.DEFAULT)?.folder).not.toBe("buildings/itownhall/");
     expect(buildingName(14)).not.toBe("Under Hall");
@@ -151,6 +163,7 @@ describe("the Inferno art", () => {
       "113 buildings/radiotower/shadow.destroyed.jpg",
       "113 buildings/radiotower/top.destroyed.png",
       "127 buildings/iportal/shadow.v2.4.jpg",
+      "132 buildings/imagmatower/anim.1.damaged.v2.png",
       "133 buildings/siegefactory/anim.1.png",
       "133 buildings/siegefactory/top.1.damaged.png",
       "133 buildings/siegefactory/top.1.png",
