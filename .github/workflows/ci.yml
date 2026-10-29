@@ -42,6 +42,11 @@ jobs:
           node-version: 24
       - name: Install
         run: bun install --frozen-lockfile
+      # Some web tests import server code (e.g. yard error rules), which needs
+      # the server's packages too.
+      - name: Install server packages
+        working-directory: server
+        run: bun install --frozen-lockfile
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -85,7 +90,7 @@ jobs:
       DB_USER: postgres
       DB_PASSWORD: ci-only
       DB_NAME: bym_ci
-      REDIS_URL: redis://localhost:6379
+      REDIS_URL: redis://localhost:6379/1
       # Test-only; the server refuses to start without one (StartupSafety.ts).
       SECRET_KEY: ci-only-test-key
       # The opt-in database suites (see the top of this file).
@@ -101,8 +106,8 @@ jobs:
       NOTICES_TEST_DB: bym_ci
       NOTIF_TEST_DB: bym_ci
       PRIVACY_TEST_DB: bym_ci
-      BOTS_TEST_REDIS: redis://localhost:6379
-      HEALTH_TEST_REDIS: redis://localhost:6379
+      BOTS_TEST_REDIS: redis://localhost:6379/1
+      HEALTH_TEST_REDIS: redis://localhost:6379/1
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
