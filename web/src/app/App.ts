@@ -1,4 +1,4 @@
-import { Application, Container } from "pixi.js";
+import { Application, Assets, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import { setGameFrameSource, setScreenNameSource } from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
@@ -88,6 +88,15 @@ export class App {
     // the Font Loading API, or a font request that fails, still renders —
     // just with the fallback stack from --font-display/--font-body.
     await loadTitanOne();
+
+    // Pictures are fetched by the page, not by Pixi's worker pool. The pool
+    // fetches and decodes one picture per worker, one worker per processor
+    // core, newest request first: a yard asking for a hundred pictures at once
+    // waited in a queue of four to twelve, its walls (asked for first) served
+    // last, and a 10 MB monster sheet held a worker the whole time. The page's
+    // own fetch lets the browser have them all in flight, in the order asked,
+    // and `createImageBitmap` still decodes them off the main thread.
+    Assets.setPreferences({ preferWorkers: false });
 
     await this.pixi.init({
       // The canvas fills the window; CSS pins it and `resizeTo` keeps the

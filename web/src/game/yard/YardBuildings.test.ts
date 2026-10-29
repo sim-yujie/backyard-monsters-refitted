@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // jsdom: a colour-matrix filter asks for a canvas when it is made.
-import { describe, expect, it } from "vitest";
-import { Sprite, Texture, type ColorMatrixFilter } from "pixi.js";
+import { describe, expect, it, vi } from "vitest";
+import { Assets, Sprite, Texture, type ColorMatrixFilter } from "pixi.js";
 import { creepZIndex } from "@/game/attack/AttackBattleLayer";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
@@ -321,5 +321,61 @@ describe("YardBuildings guests (#272)", () => {
     expect(inFront.destroyed).toBe(false);
     behind.destroy();
     inFront.destroy();
+  });
+});
+
+describe("YardBuildings: loading the pictures", () => {
+  /** The trap and the tower above, behind three walls (type 17) that share one picture. */
+  const walledYard = () => {
+    const response = yardResponse();
+    for (const id of [3, 4, 5]) response.buildingdata![String(id)] = { id, t: 17, l: 1, X: 400 + id * 40, Y: 0 };
+    return readYard(response);
+  };
+
+  const everywhere = { x: -10_000, y: -10_000, width: 20_000, height: 20_000 };
+
+  it("asks for every building's own picture first, the most shared first, before any shadow or strip", () => {
+    const asked: string[] = [];
+    const load = vi.spyOn(Assets, "load").mockImplementation(((url: string) => {
+      asked.push(url);
+      return new Promise(() => {});
+    }) as typeof Assets.load);
+    try {
+      const buildings = new YardBuildings();
+      buildings.show(walledYard(), fakeAtlas());
+      // Asked for on `show`, not on the first frame.
+      expect(asked[0]).toBe("/assets/buildings/walls/top.1.png");
+      expect(asked).toHaveLength(3);
+
+      buildings.draw(everywhere);
+      const tops = asked.slice(0, 3);
+      expect(tops.every((url) => /\/top\.\d/.test(url))).toBe(true);
+      expect(asked.length).toBeGreaterThan(3);
+      buildings.destroy();
+    } finally {
+      load.mockRestore();
+    }
+  });
+
+  it("names a building only once its picture is known not to be coming", async () => {
+    const load = vi.spyOn(Assets, "load").mockImplementation(((url: string) =>
+      url.includes("boobytrap/top") ? Promise.reject(new Error("gone")) : new Promise(() => {})) as typeof Assets.load);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const buildings = new YardBuildings();
+      buildings.show(walledYard(), fakeAtlas());
+      buildings.draw(everywhere);
+      // Still loading: a faint footprint, no names.
+      expect(buildings.labels.children).toHaveLength(0);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      buildings.draw(everywhere);
+      expect(buildings.labels.children).toHaveLength(1);
+      expect(buildings.placeholderCount).toBe(5);
+      buildings.destroy();
+    } finally {
+      load.mockRestore();
+      warn.mockRestore();
+    }
   });
 });

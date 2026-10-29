@@ -1,5 +1,5 @@
 import { ColorMatrixFilter, Container, Sprite, Text, Texture } from "pixi.js";
-import { ArtState, resolveArt, type ResolvedArt } from "./buildingArt";
+import { ArtState, resolveArt, type ResolvedArt, type ResolvedImage } from "./buildingArt";
 import { fortArtFor, type FortArt } from "./fortArt";
 import type { YardKind } from "./buildingCostData";
 import {
@@ -40,9 +40,18 @@ import { artFor, type Yard, type YardBuilding } from "./yardModel";
  * they are drawn with a multiply blend because the files are JPEGs with no
  * alpha channel (`client/scripts/BFOUNDATION.as:1108`).
  *
- * A building whose picture has not arrived, or never will, shows a diamond the
- * size of its footprint with its name on it. The yard is therefore never full
- * of holes, and a broken asset path is visible rather than silent.
+ * A building whose picture has not arrived shows a faint diamond the size of
+ * its footprint, so the yard is never full of holes. One whose picture never
+ * will arrive also gets its name on the diamond, so a broken asset path is
+ * visible rather than silent. Only those: a yard opening on a slow link used
+ * to show rows of "Block" labels while the walls' picture was on its way.
+ *
+ * `show` itself asks for the pictures the yard needs most, most wanted first
+ * (`requestTopsFirst`): every building's own picture before any shadow or
+ * animation strip, those on screen before those off it, and among those the
+ * pictures the most buildings share, so the walls' one picture comes early.
+ * It does not wait for the first frame, which the rest of a big yard's
+ * opening can hold back by a second on a busy computer.
  *
  * The one thing here that does change frame to frame is the animation layers —
  * a turret's gun, a mill's wheel. They go into the same container as the tops,
@@ -59,11 +68,15 @@ const CULL_MARGIN = 160;
 /**
  * Upper bound on placeholder labels.
  *
- * One `Text` per building would be 575 display objects with their own textures
- * if the asset server were down. The cap keeps the failure mode cheap; the
+ * Only a building whose picture failed is labelled, but one `Text` per
+ * building would still be 575 display objects with their own textures if the
+ * asset server were down. The cap keeps the failure mode cheap; the
  * unlabelled placeholders still show, and the scene reports the real count.
  */
 const MAX_PLACEHOLDER_LABELS = 60;
+
+/** How strongly a placeholder shows: a faint footprint, not a grey box. */
+const PLACEHOLDER_ALPHA = 0.3;
 
 /** Performance marks around the wait for a yard's pictures; see `markArtReady`. */
 const YARD_ART_SHOWN = "yard-art-shown";
@@ -215,6 +228,12 @@ export class YardBuildings {
   private pending = true;
   /** True until every building of the shown yard has its picture; see `markArtReady`. */
   private awaitingArt = false;
+  /** The area the last frame drew, for `requestTopsFirst`; null before the first. */
+  private lastVisible: Rect | null = null;
+  /** Placeholder labels made since the last `show`, against `MAX_PLACEHOLDER_LABELS`. */
+  private labelCount = 0;
+  /** Told once every building of the shown yard has its picture, or knows it never will. */
+  private artReadyListener: (() => void) | null = null;
   /** Buildings drawn highlighted, and the one filter they all share (#88). */
   private readonly highlighted = new Set<number>();
   private highlightFilter: ColorMatrixFilter | null = null;
@@ -236,6 +255,14 @@ export class YardBuildings {
     return this.textures;
   }
 
+  /**
+   * Says when the shown yard's buildings all have their pictures, or know
+   * they never will: the yard holds back its bigger downloads till then.
+   */
+  onArtReady(listener: (() => void) | null): void {
+    this.artReadyListener = listener;
+  }
+
   /** Buildings still showing a placeholder. */
   get placeholderCount(): number {
     return this.views.reduce((count, view) => count + (view.resolved ? 0 : 1), 0);
@@ -255,8 +282,6 @@ export class YardBuildings {
     performance.clearMeasures(YARD_ART_WAIT);
     performance.mark(YARD_ART_SHOWN);
     this.awaitingArt = true;
-
-    let labels = 0;
 
     for (const building of yard.buildings) {
       const art = artFor(building, yard.kind);
@@ -282,7 +307,7 @@ export class YardBuildings {
       const top = new Sprite(atlas.placeholder);
       fillBox(top, building.box);
       top.tint = placeholderTint(building);
-      top.alpha = 0.55;
+      top.alpha = PLACEHOLDER_ALPHA;
       this.tops.addChild(top);
 
       // Straight after their own top, so depth order still reads down the list.
@@ -298,18 +323,6 @@ export class YardBuildings {
         this.shadows.addChild(shadow);
       }
 
-      let label: Text | null = null;
-      if (labels < MAX_PLACEHOLDER_LABELS) {
-        labels++;
-        label = new Text({
-          text: building.name,
-          style: { fontFamily: "Titan One, sans-serif", fontSize: 16, fill: 0xe8eef5 },
-        });
-        label.anchor.set(0.5);
-        label.position.set(building.centreX, building.centreY);
-        this.labels.addChild(label);
-      }
-
       const view: BuildingView = {
         building,
         art,
@@ -317,7 +330,8 @@ export class YardBuildings {
         shadow,
         anims,
         fort,
-        label,
+        // A building with no art row at all is named at once: nothing is coming.
+        label: art ? null : this.addLabel(building),
         marker: building.countdown ? this.addCountdownMarker(building, atlas) : null,
         badgeHidden: false,
         offsetX: 0,
@@ -343,6 +357,7 @@ export class YardBuildings {
       for (const guest of this.guests) this.tops.addChild(guest);
       this.resortByDepth();
     }
+    this.requestTopsFirst(this.lastVisible);
     this.pending = true;
   }
 
@@ -392,6 +407,12 @@ export class YardBuildings {
    * two store changes stops on the frame it fills.
    */
   draw(visible: Rect, deltaSeconds = 0, now = 0): void {
+    // Copied into one kept object rather than a new one sixty times a second.
+    const last = (this.lastVisible ??= { x: 0, y: 0, width: 0, height: 0 });
+    last.x = visible.x;
+    last.y = visible.y;
+    last.width = visible.width;
+    last.height = visible.height;
     if (this.pending) {
       this.pending = false;
       this.resolveTextures();
@@ -746,6 +767,7 @@ export class YardBuildings {
     this.views = [];
     this.byId.clear();
     this.highlighted.clear();
+    this.labelCount = 0;
   }
 
   destroy(): void {
@@ -754,6 +776,55 @@ export class YardBuildings {
     this.highlightFilter?.destroy();
     this.highlightFilter = null;
     this.textures.destroy();
+  }
+
+  /**
+   * Asks for every building's own picture before anything else, most wanted
+   * first: those on screen before those off it, then by how many buildings
+   * share the picture. The browser serves requests of one kind in the order
+   * they were made, so on a slow link or a busy server the yard fills in by
+   * what covers most of the screen (four hundred walls are one request), and
+   * the shadows and animation strips `resolveTextures` asks for after these
+   * queue behind them rather than among them. With no frame drawn yet there
+   * is no screen to go by, and the count alone decides.
+   */
+  private requestTopsFirst(visible: Rect | null): void {
+    const left = visible ? visible.x - CULL_MARGIN : -Infinity;
+    const top = visible ? visible.y - CULL_MARGIN : -Infinity;
+    const right = visible ? visible.x + visible.width + CULL_MARGIN : Infinity;
+    const bottom = visible ? visible.y + visible.height + CULL_MARGIN : Infinity;
+
+    const wanted = new Map<string, { image: ResolvedImage; uses: number; onScreen: boolean }>();
+    for (const view of this.views) {
+      if (view.resolved || !view.art) continue;
+      const image = view.art.top;
+      const key = image.frame ? `${image.url}#${image.frame.width}x${image.frame.height}` : image.url;
+      const box = view.building.box;
+      const onScreen = box.x <= right && box.x + box.width >= left && box.y <= bottom && box.y + box.height >= top;
+      const entry = wanted.get(key);
+      if (entry) {
+        entry.uses++;
+        entry.onScreen ||= onScreen;
+      } else {
+        wanted.set(key, { image, uses: 1, onScreen });
+      }
+    }
+    const order = [...wanted.values()].sort((a, b) => Number(b.onScreen) - Number(a.onScreen) || b.uses - a.uses);
+    for (const { image } of order) this.textures.get(image);
+  }
+
+  /** A building's name over its placeholder, while the cap allows. */
+  private addLabel(building: YardBuilding): Text | null {
+    if (this.labelCount >= MAX_PLACEHOLDER_LABELS) return null;
+    this.labelCount++;
+    const label = new Text({
+      text: building.name,
+      style: { fontFamily: "Titan One, sans-serif", fontSize: 16, fill: 0xe8eef5 },
+    });
+    label.anchor.set(0.5);
+    label.position.set(building.centreX, building.centreY);
+    this.labels.addChild(label);
+    return label;
   }
 
   /** Swaps in whichever pictures have arrived since the last pass. */
@@ -779,6 +850,8 @@ export class YardBuildings {
 
           view.label?.destroy();
           view.label = null;
+        } else if (!view.label && this.textures.isMissing(art.top)) {
+          view.label = this.addLabel(view.building);
         }
       }
 
@@ -805,6 +878,7 @@ export class YardBuildings {
     this.awaitingArt = false;
     performance.mark(YARD_ART_READY);
     performance.measure(YARD_ART_WAIT, YARD_ART_SHOWN, YARD_ART_READY);
+    this.artReadyListener?.();
   }
 
   /** Puts a fortification's back and front pictures on their sprites as they arrive. */
