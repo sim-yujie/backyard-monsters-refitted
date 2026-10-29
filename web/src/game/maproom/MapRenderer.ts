@@ -14,6 +14,9 @@ import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import { BuildingAvatars } from "./buildingAvatars";
+import { cellLift, liftCorners } from "./ground";
+import { GroundArt } from "./groundArt";
+import { ConstructionBadge } from "./constructionBadge";
 import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
@@ -57,6 +60,12 @@ export class MapRenderer {
   readonly root = new Container({ isRenderGroup: true });
 
   private readonly raster = new TerrainRaster();
+  /**
+   * Every chunk's ground tiles, painted in Flash's order (`ground.ts`
+   * `paintOrder`), so a cell's cliff goes under the faces in front of it
+   * whichever chunk those belong to.
+   */
+  private readonly ground = new Container({ sortableChildren: true });
   private readonly world = new Container();
   /** Every chunk's badges, markers and plates, over every chunk's ground. */
   private readonly worldTop = new Container();
@@ -75,6 +84,9 @@ export class MapRenderer {
   private readonly avatars = new TribeAvatars();
   /** The Town Hall and outpost pictures a player cell wears (#334), fetched the same way. */
   private readonly buildings = new BuildingAvatars();
+  /** Flash's ground tiles, fetched the same way; flat hexes until they land. */
+  private readonly groundArt = new GroundArt();
+  private readonly constructionBadge = new ConstructionBadge();
   private readonly chunks = new Map<number, MapChunk>();
   private readonly residency = new ChunkResidency({
     ttlMs: CHUNK_TTL_MS,
@@ -108,12 +120,15 @@ export class MapRenderer {
     /** The fog of war sight (#331): a long-lived 1:1 dependency, like `store`. */
     private readonly sight: Sight,
   ) {
+    this.ground.interactiveChildren = false;
     this.world.interactiveChildren = false;
     this.worldTop.interactiveChildren = false;
+    this.range.liftOf = this.liftAt;
     // The raster stays under the chunks at every tier, so a chunk that has not
     // been built yet shows the world at one texel per cell instead of nothing.
     this.root.addChild(
       this.raster.sprite,
+      this.ground,
       this.world,
       this.range.container,
       this.worldTop,
@@ -140,6 +155,8 @@ export class MapRenderer {
     await Promise.all([
       this.avatars.load().then((ok) => ok && this.rebuildAll()),
       this.buildings.load().then((ok) => ok && this.rebuildAll()),
+      this.groundArt.load().then((ok) => ok && this.rebuildAll()),
+      this.constructionBadge.load().then((ok) => ok && this.rebuildAll()),
     ]);
   }
 
@@ -188,7 +205,13 @@ export class MapRenderer {
   applyZone(zone: ZoneRecord): void {
     this.raster.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
+    // The range and the highlight stand on the cells, which now have their heights.
+    this.range.invalidate();
+    this.drawHighlight();
   }
+
+  /** How far a cell is drawn from its spot on the grid (`ground.ts`), for picking and outlines. */
+  readonly liftAt = (col: number, row: number): number => cellLift(this.store.getCell(col, row));
 
   setHovered(cell: OffsetCell | null): void {
     if (same(this.hovered, cell)) return;
@@ -213,6 +236,7 @@ export class MapRenderer {
    */
   draw(range: CellRange, zoom: number): boolean {
     this.raster.flush();
+    this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;
 
@@ -230,6 +254,7 @@ export class MapRenderer {
 
     if (tier === LodTier.RASTER) {
       const changed = this.lastTier !== tier;
+      this.ground.visible = false;
       this.world.visible = false;
       this.worldTop.visible = false;
       this.lastTier = tier;
@@ -239,6 +264,7 @@ export class MapRenderer {
       return changed;
     }
 
+    this.ground.visible = true;
     this.world.visible = true;
     this.worldTop.visible = true;
     if (
@@ -266,6 +292,8 @@ export class MapRenderer {
     this.pool.destroy();
     this.avatars.destroy();
     this.buildings.destroy();
+    this.groundArt.destroy();
+    this.constructionBadge.destroy();
     this.atlas?.destroy();
     this.atlas = null;
     this.raster.destroy();
@@ -303,7 +331,16 @@ export class MapRenderer {
         }
         budget -= 1;
         if (!chunk) {
-          chunk = new MapChunk(ref, atlas, this.avatars, this.buildings, this.pool);
+          chunk = new MapChunk(
+            ref,
+            atlas,
+            this.avatars,
+            this.buildings,
+            this.pool,
+            this.ground,
+            this.groundArt,
+            this.constructionBadge,
+          );
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);
           this.worldTop.addChild(chunk.top);
@@ -361,7 +398,7 @@ export class MapRenderer {
     const zoom = this.lastZoom || 1;
 
     if (this.selected) {
-      const corners = mapRoomGrid.writeCellCorners(this.selected.col, this.selected.row, []);
+      const corners = this.liftedCorners(this.selected);
       this.highlight.poly(corners);
       this.highlight.fill({ color: SELECT_COLOUR, alpha: 0.12 });
       this.highlight.poly(corners);
@@ -369,12 +406,17 @@ export class MapRenderer {
     }
 
     if (this.hovered && !same(this.hovered, this.selected)) {
-      const corners = mapRoomGrid.writeCellCorners(this.hovered.col, this.hovered.row, []);
+      const corners = this.liftedCorners(this.hovered);
       this.highlight.poly(corners);
       this.highlight.fill({ color: HOVER_COLOUR, alpha: 0.2 });
       this.highlight.poly(corners);
       this.highlight.stroke({ width: 2 / zoom, color: HOVER_COLOUR });
     }
+  }
+
+  /** A cell's outline where its face is drawn, raised or sunk to its height. */
+  private liftedCorners(cell: OffsetCell): number[] {
+    return liftCorners(mapRoomGrid.writeCellCorners(cell.col, cell.row, []), this.liftAt(cell.col, cell.row));
   }
 }
 

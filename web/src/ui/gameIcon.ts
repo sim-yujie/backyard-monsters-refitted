@@ -31,6 +31,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * two were painted: damage is the red claw (`damage`, not `fist`), yard
  * damage is the broken brick wall (`yarddamage2`). Monsters lost, last army
  * and per hour keep their words for now; their pictures are here for later.
+ *
+ * The Map Room's ground (`art-samples/mr2-ground/icons`, waiting on the
+ * owner's pick): tower range is the cannon tower with range rings (`range`;
+ * `range2` is the cannonball and target), income the mixed resource pile,
+ * height the hill with a flag. None carries an arrow, as its number can be a
+ * gain or a loss.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -53,6 +59,10 @@ export const GAME_ICONS = {
   production2: "Per hour",
   swords: "Attack",
   fist: "Damage",
+  range: "Tower range",
+  range2: "Tower range",
+  income: "Income",
+  height: "Height",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

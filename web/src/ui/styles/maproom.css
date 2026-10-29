@@ -807,6 +807,11 @@
   --tone: var(--colour-info);
 }
 
+/* Tower range and income on an outpost's ground: two painted icons and numbers. */
+.mr2-chip--ground {
+  gap: var(--space-3);
+}
+
 /* The own yard's Flinger reach, with the switch that draws it (#177). */
 .mr2-cell__flinger {
   display: flex;

@@ -196,17 +196,21 @@ describe("another player's yard", () => {
 });
 
 describe("the ground an outpost stands on", () => {
-  it("says the tower range and income bonus of a hill on an outpost, and the height behind More", () => {
+  it("shows a hill's tower range and income as painted icons and numbers, and the height behind More", () => {
     const { host } = open(player({ b: 3, i: 150 }));
-    expect(shown(host, ".mr2-chip").map((chip) => chip.textContent)).toContain(
-      "High ground: tower range +20%, income −17%",
-    );
+    const chip = host.querySelector(".mr2-chip--ground")!;
+    expect([...chip.querySelectorAll<HTMLImageElement>("img")].map((img) => img.dataset["icon"])).toEqual([
+      "range",
+      "income",
+    ]);
+    expect(chip.querySelector(".icon-amount--gain")!.textContent).toContain("+20%");
+    expect(chip.querySelector(".icon-amount--loss")!.textContent).toContain("−17%");
     expect(host.textContent).toContain("50 m");
   });
 
   it("says nothing of the ground on a main yard", () => {
     const { host } = open(player({ b: 2, i: 150 }));
-    expect(host.textContent).not.toContain("High ground");
+    expect(host.querySelector(".mr2-chip--ground")).toBeNull();
   });
 });
 

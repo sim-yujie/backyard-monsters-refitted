@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
 import type { MapCell, PlayerCell } from "@/api/types";
+import { setClassicLook } from "@/game/classicLook";
 import {
   CellMarker,
   FOG_CLOUD_COLOUR,
@@ -20,6 +21,7 @@ import {
   fogAppearance,
   hexWidthAt,
   kitOf,
+  terrainBand,
   terrainColour,
   unexploredColour,
   type MapViewerContext,
@@ -101,11 +103,24 @@ describe("appearanceOf", () => {
     expect(appearanceOf(player({ p: 1, t: 100 }), 50)).toMatchObject({ truce: true, protected: true });
   });
 
-  it("shows the idle worker on the player's own outpost only when the server says it is free (#338)", () => {
-    expect(appearanceOf(player({ mine: 1, b: 3, wi: 1 }), 0).idleWorker).toBe(true);
-    expect(appearanceOf(player({ mine: 1, b: 3 }), 0).idleWorker).toBe(false);
-    expect(appearanceOf(player({ mine: 0, b: 3, wi: 1 }), 0).idleWorker).toBe(false);
-    expect(appearanceOf(player({ mine: 1, b: 2, wi: 1 }), 0).idleWorker).toBe(false);
+  it("in Classic, shows the idle worker on the player's own outpost only when the server says it is free (#338)", () => {
+    setClassicLook(true);
+    try {
+      expect(appearanceOf(player({ mine: 1, b: 3, wi: 1 }), 0).idleWorker).toBe(true);
+      expect(appearanceOf(player({ mine: 1, b: 3 }), 0).idleWorker).toBe(false);
+      expect(appearanceOf(player({ mine: 0, b: 3, wi: 1 }), 0).idleWorker).toBe(false);
+      expect(appearanceOf(player({ mine: 1, b: 2, wi: 1 }), 0).idleWorker).toBe(false);
+      expect(appearanceOf(player({ mine: 1, b: 3, wb: 1 }), 0).underConstruction).toBe(false);
+    } finally {
+      setClassicLook(false);
+    }
+  });
+
+  it("in Modern, shows the construction badge on the player's own outpost while its worker is busy, never the idle worker", () => {
+    expect(appearanceOf(player({ mine: 1, b: 3, wb: 1 }), 0).underConstruction).toBe(true);
+    expect(appearanceOf(player({ mine: 1, b: 3, wi: 1 }), 0)).toMatchObject({ underConstruction: false, idleWorker: false });
+    expect(appearanceOf(player({ mine: 0, b: 3, wb: 1 }), 0).underConstruction).toBe(false);
+    expect(appearanceOf(player({ mine: 1, b: 2, wb: 1 }), 0).underConstruction).toBe(false);
   });
 
   it("shows the envelope on the player's own outpost while an invitation to move onto it waits, and nothing else (#205)", () => {
@@ -277,11 +292,27 @@ describe("hexWidthAt (#334): how much width a plate has before it spills into a 
   });
 });
 
-it("keeps the server's height bands with the toned-down ground", () => {
-  expect(terrainColour(99)).toBe(0x234565);
-  expect(terrainColour(100)).toBe(0xb9ad86);
-  expect(terrainColour(150)).toBe(0x43623a);
-  expect(terrainColour(200)).toBe(0x64625c);
+it("keeps the server's height bands with Flash's ground colours", () => {
+  setClassicLook(true);
+  try {
+    expect(terrainColour(99)).toBe(0x32b6db);
+    expect(terrainColour(100)).toBe(0xcfbd79);
+    expect(terrainColour(150)).toBe(0x415d0e);
+    expect(terrainColour(200)).toBe(0x4d5d3f);
+  } finally {
+    setClassicLook(false);
+  }
+});
+
+it("tones Modern's water down and keeps Flash's land colours", () => {
+  expect(terrainColour(99)).toBe(0x4987b2);
+  expect(terrainColour(100)).toBe(0xcfbd79);
+  expect(terrainColour(200)).toBe(0x4d5d3f);
+});
+
+it("numbers the bands as Flash's ground tiles, water1 to land6", () => {
+  expect([0, 79, 80, 89, 90, 99, 100, 104, 105, 109, 110].map(terrainBand)).toEqual([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5]);
+  expect([119, 120, 139, 140, 159, 160, 169, 170, 174, 175, 208].map(terrainBand)).toEqual([5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10]);
 });
 
 describe("unexplored ground (#153)", () => {

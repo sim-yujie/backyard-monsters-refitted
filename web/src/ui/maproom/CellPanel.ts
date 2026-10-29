@@ -1,4 +1,4 @@
-import { heightBonus, heightBonusLine, incomeBonusText, towerBonusText } from "@/game/maproom/heightBonus";
+import { heightBonus } from "@/game/maproom/heightBonus";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
 import { devDetails } from "@/app/devDetails";
 import { avatarOf, avatarUrl } from "@/game/avatars";
@@ -7,6 +7,7 @@ import { cellsText } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { button, el, icon, type IconName } from "@/ui/maproom1/icons";
+import { GROUND_BONUS_TITLE, groundBonusIcons } from "./groundBonus";
 import { icon as lineIcon } from "@/ui/icons";
 
 /**
@@ -498,7 +499,7 @@ export class CellPanel {
 
     this.addDamage(payload.dm, payload.d === 1);
     // Height only matters on an outpost: towers reach and income scale by it.
-    if (outpost) this.addChip("range", heightBonusLine(payload.i), "info", "Higher ground: towers reach farther, income is lower. Lower ground: the other way round.");
+    if (outpost) this.addGroundChip(payload.i);
     if (payload.p === 1) {
       // The end, when the server sends it (#187); a bare "Protected" otherwise.
       if (payload.pe !== undefined && payload.pe > Date.now() / 1000) {
@@ -524,9 +525,7 @@ export class CellPanel {
     // The cell names no alliance, only its id, which says nothing to a player (#150).
     if (payload.aid !== null && devDetails()) this.addFact("Alliance", `#${payload.aid}`);
     if (outpost) {
-      const bonus = heightBonus(payload.i);
-      this.addFact("Height", `${bonus.metres} m`);
-      this.addFact("Ground", `${towerBonusText(bonus)}, ${incomeBonusText(bonus).toLowerCase()}`);
+      this.addFact("Height", `${heightBonus(payload.i).metres} m`);
     }
     // Only the player's own: the server sends no one else's (owner 2026-10-22).
     if (mine && payload.f !== undefined) this.addFact("Flinger", `Level ${payload.f}`);
@@ -669,6 +668,14 @@ export class CellPanel {
     if (title) chip.title = title;
     this.chips.append(chip);
     return label;
+  }
+
+  /** Tower range and income on this ground, as painted icons and numbers (`groundBonus.ts`). */
+  private addGroundChip(height: number): void {
+    const chip = el("span", "mr2-chip mr2-chip--info mr2-chip--ground");
+    chip.title = GROUND_BONUS_TITLE;
+    chip.append(...groundBonusIcons(height));
+    this.chips.append(chip);
   }
 
   private addCountdown(

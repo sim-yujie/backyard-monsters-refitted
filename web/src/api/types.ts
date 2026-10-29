@@ -912,6 +912,8 @@ export interface PlayerCell {
   fr: number;
   /** 1 on the caller's own outpost whose worker is free (#338); absent otherwise. */
   wi?: 1;
+  /** 1 on the caller's own outpost whose worker is building, upgrading or fortifying; absent otherwise. */
+  wb?: 1;
   /** Own cells only: the owner's live resources. */
   r?: Resources;
   /** Own cells only: hatchery and garrison state. */

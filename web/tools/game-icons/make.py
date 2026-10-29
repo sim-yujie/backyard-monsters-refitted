@@ -1,6 +1,8 @@
 """Make the game's painted UI icons (web/public/ui/icons/) from the approved art.
 
-usage: python -I make.py <art-samples/icons folder from branch art/game-icons>
+usage: python -I make.py <art-samples/icons folder from branch art/game-icons> [name,name,...]
+       python -I make.py ../../../art-samples/mr2-ground/icons range,range2,income,height
+         (the Map Room ground icons: tower range, its second option, income, height)
 
 Reads each icon's tight crop at painted size (large/<name>.png) and writes
 <name>-<side>.webp for every side in SIDES: square, the icon centred with a
@@ -46,17 +48,17 @@ def fit(im, side, margin):
     return Image.merge("RGBA", (*rgb.split(), c.getchannel("A")))
 
 
-def main(src):
+def main(src, names=NAMES):
     OUT.mkdir(parents=True, exist_ok=True)
     total = 0
-    for name in NAMES:
+    for name in names:
         im = Image.open(Path(src) / "large" / f"{name}.png").convert("RGBA")
         for side in SIDES:
             path = OUT / f"{name}-{side}.webp"
             fit(im, side, 1).save(path, "WEBP", quality=90, alpha_quality=100, method=6)
             total += path.stat().st_size
-    print(f"{len(NAMES)} icons x {len(SIDES)} sides, {total / 1024:.1f} KB")
+    print(f"{len(names)} icons x {len(SIDES)} sides, {total / 1024:.1f} KB")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1], *([sys.argv[2].split(",")] if len(sys.argv) > 2 else []))
