@@ -2,6 +2,7 @@ import type { Context, Next } from "koa";
 import { Env } from "../enums/Env.js";
 import { Status } from "../enums/StatusCodes.js";
 import { isStaticPath } from "../utils/staticPaths.js";
+import { type CorsSettings, corsSettings, isAllowedOrigin } from "../config/CorsConfig.js";
 
 const STATIC_MAX_AGE = 3600;
 
@@ -40,12 +41,17 @@ export const cacheControlFor = (path: string, cacheable = cacheStaticAssets): st
 /**
  * Middleware to set CORS headers and apply cache control.
  *
- * @param {Context} ctx - The Koa request/response context object.
- * @param {Next} next - The next middleware function in the stack.
- * @returns {Promise<void>} - A promise that resolves when the middleware is complete.
+ * Only an allowed page (`config/CorsConfig.ts`) is told it may read the
+ * answer; its own origin is echoed back, with `Vary: Origin` so a cache does
+ * not hand one page's answer to another.
+ *
+ * @param {CorsSettings} settings - The allowed origins, read once at start-up.
+ * @returns The middleware.
  */
-export const corsCacheControl = async (ctx: Context, next: Next) => {
-  ctx.set("Access-Control-Allow-Origin", "*");
+export const makeCorsCacheControl = (settings: CorsSettings) => async (ctx: Context, next: Next) => {
+  const origin = ctx.get("Origin");
+  if (isAllowedOrigin(origin, settings)) ctx.set("Access-Control-Allow-Origin", origin);
+  ctx.vary("Origin");
 
   ctx.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   ctx.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -59,3 +65,5 @@ export const corsCacheControl = async (ctx: Context, next: Next) => {
 
   await next();
 };
+
+export const corsCacheControl = makeCorsCacheControl(corsSettings());
