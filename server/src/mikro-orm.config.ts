@@ -86,6 +86,12 @@ export default defineConfig({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   pool: { min: 2, max: 10 },
+  // Tables whose migration owns their shape (CHECKs, foreign keys, column
+  // order) that the entity cannot carry. `db:init` runs `schema:create`
+  // before the migrations, so without this a new install would get the
+  // entity's looser table and the migration's `CREATE TABLE IF NOT EXISTS`
+  // would skip it. Left out here, the migration builds the live table.
+  schemaGenerator: { skipTables: ["inferno_progress"] },
   migrations: {
     path: path.join(import.meta.dirname, "./database/migrations"),
     pathTs: path.join(import.meta.dirname, "./database/migrations"),

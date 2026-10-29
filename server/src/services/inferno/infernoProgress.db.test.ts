@@ -4,7 +4,6 @@ import { MikroORM } from "@mikro-orm/postgresql";
 import { CreateInfernoProgressTable } from "../../database/migrations/20261025_CreateInfernoProgressTable.js";
 import { AddDescentYardsToInfernoProgress } from "../../database/migrations/20261026_AddDescentYardsToInfernoProgress.js";
 import ormConfig from "../../mikro-orm.config.js";
-import { knownFailing } from "../../testing/knownFailing.js";
 import { raiseEmergence } from "./emergenceOnLoad.js";
 import { readInfernoProgress } from "./infernoProgress.js";
 import { korathNoticeDue, korathRaisable, markKorathNoticeSeen } from "./korath.js";
@@ -50,12 +49,7 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     await orm.close();
   });
 
-  // Known failing (audit 2026-10-29, testing/knownFailing.ts) on a database built
-  // fresh by `db:init`, as CI builds it: `schema:create` makes inferno_progress from
-  // the entity, without the migration's CHECKs, ON DELETE CASCADE or column order,
-  // and the migration then skips the table it finds. They pass on a copy of a
-  // database that got the table from the migration.
-  knownFailing("the migrations are additive and can run again", async () => {
+  test("the migrations are additive and can run again", async () => {
     for (const Step of [CreateInfernoProgressTable, AddDescentYardsToInfernoProgress]) {
       const migration = new Step(orm.em.getDriver(), orm.config);
       await migration.up();
@@ -82,8 +76,7 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     ]);
   });
 
-  // Known failing on a fresh `db:init` database: see above.
-  knownFailing("a Descent yard's kept damage comes back as written; anything but an object is refused", async () => {
+  test("a Descent yard's kept damage comes back as written; anything but an object is refused", async () => {
     await sql(
       `INSERT INTO bym.inferno_progress (userid, descent_yards) VALUES (?, '{"201":{"health":{"1":0,"2":"120"},"looted":{"r1":40}}}'::jsonb)`,
       [A]
@@ -117,8 +110,7 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     expect(record.infernoBaseid).toBe("42");
   });
 
-  // Known failing on a fresh `db:init` database: see above.
-  knownFailing("the cave's level stays 0-5", async () => {
+  test("the cave's level stays 0-5", async () => {
     await expect(sql(`INSERT INTO bym.inferno_progress (userid, emergence_level) VALUES (?, 6)`, [A])).rejects.toThrow();
     await expect(sql(`INSERT INTO bym.inferno_progress (userid, emergence_level) VALUES (?, -1)`, [A])).rejects.toThrow();
   });
@@ -127,8 +119,7 @@ describe.skipIf(!dbName)("Inferno progress on a real database", () => {
     expect((await readInfernoProgress(em(), A)).emergenceLevel).toBe(0);
   });
 
-  // Known failing on a fresh `db:init` database: see above.
-  knownFailing("the row goes with the account", async () => {
+  test("the row goes with the account", async () => {
     await sql(`INSERT INTO bym.inferno_progress (userid) VALUES (?)`, [A]);
     await sql(`DELETE FROM bym."user" WHERE userid = ?`, [A]);
     const [left] = await sql<{ n: string }>(`SELECT count(*) AS n FROM bym.inferno_progress WHERE userid = ?`, [A]);
