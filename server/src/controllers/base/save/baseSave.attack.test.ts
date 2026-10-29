@@ -66,6 +66,12 @@ mock.module("../../../server.js", () => ({
       upsert,
       persist: () => {},
       flush: async () => {},
+      // The transaction the save that ends an attack lands in (audit P1, P2): the
+      // stand-in rows change in place, so there is nothing to commit or roll back.
+      begin: async () => {},
+      commit: async () => {},
+      rollback: async () => {},
+      isInTransaction: () => false,
       // Only the event counter's SQL is answered; anything else fails as with no database.
       execute: async (sql: string, params: unknown[]) => {
         if (!sql.includes("event_progress")) throw new Error("no database");

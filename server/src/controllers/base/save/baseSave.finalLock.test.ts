@@ -36,6 +36,12 @@ mock.module("../../../server.js", () => ({
       }),
       persist: () => {},
       flush: async () => {},
+      // The transaction the save that ends an attack lands in (audit P1, P2): the
+      // stand-in rows change in place, so there is nothing to commit or roll back.
+      begin: async () => {},
+      commit: async () => {},
+      rollback: async () => {},
+      isInTransaction: () => false,
     },
   },
   redis: {

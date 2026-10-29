@@ -1,4 +1,5 @@
 import type { Context } from "koa";
+import { LockMode } from "@mikro-orm/core";
 import type { KoaController } from "../../../utils/KoaController.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
@@ -25,7 +26,7 @@ import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.j
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
 import { monsterUpdateHandler, monsterUpdateMode } from "./handlers/monsterUpdateHandler.js";
 import { validateSave } from "../../../scripts/anticheat/anticheat.js";
-import { getHousingOwner, getOutpostOwnerSave } from "../../../services/base/getOutpostOwnerSave.js";
+import { getHousingOwner, getOutpostOwnerSave, type OutpostOwnerSave } from "../../../services/base/getOutpostOwnerSave.js";
 import { advanceBuildingTimers } from "../../../services/base/advanceBuildingTimers.js";
 import { championHandler } from "./handlers/championHandler.js";
 import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
@@ -195,6 +196,12 @@ export const baseSave: KoaController = async (ctx) => {
 
   try {
     await saveBase(ctx, { user, userSave, body, saveData, baseSave, isOutpostOwner, isAttack });
+  } catch (err) {
+    // A landing that failed part-way leaves nothing of itself behind: the
+    // attack stays open for this save sent again, or for the finaliser
+    // (`beginLanding`).
+    if (finalises && postgres.em.isInTransaction()) await postgres.em.rollback();
+    throw err;
   } finally {
     if (finalises) await releaseFinalLock(baseSave.basesaveid);
   }
@@ -356,6 +363,15 @@ const saveBase = async (
         });
 
   if (verdict) await recordEconomyVerdict(ctx, user, baseSave, verdict, economyConfig.mode);
+
+  // The save that ends an attack writes from here on in one transaction, on
+  // its rows locked and read afresh, and commits it only once the attack is
+  // closed (`beginLanding`).
+  const lands = isAttack && Boolean(saveData.over);
+  // Read first, in a fork and so on a connection of its own, which a landing
+  // holding one already must not wait on. Only a replayed battle reads it.
+  const housingOwner = battle ? await getHousingOwner(baseSave) : null;
+  if (lands) await beginLanding(session!, userSave, baseSave, outpostOwnerSave);
 
   const storedHealthData = baseSave.buildinghealthdata;
   // The yard's damage before this attack, for its defence replay (#359).
@@ -589,7 +605,7 @@ const saveBase = async (
       housingLoss = landHousingLoss(
         baseSave,
         { before: storedHealthData, after: battle.buildinghealthdata },
-        await getHousingOwner(baseSave),
+        housingOwner,
         now
       );
       (baseSave as unknown as { attackreport: unknown }).attackreport = reportWithHousingLoss(
@@ -600,10 +616,6 @@ const saveBase = async (
 
     postgres.em.persist(userSave);
     await postgres.em.flush();
-
-    // Event loot (the monthly Krallen Hunt) counts the credit before the cap,
-    // once: this save holds the final lock (`services/events/lootEvents.ts`).
-    if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
 
     // MR3 Takeover Logic:
     // If the attack is over and damage >= 90, trigger takeover or destroy logic.
@@ -676,17 +688,6 @@ const saveBase = async (
 
   baseSave.attackid = saveData.over ? 0 : baseSave.attackid;
 
-  // The attack is finished, so its session is spent. Dropping it now frees the
-  // row immediately instead of leaving a key that authorises nothing until it
-  // times out (issue #25).
-  if (isAttack && saveData.over) {
-    await endAttackSession(baseSave.basesaveid);
-    // Nothing is left for the server to finish from (issue #138), nor to
-    // keep a defence replay of (#359).
-    await discardCheckpoint(baseSave.basesaveid);
-    await discardDefenceReplayLoad(baseSave.basesaveid);
-  }
-
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,
   // so the owner's countdowns are brought up to the attack before savetime moves to it.
   if (isAttack && baseSave.buildingdata) {
@@ -702,6 +703,27 @@ const saveBase = async (
 
   postgres.em.persist(baseSave);
   await postgres.em.flush();
+
+  if (lands) {
+    // The loot on both sides and `attackid = 0` commit together: a copy of
+    // this save, or the finaliser, finds the attack closed from now on.
+    await postgres.em.commit();
+
+    // The attack is finished, so its session is spent. Dropping it now frees the
+    // row immediately instead of leaving a key that authorises nothing until it
+    // times out (issue #25).
+    await endAttackSession(baseSave.basesaveid);
+    // Nothing is left for the server to finish from (issue #138), nor to
+    // keep a defence replay of (#359).
+    await discardCheckpoint(baseSave.basesaveid);
+    await discardDefenceReplayLoad(baseSave.basesaveid);
+
+    // Event loot (the monthly Krallen Hunt) counts the credit before the cap,
+    // once: this save holds the final lock (`services/events/lootEvents.ts`).
+    // After the commit: a counter it fails to write is logged and lost, and
+    // must not take the landing's transaction down with it.
+    if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
+  }
 
   // A Map Room 2 camp attack played by hand is the player's plan for the
   // camp's tribe and level from now on (issue #221): the log the server fought,
@@ -794,6 +816,58 @@ const requireAttackBinding = async (
   );
 
   throw attackNotBoundErr(result.reason);
+};
+
+/**
+ * Opens the transaction the save that ends an attack lands in, and locks the
+ * rows it writes (audit 2026-10-29, P1 and P2). `baseSave` commits it once the
+ * defender's `attackid` is 0, and rolls it back if anything throws first.
+ *
+ * - **Once.** The loot used to commit on its own, with the attack still open
+ *   and its session still bound, so a failure before the attack closed let a
+ *   copy of the save, or the finaliser, land it a second time. Now nothing of
+ *   the attack commits until all of it does, as the finaliser writes an
+ *   abandoned one in a single flush (`finaliseAttack.ts`).
+ * - **On the rows as they stand.** The rows were read when the request began,
+ *   before the battle's replay, and their `resources` were written back whole,
+ *   so a gift, a collection or a spend that landed meanwhile was undone. They
+ *   are read afresh here under the lock the yard actions, gifts and help take
+ *   (`yardAction.ts`), and the bombs, the loot and the defender's loss are
+ *   applied to them as they are now; the loot itself was worked out from the
+ *   rows as the attack found them. The outpost owner's main row is read for
+ *   its `resources` alone, as `getOutpostOwnerSave` reads it.
+ *
+ * Locked in `basesaveid` order, and the row must still be this attack's: one
+ * another landing has closed since lands nothing of this one.
+ *
+ * @throws {ClientSafeError} When a row has gone, or the attack is no longer the row's.
+ */
+const beginLanding = async (
+  session: AttackSession,
+  userSave: Save,
+  baseSave: Save,
+  outpostOwnerSave: OutpostOwnerSave | null
+): Promise<void> => {
+  await postgres.em.begin();
+
+  const rows = [userSave, baseSave, outpostOwnerSave]
+    .filter((row): row is Save => row !== null)
+    .sort((a, b) => a.basesaveid - b.basesaveid);
+
+  for (const row of rows) {
+    const where = { basesaveid: row.basesaveid };
+    const locked =
+      row === outpostOwnerSave
+        ? await postgres.em.findOne(Save, where, {
+            fields: ["resources"],
+            lockMode: LockMode.PESSIMISTIC_WRITE,
+            refresh: true,
+          })
+        : await postgres.em.findOne(Save, where, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true });
+    if (!locked) throw saveFailureErr();
+  }
+
+  if (Number(baseSave.attackid) !== session.attackid) throw attackNotBoundErr("superseded");
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
