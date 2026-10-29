@@ -1,23 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Scene, SceneContext } from "./SceneManager";
 
-// The real App pulls in Pixi; the names are all this module reads from it.
-vi.mock("./App", () => ({
-  SceneName: {
-    BOOT: "boot",
-    LOGIN: "login",
-    MAP: "map",
-    MAP_ROOM_1: "maproom1",
-    MAP_ROOM_2: "maproom2",
-    YARD: "yard",
-    ATTACK: "attack",
-    BAITER: "baiter",
-    BAITER_REPLAY: "baiter-replay",
-    WATCH: "watch",
-    RAID: "raid",
-    AWAY: "away",
-  },
-}));
 vi.mock("@/game/sound/sound", () => ({ setScreenTune: vi.fn() }));
 vi.mock("@/game/sound/soundSwitches", () => ({ loadSoundSwitches: vi.fn(async () => {}) }));
 

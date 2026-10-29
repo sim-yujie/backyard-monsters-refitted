@@ -30,7 +30,7 @@ import { MapRoom1Ui } from "@/ui/maproom1/MapRoom1Ui";
 import type { CardAction } from "@/ui/maproom1/TargetCard";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 
 /**
  * Map Room 1: the neighbours and the four wild monster tribes, for a player
