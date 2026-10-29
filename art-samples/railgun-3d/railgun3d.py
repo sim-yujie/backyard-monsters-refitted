@@ -5,9 +5,11 @@ painted tiers (server/public/assets/buildings/railguntower/top.tN@2x.webp, codex
 
 (see ../tower-3d/square3d.py for the modes). The body: a low square pyramid, corner at the viewer, striped (red and
 white; tier 3 black and yellow), in one, two or three steps, an angle bracket up each corner of every step, a steel drum
-on top with a dark turntable. The turret: a red disc with a counterweight out of its back, two coil stacks with blue
-glass caps, and two square rails held level (the one fixed tilt: owner, 28 Oct, the game works out the shot) with blue
-glowing cells along them and a blue charge between them. Tier 1 steel and red, tier 2 gold and red, tier 3 black and gold.
+on top with a dark turntable. The turret is the Flash Railgun's horseshoe magnet (owner, 29 Oct: the 3D one had lost
+it): a thick U lying flat, its round back at the pivot, steel (tier 2 and 3 gold) pole pieces on its arms' ends, a coil
+stack with a blue glass cap on each arm, a square rail out of each pole held level (the one fixed tilt: owner, 28 Oct,
+the game works out the shot) with blue glowing cells along it and its stub out of the U's back, and a blue-nosed slug
+in the slot between the arms. Tier 1 red and steel, tier 2 red and gold, tier 3 black and gold.
 """
 import math
 import os
@@ -56,9 +58,9 @@ def materials():
         disc=met("disc", "gunmetal", spec=0.5, spec_rough=0.3, polish=0),
         rivet=met("rivet", "steel" if TIER == 1 else "gold", spec=1.0, wear=0),
         red=met("red", "red", spec=0.9, wear=0.3),
-        tdisc=met("tdisc", "red" if TIER == 1 else "gold" if gold else "pblack", spec=0.9, polish=0.5 if black else None),
+        magnet=met("magnet", "pblack" if black else "red", spec=0.9, polish=0.5 if black else None, wear=0.3),
+        pole=met("pole", "rail" if TIER == 1 else "gold", spec=1.0, env=L.ENV_TURNED),
         trim=met("trim", "steel" if TIER == 1 else "gold", spec=1.0),
-        weight=met("weight", "steel", spec=0.9, env=L.ENV_TURNED),
         coil=met("coil", "gold", spec=1.0),
         rail=met("rail", "rail" if TIER < 3 else "pblack", spec=0.9, polish=0.5 if black else None),
         band=met("band", "gold", spec=1.0),
@@ -124,36 +126,63 @@ def build():
     studs(rivets, cc, [Vector((0, 0, 1))] * 16, r=0.018)
     obj_from_bm("rivets_body", rivets, [M["rivet"]], parent=body)
 
-    # ---- the turret, built facing +Y (bearing 0) and turned about z by -heading: a thick disc (the painted turret is a
-    # drum, not a plate), two square rails lying on it and clamped at its front edge, the counterweight out of its back
-    # at mid height, the coil stacks standing on its back half
+    # ---- the turret, built facing +Y (bearing 0) and turned about z by -heading. The Flash Railgun's turret IS a
+    # horseshoe magnet lying flat (anim.3.loaded.png): a thick red U, its round back at the pivot and its two arms
+    # forward with a slot between them, steel pole pieces on the arms' ends, a coil standing on each arm, a rail run
+    # forward out of each pole, the rails poking out of the back too, and a blue-tipped slug lying in the slot.
     tur = L.empty("TURRET", loc=(0, 0, TOP + 0.004))   # a hair above the turntable: no touching faces
     tur.scale = (TURRET_SCALE,) * 3
-    DR, DH = 0.45, 0.22
-    td = lathe("tdisc", [[(DR - 0.02, 0.0), (DR, 0.02), (DR, DH - 0.03), (DR - 0.03, DH)], [(DR - 0.03, DH), (0.0, DH)]],
-               [M["tdisc"]], parent=tur, sharp=35)
-    add_outline(td, LN["warm"])
+    MR, MI, MH = 0.45, 0.14, 0.31   # the U's outer and inner radius, its height
+    ARM = 0.34                      # the arms' red part reaches this far forward of the pivot
+    POLE = 0.15                     # the pole pieces' length
+    AX = (MR + MI) / 2              # an arm's middle (the coils and rails stand on it)
     bm = bmesh.new()
-    for z in (0.05, DH - 0.05):
-        cc, nn = L.ring_of(18, DR + 0.002, z, 0.5)
-        studs(bm, cc, nn, r=0.017)
-    obj_from_bm("rivets_turret", bm, [M["rivet"] if TIER < 3 else M["band"]], parent=tur)
-    trim = lathe("tdisc_rim", [L.band(DR - 0.01, DR + 0.015, 0.0, 0.035)], [M["trim"]], parent=tur, sharp=35)
+    n = 24
+    out = [(MR * math.cos(-math.pi * i / n), MR * math.sin(-math.pi * i / n)) for i in range(n + 1)]       # +x round the back
+    inn = [(MI * math.cos(-math.pi * i / n), MI * math.sin(-math.pi * i / n)) for i in range(n + 1)][::-1]  # -x round to +x
+    outline = out + [(-MR, ARM), (-MI, ARM)] + inn + [(MI, ARM), (MR, ARM)]
+    face = bm.faces.new([bm.verts.new((x, y, 0.0)) for x, y in outline])
+    ext = bmesh.ops.extrude_face_region(bm, geom=[face])
+    bmesh.ops.translate(bm, vec=(0, 0, MH), verts=[v for v in ext["geom"] if isinstance(v, bmesh.types.BMVert)])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.edges.ensure_lookup_table()
+    sharp_edges = [e for e in bm.edges if e.is_manifold and e.calc_face_angle(0) > math.radians(30)]
+    bmesh.ops.bevel(bm, geom=sharp_edges, offset=0.03, segments=3, affect='EDGES', profile=0.5, clamp_overlap=True)
+    add_outline(obj_from_bm("magnet", bm, [M["magnet"]], parent=tur, sharp=35), LN["warm"])
+    # the trim band round the U's foot
+    T0, T1, TO = 0.0, 0.045, 0.014
+    bm = bmesh.new()
+    pts = [((MR + TO) * math.cos(-math.pi * i / n), (MR + TO) * math.sin(-math.pi * i / n)) for i in range(n + 1)]
+    pts = [(MR + TO, ARM - 0.01)] + pts + [(-MR - TO, ARM - 0.01)]
+    lo = [bm.verts.new((x, y, T0)) for x, y in pts]
+    hi = [bm.verts.new((x, y, T1)) for x, y in pts]
+    for i in range(len(pts) - 1):
+        bm.faces.new((lo[i + 1], lo[i], hi[i], hi[i + 1]))
+    trim = obj_from_bm("magnet_trim", bm, [M["trim"]], parent=tur, sharp=35)
     add_outline(trim, LN["warm"], L.LINE * 0.6)
-    w = lathe("weight", [[(0.0, -0.74), (0.09, -0.74), (0.105, -0.72)], [(0.105, -0.72), (0.105, -0.3)]],
-              [M["weight"]], parent=tur, sharp=35)
-    w.matrix_basis = Matrix.Translation((0, 0, 0.11)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')   # lathe z -> +Y: out the back
-    add_outline(w, LN["cool"])
-    # the coil stacks on the disc's back half
+    # rivets along the U's round back, and across the arms' tops
+    bm = bmesh.new()
+    for z in (0.08, MH - 0.07):
+        k = 11
+        cc = [(MR * math.cos(-math.pi * (i + 0.5) / k), MR * math.sin(-math.pi * (i + 0.5) / k), z) for i in range(k)]
+        nn = [(math.cos(-math.pi * (i + 0.5) / k), math.sin(-math.pi * (i + 0.5) / k), 0) for i in range(k)]
+        studs(bm, cc, nn, r=0.017)
+    obj_from_bm("rivets_turret", bm, [M["rivet"]], parent=tur)
+    # the pole pieces: a block over each arm's end, a little proud of the arm all round
+    for sx in (-1, 1):
+        bm = bmesh.new()
+        rbox(bm, (MR - MI + 0.03, POLE, MH + 0.008), Matrix.Translation((sx * AX, ARM + POLE / 2 - 0.01, 0.002)), bevel=0.025)
+        add_outline(obj_from_bm(f"pole_{'lr'[sx > 0]}", bm, [M["pole"]], parent=tur, sharp=35), LN["cool"])
+    # the coil stacks, one on each arm
     for sx in (-1, 1):
         prof = []
-        z = DH
+        z = MH
         for i, r in enumerate((0.14, 0.13, 0.12, 0.105, 0.09)):
             prof += [(r - 0.02, z), (r, z + 0.008), (r, z + 0.035), (r - 0.02, z + 0.043)]
             z += 0.046
-        coil = lathe(f"coil_{'lr'[sx > 0]}", [[(0.0, DH), (0.12, DH)], prof, [(0.06, z), (0.0, z)]], [M["coil"]],
+        coil = lathe(f"coil_{'lr'[sx > 0]}", [[(0.0, MH), (0.12, MH)], prof, [(0.06, z), (0.0, z)]], [M["coil"]],
                      parent=tur, sharp=35)
-        coil.location = (sx * 0.24, -0.16, 0.0)
+        coil.location = (sx * AX, -0.01, 0.0)
         add_outline(coil, LN["warm"], L.LINE * 0.8)
         bm = bmesh.new()
         Q.ball(bm, (0, 0, z + 0.04), 0.06, segs=16)
@@ -164,37 +193,42 @@ def build():
         knob = obj_from_bm(f"knob_{'lr'[sx > 0]}", bm, [M["coil"]], parent=tur)
         knob.location = coil.location
         add_outline(knob, LN["warm"], L.LINE * 0.6)
-    # the rails: two square bars lying on the disc from its middle out past its front, a clamp block over each at the
-    # disc's edge, gold bands, a blue cell along the top of each, blue tips
-    LR = 1.2                        # from the pivot to the tips
-    RW = 0.15
-    RZ = DH + RW / 2 - 0.02         # the rails' middle height: lying on the disc
-    R0 = -0.12                      # the rails' back ends
+    # the rails: a square bar out of each pole's face, along the arm's middle, high on the pole, gold bands, a blue
+    # cell along the inside of each, blue tips; round stubs of them out of the U's back
+    LR = 1.17                       # from the pivot to the tips
+    RW = 0.13
+    RZ = 0.275                      # the rails' middle height (as the old rails': the cells keep their size)
+    R0 = ARM + 0.04                 # the rails' back ends, inside the poles
     for sx in (-1, 1):
-        x = sx * 0.12
+        x = sx * AX
         bm = bmesh.new()
         rbox(bm, (RW, LR - R0, RW), Matrix.Translation((x, (LR + R0) / 2, RZ - RW / 2)), bevel=0.025)
         add_outline(obj_from_bm(f"rail_{'lr'[sx > 0]}", bm, [M["rail"]], parent=tur, sharp=35), LN["cool"])
         bm = bmesh.new()
-        rbox(bm, (RW + 0.06, 0.14, RW + 0.05), Matrix.Translation((x, DR - 0.04, RZ - RW / 2 - 0.02)), bevel=0.025)
-        add_outline(obj_from_bm(f"clamp_{'lr'[sx > 0]}", bm, [M["weight"] if TIER < 3 else M["tdisc"]], parent=tur,
-                                sharp=35), LN["cool"])
-        bm = bmesh.new()
-        for y0, ln in ((DR + 0.2, 0.06), (LR - 0.1, 0.08)):
+        for y0, ln in ((ARM + POLE + 0.18, 0.06), (LR - 0.1, 0.08)):
             rbox(bm, (RW + 0.02, ln, RW + 0.02), Matrix.Translation((x, y0 + ln / 2, RZ - RW / 2 - 0.01)), bevel=0.015)
         add_outline(obj_from_bm(f"rail_bands_{'lr'[sx > 0]}", bm, [M["band"]], parent=tur, sharp=35), LN["warm"], L.LINE * 0.7)
         bm = bmesh.new()
-        c0, c1 = DR + 0.3, LR - 0.14
-        rbox(bm, (0.06, c1 - c0, 0.04), Matrix.Translation((x - sx * 0.025, (c0 + c1) / 2, RZ + RW / 2 - 0.015)), bevel=0.018)
-        rbox(bm, (0.1, 0.03, 0.1), Matrix.Translation((x, LR + 0.005, RZ - 0.05)), bevel=0.014)
+        c0, c1 = ARM + POLE + 0.02, LR - 0.14
+        rbox(bm, (0.03, c1 - c0, 0.06), Matrix.Translation((x - sx * (RW / 2 + 0.005), (c0 + c1) / 2, RZ - 0.03)), bevel=0.012)
+        rbox(bm, (0.04, (c1 - c0) * 0.98, 0.035), Matrix.Translation((x - sx * 0.02, (c0 + c1) / 2, RZ + RW / 2 - 0.015)), bevel=0.012)
+        rbox(bm, (0.09, 0.03, 0.09), Matrix.Translation((x, LR + 0.005, RZ - 0.045)), bevel=0.014)
         obj_from_bm(f"lens_cell_{'lr'[sx > 0]}", bm, [M["glass"]], parent=tur, sharp=35)
-    # the charge between the rails, just out of the clamps: a blue drop of light, its point forward
+        bm = bmesh.new()
+        y_back = -math.sqrt(MR * MR - x * x)
+        cyl(bm, 0.05, 0.3, Matrix.Translation((x, y_back - 0.1, RZ - 0.04)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=16)
+        add_outline(obj_from_bm(f"stub_{'lr'[sx > 0]}", bm, [M["pole"]], parent=tur, sharp=35), LN["cool"])
+    # the slug lying in the slot: a steel bolt, its nose blue glass, and the charge's glow at the slot's mouth
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=10, radius=0.055,
-                              matrix=Matrix.Translation((0, DR + 0.12, RZ)) @ L.diag(1, 2.0, 1))
+    SZ = MH * 0.55
+    cyl(bm, 0.075, 0.36, Matrix.Translation((0, 0.12, SZ)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), segs=20)
+    add_outline(obj_from_bm("slug", bm, [M["pole"]], parent=tur, sharp=35), LN["cool"], L.LINE * 0.7)
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=10, radius=0.075,
+                              matrix=Matrix.Translation((0, 0.30, SZ)) @ L.diag(1, 1.9, 1))
     obj_from_bm("lens_charge", bm, [M["glass"]], parent=tur)
     bm = bmesh.new()
-    Q.ball(bm, (0, DR + 0.12, RZ), 0.11, segs=16)
+    Q.ball(bm, (0, ARM + 0.06, SZ), 0.12, segs=16)
     obj_from_bm("charge_glow", bm, [M["halo"]], parent=tur)
     L.empty("muzzle_base", parent=tur, loc=(0, 0.0, RZ))
     L.empty("muzzle_tip", parent=tur, loc=(0, LR + 0.02, RZ))
