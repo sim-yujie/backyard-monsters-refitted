@@ -666,6 +666,48 @@ def prof_r(prof, z):
     return prof[-1][0]
 
 
+def stretch(body, z0, rise):
+    """The taller levels: lift every body vertex above z0 by rise (the walls crossing z0 grow longer)."""
+    if not rise:
+        return
+    seen = set()
+    for o in L.objs_under(body):
+        if o.type == 'MESH' and o.data.name not in seen:
+            seen.add(o.data.name)
+            for v in o.data.vertices:
+                if v.co.z > z0:
+                    v.co.z += rise
+            o.data.update()
+
+
+def foot_spikes(M, LN, body, avoid, r0, mat):
+    """The upper levels' spikes out round the foot (as build_magma's), clear of each (bearing, gap) in avoid: level 2
+    brimstone with brimstone rubble, level 3 bigger, sharper steel."""
+    SPIKE = (1.0, 1.3, 1.6)[LOOK - 1]
+    if LOOK == 2:
+        cl = bmesh.new()
+        W.clods(cl, [bear(360 * i / 22 + 9 * (i % 3), r0 - 0.04 + 0.16 * ((i * 0.37) % 1.0), 0.04) for i in range(22)], r=0.07)
+        add_outline(W.obj("clods", cl, [M["brimstone"]], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+    st = bmesh.new()
+    uv = st.loops.layers.uv.new("UVMap")
+    bs = [b for b in range(0, 360, 20) if all(abs((b - c + 180) % 360 - 180) > g for c, g in avoid)]
+    for i, b in enumerate(bs):
+        lean = (0.26 + 0.12 * ((i * 0.53) % 1.0)) * (1 + 0.25 * (SPIKE - 1))
+        h = (0.32 + 0.14 * ((i * 0.71) % 1.0)) * SPIKE
+        W.stake(st, uv, bear(b, r0, 0.0), bear(b + (5 if i % 3 else -5), r0 + lean, h),
+                0.1 * (1 + 0.3 * (SPIKE - 1)), sides=5 if LOOK == 3 else 8, twist=i * 0.7, tip_mat=1)
+    add_outline(W.obj("spikes", st, [mat, mat], parent=body, sharp=20 if LOOK == 3 else 55), LN["warm"])
+
+
+def crown(M, LN, body, bearings, r0, r1, z0, z1, mat, name="crown"):
+    """Level 3: a crown of short steel spikes, from r0 at z0 out to their tips at r1, z1."""
+    cr = bmesh.new()
+    cuv = cr.loops.layers.uv.new("UVMap")
+    for i, b in enumerate(bearings):
+        W.stake(cr, cuv, bear(b, r0, z0), bear(b, r1, z1), 0.05, sides=5, twist=i * 0.5)
+    add_outline(W.obj(name, cr, [mat], parent=body, sharp=20), LN["cool"], L.LINE * 0.6)
+
+
 def build_magma_a(M, LN, body):
     """A, "Furnace": a soot-black riveted boiler on three squat legs (the ground glows under it), a glowing seam round its
     waist leaking lava, a barred fire door, two glass tanks of lava strapped to its belly, a crucible of molten lava on
@@ -673,6 +715,11 @@ def build_magma_a(M, LN, body):
     soot = W.mat_iron("iron_soot", base=(60, 52, 50), dark=(22, 19, 18), rust=(120, 62, 32), edge=(156, 140, 128),
                       rust_k=0.35, soot=0.7)
     trim = W.mat_iron("iron_trim", base=(84, 70, 62), dark=(34, 28, 26), edge=(176, 154, 134), rust_k=0.6, soot=0.3)
+    cru_m, chain_m, tank_m, spike_m = (M["brimstone"] if LOOK == 2 else trim), trim, M["copper_w"], M["brimstone"]
+    if LOOK == 3:      # forged steel: dark plated boiler, steel trim and crucible, steel spikes
+        soot, trim, cru_m, chain_m, tank_m, spike_m = (M["forged_plates_dark"], M["forged_dark"], M["forged"], M["forged_dark"],
+                                                       M["forged_dark"], M["forged"])
+    RISE = (0.0, 0.25, 0.5)[LOOK - 1]     # each level taller (a longer boiler)
     lava = M["lava_hot"]
     CHAINS, TANKS, STACK, SR = (125, 245, 5), (95, 335), 215, 0.92
     # the ground: scorched earth, a pool of lava glowing under the boiler
@@ -733,7 +780,7 @@ def build_magma_a(M, LN, body):
     # the crucible on top, full of molten lava; a hub stands in it for the head
     cru = [[(0.3, 1.04), (0.42, 1.12), (0.56, 1.24), (0.65, 1.36), (0.67, 1.44)], [(0.67, 1.44), (0.58, 1.45)],
            [(0.58, 1.45), (0.56, 1.36)]]
-    add_outline(W.lathe("crucible", cru, [trim], wob=0.01, parent=body, sharp=35), LN["cool"])
+    add_outline(W.lathe("crucible", cru, [cru_m], wob=0.01, parent=body, sharp=35), LN["cool"])
     W.lathe("pool", [[(0.565, 1.37), (0.18, 1.37)]], [lava], bev=0, parent=body)
     top = 1.48
     add_outline(W.lathe("hub", [[(0.2, 1.3), (0.2, 1.44), (0.17, top), (0.0, top)]], [soot], parent=body, sharp=35), LN["cool"],
@@ -767,7 +814,17 @@ def build_magma_a(M, LN, body):
     sm = bmesh.new()
     Q.cyl(sm, 0.1, 0.01, Matrix.Translation(bear(STACK, SR, 2.08)), segs=20)
     L.obj_from_bm("stackglow", sm, [lava], parent=body)
-    chain_anchors(M, LN, body, [(b, prof_r(up, 0.75) + 0.03, 0.75) for b in CHAINS], 1.0, trim)
+    stretch(body, 0.66, RISE)
+    top += RISE
+    for k in range(1, LOOK):     # a strap more round the longer boiler per level
+        z = 0.64 + k * (0.08 + RISE) / LOOK
+        strap(f"bandsR{k}", M, LN, body, 0.6, z, z + 0.06, 20, rivet_r=0.025, phase=0.25 * k, mat=trim)
+    if LOOK > 1:
+        foot_spikes(M, LN, body, [(c, 24) for c in CHAINS] + [(t, 20) for t in TANKS] + [(45, 20), (STACK, 18)], 0.84, spike_m)
+    if LOOK == 3:
+        crown(M, LN, body, [b for b in range(15, 360, 30) if all(abs((b - c + 180) % 360 - 180) > 16 for c in (75, 135, 315))
+                            and abs((b - STACK + 180) % 360 - 180) > 30], 0.62, 0.84, 1.36 + RISE, 1.5 + RISE, spike_m)
+    chain_anchors(M, LN, body, [(b, prof_r(up, 0.75) + 0.03, 0.75 + RISE) for b in CHAINS], 1.0, chain_m)
     # the head: a lava sprayer: a swivel and riser, a riveted valve block with a valve wheel, a copper pressure tank
     # behind, a nozzle pipe ending in a flat fan mouth glowing with lava
     tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
@@ -792,7 +849,7 @@ def build_magma_a(M, LN, body):
     Q.cyl(bm, 0.095, 0.24, Matrix.Translation((0, -0.24, 0.2)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=24)
     for y in (-0.15, -0.33):
         Q.cyl(bm, 0.105, 0.03, Matrix.Translation((0, y, 0.2)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=24)
-    add_outline(W.obj("ptank", bm, [M["copper_w"]], parent=tur, sharp=35), LN["warm"])
+    add_outline(W.obj("ptank", bm, [tank_m], parent=tur, sharp=35), LN["warm"])
     bm = bmesh.new()
     L.tube(bm, [Vector((0, 0.1, HZ)), Vector((0, 0.42, HZ))], [0.06, 0.055], sides=16)
     for y in (0.16, 0.38):
@@ -831,6 +888,14 @@ def build_magma_b(M, LN, body):
                              hot=(255, 214, 130), glow_k=1.3, low=1.7)
     obsid = W.mat_black_crystal("obsidian", scale=5.0, glow_k=0.6)
     band = W.mat_iron("iron_band", base=(80, 66, 58), dark=(34, 28, 26), edge=(176, 154, 134), rust_k=0.7, soot=0.35)
+    pot_m = W.mat_iron("iron_cast", base=(66, 58, 56), dark=(26, 22, 21), rust=(120, 62, 32), edge=(160, 146, 136),
+                       rust_k=0.4, soot=0.4)
+    spout_m, spike_m = M["bronze_w"], M["brimstone"]
+    if LOOK == 2:      # brimstone: a browner charred crust, more fire in its cracks
+        basalt = W.mat_brimstone("basalt2", scale=4.0, glow_k=1.6, low=1.9)
+    if LOOK == 3:      # forged steel bands and cage, a steel pot and spout, steel spikes
+        band, pot_m, spout_m, spike_m = M["forged_dark"], M["forged_dark"], M["forged"], M["forged"]
+    RISE = (0.0, 0.25, 0.5)[LOOK - 1]     # each level taller (longer columns)
     lava = M["lava_hot"]
     CHAINS = (125, 245, 5)
     # the basin: a rough rim of rock round a pool of lava
@@ -867,12 +932,27 @@ def build_magma_b(M, LN, body):
     # two iron bands round the cluster
     strap("bands", M, LN, body, 0.71, 0.2, 0.28, 18, rivet_r=0.03, mat=band)
     strap("bands2", M, LN, body, 0.71, 0.54, 0.62, 18, rivet_r=0.03, phase=0.5, mat=band)
+    stretch(body, 0.64, RISE)
+    top += RISE
+    for k in range(1, LOOK):     # a band more round the longer columns per level
+        z = 0.62 + k * (0.06 + RISE) / LOOK
+        strap(f"bandsR{k}", M, LN, body, 0.71, z, z + 0.08, 18, rivet_r=0.03, phase=0.25 * k, mat=band)
+    if LOOK == 3:      # a steel cage: upright straps between the chains
+        cg, rv = bmesh.new(), bmesh.new()
+        for b in (35, 95, 155, 215, 275, 335):
+            L.rbox(cg, (0.09, 0.04, 0.5 + RISE), Matrix.Translation(bear(b, 0.745, 0.18)) @ Matrix.Rotation(-math.radians(b), 4, 'Z'),
+                   bevel=0.012)
+            W.rivets(rv, [bear(b, 0.77, z) for z in (0.24, 0.58, 0.58 + RISE * 0.5)], [bear(b)] * 3, r=0.026)
+        add_outline(W.obj("cage", cg, [band], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+        W.obj("cagerivets", rv, [band], parent=body)
+    if LOOK > 1:
+        foot_spikes(M, LN, body, [(c, 24) for c in CHAINS], 0.97, spike_m)
+    if LOOK == 3:
+        crown(M, LN, body, [360 * i / 9 + 20 for i in range(9)], 0.26, 0.46, top - 0.14, top - 0.04, spike_m)
     chain_anchors(M, LN, body, [(b, 0.76, 0.58) for b in CHAINS], 1.12, band)
     # the head: a cast pot of lava on a swivel, banded, two ring handles, a goose-neck spout out the front
     tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
     tur.scale = (1.2, 1.2, 1.2)
-    pot_m = W.mat_iron("iron_cast", base=(66, 58, 56), dark=(26, 22, 21), rust=(120, 62, 32), edge=(160, 146, 136),
-                       rust_k=0.4, soot=0.4)
     bm = bmesh.new()
     Q.cyl(bm, 0.2, 0.05, Matrix.Translation((0, 0, 0.025)), segs=32)
     add_outline(W.obj("swivel", bm, [band], parent=tur, sharp=35), LN["cool"], L.LINE * 0.6)
@@ -894,7 +974,7 @@ def build_magma_b(M, LN, body):
     Q.cyl(bm, 0.06, 0.03, Matrix.Translation(path[7]) @ Vector((0, 0, 1)).rotation_difference(path[8] - path[6]).to_matrix().to_4x4(),
           segs=16)
     L.tube(bm, [Vector((0, 0.2, 0.36)), Vector((0, 0.36, 0.33))], [0.02, 0.02], sides=6)      # a stay to the neck
-    add_outline(W.obj("spout", bm, [M["bronze_w"]], parent=tur, sharp=35), LN["warm"])
+    add_outline(W.obj("spout", bm, [spout_m], parent=tur, sharp=35), LN["warm"])
     bm = bmesh.new()
     Q.cyl(bm, 0.05, 0.01, Matrix.Translation(path[-1] + d * 0.031) @ mq, segs=16)
     tip = path[-1] + d * 0.03
@@ -917,8 +997,8 @@ def build():
 
 SOLID = {1: ("skirt", "drum", "glowcap", "collar", "rope", "capbolts", "crown"), 2: ("post", "coil", "posts", "socket"), 3: ("column", "collar", "cagebars", "crown")}
 if TIER == 3 and MAGMA_DIR == "A":
-    SOLID[3] = ("belly", "crucible", "hub", "chimney", "tanks", "lugs")
+    SOLID[3] = ("belly", "crucible", "hub", "chimney", "tanks", "lugs", "crown")
 elif TIER == 3 and MAGMA_DIR == "B":
-    SOLID[3] = ("columns", "rim", "rimrocks")
-TAG = f"3-dir{MAGMA_DIR}" if TIER == 3 and MAGMA_DIR in ("A", "B") else TIER if LOOK == 1 else f"{TIER}-look{LOOK}"
+    SOLID[3] = ("columns", "rim", "rimrocks", "crown")
+TAG = f"3-dir{MAGMA_DIR}" + (f"-look{LOOK}" if LOOK > 1 else "") if TIER == 3 and MAGMA_DIR in ("A", "B") else TIER if LOOK == 1 else f"{TIER}-look{LOOK}"
 Q.run("inferno", build, TAG, HERE, turret_canvas=(400, 360, 200, 200), args=ARGS[1:], solid=SOLID[TIER])
