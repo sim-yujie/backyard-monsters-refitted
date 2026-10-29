@@ -27,18 +27,18 @@ export class InfernoProgress {
   emergence_last_at?: Date | null;
 
   /** The 13 Descent yards, in order: 1 once beaten. Shorter while not all were attacked. */
-  @Property({ type: "json", columnType: "jsonb", default: "'[]'::jsonb" })
+  @Property({ type: "json", columnType: "jsonb", defaultRaw: "'[]'::jsonb" })
   descent_destroyed: Opt<number[]> = [];
 
   /** The best damage (0-100) reached on each Descent yard, in order. */
-  @Property({ type: "json", columnType: "jsonb", default: "'[]'::jsonb" })
+  @Property({ type: "json", columnType: "jsonb", defaultRaw: "'[]'::jsonb" })
   descent_best: Opt<number[]> = [];
 
   /**
    * What each Descent yard not yet beaten kept from the attacks on it, by base
    * id: `{ health, looted }` (migration `20261026_AddDescentYardsToInfernoProgress.ts`).
    */
-  @Property({ type: "json", columnType: "jsonb", default: "'{}'::jsonb" })
+  @Property({ type: "json", columnType: "jsonb", defaultRaw: "'{}'::jsonb" })
   descent_yards: Opt<Record<string, { health: Record<string, number>; looted: Record<string, number> }>> = {};
 
   /** When the 13th Descent yard fell; null until then. */
@@ -58,7 +58,7 @@ export class InfernoProgress {
   korath_notice_at?: Date | null;
 
   /** The one-time story popups shown, by key: unix seconds each was shown. */
-  @Property({ type: "json", columnType: "jsonb", default: "'{}'::jsonb" })
+  @Property({ type: "json", columnType: "jsonb", defaultRaw: "'{}'::jsonb" })
   popups_seen: Opt<Record<string, number>> = {};
 
   @Property({ type: Date, defaultRaw: "now()" })
