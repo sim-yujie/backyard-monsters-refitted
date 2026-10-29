@@ -191,6 +191,7 @@ describe("a reset logs the account out everywhere (issue #318)", () => {
       `login-failure-ips:${EMAIL}`,
       `login-failures:${EMAIL}|127.0.0.1`,
       `login-failures:${EMAIL}|203.0.113.9`,
+      `login-network-failures:${EMAIL}`,
       `login-pause:${EMAIL}|127.0.0.1`,
       `login-pause:${EMAIL}|203.0.113.9`,
     ]);

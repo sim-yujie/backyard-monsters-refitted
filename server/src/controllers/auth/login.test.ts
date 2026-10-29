@@ -63,6 +63,12 @@ mock.module("../../server.js", () => ({
       return 1;
     },
     smembers: async (key: string) => (kept.get(key)?.value ?? "").split(",").filter(Boolean),
+    hincrby: async (key: string, field: string, by: number) => {
+      const hash = JSON.parse(kept.get(key)?.value ?? "{}") as Record<string, number>;
+      hash[field] = (hash[field] ?? 0) + by;
+      kept.set(key, { value: JSON.stringify(hash), ttl: kept.get(key)?.ttl ?? -1 });
+      return hash[field];
+    },
   },
 }));
 mock.module("../../utils/logger.js", () => ({
@@ -279,12 +285,13 @@ describe("sign-in back-off per email and address (security audit 2026-10-29, L2)
 describe("account-wide sign-in pause (security audit 2026-10-29, L2)", () => {
   const EMAIL = "player@example.com";
   const HOME = "127.0.0.1";
-  /** Ten addresses, five wrong passwords each: the account-wide 50 in an hour. */
+  /** Ten addresses on ten networks, five wrong passwords each: the account-wide 50 in an hour. */
   const sprayFromTenAddresses = async () => {
     for (let address = 1; address <= 10; address++) {
-      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.${address}.1`);
     }
   };
+  const ACCOUNT = `login-account-failures:${EMAIL}`;
 
   test("many addresses trip it: a new address is refused even with the right password", async () => {
     await sprayFromTenAddresses();
@@ -305,7 +312,7 @@ describe("account-wide sign-in pause (security audit 2026-10-29, L2)", () => {
 
   test("below the line nobody is refused, and other emails are untouched", async () => {
     for (let address = 1; address <= 9; address++) {
-      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.${address}.1`);
     }
     expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
 
@@ -325,5 +332,48 @@ describe("account-wide sign-in pause (security audit 2026-10-29, L2)", () => {
     expect((await run(PASSWORD, EMAIL, "2001:db8:1:2:ffff:ffff:ffff:ffff")).status).toBe(429);
     expect((await run(PASSWORD, EMAIL, "2001:db8:1:3::1")).status).toBe(200);
     expect(kept.has(`login-pause:${EMAIL}|2001:db8:1:2::/64`)).toBe(true);
+  });
+
+  test("one IPv4 /24 adds at most 10 to the count, however many addresses it uses", async () => {
+    for (let address = 1; address <= 30; address++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
+    }
+    expect(kept.get(ACCOUNT)?.value).toBe("10");
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+  });
+
+  test("one IPv6 /48 adds at most 10 to the count, across its /64s", async () => {
+    for (let net = 1; net <= 30; net++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `2001:db8:5:${net}::1`);
+    }
+    expect(kept.get(ACCOUNT)?.value).toBe("10");
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+  });
+
+  test("a password reset also forgets each network's share", async () => {
+    for (let address = 1; address <= 2; address++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
+    }
+    await clearAllLoginFailures(EMAIL);
+    expect(kept.has(`login-network-failures:${EMAIL}`)).toBe(false);
+
+    for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, "198.51.100.3");
+    expect(kept.get(ACCOUNT)?.value).toBe("5");
+  });
+
+  test("the pause lasts at most an hour from the first wrong password", async () => {
+    await sprayFromTenAddresses();
+    expect(kept.get(ACCOUNT)?.ttl).toBe(60 * 60);
+
+    kept.get(ACCOUNT)!.ttl = 60; // 59 minutes later
+    for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, "192.0.2.1");
+    expect(kept.get(ACCOUNT)?.ttl).toBe(60);
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).message).toContain("wait 1 minute and");
+  });
+
+  test("a count left with no expiry gets one, so the pause cannot last for ever", async () => {
+    kept.set(ACCOUNT, { value: "60", ttl: -1 });
+    await run("not-the-password", EMAIL, "192.0.2.1");
+    expect(kept.get(ACCOUNT)).toEqual({ value: "61", ttl: 60 * 60 });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addressBucket } from "./addressBucket.js";
+import { addressBucket, networkBucket } from "./addressBucket.js";
 
 /** Per-address limits count an IPv6 address by its /64 (security audit 2026-10-29, L2). */
 describe("addressBucket", () => {
@@ -27,5 +27,29 @@ describe("addressBucket", () => {
   test("anything that is not an address is left as it is", () => {
     expect(addressBucket("")).toBe("");
     expect(addressBucket("unknown")).toBe("unknown");
+  });
+});
+
+/** The account-wide sign-in count takes at most 10 from each network (security audit 2026-10-29, L2). */
+describe("networkBucket", () => {
+  test("an IPv4 address is its /24, also when written as IPv6", () => {
+    expect(networkBucket("203.0.113.9")).toBe("203.0.113.0/24");
+    expect(networkBucket("203.0.113.250")).toBe("203.0.113.0/24");
+    expect(networkBucket("::ffff:203.0.113.9")).toBe("203.0.113.0/24");
+    expect(networkBucket("203.0.114.9")).toBe("203.0.114.0/24");
+  });
+
+  test("an IPv6 address is its /48, however it is written", () => {
+    for (const ip of ["2001:db8:5:1::1", "2001:0db8:0005:ffff:a:b:c:d", "2001:DB8:5::", "2001:db8:5::9"]) {
+      expect([ip, networkBucket(ip)]).toEqual([ip, "2001:db8:5::/48"]);
+    }
+    expect(networkBucket("2001:db8:6:1::1")).toBe("2001:db8:6::/48");
+    expect(networkBucket("2001:db8::1")).toBe("2001:db8:0::/48");
+    expect(networkBucket("::1")).toBe("0:0:0::/48");
+  });
+
+  test("anything that is not an address is left as it is", () => {
+    expect(networkBucket("")).toBe("");
+    expect(networkBucket("unknown")).toBe("unknown");
   });
 });

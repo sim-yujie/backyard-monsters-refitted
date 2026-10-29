@@ -1,5 +1,5 @@
 import { redis } from "../../server.js";
-import { addressBucket } from "../../utils/addressBucket.js";
+import { addressBucket, networkBucket } from "../../utils/addressBucket.js";
 
 /**
  * Per-account sign-in back-off (security audit 2026-10-29, L2), in two layers.
@@ -20,10 +20,17 @@ import { addressBucket } from "../../utils/addressBucket.js";
  * {@link ACCOUNT_WINDOW_SECONDS}, from any addresses, the email is paused for
  * the rest of that hour, but only for addresses not
  * {@link rememberAddress known} for it: the player's own, where they signed
- * in within the last {@link KNOWN_ADDRESS_SECONDS}, still get in. One address
- * alone cannot reach 50 in an hour (its own pauses hold it to about a dozen),
- * nor can a player who forgot their password, so it takes a guesser with
- * several addresses, who is then held to 50 guesses an hour.
+ * in within the last {@link KNOWN_ADDRESS_SECONDS}, still get in. Each network
+ * ({@link networkBucket}: an IPv4 /24, an IPv6 /48) adds at most
+ * {@link NETWORK_MAX_FAILURES} to that count, so neither one machine cycling
+ * through its addresses nor a player who forgot their password can trip it;
+ * it takes a guesser on several networks, who is then held to 50 guesses an
+ * hour. The hour runs from the first wrong password, so the pause never lasts
+ * longer than that, and a password reset lifts it at once.
+ *
+ * Trade-off left open: a botnet spread over many networks can still pause
+ * sign-ins from new addresses on someone's email for up to an hour. The real
+ * fix is a CAPTCHA or an emailed sign-in link, after beta 5.
  *
  * A try refused by either pause is refused before the password is checked and
  * not counted. A password reset lifts both layers for the email.
@@ -34,6 +41,7 @@ export const MAX_PAUSE_SECONDS = 15 * 60;
 export const FORGET_AFTER_SECONDS = 15 * 60;
 export const ACCOUNT_MAX_FAILURES = 50;
 export const ACCOUNT_WINDOW_SECONDS = 60 * 60;
+export const NETWORK_MAX_FAILURES = 10;
 export const KNOWN_ADDRESS_SECONDS = 30 * 24 * 60 * 60;
 
 const failuresKey = (email: string, bucket: string) => `login-failures:${email}|${bucket}`;
@@ -41,6 +49,8 @@ const pauseKey = (email: string, bucket: string) => `login-pause:${email}|${buck
 /** The addresses with wrong passwords for the email, so a reset can clear them all. */
 const addressesKey = (email: string) => `login-failure-ips:${email}`;
 const accountFailuresKey = (email: string) => `login-account-failures:${email}`;
+/** How many wrong passwords each network has added to the account-wide count, in this hour. */
+const networkFailuresKey = (email: string) => `login-network-failures:${email}`;
 const knownKey = (email: string, bucket: string) => `login-known:${email}|${bucket}`;
 
 /** The pause after the given number of wrong passwords in a row, in seconds (0 for none). */
@@ -80,8 +90,17 @@ export const recordLoginFailure = async (email: string, ip: string): Promise<num
   await redis.expire(addressesKey(email), FORGET_AFTER_SECONDS);
 
   // The account-wide count runs in fixed hours from its first wrong password.
-  if ((await redis.incr(accountFailuresKey(email))) === 1) {
-    await redis.expire(accountFailuresKey(email), ACCOUNT_WINDOW_SECONDS);
+  // The expiry is set whenever the key has none, not only on the first
+  // count, so a lost EXPIRE can never leave a pause with no end.
+  const netCount = await redis.hincrby(networkFailuresKey(email), networkBucket(ip), 1);
+  if ((await redis.ttl(networkFailuresKey(email))) < 0) {
+    await redis.expire(networkFailuresKey(email), ACCOUNT_WINDOW_SECONDS);
+  }
+  if (netCount <= NETWORK_MAX_FAILURES) {
+    await redis.incr(accountFailuresKey(email));
+    if ((await redis.ttl(accountFailuresKey(email))) < 0) {
+      await redis.expire(accountFailuresKey(email), ACCOUNT_WINDOW_SECONDS);
+    }
   }
 
   const pause = pauseAfter(failures);
@@ -126,6 +145,7 @@ export const clearAllLoginFailures = async (email: string): Promise<void> => {
   await redis.del(
     ...buckets.flatMap((bucket) => [failuresKey(email, bucket), pauseKey(email, bucket)]),
     addressesKey(email),
-    accountFailuresKey(email)
+    accountFailuresKey(email),
+    networkFailuresKey(email)
   );
 };
