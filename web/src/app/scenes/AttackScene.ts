@@ -41,7 +41,7 @@ import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { setOwnYardTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import { readYard, type Yard } from "@/game/yard/yardModel";
-import { fellPens, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
+import { fellPens, withRosters, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
 import { setYardIntent } from "@/game/yard/yardIntent";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
@@ -923,6 +923,7 @@ export class AttackScene implements Scene {
     this.refreshStrip(state);
     this.refreshStatus(state);
     this.fellPens(state);
+    this.bunkerPens();
     // The end plugin (WP6) takes over from here; a pending retreat question
     // is moot once the attack is over.
     if (state.phase === "ended") {
@@ -962,6 +963,21 @@ export class AttackScene implements Scene {
     this.lifeDestroyed = state.buildingsDestroyed;
     const destroyed = this.session?.battle()?.state().destroyedIds ?? [];
     const next = fellPens(life, destroyed);
+    if (next === life) return;
+    this.life = next;
+    this.renderer.setLife(next);
+  }
+
+  /**
+   * An Inferno Compound's pen holds what its bunker has left: one walks out as
+   * each defender is sent (`HOUSINGBUNKER.as`, `dispatchCreature`), and one
+   * that walks back rejoins it. Drawing only.
+   */
+  private bunkerPens(): void {
+    const life = this.life;
+    const battle = this.session?.battle();
+    if (!life?.rosters || !battle) return;
+    const next = withRosters(life, battle.bunkerPools());
     if (next === life) return;
     this.life = next;
     this.renderer.setLife(next);

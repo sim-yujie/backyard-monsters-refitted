@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import { spriteFor } from "@/game/attack/monsterSprites";
-import { BEHAVIOUR_SPEED, championStat, monsterTickSpeed } from "@/game/combat/rules";
+import { BEHAVIOUR_SPEED, championStat, housedGarrisons, monsterTickSpeed } from "@/game/combat/rules";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard } from "./yardModel";
 import {
@@ -31,6 +31,7 @@ import {
   stepWalker,
   stepWorker,
   walkerSpecs,
+  withRosters,
   WORKER_MOTION,
   yardLifeOf,
   type LifeGroup,
@@ -214,9 +215,56 @@ describe("yardLifeOf on the Inferno", () => {
     expect(yardLifeOf(main, readYard(main)).pens).toEqual([]);
   });
 
-  it("leaves the pens to the combat engine's defenders on an attack", () => {
-    expect(yardLifeOf(inferno, readYard(inferno, { foreign: true }), "attack").pens).toEqual([]);
-    expect(yardLifeOf(inferno, readYard(inferno, { foreign: true }), "visit").pens).toHaveLength(4);
+  it("pens each bunker's own garrison on an attack, as the engine deals it", () => {
+    const life = yardLifeOf(inferno, readYard(inferno, { foreign: true }), "attack");
+    expect(life.pens).toHaveLength(4);
+    const dealt = housedGarrisons(inferno.buildingdata, inferno.monsters?.housed ?? {}, inferno.buildinghealthdata);
+    expect(life.rosters).not.toBeNull();
+    for (const pen of life.pens) {
+      const held = Object.fromEntries((life.rosters?.[pen.id] ?? []).map((group) => [group.id, group.count]));
+      expect(held).toEqual(dealt[pen.id] ?? {});
+    }
+    expect(yardLifeOf(inferno, readYard(inferno, { foreign: true }), "visit").rosters).toBeNull();
+  });
+});
+
+describe("withRosters", () => {
+  const life = withRosters(
+    lifeWith({
+      groups: [{ id: "IC1", level: 2, count: 5 }],
+      pens: [
+        { id: 7, x: 0, y: 0 },
+        { id: 9, x: 200, y: 0 },
+      ],
+    }),
+    { 7: { IC1: 3 }, 9: { IC1: 2, IC2: 1 } },
+  );
+
+  it("gives each pen what its bunker holds, at the academy level", () => {
+    expect(life.rosters).toEqual({
+      7: [{ id: "IC1", level: 2, count: 3 }],
+      9: [
+        { id: "IC1", level: 2, count: 2 },
+        { id: "IC2", level: 1, count: 1 },
+      ],
+    });
+  });
+
+  it("is the same life when the pools have not changed", () => {
+    expect(withRosters(life, { 7: { IC1: 3 }, 9: { IC2: 1, IC1: 2 } })).toBe(life);
+  });
+
+  it("walks one monster out of its pen as its bunker sends it, and empties a fallen one", () => {
+    const keys = (next: YardLife) => walkerSpecs(next, seeded()).map((spec) => spec.key).sort();
+    expect(keys(life)).toEqual(["m:7:IC1:0", "m:7:IC1:1", "m:7:IC1:2", "m:9:IC1:0", "m:9:IC1:1", "m:9:IC2:0"]);
+    expect(keys(withRosters(life, { 7: { IC1: 2 }, 9: { IC1: 2, IC2: 1 } }))).toEqual([
+      "m:7:IC1:0",
+      "m:7:IC1:1",
+      "m:9:IC1:0",
+      "m:9:IC1:1",
+      "m:9:IC2:0",
+    ]);
+    expect(keys(withRosters(life, { 7: { IC1: 3 } }))).toEqual(["m:7:IC1:0", "m:7:IC1:1", "m:7:IC1:2"]);
   });
 });
 

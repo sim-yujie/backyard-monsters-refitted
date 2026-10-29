@@ -2,6 +2,7 @@ import type { BaseLoadResponse } from "@/api/types";
 import {
   BEHAVIOUR_SPEED,
   championStat,
+  housedGarrisons,
   isKnownMonster,
   monsterMovement,
   monsterTickSpeed,
@@ -60,9 +61,14 @@ import type { Yard, YardBuilding } from "./yardModel";
  * On the Inferno the pens are its Compounds, the Housing Bunker (type 128):
  * `Populate` takes `HOUSINGBUNKER` there instead of `BUILDING15`
  * (`HOUSING.as:211`), with the same 160 x 160 footprint and `PointInHouse`. On
- * an attacked Inferno yard the bunkers' monsters are the combat engine's to
- * draw, as the defenders they send out (`housedGarrisons`), so the pens stay
- * empty there rather than show each of them twice.
+ * an attacked Inferno yard a bunker is also a defence: the creatures it sends
+ * out are the penned ones walking off to the fight (`HOUSINGBUNKER.as`,
+ * `dispatchCreature`). So each pen there shows its own garrison
+ * ({@link YardLife.rosters}): the engine's deal at the start
+ * (`housedGarrisons`), then what the battle says it still holds
+ * ({@link withRosters}, `Battle.bunkerPools`). A monster leaves the pen as its
+ * defender comes out, one walking back in rejoins it, and a fallen bunker's
+ * pen empties.
  *
  * Flash drew every one. A big army is thousands, so this draws a sample:
  * {@link sampleArmy} keeps every type present and shares at most
@@ -267,6 +273,13 @@ export interface YardLife {
   readonly plot: { readonly width: number; readonly height: number };
   /** Every footprint, so an idle worker is not put down inside a building. */
   readonly footprints: readonly LifeArea[];
+  /**
+   * What each pen holds of its own, by pen id, on an attacked Inferno yard,
+   * whose Housing Bunkers send their monsters out one by one; a pen with no
+   * entry holds none. Null everywhere else: {@link groups} is one army dealt
+   * round the pens.
+   */
+  readonly rosters: Readonly<Record<number, readonly LifeGroup[]>> | null;
 }
 
 /** Nothing alive at all. */
@@ -283,6 +296,7 @@ export const EMPTY_LIFE: YardLife = {
   hardHat: false,
   plot: { width: 0, height: 0 },
   footprints: [],
+  rosters: null,
 };
 
 const standing = (building: YardBuilding): boolean => building.hp === null || building.hp > 0;
@@ -296,7 +310,8 @@ const TRIBE_TYPE = "tribe";
  *
  * Pens are the Housing buildings with health above zero, as `Populate` takes
  * them (`HOUSING.as:212-215`); one still being built counts, as it did there.
- * On the Inferno they are its Housing Bunkers, and none on an attacked one.
+ * On the Inferno they are its Housing Bunkers, each with its own garrison
+ * when attacked.
  * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`), and is
  * empty on an attacked yard; a wild monster camp has no workers.
  *
@@ -317,7 +332,6 @@ export const yardLifeOf = (
   }
 
   const housing = housingTypeOf(save);
-  const penned = !(housing === HOUSING_BUNKER_TYPE && view === "attack");
   const pens: LifePen[] = [];
   let cage: LifePen | null = null;
   let chamber: LifeArea | null = null;
@@ -326,7 +340,7 @@ export const yardLifeOf = (
   for (const building of yard.buildings) {
     const [width, height] = building.footprint;
     footprints.push({ x: building.x, y: building.y, width, height });
-    if (penned && building.type === housing && standing(building)) {
+    if (building.type === housing && standing(building)) {
       pens.push({ id: building.id, x: building.x, y: building.y });
     }
     if (building.type === CHAMPION_CAGE_TYPE && cage === null) {
@@ -356,7 +370,7 @@ export const yardLifeOf = (
   }
 
   const workless = save.type === TRIBE_TYPE;
-  return {
+  const life: YardLife = {
     groups,
     pens,
     fallen: EMPTY_LIFE.fallen,
@@ -369,7 +383,52 @@ export const yardLifeOf = (
     hardHat: yard.buildTime < 1,
     plot: { width: yard.bounds.yardWidth, height: yard.bounds.yardHeight },
     footprints,
+    rosters: null,
   };
+  if (housing !== HOUSING_BUNKER_TYPE || view !== "attack") return life;
+  // The engine's own deal, so each pen shows what its bunker will send.
+  return withRosters(life, housedGarrisons(save.buildingdata, save.monsters?.housed ?? {}, save.buildinghealthdata));
+};
+
+/**
+ * The life with each pen holding what `pools` says, by building id then
+ * monster id (an attacked Inferno yard, `Battle.bunkerPools`); the same object
+ * when that is what it holds already, so a caller can tell nothing changed.
+ * Each type walks at its academy level, read off {@link YardLife.groups}.
+ */
+export const withRosters = (
+  life: YardLife,
+  pools: Readonly<Record<number, Readonly<Record<string, number>>>>,
+): YardLife => {
+  const levels = new Map(life.groups.map((group) => [group.id, group.level]));
+  const rosters: Record<number, LifeGroup[]> = {};
+  for (const pen of life.pens) {
+    const roster: LifeGroup[] = [];
+    for (const id of Object.keys(pools[pen.id] ?? {}).sort()) {
+      const count = Math.floor(pools[pen.id]?.[id] ?? 0);
+      if (count > 0 && isKnownMonster(id)) roster.push({ id, level: levels.get(id) ?? 1, count });
+    }
+    if (roster.length > 0) rosters[pen.id] = roster;
+  }
+  if (life.rosters && sameRosters(life.rosters, rosters)) return life;
+  return { ...life, rosters };
+};
+
+const sameRosters = (
+  one: Readonly<Record<number, readonly LifeGroup[]>>,
+  other: Readonly<Record<number, readonly LifeGroup[]>>,
+): boolean => {
+  const keys = Object.keys(one);
+  if (keys.length !== Object.keys(other).length) return false;
+  return keys.every((key) => {
+    const mine = one[Number(key)] ?? [];
+    const theirs = other[Number(key)];
+    return (
+      theirs !== undefined &&
+      mine.length === theirs.length &&
+      mine.every((group, at) => group.id === theirs[at]?.id && group.count === theirs[at]?.count)
+    );
+  });
 };
 
 /**
@@ -612,9 +671,7 @@ export const walkerSpecs = (
   if (life.pens.length > 0) {
     // The nth of a type in a pen keeps its key while the army around it changes.
     const seen = new Map<string, number>();
-    sampleArmy(life.groups, cap).forEach((monster, index) => {
-      const pen = life.pens[index % life.pens.length];
-      // Dealt round every pen first, so the ones left standing keep theirs.
+    const penned = (pen: LifePen | undefined, monster: SampledMonster): void => {
       if (!pen || life.fallen.has(pen.id)) return;
       const slot = `${pen.id}:${monster.id}`;
       const nth = seen.get(slot) ?? 0;
@@ -628,7 +685,18 @@ export const walkerSpecs = (
         speed: monsterTickSpeed(monster.id, monster.level) * (BEHAVIOUR_SPEED["pen"] ?? 1),
         odds: CREEP_WANDER_ODDS,
       });
-    });
+    };
+    const rosters = life.rosters;
+    if (rosters) {
+      // Each pen its own garrison, the places shared out evenly.
+      const share = Math.max(1, Math.floor(cap / life.pens.length));
+      for (const pen of life.pens) {
+        for (const monster of sampleArmy(rosters[pen.id] ?? [], share)) penned(pen, monster);
+      }
+    } else {
+      // Dealt round every pen first, so the ones left standing keep theirs.
+      sampleArmy(life.groups, cap).forEach((monster, index) => penned(life.pens[index % life.pens.length], monster));
+    }
   }
 
   const cage = life.cage;

@@ -170,6 +170,34 @@ describe("a fallen Housing Bunker (`HOUSINGBUNKER.as:116-127`)", () => {
   });
 });
 
+describe("what a Housing Bunker still holds, for its pen (`Battle.bunkerPools`)", () => {
+  it("holds its whole garrison until it sends any", () => {
+    const battle = battleOf({ IC1: 3, IC2: 2 }, [{ x: 160, y: 160, monsters: { C1: 1 } }]);
+    run(battle, 29);
+    expect(battle.bunkerPools()).toEqual({ 1: { IC1: 3, IC2: 2 } });
+  });
+
+  it("drops each defender it sends out", () => {
+    const battle = battleOf({ IC1: 2, IC5: 3 }, [{ x: 200, y: 200, monsters: { C15: 1 } }]);
+    run(battle, 30);
+    expect(defenders(battle)).toHaveLength(1);
+    expect(battle.bunkerPools()).toEqual({ 1: { IC1: 2, IC5: 2 } });
+  });
+
+  it("leaves out a bunker that has fallen", () => {
+    const battle = battleOf({ IC1: 4 }, [{ x: 330, y: 330, monsters: { C1: 1 } }], { levels: { C5: 6 } }, {
+      "1": { id: 1, t: 128, l: 1, X: 0, Y: 0, cU: 100 },
+      "2": { id: 2, t: 1, l: 1, X: 900, Y: 900 },
+    });
+    run(battle, 60);
+    battle.apply({ kind: "fling", t: 60, x: 120, y: 120, r: 0, monsters: { C5: 30 } });
+    expect(battle.bunkerPools()).toEqual({ 1: { IC1: 4 } });
+    for (let step = 0; step < 3000 && !battle.state().destroyedIds.includes(1); step += 1) battle.step();
+    expect(battle.state().destroyedIds).toContain(1);
+    expect(battle.bunkerPools()).toEqual({});
+  });
+});
+
 describe("a yard's housed monsters in its Housing Bunkers (`HOUSING.as:201-235`)", () => {
   const twoBunkers: CombatBuildingDataMap = {
     "262": { id: 262, t: 128, l: 4, X: 0, Y: 0 },
