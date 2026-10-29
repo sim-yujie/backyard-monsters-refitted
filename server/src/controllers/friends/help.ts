@@ -18,6 +18,7 @@ import {
   isRefusal,
   planRepair,
   planSpeedup,
+  refusalDetails,
   rewardOf,
   type HelpKind,
 } from "../../services/friends/helpRules.js";
@@ -133,7 +134,7 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       },
       now
     );
-    if (gate) throw friendRefusedErr(gate.reason, gate.from === undefined ? {} : { from: gate.from });
+    if (gate) throw friendRefusedErr(gate.reason, refusalDetails(gate));
 
     const key = String(buildingId);
     const building = theirs.buildingdata?.[key];

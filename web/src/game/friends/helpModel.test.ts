@@ -142,7 +142,28 @@ describe("the block after a help (#374)", () => {
   it("a refusal stands on that kind of that building", () => {
     const next = afterRefusal(block, 7, "speedup", "helpersFull");
     expect(next.buildings["7"]).toEqual({ speedup: "helpersFull" });
+    expect(next.gate).toBeUndefined();
     expect(afterRefusal(block, 99, "speedup", "helpersFull")).toBe(block);
+  });
+
+  it("a tooNew refusal keeps its gate, so the panel says which and when", () => {
+    const next = afterRefusal(block, 7, "speedup", "tooNew", { from: NOW + 3 * 3600, rule: "friendship" });
+    expect(next.gate).toEqual({ reason: "tooNew", from: NOW + 3 * 3600, rule: "friendship" });
+    expect(buildingHelp(next, 7, NOW)?.speedup).toEqual({
+      allowed: false,
+      reason: "tooNew",
+      text: "Opens in 3h 0m (friends for 12 hours first).",
+    });
+  });
+
+  it("tooNew says the gate the help block names", () => {
+    const gated = (gate: HelpBlock["gate"]): HelpBlock => ({ helpsLeft: 20, buildings: { "7": { speedup: "tooNew" } }, ...(gate && { gate }) });
+    const text = (gate: HelpBlock["gate"]) => (buildingHelp(gated(gate), 7, NOW)?.speedup as { text: string }).text;
+    expect(text({ reason: "tooNew", from: NOW + 5 * 3600 + 60, rule: "friendship" })).toBe("Opens in 5h 1m (friends for 12 hours first).");
+    expect(text({ reason: "tooNew", from: NOW + 28 * 3600, rule: "account" })).toBe("Opens in 1d 4h (accounts must be 3 days old).");
+    expect(text({ reason: "tooNew", rule: "level" })).toBe("Not yet: each player must be level 5.");
+    expect(text(undefined)).toBe("Not yet: friends for 12 hours, accounts 3 days old, each player level 5.");
+    expect(helpRefusalText("tooNew", { from: NOW + 90, rule: "account" }, NOW)).toBe("Opens in 1m 30s (accounts must be 3 days old).");
   });
 });
 

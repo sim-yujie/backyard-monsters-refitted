@@ -1,4 +1,5 @@
 import { dayText } from "@/game/mail/mailbox";
+import { formatCountdown } from "@/ui/format";
 import { getSession } from "./auth";
 import { ApiError, get, NetworkError, postJson } from "./http";
 import type { ApiEnvelope, BaseLoadResponse } from "./types";
@@ -80,7 +81,7 @@ export interface Friend {
   /** Friends since; null when the server sent none. */
   readonly since: number | null;
   readonly giftSentToday: boolean;
-  /** When the 24-hour rule lets a gift or a help go; null once it has. */
+  /** When the 12-hour friendship rule lets a gift or a help go; null once it has (the account and level gates may still hold). */
   readonly canGiftFrom: number | null;
   /** Whether the player could help them today; null until help lands (WP6). */
   readonly help: { readonly speedup: boolean; readonly repair: boolean } | null;
@@ -203,10 +204,18 @@ export interface HelpOffer {
   readonly repair?: true | string;
 }
 
+/** A `tooNew` refusal's details: the gate that holds and, when time lifts it, when (unix seconds). */
+export interface GateHold {
+  readonly from?: number;
+  readonly rule?: GateRule;
+}
+
 /** A help-mode load's own block (§6.2): what the player can help with in the yard. */
 export interface HelpBlock {
   readonly helpsLeft: number;
   readonly buildings: Readonly<Record<string, HelpOffer>>;
+  /** When every offer is `tooNew`: which gate holds and when it lifts. */
+  readonly gate?: GateHold & { readonly reason?: string };
 }
 
 /** A friend's main yard loaded to help in: the `view` answer plus `help`. */
@@ -257,7 +266,40 @@ export interface FriendRefusal {
   readonly message: string;
   /** For `declinedRecently` and `tooNew`: when it becomes possible, unix seconds, when the server knows. */
   readonly from?: number;
+  /** For `tooNew`: the gate that holds, when the server says. */
+  readonly rule?: GateRule;
 }
+
+/** Which gate holds a `tooNew`: the friendship's age, an account's age, or a level (the server's `rule`). */
+export type GateRule = "friendship" | "account" | "level";
+
+/** Who may help or send a gift, as the server's `FRIEND_GATES` (12 hours of friendship since 2026-10-29). */
+export const FRIEND_GATES = { friendshipAgeHours: 12, accountAgeDays: 3, minLevel: 5 } as const;
+
+const GATE_RULES: readonly GateRule[] = ["friendship", "account", "level"];
+const isGateRule = (value: unknown): value is GateRule => GATE_RULES.includes(value as GateRule);
+
+/** Why the gate holds, in a few words. */
+const GATE_TEXT: Readonly<Record<GateRule, string>> = {
+  friendship: `friends for ${FRIEND_GATES.friendshipAgeHours} hours first`,
+  account: `accounts must be ${FRIEND_GATES.accountAgeDays} days old`,
+  level: `each player must be level ${FRIEND_GATES.minLevel}`,
+};
+
+/**
+ * A `tooNew` in words: which gate holds and, when time lifts it, how long is
+ * left: "Opens in 5h 20m (friends for 12 hours first)". A level lifts by
+ * playing, so it has no time; with neither, every gate is named.
+ *
+ * @param now - Unix seconds
+ */
+export const tooNewText = (hold: GateHold = {}, now: number = Date.now() / 1000): string => {
+  const left = hold.from === undefined ? 0 : Math.ceil(hold.from - now);
+  const why = hold.rule && GATE_TEXT[hold.rule];
+  if (hold.rule === "level" || (why && left <= 0)) return `Not yet: ${why}.`;
+  if (left > 0) return why ? `Opens in ${formatCountdown(left)} (${why}).` : `Opens in ${formatCountdown(left)}.`;
+  return REFUSAL_TEXT.tooNew;
+};
 
 /** What each refusal says to the player. */
 export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
@@ -269,7 +311,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   requestsOff: "This player isn't taking friend requests.",
   declinedRecently: "You can't ask this player again yet.",
   cannotSend: "You can't send that to this player.",
-  tooNew: "That isn't possible yet. Friends need to be friends for a day first.",
+  tooNew: `Not yet: friends for ${FRIEND_GATES.friendshipAgeHours} hours, accounts ${FRIEND_GATES.accountAgeDays} days old, each player level ${FRIEND_GATES.minLevel}.`,
   dailyCap: "You have done that as many times as you can today.",
   giftSentToday: "You have already sent this friend a gift today.",
   collectLimit: "You have collected as many gifts as you can today. The rest will wait.",
@@ -323,11 +365,15 @@ export const friendRefusal = (caught: unknown): FriendRefusal => {
     const reason = data["reason"] ?? body["reason"];
     if (isReason(reason)) {
       const from = toSeconds(data["from"] ?? body["from"]);
+      const ruleValue = data["rule"] ?? body["rule"];
+      const rule = isGateRule(ruleValue) ? ruleValue : undefined;
       const message =
         reason === "declinedRecently" && from !== null
           ? `You can't ask this player again until ${dayText(from)}.`
-          : REFUSAL_TEXT[reason];
-      return { reason, message, ...(from !== null && { from }) };
+          : reason === "tooNew"
+            ? tooNewText({ ...(from !== null && { from }), ...(rule && { rule }) })
+            : REFUSAL_TEXT[reason];
+      return { reason, message, ...(from !== null && { from }), ...(rule && { rule }) };
     }
   }
   return { reason: "unknown", message: GENERAL_REFUSAL };

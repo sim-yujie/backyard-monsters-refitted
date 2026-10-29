@@ -182,7 +182,7 @@ not stop attacks either way.
 
 All checks are on the server. A **help** is one speed-up or one repair.
 
-**Who may help.** The two players are friends, have been for at least 24 hours, both accounts are at
+**Who may help.** The two players are friends, have been for at least 12 hours, both accounts are at
 least 3 days old and both are at least level 5 (section 7). Neither has blocked the
 other. Only the friend's **main yard** can be helped.
 
@@ -215,7 +215,7 @@ in the yard.
 
 ## 5. Gift rules
 
-- **Who may gift:** the same friendship rules as help (24 hours of friendship, both accounts 3 days
+- **Who may gift:** the same friendship rules as help (12 hours of friendship, both accounts 3 days
   old, both level 5+), and not blocked either way.
 - **One gift per sender per friend per day** (decision 6), UTC day. Removing and re-adding a friend
   does not give a second gift that day.
@@ -235,7 +235,7 @@ in the yard.
 
 | Table | Columns | Notes |
 | --- | --- | --- |
-| `friend` | `userid`, `friend_userid`, `created_at` | Two rows per friendship, one each way. PK (`userid`, `friend_userid`); index on `friend_userid`. `created_at` is "friends since" for the 24-hour rule. |
+| `friend` | `userid`, `friend_userid`, `created_at` | Two rows per friendship, one each way. PK (`userid`, `friend_userid`); index on `friend_userid`. `created_at` is "friends since" for the 12-hour rule. |
 | `friend_request` | `id`, `from_userid`, `to_userid`, `status` (`pending`, `accepted`, `declined`, `cancelled`, `expired`), `created_at`, `answered_at` | Partial unique index: one `pending` row per ordered pair. A request both ways at once: the second one accepts the first. |
 | `friend_gift` | `id`, `from_userid`, `to_userid`, `resource` (`r1`-`r4`), `amount`, `gift_day` (date), `created_at`, `collected_at`, `expires_at` | Unique (`from_userid`, `to_userid`, `gift_day`). |
 | `friend_help` | `id`, `helper_userid`, `owner_userid`, `baseid`, `building_id`, `kind` (`speedup`, `repair`), `seconds_saved`, `reward` (jsonb), `help_day` (date), `created_at` | Index (`helper_userid`, `help_day`) for the cap. Doubles as the audit trail. |
@@ -280,7 +280,7 @@ add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 `Friend` = `{ userid, username, pic, level, online: "online" | "today" | "week" | "away" | null,
 since, giftSentToday, canGiftFrom, help: { speedup, repair } | null }`. `online` is `null` when the
 friend hides it; "today"/"week"/"away" come from `last_seen_at`, coarse on purpose. `canGiftFrom` is
-when the 24-hour rule clears (null once it has). `help` says whether you could help today; until WP6
+when the 12-hour friendship rule clears (null once it has; the account and level rules are not in it). `help` says whether you could help today; until WP6
 lands it is `null`.
 
 `Request` = `{ requestid, userid, username, pic, level, status, at, expires }`, where `userid`,
@@ -295,8 +295,9 @@ A player who blocked you shows as `none`, and a request then fails with the neut
 
 **Refusals** (409, a stable `reason` the client turns into words): `friendLimit`, `theirFriendLimit`,
 `requestLimit`, `alreadyFriends`, `alreadyRequested`, `requestsOff`, `declinedRecently`,
-`cannotSend` (blocked either way, either account banned, or the account cannot be friended), `tooNew` (24-hour, account age
-or level rule, with `from` when known), `dailyCap`, `giftSentToday`, `collectLimit`, `notFriends`,
+`cannotSend` (blocked either way, either account banned, or the account cannot be friended), `tooNew` (12-hour friendship, account age
+or level rule; `rule` says which holds: `friendship`, `account` or `level`, and `from` when it lifts, the
+later of the two ages when both hold; a help-mode load's block carries the same as `gate`), `dailyCap`, `giftSentToday`, `collectLimit`, `notFriends`,
 `helpersFull`, `alreadyHelped`, `nothingToHelp`, `underAttack`, and three for bad targets:
 `noSuchPlayer` (no such id or name), `noSuchRequest` (not a waiting request of yours) and `self`.
 `requestLimit` is 30 requests waiting; `dailyCap` is 30 requests made today (cancelled ones count).
@@ -371,7 +372,7 @@ buildings can be helped. Until WP6 lands, `help.buildings` is empty.
 
 ## 7. Anti-abuse rules
 
-1. **Friendship age gate:** gifts and help need 24 hours of friendship. Remove and
+1. **Friendship age gate:** gifts and help need 12 hours of friendship (24 until owner 2026-10-29). Remove and
    re-add starts the clock again.
 2. **Account gate:** both accounts at least 3 days old and level 5 or more, so a fresh
    fake account is useless for days and costs real play.
@@ -456,7 +457,7 @@ on 2026-10-19 (for Q4, the first option: heal to full at once).
 | Q4 | What a friend's repair does | **Heals that building to full at once** (so once per damage, by one friend). Alternative: heals half the missing health, each friend once |
 | Q5 | Gift size | **3% of the lower of the sender's and receiver's storage caps**, one resource the sender picks (Flash gave a random resource, 2-12% of the receiver's cap) |
 | Q6 | Gifts a player can collect a day | **5** (more wait, up to 7 days) |
-| Q7 | Anti-farm rule for gifts and help | **Friends for 24 hours, both accounts 3+ days old, both level 5+** |
+| Q7 | Anti-farm rule for gifts and help | **Friends for 12 hours (was 24; owner 2026-10-29), both accounts 3+ days old, both level 5+** |
 | Q8 | The alliance member list does not exist in the web client yet | For now, **alliance mates appear as suggestions in Friends > Find**; an Add-friend button goes into the member list when that screen is built |
 | Q9 | Friend request limits | **30 open requests, 30 new a day, lapse after 14 days, 7-day wait after a decline**; a decline is not shown to the sender |
 | Q10 | Where help works | **Main yard only** (not outposts, not the Inferno) |

@@ -57,8 +57,15 @@ describe("HelpPanel (#374)", () => {
     const reasons = [...panel.element.querySelectorAll(".help-panel__reason")].map((one) => one.textContent);
     expect(reasons).toEqual([
       "You have used all your helps for today. More tomorrow.",
-      expect.stringContaining("Helping opens once you have been friends for a day"),
+      "Not yet: friends for 12 hours, accounts 3 days old, each player level 5.",
     ]);
+  });
+
+  it("says which gate holds a tooNew and when it lifts", () => {
+    const { panel } = mount();
+    const from = Math.floor(Date.now() / 1000) + 26 * 3600 + 600;
+    panel.show(silo, buildingHelp({ helpsLeft: 5, buildings: { "7": { speedup: "tooNew" } }, gate: { reason: "tooNew", from, rule: "account" } }, 7));
+    expect(panel.element.querySelector(".help-panel__reason")?.textContent).toBe("Opens in 1d 2h (accounts must be 3 days old).");
   });
 
   it("says when there is nothing to help with", () => {

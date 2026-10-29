@@ -306,14 +306,14 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
 
     await unfriend(A, B);
     await befriend(A, B, T0 - 60 * 60);
-    expect(await refusalOf(send(A, B))).toEqual({ reason: "tooNew", from: T0 - 60 * 60 + DAY });
+    expect(await refusalOf(send(A, B))).toEqual({ reason: "tooNew", from: T0 - 60 * 60 + 12 * 60 * 60, rule: "friendship" });
 
     await unfriend(A, B);
     await befriend(A, B);
     await setSave(B, { createtime: T0 - DAY });
-    expect(await refusalOf(send(A, B))).toEqual({ reason: "tooNew", from: T0 + 2 * DAY });
+    expect(await refusalOf(send(A, B))).toEqual({ reason: "tooNew", from: T0 + 2 * DAY, rule: "account" });
     await setSave(B, { createtime: T0 - 30 * DAY, points: "0" });
-    expect(await refusalOf(send(A, B))).toEqual({ reason: "tooNew" });
+    expect(await refusalOf(send(A, B))).toEqual({ reason: "tooNew", rule: "level" });
 
     expect(await giftRows(A)).toHaveLength(0);
     expect(await sql(`SELECT 1 FROM bym.notification WHERE userid IN (${LIST})`)).toHaveLength(0);

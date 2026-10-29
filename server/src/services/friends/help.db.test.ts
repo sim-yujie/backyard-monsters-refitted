@@ -248,12 +248,12 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     await sql(`UPDATE bym."user" SET banned = false WHERE userid = ?`, [OWNER]);
 
     await befriend(H1, STRANGER, T0 - 3600);
-    expect(await refusalOf(help(H1, 1, "speedup", T0, STRANGER))).toEqual({ reason: "tooNew", from: T0 - 3600 + DAY });
+    expect(await refusalOf(help(H1, 1, "speedup", T0, STRANGER))).toEqual({ reason: "tooNew", from: T0 - 3600 + 12 * 60 * 60, rule: "friendship" });
 
     await setYard(OWNER, { createtime: T0 - DAY });
-    expect(await refusalOf(help(H1, 1, "speedup"))).toEqual({ reason: "tooNew", from: T0 + 2 * DAY });
+    expect(await refusalOf(help(H1, 1, "speedup"))).toEqual({ reason: "tooNew", from: T0 + 2 * DAY, rule: "account" });
     await setYard(OWNER, { createtime: T0 - 30 * DAY, points: "100" });
-    expect(await refusalOf(help(H1, 1, "speedup"))).toEqual({ reason: "tooNew" });
+    expect(await refusalOf(help(H1, 1, "speedup"))).toEqual({ reason: "tooNew", rule: "level" });
 
     expect(await helpRows()).toHaveLength(0);
     expect((await yardOf(OWNER)).buildingdata["1"].hl).toBeUndefined();
@@ -339,6 +339,15 @@ describe.skipIf(!dbName)("the help engine on a real database (issue #373)", () =
     expect(await helpBlock(em() as never, STRANGER, owner, T0)).toEqual({
       helpsLeft: 20,
       buildings: { "1": { speedup: "notFriends" }, "2": { repair: "notFriends" } },
+    });
+
+    // Friends 2 hours: the block says which gate holds and when it lifts, for the panel's words.
+    await befriend(H1, STRANGER, T0 - 2 * 60 * 60);
+    const stranger = { ...owner, userid: STRANGER };
+    expect(await helpBlock(em() as never, H1, stranger, T0)).toEqual({
+      helpsLeft: 20,
+      buildings: { "1": { speedup: "tooNew" }, "2": { repair: "tooNew" } },
+      gate: { reason: "tooNew", from: T0 + 10 * 60 * 60, rule: "friendship" },
     });
   });
 });
