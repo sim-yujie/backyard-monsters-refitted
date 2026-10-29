@@ -15,12 +15,14 @@
  * building's isometric origin like every row in `buildingArtData.ts`. Its
  * base stands where the Flash tower's does, so a taller tier grows upward.
  *
- * - **Off unless asked for** (owner, 26 Oct 2026: not until the turrets
- *   turn): the towers show only in a browser that turned on their hidden
- *   switch (`newTowerArt`, `?towers=new`), and the player's Classic look
- *   choice still wins over it. The server's matching setting,
- *   `TOWER_TIER_ART` (off by default), sends viewers the tier of someone
- *   else's tower (`buildingArtLevels.ts`).
+ * - **The look setting decides** (owner, 29 Oct 2026: no address switch;
+ *   the Classic/Modern choice in Account Settings is the one setting for the
+ *   yard's look): with Modern, the default, the 3D Cannon, Sniper and Laser
+ *   show (`MODERN_TOWERS`); with Classic, the Flash towers. The painted tiers
+ *   of the Bunker, Tesla, Aerial Defense and Railgun stay off for players
+ *   until their 3D art is in (`setPaintedTowerArt`, for tests). The server
+ *   sends viewers the tier of someone else's Modern towers
+ *   (`buildingArtLevels.ts`).
  * - **Turrets that turn** (owner, 26 Oct 2026: "Turrets: wire in"): the
  *   Sniper, Laser, Aerial Defense and Railgun draw each tier as a body with
  *   its turret taken off plus the turret painted at every facing
@@ -53,7 +55,7 @@
  * level, which fits the same footprint. Flash's Town Hall has no animation
  * strips, so nothing moving is lost. The player's Classic look
  * choice in Account Settings (`game/classicLook.ts`) brings back the Flash
- * look for every repainted building, the towers too once they are on.
+ * look for every repainted building, the towers too.
  */
 
 import { classicLook } from "@/game/classicLook";
@@ -61,16 +63,14 @@ import type { ArtAnim } from "./buildingArtData";
 import type { TurretAim } from "./turretAim";
 import { TURRET_AIM } from "./turretAimData";
 
-/** Where this browser keeps the hidden switch for the new tower art, for testing ("1" is on). */
-export const NEW_TOWER_ART_KEY = "bymr.newTowerArt";
+/**
+ * The towers whose new art players see with the Modern look: the 3D Cannon,
+ * Sniper and Laser. The server's `TOWER_TIER_ART_LEVELS` names the same.
+ */
+export const MODERN_TOWERS: readonly number[] = [20, 21, 23];
 
-const addressSearch = (): string => {
-  try {
-    return window.location.search;
-  } catch {
-    return ""; // No page address (a test, a worker).
-  }
-};
+/** Where a browser kept the old hidden tower switch (`?towers=new`, "1" on); cleared when the game loads. */
+export const OLD_NEW_TOWER_ART_KEY = "bymr.newTowerArt";
 
 const storage = (): Storage | null => {
   try {
@@ -80,32 +80,25 @@ const storage = (): Storage | null => {
   }
 };
 
-/**
- * Whether this page shows the new tower art: off unless this browser turned
- * it on. `?towers=new` in the address turns it on and remembers that;
- * `?towers=classic` turns it off again. Not for players yet: the new
- * towers' turrets do not turn.
- */
-export const readNewTowerArt = (search: string = addressSearch(), store: Storage | null = storage()): boolean => {
-  const asked = new URLSearchParams(search).get("towers");
+/** Forgets the old hidden tower switch, which nothing reads any more. */
+export const forgetOldTowerSwitch = (store: Storage | null = storage()): void => {
   try {
-    if (asked === "new") store?.setItem(NEW_TOWER_ART_KEY, "1");
-    else if (asked === "classic") store?.removeItem(NEW_TOWER_ART_KEY);
-    return asked === "new" || (asked !== "classic" && store?.getItem(NEW_TOWER_ART_KEY) === "1");
+    store?.removeItem(OLD_NEW_TOWER_ART_KEY);
   } catch {
-    // Site data blocked: the address still decides for this page.
-    return asked === "new";
+    // Site data blocked: there is nothing kept to forget.
   }
 };
 
-let newTowerArtOn = readNewTowerArt();
+forgetOldTowerSwitch();
 
-/** Whether the new tower art is on, read once when the game loads. */
-export const newTowerArt = (): boolean => newTowerArtOn;
+/** Whether the new tower art shows: with the Modern look, as read when the game loads (`classicLook`). */
+export const newTowerArt = (): boolean => !classicLook();
 
-/** Turns the new tower art on or off for this page; for tests. */
-export const setNewTowerArt = (on: boolean): void => {
-  newTowerArtOn = on;
+let paintedTowerArtOn = false;
+
+/** Shows the painted tiers of the towers not in `MODERN_TOWERS` on this page; for tests, as they are not for players yet. */
+export const setPaintedTowerArt = (on: boolean): void => {
+  paintedTowerArtOn = on;
 };
 
 /** `[file, offsetX, offsetY]` from the building's origin, as in `ArtImage`. */
@@ -253,13 +246,13 @@ export const TOWN_HALL_ART: readonly TierArt[] = [
 const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART };
 
 /**
- * The new picture a building shows at `level`, or null with the old art on,
- * for a tower while the new tower art is off, below level 1 and for every
+ * The new picture a building shows at `level`, or null with the Classic look,
+ * for a painted tower not yet shown to players, below level 1 and for every
  * type without new art.
  */
 export const tierArtFor = (type: number, level: number): TierArt | null => {
-  if (classicLook()) return null;
-  if (!newTowerArtOn && type in TOWER_TIER_ART) return null;
+  if (!newTowerArt()) return null;
+  if (!paintedTowerArtOn && type in TOWER_TIER_ART && !MODERN_TOWERS.includes(type)) return null;
   let chosen: TierArt | null = null;
   for (const tier of NEW_ART[type] ?? []) {
     if (tier.from > level) break;

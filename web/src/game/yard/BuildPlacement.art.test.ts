@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import type { Camera } from "@/game/Camera";
 import { BuildPlacement } from "./BuildPlacement";
+import { setClassicLook } from "@/game/classicLook";
 import { ArtState, resolveArt } from "./buildingArt";
 import { readYard, type Yard } from "./yardModel";
 
@@ -85,15 +86,34 @@ describe("BuildPlacement ghost art", () => {
   });
 
   it("puts each picture at its own offset, the strip cut to its first cell", async () => {
+    // The Flash Sniper, the Classic look's.
+    setClassicLook(true);
+    try {
+      const { placement, layer } = carry(SNIPER);
+      await settle();
+      placement.moveTo(300, -300);
+      const ghost = layer.children[0] as Container;
+      const pictures = ghost.children.at(-1) as Container;
+      expect(pictures.children).toHaveLength(2);
+      const [base, rifle] = pictures.children;
+      expect([base?.x, base?.y]).toEqual([-40, -30]);
+      expect([rifle?.x, rifle?.y]).toEqual([-27, -50]);
+      expect([rifle?.width, rifle?.height]).toEqual([55, 47]);
+    } finally {
+      setClassicLook(false);
+    }
+  });
+
+  it("carries the Modern look's 3D Sniper as its body and the turret's first cell", async () => {
     const { placement, layer } = carry(SNIPER);
     await settle();
     placement.moveTo(300, -300);
     const ghost = layer.children[0] as Container;
     const pictures = ghost.children.at(-1) as Container;
     expect(pictures.children).toHaveLength(2);
-    const [base, rifle] = pictures.children;
-    expect([base?.x, base?.y]).toEqual([-40, -30]);
-    expect([rifle?.x, rifle?.y]).toEqual([-27, -50]);
-    expect([rifle?.width, rifle?.height]).toEqual([55, 47]);
+    const [body, turret] = pictures.children;
+    expect([body?.x, body?.y]).toEqual([-40, -37]);
+    expect([turret?.x, turret?.y]).toEqual([-28, -52]);
+    expect([turret?.width, turret?.height]).toEqual([56, 42]);
   });
 });

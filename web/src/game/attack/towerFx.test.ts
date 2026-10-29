@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Container, Graphics, Texture, TextureSource, TilingSprite } from "pixi.js";
 import type { Sprite } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import type { CreepSnapshot } from "@/game/combat/rules";
 import { setClassicLook } from "@/game/classicLook";
-import { setNewTowerArt } from "@/game/yard/buildingArtTiers";
+import { setPaintedTowerArt } from "@/game/yard/buildingArtTiers";
 import { angleGap, cellBearing, muzzleOffset, rowOf } from "@/game/yard/turretAim";
 import { readYard } from "@/game/yard/yardModel";
 import {
@@ -56,12 +56,13 @@ import {
  * per tower class, the Tesla Tower's charge / loop / wind-down, the muzzle
  * heights, and the effects object turning a gun through a stub host.
  *
- * The strips these turn are the Flash towers', the default; the new tower
- * art's turrets turn by the same rule over strips of their own (below).
+ * The strips these turn are the Flash towers' (the Classic look); the new
+ * tower art's turrets, the Modern default, turn by the same rule over strips
+ * of their own (below).
  */
 
 afterEach(() => {
-  setNewTowerArt(false);
+  setPaintedTowerArt(false);
   setClassicLook(false);
 });
 
@@ -191,6 +192,7 @@ const creepAt = (ix: number, iy: number): CreepSnapshot => ({
 
 describe("towersOf", () => {
   it("lists a yard's towers with the cells of their gun strip", () => {
+    setClassicLook(true);
     const sniper = towersOf(readYard(yardOf(21)));
     expect(sniper).toHaveLength(1);
     expect(sniper[0]?.type).toBe(21);
@@ -206,11 +208,10 @@ describe("towersOf", () => {
   it("gives a repainted tier its turning turret's strip and lifts its muzzle with the picture", () => {
     const yard = yardOf(21);
     yard.buildingdata = { "1": { id: 1, t: 21, l: 7, X: 0, Y: 0 } };
-    // The new tower art is off unless turned on: the Flash turret, not lifted.
-    expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
-    // The player's old-art choice wins over the switch.
-    setNewTowerArt(true);
+    // The Classic look: the Flash turret, not lifted, even with the painted tiers shown.
     setClassicLook(true);
+    expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
+    setPaintedTowerArt(true);
     expect(towersOf(readYard(yard))[0]).toMatchObject({ frames: 30, lift: 0 });
     // The new tower art: the new turret's cells, and the muzzle stands higher than tier 1's.
     setClassicLook(false);
@@ -249,7 +250,9 @@ const setUp = (type: number) => {
   return { yard, frames, graphics, fx };
 };
 
-describe("the towers with the new tower art off", () => {
+describe("the towers with the Classic look", () => {
+  beforeEach(() => setClassicLook(true));
+
   it("have no 3D aim, pivot or lift at any level, so every shot leaves the Flash muzzle", () => {
     for (const type of [20, 21, 23, 25, 115, 118]) {
       for (let level = 1; level <= 10; level++) {
@@ -306,7 +309,7 @@ describe("TowerFx", () => {
     ) * 180) / Math.PI;
 
   it("turns a 3D sniper onto the cell that faces its target on the ground, and fires from that muzzle", () => {
-    setNewTowerArt(true);
+    setPaintedTowerArt(true);
     const { yard, fx } = setUp(21);
     const [info] = towersOf(yard);
     const aim = info?.aim;
@@ -336,7 +339,7 @@ describe("TowerFx", () => {
   });
 
   it("turns a 3D Cannon onto the cell that faces its target on the ground, even below it where its raised barrel looks up", () => {
-    setNewTowerArt(true);
+    setPaintedTowerArt(true);
     const { yard, fx } = setUp(20);
     const [info] = towersOf(yard);
     const aim = info?.aim;
@@ -356,7 +359,7 @@ describe("TowerFx", () => {
   });
 
   it("lobs a 3D Cannon's shell up out of its raised barrel and down onto the creep, landing on the same tick", () => {
-    setNewTowerArt(true);
+    setPaintedTowerArt(true);
     const yard = readYard(yardOf(20));
     const [info] = towersOf(yard);
     const aim = info?.aim;
@@ -399,7 +402,7 @@ describe("TowerFx", () => {
   });
 
   it("starts a painted turret's shots where they always did, lifted with its tier", () => {
-    setNewTowerArt(true);
+    setPaintedTowerArt(true);
     const { yard, fx } = setUp(118);
     const [info] = towersOf(yard);
     if (!info) throw new Error("no railgun");
@@ -408,7 +411,7 @@ describe("TowerFx", () => {
   });
 
   it("starts a 3D turret's shots where they always did while the art has not measured its muzzle", () => {
-    setNewTowerArt(true);
+    setPaintedTowerArt(true);
     const [info] = towersOf(readYard(yardOf(21)));
     const aim = info?.aim;
     if (!info || !aim) throw new Error("no 3D sniper");
@@ -425,7 +428,7 @@ describe("TowerFx", () => {
   });
 
   it("tilts a 3D Laser's head further down the nearer the spot it burns, and lights the beam at its lens", () => {
-    setNewTowerArt(true);
+    setPaintedTowerArt(true);
     const { yard, fx } = setUp(23);
     const [info] = towersOf(yard);
     const aim = info?.aim;
@@ -458,6 +461,8 @@ describe("TowerFx", () => {
   });
 
   it("does not turn a gun the yard's tower has no strip for", () => {
+    // The Flash Cannon, the Classic look's.
+    setClassicLook(true);
     const { frames, fx } = setUp(20);
     const target = creepAt(35, 235);
     fx.onShot({ tick: 1, towerId: 1, creepId: 9, ix: target.ix, iy: target.iy }, target);
@@ -848,7 +853,7 @@ describe("TowerFx's new look", () => {
   });
 
   it("turns the 3D Cannon's barrel onto a creep in range, pointing along its shot, and kicks it back", async () => {
-    setNewTowerArt(true);
+    setPaintedTowerArt(true);
     const { fx, frames, layers, nudges } = await newLookSetUp(20);
     const near = creepAt(35, 235);
     fx.update(1, () => near, [near]);
@@ -870,6 +875,8 @@ describe("TowerFx's new look", () => {
   });
 
   it("leaves the Flash Cannon still: no strip to turn, no barrel to kick", async () => {
+    // The Flash art (the Classic look's) under the new look's effects.
+    setClassicLook(true);
     const { fx, frames, nudges } = await newLookSetUp(20);
     const near = creepAt(35, 235);
     for (let tick = 1; tick <= 40; tick += 1) fx.update(tick, () => near, [near]);
@@ -936,6 +943,8 @@ describe("TowerFx's new look", () => {
   });
 
   it("turns the Laser onto a creep in range before its beam, and follows the beam without a jump", async () => {
+    // The Flash Laser's 54 cells (the Classic look's art) under the new look's effects.
+    setClassicLook(true);
     const { fx, frames } = await newLookSetUp(23);
     const near = creepAt(35, 135);
     fx.update(1, () => near, [near]);
