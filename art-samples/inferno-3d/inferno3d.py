@@ -618,8 +618,10 @@ def build_magma(M, LN, body):
 
 # ------------------------------------------------------------- 3: the Magma Tower's two new directions (MAGMA_DIR=A|B)
 # Owner, 29 Oct: the Magma looked too much like the Blast Tower (the same red and cream stripes, a drum, a ball cannon).
-# A "Furnace" and B "Volcanic", level 1 only for now, each with the Flash Magma's chain legs and anchor weights.
-MAGMA_DIR = os.environ.get("MAGMA_DIR", "").upper()
+# A "Furnace" and B "Volcanic", each with the Flash Magma's chain legs and anchor weights. The owner picked B (29 Oct):
+# it is the Magma Tower now (render/t3, t3-look2, t3-look3); MAGMA_DIR=A renders the Furnace to render/t3-dirA[-lookN],
+# MAGMA_DIR=OLD the striped column (build_magma) to render/t3-old[-lookN].
+MAGMA_DIR = os.environ.get("MAGMA_DIR", "B").upper()
 
 
 def chain_anchors(M, LN, body, hubs, foot_r, mat):
@@ -990,7 +992,7 @@ def build():
     M = common()
     LN = dict(warm=L.line("warm"), cool=L.line("cool"))
     body = L.empty("BODY")
-    magma = {"A": build_magma_a, "B": build_magma_b}.get(MAGMA_DIR, build_magma)
+    magma = {"A": build_magma_a, "B": build_magma_b, "OLD": build_magma}[MAGMA_DIR]
     tur, top, _ = {1: build_blast, 2: build_sharp, 3: magma}[TIER](M, LN, body)
     return body, tur, top
 
@@ -1000,5 +1002,7 @@ if TIER == 3 and MAGMA_DIR == "A":
     SOLID[3] = ("belly", "crucible", "hub", "chimney", "tanks", "lugs", "crown")
 elif TIER == 3 and MAGMA_DIR == "B":
     SOLID[3] = ("columns", "rim", "rimrocks", "crown")
-TAG = f"3-dir{MAGMA_DIR}" + (f"-look{LOOK}" if LOOK > 1 else "") if TIER == 3 and MAGMA_DIR in ("A", "B") else TIER if LOOK == 1 else f"{TIER}-look{LOOK}"
+TAG = TIER if LOOK == 1 else f"{TIER}-look{LOOK}"
+if TIER == 3 and MAGMA_DIR != "B":
+    TAG = {"A": "3-dirA", "OLD": "3-old"}[MAGMA_DIR] + (f"-look{LOOK}" if LOOK > 1 else "")
 Q.run("inferno", build, TAG, HERE, turret_canvas=(400, 360, 200, 200), args=ARGS[1:], solid=SOLID[TIER])
