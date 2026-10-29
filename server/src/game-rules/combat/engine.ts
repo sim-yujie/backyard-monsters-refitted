@@ -1111,6 +1111,14 @@ export interface Battle {
   recentEvents(sinceTick: number): readonly BattleVisualEvent[];
   /** The siege weapon on the field right now (Inferno WP 6.8); a fresh copy per call. */
   siege(): SiegeSnapshot;
+  /**
+   * What each standing Housing Bunker still holds right now, by building id
+   * and monster id: its pool, without the defenders it has out. The yard draws
+   * these pacing in its pen (`HOUSINGBUNKER.as`, whose dispatched creatures
+   * are the penned ones walking out). A fallen bunker is absent. Drawing
+   * only: not in the state or the checkpoint. A fresh copy per call.
+   */
+  bunkerPools(): Readonly<Record<number, Readonly<Record<string, number>>>>;
 }
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
@@ -6339,6 +6347,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       endHp: Math.max(0, championsHp[lesson.monsterId] ?? 0),
     }));
 
+  /** {@link Battle.bunkerPools}. */
+  const bunkerPools = (): Record<number, Record<string, number>> => {
+    const out: Record<number, Record<string, number>> = {};
+    for (const bunker of bunkers) {
+      const building = bunker.building;
+      if (building.type !== HOUSING_BUNKER_TYPE || building.hp <= 0) continue;
+      const pool: Record<string, number> = {};
+      for (const [monsterId, count] of bunker.pool) if (count > 0) pool[monsterId] = count;
+      out[building.id] = pool;
+    }
+    return out;
+  };
+
   /** {@link BattleState.bunkerGarrisons}: each supplied bunker's pool, plus its defenders out. */
   const garrisonsAfter = (): Record<number, Record<string, number>> => {
     const out: Record<number, Record<string, number>> = {};
@@ -6423,6 +6444,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creeps: creepSnapshots,
     recentEvents,
     siege: siegeSnapshot,
+    bunkerPools,
   };
 };
 

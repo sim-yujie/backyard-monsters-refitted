@@ -214,6 +214,7 @@ const layerOver = (creeps: readonly CreepSnapshot[], events: readonly BattleVisu
     recentEvents: (since: number) => events.filter((event) => event.tick > since),
     state: () => real.state(),
     siege: () => real.siege(),
+    bunkerPools: () => real.bunkerPools(),
   } as unknown as ReturnType<AttackSession["battle"]>);
   const depth = new Container();
   depth.sortableChildren = true;
