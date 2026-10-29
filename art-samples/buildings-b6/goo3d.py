@@ -210,7 +210,7 @@ def build(level):
             bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=8, radius=0.07)
             B.part(f"bubble{k}_ball", bm, M["goo"], piv, line="cool", k=0.4)
             bubbles.append(piv)
-        NZ0, DZ, DR = ZR + 0.1, ZR + 0.6, 0.27                   # the funnel: neck foot, cap's underside, cap's radius
+        NZ0, DZ, DR = ZR + 0.1, ZR + 0.6, 0.24                   # the funnel: neck foot, cap's underside, cap's radius
     else:
         # ---- the dome of goo: a lumpy round heap over the rim, its lumps swelling and sinking while producing
         DT = ZR + 0.5                                  # its top

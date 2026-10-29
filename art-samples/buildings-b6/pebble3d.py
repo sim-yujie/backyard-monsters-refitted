@@ -77,10 +77,10 @@ def build(level):
     M = materials()
     root = L.empty("ROOT")
     nr = {1: 3, 3: 4, 6: 5, 10: 5}[lk]               # rings, the legs' ring included
-    R = {1: 0.5, 3: 0.62, 6: 0.64, 10: 0.66}[lk]       # the widest ring's radius
+    R = {1: 0.45, 3: 0.56, 6: 0.58, 10: 0.6}[lk]       # the widest ring's radius
     nb = 8 if lk == 1 else 10                          # blocks per ring
-    bh = 0.2 if lk == 1 else 0.22                      # a ring's height
-    leg_h = 0.24 if lk == 1 else 0.28
+    bh = 0.25 if lk == 1 else 0.26                     # a ring's height
+    leg_h = 0.3 if lk == 1 else 0.32
     movers = []
 
     # ---- the core behind the blocks (dark: it shows between them), from the legs' top to the roof
@@ -113,10 +113,10 @@ def build(level):
         movers.append((piv, (1 if i % 2 == 0 else -1) * 2 / nb))   # two blocks a loop
 
     # ---- the roof: a cone of pale wooden shingles, its eave a little ragged
-    re = rad(ztop) + 0.1
-    rh = 0.6 if lk == 1 else 0.68
-    roof = W.lathe("roof", [[(re, ztop - 0.04), (re + 0.01, ztop + 0.0), (re * 0.72, ztop + rh * 0.3),
-                             (re * 0.4, ztop + rh * 0.62), (0.05, ztop + rh), (0.0, ztop + rh + 0.01)],
+    re = rad(ztop) + 0.12
+    rh = 0.54 if lk == 1 else 0.6
+    roof = W.lathe("roof", [[(re, ztop - 0.04), (re + 0.01, ztop + 0.0), (re * 0.74, ztop + rh * 0.17),
+                             (re * 0.46, ztop + rh * 0.42), (re * 0.2, ztop + rh * 0.74), (0.05, ztop + rh), (0.0, ztop + rh + 0.01)],
                             [(re, ztop - 0.04), (rad(ztop) - 0.05, ztop - 0.02)]],
                    [M["roof"]], parent=root, n=64, wob=0.02, wob_scale=3.0, seed=lk)
     L.add_outline(roof, L.line("warm"))

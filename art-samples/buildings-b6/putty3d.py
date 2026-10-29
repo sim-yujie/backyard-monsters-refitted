@@ -5,12 +5,13 @@ server/public/assets/buildings/puttysquisher.v2/ (looks at levels 1, 3, 6 and 10
 
 The Flash building: a sooty orange-gold pot of purple putty, a pale press block on its rim, a brass hand wheel on its
 side, a brass arm out to a test tube of purple putty.
-  L1   the pot on the ground, a stirring rod in it, the test tube standing beside it
+  L1   the pot on the ground, a gold crank stirrer in it, the test tube standing beside it
   L3   on a purple frame on four pale log stumps; two pale arched squisher arms over the pot; the tube hangs on the frame
   L6   + a hub on the arms, a bigger gold hand wheel, a glass tube with a purple bulb and a wire hook on top
   L10  + a big gold wheel with purple spokes and putty on them, behind at the right; a steel coil with a bulb at the
        left; the stumps stand in steel springs
-Producing: the arms squish down and lift, the hand wheel turns, the big wheel turns.
+Producing: the gold stirrer goes round in the putty (every look, as Flash), the arms squish down and lift, the hand
+wheel turns, the big wheel turns.
 """
 import math
 import sys
@@ -31,7 +32,8 @@ def look_of(level):
 
 def materials():
     return dict(
-        pot=W.mat_gold("pot", rust_k=0.1, dirt=0.15, dents=0.7),
+        pot=B.mat_paint("pot", (238, 162, 36), under=(112, 70, 28), edge=(255, 224, 136), chips=0.72, spec=0.6,
+                        spec_rough=0.25, soot=0.45, dirt=0.3),
         brass=L.mat_metal("brass", "brass"),
         gold=L.mat_metal("gold", "gold", polish=0.7),
         putty=B.mat_goo("putty", col=(160, 84, 204), deep=(70, 26, 104), hi=(246, 214, 255)),
@@ -62,6 +64,18 @@ def handwheel(bm, r, m, spokes=4, mat=0):
     return bm
 
 
+def rounded_crank(sh, arm):
+    """The stirrer's centre line: up its shaft, a round bend out along the arm, a round bend up into the handle."""
+    pts = [Vector((0, 0, -0.1 + (sh + 0.1 - 0.06) * i / 8)) for i in range(9)]
+    pts += [Vector((0.06 - 0.06 * math.cos(a), 0, sh - 0.06 + 0.06 * math.sin(a))) for a in
+            (k * math.pi / 2 / 6 for k in range(1, 7))]
+    pts += [Vector((0.06 + (arm - 0.12) * i / 4, 0, sh)) for i in range(1, 5)]
+    pts += [Vector((arm - 0.06 + 0.06 * math.sin(a), 0, sh + 0.06 - 0.06 * math.cos(a))) for a in
+            (k * math.pi / 2 / 6 for k in range(1, 7))]
+    pts.append(Vector((arm, 0, sh + 0.1)))
+    return pts
+
+
 def build(level):
     lk = look_of(level)
     L.clear_scene()
@@ -86,6 +100,18 @@ def build(level):
             v.co *= PR * 0.95 / d
         v.co.z = ZR - 0.07 + 0.025 * math.sin(v.co.x * 17) * math.cos(v.co.y * 13) + 0.02 * (1 - d / PR)
     B.part("putty", bm, M["putty"], root, line=None)
+
+    # ---- the stirrer: a gold crank standing in the putty, going round while producing (as Flash's animation, every look)
+    piv = B.mover("stir_pivot", root, L.bear(45, 0.0 if lk == 1 else 0.14, ZR - 0.06))
+    sh = 0.3 if lk == 1 else 0.2                       # its shaft above the putty (lower under the arms)
+    bm = bmesh.new()
+    arm = 0.13
+    L.tube(bm, rounded_crank(sh, arm), [0.022] * len(rounded_crank(sh, arm)), sides=10)
+    bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=6, radius=0.035,
+                              matrix=Matrix.Translation((arm, 0.0, sh + 0.12)))
+    B.disc(bm, 0.05, 0.03, Matrix.Translation((0, 0, 0.04)), segs=16)       # a collar where it meets the putty
+    B.part("stirrer", bm, M["gold"], piv, line="cool", k=0.6)
+    movers["stir"] = piv
 
     # ---- the hand wheel on the left side, turning
     hb = 120 if lk < 6 else 135
@@ -120,7 +146,7 @@ def build(level):
     B.part("ttube_arm", bm, M["brass"], root, line="cool", k=0.7)
 
     if lk == 1:
-        # ---- the press block on the left rim and the stirring rod
+        # ---- the press block on the left rim
         bm = bmesh.new()
         c = L.bear(150, PR * 0.7, ZR - 0.05)
         m = Matrix.Translation(c) @ Matrix.Rotation(math.radians(-150 + 90), 4, 'Z')
@@ -131,9 +157,6 @@ def build(level):
             B.disc(bm, 0.035, 0.02, m @ Matrix.Rotation(math.radians(-8), 4, 'X') @ Matrix.Translation((u, 0.0, 0.2)),
                    segs=12)
         B.part("press_holes", bm, M["dark"], root, line=None)
-        bm = bmesh.new()
-        L.tube(bm, [Vector((0.05, -0.05, ZR - 0.12)), Vector((-0.02, 0.03, ZR + 0.28))], [0.02, 0.02], sides=8)
-        B.part("rod", bm, M["brass"], root, line="cool", k=0.6)
     else:
         # ---- the frame: purple posts at the corners, a square round the foot and one round the rim; the log stumps
         S = PR * 0.98
@@ -288,6 +311,7 @@ def build(level):
             B.part("coil_bulb", bm, M["putty"], root, line="cool", k=0.6)
 
     def animate(phase):
+        B.spin(movers["stir"], 'Z', phase)             # one whole turn a loop
         B.spin(movers["hand"], 'Z', 0.5 * phase)       # 4 spokes and a knob: half a turn a loop shows the knob go round
         if "arms" in movers:                           # two squishes a loop: lift slowly, drop fast
             k = phase * 2 % 1.0
