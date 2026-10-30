@@ -570,6 +570,8 @@ def materials():
                        side=0.3, emit=0.3)
     M["fchrome"] = shiny("fchrome", (172, 184, 200), rough=0.26, metal=0.75, wear=(140, 152, 170), scale=3, dirt=0.15,
                          side=0.4)
+    M["brushed"] = shiny("brushed", (204, 212, 224), rough=0.42, metal=0.35, wear=(168, 178, 194), scale=3, dirt=0.1,
+                         side=0.3, streak=0.5)
     M["lid"] = shiny("lid", (168, 184, 204), rough=0.28, metal=0.85, wear=(146, 160, 182), scale=3, dirt=0.1)
     M["wood"] = shiny("wood", (232, 184, 92), rough=0.45, metal=0.0, wear=(214, 160, 70), scale=3, dirt=0.1,
                       spec=0.45, coat=0.3)
@@ -577,6 +579,8 @@ def materials():
     M["gear"] = shiny("gear", (78, 78, 84), rough=0.38, metal=0.85, wear=(98, 98, 104), scale=6, dirt=0.15)
     M["red"] = shiny("red", (214, 6, 6), rough=0.22, metal=0.6, wear=(112, 2, 4), scale=3.5, dirt=0.3,
                      spec=0.25, coat=0.1, side=0.5)
+    M["redworn"] = shiny("redworn", (206, 10, 8), rough=0.34, metal=0.45, wear=(88, 4, 6), scale=5.0, dirt=0.45,
+                         spec=0.25, side=0.2)
     M["dial"] = shiny("dial", (236, 232, 236), rough=0.5, metal=0.0, wear=(214, 210, 218), scale=3, dirt=0.0,
                       spec=0.4)
     M["needle"] = flat("needle", (16, 16, 18), rough=0.5)
@@ -871,61 +875,69 @@ def beater():
     a0, a1, a2 = (Vector(c) for c in S.TRI)
     sweep("framebar", [U2(0.0, 2.85), U2(0.05, 3.6), U2(a1.x - 0.15, a1.y - 0.05)], P(135, 1, 0), 0.3, 0.36,
           M["fchrome"], bevel=0.05)
-    ab = U2(S.WHEEL2_U, S.WHEEL2_Z) - P(S.WHEEL2_TH, 0.62, 0)   # the bearing, on the axle behind the wheel
-    # the housing: a chrome column from the gearbox up past the bearing, just inside the wheel (as Flash's)
-    box("axlehousing", (0.8, 0.95, S.WHEEL2_Z - 0.1), U2(1.0, 1.0), M["fchrome"], rot=(0, 0, 45), bevel=0.28, segs=4)
-    ob = lathe("axlebearing", [(0.0, -0.2), (0.3, -0.2), (0.32, 0.0), (0.26, 0.18), (0.0, 0.2)], ab, M["chrome"],
-               verts=20)
-    track(ob, P(S.WHEEL2_TH, 1, 0))
-    # the triangle handle: a flat chrome bar round a rounded triangle, in the plane through the axis
-    # (Flash's is a flat plate, broad down its left side and thin along the bottom: band widths per side)
-    def shifted(offs):
-        cs = [a0, a1, a2]
-        mid = (a0 + a1 + a2) / 3
-        lines = []
-        for i in range(3):
-            a, b = cs[i], cs[(i + 1) % 3]
-            d = (b - a).normalized()
-            n = Vector((-d.y, d.x))
-            if n.dot(mid - a) < 0:
-                n = -n
-            lines.append((a + n * offs[i], d))
-        out = []
-        for i in range(3):                  # corner i is where edge i-1 meets edge i
-            (p1, d1), (p2, d2) = lines[i - 1], lines[i]
-            t = ((p2 - p1).x * d2.y - (p2 - p1).y * d2.x) / (d1.x * d2.y - d1.y * d2.x)
-            out.append(tuple(p1 + d1 * t))
-        return out
-    outer = rounded_poly(shifted((-0.33, -0.33, -0.33)), 0.75, 6)      # edges: bottom, right, left
-    inner = rounded_poly(shifted((-0.12, 0.12, 0.55)), 0.2, 6)
-    nrm = P(135, 1, 0)
+    # the triangle handle: Flash's broad brushed plate, a sickle with a curved outer edge, a wide solid top and left
+    # band, a narrow right band and bottom bar round a small opening. Traced from Flash's level 2 picture (Flash px:
+    # the plate's plane, through the axis along bearing 45, faces the camera square on)
+    outer = [(-6.5, -113.3), (-4.5, -112.5), (-3, -110.5), (-2, -107), (-1, -104), (0, -101), (1, -98.5), (2, -96),
+             (3, -93), (4, -90), (4.8, -87), (5.6, -84), (6.3, -81), (6.6, -77), (6.5, -72.2), (-3, -72),
+             (-15, -72.5), (-22, -72.8), (-25.5, -73.3), (-27.5, -74.5), (-28.6, -76.5), (-28.8, -79), (-28.4, -82),
+             (-27.8, -85), (-26.8, -88), (-25.6, -91), (-24.2, -94), (-22.6, -97), (-20.6, -100), (-18.4, -103),
+             (-16.2, -106), (-13.8, -108.6), (-11.4, -111), (-9, -112.8)]
+    hole = [(-4.6, -100.4), (-3.2, -100), (-2.2, -97.5), (-1.3, -94.5), (-0.4, -91.5), (0.6, -88), (1.6, -85),
+            (2.5, -82), (3, -79), (2.8, -77), (1.8, -76.2), (-17, -76.2), (-18.6, -76.8), (-19, -78.5), (-18.2, -81.5),
+            (-16.8, -84.5), (-15.2, -87.5), (-13.6, -90), (-11.8, -93), (-9.6, -96), (-7.2, -98.6)]
+
+    def chaikin(pts, n=2):
+        for _ in range(n):
+            q = []
+            for i in range(len(pts)):
+                (x0_, y0_), (x1_, y1_) = pts[i], pts[(i + 1) % len(pts)]
+                q += [(0.75 * x0_ + 0.25 * x1_, 0.75 * y0_ + 0.25 * y1_), (0.25 * x0_ + 0.75 * x1_, 0.25 * y0_ + 0.75 * y1_)]
+            pts = q
+        return pts
     bm = bmesh.new()
-    ring = {(w, t): [bm.verts.new(U2(x, z) + nrm * t) for x, z in loop]
-            for w, loop in (("o", outer), ("i", inner)) for t in (-0.1, 0.1)}
-    k = len(outer)
-    for i in range(k):
-        j = (i + 1) % k
-        for t in (-0.1, 0.1):
-            bm.faces.new((ring["o", t][i], ring["o", t][j], ring["i", t][j], ring["i", t][i]))
-        for w in ("o", "i"):
-            bm.faces.new((ring[w, -0.1][i], ring[w, -0.1][j], ring[w, 0.1][j], ring[w, 0.1][i]))
+    edges = []
+    for loop in (outer, hole):
+        vs = [bm.verts.new(((fx - ORIGIN[0]) / 10.0, (ORIGIN[1] - fy) / SZ - ZS, -0.09)) for fx, fy in chaikin(loop)]
+        edges += [bm.edges.new((vs[i], vs[(i + 1) % len(vs)])) for i in range(len(vs))]
+    bmesh.ops.triangle_fill(bm, use_beauty=True, use_dissolve=True, edges=edges)
+    ext = bmesh.ops.extrude_face_region(bm, geom=list(bm.faces))
+    for v in [e for e in ext["geom"] if isinstance(e, bmesh.types.BMVert)]:
+        v.co.z += 0.18
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    mesh_ob("triangle", bm, [M["fchrome"]], bevel=0.06, segs=2)
-    # the gearbox: a chrome block on the frame bar, between the spindle's bearing and the crown wheel's axle
-    box("gearbox", (1.3, 0.9, 1.7), U2(0.25, 1.3), M["fchrome"], rot=(0, 0, 45), bevel=0.3, segs=4)
+    ob = mesh_ob("triangle", bm, [M["brushed"]], bevel=0.06, segs=3)
+    ob.location = (0, 0, ZS)
+    ob.rotation_euler = Matrix((P(45, 1, 0), (0, 0, 1), P(-45, 1, 0))).transposed().to_euler()
+    # the gearbox (Flash's): a chunky rounded chrome housing low beside the triangle, a domed cap, a darker band, bolts
+    # and a small gear on its front; the crank's axle comes out of its right side through a domed wheel cover. Two
+    # short rods hold it on the spindle's top bearing.
+    fr = P(-45, 1, 0)                       # toward the camera
+    hc = U2(0.98, 2.85) + fr * 0.1         # the housing's foot
+    box("gearbox", (1.2, 0.95, 2.75), hc, M["brushed"], rot=(0, 0, 45), bevel=0.45, segs=6)
+    box("gearboxlow", (0.95, 0.8, 1.65), U2(1.0, 1.3) + fr * 0.1, M["brushed"], rot=(0, 0, 45), bevel=0.3, segs=4)
+    ob = lathe("gearboxcap", [(0.0, -0.3), (0.66, -0.3), (0.68, -0.12), (0.6, 0.06), (0.4, 0.2), (0.0, 0.25)],
+               hc + Vector((0, 0, 2.6)), M["chrome"], verts=32)
+    ob.scale = (1.0, 0.82, 1.0)
+    ob.rotation_euler = (0, 0, math.radians(45))
+    box("gearboxband", (1.24, 0.99, 0.14), hc + Vector((0, 0, 1.0)), M["steel"], rot=(0, 0, 45), bevel=0.4, segs=5)
+    q = fr.to_track_quat("Z", "Y").to_euler()
+    gc = hc + fr * 0.44 + Vector((0, 0, 0.5)) - P(45, 0.42, 0)      # a small gear peeping out at the lower left
+    gear("gearboxgear", 0.38, 10, 0.16, gc, M["gear"], q, tooth=0.24)
+    ob = lathe("gearboxgearhub", [(0.0, -0.05), (0.13, -0.05), (0.13, 0.1), (0.08, 0.14), (0.0, 0.15)], gc,
+               M["chrome"], verts=16)
+    ob.rotation_euler = q
+    box("gearboxblock", (0.8, 0.85, 1.05), U2(0.1, 1.25), M["fchrome"], rot=(0, 0, 45), bevel=0.3, segs=4)
+    ob = lathe("gearboxknob", [(0.0, -0.05), (0.17, -0.05), (0.2, 0.06), (0.14, 0.16), (0.0, 0.18)],
+               U2(0.1, 1.8) + fr * 0.4, M["chrome"], verts=16)
+    ob.rotation_euler = q
+    ob = lathe("gearboxcover", [(0.0, -0.62), (0.72, -0.62), (0.86, -0.42), (0.9, -0.12), (0.85, 0.08), (0.7, 0.22),
+                                (0.4, 0.29), (0.0, 0.3)], U2(S.WHEEL2_U, S.WHEEL2_Z), M["fchrome"], verts=40)
+    track(ob, P(S.WHEEL2_TH, 1, 0))
 
     # the crown wheel and crank, on an axle along bearing 45
     def wheel(hub):
-        R = S.WHEEL2_R
-        lathe("crownwheel", [(0.3, -0.14), (R - 0.3, -0.14), (R - 0.1, -0.1), (R, 0.0), (R - 0.04, 0.12),
-                             (R - 0.36, 0.14), (R - 0.4, 0.04), (0.5, 0.06), (0.36, 0.16), (0.3, 0.16)], (0, 0, 0),
-              M["fchrome"], parent=hub, verts=64)
-        cyl("crownweb", R - 0.32, 0.08, (0, 0, -0.04), M["fchrome"], verts=64, parent=hub)
-        for k in range(4):
-            a = 2 * math.pi * (k + 0.5) / 4
-            sweep(f"crownspoke{k}", [(0.4 * math.cos(a), 0.4 * math.sin(a), 0.0),
-                                     ((R - 0.36) * math.cos(a), (R - 0.36) * math.sin(a), 0.0)], (0, 0, 1), 0.48, 0.16,
-                  M["chrome"], parent=hub, bevel=0.04)
+        lathe("crownboss", [(0.0, 0.31), (0.3, 0.31), (0.33, 0.38), (0.28, 0.5), (0.0, 0.52)], (0, 0, 0),
+              M["chrome"], parent=hub, verts=20)
         tube("crownaxle", [(0, 0, -0.6), (0, 0, 0.5)], 0.13, M["steel"], parent=hub, verts=12)
         r = S.CRANK2_R
         sweep("crank2arm", [(0, 0, 0.42), (0, r * 0.5, 0.42), (0, r - 0.05, 0.42)], (1, 0, 0), 0.36, 0.13, M["chrome"],
@@ -954,44 +966,72 @@ def stand():
     it, the hinge block and the head over the drum; the beaters hang from the head into the hood's hole."""
     pr = S.PLINTH_R
     lathe("plinth", [(0.0, 0.0), (pr + 0.18, 0.0), (pr + 0.2, 0.1), (pr + 0.08, 0.3), (pr, 0.6), (pr, Z0 - 0.2),
-                     (pr - 0.08, Z0 - 0.06), (pr - 0.3, Z0), (0.0, Z0)], (0, 0, 0), M["red"], verts=72)
+                     (pr - 0.08, Z0 - 0.06), (pr - 0.3, Z0), (0.0, Z0)], (0, 0, 0), M["redworn"], verts=72)
     cx, cy = S.COLUMN
     dist = Vector((cx, cy)).length
     mid = Vector((cx, cy, 0)) / dist * (dist + 0.75 + pr * 0.45) / 2
     ang = math.degrees(math.atan2(cy, cx))
-    box("plinthfoot", (dist + 0.75 - pr * 0.45, 2.3, Z0 - 0.05), (mid.x, mid.y, 0.0), M["red"], rot=(0, 0, ang),
-        bevel=0.5, segs=4)
-    lathe("column", [(0.0, 0.0), (S.COLUMN_R + 0.95, 0.0), (S.COLUMN_R + 0.9, 1.4), (S.COLUMN_R + 0.55, 2.6),
-                     (S.COLUMN_R + 0.15, 3.4), (S.COLUMN_R, 4.0),
-                     (S.COLUMN_R, S.HEAD_Z0 - 0.5), (S.COLUMN_R + 0.1, S.HEAD_Z0 - 0.2), (0.0, S.HEAD_Z0 + 0.2)],
+    box("plinthfoot", (dist + 0.75 - pr * 0.45, 2.0, 2.3), (mid.x, mid.y, 0.0), M["redworn"], rot=(0, 0, ang),
+        bevel=0.6, segs=4)
+    # the column's foot: a big rounded worn lump (Flash's), then the thin column up to the neck
+    cr = S.COLUMN_R
+    lathe("columnfoot", [(0.0, 0.0), (1.42, 0.0), (1.5, 0.2), (1.48, 0.9), (1.36, 1.6), (1.12, 2.15), (0.82, 2.5),
+                         (cr + 0.08, 2.75), (cr, 3.0), (0.0, 3.0)], (cx, cy, 0.0), M["redworn"], verts=40)
+    lathe("column", [(0.0, 2.6), (cr, 2.6), (cr, S.HEAD_Z0 - 0.6), (cr + 0.1, S.HEAD_Z0 - 0.3), (0.0, S.HEAD_Z0 + 0.1)],
           (cx, cy, 0.0), M["red"], verts=36)
+    za = S.ARM3_Z
+    lathe("columncollar", [(0.0, za - 2.5), (cr + 0.06, za - 2.5), (cr + 0.13, za - 2.4), (cr + 0.13, za - 2.25),
+                           (cr + 0.07, za - 2.15), (cr + 0.07, za + 0.35), (cr + 0.13, za + 0.45), (cr + 0.13, za + 0.6),
+                           (cr + 0.04, za + 0.7), (0.0, za + 0.7)], (cx, cy, 0.0), M["chrome"], verts=36)
     # the neck: from the column's top forward under the head's back
     box("hinge", (1.6, cy - S.HEAD_Y[1] + 2.2, 0.95), (cx, (cy + S.HEAD_Y[1]) / 2 - 0.3, S.HEAD_Z0 - 0.55), M["red"],
         bevel=0.3)
     x0, x1 = S.HEAD_X
     y0, y1 = S.HEAD_Y
     z0, z1 = S.HEAD_Z0, S.HEAD_Z1
-    # the head: a soft enamel pillow (Flash's big rounded edges) with a seam band round its lower part
-    hb = 1.3
-    box("head", (x1 - x0, y1 - y0, z1 - z0), ((x0 + x1) / 2, (y0 + y1) / 2, z0), M["red"], bevel=hb, segs=8)
-    # two thin seam rings that follow the head's rounded corners (a plain box band stuck out at the corners)
-    for j, zs in enumerate((z0 + hb + 0.05, z0 + hb + 0.4)):
+    # the head: a soft enamel pillow, lofted from rounded rectangles. Flash's lower part is fuller toward the front
+    # and the left (bulge on the -X and -Y sides) and comes down lower, over the beaters' hub; its top is as before
+    hb, ht = 1.3, 0.75                       # corner radius in plan, rounding of the top edge
+    zt = z1 - ht
+    prof = [(zt + ht * math.cos(math.radians(t)), max(-hb + 0.08, -ht + ht * math.sin(math.radians(t))))
+            for t in range(0, 91, 15)]
+    prof += [(16.6, 0.0), (16.0, 0.0), (15.4, 0.0), (14.8, 0.0), (14.3, 0.0), (13.9, 0.0), (13.6, 0.0), (13.4, -0.08),
+             (13.2, -0.3), (13.0, -0.6), (12.88, -0.85), (12.8, -1.05), (12.75, -1.22)]
+    bulge = {13.4: 0.6, 13.2: 0.45, 13.0: 0.3, 12.88: 0.18, 12.8: 0.08, 12.75: 0.0}
+    bulge.update({z: max(0.0, min(0.7, 0.7 * (zt - z) / (zt - 14.1))) for z, _ in prof if z >= 13.6})
+    def hring(d, bz, n=7):
+        """The head's rounded-rectangle section: sides pushed out by bz on -X and -Y, rounding d."""
+        xa, xb, ya, yb = x0 - bz + hb, x1 - hb, y0 - bz + hb, y1 - hb
+        out = []
+        for ccx, ccy, a0 in ((xb, yb, 0), (xa, yb, 90), (xa, ya, 180), (xb, ya, 270)):
+            for i in range(n):
+                a = math.radians(a0 + 90 * i / (n - 1))
+                out.append((ccx + (hb + d) * math.cos(a), ccy + (hb + d) * math.sin(a)))
+        return out
+    bm = bmesh.new()
+    rows = [[bm.verts.new((x, y, z)) for x, y in hring(d, bulge.get(z, 0.0))] for z, d in prof]
+    n = len(rows[0])
+    for ra, rb in zip(rows, rows[1:]):
+        for i in range(n):
+            j = (i + 1) % n
+            bm.faces.new((ra[i], rb[i], rb[j], ra[j]))
+    bm.faces.new(rows[0])
+    bm.faces.new(list(reversed(rows[-1])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh_ob("head", bm, [M["red"]])
+    # two thin seam rings round the fullest part
+    for j, (zs, bz) in enumerate(((13.72, 0.7), (14.08, 0.7))):
         bm = bmesh.new()
-        hx, hy, rc = (x1 - x0) / 2 - hb, (y1 - y0) / 2 - hb, hb + 0.04
-        ring = []
-        for cx_, cy_, a0 in ((hx, hy, 0), (-hx, hy, 90), (-hx, -hy, 180), (hx, -hy, 270)):
-            for i in range(7):
-                a = math.radians(a0 + 15 * i)
-                ring.append((cx_ + rc * math.cos(a), cy_ + rc * math.sin(a)))
-        lo = [bm.verts.new((x, y, 0.0)) for x, y in ring]
-        hi = [bm.verts.new((x, y, 0.12)) for x, y in ring]
+        ring = hring(0.035, bz)
+        lo = [bm.verts.new((x, y, zs)) for x, y in ring]
+        hi = [bm.verts.new((x, y, zs + 0.11)) for x, y in ring]
         n = len(ring)
         for i in range(n):
             bm.faces.new((lo[i], lo[(i + 1) % n], hi[(i + 1) % n], hi[i]))
         bm.faces.new(hi)
         bm.faces.new(list(reversed(lo)))
-        ob = mesh_ob(f"headseam{j}", bm, [M["red"]], bevel=0.03, segs=2)
-        ob.location = ((x0 + x1) / 2, (y0 + y1) / 2, zs)
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        mesh_ob(f"headseam{j}", bm, [M["red"]], bevel=0.03, segs=2)
     # the beaters: a chrome hub down from the head, whisk wires in the hole
     zc = ZD + S.CONE_RISE
     cyl("beaterhub", 0.42, z0 - zc + 0.1, (0, 0, zc + 0.3), M["chrome"], verts=24, r2=0.55)
@@ -1002,7 +1042,6 @@ def stand():
                                 Vector((0, 0, zc - 0.55)) + d * 0.5, Vector((0, 0, zc - 0.7))], 0.05, M["chrome"],
              verts=8, smooth=True)
     # the bowl-lift arm: a steel bar from the column round the drum's right to a clamp on its side
-    za = S.ARM3_Z
     pts = [Vector((cx + 0.45, cy - 0.1, za)), Vector((3.9, 3.9, za)), Vector((4.45, 2.9, za - 0.15)),
            Vector((4.4, 1.7, za - 0.45)), P(30.0, S.DRUM_R + 0.25, za - 0.6)]
     tube("bowlarm", pts, 0.3, M["fchrome"], verts=16, smooth=True)     # a round chrome bar, as Flash's
@@ -1044,6 +1083,10 @@ def stand():
             bm.faces.new(list(reversed(lo)))
             bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
             mesh_ob(f"wheel3hole{k}", bm, [M["redhole"]], smooth=False, parent=hub)
+            # a spoke of the three-armed hub behind the disc, seen across the slot (Flash's)
+            d = Vector((math.cos(a), math.sin(a), 0.0))
+            sweep(f"wheel3spoke{k}", [d * (rm - hw - 0.02) + Vector((0, 0, 0.12)), d * (rm + hw + 0.02) + Vector((0, 0, 0.12))],
+                  (-d.y, d.x, 0.0), 0.2, 0.026, M["steel"], parent=hub, bevel=0.008)
         lathe("wheel3hub", [(0.0, -0.3), (0.42, -0.3), (0.46, 0.2), (0.36, 0.34), (0.0, 0.36)], (0, 0, 0), M["chrome"],
               parent=hub, verts=24)
         r = S.CRANK3_R
