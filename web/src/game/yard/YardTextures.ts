@@ -12,9 +12,11 @@ import { stripCells } from "./yardAnim";
  *
  * `get` never blocks and never throws. It returns a texture if one is ready,
  * starts the fetch if it has not begun, and returns null meanwhile — the
- * renderer draws a placeholder until `onReady` says otherwise. A URL that fails
- * is remembered as failed so a broken file is requested once, not every frame,
- * which matters because `draw` runs sixty times a second.
+ * renderer draws a placeholder until `onReady` says otherwise. A fetch that
+ * fails is tried again after a short wait, five tries in all as Flash's
+ * `ImageCache` did, and only then remembered as failed, so a broken file is
+ * requested five times, not every frame, which matters because `draw` runs
+ * sixty times a second. Until the last try a picture is still on its way.
  *
  * `strip` is the same bargain for animation layers: one base texture per file,
  * cut into one sub-texture per cell, cached under the strip's own key. Every
@@ -22,6 +24,9 @@ import { stripCells } from "./yardAnim";
  * than cutting its own.
  */
 export class YardTextures {
+  /** Whether `destroy` has run: a retry still waiting then gives up. */
+  private destroyed = false;
+
   private readonly ready = new Map<string, Texture>();
   private readonly strips = new Map<string, Texture[]>();
   private readonly pending = new Map<string, Promise<void>>();
@@ -31,8 +36,8 @@ export class YardTextures {
   private readonly watchers = new Set<(key: string) => void>();
 
   /**
-   * Called once per texture that arrives, and once per one that fails, so the
-   * renderer knows to redraw: a failed picture gets its building's name.
+   * Called once per texture that arrives, and once per one that fails for
+   * good, so the renderer knows to redraw: the yard stops waiting for it.
    */
   constructor(private readonly onReady: (key: string) => void) {}
 
@@ -72,7 +77,7 @@ export class YardTextures {
     const frame = image.frame;
     this.pending.set(
       key,
-      Assets.load<Texture>(image.url)
+      this.load(image.url)
         .then((texture) => {
           this.ready.set(
             key,
@@ -86,7 +91,7 @@ export class YardTextures {
           this.announce(key);
         })
         .catch((caught: unknown) => {
-          console.warn(`Building art ${image.url} did not load; drawing a placeholder.`, caught);
+          console.warn(`Building art ${image.url} did not load in ${TRIES} tries; drawing a placeholder.`, caught);
           this.failed.add(key);
           this.announce(key);
         })
@@ -106,7 +111,7 @@ export class YardTextures {
    * them is cheaper than the alternative of thirty base textures.
    */
   strip(anim: ResolvedAnim): Texture[] | null {
-    const key = `${anim.url}#${anim.width}x${anim.height}x${anim.frames}x${anim.columns ?? 0}`;
+    const key = stripKey(anim);
 
     const cached = this.strips.get(key);
     if (cached) return cached;
@@ -114,7 +119,7 @@ export class YardTextures {
 
     this.pending.set(
       key,
-      Assets.load<Texture>(anim.url)
+      this.load(anim.url)
         .then((texture) => {
           // Fitted to the file rather than trusted: nine strips in the props
           // table describe an image the server does not have. See `stripCells`.
@@ -133,7 +138,7 @@ export class YardTextures {
           this.announce(key);
         })
         .catch((caught: unknown) => {
-          console.warn(`Building animation ${anim.url} did not load; skipping the layer.`, caught);
+          console.warn(`Building animation ${anim.url} did not load in ${TRIES} tries; skipping the layer.`, caught);
           this.failed.add(key);
           this.announce(key);
         })
@@ -145,9 +150,31 @@ export class YardTextures {
     return null;
   }
 
+  /**
+   * `Assets.load`, asked again when it fails, after waits that double from a
+   * quarter of a second: five tries over about four seconds.
+   *
+   * A first load asks for a hundred pictures at once from a server that may
+   * have just started on a slow disk, and one of them can come back broken
+   * where the next ask would not. Pixi forgets a failed load, so each try is a
+   * fresh request. A yard that is gone stops asking.
+   */
+  private async load(url: string): Promise<Texture> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await Assets.load<Texture>(url);
+      } catch (caught) {
+        const delay = RETRY_DELAYS_MS[attempt];
+        if (delay === undefined) throw caught;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        if (this.destroyed) throw caught;
+      }
+    }
+  }
+
   /** True once this strip is known not to be coming. */
   isStripMissing(anim: ResolvedAnim): boolean {
-    return this.failed.has(`${anim.url}#${anim.width}x${anim.height}x${anim.frames}`);
+    return this.failed.has(stripKey(anim));
   }
 
   /** True once this image is known not to be coming. */
@@ -180,8 +207,20 @@ export class YardTextures {
     this.failed.clear();
     this.pending.clear();
     this.watchers.clear();
+    this.destroyed = true;
   }
 }
+
+/**
+ * The waits before each try after the first. Flash's `ImageCache` gave a file
+ * five tries before it gave up on it (`Loadable.tryLimit`); so does this.
+ */
+export const RETRY_DELAYS_MS: readonly number[] = [250, 500, 1000, 2000];
+
+const TRIES = RETRY_DELAYS_MS.length + 1;
+
+const stripKey = (anim: ResolvedAnim): string =>
+  `${anim.url}#${anim.width}x${anim.height}x${anim.frames}x${anim.columns ?? 0}`;
 
 const keyFor = (image: ResolvedImage): string =>
   image.frame ? `${image.url}#${image.frame.width}x${image.frame.height}` : image.url;
