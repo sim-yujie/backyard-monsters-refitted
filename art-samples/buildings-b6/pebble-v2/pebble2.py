@@ -283,6 +283,39 @@ def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, di
     return t.m
 
 
+def slate_cap(name, col, wear, shine=(214, 222, 232)):
+    """The horn cap's matte dark slate (stone or worn metal, no mirror shine), with Flash's soft white highlights
+    scattered over the right of its top and the right of its rim. Placed in the cap's own box (Generated 0..1), so the
+    smaller level 1 cap gets them in the same places."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    v = t.coords()
+    sep = t.n("ShaderNodeSeparateXYZ")
+    t.link(t.n("ShaderNodeTexCoord").outputs["Generated"], sep.inputs[0])
+    u = t.n("ShaderNodeMath", operation="MULTIPLY_ADD")         # (X + Y) / 2: 0.5 the middle, 0.85 the screen-right rim
+    t.link(sep.outputs["X"], u.inputs[0])
+    u.inputs[1].default_value = 0.5
+    half_y = t.n("ShaderNodeMath", operation="MULTIPLY")
+    t.link(sep.outputs["Y"], half_y.inputs[0])
+    half_y.inputs[1].default_value = 0.5
+    t.link(half_y.outputs[0], u.inputs[2])
+    k0, k1 = (0, 0, 0, 1), (1, 1, 1, 1)
+    top = t.mix(t.ramp(u.outputs[0], [(0.46, k0), (0.58, k1), (0.64, k1), (0.76, k0)]), t.ramp(sep.outputs["Z"], [(0.5, k0), (0.78, k1)]),
+                1.0, "MULTIPLY")
+    rim = t.mix(t.ramp(u.outputs[0], [(0.62, k0), (0.82, k1)]),
+                t.ramp(sep.outputs["Z"], [(0.36, k0), (0.48, k1), (0.6, k1), (0.72, k0)]), 1.0, "MULTIPLY")
+    specks = t.ramp(t.noise(v, 3.2, 2.0, 0.45), [(0.45, k0), (0.68, (0.8, 0.8, 0.8, 1))])   # broken into soft patches
+    hi = t.mix(t.mix(top, rim, 1.0, "LIGHTEN"), specks, 1.0, "MULTIPLY")
+    n1 = t.noise(v, 2.7, 3.0, 0.5, 0.2)
+    out = t.mix(srgb(*col), srgb(*wear), t.ramp(n1, [(0.45, k0), (0.75, (0.6, 0.6, 0.6, 1))]))
+    out = t.mix(out, srgb(*shine), hi)
+    t.set(**{"Base Color": out, "rough": 0.65, "metal": 0.05, "spec": 0.3})
+    t.bump(t.noise(v, 18, 4.0, 0.6), 0.05, 0.01)
+    MATS[name] = t.m
+    return t.m
+
+
 def flat(name, col, rough=0.5, metal=0.0, emit=0.0):
     if name in MATS:
         return MATS[name]
@@ -484,9 +517,7 @@ def materials():
     M["roof"] = lambda axis="Z": wood("roof", (186, 154, 134), (144, 108, 88), axis, rings=7, knots=False, dirt=0.2)
     M["roofb"] = lambda axis="Z": wood("roofb", (150, 112, 84), (110, 78, 56), axis, rings=7, dirt=0.2)
     M["pipe"] = painted("pipe", (52, 50, 54), rough=0.5, metal=0.5, wear=(96, 94, 100), scale=7, dirt=0.1, soot=0.5)
-    M["horn"] = painted("horn", (44, 56, 74), rough=0.4, metal=0.4, wear=(96, 116, 140), scale=6, dirt=0.05, soot=0.3)
-    M["hornin"] = flat("hornin", (26, 32, 42), rough=0.7)
-    M["hornrim"] = painted("hornrim", (120, 140, 162), rough=0.3, metal=0.6, wear=(200, 214, 228), scale=8, dirt=0.0)
+    M["horn"] = slate_cap("horn", (30, 38, 54), (52, 64, 84))
     M["band2"] = painted("band2", (84, 150, 186), rough=0.4, metal=0.5, wear=(150, 200, 224), scale=8, dirt=0.0)
     M["iron"] = painted("iron", (58, 62, 72), rough=0.45, metal=0.85, wear=(150, 156, 170), rust=(120, 70, 40), scale=7,
                         soot=0.75)
@@ -708,17 +739,14 @@ def pipe(ze):
     cyl("pipe", 0.22, top.z - base.z, base, M["pipe"], verts=20, bevel=0.02)
     cyl("pipeband", 0.25, 0.12, top - Vector((0, 0, 0.42)), M["band2"], verts=20, bevel=0.03)
     cyl("hornneck", 0.25, 0.12, top - Vector((0, 0, 0.1)), M["iron"], verts=20, bevel=0.03)
-    # the horn: a slate bell flaring open upward and to the viewer's left, a bright rolled rim round its mouth
+    # the horn: a thick slate cap on the pipe (Flash's mushroom), rounded below and on top with a defined rim round
+    # its widest, tilted a little to the viewer's left; dark slate with Flash's white highlights (slate_cap)
     k = 1.0 if L >= 3 else 0.75                 # level 1's horn is smaller (Flash's): level 3 puts the big one on
-    bell = [(0.2, 0.0), (0.22, 0.18), (0.28, 0.36), (0.4, 0.52), (0.56, 0.63), (0.74, 0.69)]
-    inner = [(0.68, 0.7), (0.5, 0.63), (0.34, 0.52), (0.22, 0.38), (0.15, 0.22), (0.0, 0.2)]
-    ax = (Vector((0, 0, 1)) + 1.3 * Vector((-0.707, -0.707, 0))).normalized()
-    rot = ax.to_track_quat("Z", "Y").to_euler()
-    for name, prof, mat in (("horn", bell, M["horn"]), ("horninside", inner, M["hornin"]),
-                            ("hornrim", [(0.66, 0.69), (0.74, 0.67), (0.8, 0.71), (0.76, 0.76), (0.66, 0.73)], M["hornrim"])):
-        h = lathe(name, [(r * k, z * k) for r, z in prof], top + Vector((0, 0, 0.02)), M["horn"], verts=40)
-        h.data.materials[0] = mat
-        h.rotation_euler = rot
+    cap = [(0.24, 0.0), (0.42, 0.04), (0.6, 0.12), (0.74, 0.2), (0.82, 0.28), (0.85, 0.32), (0.89, 0.35), (0.89, 0.4),
+           (0.85, 0.43), (0.83, 0.48), (0.76, 0.56), (0.62, 0.63), (0.42, 0.68), (0.2, 0.705), (0.0, 0.71)]
+    h = lathe("horn", [(r * k, z * k) for r, z in cap], top - Vector((0, 0, 0.1)), M["horn"], verts=48)   # sleeved over the pipe's top
+    # tipped 10 deg toward the screen's left about a level axis (no spin: the highlights keep their place)
+    h.rotation_euler = Matrix.Rotation(math.radians(10), 3, Vector((0.707, -0.707, 0))).to_euler()
 
 
 def drum(ze, seat):
