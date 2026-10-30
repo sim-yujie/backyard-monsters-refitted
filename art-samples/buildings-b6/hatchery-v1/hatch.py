@@ -573,8 +573,8 @@ def materials():
                       spec=0.45, coat=0.3)
     M["darkmetal"] = shiny("darkmetal", (40, 46, 58), rough=0.22, metal=0.85, wear=(62, 70, 84), scale=3, dirt=0.1)
     M["gear"] = shiny("gear", (78, 78, 84), rough=0.38, metal=0.85, wear=(98, 98, 104), scale=6, dirt=0.15)
-    M["red"] = shiny("red", (190, 10, 10), rough=0.24, metal=0.45, wear=(150, 6, 8), scale=1.6, dirt=0.3,
-                     spec=0.6, coat=0.3, side=0.35)
+    M["red"] = shiny("red", (150, 4, 6), rough=0.2, metal=0.6, wear=(110, 2, 4), scale=1.6, dirt=0.4,
+                     spec=0.7, coat=0.5, side=0.5)
     M["dial"] = shiny("dial", (236, 232, 236), rough=0.5, metal=0.0, wear=(214, 210, 218), scale=3, dirt=0.0,
                       spec=0.4)
     M["needle"] = flat("needle", (16, 16, 18), rough=0.5)
@@ -925,8 +925,10 @@ def stand():
     dist = Vector((cx, cy)).length
     mid = Vector((cx, cy, 0)) / dist * (dist + 0.75 + pr * 0.45) / 2
     ang = math.degrees(math.atan2(cy, cx))
-    box("plinthfoot", (dist + 0.75 - pr * 0.45, 1.7, 1.05), (mid.x, mid.y, 0.0), M["red"], rot=(0, 0, ang), bevel=0.35)
-    lathe("column", [(0.0, 0.0), (S.COLUMN_R + 0.18, 0.0), (S.COLUMN_R + 0.2, 0.8), (S.COLUMN_R, 1.5),
+    box("plinthfoot", (dist + 0.75 - pr * 0.45, 2.3, Z0 - 0.05), (mid.x, mid.y, 0.0), M["red"], rot=(0, 0, ang),
+        bevel=0.5, segs=4)
+    lathe("column", [(0.0, 0.0), (S.COLUMN_R + 0.95, 0.0), (S.COLUMN_R + 0.9, 1.4), (S.COLUMN_R + 0.55, 2.6),
+                     (S.COLUMN_R + 0.15, 3.4), (S.COLUMN_R, 4.0),
                      (S.COLUMN_R, S.HEAD_Z0 - 0.5), (S.COLUMN_R + 0.1, S.HEAD_Z0 - 0.2), (0.0, S.HEAD_Z0 + 0.2)],
           (cx, cy, 0.0), M["red"], verts=36)
     # the neck: from the column's top forward under the head's back
