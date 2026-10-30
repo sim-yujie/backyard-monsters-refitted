@@ -105,12 +105,6 @@ const beta4 = [
     badge: "14 days",
   },
   {
-    title: "Champions hatch from eggs",
-    text: "Raising a champion now gives you a special egg. One day later, out pops your new champion. Changed your mind? Cancel the egg and pick again.",
-    img: "champion-eggs",
-    alt: "A furry blue champion egg cracking open in a straw nest",
-  },
-  {
     title: "Friends list upgrade",
     text: "Find friends fast with search and filters, and see at a glance who you can help or send a gift to.",
     img: "friends",
@@ -350,7 +344,7 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
       <div class="section__head reveal">
         <span class="eyebrow">Update 2.0.0-beta.4</span>
         <h2 id="beta4-title">New in beta 4</h2>
-        <p>Halloween comes to the backyard, with a pumpkin hunt, daily treats and champions that hatch from eggs.</p>
+        <p>Halloween comes to the backyard, with a pumpkin hunt, daily treats and monsters on the move.</p>
       </div>
       <div class="beta4__grid">
         <article class="spotlight reveal reveal--pop">
@@ -386,7 +380,7 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
         </article>
         {
           beta4.map((b, i) => (
-            <article class="change reveal reveal--pop" style={`--i:${i % 3}`}>
+            <article class:list={["change reveal reveal--pop", { "change--wide": i < 2 }]} style={`--i:${i % 3}`}>
               <div class="change__art change__art--wide">
                 <img
                   src={`/images/beta4/${b.img}.webp`}
@@ -1309,10 +1303,19 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
 
   /* ── New in beta 4 ───────────────────────────────────────────────────── */
 
+  /* Six tracks: the first two cards take half a row each, the other three a third. */
   .beta4__grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 20px;
+  }
+
+  .beta4__grid > .change {
+    grid-column: span 2;
+  }
+
+  .beta4__grid > .change--wide {
+    grid-column: span 3;
   }
 
   .spotlight {
@@ -1390,9 +1393,19 @@ const motes = Array.from({ length: 18 }, (_, i) => ({
     color: var(--text-secondary);
   }
 
+  /* Two columns: the first card spans the row, the other four pair up. */
   @media (max-width: 1020px) {
     .beta4__grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .beta4__grid > .change,
+    .beta4__grid > .change--wide {
+      grid-column: span 1;
+    }
+
+    .beta4__grid > .spotlight + .change {
+      grid-column: 1 / -1;
     }
   }
 
