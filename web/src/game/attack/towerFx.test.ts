@@ -536,6 +536,17 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 
+  it("puts out a Tesla destroyed mid-charge, which never gets the engine's rest", () => {
+    const { graphics, fx } = setUp(25);
+    fx.onCharge(1, 2);
+    fx.update(30, () => undefined);
+    expect(drawn(graphics)).toBeGreaterThan(0);
+    fx.fall(1);
+    fx.update(400, () => undefined);
+    expect(drawn(graphics)).toBe(0);
+    fx.destroy();
+  });
+
   it("stands down: nothing in the air, nothing drawn, a Tesla back on its idle cell (#308)", () => {
     const sniper = setUp(21);
     const target = creepAt(35, 235);

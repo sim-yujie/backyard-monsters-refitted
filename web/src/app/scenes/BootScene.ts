@@ -26,7 +26,7 @@ export class BootScene implements Scene {
     const wrapper = document.createElement("div");
     wrapper.className = "scene-centre";
 
-    this.panel = new Panel({ title: "Backyard Monsters", closable: false });
+    this.panel = new Panel({ title: "Backyard Monsters", closable: false, className: "boot-panel" });
     this.panel.setContent(status);
     wrapper.append(this.panel.element);
     context.overlay.content.append(wrapper);
