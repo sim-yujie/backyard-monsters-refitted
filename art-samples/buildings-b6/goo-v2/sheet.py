@@ -28,7 +28,7 @@ CROPS = {
     "pump-joint": (-2, 8, 24, 36),            # the right pump into the vat with its flange, the table
     "left-side": (-40, -14, 26, 66),          # level 6 loop through the plate, level 10 arc and short pipe
     "back-loops": (2, -64, 34, 54),           # level 6 loop, level 10 staircase loops into the dome
-    "tower-cap": (-36, -64, 22, 30),          # level 10 tower, its goo cap, its branch into the dome
+    "tower-cap": (-38, -54, 24, 30),          # level 10 tower, its goo cap, its branch into the dome
     "feet": (-36, 26, 82, 32),                # stumps, post feet, pipe feet, level 10 low front pipe
 }
 

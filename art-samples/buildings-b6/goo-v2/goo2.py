@@ -336,8 +336,16 @@ def funnel_mat(name, col, wear, shine=(236, 240, 246)):
     half_y.inputs[1].default_value = 0.5
     t.link(half_y.outputs[0], u.inputs[2])
     k0, k1 = (0, 0, 0, 1), (1, 1, 1, 1)
-    rim = t.mix(t.ramp(u.outputs[0], [(0.6, k0), (0.97, (0.8, 0.8, 0.8, 1))]),
-                t.ramp(sep.outputs["Z"], [(0.7, k0), (0.94, k1)]), 1.0, "MULTIPLY")      # up onto the cap's top
+    # only along the cap's outer edge (distance from the axis in the box), at its screen right, up onto its top
+    xy = t.n("ShaderNodeCombineXYZ")
+    t.link(sep.outputs["X"], xy.inputs[0])
+    t.link(sep.outputs["Y"], xy.inputs[1])
+    dist = t.n("ShaderNodeVectorMath", operation="DISTANCE")
+    t.link(xy.outputs[0], dist.inputs[0])
+    dist.inputs[1].default_value = (0.5, 0.5, 0.0)
+    edge = t.mix(t.ramp(dist.outputs["Value"], [(0.3, k0), (0.46, k1)]),
+                 t.ramp(sep.outputs["Z"], [(0.7, k0), (0.9, k1)]), 1.0, "MULTIPLY")
+    rim = t.mix(t.ramp(u.outputs[0], [(0.6, k0), (0.88, k1)]), edge, 1.0, "MULTIPLY")
     n1 = t.noise(v, 2.7, 3.0, 0.5, 0.2)
     out = t.mix(srgb(*col), srgb(*wear), t.ramp(n1, [(0.45, k0), (0.75, (0.6, 0.6, 0.6, 1))]))
     out = t.mix(out, srgb(*shine), rim)
@@ -593,6 +601,8 @@ def materials():
     M["lead"] = painted("lead", (46, 46, 50), rough=0.45, metal=0.2, wear=(80, 80, 86), scale=5, dirt=0.0)
     M["eraser"] = painted("eraser", (214, 118, 196), rough=0.75, wear=(238, 162, 222), scale=4, dirt=0.0)
     M["ring"] = lambda axis="Z": wood("ring", (140, 106, 74), (98, 72, 48), axis, rings=5, dirt=0.35)
+    M["foot"] = painted("foot", (84, 88, 96), rough=0.5, metal=0.35, wear=(150, 156, 162), rust=(90, 78, 64), scale=5,
+                        dirt=0.2, spec=0.35, rust_at=0.7)                  # Flash's grey pencil feet
     M["iron"] = painted("iron", (60, 52, 48), rough=0.6, metal=0.3, wear=(98, 88, 80), rust=(92, 54, 26), scale=4,
                         dirt=0.2, spec=0.3, rust_at=0.64)
     return M
@@ -752,10 +762,10 @@ def sheet(balls, rr, b, ln, wd, fingers=3, z_top=None, r=None):
 
 def table_spill():
     """Goo spilt on the table at the left, and over its front edge (every level: from level 3 it runs over the lower
-    ring's front plank)."""
+    ring's front plank; the left pool is then behind the peach plate, and left out, as it would poke through it)."""
     balls = [(P(-128, S.VAT_R + 0.12, S.VAT_Z0 + 0.02), 0.4, (1.6, 1.0, 0.4)),
-             (P(-150, S.TABLE_R - 0.05, S.VAT_Z0 - 0.02), 0.32, (1.2, 1.0, 0.45)),
-             (P(-62, S.VAT_R + 0.1, S.VAT_Z0 + 0.02), 0.4, (1.4, 1.0, 0.4))]
+             (P(-150, S.TABLE_R - 0.05, S.VAT_Z0 - 0.02), 0.32, (1.2, 1.0, 0.45))] if L < 3 else []
+    balls.append((P(-62, S.VAT_R + 0.1, S.VAT_Z0 + 0.02), 0.4, (1.4, 1.0, 0.4)))
     for j in range(5):
         balls.append((P(-58, S.TABLE_R + 0.02, S.VAT_Z0 - 0.08 - 0.14 * j), 0.24 - 0.02 * j))
     return balls
@@ -936,7 +946,7 @@ def frame_l6():
                                    (S.POST_RAD + 0.08, 0.08), (S.POST_RAD + 0.06, 0.12), (S.POST_RAD - 0.02, 0.12)],
                   (c.x, c.y, z), M["steel"], verts=16)
         lathe(f"foot{k}", [(0.0, 0.0), (0.22, 0.0), (0.27, 0.06), (0.27, 0.22), (0.23, 0.36), (S.POST_RAD - 0.02, 0.5),
-                           (0.0, 0.5)], (c.x, c.y, 0.0), M["iron"], verts=16)
+                           (0.0, 0.5)], (c.x, c.y, 0.0), M["foot"], verts=16)
 
 
 # ------------------------------------------------------------------------------------------------------------ the pumps
@@ -1088,6 +1098,7 @@ def lerp(a, b, f):
 
 
 LOOP_R_IN, LOOP_R_OUT, LOOP_R_TOP = P(72, 1.42, 0), P(60, 2.1, 0), 7.62
+LOOP_R_R = 0.17                       # the back loops are thin, with tight corners, as Flash's
 
 
 def loops_l6():
@@ -1097,7 +1108,7 @@ def loops_l6():
     r = S.LOOP_R
     zt = Vector((0, 0, LOOP_R_TOP))
     pipe("loopR", [LOOP_R_IN + Vector((0, 0, 5.85)), LOOP_R_IN + zt, LOOP_R_OUT + zt,
-                   LOOP_R_OUT + Vector((0, 0, 5.6))], r, bend=0.4)
+                   LOOP_R_OUT + Vector((0, 0, 5.6))], LOOP_R_R, bend=0.2)
     b = -128.0
     pipe("loopL", [P(b, S.VAT_R - 0.2, 3.1), P(b, 2.55, 3.1), P(b, 2.55, 6.05), P(b, 1.9, 6.05), P(b, 1.9, 5.4)], r,
          bend=0.4)
@@ -1144,12 +1155,12 @@ def loops_l10():
     zt = Vector((0, 0, LOOP_R_TOP))
     q1 = lerp(LOOP_R_IN, LOOP_R_OUT, 0.65)
     in1, z1 = P(103, 1.4, 0), 8.1
-    pipe("loopB0", [in1 + Vector((0, 0, 5.8)), in1 + Vector((0, 0, z1)), q1 + Vector((0, 0, z1)), q1 + zt], 0.22,
-         bend=0.3)
+    pipe("loopB0", [in1 + Vector((0, 0, 5.8)), in1 + Vector((0, 0, z1)), q1 + Vector((0, 0, z1)), q1 + zt], LOOP_R_R,
+         bend=0.2)
     q2 = lerp(in1, q1, 0.6)
     in2, z2 = P(125, 1.38, 0), 8.95
     pipe("loopB1", [in2 + Vector((0, 0, 5.85)), in2 + Vector((0, 0, z2)), q2 + Vector((0, 0, z2)), q2 + Vector((0, 0, z1))],
-         0.22, bend=0.3)
+         LOOP_R_R, bend=0.2)
     # the right side pipe: out of the dome's right side, out past the posts, down to the ground; a branch in to the vat
     b = 52.0
     pipe("loopS", [P(b, 1.95, 5.1), P(b, 3.0, 5.1), P(b, 3.0, 0.0)], 0.22, bend=0.4)
