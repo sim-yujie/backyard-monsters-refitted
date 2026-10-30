@@ -364,9 +364,9 @@ def goo_mat(name, dark, mid, light, rough=0.5, scale=2.2, bump=0.22, ao_min=0.2,
     t = NT(name)
     v = t.coords()
     n1 = t.noise(v, scale, 1.5, 0.4, 0.0)
-    dm = tuple((d + m) / 2 for d, m in zip(dark, mid))
-    col = t.ramp(n1, [(0.34, srgb(*dm)), (0.5, srgb(*mid)), (0.66, srgb(*light))])
-    fl = t.ramp(t.noise(v, scale * 4.5, 3.0, 0.55), [(0.38, (0.72, 0.72, 0.72, 1)), (0.64, (1.25, 1.25, 1.05, 1))])
+    dm = tuple(0.3 * d + 0.7 * m for d, m in zip(dark, mid))
+    col = t.ramp(n1, [(0.3, srgb(*dm)), (0.5, srgb(*mid)), (0.7, srgb(*light))])
+    fl = t.ramp(t.noise(v, scale * 4.5, 3.0, 0.55), [(0.38, (0.86, 0.86, 0.86, 1)), (0.64, (1.12, 1.12, 1.02, 1))])
     col = t.mix(col, fl, 1.0, "MULTIPLY")                     # florets: lighter and darker specks on each bulb
     lw = t.n("ShaderNodeLayerWeight")
     lw.inputs["Blend"].default_value = 0.5
@@ -586,7 +586,7 @@ def materials():
                         dirt=0.3, spec=0.3)
     # Flash's olive-gold brass (its pipe pixels run (96, 87, 0), (132, 79, 17), (141, 105, 35), (167, 150, 44)):
     # metallic, so its shine is gold, not the sky's blue
-    M["pipe"] = painted("pipe", (166, 112, 18), rough=0.4, metal=0.55, wear=(204, 166, 44), rust=(78, 48, 8), scale=2.4,
+    M["pipe"] = painted("pipe", (184, 124, 22), rough=0.4, metal=0.55, wear=(222, 176, 52), rust=(78, 48, 8), scale=2.4,
                         dirt=0.4, spec=0.45, soot=0.35, rust_at=0.66)
     M["pipedark"] = painted("pipedark", (124, 80, 14), rough=0.5, metal=0.5, wear=(170, 130, 36), rust=(66, 40, 8),
                             scale=2.4, dirt=0.4, spec=0.34, soot=0.45, rust_at=0.62)
