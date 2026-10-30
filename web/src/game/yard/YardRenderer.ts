@@ -1,10 +1,11 @@
-import { Assets, Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
+import { Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
 import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
 import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
+import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
 import { YardHelpMarks } from "./YardHelpMarks";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
@@ -132,6 +133,10 @@ export class YardRenderer {
   private season: Season = "normal";
   /** The Halloween pumpkin that stands in for a mushroom, once it has loaded. */
   private pumpkin: Texture | null = null;
+  /** Whether the pumpkin is being asked for, so a second Halloween does not ask twice. */
+  private pumpkinLoading = false;
+  /** Whether `destroy` has run: a pumpkin still being retried then gives up. */
+  private destroyed = false;
   private unwatchSeason: (() => void) | null = null;
   private yard: Yard | null = null;
   /** Which buildings are working and the clock to read it on (#255); see `setWork`. */
@@ -195,20 +200,29 @@ export class YardRenderer {
   /**
    * Dresses the yard for `season`: the ground's tiles, and pumpkins in place
    * of the mushrooms at Halloween. The mushrooms keep the glyph until the
-   * pumpkin picture arrives, and keep it for good if it never does.
+   * pumpkin picture arrives, and keep it for good if it never does. The
+   * picture gets the yard's five tries (`retryLoad.ts`), so one broken answer
+   * on a first load does not leave mushrooms all Halloween.
    */
   setSeason(season: Season): void {
     if (season === this.season) return;
     this.season = season;
     this.ground.setSeason(season);
-    if (season === "halloween" && !this.pumpkin) {
-      void Assets.load<Texture>(PUMPKIN_ART).then(
-        (texture) => {
-          this.pumpkin = texture;
-          this.redrawMushrooms();
-        },
-        (caught: unknown) => console.warn("The Halloween pumpkin did not load; mushrooms stay.", caught),
-      );
+    if (season === "halloween" && !this.pumpkin && !this.pumpkinLoading) {
+      this.pumpkinLoading = true;
+      void loadWithRetries(PUMPKIN_ART, () => this.destroyed)
+        .then(
+          (texture) => {
+            if (this.destroyed) return;
+            this.pumpkin = texture;
+            this.redrawMushrooms();
+          },
+          (caught: unknown) =>
+            console.warn(`The Halloween pumpkin did not load in ${LOAD_TRIES} tries; mushrooms stay.`, caught),
+        )
+        .finally(() => {
+          this.pumpkinLoading = false;
+        });
     }
     this.redrawMushrooms();
   }
@@ -859,6 +873,7 @@ export class YardRenderer {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.openSheets();
     this.unwatchSeason?.();
     this.unwatchSeason = null;

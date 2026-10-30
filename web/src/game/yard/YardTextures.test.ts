@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Assets, Texture } from "pixi.js";
-import { RETRY_DELAYS_MS, YardTextures } from "./YardTextures";
+import { RETRY_DELAYS_MS } from "./retryLoad";
+import { YardTextures } from "./YardTextures";
 import type { ResolvedAnim, ResolvedImage } from "./buildingArt";
 
 /**

@@ -1,5 +1,6 @@
-import { Assets, Rectangle, Texture } from "pixi.js";
+import { Rectangle, Texture } from "pixi.js";
 import type { ResolvedAnim, ResolvedImage } from "./buildingArt";
+import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { stripCells } from "./yardAnim";
 
 /**
@@ -91,7 +92,7 @@ export class YardTextures {
           this.announce(key);
         })
         .catch((caught: unknown) => {
-          console.warn(`Building art ${image.url} did not load in ${TRIES} tries; drawing a placeholder.`, caught);
+          console.warn(`Building art ${image.url} did not load in ${LOAD_TRIES} tries; drawing a placeholder.`, caught);
           this.failed.add(key);
           this.announce(key);
         })
@@ -138,7 +139,7 @@ export class YardTextures {
           this.announce(key);
         })
         .catch((caught: unknown) => {
-          console.warn(`Building animation ${anim.url} did not load in ${TRIES} tries; skipping the layer.`, caught);
+          console.warn(`Building animation ${anim.url} did not load in ${LOAD_TRIES} tries; skipping the layer.`, caught);
           this.failed.add(key);
           this.announce(key);
         })
@@ -150,26 +151,9 @@ export class YardTextures {
     return null;
   }
 
-  /**
-   * `Assets.load`, asked again when it fails, after waits that double from a
-   * quarter of a second: five tries over about four seconds.
-   *
-   * A first load asks for a hundred pictures at once from a server that may
-   * have just started on a slow disk, and one of them can come back broken
-   * where the next ask would not. Pixi forgets a failed load, so each try is a
-   * fresh request. A yard that is gone stops asking.
-   */
-  private async load(url: string): Promise<Texture> {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return await Assets.load<Texture>(url);
-      } catch (caught) {
-        const delay = RETRY_DELAYS_MS[attempt];
-        if (delay === undefined) throw caught;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        if (this.destroyed) throw caught;
-      }
-    }
+  /** `loadWithRetries`, given up once this yard is gone. */
+  private load(url: string): Promise<Texture> {
+    return loadWithRetries(url, () => this.destroyed);
   }
 
   /** True once this strip is known not to be coming. */
@@ -210,14 +194,6 @@ export class YardTextures {
     this.destroyed = true;
   }
 }
-
-/**
- * The waits before each try after the first. Flash's `ImageCache` gave a file
- * five tries before it gave up on it (`Loadable.tryLimit`); so does this.
- */
-export const RETRY_DELAYS_MS: readonly number[] = [250, 500, 1000, 2000];
-
-const TRIES = RETRY_DELAYS_MS.length + 1;
 
 const stripKey = (anim: ResolvedAnim): string =>
   `${anim.url}#${anim.width}x${anim.height}x${anim.frames}x${anim.columns ?? 0}`;
