@@ -573,7 +573,7 @@ def materials():
                       spec=0.45, coat=0.3)
     M["darkmetal"] = shiny("darkmetal", (40, 46, 58), rough=0.22, metal=0.85, wear=(62, 70, 84), scale=3, dirt=0.1)
     M["gear"] = shiny("gear", (78, 78, 84), rough=0.38, metal=0.85, wear=(98, 98, 104), scale=6, dirt=0.15)
-    M["red"] = shiny("red", (150, 4, 6), rough=0.2, metal=0.6, wear=(110, 2, 4), scale=1.6, dirt=0.4,
+    M["red"] = shiny("red", (182, 8, 8), rough=0.2, metal=0.5, wear=(140, 4, 6), scale=1.6, dirt=0.4,
                      spec=0.7, coat=0.5, side=0.5)
     M["dial"] = shiny("dial", (236, 232, 236), rough=0.5, metal=0.0, wear=(214, 210, 218), scale=3, dirt=0.0,
                       spec=0.4)
