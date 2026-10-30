@@ -642,7 +642,11 @@
   .ach-card,
   .inferno-quake,
   .descent-card,
-  .inferno-card
+  .inferno-card,
+  .attack-tools__button,
+  .attack-dock__end,
+  .attack-viewtools__fold,
+  .test-report__peek
 ) {
   border-style: solid;
   border-color: transparent;
@@ -697,9 +701,66 @@
 }
 
 /* Hovered, a plate lifts rather than changing its fill. */
-:root[data-skin] :is(.mr2-tool, .chat-box__tab, .account-menu__button--pill):hover {
+:root[data-skin] :is(.mr2-tool, .chat-box__tab, .account-menu__button--pill, .attack-tools__button):hover:not(:disabled) {
   background: none;
   filter: drop-shadow(0 4px 6px rgb(0 0 0 / 45%)) brightness(1.12);
+}
+
+/* The attack's Catapult and Siege bar: pressed, still the plate (attack.css
+   keeps its own no-nudge rule); its picker open, lit in the accent. */
+:root[data-skin] .btn.attack-tools__button:is(:active, :disabled, [aria-expanded="true"]) {
+  background: none;
+}
+
+:root[data-skin] .attack-tools__button[aria-expanded="true"],
+:root[data-skin] .attack-tools__button--armed {
+  filter: drop-shadow(0 0 3px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+}
+
+:root[data-skin] .attack-tools__button--armed {
+  color: var(--colour-accent);
+}
+
+/* The army dock scrolls, so it would cut its first window's sign: room for
+   the sign above it, under the attack strip. */
+@media (width > 620px) and (height > 500px) {
+  :root[data-skin] .attack-dock__body {
+    padding-top: 20px;
+  }
+}
+
+/* A catapult or siege weapon waiting for its tap: its plate held down. */
+:root[data-skin] .panel :is(.attack-catapult__arm--armed, .attack-siege__fire--armed),
+:root[data-skin] .panel .btn:is(.attack-catapult__arm--armed, .attack-siege__fire--armed):is(:hover, :active):not(:disabled) {
+  border-image-source: var(--skin-button-pressed);
+  background: none;
+  color: #fff;
+  transform: translateY(2px);
+}
+
+/* Inside a window the glass's raised fill is see-through (the frame is the
+   fill), so what floats or sticks over a window's own content (a drop-down,
+   a sticky header or footer, a badge on a picture) takes the window's fill. */
+:root[data-skin] .panel :is(
+  .building-panel__more-menu,
+  .planner-inventory__header,
+  .planner-help__footer,
+  .unlock-tile__badge,
+  .champion__stage-level,
+  .chamber-card__where,
+  .inferno-tribe__level,
+  .kit-picker__confirm
+) {
+  background: var(--skin-fill);
+}
+
+/* Bob's "?" over a scene: a small round button like the yard's domes. */
+:root[data-skin] .guide-help--float {
+  border-color: var(--colour-dome-rim);
+  background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+  color: #ffffff;
+  font-family: var(--font-display);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
 }
 
 /* The chosen one of a row of map tools: lit in the accent. */
@@ -942,6 +1003,21 @@
   :root[data-skin] {
     --skin-bar-edge: 4px;
     --skin-bar-width: 12px;
+  }
+
+  /* The attack's army sheet along the bottom: the bars' plate, no rounded
+     ends (no drop shadow: a filter would hold its windows inside it). */
+  :root[data-skin] .attack-dock--sheet {
+    border-style: solid;
+    border-color: transparent;
+    border-width: var(--skin-bar-edge);
+    border-image-source: var(--skin-bar);
+    border-image-slice: var(--skin-bar-slice) fill;
+    border-image-width: var(--skin-bar-width);
+    border-image-repeat: stretch;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   /* Map Room 1 fills the phone: the window's thinner frame. */
