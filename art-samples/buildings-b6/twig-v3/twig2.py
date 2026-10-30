@@ -717,17 +717,18 @@ def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_le
     cyl("hornneck", r_pipe * 1.1, 0.2, top - Vector((0, 0, 0.1)), M["iron"], verts=16, bevel=0.02)
 
 
-def tray(center, size, lumps=False, trim="olive", tilt=14.0, roll=0.0):
+def tray(center, size, lumps=False, trim="olive", tilt=14.0, roll=0.0, keel=0.6):
     """The front tray the snapped twigs fall into, as Flash draws it: a low open box whose bottom is a deep boat hull
     curving down along its length (a sled runner seen from the side), metal caps on the four top corners, metal bands
-    round the hull near each end, a rim along the top; levels 6-10 hold black lumps. Returns the root and back_rim(u):
-    the local point on top of the back rim (the body side) at u = 2x/sx, where the hangers take hold."""
+    round the hull near each end, a rim along the top; levels 6-10 hold black lumps. Returns the root, on_hull(u, j,
+    off) (a local point on the hull, u = 2x/sx, j along the cross-section from the front rim to the back rim) and the
+    back rim's j."""
     root = bpy.data.objects.new("tray", None)
     link(root)
     root.location = center
     root.rotation_euler = (math.radians(tilt), math.radians(roll), 0)      # the front edge down: the inside shows
     sx, sy, sz = size
-    D = sz + 0.6                                         # the hull's depth below the rim in the middle
+    D = sz + keel                                        # the hull's depth below the rim in the middle
     corner = M["gold"] if trim == "gold" else M["olive"]
 
     def section(u):
@@ -794,7 +795,7 @@ def tray(center, size, lumps=False, trim="olive", tilt=14.0, roll=0.0):
             ob.location = (rng.uniform(-sx / 2 + 0.35, sx / 2 - 0.35), rng.uniform(-sy / 2 + 0.25, sy / 2 - 0.25),
                            sz - 0.2 + rng.uniform(0, 0.12))
             ob.rotation_euler = (rng.uniform(0, 3), rng.uniform(0, 3), rng.uniform(0, 3))
-    return root, lambda u: on_hull(u, nsec, 0.04) + Vector((0, 0, 0.03 + 0.055))
+    return root, on_hull, nsec
 
 
 def roller(center, length, r):
@@ -1042,8 +1043,14 @@ def roof10(hx, hy, z1, yg):
 HX, HY, Z0, Z1 = 1.05, 1.72, 1.25, 5.1          # the body: half width (X), half depth (Y), floor, top
 ROLLER = Vector((0.05, -2.67, 3.42))            # the roller's middle, in front of the arch, held by arms to the posts
 ROLLER_LEN, ROLLER_R = 1.9, 0.62
-TRAY = Vector((-0.1, -2.72, 1.9))               # the tray under the roller's mouth, hung from the front corner posts
-TRAY_SIZE, TRAY_TILT, TRAY_ROLL = (2.55, 1.15, 0.45), 22.0, -8.0
+TRAY = Vector((-0.1, -2.42, 1.38))              # the tray under the roller's mouth, bolted to the body's front face
+TRAY_SIZE, TRAY_TILT, TRAY_ROLL = (2.55, 1.15, 0.45), 22.0, -5.0
+if os.environ.get("TW_TRAY"):                   # trying placements: TW_TRAY=x,y,z,tilt,roll
+    _t = [float(v) for v in os.environ["TW_TRAY"].split(",")]
+    TRAY, TRAY_TILT, TRAY_ROLL = Vector(_t[:3]), _t[3], _t[4]
+    TRAY_SIZE = (_t[6], TRAY_SIZE[1], TRAY_SIZE[2]) if len(_t) > 6 else TRAY_SIZE
+TRAY_KEEL = float(os.environ.get("TW_KEEL", 0.6))  # how far the hull bellies below the box
+TRAY_GRIP = 2.2                                 # where the brackets take the hull: this far down its back side
 SAW = Vector((1.95, -0.67, 2.62))               # the turning parts, each on its own short axle into the right wall
 SGEAR = Vector((1.67, 0.24, 3.82))
 SWHEEL = Vector((1.54, 1.78, 3.13))
@@ -1106,18 +1113,20 @@ def build():
         x = ROLLER.x + s * (ROLLER_LEN / 2 + 0.12)
         box("rollerarm", (0.12, ROLLER.y - 0.15 + hy, 0.22), (x, (ROLLER.y - 0.15 - hy) / 2, ROLLER.z), M["iron"],
             bevel=0.03, origin="center")
-    # the tray, right under the roller's mouth; two iron hangers from the front corner posts over its back rim
-    tr, back_rim = tray(TRAY, TRAY_SIZE, lumps=L >= 6, trim="gold" if L >= 6 else "olive", tilt=TRAY_TILT,
-                        roll=TRAY_ROLL)
+    # the tray, under the roller's mouth and below it (a clear gap from the camera too), its back against the body's
+    # front face: two iron brackets from the front's bottom beam (there at every level) to the bands round its hull
+    tr, on_hull, nsec = tray(TRAY, TRAY_SIZE, lumps=L >= 6, trim="gold" if L >= 6 else "olive", tilt=TRAY_TILT,
+                             roll=TRAY_ROLL, keel=TRAY_KEEL)
     bpy.context.view_layer.update()
     mw = tr.matrix_world
-    for s in (-1, 1):
-        u = (s * hx - TRAY.x) / (TRAY_SIZE[0] / 2)
-        p = mw @ back_rim(u)
-        a = Vector((s * hx, -hy - 0.12, p.z + 0.1))
-        tube("traymount", [a, Vector((p.x, p.y + 0.12, p.z + 0.1)), p + Vector((0, 0, 0.02))], 0.05, M["iron"])
-        cyl("traymountbolt", 0.08, 0.08, (s * hx, -hy - 0.22, p.z + 0.1), M["bolt"], rot=(90, 0, 0), verts=10,
-            bevel=0.02)
+    for u in (-0.72, 0.72):
+        b = mw @ on_hull(u, nsec - TRAY_GRIP, 0.05)
+        zb = z0 + 0.12
+        tube("traymount", [Vector((b.x, -hy - 0.05, zb)), Vector((b.x, -hy - 0.16, zb)), b], 0.06, M["iron"])
+        box("traymountplate", (0.32, 0.04, 0.2), (b.x, -hy - 0.14, zb), M["iron"], bevel=0.012, origin="center")
+        for dx in (-0.1, 0.1):
+            cyl("traymountbolt", 0.04, 0.05, (b.x + dx, -hy - 0.17, zb), M["bolt"], rot=(90, 0, 0), verts=8,
+                bevel=0.01)
     # the turning parts
     mount(saw, SAW, SAW_AXIS)
     mount(small_gear, SGEAR, SGEAR_AXIS)
@@ -1342,6 +1351,37 @@ def main():
         for k, v in sorted(hits.items()):
             print("CHECK", k, sum(x[2] for x in v), v[:4])
         print("DONE check")
+        return
+    if MODE == "gap":                        # the roller and tray as the camera sees them: the gap between them
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        fwd = cam_fwd()
+
+        def fam_of(n):
+            n = n.split(".")[0]
+            if n.startswith("roller"):
+                return "R"
+            if n.startswith(("tray", "hull", "stave", "hoop", "lump")):
+                return "T"
+            return "."
+        step, gaps, over = 0.25, [], 0
+        for ix in range(int(-36 / step), int(16 / step)):
+            col = []
+            for iy in range(int(5 / step), int(48 / step)):
+                ok, loc, nrm, idx, ob, mat = SC.ray_cast(dg, px(ix * step, iy * step, Z=3.0) - fwd * 30, fwd)
+                col.append(fam_of(ob.name) if ok else " ")
+            r = [k for k, f in enumerate(col) if f == "R"]
+            t = [k for k, f in enumerate(col) if f == "T"]
+            if r and t:
+                if min(t) <= max(r):
+                    over += 1
+                gaps.append(((min(t) - max(r) - 1) * step, ix * step))
+        g = min(gaps) if gaps else None
+        print("GAP min %.2f px at x %.2f; columns with the tray at or above the roller's bottom: %d" % (g[0], g[1], over)
+              if g else "GAP none")
+        lo = min((o.evaluated_get(dg).matrix_world @ v.co).z for o in SC.objects if o.type == "MESH" and
+                 fam_of(o.name) == "T" for v in o.evaluated_get(dg).to_mesh().vertices)
+        print("GAP tray's lowest point %.2f above the ground" % (lo - GROUND))
         return
     if MODE == "probe":                      # probe sx sy ...: what the camera sees first through Flash pixels
         bpy.context.view_layer.update()
