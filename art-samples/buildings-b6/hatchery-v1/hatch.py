@@ -564,7 +564,7 @@ def materials():
     M["steel"] = shiny("steel", (178, 184, 196), rough=0.3, metal=0.9, wear=(150, 156, 170), scale=4, dirt=0.2)
     M["sleeve"] = shiny("sleeve", (180, 180, 182), rough=0.6, metal=0.15, wear=(120, 116, 126), scale=14, dirt=0.25,
                         side=0.35)
-    M["wheel"] = shiny("wheel", (238, 240, 244), rough=0.3, metal=0.3, wear=(196, 198, 208), scale=3, dirt=0.1,
+    M["wheel"] = shiny("wheel", (238, 240, 244), rough=0.35, metal=0.12, wear=(196, 198, 208), scale=3, dirt=0.1,
                        side=0.3)
     M["fchrome"] = shiny("fchrome", (172, 184, 200), rough=0.26, metal=0.75, wear=(140, 152, 170), scale=3, dirt=0.15,
                          side=0.4)
@@ -573,8 +573,8 @@ def materials():
                       spec=0.45, coat=0.3)
     M["darkmetal"] = shiny("darkmetal", (40, 46, 58), rough=0.22, metal=0.85, wear=(62, 70, 84), scale=3, dirt=0.1)
     M["gear"] = shiny("gear", (78, 78, 84), rough=0.38, metal=0.85, wear=(98, 98, 104), scale=6, dirt=0.15)
-    M["red"] = shiny("red", (182, 8, 8), rough=0.2, metal=0.5, wear=(140, 4, 6), scale=1.6, dirt=0.4,
-                     spec=0.7, coat=0.5, side=0.5)
+    M["red"] = shiny("red", (214, 6, 6), rough=0.22, metal=0.6, wear=(160, 4, 6), scale=1.6, dirt=0.25,
+                     spec=0.25, coat=0.1, side=0.5)
     M["dial"] = shiny("dial", (236, 232, 236), rough=0.5, metal=0.0, wear=(214, 210, 218), scale=3, dirt=0.0,
                       spec=0.4)
     M["needle"] = flat("needle", (16, 16, 18), rough=0.5)
@@ -938,9 +938,26 @@ def stand():
     y0, y1 = S.HEAD_Y
     z0, z1 = S.HEAD_Z0, S.HEAD_Z1
     # the head: a soft enamel pillow (Flash's big rounded edges) with a seam band round its lower part
-    box("head", (x1 - x0, y1 - y0, z1 - z0), ((x0 + x1) / 2, (y0 + y1) / 2, z0), M["red"], bevel=1.0, segs=6)
-    box("headseam", (x1 - x0 + 0.12, y1 - y0 + 0.12, 0.42), ((x0 + x1) / 2, (y0 + y1) / 2, z0 + 1.15), M["red"],
-        bevel=0.2)
+    hb = 1.3
+    box("head", (x1 - x0, y1 - y0, z1 - z0), ((x0 + x1) / 2, (y0 + y1) / 2, z0), M["red"], bevel=hb, segs=8)
+    # two thin seam rings that follow the head's rounded corners (a plain box band stuck out at the corners)
+    for j, zs in enumerate((z0 + hb + 0.05, z0 + hb + 0.4)):
+        bm = bmesh.new()
+        hx, hy, rc = (x1 - x0) / 2 - hb, (y1 - y0) / 2 - hb, hb + 0.04
+        ring = []
+        for cx_, cy_, a0 in ((hx, hy, 0), (-hx, hy, 90), (-hx, -hy, 180), (hx, -hy, 270)):
+            for i in range(7):
+                a = math.radians(a0 + 15 * i)
+                ring.append((cx_ + rc * math.cos(a), cy_ + rc * math.sin(a)))
+        lo = [bm.verts.new((x, y, 0.0)) for x, y in ring]
+        hi = [bm.verts.new((x, y, 0.12)) for x, y in ring]
+        n = len(ring)
+        for i in range(n):
+            bm.faces.new((lo[i], lo[(i + 1) % n], hi[(i + 1) % n], hi[i]))
+        bm.faces.new(hi)
+        bm.faces.new(list(reversed(lo)))
+        ob = mesh_ob(f"headseam{j}", bm, [M["red"]], bevel=0.03, segs=2)
+        ob.location = ((x0 + x1) / 2, (y0 + y1) / 2, zs)
     # the beaters: a chrome hub down from the head, whisk wires in the hole
     zc = ZD + S.CONE_RISE
     cyl("beaterhub", 0.42, z0 - zc + 0.1, (0, 0, zc + 0.3), M["chrome"], verts=24, r2=0.55)
