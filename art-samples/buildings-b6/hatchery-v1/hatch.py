@@ -562,7 +562,7 @@ def materials():
                          spec=0.6, side=0.55)
     M["chrome"] = shiny("chrome", (214, 220, 228), rough=0.2, metal=1.0, wear=(190, 196, 206), scale=4, dirt=0.15)
     M["steel"] = shiny("steel", (178, 184, 196), rough=0.3, metal=0.9, wear=(150, 156, 170), scale=4, dirt=0.2)
-    M["sleeve"] = shiny("sleeve", (172, 170, 176), rough=0.55, metal=0.4, wear=(120, 116, 126), scale=14, dirt=0.25,
+    M["sleeve"] = shiny("sleeve", (180, 180, 182), rough=0.6, metal=0.15, wear=(120, 116, 126), scale=14, dirt=0.25,
                         side=0.35)
     M["wheel"] = shiny("wheel", (238, 240, 244), rough=0.3, metal=0.3, wear=(196, 198, 208), scale=3, dirt=0.1,
                        side=0.3)
@@ -829,16 +829,16 @@ def legs():
         track(ob, P(th, 1, 0))
         top = a + P(th, 0.18, 0)
         knee = f + Vector((0, 0, 0.42))
-        tube(f"leg{i}", [top, top + (knee - top) * 0.5, knee], 0.13, M["gold"], verts=12)
-        blob_ball(f"legball{i}", knee, 0.2)
-        tube(f"legpin{i}", [knee, f + Vector((0, 0, 0.18))], 0.11, M["gold"], verts=12)
+        tube(f"leg{i}", [top, top + (knee - top) * 0.5, knee], 0.19, M["gold"], verts=14)
+        blob_ball(f"legball{i}", knee, 0.26)
+        tube(f"legpin{i}", [knee, f + Vector((0, 0, 0.18))], 0.15, M["gold"], verts=12)
         for ax in ((1, 0), (0, 1)):
             d = Vector((ax[0], ax[1], 0)) * S.CROSS_L
             tube(f"legcross{i}{ax[0]}", [f - d + Vector((0, 0, 0.2)), f + d + Vector((0, 0, 0.2))], S.CROSS_W,
                  M["gold"], verts=12)
             for sgn in (-1, 1):
-                blob_ball(f"legtoe{i}{ax[0]}{sgn}", f + d * sgn + Vector((0, 0, 0.23)), 0.23)
-        blob_ball(f"legheel{i}", f + Vector((0, 0, 0.22)), 0.22)
+                blob_ball(f"legtoe{i}{ax[0]}{sgn}", f + d * sgn + Vector((0, 0, 0.27)), 0.27)
+        blob_ball(f"legheel{i}", f + Vector((0, 0, 0.25)), 0.25)
 
 
 def blob_ball(name, at, r, mat=None):

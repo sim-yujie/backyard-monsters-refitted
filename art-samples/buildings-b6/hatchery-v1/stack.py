@@ -46,7 +46,7 @@ LIFT2 = 1.15
 LEG_TH = (-42.0, 41.0, 226.0)   # front, right, left (as Flash draws them: not evenly spaced)
 LEG_Z = 2.4                      # where a leg leaves the body (above the base's foot, level 1 height)
 FOOT_D = (4.2, 4.05, 3.8)        # each foot's middle from the axis, on the ground
-CROSS_L, CROSS_W = 1.28, 0.13     # a foot's arms (half length, bar radius), along world X and Y; ball ends
+CROSS_L, CROSS_W = 1.3, 0.17     # a foot's arms (half length, bar radius), along world X and Y; ball ends
 
 # level 2: the egg-beater drive on the sleeve
 PINION_Z, PINION_R = 0.5, 1.15  # above the sleeve's top
