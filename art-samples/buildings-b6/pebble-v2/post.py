@@ -124,7 +124,7 @@ def levels():
     out = Image.new("RGB", (4 * w + 5 * gap, top + 2 * (h + 40) + gap), (24, 24, 24))
     d = ImageDraw.Draw(out)
     d.text((12, 8), "Pebble Shiner, levels 1, 3, 6, 10 at one scale: Flash (top), 3D (bottom). Red crosses: parts fixed "
-           "to the body; the ring never moves, an added course lifts what sits above it", fill=(255, 255, 255), font=font(26))
+           "to the body; the first ring stays at one height, an added course lifts what sits above it", fill=(255, 255, 255), font=font(26))
     d.text((12, 44), "L3 adds the head with the spout (lifts collar, pipe, roof); L6 adds a second ring (lifts the head "
            "and up); L10 adds the drum on the peak and the ball on the collar", fill=(200, 200, 200), font=font(22))
     for i, lv in enumerate(fref.LEVELS):

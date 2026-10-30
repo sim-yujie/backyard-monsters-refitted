@@ -463,14 +463,15 @@ def spinner(name, center, normal_bearing, tilt, parts):
 # ------------------------------------------------------------------------------------------------------------ the model
 def materials():
     M = {}
-    M["stone"] = painted("stone", (168, 166, 180), rough=0.75, wear=(206, 206, 218), scale=2.5, dirt=0.45, spec=0.25)
-    M["stonew"] = painted("stonew", (206, 206, 216), rough=0.6, wear=(232, 232, 240), scale=2.5, dirt=0.25, spec=0.3)
-    M["stoneh"] = painted("stoneh", (176, 174, 188), rough=0.7, wear=(208, 208, 218), scale=2.0, dirt=0.3, spec=0.25)
-    M["core"] = painted("core", (86, 82, 94), rough=0.85, wear=(110, 106, 118), scale=3, dirt=0.4, spec=0.2)
-    M["coreh"] = painted("coreh", (120, 116, 130), rough=0.8, scale=3, dirt=0.3, spec=0.2)
-    M["band"] = flat("band", (84, 80, 92), rough=0.85)           # the rings' turning band: plain, so a turn of one
+    M["stone"] = painted("stone", (139, 137, 140), rough=0.75, wear=(185, 183, 186), scale=2.5, dirt=0.45, spec=0.25)
+    M["stonew"] = painted("stonew", (196, 195, 200), rough=0.6, wear=(226, 225, 230), scale=2.5, dirt=0.25, spec=0.3)
+    M["stoneh"] = painted("stoneh", (147, 145, 148), rough=0.7, wear=(191, 189, 192), scale=2.0, dirt=0.3, spec=0.25)
+    M["pebble"] = painted("pebble", (178, 177, 180), rough=0.6, wear=(218, 217, 220), scale=2.0, dirt=0.2, spec=0.3)
+    M["core"] = painted("core", (74, 72, 78), rough=0.85, wear=(98, 96, 102), scale=3, dirt=0.4, spec=0.2)
+    M["coreh"] = painted("coreh", (104, 102, 108), rough=0.8, scale=3, dirt=0.3, spec=0.2)
+    M["band"] = flat("band", (74, 72, 78), rough=0.85)           # the rings' turning band: plain, so a turn of one
     M["hole"] = flat("hole", (14, 12, 16), rough=1.0)              # pattern looks exactly the same
-    M["roof"] = lambda axis="Z": wood("roof", (224, 180, 146), (176, 128, 98), axis, rings=7, knots=False, dirt=0.2)
+    M["roof"] = lambda axis="Z": wood("roof", (186, 154, 134), (144, 108, 88), axis, rings=7, knots=False, dirt=0.2)
     M["roofb"] = lambda axis="Z": wood("roofb", (150, 112, 84), (110, 78, 56), axis, rings=7, dirt=0.2)
     M["pipe"] = painted("pipe", (62, 70, 82), rough=0.45, metal=0.7, wear=(120, 130, 146), scale=7, dirt=0.1, soot=0.5)
     M["horn"] = painted("horn", (58, 72, 88), rough=0.42, metal=0.45, wear=(120, 136, 152), scale=6, dirt=0.05, soot=0.4)
@@ -636,8 +637,12 @@ def roof(ze, peak_cut=None):
     plank deck that rests on the collar. peak_cut: the top row stops this far up (level 10's drum seat)."""
     rnd = R(57)
     c = Vector(S.ROOF_SHIFT + (0.0,))
-    lathe("roofdeck", [(0.0, ze - 0.02), (RR - 0.1, ze - 0.02), (RR - 0.1, ze + 0.04),
-                       (0.0, ze + RH - 0.02)], c, M["roofb"]("Z"), verts=48)
+    deck = [(0.0, ze + 0.005), (RR - 0.1, ze + 0.005), (RR - 0.1, ze + 0.04), (0.0, ze + RH - 0.02)]
+    if peak_cut:                                # level 10: the deck stops under the drum's seat
+        zc = ze + RH * peak_cut - 0.02
+        t = (zc - (ze + 0.04)) / (RH - 0.06)
+        deck[3:] = [((RR - 0.1) * (1 - t), zc), (0.0, zc)]
+    lathe("roofdeck", deck, c, M["roofb"]("Z"), verts=48)
     top = peak_cut or 1.0
     rows = ((-0.03, 0.42, 17, 0.0, 0.06), (0.34, 0.72, 13, 0.5, 0.13), (0.64, top, 9, 0.25, 0.2))
     for s0, s1, n, ph, lift in rows:
@@ -657,7 +662,7 @@ def roof(ze, peak_cut=None):
               M["roofb"]("Z"), verts=16)
     if peak_cut:                                # the drum's seat: a wooden cap over the cut planks
         r = RR * (1 - peak_cut)
-        cyl("roofcap", r + 0.12, 0.1, c + Vector((0, 0, ze + RH * peak_cut + 0.02)), M["roofb"]("Z"), verts=32,
+        cyl("roofcap", r + 0.12, 0.1, c + Vector((0, 0, ze + RH * peak_cut - 0.02)), M["roofb"]("Z"), verts=32,
             bevel=0.03)
 
 
@@ -666,13 +671,13 @@ def pipe(ze):
     up to the viewer's left. An iron plate where it leaves the collar, an iron band near the top."""
     a = math.radians(S.PIPE_TH)
     rad = Vector((math.cos(a), math.sin(a), 0))
-    zf = ze - 0.32
+    zf = ze - 0.28
     p0 = rad * (S.R_COLLAR - 0.25) + Vector((0, 0, zf))
     p1 = rad * (S.PIPE_R - 0.2) + Vector((0, 0, zf))
     p2 = rad * S.PIPE_R + Vector((0, 0, zf + 0.2))
     top = rad * S.PIPE_R + Vector((0, 0, ze + S.PIPE_UP - 0.42))
-    tube("pipe", [p0, p1, p2, top], 0.17, M["pipe"])
-    pl = cyl("pipeplate", 0.25, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
+    tube("pipe", [p0, p1, p2, top], 0.15, M["pipe"])
+    pl = cyl("pipeplate", 0.16, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
     pl.rotation_euler = rad.to_track_quat("Z", "Y").to_euler()
     cyl("pipeband", 0.2, 0.08, top - Vector((0, 0, 0.35)), M["iron"], verts=16, bevel=0.015)
     c = lathe("horn", [(0.15, 0.0), (0.2, 0.08), (0.62, 0.2), (0.7, 0.27), (0.62, 0.36), (0.36, 0.44), (0.0, 0.47)],
@@ -760,7 +765,7 @@ def ball(ze):
         ob.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
     MOVING.append(hub)
     # the post: out of the collar, under the eave to beyond it, up, and round under the ball to its axle
-    zf = ze - 0.32
+    zf = ze - 0.28
     rad = Vector(S.polar(S.BALL_TH, 1.0, 0.0))
     p0 = rad * (S.R_COLLAR - 0.25) + Vector((0, 0, zf))
     p1 = rad * (S.BALL_R - 0.15) + Vector((0, 0, zf))
@@ -773,13 +778,13 @@ def ball(ze):
     tube("ballpost", pts, 0.07, M["iron"])
     ab = cyl("ballaxle", 0.06, 0.5, c - ax * 1.32, M["bolt"], verts=12, bevel=0.015)
     ab.rotation_euler = ax.to_track_quat("Z", "Y").to_euler()
-    pl = cyl("ballpostplate", 0.2, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
+    pl = cyl("ballpostplate", 0.14, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
     pl.rotation_euler = rad.to_track_quat("Z", "Y").to_euler()
 
 
 def pebble(at, size, rnd, mat=None):
     """A loose pebble on the ground, a rounded white block (Flash's: the machine's output lying round its feet)."""
-    ob = box("pebble", size, (at[0], at[1], GROUND - 0.02), mat or M["stoneh"], rot=(0, 0, rnd.uniform(0, 180)),
+    ob = box("pebble", size, (at[0], at[1], GROUND - 0.02), mat or M["pebble"], rot=(0, 0, rnd.uniform(0, 180)),
              bevel=min(size) * 0.45, jitter=0.03)
     return ob
 
@@ -806,7 +811,7 @@ def build():
         head(S.z_head(L))
     # the collar: the fixed course that carries the roof, the pipe and (level 10) the ball's post
     zc = S.z_collar(L)
-    lathe("collarcore", [(1.4, zc), (2.0, zc), (2.0, ze), (1.4, ze)], (0, 0, 0), M["core"], verts=48)
+    lathe("collarcore", [(1.4, zc), (2.0, zc), (2.0, ze - 0.05), (1.4, ze - 0.05)], (0, 0, 0), M["core"], verts=48)
     course("collar", zc + 0.02, S.COLLAR_H - 0.02, 22, 1.8, S.R_COLLAR, R(13), 0.88)
     roof(ze, peak_cut=0.72 if L >= 10 else None)
     pipe(ze)
@@ -936,6 +941,9 @@ FAMILY = (("ring1", "ring1"), ("ring2", "ring2"), ("drumaxle", "axle"), ("drumkn
           ("collar", "collar"), ("basecourse", "base"), ("pier", "legs"), ("legcore", "legs"), ("shaft", "shaft"))
 
 
+MASONRY = ("legs", "base", "shaft", "head", "collar")   # stones resting on stones: not reported
+
+
 def family(o):
     n = o.name.split(".")[0]
     p = o
@@ -990,7 +998,7 @@ def main():
             for i, (a, ta, _) in enumerate(obs):
                 for b, tb, _ in obs[i + 1:]:
                     fa, fb = family(a), family(b)
-                    if fa == fb:
+                    if fa == fb or (fa in MASONRY and fb in MASONRY):
                         continue
                     n = len(ta.overlap(tb))
                     if n:
@@ -999,7 +1007,7 @@ def main():
                 print("CHECK f%02d" % k, key, sum(x[2] for x in v), v[:3])
             fams = sorted({family(o) for o, _, _ in obs if under_moving(o)})
             for fm in fams:
-                best = (9.0, "")
+                best = (9.0, "", "", "")
                 for o, t, vs in obs:
                     if family(o) != fm:
                         continue
@@ -1010,8 +1018,8 @@ def main():
                         for v in vs[::2]:
                             hit = t2.find_nearest(v, best[0])
                             if hit[0] is not None and hit[3] < best[0]:
-                                best = (hit[3], f2)
-                print("CLEAR f%02d %s nearest other part %.3f (%s)" % (k, fm, best[0], best[1]))
+                                best = (hit[3], f2, o.name, o2.name)
+                print("CLEAR f%02d %s nearest other part %.3f (%s)" % (k, fm, best[0], " ".join(best[1:])))
         print("DONE check")
         return
     if MODE == "gap":
