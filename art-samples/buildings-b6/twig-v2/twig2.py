@@ -239,8 +239,9 @@ def wood(name, light, dark, axis="Z", rings=6.0, hue_jit=0.0, rough=0.78, dirt=0
     return t.m
 
 
-def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, dirt=0.3, spec=0.4):
-    """Paint or metal with worn patches (`wear` colour shows through) and rust blotches."""
+def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, dirt=0.3, spec=0.4, soot=0.0):
+    """Paint or metal with worn patches (`wear` colour shows through), rust blotches and soot (dark, dull smudges that
+    run down the part, as Flash's dirty metals)."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
@@ -255,8 +256,16 @@ def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, di
         n2 = t.noise(v, scale * 0.7, 5.0, 0.65, 1.0)
         mask = t.ramp(n2, [(0.6, (0, 0, 0, 1)), (0.75, (0.7, 0.7, 0.7, 1))])
         out = t.mix(out, srgb(*rust), mask)
+    rough_in = rough
+    if soot:
+        v2 = t.coords(scale=(1.0, 1.0, 0.25))                  # stretched upright: streaks run down
+        n3 = t.noise(v2, scale * 0.5, 6.0, 0.7, 0.4)
+        sm = t.ramp(n3, [(0.38, (0, 0, 0, 1)), (0.62, (soot, soot, soot, 1))])
+        out = t.mix(out, srgb(30, 25, 22), sm)
+        rr = t.ramp(n3, [(0.38, (rough,) * 3 + (1,)), (0.62, (min(1.0, rough + 0.4),) * 3 + (1,))])
+        rough_in = rr
     out = t.grime(out, GROUND, 2.6, dirt)
-    t.set(**{"Base Color": out, "rough": rough, "metal": metal, "spec": spec})
+    t.set(**{"Base Color": out, "rough": rough_in, "metal": metal, "spec": spec})
     t.bump(t.noise(v, scale * 3, 4.0, 0.6), 0.06, 0.01)
     MATS[name] = t.m
     return t.m
@@ -275,52 +284,32 @@ def flat(name, col, rough=0.5, metal=0.0, emit=0.0):
 
 
 def saw_face():
-    """The saw disc's painted face: purple with a white swirl (four curved white blades), as the Flash cell."""
+    """The saw disc's painted face as the Flash cell: white, a purple rim band, and a dark purple bar across the middle
+    (it turns with the saw, so the turning shows)."""
     if "sawface" in MATS:
         return MATS["sawface"]
     t = NT("sawface")
     tc = t.n("ShaderNodeTexCoord")
     sep = t.n("ShaderNodeSeparateXYZ")
     t.link(tc.outputs["Object"], sep.inputs[0])
-    # polar coords in the disc's own XY: angle + a swirl that grows with radius
-    ang = t.n("ShaderNodeMath", operation="ARCTAN2")
-    t.link(sep.outputs["Y"], ang.inputs[0])
-    t.link(sep.outputs["X"], ang.inputs[1])
     ln = t.n("ShaderNodeVectorMath", operation="LENGTH")
     cmb = t.n("ShaderNodeCombineXYZ")
     t.link(sep.outputs["X"], cmb.inputs[0])
     t.link(sep.outputs["Y"], cmb.inputs[1])
     t.link(cmb.outputs[0], ln.inputs[0])
-    sw = t.n("ShaderNodeMath", operation="MULTIPLY_ADD")      # angle + 2.6 * r
-    t.link(ln.outputs["Value"], sw.inputs[0])
-    sw.inputs[1].default_value = 2.6
-    t.link(ang.outputs[0], sw.inputs[2])
-    blades = t.n("ShaderNodeMath", operation="SINE")
-    m4 = t.n("ShaderNodeMath", operation="MULTIPLY")
-    t.link(sw.outputs[0], m4.inputs[0])
-    m4.inputs[1].default_value = 3.0
-    t.link(m4.outputs[0], blades.inputs[0])
-    half = t.n("ShaderNodeMath", operation="MULTIPLY_ADD")
-    t.link(blades.outputs[0], half.inputs[0])
-    half.inputs[1].default_value = 0.5
-    half.inputs[2].default_value = 0.5
-    white = t.ramp(half.outputs[0], [(0.12, (0, 0, 0, 1)), (0.3, (1, 1, 1, 1))])
-    # only in the band between the hub and the purple rim
-    band = t.ramp(ln.outputs["Value"], [(0.0, (0, 0, 0, 1)), (0.22, (0, 0, 0, 1)), (0.25, (1, 1, 1, 1)),
-                                        (0.6, (1, 1, 1, 1)), (0.64, (0, 0, 0, 1)), (1.0, (0, 0, 0, 1))])
-    mm = t.n("ShaderNodeMath", operation="MULTIPLY")
-    t.link(white, mm.inputs[0])
-    t.link(band, mm.inputs[1])
-    mm = mm.outputs[0]
-    col = t.mix(srgb(132, 52, 150), srgb(236, 232, 238), mm)
-    # a darker purple ring line just inside the rim
-    ring = t.ramp(ln.outputs["Value"], [(0.0, (0, 0, 0, 1)), (0.77, (0, 0, 0, 1)), (0.8, (1, 1, 1, 1)),
-                                        (0.84, (1, 1, 1, 1)), (0.87, (0, 0, 0, 1))])
-    col = t.mix(col, srgb(96, 30, 112), ring)
+    ay = t.n("ShaderNodeMath", operation="ABSOLUTE")
+    t.link(sep.outputs["Y"], ay.inputs[0])
+    bar = t.ramp(ay.outputs[0], [(0.0, (1, 1, 1, 1)), (0.13, (1, 1, 1, 1)), (0.16, (0, 0, 0, 1)), (1.0, (0, 0, 0, 1))])
+    rim = t.ramp(ln.outputs["Value"], [(0.0, (0, 0, 0, 1)), (0.6, (0, 0, 0, 1)), (0.63, (1, 1, 1, 1)), (1.0, (1, 1, 1, 1))])
+    col = t.mix(srgb(238, 236, 242), srgb(84, 26, 100), bar)
+    col = t.mix(col, srgb(140, 58, 158), rim)
+    line = t.ramp(ln.outputs["Value"], [(0.0, (0, 0, 0, 1)), (0.6, (0, 0, 0, 1)), (0.62, (1, 1, 1, 1)),
+                                         (0.65, (0, 0, 0, 1)), (1.0, (0, 0, 0, 1))])
+    col = t.mix(col, srgb(84, 26, 100), line)
     nz = t.noise(t.coords(), 9.0, 4.0, 0.6)
-    scuff = t.ramp(nz, [(0.6, (0, 0, 0, 1)), (0.75, (0.45, 0.45, 0.45, 1))])
-    col = t.mix(col, srgb(90, 60, 70), scuff)
-    t.set(**{"Base Color": col, "rough": 0.42, "spec": 0.5})
+    scuff = t.ramp(nz, [(0.55, (0, 0, 0, 1)), (0.75, (0.55, 0.55, 0.55, 1))])
+    col = t.mix(col, srgb(96, 74, 78), scuff)
+    t.set(**{"Base Color": col, "rough": 0.5, "spec": 0.45})
     MATS["sawface"] = t.m
     return t.m
 
@@ -364,24 +353,25 @@ def materials():
     M["twig"] = lambda axis="Z": wood("twig", (232, 168, 108), (176, 110, 64), axis, rings=10, knots=False, dirt=0.1)
     M["roof"] = bark("roof", (88, 64, 60), (56, 40, 40))
     M["roofplank"] = lambda axis="X": wood("roofplank", (122, 92, 98), (78, 56, 64), axis, rings=9, dirt=0.1)
-    M["iron"] = painted("iron", (58, 62, 72), rough=0.45, metal=0.85, wear=(150, 156, 170), rust=(120, 70, 40), scale=7)
-    M["steel"] = painted("steel", (150, 160, 178), rough=0.3, metal=0.9, wear=(210, 216, 228), rust=(130, 84, 50), scale=8)
-    M["horn"] = painted("horn", (58, 66, 80), rough=0.3, metal=0.9, wear=(96, 108, 126), scale=6, dirt=0.05)
-    M["green"] = painted("green", (84, 98, 58), rough=0.6, metal=0.3, wear=(120, 130, 80), rust=(110, 74, 40), scale=6)
-    M["dgreen"] = painted("dgreen", (40, 52, 32), rough=0.6, metal=0.3, wear=(70, 84, 50), scale=6)
-    M["gold"] = painted("gold", (226, 186, 70), rough=0.32, metal=0.95, wear=(160, 120, 40), scale=9, dirt=0.15)
-    M["olive"] = painted("olive", (150, 140, 50), rough=0.4, metal=0.8, wear=(90, 80, 30), scale=9, dirt=0.15)
-    M["black"] = painted("black", (30, 30, 34), rough=0.35, metal=0.4, wear=(80, 84, 92), scale=8, dirt=0.05)
+    M["iron"] = painted("iron", (58, 62, 72), rough=0.45, metal=0.85, wear=(150, 156, 170), rust=(120, 70, 40), scale=7, soot=0.75)
+    M["steel"] = painted("steel", (150, 160, 178), rough=0.3, metal=0.9, wear=(210, 216, 228), rust=(130, 84, 50), scale=8, soot=0.6)
+    M["horn"] = painted("horn", (128, 138, 154), rough=0.35, metal=0.6, wear=(170, 178, 190), scale=6, dirt=0.05, soot=0.8)
+    M["green"] = painted("green", (84, 98, 58), rough=0.6, metal=0.3, wear=(120, 130, 80), rust=(110, 74, 40), scale=6, soot=0.6)
+    M["dgreen"] = painted("dgreen", (40, 52, 32), rough=0.6, metal=0.3, wear=(70, 84, 50), scale=6, soot=0.7)
+    M["gold"] = painted("gold", (226, 186, 70), rough=0.32, metal=0.95, wear=(160, 120, 40), scale=9, dirt=0.15, soot=0.45)
+    M["olive"] = painted("olive", (150, 140, 50), rough=0.4, metal=0.8, wear=(90, 80, 30), scale=9, dirt=0.15, soot=0.5)
+    M["black"] = painted("black", (30, 30, 34), rough=0.35, metal=0.4, wear=(80, 84, 92), scale=8, dirt=0.05, soot=0.5)
     M["lump"] = painted("lump", (26, 26, 30), rough=0.5, wear=(70, 72, 80), scale=12, dirt=0.0)
     M["hole"] = flat("hole", (8, 6, 6), rough=1.0)
     M["saw"] = saw_face()
-    M["teeth"] = painted("teeth", (196, 200, 214), rough=0.25, metal=0.95, wear=(240, 240, 250), scale=10, dirt=0.0)
+    M["teeth"] = painted("teeth", (196, 200, 214), rough=0.25, metal=0.95, wear=(240, 240, 250), scale=10, dirt=0.0, soot=0.45)
     M["hub"] = painted("hub", (96, 58, 28), rough=0.5, metal=0.4, wear=(150, 100, 50), scale=10, dirt=0.0)
     M["bolt"] = painted("bolt", (120, 150, 170), rough=0.3, metal=0.9, scale=10, dirt=0.0)
-    M["bronze"] = painted("bronze", (128, 84, 16), rough=0.4, metal=0.75, wear=(190, 140, 50), rust=(86, 54, 20), scale=7)
+    M["bronze"] = painted("bronze", (128, 84, 16), rough=0.4, metal=0.75, wear=(190, 140, 50), rust=(86, 54, 20), scale=7, soot=0.5)
     M["copper"] = painted("copper", (176, 100, 56), rough=0.4, metal=0.85, wear=(220, 150, 100), scale=8)
-    M["chute"] = painted("chute", (214, 228, 244), rough=0.45, metal=0.15, wear=(176, 192, 210), scale=4, dirt=0.15)
-    M["blade"] = painted("blade", (150, 170, 120), rough=0.3, metal=0.8, wear=(210, 220, 200), scale=6, dirt=0.05)
+    M["chute"] = painted("chute", (214, 228, 244), rough=0.45, metal=0.15, wear=(176, 192, 210), scale=4, dirt=0.15, soot=0.55)
+    M["blade"] = painted("blade", (150, 170, 120), rough=0.3, metal=0.8, wear=(210, 220, 200), scale=6, dirt=0.05, soot=0.6)
+    M["rope2"] = painted("rope2", (200, 166, 112), rough=0.9, wear=(150, 116, 76), scale=30, dirt=0.0)
     M["rope"] = painted("rope", (34, 30, 30), rough=0.9, wear=(70, 60, 54), scale=20, dirt=0.0)
     return M
 
@@ -416,11 +406,17 @@ def mesh_ob(name, bm, mats, smooth=True, bevel=0.0, segs=3, parent=None, subsurf
     return ob
 
 
-def box(name, size, at, mat, rot=(0, 0, 0), bevel=0.05, parent=None, jitter=0.0, taper=1.0, origin="bottom"):
-    """A box `size` (x, y, z) standing on `at` (origin="bottom") or centred on it, turned by rot (degrees, XYZ)."""
+def box(name, size, at, mat, rot=(0, 0, 0), bevel=0.05, parent=None, jitter=0.0, taper=1.0, origin="bottom", bow=0.0):
+    """A box `size` (x, y, z) standing on `at` (origin="bottom") or centred on it, turned by rot (degrees, XYZ).
+    bow: the middle of its height pushed toward local -Y by that much (a plank that bulges out of a wall)."""
     bm = bmesh.new()
     bmesh.ops.create_cube(bm, size=1.0)
+    if bow:
+        bmesh.ops.subdivide_edges(bm, edges=[e for e in bm.edges if abs(e.verts[0].co.z - e.verts[1].co.z) > 1e-6],
+                                  cuts=8)
     for v in bm.verts:
+        if bow:
+            v.co.y -= bow / size[1] * math.sin(math.pi * (v.co.z + 0.5))
         v.co.x *= size[0]
         v.co.y *= size[1]
         v.co.z *= size[2]
@@ -486,8 +482,10 @@ def tube(name, pts, r, mat, parent=None, verts=12, r_end=None):
     return ob
 
 
-def plank_wall(name, p0, p1, z0, z1, mat_fn, n, thick=0.12, gap=0.025, out=None, jit=0.02):
-    """A wall of n upright planks from ground point p0 to p1 (world XY), heights z0..z1, facing `out` (a unit XY)."""
+def plank_wall(name, p0, p1, z0, z1, mat_fn, n, thick=0.12, gap=0.025, out=None, jit=0.02, bulge=0.0):
+    """A wall of n upright planks from ground point p0 to p1 (world XY), heights z0..z1, facing `out` (a unit XY).
+    bulge: the wall bellies out by that much in the middle, across and up (the planks run counter-clockwise seen from
+    above, so local -Y is outward)."""
     p0, p1 = Vector(p0), Vector(p1)
     d = p1 - p0
     length = d.length
@@ -496,11 +494,15 @@ def plank_wall(name, p0, p1, z0, z1, mat_fn, n, thick=0.12, gap=0.025, out=None,
     obs = []
     for i in range(n):
         c = p0 + d * ((i + 0.5) / n)
+        f = (i + 0.5) / n
+        turn = 0.0
         if out is not None:
-            c += Vector(out) * (-thick / 2 + rng.uniform(-jit, jit))
+            c += Vector(out) * (-thick / 2 + rng.uniform(-jit, jit) + 0.5 * bulge * math.sin(math.pi * f))
+            turn = -math.degrees(math.atan(0.5 * bulge * math.pi * math.cos(math.pi * f) / length))
         top = z1 + rng.uniform(-0.04, 0.04)
         obs.append(box(f"{name}{i}", (w - gap, thick, top - z0), (c.x, c.y, z0), mat_fn("Z"),
-                       rot=(rng.uniform(-1.2, 1.2), rng.uniform(-1.5, 1.5), ang), bevel=0.03))
+                       rot=(rng.uniform(-1.2, 1.2), rng.uniform(-1.5, 1.5), ang + turn), bevel=0.03,
+                       bow=0.5 * bulge))
     return obs
 
 
@@ -561,10 +563,15 @@ def spinner(name, center, normal_bearing, tilt, parts):
 M = materials()
 
 
-def leg(at, top, r=0.2):
-    h = top - GROUND
-    lathe("leg", [(r * 1.0, h), (r * 0.92, h * 0.6), (r * 1.0, h * 0.3), (r * 1.25, h * 0.1), (r * 1.3, 0.04),
-                  (r * 1.2, 0.0), (0.0, 0.0)], (at[0], at[1], GROUND), M["post"]("Z"), verts=20)
+def leg(at, top, r=0.2, splay=(0.0, 0.0)):
+    """A round stump leg from the ground up to `top` under `at`; splay moves its foot outward (it leans in to the post)."""
+    foot = Vector((at[0] + splay[0], at[1] + splay[1], GROUND))
+    d = Vector((at[0], at[1], top)) - foot
+    h = d.length
+    ob = lathe("leg", [(r * 1.0, h), (r * 0.92, h * 0.6), (r * 1.0, h * 0.3), (r * 1.25, h * 0.1), (r * 1.3, 0.04),
+                       (r * 1.2, 0.0), (0.0, 0.0)], foot, M["post"]("Z"), verts=20)
+    ob.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
+    return ob
 
 
 def claw(at, h, face_bearing):
@@ -588,7 +595,7 @@ def saw(center):
         t = saw_teeth("sawteeth", 0.84, 1.0, 34, 0.3, M["teeth"])      # a thick silver rim: it shows down the side
         t.parent = h
         t.location = (0, 0, -0.13)
-        cyl("sawhub", 0.2, 0.22, (0, 0, -0.04), M["hub"], verts=20, bevel=0.04, parent=h)
+        cyl("sawhub", 0.28, 0.22, (0, 0, -0.04), M["hub"], verts=20, bevel=0.04, parent=h)
         for i in range(4):
             a = 2 * math.pi * i / 4 + 0.4
             cyl("sawbolt", 0.04, 0.06, (0.12 * math.cos(a), 0.12 * math.sin(a), 0.16), M["bolt"], verts=8, bevel=0.01,
@@ -641,39 +648,55 @@ def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_le
 
 
 def tray(center, size, lumps=False, trim="olive", tilt=14.0, out_bearing=-90.0):
-    """The front tray (an open wooden box on a curved scoop) the snapped twigs fall into; levels 6-10 hold black lumps."""
+    """The front tray the snapped twigs fall into: a wooden trough with a rounded hull (Flash's boat shape), staves along
+    it, metal rims and end hoops, rivets; levels 6-10 hold black lumps."""
     root = bpy.data.objects.new("tray", None)
     link(root)
     root.location = center
     root.rotation_euler = (math.radians(tilt), 0, 0)      # the front edge down: the inside shows
     sx, sy, sz = size
-    t = 0.09
-    box("traybottom", (sx, sy, t), (0, 0, 0), M["wood2"]("X"), bevel=0.03, parent=root)
-    box("trayfront", (sx + 0.04, t, sz), (0, -sy / 2, 0), M["wood"]("X"), bevel=0.03, parent=root)
-    box("trayback", (sx, t, sz * 0.9), (0, sy / 2, 0), M["wood2"]("X"), bevel=0.03, parent=root)
-    for s in (-1, 1):
-        box("trayside", (t, sy, sz), (s * sx / 2, 0, 0), M["wood"]("Y"), bevel=0.03, parent=root)
-    # the curved scoop underneath, down to the ground
-    bm = bmesh.new()
-    rows = []
-    for k in range(9):
-        a = math.radians(-90 + 90 * k / 8)
-        y = -sy / 2 + (sy * 0.9) * (1 + math.cos(a + math.pi / 2)) * 0.5
-        z = -0.55 * (1 + math.sin(a))
-        rows.append([bm.verts.new((x, y * 0.95, z)) for x in (-sx / 2 + 0.05, sx / 2 - 0.05)])
-    for a, b in zip(rows, rows[1:]):
-        bm.faces.new((a[0], a[1], b[1], b[0]))
-    sc = mesh_ob("scoop", bm, [M["wood2"]("X")], parent=root)
-    so = sc.modifiers.new("solid", "SOLIDIFY")
-    so.thickness = 0.08
+    ry, rz = sy / 2, sz + 0.42                           # the hull's half width and depth below the rim (rim at z = sz)
     corner = M["gold"] if trim == "gold" else M["olive"]
-    for s in (-1, 1):
-        for fy in (-1, 1):
-            box("traycorner", (0.14, 0.14, sz + 0.06), (s * (sx / 2), fy * sy / 2, -0.02), corner, bevel=0.03,
-                parent=root)
-    box("traylip", (sx + 0.1, 0.06, 0.06), (0, -sy / 2 - 0.02, sz), corner, bevel=0.02, parent=root)
+
+    def hull(a, x):
+        """Point on the hull at angle a (0 = back rim, pi = front rim, through the bottom) and position x along it."""
+        return Vector((x, ry * math.cos(a), sz - rz * math.sin(a) * (1.0 - 0.08 * (2 * x / sx) ** 2)))
+
+    NS = 18
+    bm = bmesh.new()
+    xs = [-sx / 2 + sx * k / 10 for k in range(11)]
+    rows = [[bm.verts.new(hull(math.pi * j / NS, x)) for j in range(NS + 1)] for x in xs]
+    for r0, r1 in zip(rows, rows[1:]):
+        for j in range(NS):
+            bm.faces.new((r0[j], r0[j + 1], r1[j + 1], r1[j]))
+    ob = mesh_ob("hull", bm, [M["wood2"]("X")], parent=root)
+    so = ob.modifiers.new("solid", "SOLIDIFY")
+    so.thickness = 0.09
+    for x in (-sx / 2, sx / 2):                          # the two ends: flat half-discs of darker wood
+        bm = bmesh.new()
+        vs = [bm.verts.new(hull(math.pi * j / NS, x)) for j in range(NS + 1)]
+        bm.faces.new(vs)
+        e = mesh_ob("trayend", bm, [M["wood"]("Y")], parent=root, smooth=False)
+        so = e.modifiers.new("solid", "SOLIDIFY")
+        so.thickness = 0.09
+        so.offset = 0
+    for j in range(2, NS - 1, 3):                        # stave seams: thin dark lines along the hull
+        pts = [hull(math.pi * (j + 0.5) / NS, x) * 1.0 for x in (-sx / 2 + 0.06, sx / 2 - 0.06)]
+        pts = [p + (p - Vector((p.x, 0, sz))).normalized() * 0.03 for p in pts]
+        tube("stave", pts, 0.018, M["dwood"]("X"), verts=6, parent=root)
+    for x in (-sx / 2 + 0.05, -sx / 2 + 0.3, sx / 2 - 0.3, sx / 2 - 0.05):      # metal hoops round the hull
+        pts = [hull(math.pi * j / NS, x) for j in range(NS + 1)]
+        pts = [p + (p - Vector((p.x, 0, sz))).normalized() * 0.05 for p in pts]
+        tube("hoop", pts, 0.045 if abs(x) > sx / 2 - 0.1 else 0.035, corner, verts=8, parent=root)
+    for fy in (-ry - 0.04, ry + 0.04):                   # rims along the top edges
+        tube("trayrim", [(-sx / 2 - 0.06, fy, sz + 0.02), (sx / 2 + 0.06, fy, sz + 0.02)], 0.06, corner, verts=10, parent=root)
+    for x in (-sx / 2 + 0.05, sx / 2 - 0.05):
+        for j in (4, 9, 14):
+            p = hull(math.pi * j / NS, x)
+            p = p + (p - Vector((p.x, 0, sz))).normalized() * 0.09
+            cyl("trayrivet", 0.04, 0.04, p, M["iron"], rot=(0, 90, 0), verts=8, bevel=0.01, parent=root)
     if lumps:
-        for i in range(9):
+        for i in range(10):
             r = rng.uniform(0.13, 0.2)
             bm = bmesh.new()
             bmesh.ops.create_icosphere(bm, subdivisions=2, radius=r)
@@ -681,8 +704,8 @@ def tray(center, size, lumps=False, trim="olive", tilt=14.0, out_bearing=-90.0):
                 v.co *= rng.uniform(0.75, 1.15)
                 v.co.z *= 0.8
             ob = mesh_ob("lump", bm, [M["lump"]], parent=root)
-            ob.location = (rng.uniform(-sx / 2 + 0.25, sx / 2 - 0.25), rng.uniform(-sy / 2 + 0.22, sy / 2 - 0.22),
-                           t + r * 0.7)
+            ob.location = (rng.uniform(-sx / 2 + 0.25, sx / 2 - 0.25), rng.uniform(-ry + 0.25, ry - 0.25),
+                           sz - 0.2 + rng.uniform(0, 0.12))
             ob.rotation_euler = (rng.uniform(0, 3), rng.uniform(0, 3), rng.uniform(0, 3))
     return root
 
@@ -723,7 +746,7 @@ def pagoda_roof(cx, cy, hx, hy, z_eave, z_apex, lift=0.35, sticks=True, cut=None
 
     def surf(s, t):
         p, cor = per(s)
-        z = z_apex - (z_apex - z_eave) * (1 - (1 - t) ** 1.15) + lift * cor * t ** 5
+        z = z_apex - (z_apex - z_eave) * (1 - (1 - t) ** 2.1) + lift * cor * t ** 5      # concave: a pagoda, not a tent
         return Vector((cx + p.x * t, cy + p.y * t, z))
 
     rows = []
@@ -745,7 +768,7 @@ def pagoda_roof(cx, cy, hx, hy, z_eave, z_apex, lift=0.35, sticks=True, cut=None
     if sticks:
         for s in (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 3.5):
             pts = [surf(s, t) + Vector((0, 0, 0.06)) for t in [i / 10 for i in range(11)]]
-            ext = pts[-1] + (pts[-1] - pts[-2]) * 2.0
+            ext = pts[-1] + (pts[-1] - pts[-2]) * 1.2
             tube("roofstick", pts + [ext], 0.09, M["twig"]("X"), r_end=0.06)
         knot_z = z_apex - 0.15
         cyl("knot", 0.44, 0.6, (cx, cy, knot_z - 0.3), M["rope"], r2=0.26, verts=20, bevel=0.08)
@@ -761,12 +784,12 @@ def pagoda_roof(cx, cy, hx, hy, z_eave, z_apex, lift=0.35, sticks=True, cut=None
 def body(z0, z1, hx, hy, arch=True):
     """The pagoda body: corner posts, plank walls, a beam round the top and bottom, an arched opening in the left face."""
     corners = [(hx, -hy), (hx, hy), (-hx, hy), (-hx, -hy)]
-    for x, y in corners:
-        box("cornerpost", (0.3, 0.3, z1 - z0 + 0.1), (x, y, z0 - 0.05), M["post"]("Z"), bevel=0.06)
-    # left face (looks -Y): planks from the left corner to the front corner
-    plank_wall("lwall", (-hx, -hy), (hx, -hy), z0, z1, M["wood"], 4, out=(0, -1))
+    for x, y in corners:                       # round posts, a little thicker at the foot
+        cyl("cornerpost", 0.24, z1 - z0 + 0.1, (x, y, z0 - 0.05), M["post"]("Z"), r2=0.2, verts=18, bevel=0.04)
+    # left face (looks -Y): planks from the left corner to the front corner; both seen faces belly out softly
+    plank_wall("lwall", (-hx, -hy), (hx, -hy), z0, z1, M["wood"], 4, out=(0, -1), bulge=0.12)
     # right face (looks +X)
-    plank_wall("rwall", (hx, -hy), (hx, hy), z0, z1, M["wood"], 6, out=(1, 0))
+    plank_wall("rwall", (hx, -hy), (hx, hy), z0, z1, M["wood"], 6, out=(1, 0), bulge=0.3)
     plank_wall("bwall", (hx, hy), (-hx, hy), z0, z1, M["wood2"], 9, out=(0, 1))
     plank_wall("bwall2", (-hx, hy), (-hx, -hy), z0, z1, M["wood2"], 6, out=(-1, 0))
     for z in (z0, z1 - 0.22):
@@ -792,13 +815,22 @@ def arch_hole(cx, z_bot, z_top, w, y_face):
     tube("archframe", frame, 0.07, M["dwood"]("Z"))
 
 
-def band(hx, hy, z, h=0.5):
-    """The olive metal strap round the right face, with rivets."""
-    box("band", (0.08, 2 * hy + 0.06, h), (hx + 0.06, 0, z), M["green"], bevel=0.02)
+def band(hx, hy, z, h=0.5, out=0.0):
+    """The olive metal strap round the right face, with rivets; out(f) = how far the wall bellies out at fraction f
+    along it, so the strap lies on the planks."""
+    n = 10
+    for i in range(n):
+        f0, f1 = i / n, (i + 1) / n
+        y0, y1 = -hy + 2 * hy * f0, -hy + 2 * hy * f1
+        x0, x1 = hx + 0.06 + out(f0), hx + 0.06 + out(f1)
+        ang = math.degrees(math.atan2(x1 - x0, y1 - y0))
+        box("band", (0.08, math.hypot(x1 - x0, y1 - y0) + 0.03, h), ((x0 + x1) / 2, (y0 + y1) / 2, z), M["green"],
+            rot=(0, 0, -ang), bevel=0.02)
     for i in range(6):
-        y = -hy + (i + 0.5) * 2 * hy / 6
+        f = (i + 0.5) / 6
+        y = -hy + f * 2 * hy
         for dz in (0.12, h - 0.12):
-            cyl("rivet", 0.04, 0.05, (hx + 0.1, y, z + dz), M["iron"], rot=(0, 90, 0), verts=8, bevel=0.01)
+            cyl("rivet", 0.04, 0.05, (hx + 0.1 + out(f), y, z + dz), M["iron"], rot=(0, 90, 0), verts=8, bevel=0.01)
 
 
 def chute(at, size, twigs=False, lean=0.0):
@@ -833,28 +865,34 @@ def gate(x0, x1, y, z0, z1):
 
 
 def level_pagoda():
-    hx, hy = 1.13, 2.05
+    hx, hy = 1.05, 1.72
     z0, z1 = 1.25, 5.45
     body(z0, z1, hx, hy)
     # legs: front, left, right corners and one under the middle of the right face
     lh = z0 + 0.1
     if L < 10:
-        for x, y in ((hx, -hy), (-hx, -hy), (hx, hy), (hx, 0.35)):
-            leg((x, y), lh, 0.4)
+        for x, y, sp in ((hx, -hy, (0.16, -0.16)), (-hx, -hy, (-0.16, -0.16)), (hx, hy, (0.16, 0.16)), (hx, 0.35, (0.22, 0))):
+            leg((x, y), lh, 0.4, sp)
     else:
-        for x, y, b in ((hx, -hy, -45), (-hx, -hy, -100), (hx, hy, 10), (hx, 0.2, -10)):
+        for x, y, b in ((hx + 0.15, -hy - 0.15, -45), (-hx - 0.15, -hy - 0.15, -100), (hx + 0.15, hy + 0.15, 10),
+                        (hx + 0.2, 0.2, -10)):
             claw((x, y), lh, b)
-    arch_hole(0.0, 1.7, 5.05, 1.25, -hy - 0.03)
-    roller(px(-14.5, 18, Y=-hy - 0.55), 1.6, 0.5)
+    arch_hole(0.0, 1.7, 5.05, 1.25, -hy - 0.15)
+    roller(px(-16, 19, Y=-hy - 0.95), 1.9, 0.62)
     tr = tray(px(-23.5, 28 if L >= 6 else 30, Y=-hy - 0.85) - Vector((0, 0, 0.25)), (1.6, 1.35, 0.5), lumps=L >= 6,
               trim="gold" if L >= 6 else "olive", tilt=30 if L >= 6 else 14)
     tr.rotation_euler.y = math.radians(12)
     leg(px(-18, 43, Z=GROUND).to_2d(), 1.6, 0.3)
-    band(hx, hy, 3.9, 0.5)
-    saw(px(12 if L >= 6 else 11, 25 if L >= 6 else 26, X=hx + 0.62))
-    small_gear(px(16, 10 if L >= 6 else 12, X=hx + 0.12))
-    funnel(Vector((-1.1, -hy - 0.25, 3.0)), 6.7 if L >= 6 else 6.5, mouth_dir=(-0.75, -0.66), r_pipe=0.27, bell=0.5,
-           bell_len=1.3, up=0.1)
+    zf = math.sin(math.pi * (4.15 - z0) / (z1 - z0))
+    band(hx, hy, 3.9, 0.5, out=lambda f: 0.15 * math.sin(math.pi * f) + 0.15 * zf)
+    saw(px(12 if L >= 6 else 11, 25 if L >= 6 else 26, X=hx + 0.75))
+    small_gear(px(16, 10 if L >= 6 else 12, X=hx + 0.4))
+    if L < 10:
+        funnel(Vector((-1.1, -hy - 0.25, 3.0)), 6.7 if L >= 6 else 6.5, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5,
+               bell_len=1.3, up=0.1)
+    else:                                       # beside the roof's left end, not through it
+        funnel(Vector((-hx - 0.62, -hy + 0.2, 3.0)), 6.9, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5,
+               bell_len=1.3, up=0.1)
     if L >= 6:
         side_wheel(px(26, 11, X=hx + 0.6))
         if L == 6:
@@ -862,53 +900,71 @@ def level_pagoda():
         else:
             chute((0.1, 1.45, 5.6), (0.8, 0.65, 3.6), twigs=True, lean=14)
     if L < 10:
-        pagoda_roof(0, 0.0, 1.3, 2.3, 5.35, 7.7, lift=0.45)
+        pagoda_roof(0, 0.0, 1.55, 2.45, 5.2, 7.3, lift=0.6)
     else:
         roof10(hx, hy, z1, -0.6)
         g0, g1 = px(-12.5, -10, Y=-0.6).x, px(4, -10, Y=-0.6).x
         gate(g0, g1, -0.6, z1 - 0.2, 9.3)
 
 
+def curl(p0, ang0, ang1, length, n=26, power=3.0):
+    """A sheet's side profile in (y, z): from p0 heading ang0 (deg, 0 = +Y, 90 = up), the heading turning to ang1 toward
+    the end (power > 1: the turn is kept for the end, so the edge rolls like curled bark)."""
+    p, pts = Vector(p0), []
+    for k in range(n + 1):
+        pts.append(p.copy())
+        a = math.radians(ang0 + (ang1 - ang0) * (k / n) ** power)
+        p = p + Vector((math.cos(a), math.sin(a))) * length / n
+    return pts
+
+
 def roof10(hx, hy, z1, yg):
-    """Level 10's roof: a front sheet rising from the front eave to the guillotine (along X at Y = yg), and a back sheet
-    starting low behind it and sweeping up toward the back, as the Flash picture's swoop."""
-    bm = bmesh.new()
-    NX, NY = 16, 28
-    x0, x1, y0, y1 = -hx - 0.85, hx + 0.3, -hy - 0.4, hy + 0.35
-    rows = []
-    for i in range(NX + 1):
-        x = x0 + (x1 - x0) * i / NX
-        row = []
-        for j in range(NY + 1):
-            y = y0 + (y1 - y0) * j / NY
-            if y < yg:
-                u = (y - y0) / (yg - y0)
-                z = z1 + 0.1 + 1.05 * (1 - (1 - u) ** 1.6)
-            else:
-                u = (y - yg) / (y1 - yg)
-                z = z1 + 0.6 + 1.1 * u ** 2.2
-            z += 0.3 * ((x - x0) / (x1 - x0) - 0.5) ** 2 * 4 * (0.4 if y < yg else 1.0)
-            row.append(bm.verts.new((x, y, z)))
-        rows.append(row)
-    for a, b in zip(rows, rows[1:]):
-        for j in range(NY):
-            bm.faces.new((a[j], a[j + 1], b[j + 1], b[j]))
-    ob = mesh_ob("roof10", bm, [M["roof"]])
-    so = ob.modifiers.new("solid", "SOLIDIFY")
-    so.thickness = 0.1
-    so.offset = -1
-    tube("roofstick", [(x0 - 0.15, y0 - 0.02, z1 + 0.18), (x1 + 0.1, y0 - 0.02, z1 + 0.3)], 0.07, M["twig"]("X"))
-    for x in (x0 + 0.3, 0.0, x1 - 0.3):
-        pts = []
-        for j in range(NY + 1):
-            y = y0 + (y1 - y0) * j / NY
-            if y < yg - 0.25:
-                u = (y - y0) / (yg - y0)
-                pts.append((x, y, z1 + 0.2 + 1.05 * (1 - (1 - u) ** 1.6)))
-        tube("roofstick", pts, 0.06, M["twig"]("Y"))
-    pts = [(x1 - 0.05, y, z1 + 0.7 + 1.1 * ((y - yg) / (y1 - yg)) ** 2.2) for y in
-           [yg + (y1 - yg) * k / 10 for k in range(11)]]
-    tube("roofstick", pts, 0.06, M["twig"]("Y"))
+    """Level 10's roof: two curled bark sheets meeting at the guillotine (along X at Y = yg), sitting low round it. The
+    front one slopes down to the front eave and rolls up a little at its edge; the back one climbs behind the gate and
+    rolls over toward the front at its top. A light rope is draped from the gate over the front sheet."""
+    x0, x1 = -hx - 0.3, hx + 0.25
+    front = curl((yg - 0.05, z1 + 0.85), 206, 170, 2.6)
+    back = curl((yg - 0.1, z1 + 0.25), 80, -120, 4.6, power=1.2)    # a roll: up behind the gate, over, down the back
+    NX = 16
+    for name, prof, dish in (("roofF", front, 0.25), ("roofB", back, 0.4)):
+        bm = bmesh.new()
+        rows = []
+        for i in range(NX + 1):
+            x = x0 + (x1 - x0) * i / NX
+            u = (2 * (x - x0) / (x1 - x0) - 1) ** 2            # 0 in the middle, 1 at the side edges: they curl up
+            rows.append([bm.verts.new((x, y, z + dish * u * (k / len(prof)) ** 0.5)) for k, (y, z) in enumerate(prof)])
+        for r0, r1 in zip(rows, rows[1:]):
+            for j in range(len(prof) - 1):
+                bm.faces.new((r0[j], r0[j + 1], r1[j + 1], r1[j]))
+        ob = mesh_ob(name, bm, [M["roof"]])
+        so = ob.modifiers.new("solid", "SOLIDIFY")
+        so.thickness = 0.1
+        so.offset = -1
+    ye, ze = front[-1]
+    tube("roofstick", [(x0 - 0.35, ye + 0.05, ze + 0.02), (x1 + 0.1, ye + 0.05, ze + 0.06)], 0.07, M["twig"]("X"))
+    for x in (x0 + 0.35, x1 - 0.3):
+        tube("roofstick", [(x, y, z + 0.07) for y, z in front[1:-2]], 0.055, M["twig"]("Y"))
+
+    def front_z(y):
+        for (ya, za), (yb, zb) in zip(front, front[1:]):
+            if yb <= y <= ya:
+                return za + (zb - za) * (ya - y) / max(1e-6, ya - yb)
+        return front[-1][1]
+    # the rope: tied round the right gate post, draped over the front sheet, its end hanging off the front eave
+    xa = px(4, -10, Y=yg).x
+    A = Vector((xa, yg - 0.25, z1 + 1.9))
+    B = Vector((x1 - 0.15, ye + 0.1, ze + 0.1))
+    pts = []
+    for k in range(13):
+        t = k / 12
+        q = A.lerp(B, t)
+        q.z = max(q.z - 0.5 * math.sin(math.pi * t), front_z(q.y) + 0.08)
+        pts.append(q)
+    pts += [B + Vector((0.02, -0.12, -0.25)), B + Vector((0.05, -0.15, -0.6))]
+    tube("rope", pts, 0.055, M["rope2"], r_end=0.04)
+    tube("rope", [(x1 - 0.45 - 0.1 * k / 9, y, z + 0.08) for k, (y, z) in enumerate(back[2::3])], 0.05, M["rope2"],
+         r_end=0.04)
+    cyl("ropetie", 0.27, 0.16, (xa, yg, z1 + 1.82), M["rope2"], verts=16, bevel=0.04)
 
 
 def level1():
@@ -925,15 +981,22 @@ def level1():
     # press frame: plane Y = -1.73, posts at X -0.89 and 1.1
     fy = -1.73
     for x, top in ((-1.0, 4.6), (1.1, 4.3)):
-        box("framepost", (0.46, 0.42, top - GROUND), (x, fy, GROUND), M["dwood"]("Z"), bevel=0.08)
-    box("framebar", (2.5, 0.46, 0.46), (0.1, fy, 4.15), M["dwood"]("X"), bevel=0.08)
+        box("framepost", (0.48, 0.44, top - GROUND), (x, fy, GROUND), M["dwood"]("Z"), bevel=0.14, taper=0.92)
+    box("framebar", (2.5, 0.5, 0.5), (0.1, fy, 4.13), M["dwood"]("X"), bevel=0.14)
     box("framebar2", (2.2, 0.28, 0.24), (0.1, fy, 1.15), M["dwood"]("X"), bevel=0.05)
     for x in (-0.89, 1.1):                                # side beams back to the cabinet
         box("framejoin", (0.22, cy0 - fy, 0.24), (x, (fy + cy0) / 2, 4.3), M["dwood"]("Y"), bevel=0.04)
     for x in (-0.89, 1.1):
         for z in (1.2, 4.32):
-            cyl("framebolt", 0.07, 0.06, (x, fy - 0.16, z), M["olive"], rot=(90, 0, 0), verts=10, bevel=0.015)
-    roller(px(-13, 22, Y=-1.35), 1.5, 0.45)
+            box("framebracket", (0.56, 0.05, 0.56), (x, fy - 0.24, z - 0.04), M["olive"], bevel=0.02, origin="center")
+            for dx, dz in ((-0.17, -0.17), (0.17, -0.17), (-0.17, 0.17), (0.17, 0.17)):
+                cyl("framebolt", 0.05, 0.06, (x + dx, fy - 0.26, z - 0.04 + dz), M["iron"], rot=(90, 0, 0), verts=10,
+                    bevel=0.015)
+    rc = px(-14, 23, Y=-2.0)
+    roller(rc, 1.7, 0.56)
+    gear("rollergear", 0.42, 10, 0.08, (rc.x + 0.98, rc.y, rc.z), M["bronze"], (0, math.radians(90), 0), tooth=0.2)
+    for s_ in (-1, 1):                                   # the roller's brackets, from its ends back to the frame posts
+        box("rollerarm", (0.12, 0.6, 0.18), (rc.x + s_ * 0.9, rc.y + 0.3, rc.z - 0.09), M["iron"], bevel=0.03)
     box("pressback", (0.12, cy0 - fy, 3.7), (-1.0, (fy + cy0) / 2, 0.6), M["dwood"]("Y"), bevel=0.03)
     box("pressfloor", (2.2, cy0 - fy, 0.14), (0.05, (fy + cy0) / 2, 0.75), M["dwood"]("X"), bevel=0.03)
     tray(px(-18, 36, Y=-2.3), (2.5, 1.1, 0.55), lumps=False, trim="olive", tilt=12)
