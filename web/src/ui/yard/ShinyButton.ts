@@ -140,8 +140,14 @@ export class ShinyButton {
   private readonly onClick = (): void => {
     if (this.reason !== null || this.busy) return;
     if (!this.armed) {
+      // "Tap again" is shorter than most labels: without this the button
+      // shrinks, its row reflows and the second tap lands on the next button
+      // (the cage's Evolve now slid under "Feed with Shiny", 30 Oct).
+      const width = this.element.getBoundingClientRect().width;
+      if (width > 0) this.element.style.minWidth = `${width}px`;
       this.armTimer = this.timers.set(() => {
         this.armTimer = null;
+        this.element.style.minWidth = "";
         this.live.textContent = "";
         this.draw();
       }, ARM_WINDOW_MS);
@@ -157,6 +163,7 @@ export class ShinyButton {
     if (this.armTimer === null) return;
     this.timers.clear(this.armTimer);
     this.armTimer = null;
+    this.element.style.minWidth = "";
     this.live.textContent = "";
     this.draw();
   };
