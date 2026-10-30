@@ -512,7 +512,7 @@ def spinner(name, center, normal_bearing, tilt, parts):
 
 # ------------------------------------------------------------------------------------------------------------ the model
 def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spec=0.5, coat=0.0, ao_min=0.5,
-          streak=0.0, side=0.0):
+          streak=0.0, side=0.0, emit=0.0):
     """Flash's Hatchery is a glossy render: polished gold, chrome, red enamel. Soft, broad reflections, a faint
     mottle (`wear` colour in soft patches), darker in the creases and low down, and faint vertical polish streaks."""
     if name in MATS:
@@ -543,6 +543,8 @@ def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spe
         out = t.mix(out, grey.outputs[0], 1.0, "MULTIPLY")
     out = t.grime(out, GROUND, 4.0, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rr, "metal": metal, "spec": spec})
+    if emit:                       # a little glow of its own colour: a part that faces away from the light kept bright
+        t.set(**{"Emission Color": out, "Emission Strength": emit})
     if coat:
         t.set(coat=coat)
         t.bsdf.inputs["Coat Roughness"].default_value = 0.12
@@ -565,7 +567,7 @@ def materials():
     M["sleeve"] = shiny("sleeve", (180, 180, 182), rough=0.6, metal=0.15, wear=(120, 116, 126), scale=14, dirt=0.25,
                         side=0.35)
     M["wheel"] = shiny("wheel", (238, 240, 244), rough=0.35, metal=0.12, wear=(196, 198, 208), scale=3, dirt=0.1,
-                       side=0.3)
+                       side=0.3, emit=0.3)
     M["fchrome"] = shiny("fchrome", (172, 184, 200), rough=0.26, metal=0.75, wear=(140, 152, 170), scale=3, dirt=0.15,
                          side=0.4)
     M["lid"] = shiny("lid", (168, 184, 204), rough=0.28, metal=0.85, wear=(146, 160, 182), scale=3, dirt=0.1)
@@ -573,11 +575,12 @@ def materials():
                       spec=0.45, coat=0.3)
     M["darkmetal"] = shiny("darkmetal", (40, 46, 58), rough=0.22, metal=0.85, wear=(62, 70, 84), scale=3, dirt=0.1)
     M["gear"] = shiny("gear", (78, 78, 84), rough=0.38, metal=0.85, wear=(98, 98, 104), scale=6, dirt=0.15)
-    M["red"] = shiny("red", (214, 6, 6), rough=0.22, metal=0.6, wear=(160, 4, 6), scale=1.6, dirt=0.25,
+    M["red"] = shiny("red", (214, 6, 6), rough=0.22, metal=0.6, wear=(112, 2, 4), scale=3.5, dirt=0.3,
                      spec=0.25, coat=0.1, side=0.5)
     M["dial"] = shiny("dial", (236, 232, 236), rough=0.5, metal=0.0, wear=(214, 210, 218), scale=3, dirt=0.0,
                       spec=0.4)
     M["needle"] = flat("needle", (16, 16, 18), rough=0.5)
+    M["redhole"] = flat("redhole", (96, 6, 8), rough=0.7)
     M["hole"] = flat("hole", (14, 10, 14), rough=1.0)
     return M
 
@@ -875,8 +878,39 @@ def beater():
                verts=20)
     track(ob, P(S.WHEEL2_TH, 1, 0))
     # the triangle handle: a flat chrome bar round a rounded triangle, in the plane through the axis
-    path = [U2(x, z) for x, z in rounded_poly([tuple(a0), tuple(a1), tuple(a2)], 0.42, 6)]
-    sweep("triangle", path, P(135, 1, 0), 0.2, 0.66, M["fchrome"], bevel=0.06, closed=True)
+    # (Flash's is a flat plate, broad down its left side and thin along the bottom: band widths per side)
+    def shifted(offs):
+        cs = [a0, a1, a2]
+        mid = (a0 + a1 + a2) / 3
+        lines = []
+        for i in range(3):
+            a, b = cs[i], cs[(i + 1) % 3]
+            d = (b - a).normalized()
+            n = Vector((-d.y, d.x))
+            if n.dot(mid - a) < 0:
+                n = -n
+            lines.append((a + n * offs[i], d))
+        out = []
+        for i in range(3):                  # corner i is where edge i-1 meets edge i
+            (p1, d1), (p2, d2) = lines[i - 1], lines[i]
+            t = ((p2 - p1).x * d2.y - (p2 - p1).y * d2.x) / (d1.x * d2.y - d1.y * d2.x)
+            out.append(tuple(p1 + d1 * t))
+        return out
+    outer = rounded_poly(shifted((-0.33, -0.33, -0.33)), 0.75, 6)      # edges: bottom, right, left
+    inner = rounded_poly(shifted((-0.12, 0.12, 0.55)), 0.2, 6)
+    nrm = P(135, 1, 0)
+    bm = bmesh.new()
+    ring = {(w, t): [bm.verts.new(U2(x, z) + nrm * t) for x, z in loop]
+            for w, loop in (("o", outer), ("i", inner)) for t in (-0.1, 0.1)}
+    k = len(outer)
+    for i in range(k):
+        j = (i + 1) % k
+        for t in (-0.1, 0.1):
+            bm.faces.new((ring["o", t][i], ring["o", t][j], ring["i", t][j], ring["i", t][i]))
+        for w in ("o", "i"):
+            bm.faces.new((ring[w, -0.1][i], ring[w, -0.1][j], ring[w, 0.1][j], ring[w, 0.1][i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh_ob("triangle", bm, [M["fchrome"]], bevel=0.06, segs=2)
     # the gearbox: a chrome block on the frame bar, between the spindle's bearing and the crown wheel's axle
     box("gearbox", (1.3, 0.9, 1.7), U2(0.25, 1.3), M["fchrome"], rot=(0, 0, 45), bevel=0.3, segs=4)
 
@@ -971,7 +1005,7 @@ def stand():
     za = S.ARM3_Z
     pts = [Vector((cx + 0.45, cy - 0.1, za)), Vector((3.9, 3.9, za)), Vector((4.45, 2.9, za - 0.15)),
            Vector((4.4, 1.7, za - 0.45)), P(30.0, S.DRUM_R + 0.25, za - 0.6)]
-    sweep("bowlarm", pts, (0, 0, 1), 0.5, 0.26, M["steel"], bevel=0.08)
+    tube("bowlarm", pts, 0.3, M["fchrome"], verts=16, smooth=True)     # a round chrome bar, as Flash's
     ob = lathe("bowlclamp", [(0.0, -0.1), (0.36, -0.1), (0.4, 0.05), (0.34, 0.3), (0.0, 0.32)],
                P(30.0, S.DRUM_R - 0.05, za - 0.6), M["steel"], verts=20)
     track(ob, P(30.0, 1, 0))
@@ -981,12 +1015,35 @@ def stand():
         R = S.WHEEL3_R
         lathe("wheel3", [(0.32, -0.1), (R - 0.12, -0.1), (R, -0.02), (R, 0.04), (R - 0.12, 0.12), (0.32, 0.12)],
               (0, 0, 0), M["wheel"], parent=hub, verts=72)
-        for k in range(3):                      # three kidney holes (dark: the red head shows behind)
+        # a chrome rim round the disc (Flash's wheel shows a thick bright edge)
+        lathe("wheel3rim", [(R - 0.22, -0.26), (R - 0.02, -0.26), (R + 0.05, -0.18), (R + 0.05, 0.1), (R - 0.02, 0.17),
+                            (R - 0.22, 0.17)], (0, 0, 0), M["chrome"], parent=hub, verts=72)
+        for k in range(3):                      # three kidney slots, inlaid flush: the dark red head seen through
             a = 2 * math.pi * k / 3 + 0.4
-            pts = [((R * 0.56 + 0.32 * math.cos(math.pi * j / 6)) * math.cos(a + 0.36 * (j / 6 - 0.5)),
-                    (R * 0.56 + 0.32 * math.cos(math.pi * j / 6)) * math.sin(a + 0.36 * (j / 6 - 0.5)), 0.125)
-                   for j in range(7)]
-            tube(f"wheel3hole{k}", pts, 0.2, M["red"], parent=hub, verts=10, smooth=True)
+            rm, hw, span = R * 0.56, 0.24, 0.8
+            pts2 = []
+            for j in range(9):                  # the outer arc
+                pts2.append((rm + hw, a - span / 2 + span * j / 8))
+            for j in range(1, 6):               # the far end cap
+                t = math.pi * j / 6
+                c = a + span / 2
+                pts2.append((rm + hw * math.cos(t), c + hw * math.sin(t) / rm))
+            for j in range(9):                  # the inner arc, back
+                pts2.append((rm - hw, a + span / 2 - span * j / 8))
+            for j in range(1, 6):               # the near end cap
+                t = math.pi * j / 6
+                c = a - span / 2
+                pts2.append((rm - hw * math.cos(t), c - hw * math.sin(t) / rm))
+            bm = bmesh.new()
+            lo = [bm.verts.new((r_ * math.cos(t_), r_ * math.sin(t_), 0.1)) for r_, t_ in pts2]
+            hi = [bm.verts.new((r_ * math.cos(t_), r_ * math.sin(t_), 0.128)) for r_, t_ in pts2]
+            n = len(pts2)
+            for i in range(n):
+                bm.faces.new((lo[i], lo[(i + 1) % n], hi[(i + 1) % n], hi[i]))
+            bm.faces.new(hi)
+            bm.faces.new(list(reversed(lo)))
+            bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+            mesh_ob(f"wheel3hole{k}", bm, [M["redhole"]], smooth=False, parent=hub)
         lathe("wheel3hub", [(0.0, -0.3), (0.42, -0.3), (0.46, 0.2), (0.36, 0.34), (0.0, 0.36)], (0, 0, 0), M["chrome"],
               parent=hub, verts=24)
         r = S.CRANK3_R
