@@ -14,7 +14,7 @@ ORIGIN = (-2.5, 41.0)       # Flash pixel of the world origin (the vat's axis on
 GROUND = 0.0
 # the vat: an upright copper tub on the axis
 VAT_R = 1.7
-VAT_Z0, VAT_Z1 = 2.35, 5.55  # its foot and its rim top
+VAT_Z0, VAT_Z1 = 1.85, 5.55  # its foot and its rim top (a tall tub, as Flash's: its foot 4 px lower than before)
 TABLE_R, TABLE_T = 1.98, 0.28   # the round wooden table it stands on
 STUMP_D, STUMP_R = 1.5, 0.5   # every level: four stumps under the table (bearings -45, 45, 135, -135)
 # the neck and the funnel on top
@@ -28,7 +28,7 @@ DOME_R, DOME_TOP = 2.12, 6.55
 POST_R, POST_RAD = 2.4, 0.14   # thin pencils, as Flash's
 POST_BEARINGS = tuple(-33.0 + 60.0 * k for k in range(6))
 POST_TOP = 5.0              # the top of the yellow (the ferrule and the eraser above it)
-RING_LO, RING_HI = (1.65, 2.07), (4.34, 4.78)   # the lower ring holds the table
+RING_LO, RING_HI = (1.15, 1.57), (4.34, 4.78)   # the lower ring holds the table
 RING_IN = 0.12              # the planks sit this far inside the posts' circle (the posts stand in front)
 # the pump pipes: out of the vat at (bearing, height), down to the ground at distance d. The right one is there at every
 # level, the front-left one from level 6.

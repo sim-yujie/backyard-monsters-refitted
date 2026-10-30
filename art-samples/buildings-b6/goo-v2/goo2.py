@@ -355,10 +355,12 @@ def funnel_mat(name, col, wear, shine=(236, 240, 246)):
     return t.m
 
 
-def goo_mat(name, dark, mid, light, rough=0.5, scale=2.2, bump=0.22, ao_min=0.2, spec=0.12, coat=0.22, rim=0.5):
-    """Wet goo as Flash paints it: bright green bulbs, each lit pale on top and falling to dark green at its edges
-    (`rim`: darker where the surface turns away from the camera), near black in the hollows between them, a white
-    glint on each (a glossy coat). Only a broad colour change from bulb to bulb, never a fine mottle."""
+def goo_mat(name, dark, mid, light, rough=0.72, scale=2.2, bump=0.32, ao_min=0.2, spec=0.06, coat=0.0, rim=0.5,
+            florets=7.0):
+    """Goo as Flash paints it: matte "broccoli", never shiny jelly. Bright green bulbs, each lit pale on top and falling
+    to dark green at its edges (`rim`: darker where the surface turns away from the camera), near black in the hollows
+    between them; inside each bulb small round florets (Voronoi cells, `florets` per unit), each a soft bump with a
+    darker crease round it; only small dull highlights (rough, low specular, no coat)."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
@@ -366,16 +368,33 @@ def goo_mat(name, dark, mid, light, rough=0.5, scale=2.2, bump=0.22, ao_min=0.2,
     n1 = t.noise(v, scale, 1.5, 0.4, 0.0)
     dm = tuple(0.3 * d + 0.7 * m for d, m in zip(dark, mid))
     col = t.ramp(n1, [(0.3, srgb(*dm)), (0.5, srgb(*mid)), (0.7, srgb(*light))])
-    fl = t.ramp(t.noise(v, scale * 4.5, 3.0, 0.55), [(0.38, (0.86, 0.86, 0.86, 1)), (0.64, (1.12, 1.12, 1.02, 1))])
-    col = t.mix(col, fl, 1.0, "MULTIPLY")                     # florets: lighter and darker specks on each bulb
+    # the florets: cells wobbled by a noise so they are not round dots, each lighter in the middle, darker at its rim
+    wob = t.n("ShaderNodeTexNoise")
+    wob.inputs["Scale"].default_value = florets * 0.6
+    t.link(v, wob.inputs["Vector"])
+    vw = t.n("ShaderNodeVectorMath", operation="MULTIPLY_ADD")
+    t.link(t.sock(wob, "Color", out=True), vw.inputs[0])
+    vw.inputs[1].default_value = (0.09, 0.09, 0.09)
+    t.link(v, vw.inputs[2])
+    vo = t.n("ShaderNodeTexVoronoi")
+    vo.inputs["Scale"].default_value = florets
+    t.link(vw.outputs[0], vo.inputs["Vector"])
+    dist = t.sock(vo, "Distance", out=True)
+    fl = t.ramp(dist, [(0.15, (1.1, 1.12, 1.04, 1)), (0.5, (0.92, 0.92, 0.9, 1)), (0.8, (0.66, 0.68, 0.64, 1))])
+    col = t.mix(col, fl, 1.0, "MULTIPLY")
+    sp = t.ramp(t.noise(v, scale * 9.0, 3.0, 0.55), [(0.4, (0.9, 0.9, 0.9, 1)), (0.65, (1.08, 1.08, 1.0, 1))])
+    col = t.mix(col, sp, 1.0, "MULTIPLY")                     # and fine specks on them, as paint
     lw = t.n("ShaderNodeLayerWeight")
     lw.inputs["Blend"].default_value = 0.5
     edge = t.ramp(t.sock(lw, "Facing", out=True), [(0.35, (0, 0, 0, 1)), (0.95, (rim, rim, rim, 1))])
     col = t.mix(col, srgb(*dark), edge)
     col = t.grime(col, GROUND, 2.6, 0.1, ao_min)
     t.set(**{"Base Color": col, "rough": rough, "spec": spec, "coat": coat})
-    t.bsdf.inputs["Coat Roughness"].default_value = 0.08
-    t.bump(t.noise(v, scale * 4.5, 3.0, 0.55), bump, 0.06)     # and their small lumps, as broccoli
+    t.bsdf.inputs["Coat Roughness"].default_value = 0.3
+    # the bumps: each floret a soft dome (height falls with the distance to its cell's middle), plus fine grain
+    h = t.ramp(dist, [(0.0, (1, 1, 1, 1)), (0.55, (0.25, 0.25, 0.25, 1)), (0.85, (0, 0, 0, 1))])
+    hg = t.mix(h, t.noise(v, scale * 9.0, 3.0, 0.55), 0.25)
+    t.bump(hg, bump, 0.05)
     MATS[name] = t.m
     return t.m
 
@@ -586,14 +605,22 @@ def materials():
                         dirt=0.3, spec=0.3)
     # Flash's olive-gold brass (its pipe pixels run (96, 87, 0), (132, 79, 17), (141, 105, 35), (167, 150, 44)):
     # metallic, so its shine is gold, not the sky's blue
-    M["pipe"] = painted("pipe", (184, 124, 22), rough=0.4, metal=0.55, wear=(222, 176, 52), rust=(78, 48, 8), scale=2.4,
-                        dirt=0.4, spec=0.45, soot=0.35, rust_at=0.66)
-    M["pipedark"] = painted("pipedark", (124, 80, 14), rough=0.5, metal=0.5, wear=(170, 130, 36), rust=(66, 40, 8),
-                            scale=2.4, dirt=0.4, spec=0.34, soot=0.45, rust_at=0.62)
-    # Flash's goo greens (goocol.py): dark (26, 43, 8) in the hollows to (87, 149, 52) on the lit bulbs, white glints
-    M["goo"] = goo_mat("goo", (12, 36, 4), (42, 100, 12), (76, 140, 18))
-    M["goodome"] = goo_mat("goodome", (12, 34, 4), (40, 96, 12), (72, 136, 18))
-    M["goobulb"] = goo_mat("goobulb", (14, 40, 4), (52, 116, 14), (96, 160, 26), rough=0.3, coat=0.45, bump=0.08)
+    if L < 10:
+        M["pipe"] = painted("pipe", (184, 124, 22), rough=0.4, metal=0.55, wear=(222, 176, 52), rust=(78, 48, 8),
+                            scale=2.4, dirt=0.4, spec=0.45, soot=0.35, rust_at=0.66)
+        M["pipedark"] = painted("pipedark", (124, 80, 14), rough=0.5, metal=0.5, wear=(170, 130, 36), rust=(66, 40, 8),
+                                scale=2.4, dirt=0.4, spec=0.34, soot=0.45, rust_at=0.62)
+    else:           # Flash's level 10 brass is darker and harder, its pumps too (pixels (61, 35, 0) to (158, 114, 35),
+        # median (105, 70, 17))
+        M["pipe"] = painted("pipe", (158, 110, 16), rough=0.4, metal=0.55, wear=(212, 168, 46), rust=(60, 36, 4),
+                            scale=2.4, dirt=0.5, spec=0.45, soot=0.45, rust_at=0.6)
+        M["pipedark"] = painted("pipedark", (108, 72, 10), rough=0.5, metal=0.5, wear=(160, 122, 30), rust=(50, 30, 4),
+                                scale=2.4, dirt=0.5, spec=0.34, soot=0.55, rust_at=0.58)
+    # Flash's goo greens (goocol.py): dark (26, 43, 8) in the hollows to (87, 149, 52) on the lit bulbs, dull highlights
+    M["goo"] = goo_mat("goo", (16, 38, 8), (50, 104, 24), (92, 152, 40))
+    dk = {3: 1.0, 6: 0.94, 10: 0.88}.get(L, 1.0)          # Flash's dome reads a little darker at levels 6 and 10
+    M["goodome"] = goo_mat("goodome", (12, 34, 6), tuple(c * dk for c in (46, 96, 22)), tuple(c * dk for c in (80, 140, 36)))
+    M["goobulb"] = goo_mat("goobulb", (14, 40, 4), (48, 108, 14), (86, 148, 24), bump=0.2)
     M["neck"] = goo_mat("neck", (6, 20, 3), (16, 46, 6), (44, 90, 14), rough=0.45, spec=0.3, coat=0.0, scale=3.0,
                         bump=0.1, rim=0.0)
     M["goodark"] = painted("goodark", (8, 16, 3), rough=0.85, wear=(16, 30, 6), scale=2.0, dirt=0.0, spec=0.05,
@@ -711,10 +738,12 @@ def along(name, axis_from, axis_to, r, depth, at, mat, **kw):
 
 
 # ------------------------------------------------------------------------------------------------------------ the vat
-# a rounded bucket as Flash's: wider at the middle (1.86) than at the foot and the rim (1.73); the level 3 frame's
-# rings, plate and brackets still clear it
-VAT_WALL = [(0.3, 1.72), (0.6, 1.79), (1.0, 1.84), (1.4, 1.86), (1.8, 1.85), (2.2, 1.81), (2.6, 1.76), (2.95, 1.73)]
-VAT_PROF = [(0.0, 0.0), (1.48, 0.0), (1.6, 0.04), (1.67, 0.13)] + [(r, z) for z, r in VAT_WALL] +     [(1.77, 3.02), (1.82, 3.1), (1.82, 3.18), (1.77, 3.22), (1.64, 3.2), (1.58, 3.1), (0.0, 3.1)]
+# a tall cylinder as Flash's: straight sides, a little narrower at the foot (1.65) than at the rim (1.74); the level 3
+# frame's rings, plate and brackets clear it
+VAT_H = S.VAT_Z1 - S.VAT_Z0
+VAT_WALL = [(0.3, 1.65), (VAT_H - 0.25, 1.74)]
+VAT_PROF = [(0.0, 0.0), (1.48, 0.0), (1.6, 0.04), (1.63, 0.13)] + [(r, z) for z, r in VAT_WALL] +     [(1.77, VAT_H - 0.18), (1.82, VAT_H - 0.1), (1.82, VAT_H - 0.02), (1.77, VAT_H + 0.02), (1.64, VAT_H),
+     (1.58, VAT_H - 0.1), (0.0, VAT_H - 0.1)]
 
 
 def vat_r(z):
@@ -736,9 +765,9 @@ def vat():
     rr = R(11)
     for k in range(6):                      # upright seams with rivets, as the plates of a riveted tank
         b = 15 + 60 * k
-        sweep(f"hoopseam{k}", [P(b, vat_r(z0 + 0.45 + 0.1 * i) + 0.01, z0 + 0.45 + 0.1 * i) for i in range(26)],
+        sweep(f"hoopseam{k}", [P(b, vat_r(z0 + 0.45 + 0.1 * i) + 0.01, z0 + 0.45 + 0.1 * i) for i in range(31)],
               U(b + 90), 0.08, 0.04, M["seam"], bevel=0.015)
-        for j in range(5):
+        for j in range(6):
             z = z0 + 0.6 + j * 0.5 + rr.uniform(-0.02, 0.02)
             ob = cyl(f"hooprivet{k}-{j}", 0.04, 0.05, P(b, vat_r(z) + 0.025, z), M["seam"], verts=8, bevel=0.015)
             ob.rotation_euler = U(b).to_track_quat("Z", "Y").to_euler()
@@ -974,7 +1003,7 @@ def frame():
     # iron brackets from the top ring to the vat's upper hoop, between the posts
     for k in range(6):
         b = S.POST_BEARINGS[k] + 30
-        z = S.VAT_Z0 + 2.78
+        z = S.VAT_Z1 - 0.42
         ap = S.POST_R * math.cos(math.radians(30)) - S.RING_IN - 0.08
         box(f"bracket{k}", (ap - vat_r(z) + 0.04, 0.12, 0.1), P(b, (ap + vat_r(z)) / 2, z), M["iron"], rot=(0, 0, b),
             origin="centre", bevel=0.02)
@@ -1162,36 +1191,39 @@ def loops_l6():
     along("loopLcollar", None, U(b), r + 0.09, 0.2, P(b, ap - 0.1, 3.1), M["hoop"], verts=20, bevel=0.03)
 
 
+TOWER_H = 8.25                        # Flash's tower top (3 px lower than the 8.6 before)
+
+
 def loops_l10():
     """Level 10: the tower at the back left with its goo cap, its branch into the dome and its arc round the left to
     the ground; two more loops stepping up behind the level 6 loop, each standing on the one below; the right side
     pipe out of the dome, down to the ground and in to the vat; the low pipe across the front."""
-    r = 0.46                                        # Flash's thick golden column
+    r = 0.38                                        # Flash's golden column
     b = 180.0
     base = P(b, 3.05, 0.0)
     cyl("towerfoot", r + 0.16, 0.22, base, M["hoop"], verts=28, bevel=0.03)
-    cyl("tower", r, 8.6, base, M["pipe"], verts=28, bevel=0.02)
+    cyl("tower", r, TOWER_H, base, M["pipe"], verts=28, bevel=0.02)
     # its joints: a fat socket low down, collars up it and a wide joint below the top where the arc leaves it
     lathe("towersocket", [(r - 0.02, 0.0), (r + 0.1, 0.0), (r + 0.12, 0.08), (r + 0.12, 0.62), (r + 0.1, 0.7),
                           (r - 0.02, 0.7)], base + Vector((0, 0, 0.9)), M["pipedark"], verts=28)
     for j, z in enumerate((2.6, 3.9, 5.2, 6.4)):
         cyl(f"towerband{j}", r + 0.07, 0.16, base + Vector((0, 0, z)), M["hoop"], verts=28, bevel=0.03)
     lathe("towerjoint", [(r - 0.02, 0.0), (r + 0.1, 0.0), (r + 0.14, 0.1), (r + 0.14, 0.5), (r + 0.1, 0.6),
-                         (r - 0.02, 0.6)], base + Vector((0, 0, 7.55)), M["pipedark"], verts=28)
-    top = base + Vector((0, 0, 8.6))
+                         (r - 0.02, 0.6)], base + Vector((0, 0, TOWER_H - 1.05)), M["pipedark"], verts=28)
+    top = base + Vector((0, 0, TOWER_H))
     lathe("towercap", [(0.0, 0.0), (r + 0.1, 0.0), (r + 0.14, 0.12), (r + 0.08, 0.22), (0.0, 0.22)], top, M["hoop"],
           verts=28)
     # Flash's cap: one shiny bulb of goo
-    meta("towergoo", [(top + Vector((0, 0, 0.3)), 0.82, (1.0, 1.0, 0.72))], M["goobulb"], res=0.03)
+    meta("towergoo", [(top + Vector((0, 0, 0.26)), 0.72, (1.0, 1.0, 0.72))], M["goobulb"], res=0.03)
     # its branch into the dome, over the top ring between the back posts
-    pipe("towerpipe", [P(b, 2.9, 5.1), P(174, 2.4, 5.1), P(162, 1.9, 5.1)], 0.2, bend=0.5)
+    pipe("towerpipe", [P(b, 2.9, 5.1), P(174, 2.4, 5.1), P(162, 1.9, 5.1)], 0.18, bend=0.5)
     # the arc from the tower's joint round the far left to the ground at the front left, with collars at its bends
-    pts = [P(-178, 3.1, 8.0), P(-165, 3.45, 8.0), P(-148, 3.55, 6.6), P(-133, 3.4, 3.8), P(-120, 3.25, 1.4),
+    pts = [P(-178, 3.1, TOWER_H - 0.6), P(-165, 3.45, TOWER_H - 0.6), P(-148, 3.55, 6.4), P(-133, 3.4, 3.8), P(-120, 3.25, 1.4),
            P(-113, 3.18, 0.0)]
-    tube("towerarc", pts, 0.24, M["pipe"], verts=16, smooth=True)
+    tube("towerarc", pts, 0.21, M["pipe"], verts=16, smooth=True)
     for j, p in enumerate(pts[1:5]):                 # the smooth curve passes through its points
         d = (pts[j + 2] - pts[j]).normalized()
-        along(f"towerarccollar{j}", None, d, 0.31, 0.16, p - d * 0.08, M["hoop"], verts=20, bevel=0.03)
+        along(f"towerarccollar{j}", None, d, 0.28, 0.16, p - d * 0.08, M["hoop"], verts=20, bevel=0.03)
     cyl("towerarcfoot", 0.36, 0.18, P(-113, 3.18, 0.0), M["hoop"], verts=20, bevel=0.03)
     # Flash's short pipe low at the left: out of the arc, in behind the front left post through the peach plate (with
     # a collar there, as the level 6 loop) to the vat's foot
@@ -1222,9 +1254,9 @@ def loops_l10():
     # the right side, busier as Flash's: a round C-loop out of the dome's right side and back in to the vat under the
     # top ring; below it a pipe out of the vat, out past the posts and down to the ground
     b = 52.0
-    pipe("loopS", [P(b, 1.95, 5.1), P(b, 2.9, 5.1), P(b, 2.9, 3.95), P(b, vat_r(3.95) - 0.2, 3.95)], 0.2, bend=0.5)
+    pipe("loopS", [P(b, 1.95, 5.1), P(b, 2.9, 5.1), P(b, 2.9, 3.95), P(b, vat_r(3.95) - 0.2, 3.95)], 0.18, bend=0.5)
     along("loopSflange", None, U(b), 0.3, 0.14, P(b, vat_r(3.95) - 0.03, 3.95), M["hoop"], verts=20, bevel=0.03)
-    pipe("loopSin", [P(b, vat_r(3.0) - 0.2, 3.0), P(b, 3.0, 3.0), P(b, 3.0, 0.0)], 0.22, bend=0.4)
+    pipe("loopSin", [P(b, vat_r(3.0) - 0.2, 3.0), P(b, 3.0, 3.0), P(b, 3.0, 0.0)], 0.19, bend=0.4)
     along("loopSinflange", None, U(b), 0.32, 0.14, P(b, vat_r(3.0) - 0.03, 3.0), M["hoop"], verts=20, bevel=0.03)
     cyl("loopSfoot", 0.34, 0.16, P(b, 3.0, 0.0), M["hoop"], verts=20, bevel=0.03)
     # the low pipe across the front: out of the side pipe near the ground, under the frame, down into the ground
