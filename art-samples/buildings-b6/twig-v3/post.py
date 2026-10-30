@@ -5,6 +5,8 @@
     python post.py anim <level>      L<level>-anim.mp4      Flash | v2 | v3, the producing loop at the game's 13.3 frames a
                                      second (40 Hz yard tick, a frame every 3rd tick), three times round
     python post.py sheet             twig-levels-v3.png     all four looks, Flash | v2 | v3
+    python post.py levels            twig-levels-row.png    L1 L3 L6 L10 side by side at one scale (Flash above, 3D
+                                     below), lines through the mounting points every level shares
 A 3D frame is the base picture (every still part and the ground shadow) with the frame's moving-parts layer laid over
 it, so nothing outside the moving parts can change between frames.
 """
@@ -105,6 +107,49 @@ def anim(lv):
     return out
 
 
+# twig2.py's mounting points (world), the same at every level: the lines in `levels` run through them
+MOUNTS = {"pipe top": (-1.9, -1.1, 6.6), "small gear": (1.67, 0.24, 3.82), "roller": (0.05, -2.67, 3.42),
+          "saw": (1.95, -0.67, 2.62), "tray": (-0.1, -2.72, 1.9)}
+
+
+def scr(v):
+    """Flash pixel of world point v (as twig2.scr)."""
+    sx, sy, sz = 10 * np.cos(np.pi / 4), 10 * np.sin(np.pi / 4) * 0.5, 10 * np.cos(np.pi / 6)
+    return 2.5 + sx * (v[0] + v[1]), 39.0 + sy * (v[0] - v[1]) - sz * v[2]
+
+
+def levels():
+    """The four looks at one scale and one crop: Flash on top, the 3D under it, dashed lines through the shared mounts."""
+    size = frame3d(1, 0).size
+    k = size[0] / (fref.FRAME[2] - fref.FRAME[0])
+    boxes = [box_of(lv, size) for lv in fref.LEVELS]
+    box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+    w, h = box[2] - box[0], box[3] - box[1]
+    gap, top = 12, 50
+    out = Image.new("RGB", (4 * w + 5 * gap, top + 2 * (h + 40) + gap), (24, 24, 24))
+    d = ImageDraw.Draw(out)
+    d.text((12, 10), "Twig Snapper, levels 1, 3, 6, 10 at one scale: Flash (top), 3D (bottom). Dashed lines: parts "
+           "fixed to the body at every level", fill=(255, 255, 255), font=font(26))
+    for i, lv in enumerate(fref.LEVELS):
+        x = gap + i * (w + gap)
+        for row, im in enumerate((flash(lv, 0, size), on_grass(frame3d(lv, 0)))):
+            y = top + row * (h + 40 + gap // 2)
+            d.text((x, y + 4), f"Level {lv}  {'Flash' if row == 0 else '3D'}", fill=(255, 255, 255), font=font(24))
+            out.paste(im.crop(box).convert("RGB"), (x, y + 36))
+    y3 = top + h + 40 + gap // 2 + 36
+    for name, v in MOUNTS.items():
+        fx, fy = scr(v)
+        py = y3 + (fy - fref.FRAME[1]) * k - box[1]
+        for xx in range(gap, out.width - gap, 24):
+            d.line((xx, py, xx + 12, py), fill=(255, 255, 255), width=2)
+        for i in range(4):
+            cx = gap + i * (w + gap) + (fx - fref.FRAME[0]) * k - box[0]
+            d.line((cx - 14, py, cx + 14, py), fill=(255, 40, 40), width=4)
+            d.line((cx, py - 14, cx, py + 14), fill=(255, 40, 40), width=4)
+        d.text((out.width - gap - 160, py - 30), name, fill=(255, 255, 255), font=font(22))
+    return out
+
+
 def still_check(lv):
     """Changed pixels between 3D frames, outside the moving parts' layers (must be 0) and in all."""
     base = np.array(frame3d(lv, 0)).astype(int)
@@ -130,6 +175,8 @@ if __name__ == "__main__":
     elif cmd == "anim":
         lv = int(sys.argv[2])
         print(anim(lv), "changed px (all, outside moving parts):", still_check(lv))
+    elif cmd == "levels":
+        levels().save(HERE / "twig-levels-row.png")
     elif cmd == "sheet":
         rows = [side(lv) for lv in fref.LEVELS]
         w = max(r.width for r in rows)

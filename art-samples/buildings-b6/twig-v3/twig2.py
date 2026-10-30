@@ -4,6 +4,10 @@ like Flash). Built from scratch against the Flash pictures in the game's own pix
     blender -b --factory-startup -P twig2.py -- <level> fit            work/fit-L<level>.png   quick silhouette, 4 px per Flash px
     blender -b --factory-startup -P twig2.py -- <level> still          render/L<level>-base.png + -parts-00.png
     blender -b --factory-startup -P twig2.py -- <level> anim [frames]  render/L<level>-parts-NN.png, one per Flash frame
+    blender -b --factory-startup -P twig2.py -- <level> check          prints CHECK lines: parts whose meshes overlap
+
+One machine at every level: the body and every part's mounting point are fixed (see build()); a level is the level below
+plus upgrades.
 
 Camera: orthographic, 30 degrees down, from bearing 45 (the towers' and the yard's 2:1 ground). One world unit is 10 Flash
 pixels across the screen, so a Flash pixel (sx, sy) and a world point line up through px() / at(). The world origin (the
@@ -657,20 +661,6 @@ def saw(center):
 SAW_AXIS, SGEAR_AXIS, WHEEL_AXIS = (-12, 8), (-10, 4), (-14, 6)     # (bearing, tilt) of each spinner's axle
 
 
-def mount_spinner(make, sx, sy, axis, r, back, wall_x, gap=0.1):
-    """Put a turning part on Flash pixel (sx, sy) just clear of the wall: its centre so far out (X) that the edge
-    nearest the wall (the disc leans by its axle's bearing and tilt) and its back face stay `gap` off the wall at
-    wall_x(y, z); then the axle back into the wall. make(center) builds the part."""
-    b, t = math.radians(axis[0]), math.radians(axis[1])
-    X = wall_x(0.0, 3.0) + 1.0
-    for _ in range(5):
-        p = px(sx, sy, X=X)
-        X = wall_x(p.y, p.z) + r * math.hypot(math.sin(b), math.sin(t)) + back + gap
-    p = px(sx, sy, X=X)
-    axle(p, axis[0], axis[1], (X - wall_x(p.y, p.z)) / max(0.3, axis_of(*axis).x) + 0.1)
-    return make(p)
-
-
 def small_gear(center, r=0.33):
     def parts(h):
         gear("sgear", r, 9, 0.1, (0, 0, 0), M["copper"], (0, 0, 0), tooth=0.22, parent=h)
@@ -705,7 +695,7 @@ def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_le
     tube("pipe", pts + [b, top - Vector((0, 0, 0.25)), top], r_pipe, M["dgreen"])
     if pts:
         d = (pts[1] - pts[0]).normalized()
-        pl = cyl("pipeplate", r_pipe * 1.6, 0.06, pts[0] + d * 0.04, M["iron"], verts=16, bevel=0.02)
+        pl = cyl("pipeplate", r_pipe * 1.35, 0.06, pts[0] + d * 0.04, M["iron"], verts=16, bevel=0.02)
         pl.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
     for z in (b.z + 0.4, top_h - 0.45):
         cyl("pipeband", r_pipe * 1.18, 0.08, (b.x, b.y, z), M["iron"], verts=16, bevel=0.015)
@@ -719,14 +709,15 @@ def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_le
     cyl("hornneck", r_pipe * 1.1, 0.2, top - Vector((0, 0, 0.1)), M["iron"], verts=16, bevel=0.02)
 
 
-def tray(center, size, lumps=False, trim="olive", tilt=14.0, out_bearing=-90.0, mount=0.0):
+def tray(center, size, lumps=False, trim="olive", tilt=14.0, roll=0.0):
     """The front tray the snapped twigs fall into, as Flash draws it: a low open box whose bottom is a deep boat hull
     curving down along its length (a sled runner seen from the side), metal caps on the four top corners, metal bands
-    round the hull near each end, a rim along the top; levels 6-10 hold black lumps."""
+    round the hull near each end, a rim along the top; levels 6-10 hold black lumps. Returns the root and back_rim(u):
+    the local point on top of the back rim (the body side) at u = 2x/sx, where the hangers take hold."""
     root = bpy.data.objects.new("tray", None)
     link(root)
     root.location = center
-    root.rotation_euler = (math.radians(tilt), 0, 0)      # the front edge down: the inside shows
+    root.rotation_euler = (math.radians(tilt), math.radians(roll), 0)      # the front edge down: the inside shows
     sx, sy, sz = size
     D = sz + 0.6                                         # the hull's depth below the rim in the middle
     corner = M["gold"] if trim == "gold" else M["olive"]
@@ -783,12 +774,6 @@ def tray(center, size, lumps=False, trim="olive", tilt=14.0, out_bearing=-90.0, 
             box("traycorner", (0.24, 0.12, 0.34), (p.x, p.y, sz - 0.25), corner, bevel=0.04, parent=root)
             cyl("trayrivet", 0.04, 0.04, (p.x, p.y + fy * 0.07, sz - 0.1), M["iron"], rot=(-90 * fy, 0, 0), verts=8,
                 bevel=0.01, parent=root)
-    for x in (-sx * 0.3, sx * 0.3):                     # iron brackets from the back rim to the wall: it is fixed on
-        if mount:
-            box("traymount", (0.16, mount + 0.1, 0.12), (x, sy / 2 + mount / 2, sz - 0.12), M["iron"], bevel=0.03,
-                parent=root, origin="center")
-            box("traymount2", (0.16, 0.1, 0.5), (x, sy / 2 + mount - 0.02, sz - 0.4), M["iron"], bevel=0.03,
-                parent=root, origin="center")
     if lumps:
         for i in range(10):
             r = rng.uniform(0.13, 0.2)
@@ -801,7 +786,7 @@ def tray(center, size, lumps=False, trim="olive", tilt=14.0, out_bearing=-90.0, 
             ob.location = (rng.uniform(-sx / 2 + 0.35, sx / 2 - 0.35), rng.uniform(-sy / 2 + 0.25, sy / 2 - 0.25),
                            sz - 0.2 + rng.uniform(0, 0.12))
             ob.rotation_euler = (rng.uniform(0, 3), rng.uniform(0, 3), rng.uniform(0, 3))
-    return root
+    return root, lambda u: on_hull(u, nsec, 0.04) + Vector((0, 0, 0.03 + 0.055))
 
 
 def roller(center, length, r):
@@ -875,13 +860,17 @@ def pagoda_roof(cx, cy, hx, hy, z_eave, z_apex, lift=0.35, sticks=True, cut=None
     return surf
 
 
-def body(z0, z1, hx, hy, arch=True):
-    """The pagoda body: corner posts, plank walls, a beam round the top and bottom, an arched opening in the left face."""
+def body(z0, z1, hx, hy, left=True):
+    """The body: corner posts, plank walls, a beam round the top and bottom; the left wall (with its arched mouth,
+    arch_hole) from level 3."""
     corners = [(hx, -hy), (hx, hy), (-hx, hy), (-hx, -hy)]
     for x, y in corners:                       # round posts, a little thicker at the foot
+        if not left and y < 0:                 # level 1: the open front's two posts are the press frame's (build())
+            continue
         cyl("cornerpost", 0.24, z1 - z0 + 0.1, (x, y, z0 - 0.05), M["post"]("Z"), r2=0.2, verts=18, bevel=0.04)
     # left face (looks -Y): planks from the left corner to the front corner; both seen faces belly out softly
-    plank_wall("lwall", (-hx, -hy), (hx, -hy), z0, z1, M["wood"], 4, out=(0, -1), bulge=0.12)
+    if left:
+        plank_wall("lwall", (-hx, -hy), (hx, -hy), z0, z1, M["wood"], 4, out=(0, -1), bulge=0.12)
     # right face (looks +X)
     plank_wall("rwall", (hx, -hy), (hx, hy), z0, z1, M["wood"], 6, out=(1, 0), bulge=0.3)
     plank_wall("bwall", (hx, hy), (-hx, hy), z0, z1, M["wood2"], 9, out=(0, 1))
@@ -947,10 +936,11 @@ def chute(at, size, twigs=False, lean=0.0, collar=False):
             tube("chutetwig", [p0, p1], 0.05, M["twig"]("Z"), r_end=0.03).parent = root
 
 
-def gate(x0, x1, y, z0, z1):
-    """Level 10's guillotine on the roof: two posts, a top bar with a slot, a green panel and a steel blade."""
-    for x in (x0, x1):
-        box("gatepost", (0.42, 0.36, z1 - z0), (x, y, z0), M["wood2"]("Z"), bevel=0.07)
+def gate(x0, x1, y, z0, z1, z0_left=None):
+    """Level 10's guillotine on the roof: two posts, a top bar with a slot, a green panel and a steel blade. The left
+    post can start lower (z0_left): it stands against the outside of the back-left wall, bolted to it."""
+    for x, zb in ((x0, z0 if z0_left is None else z0_left), (x1, z0)):
+        box("gatepost", (0.42, 0.36, z1 - zb), (x, y, zb), M["wood2"]("Z"), bevel=0.07)
     box("gatetop", (x1 - x0 + 0.55, 0.46, 0.6), (0.5 * (x0 + x1), y, z1 - 0.1), M["wood2"]("X"), bevel=0.09)
     box("gateslot", (0.6, 0.44, 0.12), (0.5 * (x0 + x1) + 0.1, y, z1 + 0.2), M["hole"], bevel=0.0)
     box("gatepanel", (x1 - x0 - 0.3, 0.08, (z1 - z0) * 0.45), (0.5 * (x0 + x1), y + 0.05, z1 - (z1 - z0) * 0.5),
@@ -958,73 +948,6 @@ def gate(x0, x1, y, z0, z1):
     bl = box("gateblade", (x1 - x0 - 0.3, 0.05, 0.5), (0.5 * (x0 + x1), y - 0.03, z1 - (z1 - z0) * 0.62), M["blade"],
              rot=(0, 12, 0), bevel=0.01, origin="center")
     del bl
-
-
-def level_pagoda():
-    hx, hy = 1.05, 1.72
-    z0, z1 = 1.25, 5.45 if L == 10 else 5.1      # under the pagoda roof the walls stop below its concave eaves
-    body(z0, z1, hx, hy)
-    # legs: front, left, right corners and one under the middle of the right face
-    lh = z0 + 0.1
-    if L < 10:
-        for x, y, sp in ((hx, -hy, (0.16, -0.16)), (-hx, -hy, (-0.16, -0.16)), (hx, hy, (0.16, 0.16)), (hx, 0.35, (0.22, 0))):
-            leg((x, y), lh, 0.4, sp)
-    else:
-        for x, y, b in ((hx + 0.15, -hy - 0.15, -45), (-hx - 0.15, -hy - 0.15, -100), (hx + 0.15, hy + 0.15, 10),
-                        (hx + 0.2, 0.2, -10)):
-            claw((x, y), lh, b)
-    arch_hole(0.0, 1.7, min(5.05, z1 - 0.3), 1.25, -hy - 0.15)
-    roller(px(-16, 19, Y=-hy - 0.95), 1.9, 0.62)
-    # the tray, as Flash: long side along the left face, right under the roller's mouth, its right end reaching the
-    # front corner, the right end a little raised, fixed to the wall by two iron brackets, a stump under its hull
-    sx_, sy_, sz_ = 2.55, 1.15, 0.45
-    tilt = 30 if L >= 6 else 14
-    yc = -2.72                                  # its back (hull and bands) just clear of the arch frame
-    root = px(-17 if L < 6 else -18, 32.4 if L < 6 else 31.0, Y=yc)
-    t = math.radians(tilt)
-    tr = tray(root, (sx_, sy_, sz_), lumps=L >= 6, trim="gold" if L >= 6 else "olive", tilt=tilt)
-    tr.rotation_euler.y = math.radians(-8)
-    # it hangs on a wooden sill in the roller's mouth: the sill runs out of the arch to under the tray's back rim, with
-    # an iron strap from the rim down over it each side
-    rim_y = yc + sy_ / 2 * math.cos(t) - sz_ * math.sin(t)
-    rim_z = root.z + sy_ / 2 * math.sin(t) + sz_ * math.cos(t)
-    y0s = -hy - 0.1
-    box("sill", (1.2, y0s - rim_y + 0.12, 0.16), (0.0, (y0s + rim_y - 0.12) / 2, rim_z - 0.2), M["post"]("Y"),
-        bevel=0.04)
-    for x in (-0.42, 0.42):
-        box("traystrap", (0.12, 0.3, 0.05), (x, rim_y - 0.02, rim_z - 0.05), M["iron"], rot=(-35, 0, 0), bevel=0.015,
-            origin="center")
-    leg((root.x - sx_ * 0.22, yc + 0.1), root.z + sz_ - 0.78 * (sz_ + 0.6) + 0.12, 0.3)
-    zf = math.sin(math.pi * (4.15 - z0) / (z1 - z0))
-    band(hx, hy, 3.9, 0.5, out=lambda f: 0.15 * math.sin(math.pi * f) + 0.15 * zf)
-
-    def wall_r(y, z):
-        """How far out the right face is at (y, z): the bulging planks, and the strap where it runs."""
-        f = min(1.0, max(0.0, (y + hy) / (2 * hy)))
-        zz = min(1.0, max(0.0, (z - z0) / (z1 - z0)))
-        return hx + 0.15 * math.sin(math.pi * f) + 0.15 * math.sin(math.pi * zz) + (0.12 if 3.3 < z < 5.0 else 0.0)
-    mount_spinner(saw, 12 if L >= 6 else 11, 25 if L >= 6 else 26, SAW_AXIS, 1.06, 0.27, wall_r)
-    mount_spinner(small_gear, 16, 10 if L >= 6 else 12, SGEAR_AXIS, 0.33, 0.06, wall_r)
-    if L < 10:                                  # out of the back-left face, round the left corner, up outside the eave
-        funnel(Vector((-1.45, -2.82, 4.85)), 6.7 if L >= 6 else 6.5, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5,
-               bell_len=1.3, up=0.1, route=[(-0.95, -1.2, 4.45), (-1.3, -1.22, 4.46), (-1.6, -1.45, 4.5),
-                                             (-1.65, -2.1, 4.55), (-1.55, -2.6, 4.68)])
-    else:                                       # out of the back-left face, beside the roof's left end, not through it
-        funnel(Vector((-hx - 0.62, -hy + 0.2, 3.0)), 6.9, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5,
-               bell_len=1.3, up=0.1, route=[(-hx + 0.1, -hy + 0.2, 2.7), (-hx - 0.2, -hy + 0.2, 2.72),
-                                             (-hx - 0.5, -hy + 0.2, 2.82)])
-    if L >= 6:
-        mount_spinner(side_wheel, 26, 11, WHEEL_AXIS, 0.68, 0.06, wall_r)
-        if L == 6:
-            chute((0.45, 2.0, 5.15), (0.85, 0.7, 2.2), lean=16, collar=True)    # stands on the roof, a collar round it
-        else:
-            chute((0.1, 1.45, 5.6), (0.8, 0.65, 3.6), twigs=True, lean=14)
-    if L < 10:
-        pagoda_roof(0, 0.0, 1.55, 2.45, 5.2, 7.3, lift=0.6)
-    else:
-        roof10(hx, hy, z1, -0.6)
-        g0, g1 = px(-12.5, -10, Y=-0.6).x, px(4, -10, Y=-0.6).x
-        gate(g0, g1, -0.6, z1 - 0.2, 9.3)
 
 
 def curl(p0, ang0, ang1, length, n=26, power=3.0):
@@ -1060,78 +983,162 @@ def roof10(hx, hy, z1, yg):
         so = ob.modifiers.new("solid", "SOLIDIFY")
         so.thickness = 0.1
         so.offset = -1
+    def lift(x, k, prof, dish):
+        """How far the sheet's side edge curls up at x, profile point k (as the mesh above)."""
+        return dish * (2 * (x - x0) / (x1 - x0) - 1) ** 2 * (k / len(prof)) ** 0.5
     ye, ze = front[-1]
     tube("roofstick", [(x0 - 0.35, ye + 0.05, ze + 0.02), (x1 + 0.1, ye + 0.05, ze + 0.06)], 0.07, M["twig"]("X"))
     for x in (x0 + 0.35, x1 - 0.3):
-        tube("roofstick", [(x, y, z + 0.07) for y, z in front[1:-2]], 0.055, M["twig"]("Y"))
+        tube("roofstick", [(x, y, z + 0.07 + lift(x, k + 1, front, 0.25)) for k, (y, z) in enumerate(front[1:-2])],
+             0.055, M["twig"]("Y"))
 
-    def front_z(y):
-        for (ya, za), (yb, zb) in zip(front, front[1:]):
+    def front_z(y, x):
+        for k, ((ya, za), (yb, zb)) in enumerate(zip(front, front[1:])):
             if yb <= y <= ya:
-                return za + (zb - za) * (ya - y) / max(1e-6, ya - yb)
-        return front[-1][1]
+                f = (ya - y) / max(1e-6, ya - yb)
+                return za + (zb - za) * f + lift(x, k + f, front, 0.25)
+        return front[-1][1] + lift(x, len(front) - 1, front, 0.25)
     # the rope: tied round the right gate post, draped over the front sheet, its end hanging off the front eave
     xa = px(4, -10, Y=yg).x
     A = Vector((xa, yg - 0.25, z1 + 1.9))
-    B = Vector((x1 - 0.15, ye + 0.1, ze + 0.1))
+    B = Vector((x1 - 0.15, ye - 0.12, ze + 0.17))      # over the eave stick, in front of it
     pts = []
     for k in range(13):
         t = k / 12
         q = A.lerp(B, t)
-        q.z = max(q.z - 0.5 * math.sin(math.pi * t), front_z(q.y) + 0.08)
+        q.z = max(q.z - 0.5 * math.sin(math.pi * t), front_z(q.y, q.x) + 0.19)     # over the sticks too
         pts.append(q)
-    pts += [B + Vector((0.02, -0.12, -0.25)), B + Vector((0.05, -0.15, -0.6))]
+    pts += [B + Vector((0.02, -0.03, -0.3)), B + Vector((0.05, -0.05, -0.65))]
     tube("rope", pts, 0.055, M["rope2"], r_end=0.04)
-    tube("rope", [(x1 - 0.45 - 0.1 * k / 9, y, z + 0.08) for k, (y, z) in enumerate(back[2::3])], 0.05, M["rope2"],
+    pts = []                                             # the second rope lies over the back roll, off its face
+    for k in range(2, len(back) - 1):
+        (ya, za), (yb, zb) = back[k - 1], back[k + 1]
+        d = Vector((yb - ya, zb - za)).normalized()
+        y, z = back[k] - Vector((-d.y, d.x)) * 0.11           # off the sheet's top face (right of the heading)
+        x = x1 - 0.15 - 0.1 * k / len(back)
+        pts.append((x, y, z + lift(x, k, back, 0.4)))
+    tube("rope", pts, 0.05, M["rope2"],
          r_end=0.04)
     cyl("ropetie", 0.27, 0.16, (xa, yg, z1 + 1.82), M["rope2"], verts=16, bevel=0.04)
 
 
-def level1():
-    """Level 1: a narrow wooden cabinet on the right, a dark press frame in front of its left face holding the roller,
-    the tray at the front, a lean-to plank roof with loose planks, the horn pipe on the frame's back post."""
-    # cabinet: X -1.1..1.0, Y 0.06..1.62, Z 0.3..4.65
-    cx0, cx1, cy0, cy1, cz0, cz1 = -1.1, 1.0, 0.06, 1.62, 0.3, 4.4
-    box("cab", (cx1 - cx0, cy1 - cy0, cz1 - cz0), ((cx0 + cx1) / 2, (cy0 + cy1) / 2, cz0), M["wood"]("Z"), bevel=0.06)
-    plank_wall("cabL", (cx0, cy0), (cx1, cy0), cz0, cz1, M["dwood"], 5, out=(0, -1))
-    for x, y in ((cx1, cy0), (cx1, cy1), (cx0, cy0)):
-        box("cabpost", (0.18, 0.18, cz1 - cz0 + 0.05), (x, y, cz0 - 0.02), M["post"]("Z"), bevel=0.05)
-        cyl("cableg", 0.24, cz0 + 0.05 - GROUND, (x, y, GROUND), M["dwood"]("Z"), verts=12, bevel=0.03)
-    box("cabslot", (0.25, 0.04, 1.6), (0.35, cy0 - 0.12, 2.2), M["hole"], bevel=0.0)
-    # press frame: plane Y = -1.73, posts at X -0.89 and 1.1
-    fy = -1.73
-    for x, top in ((-1.0, 4.6), (1.1, 4.3)):
-        box("framepost", (0.48, 0.44, top - GROUND), (x, fy, GROUND), M["dwood"]("Z"), bevel=0.14, taper=0.92)
-    box("framebar", (2.5, 0.5, 0.5), (0.1, fy, 4.13), M["dwood"]("X"), bevel=0.14)
-    box("framebar2", (2.2, 0.28, 0.24), (0.1, fy, 1.15), M["dwood"]("X"), bevel=0.05)
-    for x in (-0.89, 1.1):                                # side beams back to the cabinet
-        box("framejoin", (0.22, cy0 - fy, 0.24), (x, (fy + cy0) / 2, 4.3), M["dwood"]("Y"), bevel=0.04)
-    for x in (-0.89, 1.1):
-        for z in (1.2, 4.32):
-            box("framebracket", (0.56, 0.05, 0.56), (x, fy - 0.24, z - 0.04), M["olive"], bevel=0.02, origin="center")
-            for dx, dz in ((-0.17, -0.17), (0.17, -0.17), (-0.17, 0.17), (0.17, 0.17)):
-                cyl("framebolt", 0.05, 0.06, (x + dx, fy - 0.26, z - 0.04 + dz), M["iron"], rot=(90, 0, 0), verts=10,
-                    bevel=0.015)
-    rc = px(-14, 23, Y=-2.0)
-    roller(rc, 1.7, 0.56)
-    gear("rollergear", 0.42, 10, 0.08, (rc.x + 0.98, rc.y, rc.z), M["bronze"], (0, math.radians(90), 0), tooth=0.2)
-    for s_ in (-1, 1):                                   # the roller's brackets, from its ends back to the frame posts
-        box("rollerarm", (0.12, 0.6, 0.18), (rc.x + s_ * 0.9, rc.y + 0.3, rc.z - 0.09), M["iron"], bevel=0.03)
-    box("pressback", (0.12, cy0 - fy, 3.7), (-1.0, (fy + cy0) / 2, 0.6), M["dwood"]("Y"), bevel=0.03)
-    box("pressfloor", (2.2, cy0 - fy, 0.14), (0.05, (fy + cy0) / 2, 0.75), M["dwood"]("X"), bevel=0.03)
-    tray(px(-18, 36, Y=-2.3), (2.5, 1.1, 0.55), lumps=False, trim="olive", tilt=12)
-    mount_spinner(saw, 8, 30, SAW_AXIS, 1.06, 0.27, lambda y, z: cx1 + 0.02)
-    mount_spinner(lambda c: small_gear(c, 0.3), 14, 17, SGEAR_AXIS, 0.3, 0.06, lambda y, z: cx1 + 0.02)
-    top = px(-15, -12, Y=fy).z
-    tube("pipe", [Vector((-1.0, fy, 4.5)), Vector((-1.0, fy, top))], 0.3, M["dgreen"])
-    cyl("pipeband", 0.35, 0.1, (-1.0, fy, top - 0.5), M["iron"], verts=20, bevel=0.02)
-    lathe("cap", [(0.3, 0.0), (0.42, 0.06), (0.78, 0.2), (0.8, 0.27), (0.6, 0.42), (0.3, 0.52), (0.0, 0.55)],
-          (-1.0, fy, top - 0.05), M["horn"], verts=36)
-    # a lean-to roof as Flash's: high along the back-left edge (-X), sloping down to the front-right eave (+X); boards
-    # running down the slope, light trim boards on the high edge and the front rake, the gable under it boarded, and
-    # three loose light planks lying across it
+# ------------------------------------------------------------------------------------------------------------ the levels
+# One machine at every level (owner, 30 Oct 2026: a level is the level below plus upgrades). The body's footprint, its
+# height and every part's mounting point are fixed in world coordinates here, fitted once to Flash level 3; a level
+# only adds or swaps parts:
+#   L1   the body with an open press front (no left wall: the roller works in the open frame), a narrow cabinet at the
+#        back, a lean-to plank roof
+#   L3   = L1 + the left wall with its arched mouth, the strap round the right face, the pagoda roof
+#   L6   = L3 + the side cog, the chute through the roof, gold trim and lumps in the tray
+#   L10  = L6 + bird-claw feet, a taller chute with twigs, the curled bark roof and the gate on it
+HX, HY, Z0, Z1 = 1.05, 1.72, 1.25, 5.1          # the body: half width (X), half depth (Y), floor, top
+ROLLER = Vector((0.05, -2.67, 3.42))            # the roller's middle, in front of the arch, held by arms to the posts
+ROLLER_LEN, ROLLER_R = 1.9, 0.62
+TRAY = Vector((-0.1, -2.72, 1.9))               # the tray under the roller's mouth, hung from the front corner posts
+TRAY_SIZE, TRAY_TILT, TRAY_ROLL = (2.55, 1.15, 0.45), 22.0, -8.0
+SAW = Vector((1.95, -0.67, 2.62))               # the turning parts, each on its own short axle into the right wall
+SGEAR = Vector((1.67, 0.24, 3.82))
+SWHEEL = Vector((1.54, 1.78, 3.13))
+PIPE = [(-0.98, -1.1, 3.6), (-1.45, -1.1, 3.6), (-1.78, -1.1, 3.72)]     # out of the back-left wall, round an elbow
+PIPE_FOOT, PIPE_TOP = Vector((-1.9, -1.1, 4.0)), 6.6                    # then up outside the roof's eave
+CHUTE = Vector((0.05, 1.7, 5.45))                 # the chute's foot, through the roof (levels 6, 10)
+
+
+def wall_r(y, z):
+    """How far out the right face is at (y, z): the bulging planks, and the strap where it runs (level 3 up)."""
+    f = min(1.0, max(0.0, (y + HY) / (2 * HY)))
+    zz = min(1.0, max(0.0, (z - Z0) / (Z1 - Z0)))
+    strap = 0.12 if L >= 3 and 3.3 < z < 5.0 else 0.0
+    return HX + 0.15 * math.sin(math.pi * f) + 0.15 * math.sin(math.pi * zz) + strap
+
+
+def mount(make, center, axis):
+    """A turning part at its fixed centre, on an iron axle back along its axis into the right wall."""
+    c = Vector(center)
+    axle(c, axis[0], axis[1], (c.x - wall_r(c.y, c.z)) / max(0.3, axis_of(*axis).x) + 0.15)
+    return make(c)
+
+
+def build():
+    hx, hy, z0, z1 = HX, HY, Z0, Z1
+    body(z0, z1, hx, hy, left=L >= 3)
+    if L == 1:                                  # the cabinet's own left wall, set back behind the open press
+        plank_wall("cabL", (-hx, 0.06), (hx, 0.06), z0, z1, M["dwood"], 5, out=(0, -1))
+        box("cabslot", (0.25, 0.04, 1.6), (0.35, -0.02, 2.6), M["hole"], bevel=0.0)
+        # the press frame round the open front, as Flash's: heavy dark square posts on the front corners (the left one
+        # taller), a dark crossbar over the roller, olive plates bolted over the joints
+        for x, top in ((-hx, z1 + 0.45), (hx, z1 + 0.15)):
+            box("framepost", (0.48, 0.44, top - z0 + 0.05), (x, -hy, z0 - 0.05), M["dwood"]("Z"), bevel=0.12, taper=0.94)
+        box("framebar", (2 * hx + 0.5, 0.46, 0.46), (0.0, -hy, 4.15), M["dwood"]("X"), bevel=0.12)
+        for x in (-hx, hx):
+            for z in (z0 + 0.45, 4.38):
+                box("framebracket", (0.56, 0.05, 0.56), (x, -hy - 0.24, z), M["olive"], bevel=0.02, origin="center")
+                for dx, dz in ((-0.17, -0.17), (0.17, -0.17), (-0.17, 0.17), (0.17, 0.17)):
+                    cyl("framebolt", 0.05, 0.06, (x + dx, -hy - 0.27, z + dz), M["iron"], rot=(90, 0, 0), verts=10,
+                        bevel=0.015)
+    else:
+        arch_hole(0.0, 1.7, z1 - 0.3, 1.25, -hy - 0.15)
+        zf = math.sin(math.pi * (4.15 - z0) / (z1 - z0))
+        band(hx, hy, 3.9, 0.5, out=lambda f: 0.15 * math.sin(math.pi * f) + 0.15 * zf)
+    # feet: stumps at the front, left and right corners and under the middle of the right face; claws at level 10
+    lh = z0 + 0.1
+    if L < 10:
+        for x, y, sp in ((hx, -hy, (0.16, -0.16)), (-hx, -hy, (-0.16, -0.16)), (hx, hy, (0.16, 0.16)), (hx, 0.35, (0.22, 0))):
+            leg((x, y), lh, 0.4, sp)
+    else:
+        for x, y, b in ((hx + 0.15, -hy - 0.15, -45), (-hx - 0.15, -hy - 0.15, -100), (hx + 0.15, hy + 0.15, 10),
+                        (hx + 0.2, 0.2, -10)):
+            claw((x, y), lh, b)
+    # the roller, on two iron arms from its ends back to the front corner posts
+    roller(ROLLER, ROLLER_LEN, ROLLER_R)
+    for s in (-1, 1):                           # each arm stops against the roller's end cap
+        x = ROLLER.x + s * (ROLLER_LEN / 2 + 0.12)
+        box("rollerarm", (0.12, ROLLER.y - 0.15 + hy, 0.22), (x, (ROLLER.y - 0.15 - hy) / 2, ROLLER.z), M["iron"],
+            bevel=0.03, origin="center")
+    # the tray, right under the roller's mouth; two iron hangers from the front corner posts over its back rim
+    tr, back_rim = tray(TRAY, TRAY_SIZE, lumps=L >= 6, trim="gold" if L >= 6 else "olive", tilt=TRAY_TILT,
+                        roll=TRAY_ROLL)
+    bpy.context.view_layer.update()
+    mw = tr.matrix_world
+    for s in (-1, 1):
+        u = (s * hx - TRAY.x) / (TRAY_SIZE[0] / 2)
+        p = mw @ back_rim(u)
+        a = Vector((s * hx, -hy - 0.12, p.z + 0.1))
+        tube("traymount", [a, Vector((p.x, p.y + 0.12, p.z + 0.1)), p + Vector((0, 0, 0.02))], 0.05, M["iron"])
+        cyl("traymountbolt", 0.08, 0.08, (s * hx, -hy - 0.22, p.z + 0.1), M["bolt"], rot=(90, 0, 0), verts=10,
+            bevel=0.02)
+    # the turning parts
+    mount(saw, SAW, SAW_AXIS)
+    mount(small_gear, SGEAR, SGEAR_AXIS)
+    if L >= 6:
+        mount(side_wheel, SWHEEL, WHEEL_AXIS)
+    # the pipe and horn, the same at every level, with a stay back to the wall
+    funnel(PIPE_FOOT, PIPE_TOP, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5, bell_len=1.3, up=0.1, route=PIPE)
+    tube("pipestay", [(-hx + 0.02, PIPE_FOOT.y, PIPE_FOOT.z + 0.75), (PIPE_FOOT.x + 0.2, PIPE_FOOT.y, PIPE_FOOT.z + 0.75)],
+         0.045, M["iron"])
+    if L >= 6:
+        if L == 6:
+            chute(CHUTE, (0.85, 0.7, 2.2), lean=15, collar=True)
+        else:
+            chute(CHUTE, (0.85, 0.7, 3.4), twigs=True, lean=15, collar=True)
+    if L == 1:
+        lean_to(hx, hy, z0, z1)
+    elif L < 10:
+        pagoda_roof(0, 0.0, 1.55, 2.45, 5.2, 7.3, lift=0.6)
+    else:
+        roof10(hx, hy, z1, -0.6)
+        g0, g1 = -hx - 0.27, px(4, -10, Y=-0.6).x       # the left post against the back-left wall's outside
+        gate(g0, g1, -0.6, z1 - 0.2, 9.3, z0_left=z1 - 0.9)
+        for z in (z1 - 0.65, z1 - 0.25):
+            cyl("gatebolt", 0.06, 0.08, (g0 - 0.22, -0.6, z), M["bolt"], rot=(0, 90, 0), verts=10, bevel=0.02)
+
+
+def lean_to(hx, hy, z0, z1):
+    """Level 1's roof, as Flash's: a lean-to over the cabinet at the back, high along the back-left edge (-X), sloping
+    down to the front-right eave (+X); boards running down the slope, light trim on the high edge and the front rake,
+    the gable over the cabinet's wall boarded, three loose light planks lying across it."""
     rx0, rx1, ry0, ry1 = -1.6, 1.3, -0.25, 1.95
-    zh, zl = 4.95, 4.3
+    zh, zl = z1 + 0.77, z1 + 0.06                    # the boards rest on the ceiling's top (z1 + 0.1) at the right wall
 
     def rz(x):
         return zh - (x - rx0) * (zh - zl) / (rx1 - rx0)
@@ -1146,20 +1153,19 @@ def level1():
             jitter=0.01)
     tube("roofridge", [(rx0 + 0.04, ry0 + 0.02, zh + 0.06), (rx0 + 0.04, ry1 - 0.02, zh + 0.06)], 0.07, M["twig"]("Y"))
     tube("roofrake", [(rx0, ry0 - 0.03, zh + 0.12), (rx1 + 0.05, ry0 - 0.03, zl + 0.08)], 0.07, M["twig"]("X"))
-    for k in range(5):                                   # the gable boards on the left face, up to the roof
-        x = cx0 + (cx1 - cx0) * (k + 0.5) / 5
-        top = rz(x + (cx1 - cx0) / 10) - 0.05
-        box("gable", ((cx1 - cx0) / 5 - 0.03, 0.1, top - cz1 + 0.05), (x, cy0 - 0.04, cz1 - 0.05), M["dwood"]("Z"),
+    for k in range(5):                                   # the gable boards over the cabinet's left wall, up to the roof
+        x = -hx + 2 * hx * (k + 0.5) / 5
+        top = rz(x + hx / 5) - 0.02
+        box("gable", (2 * hx / 5 - 0.03, 0.1, top - z1 + 0.05), (x, 0.0, z1 - 0.05), M["dwood"]("Z"),
             rot=(0, 0, rng.uniform(-1, 1)), bevel=0.025)
-    box("gableback", (0.12, cy1 - cy0, zh - cz1 - 0.2), (cx0 + 0.05, (cy0 + cy1) / 2, cz1 - 0.05), M["dwood"]("Y"),
-        bevel=0.02)
-    # the loose planks lie flat on the boards (board top = rz + 0.1), side by side, pointing down the slope and a little
-    # toward the back (down-right on screen), as thick as the boards, their low ends running on past the eave
+    box("gableback", (0.12, hy - 0.06, zh - z1 - 0.15), (-hx, (hy + 0.06) / 2, z1 - 0.05), M["dwood"]("Y"), bevel=0.02)
+    # the loose planks lie flat on the boards (board top = rz + 0.1), pointing down the slope and a little toward the
+    # back, as thick as the boards, their low ends running on past the eave
     for k, (ay, deg, x1) in enumerate(((0.15, 18, 1.55), (0.55, 17, 1.7), (1.05, 13, 1.5))):
         d = Vector((math.cos(math.radians(deg)), math.sin(math.radians(deg)), 0))
         a = Vector((-1.35 + 0.08 * k, ay, 0))
         b = a + d * ((x1 - a.x) / d.x)
-        a.z, b.z = rz(a.x) + 0.15, rz(b.x) + 0.15        # rz is a plane: past the eave the plank keeps the slope
+        a.z, b.z = rz(a.x) + 0.18, rz(b.x) + 0.18        # just above the boards' jitter
         ob = box("looseplank", ((b - a).length, 0.22, 0.1), (a + b) / 2, M["twig"]("X"), bevel=0.025, origin="center")
         ob.rotation_euler = (b - a).to_track_quat("X", "Z").to_euler()
 
@@ -1266,10 +1272,7 @@ def border_of(objs, pad=10):
 
 
 def main():
-    if L == 1:
-        level1()
-    else:
-        level_pagoda()
+    build()
     setup(SC)
     out = HERE / ("work" if MODE == "fit" else "render")
     out.mkdir(exist_ok=True)
