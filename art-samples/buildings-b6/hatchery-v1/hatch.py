@@ -566,6 +566,8 @@ def materials():
                         side=0.35)
     M["wheel"] = shiny("wheel", (238, 240, 244), rough=0.3, metal=0.3, wear=(196, 198, 208), scale=3, dirt=0.1,
                        side=0.3)
+    M["fchrome"] = shiny("fchrome", (172, 184, 200), rough=0.26, metal=0.75, wear=(140, 152, 170), scale=3, dirt=0.15,
+                         side=0.4)
     M["lid"] = shiny("lid", (168, 184, 204), rough=0.28, metal=0.85, wear=(146, 160, 182), scale=3, dirt=0.1)
     M["wood"] = shiny("wood", (232, 184, 92), rough=0.45, metal=0.0, wear=(214, 160, 70), scale=3, dirt=0.1,
                       spec=0.45, coat=0.3)
@@ -659,14 +661,14 @@ def rounded_poly(corners, rad, n=8):
     return out
 
 
-def handle(name, parent, at, axis=(0, 0, 1)):
+def handle(name, parent, at, axis=(0, 0, 1), size=1.0):
     """The wooden crank handle (the same at every level): a steel collar and pin, then a fat turned knob along
     local `axis` from `at`."""
     e = bpy.data.objects.new(name, None)
     link(e, parent)
     e.location = at
     track(e, axis, "Y" if abs(Vector(axis).normalized().z) < 0.9 else "X")
-    hl, hr = S.HANDLE_L, S.HANDLE_R
+    hl, hr = S.HANDLE_L * size, S.HANDLE_R * size
     lathe(name + "collar", [(0.0, -0.06), (0.24, -0.06), (0.27, 0.04), (0.22, 0.2), (0.12, 0.26), (0.0, 0.26)],
           (0, 0, 0), M["chrome"], parent=e, verts=20)
     lathe(name + "knob", [(0.0, 0.2), (0.18, 0.2), (0.24, 0.32), (hr * 0.86, 0.75), (hr, hl * 0.62), (hr * 0.97, hl - 0.4),
@@ -811,7 +813,7 @@ def lid_and_crank():
                            (r - 0.05, 0, t + 0.3 + dz)], (0, 0, 1), 0.46, 0.15, M["steel"], parent=hub, bevel=0.05)
         lathe("crankeye", [(0.0, t + 0.2 + dz), (0.26, t + 0.2 + dz), (0.28, t + 0.38 + dz), (0.0, t + 0.4 + dz)],
               (r, 0, 0), M["steel"], parent=hub, verts=16)
-        handle("crankhandle", hub, (r, 0, t + 0.38 + dz))
+        handle("crankhandle", hub, (r, 0, t + 0.38 + dz), size=S.HANDLE1_SIZE)
     e, hub = vspin("crank1", (0, 0, Z0 + S.LID_Z), parts)
     MOVING.append(hub)
 
@@ -864,31 +866,27 @@ def beater():
           (0, 0, zb), M["steel"], verts=20)
     # the frame bar up from the bearing to the triangle, and the axle arm out to the crown wheel
     a0, a1, a2 = (Vector(c) for c in S.TRI)
-    sweep("framebar", [U2(0.0, 2.85), U2(0.05, 3.6), U2(a1.x - 0.15, a1.y - 0.05)], P(135, 1, 0), 0.22, 0.32,
-          M["wheel"], bevel=0.05)
+    sweep("framebar", [U2(0.0, 2.85), U2(0.05, 3.6), U2(a1.x - 0.15, a1.y - 0.05)], P(135, 1, 0), 0.3, 0.36,
+          M["fchrome"], bevel=0.05)
     ab = U2(S.WHEEL2_U, S.WHEEL2_Z) - P(S.WHEEL2_TH, 0.62, 0)   # the bearing, on the axle behind the wheel
-    sweep("axlearm", [U2(0.1, 2.6), U2(0.45, 3.2), ab - P(S.WHEEL2_TH, 0.15, 0)], P(135, 1, 0), 0.22, 0.34,
-          M["chrome"], bevel=0.05)
+    # the housing: a chrome column from the gearbox up past the bearing, just inside the wheel (as Flash's)
+    box("axlehousing", (0.8, 0.95, S.WHEEL2_Z - 0.1), U2(1.0, 1.0), M["fchrome"], rot=(0, 0, 45), bevel=0.28, segs=4)
     ob = lathe("axlebearing", [(0.0, -0.2), (0.3, -0.2), (0.32, 0.0), (0.26, 0.18), (0.0, 0.2)], ab, M["chrome"],
                verts=20)
     track(ob, P(S.WHEEL2_TH, 1, 0))
     # the triangle handle: a flat chrome bar round a rounded triangle, in the plane through the axis
     path = [U2(x, z) for x, z in rounded_poly([tuple(a0), tuple(a1), tuple(a2)], 0.42, 6)]
-    sweep("triangle", path, P(135, 1, 0), 0.2, 0.85, M["wheel"], bevel=0.06, closed=True)
+    sweep("triangle", path, P(135, 1, 0), 0.2, 0.66, M["fchrome"], bevel=0.06, closed=True)
     # the gearbox: a chrome block on the frame bar, between the spindle's bearing and the crown wheel's axle
-    box("gearbox", (1.3, 0.8, 1.6), U2(0.2, 1.3), M["wheel"], rot=(0, 0, 45), bevel=0.34, segs=4)
+    box("gearbox", (1.3, 0.9, 1.7), U2(0.25, 1.3), M["fchrome"], rot=(0, 0, 45), bevel=0.3, segs=4)
 
     # the crown wheel and crank, on an axle along bearing 45
     def wheel(hub):
         R = S.WHEEL2_R
         lathe("crownwheel", [(0.3, -0.14), (R - 0.3, -0.14), (R - 0.1, -0.1), (R, 0.0), (R - 0.04, 0.12),
                              (R - 0.36, 0.14), (R - 0.4, 0.04), (0.5, 0.06), (0.36, 0.16), (0.3, 0.16)], (0, 0, 0),
-              M["wheel"], parent=hub, verts=64)
-        for k in range(24):                      # face teeth on the inner face, toward the pinion
-            a = 2 * math.pi * k / 24
-            box(f"crowntooth{k}", (0.18, 0.12, 0.1), (math.cos(a) * (R - 0.32), math.sin(a) * (R - 0.32), -0.17),
-                M["chrome"], rot=(0, 0, math.degrees(a)), bevel=0.02, parent=hub)
-        cyl("crownweb", R - 0.32, 0.08, (0, 0, -0.04), M["wheel"], verts=64, parent=hub)
+              M["fchrome"], parent=hub, verts=64)
+        cyl("crownweb", R - 0.32, 0.08, (0, 0, -0.04), M["fchrome"], verts=64, parent=hub)
         for k in range(4):
             a = 2 * math.pi * (k + 0.5) / 4
             sweep(f"crownspoke{k}", [(0.4 * math.cos(a), 0.4 * math.sin(a), 0.0),
