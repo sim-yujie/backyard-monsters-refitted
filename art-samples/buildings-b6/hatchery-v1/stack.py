@@ -49,23 +49,23 @@ CROSS_L, CROSS_W = 1.28, 0.13     # a foot's arms (half length, bar radius), alo
 
 # level 2: the egg-beater drive on the sleeve
 PINION_Z, PINION_R = 0.5, 1.15  # above the sleeve's top
-WHEEL2_U, WHEEL2_Z, WHEEL2_R = 1.85, 3.9, 2.45   # the crown wheel: out along bearing 45 from the axis, height above
+WHEEL2_U, WHEEL2_Z, WHEEL2_R = 1.85, 4.3, 2.45   # the crown wheel: out along bearing 45 from the axis, height above
                                                  # the sleeve's top, radius
-WHEEL2_TH = 26.0                 # the axle's bearing
-CRANK2_R = 3.6
+WHEEL2_TH = 60.0                 # the axle's bearing
+CRANK2_R = 3.85
 TRI = ((-2.6, 4.45), (0.4, 4.45), (-0.35, 9.4))  # the triangle handle's corners (u along bearing 45, z above the sleeve)
 
 # level 3: the red mixer stand
 LIFT3 = 0.78                     # on top of LIFT2
 PLINTH_R = 2.58
-COLUMN = (1.45, 4.25)            # the column's middle (X, Y)
-COLUMN_R = 0.62
-HEAD_X, HEAD_Y = (-2.475, 2.475), (-1.56, 4.25)
-HEAD_Z0, HEAD_Z1 = 12.45, 15.95  # absolute (level 3)
-WHEEL3 = (2.56, 3.05, 13.35)     # the crank wheel's middle (on the head's +X face)
-WHEEL3_TH, WHEEL3_TILT = 8.0, 0.0   # the axle's bearing (about +X) and its tilt up
-WHEEL3_R = 2.25
-CRANK3_R = 2.2
+COLUMN = (0.8, 4.9)            # the column's middle (X, Y)
+COLUMN_R = 0.95
+HEAD_X, HEAD_Y = (-1.14, 3.36), (-3.6, 3.7)
+HEAD_Z0, HEAD_Z1 = 13.15, 18.0  # absolute (level 3)
+WHEEL3 = (3.75, 1.35, 14.25)     # the crank wheel's middle (on the head's +X face)
+WHEEL3_TH, WHEEL3_TILT = 0.0, 0.0   # the axle's bearing (about +X) and its tilt up
+WHEEL3_R = 2.3
+CRANK3_R = 4.0
 CONE_RISE, CONE_HOLE = 0.85, 1.3    # the hood's rise above the drum top, the hole's radius
 ARM3_Z = 8.6                     # the bowl-lift arm's height (absolute, level 3)
 

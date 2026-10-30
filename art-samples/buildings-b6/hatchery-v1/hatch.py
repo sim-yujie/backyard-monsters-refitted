@@ -359,7 +359,8 @@ def mesh_ob(name, bm, mats, smooth=True, bevel=0.0, segs=3, parent=None, subsurf
     return ob
 
 
-def box(name, size, at, mat, rot=(0, 0, 0), bevel=0.05, parent=None, jitter=0.0, taper=1.0, origin="bottom", bow=0.0):
+def box(name, size, at, mat, rot=(0, 0, 0), bevel=0.05, parent=None, jitter=0.0, taper=1.0, origin="bottom", bow=0.0,
+        segs=3):
     """A box `size` (x, y, z) standing on `at` (origin="bottom") or centred on it, turned by rot (degrees, XYZ).
     bow: the middle of its height pushed toward local -Y by that much (a plank that bulges out of a wall)."""
     bm = bmesh.new()
@@ -380,7 +381,7 @@ def box(name, size, at, mat, rot=(0, 0, 0), bevel=0.05, parent=None, jitter=0.0,
             v.co.y *= taper
         if jitter:
             v.co += Vector((rng.uniform(-jitter, jitter) for _ in range(3)))
-    ob = mesh_ob(name, bm, [mat], bevel=bevel, parent=parent)
+    ob = mesh_ob(name, bm, [mat], bevel=bevel, segs=segs, parent=parent)
     ob.location = at
     ob.rotation_euler = Euler([math.radians(a) for a in rot], "XYZ")
     return ob
@@ -562,13 +563,15 @@ def materials():
     M["chrome"] = shiny("chrome", (214, 220, 228), rough=0.2, metal=1.0, wear=(190, 196, 206), scale=4, dirt=0.15)
     M["steel"] = shiny("steel", (178, 184, 196), rough=0.3, metal=0.9, wear=(150, 156, 170), scale=4, dirt=0.2)
     M["sleeve"] = shiny("sleeve", (150, 140, 156), rough=0.55, metal=0.5, wear=(104, 96, 112), scale=14, dirt=0.25)
+    M["wheel"] = shiny("wheel", (238, 240, 244), rough=0.3, metal=0.3, wear=(196, 198, 208), scale=3, dirt=0.1,
+                       side=0.3)
     M["lid"] = shiny("lid", (168, 184, 204), rough=0.28, metal=0.85, wear=(146, 160, 182), scale=3, dirt=0.1)
     M["wood"] = shiny("wood", (232, 184, 92), rough=0.45, metal=0.0, wear=(214, 160, 70), scale=3, dirt=0.1,
                       spec=0.45, coat=0.3)
     M["darkmetal"] = shiny("darkmetal", (40, 46, 58), rough=0.22, metal=0.85, wear=(62, 70, 84), scale=3, dirt=0.1)
     M["gear"] = shiny("gear", (78, 78, 84), rough=0.38, metal=0.85, wear=(98, 98, 104), scale=6, dirt=0.15)
-    M["red"] = shiny("red", (196, 12, 12), rough=0.28, metal=0.25, wear=(170, 8, 10), scale=1.6, dirt=0.3,
-                     spec=0.6, coat=0.7)
+    M["red"] = shiny("red", (190, 10, 10), rough=0.24, metal=0.45, wear=(150, 6, 8), scale=1.6, dirt=0.3,
+                     spec=0.6, coat=0.3, side=0.35)
     M["dial"] = shiny("dial", (236, 232, 236), rough=0.5, metal=0.0, wear=(214, 210, 218), scale=3, dirt=0.0,
                       spec=0.4)
     M["needle"] = flat("needle", (16, 16, 18), rough=0.5)
@@ -861,29 +864,30 @@ def beater():
     # the frame bar up from the bearing to the triangle, and the axle arm out to the crown wheel
     a0, a1, a2 = (Vector(c) for c in S.TRI)
     sweep("framebar", [U2(0.0, 2.85), U2(0.05, 3.6), U2(a1.x - 0.15, a1.y - 0.05)], P(135, 1, 0), 0.22, 0.32,
+          M["wheel"], bevel=0.05)
+    ab = U2(S.WHEEL2_U, S.WHEEL2_Z) - P(S.WHEEL2_TH, 0.62, 0)   # the bearing, on the axle behind the wheel
+    sweep("axlearm", [U2(0.1, 2.6), U2(0.45, 3.2), ab - P(S.WHEEL2_TH, 0.15, 0)], P(135, 1, 0), 0.22, 0.34,
           M["chrome"], bevel=0.05)
-    sweep("axlearm", [U2(0.1, 2.6), U2(0.45, 3.2), U2(S.WHEEL2_U - 0.42, S.WHEEL2_Z)], P(135, 1, 0), 0.22, 0.34,
-          M["chrome"], bevel=0.05)
-    ob = lathe("axlebearing", [(0.0, -0.2), (0.3, -0.2), (0.32, 0.0), (0.26, 0.18), (0.0, 0.2)],
-               U2(S.WHEEL2_U - 0.4, S.WHEEL2_Z), M["chrome"], verts=20)
-    track(ob, P(45, 1, 0))
+    ob = lathe("axlebearing", [(0.0, -0.2), (0.3, -0.2), (0.32, 0.0), (0.26, 0.18), (0.0, 0.2)], ab, M["chrome"],
+               verts=20)
+    track(ob, P(S.WHEEL2_TH, 1, 0))
     # the triangle handle: a flat chrome bar round a rounded triangle, in the plane through the axis
     path = [U2(x, z) for x, z in rounded_poly([tuple(a0), tuple(a1), tuple(a2)], 0.42, 6)]
-    sweep("triangle", path, P(135, 1, 0), 0.2, 0.85, M["chrome"], bevel=0.06, closed=True)
+    sweep("triangle", path, P(135, 1, 0), 0.2, 0.85, M["wheel"], bevel=0.06, closed=True)
     # the gearbox: a chrome block on the frame bar, between the spindle's bearing and the crown wheel's axle
-    box("gearbox", (1.3, 0.8, 1.6), U2(0.2, 1.3), M["chrome"], rot=(0, 0, 45), bevel=0.22)
+    box("gearbox", (1.3, 0.8, 1.6), U2(0.2, 1.3), M["wheel"], rot=(0, 0, 45), bevel=0.34, segs=4)
 
     # the crown wheel and crank, on an axle along bearing 45
     def wheel(hub):
         R = S.WHEEL2_R
         lathe("crownwheel", [(0.3, -0.14), (R - 0.3, -0.14), (R - 0.1, -0.1), (R, 0.0), (R - 0.04, 0.12),
                              (R - 0.36, 0.14), (R - 0.4, 0.04), (0.5, 0.06), (0.36, 0.16), (0.3, 0.16)], (0, 0, 0),
-              M["chrome"], parent=hub, verts=64)
+              M["wheel"], parent=hub, verts=64)
         for k in range(24):                      # face teeth on the inner face, toward the pinion
             a = 2 * math.pi * k / 24
-            box(f"crowntooth{k}", (0.2, 0.14, 0.16), (math.cos(a) * (R - 0.32), math.sin(a) * (R - 0.32), -0.22),
+            box(f"crowntooth{k}", (0.18, 0.12, 0.1), (math.cos(a) * (R - 0.32), math.sin(a) * (R - 0.32), -0.17),
                 M["chrome"], rot=(0, 0, math.degrees(a)), bevel=0.02, parent=hub)
-        cyl("crownweb", R - 0.32, 0.08, (0, 0, -0.04), M["chrome"], verts=64, parent=hub)
+        cyl("crownweb", R - 0.32, 0.08, (0, 0, -0.04), M["wheel"], verts=64, parent=hub)
         for k in range(4):
             a = 2 * math.pi * (k + 0.5) / 4
             sweep(f"crownspoke{k}", [(0.4 * math.cos(a), 0.4 * math.sin(a), 0.0),
@@ -926,13 +930,16 @@ def stand():
     lathe("column", [(0.0, 0.0), (S.COLUMN_R + 0.18, 0.0), (S.COLUMN_R + 0.2, 0.8), (S.COLUMN_R, 1.5),
                      (S.COLUMN_R, S.HEAD_Z0 - 0.5), (S.COLUMN_R + 0.1, S.HEAD_Z0 - 0.2), (0.0, S.HEAD_Z0 + 0.2)],
           (cx, cy, 0.0), M["red"], verts=36)
-    box("hinge", (1.5, 1.5, 0.9), (cx - 0.15, cy - 0.25, S.HEAD_Z0 - 0.5), M["red"], bevel=0.3)
+    # the neck: from the column's top forward under the head's back
+    box("hinge", (1.6, cy - S.HEAD_Y[1] + 2.2, 0.95), (cx, (cy + S.HEAD_Y[1]) / 2 - 0.3, S.HEAD_Z0 - 0.55), M["red"],
+        bevel=0.3)
     x0, x1 = S.HEAD_X
     y0, y1 = S.HEAD_Y
     z0, z1 = S.HEAD_Z0, S.HEAD_Z1
-    box("head", (x1 - x0, y1 - y0, z1 - z0 - 0.55), ((x0 + x1) / 2, (y0 + y1) / 2, z0), M["red"], bevel=0.55)
-    box("headtop", (x1 - x0 - 0.4, y1 - y0 - 0.4, 0.8), ((x0 + x1) / 2, (y0 + y1) / 2, z1 - 0.8), M["red"],
-        bevel=0.38)
+    # the head: a soft enamel pillow (Flash's big rounded edges) with a seam band round its lower part
+    box("head", (x1 - x0, y1 - y0, z1 - z0), ((x0 + x1) / 2, (y0 + y1) / 2, z0), M["red"], bevel=1.0, segs=6)
+    box("headseam", (x1 - x0 + 0.12, y1 - y0 + 0.12, 0.42), ((x0 + x1) / 2, (y0 + y1) / 2, z0 + 1.15), M["red"],
+        bevel=0.2)
     # the beaters: a chrome hub down from the head, whisk wires in the hole
     zc = ZD + S.CONE_RISE
     cyl("beaterhub", 0.42, z0 - zc + 0.1, (0, 0, zc + 0.3), M["chrome"], verts=24, r2=0.55)
@@ -945,17 +952,17 @@ def stand():
     # the bowl-lift arm: a steel bar from the column round the drum's right to a clamp on its side
     za = S.ARM3_Z
     pts = [Vector((cx + 0.45, cy - 0.1, za)), Vector((3.9, 3.9, za)), Vector((4.45, 2.9, za - 0.15)),
-           Vector((4.4, 1.7, za - 0.45)), P(18.0, S.DRUM_R + 0.25, za - 0.6)]
+           Vector((4.4, 1.7, za - 0.45)), P(30.0, S.DRUM_R + 0.25, za - 0.6)]
     sweep("bowlarm", pts, (0, 0, 1), 0.5, 0.26, M["steel"], bevel=0.08)
     ob = lathe("bowlclamp", [(0.0, -0.1), (0.36, -0.1), (0.4, 0.05), (0.34, 0.3), (0.0, 0.32)],
-               P(18.0, S.DRUM_R - 0.05, za - 0.6), M["steel"], verts=20)
-    track(ob, P(18.0, 1, 0))
+               P(30.0, S.DRUM_R - 0.05, za - 0.6), M["steel"], verts=20)
+    track(ob, P(30.0, 1, 0))
 
     # the crank wheel on the head's right face
     def wheel(hub):
         R = S.WHEEL3_R
         lathe("wheel3", [(0.32, -0.1), (R - 0.12, -0.1), (R, -0.02), (R, 0.04), (R - 0.12, 0.12), (0.32, 0.12)],
-              (0, 0, 0), M["chrome"], parent=hub, verts=72)
+              (0, 0, 0), M["wheel"], parent=hub, verts=72)
         for k in range(3):                      # three kidney holes (dark: the red head shows behind)
             a = 2 * math.pi * k / 3 + 0.4
             pts = [((R * 0.56 + 0.32 * math.cos(math.pi * j / 6)) * math.cos(a + 0.36 * (j / 6 - 0.5)),
@@ -965,7 +972,7 @@ def stand():
         lathe("wheel3hub", [(0.0, -0.3), (0.42, -0.3), (0.46, 0.2), (0.36, 0.34), (0.0, 0.36)], (0, 0, 0), M["chrome"],
               parent=hub, verts=24)
         r = S.CRANK3_R
-        sweep("crank3arm", [(0, 0, 0.3), (0, r * 0.5, 0.3), (0, r - 0.05, 0.3)], (1, 0, 0), 0.36, 0.13, M["chrome"],
+        sweep("crank3arm", [(0, 0, 0.3), (0, r * 0.5, 0.3), (0, r - 0.05, 0.3)], (1, 0, 0), 0.62, 0.13, M["wheel"],
               parent=hub, bevel=0.04)
         lathe("crank3eye", [(0.0, 0.22), (0.26, 0.22), (0.28, 0.4), (0.0, 0.42)], (0, r, 0), M["chrome"], parent=hub,
               verts=16)
@@ -996,8 +1003,8 @@ def build():
 
 
 # how far each moving part turns in a loop (degrees, about its own axle), and where it starts
-TURNS = {"crank1": (-360.0, S.CRANK1_START), "crank2": (360.0, 0.0), "pinion": (-1080.0, 0.0),
-         "crank3": (360.0, 0.0)}
+TURNS = {"crank1": (-360.0, S.CRANK1_START), "crank2": (-360.0, 23.0), "pinion": (1080.0, 0.0),
+         "crank3": (-360.0, 13.4)}
 
 
 def turn(frame):
@@ -1135,7 +1142,7 @@ def border_of(objs, pad=10):
 
 FAMILY = (("basefoot", "base"), ("basebody", "base"), ("gauge", "gauge"), ("drum", "drum"), ("pipe", "pipe"),
           ("sleeve", "sleeve"), ("funnel", "funnel"), ("leg", "leg"), ("gantry", "frame"), ("framebar", "frame"),
-          ("axle", "frame"), ("triangle", "frame"), ("plinth", "stand"), ("column", "stand"), ("hinge", "stand"),
+          ("axle", "frame"), ("triangle", "frame"), ("gearbox", "frame"), ("plinth", "stand"), ("column", "stand"), ("hinge", "stand"),
           ("head", "stand"), ("wheel3boss", "stand"), ("beater", "beater"), ("bowl", "bowlarm"))
 
 
@@ -1252,6 +1259,14 @@ def main():
             print("GAP %-7s in front of %-7s: least depth gap %.3f, rays under 0.05: %d of %d (%.1f px2), screen box "
                   "x %.1f..%.1f y %.1f..%.1f" % (f1, f2, d, near, n, near * step * step, *bb[0::2], *bb[1::2]))
         print("DONE gap")
+        return
+    if MODE == "track":                      # the wooden handle's screen middle (Flash px) at every second frame
+        knobs = [o for o in SC.objects if o.name.endswith("handleknob")]
+        for k in range(0, FRAMES, 2):
+            turn(k)
+            bpy.context.view_layer.update()
+            pts = [scr(o.matrix_world @ Vector(c)) for o in knobs for c in o.bound_box]
+            print("TRACK f%02d x %.0f y %.0f" % (k, sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)))
         return
     if MODE == "probe":                      # probe sx sy ...: what the camera sees first through Flash pixels
         bpy.context.view_layer.update()
