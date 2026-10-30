@@ -1,7 +1,8 @@
 """sheet.py : the art-check sheet and crops of the Goo Factory 3D v2 (work/tools/levels_sheet.py).
 
     python sheet.py            work/sheet/goo-v2-sheet.png (Flash above 3D, L1/3/6/10, one scale, red marks on the
-                               mounts every level shares) and work/sheet/<area>-crop.png for each risky area below
+                               mounts every level shares), goo-v2-sheet-clean.png (the same without the marks, for
+                               the owner) and work/sheet/<area>-crop.png for each risky area below
 Flash and 3D are frame 0 with their ground shadows (laid on grass by the tool), at the render's scale (K=12).
 """
 import math
@@ -58,6 +59,8 @@ def main():
     base = [sys.executable, str(tool), "--flash", str(OUT / "flash-L{lv}.png"), "--model", str(OUT / "model-L{lv}.png"),
             "--levels", ",".join(map(str, LEVELS)), "--name", "Goo Factory 3D v2"] + marks
     subprocess.run(base + ["-o", str(OUT / "goo-v2-sheet.png")], check=True)
+    clean = [a for i, a in enumerate(base) if a != "--mark" and (i == 0 or base[i - 1] != "--mark")]
+    subprocess.run(clean + ["-o", str(OUT / "goo-v2-sheet-clean.png")], check=True)      # no marks: for the owner
     for name, (x, y, w, h) in CROPS.items():
         if len(sys.argv) > 1 and name not in sys.argv[1:]:
             continue
