@@ -1,6 +1,6 @@
 import { GRID_COST, TRAP_STATS } from "./combatStatsData.js";
 import {
-  STORAGE_TYPES,
+  HARVESTER_TYPES,
   hpLadder,
   isTower,
   maxHp,
@@ -547,8 +547,11 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
       fired: trap && reported === 0,
       // Only a harvester runs dry: `_looted` starts false (`BFOUNDATION.as:198`)
       // and only `BRESOURCE.Loot` sets it (`BRESOURCE.as:121-125`), so storage,
-      // which hands out of the pool, is never looted (issue #225).
-      looted: !STORAGE_TYPES.includes(type) && banked <= 0,
+      // which hands out of the pool, is never looted (issue #225), and nor is
+      // anything that holds no loot at all. A wall read as looted made a
+      // group 3 creep (Brain, Bolt) drop it as stale every tick and re-path,
+      // and each fresh route's unchecked first step walked it through the wall.
+      looted: HARVESTER_TYPES.includes(type) && banked <= 0,
       stored: banked,
       jarred: false,
     });
