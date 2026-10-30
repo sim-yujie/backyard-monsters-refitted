@@ -36,9 +36,9 @@ FUN_Z0, FUN_Z1, FUN_R = 8.9, 11.0, 1.6    # the cone from its neck (on the post)
 
 # level 1: the lid on a spindle out of the sleeve, the crank arm on it
 LID_Z, LID_R, LID_T = 11.25, 2.15, 0.38
-CRANK1_R = 3.5                   # the handle's distance from the axis
+CRANK1_R = 4.1                   # the handle's distance from the axis
 HANDLE_L, HANDLE_R = 2.9, 0.42   # the wooden handle (length, thickest radius); the same at every level
-CRANK1_START = 247.0             # bearing of the arm at frame 0 (Flash: the handle at the left)
+CRANK1_START = 262.0             # bearing of the arm at frame 0 (Flash: the handle at the left)
 
 # level 2: three legs with cross feet
 LIFT2 = 1.15

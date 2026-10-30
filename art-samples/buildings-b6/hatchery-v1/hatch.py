@@ -562,7 +562,8 @@ def materials():
                          spec=0.6, side=0.55)
     M["chrome"] = shiny("chrome", (214, 220, 228), rough=0.2, metal=1.0, wear=(190, 196, 206), scale=4, dirt=0.15)
     M["steel"] = shiny("steel", (178, 184, 196), rough=0.3, metal=0.9, wear=(150, 156, 170), scale=4, dirt=0.2)
-    M["sleeve"] = shiny("sleeve", (150, 140, 156), rough=0.55, metal=0.5, wear=(104, 96, 112), scale=14, dirt=0.25)
+    M["sleeve"] = shiny("sleeve", (172, 170, 176), rough=0.55, metal=0.4, wear=(120, 116, 126), scale=14, dirt=0.25,
+                        side=0.35)
     M["wheel"] = shiny("wheel", (238, 240, 244), rough=0.3, metal=0.3, wear=(196, 198, 208), scale=3, dirt=0.1,
                        side=0.3)
     M["lid"] = shiny("lid", (168, 184, 204), rough=0.28, metal=0.85, wear=(146, 160, 182), scale=3, dirt=0.1)
