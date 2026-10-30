@@ -616,6 +616,24 @@ def claw(at, h, face_bearing):
         tube("toe", [p0, p1, p2], 0.21, M["post"]("X"), r_end=0.08)
 
 
+def axis_of(bearing, tilt):
+    """The unit axle direction of a spinner (as spinner() builds it): bearing on the ground from +X, tilted up."""
+    a, t = math.radians(bearing), math.radians(tilt)
+    return Vector((math.cos(a) * math.cos(t), math.sin(a) * math.cos(t), math.sin(t)))
+
+
+def axle(center, bearing, tilt, length, r=0.08):
+    """A short iron axle from a wheel's centre back along its axis into the wall, with a round plate where it meets the
+    wall: what holds the wheel on (it stays still; only the wheel turns)."""
+    n = axis_of(bearing, tilt)
+    q = (-n).to_track_quat("Z", "Y").to_euler()
+    ob = cyl("axle", r, length, center, M["iron"], verts=12, bevel=0.02)
+    ob.rotation_euler = q
+    pl = cyl("axleplate", r * 2.8, 0.06, Vector(center) - n * (length - 0.12), M["iron"], verts=16, bevel=0.02)
+    pl.rotation_euler = q
+    return ob
+
+
 def saw(center):
     """The saw: purple face, silver teeth, brown hub, on an axle into the body. Faces 15 deg from +X toward the viewer."""
     def parts(h):
@@ -631,40 +649,64 @@ def saw(center):
             cyl("sawbolt", 0.04, 0.06, (0.12 * math.cos(a), 0.12 * math.sin(a), 0.16), M["bolt"], verts=8, bevel=0.01,
                 parent=h)
         return d
-    e, hub = spinner("saw", center, -12, 8, parts)       # faces nearly along the right wall, as Flash's ellipse
+    e, hub = spinner("saw", center, SAW_AXIS[0], SAW_AXIS[1], parts)   # nearly along the right wall: Flash's ellipse
     MOVING.append(hub)
-    cyl("sawaxle", 0.1, 0.8, center, M["iron"], rot=(0, -90, 12), verts=12, bevel=0.02)
     return hub
+
+
+SAW_AXIS, SGEAR_AXIS, WHEEL_AXIS = (-12, 8), (-10, 4), (-14, 6)     # (bearing, tilt) of each spinner's axle
+
+
+def mount_spinner(make, sx, sy, axis, r, back, wall_x, gap=0.1):
+    """Put a turning part on Flash pixel (sx, sy) just clear of the wall: its centre so far out (X) that the edge
+    nearest the wall (the disc leans by its axle's bearing and tilt) and its back face stay `gap` off the wall at
+    wall_x(y, z); then the axle back into the wall. make(center) builds the part."""
+    b, t = math.radians(axis[0]), math.radians(axis[1])
+    X = wall_x(0.0, 3.0) + 1.0
+    for _ in range(5):
+        p = px(sx, sy, X=X)
+        X = wall_x(p.y, p.z) + r * math.hypot(math.sin(b), math.sin(t)) + back + gap
+    p = px(sx, sy, X=X)
+    axle(p, axis[0], axis[1], (X - wall_x(p.y, p.z)) / max(0.3, axis_of(*axis).x) + 0.1)
+    return make(p)
 
 
 def small_gear(center, r=0.33):
     def parts(h):
         gear("sgear", r, 9, 0.1, (0, 0, 0), M["copper"], (0, 0, 0), tooth=0.22, parent=h)
         cyl("sgearhub", r * 0.38, 0.16, (0, 0, -0.02), M["bolt"], verts=14, bevel=0.02, parent=h)
-    e, hub = spinner("sgear", center, -10, 4, parts)
+    e, hub = spinner("sgear", center, SGEAR_AXIS[0], SGEAR_AXIS[1], parts)
     MOVING.append(hub)
     return hub
 
 
-def side_wheel(center, r=0.76):
+def side_wheel(center, r=0.68):
+    """Levels 6 and 10: the bronze cog on the right wall, as Flash's: fine teeth round a bright rim, a dark brown face,
+    a blue-grey hub."""
     def parts(h):
-        lathe("swheel", [(0.0, 0.07), (r * 0.8, 0.05), (r * 0.93, 0.1), (r, 0.06), (r, -0.06), (r * 0.9, -0.08),
-                         (0.0, -0.07)], (0, 0, 0), M["bronze"], verts=48, parent=h)
-        for i in range(6):                                 # a few dents and nicks round the edge (it turns: they move)
-            a = 2 * math.pi * i / 6 + 0.3
-            box("swnick", (0.08, 0.05, 0.1), (r * 0.97 * math.cos(a), r * 0.97 * math.sin(a), 0), M["copper"],
-                rot=(0, 0, math.degrees(a)), bevel=0.02, parent=h, origin="center")
-        cyl("swhub", 0.12, 0.2, (0, 0, -0.04), M["bolt"], verts=14, bevel=0.02, parent=h)
-    e, hub = spinner("swheel", center, -38, 18, parts)
+        gear("swheel", r, 30, 0.12, (0, 0, 0), M["bronze"], (0, 0, 0), tooth=0.1, parent=h)
+        cyl("swface", r * 0.8, 0.05, (0, 0, 0.04), M["hub"], verts=40, bevel=0.015, parent=h)
+        cyl("swhub", 0.13, 0.12, (0, 0, 0.05), M["bolt"], verts=14, bevel=0.02, parent=h)
+        for i in range(4):                                 # four rivets on the face (they turn with it)
+            a = 2 * math.pi * i / 4 + 0.5
+            cyl("swrivet", 0.035, 0.04, (r * 0.55 * math.cos(a), r * 0.55 * math.sin(a), 0.08), M["bronze"], verts=8,
+                bevel=0.01, parent=h)
+    e, hub = spinner("swheel", center, WHEEL_AXIS[0], WHEEL_AXIS[1], parts)
     MOVING.append(hub)
     return hub
 
 
-def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_len=0.5, up=0.55):
-    """The pipe up the body's left corner, ending in a steel horn turned toward the viewer's left."""
+def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_len=0.5, up=0.55, route=()):
+    """The pipe up the body's left corner, ending in a steel horn turned toward the viewer's left. route: points the pipe
+    comes along before it rises from base (out of the wall, round an elbow); a plate where it leaves the wall."""
     b = Vector(base)
     top = Vector((b.x, b.y, top_h))
-    tube("pipe", [b, top - Vector((0, 0, 0.25)), top], r_pipe, M["dgreen"])
+    pts = [Vector(p) for p in route]
+    tube("pipe", pts + [b, top - Vector((0, 0, 0.25)), top], r_pipe, M["dgreen"])
+    if pts:
+        d = (pts[1] - pts[0]).normalized()
+        pl = cyl("pipeplate", r_pipe * 1.6, 0.06, pts[0] + d * 0.04, M["iron"], verts=16, bevel=0.02)
+        pl.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
     for z in (b.z + 0.4, top_h - 0.45):
         cyl("pipeband", r_pipe * 1.18, 0.08, (b.x, b.y, z), M["iron"], verts=16, bevel=0.015)
     d = Vector((mouth_dir[0], mouth_dir[1], up)).normalized()
@@ -677,7 +719,7 @@ def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_le
     cyl("hornneck", r_pipe * 1.1, 0.2, top - Vector((0, 0, 0.1)), M["iron"], verts=16, bevel=0.02)
 
 
-def tray(center, size, lumps=False, trim="olive", tilt=14.0, out_bearing=-90.0):
+def tray(center, size, lumps=False, trim="olive", tilt=14.0, out_bearing=-90.0, mount=0.0):
     """The front tray the snapped twigs fall into, as Flash draws it: a low open box whose bottom is a deep boat hull
     curving down along its length (a sled runner seen from the side), metal caps on the four top corners, metal bands
     round the hull near each end, a rim along the top; levels 6-10 hold black lumps."""
@@ -741,6 +783,12 @@ def tray(center, size, lumps=False, trim="olive", tilt=14.0, out_bearing=-90.0):
             box("traycorner", (0.24, 0.12, 0.34), (p.x, p.y, sz - 0.25), corner, bevel=0.04, parent=root)
             cyl("trayrivet", 0.04, 0.04, (p.x, p.y + fy * 0.07, sz - 0.1), M["iron"], rot=(-90 * fy, 0, 0), verts=8,
                 bevel=0.01, parent=root)
+    for x in (-sx * 0.3, sx * 0.3):                     # iron brackets from the back rim to the wall: it is fixed on
+        if mount:
+            box("traymount", (0.16, mount + 0.1, 0.12), (x, sy / 2 + mount / 2, sz - 0.12), M["iron"], bevel=0.03,
+                parent=root, origin="center")
+            box("traymount2", (0.16, 0.1, 0.5), (x, sy / 2 + mount - 0.02, sz - 0.4), M["iron"], bevel=0.03,
+                parent=root, origin="center")
     if lumps:
         for i in range(10):
             r = rng.uniform(0.13, 0.2)
@@ -879,7 +927,7 @@ def band(hx, hy, z, h=0.5, out=0.0):
             cyl("rivet", 0.04, 0.05, (hx + 0.1 + out(f), y, z + dz), M["iron"], rot=(0, 90, 0), verts=8, bevel=0.01)
 
 
-def chute(at, size, twigs=False, lean=0.0):
+def chute(at, size, twigs=False, lean=0.0, collar=False):
     """The white sheet-metal hopper behind the roof (levels 6, 10), dark green side, twigs out of the top at 10."""
     sx, sy, sz = size
     root = bpy.data.objects.new("chuteroot", None)
@@ -889,6 +937,8 @@ def chute(at, size, twigs=False, lean=0.0):
     box("chute", (sx, sy, sz), (0, 0, 0), M["chute"], bevel=0.04, parent=root)
     box("chuteside", (0.04, sy * 0.96, sz * 0.98), (sx / 2 + 0.01, 0, 0), M["dgreen"], bevel=0.015, parent=root)
     box("chutecap", (sx + 0.1, sy + 0.1, 0.1), (0, 0, sz), M["iron"], bevel=0.03, parent=root)
+    if collar:
+        box("chutecollar", (sx + 0.22, sy + 0.22, 0.3), (0, 0, -0.05), M["iron"], bevel=0.04, parent=root)
     at = (0, 0, 0)
     if twigs:
         for k in range(7):
@@ -925,24 +975,48 @@ def level_pagoda():
             claw((x, y), lh, b)
     arch_hole(0.0, 1.7, min(5.05, z1 - 0.3), 1.25, -hy - 0.15)
     roller(px(-16, 19, Y=-hy - 0.95), 1.9, 0.62)
-    tr = tray(px(-23.5, 28 if L >= 6 else 30, Y=-hy - 0.85) - Vector((0, 0, 0.25)), (2.0, 1.15, 0.45), lumps=L >= 6,
-              trim="gold" if L >= 6 else "olive", tilt=30 if L >= 6 else 14)
-    tr.rotation_euler.y = math.radians(12)
-    leg(px(-18, 43, Z=GROUND).to_2d(), 1.6, 0.3)
+    # the tray, as Flash: long side along the left face, right under the roller's mouth, its right end reaching the
+    # front corner, the right end a little raised, fixed to the wall by two iron brackets, a stump under its hull
+    sx_, sy_, sz_ = 2.55, 1.15, 0.45
+    tilt = 30 if L >= 6 else 14
+    yc = -2.72                                  # its back (hull and bands) just clear of the arch frame
+    root = px(-17 if L < 6 else -18, 32.4 if L < 6 else 31.0, Y=yc)
+    t = math.radians(tilt)
+    tr = tray(root, (sx_, sy_, sz_), lumps=L >= 6, trim="gold" if L >= 6 else "olive", tilt=tilt)
+    tr.rotation_euler.y = math.radians(-8)
+    # it hangs on a wooden sill in the roller's mouth: the sill runs out of the arch to under the tray's back rim, with
+    # an iron strap from the rim down over it each side
+    rim_y = yc + sy_ / 2 * math.cos(t) - sz_ * math.sin(t)
+    rim_z = root.z + sy_ / 2 * math.sin(t) + sz_ * math.cos(t)
+    y0s = -hy - 0.1
+    box("sill", (1.2, y0s - rim_y + 0.12, 0.16), (0.0, (y0s + rim_y - 0.12) / 2, rim_z - 0.2), M["post"]("Y"),
+        bevel=0.04)
+    for x in (-0.42, 0.42):
+        box("traystrap", (0.12, 0.3, 0.05), (x, rim_y - 0.02, rim_z - 0.05), M["iron"], rot=(-35, 0, 0), bevel=0.015,
+            origin="center")
+    leg((root.x - sx_ * 0.22, yc + 0.1), root.z + sz_ - 0.78 * (sz_ + 0.6) + 0.12, 0.3)
     zf = math.sin(math.pi * (4.15 - z0) / (z1 - z0))
     band(hx, hy, 3.9, 0.5, out=lambda f: 0.15 * math.sin(math.pi * f) + 0.15 * zf)
-    saw(px(12 if L >= 6 else 11, 25 if L >= 6 else 26, X=hx + 0.75))
-    small_gear(px(16, 10 if L >= 6 else 12, X=hx + 0.4))
-    if L < 10:
-        funnel(Vector((-1.1, -hy - 0.25, 3.0)), 6.7 if L >= 6 else 6.5, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5,
-               bell_len=1.3, up=0.1)
-    else:                                       # beside the roof's left end, not through it
+
+    def wall_r(y, z):
+        """How far out the right face is at (y, z): the bulging planks, and the strap where it runs."""
+        f = min(1.0, max(0.0, (y + hy) / (2 * hy)))
+        zz = min(1.0, max(0.0, (z - z0) / (z1 - z0)))
+        return hx + 0.15 * math.sin(math.pi * f) + 0.15 * math.sin(math.pi * zz) + (0.12 if 3.3 < z < 5.0 else 0.0)
+    mount_spinner(saw, 12 if L >= 6 else 11, 25 if L >= 6 else 26, SAW_AXIS, 1.06, 0.27, wall_r)
+    mount_spinner(small_gear, 16, 10 if L >= 6 else 12, SGEAR_AXIS, 0.33, 0.06, wall_r)
+    if L < 10:                                  # out of the back-left face, round the left corner, up outside the eave
+        funnel(Vector((-1.45, -2.82, 4.85)), 6.7 if L >= 6 else 6.5, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5,
+               bell_len=1.3, up=0.1, route=[(-0.95, -1.2, 4.45), (-1.3, -1.22, 4.46), (-1.6, -1.45, 4.5),
+                                             (-1.65, -2.1, 4.55), (-1.55, -2.6, 4.68)])
+    else:                                       # out of the back-left face, beside the roof's left end, not through it
         funnel(Vector((-hx - 0.62, -hy + 0.2, 3.0)), 6.9, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5,
-               bell_len=1.3, up=0.1)
+               bell_len=1.3, up=0.1, route=[(-hx + 0.1, -hy + 0.2, 2.7), (-hx - 0.2, -hy + 0.2, 2.72),
+                                             (-hx - 0.5, -hy + 0.2, 2.82)])
     if L >= 6:
-        side_wheel(px(26, 11, X=hx + 0.6))
+        mount_spinner(side_wheel, 26, 11, WHEEL_AXIS, 0.68, 0.06, wall_r)
         if L == 6:
-            chute((0.45, 2.0, 4.6), (0.85, 0.7, 2.75), lean=16)
+            chute((0.45, 2.0, 5.15), (0.85, 0.7, 2.2), lean=16, collar=True)    # stands on the roof, a collar round it
         else:
             chute((0.1, 1.45, 5.6), (0.8, 0.65, 3.6), twigs=True, lean=14)
     if L < 10:
@@ -1046,8 +1120,8 @@ def level1():
     box("pressback", (0.12, cy0 - fy, 3.7), (-1.0, (fy + cy0) / 2, 0.6), M["dwood"]("Y"), bevel=0.03)
     box("pressfloor", (2.2, cy0 - fy, 0.14), (0.05, (fy + cy0) / 2, 0.75), M["dwood"]("X"), bevel=0.03)
     tray(px(-18, 36, Y=-2.3), (2.5, 1.1, 0.55), lumps=False, trim="olive", tilt=12)
-    saw(px(8, 30, X=1.65))
-    small_gear(px(14, 17, X=1.05), 0.3)
+    mount_spinner(saw, 8, 30, SAW_AXIS, 1.06, 0.27, lambda y, z: cx1 + 0.02)
+    mount_spinner(lambda c: small_gear(c, 0.3), 14, 17, SGEAR_AXIS, 0.3, 0.06, lambda y, z: cx1 + 0.02)
     top = px(-15, -12, Y=fy).z
     tube("pipe", [Vector((-1.0, fy, 4.5)), Vector((-1.0, fy, top))], 0.3, M["dgreen"])
     cyl("pipeband", 0.35, 0.1, (-1.0, fy, top - 0.5), M["iron"], verts=20, bevel=0.02)
@@ -1202,6 +1276,51 @@ def main():
     sc = SC
     moving_objs = [o for o in SC.objects if under_moving(o)]
     turn(0)
+    if MODE == "check":                      # which parts touch or pass through others (evaluated meshes, BVH overlap)
+        from mathutils.bvhtree import BVHTree
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        fam = {"saw": "saw", "sgear": "sgear", "swheel": "swheel", "swface": "swheel", "swhub": "swheel",
+               "swrivet": "swheel", "hull": "tray", "trayend": "tray", "stave": "tray", "hoop": "tray",
+               "trayrim": "tray", "traycorner": "tray", "trayrivet": "tray", "lump": "tray", "traymount": "tray",
+               "pipe": "pipe", "horn": "pipe", "roller": "roller", "chute": "chute", "roofstick": "roof",
+               "roof": "roof", "rope": "rope", "axle": "axle", "looseplank": "lplank", "gear": "gear"}
+
+        def family(o):
+            n = o.name.split(".")[0]
+            for k in sorted(fam, key=len, reverse=True):
+                if n.startswith(k):
+                    return fam[k]
+            return "body:" + n
+        obs = [o for o in SC.objects if o.type in ("MESH", "CURVE")]
+        trees = {}
+        for o in obs:
+            ev = o.evaluated_get(dg)
+            try:
+                me = ev.to_mesh()
+            except RuntimeError:
+                continue
+            if me is None:
+                continue
+            mw = ev.matrix_world
+            trees[o.name] = BVHTree.FromPolygons([mw @ v.co for v in me.vertices], [p.vertices[:] for p in me.polygons])
+            ev.to_mesh_clear()
+        hits = {}
+        for i, a in enumerate(obs):
+            for b in obs[i + 1:]:
+                fa, fb = family(a), family(b)
+                if fa == fb or (fa.startswith("body:") and fb.startswith("body:")):
+                    continue
+                ta, tb = trees.get(a.name), trees.get(b.name)
+                if ta and tb:
+                    n = len(ta.overlap(tb))
+                    if n:
+                        key = tuple(sorted((fa, fb)))
+                        hits.setdefault(key, []).append((a.name, b.name, n))
+        for k, v in sorted(hits.items()):
+            print("CHECK", k, sum(x[2] for x in v), v[:4])
+        print("DONE check")
+        return
     if MODE == "probe":                      # probe sx sy ...: what the camera sees first through Flash pixels
         bpy.context.view_layer.update()
         dg = bpy.context.evaluated_depsgraph_get()
