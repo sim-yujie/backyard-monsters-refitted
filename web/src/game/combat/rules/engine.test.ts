@@ -37,7 +37,7 @@ import {
   TARGET_GROUP,
 } from "./stats.js";
 import { buildEngineYard, reachesBuilding, screenDistanceSquared, screenPointOf } from "./yard.js";
-import type { CombatBuildingDataMap } from "./types.js";
+import type { CombatBuildingData, CombatBuildingDataMap } from "./types.js";
 
 /**
  * The engine, one rule at a time.
@@ -3181,5 +3181,53 @@ describe("the Quake Tower's drawing events (INFERNOQUAKETOWER.as)", () => {
     expect(quakes).toHaveLength(1);
     expect(quakes[0]?.radius).toBe(180);
     expect(battle.state().towers.find((tower) => tower.id === 2)?.shots).toBe(1);
+  });
+});
+
+describe("a Brain at a wall", () => {
+  /**
+   * A harvester inside a closed ring of walls, 20 a side from -100 to 100. A
+   * wall holds no loot, so it is never "looted": a group 3 creep whose route
+   * is cut at one keeps it and breaks it, as Flash's does (`CreepBase.as:853`
+   * drops a group 3 target only once `_looted`, which a wall never is). Read
+   * as looted, it dropped the wall every tick, re-pathed, and each fresh
+   * route's unchecked first step walked it on through the wall.
+   */
+  const ringed = (): CombatBuildingDataMap => {
+    const buildings: Record<string, CombatBuildingData> = {
+      "1": { id: 1, t: 1, l: 1, X: -35, Y: -35, st: 1000 },
+    };
+    let id = 10;
+    for (let at = -100; at < 100; at += 20) {
+      for (const [X, Y] of [[at, -100], [at, 80], [-100, at], [80, at]] as const) {
+        if (Object.values(buildings).some((one) => one.X === X && one.Y === Y)) continue;
+        buildings[String(id)] = { id, t: 17, l: 1, X, Y };
+        id += 1;
+      }
+    }
+    return buildings;
+  };
+
+  it("breaks the wall in its way instead of walking through it", () => {
+    const yard = yardOf(ringed());
+    const walls = yard.buildings.filter((building) => building.kind === "wall");
+    expect(walls.every((wall) => !wall.looted)).toBe(true);
+    const battle = createBattle(yard, { seed: 1, levels: { C9: 1 } });
+    battle.apply({ kind: "fling", t: 0, x: -400, y: -400, r: 40, monsters: { C9: 4 } });
+    let swungAtWall = false;
+    for (let step = 0; step < 3000 && !battle.over(); step += 1) {
+      battle.step();
+      const ringStands = walls.every((wall) => wall.hp > 0);
+      for (const brain of battle.creeps()) {
+        const target = yard.buildings.find((building) => building.id === brain.targetBuilding);
+        if (brain.state === "attacking" && target?.kind === "wall") swungAtWall = true;
+        // Nobody gets inside while the ring is whole.
+        if (ringStands) {
+          expect(Math.abs(brain.ix) < 75 && Math.abs(brain.iy) < 75, `tick ${step}`).toBe(false);
+        }
+      }
+    }
+    expect(swungAtWall).toBe(true);
+    expect(walls.some((wall) => wall.hp < wall.maxHp)).toBe(true);
   });
 });
