@@ -169,7 +169,7 @@ class NT:
         self.link(vec, nz.inputs["Vector"])
         return nz.outputs["Fac"]
 
-    def grime(self, col, low=0.0, high=1.4, amount=0.35):
+    def grime(self, col, low=0.0, high=1.4, amount=0.35, ao_min=0.55):
         """Darker toward the ground (world height), and in the creases (ambient occlusion): Flash's soft dirt."""
         geo = self.n("ShaderNodeNewGeometry")
         sep = self.n("ShaderNodeSeparateXYZ")
@@ -181,7 +181,7 @@ class NT:
         ao = self.n("ShaderNodeAmbientOcclusion", samples=8)
         ao.inputs["Distance"].default_value = 0.35
         aor = self.n("ShaderNodeMapRange")
-        aor.inputs[3].default_value, aor.inputs[4].default_value = 0.55, 1.0
+        aor.inputs[3].default_value, aor.inputs[4].default_value = ao_min, 1.0
         self.link(ao.outputs["AO"], aor.inputs[0])
         mul = self.n("ShaderNodeMath", operation="MULTIPLY")
         self.link(mr.outputs[0], mul.inputs[0])
@@ -245,7 +245,8 @@ def wood(name, light, dark, axis="Z", rings=6.0, hue_jit=0.0, rough=0.78, dirt=0
     return t.m
 
 
-def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, dirt=0.3, spec=0.4, soot=0.0):
+def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, dirt=0.3, spec=0.4, soot=0.0, top=None,
+            ao_min=0.55):
     """Paint or metal with worn patches (`wear` colour shows through), rust blotches and soot (dark, dull smudges that
     run down the part, as Flash's dirty metals)."""
     if name in MATS:
@@ -270,7 +271,12 @@ def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, di
         out = t.mix(out, srgb(30, 25, 22), sm)
         rr = t.ramp(n3, [(0.38, (rough,) * 3 + (1,)), (0.62, (min(1.0, rough + 0.4),) * 3 + (1,))])
         rough_in = rr
-    out = t.grime(out, GROUND, 2.6, dirt)
+    if top:                                     # faces turned up are paler (Flash's near-white block tops)
+        geo = t.n("ShaderNodeNewGeometry")
+        sep = t.n("ShaderNodeSeparateXYZ")
+        t.link(geo.outputs["Normal"], sep.inputs[0])
+        out = t.mix(out, srgb(*top), t.ramp(sep.outputs["Z"], [(0.3, (0, 0, 0, 1)), (0.8, (1, 1, 1, 1))]))
+    out = t.grime(out, GROUND, 2.6, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rough_in, "metal": metal, "spec": spec})
     t.bump(t.noise(v, scale * 3, 4.0, 0.6), 0.06, 0.01)
     MATS[name] = t.m
@@ -463,18 +469,23 @@ def spinner(name, center, normal_bearing, tilt, parts):
 # ------------------------------------------------------------------------------------------------------------ the model
 def materials():
     M = {}
-    M["stone"] = painted("stone", (139, 137, 140), rough=0.75, wear=(185, 183, 186), scale=2.5, dirt=0.45, spec=0.25)
-    M["stonew"] = painted("stonew", (196, 195, 200), rough=0.6, wear=(226, 225, 230), scale=2.5, dirt=0.25, spec=0.3)
-    M["stoneh"] = painted("stoneh", (147, 145, 148), rough=0.7, wear=(191, 189, 192), scale=2.0, dirt=0.3, spec=0.25)
+    # Flash's stone: near-white tops and lit faces, blue-grey shaded sides, soft (not black) joints
+    M["stone"] = painted("stone", (124, 126, 142), rough=0.75, wear=(166, 168, 180), scale=2.5, dirt=0.3, spec=0.25,
+                         top=(236, 236, 240), ao_min=0.7)
+    M["stoneh"] = painted("stoneh", (134, 136, 150), rough=0.7, wear=(176, 178, 190), scale=2.0, dirt=0.2, spec=0.25,
+                          top=(240, 240, 244), ao_min=0.7)
+    M["stoner"] = painted("stoner", (134, 136, 150), rough=0.7, wear=(184, 186, 198), scale=2.0, dirt=0.15, spec=0.25,
+                          top=(244, 244, 248), ao_min=0.72)     # the turning rings' blocks: the palest stone
     M["pebble"] = painted("pebble", (178, 177, 180), rough=0.6, wear=(218, 217, 220), scale=2.0, dirt=0.2, spec=0.3)
-    M["core"] = painted("core", (74, 72, 78), rough=0.85, wear=(98, 96, 102), scale=3, dirt=0.4, spec=0.2)
-    M["coreh"] = painted("coreh", (104, 102, 108), rough=0.8, scale=3, dirt=0.3, spec=0.2)
-    M["band"] = flat("band", (74, 72, 78), rough=0.85)           # the rings' turning band: plain, so a turn of one
+    M["core"] = painted("core", (92, 94, 108), rough=0.85, wear=(112, 114, 126), scale=3, dirt=0.4, spec=0.2)
+    M["coreh"] = painted("coreh", (118, 120, 134), rough=0.8, scale=3, dirt=0.3, spec=0.2)
+    M["band"] = flat("band", (96, 98, 112), rough=0.85)           # the rings' turning band: plain, so a turn of one
     M["hole"] = flat("hole", (14, 12, 16), rough=1.0)              # pattern looks exactly the same
     M["roof"] = lambda axis="Z": wood("roof", (186, 154, 134), (144, 108, 88), axis, rings=7, knots=False, dirt=0.2)
     M["roofb"] = lambda axis="Z": wood("roofb", (150, 112, 84), (110, 78, 56), axis, rings=7, dirt=0.2)
-    M["pipe"] = painted("pipe", (62, 70, 82), rough=0.45, metal=0.7, wear=(120, 130, 146), scale=7, dirt=0.1, soot=0.5)
-    M["horn"] = painted("horn", (58, 72, 88), rough=0.42, metal=0.45, wear=(120, 136, 152), scale=6, dirt=0.05, soot=0.4)
+    M["pipe"] = painted("pipe", (52, 50, 54), rough=0.5, metal=0.5, wear=(96, 94, 100), scale=7, dirt=0.1, soot=0.5)
+    M["horn"] = painted("horn", (50, 64, 82), rough=0.55, metal=0.2, wear=(104, 124, 146), scale=6, dirt=0.05, soot=0.3)
+    M["band2"] = painted("band2", (84, 150, 186), rough=0.4, metal=0.5, wear=(150, 200, 224), scale=8, dirt=0.0)
     M["iron"] = painted("iron", (58, 62, 72), rough=0.45, metal=0.85, wear=(150, 156, 170), rust=(120, 70, 40), scale=7,
                         soot=0.75)
     M["bolt"] = painted("bolt", (150, 160, 176), rough=0.3, metal=0.9, scale=10, dirt=0.0)
@@ -488,6 +499,7 @@ def materials():
 
 M = materials()
 RR, RH = S.roof_size(L)        # the roof: level 1's is smaller, level 3 puts on the big one (as Flash)
+RP = S.roof_p(L)
 
 
 def R(seed):
@@ -495,7 +507,7 @@ def R(seed):
     return random.Random(seed)
 
 
-def seg_mesh(name, w, r0, r1, h, bulge=0.0, n=None, rnd=None, jit=0.0):
+def seg_mesh(name, w, r0, r1, h, bulge=0.0, n=None, rnd=None, jit=0.0, bevel=0.09):
     """A stone block: the piece of a ring w degrees wide round bearing 0, radii r0..r1, heights 0..h. bulge: the outer
     face bows out at mid height. Returns a mesh object at the origin (place it with its rotation and height)."""
     n = n or max(2, int(w / 5))
@@ -516,7 +528,7 @@ def seg_mesh(name, w, r0, r1, h, bulge=0.0, n=None, rnd=None, jit=0.0):
         for v in bm.verts:
             v.co += Vector((rnd.uniform(-jit, jit) for _ in range(3)))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return mesh_ob(name, bm, [M["stone"]], smooth=False, bevel=min(0.09, h / 4), segs=3)
+    return mesh_ob(name, bm, [M["stone"]], smooth=False, bevel=min(bevel, h / 4), segs=3)
 
 
 def place(ob, bearing, z, mat=None):
@@ -560,8 +572,8 @@ def ring(name, z0, phase):
     link(hub, e)
     lathe(name + "band", [(1.56, z0 + 0.04), (2.24, z0 + 0.04), (2.24, z0 + S.RING_H - 0.04), (1.56, z0 + S.RING_H - 0.04),
                           (1.56, z0 + 0.04)], (0, 0, 0), M["band"], verts=56, parent=hub)
-    big = seg_mesh(name + "big", 23.0, 2.1, S.R_RING - 0.04, S.RING_H - 0.1, 0.05, n=6) if L >= 3 else None
-    small = seg_mesh(name + "small", 21.0, 2.1, S.R_RING - 0.14, S.RING_H - 0.16, 0.05, n=6)
+    big = seg_mesh(name + "big", 23.0, 2.1, S.R_RING - 0.04, S.RING_H - 0.1, 0.02, n=6, bevel=0.05) if L >= 3 else None
+    small = seg_mesh(name + "small", 21.0, 2.1, S.R_RING - 0.14, S.RING_H - 0.16, 0.02, n=6, bevel=0.05)
     for k in range(S.N_RING):
         src = big if k % 2 == 0 and big else small     # level 3 swaps every other stone for a bigger one
         ob = src if src.parent is None else src.copy()
@@ -569,7 +581,7 @@ def ring(name, z0, phase):
             link(ob)
         ob.parent = hub
         dz = 0.05 if src is big else 0.08
-        place(ob, 360.0 * (k + phase) / S.N_RING, z0 + dz)
+        place(ob, 360.0 * (k + phase) / S.N_RING, z0 + dz, M["stoner"])
     MOVING.append(hub)
     return hub
 
@@ -579,7 +591,7 @@ def head(z0):
     on the front-left and a dark slot on the right."""
     rnd = R(31)
     h = S.HEAD_H
-    lathe("headcore", [(1.5, z0 + 0.04), (2.2, z0 + 0.04), (2.3, z0 + h * 0.5), (2.18, z0 + h), (1.5, z0 + h),
+    lathe("headcore", [(1.5, z0 + 0.04), (2.06, z0 + 0.04), (2.12, z0 + h * 0.5), (2.02, z0 + h), (1.5, z0 + h),
                        (1.5, z0 + 0.04)], (0, 0, 0), M["coreh"], verts=48)
     hc = (h - 0.04) / 2
     course("headA", z0 + 0.04, hc, 13, 2.0, S.R_HEAD - 0.08, rnd, 0.95, M["stoneh"], 0.0, 0.1, 0.03, 0.03)
@@ -588,8 +600,8 @@ def head(z0):
     a = math.radians(S.SPOUT_TH)
     d = Vector((math.cos(a), math.sin(a), -0.12)).normalized()
     base = Vector((2.0 * math.cos(a), 2.0 * math.sin(a), z0 + S.SPOUT_UP))
-    sp = lathe("spout", [(0.5, 0.0), (0.52, 0.55), (0.58, 0.74), (0.6, 0.88), (0.52, 0.98), (0.36, 0.96), (0.34, 0.8)],
-               base, M["stonew"], verts=32)
+    sp = lathe("spout", [(0.5, 0.0), (0.52, 0.55), (0.58, 0.74), (0.6, 0.88), (0.53, 0.98), (0.36, 0.96), (0.34, 0.8)],
+               base, M["stoneh"], verts=32)
     sp.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
     dk = cyl("spouthole", 0.35, 0.05, base + d * 0.76, M["hole"], verts=24, bevel=0.0)
     dk.rotation_euler = sp.rotation_euler
@@ -618,72 +630,85 @@ def shingle_mesh(name, w0, w1, ln, th, mat, tip=0.16):
     return mesh_ob(name, bm, [mat], smooth=False, bevel=0.02, segs=2)
 
 
-def cone_frame(phi, s, ze, lift):
-    """Where a plank sits on the roof cone: its foot at bearing phi, fraction s up the slope, lifted `lift` off it."""
+def roof_r(s):
+    """The roof's radius at fraction s of its height (Flash's L3+ roof: a steep top flaring out to the eave)."""
+    return RR * max(0.0, 1.0 - s) ** RP
+
+
+def cone_frame(phi, s0, s1, ze, lift):
+    """Where a plank sits on the roof: its foot at bearing phi, fraction s0 up the roof, running straight up to s1,
+    lifted `lift` off it. Returns the foot, the plank's frame and its length."""
     a = math.radians(phi)
     rad = Vector((math.cos(a), math.sin(a), 0))
-    p = rad * (RR * (1 - s)) + Vector((0, 0, ze + RH * s))
-    up = (Vector((0, 0, RH)) - rad * RR).normalized()
+    p = rad * roof_r(s0) + Vector((0, 0, ze + RH * s0))
+    q = rad * roof_r(s1) + Vector((0, 0, ze + RH * s1))
+    up = (q - p).normalized()
     t = Vector((-math.sin(a), math.cos(a), 0))
     n = t.cross(up)
     if n.dot(rad) < 0:
         n = -n
     m = Matrix((t, up, n)).transposed()
-    return p + n * lift, m
+    return p + n * lift, m, (q - p).length
 
 
 def roof(ze, peak_cut=None):
-    """The cone roof of pale planks, two rows round, their rounded feet making the scalloped eave (Flash's), on a
-    plank deck that rests on the collar. peak_cut: the top row stops this far up (level 10's drum seat)."""
+    """The roof of pale planks, three rows round, their rounded feet making the scalloped eave (Flash's), on a plank
+    deck that rests on the collar. peak_cut: the planks stop this far up (level 10's drum seat)."""
     rnd = R(57)
     c = Vector(S.ROOF_SHIFT + (0.0,))
-    deck = [(0.0, ze + 0.005), (RR - 0.1, ze + 0.005), (RR - 0.1, ze + 0.04), (0.0, ze + RH - 0.02)]
-    if peak_cut:                                # level 10: the deck stops under the drum's seat
-        zc = ze + RH * peak_cut - 0.02
-        t = (zc - (ze + 0.04)) / (RH - 0.06)
-        deck[3:] = [((RR - 0.1) * (1 - t), zc), (0.0, zc)]
-    lathe("roofdeck", deck, c, M["roofb"]("Z"), verts=48)
     top = peak_cut or 1.0
-    rows = ((-0.03, 0.42, 17, 0.0, 0.06), (0.34, 0.72, 13, 0.5, 0.13), (0.64, top, 9, 0.25, 0.2))
+    deck = [(0.0, ze + 0.005), (RR - 0.1, ze + 0.005)]
+    for i in range(13):
+        sd = top * i / 12
+        deck.append((max(0.0, roof_r(sd) - 0.1), ze + 0.04 + (RH - 0.06) * sd))
+    if peak_cut:                                # level 10: the deck stops under the drum's seat
+        deck[-1] = (deck[-1][0], ze + RH * peak_cut - 0.02)
+    deck.append((0.0, deck[-1][1]))
+    lathe("roofdeck", deck, c, M["roofb"]("Z"), verts=48)
+    rows = ((-0.03, 0.42, 17, 0.0, 0.06), (0.34, 0.72, 13, 0.5, 0.13), (0.64, 0.93, 9, 0.25, 0.17))
     for s0, s1, n, ph, lift in rows:
-        r0, r1 = RR * (1 - s0), RR * (1 - s1)
-        ln = (s1 - s0) * math.hypot(RR, RH)
+        if s0 >= top:
+            continue
+        s1 = min(s1, top)
+        r0, r1 = roof_r(s0), roof_r(s1)
         for k in range(n):
             phi = 360.0 * (k + ph + rnd.uniform(-0.1, 0.1)) / n
             w0 = 2 * math.pi * r0 / n * 1.12
             w1 = max(0.04, 2 * math.pi * r1 / n * 1.1)
+            p, m, ln = cone_frame(phi, s0, s1, ze, lift + 0.025 * (k % 2))
             ob = shingle_mesh("roofplank", w0, w1, ln * rnd.uniform(0.93, 1.0), 0.08, M["roof"]("Y"), tip=0.2)
-            p, m = cone_frame(phi, s0, ze, lift + 0.025 * (k % 2))
             p += c
             tilt = Matrix.Rotation(math.radians(rnd.uniform(-4, 4)), 3, "Y") @ Matrix.Rotation(math.radians(rnd.uniform(-3, 3)), 3, "Z")
             ob.matrix_world = Matrix.Translation(p) @ (m @ tilt).to_4x4()
     if not peak_cut:                            # a peak cap closes the top
-        lathe("roofpeak", [(0.0, 0.0), (0.3, 0.0), (0.26, 0.1), (0.0, 0.42)], c + Vector((0, 0, ze + RH - 0.22)),
+        lathe("roofpeak", [(0.0, 0.0), (0.4, 0.0), (0.34, 0.12), (0.0, RH * 0.14 + 0.16)], c + Vector((0, 0, ze + RH * 0.86)),
               M["roofb"]("Z"), verts=16)
     if peak_cut:                                # the drum's seat: a wooden cap over the cut planks
-        r = RR * (1 - peak_cut)
-        cyl("roofcap", r + 0.12, 0.1, c + Vector((0, 0, ze + RH * peak_cut - 0.02)), M["roofb"]("Z"), verts=32,
-            bevel=0.03)
+        cyl("roofcap", roof_r(peak_cut) + 0.12, 0.1, c + Vector((0, 0, ze + RH * peak_cut - 0.02)), M["roofb"]("Z"),
+            verts=32, bevel=0.03)
 
 
 def pipe(ze):
-    """The pipe: out of the collar on the back left, round an elbow, up past the eave, ending in a slate horn turned
-    up to the viewer's left. An iron plate where it leaves the collar, an iron band near the top."""
+    """The pipe: a short iron arm out of the collar on the back left, under the eave, into a socket, and from there a
+    thick dark pipe standing up beside the roof with a blue band, under a chunky slate horn (Flash's)."""
     a = math.radians(S.PIPE_TH)
     rad = Vector((math.cos(a), math.sin(a), 0))
-    zf = ze - 0.28
+    zf = ze - 0.205
     p0 = rad * (S.R_COLLAR - 0.25) + Vector((0, 0, zf))
-    p1 = rad * (S.PIPE_R - 0.2) + Vector((0, 0, zf))
-    p2 = rad * S.PIPE_R + Vector((0, 0, zf + 0.2))
-    top = rad * S.PIPE_R + Vector((0, 0, ze + S.PIPE_UP - 0.42))
-    tube("pipe", [p0, p1, p2, top], 0.15, M["pipe"])
-    pl = cyl("pipeplate", 0.16, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
+    foot = rad * S.PIPE_R + Vector((0, 0, zf))
+    top = rad * S.PIPE_R + Vector((0, 0, ze + S.PIPE_UP))
+    tube("pipearm", [p0, foot], 0.1, M["iron"])
+    pl = cyl("pipeplate", 0.12, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
     pl.rotation_euler = rad.to_track_quat("Z", "Y").to_euler()
-    cyl("pipeband", 0.2, 0.08, top - Vector((0, 0, 0.35)), M["iron"], verts=16, bevel=0.015)
-    c = lathe("horn", [(0.15, 0.0), (0.2, 0.08), (0.62, 0.2), (0.7, 0.27), (0.62, 0.36), (0.36, 0.44), (0.0, 0.47)],
-              top - Vector((0, 0, 0.05)), M["horn"], verts=40)
-    c.rotation_euler = (math.radians(10), math.radians(-14), 0)
-    cyl("hornneck", 0.2, 0.16, top - Vector((0, 0, 0.12)), M["iron"], verts=16, bevel=0.02)
+    cyl("pipesocket", 0.26, 0.3, foot - Vector((0, 0, 0.15)), M["iron"], verts=20, bevel=0.04)
+    cyl("pipe", 0.22, top.z - foot.z - 0.1, foot + Vector((0, 0, 0.1)), M["pipe"], verts=20, bevel=0.02)
+    cyl("pipeband", 0.25, 0.12, top - Vector((0, 0, 0.42)), M["band2"], verts=20, bevel=0.03)
+    cyl("hornneck", 0.25, 0.12, top - Vector((0, 0, 0.1)), M["iron"], verts=20, bevel=0.03)
+    c = lathe("horn", [(0.2, 0.0), (0.5, 0.03), (0.7, 0.12), (0.78, 0.26), (0.78, 0.42), (0.7, 0.54), (0.46, 0.6),
+                       (0.0, 0.62)], top, M["horn"], verts=40, bevel=0.0)
+    c.rotation_euler = (math.radians(6), math.radians(-10), 0)
+    if L < 3:                                   # level 1's horn is smaller (Flash's): level 3 puts the big one on
+        c.scale = (0.75, 0.75, 0.8)
 
 
 def drum(ze, seat):
@@ -765,7 +790,7 @@ def ball(ze):
         ob.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
     MOVING.append(hub)
     # the post: out of the collar, under the eave to beyond it, up, and round under the ball to its axle
-    zf = ze - 0.28
+    zf = ze - 0.205
     rad = Vector(S.polar(S.BALL_TH, 1.0, 0.0))
     p0 = rad * (S.R_COLLAR - 0.25) + Vector((0, 0, zf))
     p1 = rad * (S.BALL_R - 0.15) + Vector((0, 0, zf))
@@ -778,7 +803,7 @@ def ball(ze):
     tube("ballpost", pts, 0.07, M["iron"])
     ab = cyl("ballaxle", 0.06, 0.5, c - ax * 1.32, M["bolt"], verts=12, bevel=0.015)
     ab.rotation_euler = ax.to_track_quat("Z", "Y").to_euler()
-    pl = cyl("ballpostplate", 0.14, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
+    pl = cyl("ballpostplate", 0.12, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
     pl.rotation_euler = rad.to_track_quat("Z", "Y").to_euler()
 
 
@@ -801,7 +826,7 @@ def build():
           verts=48)
     for k in range(6):
         pier(-56.0 + 60.0 * k, rnd)
-    course("basecourse", S.Z_PIER, S.Z_BASE - S.Z_PIER - 0.02, 20, 1.6, 2.36, R(12), 0.9)
+    course("basecourse", S.Z_PIER, S.Z_BASE - S.Z_PIER - 0.02, 20, 1.6, 2.24, R(12), 0.9)
     # the fixed core the rings turn round, from the base course to the collar
     cyl("shaft", 1.5, S.z_collar(L) - S.Z_BASE + 0.1, (0, 0, S.Z_BASE - 0.05), M["core"], verts=48, bevel=0.0)
     ring("ring1", S.Z_BASE, 0.0)
@@ -813,10 +838,10 @@ def build():
     zc = S.z_collar(L)
     lathe("collarcore", [(1.4, zc), (2.0, zc), (2.0, ze - 0.05), (1.4, ze - 0.05)], (0, 0, 0), M["core"], verts=48)
     course("collar", zc + 0.02, S.COLLAR_H - 0.02, 22, 1.8, S.R_COLLAR, R(13), 0.88)
-    roof(ze, peak_cut=0.72 if L >= 10 else None)
+    roof(ze, peak_cut=S.PEAK_CUT if L >= 10 else None)
     pipe(ze)
     if L >= 10:
-        drum(ze, 0.72)
+        drum(ze, S.PEAK_CUT)
         ball(ze)
     rnd = R(17)
     for at, size in PEBBLES + (PEBBLES6 if L >= 6 else []):

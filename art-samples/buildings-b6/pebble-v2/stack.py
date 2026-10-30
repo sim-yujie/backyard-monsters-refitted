@@ -10,25 +10,28 @@ import math
 
 ORIGIN = (-1.5, 36.0)       # Flash pixel of the world origin (the building's middle on the ground)
 GROUND = 0.0
-R_RING = 2.66               # the turning rings' big blocks, outer face
-R_HEAD = 2.4                # the head's widest
+R_RING = 2.8                # the turning rings' big blocks, outer face
+R_HEAD = 2.28               # the head's widest
 R_COLLAR = 2.2 
 Z_PIER = 1.62               # the piers' top
 Z_BASE = 1.86               # the base course's top: the first ring's floor
 RING_H = 0.9
-HEAD_H = 1.8
-COLLAR_H = 0.45
-ROOF_R = 2.55               # the roof's eave
-ROOF_H = 2.0
-ROOF_R1, ROOF_H1 = 2.15, 1.9  # level 1's smaller roof (Flash's): level 3 puts the big one on
+HEAD_H = 1.45
+COLLAR_H = 0.35
+ROOF_R = 2.3                # the roof's eave
+ROOF_H = 2.45
+ROOF_R1, ROOF_H1 = 2.15, 2.15 # level 1's smaller roof (Flash's): level 3 puts the big one on
+ROOF_P, ROOF_P1 = 1.4, 1.4     # the roof's curve: radius = eave * (1 - s)^P at height s (P > 1: a steep top flaring
+                               # out to the eave, as Flash's roofs)
 ROOF_SHIFT = (0.22, 0.22)   # the roof sits a little to the right of the body's middle, as Flash's
 N_RING = 14                 # blocks per ring: big and small in turn (the pattern repeats every 2 blocks)
 RING_TURN = 3 * 2 * 360 / N_RING      # one loop turns a ring 3 patterns (154.3 deg): Flash's ~72 px at the front
-PIPE_TH, PIPE_R = 186.0, 2.95         # the pipe: bearing and distance from the middle (outside the eave)
-PIPE_UP = 0.6                         # the horn's top above the eave
+PIPE_TH, PIPE_R = 190.0, 2.6          # the pipe: bearing and distance from the middle (outside the eave)
+PIPE_UP = 1.1                         # the pipe's top above the eave (the horn sits on it)
 SPOUT_TH = -98.0                      # the spout on the head (bearing)
-SPOUT_UP = 1.25                       # the spout's middle above the head's floor
+SPOUT_UP = 0.8                        # the spout's middle above the head's floor
 SLOT_TH = 29.0
+PEAK_CUT = 0.64                       # level 10: the planks stop here and the drum sits on the cut
 BALL_TH, BALL_R, BALL_UP = 4.0, 3.1, 1.86   # level 10's spiked ball: bearing, distance, centre above the eave
 BALL_AXIS = (0.93, 0.15, 0.32)              # its spin axis (Flash: spikes go round anticlockwise, the front rolls down)
 
@@ -47,6 +50,10 @@ def z_eave(lv):
 
 def roof_size(lv):
     return (ROOF_R, ROOF_H) if lv >= 3 else (ROOF_R1, ROOF_H1)
+
+
+def roof_p(lv):
+    return ROOF_P if lv >= 3 else ROOF_P1
 
 
 def polar(th, r, z):
