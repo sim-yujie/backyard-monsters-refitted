@@ -33,7 +33,7 @@ RING_IN = 0.12              # the planks sit this far inside the posts' circle (
 # the pump pipes: out of the vat at (bearing, height), down to the ground at distance d. The right one is there at every
 # level, the front-left one from level 6.
 PIPE_R = 0.43
-PUMPS = {"pumpR": (-8.0, 3.4, 2.92), "pumpL": (-63.0, 2.6, 3.3)}
+PUMPS = {"pumpR": (-8.0, 3.4, 2.92), "pumpL": (-59.0, 3.0, 3.3)}
 # level 6 up: the loops (bearing of the outer leg)
 LOOP_R = 0.24
 
