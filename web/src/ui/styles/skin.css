@@ -240,6 +240,13 @@
     1.5px 1.5px 0 var(--skin-title-stroke), -1.5px 1.5px 0 var(--skin-title-stroke), 1.5px -1.5px 0 var(--skin-title-stroke), -1.5px -1.5px 0 var(--skin-title-stroke);
 }
 
+/* A window with no close disc (loading, "You were away too long") lends its
+   sign that corner too: Flash's long ribbon tails cut "Backyard Monsters" to
+   "Backyard M…" in the narrow loading window. */
+:root[data-skin] .panel__titlebar:not(:has(> .btn[aria-label^="Close"])) > .panel__title {
+  max-width: calc(100% + 2 * var(--skin-edge) + 16px);
+}
+
 /* The one or two words on the steel sign are dark on mustard: a thin light rim is enough. */
 :root[data-skin="scrap"] .panel__title {
   font-size: 21px;
@@ -352,7 +359,7 @@
 :root[data-skin] .panel .btn--primary:focus-visible,
 :root[data-skin] .panel .btn--outline:focus-visible,
 :root[data-skin] .panel .build-info__build:focus-visible,
-:root[data-skin] .panel .tabs__tab:focus-visible,
+:root[data-skin] .panel :is(.tabs__tab, .test-report__tab, .baiter__tab, .planner-help__tab):focus-visible,
 :root[data-skin] .panel__titlebar > .btn[aria-label^="Close"]:focus-visible {
   box-shadow: none;
   filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 4px var(--colour-accent));
@@ -389,7 +396,10 @@
 
 /* ── Tabs: painted tabs; the chosen one lit, the rest dull ──────────────── */
 
-:root[data-skin] .panel .tabs {
+/* Also the rows of ghost buttons that work as tabs: the Baiter's and its test
+   report's, the Yard Planner help's. */
+
+:root[data-skin] .panel :is(.tabs, .test-report__tabs, .baiter__tabs, .planner-help__tabs) {
   gap: 4px;
   padding: 0;
   border: 0;
@@ -397,7 +407,7 @@
   align-items: flex-end;
 }
 
-:root[data-skin] .panel .tabs__tab {
+:root[data-skin] .panel :is(.tabs__tab, .test-report__tab, .baiter__tab, .planner-help__tab) {
   min-height: 42px;
   padding: 3px 2px 0;
   border-style: solid;
@@ -414,14 +424,12 @@
   font-weight: var(--display-weight);
 }
 
-:root[data-skin] .panel .tabs__tab:hover {
+:root[data-skin] .panel :is(.tabs__tab, .test-report__tab, .baiter__tab, .planner-help__tab):hover {
   background: none;
   filter: brightness(1.1);
 }
 
-:root[data-skin] .panel .tabs__tab[aria-selected="true"],
-:root[data-skin] .panel .tabs__tab[aria-current="true"],
-:root[data-skin] .panel .tabs__tab[aria-pressed="true"] {
+:root[data-skin] .panel :is(.tabs__tab, .test-report__tab, .baiter__tab, .planner-help__tab):is([aria-selected="true"], [aria-current="true"], [aria-pressed="true"]) {
   min-height: 46px;
   border-image-source: var(--skin-tab-on);
   background: none;
@@ -622,6 +630,7 @@
   .zoom-controls,
   .map-status,
   .mr2-float,
+  .mr2-hover,
   .mr2-tool,
   .mr2-kit-filter,
   .mr1-mini,
@@ -672,6 +681,14 @@
 /* Bars inside a window (Map Room 1's map tools, world chat's tab) would take
    the window's dark ink: given the plate's own. */
 :root[data-skin] :is(.mr1, .chat-box--open) :is(.mr1-mini, .mr1-legend, .mr1-map__home, .chat-box__tab) {
+  color: var(--skin-ink);
+}
+
+/* So would the cards on the Descent and Inferno maps ("Depth" was brown on
+   brown in Classic); their warning a red that shows on the dark plate. */
+:root[data-skin] .panel :is(.descent-card, .inferno-card) {
+  --colour-danger: #ff7a70;
+
   color: var(--skin-ink);
 }
 
@@ -754,6 +771,12 @@
   background: var(--skin-fill);
 }
 
+/* A dark count on a picture (Housing's ×39): the dark chip's own light words,
+   not the parchment's dark ink. */
+:root[data-skin] .panel .housing-living__badge {
+  color: var(--skin-ink);
+}
+
 /* Bob's "?" over a scene: a small round button like the yard's domes. */
 :root[data-skin] .guide-help--float {
   border-color: var(--colour-dome-rim);
@@ -794,9 +817,10 @@
     0 1px 0 var(--skin-label-stroke), 1px 0 0 var(--skin-label-stroke), -1px 0 0 var(--skin-label-stroke), 0 -1px 0 var(--skin-label-stroke);
 }
 
-/* A chosen toggle on a bar (Select, 3D, the map's Map/Yard and kit filter):
-   the window's small second plate, lit. */
-:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"]) {
+/* A chosen toggle on a bar (Select, 3D, the map's Map/Yard and kit filter,
+   an attack's or replay's speed, the Inferno map's Map/List): the window's
+   small second plate, lit. */
+:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"], .attack-strip__speed-button[aria-pressed="true"], .inferno-map__toggle-button[aria-pressed="true"]) {
   border-style: solid;
   border-color: transparent;
   border-width: 0 12px;
@@ -893,9 +917,9 @@
 
 /* ── Buttons outside the windows ──────────────────────────────────────── */
 
-/* The one thing to do on a card or bar (Stay protected, Apply, Send) is the
-   window's painted plate too. */
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing) .btn--primary {
+/* The one thing to do on a card or bar (Stay protected, Apply, Send, the
+   raid's I'm Ready Now) is the window's painted plate too. */
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary {
   padding: 0 2px 3px;
   border-style: solid;
   border-color: transparent;
@@ -914,25 +938,26 @@
     1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
 }
 
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing) .btn--primary:hover:not(:disabled) {
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary:hover:not(:disabled) {
   background: none;
   filter: brightness(1.08);
 }
 
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing) .btn--primary:disabled {
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary:disabled {
   background: none;
   filter: grayscale(1) brightness(0.85);
 }
 
 /* ── The sign-in screen ───────────────────────────────────────────────── */
 
-/* Around the window, the style's own ground rather than the slate: a lit
-   sheet of steel, or Flash's warm brown. The game's name in the title's ink. */
-:root[data-skin="scrap"] .scene-centre--login {
+/* Around the window (sign-in, loading, the map's door, "You were away too
+   long"), the style's own ground rather than the slate: a lit sheet of
+   steel, or Flash's warm brown. The game's name in the title's ink. */
+:root[data-skin="scrap"] .scene-centre {
   background: radial-gradient(ellipse at 50% 45%, #46576a, #1d252d 70%);
 }
 
-:root[data-skin="flash"] .scene-centre--login {
+:root[data-skin="flash"] .scene-centre {
   background: radial-gradient(ellipse at 50% 45%, #7a4a1e, #2b1708 70%);
 }
 
