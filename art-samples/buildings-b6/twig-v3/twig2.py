@@ -1070,7 +1070,7 @@ def level1():
             ((rx0 + rx1) / 2 + rng.uniform(-0.05, 0.05), y, (zl + zh) / 2 + 0.05), M["roofplank"]("X"),
             rot=(rng.uniform(-1.5, 1.5), slope + rng.uniform(-0.8, 0.8), 0), bevel=0.025, origin="center",
             jitter=0.01)
-    tube("roofridge", [(rx0 - 0.02, ry0 - 0.05, zh + 0.12), (rx0 - 0.02, ry1 + 0.05, zh + 0.12)], 0.08, M["twig"]("Y"))
+    tube("roofridge", [(rx0 + 0.04, ry0 + 0.02, zh + 0.06), (rx0 + 0.04, ry1 - 0.02, zh + 0.06)], 0.07, M["twig"]("Y"))
     tube("roofrake", [(rx0, ry0 - 0.03, zh + 0.12), (rx1 + 0.05, ry0 - 0.03, zl + 0.08)], 0.07, M["twig"]("X"))
     for k in range(5):                                   # the gable boards on the left face, up to the roof
         x = cx0 + (cx1 - cx0) * (k + 0.5) / 5
@@ -1079,12 +1079,14 @@ def level1():
             rot=(0, 0, rng.uniform(-1, 1)), bevel=0.025)
     box("gableback", (0.12, cy1 - cy0, zh - cz1 - 0.2), (cx0 + 0.05, (cy0 + cy1) / 2, cz1 - 0.05), M["dwood"]("Y"),
         bevel=0.02)
-    for k, (ax, ay, ln) in enumerate(((-1.45, -0.1, 3.3), (-1.0, -0.3, 3.2), (-0.55, -0.35, 2.9))):
-        a = Vector((ax, ay, 0))
-        b = a + Vector((0.7071, 0.7071, 0)) * ln
-        a.z = rz(max(rx0, min(rx1, a.x))) + 0.12 + 0.07 * k
-        b.z = rz(max(rx0, min(rx1, b.x))) + 0.12 + 0.07 * k
-        ob = box("looseplank", ((b - a).length, 0.2, 0.07), (a + b) / 2, M["twig"]("X"), bevel=0.02, origin="center")
+    # the loose planks lie flat on the boards (board top = rz + 0.1), side by side, pointing down the slope and a little
+    # toward the back (down-right on screen), as thick as the boards, their low ends running on past the eave
+    for k, (ay, deg, x1) in enumerate(((0.15, 18, 1.55), (0.55, 17, 1.7), (1.05, 13, 1.5))):
+        d = Vector((math.cos(math.radians(deg)), math.sin(math.radians(deg)), 0))
+        a = Vector((-1.35 + 0.08 * k, ay, 0))
+        b = a + d * ((x1 - a.x) / d.x)
+        a.z, b.z = rz(a.x) + 0.15, rz(b.x) + 0.15        # rz is a plane: past the eave the plank keeps the slope
+        ob = box("looseplank", ((b - a).length, 0.22, 0.1), (a + b) / 2, M["twig"]("X"), bevel=0.025, origin="center")
         ob.rotation_euler = (b - a).to_track_quat("X", "Z").to_euler()
 
 
