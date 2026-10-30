@@ -1020,6 +1020,11 @@
     backdrop-filter: none;
   }
 
+  /* Its scrolling body leaves room for the Army window's sign. */
+  :root[data-skin] .attack-dock--sheet .attack-dock__body {
+    padding-top: 16px;
+  }
+
   /* Map Room 1 fills the phone: the window's thinner frame. */
   :root[data-skin="scrap"] .mr1 {
     --skin-frame-width: 32px;
