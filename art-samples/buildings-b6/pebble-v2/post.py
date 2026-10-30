@@ -126,7 +126,7 @@ def levels():
     d.text((12, 8), "Pebble Shiner, levels 1, 3, 6, 10 at one scale: Flash (top), 3D (bottom). Red crosses: parts fixed "
            "to the body; the first ring stays at one height, an added course lifts what sits above it", fill=(255, 255, 255), font=font(26))
     d.text((12, 44), "L3 adds the head with the spout (lifts collar, pipe, roof); L6 adds a second ring (lifts the head "
-           "and up); L10 adds the drum on the peak and the ball on the collar", fill=(200, 200, 200), font=font(22))
+           "and up); L10 adds the drum on the peak and the ball on the collar. Blue dashes: the tower's axis", fill=(200, 200, 200), font=font(22))
     for i, lv in enumerate(fref.LEVELS):
         x = gap + i * (w + gap)
         for row, im in enumerate((flash(lv, 0, size), on_grass(frame3d(lv, 0)))):
@@ -136,6 +136,10 @@ def levels():
     y3 = top + h + 40 + gap // 2 + 36
     for i, lv in enumerate(fref.LEVELS):
         x0 = gap + i * (w + gap)
+        ax = x0 + (S.ORIGIN[0] - fref.FRAME[0]) * k - box[0]     # the tower's vertical axis (the roof is centred on it)
+        for yy in range(top + 36, y3 + h, 20):
+            d.line((ax, yy, ax, yy + 10), fill=(80, 200, 255), width=2)
+        used = []                                   # label heights, so two lines close together keep both names legible
         for name, v in S.mounts(lv).items():
             fx, fy = scr(v)
             py = y3 + (fy - fref.FRAME[1]) * k - box[1]
@@ -145,7 +149,11 @@ def levels():
             d.line((cx - 14, py, cx + 14, py), fill=(255, 40, 40), width=4)
             d.line((cx, py - 14, cx, py + 14), fill=(255, 40, 40), width=4)
             if i == 3:
-                d.text((x0 + w - 130, py - 28), name, fill=(255, 255, 255), font=font(22))
+                ty = py - 28
+                while any(abs(ty - u) < 24 for u in used):
+                    ty -= 24
+                used.append(ty)
+                d.text((x0 + w - 130, ty), name, fill=(255, 255, 255), font=font(22))
     return out
 
 

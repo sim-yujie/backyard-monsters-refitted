@@ -484,7 +484,9 @@ def materials():
     M["roof"] = lambda axis="Z": wood("roof", (186, 154, 134), (144, 108, 88), axis, rings=7, knots=False, dirt=0.2)
     M["roofb"] = lambda axis="Z": wood("roofb", (150, 112, 84), (110, 78, 56), axis, rings=7, dirt=0.2)
     M["pipe"] = painted("pipe", (52, 50, 54), rough=0.5, metal=0.5, wear=(96, 94, 100), scale=7, dirt=0.1, soot=0.5)
-    M["horn"] = painted("horn", (50, 64, 82), rough=0.55, metal=0.2, wear=(104, 124, 146), scale=6, dirt=0.05, soot=0.3)
+    M["horn"] = painted("horn", (44, 56, 74), rough=0.4, metal=0.4, wear=(96, 116, 140), scale=6, dirt=0.05, soot=0.3)
+    M["hornin"] = flat("hornin", (26, 32, 42), rough=0.7)
+    M["hornrim"] = painted("hornrim", (120, 140, 162), rough=0.3, metal=0.6, wear=(200, 214, 228), scale=8, dirt=0.0)
     M["band2"] = painted("band2", (84, 150, 186), rough=0.4, metal=0.5, wear=(150, 200, 224), scale=8, dirt=0.0)
     M["iron"] = painted("iron", (58, 62, 72), rough=0.45, metal=0.85, wear=(150, 156, 170), rust=(120, 70, 40), scale=7,
                         soot=0.75)
@@ -700,15 +702,23 @@ def pipe(ze):
     tube("pipearm", [p0, foot], 0.1, M["iron"])
     pl = cyl("pipeplate", 0.12, 0.06, rad * (S.R_COLLAR - 0.02) + Vector((0, 0, zf)), M["iron"], verts=16, bevel=0.02)
     pl.rotation_euler = rad.to_track_quat("Z", "Y").to_euler()
+    # from level 3 (over the head) the pipe runs on down past the socket, its foot hidden behind the eave
+    base = foot - Vector((0, 0, S.PIPE_DOWN if L >= 3 else 0.12))
     cyl("pipesocket", 0.26, 0.3, foot - Vector((0, 0, 0.15)), M["iron"], verts=20, bevel=0.04)
-    cyl("pipe", 0.22, top.z - foot.z - 0.1, foot + Vector((0, 0, 0.1)), M["pipe"], verts=20, bevel=0.02)
+    cyl("pipe", 0.22, top.z - base.z, base, M["pipe"], verts=20, bevel=0.02)
     cyl("pipeband", 0.25, 0.12, top - Vector((0, 0, 0.42)), M["band2"], verts=20, bevel=0.03)
     cyl("hornneck", 0.25, 0.12, top - Vector((0, 0, 0.1)), M["iron"], verts=20, bevel=0.03)
-    c = lathe("horn", [(0.2, 0.0), (0.5, 0.03), (0.7, 0.12), (0.78, 0.26), (0.78, 0.42), (0.7, 0.54), (0.46, 0.6),
-                       (0.0, 0.62)], top, M["horn"], verts=40, bevel=0.0)
-    c.rotation_euler = (math.radians(6), math.radians(-10), 0)
-    if L < 3:                                   # level 1's horn is smaller (Flash's): level 3 puts the big one on
-        c.scale = (0.75, 0.75, 0.8)
+    # the horn: a slate bell flaring open upward and to the viewer's left, a bright rolled rim round its mouth
+    k = 1.0 if L >= 3 else 0.75                 # level 1's horn is smaller (Flash's): level 3 puts the big one on
+    bell = [(0.2, 0.0), (0.22, 0.18), (0.28, 0.36), (0.4, 0.52), (0.56, 0.63), (0.74, 0.69)]
+    inner = [(0.68, 0.7), (0.5, 0.63), (0.34, 0.52), (0.22, 0.38), (0.15, 0.22), (0.0, 0.2)]
+    ax = (Vector((0, 0, 1)) + 1.3 * Vector((-0.707, -0.707, 0))).normalized()
+    rot = ax.to_track_quat("Z", "Y").to_euler()
+    for name, prof, mat in (("horn", bell, M["horn"]), ("horninside", inner, M["hornin"]),
+                            ("hornrim", [(0.66, 0.69), (0.74, 0.67), (0.8, 0.71), (0.76, 0.76), (0.66, 0.73)], M["hornrim"])):
+        h = lathe(name, [(r * k, z * k) for r, z in prof], top + Vector((0, 0, 0.02)), M["horn"], verts=40)
+        h.data.materials[0] = mat
+        h.rotation_euler = rot
 
 
 def drum(ze, seat):
@@ -1093,6 +1103,34 @@ def main():
                 hits.append(ob.name)
                 o = loc + fwd * 1e-3
             print("PROBE", sx, sy, hits)
+        return
+    if MODE == "overhang":
+        # how far the roof reaches past the body on the screen's left and right (render px), and where the roof, its
+        # peak and the drum sit against the tower's axis (the roof is centred on it)
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        xs = {}
+        for o in SC.objects:
+            if o.type != "MESH":
+                continue
+            n = o.name.split(".")[0]
+            key = family(o) if family(o) in ("roof", "drum") else n if n in ("collar", "collarcore") else \
+                "head" if n.startswith("head") else None
+            if key is None:
+                continue
+            me = o.evaluated_get(dg).to_mesh()
+            xs.setdefault(key, []).extend(scr(o.matrix_world @ v.co)[0] for v in me.vertices)
+            o.evaluated_get(dg).to_mesh_clear()
+        ax = ORIGIN[0]
+        for key in sorted(xs):
+            a, b = min(xs[key]), max(xs[key])
+            print("OVERHANG %-10s left %.1f right %.1f (render px from the axis), middle %+.2f" %
+                  (key, (ax - a) * K, (b - ax) * K, ((a + b) / 2 - ax) * K))
+        r = xs["roof"]
+        for key in ("collar", "head"):
+            if key in xs:
+                print("OVERHANG roof past %-6s: left %.1f px, right %.1f px" %
+                      (key, (min(xs[key]) - min(r)) * K, (max(r) - max(xs[key])) * K))
         return
     if MODE == "fit":
         sc.cycles.samples = 24

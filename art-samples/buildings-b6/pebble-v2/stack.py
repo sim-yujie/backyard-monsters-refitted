@@ -23,10 +23,12 @@ ROOF_H = 2.45
 ROOF_R1, ROOF_H1 = 2.15, 2.15 # level 1's smaller roof (Flash's): level 3 puts the big one on
 ROOF_P, ROOF_P1 = 1.4, 1.4     # the roof's curve: radius = eave * (1 - s)^P at height s (P > 1: a steep top flaring
                                # out to the eave, as Flash's roofs)
-ROOF_SHIFT = (0.22, 0.22)   # the roof sits a little to the right of the body's middle, as Flash's
+ROOF_SHIFT = (0.0, 0.0)     # the roof (its peak and the L10 drum) sits on the tower's axis (owner: centred)
 N_RING = 14                 # blocks per ring: big and small in turn (the pattern repeats every 2 blocks)
 RING_TURN = 3 * 2 * 360 / N_RING      # one loop turns a ring 3 patterns (154.3 deg): Flash's ~72 px at the front
-PIPE_TH, PIPE_R = 190.0, 2.6          # the pipe: bearing and distance from the middle (outside the eave)
+PIPE_TH, PIPE_R = 170.0, 2.75         # the pipe: bearing and distance from the middle (outside the eave; at
+                                      # 170 the L1 eave hides the socket's foot)
+PIPE_DOWN = 0.6                       # the pipe's foot below the arm (behind the eave)
 PIPE_UP = 1.1                         # the pipe's top above the eave (the horn sits on it)
 SPOUT_TH = -98.0                      # the spout on the head (bearing)
 SPOUT_UP = 0.8                        # the spout's middle above the head's floor
