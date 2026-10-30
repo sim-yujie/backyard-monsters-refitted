@@ -45,6 +45,8 @@ export class YardInput {
   private pressX = 0;
   private pressY = 0;
   private pressed = false;
+  /** A touch's `pointerup` just opened something: its `touchend` drops the tap's click. */
+  private swallowClick = false;
 
   constructor(options: YardInputOptions) {
     this.options = options;
@@ -56,6 +58,7 @@ export class YardInput {
     canvas.addEventListener("pointerup", this.onPointerUp);
     canvas.addEventListener("pointermove", this.onPointerMove);
     canvas.addEventListener("pointerleave", this.onPointerLeave);
+    canvas.addEventListener("touchend", this.onTouchEnd, { passive: false });
     window.addEventListener("keydown", this.onKeyDown);
   }
 
@@ -65,6 +68,7 @@ export class YardInput {
     canvas.removeEventListener("pointerup", this.onPointerUp);
     canvas.removeEventListener("pointermove", this.onPointerMove);
     canvas.removeEventListener("pointerleave", this.onPointerLeave);
+    canvas.removeEventListener("touchend", this.onTouchEnd);
     window.removeEventListener("keydown", this.onKeyDown);
   }
 
@@ -85,6 +89,7 @@ export class YardInput {
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     this.pressed = true;
+    this.swallowClick = false;
     this.pressX = event.clientX;
     this.pressY = event.clientY;
   };
@@ -100,16 +105,32 @@ export class YardInput {
     // dismissed without reaching for its close button. A mushroom counts only
     // where no building is: buildings are drawn over it.
     const building = this.buildingAt(event);
+    const touch = event.pointerType === "touch";
     const { pickMushroom, onMushroom } = this.options;
     if (!building && pickMushroom && onMushroom) {
       const world = this.worldAt(event);
       const mushroom = pickMushroom(world.x, world.y);
       if (mushroom) {
+        this.swallowClick = touch;
         onMushroom(mushroom);
         return;
       }
     }
+    this.swallowClick = touch && building !== null;
     this.options.onSelect(building);
+  };
+
+  /**
+   * A tap opens a building's panel on `pointerup`, before the browser sends
+   * the tap's `click`, which it aims at whatever is under the finger by then:
+   * the panel that just opened. A tap on the Champion Cage froze its champion
+   * that way, the cage's Freeze tile having opened under the finger (30 Oct).
+   * Cancelling the touch's end drops that click.
+   */
+  private readonly onTouchEnd = (event: TouchEvent): void => {
+    if (!this.swallowClick) return;
+    this.swallowClick = false;
+    if (event.cancelable) event.preventDefault();
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
