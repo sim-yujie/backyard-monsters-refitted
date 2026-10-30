@@ -583,21 +583,25 @@ def materials():
                           side=0.6)
     M["pedside"] = shiny("pedside", (176, 168, 186), rough=0.36, metal=0.15, wear=(150, 142, 160), scale=3, dirt=0.15,
                          side=0.9)
+    M["rod"] = shiny("rod", (112, 120, 134), rough=0.3, metal=0.7, wear=(92, 100, 114), scale=4, dirt=0.05)
     M["rim"] = shiny("rim", (176, 196, 214), rough=0.25, metal=0.9, wear=(150, 170, 192), scale=4, dirt=0.1)
     M["port"] = shiny("port", (222, 228, 238), rough=0.22, metal=0.35, wear=(184, 194, 210), scale=3, dirt=0.1, side=0.4,
                       coat=0.5)
     # the dish: steel blue, darker up and to the left, with Flash's white sheen right of the hub; less mirror-like so
     # the gold hub and arm don't show a blurred reflection Flash doesn't have
-    M["dish"] = shiny("dish", (128, 150, 172), rough=0.32, metal=0.5, wear=(104, 124, 146), scale=1.2, dirt=0.05,
+    M["dish"] = shiny("dish", (128, 150, 172), rough=0.42, metal=0.5, wear=(104, 124, 146), scale=1.2, dirt=0.05,
                       side=0.25, glow=((26.0, -25.0, 15.0, 5.5, 0.7, (240, 244, 246)),
                                        (24.0, -20.0, 18.0, 9.0, 0.3, (196, 208, 214))), streak=0.3)
     # Flash's bowl and feet are bright orange gold (foot ~175,112,25), not dark brass: less metal, a clear coat
-    M["bowl"] = shiny("bowl", (255, 156, 12), rough=0.22, metal=0.55, side=0.5, wear=(214, 112, 8), scale=1.5,
-                      dirt=0.5, streak=0.3, coat=0.25,
-                      glow=((-24.0, 46.0, 9.0, 5.0, 0.22, (250, 168, 36)), (0.0, 44.0, 30.0, 3.5, 0.3, (250, 160, 34))))
+    M["bowl"] = shiny("bowl", (255, 156, 12), rough=0.24, metal=0.35, side=0.5, wear=(214, 112, 8), scale=1.5,
+                      dirt=0.35, streak=0.3, coat=0.1, spec=0.25,
+                      glow=((-24.0, 46.0, 9.0, 5.0, 0.22, (250, 168, 36)), (0.0, 44.0, 30.0, 3.5, 0.3, (250, 160, 34)),
+                            # Flash's dark reflections: a crease left of the middle, a patch on the right, the bottom
+                            (-13.0, 49.5, 7.0, 1.6, 0.4, (80, 40, 8)), (16.0, 48.5, 5.0, 2.0, 0.3, (80, 40, 8)),
+                            (0.0, 58.5, 22.0, 3.5, 0.6, (60, 30, 6))))
     M["leg"] = shiny("leg", (250, 150, 20), rough=0.24, metal=0.4, side=0.3, wear=(255, 200, 60), scale=1.2,
                      dirt=0.05, streak=0.3, coat=0.3)
-    M["tick"] = flat("tick", (150, 92, 40), rough=0.9)
+    M["tick"] = flat("tick", (168, 102, 42), rough=0.9)
     M["dishback"] = shiny("dishback", (120, 132, 150), rough=0.35, metal=0.8, wear=(98, 110, 128), scale=2, dirt=0.2)
     M["rivet"] = shiny("rivet", (104, 110, 122), rough=0.25, metal=0.9, wear=(120, 128, 142), scale=6, dirt=0.05)
     M["wire"] = flat("wire", (84, 94, 108), rough=0.5, metal=0.5)
@@ -712,8 +716,8 @@ def drum():
     # the faint gold scale low on the band's front
     # (thin dull orange lines barely proud of the band, long and short in turn, like Flash's; not shiny pins)
     for j, th in enumerate(S.TICK_TH):
-        h = 0.32 if j % 2 else 0.22
-        box("drumtick", (0.004, 0.06, h), P(th, R + 0.002, ZB + 0.48), M["tick"], rot=(0, 0, th), bevel=0.0)
+        h = 0.48 if j % 2 else 0.34
+        box("drumtick", (0.004, 0.06, h), P(th, R + 0.002, ZB + 0.24), M["tick"], rot=(0, 0, th), bevel=0.0)
 
 
 def bowl():
@@ -733,16 +737,17 @@ def legs():
              M["leg"], verts=12)
         tube("leggusset%d" % i, [P(th, S.DRUM_R - 0.3, ZB + 0.02), P(th, S.LEG_D - 0.3, S.KNUCKLE_Z + 0.08)], 0.09,
              M["leg"], verts=12)
-        # the teardrop foot: a blunt round bottom, fattest a fifth of the way up, narrowing evenly to a small knot
-        # that flares into a cup round the knuckle ball (Flash: no waist, no separate collar)
+        # the teardrop foot: a blunt round bottom, fattest low down, its sides narrowing evenly (no waist) up to a
+        # round knob where the struts meet and a cup round the knuckle ball (Flash's joint above the foot is lumpy)
         e = bpy.data.objects.new("leg%d" % i, None)
         link(e)
         e.location = (k.x, k.y, 0.0)
-        fr = S.FOOT_R
-        lathe("legfoot%d" % i, [(0.0, 0.0), (fr * 0.62, 0.03), (fr * 0.9, 0.15), (fr * 0.99, 0.36), (fr, 0.52),
-                                 (fr * 0.96, 0.78), (fr * 0.84, 1.15), (fr * 0.66, 1.6), (fr * 0.5, 2.05),
-                                 (fr * 0.39, 2.36), (0.2, 2.6), (0.25, 2.76), (0.29, 2.94), (0.3, 3.08), (0.25, 3.13),
-                                 (0.19, 3.07), (0.0, 3.0)],
+        fr, hf = S.FOOT_R, S.FOOT_TOP
+        tear = [(0.0, 0.0), (0.6, 0.02), (0.88, 0.07), (1.0, 0.15), (0.96, 0.3), (0.84, 0.45), (0.62, 0.64),
+                (0.44, 0.85), (0.38, 1.0)]
+        lathe("legfoot%d" % i, [(fr * a, hf * b) for a, b in tear] +
+              [(0.17, hf + 0.1), (0.32, hf + 0.24), (0.4, hf + 0.42), (0.38, hf + 0.6), (0.24, hf + 0.78),
+               (0.27, 3.02), (0.28, 3.1), (0.24, 3.14), (0.19, 3.07), (0.0, 3.0)],
               (0, 0, 0), M["leg"], parent=e, verts=32)
         kr = S.KNUCKLE_R
         ball = [(kr * math.sin(math.radians(a)), -kr * math.cos(math.radians(a))) for a in range(0, 181, 15)]
@@ -833,7 +838,7 @@ def top():
         f.material_index = 1
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     mesh_ob("dishbowl", bm, [M["dish"], M["dishback"]], parent=e)
-    ring("dishrim", R + 0.0, 0.095, M["gold"], parent=e, z=D - 0.01, n=128)
+    ring("dishrim", R + 0.0, 0.12, M["gold"], parent=e, z=D - 0.01, n=128)
 
     def rim_angle(sx, sy):
         q = inv @ ray_plane(sx, sy, e.matrix_world @ Vector((0, 0, D)), n)
@@ -883,7 +888,9 @@ def top():
     hub.rotation_euler.rotate_axis("Z", math.radians(30))
     tip = on_face(rim_angle(*S.DISH_ROD), 0.98, 0.14)
     a0 = hp + hn * 0.34
-    tube("dishrod", [a0, tip], 0.075, M["chrome"], parent=e, verts=12)
+    tube("dishrod", [a0, tip], 0.1, M["rod"], parent=e, verts=12)
+    # Flash draws the hub long: a gold sleeve holds the rod's foot
+    tube("dishsleeve", [hp + hn * 0.2, a0 + (tip - a0).normalized() * 0.9], 0.2, M["gold"], parent=e, verts=16)
     lathe("dishrodend", [(0.0, -0.1), (0.11, -0.1), (0.13, 0.0), (0.09, 0.1), (0.0, 0.12)], tip, M["chrome"],
           parent=e, verts=12)
     mid = a0.lerp(tip, 0.5)
