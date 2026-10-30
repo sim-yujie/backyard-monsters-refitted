@@ -1209,16 +1209,16 @@ def loops_l10():
     for j, z in enumerate((2.6, 3.9, 5.2, 6.4)):
         cyl(f"towerband{j}", r + 0.07, 0.16, base + Vector((0, 0, z)), M["hoop"], verts=28, bevel=0.03)
     lathe("towerjoint", [(r - 0.02, 0.0), (r + 0.1, 0.0), (r + 0.14, 0.1), (r + 0.14, 0.5), (r + 0.1, 0.6),
-                         (r - 0.02, 0.6)], base + Vector((0, 0, TOWER_H - 1.05)), M["pipedark"], verts=28)
+                         (r - 0.02, 0.6)], base + Vector((0, 0, TOWER_H - 0.8)), M["pipedark"], verts=28)
     top = base + Vector((0, 0, TOWER_H))
     lathe("towercap", [(0.0, 0.0), (r + 0.1, 0.0), (r + 0.14, 0.12), (r + 0.08, 0.22), (0.0, 0.22)], top, M["hoop"],
           verts=28)
-    # Flash's cap: one shiny bulb of goo
-    meta("towergoo", [(top + Vector((0, 0, 0.26)), 0.72, (1.0, 1.0, 0.72))], M["goobulb"], res=0.03)
+    # Flash's cap: one bulb of goo sitting low in the rim, as in a cup
+    meta("towergoo", [(top + Vector((0, 0, 0.2)), 0.7, (1.0, 1.0, 0.78))], M["goobulb"], res=0.03)
     # its branch into the dome, over the top ring between the back posts
     pipe("towerpipe", [P(b, 2.9, 5.1), P(174, 2.4, 5.1), P(162, 1.9, 5.1)], 0.18, bend=0.5)
     # the arc from the tower's joint round the far left to the ground at the front left, with collars at its bends
-    pts = [P(-178, 3.1, TOWER_H - 0.6), P(-165, 3.45, TOWER_H - 0.6), P(-148, 3.55, 6.4), P(-133, 3.4, 3.8), P(-120, 3.25, 1.4),
+    pts = [P(-178, 3.1, TOWER_H - 0.5), P(-165, 3.45, TOWER_H - 0.5), P(-148, 3.55, 6.5), P(-133, 3.4, 3.8), P(-120, 3.25, 1.4),
            P(-113, 3.18, 0.0)]
     tube("towerarc", pts, 0.21, M["pipe"], verts=16, smooth=True)
     for j, p in enumerate(pts[1:5]):                 # the smooth curve passes through its points
