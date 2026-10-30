@@ -416,19 +416,30 @@ def lathe(name, prof, at, mat, rot=(0, 0, 0), verts=32, parent=None, bevel=0.0):
     return ob
 
 
-def tube(name, pts, r, mat, parent=None, verts=12, r_end=None):
-    """A round stick through world points pts (a curve with a round bevel)."""
+def tube(name, pts, r, mat, parent=None, verts=12, r_end=None, cyclic=False, smooth=False):
+    """A round stick through world points pts (a curve with a round bevel); cyclic closes it into a seamless loop,
+    smooth bends it softly through the points (a Bezier curve) instead of at sharp corners."""
     cu = bpy.data.curves.new(name, "CURVE")
     cu.dimensions = "3D"
     cu.bevel_depth = r
     cu.bevel_resolution = 3
     cu.use_fill_caps = True
-    sp = cu.splines.new("POLY")
-    sp.points.add(len(pts) - 1)
-    for p, q in zip(sp.points, pts):
-        p.co = (q[0], q[1], q[2], 1)
+    if smooth:
+        sp = cu.splines.new("BEZIER")
+        sp.bezier_points.add(len(pts) - 1)
+        cps = sp.bezier_points
+        for p, q in zip(cps, pts):
+            p.co = q
+            p.handle_left_type = p.handle_right_type = "AUTO"
+    else:
+        sp = cu.splines.new("POLY")
+        sp.points.add(len(pts) - 1)
+        cps = sp.points
+        for p, q in zip(cps, pts):
+            p.co = (q[0], q[1], q[2], 1)
+    sp.use_cyclic_u = cyclic
     if r_end is not None:
-        for i, p in enumerate(sp.points):
+        for i, p in enumerate(cps):
             p.radius = 1 + (r_end / r - 1) * i / max(1, len(pts) - 1)
     ob = bpy.data.objects.new(name, cu)
     cu.materials.append(mat)
@@ -566,8 +577,8 @@ def sweep(name, pts, side, w, h, mat, parent=None, bevel=0.08, taper=None):
 
 
 def ring(name, r, wire, mat, parent=None, z=0.0, n=48):
-    return tube(name, [(r * math.cos(2 * math.pi * i / n), r * math.sin(2 * math.pi * i / n), z) for i in range(n + 1)],
-                wire, mat, parent=parent, verts=12)
+    return tube(name, [(r * math.cos(2 * math.pi * i / n), r * math.sin(2 * math.pi * i / n), z) for i in range(n)],
+                wire, mat, parent=parent, verts=12, cyclic=True)
 
 
 def handwheel(name, r, mat, parent, spokes=4, rim=0.1, knob=True):
@@ -930,29 +941,32 @@ def cage():
 
 
 def drips():
-    """Level 10: putty slopped over the arches' backs and over the front of the pot's rim, running down in fat drips
-    that end in a drop."""
+    """Level 10: putty slopped over the arches' backs and over the front of the pot's rim. Each is a soft tongue of
+    putty on top, one smooth run down the side and a teardrop at its end (the run starts and ends buried in them)."""
     rnd = R(41)
     for i, x in enumerate(S.ARCH_X):
         pts = arch_pts(x)
         j = 5 if i == 0 else 21      # clear of the hub and, on screen, of the tube arm
         p = Vector(pts[j])
         top = p.z + S.ARCH_T / 2 * 0.98
-        blob(f"drip{i}", (x, p.y, top), 0.3, 0.42, stretch=(1.0, 1.25))
         side = -1 if i == 0 else 1
-        w = S.ARCH_W / 2 + 0.04
-        z1 = top - 0.55 - rnd.uniform(0.0, 0.2)
-        end = Vector((x + side * w, p.y + 0.05, z1))
-        tube(f"driprun{i}", [(x + side * 0.12, p.y, top + 0.04), (x + side * w * 0.9, p.y, top - 0.06),
-                             (x + side * w, p.y + 0.02, top - 0.3), end], 0.15, M["putty"], verts=12, r_end=0.09)
-        blob(f"dripdrop{i}", end + Vector((0, 0, -0.04)), 0.12, 1.25)
+        blob(f"drip{i}", (x + side * 0.03, p.y, top - 0.02), 0.22, 0.5, stretch=(1.0, 1.2))
+        w = S.ARCH_W / 2 + 0.03
+        z1 = top - 0.6 - rnd.uniform(0.0, 0.15)
+        end = Vector((x + side * w, p.y + 0.03, z1))
+        tube(f"driprun{i}", [(x + side * 0.02, p.y, top - 0.08), (x + side * (w - 0.04), p.y, top - 0.12),
+                             (x + side * w, p.y + 0.01, top - 0.35), end], 0.15, M["putty"], verts=12, r_end=0.1,
+             smooth=True)
+        blob(f"dripdrop{i}", end + Vector((0, 0, -0.08)), 0.15, 1.3)
     for k, th in enumerate((-39.0, -15.0, 9.0, 62.0)):     # clear of the block, the brackets and the post knobs
         z1 = ZR - 0.45 - rnd.uniform(0.0, 0.6)
-        pts = [S.polar(th, S.POT_R - 0.3, ZR + 0.1), S.polar(th, S.POT_R - 0.04, ZR + 0.14),
-               S.polar(th, S.POT_R + 0.07, ZR - 0.04), S.polar(th + 1.0, rad_at_pot(ZR - 0.35 - ZP) + 0.11, ZR - 0.35),
-               S.polar(th + 2.0, rad_at_pot(z1 - ZP) + 0.1, z1)]
-        tube(f"driprim{k}", pts, 0.18, M["putty"], verts=12, r_end=0.09)
-        blob(f"driprimdrop{k}", Vector(pts[-1]) + Vector((0, 0, -0.05)), 0.12, 1.25)
+        tongue = blob(f"driptongue{k}", S.polar(th, S.POT_R - 0.14, ZR + 0.07), 0.22, 0.6, stretch=(1.35, 1.0))
+        tongue.rotation_euler = (0, 0, math.radians(th))
+        pts = [S.polar(th, S.POT_R - 0.14, ZR + 0.0), S.polar(th, S.POT_R + 0.06, ZR - 0.02),
+               S.polar(th + 1.0, rad_at_pot(ZR - 0.35 - ZP) + 0.1, ZR - 0.35),
+               S.polar(th + 2.0, rad_at_pot(z1 - ZP) + 0.09, z1)]
+        tube(f"driprim{k}", pts, 0.16, M["putty"], verts=12, r_end=0.1, smooth=True)
+        blob(f"driprimdrop{k}", Vector(pts[-1]) + Vector((0, 0, -0.08)), 0.15, 1.3)
 
 
 def build():
