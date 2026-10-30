@@ -3,6 +3,7 @@ import { transferActions } from "@/api/infernoTransfer";
 import { raidApi } from "@/api/raid";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { screenShakeOn } from "@/game/attack/juice";
+import { TapClickGuard } from "@/game/TapClickGuard";
 import {
   CAVE_MAX_LEVEL,
   CAVE_TOWN_HALL,
@@ -95,9 +96,12 @@ const mountCave = (
   let pressX = 0;
   let pressY = 0;
   let pressed = false;
+  // A tap that opens the cave's menu must not click the menu too (`TapClickGuard`).
+  const tapClick = new TapClickGuard(canvas);
   const onDown = (event: PointerEvent): void => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     pressed = true;
+    tapClick.press();
     pressX = event.clientX;
     pressY = event.clientY;
   };
@@ -108,16 +112,20 @@ const mountCave = (
     if (scene.plannerOpen() || scene.carrying() || renderer.view !== YardView.ISO) return;
     const rect = canvas.getBoundingClientRect();
     const world = camera.screenToWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top });
-    if (cave.contains(world.x, world.y)) onTap();
+    if (!cave.contains(world.x, world.y)) return;
+    tapClick.opened(event);
+    onTap();
   };
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("pointerup", onUp);
+  tapClick.attach();
 
   return {
     cave,
     dispose: () => {
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("pointerup", onUp);
+      tapClick.detach();
       renderer.leaveBuildings(cave.view);
       cave.destroy();
     },

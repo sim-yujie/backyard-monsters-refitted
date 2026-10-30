@@ -214,6 +214,26 @@ describe("the cave in the Inferno yard (WP 1.18)", () => {
     teardown?.();
     expect(renderer.leaveBuildings).toHaveBeenCalledTimes(1);
   });
+
+  it("does not let the tap that opens the menu press Exit Cavern too (30 Oct)", () => {
+    const { canvas, teardown } = mount(undefined, { kind: "inferno" });
+    const touchEnd = (): boolean => {
+      const end = new Event("touchend", { cancelable: true });
+      canvas.dispatchEvent(end);
+      return end.defaultPrevented;
+    };
+    // A finger's click would land on the menu that opened under it: dropped.
+    tap(canvas);
+    expect(touchEnd()).toBe(true);
+    // A mouse clicks the canvas it was pressed on, and a drag opens nothing.
+    canvas.dispatchEvent(new PointerEvent("pointerdown", { clientX: 10, clientY: 10, pointerType: "mouse" }));
+    canvas.dispatchEvent(new PointerEvent("pointerup", { clientX: 10, clientY: 10, pointerType: "mouse" }));
+    expect(touchEnd()).toBe(false);
+    canvas.dispatchEvent(new PointerEvent("pointerdown", { clientX: 10, clientY: 10, pointerType: "touch" }));
+    canvas.dispatchEvent(new PointerEvent("pointerup", { clientX: 60, clientY: 10, pointerType: "touch" }));
+    expect(touchEnd()).toBe(false);
+    teardown?.();
+  });
 });
 
 describe("a tap on the cave", () => {

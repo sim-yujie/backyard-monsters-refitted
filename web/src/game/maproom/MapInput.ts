@@ -1,5 +1,6 @@
 import type { Camera } from "@/game/Camera";
 import type { OffsetCell } from "@/game/HexGrid";
+import { TapClickGuard, touchEndsOn } from "@/game/TapClickGuard";
 import { pickCell } from "./ground";
 import { inWorld } from "./zones";
 
@@ -42,9 +43,17 @@ export class MapInput {
   private pressX = 0;
   private pressY = 0;
   private pressed = false;
+  /**
+   * A tap that opens a cell's panel must not click the panel too: its Attack
+   * may be under the finger. One that ends on the canvas keeps its click, for
+   * the double tap.
+   */
+  private readonly tapClick: TapClickGuard;
 
   constructor(options: MapInputOptions) {
     this.options = options;
+    const canvas = options.canvas;
+    this.tapClick = new TapClickGuard(canvas, (event) => touchEndsOn(canvas, event));
   }
 
   attach(): void {
@@ -54,6 +63,7 @@ export class MapInput {
     canvas.addEventListener("pointermove", this.onPointerMove);
     canvas.addEventListener("pointerleave", this.onPointerLeave);
     canvas.addEventListener("dblclick", this.onDoubleClick);
+    this.tapClick.attach();
     window.addEventListener("keydown", this.onKeyDown);
   }
 
@@ -64,6 +74,7 @@ export class MapInput {
     canvas.removeEventListener("pointermove", this.onPointerMove);
     canvas.removeEventListener("pointerleave", this.onPointerLeave);
     canvas.removeEventListener("dblclick", this.onDoubleClick);
+    this.tapClick.detach();
     window.removeEventListener("keydown", this.onKeyDown);
   }
 
@@ -81,6 +92,7 @@ export class MapInput {
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     this.pressed = true;
+    this.tapClick.press();
     this.pressX = event.clientX;
     this.pressY = event.clientY;
   };
@@ -93,7 +105,9 @@ export class MapInput {
     if (travelled > DRAG_SLOP) return;
 
     const cell = this.cellAt(event);
-    if (cell) this.options.onSelect(cell);
+    if (!cell) return;
+    this.tapClick.opened(event);
+    this.options.onSelect(cell);
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
