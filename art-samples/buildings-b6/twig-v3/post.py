@@ -108,6 +108,7 @@ def anim(lv):
 
 
 # twig2.py's mounting points (world), the same at every level: the lines in `levels` run through them
+LIFT = {1: -0.5}       # level 1 stands lower on short feet (twig2.L1_DROP); its parts move with the body
 MOUNTS = {"pipe top": (-1.9, -1.1, 6.6), "small gear": (1.67, 0.24, 3.82), "roller": (0.05, -2.67, 3.42),
           "saw": (1.95, -0.67, 2.62), "tray": (-0.1, -2.72, 1.9)}
 
@@ -129,7 +130,8 @@ def levels():
     out = Image.new("RGB", (4 * w + 5 * gap, top + 2 * (h + 40) + gap), (24, 24, 24))
     d = ImageDraw.Draw(out)
     d.text((12, 10), "Twig Snapper, levels 1, 3, 6, 10 at one scale: Flash (top), 3D (bottom). Dashed lines: parts "
-           "fixed to the body at every level", fill=(255, 255, 255), font=font(26))
+           "fixed to the body at every level (level 1 stands 4 px lower on short feet; level 3's legs lift it)",
+           fill=(255, 255, 255), font=font(26))
     for i, lv in enumerate(fref.LEVELS):
         x = gap + i * (w + gap)
         for row, im in enumerate((flash(lv, 0, size), on_grass(frame3d(lv, 0)))):
@@ -138,12 +140,13 @@ def levels():
             out.paste(im.crop(box).convert("RGB"), (x, y + 36))
     y3 = top + h + 40 + gap // 2 + 36
     for name, v in MOUNTS.items():
-        fx, fy = scr(v)
-        py = y3 + (fy - fref.FRAME[1]) * k - box[1]
-        for xx in range(gap, out.width - gap, 24):
-            d.line((xx, py, xx + 12, py), fill=(255, 255, 255), width=2)
-        for i in range(4):
-            cx = gap + i * (w + gap) + (fx - fref.FRAME[0]) * k - box[0]
+        for i, lv in enumerate(fref.LEVELS):
+            fx, fy = scr((v[0], v[1], v[2] + LIFT.get(lv, 0.0)))
+            py = y3 + (fy - fref.FRAME[1]) * k - box[1]
+            x0 = gap + i * (w + gap)
+            for xx in range(x0, x0 + w - 12, 24):
+                d.line((xx, py, xx + 12, py), fill=(255, 255, 255), width=2)
+            cx = x0 + (fx - fref.FRAME[0]) * k - box[0]
             d.line((cx - 14, py, cx + 14, py), fill=(255, 40, 40), width=4)
             d.line((cx, py - 14, cx, py + 14), fill=(255, 40, 40), width=4)
         d.text((out.width - gap - 160, py - 30), name, fill=(255, 255, 255), font=font(22))

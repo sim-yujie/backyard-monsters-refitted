@@ -380,6 +380,7 @@ def materials():
     M["wood"] = lambda axis="Z": wood("wood", (218, 150, 90), (160, 100, 56), axis, dirt=0.45)
     M["wood2"] = lambda axis="Z": wood("wood2", (200, 134, 78), (140, 86, 46), axis, rings=8)
     M["dwood"] = lambda axis="Z": wood("dwood", (110, 72, 46), (66, 40, 26), axis, rings=7, dirt=0.25)
+    M["pwood"] = lambda axis="Z": wood("pwood", (104, 64, 38), (56, 33, 21), axis, rings=7, dirt=0.2)   # L1 press, L10 gate
     M["post"] = lambda axis="Z": wood("post", (220, 160, 100), (160, 104, 60), axis, rings=5, dirt=0.4)
     M["twig"] = lambda axis="Z": wood("twig", (232, 168, 108), (176, 110, 64), axis, rings=10, knots=False, dirt=0.1)
     M["roof"] = bark("roof", (88, 64, 60), (56, 40, 40))
@@ -686,9 +687,10 @@ def side_wheel(center, r=0.68):
     return hub
 
 
-def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_len=0.5, up=0.55, route=()):
+def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_len=0.5, up=0.55, route=(), cap=False):
     """The pipe up the body's left corner, ending in a steel horn turned toward the viewer's left. route: points the pipe
-    comes along before it rises from base (out of the wall, round an elbow); a plate where it leaves the wall."""
+    comes along before it rises from base (out of the wall, round an elbow); a plate where it leaves the wall. cap: a
+    steel dome on the top instead of the horn (level 1, as Flash's)."""
     b = Vector(base)
     top = Vector((b.x, b.y, top_h))
     pts = [Vector(p) for p in route]
@@ -699,6 +701,12 @@ def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_le
         pl.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
     for z in (b.z + 0.4, top_h - 0.45):
         cyl("pipeband", r_pipe * 1.18, 0.08, (b.x, b.y, z), M["iron"], verts=16, bevel=0.015)
+    if cap:                                    # a mushroom dome over the open pipe end
+        c = lathe("cap", [(r_pipe * 0.95, 0.0), (r_pipe * 1.3, 0.08), (0.72, 0.24), (0.76, 0.32), (0.58, 0.48),
+                          (0.3, 0.58), (0.0, 0.61)], top - Vector((0, 0, 0.1)), M["horn"], verts=36)
+        c.rotation_euler = (math.radians(6), math.radians(-10), 0)      # tipped a little toward the viewer's left
+        cyl("hornneck", r_pipe * 1.1, 0.2, top - Vector((0, 0, 0.3)), M["iron"], verts=16, bevel=0.02)
+        return
     d = Vector((mouth_dir[0], mouth_dir[1], up)).normalized()
     prof = [(r_pipe * 0.95, 0.0), (r_pipe * 1.05, bell_len * 0.35), (r_pipe * 1.5, bell_len * 0.7),
             (bell * 0.8, bell_len * 0.92), (bell, bell_len), (bell * 0.95, bell_len * 1.04), (bell * 0.7, bell_len * 0.98)]
@@ -940,8 +948,8 @@ def gate(x0, x1, y, z0, z1, z0_left=None):
     """Level 10's guillotine on the roof: two posts, a top bar with a slot, a green panel and a steel blade. The left
     post can start lower (z0_left): it stands against the outside of the back-left wall, bolted to it."""
     for x, zb in ((x0, z0 if z0_left is None else z0_left), (x1, z0)):
-        box("gatepost", (0.42, 0.36, z1 - zb), (x, y, zb), M["wood2"]("Z"), bevel=0.07)
-    box("gatetop", (x1 - x0 + 0.55, 0.46, 0.6), (0.5 * (x0 + x1), y, z1 - 0.1), M["wood2"]("X"), bevel=0.09)
+        box("gatepost", (0.42, 0.36, z1 - zb), (x, y, zb), M["pwood"]("Z"), bevel=0.07)
+    box("gatetop", (x1 - x0 + 0.55, 0.46, 0.6), (0.5 * (x0 + x1), y, z1 - 0.1), M["pwood"]("X"), bevel=0.09)
     box("gateslot", (0.6, 0.44, 0.12), (0.5 * (x0 + x1) + 0.1, y, z1 + 0.2), M["hole"], bevel=0.0)
     box("gatepanel", (x1 - x0 - 0.3, 0.08, (z1 - z0) * 0.45), (0.5 * (x0 + x1), y + 0.05, z1 - (z1 - z0) * 0.5),
         M["green"], bevel=0.02)
@@ -1026,9 +1034,9 @@ def roof10(hx, hy, z1, yg):
 # One machine at every level (owner, 30 Oct 2026: a level is the level below plus upgrades). The body's footprint, its
 # height and every part's mounting point are fixed in world coordinates here, fitted once to Flash level 3; a level
 # only adds or swaps parts:
-#   L1   the body with an open press front (no left wall: the roller works in the open frame), a narrow cabinet at the
+#   L1   (all of it 0.5 lower, on short dark feet) the body with an open press front (no left wall: the roller works in the open frame), a narrow cabinet at the
 #        back, a lean-to plank roof
-#   L3   = L1 + the left wall with its arched mouth, the strap round the right face, the pagoda roof
+#   L3   = L1 + stump legs that lift the machine, the left wall with its arched mouth, the strap round the right face, the pagoda roof
 #   L6   = L3 + the side cog, the chute through the roof, gold trim and lumps in the tray
 #   L10  = L6 + bird-claw feet, a taller chute with twigs, the curled bark roof and the gate on it
 HX, HY, Z0, Z1 = 1.05, 1.72, 1.25, 5.1          # the body: half width (X), half depth (Y), floor, top
@@ -1041,7 +1049,8 @@ SGEAR = Vector((1.67, 0.24, 3.82))
 SWHEEL = Vector((1.54, 1.78, 3.13))
 PIPE = [(-0.98, -1.1, 3.6), (-1.45, -1.1, 3.6), (-1.78, -1.1, 3.72)]     # out of the back-left wall, round an elbow
 PIPE_FOOT, PIPE_TOP = Vector((-1.9, -1.1, 4.0)), 6.6                    # then up outside the roof's eave
-CHUTE = Vector((0.05, 1.7, 5.45))                 # the chute's foot, through the roof (levels 6, 10)
+CHUTE = Vector((0.05, 1.7, 5.45))
+L1_DROP = 0.5                                   # level 1 stands this much lower, on short feet (4 Flash px)                 # the chute's foot, through the roof (levels 6, 10)
 
 
 def wall_r(y, z):
@@ -1068,8 +1077,8 @@ def build():
         # the press frame round the open front, as Flash's: heavy dark square posts on the front corners (the left one
         # taller), a dark crossbar over the roller, olive plates bolted over the joints
         for x, top in ((-hx, z1 + 0.45), (hx, z1 + 0.15)):
-            box("framepost", (0.48, 0.44, top - z0 + 0.05), (x, -hy, z0 - 0.05), M["dwood"]("Z"), bevel=0.12, taper=0.94)
-        box("framebar", (2 * hx + 0.5, 0.46, 0.46), (0.0, -hy, 4.15), M["dwood"]("X"), bevel=0.12)
+            box("framepost", (0.48, 0.44, top - z0 + 0.05), (x, -hy, z0 - 0.05), M["pwood"]("Z"), bevel=0.12, taper=0.94)
+        box("framebar", (2 * hx + 0.5, 0.46, 0.46), (0.0, -hy, 4.15), M["pwood"]("X"), bevel=0.12)
         for x in (-hx, hx):
             for z in (z0 + 0.45, 4.38):
                 box("framebracket", (0.56, 0.05, 0.56), (x, -hy - 0.24, z), M["olive"], bevel=0.02, origin="center")
@@ -1082,7 +1091,9 @@ def build():
         band(hx, hy, 3.9, 0.5, out=lambda f: 0.15 * math.sin(math.pi * f) + 0.15 * zf)
     # feet: stumps at the front, left and right corners and under the middle of the right face; claws at level 10
     lh = z0 + 0.1
-    if L < 10:
+    if L == 1:
+        pass                                    # short feet, after the drop at the end
+    elif L < 10:
         for x, y, sp in ((hx, -hy, (0.16, -0.16)), (-hx, -hy, (-0.16, -0.16)), (hx, hy, (0.16, 0.16)), (hx, 0.35, (0.22, 0))):
             leg((x, y), lh, 0.4, sp)
     else:
@@ -1113,7 +1124,8 @@ def build():
     if L >= 6:
         mount(side_wheel, SWHEEL, WHEEL_AXIS)
     # the pipe and horn, the same at every level, with a stay back to the wall
-    funnel(PIPE_FOOT, PIPE_TOP, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5, bell_len=1.3, up=0.1, route=PIPE)
+    funnel(PIPE_FOOT, PIPE_TOP, mouth_dir=(-0.6, -0.8), r_pipe=0.27, bell=0.5, bell_len=1.3, up=0.1, route=PIPE,
+           cap=L == 1)
     tube("pipestay", [(-hx + 0.02, PIPE_FOOT.y, PIPE_FOOT.z + 0.75), (PIPE_FOOT.x + 0.2, PIPE_FOOT.y, PIPE_FOOT.z + 0.75)],
          0.045, M["iron"])
     if L >= 6:
@@ -1131,6 +1143,13 @@ def build():
         gate(g0, g1, -0.6, z1 - 0.2, 9.3, z0_left=z1 - 0.9)
         for z in (z1 - 0.65, z1 - 0.25):
             cyl("gatebolt", 0.06, 0.08, (g0 - 0.22, -0.6, z), M["bolt"], rot=(0, 90, 0), verts=10, bevel=0.02)
+    if L == 1:                                  # level 1 sits low on short dark feet: the whole machine, every part
+        for o in list(SC.objects):              # fixed to it, drops by L1_DROP; level 3's stump legs lift it
+            if o.parent is None:
+                o.location.z -= L1_DROP
+        for x, y in ((hx, -hy), (-hx, -hy), (hx, hy), (-hx, hy)):
+            box("foot", (0.46, 0.46, z0 - L1_DROP - GROUND + 0.1), (x, y, GROUND), M["pwood"]("Z"), bevel=0.08,
+                taper=0.85)
 
 
 def lean_to(hx, hy, z0, z1):
@@ -1165,7 +1184,7 @@ def lean_to(hx, hy, z0, z1):
         d = Vector((math.cos(math.radians(deg)), math.sin(math.radians(deg)), 0))
         a = Vector((-1.35 + 0.08 * k, ay, 0))
         b = a + d * ((x1 - a.x) / d.x)
-        a.z, b.z = rz(a.x) + 0.18, rz(b.x) + 0.18        # just above the boards' jitter
+        a.z, b.z = rz(a.x) + 0.2, rz(b.x) + 0.2          # just above the boards' jitter
         ob = box("looseplank", ((b - a).length, 0.22, 0.1), (a + b) / 2, M["twig"]("X"), bevel=0.025, origin="center")
         ob.rotation_euler = (b - a).to_track_quat("X", "Z").to_euler()
 
