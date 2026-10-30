@@ -1,13 +1,12 @@
-"""post.py : the Putty Squisher v3 sample pictures, from putty3.py's renders (render/), v2's renders
-(../putty-v2/render/, read only) and the Flash art (fref.py).
+"""post.py : the Goo Factory 3D v2 sample pictures, from goo2.py's renders (render/) and the Flash art (fref.py).
 
-    python post.py side <level>      L<level>-side.png      Flash | v2 | v3, large (the building fills the frame), frame 0
+    python post.py side <level>      L<level>-side.png      Flash | 3D, large (the building fills the frame), frame 0
     python post.py outline <level>   L<level>-outline.png   Flash outline (red) on the 3D, the miss map; overlap printed
-    python post.py anim <level>      L<level>-anim.mp4      Flash | v2 | v3, the producing loop at the game's 13.3 frames a
+    python post.py anim <level>      L<level>-anim.mp4      Flash | 3D, the producing loop at the game's 13.3 frames a
                                      second (40 Hz yard tick, a frame every 3rd tick), three times round
     python post.py motion <level>    L<level>-motion.png    where the 3D loop changes pixels (red), beside Flash's
-    python post.py levels            putty-v3-levels-row.png  L1 L3 L6 L10 at one scale: Flash, v2, v3 in three rows,
-                                     lines through the parts every level shares (on v3)
+    python post.py levels            goo-v2-levels-row.png  L1 L3 L6 L10 at one scale: Flash above 3D, lines through
+                                     the parts every level shares (on the 3D)
 A 3D frame is the base picture (every still part and the ground shadow) with the frame's moving-parts layer laid over
 it, so nothing outside the moving parts can change between frames.
 """
@@ -24,7 +23,6 @@ import stack as S
 
 HERE = Path(__file__).resolve().parent
 R = HERE / "render"
-R2 = HERE.parent / "putty-v2" / "render"
 GRASS = (96, 140, 60)
 FPS = 40 / 3
 
@@ -65,10 +63,9 @@ def box_of(lv, size):
     """One crop box for a look: Flash and 3D together, building and shadow, every frame (still parts never shift)."""
     a = np.array(fref.flash_rgba(lv).resize(size).getchannel("A")) > 8
     a |= np.array(fref.shadow_rgba(lv).resize(size).getchannel("A")) > 40
-    for r in (R, R2):
-        a |= np.array(frame3d(lv, 0, r).getchannel("A")) > 40
-        for p in sorted(r.glob(f"L{lv}-parts-*.png")):
-            a |= np.array(Image.open(p).getchannel("A")) > 8
+    a |= np.array(frame3d(lv, 0).getchannel("A")) > 40
+    for p in sorted(R.glob(f"L{lv}-parts-*.png")):
+        a |= np.array(Image.open(p).getchannel("A")) > 8
     ys, xs = np.nonzero(a)
     pad = 30
     return max(0, xs.min() - pad), max(0, ys.min() - pad), min(size[0], xs.max() + pad), min(size[1], ys.max() + pad)
@@ -90,9 +87,8 @@ def pair(ims, labels, title):
 def side(lv, k=0):
     b3 = frame3d(lv, k)
     box = box_of(lv, b3.size)
-    b2 = frame3d(lv, k, R2)
-    return pair([flash(lv, k, b3.size).crop(box), on_grass(b2).crop(box), on_grass(b3).crop(box)],
-                ["Flash", "3D v2 (kept)", "3D v3 (new)"], f"Putty Squisher level {lv}")
+    return pair([flash(lv, k, b3.size).crop(box), on_grass(b3).crop(box)], ["Flash", "3D"],
+                f"Goo Factory level {lv}")
 
 
 def anim(lv):
@@ -112,35 +108,34 @@ def anim(lv):
 
 
 def scr(v):
-    """Flash pixel of world point v (as putty2.scr)."""
+    """Flash pixel of world point v (as goo2.scr)."""
     sx, sy, sz = 10 * np.cos(np.pi / 4), 10 * np.sin(np.pi / 4) * 0.5, 10 * np.cos(np.pi / 6)
     return S.ORIGIN[0] + sx * (v[0] + v[1]), S.ORIGIN[1] + sy * (v[0] - v[1]) - sz * v[2]
 
 
 def levels():
-    """The four looks at one scale and one crop: Flash on top, v2 in the middle, v3 at the bottom; on v3, dashed lines
-    through the shared parts (each at its own height on that level: level 3 lifts the pot and every part on it)."""
+    """The four looks at one scale and one crop: Flash on top, 3D below; on the 3D, dashed lines through the parts
+    every level shares (the body never moves between levels)."""
     size = frame3d(1, 0).size
     k = size[0] / (fref.FRAME[2] - fref.FRAME[0])
     boxes = [box_of(lv, size) for lv in fref.LEVELS]
     box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
     w, h = box[2] - box[0], box[3] - box[1]
     gap, top, lab = 12, 84, 40
-    out = Image.new("RGB", (4 * w + 5 * gap, top + 3 * (h + lab + gap)), (24, 24, 24))
+    out = Image.new("RGB", (4 * w + 5 * gap, top + 2 * (h + lab + gap)), (24, 24, 24))
     d = ImageDraw.Draw(out)
-    d.text((12, 8), "Putty Squisher, levels 1, 3, 6, 10 at one scale: Flash (top), 3D v2 (middle, kept), 3D v3 (bottom, "
-           "new take)", fill=(255, 255, 255), font=font(26))
-    d.text((12, 44), "v3: same parts and colours, chunkier and simpler shapes. Red crosses on v3: parts fixed to the pot; "
-           "L3 lifts the pot and every part on it. Blue dashes: the pot's axis", fill=(200, 200, 200), font=font(22))
-    rows = (("Flash", lambda lv: flash(lv, 0, size)), ("3D v2", lambda lv: on_grass(frame3d(lv, 0, R2))),
-            ("3D v3", lambda lv: on_grass(frame3d(lv, 0))))
-    ys = [top + r * (h + lab + gap) for r in range(3)]
+    d.text((12, 8), "Goo Factory, levels 1, 3, 6, 10 at one scale: Flash (top), 3D (bottom)", fill=(255, 255, 255),
+           font=font(26))
+    d.text((12, 44), "Red crosses on the 3D: parts of the one body (funnel, collar, rim, pump foot, top ring), the same "
+           "place at every level. Blue dashes: the vat's axis", fill=(200, 200, 200), font=font(22))
+    rows = (("Flash", lambda lv: flash(lv, 0, size)), ("3D", lambda lv: on_grass(frame3d(lv, 0))))
+    ys = [top + r * (h + lab + gap) for r in range(2)]
     for i, lv in enumerate(fref.LEVELS):
         x = gap + i * (w + gap)
         for (name, get), y in zip(rows, ys):
             d.text((x, y + 6), f"Level {lv}  {name}", fill=(255, 255, 255), font=font(24))
             out.paste(get(lv).crop(box).convert("RGB"), (x, y + lab))
-    y3 = ys[2] + lab
+    y3 = ys[1] + lab
     for i, lv in enumerate(fref.LEVELS):
         x0 = gap + i * (w + gap)
         ax = x0 + (S.ORIGIN[0] - fref.FRAME[0]) * k - box[0]
@@ -178,7 +173,7 @@ def motion(lv):
         a = f0.astype(float)
         a[ch] = a[ch] * 0.3 + np.array([255, 0, 0]) * 0.7
         ims.append(Image.fromarray(a.astype(np.uint8)).crop(box_of(lv, size)))
-    return pair(ims, ["Flash: pixels that change in the loop", "3D"], f"Putty Squisher level {lv}: what moves")
+    return pair(ims, ["Flash: pixels that change in the loop", "3D"], f"Goo Factory level {lv}: what moves")
 
 
 def still_check(lv):
@@ -207,7 +202,7 @@ if __name__ == "__main__":
         lv = int(sys.argv[2])
         print(anim(lv), "changed px (all, outside moving parts):", still_check(lv))
     elif cmd == "levels":
-        levels().save(HERE / "putty-v3-levels-row.png")
+        levels().save(HERE / "goo-v2-levels-row.png")
     elif cmd == "motion":
         lv = int(sys.argv[2])
         motion(lv).save(HERE / f"L{lv}-motion.png")

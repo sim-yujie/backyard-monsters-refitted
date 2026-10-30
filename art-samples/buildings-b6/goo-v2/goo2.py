@@ -42,7 +42,7 @@ EL = 30.0
 ORIGIN = S.ORIGIN                     # Flash pixel of the world origin (the building's middle on the ground)
 GROUND = S.GROUND
 FRAME = (-44, -64, 52, 60)            # the canvas in Flash px (as fref.FRAME)
-K = {"fit": 4}.get(MODE, int(os.environ.get("PB_K", 12)))      # render px per Flash px
+K = int(os.environ.get("PB_K", 4 if MODE == "fit" else 12))      # render px per Flash px
 SX, SY, SZ = 10 * math.cos(math.radians(45)), 10 * math.sin(math.radians(45)) * math.sin(math.radians(EL)), \
     10 * math.cos(math.radians(EL))
 L = LEVEL
@@ -346,6 +346,22 @@ def funnel_mat(name, col, wear, shine=(236, 240, 246)):
     return t.m
 
 
+def goo_mat(name, dark, mid, light, rough=0.36, scale=2.6, bump=0.25, ao_min=0.2, spec=0.5):
+    """Wet goo as Flash paints it: mottled dark and mid green with pale yellow-green glints, near black in the hollows
+    between the lumps."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    v = t.coords()
+    n1 = t.noise(v, scale, 5.0, 0.6, 0.4)
+    col = t.ramp(n1, [(0.36, srgb(*dark)), (0.55, srgb(*mid)), (0.72, srgb(*light))])
+    col = t.grime(col, GROUND, 2.6, 0.15, ao_min)
+    t.set(**{"Base Color": col, "rough": rough, "spec": spec})
+    t.bump(t.noise(v, scale * 3.0, 4.0, 0.6), bump, 0.03)
+    MATS[name] = t.m
+    return t.m
+
+
 def flat(name, col, rough=0.5, metal=0.0, emit=0.0):
     if name in MATS:
         return MATS[name]
@@ -553,8 +569,11 @@ def materials():
                         dirt=0.4, spec=0.38, soot=0.35, rust_at=0.66)
     M["pipedark"] = painted("pipedark", (150, 90, 26), rough=0.52, metal=0.3, wear=(204, 146, 62), rust=(70, 40, 12),
                             scale=2.4, dirt=0.4, spec=0.34, soot=0.45, rust_at=0.62)
-    M["goo"] = painted("goo", (38, 96, 8), rough=0.42, wear=(92, 156, 22), scale=1.3, dirt=0.3, spec=0.22, ao_min=0.25)
-    M["goodark"] = painted("goodark", (16, 40, 6), rough=0.45, wear=(34, 72, 12), scale=2.0, dirt=0.0, spec=0.2)
+    M["goo"] = goo_mat("goo", (14, 44, 4), (40, 104, 10), (96, 160, 22), rough=0.5, spec=0.25)
+    M["goodome"] = goo_mat("goodome", (12, 36, 4), (34, 90, 10), (84, 150, 22), rough=0.55, spec=0.12, scale=4.0,
+                           bump=0.3, ao_min=0.12)
+    M["goodark"] = painted("goodark", (8, 16, 3), rough=0.85, wear=(16, 30, 6), scale=2.0, dirt=0.0, spec=0.05,
+                           ao_min=0.2)
     M["slate"] = funnel_mat("slate", (60, 68, 88), (80, 90, 110))
     M["slatein"] = painted("slatein", (40, 46, 60), rough=0.7, wear=(60, 68, 84), scale=3, dirt=0.0, spec=0.25)
     M["steel"] = painted("steel", (152, 162, 158), rough=0.5, metal=0.35, wear=(200, 208, 204), rust=(110, 96, 78),
@@ -736,12 +755,17 @@ def goo_l1():
     z1 = S.VAT_Z1
     balls = []
     n = 40
-    for k in range(n):                                     # the crown: a smooth fat lip on the rim
+    for k in range(n):                                     # the crown: a lumpy lip on the rim, heaped at the front
         b = 360.0 * k / n
-        balls.append((P(b + rr.uniform(-3, 3), S.VAT_R - 0.04 + rr.uniform(-0.04, 0.06),
-                        z1 + 0.12 + 0.09 * math.sin(3 * math.radians(b)) + rr.uniform(-0.06, 0.06)),
-                      0.5 + 0.06 * math.sin(5 * math.radians(b) + 1.0) + rr.uniform(-0.06, 0.06)))
-    for b, ln, wd, nf in ((4, 2.35, 1.45, 5), (-125, 2.0, 0.7, 3), (-70, 0.75, 0.5, 2), (-155, 0.9, 0.5, 2),
+        front = math.cos(math.radians(b + 45))
+        balls.append((P(b + rr.uniform(-3, 3), S.VAT_R - 0.04 + rr.uniform(-0.06, 0.08),
+                        z1 - 0.05 + 0.15 * front + rr.uniform(-0.08, 0.08)), 0.42 + rr.uniform(-0.08, 0.08)))
+    for k in range(34):                                    # smaller lumps on it, so it is never a smooth tube
+        b = rr.uniform(0, 360)
+        front = math.cos(math.radians(b + 45))
+        balls.append((P(b, S.VAT_R + rr.uniform(-0.25, 0.12), z1 + 0.1 + 0.15 * front + rr.uniform(-0.1, 0.1)),
+                      rr.uniform(0.2, 0.3)))
+    for b, ln, wd, nf in ((4, 2.35, 1.45, 5), (-125, 1.3, 0.7, 3), (-70, 0.75, 0.5, 2), (-155, 0.9, 0.5, 2),
                           (45, 0.8, 0.45, 2), (-100, 0.45, 0.4, 2)):
         sheet(balls, rr, b, ln, wd, nf)
     # spilt on the table at the left, and over its front edge
@@ -764,16 +788,20 @@ DOME_PROF = [(2.0, 4.86), (2.16, 5.1), (2.14, 5.42), (1.94, 5.75), (1.56, 6.04),
 def goo_dome():
     """Level 3 up: the goo heaped into a dome of fat bulbs over the vat, resting on the top ring, up to the collar."""
     rr = R(31)
-    balls = [((0, 0, 5.3), 2.4, (1.0, 1.0, 0.5)), ((0, 0, 5.8), 1.75, (1.0, 1.0, 0.5))]
-    for i, (r, z) in enumerate(DOME_PROF[:-1]):
-        n = max(4, int(2 * math.pi * r / 0.8))
-        off = rr.uniform(0, 360)
-        for k in range(n):
-            b = off + 360.0 * k / n + rr.uniform(-14, 14)
-            rad = rr.uniform(0.44, 0.68)
-            zz = z + rr.uniform(-0.12, 0.12)
-            balls.append((P(b, r - rad * 0.6 + rr.uniform(-0.08, 0.05), zz), rad))
-    return meta("goodome", balls, M["goo"], res=0.05)
+    balls = [((0, 0, 5.25), 2.5, (1.0, 1.0, 0.45)), ((0, 0, 5.75), 1.9, (1.0, 1.0, 0.5))]
+    # lumps of many sizes scattered over the dome (no rows, so it never reads as a ribbed pumpkin): a few big ones and
+    # many small, each pushed out to the dome's skin
+    prof = DOME_PROF
+    for k in range(150):
+        t = rr.random() ** 0.8
+        f = t * (len(prof) - 2)
+        i = int(f)
+        r = prof[i][0] + (prof[i + 1][0] - prof[i][0]) * (f - i)
+        z = prof[i][1] + (prof[i + 1][1] - prof[i][1]) * (f - i)
+        rad = rr.choice((0.3, 0.34, 0.38, 0.42, 0.5, 0.58))
+        balls.append((P(rr.uniform(0, 360), r - rad * 0.55 + rr.uniform(-0.06, 0.06), z + rr.uniform(-0.08, 0.08)),
+                      rad))
+    return meta("goodome", balls, M["goodome"], res=0.04)
 
 
 def dome_hit(org, d, trees_):
@@ -792,6 +820,7 @@ def straps_and_vanes(dome):
     me = dome.data
     t = BVHTree.FromPolygons([dome.matrix_world @ v.co for v in me.vertices], [p.vertices[:] for p in me.polygons])
     c = Vector((0, 0, 4.9))
+    paths = {}
     for k, b in enumerate(S.POST_BEARINGS):
         u = U(b)
         pts = []
@@ -812,20 +841,31 @@ def straps_and_vanes(dome):
         path = [top] + [p for p in out if (p - c).dot(u) > 0.5] + [foot]
         path = [p for i, p in enumerate(path) if i == 0 or (p - path[i - 1]).length > 0.06]
         sweep(f"strap{k}", path, U(b + 90), 0.11, 0.045, M["steel"], bevel=0.012)
-    for k, b in enumerate((45, 135, -135)):
-        u = U(b)
-        hi = []
-        for r in (0.75, 1.4, 2.1):
-            o = u * r + Vector((0, 0, 9))
-            h = dome_hit(o, Vector((0, 0, -1)), [t])
-            hi.append(9 - h if h is not None else 4.8)
-        z_in, z_out = max(hi[0], hi[1]) + 0.1, max(hi[1], hi[2]) + 0.08
-        z_in = max(z_in, z_out)
-        a = P(b, 0.62, z_in)
-        e = P(b, 2.12, z_out)
-        tilt = math.degrees(math.atan2(z_in - z_out, 1.5))
-        box(f"vane{k}", (1.5, 0.5, 0.06), (a + e) / 2, M["vane"], rot=(0, tilt, b), bevel=0.02, origin="centre")
-        tube(f"vanerod{k}", [P(b, S.NECK_R - 0.05, z_in + 0.02), P(b, 0.7, z_in + 0.02)], 0.05, M["steel"])
+        paths[b] = path
+    # the vanes: flat grey blades on rods out of the collar, over three of the straps (right, back, left; none at the
+    # front), nearly level and clear of the strap and the goo under their whole width
+    for k, b in enumerate((27.0, 147.0, -153.0)):
+        b = min(paths, key=lambda q: abs((q - b + 180) % 360 - 180))
+        u, w = U(b), U(b + 90)
+        r0, r1 = 0.62, 2.12
+
+        def floor(r):
+            zs = [p.z + 0.035 for p in paths[b] if abs(p.dot(u) - r) < 0.08]
+            for s in (-0.25, 0.0, 0.25):
+                o = u * r + w * s + Vector((0, 0, 9))
+                h = dome_hit(o, Vector((0, 0, -1)), [t])
+                if h is not None:
+                    zs.append(9 - h + 0.01)
+            return max(zs) if zs else 4.8
+        rs = [r0 + (r1 - r0) * i / 12 for i in range(13)]
+        fl = [floor(r) for r in rs]
+        z_in, z_out = 0.0, -0.32                    # nearly level, as Flash's blades: a slight droop outward
+        lift = max(f - (z_in + (z_out - z_in) * i / 12) for i, f in enumerate(fl))
+        z_in, z_out = z_in + lift + 0.03, z_out + lift + 0.03
+        a, e = P(b, r0, z_in), P(b, r1, z_out)
+        tilt = math.degrees(math.atan2(z_in - z_out, r1 - r0))
+        box(f"vane{k}", (r1 - r0, 0.5, 0.06), (a + e) / 2, M["vane"], rot=(0, tilt, b), bevel=0.02, origin="centre")
+        tube(f"vanerod{k}", [P(b, S.NECK_R - 0.05, z_in + 0.02), P(b, r0 + 0.08, z_in + 0.02)], 0.05, M["steel"])
 
 
 # ------------------------------------------------------------------------------------------------------------ the frame
@@ -1003,26 +1043,56 @@ PUMP_WALL = {}
 
 
 # ------------------------------------------------------------------------------------------------------------ the loops
+def fillet(pts, rad, n=8):
+    """The polyline pts with each inner corner rounded off to radius rad (a pipe's bends)."""
+    pts = [Vector(p) for p in pts]
+    out = [pts[0]]
+    for a, b, c in zip(pts, pts[1:], pts[2:]):
+        u, v = (a - b).normalized(), (c - b).normalized()
+        ang = u.angle(v)
+        if ang > math.pi - 1e-3:
+            out.append(b)
+            continue
+        t = min(rad / math.tan(ang / 2), (a - b).length * 0.5, (c - b).length * 0.5)
+        p0, p1 = b + u * t, b + v * t
+        for i in range(n + 1):
+            s = i / n
+            out.append(p0 * (1 - s) ** 2 + b * (2 * s * (1 - s)) + p1 * (s * s))
+    out.append(pts[-1])
+    return out
+
+
+def pipe(name, pts, r, mat=None, bend=0.35):
+    return tube(name, fillet(pts, bend), r, mat or M["pipe"], verts=16)
+
+
+def lerp(a, b, f):
+    return Vector(a) + (Vector(b) - Vector(a)) * f
+
+
+LOOP_R_IN, LOOP_R_OUT, LOOP_R_TOP = P(57, 1.35, 0), P(45, 2.02, 0), 7.9
+
+
 def loops_l6():
-    """Level 6: the return loop at the back right (from the ground behind the right post, up over the funnel's side
-    and down into the dome) and the side loop at the left (out of the vat through the peach plate, up, in to the
-    dome's shoulder)."""
+    """Level 6: the return loop at the back right (up out of the dome beside the funnel, over and down into the dome's
+    right shoulder) and the side loop at the left (out of the vat through the peach plate, up, in to the dome's
+    shoulder)."""
     r = S.LOOP_R
-    b = 92.0
-    pts = [P(b, 3.1, 0.0), P(b, 3.1, 7.25), P(b, 3.0, 7.6), P(b, 2.75, 7.68), P(b, 1.6, 7.68), P(b, 1.4, 7.6),
-           P(b, 1.35, 7.35), P(b, 1.35, 6.1)]
-    tube("loopR", pts, r, M["pipe"], verts=16, smooth=True)
-    cyl("loopRfoot", r + 0.12, 0.18, P(b, 3.1, 0.0), M["hoop"], verts=20, bevel=0.03)
+    zt = Vector((0, 0, LOOP_R_TOP))
+    pipe("loopR", [LOOP_R_IN + Vector((0, 0, 5.85)), LOOP_R_IN + zt, LOOP_R_OUT + zt,
+                   LOOP_R_OUT + Vector((0, 0, 5.6))], r, bend=0.4)
     b = -128.0
-    pts = [P(b, S.VAT_R - 0.2, 3.1), P(b, 2.4, 3.1), P(b, 2.68, 3.2), P(b, 2.75, 3.5), P(b, 2.75, 5.9), P(b, 2.68, 6.2),
-           P(b, 2.4, 6.3), P(b, 1.95, 6.3), P(b, 1.8, 6.1), P(b, 1.75, 5.6)]
-    tube("loopL", pts, r, M["pipe"], verts=16, smooth=True)
+    pipe("loopL", [P(b, S.VAT_R - 0.2, 3.1), P(b, 2.55, 3.1), P(b, 2.55, 6.25), P(b, 1.75, 6.25), P(b, 1.75, 5.6)], r,
+         bend=0.4)
     along("loopLflange", None, U(b), r + 0.12, 0.14, P(b, S.VAT_R - 0.03, 3.1), M["hoop"], verts=20, bevel=0.03)
+    ap = (S.POST_R * math.cos(math.radians(30)) - S.RING_IN + 0.02) / math.cos(math.radians(b + 123))
+    along("loopLcollar", None, U(b), r + 0.09, 0.2, P(b, ap - 0.1, 3.1), M["hoop"], verts=20, bevel=0.03)
 
 
 def loops_l10():
-    """Level 10: the tower at the back left with its goo cap and its arc to the ground, two more loops stepping up at the
-    back right, the right side loop."""
+    """Level 10: the tower at the back left with its goo cap, its branch into the dome and its arc round the left to
+    the ground; two more loops stepping up behind the level 6 loop, each standing on the one below; the right side
+    pipe out of the dome, down to the ground and in to the vat; the low pipe across the front."""
     r = 0.34
     b = 180.0
     base = P(b, 3.05, 0.0)
@@ -1035,27 +1105,34 @@ def loops_l10():
           verts=24)
     meta("towergoo", [(top + Vector((0, 0, 0.22)), 0.5, (1.0, 1.0, 0.45))] +
          [(top + U(a) * 0.3 + Vector((0, 0, 0.16)), 0.22) for a in range(0, 360, 60)], M["goo"], res=0.04)
-    # a thin pipe beside it, from the tower's foot to the dome
-    pts = [P(165, 2.75, 0.0), P(165, 2.75, 6.9), P(165, 2.6, 7.2), P(165, 2.2, 7.2), P(165, 1.7, 6.8),
-           P(165, 1.65, 6.0)]
-    tube("towerpipe", pts, 0.16, M["pipe"], verts=12, smooth=True)
-    # the arc from the tower's top round the left to the ground at the front left
-    pts = [top + Vector((0, 0, -1.0)) + U(-150) * r, P(-158, 3.9, 7.3), P(-140, 4.3, 5.6), P(-128, 4.2, 3.0),
-           P(-120, 3.95, 0.9), P(-118, 3.9, 0.0)]
+    # its branch into the dome, over the top ring between the back posts
+    pipe("towerpipe", [P(b, 2.9, 5.1), P(174, 2.4, 5.1), P(162, 1.9, 5.1)], 0.2, bend=0.5)
+    # the arc from the tower's top round the far left to the ground at the front left
+    pts = [P(-178, 3.1, 8.0), P(-165, 3.45, 8.0), P(-148, 3.55, 6.6), P(-133, 3.4, 3.8), P(-120, 3.25, 1.4),
+           P(-113, 3.18, 0.0)]
     tube("towerarc", pts, 0.2, M["pipe"], verts=14, smooth=True)
-    cyl("towerarcfoot", 0.32, 0.16, P(-118, 3.9, 0.0), M["hoop"], verts=20, bevel=0.03)
-    # two loops stepping up behind the level 6 loop
-    for j, (b, d, top_z) in enumerate(((110.0, 3.25, 8.6), (126.0, 3.35, 9.5))):
-        pts = [P(b, d, 0.0), P(b, d, top_z - 0.35), P(b, d - 0.12, top_z - 0.05), P(b, d - 0.4, top_z),
-               P(b, 1.55, top_z), P(b, 1.3, top_z - 0.15), P(b, 1.22, top_z - 0.5), P(b, 1.22, 6.2)]
-        tube(f"loopB{j}", pts, 0.22, M["pipe"], verts=14, smooth=True)
-        cyl(f"loopBfoot{j}", 0.34, 0.16, P(b, d, 0.0), M["hoop"], verts=20, bevel=0.03)
-    # the right side loop: out of the vat between the rings, out past the posts, down to the ground
-    b = 40.0
-    pts = [P(b, S.VAT_R - 0.2, 3.6), P(b, 2.5, 3.6), P(b, 3.05, 3.7), P(b, 3.3, 3.3), P(b, 3.35, 2.6), P(b, 3.35, 0.0)]
-    tube("loopS", pts, 0.22, M["pipe"], verts=14, smooth=True)
-    along("loopSflange", None, U(b), 0.34, 0.14, P(b, S.VAT_R - 0.03, 3.6), M["hoop"], verts=20, bevel=0.03)
-    cyl("loopSfoot", 0.34, 0.16, P(b, 3.35, 0.0), M["hoop"], verts=20, bevel=0.03)
+    cyl("towerarcfoot", 0.32, 0.16, P(-113, 3.18, 0.0), M["hoop"], verts=20, bevel=0.03)
+    # two loops stepping up behind the level 6 loop: each rises out of the dome behind the funnel and comes down onto
+    # the top of the loop below it
+    zt = Vector((0, 0, LOOP_R_TOP))
+    q1 = lerp(LOOP_R_IN, LOOP_R_OUT, 0.65)
+    in1, z1 = P(103, 1.4, 0), 8.2
+    pipe("loopB0", [in1 + Vector((0, 0, 5.8)), in1 + Vector((0, 0, z1)), q1 + Vector((0, 0, z1)), q1 + zt], 0.22,
+         bend=0.3)
+    q2 = lerp(in1, q1, 0.6)
+    in2, z2 = P(125, 1.38, 0), 9.05
+    pipe("loopB1", [in2 + Vector((0, 0, 5.85)), in2 + Vector((0, 0, z2)), q2 + Vector((0, 0, z2)), q2 + Vector((0, 0, z1))],
+         0.22, bend=0.3)
+    # the right side pipe: out of the dome's right side, out past the posts, down to the ground; a branch in to the vat
+    b = 52.0
+    pipe("loopS", [P(b, 1.95, 5.1), P(b, 3.0, 5.1), P(b, 3.0, 0.0)], 0.22, bend=0.4)
+    pipe("loopSin", [P(b, 3.0, 3.0), P(b, S.VAT_R - 0.2, 3.0)], 0.2)
+    along("loopSflange", None, U(b), 0.32, 0.14, P(b, S.VAT_R - 0.03, 3.0), M["hoop"], verts=20, bevel=0.03)
+    cyl("loopSfoot", 0.34, 0.16, P(b, 3.0, 0.0), M["hoop"], verts=20, bevel=0.03)
+    # the low pipe across the front: out of the side pipe near the ground, under the frame, down into the ground
+    a, e = P(b, 3.0, 0.35), Vector((-0.39, -1.24, 0.35))
+    pipe("loopF", [a, e, e - Vector((0, 0, 0.35))], 0.16, bend=0.25)
+    cyl("loopFfoot", 0.26, 0.14, e - Vector((0, 0, 0.35)), M["hoop"], verts=20, bevel=0.03)
 
 
 # ------------------------------------------------------------------------------------------------------------ build
@@ -1209,8 +1286,8 @@ FAMILY = (("pump", "pump"), ("flange", "flange"), ("vat", "vat"), ("hoop", "vat"
           ("funnel", "funnel"), ("strap", "strap"), ("vanerod", "vane"), ("vane", "vane"), ("postwood", "post"),
           ("postlead", "post"), ("postferrule", "post"), ("posteraser", "post"), ("post", "post"), ("ring", "ring"),
           ("bracket", "bracket"), ("clamp", "clamp"), ("foot", "foot"), ("loopRfoot", "loopR"), ("loopR", "loopR"),
-          ("loopL", "loopL"), ("loopB0", "loopB0"), ("loopB1", "loopB1"), ("loopBfoot0", "loopB0"), ("loopBfoot1", "loopB1"),
-          ("loopS", "loopS"), ("tower", "tower"))
+          ("loopL", "loopL"), ("loopB", "loopR"), ("loopS", "loopS"), ("loopF", "loopS"),
+          ("tower", "tower"))
 MASONRY = ()
 
 
@@ -1241,7 +1318,7 @@ def main():
             for i, (a, ta, _) in enumerate(obs):
                 for b, tb, _ in obs[i + 1:]:
                     fa, fb = family(a), family(b)
-                    if fa == fb:
+                    if fa == fb or (k and not (under_moving(a) or under_moving(b))):   # still pairs: frame 0 only
                         continue
                     n = len(ta.overlap(tb))
                     if n:
