@@ -117,6 +117,7 @@ describe("the quake's fall-off (`INFERNOQUAKETOWER.as:174-179`)", () => {
 
 describe("the Quake Tower in a battle", () => {
   it("winds up 179 ticks after its first Fire and 174 after each later one", () => {
+    // The D.A.V.E. reaches the tower at tick 237 and has it down by 664.
     const hits = [...quakes(quakeBattle({ C12: 1 }), 1000).keys()];
     // `Props()` seeds the fire tick with `rate` (15); at 0 it finds its target
     // and waits 30; at 0 again it fires, and the wind-up starts (`Fire`, :132).
@@ -124,7 +125,7 @@ describe("the Quake Tower in a battle", () => {
     // 28 more steps 6 apart, then 4 steps a tick and the quake the tick after:
     // 179. It ends on 179, 5 past a multiple of 6, so every later one is 174.
     // Between them the fire tick, frozen through the wind-up, runs out its 30.
-    expect(hits).toEqual([15 + 30 + 179, 224 + 30 + 174, 428 + 204, 632 + 204]);
+    expect(hits).toEqual([15 + 30 + 179, 224 + 30 + 174, 428 + 204]);
   });
 
   it("shakes a whole clump of Pokeys down in one quake", () => {
@@ -136,8 +137,9 @@ describe("the Quake Tower in a battle", () => {
   });
 
   it("is not weakened by the tower's own health", () => {
-    const whole = [...quakes(quakeBattle({ C12: 1 }), 700).values()];
-    const hurt = [...quakes(quakeBattle({ C12: 1 }, { health: { "1": 5000 } }), 700).values()];
+    // Two quakes each, before the D.A.V.E. has the hurt one down.
+    const whole = [...quakes(quakeBattle({ C12: 1 }), 600).values()];
+    const hurt = [...quakes(quakeBattle({ C12: 1 }, { health: { "1": 5000 } }), 600).values()];
     expect(hurt).toEqual(whole);
     for (const [amount] of whole) {
       expect(amount).toBeGreaterThanOrEqual(366);
@@ -203,10 +205,11 @@ describe("the Magma Tower (`INFERNO_MAGMA_TOWER.as`)", () => {
   });
 
   it("fires 20 + 30 ticks in, then every rate x 2, its whole damage at full health", () => {
-    const hits = [...quakes(magmaBattle({ C12: 1 }), 400).entries()];
+    // Up to tick 236, before the D.A.V.E. reaches the tower and dents it.
+    const hits = [...quakes(magmaBattle({ C12: 1 }), 236).entries()];
     // `Props()` seeds the fire tick with `rate`; the first reload finds the
     // target and waits 30 (`BTOWER.as:184-190`); then one shot every 40.
-    expect(hits.map(([tick]) => tick)).toEqual([50, 90, 130, 170, 210, 250, 290, 330, 370]);
+    expect(hits.map(([tick]) => tick)).toEqual([50, 90, 130, 170, 210]);
     for (const [, amounts] of hits) expect(amounts).toEqual([180]);
   });
 
