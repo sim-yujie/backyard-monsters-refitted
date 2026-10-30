@@ -1,0 +1,11 @@
+# Only the render pipeline (scripts and notes) and the before/after sheet are kept: the renders, pieces and pictures
+# are made by render_all.sh (see its header).
+*
+!*/
+!*.py
+!*.sh
+!*.md
+!layout.jsonl
+!.gitignore
+!no-outline/*.jpg
+__pycache__/

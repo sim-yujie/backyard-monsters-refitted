@@ -1,0 +1,1008 @@
+"""inferno3d.py : the three Inferno towers as 3D models in the game's camera (buildings-3d-2, 28 Oct 2026), modelled on
+the Flash art (no painted repaint exists): T=1 the Inferno Blast Tower (icannontower), T=2 the Sharpshooter (isnipertower),
+T=3 the Magma Tower (imagmatower). Each is round, so only its head turns; the rest (the striped skirt and wooden drum,
+the coil post, the striped column with its chain legs) is the body.
+
+  blender -b --factory-startup -P inferno3d.py -- T body | turret [h ...] | full H | aim | clash | save
+
+(see ../tower-3d/square3d.py for the modes; the same scale, 75 px per unit at @2x, and the same camera; the body canvas is
+taller, BODY_CANVAS below, as the Sharpshooter stands about 3.3 units high.)
+"""
+import math
+import os
+import sys
+from pathlib import Path
+
+import bmesh
+import bpy
+from mathutils import Matrix, Vector
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "tower-3d"))
+import look3d as L  # noqa: E402
+L.EL = float(os.environ.get("INFERNO_EL", 30.0))
+import square3d as Q  # noqa: E402
+import worn3d as W  # noqa: E402
+from look3d import add_outline, bear, lathe, mat_flat, obj_from_bm, rbox, srgb, studs, tube  # noqa: E402
+
+Q.BODY_CANVAS = (640, 760, 320, 590)       # w, h, the ground middle's pixel (4x)
+L.METALS.update(
+    bronze=((60, 34, 16), (150, 98, 56), (226, 182, 128), (1.0, 0.9, 0.75, 1)),    # the Inferno's dull bronze
+    copper=((70, 28, 12), (190, 100, 56), (250, 186, 136), (1.0, 0.88, 0.78, 1)),
+    iron=((22, 18, 18), (70, 62, 60), (150, 140, 136), (0.95, 0.92, 0.9, 1)),
+)
+ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["1", "body"]
+TIER = int(ARGS[0])
+LOOK = int(os.environ.get("INFERNO_LOOK", 1))   # the Blast Tower's level look (1-3, see blast_roles): render/t1-lookN
+
+
+def mat_diag(name, a, b, n=6, lean=1.6, period=1.0):
+    """Diagonal painted stripes wound round the Z axis (the Inferno's red and cream), a little chipped and grimy."""
+    p = L.Paint(name)
+    sep = p.N.new("ShaderNodeSeparateXYZ")
+    p.link(p.tc.outputs["Object"], sep.inputs[0])
+    ang = p.math("ARCTAN2", sep.outputs[1], sep.outputs[0])
+    u = p.math("ADD", p.math("MULTIPLY", ang, n / (2 * math.pi)), p.math("MULTIPLY", sep.outputs[2], lean / period))
+    bnd = p.math("GREATER_THAN", p.math("FRACT", u), 0.5)
+    paint = p.mix(srgb(*a), srgb(*b), bnd)
+    chip = p.ramp(p.noise(7.0, 8.0, 0.62), [(0.62, (0, 0, 0, 1)), (0.645, (1, 1, 1, 1))])
+    paint = p.mix(paint, srgb(120, 70, 40), chip)
+    grime = p.ramp(p.noise(2.0, 3.0), [(0.3, (0.78, 0.74, 0.72, 1)), (0.7, (1, 1, 1, 1))])
+    return p.finish(p.mix(paint, grime, 1.0, 'MULTIPLY'), spec=0.3, spec_rough=0.35, shade=L.WARM_SHADE)
+
+
+def mat_parchment(name):
+    """The Sharpshooter's drum: cream parchment panels with dark scrawl, between dark red ones."""
+    p = L.Paint(name)
+    sep = p.N.new("ShaderNodeSeparateXYZ")
+    p.link(p.tc.outputs["Object"], sep.inputs[0])
+    ang = p.math("ARCTAN2", sep.outputs[1], sep.outputs[0])
+    panel = p.math("GREATER_THAN", p.math("FRACT", p.math("MULTIPLY", ang, 8 / (2 * math.pi))), 0.32)
+    scrawl = p.ramp(p.noise(14.0, 6.0, 0.7, stretch=(1.0, 1.0, 3.0)), [(0.6, (1, 1, 1, 1)), (0.66, (0.45, 0.36, 0.3, 1))])
+    cream = p.mix(srgb(238, 222, 190), scrawl, 1.0, 'MULTIPLY')
+    paint = p.mix(srgb(120, 22, 24), cream, panel)
+    grime = p.ramp(p.noise(2.5, 3.0), [(0.3, (0.8, 0.76, 0.72, 1)), (0.7, (1, 1, 1, 1))])
+    return p.finish(p.mix(paint, grime, 1.0, 'MULTIPLY'), spec=0.25, spec_rough=0.4, shade=L.WARM_SHADE)
+
+
+def common():
+    met = L.mat_metal
+    return dict(
+        bronze=met("bronze", spec=1.0, wear=0.5),
+        copper=met("copper", spec=1.0, wear=0.3),
+        iron=met("iron", spec=0.8, wear=0.6, polish=0.3),
+        wood=L.mat_wood("wood", light=(170, 104, 62), dark=(118, 66, 36), crack=(60, 30, 16)),
+        stripes=mat_diag("stripes", (196, 30, 26), (236, 214, 178)),
+        leather=L.mat_wood("leather", light=(176, 120, 76), dark=(120, 76, 44), crack=(70, 40, 20)),
+        glow=L.mat_glass_lamp("glow", core=(255, 240, 170), mid=(255, 140, 30), rim=(200, 50, 0)),
+        halo=L.mat_halo("halo", (255, 140, 40), strength=0.5),
+        bore=mat_flat("bore", (20, 14, 12), spec=0.1),
+        lens=L.mat_glass_lamp("lens", core=(220, 250, 255), mid=(80, 190, 230), rim=(20, 80, 140)),
+        parch=mat_parchment("parch"),
+        wire=mat_flat("wire", (230, 190, 40), spec=0.6),
+        # the worn look (owner, 29 Oct: "too unrefined and lacks detail compared to the original"; see worn3d.py)
+        dirt=W.mat_dirt("dirt"),
+        stripes_w=W.mat_worn_diag("stripes_w", (192, 24, 18), (222, 190, 142)),
+        stake=W.mat_raw_wood("stake"),
+        staves=W.mat_planks("staves", n=16, light=(196, 140, 92), dark=(150, 98, 60)),
+        staves_dark=W.mat_planks("staves_dark", n=14, light=(150, 96, 58), dark=(104, 62, 36), soot=0.35),
+        rope=W.mat_rope("rope"),
+        iron_w=W.mat_iron("iron_w"),
+        iron_dirty=W.mat_iron("iron_dirty", base=(76, 60, 50), dark=(36, 28, 24), rust_k=0.8, soot=0.5, dirt=0.0),
+        iron_head=W.mat_iron("iron_head"),
+        panels=W.mat_worn_panels("panels", ratio=0.4),
+        lamp_red=L.mat_glass_lamp("lamp_red", core=(255, 220, 180), mid=(230, 40, 30), rim=(120, 10, 10)),
+        brass_w=W.mat_iron("brass_w", base=(200, 150, 60), dark=(120, 80, 24), rust=(110, 90, 40), edge=(250, 220, 150),
+                           rust_k=0.4, spec=0.3),
+        copper_w=W.mat_iron("copper_w", base=(214, 136, 82), dark=(140, 72, 36), rust=(110, 60, 34), edge=(250, 206, 160),
+                            rust_k=0.45, dents=0.5, spec=0.3),
+        steel_w=W.mat_iron("steel_w", base=(170, 166, 160), dark=(96, 92, 88), rust=(140, 84, 44), edge=(230, 226, 218),
+                           rust_k=0.35, spec=0.35),
+        lava=W.mat_lava("lava"),
+        lava_hot=W.mat_lava("lava_hot", hot=(255, 248, 200), mid=(255, 150, 30), deep=(230, 60, 0), crust=(90, 30, 8),
+                            strength=1.6),
+        bronze_w=W.mat_iron("bronze_w", base=(112, 76, 48), dark=(60, 38, 24), rust=(150, 74, 30), edge=(200, 160, 116),
+                            rust_k=0.6),
+        bronze_head=W.mat_iron("bronze_head", base=(132, 92, 62), dark=(70, 46, 30), rust=(150, 76, 32), edge=(214, 176, 130),
+                               rust_k=0.6),
+        iron_hoop=W.mat_iron("iron_hoop", base=(74, 58, 48), dark=(38, 29, 25), edge=(150, 128, 108), rust_k=0.85),
+        iron_sooty=W.mat_iron("iron_sooty", rust_k=0.6, soot=0.6),
+        # the upper levels' looks after the Inferno's blocks (see blast_roles)
+        brimstone=W.mat_brimstone("brimstone"),
+        forged=W.mat_forged("forged"),
+        forged_dark=W.mat_forged("forged_dark", base=(70, 64, 64), dark=(34, 31, 33), edge=(168, 162, 158), edge_k=0.55,
+                                 spec=0.4),
+        forged_plates=W.mat_forged("forged_plates", seams=16),
+        panels_forged=W.mat_worn_panels("panels_forged", ratio=0.4, cream=(62, 56, 56), red=(150, 16, 14), scrawl=(30, 28, 28),
+                                        edge=(170, 162, 158)),
+        forged_plates_dark=W.mat_forged("forged_plates_dark", seams=14, base=(70, 64, 64), dark=(34, 31, 33)),
+        forged_magma=W.mat_forged("forged_magma"),
+        stripes_forged=W.mat_worn_diag("stripes_forged", (172, 16, 12), (56, 50, 50), under=(28, 26, 26),
+                                       edge=(168, 160, 156), chips=0.72, dirt=0.3, soot=0.15, streaks=0.12),
+    )
+
+
+def ridged_barrel(name, tur, M, y0, y1, r, z, rings, mat="bronze", mouth=1.25):
+    """A barrel along +Y at height z from y0 to y1, raised rings at the fractions in rings, a flared mouth."""
+    prof = [(r, 0.0)]
+    for f in rings:
+        yc = (y1 - y0) * f
+        prof += [(r, yc - 0.04), (r * 1.25, yc - 0.025), (r * 1.25, yc + 0.025), (r, yc + 0.04)]
+    L_ = y1 - y0
+    prof += [(r, L_ - 0.08), (r * mouth, L_ - 0.03), (r * mouth, L_)]
+    inner = [(r * mouth, L_), (r * 0.75, L_), (r * 0.7, L_ - 0.1), (0.0, L_ - 0.12)]
+    b = lathe(name, [prof, inner], [M[mat], M["bore"]], mat_of_seg=[0, 1], parent=tur, sharp=35, n=40)
+    b.matrix_basis = Matrix.Translation((0, y0, z)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')
+    return b
+
+
+# ------------------------------------------------------------------------------------------------ 1: Inferno Blast Tower
+def pleat(ob, n, amp, z0, z1, phase):
+    """Folds in a lathe part (the skirt's canvas): n ridges round it, deepest at z0, gone by z1."""
+    for v in ob.data.vertices:
+        x, y, z = v.co
+        r = math.hypot(x, y)
+        if r < 1e-4:
+            continue
+        t = 1.0 - min(1.0, max(0.0, (z - z0) / (z1 - z0)))
+        k = (r + amp * t * (1.0 - abs(math.sin(n / 2 * (math.atan2(y, x) - phase)))) ** 1.6) / r
+        v.co.x, v.co.y = x * k, y * k
+    ob.data.update()
+
+
+def strap(name, M, LN, parent, r, z0, z1, n_rivets, rivet_r=0.034, phase=0.0, mat="iron_hoop"):
+    """An iron hoop round a round part, riveted on."""
+    mat = M[mat] if isinstance(mat, str) else mat
+    hoop = W.lathe(name, [L.band(r - 0.02, r + 0.03, z0, z1, bev=0.012)], [mat], bev=0, parent=parent, sharp=35)
+    add_outline(hoop, LN["cool"], L.LINE * 0.6)
+    bm = bmesh.new()
+    pts, nrm = L.ring_of(n_rivets, r + 0.03, (z0 + z1) / 2, phase)
+    W.rivets(bm, pts, nrm, r=rivet_r)
+    W.obj(name + "_rivets", bm, [mat], parent=parent)
+    return hoop
+
+
+def blast_roles(M):
+    """The Blast Tower's material key for each role, by LOOK (the owner, 29 Oct: a tower's levels follow its world's
+    blocks, in the Inferno Brimstone and Forged Steel): 1 the approved worn tower, 2 the same with charred brimstone
+    spikes and rubble glowing in their cracks, 3 forged steel (dark steel plating, head and spikes, red and steel
+    stripes). Each level also stands taller than the last (see RISE in build_blast)."""
+    if LOOK == 2:
+        return dict(skirt="stripes_w", stake="brimstone", tip="brimstone", staves="staves", staves_dark="staves_dark",
+                    hoop="iron_hoop", plate="iron_dirty", rope="rope", bolt="iron_w", collar="iron_w", cap="iron_w",
+                    ball="iron_head", trim="iron_head", barrel="iron_sooty", band=None, clod="brimstone")
+    if LOOK == 3:
+        return dict(skirt="stripes_forged", stake="forged", tip="forged", staves="forged_plates",
+                    staves_dark="forged_plates_dark", hoop="forged_dark", plate="forged_plates_dark",
+                    rope="forged_dark", bolt="forged", collar="forged", cap="forged", ball="forged_dark", trim="forged",
+                    barrel="forged_dark", band="forged", clod="dirt")
+    return dict(skirt="stripes_w", stake="stake", tip="stake", staves="staves", staves_dark="staves_dark",
+                hoop="iron_hoop", plate="iron_dirty", rope="rope", bolt="iron_w", collar="iron_w", cap="iron_w",
+                ball="iron_head", trim="iron_head", barrel="iron_sooty", band=None, clod="dirt")
+
+
+def barrel_bands(tur, M, LN, y0, y1, r, z, rings, mat, mouth=1.25):
+    """Bands over a ridged barrel's rings and mouth (the forged steel look's)."""
+    L_ = y1 - y0
+    segs = [L.band(r, r * 1.25 + 0.012, L_ * f - 0.04, L_ * f + 0.04, bev=0.01) for f in rings]
+    segs.append(L.band(r, r * mouth + 0.014, L_ - 0.09, L_ - 0.005, bev=0.01))
+    b = W.lathe("bands", segs, [M[mat]], bev=0, parent=tur, sharp=35, n=40)
+    b.matrix_basis = Matrix.Translation((0, y0, z)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')
+    add_outline(b, LN["cool"], L.LINE * 0.6)
+    return b
+
+
+def build_blast(M, LN, body):
+    R = {k: M[v] if v else None for k, v in blast_roles(M).items()}
+    faceted = LOOK == 3       # forged steel: flat-sided tub, neck and spikes
+    RISE = (0.0, 0.25, 0.5)[LOOK - 1]     # each level stands taller than the last (reads as a longer range)
+    SPIKE = (1.0, 1.3, 1.6)[LOOK - 1]     # and its spikes are bigger
+    # the scorched rubble round the foot
+    mound = W.lathe("mound", [[(1.14, 0.0), (1.04, 0.05), (0.92, 0.1), (0.8, 0.1), (0.66, 0.06)]], [M["dirt"]], bev=0,
+                    parent=body, n=128)
+    W.wobble(mound, 0.07, 3.5, 1.0, zamp=0.035)
+    W.finish(mound)
+    add_outline(mound, LN["warm"], L.LINE * 0.7)
+    cl = bmesh.new()
+    W.clods(cl, [bear(360 * i / 22 + 9 * (i % 3), 0.86 + 0.2 * ((i * 0.37) % 1.0), 0.05) for i in range(22)], r=0.075)
+    add_outline(W.obj("clods", cl, [R["clod"]], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+    # the skirt: a striped canvas cone in folds, worn and scorched toward the ground
+    sk = W.lathe("skirt", [[(0.88, 0.0), (0.87, 0.05), (0.58, 0.8), (0.54, 0.84)]], [R["skirt"]], bev=0, parent=body,
+                 sharp=50, n=160)
+    pleat(sk, 10, 0.06, 0.0, 0.84, math.radians(90 - 18) + math.pi / 10)
+    W.wobble(sk, 0.02, 2.0, 2.0)
+    W.finish(sk)
+    add_outline(sk, LN["warm"])
+    # the stakes round the foot: rough wooden planks standing in the rubble, leaning out like petals
+    st = bmesh.new()
+    uv = st.loops.layers.uv.new("UVMap")
+    ns = 12 if LOOK == 3 else 10
+    for i in range(ns):
+        b = 360 * i / ns + 18 + (7 if i % 2 else -5)
+        lean = (0.34 + 0.14 * ((i * 0.53) % 1.0)) * (1 + 0.25 * (SPIKE - 1))
+        h = (0.66 + 0.2 * ((i * 0.71) % 1.0)) * SPIKE
+        W.stake(st, uv, bear(b, 0.8, 0.0), bear(b + (6 if i % 3 else -6), 0.8 + lean, h), 0.15 * (1 + 0.3 * (SPIKE - 1)),
+                sides=5 if faceted else 8,
+                twist=i * 0.7, tip_mat=1 if LOOK > 1 else None)
+    add_outline(W.obj("stakes", st, [R["stake"], R["tip"]], parent=body, sharp=20 if faceted else 55), LN["warm"])
+    # the stave neck above the skirt, an iron strap round its foot
+    z1 = 1.58 + RISE
+    neck = W.lathe("neck", [[(0.5, 0.78), (0.53, 0.98 + RISE / 2), (0.51, 1.17 + RISE)]], [R["staves_dark"]], bev=0,
+                   wob=0.012,
+                   parent=body, sharp=20 if faceted else 35, n=14 if faceted else 96)
+    add_outline(neck, LN["warm"])
+    strap("neckstrap", M, LN, body, 0.51, 0.84, 0.92, 12, phase=0.25, mat=R["hoop"])
+    for k in range(1, LOOK):     # a strap more round the longer neck per level
+        zc = 0.88 + k * (RISE + 0.24) / LOOK
+        strap(f"neckstrap{k}", M, LN, body, 0.525, zc - 0.04, zc + 0.04, 12, phase=0.25 + k * 0.3, mat=R["hoop"])
+    # the tub: light staves, an iron hoop, a rope laid round its rim, a recessed iron plate with bolts in it
+    tub = W.lathe("drum", [[(0.5, 1.12 + RISE), (0.6, 1.16 + RISE), (0.63, 1.36 + RISE), (0.62, z1 - 0.04), (0.585, z1)],
+                           [(0.585, z1), (0.53, z1), (0.52, z1 - 0.06)]],
+                  [R["staves"], R["staves_dark"]], mat_of_seg=[0, 1], wob=0.012, seed=3.0, parent=body,
+                  sharp=20 if faceted else 35, n=16 if faceted else 96)
+    add_outline(tub, LN["warm"])
+    strap("tubhoop", M, LN, body, 0.605, 1.19 + RISE, 1.27 + RISE, 14, rivet_r=0.036, mat=R["hoop"])
+    W.lathe("plate", [[(0.53, z1 - 0.06), (0.0, z1 - 0.06)]], [R["plate"]], bev=0, parent=body)
+    rp = bmesh.new()
+    W.rope_ring(rp, 0.6, z1 + 0.01, r=0.07, pitch=0.13)
+    add_outline(W.obj("rope", rp, [R["rope"]], parent=body, sharp=70), LN["warm"], L.LINE * 0.6)
+    if LOOK == 3:     # a crown of short steel spikes round the rim, under the barrel's sweep
+        cr = bmesh.new()
+        cuv = cr.loops.layers.uv.new("UVMap")
+        for i in range(10):
+            b = 360 * i / 10 + 9
+            W.stake(cr, cuv, bear(b, 0.6, z1 - 0.02), bear(b, 0.84, z1 + 0.24), 0.075, sides=5, twist=i * 0.5)
+        add_outline(W.obj("crown", cr, [R["stake"]], parent=body, sharp=20), LN["cool"], L.LINE * 0.6)
+    bm = bmesh.new()
+    pts, nrm = L.ring_of(8, 0.45, z1 - 0.06, 0.5)
+    W.bolts(bm, pts, [(0, 0, 1)] * 8, r=0.04)
+    add_outline(W.obj("platebolts", bm, [R["bolt"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.5)
+    # the iron collar the head sits on, a glowing slit under its bolted cap
+    col = W.lathe("collar", [[(0.3, z1 - 0.07), (0.31, z1 + 0.03), (0.27, z1 + 0.06)]], [R["collar"]], parent=body, sharp=35)
+    add_outline(col, LN["cool"])
+    lathe("glowring", [[(0.3, z1 + 0.04), (0.3, z1 + 0.11), (0.27, z1 + 0.12)]], [M["glow"]], parent=body)
+    rim = W.lathe("glowcap", [L.band(0.0, 0.37, z1 + 0.11, z1 + 0.17)], [R["cap"]], bev=0, parent=body, sharp=35)
+    add_outline(rim, LN["cool"])
+    bm = bmesh.new()
+    pts, nrm = L.ring_of(8, 0.345, z1 + 0.14, 0.5)
+    W.bolts(bm, pts, nrm, r=0.032, washer=False)
+    add_outline(W.obj("capbolts", bm, [R["bolt"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.5)
+    top = z1 + 0.17
+    # the head: a hammered iron ball with a riveted seam, a ridged barrel out of its side, level
+    tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
+    RB, HZ = 0.3, 0.3
+    bm = bmesh.new()
+    Q.ball(bm, (0, 0, HZ), RB, segs=32)
+    ball = W.obj("ball", bm, [R["ball"]], parent=tur)
+    W.wobble(ball, 0.008, 6.0, 4.0, radial=False)
+    W.finish(ball)
+    add_outline(ball, LN["cool"])
+    seam = W.lathe("seam", [L.band(RB - 0.02, RB + 0.02, HZ - 0.03, HZ + 0.03, bev=0.01)], [R["trim"]], bev=0,
+                   parent=tur, sharp=35)
+    add_outline(seam, LN["cool"], L.LINE * 0.6)
+    bm = bmesh.new()
+    pts, nrm = L.ring_of(14, RB + 0.02, HZ, 0.5)
+    W.rivets(bm, pts, nrm, r=0.032)
+    W.obj("seamrivets", bm, [R["trim"]], parent=tur)
+    bm = bmesh.new()
+    Q.cyl(bm, 0.23, 0.07, Matrix.Translation((0, 0, 0.035)), segs=32)
+    add_outline(W.obj("neck_h", bm, [R["trim"]], parent=tur, sharp=35), LN["cool"])
+    bm = bmesh.new()
+    pts, nrm = L.ring_of(6, 0.2, 0.07, 0.5)
+    W.bolts(bm, pts, [(0, 0, 1)] * 6, r=0.03, washer=False)
+    W.obj("neckbolts", bm, [R["bolt"]], parent=tur, sharp=35)
+    bar = ridged_barrel("barrel", tur, M, RB * 0.5, RB + 0.5, 0.14, HZ, (0.35, 0.65), mat=blast_roles(M)["barrel"])
+    W.finish(bar)
+    add_outline(bar, LN["cool"])
+    if blast_roles(M)["band"]:
+        barrel_bands(tur, M, LN, RB * 0.5, RB + 0.5, 0.14, HZ, (0.35, 0.65), blast_roles(M)["band"])
+    bm = bmesh.new()      # the flange where the barrel leaves the ball, bolted
+    m = Matrix.Translation((0, RB * 0.86, HZ)) @ Matrix.Rotation(-math.pi / 2, 4, 'X')
+    Q.cyl(bm, 0.21, 0.05, m, segs=32)
+    add_outline(W.obj("flange", bm, [R["trim"]], parent=tur, sharp=35), LN["cool"], L.LINE * 0.6)
+    bm = bmesh.new()
+    pts = [Vector((0.175 * math.cos(2 * math.pi * (k + 0.5) / 6), RB * 0.86 + 0.026,
+                   HZ + 0.175 * math.sin(2 * math.pi * (k + 0.5) / 6))) for k in range(6)]
+    W.bolts(bm, pts, [(0, 1, 0)] * 6, r=0.026, washer=False)
+    W.obj("flangebolts", bm, [R["bolt"]], parent=tur, sharp=35)
+    L.empty("muzzle_base", parent=tur, loc=(0, 0, HZ))
+    L.empty("muzzle_tip", parent=tur, loc=(0, RB + 0.5, HZ))
+    return tur, top, ("skirt", "drum", "glowcap")
+
+
+# ---------------------------------------------------------------------------------------------------- 2: Sharpshooter
+def on_cone(r0, z0, r1, z1, z):
+    """The radius and outward normal (as (cos, sin)-free slope) of a cone from (r0, z0) to (r1, z1) at height z."""
+    t = (z - z0) / (z1 - z0)
+    return r0 + (r1 - r0) * t, (z1 - z0, -(r1 - r0))
+
+
+def sharp_roles():
+    """The Sharpshooter's material key for each role, by LOOK (as blast_roles: 1 worn, 2 the same with brimstone spikes
+    and rubble, 3 forged steel; the copper coil, red lamps and brass stay on every level)."""
+    if LOOK == 3:
+        return dict(panels="panels_forged", top="forged_plates_dark", strap="forged_dark", post="forged_plates_dark",
+                    head="forged_dark", metal="forged", barrel="forged", spike="forged")
+    return dict(panels="panels", top="iron_dirty", strap="iron_hoop", post="staves_dark", head="iron_head", metal="iron_w",
+                barrel="steel_w", spike="brimstone")
+
+
+def build_sharp(M, LN, body):
+    SR = sharp_roles()
+    R = {k: M[v] for k, v in SR.items()}
+    RISE = (0.0, 0.25, 0.5)[LOOK - 1]     # each level stands taller than the last (reads as a longer range)
+    z1 = 0.8
+    if LOOK > 1:     # the upper levels: spikes round the foot (brimstone, then bigger forged steel), level 2's rubble
+        SPIKE = (1.0, 1.3, 1.6)[LOOK - 1]
+        if LOOK == 2:
+            cl = bmesh.new()
+            W.clods(cl, [bear(360 * i / 22 + 9 * (i % 3), 0.98 + 0.16 * ((i * 0.37) % 1.0), 0.04) for i in range(22)],
+                    r=0.075)
+            add_outline(W.obj("clods", cl, [M["brimstone"]], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+        st = bmesh.new()
+        uv = st.loops.layers.uv.new("UVMap")
+        ns = 12 if LOOK == 3 else 10
+        for i in range(ns):
+            b = 360 * i / ns + 18 + (7 if i % 2 else -5)
+            lean = (0.3 + 0.14 * ((i * 0.53) % 1.0)) * (1 + 0.25 * (SPIKE - 1))
+            h = (0.5 + 0.2 * ((i * 0.71) % 1.0)) * SPIKE
+            W.stake(st, uv, bear(b, 0.86, 0.0), bear(b + (6 if i % 3 else -6), 0.86 + lean, h),
+                    0.13 * (1 + 0.3 * (SPIKE - 1)), sides=5 if LOOK == 3 else 8, twist=i * 0.7, tip_mat=1)
+        add_outline(W.obj("spikes", st, [R["spike"], R["spike"]], parent=body, sharp=20 if LOOK == 3 else 55), LN["warm"])
+    drum = W.lathe("drum", [[(0.86, 0.0), (0.88, 0.04), (0.74, z1 - 0.04), (0.7, z1)], [(0.7, z1), (0.0, z1)]],
+                   [R["panels"], R["top"]], mat_of_seg=[0, 1], wob=0.012, parent=body, sharp=35)
+    add_outline(drum, LN["warm"])
+    strap("trim_low", M, LN, body, 0.875, 0.0, 0.09, 20, rivet_r=0.034, mat=SR["strap"])
+    strap("trim_top", M, LN, body, 0.715, z1 - 0.06, z1 + 0.01, 16, rivet_r=0.03, phase=0.5, mat=SR["strap"])
+    if LOOK == 3:     # a crown of short steel spikes round the drum's rim
+        cr = bmesh.new()
+        cuv = cr.loops.layers.uv.new("UVMap")
+        for i in range(12):
+            b = 360 * i / 12 + 15
+            W.stake(cr, cuv, bear(b, 0.71, z1 - 0.03), bear(b, 0.9, z1 + 0.2), 0.06, sides=5, twist=i * 0.5)
+        add_outline(W.obj("crown", cr, [R["spike"]], parent=body, sharp=20), LN["cool"], L.LINE * 0.6)
+    # rivets at the parchment panels' corners
+    bm = bmesh.new()
+    pts, nrm = [], []
+    for k in range(8):
+        for f in (0.0, 0.4):
+            a = 2 * math.pi * (k + f) / 8 + (0.04 if f == 0 else -0.04)
+            for z in (0.2, 0.6):
+                r, (nr, nz) = on_cone(0.88, 0.04, 0.74, z1 - 0.04, z)
+                pts.append(Vector((r * math.cos(a), r * math.sin(a), z)))
+                nrm.append(Vector((nr * math.cos(a), nr * math.sin(a), nz)))
+    W.rivets(bm, pts, nrm, r=0.03)
+    W.obj("panelrivets", bm, [M[SR["strap"]]], parent=body)
+    # the dark socket on top, bolted; posts round it with red lamps on top and a twisted wire between
+    sock = W.lathe("socket", [[(0.56, z1), (0.58, z1 + 0.02), (0.58, z1 + 0.2), (0.5, z1 + 0.24), (0.36, z1 + 0.24),
+                               (0.34, z1 + 0.1), (0.0, z1 + 0.1)]], [R["top"]], wob=0.008, parent=body, sharp=35)
+    add_outline(sock, LN["cool"])
+    bm = bmesh.new()
+    pts, nrm = L.ring_of(10, 0.43, z1 + 0.24, 0.5)
+    W.bolts(bm, pts, [(0, 0, 1)] * 10, r=0.035)
+    add_outline(W.obj("sockbolts", bm, [R["metal"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.5)
+    posts, knobs, rings = bmesh.new(), bmesh.new(), bmesh.new()
+    tops = []
+    for b in (100, 200, 330):
+        c = bear(b, 0.62, z1)
+        Q.cyl(posts, 0.032, 0.58, Matrix.Translation(c + Vector((0, 0, 0.29))), segs=10)
+        Q.cyl(posts, 0.06, 0.05, Matrix.Translation(c + Vector((0, 0, 0.025))), segs=12)      # its foot
+        Q.ball(knobs, c + Vector((0, 0, 0.64)), 0.065, segs=12)
+        Q.cyl(rings, 0.075, 0.03, Matrix.Translation(c + Vector((0, 0, 0.6))), segs=16)       # the lamp's brass cup
+        tops.append(c + Vector((0, 0, 0.56)))
+    add_outline(W.obj("posts", posts, [R["metal"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+    add_outline(W.obj("knobs", knobs, [M["lamp_red"]], parent=body), LN["warm"], L.LINE * 0.5)
+    add_outline(W.obj("cups", rings, [M["brass_w"]], parent=body, sharp=35), LN["warm"], L.LINE * 0.5)
+    w = bmesh.new()
+    for a, b in zip(tops, tops[1:] + tops[:1]):
+        mid = (a + b) / 2 - Vector((0, 0, 0.08))
+        path = L.bezier(a, mid, mid, b, n=40)
+        for s in (0, 1):        # two strands twisted round each other
+            pts = []
+            for i, p in enumerate(path):
+                t = path[min(i + 1, len(path) - 1)] - path[max(i - 1, 0)]
+                side = t.cross(Vector((0, 0, 1))).normalized()
+                ph = i * 0.9 + s * math.pi
+                pts.append(p + (side * math.cos(ph) + Vector((0, 0, 1)) * math.sin(ph)) * 0.01)
+            L.tube(w, pts, [0.011] * len(pts), sides=5)
+    W.obj("wire", w, [M["brass_w"]], parent=body)
+    # the coil post: stacked turned segments, a worn copper ribbon wound round it
+    zc0, top = z1 + 0.1, 2.6 + RISE
+    prof = [(0.2, zc0)]
+    z = zc0
+    for i, h in enumerate((0.26, 0.22, 0.3, 0.24, 0.28, 0.2, 0.24, 0.26, 0.22)):
+        r = 0.17 + 0.03 * ((i * 0.61) % 1.0)
+        prof += [(r + 0.04, z + 0.02), (r + 0.04, z + 0.06), (r, z + 0.08), (r, z + h - 0.02)]
+        z += h
+        if z > top - 0.15:
+            break
+    prof += [(0.2, top - 0.05), (0.2, top), (0.0, top)]
+    post = W.lathe("post", [prof], [R["post"]], wob=0.008, parent=body, sharp=35)
+    add_outline(post, LN["warm"])
+    pts, radii = [], []
+    n = 260
+    for i in range(n + 1):
+        t = i / n
+        a = 2 * math.pi * (3.5 + 2 * RISE) * t
+        r = 0.44 - 0.1 * t
+        pts.append((r * math.sin(a), r * math.cos(a), zc0 + 0.1 + (top - zc0 - 0.25) * t))
+        radii.append(0.1 * (1.0 + 0.12 * math.sin(i * 0.37)))
+    coil = bmesh.new()
+    L.tube(coil, pts, radii, sides=12, flat=0.28)
+    co = W.obj("coil", coil, [M["copper_w"]], parent=body, sharp=60)
+    W.wobble(co, 0.025, 2.5, 6.0)
+    W.finish(co)
+    add_outline(co, LN["warm"])
+    # the head: a cast iron box gun, bolted, a dial on its side, a perforated steel barrel out of its front, a lens behind
+    tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
+    bm = bmesh.new()
+    L.rbox(bm, (0.54, 0.7, 0.42), Matrix.Translation((0, -0.06, 0.05)), bevel=0.05)
+    head = W.obj("head", bm, [R["head"]], parent=tur, sharp=35)
+    W.wobble(head, 0.01, 4.0, 7.0, radial=False)
+    W.finish(head)
+    add_outline(head, LN["cool"])
+    bm = bmesh.new()
+    cs = [(x, y, 0.47) for x in (-0.21, 0.21) for y in (-0.35, 0.23)]
+    W.bolts(bm, cs, [(0, 0, 1)] * 4, r=0.035)
+    for sx in (-1, 1):       # the dials on its sides, a bolt in each
+        Q.cyl(bm, 0.1, 0.04, Matrix.Translation((sx * 0.28, -0.08, 0.26)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'), segs=24)
+        W.bolts(bm, [(sx * 0.3, -0.08, 0.26)], [(sx, 0, 0)], r=0.035, washer=False)
+    add_outline(W.obj("headbolts", bm, [R["metal"]], parent=tur, sharp=35), LN["cool"], L.LINE * 0.5)
+    bm = bmesh.new()
+    Q.cyl(bm, 0.12, 0.08, Matrix.Translation((0, 0, 0.045)), segs=24)
+    add_outline(W.obj("neck_h", bm, [R["metal"]], parent=tur, sharp=35), LN["cool"])
+    HZ = 0.27
+    bar = ridged_barrel("barrel", tur, M, 0.2, 0.84, 0.1, HZ, (0.2, 0.8), mat=SR["barrel"], mouth=1.3)
+    W.finish(bar)
+    add_outline(bar, LN["cool"])
+    bm = bmesh.new()      # the barrel's holes
+    for j in range(3):
+        for k in range(8):
+            a = 2 * math.pi * (k + 0.5 * (j % 2)) / 8
+            c = Vector((0.1 * math.cos(a), 0.42 + 0.12 * j, HZ + 0.1 * math.sin(a)))
+            m = Matrix.Translation(c) @ Vector((0, 0, 1)).rotation_difference(Vector((math.cos(a), 0, math.sin(a)))).to_matrix().to_4x4()
+            Q.cyl(bm, 0.022, 0.012, m, segs=8)
+    L.obj_from_bm("holes", bm, [M["bore"]], parent=tur)
+    bm = bmesh.new()
+    m = Matrix.Translation((0, -0.42, HZ)) @ Matrix.Rotation(math.pi / 2, 4, 'X')
+    Q.cyl(bm, 0.1, 0.04, m, segs=20)
+    L.obj_from_bm("lens_back", bm, [M["lens"]], parent=tur)
+    L.empty("muzzle_base", parent=tur, loc=(0, 0, HZ))
+    L.empty("muzzle_tip", parent=tur, loc=(0, 0.84, HZ))
+    return tur, top, ("post", "coil", "posts", "socket")
+
+
+# ----------------------------------------------------------------------------------------------------- 3: Magma Tower
+def magma_roles():
+    """The Magma Tower's material key for each role, by LOOK (as blast_roles: 1 worn, 2 the same with brimstone spikes
+    and rubble, 3 forged steel); the lava glows hotter on every level (the tower's mark at game size)."""
+    if LOOK == 3:
+        return dict(iron="forged", top="forged_plates_dark", hoop="forged_dark", stripes="stripes_forged",
+                    bronze="forged_dark", head="forged_dark", lava="lava_hot", spike="forged")
+    return dict(iron="iron_w", top="iron_dirty", hoop="iron_hoop", stripes="stripes_w", bronze="bronze_w",
+                head="bronze_head", lava="lava_hot", spike="brimstone")
+
+
+def build_magma(M, LN, body):
+    MR = magma_roles()
+    R = {k: M[v] for k, v in MR.items()}
+    RISE = (0.0, 0.25, 0.5)[LOOK - 1]     # each level stands taller than the last (reads as a longer range)
+    CHAINS = (125, 245, 5)
+    if LOOK > 1:     # the upper levels: spikes round the foot clear of the chains (brimstone, then bigger steel)
+        SPIKE = (1.0, 1.3, 1.6)[LOOK - 1]
+        if LOOK == 2:
+            cl = bmesh.new()
+            W.clods(cl, [bear(360 * i / 22 + 9 * (i % 3), 0.74 + 0.16 * ((i * 0.37) % 1.0), 0.04) for i in range(22)],
+                    r=0.07)
+            add_outline(W.obj("clods", cl, [M["brimstone"]], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+        st = bmesh.new()
+        uv = st.loops.layers.uv.new("UVMap")
+        bs = [b for b in range(0, 360, 20) if min(abs((b - c + 180) % 360 - 180) for c in CHAINS) > 24]
+        for i, b in enumerate(bs):
+            lean = (0.26 + 0.12 * ((i * 0.53) % 1.0)) * (1 + 0.25 * (SPIKE - 1))
+            h = (0.32 + 0.14 * ((i * 0.71) % 1.0)) * SPIKE     # out from the foot, so its lava windows show
+            W.stake(st, uv, bear(b, 0.76, 0.0), bear(b + (5 if i % 3 else -5), 0.76 + lean, h),
+                    0.1 * (1 + 0.3 * (SPIKE - 1)), sides=5 if LOOK == 3 else 8, twist=i * 0.7, tip_mat=1)
+        add_outline(W.obj("spikes", st, [R["spike"], R["spike"]], parent=body, sharp=20 if LOOK == 3 else 55), LN["warm"])
+    # the foot: a riveted iron ring with lava windows, the striped column, a lava collar in a cage, three chain legs
+    foot = W.lathe("foot", [[(0.58, 0.0), (0.6, 0.03), (0.6, 0.3), (0.52, 0.34)], [(0.52, 0.34), (0.0, 0.34)]],
+                   [R["iron"], R["top"]], mat_of_seg=[0, 1], wob=0.01, parent=body, sharp=35)
+    add_outline(foot, LN["cool"])
+    win = bmesh.new()
+    for i in range(10):
+        b = 360 * i / 10
+        n_, t_ = bear(b), bear(b + 90)
+        m = Matrix.Translation(bear(b, 0.6, 0.165)) @ Matrix((t_, Vector((0, 0, 1)), n_)).transposed().to_4x4()
+        L.rbox(win, (0.27, 0.2, 0.02), m, bevel=0.01)
+    L.obj_from_bm("windows_foot", win, [R["lava"]], parent=body)
+    bm = bmesh.new()
+    for z in (0.035, 0.295):
+        pts, nrm = L.ring_of(20, 0.605, z, 0.5)
+        W.rivets(bm, pts, nrm, r=0.028)
+    W.obj("footrivets", bm, [R["hoop"]], parent=body)
+    zc0, zc1 = 0.34, 1.25 + RISE
+    col = W.lathe("column", [[(0.44, zc0), (0.44, zc1)]], [R["stripes"]], bev=0, wob=0.012, parent=body, sharp=35)
+    add_outline(col, LN["warm"])
+    strap("bands", M, LN, body, 0.45, zc0, zc0 + 0.07, 14, rivet_r=0.03, mat=R["hoop"])
+    strap("bands2", M, LN, body, 0.45, zc1 - 0.07, zc1, 14, rivet_r=0.03, phase=0.5, mat=R["hoop"])
+    for k in range(1, LOOK):     # a strap more round the taller column per level
+        zc = zc0 + k * (zc1 - zc0) / LOOK
+        strap(f"bands_{k}", M, LN, body, 0.45, zc - 0.035, zc + 0.035, 14, rivet_r=0.03, phase=0.25 * k, mat=R["hoop"])
+    cz0, cz1 = zc1, zc1 + 0.36
+    cage = W.lathe("collar", [[(0.44, cz0), (0.5, cz0 + 0.02), (0.5, cz1 - 0.02), (0.44, cz1)], [(0.44, cz1), (0.0, cz1)]],
+                   [R["lava"], R["top"]], mat_of_seg=[0, 1], bev=0, parent=body)
+    bars = bmesh.new()
+    for i in range(10):
+        L.rbox(bars, (0.06, 0.035, cz1 - cz0), Matrix.Translation(bear(36 * i, 0.515, cz0)) @ Matrix.Rotation(-math.radians(36 * i), 4, 'Z'),
+               bevel=0.01)
+    for z in (cz0, cz1):
+        Q.cyl(bars, 0.545, 0.06, Matrix.Translation((0, 0, z)), segs=48)
+    add_outline(W.obj("cagebars", bars, [R["iron"]], parent=body, sharp=35), LN["cool"])
+    bm = bmesh.new()
+    for z in (cz0, cz1):
+        pts, nrm = L.ring_of(10, 0.548, z, 0.5)
+        W.rivets(bm, pts, nrm, r=0.03)
+    W.obj("cagerivets", bm, [R["hoop"]], parent=body)
+    # on top: a raised boss round the neck, riveted straps out to the rim; a clasp strap down the front
+    lid = W.lathe("lid", [[(0.5, cz1 + 0.03), (0.26, cz1 + 0.06), (0.22, cz1 + 0.1), (0.0, cz1 + 0.1)]], [R["hoop"]],
+                  parent=body, sharp=35)
+    add_outline(lid, LN["cool"], L.LINE * 0.6)
+    st, rv = bmesh.new(), bmesh.new()
+    for i in range(5):
+        b = 72 * i + 45
+        L.rbox(st, (0.07, 0.3, 0.035), Matrix.Translation(bear(b, 0.38, cz1 + 0.035)) @ Matrix.Rotation(-math.radians(b), 4, 'Z'),
+               bevel=0.012)
+        W.rivets(rv, [bear(b, 0.3, cz1 + 0.07), bear(b, 0.46, cz1 + 0.07)], [(0, 0, 1)] * 2, r=0.026)
+    L.rbox(st, (0.14, 0.05, 0.5), Matrix.Translation(bear(45, 0.53, cz0 - 0.08)) @ Matrix.Rotation(-math.radians(45), 4, 'Z'),
+           bevel=0.015)
+    L.rbox(st, (0.2, 0.08, 0.12), Matrix.Translation(bear(45, 0.56, cz0 + 0.02)) @ Matrix.Rotation(-math.radians(45), 4, 'Z'),
+           bevel=0.02)
+    add_outline(W.obj("lidstraps", st, [R["hoop"]], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+    W.obj("lidrivets", rv, [R["iron"]], parent=body)
+    if LOOK == 3:     # a crown of short steel spikes round the lid's rim, under the barrel's sweep
+        cr = bmesh.new()
+        cuv = cr.loops.layers.uv.new("UVMap")
+        for i in range(10):
+            b = 360 * i / 10 + 18
+            W.stake(cr, cuv, bear(b, 0.5, cz1), bear(b, 0.7, cz1 + 0.12), 0.05, sides=5, twist=i * 0.5)
+        add_outline(W.obj("crown", cr, [R["spike"]], parent=body, sharp=20), LN["cool"], L.LINE * 0.6)
+    # the chain legs: links from hubs on the column's side out and down to round bronze feet
+    links, feet, hubs = bmesh.new(), bmesh.new(), bmesh.new()
+    for b in CHAINS:
+        a, d = bear(b, 0.5, cz0 + 0.1), bear(b, 0.95, 0.0)
+        hm = Matrix.Translation(bear(b, 0.55, cz0 + 0.1)) @ Vector((0, 0, 1)).rotation_difference(bear(b)).to_matrix().to_4x4()
+        Q.cyl(hubs, 0.12, 0.08, hm, segs=20)
+        Q.cyl(hubs, 0.06, 0.12, hm @ Matrix.Translation((0, 0, 0.04)), segs=12)
+        path = L.bezier(a, bear(b, 0.9, cz0), bear(b, 1.0, 0.5), d + Vector((0, 0, 0.14)), n=12)
+        for i, p in enumerate(path[:-1]):
+            q = path[i + 1]
+            dv = q - p
+            m = Matrix.Translation((p + q) / 2) @ Vector((0, 0, 1)).rotation_difference(dv).to_matrix().to_4x4() @ \
+                Matrix.Rotation(math.pi / 2 * (i % 2), 4, 'Z')
+            sub = bmesh.new()
+            bmesh.ops.create_circle(sub, segments=12, radius=1.0)
+            ring = [v.co.copy() for v in sub.verts]
+            L.tube(links, [m @ Vector((0.05 * c.x, 0, dv.length * 0.64 * c.y)) for c in ring + ring[:1]],
+                   [0.026] * (len(ring) + 1), sides=6, cap=False)
+        Q.cyl(feet, 0.16, 0.12, Matrix.Translation(d + Vector((0, 0, 0.06))), segs=24, r2=0.13)
+        Q.cyl(feet, 0.175, 0.03, Matrix.Translation(d + Vector((0, 0, 0.015))), segs=24)
+        Q.cyl(feet, 0.05, 0.08, Matrix.Translation(d + Vector((0, 0, 0.14))), segs=12)
+    add_outline(W.obj("hubs", hubs, [R["bronze"]], parent=body, sharp=35), LN["warm"])
+    ch = W.obj("chains", links, [R["bronze"]], parent=body, sharp=60)
+    add_outline(ch, LN["cool"], L.LINE * 0.7)
+    add_outline(W.obj("feet", feet, [R["bronze"]], parent=body, sharp=35), LN["warm"])
+    top = cz1 + 0.05
+    # the head: a squat cast bronze nozzle on a short neck, a strap round it, its mouth forward
+    tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
+    bm = bmesh.new()
+    Q.cyl(bm, 0.14, 0.14, Matrix.Translation((0, 0, 0.07)), segs=24)
+    add_outline(W.obj("neck_h", bm, [R["iron"]], parent=tur, sharp=35), LN["cool"])
+    bm = bmesh.new()
+    L.rbox(bm, (0.36, 0.42, 0.26), Matrix.Translation((0, -0.06, 0.12)), bevel=0.1)
+    hd = W.obj("head", bm, [R["head"]], parent=tur, sharp=35)
+    W.wobble(hd, 0.012, 4.0, 9.0, radial=False)
+    W.finish(hd)
+    add_outline(hd, LN["warm"])
+    bm = bmesh.new()
+    L.rbox(bm, (0.4, 0.07, 0.3), Matrix.Translation((0, -0.12, 0.1)), bevel=0.02)
+    W.bolts(bm, [(sx * 0.2, -0.12, 0.25) for sx in (-1, 1)], [(sx, 0, 0) for sx in (-1, 1)], r=0.03, washer=False)
+    add_outline(W.obj("headstrap", bm, [R["hoop"]], parent=tur, sharp=35), LN["cool"], L.LINE * 0.6)
+    HZ = 0.25
+    bar = ridged_barrel("barrel", tur, M, 0.1, 0.56, 0.1, HZ, (0.5,), mat=MR["head"], mouth=1.35)
+    W.finish(bar)
+    add_outline(bar, LN["warm"])
+    L.empty("muzzle_base", parent=tur, loc=(0, 0, HZ))
+    L.empty("muzzle_tip", parent=tur, loc=(0, 0.56, HZ))
+    return tur, top, ("column", "collar", "cagebars")
+
+
+# ------------------------------------------------------------- 3: the Magma Tower's two new directions (MAGMA_DIR=A|B)
+# Owner, 29 Oct: the Magma looked too much like the Blast Tower (the same red and cream stripes, a drum, a ball cannon).
+# A "Furnace" and B "Volcanic", each with the Flash Magma's chain legs and anchor weights. The owner picked B (29 Oct):
+# it is the Magma Tower now (render/t3, t3-look2, t3-look3); MAGMA_DIR=A renders the Furnace to render/t3-dirA[-lookN],
+# MAGMA_DIR=OLD the striped column (build_magma) to render/t3-old[-lookN].
+MAGMA_DIR = os.environ.get("MAGMA_DIR", "B").upper()
+
+
+def chain_anchors(M, LN, body, hubs, foot_r, mat):
+    """The chain legs: from a hub at each (bearing, radius, height) a chain sags out and down to an anchor weight on the
+    ground foot_r out."""
+    links, feet, hb = bmesh.new(), bmesh.new(), bmesh.new()
+    for b, r, z in hubs:
+        a, d = bear(b, r - 0.05, z), bear(b, foot_r, 0.0)
+        hm = Matrix.Translation(bear(b, r, z)) @ Vector((0, 0, 1)).rotation_difference(bear(b)).to_matrix().to_4x4()
+        Q.cyl(hb, 0.12, 0.08, hm, segs=20)
+        Q.cyl(hb, 0.06, 0.12, hm @ Matrix.Translation((0, 0, 0.04)), segs=12)
+        path = L.bezier(a, bear(b, r + 0.35, z - 0.1), bear(b, foot_r + 0.05, min(0.5, z * 0.6)), d + Vector((0, 0, 0.2)), n=12)
+        for i, p in enumerate(path[:-1]):
+            q = path[i + 1]
+            dv = q - p
+            m = Matrix.Translation((p + q) / 2) @ Vector((0, 0, 1)).rotation_difference(dv).to_matrix().to_4x4() @ \
+                Matrix.Rotation(math.pi / 2 * (i % 2), 4, 'Z')
+            sub = bmesh.new()
+            bmesh.ops.create_circle(sub, segments=12, radius=1.0)
+            ring = [v.co.copy() for v in sub.verts]
+            L.tube(links, [m @ Vector((0.05 * c.x, 0, dv.length * 0.64 * c.y)) for c in ring + ring[:1]],
+                   [0.026] * (len(ring) + 1), sides=6, cap=False)
+        Q.cyl(feet, 0.17, 0.15, Matrix.Translation(d + Vector((0, 0, 0.075))), segs=24, r2=0.12)     # a squat bell weight
+        Q.cyl(feet, 0.19, 0.035, Matrix.Translation(d + Vector((0, 0, 0.0175))), segs=24)
+        Q.cyl(feet, 0.05, 0.1, Matrix.Translation(d + Vector((0, 0, 0.19))), segs=12)
+    add_outline(W.obj("hubs", hb, [mat], parent=body, sharp=35), LN["warm"])
+    add_outline(W.obj("chains", links, [mat], parent=body, sharp=60), LN["cool"], L.LINE * 0.7)
+    add_outline(W.obj("feet", feet, [mat], parent=body, sharp=35), LN["warm"])
+
+
+def lava_runs(bm, runs, r=0.045):
+    """Lava running down a surface (each run a list of points, top to bottom): thinning, a drop at its end."""
+    for pts in runs:
+        n = len(pts)
+        L.tube(bm, pts, [r * (1.0 - 0.35 * i / (n - 1)) for i in range(n)], sides=8)
+        Q.ball(bm, pts[-1] - Vector((0, 0, r * 0.4)), r * 0.95, segs=10)
+
+
+def prof_r(prof, z):
+    """A lathe profile's radius at height z (linear between its points)."""
+    for (r0, z0), (r1, z1) in zip(prof, prof[1:]):
+        if min(z0, z1) <= z <= max(z0, z1) and z1 != z0:
+            return r0 + (r1 - r0) * (z - z0) / (z1 - z0)
+    return prof[-1][0]
+
+
+def stretch(body, z0, rise):
+    """The taller levels: lift every body vertex above z0 by rise (the walls crossing z0 grow longer)."""
+    if not rise:
+        return
+    seen = set()
+    for o in L.objs_under(body):
+        if o.type == 'MESH' and o.data.name not in seen:
+            seen.add(o.data.name)
+            for v in o.data.vertices:
+                if v.co.z > z0:
+                    v.co.z += rise
+            o.data.update()
+
+
+def foot_spikes(M, LN, body, avoid, r0, mat):
+    """The upper levels' spikes out round the foot (as build_magma's), clear of each (bearing, gap) in avoid: level 2
+    brimstone with brimstone rubble, level 3 bigger, sharper steel."""
+    SPIKE = (1.0, 1.3, 1.6)[LOOK - 1]
+    if LOOK == 2:
+        cl = bmesh.new()
+        W.clods(cl, [bear(360 * i / 22 + 9 * (i % 3), r0 - 0.04 + 0.16 * ((i * 0.37) % 1.0), 0.04) for i in range(22)], r=0.07)
+        add_outline(W.obj("clods", cl, [M["brimstone"]], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+    st = bmesh.new()
+    uv = st.loops.layers.uv.new("UVMap")
+    bs = [b for b in range(0, 360, 20) if all(abs((b - c + 180) % 360 - 180) > g for c, g in avoid)]
+    for i, b in enumerate(bs):
+        lean = (0.26 + 0.12 * ((i * 0.53) % 1.0)) * (1 + 0.25 * (SPIKE - 1))
+        h = (0.32 + 0.14 * ((i * 0.71) % 1.0)) * SPIKE
+        W.stake(st, uv, bear(b, r0, 0.0), bear(b + (5 if i % 3 else -5), r0 + lean, h),
+                0.1 * (1 + 0.3 * (SPIKE - 1)), sides=5 if LOOK == 3 else 8, twist=i * 0.7, tip_mat=1)
+    add_outline(W.obj("spikes", st, [mat, mat], parent=body, sharp=20 if LOOK == 3 else 55), LN["warm"])
+
+
+def crown(M, LN, body, bearings, r0, r1, z0, z1, mat, name="crown"):
+    """Level 3: a crown of short steel spikes, from r0 at z0 out to their tips at r1, z1."""
+    cr = bmesh.new()
+    cuv = cr.loops.layers.uv.new("UVMap")
+    for i, b in enumerate(bearings):
+        W.stake(cr, cuv, bear(b, r0, z0), bear(b, r1, z1), 0.05, sides=5, twist=i * 0.5)
+    add_outline(W.obj(name, cr, [mat], parent=body, sharp=20), LN["cool"], L.LINE * 0.6)
+
+
+def build_magma_a(M, LN, body):
+    """A, "Furnace": a soot-black riveted boiler on three squat legs (the ground glows under it), a glowing seam round its
+    waist leaking lava, a barred fire door, two glass tanks of lava strapped to its belly, a crucible of molten lava on
+    top with a smoke stack behind; the head a lava sprayer (a valve block, a valve wheel, a flat fan nozzle)."""
+    soot = W.mat_iron("iron_soot", base=(60, 52, 50), dark=(22, 19, 18), rust=(120, 62, 32), edge=(156, 140, 128),
+                      rust_k=0.35, soot=0.7)
+    trim = W.mat_iron("iron_trim", base=(84, 70, 62), dark=(34, 28, 26), edge=(176, 154, 134), rust_k=0.6, soot=0.3)
+    cru_m, chain_m, tank_m, spike_m = (M["brimstone"] if LOOK == 2 else trim), trim, M["copper_w"], M["brimstone"]
+    if LOOK == 3:      # forged steel: dark plated boiler, steel trim and crucible, steel spikes
+        soot, trim, cru_m, chain_m, tank_m, spike_m = (M["forged_plates_dark"], M["forged_dark"], M["forged"], M["forged_dark"],
+                                                       M["forged_dark"], M["forged"])
+    RISE = (0.0, 0.25, 0.5)[LOOK - 1]     # each level taller (a longer boiler)
+    lava = M["lava_hot"]
+    CHAINS, TANKS, STACK, SR = (125, 245, 5), (95, 335), 215, 0.92
+    # the ground: scorched earth, a pool of lava glowing under the boiler
+    add_outline(W.lathe("ground", [[(0.92, 0.0), (0.86, 0.03), (0.6, 0.045), (0.0, 0.045)]], [M["dirt"]], bev=0, wob=0.03,
+                        parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+    W.lathe("firebed", [[(0.44, 0.05), (0.0, 0.05)]], [lava], bev=0, wob=0.04, wob_scale=4.0, parent=body)
+    # the boiler: a lower and an upper belly, two riveted flanges round the waist with molten lava glowing between them
+    low = [(0.3, 0.16), (0.44, 0.17), (0.54, 0.26), (0.59, 0.4), (0.6, 0.5)]
+    up = [(0.6, 0.62), (0.59, 0.72), (0.54, 0.86), (0.45, 0.96), (0.34, 1.02), (0.3, 1.06)]
+    belly = W.lathe("belly", [[(0.0, 0.16), (0.3, 0.16)], low, up], [soot], wob=0.008, parent=body, sharp=35)
+    add_outline(belly, LN["cool"])
+    W.lathe("seam", [[(0.585, 0.49), (0.585, 0.63)]], [lava], bev=0, parent=body)
+    fl = W.lathe("flanges", [L.band(0.58, 0.64, 0.48, 0.525, bev=0.012), L.band(0.58, 0.64, 0.595, 0.64, bev=0.012)], [trim],
+                 bev=0, parent=body, sharp=35)
+    add_outline(fl, LN["cool"], L.LINE * 0.6)
+    rv = bmesh.new()
+    for z in (0.502, 0.618):
+        pts, nrm = L.ring_of(24, 0.642, z, 0.5)
+        W.rivets(rv, pts, nrm, r=0.022)
+    for z in (0.3, 0.8):         # rows of rivets on the plates
+        pts, nrm = L.ring_of(20, prof_r(low + up, z) + 0.004, z, 0.25)
+        W.rivets(rv, pts, [n + Vector((0, 0, 0.3 if z > 0.6 else -0.3)) for n in nrm], r=0.02)
+    W.obj("bellyrivets", rv, [trim], parent=body)
+    # the squat legs, under the tanks and the stack
+    lg = bmesh.new()
+    for b in TANKS + (STACK,):
+        L.tube(lg, [bear(b, 0.34, 0.2), bear(b, 0.46, 0.1), bear(b, 0.56, 0.04)], [0.075, 0.08, 0.09], sides=10)
+        Q.cyl(lg, 0.12, 0.045, Matrix.Translation(bear(b, 0.57, 0.0225)), segs=16)
+    add_outline(W.obj("legs", lg, [soot], parent=body, sharp=35), LN["cool"])
+    # the fire door at the front: a frame and bars over lava
+    fm = Matrix.Translation(bear(45, 0.56, 0.2)) @ Matrix.Rotation(-math.radians(45), 4, 'Z') @ \
+        Matrix.Rotation(-math.radians(14), 4, 'X')
+    dl, dr = bmesh.new(), bmesh.new()
+    L.rbox(dl, (0.27, 0.03, 0.24), fm @ Matrix.Translation((0, -0.005, 0.0)), bevel=0.01)
+    L.rbox(dr, (0.34, 0.05, 0.05), fm @ Matrix.Translation((0, 0.02, -0.02)), bevel=0.012)
+    L.rbox(dr, (0.34, 0.05, 0.05), fm @ Matrix.Translation((0, 0.02, 0.24)), bevel=0.012)
+    for x in (-0.15, -0.075, 0.0, 0.075, 0.15):
+        L.rbox(dr, (0.035, 0.045, 0.26), fm @ Matrix.Translation((x, 0.025, 0.0)), bevel=0.01)
+    L.obj_from_bm("doorlava", dl, [lava], parent=body)
+    add_outline(W.obj("door", dr, [trim], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+    # the lava tanks: glass cylinders in iron caps and bars, a pipe from each into the boiler
+    tg, tk = bmesh.new(), bmesh.new()
+    for b in TANKS:
+        c = bear(b, 0.72)
+        Q.cyl(tg, 0.12, 0.6, Matrix.Translation(c + Vector((0, 0, 0.53))), segs=24)
+        for z in (0.21, 0.85):
+            Q.cyl(tk, 0.15, 0.08, Matrix.Translation(c + Vector((0, 0, z))), segs=24)
+            Q.cyl(tk, 0.135, 0.11, Matrix.Translation(c + Vector((0, 0, z))), segs=24)
+        for k in (-50, 0, 50):
+            L.rbox(tk, (0.03, 0.03, 0.62), Matrix.Translation(bear(b + 0, 0.72) + bear(b + k, 0.125, 0.22)) @
+                   Matrix.Rotation(-math.radians(b + k), 4, 'Z'), bevel=0.008)
+        L.tube(tk, L.bezier(c + Vector((0, 0, 0.88)), c + Vector((0, 0, 1.0)), bear(b, 0.55, 1.0), bear(b, 0.4, 0.98), n=10),
+               [0.045] * 10, sides=10)
+        L.tube(tk, [bear(b, 0.5, 0.36), bear(b, 0.64, 0.36)], [0.04, 0.04], sides=10)      # a bracket
+    L.obj_from_bm("tankglass", tg, [lava], parent=body)
+    tko = W.obj("tanks", tk, [trim], parent=body, sharp=35)
+    add_outline(tko, LN["cool"], L.LINE * 0.7)
+    # the crucible on top, full of molten lava; a hub stands in it for the head
+    cru = [[(0.3, 1.04), (0.42, 1.12), (0.56, 1.24), (0.65, 1.36), (0.67, 1.44)], [(0.67, 1.44), (0.58, 1.45)],
+           [(0.58, 1.45), (0.56, 1.36)]]
+    add_outline(W.lathe("crucible", cru, [cru_m], wob=0.01, parent=body, sharp=35), LN["cool"])
+    W.lathe("pool", [[(0.565, 1.37), (0.18, 1.37)]], [lava], bev=0, parent=body)
+    top = 1.48
+    add_outline(W.lathe("hub", [[(0.2, 1.3), (0.2, 1.44), (0.17, top), (0.0, top)]], [soot], parent=body, sharp=35), LN["cool"],
+                L.LINE * 0.6)
+    lu, rv = bmesh.new(), bmesh.new()
+    for b in (135, 315):           # the crucible's lifting lugs
+        L.rbox(lu, (0.1, 0.12, 0.12), Matrix.Translation(bear(b, 0.66, 1.3)) @ Matrix.Rotation(-math.radians(b), 4, 'Z'),
+               bevel=0.03)
+    L.rbox(lu, (0.16, 0.2, 0.04), Matrix.Translation(bear(75, 0.68, 1.41)) @ Matrix.Rotation(-math.radians(75), 4, 'Z'),
+           bevel=0.015)            # a pour lip
+    pts, nrm = L.ring_of(18, 0.66, 1.4, 0.3)
+    W.rivets(rv, pts, [n + Vector((0, 0, -0.5)) for n in nrm], r=0.022)
+    add_outline(W.obj("lugs", lu, [trim], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+    W.obj("crucrivets", rv, [trim], parent=body)
+    # lava: dripping off the crucible's lip and the pour lip, leaking from the waist seam down the lower belly
+    dr = bmesh.new()
+    lava_runs(dr, [[bear(b, 0.675, 1.43), bear(b, 0.69, 1.38), bear(b, 0.69, 1.38 - ln)]
+                   for b, ln in ((20, 0.1), (160, 0.07), (290, 0.12), (345, 0.06))], r=0.035)
+    lava_runs(dr, [[bear(75, 0.76, 1.43), bear(75, 0.79, 1.36), bear(75, 0.79, 1.2)]], r=0.04)
+    lava_runs(dr, [[bear(b, prof_r(low, z) + 0.025, z) for z in [0.5 - k * (0.5 - z1) / 5 for k in range(6)]]
+                   for b, z1 in ((15, 0.3), (75, 0.24), (290, 0.34))], r=0.035)
+    L.obj_from_bm("lavaruns", dr, [lava], parent=body)
+    # the smoke stack behind: a pipe out of the boiler's back and up, its mouth glowing
+    sk = bmesh.new()
+    path = L.bezier(bear(STACK, 0.5, 0.78), bear(STACK, SR, 0.78), bear(STACK, SR, 0.78), bear(STACK, SR, 1.1), n=10)
+    L.tube(sk, path + [bear(STACK, SR, 2.0)], [0.085] * 11, sides=16)
+    Q.cyl(sk, 0.12, 0.12, Matrix.Translation(bear(STACK, SR, 2.04)), segs=20, r2=0.13)     # a flared mouth
+    for z in (1.2, 1.6):
+        Q.cyl(sk, 0.1, 0.04, Matrix.Translation(bear(STACK, SR, z)), segs=20)
+    add_outline(W.obj("chimney", sk, [soot], parent=body, sharp=35), LN["cool"])
+    sm = bmesh.new()
+    Q.cyl(sm, 0.1, 0.01, Matrix.Translation(bear(STACK, SR, 2.08)), segs=20)
+    L.obj_from_bm("stackglow", sm, [lava], parent=body)
+    stretch(body, 0.66, RISE)
+    top += RISE
+    for k in range(1, LOOK):     # a strap more round the longer boiler per level
+        z = 0.64 + k * (0.08 + RISE) / LOOK
+        strap(f"bandsR{k}", M, LN, body, 0.6, z, z + 0.06, 20, rivet_r=0.025, phase=0.25 * k, mat=trim)
+    if LOOK > 1:
+        foot_spikes(M, LN, body, [(c, 24) for c in CHAINS] + [(t, 20) for t in TANKS] + [(45, 20), (STACK, 18)], 0.84, spike_m)
+    if LOOK == 3:
+        crown(M, LN, body, [b for b in range(15, 360, 30) if all(abs((b - c + 180) % 360 - 180) > 16 for c in (75, 135, 315))
+                            and abs((b - STACK + 180) % 360 - 180) > 30], 0.62, 0.84, 1.36 + RISE, 1.5 + RISE, spike_m)
+    chain_anchors(M, LN, body, [(b, prof_r(up, 0.75) + 0.03, 0.75 + RISE) for b in CHAINS], 1.0, chain_m)
+    # the head: a lava sprayer: a swivel and riser, a riveted valve block with a valve wheel, a copper pressure tank
+    # behind, a nozzle pipe ending in a flat fan mouth glowing with lava
+    tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
+    tur.scale = (1.2, 1.2, 1.2)
+    HZ = 0.24
+    bm = bmesh.new()
+    Q.cyl(bm, 0.17, 0.06, Matrix.Translation((0, 0, 0.03)), segs=32)
+    Q.cyl(bm, 0.075, 0.12, Matrix.Translation((0, 0, 0.12)), segs=16)
+    L.rbox(bm, (0.22, 0.24, 0.16), Matrix.Translation((0, 0.0, 0.16)), bevel=0.04)
+    W.bolts(bm, [(sx * 0.11, sy * 0.08, 0.27) for sx in (-1, 1) for sy in (-1, 1)], [(sx, 0, 0) for sx in (-1, 1) for _ in (0, 1)],
+            r=0.025, washer=False)
+    add_outline(W.obj("valve", bm, [trim], parent=tur, sharp=35), LN["cool"])
+    bm = bmesh.new()
+    Q.cyl(bm, 0.025, 0.08, Matrix.Translation((0, 0, 0.35)), segs=10)
+    ring = [Vector((0.11 * math.cos(2 * math.pi * k / 24), 0.11 * math.sin(2 * math.pi * k / 24), 0.39)) for k in range(25)]
+    L.tube(bm, ring, [0.02] * 25, sides=8, cap=False)
+    for k in range(4):
+        a = math.pi / 4 + k * math.pi / 2
+        L.tube(bm, [Vector((0, 0, 0.39)), Vector((0.11 * math.cos(a), 0.11 * math.sin(a), 0.39))], [0.012] * 2, sides=6)
+    add_outline(W.obj("wheel", bm, [M["brass_w"]], parent=tur, sharp=35), LN["warm"], L.LINE * 0.6)
+    bm = bmesh.new()
+    Q.cyl(bm, 0.095, 0.24, Matrix.Translation((0, -0.24, 0.2)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=24)
+    for y in (-0.15, -0.33):
+        Q.cyl(bm, 0.105, 0.03, Matrix.Translation((0, y, 0.2)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=24)
+    add_outline(W.obj("ptank", bm, [tank_m], parent=tur, sharp=35), LN["warm"])
+    bm = bmesh.new()
+    L.tube(bm, [Vector((0, 0.1, HZ)), Vector((0, 0.42, HZ))], [0.06, 0.055], sides=16)
+    for y in (0.16, 0.38):
+        Q.cyl(bm, 0.075, 0.035, Matrix.Translation((0, y, HZ)) @ Matrix.Rotation(math.pi / 2, 4, 'X'), segs=16)
+    L.rbox(bm, (0.12, 0.09, 0.2), Matrix.Translation((0, 0.4, HZ)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), bevel=0.02,
+           taper=2.1, taper_y=0.65)
+    add_outline(W.obj("nozzle", bm, [trim], parent=tur, sharp=35), LN["cool"])
+    bm = bmesh.new()
+    L.rbox(bm, (0.23, 0.035, 0.02), Matrix.Translation((0, 0.598, HZ)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), bevel=0.008)
+    lava_runs(bm, [[Vector((0.05, 0.6, HZ - 0.02)), Vector((0.05, 0.61, HZ - 0.07)), Vector((0.05, 0.61, HZ - 0.12))]], r=0.025)
+    L.obj_from_bm("nozzlelava", bm, [lava], parent=tur)
+    L.empty("muzzle_base", parent=tur, loc=(0, 0.1, HZ))
+    L.empty("muzzle_tip", parent=tur, loc=(0, 0.62, HZ))
+    return tur, top, ("belly", "crucible", "hub", "chimney", "tanks")
+
+
+def basalt_column(bm, c, r, h, rot, tilt=(0.0, 0.0), lean=(0.0, 0.0)):
+    """A basalt column: a six-sided prism standing at c, its top cut on a slant (tilt: rise per unit x and y), leaning."""
+    sub = bmesh.new()
+    bmesh.ops.create_cone(sub, cap_ends=True, segments=6, radius1=r, radius2=r * 0.95, depth=h,
+                          matrix=Matrix.Translation((0, 0, h / 2)))
+    for v in sub.verts:
+        if v.co.z > h / 2:
+            v.co.z += tilt[0] * v.co.x + tilt[1] * v.co.y
+            v.co.x += lean[0]
+            v.co.y += lean[1]
+    bmesh.ops.bevel(sub, geom=list(sub.edges), offset=0.025, segments=2, affect='EDGES', profile=0.5)
+    L.add_mesh(bm, sub, Matrix.Translation(Vector(c)) @ Matrix.Rotation(rot, 4, 'Z'))
+
+
+def build_magma_b(M, LN, body):
+    """B, "Volcanic": a cluster of cut basalt columns, each its own height, lava glowing between them and in their
+    cracks and running down their faces into a glowing basin at the foot; two iron bands hold them, the chains and
+    anchor weights hold the bands. The head a cast pot of lava with a long goose-neck spout."""
+    basalt = W.mat_brimstone("basalt", scale=4.0, crust=((20, 20, 26), (82, 78, 86)), fire=(255, 112, 24),
+                             hot=(255, 214, 130), glow_k=1.3, low=1.7)
+    obsid = W.mat_black_crystal("obsidian", scale=5.0, glow_k=0.6)
+    band = W.mat_iron("iron_band", base=(80, 66, 58), dark=(34, 28, 26), edge=(176, 154, 134), rust_k=0.7, soot=0.35)
+    pot_m = W.mat_iron("iron_cast", base=(66, 58, 56), dark=(26, 22, 21), rust=(120, 62, 32), edge=(160, 146, 136),
+                       rust_k=0.4, soot=0.4)
+    spout_m, spike_m = M["bronze_w"], M["brimstone"]
+    if LOOK == 2:      # brimstone: a browner charred crust, more fire in its cracks
+        basalt = W.mat_brimstone("basalt2", scale=4.0, glow_k=1.6, low=1.9)
+    if LOOK == 3:      # forged steel bands and cage, a steel pot and spout, steel spikes
+        band, pot_m, spout_m, spike_m = M["forged_dark"], M["forged_dark"], M["forged"], M["forged"]
+    RISE = (0.0, 0.25, 0.5)[LOOK - 1]     # each level taller (longer columns)
+    lava = M["lava_hot"]
+    CHAINS = (125, 245, 5)
+    # the basin: a rough rim of rock round a pool of lava
+    W.lathe("basin", [[(0.93, 0.035), (0.0, 0.035)]], [lava], bev=0, parent=body)
+    rim = W.lathe("rim", [[(1.0, 0.0), (1.03, 0.06), (0.97, 0.11), (0.91, 0.08), (0.9, 0.02)]], [basalt], wob=0.04, wob_scale=3.0,
+                  parent=body, sharp=50)
+    add_outline(rim, LN["warm"], L.LINE * 0.7)
+    cl = bmesh.new()
+    W.clods(cl, [bear(360 * i / 20 + 7 * (i % 3), 0.97 + 0.03 * ((i * 0.37) % 1.0), 0.08) for i in range(20)], r=0.1)
+    add_outline(W.obj("rimrocks", cl, [basalt], parent=body, sharp=60), LN["warm"], L.LINE * 0.6)
+    # the lava core the columns stand round (it glows in the gaps between them)
+    W.lathe("core", [[(0.45, 0.0), (0.45, 0.95), (0.0, 0.95)]], [lava], bev=0, parent=body)
+    co = bmesh.new()
+    top = 1.55
+    basalt_column(co, (0, 0, 0), 0.3, top, 0.2)
+    HS = (1.22, 0.7, 1.0, 0.76, 1.28, 0.88, 0.68)
+    for i, h in enumerate(HS):
+        b = 360 * i / len(HS) + 12
+        basalt_column(co, bear(b, 0.5), 0.2, h, 0.37 * i, tilt=(0.12 * ((i % 3) - 1), 0.1 * ((i % 2) * 2 - 1)),
+                      lean=tuple(bear(b, 0.02))[:2])
+    for i, (b, h) in enumerate(((40, 0.24), (100, 0.16), (165, 0.3), (285, 0.2), (335, 0.27))):   # broken stubs in the pool
+        basalt_column(co, bear(b, 0.8), 0.11, h, 0.9 * i, tilt=(0.25, -0.2))
+    co.normal_update()
+    for f in co.faces:             # the cut tops: glassy obsidian
+        f.material_index = 1 if f.normal.z > 0.8 else 0
+    add_outline(W.obj("columns", co, [basalt, obsid], parent=body, sharp=30), LN["warm"])
+    # lava running down the front columns' faces into the basin
+    rn = bmesh.new()
+    lava_runs(rn, [[bear(b + 3 * math.sin(k), 0.69 + 0.012 * (k % 2), HS[i] - 0.03 - k * (HS[i] - 0.06) / 6) for k in range(7)]
+                   for i, b in ((0, 12), (1, 63.4), (6, 320.6))], r=0.04)
+    lava_runs(rn, [[bear(b, 0.29, top - 0.01), bear(b, 0.315, top - 0.06), bear(b, 0.315, top - ln)]     # down its corners
+                   for b, ln in ((18.5, 0.45), (78.5, 0.3))], r=0.035)
+    L.obj_from_bm("lavaruns", rn, [lava], parent=body)
+    # two iron bands round the cluster
+    strap("bands", M, LN, body, 0.71, 0.2, 0.28, 18, rivet_r=0.03, mat=band)
+    strap("bands2", M, LN, body, 0.71, 0.54, 0.62, 18, rivet_r=0.03, phase=0.5, mat=band)
+    stretch(body, 0.64, RISE)
+    top += RISE
+    for k in range(1, LOOK):     # a band more round the longer columns per level
+        z = 0.62 + k * (0.06 + RISE) / LOOK
+        strap(f"bandsR{k}", M, LN, body, 0.71, z, z + 0.08, 18, rivet_r=0.03, phase=0.25 * k, mat=band)
+    if LOOK == 3:      # a steel cage: upright straps between the chains
+        cg, rv = bmesh.new(), bmesh.new()
+        for b in (35, 95, 155, 215, 275, 335):
+            L.rbox(cg, (0.09, 0.04, 0.5 + RISE), Matrix.Translation(bear(b, 0.745, 0.18)) @ Matrix.Rotation(-math.radians(b), 4, 'Z'),
+                   bevel=0.012)
+            W.rivets(rv, [bear(b, 0.77, z) for z in (0.24, 0.58, 0.58 + RISE * 0.5)], [bear(b)] * 3, r=0.026)
+        add_outline(W.obj("cage", cg, [band], parent=body, sharp=35), LN["cool"], L.LINE * 0.6)
+        W.obj("cagerivets", rv, [band], parent=body)
+    if LOOK > 1:
+        foot_spikes(M, LN, body, [(c, 24) for c in CHAINS], 0.97, spike_m)
+    if LOOK == 3:
+        crown(M, LN, body, [360 * i / 9 + 20 for i in range(9)], 0.26, 0.46, top - 0.14, top - 0.04, spike_m)
+    chain_anchors(M, LN, body, [(b, 0.76, 0.58) for b in CHAINS], 1.12, band)
+    # the head: a cast pot of lava on a swivel, banded, two ring handles, a goose-neck spout out the front
+    tur = L.empty("TURRET", loc=(0, 0, top + 0.004))
+    tur.scale = (1.2, 1.2, 1.2)
+    bm = bmesh.new()
+    Q.cyl(bm, 0.2, 0.05, Matrix.Translation((0, 0, 0.025)), segs=32)
+    add_outline(W.obj("swivel", bm, [band], parent=tur, sharp=35), LN["cool"], L.LINE * 0.6)
+    pot = W.lathe("pot", [[(0.1, 0.05), (0.2, 0.07), (0.25, 0.16), (0.25, 0.26), (0.22, 0.33), (0.245, 0.35), (0.245, 0.375)],
+                          [(0.245, 0.375), (0.2, 0.375), (0.19, 0.33)]], [pot_m], wob=0.006, parent=tur, sharp=35)
+    add_outline(pot, LN["cool"])
+    W.lathe("potlava", [[(0.195, 0.335), (0.0, 0.335)]], [lava], bev=0, parent=tur)
+    strap("potband", M, LN, tur, 0.25, 0.18, 0.23, 12, rivet_r=0.022, mat=band)
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        ring = [Vector((sx * (0.27 + 0.06 * (1 - math.cos(2 * math.pi * k / 16))), 0.0, 0.3 + 0.06 * math.sin(2 * math.pi * k / 16)))
+                for k in range(17)]
+        L.tube(bm, ring, [0.018] * 17, sides=8, cap=False)
+    path = L.bezier((0, 0.16, 0.17), (0, 0.42, 0.14), (0, 0.42, 0.46), (0, 0.66, 0.44), n=16)
+    L.tube(bm, path, [0.075 - 0.03 * k / 15 for k in range(16)], sides=14)
+    d = (path[-1] - path[-2]).normalized()
+    mq = Vector((0, 0, 1)).rotation_difference(d).to_matrix().to_4x4()
+    Q.cyl(bm, 0.05, 0.06, Matrix.Translation(path[-1]) @ mq, segs=16, r2=0.068)          # the flared tip
+    Q.cyl(bm, 0.06, 0.03, Matrix.Translation(path[7]) @ Vector((0, 0, 1)).rotation_difference(path[8] - path[6]).to_matrix().to_4x4(),
+          segs=16)
+    L.tube(bm, [Vector((0, 0.2, 0.36)), Vector((0, 0.36, 0.33))], [0.02, 0.02], sides=6)      # a stay to the neck
+    add_outline(W.obj("spout", bm, [spout_m], parent=tur, sharp=35), LN["warm"])
+    bm = bmesh.new()
+    Q.cyl(bm, 0.05, 0.01, Matrix.Translation(path[-1] + d * 0.031) @ mq, segs=16)
+    tip = path[-1] + d * 0.03
+    lava_runs(bm, [[tip + Vector((0, -0.01, -0.03)), tip + Vector((0, 0.0, -0.08)), tip + Vector((0, 0.0, -0.13))]], r=0.022)
+    L.obj_from_bm("spoutlava", bm, [lava], parent=tur)
+    L.empty("muzzle_base", parent=tur, loc=(0, 0.16, 0.17))
+    L.empty("muzzle_tip", parent=tur, loc=tuple(tip))
+    return tur, top, ("columns", "core")
+
+
+def build():
+    L.clear_scene()
+    M = common()
+    LN = dict(warm=L.line("warm"), cool=L.line("cool"))
+    body = L.empty("BODY")
+    magma = {"A": build_magma_a, "B": build_magma_b, "OLD": build_magma}[MAGMA_DIR]
+    tur, top, _ = {1: build_blast, 2: build_sharp, 3: magma}[TIER](M, LN, body)
+    return body, tur, top
+
+
+SOLID = {1: ("skirt", "drum", "glowcap", "collar", "rope", "capbolts", "crown"), 2: ("post", "coil", "posts", "socket"), 3: ("column", "collar", "cagebars", "crown")}
+if TIER == 3 and MAGMA_DIR == "A":
+    SOLID[3] = ("belly", "crucible", "hub", "chimney", "tanks", "lugs", "crown")
+elif TIER == 3 and MAGMA_DIR == "B":
+    SOLID[3] = ("columns", "rim", "rimrocks", "crown")
+TAG = TIER if LOOK == 1 else f"{TIER}-look{LOOK}"
+if TIER == 3 and MAGMA_DIR != "B":
+    TAG = {"A": "3-dirA", "OLD": "3-old"}[MAGMA_DIR] + (f"-look{LOOK}" if LOOK > 1 else "")
+Q.run("inferno", build, TAG, HERE, turret_canvas=(400, 360, 200, 200), args=ARGS[1:], solid=SOLID[TIER])
