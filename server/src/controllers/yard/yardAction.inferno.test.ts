@@ -941,7 +941,7 @@ describe("the Inferno shop (STORE.as:210)", () => {
     expect(body(await buy("TODI")).report).toMatchObject({ credits: 600, q: 1 });
     expect(body(await buy("TODI")).report).toMatchObject({ credits: 600, q: 1 });
     expect(mainSave().credits).toBe(0);
-    expect(storeBuffs(infernoStore(), now(), "defender")).toEqual({ towerDamage: true });
+    expect(storeBuffs(infernoStore(), now(), "defender")).toEqual({ towerDamage: 86_400 });
     expect(storeBuffs(infernoStore(), now(), "attacker")).toBeUndefined();
   });
 
