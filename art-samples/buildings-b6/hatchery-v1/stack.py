@@ -42,18 +42,18 @@ CRANK1_START = 247.0             # bearing of the arm at frame 0 (Flash: the han
 
 # level 2: three legs with cross feet
 LIFT2 = 1.15
-LEG_TH = (-45.0, 65.0, 205.0)   # front, back right, back left
+LEG_TH = (-42.0, 41.0, 226.0)   # front, right, left (as Flash draws them: not evenly spaced)
 LEG_Z = 2.4                      # where a leg leaves the body (above the base's foot, level 1 height)
-FOOT_D = 4.3                     # a foot's middle from the axis, on the ground
-CROSS_L, CROSS_W = 1.5, 0.13     # a foot's arms (half length, bar radius), along world X and Y; ball ends
+FOOT_D = (4.2, 4.05, 3.8)        # each foot's middle from the axis, on the ground
+CROSS_L, CROSS_W = 1.28, 0.13     # a foot's arms (half length, bar radius), along world X and Y; ball ends
 
 # level 2: the egg-beater drive on the sleeve
-PINION_Z, PINION_R = 1.2, 1.15  # above the sleeve's top
-WHEEL2_U, WHEEL2_Z, WHEEL2_R = 1.6, 3.6, 2.45   # the crown wheel: out along bearing 45 from the axis, height above
+PINION_Z, PINION_R = 0.5, 1.15  # above the sleeve's top
+WHEEL2_U, WHEEL2_Z, WHEEL2_R = 1.85, 3.9, 2.45   # the crown wheel: out along bearing 45 from the axis, height above
                                                  # the sleeve's top, radius
 WHEEL2_TH = 26.0                 # the axle's bearing
 CRANK2_R = 3.6
-TRI = ((-2.75, 4.35), (0.35, 4.35), (-0.8, 9.5))  # the triangle handle's corners (u along bearing 45, z above the sleeve)
+TRI = ((-2.6, 4.45), (0.4, 4.45), (-0.35, 9.4))  # the triangle handle's corners (u along bearing 45, z above the sleeve)
 
 # level 3: the red mixer stand
 LIFT3 = 0.78                     # on top of LIFT2

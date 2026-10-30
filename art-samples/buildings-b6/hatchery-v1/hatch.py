@@ -817,7 +817,7 @@ def legs():
     """Three gold legs from bosses on the base's foot ring out and down to cross feet with ball ends on the ground."""
     for i, th in enumerate(S.LEG_TH):
         a = P(th, S.FOOT_R - 0.05, Z0 + 0.55)
-        f = P(th, S.FOOT_D, 0.0)
+        f = P(th, S.FOOT_D[i], 0.0)
         ob = lathe(f"legboss{i}", [(0.0, -0.1), (0.24, -0.1), (0.26, 0.08), (0.18, 0.2), (0.0, 0.22)], a, M["gold"],
                    verts=16)
         track(ob, P(th, 1, 0))
@@ -869,7 +869,9 @@ def beater():
     track(ob, P(45, 1, 0))
     # the triangle handle: a flat chrome bar round a rounded triangle, in the plane through the axis
     path = [U2(x, z) for x, z in rounded_poly([tuple(a0), tuple(a1), tuple(a2)], 0.42, 6)]
-    sweep("triangle", path, P(135, 1, 0), 0.2, 0.58, M["chrome"], bevel=0.06, closed=True)
+    sweep("triangle", path, P(135, 1, 0), 0.2, 0.85, M["chrome"], bevel=0.06, closed=True)
+    # the gearbox: a chrome block on the frame bar, between the spindle's bearing and the crown wheel's axle
+    box("gearbox", (1.3, 0.8, 1.6), U2(0.2, 1.3), M["chrome"], rot=(0, 0, 45), bevel=0.22)
 
     # the crown wheel and crank, on an axle along bearing 45
     def wheel(hub):
@@ -881,6 +883,7 @@ def beater():
             a = 2 * math.pi * k / 24
             box(f"crowntooth{k}", (0.2, 0.14, 0.16), (math.cos(a) * (R - 0.32), math.sin(a) * (R - 0.32), -0.22),
                 M["chrome"], rot=(0, 0, math.degrees(a)), bevel=0.02, parent=hub)
+        cyl("crownweb", R - 0.32, 0.08, (0, 0, -0.04), M["chrome"], verts=64, parent=hub)
         for k in range(4):
             a = 2 * math.pi * (k + 0.5) / 4
             sweep(f"crownspoke{k}", [(0.4 * math.cos(a), 0.4 * math.sin(a), 0.0),
