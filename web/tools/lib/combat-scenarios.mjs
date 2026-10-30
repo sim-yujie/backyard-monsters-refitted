@@ -495,14 +495,15 @@ export const SCENARIOS = [
     name: "raid-east",
     description:
       "A wild monster raid on the sandbox yard: C2 tanks, C4 damage dealers and C3 looters at " +
-      "level 1 from off the east side, a hit limit of 30, the bunkers defending; ends when no " +
-      "raider is left (issue #226).",
+      "the defender's own academy levels (C4 untrained, level 1) from off the east side, no hit " +
+      "limit, the bunkers defending; ends when no raider is left (issue #226, owner decision " +
+      "2026-10-06).",
     yard: "sandbox",
     kind: "main",
     levels: LEVEL_ONE,
     playerLevel: 20,
     tailTicks: 48000,
-    raid: { hitLimit: 30 },
+    raid: true,
     defence: {
       bunkers: {
         83: { C1: 10, C2: 4 },

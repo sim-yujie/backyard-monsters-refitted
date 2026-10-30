@@ -65,49 +65,49 @@
     "creepsKilled": 0,
     "championHp": null,
     "damagedBuildings": 2,
-    "rngDraws": 2114,
+    "rngDraws": 1756,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "a1c173ff9eac01b1"
+        "digest": "e84f2e0edf029d7c"
       },
       {
         "tick": 1600,
-        "digest": "d14f6142840d36cc"
+        "digest": "c28453b581ea18b7"
       },
       {
         "tick": 2400,
-        "digest": "a94482a52b7bdbc7"
+        "digest": "81a8b12aa3781fdc"
       },
       {
         "tick": 3200,
-        "digest": "0f55921222b278dc"
+        "digest": "97d3e9458b5a1dc7"
       },
       {
         "tick": 4000,
-        "digest": "f7ec72d0436f92e2"
+        "digest": "b2d66b3f2f706f21"
       },
       {
         "tick": 4800,
-        "digest": "380a56f516fa6697"
+        "digest": "b06391fad18f1fac"
       },
       {
         "tick": 5600,
-        "digest": "8a6904468fb732d8"
+        "digest": "ee278451f74bce1b"
       },
       {
         "tick": 6400,
-        "digest": "5da81ae235c495ec"
+        "digest": "0fc05e95430d0e17"
       },
       {
         "tick": 7200,
-        "digest": "026b983f41c5e579"
+        "digest": "13b8f980607a4bc2"
       },
       {
         "tick": 8000,
-        "digest": "c40c44209d4eaff2"
+        "digest": "6461f48f0b28fa71"
       }
     ],
-    "digest": "4a5720d079ac6262"
+    "digest": "0541193f927361a1"
   }
 }

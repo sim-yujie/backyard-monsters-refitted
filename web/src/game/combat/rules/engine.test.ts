@@ -89,10 +89,11 @@ describe("a Pokey against a lone Cannon Tower", () => {
     const { yard, battle } = battleOf();
     run(battle, 1200);
     const tower = yard.buildings[0];
-    // 60 damage a swing, and the Pokey got eleven in before it died. It lands
+    // 60 damage a swing, and the Pokey got twelve in before it died. It lands
     // within 50 screen pixels of (-100, -100) (issue #91), which with this
-    // seed puts it at the tower in time for an eleventh swing.
-    expect(tower!.maxHp - tower!.hp).toBe(660);
+    // seed puts it at the tower in time for a twelfth swing: it keeps its
+    // first route, which no later look beats (`MonsterBase.as:1255-1270`).
+    expect(tower!.maxHp - tower!.hp).toBe(720);
   });
 
   it("ends the battle once the last attacker is gone and the countdown has run", () => {
@@ -2703,9 +2704,9 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
     }
     const hits = events.filter((event) => event.kind === "hit");
     const hurts = events.filter((event) => event.kind === "hurt");
-    // The Pokey got eleven swings in before it died, 60 a swing, on foot, at
+    // The Pokey got twelve swings in before it died, 60 a swing, on foot, at
     // the tower it was standing on.
-    expect(hits).toHaveLength(11);
+    expect(hits).toHaveLength(12);
     for (const hit of hits) {
       if (hit.kind !== "hit") throw new Error("filtered");
       expect(hit.creepId).toBe(1);
