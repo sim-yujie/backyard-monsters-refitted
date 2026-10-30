@@ -770,7 +770,8 @@ def goo_l1():
     for k in range(36):                                    # inside: lumps heaped lower, a mound round the neck
         a, d = rr.uniform(0, 360), 1.5 * math.sqrt(rr.random())
         balls.append((P(a, d, z1 - 0.12 + 0.12 * (1 - d / 1.35) + rr.uniform(-0.05, 0.05)), rr.uniform(0.3, 0.42)))
-    for b, ln, wd, nf in ((4, 2.35, 1.45, 5), (-125, 1.3, 0.7, 3), (-155, 0.9, 0.5, 2), (45, 0.8, 0.45, 2)):
+    # the broad sheet hangs front right, ending well above the foot (as Flash), so the copper shows at the right
+    for b, ln, wd, nf in ((-12, 1.9, 1.45, 5), (-125, 1.3, 0.7, 3), (-155, 0.9, 0.5, 2), (45, 0.8, 0.45, 2)):
         sheet(balls, rr, b, ln, wd, nf, r=S.VAT_R - 0.08)
     # spilt on the table at the left, and over its front edge
     balls.append((P(-128, S.VAT_R + 0.12, S.VAT_Z0 + 0.02), 0.4, (1.6, 1.0, 0.4)))
@@ -850,16 +851,17 @@ def straps_and_vanes(dome):
         sweep(f"strap{k}", path, U(b + 90), 0.11, 0.045, M["steel"], bevel=0.012)
         paths[b] = path
     # the vanes: flat grey blades on rods out of the collar between the straps, square to the camera at the right and
-    # the left as Flash's (level on screen); none at the front, and none at the back (where the level 6 and 10 loops
-    # stand). Nearly level and clear of the straps and the goo under their whole width
+    # the left as Flash's; none at the front, and none at the back (where the level 6 and 10 loops stand). As Flash's:
+    # the left one short and nearly level, the right one longer and drooping to the right. Each clear of the straps
+    # and the goo under its whole width, and narrow enough to pass the level 6 loop's outer leg
     strap_pts = [p for path in paths.values() for p in path]
-    for k, b in enumerate((45.0, -135.0)):
+    for k, (b, r1, droop) in enumerate(((45.0, 2.3, 0.8), (-135.0, 1.75, 0.25))):
         u, w = U(b), U(b + 90)
-        r0, r1 = 0.62, 2.12
+        r0, hw = 0.62, 0.25
 
         def floor(r):
-            zs = [p.z + 0.035 for p in strap_pts if abs(p.dot(u) - r) < 0.1 and abs(p.dot(w)) < 0.4 and p.dot(u) > 0]
-            for s in (-0.31, 0.0, 0.31):
+            zs = [p.z + 0.035 for p in strap_pts if abs(p.dot(u) - r) < 0.1 and abs(p.dot(w)) < hw + 0.09 and p.dot(u) > 0]
+            for s in (-hw, 0.0, hw):
                 o = u * r + w * s + Vector((0, 0, 9))
                 h = dome_hit(o, Vector((0, 0, -1)), [t])
                 if h is not None:
@@ -867,12 +869,13 @@ def straps_and_vanes(dome):
             return max(zs) if zs else 4.8
         rs = [r0 + (r1 - r0) * i / 12 for i in range(13)]
         fl = [floor(r) for r in rs]
-        z_in, z_out = 0.0, -0.32                    # nearly level, as Flash's blades: a slight droop outward
+        z_in, z_out = 0.0, -droop
         lift = max(f - (z_in + (z_out - z_in) * i / 12) for i, f in enumerate(fl))
-        z_in, z_out = z_in + lift + 0.03, z_out + lift + 0.03
+        z_in, z_out = z_in + lift + 0.07, z_out + lift + 0.07       # half the blade, and a gap over the lumps
         a, e = P(b, r0, z_in), P(b, r1, z_out)
         tilt = math.degrees(math.atan2(z_in - z_out, r1 - r0))
-        box(f"vane{k}", (r1 - r0, 0.62, 0.06), (a + e) / 2, M["vane"], rot=(0, tilt, b), bevel=0.02, origin="centre")
+        box(f"vane{k}", ((e - a).length, 2 * hw, 0.06), (a + e) / 2, M["vane"], rot=(0, tilt, b), bevel=0.02,
+            origin="centre")
         tube(f"vanerod{k}", [P(b, S.NECK_R - 0.05, z_in + 0.02), P(b, r0 + 0.08, z_in + 0.02)], 0.05, M["steel"])
         print("PROBE vane %d at %.0f: z %.2f .. %.2f" % (k, b, z_in, z_out))
 
@@ -1121,6 +1124,16 @@ def loops_l10():
            P(-113, 3.18, 0.0)]
     tube("towerarc", pts, 0.2, M["pipe"], verts=14, smooth=True)
     cyl("towerarcfoot", 0.32, 0.16, P(-113, 3.18, 0.0), M["hoop"], verts=20, bevel=0.03)
+    # Flash's short pipe low at the left: out of the arc, in behind the front left post through the peach plate (with
+    # a collar there, as the level 6 loop) to the vat's foot
+    a, e = P(-125.5, 3.3, 2.45), P(-108, S.VAT_R - 0.1, 2.65)
+    pipe("towerleg", [a, e], 0.16)
+    along("towerlegflange", None, U(-108), 0.27, 0.12, P(-108, S.VAT_R - 0.03, 2.65), M["hoop"], verts=20, bevel=0.03)
+    n = U(-123.0)                                   # the plate's outward normal (between posts 4 and 5)
+    ap = S.POST_R * math.cos(math.radians(30)) - S.RING_IN + 0.02
+    t = (a.dot(n) - ap) / (a.dot(n) - e.dot(n))
+    dr = (e - a).normalized()
+    along("towerlegcollar", None, dr, 0.25, 0.2, a.lerp(e, t) - dr * 0.1, M["hoop"], verts=20, bevel=0.03)
     # two loops stepping up behind the level 6 loop: each rises out of the dome behind the funnel and comes down onto
     # the top of the loop below it
     zt = Vector((0, 0, LOOP_R_TOP))

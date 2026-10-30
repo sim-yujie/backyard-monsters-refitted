@@ -25,7 +25,7 @@ FUNNEL_Z0, FUNNEL_TOP, FUNNEL_R = 7.12, 8.08, 1.02
 GOO1_TOP = 5.95
 DOME_R, DOME_TOP = 2.12, 6.55
 # the pencil frame (level 3 up): six posts round the vat, two rings of planks
-POST_R, POST_RAD = 2.4, 0.19
+POST_R, POST_RAD = 2.4, 0.14   # thin pencils, as Flash's
 POST_BEARINGS = tuple(-33.0 + 60.0 * k for k in range(6))
 POST_TOP = 5.0              # the top of the yellow (the ferrule and the eraser above it)
 RING_LO, RING_HI = (1.65, 2.07), (4.34, 4.78)   # the lower ring holds the table

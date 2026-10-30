@@ -1,6 +1,6 @@
 #!/bin/sh
-# run.sh <level> <mode> : one Blender run of goo2.py, after any other Blender on the PC has finished (only one
-# render may run at a time).
+# run.sh <level> <mode> : one Blender run of goo2.py, started once fewer than 3 Blenders run on the PC (the shared
+# limit).
 BL="C:/Program Files/Blender Foundation/Blender 5.2/blender.exe"
 cd "$(dirname "$0")"
 while [ "$(tasklist 2>/dev/null | grep -ci "^blender.exe")" -ge 3 ]; do sleep 15; done
