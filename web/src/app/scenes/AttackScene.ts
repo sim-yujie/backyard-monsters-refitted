@@ -471,7 +471,8 @@ export class AttackScene implements Scene {
     // scenery in the yard's own containers, never in the battle layer, so no
     // creep targets them and no count includes them. No caged champion: the
     // engine has no defending champion, and one that never fights would lie.
-    this.life = yardLifeOf(response, yard, "attack");
+    // No workers on a Moloch yard, a world map attack in Flash.
+    this.life = yardLifeOf(response, yard, "attack", molochYard);
     this.renderer.setLife(this.life);
     this.buildingCount = countedBuildings(yard.buildings.map((building) => building.type));
     this.startCamera(yard, context);

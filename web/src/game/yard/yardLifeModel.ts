@@ -33,7 +33,10 @@ import type { Yard, YardBuilding } from "./yardModel";
  * - **No workers on a wild monster camp.** `QUEUE.Spawn` skips the two world
  *   map modes, `WMATTACK` and `WMVIEW` (`QUEUE.as:56`); a player's yard, visited
  *   or attacked, has its workers, and a running job has one standing at it
- *   (`BFOUNDATION.as:3154-3182` queues it on load, whoever is looking).
+ *   (`BFOUNDATION.as:3154-3182` queues it on load, whoever is looking). A
+ *   Moloch yard (a Descent yard or an Inferno map tribe) is one too: it loads
+ *   as an Inferno yard, but Flash attacks it in `IWMATTACK`, which
+ *   `GLOBAL.Setup` turns into `WMATTACK` (`GLOBAL.as:763-787`).
  * - **No champion on an attacked yard.** Flash's cage champion was a guardian
  *   that came out to fight the attacker. The combat engine does not simulate a
  *   defending champion (only the attacker's flung ones,
@@ -313,7 +316,8 @@ const TRIBE_TYPE = "tribe";
  * On the Inferno they are its Housing Bunkers, each with its own garrison
  * when attacked.
  * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`), and is
- * empty on an attacked yard; a wild monster camp has no workers.
+ * empty on an attacked yard; a wild monster camp has no workers, nor has a
+ * Moloch yard, which the caller marks `wild` since its save says Inferno.
  *
  * Every housed monster the combat tables know is drawn. A ground monster, the
  * Pokey among them, names no `movement` there (only flyers, burrowers and
@@ -323,6 +327,7 @@ export const yardLifeOf = (
   save: BaseLoadResponse,
   yard: Yard,
   view: LifeView = "own",
+  wild = false,
 ): YardLife => {
   const groups: LifeGroup[] = [];
   for (const [id, raw] of Object.entries(save.monsters?.housed ?? {})) {
@@ -369,7 +374,7 @@ export const yardLifeOf = (
     champions.push({ id: `G${t}`, level, sheetLevel: level });
   }
 
-  const workless = save.type === TRIBE_TYPE;
+  const workless = wild || save.type === TRIBE_TYPE;
   const life: YardLife = {
     groups,
     pens,
