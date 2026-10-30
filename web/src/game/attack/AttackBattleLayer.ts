@@ -2286,6 +2286,7 @@ export class AttackBattleLayer {
       const before = this.smokeStep.get(id) ?? 0;
       if (step === before) continue;
       this.smokeStep.set(id, step);
+      if (step >= 4) this.towerFx.fall(id);
       if (!this.smokePrimed) continue;
       const crossedDestroyed = step >= 4 && before < 4;
       const crossedDamaged = step >= 2 && before < 2;

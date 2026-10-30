@@ -1142,6 +1142,12 @@ body {
   padding: var(--space-4);
 }
 
+/* The loading window holds one short line, so on its own it is narrower than
+   the painted title sign and "Backyard Monsters" was cut to "Backyard Mo…". */
+.boot-panel {
+  width: min(340px, 100%);
+}
+
 /* The login screen keeps the game's name, the panel and the footer inside the
    window: on a short window the panel shrinks and scrolls inside itself, so
    no form's bottom is ever cut off. Auto margins centre the stack without
