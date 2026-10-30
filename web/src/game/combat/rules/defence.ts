@@ -92,8 +92,10 @@ export const academyRanks = (academy: unknown): MonsterRanks => {
 
 /**
  * The boosts a yard's `storedata` has running at `now` (unix seconds): each
- * {@link BOOST_ITEMS} entry whose end `e` is still ahead. An attacker brings
- * no towers, so its Tower Overdrive is left out. Undefined when none runs.
+ * {@link BOOST_ITEMS} entry whose end `e` is still ahead, as the whole seconds
+ * it has left, so the battle can stop it when it runs out (engine fidelity
+ * note 19). An attacker brings no towers, so its Tower Overdrive is left out.
+ * Undefined when none runs.
  *
  * @param storedata - The yard's `storedata`.
  * @param now - The battle's start, unix seconds.
@@ -110,17 +112,30 @@ export const storeBuffs = (
   for (const [item, buff] of Object.entries(BOOST_ITEMS)) {
     if (side === "attacker" && buff === "towerDamage") continue;
     const ends = Number(record(store[item])?.e);
-    if (Number.isFinite(ends) && ends > now) buffs[buff] = true;
+    if (!Number.isFinite(ends) || ends <= now) continue;
+    // `TOD` and `TODI` both feed the one `_towerOverdrive`, the later read
+    // winning (`STORE.as:2436-2444`).
+    buffs[buff] = Math.floor(ends - now);
   }
   return Object.keys(buffs).length > 0 ? buffs : undefined;
 };
 
-/** A side's boosts as stored or served: only the known ones, and only when on. */
+/**
+ * A side's boosts as stored or served: only the known ones, and only when on.
+ * A boost is `true` (on all battle, as stored before boosts could run out) or
+ * the whole seconds it had left.
+ */
 const parseSideBuffs = (raw: unknown): SideBuffs | undefined => {
   const value = record(raw);
   if (!value) return undefined;
   const buffs: { -readonly [K in keyof SideBuffs]: SideBuffs[K] } = {};
-  for (const buff of Object.values(BOOST_ITEMS)) if (value[buff] === true) buffs[buff] = true;
+  for (const buff of Object.values(BOOST_ITEMS)) {
+    const span = value[buff];
+    if (span === true) buffs[buff] = true;
+    else if (typeof span === "number" && Number.isFinite(span) && span >= 0) {
+      buffs[buff] = Math.floor(span);
+    }
+  }
   return Object.keys(buffs).length > 0 ? buffs : undefined;
 };
 

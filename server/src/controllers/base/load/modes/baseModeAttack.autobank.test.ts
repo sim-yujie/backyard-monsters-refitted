@@ -256,10 +256,11 @@ describe("the attack load freezes both sides' shop boosts (beta.4)", () => {
 
     const session = await attack(MAIN_BASEID);
 
+    // Each as the whole seconds it has left, so it can run out mid-battle.
     expect(session?.defenderForces?.buffs).toEqual({
-      defender: { towerDamage: true, monsterDamage: true },
+      defender: { towerDamage: 3_600, monsterDamage: 3_600 },
       // Their Tower Overdrive stays home: an attacker brings no towers.
-      attacker: { monsterArmour: true, monsterSpeed: true },
+      attacker: { monsterArmour: 3_600, monsterSpeed: 3_600 },
     });
   });
 
@@ -273,7 +274,7 @@ describe("the attack load freezes both sides' shop boosts (beta.4)", () => {
     outpost.storedata = { TOD: running() };
     outpost.attackid = 0;
     const again = await attack(OUTPOST_BASEID);
-    expect(again?.defenderForces?.buffs).toEqual({ defender: { towerDamage: true } });
+    expect(again?.defenderForces?.buffs).toEqual({ defender: { towerDamage: 3_600 } });
   });
 
   test("no boosts anywhere: the defence is served as before", async () => {

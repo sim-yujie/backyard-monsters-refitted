@@ -50,7 +50,15 @@ describe("IC5 Balthazar sheds its flying and ground flags (`Balthazar.as:10-15`)
   };
 
   it("is shot by a ground-only tower, though it flies", () => {
-    expect(watch(flung(cannonYard, { IC5: 1 }), 400).hurts.length).toBeGreaterThan(0);
+    // Shot at, that is: the Cannon's shell blasts up where Balthazar is drawn,
+    // 40 pixels high, and misses it, as Flash's does (`SHELL_BLASTS_WHERE_IT_LANDS`).
+    const battle = flung(cannonYard, { IC5: 1 });
+    let shots = 0;
+    for (let step = 0; step < 400 && !battle.over(); step += 1) {
+      battle.step();
+      shots += battle.recentEvents(battle.tick - 1).filter((event) => event.kind === "shot").length;
+    }
+    expect(shots).toBeGreaterThan(0);
   });
 
   it("where a plain flyer is not", () => {

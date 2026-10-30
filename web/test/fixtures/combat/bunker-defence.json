@@ -70,74 +70,76 @@
     "creepsKilled": 70,
     "championHp": null,
     "damagedBuildings": 2,
-    "rngDraws": 4671,
+    "rngDraws": 4739,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "a7830baaabca71b4"
+        "digest": "5a1cd2cade6d8660"
       },
       {
         "tick": 1600,
-        "digest": "8050507fda2a1df5"
+        "digest": "b2e68152a4ef45d8"
       },
       {
         "tick": 2400,
-        "digest": "41d018f4b292f9ea"
+        "digest": "2a3cc23561f03a53"
       },
       {
         "tick": 3200,
-        "digest": "a80a4d4f40227b85"
+        "digest": "2f893b4225afb8c8"
       },
       {
         "tick": 4000,
-        "digest": "6360f90d3bd9b63b"
+        "digest": "f15696d4a7ef038a"
       },
       {
         "tick": 4800,
-        "digest": "7abc91c4ca62aa3a"
+        "digest": "2fb1a565ae1c5583"
       },
       {
         "tick": 5600,
-        "digest": "74cec2bb841460f9"
+        "digest": "07e966e62a4212d4"
       },
       {
         "tick": 6400,
-        "digest": "35d430dfb657b455"
+        "digest": "60322272be0d0378"
       },
       {
         "tick": 7200,
-        "digest": "9f26992ec7550c6c"
+        "digest": "832b216b9dbc9529"
       },
       {
         "tick": 8000,
-        "digest": "8ad1025daa7460cb"
+        "digest": "fc882684048c317a"
       },
       {
         "tick": 8800,
-        "digest": "fdad5be7c48f8dbd"
+        "digest": "8c002a6a49a41850"
       },
       {
         "tick": 9600,
-        "digest": "5ecb98d432b02dca"
+        "digest": "230c4cd591e3eef3"
       },
       {
         "tick": 10400,
-        "digest": "510d8b5682338534"
+        "digest": "6d2f7cc32e0ee301"
       },
       {
         "tick": 11200,
-        "digest": "e5bfb50b53b7dc09"
+        "digest": "014db496d28580c4"
       },
       {
         "tick": 12000,
-        "digest": "3246e4c52d4b23b3"
+        "digest": "ebd0595c1d58cab2"
       }
     ],
-    "digest": "914488dd3c1dbddb",
+    "digest": "2de3cd0499385cea",
     "bunkerLosses": {
       "83": {
-        "C1": 2,
-        "C2": 2
+        "C2": 3
+      },
+      "84": {
+        "C8": 2
       },
       "85": {
         "C3": 8
@@ -145,11 +147,11 @@
     },
     "bunkerGarrisons": {
       "83": {
-        "C1": 8,
-        "C2": 2
+        "C1": 10,
+        "C2": 1
       },
       "84": {
-        "C8": 6
+        "C8": 4
       },
       "85": {},
       "86": {

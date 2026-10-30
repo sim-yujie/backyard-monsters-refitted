@@ -523,13 +523,6 @@ export const sightStrength = (since: number, rate: number): number | null => {
 export const SNIPER_TRAIL_TICKS = 34;
 /** Ticks the bright line of a Sniper's trail takes to fade after its round strikes. */
 const SNIPER_GLOW_TICKS = 19;
-/**
- * World px a tick the new look's Sniper round flies: four times Flash's ball,
- * so a shot across its range lands in about a tenth of a second and the flash,
- * the line and the strike read as one crack. Looks only: the engine has taken
- * the damage off on the tick it fired, and the wound shows when this lands.
- */
-export const SNIPER_ROUND_SPEED = 20;
 /** Ticks the wide sheath of light round a Sniper's line takes to fade after its round strikes. */
 const SNIPER_CRACK_TICKS = 10;
 /** The Sniper's strike: the yard's jolt, px, and how long it lasts, ticks. */
@@ -1045,7 +1038,6 @@ export class TowerFx {
     this.nextKey += 1;
     // The flak's twin barrels take turns: its shell is drawn out of one of them.
     const barrel = type === 115 && this.painted ? this.barrelOf(tower, from, aim) : undefined;
-    const flies = type === 21 && this.painted ? SNIPER_ROUND_SPEED : speed;
     // A 3D Cannon keeps its barrel raised and lobs its shell: up out of the muzzle and down on the creep.
     const tilt = type === 20 ? tower.info.aim?.tilt : undefined;
     const arc =
@@ -1059,7 +1051,10 @@ export class TowerFx {
       bornTick: event.tick,
       x: from.x,
       y: from.y,
-      speed: Math.max(flies, 1),
+      // At its shell's speed, the new look's Sniper round too: the engine flies
+      // the shell and hurts when it lands (engine fidelity note 1), so a faster
+      // round would strike well before its wound and its kill.
+      speed: Math.max(speed, 1),
       splash: stats?.splash ?? 0,
       aim,
       stepX: 0,

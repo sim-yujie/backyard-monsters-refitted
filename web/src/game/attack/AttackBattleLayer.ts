@@ -15,6 +15,7 @@ import {
   battleDefence,
   isSpurtzCannon,
   parseDefenderForces,
+  towerShellFlies,
   type Battle,
   type BattleVisualEvent,
   type CreepSnapshot,
@@ -2341,8 +2342,12 @@ export class AttackBattleLayer {
     }
     if (event.kind === "shot") {
       const key = this.towerFx.onShot(event, this.views.get(event.creepId)?.snapshot ?? undefined);
+      // A shell's wounds come from the engine on the tick it lands (fidelity
+      // note 1), so there is nothing to hold; holding would only claim another
+      // shell's landing on this tick and show it a flight late.
+      const type = this.yard.buildings.find((each) => each.id === event.towerId)?.type;
       this.ledger.shot(
-        key === null
+        key === null || (type !== undefined && towerShellFlies(type))
           ? null
           : {
               key,

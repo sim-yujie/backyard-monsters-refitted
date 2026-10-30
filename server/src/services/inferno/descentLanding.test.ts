@@ -20,7 +20,7 @@ const ATTACK_ID = 5151;
 const NEW_YARD_BASEID = "777001";
 /** The Descent defence the start served (no bunkers on the first yards). */
 const FORCES = { bunkers: {}, defenderLevels: { IC1: 2 }, defenderChampions: [] };
-const ARMY = { C1: 200 };
+const ARMY = { C1: 200, C10: 20 };
 
 const store = new Map<string, string>();
 let row: Partial<InfernoProgress> | null;
@@ -470,8 +470,10 @@ describe("the save that ends a Descent attack", () => {
   test("from yard 7 the server's replay burns surface monsters, as the client's fight does (WP 1.21)", async () => {
     row = progressRow(6);
     startSession("207");
-    const POKEYS = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C1: 80 } }] };
-    const ctx = finalSave("207", { tick: "12000", flinglog: JSON.stringify(POKEYS) });
+    // Twenty Crabatrons, which live long enough under the towers for the burn
+    // to show in the damage (7.29% burnt, 7.61% not); Pokeys die too fast to tell.
+    const CRABATRONS = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C10: 20 } }] };
+    const ctx = finalSave("207", { tick: "12000", flinglog: JSON.stringify(CRABATRONS) });
 
     expect(await run(ctx)).toBeNull();
     const input = inputs[0]!;

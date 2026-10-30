@@ -408,7 +408,7 @@ describe("the fight", () => {
         MOD: { q: 1, s: NOW - 90_000, e: NOW - 60 },
       };
       const { start } = await toFight();
-      expect(start.fight.defence.buffs).toEqual({ defender: { towerDamage: true, monsterArmour: true } });
+      expect(start.fight.defence.buffs).toEqual({ defender: { towerDamage: 3_600, monsterArmour: 3_600 } });
     },
     FIGHT_TIMEOUT_MS
   );

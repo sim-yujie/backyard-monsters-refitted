@@ -76,6 +76,20 @@ const quakes = (battle: ReturnType<typeof createBattle>, ticks: number) => {
   return out;
 };
 
+/** The ticks the tower fired on, and each hurt with its tick, over `ticks`. */
+const shotsAndHurts = (battle: ReturnType<typeof createBattle>, ticks: number) => {
+  const shots: number[] = [];
+  const hurts: { tick: number; amount: number }[] = [];
+  for (let step = 0; step < ticks && !battle.over(); step += 1) {
+    battle.step();
+    for (const event of battle.recentEvents(battle.tick - 1)) {
+      if (event.kind === "shot") shots.push(event.tick);
+      if (event.kind === "hurt") hurts.push({ tick: event.tick, amount: event.amount });
+    }
+  }
+  return { shots, hurts };
+};
+
 describe("the Quake Tower's numbers (`YARD_PROPS.as:6886`)", () => {
   it("reaches 160 to 210 and shakes for 1,100 to 4,400, re-arming at 15", () => {
     expect([1, 2, 3, 4, 5, 6].map((level) => towerStats(129, level)?.range)).toEqual([
@@ -206,11 +220,13 @@ describe("the Magma Tower (`INFERNO_MAGMA_TOWER.as`)", () => {
 
   it("fires 20 + 30 ticks in, then every rate x 2, its whole damage at full health", () => {
     // Up to tick 236, before the D.A.V.E. reaches the tower and dents it.
-    const hits = [...quakes(magmaBattle({ C12: 1 }), 236).entries()];
+    const { shots, hurts } = shotsAndHurts(magmaBattle({ C12: 1 }), 236);
     // `Props()` seeds the fire tick with `rate`; the first reload finds the
     // target and waits 30 (`BTOWER.as:184-190`); then one shot every 40.
-    expect(hits.map(([tick]) => tick)).toEqual([50, 90, 130, 170, 210]);
-    for (const [, amounts] of hits) expect(amounts).toEqual([180]);
+    expect(shots).toEqual([50, 90, 130, 170, 210]);
+    // Each `FIREBALL` lands some ticks on (fidelity note 1), all of it on the target.
+    expect(hurts.map((hurt) => hurt.amount)).toEqual(shots.map(() => 180));
+    hurts.forEach((hurt, at) => expect(hurt.tick).toBeGreaterThan(shots[at]!));
   });
 
   it("is weakened by its own health, as the other towers are (`:62`)", () => {
@@ -229,11 +245,11 @@ describe("the Magma Tower (`INFERNO_MAGMA_TOWER.as`)", () => {
     const hits = quakes(magmaBattle({ C1: 4 }), 400);
     for (const amounts of hits.values()) expect(amounts).toHaveLength(1);
     // The magma's `FlameEffect` hangs off `onProjectileCollision`, which
-    // nothing ever listens with (`:81-89`), so a creep takes nothing between shots.
-    const ticks = [...hits.keys()];
-    for (let at = 1; at < ticks.length; at += 1) {
-      expect(ticks[at]! - ticks[at - 1]!).toBeGreaterThanOrEqual(40);
-    }
+    // nothing ever listens with (`:81-89`), so a creep takes nothing between
+    // shots: no more hurts than shells, one apiece.
+    const { shots, hurts } = shotsAndHurts(magmaBattle({ C1: 4 }), 400);
+    expect(hurts.length).toBeGreaterThan(0);
+    expect(hurts.length).toBeLessThanOrEqual(shots.length);
   });
 
   it("burns a quarter harder under Tower Overdrive", () => {
