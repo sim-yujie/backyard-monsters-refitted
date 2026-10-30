@@ -637,7 +637,12 @@
   .yard-attack-lock__banner,
   .attack-strip,
   .attack-menu__list,
-  .raid-bar
+  .raid-bar,
+  .build-placing,
+  .ach-card,
+  .inferno-quake,
+  .descent-card,
+  .inferno-card
 ) {
   border-style: solid;
   border-color: transparent;
@@ -829,7 +834,7 @@
 
 /* The one thing to do on a card or bar (Stay protected, Apply, Send) is the
    window's painted plate too. */
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1) .btn--primary {
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing) .btn--primary {
   padding: 0 2px 3px;
   border-style: solid;
   border-color: transparent;
@@ -848,12 +853,12 @@
     1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
 }
 
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1) .btn--primary:hover:not(:disabled) {
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing) .btn--primary:hover:not(:disabled) {
   background: none;
   filter: brightness(1.08);
 }
 
-:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1) .btn--primary:disabled {
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing) .btn--primary:disabled {
   background: none;
   filter: grayscale(1) brightness(0.85);
 }
@@ -931,5 +936,22 @@
 
   :root[data-skin] .build-menu__tabs .tabs__tab {
     font-size: min(var(--text-sm), 2.9vw);
+  }
+
+  /* The bars' edge thinner too: the planner's bottom line keeps one row. */
+  :root[data-skin] {
+    --skin-bar-edge: 4px;
+    --skin-bar-width: 12px;
+  }
+
+  /* Map Room 1 fills the phone: the window's thinner frame. */
+  :root[data-skin="scrap"] .mr1 {
+    --skin-frame-width: 32px;
+    --skin-edge: 15px;
+  }
+
+  :root[data-skin="flash"] .mr1 {
+    --skin-frame-width: 30px;
+    --skin-edge: 16px;
   }
 }
