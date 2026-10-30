@@ -6400,7 +6400,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 5,
       },
       "1": {
-        st: 0,
+        st: 60142,
         id: 1,
         pr: 1,
         t: 1,
@@ -6411,7 +6411,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "2": {
-        st: 0,
+        st: 5670,
         id: 2,
         pr: 1,
         t: 2,
@@ -6581,7 +6581,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         t: 51,
       },
       "57": {
-        st: 0,
+        st: 5670,
         id: 57,
         pr: 1,
         t: 4,
@@ -6592,7 +6592,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "58": {
-        st: 0,
+        st: 5670,
         id: 58,
         pr: 1,
         t: 4,
@@ -6603,7 +6603,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "133": {
-        st: 0,
+        st: 5670,
         id: 133,
         pr: 1,
         t: 1,
@@ -6614,7 +6614,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "134": {
-        st: 0,
+        st: 5670,
         id: 134,
         pr: 1,
         t: 1,
@@ -6625,7 +6625,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "135": {
-        st: 0,
+        st: 5670,
         id: 135,
         pr: 1,
         t: 1,
@@ -6636,7 +6636,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "136": {
-        st: 0,
+        st: 60142,
         id: 136,
         pr: 1,
         t: 3,
@@ -6647,7 +6647,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "137": {
-        st: 0,
+        st: 5670,
         id: 137,
         pr: 1,
         t: 3,
@@ -6658,7 +6658,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "138": {
-        st: 0,
+        st: 60142,
         id: 138,
         pr: 1,
         t: 3,
@@ -6669,7 +6669,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "139": {
-        st: 0,
+        st: 5670,
         id: 139,
         pr: 1,
         t: 3,
@@ -6687,7 +6687,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "141": {
-        st: 0,
+        st: 60142,
         id: 141,
         pr: 1,
         t: 2,
@@ -6698,7 +6698,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "142": {
-        st: 0,
+        st: 60142,
         id: 142,
         pr: 1,
         t: 2,
@@ -6709,7 +6709,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "143": {
-        st: 0,
+        st: 5670,
         id: 143,
         pr: 1,
         t: 2,
@@ -6720,7 +6720,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "144": {
-        st: 0,
+        st: 60142,
         id: 144,
         pr: 1,
         t: 2,
@@ -6731,7 +6731,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "145": {
-        st: 0,
+        st: 5670,
         id: 145,
         pr: 1,
         t: 2,
@@ -6742,7 +6742,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "146": {
-        st: 0,
+        st: 5670,
         id: 146,
         pr: 1,
         t: 1,
@@ -6753,7 +6753,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "147": {
-        st: 0,
+        st: 5670,
         id: 147,
         pr: 1,
         t: 1,
@@ -8048,7 +8048,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         t: 17,
       },
       "719": {
-        st: 0,
+        st: 5670,
         id: 719,
         pr: 1,
         t: 4,
@@ -8059,7 +8059,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "720": {
-        st: 0,
+        st: 60142,
         id: 720,
         pr: 1,
         t: 4,
@@ -10693,7 +10693,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         t: 17,
       },
       "1681": {
-        st: 0,
+        st: 5670,
         id: 1681,
         pr: 1,
         t: 2,
@@ -10996,7 +10996,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 5,
       },
       "1": {
-        st: 0,
+        st: 60142,
         id: 1,
         pr: 1,
         t: 1,
@@ -11007,7 +11007,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "2": {
-        st: 0,
+        st: 5670,
         id: 2,
         pr: 1,
         t: 2,
@@ -11177,7 +11177,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         t: 51,
       },
       "57": {
-        st: 0,
+        st: 5670,
         id: 57,
         pr: 1,
         t: 4,
@@ -11188,7 +11188,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "58": {
-        st: 0,
+        st: 5670,
         id: 58,
         pr: 1,
         t: 4,
@@ -11199,7 +11199,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "133": {
-        st: 0,
+        st: 5670,
         id: 133,
         pr: 1,
         t: 1,
@@ -11210,7 +11210,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "134": {
-        st: 0,
+        st: 5670,
         id: 134,
         pr: 1,
         t: 1,
@@ -11221,7 +11221,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "135": {
-        st: 0,
+        st: 5670,
         id: 135,
         pr: 1,
         t: 1,
@@ -11232,7 +11232,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "136": {
-        st: 0,
+        st: 60142,
         id: 136,
         pr: 1,
         t: 3,
@@ -11243,7 +11243,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "137": {
-        st: 0,
+        st: 5670,
         id: 137,
         pr: 1,
         t: 3,
@@ -11254,7 +11254,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "138": {
-        st: 0,
+        st: 60142,
         id: 138,
         pr: 1,
         t: 3,
@@ -11265,7 +11265,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "139": {
-        st: 0,
+        st: 5670,
         id: 139,
         pr: 1,
         t: 3,
@@ -11283,7 +11283,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "141": {
-        st: 0,
+        st: 60142,
         id: 141,
         pr: 1,
         t: 2,
@@ -11294,7 +11294,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "142": {
-        st: 0,
+        st: 60142,
         id: 142,
         pr: 1,
         t: 2,
@@ -11305,7 +11305,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "143": {
-        st: 0,
+        st: 5670,
         id: 143,
         pr: 1,
         t: 2,
@@ -11316,7 +11316,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "144": {
-        st: 0,
+        st: 60142,
         id: 144,
         pr: 1,
         t: 2,
@@ -11327,7 +11327,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 6,
       },
       "145": {
-        st: 0,
+        st: 5670,
         id: 145,
         pr: 1,
         t: 2,
@@ -11338,7 +11338,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "146": {
-        st: 0,
+        st: 5670,
         id: 146,
         pr: 1,
         t: 1,
@@ -11349,7 +11349,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "147": {
-        st: 0,
+        st: 5670,
         id: 147,
         pr: 1,
         t: 1,
@@ -12644,7 +12644,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         t: 17,
       },
       "719": {
-        st: 0,
+        st: 5670,
         id: 719,
         pr: 1,
         t: 4,
@@ -12655,7 +12655,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         l: 3,
       },
       "720": {
-        st: 0,
+        st: 60142,
         id: 720,
         pr: 1,
         t: 4,
@@ -15289,7 +15289,7 @@ export const kozu: Record<TribeScale, SaveData> = {
         t: 17,
       },
       "1681": {
-        st: 0,
+        st: 5670,
         id: 1681,
         pr: 1,
         t: 2,
