@@ -579,7 +579,7 @@ def materials():
     M["gear"] = shiny("gear", (78, 78, 84), rough=0.38, metal=0.85, wear=(98, 98, 104), scale=6, dirt=0.15)
     M["red"] = shiny("red", (214, 6, 6), rough=0.22, metal=0.6, wear=(112, 2, 4), scale=3.5, dirt=0.3,
                      spec=0.25, coat=0.1, side=0.5)
-    M["redworn"] = shiny("redworn", (206, 10, 8), rough=0.34, metal=0.45, wear=(88, 4, 6), scale=5.0, dirt=0.45,
+    M["redworn"] = shiny("redworn", (206, 10, 8), rough=0.34, metal=0.45, wear=(40, 2, 3), scale=5.0, dirt=0.5,
                          spec=0.25, side=0.2, emit=0.18)
     M["dial"] = shiny("dial", (236, 232, 236), rough=0.5, metal=0.0, wear=(214, 210, 218), scale=3, dirt=0.0,
                       spec=0.4)
@@ -956,6 +956,19 @@ def beater():
 
 
 # ---------------------------------------------------------------------------------------------------- level 3
+def lumpy(ob, strength=0.14, size=0.9):
+    """Soft lumps (a worn cast part): subdivide, then push the surface in and out with a cloud noise."""
+    mo = ob.modifiers.new("sub", "SUBSURF")
+    mo.levels = mo.render_levels = 2
+    tx = bpy.data.textures.get("lumps") or bpy.data.textures.new("lumps", "CLOUDS")
+    tx.noise_scale = size
+    mo = ob.modifiers.new("lumps", "DISPLACE")
+    mo.texture = tx
+    mo.texture_coords = "GLOBAL"
+    mo.strength = strength
+    mo.mid_level = 0.5
+
+
 def stand():
     """Level 3: the red mixer stand. A plinth under the base with a foot out to the back right, the column up from
     it, the hinge block and the head over the drum; the beaters hang from the head into the hood's hole."""
@@ -972,6 +985,8 @@ def stand():
     cr = S.COLUMN_R
     lathe("columnfoot", [(0.0, 0.0), (1.42, 0.0), (1.5, 0.2), (1.48, 0.9), (1.36, 1.6), (1.12, 2.15), (0.82, 2.5),
                          (cr + 0.08, 2.75), (cr, 3.0), (0.0, 3.0)], (cx, cy, 0.0), M["redworn"], verts=40)
+    lumpy(bpy.data.objects["columnfoot"])
+    lumpy(bpy.data.objects["plinthfoot"])
     lathe("column", [(0.0, 2.6), (cr, 2.6), (cr, S.HEAD_Z0 - 0.6), (cr + 0.1, S.HEAD_Z0 - 0.3), (0.0, S.HEAD_Z0 + 0.1)],
           (cx, cy, 0.0), M["red"], verts=36)
     za = S.ARM3_Z
@@ -990,10 +1005,10 @@ def stand():
     zt = z1 - ht
     prof = [(zt + ht * math.cos(math.radians(t)), max(-hb + 0.08, -ht + ht * math.sin(math.radians(t))))
             for t in range(0, 91, 15)]
-    prof += [(16.6, 0.0), (16.0, 0.0), (15.4, 0.0), (14.8, 0.0), (14.3, 0.0), (13.9, 0.0), (13.6, 0.0), (13.4, -0.08),
-             (13.2, -0.3), (13.0, -0.6), (12.88, -0.85), (12.8, -1.05), (12.75, -1.22)]
-    bulge = {13.4: 0.6, 13.2: 0.45, 13.0: 0.3, 12.88: 0.18, 12.8: 0.08, 12.75: 0.0}
-    bulge.update({z: max(0.0, min(0.7, 0.7 * (zt - z) / (zt - 14.1))) for z, _ in prof if z >= 13.6})
+    prof += [(16.4, 0.0), (15.9, 0.0), (15.4, 0.0), (14.9, 0.0), (14.4, 0.0), (14.0, 0.0), (13.7, 0.0),
+             (13.5, -0.08), (13.3, -0.3), (13.1, -0.6), (12.98, -0.85), (12.9, -1.05), (12.85, -1.22)]
+    bulge = {13.5: 0.6, 13.3: 0.45, 13.1: 0.3, 12.98: 0.18, 12.9: 0.08, 12.85: 0.0}
+    bulge.update({z: max(0.0, min(0.7, 0.7 * (zt - z) / (zt - 14.2))) for z, _ in prof if z >= 13.7})
     def hring(d, bz, n=7):
         """The head's rounded-rectangle section: sides pushed out by bz on -X and -Y, rounding d."""
         xa, xb, ya, yb = x0 - bz + hb, x1 - hb, y0 - bz + hb, y1 - hb
@@ -1015,7 +1030,7 @@ def stand():
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     mesh_ob("head", bm, [M["red"]])
     # two thin seam rings round the fullest part
-    for j, (zs, bz) in enumerate(((13.72, 0.7), (14.08, 0.7))):
+    for j, (zs, bz) in enumerate(((13.82, 0.7), (14.17, 0.7))):
         bm = bmesh.new()
         ring = hring(0.035, bz)
         lo = [bm.verts.new((x, y, zs)) for x, y in ring]
@@ -1029,7 +1044,7 @@ def stand():
         mesh_ob(f"headseam{j}", bm, [M["red"]], bevel=0.03, segs=2)
     # the beaters: a chrome hub down from the head, whisk wires in the hole
     zc = ZD + S.CONE_RISE
-    cyl("beaterhub", 0.42, z0 - zc + 0.1, (0, 0, zc + 0.3), M["chrome"], verts=24, r2=0.55)
+    cyl("beaterhub", 0.24, z0 - zc + 0.1, (0, 0, zc + 0.3), M["darkmetal"], verts=24, r2=0.3)    # a thin dark shaft (Flash shows none)
     for k in range(8):
         a = 2 * math.pi * k / 8
         d = Vector((math.cos(a), math.sin(a), 0))
@@ -1038,11 +1053,11 @@ def stand():
              verts=8, smooth=True)
     # the bowl-lift arm: a steel bar from the column round the drum's right to a clamp on its side
     # (Flash's runs level out to the right, then back down to the drum's front right, just above the gold pipe)
-    pts = [Vector((cx + 0.45, cy - 0.1, za)), Vector((4.0, 4.1, za)), Vector((4.7, 3.0, za - 0.1)),
-           Vector((4.6, 2.0, za - 0.3)), P(24.0, S.DRUM_R + 0.25, za - 0.5)]
+    pts = [Vector((cx + 0.45, cy - 0.1, za)), Vector((4.0, 4.1, za)), Vector((4.7, 3.0, za - 0.2)),
+           Vector((4.6, 2.0, za - 0.7)), P(24.0, S.DRUM_R + 0.25, za - 1.2)]
     tube("bowlarm", pts, 0.3, M["fchrome"], verts=16, smooth=True)     # a round chrome bar, as Flash's
     ob = lathe("bowlclamp", [(0.0, -0.1), (0.36, -0.1), (0.4, 0.05), (0.34, 0.3), (0.0, 0.32)],
-               P(24.0, S.DRUM_R - 0.05, za - 0.5), M["steel"], verts=20)
+               P(24.0, S.DRUM_R - 0.05, za - 1.2), M["steel"], verts=20)
     track(ob, P(24.0, 1, 0))
 
     # the crank wheel on the head's right face
