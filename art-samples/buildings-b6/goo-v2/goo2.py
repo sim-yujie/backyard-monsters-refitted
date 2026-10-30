@@ -355,8 +355,8 @@ def funnel_mat(name, col, wear, shine=(236, 240, 246)):
     return t.m
 
 
-def goo_mat(name, dark, mid, light, rough=0.72, scale=2.2, bump=0.32, ao_min=0.2, spec=0.06, coat=0.0, rim=0.5,
-            florets=7.0):
+def goo_mat(name, dark, mid, light, rough=0.72, scale=2.2, bump=0.55, ao_min=0.2, spec=0.06, coat=0.0, rim=0.5,
+            florets=8.0):
     """Goo as Flash paints it: matte "broccoli", never shiny jelly. Bright green bulbs, each lit pale on top and falling
     to dark green at its edges (`rim`: darker where the surface turns away from the camera), near black in the hollows
     between them; inside each bulb small round florets (Voronoi cells, `florets` per unit), each a soft bump with a
