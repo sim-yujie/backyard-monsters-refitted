@@ -501,7 +501,7 @@ def spinner(name, center, normal_bearing, tilt, parts):
 
 # ------------------------------------------------------------------------------------------------------------ the model
 def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spec=0.5, coat=0.0, ao_min=0.5,
-          streak=0.0, side=0.0):
+          streak=0.0, side=0.0, glow=()):
     """Flash's Hatchery is a glossy render: polished gold, chrome, red enamel. Soft, broad reflections, a faint
     mottle (`wear` colour in soft patches), darker in the creases and low down, and faint vertical polish streaks."""
     if name in MATS:
@@ -530,6 +530,11 @@ def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spe
         for i in range(3):
             t.link(mr.outputs[0], grey.inputs[i])
         out = t.mix(out, grey.outputs[0], 1.0, "MULTIPLY")
+    for k, g in enumerate(glow):
+        fac = screen_spot(t, *g[:5])
+        out = t.mix(out, srgb(*g[5]), fac)
+        if k == 0:                 # the main sheen also glows a little, so the metal can't swallow it
+            t.set(**{"Emission Color": srgb(*g[5]), "Emission Strength": fac})
     out = t.grime(out, GROUND, 4.0, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rr, "metal": metal, "spec": spec})
     if coat:
@@ -541,6 +546,28 @@ def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spe
 
 
 
+def screen_spot(t, cx, cy, ax, ay, amount):
+    """A soft oval at Flash pixel (cx, cy) with half-axes (ax, ay) px, as seen through the camera (which covers FRAME):
+    for a painted highlight that must sit where Flash draws it, e.g. the white sheen across the dish."""
+    tc = t.n("ShaderNodeTexCoord")
+    sep = t.n("ShaderNodeSeparateXYZ")
+    t.link(tc.outputs["Window"], sep.inputs[0])
+    w, h = FRAME[2] - FRAME[0], FRAME[3] - FRAME[1]
+    comb = t.n("ShaderNodeCombineXYZ")
+    for i, (scale, off) in enumerate(((w / ax, (FRAME[0] - cx) / ax), (-h / ay, (FRAME[3] - cy) / ay))):
+        m = t.n("ShaderNodeMath", operation="MULTIPLY_ADD")
+        t.link(sep.outputs[i], m.inputs[0])
+        m.inputs[1].default_value, m.inputs[2].default_value = scale, off
+        t.link(m.outputs[0], comb.inputs[i])
+    ln = t.n("ShaderNodeVectorMath", operation="LENGTH")
+    t.link(comb.outputs[0], ln.inputs[0])
+    mr = t.n("ShaderNodeMapRange", interpolation_type="SMOOTHSTEP")
+    mr.inputs[1].default_value, mr.inputs[2].default_value = 1.0, 0.0
+    mr.inputs[3].default_value, mr.inputs[4].default_value = 0.0, amount
+    t.link(ln.outputs["Value"], mr.inputs[0])
+    return mr.outputs[0]
+
+
 def materials():
     M = {}
     # the Hatchery's gold, purple drum and pink top, so the two buildings read as one set
@@ -549,19 +576,27 @@ def materials():
     M["golddark"] = shiny("golddark", (176, 96, 20), rough=0.34, metal=0.75, wear=(208, 136, 46), scale=1.5, dirt=0.45)
     M["drum"] = shiny("drum", (84, 68, 88), rough=0.4, metal=0.3, wear=(100, 84, 106), scale=2.0, dirt=0.2,
                       spec=0.45)
-    M["drumtop"] = shiny("drumtop", (176, 136, 172), rough=0.32, metal=0.2, wear=(164, 124, 162), scale=1.2, dirt=0.15,
+    M["drumtop"] = shiny("drumtop", (184, 148, 182), rough=0.32, metal=0.2, wear=(164, 124, 162), scale=1.2, dirt=0.15,
                          spec=0.5, side=0.6)
     M["chrome"] = shiny("chrome", (214, 220, 228), rough=0.2, metal=1.0, wear=(190, 196, 206), scale=4, dirt=0.15)
-    M["pedestal"] = shiny("pedestal", (196, 194, 202), rough=0.32, metal=0.15, wear=(166, 164, 174), scale=3, dirt=0.1,
-                          side=0.35)
+    M["pedestal"] = shiny("pedestal", (158, 166, 182), rough=0.34, metal=0.15, wear=(144, 146, 152), scale=3, dirt=0.1,
+                          side=0.6)
     M["rim"] = shiny("rim", (176, 196, 214), rough=0.25, metal=0.9, wear=(150, 170, 192), scale=4, dirt=0.1)
-    M["port"] = shiny("port", (184, 190, 204), rough=0.3, metal=0.6, wear=(156, 164, 180), scale=3, dirt=0.1, side=0.4)
-    M["dish"] = shiny("dish", (186, 212, 228), rough=0.22, metal=0.9, wear=(150, 176, 198), scale=1.2, dirt=0.05,
-                      side=-0.3, streak=0.3)
-    M["bowl"] = shiny("bowl", (255, 168, 28), rough=0.16, metal=0.9, side=0.4, wear=(252, 196, 60), scale=1.5,
-                      dirt=0.05, streak=0.3)
+    M["port"] = shiny("port", (222, 228, 238), rough=0.22, metal=0.35, wear=(184, 194, 210), scale=3, dirt=0.1, side=0.4,
+                      coat=0.5)
+    # the dish: steel blue, darker up and to the left, with Flash's white sheen right of the hub; less mirror-like so
+    # the gold hub and arm don't show a blurred reflection Flash doesn't have
+    M["dish"] = shiny("dish", (134, 158, 182), rough=0.3, metal=0.6, wear=(108, 130, 156), scale=1.2, dirt=0.05,
+                      side=-0.45, glow=((27.0, -26.0, 14.0, 4.5, 0.45, (240, 244, 246)),
+                                        (24.0, -21.0, 18.0, 10.0, 0.35, (214, 228, 236))), streak=0.3)
+    # Flash's bowl and feet are bright orange gold (foot ~175,112,25), not dark brass: less metal, a clear coat
+    M["bowl"] = shiny("bowl", (255, 160, 18), rough=0.24, metal=0.45, side=0.45, wear=(252, 196, 50), scale=1.5,
+                      dirt=0.05, streak=0.3, coat=0.3)
+    M["leg"] = shiny("leg", (250, 150, 20), rough=0.24, metal=0.4, side=0.45, wear=(255, 200, 60), scale=1.2,
+                     dirt=0.05, streak=0.3, coat=0.3)
+    M["tick"] = flat("tick", (128, 80, 40), rough=0.9)
     M["dishback"] = shiny("dishback", (120, 132, 150), rough=0.35, metal=0.8, wear=(98, 110, 128), scale=2, dirt=0.2)
-    M["rivet"] = shiny("rivet", (150, 158, 172), rough=0.25, metal=0.9, wear=(120, 128, 142), scale=6, dirt=0.05)
+    M["rivet"] = shiny("rivet", (104, 110, 122), rough=0.25, metal=0.9, wear=(120, 128, 142), scale=6, dirt=0.05)
     M["wire"] = flat("wire", (52, 60, 72), rough=0.5, metal=0.5)
     M["hole"] = flat("hole", (14, 10, 14), rough=1.0)
     return M
@@ -646,14 +681,14 @@ def rounded_poly(corners, rad, n=8):
 # ---------------------------------------------------------------------------------------------------- the body
 def drum():
     R = S.DRUM_R
-    # the band (dark purple) with a flat underside, the pink top with a rounded edge and a low dome
+    # the band (dark purple) with a flat underside, the pink top with a rounded edge and a shallow basin round the pedestal
     lathe("drumband", [(S.BOWL_R - 0.05, ZB + 0.02), (R - 0.06, ZB), (R, ZB + 0.06), (R, ZT - 0.16)], (0, 0, 0),
           M["drum"], verts=96)
-    lathe("drumtop", [(R - 0.03, ZT - 0.16), (R - 0.06, ZT - 0.04), (R - 0.22, ZT), (R * 0.6, ZT + S.TOP_DOME * 0.7),
-                      (0.0, ZT + S.TOP_DOME)], (0, 0, 0), M["drumtop"], verts=96)
+    lathe("drumtop", [(R - 0.03, ZT - 0.16), (R - 0.06, ZT - 0.04), (R - 0.22, ZT), (R * 0.86, ZT - 0.05),
+                      (R * 0.68, ZT + S.TOP_DOME * 0.85), (0.0, ZT + S.TOP_DOME)], (0, 0, 0), M["drumtop"], verts=96)
     ring("drumrimtop", R - 0.01, 0.06, M["rim"], z=ZT - 0.13, n=128)
     ring("drumrimbot", R + 0.005, 0.07, M["rim"], z=ZB + 0.08, n=128)
-    # eight portholes round the band: a silver ring, a dark hole, a small grey ring in the hole
+    # eight portholes round the band: a bright silver ring, a dark hole, a small grey boss in the hole
     for i in range(S.PORT_N):
         th = S.FRONT + i * 360.0 / S.PORT_N
         e = bpy.data.objects.new("port%d" % i, None)
@@ -661,8 +696,8 @@ def drum():
         e.location = P(th, R - 0.07, S.PORT_Z)
         track(e, P(th, 1.0, 0.0), "Y")
         ring("portring%d" % i, S.PORT_R, S.PORT_W, M["port"], parent=e, n=40)
-        cyl("porthole%d" % i, S.PORT_R - 0.04, 0.1, (0, 0, -0.06), M["hole"], parent=e, verts=32, bevel=0.0)
-        ring("portinner%d" % i, 0.17, 0.045, M["rim"], parent=e, z=0.03, n=24)
+        cyl("porthole%d" % i, S.PORT_R - 0.04, 0.085, (0, 0, 0.0), M["hole"], parent=e, verts=32, bevel=0.0)
+        cyl("portinner%d" % i, 0.11, 0.12, (0, 0, 0.0), M["rim"], parent=e, verts=24, bevel=0.02)
     # small gold knobs on the top rim
     for th in S.NUB_TH:
         e = bpy.data.objects.new("nubpin", None)
@@ -672,8 +707,10 @@ def drum():
         lathe("nub", [(0.0, -0.05), (0.14, -0.05), (0.15, 0.04), (0.1, 0.12), (0.0, 0.14)], (0, 0, 0), M["gold"],
               parent=e, verts=16)
     # the faint gold scale low on the band's front
-    for th in S.TICK_TH:
-        box("drumtick", (0.012, 0.045, 0.34), P(th, R - 0.004, ZB + 0.17), M["golddark"], rot=(0, 0, th), bevel=0.0)
+    # (thin dull orange lines barely proud of the band, long and short in turn, like Flash's; not shiny pins)
+    for j, th in enumerate(S.TICK_TH):
+        h = 0.32 if j % 2 else 0.22
+        box("drumtick", (0.008, 0.06, h), P(th, R + 0.002, ZB + 0.24), M["tick"], rot=(0, 0, th), bevel=0.0)
 
 
 def bowl():
@@ -690,21 +727,23 @@ def legs():
         k = P(th, S.LEG_D, S.KNUCKLE_Z)
         # the strut: out of the bowl to the knuckle, and a bracket up to the band's bottom
         tube("legstrut%d" % i, [P(th, S.BOWL_R * 0.8, S.KNUCKLE_Z - 0.15), P(th, S.LEG_D - 0.15, S.KNUCKLE_Z)], 0.15,
-             M["bowl"], verts=12)
+             M["leg"], verts=12)
         tube("leggusset%d" % i, [P(th, S.DRUM_R - 0.3, ZB + 0.02), P(th, S.LEG_D - 0.3, S.KNUCKLE_Z + 0.08)], 0.09,
-             M["bowl"], verts=12)
-        # the teardrop foot (round bottom, thin neck), a cup collar and the knuckle ball on top
+             M["leg"], verts=12)
+        # the teardrop foot: a blunt round bottom, fattest a fifth of the way up, narrowing evenly to a small knot
+        # that flares into a cup round the knuckle ball (Flash: no waist, no separate collar)
         e = bpy.data.objects.new("leg%d" % i, None)
         link(e)
         e.location = (k.x, k.y, 0.0)
         fr = S.FOOT_R
-        lathe("legfoot%d" % i, [(0.0, 0.0), (fr * 0.6, 0.08), (fr * 0.88, 0.28), (fr, 0.62), (fr * 0.94, 0.95),
-                                 (fr * 0.79, 1.4), (fr * 0.63, 1.9), (fr * 0.52, 2.3), (0.19, 2.58), (0.24, 2.68),
-                                 (0.4, 2.8), (0.43, 2.95), (0.36, 3.1), (0.0, 3.13)],
-              (0, 0, 0), M["bowl"], parent=e, verts=32)
+        lathe("legfoot%d" % i, [(0.0, 0.0), (fr * 0.62, 0.03), (fr * 0.9, 0.15), (fr * 0.99, 0.36), (fr, 0.52),
+                                 (fr * 0.96, 0.78), (fr * 0.84, 1.15), (fr * 0.66, 1.6), (fr * 0.5, 2.05),
+                                 (fr * 0.39, 2.36), (0.2, 2.6), (0.25, 2.76), (0.29, 2.94), (0.3, 3.08), (0.25, 3.13),
+                                 (0.19, 3.07), (0.0, 3.0)],
+              (0, 0, 0), M["leg"], parent=e, verts=32)
         kr = S.KNUCKLE_R
-        lathe("legknuckle%d" % i, [(0.0, -kr), (kr * 0.7, -kr * 0.7), (kr, 0.0), (kr * 0.7, kr * 0.7), (0.0, kr)],
-              (0, 0, S.KNUCKLE_Z), M["bowl"], parent=e, verts=24)
+        ball = [(kr * math.sin(math.radians(a)), -kr * math.cos(math.radians(a))) for a in range(0, 181, 15)]
+        lathe("legknuckle%d" % i, ball, (0, 0, S.KNUCKLE_Z), M["leg"], parent=e, verts=24)
 
 
 def ray_plane(sx, sy, p0, nrm):

@@ -19,11 +19,11 @@ FRONT = -45.0               # the bearing that faces the viewer
 # the drum
 DRUM_R = 3.75
 DRUM_Z0, DRUM_Z1 = 3.79, 6.15     # the band's bottom and the top's edge
-TOP_DOME = 0.06                  # the pink top rises this much to the middle
-PORT_N, PORT_R, PORT_W = 8, 0.43, 0.13    # portholes: how many, ring radius, ring thickness
+TOP_DOME = -0.24                 # the pink top dips this much round the pedestal (a shallow basin, as Flash shades it)
+PORT_N, PORT_R, PORT_W = 8, 0.37, 0.12    # portholes: how many, ring radius, ring thickness
 PORT_Z = 4.97
 NUB_TH = (-135.0, 45.0, 135.0)   # small gold knobs on the top rim (screen left, right, back)
-TICK_TH = (-63.0, -57.0, -51.0, -45.0, -39.0, -33.0)  # the faint gold scale marks low on the band's front
+TICK_TH = (-69.0, -63.0, -57.0, -51.0, -45.0, -39.0, -33.0)  # the faint gold scale marks low on the band's front
 
 # the gold bowl under the drum
 BOWL_R, BOWL_DEPTH = 3.5, 3.07  # its radius at the drum's bottom and how far down it reaches
@@ -31,13 +31,13 @@ BOWL_R, BOWL_DEPTH = 3.5, 3.07  # its radius at the drum's bottom and how far do
 # the legs
 LEG_TH = (FRONT - 53.0, FRONT + 53.0, FRONT + 180.0)   # three legs; Flash shows the front two
 LEG_D = 4.45                     # the foot's axis from the drum's axis
-KNUCKLE_Z, KNUCKLE_R = 3.46, 0.37
-FOOT_R, FOOT_TOP = 0.41, 2.97    # the teardrop's fattest radius, where its neck meets the knuckle's collar
+KNUCKLE_Z, KNUCKLE_R = 3.26, 0.27
+FOOT_R, FOOT_TOP = 0.47, 2.97    # the teardrop's fattest radius, where its neck meets the knuckle's collar
 
 # the top: pedestal, post, yoke, dish
 PED_X, PED_Y = -0.4, 0.4         # the pedestal's middle (a little to the back)
-PED_R, PED_H = 1.6, 0.55
-POST_R, POST_H = 0.27, 0.6
+PED_R, PED_H = 1.6, 0.7
+POST_R, POST_H = 0.27, 0.75
 AXLE_R, AXLE_L = 0.48, 1.45      # the yoke's crosswise axle (along world Y)
 DISH_R, DISH_DEPTH = 3.08, 1.2
 DISH_C = (11.0, -31.5)           # Flash pixel of the rim's middle
