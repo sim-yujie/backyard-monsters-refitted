@@ -137,6 +137,26 @@ describe("IdleWatch", () => {
     expect(watch.state).toBe(IdleState.DISCONNECTED);
   });
 
+  it("disconnects when the protection runs out, input or none, but not during an attack", () => {
+    watch.hold();
+    vi.advanceTimersByTime(MINUTE);
+    input.dispatchEvent(new Event("pointermove"));
+    const undefer = watch.defer();
+    watch.lapse(true);
+    expect(events).toEqual([]);
+    undefer();
+    expect(events).toEqual(["disconnect"]);
+  });
+
+  it("stays connected when a real action renews the protection first", () => {
+    watch.hold();
+    const undefer = watch.defer();
+    watch.lapse(true);
+    watch.lapse(false);
+    undefer();
+    expect(events).toEqual([]);
+  });
+
   describe("an attack or a replay", () => {
     it("holds the countdown and the disconnect off for as long as it lasts", () => {
       watch.hold();
