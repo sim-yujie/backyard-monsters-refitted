@@ -94,6 +94,12 @@ export interface ProtectionWatchOptions {
    * at work in the Yard Planner carries the plan ({@link ProtectionWatch.active}).
    */
   readonly stay: (plan?: string) => Promise<ProtectionAnswer>;
+  /**
+   * The protection ran out (true) on a held screen, or a real action renewed
+   * it (false). The owner's rule (30 Oct): a player whose protection has run
+   * out is disconnected, as the idle disconnect does (`IdleWatch.lapse`).
+   */
+  readonly onLapse?: (lapsed: boolean) => void;
   /** Who is signed in; a new account starts the clock again. */
   readonly account?: () => string | null;
   /** Milliseconds; `Date.now` by default. */
@@ -104,6 +110,7 @@ export class ProtectionWatch {
   readonly timings: ProtectionTimings;
   private readonly onShow: (endsAt: number) => void;
   private readonly onHide: () => void;
+  private readonly onLapse: ((lapsed: boolean) => void) | undefined;
   private readonly sendStay: (plan?: string) => Promise<ProtectionAnswer>;
   private readonly account: () => string | null;
   private readonly now: () => number;
@@ -123,12 +130,14 @@ export class ProtectionWatch {
   /** No {@link active} tap before this, a browser-clock time: the last one failed. */
   private activeRetryAt = 0;
   private shown = false;
+  private lapsed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: ProtectionWatchOptions) {
     this.timings = options.timings ?? PROTECTION_TIMINGS;
     this.onShow = options.onShow;
     this.onHide = options.onHide;
+    this.onLapse = options.onLapse;
     this.sendStay = options.stay;
     this.account = options.account ?? (() => null);
     this.now = options.now ?? Date.now;
@@ -254,17 +263,27 @@ export class ProtectionWatch {
     const promptAt = this.promptAt();
     if (this.stopped || this.holders === 0 || promptAt === null) {
       this.setShown(false);
+      this.setLapsed(false);
       return;
     }
     const now = this.now();
+    const endAt = promptAt + this.timings.warningMs;
     const showAt = Math.max(promptAt, this.resumeAt);
+    this.setLapsed(now >= endAt);
     if (now < showAt) {
       this.setShown(false);
-      this.timer = setTimeout(this.schedule, showAt - now);
+      this.timer = setTimeout(this.schedule, (now < endAt ? Math.min(showAt, endAt) : showAt) - now);
       return;
     }
     this.setShown(!this.suppressed);
+    if (now < endAt) this.timer = setTimeout(this.schedule, endAt - now);
   };
+
+  private setLapsed(on: boolean): void {
+    if (on === this.lapsed) return;
+    this.lapsed = on;
+    this.onLapse?.(on);
+  }
 
   private setShown(on: boolean): void {
     if (on === this.shown) return;

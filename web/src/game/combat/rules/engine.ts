@@ -67,7 +67,7 @@ import {
 } from "./vacuum.js";
 import type { VacuumPlan } from "./vacuum.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
-import { buildPathGrid, pointTarget } from "./grid.js";
+import { buildPathGrid, cellOf, pointTarget } from "./grid.js";
 import {
   cannotBeat,
   exposure,
@@ -96,6 +96,8 @@ import {
   RETREAT_GRACE_SECONDS,
   STORAGE_TYPES,
   TARGET_GROUP,
+  SPECIALIST_DAMAGE_MULTIPLIER,
+  HUNT_DAMAGE_MULTIPLIER,
   TOWER_ACQUIRE_TICKS,
   TOWER_REARM_MULTIPLIER,
   TRAP_RETARGET_TICKS,
@@ -892,6 +894,8 @@ export interface CreepSnapshot {
   readonly blinking?: boolean;
   /** Fang's venom stacks on it; absent when it is not poisoned (issue #352). */
   readonly poisonStacks?: number;
+  /** Malphus mid-hop over a wall: ticks since it took off, under {@link HOP_TICKS}. */
+  readonly hop?: number;
 }
 
 /**
@@ -1342,6 +1346,19 @@ interface Creep {
    * for every other creep and for a Hybrid champion, which picks as Flash's.
    */
   weights: StanceWeights | null;
+  /**
+   * `k_sBHVR_HUNT` (`CreepBase.as:398-402`): an attacker whose target group
+   * was 6, Balthazar. It keeps the behaviour after its group falls through
+   * to 1, so its blows at a creep stay triple (`:884-886`).
+   */
+  hunts: boolean;
+  /**
+   * The cage slot of the penned champion a hunter is after (`findHuntingTargets`
+   * lists `CREATURES._guardian` in its cage too, `MonsterBase.as:960-965`), or -1.
+   */
+  huntPen: number;
+  /** Malphus: the tick its hop over a wall began (`CreepBase.as:1503-1528`), or -1. */
+  hopStart: number;
 }
 
 /** A {@link ChampionLesson} as the battle builds it (issue #219). */
@@ -1405,6 +1422,9 @@ const NO_ABILITIES = {
   looking: false,
   surfaceChase: false,
   weights: null,
+  hunts: false,
+  huntPen: -1,
+  hopStart: -1,
 } as const;
 
 interface DefenderHome {
@@ -1437,6 +1457,8 @@ interface CageSlot {
   pen: CagePen | null;
   /** Its health and report tally (issue #22). */
   readonly report: DefenderChampionReport;
+  /** The hunter that struck it in its cage, by creep id, or -1: it comes out at it. */
+  provokedBy: number;
 }
 
 interface Tower {
@@ -1770,6 +1792,24 @@ const creepReach = (range: number): number => Math.max(range * range, 2500);
 const CLOSE_FIGHT_SQUARED = 2500;
 
 /**
+ * Balthazar is at a building under 50 screen px from its `_position`, and
+ * otherwise flies to a point `30 + Math.random() * 10` px out from it
+ * (`MonsterBase.as:1130-1141`); the engine takes that radius's middle.
+ */
+const BALTHAZAR_REACH = 50;
+const BALTHAZAR_STOP = 35;
+
+/**
+ * Malphus's hop (`CreepBase.as:1508-1526`): a 0.4 s tween 60 px up, then a
+ * 0.4 s bounce back down. `_jumpingUp` holds for the first, `_jumping` for
+ * both, and `move()` speeds it up by three, then by two (`:1471-1478`).
+ */
+export const HOP_UP_TICKS = ticks(0.4);
+export const HOP_TICKS = ticks(0.8);
+const HOP_UP_SPEED = 3;
+const HOP_DOWN_SPEED = 2;
+
+/**
  * The creeps one can fight (issue #195): the other side, on the ground, and in
  * the air too unless it is a ground creep that swings in melee.
  */
@@ -2029,6 +2069,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         champion: null,
         pen: null,
         report: { t: caged.t, hp: cagedHealth(caged), damageDealt: 0, kills: 0 },
+        provokedBy: -1,
       }))
     : [];
   /** The slot of a caged champion's creep, or undefined for any other creep. */
@@ -2573,6 +2614,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       provokedBy: -1,
       ...NO_ABILITIES,
       rank,
+      // Target group 6 hunts (`CreepBase.as:198-199`); a defender never does.
+      hunts: mode === "attack" && targetGroup === TARGET_GROUP.CHAMPIONS,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -3561,8 +3604,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.waypointIndex = 0;
   };
 
-  /** Returns false when the creep found nothing and turned for home. */
-  const findTarget = (creep: Creep): boolean => {
+  /**
+   * Returns false when the creep found nothing and turned for home.
+   *
+   * `relook` is the look a monster takes every {@link RETARGET_TICKS} while it
+   * still has a target: its new route is only taken under `setWaypoints`'
+   * rule ({@link routeTo}).
+   */
+  const findTarget = (creep: Creep, relook = false): boolean => {
     let chosen: EngineBuilding | null;
     if (creep.champion) {
       // A champion's own lists (`ChampionBase.findTarget`, `Krallen.findTarget`, issue #222).
@@ -3580,19 +3629,78 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
             scoring,
           );
     } else {
+      // Group 6 hunts first, while it still is group 6 (`MonsterBase.as:1041-1049`).
+      if (creep.hunts && creep.targetGroup === TARGET_GROUP.CHAMPIONS) takeHuntTarget(creep);
       const result = findBuildingTarget(yard, creep.x, creep.y, creep.targetGroup, targetContext);
       if (result.fellThrough && creep.targetGroup !== TARGET_GROUP.TOWERS) {
         creep.targetGroup = TARGET_GROUP.ALL;
       }
       chosen = result.closest;
     }
+    const quarry = creep.hunts && (creep.targetCreep >= 0 || creep.huntPen >= 0);
     if (!chosen) {
+      // `if (!closestBuilding && !this._targetCreep)` (`MonsterBase.as:1087-1089`).
+      if (quarry) return true;
       // Nothing left to attack: `changeModeRetreat` (`MonsterBase.as:1089`).
       creep.behaviour = "retreat";
       return false;
     }
-    routeTo(creep, chosen);
+    if (quarry) {
+      // Balthazar heads for a building only once it has no creep (`MonsterBase.as:1130`).
+      creep.targetBuilding = chosen.id;
+      return true;
+    }
+    routeTo(creep, chosen, relook && !creep.champion);
     return true;
+  };
+
+  /** How many defenders `findHuntingTargets` lists at most (`MonsterBase.as:955`). */
+  const HUNT_LIST = 10;
+
+  /**
+   * `findHuntingTargets` (`MonsterBase.as:943-981`): the nearest, on screen, of
+   * the first ten defenders out on the field and the cage's champions, the one
+   * still in its cage included (`:960-971`). Flash leaves `_atTarget` as it
+   * was, so a Balthazar that was at a building would strike its new quarry
+   * from there; here it flies to it first.
+   */
+  const takeHuntTarget = (creep: Creep): void => {
+    let nearest = Infinity;
+    let foe: Creep | null = null;
+    let pen = -1;
+    let listed = 0;
+    for (const other of creeps) {
+      if (listed >= HUNT_LIST) break;
+      if (!other.friendly || other.champion || other.gone || other.hp <= 0) continue;
+      if (other.behaviour !== "defend" && other.behaviour !== "bunker") continue;
+      listed += 1;
+      if (!other.targetable || !canHit(creep.hitFlags, other.flags)) continue;
+      const squared = screenDistanceSquared(creep.ix, creep.iy, other.ix, other.iy);
+      if (squared < nearest) {
+        nearest = squared;
+        foe = other;
+        pen = -1;
+      }
+    }
+    for (let at = 0; at < cageSlots.length; at += 1) {
+      const slot = cageSlots[at] as CageSlot;
+      const out = slot.champion;
+      const where = slot.pen ?? (out && out.hp > 0 && !out.gone && out.targetable ? out : null);
+      if (!where || slot.report.hp <= 0) continue;
+      const squared = screenDistanceSquared(creep.ix, creep.iy, where.ix, where.iy);
+      if (squared < nearest) {
+        nearest = squared;
+        foe = slot.pen ? null : out;
+        pen = slot.pen ? at : -1;
+      }
+    }
+    if (!foe && pen < 0) return;
+    creep.targetCreep = foe ? foe.id : -1;
+    creep.huntPen = pen;
+    creep.atTarget = false;
+    creep.attacking = false;
+    creep.waypoints = [];
+    creep.waypointIndex = 0;
   };
 
   /**
@@ -3727,12 +3835,26 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return { features, liveTower, shareAt };
   };
 
-  /** Sets a creep on its way to a building: straight for a flyer, by the grid on foot. */
-  const routeTo = (creep: Creep, chosen: EngineBuilding): void => {
-    creep.targetBuilding = chosen.id;
-    if (creep.champion && creep.flying) creep.looking = true;
-    creep.waypointIndex = 0;
+  /**
+   * Sets a creep on its way to a building: straight for a flyer, by the grid on foot.
+   *
+   * With `keep`, a creep on foot that is already walking to a target takes the
+   * new route only under `setWaypoints`' rule (`MonsterBase.as:1255-1270`,
+   * `ChampionBase.as:704-716`): when it has fewer waypoints than the old one
+   * has left, and never when it ends at a wall, unless the creep is a wall
+   * specialist. Otherwise it walks on as it was, target and all. A flyer and a
+   * burrower are set on their target without a route (`MonsterBase.as:1093-1158`),
+   * so the rule never reaches them.
+   */
+  const routeTo = (creep: Creep, chosen: EngineBuilding, keep = false): void => {
     if (creep.flying) {
+      creep.targetBuilding = chosen.id;
+      if (creep.champion) creep.looking = true;
+      creep.waypointIndex = 0;
+      if (!creep.champion && creep.monsterId === BALTHAZAR_ID) {
+        flyBalthazarTo(creep, chosen);
+        return;
+      }
       creep.waypoints = [{ x: chosen.x, y: chosen.y }];
       // Under 170 screen px from `_position` (`ChampionBase.as:662`).
       const at = screenPointOf(creep.ix, creep.iy);
@@ -3743,10 +3865,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       { fromX: creep.ix, fromY: creep.iy, target: chosen, ignoreWalls: creep.ignoreWalls },
       rng,
     );
-    if (route.blockedBy >= 0) {
-      const wall = buildingOf(route.blockedBy);
-      if (wall && wall.hp > 0) creep.targetBuilding = wall.id;
+    const blocker = route.blockedBy >= 0 ? buildingOf(route.blockedBy) : null;
+    const wall = blocker && blocker.hp > 0 ? blocker : null;
+    if (keep && !creep.burrows && creep.targetBuilding >= 0) {
+      const left = creep.waypoints.length - creep.waypointIndex;
+      const shorter = route.waypoints.length < left;
+      if (!shorter || (wall && creep.targetGroup !== TARGET_GROUP.WALLS)) return;
     }
+    creep.targetBuilding = wall ? wall.id : chosen.id;
+    creep.waypointIndex = 0;
     if (route.waypoints.length > 1) {
       // The first waypoint is the creep's own cell; walking to it is a no-op.
       creep.waypoints = route.waypoints.slice(1);
@@ -3754,6 +3881,29 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.waypoints = [{ x: chosen.x, y: chosen.y }];
     }
     creep.atTarget = false;
+  };
+
+  /**
+   * Balthazar's approach to a building (`MonsterBase.as:1128-1143`): it is at
+   * it under 50 screen px from `_position`; farther off it flies to a point 30
+   * to 40 px out from there, towards itself, and is at it once that point is
+   * reached ({@link moveCreep}). Straight there, by fidelity note 4: the
+   * radius is the middle of Flash's 30 to 40, and there is no ±20° swing.
+   */
+  const flyBalthazarTo = (creep: Creep, chosen: EngineBuilding): void => {
+    const at = screenPointOf(creep.ix, creep.iy);
+    const across = at.x - chosen.sx;
+    const down = at.y - chosen.sy;
+    const away = Math.sqrt(across * across + down * down);
+    creep.atTarget = away < BALTHAZAR_REACH;
+    if (creep.atTarget || away === 0) {
+      creep.waypoints = [{ x: chosen.x, y: chosen.y }];
+      return;
+    }
+    const stopX = chosen.sx + (across / away) * BALTHAZAR_STOP;
+    const stopY = chosen.sy + (down / away) * BALTHAZAR_STOP;
+    // `screenPointOf` undone: screen (a, d) is yard (d + a / 2, d - a / 2).
+    creep.waypoints = [{ x: stopY + stopX / 2, y: stopY - stopX / 2 }];
   };
 
   /**
@@ -3813,12 +3963,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!target || target.hp <= 0) return;
     // Korath counts every swing towards his quake (`Korath.as:78`).
     if (creep.monsterId === KORATH_ID && creep.champion) creep.hits += 1;
-    const multiplier = specialistMultiplier(creep.targetGroup, target.kind);
+    // A monster's shot is `rangedAttack`'s plain `damage`, outside the specialist
+    // multipliers (`CreepBase.as:886-894`, `:919-920`); Sabnox doubles its own at
+    // a tower (`Sabnox.as:12-17`).
+    const shot = !creep.champion && creep.range > 1;
+    const multiplier = shot
+      ? creep.monsterId === SABNOX_ID && target.kind === "tower"
+        ? SPECIALIST_DAMAGE_MULTIPLIER
+        : 1
+      : specialistMultiplier(creep.targetGroup, target.kind);
     // Fomor's fireball lands as a `DummyTarget`, which loots at 1 (`FIREBALL.as:165`,
-    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222); so does Sabnox's.
-    const fireball =
-      (creep.champion && creep.monsterId === FOMOR_ID) ||
-      (!creep.champion && creep.monsterId === SABNOX_ID);
+    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222). So does every
+    // monster's shot: a fireball as a `DummyTarget`, Rezghul's `Projectilev2` as
+    // itself (`Projectilev2.as:155`), neither of them a `MonsterBase`.
+    const fireball = (creep.champion && creep.monsterId === FOMOR_ID) || shot;
     const looting = fireball ? 1 : lootOf(creep);
     recordHit(
       creep,
@@ -3842,6 +4000,76 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
+   * A blow's damage at a creep: triple for a hunter's melee blow
+   * (`CreepBase.as:884-886`). A shot is fired without it (`:902-903`).
+   */
+  const huntBlow = (creep: Creep): number =>
+    creep.hunts && creep.range <= 1 ? creep.damage * HUNT_DAMAGE_MULTIPLIER : creep.damage;
+
+  /** `CREATURES._creatureCount > 0 || CREATURES._hasLivingGuardian` (`CreepBase.as:851`). */
+  const anyHuntable = (): boolean =>
+    defendersOut > 0 || cageSlots.some((slot) => slot.report.hp > 0);
+
+  /**
+   * A hunter after the champion still in its cage (`MonsterBase.as:960-965`):
+   * it flies there and strikes it in its cage at triple damage, from within
+   * the 50 px every melee blow at a creep needs (`CreepBase.as:1563-1567`).
+   * The blow turns the champion on it (`:906-914`), which comes out at the
+   * start of the next step ({@link tickCageSlot}). Once the champion is out,
+   * or dead, the hunter goes on as at any other creep: false hands the tick
+   * back.
+   */
+  const huntPenned = (creep: Creep): boolean => {
+    const slot = cageSlots[creep.huntPen];
+    const pen = slot?.pen;
+    if (!slot || !pen || slot.report.hp <= 0) {
+      creep.huntPen = -1;
+      const out = slot?.champion;
+      if (out && out.hp > 0 && !out.gone && byCreepId.get(out.id) === out) {
+        creep.targetCreep = out.id;
+      } else {
+        // Dead in its cage: `loseTarget` and a fresh look (`CreepBase.as:860-863`).
+        loseTarget(creep);
+      }
+      return false;
+    }
+    const squared = screenDistanceSquared(creep.ix, creep.iy, pen.ix, pen.iy);
+    creep.atTarget = squared < creepReach(creep.range);
+    if (creep.atTarget) {
+      creep.attacking = true;
+      if (creep.attackCooldown <= 0) {
+        creep.attackCooldown += swingDelay(creep);
+        const before = slot.report.hp;
+        damageCaged(slot, huntBlow(creep));
+        // `recordHit`'s, but on neither a building nor a creep on the field.
+        visual.push({
+          kind: "hit",
+          tick,
+          creepId: creep.id,
+          buildingId: -1,
+          creepTargetId: -1,
+          ix: creep.ix,
+          iy: creep.iy,
+          targetIx: pen.ix,
+          targetIy: pen.iy,
+          ranged: false,
+          flying: creep.flying,
+          amount: before - slot.report.hp,
+        });
+        if (slot.pen) slot.provokedBy = creep.id;
+      } else {
+        creep.attackCooldown -= 1;
+      }
+      return true;
+    }
+    creep.attacking = false;
+    creep.waypoints = [{ x: pen.ix, y: pen.iy }];
+    creep.waypointIndex = 0;
+    moveCreep(creep);
+    return true;
+  };
+
+  /**
    * One blow at another creep. Korath's at a flyer is his fireball, a quarter
    * of his damage (`Korath.as:72-75`, `:110-115`); his others are blows that
    * count towards his quake (`:78`); both leave his flame on what they hit
@@ -3849,7 +4077,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const strikeCreep = (creep: Creep, foe: Creep, by: Creep | null): number => {
     if (!(creep.champion && creep.monsterId === KORATH_ID)) {
-      return damageCreep(foe, creep.damage, by, creep);
+      return damageCreep(foe, huntBlow(creep), by, creep);
     }
     if (foe.flying && hasFireball(KORATH_ID, creep.level, creep.power)) {
       // The flame catches as the fireball lands, before its damage (`FIREBALL.as:138-149`).
@@ -4300,6 +4528,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (boosted(creep, "monsterSpeed")) speed *= MONSTER_SPEED_BUFF;
     const factor = BEHAVIOUR_SPEED[creep.behaviour];
     if (factor !== undefined) speed *= factor;
+    // Mid-hop, Malphus goes three times as fast on the way up and twice on
+    // the way down (`CreepBase.as:1471-1478`).
+    if (creep.hopStart >= 0) {
+      const into = tick - creep.hopStart;
+      if (into >= HOP_TICKS) creep.hopStart = -1;
+      else speed *= into < HOP_UP_TICKS ? HOP_UP_SPEED : HOP_DOWN_SPEED;
+    }
     if (creep.attacking) return;
     if (creep.waypointIndex >= creep.waypoints.length) return;
 
@@ -4313,6 +4548,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         return;
       }
       waypoint = creep.waypoints[creep.waypointIndex] as Cart;
+      if (creep.hopStart < 0 && hopsOver(creep, waypoint)) creep.hopStart = tick;
     }
 
     // Flash walks `_tmpPoint` `speed` screen px towards the waypoint
@@ -4320,6 +4556,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // whichever way it heads. The step is taken on screen, then turned back
     // into yard units: screen (a, d) is yard (a / 2 + d, d - a / 2).
     stepCreep(creep, waypoint.x, waypoint.y, speed);
+  };
+
+  /**
+   * Whether a jumper's next waypoint sets off a hop (`CreepBase.as:1505-1526`):
+   * it lies on a standing wall. `PATHING.GetBuildingFromISO` reads the grid's
+   * registered building, and only a wall registers (`BWALL.as:11-13`), so
+   * Malphus hops over walls and walks through every other building.
+   */
+  const hopsOver = (creep: Creep, waypoint: Cart): boolean => {
+    if (!creep.ignoreWalls || creep.burrows || creep.champion) return false;
+    const id = grid.wallAt(cellOf(Math.trunc(waypoint.x), Math.trunc(waypoint.y)));
+    const wall = id >= 0 ? buildingOf(id) : null;
+    return !!wall && wall.hp > 0;
   };
 
   /** `speed` screen px towards a yard point, as {@link moveCreep} takes them. */
@@ -5218,6 +5467,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tickHealer(creep);
       return;
     }
+    if (creep.huntPen >= 0 && huntPenned(creep)) return;
     if (defended && fightsBack(creep) && engage(creep)) return;
     if (creep.support) {
       // `move()`, then `tickBBuff` (`MonsterBase.tick`, `Fomor.as:22-32`).
@@ -5244,7 +5494,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ? !creep.looking && creep.frame % CHAMPION_RETARGET_FRAMES === 0
       : (tick + creep.phase) % RETARGET_TICKS === 0;
     if (hunting && !creep.attacking && lookAgain) {
-      hunting = findTarget(creep);
+      hunting = findTarget(creep, true);
+    } else if (
+      hunting &&
+      creep.hunts &&
+      creep.targetGroup === TARGET_GROUP.CHAMPIONS &&
+      lookAgain &&
+      anyHuntable()
+    ) {
+      // A hunter at a building looks for a creep again all the same (`CreepBase.as:851-852`).
+      hunting = findTarget(creep, true);
     }
     if (hunting && creep.targetBuilding < 0) hunting = findTarget(creep);
     if (!hunting) return;
@@ -6339,10 +6598,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const pen = slot.pen;
     if (!pen) return;
     const frame = pen.frame + 1;
+    // A hunter's blow in there turns it on the hunter (`CreepBase.as:906-914`).
+    const hunter = slot.provokedBy >= 0 ? byCreepId.get(slot.provokedBy) : undefined;
+    slot.provokedBy = -1;
     const foe =
-      frame % CAGE_LOOK_FRAMES === 0
-        ? defenceTarget(pen.x, pen.y, pen.hitFlags, pen.flying)
-        : undefined;
+      hunter && hunter.hp > 0 && !hunter.gone
+        ? hunter
+        : frame % CAGE_LOOK_FRAMES === 0
+          ? defenceTarget(pen.x, pen.y, pen.hitFlags, pen.flying)
+          : undefined;
     if (!foe) {
       pen.frame = frame;
       return;
@@ -6685,6 +6949,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ...(creep.invisible && creep.burrows ? { burrowed: true } : {}),
       ...(creep.blinkHops > 0 ? { blinking: true } : {}),
       ...(creep.venomStacks > 0 ? { poisonStacks: creep.venomStacks } : {}),
+      ...(creep.hopStart >= 0 && tick - creep.hopStart < HOP_TICKS
+        ? { hop: tick - creep.hopStart }
+        : {}),
     }));
 
   const recentEvents = (sinceTick: number): BattleVisualEvent[] => {

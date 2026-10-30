@@ -50,6 +50,7 @@ import {
   splashLook,
 } from "./punchyMoments";
 import { dirtFor, surfaceHop } from "./burrowFx";
+import { jumpLift } from "./jumpFx";
 import { classicLook } from "@/game/classicLook";
 import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
@@ -359,6 +360,11 @@ export const layoutCreep = (
   } else if (creep.flying) {
     altitude = flyerAltitude(creep.monsterId);
     y += options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
+  } else if (creep.hop !== undefined && !options.reducedMotion) {
+    // Malphus over a wall: its body sorts by the height it is drawn at, like a
+    // flyer's, so it shows over the wall rather than behind it.
+    altitude = jumpLift(creep.hop);
+    y -= altitude;
   } else if (pose.moving && !options.reducedMotion && !options.classic && singlePose(sheet)) {
     y -= Math.abs(Math.sin((pose.age / HOP_PERIOD_TICKS) * Math.PI)) * HOP_HEIGHT;
   }
@@ -2287,6 +2293,7 @@ export class AttackBattleLayer {
       const before = this.smokeStep.get(id) ?? 0;
       if (step === before) continue;
       this.smokeStep.set(id, step);
+      if (step >= 4) this.towerFx.fall(id);
       if (!this.smokePrimed) continue;
       const crossedDestroyed = step >= 4 && before < 4;
       const crossedDamaged = step >= 2 && before < 2;

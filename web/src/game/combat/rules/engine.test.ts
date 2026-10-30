@@ -96,7 +96,9 @@ describe("a Pokey against a lone Cannon Tower", () => {
     run(battle, 1200);
     const tower = yard.buildings[0];
     // 60 damage a swing, and the Pokey got fourteen in before it died. It
-    // lands within 50 screen pixels of (-100, -100) (issue #91).
+    // lands within 50 screen pixels of (-100, -100) (issue #91), which with this
+    // seed puts it at the tower early: it keeps its first route, which no later
+    // look beats (`MonsterBase.as:1255-1270`).
     expect(tower!.maxHp - tower!.hp).toBe(840);
   });
 
@@ -108,7 +110,8 @@ describe("a Pokey against a lone Cannon Tower", () => {
     // the tower, `int(20 * (0.5 + 0.5 * 5940 / 6000))`, down to 8 for the last.
     expect(tower?.shots).toBe(11);
     expect(tower?.damageDealt).toBe(200);
-    expect(yard.buildings[0]!.maxHp - yard.buildings[0]!.hp).toBe(660);
+    // Twelve swings of 60 before the eleventh shell.
+    expect(yard.buildings[0]!.maxHp - yard.buildings[0]!.hp).toBe(720);
   });
 
   it("lands each shell eight ticks after it leaves the tower, and only then hurts", () => {
