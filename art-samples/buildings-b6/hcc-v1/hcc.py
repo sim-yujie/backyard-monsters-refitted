@@ -558,7 +558,7 @@ def materials():
     M["port"] = shiny("port", (184, 190, 204), rough=0.3, metal=0.6, wear=(156, 164, 180), scale=3, dirt=0.1, side=0.4)
     M["dish"] = shiny("dish", (186, 212, 228), rough=0.22, metal=0.9, wear=(150, 176, 198), scale=1.2, dirt=0.05,
                       side=-0.3, streak=0.3)
-    M["bowl"] = shiny("bowl", (255, 168, 28), rough=0.26, metal=0.7, side=0.4, wear=(252, 196, 60), scale=1.5,
+    M["bowl"] = shiny("bowl", (255, 168, 28), rough=0.16, metal=0.9, side=0.4, wear=(252, 196, 60), scale=1.5,
                       dirt=0.05, streak=0.3)
     M["dishback"] = shiny("dishback", (120, 132, 150), rough=0.35, metal=0.8, wear=(98, 110, 128), scale=2, dirt=0.2)
     M["rivet"] = shiny("rivet", (150, 158, 172), rough=0.25, metal=0.9, wear=(120, 128, 142), scale=6, dirt=0.05)
@@ -698,8 +698,8 @@ def legs():
         link(e)
         e.location = (k.x, k.y, 0.0)
         fr = S.FOOT_R
-        lathe("legfoot%d" % i, [(0.0, 0.0), (fr * 0.5, 0.05), (fr * 0.85, 0.22), (fr, 0.62), (fr * 0.96, 0.95),
-                                 (fr * 0.8, 1.4), (fr * 0.6, 1.85), (0.17, 2.3), (0.16, 2.55), (0.24, 2.68),
+        lathe("legfoot%d" % i, [(0.0, 0.0), (fr * 0.6, 0.08), (fr * 0.88, 0.28), (fr, 0.62), (fr * 0.94, 0.95),
+                                 (fr * 0.79, 1.4), (fr * 0.63, 1.9), (fr * 0.52, 2.3), (0.19, 2.58), (0.24, 2.68),
                                  (0.4, 2.8), (0.43, 2.95), (0.36, 3.1), (0.0, 3.13)],
               (0, 0, 0), M["bowl"], parent=e, verts=32)
         kr = S.KNUCKLE_R
