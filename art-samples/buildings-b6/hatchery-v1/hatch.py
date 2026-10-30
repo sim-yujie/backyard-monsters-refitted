@@ -580,7 +580,7 @@ def materials():
     M["red"] = shiny("red", (214, 6, 6), rough=0.22, metal=0.6, wear=(112, 2, 4), scale=3.5, dirt=0.3,
                      spec=0.25, coat=0.1, side=0.5)
     M["redworn"] = shiny("redworn", (206, 10, 8), rough=0.34, metal=0.45, wear=(88, 4, 6), scale=5.0, dirt=0.45,
-                         spec=0.25, side=0.2)
+                         spec=0.25, side=0.2, emit=0.18)
     M["dial"] = shiny("dial", (236, 232, 236), rough=0.5, metal=0.0, wear=(214, 210, 218), scale=3, dirt=0.0,
                       spec=0.4)
     M["needle"] = flat("needle", (16, 16, 18), rough=0.5)
@@ -1042,12 +1042,13 @@ def stand():
                                 Vector((0, 0, zc - 0.55)) + d * 0.5, Vector((0, 0, zc - 0.7))], 0.05, M["chrome"],
              verts=8, smooth=True)
     # the bowl-lift arm: a steel bar from the column round the drum's right to a clamp on its side
-    pts = [Vector((cx + 0.45, cy - 0.1, za)), Vector((3.9, 3.9, za)), Vector((4.45, 2.9, za - 0.15)),
-           Vector((4.4, 1.7, za - 0.45)), P(30.0, S.DRUM_R + 0.25, za - 0.6)]
+    # (Flash's runs level out to the right, then back down to the drum's front right, just above the gold pipe)
+    pts = [Vector((cx + 0.45, cy - 0.1, za)), Vector((4.0, 4.1, za)), Vector((4.7, 3.0, za - 0.1)),
+           Vector((4.6, 2.0, za - 0.3)), P(24.0, S.DRUM_R + 0.25, za - 0.5)]
     tube("bowlarm", pts, 0.3, M["fchrome"], verts=16, smooth=True)     # a round chrome bar, as Flash's
     ob = lathe("bowlclamp", [(0.0, -0.1), (0.36, -0.1), (0.4, 0.05), (0.34, 0.3), (0.0, 0.32)],
-               P(30.0, S.DRUM_R - 0.05, za - 0.6), M["steel"], verts=20)
-    track(ob, P(30.0, 1, 0))
+               P(24.0, S.DRUM_R - 0.05, za - 0.5), M["steel"], verts=20)
+    track(ob, P(24.0, 1, 0))
 
     # the crank wheel on the head's right face
     def wheel(hub):
