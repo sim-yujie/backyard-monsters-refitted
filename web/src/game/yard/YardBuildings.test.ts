@@ -9,6 +9,7 @@ import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
 import { readWork } from "./buildingWork";
 import { rowOf } from "./buildingCosts";
 import { artFor, readYard } from "./yardModel";
+import { RETRY_DELAYS_MS } from "./retryLoad";
 
 /**
  * The frame setter a battle turns a tower's gun with (issue #67), and the
@@ -358,25 +359,38 @@ describe("YardBuildings: loading the pictures", () => {
     }
   });
 
-  it("names a building only once its picture is known not to be coming", async () => {
-    const load = vi.spyOn(Assets, "load").mockImplementation(((url: string) =>
-      url.includes("boobytrap/top") ? Promise.reject(new Error("gone")) : new Promise(() => {})) as typeof Assets.load);
+  it("never writes a name over a building whose picture is late or failed", async () => {
+    vi.useFakeTimers();
+    // The walls' picture fails every try; the trap's fails once, then arrives.
+    let trapTries = 0;
+    const load = vi.spyOn(Assets, "load").mockImplementation(((url: string) => {
+      if (url.includes("walls/top")) return Promise.reject(new Error("gone"));
+      if (url.includes("boobytrap/top") && trapTries++ === 0) return Promise.reject(new Error("broken answer"));
+      if (url.includes("boobytrap/top")) return Promise.resolve(Texture.WHITE);
+      return new Promise(() => {});
+    }) as typeof Assets.load);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const buildings = new YardBuildings();
       buildings.show(walledYard(), fakeAtlas());
       buildings.draw(everywhere);
-      // Still loading: a faint footprint, no names.
       expect(buildings.labels.children).toHaveLength(0);
 
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      buildings.draw(everywhere);
-      expect(buildings.labels.children).toHaveLength(1);
-      expect(buildings.placeholderCount).toBe(5);
+      // Five tries over about four seconds.
+      for (const delay of RETRY_DELAYS_MS) {
+        await vi.advanceTimersByTimeAsync(delay);
+        buildings.draw(everywhere);
+      }
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("walls/top.1.png"), expect.anything());
+      // The trap has its picture; the three walls and the tower keep a faint
+      // footprint, and nothing is written over any of them.
+      expect(buildings.placeholderCount).toBe(4);
+      expect(buildings.labels.children).toHaveLength(0);
       buildings.destroy();
     } finally {
       load.mockRestore();
       warn.mockRestore();
+      vi.useRealTimers();
     }
   });
 });

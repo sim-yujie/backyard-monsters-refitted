@@ -42,9 +42,11 @@ import { artFor, type Yard, type YardBuilding } from "./yardModel";
  *
  * A building whose picture has not arrived shows a faint diamond the size of
  * its footprint, so the yard is never full of holes. One whose picture never
- * will arrive also gets its name on the diamond, so a broken asset path is
- * visible rather than silent. Only those: a yard opening on a slow link used
- * to show rows of "Block" labels while the walls' picture was on its way.
+ * arrives keeps that diamond and nothing more, as Flash's buildings stayed
+ * empty when `ImageCache` gave up on a file: a name written over every
+ * failed building piled "Block" over every wall in an unreadable heap. The
+ * console says which file failed. Only a building with no art row at all is
+ * named, since that is a gap in the art table, not a slow or broken download.
  *
  * `show` itself asks for the pictures the yard needs most, most wanted first
  * (`requestTopsFirst`): every building's own picture before any shadow or
@@ -68,10 +70,10 @@ const CULL_MARGIN = 160;
 /**
  * Upper bound on placeholder labels.
  *
- * Only a building whose picture failed is labelled, but one `Text` per
- * building would still be 575 display objects with their own textures if the
- * asset server were down. The cap keeps the failure mode cheap; the
- * unlabelled placeholders still show, and the scene reports the real count.
+ * Only a building with no art row is labelled, but one `Text` per building
+ * would still be 575 display objects with their own textures if a whole type
+ * fell out of the art table. The cap keeps that failure cheap; the unlabelled
+ * placeholders still show.
  */
 const MAX_PLACEHOLDER_LABELS = 60;
 
@@ -850,8 +852,6 @@ export class YardBuildings {
 
           view.label?.destroy();
           view.label = null;
-        } else if (!view.label && this.textures.isMissing(art.top)) {
-          view.label = this.addLabel(view.building);
         }
       }
 
