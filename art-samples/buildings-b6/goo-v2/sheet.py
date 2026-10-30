@@ -2,7 +2,7 @@
 
     python sheet.py            work/sheet/goo-v2-sheet.png (Flash above 3D, L1/3/6/10, one scale, red marks on the
                                mounts every level shares) and work/sheet/<area>-crop.png for each risky area below
-Flash and 3D are frame 0, on grass with their ground shadows, at the render's scale (K=12).
+Flash and 3D are frame 0 with their ground shadows (laid on grass by the tool), at the render's scale (K=12).
 """
 import math
 import subprocess
@@ -45,8 +45,11 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for lv in LEVELS:
         m = post.frame3d(lv, 0)
-        post.on_grass(m).convert("RGB").save(OUT / f"model-L{lv}.png")
-        post.flash(lv, 0, m.size).convert("RGB").save(OUT / f"flash-L{lv}.png")
+        m.save(OUT / f"model-L{lv}.png")                    # see-through round the building: the sheet crops to it
+        f = Image.new("RGBA", m.size)
+        f.alpha_composite(post.fref.shadow_rgba(lv).resize(m.size, Image.BICUBIC))
+        f.alpha_composite(post.fref.flash_rgba(lv, 0).resize(m.size, Image.BICUBIC))
+        f.save(OUT / f"flash-L{lv}.png")
     marks = []
     for name, v in S.mounts(1).items():
         x, y = rpx(*scr(v))

@@ -336,8 +336,8 @@ def funnel_mat(name, col, wear, shine=(236, 240, 246)):
     half_y.inputs[1].default_value = 0.5
     t.link(half_y.outputs[0], u.inputs[2])
     k0, k1 = (0, 0, 0, 1), (1, 1, 1, 1)
-    rim = t.mix(t.ramp(u.outputs[0], [(0.72, k0), (0.9, k1)]),
-                t.ramp(sep.outputs["Z"], [(0.6, k0), (0.76, k1), (0.9, k1), (0.98, k0)]), 1.0, "MULTIPLY")
+    rim = t.mix(t.ramp(u.outputs[0], [(0.6, k0), (0.97, (0.8, 0.8, 0.8, 1))]),
+                t.ramp(sep.outputs["Z"], [(0.7, k0), (0.94, k1)]), 1.0, "MULTIPLY")      # up onto the cap's top
     n1 = t.noise(v, 2.7, 3.0, 0.5, 0.2)
     out = t.mix(srgb(*col), srgb(*wear), t.ramp(n1, [(0.45, k0), (0.75, (0.6, 0.6, 0.6, 1))]))
     out = t.mix(out, srgb(*shine), rim)
@@ -576,7 +576,7 @@ def materials():
     M["neck"] = goo_mat("neck", (6, 20, 3), (16, 46, 6), (44, 90, 14), rough=0.45, spec=0.3, scale=3.0, bump=0.1)
     M["goodark"] = painted("goodark", (8, 16, 3), rough=0.85, wear=(16, 30, 6), scale=2.0, dirt=0.0, spec=0.05,
                            ao_min=0.2)
-    M["slate"] = funnel_mat("slate", (42, 48, 64), (58, 66, 84))
+    M["slate"] = funnel_mat("slate", (46, 58, 72), (62, 76, 90))         # Flash's steel blue
     M["slatein"] = painted("slatein", (40, 46, 60), rough=0.7, wear=(60, 68, 84), scale=3, dirt=0.0, spec=0.25)
     M["steel"] = painted("steel", (122, 130, 140), rough=0.5, metal=0.35, wear=(200, 208, 204), rust=(110, 96, 78),
                          scale=6, dirt=0.15, rust_at=0.7)
@@ -750,6 +750,17 @@ def sheet(balls, rr, b, ln, wd, fingers=3, z_top=None, r=None):
         balls.append((P(bb, r + 0.1, z_top - lf - 0.04), 0.24))
 
 
+def table_spill():
+    """Goo spilt on the table at the left, and over its front edge (every level: from level 3 it runs over the lower
+    ring's front plank)."""
+    balls = [(P(-128, S.VAT_R + 0.12, S.VAT_Z0 + 0.02), 0.4, (1.6, 1.0, 0.4)),
+             (P(-150, S.TABLE_R - 0.05, S.VAT_Z0 - 0.02), 0.32, (1.2, 1.0, 0.45)),
+             (P(-62, S.VAT_R + 0.1, S.VAT_Z0 + 0.02), 0.4, (1.4, 1.0, 0.4))]
+    for j in range(5):
+        balls.append((P(-58, S.TABLE_R + 0.02, S.VAT_Z0 - 0.08 - 0.14 * j), 0.24 - 0.02 * j))
+    return balls
+
+
 def goo_l1():
     """Level 1: a lumpy lip of goo on the rim, goo heaped lower inside round the neck (dark where the lip shades it),
     slopping over the rim in broad sheets with ragged ends, and spilt on the table."""
@@ -773,13 +784,7 @@ def goo_l1():
     # the broad sheet hangs front right, ending well above the foot (as Flash), so the copper shows at the right
     for b, ln, wd, nf in ((-12, 1.9, 1.45, 5), (-125, 1.3, 0.7, 3), (-155, 0.9, 0.5, 2), (45, 0.8, 0.45, 2)):
         sheet(balls, rr, b, ln, wd, nf, r=S.VAT_R - 0.08)
-    # spilt on the table at the left, and over its front edge
-    balls.append((P(-128, S.VAT_R + 0.12, S.VAT_Z0 + 0.02), 0.4, (1.6, 1.0, 0.4)))
-    balls.append((P(-150, S.TABLE_R - 0.05, S.VAT_Z0 - 0.02), 0.32, (1.2, 1.0, 0.45)))
-    balls.append((P(-62, S.VAT_R + 0.1, S.VAT_Z0 + 0.02), 0.4, (1.4, 1.0, 0.4)))
-    for j in range(5):
-        balls.append((P(-58, S.TABLE_R + 0.02, S.VAT_Z0 - 0.08 - 0.14 * j), 0.24 - 0.02 * j))
-    goo = meta("goo", balls, M["goo"], res=0.04)
+    goo = meta("goo", balls + table_spill(), M["goo"], res=0.04)
     # the pool inside the crown, low and dark round the neck
     meta("goopool", [((0, 0, z1 - 0.12), 2.3, (1.0, 1.0, 0.16))], M["goodark"], res=0.05)
     return goo
@@ -1166,6 +1171,7 @@ def build():
         neck(S.VAT_Z1)
     else:
         dome = goo_dome()
+        meta("goospill", table_spill(), M["goo"], res=0.04)
         neck(5.6)
         frame()
         straps_and_vanes(dome)
