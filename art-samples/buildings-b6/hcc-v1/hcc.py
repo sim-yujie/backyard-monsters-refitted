@@ -579,25 +579,28 @@ def materials():
     M["drumtop"] = shiny("drumtop", (184, 148, 182), rough=0.32, metal=0.2, wear=(164, 124, 162), scale=1.2, dirt=0.15,
                          spec=0.5, side=0.6)
     M["chrome"] = shiny("chrome", (214, 220, 228), rough=0.2, metal=1.0, wear=(190, 196, 206), scale=4, dirt=0.15)
-    M["pedestal"] = shiny("pedestal", (158, 166, 182), rough=0.34, metal=0.15, wear=(144, 146, 152), scale=3, dirt=0.1,
+    M["pedestal"] = shiny("pedestal", (186, 192, 204), rough=0.34, metal=0.15, wear=(144, 146, 152), scale=3, dirt=0.1,
                           side=0.6)
+    M["pedside"] = shiny("pedside", (176, 168, 186), rough=0.36, metal=0.15, wear=(150, 142, 160), scale=3, dirt=0.15,
+                         side=0.9)
     M["rim"] = shiny("rim", (176, 196, 214), rough=0.25, metal=0.9, wear=(150, 170, 192), scale=4, dirt=0.1)
     M["port"] = shiny("port", (222, 228, 238), rough=0.22, metal=0.35, wear=(184, 194, 210), scale=3, dirt=0.1, side=0.4,
                       coat=0.5)
     # the dish: steel blue, darker up and to the left, with Flash's white sheen right of the hub; less mirror-like so
     # the gold hub and arm don't show a blurred reflection Flash doesn't have
-    M["dish"] = shiny("dish", (134, 158, 182), rough=0.3, metal=0.6, wear=(108, 130, 156), scale=1.2, dirt=0.05,
-                      side=-0.45, glow=((27.0, -26.0, 14.0, 4.5, 0.45, (240, 244, 246)),
-                                        (24.0, -21.0, 18.0, 10.0, 0.35, (214, 228, 236))), streak=0.3)
+    M["dish"] = shiny("dish", (128, 150, 172), rough=0.32, metal=0.5, wear=(104, 124, 146), scale=1.2, dirt=0.05,
+                      side=0.25, glow=((26.0, -25.0, 15.0, 5.5, 0.7, (240, 244, 246)),
+                                       (24.0, -20.0, 18.0, 9.0, 0.3, (196, 208, 214))), streak=0.3)
     # Flash's bowl and feet are bright orange gold (foot ~175,112,25), not dark brass: less metal, a clear coat
-    M["bowl"] = shiny("bowl", (255, 160, 18), rough=0.24, metal=0.45, side=0.45, wear=(252, 196, 50), scale=1.5,
-                      dirt=0.05, streak=0.3, coat=0.3)
-    M["leg"] = shiny("leg", (250, 150, 20), rough=0.24, metal=0.4, side=0.45, wear=(255, 200, 60), scale=1.2,
+    M["bowl"] = shiny("bowl", (255, 156, 12), rough=0.22, metal=0.55, side=0.5, wear=(214, 112, 8), scale=1.5,
+                      dirt=0.5, streak=0.3, coat=0.25,
+                      glow=((-24.0, 46.0, 9.0, 5.0, 0.22, (250, 168, 36)), (0.0, 44.0, 30.0, 3.5, 0.3, (250, 160, 34))))
+    M["leg"] = shiny("leg", (250, 150, 20), rough=0.24, metal=0.4, side=0.3, wear=(255, 200, 60), scale=1.2,
                      dirt=0.05, streak=0.3, coat=0.3)
-    M["tick"] = flat("tick", (128, 80, 40), rough=0.9)
+    M["tick"] = flat("tick", (150, 92, 40), rough=0.9)
     M["dishback"] = shiny("dishback", (120, 132, 150), rough=0.35, metal=0.8, wear=(98, 110, 128), scale=2, dirt=0.2)
     M["rivet"] = shiny("rivet", (104, 110, 122), rough=0.25, metal=0.9, wear=(120, 128, 142), scale=6, dirt=0.05)
-    M["wire"] = flat("wire", (52, 60, 72), rough=0.5, metal=0.5)
+    M["wire"] = flat("wire", (84, 94, 108), rough=0.5, metal=0.5)
     M["hole"] = flat("hole", (14, 10, 14), rough=1.0)
     return M
 
@@ -710,7 +713,7 @@ def drum():
     # (thin dull orange lines barely proud of the band, long and short in turn, like Flash's; not shiny pins)
     for j, th in enumerate(S.TICK_TH):
         h = 0.32 if j % 2 else 0.22
-        box("drumtick", (0.008, 0.06, h), P(th, R + 0.002, ZB + 0.24), M["tick"], rot=(0, 0, th), bevel=0.0)
+        box("drumtick", (0.004, 0.06, h), P(th, R + 0.002, ZB + 0.48), M["tick"], rot=(0, 0, th), bevel=0.0)
 
 
 def bowl():
@@ -770,12 +773,16 @@ def dish_normal():
 def top():
     zt = ZT + S.TOP_DOME
     ped = Vector((S.PED_X, S.PED_Y, zt - 0.08))
-    lathe("pedestal", [(0.0, 0.0), (S.PED_R, 0.0), (S.PED_R, S.PED_H - 0.08), (S.PED_R - 0.06, S.PED_H),
-                       (0.0, S.PED_H + 0.02)], ped, M["pedestal"], verts=64)
+    # a bright top on a side that turns from pale lavender grey on the left to dark mauve on the right (Flash)
+    lathe("pedestalside", [(0.0, 0.0), (S.PED_R, 0.0), (S.PED_R, S.PED_H - 0.08)], ped, M["pedside"], verts=64)
+    lathe("pedestal", [(S.PED_R, S.PED_H - 0.081), (S.PED_R - 0.06, S.PED_H), (0.0, S.PED_H + 0.02)], ped,
+          M["pedestal"], verts=64)
     zp = ped.z + S.PED_H
-    cyl("post", S.POST_R, S.POST_H + S.AXLE_R * 0.6, (ped.x, ped.y, zp - 0.05), M["gold"], verts=20, bevel=0.0)
-    lathe("postcollar", [(0.0, 0.0), (0.42, 0.0), (0.42, 0.1), (0.3, 0.18), (0.0, 0.18)], (ped.x, ped.y, zp - 0.02),
-          M["gold"], verts=24)
+    # Flash's post is a broad gold block under the axle, not a thin rod
+    box("post", (2 * S.POST_R, 2 * S.POST_R, S.POST_H + S.AXLE_R * 0.6), (ped.x, ped.y, zp - 0.05), M["gold"],
+        bevel=0.06)
+    box("postcollar", (2 * S.POST_R + 0.14, 2 * S.POST_R + 0.14, 0.14), (ped.x, ped.y, zp - 0.02), M["gold"],
+        bevel=0.04)
     A = Vector((ped.x, ped.y, zp + S.POST_H + S.AXLE_R * 0.6))      # the axle's middle
     # the yoke: the gold post runs up into the crosswise chrome axle; the axle's ends show the gold bore
     cyl("yokeaxle", S.AXLE_R, S.AXLE_L, (A.x, A.y - S.AXLE_L / 2, A.z), M["chrome"], rot=(-90, 0, 0), verts=28,
@@ -871,7 +878,7 @@ def top():
     # the gold hub (where Flash draws it, low left of the middle), the chrome feed rod from it out to the rim, and two
     # thin stays from the rod's middle to the rim
     hp, hn = face_at(*S.DISH_HUB)
-    hub = box("dishhub", (0.62, 0.62, 0.42), hp - hn * 0.06, M["gold"], parent=e, bevel=0.08)
+    hub = box("dishhub", (0.74, 0.74, 0.46), hp - hn * 0.06, M["gold"], parent=e, bevel=0.08)
     hub.rotation_euler = hn.to_track_quat("Z", "Y").to_euler()
     hub.rotation_euler.rotate_axis("Z", math.radians(30))
     tip = on_face(rim_angle(*S.DISH_ROD), 0.98, 0.14)
