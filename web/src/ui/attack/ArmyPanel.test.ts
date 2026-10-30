@@ -547,7 +547,7 @@ describe("ArmyPanel champion", () => {
     );
     const rule = /\n\.attack-army__champion \{([^}]*)\}/.exec(css)?.[1] ?? "";
     expect(rule).toContain("display: grid");
-    expect(rule).toMatch(/"pick icon label"\s*"pick icon note"\s*"pick icon mode"/);
+    expect(rule).toMatch(/"pick icon label"\s*"pick icon note"\s*"pick mode mode"/);
 
     const { panel } = mount();
     const row = panel.element.querySelector(".attack-army__champion");
@@ -559,6 +559,25 @@ describe("ArmyPanel champion", () => {
       "attack-army__note",
       "attack-army__mode",
     ]);
+  });
+
+  it("wraps the health under a champion's name rather than cut the name short", () => {
+    // The Classic frame left "Kr…" and "Fo…": the label must wrap, its gap
+    // must not open a blank line between the wrapped parts, and the Mode
+    // picker must narrow with its row rather than run past the group's edge.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../styles/attack.css"),
+      "utf8",
+    );
+    const label = /\n\.attack-army__label \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(label).toContain("flex-wrap: wrap");
+    expect(label).toMatch(/gap: 0 /);
+    const select = /\n\.attack-army__mode-select \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(select).toContain("min-width: 0");
+
+    const { panel } = mount();
+    const names = [...panel.element.querySelectorAll(".attack-army__champion .attack-army__name")];
+    expect(names.map((name) => name.textContent)).toEqual(["Krallen", "Fomor"]);
   });
 
   it("hides the group when the attacker owns no champion", () => {
