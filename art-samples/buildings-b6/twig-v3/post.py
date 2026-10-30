@@ -110,7 +110,7 @@ def anim(lv):
 # twig2.py's mounting points (world), the same at every level: the lines in `levels` run through them
 LIFT = {1: -0.5}       # level 1 stands lower on short feet (twig2.L1_DROP); its parts move with the body
 MOUNTS = {"pipe top": (-1.9, -1.1, 6.6), "small gear": (1.67, 0.24, 3.82), "roller": (0.05, -2.67, 3.42),
-          "saw": (1.95, -0.67, 2.62), "tray": (-0.1, -2.72, 1.9)}
+          "saw": (1.95, -0.67, 2.62), "tray": (-0.1, -2.7, 1.24)}
 
 
 def scr(v):

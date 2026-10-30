@@ -717,7 +717,7 @@ def funnel(base, top_h, mouth_dir=(-0.75, -0.66), r_pipe=0.2, bell=0.62, bell_le
     cyl("hornneck", r_pipe * 1.1, 0.2, top - Vector((0, 0, 0.1)), M["iron"], verts=16, bevel=0.02)
 
 
-def tray(center, size, lumps=False, trim="olive", tilt=14.0, roll=0.0, keel=0.6):
+def tray(center, size, lumps=False, trim="olive", tilt=14.0, roll=0.0, keel=0.6, hoop_u=0.72):
     """The front tray the snapped twigs fall into, as Flash draws it: a low open box whose bottom is a deep boat hull
     curving down along its length (a sled runner seen from the side), metal caps on the four top corners, metal bands
     round the hull near each end, a rim along the top; levels 6-10 hold black lumps. Returns the root, on_hull(u, j,
@@ -771,7 +771,7 @@ def tray(center, size, lumps=False, trim="olive", tilt=14.0, roll=0.0, keel=0.6)
     nsec = len(secs[0]) - 1
     for j in (1.6, 3.2, nsec - 3.2, nsec - 1.6):          # stave seams along the hull
         tube("stave", [on_hull(u, j, 0.025) for u in us[2:-2]], 0.018, M["dwood"]("X"), verts=6, parent=root)
-    for u in (-0.72, 0.72):                              # metal bands round the hull near each end
+    for u in (-hoop_u, hoop_u):                          # metal bands round the hull near each end
         tube("hoop", [on_hull(u, j, 0.05) for j in [k * nsec / 16 for k in range(17)]], 0.05, corner, verts=8,
              parent=root)
     for fy in (-1, 1):                                   # rims along the top edges, bending down at the ends
@@ -1043,14 +1043,16 @@ def roof10(hx, hy, z1, yg):
 HX, HY, Z0, Z1 = 1.05, 1.72, 1.25, 5.1          # the body: half width (X), half depth (Y), floor, top
 ROLLER = Vector((0.05, -2.67, 3.42))            # the roller's middle, in front of the arch, held by arms to the posts
 ROLLER_LEN, ROLLER_R = 1.9, 0.62
-TRAY = Vector((-0.1, -2.42, 1.38))              # the tray under the roller's mouth, bolted to the body's front face
+TRAY = Vector((-0.1, -2.7, 1.24))                # the tray under the roller's mouth, bolted to the body's front face
 TRAY_SIZE, TRAY_TILT, TRAY_ROLL = (2.55, 1.15, 0.45), 22.0, -5.0
 if os.environ.get("TW_TRAY"):                   # trying placements: TW_TRAY=x,y,z,tilt,roll
     _t = [float(v) for v in os.environ["TW_TRAY"].split(",")]
     TRAY, TRAY_TILT, TRAY_ROLL = Vector(_t[:3]), _t[3], _t[4]
     TRAY_SIZE = (_t[6], TRAY_SIZE[1], TRAY_SIZE[2]) if len(_t) > 6 else TRAY_SIZE
-TRAY_KEEL = float(os.environ.get("TW_KEEL", 0.6))  # how far the hull bellies below the box
+TRAY_KEEL = float(os.environ.get("TW_KEEL", 0.3))  # how far the hull bellies below the box
 TRAY_GRIP = 2.2                                 # where the brackets take the hull: this far down its back side
+TRAY_GRIP_U = float(os.environ.get("TW_GRIPU", 0.5))  # the bands, and the brackets on them, this far out (inside the posts)
+TRAY_BEAM_X = float(os.environ.get("TW_BEAMX", 0.4))  # the brackets' feet on the beam, inside the arch frame's legs
 SAW = Vector((1.95, -0.67, 2.62))               # the turning parts, each on its own short axle into the right wall
 SGEAR = Vector((1.67, 0.24, 3.82))
 SWHEEL = Vector((1.54, 1.78, 3.13))
@@ -1116,16 +1118,16 @@ def build():
     # the tray, under the roller's mouth and below it (a clear gap from the camera too), its back against the body's
     # front face: two iron brackets from the front's bottom beam (there at every level) to the bands round its hull
     tr, on_hull, nsec = tray(TRAY, TRAY_SIZE, lumps=L >= 6, trim="gold" if L >= 6 else "olive", tilt=TRAY_TILT,
-                             roll=TRAY_ROLL, keel=TRAY_KEEL)
+                             roll=TRAY_ROLL, keel=TRAY_KEEL, hoop_u=TRAY_GRIP_U)
     bpy.context.view_layer.update()
     mw = tr.matrix_world
-    for u in (-0.72, 0.72):
+    for u in (-TRAY_GRIP_U, TRAY_GRIP_U):
         b = mw @ on_hull(u, nsec - TRAY_GRIP, 0.05)
-        zb = z0 + 0.12
-        tube("traymount", [Vector((b.x, -hy - 0.05, zb)), Vector((b.x, -hy - 0.16, zb)), b], 0.06, M["iron"])
-        box("traymountplate", (0.32, 0.04, 0.2), (b.x, -hy - 0.14, zb), M["iron"], bevel=0.012, origin="center")
-        for dx in (-0.1, 0.1):
-            cyl("traymountbolt", 0.04, 0.05, (b.x + dx, -hy - 0.17, zb), M["bolt"], rot=(90, 0, 0), verts=8,
+        zb, xb = z0 + 0.12, math.copysign(TRAY_BEAM_X, u)
+        tube("traymount", [Vector((xb, -hy - 0.09, zb)), Vector((xb, -hy - 0.16, zb)), b], 0.06, M["iron"])
+        box("traymountplate", (0.26, 0.04, 0.2), (xb, -hy - 0.14, zb), M["iron"], bevel=0.012, origin="center")
+        for dx in (-0.08, 0.08):
+            cyl("traymountbolt", 0.04, 0.05, (xb + dx, -hy - 0.17, zb), M["bolt"], rot=(90, 0, 0), verts=8,
                 bevel=0.01)
     # the turning parts
     mount(saw, SAW, SAW_AXIS)
