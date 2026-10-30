@@ -49,7 +49,7 @@ FOOT_D = (4.2, 4.05, 3.8)        # each foot's middle from the axis, on the grou
 CROSS_L, CROSS_W = 1.3, 0.17     # a foot's arms (half length, bar radius), along world X and Y; ball ends
 
 # level 2: the egg-beater drive on the sleeve
-PINION_Z, PINION_R = 0.5, 1.15  # above the sleeve's top
+PINION_Z, PINION_R = 1.3, 1.15  # above the sleeve's top (Flash's dark gear sits clear above the rim)
 WHEEL2_U, WHEEL2_Z, WHEEL2_R = 1.85, 4.3, 2.45   # the crown wheel: out along bearing 45 from the axis, height above
                                                  # the sleeve's top, radius
 WHEEL2_TH = 60.0                 # the axle's bearing

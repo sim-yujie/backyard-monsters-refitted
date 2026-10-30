@@ -113,9 +113,10 @@ def scr(v):
     return S.ORIGIN[0] + sx * (v[0] + v[1]), S.ORIGIN[1] + sy * (v[0] - v[1]) - sz * v[2]
 
 
-def levels():
+def levels(clean=False):
     """The three looks at one scale and one crop: Flash on top, 3D below; on the 3D, dashed lines through the shared
-    parts (each at its own height on that level: levels 2 and 3 lift the body and every part on it)."""
+    parts (each at its own height on that level: levels 2 and 3 lift the body and every part on it). clean: no lines,
+    crosses or note (the owner's copy)."""
     size = frame3d(1, 0).size
     k = size[0] / (fref.FRAME[2] - fref.FRAME[0])
     boxes = [box_of(lv, size) for lv in fref.LEVELS]
@@ -127,8 +128,9 @@ def levels():
     d = ImageDraw.Draw(out)
     d.text((12, 8), "Hatchery, levels 1, 2, 3 at one scale: Flash (top), 3D (bottom)", fill=(255, 255, 255),
            font=font(26))
-    d.text((12, 44), "Red crosses on the 3D: parts fixed to the body; L2 and L3 lift the body and every part on it. "
-           "Blue dashes: the body's axis", fill=(200, 200, 200), font=font(22))
+    if not clean:
+        d.text((12, 44), "Red crosses on the 3D: parts fixed to the body; L2 and L3 lift the body and every part on it. "
+               "Blue dashes: the body's axis", fill=(200, 200, 200), font=font(22))
     rows = (("Flash", lambda lv: flash(lv, 0, size)), ("3D", lambda lv: on_grass(frame3d(lv, 0))))
     ys = [top + r * (h + lab + gap) for r in range(2)]
     for i, lv in enumerate(fref.LEVELS):
@@ -137,7 +139,7 @@ def levels():
             d.text((x, y + 6), f"Level {lv}  {name}", fill=(255, 255, 255), font=font(24))
             out.paste(get(lv).crop(box).convert("RGB"), (x, y + lab))
     y3 = ys[1] + lab
-    for i, lv in enumerate(fref.LEVELS):
+    for i, lv in enumerate(fref.LEVELS if not clean else ()):
         x0 = gap + i * (w + gap)
         ax = x0 + (S.ORIGIN[0] - fref.FRAME[0]) * k - box[0]
         for yy in range(top + lab, y3 + h, 20):
@@ -204,6 +206,7 @@ if __name__ == "__main__":
         print(anim(lv), "changed px (all, outside moving parts):", still_check(lv))
     elif cmd == "levels":
         levels().save(HERE / "hatchery-levels-row.png")
+        levels(clean=True).save(HERE / "hatchery-levels-clean.png")
     elif cmd == "motion":
         lv = int(sys.argv[2])
         motion(lv).save(HERE / f"L{lv}-motion.png")

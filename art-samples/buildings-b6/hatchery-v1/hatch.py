@@ -912,23 +912,18 @@ def beater():
     # and a small gear on its front; the crank's axle comes out of its right side through a domed wheel cover. Two
     # short rods hold it on the spindle's top bearing.
     fr = P(-45, 1, 0)                       # toward the camera
-    hc = U2(0.98, 2.85) + fr * 0.1         # the housing's foot
-    box("gearbox", (1.2, 0.95, 2.75), hc, M["brushed"], rot=(0, 0, 45), bevel=0.45, segs=6)
-    box("gearboxlow", (0.95, 0.8, 1.65), U2(1.0, 1.3) + fr * 0.1, M["brushed"], rot=(0, 0, 45), bevel=0.3, segs=4)
+    hc = U2(0.98, 2.2) + fr * 0.1          # the housing's foot
+    box("gearbox", (1.2, 0.95, 3.35), hc, M["brushed"], rot=(0, 0, 45), bevel=0.45, segs=6)
     ob = lathe("gearboxcap", [(0.0, -0.3), (0.66, -0.3), (0.68, -0.12), (0.6, 0.06), (0.4, 0.2), (0.0, 0.25)],
-               hc + Vector((0, 0, 2.6)), M["chrome"], verts=32)
+               hc + Vector((0, 0, 3.2)), M["chrome"], verts=32)
     ob.scale = (1.0, 0.82, 1.0)
     ob.rotation_euler = (0, 0, math.radians(45))
-    box("gearboxband", (1.24, 0.99, 0.14), hc + Vector((0, 0, 1.0)), M["steel"], rot=(0, 0, 45), bevel=0.4, segs=5)
+    box("gearboxband", (1.24, 0.99, 0.14), hc + Vector((0, 0, 1.55)), M["steel"], rot=(0, 0, 45), bevel=0.4, segs=5)
     q = fr.to_track_quat("Z", "Y").to_euler()
     gc = hc + fr * 0.44 + Vector((0, 0, 0.5)) - P(45, 0.42, 0)      # a small gear peeping out at the lower left
-    gear("gearboxgear", 0.38, 10, 0.16, gc, M["gear"], q, tooth=0.24)
+    gear("gearboxgear", 0.38, 10, 0.16, gc, M["steel"], q, tooth=0.24)
     ob = lathe("gearboxgearhub", [(0.0, -0.05), (0.13, -0.05), (0.13, 0.1), (0.08, 0.14), (0.0, 0.15)], gc,
                M["chrome"], verts=16)
-    ob.rotation_euler = q
-    box("gearboxblock", (0.8, 0.85, 1.05), U2(0.1, 1.25), M["fchrome"], rot=(0, 0, 45), bevel=0.3, segs=4)
-    ob = lathe("gearboxknob", [(0.0, -0.05), (0.17, -0.05), (0.2, 0.06), (0.14, 0.16), (0.0, 0.18)],
-               U2(0.1, 1.8) + fr * 0.4, M["chrome"], verts=16)
     ob.rotation_euler = q
     ob = lathe("gearboxcover", [(0.0, -0.62), (0.72, -0.62), (0.86, -0.42), (0.9, -0.12), (0.85, 0.08), (0.7, 0.22),
                                 (0.4, 0.29), (0.0, 0.3)], U2(S.WHEEL2_U, S.WHEEL2_Z), M["fchrome"], verts=40)
@@ -951,10 +946,10 @@ def beater():
     def pin(hub):
         gear("pinion", S.PINION_R, 9, 0.36, (0, 0, 0), M["gear"], (0, 0, 0), tooth=0.3, parent=hub)
         cyl("pinionhub", 0.34, 0.6, (0, 0, -0.3), M["gear"], parent=hub, verts=16)
-        tube("spindle", [(0, 0, -3.25), (0, 0, 1.05)], 0.12, M["steel"], parent=hub, verts=12)
+        tube("spindle", [(0, 0, -4.05), (0, 0, 1.05)], 0.12, M["steel"], parent=hub, verts=12)
         for k in range(3):                       # the beater blades down in the sleeve, under the bridge
             a = 2 * math.pi * k / 3
-            box(f"spindleblade{k}", (0.85, 0.05, 0.7), (0.45 * math.cos(a), 0.45 * math.sin(a), -3.15), M["steel"],
+            box(f"spindleblade{k}", (0.85, 0.05, 0.7), (0.45 * math.cos(a), 0.45 * math.sin(a), -3.95), M["steel"],
                 rot=(0, 0, math.degrees(a)), bevel=0.01, parent=hub)
     e, hub = vspin("pinion", (0, 0, ZS + S.PINION_Z), pin)
     MOVING.append(hub)
