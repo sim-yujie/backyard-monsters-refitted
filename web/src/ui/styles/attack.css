@@ -660,11 +660,15 @@
   color: var(--colour-text-muted);
 }
 
+/* The count or health wraps under the name rather than squeeze it to an
+ * ellipsis: in the Classic frame a champion's row is too narrow for
+ * "Krallen L5 62,000 hp" on one line, and showed "Kr…". */
 .attack-army__label {
   grid-area: label;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: 0 var(--space-2);
   min-width: 0;
   font-size: var(--text-sm);
 }
@@ -739,14 +743,16 @@
 }
 
 /* The note ("Already sent", "One champion per attack") sits under the name on
- * its own line, so it never squeezes the name to an ellipsis (#81). */
+ * its own line, so it never squeezes the name to an ellipsis (#81). The Mode
+ * runs under the portrait too: beside it, the Classic frame left the picker
+ * too little room for "Offensive". */
 .attack-army__champion {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
   grid-template-areas:
     "pick icon label"
     "pick icon note"
-    "pick icon mode";
+    "pick mode mode";
   align-items: center;
   column-gap: var(--space-2);
   row-gap: 0;
@@ -779,7 +785,7 @@
   grid-template-areas:
     "pick icon label label"
     "pick icon note retreat"
-    "pick icon mode mode";
+    "pick mode mode mode";
 }
 
 .attack-army__champion-retreat {
@@ -799,6 +805,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   margin-top: var(--space-1);
   font-size: var(--text-sm);
   color: var(--colour-text-secondary);
@@ -806,6 +813,7 @@
 }
 
 .attack-army__mode-select {
+  min-width: 0;
   min-height: var(--control-height-compact);
   padding: 0 var(--space-2);
   border: 1px solid var(--colour-border);
