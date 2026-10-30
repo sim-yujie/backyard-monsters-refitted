@@ -314,7 +314,9 @@ import {
  *    keeps its old frame count and heading, where every shell here starts
  *    fresh (as the Spurtz's do, note 18); a flyer's height leaves out its
  *    five-pixel bob; and a shell at a monster that retreated is gone, as the
- *    monster is (note 7).
+ *    monster is (note 7). A splash shell blasts where it lands, short of its
+ *    target and, at a flyer, up in the air, as Flash's does; that one quirk
+ *    hangs off {@link SHELL_BLASTS_WHERE_IT_LANDS}.
  * 2. **Unit steps use a normalised vector, not `cos(atan2(…))`.** The client
  *    advances `_tmpPoint`, a screen point, by `cos(atan2(dy, dx)) * speed` and
  *    the matching sine (`CreepBase.as:1679-1680`), which is the unit vector
@@ -628,6 +630,8 @@ export interface BattleOptions {
    * any fight outside the Descent, which then burns nothing.
    */
   readonly descentYard?: number;
+  /** Overrides {@link SHELL_BLASTS_WHERE_IT_LANDS} for this battle; absent, it holds. */
+  readonly shellBlastsWhereItLands?: boolean;
 }
 
 /**
@@ -1563,6 +1567,8 @@ const SHELL_TOP: Readonly<Record<number, number>> = {
   130: -25, // INFERNO_CANNON_TOWER.as:14
   132: -30, // INFERNO_MAGMA_TOWER.as:34
 };
+/** Whether a tower's shot is a shell that hurts when it lands, not when fired. */
+export const towerShellFlies = (type: number): boolean => SHELL_TOP[type] !== undefined;
 /** The Sniper's `_top` on an Inferno yard. */
 const SNIPER_INFERNO_TOP = -60;
 /** The Magma Tower, whose shell is a `FIREBALL` (`INFERNO_MAGMA_TOWER.as:77`). */
@@ -1573,10 +1579,23 @@ const MAGMA_TOWER_TYPE = 132;
  */
 const FLYER_ALTITUDE = 108;
 const FLYER_ALTITUDES: Readonly<Record<string, number>> = { IC5: 40 };
+/**
+ * Flash's splash-altitude quirk (fidelity note 1), on as in Flash: a splash
+ * shell blasts round the point it lands at, up to its `speed` short of its
+ * target and, at a flyer, up at the height the flyer is drawn, so its target
+ * takes only a share, a small one in the air. Off, it still flies, but blasts
+ * on its target as an instant shot does: the whole shot to the target, the
+ * blast round it. The owner has yet to choose; a battle may override it with
+ * {@link BattleOptions.shellBlastsWhereItLands}.
+ */
+export const SHELL_BLASTS_WHERE_IT_LANDS = true;
 /** A shell re-aims on every fifth frame (`PROJECTILE.as:36`, `FIREBALL.as:128`). */
 const SHELL_AIM_FRAMES = 5;
 
-/** A Monster Bunker picks among this many of the nearest (`FindTargets(3)`, `BUILDING22.as:341`). */
+/**
+ * A Monster Bunker picks among this many of the nearest (`FindTargets(3)`,
+ * `BUILDING22.as:341`).
+ */
 const BUNKER_TARGETS = 3;
 /**
  * The monsters a Monster Bunker sends after a flyer, in the order it tries
@@ -1826,6 +1845,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const spurtzShells: SpurtzShell[] = [];
   /** The other towers' shells in the air, in the order fired (fidelity note 1). */
   const towerShells: TowerShell[] = [];
+  const blastWhereItLands = options.shellBlastsWhereItLands ?? SHELL_BLASTS_WHERE_IT_LANDS;
   /** Spurtz hatched this step, on their feet at its end: screen points, whole. */
   const pendingSpurtz: Array<{ readonly tower: Tower; readonly x: number; readonly y: number }> =
     [];
@@ -5496,9 +5516,23 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       });
       return;
     }
+    hurtOnTarget(tower.report, creep, shot, splash, flags);
+  };
+
+  /**
+   * `shot` on `creep` itself, then its blast round it, if any: an instant
+   * shot's, or a shell's with {@link SHELL_BLASTS_WHERE_IT_LANDS} off.
+   */
+  const hurtOnTarget = (
+    report: TowerReport,
+    creep: Creep,
+    shot: number,
+    splash: number,
+    flags: number,
+  ): void => {
     const before = creep.hp;
-    tower.report.damageDealt += damageCreep(creep, shot);
-    if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
+    report.damageDealt += damageCreep(creep, shot);
+    if (before > 0 && creep.hp <= 0) report.kills += 1;
     if (splash <= 0) return;
     // `DealLinearAEDamage` over the blast, with its floor of a fifth (`:340-389`),
     // of what the shell carries.
@@ -5506,8 +5540,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const linear = (shot / splash) * (splash - hit.dist);
       const dealt = Math.max(linear, shot / 5);
       const health = hit.creep.hp;
-      tower.report.damageDealt += damageCreep(hit.creep, dealt);
-      if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
+      report.damageDealt += damageCreep(hit.creep, dealt);
+      if (health > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
   };
 
@@ -5568,15 +5602,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * `DealLinearAEDamage` round the point it went off at, which is up to its
    * `speed` short of the target and, at a flyer, up in the air, so the target
    * takes only its share like the rest (`Targeting.as:340-389`). Without one,
-   * the target takes the shot.
+   * or with {@link SHELL_BLASTS_WHERE_IT_LANDS} off, the target takes the shot.
    */
   const landShell = (shell: TowerShell): void => {
     const report = shell.tower.report;
     const target = shell.target;
-    if (shell.splash <= 0) {
-      const before = target.hp;
-      report.damageDealt += damageCreep(target, shell.damage);
-      if (before > 0 && target.hp <= 0) report.kills += 1;
+    if (shell.splash <= 0 || !blastWhereItLands) {
+      hurtOnTarget(report, target, shell.damage, shell.splash, shell.flags);
       return;
     }
     const radius = shell.splash;

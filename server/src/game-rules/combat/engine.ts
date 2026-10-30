@@ -305,11 +305,18 @@ import {
  * Each is a deliberate simplification, cited, and each is a candidate for a
  * later pass rather than a bug.
  *
- * 1. **Projectiles land instantly.** A tower's `speed` is the flight time of
- *    its shot (`client/scripts/BTOWER.as:107`); the engine applies the damage
- *    on the tick the tower fires. A creep that would have outrun a slow shell
- *    does not here, so slow towers are slightly stronger and a creep killed by
- *    a shot already in the air dies a few ticks earlier.
+ * 1. **Tower shells fly, as Flash's do, but from fresh.** The Cannon, Sniper,
+ *    Aerial Defense, Inferno Cannon and Magma shots are shells that home on
+ *    their target at half their `speed` a loop (`BTOWER.as:107`,
+ *    `PROJECTILE.as`, `FIREBALL.as`) and hurt when they land; one whose target
+ *    has died is wasted. The Laser, Tesla, Railgun and Quake hurt at once, as
+ *    in Flash. Where it is not Flash: Flash pools its shells and a reused one
+ *    keeps its old frame count and heading, where every shell here starts
+ *    fresh (as the Spurtz's do, note 18); a flyer's height leaves out its
+ *    five-pixel bob; and a shell at a monster that retreated is gone, as the
+ *    monster is (note 7). A splash shell blasts where it lands, short of its
+ *    target and, at a flyer, up in the air, as Flash's does; that one quirk
+ *    hangs off {@link SHELL_BLASTS_WHERE_IT_LANDS}.
  * 2. **Unit steps use a normalised vector, not `cos(atan2(…))`.** The client
  *    advances `_tmpPoint`, a screen point, by `cos(atan2(dy, dx)) * speed` and
  *    the matching sine (`CreepBase.as:1679-1680`), which is the unit vector
@@ -492,9 +499,11 @@ import {
  *    them walk 1.5 times as fast and swing 1.5 times as often
  *    (`HyperSpeed.as`). The defender's boosts are its yard's; the attacker's
  *    are its main yard's, copied at attack start (`GLOBAL.as:816-822`,
- *    `MonsterBase.updateBuffs`, `:799-845`), and a wild raid has none. Where
- *    it is not Flash: a boost runs the whole battle if it was running when the
- *    battle began, where Flash's stops the moment it runs out.
+ *    `MonsterBase.updateBuffs`, `:799-845`), and a wild raid has none. Each
+ *    runs for the whole seconds it had left at the start ({@link BuffSpan}),
+ *    as in Flash: Tower Overdrive is looked at on every shot and stops the
+ *    moment it runs out; a monster's boosts are the ones on when it joins the
+ *    field, and it keeps them, since Flash never takes the modifiers off.
  * 20. **Walls block a shot on foot, as Flash's do (owner decision
  *    2026-10-23).** An attacker on foot shoots a building only with no
  *    standing Wall between it and the building's anchor, the target aside
@@ -621,23 +630,42 @@ export interface BattleOptions {
    * any fight outside the Descent, which then burns nothing.
    */
   readonly descentYard?: number;
+  /** Overrides {@link SHELL_BLASTS_WHERE_IT_LANDS} for this battle; absent, it holds. */
+  readonly shellBlastsWhereItLands?: boolean;
 }
 
 /**
  * The boosts one side's shop items give it in a battle (fidelity note 19):
  * Tower Overdrive (`TOD`), Monster Overdrive (`MOD`), the Monster Defensive
- * Buff (`MDOD`) and the Monster Speed Buff (`MSOD`). Each is on or absent.
+ * Buff (`MDOD`) and the Monster Speed Buff (`MSOD`). Each is a {@link BuffSpan}
+ * or absent.
  */
 export interface SideBuffs {
   /** Tower Overdrive: the side's towers do {@link TOWER_OVERDRIVE} times the damage. */
-  readonly towerDamage?: boolean;
+  readonly towerDamage?: BuffSpan;
   /** Monster Overdrive: its monsters do {@link MONSTER_OVERDRIVE} times the damage. */
-  readonly monsterDamage?: boolean;
+  readonly monsterDamage?: BuffSpan;
   /** Monster Defensive Buff: its monsters take {@link MONSTER_ARMOUR_BUFF} off every hit. */
-  readonly monsterArmour?: boolean;
+  readonly monsterArmour?: BuffSpan;
   /** Monster Speed Buff: its monsters walk and swing {@link MONSTER_SPEED_BUFF} times as fast. */
-  readonly monsterSpeed?: boolean;
+  readonly monsterSpeed?: BuffSpan;
 }
+
+/**
+ * How long a boost runs (fidelity note 19): the whole seconds it had left
+ * when the battle began, its end `e` less the start, or `true` for the whole
+ * battle, which is what a defence frozen before boosts could run out holds;
+ * `false` is off.
+ */
+export type BuffSpan = boolean | number;
+
+/**
+ * Whether a boost is on at `tick`: Flash's `boost.Get() >= GLOBAL.Timestamp()`
+ * (`BUILDING20.as:29`, `MonsterBase.as:802`), with the clock in whole seconds
+ * from the battle's start.
+ */
+export const buffOn = (span: BuffSpan | undefined, tick: number): boolean =>
+  span === true || (typeof span === "number" && Math.trunc(tick / TICKS_PER_SECOND) <= span);
 
 /** Each side's boosts ({@link SideBuffs}); the attacker's towers never fire. */
 export interface BattleBuffs {
@@ -1496,6 +1524,107 @@ interface SpurtzShell {
   readonly scale: number;
 }
 
+/**
+ * A tower's shell in the air (fidelity note 1): the Cannon's, Sniper's,
+ * Aerial Defense's and Inferno Cannon's `PROJECTILE` (`PROJECTILE.as`), or the
+ * Magma Tower's `FIREBALL` (`FIREBALL.as:92-162`). It homes on its target and
+ * does its damage once it is within its `speed` of it.
+ */
+interface TowerShell {
+  readonly tower: Tower;
+  readonly target: Creep;
+  /** `_tmpX`, `_tmpY`: where it is, on screen. */
+  x: number;
+  y: number;
+  /** `_xChange`, `_yChange`: its move a loop, re-aimed every fifth frame. */
+  stepX: number;
+  stepY: number;
+  /** `_frameNumber`, which starts at 4 (`ProjectileBase.as:59`). */
+  frame: number;
+  /** Its `_maxSpeed`: it moves half of this a loop and lands within all of it. */
+  readonly speed: number;
+  /** `int(damage * scale)`, fixed when it was fired. */
+  readonly damage: number;
+  readonly splash: number;
+  /** What its blast may hurt. */
+  readonly flags: number;
+  /**
+   * A `FIREBALL` aims at the target's `_tmpPoint` itself; a `PROJECTILE` at
+   * where it is drawn, `_mc.x`, `_mc.y`, which are whole.
+   */
+  readonly exact: boolean;
+}
+
+/**
+ * The towers whose shot flies (fidelity note 1), with `_top`, how far above
+ * the anchor it leaves from. The Sniper's sits higher on an Inferno yard
+ * (`BUILDING21.as:15`). Every other tower hurts at once.
+ */
+const SHELL_TOP: Readonly<Record<number, number>> = {
+  20: -4, // BUILDING20.as:17
+  21: -30, // BUILDING21.as:15
+  115: -5, // BUILDING115.as:31
+  130: -25, // INFERNO_CANNON_TOWER.as:14
+  132: -30, // INFERNO_MAGMA_TOWER.as:34
+};
+/** Whether a tower's shot is a shell that hurts when it lands, not when fired. */
+export const towerShellFlies = (type: number): boolean => SHELL_TOP[type] !== undefined;
+/** The Sniper's `_top` on an Inferno yard. */
+const SNIPER_INFERNO_TOP = -60;
+/** The Magma Tower, whose shell is a `FIREBALL` (`INFERNO_MAGMA_TOWER.as:77`). */
+const MAGMA_TOWER_TYPE = 132;
+/**
+ * How high a flyer is drawn, which a shell aims at: `m_altitudeMax`, 108, or
+ * 40 for IC5 (`CreepBase.as:144-150`). The five-pixel bob is left out.
+ */
+const FLYER_ALTITUDE = 108;
+const FLYER_ALTITUDES: Readonly<Record<string, number>> = { IC5: 40 };
+/**
+ * Flash's splash-altitude quirk (fidelity note 1), on as in Flash: a splash
+ * shell blasts round the point it lands at, up to its `speed` short of its
+ * target and, at a flyer, up at the height the flyer is drawn, so its target
+ * takes only a share, a small one in the air. Off, it still flies, but blasts
+ * on its target as an instant shot does: the whole shot to the target, the
+ * blast round it. The owner has yet to choose; a battle may override it with
+ * {@link BattleOptions.shellBlastsWhereItLands}.
+ */
+export const SHELL_BLASTS_WHERE_IT_LANDS = true;
+/** A shell re-aims on every fifth frame (`PROJECTILE.as:36`, `FIREBALL.as:128`). */
+const SHELL_AIM_FRAMES = 5;
+
+/**
+ * A Monster Bunker picks among this many of the nearest (`FindTargets(3)`,
+ * `BUILDING22.as:341`).
+ */
+const BUNKER_TARGETS = 3;
+/**
+ * The monsters a Monster Bunker sends after a flyer, in the order it tries
+ * them (`BUILDING22.as:348-359`): DAVE, Eye-ra, Balthazar, IC7.
+ */
+const BUNKER_INTERCEPTORS: readonly string[] = ["C12", "C5", "IC5", "IC7"];
+/** Of those, the ones that go only with their Monster Lab power-up. */
+const BUNKER_POWERED_INTERCEPTORS: ReadonlySet<string> = new Set(["C12", "C5"]);
+
+/**
+ * A bunker's kinds in the order it walks them to pick one for a walker, the
+ * monster list's: C1 up, then the Inferno's IC1 up. Flash walks its
+ * `_monsters` Dictionary and keeps the last kind with one to release
+ * (`BUILDING22.as:360-365`); that Dictionary's order is the Flash player's
+ * own, which no save keeps, so the engine takes the list it was filled from
+ * in Map Room 3 (`GLOBAL.player.monsterList`, `:653-661`).
+ */
+const byMonsterList = (
+  [one]: readonly [string, number],
+  [other]: readonly [string, number],
+): number => {
+  const oneInferno = one.startsWith("I");
+  if (oneInferno !== other.startsWith("I")) return oneInferno ? 1 : -1;
+  const oneNumber = Number(one.replace(/^\D+/, ""));
+  const otherNumber = Number(other.replace(/^\D+/, ""));
+  if (oneNumber !== otherNumber) return oneNumber - otherNumber;
+  return one < other ? -1 : one > other ? 1 : 0;
+};
+
 /** A Laser Tower's beam still sweeping (issue #267), `LASER` in Flash. */
 interface LaserBeam {
   readonly tower: Tower;
@@ -1714,6 +1843,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const pendingZombies: Array<{ readonly corpse: Corpse; readonly raiser: Creep }> = [];
   /** Spurtz Cannon shells in the air, in the order fired (issue #313, `FIREBALLS`). */
   const spurtzShells: SpurtzShell[] = [];
+  /** The other towers' shells in the air, in the order fired (fidelity note 1). */
+  const towerShells: TowerShell[] = [];
+  const blastWhereItLands = options.shellBlastsWhereItLands ?? SHELL_BLASTS_WHERE_IT_LANDS;
   /** Spurtz hatched this step, on their feet at its end: screen points, whole. */
   const pendingSpurtz: Array<{ readonly tower: Tower; readonly x: number; readonly y: number }> =
     [];
@@ -1742,16 +1874,24 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   let puttied = 0;
   /*
    * Each side's shop boosts (fidelity note 19). A creep is the defender's when
-   * it is friendly; a wild raid's raiders have none of the player's.
+   * it is friendly; a wild raid's raiders have none of the player's. A
+   * monster gets the ones on when it joins the field and keeps them: Flash's
+   * `updateBuffs` adds a boost's modifier and never takes it off
+   * (`MonsterBase.as:799-845`), so one that runs out mid-battle only misses
+   * the monsters that come later.
    */
   const attackerBuffs: SideBuffs = (options.raid ? undefined : options.buffs?.attacker) ?? {};
   const defenderBuffs: SideBuffs = options.buffs?.defender ?? {};
-  const buffsOf = (creep: Creep): SideBuffs => (creep.friendly ? defenderBuffs : attackerBuffs);
-  /** Tower Overdrive on the defender's towers' damage, 1 without it. */
-  const towerBoost = defenderBuffs.towerDamage ? TOWER_OVERDRIVE : 1;
+  const boosted = (creep: Creep, buff: keyof SideBuffs): boolean =>
+    buffOn((creep.friendly ? defenderBuffs : attackerBuffs)[buff], creep.born);
+  /**
+   * Tower Overdrive on the defender's towers' damage, 1 without it: looked at
+   * on every shot, so it stops the moment it runs out (`BUILDING20.as:29`).
+   */
+  const towerBoost = (): number => (buffOn(defenderBuffs.towerDamage, tick) ? TOWER_OVERDRIVE : 1);
   /** Monster Overdrive (`MonsterDust.as`), on a creep as it joins the field. */
   const boostDamage = (creep: Creep): void => {
-    if (buffsOf(creep).monsterDamage) creep.damage *= MONSTER_OVERDRIVE;
+    if (boosted(creep, "monsterDamage")) creep.damage *= MONSTER_OVERDRIVE;
   };
   let nextCreepId = 1;
   let creepsFlung = 0;
@@ -2141,7 +2281,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.armour > 0) raw *= 1 - creep.armour;
     if (creep.puttyArmour > 0) raw *= 1 - creep.puttyArmour;
     // The Monster Defensive Buff is armour of its own too (`BeastMode.as`).
-    if (buffsOf(creep).monsterArmour) raw *= 1 - MONSTER_ARMOUR_BUFF;
+    if (boosted(creep, "monsterArmour")) raw *= 1 - MONSTER_ARMOUR_BUFF;
     const applied = Math.min(raw, creep.hp);
     if (applied > 0) {
       visual.push({
@@ -2932,7 +3072,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * never comes out.
    */
   const damageCaged = (slot: CageSlot, raw: number): void => {
-    const dealt = defenderBuffs.monsterArmour ? raw * (1 - MONSTER_ARMOUR_BUFF) : raw;
+    const dealt = buffOn(defenderBuffs.monsterArmour, tick) ? raw * (1 - MONSTER_ARMOUR_BUFF) : raw;
     const hp = Math.max(0, slot.report.hp - dealt);
     slot.report.hp = hp;
     if (slot.champion) slot.champion.hp = hp;
@@ -3136,8 +3276,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         else if (inside > 0) {
           const range = towerStats(building.type, building.level, yard.kind)?.range ?? 0;
           const scan = towerScanPoint(building);
+          // Flyers count only for a bunker that would send at them (`BUILDING22.as:123`).
+          const flags = oldStyleTargets(bunkerInterceptor(bunker) ? 1 : 0);
           open =
-            (range > 0 && index.inRange(range, scan.x, scan.y, oldStyleTargets(1)).length > 0) ||
+            (range > 0 && index.inRange(range, scan.x, scan.y, flags).length > 0) ||
             decoyOver(building);
         }
       }
@@ -3642,7 +3784,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const swingDelay = (creep: Creep): number => {
     let boost = creep.enrage * creep.puttySpeed;
     // The Monster Speed Buff divides the delay too (`HyperSpeed.as`, `DivisionModifier`).
-    if (buffsOf(creep).monsterSpeed) boost *= MONSTER_SPEED_BUFF;
+    if (boosted(creep, "monsterSpeed")) boost *= MONSTER_SPEED_BUFF;
     // A ranked Bandito spins faster: 1, 1.5, 2 x (`BanditoAOEDamageSpin.as:23`, issue #352).
     if (creep.rank > 0 && creep.monsterId === BANDITO_ID) {
       boost *= banditoSpeedPercent(creep.rank) / 100;
@@ -4155,7 +4297,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // A putty bomb's boost, on top of Fomor's (`ResourceBomb.as:170-185`).
     if (creep.puttySpeed !== 1) speed *= creep.puttySpeed;
     // The Monster Speed Buff (`HyperSpeed.k_moveSpeedModifier`).
-    if (buffsOf(creep).monsterSpeed) speed *= MONSTER_SPEED_BUFF;
+    if (boosted(creep, "monsterSpeed")) speed *= MONSTER_SPEED_BUFF;
     const factor = BEHAVIOUR_SPEED[creep.behaviour];
     if (factor !== undefined) speed *= factor;
     if (creep.attacking) return;
@@ -5203,7 +5345,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const base = stats?.damage;
     if (stats?.range === undefined || base === undefined) return;
     // Tower Overdrive (fidelity note 19): on the shot before it is cut to a whole number.
-    const damage = towerBoost === 1 ? base : base * towerBoost;
+    const boost = towerBoost();
+    const damage = boost === 1 ? base : base * boost;
     if (building.type === AERIAL_DEFENSE_TYPE) {
       tickSalvo(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
       return;
@@ -5330,7 +5473,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     hose.health -= Math.trunc((power / tower.range) * (tower.range - hall));
   };
 
-  /** A shell at `creep` carrying `shot`, then its blast, if it has one. */
+  /**
+   * A shell at `creep` carrying `shot`. A tower in {@link SHELL_TOP} sends it
+   * flying ({@link tickTowerShells}); any other hurts at once, its blast too.
+   */
   const fireShell = (
     tower: Tower,
     creep: Creep,
@@ -5346,9 +5492,47 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ix: creep.ix,
       iy: creep.iy,
     });
+    const building = tower.building;
+    const top = SHELL_TOP[building.type];
+    if (top !== undefined) {
+      // `PROJECTILES.Spawn(new Point(_mc.x, _mc.y + _top), ...)` (`BUILDING20.as:43`
+      // and the others), or `FIREBALLS.Spawn2` for the Magma Tower.
+      const rise = building.type === 21 && yard.kind === "inferno" ? SNIPER_INFERNO_TOP : top;
+      const fireball = building.type === MAGMA_TOWER_TYPE;
+      towerShells.push({
+        tower,
+        target: creep,
+        x: building.sx,
+        y: building.sy + rise,
+        stepX: 0,
+        stepY: 0,
+        frame: 4,
+        speed: towerStats(building.type, building.level, yard.kind)?.speed ?? 0,
+        damage: shot,
+        // A `FIREBALL` at a flyer has no blast (`FIREBALLS.as:103-108`).
+        splash: fireball && creep.flying ? 0 : splash,
+        flags,
+        exact: fireball,
+      });
+      return;
+    }
+    hurtOnTarget(tower.report, creep, shot, splash, flags);
+  };
+
+  /**
+   * `shot` on `creep` itself, then its blast round it, if any: an instant
+   * shot's, or a shell's with {@link SHELL_BLASTS_WHERE_IT_LANDS} off.
+   */
+  const hurtOnTarget = (
+    report: TowerReport,
+    creep: Creep,
+    shot: number,
+    splash: number,
+    flags: number,
+  ): void => {
     const before = creep.hp;
-    tower.report.damageDealt += damageCreep(creep, shot);
-    if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
+    report.damageDealt += damageCreep(creep, shot);
+    if (before > 0 && creep.hp <= 0) report.kills += 1;
     if (splash <= 0) return;
     // `DealLinearAEDamage` over the blast, with its floor of a fifth (`:340-389`),
     // of what the shell carries.
@@ -5356,8 +5540,87 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const linear = (shot / splash) * (splash - hit.dist);
       const dealt = Math.max(linear, shot / 5);
       const health = hit.creep.hp;
-      tower.report.damageDealt += damageCreep(hit.creep, dealt);
-      if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
+      report.damageDealt += damageCreep(hit.creep, dealt);
+      if (health > 0 && hit.creep.hp <= 0) report.kills += 1;
+    }
+  };
+
+  /**
+   * `PROJECTILES.Tick` then `FIREBALLS.Tick` for the towers' shells, after the
+   * creeps, in the order fired (`GLOBAL.as:1290-1291`). A shell whose target
+   * has died is gone, its blast with it (`PROJECTILE.as:20-23`); the
+   * Magma's `FIREBALL` flies on to land on nothing (`FIREBALL.as:142-146`),
+   * which comes to the same. One whose target has left the field is gone too.
+   */
+  const tickTowerShells = (): void => {
+    if (towerShells.length === 0) return;
+    // The blasts look for creeps where they stand now, after their moves.
+    index.rebuild(creeps);
+    let write = 0;
+    for (let read = 0; read < towerShells.length; read += 1) {
+      const shell = towerShells[read] as TowerShell;
+      if (flyShell(shell)) continue;
+      towerShells[write] = shell;
+      write += 1;
+    }
+    towerShells.length = write;
+  };
+
+  /**
+   * One loop of a shell (`PROJECTILE.Tick` and `Move`, `PROJECTILE.as:18-53`):
+   * the distance to its target, as a whole number, then its move, then that
+   * distance less the move, whole again; within its `speed`, it lands. True
+   * once it is done with.
+   */
+  const flyShell = (shell: TowerShell): boolean => {
+    shell.frame += 1;
+    const target = shell.target;
+    if (target.hp <= 0 || target.gone) return true;
+    const at = screenPointOf(target.ix, target.iy);
+    // A flyer is aimed at where it is drawn, its altitude up (`PROJECTILE.as:24`).
+    const lift = target.flying ? (FLYER_ALTITUDES[target.monsterId] ?? FLYER_ALTITUDE) : 0;
+    const aimX = shell.exact ? at.x : Math.trunc(at.x);
+    const aimY = (shell.exact ? at.y : Math.trunc(at.y)) - lift;
+    const toX = aimX - shell.x;
+    const toY = aimY - shell.y;
+    const length = Math.sqrt(toX * toX + toY * toY);
+    const step = shell.speed * 0.5;
+    if (shell.frame % SHELL_AIM_FRAMES === 0) {
+      // `cos(atan2(dy, dx))` and its sine: the unit vector (note 2); `atan2(0, 0)` is 0.
+      shell.stepX = length > 0 ? (toX / length) * step : step;
+      shell.stepY = length > 0 ? (toY / length) * step : 0;
+    }
+    shell.x += shell.stepX;
+    shell.y += shell.stepY;
+    if (Math.trunc(Math.trunc(length) - step) > shell.speed) return false;
+    landShell(shell);
+    return true;
+  };
+
+  /**
+   * A shell lands. With a blast, `PROJECTILE.Splash` (`PROJECTILE.as:63-68`):
+   * `DealLinearAEDamage` round the point it went off at, which is up to its
+   * `speed` short of the target and, at a flyer, up in the air, so the target
+   * takes only its share like the rest (`Targeting.as:340-389`). Without one,
+   * or with {@link SHELL_BLASTS_WHERE_IT_LANDS} off, the target takes the shot.
+   */
+  const landShell = (shell: TowerShell): void => {
+    const report = shell.tower.report;
+    const target = shell.target;
+    if (shell.splash <= 0 || !blastWhereItLands) {
+      hurtOnTarget(report, target, shell.damage, shell.splash, shell.flags);
+      return;
+    }
+    const radius = shell.splash;
+    const centre = fromIso(shell.x, shell.y);
+    for (const hit of index.inRange(radius, centre.x, centre.y, shell.flags)) {
+      const dist = Math.trunc(hit.dist);
+      if (radius < dist) continue;
+      const linear = Math.trunc((shell.damage / radius) * (radius - dist));
+      const dealt = Math.max(linear, Math.trunc(shell.damage / 5));
+      const before = hit.creep.hp;
+      report.damageDealt += damageCreep(hit.creep, dealt);
+      if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
   };
 
@@ -5375,7 +5638,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const stats = towerStats(building.type, building.level, yard.kind);
     const base = stats?.damage;
     if (stats?.range === undefined || base === undefined) return;
-    const damage = towerBoost === 1 ? base : base * towerBoost;
+    const boost = towerBoost();
+    const damage = boost === 1 ? base : base * boost;
 
     tower.fireTick -= 1;
     if (tower.fireTick <= 0) {
@@ -5912,22 +6176,54 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const stats = towerStats(building.type, building.level, yard.kind);
     const range = stats?.range ?? 0;
     if (range <= 0) return;
-    // A bunker sends its defenders at anything attacking, air or ground
-    // (`BUILDING22.as:340-354`); the interceptor pick is the random draw.
-    // Scanned from the middle of the footprint, like a tower (`BUILDING22.as:90`).
+    // `FindTargets(3)` (`BUILDING22.as:80-160`): the three nearest walkers, and
+    // the three nearest flyers only for a bunker holding a monster that can
+    // hit one. Scanned from the middle of the footprint, like a tower (`:90`).
     const scan = towerScanPoint(building);
-    const found = index.inRange(range, scan.x, scan.y, oldStyleTargets(1));
-    if (found.length === 0) return;
+    const walkers = index
+      .inRange(range, scan.x, scan.y, oldStyleTargets(0))
+      .slice(0, BUNKER_TARGETS);
+    const interceptor = bunkerInterceptor(bunker);
+    const flyers = interceptor
+      ? index.inRange(range, scan.x, scan.y, oldStyleTargets(2)).slice(0, BUNKER_TARGETS)
+      : [];
 
-    const ids: string[] = [];
-    for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
-      // A healer has nothing to fight with, so it stays in (issue #195).
-      if (count > 0 && monsterStat(monsterId, "damage", 1) > 0) ids.push(monsterId);
+    // `:345-365`: an interceptor after a flyer; else, at a walker, the last
+    // kind in the bunker's list with one still in. A healer has nothing to
+    // fight with, so it stays in (issue #195).
+    let monsterId = flyers.length > 0 ? interceptor : undefined;
+    let foes = flyers;
+    if (!monsterId && walkers.length > 0) {
+      foes = walkers;
+      for (const [id, count] of [...bunker.pool.entries()].sort(byMonsterList)) {
+        if (count > 0 && monsterStat(id, "damage", 1) > 0) monsterId = id;
+      }
     }
-    if (ids.length === 0) return;
-    const monsterId = ids[rng.int(ids.length)] as string;
-    sendFromBunker(bunker, monsterId, (found[0] as { creep: Creep }).creep, range, scan);
+    if (!monsterId) return;
+    // Its target is any of the three, at random (`:384-388`).
+    const foe = (foes[rng.int(foes.length)] as { creep: Creep }).creep;
+    const defender = sendFromBunker(bunker, monsterId, foe, range, scan);
+    // It looks for foes of its own with its `targetMode` (`CreepBase.as:663`):
+    // air and ground for an interceptor, else ground only.
+    defender.hitFlags = oldStyleTargets(interceptsFlyers(monsterId) ? 1 : 0);
   };
+
+  /**
+   * Whether a Monster Bunker's monster can go after a flyer (`BUILDING22.as:123`,
+   * `:348-359`): a DAVE or an Eye-ra with its Monster Lab power-up, or a
+   * Balthazar or an IC7.
+   */
+  const interceptsFlyers = (monsterId: string): boolean =>
+    BUNKER_INTERCEPTORS.includes(monsterId) &&
+    (!BUNKER_POWERED_INTERCEPTORS.has(monsterId) || rankOf(options.defenderRanks, monsterId) > 0);
+
+  /**
+   * The interceptor a Monster Bunker would send after a flyer: the first of
+   * {@link BUNKER_INTERCEPTORS} it still holds. Without one it never looks at
+   * flyers, and stays shut for them.
+   */
+  const bunkerInterceptor = (bunker: Bunker): string | undefined =>
+    BUNKER_INTERCEPTORS.find((id) => (bunker.pool.get(id) ?? 0) > 0 && interceptsFlyers(id));
 
   /**
    * A Housing Bunker's turn ({@link HOUSING_BUNKER_TYPE}): every 30 ticks, a
@@ -5981,7 +6277,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     foe: Creep,
     range: number,
     scan: Cart,
-  ): void => {
+  ): Creep => {
     const building = bunker.building;
     bunker.pool.set(monsterId, (bunker.pool.get(monsterId) ?? 0) - 1);
     bunker.dispatched += 1;
@@ -6007,6 +6303,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       centreY: scan.y,
       leash: range,
     };
+    return defender;
   };
 
   /**
@@ -6276,6 +6573,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (creep.burrows) tickBurrow(creep);
     }
     tickLeaving();
+    tickTowerShells();
 
     if (creeps.length > 0) {
       let write = 0;

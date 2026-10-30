@@ -113,7 +113,8 @@ export const storeBuffs = (
     if (side === "attacker" && buff === "towerDamage") continue;
     const ends = Number(record(store[item])?.e);
     if (!Number.isFinite(ends) || ends <= now) continue;
-    // `TOD` and `TODI` both feed the one `_towerOverdrive`, the later read winning (`STORE.as:2436-2444`).
+    // `TOD` and `TODI` both feed the one `_towerOverdrive`, the later read
+    // winning (`STORE.as:2436-2444`).
     buffs[buff] = Math.floor(ends - now);
   }
   return Object.keys(buffs).length > 0 ? buffs : undefined;

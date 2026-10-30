@@ -4,20 +4,23 @@ import { rangePointOf } from "@/game/combat/rules";
  * Holds back what a tower's bullet did to the creeps until the bullet has
  * landed (issue #77).
  *
- * The engine applies a tower's damage on the tick it fires: the shot, the
- * target's wound, any splash wounds and any deaths all arrive in one run of
- * `recentEvents`. Flash did not. The Sniper, Cannon and Aerial towers spawn a
- * `PROJECTILE` whose `Move` calls `modifyHealth` only once it is within a
- * speed of its target (`client/scripts/PROJECTILE.as:31-50`), and `Splash`
- * deals the blast there. The Tesla (`BUILDING25.as:145`) and the Railgun
- * (`BUILDING118.as:195`) hurt at once, as does the Laser's beam, so their
- * wounds are shown at once too.
+ * The Cannon, Sniper, Aerial Defense, Inferno Cannon and Magma shells now fly
+ * in the engine too and hurt on the tick they land (engine fidelity note 1,
+ * `towerShellFlies`), so the layer holds nothing for them and shows their
+ * wounds as they come. What follows is for a tower drawn as a bullet whose
+ * engine shot still hurts at once.
  *
- * The combat rules are shared with the server and stay as they are. The delay
- * lives in the picture only: the layer shows a creep's health as the engine's
- * plus whatever this still holds for it, floats the number and tints the body
- * when the bullet lands, and keeps a creep that the held wound killed on
- * screen, standing, until then — the bullet lands, then it dies.
+ * Such a tower's damage lands on the tick it fires: the shot, the
+ * target's wound, any splash wounds and any deaths all arrive in one run of
+ * `recentEvents`, where Flash's `PROJECTILE` calls `modifyHealth` only once it
+ * is within a speed of its target (`client/scripts/PROJECTILE.as:31-50`). The
+ * Tesla (`BUILDING25.as:145`) and the Railgun (`BUILDING118.as:195`) hurt at
+ * once, as does the Laser's beam, so their wounds are shown at once too.
+ *
+ * The delay lives in the picture only: the layer shows a creep's health as
+ * the engine's plus whatever this still holds for it, floats the number and
+ * tints the body when the bullet lands, and keeps a creep that the held wound
+ * killed on screen, standing, until then — the bullet lands, then it dies.
  *
  * ## Which wounds belong to a bullet
  *
