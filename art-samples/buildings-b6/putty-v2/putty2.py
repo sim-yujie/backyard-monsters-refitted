@@ -12,11 +12,12 @@ on it, no outline, Flash's soft light.
 The body is the pot (stack.py). Level 1 stands it on the ground with the press block on its rim, the hand wheel on its
 side and the test tube beside it on a gold arm. Level 3 sets the same pot in the purple frame on four log stumps (which
 lifts it and every part on it) and bolts two pale arches over it. Level 6 adds the hub on the arches with the flask,
-the valve wheel and the arm that now holds the test tube up. Level 10 adds the cage wheel on the hub's axle, the coil
-and the basin, and springs round the stumps.
+the valve wheel and the arm that now holds the test tube up. Level 10 adds the cage wheel on a cranked axle out of the
+hub, the coil and the basin, and springs round the stumps.
 
 Animation, as Flash (worked out from the frames, see the report): the gold stirrer goes round three times a loop and the
-putty's swirl once, clockwise from above, at an even speed; at level 10 the cage wheel turns as well. Nothing else
+putty's swirl once, clockwise from above, at an even speed; at level 10 the cage wheel turns two rungs a loop,
+anticlockwise on screen (work/spin_dir.py measures Flash's and the 3D's way round). Nothing else
 moves. Stillness is built in as in pebble2.py: the base picture is rendered once, each frame renders only the moving
 parts with every still part as a holdout, and post.py lays that layer over the base.
 """
@@ -275,7 +276,9 @@ def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, di
         geo = t.n("ShaderNodeNewGeometry")
         sep = t.n("ShaderNodeSeparateXYZ")
         t.link(geo.outputs["Normal"], sep.inputs[0])
-        out = t.mix(out, srgb(*top), t.ramp(sep.outputs["Z"], [(0.3, (0, 0, 0, 1)), (0.8, (1, 1, 1, 1))]))
+        up = t.n("ShaderNodeMath", operation="ABSOLUTE")         # a box's faces may wind either way
+        t.link(sep.outputs["Z"], up.inputs[0])
+        out = t.mix(out, srgb(*top), t.ramp(up.outputs[0], [(0.3, (0, 0, 0, 1)), (0.8, (1, 1, 1, 1))]))
     out = t.grime(out, GROUND, 2.6, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rough_in, "metal": metal, "spec": spec})
     t.bump(t.noise(v, scale * 3, 4.0, 0.6), 0.06, 0.01)
@@ -501,27 +504,30 @@ def spinner(name, center, normal_bearing, tilt, parts):
 def materials():
     M = {}
     # the pot: Flash's sooty orange-gold, worn lighter on the bulges, soot running down, dark seams
-    M["pot"] = painted("pot", (198, 112, 18), rough=0.5, metal=0.25, wear=(242, 172, 40), rust=(52, 28, 6), scale=1.1,
-                       dirt=0.55, spec=0.35, rust_at=0.52)
-    M["potin"] = painted("potin", (150, 66, 30), rough=0.7, wear=(176, 92, 40), rust=(84, 34, 18), scale=3.5, dirt=0.2,
+    # every material matte (no mirror shine): Flash's surfaces are soft and dull
+    # the pot: Flash's deep orange-gold, big dark soot patches (Flash (185, 114, 35), soot (44, 26, 0)), dark seams
+    M["pot"] = painted("pot", (204, 124, 22), rough=0.7, metal=0.0, wear=(232, 160, 42), rust=(44, 26, 0), scale=1.6,
+                       dirt=0.45, spec=0.3, rust_at=0.56, soot=0.3)
+    M["potin"] = painted("potin", (112, 46, 22), rough=0.8, wear=(138, 66, 30), rust=(58, 24, 12), scale=3.5, dirt=0.2,
                          spec=0.2)
-    M["seam"] = flat("seam", (88, 46, 18), rough=0.7)
-    M["putty"] = painted("putty", (128, 74, 176), rough=0.38, wear=(170, 118, 214), scale=1.6, dirt=0.0, spec=0.35)
-    M["gold"] = painted("gold", (222, 166, 36), rough=0.42, metal=0.55, wear=(250, 214, 108), scale=6, dirt=0.15,
-                        spec=0.4)
-    M["purple"] = painted("purple", (64, 28, 102), rough=0.45, wear=(96, 54, 144), scale=2.5, dirt=0.3, spec=0.35,
-                          top=(118, 78, 170), ao_min=0.6)
+    M["seam"] = flat("seam", (70, 36, 10), rough=0.8)
+    M["putty"] = painted("putty", (92, 46, 140), rough=0.55, wear=(130, 84, 182), scale=1.6, dirt=0.0, spec=0.3)
+    M["gold"] = painted("gold", (214, 156, 30), rough=0.58, metal=0.25, wear=(240, 200, 96), scale=6, dirt=0.15,
+                        spec=0.35)
+    M["purple"] = painted("purple", (38, 15, 60), rough=0.62, wear=(62, 32, 92), scale=2.5, dirt=0.3, spec=0.3,
+                          top=(92, 60, 134), ao_min=0.55)
     M["stump"] = lambda axis="Z": wood("stump", (206, 164, 142), (156, 116, 98), axis, rings=5, dirt=0.25)
     M["stumptop"] = painted("stumptop", (232, 204, 184), rough=0.8, wear=(204, 166, 144), scale=4, dirt=0.0)
-    M["arch"] = painted("arch", (178, 148, 102), rough=0.75, wear=(212, 182, 134), rust=(112, 90, 56), scale=2.2,
-                        dirt=0.25, spec=0.25, soot=0.35)
-    M["block"] = painted("block", (92, 76, 66), rough=0.8, wear=(132, 112, 90), scale=2.0, dirt=0.2, spec=0.25,
-                         soot=0.6, top=(218, 182, 122))
+    M["arch"] = painted("arch", (172, 146, 100), rough=0.8, wear=(204, 178, 132), rust=(96, 78, 46), scale=2.2,
+                        dirt=0.3, spec=0.25, soot=0.45)
+    # the block: a pale tan top, brown sides smudged with black soot (Flash (122, 101, 58) on top, (34, 24, 30) in the soot)
+    M["block"] = painted("block", (92, 76, 54), rough=0.85, wear=(124, 104, 70), scale=2.0, dirt=0.45, spec=0.2,
+                         soot=0.9, top=(158, 134, 86))
     M["hole"] = flat("hole", (22, 14, 12), rough=1.0)
-    M["glass"] = painted("glass", (196, 198, 214), rough=0.3, wear=(232, 234, 244), scale=4, dirt=0.0, spec=0.5)
-    M["liquid"] = painted("liquid", (140, 84, 196), rough=0.3, wear=(178, 130, 226), scale=3, dirt=0.0, spec=0.5)
-    M["cap"] = painted("cap", (222, 222, 232), rough=0.5, wear=(196, 196, 210), scale=5, dirt=0.0)
-    M["steel"] = painted("steel", (150, 154, 166), rough=0.42, metal=0.6, wear=(196, 200, 212), scale=8, dirt=0.1)
+    M["glass"] = painted("glass", (184, 196, 210), rough=0.45, wear=(226, 232, 242), scale=4, dirt=0.0, spec=0.4)
+    M["liquid"] = painted("liquid", (124, 70, 180), rough=0.45, wear=(164, 116, 214), scale=3, dirt=0.0, spec=0.4)
+    M["cap"] = painted("cap", (222, 222, 232), rough=0.6, wear=(196, 196, 210), scale=5, dirt=0.0)
+    M["steel"] = painted("steel", (150, 154, 166), rough=0.55, metal=0.3, wear=(196, 200, 212), scale=8, dirt=0.1)
     return M
 
 
@@ -579,11 +585,15 @@ def handwheel(name, r, mat, parent, spokes=4, rim=0.07, knob=True):
     return obs
 
 
+# the pot's side: a round foot (narrow where the rails pass it), the wide belly (full to the posts, as Flash's), in to the rim
+POT_PROF = [(0.0, 0.0), (1.1, 0.0), (1.24, 0.1), (1.3, 0.37), (1.66, 0.62), (1.85, 0.95), (S.POT_RMAX, 1.3), (S.POT_RMAX, 1.9),
+            (1.86, 2.4), (1.78, 2.78), (1.71, S.POT_H - 0.12)]
+
+
 def pot():
     """The pot: a round-bellied cauldron with a rolled rim, dark seams and rivets; rusty inside."""
     H, RM = S.POT_H, S.POT_RMAX
-    prof = [(0.0, 0.0), (0.86, 0.0), (1.3, 0.1), (1.6, 0.36), (1.8, 0.78), (RM, 1.3), (RM, 1.9), (1.86, 2.4),
-            (1.78, 2.78), (1.71, H - 0.12)]
+    prof = POT_PROF
     lathe("pot", prof, (0, 0, ZP), M["pot"], verts=64)
     # the rolled rim
     lathe("potrim", [(1.66, H - 0.14), (1.73, H - 0.15), (S.POT_R, H - 0.08), (S.POT_R, H - 0.02), (1.7, H),
@@ -721,9 +731,9 @@ def frame():
     for i, c in enumerate(cs):
         d = c.normalized()
         cyl(f"post{i}", S.POST_R, zt - zr, (c.x, c.y, zr), M["purple"], verts=20, bevel=0.0)
-        lathe(f"postknob{i}", [(0.0, -0.05), (S.POST_R * 1.08, 0.0), (S.POST_R * 1.18, 0.14), (S.POST_R * 0.95, 0.34),
-                               (0.0, 0.4)], (c.x, c.y, zt - 0.05), M["purple"], verts=20)
-        lathe(f"postfoot{i}", [(0.0, 0.0), (S.POST_R * 1.35, 0.0), (S.POST_R * 1.2, 0.18), (S.POST_R * 0.99, 0.32),
+        lathe(f"postknob{i}", [(0.0, -0.05), (S.POST_R * 1.1, 0.0), (S.POST_R * 1.35, 0.14), (S.POST_R * 1.32, 0.3),
+                               (S.POST_R * 1.0, 0.44), (0.0, 0.49)], (c.x, c.y, zt - 0.05), M["purple"], verts=20)
+        lathe(f"postfoot{i}", [(0.0, 0.0), (S.POST_R * 1.6, 0.0), (S.POST_R * 1.4, 0.22), (S.POST_R * 0.99, 0.4),
                                (0.0, 0.32)], (c.x, c.y, zr + t / 2 - 0.04), M["purple"], verts=20)
         # the bracket from the post's top to the pot, under the rim
         zb = ZR - 0.35
@@ -756,7 +766,7 @@ def arches():
         sweep(f"arch{i}", pts, (1, 0, 0), 0.54, 0.46, M["arch"], bevel=0.12,
               taper=lambda s: 1.15 - 0.2 * math.sin(math.pi * s))
         # the far foot's seat on the rim
-        box(f"archseat{i}", (0.56, 0.5, 0.14), (x, y1 - 0.05, ZR - 0.02), M["arch"], bevel=0.05)
+        box(f"archseat{i}", (0.5, 0.4, 0.14), (x, y1 - 0.05, ZR - 0.02), M["arch"], bevel=0.05)
 
 
 def helix(name, c, r, z0, z1, turns, wire, mat, axis=None, parent=None):
@@ -776,12 +786,14 @@ def hub():
     place at level 10), the valve wheel on its shaft out to the left and the gold arm out to the right."""
     zh = S.z_hub(L)
     x0, x1 = S.ARCH_X
-    ob = cyl("hub", S.HUB_R, (x1 - x0) + 0.5, (x0 - 0.25, 0, zh), M["arch"], verts=28, bevel=0.06)
-    ob.rotation_euler = (0, math.radians(90), 0)
-    for k, x in enumerate((x0 - 0.25, x1 + 0.25)):    # an iron band and an axle hole on each end
-        ob = cyl(f"hubband{k}", S.HUB_R + 0.03, 0.12, (x - 0.06, 0, zh), M["gold"], verts=28, bevel=0.02)
-        ob.rotation_euler = (0, math.radians(90), 0)
-    ob = cyl("hubhole", 0.2, 0.06, (x1 + 0.24, 0, zh), M["hole"], verts=16, bevel=0.0)
+    # the hub: a big round tan boss (as Flash's), fat in the middle and rounded off at the ends, a raised ring round
+    # the axle hole on its end toward the viewer's right
+    hr, hl = S.HUB_R, x1 + 0.18
+    lathe("hub", [(0.0, -hl), (hr * 0.62, -hl), (hr * 0.88, -hl + 0.1), (hr, -hl + 0.32), (hr, hl - 0.32),
+                  (hr * 0.88, hl - 0.1), (hr * 0.62, hl), (0.0, hl)], (0, 0, zh), M["arch"], rot=(0, 90, 0), verts=32)
+    lathe("hubring", [(0.0, -0.05), (0.4, -0.05), (0.42, 0.06), (0.36, 0.13), (0.24, 0.13), (0.2, 0.06), (0.0, 0.06)],
+          (hl - 0.02, 0, zh), M["arch"], rot=(0, 90, 0), verts=24)
+    ob = cyl("hubhole", 0.19, 0.04, (hl + 0.09, 0, zh), M["hole"], verts=16, bevel=0.0)
     ob.rotation_euler = (0, math.radians(90), 0)
     # the flask: a purple bulb on a collar on the hub's top, a glass neck
     fx, fy = S.FLASK
@@ -801,6 +813,9 @@ def hub():
             pts.append(Vector((m.x - h.x / 2 * math.cos(a), m.y - h.y / 2 * math.cos(a), top - 0.3 + 0.3 * math.sin(a))))
         pts += [Vector((p1.x, p1.y, top - 0.3)), p1]
         tube("flaskloop", pts, 0.07, M["glass"], verts=10)
+        # where the loop goes into the hub: a tan knob with a dark mouth (Flash's dark hole over the hub)
+        lathe("hubknob", [(0.0, -0.1), (0.22, -0.1), (0.24, 0.1), (0.19, 0.2), (0.11, 0.2), (0.11, 0.12), (0.0, 0.12)],
+              (p1.x, p1.y, p1.z - 0.02), M["arch"], verts=20)
     # the valve wheel on its shaft along -Y
     zv = zh + S.VALVE_UP
     tube("valveshaft", [(0.0, -S.HUB_R + 0.1, zh), (0.0, -S.HUB_R - 0.5, zh), (0.0, S.VALVE_Y + 0.6, zv),
@@ -812,7 +827,7 @@ def hub():
     handwheel("valve", S.VALVE_R, M["gold"], e, spokes=5)
     # the arm out to the right: from the hub's end to the tube's holder
     zt = S.TUBE_TOP6
-    tube_and_holder(zt - S.TUBE_LEN6, zt, [(x1 + 0.3, 0.0, zh - 0.3), (x1 + 0.6, 0.06, zh - 0.3)])
+    tube_and_holder(zt - S.TUBE_LEN6, zt, [(hl - 0.05, 0.0, zh + 0.3), (hl + 0.3, 0.06, zh + 0.28)])
 
 
 def cage():
@@ -820,7 +835,9 @@ def cage():
     hub, putty clinging to the rungs and sagging between them. It turns (two rungs a loop)."""
     zh = S.z_hub(L)
     y1 = S.CAGE_Y + S.CAGE_W / 2
-    tube("cageaxle", [(0.0, S.HUB_R - 0.1, zh), (0.0, y1 + 0.2, zh)], 0.08, M["steel"], verts=10)
+    zc = zh - S.CAGE_DOWN
+    tube("cageaxle", [(0.0, S.HUB_R - 0.1, zh), (0.0, S.HUB_R + 0.25, zh), (0.0, S.HUB_R + 0.55, zc),
+                      (0.0, y1 + 0.2, zc)], 0.08, M["steel"], verts=10)
     rnd = R(31)
 
     def parts(hub):
@@ -838,32 +855,41 @@ def cage():
             c, sn = math.cos(a), math.sin(a)
             tube(f"cagerung{j}", [(rr * c, rr * sn, -S.CAGE_W / 2), (rr * c, rr * sn, S.CAGE_W / 2)], 0.055, M["gold"],
                  parent=hub, verts=8)
-            # putty clinging to the rung: two lumps on it and a string sagging toward the next rung
-            for t in (-0.3, 0.25):
-                bm = bmesh.new()
-                bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=1.0)
-                for v in bm.verts:
-                    v.co.x *= 0.22
-                    v.co.y *= 0.22
-                    v.co.z *= 0.26
-                ob = mesh_ob(f"cageputty{j}_{t}", bm, [M["putty"]], parent=hub)
-                ob.location = ((rr - 0.04) * c, (rr - 0.04) * sn, t * S.CAGE_W / 2 + rnd.uniform(-0.1, 0.1))
+            # putty clinging to the rung: a fat lump over most of it (Flash's big purple knobs on the rim)
+            bm = bmesh.new()
+            bmesh.ops.create_uvsphere(bm, u_segments=14, v_segments=10, radius=1.0)
+            for v in bm.verts:
+                v.co.x *= 0.3
+                v.co.y *= 0.3
+                v.co.z *= 0.42
+            ob = mesh_ob(f"cageputty{j}", bm, [M["putty"]], parent=hub)
+            ob.location = ((rr - 0.02) * c, (rr - 0.02) * sn, rnd.uniform(-0.06, 0.06))
+            ob.rotation_euler = (0, 0, a)
+            # a string sagging in toward the next rung, both sides
             b = a + math.pi / S.CAGE_RUNGS
             a2 = a + 2 * math.pi / S.CAGE_RUNGS
-            for zz in (-0.35, 0.3):
-                tube(f"cagestring{j}_{zz}", [((rr - 0.03) * c, (rr - 0.03) * sn, zz),
-                                             ((rr - 0.4) * math.cos(b), (rr - 0.4) * math.sin(b), zz + 0.05),
-                                             ((rr - 0.03) * math.cos(a2), (rr - 0.03) * math.sin(a2), zz)],
-                     0.075, M["putty"], parent=hub, verts=8, r_end=0.05)
-            if j % 2 == 0:              # a strand down a spoke's way toward the middle
-                tube(f"cagestrand{j}", [((rr - 0.05) * c, (rr - 0.05) * sn, 0.0), (0.7 * c, 0.7 * sn, 0.1),
-                                        (0.25 * c, 0.25 * sn, 0.0)], 0.08, M["putty"], parent=hub, verts=8, r_end=0.05)
-    e, h = spinner("cage", (0.0, S.CAGE_Y, zh), 90.0, 0.0, parts)
+            for zz in (-0.36, 0.32):
+                tube(f"cagestring{j}_{zz}", [((rr - 0.05) * c, (rr - 0.05) * sn, zz),
+                                             ((rr - 0.45) * math.cos(b), (rr - 0.45) * math.sin(b), zz + 0.05),
+                                             ((rr - 0.05) * math.cos(a2), (rr - 0.05) * math.sin(a2), zz)],
+                     0.1, M["putty"], parent=hub, verts=8, r_end=0.07)
+            # a thick strand from every lump in to the axle: the putty the cage winds up
+            for zz in ((-0.15,) if j % 2 else (-0.36, 0.26)):
+                tube(f"cagestrand{j}_{zz}", [((rr - 0.1) * c, (rr - 0.1) * sn, zz * 0.6),
+                                             (0.95 * math.cos(a - 0.12), 0.95 * math.sin(a - 0.12), zz),
+                                             (0.45 * math.cos(a - 0.3), 0.45 * math.sin(a - 0.3), zz * 0.8),
+                                             (0.14 * math.cos(a - 0.4), 0.14 * math.sin(a - 0.4), zz * 0.8)],
+                     0.13, M["putty"], parent=hub, verts=8, r_end=0.09)
+        # a wad of putty wound round the axle between the two hubs
+        lathe("cagewad", [(0.0, -0.44), (0.2, -0.42), (0.36, -0.28), (0.42, -0.05), (0.4, 0.15), (0.3, 0.32), (0.16, 0.42),
+                          (0.0, 0.44)], (0, 0, 0), M["putty"], parent=hub, verts=20)
+    e, h = spinner("cage", (0.0, S.CAGE_Y, zc), 90.0, 0.0, parts)
     MOVING.append(h)
     # the coil: from a bulb on the valve shaft, up and along +Y to the flask's neck (in place of the glass loop)
-    zb = zh + S.VALVE_UP + 0.62
+    zb = zh + S.VALVE_UP + 0.95          # the bulb clear above the valve wheel's rim
     yb = S.VALVE_Y + 0.35
-    lathe("coilbulb", [(0.0, -0.3), (0.26, -0.24), (0.32, 0.0), (0.26, 0.24), (0.0, 0.3)], (0.0, yb, zb),
+    lathe("coilbulb", [(0.32 * math.sin(math.pi * i / 12), -0.3 * math.cos(math.pi * i / 12)) for i in range(13)],
+          (0.0, yb, zb),
           M["liquid"], verts=20)
     cyl("coilstem", 0.06, zb - zh - S.VALVE_UP - 0.25, (0.0, yb, zh + S.VALVE_UP), M["gold"], verts=10)
     fx, fy = S.FLASK
@@ -920,9 +946,7 @@ def drips():
 
 
 def rad_at_pot(z):
-    prof = [(0.0, 0.0), (0.86, 0.0), (1.3, 0.1), (1.6, 0.36), (1.8, 0.78), (S.POT_RMAX, 1.3), (S.POT_RMAX, 1.9),
-            (1.86, 2.4), (1.78, 2.78), (1.71, S.POT_H - 0.12)]
-    return rad_at(prof, z)
+    return rad_at(POT_PROF, z)
 
 
 def build():

@@ -17,15 +17,15 @@ POT_RMAX = 1.9              # the belly
 LIFT = 1.7                  # level 3 up: the pot's foot stands this high in the frame
 PUTTY_DOWN = 0.75           # the putty's surface below the rim top
 # the frame (level 3 up): a square of rails on the stumps, a post at each corner
-FR_D = 2.6                  # the corners' distance from the axis
+FR_D = 2.25                 # the corners' distance from the axis (the posts hug the pot, as Flash's)
 FR_ROT = -12.0              # the square turned this much (deg) from the ground grid (as Flash's frame)
 RAIL_Z, RAIL_T = 1.85, 0.44 # the rails' middle height and thickness
 STRAP_Z = 1.42              # the straps' foot under the pot (their top is the pot's foot)
 STUMP_H = 1.61              # the stumps' top: the rails' corners rest on them
-POST_R = 0.36
+POST_R = 0.32                # Flash's posts are 4-6 px across; their goo knobs and feet are fatter
 STUMP_D, STUMP_R = 2.2, 0.48
 # the press block on the rim (every level) and the arches (level 3 up)
-BLOCK = (0.12, -1.62)        # the block's middle (X, Y) on the rim
+BLOCK = (0.0, -1.62)         # the block's middle (X, Y) on the rim
 BLOCK_SIZE = (1.5, 0.9, 1.0)
 ARCH_X = (-0.62, 0.62)      # the two arches' planes
 ARCH_Y = (-1.55, 1.45)      # their feet (on the block, on the rim)
@@ -34,19 +34,21 @@ ARCH_UP = 1.65              # their crown above the rim top
 WHEEL_TH, WHEEL_D, WHEEL_UP, WHEEL_R = -112.0, 2.55, 1.35, 0.72
 WHEEL_AX = -97.0             # the way its axle points (it faces the viewer more than a spoke from the axis would)
 # the test tube: one spot on the ground plan at every level
-TUBE_XY = (2.95, 0.95)
-TUBE_TOP = (2.85, 4.3)        # the tube's top at level 1 and level 3 (it stands on the ground)
-TUBE_R = 0.34
+TUBE_XY = (3.2, 1.15)       # 2-3 px clear of the right post as the camera sees it (as Flash's)
+TUBE_TOP = (2.45, 4.3)        # the tube's top at level 1 and level 3 (it stands on the ground)
+TUBE_R = 0.28                # Flash's tube is about 5 px across
 # level 6: the hub on the arches' crown (a short drum across both arches), its flask, the valve wheel on a shaft out
 # to the left, and the arm out to the right that holds the test tube up
-HUB_R, HUB_UP = 0.62, 0.3   # the hub's radius; its axis above the arches' crown line
+HUB_R, HUB_UP = 0.7, 0.3    # the hub's radius; its axis above the arches' crown line
 FLASK = (-0.2, -0.25)       # the flask on the hub's top
 VALVE_Y, VALVE_R, VALVE_UP = -2.63, 0.55, 0.45     # the valve wheel on its shaft (out along -Y from the hub, rising)
-TUBE_TOP6 = 7.0             # the tube's top from level 6 (it hangs from the arm)
+TUBE_TOP6 = 6.4             # the tube's top from level 6 (it hangs from the arm)
 TUBE_LEN6 = 4.0
-# level 10: the cage wheel on the hub's axle out to the back right, the basin under its far end
-CAGE_Y, CAGE_W, CAGE_R = 2.38, 1.3, 1.44
-BASIN = (0.5, 2.68, 4.75)   # the basin's middle on the ground plan and its rim height
+# level 10: the cage wheel out to the back right of the hub (its axle along +Y, as Flash's runs up to the screen's
+# right), on a cranked axle from the hub that drops CAGE_DOWN, so the cage hangs as low and as far left as Flash's
+# without touching the arches or the back post; the basin under its far end
+CAGE_Y, CAGE_W, CAGE_R, CAGE_DOWN = 2.35, 1.2, 1.5, 0.1
+BASIN = (1.7, 2.65, 4.2)     # the basin's middle on the ground plan and its rim height
 CAGE_RUNGS = 8
 CAGE_TURN = 2 * 360.0 / CAGE_RUNGS    # a loop turns the cage two rungs (Flash: about 4 deg a frame)
 STIR_TURN = 3 * 360.0                 # a loop turns the stirrer three times (Flash: once every 8.7 frames)
