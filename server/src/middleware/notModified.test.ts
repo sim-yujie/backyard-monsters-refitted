@@ -39,7 +39,8 @@ describe("notModified with koa-static", () => {
     const res = await get();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("ETag")).toMatch(/^W\/"1f4-[0-9a-f]+"$/);
+    // Strong, so a browser can resume a cut-off download with If-Range.
+    expect(res.headers.get("ETag")).toMatch(/^"1f4-[0-9a-f]+"$/);
     expect((await res.arrayBuffer()).byteLength).toBe(500);
   });
 

@@ -11,12 +11,18 @@ import type { Context, Next } from "koa";
  * from (Windows does that), so a date alone could call the new file the old
  * one. Size and time to the millisecond together change with any new copy.
  *
+ * The tag is strong, as nginx's is for the same two numbers. A browser that
+ * kept part of a picture (a reload cut the download off) asks for the rest
+ * with `If-Range` naming this tag, and a weak tag can never match there
+ * (RFC 9110 13.1.5): the server sent the whole file again where the browser
+ * expected the rest, and Chrome failed the picture.
+ *
  * @param {ServerResponse} res - The response the file goes out on.
  * @param {string} _path - The file's path on disk.
  * @param {Stats} stats - The file's stats, from koa-send.
  */
 export const tagFile = (res: ServerResponse, _path: string, stats: Stats) => {
-  res.setHeader("ETag", `W/"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}"`);
+  res.setHeader("ETag", `"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}"`);
 };
 
 /**
