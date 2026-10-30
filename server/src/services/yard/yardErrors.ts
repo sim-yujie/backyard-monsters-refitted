@@ -67,6 +67,13 @@ export const notInOutpostErr = (message = "That cannot be done in an outpost.") 
   yardRefusedErr("notInOutpost", message);
 
 /**
+ * The route does not work on the Inferno yard yet (`docs/design/inferno.md`
+ * §5): only the routes checked against Flash's Inferno rules allow it.
+ */
+export const notInInfernoErr = (message = "That cannot be done in the Inferno.") =>
+  yardRefusedErr("notInInferno", message);
+
+/**
  * `409 raidInProgress`: a wild monster raid is being fought on the yard (#226,
  * `services/raids/raidLock.ts`). The web yard shows this sentence as a notice
  * (#309, `YardStore`'s `onRaidInProgress`).

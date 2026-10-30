@@ -12,6 +12,7 @@ import {
 import { championPortrait, showPortrait } from "@/game/portraits";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
+import { AMOUNT_CHANGE_SIGNS } from "@/ui/amountChange";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
@@ -85,8 +86,28 @@ const decorationName = (type: number): string => typeName(type);
 export const rewardsText = (rewards: readonly EventReward[]): string =>
   rewards.map((reward) => rewardText(reward, decorationName)).join(" + ");
 
-/** A small picture for one reward, and its short figure. */
-const rewardBadge = (reward: EventReward): HTMLElement => {
+/**
+ * A claim's notice: "Day 3 claimed" and the rewards as the panel's own
+ * pictures and short figures, "[twig][pebble] +1K", the resources and Shiny
+ * green with a plus as gains (owner, 28 Oct); the full words ("Day 3
+ * claimed, gained 1,000 Twigs + 1,000 Pebbles") on hover and for a screen
+ * reader.
+ */
+export const claimedLine = (title: string, rewards: readonly EventReward[]): HTMLElement => {
+  const words = rewards.length > 0 ? `${title}, gained ${rewardsText(rewards)}` : title;
+  const line = el("span", "events-claimed");
+  line.setAttribute("role", "img");
+  line.setAttribute("aria-label", words);
+  line.title = words;
+  line.append(el("span", "events-claimed__title", title), ...rewards.map((reward) => rewardBadge(reward, true)));
+  return line;
+};
+
+/**
+ * A small picture for one reward, and its short figure. A reward `gained`
+ * (claimed, not on offer) signs its resources and Shiny "+10K", in green.
+ */
+const rewardBadge = (reward: EventReward, gained = false): HTMLElement => {
   const badge = el("span", `events-reward events-reward--${reward.kind}`);
   const pictures = el("span", "events-reward__pictures");
   let figure = "";
@@ -132,6 +153,11 @@ const rewardBadge = (reward: EventReward): HTMLElement => {
     }
   }
   badge.append(pictures);
+  const amount = reward.kind === "resources" || reward.kind === "shiny";
+  if (gained && amount && figure) {
+    badge.classList.add("events-reward--gain");
+    figure = `${AMOUNT_CHANGE_SIGNS.gain}${figure}`;
+  }
   if (figure) badge.append(el("span", "events-reward__figure", figure));
   return badge;
 };

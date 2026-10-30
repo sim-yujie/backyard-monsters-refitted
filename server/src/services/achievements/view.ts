@@ -1,7 +1,7 @@
 import type { EntityManager } from "@mikro-orm/core";
 import { achievementConfig } from "../../config/AchievementConfig.js";
 import {
-  AVAILABLE_ACHIEVEMENTS,
+  availableAchievements,
   type AchievementDef,
   type AchievementRule,
   type AchievementStat,
@@ -134,7 +134,7 @@ export const achievementsState = (
 ): AchievementsState => {
   const record = readAchievements(save);
   let shinyEarned = 0;
-  const achievements = AVAILABLE_ACHIEVEMENTS.map((entry): AchievementEntryView => {
+  const achievements = availableAchievements().map((entry): AchievementEntryView => {
     const unlock = earnedUnlock(record, entry.id, rewards);
     if (unlock) shinyEarned += unlock.shiny;
     return {
@@ -161,7 +161,7 @@ export const publicAchievements = (
   record: Achievements,
   rewards: boolean = achievementConfig.rewards
 ): PublicAchievements => {
-  const achievements = AVAILABLE_ACHIEVEMENTS.map((entry): PublicAchievementView => {
+  const achievements = availableAchievements().map((entry): PublicAchievementView => {
     const unlock = earnedUnlock(record, entry.id, rewards);
     return {
       id: entry.id,

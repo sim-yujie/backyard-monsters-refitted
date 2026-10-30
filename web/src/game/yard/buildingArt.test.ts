@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import manifest from "../../../test/fixtures/building-art-files.json";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
@@ -15,6 +15,12 @@ import {
   stripCrop,
 } from "./buildingArt";
 import { stripCells } from "./yardAnim";
+import { setClassicLook } from "@/game/classicLook";
+
+// These tests read the Flash art table, its strips and its files, so they run on the old building art
+// (the new Town Hall is the default; buildingArtTiers.test.ts covers it).
+beforeAll(() => setClassicLook(true));
+afterAll(() => setClassicLook(false));
 
 /**
  * The art table against the art that is actually on the game server.
@@ -101,6 +107,81 @@ describe("the art table", () => {
     // level 5 one is live.
     expect(resolveArt(127, 1, ArtState.DEFAULT)?.shadow).toBeNull();
     expect(resolveArt(127, 5, ArtState.DEFAULT)?.shadow?.url).toContain("shadow.5.v2.jpg");
+  });
+});
+
+describe("the Inferno art", () => {
+  it("draws the Under Hall and the Inferno Academy from their own folders", () => {
+    expect(resolveArt(14, 1, ArtState.DEFAULT, "inferno")?.folder).toBe("buildings/itownhall/");
+    expect(resolveArt(26, 1, ArtState.DEFAULT, "inferno")?.folder).toBe("buildings/iacademy/");
+    expect(artFolder(14, "inferno")).toBe("buildings/itownhall/");
+    expect(buildingName(14, "inferno")).toBe("Under Hall");
+  });
+
+  it("keeps the Under Hall's own picture when the new tower and Town Hall art is on", () => {
+    const classic = resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url;
+    setClassicLook(false);
+    try {
+      expect(resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url).toBe(classic);
+      expect(resolveArt(14, 3, ArtState.DEFAULT)?.top.url).not.toBe(classic);
+    } finally {
+      setClassicLook(true);
+    }
+  });
+
+  it("keeps the layers Flash places at a fractional offset", () => {
+    // The Incubator's top has a hole where its glass window goes, and the window
+    // is an `anim2` at `new Rectangle(4, 13.5, 27, 31)` (`INFERNOYARDPROPS.as:1046`).
+    // Reading only whole numbers dropped it and left the hole showing.
+    const incubator = resolveArt(13, 1, ArtState.DEFAULT, "inferno");
+    expect(incubator?.anims.map((a) => [a.url.split("/").pop(), a.x, a.y])).toEqual([
+      ["anim.1.v2.png", -48, -45],
+      ["anim.2.v2.png", 4, 13.5],
+    ]);
+    expect(resolveArt(3, 1, ArtState.DEFAULT, "inferno")?.anims).toHaveLength(3);
+  });
+
+  it("draws the Yard Planner from its own painted folder, which Flash never had", () => {
+    const planner = resolveArt(10, 1, ArtState.DEFAULT, "inferno");
+    expect(planner?.folder).toBe("buildings/iyardplanner/");
+    expect([fileOf(planner?.top.url ?? ""), planner?.top.x, planner?.top.y]).toEqual(["top.1.png", -45, -42]);
+    expect(folders["buildings/iyardplanner/"]?.files).toContain("top.1.destroyed.png");
+    expect(resolveArt(10, 1, ArtState.DEFAULT)?.folder).toBe("buildings/yardplanner/");
+  });
+
+  it("keeps the main art outside the Inferno", () => {
+    expect(resolveArt(14, 1, ArtState.DEFAULT)?.folder).not.toBe("buildings/itownhall/");
+    expect(buildingName(14)).not.toBe("Under Hall");
+  });
+
+  it("falls back to the main row for a type with no Inferno row", () => {
+    // The siege factory's Inferno row names files that are not on disk, so the
+    // generator drops it and the main art is used.
+    expect(resolveArt(133, 1, ArtState.DEFAULT, "inferno")?.folder).toBe(
+      resolveArt(133, 1, ArtState.DEFAULT)?.folder,
+    );
+  });
+
+  it("lists the Inferno files the props name but the disk lacks", () => {
+    expect(manifest.infernoMissing).toEqual([
+      "1 buildings/iboneharvester/top.2.damaged.png",
+      "1 buildings/iboneharvester/top.2.destroyed.png",
+      "100 buildings/decorations/statue-eiffeltower/shadow.jpg",
+      "100 buildings/decorations/statue-eiffeltower/top.png",
+      "113 buildings/radiotower/shadow.destroyed.jpg",
+      "113 buildings/radiotower/top.destroyed.png",
+      "127 buildings/iportal/shadow.v2.4.jpg",
+      "132 buildings/imagmatower/anim.1.damaged.v2.png",
+      "133 buildings/siegefactory/anim.1.png",
+      "133 buildings/siegefactory/top.1.damaged.png",
+      "133 buildings/siegefactory/top.1.png",
+      "134 buildings/siegelab/anim.1.png",
+      "134 buildings/siegelab/top.1.damaged.png",
+      "134 buildings/siegelab/top.1.png",
+      "2 buildings/icoalproducer/shadow.2.destroyed.jpg",
+      "8 buildings/imonsterlab/top.1.damaged.v2.png",
+      "8 buildings/imonsterlab/top.1.destroyed.v2.png",
+    ]);
   });
 });
 

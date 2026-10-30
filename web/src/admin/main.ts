@@ -1,7 +1,10 @@
 import "./admin.css";
 import { restoreStoredSession } from "@/api/auth";
 import { ApiError } from "@/api/http";
+import { SESSION_STORAGE_KEY } from "@/config";
 import {
+  adoptNewerSignIn,
+  failureKind,
   fetchBugReports,
   fetchHealth,
   fetchMe,
@@ -140,6 +143,8 @@ class Dashboard {
   );
   private readonly updated = h("span", { class: "updated" }, "Not checked yet");
   private readonly refreshButton: HTMLButtonElement;
+  /** The last health check was refused this browser's sign-in. */
+  private signedOut = false;
   private readonly bugs = new BugsView({
     onRoute: (id) => this.openBug(id),
     onError: (message) => this.say(message),
@@ -285,6 +290,12 @@ class Dashboard {
     window.setInterval(() => {
       if (document.visibilityState === "visible") void this.loadHealth();
     }, HEALTH_REFRESH_MS);
+    // The game signing in again in another tab ends the token this page
+    // started with and saves the new one; take it up straight away.
+    window.addEventListener("storage", (event) => {
+      if (event.key !== SESSION_STORAGE_KEY) return;
+      if (adoptNewerSignIn() || this.signedOut) void this.loadAll();
+    });
     this.watchScroll();
   }
 
@@ -381,41 +392,82 @@ class Dashboard {
       report = health;
       this.newBugs = bugs ? bugs.reports.length : null;
     } catch (err) {
-      this.verdict.className = "verdict verdict-bad";
-      replace(
-        this.verdict,
-        h(
-          "div",
-          { class: "verdict-head" },
-          h("span", { class: "verdict-icon" }, icon("bad", 28)),
-          h(
-            "div",
-            {},
-            h("h2", { attrs: { id: "verdict-title" } }, "The server's health could not be read"),
-            h(
-              "p",
-              { class: "verdict-sub" },
-              "The game server may be down or restarting. If players also cannot get in, it is down.",
-            ),
-          ),
-        ),
-        h(
-          "div",
-          { class: "verdict-actions" },
-          h(
-            "button",
-            { class: "button primary", attrs: { type: "button" }, onClick: () => void this.loadAll() },
-            "Try again",
-          ),
-          h("p", { class: "note" }, String(err)),
-        ),
-      );
+      this.showHealthFailure(err);
       return;
     }
+    this.signedOut = false;
     this.renderVerdict(report);
     replace(this.sections.health.body, ...renderHealth(report));
     replace(this.sections.backups.body, ...renderBackups(report));
     this.updated.textContent = `Checked ${dateTime(report.health.generatedAt).split(" ").pop()}`;
+  }
+
+  /**
+   * Why the health could not be read, in the owner's words. The server
+   * refusing this browser's sign-in is not the server being down: it answered.
+   */
+  private showHealthFailure(err: unknown): void {
+    const kind = failureKind(err);
+    this.signedOut = kind === "signedOut";
+    const tryAgain = h(
+      "button",
+      {
+        class: kind === "signedOut" ? "button" : "button primary",
+        attrs: { type: "button" },
+        onClick: () => void this.loadAll(),
+      },
+      "Try again",
+    );
+    const [title, sub, actions] =
+      kind === "signedOut"
+        ? [
+            "Your dashboard sign-in has run out",
+            "The server is up, but it no longer accepts the sign-in saved in this browser. " +
+              "The game keeps one sign-in per account, so opening the game or signing in again, " +
+              "here or on another device, ends the one this page was using. " +
+              "Sign in to the game in this browser and this page picks it up by itself.",
+            [
+              h(
+                "a",
+                { class: "button primary", attrs: { href: "/", target: "_blank", rel: "noopener" } },
+                "Sign in again",
+              ),
+              tryAgain,
+            ],
+          ]
+        : kind === "unreachable"
+          ? [
+              "The server could not be reached",
+              "The game server may be down or restarting, or this device may be offline. " +
+                "If players also cannot get in, it is down.",
+              [tryAgain],
+            ]
+          : [
+              "The server's health could not be read",
+              "The server answered, but not with its health report.",
+              [tryAgain],
+            ];
+    this.verdict.className = "verdict verdict-bad";
+    replace(
+      this.verdict,
+      h(
+        "div",
+        { class: "verdict-head" },
+        h("span", { class: "verdict-icon" }, icon("bad", 28)),
+        h(
+          "div",
+          {},
+          h("h2", { attrs: { id: "verdict-title" } }, title),
+          h("p", { class: "verdict-sub" }, sub),
+        ),
+      ),
+      h(
+        "div",
+        { class: "verdict-actions" },
+        h("div", { class: "verdict-buttons" }, ...actions),
+        h("p", { class: "note" }, String(err)),
+      ),
+    );
   }
 
   /** Each section's heading and link say whether something there needs a look. */

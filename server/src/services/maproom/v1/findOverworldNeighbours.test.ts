@@ -136,7 +136,7 @@ describe("findOverworldNeighbours", () => {
 
   test("bots fill only the places real players leave, every real player kept", async () => {
     const reals = [realRow(2), realRow(3), realRow(4)];
-    const bots = Array.from({ length: 40 }, (_, i) => botRow(500 + i, 1 + (i % 12)));
+    const bots = Array.from({ length: 40 }, (_, i) => botRow(500 + i, 15 + (i % 3)));
     const { em, queries } = fakeEm(reals, bots);
     const neighbours = await findOverworldNeighbours(em, player, levelFive, {
       now: NOW,
@@ -152,7 +152,8 @@ describe("findOverworldNeighbours", () => {
 
     const botQuery = queries[1];
     expect(botQuery.sql).toContain("b.state = 'active'");
-    expect(botQuery.params).toEqual(["main", 1, 12, 1, 1]);
+    // A level 5 player's window is 1-12, but no bot stands below 15: the nearest bots, 15-17 (`botLevelWindow`).
+    expect(botQuery.params).toEqual(["main", 15, 17, 1, 1]);
   });
 
   test("bots attackable now are picked before protected ones", async () => {

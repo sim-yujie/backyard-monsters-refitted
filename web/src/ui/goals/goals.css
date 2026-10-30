@@ -97,7 +97,8 @@
 .goals-row__note {
   margin: 0;
   font-size: var(--text-sm);
-  color: var(--colour-warning-text);
+  /* Amber on the card (warning-text is the dark ink for an amber fill). */
+  color: var(--colour-warning);
 }
 
 .goals-row__note--refused {
@@ -147,6 +148,15 @@
   display: inline-flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
+}
+
+/* The green "+1,000" (`.res-amount--gain`, `ui.css`) is made for a panel, not
+   the cyan button: it sits on a small panel-coloured chip, as the yard's
+   collect float does, so it reads in both themes. */
+.goals-claim__amount.res-amount--gain {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--colour-surface-base) 80%, transparent);
 }
 
 .goals-claim__amount--capped .res-amount__value {
@@ -276,4 +286,18 @@
     width: min(380px, calc(100vw - 150px - 98px));
     max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
   }
+}
+
+/* A monster reward's notice: the monster's picture, "10 Zagnoids → Compound". */
+.goals-reward-line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.goals-reward-line__picture {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }

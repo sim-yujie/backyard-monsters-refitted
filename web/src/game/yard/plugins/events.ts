@@ -4,7 +4,7 @@ import { onPumpkins, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { seasonFor, setSeason } from "@/game/season";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
 import { eventsArt } from "@/ui/events/eventsArt";
-import { calendarKey, EventsPanel, rewardsText, tierKey, type EventsPanelView } from "@/ui/events/EventsPanel";
+import { calendarKey, claimedLine, EventsPanel, tierKey, type EventsPanelView } from "@/ui/events/EventsPanel";
 import { modalLayer, openWhatsNew } from "@/ui/events/WhatsNewDialog";
 import "@/ui/events/pumpkinHuntHint";
 import { dockButton } from "@/ui/yard/YardDock";
@@ -183,7 +183,7 @@ export class EventsDoor {
     this.claiming = null;
     if (result.ok) {
       const day = event.calendar?.days[result.report.day - 1] ?? [];
-      this.mounts.notices.show(EVENTS_NOTICE, `Day ${result.report.day} claimed: ${rewardsText(day)}`, {
+      this.mounts.notices.show(EVENTS_NOTICE, claimedLine(`Day ${result.report.day} claimed`, day), {
         level: "info",
         timeoutMs: 5_000,
       });
@@ -205,7 +205,7 @@ export class EventsDoor {
     this.claiming = null;
     if (result.ok) {
       const rewards = event.ladder?.tiers[tier]?.rewards ?? [];
-      const words = grantedKrallenText(result.report.granted) ?? `Reward claimed: ${rewardsText(rewards)}`;
+      const words = grantedKrallenText(result.report.granted) ?? claimedLine("Claimed", rewards);
       this.mounts.notices.show(EVENTS_NOTICE, words, {
         level: "info",
         timeoutMs: 5_000,

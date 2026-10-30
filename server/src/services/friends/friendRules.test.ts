@@ -30,7 +30,7 @@ describe("friends rules", () => {
       maxRequestsPerDay: 30,
       requestLapseDays: 14,
       declineWaitDays: 7,
-      friendshipAgeHours: 24,
+      friendshipAgeHours: 12,
       dailyHelps: 20,
     });
   });
@@ -56,6 +56,8 @@ describe("friends rules", () => {
   test("small readers: timestamps, block lists and LIKE text", () => {
     expect(secondsOf(new Date(T0 * 1000 + 999))).toBe(T0);
     expect(secondsOf(new Date(T0 * 1000).toISOString())).toBe(T0);
+    // timestamptz text in any zone is the same instant (12:30 UTC is 20:30 in Singapore).
+    expect(secondsOf("2026-10-19 20:30:00+08")).toBe(T0);
     expect(secondsOf(null)).toBeNull();
     expect(blockedIdsOf([3, "4", "x", 5.5])).toEqual([3, 4]);
     expect(blockedIdsOf(null)).toEqual([]);

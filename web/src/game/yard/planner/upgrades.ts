@@ -220,7 +220,7 @@ const levelRows = (yard: Yard): { rows: LevelRow[]; byId: Map<number, LevelRow> 
  */
 export const ladderFor = (node: PlanNode, yard: Yard): Ladder => {
   const current = node.level;
-  const max = plannableType(node.type) ? maxLevel(node.type, yard.kind) : 0;
+  const max = plannableType(node.type, yard.kind) ? maxLevel(node.type, yard.kind) : 0;
   // A building still counting its initial build down reports level 0
   // (`yardModel.ts`), but its build is paid for: the honest first step is the
   // one that leaves level 1, not the one that pays for the building again.
@@ -322,7 +322,7 @@ export const planTotals = (nodes: Iterable<PlanNode>, yard: Yard): PlanTotals =>
 
     // From level 1 at the lowest: a building mid-build reports level 0 and its
     // build is already paid for, so `costs[0]` is not part of what is planned.
-    const run = upgradeSteps(node.type, Math.max(node.level, 1), node.plan.level);
+    const run = upgradeSteps(node.type, Math.max(node.level, 1), node.plan.level, yard.kind);
     const total = sumCosts(run);
 
     needed.r1 += total.r1;
@@ -347,7 +347,7 @@ export const planTotals = (nodes: Iterable<PlanNode>, yard: Yard): PlanTotals =>
   const byType: SelectionTypeCost[] = [...perType.entries()]
     .map(([type, entry]) => ({
       type,
-      name: typeName(type),
+      name: typeName(type, yard.kind),
       count: entry.count,
       needed: { r1: entry.r1, r2: entry.r2, r3: entry.r3, r4: entry.r4 },
     }))
@@ -487,7 +487,7 @@ export const previewApply = (nodes: Iterable<PlanNode>, yard: Yard): ApplyPrevie
     // `buildingdata` and moves on for the same reason.
     if (!row) continue;
 
-    if (!plannableType(node.type)) {
+    if (!plannableType(node.type, yard.kind)) {
       skipped.push({ id: node.id, t: node.type, reason: "noLadder" });
       continue;
     }
@@ -519,7 +519,7 @@ export const previewApply = (nodes: Iterable<PlanNode>, yard: Yard): ApplyPrevie
     }
 
     while (level < target) {
-      const step = costOf(node.type, level);
+      const step = costOf(node.type, level, yard.kind);
       // Unreachable while `target <= maxLevel`, which `setPlan` and the
       // server's `checkPlans` both enforce; stopping is the harmless reading.
       if (!step) break;

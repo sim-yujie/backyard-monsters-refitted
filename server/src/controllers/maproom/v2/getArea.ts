@@ -13,7 +13,7 @@ import { onlinePlayers } from "../../../services/user/online.js";
 import { getTruces } from "../../../services/maproom/getTruces.js";
 import { attackersAmong } from "../../../services/maproom/v2/attackers.js";
 import { friendsAmong } from "../../../services/friends/friendFlags.js";
-import { idleWorkerSaves } from "../../../services/maproom/v2/idleWorkers.js";
+import { outpostWorkerSaves } from "../../../services/maproom/v2/idleWorkers.js";
 import { pendingInvitesOn } from "../../../services/mail/inviteRules.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { mapRoomDisabledErr } from "../../../errors/errors.js";
@@ -216,12 +216,12 @@ export const getArea: KoaController = async (ctx) => {
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST)
     .map((cell) => cell.baseid);
 
-  // Own outposts whose worker is free (#338), by base-save id.
+  // Own outposts whose worker is free (#338) or busy, by base-save id.
   const ownOutpostSaveIds = visibleDbCells
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST && cell.save)
     .map((cell) => cell.save!.basesaveid);
 
-  const [ownersList, online, truces, pendingInvites, idleWorkers, attackers, friends] = await Promise.all([
+  const [ownersList, online, truces, pendingInvites, workers, attackers, friends] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
@@ -231,7 +231,7 @@ export const getArea: KoaController = async (ctx) => {
     onlinePlayers(ownerIds, getCurrentDateTime()),
     getTruces(user.userid, ownerIds),
     pendingInvitesOn(postgres.em, user.userid, ownOutposts, getCurrentDateTime()),
-    idleWorkerSaves(postgres.em, ownOutpostSaveIds),
+    outpostWorkerSaves(postgres.em, ownOutpostSaveIds),
     // Who has ever attacked the viewer: the red "attacked you" plate (`ak`).
     attackersAmong(postgres.em, user.userid, ownerIds),
     // Friends among them: the `fr` flag (friends WP2, #369).
@@ -243,7 +243,8 @@ export const getArea: KoaController = async (ctx) => {
   ctx.state.online = online;
   ctx.state.truces = truces;
   ctx.state.pendingInvites = pendingInvites;
-  ctx.state.idleWorkers = idleWorkers;
+  ctx.state.idleWorkers = workers.idle;
+  ctx.state.busyWorkers = workers.busy;
   ctx.state.attackers = attackers;
   ctx.state.friends = friends;
 

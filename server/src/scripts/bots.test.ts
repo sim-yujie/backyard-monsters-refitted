@@ -15,18 +15,20 @@ describe("parseArgs", () => {
       perDay: 170,
       dryRun: true,
     });
-    expect(parseArgs(["create", "--levels", "5,15,25,35,40", "--count", "5"])).toMatchObject({
-      levels: [5, 15, 25, 35, 40],
+    expect(parseArgs(["create", "--levels", "15,20,25,35,40", "--count", "5"])).toMatchObject({
+      levels: [15, 20, 25, 35, 40],
       count: 5,
     });
     expect(parseArgs(["remove-all", "--yes"])).toMatchObject({ command: "remove-all", yes: true });
   });
 
-  test("refuses unknown options, bad numbers and levels outside 1-40", () => {
+  test("refuses unknown options, bad numbers and levels outside 15-40", () => {
     expect(() => parseArgs(["create", "--targt", "5"])).toThrow();
     expect(() => parseArgs(["create", "--target", "lots"])).toThrow();
     expect(() => parseArgs(["create", "--target"])).toThrow();
     expect(() => parseArgs(["create", "--levels", "0,5"])).toThrow();
+    // No bot below level 15 (owner, 2026-10-23).
+    expect(() => parseArgs(["create", "--levels", "14"])).toThrow();
     expect(() => parseArgs(["create", "--levels", "41"])).toThrow();
   });
 });
@@ -36,20 +38,23 @@ describe("createPlan", () => {
     createPlan(parseArgs(["create", ...argv]), active, madeToday, 500);
 
   test("--levels makes the levels given, in turn, one each unless --count says", () => {
-    expect(plan(["--levels", "5,15,25,35,40"])).toEqual([5, 15, 25, 35, 40]);
-    expect(plan(["--levels", "5,15", "--count", "5"])).toEqual([5, 15, 5, 15, 5]);
+    expect(plan(["--levels", "15,20,25,35,40"])).toEqual([15, 20, 25, 35, 40]);
+    expect(plan(["--levels", "16,20", "--count", "5"])).toEqual([16, 20, 16, 20, 16]);
     // Whatever is already there.
-    expect(plan(["--levels", "1"], { 1: 99 })).toEqual([1]);
+    expect(plan(["--levels", "15"], { 15: 99 })).toEqual([15]);
   });
 
   test("--fill tops up to BOTS_TOTAL; --target to its own number", () => {
     expect(plan(["--fill"])).toHaveLength(500);
-    expect(plan(["--target", "40"])).toEqual(Array.from({ length: 40 }, (_, index) => index + 1));
+    // Forty over levels 15-40: one each, and one more on the lowest fourteen.
+    expect(plan(["--target", "40"])).toEqual(
+      Array.from({ length: 26 }, (_, index) => (index < 14 ? [15 + index, 15 + index] : [15 + index])).flat()
+    );
   });
 
   test("--count without --levels caps a fill", () => {
-    expect(plan(["--count", "5"])).toEqual([1, 1, 1, 1, 1]);
-    expect(plan(["--count", "3", "--target", "40"], { 1: 1 })).toEqual([2, 3, 4]);
+    expect(plan(["--count", "5"])).toEqual([15, 15, 15, 15, 15]);
+    expect(plan(["--count", "3", "--target", "26"], { 15: 1 })).toEqual([16, 17, 18]);
     expect(plan(["--count", "50", "--fill", "--per-day", "10"])).toHaveLength(10);
   });
 

@@ -6,6 +6,8 @@
  * signature rather than pretending the list is complete.
  */
 
+import type { InfernoLoadState } from "./inferno";
+
 /** Every successful game response carries `error: 0`. See ApiError for why. */
 export interface ApiEnvelope {
   error?: number | string;
@@ -562,6 +564,19 @@ export type BuildingDataMap = Record<string, BuildingData>;
 export type BuildingHealthData = Record<string, number>;
 
 /**
+ * The siege weapons a player holds (`siege`, Inferno WP 6.3): each weapon's
+ * researched level, 0..10, and how many are made and unused, 0 or 1
+ * (`SiegeWeapon.exportVariables`).
+ */
+export type SiegeData = Record<string, { level?: number; quantity?: number } | undefined>;
+
+/**
+ * The Inferno purse (`iresources`): Bone, Coal, Sulfur and Magma held as
+ * `r1..r4`, their caps as `r1max..r4max` (`BASE._iresources`).
+ */
+export type InfernoResourcesData = Partial<Record<`r${1 | 2 | 3 | 4}` | `r${1 | 2 | 3 | 4}max`, number>>;
+
+/**
  * One yard mushroom as the save stores it: `[frame, X, Y]`, the art frame
  * (1 to 5) and the position in yard units, as for a building
  * (`client/scripts/BASE.as:2749-2757` writes it, `MUSHROOMS.as:84-90` reads
@@ -635,6 +650,10 @@ export interface BaseLoadResponse extends ApiEnvelope {
   randommoveat?: number | null;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
+  /** The siege weapons (WP 6.3). Not a yard-state field: siege answers and `completed` keep it current. */
+  siege?: SiegeData | null;
+  /** The Inferno purse the Siege Lab and Factory pay from (WP 6.3). */
+  iresources?: InfernoResourcesData | null;
   mushrooms?: MushroomSave | null;
   /**
    * Owned store items. `ENL.q` is the yard expansion level, 0..6, `BEW.q` the
@@ -707,6 +726,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   attackerbrains?: unknown;
   /**
+   * Attack modes only: the attacker's champions' health, by type, as the
+   * server froze it into this attack at launch. A flung champion comes out at
+   * this (`ATTACK.as:532`), which is what the server replays.
+   */
+  attackerhealth?: unknown;
+  /**
    * Attack modes only: the attacker's academy levels, by monster id, as the
    * server froze them into this attack at launch after catching their yard up
    * (issue #201). The battle is fought at these, which the server replays.
@@ -761,6 +786,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * yard routes' `completed` shape (issue #135). `[]` when nothing did.
    */
   completed?: CompletedJob[];
+  /**
+   * Only on the owner's build-mode load of their own main yard, and only while
+   * the new Inferno is switched on: the cave, and the level Moloch's
+   * emergence just raised it to (`docs/design/inferno.md` §2.2).
+   */
+  infernostate?: InfernoLoadState;
   /**
    * Only on the owner's build-mode load of their own main yard or outpost:
    * the account's new-player tutorial summary (issue #227). Every yard action
@@ -881,6 +912,8 @@ export interface PlayerCell {
   fr: number;
   /** 1 on the caller's own outpost whose worker is free (#338); absent otherwise. */
   wi?: 1;
+  /** 1 on the caller's own outpost whose worker is building, upgrading or fortifying; absent otherwise. */
+  wb?: 1;
   /** Own cells only: the owner's live resources. */
   r?: Resources;
   /** Own cells only: hatchery and garrison state. */

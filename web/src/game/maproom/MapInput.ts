@@ -1,5 +1,6 @@
 import type { Camera } from "@/game/Camera";
-import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
+import type { OffsetCell } from "@/game/HexGrid";
+import { pickCell } from "./ground";
 import { inWorld } from "./zones";
 
 /**
@@ -29,6 +30,11 @@ export interface MapInputOptions {
   onZoomStep: (direction: number) => void;
   /** Escape. */
   onCancel: () => void;
+  /**
+   * How far each cell is drawn from its spot (`ground.ts`), so a click lands
+   * on the raised or sunken face it hits. Flat when absent.
+   */
+  liftOf?: (col: number, row: number) => number;
 }
 
 export class MapInput {
@@ -68,7 +74,7 @@ export class MapInput {
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     });
-    const cell = mapRoomGrid.pixelToCell(world.x, world.y);
+    const cell = pickCell(world.x, world.y, this.options.liftOf ?? flat);
     return inWorld(cell.col, cell.row) ? cell : null;
   }
 
@@ -144,3 +150,5 @@ const isTextEntry = (target: EventTarget | null): boolean => {
     target.isContentEditable
   );
 };
+
+const flat = (): number => 0;

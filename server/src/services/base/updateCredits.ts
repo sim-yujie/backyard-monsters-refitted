@@ -21,7 +21,8 @@ export const updateCredits = (ctx: Context, save: Save, item: string, quantity: 
   const user: User = ctx.authUser;
   const userSave = user.save!;
 
-  if (quantity <= 0) {
+  // NaN and fractions too, not only zero and below (security audit 2026-10-29, I1).
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) {
     logger.error("Invalid purchase quantity!", { item, quantity });
     return;
   }

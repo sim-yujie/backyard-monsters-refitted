@@ -30,7 +30,13 @@ export interface CatchUpDamageSave {
 }
 
 const kindOf = (type: string | undefined): CombatTargetKind =>
-  type === BaseType.OUTPOST ? "outpost" : type === BaseType.TRIBE ? "wild" : "main";
+  type === BaseType.OUTPOST
+    ? "outpost"
+    : type === BaseType.TRIBE
+      ? "wild"
+      : type === BaseType.INFERNO
+        ? "inferno"
+        : "main";
 
 /**
  * The yard's damage percentage from its buildings' health as it stands.

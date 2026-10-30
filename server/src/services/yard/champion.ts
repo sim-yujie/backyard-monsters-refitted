@@ -10,19 +10,21 @@ import {
   type ChampionEntry,
   type FeedRecipe,
 } from "../../game-data/championCatalogue.js";
+import { Status } from "../../enums/StatusCodes.js";
 import type { ChampionStance } from "../../game-rules/combat/index.js";
+import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { isMapRoom3Monsters } from "./hatchery.js";
-import { juicerErr, juicerStatus, type JuiceSave } from "./juice.js";
+import type { JuiceSave } from "./juice.js";
 import { readHoused } from "./production.js";
 import { championHealPrice } from "./shiny.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
 /**
  * The Champion Cage: `POST /bm/yard/champion/raise`, `/feed`, `/evolve`,
- * `/heal`, `/rename` and `/juice` (`docs/design/yard-buildings.md` §7.2,
+ * `/heal`, `/rename` and the refused `/juice` (`docs/design/yard-buildings.md` §7.2,
  * decisions D11 and D17; issue #123; `docs/specs/monsters-and-hatchery.md` §7).
  *
  * **Storage** is the save's `champion` list as the original kept it
@@ -34,16 +36,15 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * every action here works on that one.
  *
  * **Raise** (`CHAMPIONSELECTPOPUP.RaiseGuard`, `CHAMPIONSELECTPOPUP.as:72-90`)
- * is free and only for Gorgo, Drull and Fomor (D17). It lays an EGG (owner,
- * 2026-10-20): status 3, `ft` the hatch time a full day ahead, every time,
- * with no way to hurry it (no Shiny, item or friend help: those all work on
- * building countdowns, never on the champion list). The catch-up hatches it
- * (`catchUpChampions.ts`): level 1, full health, fed for 23 hours from the
- * hatch. Refused while a champion or an egg is in the cage or while that type
- * is frozen in the Chamber. **Cancel egg** takes the egg out, so another can
- * be picked; the new egg takes its own full day. While the egg waits nothing
- * defends, and feed, evolve, heal, rename, juice and freeze are refused
- * (`409 eggInCage`); so is thawing a champion into the cage.
+ * is free and for Gorgo, Drull and Fomor (D17), and Korath once the player
+ * owns an Inferno yard (owner I10, `services/inferno/korath.ts`). The champion
+ * is in the cage straight away, as in the original (owner, 2026-10-28, which
+ * dropped the one-day egg of 2026-10-20 along with champion juicing): level 1,
+ * full health, fed for one interval. Refused while a champion is in the cage
+ * or while that type is frozen in the Chamber. An egg an older save still
+ * holds (status 3) hatches on the next catch-up (`hatchDueEgg`); until then
+ * feed, evolve, heal, rename and freeze say `409 eggInCage`, and
+ * `champion/cancel-egg` is gone (`410`).
  *
  * **Feed** (`CHAMPIONCAGE.FeedGuardian`, `CHAMPIONCAGE.as:682-877`), only once
  * the champion is hungry (`ft` has passed), except the top level's Shiny feed:
@@ -68,9 +69,10 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * **Rename**: 1-20 characters, profanity refused (the original's name popup
  * took 12, `CHAMPIONNAMEPOPUP.as:27-30`; §7.2 widens it).
  *
- * **Juice** (`CHAMPIONCAGE.JuiceChampion`, `:303-307`, from the Juicer's panel,
- * `BUILDINGINFO.as:161-165`): the champion goes into a working Juicer for good,
- * status 2, and gives no goo (`BUILDING9.as:70-73`).
+ * **Juice** (`CHAMPIONCAGE.JuiceChampion`, `:303-307`) is refused (`409
+ * juiceDisabled`, owner 2026-10-28): juicing a hurt champion and raising a
+ * fresh one was an exploit. Champions juiced before then keep status 2, and
+ * raising that type again replaces them.
  *
  * Pure: the wrapper hands in the caught-up save, charges the Shiny and writes.
  */
@@ -84,8 +86,8 @@ export const CHAMPION_CHAMBER_TYPE = 119;
 /** `ChampionBase` statuses (`client/scripts/com/monsters/monsters/champions/ChampionBase.as:26-36`). */
 export const CHAMPION_STATUS = { ACTIVE: 0, FROZEN: 1, JUICED: 2, EGG: 3 } as const;
 
-/** How long an egg takes to hatch: one day, every time (owner, 2026-10-20). */
-export const EGG_HATCH_SECONDS = 24 * 60 * 60;
+/** Korath's champion type (`G4`): raised once the player owns an Inferno yard (owner I10). */
+export const KORATH_TYPE = 4;
 
 /** The longest name `champion/rename` takes. */
 export const CHAMPION_NAME_MAX = 20;
@@ -239,21 +241,29 @@ const evolved = (champion: ChampionData, entry: ChampionEntry, level: number, no
 };
 
 /**
- * `POST /bm/yard/champion/raise`: lay a champion's egg in the cage; it hatches
- * {@link EGG_HATCH_SECONDS} later.
+ * `POST /bm/yard/champion/raise`: put a level-1 champion in the cage, now.
  *
- * Refusals, in order: `409 notRaisable { type }` (Korath and Krallen, D17);
+ * Refusals, in order: `409 notRaisable { type }` (Krallen, D17, and Korath
+ * until `unlocked.korath`: the player owns an Inferno yard, owner I10);
  * `409 noCage` / `409 busy`; `409 championInCage` while a champion is in the
- * cage; `409 eggInCage { type, hatchAt }` while an egg is; `409 frozen { type }`
- * while that champion is frozen in the Chamber
+ * cage; `409 eggInCage { type, hatchAt }` while an old save's egg has not yet
+ * been hatched by the catch-up; `409 frozen { type }` while that champion is
+ * frozen in the Chamber
  * (`championchamber_alreadyfrozen`, `CHAMPIONSELECTPOPUP.as:77-80`).
  *
  * @param type - Champion type 1..5.
  * @param now - Unix seconds.
+ * @param unlocked - Champions this player has unlocked beyond the catalogue's
+ *   three: `korath` once they own an Inferno yard.
  */
-export const planChampionRaise = (save: ChampionSave, type: number, now: number) => {
+export const planChampionRaise = (
+  save: ChampionSave,
+  type: number,
+  now: number,
+  unlocked: { readonly korath?: boolean } = {}
+) => {
   const entry = championEntry(type);
-  if (!entry?.raisable) {
+  if (!entry || !(entry.raisable || (entry.t === KORATH_TYPE && unlocked.korath === true))) {
     throw yardRefusedErr("notRaisable", "That champion cannot be raised at the cage.", { type });
   }
   cageOrThrow(save);
@@ -264,7 +274,7 @@ export const planChampionRaise = (save: ChampionSave, type: number, now: number)
   }
   const egg = eggIndex(champions);
   if (egg >= 0) {
-    throw yardRefusedErr("eggInCage", "Your cage already holds an egg. Cancel it to pick another champion.", {
+    throw yardRefusedErr("eggInCage", "Your cage already holds an egg.", {
       type: Math.trunc(numberOf(champions[egg]!.t)),
       hatchAt: numberOf(champions[egg]!.ft),
     });
@@ -277,17 +287,16 @@ export const planChampionRaise = (save: ChampionSave, type: number, now: number)
   }
 
   // A juiced (or otherwise gone) champion of the same type is replaced, as the
-  // original re-used its entry (`RaiseGuard`, `:82-85`, then `export`). The
-  // egg already holds the level-1 champion it hatches into; `ft` is the hatch.
+  // original re-used its entry (`RaiseGuard`, `:82-85`, then `export`).
   const champion: ChampionData = {
     t: entry.t,
     hp: atChampionLevel(entry.health, 1),
     l: 1,
-    ft: now + EGG_HATCH_SECONDS,
+    ft: now + entry.feedTime,
     fd: 0,
     fb: 0,
     pl: entry.powerLevel,
-    status: CHAMPION_STATUS.EGG,
+    status: CHAMPION_STATUS.ACTIVE,
   };
   if (existing >= 0) champions[existing] = champion;
   else champions.push(champion);
@@ -297,27 +306,22 @@ export const planChampionRaise = (save: ChampionSave, type: number, now: number)
 };
 
 /**
- * `POST /bm/yard/champion/cancelegg`: take the egg out of the cage, so the
- * player can pick a champion again. Nothing is paid back (raising is free) and
- * the next egg takes its own full day.
- *
- * Refusals: `409 noCage` / `409 busy`; `409 noEgg` when the cage holds none.
+ * `POST /bm/yard/champion/cancel-egg`: gone with the eggs (owner, 2026-10-28).
+ * Always `410 eggsRemoved`, so an old client learns why.
  */
-export const planChampionCancelEgg = (save: ChampionSave) => {
-  cageOrThrow(save);
-  const champions = readChampions(save.champion);
-  const index = eggIndex(champions);
-  if (index < 0) throw yardRefusedErr("noEgg", "There is no egg in your cage.");
-  const [egg] = champions.splice(index, 1);
-
-  const report: ChampionReport = { champion: egg! };
-  return { report, slices: { champion: champions } };
-};
+export const championCancelEggGoneErr = () =>
+  new ClientSafeError({
+    message: "Champions no longer come from eggs. Raise one at the cage instead.",
+    status: Status.GONE,
+    data: { reason: "eggsRemoved" },
+    isClientFriendly: true,
+  });
 
 /**
- * Hatches the egg in `champions` once its time has come: the level-1 champion
- * it holds, at the health it holds (full, unless something took some), fed for
- * one interval from the hatch, not from now. Mutates `champions`.
+ * Hatches an older save's egg in `champions` (eggs are no longer laid, owner
+ * 2026-10-28): at once, whatever hatch time it was given, into the level-1
+ * champion it holds, at the health it holds (full, unless something took
+ * some), fed for one interval from the hatch. Mutates `champions`.
  *
  * @returns The hatch time and the champion's catalogue entry, or null when
  *   nothing hatched.
@@ -329,8 +333,7 @@ export const hatchDueEgg = (
   const index = eggIndex(champions);
   if (index < 0) return null;
   const egg = champions[index]!;
-  const hatchAt = numberOf(egg.ft);
-  if (hatchAt > now) return null;
+  const hatchAt = Math.min(numberOf(egg.ft), now);
   const entry = entryOf(egg)!;
   const hatched: ChampionData = {
     ...egg,
@@ -525,19 +528,9 @@ export const planChampionStance = (save: ChampionSave, type: number, stance: Cha
 };
 
 /**
- * `POST /bm/yard/champion/juice`: put the champion in the cage into the
- * Juicer for good. It gives no goo.
- *
- * Refusals: `409 noChampion`; the Juicer's own refusals (`noJuicer`, `busy`,
- * `damaged`, `juice.ts`).
+ * `POST /bm/yard/champion/juice`: champions can no longer be juiced (owner,
+ * 2026-10-28). Always `409 juiceDisabled`, whatever the yard holds.
  */
-export const planChampionJuice = (save: ChampionSave) => {
-  const { champions, index, champion } = activeOrThrow(save);
-  const juicer = juicerStatus(save);
-  if (juicer.problem) throw juicerErr(juicer.problem);
-  const juiced = { ...champion, status: CHAMPION_STATUS.JUICED };
-  champions[index] = juiced;
-
-  const report: ChampionReport = { champion: juiced };
-  return { report, slices: { champion: champions } };
+export const planChampionJuice = (_save: ChampionSave): never => {
+  throw yardRefusedErr("juiceDisabled", "Champions can no longer be juiced.");
 };

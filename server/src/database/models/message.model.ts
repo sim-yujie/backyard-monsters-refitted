@@ -3,6 +3,19 @@ import { BigIntType, type Opt } from "@mikro-orm/core";
 import { FrontendKey } from "../../utils/FrontendKey.js";
 import { v4 } from "uuid";
 
+/**
+ * What an attack notice is about, as numbers (less-text job 3, 28 Oct 2026),
+ * so the bell, the away line and the mailbox can show it as icons: the damage
+ * the yard was left at, in percent, and the loot taken, whole units by
+ * resource key (`r1`..`r4`; Bone to Magma on an Inferno notice). The housed
+ * monsters lost are kept for the record but not told (owner, 27 Oct).
+ */
+export interface AttackStats {
+  readonly damage: number;
+  readonly loot: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>;
+  readonly housedLost?: number;
+}
+
 @Index({ properties: ["userid", "userUnread"] })
 @Index({ properties: ["targetid", "targetUnread"] })
 @Entity({ tableName: "message" })
@@ -113,6 +126,16 @@ export class Message {
   @Property({ type: "number", nullable: true })
   @FrontendKey
   byuserid: number | null = null;
+
+  /**
+   * On the game's attack notices (`outpostattacked`, `yardattacked`,
+   * `infernoattacked`), the attack's numbers ({@link AttackStats}); null on
+   * every other message and on notices written before 28 Oct 2026, which keep
+   * only their sentence.
+   */
+  @Property({ nullable: true, type: "json", columnType: "jsonb" })
+  @FrontendKey
+  attackstats: AttackStats | null = null;
 
   @Property({ type: Date, onCreate: () => new Date() })
   createdAt: Opt<Date> = new Date();

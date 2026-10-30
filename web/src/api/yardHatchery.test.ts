@@ -6,6 +6,7 @@ import {
   HatcheryKey,
   hatcheryActions,
   hatcheryAdd,
+  hatcheryClear,
   hatcheryFinish,
   hatcheryRemove,
   type HatcheryApi,
@@ -42,16 +43,19 @@ describe("hatchery routes", () => {
     await hatcheryRemove("hcc", 2, "all");
     await hatcheryRemove(12, 0, 1);
     await hatcheryFinish("hcc");
+    await hatcheryClear(12);
     expect(sent.map((call) => call.url.replace(/^.*\/bm\/yard/, ""))).toEqual([
       "/hatchery/add",
       "/hatchery/remove",
       "/hatchery/remove",
       "/hatchery/finish",
+      "/hatchery/clear",
     ]);
     expect(Object.fromEntries(sent[0]!.body)).toEqual({ hatchery: "12", monster: "C3", count: "80" });
     expect(Object.fromEntries(sent[1]!.body)).toEqual({ hatchery: "hcc", slot: "2", count: "all" });
     expect(Object.fromEntries(sent[2]!.body)).toEqual({ hatchery: "12", slot: "0", count: "1" });
     expect(Object.fromEntries(sent[3]!.body)).toEqual({ hatchery: "hcc" });
+    expect(Object.fromEntries(sent[4]!.body)).toEqual({ hatchery: "12" });
   });
 });
 
@@ -91,6 +95,14 @@ const setup = (load: Partial<BaseLoadResponse> = {}) => {
     ),
     remove: vi.fn((hatchery: number | "hcc", slot: number) =>
       Promise.resolve(answer({ hatchery, slot, monster: "C1", removed: 20, refund: { r4: 5_000 } })),
+    ),
+    clear: vi.fn((hatchery: number | "hcc") =>
+      Promise.resolve(
+        answer(
+          { hatchery, removed: { C1: 40 }, refund: { r4: 10_000 } },
+          { resources: { r1: 0, r2: 0, r3: 0, r4: 1e6 + 10_000 } },
+        ),
+      ),
     ),
     finish: vi.fn((hatchery: number | "hcc") =>
       Promise.resolve(answer({ hatchery, housed: { C1: 3 }, credits: 8, finishedAll: true })),
@@ -134,6 +146,15 @@ describe("hatcheryActions", () => {
     expect(api.remove).toHaveBeenCalledWith("hcc", 3, "all");
     expect((await actions.finish(10)).ok).toBe(true);
     expect(api.finish).toHaveBeenCalledWith(10);
+  });
+
+  it("clears a whole queue in one request and merges the refund", async () => {
+    const { store, api, actions } = setup();
+    const result = await actions.clear("hcc");
+    expect(api.clear).toHaveBeenCalledOnce();
+    expect(api.clear).toHaveBeenCalledWith("hcc");
+    expect(result).toMatchObject({ ok: true, report: { removed: { C1: 40 }, refund: { r4: 10_000 } } });
+    expect(store.resources.r4).toBe(1e6 + 10_000);
   });
 
   it("buys an Overdrive through the shop, and refuses a second while one runs", async () => {

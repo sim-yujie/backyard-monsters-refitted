@@ -6,7 +6,7 @@ import { BaseType } from "../../../enums/Base.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { experiencePoints } from "../../../game-data/stats/experiencePoints.js";
 import { botConfig } from "../../../config/BotConfig.js";
-import { findBotCandidates, pickBotNeighbours } from "../../bots/botNeighbours.js";
+import { botLevelWindow, findBotCandidates, pickBotNeighbours } from "../../bots/botNeighbours.js";
 import { calculateBaseLevel } from "../../base/calculateBaseLevel.js";
 import { shuffle } from "../../../utils/shuffle.js";
 import { createNeighbourData } from "../createNeighbourData.js";
@@ -132,7 +132,9 @@ export interface FindNeighboursOptions {
  *
  * Up to 25 players within 7 levels either way. Real players seen in the last
  * 30 days take places first; with `BOTS_FILL` on, bots fill the rest (bots
- * attackable now first, spread across the levels). With it off the list holds
+ * attackable now first, spread across the levels). No bot stands below level
+ * 15, so a player under it gets the nearest bots, levels 15-17
+ * (`botLevelWindow`). With it off the list holds
  * real players only, and bots never appear.
  *
  * Bot entries are built exactly as real ones, and the list is shuffled, so
@@ -172,7 +174,12 @@ export const findOverworldNeighbours = async (
 
   if (fill && empty > 0) {
     const taken = new Set([...neighbours.map((neighbour) => neighbour.userid), ...exclude]);
-    const candidates = await findBotCandidates(em, user.userid, levels, Math.floor(now.getTime() / 1000));
+    const candidates = await findBotCandidates(
+      em,
+      user.userid,
+      botLevelWindow(levels),
+      Math.floor(now.getTime() / 1000)
+    );
     const bots = pickBotNeighbours(
       candidates.filter((bot) => !taken.has(bot.userid)),
       empty,

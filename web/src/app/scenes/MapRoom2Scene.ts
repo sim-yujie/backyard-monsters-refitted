@@ -30,6 +30,7 @@ import {
   type TakeoverQuoteResponse,
 } from "@/api/types";
 import { CELL_HEIGHT, CELL_WIDTH, DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
+import { mapRefreshSeconds } from "@/game/quality";
 import {
   attackRefusal,
   hasDeclareWar,
@@ -97,7 +98,7 @@ import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 import { isPhoneLayout } from "@/ui/phoneLayout";
 
 /**
@@ -415,6 +416,7 @@ export class MapRoom2Scene implements Scene {
       onZoomToCell: (cell) => this.zoomToCell(cell),
       onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
       onCancel: () => this.clearSelection(),
+      liftOf: this.renderer.liftAt,
     });
     this.input.attach();
 
@@ -503,7 +505,8 @@ export class MapRoom2Scene implements Scene {
       this.sinceStaleCheck += deltaSeconds;
       if (this.sinceStaleCheck >= STALE_CHECK_INTERVAL_SECONDS) {
         this.sinceStaleCheck = 0;
-        this.store.refreshStale(ZONE_STALE_SECONDS);
+        // Every minute; every 3 on the Low Quality setting.
+        this.store.refreshStale(mapRefreshSeconds(ZONE_STALE_SECONDS));
       }
     }
 
@@ -671,17 +674,23 @@ export class MapRoom2Scene implements Scene {
     this.camera.zoomAt(zoom, { x: this.viewportWidth / 2, y: this.viewportHeight / 2 });
   }
 
+  /** Where a cell is drawn: its spot on the grid, raised or sunk to its height (`ground.ts`). */
+  private cellPoint(cell: OffsetCell): { x: number; y: number } {
+    const spot = mapRoomGrid.cellToPixel(cell.col, cell.row);
+    return { x: spot.x, y: spot.y + this.renderer.liftAt(cell.col, cell.row) };
+  }
+
   /** Double click: zoom in a step and put that cell in the middle. */
   private zoomToCell(cell: OffsetCell): void {
     this.camera.zoom = Math.min(this.camera.zoom * 2, this.camera.maxZoom);
-    this.camera.centreOn(mapRoomGrid.cellToPixel(cell.col, cell.row));
+    this.camera.centreOn(this.cellPoint(cell));
     this.selectCell(cell);
   }
 
   private jumpTo(cell: OffsetCell, zoom?: number, select = true): void {
     if (!inWorld(cell.col, cell.row)) return;
     if (zoom !== undefined) this.camera.zoom = zoom;
-    this.camera.centreOn(mapRoomGrid.cellToPixel(cell.col, cell.row));
+    this.camera.centreOn(this.cellPoint(cell));
     this.camera.dirty = true;
     if (select) this.selectCell(cell);
   }
@@ -721,7 +730,7 @@ export class MapRoom2Scene implements Scene {
       ui.hideHover();
       return;
     }
-    const centre = this.camera.worldToScreen(mapRoomGrid.cellToPixel(cell.col, cell.row));
+    const centre = this.camera.worldToScreen(this.cellPoint(cell));
     const half = (CELL_WIDTH / 2) * this.camera.zoom;
     ui.showHover(content, { left: centre.x - half, right: centre.x + half, middle: centre.y });
   }
@@ -740,7 +749,7 @@ export class MapRoom2Scene implements Scene {
     const panel = ui?.cellPanelRect();
     if (!ui || !panel) return;
     const pan = panClearOfPanel({
-      point: this.camera.worldToScreen(mapRoomGrid.cellToPixel(cell.col, cell.row)),
+      point: this.camera.worldToScreen(this.cellPoint(cell)),
       halfWidth: (CELL_WIDTH / 2) * this.camera.zoom,
       halfHeight: (CELL_HEIGHT / 2) * this.camera.zoom,
       panel,

@@ -5,7 +5,7 @@ import { GuideOverlay, type GuideStep } from "@/ui/guide/GuideOverlay";
 import "@/ui/styles/guide-start.css";
 import { guideBus } from "./guideBus";
 import { PRACTICE_CAMP_BASEID } from "./practiceBox";
-import { dotsFor, isGuideStep, LINES, type GuideStepName } from "./steps";
+import { CUES, dotsFor, isGuideStep, LINES, type GuideStepName } from "./steps";
 import { findTarget, TutTarget } from "./targets";
 
 /**
@@ -114,6 +114,7 @@ export class Mr1Guide {
         key: "lost",
         step: this.line("attack-result", {
           text: LINES.lost,
+          cue: CUES.lost!,
           mood: "worried",
           actions: [{ label: "Try again", primary: true, onClick: () => void this.retry() }],
         }),
@@ -124,7 +125,16 @@ export class Mr1Guide {
       case "pick-camp": {
         const carded = this.picked === PRACTICE_CAMP_BASEID && findTarget(TutTarget.TARGET_ATTACK) !== null;
         return carded
-          ? { key: "attack", step: this.line("pick-camp", { text: LINES.tapAttack, target: TutTarget.TARGET_ATTACK }) }
+          ? {
+              key: "attack",
+              // From below, so the hand leaves the card's lines (the army, the protection) readable.
+              step: this.line("pick-camp", {
+                text: LINES.tapAttack,
+                cue: CUES.tapAttack!,
+                target: TutTarget.TARGET_ATTACK,
+                side: "below",
+              }),
+            }
           : { key: "camp", step: this.line("pick-camp", { text: LINES.pickCamp, target: TutTarget.MR1_PRACTICE }) };
       }
       case "attack":
@@ -165,7 +175,12 @@ export class Mr1Guide {
       const answer = await this.api.advance(from);
       const step = this.stepOf(answer);
       this.outcome = step === "attack-result" ? "lost" : "won";
-      if (this.outcome === "won") this.step = null;
+      if (this.outcome === "won") {
+        this.step = null;
+        // The win removed the camp on the server ("gone once you win"): read
+        // the map again so its pin goes now, not on the next visit.
+        this.hooks.refresh();
+      }
     } catch {
       this.hooks.refresh();
     } finally {

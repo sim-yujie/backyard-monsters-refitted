@@ -1,4 +1,5 @@
 import { footprintOf, type Point, type Rect } from "../YardGrid";
+import type { YardKind } from "../buildingCosts";
 import { DECORATION_HEIGHT, DECORATION_WIDTH, snap } from "./placement";
 
 /**
@@ -56,9 +57,9 @@ export const blueprintDragToYard = (
 
 /* ── Tiles ────────────────────────────────────────────────────────────────── */
 
-/** A building's tile in blueprint world pixels: its footprint, translated. */
-export const tileRect = (type: number, x: number, y: number): Rect => {
-  const [width, height] = footprintOf(type);
+/** A building's tile in blueprint world pixels: its footprint (`kind`'s), translated. */
+export const tileRect = (type: number, x: number, y: number, kind: YardKind = "main"): Rect => {
+  const [width, height] = footprintOf(type, kind);
   const origin = blueprintToWorld(x, y);
   return { x: origin.x, y: origin.y, width, height };
 };

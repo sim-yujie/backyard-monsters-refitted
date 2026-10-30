@@ -94,7 +94,7 @@ interface Forces {
   readonly bunkers: Record<number, Record<string, number>>;
 }
 
-const setUp = (scene: Scene, forces?: Forces) => {
+const setUp = (scene: Scene, forces?: Forces, classic = false) => {
   const session = new AttackSession({ target: targetOf(scene.monsters, scene.ranks ?? {}), seed: 1 });
   const response = {
     ...yardOf(scene.buildings),
@@ -114,6 +114,8 @@ const setUp = (scene: Scene, forces?: Forces) => {
     reducedMotion: false,
     textures: new MonsterSheetTextures(blankSheet),
     now: () => wall,
+    // Full effects asked for, so the Classic look is what turns them off.
+    ...(classic ? { classic, juice: "full" as const } : {}),
   });
   session.appendFling(scene.fling);
   return { session, layer, root, tickWall: (ms: number) => (wall += ms) };
@@ -228,6 +230,28 @@ describe("the punchy blast in a real attack (feat/punchy-trial)", () => {
     layer.update();
     expect(Math.abs(root.pivot.x)).toBeLessThanOrEqual(MAX_SHAKE);
     expect(Math.abs(root.pivot.y)).toBeLessThanOrEqual(MAX_SHAKE);
+  });
+
+  it("Korath's quake in the Classic look: Flash's rings alone, no blast, shake or damage numbers", () => {
+    const modern = setUp(SCENES.korath);
+    let modernNumbers = 0;
+    until(modern.session, modern.layer, (events) => {
+      modernNumbers = Math.max(modernNumbers, modern.layer.creepEffects.labelCount);
+      return events.some((event) => event.kind === "quake");
+    });
+    expect(modernNumbers).toBeGreaterThan(0);
+
+    const { session, layer, root } = setUp(SCENES.korath, undefined, true);
+    until(session, layer, (events) => {
+      expect(layer.creepEffects.labelCount).toBe(0);
+      return events.some((event) => event.kind === "quake");
+    });
+    for (let step = 0; step < TICKS_PER_SECOND; step += 1) frame(session, layer);
+    expect(layer.blasts.blastsMade).toBe(0);
+    expect(layer.blasts.shakeAmp).toBe(0);
+    expect(layer.creepEffects.labelCount).toBe(0);
+    expect(root.pivot.x).toBe(0);
+    expect(root.pivot.y).toBe(0);
   });
 
   it("Project X's death blast: the yellow rings, no punchy blast", () => {

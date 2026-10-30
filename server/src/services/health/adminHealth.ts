@@ -23,16 +23,16 @@ export interface AdminHealthReport {
   readonly telegram: boolean;
 }
 
-export interface AdminHealthDeps extends Pick<HealthDeps, "readHostStatus"> {
+export interface AdminHealthDeps extends Pick<HealthDeps, "readHostStatus" | "containerDisk"> {
   readonly sql: HealthDeps["sql"];
   readonly redis: AlertRedis & { send(command: string, args: string[]): Promise<unknown> };
   readonly now?: number;
 }
 
 /** Builds the report; never rejects (a part that fails says so). */
-export const adminHealthReport = async ({ sql, redis, readHostStatus, now = Date.now() }: AdminHealthDeps): Promise<AdminHealthReport> => {
+export const adminHealthReport = async ({ sql, redis, readHostStatus, containerDisk, now = Date.now() }: AdminHealthDeps): Promise<AdminHealthReport> => {
   const config = alertConfig();
-  const health = await healthSummary({ sql, redisSend: (command, args) => redis.send(command, args), readHostStatus, now });
+  const health = await healthSummary({ sql, redisSend: (command, args) => redis.send(command, args), readHostStatus, containerDisk, now });
   const open = await redisAlertStore(redis)
     .all()
     .catch(() => new Map<string, AlertState>());

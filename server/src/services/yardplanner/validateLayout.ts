@@ -172,18 +172,20 @@ const decorationUnmoved = (node: LayoutNode, saved: BuildingDataMap | null | und
  * Checks positions: inside the plot for `expansion`, and no two footprints on
  * the same cells. Mushrooms are not obstacles: Apply moves any a building
  * lands on (#263). With `saved` (the caller's `buildingdata`) a decoration at
- * its saved spot is not held to the plot.
+ * its saved spot is not held to the plot. Footprints are `kind`'s: the
+ * Inferno's Under Hall and Academy are bigger than the main yard's.
  */
 export const checkNodePlacement = (
   nodes: LayoutNode[],
   expansion: number,
-  saved?: BuildingDataMap | null
+  saved?: BuildingDataMap | null,
+  kind: YardKind = "main"
 ): void => {
   const outside: number[] = [];
   const placed: { id: number; rect: FootprintRect }[] = [];
 
   for (const node of nodes) {
-    const rect = rectOf(node.t, node.x, node.y);
+    const rect = rectOf(node.t, node.x, node.y, kind);
     if (!withinBounds(rect, expansion) && !decorationUnmoved(node, saved)) outside.push(node.id);
     placed.push({ id: node.id, rect });
   }
@@ -216,7 +218,8 @@ export const checkNodePlacement = (
 export const checkStoragePlacements = (
   placements: readonly StoragePlacement[],
   nodes: readonly LayoutNode[],
-  expansion: number
+  expansion: number,
+  kind: YardKind = "main"
 ): void => {
   const notDecorations = placements.flatMap((one, index) => (footprintOf(one.t).decoration ? [] : [index]));
   if (notDecorations.length > 0) {
@@ -225,7 +228,7 @@ export const checkStoragePlacements = (
     });
   }
 
-  const rects = placements.map((one) => rectOf(one.t, one.x, one.y));
+  const rects = placements.map((one) => rectOf(one.t, one.x, one.y, kind));
   const outside = rects.flatMap((rect, index) => (withinBounds(rect, expansion) ? [] : [index]));
   if (outside.length > 0) {
     throw layoutInvalidErr(
@@ -234,7 +237,7 @@ export const checkStoragePlacements = (
     );
   }
 
-  const others = nodes.map((node) => rectOf(node.t, node.x, node.y));
+  const others = nodes.map((node) => rectOf(node.t, node.x, node.y, kind));
   const overlapping = rects.flatMap((rect, index) =>
     others.some((other) => overlaps(rect, other)) ||
     rects.some((other, at) => at !== index && overlaps(rect, other))

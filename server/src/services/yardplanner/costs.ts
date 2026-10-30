@@ -9,6 +9,13 @@ import { BaseType } from "../../enums/Base.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 
 /**
+ * The `re` entry type that stands for the player's Inferno Under Hall
+ * (`INFERNOQUAKETOWER.UNDERHALL_ID`, `client/scripts/INFERNOQUAKETOWER.as:15`):
+ * every main-yard Inferno building requires `[999, 1, 1]`.
+ */
+export const UNDER_HALL_REQUIREMENT = 999;
+
+/**
  * Reading the building cost table, server-side.
  *
  * The batch routes the Yard Planner calls are the first place this server
@@ -60,17 +67,19 @@ import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js"
 export { propsFor, type YardKind };
 
 /**
- * The kind of yard a save is: an outpost row builds from the outpost table,
- * everything else from the main one. The yard rules read it off the save they
- * are handed, so a route needs no extra argument: the yard action wrapper hands
- * an outpost's rules a save whose `type` is `outpost`
+ * The kind of yard a save is: an outpost row builds from the outpost table, an
+ * Inferno yard from the Inferno table (`GLOBAL.as:718-719`), everything else
+ * from the main one. The yard rules read it off the save they are handed, so a
+ * route needs no extra argument: the yard action wrapper hands an outpost's or
+ * the Inferno yard's rules a save whose `type` is `outpost` or `inferno`
  * (`services/yard/poolView.ts`).
  */
 export const yardKindOf = (save: { type?: string | null } | null | undefined): YardKind =>
-  save?.type === BaseType.OUTPOST ? "outpost" : "main";
+  save?.type === BaseType.OUTPOST ? "outpost" : save?.type === BaseType.INFERNO ? "inferno" : "main";
 
-/** What the player calls a yard's hall in a message: the Town Hall, or the outpost core. */
-export const hallName = (kind: YardKind): string => (kind === "outpost" ? "core" : "Town Hall");
+/** What the player calls a yard's hall in a message: the Town Hall, the outpost core or the Under Hall. */
+export const hallName = (kind: YardKind): string =>
+  kind === "outpost" ? "core" : kind === "inferno" ? "Under Hall" : "Town Hall";
 
 /** A countdown at or below this many seconds is free to finish. */
 export const FREE_FINISH_SECONDS = 300;
@@ -169,14 +178,21 @@ export const countOfType = (
  * or above the required level, and compare against the required count. A
  * building still counting its initial build down is level 0 here, so it unlocks
  * nothing.
+ *
+ * An {@link UNDER_HALL_REQUIREMENT} entry (999, the main yard's Inferno
+ * buildings) is no building on the yard: it is met when the player's Inferno
+ * Under Hall, `underHall`, is at the level or above (`BASE.as:3762-3765`).
+ * Left out, it reads 0, so the entry is unmet.
  */
 export const requirementsMet = (
   re: readonly CostRequirement[],
-  buildingdata: BuildingDataMap | null | undefined
+  buildingdata: BuildingDataMap | null | undefined,
+  underHall = 0
 ): boolean => {
   if (re.length === 0) return true;
   const buildings = buildingsOf(buildingdata);
   return re.every(([type, count, level]) => {
+    if (type === UNDER_HALL_REQUIREMENT) return underHall >= level;
     let have = 0;
     for (const building of buildings) {
       if (Number(building.t) === type && levelOf(building) >= level) have++;

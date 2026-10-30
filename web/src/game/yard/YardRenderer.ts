@@ -1,10 +1,11 @@
-import { Assets, Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
+import { Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
 import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
 import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
+import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
 import { YardHelpMarks } from "./YardHelpMarks";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
@@ -12,14 +13,14 @@ import { YardLifeLayer } from "./YardLifeLayer";
 import { holdBack, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
 import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
-import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
+import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
 import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
-import { mushroomAt, mushroomKey } from "./mushroomPick";
+import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
 import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
 
@@ -65,7 +66,6 @@ export class YardRenderer {
 
   private readonly ground = new YardGround();
   private readonly buildings = new YardBuildings();
-  private readonly mushroomLayer = new Container();
   /** Each mushroom's sprite by `mushroomKey`, rebuilt with every `show`. */
   private readonly mushroomSprites = new Map<string, Sprite>();
   /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
@@ -85,8 +85,24 @@ export class YardRenderer {
   private readonly hatchMarks = new YardHatchMarks((id) => this.hatchMarkAnchor(id));
   /** The wrenches over a friend's yard on a visit (#374); see `YardHelpMarks`. */
   private readonly helpMarks = new YardHelpMarks((id) => this.hatchMarkAnchor(id));
+  /** Opens {@link sheetsAllowed}; see there. */
+  private allowSheets: () => void = () => {};
+  /**
+   * Settles once the first yard shown has every building's picture, or after
+   * {@link SHEET_HOLD_MS} at most. The creatures' sheets wait for it: a
+   * painted monster sheet is up to 10 MB, three of them came to 24 MB on a
+   * full yard, and fetched alongside the building pictures they held those
+   * back for seconds on a slow link. Once open it stays open.
+   */
+  private readonly sheetsAllowed = new Promise<void>((resolve) => {
+    this.allowSheets = resolve;
+  });
+  private sheetHold: ReturnType<typeof setTimeout> | null = null;
   /** What lives on the yard (#158, #159): scenery, never in the battle. */
-  private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
+  private readonly life = new YardLifeLayer({
+    reducedMotion: prefersReducedMotion(),
+    textures: new MonsterSheetTextures((url) => this.sheetsAllowed.then(() => loadSheet(url))),
+  });
   /** The planner is open: the creatures step out of the way until it closes. */
   private lifeHidden = false;
   /** The life last set, before {@link lifeHolds} cut it. */
@@ -117,6 +133,10 @@ export class YardRenderer {
   private season: Season = "normal";
   /** The Halloween pumpkin that stands in for a mushroom, once it has loaded. */
   private pumpkin: Texture | null = null;
+  /** Whether the pumpkin is being asked for, so a second Halloween does not ask twice. */
+  private pumpkinLoading = false;
+  /** Whether `destroy` has run: a pumpkin still being retried then gives up. */
+  private destroyed = false;
   private unwatchSeason: (() => void) | null = null;
   private yard: Yard | null = null;
   /** Which buildings are working and the clock to read it on (#255); see `setWork`. */
@@ -147,13 +167,12 @@ export class YardRenderer {
   private zoomWatcher: ((zoom: number) => void) | null = null;
 
   constructor() {
-    this.mushroomLayer.eventMode = "none";
+    this.buildings.onArtReady(() => this.openSheets());
     this.isoDecals.eventMode = "none";
     this.root.addChild(
       this.ground.root,
       this.isoDecals,
       this.buildings.shadows,
-      this.mushroomLayer,
       this.buildings.tops,
       this.collect.root,
       this.blueprint.root,
@@ -181,20 +200,29 @@ export class YardRenderer {
   /**
    * Dresses the yard for `season`: the ground's tiles, and pumpkins in place
    * of the mushrooms at Halloween. The mushrooms keep the glyph until the
-   * pumpkin picture arrives, and keep it for good if it never does.
+   * pumpkin picture arrives, and keep it for good if it never does. The
+   * picture gets the yard's five tries (`retryLoad.ts`), so one broken answer
+   * on a first load does not leave mushrooms all Halloween.
    */
   setSeason(season: Season): void {
     if (season === this.season) return;
     this.season = season;
     this.ground.setSeason(season);
-    if (season === "halloween" && !this.pumpkin) {
-      void Assets.load<Texture>(PUMPKIN_ART).then(
-        (texture) => {
-          this.pumpkin = texture;
-          this.redrawMushrooms();
-        },
-        (caught: unknown) => console.warn("The Halloween pumpkin did not load; mushrooms stay.", caught),
-      );
+    if (season === "halloween" && !this.pumpkin && !this.pumpkinLoading) {
+      this.pumpkinLoading = true;
+      void loadWithRetries(PUMPKIN_ART, () => this.destroyed)
+        .then(
+          (texture) => {
+            if (this.destroyed) return;
+            this.pumpkin = texture;
+            this.redrawMushrooms();
+          },
+          (caught: unknown) =>
+            console.warn(`The Halloween pumpkin did not load in ${LOAD_TRIES} tries; mushrooms stay.`, caught),
+        )
+        .finally(() => {
+          this.pumpkinLoading = false;
+        });
     }
     this.redrawMushrooms();
   }
@@ -230,8 +258,15 @@ export class YardRenderer {
 
     // The base seed keeps one yard's grass the same between visits. Somebody
     // else's yard sits on open grass with no plot edge (see `Yard.foreign`).
-    this.ground.layout(yard.bounds, yard.savedAt || 1, yard.foreign ? "open" : "plot");
+    // An Inferno yard stands on lava (`BASE.as:1493-1495`).
+    this.ground.layout(
+      yard.bounds,
+      yard.savedAt || 1,
+      yard.foreign ? "open" : "plot",
+      yard.kind === "inferno" ? "lava" : "grass",
+    );
     void this.ground.loadTiles();
+    this.sheetHold ??= setTimeout(() => this.openSheets(), SHEET_HOLD_MS);
 
     // The creatures outlive a redraw: out of the containers the yard is about
     // to empty, and back in once it has refilled them.
@@ -254,7 +289,10 @@ export class YardRenderer {
       else sprite.anchor.set(0.5, 0.85);
       sprite.scale.set(this.mushroomSize());
       sprite.position.set(mushroom.worldX, mushroom.worldY);
-      this.mushroomLayer.addChild(sprite);
+      // Among the buildings, by depth: a wall behind it no longer covers it.
+      sprite.eventMode = "none";
+      sprite.zIndex = mushroomZIndex(mushroom);
+      this.buildings.addGuest(sprite);
       this.mushroomSprites.set(key, sprite);
       keys.add(key);
     }
@@ -317,7 +355,6 @@ export class YardRenderer {
       this.ground.root,
       this.isoDecals,
       this.buildings.shadows,
-      this.mushroomLayer,
       this.buildings.tops,
       this.collect.root,
       this.buildings.markers,
@@ -757,6 +794,11 @@ export class YardRenderer {
     this.buildings.setAnimFrame(id, layerIndex, frame);
   }
 
+  /** Shifts one of a building's animation layers: a gun's recoil; see `YardBuildings.nudgeAnim`. */
+  nudgeAnim(id: number, layerIndex: number, dx: number, dy: number): void {
+    this.buildings.nudgeAnim(id, layerIndex, dx, dy);
+  }
+
   /** Puts every building back where the save had it, in both views. */
   resetPlacements(): void {
     for (const id of this.byId.keys()) this.buildings.offsetBuilding(id, 0, 0);
@@ -824,7 +866,15 @@ export class YardRenderer {
     if (sprite && mushroom) sprite.position.set(mushroom.worldX, mushroom.worldY);
   }
 
+  /** Lets the creatures' sheets load; see {@link sheetsAllowed}. */
+  private openSheets(): void {
+    this.allowSheets();
+    if (this.sheetHold !== null) clearTimeout(this.sheetHold);
+  }
+
   destroy(): void {
+    this.destroyed = true;
+    this.openSheets();
     this.unwatchSeason?.();
     this.unwatchSeason = null;
     this.collect.destroy();
@@ -927,7 +977,10 @@ export class YardRenderer {
   }
 
   private clearMushrooms(): void {
-    for (const child of this.mushroomLayer.removeChildren()) child.destroy();
+    for (const sprite of this.mushroomSprites.values()) {
+      this.buildings.removeGuest(sprite);
+      sprite.destroy();
+    }
     this.mushroomSprites.clear();
   }
 
@@ -986,6 +1039,13 @@ export class YardRenderer {
 const PUMPKIN_ART = "/assets/buildings/decorations/pumpkins/top.png";
 const PUMPKIN_BASE = 0.9;
 const PUMPKIN_SCALE = 1.3;
+
+/**
+ * The longest the creatures' sheets wait for the building pictures, in
+ * milliseconds: a building picture that never answers must not keep the
+ * yard empty of monsters.
+ */
+const SHEET_HOLD_MS = 4000;
 
 /** How far a hatchery's number is raised over a job bar and its time, world pixels at zoom 1. */
 const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;

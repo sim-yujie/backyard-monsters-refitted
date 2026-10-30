@@ -16,6 +16,10 @@ import type { YardStoreReader } from "./YardStore";
  * (`repair.ts` `repairNowPrice`). The wall upgrades (`BLK2`..`BLK5`) are
  * priced from the yard's Blocks as the server prices them ({@link wallOffers}).
  *
+ * The Inferno yard has its own store (WP 1.17, {@link INFERNO_SHOP_ITEMS}):
+ * Flash's Inferno list (`client/scripts/STORE.as:210`) plus its workers,
+ * bought into the Inferno's own `storedata`; Shiny is the player's one purse.
+ *
  * Pure: {@link shopModel} reads a store and returns rows; the screen
  * (`ui/yard/ShopScreen.ts`) draws them.
  */
@@ -41,6 +45,21 @@ export const SHOP_SECTION_TITLES: Readonly<Record<ShopSection, string>> = {
   protection: "Protection",
 };
 
+/**
+ * What a boost does as a painted icon and a number (the text cut, 28 Oct):
+ * the red claw and "+25%" for Tower Overdrive. The card shows these and the
+ * clock with how long it lasts in place of the sentence, which stays for
+ * hover and a screen reader.
+ */
+export interface ShopEffect {
+  /** A painted icon (`ui/gameIcon.ts`). */
+  readonly icon: "damage" | "speed" | "housing";
+  /** "+25%", "−30% taken". */
+  readonly amount: string;
+  /** What the icon means here: "Tower damage". */
+  readonly label: string;
+}
+
 /** One item the Shop sells through `shop/buy`. */
 export interface ShopItem {
   /** The store code `shop/buy` takes. */
@@ -48,6 +67,8 @@ export interface ShopItem {
   readonly name: string;
   /** What it does, in a sentence. */
   readonly blurb: string;
+  /** What it does as icons and numbers, drawn in place of the blurb. */
+  readonly effects?: readonly ShopEffect[];
   readonly section: ShopSection;
   /** The price of each step, cheapest first; one entry for an item bought once at a time. */
   readonly prices: readonly number[];
@@ -161,6 +182,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "EXH",
     name: "Housing Expansion",
     blurb: "Monster Housing holds 25% more for 24 hours.",
+    effects: [{ icon: "housing", amount: "+25%", label: "Housing space" }],
     section: ShopSection.MONSTERS,
     prices: [375],
     seconds: DAY,
@@ -174,6 +196,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "TOD",
     name: "Tower Overdrive",
     blurb: "This yard's towers do 25% more damage for 24 hours.",
+    effects: [{ icon: "damage", amount: "+25%", label: "Tower damage" }],
     section: ShopSection.BOOSTS,
     prices: [600],
     seconds: DAY,
@@ -184,6 +207,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "MOD",
     name: "Monster Overdrive",
     blurb: "Your monsters do 25% more damage for 24 hours, in your attacks and at home.",
+    effects: [{ icon: "damage", amount: "+25%", label: "Monster damage" }],
     section: ShopSection.BOOSTS,
     prices: [500],
     seconds: DAY,
@@ -194,6 +218,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "MDOD",
     name: "Monster Defensive Buff",
     blurb: "Your monsters take 30% less damage for 24 hours, in your attacks and at home.",
+    effects: [{ icon: "damage", amount: "−30% taken", label: "Damage your monsters take" }],
     section: ShopSection.BOOSTS,
     prices: [500],
     seconds: DAY,
@@ -204,6 +229,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "MSOD",
     name: "Monster Speed Buff",
     blurb: "Your monsters move and attack 50% faster for 24 hours, in your attacks and at home.",
+    effects: [{ icon: "speed", amount: "+50%", label: "Monster speed" }],
     section: ShopSection.BOOSTS,
     prices: [500],
     seconds: DAY,
@@ -236,6 +262,125 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     item: "PRO3",
     name: "Ultimate Protection",
     blurb: "Nobody can attack your yard for 28 more days. Attacking anyone ends it.",
+    section: ShopSection.PROTECTION,
+    prices: [1_100],
+    seconds: 28 * DAY,
+    outposts: false,
+    stacks: true,
+  },
+];
+
+/**
+ * What the Inferno yard's store sells (WP 1.17, `shop/buy`'s
+ * `INFERNO_SHOP_ITEMS`), in Flash's order (`STORE.as:210`): More Yardage and
+ * the walls ({@link INFERNO_WALL_TIERS}), Improved Packing, the Inferno's three
+ * Hatchery Overdrives, the protections, Housing Expansion and Tower
+ * Overdrive. The Extra Worker is not Flash's here: owner decision I3, the
+ * Inferno's own ladder at the surface's prices, five workers at most. The
+ * Inferno's codes end in `I`; Improved Packing, the workers and protection
+ * share the surface's codes, and land in the Inferno row all the same.
+ */
+export const INFERNO_SHOP_ITEMS: readonly ShopItem[] = [
+  {
+    item: "BEW",
+    name: "Extra Worker",
+    blurb:
+      "One more Inferno worker, so one more building can go up or be upgraded at the same time.",
+    section: ShopSection.BUILDING,
+    prices: [250, 500, 1_000, 2_000],
+    seconds: 0,
+    outposts: false,
+  },
+  {
+    item: "ENLI",
+    name: "More Yardage",
+    blurb: "Your Inferno yard grows 10% each way, making room for more.",
+    section: ShopSection.STORAGE,
+    prices: [50, 100, 150, 200, 250],
+    seconds: 0,
+    outposts: false,
+  },
+  {
+    item: "BIP",
+    name: "Improved Packing",
+    blurb: "Every Inferno resource holds 10% more.",
+    section: ShopSection.STORAGE,
+    prices: [50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+    seconds: 0,
+    outposts: false,
+  },
+  {
+    item: "HODI",
+    name: "Hatchery Overdrive 4x",
+    blurb: "Incubators work four times as fast for an hour.",
+    section: ShopSection.MONSTERS,
+    prices: [30],
+    seconds: HOUR,
+    outposts: false,
+  },
+  {
+    item: "HOD2I",
+    name: "Hatchery Overdrive 6x",
+    blurb: "Incubators work six times as fast for an hour.",
+    section: ShopSection.MONSTERS,
+    prices: [50],
+    seconds: HOUR,
+    outposts: false,
+  },
+  {
+    item: "HOD3I",
+    name: "Hatchery Overdrive 10x",
+    blurb: "Incubators work ten times as fast for an hour.",
+    section: ShopSection.MONSTERS,
+    prices: [100],
+    seconds: HOUR,
+    outposts: false,
+  },
+  {
+    item: "EXHI",
+    name: "Housing Expansion",
+    blurb: "Compounds hold 25% more monsters for 24 hours.",
+    effects: [{ icon: "housing", amount: "+25%", label: "Housing space" }],
+    section: ShopSection.MONSTERS,
+    prices: [375],
+    seconds: DAY,
+    outposts: false,
+  },
+  {
+    item: "TODI",
+    name: "Tower Overdrive",
+    blurb: "Your Inferno towers do 25% more damage for 24 hours.",
+    effects: [{ icon: "damage", amount: "+25%", label: "Tower damage" }],
+    section: ShopSection.BOOSTS,
+    prices: [600],
+    seconds: DAY,
+    outposts: false,
+    restarts: true,
+  },
+  {
+    item: "PRO1",
+    name: "24 Hours Protection",
+    blurb: "Nobody can attack your Inferno yard for 24 more hours. Attacking anyone ends it.",
+    section: ShopSection.PROTECTION,
+    prices: [32],
+    seconds: DAY,
+    outposts: false,
+    stacks: true,
+  },
+  {
+    item: "PRO2",
+    name: "Holiday Protection",
+    blurb: "Nobody can attack your Inferno yard for 7 more days. Attacking anyone ends it.",
+    section: ShopSection.PROTECTION,
+    prices: [250],
+    seconds: 7 * DAY,
+    outposts: false,
+    stacks: true,
+  },
+  {
+    item: "PRO3",
+    name: "Ultimate Protection",
+    blurb: "Nobody can attack your Inferno yard for 28 more days. Attacking anyone ends it.",
     section: ShopSection.PROTECTION,
     prices: [1_100],
     seconds: 28 * DAY,
@@ -279,6 +424,26 @@ export const WALL_TIERS: readonly WallTier[] = [
   { item: "BLK5", tier: 5, name: "Black Diamond Blocks", material: "black diamond", townHall: 6 },
 ];
 
+/**
+ * The Inferno's two (`STORE.as:210`, `services/yard/wallBlocks.ts`): Flash's
+ * Stone and Metal under Inferno names, the same Block, prices and rule, behind
+ * the Under Hall (`townHall`) at 3 and 4.
+ */
+export const INFERNO_WALL_TIERS: readonly WallTier[] = [
+  { item: "BLK2I", tier: 2, name: "Granite Blocks", material: "granite", townHall: 3 },
+  {
+    item: "BLK3I",
+    tier: 3,
+    name: "Forged Steel Blocks",
+    material: "forged steel",
+    townHall: 4,
+  },
+];
+
+/** The wall upgrades a yard of `kind` sells. */
+export const wallTiersFor = (kind: YardKind): readonly WallTier[] =>
+  kind === "inferno" ? INFERNO_WALL_TIERS : WALL_TIERS;
+
 /** Shiny per Block to climb into level `n` (index = n), as `shop/buy` charges it (`STORE.as:404-519`). */
 export const WALL_STEP_SHINY: readonly number[] = [0, 0, 3, 6, 10, 15];
 
@@ -305,8 +470,15 @@ export interface WallOffer {
 const blockLevel = (type: number, level: number): number =>
   type === LEGACY_WALL_TYPE ? Math.max(2, level) : Math.max(1, level);
 
-/** The Hatchery Overdrives: one of the three at a time (§4.4). */
-const HATCHERY_OVERDRIVES: readonly string[] = ["HOD", "HOD2", "HOD3"];
+/** The Hatchery Overdrives: one of the three at a time (§4.4); the Inferno's are its own three. */
+const HATCHERY_OVERDRIVES: readonly string[] = [
+  "HOD",
+  "HOD2",
+  "HOD3",
+  "HODI",
+  "HOD2I",
+  "HOD3I",
+];
 
 /** What a row offers now. */
 export type ShopOfferState =
@@ -349,13 +521,14 @@ export interface ShopModel {
 
 export const NOT_ENOUGH_SHINY = "Not enough Shiny.";
 
-/** The four wall upgrades for the yard as it stands: price, Blocks raised, and why not. */
+/** The wall upgrades for the yard as it stands: price, Blocks raised, and why not. */
 export const wallOffers = (reader: YardStoreReader): readonly WallOffer[] => {
   const levels = reader.yard.buildings
     .filter((one) => one.type === WALL_TYPE || one.type === LEGACY_WALL_TYPE)
     .map((one) => blockLevel(one.type, one.level));
   const hall = townHallLevel(reader.yard);
-  return WALL_TIERS.map((tier): WallOffer => {
+  const hallWord = reader.kind === "inferno" ? "Under Hall" : "Town Hall";
+  return wallTiersFor(reader.kind).map((tier): WallOffer => {
     if (levels.length === 0) return { tier, blocks: 0, state: { kind: "none" } };
     let blocks = 0;
     let price = 0;
@@ -366,8 +539,8 @@ export const wallOffers = (reader: YardStoreReader): readonly WallOffer[] => {
     }
     if (blocks === 0) return { tier, blocks, state: { kind: "reached" } };
     const blocked =
-      reader.kind === "main" && hall < tier.townHall
-        ? `Needs Town Hall level ${tier.townHall}.`
+      reader.kind !== "outpost" && hall < tier.townHall
+        ? `Needs ${hallWord} level ${tier.townHall}.`
         : reader.credits < price
           ? NOT_ENOUGH_SHINY
           : null;
@@ -399,7 +572,11 @@ const runningUntil = (
 
 /** The items a yard of `kind` sells. */
 export const shopItemsFor = (kind: YardKind): readonly ShopItem[] =>
-  kind === "outpost" ? SHOP_ITEMS.filter((one) => one.outposts) : SHOP_ITEMS;
+  kind === "inferno"
+    ? INFERNO_SHOP_ITEMS
+    : kind === "outpost"
+      ? SHOP_ITEMS.filter((one) => one.outposts)
+      : SHOP_ITEMS;
 
 /** Why an item on sale cannot be bought now, or null. */
 const blockedReason = (item: ShopItem, price: number, reader: YardStoreReader, now: number): string | null => {

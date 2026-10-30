@@ -83,6 +83,42 @@ describe("HudStatus", () => {
     status.destroy();
   });
 
+  it("holds the level-up box while Bob's guided start runs, then shows the level reached", () => {
+    const guide = (state: string, step = "build-housing") => ({ onboarding: { guide: { state, step } } });
+    const store = storeWith({ playerlevel: 1, playerpoints: 100, ...guide("active") } as unknown as Partial<BaseLoadResponse>);
+    const status = new HudStatus({ store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
+
+    // Finish now on the Sniper Tower: level 2, with Bob still pointing at Build.
+    store.mergeWrite({ playerlevel: 2, playerpoints: 1_000 } as Partial<BaseLoadResponse>);
+    expect(status.element.querySelector(".hud-status__level")?.textContent).toBe("Level 2");
+    expect(document.body.querySelector(".level-up")).toBeNull();
+
+    store.mergeWrite({ playerlevel: 3, playerpoints: 3_600 } as Partial<BaseLoadResponse>);
+    expect(document.body.querySelector(".level-up")).toBeNull();
+
+    // The guide ends: one box, for the level reached.
+    store.mergeWrite(guide("done") as unknown as Partial<BaseLoadResponse>);
+    const boxes = document.body.querySelectorAll(".level-up");
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]?.textContent).toContain("You reached level 3!");
+
+    store.mergeWrite({ playerpoints: 3_700 } as Partial<BaseLoadResponse>);
+    expect(document.body.querySelectorAll(".level-up")).toHaveLength(1);
+    status.destroy();
+  });
+
+  it("shows a level gained before the guide's first line once the guide is skipped", () => {
+    const guide = (state: string) => ({ onboarding: { guide: { state, step: "welcome" } } });
+    const store = storeWith({ playerlevel: 1, playerpoints: 100, ...guide("pending") } as unknown as Partial<BaseLoadResponse>);
+    const status = new HudStatus({ store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices });
+
+    store.mergeWrite({ playerlevel: 2, playerpoints: 1_000 } as Partial<BaseLoadResponse>);
+    expect(document.body.querySelector(".level-up")).toBeNull();
+    store.mergeWrite(guide("skipped") as unknown as Partial<BaseLoadResponse>);
+    expect(document.body.querySelector(".level-up")?.textContent).toContain("You reached level 2!");
+    status.destroy();
+  });
+
   it("does not announce the level the yard opened with", () => {
     const store = storeWith({ playerlevel: 4, playerpoints: 6_000 } as Partial<BaseLoadResponse>);
     const status = new HudStatus({ store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices });

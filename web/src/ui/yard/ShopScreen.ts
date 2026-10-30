@@ -8,12 +8,14 @@ import {
   ShopSection,
   shopModel,
   type RepairAllOffer,
+  type ShopEffect,
   type ShopOffer,
   type WallOffer,
 } from "@/game/yard/shop";
 import type { YardKind } from "@/game/yard/buildingCostData";
 import { actionKey, YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { iconAmount } from "@/ui/gameIcon";
 import { Panel } from "@/ui/Panel";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { ShinyButton } from "./ShinyButton";
@@ -31,7 +33,9 @@ import "@/ui/styles/shop.css";
  * a Repairs card offers Repair everything now (`FIX`, the `repair/instant`
  * route). Under Building, a Walls section sells the four wall upgrades,
  * priced from the yard's Blocks. Docked like the Monsters screen and, like it, not a modal and open
- * after every purchase.
+ * after every purchase. On the Inferno yard it is the Inferno's store (WP 1.17
+ * items, `shop.ts` `INFERNO_SHOP_ITEMS`): its two walls, its overdrives and
+ * its protection, bought for the Inferno yard with the one Shiny purse.
  *
  * What the rows say comes from `game/yard/shop.ts`; the server prices and
  * refuses every purchase itself.
@@ -68,29 +72,43 @@ export const durationText = (seconds: number): string => {
   return hours === 1 ? "1 hour" : `${hours} hours`;
 };
 
-/** The line under a card's blurb: steps bought, time left, or how long it lasts. */
+/** "24h", "7d", "1h": how long a boost lasts, beside the clock. */
+export const durationShort = (seconds: number): string =>
+  seconds % 86_400 === 0 && seconds > 86_400 ? `${seconds / 86_400}d` : `${Math.round(seconds / 3_600)}h`;
+
+/**
+ * The line under a card's blurb: steps bought, time left, or how long it
+ * lasts. Empty for a boost that is not running: its clock chip says how long.
+ */
 export const offerMeta = (offer: ShopOffer, now: number): string => {
   const { item, owned, state } = offer;
   if (state.kind === "running") return `Running: ${formatCountdown(state.endsAt - now)} left`;
   if (state.kind === "soldOut") return `All ${item.prices.length} bought`;
   // A battle boost that runs: buying it again starts its full time afresh.
   if (state.endsAt !== undefined) {
-    return `Running: ${formatCountdown(state.endsAt - now)} left. Buy again to restart at ${durationText(item.seconds)}`;
+    return `Running: ${formatCountdown(state.endsAt - now)} left. Buying again restarts it`;
   }
   if (owned !== null) return `${owned} of ${item.prices.length} bought`;
   if (item.stacks) return `Adds ${durationText(item.seconds)}`;
+  if (item.effects) return "";
   return `Lasts ${durationText(item.seconds)}`;
 };
 
 /** The line under the Battle boosts heading: where they work, and that they do not add up. */
 export const boostsNote = (kind: YardKind): string =>
   kind === "outpost"
-    ? "Tower Overdrive works when this outpost is attacked. Buying it again restarts it; time left is not added."
-    : "Monster boosts work in your attacks and when your yard is attacked. Buying one again restarts it; time left is not added.";
+    ? "Tower Overdrive: when this outpost is attacked. Buying again restarts it; time left is not added."
+    : kind === "inferno"
+      ? "Tower Overdrive: when your Inferno yard is attacked. Buying again restarts it; time left is not added."
+      : "Monster boosts: in your attacks and at home. Buying again restarts it; time left is not added.";
 
 /** The line under the Walls heading: how the price adds up. */
 export const WALLS_NOTE =
   "Each Block costs 3 Shiny to reach stone, then 6 more for metal, 10 more for gold and 15 more for black diamond. Blocks still being built or upgraded are finished.";
+
+/** {@link WALLS_NOTE} on the Inferno yard, which sells two. */
+export const INFERNO_WALLS_NOTE =
+  "Each Block costs 3 Shiny to reach granite, then 6 more for forged steel. Blocks still being built or upgraded are finished.";
 
 /** The line under a wall upgrade's blurb. */
 export const wallMeta = (offer: WallOffer): string => {
@@ -100,11 +118,17 @@ export const wallMeta = (offer: WallOffer): string => {
   return `${formatAmount(blocks)} ${blocks === 1 ? "Block" : "Blocks"} to raise`;
 };
 
-/** The line under the Protection heading: how long the yard is still protected. */
-export const protectionText = (until: number | null, now: number): string =>
-  until === null
-    ? "Your yard is not protected. Protection you buy starts now."
-    : `Your yard is protected for ${formatCountdown(until - now)}. Protection you buy is added on top.`;
+/** The line under the Protection heading: how long the yard (the Inferno's, on `kind` "inferno") is still protected. */
+export const protectionText = (
+  until: number | null,
+  now: number,
+  kind: YardKind = "main",
+): string => {
+  const yard = kind === "inferno" ? "Your Inferno yard" : "Your yard";
+  return until === null
+    ? `${yard} is not protected. Protection you buy starts now.`
+    : `${yard} is protected for ${formatCountdown(until - now)}. Protection you buy is added on top.`;
+};
 
 const refusalText = (refusal: YardRefusal): string =>
   refusal.reason === "network"
@@ -245,24 +269,28 @@ export class ShopScreen {
           SHOP_SECTION_TITLES[section],
           offers.map((offer) => this.offerCard(offer, now)),
           section === ShopSection.PROTECTION
-            ? protectionText(model.protectedUntil, now)
+            ? protectionText(model.protectedUntil, now, store.kind)
             : section === ShopSection.BOOSTS
               ? boostsNote(store.kind)
               : null,
         ),
       );
       if (section === ShopSection.BUILDING) {
-        sections.push(this.section("walls", "Walls", model.walls.map((offer) => this.wallCard(offer)), WALLS_NOTE));
+        const note = store.kind === "inferno" ? INFERNO_WALLS_NOTE : WALLS_NOTE;
+        sections.push(this.section("walls", "Walls", model.walls.map((offer) => this.wallCard(offer)), note));
       }
     }
     if (model.repair) sections.push(this.section("repairs", "Repairs", [this.repairCard(model.repair)]));
-    this.comingLater ??= this.section(
-      "later",
-      "Coming later",
-      COMING_LATER.map((one) => this.laterCard(one.items[0] ?? one.name, one.name, one.blurb)),
-      "Not sold yet: this game does not do what they did.",
-    );
-    sections.push(this.comingLater);
+    // Flash's Inferno store never listed the Shiny decorations.
+    if (store.kind !== "inferno") {
+      this.comingLater ??= this.section(
+        "later",
+        "Coming later",
+        COMING_LATER.map((one) => this.laterCard(one.items[0] ?? one.name, one.name, one.blurb)),
+        "Not sold yet: this game does not do what they did.",
+      );
+      sections.push(this.comingLater);
+    }
     this.list.replaceChildren(...sections);
     this.syncPending();
   }
@@ -323,7 +351,9 @@ export class ShopScreen {
   private offerCard(offer: ShopOffer, now: number): HTMLElement {
     const { item, state } = offer;
     const card = this.card(item.item, item.name, item.blurb, "Buy", () => void this.buy(item.item, item.name), true);
+    if (item.effects && !card.element.dataset["effects"]) this.drawEffects(card, item.blurb, item.effects, item.seconds);
     card.meta.textContent = offerMeta(offer, now);
+    card.meta.hidden = card.meta.textContent === "";
     card.element.dataset["state"] = state.kind;
     // A running battle boost glows (`shop-card--boosted`) while it stays on sale.
     card.element.classList.toggle("shop-card--boosted", state.kind === "buy" && state.endsAt !== undefined);
@@ -367,6 +397,30 @@ export class ShopScreen {
       card.gate.hidden = true;
     }
     return card.element;
+  }
+
+  /**
+   * A boost's effect in place of its sentence (the text cut, 28 Oct): each
+   * effect's painted icon and number, then the clock and how long it lasts,
+   * "[claw] +25%  [clock] 24h". The sentence stays as the hover and for a
+   * screen reader, which hears it once instead of the chips.
+   */
+  private drawEffects(card: Card, blurb: string, effects: readonly ShopEffect[], seconds: number): void {
+    const text = card.element.querySelector<HTMLElement>(".shop-card__blurb");
+    if (!text) return;
+    card.element.dataset["effects"] = "";
+    const spoken = document.createElement("span");
+    spoken.className = "u-visually-hidden";
+    spoken.textContent = blurb;
+    const chips = document.createElement("span");
+    chips.className = "shop-card__effects";
+    chips.setAttribute("aria-hidden", "true");
+    chips.append(
+      ...effects.map((effect) => iconAmount(effect.icon, effect.amount, { label: effect.label, chip: true, size: 24 })),
+      iconAmount("time", durationShort(seconds), { label: `Lasts ${durationText(seconds)}`, chip: true, size: 24 }),
+    );
+    text.title = blurb;
+    text.replaceChildren(spoken, chips);
   }
 
   /**

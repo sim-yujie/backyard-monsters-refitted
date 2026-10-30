@@ -1,9 +1,8 @@
 import type { ChampionStance } from "@/game/combat/rules";
-import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
 import { championEntry } from "@/game/yard/championCatalogue";
 import {
   activeChampion,
-  cageEgg,
+  canRaise,
   cageView,
   chamberView,
   specialChampion,
@@ -22,16 +21,18 @@ import { yardBody, type YardRefusal } from "./yard";
  * The Champion Cage's yard routes (`docs/design/yard-buildings.md` §7.2; wire
  * contract in `docs/server-api.md` "Yard actions"):
  *
- *   POST /api/:apiVersion/bm/yard/champion/raise    type (1..3): lays an egg
- *   POST /api/:apiVersion/bm/yard/champion/cancel-egg  (pick again; the new egg takes a full day)
+ *   POST /api/:apiVersion/bm/yard/champion/raise    type (1..4): in the cage at once
  *   POST /api/:apiVersion/bm/yard/champion/feed     mode = monsters | shiny
  *   POST /api/:apiVersion/bm/yard/champion/evolve
  *   POST /api/:apiVersion/bm/yard/champion/heal
  *   POST /api/:apiVersion/bm/yard/champion/rename   name
  *   POST /api/:apiVersion/bm/yard/champion/stance   type, stance (Mode, #220)
- *   POST /api/:apiVersion/bm/yard/champion/juice
  *   POST /api/:apiVersion/bm/yard/champion/freeze   (Champion Chamber, #125)
  *   POST /api/:apiVersion/bm/yard/champion/thaw     type
+ *
+ * Champions cannot be juiced and there are no eggs any more (owner,
+ * 2026-10-28): the server refuses `champion/juice` (`409 juiceDisabled`) and
+ * answers `champion/cancel-egg` with `410`, so neither is called from here.
  */
 
 const CHAMPION_PATH = "/api/:apiVersion/bm/yard/champion";
@@ -100,13 +101,6 @@ export const championStance = (
     yardBody({ type: String(type), stance }),
   );
 
-/** Takes the egg out of the cage so the player can pick again. */
-export const championCancelEgg = (baseid?: string): Promise<YardResponse<ChampionReport>> =>
-  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/cancel-egg`, yardBody({}, baseid));
-
-export const championJuice = (baseid?: string): Promise<YardResponse<ChampionReport>> =>
-  post<YardResponse<ChampionReport>>(`${CHAMPION_PATH}/juice`, yardBody({}, baseid));
-
 export const championFreeze = (baseid?: string, type?: number): Promise<YardResponse<ChampionReport>> =>
   post<YardResponse<ChampionReport>>(
     `${CHAMPION_PATH}/freeze`,
@@ -124,24 +118,20 @@ export const championThaw = (
 
 export interface ChampionApi {
   raise: typeof championRaise;
-  cancelEgg: typeof championCancelEgg;
   feed: typeof championFeed;
   evolve: typeof championEvolve;
   heal: typeof championHeal;
   rename: typeof championRename;
-  juice: typeof championJuice;
   freeze: typeof championFreeze;
   thaw: typeof championThaw;
 }
 
 export const championApi: ChampionApi = {
   raise: championRaise,
-  cancelEgg: championCancelEgg,
   feed: championFeed,
   evolve: championEvolve,
   heal: championHeal,
   rename: championRename,
-  juice: championJuice,
   freeze: championFreeze,
   thaw: championThaw,
 };
@@ -149,12 +139,10 @@ export const championApi: ChampionApi = {
 /** The queue keys, for `store.isRunning`. */
 export const ChampionKey = {
   raise: actionKey("champion", "raise"),
-  cancelEgg: actionKey("champion", "cancelEgg"),
   feed: (mode: FeedMode): string => actionKey("championFeed", mode),
   evolve: actionKey("champion", "evolve"),
   heal: actionKey("champion", "heal"),
   rename: actionKey("champion", "rename"),
-  juice: actionKey("champion", "juice"),
   freeze: actionKey("champion", "freeze"),
   healSpecial: actionKey("champion", "healSpecial"),
   freezeSpecial: actionKey("champion", "freezeSpecial"),
@@ -163,13 +151,10 @@ export const ChampionKey = {
 
 export interface ChampionActions {
   raise(type: number): Promise<YardActionResult<ChampionReport>>;
-  /** Takes the egg out of the cage; raising again lays a new one. */
-  cancelEgg(): Promise<YardActionResult<ChampionReport>>;
   feed(mode: FeedMode): Promise<YardActionResult<ChampionFeedReport>>;
   evolve(): Promise<YardActionResult<ChampionPaidReport>>;
   heal(): Promise<YardActionResult<ChampionPaidReport>>;
   rename(name: string): Promise<YardActionResult<ChampionReport>>;
-  juice(): Promise<YardActionResult<ChampionReport>>;
   freeze(): Promise<YardActionResult<ChampionReport>>;
   /** Heals Krallen, who stays beside the champion in the cage. */
   healSpecial(): Promise<YardActionResult<ChampionPaidReport>>;
@@ -218,30 +203,19 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
       key: ChampionKey.raise,
       check: (reader) => {
         const entry = championEntry(type);
-        if (!entry?.raisable) return refuse("notRaisable", "That champion cannot be raised at the cage.");
+        if (!entry || !canRaise(entry, reader.save)) {
+          return refuse("notRaisable", "That champion cannot be raised at the cage.");
+        }
         const cage = cageView(reader.save, reader.now());
         if (cage.kind === "noCage") return refuse("noCage", "Build a Champion Cage first.");
         if (cage.kind === "building") return refuse("busy", "Your Champion Cage is still being built.");
         if (activeChampion(reader.save)) return refuse("championInCage", "Your cage already holds a champion.");
-        const egg = cageEgg(reader.save);
-        if (egg) {
-          return refuse("eggInCage", "Your cage already holds an egg. Cancel it to pick again.", {
-            type: Number(egg.t),
-            hatchAt: Number(egg.ft),
-          });
-        }
         if (frozenChampions(reader.save).some((one) => Number(one.t) === type)) {
           return refuse("frozen", `Your ${entry.name} is frozen in the Champion Chamber. Thaw it instead.`);
         }
         return null;
       },
       send: (_api, ...yard) => api.raise(type, ...yard),
-    }),
-  cancelEgg: () =>
-    store.run({
-      key: ChampionKey.cancelEgg,
-      check: (reader) => (cageEgg(reader.save) ? null : refuse("noEgg", "There is no egg in your cage.")),
-      send: (_api, ...yard) => api.cancelEgg(...yard),
     }),
   feed: (mode) =>
     store.run({
@@ -326,24 +300,6 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         return activeChampion(reader.save) ? null : refuse("noChampion", "There is no champion in your cage.");
       },
       send: (_api, ...yard) => api.rename(name.trim(), ...yard),
-    }),
-  juice: () =>
-    store.run({
-      key: ChampionKey.juice,
-      check: (reader) => {
-        const active = activeChampion(reader.save);
-        if (!active || !championView(reader.save, active, reader.now())) {
-          return refuse("noChampion", "There is no champion in your cage.");
-        }
-        const status = juicerStatus(reader.save);
-        if (!status.ok) {
-          const reason =
-            status.problem === "building" || status.problem === "upgrading" ? "busy" : status.problem;
-          return refuse(reason, juicerProblemText(status.problem));
-        }
-        return null;
-      },
-      send: (_api, ...yard) => api.juice(...yard),
     }),
   freeze: () =>
     store.run({

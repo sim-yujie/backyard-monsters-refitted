@@ -11,6 +11,7 @@ import {
 import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { PROJECTILE_TICKS } from "./creepFx";
+import { FELLED_TICKS, type JuiceLevel } from "./juice";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
 import { sheetUrl } from "./monsterSprites";
 
@@ -81,7 +82,12 @@ const hostOf = (): Host => {
   };
 };
 
-const setUp = (buildings: BuildingRow[], monsters?: Record<string, number>) => {
+const setUp = (
+  buildings: BuildingRow[],
+  monsters?: Record<string, number>,
+  juice: JuiceLevel = "off",
+  classic = false,
+) => {
   const session = new AttackSession({ target: targetOf(monsters), seed: 1 });
   const response = yardOf(buildings);
   session.load(response);
@@ -93,6 +99,11 @@ const setUp = (buildings: BuildingRow[], monsters?: Record<string, number>) => {
     overlay: new Container(),
     reducedMotion: false,
     textures: new MonsterSheetTextures(blankSheet),
+    juice,
+    classic,
+    effectsQuality: "full",
+    shotSheet: () =>
+      Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1728 }) })),
   });
   return { session, layer, host };
 };
@@ -211,6 +222,94 @@ describe("a sniper's bullet (#77)", () => {
     // its tick or the one after.
     expect(twoX - oneX).toBeGreaterThanOrEqual(0);
     expect(twoX - oneX).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("the new look's Sniper round striking a creep", () => {
+  /** Runs frames until the Sniper's next round lands; that frame's events. */
+  const untilLanded = (session: AttackSession, layer: AttackBattleLayer) => {
+    let shot = false;
+    for (let step = 0; step < 20 * TICKS_PER_SECOND; step += 1) {
+      const events = frame(session, layer);
+      if (events.some((event) => event.kind === "shot")) shot = true;
+      if (shot && layer.heldShots === 0) return { events, tick: session.battle()?.tick ?? -1 };
+    }
+    return null;
+  };
+
+  it("flashes the body it strikes for a few ticks, and the classic look never does", async () => {
+    for (const juice of ["full", "off"] as const) {
+      const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }], undefined, juice);
+      // The shot sheet comes in on the next turn of the event loop.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      session.appendFling({ x: -150, y: -150, monsters: { C1: 1 } });
+      const landed = untilLanded(session, layer);
+      expect(landed).not.toBeNull();
+      const creep = session.battle()?.creeps()[0];
+      expect(creep).toBeDefined();
+      const id = creep?.id ?? -1;
+      const glint = layer.bodyOf(id)?.glint ?? 0;
+      if (juice === "full") expect(glint).toBeGreaterThan(0.5);
+      else expect(glint).toBe(0);
+      // Gone again well before the next shot.
+      for (let step = 0; step < 8; step += 1) frame(session, layer);
+      expect(layer.bodyOf(id)?.glint).toBe(0);
+      expect(layer.bodyOf(id)?.felled).toBe(false);
+      layer.destroy();
+    }
+  });
+
+  it("shoots Flash's shots in the Classic look, whatever the effects setting says", async () => {
+    for (const classic of [false, true]) {
+      const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }], undefined, "full", classic);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      session.appendFling({ x: -150, y: -150, monsters: { C1: 1 } });
+      let sparks = 0;
+      for (let step = 0; step < TICKS_PER_SECOND * 10 && !session.ended; step += 1) {
+        frame(session, layer);
+        sparks = Math.max(sparks, layer.towerEffects.sparkCount);
+        if (classic) expect(layer.creepEffects.labelCount).toBe(0);
+      }
+      if (classic) expect(sparks).toBe(0);
+      else expect(sparks).toBeGreaterThan(0);
+      layer.destroy();
+    }
+  });
+
+  it("keeps a creep it killed up for a moment, frozen and fading, then lets it go into its splat", async () => {
+    const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }], undefined, "full");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    session.appendFling({ x: -200, y: -100, monsters: { C1: 1 } });
+    let killed = -1;
+    for (let step = 0; step < 30 * TICKS_PER_SECOND && killed < 0; step += 1) {
+      const death = frame(session, layer).find((event) => event.kind === "death");
+      if (death?.kind === "death") killed = death.creepId;
+    }
+    expect(killed).toBeGreaterThanOrEqual(0);
+    // The killing round lands; the creep stays up over its splat.
+    for (let step = 0; step < 2 * TICKS_PER_SECOND && layer.heldShots > 0; step += 1) {
+      frame(session, layer);
+    }
+    expect(layer.heldShots).toBe(0);
+    expect(layer.splatCount).toBeGreaterThan(0);
+    const struck = layer.bodyOf(killed);
+    expect(struck?.felled).toBe(true);
+    expect(struck?.glint).toBeGreaterThan(0.5);
+    expect(layer.shownHealthOf(killed)).toBeNull();
+    const alphas: number[] = [];
+    let frames = 0;
+    while (layer.bodyOf(killed) !== null && frames < 40) {
+      frame(session, layer);
+      alphas.push(layer.bodyOf(killed)?.alpha ?? 0);
+      frames += 1;
+    }
+    expect(layer.bodyOf(killed)).toBeNull();
+    expect(frames).toBeGreaterThan(5);
+    expect(frames).toBeLessThanOrEqual(FELLED_TICKS + 1);
+    // It fades, never brightening back.
+    for (let i = 1; i < alphas.length; i += 1) expect(alphas[i]).toBeLessThanOrEqual(alphas[i - 1] ?? 1);
+    expect(layer.creepCount).toBe(0);
+    layer.destroy();
   });
 });
 

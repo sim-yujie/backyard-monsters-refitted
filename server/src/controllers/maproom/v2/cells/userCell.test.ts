@@ -148,6 +148,21 @@ describe("userCell idle worker (#338)", () => {
     const other = { ...outpostWith(0, 0), save: { ...outpostWith(0, 0).save, basesaveid: 9 } } as unknown as Parameters<typeof userCell>[1];
     expect(await userCell(withIdle([9]), other, owners)).not.toHaveProperty("wi");
   });
+
+  const withBusy = (ids: number[]) =>
+    ({ authUser: { userid: 2505, save: {} }, state: { online: new Set(), truces: new Map(), idleWorkers: new Set(), busyWorkers: new Set(ids) } }) as unknown as Context;
+
+  test("an own outpost with its worker busy says wb, not wi", async () => {
+    const payload = await userCell(withBusy([9]), own(3, 9), ownerFor);
+    expect(payload).toMatchObject({ wb: 1 });
+    expect(payload).not.toHaveProperty("wi");
+  });
+
+  test("a busy worker on someone else's outpost or a home cell is never shown", async () => {
+    const other = { ...outpostWith(0, 0), save: { ...outpostWith(0, 0).save, basesaveid: 9 } } as unknown as Parameters<typeof userCell>[1];
+    expect(await userCell(withBusy([9]), other, owners)).not.toHaveProperty("wb");
+    expect(await userCell(withBusy([9]), own(2, 9), ownerFor)).not.toHaveProperty("wb");
+  });
 });
 
 describe("userCell town hall level", () => {

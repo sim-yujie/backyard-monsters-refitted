@@ -11,8 +11,9 @@ import {
 import type { YardActionResult, YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { formatAmount, formatCompact } from "@/ui/format";
+import type { AmountChange } from "@/ui/amountChange";
 import { icon } from "@/ui/icons";
-import { RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_NAMES, resourceAmount, resourceRealm } from "@/ui/resourceIcon";
 
 /**
  * The yard's Collect all button (`docs/design/yard-buildings.md` §5.1,
@@ -57,6 +58,15 @@ export const collectAllTitle = (amounts: Readonly<Record<HarvestKey, number>>): 
 /** What the tooltip adds while a silo the bank would fill is full. */
 export const COLLECT_FULL_NOTE =
   "Storage is full: what does not fit stays in your harvesters. Build or upgrade Storage Silos.";
+
+/** The same in the Inferno, where Resource Pods hold the purse. */
+export const INFERNO_COLLECT_FULL_NOTE =
+  "Storage is full: what does not fit stays in your harvesters. Build or upgrade Resource Pods.";
+
+/** What raises the cap in the realm on screen. */
+const storageName = (): string => (resourceRealm() === "inferno" ? "Resource Pods" : "Storage Silos");
+const collectFullNote = (): string =>
+  resourceRealm() === "inferno" ? INFERNO_COLLECT_FULL_NOTE : COLLECT_FULL_NOTE;
 
 /** What the empty bubble says. */
 export const COLLECT_EMPTY_LABEL =
@@ -119,16 +129,35 @@ export const collectRing = (
   return { ...waiting, fraction, state };
 };
 
-/** "icon 720 icon 300": the non-zero amounts of a report field, or null for none. */
-const amountsNode = (amounts: Readonly<Record<HarvestKey, number>>): Node | null => {
+/**
+ * "icon 720 icon 300": the non-zero amounts of a report field, or null for
+ * none; "+720" in green with `change: "gain"` (`amountChange.ts`).
+ */
+const amountsNode = (amounts: Readonly<Record<HarvestKey, number>>, change?: AmountChange): Node | null => {
   const shown = KEYS.filter((key) => amounts[key] > 0);
   if (shown.length === 0) return null;
   const span = document.createElement("span");
   shown.forEach((key, index) => {
     if (index > 0) span.append(" ");
-    span.append(resourceAmount(key, amounts[key]));
+    span.append(resourceAmount(key, amounts[key], change ? { change } : {}));
   });
   return span;
+};
+
+/**
+ * "+720" in green with the resource's icon: what a tap banked, for the yard to
+ * float off the building (`harvest.css`). A gain (`amountChange.ts`); only to
+ * look at, as the notice says the same in words.
+ */
+export const bankFloat = (resource: HarvestKey, amount: number): HTMLElement => {
+  const float = resourceAmount(resource, amount, {
+    className: "yard-bank-float",
+    decorative: true,
+    change: "gain",
+    tooltip: false,
+  });
+  float.setAttribute("aria-hidden", "true");
+  return float;
 };
 
 /**
@@ -143,7 +172,8 @@ export const showBankResult = (notices: Notices, result: YardActionResult<BankRe
     return;
   }
   const { banked, leftInBuffers } = result.report;
-  const got = amountsNode(banked);
+  // What was collected is a gain; what stayed behind is only where it is.
+  const got = amountsNode(banked, "gain");
   const kept = amountsNode(leftInBuffers);
   const message = document.createElement("span");
   if (got) message.append("Collected ", got, ".");
@@ -151,7 +181,7 @@ export const showBankResult = (notices: Notices, result: YardActionResult<BankRe
     if (got) message.append(" ");
     message.append(
       kept,
-      " stayed in your harvesters: storage is full. Build or upgrade Storage Silos.",
+      ` stayed in your harvesters: storage is full. Build or upgrade ${storageName()}.`,
     );
   }
   if (!got && !kept) return;
@@ -251,11 +281,11 @@ export class CollectAll {
     this.icons.hidden = false;
     this.amount.textContent = formatCompact(ring.total);
     const full = ring.state === CollectState.FULL;
-    this.button.title = collectAllTitle(ring.amounts) + (full ? `\n${COLLECT_FULL_NOTE}` : "");
+    this.button.title = collectAllTitle(ring.amounts) + (full ? `\n${collectFullNote()}` : "");
     this.button.setAttribute(
       "aria-label",
       `Collect all: ${formatAmount(ring.total)} waiting in your harvesters.` +
-        (full ? ` ${COLLECT_FULL_NOTE}` : ""),
+        (full ? ` ${collectFullNote()}` : ""),
     );
     this.button.disabled = store.isRunning(BankKey.ALL);
   }

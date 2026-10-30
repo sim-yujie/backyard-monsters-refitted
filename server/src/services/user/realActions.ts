@@ -51,6 +51,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "locker/instant",
   "hatchery/add",
   "hatchery/remove",
+  "hatchery/clear",
   "hatchery/finish",
   // Collecting: the bank and the mushrooms.
   "bank",
@@ -86,6 +87,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "fortify/cancel",
   "starterkit",
   "decor/place",
+  "move",
   "goals/claim",
   "goals/baiter-start",
   "goals/baiter-run",
@@ -94,6 +96,14 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "guide/army",
   "guide/skip",
   "events/ladder/claim",
+  "siege/lab/start",
+  "siege/lab/cancel",
+  "siege/lab/finish",
+  "siege/lab/instant",
+  "siege/factory/start",
+  "siege/factory/cancel",
+  "siege/factory/finish",
+  "siege/factory/instant",
 ];
 
 /**
@@ -126,12 +136,10 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/base/load", when: isAttackLoad },
   { method: "POST", path: "/api/:apiVersion/bm/base/load", when: isAttackLoad },
   { method: "POST", path: "/base/save" },
-  { method: "POST", path: "/api/:apiVersion/bm/base/save" },
   // Moving the main yard.
   { method: "POST", path: "/base/migrate" },
   { method: "POST", path: "/base/migratetofriend" },
   { method: "POST", path: "/base/rejectmigratetofriend" },
-  { method: "GET", path: "/worldmapv3/relocate" },
   { method: "POST", path: "/worldmapv2/randommove" },
   // Map Room 2: taking over, auto-attacking, sending monsters.
   { method: "POST", path: "/worldmapv2/takeoverCell" },

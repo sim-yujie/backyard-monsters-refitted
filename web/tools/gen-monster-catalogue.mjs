@@ -21,9 +21,10 @@
  * |                     | string table (the archived `en.v612.txt` lacks the      |
  * |                     | C16-C19 names and every lab string)                     |
  *
- * Only the surface monsters `C1`..`C19` are written. `C200` is the AI looter
- * the client excludes from every list (`CREATURELOCKER.as:1095`) and the
- * Inferno roster (`IC1`..`IC8`) is out of scope (decision D19).
+ * The surface monsters `C1`..`C19` are written to `MONSTER_CATALOGUE` and the
+ * Inferno roster `IC1`..`IC8` to `INFERNO_MONSTER_CATALOGUE`, from the same
+ * table (`docs/design/inferno.md` §2.6, WP 2.1). `C200` is the AI looter the
+ * client excludes from every list (`CREATURELOCKER.as:1095`) and is left out.
  *
  * Decision D7 re-enables Vorg (`C16`), Slimeattikus (`C17`) and Rezghul
  * (`C19`): all three are written `blocked: false`. Rezghul also has no list
@@ -355,7 +356,10 @@ if (added.length || missing.length) {
   );
 }
 
-const monsters = SURFACE.map((id) => {
+const INFERNO = Array.from({ length: 8 }, (_, k) => `IC${k + 1}`);
+
+/** One monster's economy row off the locker table. */
+const readMonster = (id) => {
   const raw = locker.value[id];
   const line = locker.lines[id];
   const props = raw.props;
@@ -386,7 +390,9 @@ const monsters = SURFACE.map((id) => {
     cTime: ladder(LOCKER, line, id, "cTime", props.cTime),
     cStorage: ladder(LOCKER, line, id, "cStorage", props.cStorage),
   };
-});
+};
+
+const monsters = SURFACE.map(readMonster);
 
 const byId = new Map(monsters.map((one) => [one.id, one]));
 
@@ -437,6 +443,22 @@ for (const one of listed) {
   if (slots.has(slot))
     fail(LOCKER, one.line, `${one.id} shares locker slot ${slot} with ${slots.get(slot)}`);
   slots.set(slot, one.id);
+}
+
+// The Inferno roster: every one obtainable, none spawned, its own locker pages.
+const infernoRows = INFERNO.map((id) => {
+  const one = readMonster(id);
+  if (one.blocked) fail(LOCKER, one.line, `${id} is newly blocked`);
+  if (one.fake || one.dependent !== null) fail(LOCKER, one.line, `${id} is newly a spawn`);
+  if (one.page < 1) fail(LOCKER, one.line, `${id} has no locker page`);
+  return { ...one, spawnedBy: null, overridden: [] };
+});
+const infernoSlots = new Map();
+for (const one of infernoRows) {
+  const slot = `${one.page}/${one.order}`;
+  if (infernoSlots.has(slot))
+    fail(LOCKER, one.line, `${one.id} shares locker slot ${slot} with ${infernoSlots.get(slot)}`);
+  infernoSlots.set(slot, one.id);
 }
 
 /* ── The lab table ────────────────────────────────────────────────────────── */
@@ -534,8 +556,10 @@ const output = `/**
  * \`server/public/gamestage/assets/english.json\`. Decision D7
  * (\`docs/design/yard-buildings.md\` §4.8) is applied on top: Vorg (C16),
  * Slimeattikus (C17) and Rezghul (C19) are obtainable, Rezghul in locker slot
- * page 4 / order 4; Slimeattikus Mini (C18) stays blocked as C17's spawn. C200
- * and the Inferno roster are not included.
+ * page 4 / order 4; Slimeattikus Mini (C18) stays blocked as C17's spawn. The
+ * Inferno roster (IC1-IC8) is its own list, \`INFERNO_MONSTER_CATALOGUE\`, priced
+ * in Sulfur (unlock, training) and Magma (hatching) on the Inferno yard
+ * (\`docs/design/inferno.md\` §2.6). C200 is not included.
  *
  * This file exists twice, byte for byte: \`web/src/game/monsters/monsterCatalogue.ts\`
  * (what the Monsters screen shows) and \`server/src/game-data/monsterCatalogue.ts\`
@@ -545,12 +569,12 @@ const output = `/**
  * combat rules and \`server/src/game-data/stats/monsterStats.ts\`.
  */
 
-/** One paid step: \`[putty, seconds]\`. */
+/** One paid step: \`[putty, seconds]\` (Sulfur for an Inferno monster). */
 export type PaidStep = readonly [putty: number, seconds: number];
 
-/** One surface monster. */
+/** One monster: a surface one, or an Inferno one (\`IC…\`). */
 export interface MonsterEntry {
-  /** Roster id, \`C1\`..\`C19\`. */
+  /** Roster id, \`C1\`..\`C19\` or \`IC1\`..\`IC8\`. */
   readonly id: string;
   readonly name: string;
   /** The game's own blurb; contains \`<br>\` and \`<b>\` markup. */
@@ -614,19 +638,30 @@ export const MONSTER_CATALOGUE: readonly MonsterEntry[] = [
 ${rows.map(monsterRow).join("\n")}
 ];
 
+/**
+ * The Inferno roster, \`IC1\`..\`IC8\`: unlocked in the Inferno's Monster Locker
+ * and trained in its Academy for Sulfur, hatched in its Incubators for Magma.
+ */
+export const INFERNO_MONSTER_CATALOGUE: readonly MonsterEntry[] = [
+${infernoRows.map(monsterRow).join("\n")}
+];
+
 export const LAB_ABILITIES: readonly LabAbility[] = [
 ${abilities.map(abilityRow).join("\n")}
 ];
 
 const MONSTERS_BY_ID: ReadonlyMap<string, MonsterEntry> = new Map(
-  MONSTER_CATALOGUE.map((entry) => [entry.id, entry]),
+  [...MONSTER_CATALOGUE, ...INFERNO_MONSTER_CATALOGUE].map((entry) => [entry.id, entry]),
 );
 
 const ABILITIES_BY_ID: ReadonlyMap<string, LabAbility> = new Map(
   LAB_ABILITIES.map((ability) => [ability.id, ability]),
 );
 
-/** The catalogue entry for \`id\`, or undefined for an id not in it (C200, Inferno, junk). */
+/**
+ * The catalogue entry for \`id\`, surface or Inferno, or undefined for an id in
+ * neither (C200, junk).
+ */
 export const monsterEntry = (id: string): MonsterEntry | undefined => MONSTERS_BY_ID.get(id);
 
 /** The lab ability for \`id\`, or undefined for the monsters that have none. */
@@ -644,8 +679,21 @@ export const LISTED_MONSTERS: readonly MonsterEntry[] = MONSTER_CATALOGUE.filter
   (entry) => !entry.blocked,
 ).sort(compareListOrder);
 
-/** True for a monster a player can unlock, hatch and house. */
-export const isListed = (id: string): boolean => monsterEntry(id)?.blocked === false;
+/** True for a surface monster a player can unlock, hatch and house. */
+export const isListed = (id: string): boolean =>
+  !isInfernoMonster(id) && monsterEntry(id)?.blocked === false;
+
+/** True for an Inferno roster id (\`IC…\`), known to the catalogue or not. */
+export const isInfernoMonster = (id: string): boolean => /^IC\\d+$/.test(id);
+
+/** Every Inferno monster, in list order (\`index\`). */
+export const INFERNO_LISTED_MONSTERS: readonly MonsterEntry[] = [
+  ...INFERNO_MONSTER_CATALOGUE,
+].sort(compareListOrder);
+
+/** True for an Inferno monster a player can unlock, hatch and house in the Inferno. */
+export const isInfernoListed = (id: string): boolean =>
+  isInfernoMonster(id) && monsterEntry(id) !== undefined;
 
 /**
  * The value of a per-level ladder at academy \`level\`: \`ladder[level - 1]\`,
@@ -716,12 +764,13 @@ if (CHECK) {
     writeFileSync(path, output, "utf8");
   }
   console.log(
-    `${rows.length} monsters (${listed.length} listed), ${abilities.length} lab abilities`,
+    `${rows.length} monsters (${listed.length} listed), ${infernoRows.length} Inferno, ` +
+      `${abilities.length} lab abilities`,
   );
   console.log(`-> ${WEB_OUT}`);
   console.log(`-> ${SERVER_OUT}`);
   console.log(
-    rows
+    [...rows, ...infernoRows]
       .map(
         (one) =>
           `${one.id}\t${one.name}\tL${one.level}\t${one.resource}\t${one.time}s\t` +

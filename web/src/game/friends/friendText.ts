@@ -70,20 +70,21 @@ const buildingOf = (notice: FriendNotice): string => {
 };
 
 /**
- * A `friend` notification's line (§6.1): "Bob wants to be your friend.",
- * "Bob is now your friend.", "Bob sent you a gift.", "Bob took 6m 30s off
- * your Storage Silo.", "Bob repaired your Cannon Tower." An event the client
- * does not know yet gets a general line.
+ * A `friend` notification's line (§6.1), the short ones without a sentence
+ * (owner, 27 Oct: fewer words): "Friend request from Bob", "Now friends
+ * with Bob", "Gift from Bob"; "Bob took 6m 30s off your Storage Silo.",
+ * "Bob repaired your Cannon Tower." An event the client does not know yet
+ * gets a general line.
  */
 export const friendNoticeText = (notice: FriendNotice): string => {
   const name = nameOf(notice);
   switch (notice.event) {
     case "request":
-      return `${name} wants to be your friend.`;
+      return name === "Someone" ? "Friend request" : `Friend request from ${name}`;
     case "accepted":
-      return `${name} is now your friend.`;
+      return `Now friends with ${name}`;
     case "gift":
-      return `${name} sent you a gift.`;
+      return name === "Someone" ? "Gift from a friend" : `Gift from ${name}`;
     case "helpSpeedup": {
       const seconds = Math.floor(Number(notice.seconds) || 0);
       const building = buildingOf(notice);
@@ -103,7 +104,7 @@ export const friendNoticeText = (notice: FriendNotice): string => {
 export const friendLineText = (jobs: readonly unknown[]): string => {
   const notices = jobs.filter((job): job is FriendNotice => typeof job === "object" && job !== null);
   if (notices.length === 0) return "News from your friends.";
-  return notices.map(friendNoticeText).join(" ");
+  return notices.map(friendNoticeText).join(" · ");
 };
 
 /** The Friends tab a `friend` row opens when clicked: "gifts" for a gift, else none. */

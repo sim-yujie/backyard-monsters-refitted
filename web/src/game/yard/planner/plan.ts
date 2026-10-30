@@ -1,4 +1,4 @@
-import { kindOf, maxLevel } from "../buildingCosts";
+import { kindOf, maxLevel, type YardKind } from "../buildingCosts";
 import { isStorageId } from "../decorStorage";
 import { holdsWorker } from "../workers";
 import { nearbyArea } from "../nearbyFootprints";
@@ -99,13 +99,15 @@ const UNPLANNABLE_KINDS: ReadonlySet<string> = new Set([
   "placeholder",
 ]);
 
-/** Whether a type can be planned an upgrade at all. */
-export const plannableType = (type: number): boolean =>
-  maxLevel(type) > 0 && !UNPLANNABLE_KINDS.has(kindOf(type));
+/** Whether a type can be planned an upgrade at all, on a yard of `kind`. */
+export const plannableType = (type: number, kind: YardKind = "main"): boolean =>
+  maxLevel(type, kind) > 0 && !UNPLANNABLE_KINDS.has(kindOf(type, kind));
 
 export class Plan {
   readonly plot: PlotBounds;
   readonly expansion: number;
+  /** The yard's kind: the Inferno's ladders and footprints differ. */
+  readonly kind: YardKind;
 
   private readonly nodes = new Map<number, PlanNode>();
   /** Where each building sat when the planner opened, for the moved outline. */
@@ -115,8 +117,9 @@ export class Plan {
   /** The selection currently picked up, or null when nothing is being dragged. */
   private lifted: PlanNode[] | null = null;
 
-  private constructor(expansion: number) {
+  private constructor(expansion: number, kind: YardKind) {
     this.expansion = expansion;
+    this.kind = kind;
     this.plot = plotBounds(expansion);
   }
 
@@ -128,7 +131,7 @@ export class Plan {
    * somewhere free (`server/src/services/yard/mushrooms.ts`).
    */
   static fromYard(yard: Yard): Plan {
-    const plan = new Plan(yard.expansionLevel);
+    const plan = new Plan(yard.expansionLevel, yard.kind);
     for (const building of yard.buildings) plan.add(nodeOf(building));
     return plan;
   }
@@ -354,8 +357,8 @@ export class Plan {
     }
 
     if (node.busy || node.damaged) return null;
-    if (!plannableType(node.type)) return null;
-    if (level <= node.level || level > maxLevel(node.type)) return null;
+    if (!plannableType(node.type, this.kind)) return null;
+    if (level <= node.level || level > maxLevel(node.type, this.kind)) return null;
     if (before && before.level === level) return null;
 
     const after: NodePlan = { level, order: before ? before.order : this.nextOrder() };
@@ -688,7 +691,7 @@ export class Plan {
    * mid-drag.
    */
   canPlace(type: number, x: number, y: number): PlaceCheck {
-    const [width, height] = footprintOf(type);
+    const [width, height] = footprintOf(type, this.kind);
     const probe: PlanNode = {
       // Negative, so it can never collide with a real id if it were stamped.
       id: -1,

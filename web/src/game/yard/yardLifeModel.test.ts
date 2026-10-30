@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { BEHAVIOUR_SPEED, championStat, monsterTickSpeed } from "@/game/combat/rules";
+import { spriteFor } from "@/game/attack/monsterSprites";
+import { BEHAVIOUR_SPEED, championStat, housedGarrisons, monsterTickSpeed } from "@/game/combat/rules";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard } from "./yardModel";
 import {
@@ -30,6 +31,7 @@ import {
   stepWalker,
   stepWorker,
   walkerSpecs,
+  withRosters,
   WORKER_MOTION,
   yardLifeOf,
   type LifeGroup,
@@ -76,9 +78,9 @@ describe("yardLifeOf", () => {
     expect(life.cage).toEqual({ id: 51, x: 135, y: -25 });
   });
 
-  it("keeps the active champions, Krallen's sheet at its power level", () => {
+  it("keeps the active champions, Krallen's sheet at her level", () => {
     expect(life.champions).toEqual([
-      { id: "G5", level: 5, sheetLevel: 2 },
+      { id: "G5", level: 5, sheetLevel: 5 },
       { id: "G3", level: 6, sheetLevel: 6 },
     ]);
   });
@@ -99,6 +101,18 @@ describe("yardLifeOf", () => {
       ["C2", 3],
       ["C14", 1],
     ]);
+  });
+
+  it("shows Krallen's look by her level, whatever her power level (owner, 2026-10-25)", () => {
+    const looks = [1, 2, 3, 4, 5].map((l) => {
+      const krallen = {
+        ...save,
+        champion: [{ t: 5, l, hp: 100, fb: 0, fd: 0, ft: 0, pl: 2, status: 0 }],
+      } as BaseLoadResponse;
+      const [champion] = yardLifeOf(krallen, readYard(krallen)).champions;
+      return champion && spriteFor(champion.id, champion.sheetLevel)?.key;
+    });
+    expect(looks).toEqual(["G5_1", "G5_1", "G5_2", "G5_2", "G5_3"]);
   });
 
   it("leaves out a frozen or juiced champion, and a pen at zero health", () => {
@@ -169,9 +183,96 @@ describe("yardLifeOf on somebody else's yard (#159)", () => {
     }
   });
 
+  it("a Moloch yard has no workers though its save says Inferno (`GLOBAL.as:763-787`)", () => {
+    const moloch = { ...busy, type: "inferno" } as BaseLoadResponse;
+    const read = yardLifeOf(moloch, readYard(moloch, { foreign: true, wild: true }), "attack", true);
+    expect(read.workers).toBe(0);
+    expect(read.jobs).toEqual([]);
+    expect(yardLifeOf(moloch, readYard(moloch, { foreign: true }), "attack").workers).toBe(5);
+  });
+
   it("reads the defender's own academy for the walking speed", () => {
     const slow = { ...busy, academy: {} } as BaseLoadResponse;
     expect(yardLifeOf(slow, yard, "visit").groups.map((group) => group.level)).toEqual([1, 1]);
+  });
+});
+
+describe("yardLifeOf on the Inferno", () => {
+  // The same yard with its Housing turned into Housing Bunkers, as an Inferno has them.
+  const inferno = {
+    ...save,
+    type: "inferno",
+    buildingdata: Object.fromEntries(
+      Object.entries(save.buildingdata ?? {}).map(([key, row]) => [
+        key,
+        Number(row?.t) === 15 ? { ...row, t: 128 } : row,
+      ]),
+    ),
+  } as BaseLoadResponse;
+
+  it("pens the monsters in its Housing Bunkers (`HOUSING.as:211`)", () => {
+    const life = yardLifeOf(inferno, readYard(inferno));
+    expect(life.pens.map((pen) => pen.id)).toEqual([82, 584, 585, 586]);
+    expect(walkerSpecs(life, seeded()).length).toBeGreaterThan(0);
+  });
+
+  it("is no pen for Monster Housing there, nor a Bunker on the main yard", () => {
+    const mixed = { ...inferno, buildingdata: save.buildingdata } as BaseLoadResponse;
+    expect(yardLifeOf(mixed, readYard(mixed)).pens).toEqual([]);
+    const main = { ...inferno, type: save.type } as BaseLoadResponse;
+    expect(yardLifeOf(main, readYard(main)).pens).toEqual([]);
+  });
+
+  it("pens each bunker's own garrison on an attack, as the engine deals it", () => {
+    const life = yardLifeOf(inferno, readYard(inferno, { foreign: true }), "attack");
+    expect(life.pens).toHaveLength(4);
+    const dealt = housedGarrisons(inferno.buildingdata, inferno.monsters?.housed ?? {}, inferno.buildinghealthdata);
+    expect(life.rosters).not.toBeNull();
+    for (const pen of life.pens) {
+      const held = Object.fromEntries((life.rosters?.[pen.id] ?? []).map((group) => [group.id, group.count]));
+      expect(held).toEqual(dealt[pen.id] ?? {});
+    }
+    expect(yardLifeOf(inferno, readYard(inferno, { foreign: true }), "visit").rosters).toBeNull();
+  });
+});
+
+describe("withRosters", () => {
+  const life = withRosters(
+    lifeWith({
+      groups: [{ id: "IC1", level: 2, count: 5 }],
+      pens: [
+        { id: 7, x: 0, y: 0 },
+        { id: 9, x: 200, y: 0 },
+      ],
+    }),
+    { 7: { IC1: 3 }, 9: { IC1: 2, IC2: 1 } },
+  );
+
+  it("gives each pen what its bunker holds, at the academy level", () => {
+    expect(life.rosters).toEqual({
+      7: [{ id: "IC1", level: 2, count: 3 }],
+      9: [
+        { id: "IC1", level: 2, count: 2 },
+        { id: "IC2", level: 1, count: 1 },
+      ],
+    });
+  });
+
+  it("is the same life when the pools have not changed", () => {
+    expect(withRosters(life, { 7: { IC1: 3 }, 9: { IC2: 1, IC1: 2 } })).toBe(life);
+  });
+
+  it("walks one monster out of its pen as its bunker sends it, and empties a fallen one", () => {
+    const keys = (next: YardLife) => walkerSpecs(next, seeded()).map((spec) => spec.key).sort();
+    expect(keys(life)).toEqual(["m:7:IC1:0", "m:7:IC1:1", "m:7:IC1:2", "m:9:IC1:0", "m:9:IC1:1", "m:9:IC2:0"]);
+    expect(keys(withRosters(life, { 7: { IC1: 2 }, 9: { IC1: 2, IC2: 1 } }))).toEqual([
+      "m:7:IC1:0",
+      "m:7:IC1:1",
+      "m:9:IC1:0",
+      "m:9:IC1:1",
+      "m:9:IC2:0",
+    ]);
+    expect(keys(withRosters(life, { 7: { IC1: 3 } }))).toEqual(["m:7:IC1:0", "m:7:IC1:1", "m:7:IC1:2"]);
   });
 });
 
@@ -414,18 +515,12 @@ describe("trips to and from the Champion Chamber (#314)", () => {
     expect(yardLifeOf({ ...save, champion } as unknown as BaseLoadResponse, yard, "attack").frozen).toEqual([]);
   });
 
-  it("reads the egg waiting in the cage, but not on an attacked yard", () => {
+  it("puts nothing in the cage for an older save's egg (eggs removed, owner 2026-10-28)", () => {
     const yard = readYard(save);
     const champion = [{ t: 2, l: 1, status: 3, ft: 99 }];
     const life = yardLifeOf({ ...save, champion } as unknown as BaseLoadResponse, yard);
-    const cage = yard.buildings.find((one) => one.type === 114)!;
-    expect(life.egg).toEqual({
-      id: "G2",
-      x: cage.x + cage.footprint[0] / 2,
-      y: cage.y + cage.footprint[1] / 2,
-    });
     expect(life.champions).toEqual([]);
-    expect(yardLifeOf({ ...save, champion } as unknown as BaseLoadResponse, yard, "attack").egg).toBeNull();
+    expect(life).not.toHaveProperty("egg");
   });
 
   it("finds the Chamber's footprint among the buildings", () => {

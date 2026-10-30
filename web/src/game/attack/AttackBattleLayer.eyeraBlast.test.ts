@@ -79,7 +79,7 @@ const hostOf = (): Host => {
   };
 };
 
-const setUp = (buildings: BuildingRow[], monsters: Record<string, number>) => {
+const setUp = (buildings: BuildingRow[], monsters: Record<string, number>, classic = false) => {
   const session = new AttackSession({ target: targetOf(monsters), seed: 1 });
   const response = yardOf(buildings);
   session.load(response);
@@ -91,6 +91,7 @@ const setUp = (buildings: BuildingRow[], monsters: Record<string, number>) => {
     overlay: new Container(),
     reducedMotion: false,
     textures: new MonsterSheetTextures(blankSheet),
+    ...(classic ? { classic, juice: "full" as const } : {}),
   });
   return { session, layer, host };
 };
@@ -124,6 +125,16 @@ describe("an Eye-ra's blast, drawn as a fireball (feat/eyera-explosion)", () => 
     expect(layer.blasts.blastsMade).toBe(1);
     expect(layer.blasts.bitCount).toBeGreaterThan(0);
     expect(layer.blasts.markCount).toBe(1);
+  });
+
+  it("draws Flash's yellow rings in the Classic look, no fireball", () => {
+    const { session, layer } = setUp([{ id: 1, t: 14, l: 1, X: 0, Y: 0 }], { C5: 2 }, true);
+    session.appendFling({ x: -150, y: -150, monsters: { C5: 1 } });
+    const rings = layer.splatCount;
+    untilBlast(session, layer);
+    expect(layer.splatCount).toBeGreaterThan(rings);
+    expect(layer.blasts.blastsMade).toBe(0);
+    expect(layer.blasts.markCount).toBe(0);
   });
 
   it("changes nothing in the battle: the same health as an undrawn one", () => {

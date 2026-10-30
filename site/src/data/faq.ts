@@ -46,6 +46,8 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "Where do I report bugs?",
-    a: `Email ${SITE.bugEmail} with what happened and, if you can, a screenshot. There is no Discord yet.`,
+    a: `Email ${SITE.bugEmail} with what happened and, if you can, a screenshot.${
+      SITE.discordUrl ? ` You can also tell us on the Discord at ${SITE.discordUrl.replace(/^https?:\/\//, "")}.` : ""
+    }`,
   },
 ];

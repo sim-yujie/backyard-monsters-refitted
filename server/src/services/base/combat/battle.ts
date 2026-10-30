@@ -7,7 +7,7 @@ import {
   fightableLog,
   foughtAcademy,
   wholeAmounts,
-  withFrozenBrains,
+  withFrozenChampions,
   type LootAttacker,
   type ReplayedLoot,
 } from "./attackLoot.js";
@@ -81,6 +81,7 @@ export const battleReplayInput = ({
   tick,
   declareWar,
   left,
+  descentYard,
 }: {
   flinglog: unknown;
   session: AttackSession | null;
@@ -89,6 +90,8 @@ export const battleReplayInput = ({
   tick: number;
   declareWar: boolean;
   left?: boolean;
+  /** The Descent yard fought, 1 to 13 (`AbandonedInput.descentYard`); absent outside the Descent. */
+  descentYard?: number;
 }): AbandonedInput | null => {
   const log = parseFlingLog(flinglog);
   if (!log) return null;
@@ -100,6 +103,7 @@ export const battleReplayInput = ({
     buildingdata: attacker.buildingdata ?? null,
     resources: session?.attackerResources ?? null,
     brains: session?.championBrains ?? null,
+    health: session?.championHealth ?? null,
   };
   return {
     defender: {
@@ -116,10 +120,11 @@ export const battleReplayInput = ({
       siege: attacker.siege ?? null,
     },
     // Only what the attacker could have flung fights, as in the loot's own rule,
-    // and each champion with the brain the attack froze, never the log's (#219).
+    // and each champion with the brain (#219) and health the attack froze,
+    // never the log's.
     log: session?.entryHoused
       ? fightableLog(log, fighter, session.entryHoused)
-      : withFrozenBrains(log, session?.championBrains),
+      : withFrozenChampions(log, session?.championBrains, session?.championHealth),
     tick,
     // The countdown the client was served, whatever runs now (issue #201).
     declareWar: session?.declareWar ?? declareWar,
@@ -127,6 +132,7 @@ export const battleReplayInput = ({
     ...(left !== undefined && { left }),
     // The defence the attack load served (issue #195).
     ...(session?.defenderForces && { defence: session.defenderForces }),
+    ...(descentYard !== undefined && { descentYard }),
   };
 };
 

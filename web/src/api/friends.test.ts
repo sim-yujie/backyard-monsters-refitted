@@ -7,6 +7,7 @@ import {
   NETWORK_REFUSAL,
   REFUSAL_TEXT,
   toSeconds,
+  tooNewText,
   type FriendRefusalReason,
 } from "./friends";
 import { ApiError, NetworkError } from "./http";
@@ -263,6 +264,29 @@ describe("friendRefusal", () => {
       message: REFUSAL_TEXT.tooNew,
       from: Math.floor(Date.parse("2026-10-20T00:00:00Z") / 1000),
     });
+  });
+
+  it("says which gate holds a tooNew and how long is left", () => {
+    const now = Math.floor(Date.now() / 1000);
+    const refused = (body: Record<string, unknown>) => friendRefusal(new ApiError("no", { status: 409, body }));
+    // Friends 7 hours of the 12: about 5 hours to go.
+    const friendship = refused({ reason: "tooNew", from: now + 5 * 3600 - 30, rule: "friendship" });
+    expect(friendship).toMatchObject({ reason: "tooNew", rule: "friendship", from: now + 5 * 3600 - 30 });
+    expect(friendship.message).toMatch(/^Opens in 4h 59m|^Opens in 5h 0m/);
+    expect(friendship.message).toContain("(friends for 12 hours first)");
+    expect(refused({ reason: "tooNew", rule: "level" }).message).toBe("Not yet: each player must be level 5.");
+    // An older server with no rule: still the time left; an unknown rule is dropped.
+    expect(refused({ reason: "tooNew", from: now + 600 + 30 }).message).toMatch(/^Opens in 10m \d+s\.$/);
+    expect(refused({ reason: "tooNew", rule: "moon" })).toEqual({ reason: "tooNew", message: REFUSAL_TEXT.tooNew });
+    // The dropped account-age rule (owner 2026-10-29) is not read either.
+    expect(refused({ reason: "tooNew", rule: "account" })).toEqual({ reason: "tooNew", message: REFUSAL_TEXT.tooNew });
+    expect(REFUSAL_TEXT.tooNew).toBe("Not yet: friends for 12 hours and each player level 5.");
+  });
+
+  it("tooNewText: a gate whose time has passed is named without a countdown", () => {
+    expect(tooNewText({ from: 1000, rule: "friendship" }, 2000)).toBe("Not yet: friends for 12 hours first.");
+    expect(tooNewText({ from: 1000 + 12 * 3600, rule: "friendship" }, 1000)).toBe("Opens in 12h 0m (friends for 12 hours first).");
+    expect(tooNewText({}, 1000)).toBe(REFUSAL_TEXT.tooNew);
   });
 
   it("names the day a declined request can be asked again", () => {

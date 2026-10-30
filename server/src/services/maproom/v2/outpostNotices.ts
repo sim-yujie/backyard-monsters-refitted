@@ -1,5 +1,5 @@
 import type { EntityManager } from "@mikro-orm/core";
-import { Message } from "../../../database/models/message.model.js";
+import { Message, type AttackStats } from "../../../database/models/message.model.js";
 import { Thread } from "../../../database/models/thread.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { BaseType } from "../../../enums/Base.js";
@@ -19,8 +19,10 @@ import { SYSTEM_SENDER } from "../../mail/systemSender.js";
  * its `completed` list, for the "While you were away" notice, and marks them
  * read (`takeOutpostNotices`); they stay in the mailbox.
  *
- * The text is written once, here, and stored whole: the mailbox shows it as
- * it is and the away notice shows it as it is.
+ * The text is written once, here, and stored whole. An attack notice also
+ * stores its numbers (`attackstats`: damage and loot), which the bell, the
+ * away notice and the mailbox show as icons, with the text kept for screen
+ * readers and for notices older than the numbers (less-text job 3, 28 Oct).
  */
 
 export { SYSTEM_SENDER } from "../../mail/systemSender.js";
@@ -34,14 +36,21 @@ export const OUTPOST_TAKEN = "outposttaken";
  * "Show on map" for it.
  */
 export const YARD_ATTACKED = "yardattacked";
+/**
+ * Another player attacked the player's Inferno yard (`docs/design/inferno.md`
+ * §2.7, WP 3.4): written by the landing, or by the server closing an attack
+ * its attacker left (`services/inferno/infernoPlayerLanding.ts`). No cell.
+ */
+export const INFERNO_ATTACKED = "infernoattacked";
 
 /** The notices' kinds in the away notice, the load's `completed` list. */
-export type OutpostNoticeKind = "outpostAttacked" | "outpostTaken" | "yardAttacked";
+export type OutpostNoticeKind = "outpostAttacked" | "outpostTaken" | "yardAttacked" | "infernoAttacked";
 
 const KIND_OF: Readonly<Record<string, OutpostNoticeKind>> = {
   [OUTPOST_ATTACKED]: "outpostAttacked",
   [OUTPOST_TAKEN]: "outpostTaken",
   [YARD_ATTACKED]: "yardAttacked",
+  [INFERNO_ATTACKED]: "infernoAttacked",
 };
 
 /** A resource amount per key, as the loot is counted. */
@@ -54,11 +63,19 @@ const RESOURCE_NAMES: Readonly<Record<string, string>> = {
   r4: "Goo",
 };
 
+/** The Inferno's own resources, in the same keys (`docs/design/inferno.md` §2.3). */
+const INFERNO_RESOURCE_NAMES: Readonly<Record<string, string>> = {
+  r1: "Bone",
+  r2: "Coal",
+  r3: "Sulfur",
+  r4: "Magma",
+};
+
 /** "1,234 Twigs and 500 Goo", or "" when nothing was taken. */
-const amountsText = (amounts: ResourceAmounts): string => {
+const amountsText = (amounts: ResourceAmounts, names = RESOURCE_NAMES): string => {
   const parts = (["r1", "r2", "r3", "r4"] as const).flatMap((key) => {
     const amount = Math.floor(Number(amounts[key] ?? 0));
-    return amount > 0 ? [`${amount.toLocaleString("en-GB")} ${RESOURCE_NAMES[key]}`] : [];
+    return amount > 0 ? [`${amount.toLocaleString("en-GB")} ${names[key]}`] : [];
   });
   if (parts.length <= 1) return parts.join("");
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
@@ -71,18 +88,17 @@ export interface OutpostCell {
 
 /**
  * "Bramble attacked your outpost at (243, 206)" and what it cost: the damage
- * it was left at, the loot taken from the owner's pool and, when a Housing
- * fell, how many housed monsters went with it (issue #160).
+ * it was left at and the loot taken from the owner's pool. The housed
+ * monsters a fallen Housing took (issue #160) are not told (owner, 27 Oct).
  */
 export const attackNoticeText = (
   attacker: string,
   cell: OutpostCell,
   damage: number,
   loot: ResourceAmounts,
-  housedLost = 0,
 ): { subject: string; message: string } => ({
   subject: `${attacker} attacked your outpost at (${cell.x}, ${cell.y})`,
-  message: costText(damage, loot, housedLost),
+  message: costText(damage, loot),
 });
 
 /**
@@ -93,23 +109,49 @@ export const yardAttackNoticeText = (
   attacker: string,
   damage: number,
   loot: ResourceAmounts,
-  housedLost = 0,
 ): { subject: string; message: string } => ({
   subject: `${attacker} attacked your yard`,
-  message: costText(damage, loot, housedLost),
+  message: costText(damage, loot),
 });
 
-/** "It was left 63% damaged, and 1,234 Twigs were looted.", and the housed monsters lost, if any. */
-const costText = (damage: number, loot: ResourceAmounts, housedLost: number): string => {
-  const taken = amountsText(loot);
-  const looted = taken === "" ? "nothing was looted" : `${taken} were looted`;
-  const lost = Math.max(0, Math.floor(housedLost));
-  return (
-    `It was left ${Math.max(0, Math.round(damage))}% damaged` +
-    (lost === 0
-      ? `, and ${looted}.`
-      : `, ${looted}, and ${lost} housed ${lost === 1 ? "monster was" : "monsters were"} lost.`)
-  );
+/**
+ * "Bramble attacked your Inferno yard" and what it cost, in Inferno words:
+ * "It was left 30% damaged. 1,200 Bone and 300 Coal were looted." (WP 3.4).
+ */
+export const infernoAttackNoticeText = (
+  attacker: string,
+  damage: number,
+  loot: ResourceAmounts,
+): { subject: string; message: string } => ({
+  subject: `${attacker} attacked your Inferno yard`,
+  message: costText(damage, loot, INFERNO_RESOURCE_NAMES),
+});
+
+/**
+ * "It was left 63% damaged. 1,234 Twigs were looted." The damage is a
+ * sentence of its own, so a list of resources never runs on after it (S3
+ * browser check: "100% damaged, 4,837 Bone, 4,546 Coal, ... were looted").
+ */
+const costText = (damage: number, loot: ResourceAmounts, names = RESOURCE_NAMES): string => {
+  const taken = amountsText(loot, names);
+  return `It was left ${damagePercent(damage)}% damaged. ${taken === "" ? "Nothing was looted" : `${taken} were looted`}.`;
+};
+
+/** A yard's damage as the notices give it: a whole percent, never below 0. */
+const damagePercent = (damage: number): number => Math.max(0, Math.round(damage));
+
+/**
+ * An attack notice's numbers, as `message.attackstats` keeps them: the damage
+ * as {@link costText} words it, the loot in whole units with nothing for a
+ * resource not taken, and the housed monsters lost (kept, not told).
+ */
+export const attackStats = (damage: number, loot: ResourceAmounts, housedLost = 0): AttackStats => {
+  const taken: Partial<Record<"r1" | "r2" | "r3" | "r4", number>> = {};
+  for (const key of ["r1", "r2", "r3", "r4"] as const) {
+    const amount = Math.floor(Number(loot[key] ?? 0));
+    if (amount > 0) taken[key] = amount;
+  }
+  return { damage: damagePercent(damage), loot: taken, housedLost: Math.max(0, Math.floor(housedLost)) };
 };
 
 /** "Bramble took your outpost at (243, 206)". */
@@ -119,7 +161,12 @@ export const takenNoticeText = (taker: string, cell: OutpostCell): { subject: st
 });
 
 /** The notices about an attack or a takeover, which name the player who did it (`byuserid`, #378). */
-export const ATTACK_NOTICE_TYPES: ReadonlySet<string> = new Set([OUTPOST_ATTACKED, OUTPOST_TAKEN, YARD_ATTACKED]);
+export const ATTACK_NOTICE_TYPES: ReadonlySet<string> = new Set([
+  OUTPOST_ATTACKED,
+  OUTPOST_TAKEN,
+  YARD_ATTACKED,
+  INFERNO_ATTACKED,
+]);
 
 export interface OutpostNoticeInput {
   /** The outpost's owner, who is told. */
@@ -129,6 +176,8 @@ export interface OutpostNoticeInput {
   /** `outpostattacked`, `outposttaken`, or an invitation's answer (`inviteaccepted`, `invitedeclined`, #205). */
   readonly type: string;
   readonly text: { subject: string; message: string };
+  /** An attack notice's numbers ({@link attackStats}); none on any other. */
+  readonly stats?: AttackStats | null;
   /** Where it happened; null for a Map Room 1 yard, which has no cell. */
   readonly cell: OutpostCell | null;
   readonly baseid: string;
@@ -143,7 +192,7 @@ export interface OutpostNoticeInput {
  * attacker. Flushes `em`; inside a transaction it lands with it.
  */
 export const writeOutpostNotice = async (em: EntityManager, input: OutpostNoticeInput): Promise<void> => {
-  const { ownerId, byUserId, type, text, cell, baseid, now, replayid } = input;
+  const { ownerId, byUserId, type, text, stats, cell, baseid, now, replayid } = input;
   if (!ownerId || ownerId === byUserId) return;
 
   const [last] = await em.find(Thread, {}, { orderBy: { threadid: "DESC" }, limit: 1 });
@@ -165,6 +214,7 @@ export const writeOutpostNotice = async (em: EntityManager, input: OutpostNotice
     baseid,
     updatetime: now,
     ...(replayid != null && { replayid }),
+    ...(stats != null && { attackstats: stats }),
     // The attacker or taker, for the notice's Add friend (#378); not who answered an invitation.
     ...(ATTACK_NOTICE_TYPES.has(type) && byUserId > 0 && { byuserid: byUserId }),
   });
@@ -182,7 +232,12 @@ export interface OutpostNoticeJob {
   id: string;
   t: null;
   at: number;
-  detail: { text: string; x: number | null; y: number | null };
+  /**
+   * `text` is the whole sentence. An attack notice written since 28 Oct also
+   * gives its `subject` ("Bramble attacked your yard") and its numbers
+   * (`stats`), which the away notice shows as icons after the subject.
+   */
+  detail: { text: string; x: number | null; y: number | null; subject?: string; stats?: AttackStats };
 }
 
 /**
@@ -197,7 +252,7 @@ export const takeOutpostNotices = async (em: EntityManager, userid: number): Pro
       targetid: userid,
       userid: SYSTEM_SENDER,
       targetUnread: 1,
-      messagetype: { $in: [OUTPOST_ATTACKED, OUTPOST_TAKEN, YARD_ATTACKED] },
+      messagetype: { $in: [...ATTACK_NOTICE_TYPES] },
     },
     { orderBy: { updatetime: "ASC" } },
   );
@@ -216,6 +271,7 @@ export const takeOutpostNotices = async (em: EntityManager, userid: number): Pro
       text: `${message.subject}. ${message.message}`,
       x: message.coords?.[0] ?? null,
       y: message.coords?.[1] ?? null,
+      ...(message.attackstats && { subject: message.subject, stats: message.attackstats }),
     },
   }));
 };
@@ -265,7 +321,8 @@ export const noticeOutpostAttack = async (
     ownerId: outpost.saveuserid,
     byUserId: attacker.userid,
     type: OUTPOST_ATTACKED,
-    text: attackNoticeText(attacker.username, cell, Number(outpost.damage) || 0, lootTaken(defenderDelta), housedLost),
+    text: attackNoticeText(attacker.username, cell, Number(outpost.damage) || 0, lootTaken(defenderDelta)),
+    stats: attackStats(Number(outpost.damage) || 0, lootTaken(defenderDelta), housedLost),
     cell,
     baseid: outpost.baseid,
     now,
@@ -274,9 +331,9 @@ export const noticeOutpostAttack = async (
 
 /**
  * At the end of an attack on a Map Room 1 or 2 main yard, live or finished by
- * the server: tells its owner who attacked it, the damage it was left at, what
- * was looted and the housed monsters lost (bot neighbours §4.8, #241; Map Room
- * 2 by #361). Sent for every such defence, so no notice tells one kind of
+ * the server: tells its owner who attacked it, the damage it was left at and
+ * what was looted (bot neighbours §4.8, #241; Map Room 2 by #361); the housed
+ * monsters lost are kept in its numbers, not told. Sent for every such defence, so no notice tells one kind of
  * attacker from another. Like Map Room 1's, a Map Room 2 notice has no cell.
  */
 export const noticeYardAttack = async (
@@ -297,7 +354,8 @@ export const noticeYardAttack = async (
     ownerId: yard.saveuserid,
     byUserId: attacker.userid,
     type: YARD_ATTACKED,
-    text: yardAttackNoticeText(attacker.username, Number(yard.damage) || 0, lootTaken(defenderDelta), housedLost),
+    text: yardAttackNoticeText(attacker.username, Number(yard.damage) || 0, lootTaken(defenderDelta)),
+    stats: attackStats(Number(yard.damage) || 0, lootTaken(defenderDelta), housedLost),
     cell: null,
     baseid: yard.baseid,
     now,
@@ -313,4 +371,37 @@ const lootTaken = (defenderDelta: ResourceAmounts | null | undefined): ResourceA
     if (Number.isFinite(delta) && delta < 0) loot[key] = Math.min(-delta, MAX_LOOT_PER_RESOURCE);
   }
   return loot;
+};
+
+/**
+ * At the end of an attack on a player's Inferno yard, landed by the final
+ * save or closed by the server (WP 3.4): tells its owner who attacked it, the
+ * damage it was left at and what was looted from their Inferno purse (the
+ * housed monsters lost with fallen Housing Bunkers are kept, not told). There are no replays of
+ * an Inferno attack (owner, 27 Oct); the notice names the attacker, so the
+ * mailbox offers Add friend.
+ */
+export const noticeInfernoAttack = async (
+  em: EntityManager,
+  input: {
+    yard: Pick<Save, "baseid" | "saveuserid" | "damage">;
+    attacker: { userid: number; username: string };
+    /** What the defender's purse really lost, whole units. */
+    loot: ResourceAmounts;
+    housedLost: number;
+    now: number;
+  },
+): Promise<void> => {
+  const { yard, attacker, loot, housedLost, now } = input;
+  await writeOutpostNotice(em, {
+    ownerId: yard.saveuserid,
+    byUserId: attacker.userid,
+    type: INFERNO_ATTACKED,
+    text: infernoAttackNoticeText(attacker.username, Number(yard.damage) || 0, loot),
+    stats: attackStats(Number(yard.damage) || 0, loot, housedLost),
+
+    cell: null,
+    baseid: yard.baseid,
+    now,
+  });
 };

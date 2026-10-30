@@ -76,3 +76,57 @@ export const poolView = (yard: Save, pool: Save): Save =>
       return own;
     },
   });
+
+/**
+ * The Inferno yard's columns that live on the main row, and the main-row
+ * column each one reads (`docs/design/inferno.md` §3.1, WP 1.15).
+ *
+ * - `resources` is the Inferno purse, the main save's `iresources` (Bone,
+ *   Coal, Sulfur, Magma): every build, upgrade, cancel and recycle in the
+ *   Inferno charges or refunds it (`BASE.Fund(..., isInfernoBuilding)`,
+ *   `client/scripts/BFOUNDATION.as:2557`).
+ * - `credits`: Shiny is the player's, shared with the surface.
+ * - `onboarding`, `achievements`: the account's records, as on an outpost.
+ *
+ * Everything else is the Inferno row's own, unlike an outpost's: its `points`
+ * (the Inferno level, saved on the Inferno save in Flash, `BASE.as:3195`), its
+ * `storedata`, and its Locker, Academy and housed monsters.
+ */
+const INFERNO_POOL_FIELDS: ReadonlyMap<PropertyKey, string> = new Map([
+  ["resources", "iresources"],
+  ["credits", "credits"],
+  ["onboarding", "onboarding"],
+  ["achievements", "achievements"],
+]);
+
+/**
+ * The Inferno yard `yard` as its rules see it, with the Inferno purse and the
+ * Shiny of `pool`, its owner's main yard (see {@link INFERNO_POOL_FIELDS}).
+ * Its `type` stays `inferno`, so the rules read the Inferno table
+ * (`yardKindOf`), and the storage cap is the Inferno's: 10,000 plus the yard's
+ * own Resource Pods, times the yard's own Improved Packing Skills
+ * (`storageCap`). The cap is worked out from the yard's buildings each time it
+ * is read, so a Resource Pod an action builds or recycles moves it at once.
+ *
+ * @param yard - The Inferno yard row.
+ * @param pool - The owner's main row.
+ */
+export const infernoView = (yard: Save, pool: Save): Save => {
+  const poolKey = (prop: PropertyKey): string | undefined => INFERNO_POOL_FIELDS.get(prop);
+  return new Proxy(yard, {
+    get(target, prop) {
+      const key = poolKey(prop);
+      return key ? Reflect.get(pool, key) : Reflect.get(target, prop);
+    },
+    set(target, prop, value) {
+      const key = poolKey(prop);
+      return key ? Reflect.set(pool, key, value) : Reflect.set(target, prop, value);
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      const own = Reflect.getOwnPropertyDescriptor(target, prop);
+      const key = poolKey(prop);
+      if (own && "value" in own && key) return { ...own, value: Reflect.get(pool, key) };
+      return own;
+    },
+  });
+};

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { closeSync, existsSync, openSync, readSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { MONSTER_SPRITES, type MonsterSheet } from "./monsterSpriteData";
-import { REPAINT_LAYOUTS, REPAINTED_SHEETS } from "./monsterSprites";
+import { applyLayout, REPAINTED_SHEETS } from "./monsterSprites";
+import { SHEET_VERSIONS } from "./sheetVersions";
+import { sheetCopies } from "@/game/quality";
 
 /**
  * The generated sprite table, checked against the PNGs on the game server's
@@ -30,6 +32,42 @@ const pngSize = (path: string): { width: number; height: number } => {
   expect(head.toString("latin1", 1, 4)).toBe("PNG");
   return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
 };
+
+/** A PNG's tEXt notes ahead of its pixels, as {key: value}. */
+const pngNotes = (path: string): Record<string, string> => {
+  const head = Buffer.alloc(1 << 16);
+  const handle = openSync(path, "r");
+  let read: number;
+  try {
+    read = readSync(handle, head, 0, head.length, 0);
+  } finally {
+    closeSync(handle);
+  }
+  const notes: Record<string, string> = {};
+  for (let at = 8; at + 8 <= read; ) {
+    const length = head.readUInt32BE(at);
+    const kind = head.toString("latin1", at + 4, at + 8);
+    if (kind === "IDAT") break;
+    if (kind === "tEXt") {
+      const body = head.toString("latin1", at + 8, at + 8 + length);
+      const split = body.indexOf("\0");
+      if (split > 0) notes[body.slice(0, split)] = body.slice(split + 1);
+    }
+    at += 12 + length;
+  }
+  return notes;
+};
+
+/**
+ * The painted sheets (`name@4x.png`, `name@3x.png`, Korath 5 and 6 `name@2x.png`)
+ * and their Quality copies: `name@2x.png` (`name@1.5x.png`), `name.png`.
+ */
+const paintings = Object.values(REPAINTED_SHEETS).flatMap((file) => {
+  const copies = sheetCopies(file);
+  if (!copies) return [];
+  const scaleOf = (name: string): number => Number(/@([\d.]+)x\.png$/.exec(name)?.[1] ?? 1);
+  return [{ file, scale: scaleOf(file), half: copies.medium, halfScale: scaleOf(copies.medium), one: copies.low }];
+});
 
 /**
  * Sheets whose size is not a whole multiple of the frame size, with the
@@ -199,18 +237,67 @@ describe("MONSTER_SPRITES", () => {
     for (const [original, repaint] of Object.entries(REPAINTED_SHEETS)) {
       const sheet = sheets.find((one) => one.file === original);
       expect(sheet, original).toBeDefined();
+      if (!sheet) continue;
       const scale = Number(/@(\d+)x\./.exec(repaint)?.[1] ?? 1);
-      // A repaint with its own layout (more rows, taller cells) sizes by that layout.
-      const layout = REPAINT_LAYOUTS[original];
-      const columns = sheet?.columns ?? 1;
-      const width = layout?.frameWidth ? layout.frameWidth * columns : sheet?.width ?? 0;
-      const height = layout?.frameHeight
-        ? layout.frameHeight * (layout.rows ?? sheet?.rows ?? 1)
-        : sheet?.height ?? 0;
+      // A repaint with its own layout (more or fewer rows, taller cells, packed) sizes by that layout.
+      const { width, height } = applyLayout(sheet);
       expect(pngSize(`${ASSETS}${repaint}`), repaint).toEqual({
         width: width * scale,
         height: height * scale,
       });
+    }
+  });
+
+  // The Quality setting (`game/quality.ts`) draws these on Medium and Low; a
+  // painting without them would show nothing there. `web/tools/sheet_copies.py`
+  // makes them, and the animated kits' `shrink-sheet.py` runs it.
+  it("has a half-size and a 1x copy beside every painted sheet", () => {
+    expect(paintings.length).toBeGreaterThan(30);
+    for (const { file, scale, half, halfScale, one } of paintings) {
+      const painted = pngSize(`${ASSETS}${file}`);
+      for (const [copy, times] of [[half, halfScale], [one, 1]] as const) {
+        expect(existsSync(`${ASSETS}${copy}`), `${copy} is missing: run python web/tools/sheet_copies.py`).toBe(true);
+        expect(pngSize(`${ASSETS}${copy}`), copy).toEqual({
+          width: (painted.width * times) / scale,
+          height: (painted.height * times) / scale,
+        });
+      }
+      // Made from this painting, not an older one: the copy names it and its byte size.
+      const made = `${file.split("/").pop()} ${statSync(`${ASSETS}${file}`).size}`;
+      expect(pngNotes(`${ASSETS}${half}`)["bymr-copy-of"], `${half} is stale: run python web/tools/sheet_copies.py`).toBe(made);
+      const oneMark = pngNotes(`${ASSETS}${one}`)["bymr-copy-of"];
+      if (oneMark !== undefined) expect(oneMark, one).toBe(made);
+    }
+  });
+
+  it("asks for every painting and copy with its current version (sheetVersions.ts)", () => {
+    const want: Record<string, string> = {};
+    for (const { file, half, one } of paintings) {
+      for (const path of [file, half, one]) want[path] = statSync(`${ASSETS}${path}`).size.toString(36);
+    }
+    expect(SHEET_VERSIONS, "out of date: run python web/tools/sheet_copies.py").toEqual(want);
+  });
+
+  it("paints Krallen's and Korath's ground shadow into every sheet and copy, once", () => {
+    // Without the Flash sheets' baked shadow she looked as if she floated
+    // (owner, 2026-10-25). `web/tools/add-champ-ground-shadow.py` marks a sheet
+    // it has shadowed with a tEXt chunk ahead of the pixels, and refuses one
+    // already marked.
+    const keys = ["G5_1", "G5_2", "G5_3", "G4_1", "G4_2", "G4_3", "G4_4", "G4_5", "G4_6"];
+    for (const key of keys) {
+      const repaint = REPAINTED_SHEETS[MONSTER_SPRITES[key]?.file ?? ""];
+      expect(repaint, key).toBeDefined();
+      const copies = sheetCopies(repaint ?? "");
+      for (const file of [repaint ?? "", copies?.medium ?? "", copies?.low ?? ""]) {
+        const head = Buffer.alloc(256);
+        const handle = openSync(`${ASSETS}${file}`, "r");
+        try {
+          readSync(handle, head, 0, 256, 0);
+        } finally {
+          closeSync(handle);
+        }
+        expect(head.toString("latin1"), file).toContain("tEXtbymr-ground-shadow");
+      }
     }
   });
 });

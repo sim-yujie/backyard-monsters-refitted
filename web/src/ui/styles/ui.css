@@ -369,6 +369,52 @@ body {
   margin-left: 0.8em;
 }
 
+/* ── Painted icons (`gameIcon.ts`) ─────────────────────────────────────────
+ * A heart, a claw, an hourglass in place of a word. The size is the `<img>`'s
+ * own width and height (16, 24 or 32 px); `srcset` picks the file. An
+ * `.icon-amount` is the icon and a number on one line, and may also be a
+ * `.chip`, whose spacing then wins (it comes later in this file).
+ */
+.game-icon {
+  display: inline-block;
+  flex: none;
+  object-fit: contain;
+  vertical-align: middle;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.icon-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A gain or a loss (`amountChange.ts`): "+300" green, "−300" red, for a
+ * resource or an icon amount alike. The sign says it without the colour. */
+.icon-amount--gain > .icon-amount__value,
+.res-amount--gain > .res-amount__value,
+.icon-amount--loss > .icon-amount__value,
+.res-amount--loss > .res-amount__value {
+  font-weight: 700;
+  text-shadow:
+    0 0 2px var(--colour-change-halo),
+    0 1px 1px var(--colour-change-halo);
+}
+
+.icon-amount--gain > .icon-amount__value,
+.res-amount--gain > .res-amount__value {
+  color: var(--colour-gain);
+}
+
+.icon-amount--loss > .icon-amount__value,
+.res-amount--loss > .res-amount__value {
+  color: var(--colour-loss);
+}
+
 /* ── Quantity stepper (`QuantityStepper.ts`) ───────────────────────────────
  * `−`, a number box, `+`, optional `+5` / `+10`, and Fill, the same wherever it is used (the Army
  * panel, Hatch, the bunker, juicing). A screen's own `<block>__controls`
@@ -641,7 +687,7 @@ body {
 }
 
 /* The main yard's income an hour (#280): "+12,400/h" in a quiet voice under
-   the amount, dimmed with "full" while the silo is full, as that income is lost. */
+   the amount, dimmed while the silo is full, as that income is lost. */
 .hud__rate {
   color: var(--colour-text-muted);
   font-size: var(--text-xs);
@@ -653,9 +699,10 @@ body {
   opacity: 0.6;
 }
 
-.hud__rate-full {
-  color: var(--colour-warning);
-  font-weight: 600;
+/* A full silo's painted "storage full" mark (the text cut, 28 Oct); the
+   corner lays it on the pile's shoulder (yard-hud.css). */
+.hud__full-mark {
+  margin-left: var(--space-1);
 }
 
 /* Workers, free / total; a press goes to the job that finishes soonest. */
@@ -716,7 +763,8 @@ body {
 }
 
 /* A change of amount, floating off the readout (#92). Downwards for a spend,
-   upwards for a gain; a plain fade when motion is reduced. */
+   upwards for a gain; a plain fade when motion is reduced. Red and green as
+   every other gain or loss (`.res-amount--gain/--loss` above). */
 .hud__delta {
   position: fixed;
   z-index: var(--z-popup);
@@ -727,18 +775,21 @@ body {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: var(--leading-tight);
+  text-shadow:
+    0 0 2px var(--colour-change-halo),
+    0 1px 1px var(--colour-change-halo);
   white-space: nowrap;
   pointer-events: none;
   animation: hud-delta 1.6s var(--easing) forwards;
 }
 
 .hud__delta--down {
-  color: var(--colour-danger);
+  color: var(--colour-loss);
   --hud-delta-drift: 8px;
 }
 
 .hud__delta--up {
-  color: var(--colour-success);
+  color: var(--colour-gain);
   --hud-delta-drift: -8px;
 }
 
@@ -839,6 +890,11 @@ body {
   -webkit-backdrop-filter: var(--blur-panel);
   backdrop-filter: var(--blur-panel);
   box-shadow: var(--shadow-popup);
+  /* The list is taller than a laptop screen (or a phone on its side), so it
+     keeps to the screen and scrolls. */
+  max-height: calc(100dvh - 84px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .account-menu__list[hidden] {
@@ -876,6 +932,13 @@ body {
   justify-content: flex-start;
   text-align: start;
   color: var(--colour-text);
+}
+
+/* "Join the Discord" is a link, not a button: centred upright like the rest. */
+.account-menu__discord {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 /* The player's avatar (#175): a small face on the button, a larger one by the
@@ -1054,16 +1117,6 @@ body {
   }
 }
 
-/* A phone on its side: the Account list would run off the bottom, so it keeps
-   to the screen and scrolls. */
-@media (width > 620px) and (height <= 500px) {
-  .account-menu__list {
-    max-height: calc(100dvh - 84px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-}
-
 /* The narrowest phones: smaller figures and tighter readouts again. */
 @media (width <= 390px) {
   .hud__resource-button {
@@ -1089,6 +1142,17 @@ body {
   padding: var(--space-4);
 }
 
+/* The login screen keeps the game's name, the panel and the footer inside the
+   window: on a short window the panel shrinks and scrolls inside itself, so
+   no form's bottom is ever cut off. Auto margins centre the stack without
+   pushing its top out of reach. */
+.scene-centre--login {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+}
+
 /* The game's name and beta warning over the sign-in panel. */
 .login-stack {
   display: flex;
@@ -1096,6 +1160,21 @@ body {
   align-items: center;
   gap: var(--space-4);
   max-width: 100%;
+  max-height: 100%;
+  margin-block: auto;
+}
+
+.login-stack > .login-brand,
+.login-stack > .login-footer {
+  flex-shrink: 0;
+}
+
+/* Too short even for a shrunk panel (a phone held sideways): the whole
+   screen scrolls instead. */
+@media (max-height: 480px) {
+  .login-stack {
+    max-height: none;
+  }
 }
 
 .login-brand {
@@ -1163,12 +1242,36 @@ body {
   flex: 1 1 auto;
 }
 
-/* The sign-in and sign-up panel may use nearly the whole screen height, so
-   the sign-up form (four fields, the bot check, the terms line) fits without
-   scrolling inside the panel on an 800 px tall screen (issue #213), less the
-   game's name and beta line above it. */
+/* "Have an account? Sign in" at the top of the sign-up form. */
+.login-form__have-account {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--colour-border);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.login-form__have-account-button {
+  padding-inline: var(--space-1);
+  color: var(--colour-accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* The sign-in and sign-up panel takes whatever height the game's name and
+   the footer leave (issue #213) and scrolls inside itself past that. The
+   body's own height cap would otherwise cut it off above the window's bottom. */
+.panel--login {
+  min-height: 0;
+}
+
 .panel--login .panel__body {
-  max-height: min(calc(88vh - 72px), 760px);
+  max-height: none;
+  min-height: 0;
 }
 
 /* The Terms, Privacy and age line under Create account (issue #213). */
@@ -1632,10 +1735,32 @@ body {
   font-weight: 600;
   color: var(--colour-text-strong);
 }
+.account-settings__select {
+  margin-left: auto;
+  padding: var(--space-1) var(--space-2);
+  font: inherit;
+  border-radius: 6px;
+}
 .account-settings__heading {
   margin: 0;
   font-size: var(--text-md);
   color: var(--colour-text-strong);
+}
+
+/* The one-time "Slow internet?" suggestion (ui/quality/SlowInternetDialog.ts). */
+.slow-internet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 340px;
+}
+.slow-internet p {
+  margin: 0;
+}
+.slow-internet__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }
 
 .account-settings__blocked {

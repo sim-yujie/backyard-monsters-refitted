@@ -163,12 +163,15 @@ const POLICIES = new Map<number, AnimPolicy>([
   [19, STATIC_FIXED],
   // Towers. The cell is a facing, set only when something is being shot at.
   [21, STATIC],
-  [22, STATIC],
+  // Monster Bunker: its strip is its shutters, down (cell 0) at rest; its `TickFast` brings them down
+  // straight away when nothing calls them up (`BUILDING22.as:446-452`), so a random cell never shows.
+  [22, STATIC_FIXED],
   [23, STATIC],
   [25, STATIC_FIXED],
   [115, STATIC],
   [118, STATIC],
   [129, STATIC_FIXED],
+  [130, STATIC],
   [132, STATIC],
   [136, STATIC_FIXED],
   [137, STATIC_FIXED],
@@ -212,6 +215,8 @@ export interface StripCells {
   readonly width: number;
   readonly height: number;
   readonly frames: number;
+  /** Cells in a row, for a strip of several rows. */
+  readonly columns?: number;
 }
 
 /**
@@ -235,12 +240,21 @@ export interface StripCells {
  * `frames` of them and the rest are leftovers.
  */
 export const stripCells = (
-  anim: { readonly width: number; readonly height: number; readonly frames: number },
+  anim: {
+    readonly width: number;
+    readonly height: number;
+    readonly frames: number;
+    readonly columns?: number;
+  },
   sourceWidth: number,
   sourceHeight: number,
 ): StripCells => {
   const width = Math.max(1, Math.min(anim.width, sourceWidth));
   const height = Math.max(1, Math.min(anim.height, sourceHeight));
   const fit = Math.max(1, Math.floor(sourceWidth / width));
-  return { width, height, frames: Math.max(1, Math.min(anim.frames, fit)) };
+  if (!anim.columns) return { width, height, frames: Math.max(1, Math.min(anim.frames, fit)) };
+  // A strip of several rows (the 3D Laser's tilts): whole rows that fit.
+  const columns = Math.min(anim.columns, fit);
+  const rows = Math.max(1, Math.floor(sourceHeight / height));
+  return { width, height, frames: Math.max(1, Math.min(anim.frames, columns * rows)), columns };
 };

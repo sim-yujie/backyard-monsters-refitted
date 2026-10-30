@@ -754,12 +754,12 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   ], [1,1,1,1,1]],
   // 129 Quake Tower (tower) — YARD_PROPS.as:6911
   [129, "Quake Tower", "tower", 3, [
-    [312500,187500,125000,0,18000,[]],
-    [1250000,750000,500000,0,86400,[]],
-    [3750000,2250000,1500000,0,172800,[]],
-    [7187500,4312500,2875000,0,259200,[]],
-    [12000000,9000000,6000000,0,388800,[]],
-    [16500000,12687500,7562500,0,475200,[]],
+    [312500,187500,125000,0,18000,[[999,1,1]]],
+    [1250000,750000,500000,0,86400,[[999,1,1]]],
+    [3750000,2250000,1500000,0,172800,[[999,1,1]]],
+    [7187500,4312500,2875000,0,259200,[[999,1,1]]],
+    [12000000,9000000,6000000,0,388800,[[999,1,1]]],
+    [16500000,12687500,7562500,0,475200,[[999,1,1]]],
   ], [0,1,1,2,2,4,4,4,4,4,4]],
   // 131 bdg_wmi2totem (decoration) — YARD_PROPS.as:7059
   [131, "bdg_wmi2totem", "decoration", 4, [
@@ -772,29 +772,29 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   ], [0]],
   // 132 Magma Tower (tower) — YARD_PROPS.as:7194
   [132, "Magma Tower", "tower", 3, [
-    [187500,250000,62500,0,18000,[]],
-    [750000,1000000,250000,0,86400,[]],
-    [2250000,3000000,750000,0,172800,[]],
-    [5250000,5000000,1250000,0,345600,[]],
-    [12000000,10000000,2000000,0,518400,[]],
-    [16000000,15000000,3000000,0,791200,[]],
+    [187500,250000,62500,0,18000,[[999,1,1]]],
+    [750000,1000000,250000,0,86400,[[999,1,1]]],
+    [2250000,3000000,750000,0,172800,[[999,1,1]]],
+    [5250000,5000000,1250000,0,345600,[[999,1,1]]],
+    [12000000,10000000,2000000,0,518400,[[999,1,1]]],
+    [16000000,15000000,3000000,0,791200,[[999,1,1]]],
   ], [0,1,1,1,2,2,2,2,2,2,2]],
   // 133 b_siegefactory (special) — YARD_PROPS.as:7326
   [133, "b_siegefactory", "special", 2, [
-    [1500000,1500000,0,0,86400,[]],
+    [1500000,1500000,0,0,86400,[[999,1,1],[134,1,1]]],
   ], [0,1,1,1,1,1,1,1,1,1,1]],
   // 134 b_siegeworks (special) — YARD_PROPS.as:7372
   [134, "b_siegeworks", "special", 2, [
-    [600000,600000,0,0,43200,[]],
-    [1200000,1200000,0,0,64800,[]],
-    [1800000,1800000,0,0,86400,[]],
-    [2400000,2400000,0,0,129600,[]],
-    [3000000,3000000,0,0,172800,[]],
-    [4000000,4000000,0,0,216000,[]],
-    [5000000,5000000,0,0,259200,[]],
-    [6000000,6000000,0,0,302400,[]],
-    [7500000,7500000,0,0,345600,[]],
-    [9000000,9000000,0,0,432000,[]],
+    [600000,600000,0,0,43200,[[999,1,1]]],
+    [1200000,1200000,0,0,64800,[[999,1,1]]],
+    [1800000,1800000,0,0,86400,[[999,1,1]]],
+    [2400000,2400000,0,0,129600,[[999,1,1]]],
+    [3000000,3000000,0,0,172800,[[999,1,1]]],
+    [4000000,4000000,0,0,216000,[[999,1,1]]],
+    [5000000,5000000,0,0,259200,[[999,1,1]]],
+    [6000000,6000000,0,0,302400,[[999,1,1]]],
+    [7500000,7500000,0,0,345600,[[999,1,1]]],
+    [9000000,9000000,0,0,432000,[[999,1,1]]],
   ], [0,1,1,1,1,1,1,1,1,1,1]],
   // 135 bdg_dave_trophy (decoration) — YARD_PROPS.as:7526
   [135, "bdg_dave_trophy", "decoration", 4, [
@@ -803,18 +803,18 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
   // 136 bi_spurtzcannon (tower) — YARD_PROPS.as:7602
   [136, "bi_spurtzcannon", "tower", 3, [
     [0,0,0,0,0,[]],
-    [500000,375000,250000,0,432000,[[14,1,7]]],
-    [1000000,750000,500000,0,604800,[[14,1,8]]],
-    [3000000,2250000,1500000,0,864000,[[14,1,9]]],
-    [12000000,9000000,6000000,0,1209600,[[14,1,10]]],
+    [500000,375000,250000,0,432000,[[999,1,1],[14,1,7]]],
+    [1000000,750000,500000,0,604800,[[999,1,1],[14,1,8]]],
+    [3000000,2250000,1500000,0,864000,[[999,1,1],[14,1,9]]],
+    [12000000,9000000,6000000,0,1209600,[[999,1,1],[14,1,10]]],
   ], [0,2]],
   // 137 bi_blackspurtzcannon (tower) — YARD_PROPS.as:7714
   [137, "bi_blackspurtzcannon", "tower", 3, [
     [0,0,0,0,0,[]],
-    [500000,375000,250000,0,432000,[[14,1,7]]],
-    [1000000,750000,500000,0,604800,[[14,1,8]]],
-    [3000000,2250000,1500000,0,864000,[[14,1,9]]],
-    [12000000,9000000,6000000,0,1209600,[[14,1,10]]],
+    [500000,375000,250000,0,432000,[[999,1,1],[14,1,7]]],
+    [1000000,750000,500000,0,604800,[[999,1,1],[14,1,8]]],
+    [3000000,2250000,1500000,0,864000,[[999,1,1],[14,1,9]]],
+    [12000000,9000000,6000000,0,1209600,[[999,1,1],[14,1,10]]],
   ], [0,2]],
   // 138 b_stronghold (tower) — YARD_PROPS.as:7804
   [138, "b_stronghold", "tower", 3, [
@@ -839,11 +839,12 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
 /* ── Outposts ───────────────────────────────────────────────────────────────── */
 
 /**
- * Which props table a yard builds from: a player's main yard, or one of their
+ * Which props table a yard builds from: a player's main yard, one of their
  * Map Room 2 outposts, which swaps in `OUTPOST_YARD_PROPS._outpostProps` for the
- * whole table (`client/scripts/GLOBAL.as:716-723`).
+ * whole table (`client/scripts/GLOBAL.as:716-723`), or their Inferno yard, which
+ * swaps in `INFERNOYARDPROPS._infernoYardProps` the same way (`:718-719`).
  */
-export type YardKind = "main" | "outpost";
+export type YardKind = "main" | "outpost" | "inferno";
 
 /**
  * The outpost core, the outpost's Town Hall.
@@ -1438,12 +1439,12 @@ export const OUTPOST_COST_ROWS: readonly CostRow[] = [
   ], [1,1,1,1]],
   // 132 Magma Tower (tower) — OUTPOST_YARD_PROPS.as:6049
   [132, "Magma Tower", "tower", 3, [
-    [187500,250000,62500,0,18000,[]],
-    [750000,1000000,250000,0,86400,[]],
-    [2250000,3000000,750000,0,172800,[]],
-    [5250000,5000000,1250000,0,345600,[]],
-    [12000000,10000000,2000000,0,518400,[]],
-    [16000000,15000000,3000000,0,791200,[]],
+    [187500,250000,62500,0,18000,[[999,1,1]]],
+    [750000,1000000,250000,0,86400,[[999,1,1]]],
+    [2250000,3000000,750000,0,172800,[[999,1,1]]],
+    [5250000,5000000,1250000,0,345600,[[999,1,1]]],
+    [12000000,10000000,2000000,0,518400,[[999,1,1]]],
+    [16000000,15000000,3000000,0,791200,[[999,1,1]]],
   ], [0,1,1,1,2,2,2,2,2,2,2]],
   // 133 b_siegefactory (special) — OUTPOST_YARD_PROPS.as:6181
   [133, "b_siegefactory", "special", 2, [
@@ -1693,3 +1694,830 @@ export const MAIN_FORTIFY_ROWS: readonly (readonly [type: number, steps: readonl
     [9664000,9996800,4331200,0,345600,[[14,1,8]]],
   ]],
 ];
+
+/* ── Inferno ────────────────────────────────────────────────────────────────── */
+
+/**
+ * The Under Hall, the Inferno yard's Town Hall. It shares the Town Hall's type
+ * id, so every `re` names `[14, 1, level]` and `quantity[level]` is read at
+ * its level, 0 to 6. It is never built, only upgraded: the server places it
+ * with the Flash start layout (`client/scripts/BASE.as:1616-1656`).
+ */
+export const UNDER_HALL_TYPE = 14;
+
+/**
+ * The Inferno yard's rows, in the same shape as {@link BUILDING_COST_ROWS}.
+ *
+ * Source: `client/scripts/INFERNOYARDPROPS.as`, read exactly as the main table
+ * is, with none of the Map Room 2 overrides: `GLOBAL.SetBuildingProps` swaps
+ * this table in wholesale for an Inferno yard (`client/scripts/GLOBAL.as:718-719`).
+ * Prices and times are Flash's, the Juicer's 1M/1M/1M included (owner
+ * decisions I16, R1-R4, `docs/design/inferno.md` §2.1). `r1`..`r4` are Bone,
+ * Coal, Sulfur and Magma here.
+ *
+ * Not every row is buildable: see {@link INFERNO_BUILDABLE_TYPES}.
+ */
+export const INFERNO_COST_ROWS: readonly CostRow[] = [
+  // 1 Bone Cruncher (resource) — INFERNOYARDPROPS.as:22
+  [1, "Bone Cruncher", "resource", 1, [
+    [0,750,0,0,15,[[14,1,1]]],
+    [0,1575,0,0,300,[[14,1,1]]],
+    [0,3300,0,0,1200,[[14,1,1]]],
+    [0,6950,0,0,3600,[[14,1,2]]],
+    [0,14500,0,0,7200,[[14,1,2]]],
+    [0,30600,0,0,18000,[[14,1,3]]],
+    [0,64300,0,0,43200,[[14,1,3]]],
+    [0,135000,0,0,86400,[[14,1,4]]],
+    [0,283600,0,0,172800,[[14,1,4]]],
+    [0,600000,0,0,259200,[[14,1,5]]],
+  ], [0,1,2,4,5,6,6,6,6,6], {
+    produce: [2,4,7,11,16,22,29,37,46,56],
+    cycleTime: [10,10,10,10,10,10,10,10,10,10],
+    capacity: [720,2160,5670,13365,29160,60142,118918,227584,424414,775018],
+  }],
+  // 2 Coal Extractor (resource) — INFERNOYARDPROPS.as:145
+  [2, "Coal Extractor", "resource", 1, [
+    [750,0,0,0,15,[[14,1,1]]],
+    [1575,0,0,0,300,[[14,1,1]]],
+    [3300,0,0,0,1200,[[14,1,1]]],
+    [6950,0,0,0,3600,[[14,1,2]]],
+    [14500,0,0,0,7200,[[14,1,2]]],
+    [30600,0,0,0,18000,[[14,1,3]]],
+    [64300,0,0,0,43200,[[14,1,3]]],
+    [135000,0,0,0,86400,[[14,1,4]]],
+    [283600,0,0,0,172800,[[14,1,4]]],
+    [600000,0,0,0,259200,[[14,1,5]]],
+  ], [0,1,2,4,5,6,6,6,6,6], {
+    produce: [2,4,7,11,16,22,29,37,46,56],
+    cycleTime: [10,10,10,10,10,10,10,10,10,10],
+    capacity: [720,2160,5670,13365,29160,60142,118918,227584,424414,775018],
+  }],
+  // 3 Sulfur Swirler (resource) — INFERNOYARDPROPS.as:266
+  [3, "Sulfur Swirler", "resource", 1, [
+    [525,224,0,0,20,[[14,1,1]]],
+    [1102,470,0,0,300,[[14,1,1]]],
+    [2315,992,0,0,1200,[[14,1,1]]],
+    [4862,2086,0,0,3600,[[14,1,2]]],
+    [10210,4375,0,0,7200,[[14,1,2]]],
+    [21441,9190,0,0,18000,[[14,1,3]]],
+    [45027,19298,0,0,43200,[[14,1,3]]],
+    [94557,40524,0,0,86400,[[14,1,4]]],
+    [198570,85102,0,0,172800,[[14,1,4]]],
+    [416997,178716,0,0,259200,[[14,1,5]]],
+  ], [0,1,2,4,5,6,6,6,6,6], {
+    produce: [2,4,7,11,16,22,29,37,46,56],
+    cycleTime: [10,10,10,10,10,10,10,10,10,10],
+    capacity: [720,2160,5670,13365,29160,60142,118918,227584,424414,775018],
+  }],
+  // 4 Magma Pump (resource) — INFERNOYARDPROPS.as:387
+  [4, "Magma Pump", "resource", 1, [
+    [247,577,0,0,20,[[14,1,1]]],
+    [520,1212,0,0,300,[[14,1,1]]],
+    [1090,2546,0,0,1200,[[14,1,1]]],
+    [2290,5348,0,0,3600,[[14,1,2]]],
+    [4810,11231,0,0,7200,[[14,1,2]]],
+    [10108,23585,0,0,18000,[[14,1,3]]],
+    [21227,49529,0,0,43200,[[14,1,3]]],
+    [44580,104012,0,0,86400,[[14,1,4]]],
+    [93600,218427,0,0,172800,[[14,1,4]]],
+    [196584,458696,0,0,259200,[[14,1,5]]],
+  ], [0,1,2,4,5,6,6,6,6,6], {
+    produce: [2,4,7,11,16,22,29,37,46,56],
+    cycleTime: [10,10,10,10,10,10,10,10,10,10],
+    capacity: [720,2160,5670,13365,29160,60142,118918,227584,424414,775018],
+  }],
+  // 5 Flinger (special) — INFERNOYARDPROPS.as:518
+  [5, "Flinger", "special", 2, [
+    [1000,1000,500,0,900,[[14,1,1]]],
+    [64300,64300,32150,0,10800,[[14,1,3],[11,1,1]]],
+    [283600,283600,141800,0,32400,[[14,1,4],[11,1,1]]],
+    [1247840,1247840,623920,0,97200,[[14,1,4],[11,1,1]]],
+  ], [0,1,1,1,1,1,1,1,1,1]],
+  // 6 Resource Pod (special) — INFERNOYARDPROPS.as:612
+  [6, "Resource Pod", "special", 1, [
+    [3010,1855,0,0,1200,[[14,1,1]]],
+    [7421,3710,0,0,1800,[[14,1,1]]],
+    [14843,7421,0,0,2700,[[14,1,1]]],
+    [29687,14843,0,0,4050,[[14,1,2]]],
+    [59375,29687,0,0,6075,[[14,1,3]]],
+    [118750,59375,0,0,9112,[[14,1,3]]],
+    [237500,118750,0,0,13668,[[14,1,4]]],
+    [475000,237500,0,0,20503,[[14,1,4]]],
+    [950000,475000,0,0,30754,[[14,1,5]]],
+    [1900000,950000,0,0,46132,[[14,1,6]]],
+  ], [0,2,2,3,4,5,5], {
+    produce: [],
+    cycleTime: [],
+    capacity: [7500,15000,30000,60000,120000,240000,480000,960000,1920000,3840000],
+  }],
+  // 8 Strongbox (special) — INFERNOYARDPROPS.as:768
+  [8, "Strongbox", "special", 2, [
+    [1800,2300,0,0,600,[[14,1,1],[13,1,1]]],
+    [28800,18400,0,0,18000,[[14,1,2]]],
+    [115200,147200,0,0,72000,[[14,1,3]]],
+    [460800,588800,0,0,129600,[[14,1,4]]],
+  ], [0,1,1,1,1,1,1,1,1,1]],
+  // 9 Monster Juicer (special) — INFERNOYARDPROPS.as:833
+  [9, "Monster Juicer", "special", 2, [
+    [1000000,1000000,1000000,0,43200,[[14,1,1],[128,1,1]]],
+    [250000,250000,0,0,21600,[[14,1,1],[128,1,1]]],
+    [500000,500000,0,0,43200,[[14,1,1],[128,1,1]]],
+  ], [0,0,0,1,1,1,1,1,1,1]],
+  // 10 Yard Planner (special) — INFERNOYARDPROPS.as:891
+  [10, "Yard Planner", "special", 2, [
+    [250000,250000,0,0,43200,[[14,1,3]]],
+  ], [0,0,0,1,1,1,1,1,1,1]],
+  // 11 Map Room (special) — INFERNOYARDPROPS.as:935
+  [11, "Map Room", "special", 2, [
+    [2000,2000,0,0,900,[[14,1,1]]],
+  ], [0,1,1,1,1,1,1,1,1,1]],
+  // 12 General Store (special) — INFERNOYARDPROPS.as:978
+  [12, "General Store", "special", 2, [
+    [1080,720,0,0,10,[[14,1,1]]],
+  ], [0,1,1,1,1,1,1,1,1,1]],
+  // 13 Incubator (special) — INFERNOYARDPROPS.as:1020
+  [13, "Incubator", "special", 2, [
+    [2000,2000,0,0,900,[[14,1,1],[128,1,1]]],
+    [21227,49529,0,0,3600,[[14,1,3],[8,1,1]]],
+    [93600,218427,0,0,43200,[[14,1,4]]],
+  ], [0,1,2,3,4,5,5,5,5,5]],
+  // 14 Under Hall (special) — INFERNOYARDPROPS.as:1079
+  [14, "Under Hall", "special", 2, [
+    [0,0,0,0,10,[]],
+    [7000,7000,0,0,600,[[14,1,1]]],
+    [42000,42000,0,0,14400,[[14,1,2]]],
+    [240000,240000,0,0,57600,[[14,1,3]]],
+    [1400000,1400000,0,0,172800,[[14,1,4]]],
+    [7560000,7560000,0,0,345600,[[14,1,5]]],
+  ], [1,1,1,1,1,1,1,1,1,1]],
+  // 15 Compound (special) — INFERNOYARDPROPS.as:1223
+  [15, "Compound", "special", 2, [
+    [2160,2160,0,0,300,[[14,1,1]]],
+    [8640,8640,0,0,4500,[[14,1,3],[8,1,1]]],
+    [34560,34560,0,0,10800,[[14,1,4],[8,1,1]]],
+    [138240,138240,0,0,28800,[[14,1,5],[8,1,1]]],
+    [552960,552960,0,0,72000,[[14,1,6],[8,1,1]]],
+    [2211840,2211840,0,0,144000,[[14,1,6],[8,1,1]]],
+  ], [0,0,0,0,0,0]],
+  // 16 Hatchery Control Center (special) — INFERNOYARDPROPS.as:1301
+  [16, "Hatchery Control Center", "special", 2, [
+    [4000000,4000000,4000000,0,90000,[[14,1,3],[13,3,2]]],
+  ], [0,0,0,0,0,0]],
+  // 17 Block (wall) — INFERNOYARDPROPS.as:1343
+  [17, "Block", "wall", 3, [
+    [1000,0,0,0,5,[[14,1,2]]],
+    [0,10000,0,0,5,[[14,1,3]]],
+    [100000,100000,0,0,5,[[14,1,4]]],
+  ], [0,0,30,60,120,200,220]],
+  // 18 Stone Block (wall) — INFERNOYARDPROPS.as:1418
+  [18, "Stone Block", "wall", 3, [
+    [0,2000,0,0,5,[[14,1,3]]],
+  ], [0,0,10,20,40,60,70,90,90,90]],
+  // 19 Wild Monster Baiter (special) — INFERNOYARDPROPS.as:1457
+  [19, "Wild Monster Baiter", "special", 2, [
+    [25000,25000,15000,0,18000,[[14,1,4],[8,1,1]]],
+    [1000000,1000000,500000,0,36000,[[14,1,4],[8,1,2]]],
+    [2000000,2000000,1000000,0,72000,[[14,1,4],[8,1,3]]],
+    [4000000,4000000,2000000,0,144000,[[14,1,5],[8,1,4]]],
+    [6000000,6000000,4000000,0,288000,[[14,1,6],[8,1,4]]],
+    [10000000,10000000,6000000,0,576000,[[14,1,7],[8,1,4]]],
+    [16000000,16000000,10000000,0,1152000,[[14,1,8],[8,1,4]]],
+  ], [0,0,0,0,0,0]],
+  // 20 Blast Tower (tower) — INFERNOYARDPROPS.as:1588
+  [20, "Blast Tower", "tower", 3, [
+    [2000,1500,500,0,30,[[14,1,1]]],
+    [10000,7500,2500,0,900,[[14,1,2]]],
+    [50000,37500,12500,0,2700,[[14,1,3]]],
+    [250000,187500,62500,0,8100,[[14,1,4]]],
+    [1250000,937500,312500,0,24300,[[14,1,4]]],
+    [6250000,4687500,1562500,0,72900,[[14,1,5]]],
+    [9375000,7000000,1562500,0,172800,[[14,1,6]]],
+  ], [0,0,0,0,0,0]],
+  // 21 Sharpshooter (tower) — INFERNOYARDPROPS.as:1764
+  [21, "Sharpshooter", "tower", 3, [
+    [1500,2000,500,0,30,[[14,1,1]]],
+    [7500,10000,2500,0,900,[[14,1,2]]],
+    [37500,50000,12500,0,2700,[[14,1,3]]],
+    [187500,250000,62500,0,18000,[[14,1,4]]],
+    [937500,1250000,312500,0,43200,[[14,1,4]]],
+    [4687500,6250000,1562500,0,86400,[[14,1,5]]],
+    [7031250,9375000,2343750,0,172800,[[14,1,6]]],
+  ], [0,2,3,3,4,4,6]],
+  // 22 Monster Bunker (tower) — INFERNOYARDPROPS.as:1900
+  [22, "Monster Bunker", "tower", 3, [
+    [250000,187500,62500,0,21600,[[14,1,3],[15,1,1]]],
+    [1000000,1000000,500000,0,43200,[[14,1,4],[15,1,2]]],
+    [2000000,2000000,1000000,0,86400,[[14,1,5],[15,1,3]]],
+    [4000000,4000000,2000000,0,172800,[[14,1,9],[15,1,3]]],
+  ], [0,0,0,0,0,0]],
+  // 23 Laser Tower (tower) — INFERNOYARDPROPS.as:1996
+  [23, "Laser Tower", "tower", 3, [
+    [500000,250000,100000,0,18000,[[14,1,4]]],
+    [1000000,500000,200000,0,86400,[[14,1,5]]],
+    [2000000,1000000,400000,0,172800,[[14,1,6]]],
+    [4000000,2000000,800000,0,259200,[[14,1,7]]],
+    [8000000,4000000,1600000,0,388800,[[14,1,8]]],
+    [16000000,8000000,3200000,0,777600,[[14,1,9]]],
+  ], [0,0,0,0,0,0]],
+  // 24 Booby Trap (trap) — INFERNOYARDPROPS.as:2124
+  [24, "Booby Trap", "trap", 3, [
+    [1000,1000,1000,0,5,[[14,1,2]]],
+  ], [0,0,8,15,20,28,35]],
+  // 25 Tesla Tower (tower) — INFERNOYARDPROPS.as:2205
+  [25, "Tesla Tower", "tower", 3, [
+    [187500,250000,62500,0,18000,[[14,1,4]]],
+    [750000,1000000,250000,0,86400,[[14,1,5]]],
+    [2250000,3000000,750000,0,172800,[[14,1,6]]],
+    [5250000,5000000,1250000,0,345600,[[14,1,7]]],
+    [12000000,10000000,2000000,0,518400,[[14,1,7]]],
+    [18000000,15000000,5000000,0,691200,[[14,1,9]]],
+  ], [0,0,0,0,0,0]],
+  // 26 bi_academy (special) — INFERNOYARDPROPS.as:2331
+  [26, "bi_academy", "special", 2, [
+    [100000,100000,0,0,10800,[[14,1,3],[8,1,2]]],
+    [250000,250000,0,0,21600,[[14,1,4],[8,1,3]]],
+    [400000,400000,0,0,43200,[[14,1,5],[8,1,4]]],
+    [800000,800000,0,0,86400,[[14,1,6],[8,1,4]]],
+  ], [1,1,1,1,2,2,2]],
+  // 27 Horsey (enemy) — INFERNOYARDPROPS.as:2411
+  [27, "Horsey", "enemy", 999, [
+    [0,0,0,0,5,[[14,1,1]]],
+  ], [1]],
+  // 28 American Flag (decoration) — INFERNOYARDPROPS.as:2445
+  [28, "American Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 29 British Flag (decoration) — INFERNOYARDPROPS.as:2479
+  [29, "British Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 30 Australian Flag (decoration) — INFERNOYARDPROPS.as:2513
+  [30, "Australian Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 31 Brazilian Flag (decoration) — INFERNOYARDPROPS.as:2547
+  [31, "Brazilian Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 32 European Flag (decoration) — INFERNOYARDPROPS.as:2581
+  [32, "European Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 33 French Flag (decoration) — INFERNOYARDPROPS.as:2616
+  [33, "French Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 34 Indonesian Flag (decoration) — INFERNOYARDPROPS.as:2650
+  [34, "Indonesian Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 35 Italian Flag (decoration) — INFERNOYARDPROPS.as:2684
+  [35, "Italian Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 36 Malaysian Flag (decoration) — INFERNOYARDPROPS.as:2718
+  [36, "Malaysian Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 37 Dutch Flag (decoration) — INFERNOYARDPROPS.as:2752
+  [37, "Dutch Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 38 New Zealand Flag (decoration) — INFERNOYARDPROPS.as:2786
+  [38, "New Zealand Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 39 Norwegian Flag (decoration) — INFERNOYARDPROPS.as:2820
+  [39, "Norwegian Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 40 Polish Flag (decoration) — INFERNOYARDPROPS.as:2854
+  [40, "Polish Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 41 Swedish Flag (decoration) — INFERNOYARDPROPS.as:2888
+  [41, "Swedish Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 42 Turkish Flag (decoration) — INFERNOYARDPROPS.as:2922
+  [42, "Turkish Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 43 Canadian Flag (decoration) — INFERNOYARDPROPS.as:2956
+  [43, "Canadian Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 44 Danish Flag (decoration) — INFERNOYARDPROPS.as:2990
+  [44, "Danish Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 45 German Flag (decoration) — INFERNOYARDPROPS.as:3024
+  [45, "German Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 46 Filipino Flag (decoration) — INFERNOYARDPROPS.as:3058
+  [46, "Filipino Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 47 Singaporean Flag (decoration) — INFERNOYARDPROPS.as:3092
+  [47, "Singaporean Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 48 Austrian Flag (decoration) — INFERNOYARDPROPS.as:3126
+  [48, "Austrian Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 49 Pirate Flag (decoration) — INFERNOYARDPROPS.as:3160
+  [49, "Pirate Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 50 Peace Flag (decoration) — INFERNOYARDPROPS.as:3195
+  [50, "Peace Flag", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 51 Catapult (special) — INFERNOYARDPROPS.as:3229
+  [51, "Catapult", "special", 2, [
+    [75000,75000,75000,0,5400,[[14,1,3],[5,1,1]]],
+    [128600,128600,128600,0,10800,[[14,1,4],[5,1,1]]],
+    [257200,257200,257200,0,21600,[[14,1,5],[5,1,1]]],
+    [514400,514400,514400,0,43200,[[14,1,6],[5,1,1],[11,1,2]]],
+  ], [0,0,0,0,0,0]],
+  // 52 Simple Sign (taunt) — INFERNOYARDPROPS.as:3315
+  [52, "Simple Sign", "taunt", 999, [
+    [100000,100000,100000,100000,0,[]],
+  ], [0]],
+  // 55 Acorn (decoration) — INFERNOYARDPROPS.as:3396
+  [55, "Acorn", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 56 Beehive (decoration) — INFERNOYARDPROPS.as:3429
+  [56, "Beehive", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 57 Bird House (decoration) — INFERNOYARDPROPS.as:3462
+  [57, "Bird House", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 58 Camping Tent (decoration) — INFERNOYARDPROPS.as:3495
+  [58, "Camping Tent", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 59 Childrens Jax (decoration) — INFERNOYARDPROPS.as:3528
+  [59, "Childrens Jax", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 60 Red Gnome (decoration) — INFERNOYARDPROPS.as:3561
+  [60, "Red Gnome", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 61 Blue Gnome (decoration) — INFERNOYARDPROPS.as:3594
+  [61, "Blue Gnome", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 62 Green Gnome (decoration) — INFERNOYARDPROPS.as:3627
+  [62, "Green Gnome", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 63 Hammock (decoration) — INFERNOYARDPROPS.as:3660
+  [63, "Hammock", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 64 Lawn Chair (decoration) — INFERNOYARDPROPS.as:3693
+  [64, "Lawn Chair", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 65 Outhouse (decoration) — INFERNOYARDPROPS.as:3726
+  [65, "Outhouse", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 66 Pinecone (decoration) — INFERNOYARDPROPS.as:3759
+  [66, "Pinecone", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 67 Rock (decoration) — INFERNOYARDPROPS.as:3792
+  [67, "Rock", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 68 Toy Raceway (decoration) — INFERNOYARDPROPS.as:3825
+  [68, "Toy Raceway", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 69 Scarecrow (decoration) — INFERNOYARDPROPS.as:3858
+  [69, "Scarecrow", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 70 Sun Dial (decoration) — INFERNOYARDPROPS.as:3891
+  [70, "Sun Dial", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 71 Tiki Torch (decoration) — INFERNOYARDPROPS.as:3924
+  [71, "Tiki Torch", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 72 Walnut (decoration) — INFERNOYARDPROPS.as:3958
+  [72, "Walnut", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 73 Tombstone (decoration) — INFERNOYARDPROPS.as:3991
+  [73, "Tombstone", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 74 Dead Pokey (decoration) — INFERNOYARDPROPS.as:4024
+  [74, "Dead Pokey", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 75 Dead Octo-Ooze (decoration) — INFERNOYARDPROPS.as:4057
+  [75, "Dead Octo-Ooze", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 76 Dead Bolt (decoration) — INFERNOYARDPROPS.as:4090
+  [76, "Dead Bolt", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 77 Dead Bandito (decoration) — INFERNOYARDPROPS.as:4123
+  [77, "Dead Bandito", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 78 Dead Brain (decoration) — INFERNOYARDPROPS.as:4156
+  [78, "Dead Brain", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 79 Dead Crabatron (decoration) — INFERNOYARDPROPS.as:4189
+  [79, "Dead Crabatron", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 80 Dead D.A.V.E. (decoration) — INFERNOYARDPROPS.as:4222
+  [80, "Dead D.A.V.E.", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 81 Dead Eye-ra (decoration) — INFERNOYARDPROPS.as:4255
+  [81, "Dead Eye-ra", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 82 Dead Fang (decoration) — INFERNOYARDPROPS.as:4288
+  [82, "Dead Fang", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 83 Dead Fink (decoration) — INFERNOYARDPROPS.as:4321
+  [83, "Dead Fink", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 84 Dead Ichi (decoration) — INFERNOYARDPROPS.as:4354
+  [84, "Dead Ichi", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 85 Dead Project-X (decoration) — INFERNOYARDPROPS.as:4387
+  [85, "Dead Project-X", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 86 Blackberry Bush (decoration) — INFERNOYARDPROPS.as:4420
+  [86, "Blackberry Bush", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 87 Bonsai Tree (decoration) — INFERNOYARDPROPS.as:4450
+  [87, "Bonsai Tree", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 88 Cactus (decoration) — INFERNOYARDPROPS.as:4483
+  [88, "Cactus", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 89 Monster Fly Trap (decoration) — INFERNOYARDPROPS.as:4516
+  [89, "Monster Fly Trap", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 90 Thorns (decoration) — INFERNOYARDPROPS.as:4549
+  [90, "Thorns", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 91 Pink Flowers (decoration) — INFERNOYARDPROPS.as:4582
+  [91, "Pink Flowers", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 92 Purple Flowers (decoration) — INFERNOYARDPROPS.as:4615
+  [92, "Purple Flowers", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 93 Red Flowers (decoration) — INFERNOYARDPROPS.as:4648
+  [93, "Red Flowers", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 94 White Flowers (decoration) — INFERNOYARDPROPS.as:4681
+  [94, "White Flowers", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 95 Yellow Flowers (decoration) — INFERNOYARDPROPS.as:4714
+  [95, "Yellow Flowers", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 96 Baseball Trophy (decoration) — INFERNOYARDPROPS.as:4747
+  [96, "Baseball Trophy", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 97 Football Trophy (decoration) — INFERNOYARDPROPS.as:4781
+  [97, "Football Trophy", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 98 Soccer Trophy (decoration) — INFERNOYARDPROPS.as:4815
+  [98, "Soccer Trophy", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 99 Statue of Liberty (decoration) — INFERNOYARDPROPS.as:4849
+  [99, "Statue of Liberty", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 100 Eiffel Tower (decoration) — INFERNOYARDPROPS.as:4883
+  [100, "Eiffel Tower", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 101 Big Ben (decoration) — INFERNOYARDPROPS.as:4917
+  [101, "Big Ben", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 102 Swimming Pool (decoration) — INFERNOYARDPROPS.as:4951
+  [102, "Swimming Pool", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 103 Pond (decoration) — INFERNOYARDPROPS.as:4984
+  [103, "Pond", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 104 Zen Garden (decoration) — INFERNOYARDPROPS.as:5014
+  [104, "Zen Garden", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 105 Fountain (decoration) — INFERNOYARDPROPS.as:5047
+  [105, "Fountain", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 106 Tea Garden (decoration) — INFERNOYARDPROPS.as:5080
+  [106, "Tea Garden", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 107 Monster Skull (decoration) — INFERNOYARDPROPS.as:5113
+  [107, "Monster Skull", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 108 Puzzle Cube (unsolved) (decoration) — INFERNOYARDPROPS.as:5146
+  [108, "Puzzle Cube (unsolved)", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 109 Puzzle Cube (solved) (decoration) — INFERNOYARDPROPS.as:5179
+  [109, "Puzzle Cube (solved)", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 110 D.A.V.E. Pumpkin (decoration) — INFERNOYARDPROPS.as:5212
+  [110, "D.A.V.E. Pumpkin", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 111 Mini-Pumpkin (decoration) — INFERNOYARDPROPS.as:5245
+  [111, "Mini-Pumpkin", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [6]],
+  // 113 Radio Tower (special) — INFERNOYARDPROPS.as:5292
+  [113, "Radio Tower", "special", 2, [
+    [2000,2000,2000,0,300,[[14,1,2]]],
+  ], [1,1,1,1,1,1,1,1,1,1]],
+  // 114 Champion Cage (cage) — INFERNOYARDPROPS.as:5327
+  [114, "Champion Cage", "cage", 3, [
+    [500000,500000,250000,0,86400,[[14,1,4]]],
+  ], [0,0,0,0,0,0]],
+  // 115 Aerial Defense Tower (tower) — INFERNOYARDPROPS.as:5396
+  [115, "Aerial Defense Tower", "tower", 3, [
+    [215000,280000,62500,0,18000,[[14,1,4]]],
+    [850000,1200000,250000,0,86400,[[14,1,5]]],
+    [2750000,3400000,750000,0,172800,[[14,1,6]]],
+    [5750000,5200000,1250000,0,345600,[[14,1,7]]],
+    [13500000,11000000,2000000,0,518400,[[14,1,7]]],
+    [16000000,14000000,4000000,0,691200,[[14,1,9]]],
+  ], [0,0,0,0,0,0]],
+  // 116 Monster Lab (special) — INFERNOYARDPROPS.as:5520
+  [116, "Monster Lab", "special", 2, [
+    [100000,100000,0,0,10800,[[14,1,5],[8,1,3],[26,1,2]]],
+    [300000,300000,0,0,43200,[[14,1,6],[8,1,4],[26,1,3]]],
+    [600000,600000,0,0,86400,[[14,1,7],[8,1,4],[26,1,4]]],
+  ], [0,0,0,0,0,0]],
+  // 117 Heavy Trap (trap) — INFERNOYARDPROPS.as:5576
+  [117, "Heavy Trap", "trap", 3, [
+    [50000,50000,50000,0,5,[[14,1,4]]],
+  ], [0,0,0,0,0,0]],
+  // 118 Railgun (tower) — INFERNOYARDPROPS.as:5655
+  [118, "Railgun", "tower", 3, [
+    [6000000,6000000,6000000,6000000,1,[[14,1,9]]],
+    [3600000,4320000,2880000,0,86400,[[14,1,6]]],
+    [6480000,7776000,5184000,0,172800,[[14,1,7]]],
+    [11664000,13996800,9331200,0,345600,[[14,1,7]]],
+    [16995200,18194240,16796160,0,518400,[[14,1,8]]],
+    [20220000,24202000,19000000,0,691200,[[14,1,9]]],
+  ], [0,0,0,0,0,0]],
+  // 119 Champion Chamber (special) — INFERNOYARDPROPS.as:5784
+  [119, "Champion Chamber", "special", 3, [
+    [500000,500000,250000,0,86400,[[14,1,4],[114,1,1]]],
+  ], [0,0,0,0,0,0,0,0,0,0]],
+  // 127 Inferno Cavern (enemy) — INFERNOYARDPROPS.as:5931
+  [127, "Inferno Cavern", "enemy", 999, [
+    [0,0,0,0,5,[[14,1,1]]],
+    [0,0,0,0,5,[[14,1,1]]],
+    [0,0,0,0,5,[[14,1,1]]],
+    [0,0,0,0,5,[[14,1,1]]],
+    [0,0,0,0,5,[[14,1,1]]],
+  ], [0,1,1,1,1,1]],
+  // 128 Compound (tower) — INFERNOYARDPROPS.as:6007
+  [128, "Compound", "tower", 2, [
+    [2160,2160,0,0,300,[[14,1,1]]],
+    [8640,8640,0,0,4500,[[14,1,2]]],
+    [34560,34560,0,0,10800,[[14,1,3]]],
+    [138240,138240,0,0,28800,[[14,1,4]]],
+    [552960,552960,0,0,72000,[[14,1,5]]],
+    [2211840,2211840,0,0,144000,[[14,1,6],[8,1,1]]],
+  ], [0,1,1,1,1,1,1]],
+  // 129 Quake Tower (tower) — INFERNOYARDPROPS.as:6108
+  [129, "Quake Tower", "tower", 3, [
+    [312500,187500,125000,0,18000,[[14,1,3]]],
+    [1250000,750000,500000,0,86400,[[14,1,4]]],
+    [3750000,2250000,1500000,0,172800,[[14,1,4]]],
+    [7187500,4312500,2875000,0,259200,[[14,1,5]]],
+    [12000000,9000000,6000000,0,388800,[[14,1,5]]],
+    [16500000,12687500,7562500,0,475200,[[14,1,6]]],
+  ], [0,0,0,2,2,4,4]],
+  // 130 Blast Tower (tower) — INFERNOYARDPROPS.as:6277
+  [130, "Blast Tower", "tower", 3, [
+    [2000,1500,500,0,30,[[14,1,1]]],
+    [10000,7500,2500,0,900,[[14,1,2]]],
+    [50000,37500,12500,0,2700,[[14,1,3]]],
+    [250000,187500,62500,0,8100,[[14,1,4]]],
+    [1250000,937500,312500,0,24300,[[14,1,4]]],
+    [6250000,4687500,1562500,0,72900,[[14,1,5]]],
+    [9375000,7000000,1562500,0,172800,[[14,1,6]]],
+  ], [0,2,3,3,4,4,6]],
+  // 131 Victory Totem Pole (decoration) — INFERNOYARDPROPS.as:6410
+  [131, "Victory Totem Pole", "decoration", 4, [
+    [0,0,0,0,0,[]],
+    [0,0,0,0,0,[]],
+    [0,0,0,0,0,[]],
+    [0,0,0,0,0,[]],
+    [0,0,0,0,0,[]],
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 132 Magma Tower (tower) — INFERNOYARDPROPS.as:6541
+  [132, "Magma Tower", "tower", 3, [
+    [187500,250000,62500,0,18000,[[14,1,3]]],
+    [750000,1000000,250000,0,86400,[[14,1,4]]],
+    [2250000,3000000,750000,0,172800,[[14,1,4]]],
+    [5250000,5000000,1250000,0,345600,[[14,1,5]]],
+    [12000000,10000000,2000000,0,518400,[[14,1,5]]],
+    [16000000,15000000,3000000,0,791200,[[14,1,6]]],
+  ], [0,0,0,1,2,2,3]],
+  // 133 b_siegefactory (special) — INFERNOYARDPROPS.as:6673
+  [133, "b_siegefactory", "special", 2, [
+    [0,0,0,0,0,[]],
+  ], [1,1,1,1,1,1,1,1,1,1]],
+  // 134 b_siegeworks (special) — INFERNOYARDPROPS.as:6750
+  [134, "b_siegeworks", "special", 2, [
+    [0,0,0,0,0,[]],
+  ], [1,1,1,1,1,1,1,1,1,1]],
+  // 135 bdg_dave_trophy (decoration) — INFERNOYARDPROPS.as:6829
+  [135, "bdg_dave_trophy", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+];
+
+/**
+ * `[type, blocked, hp, fortify, capacity]`, one per Inferno row, in the shape of
+ * {@link OUTPOST_TRAIT_ROWS}. `capacity` is the Housing Bunker's monster room
+ * (`[200, 300, 520, 780, 1140, 1820]`) and the blocked Flinger's and Housing's.
+ */
+export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
+  [1, false, [500,950,1800,3400,6500,12000,24000,45000,85000,165000], [], []],
+  [2, false, [500,950,1800,3400,6500,12000,24000,45000,85000,165000], [], []],
+  [3, false, [500,950,1800,3400,6500,12000,24000,45000,85000,165000], [], []],
+  [4, false, [500,950,1800,3400,6500,12000,24000,45000,85000,165000], [], []],
+  [5, true, [4000,8000,16000,28000], [], [200,300,520,640,1140,1820]],
+  [6, false, [750,1400,2550,4750,8800,16250,30000,55600,105000,190000], [], []],
+  [8, false, [4000,16000,32000,64000], [], []],
+  [9, false, [16000,32000,64000], [], []],
+  [10, false, [16000], [], []],
+  [11, true, [5000,10000], [], []],
+  [12, true, [4000], [], []],
+  [13, false, [4000,16000,32000], [], []],
+  [14, true, [4000,8800,20000,42000,94000,200000], [], []],
+  [15, true, [4000,14000,25000,43000,75000,130000], [], [200,260,320,380,450,540]],
+  [16, true, [64000], [], []],
+  [17, false, [1000,2300,5750,18000,27000], [], []],
+  [18, true, [3600], [], []],
+  [19, true, [1000,1500,2250,3375,5000,7500,12000], [], [600,900,1200,1500,2100,3200,4800]],
+  [20, true, [6000,9000,12600,17640,26460,34400,45000,58000,75500,98200], [], []],
+  [21, false, [6000,9000,12600,17640,26460,34400,45000], [], []],
+  [22, true, [10000,24500,52000,75000], [], [380,450,540,640]],
+  [23, true, [9000,12600,17640,26460,34400,42200], [], []],
+  [24, false, [10], [], []],
+  [25, true, [15000,22000,30000,48000,60000,72000], [], []],
+  [26, false, [6000,10000,14000,20000], [], []],
+  [27, true, [1], [], []],
+  [28, true, [100], [], []],
+  [29, true, [100], [], []],
+  [30, true, [100], [], []],
+  [31, true, [100], [], []],
+  [32, true, [100], [], []],
+  [33, true, [100], [], []],
+  [34, true, [100], [], []],
+  [35, true, [100], [], []],
+  [36, true, [100], [], []],
+  [37, true, [100], [], []],
+  [38, true, [100], [], []],
+  [39, true, [100], [], []],
+  [40, true, [100], [], []],
+  [41, true, [100], [], []],
+  [42, true, [100], [], []],
+  [43, true, [100], [], []],
+  [44, true, [100], [], []],
+  [45, true, [100], [], []],
+  [46, true, [100], [], []],
+  [47, true, [100], [], []],
+  [48, true, [100], [], []],
+  [49, true, [100], [], []],
+  [50, true, [100], [], []],
+  [51, true, [4000,8000,16000,32000], [], []],
+  [52, true, [100], [], []],
+  [55, true, [100], [], []],
+  [56, true, [100], [], []],
+  [57, true, [100], [], []],
+  [58, true, [100], [], []],
+  [59, true, [100], [], []],
+  [60, true, [100], [], []],
+  [61, true, [100], [], []],
+  [62, true, [100], [], []],
+  [63, true, [100], [], []],
+  [64, true, [100], [], []],
+  [65, true, [100], [], []],
+  [66, true, [100], [], []],
+  [67, true, [100], [], []],
+  [68, true, [100], [], []],
+  [69, true, [100], [], []],
+  [70, true, [100], [], []],
+  [71, true, [100], [], []],
+  [72, true, [100], [], []],
+  [73, true, [100], [], []],
+  [74, true, [100], [], []],
+  [75, true, [100], [], []],
+  [76, true, [100], [], []],
+  [77, true, [100], [], []],
+  [78, true, [100], [], []],
+  [79, true, [100], [], []],
+  [80, true, [100], [], []],
+  [81, true, [100], [], []],
+  [82, true, [100], [], []],
+  [83, true, [100], [], []],
+  [84, true, [100], [], []],
+  [85, true, [100], [], []],
+  [86, true, [100], [], []],
+  [87, true, [100], [], []],
+  [88, true, [100], [], []],
+  [89, true, [100], [], []],
+  [90, true, [100], [], []],
+  [91, true, [100], [], []],
+  [92, true, [100], [], []],
+  [93, true, [100], [], []],
+  [94, true, [100], [], []],
+  [95, true, [100], [], []],
+  [96, true, [100], [], []],
+  [97, true, [100], [], []],
+  [98, true, [100], [], []],
+  [99, true, [100], [], []],
+  [100, true, [100], [], []],
+  [101, true, [100], [], []],
+  [102, true, [100], [], []],
+  [103, true, [100], [], []],
+  [104, true, [100], [], []],
+  [105, true, [100], [], []],
+  [106, true, [100], [], []],
+  [107, true, [100], [], []],
+  [108, true, [100], [], []],
+  [109, true, [100], [], []],
+  [110, true, [100], [], []],
+  [111, true, [100], [], []],
+  [113, true, [3400], [], []],
+  [114, true, [10000], [], []],
+  [115, true, [15000,22000,30000,48000,60000,72000], [], []],
+  [116, true, [9000,16000,24000,32000], [], []],
+  [117, true, [10], [], []],
+  [118, true, [17640,34400,45000,58000,75500,90000], [], []],
+  [119, true, [16000], [], []],
+  [127, false, [1,1,1,1,1], [], []],
+  [128, false, [4000,14000,25000,43000,75000,130000], [], [200,300,520,780,1140,1820]],
+  [129, false, [10000,16000,22000,28000,34000,48000], [], []],
+  [130, false, [6000,9000,12600,17640,26460,34400,45000], [], []],
+  [131, true, [100,100,100,100,100,100], [], []],
+  [132, false, [15000,22000,30000,49000,59000,70000], [], []],
+  [133, true, [100,100,100,100,100,100], [], []],
+  [134, true, [100,100,100,100,100,100], [], []],
+  [135, true, [100], [], []],
+];
+
+/**
+ * The types the Inferno build menu may offer: filed under one of the four menu
+ * tabs (`client/scripts/BUILDINGSPOPUP.as:28-35`), not `block`ed (`:132`), and
+ * allowed at least one at some Under Hall level. Everything else in
+ * {@link INFERNO_COST_ROWS} (the Under Hall, Flinger, Housing, …) is blocked.
+ */
+export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 10, 13, 17, 21, 24, 26, 128, 129, 130, 132];

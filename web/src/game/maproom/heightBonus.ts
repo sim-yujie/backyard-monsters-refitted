@@ -28,19 +28,3 @@ export const heightBonus = (height: number): HeightBonus => {
     incomePct: Math.round((AVERAGE_ALTITUDE * 100) / incomeCell - 100),
   };
 };
-
-const signed = (percent: number): string =>
-  percent === 0 ? "0%" : `${percent < 0 ? "−" : "+"}${Math.abs(percent)}%`;
-
-/** "Tower range +20%" */
-export const towerBonusText = (bonus: HeightBonus): string => `Tower range ${signed(bonus.towerPct)}`;
-
-/** "Income −17%" */
-export const incomeBonusText = (bonus: HeightBonus): string => `Income ${signed(bonus.incomePct)}`;
-
-/** One line for a chip or a dialog: "Hill: tower range +20%, income −17%". */
-export const heightBonusLine = (height: number): string => {
-  const bonus = heightBonus(height);
-  const place = bonus.towerPct > 0 ? "High ground" : bonus.incomePct > 0 ? "Low ground" : "Level ground";
-  return `${place}: ${towerBonusText(bonus).toLowerCase()}, ${incomeBonusText(bonus).toLowerCase()}`;
-};

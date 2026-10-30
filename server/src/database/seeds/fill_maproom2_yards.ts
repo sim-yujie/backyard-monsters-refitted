@@ -45,7 +45,7 @@ try {
     const { given, notBlank } = await giveSeededYards(em, {
       rng: mulberry32(seed),
       now: Math.floor(Date.now() / 1000),
-      daysPerLevel: botConfig().daysPerLevel,
+      pace: botConfig().pace,
       onBatch: (batch) => {
         for (const player of batch) byLevel[player.level] = (byLevel[player.level] ?? 0) + 1;
         process.stdout.write(".");

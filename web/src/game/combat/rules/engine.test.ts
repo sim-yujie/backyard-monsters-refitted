@@ -5,6 +5,7 @@ import {
   bucketCost,
   bunkerGarrisons,
   bunkerLossRecord,
+  BUNKER_DOOR_FRAMES,
   createBattle,
   dropRadius,
   flingCost,
@@ -505,6 +506,37 @@ describe("the Tesla Tower's charge and zaps (issue #266)", () => {
     // then up to `rate * 2` for the next `Fire`.
     expect(charges[1]! - lastZap.tick).toBeGreaterThanOrEqual(60);
     expect(charges[1]! - lastZap.tick).toBeLessThanOrEqual(92 + 20);
+  });
+
+  it("says when it stops zapping, and by when it charges again while it still has a target", () => {
+    const battle = teslaBattle({ C15: 1 });
+    const charges: number[] = [];
+    const rests: { tick: number; rearmBy: number | null }[] = [];
+    for (let step = 0; step < 700 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "charge") charges.push(event.tick);
+        if (event.kind === "coilRest") rests.push({ tick: event.tick, rearmBy: event.rearmBy });
+      }
+    }
+    expect(charges.length).toBeGreaterThanOrEqual(2);
+    // Its 10 zaps spent, it rests between its charges, and the next comes by `rearmBy`.
+    const rest = rests.find((one) => one.tick > charges[0]! && one.tick < charges[1]!)!;
+    expect(rest.rearmBy).not.toBeNull();
+    expect(charges[1]!).toBeLessThanOrEqual(rest.rearmBy!);
+    expect(charges[1]!).toBeGreaterThan(rest.tick);
+  });
+
+  it("rests for want of a target once its last target is dead", () => {
+    const battle = teslaBattle({ C1: 1 });
+    const rests: (number | null)[] = [];
+    for (let step = 0; step < 600 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "coilRest") rests.push(event.rearmBy);
+      }
+    }
+    expect(rests.at(-1)).toBeNull();
   });
 
   it("kills a clump of Pokeys, a charge at a time", () => {
@@ -1866,7 +1898,8 @@ describe("a bunker's reach (issue #91)", () => {
    * A level 1 Monster Bunker (range 300, 90 x 90) at the origin scans from the
    * middle of its footprint, (45, 45) (`HOUSINGBUNKER.as:156`,
    * `BUILDING22.as:90`). A Pokey dropped by a harvester off to the south-east
-   * stops at it and swings; the bunker's first look is on tick 30.
+   * stops at it and swings. The bunker's first look is on tick 30, but its door
+   * is not fully up till after that, so it sends nothing out before tick 60.
    */
   const battleOf = (harvesterAt: number) => {
     const yard = yardOf({
@@ -1884,7 +1917,7 @@ describe("a bunker's reach (issue #91)", () => {
     });
     run(battle, 29);
     const pokey = battle.creeps()[0]!;
-    run(battle, 1);
+    run(battle, 31);
     const defenders = battle.creeps().filter((creep) => creep.friendly);
     return { pokey, defenders };
   };
@@ -1900,6 +1933,73 @@ describe("a bunker's reach (issue #91)", () => {
     const { pokey, defenders } = battleOf(350);
     expect(Math.hypot(pokey.ix - 45, pokey.iy - 45)).toBeGreaterThan(300);
     expect(defenders).toHaveLength(0);
+  });
+
+  it("tells the renderer each defender it sends, to roll the shutters up (drawing only)", () => {
+    const sent = (harvesterAt: number) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+      });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+      battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
+      run(battle, 60);
+      return battle.recentEvents(-1).filter((event) => event.kind === "release");
+    };
+    expect(sent(290)).toEqual([{ kind: "release", tick: 60, buildingId: 1 }]);
+    expect(sent(350)).toEqual([]);
+  });
+
+  it("tells the renderer when the Flash door opens and shuts: open while attackers are in range or its monsters are out (drawing only)", () => {
+    const doors = (harvesterAt: number) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+      });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+      battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
+      const out: { tick: number; open: boolean; defenders: number }[] = [];
+      let released = Infinity;
+      for (let step = 0; step < 1500 && !battle.over(); step += 1) {
+        battle.step();
+        const defenders = battle.creeps().filter((creep) => creep.friendly).length;
+        for (const event of battle.recentEvents(battle.tick - 1)) {
+          if (event.kind === "release") released = Math.min(released, event.tick);
+          if (event.kind === "bunkerDoor") out.push({ tick: event.tick, open: event.open, defenders });
+        }
+      }
+      return { out, released };
+    };
+    const { out, released } = doors(290);
+    // It opens as the attacker comes in range, and the first defender comes out
+    // only once it is fully up, 15 frames on (`BUILDING22.as:344`).
+    expect(out[0]?.open).toBe(true);
+    expect(released).toBeGreaterThan(out[0]!.tick + (BUNKER_DOOR_FRAMES - 1) * 2);
+    expect(released).toBeLessThan(Infinity);
+    // Never shut while one of its monsters is out.
+    for (const change of out) if (!change.open) expect(change.defenders).toBe(0);
+    // Out of range, it stays shut till the attacker walks in.
+    const far = doors(350);
+    expect(far.out[0]?.open).toBe(true);
+    expect(far.out[0]!.tick).toBeGreaterThan(30);
+    expect(far.released).toBeGreaterThan(far.out[0]!.tick + (BUNKER_DOOR_FRAMES - 1) * 2);
+  });
+
+  it("sends nothing out on its 30-tick look while the door is still rising, and the next look sends it", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 290, Y: 290 },
+    });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+    battle.apply({ kind: "fling", t: 0, x: 270, y: 270, r: 0, monsters: { C1: 1 } });
+    run(battle, 30);
+    const opened = battle.recentEvents(-1).find((event) => event.kind === "bunkerDoor");
+    // Open before the first look on tick 30, but not yet fully up by it.
+    expect(opened).toMatchObject({ open: true });
+    expect(opened!.tick + (BUNKER_DOOR_FRAMES - 1) * 2).toBeGreaterThanOrEqual(30);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
+    run(battle, 30);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(1);
   });
 });
 
@@ -1986,7 +2086,7 @@ describe("the fight-back (issue #195)", () => {
     const battle = bunkerBattle();
     const far = battle.creeps().find((creep) => creep.ix > 1000)!;
     run(battle, 1);
-    run(battle, 29);
+    run(battle, 59);
     const [defender] = battle.creeps().filter((creep) => creep.friendly);
     expect(defender).toMatchObject({ monsterId: "C8", level: 6 });
     for (let step = 0; step < 300; step += 1) {
@@ -2004,11 +2104,28 @@ describe("the fight-back (issue #195)", () => {
     expect(battle.state().bunkerGarrisons).toEqual({ 1: { C8: 1 } });
   });
 
-  it("sends it out again at the next attacker to come near", () => {
+  it("sends it out again at the next attacker to come near, once its shut door is back up", () => {
     const battle = bunkerBattle();
-    run(battle, 600);
+    let shut = false;
+    for (let step = 0; step < 600; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "bunkerDoor") shut = !event.open;
+      }
+    }
+    expect(shut).toBe(true);
     battle.apply({ kind: "fling", t: 600, x: 140, y: 140, r: 0, monsters: { C1: 1 } });
-    run(battle, 60);
+    let opened = -1;
+    let sent = -1;
+    for (let step = 0; step < 90; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "bunkerDoor" && event.open && opened < 0) opened = event.tick;
+        if (event.kind === "release" && sent < 0) sent = event.tick;
+      }
+    }
+    expect(opened).toBeGreaterThanOrEqual(600);
+    expect(sent).toBeGreaterThan(opened + (BUNKER_DOOR_FRAMES - 1) * 2);
     expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(1);
   });
 
@@ -2327,12 +2444,13 @@ describe("the Housing Bunker (issue #143)", () => {
     return { yard, pokey, defenders };
   };
 
-  it("stands with its health and sends a defender at a creep within 500", () => {
+  it("stands with its health and sends its defenders at a creep within 500", () => {
     const { yard, pokey, defenders } = battleOf(400);
     expect(yard.buildings[0]?.hp).toBe(4000);
     expect(Math.hypot(pokey.ix - 80, pokey.iy - 80)).toBeLessThan(500);
-    expect(defenders).toHaveLength(1);
-    expect(defenders[0]?.targetCreep).toBe(pokey.id);
+    // All of them at once (`HOUSINGBUNKER.as:289-298`, Inferno WP 1.6).
+    expect(defenders).toHaveLength(2);
+    for (const defender of defenders) expect(defender.targetCreep).toBe(pokey.id);
   });
 
   it("sends nothing at a creep beyond its range", () => {
@@ -3039,5 +3157,29 @@ describe("an Eye-ra with no wall to break", () => {
       amount: hall.maxHp - hall.hp,
     });
     expect(events.find((event) => event.kind === "splash")).toMatchObject({ moveId: "C5", hits: 1 });
+  });
+});
+
+describe("the Quake Tower's drawing events (INFERNOQUAKETOWER.as)", () => {
+  it("draws its 33 strip cells as it winds up, then tells of the quake once, at the tower's reach", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 14, l: 1, X: 820, Y: 820 },
+      "2": { id: 2, t: 129, l: 3, X: 760, Y: 760 },
+    });
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({ kind: "fling", t: 0, x: 790, y: 790, r: 0, monsters: { C1: 4 } });
+    const cells: number[] = [];
+    const quakes: { tick: number; radius: number }[] = [];
+    for (let step = 0; step < 400 && !battle.over() && quakes.length === 0; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "towerCell" && event.towerId === 2) cells.push(event.cell);
+        if (event.kind === "towerQuake" && event.towerId === 2) quakes.push(event);
+      }
+    }
+    expect(cells).toEqual(Array.from({ length: 33 }, (_, cell) => cell));
+    expect(quakes).toHaveLength(1);
+    expect(quakes[0]?.radius).toBe(180);
+    expect(battle.state().towers.find((tower) => tower.id === 2)?.shots).toBe(1);
   });
 });

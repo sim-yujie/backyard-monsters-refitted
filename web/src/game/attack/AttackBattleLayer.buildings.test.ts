@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Container, Texture, TextureSource } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
+import { setClassicLook } from "@/game/classicLook";
 import { readYard } from "@/game/yard/yardModel";
 import { AttackBattleLayer, MonsterSheetTextures, type BattleYardHost } from "./AttackBattleLayer";
 import { AttackSession } from "./AttackSession";
@@ -130,12 +131,26 @@ describe("towers", () => {
     layer.destroy();
   });
 
-  it("leaves a cannon's frame alone: it has no gun strip", () => {
+  it("leaves the Flash Cannon's frame alone with the Classic look: it has no gun strip", () => {
+    setClassicLook(true);
+    try {
+      const { session, host, layer } = setUp([{ id: 1, t: 20, l: 1, X: 0, Y: 0 }]);
+      session.appendFling({ x: -150, y: -150, monsters: { C1: 3 } });
+      play(session, 6, layer);
+      expect(session.battle()?.state().towers[0]?.shots ?? 0).toBeGreaterThan(0);
+      expect(host.frames.size).toBe(0);
+      layer.destroy();
+    } finally {
+      setClassicLook(false);
+    }
+  });
+
+  it("turns the Modern look's 3D Cannon barrel onto what it shoots", () => {
     const { session, host, layer } = setUp([{ id: 1, t: 20, l: 1, X: 0, Y: 0 }]);
     session.appendFling({ x: -150, y: -150, monsters: { C1: 3 } });
     play(session, 6, layer);
     expect(session.battle()?.state().towers[0]?.shots ?? 0).toBeGreaterThan(0);
-    expect(host.frames.size).toBe(0);
+    expect(host.frames.size).toBeGreaterThan(0);
     layer.destroy();
   });
 });

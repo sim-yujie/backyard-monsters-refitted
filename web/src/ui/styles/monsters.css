@@ -150,8 +150,11 @@
   font-size: var(--text-sm);
 }
 
+/* A done action reads in plain text: only its amounts carry the red/green
+   of a loss or gain ("Unlocking Vorg: −384,000"), so the words around them
+   do not take a colour of their own. */
 .monsters-status--good {
-  color: var(--colour-success);
+  color: var(--colour-text);
 }
 
 .monsters-status--bad {
@@ -426,8 +429,26 @@
   font-variant-numeric: tabular-nums;
 }
 
-.locker-detail__stats {
-  color: var(--colour-text-muted);
+/* The monster's numbers as painted icons (`statGrid` in monsterNumbers.ts):
+   in rows that wrap when "10s → 8s" would not fit, a number the next level
+   changes picked out in green. */
+.monster-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--colour-text);
+  font-weight: 700;
+}
+
+.monster-stats__item--up {
+  color: var(--colour-success);
+}
+
+.monster-stats .res-amount > .res-icon {
+  height: 24px;
 }
 
 .locker-detail__action {

@@ -11,6 +11,7 @@ import {
   upgradeSteps,
   WALL_TYPES,
   type CostTotals,
+  type YardKind,
 } from "../buildingCosts";
 import type { Yard } from "../yardModel";
 import type { PlanNode } from "./placement";
@@ -103,10 +104,11 @@ const TOWN_HALL_TYPE = 14;
  *
  * The art table is the first source because it is the one the rest of the yard
  * screen reads from; the cost table's own copy covers a type with no art, and
- * the type id covers a type in neither.
+ * the type id covers a type in neither. On the Inferno yard (`kind`) the
+ * Inferno's names: Bone Cruncher, Under Hall.
  */
-export const typeName = (type: number): string =>
-  buildingName(type) || nameOf(type) || `Type ${type}`;
+export const typeName = (type: number, kind: YardKind = "main"): string =>
+  buildingName(type, kind) || nameOf(type, kind) || `Type ${type}`;
 
 /** The four resources a yard holds, with absent fields read as zero. */
 export const heldResources = (resources: Resources): ResourceAmounts => ({
@@ -169,7 +171,7 @@ export const summariseSelection = (
     if (node.fixed) continue;
 
     const type = ladderType(node.type);
-    const step = costOf(type, effectiveLevel(node));
+    const step = costOf(type, effectiveLevel(node), yard.kind);
     if (!step) {
       maxed++;
       continue;
@@ -196,7 +198,7 @@ export const summariseSelection = (
   const byType: SelectionTypeCost[] = [...perType.entries()]
     .map(([type, entry]) => ({
       type,
-      name: typeName(type),
+      name: typeName(type, yard.kind),
       count: entry.count,
       needed: { r1: entry.r1, r2: entry.r2, r3: entry.r3, r4: entry.r4 },
     }))
@@ -245,7 +247,7 @@ export const wallBatchPreview = (
     }
 
     eligible.push(node.id);
-    for (const step of upgradeSteps(ladderType(node.type), level, target)) {
+    for (const step of upgradeSteps(ladderType(node.type), level, target, yard.kind)) {
       steps.push(step);
       for (const [type, , required] of step[5]) {
         if (type === TOWN_HALL_TYPE && required > need) need = required;
@@ -269,15 +271,16 @@ export const wallBatchPreview = (
 
 /**
  * The target levels a wall batch may be asked for, 2 up to the top of the
- * ladder, with the Town Hall level each one needs.
+ * ladder of a yard of `kind` (the Inferno's stops at 3), with the hall level
+ * each one needs.
  *
  * The panel draws a button per entry and disables the ones the yard has not
  * earned, so the reason is in the data rather than in the panel's arithmetic.
  */
-export const wallTargets = (): readonly { level: number; need: number }[] => {
+export const wallTargets = (kind: YardKind = "main"): readonly { level: number; need: number }[] => {
   const targets: { level: number; need: number }[] = [];
-  for (let level = 2; level <= maxLevel(17); level++) {
-    const step = costOf(17, level - 1);
+  for (let level = 2; level <= maxLevel(17, kind); level++) {
+    const step = costOf(17, level - 1, kind);
     let need = 0;
     for (const [type, , required] of step?.[5] ?? []) {
       if (type === TOWN_HALL_TYPE && required > need) need = required;

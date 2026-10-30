@@ -12,12 +12,14 @@ import { attackYardHandlers } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import {
   AttackSession,
+  combatKind,
+  devDescentYard,
   LIVE_SPEEDS,
   PLAYBACK_SPEEDS,
   type AttackSessionState,
   type AttackSpeed,
 } from "@/game/attack/AttackSession";
-import { consumeAttackTarget, type AttackTarget } from "@/game/attack/attackTarget";
+import { consumeAttackTarget, fromInfernoYard, type AttackTarget } from "@/game/attack/attackTarget";
 import { targetLabel } from "@/game/attack/attackSave";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
 import {
@@ -31,29 +33,42 @@ import {
 import { DEFENCE_REFUSAL_TEXT, defenceReadout, type DefenceRefusal } from "@/game/defences/defenceWatch";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { consumeRaidRun, raidTarget, type RaidRun } from "@/game/raid/raidSession";
+import { MOLOCH_RAID_TITLE, MOLOCH_RAIDERS } from "@/game/inferno/emergenceText";
+import { isMolochRaid } from "@/game/inferno/molochRaid";
+import { backToInferno } from "@/game/inferno/tribeReturn";
 import { tribeTitle } from "@/game/raid/raidText";
 import { Camera } from "@/game/Camera";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { setOwnYardTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import { readYard, type Yard } from "@/game/yard/yardModel";
-import { fellPens, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
+import { fellPens, withRosters, yardLifeOf, type YardLife } from "@/game/yard/yardLifeModel";
 import { setYardIntent } from "@/game/yard/yardIntent";
 import { YardRenderer } from "@/game/yard/YardRenderer";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatAmount } from "@/ui/format";
+import { AMOUNT_CHANGE_WORDS, writeAmount, type AmountChange } from "@/ui/amountChange";
 import { Hud } from "@/ui/Hud";
 import { icon } from "@/ui/icons";
 import { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
-import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceName, setResourceRealm } from "@/ui/resourceIcon";
+import { gameIcon } from "@/ui/gameIcon";
 import { AttackMenu, sheetHandleLabel } from "@/ui/attack/AttackMenu";
-import { ATTACK_CONFIRM_CLASS } from "@/ui/attack/attackDialogs";
+import {
+  ATTACK_CONFIRM_CLASS,
+  KEEP_FIGHTING,
+  keptText,
+  RETREAT_TITLE,
+  retreatKeptLine,
+  retreatMessage,
+} from "@/ui/attack/attackDialogs";
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
 import { ZoomControl } from "@/ui/ZoomControl";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
+import { setScreenTune } from "@/game/sound/sound";
 
 /**
  * The attack: an enemy yard, a clock, and the slots the rest of the flow
@@ -160,12 +175,14 @@ export class AttackScene implements Scene {
   private damage: HTMLElement | null = null;
   private loot: HTMLElement | null = null;
   /** The loot readout's four amounts, twigs to goo. */
-  private lootValues: HTMLElement[] = [];
+  private lootAmounts: HTMLElement[] = [];
   private hudSlot: HTMLElement | null = null;
   private speedButtons = new Map<AttackSpeed, HTMLButtonElement>();
   private retreatButton: HTMLButtonElement | null = null;
   private menu: AttackMenu | null = null;
   private confirm: Panel | null = null;
+  /** The open Retreat question's "35% kept", told again as the fight goes on. */
+  private retreatLine: HTMLElement | null = null;
 
   private dock: HTMLElement | null = null;
   private dockBody: HTMLElement | null = null;
@@ -208,16 +225,26 @@ export class AttackScene implements Scene {
       // A defence fought under other rules is refused before anything is built (#362).
       this.watchRefused = this.watchRun ? watchRefusal(this.watchRun) : null;
       this.target = this.watchRun && !this.watchRefused ? watchTarget(this.watchRun) : null;
+      // A defence replay is the player's own yard under attack (`game/sound/tunes.ts`).
+      if (isDefenceWatch(this.watchRun)) setScreenTune("underAttack");
     } else if (this.raiding) {
       this.raidRun = consumeRaidRun();
       this.target = this.raidRun ? raidTarget(this.raidRun) : null;
     } else {
       this.target = consumeAttackTarget();
+      // A Descent yard, a Moloch tribe or another player's Inferno yard is
+      // fought to the Inferno's attack tune (`game/sound/tunes.ts`, WP 7.2).
+      if (this.target && combatKind(this.target) === "inferno") setScreenTune("infernoAttack");
     }
 
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
     this.renderer.root.addChild(this.battleLayer);
+
+    // A Moloch tribe or another player's Inferno yard is fought from the
+    // Inferno yard for its purse: Bone, Coal, Sulfur and Magma on the HUD and
+    // every panel (Inferno WP 2.10, 3.5).
+    setResourceRealm(fromInfernoYard(this.target) ? "inferno" : "surface");
 
     // A raid has no HUD: nothing on it may be left until it is over.
     if (!this.raiding) {
@@ -328,7 +355,7 @@ export class AttackScene implements Scene {
     this.clock = null;
     this.damage = null;
     this.loot = null;
-    this.lootValues = [];
+    this.lootAmounts = [];
     this.hudSlot = null;
     this.speedButtons.clear();
     this.retreatButton = null;
@@ -338,6 +365,7 @@ export class AttackScene implements Scene {
     this.status = null;
     this.hud?.destroy();
     this.hud = null;
+    setResourceRealm("surface");
     this.notices.destroy();
     this.battleLayer.removeChildren();
     this.renderer.destroy();
@@ -427,8 +455,9 @@ export class AttackScene implements Scene {
     // An attack target is always somebody else's yard: open grass, no plot
     // edge, and room around the camp to drop on (issue #62). A practice
     // attack's wild monsters come from far outside the plot, so it is drawn
-    // the same way.
-    const yard = readYard(response, { foreign: true });
+    // the same way. A Moloch yard lies on the grown plot of a wild camp.
+    const molochYard = this.target?.descentYard !== undefined || this.target?.infernoTribe === true;
+    const yard = readYard(response, { foreign: true, wild: molochYard });
     this.yard = yard;
     // The defender's harvesters, hatcheries and the rest animate only while
     // working (#255).
@@ -442,7 +471,8 @@ export class AttackScene implements Scene {
     // scenery in the yard's own containers, never in the battle layer, so no
     // creep targets them and no count includes them. No caged champion: the
     // engine has no defending champion, and one that never fights would lie.
-    this.life = yardLifeOf(response, yard, "attack");
+    // No workers on a Moloch yard, a world map attack in Flash.
+    this.life = yardLifeOf(response, yard, "attack", molochYard);
     this.renderer.setLife(this.life);
     this.buildingCount = countedBuildings(yard.buildings.map((building) => building.type));
     this.startCamera(yard, context);
@@ -464,6 +494,9 @@ export class AttackScene implements Scene {
           : this.practice
             ? { clockFromFirstDrop: true }
             : {}),
+      // Dev only: `?descentYard=13` fights a practice under the Descent burn,
+      // to see it before the Descent's own attacks exist (Inferno WP 1.21).
+      ...(import.meta.env.DEV && this.practice ? devDescentYard(window.location.search) : {}),
     });
     this.session = session;
     this.unsubscribe = session.subscribe((state) => this.onSessionChange(state));
@@ -504,7 +537,15 @@ export class AttackScene implements Scene {
       guide: context.overlay.guide,
       battleLayer: this.battleLayer,
       notices: this.notices,
-      goToMap: () => context.goTo(SceneName.MAP),
+      goToMap: () => {
+        // A Moloch tribe's or an Inferno player's map is the Inferno's, over the Inferno yard (WP 2.10, 3.5).
+        if (fromInfernoYard(target)) {
+          backToInferno(true);
+          context.goTo(SceneName.YARD);
+          return;
+        }
+        context.goTo(SceneName.MAP);
+      },
       goToOutpost: (outpostTarget: OwnYardTarget) => {
         setOwnYardTarget(outpostTarget);
         context.goTo(SceneName.YARD);
@@ -639,7 +680,9 @@ export class AttackScene implements Scene {
         : "Test attack"
       : this.raiding
         ? this.raidRun
-          ? `${tribeTitle(this.raidRun.raid.tribe)} raid`
+          ? isMolochRaid(this.raidRun.raid)
+            ? MOLOCH_RAID_TITLE
+            : `${tribeTitle(this.raidRun.raid.tribe)} raid`
           : "Wild monster raid"
         : isDefenceWatch(this.watchRun)
           ? `Defence replay: ${this.watchRun.defence.attacker.name}`
@@ -655,29 +698,34 @@ export class AttackScene implements Scene {
     clock.setAttribute("aria-live", "off");
     clock.textContent = "—:——";
 
-    // The number alone on the narrowest phones (#381): the word gives way so
-    // Retreat stays on the one row.
+    // The broken wall and "37%" (less-text job 8): no word, so Retreat stays
+    // on the one row even on the narrowest phones (#381). The wall says "Yard
+    // damage" on hover and to screen readers.
     const damage = document.createElement("span");
-    damage.className = "attack-strip__readout";
-    damage.title = "Damage";
+    damage.className = "attack-strip__readout attack-strip__damage";
     const damageValue = document.createElement("span");
     damageValue.textContent = "0%";
-    const damageWord = document.createElement("span");
-    damageWord.className = "attack-strip__word";
-    damageWord.textContent = " damage";
-    damage.append(damageValue, damageWord);
+    damage.append(gameIcon("yarddamage2", { size: 24, label: "Yard damage" }), damageValue);
 
-    // "Loot" and one icon-and-amount per resource (#93).
+    // One icon-and-amount per resource (#93), with no "Loot" before them
+    // (less-text job 8); an Inferno fight takes Bone, Coal, Sulfur and Magma
+    // (Inferno WP 1.13). The row's tooltip names each. Loot won is green
+    // "+1,500"; a defence replay's is the yard's loss, red "−1,500" (owner,
+    // 28 Oct). Nothing yet is a plain "0".
     const loot = document.createElement("span");
     loot.className = "attack-strip__readout attack-strip__loot";
     const amounts = document.createElement("span");
     amounts.className = "res-list";
-    this.lootValues = RESOURCE_KEYS.map((key) => {
-      const amount = resourceAmount(key, "0");
+    const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
+    this.lootAmounts = RESOURCE_KEYS.map((key) => {
+      const amount = resourceAmount(key, 0, { realm, change: this.lootChange() });
       amounts.append(amount);
-      return amount.querySelector<HTMLElement>(".res-amount__value")!;
+      return amount;
     });
-    loot.append("Loot ", amounts);
+    const lootWord = document.createElement("span");
+    lootWord.className = "u-visually-hidden";
+    lootWord.textContent = "Loot ";
+    loot.append(lootWord, amounts);
     // Nothing is taken in practice; a raid's losses show when it has landed.
     loot.hidden = this.practice || this.raiding;
     // A raid has no countdown: it runs until the server's fight ended.
@@ -876,12 +924,16 @@ export class AttackScene implements Scene {
     this.refreshStrip(state);
     this.refreshStatus(state);
     this.fellPens(state);
+    this.bunkerPens();
     // The end plugin (WP6) takes over from here; a pending retreat question
     // is moot once the attack is over.
     if (state.phase === "ended") {
       this.confirm?.close();
       this.confirm = null;
+      return;
     }
+    // The fight goes on behind the Retreat question: its damage keeps up with the strip's.
+    if (this.retreatLine) this.retreatLine.textContent = keptText(this.presentation.damageShown(state));
   }
 
   /**
@@ -917,6 +969,21 @@ export class AttackScene implements Scene {
     this.renderer.setLife(next);
   }
 
+  /**
+   * An Inferno Compound's pen holds what its bunker has left: one walks out as
+   * each defender is sent (`HOUSINGBUNKER.as`, `dispatchCreature`), and one
+   * that walks back rejoins it. Drawing only.
+   */
+  private bunkerPens(): void {
+    const life = this.life;
+    const battle = this.session?.battle();
+    if (!life?.rosters || !battle) return;
+    const next = withRosters(life, battle.bunkerPools());
+    if (next === life) return;
+    this.life = next;
+    this.renderer.setLife(next);
+  }
+
   private refreshStrip(state: AttackSessionState): void {
     if (this.clock) {
       // The countdown, then the retreat grace, labelled and counted down (#149).
@@ -942,12 +1009,16 @@ export class AttackScene implements Scene {
       this.damage.textContent = `${readout.damage}%`;
     }
     if (this.loot) {
-      const { r1, r2, r3, r4 } = readout.loot;
       RESOURCE_KEYS.forEach((key, index) => {
-        const value = this.lootValues[index];
-        if (value) value.textContent = formatAmount(readout.loot[key]);
+        const amount = this.lootAmounts[index];
+        if (amount) writeAmount(amount, "res-amount", readout.loot[key], { change: this.lootChange(), tooltip: false });
       });
-      this.loot.title = `Twigs ${r1}, pebbles ${r2}, putty ${r3}, goo ${r4}`;
+      // Bone, Coal, Sulfur and Magma in an Inferno fight, as the strip's icons.
+      const realm = this.target && combatKind(this.target) === "inferno" ? "inferno" : "surface";
+      const word = AMOUNT_CHANGE_WORDS[this.lootChange()];
+      this.loot.title = RESOURCE_KEYS.map(
+        (key) => `${resourceName(key, realm)} ${formatAmount(readout.loot[key])}${readout.loot[key] >= 1 ? ` ${word}` : ""}`,
+      ).join(", ");
     }
     const skipping = this.session?.skipping ?? false;
     for (const [value, button] of this.speedButtons) {
@@ -957,6 +1028,11 @@ export class AttackScene implements Scene {
     if (this.retreatButton) {
       this.retreatButton.disabled = state.phase !== "running" && state.phase !== "loaded";
     }
+  }
+
+  /** The loot readout's side: won by the attacker, or the yard's loss in a defence replay. */
+  private lootChange(): AmountChange {
+    return isDefenceWatch(this.watchRun) ? "loss" : "gain";
   }
 
   private refreshStatus(state: AttackSessionState): void {
@@ -979,10 +1055,11 @@ export class AttackScene implements Scene {
       return;
     }
     if (this.raiding) {
+      const raiders = isMolochRaid(this.raidRun?.raid) ? MOLOCH_RAIDERS : "Wild monsters";
       status.textContent =
         state.phase === "ended"
           ? "The raid is over."
-          : `Wild monsters on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
+          : `${raiders} on your yard · ${this.buildingCount} buildings · ${state.buildingsDestroyed} destroyed · ` +
             `${state.creepsAlive} attacking`;
       return;
     }
@@ -1014,15 +1091,15 @@ export class AttackScene implements Scene {
       after?.();
       return;
     }
+    // "Retreat now?", "The attack ends now.", the wall and "35% kept"
+    // (less-text job 8), "Keep fighting" or "Retreat".
+    const kept = retreatKeptLine(this.presentation.damageShown(state));
     this.confirm = confirmPanel({
-      title: "Retreat?",
-      message: "Retreating ends the attack now and cannot be undone.",
-      note:
-        `${Math.max(0, Math.floor(state.damagePercent))}% damage dealt so far will be kept.` +
-        (goingTo
-          ? ` The result is saved on the end screen first, which leads back to the map, not straight to ${goingTo}.`
-          : ""),
+      title: RETREAT_TITLE,
+      message: retreatMessage(goingTo),
+      note: kept.line,
       confirmLabel: "Retreat",
+      cancelLabel: KEEP_FIGHTING,
       onConfirm: () => {
         this.confirm?.close();
         session.retreat();
@@ -1030,9 +1107,11 @@ export class AttackScene implements Scene {
       },
       onClose: () => {
         this.confirm = null;
+        this.retreatLine = null;
       },
     });
     this.confirm.element.classList.add(ATTACK_CONFIRM_CLASS);
+    this.retreatLine = kept.value;
     this.confirm.mount(context.overlay.modal);
   }
 
@@ -1062,11 +1141,20 @@ export class AttackScene implements Scene {
       context.goTo(scene);
       return;
     }
-    if (session?.hasActed() && (phase === "running" || phase === "loaded")) {
+    // An Inferno player attack counts once started (WP 3.5): it is retreated
+    // too, so its save lands before the Inferno yard's load could close it.
+    const counts = session?.hasActed() || this.target?.infernoPlayer === true;
+    if (counts && (phase === "running" || phase === "loaded")) {
       this.askRetreat(undefined, scene === SceneName.MAP ? undefined : destinationName(scene));
       return;
     }
     before?.();
+    // A Moloch tribe or an Inferno player is left for the Inferno: its yard, or its map over it (WP 2.10, 3.5).
+    if (fromInfernoYard(this.target) && (scene === SceneName.MAP || scene === SceneName.YARD)) {
+      backToInferno(scene === SceneName.MAP);
+      context.goTo(SceneName.YARD);
+      return;
+    }
     context.goTo(scene);
   }
 

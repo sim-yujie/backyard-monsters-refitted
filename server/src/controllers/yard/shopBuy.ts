@@ -93,6 +93,13 @@ export interface ShopItemRule {
  * Metal, Gold, Black Diamond Blocks) raise every Block below the tier to it
  * for 3 / 6 / 10 / 15 Shiny per Block per level climbed, behind Town Hall
  * 3 / 4 / 5 / 6 in the main yard (`services/yard/wallBlocks.ts`).
+ *
+ * Inferno WP 1.17, the Inferno's own items ({@link INFERNO_SHOP_ITEMS}):
+ * `ENLI` (More Yardage, 50 to 250 in five steps), `BLK2I` / `BLK3I` (Granite
+ * and Forged Steel Blocks, priced and applied as `BLK2` / `BLK3`, behind
+ * Under Hall 3 / 4), `HODI` / `HOD2I` / `HOD3I` (the Inferno's Hatchery
+ * Overdrive 4x / 6x / 10x, one at a time with each other), `EXHI` (Housing
+ * Expansion) and `TODI` (Tower Overdrive, restarts like `TOD`).
  */
 export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BEW: {},
@@ -116,6 +123,14 @@ export const SHOP_ITEMS: Readonly<Record<string, ShopItemRule>> = {
   BLK3: { walls: true },
   BLK4: { walls: true },
   BLK5: { walls: true },
+  ENLI: {},
+  BLK2I: { walls: true },
+  BLK3I: { walls: true },
+  HODI: { check: ({ save, now }) => overdriveGate(save.storedata, now) },
+  HOD2I: { check: ({ save, now }) => overdriveGate(save.storedata, now) },
+  HOD3I: { check: ({ save, now }) => overdriveGate(save.storedata, now) },
+  EXHI: {},
+  TODI: { restart: true },
 };
 
 /**
@@ -142,6 +157,50 @@ export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set([
   "BLK3",
   "BLK4",
   "BLK5",
+]);
+
+/**
+ * What the Inferno yard's store sells of {@link SHOP_ITEMS}
+ * (`docs/design/inferno.md` §5, WP 1.17): Flash's Inferno groups
+ * (`client/scripts/STORE.as:210`: `ENLI`, `BLK2I`, `BLK3I`, `BIP`, `HODI`,
+ * `HOD2I`, `HOD3I`, `PRO1`..`PRO3`, `EXHI`, `TODI`) plus `BEW`, which Flash
+ * did not sell there: owner decision I3, the Inferno's own ladder of 250 /
+ * 500 / 1,000 / 2,000 Shiny, five workers at most. Its speed-ups (`SP1`..`SP4`)
+ * and `FIX` are the `speedup` and `repair/instant` routes'; the resource packs
+ * (`BR11I`..`BR43I`) are dropped, as on the surface.
+ *
+ * Bought in the Inferno, an item lands in the Inferno row's own `storedata`,
+ * as Flash kept store data per yard: its workers (`workers.ts`), packing and
+ * More Yardage, overdrives and boosts are that yard's. Damage protection
+ * protects the Inferno yard (its own `protected`). Shiny is the player's,
+ * shared with the surface.
+ */
+export const INFERNO_SHOP_ITEMS: ReadonlySet<string> = new Set([
+  "BEW",
+  "ENLI",
+  "BLK2I",
+  "BLK3I",
+  "BIP",
+  "HODI",
+  "HOD2I",
+  "HOD3I",
+  "PRO1",
+  "PRO2",
+  "PRO3",
+  "EXHI",
+  "TODI",
+]);
+
+/** The Inferno's own items, sold nowhere else (Flash's main yard and outposts never list them). */
+const INFERNO_ONLY_ITEMS: ReadonlySet<string> = new Set([
+  "ENLI",
+  "BLK2I",
+  "BLK3I",
+  "HODI",
+  "HOD2I",
+  "HOD3I",
+  "EXHI",
+  "TODI",
 ]);
 
 /** What the route sends back as `report`. */
@@ -229,8 +288,15 @@ export const yardShopBuyAction = defineYardAction({
     if (!rule || !storeItem) {
       throw yardBadRequestErr("That item is not for sale.", { item }, "notForSale");
     }
-    if (yardKindOf(save) === "outpost" && !OUTPOST_SHOP_ITEMS.has(item)) {
+    const kind = yardKindOf(save);
+    if (kind === "outpost" && !OUTPOST_SHOP_ITEMS.has(item)) {
       throw yardBadRequestErr("That item is not sold in outposts.", { item }, "notForSale");
+    }
+    if (kind === "inferno" && !INFERNO_SHOP_ITEMS.has(item)) {
+      throw yardBadRequestErr("That item is not sold in the Inferno.", { item }, "notForSale");
+    }
+    if (kind !== "inferno" && INFERNO_ONLY_ITEMS.has(item)) {
+      throw yardBadRequestErr("That item is sold only in the Inferno.", { item }, "notForSale");
     }
 
     const entry: JsonObject = save.storedata?.[item] ?? {};
@@ -273,4 +339,5 @@ export const yardShopBuyAction = defineYardAction({
     };
   },
   outposts: "allow",
+  inferno: "allow",
 });

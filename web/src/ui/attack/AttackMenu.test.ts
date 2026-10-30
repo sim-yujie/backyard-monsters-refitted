@@ -70,6 +70,16 @@ describe("sheetHandleLabel", () => {
     expect(sheetHandleLabel(dock)).toBe("Army");
   });
 
+  it("says Attack Force when the army panel is called that (a Moloch tribe attack)", () => {
+    const dock = document.createElement("div");
+    dock.append(panel("attack-army", "Attack Force"));
+    expect(sheetHandleLabel(dock)).toBe("Attack Force");
+  });
+
+  it("says Army before any panel is mounted", () => {
+    expect(sheetHandleLabel(document.createElement("div"))).toBe("Army");
+  });
+
   it("names the open picker", () => {
     const dock = document.createElement("div");
     dock.classList.add("attack-dock--picker");

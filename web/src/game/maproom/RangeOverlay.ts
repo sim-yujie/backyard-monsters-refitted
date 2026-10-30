@@ -9,6 +9,7 @@ import {
   type RangeSource,
 } from "./attackRange";
 import { RANGE_COLOUR } from "./cellVisuals";
+import { liftCorners } from "./ground";
 
 /**
  * The player's attack range drawn over the map (issue #177): a line round
@@ -46,6 +47,15 @@ export class RangeOverlay {
   private lineZoom = 0;
   /** The last sources drawn, as a key, so an unchanged set is not rebuilt. */
   private drawnKey = "";
+  private sources: readonly RangeSource[] | null = null;
+  /** Set when cells' heights have landed since the range was drawn. */
+  private stale = false;
+
+  /**
+   * How far each cell is drawn from its spot (`ground.ts`), so the range lies
+   * on the raised ground rather than under it. Flat until the renderer sets it.
+   */
+  liftOf: (col: number, row: number) => number = () => 0;
 
   constructor() {
     this.container.interactiveChildren = false;
@@ -68,6 +78,7 @@ export class RangeOverlay {
       return;
     }
     this.container.visible = true;
+    this.sources = sources;
 
     const key = sources.map((one) => `${one.col},${one.row},${one.reach}`).join(";");
     if (key === this.drawnKey) {
@@ -83,7 +94,7 @@ export class RangeOverlay {
     for (const cellKey of cells) {
       const col = Math.floor(cellKey / WORLD_HEIGHT);
       const row = cellKey % WORLD_HEIGHT;
-      mapRoomGrid.writeCellCorners(col, row, corners);
+      liftCorners(mapRoomGrid.writeCellCorners(col, row, corners), this.liftOf(col, row));
       this.hole.poly(corners.slice());
       this.inside.poly(corners.slice());
     }
@@ -92,6 +103,20 @@ export class RangeOverlay {
 
     this.edges = rangeEdges(cells);
     this.drawLine();
+  }
+
+  /** Cells' heights changed: the range is redrawn on the next `flush`. */
+  invalidate(): void {
+    this.stale = true;
+  }
+
+  /** Redraws the range once if heights landed since it was drawn, at most once a frame. */
+  flush(): void {
+    if (!this.stale) return;
+    this.stale = false;
+    if (!this.container.visible || !this.sources) return;
+    this.drawnKey = "";
+    this.show(this.sources);
   }
 
   /** The line keeps its screen width as the map zooms. */
@@ -107,7 +132,7 @@ export class RangeOverlay {
     if (this.edges.length === 0) return;
     const corners: number[] = [];
     for (const { col, row, side } of this.edges) {
-      mapRoomGrid.writeCellCorners(col, row, corners);
+      liftCorners(mapRoomGrid.writeCellCorners(col, row, corners), this.liftOf(col, row));
       const [a, b] = NEIGHBOUR_EDGES[side]!;
       this.line.moveTo(corners[a * 2]!, corners[a * 2 + 1]!);
       this.line.lineTo(corners[b * 2]!, corners[b * 2 + 1]!);

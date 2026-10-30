@@ -111,7 +111,14 @@ describe("POST /bm/yard/juice", () => {
     const answer = await juice({ C1: 10, C2: 5 });
     expect(answer.status).toBe(200);
     // 10 × ceil(250 × 0.6) + 5 × ceil(500 × 0.6) = 1500 + 1500.
-    expect(answer.body.report).toEqual({ juiced: { C1: 10, C2: 5 }, goo: 3000, lost: 0, rate: 0.6 });
+    expect(answer.body.report).toEqual({
+      juiced: { C1: 10, C2: 5 },
+      goo: 3000,
+      lost: 0,
+      magma: 0,
+      magmaLost: 0,
+      rate: 0.6,
+    });
     const row = db.row!;
     expect(row.resources).toMatchObject({ r4: 4000 });
     expect((row.monsters as Row).housed).toEqual({ C1: 20 });
@@ -159,10 +166,10 @@ describe("POST /bm/yard/juice", () => {
     expect(answer.body).toMatchObject({ reason: "notEnough", monster: "C2", have: 5, need: 6 });
   });
 
-  test("Inferno monsters and unknown ids are refused", async () => {
+  test("unknown ids are refused; an Inferno monster is juiceable on the main yard (WP 2.3)", async () => {
     const inferno = await juice({ IC1: 1 });
     expect(inferno.status).toBe(409);
-    expect(inferno.body.reason).toBe("inferno");
+    expect(inferno.body.reason).toBe("notEnough");
     for (const body of [{ G1: 1 }, { C99: 1 }, { nope: 1 }] as Record<string, number>[]) {
       const answer = await juice(body);
       expect(answer.status).toBe(400);

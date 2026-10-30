@@ -51,3 +51,15 @@ describe("health check deploy files", () => {
     expect(example).toMatch(/^TELEGRAM_CHAT_ID=$/m);
   });
 });
+
+describe("Redis memory (security audit 2026-10-29)", () => {
+  test("Redis has a memory cap under its container's, and drops only keys that expire", () => {
+    const compose = read("../../../docker-compose.prod.yml");
+    const start = compose.indexOf("\n  redis:\n    logging");
+    const redis = compose.slice(start, compose.indexOf("\n  backup:", start));
+    expect(redis).toContain('command: ["redis-server", "--maxmemory", "160mb", "--maxmemory-policy", "volatile-lru"]');
+    expect(redis).toContain("memory: 256M");
+    expect(redis).not.toContain("allkeys");
+  });
+});
+

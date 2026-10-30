@@ -122,7 +122,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     expect(await notices(B)).toEqual([{ event: "request", userid: A, username: "zz_fr_alice" }]);
 
     const accepted = await answer(B, sent.request.requestid, true, T0 + 60);
-    expect(accepted.friend).toMatchObject({ userid: A, username: "zz_fr_alice", since: T0 + 60, canGiftFrom: T0 + 60 + DAY, help: null });
+    expect(accepted.friend).toMatchObject({ userid: A, username: "zz_fr_alice", since: T0 + 60, canGiftFrom: T0 + 60 + 12 * 60 * 60, help: null });
     expect(await notices(A)).toEqual([{ event: "accepted", userid: B, username: "zz_fr_bob" }]);
     expect((await notices(B)).at(-1)).toEqual({ event: "accepted", userid: A, username: "zz_fr_alice" });
 

@@ -7,17 +7,95 @@ import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
 import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { pointsForBuild, pointsForUpgrade, requirementsMet, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import {
+  bankPoints,
   levelBand,
   levelOfTotal,
   MAP_ROOM_TYPE,
+  MINIMUM_YARD,
+  minimumYardTotal,
   PERSONAS,
   Progression,
   targetInBand,
   wallTargets,
   yardAtPoints,
+  STAGE_SLIP,
   type ProgressionBuilding,
   type ProgressionYard,
 } from "./progression.js";
+import { CORE_STYLE_WALLS, yardStyleOf } from "./yardStyle.js";
+
+/** `quantity[hall]`, as the build gate reads it. */
+const allowedAt = (type: number, hall: number): number => {
+  const quantity = costOf(type)!.quantity;
+  return quantity[Math.min(hall, quantity.length - 1)] ?? 0;
+};
+
+/** The build plan (owner decisions, 2026-10-23; the file comment of `progression.ts`). */
+describe("the build plan", () => {
+  /** Every action of a run up to level 41, with the yard as it stood before it. */
+  const walk = (seed: number, persona: (typeof PERSONAS)[number], visit: (action: { kind: string; t: number }, run: Progression) => void) => {
+    const run = new Progression(seed, persona);
+    for (let action = run.next(); action && run.level <= 41; action = run.next()) {
+      visit(action, run);
+      run.apply();
+    }
+  };
+  const count = (run: Progression, type: number) => run.buildings().filter((building) => building.t === type).length;
+
+  test(
+    "every harvester the Town Hall allows stands before it is upgraded",
+    () => {
+      let upgrades = 0;
+      for (let seed = 1; seed <= 6; seed++) {
+        for (const persona of PERSONAS) {
+          walk(seed, persona, (action, run) => {
+            if (action.t !== TOWN_HALL_TYPE || action.kind !== "upgrade") return;
+            upgrades++;
+            const missing = [1, 2, 3, 4].filter((type) => count(run, type) < allowedAt(type, run.townHall));
+            expect({ seed, persona, hall: run.townHall, missing }).toEqual({ seed, persona, hall: run.townHall, missing: [] });
+          });
+        }
+      }
+      expect(upgrades).toBeGreaterThan(18 * 5);
+    },
+    { timeout: 60_000 }
+  );
+
+  test(
+    "Twig Snappers and Pebble Shiners before Putty Squishers and Goo Factories, but for the odd slip",
+    () => {
+      let side = 0;
+      let early = 0;
+      for (let seed = 1; seed <= 6; seed++) {
+        for (const persona of PERSONAS) {
+          walk(seed, persona, (action, run) => {
+            if (action.kind !== "build" || (action.t !== 3 && action.t !== 4)) return;
+            side++;
+            if ([1, 2].some((type) => count(run, type) < allowedAt(type, run.townHall))) early++;
+          });
+        }
+      }
+      expect(side).toBeGreaterThan(100);
+      // An action comes from the stage after the earliest only now and then (`STAGE_SLIP`); measured about 8%.
+      expect(early / side).toBeLessThan(STAGE_SLIP);
+    },
+    { timeout: 60_000 }
+  );
+
+  test("a bot has Housing, and so an army, from level 3", () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const persona = PERSONAS[seed % PERSONAS.length]!;
+      for (const level of [3, 4, 5]) {
+        const yard = yardAtPoints(seed, persona, targetInBand(level, 0.5));
+        expect({ seed, level, housing: yard.buildings.some((building) => building.t === 15) }).toEqual({
+          seed,
+          level,
+          housing: true,
+        });
+      }
+    }
+  });
+});
 
 /** The bot progression (issue #237, `docs/design/bot-neighbours.md` §4.2). */
 
@@ -35,14 +113,14 @@ const allowed = (type: number, hall: number): number => {
   return quantity[Math.min(hall, quantity.length - 1)] ?? 0;
 };
 
-/** Points a yard earned from the starter base, worked out from its buildings alone. */
+/** Points a yard earned from the starter base, worked out from its buildings alone, banking included. */
 const pointsOf = (buildings: readonly ProgressionBuilding[]): number => {
   const starters = new Set(STARTER_BUILDINGS.map((_, index) => index + 1));
   let points = 0;
   for (const building of buildings) {
     const costs = costOf(building.t)!.costs;
-    if (!starters.has(building.id)) points += pointsForBuild(costs[0]!);
-    for (let level = 1; level < building.l; level++) points += pointsForUpgrade(costs[level]!);
+    if (!starters.has(building.id)) points += pointsForBuild(costs[0]!) + bankPoints(costs[0]!);
+    for (let level = 1; level < building.l; level++) points += pointsForUpgrade(costs[level]!) + bankPoints(costs[level]!);
   }
   return points;
 };
@@ -157,16 +235,56 @@ describe("walls and traps (issue #250)", () => {
           const hall = yard.townHall;
           if (hall < 3) continue;
           const mine = yard.buildings.filter((building) => building.t === 17).length;
-          // A Town Hall just upgraded has not caught up yet, but it filled the last one's room first.
-          expect({ level, index, caughtUp: mine >= 0.7 * allowed(17, hall - 1) }).toEqual({ level, index, caughtUp: true });
+          // A Town Hall just upgraded has not caught up yet, but it stood the last one's walls first.
+          expect({ level, index, caughtUp: mine >= wallTargets(seed)[hall - 1]! }).toEqual({ level, index, caughtUp: true });
+          // A bot that walls only its core stands no more than its rings take.
+          if (yardStyleOf(seed).walls === "core") {
+            expect(mine).toBeLessThanOrEqual(CORE_STYLE_WALLS);
+            continue;
+          }
           walls += mine;
           wallRoom += allowed(17, hall);
           traps += yard.buildings.filter((building) => building.t === 24 || building.t === 117).length;
           trapRoom += allowed(24, hall) + allowed(117, hall);
         }
       }
-      expect(walls / wallRoom).toBeGreaterThan(0.85);
-      expect(traps / trapRoom).toBeGreaterThan(0.8);
+      // A hall just upgraded builds its new harvesters and towers before its new walls.
+      expect(walls / wallRoom).toBeGreaterThan(0.65);
+      expect(traps / trapRoom).toBeGreaterThan(0.65);
+    },
+    { timeout: 60_000 }
+  );
+
+  test(
+    "walls from soon after they unlock at Town Hall 2 (owner review 2026-10-23: none before level 25 read wrong)",
+    () => {
+      for (let level = 12; level <= 40; level++) {
+        for (let index = 0; index < 6; index++) {
+          const seed = level * 7919 + index * 104729;
+          const yard = yardAtPoints(seed, PERSONAS[index % PERSONAS.length]!, targetInBand(level, (index + 0.5) / 6));
+          const mine = yard.buildings.filter((building) => building.t === 17).length;
+          // Level 16 on, every bot has its Town Hall 2 and stands walls; many already have them at 12-15.
+          if (level >= 16) {
+            expect({ level, index, hall: yard.townHall >= 2, walls: mine > 0 }).toEqual({
+              level,
+              index,
+              hall: true,
+              walls: true,
+            });
+          }
+        }
+      }
+      // Walls go down with the basics of a hall, not after its upgrades: most Town Hall 2 bots have theirs.
+      let walled = 0;
+      let all = 0;
+      for (let seed = 1; seed <= 60; seed++) {
+        const yard = yardAtPoints(seed * 7727, PERSONAS[seed % PERSONAS.length]!, targetInBand(14, 0.5));
+        if (yard.townHall !== 2) continue;
+        all++;
+        if (yard.buildings.some((building) => building.t === 17)) walled++;
+      }
+      expect(all).toBeGreaterThan(30);
+      expect(walled / all).toBeGreaterThan(0.5);
     },
     { timeout: 60_000 }
   );
@@ -192,13 +310,15 @@ describe("wall upgrades (issue #252)", () => {
   test(
     "walls go from wood to stone and better as the level rises: mostly upgraded by levels 35-40",
     () => {
-      const tiers = [12, 15, 20, 25, 30, 35, 40].map((level) => ({ level, tier: averageTier(level, 6) }));
+      const tiers = [15, 20, 25, 30, 35, 40].map((level) => ({ level, tier: averageTier(level, 6) }));
       // Town Hall 2 builds wood only.
       expect(tiers[0]!.tier).toBe(1);
       for (let i = 1; i < tiers.length; i++) expect(tiers[i]!.tier).toBeGreaterThan(tiers[i - 1]!.tier);
-      expect(tiers.find((one) => one.level === 25)!.tier).toBeGreaterThan(1.5);
-      expect(tiers.find((one) => one.level === 35)!.tier).toBeGreaterThan(2.5);
-      expect(tiers.find((one) => one.level === 40)!.tier).toBeGreaterThan(4);
+      // Town Hall 4 comes at about level 25 and its new walls go up wood.
+      expect(tiers.find((one) => one.level === 25)!.tier).toBeGreaterThan(1.2);
+      expect(tiers.find((one) => one.level === 35)!.tier).toBeGreaterThan(2.2);
+      // Level 40 stands at Town Hall 7 or 8 (`WALL_TIER`: about 3 to 4).
+      expect(tiers.find((one) => one.level === 40)!.tier).toBeGreaterThan(3);
     },
     { timeout: 60_000 }
   );
@@ -235,6 +355,46 @@ describe("Progression", () => {
     }
   });
 
+  test("every Town Hall upgrade takes the Monster Locker step with it, so the locker is never behind", () => {
+    // The top locker level a hall allows: built at Town Hall 2, one more each hall to 4 at Town Hall 5.
+    const lockerFor = (hall: number) => Math.max(0, Math.min(hall - 1, 4));
+    for (const persona of PERSONAS) {
+      for (let seed = 0; seed < 3; seed++) {
+        const run = new Progression(seed * 7919 + 11, persona);
+        let action = run.next();
+        while (action) {
+          if (action.t === TOWN_HALL_TYPE && action.to <= 5) {
+            expect(action.then).toEqual({
+              kind: action.to === 2 ? "build" : "upgrade",
+              id: expect.any(Number),
+              t: 8,
+              to: lockerFor(action.to),
+            });
+          } else {
+            expect(action.then).toBeUndefined();
+          }
+          run.apply();
+          const locker = run.buildings().find((building) => building.t === 8)?.l ?? 0;
+          expect(locker).toBe(lockerFor(run.townHall));
+          action = run.next();
+        }
+      }
+    }
+  });
+
+  test("bots from level 15 have a locker at the top level their hall allows", () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const persona = PERSONAS[seed % PERSONAS.length]!;
+      for (const level of [15, 20, 25, 30, 40]) {
+        const yard = yardAtPoints(seed, persona, targetInBand(level, (seed % 10) / 10));
+        expect(yard.level).toBe(level);
+        const locker = yard.buildings.find((building) => building.t === 8);
+        expect(locker?.l).toBe(Math.min(yard.townHall - 1, 4));
+        expect(yard.builtAtHall[locker!.id]).toBe(2);
+      }
+    }
+  }, 60_000);
+
   test("next() is stable until apply() takes it", () => {
     const run = new Progression(9, "economy");
     for (let step = 0; step < 50; step++) {
@@ -269,8 +429,9 @@ describe("Progression", () => {
     };
     const towers = [20, 21, 23, 25, 115, 118];
     expect(share("towers", towers)).toBeGreaterThan(share("economy", towers));
-    const economy = [1, 2, 3, 4, 6];
-    expect(share("economy", economy)).toBeGreaterThan(share("army", economy));
+    // Every bot fills its harvesters first (the build plan), so the army bot shows its lean in monster buildings.
+    const army = [8, 9, 13, 15, 16, 114, 116, 119];
+    expect(share("army", army)).toBeGreaterThan(share("economy", army));
   });
 });
 
@@ -282,5 +443,27 @@ describe("levelOfTotal", () => {
         expect(levelOfTotal(total)).toBe(calculateBaseLevel(String(total), "0"));
       }
     }
+  });
+});
+
+describe("the minimum yard (owner, 2026-10-23)", () => {
+  test("a Town Hall 2 with every resource building and tower it allows and Housing comes at level 10-15, never past the level 15 floor", () => {
+    const levels: number[] = [];
+    for (let index = 0; index < 150; index++) {
+      const seed = 31337 + index * 7919;
+      const persona = PERSONAS[index % PERSONAS.length]!;
+      const total = minimumYardTotal(seed, persona);
+      const yard = yardAtPoints(seed, persona, total);
+      // The yard the run stops at for that total holds the minimum yard.
+      expect(yard.townHall).toBeGreaterThanOrEqual(MINIMUM_YARD.hall);
+      const count = (type: number) => yard.buildings.filter((building) => building.t === type).length;
+      for (const type of [1, 2, 3, 4, 6]) expect(count(type)).toBe(2);
+      expect(count(15)).toBe(1);
+      expect(count(20)).toBe(3);
+      expect(count(21)).toBe(3);
+      levels.push(levelOfTotal(total));
+    }
+    expect(Math.min(...levels)).toBeGreaterThanOrEqual(10);
+    expect(Math.max(...levels)).toBeLessThanOrEqual(15);
   });
 });

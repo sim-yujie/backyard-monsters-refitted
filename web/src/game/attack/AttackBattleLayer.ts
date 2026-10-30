@@ -1,5 +1,6 @@
 import {
   Assets,
+  CanvasSource,
   Container,
   Graphics,
   Rectangle,
@@ -38,7 +39,7 @@ import {
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
-import { BlastFx } from "./blastFx";
+import { BlastFx, type PunchyStrength } from "./blastFx";
 import { RingFx } from "./ringFx";
 import {
   BANDITO_PUNCHY,
@@ -48,9 +49,13 @@ import {
   splashLook,
 } from "./punchyMoments";
 import { dirtFor, surfaceHop } from "./burrowFx";
+import { classicLook } from "@/game/classicLook";
+import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
+import { StatusIconRow, statusesOf } from "./statusIcons";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
+import { SiegeFx, type SiegeArt } from "./siegeFx";
 import { TrapReveal } from "./trapReveal";
 import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
 import {
@@ -71,18 +76,29 @@ import {
 import {
   BIG_MAX_SHAKE,
   CHAMPION_STRIKE_FRAMES,
+  FELLED_AFTER_TICKS,
+  FELLED_TICKS,
   HIT_STOP_CHAMPION_MS,
   HIT_STOP_DESTROY_MS,
   SLOW_MO_EASE_SECONDS,
   SLOW_MO_SECONDS,
+  STRUCK_HOLD_TICKS,
   WINDUP_PULL_PX,
   bigLungeOffset,
   expectedSwingGap,
+  effectsQuality,
+  felledAlpha,
+  felledOffset,
   juiceLevel,
   nextSwingGap,
+  screenShakeOn,
   slowMoSeconds,
   squashScale,
+  struckFlash,
+  struckOffset,
+  struckSquash,
   windUpFrame,
+  type EffectsQuality,
   type JuiceLevel,
 } from "./juice";
 
@@ -190,6 +206,8 @@ export const STILL_LATCH_TICKS = 3;
 
 /** The tint a creep's body shows for `HURT_TICKS` after it is hit. */
 export const HURT_TINT = 0xff7070;
+/** The hot gold-white a creep's body flashes when a heavy round strikes it, in added light. */
+export const STRUCK_TINT = 0xffe2a8;
 
 /** The sheet a ranked D.A.V.E.'s rockets are cut from (`SPRITES.as:83`). */
 const ROCKET_SHEET: MonsterSheet = MONSTER_SPRITES["rocket"]!;
@@ -200,6 +218,7 @@ const CHAMPION_BAR = { width: 40, height: 5, gap: 8 } as const;
 
 /** The GPU texture limit assumed until the renderer says otherwise. */
 export const DEFAULT_MAX_TEXTURE_SIZE = 4096;
+
 
 /** How a creep should be drawn this frame, with no Pixi in it. */
 export interface CreepLayout {
@@ -232,10 +251,18 @@ export interface CreepPose {
   readonly swingAge?: number;
   /** When its next blow is expected, for the juiced wind-up; absent draws it as before. */
   readonly swing?: SwingTiming;
+  /**
+   * Ticks since Korath began his quake: the stomp's clock, which Flash starts
+   * at 0 with the quake (`Korath.as:183-185`), so the slam lands with the
+   * quake. Absent when he is not quaking.
+   */
+  readonly quakeAge?: number;
 }
 
 export interface LayoutOptions {
   readonly reducedMotion: boolean;
+  /** The Classic look: no walking hop, which Flash never had. */
+  readonly classic?: boolean;
 }
 
 /**
@@ -274,7 +301,9 @@ export const headingBetween = (from: Point, to: Point): number | null => {
 };
 
 /**
- * Which row cycle a creep shows: attacking, walking, or standing.
+ * Which row cycle a creep shows: Korath's stomp while he quakes
+ * (`Korath.getNextSprite`, `Korath.as:146-149`), else attacking, walking, or
+ * standing.
  *
  * A flyer never stands: it is in the air, and the only flyer sheets with a
  * standing row are Fomor's (`fly_3` to `fly_6`), whose row 0 has the wings
@@ -284,6 +313,7 @@ export const headingBetween = (from: Point, to: Point): number | null => {
  * waiting in the air keeps flapping (#206).
  */
 export const animationFor = (creep: CreepSnapshot, moving: boolean): MonsterAnimation => {
+  if (creep.quaking) return "stomp";
   if (creep.state === "attacking") return "attack";
   return moving || creep.flying ? "walk" : "idle";
 };
@@ -315,7 +345,7 @@ export const layoutCreep = (
   const row =
     animation === "attack"
       ? attackRow(sheet, pose.swingAge, pose.age, pose.swing)
-      : frameRow(sheet, animation, pose.age);
+      : frameRow(sheet, animation, animation === "stomp" ? (pose.quakeAge ?? pose.age) : pose.age);
   const anchor = anchorOffset(sheet);
 
   let y = ground.y + anchor.y;
@@ -328,7 +358,7 @@ export const layoutCreep = (
   } else if (creep.flying) {
     altitude = flyerAltitude(creep.monsterId);
     y += options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
-  } else if (pose.moving && !options.reducedMotion && singlePose(sheet)) {
+  } else if (pose.moving && !options.reducedMotion && !options.classic && singlePose(sheet)) {
     y -= Math.abs(Math.sin((pose.age / HOP_PERIOD_TICKS) * Math.PI)) * HOP_HEIGHT;
   }
 
@@ -362,7 +392,7 @@ export type SheetLoader = (url: string) => Promise<Texture>;
  * drawn at a quarter of its size or less at the usual zoom, and without them
  * it shimmers.
  */
-const loadSheet: SheetLoader = (url) =>
+export const loadSheet: SheetLoader = (url) =>
   Assets.load<Texture>(
     isHighResolutionSheet(url) ? { src: url, data: { autoGenerateMipmaps: true } } : url,
   );
@@ -373,9 +403,14 @@ const loadSheet: SheetLoader = (url) =>
  * Mirrors `YardTextures`: `frame` never blocks and never throws; it starts the
  * fetch on the first ask, returns null until the sheet is in, and remembers a
  * failure so a missing file is asked for once. Cells of a sheet within the
- * texture limit are `Texture`s framed over the one source. Cells of a sheet
- * over the limit are copied through a canvas into their own small source, so
- * the oversized image is never bound to the GPU.
+ * texture limit are `Texture`s framed over the one source. A painted sheet
+ * bigger than the limit is fetched as a smaller copy that fits (`sheetUrl`),
+ * so it is never downloaded and decoded whole. As a last resort, cells of a
+ * sheet still over the limit are copied through a canvas into their own small
+ * source, so the oversized image is never bound to the GPU: WebGL refuses a
+ * picture wider or taller than the limit, and Pixi would draw nothing for it.
+ * The limit is the picture's real size, so a `@4x` repaint counts four times
+ * the table's cells.
  */
 export class MonsterSheetTextures {
   private readonly sources = new Map<string, Texture>();
@@ -384,13 +419,14 @@ export class MonsterSheetTextures {
   private readonly cells = new Map<string, Texture>();
   /** Cells that own their source (canvas copies) and must be destroyed fully. */
   private readonly owned = new Set<Texture>();
-  private limit: number;
+  /** The limit given or set; null to go by the device's, once a layer has read it. */
+  private limit: number | null;
 
   constructor(
     private readonly load: SheetLoader = loadSheet,
-    maxTextureSize = DEFAULT_MAX_TEXTURE_SIZE,
+    maxTextureSize?: number,
   ) {
-    this.limit = maxTextureSize;
+    this.limit = maxTextureSize ?? null;
   }
 
   /** The GPU's texture limit, once the renderer has said what it is. */
@@ -399,12 +435,19 @@ export class MonsterSheetTextures {
   }
 
   get maxTextureSize(): number {
-    return this.limit;
+    return this.limit ?? deviceTextureLimit() ?? DEFAULT_MAX_TEXTURE_SIZE;
   }
 
-  /** Whether a sheet needs cutting through a canvas rather than framing. */
-  oversized(sheet: MonsterSheet): boolean {
-    return sheet.width > this.limit || sheet.height > this.limit;
+  /**
+   * Whether a sheet needs cutting through a canvas rather than framing: the
+   * loaded picture's size in pixels, or before it is in, the table's size
+   * times the resolution its URL names.
+   */
+  oversized(sheet: MonsterSheet, source?: Pick<TextureSource, "pixelWidth" | "pixelHeight">): boolean {
+    const scale = source ? 1 : sheetResolution(sheetUrl(sheet));
+    const width = source?.pixelWidth ?? sheet.width * scale;
+    const height = source?.pixelHeight ?? sheet.height * scale;
+    return width > this.maxTextureSize || height > this.maxTextureSize;
   }
 
   /** Starts fetching a sheet, so its first cell is ready sooner. */
@@ -423,7 +466,7 @@ export class MonsterSheetTextures {
     const rect = frameRect(sheet, column, row);
 
     let cell: Texture | null;
-    if (this.oversized(sheet)) {
+    if (this.oversized(sheet, source.source)) {
       cell = copyCell(source.source, rect);
       if (!cell) return null;
       this.owned.add(cell);
@@ -473,7 +516,8 @@ export class MonsterSheetTextures {
 
 /**
  * One cell of an oversized sheet, copied through a canvas into a texture of
- * its own. Null where there is no canvas to draw with, or nothing drawable
+ * its own at the sheet's resolution (`rect` is in 1x units, the picture `@4x`
+ * or so). Null where there is no canvas to draw with, or nothing drawable
  * behind the source, in which case the caller shows its marker instead.
  */
 const copyCell = (
@@ -483,40 +527,45 @@ const copyCell = (
   if (typeof document === "undefined") return null;
   const image = (source as { resource?: unknown }).resource;
   if (!image || typeof image !== "object") return null;
+  const scale = source.resolution > 0 ? source.resolution : 1;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(rect.width);
-  canvas.height = Math.ceil(rect.height);
+  canvas.width = Math.ceil(rect.width * scale);
+  canvas.height = Math.ceil(rect.height * scale);
   const context = canvas.getContext("2d");
   if (!context) return null;
   try {
     context.drawImage(
       image as CanvasImageSource,
-      rect.x,
-      rect.y,
-      rect.width,
-      rect.height,
+      rect.x * scale,
+      rect.y * scale,
+      rect.width * scale,
+      rect.height * scale,
       0,
       0,
-      rect.width,
-      rect.height,
+      rect.width * scale,
+      rect.height * scale,
     );
   } catch {
     return null;
   }
-  return Texture.from(canvas);
+  return new Texture({ source: new CanvasSource({ resource: canvas, resolution: scale }) });
 };
 
 /** The GPU texture limit a Pixi renderer reports, or null when it does not say. */
 export const gpuTextureLimit = (renderer: Renderer): number | null => {
   const gl = (renderer as { gl?: WebGLRenderingContext }).gl;
-  if (gl && typeof gl.getParameter === "function") {
-    const size: unknown = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    if (typeof size === "number" && size > 0) return size;
+  let size: unknown = null;
+  if (gl && typeof gl.getParameter === "function") size = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  if (typeof size !== "number" || size <= 0) {
+    const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
+      .device;
+    size = device?.limits?.maxTextureDimension2D;
   }
-  const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
-    .device;
-  const size = device?.limits?.maxTextureDimension2D;
-  return typeof size === "number" && size > 0 ? size : null;
+  if (typeof size !== "number" || size <= 0) return null;
+  // Remembered for every sheet cutter (the guide's walk-ins too, which have no
+  // renderer of their own) and for picking a copy the card can hold (`sheetUrl`).
+  setDeviceTextureLimit(size);
+  return size;
 };
 
 /* ── The layer ──────────────────────────────────────────────────────────── */
@@ -544,6 +593,8 @@ export interface BattleYardHost {
   flashBuilding?(id: number, on: boolean): void;
   /** The camera's zoom, so damage numbers keep their size on screen (#68); 1 when absent. */
   readonly zoom?: number;
+  /** Shifts one of a building's animation layers by world px: a gun's recoil; 0, 0 puts it back. */
+  nudgeAnim?(id: number, layer: number, dx: number, dy: number): void;
 }
 
 export interface AttackBattleLayerOptions {
@@ -555,9 +606,22 @@ export interface AttackBattleLayerOptions {
   readonly reducedMotion?: boolean;
   /** How big the effects are drawn; the player's setting when left out (feat/attack-juice-demo). */
   readonly juice?: JuiceLevel;
+  /**
+   * The Classic look (`game/classicLook.ts`); the player's choice when left
+   * out. It draws the battle as Flash did, whatever `juice` says.
+   */
+  readonly classic?: boolean;
+  /** The "Screen shake" switch; the player's setting when left out (beta.5). */
+  readonly screenShake?: boolean;
+  /** "Effects: full / low" for the towers' shots; the player's setting or the screen size when left out. */
+  readonly effectsQuality?: EffectsQuality;
   readonly textures?: MonsterSheetTextures;
   /** The bomb sheets; a test hands in its own (#87). */
   readonly bombArt?: BombArt;
+  /** The siege weapons' sheets; a test hands in its own (Inferno WP 6.8). */
+  readonly siegeArt?: SiegeArt;
+  /** The towers' shot sheet; a test hands in its own. */
+  readonly shotSheet?: (url: string) => Promise<Texture>;
   /** The bomb rain's randomness; `Math.random` unless a test fixes it. */
   readonly random?: () => number;
   /** Wall-clock milliseconds, for the rain after the end; `performance.now` unless a test fixes it. */
@@ -572,8 +636,8 @@ interface CreepView {
   shadow: Sprite | null;
   barBack: Sprite;
   barFront: Sprite;
-  /** The venom drop over a poisoned creep (issue #352). */
-  venom: Graphics;
+  /** The badges over a creep under an effect: venom, flame, enrage, putty, loot. */
+  status: StatusIconRow;
   /** The ground point at the last tick that was looked at, for the heading. */
   lastX: number;
   lastY: number;
@@ -594,10 +658,20 @@ interface CreepView {
   swingTick: number;
   /** Ticks expected from its last hit to the next, for the juiced wind-up. */
   swingGap: number;
+  /** The tick Korath was first seen quaking, the stomp's clock; -Infinity while he is not. */
+  quakeTick: number;
   lungeX: number;
   lungeY: number;
   /** The tick the creep was last hurt, for the red tint (#68). */
   hurtTick: number;
+  /** The tick a heavy round (the new look's Sniper) last struck it, and the unit vector it flew along. */
+  struckTick: number;
+  struckX: number;
+  struckY: number;
+  /** Its body again in added light, for the strike's flash; made at its first strike. */
+  glint: Sprite | null;
+  /** The tick a heavy round killed it: it stays up, frozen, thrown back and fading ({@link fell}). */
+  felledTick: number;
   /** Health at the last tick looked at: a rise is healing, shown green (#68). */
   lastHp: number;
   /** World y of the top of the body as last drawn, for the numbers over it. */
@@ -658,10 +732,11 @@ const SHADOW_ALPHA = 0.8;
 const SPLAT_COLOUR = 0x5da832;
 /** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
 const QUAKE_COLOUR = 0xf28500;
-/** The special moves' bursts (issue #352): a splash, a Bolt's hop, the venom drop. */
+/** The Quake Tower's `QuakeGraphic` line colour (`INFERNOQUAKETOWER.as`). */
+const TOWER_QUAKE_COLOUR = 0x6666cc;
+/** The special moves' bursts (issue #352): a splash, a Bolt's hop. */
 const SPLASH_COLOUR = 0xe8d44d;
 const BLINK_COLOUR = 0x9fd4ff;
-const VENOM_COLOUR = 0x7bd62a;
 /** Blink.as:78: a hopping Bolt is drawn at this alpha. A cloaked Brain is drawn the same. */
 const UNSEEN_ALPHA = 0.3;
 const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
@@ -730,12 +805,17 @@ export class AttackBattleLayer {
   private readonly fire = new Graphics();
   /** The Spurtz Cannon's shells, off their sheet, just over `fire` (issue #313). */
   private readonly shells = new Container();
+  /** The towers' painted shots (beta.5): their glow lines added on, their sparks over them. */
+  private readonly shotGlow = new Graphics();
+  private readonly shotSparks = new Container();
   private readonly bars = new Container();
 
   private readonly views = new Map<number, CreepView>();
   private readonly pool: CreepView[] = [];
   /** Creeps walking off the field: out of `views`, not yet back in `pool`. */
   private readonly leavers = new Map<number, Leaver>();
+  /** Creeps a heavy round killed, still up for a moment: out of `views`, not yet back in `pool`. */
+  private readonly felled = new Map<number, CreepView>();
   /** Every creep that has walked off or is walking, so the frozen field never redraws it. */
   private readonly departed = new Set<number>();
   /** Creeps the engine reported dead: they splat rather than walk off. */
@@ -768,6 +848,8 @@ export class AttackBattleLayer {
 
   /* Resource bombs (#87): the rain, and the health its particles still carry. */
   private readonly bombFx: BombFx;
+  /** The Decoy, the Vacuum's hose and the Jars (Inferno WP 6.8), in the bombs' air layer. */
+  private readonly siegeFx: SiegeFx;
   /** Falling particles, above the buildings and the bars, under the shots; made on the first bomb. */
   private air: Container | null = null;
   /** Landed debris, on the ground under the buildings; made on the first bomb. */
@@ -805,6 +887,8 @@ export class AttackBattleLayer {
 
   /* The bigger effects trial (feat/attack-juice-demo); drawing only. */
   private readonly juice: JuiceLevel;
+  /** The Classic look: Flash's battle, without the new effects (`game/classicLook.ts`). */
+  private readonly classic: boolean;
   /** Wall-clock ms the picture holds still until, for a hit-stop; the battle runs on. */
   private holdUntil = Number.NEGATIVE_INFINITY;
   /** Whether the attack-ending blow plays its last moments in slow motion. */
@@ -821,7 +905,8 @@ export class AttackBattleLayer {
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
     this.textures = options.textures ?? new MonsterSheetTextures();
     this.now = options.now ?? (() => performance.now());
-    this.juice = options.juice ?? juiceLevel();
+    this.classic = options.classic ?? classicLook();
+    this.juice = this.classic ? "off" : (options.juice ?? juiceLevel());
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -831,17 +916,20 @@ export class AttackBattleLayer {
 
     this.depth = this.host.depthSortedLayer();
     this.shadows = this.host.groundShadowLayer?.() ?? this.depth;
-    for (const layer of [this.effects, this.blastAir, this.fire, this.shells, this.bars]) {
+    for (const layer of [this.effects, this.blastAir, this.fire, this.shells, this.shotGlow, this.shotSparks, this.bars]) {
       layer.eventMode = "none";
     }
+    this.shotGlow.blendMode = "add";
     // Our own children only: the drop ring and anything else already in the
     // overlay stays where it is.
-    this.overlay.addChild(this.effects, this.fire, this.shells, this.bars);
+    this.overlay.addChild(this.effects, this.fire, this.shells, this.shotGlow, this.shotSparks, this.bars);
+    // The "Screen shake" switch stills every shake, the blasts' and the towers'.
+    const shakeOn = !this.classic && (options.screenShake ?? screenShakeOn());
     this.blastFx = new BlastFx(
       {
         air: this.blastAir,
         ground: () => this.debrisLayer(),
-        shake: (dx, dy) => this.shakeYard(dx, dy),
+        ...(shakeOn ? { shake: (dx: number, dy: number) => this.shakeYard(dx, dy) } : {}),
       },
       this.reducedMotion,
       this.juice === "full" ? BIG_MAX_SHAKE : undefined,
@@ -859,6 +947,18 @@ export class AttackBattleLayer {
         ...(options.random ? { random: options.random } : {}),
       },
     );
+    const buildingOf = new Map(options.yard.buildings.map((building) => [building.id, building]));
+    this.siegeFx = new SiegeFx(
+      {
+        air: () => this.airLayer(),
+        world: (x, y) => groundWorld(x, y, this.origin),
+        building: (id) => buildingOf.get(id) ?? null,
+      },
+      {
+        reducedMotion: this.reducedMotion,
+        ...(options.siegeArt ? { art: options.siegeArt } : {}),
+      },
+    );
     this.fx = new CreepFx(
       {
         creepAnchor: (id) => this.creepAnchor(id),
@@ -869,6 +969,7 @@ export class AttackBattleLayer {
       },
       this.reducedMotion,
       this.juice !== "off",
+      !this.classic,
     );
     this.overlay.addChild(this.fx.root);
 
@@ -881,9 +982,24 @@ export class AttackBattleLayer {
       {
         setAnimFrame: (id, layer, frame) => this.host.setAnimFrame(id, layer, frame),
         landed: (key, tick) => this.showReleased(this.ledger.land(key), tick),
+        struck: (id, tick, dirX, dirY) => this.onStruck(id, tick, dirX, dirY),
         shellLayer: () => this.shells,
+        nudge: (id, layer, dx, dy) => this.host.nudgeAnim?.(id, layer, dx, dy),
       },
       this.origin,
+      {
+        // `?juice=0` keeps the old look; "Reduce effects" or "Effects: low" draw fewer bits.
+        look:
+          this.juice === "off"
+            ? "classic"
+            : this.juice === "reduced" || (options.effectsQuality ?? effectsQuality()) === "low"
+              ? "low"
+              : "full",
+        sparks: this.shotSparks,
+        glow: this.shotGlow,
+        shake: (tick, amp, life) => this.blastFx.jolt(tick, amp, life),
+        ...(options.shotSheet ? { load: options.shotSheet } : {}),
+      },
     );
     const originOf = new Map<number, Point>();
     for (const building of options.yard.buildings) {
@@ -933,14 +1049,16 @@ export class AttackBattleLayer {
       // Creeps the engine still has first, then this frame's events, and only
       // then the ones it dropped: a creep a held bullet killed must still have
       // its view when its death is read, to stay on screen until the bullet lands.
-      const seen = this.syncCreeps(battle.creeps(), tick);
+      const live = battle.creeps();
+      const seen = this.syncCreeps(live, tick);
       for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
       this.lastEventTick = tick;
       this.settleGone(seen, tick);
 
-      this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined);
+      this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined, live);
       this.showReleased(this.ledger.expire(tick), tick);
       this.paintCreeps(tick);
+      this.fell(tick);
       if (this.session.ended && !this.endWalked) this.walkOffAtEnd(shown);
       this.walkOff(shown);
     }
@@ -952,6 +1070,7 @@ export class AttackBattleLayer {
     this.blastFx.update(shown);
     this.fx.update(shown);
     this.bombFx.update(shown);
+    this.siegeFx.update(battle.siege(), shown);
     this.showBombNumbers(shown);
 
     if (this.damageDirty) {
@@ -1015,6 +1134,8 @@ export class AttackBattleLayer {
     this.views.clear();
     for (const leaver of this.leavers.values()) this.release(leaver.view);
     this.leavers.clear();
+    for (const view of this.felled.values()) this.release(view);
+    this.felled.clear();
     this.ledger.clear();
     this.heldBuildingHp.clear();
     this.lastJump.clear();
@@ -1120,7 +1241,7 @@ export class AttackBattleLayer {
 
   /** How many creeps have a sprite right now, walkers included. */
   get creepCount(): number {
-    return this.views.size + this.leavers.size;
+    return this.views.size + this.leavers.size + this.felled.size;
   }
 
   /** The projectiles, smoke and damage numbers, for a test or the dev hook to read. */
@@ -1139,10 +1260,27 @@ export class AttackBattleLayer {
     return view ? this.shownFraction(view) : null;
   }
 
-  /** How a creep's body and bar are drawn right now, for a test or the dev hook; null with no sprite. */
-  bodyOf(id: number): { readonly alpha: number; readonly barAlpha: number; readonly y: number } | null {
-    const view = this.views.get(id);
-    return view ? { alpha: view.body.alpha, barAlpha: view.barBack.alpha, y: view.body.y } : null;
+  /**
+   * How a creep's body and bar are drawn right now, for a test or the dev
+   * hook, a creep a heavy round killed included; null with no sprite. `glint`
+   * is the strike's flash over the body, 0 when there is none.
+   */
+  bodyOf(id: number): {
+    readonly alpha: number;
+    readonly barAlpha: number;
+    readonly y: number;
+    readonly glint: number;
+    readonly felled: boolean;
+  } | null {
+    const view = this.views.get(id) ?? this.felled.get(id);
+    if (!view) return null;
+    return {
+      alpha: view.body.alpha,
+      barAlpha: view.barBack.alpha,
+      y: view.body.y,
+      glint: view.glint?.visible ? view.glint.alpha : 0,
+      felled: this.felled.has(id),
+    };
   }
 
   /** Splats, dirt and gibs still fading on the ground, for tests. */
@@ -1173,8 +1311,10 @@ export class AttackBattleLayer {
 
     for (const view of [...this.views.values(), ...this.pool]) this.dispose(view);
     for (const leaver of this.leavers.values()) this.dispose(leaver.view);
+    for (const view of this.felled.values()) this.dispose(view);
     this.views.clear();
     this.leavers.clear();
+    this.felled.clear();
     this.pool.length = 0;
 
     for (const splat of this.splats) {
@@ -1198,6 +1338,7 @@ export class AttackBattleLayer {
     this.lastJump.clear();
     this.fx.destroy();
     this.bombFx.destroy();
+    this.siegeFx.destroy();
     this.heldBombHp.clear();
     this.rains.clear();
     this.bombNumbers.clear();
@@ -1208,7 +1349,7 @@ export class AttackBattleLayer {
 
     // Only what this added: the overlay and the sorted container are the
     // scene's and the renderer's, and keep their other children.
-    for (const layer of [this.effects, this.fire, this.shells, this.bars]) {
+    for (const layer of [this.effects, this.fire, this.shells, this.shotGlow, this.shotSparks, this.bars]) {
       this.overlay.removeChild(layer);
       layer.destroy({ children: true });
     }
@@ -1302,7 +1443,7 @@ export class AttackBattleLayer {
         continue;
       }
       this.died.delete(id);
-      this.release(view);
+      this.letGo(view, tick);
     }
   }
 
@@ -1342,9 +1483,9 @@ export class AttackBattleLayer {
     this.departed.add(view.id);
     this.leavers.set(view.id, { view, plan });
     this.walkOffUntil = Math.max(this.walkOffUntil, shown + WALK_OFF_TICKS + WALK_OFF_PAUSE_TICKS);
-    // Whatever it was doing, it is only walking now: no hurt tint, no venom.
+    // Whatever it was doing, it is only walking now: no hurt tint, no badges.
     view.body.tint = view.baseTint;
-    view.venom.visible = false;
+    view.status.hide();
   }
 
   /** Moves and fades every walker; one that is done goes back to the pool. */
@@ -1399,13 +1540,15 @@ export class AttackBattleLayer {
             ? abilityTint(view.snapshot)
             : view.baseTint;
       this.paintMoves(view, tick);
+      this.paintGlint(view, tick);
     }
   }
 
   /**
    * The special moves' looks (issue #352): a hopping Bolt flickers at the
    * alpha Flash gave it (Blink.as:78), a cloaked Brain is see-through, and a
-   * poisoned creep carries a green drop that grows with its stacks.
+   * creep under an effect carries its icons over the bar ({@link StatusIconRow}),
+   * the venom's growing with its stacks.
    */
   private paintMoves(view: CreepView, tick: number): void {
     const creep = view.snapshot;
@@ -1416,12 +1559,12 @@ export class AttackBattleLayer {
     if (view.burrowed) view.body.alpha = 0;
     view.barBack.alpha = view.burrowed ? 0 : 1;
     view.barFront.alpha = view.barBack.alpha;
-    const stacks = creep?.poisonStacks ?? 0;
-    view.venom.visible = stacks > 0;
-    if (stacks > 0) {
-      view.venom.position.set(view.barBack.x + view.barBack.width + 5, view.barBack.y - 3);
-      view.venom.scale.set(1 + Math.min(stacks, 5) * 0.12);
-    }
+    view.status.show(
+      statusesOf(creep),
+      view.barBack.x + view.barBack.width / 2,
+      view.barBack.y,
+      view.barBack.alpha * view.body.alpha,
+    );
   }
 
   private acquire(creep: CreepSnapshot, tick: number): CreepView {
@@ -1447,9 +1590,14 @@ export class AttackBattleLayer {
     view.lungeTick = Number.NEGATIVE_INFINITY;
     view.swingTick = Number.NEGATIVE_INFINITY;
     view.swingGap = expectedSwingGap(creep.monsterId, creep.level, creep.champion);
+    view.quakeTick = Number.NEGATIVE_INFINITY;
     view.lungeX = 0;
     view.lungeY = 0;
     view.hurtTick = Number.NEGATIVE_INFINITY;
+    view.struckTick = Number.NEGATIVE_INFINITY;
+    view.struckX = 0;
+    view.struckY = 0;
+    view.felledTick = Number.NEGATIVE_INFINITY;
     view.lastHp = creep.hp;
     view.top = ground.y;
     view.snapshot = creep;
@@ -1478,10 +1626,8 @@ export class AttackBattleLayer {
     barBack.tint = BAR_BACK_COLOUR;
     const barFront = new Sprite(Texture.WHITE);
     barFront.tint = BAR_FRONT_COLOUR;
-    const venom = new Graphics();
-    venom.moveTo(0, -5).quadraticCurveTo(4, 0, 0, 3).quadraticCurveTo(-4, 0, 0, -5).fill({ color: VENOM_COLOUR });
-    venom.visible = false;
-    this.bars.addChild(barBack, barFront, venom);
+    const status = new StatusIconRow();
+    this.bars.addChild(barBack, barFront, status.container);
     return {
       id: -1,
       monsterId: "",
@@ -1490,7 +1636,7 @@ export class AttackBattleLayer {
       shadow: null,
       barBack,
       barFront,
-      venom,
+      status,
       lastX: 0,
       lastY: 0,
       lastTick: -1,
@@ -1503,9 +1649,15 @@ export class AttackBattleLayer {
       lungeTick: Number.NEGATIVE_INFINITY,
       swingTick: Number.NEGATIVE_INFINITY,
       swingGap: 60,
+      quakeTick: Number.NEGATIVE_INFINITY,
       lungeX: 0,
       lungeY: 0,
       hurtTick: Number.NEGATIVE_INFINITY,
+      struckTick: Number.NEGATIVE_INFINITY,
+      struckX: 0,
+      struckY: 0,
+      glint: null,
+      felledTick: Number.NEGATIVE_INFINITY,
       lastHp: 0,
       top: 0,
       snapshot: null,
@@ -1520,7 +1672,8 @@ export class AttackBattleLayer {
     view.body.visible = false;
     view.barBack.visible = false;
     view.barFront.visible = false;
-    view.venom.visible = false;
+    view.status.hide();
+    if (view.glint) view.glint.visible = false;
     // A walker leaves faded; the next creep to use the view starts whole.
     view.barBack.alpha = 1;
     view.barFront.alpha = 1;
@@ -1536,13 +1689,17 @@ export class AttackBattleLayer {
   private dispose(view: CreepView): void {
     this.depth.removeChild(view.body);
     view.body.destroy();
+    if (view.glint) {
+      this.depth.removeChild(view.glint);
+      view.glint.destroy();
+    }
     if (view.shadow) {
       this.shadows.removeChild(view.shadow);
       view.shadow.destroy();
     }
     view.barBack.destroy();
     view.barFront.destroy();
-    view.venom.destroy();
+    view.status.destroy();
   }
 
   private place(view: CreepView, creep: CreepSnapshot, tick: number): void {
@@ -1587,26 +1744,31 @@ export class AttackBattleLayer {
 
     const sheet = view.sheet;
     const swing = this.swingTiming(view);
+    if (!creep.quaking) view.quakeTick = Number.NEGATIVE_INFINITY;
+    else if (view.quakeTick === Number.NEGATIVE_INFINITY) view.quakeTick = tick;
     const pose: CreepPose = {
       heading: view.heading,
       moving: view.moving,
       age: tick - view.bornTick,
       swingAge: tick - view.swingTick,
       ...(swing ? { swing } : {}),
+      ...(creep.quaking ? { quakeAge: tick - view.quakeTick } : {}),
     };
     const body = view.body;
 
     // A melee hit nudges the body toward what it struck and back (#63). The
     // wound's tint (#68) and the health bar wait for `paintCreeps`, after
     // this frame's bullets have landed (#77). Juiced, it snaps further, and
-    // the body leans back as it winds up and squashes and stretches.
+    // the body leans back as it winds up and squashes and stretches; not
+    // while Korath stamps out his quake, which has its own frames.
     const sinceHit = tick - view.swingTick;
+    const swinging = creep.state === "attacking" && !creep.quaking;
     const windUp =
-      swing && sheet && creep.state === "attacking" && !view.moving
+      swing && sheet && swinging && !view.moving
         ? this.windUpOf(sheet, sinceHit, swing)
         : null;
     const squash =
-      swing && !this.reducedMotion && creep.state === "attacking" && !creep.flying
+      swing && !this.reducedMotion && swinging && !creep.flying
         ? squashScale(sinceHit, windUp, swing.strike ?? 2)
         : { x: 1, y: 1 };
     const lunge = this.reducedMotion
@@ -1617,26 +1779,43 @@ export class AttackBattleLayer {
         : lungeOffset(tick - view.lungeTick);
     // A Wormzer that has just come up hops out of its hole (`MonsterBase.jump`).
     const hop = this.reducedMotion ? 0 : surfaceHop(tick - view.surfaceTick);
+    // A heavy round knocks it back along the round's flight, flattens it and
+    // holds it on one frame for a moment ({@link onStruck}).
+    // One it killed is thrown further and stays on that frame ({@link fell}).
+    const struck = tick - view.struckTick;
+    const felled = view.felledTick !== Number.NEGATIVE_INFINITY;
+    const knock = this.reducedMotion
+      ? 0
+      : felled
+        ? felledOffset(tick - view.felledTick)
+        : struckOffset(struck);
+    const flat = this.reducedMotion ? { x: 1, y: 1 } : struckSquash(struck);
+    const held =
+      view.cellKey !== "" &&
+      (felled || (!this.reducedMotion && struck >= 0 && struck < STRUCK_HOLD_TICKS));
 
     let top: number;
     if (sheet) {
       const layout = layoutCreep(creep, sheet, pose, this.origin, {
         reducedMotion: this.reducedMotion,
+        classic: this.classic,
       });
       const cell = this.textures.frame(sheet, layout.column, layout.row);
       if (cell) {
-        if (view.cellKey !== layout.key) {
+        if (view.cellKey !== layout.key && !held) {
           view.cellKey = layout.key;
           body.texture = cell;
         }
-        body.scale.set(squash.x, squash.y);
+        const scaleX = squash.x * flat.x;
+        const scaleY = squash.y * flat.y;
+        body.scale.set(scaleX, scaleY);
         view.baseTint = 0xffffff;
         // Whole pixels, as Flash drew them (`MonsterBase.as:613-616`): a cell
         // sampled at a fraction of a pixel shimmers as it moves. A squash
         // scales about the feet, so they stay on the ground.
         body.position.set(
-          Math.round(layout.groundX + (layout.x - layout.groundX) * squash.x + lunge * view.lungeX),
-          Math.round(layout.groundY + (layout.y - layout.groundY) * squash.y + lunge * view.lungeY - hop),
+          Math.round(layout.groundX + (layout.x - layout.groundX) * scaleX + lunge * view.lungeX + knock * view.struckX),
+          Math.round(layout.groundY + (layout.y - layout.groundY) * scaleY + lunge * view.lungeY + knock * view.struckY - hop),
         );
         top = layout.y - hop;
       } else {
@@ -1829,6 +2008,82 @@ export class AttackBattleLayer {
     this.fx.number(tick, `creep:${wound.creepId}`, wound.creepId, wound.amount, at, "damage");
   }
 
+  /**
+   * A heavy round struck a creep (the new look's Sniper Tower): its body
+   * flashes hot, is knocked back along the round's flight and flattened, and
+   * holds on one frame for a moment, a hit-stop on the creep alone. Drawing only.
+   */
+  private onStruck(creepId: number, tick: number, dirX: number, dirY: number): void {
+    const view = this.views.get(creepId);
+    if (!view) return;
+    view.struckTick = tick;
+    view.struckX = dirX;
+    view.struckY = dirY;
+  }
+
+  /**
+   * A dead creep's view back to the pool; one a heavy round struck in its last
+   * few ticks falls first ({@link fell}).
+   */
+  private letGo(view: CreepView, tick: number): void {
+    if (tick - view.struckTick <= FELLED_AFTER_TICKS && view.snapshot) {
+      view.felledTick = view.struckTick;
+      this.felled.set(view.id, view);
+      return;
+    }
+    this.release(view);
+  }
+
+  /**
+   * A creep a heavy round killed: frozen on its last frame, flashing, thrown
+   * back along the round's flight and fading over its splat, then let go.
+   * Drawing only; the engine let go of it already.
+   */
+  private fell(tick: number): void {
+    for (const [id, view] of this.felled) {
+      const age = tick - view.felledTick;
+      if (age >= FELLED_TICKS || !view.snapshot) {
+        this.felled.delete(id);
+        this.release(view);
+        continue;
+      }
+      this.place(view, view.snapshot, tick);
+      view.barBack.visible = false;
+      view.barFront.visible = false;
+      view.status.hide();
+      const alpha = felledAlpha(age);
+      view.body.alpha = alpha;
+      if (view.shadow) view.shadow.alpha = SHADOW_ALPHA * alpha;
+      this.paintGlint(view, tick);
+    }
+  }
+
+  /** The strike's flash: the body drawn again over itself in added light, fading. */
+  private paintGlint(view: CreepView, tick: number): void {
+    const flash = struckFlash(tick - view.struckTick);
+    if (flash <= 0 || !view.body.visible || view.burrowed) {
+      if (view.glint) view.glint.visible = false;
+      return;
+    }
+    let glint = view.glint;
+    if (!glint) {
+      glint = new Sprite(view.body.texture);
+      glint.eventMode = "none";
+      glint.blendMode = "add";
+      glint.tint = STRUCK_TINT;
+      this.depth.addChild(glint);
+      view.glint = glint;
+    }
+    const body = view.body;
+    glint.texture = body.texture;
+    glint.anchor.copyFrom(body.anchor);
+    glint.position.copyFrom(body.position);
+    glint.scale.copyFrom(body.scale);
+    glint.zIndex = body.zIndex + 0.5;
+    glint.alpha = flash * body.alpha;
+    glint.visible = true;
+  }
+
   /** What landed bullets let go of: their wounds, then the deaths those held. */
   private showReleased(released: Released<DeathEvent>, tick: number): void {
     for (const wound of released.wounds) this.showWound(wound, tick);
@@ -1841,7 +2096,7 @@ export class AttackBattleLayer {
       // The engine let go of this creep a flight ago; its ghost goes with the splat.
       if (view && !this.ledger.holds(death.creepId)) {
         this.views.delete(death.creepId);
-        this.release(view);
+        this.letGo(view, tick);
       }
     }
   }
@@ -2101,17 +2356,37 @@ export class AttackBattleLayer {
       this.towerFx.onCharge(event.towerId, event.tick);
       return;
     }
+    if (event.kind === "towerCell") {
+      this.towerFx.onTowerCell(event.towerId, event.cell);
+      return;
+    }
+    if (event.kind === "towerQuake") {
+      // The Quake Tower's `QuakeGraphic`: rings out to its reach, in its blue.
+      const at = this.towerFx.onTowerQuake(event.towerId, event.tick);
+      if (at) this.spawnRing(event.tick, at, event.radius, TOWER_QUAKE_COLOUR);
+      return;
+    }
+    if (event.kind === "coilRest") {
+      this.towerFx.onCoilRest(event.towerId, event.tick, event.rearmBy);
+      return;
+    }
+    // A monster out moves nothing: the shutters follow the door (`bunkerDoor`).
+    if (event.kind === "release") return;
+    if (event.kind === "bunkerDoor") {
+      this.towerFx.onDoor(event.buildingId, event.tick, event.open);
+      return;
+    }
     if (event.kind === "splash") {
       // Eye-ra's blast is a fireball (feat/eyera-explosion); a Bandito's
       // rings come with a flash (feat/punchy-trial); the rest keep the rings.
       const at = groundWorld(event.ix, event.iy, this.origin);
-      const look = splashLook(event.moveId);
+      const look = splashLook(event.moveId, this.classic);
       if (look === "fiery") {
         this.blastFx.fiery(event.tick, at, event.radius);
         return;
       }
       this.spawnRing(event.tick, at, event.radius, SPLASH_COLOUR);
-      if (look === "rings-flash") this.blastFx.punchy(event.tick, at, event.radius, BANDITO_PUNCHY);
+      if (look === "rings-flash") this.punchy(event.tick, at, event.radius, BANDITO_PUNCHY);
       return;
     }
     if (event.kind === "blink") {
@@ -2143,7 +2418,7 @@ export class AttackBattleLayer {
       view.surfaceTick = tick;
       // Up out of the ground to bite: a light punchy blast (feat/punchy-trial);
       // not when it comes up to walk, home or to a foe close by.
-      if (creep.state === "attacking") this.blastFx.punchy(tick, ground, SURFACE_BLAST_RADIUS, SURFACE_PUNCHY);
+      if (creep.state === "attacking") this.punchy(tick, ground, SURFACE_BLAST_RADIUS, SURFACE_PUNCHY);
     }
     view.burrowed = under;
     view.dirtTick = tick;
@@ -2242,7 +2517,12 @@ export class AttackBattleLayer {
   private spawnQuake(tick: number, at: Point, radius: number): void {
     this.spawnRing(tick, at, radius, QUAKE_COLOUR);
     // And the stomp itself, a punchy blast inside the reach (feat/punchy-trial).
-    this.blastFx.punchy(tick, at, radius * 0.9, QUAKE_PUNCHY);
+    this.punchy(tick, at, radius * 0.9, QUAKE_PUNCHY);
+  }
+
+  /** A punchy blast (feat/punchy-trial), new with the revamp, so never in the Classic look. */
+  private punchy(tick: number, at: Point, radius: number, strength: PunchyStrength): void {
+    if (!this.classic) this.blastFx.punchy(tick, at, radius, strength);
   }
 
   /** Three fading rings on the ground, radius wide: a quake, or a special move's burst. */

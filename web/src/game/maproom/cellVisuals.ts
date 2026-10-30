@@ -1,6 +1,7 @@
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
 import { HexGrid } from "@/game/HexGrid";
+import { classicLook } from "@/game/classicLook";
 
 /**
  * What a cell looks like, as data.
@@ -51,9 +52,16 @@ export interface CellAppearance {
   truce: boolean;
   /**
    * The player's own outpost with its worker free (#338; Flash's `mcWorker`):
-   * a small blue creature beside the tower. Only the owner sees it.
+   * a small blue creature beside the tower. Only the owner sees it, and only
+   * in Classic.
    */
   idleWorker: boolean;
+  /**
+   * Modern's opposite of `idleWorker` (owner, 29 Oct 2026): the player's own
+   * outpost with something being built, upgraded or fortified, shown as a
+   * painted construction badge beside the tower. Only the owner sees it.
+   */
+  underConstruction: boolean;
   /**
    * The player's own outpost with an invitation to move onto it still waiting
    * (#205; Flash's `mcInvite`): Flash's open envelope on its tower. Only the owner sees it.
@@ -140,25 +148,34 @@ export const DEFAULT_VIEWER_CONTEXT: MapViewerContext = { myAlliance: null, kitF
  *
  * The cut-offs are the server's, not a rounding of them: height <= 99 is water
  * and can never be occupied, 100..109 is sand, 110..169 is grass in four
- * shades, 170 and above is rock.
+ * shades, 170 and above is rock. They are also Flash's ground tiles, in the
+ * same order (`MapRoomCell.Update`, `groundArt.ts`).
  *
- * The shades are the toned-down ground of the approved "one calm look"
- * (#176, R-MR2-Map-A): quieter water, sand and grass, so the camps and the
- * players carry the colour.
+ * The colours are those tiles' average, so the far view's one texel per cell
+ * reads as the textured ground it zooms into: water as Flash showed it, under
+ * its half-clear sheet of light blue. Modern's repainted tiles are shifted to
+ * the same averages (`web/tools/maproom-ground/build.py`), so both looks share
+ * the land colours; Modern's toned-down water has its own (`modern`).
  */
-const TERRAIN_BANDS: { maxHeight: number; colour: number }[] = [
-  { maxHeight: 79, colour: 0x1a3048 },
-  { maxHeight: 89, colour: 0x1d3a57 },
-  { maxHeight: WATER_MAX_HEIGHT, colour: 0x234565 },
-  { maxHeight: 104, colour: 0xb9ad86 },
-  { maxHeight: 109, colour: 0xaa9d75 },
-  { maxHeight: 119, colour: 0x557a48 },
-  { maxHeight: 139, colour: 0x4b6d41 },
-  { maxHeight: 159, colour: 0x43623a },
-  { maxHeight: 169, colour: 0x3c5835 },
-  { maxHeight: 174, colour: 0x6d6b64 },
-  { maxHeight: Number.POSITIVE_INFINITY, colour: 0x64625c },
+const TERRAIN_BANDS: { maxHeight: number; colour: number; modern?: number }[] = [
+  { maxHeight: 79, colour: 0x23a2c1, modern: 0x387396 },
+  { maxHeight: 89, colour: 0x2aacce, modern: 0x417da3 },
+  { maxHeight: WATER_MAX_HEIGHT, colour: 0x32b6db, modern: 0x4987b2 },
+  { maxHeight: 104, colour: 0xcfbd79 },
+  { maxHeight: 109, colour: 0xcaa670 },
+  { maxHeight: 119, colour: 0x647f16 },
+  { maxHeight: 139, colour: 0x4d7b0d },
+  { maxHeight: 159, colour: 0x415d0e },
+  { maxHeight: 169, colour: 0x395e10 },
+  { maxHeight: 174, colour: 0x334b1c },
+  { maxHeight: Number.POSITIVE_INFINITY, colour: 0x4d5d3f },
 ];
+
+/** Which of the eleven terrain bands a height falls in, 0 (deepest water) to 10 (high rock). */
+export const terrainBand = (height: number): number => {
+  const index = TERRAIN_BANDS.findIndex((band) => height <= band.maxHeight);
+  return index < 0 ? TERRAIN_BANDS.length - 1 : index;
+};
 
 /** Fill for a cell whose zone has not arrived yet. */
 export const LOADING_COLOUR = 0x272c38;
@@ -263,10 +280,9 @@ const PLAYER_COLOUR = 0xe8ecf5;
 const OUTPOST_COLOUR = 0xb9c2d6;
 
 export const terrainColour = (height: number): number => {
-  for (const band of TERRAIN_BANDS) {
-    if (height <= band.maxHeight) return band.colour;
-  }
-  return LOADING_COLOUR;
+  if (Number.isNaN(height)) return LOADING_COLOUR;
+  const band = TERRAIN_BANDS[terrainBand(height)]!;
+  return classicLook() ? band.colour : (band.modern ?? band.colour);
 };
 
 /** The appearance of a cell that has not loaded. */
@@ -281,6 +297,7 @@ export const loadingAppearance = (): CellAppearance => ({
   protected: false,
   truce: false,
   idleWorker: false,
+  underConstruction: false,
   invitePending: false,
   loading: true,
   star: "",
@@ -352,6 +369,7 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     protected: false,
   truce: false,
   idleWorker: false,
+  underConstruction: false,
     invitePending: false,
     loading: false,
     star: "",
@@ -401,6 +419,7 @@ export const appearanceOf = (
     protected: false,
   truce: false,
   idleWorker: false,
+  underConstruction: false,
     invitePending: false,
     loading: false,
     star: "",
@@ -433,7 +452,8 @@ export const appearanceOf = (
       own,
       protected: cell.p === 1,
       truce: truceActive,
-      idleWorker: own && outpost && cell.wi === 1,
+      idleWorker: classicLook() && own && outpost && cell.wi === 1,
+      underConstruction: !classicLook() && own && outpost && cell.wb === 1,
       invitePending: own && outpost && Number(cell.pi) > 0,
       star: String(cell.l),
       plateColour: style.colour,

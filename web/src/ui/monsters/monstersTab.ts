@@ -103,6 +103,8 @@ export const MonsterBuilding = {
   HCC: 16,
   ACADEMY: 26,
   LAB: 116,
+  /** The Inferno yard's housing, the Compound (`HOUSINGBUNKER`). */
+  HOUSING_BUNKER: 128,
 } as const;
 
 /** The tab each monster building opens (D4). */
@@ -111,6 +113,7 @@ export const TAB_FOR_BUILDING: Readonly<Record<number, MonstersTabId>> = {
   [MonsterBuilding.HATCHERY]: MonstersTabId.HATCH,
   [MonsterBuilding.HCC]: MonstersTabId.HATCH,
   [MonsterBuilding.HOUSING]: MonstersTabId.HOUSING,
+  [MonsterBuilding.HOUSING_BUNKER]: MonstersTabId.HOUSING,
   [MonsterBuilding.ACADEMY]: MonstersTabId.TRAIN,
   [MonsterBuilding.LAB]: MonstersTabId.LAB,
 };

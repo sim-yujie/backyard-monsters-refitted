@@ -2,7 +2,16 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AvatarId } from "@/game/avatars";
-import { AccountMenu, DEFAULT_NOTE, PICK_FAILED, accountName, levelText } from "./AccountMenu";
+import {
+  AccountMenu,
+  DEFAULT_NOTE,
+  PICK_FAILED,
+  SOUND_SAVE_FAILED,
+  accountName,
+  levelText,
+  soundSwitchText,
+} from "./AccountMenu";
+import { loadSoundSwitches, resetSoundSwitchesForTest } from "@/game/sound/soundSwitches";
 
 describe("AccountMenu", () => {
   let menu: AccountMenu | null = null;
@@ -318,6 +327,23 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
+  describe("the Join the Discord item", () => {
+    it("is always there, after Report a bug, and opens the invite in a new tab", () => {
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onReportBug: vi.fn() });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLAnchorElement>(".account-menu__discord")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("Join the Discord");
+      expect(item.getAttribute("href")).toBe("https://discord.gg/wthryBRZHz");
+      expect(item.target).toBe("_blank");
+      expect(item.rel).toBe("noopener noreferrer");
+      expect(item.previousElementSibling?.classList.contains("account-menu__report-bug")).toBe(true);
+      item.addEventListener("click", (event) => event.preventDefault());
+      item.click();
+      expect(menu.open).toBe(false);
+    });
+  });
 });
 
 /**
@@ -337,5 +363,67 @@ describe("AccountMenu stacking", () => {
     );
     expect(rule?.[1]).toMatch(/z-index:\s*var\(--z-popup\)/);
     expect(token("z-popup")).toBeGreaterThan(token("z-hud"));
+  });
+});
+
+/** The two sound switches beside "Reduce effects" (beta.5). */
+describe("AccountMenu sound switches", () => {
+  let menu: AccountMenu | null = null;
+
+  afterEach(() => {
+    menu?.destroy();
+    menu = null;
+    resetSoundSwitchesForTest();
+  });
+
+  const build = async (stored: { music: boolean; effects: boolean }, failSave = false) => {
+    const saves: unknown[] = [];
+    resetSoundSwitchesForTest({
+      account: () => 7,
+      fetch: async () => ({ ...stored }),
+      save: async (change) => {
+        saves.push(change);
+        if (failSave) throw new Error("offline");
+        return { ...stored, ...change };
+      },
+    });
+    menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn() });
+    document.body.append(menu.element);
+    const music = menu.element.querySelector<HTMLButtonElement>(".account-menu__sound--music")!;
+    const effects = menu.element.querySelector<HTMLButtonElement>(".account-menu__sound--effects")!;
+    return { saves, music, effects };
+  };
+
+  it("sit right after Reduce effects, greyed until the account's switches are known", async () => {
+    const { music, effects } = await build({ music: false, effects: true });
+    expect(music.previousElementSibling?.classList.contains("account-menu__effects")).toBe(true);
+    expect(effects.previousElementSibling).toBe(music);
+    expect(music.getAttribute("role")).toBe("menuitemcheckbox");
+    expect(music.disabled).toBe(true);
+    await loadSoundSwitches();
+    expect(music.disabled).toBe(false);
+    expect(music.textContent).toBe("Music: Off");
+    expect(music.getAttribute("aria-checked")).toBe("false");
+    expect(effects.textContent).toBe("Sound effects: On");
+  });
+
+  it("a press flips the switch at once and saves only it", async () => {
+    const { saves, music, effects } = await build({ music: true, effects: true });
+    await loadSoundSwitches();
+    effects.click();
+    expect(effects.textContent).toBe("Sound effects: Off");
+    await Promise.resolve();
+    expect(saves).toEqual([{ effects: false }]);
+    expect(music.textContent).toBe("Music: On");
+  });
+
+  it("a failed save puts it back and says so on hover", async () => {
+    const { music } = await build({ music: true, effects: true }, true);
+    await loadSoundSwitches();
+    music.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(music.textContent).toBe("Music: On");
+    expect(music.title).toBe(SOUND_SAVE_FAILED);
+    expect(soundSwitchText("Music", false)).toBe("Music: Off");
   });
 });

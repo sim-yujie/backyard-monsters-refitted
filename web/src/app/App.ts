@@ -1,10 +1,11 @@
-import { Application, Container } from "pixi.js";
+import { Application, Assets, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
 import { setGameFrameSource, setScreenNameSource } from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
+import { withMusic } from "./musicScene";
 import { IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
 import { getAuthToken, onAnswer } from "@/api/http";
@@ -24,6 +25,8 @@ import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
 import { AwayScene } from "./scenes/AwayScene";
+import { SceneName } from "./sceneName";
+import { guardTick } from "./guardedTick";
 import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
 import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 import { makeRaidDue } from "@/api/raid";
@@ -44,51 +47,6 @@ async function loadTitanOne(): Promise<void> {
     // Fallback stack takes over; see the comment in `start()`.
   }
 }
-
-/** Scene names, so nothing depends on a bare string in two places. */
-export const SceneName = {
-  BOOT: "boot",
-  LOGIN: "login",
-  /**
-   * "The map", before anything knows which: loads the own yard and opens
-   * Map Room 1, Map Room 2 or, with no Map Room, the yard (issue #162).
-   */
-  MAP: "map",
-  /** The neighbours and wild monster tribes, below Map Room 2 (issue #132). */
-  MAP_ROOM_1: "maproom1",
-  MAP_ROOM_2: "maproom2",
-  YARD: "yard",
-  /** An attack on a foreign yard; opened through `game/attack/attackTarget`. */
-  ATTACK: "attack",
-  /**
-   * A Wild Monster Baiter practice attack on the own yard (#126): the attack
-   * scene with only the battle layer and the Baiter's package, opened through
-   * `game/baiter/baiterSession`. Nothing on it talks to the server.
-   */
-  BAITER: "baiter",
-  /**
-   * A finished Baiter test played back (#22, WP5): the attack scene with only
-   * the battle layer and the Baiter's package, opened through
-   * `game/baiter/testHistory`. Nothing on it talks to the server.
-   */
-  BAITER_REPLAY: "baiter-replay",
-  /**
-   * An auto-attack's battle played back (issue #221): the attack scene with
-   * only the battle layer and the watch package, opened through
-   * `game/autoAttack/watchRun`. Nothing on it talks to the server.
-   */
-  WATCH: "watch",
-  /**
-   * A wild monster raid on the own main yard (#226): the attack scene with
-   * only the battle layer and the raid package, opened through
-   * `game/raid/raidSession`. It plays the fight the server already fought,
-   * then lands it and opens the yard.
-   */
-  RAID: "raid",
-  /** "You were away too long": the idle disconnect (#271, `game/presence/idleWatch.ts`). */
-  AWAY: "away",
-} as const;
-export type SceneName = (typeof SceneName)[keyof typeof SceneName];
 
 /**
  * The application shell.
@@ -130,6 +88,15 @@ export class App {
     // the Font Loading API, or a font request that fails, still renders —
     // just with the fallback stack from --font-display/--font-body.
     await loadTitanOne();
+
+    // Pictures are fetched by the page, not by Pixi's worker pool. The pool
+    // fetches and decodes one picture per worker, one worker per processor
+    // core, newest request first: a yard asking for a hundred pictures at once
+    // waited in a queue of four to twelve, its walls (asked for first) served
+    // last, and a 10 MB monster sheet held a worker the whole time. The page's
+    // own fetch lets the browser have them all in flight, in the order asked,
+    // and `createImageBitmap` still decodes them off the main thread.
+    Assets.setPreferences({ preferWorkers: false });
 
     await this.pixi.init({
       // The canvas fills the window; CSS pins it and `resizeTo` keeps the
@@ -286,25 +253,23 @@ export class App {
       withPresence(
         withHold(withProtection(withIdle(factory, idle, { defer }), protection, { simulation }), botCheck),
       );
-    this.scenes
-      .register(SceneName.BOOT, () => new BootScene())
-      .register(SceneName.LOGIN, () => new LoginScene())
-      .register(SceneName.MAP, game(() => new MapGateScene()))
-      .register(SceneName.MAP_ROOM_1, game(() => new MapRoom1Scene()))
-      .register(SceneName.MAP_ROOM_2, game(() => new MapRoom2Scene()))
-      .register(SceneName.YARD, game(() => new YardScene()))
-      .register(SceneName.ATTACK, game(() => new AttackScene(), true))
-      .register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true, true))
-      .register(
-        SceneName.BAITER_REPLAY,
-        game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true, true),
-      )
-      .register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true))
-      .register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true))
-      .register(
-        SceneName.AWAY,
-        () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt),
-      );
+    // Every screen asks for its own tune as it opens (`musicScene.ts`).
+    const register = (name: SceneName, factory: SceneFactory) => scenes.register(name, withMusic(name, factory));
+    register(SceneName.BOOT, () => new BootScene());
+    register(SceneName.LOGIN, () => new LoginScene());
+    register(SceneName.MAP, game(() => new MapGateScene()));
+    register(SceneName.MAP_ROOM_1, game(() => new MapRoom1Scene()));
+    register(SceneName.MAP_ROOM_2, game(() => new MapRoom2Scene()));
+    register(SceneName.YARD, game(() => new YardScene()));
+    register(SceneName.ATTACK, game(() => new AttackScene(), true));
+    register(SceneName.BAITER, game(() => new AttackScene(BAITER_PLUGINS, { practice: true }), true, true));
+    register(
+      SceneName.BAITER_REPLAY,
+      game(() => new AttackScene(BAITER_REPLAY_PLUGINS, { practice: true }), true, true),
+    );
+    register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true));
+    register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true));
+    register(SceneName.AWAY, () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt));
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
@@ -315,9 +280,10 @@ export class App {
       this.resizeObserver.observe(this.host);
     }
 
-    this.pixi.ticker.add((ticker) => {
-      this.scenes?.tick(ticker.deltaMS / 1000);
-    });
+    // Guarded: one throw in a scene's update must not stop Pixi asking for
+    // the next frame (`guardedTick.ts`).
+    const tick = guardTick((deltaSeconds) => this.scenes?.tick(deltaSeconds));
+    this.pixi.ticker.add((ticker) => tick.run(ticker.deltaMS / 1000));
 
     await this.scenes.start(SceneName.BOOT);
   }

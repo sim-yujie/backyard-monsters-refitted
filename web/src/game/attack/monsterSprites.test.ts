@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setDeviceTextureLimit, setQuality } from "@/game/quality";
+import { buildEngineYard, createBattle } from "@/game/combat/rules";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
 import {
   anchorOffset,
@@ -10,6 +12,7 @@ import {
   championFlightTop,
   hoverOffset,
   isHighResolutionSheet,
+  krallenLook,
   MIRRORED_HEADINGS,
   REPAINTED_SHEETS,
   shadowOffset,
@@ -17,6 +20,7 @@ import {
   sheetUrl,
   spriteFor,
 } from "./monsterSprites";
+import { SHEET_VERSIONS } from "./sheetVersions";
 
 const sheet = (key: string) => {
   const found = MONSTER_SPRITES[key];
@@ -25,6 +29,9 @@ const sheet = (key: string) => {
 };
 
 const degrees = (value: number) => (value * Math.PI) / 180;
+
+/** A sheet URL without its `?v=` version. */
+const bare = (url: string | undefined) => url?.replace(/\?.*$/, "");
 
 describe("directionColumn", () => {
   it("maps the four cardinal headings on a 30-column sheet (SPRITES.as:369)", () => {
@@ -183,6 +190,78 @@ describe("spriteFor", () => {
     expect(spriteFor("G3", 2.9)?.key).toBe("G3_2");
   });
 
+  it("gives Krallen look 1 at levels 1-2, look 2 at 3-4 and look 3 at 5 (owner, 2026-10-25)", () => {
+    expect([1, 2, 3, 4, 5].map(krallenLook)).toEqual([1, 1, 2, 2, 3]);
+    expect([1, 2, 3, 4, 5].map((level) => spriteFor("G5", level)?.key)).toEqual([
+      "G5_1",
+      "G5_1",
+      "G5_2",
+      "G5_2",
+      "G5_3",
+    ]);
+  });
+
+  it("draws a flung Krallen in battle by her level, whatever her power level", () => {
+    const yard = buildEngineYard({
+      buildingdata: { "1": { id: 1, t: 1, X: 100, Y: 100 } },
+      buildinghealthdata: {},
+      resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
+    });
+    const looks = [1, 2, 3, 4, 5].map((l) => {
+      const battle = createBattle(yard, { seed: 7 });
+      battle.apply({ kind: "fling", t: 0, x: -300, y: 0, r: 100, monsters: {}, champion: { t: 5, l, pl: 2 } });
+      battle.step();
+      const krallen = battle.creeps().find((creep) => creep.monsterId === "G5");
+      return krallen && spriteFor(krallen.monsterId, krallen.level)?.key;
+    });
+    expect(looks).toEqual(["G5_1", "G5_1", "G5_2", "G5_2", "G5_3"]);
+  });
+
+  it("draws every Krallen look from its repaint, look 3 at level 5 included", () => {
+    const urls = [1, 3, 5].map((level) => {
+      const one = spriteFor("G5", level);
+      return one && bare(sheetUrl(one));
+    });
+    expect(urls).toEqual([
+      "/assets/monsters/krallen_1_rev_65-repaint@4x.png",
+      "/assets/monsters/krallen_2_rev_65-repaint@4x.png",
+      "/assets/monsters/krallen_3_rev_65-repaint@4x.png",
+    ]);
+  });
+
+  it("draws the level 4-6 Gorgo, Drull and Fomor from their repaints", () => {
+    const repainted: Array<[string, number, string]> = [
+      ["G1", 4, "ape_4"],
+      ["G2", 4, "dragon_4"],
+      ["G3", 4, "fly_4"],
+      ["G1", 5, "ape_5"],
+      ["G2", 5, "dragon_5"],
+      ["G3", 5, "fly_5"],
+      ["G1", 6, "ape_6"],
+      ["G2", 6, "dragon_6"],
+      ["G3", 6, "fly_6"],
+    ];
+    for (const [id, level, name] of repainted) {
+      const one = spriteFor(id, level);
+      expect(one && bare(sheetUrl(one))).toBe(`/assets/monsters/${name}-repaint@4x.png`);
+    }
+  });
+
+  it("draws every Korath level from its repaint, level 4 at 3x and levels 5 and 6 at 2x", () => {
+    const urls = [1, 2, 3, 4, 5, 6].map((level) => {
+      const one = spriteFor("G4", level);
+      return one && bare(sheetUrl(one));
+    });
+    expect(urls).toEqual([
+      "/assets/monsters/korath_1-repaint@4x.png",
+      "/assets/monsters/korath_2-repaint@4x.png",
+      "/assets/monsters/korath_3-repaint@4x.png",
+      "/assets/monsters/korath_4-repaint@3x.png",
+      "/assets/monsters/korath_5-repaint@2x.png",
+      "/assets/monsters/korath_6-repaint@2x.png",
+    ]);
+  });
+
   it("is undefined for an unknown id", () => {
     expect(spriteFor("C99")).toBeUndefined();
     expect(spriteFor("G9", 1)).toBeUndefined();
@@ -244,13 +323,68 @@ describe("sheetUrl", () => {
     expect(sheetUrl("monsters/flyingshadow.png")).toBe("/assets/monsters/flyingshadow.png");
   });
 
-  it("serves a repainted sheet in place of the original", () => {
+  it("serves a repainted sheet in place of the original, with its version", () => {
     for (const one of Object.values(MONSTER_SPRITES)) {
       const repaint = REPAINTED_SHEETS[one.file];
-      expect(sheetUrl(one)).toBe(`/assets/${repaint ?? one.file}`);
+      expect(bare(sheetUrl(one))).toBe(`/assets/${repaint ?? one.file}`);
+      if (repaint) expect(sheetUrl(one)).toBe(`/assets/${repaint}?v=${SHEET_VERSIONS[repaint]}`);
     }
     expect(isHighResolutionSheet("/assets/monsters/14-repaint@4x.png")).toBe(true);
+    expect(isHighResolutionSheet("/assets/monsters/pokey-anim@2x.png?v=4xkz")).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("C1")))).toBe(true);
     expect(isHighResolutionSheet(sheetUrl(sheet("IC1")))).toBe(false);
+  });
+
+  it("asks for a smaller copy where the graphics card cannot hold the painting", () => {
+    try {
+      // Gorgo 5 at 4x is 10240 px wide: an 8192 card gets the @2x copy, a 4096 card the 1x.
+      setDeviceTextureLimit(8192);
+      expect(bare(sheetUrl(sheet("G1_5")))).toBe("/assets/monsters/ape_5-repaint@2x.png");
+      setDeviceTextureLimit(4096);
+      expect(bare(sheetUrl(sheet("G1_5")))).toBe("/assets/monsters/ape_5-repaint.png");
+      // Korath 5's packed 2x sheet, 8000 px, fits an 8192 card as it is.
+      setDeviceTextureLimit(8192);
+      expect(bare(sheetUrl(sheet("G4_5")))).toBe("/assets/monsters/korath_5-repaint@2x.png");
+    } finally {
+      setDeviceTextureLimit(null);
+    }
+  });
+
+  describe("at each Quality setting", () => {
+    // The choice is kept in the browser's storage; a stand-in for it here.
+    beforeEach(() => {
+      const kept = new Map<string, string>();
+      vi.stubGlobal("window", {
+        localStorage: { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => kept.set(key, value) },
+      });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("asks for the painted sheet on High, its half-size copy on Medium and its 1x copy on Low", () => {
+      const urls = (["high", "medium", "low"] as const).map((level) => {
+        setQuality(level);
+        return sheetUrl(sheet("C1"));
+      });
+      expect(urls.map(bare)).toEqual([
+        "/assets/monsters/pokey-anim@4x.png",
+        "/assets/monsters/pokey-anim@2x.png",
+        "/assets/monsters/pokey-anim.png",
+      ]);
+      // Each with its own version, so a week in the browser's cache never serves an old painting.
+      expect(urls.map((url) => url.split("?v=")[1])).toEqual([
+        SHEET_VERSIONS["monsters/pokey-anim@4x.png"],
+        SHEET_VERSIONS["monsters/pokey-anim@2x.png"],
+        SHEET_VERSIONS["monsters/pokey-anim.png"],
+      ]);
+      // Low's copy is drawn at 1x, like the Flash sheet it stands in for.
+      expect(isHighResolutionSheet(urls[2] ?? "")).toBe(false);
+    });
+
+    it("leaves a sheet with no repaint alone at every level", () => {
+      for (const level of ["high", "medium", "low"] as const) {
+        setQuality(level);
+        expect(sheetUrl(sheet("IC1"))).toBe("/assets/monsters/spurtz.png");
+      }
+    });
   });
 });

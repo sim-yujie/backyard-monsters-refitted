@@ -133,9 +133,11 @@ export interface ConfirmPanelOptions {
   title: string;
   /** What is about to happen, in one sentence the player can act on. */
   message: string;
-  /** A second line, for the reassurance that nothing is permanent yet. */
-  note?: string;
+  /** A second line, for the reassurance that nothing is permanent yet; an element is put in as it is. */
+  note?: string | HTMLElement;
   confirmLabel: string;
+  /** The way out's words; "Cancel" when not given. */
+  cancelLabel?: string;
   onConfirm: () => void;
   onClose: () => void;
 }
@@ -168,7 +170,7 @@ export const confirmPanel = (options: ConfirmPanelOptions): Panel => {
   if (options.note) {
     const note = document.createElement("p");
     note.className = "u-muted";
-    note.textContent = options.note;
+    note.append(options.note);
     children.push(note);
   }
 
@@ -181,7 +183,7 @@ export const confirmPanel = (options: ConfirmPanelOptions): Panel => {
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = "btn btn--ghost";
-  cancel.textContent = "Cancel";
+  cancel.textContent = options.cancelLabel ?? "Cancel";
   cancel.addEventListener("click", () => panel.close());
 
   const actions = document.createElement("div");
@@ -604,7 +606,7 @@ export const rearmPanel = (options: RearmPanelOptions): Panel => {
     .filter((entry) => entry.check.reason !== null);
 
   const steps = options.traps
-    .map((trap) => costOf(trap.t, 0))
+    .map((trap) => costOf(trap.t, 0, options.yard.kind))
     .filter((step): step is NonNullable<typeof step> => step !== null);
   const cost = sumCosts(steps);
   const held = heldResources(options.yard.resources);
@@ -622,7 +624,7 @@ export const rearmPanel = (options: RearmPanelOptions): Panel => {
           ...counts.entries(),
         ]
           .sort((a, b) => a[0] - b[0])
-          .map(([type, count]) => `${count} × ${typeName(type)}`)
+          .map(([type, count]) => `${count} × ${typeName(type, options.yard.kind)}`)
           .join(", ")}.`;
 
   const costList = document.createElement("dl");
@@ -642,7 +644,7 @@ export const rearmPanel = (options: RearmPanelOptions): Panel => {
     const item = document.createElement("li");
 
     const text = document.createElement("span");
-    text.textContent = `${typeName(trap.t)} at ${trap.x}, ${trap.y} — ${
+    text.textContent = `${typeName(trap.t, options.yard.kind)} at ${trap.x}, ${trap.y} — ${
       check.reason === PlaceBlock.BOUNDS
         ? "outside your yard at its current size"
         : "something is standing there"

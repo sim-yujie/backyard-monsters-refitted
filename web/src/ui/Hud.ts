@@ -18,8 +18,10 @@ import { openNews } from "./announcements/AnnouncementDialog";
 import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
+import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
 import { formatAmount, formatCompact } from "./format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, type ResourceKey } from "./resourceIcon";
+import { gameIcon } from "./gameIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
 
 /**
@@ -39,14 +41,19 @@ import { DamageBanner } from "./yard/DamageBanner";
  * On the player's own yard the scene hands over a binding (`bindYard`), and
  * the bar adds what only that yard knows (issue #100, design §3.1): each
  * resource's storage cap as "amount / cap" with a thin fill bar that turns
- * amber when the silo is full, a Workers control ("free / total") that goes
- * to the job finishing soonest, and the post-attack "N buildings damaged
+ * amber when the silo is full, with the painted "storage full" mark on the
+ * pile and, in the corner, "15M/15M" (the text cut, 28 Oct); a Workers
+ * control (the worker and "free/total") that goes
+ * to the job finishing soonest; and the post-attack "N buildings damaged
  * [Repair all]" line in the notice dock (`DamageBanner`, design §5.5). The
  * map, the attack screen and a foreign yard have no binding and show the
  * amounts alone. On the main yard each resource also carries what the player
- * makes of it an hour, "+12,400/h" (#280, `incomeRate.ts`), dimmed with
- * "full" while its silo is full, since that income is lost. In an outpost the amounts and caps are the main yard's pool,
- * as the server sends them.
+ * makes of it an hour, "+12,400/h" (#280, `incomeRate.ts`), dimmed while
+ * its silo is full, since that income is lost. In an outpost the amounts and caps are the main yard's pool,
+ * as the server sends them. On the Inferno yard the four are Bone, Coal,
+ * Sulfur and Magma, with the Inferno purse and its cap (WP 1.19,
+ * `resourceIcon.ts`'s realm), and the income line of its own harvesters at
+ * the Inferno's rates (Flash's resource bubble gave the Inferno's rate too).
  *
  * The yard lays it out as its `corner` (the HUD redesign, #171, option B:
  * "a game, not a dashboard"): no brand and no screen tabs, the readouts and
@@ -80,6 +87,20 @@ const FIT_ORDER: readonly HudFit[] = [HudFit.FULL, HudFit.NO_BRAND, HudFit.NO_CA
 
 /** What a full silo's readout says on hover and in its bubble (design §3.1). */
 export const FULL_NOTE = "Full: new income is lost. Build or upgrade Storage Silos.";
+
+/** {@link FULL_NOTE} on the Inferno yard, whose storage is the Resource Pod. */
+export const INFERNO_FULL_NOTE = "Full: new income is lost. Build or upgrade Resource Pods.";
+
+/**
+ * "15M/15M": a full silo's readout on the yard (the text cut, 28 Oct). Both
+ * figures are the cap, so the digits say nothing the fill bar does not; the
+ * exact amounts stay in the tooltip and the tap bubble. A whole ".0" is
+ * dropped ("15M", not "15.0M") to keep it short on a phone.
+ */
+export const fullText = (amount: number, cap: number): string => {
+  const short = (value: number): string => formatCompact(value).replace(/\.0+(?=[KMB]$)/, "");
+  return `${short(amount)}/${short(cap)}`;
+};
 
 /** "+12,400/h", or "+12.4K/h" short: a resource's income an hour (#280). */
 export const formatRate = (perHour: number, compact = false): string =>
@@ -164,11 +185,12 @@ export const COUNT_MS = 500;
 const OFFSET_PX = 8;
 
 /**
- * "−5.0M" or "+120": a change as the float shows it. U+2212, not a hyphen.
- * Short on purpose: it is on screen for a second and only says how big.
+ * "−5.0M" or "+120": a change as the float shows it, signed like every other
+ * gain or loss (`amountChange.ts`, U+2212 rather than a hyphen). Short on
+ * purpose: it is on screen for a second and only says how big.
  */
 export const formatDelta = (delta: number): string =>
-  `${delta < 0 ? "−" : "+"}${formatCompact(Math.abs(delta))}`;
+  `${AMOUNT_CHANGE_SIGNS[delta < 0 ? "loss" : "gain"]}${formatCompact(Math.abs(delta))}`;
 
 /** "11,158,040,000": an amount in full, the same in every locale (`formatAmount`). */
 export const formatExact = (amount: number): string => formatAmount(amount);
@@ -188,9 +210,9 @@ export const exactLabel = (key: ResourceKey, amount: number | undefined, cap?: n
 /** "Making 12,400 an hour.", the income line's part of the tooltip and the bubble (#280). */
 export const rateNote = (perHour: number): string => `Making ${formatExact(perHour)} an hour.`;
 
-/** "2 / 5" free of total, and the Workers control's tooltip. */
+/** "2/5" free of total, and the Workers control's tooltip. */
 export const workersText = (free: number, total: number): { value: string; label: string } => ({
-  value: `${free} / ${total}`,
+  value: `${free}/${total}`,
   label:
     free >= total
       ? `Workers: all ${total} free.`
@@ -208,6 +230,8 @@ interface Readout {
   readonly fill: HTMLElement;
   /** "+12,400/h" under the amount; hidden off the main yard (#280). */
   readonly rate: HTMLElement;
+  /** The painted "storage full" mark on the pile, shown while the silo is full. */
+  readonly fullMark: HTMLElement;
   amount: number | undefined;
   cap: number | undefined;
   /** Income an hour, on the main yard only. */
@@ -237,6 +261,8 @@ export class Hud {
   private bubbleTimer: number | undefined;
   private readonly floats = new Set<HTMLElement>();
   private yardBinding: YardUiBinding | null = null;
+  /** What a full readout says: {@link INFERNO_FULL_NOTE} while the Inferno yard is bound. */
+  private fullNote = FULL_NOTE;
   private unsubscribeYard: (() => void) | null = null;
   /** The post-attack "N buildings damaged [Repair all]" line, while bound (§5.5). */
   private damageBanner: DamageBanner | null = null;
@@ -302,7 +328,11 @@ export class Hud {
       rate.className = "hud__rate";
       rate.setAttribute("aria-hidden", "true");
       rate.hidden = true;
-      button.append(amount, capText, bar, rate);
+      // The button's own label says "Full: new income is lost", so the mark is
+      // a picture only.
+      const fullMark = gameIcon("storagefull", { size: 16, decorative: true, className: "hud__full-mark" });
+      fullMark.hidden = true;
+      button.append(amount, capText, fullMark, bar, rate);
       // On the own yard the Shiny counter is the Shop's door (§8.2); the
       // Shop's header then shows the exact balance.
       button.addEventListener("click", () => {
@@ -325,6 +355,7 @@ export class Hud {
         bar,
         fill,
         rate,
+        fullMark,
         amount: undefined,
         cap: undefined,
         perHour: undefined,
@@ -358,7 +389,7 @@ export class Hud {
     this.workersButton.append(workerIcon, this.workersName, this.workersValue);
     this.workersButton.addEventListener("click", () => this.goToNextJob());
     this.workers.append(this.workersButton);
-    // The corner's Workers is the icon and "5 / 5", as the mock-up draws it.
+    // The corner's Workers is the icon and "5/5", as the mock-up draws it.
     this.workersName.hidden = this.corner;
 
     const spacer = document.createElement("div");
@@ -656,30 +687,32 @@ export class Hud {
   private render(readout: Readout): void {
     const shown = readout.shown ?? this.target(readout);
     if (shown === undefined) return;
+    const state = capState(shown, readout.cap);
+    const full = state?.full === true;
+    // The corner draws the cap as the fill bar alone, the figure kept for the
+    // tooltip and the tap bubble, until the silo is full: then "15M/15M". A
+    // phone's quarter-width cell has no room for "23.1M/23.1M", so there the
+    // short amount and the full mark say it.
     readout.value.textContent =
-      this.fitted === HudFit.COMPACT ? formatCompact(shown) : formatAmount(shown);
-    // The corner draws the cap as the fill bar alone; the figure is in the
-    // tooltip and the tap bubble.
+      this.fitted === HudFit.COMPACT
+        ? formatCompact(shown)
+        : this.corner && full && readout.cap !== undefined
+          ? fullText(shown, readout.cap)
+          : formatAmount(shown);
     const showCap =
       !this.corner &&
       readout.cap !== undefined &&
       (this.fitted === HudFit.FULL || this.fitted === HudFit.NO_BRAND);
     readout.capText.textContent = showCap ? ` / ${formatAmount(readout.cap)}` : "";
-    const state = capState(shown, readout.cap);
     readout.bar.hidden = state === null;
     readout.fill.style.width = state === null ? "" : `${+(state.fraction * 100).toFixed(2)}%`;
-    readout.button.classList.toggle("hud__resource-button--full", state?.full === true);
+    readout.button.classList.toggle("hud__resource-button--full", full);
+    readout.fullMark.hidden = !full;
     readout.rate.hidden = readout.perHour === undefined;
     if (readout.perHour !== undefined) {
       readout.rate.textContent = formatRate(readout.perHour, this.fitted === HudFit.COMPACT);
-      // Still made, but lost while the silo is full: dimmed, and said.
-      readout.rate.classList.toggle("hud__rate--full", state?.full === true);
-      if (state?.full) {
-        const tag = document.createElement("span");
-        tag.className = "hud__rate-full";
-        tag.textContent = "full";
-        readout.rate.append(" ", tag);
-      }
+      // Still made, but lost while the silo is full: dimmed, the pile marked full.
+      readout.rate.classList.toggle("hud__rate--full", full);
     }
   }
 
@@ -747,10 +780,18 @@ export class Hud {
     const caps: ResourceCaps | null = store?.caps ?? null;
     // An outpost's save has the outpost's harvesters, which pay by the
     // outposts' own rule, and not the main yard's: the rate is the main yard's.
-    const rates = store?.kind === "main" ? incomePerHour(store.save, store.now()) : null;
+    // The Inferno yard's are its own, at the Inferno's rates (WP 1.19).
+    const rates =
+      store?.kind === "main" || store?.kind === "inferno"
+        ? incomePerHour(store.save, store.now(), store.kind)
+        : null;
+    this.fullNote = store?.kind === "inferno" ? INFERNO_FULL_NOTE : FULL_NOTE;
     for (const key of RESOURCE_KEYS) {
       const readout = this.readouts.get(key);
       if (!readout) continue;
+      // Bone, Coal, Sulfur and Magma while the Inferno yard is bound (WP 1.19).
+      const icon = readout.button.querySelector<HTMLElement>(".res-icon");
+      if (icon) restyleIcon(icon, key);
       readout.cap = caps?.[key];
       readout.perHour = rates?.[key];
       this.render(readout);
@@ -803,10 +844,11 @@ export class Hud {
     const full = capState(readout.amount, readout.cap)?.full === true;
     const notes = [
       ...(readout.perHour === undefined ? [] : [rateNote(readout.perHour)]),
-      ...(full ? [FULL_NOTE] : []),
+      ...(full ? [this.fullNote] : []),
     ];
     readout.button.title = [text, ...notes].join("\n");
-    readout.button.setAttribute("aria-label", [text, ...notes].join(". "));
+    // The notes end in a full stop already: "Bone: 1 of 2. Making 720 an hour. Full: ..."
+    readout.button.setAttribute("aria-label", notes.length ? [`${text}.`, ...notes].join(" ") : text);
   }
 
   /** The own yard's Shop door, or null where there is no Shop (the map, an attack, a visit). */
@@ -885,7 +927,7 @@ export class Hud {
     if (capState(amount, cap)?.full) {
       const note = document.createElement("p");
       note.className = "hud__exact-note";
-      note.textContent = FULL_NOTE;
+      note.textContent = this.fullNote;
       this.bubble.append(note);
     }
   }

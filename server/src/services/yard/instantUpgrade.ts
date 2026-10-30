@@ -44,7 +44,10 @@ export interface InstantUpgradePlan {
   report: InstantUpgradeReport;
 }
 
-/** Building kinds with their own batch routes (`walls/upgrade`, `traps/rearm`). */
+/**
+ * Building kinds with their own batch routes (`walls/upgrade`, `traps/rearm`),
+ * except on the Inferno yard, which has no planner (WP 1.16).
+ */
 const BATCH_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
 /** The two checks an instant upgrade skips: it charges no resources and holds no worker. */
@@ -59,7 +62,7 @@ const SKIPPED: ReadonlySet<string> = new Set(["shortfall", "workers"]);
  * is at, or throws the refusal the upgrade route would.
  *
  * Refusals, in order: `400 badRequest` unknown id; `400 useBatchRoute` wall
- * or trap; `409 mapRoom`; then `planOneUpgrade`'s: `400 badRequest` no ladder
+ * or trap (the Inferno's too, owner decision 2026-10-29); `409 mapRoom`; then `planOneUpgrade`'s: `400 badRequest` no ladder
  * (decoration, mushroom, placeholder), `409 busy` (`409 training` for an
  * Academy that is training, #145), `409 damaged`,
  * `409 townHall {have: 0, need: 1}`, `409 maxLevel {level, max}`,

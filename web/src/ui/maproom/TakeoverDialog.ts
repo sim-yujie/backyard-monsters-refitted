@@ -9,10 +9,10 @@ import {
   useShinyLabel,
   type TakeoverKind,
 } from "@/game/maproom/takeover";
-import { heightBonusLine } from "@/game/maproom/heightBonus";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
+import { GROUND_BONUS_TITLE, groundBonusIcons } from "./groundBonus";
 
 /**
  * The takeover confirm dialog (issue #82): Flash's `PopupTakeover`
@@ -102,7 +102,8 @@ export class TakeoverDialog {
 
     const ground = document.createElement("p");
     ground.className = "u-muted takeover-dialog__ground";
-    ground.textContent = options.height === undefined ? "" : `The ground here — ${heightBonusLine(options.height).toLowerCase()}.`;
+    ground.title = GROUND_BONUS_TITLE;
+    if (options.height !== undefined) ground.append(...groundBonusIcons(options.height));
     ground.hidden = options.height === undefined;
 
     const cost = document.createElement("ul");

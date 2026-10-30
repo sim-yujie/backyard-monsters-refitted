@@ -13,6 +13,7 @@ import {
 import { storedCount, storedDecorations } from "./decorStorage";
 import { isDecoration } from "./planner/placement";
 import { overCap } from "./storage";
+import { isSurfaceInferno, purseFunds, surfaceInfernoStanding, UNDER_HALL_REQUIREMENT } from "./surfaceInferno";
 import { freeWorkers, sharperToolsMultiplier } from "./workers";
 import type { Yard, YardWorkers } from "./yardModel";
 
@@ -35,9 +36,15 @@ import type { Yard, YardWorkers } from "./yardModel";
  *
  * The list is {@link BUILD_CATALOGUE}: the original build menu's types
  * (`client/scripts/BUILDINGSPOPUP.as:124`, props `group` 1 to 3 without
- * `block`) less the Radio (D15), the Inferno types (D19) and the Map Room 3
+ * `block`) less the Radio (D15), the Spurtz Cannons and the Map Room 3
  * structures, in the original's `order` within each tab. The server's
  * `BUILDABLE_TYPES` is the same set; a test on each side pins it.
+ *
+ * The main yard's Inferno buildings, the Quake and Magma Towers, the Siege
+ * Factory and the Siege Lab (Inferno WP 6.1, `surfaceInferno.ts`), are listed
+ * in their `order` too, but only offered once the cave is at level 5. They
+ * count by the Under Hall, wait for the Descent (`infernoLocked`) and are
+ * priced in the Inferno purse, as the server's gates have them.
  *
  * An outpost's menu is {@link OUTPOST_BUILD_CATALOGUE}: the same tabs and order,
  * read against the outpost props table (`client/scripts/OUTPOST_YARD_PROPS.as`),
@@ -76,12 +83,15 @@ export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   {
     id: BuildCategory.BUILDINGS,
     label: "Buildings",
-    types: [12, 8, 26, 15, 13, 16, 114, 119, 5, 51, 11, 19, 116, 10, 9],
+    // The Siege Factory and Lab follow the Champion Cage and Chamber, so those
+    // stay beside the monster buildings (#159); among Flash's own Buildings
+    // they keep its `order` (after the Hatchery Overdrive, before the Flinger).
+    types: [12, 8, 26, 15, 13, 16, 114, 119, 133, 134, 5, 51, 11, 19, 116, 10, 9],
   },
   {
     id: BuildCategory.DEFENSIVE,
     label: "Defensive",
-    types: [21, 20, 25, 23, 22, 115, 118, 24, 17, 117],
+    types: [21, 20, 129, 25, 23, 22, 115, 118, 132, 24, 17, 117],
   },
   { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
 ];
@@ -118,13 +128,36 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
   OUTPOST_BUILD_CATALOGUE.flatMap((category) => category.types),
 );
 
+/**
+ * The Inferno yard's build menu (Inferno WP 1.19): the seventeen types the
+ * Inferno props table offers (`client/scripts/INFERNOYARDPROPS.as`, its
+ * `group` 1 to 3 without `block`; the server's `INFERNO_BUILDABLE_TYPES`), in
+ * that table's `order` within each tab. The Under Hall is the hall. The
+ * Housing Bunker (128) is filed under Buildings, as its `group` 2 files it.
+ * The Yard Planner (10) is this project's (owner decision 2026-10-29: Flash
+ * `block`ed it there), placed before the Juicer as in the main menu.
+ * Decorations are not built there, and the storage they come from is the main
+ * yard's, so the tab is empty, as an outpost's.
+ */
+export const INFERNO_BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
+  { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
+  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [8, 26, 128, 13, 10, 9] },
+  { id: BuildCategory.DEFENSIVE, label: "Defensive", types: [21, 129, 130, 132, 24, 17] },
+  { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
+];
+
+/** Every type the Inferno yard's menu offers. */
+export const INFERNO_MENU_TYPES: ReadonlySet<number> = new Set(
+  INFERNO_BUILD_CATALOGUE.flatMap((category) => category.types),
+);
+
 /** The menu of a yard of `kind`. */
 export const catalogueFor = (kind: YardKind = "main"): readonly BuildCategoryDefinition[] =>
-  kind === "outpost" ? OUTPOST_BUILD_CATALOGUE : BUILD_CATALOGUE;
+  kind === "outpost" ? OUTPOST_BUILD_CATALOGUE : kind === "inferno" ? INFERNO_BUILD_CATALOGUE : BUILD_CATALOGUE;
 
 /** Every type the menu of a yard of `kind` offers. */
 export const buildableTypesFor = (kind: YardKind = "main"): ReadonlySet<number> =>
-  kind === "outpost" ? OUTPOST_BUILDABLE_TYPES : BUILDABLE_TYPES;
+  kind === "outpost" ? OUTPOST_BUILDABLE_TYPES : kind === "inferno" ? INFERNO_MENU_TYPES : BUILDABLE_TYPES;
 
 /** Walls and traps are written finished and hold no worker (D13). */
 export const buildsAtOnce = (type: number, kind: YardKind = "main"): boolean => {
@@ -147,6 +180,9 @@ export interface BuildContext {
 
 /** Why a tile cannot be built (or bought outright), in the server's terms. */
 export type BuildGate =
+  /** A main-yard Inferno building before the Descent is passed (`inferno_building_requirement`). */
+  | { readonly reason: "infernoLocked" }
+  /** The hall allows none yet: the Under Hall's level for a main-yard Inferno building. */
   | { readonly reason: "townHall"; readonly have: number; readonly need: number }
   | {
       readonly reason: "limit";
@@ -219,6 +255,11 @@ export interface BuildOffer {
   /** Why Instant is disabled: the same gates minus resources and workers, plus Shiny. */
   readonly instantGate: BuildGate | null;
   /**
+   * A main-yard Inferno building (WP 6.1): its hall is the Under Hall and its
+   * `cost` is Bone, Coal, Sulfur and Magma from the Inferno purse.
+   */
+  readonly inferno: boolean;
+  /**
    * A decoration placed from storage (§8.3, #128): how many are stored. It is
    * free, finished at once and needs no worker; there is no instant, and
    * `owned`, `allowed` and `most` count nothing. Null for anything built.
@@ -228,10 +269,12 @@ export interface BuildOffer {
 
 /**
  * The tile of a decoration in storage, or null when none is stored or the
- * yard is an outpost (storage is the main yard's, owner decision 2026-09-29).
+ * yard is an outpost or the Inferno (storage is the main yard's, owner
+ * decision 2026-09-29).
  */
 export const storageOffer = (type: number, context: BuildContext): BuildOffer | null => {
-  if ((context.kind ?? context.yard.kind) === "outpost") return null;
+  const kind = context.kind ?? context.yard.kind;
+  if (kind === "outpost" || kind === "inferno") return null;
   const stored = storedCount(context.save.researchdata, type);
   if (stored === 0) return null;
   return {
@@ -248,6 +291,7 @@ export const storageOffer = (type: number, context: BuildContext): BuildOffer | 
     instantPrice: 0,
     gate: null,
     instantGate: null,
+    inferno: false,
     stored,
   };
 };
@@ -293,9 +337,19 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
   const step = row?.[4][0];
   if (!category || !row || !step) return null;
 
+  // A main-yard Inferno building is not offered before the cave's last
+  // level; then it counts by the Under Hall and pays from the purse.
+  const inferno = isSurfaceInferno(type, kind);
+  const standing = inferno ? surfaceInfernoStanding(context.save) : null;
+  if (standing && !standing.unlocked) return null;
+  const underHall = standing?.underHall ?? 0;
+  const funds = inferno ? purseFunds(context.save) : { resources: context.resources, caps: context.caps };
+  const isHall = (required: number): boolean =>
+    inferno ? required === UNDER_HALL_REQUIREMENT : HALL_TYPES.includes(required);
+
   const quantity = row[5];
   const { yard } = context;
-  const hall = townHallLevel(yard);
+  const hall = inferno ? underHall : townHallLevel(yard);
   const owned = yard.buildings.reduce((count, one) => count + (one.type === type ? 1 : 0), 0);
   const allowed = hall > 0 ? allowedAt(quantity, hall) : 0;
   const atOnce = buildsAtOnce(type, kind);
@@ -303,7 +357,9 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
 
   // The gates Build and Instant share, in the server's order.
   let common: BuildGate | null = null;
-  if (allowed <= 0) {
+  if (standing && !standing.descentPassed) {
+    common = { reason: "infernoLocked" };
+  } else if (allowed <= 0) {
     common = {
       reason: "townHall",
       have: hall,
@@ -311,9 +367,9 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     };
   } else if (owned >= allowed) {
     common = { reason: "limit", have: owned, allowed, next: nextHallAllowing(quantity, hall, allowed) };
-  } else if (!requirementsMet(step[5], yard)) {
-    const unmet = step[5].filter((entry) => !requirementsMet([entry], yard));
-    const townHall = unmet.find(([required]) => HALL_TYPES.includes(required));
+  } else if (!requirementsMet(step[5], yard, underHall)) {
+    const unmet = step[5].filter((entry) => !requirementsMet([entry], yard, underHall));
+    const townHall = unmet.find(([required]) => isHall(required));
     common = townHall
       ? { reason: "townHall", have: hall, need: townHall[2] }
       : { reason: "requirements", requirements: unmet };
@@ -329,11 +385,11 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     let short = false;
     let over = false;
     for (const key of KEYS) {
-      const missing = guidePaid ? 0 : cost[key] - held(context.resources, key);
+      const missing = guidePaid ? 0 : cost[key] - held(funds.resources, key);
       if (missing > 0) {
         shortfall[key] = missing;
         short = true;
-        if (overCap(cost[key], context.caps?.[key])) over = true;
+        if (overCap(cost[key], funds.caps?.[key])) over = true;
       }
     }
     if (short) gate = { reason: "shortfall", shortfall, overCap: over };
@@ -345,25 +401,28 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
   const most = quantity.reduce((top, one) => Math.max(top, one), 0);
   // The hall the next one needs: the first that allows more than the yard
   // holds, or the build step's own hall requirement if that is higher.
-  const stepHall = step[5].find(([required]) => HALL_TYPES.includes(required))?.[2] ?? 1;
+  const stepHall = step[5].find(([required]) => isHall(required))?.[2] ?? 1;
   const hallNeed = Math.max(stepHall, nextHallAllowing(quantity, 0, owned) ?? stepHall);
   const needs: BuildNeed[] = [
     { kind: "townHall", level: hallNeed, met: hall >= hallNeed },
     ...step[5]
-      .filter(([required]) => !HALL_TYPES.includes(required))
+      .filter(([required]) => !isHall(required) && !HALL_TYPES.includes(required))
       .map(([required, count, level]): BuildNeed => ({
         kind: "building",
         type: required,
         count,
         level,
-        met: requirementsMet([[required, count, level]], yard),
+        met: requirementsMet([[required, count, level]], yard, underHall),
       })),
   ];
 
   let status: BuildStatus = "ready";
   if (most > 0 && owned >= most) status = "maxed";
   else if (owned > 0 && owned >= allowed) status = "limit";
-  else if (owned === 0 && (common?.reason === "townHall" || common?.reason === "requirements")) {
+  else if (
+    owned === 0 &&
+    (common?.reason === "townHall" || common?.reason === "requirements" || common?.reason === "infernoLocked")
+  ) {
     status = "locked";
   }
 
@@ -388,6 +447,7 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     instantPrice,
     gate,
     instantGate,
+    inferno,
     stored: null,
   };
 };

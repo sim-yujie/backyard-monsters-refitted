@@ -14,6 +14,7 @@ import {
   threadItems,
   threadList,
   unreadThreads,
+  type MailAttack,
   type MailContact,
   type MailItem,
   type MailThread,
@@ -45,6 +46,7 @@ import {
 } from "@/game/mail/invite";
 import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
+import { attackStatsRow, attackStatsText } from "@/ui/attackNotice";
 import { requestCard, type RequestAction } from "./RequestCard";
 import "@/ui/styles/mail.css";
 
@@ -169,6 +171,25 @@ const buttonOf = (className: string, text: string, onClick: () => void): HTMLBut
   const node = make("button", className, text);
   node.type = "button";
   node.addEventListener("click", onClick);
+  return node;
+};
+
+/**
+ * An attack notice's numbers as icons in place of its sentence (less-text job
+ * 3): the sentence stays as the tooltip, and the icons carry their words.
+ */
+const attackText = (text: string, attack: MailAttack): HTMLElement => {
+  const node = make("p", "mail-message__text mail-message__text--attack");
+  node.title = text;
+  node.append(attackStatsRow(attack.stats, attack.realm));
+  return node;
+};
+
+/** The thread list's preview of an attack notice: its numbers as icons. */
+const attackPreview = (attack: MailAttack): HTMLElement => {
+  const node = make("span", "mail-row__preview mail-row__preview--attack");
+  node.title = attackStatsText(attack.stats, attack.realm);
+  node.append(attackStatsRow(attack.stats, attack.realm));
   return node;
 };
 
@@ -427,7 +448,7 @@ export class MailboxScreen {
         row.append(
           head,
           make("span", "mail-row__subject", thread.subject),
-          make("span", "mail-row__preview", thread.preview),
+          thread.attack ? attackPreview(thread.attack) : make("span", "mail-row__preview", thread.preview),
         );
         const state = truceState(thread.truce, now);
         const invited = inviteState(thread.invite, now);
@@ -509,7 +530,7 @@ export class MailboxScreen {
       if (item.label && index !== request && index !== invitation) {
         bubble.append(make("strong", "mail-message__label", item.label));
       }
-      bubble.append(make("p", "mail-message__text", item.text));
+      bubble.append(item.attack ? attackText(item.text, item.attack) : make("p", "mail-message__text", item.text));
       if (index === request && state !== null) {
         const card = truceCard(state, until, item.mine, thread.otherName, now);
         bubble.classList.add("mail-message--request");

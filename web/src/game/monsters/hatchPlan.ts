@@ -3,14 +3,8 @@ import { maxHp } from "@/game/combat/rules";
 import { timeCost } from "@/game/yard/buildingCosts";
 import { acceleratedEnd, overdriveAt, savedAtOf } from "@/game/yard/jobs";
 import { academyLevel, housingCapacity } from "./housingSummary";
-import {
-  hatchCost,
-  hatchTime,
-  housingSpace,
-  LISTED_MONSTERS,
-  monsterEntry,
-  type MonsterEntry,
-} from "./monsterCatalogue";
+import { hatchCost, hatchTime, housingSpace, monsterEntry, type MonsterEntry } from "./monsterCatalogue";
+import { listedMonstersOf, type MonsterRealm } from "./realm";
 
 /**
  * What the Hatch tab shows, as data (`docs/design/yard-buildings.md` §4.4).
@@ -59,7 +53,22 @@ export const HATCHERY_OVERDRIVES = [
   { item: "HOD3", power: 10, price: 100 },
 ] as const;
 
-export type OverdriveItem = (typeof HATCHERY_OVERDRIVES)[number]["item"];
+/** The Inferno shop's Incubator Overdrives, the only ones it sells (`INFERNO_SHOP_ITEMS`, WP 1.17). */
+export const INFERNO_HATCHERY_OVERDRIVES = [
+  { item: "HODI", power: 4, price: 30 },
+  { item: "HOD2I", power: 6, price: 50 },
+  { item: "HOD3I", power: 10, price: 100 },
+] as const;
+
+export type OverdriveItem =
+  | (typeof HATCHERY_OVERDRIVES)[number]["item"]
+  | (typeof INFERNO_HATCHERY_OVERDRIVES)[number]["item"];
+
+/** The overdrives a yard of `realm` sells. */
+export const overdrivesOf = (
+  realm: MonsterRealm,
+): readonly { readonly item: OverdriveItem; readonly power: number; readonly price: number }[] =>
+  realm === "inferno" ? INFERNO_HATCHERY_OVERDRIVES : HATCHERY_OVERDRIVES;
 
 /** A queue stack: monster id, how many, the academy level whose price was paid. */
 export type QueueStack = [id: string, count: number, level: number];
@@ -327,6 +336,13 @@ export const queueOf = (yard: HatchYard, target: HatchTarget): QueueStack[] | nu
 /** Monsters waiting in a queue. */
 export const queuedCount = (queue: readonly QueueStack[]): number =>
   queue.reduce((total, stack) => total + stack[1], 0);
+
+/**
+ * The goo Clear all gives back for a queue: each stack at its paid level, as
+ * taking every stack out one by one would (`hatchery/clear`), before the cap.
+ */
+export const queueRefund = (queue: readonly QueueStack[]): number =>
+  queue.reduce((total, [id, count, level]) => total + count * priceOf(id, level), 0);
 
 /* ── Housing ───────────────────────────────────────────────────────────── */
 
@@ -735,7 +751,7 @@ export const activeOverdrive = (
   storedata: StoreData | null | undefined,
   now: number,
 ): { readonly item: OverdriveItem; readonly power: number; readonly endsAt: number } | null => {
-  for (const { item, power } of HATCHERY_OVERDRIVES) {
+  for (const { item, power } of [...HATCHERY_OVERDRIVES, ...INFERNO_HATCHERY_OVERDRIVES]) {
     const endsAt = finite(storedata?.[item]?.e);
     if (endsAt !== null && endsAt > now) return { item, power, endsAt };
   }
@@ -761,12 +777,15 @@ export interface HatchMonster {
 }
 
 /**
- * Every listed monster in list order, each saying whether it can be hatched:
- * unlocked (`lockerdata[id].t == 2`, the add route's rule), unlocking, or
- * locked.
+ * Every listed monster of `realm` in list order (the Inferno roster in an
+ * Incubator), each saying whether it can be hatched: unlocked
+ * (`lockerdata[id].t == 2`, the add route's rule), unlocking, or locked.
  */
-export const hatchMonsters = (save: Pick<BaseLoadResponse, "lockerdata" | "academy">): HatchMonster[] =>
-  LISTED_MONSTERS.map((monster) => {
+export const hatchMonsters = (
+  save: Pick<BaseLoadResponse, "lockerdata" | "academy">,
+  realm: MonsterRealm = "surface",
+): HatchMonster[] =>
+  listedMonstersOf(realm).map((monster) => {
     const t = Number(save.lockerdata?.[monster.id]?.t);
     const state: HatchMonsterState =
       t === 2 ? { kind: "ready" } : t === 1 ? { kind: "unlocking" } : { kind: "locked" };

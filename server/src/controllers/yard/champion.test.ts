@@ -1,22 +1,19 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import type { User } from "../../database/models/user.model.js";
-import type { BuildingData } from "../../types/BuildingData.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { planSpeedup as planFriendSpeedup, previewHelp } from "../../services/friends/helpRules.js";
 import {
   yardChampionCancelEggAction,
   yardChampionEvolveAction,
   yardChampionFeedAction,
   yardChampionHealAction,
+  yardChampionJuiceAction,
   yardChampionRaiseAction,
   yardChampionRenameAction,
   yardChampionStanceAction,
 } from "./champion.js";
 import { yardChampionFreezeAction, yardChampionThawAction } from "./chamber.js";
-import { yardSpeedupAction } from "./speedup.js";
-import { yardInstantUpgradeAction } from "./instantUpgrade.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
 
 /**
@@ -28,13 +25,15 @@ import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js
 
 type Row = Record<string, unknown>;
 
-const db = { row: null as Row | null };
+/** The save row, and the player's `inferno_progress` row (Korath, owner I10). */
+const db = { row: null as Row | null, progress: null as Row | null };
 
 const em = {
   async transactional<T>(cb: (fork: unknown) => Promise<T>): Promise<T> {
     let entity: Row | null = null;
     const fork = {
-      async findOne() {
+      async findOne(entityClass?: { name?: string }) {
+        if (entityClass?.name === "InfernoProgress") return db.progress;
         entity = db.row && structuredClone(db.row);
         return entity;
       },
@@ -88,16 +87,30 @@ const championOf = (row: Row | null) => (row!.champion as Row[])[0]!;
 describe("champion routes", () => {
   beforeEach(() => {
     db.row = rowOf();
+    db.progress = null;
   });
 
-  test("raise lays an egg, and the answer carries it in the state", async () => {
+  test("raise puts the champion in the cage at once, and the answer carries it in the state", async () => {
     const now = getCurrentDateTime();
     const answer = await run(yardChampionRaiseAction, { type: "3" });
     expect(answer.status).toBe(200);
     expect(answer.body.champion).toEqual(db.row!.champion);
-    expect(championOf(db.row)).toMatchObject({ t: 3, l: 1, hp: 15_000, status: 3 });
-    expect(Number(championOf(db.row).ft)).toBeGreaterThanOrEqual(now + 24 * HOUR);
+    expect(championOf(db.row)).toMatchObject({ t: 3, l: 1, hp: 15_000, status: 0 });
+    expect(Number(championOf(db.row).ft)).toBeGreaterThanOrEqual(now + 20 * HOUR);
     expect(db.row!.credits).toBe(500);
+    // No waiting: the very next action works on it.
+    expect((await run(yardChampionRenameAction, { name: "Sparky" })).status).toBe(200);
+  });
+
+  test("juicing a champion is refused (409 juiceDisabled) and writes nothing, even with a working Juicer", async () => {
+    const buildingdata = { ...(rowOf().buildingdata as Row), "5": { id: 5, t: 9, x: 400, y: 0, l: 1 } };
+    const hurt = { t: 2, hp: 1_000, l: 4, ft: getCurrentDateTime() + HOUR, fd: 0, fb: 0, pl: 1, status: 0 };
+    db.row = rowOf({ buildingdata, champion: [hurt] });
+    const before = structuredClone(db.row!.champion);
+    const answer = await run(yardChampionJuiceAction);
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "juiceDisabled" });
+    expect(db.row!.champion).toEqual(before);
   });
 
   test("a starving champion loses its feed in the catch-up before the action runs", async () => {
@@ -198,69 +211,94 @@ describe("champion routes", () => {
   });
 });
 
-describe("champion eggs through the routes", () => {
-  const DAY = 24 * HOUR;
+describe("older saves' eggs through the routes (eggs removed, owner 2026-10-28)", () => {
   const egg = (ft: number, t = 2) => ({ t, hp: 12_000, l: 1, ft, fd: 0, fb: 0, pl: 1, status: 3 });
 
   beforeEach(() => {
     db.row = rowOf();
   });
 
-  test("no champion until the day is up, then the catch-up hatches it before the next action", async () => {
-    expect((await run(yardChampionRaiseAction, { type: "2" })).status).toBe(200);
-    const laid = championOf(db.row);
-    // An hour before the hatch: still an egg, and the cage has no champion.
+  test("the next action's catch-up hatches the egg at once, even before its old hatch time", async () => {
     const now = getCurrentDateTime();
-    db.row = rowOf({ savetime: now - 10, champion: [{ ...laid, ft: now + HOUR }] });
-    const early = await run(yardChampionHealAction);
-    expect(early.body).toMatchObject({ reason: "eggInCage" });
-    expect(championOf(db.row)).toMatchObject({ status: 3 });
-
-    // The day is up: any action's catch-up hatches it first, fed from the hatch.
-    db.row = rowOf({ savetime: now - 2 * HOUR, champion: [{ ...laid, ft: now - HOUR }] });
+    db.row = rowOf({ savetime: now - 10, champion: [egg(now + 20 * HOUR)] });
     const rename = await run(yardChampionRenameAction, { name: "Sparky" });
     expect(rename.status).toBe(200);
     expect((rename.body.completed as Row[]).map((job) => job.kind)).toContain("championHatch");
-    expect(championOf(db.row)).toMatchObject({ t: 2, l: 1, hp: 12_000, status: 0, nm: "Sparky", ft: now + 22 * HOUR });
+    expect(championOf(db.row)).toMatchObject({ t: 2, l: 1, hp: 12_000, status: 0, nm: "Sparky" });
+    expect(Number(championOf(db.row).ft)).toBeGreaterThanOrEqual(now + 20 * HOUR);
   });
 
-  test("cancel, then raise again: the new egg takes a full day", async () => {
+  test("an egg past its hatch time hatches at that time, fed from the hatch", async () => {
     const now = getCurrentDateTime();
-    db.row = rowOf({ champion: [egg(now + 10)] });
-    const cancel = await run(yardChampionCancelEggAction);
-    expect(cancel.status).toBe(200);
-    expect(db.row!.champion).toEqual([]);
-    expect((await run(yardChampionCancelEggAction)).body).toMatchObject({ reason: "noEgg" });
-
-    expect((await run(yardChampionRaiseAction, { type: "1" })).status).toBe(200);
-    expect(championOf(db.row)).toMatchObject({ t: 1, status: 3 });
-    expect(Number(championOf(db.row).ft)).toBeGreaterThanOrEqual(now + DAY);
+    db.row = rowOf({ savetime: now - 2 * HOUR, champion: [egg(now - HOUR)] });
+    expect((await run(yardChampionRenameAction, { name: "Sparky" })).status).toBe(200);
+    expect(championOf(db.row)).toMatchObject({ status: 0, ft: now + 22 * HOUR });
   });
 
-  test("raising over a waiting egg is refused and writes nothing", async () => {
+  test("raising over an old egg finds it hatched: the cage already holds a champion", async () => {
     const now = getCurrentDateTime();
     db.row = rowOf({ champion: [egg(now + HOUR)] });
     const answer = await run(yardChampionRaiseAction, { type: "3" });
     expect(answer.status).toBe(409);
-    expect(answer.body).toMatchObject({ reason: "eggInCage" });
-    expect(db.row!.champion).toEqual([egg(now + HOUR)]);
+    expect(answer.body).toMatchObject({ reason: "championInCage" });
   });
 
-  test("no speed-up, instant finish or friend help can reach the egg", async () => {
+  test("cancel-egg is gone: 410 eggsRemoved, and nothing is written", async () => {
     const now = getCurrentDateTime();
-    db.row = rowOf({ credits: 100_000, champion: [egg(now + HOUR)] });
-    for (const item of ["SP1", "SP2", "SP3", "SP4"]) {
-      const answer = await run(yardSpeedupAction, { id: "3", item });
-      expect(answer.status).toBe(409);
-    }
-    expect((await run(yardInstantUpgradeAction, { id: "3" })).status).toBe(409);
-    expect(championOf(db.row)).toEqual(egg(now + HOUR));
-    expect(db.row!.credits).toBe(100_000);
+    db.row = rowOf({ champion: [egg(now + HOUR)] });
+    const before = structuredClone(db.row);
+    const cancel = await run(yardChampionCancelEggAction);
+    expect(cancel.status).toBe(410);
+    expect(cancel.body).toMatchObject({ reason: "eggsRemoved" });
+    expect(db.row).toEqual(before);
+  });
+});
 
-    // A friend's help only ever shortens a building's countdown; the cage has none.
-    const cage = (db.row!.buildingdata as Record<string, BuildingData>)["3"]!;
-    expect(planFriendSpeedup(cage, 99)).toEqual({ reason: "nothingToHelp" });
-    const offered = previewHelp(db.row as never, 99, now, null);
-    expect(offered["3"]?.speedup).not.toBe(true);
+describe("raising Korath (Inferno WP 5.1, owner I10)", () => {
+  const saved = process.env.INFERNO_ENABLED;
+  const owner = { userid: 2505, inferno_baseid: "88001", korath_unlocked_at: new Date() };
+
+  beforeEach(() => {
+    db.row = rowOf();
+    db.progress = null;
+    process.env.INFERNO_ENABLED = "on";
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env.INFERNO_ENABLED;
+    else process.env.INFERNO_ENABLED = saved;
+  });
+
+  test("is refused before the player owns an Inferno yard, and nothing is written", async () => {
+    const before = structuredClone(db.row);
+    const answer = await run(yardChampionRaiseAction, { type: "4" });
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "notRaisable" });
+    expect(db.row).toEqual(before);
+  });
+
+  test("raises him at the cage once they own one: free, in the cage straight away", async () => {
+    db.progress = owner;
+    const now = getCurrentDateTime();
+    const answer = await run(yardChampionRaiseAction, { type: "4" });
+    expect(answer.status).toBe(200);
+    expect(championOf(db.row)).toMatchObject({ t: 4, l: 1, hp: 28_000, pl: 0, status: 0 });
+    expect(Number(championOf(db.row).ft)).toBeGreaterThanOrEqual(now + 20 * HOUR);
+    expect(db.row!.credits).toBe(500);
+  });
+
+  test("keeps one basic champion at a time", async () => {
+    db.progress = owner;
+    db.row = rowOf({ champion: [{ t: 1, hp: 40_000, l: 1, ft: getCurrentDateTime() + HOUR, fd: 0, fb: 0, pl: 1, status: 0 }] });
+    const answer = await run(yardChampionRaiseAction, { type: "4" });
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "championInCage" });
+  });
+
+  test("is refused while the new Inferno is switched off, yard or not", async () => {
+    db.progress = owner;
+    delete process.env.INFERNO_ENABLED;
+    const answer = await run(yardChampionRaiseAction, { type: "4" });
+    expect(answer.status).toBe(409);
+    expect(answer.body).toMatchObject({ reason: "notRaisable" });
   });
 });

@@ -1,4 +1,7 @@
-import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel } from "./buildingArtData";
+import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel, type ArtRow } from "./buildingArtData";
+import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
+import { hasInfernoTiers, tierArtFor } from "./buildingArtTiers";
+import type { YardKind } from "./buildingCostData";
 
 /**
  * Resolving a building to its art.
@@ -15,6 +18,11 @@ import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel } from ".
  * one, otherwise walk *down* until an entry exists. Level 0 — a building still
  * under construction — uses the level 1 art.
  * (`client/scripts/BFOUNDATION.as:896-914`.)
+ *
+ * The repainted defensive towers and Town Hall are the exception: unless the
+ * player chose the old (Flash) art, each tier or level takes a new picture
+ * from `buildingArtTiers.ts` instead of the Flash row; a tower whose turret
+ * turns takes a body and a turret strip, like the Flash tower it replaces.
  *
  * Two buildings have a lower maximum on Map Room 2 than the art table knows
  * about, and the client clamps the level before looking the art up
@@ -63,12 +71,24 @@ interface ArtRowIndex {
   readonly size: number;
 }
 
-const ROWS = new Map<number, ArtRowIndex>(
-  BUILDING_ART_ROWS.map((row) => [
-    row[0],
-    { name: row[1], folder: row[2], levels: row[3], hp: row[4], size: row[5] },
-  ]),
-);
+const indexOf = (rows: readonly ArtRow[]): Map<number, ArtRowIndex> =>
+  new Map(
+    rows.map((row) => [row[0], { name: row[1], folder: row[2], levels: row[3], hp: row[4], size: row[5] }]),
+  );
+
+const ROWS = indexOf(BUILDING_ART_ROWS);
+
+/**
+ * The Inferno yard's rows: the types whose art or health differs there
+ * (`INFERNOYARDPROPS.as`, `buildingArtInfernoData.ts`). Flash swaps that
+ * table in for the whole props table on an Inferno yard; every type it does
+ * not change reads the main row.
+ */
+const INFERNO_ROWS = indexOf(INFERNO_ART_ROWS);
+
+/** A type's row in the props table this kind of yard reads. */
+const rowFor = (type: number, kind: YardKind): ArtRowIndex | undefined =>
+  (kind === "inferno" ? INFERNO_ROWS.get(type) : undefined) ?? ROWS.get(type);
 
 /**
  * Prefixes the props table hangs on a string key: `bdg_` for a decoration,
@@ -97,8 +117,8 @@ export const prettifyArtKey = (key: string): string =>
     .join(" ");
 
 /** The display name from the game's own string table, or null. */
-export const buildingName = (type: number): string | null => {
-  const name = ROWS.get(type)?.name;
+export const buildingName = (type: number, kind: YardKind = "main"): string | null => {
+  const name = rowFor(type, kind)?.name;
   if (name === undefined) return null;
   return name.includes("_") ? prettifyArtKey(name) : name;
 };
@@ -110,7 +130,8 @@ export const hasArt = (type: number): boolean => ROWS.has(type);
 export const artTypes = (): number[] => [...ROWS.keys()].sort((a, b) => a - b);
 
 /** The asset folder for a type, exactly as the props table spells it. */
-export const artFolder = (type: number): string | null => ROWS.get(type)?.folder ?? null;
+export const artFolder = (type: number, kind: YardKind = "main"): string | null =>
+  rowFor(type, kind)?.folder ?? null;
 
 /**
  * Maximum health at a level, from the props table's `hp` ladder.
@@ -121,8 +142,8 @@ export const artFolder = (type: number): string | null => ROWS.get(type)?.folder
  * Room 3 needs. Null when the type has no ladder at all, which is every
  * decoration.
  */
-export const maxHealth = (type: number, level: number): number | null => {
-  const ladder = ROWS.get(type)?.hp;
+export const maxHealth = (type: number, level: number, kind: YardKind = "main"): number | null => {
+  const ladder = rowFor(type, kind)?.hp;
   if (!ladder || ladder.length === 0) return null;
   const index = Math.min(Math.max(level - 1, 0), ladder.length - 1);
   return ladder[index] ?? null;
@@ -168,10 +189,15 @@ export interface ResolvedAnim {
   /** Top-left of cell 0 relative to the building's isometric origin. */
   readonly x: number;
   readonly y: number;
-  /** One cell. Cell `i` is the rectangle `(i * width, 0, width, height)`. */
+  /**
+   * One cell. Cell `i` is the rectangle `(i * width, 0, width, height)`, or
+   * with `columns`, `((i % columns) * width, floor(i / columns) * height)`.
+   */
   readonly width: number;
   readonly height: number;
   readonly frames: number;
+  /** Cells in a row, for a strip of several rows (the 3D Laser's tilts); one row without it. */
+  readonly columns?: number;
 }
 
 /**
@@ -238,6 +264,12 @@ export interface ResolvedArt {
    * both would show cell 0 through the transparent parts of every other cell.
    */
   readonly topIsAnim: boolean;
+  /**
+   * The whole building in one picture, for an icon, when `top` is only part
+   * of it: a repainted tower whose turret turns has its body as `top` and the
+   * turret in `anims`, and keeps the tier's painted picture here.
+   */
+  readonly still?: ResolvedImage;
 }
 
 const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
@@ -251,13 +283,14 @@ const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
   };
 };
 
-const animOf = (folder: string, entry: ArtAnim): ResolvedAnim => ({
+const animOf = (folder: string, entry: ArtAnim, columns?: number): ResolvedAnim => ({
   url: `${ASSET_ROOT}${folder}${entry[0]}`,
   x: entry[1],
   y: entry[2],
   width: entry[3],
   height: entry[4],
   frames: entry[5],
+  ...(columns ? { columns } : {}),
 });
 
 /** Indices into an `ArtLevel` tuple for the default, damaged and destroyed art. */
@@ -272,16 +305,58 @@ const ANIM_INDEX: Record<ArtState, 7 | 8 | null> = { "": 7, damaged: 8, destroye
  * `level` is the building's own level; 0 (under construction) and anything
  * above the table's ceiling are handled here.
  */
-export const resolveArt = (type: number, level: number, state: ArtState): ResolvedArt | null => {
-  const row = ROWS.get(type);
+export const resolveArt = (
+  type: number,
+  level: number,
+  state: ArtState,
+  kind: YardKind = "main",
+): ResolvedArt | null => {
+  const row = rowFor(type, kind);
   if (!row) return null;
 
-  const cap = MAP_ROOM_2_MAX_LEVEL[type];
+  const cap = kind === "inferno" ? undefined : MAP_ROOM_2_MAX_LEVEL[type];
   const effective = cap === undefined ? level : Math.min(level, cap);
 
   // Level 0 is a building whose foundation is down but which is not finished;
   // it shows the level 1 art.
   const wanted = effective <= 0 ? 1 : effective;
+
+  // A repainted tier or Town Hall level, unless the old art is on: the same art for
+  // default and damaged alike; a destroyed one falls through to the Flash rubble.
+  // A tower whose turret turns is its body with the turret's strip over it, and
+  // the parts of the body in front of the turret (the Cannon's prongs) over that.
+  // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art,
+  // unless the Inferno has tiers of its own for it (the Blast Tower, the Sharpshooter).
+  const ownInfernoArt =
+    kind === "inferno" && row.folder !== ROWS.get(type)?.folder && !hasInfernoTiers(type, kind);
+  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted, kind);
+  // A tier whose moving part is a strip (the 3D Tesla's film, the Bunker's shutters) has it over its top,
+  // or, when each cell is the whole building, in its place: its top is then the strip's cell 0.
+  if (tier) {
+    const { turret, anim } = tier;
+    const layers = turret ? (turret.front ? [turret.strip, turret.front] : [turret.strip]) : anim ? [anim.strip] : [];
+    const columnsOf = (layer: ArtAnim): number | undefined =>
+      layer === turret?.strip ? turret.columns : layer === anim?.strip ? anim.columns : undefined;
+    const still = imageOf(row.folder, tier.top);
+    const whole = !turret && anim?.whole === true;
+    const top = turret
+      ? imageOf(row.folder, turret.body)
+      : whole && anim
+        ? imageOf(row.folder, [anim.strip[0], anim.strip[1], anim.strip[2], anim.strip[3], anim.strip[4]])
+        : still;
+    if (top && still) {
+      return {
+        name: row.name,
+        folder: row.folder,
+        level: tier.from,
+        top,
+        shadow: imageOf(row.folder, tier.shadow),
+        anims: layers.map((layer) => animOf(row.folder, layer, columnsOf(layer))),
+        topIsAnim: whole,
+        ...(turret || whole ? { still } : {}),
+      };
+    }
+  }
 
   let chosen: ArtLevel | null = null;
   for (const candidate of row.levels) {

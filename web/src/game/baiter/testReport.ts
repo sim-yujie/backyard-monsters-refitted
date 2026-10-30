@@ -210,7 +210,7 @@ const hintOf = (state: BattleState): string | null => {
   const grounded = state.towers.filter((tower) => !hitsFlyers(tower.type));
   if (grounded.length > 0 && dropped.every(flies)) {
     const types = [...new Set(grounded.map((tower) => tower.type))];
-    const names = grounded.length === 1 ? types.map(typeName) : types.map((type) => `${typeName(type)}s`).sort();
+    const names = grounded.length === 1 ? types.map((type) => typeName(type)) : types.map((type) => `${typeName(type)}s`).sort();
     return `Your ${listOf(names)} can't hit flying monsters, and this army flew.`;
   }
   const silent = state.towers.filter((tower) => tower.firstShotTick === null).length;

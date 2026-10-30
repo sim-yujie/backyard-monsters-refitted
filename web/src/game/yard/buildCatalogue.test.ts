@@ -53,6 +53,8 @@ interface Fixture {
   readonly storedata?: BaseLoadResponse["storedata"];
   readonly researchdata?: BaseLoadResponse["researchdata"];
   readonly outpost?: boolean;
+  readonly infernostate?: BaseLoadResponse["infernostate"];
+  readonly iresources?: BaseLoadResponse["iresources"];
 }
 
 const contextOf = (fixture: Fixture): BuildContext => {
@@ -66,6 +68,8 @@ const contextOf = (fixture: Fixture): BuildContext => {
     buildinghealthdata: {},
     storedata: fixture.storedata ?? {},
     researchdata: fixture.researchdata ?? {},
+    ...(fixture.infernostate && { infernostate: fixture.infernostate }),
+    ...(fixture.iresources && { iresources: fixture.iresources }),
   } as unknown as BaseLoadResponse;
   const yard = readYard(save);
   return {
@@ -89,14 +93,14 @@ describe("the catalogue", () => {
     // `BUILDABLE_TYPES` in server/src/services/yard/build.ts.
     expect([...BUILDABLE_TYPES].sort((a, b) => a - b)).toEqual([
       1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 51, 114,
-      115, 116, 117, 118, 119,
+      115, 116, 117, 118, 119, 129, 132, 133, 134,
     ]);
     const all = BUILD_CATALOGUE.flatMap((category) => category.types);
     expect(new Set(all).size).toBe(all.length);
   });
 
-  it("leaves out the Radio, the Inferno types, Map Room 3 structures and the Town Hall", () => {
-    for (const type of [14, 18, 113, 129, 132, 133, 134, 136, 137, 138, 139, 140]) {
+  it("leaves out the Radio, the Spurtz Cannons, Map Room 3 structures and the Town Hall", () => {
+    for (const type of [14, 18, 113, 136, 137, 138, 139, 140]) {
       expect(BUILDABLE_TYPES.has(type)).toBe(false);
     }
   });
@@ -428,5 +432,91 @@ describe("the outpost catalogue", () => {
       (offer) => offer.type,
     );
     expect(types).toEqual([15, 13, 16, 5, 9]);
+  });
+});
+
+/**
+ * The main yard's Inferno buildings (Inferno WP 6.1): offered once the cave
+ * is at level 5, behind the Descent, counted by the Under Hall and priced in
+ * the Inferno purse. Quake Tower `costs[0]` = 312,500 / 187,500 / 125,000,
+ * `quantity` by Under Hall `[0, 1, 1, 2, 2, 4, ...]`.
+ */
+describe("buildOffer: the main yard's Inferno buildings", () => {
+  const QUAKE = 129;
+  const FACTORY = 133;
+  const LAB = 134;
+  const PURSE = { r1: 5e6, r2: 5e6, r3: 5e6, r4: 5e6, r1max: 1e7, r2max: 1e7, r3max: 1e7, r4max: 1e7 };
+
+  /** An `infernostate` with the cave at `cave`, the Descent `passed` or not, and that Under Hall. */
+  const stateOf = (cave: number, passed: boolean, underHall: number) =>
+    ({
+      now: T0,
+      cave: { shown: true, level: cave, maxLevel: 5 },
+      emergence: { lastAt: null, nextAt: null, done: cave >= 5 },
+      descent: { level: passed ? 14 : 1, destroyed: [], passed },
+      hasYard: passed,
+      underHall,
+      korathNotice: false,
+      raised: null,
+    }) as unknown as BaseLoadResponse["infernostate"];
+
+  const inferno = (underHall: number, extra: Partial<Fixture> = {}) =>
+    contextOf({ buildings: [HALL(9)], infernostate: stateOf(5, true, underHall), iresources: PURSE, ...extra });
+
+  it("is not offered without an infernostate, or before the cave's last level", () => {
+    expect(buildOffer(QUAKE, contextOf({ buildings: [HALL(9)] }))).toBeNull();
+    expect(buildOffer(QUAKE, contextOf({ buildings: [HALL(9)], infernostate: stateOf(4, true, 3) }))).toBeNull();
+    expect(buildOffer(CANNON, contextOf({ buildings: [HALL(9)] }))?.inferno).toBe(false);
+  });
+
+  it("waits for the Descent first: infernoLocked, a locked tile, Instant too", () => {
+    const offer = buildOffer(QUAKE, inferno(3, { infernostate: stateOf(5, false, 0) }));
+    expect(offer).toMatchObject({ inferno: true, status: "locked", gate: { reason: "infernoLocked" } });
+    expect(offer?.instantGate).toEqual({ reason: "infernoLocked" });
+  });
+
+  it("no Under Hall: the hall gate, read off the Under Hall, not the Town Hall 9", () => {
+    const offer = buildOffer(QUAKE, inferno(0));
+    expect(offer?.gate).toEqual({ reason: "townHall", have: 0, need: 1 });
+    expect(offer?.allowed).toBe(0);
+  });
+
+  it("Under Hall 1: one Quake Tower, priced from the purse, the surface's resources not counted", () => {
+    const offer = buildOffer(QUAKE, inferno(1, { resources: { r1: 0, r2: 0, r3: 0, r4: 0 } }));
+    expect(offer).toMatchObject({ allowed: 1, gate: null, cost: { r1: 312_500, r2: 187_500, r3: 125_000, r4: 0 } });
+    expect(offer?.needs).toEqual([{ kind: "townHall", level: 1, met: true }]);
+
+    const one = buildOffer(QUAKE, inferno(1, { buildings: [HALL(9), building(2, QUAKE, { l: 1 })] }));
+    expect(one?.gate).toEqual({ reason: "limit", have: 1, allowed: 1, next: 3 });
+  });
+
+  it("a purse short of the price is a shortfall, however rich the surface", () => {
+    const short = { ...PURSE, r1: 1000 };
+    const offer = buildOffer(QUAKE, inferno(1, { iresources: short }));
+    expect(offer?.gate).toEqual({
+      reason: "shortfall",
+      shortfall: { r1: 311_500, r2: 0, r3: 0, r4: 0 },
+      overCap: false,
+    });
+  });
+
+  it("the Siege Factory needs the Siege Lab, and its needs list names the Lab, not the Under Hall entry", () => {
+    const offer = buildOffer(FACTORY, inferno(1));
+    expect(offer?.gate).toEqual({ reason: "requirements", requirements: [[LAB, 1, 1]] });
+    expect(offer?.needs).toEqual([
+      { kind: "townHall", level: 1, met: true },
+      { kind: "building", type: LAB, count: 1, level: 1, met: false },
+    ]);
+    const withLab = buildOffer(FACTORY, inferno(1, { buildings: [HALL(9), building(2, LAB, { l: 1 })] }));
+    expect(withLab?.gate).toBeNull();
+  });
+
+  it("files the Siege buildings after the Champion Chamber, the towers in Flash's order", () => {
+    const context = inferno(1);
+    const buildings = buildOffers(BuildCategory.BUILDINGS, context).map((offer) => offer.type);
+    expect(buildings.slice(5, 10)).toEqual([16, 114, 119, 133, 134]);
+    const defensive = buildOffers(BuildCategory.DEFENSIVE, context).map((offer) => offer.type);
+    expect(defensive.indexOf(129)).toBe(defensive.indexOf(20) + 1);
+    expect(defensive.indexOf(132)).toBe(defensive.indexOf(118) + 1);
   });
 });

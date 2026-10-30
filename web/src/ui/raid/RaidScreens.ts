@@ -17,6 +17,7 @@ import {
 } from "@/game/raid/raidText";
 import { raidCountdownText, type RaidBusy, type RaidStage, type RaidYardView } from "@/game/raid/raidYardFlow";
 import { TROJAN_TRIBE } from "@/game/trojan/trojanHorse";
+import { alarmPulse } from "@/ui/alarmPulse";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
@@ -82,7 +83,8 @@ export interface RaidAlertActions {
 /**
  * The WILD MONSTER ALERT (`AIATTACKPOPUP.as`): the tribe, up to three of its
  * monster types, the time left, and "Engage now" or "Prepare defences".
- * Neither Escape nor the scrim closes it (D6): the player must answer.
+ * Neither Escape nor the scrim closes it (D6): the player must answer. Its
+ * border pulses with the alarm glow while it is up.
  */
 export class RaidAlert {
   readonly popup: Popup;
@@ -94,6 +96,7 @@ export class RaidAlert {
   constructor(raid: { readonly id: string; readonly tribe: string; readonly monsters: Readonly<Record<string, number>> }, actions: RaidAlertActions) {
     this.raidId = raid.id;
     this.popup = new Popup({ title: ALERT_TITLE, className: "raid-alert", dismissable: false });
+    alarmPulse(this.popup);
 
     const head = element("div", "raid-alert__head");
     const words = element("div", "raid-alert__words");
@@ -313,14 +316,15 @@ export const raidResultPopup = (result: RaidResult, repair: RaidRepairOffer | nu
 
   if (result.shiny > 0) {
     const reward = element("p", "raid-result__reward");
-    reward.append("Reward: ", resourceAmount("shiny", `+${formatAmount(result.shiny)}`));
+    // Gains green with a plus, losses red with a minus (owner, 28 Oct).
+    reward.append("Reward: ", resourceAmount("shiny", result.shiny, { change: "gain" }));
     parts.push(reward);
   }
   if (anyStolen(result)) {
     const stolen = element("div", "raid-result__stolen");
     const list = element("span", "res-list");
     for (const key of RESOURCE_KEYS) {
-      if (result.stolen[key] > 0) list.append(resourceAmount(key, formatAmount(result.stolen[key])));
+      if (result.stolen[key] > 0) list.append(resourceAmount(key, result.stolen[key], { change: "loss" }));
     }
     stolen.append(element("span", "raid-result__label", "The raiders took"), list);
     parts.push(stolen);

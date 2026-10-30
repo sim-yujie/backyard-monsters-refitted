@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
+import { hatchCost } from "./monsterCatalogue";
 import { juiceGoo, juicePreview, juicerRate, juicerStatus } from "./juice";
 
 /** The Juicer rules the Housing tab and the Bunker panel price with (server: `services/yard/juice.ts`). */
@@ -52,6 +53,9 @@ describe("juice goo", () => {
       goo: 5_000,
       credited: 3_000,
       lost: 2_000,
+      magma: 0,
+      magmaCredited: 0,
+      magmaLost: 0,
     });
     expect(juicePreview(save, { C2: 1 }, 1, { r1: 0, r2: 0, r3: 0, r4: 12_000 }, caps)).toMatchObject({
       credited: 0,
@@ -61,5 +65,34 @@ describe("juice goo", () => {
       credited: 500,
       lost: 0,
     });
+  });
+});
+
+describe("Inferno monsters juiced on the main yard (Inferno WP 2.3)", () => {
+  const pool = { r1: 0, r2: 0, r3: 0, r4: 0 };
+  const caps = { r1: 10_000, r2: 10_000, r3: 10_000, r4: 10_000 };
+  const each = Math.ceil((hatchCost("IC1", 1) ?? 0) * 1);
+
+  it("pay Magma into the Inferno purse, clamped to its cap, and no goo", () => {
+    const save = saveOf({}, { iresources: { r4: 1_000, r4max: 1_000 + each } });
+    expect(juicePreview(save, { IC1: 2, C2: 1 }, 1, pool, caps)).toEqual({
+      count: 3,
+      goo: 500,
+      credited: 500,
+      lost: 0,
+      magma: 2 * each,
+      magmaCredited: each,
+      magmaLost: each,
+    });
+  });
+
+  it("with no Inferno cap saved, no Magma lands, as on the server", () => {
+    const save = saveOf({}, { iresources: { r4: 0 } });
+    expect(juicePreview(save, { IC1: 1 }, 1, pool, caps)).toMatchObject({ magma: each, magmaCredited: 0 });
+  });
+
+  it("on the Inferno yard their juice is that yard's own Magma pool", () => {
+    const save = saveOf({});
+    expect(juicePreview(save, { IC1: 1 }, 1, pool, caps, "inferno")).toMatchObject({ goo: each, magma: 0 });
   });
 });

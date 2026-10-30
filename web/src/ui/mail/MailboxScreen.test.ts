@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { InviteAnswer, InvitePayment, MailApi, MailMessage, MailTarget, Outgoing, SendResult } from "@/api/mail";
 import { MailboxScreen, type MailboxScreenOptions } from "./MailboxScreen";
 import { ApiError } from "@/api/http";
+import { spokenText } from "@/ui/resourceIcon";
 
 /**
  * The mailbox screen (#193) over a fake mail API: the list, a thread, a
@@ -221,6 +222,33 @@ describe("the mailbox screen", () => {
       const second = await openNotice({});
       expect(second.host.querySelector(".mail-message__defence")).toBeNull();
     });
+  });
+
+  it("shows an attack notice's numbers as icons, the sentence kept as their tooltip (less-text job 3)", async () => {
+    const defended = message({
+      threadid: 7,
+      userid: 0,
+      messagetype: "yardattacked",
+      subject: "Kai_Builds attacked your yard",
+      message: "It was left 63% damaged. 1,234 Twigs and 500 Goo were looted.",
+      unread: 1,
+      updatetime: NOW - 30,
+      attackstats: { damage: 63, loot: { r1: 1234, r4: 500 }, housedLost: 9 },
+    });
+    const api = fakeApi([[defended]], { 7: [defended] });
+    const { host } = await openScreen(api);
+
+    const preview = rows(host)[0]!.querySelector(".mail-row__preview--attack");
+    expect(spokenText(preview!)).toBe("Yard damage 63% Twigs 1,234 lost Goo 500 lost");
+    expect(preview!.getAttribute("title")).toBe("Yard damage 63% · 1,234 Twigs lost · 500 Goo lost");
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-pane__subject")?.textContent).toBe("Kai_Builds attacked your yard");
+    const text = host.querySelector<HTMLElement>(".mail-message__text--attack");
+    expect(spokenText(text!)).toBe("Yard damage 63% Twigs 1,234 lost Goo 500 lost");
+    expect(text!.title).toBe("It was left 63% damaged. 1,234 Twigs and 500 Goo were looted.");
+    // The housed monsters lost are not told (owner, 27 Oct).
+    expect(text!.textContent).not.toContain("9");
   });
 
   describe("Add friend on an attack notice (friends WP11, #378)", () => {

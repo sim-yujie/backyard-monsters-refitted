@@ -1,0 +1,91 @@
+You are making game visual-effect (VFX) sprite textures for "Backyard Monsters", a bright, cartoony, hand-painted isometric strategy game. The images in reference/ show the game's defence towers (Tesla coil, Railgun, Cannon) so you can match the painterly game style. These textures will be used for tower shots: sparks, impact bursts, glows, smoke and muzzle flashes. The game tints them with colour in code, so every effect must be painted in NEUTRAL GREYSCALE ONLY (white, light grey, grey; no colour at all), except where noted.
+
+Use your image generation tool to create 12 SEPARATE square images, each 1024x1024 pixels, and save them into the out/ folder with exactly these file names. Every image: ONE effect only, centred, filling about 70% of the square, with at least 120 px of empty margin on every side. The background must be a perfectly flat, solid pure green #00FF00 (RGB 0,255,0) across the whole image: no gradient, no vignette, no texture, no shadow, no ground, no border, no text, no watermark. The effect itself must contain no green.
+
+1. out/fx01_glow.png - a soft round light bloom: brilliant white centre fading smoothly and evenly to nothing, perfectly round, like a lens glow.
+2. out/fx02_flare.png - a sparkling star flare: a small hot white core with 4 long thin sharp rays (up, down, left, right) and 4 shorter diagonal rays, with a faint soft glow around the core.
+3. out/fx03_muzzle.png - a cartoon muzzle flash seen from the side: a bright white-hot point at the LEFT-centre of the square, with a cone of jagged flame tongues blasting toward the RIGHT edge, widest in the middle, sharp flickering tips.
+4. out/fx04_spark.png - a single fast spark streak lying horizontally: a hot bright rounded head at the RIGHT end and a long thin tapering tail to the LEFT, slightly glowing.
+5. out/fx05_burst.png - an impact explosion burst: a ragged star of 8 to 10 uneven, sharp flame/energy spikes radiating from a bright white core, painted with soft inner shading, like a cartoon hit flash in a mobile strategy game.
+6. out/fx06_zap.png - an electric impact: a bright white core with 6 to 8 small jagged crackling lightning forks branching outward in all directions, with a soft glow around the core.
+7. out/fx07_smoke.png - a puffy round cartoon smoke cloud made of a few overlapping soft balls, painted shading: light grey on top, darker grey underneath, soft edges.
+8. out/fx08_wisp.png - a wispy, irregular, soft smoke puff, pale grey, with feathery see-through edges.
+9. out/fx09_ring.png - a shockwave ring: a thin bright white circle (about 75% of the square wide) with a soft glow on both sides of the line and an empty centre (the centre stays pure green).
+10. out/fx10_orb.png - a glowing energy orb / plasma ball: a white-hot round core with a wispy, swirling energy halo around it.
+11. out/fx11_beam.png - a horizontal glowing energy beam stroke: a straight bright white line running across about 80% of the width through the centre, with soft glow above and below it, and both ends tapering to points. Keep it thin: the glow is at most 1/6 of the image height.
+12. out/fx12_scorch.png - a blast scorch mark on the ground seen from above: a DARK charcoal-grey to near-black splat with ragged radiating streaks and soft edges (this one is dark, not white).
+
+Paint them as polished, high-quality game effects (think modern mobile strategy games like Clash of Clans), clean and readable at small sizes. Make all 12 images, then list the files you saved.
+
+--- Second run (2026-10-24, Antigravity --write): the five stand-ins and six lightning bolts ---
+Saved as src/fx02_flare, fx06_zap, fx08_wisp, fx10_orb, fx12_scorch and fx13_bolt1 ... fx17_bolt5.
+bolt6 was not painted (image quota ran out); painted 2026-10-25 in a bolt6-only run (bolts 1-5 as style references), saved as src/fx18_bolt6.
+Prompt as sent:
+
+You are painting game visual-effect (VFX) sprite textures for "Backyard Monsters", a bright, cartoony, hand-painted isometric strategy game. The images in reference/ are effects already painted for this set (an impact burst, a beam stroke, a smoke puff): match their painterly, polished style. The game tints these textures with colour in code, so paint every effect in NEUTRAL GREYSCALE ONLY (white, light grey, grey; no colour at all), except where noted.
+
+VERY IMPORTANT: every image must be made with your IMAGE GENERATION tool. Do NOT write or run any code (no Python, no PIL, no numpy, no scripts, no SVG, no canvas) to draw, edit, fix, resize or finish any image. If the image tool fails or runs out of quota, STOP and report which files are missing. A missing file is fine; a code-drawn file is not acceptable.
+
+Background for every image: a perfectly flat, solid pure green #00FF00 (RGB 0,255,0) across the whole image: no gradient, no vignette, no texture, no shadow, no ground, no border, no text, no watermark. The effect itself must contain no green. One effect per image, with clear empty green margin on every side.
+
+Square images (1024x1024), effect centred, filling about 70% of the square:
+1. out/fx02_flare.png - a sparkling star flare: a small hot white core with 4 long thin sharp rays (up, down, left, right) and 4 shorter diagonal rays, with a faint soft glow around the core.
+2. out/fx06_zap.png - an electric impact: a bright white core with 6 to 8 small jagged crackling lightning forks branching outward in all directions, each fork tapering from thick to thin, with a soft glow around the core.
+3. out/fx08_wisp.png - a wispy, irregular, soft smoke puff, pale grey, with feathery see-through edges.
+4. out/fx10_orb.png - a glowing energy orb / plasma ball: a white-hot round core with a wispy, swirling energy halo around it.
+5. out/fx12_scorch.png - a blast scorch mark on the ground seen from directly above: a DARK charcoal-grey to near-black splat with ragged radiating streaks and soft edges (this one is dark, not white).
+
+Wide images (as wide as your tool allows, e.g. 1536x512 or 2048x512; if only square is possible, use 1024x1024 and keep the bolt inside the middle third vertically). Each is ONE lightning bolt lying HORIZONTALLY, running from near the left edge to near the right edge (leave about 4% green margin at each end), centred vertically, and staying inside the middle third of the image height:
+6. out/bolt1.png
+7. out/bolt2.png
+8. out/bolt3.png
+9. out/bolt4.png
+10. out/bolt5.png
+11. out/bolt6.png
+Every bolt: a cartoon game lightning bolt painted bright white with a slightly brighter centre line. It makes only 3 to 5 BIG zigzags with SHARP corners (not a wavy line, not many tiny wiggles). The stroke is THICKER at each bend and THINNER on the straight runs between bends, and both ends taper to sharp points. Off two or three of the bends, a small side fork branches out, also tapered from thick to thin and ending in a sharp point. Only a very faint thin glow hugging the stroke, no big glow. Make each of the six bolts a DIFFERENT zigzag shape (different bend positions, heights and fork places), so the game can flicker between them.
+
+Paint them as polished, high-quality game effects (think modern mobile strategy games like Clash of Clans), clean and readable at small sizes. Make all 11 images, then list the files you saved and say for each one that it came from the image generation tool.
+
+
+--- Third run (2026-10-25, Antigravity --write): Sniper Tower + Aerial Defense Tower; picks: fx22_brake = brake v2, fx23_flak = flak, fx24_shrapnel = shrapnel v2, fx25_tracer = tracer v3 ---
+
+You are painting game visual-effect (VFX) sprite textures for "Backyard Monsters", a bright, cartoony, hand-painted isometric strategy game. The images in reference/ are effects already painted for this set (fx03 muzzle flash, fx04 spark, fx05 impact burst, fx07 smoke puff, fx19 streak) plus two of the game's towers (a Sniper Tower and an Aerial Defense flak tower): match the painterly, polished style of the fx images. The game tints these textures with colour in code, so paint every effect in NEUTRAL GREYSCALE ONLY (white, light grey, grey; no colour at all), except where noted.
+
+VERY IMPORTANT: every image must be made with your IMAGE GENERATION tool. Do NOT write or run any code (no Python, no PIL, no numpy, no scripts, no SVG, no canvas) to draw, edit, fix, resize or finish any image. If the image tool fails or runs out of quota, STOP and report which files are missing. A missing file is fine; a code-drawn file is not acceptable.
+
+Background for every image: a perfectly flat, solid pure green #00FF00 (RGB 0,255,0) across the whole image: no gradient, no vignette, no texture, no shadow, no ground, no border, no text, no watermark. The effect itself must contain no green. One effect per image, with clear empty green margin on every side.
+
+Square images (1024x1024), effect centred, filling about 70% of the square:
+1. out/fx22_brake.png - a sniper rifle's muzzle-brake flash seen from the side: a small white-hot point at the LEFT-centre of the square; from it ONE long, narrow, sharp forward jet of flame blasting toward the RIGHT edge (much longer and thinner than an ordinary muzzle flash), plus TWO short side jets bursting out sideways from just in front of the hot point, one angled up and one angled down, like the side ports of a muzzle brake. Crisp flame tongues with sharp tips, soft painted inner shading.
+2. out/fx23_flak.png - a flak shell air-burst cloud: a dense, lumpy, ragged ball of explosion smoke made of several tight overlapping puffs, with a few small torn wisps at its edge. Paint it in MEDIUM-TO-DARK grey with lighter grey highlights along the top edges of the puffs (this one is mostly grey, not white). Like the black flak puffs in old war films, in a cartoon game style.
+3. out/fx24_shrapnel.png - a shrapnel spray: 10 to 14 thin, straight, sharp bright white fragment streaks flying outward in all directions from an EMPTY centre (the centre stays pure green), each streak a tapered dash with a hot point at its outer end, of slightly different lengths and spacing, no glow cloud.
+
+Wide image (as wide as your tool allows, e.g. 1536x512 or 2048x512; if only square is possible, use 1024x1024 and keep the effect inside the middle third vertically):
+4. out/fx25_tracer.png - a bullet tracer lying HORIZONTALLY across the image: a small, very bright, white-hot pointed head near the RIGHT edge, and from it ONE long, thin, perfectly straight tail running to near the LEFT edge, fading smoothly to nothing at its left end, with only a thin soft glow hugging it. Leave about 4% green margin at each end; keep it centred vertically and thin (the glow at most 1/8 of the image height).
+
+Paint them as polished, high-quality game effects (think modern mobile strategy games like Clash of Clans), clean and readable at small sizes. Make all 4 images, then list the files you saved and say for each one that it came from the image generation tool.
+
+
+--- Fourth run (2026-10-25, Antigravity --write): Sniper Tower + Aerial Defense Tower redo (owner: the first look was plain and the two towers looked alike); one picture each, all kept: fx26_rifleflash, fx27_bullet, fx28_vapour, fx29_ricochet, fx30_debris, fx31_shell, fx32_fireball, fx33_aaflash. fx22_brake and fx25_tracer stay in src but are no longer laid on the sheet ---
+
+You are painting game visual-effect (VFX) sprite textures for "Backyard Monsters", a bright, cartoony, hand-painted isometric strategy game. The images in reference/ are effects already painted for this set (fx03 muzzle flash, fx05 impact burst, fx07 smoke puff, fx19 streak, fx23 flak cloud, fx25 tracer) plus two of the game's towers (a Sniper Tower and an Aerial Defense twin-barrel flak tower): match the painterly, polished style of the fx images. The game tints these textures with colour in code, so paint every effect in NEUTRAL GREYSCALE ONLY (white, light grey, grey, dark grey; no colour at all).
+
+These are for two towers that must look VERY DIFFERENT from each other: the Sniper Tower fires one thin, fast, precise rifle round; the Aerial Defense Tower fires chunky, heavy flak shells that explode in the air. Make the sniper pieces thin, sharp and precise, and the flak pieces fat, round and heavy.
+
+VERY IMPORTANT: every image must be made with your IMAGE GENERATION tool. Do NOT write or run any code (no Python, no PIL, no numpy, no scripts, no SVG, no canvas) to draw, edit, fix, resize or finish any image. If the image tool fails or runs out of quota, STOP and report which files are missing. A missing file is fine; a code-drawn file is not acceptable.
+
+Background for every image: a perfectly flat, solid pure green #00FF00 (RGB 0,255,0) across the whole image: no gradient, no vignette, no texture, no shadow, no ground, no border, no text, no watermark. The effect itself must contain no green. One effect per image, with clear empty green margin on every side.
+
+Square images (1024x1024), effect centred, filling about 70% of the square:
+1. out/fx26_rifleflash.png - a heavy sniper rifle's muzzle blast seen from the side, firing toward the RIGHT: a white-hot point at the LEFT-centre (about one fifth in from the left edge). Around that point a crisp four-pointed star flash: one very long, very thin, needle-sharp spike reaching forward to the right edge, a short spike back to the left, and two medium thin spikes straight up and straight down. Along the long forward spike, a slim cone of small jagged flame tongues. A soft glow round the hot point. Crisp and sharp, not a round fireball.
+2. out/fx29_ricochet.png - a directional bullet-impact spark spray: a small brilliant flash point at the LEFT-centre, and from it a fan of 12 to 16 thin, sharp, straight spark streaks plus a few tiny bright fragments spraying toward the RIGHT, all within a 70-degree cone (longer streaks in the middle of the fan, shorter at its sides), each streak tapering from a hot head at its outer end. A small soft glow at the flash point only.
+3. out/fx30_debris.png - a kick of dirt and debris seen from the side: from a point at the BOTTOM-centre, a fountain of 20 to 30 small chunky irregular clods, pebbles and dust specks flung up and outward, bigger chunks lower and smaller specks higher, with a small soft dust puff at the base. Painted MID-TO-DARK grey with lighter grey on the top edges (mostly grey, not white).
+4. out/fx31_shell.png - a chunky anti-aircraft flak shell in flight seen from the side, flying toward the RIGHT: a FAT glowing rounded slug (about a quarter of the image wide and half as tall as it is long) with a white-hot core at its round nose, and behind it to the LEFT a short, thick, flickering comet tail of flame tongues that tapers to a point. Bold, chunky and heavy, NOT a thin line.
+5. out/fx32_fireball.png - a mid-air explosion fireball: a round, billowing ball of churning, overlapping flame puffs, white-hot in the middle, light grey through the body, darker grey shading at its lumpy outer edges, with a few short flame tongues licking outward. Round and puffy, NOT a spiky star.
+6. out/fx33_aaflash.png - an anti-aircraft cannon's muzzle blast seen from the side, firing toward the RIGHT: from a point at the LEFT-centre, a short, fat, round ball of flame with a wide, splayed cone of thick flame tongues, plus an oval ring-shaped puff of blast gas standing upright around the muzzle (a doughnut of blast seen edge-on, crossing the barrel line). Short and fat, unlike a rifle's thin flash.
+
+Wide images (as wide as your tool allows, e.g. 1536x512 or 2048x512; if only square is possible, use 1024x1024 and keep the effect inside the middle third vertically). Each lies HORIZONTALLY, runs from near the left edge to near the right edge (leave about 4% green margin at each end), centred vertically:
+7. out/fx27_bullet.png - a supersonic sniper bullet in flight: a tiny, very bright, white-hot needle-pointed head near the RIGHT end, wrapped in a small V-shaped shock cone (two thin, bright, slightly curved lines sweeping back from the tip, like a supersonic wake), and from the head ONE thin, perfectly straight glowing tail running to near the LEFT end, bright near the head and fading smoothly to nothing. Keep it thin: the whole thing at most 1/6 of the image height.
+8. out/fx28_vapour.png - a bullet's vapour trail: a long, thin, straight ribbon of pale smoke, gently twisting and curling along its length with small swirls, soft feathery edges, tightest and brightest at the RIGHT end, slowly widening, breaking up into wisps and fading to nothing toward the LEFT end. Light grey and white. Thin: at most 1/5 of the image height.
+
+Paint them as polished, high-quality game effects (think modern mobile strategy games like Clash of Clans), clean and readable at small sizes. Make all 8 images, save each one into the out/ folder with exactly the file name given, then list the files you saved and say for each one that it came from the image generation tool.

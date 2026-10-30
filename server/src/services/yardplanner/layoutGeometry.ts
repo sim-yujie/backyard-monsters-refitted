@@ -1,3 +1,4 @@
+import type { YardKind } from "../../game-data/buildingCosts.js";
 import { footprintOf, MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 
@@ -44,13 +45,18 @@ export const yardSize = (expansion: number): readonly [number, number] => {
 };
 
 /**
- * The caller's current expansion level, from `storedata.ENL.q`.
+ * The caller's current expansion level, from `storedata.ENL.q`, or on the
+ * Inferno yard from `storedata.ENLI.q`, the Inferno shop's "More Yardage"
+ * (`client/scripts/STORE.as:210`). Flash grows the loaded yard by both keys of
+ * its store data (`STORE.as:2346-2365`); the Inferno yard's own store data
+ * only ever holds `ENLI`, the main yard's only `ENL`.
  *
  * Absent or malformed store data means no purchases, which is the same default
  * the client falls back to.
  */
-export const currentExpansion = (storedata: JsonObject | null | undefined): number => {
-  const enl = (storedata as Record<string, { q?: unknown }> | null | undefined)?.ENL;
+export const currentExpansion = (storedata: JsonObject | null | undefined, kind: YardKind = "main"): number => {
+  const key = kind === "inferno" ? "ENLI" : "ENL";
+  const enl = (storedata as Record<string, { q?: unknown }> | null | undefined)?.[key];
   const quantity = Number(enl?.q);
   if (!Number.isFinite(quantity)) return 0;
   return Math.min(Math.max(Math.trunc(quantity), 0), MAX_EXPANSIONS);
@@ -64,9 +70,12 @@ export interface FootprintRect {
   h: number;
 }
 
-/** The rectangle a building of `type` occupies when its origin is at `(x, y)`. */
-export const rectOf = (type: number, x: number, y: number): FootprintRect => {
-  const { w, h } = footprintOf(type);
+/**
+ * The rectangle a building of `type` occupies when its origin is at `(x, y)`,
+ * in a yard of `kind` (the Inferno's Under Hall and Academy differ).
+ */
+export const rectOf = (type: number, x: number, y: number, kind: YardKind = "main"): FootprintRect => {
+  const { w, h } = footprintOf(type, kind);
   return { x, y, w, h };
 };
 

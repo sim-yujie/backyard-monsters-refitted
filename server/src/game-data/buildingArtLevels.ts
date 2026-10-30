@@ -28,14 +28,42 @@ export const BUILDING_ART_LEVELS: Readonly<Record<number, readonly number[]>> = 
 };
 
 /**
+   * The tiers of the towers players see with the Modern look
+   * (`MODERN_TOWERS` in `web/src/game/yard/buildingArtTiers.ts`): tiers 2 and 3
+   * from levels 4 and 7, the Monster Bunker's and the six-level Magma Tower's
+   * from 3 and 5, and one picture for every level of the Spurtz Cannons. The
+   * Inferno's Blast Tower and Sharpshooter (20 and 21 there, and 130) split as
+   * the Cannon and Sniper do. The Flash towers, and the Classic look, have one
+   * picture for every level. A viewer is sent only the tier's first level,
+   * never the exact level. Always on: the old `TOWER_TIER_ART` env switch is
+   * removed.
+ */
+export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
+  20: [1, 4, 7],
+  21: [1, 4, 7],
+  22: [1, 3, 5],
+  23: [1, 4, 7],
+  25: [1, 4, 7],
+  115: [1, 4, 7],
+  118: [1, 4, 7],
+  130: [1, 4, 7],
+  132: [1, 3, 5],
+  136: [1],
+  137: [1],
+};
+
+/**
  * The level whose picture a building at `level` shows: the highest art level
  * at or below it, and 1 for a type with one picture. A level of 0 or less (a
  * foundation still being built) is kept as it is; it says nothing.
+ * `towerTiers` adds the tower tiers (`TOWER_TIER_ART_LEVELS`), on unless a
+ * caller asks for the Flash steps alone.
  */
-export const artLevelOf = (type: number, level: number): number => {
+export const artLevelOf = (type: number, level: number, towerTiers: boolean = true): number => {
   if (!(level > 0)) return level;
   let chosen = 1;
-  for (const step of BUILDING_ART_LEVELS[type] ?? []) {
+  const steps = (towerTiers ? TOWER_TIER_ART_LEVELS[type] : undefined) ?? BUILDING_ART_LEVELS[type] ?? [];
+  for (const step of steps) {
     if (step > level) break;
     chosen = step;
   }

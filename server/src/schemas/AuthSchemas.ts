@@ -125,6 +125,21 @@ export const UpdateSettingsSchema = z.object({
 });
 
 /**
+ * Schema to validate a change to the sound switches (beta.5,
+ * `services/sound/soundSettings.ts`): send only the switch that changed.
+ * Strict, so a misspelt switch is refused rather than quietly ignored.
+ */
+export const UpdateSoundSchema = z
+  .object({
+    music: z.boolean().optional(),
+    effects: z.boolean().optional(),
+  })
+  .strict()
+  .refine((body) => body.music !== undefined || body.effects !== undefined, {
+    message: "Send music, effects or both.",
+  });
+
+/**
  * Schema to validate an avatar change (issue #175).
  * - avatar is the picture's path; the controller holds it to the allow-list in
  *   `game-data/avatars.ts`, so this only checks the shape.

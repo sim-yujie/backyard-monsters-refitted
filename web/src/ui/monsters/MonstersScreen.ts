@@ -1,7 +1,8 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { housingSummary } from "@/game/monsters/housingSummary";
-import { nameOf, quantityOf, townHallLevel } from "@/game/yard/buildingCosts";
+import { monsterRealmOf, monsterWords } from "@/game/monsters/realm";
+import { nameOf, quantityOf, townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
@@ -34,6 +35,11 @@ import { MONSTERS_TABS } from "./tabs";
  *
  * The frame is this file; each tab's body is its own (`monstersTab.ts` has the
  * contract, `tabs.ts` the list).
+ *
+ * On the Inferno yard (Inferno WP 2.4) the same screen serves the Inferno
+ * roster: its header's two resources are Magma and Sulfur (the screen's
+ * resource realm), its housing is the Compound, and a missing building is
+ * named as Flash names it there, behind the Under Hall.
  */
 
 export interface MonstersScreenOptions {
@@ -54,10 +60,27 @@ const PURPOSE: Readonly<Record<MonstersTabId, string>> = {
   lab: "research monster abilities",
 };
 
-/** The first Town Hall level that allows one of `type` (the build menu's rule). */
-export const townHallFor = (type: number): number => {
-  for (let hall = 1; hall <= 10; hall++) if (quantityOf(type, hall) > 0) return hall;
+/** The first Town Hall (Under Hall in the Inferno) level that allows one of `type` (the build menu's rule). */
+export const townHallFor = (type: number, kind: YardKind = "main"): number => {
+  for (let hall = 1; hall <= 10; hall++) if (quantityOf(type, hall, kind) > 0) return hall;
   return 0;
+};
+
+/** Flash's Inferno names for each tab's building (`realm.ts`). */
+const infernoBuildingName = (id: MonstersTabId): string | null => {
+  const words = monsterWords("inferno");
+  switch (id) {
+    case MonstersTabId.UNLOCK:
+      return words.locker;
+    case MonstersTabId.HATCH:
+      return words.hatchery;
+    case MonstersTabId.HOUSING:
+      return words.housing;
+    case MonstersTabId.TRAIN:
+      return words.academy;
+    default:
+      return null;
+  }
 };
 
 /** The tutorial's screen id for each tab (issue #227, `guideBus.ts`). */
@@ -149,7 +172,7 @@ export class MonstersScreen {
     housing.className = "monsters-header__housing";
     const housingLabel = document.createElement("span");
     housingLabel.className = "monsters-header__label";
-    housingLabel.textContent = "Housing";
+    housingLabel.textContent = monsterWords(monsterRealmOf(this.binding.store.kind)).housing;
     this.housingValue = document.createElement("span");
     this.housingValue.className = "monsters-header__value";
     this.housingMeter = document.createElement("span");
@@ -330,10 +353,13 @@ export class MonstersScreen {
 
   private emptyNote(definition: MonstersTabDefinition): HTMLElement {
     const type = definition.buildings[0] ?? 0;
-    const name = nameOf(type) || definition.label;
+    const kind = this.binding.store.kind;
+    const inferno = kind === "inferno";
+    const name = (inferno ? infernoBuildingName(definition.id) : nameOf(type)) || definition.label;
     // An outpost's core allows everything its menu lists, so no hall line there.
-    const need = this.binding.store.kind === "outpost" ? 0 : townHallFor(type);
+    const need = kind === "outpost" ? 0 : townHallFor(type, kind);
     const hall = townHallLevel(this.binding.store.yard);
+    const hallName = inferno ? "Under Hall" : "Town Hall";
 
     const note = document.createElement("div");
     note.className = "monsters-empty";
@@ -349,8 +375,8 @@ export class MonstersScreen {
       need <= 0
         ? ""
         : hall >= need
-          ? `Needs Town Hall ${need}: yours is level ${hall}, so you can build one now.`
-          : `Needs Town Hall ${need}: yours is level ${hall}.`;
+          ? `Needs ${hallName} ${need}: yours is level ${hall}, so you can build one now.`
+          : `Needs ${hallName} ${need}: yours is level ${hall}.`;
     gate.classList.toggle("monsters-empty__gate--short", hall < need);
     note.append(title, text);
     if (need > 0) note.append(gate);

@@ -40,7 +40,8 @@ describe("the gift picker", () => {
     const { picker, store, calls, onSent } = await setup();
     await picker.send("r3");
     expect(calls).toContainEqual(["sendGift", 7, "r3"]);
-    expect(picker.statusText).toBe("You sent Bob 300 Putty.");
+    // A gift sent is a loss: red with a minus (owner, 28 Oct).
+    expect(picker.statusText).toBe("Sent to Bob · Putty 300 lost");
     expect(store.friends[0]!.giftSentToday).toBe(true);
     expect(onSent).toHaveBeenCalledOnce();
     expect(choice("r1").disabled).toBe(true);
@@ -58,7 +59,7 @@ describe("the gift picker", () => {
   it("says a refusal and lets the player try again", async () => {
     const { picker } = await setup({ sendGift: refused("tooNew") });
     await picker.send("r1");
-    expect(picker.statusText).toContain("isn't possible yet");
+    expect(picker.statusText).toContain("Not yet");
     expect(choice("r2").disabled).toBe(false);
   });
 

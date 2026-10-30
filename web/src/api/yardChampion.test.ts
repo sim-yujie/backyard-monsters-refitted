@@ -4,7 +4,6 @@ import type { YardApi } from "./yard";
 import { YardStore } from "@/game/yard/YardStore";
 import {
   championActions,
-  championCancelEgg,
   championFeed,
   championRaise,
   championStance,
@@ -45,12 +44,6 @@ describe("champion routes", () => {
     expect(sent[1]!.body.get("mode")).toBe("shiny");
   });
 
-  it("cancel-egg posts to its own route", async () => {
-    stubFetch();
-    await championCancelEgg();
-    expect(sent[0]!.url).toMatch(/\/bm\/yard\/champion\/cancel-egg$/);
-  });
-
   it("stance sends the champion type and its Mode (#220)", async () => {
     stubFetch();
     await championStance(5, "defensive");
@@ -62,9 +55,14 @@ describe("champion routes", () => {
 
 const T0 = 2_000_000;
 
-const setup = (champion: ChampionSaveEntry[], housed: Record<string, number> = { C2: 40 }) => {
+const setup = (
+  champion: ChampionSaveEntry[],
+  housed: Record<string, number> = { C2: 40 },
+  extra: Partial<BaseLoadResponse> = {},
+) => {
   const store = new YardStore({
     save: {
+      ...extra,
       error: 0,
       currenttime: T0,
       savetime: T0,
@@ -83,12 +81,10 @@ const setup = (champion: ChampionSaveEntry[], housed: Record<string, number> = {
   const answer = { error: 0, savetime: T0, currenttime: T0, completed: [], report: {} } as unknown as YardResponse<never>;
   const api = {
     raise: vi.fn(() => Promise.resolve(answer)),
-    cancelEgg: vi.fn(() => Promise.resolve(answer)),
     feed: vi.fn(() => Promise.resolve(answer)),
     evolve: vi.fn(() => Promise.resolve(answer)),
     heal: vi.fn(() => Promise.resolve(answer)),
     rename: vi.fn(() => Promise.resolve(answer)),
-    juice: vi.fn(() => Promise.resolve(answer)),
     freeze: vi.fn(() => Promise.resolve(answer)),
     thaw: vi.fn(() => Promise.resolve(answer)),
   } as unknown as ChampionApi;
@@ -120,14 +116,26 @@ describe("championActions: local checks", () => {
     expect(frozen.api.raise).toHaveBeenCalledWith(2);
   });
 
-  it("raise: not while an egg waits in the cage; cancelEgg needs one", async () => {
+  it("raise: Korath once the load says he is unlocked (Inferno WP 5.1), and still one at a time", async () => {
+    const unlocked = { infernostate: { korathUnlocked: true } } as unknown as Partial<BaseLoadResponse>;
+    const empty = setup([], undefined, unlocked);
+    expect((await empty.actions.raise(4)).ok).toBe(true);
+    expect(empty.api.raise).toHaveBeenCalledWith(4);
+    expect(reasonOf(await setup([], undefined, unlocked).actions.raise(5))).toBe("notRaisable");
+    expect(reasonOf(await setup([gorgo()], undefined, unlocked).actions.raise(4))).toBe("championInCage");
+    expect(reasonOf(await setup([]).actions.raise(4))).toBe("notRaisable");
+  });
+
+  it("has no juice or cancel-egg action (owner, 2026-10-28)", () => {
+    const { actions } = setup([gorgo()]);
+    expect(actions).not.toHaveProperty("juice");
+    expect(actions).not.toHaveProperty("cancelEgg");
+  });
+
+  it("raise: an older save's egg is left to the server, whose catch-up hatches it first", async () => {
     const egg = setup([gorgo({ t: 2, status: 3, ft: T0 + 3_600 })]);
-    expect(reasonOf(await egg.actions.raise(1))).toBe("eggInCage");
-    expect(reasonOf(await egg.actions.feed("shiny"))).toBe("noChampion");
-    expect(reasonOf(await egg.actions.juice())).toBe("noChampion");
-    expect((await egg.actions.cancelEgg()).ok).toBe(true);
-    expect(egg.api.cancelEgg).toHaveBeenCalled();
-    expect(reasonOf(await setup([]).actions.cancelEgg())).toBe("noEgg");
+    expect((await egg.actions.raise(1)).ok).toBe(true);
+    expect(egg.api.raise).toHaveBeenCalledWith(1);
   });
 
   it("feed: waits for hunger and checks housing", async () => {
@@ -150,9 +158,5 @@ describe("championActions: local checks", () => {
   it("freeze and thaw: need a chamber, and thaw an empty cage", async () => {
     expect(reasonOf(await setup([gorgo()]).actions.freeze())).toBe("freezeRefused");
     expect(reasonOf(await setup([gorgo({ status: 1 })]).actions.thaw(1))).toBe("thawRefused");
-  });
-
-  it("juice: needs a working Juicer", async () => {
-    expect(reasonOf(await setup([gorgo()]).actions.juice())).toBe("noJuicer");
   });
 });

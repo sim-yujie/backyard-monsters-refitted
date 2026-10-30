@@ -47,7 +47,7 @@ URL (`URL.createObjectURL`), since an `<img src>` cannot send the header.
 | `GET /api/:apiVersion/admin/bugreports/:id/picture` | the player's added picture, the same way |
 | `POST /api/:apiVersion/admin/bugreports/:id/ticket` | body `{ status?, notes? }`; answers `{ report: BugReportDetail }` as it is afterwards; `400 badTicket`, `404 notFound` |
 | `POST /api/:apiVersion/admin/bugreports/:id/reply` | body `{ message }`; writes to the report's player in the game's mail; answers `{ report: BugReportDetail }`; `400 badReply`, `404 notFound`, `409 signedOut` / `noPlayer` |
-| `GET /api/:apiVersion/admin/players?q=` | `{ players: PlayerMatch[] }`: at most 10 whose name starts with `q` (any case) or whose account number it is; bots left out |
+| `GET /api/:apiVersion/admin/players?q=` | `{ players: PlayerMatch[] }`: at most 10 whose name holds `q` (any case; `_`, space, `-` and `.` alike; `%` and `_` only themselves), whose account number it is, or who had that name before (on a bug report or award); exact matches first; bots shown but marked and after the players (`searchPlayers` in `services/admin/shinyAwards.ts`) |
 | `GET /api/:apiVersion/admin/shiny?before=&limit=` | `{ awards: ShinyAwardView[], nextBefore: number \| null, total: { awards, shiny } }`, newest first; `limit` 1 to 100 (default 50) |
 | `POST /api/:apiVersion/admin/shiny` | body `{ userid, amount, reason, bugReportId?, requestId }`; answers `{ award: ShinyAwardView, already: boolean, report?: BugReportDetail }`; `400 badAward`, `409 noPlayer` / `noMainYard` / `notTheirReport` |
 | `GET /api/:apiVersion/admin/errors?source=&sort=&limit=&sinceDays=` | `{ groups: ErrorGroup[], totals }` |
@@ -222,6 +222,8 @@ interface ShinyAwardView {
 interface PlayerMatch {
   userid: number;
   username: string;
+  formerName: string | null; // the earlier name `q` matched, when it is not their name now
+  bot: boolean; // a computer-run neighbour (`bym.bot`, not a seeded dev player)
   lastSeenAt: string | null;
 }
 ```

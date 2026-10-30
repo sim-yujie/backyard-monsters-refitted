@@ -1,5 +1,8 @@
+import { classicLook } from "@/game/classicLook";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet, type RowCycle } from "./monsterSpriteData";
 import { windUpFrame } from "./juice";
+import { SHEET_VERSIONS } from "./sheetVersions";
+import { sheetAtQuality, sheetForDevice } from "@/game/quality";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -112,6 +115,14 @@ export interface SheetLayoutOverride {
   readonly anchorX?: number;
   readonly anchorY?: number;
   readonly rows?: number;
+  /**
+   * Cells to a sheet row when the repaint packs its cells rather than giving
+   * each heading its own column: cell `(heading c, frame r)` is the
+   * `(r × directions + c)`th, counted along each sheet row. A square-ish sheet
+   * keeps a tall one (Korath 5 and 6: 30 frames of 16 headings) within the
+   * 8192 px many graphics cards cannot pass. `rows` still counts frames.
+   */
+  readonly columns?: number;
   readonly animations?: Readonly<Partial<Record<MonsterAnimation, RowCycle>>>;
   /**
    * Which frame of the `attack` cycle is the blow itself (0-based). When set,
@@ -124,12 +135,16 @@ export interface SheetLayoutOverride {
 /** A sheet as the game draws it: the Flash table row plus any repaint layout. */
 export interface AnimatedSheet extends MonsterSheet {
   readonly strikeFrame?: number;
+  /** Cells to a sheet row for a packed repaint (`SheetLayoutOverride.columns`); see `frameRect`. */
+  readonly packedColumns?: number;
 }
 
 /**
  * Animation layouts for repainted sheets, by original file (the same key as
  * `REPAINTED_SHEETS`). A sheet with no entry is drawn exactly as the table
- * says. Add an entry only together with the matching repaint entry.
+ * says, and so is every sheet with the player's Classic look on (the Flash
+ * sheet needs the Flash row). Add an entry only together with the matching
+ * repaint entry.
  */
 export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
   // Bandito: 41x40 cells (the old 29x28 cell plus 6 px each side and 12 px on
@@ -458,6 +473,12 @@ export const REPAINT_LAYOUTS: Readonly<Record<string, SheetLayoutOverride>> = {
     },
     strikeFrame: 2,
   },
+  // Korath 5 and 6: the Flash cells, one transparent pixel row (6) or column (5)
+  // added so every cell edge falls on a whole pixel in the @1.5x copy, and the
+  // 480 cells (30 frames of 16 headings) packed 20 to a row. In the Flash
+  // layout, 16 wide and 30 tall, even the 2x sheet passed 8192 px.
+  "monsters/korath_5.png": { frameWidth: 200, columns: 20 },
+  "monsters/korath_6.png": { frameHeight: 168, columns: 20 },
 };
 
 const layoutCache = new Map<MonsterSheet, AnimatedSheet>();
@@ -475,23 +496,26 @@ export function applyLayout(
   const frameWidth = override.frameWidth ?? sheet.frameWidth;
   const frameHeight = override.frameHeight ?? sheet.frameHeight;
   const rows = override.rows ?? sheet.rows;
+  const packed = override.columns;
   const result: AnimatedSheet = {
     ...sheet,
     frameWidth,
     frameHeight,
     rows,
-    width: frameWidth * sheet.columns,
-    height: frameHeight * rows,
+    width: frameWidth * (packed ?? sheet.columns),
+    height: frameHeight * (packed ? Math.ceil((rows * sheet.directions) / packed) : rows),
     anchorX: override.anchorX ?? sheet.anchorX,
     anchorY: override.anchorY ?? sheet.anchorY,
     animations: override.animations ?? sheet.animations,
     ...(override.strikeFrame !== undefined ? { strikeFrame: override.strikeFrame } : {}),
+    ...(packed ? { packedColumns: packed } : {}),
   };
   if (cacheable) layoutCache.set(sheet, result);
   return result;
 }
 
-const withLayout = (sheet: MonsterSheet): AnimatedSheet => applyLayout(sheet);
+/** The sheet as drawn: its repaint layout, or the Flash table row with the Flash art on. */
+const withLayout = (sheet: MonsterSheet): AnimatedSheet => (classicLook() ? sheet : applyLayout(sheet));
 
 /** Champion families and their sheets in level order, built once on first use. */
 let familyIndex: ReadonlyMap<string, readonly MonsterSheet[]> | null = null;
@@ -513,21 +537,31 @@ const championSheets = (family: string): readonly MonsterSheet[] => {
   return familyIndex.get(family) ?? [];
 };
 
+/** Krallen's sheets, `G5_1` to `G5_3`. */
+const KRALLEN_SHEET_FAMILY = "G5";
+
+/**
+ * Krallen's look, 1 to 3, by her level (owner, 2026-10-25): levels 1-2 the
+ * first, 3-4 the second, 5 the third. Her power level picks none of it.
+ */
+export const krallenLook = (level: number): number => (level >= 5 ? 3 : level >= 3 ? 2 : 1);
+
 /**
  * The sheet for a creature.
  *
  * Creeps have one sheet under their own id. Champions have one per level,
- * keyed `G1_4`, chosen as `min(level, sheets)` (`ChampionBase.as:229`); for
- * Krallen the number is its power level rather than its level
- * (`Krallen.as:48`), so pass that. A level below 1 uses the first sheet.
- * Undefined for an id the table does not know.
+ * keyed `G1_4`, chosen as `min(level, sheets)` (`ChampionBase.as:229`). Krallen
+ * takes her sheet by her level too, through {@link krallenLook}, in the yard
+ * and in battle alike (Flash used her power level, `Krallen.as:48`). A level
+ * below 1 uses the first sheet. Undefined for an id the table does not know.
  */
 export function spriteFor(creatureId: string, level = 1): AnimatedSheet | undefined {
   const direct = MONSTER_SPRITES[creatureId];
   if (direct) return withLayout(direct);
   const sheets = championSheets(creatureId);
   if (sheets.length === 0) return undefined;
-  const index = Math.min(Math.max(1, Math.floor(level)), sheets.length) - 1;
+  const look = creatureId === KRALLEN_SHEET_FAMILY ? krallenLook(level) : level;
+  const index = Math.min(Math.max(1, Math.floor(look)), sheets.length) - 1;
   const chosen = sheets[index];
   return chosen ? withLayout(chosen) : undefined;
 }
@@ -563,7 +597,7 @@ export function directionColumn(angleRadians: number, directions: number, offset
  * the middle column right, while straight down and straight up are where
  * they belong. Read without correction, the monster walks one way facing the
  * other. The held animated sheets were built from the same frames, so the
- * entry stays right for them.
+ * entry stays right for them. The Flash sheets (Classic look) face true.
  */
 export const MIRRORED_HEADINGS: ReadonlySet<string> = new Set([
   "monsters/ichi.png", // Ichi repaint and its animated sheet
@@ -577,7 +611,7 @@ export const MIRRORED_HEADINGS: ReadonlySet<string> = new Set([
  */
 export function sheetColumn(sheet: MonsterSheet, angleRadians: number): number {
   const column = directionColumn(angleRadians, sheet.directions, sheet.directionOffset);
-  if (!MIRRORED_HEADINGS.has(sheet.file)) return column;
+  if (classicLook() || !MIRRORED_HEADINGS.has(sheet.file)) return column;
   return (sheet.directions / 2 - column + sheet.directions) % sheet.directions;
 }
 
@@ -669,11 +703,16 @@ export interface SwingTiming {
   readonly strike?: number;
 }
 
-/** The pixel rectangle of cell `(column, row)` in the sheet (`SPRITES.as:379-380`). */
-export function frameRect(sheet: MonsterSheet, column: number, row: number): FrameRect {
+/**
+ * The pixel rectangle of cell `(column, row)` in the sheet (`SPRITES.as:379-380`),
+ * or, in a packed repaint, of that heading and frame where the packing put it.
+ */
+export function frameRect(sheet: AnimatedSheet, column: number, row: number): FrameRect {
+  const packed = sheet.packedColumns;
+  const cell = packed ? row * sheet.directions + column : 0;
   return {
-    x: column * sheet.frameWidth,
-    y: row * sheet.frameHeight,
+    x: (packed ? cell % packed : column) * sheet.frameWidth,
+    y: (packed ? Math.floor(cell / packed) : row) * sheet.frameHeight,
     width: sheet.frameWidth,
     height: sheet.frameHeight,
   };
@@ -745,11 +784,12 @@ export function flyerAltitude(creatureId: string): number {
 
 /**
  * Sheets repainted for the revamp, by original file. Each is the original
- * layout drawn at four times the size; the `@4x` in the name is how Pixi knows
- * the resolution, so the table's 1x cell rectangles still frame it. Art trial: the Pokey
+ * layout drawn at four times the size (three for Korath 4, two for Korath 5
+ * and 6, whose packed sheets would pass 8192 px at any more); the `@4x`,
+ * `@3x` or `@2x` in the name is how Pixi knows the resolution, so the table's 1x cell rectangles still frame it. Art trial: the Pokey
  * (`gen-pokey-sprite.py`), the Teratorn (`gen-teratorn-sprite.py`) the Bolt (`gen-bolt-sprite.py`) and the Octo-ooze (`gen-octo-sprite.py`).
  * Remove an entry to go back to the original sheet; empty the table to
- * switch the trial off.
+ * switch the trial off. A player with Classic look on gets every original.
  */
 export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/14.v1.png": "monsters/teratorn-anim@4x.png", // Teratorn animated repaint (3 flap rows + 5 attack rows)
@@ -775,13 +815,48 @@ export const REPAINTED_SHEETS: Readonly<Record<string, string>> = {
   "monsters/ape_1.png": "monsters/ape_1-repaint@4x.png", // Gorgo level 1 repaint (all 16 headings, idle + walk + attack)
   "monsters/fly_1.png": "monsters/fly_1-repaint@4x.png", // Fomor level 1 repaint (all 16 headings, idle + walk)
   "monsters/dragon_1.png": "monsters/dragon_1-repaint@4x.png", // Drull level 1 repaint (all 16 headings painted, idle + walk + attack)
+  "monsters/ape_2.png": "monsters/ape_2-repaint@4x.png", // Gorgo level 2 repaint (all 16 headings, idle + walk + attack)
+  "monsters/dragon_2.png": "monsters/dragon_2-repaint@4x.png", // Drull level 2 repaint (all 16 headings painted, idle + walk + attack)
+  "monsters/fly_2.png": "monsters/fly_2-repaint@4x.png", // Fomor level 2 repaint (all 16 headings, idle + walk)
+  "monsters/ape_3.png": "monsters/ape_3-repaint@4x.png", // Gorgo level 3 repaint (all 16 headings, idle + walk + attack)
+  "monsters/dragon_3.png": "monsters/dragon_3-repaint@4x.png", // Drull level 3 repaint (all 16 headings painted, idle + walk + attack)
+  "monsters/fly_3.png": "monsters/fly_3-repaint@4x.png", // Fomor level 3 repaint (all 16 headings painted, standing + wing beat)
+  "monsters/ape_4.png": "monsters/ape_4-repaint@4x.png", // Gorgo level 4 repaint (all 16 headings, idle + walk + attack)
+  "monsters/dragon_4.png": "monsters/dragon_4-repaint@4x.png", // Drull level 4 repaint (all 16 headings, idle + walk + attack)
+  "monsters/fly_4.png": "monsters/fly_4-repaint@4x.png", // Fomor level 4 repaint (all 16 headings, standing + wing beat)
+  "monsters/ape_5.png": "monsters/ape_5-repaint@4x.png", // Gorgo level 5 repaint (all 16 headings, idle + walk + attack)
+  "monsters/dragon_5.png": "monsters/dragon_5-repaint@4x.png", // Drull level 5 repaint (all 16 headings, idle + walk + attack)
+  "monsters/fly_5.png": "monsters/fly_5-repaint@4x.png", // Fomor level 5 repaint (all 16 headings, standing + wing beat)
+  "monsters/ape_6.png": "monsters/ape_6-repaint@4x.png", // Gorgo level 6 repaint (all 16 headings, idle + walk + attack)
+  "monsters/dragon_6.png": "monsters/dragon_6-repaint@4x.png", // Drull level 6 repaint (all 16 headings, idle + walk + attack)
+  "monsters/fly_6.png": "monsters/fly_6-repaint@4x.png", // Fomor level 6 repaint (all 16 headings, standing + wing beat)
+  "monsters/krallen_1_rev_65.png": "monsters/krallen_1_rev_65-repaint@4x.png", // Krallen look 1 repaint (all 16 headings, run + attack, ground shadow)
+  "monsters/krallen_2_rev_65.png": "monsters/krallen_2_rev_65-repaint@4x.png", // Krallen look 2 repaint (all 16 headings, run + attack, ground shadow)
+  "monsters/krallen_3_rev_65.png": "monsters/krallen_3_rev_65-repaint@4x.png", // Krallen look 3 repaint (all 16 headings, run + attack, ground shadow)
+  "monsters/korath_1.png": "monsters/korath_1-repaint@4x.png", // Korath level 1 repaint (all 16 headings, walk + attack, ground shadow)
+  "monsters/korath_2.png": "monsters/korath_2-repaint@4x.png", // Korath level 2 repaint (all 16 headings, walk + attack, ground shadow)
+  "monsters/korath_3.png": "monsters/korath_3-repaint@4x.png", // Korath level 3 repaint (all 16 headings, walk + attack, ground shadow)
+  "monsters/korath_4.png": "monsters/korath_4-repaint@3x.png", // Korath level 4 repaint at 3x (at 4x it was 9840 px tall), walk + attack, ground shadow
+  "monsters/korath_5.png": "monsters/korath_5-repaint@2x.png", // Korath level 5 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
+  "monsters/korath_6.png": "monsters/korath_6-repaint@2x.png", // Korath level 6 repaint at 2x, packed (REPAINT_LAYOUTS), walk + attack + stomp
 };
 
-/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`). */
-export const isHighResolutionSheet = (url: string): boolean => /@\d+x\.\w+$/.test(url);
+/** Whether a sheet URL names a high-resolution sheet (`name@4x.png`, `name@3x.png`, `name@1.5x.png?v=…`). */
+export const isHighResolutionSheet = (url: string): boolean => /@\d+(\.\d+)?x\.\w+(\?.*)?$/.test(url);
 
-/** The URL the sheet is served from: `/assets/monsters/<file>`, or its repaint. */
+/**
+ * The URL the sheet is served from: `/assets/monsters/<file>`, or, unless the
+ * Classic look is on, its repaint in the copy the Quality setting asks for
+ * (`game/quality.ts`), stepped down to a smaller copy where that one is
+ * bigger than this device's graphics card holds (given a sheet, whose size
+ * says), with that file's version so a repaint is fetched afresh
+ * (`sheetVersions.ts`).
+ */
 export function sheetUrl(sheet: MonsterSheet | string): string {
   const file = typeof sheet === "string" ? sheet : sheet.file;
-  return `${ASSET_ROOT}${REPAINTED_SHEETS[file] ?? file}`;
+  const repaint = classicLook() ? undefined : REPAINTED_SHEETS[file];
+  if (!repaint) return `${ASSET_ROOT}${file}`;
+  const copy = typeof sheet === "string" ? sheetAtQuality(repaint) : sheetForDevice(repaint, applyLayout(sheet));
+  const version = SHEET_VERSIONS[copy];
+  return `${ASSET_ROOT}${copy}${version ? `?v=${version}` : ""}`;
 }

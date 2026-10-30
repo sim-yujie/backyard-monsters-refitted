@@ -100,32 +100,49 @@ const buttons = (root: HTMLElement): HTMLButtonElement[] => [
 ];
 const buttonNamed = (root: HTMLElement, text: string): HTMLButtonElement | undefined =>
   buttons(root).find((one) => one.textContent?.startsWith(text));
+/** One of the Champion Cage's two tabs. */
+const tabNamed = (root: HTMLElement, tab: "champion" | "building"): HTMLButtonElement =>
+  root.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${tab}"]`)!;
 
 const HALL = building(1, 14, 5);
 
 /** The info rows as "Label value" lines. */
 const infoLines = (root: HTMLElement): string[] =>
   [...root.querySelectorAll(".building-panel__info dt")].map(
-    (term) => `${term.textContent} ${spokenText(term.nextElementSibling!)}`,
+    (term) => `${spokenText(term)} ${spokenText(term.nextElementSibling!)}`,
   );
 
 describe("BuildingPanel: a tower at rest", () => {
   it("titles itself with name and level and shows the tower numbers", () => {
     const { element } = setup([HALL, building(2, 20, 4)], 2);
     expect(element.querySelector(".panel__title")?.textContent).toBe("Cannon Tower · Level 4");
-    expect(infoLines(element)).toEqual([
-      "Health 17,640 / 17,640",
-      "Range 190 → 200",
-      "Damage 80/s → 100/s",
-    ]);
+    // The numbers as they are now; what level 5 changes sits beside Upgrade.
+    expect(infoLines(element)).toEqual(["Health 17,640 / 17,640", "Range 190", "Damage 80/s"]);
+    expect(element.querySelector(".building-panel__info dt img")?.getAttribute("aria-label")).toBe("Health");
+  });
+
+  it("a harvester's rate and a silo's room as resource icons and numbers", () => {
+    const snapper = setup([HALL, building(2, 1, 1)], 2).element;
+    expect(infoLines(snapper)).toContain("Makes Twigs 720/h");
+    expect(spokenText(snapper.querySelector(".building-upgrade__gains")!)).toContain("Makes Twigs 720/h → 1,440/h");
+    const silo = setup([HALL, building(2, 6, 1)], 2).element;
+    expect(infoLines(silo)).toContain("Storage added Twigs Pebbles Putty Goo +7,500");
+    expect(spokenText(silo.querySelector(".building-upgrade__gains")!)).toBe(
+      "Storage added +7,500 → +15,000",
+    );
   });
 
   it("offers Upgrade with its cost and time, and Instant", () => {
     const { element } = setup([HALL, building(2, 20, 4)], 2);
     const block = element.querySelector(".building-upgrade")!;
     const words = spokenText(block);
-    expect(words).toContain("Upgrade to 5");
-    expect(words).toContain("6h 45m");
+    expect(block.querySelector(".building-panel__heading")?.textContent).toBe("Lv 4 → 5");
+    expect(words).toContain("Upgrade time · 1 worker 6h 45m");
+    // The gains, beside the button: icon or word, "now → next".
+    expect(spokenText(block.querySelector(".building-upgrade__gains")!)).toBe("Range 190 → 200 Damage 80/s → 100/s");
+    expect(block.querySelector('.building-upgrade__gain[data-row="Damage"] img')?.getAttribute("aria-label")).toBe(
+      "Damage",
+    );
     expect(words).toContain("Twigs");
     expect(words).toContain("Pebbles");
     expect(buttonNamed(element, "Upgrade")?.disabled).toBe(false);
@@ -303,6 +320,22 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
     }
   });
 
+  it("an own Town Hall shows the next level's unlocks as pictures with +1 or NEW", () => {
+    const { element } = setup([building(1, 14, 1)], 1);
+    const unlocks = element.querySelector<HTMLElement>(".building-panel__unlocks")!;
+    expect(unlocks.hidden).toBe(false);
+    expect(unlocks.querySelector(".building-panel__label")!.textContent).toBe("Lv 2 unlocks");
+    expect(unlocks.querySelector(".building-panel__label")!.getAttribute("title")).toBe("Town Hall 2 unlocks");
+    const silo = [...unlocks.querySelectorAll<HTMLElement>(".unlock-tile")].find(
+      (tile) => tile.getAttribute("aria-label") === "Storage Silo +1",
+    )!;
+    expect(silo.querySelector("img")!.getAttribute("src")).toBe("/assets/buildingbuttons/6.jpg");
+    expect(silo.querySelector(".unlock-tile__badge")!.textContent).toBe("+1");
+    expect(silo.querySelector(".unlock-tile__name")!.textContent).toBe("Storage Silo");
+    const fresh = unlocks.querySelector<HTMLElement>(".unlock-tile--new");
+    if (fresh) expect(fresh.querySelector(".unlock-tile__badge")!.textContent).toBe("NEW");
+  });
+
   it("a foreign Town Hall lists no unlocks and a running upgrade shows no countdown", () => {
     const { element } = setup([building(1, 14, 5, { cU: 3_600 })], 1, { own: false });
     expect(element.querySelector(".panel__title")?.textContent).toBe("Town Hall");
@@ -420,25 +453,69 @@ describe("BuildingPanel: the Wild Monster Baiter (#126, #22, #308)", () => {
 });
 
 describe("BuildingPanel: the Champion Cage (§7.2)", () => {
-  it("Open cage shows the cage's controls under the actions, and Close cage hides them", () => {
+  it("opens straight on the champion, in the wider panel, with no Open cage (owner, 28 Oct)", () => {
     const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
-    expect(element.querySelector(".champion")).toBeNull();
-    buttonNamed(element, "Open cage")!.click();
+    expect(element.classList.contains("building-panel--cage")).toBe(true);
     expect(element.querySelector(".champion .champion-card")).not.toBeNull();
-    expect(buttonNamed(element, "Close cage")!.getAttribute("aria-expanded")).toBe("true");
-    buttonNamed(element, "Close cage")!.click();
-    expect(element.querySelector(".champion")).toBeNull();
-    buttonNamed(element, "Open cage")!.click();
+    expect(buttonNamed(element, "Open cage")).toBeUndefined();
+    const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
+      ["Champion", "true"],
+      ["Building", "false"],
+    ]);
+    expect(element.dataset["cageTab"]).toBe("champion");
+    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(false);
+    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(true);
     panel.show(store.building(1)!);
     expect(element.querySelector(".champion")).toBeNull();
+    expect(element.classList.contains("building-panel--cage")).toBe(false);
+    expect(element.querySelector<HTMLElement>(".building-panel__tabs")!.hidden).toBe(true);
   });
 
-  it("Open chamber shows the chamber's controls (#125)", () => {
+  it("keeps the building's card a tab away, and the champion's window open behind it", () => {
+    const { element } = setup([HALL, building(2, 114, 1)], 2);
+    const champion = element.querySelector(".champion");
+    tabNamed(element, "building").click();
+    expect(element.dataset["cageTab"]).toBe("building");
+    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
+    expect(element.querySelector(".building-panel__actions")!.childElementCount).toBeGreaterThan(0);
+    tabNamed(element, "champion").click();
+    expect(element.dataset["cageTab"]).toBe("champion");
+    expect(element.querySelector(".champion")).toBe(champion);
+  });
+
+  it("opens the Champion Chamber straight on its champions too, with Building a tab away (#125; owner, 28 Oct)", () => {
     const { element } = setup([HALL, building(2, 119, 1)], 2);
-    buttonNamed(element, "Open chamber")!.click();
+    expect(element.classList.contains("building-panel--cage")).toBe(true);
     expect(element.querySelector(".chamber")).not.toBeNull();
-    buttonNamed(element, "Close chamber")!.click();
-    expect(element.querySelector(".chamber")).toBeNull();
+    expect(buttonNamed(element, "Open chamber")).toBeUndefined();
+    const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
+      ["Champions", "true"],
+      ["Building", "false"],
+    ]);
+    expect(element.querySelector('[role="tablist"]')!.getAttribute("aria-label")).toBe("Champion Chamber");
+    tabNamed(element, "building").click();
+    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
+    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
+  });
+
+  it("puts a red dot on a damaged chamber's Building tab", () => {
+    const { element } = setup([HALL, { ...building(2, 119, 1), hp: 100 }], 2);
+    expect(tabNamed(element, "building").classList.contains("building-panel__tab--alert")).toBe(true);
+  });
+
+  it("openChampion brings back the champion tab once, and does nothing on another building (Inferno WP 5.2)", () => {
+    const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
+    tabNamed(element, "building").click();
+    panel.openChampion();
+    panel.openChampion();
+    expect(element.querySelectorAll(".champion")).toHaveLength(1);
+    expect(element.dataset["cageTab"]).toBe("champion");
+    panel.show(store.building(1)!);
+    panel.openChampion();
+    expect(element.querySelector(".champion")).toBeNull();
   });
 });
 

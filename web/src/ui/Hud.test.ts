@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResourceCaps } from "@/api/types";
 import type { YardJob } from "@/game/yard/jobs";
 import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
-import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, Hud, workersText } from "./Hud";
+import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, fullText, Hud, INFERNO_FULL_NOTE, workersText } from "./Hud";
 import { Notices } from "./maproom/Notices";
-import { spokenText } from "./resourceIcon";
+import { setResourceRealm, spokenText } from "./resourceIcon";
 
 /**
  * The HUD's readouts: icons for the words (#93), and every change visible
@@ -365,6 +365,7 @@ describe("the yard's corner layout (#171)", () => {
       playerLevel: 42,
       jobs: () => [],
       save: {},
+      yard: { kind: "main" },
       now: () => 0,
       isRunning: () => false,
       subscribe: () => () => undefined,
@@ -384,6 +385,7 @@ describe("the yard's corner layout (#171)", () => {
       workers: { total: 5, busy: 0 },
       jobs: () => [],
       save: {},
+      yard: { kind: "main" },
       now: () => 0,
       isRunning: () => false,
       subscribe: () => () => undefined,
@@ -395,8 +397,93 @@ describe("the yard's corner layout (#171)", () => {
     expect(r1.title).toBe("Twigs: 10 of 20");
     expect(r1.querySelector<HTMLElement>(".hud__cap-bar")!.hidden).toBe(false);
     const workers = hud.element.querySelector<HTMLButtonElement>(".hud__workers-button")!;
-    expect(workers.textContent).toBe("Workers5 / 5");
+    expect(workers.textContent).toBe("Workers5/5");
     expect(workers.querySelector<HTMLElement>(".hud__workers-name")!.hidden).toBe(true);
+    hud.destroy();
+  });
+
+  it("shows a full silo as 15M/15M with the painted full mark, the exact figures kept for hover", () => {
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    const store = {
+      caps: { r1: 15_000_000, r2: 23_050_000, r3: 20, r4: 20 },
+      workers: { total: 3, busy: 3 },
+      jobs: () => [],
+      save: {},
+      yard: { kind: "main" },
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.setResources({ r1: 15_000_000, r2: 23_050_000, r3: 10 });
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+    const button = (key: string): HTMLButtonElement =>
+      hud.element.querySelector<HTMLButtonElement>(`.hud__resource-button[data-resource="${key}"]`)!;
+    const mark = (key: string): HTMLElement => button(key).querySelector<HTMLElement>(".hud__full-mark")!;
+    expect(button("r1").textContent).toBe("15M/15M");
+    expect(button("r2").textContent).toBe("23.1M/23.1M");
+    expect(mark("r1").hidden).toBe(false);
+    expect(mark("r1").dataset["icon"]).toBe("storagefull");
+    expect(button("r1").title).toBe(`Twigs: 15,000,000 of 15,000,000\n${FULL_NOTE}`);
+    // Not full: the amount alone, no mark.
+    expect(button("r3").textContent).toBe("10");
+    expect(mark("r3").hidden).toBe(true);
+    // All three workers busy: "0/3", no clock (the number says it).
+    const workers = hud.element.querySelector<HTMLButtonElement>(".hud__workers-button")!;
+    expect(workers.textContent).toBe("Workers0/3");
+    expect(workers.querySelector(".hud__workers-clock")).toBeNull();
+    expect(workers.getAttribute("aria-label")).toBe(
+      "Workers: none of 3 free. Click to go to the job that finishes soonest.",
+    );
+    hud.destroy();
+  });
+
+  it("shows the Inferno's four, its purse and its cap on the Inferno yard (WP 1.19)", () => {
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    const store = {
+      kind: "inferno",
+      caps: { r1: 1_600, r2: 1_600, r3: 1_600, r4: 1_600 },
+      workers: { total: 1, busy: 0 },
+      jobs: () => [],
+      // A level 2 Coal Extractor: 1,440 Coal an hour by the Inferno table.
+      save: { buildingdata: { "1": { id: 1, t: 2, l: 2, X: 0, Y: 0 } } },
+      yard: { kind: "inferno" },
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.setResources({ r1: 1_600, r2: 1_200 });
+    setResourceRealm("inferno");
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    const r2 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r2"]')!;
+    // Full, it names the Inferno's storage, the Resource Pod.
+    expect(r1.title).toBe(`Bone: 1,600 of 1,600\nMaking 0 an hour.\n${INFERNO_FULL_NOTE}`);
+    expect(r2.title).toBe("Coal: 1,200 of 1,600\nMaking 1,440 an hour.");
+    // Spoken, each sentence ends once (no "an hour.." before the full note).
+    expect(r1.getAttribute("aria-label")).toBe(`Bone: 1,600 of 1,600. Making 0 an hour. ${INFERNO_FULL_NOTE}`);
+    expect(r1.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("inferno");
+    // The income line of the Inferno's own harvesters (Flash's bubble gave the Inferno's rate).
+    const rate = r2.querySelector<HTMLElement>(".hud__rate")!;
+    expect(rate.hidden).toBe(false);
+    expect(rate.textContent).toBe("+1,440/h");
+    // Back on the surface the same readouts are Twigs and Pebbles again.
+    setResourceRealm("surface");
+    hud.bindYard(null);
+    expect(r2.title).toBe("Pebbles: 1,200");
+    expect(r2.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("surface");
+    hud.destroy();
+  });
+
+  it("draws the Inferno's four with no yard bound when built in the Inferno realm (a look at a player's Inferno yard, WP 3.4)", () => {
+    setResourceRealm("inferno");
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 1_600, r2: 1_600, r3: 0, r4: 0 });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    const r4 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r4"]')!;
+    expect(r1.title).toBe("Bone: 1,600");
+    expect(r4.title).toBe("Magma: 0");
+    expect(r1.querySelector<HTMLElement>(".res-icon")!.dataset["realm"]).toBe("inferno");
+    setResourceRealm("surface");
     hud.destroy();
   });
 
@@ -407,6 +494,29 @@ describe("the yard's corner layout (#171)", () => {
     hud.setResources({ r1: 15_000_000 });
     expect(hud.fitLevel).toBe("compact");
     expect(hud.element.querySelector('.hud__resource-button[data-resource="r1"]')!.textContent).toBe("15.0M");
+    hud.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a full silo to the short amount and the full mark on a phone, where 23.1M/23.1M would not fit", () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(width <= 620px)" })));
+    const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
+    const store = {
+      caps: { r1: 23_050_000, r2: 20, r3: 20, r4: 20 },
+      workers: { total: 3, busy: 0 },
+      jobs: () => [],
+      save: {},
+      yard: { kind: "main" },
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+    };
+    hud.setResources({ r1: 23_050_000, r2: 10 });
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices: new Notices() });
+    const r1 = hud.element.querySelector<HTMLButtonElement>('.hud__resource-button[data-resource="r1"]')!;
+    expect(r1.textContent).toBe("23.1M");
+    expect(r1.querySelector<HTMLElement>(".hud__full-mark")!.hidden).toBe(false);
+    expect(r1.title).toBe(`Twigs: 23,050,000 of 23,050,000\n${FULL_NOTE}`);
     hud.destroy();
     vi.unstubAllGlobals();
   });
@@ -480,6 +590,7 @@ describe("the HUD on the player's own yard", () => {
       },
       jobs: () => store.jobList,
       // Collect all reads these; an empty yard keeps it hidden (`CollectAll.test.ts`).
+      yard: { kind: "main" },
       save: {},
       now: () => 0,
       isRunning: () => false,
@@ -593,7 +704,7 @@ describe("the HUD on the player's own yard", () => {
   it("shows workers free / total and goes to the job that ends soonest", () => {
     hud.bindYard(binding);
     expect(hud.element.querySelector<HTMLElement>(".hud__workers")!.hidden).toBe(false);
-    expect(workers().textContent).toBe("Workers3 / 5");
+    expect(workers().textContent).toBe("Workers3/5");
     expect(workers().title).toBe(workersText(3, 5).label);
     expect(workers().getAttribute("aria-disabled")).toBe("false");
     workers().click();
@@ -602,7 +713,7 @@ describe("the HUD on the player's own yard", () => {
     store.workers = { total: 5, busy: 0 };
     store.jobList = [];
     store.emit({ reason: "predicted" });
-    expect(workers().textContent).toBe("Workers5 / 5");
+    expect(workers().textContent).toBe("Workers5/5");
     expect(workers().getAttribute("aria-disabled")).toBe("true");
     workers().click();
     expect(selectBuilding).toHaveBeenCalledTimes(1);
@@ -646,10 +757,20 @@ describe("capState", () => {
   });
 });
 
+describe("fullText", () => {
+  it("spells both figures short, without a whole .0", () => {
+    expect(fullText(15_000_000, 15_000_000)).toBe("15M/15M");
+    expect(fullText(23_050_000, 23_050_000)).toBe("23.1M/23.1M");
+    expect(fullText(1_600, 1_600)).toBe("1.6K/1.6K");
+    expect(fullText(500, 500)).toBe("500/500");
+    expect(fullText(2_000_000_000, 2_000_000_000)).toBe("2B/2B");
+  });
+});
+
 describe("workersText", () => {
   it("counts free of total and says what a click does", () => {
     expect(workersText(2, 5)).toEqual({
-      value: "2 / 5",
+      value: "2/5",
       label: "Workers: 2 of 5 free. Click to go to the job that finishes soonest.",
     });
     expect(workersText(0, 1).label).toBe("Workers: none of 1 free. Click to go to the job that finishes soonest.");
@@ -674,6 +795,7 @@ describe("the HUD's income an hour", () => {
       workers: { total: 5, busy: 0 },
       jobs: () => [],
       save,
+      yard: { kind },
       now: () => 1_000,
       isRunning: () => false,
       subscribe: () => () => undefined,
@@ -707,12 +829,16 @@ describe("the HUD's income an hour", () => {
     hud.destroy();
   });
 
-  it("dims a full silo's rate and says full, since that income is lost", () => {
+  it("dims a full silo's rate and marks the pile full, since that income is lost", () => {
     const hud = new Hud({ scenes: [], layout: "corner", onSceneSelect: () => {} }).mount(document.body);
     hud.setResources({ r1: 20_000, r2: 0, r3: 0, r4: 0 });
     bindTo(hud, "main");
     expect(rate(hud, "r1").classList.contains("hud__rate--full")).toBe(true);
-    expect(rate(hud, "r1").textContent).toBe("+1,440/h full");
+    expect(rate(hud, "r1").textContent).toBe("+1,440/h");
+    const mark = (key: string): HTMLElement => rate(hud, key).parentElement!.querySelector<HTMLElement>(".hud__full-mark")!;
+    expect(mark("r1").hidden).toBe(false);
+    expect(mark("r1").dataset["icon"]).toBe("storagefull");
+    expect(mark("r3").hidden).toBe(true);
     expect(rate(hud, "r3").classList.contains("hud__rate--full")).toBe(false);
     // Spending takes it off the cap.
     hud.setResources({ r1: 19_000 });

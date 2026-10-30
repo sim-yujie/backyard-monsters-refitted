@@ -1,9 +1,13 @@
 import type { CompletedJob } from "@/api/types";
+import { attackNoticeRealm, attackNoticeStatsOf, type AttackNoticeStats } from "@/game/attack/attackNoticeStats";
 import { labAbility, monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { siegeData } from "@/game/combat/rules/siege";
+import { SIEGE_LAB_TYPE } from "@/game/yard/jobs";
 import { championEntry } from "@/game/yard/championCatalogue";
 import { typeName } from "@/game/yard/planner/summary";
 import { formatAmount } from "@/ui/format";
-import { RESOURCE_KEYS, RESOURCE_NAMES } from "@/ui/resourceIcon";
+import { attackStatsRow } from "@/ui/attackNotice";
+import { RESOURCE_KEYS, RESOURCE_NAMES, type ResourceRealm } from "@/ui/resourceIcon";
 
 /**
  * "3 upgrades finished: Cannon Tower 5, Sniper Tower 3, Silo 7"
@@ -52,6 +56,13 @@ export interface JobNoticeGroup {
    * "While you were away" rather than under it: the starter base.
    */
   readonly standalone?: boolean;
+  /**
+   * On an attack notice that came with its numbers (since 28 Oct): who
+   * attacked what, and the numbers, which the line shows as icons on a line of
+   * their own instead of the sentence (the heading, kept for the tooltip and
+   * the plain text).
+   */
+  readonly attack?: { readonly subject: string; readonly stats: AttackNoticeStats; readonly realm: ResourceRealm };
 }
 
 /** The store buffs a Phase 1 yard can hold, by code (`server/src/game-data/store/storeItems.ts`). */
@@ -77,6 +88,7 @@ const NOUNS: Readonly<Record<string, readonly [string, string]>> = {
   train: ["training", "trainings"],
   research: ["research", "researches"],
   repair: ["repair", "repairs"],
+  siege: ["Chaos weapon", "Chaos weapons"],
 };
 
 const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
@@ -121,8 +133,9 @@ const STARTER_BASE = "starterBase";
 const STARVED = "starve";
 
 /**
- * A champion's egg hatched, a day after it was raised (owner 2026-10-20;
- * `server/src/services/yard/catchUpChampions.ts`): "Your Drull has hatched!",
+ * An older save's champion egg hatched (eggs were removed on 2026-10-28; the
+ * server's catch-up hatches any left, `server/src/services/yard/catchUpChampions.ts`):
+ * "Your Drull has hatched!",
  * a sentence of its own, ahead of what finished.
  */
 const CHAMPION_HATCH = "championHatch";
@@ -166,25 +179,31 @@ const countOf = (job: CompletedJob): number => {
  * (`server/src/services/maproom/v2/outpostNotices.ts`): "Bramble attacked your
  * outpost at (243, 206). It was left 63% damaged, and 1,234 Twigs were
  * looted." Told as a sentence of its own, ahead of what finished; the value
- * is what it says if the server sent no text.
+ * is what it says if the server sent no text. An attack notice written since
+ * 28 Oct also sends its subject and numbers, shown as icons (less-text job 3).
  */
 const SERVER_NOTICES: Readonly<Record<string, string>> = {
   outpostAttacked: "One of your outposts was attacked",
   outpostTaken: "One of your outposts was taken",
   yardAttacked: "Your yard was attacked",
+  infernoAttacked: "Your Inferno yard was attacked",
 };
 
 const isServerNotice = (job: CompletedJob): boolean => Object.hasOwn(SERVER_NOTICES, job.kind);
 
 /** A server-written notice as its own sentence, with no buttons. */
 const serverNoticeGroup = (job: CompletedJob): JobNoticeGroup => {
-  const text = (job.detail as { text?: unknown }).text;
+  const { text, subject, stats } = job.detail as { text?: unknown; subject?: unknown; stats?: unknown };
+  const numbers = attackNoticeStatsOf(stats);
   return {
     kind: job.kind,
     heading: typeof text === "string" && text !== "" ? text.replace(/\.$/, "") : (SERVER_NOTICES[job.kind] ?? ""),
     items: [],
     tail: "",
     standalone: true,
+    ...(numbers &&
+      typeof subject === "string" &&
+      subject !== "" && { attack: { subject, stats: numbers, realm: attackNoticeRealm(job.kind) } }),
   };
 };
 
@@ -275,6 +294,16 @@ const labelOf = (job: CompletedJob): JobNoticeItem => {
       buildingId: typeof detail.lab === "number" ? detail.lab : null,
     };
   }
+  if (job.kind === "siege") {
+    // "Marilyn Monstroe level 2" from the Chaos Lab, "Marilyn Monstroe ready" from the Factory (WP 6.3).
+    const id = String(job.id);
+    const detail = job.detail as { level?: unknown; building?: unknown };
+    const name = siegeData(id)?.name ?? id;
+    return {
+      label: job.t === SIEGE_LAB_TYPE && typeof detail.level === "number" ? `${name} level ${detail.level}` : `${name} ready`,
+      buildingId: typeof detail.building === "number" ? detail.building : null,
+    };
+  }
   const buildingId = typeof job.id === "number" ? job.id : null;
   const name = job.t === null ? String(job.id) : typeName(job.t);
   const detail = job.detail as { level?: unknown; fort?: unknown };
@@ -337,9 +366,18 @@ export const noticeText = (group: JobNoticeGroup): string => {
 /** What goes after a sentence before the next: ". ", or a space after one that ends itself ("…hatched!"). */
 const after = (text: string): string => (/[.!?]$/.test(text) ? " " : ". ");
 
-/** Sentences joined by {@link after}. */
-const sentences = (texts: readonly string[]): string =>
-  texts.reduce((line, text, index) => (index === 0 ? text : line + after(line) + text), "");
+/**
+ * The full stop a line of several sentences ends with ("Bramble attacked your
+ * Inferno yard. It was left 30% damaged, and 1,200 Bone were looted."), or ""
+ * for a line of one, which reads as a list row ("Upgrade finished: Silo 7").
+ */
+const finalStop = (text: string): string => (/[.!?] /.test(text) && !/[.!?]$/.test(text) ? "." : "");
+
+/** Sentences joined by {@link after}, a line of several closed by {@link finalStop}. */
+const sentences = (texts: readonly string[]): string => {
+  const line = texts.reduce((joined, text, index) => (index === 0 ? text : joined + after(joined) + text), "");
+  return line + finalStop(line);
+};
 
 /** A heading after the away lead-in, where it no longer starts the sentence. */
 const awayHeading = (group: JobNoticeGroup): JobNoticeGroup => ({
@@ -375,14 +413,18 @@ export const jobLineText = (kind: JobLineKind, completed: readonly CompletedJob[
 /**
  * A notification as a line of text with every building in it a button that
  * calls `select` with its id, or plain text when `select` is null (a building
- * in another yard than the one open). Worded as {@link jobLineText}.
+ * in another yard than the one open). Worded as {@link jobLineText}, except
+ * that an attack notice with its numbers comes first, on lines of its own:
+ * "Bramble attacked your yard", then the damage and loot as icons.
  */
 export const jobLine = (
   kind: JobLineKind,
   completed: readonly CompletedJob[],
   select: ((buildingId: number) => void) | null,
 ): HTMLElement => {
-  const groups = groupCompletedJobs(completed);
+  const all = groupCompletedJobs(completed);
+  const attacks = all.filter((group) => group.attack !== undefined);
+  const groups = all.filter((group) => group.attack === undefined);
   const line = document.createElement("span");
   line.className = kind === "away" ? "job-notice job-notice--away" : "job-notice";
   const standalone = kind === "away" ? groups.filter((group) => group.standalone) : groups;
@@ -398,7 +440,25 @@ export const jobLine = (
       appendGroup(line, awayHeading(group), select);
     });
   }
+  line.append(finalStop(line.textContent ?? ""));
+  if (attacks.length === 0) return line;
+  const rest = document.createElement("span");
+  rest.className = "attack-notice__rest";
+  rest.append(...line.childNodes);
+  line.replaceChildren(...attacks.map(attackBlock), ...(rest.textContent === "" ? [] : [rest]));
   return line;
+};
+
+/** "Bramble attacked your yard" over its numbers as icons. */
+const attackBlock = (group: JobNoticeGroup): HTMLElement => {
+  const block = document.createElement("span");
+  block.className = "attack-notice";
+  if (group.attack === undefined) return block;
+  const subject = document.createElement("span");
+  subject.className = "attack-notice__subject";
+  subject.textContent = group.attack.subject;
+  block.append(subject, attackStatsRow(group.attack.stats, group.attack.realm));
+  return block;
 };
 
 /** "Heading: " then each item, a building as a button that selects it (or the group's sentence). */

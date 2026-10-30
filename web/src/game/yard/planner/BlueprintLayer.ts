@@ -373,7 +373,7 @@ export class BlueprintLayer {
   /* ── Building the scene ─────────────────────────────────────────────── */
 
   private rectOf(tile: Tile): Rect {
-    return tileRect(tile.building.type, tile.x, tile.y);
+    return tileRect(tile.building.type, tile.x, tile.y, this.yard?.kind);
   }
 
   private build(): void {
@@ -460,7 +460,7 @@ export class BlueprintLayer {
     // cache for its pictures, which usually answers at once because the
     // isometric yard has already fetched them.
     const resolved = tileShowsIcon(category, width, height)
-      ? resolveArt(building.type, building.level, ArtState.DEFAULT)
+      ? resolveArt(building.type, building.level, ArtState.DEFAULT, this.yard?.kind)
       : null;
     const art = resolved ? partsOf(resolved) : [];
 

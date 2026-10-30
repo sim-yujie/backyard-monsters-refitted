@@ -120,7 +120,7 @@ Built in WP0 beyond this table, for the tips: `build-instant`, `build-cancel-car
 ### 2.3 The steps
 
 Lines are adapted from Flash's `tut_*` strings (`server/public/gamestage/assets/english.json`); the
-Flash key is in brackets. "On me" means the server pays the shortfall (§2.4).
+Flash key is in brackets. "On me" means the server pays the whole cost (§2.4).
 
 | # | Macro step (`guide.step`) | Bob says | Pointer | Advances when | Server grants / validates | Rewind, reload |
 |---|---|---|---|---|---|---|
@@ -150,20 +150,21 @@ tips 90 s).
 
 ### 2.4 What the guided start pays for
 
-"Top up to the exact cost" works as Flash's `BASE.Fund` before a tutorial build
-(`client/scripts/TUTORIAL.as:396-400`, `:484-488`, `:604-608`, `:682-686`): if the player holds less
-than the cost, the tutorial adds the difference, then the full cost is charged. The server does it
-in one step without ever handing resources over: the build debits `min(held, cost)` per resource
-and records the difference as the grant. The player cannot pull the top-up out by cancelling,
-because cancelling a guided-start building is refused while the guide is active (Flash locked
-recycling during its tutorial, `tut_recycle_locked`).
+Bob says "This one's on me", so the guide pays the whole cost and the player's own resources are not
+touched. **Changed 2026-10-28** (owner playtest: the player's Twigs and Pebbles still dropped to 0).
+Flash's `BASE.Fund` before a tutorial build (`client/scripts/TUTORIAL.as:396-400`, `:484-488`,
+`:604-608`, `:682-686`) only added the shortfall and then charged the full cost, which spent the
+player's savings. The server does it in one step without ever handing resources over: the build
+debits nothing and records the cost as the grant. The player cannot pull the grant out by cancelling:
+cancelling a guided-start building is refused while the guide is active (Flash locked recycling
+during its tutorial, `tut_recycle_locked`), and after a skip the grant is kept back from the refund.
 
 | Grant | Most it can be | Once per account |
 |---|---|---|
-| Sniper Tower top-up | 1,500 twigs, 2,000 pebbles, 500 putty | `grants["fund:21"]` |
-| Housing top-up | 2,160 twigs, 2,160 pebbles | `grants["fund:15"]` |
-| Map Room top-up | 2,000 twigs, 2,000 pebbles | `grants["fund:11"]` |
-| Flinger top-up | 1,000 twigs, 1,000 pebbles, 500 putty | `grants["fund:5"]` |
+| Sniper Tower | 1,500 twigs, 2,000 pebbles, 500 putty | `grants["fund:21"]` |
+| Housing | 2,160 twigs, 2,160 pebbles | `grants["fund:15"]` |
+| Map Room | 2,000 twigs, 2,000 pebbles | `grants["fund:11"]` |
+| Flinger | 1,000 twigs, 1,000 pebbles, 500 putty | `grants["fund:5"]` |
 | Four free finishes | the four constructions above | `grants["finish:<type>"]` |
 | Pokeys | housed Pokeys topped up to 15 (never above) | `grants["army"]`, a list; each entry records how many were added. Only in steps `pokeys` and `attack-result` |
 | Protection | `protected = max(protected, now + 7 days)` | at `done` or `skipped` |
@@ -439,7 +440,7 @@ refers to §6.2; "B" is a building check.
 | 57 | UG3 | Fomor the Fearless | Fomor at level 6 | 0 / 0 / 0 / 800,000 | HG3 | keep | champion G3 |
 | 58 | BK4 | Resource Mogul | bank 500,000 in one tap | 50,000 each | BK3 | keep | counter |
 | 59 | BL2 | Monster Smoothie | juice 100 | 0 / 0 / 10,000 / 10,000 | BL1 | keep | counter |
-| 59-67 | SW4-SW12 | Siege weapons: decoy, vacuum and jars to levels 1, 5 and 10 | Siege Lab levels | a siege weapon each | C16, then chains | drop (no Siege Factory or Siege Lab in the web) | — |
+| 59-67 | SW4-SW12 | Siege weapons: decoy, vacuum and jars to levels 1, 5 and 10 | Siege Lab levels | a siege weapon each | C16, then chains | **kept since Inferno WP 6.8**, shown only with `INFERNO_ENABLED` on; the weapon is made in the Chaos Factory, refused unless it is built, idle and empty | B: `siege[id].level` |
 | 60 | BL3 | Monster Milkshake | juice 1,000 | 0 / 0 / 100,000 / 100,000 | BL2 | keep | counter |
 | 61 | BL4 | Monster Margarita | juice 5,000 | 0 / 0 / 1,000,000 / 1,000,000 | BL3 | keep | counter |
 | 62 | M4 | Golden Mushroom Booty | 5 golden mushrooms | 1,000 / 1,000 / 500 / 500 | M1 | keep | counter `goldMushrooms >= 5` |
@@ -458,6 +459,7 @@ refers to §6.2; "B" is a building check.
 | 82 | N3 | Into the Wild | move to Map Room 2 (Map Room level 2) | 10,000 each [PLACEHOLDER] | C14 | **new** | B: type 11 `l >= 2` |
 
 Counts: Flash has 85 quests; 65 are kept (12 of them monster unlocks), 20 dropped, and 3 are new.
+Since Inferno WP 6.8 the nine siege quests SW4-SW12 are back too (74 kept, 11 dropped), behind the Inferno switch; they pay no resources.
 The kept list pays 373,300 twigs, 343,900 pebbles,
 1,398,000 putty and 3,816,500 goo in all, most of it in the champion and juice goals at the far end.
 The first thirteen (orders 4 to 16) pay about 33,300 / 33,900 / 13,500 / 17,500, roughly 48 hours of

@@ -10,7 +10,7 @@ import {
   PRACTICE_CAMP_BASEID,
   practiceBoxCorners,
 } from "@/game/guide/practiceBox";
-import { dotsFor, LINES } from "@/game/guide/steps";
+import { CUES, dotsFor, LINES } from "@/game/guide/steps";
 import { registerCanvasTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import type { Point } from "@/game/yard/YardGrid";
 import { armyPanelFor } from "@/ui/attack/ArmyPanel";
@@ -154,7 +154,7 @@ export const practicePlugin =
         return;
       }
       if (bucket.isEmpty()) {
-        show("fill", line(`${LINES.attackBase} ${LINES.fillAll}`, { target: TutTarget.FILL_ALL }));
+        show("fill", line(`${LINES.attackBase} ${LINES.fillAll}`, { cue: CUES.fillAll!, target: TutTarget.FILL_ALL }));
         return;
       }
       show("drop", line(LINES.dropBox, { target: TutTarget.PRACTICE_BOX }));

@@ -1,7 +1,6 @@
 import { ACADEMY_KEYS, academyActions, type AcademyActions } from "@/api/yardAcademy";
 import type { YardRefusal } from "@/api/yard";
-import { monsterStat } from "@/game/combat/rules";
-import { hatchCost, housingSpace, monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import {
   academyFor,
   academySlots,
@@ -19,10 +18,11 @@ import {
   type TrainGate,
   type TrainRow,
 } from "@/game/monsters/training";
+import { monsterRealmOf, monsterWords, type MonsterRealm } from "@/game/monsters/realm";
 import { progressFraction } from "@/game/yard/jobs";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
-import { hatchTimeText, speedText } from "./monsterNumbers";
+import { monsterStats, statGrid } from "./monsterNumbers";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/train.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
@@ -46,6 +46,10 @@ import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersT
  * (`academyActions`, `api/yardAcademy.ts`). Shiny spends are
  * {@link ShinyButton}s (tap, then tap again); Cancel opens one inline
  * confirmation stating the refund, capped as the server caps it.
+ *
+ * On the Inferno yard it is the Infernal Academy (Inferno WP 2.4): the
+ * Inferno roster trained for Sulfur to level 5, the hatch cost in Magma
+ * (Flash's `infacad_att_cost`).
  */
 
 const duration = (seconds: number): string => formatCountdown(seconds);
@@ -114,6 +118,15 @@ export class TrainTab implements MonstersTab {
 
   private get store() {
     return this.context.binding.store;
+  }
+
+  /** "Academy", or Flash's "Infernal Academy" on the Inferno yard. */
+  private get academyName(): string {
+    return this.realm === "inferno" ? monsterWords(this.realm).academy : "Academy";
+  }
+
+  private get realm(): MonsterRealm {
+    return monsterRealmOf(this.store.kind);
   }
 
   show(focus: MonstersFocus): void {
@@ -191,7 +204,7 @@ export class TrainTab implements MonstersTab {
   }
 
   private slotCard(slot: AcademySlot, used: Set<string>): HTMLElement {
-    const title = `Academy ${slot.number}`;
+    const title = `${this.academyName} ${slot.number}`;
     if (slot.state.kind === "training") return this.trainingCard(title, slot.state.training, used, slot);
 
     const card = document.createElement("section");
@@ -342,7 +355,7 @@ export class TrainTab implements MonstersTab {
     if (rows.length === 0) {
       const empty = document.createElement("li");
       empty.className = "train__empty";
-      empty.textContent = "No monsters unlocked yet. Unlock one in the Monster Locker first.";
+      empty.textContent = `No monsters unlocked yet. Unlock one in the ${monsterWords(this.realm).locker} first.`;
       this.list.replaceChildren(empty);
       return;
     }
@@ -404,9 +417,8 @@ export class TrainTab implements MonstersTab {
     const facts = document.createElement("p");
     facts.className = "locker-detail__facts";
     facts.textContent = `Level ${level} of ${max}`;
-    const stats = document.createElement("p");
-    stats.className = "locker-detail__stats";
-    stats.textContent = statLine(monster.id, level, step ? level + 1 : null);
+    const stats = statGrid(monsterStats(monster.id, level, step ? level + 1 : null), this.realm);
+    stats.classList.add("locker-detail__stats");
     heading.append(name, facts, stats);
     head.append(heading);
 
@@ -433,7 +445,7 @@ export class TrainTab implements MonstersTab {
         `Level ${level + 1}: `,
         resourceAmount("r3", step[0]),
         ` · ${duration(step[1])}`,
-        ...(gate === null && at ? [` · at Academy ${at.number}`] : []),
+        ...(gate === null && at ? [` · at ${this.academyName} ${at.number}`] : []),
       );
       action.append(facts);
       // Training is a player-wide level, not one monster's (issue #180).
@@ -441,18 +453,18 @@ export class TrainTab implements MonstersTab {
       scope.className = "locker-detail__note";
       scope.textContent = `Training upgrades every ${monster.name}, now and in future.`;
       action.append(scope);
-      if (gate) action.append(gateLine(gate));
+      if (gate) action.append(gateLine(gate, this.realm));
       const buttons = document.createElement("div");
       buttons.className = "map-row map-row--wrap locker-detail__buttons";
       const train = plainButton(`Train to level ${level + 1}`, () => void this.runTrain(monster.id), "btn--primary");
       train.dataset["focusKey"] = "train";
       train.disabled = gate !== null;
-      if (gate) train.title = `${gateText(gate)}.`;
+      if (gate) train.title = `${gateText(gate, this.realm)}.`;
       this.plainButtons.push(train);
       used.add("instant");
       const instant = this.shinyButton("instant", "Instant", () => void this.runInstant(monster.id));
       instant.setPrice(instantPrice(step));
-      instant.setBlocked(lockedInstant ? `${gateText(lockedInstant)}.` : null);
+      instant.setBlocked(lockedInstant ? `${gateText(lockedInstant, this.realm)}.` : null);
       buttons.append(train, instant.element);
       action.append(buttons);
     }
@@ -501,12 +513,16 @@ export class TrainTab implements MonstersTab {
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
+  // What an action spent is red with a minus ("Putty −64,000", no "spent"),
+  // what a cancel gave back green with a plus (owner, 28 Oct); the prices on
+  // the buttons stay plain.
+
   private async runTrain(id: string): Promise<void> {
     const result = await this.actions.train(id);
     this.report(result, (report) => [
       `Training ${nameOf(report.monster)} to level ${report.to}: `,
-      resourceAmount("r3", report.cost.r3),
-      " spent.",
+      resourceAmount("r3", report.cost.r3, { change: "loss" }),
+      ".",
     ]);
   }
 
@@ -514,7 +530,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.instant(id);
     this.report(result, (report) => [
       `${nameOf(report.monster)} is level ${report.level}, for `,
-      resourceAmount("shiny", report.credits),
+      resourceAmount("shiny", report.credits, { change: "loss" }),
       ".",
     ]);
   }
@@ -523,7 +539,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.finish(id);
     this.report(result, (report) => [
       `${nameOf(report.monster)} is level ${report.level}`,
-      ...(report.credits > 0 ? [", for ", resourceAmount("shiny", report.credits)] : []),
+      ...(report.credits > 0 ? [", for ", resourceAmount("shiny", report.credits, { change: "loss" })] : []),
       ".",
     ]);
   }
@@ -532,7 +548,7 @@ export class TrainTab implements MonstersTab {
     const result = await this.actions.cancel(id);
     this.report(result, (report) =>
       report.refund.r3 > 0
-        ? ["Training cancelled. Got back ", resourceAmount("r3", report.refund.r3), "."]
+        ? ["Training cancelled. Got back ", resourceAmount("r3", report.refund.r3, { change: "gain" }), "."]
         : ["Training cancelled."],
     );
   }
@@ -579,42 +595,13 @@ const slotTitle = (title: string, level: number | null): HTMLElement => {
   return heading;
 };
 
-/**
- * What the next level changes: "Health 400 → 480 · Damage 30 → 36 · Space 1".
- * A negative damage is a healer's (Vorg). Hatch cost is included when it moves.
- */
-export const statLine = (id: string, level: number, next: number | null): string => {
-  const pair = (now: number, then: number | null): string =>
-    then === null || then === now ? formatAmount(now) : `${formatAmount(now)} → ${formatAmount(then)}`;
-  const health = pair(monsterStat(id, "health", level), next && monsterStat(id, "health", next));
-  const damageNow = monsterStat(id, "damage", level);
-  const damageNext = next && monsterStat(id, "damage", next);
-  const damage =
-    damageNow < 0
-      ? `Heals ${pair(-damageNow, damageNext === null ? null : -damageNext)}`
-      : `Damage ${pair(damageNow, damageNext)}`;
-  const speedNow = monsterStat(id, "speed", level);
-  const speedNext = next && monsterStat(id, "speed", next);
-  const speed =
-    speedNext === null || speedNext === speedNow
-      ? speedText(id, level)
-      : `${speedText(id, level)} → ${speedText(id, next ?? level)}`;
-  const space = pair(housingSpace(id, level) ?? 0, next && (housingSpace(id, next) ?? 0));
-  const goo = pair(hatchCost(id, level) ?? 0, next && (hatchCost(id, next) ?? 0));
-  const time =
-    next === null || hatchTimeText(id, next) === hatchTimeText(id, level)
-      ? hatchTimeText(id, level)
-      : `${hatchTimeText(id, level)} → ${hatchTimeText(id, next)}`;
-  return [`Health ${health}`, damage, `Speed ${speed}`, `Space ${space}`, `Hatch ${goo} goo`, `Hatch time ${time}`].join(" · ");
-};
-
-/** The one line that says why Train is disabled; a putty shortfall with its icon. */
-const gateLine = (gate: TrainGate): HTMLElement => {
+/** The one line that says why Train is disabled; a putty (Sulfur) shortfall with its icon. */
+const gateLine = (gate: TrainGate, realm: MonsterRealm): HTMLElement => {
   const line = document.createElement("p");
   line.className = "monsters-gate";
   if (gate.reason === "shortfall" && !gate.overCap) {
     line.append("Need ", resourceAmount("r3", gate.need), " more");
-  } else line.textContent = gateText(gate);
+  } else line.textContent = gateText(gate, realm);
   return line;
 };
 

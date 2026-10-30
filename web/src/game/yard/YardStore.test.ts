@@ -510,6 +510,22 @@ describe("the action queue", () => {
     expect(api.cancelUpgrade).not.toHaveBeenCalled();
   });
 
+  it("sends an Inferno wall to the planner's batch, as on the main yard", async () => {
+    const api = stubApi();
+    const { store } = storeWith(
+      loadWith({
+        type: "inferno",
+        buildingdata: { ...baseBuildings(), "6": { X: 500, Y: 0, t: 17, id: 6, l: 1 } },
+      }),
+      api,
+    );
+    const result = await store.upgrade(6);
+    // Owner decision 29 Oct 2026: the Inferno has the planner, so its walls
+    // upgrade only through the batch, like the main yard's (D13).
+    expect(result.ok ? "ok" : result.refusal.reason).toBe("useBatchRoute");
+    expect(api.upgrade).not.toHaveBeenCalled();
+  });
+
   it("reports a server refusal and fetches the state it was refused against", async () => {
     const refused = new ApiError("You do not have enough resources for that.", {
       status: 409,

@@ -95,7 +95,9 @@ describe("TakeoverDialog", () => {
     modal.replaceChildren();
     const { $ } = open({ height: 150 });
     expect($(".takeover-dialog__ground").hidden).toBe(false);
-    expect($(".takeover-dialog__ground").textContent).toContain("high ground: tower range +20%, income −17%");
+    expect($(".takeover-dialog__ground").textContent).toContain("+20%");
+    expect($(".takeover-dialog__ground").textContent).toContain("−17%");
+    expect($(".takeover-dialog__ground img[data-icon='range']")).not.toBeNull();
   });
 
   it("shows Flash's title and lead, and the quote's price for each resource", () => {

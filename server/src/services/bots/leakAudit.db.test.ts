@@ -35,7 +35,7 @@ const enabled = Boolean(dbName) && dbName !== "bym";
 const RUNNING_STATE = new Set(["cB", "cL", "cU", "cF", "cP", "rE", "hp"]);
 
 /** Names that would only be in a response because something about a bot leaked. */
-const BOT_ONLY_KEYS = ["persona", "level_since", "retired_at", "grow_drops", "bot_userid", "last_seen_at", "email", "password"];
+const BOT_ONLY_KEYS = ["persona", "level_since", "retired_at", "grow_drops", "yard_version", "bot_userid", "last_seen_at", "email", "password"];
 
 const PREFIX = "wp12leak";
 
@@ -117,8 +117,11 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     return ctx.body as Body;
   };
 
+  /** An attack load carries the attack payload, as the client sends it (`web/src/api/base.ts`); outside ENV=local the server refuses one without (`validateAttack.ts`). */
+  const NO_ARMY = JSON.stringify({ monsters: [], champions: [] });
+
   const load = (email: string, type: string, baseid: string) =>
-    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1" });
+    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1", ...(type === "attack" ? { attackData: NO_ARMY } : {}) });
 
   /** A player as sign-up makes one (`register.ts`), then their first yard load and a look at Map Room 1. */
   const signUp = async (name: string) => {
@@ -188,7 +191,7 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     process.env.BOTS_FILL = "on";
     await cleanUp();
 
-    [bot] = await createBots(db.em.fork(), [1], { rng: mulberry32(245), now: Math.floor(Date.now() / 1000), daysPerLevel: 3 });
+    [bot] = await createBots(db.em.fork(), [15], { rng: mulberry32(245), now: Math.floor(Date.now() / 1000), pace: 3 });
     // The real player first, so the viewer's first Map Room 1 search finds them.
     real = await signUp(`${PREFIX}real`);
     rival = await signUp(`${PREFIX}rival`);
@@ -206,9 +209,9 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     await db.close(true);
   });
 
-  test("the real player and the bot stand on the same level", async () => {
+  test("the real player starts on level 1, the bot on the floor (level 15)", async () => {
     expect((await saveOf(real.userid)).level).toBe(1);
-    expect((await saveOf(bot.userid)).level).toBe(1);
+    expect((await saveOf(bot.userid)).level).toBe(15);
   });
 
   test("the view load", async () => {

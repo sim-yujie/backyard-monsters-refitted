@@ -143,4 +143,101 @@ describe("AccountSettings", () => {
     expect(document.querySelectorAll("#settings-blocked li")).toHaveLength(1);
     expect(document.body.textContent).toContain(SETTINGS_TEXT.unblockFailed);
   });
+
+  it("keeps Screen shake in this browser, on until switched off", async () => {
+    localStorage.clear();
+    await open({});
+    const box = document.querySelector<HTMLInputElement>("#settings-screen-shake")!;
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.screenShake")).toBe("0");
+    box.checked = true;
+    box.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.screenShake")).toBeNull();
+  });
+
+  it("greys out Screen shake when the device asks for less motion", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("reduced-motion") }));
+    try {
+      await open({});
+      const box = document.querySelector<HTMLInputElement>("#settings-screen-shake")!;
+      expect(box.checked).toBe(false);
+      expect(box.disabled).toBe(true);
+      expect(document.body.textContent).toContain(SETTINGS_TEXT.shakeReducedHint);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("saves Effects: Full / Low, and shows the effects even when the account fails to load", async () => {
+    localStorage.clear();
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.loadFailed);
+    const select = document.querySelector<HTMLSelectElement>("#settings-effects-quality")!;
+    expect(select.value).toBe("full");
+    select.value = "low";
+    select.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.effectsQuality")).toBe("low");
+  });
+
+  it("offers Quality: High / Medium / Low, High by default, kept in this browser", async () => {
+    localStorage.clear();
+    await open({});
+    const select = document.querySelector<HTMLSelectElement>("#settings-quality")!;
+    expect(select.closest("label")!.textContent).toContain(SETTINGS_TEXT.downloadLabel);
+    expect([...select.options].map((option) => option.value)).toEqual(["high", "medium", "low"]);
+    expect(select.value).toBe("high");
+    const hint = document.querySelector("#settings-quality-hint")!;
+    expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHint.high);
+    select.value = "low";
+    select.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.quality")).toBe("low");
+    expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.low);
+    expect(hint.textContent).toContain(SETTINGS_TEXT.downloadSaved);
+    localStorage.clear();
+  });
+
+  it("shows the saved Quality, even when the account fails to load", async () => {
+    localStorage.clear();
+    localStorage.setItem("bymr.quality", "medium");
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.querySelector<HTMLSelectElement>("#settings-quality")!.value).toBe("medium");
+    localStorage.clear();
+  });
+
+  it("offers one Look and sound choice, Modern by default, kept in this browser for the next load", async () => {
+    localStorage.clear();
+    await open({});
+    const look = document.querySelector<HTMLSelectElement>("#settings-look")!;
+    expect(look.closest("label")!.textContent).toContain(SETTINGS_TEXT.lookLabel);
+    expect([...look.options].map((option) => option.textContent)).toEqual([
+      SETTINGS_TEXT.lookModern,
+      SETTINGS_TEXT.lookClassic,
+    ]);
+    expect(look.value).toBe("modern");
+    look.value = "classic";
+    look.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.look")).toBe("classic");
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.lookSaved);
+    look.value = "modern";
+    look.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.look")).toBeNull();
+    // The old art checkbox is gone: one choice covers it.
+    expect(document.querySelector("#settings-classic-art")).toBeNull();
+  });
+
+  it("shows Classic for a player who had Classic building art on, even when the account fails to load", async () => {
+    localStorage.clear();
+    localStorage.setItem("bymr.classicBuildingArt", "1");
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.querySelector<HTMLSelectElement>("#settings-look")!.value).toBe("classic");
+    localStorage.clear();
+  });
 });

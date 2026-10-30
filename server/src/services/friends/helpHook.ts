@@ -5,6 +5,8 @@ export interface HelpBlock {
   helpsLeft: number;
   /** Per building id: `speedup` / `repair` each `true` or a refusal reason. */
   buildings: Record<string, { speedup?: true | string; repair?: true | string }>;
+  /** A `tooNew` refusal's gate (`friendship`, `account` or `level`) and, when time lifts it, `from`. */
+  gate?: { reason: string; from?: number; rule?: string };
 }
 
 /**

@@ -1,0 +1,530 @@
+/*
+ * Painted windows (owner, 28 Oct 2026; skin.ts sets `data-skin` on <html>):
+ * every `.panel` gets a 9-slice painted frame, its title a sign riding on the
+ * top edge, its close button a painted disc, and its tabs and buttons the same
+ * kit. Two styles, one per Classic/Modern look:
+ *
+ * - `scrap` (Modern): blue-grey riveted steel, rusty straps and bones, a
+ *   mustard tin title sign, orange plate buttons, brass second choices.
+ * - `flash` (Classic): the Flash pop-ups refreshed: cream parchment, bone
+ *   corners, a red ribbon title, orange-yellow pills, green second choices.
+ *
+ * Art: web/public/ui/skin/<style>/ (Codex paintings, made in
+ * worktrees/ui-skin/mockups; `tools/web_assets.py` writes the .webp files).
+ * Each style only sets custom properties (art, slices, inks) and the panel's
+ * colour tokens, so what is inside keeps working without its own rules.
+ * Never set `position` on `.panel` here: this selector would beat each
+ * panel's own (`.build-menu { position: absolute }`).
+ */
+
+/* ── Modern: scrap metal and bone ───────────────────────────────────────── */
+
+:root[data-skin="scrap"] .panel {
+  --skin-frame: url("/ui/skin/scrap/frame.webp");
+  --skin-frame-slice: 100;
+  --skin-frame-width: 50px;
+  --skin-edge: 24px;
+  --skin-title: url("/ui/skin/scrap/title.webp");
+  --skin-title-slice: 72;
+  --skin-title-cap: 26px;
+  --skin-title-height: 48px;
+  --skin-title-lift: 38px;
+  /* A length, never a bare 0: it goes in the title's calc(), where "48px - 0"
+     is invalid and the words ride at the top of the sign. */
+  --skin-title-pad: 0px;
+  --skin-title-ink: #2c1a04;
+  --skin-title-stroke: rgb(255 226 120 / 85%);
+  --skin-close: url("/ui/skin/scrap/close.webp");
+  --skin-button: url("/ui/skin/scrap/button.webp");
+  --skin-button-pressed: url("/ui/skin/scrap/button-pressed.webp");
+  --skin-button-slice: 56;
+  --skin-button-cap: 24px;
+  --skin-button-stroke: #5a1800;
+  --skin-button2: url("/ui/skin/scrap/button-alt.webp");
+  --skin-button2-slice: 45;
+  --skin-button2-cap: 24px;
+  --skin-button2-ink: #2c1a04;
+  --skin-button2-stroke: rgb(255 236 170 / 70%);
+  --skin-tab-on: url("/ui/skin/scrap/tab-on.webp");
+  --skin-tab-off: url("/ui/skin/scrap/tab-off.webp");
+  --skin-tab-slice: 52;
+  --skin-tab-cap: 22px;
+  --skin-tab-ink: #1e252c;
+  --skin-tab-ink-off: #f1e2cc;
+  --skin-fill: #414f5c;
+
+  /* Light words on dark steel: brighter than the glass's, each with a shadow. */
+  --colour-surface-base: var(--skin-fill);
+  --colour-surface-raised: transparent;
+  --colour-surface-overlay: rgb(0 0 0 / 22%);
+  --colour-surface-sunken: rgb(8 14 22 / 34%);
+  --colour-surface-input: rgb(8 14 22 / 55%);
+  --colour-surface-control: rgb(255 255 255 / 12%);
+  --colour-surface-control-hover: rgb(255 255 255 / 20%);
+  --colour-surface-selected: rgb(255 140 40 / 22%);
+  --colour-border: rgb(0 0 0 / 40%);
+  --colour-border-subtle: rgb(0 0 0 / 28%);
+  --colour-border-strong: rgb(255 255 255 / 30%);
+  --colour-border-dashed: rgb(255 255 255 / 34%);
+  --colour-text: #f6f9fc;
+  --colour-text-strong: #ffffff;
+  --colour-text-secondary: #dde5ee;
+  --colour-text-muted: #c8d3df;
+  --colour-text-disabled: #b4c0cc;
+  --colour-text-inverse: #1e252c;
+  --colour-accent: #ff8a2a;
+  --colour-accent-hover: #ff9c48;
+  --colour-accent-pressed: #e8701a;
+  --colour-accent-text: #ffffff;
+  --colour-accent-soft: rgb(255 138 42 / 22%);
+  --colour-accent-line: rgb(255 150 60 / 80%);
+  --colour-warning: #ffd35a;
+  --colour-success: #7ee08a;
+  --colour-gain: #8be892;
+  --colour-loss: #ff8a80;
+  --colour-danger: #ff7a70;
+  --colour-info: #9cc8ff;
+
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+  color-scheme: dark;
+}
+
+/* ── Classic: Flash refreshed ───────────────────────────────────────────── */
+
+:root[data-skin="flash"] .panel {
+  --skin-frame: url("/ui/skin/flash/frame.webp");
+  --skin-frame-slice: 95;
+  --skin-frame-width: 47.5px;
+  --skin-edge: 26px;
+  --skin-title: url("/ui/skin/flash/title.webp");
+  --skin-title-slice: 130;
+  --skin-title-cap: 58px;
+  --skin-title-height: 58px;
+  --skin-title-lift: 44px;
+  --skin-title-pad: 7px;
+  --skin-title-ink: #fff6dc;
+  --skin-title-stroke: #6b1010;
+  --skin-close: url("/ui/skin/flash/close.webp");
+  --skin-button: url("/ui/skin/flash/button.webp");
+  --skin-button-pressed: url("/ui/skin/flash/button-pressed.webp");
+  --skin-button-slice: 63;
+  --skin-button-cap: 26px;
+  --skin-button-stroke: #5a2a0a;
+  --skin-button2: url("/ui/skin/flash/button-small.webp");
+  --skin-button2-slice: 50;
+  --skin-button2-cap: 22px;
+  --skin-button2-ink: #ffffff;
+  --skin-button2-stroke: #245a0c;
+  --skin-tab-on: url("/ui/skin/flash/tab-on.webp");
+  --skin-tab-off: url("/ui/skin/flash/tab-off.webp");
+  --skin-tab-slice: 45;
+  --skin-tab-cap: 19px;
+  --skin-tab-ink: #3d2410;
+  --skin-tab-ink-off: #6a4a28;
+  --skin-fill: #f8e4c0;
+
+  /* Warm dark words on cream. */
+  --colour-surface-base: var(--skin-fill);
+  --colour-surface-raised: transparent;
+  --colour-surface-overlay: rgb(120 80 30 / 10%);
+  --colour-surface-sunken: rgb(120 80 30 / 10%);
+  --colour-surface-input: #fffaf0;
+  --colour-surface-control: rgb(120 80 30 / 12%);
+  --colour-surface-control-hover: rgb(120 80 30 / 20%);
+  --colour-surface-selected: rgb(120 80 30 / 18%);
+  --colour-border: rgb(90 55 20 / 25%);
+  --colour-border-subtle: rgb(90 55 20 / 16%);
+  --colour-border-strong: rgb(90 55 20 / 40%);
+  --colour-border-dashed: rgb(90 55 20 / 35%);
+  --colour-tile-glow: rgb(255 255 255 / 45%);
+  --colour-tile-ground: rgb(120 80 30 / 6%);
+  --colour-text: #3d2410;
+  --colour-text-strong: #2a1606;
+  --colour-text-secondary: #5e3d1e;
+  --colour-text-muted: #6e4f30;
+  --colour-text-disabled: #7f6748;
+  --colour-text-inverse: #fff8e8;
+  --colour-accent: #c8640a;
+  --colour-accent-hover: #d8740e;
+  --colour-accent-pressed: #b0560a;
+  --colour-accent-text: #ffffff;
+  --colour-accent-soft: rgb(224 122 18 / 16%);
+  --colour-accent-line: rgb(200 100 10 / 60%);
+  --colour-warning: #8a5000;
+  --colour-warning-soft: rgb(154 91 0 / 10%);
+  --colour-danger: #b42323;
+  --colour-success: #1f7a3a;
+  --colour-info: #2a55c4;
+  --colour-gain: #176b31;
+  --colour-loss: #b42323;
+  --colour-change-halo: rgb(255 255 255 / 70%);
+  --colour-meter: #6a5236;
+
+  color-scheme: light;
+}
+
+/* ── The frame ──────────────────────────────────────────────────────────── */
+
+:root[data-skin] .panel {
+  color: var(--colour-text);
+  background: none;
+  border-style: solid;
+  border-width: var(--skin-edge);
+  border-radius: 0;
+  border-image-source: var(--skin-frame);
+  border-image-slice: var(--skin-frame-slice) fill;
+  border-image-width: var(--skin-frame-width);
+  border-image-repeat: round;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  overflow: visible;
+  filter: drop-shadow(0 10px 14px rgb(0 0 0 / 45%));
+
+  /* The focus ring in the window's own accent, not the glass's cyan. */
+  --focus-ring: 0 0 0 2px var(--skin-fill), 0 0 0 4px var(--colour-accent);
+}
+
+/* A modal's frame already casts its shadow; it is wide enough for the title
+   sign and the close disc side by side. */
+:root[data-skin] .popup-backdrop > .panel {
+  min-width: min(300px, 92vw);
+  box-shadow: none;
+}
+
+/* The level-up box, one line and an OK, sits centred under its centred sign. */
+:root[data-skin] .level-up > .panel__body {
+  text-align: center;
+}
+
+/* ── Title: a sign riding on the top edge; the close button a disc on the corner ── */
+
+/* The title bar stays in the window (what else it holds, such as the Build
+   menu's workers line, its "?" and close, keeps its row), with just room
+   under the sign; only the sign itself is lifted onto the frame. */
+:root[data-skin] .panel__titlebar {
+  position: relative;
+  min-height: calc(var(--skin-title-height) - var(--skin-title-lift) + 4px);
+  padding: calc(var(--skin-title-height) - var(--skin-title-lift) + 4px) 0 var(--space-2);
+  border-bottom: 0;
+}
+
+:root[data-skin] .panel__title {
+  position: absolute;
+  top: calc(-1 * var(--skin-title-lift));
+  left: 50%;
+  z-index: 1;
+  box-sizing: border-box;
+  max-width: calc(100% + 2 * var(--skin-edge) - 56px);
+  min-width: 180px;
+  height: var(--skin-title-height);
+  padding: 0 2px var(--skin-title-pad);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  line-height: calc(var(--skin-title-height) - var(--skin-title-pad));
+  transform: translateX(-50%);
+  border-style: solid;
+  border-width: 0 var(--skin-title-cap);
+  border-image-source: var(--skin-title);
+  border-image-slice: 0 var(--skin-title-slice) fill;
+  border-image-width: 0 var(--skin-title-cap);
+  border-image-repeat: stretch;
+  color: var(--skin-title-ink);
+  font-size: 22px;
+  text-shadow:
+    0 2px 0 var(--skin-title-stroke), 2px 0 0 var(--skin-title-stroke), -2px 0 0 var(--skin-title-stroke), 0 -2px 0 var(--skin-title-stroke),
+    1.5px 1.5px 0 var(--skin-title-stroke), -1.5px 1.5px 0 var(--skin-title-stroke), 1.5px -1.5px 0 var(--skin-title-stroke), -1.5px -1.5px 0 var(--skin-title-stroke);
+}
+
+/* The one or two words on the steel sign are dark on mustard: a thin light rim is enough. */
+:root[data-skin="scrap"] .panel__title {
+  font-size: 21px;
+  text-shadow: 0 1px 0 var(--skin-title-stroke);
+}
+
+/* The 300px docks (a building's window, the map's): a smaller title on a
+   sign as wide as the frame, its right end under the close disc, so
+   "Champion Chamber · Level 1" fits. */
+:root[data-skin] .map-panel .panel__title {
+  min-width: 150px;
+  max-width: calc(100% + 2 * var(--skin-edge) + 16px);
+  padding-inline: 14px;
+  font-size: 16px;
+}
+
+/* The ribbon's tails are long: a little lower and narrower there. */
+:root[data-skin="flash"] .map-panel {
+  --skin-title-height: 50px;
+  --skin-title-cap: 40px;
+  --skin-title-lift: 40px;
+  --skin-title-pad: 6px;
+}
+
+:root[data-skin="flash"] .map-panel .panel__title {
+  padding-inline: 8px;
+  font-size: 15px;
+}
+
+:root[data-skin] .panel__titlebar > .btn[aria-label^="Close"] {
+  position: absolute;
+  top: calc(-1 * var(--skin-edge) - 12px);
+  right: calc(-1 * var(--skin-edge) - 8px);
+  z-index: 2;
+  width: 46px;
+  min-width: 0;
+  height: 46px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--skin-close) center / contain no-repeat;
+  color: transparent;
+  font-size: 0;
+  text-shadow: none;
+  filter: drop-shadow(0 3px 2px rgb(0 0 0 / 35%));
+}
+
+:root[data-skin] .panel__titlebar > .btn[aria-label^="Close"]:hover:not(:disabled) {
+  background: var(--skin-close) center / contain no-repeat;
+  filter: drop-shadow(0 3px 2px rgb(0 0 0 / 35%)) brightness(1.1);
+}
+
+/* ── Buttons: the one thing to do is the big plate; a second choice the small one ── */
+
+:root[data-skin] .panel .btn--primary,
+:root[data-skin] .panel .btn--outline,
+:root[data-skin] .panel .build-info__build {
+  min-height: 46px;
+  padding: 0 2px 4px;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 var(--skin-button-cap);
+  border-radius: 0;
+  border-image-source: var(--skin-button);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  border-image-repeat: stretch;
+  background: none;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke),
+    1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
+}
+
+:root[data-skin] .panel .btn--outline {
+  border-width: 0 var(--skin-button2-cap);
+  border-image-source: var(--skin-button2);
+  border-image-slice: 0 var(--skin-button2-slice) fill;
+  border-image-width: 0 var(--skin-button2-cap);
+  color: var(--skin-button2-ink);
+  text-shadow:
+    0 1px 0 var(--skin-button2-stroke), 1px 0 0 var(--skin-button2-stroke), -1px 0 0 var(--skin-button2-stroke), 0 -1px 0 var(--skin-button2-stroke);
+}
+
+:root[data-skin="flash"] .panel .btn--outline {
+  text-shadow:
+    0 2px 0 var(--skin-button2-stroke), 2px 0 0 var(--skin-button2-stroke), -2px 0 0 var(--skin-button2-stroke), 0 -2px 0 var(--skin-button2-stroke),
+    1.5px 1.5px 0 var(--skin-button2-stroke), -1.5px 1.5px 0 var(--skin-button2-stroke), 1.5px -1.5px 0 var(--skin-button2-stroke), -1.5px -1.5px 0 var(--skin-button2-stroke);
+}
+
+:root[data-skin] .panel .btn--primary:hover:not(:disabled),
+:root[data-skin] .panel .btn--outline:hover:not(:disabled),
+:root[data-skin] .panel .build-info__build:hover:not(:disabled) {
+  background: none;
+  filter: brightness(1.08);
+}
+
+:root[data-skin] .panel .btn--primary:active:not(:disabled),
+:root[data-skin] .panel .build-info__build:active:not(:disabled) {
+  background: none;
+  border-image-source: var(--skin-button-pressed);
+  transform: translateY(2px);
+}
+
+/* Focus: a glow around the plate's own shape rather than a square ring. */
+:root[data-skin] .panel .btn--primary:focus-visible,
+:root[data-skin] .panel .btn--outline:focus-visible,
+:root[data-skin] .panel .build-info__build:focus-visible,
+:root[data-skin] .panel .tabs__tab:focus-visible,
+:root[data-skin] .panel__titlebar > .btn[aria-label^="Close"]:focus-visible {
+  box-shadow: none;
+  filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 4px var(--colour-accent));
+}
+
+/* Off: the same plate, greyed, its words still clear. */
+:root[data-skin] .panel .btn--primary:disabled,
+:root[data-skin] .panel .btn--outline:disabled,
+:root[data-skin] .panel .build-info__build:disabled {
+  background: none;
+  color: #ffffff;
+  text-shadow:
+    0 2px 0 #1e1e1e, 2px 0 0 #1e1e1e, -2px 0 0 #1e1e1e, 0 -2px 0 #1e1e1e,
+    1.5px 1.5px 0 #1e1e1e, -1.5px 1.5px 0 #1e1e1e, 1.5px -1.5px 0 #1e1e1e, -1.5px -1.5px 0 #1e1e1e;
+  filter: grayscale(1) brightness(0.85);
+}
+
+/* A plain button on steel: a lit plate with a clear rim, not a dim smudge. */
+:root[data-skin="scrap"] .panel .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab) {
+  border-color: rgb(255 255 255 / 26%);
+  background: linear-gradient(rgb(255 255 255 / 16%), rgb(255 255 255 / 6%));
+  box-shadow: 0 2px 0 rgb(0 0 0 / 35%);
+}
+
+:root[data-skin="scrap"] .panel .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab):hover:not(:disabled) {
+  background: linear-gradient(rgb(255 255 255 / 24%), rgb(255 255 255 / 12%));
+}
+
+:root[data-skin="scrap"] .panel .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab):disabled {
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(0 0 0 / 20%);
+  box-shadow: none;
+}
+
+/* ── Tabs: painted tabs; the chosen one lit, the rest dull ──────────────── */
+
+:root[data-skin] .panel .tabs {
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  align-items: flex-end;
+}
+
+:root[data-skin] .panel .tabs__tab {
+  min-height: 42px;
+  padding: 3px 2px 0;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 var(--skin-tab-cap);
+  border-radius: 0;
+  border-image-source: var(--skin-tab-off);
+  border-image-slice: 0 var(--skin-tab-slice) fill;
+  border-image-width: 0 var(--skin-tab-cap);
+  border-image-repeat: stretch;
+  background: none;
+  color: var(--skin-tab-ink-off);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+}
+
+:root[data-skin] .panel .tabs__tab:hover {
+  background: none;
+  filter: brightness(1.1);
+}
+
+:root[data-skin] .panel .tabs__tab[aria-selected="true"],
+:root[data-skin] .panel .tabs__tab[aria-current="true"],
+:root[data-skin] .panel .tabs__tab[aria-pressed="true"] {
+  min-height: 46px;
+  border-image-source: var(--skin-tab-on);
+  background: none;
+  color: var(--skin-tab-ink);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 45%);
+  box-shadow: none;
+}
+
+/* ── Tight spots ────────────────────────────────────────────────────────── */
+
+/* The painted plate's ends are wider than the glass button's padding: in a
+   quantity stepper they are pinched a little, so the count keeps room. */
+:root[data-skin] .panel .qty-stepper .btn--outline {
+  --skin-button2-cap: 15px;
+
+  padding: 0;
+}
+
+:root[data-skin] .panel .qty-stepper__count {
+  min-width: 4ch;
+}
+
+/* A dock is 300px and its frame takes 48 of them: the inside keeps a little
+   less margin (the frame is the margin), the plates' ends are pinched, and a
+   row that still does not fit wraps rather than running under the frame. */
+:root[data-skin] .map-panel .panel__body {
+  padding-inline: var(--space-2);
+}
+
+:root[data-skin] .map-panel .btn--primary {
+  --skin-button-cap: 18px;
+}
+
+:root[data-skin] .map-panel .map-row {
+  flex-wrap: wrap;
+}
+
+/* The Hatch tab lays itself out by its own width (hatch.css): the frame gets
+   its own room on top of the original's 1160px, so the inside is as wide as
+   on the glass. */
+@media (width > 620px) {
+  :root[data-skin] .monsters-screen[data-tab="hatch"] {
+    width: min(1160px + 2 * var(--skin-edge), calc(100vw - 2 * var(--space-4)));
+  }
+
+  :root[data-skin] .monsters-screen--beside-panel[data-tab="hatch"] {
+    width: min(1160px + 2 * var(--skin-edge), calc(100vw - 300px - 4 * var(--space-4)));
+  }
+}
+
+@media (620px < width <= 1080px) {
+  :root[data-skin] .monsters-screen--beside-panel[data-tab="hatch"] {
+    width: min(1160px + 2 * var(--skin-edge), calc(100vw - 2 * var(--space-4)));
+  }
+}
+
+/* ── Phone (the phone layout's query, `phoneLayout.ts`) ─────────────────── */
+
+/* A thinner frame and a smaller sign and disc: the room goes to what is in
+   the window. */
+@media (width <= 620px), (height <= 500px) {
+  :root[data-skin="scrap"] .panel {
+    --skin-frame-width: 32px;
+    --skin-edge: 15px;
+    --skin-title-cap: 20px;
+    --skin-title-height: 38px;
+    --skin-title-lift: 28px;
+  }
+
+  :root[data-skin="flash"] .panel {
+    --skin-frame-width: 30px;
+    --skin-edge: 16px;
+    --skin-title-cap: 40px;
+    --skin-title-height: 40px;
+    --skin-title-lift: 30px;
+    --skin-title-pad: 5px;
+  }
+
+  :root[data-skin] .panel__title,
+  :root[data-skin] .map-panel .panel__title {
+    min-width: 130px;
+    font-size: 16px;
+  }
+
+  /* A window as wide as the screen keeps its disc on the screen. */
+  :root[data-skin] .panel__titlebar > .btn[aria-label^="Close"] {
+    right: calc(-1 * var(--skin-edge) + 2px);
+    width: 40px;
+    height: 40px;
+  }
+
+  /* Four tabs share a phone's width: their painted ends pinched. */
+  :root[data-skin] .panel .tabs {
+    gap: 2px;
+  }
+
+  :root[data-skin] .panel .tabs__tab {
+    --skin-tab-cap: 5px;
+
+    min-height: 38px;
+    padding: 2px 0 0;
+    letter-spacing: -0.02em;
+  }
+
+  :root[data-skin] .build-menu__tabs .tabs__tab {
+    font-size: min(var(--text-sm), 2.9vw);
+  }
+}

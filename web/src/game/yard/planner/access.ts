@@ -25,9 +25,12 @@ import { BaseMode } from "@/api/types";
  *
  * What is deliberately *not* here is the Flash client's rule that a damaged or
  * counting-down Yard Planner removed the entry (`BUILDINGINFO.as:99,111,118,125`).
- * Q5 drops it, so this function never reads a building's health, level,
- * fortification or countdown: `hasYardPlanner` asks whether the yard holds one,
- * full stop.
+ * Q5 drops it for damage, upgrades and fortifying. The one state that does
+ * count is the first build: owner report 2026-10-26, a Yard Planner still
+ * being built must not unlock the Blueprint view yet. `hasYardPlanner` asks
+ * whether the yard holds a finished one (level 1 or more; the yard model
+ * reports a running build countdown as level 0), and never reads health,
+ * fortification or an upgrade countdown.
  *
  * Pure on purpose: the yard scene passes its load type and whose yard it is,
  * and the rules keep their own tests.
@@ -50,12 +53,16 @@ export type PlannerAccess = (typeof PlannerAccess)[keyof typeof PlannerAccess];
  * Narrower than `Yard` so a test can ask without constructing a save.
  */
 export interface PlannerAccessYard {
-  readonly buildings: readonly { readonly type: number }[];
+  readonly buildings: readonly { readonly type: number; readonly level: number }[];
 }
 
-/** Whether the yard holds a Yard Planner, in whatever state. */
+/** Whether the yard holds a Yard Planner that has been built. */
 export const hasYardPlanner = (yard: PlannerAccessYard): boolean =>
-  yard.buildings.some((building) => building.type === YARD_PLANNER_TYPE);
+  yard.buildings.some((building) => building.type === YARD_PLANNER_TYPE && building.level >= 1);
+
+/** Whether the yard's only Yard Planner is still being built. */
+const yardPlannerBuilding = (yard: PlannerAccessYard): boolean =>
+  !hasYardPlanner(yard) && yard.buildings.some((building) => building.type === YARD_PLANNER_TYPE);
 
 /**
  * Whether the player may open the planner in this yard.
@@ -72,19 +79,22 @@ export const plannerAccess = (loadType: string, ownYard: boolean): PlannerAccess
 
 /** Why the Blueprint view is off in a yard with no Yard Planner. */
 export const BLUEPRINT_NEEDS_PLANNER = "Build a Yard Planner to unlock Blueprint view";
+/** Why it is off while the yard's Yard Planner is still being built (2026-10-26). */
+export const BLUEPRINT_PLANNER_BUILDING = "Blueprint view unlocks when your Yard Planner is finished";
 /** Why it is off in an outpost, which cannot build one (2026-09-30). */
 export const BLUEPRINT_NOT_IN_OUTPOSTS = "Blueprint view isn't available in outposts";
 
 /**
  * Why the planner's Blueprint view cannot be opened in this yard, or null
- * when it can: never in an outpost, and elsewhere only with a Yard Planner
- * (owner decision 2026-09-30).
+ * when it can: never in an outpost, and elsewhere only with a finished Yard
+ * Planner (owner decisions 2026-09-30 and 2026-10-26).
  */
 export const blueprintBlock = (
   yard: PlannerAccessYard & { readonly kind?: string },
 ): string | null => {
   if (yard.kind === "outpost") return BLUEPRINT_NOT_IN_OUTPOSTS;
-  return hasYardPlanner(yard) ? null : BLUEPRINT_NEEDS_PLANNER;
+  if (hasYardPlanner(yard)) return null;
+  return yardPlannerBuilding(yard) ? BLUEPRINT_PLANNER_BUILDING : BLUEPRINT_NEEDS_PLANNER;
 };
 
 /**

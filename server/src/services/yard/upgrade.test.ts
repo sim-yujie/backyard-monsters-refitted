@@ -346,3 +346,46 @@ describe("upgrade/cancel", () => {
     expect(reasonOf(() => planCancelUpgrade(upgrading(), 99))).toEqual([400, "badRequest"]);
   });
 });
+
+/**
+ * A main-yard Quake Tower (Inferno WP 6.1): its upgrade reads the Under Hall
+ * entry and is paid from the Inferno purse. Level 1 to 2 costs
+ * 1,250,000 / 750,000 / 500,000 Inferno.
+ */
+describe("a main-yard Inferno building", () => {
+  const QUAKE = 129;
+  const PURSE = { r1: 5_000_000, r2: 5_000_000, r3: 5_000_000, r4: 5_000_000 };
+  const CAPS = { r1max: 10_000_000, r2max: 10_000_000, r3max: 10_000_000, r4max: 10_000_000 };
+  const quakeYard = (underHall: number, iresources: Record<string, number> = { ...PURSE, ...CAPS }) => {
+    const save = yard({ type: "main", iresources, infernoStanding: { descentPassed: true, underHall } });
+    save.buildingdata!["4"] = { id: 4, t: QUAKE, x: 0, y: 0, l: 1 };
+    return save;
+  };
+
+  test("no Under Hall: 409 underHall", () => {
+    const err = refusal(() => planUpgradeAction(quakeYard(0), 4, NOW));
+    expect(err.status).toBe(409);
+    expect(err.data).toMatchObject({ reason: "underHall", underHall: { have: 0, need: 1 } });
+  });
+
+  test("charged from the purse, the surface untouched, the purse reported", () => {
+    const outcome = planUpgradeAction(quakeYard(1), 4, NOW);
+    expect(outcome).not.toHaveProperty("debit");
+    expect(outcome.report.cost).toEqual({ r1: 1_250_000, r2: 750_000, r3: 500_000, r4: 0 });
+    expect(outcome.slices.iresources).toMatchObject({ r1: 3_750_000, r2: 4_250_000, r3: 4_500_000, r4: 5_000_000 });
+  });
+
+  test("a purse short of the price: 409 shortfall, purse inferno", () => {
+    const err = refusal(() => planUpgradeAction(quakeYard(1, { r1: 0, r2: 0, r3: 0, r4: 0, ...CAPS }), 4, NOW));
+    expect(err.data).toMatchObject({ reason: "shortfall", purse: "inferno", shortfall: { r1: 1_250_000 } });
+  });
+
+  test("cancelling gives the step back to the purse", () => {
+    const started = planUpgradeAction(quakeYard(1), 4, NOW);
+    const save = quakeYard(1, started.slices.iresources as Record<string, number>);
+    save.buildingdata = started.slices.buildingdata;
+    const cancelled = planCancelUpgrade(save, 4);
+    expect(cancelled).not.toHaveProperty("credit");
+    expect(cancelled.slices.iresources).toMatchObject(PURSE);
+  });
+});

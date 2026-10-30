@@ -2,6 +2,7 @@ import { markAchievementsSeen, markSeenAction } from "@/api/achievements";
 import type { Onboarding } from "@/api/types";
 import { achievementsOpener } from "@/game/achievements/achievementsView";
 import { unlockInbox, type UnlockInbox } from "@/game/achievements/unlockInbox";
+import { emergencePlaying, onEmergencePlaying } from "@/game/inferno/emergenceHold";
 import { YardChangeReason, type YardChange } from "@/game/yard/YardStore";
 import { UnlockPopup } from "@/ui/achievements/UnlockPopup";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
@@ -19,7 +20,8 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  * no answer is tried again after the yard's next answer.
  *
  * Nothing comes up while Bob's guided start is still to run or running: the
- * cards wait for it to end, so none covers a tutorial step. The HUD's Shiny
+ * cards wait for it to end, so none covers a tutorial step. While Moloch's
+ * emergence plays (the Inferno cave, WP 1.10) the cards step aside. The HUD's Shiny
  * readout needs nothing here: the same answer's `credits` moves it.
  */
 
@@ -34,6 +36,7 @@ export class UnlockPopupDoor {
   private readonly inbox: UnlockInbox;
   private readonly send: typeof markAchievementsSeen;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribeEmergence: () => void;
   /** A `seen` call is out. */
   private confirming = false;
   /** The last `seen` got no answer: try again after the yard's next one. */
@@ -58,7 +61,9 @@ export class UnlockPopupDoor {
     });
     mounts.overlay.content.append(this.popup.element);
     this.popup.hold(guideOpen(mounts.store.save.onboarding));
+    this.popup.stepAside(emergencePlaying());
     this.unsubscribe = mounts.store.subscribe((change) => this.onStore(change));
+    this.unsubscribeEmergence = onEmergencePlaying((playing) => this.popup.stepAside(playing));
     // The load the yard opened with, then anything an earlier yard showed and never confirmed.
     inbox.add(mounts.store.save.achievements);
     this.popup.pump();
@@ -68,6 +73,7 @@ export class UnlockPopupDoor {
   destroy(): void {
     this.destroyed = true;
     this.unsubscribe();
+    this.unsubscribeEmergence();
     this.popup.destroy();
   }
 

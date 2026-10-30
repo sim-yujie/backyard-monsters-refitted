@@ -3,7 +3,14 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import alea from "alea";
 
 import { ATTACK_TIMEOUT } from "../base/isAttackActive.js";
-import { type BotNeighbourCandidate, findBotCandidates, pickBotNeighbours } from "./botNeighbours.js";
+import { neighbourLevelWindow } from "../maproom/v1/findOverworldNeighbours.js";
+import {
+  botLevelWindow,
+  type BotNeighbourCandidate,
+  findBotCandidates,
+  FLOOR_REACH,
+  pickBotNeighbours,
+} from "./botNeighbours.js";
 
 const NOW = 1_790_000_000;
 
@@ -112,5 +119,20 @@ describe("pickBotNeighbours (issue #236)", () => {
     expect(new Set(a).size).toBe(20);
     expect(a).not.toEqual(b);
     expect(pickBotNeighbours(bots, 20, alea("a")).map((bot) => bot.userid)).toEqual(a);
+  });
+});
+
+describe("botLevelWindow (no bot below level 15, owner 2026-10-23)", () => {
+  test("a new player under level 15 gets the nearest bots, 15-17; higher players keep their window from the floor up", () => {
+    // Level 3: the window is 1-10, with no bot in it.
+    expect(botLevelWindow(neighbourLevelWindow(3))).toEqual({ min: 15, max: 17 });
+    expect(botLevelWindow(neighbourLevelWindow(1))).toEqual({ min: 15, max: 17 });
+    // Level 10: 3-17.
+    expect(botLevelWindow(neighbourLevelWindow(10))).toEqual({ min: 15, max: 17 });
+    // Level 14: 7-21.
+    expect(botLevelWindow(neighbourLevelWindow(14))).toEqual({ min: 15, max: 21 });
+    // Level 25: 18-32, as before.
+    expect(botLevelWindow(neighbourLevelWindow(25))).toEqual({ min: 18, max: 32 });
+    expect(FLOOR_REACH).toBe(2);
   });
 });

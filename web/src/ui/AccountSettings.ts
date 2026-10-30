@@ -1,6 +1,7 @@
 /**
  * The account settings dialog: change username and the Shiny Lock switch,
- * opened from the account menu.
+ * opened from the account menu. Its "Game effects" and "Building art" parts
+ * are kept in this browser only: no server.
  *
  * Both are server rules this only fronts. A rename keeps the game's username
  * rules and a long cooldown (`changeUsername.ts`); Shiny Lock makes the server
@@ -11,6 +12,9 @@ import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
+import { saveClassicLook, savedClassicLook } from "@/game/classicLook";
+import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
+import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
 import { Popup } from "@/ui/Popup";
 
 export const SETTINGS_TEXT = {
@@ -33,6 +37,31 @@ export const SETTINGS_TEXT = {
   blockedLoadFailed: "Could not load your blocked players.",
   unblock: "Unblock",
   unblockFailed: "Could not unblock that player. Try again.",
+  effectsTitle: "Game effects",
+  shakeLabel: "Screen shake",
+  shakeHint: "The screen jolts on big hits in a fight.",
+  shakeReducedHint: "Off, because your device asks for less motion.",
+  qualityLabel: "Effects",
+  qualityFull: "Full",
+  qualityLow: "Low",
+  qualityHint: "Low draws fewer sparks and glows, for slower phones. Phones start on Low.",
+  lookTitle: "Look and sound",
+  lookLabel: "Style",
+  lookModern: "Modern",
+  lookClassic: "Classic (original Flash)",
+  lookHint: "Classic shows and plays the game as the original did.",
+  lookSaved: "Saved. Reload the page to see the change.",
+  lookFailed: "Could not save this in your browser. Check that site data is allowed.",
+  downloadLabel: "Quality",
+  downloadHigh: "High",
+  downloadMedium: "Medium",
+  downloadLow: "Low",
+  downloadHint: {
+    high: "Sharpest monsters. Music plays at once.",
+    medium: "Lighter monsters and music. Music waits until you turn it on.",
+    low: "For slow internet: lightest monsters, music off, slower map updates.",
+  },
+  downloadSaved: "Saved. Monsters already on screen change after a reload.",
 } as const;
 
 /** "You can change your username again on 3 Mar 2027." for the cooldown line. */
@@ -70,12 +99,20 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
 
   fetchAccount().then(
     (account) => {
-      body.replaceChildren(usernameSection(account, options), shinySection(account), privacySection(account.privacy));
+      body.replaceChildren(
+        usernameSection(account, options),
+        shinySection(account),
+        privacySection(account.privacy),
+        lookSection(),
+        effectsSection(),
+      );
       popup.focusFirst();
     },
     () => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
+      // Kept in this browser, so they work without the server.
+      body.append(lookSection(), effectsSection());
     },
   );
   return popup;
@@ -245,6 +282,150 @@ const privacyToggle = (
   return section;
 };
 
+/** Whether the device asks for less motion: the shake stays off then, whatever the switch says. */
+const osReducedMotion = (): boolean =>
+  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Game effects (beta.5 tower attack effects): the "Screen shake" switch and
+ * "Effects: Full / Low"; and "Quality: High / Medium / Low", how much the game
+ * downloads (`game/quality.ts`, owner 28 Oct 2026).
+ */
+const effectsSection = (): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const heading = document.createElement("h3");
+  heading.className = "account-settings__heading";
+  heading.textContent = SETTINGS_TEXT.effectsTitle;
+
+  const shakeRow = document.createElement("label");
+  shakeRow.className = "account-settings__toggle";
+  const shake = document.createElement("input");
+  shake.type = "checkbox";
+  shake.id = "settings-screen-shake";
+  const still = osReducedMotion();
+  shake.checked = !still && screenShakeOn();
+  shake.disabled = still;
+  const shakeWords = document.createElement("span");
+  shakeWords.textContent = SETTINGS_TEXT.shakeLabel;
+  shakeRow.append(shake, shakeWords);
+  const shakeHint = document.createElement("p");
+  shakeHint.className = "field__hint";
+  shakeHint.id = "settings-screen-shake-hint";
+  shakeHint.textContent = still ? SETTINGS_TEXT.shakeReducedHint : SETTINGS_TEXT.shakeHint;
+  shake.setAttribute("aria-describedby", shakeHint.id);
+  shake.addEventListener("change", () => setScreenShake(shake.checked));
+
+  const qualityRow = document.createElement("label");
+  qualityRow.className = "account-settings__toggle";
+  const qualityWords = document.createElement("span");
+  qualityWords.textContent = SETTINGS_TEXT.qualityLabel;
+  const quality = document.createElement("select");
+  quality.id = "settings-effects-quality";
+  quality.className = "account-settings__select";
+  for (const [value, text] of [
+    ["full", SETTINGS_TEXT.qualityFull],
+    ["low", SETTINGS_TEXT.qualityLow],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    quality.append(option);
+  }
+  quality.value = effectsQuality();
+  qualityRow.append(qualityWords, quality);
+  const qualityHint = document.createElement("p");
+  qualityHint.className = "field__hint";
+  qualityHint.id = "settings-effects-quality-hint";
+  qualityHint.textContent = SETTINGS_TEXT.qualityHint;
+  quality.setAttribute("aria-describedby", qualityHint.id);
+  quality.addEventListener("change", () => setEffectsQuality(quality.value as EffectsQuality));
+
+  section.append(heading, shakeRow, shakeHint, qualityRow, qualityHint, ...downloadRow());
+  return section;
+};
+
+/** "Quality: High / Medium / Low", with a line saying what the chosen level does. */
+const downloadRow = (): HTMLElement[] => {
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.downloadLabel;
+  const select = document.createElement("select");
+  select.id = "settings-quality";
+  select.className = "account-settings__select";
+  for (const [value, text] of [
+    ["high", SETTINGS_TEXT.downloadHigh],
+    ["medium", SETTINGS_TEXT.downloadMedium],
+    ["low", SETTINGS_TEXT.downloadLow],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    select.append(option);
+  }
+  select.value = downloadQuality();
+  row.append(words, select);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-quality-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.downloadHint[select.value as Quality];
+  select.setAttribute("aria-describedby", hint.id);
+  select.addEventListener("change", () => {
+    const level = select.value as Quality;
+    setQuality(level);
+    hint.textContent = `${SETTINGS_TEXT.downloadHint[level]} ${SETTINGS_TEXT.downloadSaved}`;
+  });
+  return [row, hint];
+};
+
+/**
+ * Look and sound (owner, 28 Oct 2026): Modern, or Classic, the game as Flash
+ * looked and sounded wherever Flash had a version (`game/classicLook.ts`).
+ * The yard is already drawn, so the choice shows from the next load.
+ */
+const lookSection = (): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const heading = document.createElement("h3");
+  heading.className = "account-settings__heading";
+  heading.textContent = SETTINGS_TEXT.lookTitle;
+
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.lookLabel;
+  const look = document.createElement("select");
+  look.id = "settings-look";
+  look.className = "account-settings__select";
+  for (const [value, text] of [
+    ["modern", SETTINGS_TEXT.lookModern],
+    ["classic", SETTINGS_TEXT.lookClassic],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    look.append(option);
+  }
+  look.value = savedClassicLook() ? "classic" : "modern";
+  row.append(words, look);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-look-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.lookHint;
+  look.setAttribute("aria-describedby", hint.id);
+  look.addEventListener("change", () => {
+    const saved = saveClassicLook(look.value === "classic");
+    hint.textContent = saved ? SETTINGS_TEXT.lookSaved : SETTINGS_TEXT.lookFailed;
+    hint.classList.toggle("field__hint--error", !saved);
+  });
+
+  section.append(heading, row, hint);
+  return section;
+};
+
 /** Privacy: the two switches and the blocked players with Unblock (friends WP9). */
 const privacySection = (privacy: PrivacySettings): HTMLElement => {
   const section = document.createElement("div");
@@ -278,7 +459,7 @@ const blockedSection = (): HTMLElement => {
   const note = document.createElement("p");
   note.className = "field__hint";
   note.setAttribute("aria-live", "polite");
-  note.textContent = "Loading…";
+  note.textContent = "Loadingâ€¦";
   section.append(heading, list, note);
 
   const show = (blocked: BlockedPlayer[]): void => {

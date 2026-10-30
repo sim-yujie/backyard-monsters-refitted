@@ -40,9 +40,9 @@ import { yardRefusedErr } from "./yardErrors.js";
  * (`bdg_chamber_damaged`) or a champion is in the cage
  * (`bdg_chamber_freeze`).
  *
- * **Eggs** (owner, 2026-10-20; `champion.ts`): an egg cannot be frozen, and
- * no basic champion thaws while an egg is in the cage (`409 eggInCage`):
- * cancel the egg first. Krallen is beside the cage either way, so neither
+ * **Eggs** (only in older saves, until the catch-up hatches them; `champion.ts`):
+ * an egg cannot be frozen, and no basic champion thaws while an egg is in the
+ * cage (`409 eggInCage`). Krallen is beside the cage either way, so neither
  * rule touches him.
  *
  * **Storage** is unchanged from the original: the `champion` list is the
@@ -173,7 +173,7 @@ export const planChampionThaw = (save: ChampionSave, type: number, now: number) 
     throw yardRefusedErr("championInCage", "Freeze the champion in your cage before you thaw another.");
   }
   if (championEntry(type)?.kind !== "special" && eggIndex(champions) >= 0) {
-    throw eggInCageErr("Your cage holds an egg. Cancel it before you thaw a champion.");
+    throw eggInCageErr("Your cage holds an egg. Wait for it to hatch.");
   }
   const index = champions.findIndex(
     (champion) =>

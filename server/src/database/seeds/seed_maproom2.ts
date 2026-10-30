@@ -84,7 +84,7 @@ const NEXT_USER_BASEID = `SELECT nextval('bym.user_baseid_seq') AS baseid`;
     const { given } = await giveSeededYards(orm.em.fork(), {
       rng: mulberry32(Date.now() >>> 0),
       now: Math.floor(Date.now() / 1000),
-      daysPerLevel: botConfig().daysPerLevel,
+      pace: botConfig().pace,
     });
     logger.info(`Gave ${given.length} seeded players a yard`);
 

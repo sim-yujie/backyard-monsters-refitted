@@ -1,4 +1,4 @@
-import { kindOf } from "../buildingCosts";
+import { kindOf, type YardKind } from "../buildingCosts";
 import type { PlanNode } from "./placement";
 import { typeName } from "./summary";
 
@@ -64,8 +64,8 @@ const CATEGORY_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 /** The category a chip or a header would file a type under. */
-export const kindFor = (type: number): string => {
-  const kind = kindOf(type);
+export const kindFor = (type: number, yardKind: YardKind = "main"): string => {
+  const kind = kindOf(type, yardKind);
   return CATEGORY_KINDS.has(kind) ? kind : OTHER_KIND;
 };
 
@@ -162,6 +162,7 @@ export const searchNodes = (
   nodes: Iterable<PlanNode>,
   query: string,
   kinds: ReadonlySet<string>,
+  yardKind: YardKind = "main",
 ): SearchGroup[] => {
   const needle = query.trim().toLowerCase();
   const byId = DIGITS.test(needle);
@@ -170,10 +171,10 @@ export const searchNodes = (
   for (const node of nodes) {
     if (node.fixed) continue;
 
-    const kind = kindFor(node.type);
+    const kind = kindFor(node.type, yardKind);
     if (kinds.size > 0 && !kinds.has(kind)) continue;
 
-    const name = typeName(node.type);
+    const name = typeName(node.type, yardKind);
     if (needle.length > 0) {
       const matches =
         name.toLowerCase().includes(needle) || (byId && String(node.type).includes(needle));
@@ -210,13 +211,15 @@ export const searchNodes = (
  * Counted over every node rather than over the matches, because a chip's count
  * is what it would show if it were the only filter — a badge that changed as
  * the query was typed would be telling the player about the query instead of
- * about the yard.
+ * about the yard. `yardKind` must match the one `searchNodes` files by, or a
+ * type only the Inferno table has (the Inferno Cannon) counts under `other`
+ * while its stack sits under Towers.
  */
-export const countByKind = (nodes: Iterable<PlanNode>): Map<string, number> => {
+export const countByKind = (nodes: Iterable<PlanNode>, yardKind: YardKind = "main"): Map<string, number> => {
   const counts = new Map<string, number>();
   for (const node of nodes) {
     if (node.fixed) continue;
-    const kind = kindFor(node.type);
+    const kind = kindFor(node.type, yardKind);
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
   return counts;

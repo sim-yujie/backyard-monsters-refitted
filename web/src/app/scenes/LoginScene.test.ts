@@ -15,7 +15,6 @@ const auth = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/auth", () => auth);
-vi.mock("../App", () => ({ SceneName: { YARD: "yard" } }));
 
 const { LoginScene } = await import("./LoginScene");
 
@@ -113,13 +112,14 @@ describe("LoginScene sign-up", () => {
     expect($<HTMLInputElement>("#signup-confirm").autocomplete).toBe("new-password");
   });
 
-  it("keeps the fields, then the submit button, then the way back, in tab order", () => {
+  it("keeps the short way back, the fields, the submit button, then the way back, in tab order", () => {
     open();
     button("Create account").click();
     const order = [...root.querySelectorAll("input, button")]
       .filter((element) => !element.closest(".panel__titlebar, .login-footer, [hidden]"))
       .map((element) => element.id || element.textContent);
     expect(order).toEqual([
+      "Sign in",
       "signup-username",
       "signup-email",
       "signup-password",
@@ -247,6 +247,32 @@ describe("LoginScene sign-up", () => {
   });
 });
 
+describe("LoginScene way back from sign-up", () => {
+  it("puts Have an account? Sign in at the top of the form", () => {
+    open();
+    button("Create account").click();
+    const line = $(".login-form").firstElementChild as HTMLElement;
+    expect(line.classList.contains("login-form__have-account")).toBe(true);
+    expect(line.textContent).toBe("Have an account?Sign in");
+  });
+
+  it("goes back to sign-in from the top line, keeping the email", () => {
+    open();
+    button("Create account").click();
+    type("#signup-email", "zz@example.com");
+    button("Sign in").click();
+    expect($("h2").textContent).toBe("Sign in");
+    expect($<HTMLInputElement>("#email").value).toBe("zz@example.com");
+    expect(document.activeElement).toBe($("#password"));
+  });
+
+  it("lets the login screen scroll rather than cut a form off", () => {
+    open();
+    expect($(".scene-centre").classList.contains("scene-centre--login")).toBe(true);
+    expect($(".scene-centre--login > .login-stack > .panel--login")).not.toBeNull();
+  });
+});
+
 describe("LoginScene sign-up launch extras", () => {
   it("says under the button what creating an account agrees to, with both links", () => {
     open();
@@ -262,7 +288,7 @@ describe("LoginScene sign-up launch extras", () => {
     expect(links.every((link) => link.target === "_blank" && link.rel === "noopener")).toBe(true);
   });
 
-  it("links Terms, Privacy, Credits and the Patreon under the panel, in new tabs", () => {
+  it("links Terms, Privacy, Credits, the Patreon and the Discord under the panel, in new tabs", () => {
     open();
 
     const links = [...$(".login-footer").querySelectorAll("a")];
@@ -271,9 +297,10 @@ describe("LoginScene sign-up launch extras", () => {
       ["Privacy Policy", "/privacy"],
       ["Credits", "/credits"],
       ["Support us on Patreon", "https://www.patreon.com/c/TheMonsterLab"],
+      ["Discord", "https://discord.gg/wthryBRZHz"],
     ]);
     expect(links.every((link) => link.target === "_blank")).toBe(true);
-    expect(links.at(-1)?.rel).toBe("noopener noreferrer");
+    expect(links.slice(-2).map((link) => link.rel)).toEqual(["noopener noreferrer", "noopener noreferrer"]);
   });
 
   it("flags a reserved name as it is typed", () => {
@@ -389,7 +416,7 @@ describe("LoginScene sign-up — the dev-only test yard box (#217)", () => {
     const order = [...root.querySelectorAll("input, button")]
       .filter((element) => !element.closest(".panel__titlebar, [hidden]"))
       .map((element) => element.id || element.textContent);
-    expect(order.slice(3, 5)).toEqual(["signup-confirm", "signup-sandbox-start"]);
+    expect(order.slice(4, 6)).toEqual(["signup-confirm", "signup-sandbox-start"]);
   });
 
   it("left unticked, the sign-up does not ask for the test yard", async () => {

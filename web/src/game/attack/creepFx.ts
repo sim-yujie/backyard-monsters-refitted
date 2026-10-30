@@ -405,6 +405,8 @@ export class CreepFx {
     private readonly host: CreepFxHost,
     private readonly reducedMotion = false,
     private readonly juiced = false,
+    /** Whether hits show their numbers: new with the revamp (#68), so not in the Classic look. */
+    private readonly numbers = true,
   ) {
     for (const layer of [this.root, this.fire, this.rockets, this.smoke, this.labels]) {
       layer.eventMode = "none";
@@ -491,6 +493,7 @@ export class CreepFx {
    * not shown, as Flash dropped them.
    */
   number(tick: number, key: string, follow: number, amount: number, at: Point, kind: NumberKind): void {
+    if (!this.numbers) return;
     const shown = Math.max(1, Math.round(Math.abs(amount)));
     if (this.juiced) {
       this.bigNumber(tick, key, follow, shown, at, kind);

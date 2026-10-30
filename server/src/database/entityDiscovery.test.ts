@@ -50,10 +50,12 @@ describe("entity discovery", () => {
         persona: { type: "text", nullable: false },
         level: { type: "int", nullable: false },
         level_since: { type: "timestamptz", nullable: false },
+        quiet_since: { type: "timestamptz", nullable: true },
         state: { type: "text", nullable: false },
         created_at: { type: "timestamptz", nullable: false },
         retired_at: { type: "timestamptz", nullable: true },
         grow_drops: { type: "int", nullable: false },
+        yard_version: { type: "int", nullable: false },
       });
       expect(columns("BotJob")).toEqual({
         id: { type: "bigserial", nullable: false },
@@ -116,6 +118,22 @@ describe("entity discovery", () => {
       expect(columns("User").friend_requests_off).toEqual({ type: "boolean", nullable: false });
       // The attack cap's dropped neighbours (issue #247), against its migration.
       expect(columns("Maproom").dropped_neighbours).toEqual({ type: "jsonb", nullable: false });
+      // The Inferno progress row (docs/design/inferno.md §3.1), against its migration.
+      expect(columns("InfernoProgress")).toEqual({
+        userid: { type: "int", nullable: false },
+        emergence_level: { type: "smallint", nullable: false },
+        emergence_last_at: { type: "timestamptz", nullable: true },
+        descent_destroyed: { type: "jsonb", nullable: false },
+        descent_best: { type: "jsonb", nullable: false },
+        descent_yards: { type: "jsonb", nullable: false },
+        descent_passed_at: { type: "timestamptz", nullable: true },
+        inferno_baseid: { type: "varchar(255)", nullable: true },
+        korath_unlocked_at: { type: "timestamptz", nullable: true },
+        korath_notice_at: { type: "timestamptz", nullable: true },
+        popups_seen: { type: "jsonb", nullable: false },
+        created_at: { type: "timestamptz", nullable: false },
+        updated_at: { type: "timestamptz", nullable: false },
+      });
     } finally {
       await orm.close();
     }

@@ -20,6 +20,7 @@ const item = (type: string, mine = false): MailItem => ({
   invite: null,
   defenceId: null,
   byUserId: null,
+  attack: null,
 });
 
 describe("truceState", () => {

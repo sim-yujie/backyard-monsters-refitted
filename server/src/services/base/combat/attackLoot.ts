@@ -19,7 +19,7 @@ import type { EntryHoused } from "../../yard/attackRoster.js";
 import { creditResources, type CreditResult, type CreditSave } from "../../yard/credit.js";
 import { storageCap } from "../economy/resourceBudget.js";
 import { parseFlingLog } from "../attackCheckpoint.js";
-import type { AttackSession, ChampionBrains } from "../attackSession.js";
+import type { AttackSession, ChampionBrains, ChampionHealth } from "../attackSession.js";
 import { catapultLevelOf } from "./bombSpend.js";
 
 /**
@@ -174,6 +174,13 @@ export interface LootAttacker {
    * fights with. Absent, every champion fights with none.
    */
   brains?: ChampionBrains | null;
+  /**
+   * The attacker's champions' health as the attack froze it at launch (the
+   * session's `championHealth`): the only health the replay sends them out
+   * at, and a champion with none left is not sent. Absent, every champion
+   * goes out at full health, as a session minted before it was fought.
+   */
+  health?: ChampionHealth | null;
 }
 
 const bombById: ReadonlyMap<string, BombStats> = new Map(BOMBS.map((bomb) => [bomb.id, bomb]));
@@ -257,22 +264,31 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
     // nor `fb` fights at its level alone.
     // Its Mode (issue #220) is the attacker's choice for this attack and rides
     // along as sent; a log with none fights it as Hybrid.
-    // Its brain (issue #219) is never the log's: the session's frozen copy is
-    // stamped on, or none.
+    // Its brain (issue #219) and its health are never the log's: the
+    // session's frozen copies are stamped on, and one with no health left at
+    // launch stays home (`ATTACK.as:245`, only a champion with `hp > 0`).
     let champion: FlungChampion | undefined;
     const stored = event.champion ? owned.get(event.champion.t) : undefined;
-    if (event.champion && stored !== undefined && !championsFlung.has(event.champion.t)) {
+    if (
+      event.champion &&
+      stored !== undefined &&
+      !championsFlung.has(event.champion.t) &&
+      (!attacker.health || (attacker.health[String(event.champion.t)] ?? 0) > 0)
+    ) {
       championsFlung.add(event.champion.t);
       const { pl, fb, s } = event.champion;
-      champion = withFrozenBrain(
-        {
-          t: event.champion.t,
-          l: Math.min(event.champion.l, stored.l),
-          ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
-          ...(fb !== undefined && { fb: Math.max(0, Math.min(fb, stored.fb)) }),
-          ...(s !== undefined && { s }),
-        },
-        attacker.brains
+      champion = withFrozenHealth(
+        withFrozenBrain(
+          {
+            t: event.champion.t,
+            l: Math.min(event.champion.l, stored.l),
+            ...(pl !== undefined && { pl: Math.max(0, Math.min(pl, stored.pl)) }),
+            ...(fb !== undefined && { fb: Math.max(0, Math.min(fb, stored.fb)) }),
+            ...(s !== undefined && { s }),
+          },
+          attacker.brains
+        ),
+        attacker.health
       );
     }
 
@@ -301,16 +317,39 @@ export const withFrozenBrain = (champion: FlungChampion, brains: ChampionBrains 
 };
 
 /**
- * A log whose every flung champion carries the frozen brain and nothing else
- * (`withFrozenBrain`), for a replay that does not cut the log down first.
+ * A flung champion at the health the attack froze at launch: the session's
+ * figure for its type, whatever the log said, as Flash sent it out at its
+ * stored `hp` (`ATTACK.as:532`). With no frozen health (a session minted
+ * before it) it goes out at full health, as its client fought it.
+ *
+ * @param champion - The champion as the log flings it.
+ * @param health - The session's `championHealth`, if any.
+ */
+export const withFrozenHealth = (champion: FlungChampion, health: ChampionHealth | null | undefined): FlungChampion => {
+  const { hp: _sent, ...rest } = champion;
+  const hp = health?.[String(champion.t)];
+  return hp !== undefined ? { ...rest, hp } : rest;
+};
+
+/**
+ * A log whose every flung champion carries the frozen brain and health and
+ * nothing else (`withFrozenBrain`, `withFrozenHealth`), for a replay that
+ * does not cut the log down first.
  *
  * @param log - The log as sent.
  * @param brains - The session's `championBrains`, if any.
+ * @param health - The session's `championHealth`, if any.
  */
-export const withFrozenBrains = (log: FlingLog, brains: ChampionBrains | null | undefined): FlingLog => ({
+export const withFrozenChampions = (
+  log: FlingLog,
+  brains: ChampionBrains | null | undefined,
+  health?: ChampionHealth | null
+): FlingLog => ({
   ...log,
   events: log.events.map((event) =>
-    event.kind === "fling" && event.champion ? { ...event, champion: withFrozenBrain(event.champion, brains) } : event
+    event.kind === "fling" && event.champion
+      ? { ...event, champion: withFrozenHealth(withFrozenBrain(event.champion, brains), health) }
+      : event
   ),
 });
 

@@ -1,0 +1,44 @@
+/* ── An attack notice's numbers (`attackNotice.ts`) ────────────────────────
+ * "Bramble attacked your yard" on its own line, then the broken wall with the
+ * damage and a pile per resource taken, wrapping as a row of chips would. In
+ * the bell, the away line and the mailbox (less-text job 3).
+ */
+.attack-notice {
+  display: block;
+}
+
+.attack-notice + .attack-notice,
+.attack-notice + .attack-notice__rest {
+  margin-top: var(--space-1);
+}
+
+.attack-notice__rest {
+  display: block;
+}
+
+.attack-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin-top: 2px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.attack-stats .res-amount {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The mailbox: the numbers under the notice's subject, and in its list row. */
+.mail-message__text--attack {
+  white-space: normal;
+}
+
+.mail-row__preview--attack .attack-stats {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  margin-top: 0;
+  font-weight: 400;
+}

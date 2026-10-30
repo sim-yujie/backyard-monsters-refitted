@@ -209,11 +209,11 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
       order = Math.max(order, at) + 1;
 
       const plannable =
-        plannableType(node.type) &&
+        plannableType(node.type, plan.kind) &&
         !node.busy &&
         !node.damaged &&
         wanted > node.level &&
-        wanted <= maxLevel(node.type);
+        wanted <= maxLevel(node.type, plan.kind);
 
       if (!plannable) plansDropped++;
       else if (!node.plan || node.plan.level !== wanted || node.plan.order !== at) {

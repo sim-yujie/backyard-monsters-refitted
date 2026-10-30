@@ -11,16 +11,18 @@ import { repairActions } from "@/api/yardRepair";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
 import type { RecordedTest } from "@/game/baiter/testHistory";
 import { artFolder, resolveArt } from "@/game/yard/buildingArt";
-import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES } from "@/game/yard/buildingCosts";
-import { HOUSING_TYPE, housingBuildings } from "@/game/monsters/housing";
+import { maxLevel, OUTPOST_CORE_TYPE, WALL_TYPES, type YardKind } from "@/game/yard/buildingCosts";
+import { housingBuildings, housingTypeOf } from "@/game/monsters/housing";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { SITE_NAME, siteOfType } from "@/game/siege/siege";
 import { harvesterNow, isHarvester } from "@/game/yard/harvest";
 import type { RecycleOffer } from "@/game/yard/recycle";
-import { NEED_MORE_SILOS } from "@/game/yard/storage";
+import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { progressFraction } from "@/game/yard/jobs";
 import { repairOffer, type RepairOffer } from "@/game/yard/repair";
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import { typeName } from "@/game/yard/planner/summary";
+import { hallWord } from "./BuildMenu";
 import {
   actionKey,
   YardChangeReason,
@@ -34,7 +36,15 @@ import { icon } from "@/ui/icons";
 import { HousingJuice } from "@/ui/monsters/HousingJuice";
 import { HousingView } from "@/ui/monsters/HousingView";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
-import { costAmounts, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
+import { gameIcon, iconAmount, type GameIconName } from "@/ui/gameIcon";
+import {
+  costAmounts,
+  RESOURCE_KEYS,
+  resourceAmount,
+  resourceIcon,
+  type ResourceIconOptions,
+} from "@/ui/resourceIcon";
+import { isSurfaceInferno, purseFunds } from "@/game/yard/surfaceInferno";
 import { costFactChips } from "./costFactChips";
 import {
   jobOffer,
@@ -48,12 +58,13 @@ import {
   type UpgradeGate,
   type UpgradeOffer,
 } from "./buildingActions";
-import { buildingHealthLabel, buildingInfo, type InfoValue } from "./buildingInfo";
+import { buildingHealthLabel, buildingInfo, unlockText, type InfoRow, type InfoValue } from "./buildingInfo";
+import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { BaiterPanel } from "./BaiterPanel";
 import { BunkerPanel } from "./BunkerPanel";
 import { ChamberPanel } from "./ChamberPanel";
 import { ChampionPanel } from "./ChampionPanel";
-import { withChampionsHealed } from "@/game/yard/championModel";
+import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE, withChampionsHealed } from "@/game/yard/championModel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
@@ -159,6 +170,20 @@ const SPEEDUP_LABEL: Readonly<Record<SpeedupItem, string>> = {
 
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
 
+/** The Champion Cage's and Chamber's two tabs: its champion(s), then the building's own card. */
+type CageTab = "champion" | "building";
+
+const CAGE_TABS: ReadonlyArray<readonly [CageTab, string]> = [
+  ["champion", "Champion"],
+  ["building", "Building"],
+];
+
+/** A building that opens on its champions: the cage on its one, the chamber on all it holds. */
+type ChampionHome = "cage" | "chamber";
+
+/** The first tab's word: the cage holds one champion, the chamber several. */
+const CHAMPION_TAB: Readonly<Record<ChampionHome, string>> = { cage: "Champion", chamber: "Champions" };
+
 /** The live parts of the job block, refreshed every second without a redraw. */
 interface JobRefs {
   readonly countdown: HTMLElement;
@@ -177,6 +202,8 @@ export class BuildingPanel {
   private readonly swatch: HTMLElement;
   private readonly info: HTMLDListElement;
   private readonly unlocks: HTMLElement;
+  /** The info rows the next level changes, drawn beside Upgrade; none when there is no upgrade to offer. */
+  private gains: readonly InfoRow[] = [];
   private readonly actions: HTMLElement;
   /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
   private readonly bunkerSlot: HTMLElement;
@@ -186,6 +213,14 @@ export class BuildingPanel {
   /** Holds the Champion Cage's or Chamber's controls while they are open (`ChampionPanel.ts`, `ChamberPanel.ts`). */
   private readonly championSlot: HTMLElement;
   private champion: ChampionPanel | ChamberPanel | null = null;
+  /**
+   * A built Champion Cage on the own yard opens straight on its champion
+   * (owner, 28 Oct: no second click), in a wider panel; the building's own
+   * card (upgrade, repair, details) is the second tab. The Champion Chamber
+   * does the same with its frozen champions (owner, 28 Oct: "the same treatment").
+   */
+  private readonly cageTabs: HTMLElement;
+  private cageTab: CageTab = "champion";
   private readonly status: HTMLElement;
   /** A Housing's level chip beside the title ("Level 6 · max"). */
   private readonly chip: HTMLElement;
@@ -265,6 +300,28 @@ export class BuildingPanel {
     this.championSlot.className = "building-panel__champion";
     this.championSlot.hidden = true;
 
+    this.cageTabs = document.createElement("div");
+    this.cageTabs.className = "tabs building-panel__tabs";
+    this.cageTabs.setAttribute("role", "tablist");
+    this.cageTabs.setAttribute("aria-label", "Champion Cage");
+    this.cageTabs.hidden = true;
+    for (const [tab, label] of CAGE_TABS) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tabs__tab building-panel__tab";
+      button.dataset["tab"] = tab;
+      button.setAttribute("role", "tab");
+      button.textContent = label;
+      button.addEventListener("click", () => this.showCageTab(tab));
+      this.cageTabs.append(button);
+    }
+    // Two tabs: either arrow moves to the other one.
+    this.cageTabs.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      this.showCageTab(this.cageTab === "champion" ? "building" : "champion");
+    });
+
     this.status = document.createElement("p");
     this.status.className = "building-panel__status";
     this.status.setAttribute("role", "status");
@@ -325,6 +382,7 @@ export class BuildingPanel {
     this.details.append(summary, this.facts);
 
     this.panel.setContent(
+      this.cageTabs,
       this.blurb,
       this.kind,
       this.info,
@@ -366,6 +424,7 @@ export class BuildingPanel {
       this.closeJuice();
       this.toggleMore(false);
       this.detailsShown = false;
+      this.cageTab = "champion";
     }
     this.building = building;
     if (this.isHousing(building)) {
@@ -383,6 +442,9 @@ export class BuildingPanel {
       guideBus.emit("screen", { id: GuideScreen.BUILDING, root: this.element, header: this.panel.titlebar });
       if (this.repairView) {
         guideBus.emit("screen", { id: GuideScreen.REPAIR, root: this.element, header: this.panel.titlebar });
+      }
+      if (this.champion instanceof ChampionPanel) {
+        guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
       }
     }
   }
@@ -431,18 +493,85 @@ export class BuildingPanel {
     this.renderInfo(building);
     this.renderHousing(building);
     this.renderActions(building);
+    this.renderCage(building);
     this.bunker?.show();
     this.champion?.show();
     this.renderDetails(building);
   }
 
+  /** A built cage or chamber on the own yard: always on its champions, with the building a tab away. */
+  private championHome(building: YardBuilding): ChampionHome | null {
+    if (this.yard === undefined || building.level <= 0) return null;
+    if (building.type === CHAMPION_CAGE_TYPE) return "cage";
+    if (building.type === CHAMPION_CHAMBER_TYPE) return "chamber";
+    return null;
+  }
+
+  /**
+   * The cage's or chamber's tabs and which half shows: the champions, or the
+   * plain card's kind line, numbers, actions and Details. The champions'
+   * window is made here, so clicking the building is all it takes.
+   */
+  private renderCage(building: YardBuilding): void {
+    const store = this.yard?.store;
+    const home = store ? this.championHome(building) : null;
+    const on = home !== null && store !== undefined;
+    this.element.classList.toggle("building-panel--cage", on);
+    this.cageTabs.hidden = !on;
+    if (!on) {
+      delete this.element.dataset["cageTab"];
+      return;
+    }
+    if (!this.champion) {
+      this.champion = home === "cage" ? new ChampionPanel({ store }) : new ChamberPanel({ store });
+      this.championSlot.append(this.champion.element);
+    }
+    this.cageTabs.setAttribute("aria-label", home === "cage" ? "Champion Cage" : "Champion Chamber");
+    const first = this.cageTabs.querySelector<HTMLElement>('[data-tab="champion"]');
+    if (first) first.textContent = CHAMPION_TAB[home];
+    const tab = this.cageTab;
+    this.element.dataset["cageTab"] = tab;
+    for (const button of this.cageTabs.querySelectorAll<HTMLButtonElement>(".building-panel__tab")) {
+      const selected = button.dataset["tab"] === tab;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    }
+    // A cage or chamber that needs repair says so on its Building tab.
+    const repair = repairOffer(building.id, store.save, store.credits, store.now()) !== null;
+    this.cageTabs.querySelector<HTMLElement>('[data-tab="building"]')?.classList.toggle("building-panel__tab--alert", repair);
+    const onChampion = tab === "champion";
+    this.championSlot.hidden = !onChampion;
+    this.kind.hidden = onChampion;
+    if (onChampion) {
+      this.info.hidden = true;
+      this.unlocks.hidden = true;
+      this.actions.hidden = true;
+    }
+    this.details.hidden = onChampion;
+  }
+
+  private showCageTab(tab: CageTab): void {
+    if (this.cageTab === tab) return;
+    this.cageTab = tab;
+    this.render();
+    if (tab === "champion" && this.champion instanceof ChampionPanel) {
+      guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
+    }
+    this.cageTabs.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.focus();
+  }
+
   /**
    * A Housing on the own yard: the Housing panel (#170), not the plain card.
    * Still on its first build, it has no working window yet (#281): the plain
-   * card's construction info shows instead, as for any other building.
+   * card's construction info shows instead, as for any other building. On the
+   * Inferno yard it is a Compound (the Housing Bunker type, Inferno WP 2.4).
    */
   private isHousing(building: YardBuilding): boolean {
-    return building.type === HOUSING_TYPE && this.yard !== undefined && building.level > 0;
+    return (
+      this.yard !== undefined &&
+      building.type === housingTypeOf(this.yard.store.save) &&
+      building.level > 0
+    );
   }
 
   /**
@@ -479,7 +608,7 @@ export class BuildingPanel {
     const count = housingBuildings(store.save, store.now()).length;
     this.blurb.textContent =
       count > 1
-        ? `Where your monsters live. Your ${count} Housings share one space: bigger space, bigger army.`
+        ? `Where your monsters live. Your ${count} ${store.kind === "inferno" ? "Compounds" : "Housings"} share one space: bigger space, bigger army.`
         : "Where your monsters live. Its space is your army's: bigger space, bigger army.";
 
     if (!this.housing) {
@@ -592,23 +721,16 @@ export class BuildingPanel {
     const { rows, list } = this.yard
       ? buildingInfo(building, this.yard.store.kind, this.yard.store.yard.cellHeight)
       : { rows: [], list: null };
+    // With an upgrade to offer, what it changes sits beside the Upgrade
+    // button instead (`upgradeGains`); these rows then read as they are now.
+    this.gains = this.yard && panelModel(building, this.yard.store).upgrade ? rows.filter((row) => row.next) : [];
+    const withNext = this.gains.length === 0;
     this.info.replaceChildren();
     for (const row of rows) {
       const term = document.createElement("dt");
-      term.textContent = row.label;
+      term.append(infoLabel(row.label));
       const definition = document.createElement("dd");
-      definition.append(infoValue(row.now));
-      if (row.next) {
-        const arrow = document.createElement("span");
-        arrow.className = "building-panel__arrow";
-        arrow.textContent = " → ";
-        const next = document.createElement("span");
-        next.className = row.down
-          ? "building-panel__next building-panel__next--down"
-          : "building-panel__next";
-        next.append(infoValue(row.next));
-        definition.append(arrow, next);
-      }
+      definition.append(...infoChange(row, withNext));
       this.info.append(term, definition);
     }
     this.info.hidden = rows.length === 0;
@@ -616,14 +738,46 @@ export class BuildingPanel {
     this.unlocks.replaceChildren();
     this.unlocks.hidden = list === null;
     if (list) {
+      // "Lv 3 unlocks", then each building's picture with its name and a
+      // "+1" or NEW badge; the words whole on hover and for a screen reader.
       const heading = document.createElement("p");
       heading.className = "building-panel__label";
       heading.textContent = list.label;
+      heading.title = list.title;
+      if (list.items.length === 0) {
+        const none = document.createElement("p");
+        none.className = "building-panel__none";
+        none.textContent = "No new buildings";
+        this.unlocks.append(heading, none);
+        return;
+      }
+      const kind = this.yard?.store.kind ?? "main";
       const items = document.createElement("ul");
-      items.className = "building-panel__list";
-      for (const text of list.items) {
+      items.className = "building-panel__unlock-list";
+      items.setAttribute("aria-label", list.title);
+      for (const unlock of list.items) {
+        const words = unlockText(unlock);
         const item = document.createElement("li");
-        item.textContent = text;
+        item.className = unlock.isNew ? "unlock-tile unlock-tile--new" : "unlock-tile";
+        item.title = words;
+        item.setAttribute("aria-label", words);
+        const picture = document.createElement("img");
+        picture.className = "unlock-tile__picture";
+        picture.src = buttonUrl(unlock.type, kind);
+        picture.alt = "";
+        picture.width = 60;
+        picture.height = 80;
+        picture.decoding = "async";
+        picture.draggable = false;
+        const badge = document.createElement("span");
+        badge.className = unlock.isNew ? "unlock-tile__badge chip chip--accent" : "unlock-tile__badge chip";
+        badge.setAttribute("aria-hidden", "true");
+        badge.textContent = unlock.isNew ? "NEW" : `+${unlock.added}`;
+        const name = document.createElement("span");
+        name.className = "unlock-tile__name";
+        name.setAttribute("aria-hidden", "true");
+        name.textContent = unlock.name;
+        item.append(picture, badge, name);
         items.append(item);
       }
       this.unlocks.append(heading, items);
@@ -731,21 +885,21 @@ export class BuildingPanel {
       button.setAttribute("aria-expanded", String(open));
       return button;
     }
-    if ((model?.open === "cage" || model?.open === "chamber") && this.yard) {
-      const target = model.open;
-      const open = this.champion !== null;
-      const word = target === "cage" ? "cage" : "chamber";
-      const button = actionButton(open ? `Close ${word}` : `Open ${word}`, () => this.toggleChampion(target), "btn--primary");
-      button.classList.add("building-panel__planner");
-      button.setAttribute("aria-expanded", String(open));
-      return button;
-    }
+    // The cage and chamber need no Open: they open on their champions, this card a tab away.
     const scene = this.yard?.scene;
     if (model?.open === "shop" && scene?.openShop) {
       const openShop = scene.openShop.bind(scene);
       const button = actionButton("Open Shop", () => openShop(), "btn--primary");
       button.classList.add("building-panel__planner");
       button.title = "Spend Shiny on workers, boosts and more";
+      return button;
+    }
+    const site = model?.open === "siege" ? siteOfType(building.type) : null;
+    if (site && scene?.openSiege) {
+      // Flash's Open button on these two, named for the popup's tab (`BUILDINGINFO.as:240-245`).
+      const button = actionButton(SITE_NAME[site], () => scene.openSiege?.(site), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.title = site === "lab" ? "Research Chaos Weapons" : "Build Chaos Weapons";
       return button;
     }
     if (model?.open === "monsters" && model.monstersTab && scene?.openMonsters) {
@@ -834,8 +988,13 @@ export class BuildingPanel {
    * as it does picking a new building. `Free` in words when there is nothing
    * to pay, as the Map Room's single-currency steps sometimes have.
    */
-  private costFactsLine(cost: UpgradeOffer["cost"], resources: Resources): HTMLElement {
-    const chips = costFactChips(cost, resources);
+  /** Whether `building` is one of the main yard's Inferno buildings, priced in the Inferno purse (WP 6.1). */
+  private infernoBuilding(building: YardBuilding): boolean {
+    return isSurfaceInferno(building.type, this.yard?.store.kind ?? "main");
+  }
+
+  private costFactsLine(cost: UpgradeOffer["cost"], resources: Resources, inferno = false): HTMLElement {
+    const chips = costFactChips(cost, resources, inferno ? "inferno" : undefined);
     if (chips.length === 0) {
       const line = document.createElement("p");
       line.className = "building-panel__cost";
@@ -859,22 +1018,23 @@ export class BuildingPanel {
     block.className = "building-panel__block building-upgrade";
     block.setAttribute("aria-label", `Upgrade to level ${offer.to}`);
 
+    // "Lv 2 → 3", the clock, the cost, then what the level brings.
     const head = document.createElement("div");
     head.className = "building-panel__head";
     const title = document.createElement("h3");
     title.className = "building-panel__heading";
-    title.textContent = `Upgrade to ${offer.to}`;
-    const time = document.createElement("span");
-    time.className = "building-panel__time";
-    time.textContent = describeSeconds(offer.seconds);
-    time.title = "How long the upgrade takes. It holds one worker until it finishes.";
-    head.append(title, time);
+    title.textContent = `Lv ${offer.from} → ${offer.to}`;
+    title.title = `Upgrade to level ${offer.to}`;
+    head.append(title, stepTime(offer.seconds, "Upgrade time · 1 worker"));
     block.append(head);
 
-    block.append(this.costFactsLine(offer.cost, resources));
+    // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
+    const held = offer.inferno && this.yard ? purseFunds(this.yard.store.save).resources : resources;
+    block.append(this.costFactsLine(offer.cost, held, offer.inferno));
+    if (this.gains.length > 0) block.append(upgradeGains(this.gains));
 
     if (offer.gate) {
-      const line = gateLine(offer.gate);
+      const line = gateLine(offer.gate, this.yard?.store.kind, offer.inferno);
       line.id = this.gateId(building);
       block.append(line);
     }
@@ -901,7 +1061,7 @@ export class BuildingPanel {
       );
       tutTarget(instant.element, TutTarget.INSTANT);
       instant.setPrice(offer.instantPrice);
-      instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate) : null);
+      instant.setBlocked(offer.instantGate ? gateSentence(offer.instantGate, this.yard?.store.kind) : null);
       row.append(instant.element);
       this.pendingButtons.push({ key: actionKey("instant", building.id), button: instant });
     }
@@ -931,18 +1091,14 @@ export class BuildingPanel {
     title.className = "building-panel__heading";
     title.textContent = `Fortify to F${offer.to}`;
     title.title = `Fortified F${offer.from} of ${offer.max}.`;
-    const time = document.createElement("span");
-    time.className = "building-panel__time";
-    time.textContent = describeSeconds(offer.seconds);
-    time.title = "How long the fortification takes. It holds a worker until it finishes.";
-    head.append(title, time);
+    head.append(title, stepTime(offer.seconds, "Fortify time · 1 worker"));
     block.append(head);
 
     block.append(this.costFactsLine(offer.cost, resources));
 
     const gateId = `${this.gateId(building)}-fortify`;
     if (offer.gate) {
-      const line = gateLine(offer.gate);
+      const line = gateLine(offer.gate, this.yard?.store.kind);
       line.id = gateId;
       block.append(line);
     } else if (!NON_TOWER_FORTIFY_TYPES.has(building.type)) {
@@ -1089,14 +1245,15 @@ export class BuildingPanel {
     wrap.setAttribute("aria-label", "Confirm cancel");
     const question = document.createElement("p");
     question.className = "building-cancel__question";
-    const refund = costAmounts(offer.refund);
+    const icons = realmIcons(this.infernoBuilding(building));
+    const refund = costAmounts(offer.refund, undefined, icons);
     question.append(
       fortifying ? "Stop fortifying and get back " : "Cancel and get back ",
       refund ?? "nothing",
       "? Progress is lost.",
     );
     wrap.append(question);
-    const lost = costAmounts(offer.lost);
+    const lost = costAmounts(offer.lost, undefined, icons);
     if (lost) {
       const warning = document.createElement("p");
       warning.className = "building-cancel__lost";
@@ -1167,7 +1324,7 @@ export class BuildingPanel {
     if (offer.toStorage) {
       question.append(`Put this ${building.name} in storage? You can place it again later.`);
     } else {
-      const refund = costAmounts(offer.refund);
+      const refund = costAmounts(offer.refund, undefined, realmIcons(this.infernoBuilding(building)));
       question.append(
         `Recycle this ${building.name} and get back `,
         refund ?? "nothing",
@@ -1175,7 +1332,7 @@ export class BuildingPanel {
       );
     }
     wrap.append(question);
-    const lost = costAmounts(offer.lost);
+    const lost = costAmounts(offer.lost, undefined, realmIcons(this.infernoBuilding(building)));
     if (lost) {
       const warning = document.createElement("p");
       warning.className = "building-recycle__warning";
@@ -1333,7 +1490,7 @@ export class BuildingPanel {
         return;
       }
       // The building is gone, and this panel with it: the refund goes to the notices.
-      const refund = costAmounts(result.report.refund);
+      const refund = costAmounts(result.report.refund, undefined, reportIcons(result.report));
       const text = document.createElement("span");
       text.append(...(refund ? ["Build cancelled. Got back ", refund, "."] : ["Build cancelled."]));
       this.yard?.notices.show("build-cancel", text, { level: "info", timeoutMs: 6_000 });
@@ -1341,7 +1498,7 @@ export class BuildingPanel {
     }
     const result = await store.cancelUpgrade(id);
     this.report(id, result, (report) => {
-      const refund = costAmounts(report.refund);
+      const refund = costAmounts(report.refund, undefined, reportIcons(report));
       return refund ? ["Upgrade cancelled. Got back ", refund, "."] : ["Upgrade cancelled."];
     });
   }
@@ -1488,21 +1645,12 @@ export class BuildingPanel {
     this.bunkerSlot.hidden = true;
   }
 
-  /** Opens or closes the Champion Cage's or Chamber's controls under the actions. */
-  private toggleChampion(target: "cage" | "chamber"): void {
+  /** Opens the Champion Cage's or Chamber's controls when this panel is on one (the "Korath unlocked" popup). */
+  openChampion(): void {
+    const building = this.building;
     const store = this.yard?.store;
-    if (this.champion || !this.building || !store) {
-      this.closeChampion();
-    } else {
-      this.champion = target === "cage" ? new ChampionPanel({ store }) : new ChamberPanel({ store });
-      this.championSlot.append(this.champion.element);
-      this.championSlot.hidden = false;
-      if (target === "cage") {
-        guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
-      }
-    }
-    this.render();
-    this.champion?.element.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+    if (!building || !store) return;
+    if (this.championHome(building)) this.showCageTab("champion");
   }
 
   private closeChampion(): void {
@@ -1733,16 +1881,25 @@ const gateText = (text: string): HTMLElement => {
   return paragraph;
 };
 
+/** Icons for a main-yard Inferno building's amounts: Bone, Coal, Sulfur and Magma (WP 6.1). */
+const realmIcons = (inferno: boolean): ResourceIconOptions => (inferno ? { realm: "inferno" } : {});
+
+/** A report with a `purse` went to the Inferno purse, so its amounts are the Inferno's. */
+const reportIcons = (report: object): ResourceIconOptions => realmIcons("purse" in report);
+
 /** "2 × Monster Locker at level 3", or "a Monster Locker at level 3" for one. */
-const requirementText = ([type, count, level]: readonly [number, number, number]): string =>
-  `${count === 1 ? "a" : `${count} ×`} ${typeName(type)} at level ${level}`;
+const requirementText = ([type, count, level]: readonly [number, number, number], kind: YardKind): string =>
+  `${count === 1 ? "a" : `${count} ×`} ${typeName(type, kind)} at level ${level}`;
 
 /**
  * Why a gate stops the upgrade, as plain words: what a disabled button's
  * tooltip and accessible name carry, where no icon can go.
  */
-export const gateSentence = (gate: UpgradeGate): string => {
+export const gateSentence = (gate: UpgradeGate, kind: YardKind = "main", inferno = false): string => {
+  const hall = hallWord(kind);
   switch (gate.reason) {
+    case "underHall":
+      return `Needs Under Hall ${gate.need}.`;
     case "busy":
       return "Busy with another job.";
     case "training":
@@ -1750,12 +1907,14 @@ export const gateSentence = (gate: UpgradeGate): string => {
     case "damaged":
       return "Repair first.";
     case "townHall":
-      return gate.have <= 0 ? "Build a Town Hall first." : `Needs Town Hall ${gate.need}.`;
+      return gate.have <= 0 ? `Build a ${hall} first.` : `Needs ${hall} ${gate.need}.`;
     case "maxLevel":
       return "Max level.";
     case "requirements":
-      return `Needs ${gate.requirements.map(requirementText).join(", ")}.`;
+      return `Needs ${gate.requirements.map((entry) => requirementText(entry, kind)).join(", ")}.`;
     case "shortfall":
+      if (inferno) return gate.overCap ? NEED_MORE_PODS : "Not enough Inferno resources.";
+      if (kind === "inferno") return gate.overCap ? NEED_MORE_PODS : "Not enough resources.";
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
@@ -1764,33 +1923,104 @@ export const gateSentence = (gate: UpgradeGate): string => {
   }
 };
 
-/** The one line under the cost that says why Upgrade is disabled, amounts drawn with their icons. */
-export const gateLine = (gate: UpgradeGate): HTMLElement => {
+/**
+ * The one line under the cost that says why Upgrade is disabled, amounts
+ * drawn with their icons: the Inferno's for a main-yard Inferno building.
+ */
+export const gateLine = (gate: UpgradeGate, kind: YardKind = "main", inferno = false): HTMLElement => {
   const line = gateText("");
   if (gate.reason === "shortfall" && !gate.overCap) {
-    line.append("Need ", costAmounts(gate.shortfall) ?? "", " more.");
+    line.append("Need ", costAmounts(gate.shortfall, undefined, realmIcons(inferno)) ?? "", " more.");
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
   } else {
-    line.textContent = gateSentence(gate);
+    line.textContent = gateSentence(gate, kind, inferno);
   }
   return line;
 };
 
-/** An info value: text, an amount with its icon, or a row of icons. */
-const infoValue = (value: InfoValue): Node => {
+/**
+ * An info value: text, an amount with its icon (all four icons for an
+ * amount of every resource, a silo's "+7,500"), or a row of icons. `icons`
+ * false leaves them off, for the "→ next" half whose "now" already has them.
+ */
+const infoValue = (value: InfoValue, icons = true): Node => {
   if ("text" in value) return document.createTextNode(value.text);
   if ("resources" in value) {
-    const icons = document.createElement("span");
-    icons.className = "building-panel__icons";
-    if (value.resources.length === 0) icons.textContent = "None";
-    for (const key of value.resources) icons.append(resourceIcon(key));
-    return icons;
+    const row = document.createElement("span");
+    row.className = "building-panel__icons";
+    if (value.resources.length === 0) row.textContent = "None";
+    for (const key of value.resources) row.append(resourceIcon(key));
+    return row;
   }
-  const text = `${formatAmount(value.amount)}${value.suffix ?? ""}`;
-  return value.resource
-    ? resourceAmount(value.resource, text)
-    : document.createTextNode(text);
+  const text = `${value.prefix ?? ""}${formatAmount(value.amount)}${value.suffix ?? ""}`;
+  if (!icons) return document.createTextNode(text);
+  if (value.resource) return resourceAmount(value.resource, text);
+  const all = document.createElement("span");
+  all.className = "building-panel__all";
+  const row = document.createElement("span");
+  row.className = "building-panel__icons";
+  row.append(...RESOURCE_KEYS.map((key) => resourceIcon(key)));
+  all.append(row, text);
+  return all;
+};
+
+/** The rows whose word a painted icon says: health and damage. */
+const LABEL_ICONS: Readonly<Record<string, GameIconName>> = {
+  Health: "health",
+  "Cage health": "health",
+  Damage: "damage",
+  "Damage per shot": "damage",
+};
+
+/** A row's name: its painted icon where it has one (the word on hover), or the word. */
+const infoLabel = (label: string): Node => {
+  const name = LABEL_ICONS[label];
+  return name ? gameIcon(name, { size: 16, label }) : document.createTextNode(label);
+};
+
+/**
+ * A row's value now and, when `withNext`, "→ next", the gain in green.
+ * `nowIcons` false draws "now" without its icons too.
+ */
+const infoChange = (row: InfoRow, withNext = true, nowIcons = true): Node[] => {
+  if (!withNext || !row.next) return [infoValue(row.now, nowIcons)];
+  const arrow = document.createElement("span");
+  arrow.className = "building-panel__arrow";
+  arrow.textContent = " → ";
+  const next = document.createElement("span");
+  next.className = row.down ? "building-panel__next building-panel__next--down" : "building-panel__next";
+  next.append(infoValue(row.next, "resources" in row.next));
+  return [infoValue(row.now, nowIcons), arrow, next];
+};
+
+/**
+ * What an upgrade brings, beside its button: each changed row as its icon
+ * (or word) and "now → next", "[claw] 30/s → 36/s · Range 190 → 200".
+ */
+const upgradeGains = (rows: readonly InfoRow[]): HTMLElement => {
+  const list = document.createElement("ul");
+  list.className = "building-upgrade__gains";
+  list.setAttribute("aria-label", "Next level");
+  for (const row of rows) {
+    const item = document.createElement("li");
+    item.className = "building-upgrade__gain";
+    item.dataset["row"] = row.label;
+    // A silo's four icons are on its row above: here just "+7,500 → +15,000".
+    const everyResource = "amount" in row.now && !row.now.resource;
+    item.append(infoLabel(row.label), " ", ...infoChange(row, true, !everyResource));
+    list.append(item);
+  }
+  return list;
+};
+
+/** A step's time beside its heading: the hourglass and "4h 0m", the rest on hover. */
+const stepTime = (seconds: number, words: string): HTMLElement => {
+  const time = document.createElement("span");
+  time.className = "building-panel__time";
+  time.title = words;
+  time.append(iconAmount("time", describeSeconds(seconds), { label: words, tooltip: false }));
+  return time;
 };
 
 /** "3 × Pokey, 1 × Octo-ooze", or null for none. */
@@ -1816,11 +2046,11 @@ export const recycledMessage = (
     line.append(`${name} put in storage. Place it again from Build, Decorations.`);
     return line;
   }
-  const refund = costAmounts(report.refund);
+  const refund = costAmounts(report.refund, undefined, reportIcons(report));
   line.append(`${name} recycled`);
   if (refund) line.append(" for ", refund);
   line.append(".");
-  const lost = costAmounts(report.lost);
+  const lost = costAmounts(report.lost, undefined, reportIcons(report));
   if (lost) line.append(" ", lost, " did not fit in storage.");
   const culled = cullText(report.culled);
   if (culled) line.append(` Housing shrank: ${culled} lost.`);

@@ -6,7 +6,8 @@ import type { AcademyActions } from "@/api/yardAcademy";
 import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
-import { statLine, TrainTab } from "./TrainTab";
+import { monsterStats } from "./monsterNumbers";
+import { TrainTab } from "./TrainTab";
 
 /**
  * The Train tab as a player meets it: the academy slots, the list of unlocked
@@ -105,7 +106,17 @@ describe("TrainTab: slots and list", () => {
     const card = element.querySelector<HTMLElement>(".locker__detail")!;
     expect(card.querySelector(".locker-detail__name")!.textContent).toBe("Octo-ooze");
     expect(card.querySelector(".locker-detail__facts")!.textContent).toBe("Level 3 of 6");
-    expect(card.querySelector(".locker-detail__stats")!.textContent).toBe(statLine("C2", 3, 4));
+    // Only the numbers level 4 changes read "now → next", picked out.
+    const stats = card.querySelector(".locker-detail__stats")!;
+    expect(spokenText(stats)).toBe(
+      monsterStats("C2", 3, 4)
+        .map((stat) => `${stat.icon === "goo" ? "Goo" : stat.label} ${stat.value}`)
+        .join(" "),
+    );
+    expect(spokenText(stats)).toMatch(/^Health [\d,]+ → [\d,]+ /);
+    expect([...stats.querySelectorAll(".monster-stats__item--up")].map((item) => (item as HTMLElement).dataset["stat"])).toContain(
+      "Health",
+    );
     expect(spokenText(card.querySelector(".locker-detail__note")!)).toBe(
       "Level 4: Putty 24,000 · 10h 0m · at Academy 1",
     );
@@ -165,7 +176,7 @@ describe("TrainTab: Train and Instant", () => {
     await Promise.resolve();
     const status = element.querySelector<HTMLElement>(".monsters-status")!;
     expect(status.hidden).toBe(false);
-    expect(spokenText(status)).toBe("Training Octo-ooze to level 4: Putty 24,000 spent.");
+    expect(spokenText(status)).toBe("Training Octo-ooze to level 4: Putty 24,000 lost.");
   });
 });
 

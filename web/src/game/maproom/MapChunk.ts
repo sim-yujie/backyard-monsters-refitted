@@ -1,5 +1,6 @@
 import { Container, NineSliceSprite, Sprite, type Texture } from "pixi.js";
-import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
+import { isFogCell } from "@/api/types";
+import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { mapRoomGrid } from "@/game/HexGrid";
 import { chunkCells, type ChunkRef } from "./chunks";
 import {
@@ -35,6 +36,9 @@ import {
 import { BuildingKind, type BuildingAvatars } from "./buildingAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
+import { cellLift, paintOrder } from "./ground";
+import { GROUND_ANCHOR_X, GROUND_ANCHOR_Y, type GroundArt } from "./groundArt";
+import type { ConstructionBadge } from "./constructionBadge";
 
 /**
  * One 10 x 10 block of the map, built once as sprites.
@@ -59,6 +63,12 @@ import type { ZoneStore } from "./ZoneStore";
  * swords for a player who has attacked the viewer, see `cellVisuals.ts`).
  * An outpost's tower also carries its Starter Kit's tint, and every sprite a
  * cell draws dims together when the kit filter excludes it.
+ *
+ * The ground is Flash's (`ground.ts`): each cell a textured hex column stood
+ * at its height, and everything on the cell raised or sunk with it. Its
+ * sprites go into the renderer's one sorted `ground` layer rather than this
+ * chunk's container, because a cell's cliff must go under the faces of the
+ * cells in front of it, and at a chunk's edge those belong to the next chunk.
  */
 
 /** Detail a chunk has been asked to carry. */
@@ -130,6 +140,8 @@ const BUILDING_HEIGHT = CELL_HEIGHT * 0.85;
 const FLASH_TOWER_HEIGHT = 61;
 /** The idle worker stands at the dome's right edge, this fraction of the dome height above the foot. */
 const WORKER_Y_FRACTION = 0.3;
+/** Modern's construction badge, in Flash units like the worker it replaces (longest side). */
+const BADGE_SIZE = 38;
 
 /** The gold level star every player cell wears (#334), tucked at the tower's upper left. */
 const STAR_RADIUS = CELL_HEIGHT * 0.19;
@@ -171,8 +183,6 @@ export class MapChunk {
    */
   readonly top = new Container();
 
-  private readonly terrain = new Container();
-  private readonly outlines = new Container();
   /** Camp tents. Swapped out wholesale for `portraits` at the close tiers. */
   private readonly tents = new Container();
   /** Camp portraits, present only when the art had arrived by build time. */
@@ -186,7 +196,11 @@ export class MapChunk {
   private readonly plates = new Container();
   private readonly labels: LabelLayer;
 
+  /** This chunk's tiles, water and hairlines, which live in the shared ground layer. */
+  private readonly groundSprites: Sprite[] = [];
   private readonly outlineSprites: Sprite[] = [];
+  private shown = false;
+  private outlinesShown = false;
   private readonly requests: LabelRequest[] = [];
   private outlineTexture: Texture | null = null;
   private text: TextLevel = TextLevel.NONE;
@@ -205,13 +219,15 @@ export class MapChunk {
     private readonly avatars: TribeAvatars,
     private readonly buildings: BuildingAvatars,
     pool: TextPool,
+    /** The renderer's layer every chunk's ground is painted into, sorted by `zIndex`. */
+    private readonly ground: Container,
+    private readonly groundArt: GroundArt,
+    private readonly constructionBadge: ConstructionBadge,
   ) {
     this.labels = new LabelLayer(pool);
     this.container.interactiveChildren = false;
     this.top.interactiveChildren = false;
     this.container.addChild(
-      this.terrain,
-      this.outlines,
       this.tents,
       this.portraits,
       // Crosses go over whichever of the two is showing.
@@ -224,6 +240,9 @@ export class MapChunk {
   set visible(visible: boolean) {
     this.container.visible = visible;
     this.top.visible = visible;
+    if (visible === this.shown) return;
+    this.shown = visible;
+    this.showGround();
   }
 
   /** How much text this chunk is carrying, for the renderer's budget. */
@@ -245,12 +264,31 @@ export class MapChunk {
     const cells = chunkCells(this.ref);
     for (let col = cells.minCol; col <= cells.maxCol; col++) {
       for (let row = cells.minRow; row <= cells.maxRow; row++) {
-        const appearance = appearanceOf(store.getCell(col, row), nowSeconds, context, { x: col, y: row });
-        const centre = mapRoomGrid.cellToPixel(col, row);
+        const cell = store.getCell(col, row);
+        const appearance = appearanceOf(cell, nowSeconds, context, { x: col, y: row });
+        const spot = mapRoomGrid.cellToPixel(col, row);
+        const order = paintOrder(col, row);
+        // Where the cell is drawn: its spot on the grid, raised or sunk to its height.
+        const centre = { x: spot.x, y: spot.y + cellLift(cell) };
 
-        this.terrain.addChild(
-          place(new Sprite(this.atlas.hex), centre.x, centre.y, appearance.terrain),
-        );
+        const height = cell && !isFogCell(cell) ? cell.i : null;
+        const tile = height === null ? null : this.groundArt.tileFor(height);
+        if (tile && height !== null) {
+          const sprite = new Sprite(tile);
+          sprite.anchor.set(GROUND_ANCHOR_X, GROUND_ANCHOR_Y);
+          sprite.position.set(centre.x, centre.y);
+          this.addGround(sprite, order);
+          if (height <= WATER_MAX_HEIGHT) {
+            // The water sheet, at the height the land starts (`groundArt.ts`).
+            const water = this.groundArt.waterSurface;
+            const surface = place(new Sprite(this.atlas.hex), spot.x, spot.y, water.colour);
+            surface.alpha = water.alpha;
+            this.addGround(surface, order + 0.5);
+          }
+        } else {
+          // Fog, a cell still loading, or the tiles not here yet: a flat hex of its colour.
+          this.addGround(place(new Sprite(this.atlas.hex), centre.x, centre.y, appearance.terrain), order);
+        }
 
         const outline = place(
           new Sprite(this.atlas.outlineFine),
@@ -260,7 +298,7 @@ export class MapChunk {
         );
         outline.alpha = GRID_ALPHA;
         this.outlineSprites.push(outline);
-        this.outlines.addChild(outline);
+        this.addGround(outline, order + 0.25);
 
         if (appearance.marker === CellMarker.YARD || appearance.marker === CellMarker.OUTPOST) {
           this.addPlayer(appearance, centre.x, centre.y);
@@ -271,6 +309,19 @@ export class MapChunk {
     }
 
     this.outlineTexture = this.atlas.outlineFine;
+    this.showGround();
+  }
+
+  private addGround(sprite: Sprite, order: number): void {
+    sprite.zIndex = order;
+    this.groundSprites.push(sprite);
+    this.ground.addChild(sprite);
+  }
+
+  /** The ground layer is shared, so this chunk's part of it is shown sprite by sprite. */
+  private showGround(): void {
+    for (const sprite of this.groundSprites) sprite.visible = this.shown;
+    for (const sprite of this.outlineSprites) sprite.visible = this.shown && this.outlinesShown;
   }
 
   /** Adds the text this chunk is missing. A no-op once it is already there. */
@@ -295,7 +346,10 @@ export class MapChunk {
       this.outlineTexture = view.outline;
       for (const sprite of this.outlineSprites) sprite.texture = view.outline;
     }
-    this.outlines.visible = view.outline !== null;
+    if (this.outlinesShown !== (view.outline !== null)) {
+      this.outlinesShown = view.outline !== null;
+      this.showGround();
+    }
 
     // Exactly one of the two camp layers is ever on screen.
     const portraits = view.avatars && this.hasPortraits;
@@ -317,12 +371,12 @@ export class MapChunk {
     this.labels.release();
     this.text = TextLevel.NONE;
     this.requests.length = 0;
+    for (const sprite of this.groundSprites) sprite.destroy();
+    this.groundSprites.length = 0;
     this.outlineSprites.length = 0;
     this.hasPortraits = false;
     this.clearPlates();
     for (const layer of [
-      this.terrain,
-      this.outlines,
       this.tents,
       this.portraits,
       this.details,
@@ -427,7 +481,8 @@ export class MapChunk {
    *
    * A cell under damage protection wears Flash's glass dome over its building
    * (#338), an active truce a small green tick, and the player's own outpost
-   * with a free worker the little blue worker. All three are drawn in `bases`
+   * with a free worker the little blue worker (Classic) or, while it builds,
+   * the construction badge (Modern). All of them are drawn in `bases`
    * so they sit over the building but under the star and the plate (both in
    * later layers), and dim with the rest of the cell under the kit filter.
    */
@@ -481,6 +536,18 @@ export class MapChunk {
         worker.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
         worker.alpha = alpha;
         this.bases.addChild(worker);
+      }
+
+      const badgeTexture = appearance.underConstruction ? this.constructionBadge.texture : null;
+      if (badgeTexture) {
+        // Where Flash's worker stood, a little larger: the painted sign has a white rim.
+        const badge = new Sprite(badgeTexture);
+        badge.anchor.set(0.5);
+        const scale = (BADGE_SIZE * flashScale) / Math.max(badgeTexture.width, badgeTexture.height);
+        badge.setSize(badgeTexture.width * scale, badgeTexture.height * scale);
+        badge.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
+        badge.alpha = alpha;
+        this.bases.addChild(badge);
       }
     }
 

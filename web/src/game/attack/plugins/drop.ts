@@ -24,8 +24,18 @@
  * clears an armed siege weapon and vice versa only because one tap drops one
  * thing — the bucket is untouched either way, and un-arming puts the ring
  * back on the bucket. `session.setUnusedTools` is kept equal to the bombs
- * still buyable (one per resource) plus the siege weapons left, so an empty
- * field does not end the attack while there is still something to fire.
+ * still buyable (one per resource) plus the siege weapon if it can still be
+ * fired, so an empty field does not end the attack while there is still
+ * something to fire.
+ *
+ * ## One siege weapon
+ *
+ * As Flash's `SIEGEWEAPONPOPUP` (Inferno WP 6.8), an attack offers one siege
+ * weapon, the first in stock ({@link availableSiege}), and fires it once.
+ * The Siege button is there only when there is one, and never against an
+ * Inferno yard or in the Descent (`UI_TOP.as:289`). Fire arms the Decoy or
+ * the Jars for the next tap; the Vacuum has no drop zone and fires on the
+ * spot, onto the Town Hall, with nothing to tap (`SIEGEWEAPONPOPUP.Target`).
  *
  * ## One pool on screen
  *
@@ -46,24 +56,24 @@ import type { Resources } from "@/api/types";
 import { ATTACK_PLUGINS, type AttackPlugin } from "@/game/attack/attackPlugins";
 import {
   AttackInput,
+  availableSiege,
   parseSiegeStock,
+  siegeWeapon,
   unusedToolCount,
   type DropPreview,
   type DropTool,
-  type SiegeStock,
   type SiegeWeaponId,
   type ToolInventory,
 } from "@/game/attack/AttackInput";
 import { hudResources, poolOf, spendBomb, type AttackerPool } from "@/game/attack/attackerPool";
 import { bucketFor } from "@/game/attack/bucket";
+import { combatKind } from "@/game/attack/AttackSession";
 import { bucketOptionsOf, type TestFlavour } from "@/game/attack/plugins/army";
+import { VACUUM_TARGET_TYPES } from "@/game/combat/rules/vacuum";
 import { DropHighlight } from "@/game/attack/dropHighlight";
 import { CatapultPanel } from "@/ui/attack/CatapultPanel";
-import { SiegePanel } from "@/ui/attack/SiegePanel";
+import { SiegePanel, siegeOnField, type SiegeState } from "@/ui/attack/SiegePanel";
 import { Container, Graphics } from "pixi.js";
-
-/** Siege weapons are not built yet (owner, 2026-10-10): the panel, its button and its S key stay off. */
-const SIEGE_PANEL_ENABLED = false;
 
 /** Ring colours: the success and danger tokens of `tokens.css`. */
 const RING_LEGAL = 0x5bbd6a;
@@ -110,23 +120,54 @@ class DropRing {
 export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mounts) => {
   const { session, target, yard, renderer, camera, canvas, dock, notices } = mounts;
   const bucket = bucketFor(session, bucketOptionsOf(flavour));
-  const catapultLevel = target.roster.catapultLevel;
+  // An Inferno yard (the Descent's included) offers no catapult and no siege
+  // weapon: Flash loads a Descent yard as `INFERNO_YARD`, and `UI_TOP` adds
+  // neither popup on one (`client/scripts/UI_TOP.as:289`, `:296`,
+  // `maproom_inferno/PlayerHandler.as:333`).
+  const infernoYard = combatKind(target) === "inferno";
+  const catapultLevel = infernoYard ? 0 : target.roster.catapultLevel;
 
   /* ── The attacker's inventory ─────────────────────────────────────── */
 
   /** The own-yard resources the pool was read from, for goo and the caps. */
   const held: Resources | null = target.roster.resources;
   let pool: AttackerPool | null = poolOf(held);
-  const stock: SiegeStock[] = parseSiegeStock(target.roster.siege);
   const bombsUsed = new Set<number>();
+  /** The one siege weapon this attack offers; none in a Baiter test or against an Inferno yard. */
+  const offered =
+    flavour.test || infernoYard
+      ? null
+      : availableSiege(parseSiegeStock(target.roster.siege));
+  const offeredSpec = offered ? siegeWeapon(offered.id) : undefined;
   const siegeUsed: Partial<Record<SiegeWeaponId, number>> = {};
+  let siegeFired = false;
+
+  /**
+   * `Vacuum.canFire`: a Town Hall (or the Resource Outpost) left standing to
+   * latch onto, the building the engine's `startVacuum` picks. Read again only
+   * when the count of flattened buildings moves.
+   */
+  const vacuumTarget = yard.buildings.find((building) => VACUUM_TARGET_TYPES.includes(building.type));
+  let canFireFor = -1;
+  let canFire = true;
+  const siegeCanFire = (): boolean => {
+    if (offered?.id !== "vacuum") return true;
+    const flattened = session.state().buildingsDestroyed;
+    if (flattened !== canFireFor) {
+      canFireFor = flattened;
+      const destroyed = session.battle()?.state().destroyedIds ?? [];
+      canFire = vacuumTarget !== undefined && !destroyed.includes(vacuumTarget.id);
+    }
+    return canFire;
+  };
 
   const inventory = (): ToolInventory => ({
     catapultLevel,
     pool,
     bombsUsed,
     creepsAlive: session.state().creepsAlive,
-    siege: stock,
+    // One weapon per attack, while it can still be fired.
+    siege: offered && siegeCanFire() ? [{ ...offered, quantity: Math.min(1, offered.quantity) }] : [],
     siegeUsed,
   });
 
@@ -165,9 +206,9 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
   siegeButton.title = "Siege weapons (S)";
   siegeButton.setAttribute("aria-expanded", "false");
 
-  tools.append(catapultButton);
-  if (SIEGE_PANEL_ENABLED) tools.append(siegeButton);
-  if (!flavour.test) dock.append(tools);
+  if (!infernoYard) tools.append(catapultButton);
+  if (offered) tools.append(siegeButton);
+  if (!flavour.test && tools.childElementCount > 0) dock.append(tools);
 
   let catapult: CatapultPanel | null = null;
   let siege: SiegePanel | null = null;
@@ -210,7 +251,16 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
       live: live(),
       armed: armedBomb(),
     });
-    siege?.update({ used: siegeUsed, live: live(), armed: armedSiege() });
+    if (siege) {
+      const state: SiegeState = siegeFired ? "fired" : armedSiege() ? "armed" : "ready";
+      const battle = session.battle();
+      siege.update({
+        state,
+        live: live(),
+        canFire: siegeCanFire(),
+        onField: siegeFired && battle ? siegeOnField(battle.siege(), battle.tick) : null,
+      });
+    }
     catapultButton.classList.toggle("attack-tools__button--armed", armedBomb() !== null);
     siegeButton.classList.toggle("attack-tools__button--armed", armedSiege() !== null);
     session.setUnusedTools(unusedToolCount(inventory()));
@@ -240,16 +290,47 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
     reportSheet();
   };
 
+  /**
+   * The panel's Fire button (`SIEGEWEAPONPOPUP.Target`): armed, it cancels;
+   * otherwise a weapon with a drop range arms for the next tap, and the
+   * Vacuum fires now. Either way an armed bomb is put away first
+   * (`ZeroOutAttacks`).
+   */
+  const fireSiege = (): void => {
+    if (!offered || !offeredSpec || siegeFired) return;
+    if (armedSiege()) {
+      input.setTool(null);
+      return;
+    }
+    if (!live() || !siegeCanFire()) return;
+    const tool = { kind: "siege" as const, weapon: offeredSpec, level: offered.level };
+    if (offeredSpec.range.length > 0) {
+      input.setTool(tool);
+      return;
+    }
+    input.setTool(null);
+    try {
+      session.appendSiege({ x: 0, y: 0, weapon: offered.id });
+    } catch (caught) {
+      notices.show("attack-drop", caught instanceof Error ? caught.message : "That could not be fired.", {
+        level: "info",
+        timeoutMs: 2500,
+      });
+      return;
+    }
+    onToolUsed(tool);
+  };
+
   const toggleSiege = (): void => {
+    if (!offered) return;
     if (siege) {
       siege.close();
       return;
     }
     catapult?.close();
     siege = new SiegePanel({
-      stock,
-      onPick: (pick) =>
-        input.setTool(pick ? { kind: "siege", weapon: pick.spec, level: pick.level } : null),
+      weapon: offered,
+      onFire: fireSiege,
       onClose: () => {
         siege = null;
         siegeButton.setAttribute("aria-expanded", "false");
@@ -278,6 +359,7 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
       }
     } else {
       siegeUsed[tool.weapon.id] = (siegeUsed[tool.weapon.id] ?? 0) + 1;
+      siegeFired = true;
     }
     refreshPanels();
   };
@@ -296,7 +378,12 @@ export const createDropPlugin = (flavour: TestFlavour = {}): AttackPlugin => (mo
     onRefuse: (reason) => notices.show("attack-drop", reason, { level: "info", timeoutMs: 2500 }),
     onToolUsed,
     onToolChange: () => refreshPanels(),
-    ...(flavour.test ? {} : { onOpenCatapult: toggleCatapult, ...(SIEGE_PANEL_ENABLED ? { onOpenSiege: toggleSiege } : {}) }),
+    ...(flavour.test
+      ? {}
+      : {
+          ...(infernoYard ? {} : { onOpenCatapult: toggleCatapult }),
+          ...(offered ? { onOpenSiege: toggleSiege } : {}),
+        }),
   });
   input.attach();
 

@@ -1,12 +1,12 @@
-import { Assets, Container, Texture, TextureSource, type Sprite } from "pixi.js";
-import { describe, expect, it, vi } from "vitest";
+import { Container, Texture, TextureSource, type Sprite } from "pixi.js";
+import { describe, expect, it } from "vitest";
 import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
 import { mulberry32 } from "@/game/combat/rules/rng";
 import { championFlightTop, shadowOffset, sheetUrl, spriteFor } from "@/game/attack/monsterSprites";
-import { yardBounds } from "./YardGrid";
-import { EMPTY_LIFE, type YardLife } from "./yardLifeModel";
-import { EGG_HEIGHT, YardLifeLayer } from "./YardLifeLayer";
+import { depthKey, footprintCentre, yardBounds } from "./YardGrid";
+import { CHAMPION_CAGE_TYPE, EMPTY_LIFE, type YardLife } from "./yardLifeModel";
+import { YardLifeLayer } from "./YardLifeLayer";
 
 /** Every sheet arrives at once as a blank of the right size. */
 const textures = () =>
@@ -214,6 +214,42 @@ describe("YardLifeLayer", () => {
     expect(two.body.y).toBe(two.groundY - MONSTER_SPRITES["G3_2"]!.anchorY);
   });
 
+  it("draws a champion pacing its cage in front of the whole cage, back fence and all", async () => {
+    const { layer, tops, shadows } = setUp(true);
+    const yardLife = life({ groups: [], workers: 0 });
+    layer.set(yardLife, bounds);
+    layer.attach(tops, shadows);
+    layer.update(everywhere, 0);
+    await flush();
+    const [walker] = layer.walkerList;
+    const body = tops.children[0] as Sprite | undefined;
+    if (!walker || !body) throw new Error("no Gorgo");
+    // The cage's picture and its animation layers, as `YardBuildings` sorts them.
+    const cage = yardLife.cage!;
+    const centre = footprintCentre(bounds, CHAMPION_CAGE_TYPE, cage.x, cage.y);
+    const cageTop = depthKey(centre.x, centre.y, cage.id) * 8 + 3;
+    // At every corner of its pen, the back one, behind the cage's middle, too.
+    const { x, y, width, height } = walker.area;
+    for (const [atX, atY] of [
+      [x, y],
+      [x + width, y],
+      [x, y + height],
+      [x + width, y + height],
+    ] as const) {
+      walker.x = atX;
+      walker.y = atY;
+      layer.update(everywhere, 0);
+      expect(body.zIndex).toBeGreaterThan(cageTop);
+    }
+    // On its way to the Chamber it sorts at its own feet again.
+    walker.x = x;
+    walker.y = y;
+    walker.trip = [{ x: 0, y: 0 }];
+    layer.update(everywhere, 0);
+    expect(body.zIndex).toBe(creepZIndex(x - y + bounds.originX, (x + y) / 2 + bounds.originY, 1));
+    expect(body.zIndex).toBeLessThan(cageTop);
+  });
+
   it("walks the creatures on the clock, and under reduced motion does not", () => {
     for (const reduced of [false, true]) {
       const { layer, tops, shadows } = setUp(reduced);
@@ -251,35 +287,6 @@ describe("YardLifeLayer", () => {
     const [there] = loaded.layer.workerList;
     expect(there?.x).toBe(there?.targetX);
     expect(there?.y).toBe(there?.targetY);
-  });
-});
-
-describe("YardLifeLayer egg (owner 2026-10-20)", () => {
-  it("stands the egg where the life says, hides it with the rest, and takes it away", async () => {
-    const load = vi
-      .spyOn(Assets, "load")
-      .mockResolvedValue(new Texture({ source: new TextureSource({ width: 96, height: 120 }) }) as never);
-    const { layer, tops, shadows } = setUp();
-    const cage = { id: 6, x: -200, y: -200 };
-    const at = { x: -140, y: -140 };
-    layer.set(life({ champions: [], workers: 0, groups: [], cage, egg: { id: "G2", ...at } }), bounds);
-    expect(layer.attach(tops, shadows)).toBe(true);
-    expect(load).toHaveBeenCalledWith("/eggs/G2-egg-yard.webp");
-    await flush();
-    const egg = layer.eggSprite!;
-    expect(egg.parent).toBe(tops);
-    expect(egg.visible).toBe(true);
-    expect(egg.height).toBe(EGG_HEIGHT);
-    expect(egg.position.x).toBe(at.x - at.y + bounds.originX);
-    expect(egg.position.y).toBe((at.x + at.y) / 2 + bounds.originY);
-    layer.setHidden(true);
-    expect(egg.visible).toBe(false);
-    layer.setHidden(false);
-    expect(egg.visible).toBe(true);
-    layer.set(life({ champions: [], workers: 0, groups: [], cage, egg: null }), bounds);
-    expect(layer.eggSprite).toBeNull();
-    expect(egg.destroyed).toBe(true);
-    load.mockRestore();
   });
 });
 

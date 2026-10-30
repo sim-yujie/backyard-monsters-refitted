@@ -25,15 +25,11 @@ import { baseModeHelp } from "./modes/baseModeHelp.js";
 import { helpBlockFor } from "../../../services/friends/helpHook.js";
 import { baseModeBuild } from "./modes/baseModeBuild.js";
 import { baseModeAttack } from "./modes/baseModeAttack.js";
-import { infernoModeDescent } from "./modes/infernoModeDescent.js";
-import { infernoModeView } from "./modes/infernoModeView.js";
-import { infernoModeAttack } from "./modes/infernoModeAttack.js";
-import { infernoModeBuild } from "./modes/infernoModeBuild.js";
-import { INFERNO_MODES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
+import { INFERNO_MODES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { validateAttack } from "../../../services/maproom/validateAttack.js";
 import { playerMapVersion } from "../../../services/maproom/playerMapVersion.js";
 import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
-import { baseNotFoundErr, discordAgeErr } from "../../../errors/errors.js";
+import { baseNotFoundErr, discordAgeErr, mapRoom3ClosedErr } from "../../../errors/errors.js";
 import { EnumBaseRelationship } from "../../../enums/EnumBaseRelationship.js";
 import { canAttack } from "../../../services/base/canAttack.js";
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
@@ -47,6 +43,8 @@ import { unseenAchievements } from "../../../services/achievements/record.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { catchUpOwnerOutpost, catchUpOwnerYard } from "../../yard/yardRoute.js";
+import { infernoLoadState, underHallOnceDescended } from "../../inferno/infernoState.js";
+import { emergenceOnLoad, type EmergenceOnLoad } from "../../../services/inferno/emergenceOnLoad.js";
 import type { CompletedJob } from "../../../services/yard/catchUp.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels.js";
@@ -55,9 +53,11 @@ import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
 import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
+import { infernoConfig } from "../../../config/InfernoConfig.js";
+import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
-import type { AcademyLevels, AcademyRanks, ChampionBrains } from "../../../services/base/attackSession.js";
+import type { AcademyLevels, AcademyRanks, ChampionBrains, ChampionHealth } from "../../../services/base/attackSession.js";
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
 import { noteActivePlayer } from "../../../services/stats/activity.js";
 import { logger } from "../../../utils/logger.js";
@@ -73,8 +73,6 @@ type Stronghold = { level: number; cell?: { x: number; y: number } | null };
 
 const STRONGHOLD_FIELDS = ["level", "cell.x", "cell.y"] as const;
 
-const INFERNO_SAVE_MODES = new Set<string>([BaseMode.IBUILD, BaseMode.IATTACK, BaseMode.IWMATTACK]);
-
 /**
  * Controller responsible for loading base modes based on the user's request.
  *
@@ -84,10 +82,10 @@ const INFERNO_SAVE_MODES = new Set<string>([BaseMode.IBUILD, BaseMode.IATTACK, B
  */
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { baseid, type, mapversion: requestedVersion, attackData, attackcost } = BaseLoadSchema.parse(ctx.request.body);
+  const { baseid, type, mapversion: requestedVersion, attackData } = BaseLoadSchema.parse(ctx.request.body);
 
-  // The old Inferno modes are closed until the new Inferno ships (`config/InfernoConfig.ts`).
-  if (INFERNO_MODES.has(type)) requireInfernoOpen(ctx, user, `load ${type}`);
+  // The Flash Inferno's modes are gone: the Inferno loads through `/bm/inferno/*` (WP 7.1).
+  if (INFERNO_MODES.has(type)) refuseOldInferno(ctx, user, `load ${type}`);
 
   // An attack the player left without saving is finished before anything
   // below reads a row it writes — the player's own save above all — so their
@@ -96,20 +94,30 @@ export const baseLoad: KoaController = async (ctx) => {
   const attacking = type === BaseMode.ATTACK || type === BaseMode.WMATTACK;
   if (type === BaseMode.BUILD || ATTACK_MODES.has(type)) {
     await finaliseBeforeLoad(user.userid, type, baseid, attacking);
+    // So is an Inferno player attack they left (`infernoPlayerFinalise.ts`).
+    if (infernoConfig.enabled) await closeInfernoPlayerAttacksOf(user.userid, type);
   }
 
-  await postgres.em.populate(user, INFERNO_SAVE_MODES.has(type) ? ["save", "infernosave"] : ["save"]);
+  await postgres.em.populate(user, ["save"]);
 
   // The player's Map Room is the one their own save records, not the
   // request's: every rule below follows it, the attack's range check above
   // all, which a forged 3 or 1 used to skip (issue #165, `playerMapVersion.ts`).
   const mapversion = playerMapVersion(user.save);
 
+  // Map Room 3 is closed (security audit 2026-10-29, C1): a save still on it
+  // loads, views and builds its yard as before, but starts no attack, whose
+  // cost and result Map Room 3 took from the client. With no attack load there
+  // is no attack binding, so no Map Room 3 attack save is taken either.
+  if (attacking && mapversion === MapRoomVersion.V3) throw mapRoom3ClosedErr();
+
   let baseSave: Save | null = null;
   /** The defence an attack is fought against (issue #195), served beside the yard. */
   let defenderForces: DefenderForces | undefined;
   /** The attacker's champions' brains, as the attack froze them (issue #219), served to the client. */
   let championBrains: ChampionBrains | undefined;
+  /** Their health, as the attack froze it, served to the client: each goes out at this. */
+  let championHealth: ChampionHealth | undefined;
   /** The attacker's academy levels, as the attack froze them (issue #201), served to the client. */
   let attackerAcademy: AcademyLevels | undefined;
   /** The attacker's Monster Lab ranks, frozen with it (issue #352), served to the client. */
@@ -137,7 +145,6 @@ export const baseLoad: KoaController = async (ctx) => {
       break;
 
     case BaseMode.VIEW:
-    case BaseMode.IVIEW:
       baseSave = await baseModeView(baseid, mapversion, user.save!.worldid, user);
       break;
 
@@ -149,40 +156,13 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
 
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces, championBrains, attackerAcademy, attackerRanks } =
+      ({ save: baseSave, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks } =
         await baseModeAttack({
         user,
         baseid,
         mapversion,
-        attackCost: attackcost,
         attackerLevel,
       }));
-      break;
-
-    case BaseMode.IDESCENT:
-      baseSave = await infernoModeDescent(user);
-      break;
-
-    case BaseMode.IBUILD:
-      baseSave = await infernoModeBuild(user);
-      break;
-
-    case BaseMode.IWMVIEW:
-      baseSave = await infernoModeView(user, baseid);
-      break;
-
-    case BaseMode.IATTACK:
-      if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
-
-      await validateAttack(user, attackData, mapversion);
-      baseSave = await infernoModeAttack(user, baseid);
-      break;
-
-    case BaseMode.IWMATTACK:
-      if (!ctx.meetsDiscordAgeCheck) throw discordAgeErr();
-      
-      await validateAttack(user, attackData, mapversion);
-      baseSave = await infernoModeAttack(user, baseid);
       break;
 
     case BaseMode.WMVIEW:
@@ -193,12 +173,11 @@ export const baseLoad: KoaController = async (ctx) => {
       if (!ctx.meetsDiscordAgeCheck && !MR1_TRIBE_IDS.has(baseid)) throw discordAgeErr();
       
       await validateAttack(user, attackData, mapversion);
-      ({ save: baseSave, defenderForces, championBrains, attackerAcademy, attackerRanks } =
+      ({ save: baseSave, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks } =
         await baseModeAttack({
         user,
         baseid,
         mapversion,
-        attackCost: attackcost,
         attackerLevel,
       }));
       break;
@@ -243,6 +222,8 @@ export const baseLoad: KoaController = async (ctx) => {
   let completed: (CompletedJob | OutpostNoticeJob)[] | undefined;
   let notifications: number | undefined;
   let trojanNew = false;
+  let emergence: EmergenceOnLoad | undefined;
+  let underHall: number | undefined;
   if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
     // The catch-up also counts this load as one more session towards the
     // next wild monster raid, in the same write (`catchUpOwnerYard`, #226),
@@ -260,6 +241,13 @@ export const baseLoad: KoaController = async (ctx) => {
     // fight lock (`startSession`): a fight a raid start set going meanwhile
     // is cancelled here, not left open on an unlocked yard.
     await cancelRaidOnYardLoad(user.userid, gameWasClosed);
+    // Moloch's emergence (docs/design/inferno.md §2.2, §3.2): with the new
+    // Inferno on, the cave goes up a level when its next raid is due, written
+    // before the raid starts. After the raid cancel above, so a raid this load
+    // cancelled does not hold it back.
+    emergence = await emergenceOnLoad(postgres.em, user.userid, baseSave, getCurrentDateTime());
+    // The Under Hall the main yard's Inferno buildings count by (WP 6.1).
+    underHall = emergence && (await underHallOnceDescended(postgres.em, user.userid, emergence.progress, baseSave));
   } else if (
     type === BaseMode.BUILD &&
     isOwner &&
@@ -304,7 +292,7 @@ export const baseLoad: KoaController = async (ctx) => {
     await invalidateSightIfFlingerChanged(user, flingerBefore, baseSave.flinger);
   }
 
-  // An attack load is committed by now (`baseModeAttack`, `infernoModeAttack`):
+  // An attack load is committed by now (`baseModeAttack`):
   // its attacker gets the whole yard; a view, a visit or a help gets it masked.
   const filteredSave = await mapSaveData(baseSave, user, { attack: isAttack });
   const isTutorialEnabled = devConfig.skipTutorial ? 205 : filteredSave.tutorialstage;
@@ -510,6 +498,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(championBrains && { attackerbrains: championBrains }),
+    ...(championHealth && { attackerhealth: championHealth }),
     ...(attackerAcademy && { attackeracademy: attackerAcademy }),
     ...(attackerRanks && Object.keys(attackerRanks).length > 0 && { attackerranks: attackerRanks }),
     ...(completed && { completed }),
@@ -517,6 +506,9 @@ export const baseLoad: KoaController = async (ctx) => {
     // The Trojan Horse was just placed on this load (issue #324): the
     // client's one-time camera pan (design §3.1).
     ...(trojanNew && { trojanNew: true }),
+    // The cave and Moloch's emergence (docs/design/inferno.md §3.2), with
+    // `raised` when this load set its next raid going.
+    ...(emergence && { infernostate: infernoLoadState(emergence, baseSave, getCurrentDateTime(), underHall) }),
     ...(isOwner && {
       chatenabled: 1,
       chattoken,
@@ -537,14 +529,6 @@ export const baseLoad: KoaController = async (ctx) => {
   if (type === BaseMode.ATTACK && mapversion === MapRoomVersion.V3) {
     if (totalStrongholdBonus > 0) response.attackingplayer = { buffs: { 5: totalStrongholdBonus } };
     if (totalDefenderStrongholdBonus > 0) response.defendingplayer = { buffs: { 6: totalDefenderStrongholdBonus } };
-  }
-
-  // Only send descent tribe IDs (201-213) to the client
-  if (type === BaseMode.IDESCENT) {
-    const wmstatus = (filteredSave.wmstatus ?? []).filter(baseid => baseid[0] >= 201 && baseid[0] <= 213);
-
-    response.resources = filteredSave.iresources;
-    response.wmstatus = wmstatus;
   }
 
   // The yard as this attack is served it, kept for the defender's replay of

@@ -70,6 +70,13 @@ export const towerTargets = (type: number): number => oldStyleTargets(flyerMode(
 /** The trap's fixed mode, which no props entry carries (`BTRAP.as:26`). */
 export const TRAP_TARGETS = oldStyleTargets(-1);
 
+/**
+ * What a Quake Tower's quake hurts, the same mode: it sets its own
+ * `attackFlags` (`INFERNOQUAKETOWER.as:29`), while it picks its target by its
+ * flyer mode as any tower does ({@link towerTargets}).
+ */
+export const QUAKE_TARGETS = oldStyleTargets(-1);
+
 /** The Cannon and the Inferno Cannon, whose shells blast with the trap's flags. */
 const INVISIBLE_BLAST_TOWERS: ReadonlySet<number> = new Set([20, 130]);
 

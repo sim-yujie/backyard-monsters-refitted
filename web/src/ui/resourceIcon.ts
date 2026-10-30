@@ -1,4 +1,5 @@
-import { formatAmount, formatCompact } from "./format";
+import { writeAmount, type AmountChange } from "./amountChange";
+import { formatAmount } from "./format";
 
 /**
  * The resource icons every amount on screen is drawn with (issue #93).
@@ -10,14 +11,14 @@ import { formatAmount, formatCompact } from "./format";
  *
  * ## The art
  *
- * The four resources come from the popup art (`/assets/popups/resource*.png`,
- * byte-identical to `archived/bag_*.png`): a sack spilling its contents,
- * about 2:1. At 18 px tall the whole picture is mostly sack, and four brown
- * sacks side by side read as one icon four times. So each is cropped to the
- * spilled pile on the right, which is where the four differ — sticks, grey
- * stones, purple putty, green goo — and which is close to square. The crop is
- * done with `background-size`/`background-position` on the one served image,
- * so there is no second copy of the art to keep in step.
+ * The four resources are piles drawn for the game (`/assets/popups/resource*.png`,
+ * 128 x 128 with a transparent ground): sticks, grey stones, purple putty,
+ * green goo. The old popup art was a sack spilling its contents and had to be
+ * cropped to the pile on the right; these are all pile, so the whole width
+ * shows. Only the empty rows above and below are trimmed, by one band shared
+ * by every pile so all four are drawn at the same scale. The trim is done with
+ * `background-size`/`background-position` on the one served image, so there is
+ * no second copy of the art to keep in step.
  *
  * Shiny is the coin stack from `/assets/alliances/shiny-icon.png`, used whole:
  * it is already square and small, and it reads as money at any size, where
@@ -38,13 +39,63 @@ export type ResourceKey = "r1" | "r2" | "r3" | "r4" | "shiny";
 /** The four harvested resources in the order the game has always shown them. */
 export const RESOURCE_KEYS = ["r1", "r2", "r3", "r4"] as const;
 
-export const RESOURCE_NAMES: Readonly<Record<ResourceKey, string>> = {
+/**
+ * Which four resources the screen is showing: the surface's, or the Inferno's
+ * while the player is on their Inferno yard (Inferno WP 1.19). The Inferno's
+ * are Bone, Coal, Sulfur and Magma in the same four slots, as Flash swaps
+ * `GLOBAL._resourceNames` for the loaded yard; Shiny is the same in both.
+ *
+ * The yard scene sets it when it opens a yard and puts it back when it leaves
+ * ({@link setResourceRealm}), so every panel drawn meanwhile names and draws
+ * the Inferno's without being told. A node already on screen keeps what it was
+ * drawn with; {@link restyleIcon} brings a long-lived one (the HUD) up to date.
+ */
+export type ResourceRealm = "surface" | "inferno";
+
+let realm: ResourceRealm = "surface";
+
+/** The resources the screen shows now. */
+export const resourceRealm = (): ResourceRealm => realm;
+
+/** Shows the Inferno's resources from now on, or the surface's again. */
+export const setResourceRealm = (next: ResourceRealm): void => {
+  realm = next;
+};
+
+const SURFACE_NAMES: Readonly<Record<ResourceKey, string>> = {
   r1: "Twigs",
   r2: "Pebbles",
   r3: "Putty",
   r4: "Goo",
   shiny: "Shiny",
 };
+
+/** The Inferno's four (`#r_bone#`.. in Flash's keys), Shiny unchanged. */
+export const INFERNO_RESOURCE_NAMES: Readonly<Record<ResourceKey, string>> = {
+  r1: "Bone",
+  r2: "Coal",
+  r3: "Sulfur",
+  r4: "Magma",
+  shiny: "Shiny",
+};
+
+/** A resource's name in `inRealm`, the screen's own by default. */
+export const resourceName = (key: ResourceKey, inRealm: ResourceRealm = realm): string =>
+  (inRealm === "inferno" ? INFERNO_RESOURCE_NAMES : SURFACE_NAMES)[key];
+
+/**
+ * Each resource's name in the screen's realm: "Twigs" on the surface, "Bone"
+ * in the Inferno. Read when used, so it follows {@link setResourceRealm}.
+ */
+export const RESOURCE_NAMES: Readonly<Record<ResourceKey, string>> = Object.defineProperties(
+  {},
+  Object.fromEntries(
+    (Object.keys(SURFACE_NAMES) as ResourceKey[]).map((key) => [
+      key,
+      { enumerable: true, get: () => resourceName(key) },
+    ]),
+  ),
+) as Readonly<Record<ResourceKey, string>>;
 
 /** The key a bomb's numeric `resource` (1 twigs, 2 pebbles, 3 putty) names. */
 export const resourceKeyOf = (resource: number): ResourceKey =>
@@ -59,13 +110,41 @@ interface IconArt {
   readonly crop: readonly [number, number, number, number];
 }
 
-/** Crops measured from each image's alpha: the pile, without the sack. */
+/**
+ * The rows every pile sits within: measured from the alpha of all four, and of
+ * the Inferno's bone, coal, sulfur and magma drawn to the same frame.
+ */
+const PILE_CROP = [0, 22, 128, 84] as const;
+
+const pile = (url: string): IconArt => ({ url, width: 128, height: 128, crop: PILE_CROP });
+
 const ART: Readonly<Record<ResourceKey, IconArt>> = {
-  r1: { url: "/assets/popups/resourcetwigs.png", width: 182, height: 95, crop: [102, 26, 79, 68] },
-  r2: { url: "/assets/popups/resourcepebbles.png", width: 190, height: 101, crop: [106, 30, 83, 70] },
-  r3: { url: "/assets/popups/resourceputty.png", width: 191, height: 95, crop: [107, 31, 84, 63] },
-  r4: { url: "/assets/popups/resourcegoo.png", width: 192, height: 98, crop: [108, 31, 83, 65] },
+  r1: pile("/assets/popups/resourcetwigs.png"),
+  r2: pile("/assets/popups/resourcepebbles.png"),
+  r3: pile("/assets/popups/resourceputty.png"),
+  r4: pile("/assets/popups/resourcegoo.png"),
   shiny: { url: "/assets/alliances/shiny-icon.png", width: 40, height: 41, crop: [0, 0, 40, 41] },
+};
+
+/**
+ * The Inferno's icons. Flash's are vector art inside `assets.swf`, which was
+ * not recovered (`docs/design/inferno.md` §4, art track A2), so they are piles
+ * painted for the game in the surface's frame: bone, coal, sulfur and magma,
+ * 128 x 128, trimmed by the same band as the surface's.
+ */
+export const INFERNO_ICON_FILES: Readonly<Record<"r1" | "r2" | "r3" | "r4", string>> = {
+  r1: "/assets/popups/resourcebone.png",
+  r2: "/assets/popups/resourcecoal.png",
+  r3: "/assets/popups/resourcesulfur.png",
+  r4: "/assets/popups/resourcemagma.png",
+};
+
+const INFERNO_ART: Readonly<Record<ResourceKey, IconArt>> = {
+  r1: pile(INFERNO_ICON_FILES.r1),
+  r2: pile(INFERNO_ICON_FILES.r2),
+  r3: pile(INFERNO_ICON_FILES.r3),
+  r4: pile(INFERNO_ICON_FILES.r4),
+  shiny: ART.shiny,
 };
 
 /** A percentage with no more digits than a stylesheet needs. */
@@ -82,8 +161,9 @@ const percent = (value: number): string => `${+value.toFixed(3)}%`;
  */
 export const iconStyle = (
   key: ResourceKey,
+  inRealm: ResourceRealm = realm,
 ): { backgroundImage: string; backgroundSize: string; backgroundPosition: string; aspectRatio: string } => {
-  const { url, width, height, crop } = ART[key];
+  const { url, width, height, crop } = (inRealm === "inferno" ? INFERNO_ART : ART)[key];
   const [x, y, w, h] = crop;
   const along = (offset: number, image: number, part: number): string =>
     image === part ? "0%" : percent((offset / (image - part)) * 100);
@@ -102,26 +182,38 @@ export const iconStyle = (
  * `decorative` drops the name from the accessibility tree and the tooltip, for
  * a control that already carries the name in its own label. `tooltip: false`
  * keeps the name for a screen reader but leaves hover to an ancestor whose own
- * `title` says more, which the icon's would otherwise hide.
+ * `title` says more, which the icon's would otherwise hide. `realm` draws it
+ * as that realm's whatever the screen's is: an Inferno fight's loot on the
+ * attack screen, which shows the surface's (Inferno WP 1.13).
  */
 export interface ResourceIconOptions {
   readonly decorative?: boolean;
   readonly tooltip?: boolean;
+  readonly realm?: ResourceRealm;
 }
 
 export const resourceIcon = (key: ResourceKey, options: ResourceIconOptions = {}): HTMLElement => {
   const icon = document.createElement("span");
   icon.className = `res-icon res-icon--${key}`;
-  Object.assign(icon.style, iconStyle(key));
-  if (options.decorative) {
-    icon.setAttribute("aria-hidden", "true");
-  } else {
-    const name = RESOURCE_NAMES[key];
-    icon.setAttribute("role", "img");
-    icon.setAttribute("aria-label", name);
-    if (options.tooltip !== false) icon.title = name;
-  }
+  if (options.decorative) icon.setAttribute("aria-hidden", "true");
+  else icon.setAttribute("role", "img");
+  if (options.tooltip === false) icon.dataset["notip"] = "";
+  restyleIcon(icon, key, options.realm);
   return icon;
+};
+
+/**
+ * Draws `icon` as `key` in the screen's realm, or `inRealm`, and names it so:
+ * for an icon made before the realm changed, like the HUD's, which outlives
+ * the yard.
+ */
+export const restyleIcon = (icon: HTMLElement, key: ResourceKey, inRealm: ResourceRealm = realm): void => {
+  Object.assign(icon.style, iconStyle(key, inRealm));
+  icon.dataset["realm"] = inRealm;
+  if (icon.getAttribute("aria-hidden") === "true") return;
+  const name = resourceName(key, inRealm);
+  icon.setAttribute("aria-label", name);
+  if (icon.dataset["notip"] === undefined) icon.title = name;
 };
 
 export interface ResourceAmountOptions extends ResourceIconOptions {
@@ -131,6 +223,12 @@ export interface ResourceAmountOptions extends ResourceIconOptions {
    * default, issue #134). Only for a control with no room to grow.
    */
   readonly compact?: boolean;
+  /**
+   * Resources that changed hands, not a price or a stock: "+300" in green
+   * for loot won or a gift received, "−300" in red for loot taken or a gift
+   * sent, said as "300 gained" / "300 lost" (`amountChange.ts`).
+   */
+  readonly change?: AmountChange;
 }
 
 /**
@@ -138,6 +236,7 @@ export interface ResourceAmountOptions extends ResourceIconOptions {
  *
  * A number is spelled in full unless `compact` asks otherwise. A string is
  * taken as already spelled, for "12,500 of 40,000" or a placeholder dash.
+ * `change` signs and colours it as a gain or a loss.
  */
 export const resourceAmount = (
   key: ResourceKey,
@@ -147,11 +246,8 @@ export const resourceAmount = (
   const wrapper = document.createElement("span");
   wrapper.className = options.className ? `res-amount ${options.className}` : "res-amount";
   wrapper.dataset["resource"] = key;
-  const value = document.createElement("span");
-  value.className = "res-amount__value";
-  value.textContent =
-    typeof amount === "string" ? amount : (options.compact ? formatCompact : formatAmount)(amount);
-  wrapper.append(resourceIcon(key, options), value);
+  wrapper.append(resourceIcon(key, options));
+  writeAmount(wrapper, "res-amount", amount, options);
   return wrapper;
 };
 
@@ -168,14 +264,16 @@ export interface ResourceCost {
  * or null when it all costs nothing so the caller can say so in its own words.
  *
  * Amounts are in full by default; pass `formatCompact` where the row has no
- * room for them.
+ * room for them. `options.realm` draws a realm's icons whatever the screen's
+ * is: a main-yard Inferno building's price in Bone, Coal, Sulfur and Magma.
  */
 export const costAmounts = (
   cost: ResourceCost,
   format: (value: number) => string = formatAmount,
+  options: ResourceIconOptions = {},
 ): HTMLElement | null => {
   const parts = RESOURCE_KEYS.filter((key) => (cost[key] ?? 0) > 0).map((key) =>
-    resourceAmount(key, format(cost[key] ?? 0)),
+    resourceAmount(key, format(cost[key] ?? 0), options),
   );
   if (parts.length === 0) return null;
   const list = document.createElement("span");

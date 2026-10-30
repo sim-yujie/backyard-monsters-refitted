@@ -12,7 +12,9 @@ import { trim } from "./tribeAvatars";
  * The outpost core is always drawn at level 1. A main yard wears the Town Hall
  * picture for its owner's real Town Hall level (1-10, the server's `th`;
  * owner decision 2026-10-10), and the level-3 picture when that is unknown -
- * the Flash map never varied it. Every level is drawn at the same on-map
+ * the Flash map never varied it. That is the repainted hall in Modern and
+ * Flash's in Classic (`buildingArtUrl`); the repainted files are `@2x`, which
+ * `trim` has to allow for. Every level is drawn at the same on-map
  * height by `MapChunk`, so the dome, star and name plate fit as before.
  * `buildingArt.ts`'s `resolveArt` is reused rather than hand-written paths, so
  * this reads the same `top.N.png` the yard screen itself would for those levels.
@@ -51,6 +53,17 @@ const ART_TYPE: Record<BuildingKind, number> = {
   [BuildingKind.OUTPOST]: OUTPOST_CORE_TYPE,
 };
 
+/**
+ * The URL of the picture a kind wears at a Town Hall level: in Modern the
+ * repainted hall for that level (`top.newN@2x.webp`), in Classic Flash's own
+ * (`top.N.png`), as the yard screen picks them; the outpost core always at
+ * level 1. Null for a type with no art.
+ */
+export const buildingArtUrl = (kind: BuildingKind, hallLevel?: number): string | null => {
+  const level = kind === BuildingKind.OUTPOST ? OUTPOST_ART_LEVEL : yardArtLevel(hallLevel);
+  return resolveArt(ART_TYPE[kind], level, "")?.top.url ?? null;
+};
+
 export class BuildingAvatars {
   private readonly textures = new Map<string, Texture>();
   private pending: Promise<boolean> | null = null;
@@ -87,21 +100,17 @@ export class BuildingAvatars {
   }
 
   private async loadOnce(): Promise<boolean> {
-    const wanted: { key: string; type: number; level: number }[] = [
-      { key: keyOf(BuildingKind.OUTPOST), type: ART_TYPE[BuildingKind.OUTPOST], level: OUTPOST_ART_LEVEL },
-    ];
-    for (let level = 1; level <= YARD_MAX_LEVEL; level++) {
-      wanted.push({ key: keyOf(BuildingKind.YARD, level), type: ART_TYPE[BuildingKind.YARD], level });
-    }
+    const wanted: { kind: BuildingKind; level?: number }[] = [{ kind: BuildingKind.OUTPOST }];
+    for (let level = 1; level <= YARD_MAX_LEVEL; level++) wanted.push({ kind: BuildingKind.YARD, level });
     await Promise.all(
-      wanted.map(async ({ key, type, level }) => {
-        const art = resolveArt(type, level, "");
-        if (!art) return;
+      wanted.map(async ({ kind, level }) => {
+        const url = buildingArtUrl(kind, level);
+        if (!url) return;
         try {
-          const texture = await Assets.load<Texture>(art.top.url);
-          this.textures.set(key, trim(texture));
+          const texture = await Assets.load<Texture>(url);
+          this.textures.set(keyOf(kind, level), trim(texture));
         } catch (caught) {
-          console.warn(`Building picture ${art.top.url} did not load; its markers stay plain.`, caught);
+          console.warn(`Building picture ${url} did not load; its markers stay plain.`, caught);
         }
       }),
     );

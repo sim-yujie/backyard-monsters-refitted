@@ -1,14 +1,18 @@
-import type { Save } from "../../database/models/save.model.js";
+import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { emitLevelChange } from "../../chat/levelChangeBus.js";
+import { BaseType } from "../../enums/Base.js";
 import { layoutInvalidErr } from "../../errors/errors.js";
 import { YardTargetSchema } from "../../schemas/YardSchemas.js";
 import { postgres } from "../../server.js";
 import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
+import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
+import { syncInfernoCap } from "../../services/inferno/infernoLoad.js";
 import { catchUpYard } from "../../services/yard/catchUp.js";
-import { notInOutpostErr } from "../../services/yard/yardErrors.js";
+import { notInOutpostErr, notYourYardErr } from "../../services/yard/yardErrors.js";
+import { yardKindOf, type YardKind } from "../../services/yardplanner/costs.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { lockOwnYard } from "../yard/yardAction.js";
+import { lockInfernoRow, lockOwnYard } from "../yard/yardAction.js";
 
 /**
  * The yard a Yard Planner route acts on (outposts WP3, issue #184).
@@ -28,6 +32,15 @@ import { lockOwnYard } from "../yard/yardAction.js";
  * Saving, loading and deleting layouts is refused for an outpost: Flash's
  * planner could not save or load templates there
  * (`client/scripts/com/monsters/baseplanner/BasePlanner.as:41`).
+ *
+ * The Inferno yard's `baseid` works like the main yard's (owner decision
+ * 2026-10-29, overriding Flash, which had no planner there, `BASE.as:1072`;
+ * `docs/design/inferno.md` §2.5). Apply and the batches lock the main row and
+ * then the Inferno row (`lockOwnYard`, `403 infernoOff` while the Inferno is
+ * switched off) and act on the Inferno yard seen through the main yard
+ * (`infernoView`): its own buildings and Inferno footprints, the Inferno purse.
+ * Its layouts are its own: they live in the Inferno row's `savetemplate`,
+ * never mixed with the main yard's ({@link onLayoutYard}).
  */
 
 /**
@@ -85,6 +98,9 @@ export const onPlannerYard = async <T>(
     const flingerBefore = yard.save.flinger;
     catchUpYard(yard.save, now);
     const batchResult = run(yard.save, now);
+    // A Resource Pod an Apply finishes moves the Inferno caps, as a yard
+    // action's does (`runYardAction`).
+    if (yard.inferno) syncInfernoCap(yard.main, yard.inferno);
     await tx.flush();
     return { batchResult, flingerBefore, flingerAfter: yard.save.flinger };
   });
@@ -111,8 +127,69 @@ const invalidateSightIfFlingerChanged = async (
 };
 
 /**
- * Refuses a layout save, load or delete that names an outpost (the file
- * comment): `409 notInOutpost`.
+ * The row whose `savetemplate` holds the layouts a request names, and the
+ * yard's kind: the main save without a `baseid` (or with its own), the
+ * caller's Inferno row with its `baseid_inferno` (the file comment), and an
+ * outpost is refused (`409 notInOutpost`), as Flash's planner could not save
+ * or load layouts there (`BasePlanner.as:41`).
+ *
+ * The Inferno row is read under its lock when `write` is set (a save or a
+ * delete, written in the same transaction), and plainly for a read, which an
+ * attack on the Inferno yard does not stop, as it does not stop the main
+ * yard's list either.
+ *
+ * @param user - The caller (`ctx.authUser`).
+ * @param raw - The request body or query, which may carry `baseid`.
+ * @param run - The route's work on the row; it must not persist it.
+ * @param write - Whether `run` changes the row, which is then written.
+ * @returns What `run` returned.
+ * @throws `409 notInOutpost`, `403 infernoOff`, `403 notYourYard`, and
+ *   `409 underAttack` for a write on an Inferno yard being attacked.
+ */
+export const onLayoutYard = async <T>(
+  user: User,
+  raw: unknown,
+  run: (save: Save, kind: YardKind) => T,
+  write: boolean
+): Promise<T> => {
+  await postgres.em.populate(user, ["save"]);
+  const main = user.save!;
+  const baseid = targetOf(user, raw);
+
+  if (baseid === undefined) {
+    const result = run(main, "main");
+    if (write) {
+      postgres.em.persist(main);
+      await postgres.em.flush();
+    }
+    return result;
+  }
+
+  if (!(Number(main.baseid_inferno) > 0) || baseid !== String(main.baseid_inferno)) {
+    throw notInOutpostErr("Layouts cannot be saved or loaded in an outpost.");
+  }
+
+  if (!write) {
+    requireInfernoEnabled();
+    const inferno = await postgres.em.findOne(Save, { baseid });
+    if (!inferno || inferno.type !== BaseType.INFERNO || inferno.userid !== user.userid) {
+      throw notYourYardErr();
+    }
+    return run(inferno, yardKindOf(inferno));
+  }
+
+  return postgres.em.transactional(async (tx) => {
+    const inferno = await lockInfernoRow(tx, user, baseid);
+    const result = run(inferno, yardKindOf(inferno));
+    await tx.flush();
+    return result;
+  });
+};
+
+/**
+ * Refuses a legacy Flash template call that names any yard but the main
+ * one: `409 notInOutpost`. The Flash client never had a planner outside the
+ * main yard, so its routes (`gettemplates`, `savetemplate`) stay main-only.
  *
  * @param user - The caller, with `save` populated.
  * @param raw - The request body or query, which may carry `baseid`.

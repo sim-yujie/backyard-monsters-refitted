@@ -45,6 +45,10 @@ export class Bot {
   @Property({ type: Date })
   level_since!: Date;
 
+  /** When the bot stops growing (`services/bots/population.ts`); null while it never will. */
+  @Property({ type: Date, nullable: true })
+  quiet_since?: Date | null;
+
   @Property({ type: "string", columnType: "text", default: "active" })
   state: Opt<BotState> = "active";
 
@@ -57,4 +61,12 @@ export class Bot {
   /** Grow jobs dropped in a row by the sweep; it retires the bot at `MAX_GROW_DROPS` (issue #248). */
   @Property({ type: "number", default: 0 })
   grow_drops: Opt<number> = 0;
+
+  /**
+   * The yard generator's version the yard was made with (`BOT_YARD_VERSION`,
+   * `services/bots/yardGenerator.ts`); the sweep's next grow rebuilds an older
+   * one. A row made without it reads as the first version.
+   */
+  @Property({ type: "number", default: 1 })
+  yard_version: Opt<number> = 1;
 }

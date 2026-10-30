@@ -12,6 +12,9 @@ const redis = (open: Record<string, string>) => ({
   hdel: async () => 1,
 });
 
+/** A disk with room, so the machine running the tests does not decide the outcome. */
+const roomyDisk = async () => ({ path: "logs", mount: "/", totalBytes: 100, usedBytes: 50, availableBytes: 50, usedPercent: 50 });
+
 describe("admin health report", () => {
   test("puts the summary, what is wrong now and what was already said together", async () => {
     const state = { title: "The server's health check has stopped", section: "health" as const, since: 1, lastSentAt: 1 };
@@ -19,6 +22,7 @@ describe("admin health report", () => {
       sql: async <T>() => [{ bytes: 42 }] as T[],
       redis: redis({ "host-status": JSON.stringify(state) }),
       readHostStatus: async () => null,
+      containerDisk: roomyDisk,
     });
     expect(report.health.database).toMatchObject({ ok: true, sizeBytes: 42 });
     expect(report.health.redis.usedMemoryBytes).toBe(5);
@@ -42,6 +46,7 @@ describe("admin health report", () => {
         hdel: async () => 1,
       },
       readHostStatus: async () => null,
+      containerDisk: roomyDisk,
     });
     expect(report.problems.map((problem) => problem.key)).toContain("redis");
     expect(report.openAlerts).toEqual({});

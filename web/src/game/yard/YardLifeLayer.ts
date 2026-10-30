@@ -1,11 +1,10 @@
-import { Assets, Sprite, Texture, type Container, type Renderer } from "pixi.js";
+import { Sprite, Texture, type Container, type Renderer } from "pixi.js";
 import {
   creepZIndex,
   gpuTextureLimit,
   MonsterSheetTextures,
 } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES, type MonsterSheet } from "@/game/attack/monsterSpriteData";
-import { championEggUrl } from "@/game/portraits";
 import {
   anchorOffset,
   championFlightTop,
@@ -17,6 +16,7 @@ import {
 } from "@/game/attack/monsterSprites";
 import { fromIso, type Point, type Rect, type YardBounds } from "./YardGrid";
 import {
+  cageMiddle,
   chamberDoor,
   championTrips,
   championWalkerKey,
@@ -68,17 +68,7 @@ import {
  * the Champion Chamber (#314) when `set` is handed a route to walk; under
  * reduced motion, with no route, or on a yard read fresh it is simply gone
  * from the cage or back in it.
- *
- * A champion's egg (owner 2026-10-20) stands still in the middle of the cage,
- * one picture ({@link EGG_HEIGHT} world px tall), until it hatches or is
- * cancelled.
  */
-
-/** How tall the egg stands in the cage, in world px (its picture is drawn at twice this). */
-export const EGG_HEIGHT = 60;
-
-/** Depth tie-break id of the egg, past every walker's and worker's. */
-const EGG_DEPTH_ID = 999;
 
 /** World px of slack around the view before a creature counts as off screen. */
 const CULL_MARGIN = 120;
@@ -138,8 +128,6 @@ export class YardLifeLayer {
   private shadows: Container | null = null;
   private hidden = false;
   private limitRead = false;
-  /** The egg in the cage, its champion's id, and whether its picture is in. */
-  private egg: { readonly id: string; readonly sprite: Sprite; ready: boolean } | null = null;
   /** Fractions of a tick carried between frames. */
   private creatureClock = 0;
   private workerClock = 0;
@@ -255,13 +243,11 @@ export class YardLifeLayer {
       this.workerBodies.push(this.makeBody(WORKER_SHEET ?? null));
     }
 
-    this.setEgg(next, bounds);
     this.mount();
   }
 
   /** Takes every sprite out of the yard's containers, before the yard clears them. */
   detach(): void {
-    this.egg?.sprite.parent?.removeChild(this.egg.sprite);
     for (const body of this.bodies()) {
       body.body.parent?.removeChild(body.body);
       body.shadow?.parent?.removeChild(body.shadow);
@@ -284,12 +270,6 @@ export class YardLifeLayer {
   setHidden(hidden: boolean): void {
     this.hidden = hidden;
     if (hidden) for (const body of this.bodies()) this.show(body, false);
-    if (this.egg) this.egg.sprite.visible = !hidden && this.egg.ready;
-  }
-
-  /** The egg's sprite, for tests. */
-  get eggSprite(): Sprite | null {
-    return this.egg?.sprite ?? null;
   }
 
   /**
@@ -326,6 +306,11 @@ export class YardLifeLayer {
     const onScreen = (x: number, y: number): boolean =>
       x >= left && x <= right && y >= top && y <= bottom;
 
+    // A champion pacing its cage sorts in front of the cage's middle, where the
+    // cage sorts, so the back fence never draws across it (see `cageMiddle`).
+    const cage = this.life.cage ? cageMiddle(this.life.cage) : null;
+    const cageY = cage ? (cage.x + cage.y) / 2 + bounds.originY : null;
+
     let depthId = 0;
     for (const [key, walker] of this.walkers) {
       depthId++;
@@ -340,7 +325,8 @@ export class YardLifeLayer {
       const tick = this.reducedMotion ? 0 : walker.age;
       const hovers = hoversInCage(walker, body.sheet);
       const animation = walker.moving || hovers ? "walk" : "idle";
-      this.place(body, x, y, walker.heading, animation, tick, depthId, hovers);
+      const sortFloor = walker.champion && !walker.trip && cageY !== null ? cageY : -Infinity;
+      this.place(body, x, y, walker.heading, animation, tick, depthId, hovers, sortFloor);
     }
 
     this.workers.forEach((worker, index) => {
@@ -358,8 +344,6 @@ export class YardLifeLayer {
 
   destroy(): void {
     this.detach();
-    this.egg?.sprite.destroy();
-    this.egg = null;
     for (const body of this.bodies()) {
       body.body.destroy();
       body.shadow?.destroy();
@@ -383,40 +367,6 @@ export class YardLifeLayer {
   }
 
   /* ── Sprites ──────────────────────────────────────────────────────── */
-
-  /** Puts the cage's egg in the middle of the cage, or takes it away. */
-  private setEgg(life: YardLife, bounds: YardBounds): void {
-    const id = life.egg?.id ?? null;
-    if (this.egg && this.egg.id !== id) {
-      this.egg.sprite.parent?.removeChild(this.egg.sprite);
-      this.egg.sprite.destroy();
-      this.egg = null;
-    }
-    if (!id || !life.egg) return;
-    if (!this.egg) {
-      const sprite = new Sprite(Texture.EMPTY);
-      sprite.eventMode = "none";
-      sprite.anchor.set(0.5, 1);
-      sprite.visible = false;
-      const egg = { id, sprite, ready: false };
-      this.egg = egg;
-      void Assets.load<Texture>(championEggUrl(id, "yard"))
-        .then((texture) => {
-          if (this.egg !== egg || sprite.destroyed) return;
-          sprite.texture = texture;
-          sprite.scale.set(EGG_HEIGHT / Math.max(1, texture.height));
-          egg.ready = true;
-          sprite.visible = !this.hidden;
-        })
-        .catch((caught: unknown) => {
-          console.warn(`Egg art for ${id} did not load.`, caught);
-        });
-    }
-    const x = life.egg.x - life.egg.y + bounds.originX;
-    const y = (life.egg.x + life.egg.y) / 2 + bounds.originY;
-    this.egg.sprite.position.set(x, y);
-    this.egg.sprite.zIndex = creepZIndex(x, y, EGG_DEPTH_ID);
-  }
 
   private *bodies(): Generator<Body> {
     yield* this.walkerBodies.values();
@@ -450,8 +400,7 @@ export class YardLifeLayer {
   private mount(): boolean {
     if (!this.tops) return false;
     for (const body of this.bodies()) this.mountBody(body);
-    if (this.egg && this.egg.sprite.parent !== this.tops) this.tops.addChild(this.egg.sprite);
-    return this.count > 0 || this.egg !== null;
+    return this.count > 0;
   }
 
   private mountBody(body: Body): void {
@@ -476,6 +425,7 @@ export class YardLifeLayer {
     tick: number,
     depthId: number,
     hovers = false,
+    sortFloor = -Infinity,
   ): void {
     const sheet = body.sheet;
     if (!sheet) return;
@@ -494,8 +444,9 @@ export class YardLifeLayer {
     const anchor = anchorOffset(sheet);
     body.body.position.set(x + anchor.x, y + (hovers ? championFlightTop(tick) : anchor.y));
     // A hovering body sorts as if it stood its altitude further down the
-    // screen, as a flyer does on the attack screen.
-    const zIndex = creepZIndex(x, hovers ? y + flyerAltitude(sheet.family) : y, depthId);
+    // screen, as a flyer does on the attack screen; none sorts further back than `sortFloor`.
+    const sortY = Math.max(hovers ? y + flyerAltitude(sheet.family) : y, sortFloor);
+    const zIndex = creepZIndex(x, sortY, depthId);
     if (body.body.zIndex !== zIndex) body.body.zIndex = zIndex;
     body.body.visible = true;
 

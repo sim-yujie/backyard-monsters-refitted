@@ -24,7 +24,8 @@ export const BuildingIdField = z.coerce.number().int().nonnegative();
 /**
  * The yard a request acts on, on every yard route: absent (or `0`) for the
  * caller's main yard, else the `baseid` of one of their Map Room 2 outposts
- * (the id `/base/load` and `Save.outposts` use). The wrapper reads it
+ * (the id `/base/load` and `Save.outposts` use) or of their Inferno yard (the
+ * main save's `baseid_inferno`). The wrapper reads it
  * beside the route's own schema (`controllers/yard/yardAction.ts`).
  */
 export const YardTargetSchema = z.object({
@@ -103,6 +104,11 @@ export const YardHatcheryRemoveSchema = z.object({
   count: z.union([z.literal("all"), z.coerce.number().int().min(1)]).default(1),
 });
 
+/** `POST /bm/yard/hatchery/clear`: a hatchery, or `hcc` for the shared queue (Clear all). */
+export const YardHatcheryClearSchema = z.object({
+  hatchery: HatcheryTargetField,
+});
+
 /** `POST /bm/yard/hatchery/finish`: a hatchery, or `hcc` for everything the HCC feeds. */
 export const YardHatcheryFinishSchema = z.object({
   hatchery: HatcheryTargetField,
@@ -138,6 +144,16 @@ const YardCoordinateField = z.coerce.number().int().min(-4000).max(4000);
  */
 export const YardBuildSchema = z.object({
   type: z.coerce.number().int().positive(),
+  x: YardCoordinateField,
+  y: YardCoordinateField,
+});
+
+/**
+ * `POST /bm/yard/move`: one building and where its footprint now starts.
+ * Whether it may go there is the route's rule (`services/yard/move.ts`).
+ */
+export const YardMoveSchema = z.object({
+  id: BuildingIdField,
   x: YardCoordinateField,
   y: YardCoordinateField,
 });
@@ -199,6 +215,12 @@ const MonsterCountsField = jsonField("monsters must be a JSON object of counts")
 
 /** `POST /bm/yard/juice`: housed monsters to juice for goo (`services/yard/juice.ts`). */
 export const YardJuiceSchema = z.object({ monsters: MonsterCountsField });
+
+/**
+ * `POST /bm/inferno/transfer`: Inferno monsters to bring up from the Compound
+ * to the main yard's Housing (`services/inferno/transfer.ts`).
+ */
+export const InfernoTransferSchema = z.object({ monsters: MonsterCountsField });
 
 /**
  * `POST /bm/yard/bunker/fill`: monsters to put in a Monster Bunker, from
@@ -288,3 +310,16 @@ export const YardStarterKitSchema = z.object({
   pay: z.enum(["resources", "shiny"]),
   topUp: z.coerce.number().int().nonnegative().optional(),
 });
+
+/**
+ * `POST /bm/yard/siege/{lab,factory}/{start,instant}`: the siege weapon
+ * (`decoy`, `vacuum`, `jars`) and, to buy a shortfall of Inferno resources
+ * with Shiny, the price the server named in its `409 shortfall`.
+ */
+export const YardSiegeWeaponSchema = z.object({
+  weapon: z.string().min(1).max(16),
+  topUp: z.coerce.number().int().nonnegative().optional(),
+});
+
+/** `POST /bm/yard/siege/{lab,factory}/{cancel,finish}` take no fields: one job per building. */
+export const YardSiegeSchema = z.object({});

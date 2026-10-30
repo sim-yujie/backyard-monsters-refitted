@@ -16,6 +16,9 @@ export const NEED_MORE_SILOS_PHRASE = "Need more silos: this costs more than you
 /** The same as a sentence. */
 export const NEED_MORE_SILOS = `${NEED_MORE_SILOS_PHRASE}.`;
 
+/** The same for the Inferno purse, whose cap the Inferno yard's Resource Pods raise. */
+export const NEED_MORE_PODS = "Need more Resource Pods: this costs more than your Inferno storage holds.";
+
 /** True when `cost` is more than the cap can ever hold. An unknown cap is never exceeded. */
 export const overCap = (cost: number, cap: number | null | undefined): boolean =>
   typeof cap === "number" && cap > 0 && cost > cap;
