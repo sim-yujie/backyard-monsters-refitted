@@ -574,8 +574,8 @@ def materials():
                         spec=0.3)
     M["hoop"] = painted("hoop", (124, 72, 24), rough=0.55, metal=0.3, wear=(176, 110, 40), rust=(60, 32, 10), scale=3.0,
                         dirt=0.3, spec=0.3)
-    M["pipe"] = painted("pipe", (192, 122, 34), rough=0.48, metal=0.3, wear=(238, 184, 86), rust=(84, 48, 14), scale=2.4,
-                        dirt=0.4, spec=0.38, soot=0.35, rust_at=0.66)
+    M["pipe"] = painted("pipe", (192, 122, 34), rough=0.34, metal=0.3, wear=(238, 184, 86), rust=(84, 48, 14), scale=2.4,
+                        dirt=0.4, spec=0.55, soot=0.35, rust_at=0.66)
     M["pipedark"] = painted("pipedark", (150, 90, 26), rough=0.52, metal=0.3, wear=(204, 146, 62), rust=(70, 40, 12),
                             scale=2.4, dirt=0.4, spec=0.34, soot=0.45, rust_at=0.62)
     M["goo"] = goo_mat("goo", (14, 44, 4), (40, 104, 10), (96, 160, 22), rough=0.5, spec=0.25)
