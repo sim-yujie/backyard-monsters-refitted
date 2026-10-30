@@ -183,6 +183,14 @@ describe("yardLifeOf on somebody else's yard (#159)", () => {
     }
   });
 
+  it("a Moloch yard has no workers though its save says Inferno (`GLOBAL.as:763-787`)", () => {
+    const moloch = { ...busy, type: "inferno" } as BaseLoadResponse;
+    const read = yardLifeOf(moloch, readYard(moloch, { foreign: true, wild: true }), "attack", true);
+    expect(read.workers).toBe(0);
+    expect(read.jobs).toEqual([]);
+    expect(yardLifeOf(moloch, readYard(moloch, { foreign: true }), "attack").workers).toBe(5);
+  });
+
   it("reads the defender's own academy for the walking speed", () => {
     const slow = { ...busy, academy: {} } as BaseLoadResponse;
     expect(yardLifeOf(slow, yard, "visit").groups.map((group) => group.level)).toEqual([1, 1]);
