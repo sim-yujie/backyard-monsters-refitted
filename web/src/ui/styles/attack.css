@@ -1086,6 +1086,18 @@
   background: color-mix(in srgb, var(--colour-surface-raised), var(--colour-text) 12%);
 }
 
+/*
+ * No 1px press nudge here (ui.css `.btn:active`). The tool bar is the last
+ * thing in the dock body, which scrolls, so the nudge pushed it 1px past the
+ * body's edge: the body overflowed, a Windows scrollbar took 15px off its
+ * width, the Army panel rewrapped taller and the button slid out from under
+ * the pointer before the release, so the click was lost (Brave, beta.4.1).
+ */
+.btn.attack-tools__button:active:not(:disabled) {
+  transform: none;
+  background: color-mix(in srgb, var(--colour-surface-raised), var(--colour-text) 20%);
+}
+
 .attack-tools__button:disabled {
   background: var(--colour-surface-raised);
 }

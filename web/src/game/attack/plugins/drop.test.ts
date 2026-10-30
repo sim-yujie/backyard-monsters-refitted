@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Container } from "pixi.js";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
@@ -114,6 +117,20 @@ describe("the drop plugin's pickers in the dock", () => {
     button("Catapult").click();
     expect(open()).toEqual([]);
     expect(sheet.classList.contains("attack-dock--picker")).toBe(false);
+  });
+
+  it("keeps a pressed tool button still, so the press cannot make the dock scroll and lose the click (Brave)", () => {
+    // The tool bar ends the dock's scrolling body. ui.css sinks a pressed
+    // button 1px; there that 1px overflowed the body, a Windows scrollbar
+    // narrowed it, the Army panel rewrapped and the button slid away before
+    // the release. jsdom lays nothing out, so the rule that stops it is pinned.
+    mount(target(null));
+    expect(dock.lastElementChild?.classList.contains("attack-tools")).toBe(true);
+    const styles = resolve(dirname(fileURLToPath(import.meta.url)), "../../../ui/styles");
+    const ui = readFileSync(resolve(styles, "ui.css"), "utf8");
+    expect(ui).toMatch(/\n\.btn:active:not\(:disabled\) \{\s*transform: translateY\(1px\);/);
+    const attack = readFileSync(resolve(styles, "attack.css"), "utf8");
+    expect(attack).toMatch(/\n\.btn\.attack-tools__button:active:not\(:disabled\) \{\s*transform: none;/);
   });
 
   it("offers no Siege button for a weapon with none left, nor in the Descent", () => {
