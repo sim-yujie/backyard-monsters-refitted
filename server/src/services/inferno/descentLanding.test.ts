@@ -470,7 +470,7 @@ describe("the save that ends a Descent attack", () => {
   test("from yard 7 the server's replay burns surface monsters, as the client's fight does (WP 1.21)", async () => {
     row = progressRow(6);
     startSession("207");
-    const POKEYS = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C1: 40 } }] };
+    const POKEYS = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C1: 80 } }] };
     const ctx = finalSave("207", { tick: "12000", flinglog: JSON.stringify(POKEYS) });
 
     expect(await run(ctx)).toBeNull();
