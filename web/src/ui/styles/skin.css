@@ -771,6 +771,14 @@
   background: var(--skin-fill);
 }
 
+/* A frozen champion's badge keeps its ice blue (on the window's fill its
+   words were lost in both styles). */
+:root[data-skin] .panel .chamber-card--frozen .chamber-card__where {
+  background: var(--colour-info);
+  color: var(--colour-text-inverse);
+  text-shadow: none;
+}
+
 /* A dark count on a picture (Housing's ×39): the dark chip's own light words,
    not the parchment's dark ink. */
 :root[data-skin] .panel .housing-living__badge {
