@@ -29,11 +29,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import kit  # noqa: E402
-from kit import Vector, box, cyl, lathe, tube, ring, sweep, gear, blob, painted, flat, link, srgb  # noqa: E402
+from kit import Vector, Euler, box, cyl, lathe, tube, ring, sweep, gear, blob, painted, flat, link, srgb  # noqa: E402
 
 L = kit.L
 kit.OUT = HERE
-kit.ORIGIN = (-2.0, 31.5) if L < 3 else (2.0, 39.0)   # Flash pixel of the bowl axis on the ground: Flash draws level 3 4 px right, 7.5 lower
+kit.ORIGIN = (-2.0, 31.5) if L < 3 else (2.0, 38.0)   # Flash pixel of the bowl axis on the ground: Flash draws level 3 4 px right, 6.5 lower
 kit.FRAME = (-56, -48, 56, 68)
 kit.FRAMES = 47 if L < 3 else 50
 kit.SUN, kit.SUN_COL = 5.2, (1.0, 0.9, 0.78)      # Flash's Inferno light: warm, a darker fill
@@ -42,18 +42,19 @@ FR = kit.FRAMES
 rng = kit.rng
 
 # ------------------------------------------------------------------------------------------------ the body's sizes
-FOOT = [(3.0, 0.0), (3.03, 0.06), (3.0, 0.22), (2.88, 0.26), (2.88, 0.42), (2.72, 0.46), (2.62, 0.62)]   # two low steps
-BOWL = [(2.62, 0.62), (2.72, 0.72), (2.86, 0.86), (2.98, 1.1), (3.06, 1.5), (3.12, 2.1), (3.16, 2.7), (3.2, 3.25)]
-RIM_Z, RIM_R = 3.42, 3.24             # the rolled lip
+FOOT = [(3.0, 0.0), (3.03, 0.05), (3.0, 0.24)]                                # Flash's dark pedestal on the ground,
+PALE = [(3.0, 0.24), (2.92, 0.3), (2.66, 0.56), (2.6, 0.62)]                  # its sloped top lit pale,
+BOWL = [(2.6, 0.62), (2.55, 0.8), (2.62, 0.92), (2.86, 1.02), (3.08, 1.2), (3.22, 1.45), (3.28, 1.8), (3.27, 2.2),
+        (3.24, 2.7), (3.2, 3.25)]     # a dark waist, then the round belly bulging below the rim: a squat cauldron
+RIM_R, RIM_Z = 3.24, 3.42             # the rolled lip; the belly bulges below it, a squat cauldron as Flash
 IN_R, FLOOR_Z = 3.0, 1.55             # inside wall and floor
 ROLL_Y, ROLL_Z = (-1.0, 0.55), 3.05      # Flash's two rollers (front, back), filling the bowl to the rim
 ROLL_R = (0.42, 0.5)                  # their cores; level 1's front one carries bone teeth, the back one sockets
 ROLL_X = 2.2                          # the rollers' toothed length ends here; bare axles run on to the wall
 POST_X, BAR_Z = (-3.2, 2.75), 6.05     # level 1: the posts on the rim (Y 0) and the bar along X
 HORN = (-2.66, -2.5)                 # the horn's axis (X, Y), on the bowl's left
-DRUM = (0.225, -3.58, 0.92, 2.3)      # the drum: middle X, Y, radius, length (axis DRUM_U, nearly across the picture)
-DRUM_U = (0.5, 0.866)               # its axis: its near end cap just shows, as Flash
-DRUM_IN = 0.45                      # how far past its middle the base's collar sits
+DRUM = (-0.04, -3.8, 0.75, 2.7)      # the drum: middle X, Y, radius, length (axis DRUM_U)
+DRUM_U = (0.985, 0.17)              # Flash: lying along the bowl's front left, its long side to us, the near end lower right
 PLATE = (3.5, 0.3)                  # the steel plate's middle on the ground
 COLUMN = (3.05, 2.1)                   # level 3: the steel column
 SH3_TH = -9.0                         # level 3: where the hood stands round the bowl (deg)
@@ -84,11 +85,13 @@ def mats():
     m["spike"] = painted("spike", (122, 112, 100), rough=0.45, metal=0.5, wear=(212, 202, 186), rust=(84, 52, 30),
                          scale=8, dirt=0.25, spec=0.5, soot=0.4, rust_at=0.6, grain=0.2)
     m["core"] = painted("core", (14, 14, 13), rough=0.9, metal=0.1, wear=(34, 32, 30), scale=6, dirt=0.3, spec=0.12)
-    m["roller"] = painted("roller", (112, 114, 110), rough=0.5, metal=0.45, wear=(176, 176, 168), rust=(80, 56, 38),
-                          scale=7, dirt=0.4, spec=0.35, soot=0.5, rust_at=0.6, grain=0.3)     # L1: the grey back roller
+    m["roller"] = painted("roller", (124, 118, 104), rough=0.72, metal=0.15, wear=(196, 186, 160), rust=(84, 60, 40),
+                          scale=9, dirt=0.6, spec=0.25, soot=0.6, rust_at=0.55, grain=0.55)  # L1: the rough grey slab
     m["planks"] = kit.wood("planks", (206, 104, 40), (128, 54, 18), axis="Y", rings=4, dirt=0.4)    # orange boards
     m["pale"] = painted("pale", (150, 152, 144), rough=0.5, metal=0.4, wear=(206, 206, 196), rust=(80, 60, 44),
                         scale=6, dirt=0.3, spec=0.4, rust_at=0.66)
+    m["paleband"] = painted("paleband", (84, 96, 90), rough=0.55, metal=0.35, wear=(158, 170, 160), rust=(62, 44, 30),
+                            scale=7, dirt=0.5, spec=0.3, soot=0.5, rust_at=0.6, grain=0.35)    # the foot's pale band
     m["steel"] = painted("steel", (78, 80, 82), rough=0.48, metal=0.5, wear=(164, 164, 158), rust=(62, 42, 30),
                          scale=6, dirt=0.4, spec=0.4, soot=0.55, rust_at=0.6, grain=0.25)
     m["cogsteel"] = painted("cogsteel", (138, 140, 138), rough=0.45, metal=0.5, wear=(214, 214, 208), rust=(84, 64, 46),
@@ -114,13 +117,13 @@ def at_r(prof, z):
 
 
 def wall_r(z):
-    return at_r(FOOT + BOWL, z)
+    return at_r(FOOT + PALE[1:] + BOWL[1:], z)
 
 
 # ------------------------------------------------------------------------------------------------ the bowl
 def bowl():
-    lathe("bowlfoot", [(0.0, 0.0)] + FOOT[:6] + [(0.0, 0.46)], (0, 0, 0), M["steel"], verts=64)   # the grey steps
-    lathe("bowlneck", [(0.0, 0.46)] + FOOT[5:] + [(0.0, 1.0)], (0, 0, 0), M["iron"], verts=64)
+    lathe("bowlfoot", [(0.0, 0.0)] + FOOT + [(0.0, 0.24)], (0, 0, 0), M["steel"], verts=64)   # the pedestal
+    lathe("bowlpale", [(0.0, 0.24)] + PALE + [(0.0, 0.62)], (0, 0, 0), M["paleband"], verts=64)    # its pale top
     lo = [p for p in BOWL if p[1] <= 2.55]
     hi = [p for p in BOWL if p[1] >= 2.55]
     lathe("bowl", lo + [(at_r(BOWL, 2.55), 2.55)], (0, 0, 0), M["iron"], verts=72)
@@ -129,13 +132,13 @@ def bowl():
     lathe("bowltop", prof, (0, 0, 0), M["ironrust"] if L < 3 else M["iron"], verts=72)   # L1: stained under the lip
     lathe("bowlin", [(IN_R, 3.22), (IN_R - 0.08, 2.4), (IN_R - 0.4, 1.8), (2.0, FLOOR_Z), (0.0, FLOOR_Z)],
           (0, 0, 0), M["inside"], verts=72)
-    ring("bowllip", RIM_R - 0.06, 0.17, M["lip"], z=RIM_Z - 0.02, n=72)    # Flash's thick rolled lip
+    ring("bowllip", RIM_R - 0.05, 0.11, M["lip"], z=RIM_Z - 0.02, n=72)    # Flash's rolled lip, a thin bright line
     if L >= 3:                                 # level 3: a riveted band round the bowl's belly
-        lathe("bowlband", [(3.1, 2.1), (3.36, 2.18), (3.44, 2.45), (3.36, 2.72), (3.12, 2.8)], (0, 0, 0), M["band"],
+        lathe("bowlband", [(3.24, 2.1), (3.44, 2.18), (3.5, 2.45), (3.44, 2.72), (3.2, 2.8)], (0, 0, 0), M["band"],
               verts=72)
         for i in range(18):
             a = 2 * math.pi * (i + 0.5) / 18
-            kit.blob(f"bowlrivet{i}", (3.38 * math.cos(a), 3.38 * math.sin(a), 2.45), 0.07, 0.9, M["iron"])
+            kit.blob(f"bowlrivet{i}", (3.47 * math.cos(a), 3.47 * math.sin(a), 2.45), 0.07, 0.9, M["iron"])
 
 
 # ------------------------------------------------------------------------------------------------ the rollers
@@ -154,7 +157,13 @@ def rollers():
         link(hub, e)
         kit.MOVING.append(hub)
         core = M["core"] if L >= 3 else (M["bonedark"] if i == 0 else M["roller"])
-        cyl(f"roll{i}core", r, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), core, parent=hub, verts=28)
+        if L < 3 and i == 1:                    # Flash's back roller: a flat-faced grey slab, a six-sided beam
+            slab = cyl(f"roll{i}core", r + 0.14, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), core, parent=hub, verts=6,
+                       bevel=0.05)
+            v0 = slab.data.vertices[0].co
+            a0 = math.atan2(v0.y, v0.x) + math.pi / 6        # the first flat face's middle
+        else:
+            cyl(f"roll{i}core", r, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), core, parent=hub, verts=28)
         cyl(f"roll{i}axle", 0.12, 2 * half, (0, 0, -half), M["steel"], parent=hub, verts=12)
         if L >= 3:                                           # spikes, staggered between the rollers
             step, nj = 0.55, 5
@@ -169,30 +178,37 @@ def rollers():
                              r2=0.012, verts=10, parent=hub, bevel=0.0)
                     sp.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
             continue
-        step = 0.4
-        for k in range(12):
-            z = -ROLL_X + 0.22 + k * step
-            if z > ROLL_X - 0.2:
-                break
-            for j in range(8):
-                a = 2 * math.pi * (j + 0.5 * (k % 2)) / 8
-                d = Vector((math.cos(a), math.sin(a), 0))
-                if i == 0:                                   # front: chunky bone teeth
-                    g = rng.uniform(0.85, 1.12)          # worn, uneven teeth, a few darker
-                    t = box(f"roll{i}tooth{k}-{j}", (0.24 * g, 0.27 * g, 0.3), (0, 0, 0),
-                            M["bonedark"] if rng.random() < 0.18 else M["bone"], parent=hub, bevel=0.06,
-                            origin="centre")
-                    t.location = (d.x * (r + 0.06), d.y * (r + 0.06), z)
-                    t.rotation_euler = (rng.uniform(-0.12, 0.12), rng.uniform(-0.12, 0.12), a)
-                else:                                        # back: dark round sockets in the grey roller
-                    h = cyl(f"roll{i}hole{k}-{j}", 0.11, 0.05, (d.x * (r - 0.03), d.y * (r - 0.03), z), M["hole"],
-                            verts=14, parent=hub, bevel=0.0)
-                    h.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
-                    rim = kit.bpy.data.objects.new(f"roll{i}holerim{k}-{j}", None)
-                    link(rim, hub)
-                    rim.location = (d.x * (r + 0.005), d.y * (r + 0.005), z)
-                    rim.rotation_euler = h.rotation_euler
-                    ring(f"roll{i}holering{k}-{j}", 0.12, 0.022, M["pale"], parent=rim, n=14)
+        if i == 0:                                   # front: rows of rough pointed bone teeth, worn and uneven
+            step = 0.36
+            for k in range(13):
+                z = -ROLL_X + 0.2 + k * step
+                if z > ROLL_X - 0.15:
+                    break
+                for j in range(8):
+                    a = 2 * math.pi * (j + 0.5 * (k % 2) + rng.uniform(-0.08, 0.08)) / 8
+                    d = Vector((math.cos(a), math.sin(a), 0))
+                    g = rng.uniform(0.8, 1.15)
+                    t = cyl(f"roll{i}tooth{k}-{j}", 0.19 * g, 0.3 * g, (d.x * (r - 0.05), d.y * (r - 0.05),
+                            z + rng.uniform(-0.05, 0.05)), M["bonedark"] if rng.random() < 0.22 else M["bone"],
+                            r2=0.07, verts=4, parent=hub, bevel=0.035)
+                    t.rotation_euler = (d.to_track_quat("Z", "Y") @ Euler((rng.uniform(-0.15, 0.15),
+                                        rng.uniform(-0.15, 0.15), math.pi / 4 + rng.uniform(-0.3, 0.3))).to_quaternion()).to_euler()
+            continue
+        # back: Flash's slab face, a row of dark round sockets on each flat face with pale worn bosses between
+        rr = (r + 0.14) * math.cos(math.pi / 6)              # the flat faces' distance from the axis
+        for j in range(6):
+            a = a0 + 2 * math.pi * j / 6
+            d = Vector((math.cos(a), math.sin(a), 0))
+            for k in range(8):
+                z = -ROLL_X + 0.3 + k * 0.55 + rng.uniform(-0.05, 0.05)
+                if z > ROLL_X - 0.2:
+                    break
+                h = cyl(f"roll{i}hole{j}-{k}", 0.13 * rng.uniform(0.8, 1.15), 0.04, (d.x * (rr - 0.02), d.y * (rr - 0.02), z),
+                        M["hole"], verts=10, parent=hub, bevel=0.0)
+                h.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
+                if k < 7:
+                    kit.blob(f"roll{i}boss{j}-{k}", (d.x * rr, d.y * rr, z + 0.27), 0.09 * rng.uniform(0.8, 1.2), 0.8,
+                             M["bone"] if rng.random() < 0.7 else M["pale"], parent=hub)
 
 
 # ------------------------------------------------------------------------------------------------ the horn
@@ -242,28 +258,23 @@ def horn():
 
 # ------------------------------------------------------------------------------------------------ the drum
 def drum():
-    """Flash's orange metal drum, lying at the bowl's front left with its axis across the picture, its far end tucked
-    under the bowl into a bolted collar on the base; it lies on the ground."""
+    """Flash's orange metal drum: a plain long cylinder lying on the ground along the bowl's front left, tucked in under
+    the belly, its long side to us with thin dark bands round it and its near end (lower right) in shade."""
     x, y, r, ln = DRUM
     u = Vector(DRUM_U + (0,)).normalized()
     c = Vector((x, y, r))
     rot = tuple(math.degrees(a) for a in u.to_track_quat("Z", "Y").to_euler())
-    e = cyl("drum", r, ln, c - u * (ln / 2), M["copper"], rot=rot, verts=48, bevel=0.14)
-    for f in (0.1, 0.45):                       # rolled hoops
-        cyl(f"drumhoop{f}", r + 0.045, 0.13, c - u * (ln / 2) + u * (ln * f), M["rust"], rot=rot, verts=48, bevel=0.03)
-    cyl("drumcap", r - 0.22, 0.06, c - u * (ln / 2 + 0.04), M["rust"], rot=rot, verts=40, r2=r - 0.32)   # a boss
-    cyl("drumcollar", r + 0.1, 0.3, c + u * (DRUM_IN - 0.15), M["rust"], rot=rot, verts=48, bevel=0.04)
-    for k in range(8):                          # the collar's bolts
-        a = 2 * math.pi * (k + 0.5) / 8
-        side = Vector((-u.y, u.x, 0))
-        p = c + u * (DRUM_IN - 0.15) + side * ((r + 0.11) * math.cos(a)) + Vector((0, 0, (r + 0.11) * math.sin(a)))
-        kit.blob(f"drumcollarbolt{k}", p, 0.05, 0.9, M["bone"])
-    if L >= 3:                                  # level 3: riveted ends
-        side = Vector((-u.y, u.x, 0))
-        for k in range(12):
-            a = 2 * math.pi * k / 12
-            p = c - u * (ln * 0.42) + side * ((r + 0.02) * math.cos(a)) + Vector((0, 0, (r + 0.02) * math.sin(a)))
-            kit.blob(f"drumrivet{k}0.08", p, 0.045, 0.9, M["rust"])
+    e = cyl("drum", r, ln, c - u * (ln / 2), M["copper"], rot=rot, verts=48, bevel=0.1)
+    for f in (0.3, 0.62, 0.9):                  # thin dark bands round it, nearly flush (Flash's lines)
+        cyl(f"drumband{f}", r + 0.012, 0.07, c - u * (ln / 2) + u * (ln * f), M["groove"], rot=rot, verts=48)
+    for s_ in (-1, 1):                          # rolled rims at both ends, the near cap a dark rust boss
+        cyl(f"drumrim{s_}", r + 0.02, 0.1, c + u * (s_ * ln / 2 - (0.12 if s_ > 0 else -0.02)), M["rust"], rot=rot,
+            verts=48, bevel=0.03)
+    cyl("drumcap", r - 0.2, 0.05, c + u * (ln / 2 - 0.01), M["rust"], rot=rot, verts=40, r2=r - 0.3)
+    for k in range(2):                          # two chocks behind it keep it from rolling
+        p = c + u * (ln * (0.3 if k else -0.3)) - Vector((0, 0, r))
+        box(f"drumchock{k}", (0.3, 0.5, 0.2), (p.x, p.y + r * 0.62, 0.0), M["rust"],
+            rot=(0, 0, math.degrees(math.atan2(u.y, u.x))), bevel=0.03)
     return e
 
 
@@ -271,16 +282,16 @@ def drum():
 def shield():
     """The rust shield on the bowl's front right, standing off the wall on brackets. Level 1: Flash's pointed shield,
     thick, leaning out, a pale triangle of lines down to its point; a steel rod from the point down to the plate, a
-    chain hanging from its right edge, the cog beside the rod. Level 3 (Flash redraws it): a bigger hood, its foot low
-    by the bowl's foot and its top leaning out over the band; a thick rust frame round a dark panel with a pale inner
-    line and a small copper gear."""
+    chain hanging from its right edge, the cog beside the rod. Level 3 (Flash redraws it): a wider plate fixed flat on
+    brackets against the bowl's front right, its top above the rim; a thick rust frame round a dark panel with a pale
+    inner line and a small copper gear. The big cog stands below it on the ground plate."""
     if L < 3:
         th, face, r0 = math.radians(-8), math.radians(-6), 3.4
         wt, wb, z0, z1, lean = 3.0, 3.0, 0.95, 4.1, 0.5
         shape = [(-1, 0.5), (0, 0), (1, 0.5), (1, 1), (-1, 1)]
     else:
-        th, face, r0 = math.radians(SH3_TH), math.radians(-4), 4.38     # foot out on the plate, top back on the rim
-        wt, wb, z0, z1, lean = 3.25, 2.65, 0.2, 3.9, -0.8
+        th, face, r0 = math.radians(SH3_TH), math.radians(-4), 3.82     # flat on the bowl's front right, as Flash
+        wt, wb, z0, z1, lean = 3.25, 2.9, 2.0, 3.8, 0.0
         shape = [(-1, 0), (1, 0), (1, 1), (-1, 1)]
     c = Vector((r0 * math.cos(th), r0 * math.sin(th), 0))
     out = Vector((math.cos(face), math.sin(face), 0))
@@ -321,17 +332,13 @@ def shield():
              tooth=0.24)
         kit.blob("shieldgearhub", at(-0.38, 0.68, 0.11), 0.1, 0.6, M["rust"])
     for u in (-0.85, 0.85):                     # brackets into the wall, bolts on the face
-        for v in ((0.5, 0.88) if L < 3 else (0.55, 0.9)):
+        for v in ((0.5, 0.88) if L < 3 else (0.2, 0.8)):
             p = at(u * 0.7, v, -0.22)
             q = Vector((p.x, p.y, 0)).normalized() * (wall_r(p.z) - 0.08) + Vector((0, 0, p.z))
             sweep(f"shieldbracket{u}{v}", [q, p], (0, 0, 1), 0.14, 0.12, M["rust"], bevel=0.02)
             kit.blob(f"shieldbolt{u}{v}", at(u * (0.9 if L < 3 else 1.0), v, 0.06 if L < 3 else 0.2), 0.07, 0.7,
                      M["bone"])
-    if L >= 3:                                  # its foot stands on the plate on two shoes
-        for u in (-0.75, 0.75):
-            f = at(u, 0.0, -0.07)
-            box(f"shieldshoe{u}", (0.36, 0.3, max(0.05, f.z - 0.1)), (f.x, f.y, 0.1), M["rust"], rot=(0, 0, -10),
-                bevel=0.03)
+    if L >= 3:
         return
     # the rod from the point down to the plate
     top = at(0.0, 0.03, -0.11)
@@ -359,7 +366,7 @@ def shield():
 def plate():
     """The steel plate on the ground: a dark top inset in a pale bevelled rim, as Flash."""
     x, y = PLATE
-    w = 1.9 if L < 3 else 2.8
+    w = 1.9 if L < 3 else 2.4
     if L >= 3:                                  # under the hood's foot, reaching to the column
         x, y = x - 0.15, y - 0.6
     box("plate", (w, w * 0.9, 0.09), (x, y, 0), M["pale"], rot=(0, 0, 40), bevel=0.04)
@@ -376,10 +383,8 @@ def cog():
         x, y = p.x, p.y
         face = Vector((1, -1, 0)).normalized()
     else:
-        at = STATE["shield_at"]
         face = Vector((math.cos(math.radians(-4)), math.sin(math.radians(-4)), 0))
-        p = at(0.08, (zc - 0.2) / (3.9 - 0.2), 0.0) + face * 0.45
-        x, y = p.x, p.y
+        x, y = 4.4, -0.57                       # Flash's place, in front of the plate's lower edge
     e = kit.bpy.data.objects.new("cog", None)
     link(e)
     e.location = (x, y, zc)
@@ -397,7 +402,11 @@ def cog():
             a = 2 * math.pi * k / 5
             kit.blob(f"coghole{k}", (r * 0.55 * math.cos(a), r * 0.55 * math.sin(a), 0.11), r * 0.13, 0.25, M["dark"],
                      parent=hub)
-        cyl("cogaxle", 0.11, 0.5, (x - face.x * 0.45, y - face.y * 0.45, zc), M["steel"], rot=rot, verts=10)
+        cyl("cogaxle", 0.11, 0.5, (x - face.x * 0.38, y - face.y * 0.38, zc), M["steel"], rot=rot, verts=10)
+        b = Vector((x, y, 0)) - face * 0.33     # its stand: a flat steel post on the ground plate up to a bearing,
+        box("cogstand", (0.14, 0.42, zc - 0.05), (b.x, b.y, 0.1), M["steel"], rot=(0, 0, -4), bevel=0.03)   # clear
+        cyl("cogbearing", 0.24, 0.12, (b.x - face.x * 0.06, b.y - face.y * 0.06, zc), M["steel"], rot=rot, verts=16,
+            bevel=0.02)                         # of the plate's frame behind it
         return
     # the axle block behind it, on the plate
     b = Vector((x, y, 0)) - face * 0.35
@@ -483,21 +492,23 @@ def column():
     """Level 3: the steel column on the ground behind the plate; its head carries the hopper's arm under a stack of
     grey collars (Flash's bolted head)."""
     x, y = COLUMN
-    cyl("column", 0.17, PIV_Z + 0.4, (x, y, 0.12), M["steel"], verts=20, bevel=0.03)
+    cyl("column", 0.17, COL_Z + 0.4, (x, y, 0.12), M["steel"], verts=20, bevel=0.03)
     for z in (0.12, 1.55, 4.4):
         cyl(f"columncollar{z}", 0.27, 0.22, (x, y, z), M["steel"], verts=20, bevel=0.04)
     cyl("columnfoot", 0.42, 0.18, (x, y, 0.12), M["rust"], verts=20, bevel=0.04)
-    cyl("columnhead", 0.32, 0.62, (x, y, PIV_Z - 0.31), M["steel"], verts=20, bevel=0.04)
-    for k, z in enumerate((PIV_Z - 0.62, PIV_Z - 0.86, PIV_Z - 1.1)):
+    cyl("columnhead", 0.32, 0.62, (x, y, COL_Z - 0.31), M["steel"], verts=20, bevel=0.04)
+    for k, z in enumerate((COL_Z - 0.62, COL_Z - 0.86, COL_Z - 1.1)):
         cyl(f"columnstack{k}", 0.36 - 0.03 * k, 0.2, (x, y, z), M["steel"], verts=20, bevel=0.05)
-    cyl("columncap", 0.22, 0.2, (x, y, PIV_Z + 0.31), M["steel"], r2=0.1, verts=16, bevel=0.03)
+    cyl("columncap", 0.22, 0.2, (x, y, COL_Z + 0.31), M["steel"], r2=0.1, verts=16, bevel=0.03)
 
 
 BUCKET_X = -0.5
-REST = 18.0                           # level 3: the hopper's tip at rest (deg): its cover up, its plank door toward us
-PIV_Z = 6.9
+REST = 12.0                           # level 3: the hopper's tip at rest (deg): its cover up, its plank door toward us
+PIV_Z = 7.3
+COL_Z = 6.55                          # level 3: the column's head (Flash's, below the hopper's raised left end)
+HOP_YAW, HOP_ROLL = 25.0, 10.0       # level 3: the hopper turned to face us and its left end raised, as Flash
 AXLE = (1.45, PIV_Z)                  # level 3: the hopper's axle (Y, Z), along X
-HOP_X, HOP_W, HOP_D = (-0.9, 2.4), 2.1, 2.25       # the hopper's length (from the axle), width, depth
+HOP_X, HOP_W, HOP_D = (-0.5, 2.4), 2.1, 2.25       # the hopper's length (from the axle), width, depth
 
 
 def hopper():
@@ -511,6 +522,9 @@ def hopper():
     e = kit.bpy.data.objects.new("hopper", None)
     link(e)
     e.location = (0, ya, za)
+    yaw = math.radians(HOP_YAW)
+    roll = math.radians(HOP_ROLL)
+    e.rotation_euler = (0, roll, yaw)
     hub = kit.bpy.data.objects.new("hopper-spin", None)
     link(hub, e)
     kit.MOVING.append(hub)
@@ -520,27 +534,28 @@ def hopper():
     yb, yf = 0.15, 0.15 - HOP_W                 # its back and its front (local Y)
     ym = (yb + yf) / 2
     zf, zt = -HOP_D + 0.15, 0.15                # its bottom and top
-    box("hopperfloor", (ln, HOP_W, t), (xm, ym, zf), M["rust"], parent=hub, bevel=0.03)
+    ch = 0.22                                   # the end walls and floor reach past the boards: a chute's mouth
+    box("hopperfloor", (ln, HOP_W + ch, t), (xm, ym - ch / 2, zf), M["rust"], parent=hub, bevel=0.03)
     for s, x_ in ((-1, x0), (1, x1)):
-        box(f"hopperend{s}", (t, HOP_W, HOP_D), (x_ - s * t / 2, ym, zf), M["rust"], parent=hub, bevel=0.03)
+        box(f"hopperend{s}", (t + 0.04, HOP_W + ch, HOP_D), (x_ - s * t / 2, ym - ch / 2, zf), M["rust"], parent=hub,
+            bevel=0.03)
     box("hopperlid", (ln, t, HOP_D), (xm, yb - t / 2, zf), M["rust"], parent=hub, bevel=0.03)
-    box("hoppercover", (ln + 0.12, HOP_W + 0.12, t + 0.02), (xm, ym, zt - t), M["rust"], parent=hub, bevel=0.035)
-    for f in (0.1, 0.5, 0.9):                   # copper straps over the cover and down the back
-        xx = x0 + ln * f
-        box(f"hopperribc{f}", (0.16, HOP_W + 0.16, 0.06), (xx, ym, zt + 0.02), M["copper"], parent=hub, bevel=0.02)
-        box(f"hopperribb{f}", (0.16, 0.06, HOP_D), (xx, yb + 0.03, zf), M["copper"], parent=hub, bevel=0.02)
-    # the plank door: boards across, hinged on the cover's front edge (moving with the bin, and opening to pour)
+    # Flash's top: a thick plain rust slab, overhanging the ends and the boards' top
+    box("hoppercover", (ln + 0.3, HOP_W + 0.5, 0.24), (xm, ym - 0.2, zt - 0.12), M["rust"], parent=hub,
+        bevel=0.05)
+    # the plank face: boards running down toward the bowl, set back in the mouth, hinged under the slab (moving with
+    # the bin, and swinging open to pour); lit orange from below as Flash
     hg = kit.bpy.data.objects.new("hopperdoor", None)
     link(hg, hub)
-    hg.location = (0, yf - 0.02, zt - t)
+    hg.location = (0, yf + 0.04, zt - 0.14)
     STATE["door"] = hg
-    n = 4
-    hd = HOP_D - t - 0.04
+    n = 6
+    hd = HOP_D - 0.3
+    bw = (ln - 0.08) / n
     for k in range(n):
-        box(f"hopperboard{k}", (ln - 0.06, t, hd / n - 0.025), (xm, -t / 2, -(k + 1) * hd / n), M["planks"],
-            parent=hg, bevel=0.025, rot=(kit.rng.uniform(-1.5, 1.5), 0, kit.rng.uniform(-0.6, 0.6)))
-    for f in (0.15, 0.85):                      # two copper battens across the boards
-        box(f"hopperbatten{f}", (0.16, 0.06, hd), (x0 + ln * f, -t - 0.03, -hd), M["copper"], parent=hg, bevel=0.02)
+        box(f"hopperboard{k}", (bw - 0.035, t, hd * kit.rng.uniform(0.96, 1.0)), (x0 + 0.04 + (k + 0.5) * bw, -t / 2,
+            -hd), M["planks"], parent=hg, bevel=0.025, rot=(kit.rng.uniform(-1.5, 1.5), kit.rng.uniform(-0.8, 0.8), 0))
+    box("hopperbatten", (ln - 0.14, 0.06, 0.16), (xm, -t - 0.03, -hd + 0.2), M["rust"], parent=hg, bevel=0.02)
     for s, x_ in ((-1, x0), (1, x1)):          # axle stubs out of both ends
         cyl(f"hopperstub{s}", 0.11, 0.34, (x_ + (0.0 if s > 0 else -0.34), 0, 0), M["steel"], rot=(0, 90, 0),
             parent=hub, verts=12)
@@ -549,15 +564,20 @@ def hopper():
     box("hopperfillbed", (ln - 0.25, HOP_W - 0.25, 0.6), (xm, ym, zf + 0.05), M["bonedark"], parent=fill, bevel=0.05)
     bones_heap("hopperbone", fill, (xm, ym, zf + 0.68), ln / 2 - 0.3, HOP_W / 2 - 0.3, 12, 12)
     # Flash's slanted leg under the left end: from a shoe on the back-left rim up to a bearing on the left stub
-    rx = -math.sqrt(RIM_R ** 2 - ya ** 2) + 0.12
-    foot, head = Vector((rx, ya, RIM_Z + 0.05)), Vector((x0 - 0.3, ya, za))
-    sweep("hopperleg", [foot, head], (0, 1, 0), 0.24, 0.2, M["rust"], bevel=0.04)
-    box("hopperlegshoe", (0.5, 0.42, 0.14), (rx, ya, RIM_Z + 0.02), M["rust"],
-        rot=(0, 0, math.degrees(math.atan2(ya, rx)) + 90), bevel=0.03)
-    cyl("hopperlegboss", 0.2, 0.32, (x0 - 0.46, ya, za), M["steel"], rot=(0, 90, 0), verts=16)
+    def wp(lx):                                 # a point on the axle, local X -> world
+        return Vector((lx * math.cos(roll) * math.cos(yaw), ya + lx * math.cos(roll) * math.sin(yaw),
+                       za - lx * math.sin(roll)))
+    yd, rd = math.degrees(yaw), math.degrees(roll)
+    head = wp(x0 - 0.3)
+    u = Vector((head.x, head.y, 0)).normalized()
+    foot = u * (RIM_R - 0.12) + Vector((0, 0, RIM_Z + 0.05))
+    sweep("hopperleg", [foot, head], (-u.y, u.x, 0), 0.24, 0.2, M["rust"], bevel=0.04)
+    box("hopperlegshoe", (0.5, 0.42, 0.14), (foot.x, foot.y, RIM_Z + 0.02), M["rust"],
+        rot=(0, 0, math.degrees(math.atan2(u.y, u.x)) + 90), bevel=0.03)
+    cyl("hopperlegboss", 0.2, 0.32, wp(x0 - 0.46), M["steel"], rot=(0, 90 + rd, yd), verts=16)
     # the arm from the column's head to the right stub
-    sweep("arm", [Vector((x, y, za)), Vector((x1 + 0.36, ya, za))], (0, 0, 1), 0.22, 0.28, M["rust"], bevel=0.04)
-    cyl("armboss", 0.21, 0.36, (x1 + 0.32, ya, za), M["steel"], rot=(0, 90, 0), verts=16)
+    sweep("arm", [Vector((x, y, COL_Z)), wp(x1 + 0.36)], (0, 0, 1), 0.22, 0.28, M["rust"], bevel=0.04)
+    cyl("armboss", 0.21, 0.36, wp(x1 + 0.32), M["steel"], rot=(0, 90 + rd, yd), verts=16)
     STATE["mouth"] = lambda: hub.matrix_world @ Vector((xm, yf, zf))
     return hub, fill
 
@@ -644,7 +664,7 @@ def tip_angle(f):
     swing about its axle: up and back, then forward to pour, then back to rest."""
     if L < 3:
         return 360.0 * f
-    keys = [(0.0, REST), (0.1, -22.0), (0.3, -26.0), (0.45, 70.0), (0.75, 78.0), (0.9, REST), (1.0, REST)]
+    keys = [(0.0, REST), (0.1, -40.0), (0.3, -44.0), (0.45, 24.0), (0.75, 27.0), (0.9, REST), (1.0, REST)]
     for (f0, a0), (f1, a1) in zip(keys, keys[1:]):
         if f0 <= f <= f1:
             s = (f - f0) / (f1 - f0)
@@ -673,7 +693,7 @@ def turn(frame):
     else:
         tip.rotation_euler = (math.radians(a), 0, 0)
         o = max(0.0, min(1.0, (f - 0.42) / 0.08, (0.86 - f) / 0.1))          # the door swings open to pour
-        STATE["door"].rotation_euler = (math.radians(-75.0 * o * o * (3 - 2 * o)), 0, 0)
+        STATE["door"].rotation_euler = (math.radians(-35.0 * o * o * (3 - 2 * o)), 0, 0)
         pouring = 0.42 <= f <= 0.75
         empty = f >= 0.62 or f < 0.06
         kit.bpy.context.view_layer.update()
@@ -696,7 +716,7 @@ def turn(frame):
         b.hide_render = not show
         for o in b.children:
             o.hide_render = not show
-    land = Vector((0.35, 1.0, ROLL_Z + 0.9)) if L >= 3 else Vector((0.0, -0.6, ROLL_Z + 0.9))
+    land = Vector((0.35, 0.3, ROLL_Z + 0.8)) if L >= 3 else Vector((0.0, -0.6, ROLL_Z + 0.9))
     d0, d1 = (0.5, 0.88) if L >= 3 else (0.3, 0.64)
     for b, dx, dy, ph in DUST:                  # each puff swells and rises, then is gone
         u = (f - d0 - ph * (d1 - d0) * 0.5) / ((d1 - d0) * 0.6)
