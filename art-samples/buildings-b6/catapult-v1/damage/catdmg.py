@@ -190,7 +190,7 @@ def damaged():
         kill(named(r"strut"))
         kill([o for o in named(r"bracket") if centre([o]).x > 3.0])
         lay_gear("gear", (3.3, 1.6), tilt=8, yaw=20)
-        ax = named(r"axle")
+        ax = named(r"axle|elbow")
         turn(ax, Vector((FA, S.AX1_Y, S.AX1_Z)), (0, 1, 0), 14)
         tip_bucket(46, -15)
         kill(named(r"arm"))                         # the snapped lever on the ground in front
@@ -213,21 +213,23 @@ def damaged():
     tip_bucket(40, -10)
     kill(named(r"arm"))
     G["beam"]("arm", (1.25, S.ROD_Y, S.ROD_Z - 0.05), (0.9, -2.3, 2.7), 0.24, 0.22, M["paleY"])
-    hole(named(r"ywall\d+"), (0.55, -FB + 0.05, 1.55), 0.85, (0, -1, 0), 21, stretch=(1.2, 0.9))
+    hole(named(r"ywall\d+"), (0.55, -FB + 0.05, 1.2), 0.72, (0, -1, 0), 21, stretch=(1.2, 0.9))
     hole(named(r"xwall1\d+"), (FA - 0.05, 0.9, 2.2), 0.7, (1, 0, 0), 22, stretch=(1.0, 1.25))
     burn((S.GEAR2_X, S.AX2_Y, S.AX2_Z), 1.0)
     burn((-S.BOW_X, S.ROD_Y, S.ROD_Z), 0.8)
     debris((1.6, -3.4), 8, 1.3, seed=2, mats=mats())
     if LOOK == 3:
-        # the right post snapped low, so the drum dropped on that side onto the stub; a third hole low in the front
-        kill([o for o in named(r"pole") if centre([o]).x > 0])
-        (y0, z0), (y1, z1) = S.POST3_FOOT, S.POST3_TOP
-        _, q = stub_tube("pole", (1.72, y0, z0 - 0.05), (1.72, y1, z1), 0.42, S.POST3_R, M["poleZ"])
+        # the fork's right arm snapped low, so the spool's rod dropped on that side onto the stub; a third hole low in
+        # the front
+        kill([o for o in named(r"pole") if centre([o]).x > 0.3])
+        bx, by, bz = S.FORK_BASE
+        _, q = stub_tube("pole", (bx, by, bz), S.APEX3, 0.42, S.POST3_R, M["poleZ"])
         dr = named(r"drum|drod|groove")
-        piv = Vector((-1.72, S.DRUM_Y, S.DRUM_Z))
-        ang = math.degrees(math.atan2(S.DRUM_Z - q.z - 0.1, 3.44))
+        xr = max(p.x for p in points(named(r"drod")))
+        piv = Vector((-xr, S.DRUM_Y, S.DRUM_Z))
+        ang = math.degrees(math.atan2(S.DRUM_Z - q.z - 0.1, 2 * xr))
         turn(dr, piv, (0, 1, 0), ang)
-        hole(named(r"ywall\d+"), (-1.2, -FB + 0.05, 2.7), 0.6, (0, -1, 0), 23)
+        hole(named(r"ywall\d+"), (-1.2, -FB + 0.05, 1.3), 0.6, (0, -1, 0), 23)
         G["tube"]("brokenpole", [Vector((2.3, -2.2, 0.15)), Vector((3.2, -0.5, 0.3))], S.POST3_R * 0.9, M["poleZ"],
                   verts=12)
 
@@ -241,12 +243,14 @@ def destroyed():
         snap(o, R.uniform(0.18, 0.4))
     for o in named(r"post-?1"):
         snap(o, R.uniform(0.25, 0.35))
-    kill(named(r"leg-?1|back|rivet|stand|strap|rod2?|arm"))
-    for o in named(r"(ywall|xwall-?1)\d+"):          # the planks' feet went with the posts: down on the ground
+    kill(named(r"leg-?1|back|rivet|stand|strap|rod2?|cap|gearpin|arm|frail|bpost|bxbeam"))
+    kill([o for o in named(r"deck") if o.dimensions.x < 0.2])       # the -X planks' dark inner face
+    for o in named(r"(ywall|xwall-?1)\d+|deck"):     # the planks' feet went with the posts: down on the ground
         o.location.z -= S.FOOT_H
-    # the deck dropped onto the stubs, tilted toward the front
-    deck = named(r"deck")
-    turn(deck, Vector((0, 0, S.TOP2)), (1, 0, 0), -7, move=(0, -0.2, -0.4))
+    # the side rails and the cross beam fell onto the stubs, askew
+    deck = named(r"sbeam-?1|xbeam")
+    for k, o in enumerate(deck):
+        turn([o], centre([o]), (0, 0, 1), (-9, 6, 14)[k % 3], move=(0, -0.2, -0.6))
     # the drum fallen back and right onto the heap; the poles broken across it
     dr = named(r"drum|drod|groove")
     turn(dr, Vector((0, S.DRUM_Y, S.DRUM_Z)), (0, 0, 1), 28, move=(0.9, 0.6, 0.0))

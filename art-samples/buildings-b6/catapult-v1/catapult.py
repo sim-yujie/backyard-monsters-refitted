@@ -920,16 +920,21 @@ def materials():
     M = {}
     # Flash's timber: dark brown square posts and beams, pale tan sticks (the lever and look 1's cross bars)
     for ax in ("X", "Y", "Z"):
-        M["post" + ax] = wood("post", (94, 72, 54), (52, 40, 30), axis=ax, dirt=0.25, rings=4.0)
+        if LOOK == 3:                   # look 3's whole box: paler, yellower wood (Flash)
+            M["post" + ax] = wood("post3", (156, 132, 92), (100, 84, 56), axis=ax, dirt=0.25, rings=4.0)
+        else:
+            M["post" + ax] = wood("post", (94, 72, 54), (52, 40, 30), axis=ax, dirt=0.25, rings=4.0)
         M["pale" + ax] = wood("pale", (204, 172, 138), (156, 124, 96), axis=ax, dirt=0.1, rings=3.0, knots=False)
         if LOOK == 2:                   # look 2's box: dark chocolate planks
-            M["plank" + ax] = wood("plank2", (86, 64, 46), (48, 36, 28), axis=ax, dirt=0.3, rings=4.0)
-        else:                           # look 3's: paler, warmer brown
-            M["plank" + ax] = wood("plank3", (124, 98, 66), (78, 60, 40), axis=ax, dirt=0.3, rings=4.0)
+            M["plank" + ax] = wood("plank2", (100, 80, 58), (56, 44, 34), axis=ax, dirt=0.3, rings=4.0)
+        else:                           # look 3's: paler, yellower
+            M["plank" + ax] = wood("plank3", (166, 142, 92), (108, 90, 56), axis=ax, dirt=0.3, rings=4.0)
         M["pole" + ax] = wood("pole", (150, 122, 84), (98, 78, 52), axis=ax, dirt=0.1, rings=3.0)
     for k in ("postX", "postY", "postZ", "plankX", "plankY", "plankZ"):
         stain(M[k], 1.1, 0.22, 2.0 + len(k), fine=0.1)
     M["inside"] = flat("inside", (20, 15, 11), rough=1.0)
+    # the box's inside (the floor, the -X planks' inner face): the same wood in shadow
+    M["dim"] = wood("dim", (70, 56, 38), (40, 32, 22), axis="X", dirt=0.3, rings=4.0) if LOOK == 3 else         wood("dim", (50, 38, 28), (28, 21, 16), axis="X", dirt=0.3, rings=4.0)
     # metals: Flash's pale blue-grey polished steel (the axles, bows, brackets), darker grey gears, near-black feet
     M["steel"] = shiny("steel", (176, 186, 202), rough=0.3, metal=0.8, wear=(128, 138, 156), scale=3.0, dirt=0.15)
     M["gear"] = shiny("gear", (160, 160, 168), rough=0.4, metal=0.75, wear=(116, 116, 126), scale=3.0, dirt=0.2)
@@ -942,8 +947,8 @@ def materials():
     M["band"] = painted("band", (96, 74, 54), rough=0.6, dirt=0.0, spec=0.3)
     M["stud"] = shiny("stud", (212, 220, 232) if LOOK >= 2 else (150, 154, 166), rough=0.35, metal=0.4, dirt=0.0)
     # look 3's rope drum: pale cream
-    M["drum"] = painted("drum", (236, 206, 170), rough=0.6, wear=(214, 180, 142), scale=3.0, dirt=0.1, spec=0.3)
-    M["groove"] = painted("groove", (176, 140, 104), rough=0.7, dirt=0.0, spec=0.2)
+    M["drum"] = painted("drum", (206, 170, 132), rough=0.65, wear=(178, 142, 106), scale=3.0, dirt=0.2, spec=0.2)
+    M["groove"] = painted("groove", (178, 142, 106), rough=0.7, dirt=0.0, spec=0.2)
     return M
 
 
@@ -1014,10 +1019,18 @@ def lever1():
 def axle1():
     y, z = S.AX1_Y, S.AX1_Z
     x0, x1 = S.AX1_X
-    rod("axle", x0, x1, y, z, 0.17, M["steel"])
+    rod("axle", -1.9, x1, y, z, 0.17, M["steel"])
     rod("sleeve", -1.55, 0.55, y, z, 0.27, M["steel"], verts=32)
-    for x in (-(FA - S.BEAM / 2), FA - S.BEAM / 2):            # bracket blocks on the side beams
-        box("bracket", (0.46, 0.5, 0.75), (x, y, S.TOP1 + 0.02), M["steel"], bevel=0.06)
+    xb = FA - S.BEAM / 2
+    box("bracket", (0.46, 0.5, 0.75), (xb, y, S.TOP1 + 0.02), M["steel"], bevel=0.06)     # on the +X side beam
+    # the -X end (Flash): a low dark saddle on the side beam, and the axle bent at a steel elbow out past the beam
+    # and down toward the front, like a crank
+    box("bracket", (0.42, 0.48, 0.42), (-xb, y, S.TOP1 + 0.0), M["gdark"], bevel=0.05)
+    xe = -2.12
+    tube("elbow", [(-1.7, y, z), (xe, y, z), (xe, y - 0.1, z - 0.04), (xe, y - 0.7, z - 0.3)], 0.19, M["steel"],
+         verts=16)
+    sphere("elbow", 0.25, (xe, y - 0.03, z - 0.01), M["steel"], n=16)
+    sphere("elbow", 0.21, (xe, y - 0.72, z - 0.31), M["steel"], n=14)
     wheel_gear("gear", S.GEAR1_X, y, z, S.GEAR_R, M["gear"])
 
 
@@ -1056,37 +1069,50 @@ def back_top():
 
 
 def box2():
-    fh, top, by = S.FOOT_H, S.TOP2, S.BACK_Y
+    """Looks 2, 3: look 1's frame grown into a low, open box (Flash). The front and left corner posts rise above it to
+    carry the steel bracket blocks; side rails along Y lie on the posts at look 1's beam height; planks low on the -Y
+    front and the -X back, up to the rail on the +X side, whose back slopes down to a foot far behind. No lid: the
+    steel works sit down inside it."""
+    fh, top, rail, by = S.FOOT_H, S.TOP2, S.RAIL, S.BACK_Y
     yb = back_top()
+    yf = by - 0.45                      # the sloping legs' feet
     # steel feet: under the front corners and the back slope's foot
     for sx in (-1, 1):
-        for y in (-CY, by - 0.45):
+        for y in (-CY, yf):
             box("foot", (0.95, 0.95, fh), (sx * (CX - 0.05), y, 0), M["foot"], bevel=0.06)
-    # corner posts at the front, the sloping legs at the back
+    # the tall corner posts at the front, the sloping legs from the rails' backs down to the feet behind
     for sx in (-1, 1):
         box(f"post{sx}", (P + 0.06, P + 0.06, top - fh), (sx * CX, -CY, fh), M["postZ"], bevel=0.04, jitter=0.01)
-        beam(f"leg{sx}", (sx * CX, yb - 0.2, top - 0.05), (sx * CX, by - 0.45, fh), P + 0.04, P, M["postY"])
-        # rivets down the front corner post's -Y face and along the sloping leg
+        beam(f"leg{sx}", (sx * CX, yb - 0.2, rail - 0.05), (sx * CX, yf, fh), P + 0.04, P, M["postY"])
+        # rivets down the front corner post's -Y face
         for k in range(7):
             z = fh + 0.35 + k * (top - fh - 0.6) / 6
             sphere("rivet", 0.06, (sx * CX + 0.12 * sx, -FB - 0.035, z), M["rivet"], n=8)
-    # the side walls: upright planks, the tops following the slope
-    def side_top(u):
+        # the side rail along Y on the posts (look 1's side beam); the -X one sticks out past the front (Flash)
+        y0 = -FB - (0.55 if sx < 0 else 0.0)
+        box(f"sbeam{sx}", (S.BEAM, yb - y0, S.BEAM), (sx * (FA - S.BEAM / 2), (y0 + yb) / 2, rail - S.BEAM),
+            M["postY"], bevel=0.04)
+
+    # the side walls: upright planks, the tops under the rail (+X) or low (-X), then following the slope
+    def side_top(u, flat):
         y = -FB + u
-        if y <= yb - 0.2:
-            return top - 0.05
-        return top - 0.05 + (y - (yb - 0.2)) * (fh - top + 0.05) / ((by - 0.45) - (yb - 0.2))
-    for sx in (-1, 1):
+        slope = rail - 0.05 + (y - (yb - 0.2)) * (fh - rail + 0.05) / (yf - (yb - 0.2))
+        return min(flat, slope)
+    for sx, flat in ((1, rail - S.BEAM + 0.02), (-1, S.WALL_B)):
         planks(f"xwall{sx}", (sx * (FA - 0.04), -FB + P), (sx * (FA - 0.04), by - 0.75), lambda u: fh,
-               lambda u, f=side_top: f(u + P), M["plankZ"], 7, thick=0.12, gap=0.035, out=(sx, 0))
-    # the front wall between the posts
-    planks("ywall", (-FA + P, -FB + 0.04), (FA - P, -FB + 0.04), lambda u: fh, lambda u: top - 0.05, M["plankZ"], 6,
-           thick=0.12, gap=0.035, out=(0, -1))
-    # the top deck and the sloping back
-    box("deck", (2 * FA - 0.1, yb + FB - 0.1, 0.14), (0, (yb - FB) / 2, top - 0.16), M["plankX"], bevel=0.03)
-    d = Vector((0, (by - 0.45) - (yb - 0.2), fh - top))
+               lambda u, f=flat: side_top(u + P, f), M["plankZ"], 7, thick=0.12, gap=0.035, out=(sx, 0))
+    # the -Y front between the posts: low planks under a top rail, the box open above them
+    planks("ywall", (-FA + P, -FB + 0.04), (FA - P, -FB + 0.04), lambda u: fh, lambda u: S.WALL_F - 0.24,
+           M["plankZ"], 6, thick=0.12, gap=0.035, out=(0, -1))
+    box("frail", (2 * FA - 2 * P + 0.12, 0.34, 0.26), (0, -FB + 0.13, S.WALL_F - 0.26), M["postX"], bevel=0.04)
+    # the floor, low inside, and the sloping back
+    box("deck", (2 * FA - 0.3, yb + FB - 0.3, 0.12), (0, (yb - FB) / 2, fh), M["dim"], bevel=0.03)
+    # the inside of the -X planks in shadow (Flash's box is dark inside)
+    box("deck", (0.03, by - 0.75 + FB - P, S.WALL_B - fh - 0.1), (-(FA - 0.2), (by - 0.75 - FB + P) / 2, fh + 0.1),
+        M["dim"], bevel=0.0)
+    d = Vector((0, yf - (yb - 0.2), fh - rail))
     n = d.normalized()
-    q = Vector((0, yb - 0.2, top - 0.1)) + d / 2
+    q = Vector((0, yb - 0.2, rail - 0.1)) + d / 2
     o = box("back", (2 * FA - 0.3, d.length, 0.12), q, M["plankY"], bevel=0.03, origin="centre")
     o.rotation_euler = (math.atan2(n.z, n.y), 0, 0)
 
@@ -1096,21 +1122,24 @@ def axle2():
     rod("axle", -S.GEAR2_X - 0.15, S.GEAR2_X + 0.15, y, z, 0.17, M["steel"])
     rod("sleeve", -1.3, 1.3, y, z, 0.26, M["steel"], verts=32)
     for sx in (-1, 1):
-        # steel stands on the deck carry it
-        box("stand", (0.3, 0.42, z - S.TOP2 + 0.1), (sx * 1.72, y, S.TOP2 - 0.02), M["steel"], bevel=0.05)
-        wheel_gear(f"gear{sx}", sx * S.GEAR2_X - (0.0 if sx > 0 else 0.0), y, z, 1.5 if sx > 0 else 1.3, M["gear"])
-    # the lower rod on two bracket blocks along the front top
+        # dark steel stands on the side rails, just inside the gears, carry it
+        box("stand", (0.16, 0.36, z - S.RAIL + 0.1), (sx * 2.0, y, S.RAIL - 0.02), M["gdark"], bevel=0.04)
+        wheel_gear(f"gear{sx}", sx * S.GEAR2_X, y, z, 1.5 if sx > 0 else 1.3, M["gear"])
+    # the lower rod on the bracket blocks on top of the front corner posts
     for sx in (-1, 1):
         box("bracket", (0.56, 0.6, 0.72), (sx * S.BOW_X, S.ROD_Y, S.TOP2 - 0.02), M["steel"], bevel=0.06)
     rod("rod", -S.BOW_X, S.BOW_X, S.ROD_Y, S.ROD_Z, 0.15, M["steel"])
-    # Flash's busier steel between the gears: a second rod under the axle through the stands, collars on the axle
-    # inside the gears, and flat straps from each stand forward to its bracket block
-    y2, z2 = y - 0.15, S.TOP2 + 0.55
-    rod("rod2", -1.95, 1.95, y2, z2, 0.11, M["steel"])
+    # Flash's busier steel down in the box: a second rod across the side rails through the stands, out past the +X
+    # side to a round end cap; collars on the axle inside the gears; flat straps from each stand to its bracket block
+    y2, z2 = 0.66, S.RAIL + 0.13
+    rod("rod2", -2.3, 2.42, y2, z2, 0.13, M["steel"])
+    rod("cap", 2.4, 2.62, y2, z2, 0.3, M["steel"], verts=32)
+    # a small pinion on it under the +X gear, meshing with it (Flash's steel bits under that gear)
+    gear("gearpin", 0.55, 10, 0.2, (S.GEAR2_X, y2, z2), M["gear"], (0, math.radians(90), 0), tooth=0.13)
     for sx in (-1, 1):
         rod("collar", sx * 1.95 - (0.3 if sx > 0 else 0.0), sx * 1.95 + (0.0 if sx > 0 else 0.3), y, z, 0.24,
             M["steel"], verts=24)
-        box("strap", (0.14, (y - 0.1) - S.ROD_Y, 0.16), (sx * 1.72, (y - 0.1 + S.ROD_Y) / 2, S.TOP2 + 0.28),
+        box("strap", (0.14, (y - 0.1) - S.ROD_Y, 0.16), (sx * 1.98, (y - 0.1 + S.ROD_Y) / 2, S.TOP2 + 0.28),
             M["steel"], bevel=0.03)
 
 
@@ -1135,17 +1164,45 @@ def lever2():
          M["paleY"])
 
 
-def posts3():
-    (y0, z0), (y1, z1) = S.POST3_FOOT, S.POST3_TOP
+def back_posts():
+    """The back posts (Flash). Look 2: on each side a dark beam sloping up and back from the cross beam to a short post
+    on the sloping leg. Look 3 adds a tall forked post on a back cross beam: two round arms leaning apart (from the
+    front Flash's two leaning posts, a V) with a small rope spool on a rod between them, behind the axle."""
+    fx, fy, fz = S.AF_FRONT
+    box("xbeam", (2 * (FA - S.BEAM) + 0.1, S.BEAM, S.BEAM), (0, S.XBEAM_Y, S.RAIL - S.BEAM), M["postX"], bevel=0.04)
     for sx in (-1, 1):
-        tube("pole", [(sx * 1.72, y0, z0 - 0.05), (sx * 1.72, y1, z1)], S.POST3_R, M["poleZ"], verts=16)
-    # the rope drum on its rod between them
-    rod("drod", -1.72, 1.72, S.DRUM_Y, S.DRUM_Z, 0.12, M["steel"])
-    rod("drum", -S.DRUM_L / 2, S.DRUM_L / 2, S.DRUM_Y, S.DRUM_Z, S.DRUM_R, M["drum"], verts=48)
-    for i in range(5):
-        x = -S.DRUM_L / 2 + S.DRUM_L * (i + 1) / 6
-        t = ring("groove", S.DRUM_R + 0.01, 0.05, M["groove"], n=64)
-        t.location = (x, S.DRUM_Y, S.DRUM_Z)
+        f = Vector((sx * fx, fy, fz - 0.02))
+        t = Vector((sx * S.APEX2[0], *S.APEX2[1:]))
+        beam("bpost", f, t + (t - f).normalized() * 0.2, 0.42, 0.42, M["postZ"])
+        # the short post under its top, standing on the sloping leg
+        y = t.y
+        z0 = S.RAIL - 0.05 + (y - (back_top() - 0.2)) * (S.FOOT_H - S.RAIL + 0.05) /             (S.BACK_Y - 0.45 - (back_top() - 0.2)) + 0.2
+        box("bpost", (0.42, 0.42, t.z - z0 + 0.1), (sx * S.APEX2[0], y, z0), M["postZ"], bevel=0.04)
+    if LOOK == 2:
+        return
+    # the back cross beam between the sloping legs, the fork's stem on it and its two arms
+    by = S.BXBEAM_Y
+    zl = S.RAIL - 0.05 + (by - (back_top() - 0.2)) * (S.FOOT_H - S.RAIL + 0.05) / (S.BACK_Y - 0.45 - (back_top() - 0.2))
+    box("bxbeam", (2 * CX + 0.2, 0.5, 0.5), (0, by, zl - 0.2), M["postX"], bevel=0.04)
+    bx, _, bz = S.FORK_BASE
+    box("pole", (0.62, 0.58, bz + 0.3 - (zl + 0.3)), (0, by, zl + 0.28), M["poleZ"], bevel=0.06)
+    for sx in (-1, 1):
+        f = Vector((sx * bx, by, bz))
+        t = Vector((sx * S.APEX3[0], *S.APEX3[1:]))
+        tube("pole", [f, t], S.POST3_R, M["poleZ"], verts=16)
+    # the spool's rod, from arm to arm
+    u = (S.DRUM_Z - bz) / (S.APEX3[2] - bz)
+    xr = bx + (S.APEX3[0] - bx) * u
+    rod("drod", -xr, xr, S.DRUM_Y, S.DRUM_Z, 0.12, M["steel"])
+    r, ln = S.DRUM_R, S.DRUM_L
+    h = ln / 2
+    prof = [(0.0, -h), (r * 0.72, -h), (r * 0.86, -h + 0.05), (r * 0.95, -h + 0.14), (r, -h + 0.32), (r, h - 0.32),
+            (r * 0.95, h - 0.14), (r * 0.86, h - 0.05), (r * 0.72, h), (0.0, h)]
+    lathe("drum", prof, (S.DRUM_X, S.DRUM_Y, S.DRUM_Z), M["drum"], rot=(0, 90, 0), verts=48)
+    # two faint turns of the rope
+    for x in (-0.3, 0.0, 0.3):
+        t = ring("groove", r - 0.012, 0.022, M["groove"], n=64)
+        t.location = (S.DRUM_X + x, S.DRUM_Y, S.DRUM_Z)
         t.rotation_euler = (0, math.radians(90), 0)
 
 
@@ -1159,13 +1216,12 @@ def build():
         axle2()
         bows()
         lever2()
-    if LOOK == 3:
-        posts3()
+        back_posts()
     bucket(LOOK)
     bpy.context.view_layer.update()
 
 
-FAMILY = (("post", "post"), ("sbeam", "post"), ("leg", "post"), ("fbar", "bar"), ("bbar", "bar"), ("arm", "arm"),
+FAMILY = (("post", "post"), ("frail", "post"), ("xbeam", "post"), ("bxbeam", "post"), ("bpost", "pole"), ("elbow", "axle"), ("cap", "rod"), ("sbeam", "post"), ("leg", "post"), ("fbar", "bar"), ("bbar", "bar"), ("arm", "arm"),
           ("axle", "axle"), ("sleeve", "axle"), ("bracket", "bracket"), ("gear", "gear"), ("strut", "strut"),
           ("bucket", "bucket"), ("bin", "bucket"), ("band", "bucket"), ("stud", "bucket"), ("foot", "foot"),
           ("rivet", "post"), ("xwall", "wall"), ("ywall", "wall"), ("deck", "wall"), ("back", "wall"),
