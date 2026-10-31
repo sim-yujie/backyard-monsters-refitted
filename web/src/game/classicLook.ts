@@ -15,7 +15,8 @@
  *   hit-stop, slow motion, demolish blast or big flash), the towers' Flash
  *   shots (no painted shots, tower shake or turret aiming), no punchy blasts,
  *   Eye-ra's yellow rings rather than the fireball, and no damage numbers.
- * - **Music**: Flash's yard tune rather than the new one (`game/sound/tunes.ts`).
+ * - **Music**: Flash's yard tune rather than the new one (`game/sound/tunes.ts`),
+ *   unless the player picks the music on its own ({@link flashMusic}).
  * - **Windows**: every panel dressed as the Flash pop-ups, refreshed (cream
  *   parchment, red ribbon), rather than Modern's riveted steel (`ui/skin.ts`).
  *
@@ -75,4 +76,43 @@ export const classicLook = (): boolean => classicOn;
 /** Switches Classic on or off for this page, without saving it; for tests. */
 export const setClassicLook = (on: boolean): void => {
   classicOn = on;
+};
+
+/**
+ * The music on its own (a player's request, 31 Oct 2026): "new" for the new
+ * yard tune or "flash" for Flash's, whatever the Style; nothing follows the Style.
+ */
+export const MUSIC_KEY = "bymr.music";
+
+export type MusicChoice = "style" | "new" | "flash";
+
+/** Saves the music choice for the next time the game loads. True if it was saved. */
+export const saveMusicChoice = (choice: MusicChoice, store: Storage | null = storage()): boolean => {
+  try {
+    if (choice === "style") store?.removeItem(MUSIC_KEY);
+    else store?.setItem(MUSIC_KEY, choice);
+    return store !== null;
+  } catch {
+    return false;
+  }
+};
+
+/** The saved music choice; it follows the Style when nothing (or something unknown) is saved. */
+export const savedMusicChoice = (store: Storage | null = storage()): MusicChoice => {
+  try {
+    const saved = store?.getItem(MUSIC_KEY);
+    return saved === "new" || saved === "flash" ? saved : "style";
+  } catch {
+    return "style";
+  }
+};
+
+let musicChoice = savedMusicChoice();
+
+/** Whether the yard plays Flash's tune, read once when the game loads. */
+export const flashMusic = (): boolean => (musicChoice === "style" ? classicOn : musicChoice === "flash");
+
+/** Sets the music choice for this page, without saving it; for tests. */
+export const setMusicChoice = (choice: MusicChoice): void => {
+  musicChoice = choice;
 };

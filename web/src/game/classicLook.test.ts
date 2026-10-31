@@ -17,10 +17,15 @@ import { tierArtFor } from "@/game/yard/buildingArtTiers";
 import {
   CLASSIC_LOOK_KEY,
   OLD_CLASSIC_LOOK_KEYS,
+  MUSIC_KEY,
   classicLook,
+  flashMusic,
   saveClassicLook,
   savedClassicLook,
+  saveMusicChoice,
+  savedMusicChoice,
   setClassicLook,
+  setMusicChoice,
 } from "./classicLook";
 
 /** A browser's site data, kept in memory. */
@@ -50,7 +55,10 @@ const SHEETS = Object.values(MONSTER_SPRITES);
 const REPAINTED = SHEETS.filter((sheet) => REPAINTED_SHEETS[sheet.file] !== undefined);
 const RELAID = SHEETS.filter((sheet) => REPAINT_LAYOUTS[sheet.file] !== undefined);
 
-afterEach(() => setClassicLook(false));
+afterEach(() => {
+  setClassicLook(false);
+  setMusicChoice("style");
+});
 
 describe("the saved choice", () => {
   it("is off by default and is what Account Settings saved, read at the next load", () => {
@@ -191,5 +199,29 @@ describe("battle effects and music", () => {
     expect(tuneFile("attack", true)).toBe(tuneFile("attack", false));
     setClassicLook(true);
     expect(tuneFile("yard").url).toContain("Music_Building");
+  });
+
+  it("lets the music be picked on its own, whatever the Style", () => {
+    expect(flashMusic()).toBe(false);
+    setClassicLook(true);
+    expect(flashMusic()).toBe(true);
+    setMusicChoice("new");
+    expect(tuneFile("yard")).toBe(TUNES.yard);
+    setClassicLook(false);
+    setMusicChoice("flash");
+    expect(tuneFile("yard").url).toContain("Music_Building");
+  });
+
+  it("keeps the music choice in this browser, and follows the Style when nothing is saved", () => {
+    const store = memoryStore();
+    expect(savedMusicChoice(store)).toBe("style");
+    expect(saveMusicChoice("flash", store)).toBe(true);
+    expect(store.getItem(MUSIC_KEY)).toBe("flash");
+    expect(savedMusicChoice(store)).toBe("flash");
+    saveMusicChoice("style", store);
+    expect(store.getItem(MUSIC_KEY)).toBeNull();
+    store.setItem(MUSIC_KEY, "loud");
+    expect(savedMusicChoice(store)).toBe("style");
+    expect(savedMusicChoice(null)).toBe("style");
   });
 });

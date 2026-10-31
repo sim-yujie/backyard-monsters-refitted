@@ -231,6 +231,26 @@ describe("AccountSettings", () => {
     expect(document.querySelector("#settings-classic-art")).toBeNull();
   });
 
+  it("offers the music on its own, following the Style by default, kept in this browser for the next load", async () => {
+    localStorage.clear();
+    await open({});
+    const music = document.querySelector<HTMLSelectElement>("#settings-music")!;
+    expect(music.closest("label")!.textContent).toContain(SETTINGS_TEXT.musicLabel);
+    expect([...music.options].map((option) => option.textContent)).toEqual([
+      SETTINGS_TEXT.musicStyle,
+      SETTINGS_TEXT.musicNew,
+      SETTINGS_TEXT.musicFlash,
+    ]);
+    expect(music.value).toBe("style");
+    music.value = "flash";
+    music.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.music")).toBe("flash");
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.musicSaved);
+    music.value = "style";
+    music.dispatchEvent(new Event("change"));
+    expect(localStorage.getItem("bymr.music")).toBeNull();
+  });
+
   it("shows Classic for a player who had Classic building art on, even when the account fails to load", async () => {
     localStorage.clear();
     localStorage.setItem("bymr.classicBuildingArt", "1");

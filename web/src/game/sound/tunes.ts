@@ -36,7 +36,7 @@
  * So it is not listed.
  */
 
-import { classicLook } from "@/game/classicLook";
+import { flashMusic } from "@/game/classicLook";
 
 export type Tune = "yard" | "attack" | "underAttack" | "infernoYard" | "infernoAttack";
 
@@ -73,15 +73,15 @@ export const TUNES: Readonly<Record<Tune, TuneFile>> = {
 };
 
 /**
- * The tunes the revamp replaced, as Flash had them, for the Classic look
- * (`game/classicLook.ts`): Flash's own yard tune, `Music_Building.mp3`.
+ * The tunes the revamp replaced, as Flash had them, for the Classic look or
+ * the Flash music choice (`game/classicLook.ts`): Flash's own yard tune, `Music_Building.mp3`.
  */
 export const FLASH_TUNES: Readonly<Partial<Record<Tune, TuneFile>>> = {
   yard: { url: "/assets/sounds/music/Music_Building.mp3", volume: 0.6 },
 };
 
-/** A tune's file: Flash's own in the Classic look where the revamp replaced it. */
-export const tuneFile = (tune: Tune, classic: boolean = classicLook()): TuneFile =>
+/** A tune's file: Flash's own with Flash music where the revamp replaced it. */
+export const tuneFile = (tune: Tune, classic: boolean = flashMusic()): TuneFile =>
   (classic ? FLASH_TUNES[tune] : undefined) ?? TUNES[tune];
 
 /**
