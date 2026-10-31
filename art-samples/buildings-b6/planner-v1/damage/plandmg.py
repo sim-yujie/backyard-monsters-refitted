@@ -148,7 +148,7 @@ def damaged():                  # D.run() has built the model already
     hole(named(r"capy")[0], Vector((x1, S.PARA_Y[1] - 0.2, DZ + S.PARA_H)), 0.75, seed=11, squash=1.2)
     hole(blk, Vector((x1, S.BLOCK[3] - 0.25, DZ - 0.3)), 0.7, seed=12, squash=1.0)
     wy, wz, wr = S.WIN
-    kill(named(r"winglow|winshade|winrim"))
+    kill(named(r"winglow|winshade|winrim|socket"))
     kill(named(r"winhole"))                  # the blown-out hole is black inside already
     hole(blk, Vector((x1, wy, wz)), wr * 1.5, seed=13, squash=1.1)
     hole(blk, Vector((x1, 1.2, 0.9)), 0.36, seed=14)
@@ -190,6 +190,25 @@ def damaged():                  # D.run() has built the model already
         o.data.transform(o.matrix_world)
         o.matrix_world = Matrix.Identity(4)
         o.data.transform(sq)
+    # its top broken off raggedly: hollowed out (dark inside), the wall's top broken in jagged notches, no flat brick
+    # top left showing beside the fallen shade
+    dr = named(r"drum")[0]
+    dc = Vector(S.DRUM_C + (0.0,))
+    top = DZ + S.DRUM_H * 0.6
+    core = cyl("drumcore", S.DRUM_R - 0.24, 2.0, dc + Vector((0, 0, top - 0.55)), inside(), verts=24, bevel=0.0)
+    core.hide_render = True
+    m = dr.modifiers.new("hollow", "BOOLEAN")
+    m.operation, m.solver, m.object = "DIFFERENCE", "EXACT", core
+    try:
+        m.material_mode = "TRANSFER"
+    except (AttributeError, TypeError):
+        pass
+    if inside().name not in [mm.name for mm in dr.data.materials if mm]:
+        dr.data.materials.append(inside())
+    for k, (th, dz, r) in enumerate(((-215, 0.0, 0.5), (-190, -0.15, 0.4), (-165, 0.05, 0.55), (-138, -0.2, 0.45),
+                                     (-112, 0.0, 0.5), (-88, -0.1, 0.4), (-62, 0.05, 0.55), (-36, -0.15, 0.45),
+                                     (-12, 0.0, 0.4), (14, -0.1, 0.5))):
+        hole(dr, dc + P(th, S.DRUM_R, top + dz), r, seed=40 + k, squash=1.0)
     recolour(named(r"shade"), shade_burnt)
     for k in range(4):
         burn(rim + Vector((R.uniform(-1.6, 1.6), R.uniform(-1.6, 1.6), R.uniform(-0.2, 1.8))), 0.8)
@@ -252,7 +271,7 @@ def destroyed():
     for k in range(5):
         burn(C + P(R.uniform(-180, 180), R.uniform(0.5, 2.6), hz), 1.2)
     # gone: the decks, the drum and its windows, the railing, the door, the parapets and their caps
-    kill(named(r"deck|deckp|drum|window\d\d|wsash\d\d|post\d+|postcap\d+|wire\d|door|jamb.*|lintel|parax|capx|paray|capy|"
+    kill(named(r"deck|deckp|deckl|socket|drum|window\d\d|wsash\d\d|post\d+|postcap\d+|wire\d|door|jamb.*|lintel|parax|capx|paray|capy|"
                r"winglow|winshade|winrim|afoot"))
     # the block a broken shell: lower, its top and back corner broken, its window a dark hole
     x1 = S.BLOCK[1]
@@ -260,7 +279,7 @@ def destroyed():
     blk.data.transform(Matrix.Diagonal((1, 1, BK, 1)))
     kill(named(r"winhole"))                  # the blown-out hole is black inside already
     wy, wz, wr = S.WIN
-    hole(blk, Vector((x1, wy, wz)), wr * 1.5, seed=21, squash=1.1)
+    hole(blk, Vector((x1, wy, wz * BK)), wr * 1.5, seed=21, squash=1.1)
     bt = DZ * BK
     for k, (x, y, r) in enumerate(((x1, 1.0, 1.0), (x1, S.BLOCK[3], 1.1), (2.6, S.BLOCK[2], 0.9), (x1, 2.6, 0.7),
                                    (3.6, S.BLOCK[2], 0.6), (1.4, S.BLOCK[3], 0.9))):
@@ -291,7 +310,7 @@ def destroyed():
     for k, (gx, gy, hx, hy, hzz) in enumerate(((-58, 58, -38, 44, 2.0), (-46, 74, -26, 58, 1.8), (-6, 84, -4, 60, 1.6),
                                                (-50, 30, -32, 40, 2.6), (-34, 22, -26, 38, 3.0), (34, 20, 26, 36, 3.0),
                                                (58, 52, 42, 52, 1.6), (18, 82, 8, 64, 1.4), (-24, 82, -14, 64, 1.2))):
-        beam(f"beam{k}", px(gx, gy, Z=0.08), px(hx, hy, Z=hzz), w=R.uniform(0.18, 0.26))
+        beam(f"beam{k}", px(gx, gy, Z=0.05), px(hx, hy, Z=hzz), w=R.uniform(0.18, 0.26))
     for k, (gx, gy, a) in enumerate(((-48, 50, 30), (-30, 76, -20), (56, 62, 60), (36, 74, 10), (-52, 68, 80))):
         p = px(gx, gy, Z=0.06)
         d = Vector((math.cos(math.radians(a)), math.sin(math.radians(a)), 0.0))

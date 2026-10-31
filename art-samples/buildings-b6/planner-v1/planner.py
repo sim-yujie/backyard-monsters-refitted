@@ -941,16 +941,23 @@ def materials():
     M["stone"] = fieldstone("stone", [(206, 194, 170), (174, 166, 150), (216, 204, 178), (188, 174, 150),
                                       (160, 154, 142), (198, 190, 172)], (118, 108, 92), scale=1.3)
     M["door"] = wood("door", (112, 84, 46), (70, 50, 26), axis="Z", dirt=0.2)
-    M["jamb"] = wood("jamb", (140, 112, 70), (98, 76, 46), axis="Z", dirt=0.25)
-    M["step"] = painted("step", (226, 214, 190), rough=0.85, wear=(170, 152, 118), scale=3.0, dirt=0.5, spec=0.15)
+    M["jamb"] = wood("jamb", (96, 72, 42), (62, 44, 24), axis="Z", dirt=0.25)
+    M["step"] = painted("step", (246, 243, 230), rough=0.85, wear=(188, 182, 158), scale=3.0, dirt=0.45, spec=0.15)
     M["deck"] = wood("deck", (234, 198, 130), (176, 132, 74), axis="X", dirt=0.25)
+    # the square deck: Flash's golden, shaded wood, lit by the shade and darker toward its back and its edges
+    M["deckp"] = wood("deckp", (218, 186, 120), (168, 128, 66), axis="X", dirt=0.25)
+    shade_along(M["deckp"], (0.707, 0.707, 0.0), 3.0, 5.6, 0.6)
+    shade_along(M["deckp"], (0.0, 1.0, 0.0), 3.9, 4.8, 0.8)
+    shade_along(M["deckp"], (1.0, 0.0, 0.0), 4.3, 5.35, 0.85)
     M["deckedge"] = wood("deckedge", (150, 106, 58), (104, 72, 38), axis="Z", dirt=0.2)
     M["block"] = brick("block", (138, 68, 50), (118, 56, 40), (96, 48, 34), "box")
     M["drum"] = brick("drum", (122, 54, 34), (100, 44, 28), (48, 22, 14), "cyl", bw=0.5, bh=0.18, mort=0.02)
     M["cap"] = painted("cap", (244, 240, 230), rough=0.7, wear=(214, 206, 190), scale=4.0, dirt=0.0, spec=0.3)
     M["glow"] = flat("glow", (255, 214, 40), rough=0.6, emit=1.6)
+    M["winlit"] = flat("winlit", (232, 176, 36), rough=0.6, emit=0.9)
     M["sash"] = flat("sash", (60, 34, 18), rough=0.8)
     M["hole"] = flat("hole", (22, 12, 8), rough=1.0)
+    M["socket"] = flat("socket", (6, 6, 7), rough=1.0)
     M["shade"] = shiny("shade", (48, 48, 52), rough=0.42, metal=0.0, wear=(40, 40, 44), scale=2.0, dirt=0.15, spec=0.5,
                        side=0.55)
     M["arm"] = shiny("arm", (22, 22, 26), rough=0.38, metal=0.3, wear=(32, 32, 38), scale=3.0, dirt=0.0, spec=0.5)
@@ -1018,7 +1025,7 @@ def base():
         o.location = C
     # the step: a pale slab along the door's foot
     c = C + P(S.STEP[0], S.BASE_R + 0.25, 0)
-    box("step", (2.2, 0.8, S.STEP[1]), c, M["step"], rot=(0, 0, S.STEP[0] + 90), bevel=0.1, segs=3, jitter=0.03)
+    box("step", (2.2, 0.8, S.STEP[1]), c, M["step"], rot=(0, 0, S.STEP[0] + 90), bevel=0.2, segs=5, jitter=0.05)
 
 
 def deck():
@@ -1030,8 +1037,15 @@ def deck():
     x0, x1, y0, y1 = S.PLAT
     x1 = S.BLOCK[1] - 0.04         # inside the block's walls on its +X and -Y sides; over its back and +Y side
     y0 = S.BLOCK[2] + 0.04
-    box("deckp", (x1 - x0, y1 - y0, S.DECK_Z1 - S.DECK_Z0), ((x0 + x1) / 2, (y0 + y1) / 2, S.DECK_Z0), M["deck"],
-        bevel=0.05)
+    dz = S.DECK_Z1 - S.DECK_Z0
+    obs = [box("deckp", (x1 - x0, y1 - y0, dz), ((x0 + x1) / 2, (y0 + y1) / 2, S.DECK_Z0), M["deckp"], bevel=0.05),
+           # the ledge: past the +X parapet's back end the deck runs out over the block's face, as Flash's
+           box("deckl", (S.LEDGE + 0.04, y1 - S.PARA_Y[1], dz), (x1 + 0.02 + S.LEDGE / 2, (S.PARA_Y[1] + y1) / 2,
+                                                                  S.DECK_Z0), M["deckp"], bevel=0.05)]
+    for o in obs:                     # their sides darker brown, as the round deck's
+        o.data.materials.append(M["deckedge"])
+        for f in o.data.polygons:
+            f.material_index = 1 if abs(f.normal.z) < 0.5 else 0
 
 
 def block():
@@ -1046,12 +1060,11 @@ def block():
     box("paray", (S.PARA_T, b - a, S.PARA_H), (x1 - S.PARA_T / 2, (a + b) / 2, z), M["block"], bevel=0.03)
     box("capy", (S.PARA_T + 0.14, b - a + 0.1, 0.16), (x1 - S.PARA_T / 2, (a + b) / 2, z + S.PARA_H), M["cap"],
         bevel=0.05)
-    # the round window: a dark hole, the yellow light deep inside it
+    # the round window: lit yellow, a dark rim showing mostly on its right (the frame's inner side), as Flash's
     wy, wz, wr = S.WIN
     cyl("winhole", wr, 0.03, (x1 - 0.01, wy, wz), M["hole"], rot=(0, 90, 0), verts=32, bevel=0.0)
-    cyl("winglow", wr * 0.78, 0.02, (x1 + 0.01, wy - 0.1, wz - 0.04), M["glow"], rot=(0, 90, 0), verts=32, bevel=0.0)
-    cyl("winshade", wr * 0.74, 0.02, (x1 + 0.02, wy + 0.08, wz + 0.02), M["hole"], rot=(0, 90, 0), verts=32,
-        bevel=0.0)                # the hole's deep right side hides most of the light: a yellow crescent on the left
+    cyl("winglow", wr * 0.74, 0.02, (x1 + 0.01, wy - 0.14, wz - 0.03), M["winlit"], rot=(0, 90, 0), verts=32,
+        bevel=0.0)
     lathe("winrim", [(wr + 0.12, 0.0), (wr + 0.12, 0.08), (wr, 0.08), (wr, 0.0)], (x1 - 0.02, wy, wz), M["block"],
           rot=(0, 90, 0), verts=32)
 
@@ -1116,18 +1129,62 @@ def ring_at(c, nrm, r, k=64):
 
 
 def loft(name, rings, mat, cap0=True, cap1=True):
+    """Rings of k points joined into a tube. UV: u = the point's place round its ring (0..1), v = the ring's index."""
     bm = bmesh.new()
+    uv = bm.loops.layers.uv.new("UVMap")
     vs = [[bm.verts.new(p) for p in rg] for rg in rings]
     k = len(rings[0])
-    for a, b in zip(vs, vs[1:]):
+    for j, (a, b) in enumerate(zip(vs, vs[1:])):
         for i in range(k):
-            bm.faces.new((a[i], a[(i + 1) % k], b[(i + 1) % k], b[i]))
+            f = bm.faces.new((a[i], a[(i + 1) % k], b[(i + 1) % k], b[i]))
+            for lp, c in zip(f.loops, ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))):
+                lp[uv].uv = (c[0] / k, c[1])
     if cap0:
         bm.faces.new(vs[0][::-1])
     if cap1:
         bm.faces.new(vs[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return mesh_ob(name, bm, [mat])
+
+
+def streak(mat, u0, v0, v1):
+    """Flash's sharp highlight streak down the shade's lit left side: the base colour lifted to pale grey along the
+    loft's u = u0 (a narrow band), between rings v0 and v1, fading in at both ends."""
+    nt = mat.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    src = b.inputs["Base Color"].links[0].from_socket
+    uvn = nt.nodes.new("ShaderNodeUVMap")
+    uvn.uv_map = "UVMap"
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(uvn.outputs["UV"], sep.inputs[0])
+
+    def node(op, a, bv):
+        m = nt.nodes.new("ShaderNodeMath")
+        m.operation = op
+        for k, x in enumerate((a, bv)):
+            if isinstance(x, float):
+                m.inputs[k].default_value = x
+            else:
+                nt.links.new(x, m.inputs[k])
+        return m.outputs[0]
+
+    def rng_(x, a, bb, c, d):
+        m = nt.nodes.new("ShaderNodeMapRange")
+        m.interpolation_type = "SMOOTHSTEP"
+        m.inputs[1].default_value, m.inputs[2].default_value = a, bb
+        m.inputs[3].default_value, m.inputs[4].default_value = c, d
+        nt.links.new(x, m.inputs[0])
+        return m.outputs[0]
+
+    across = rng_(node("ABSOLUTE", node("SUBTRACT", sep.outputs["X"], u0), 0.0), 0.005, 0.03, 1.0, 0.0)
+    along = node("MULTIPLY", rng_(sep.outputs["Y"], v0, v0 + 3.0, 0.0, 1.0),
+                 rng_(sep.outputs["Y"], v1 - 4.0, v1 - 0.3, 1.0, 0.0))
+    mix = nt.nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    nt.links.new(node("MULTIPLY", across, along), mix.inputs[0])
+    nt.links.new(src, mix.inputs[6])
+    mix.inputs[7].default_value = srgb(150, 152, 158)
+    nt.links.new(mix.outputs[2], b.inputs["Base Color"])
 
 
 def shade():
@@ -1148,9 +1205,13 @@ def shade():
         t = i / n
         r = nr + (R - 0.06 - nr) * (1 - t) ** S.SHADE_FLARE
         rings.append(ring_at(c00.lerp(c1, t), n0, r))
-    rings += [ring_at(c2, up, nr * 0.98), ring_at(c2 + up * 0.07, up, nr * 0.93),     # a flat top, as Flash's
-              ring_at(c2 + up * 0.12, up, nr * 0.78), ring_at(c2 + up * 0.14, up, nr * 0.3)]
+    n_cone = len(rings)
+    rings += [ring_at(c2, up, nr * 0.98), ring_at(c2 + up * 0.08, up, nr * 0.97),   # a rounded lip round a dark
+              ring_at(c2 + up * 0.13, up, nr * 0.86), ring_at(c2 + up * 0.12, up, nr * 0.66),   # socket, as Flash's
+              ring_at(c2 + up * 0.02, up, nr * 0.62)]
     loft("shade", rings, M["shade"])
+    cyl("socket", nr * 0.64, 0.02, c2 + up * 0.03, M["socket"], verts=32, bevel=0.0)
+    streak(M["shade"], S.SHADE_STREAK, 3.5, n_cone - 1.0)
     top = c2 + up * 0.14
     cyl("knob", 0.07, 0.5, top - up * 0.05, M["knob"], verts=12, bevel=0.0)
     return top
@@ -1166,7 +1227,9 @@ def rail_path():
     for i in range(41):
         t = math.radians(t0 + (tl - t0) * i / 40)
         pts.append(Vector((cx + S.DECK_R * math.cos(t), cy + S.DECK_R * math.sin(t))))
-    pts += [Vector((x0 + 0.08, y1 - 0.08)), Vector((x1 - 0.08, y1 - 0.08)), Vector((x1 - 0.08, S.PARA_Y[1]))]
+    xl = x1 + S.LEDGE                 # round the ledge, back in to the parapet's end
+    pts += [Vector((x0 + 0.08, y1 - 0.08)), Vector((xl - 0.08, y1 - 0.08)), Vector((xl - 0.08, S.PARA_Y[1] + 0.08)),
+            Vector((x1, S.PARA_Y[1] + 0.08))]
     return pts
 
 
