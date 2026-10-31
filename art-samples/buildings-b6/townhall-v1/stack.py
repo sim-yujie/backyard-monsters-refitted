@@ -40,8 +40,8 @@ LV2 = dict(can=(2.9, 1.3, 6.4), legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_
            fun_k=0.85, fun_extra=0.6, mag_th=-82.0, magnet_z=5.5, glass_th=-12.0, glass_d=2.76, glass_z=7.82)
 
 # level 3: the roof bent into a hood (radius, rim height) over a ribbed core on a steel pan, an octagonal gold rail
-LV3 = dict(hood=(3.85, 7.6), hood_flat=1.0, hood_drop=0.3, hood_flare=0.15, cut=(15.0, 48.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
-           holes=((-90.0, 34.0, 1.3), (-2.0, 28.0, 1.12)),
+LV3 = dict(hood=(3.25, 7.1), hood_sq=(0.55, 0.8), hood_flat=1.38, hood_drop=0.3, hood_flare=0.45, hood_corners=(-150.0, -100.0, 10.0, 60.0, 115.0), cut=(19.0, 36.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
+           holes=((-88.0, 40.0, 1.3), (-2.0, 36.0, 1.12)),
            hood_rivets=((-140.0, 3.0), (-72.0, 3.0), (-18.0, 3.0), (52.0, 3.0), (-45.0, 72.0), (-100.0, 62.0)),
            fun_k=1.0, fun_extra=0.0, magnets=(-84.0, -6.0), magnet_z=6.0, rail=(6.0, 3.0, 3.8), leg_d=5.0,
            frames=(-135.0, 45.0), frame_z=4.7)
@@ -49,12 +49,12 @@ LV3 = dict(hood=(3.85, 7.6), hood_flat=1.0, hood_drop=0.3, hood_flare=0.15, cut=
 # level 4: the hood grown into a dome of four panels (seams at the quarters) on a tall drum with gold straps
 LV4 = dict(drum=(3.75, 2.5, 8.3), dome=(4.0, 8.3), dome_flat=0.8, seams=(-45.0, 45.0, 135.0, -135.0),
            holes=((-90.0, 36.0, 0.95), (0.0, 36.0, 0.95)), fun_k=0.88, fun_extra=0.6, straps=(-75.0, -15.0, -133.0, 43.0),
-           foot_d=5.4, petals=((180.0, 0.10), (90.0, 0.20), (-90.0, 0.30), (0.0, 0.40)), hook=(0.9, 1.25), hook_swirl=18.0,
+           foot_d=5.4, petals=((180.0, 0.10), (90.0, 0.20), (-90.0, 0.30), (0.0, 0.40)), hook=(0.75, 1.0), hook_swirl=18.0,
            brace_z=2.4)
 
 FEET8 = tuple(FRONT + 45.0 * k for k in range(8))
-_BODY5 = dict(drum=(3.7, 4.6, 7.4), dome=(4.2, 7.4), fun_z=11.75, straps=(-70.0, -20.0, -140.0, 50.0),
-              holes=tuple((FRONT + 45.0 * k, 40.0, 0.8) for k in range(8)), brass_spout=True,
+_BODY5 = dict(drum=(3.7, 4.6, 8.6), dome=(4.05, 8.6), dome_flat=0.85, fun_z=12.1, straps=(-70.0, -20.0, -140.0, 50.0),
+              holes=tuple((FRONT + 45.0 * k, 34.0, 0.95) for k in range(8)), brass_spout=True,
               meridians=tuple(FRONT + 22.5 + 45.0 * k for k in range(8)), feet=FEET8, foot_d=5.9)
 
 
@@ -74,14 +74,14 @@ LV = {
     2: LV2,
     3: LV3,
     4: LV4,
-    5: _lift(_BODY5, 1.0, foot_d=5.8, plinth_z=2.4, drum=(3.7, 3.0, 8.4)),   # Flash stands level 5 as high as level 6
-    6: _lift(_BODY5, 1.0, tiers=((4.8, 3.9, 5.6), (6.0, 2.2, 3.9))),
+    5: _lift(_BODY5, 1.0, foot_d=5.8, plinth_z=2.4, drum=(3.7, 3.0, 9.6), fun_k=0.85),   # Flash stands level 5 as high as level 6
+    6: _lift(_BODY5, 1.0, drum=(3.7, 4.8, 9.6), tiers=((4.7, 3.8, 5.0), (5.9, 2.2, 3.8))),
 }
 # levels 7 and 8: level 6 with one big front porthole and two at the sides, gold pipes at the four quarters, a crown
 LV[7] = dict(LV[6], holes=((FRONT, 30.0, 1.0), (FRONT - 90, 32.0, 0.8), (FRONT + 90, 32.0, 0.8)),
-             pipes=(FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135), fun_z=LV[6]["fun_z"] + 1.2, meridians=(),
+             pipes=(FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135), fun_z=LV[6]["fun_z"] + 0.75,
              scatter=True, straps=(-75.0, -15.0, -140.0, 50.0))
-LV[8] = dict(LV[7], holes=LV[7]["holes"] + tuple((FRONT - 90 + 30 * k, 56.0, 0.42) for k in range(7)))
+LV[8] = dict(LV[7], pipe_r=0.62, holes=LV[7]["holes"] + tuple((FRONT + a, 56.0, 0.42) for a in (-36.0, -18.0, 0.0, 18.0, 36.0)))
 
 
 def polar(th, r, z):
