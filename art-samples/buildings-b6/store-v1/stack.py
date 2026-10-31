@@ -41,7 +41,7 @@ TACK_R, TACK_T = 0.72, 0.1
 
 # the popsicle sticks on top
 STICK_N, STICK_W, STICK_T = 4, 1.25, 0.09
-STICK_X0, STICK_X1 = -2.95, 2.42   # side by side across this span: over the left face they reach the cover's edge
+STICK_X0, STICK_X1 = -2.78, 2.42   # side by side across this span: over the left face they reach the cover's edge
 STICK_Y0, STICK_Y1 = -4.0, 2.85
 
 # the strap across the back of the sticks, and the paper behind it
