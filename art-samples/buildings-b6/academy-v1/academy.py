@@ -605,8 +605,8 @@ def materials():
     M["bandgold"] = shiny("bandgold", (236, 146, 24), rough=0.35, metal=0.2, side=0.3, wear=(250, 180, 60), scale=1.5,
                           dirt=0.1, spec=0.5)
     M["golddark"] = shiny("golddark", (176, 100, 18), rough=0.3, metal=0.75, wear=(210, 140, 40), scale=1.5, dirt=0.4)
-    M["blockgold"] = shiny("blockgold", (186, 128, 28), rough=0.3, metal=0.55, wear=(160, 118, 36), scale=2.0,
-                           dirt=0.6, ao_min=0.15, coat=0.25, spec=0.5, lit=((-0.4, -0.9, 0.12), (252, 240, 196), 0.62, 0.9))
+    M["blockgold"] = shiny("blockgold", (212, 142, 22), rough=0.28, metal=0.7, wear=(140, 92, 18), scale=2.0,
+                           dirt=0.9, ao_min=0.02, coat=0.3, spec=0.6, lit=((-0.55, -0.8, 0.25), (255, 238, 170), 0.5, 0.82))
     M["foot"] = shiny("foot", (14, 13, 13), rough=0.6, metal=0.1, wear=(22, 21, 21), scale=3, dirt=0.0, spec=0.15)
     M["hole"] = flat("hole", (10, 8, 8), rough=1.0)
     M["pit"] = shiny("pit", (16, 11, 7), rough=0.5, metal=0.3, scale=3, dirt=0.0)
@@ -790,7 +790,7 @@ def porthole(th, ph, side, at):
     box("portgold", (0.36, 2 * hh, 0.16), (gx, 0, T - 0.02), M["gold"], parent=e, bevel=0.05)
     box("portgold", (1.3 * hw, 0.28, 0.16), (-0.35 * hw * out, hh - 0.14, T - 0.02), M["gold"], parent=e, bevel=0.05)
     for x, y in ((-0.63, 0.8), (0.75, 0.0), (-1.05, -0.5), (0.53, -1.0)):      # x toward the inner edge
-        lathe("portrivet", [(0.0, 0.14), (0.1, 0.12), (0.15, 0.0)], (x * inner, y, T - 0.02), M["gold"], parent=e,
+        lathe("portrivet", [(0.0, 0.18), (0.13, 0.15), (0.19, 0.0)], (x * inner, y, T - 0.02), M["gold"], parent=e,
               verts=12)
 
 
@@ -886,6 +886,15 @@ def rib_profile(th):
         d = c - Vector((0.0, C))
         if d.length < R - 0.05:                     # rests on the dome: the inner face lies on the ball
             c = Vector((0.0, C)) + d.normalized() * (R - 0.05)
+        g = min(1.0, i / 10.0)                       # the top end reaches down onto the dome (seated, not floating)
+        g = g * g * (3 - 2 * g)
+        z_seam = C + R * math.sin(math.radians(V.WALL_E))
+        if p.y >= z_seam:
+            seat_ = Vector((0.0, C)) + (p - Vector((0.0, C))).normalized() * (R - 0.08)
+        else:                                        # below the seam the dome is the straight wall
+            seat_ = Vector((R * math.cos(math.radians(V.WALL_E)) - 0.06, p.y))
+        if c.x > seat_.x:
+            c = seat_.lerp(c, g)
         inn.append(c)
     return o, inn
 
@@ -965,10 +974,10 @@ def blocks():
     z = V.OPEN_Z
 
     def parts(hub):
-        box("blk", (1.9, 1.9, 1.15), (0, 0, -0.85), M["blockgold"], parent=hub, bevel=0.06, rot=(6, -4, 45))
-        cyl("blkaxle", 0.28, 0.8, (0, 0, -1.6), M["golddark"], parent=hub, verts=16)     # down to the pit floor
-        ring_ = ((1.0, 15, 0.82, -0.32, 20, (14, -10)), (1.04, 62, 0.7, -0.5, 35, (-12, 8)),
-                 (0.98, 108, 0.86, -0.25, 5, (8, 16)), (1.08, 150, 0.62, -0.62, 50, (-16, -6)))
+        box("blk", (2.15, 2.15, 1.15), (0, 0, -0.85), M["blockgold"], parent=hub, bevel=0.06, rot=(6, -4, 45))
+        cyl("blkaxle", 0.28, 0.55, (0, 0, -1.35), M["golddark"], parent=hub, verts=16)     # down to the pit floor
+        ring_ = ((1.0, 15, 0.82, -0.5, 20, (14, -10)), (1.04, 62, 0.7, -0.75, 35, (-12, 8)),
+                 (0.95, 108, 0.76, -0.4, 5, (8, 12)), (1.08, 150, 0.62, -0.85, 50, (-16, -6)))
         for r, ang, sz, dz, rot, (tx, ty) in ring_:
             for twin in (0, 180):
                 aa = math.radians(ang + twin)
@@ -979,7 +988,7 @@ def blocks():
             aa = math.radians(70 + twin)
             box("blk", (0.5, 0.45, 0.38), (0.42 * math.cos(aa), 0.42 * math.sin(aa), 0.24), M["blockgold"],
                 parent=hub, bevel=0.04, rot=(10, -6, 70 + twin + 30))
-    e, hub = vspin("blocks", (0, 0, z - 0.35), parts)
+    e, hub = vspin("blocks", (0, 0, z - 0.6), parts)
     MOVING.append(hub)
 
 
