@@ -9,6 +9,7 @@ destroyed look is the crushed dome shell lying open on the ground with its gold 
 Flash has no damaged or destroyed animation for the Academy, so each look is one still (the blocks stand still).
 """
 import math
+import os
 import random
 import sys
 from pathlib import Path
@@ -51,7 +52,7 @@ def dent(o, p, r, depth):
         w = mw @ v.co
         d = (w - p).length
         if d < r:
-            f = (1 - d / r) ** 2 * (0.8 + 0.4 * R.random())
+            f = (1 - d / r) ** 2 * (0.8 + 0.2 * (1 + math.sin(3.1 * w.x + 2.3 * w.y + 1.7 * w.z)))   # same on the seams
             n = (w - CEN).normalized()
             v.co = mi @ (w - n * depth * f)
 
@@ -62,6 +63,18 @@ def torn_holes(o, spots, depth=0.3):
     o = D.bake(o)
     for x, y, z, rad in spots:
         dent(o, Vector((x, y, z)), rad * 2.0, 0.35)
+    # the seam lines follow the dent and stop at the torn edge (they would hang across the hole)
+    for sm in D.objs("seam"):
+        sm = D.bake(sm)
+        for x, y, z, rad in spots:
+            dent(sm, Vector((x, y, z)), rad * 2.0, 0.35)
+        bm = bmesh.new()
+        bm.from_mesh(sm.data)
+        mw = sm.matrix_world
+        gone = [v for v in bm.verts if any((mw @ v.co - Vector(s[:3])).length < s[3] * 1.25 for s in spots)]
+        bmesh.ops.delete(bm, geom=gone, context="VERTS")
+        bm.to_mesh(sm.data)
+        bm.free()
     bm = bmesh.new()
     bm.from_mesh(o.data)
     mw, mi = o.matrix_world, o.matrix_world.inverted()
@@ -104,7 +117,19 @@ def ball_mesh(name, r, at, mat):
 
 def inside_behind(spots):
     """The dark inside of the dome, and a few gold blocks just inside each hole that catch the light through it."""
-    ball_mesh("inner", V.DOME_R - 0.55, CEN, M["pit"])
+    # only the part of the inner ball behind the holes: a whole ball would hide the gold blocks in the top opening
+    r = V.DOME_R - 0.55       # levels 3+: inside the straight wall below the seam (radius R cos WALL_E), or it shows
+    if V.ribbed:
+        r = min(r, V.DOME_R * math.cos(math.radians(V.WALL_E)) - 0.35)
+    ball = ball_mesh("inner", r, CEN, M["pit"])
+    dirs = [(Vector(s[:3]) - CEN).normalized() for s in spots]
+    bm = bmesh.new()
+    bm.from_mesh(ball.data)
+    cosr = [math.cos(1.7 * s[3] / V.DOME_R) for s in spots]       # just round each hole: not up into the opening
+    far = [f for f in bm.faces if not any(f.calc_center_median().normalized().dot(d) > c for d, c in zip(dirs, cosr))]
+    bmesh.ops.delete(bm, geom=far, context="FACES")
+    bm.to_mesh(ball.data)
+    bm.free()
     for x, y, z, rad in spots:
         p = Vector((x, y, z))
         n = (p - CEN).normalized()
@@ -172,7 +197,7 @@ def damaged():
         torn_holes(dome, spots)
         inside_behind(spots)
         p = ports()
-        wrench(p[0], 28.0)
+        wrench(p[0], 40.0, out=0.08)
         if L >= 2:                       # the right plate torn off, lying on the ground at the front right
             D.kill([p[1]])
             box("bit", (2.8, 2.5, 0.3), Vector((3.6, 3.2, GROUND)), M["plate"], rot=(3, -4, 20), bevel=0.05,
@@ -184,9 +209,13 @@ def damaged():
             box("bit", (1.9, 3.2, 0.3), Vector((-3.0, -5.2, GROUND)), M["plate"], rot=(2, 3, -30), bevel=0.05)
             box("bit", (3.2, 0.28, 0.26), Vector((-2.8, -5.0, 0.3)), M["gold"], rot=(0, 0, 58), bevel=0.05)
             ground_bits((4.6, -1.6), 5, ("bar", "shard", "bar", "disc"), seed=3, spread=1.0)
-        ground_bits((-3.2, -4.6), 3, ("bar", "disc", "shard"), seed=1, spread=0.7)
+        if L == 1:                       # Flash: a dark hole collar and a long gold bar lying at the front left
+            cyl("bit", 1.0, 0.14, Vector((-4.6, -4.4, GROUND)), M["seam"], verts=32)
+            box("bit", (2.8, 0.5, 0.45), Vector((-2.4, -5.9, GROUND)), M["gold"], rot=(0, 0, 38), bevel=0.08)
+        else:
+            ground_bits((-3.2, -4.6), 3, ("bar", "disc", "shard"), seed=1, spread=0.7)
     else:
-        spots = [tuple(on_dome(-45.0, 44.0)) + (1.15,), tuple(on_dome(45.0, 40.0)) + (1.0,)]
+        spots = [tuple(on_dome(-45.0, 44.0)) + (1.5,), tuple(on_dome(45.0, 40.0)) + (1.3,)]
         torn_holes(dome, spots)
         inside_behind(spots)
         # the front-left rib wrenched outward off the dome, the front-right one broken into chunks on the ground
@@ -239,13 +268,16 @@ def destroyed():
         zs = [(mw @ v.co).z for v in o.data.vertices]
         top = max(zs)
         for v, z in zip(o.data.vertices, zs):
-            if z > top - 0.35:
-                v.co = mi @ ((mw @ v.co) + Vector((R.uniform(-0.2, 0.2), R.uniform(-0.2, 0.2), R.uniform(-0.45, 0.1))))
-    shell = torn_holes(shell, [tuple(Vector((-1.2, -3.2, 1.1)) + sh) + (1.3,)], depth=0.25)
-    # the gold band's arc and the foot, crushed under the shell
-    pts = [Vector(S.polar(a, 4.0, 0.25)) + sh for a in range(-170, 10, 10)]
-    G["sweep"]("band", pts, (0, 0, 1), 0.5, 0.35, M["gold"])
-    cyl("foot", 3.6, 0.3, sh, M["foot"], verts=64)
+            if z > top - 0.35:          # a torn edge in broad teeth (by bearing), not single-vertex spikes
+                w = mw @ v.co
+                a = math.atan2(w.y - sh.y, w.x - sh.x)
+                v.co = mi @ (w - Vector((0, 0, 0.35 * (0.5 + 0.3 * math.sin(7 * a) + 0.2 * math.sin(13 * a + 1.1)))))
+    # the black foot, crushed under the shell
+    cyl("foot", 3.2, 0.3, sh, M["foot"], verts=64)
+    # Flash's spilled slabs are bright clean gold on every side (no soot, no dark low-down shading)
+    M["blockgold"] = G["shiny"]("cleangold", (232, 176, 32), rough=0.32, metal=0.45, wear=(200, 140, 20), scale=2.0,
+                                dirt=0.1, ao_min=0.7, coat=0.3, spec=0.6,
+                                lit=((-0.55, -0.8, 0.25), (255, 238, 170), 0.5, 0.82))
     # gold blocks spilled to the front left (a long slab) and the front right (a broken zigzag of slabs)
     box("bit", (3.4, 1.1, 0.45), Vector((-1.6, -5.0, GROUND)) + sh, M["blockgold"], rot=(0, 4, -12), bevel=0.06)
     box("bit", (1.6, 1.0, 0.5), Vector((-3.6, -3.9, GROUND)) + sh, M["blockgold"], rot=(6, 0, 30), bevel=0.06)
@@ -255,4 +287,57 @@ def destroyed():
     ground_bits((0.4, -3.6) if not V.ribbed else (-0.45, -2.5), 4, ("blk", "shard", "blk", "bar"), seed=13, spread=1.6)
 
 
-D.run(damaged, destroyed, soot_amount=(0.35, 0.5))
+def contact_check():
+    """Floating check (PB_CHECK=1): every visible mesh must rest on the ground or touch (through a chain of touching
+    parts) something that does. Prints CHECK lines and quits without rendering."""
+    from mathutils.bvhtree import BVHTree
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    obs, trees, boxes, low = [], [], [], []
+    for o in SC.objects:
+        if o.type not in ("MESH", "CURVE") or o.hide_render or o.name.startswith("ground"):
+            continue
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        vs = [o.matrix_world @ v.co for v in me.vertices]
+        if not vs:
+            ev.to_mesh_clear()
+            continue
+        polys = [tuple(p.vertices) for p in me.polygons]
+        ev.to_mesh_clear()
+        obs.append(o)
+        trees.append(BVHTree.FromPolygons(vs, polys) if polys else None)
+        boxes.append((Vector([min(v[i] for v in vs) for i in range(3)]), Vector([max(v[i] for v in vs) for i in range(3)])))
+        low.append((min(v.z for v in vs), vs))
+    n, tol = len(obs), 0.04
+    ok = [low[i][0] <= GROUND + tol for i in range(n)]
+    nb = [[] for _ in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            (a0, a1), (b0, b1) = boxes[i], boxes[j]
+            if any(a0[k] > b1[k] + tol or b0[k] > a1[k] + tol for k in range(3)):
+                continue
+            hit = bool(trees[i] and trees[j] and trees[i].overlap(trees[j]))
+            if not hit and trees[j]:
+                hit = any(trees[j].find_nearest(v, tol)[0] is not None for v in low[i][1][::3])
+            if not hit and trees[i]:
+                hit = any(trees[i].find_nearest(v, tol)[0] is not None for v in low[j][1][::3])
+            if hit:
+                nb[i].append(j)
+                nb[j].append(i)
+    todo = [i for i in range(n) if ok[i]]
+    while todo:
+        i = todo.pop()
+        for j in nb[i]:
+            if not ok[j]:
+                ok[j] = True
+                todo.append(j)
+    bad = [obs[i].name for i in range(n) if not ok[i]]
+    print("CHECK objects", n, "floating", len(bad), *bad[:40], flush=True)
+    os._exit(0)
+
+
+if os.environ.get("PB_CHECK"):
+    D.run(lambda: (damaged(), contact_check()), lambda: (destroyed(), contact_check()))
+else:
+    D.run(damaged, destroyed, soot_amount=(0.35, 0.5))

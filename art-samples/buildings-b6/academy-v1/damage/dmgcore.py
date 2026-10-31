@@ -245,7 +245,7 @@ def debris(at, n=6, spread=1.2, kinds=("plank", "stick", "bracket"), seed=0, mat
 def soot(amount=0.35, scale=2.2):
     """Scorch: every material's colour darkened in soft patches (fixed noise in object space), as a battle left it."""
     for m in bpy.data.materials:
-        if not m.use_nodes or m.name == "inside":
+        if not m.use_nodes or m.name == "inside" or m.name.startswith("clean"):
             continue
         t = m.node_tree
         bs = next((n for n in t.nodes if n.type == "BSDF_PRINCIPLED"), None)
@@ -335,7 +335,7 @@ def scorch(strength=0.92):
     out = nd.new("NodeGroupOutput")
     ln.new(mul.outputs[0], out.inputs["Fac"])
     for m in bpy.data.materials:
-        if not m.use_nodes or m.name == "inside":
+        if not m.use_nodes or m.name == "inside" or m.name.startswith("clean"):
             continue
         t = m.node_tree
         bs = next((n for n in t.nodes if n.type == "BSDF_PRINCIPLED"), None)
