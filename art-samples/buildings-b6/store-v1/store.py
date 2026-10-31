@@ -326,6 +326,40 @@ def link(ob, parent=None):
     return ob
 
 
+def crumple(mat, scale, strength):
+    """Crumpled paper: the creases of a Voronoi pattern bump the surface (added to the bump already there)."""
+    nt = mat.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    vo = nt.nodes.new("ShaderNodeTexVoronoi")
+    vo.feature = "DISTANCE_TO_EDGE"
+    vo.inputs["Scale"].default_value = scale
+    bu = nt.nodes.new("ShaderNodeBump")
+    bu.inputs["Strength"].default_value = strength
+    bu.inputs["Distance"].default_value = 0.03
+    nt.links.new(vo.outputs["Distance"], bu.inputs["Height"])
+    old = b.inputs["Normal"].links[0].from_socket if b.inputs["Normal"].links else None
+    if old is not None:
+        nt.links.new(old, bu.inputs["Normal"])
+    nt.links.new(bu.outputs[0], b.inputs["Normal"])
+
+
+def crumple_geo(ob, size, amount, seed=0):
+    """Crumple a mesh: a fine subdivision pushed along its normals by a Voronoi texture (sharp creases, flat facets)."""
+    sub = ob.modifiers.new("sub", "SUBSURF")
+    sub.levels = sub.render_levels = 2
+    sub.subdivision_type = "SIMPLE"
+    tx = bpy.data.textures.new(f"{ob.name}-crumple", "VORONOI")
+    tx.noise_scale = size
+    tx.distance_metric = "DISTANCE"
+    dm = ob.modifiers.new("crumple", "DISPLACE")
+    dm.texture = tx
+    dm.texture_coords = "GLOBAL"
+    dm.strength = amount
+    dm.mid_level = 1.0                    # only inward: no pushing into the parts around it
+    ob.modifiers.new("smooth", "SMOOTH").factor = 0.3
+    return ob
+
+
 def mesh_ob(name, bm, mats, smooth=True, bevel=0.0, segs=3, parent=None, subsurf=0):
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
@@ -584,9 +618,10 @@ def printed(name, path, rough=0.62, dirt=0.3):
 
 
 def along(name, stops, axis="X", lo=0.0, hi=1.0, space="Generated", rough=0.55, spec=0.4, dirt=0.2, grain=0.0,
-          wear=None, scale=4.0, side=0.0):
+          wear=None, scale=4.0, side=0.0, rim=None, wear_amt=0.5):
     """A colour that changes along one axis (Generated: the part's own box 0..1; Object: world units lo..hi), with a
-    faint mottle and, if grain, the soft streaks of pale wood along the same axis."""
+    faint mottle and, if grain, the soft streaks of pale wood along the same axis; rim (colour, strength) greys the
+    faces that turn away from the top (Flash shades its sticks' rounded rims grey)."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
@@ -603,7 +638,27 @@ def along(name, stops, axis="X", lo=0.0, hi=1.0, space="Generated", rough=0.55, 
         out = t.mix(out, t.ramp(g, [(0.3, srgb(150, 140, 136)), (0.7, (1, 1, 1, 1))]), grain, "MULTIPLY")
     if wear:
         n1 = t.noise(v, scale * 0.5, 3.0, 0.5, 0.2)
-        out = t.mix(out, srgb(*wear), t.ramp(n1, [(0.45, (0, 0, 0, 1)), (0.78, (0.5, 0.5, 0.5, 1))]))
+        out = t.mix(out, srgb(*wear), t.ramp(n1, [(0.45, (0, 0, 0, 1)), (0.78, (wear_amt,) * 3 + (1,))]))
+    if rim:
+        geo = t.n("ShaderNodeNewGeometry")
+        sz = t.n("ShaderNodeSeparateXYZ")
+        t.link(geo.outputs["Normal"], sz.inputs[0])
+        mr3 = t.n("ShaderNodeMapRange")
+        mr3.inputs[1].default_value, mr3.inputs[2].default_value = 0.97, 0.3
+        mr3.inputs[3].default_value, mr3.inputs[4].default_value = 0.0, rim[1]
+        t.link(sz.outputs["Z"], mr3.inputs[0])
+        fac = mr3.outputs[0]
+        if len(rim) > 2:                          # only above height rim[2] (world z, fading in over 0.1 below it)
+            sp = t.n("ShaderNodeSeparateXYZ")
+            t.link(geo.outputs["Position"], sp.inputs[0])
+            mr4 = t.n("ShaderNodeMapRange")
+            mr4.inputs[1].default_value, mr4.inputs[2].default_value = rim[2] - 0.1, rim[2]
+            t.link(sp.outputs["Z"], mr4.inputs[0])
+            ml = t.n("ShaderNodeMath", operation="MULTIPLY")
+            t.link(fac, ml.inputs[0])
+            t.link(mr4.outputs[0], ml.inputs[1])
+            fac = ml.outputs[0]
+        out = t.mix(out, srgb(*rim[0]), fac)
     if side:
         geo = t.n("ShaderNodeNewGeometry")
         dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
@@ -708,19 +763,24 @@ def materials():
     # popsicle sticks: pale wood, white at the back, going pink toward the front and the right
     pinks = ((0.0, 0.1), (0.1, 0.4), (0.55, 0.8), (0.9, 1.0))
     for i, (p0, p1) in enumerate(pinks):
-        w, p = (232, 228, 226), (238, 158, 156)
+        w, p = (226, 220, 216), (236, 162, 158)
         c0 = tuple(a + (b - a) * p0 for a, b in zip(w, p))
         c1 = tuple(a + (b - a) * p1 for a, b in zip(w, p))
-        M[f"stick{i}"] = along(f"stick{i}", [(0.0, c0), (0.45, c0), (1.0, c1)], axis="Y", rough=0.75, spec=0.2,
-                               dirt=0.1, grain=0.4, scale=3)
+        M[f"stick{i}"] = along(f"stick{i}", [(0.0, c0), (0.45, c0), (1.0, c1)], axis="Y", rough=0.85, spec=0.12,
+                               dirt=0.15, grain=0.3, scale=3, rim=((132, 126, 136), 0.9))
     # the strap: a dark tip, tan at its left end, white in the middle, yellow over the right edge (world X)
-    M["strap"] = along("strap", [(0.0, (110, 64, 36)), (0.05, (180, 118, 72)), (0.14, (196, 140, 92)),
-                                 (0.28, (226, 186, 140)), (0.41, (252, 248, 244)), (0.66, (250, 244, 236)),
-                                 (0.76, (236, 176, 48)), (1.0, (224, 160, 36))],
-                       axis="X", lo=-2.62, hi=S.DIE_A + 0.1, space="Object", rough=0.45, spec=0.45, dirt=0.1)
+    # (matte card, as Flash's: a long torn tan piece at the left)
+    M["strap"] = along("strap", [(0.0, (130, 80, 46)), (0.04, (184, 120, 70)), (0.2, (206, 148, 96)),
+                                 (0.33, (230, 200, 168)), (0.43, (244, 240, 234)), (0.67, (242, 236, 226)),
+                                 (0.76, (234, 178, 56)), (1.0, (224, 162, 40))],
+                       axis="X", lo=-3.05, hi=S.DIE_A + 0.1, space="Object", rough=0.85, spec=0.15, dirt=0.1,
+                       rim=((128, 84, 52), 0.7, S.ZSTICK))            # Flash's brown edges (not the bent end)
     lift(M["strap"], (120, 96, 60), 0.5)
-    M["paper"] = along("paper", [(0.0, (238, 168, 162)), (0.5, (232, 156, 152)), (1.0, (222, 144, 142))], axis="Y",
-                       rough=0.8, spec=0.2, dirt=0.05, wear=(248, 212, 206), scale=2.2)      # Flash's light pink
+    # Flash's paper: broken white and light pink, crumpled
+    M["paper"] = along("paper", [(0.0, (240, 184, 178)), (0.5, (236, 172, 166)), (1.0, (228, 160, 156))], axis="Y",
+                       rough=0.85, spec=0.15, dirt=0.05, wear=(252, 242, 240), scale=7, wear_amt=0.5)
+    crumple(M["paper"], 9.0, 0.35)
+    M["blob"] = flat("blob", (196, 210, 246), rough=0.55)          # the white-blue blob on the strap's left end
     # thumbtacks: Flash's bright old gold discs, dark brass pins
     M["tack"] = shiny("tack", (214, 166, 40), rough=0.3, metal=0.6, side=0.4, wear=(196, 130, 34), scale=2.0,
                       dirt=0.25, coat=0.2, spec=0.4)
@@ -730,7 +790,7 @@ def materials():
     M["pin"] = shiny("pin", (176, 132, 60), rough=0.35, metal=0.8, wear=(130, 96, 44), scale=4, dirt=0.05)
     M["wire"] = shiny("wire", (196, 200, 208), rough=0.45, metal=0.4, wear=(140, 146, 156), scale=4, dirt=0.05)
     # the wires lying along the sticks: Flash draws them as dark grey lines
-    M["wire2"] = shiny("wire2", (96, 98, 106), rough=0.5, metal=0.3, wear=(80, 82, 90), scale=4, dirt=0.0)
+    M["wire2"] = shiny("wire2", (82, 84, 92), rough=0.55, metal=0.3, wear=(70, 72, 80), scale=4, dirt=0.0)
     M["hole"] = flat("hole", (24, 18, 18), rough=1.0)
     return M
 
@@ -783,7 +843,7 @@ def die():
     # the pips: spheres whose caps cut PIP_R wide and PIP_DEPTH deep (the cut faces take the pip's white)
     rs = (S.PIP_R ** 2 + S.PIP_DEPTH ** 2) / (2 * S.PIP_DEPTH)
     bm = bmesh.new()
-    zc = S.DIE_Z0 + S.DIE_H / 2
+    zc = S.PIP_Z
     for y in S.PIP_Y:
         for k in (-1, 0, 1):
             bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20, radius=rs,
@@ -899,7 +959,7 @@ def sticks():
         for v in [e for e in ext["geom"] if isinstance(e, bmesh.types.BMVert)]:
             v.co.z += t
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-        ob = mesh_ob(f"stick{i}", bm, [M[f"stick{i}"]], smooth=False, bevel=0.03, segs=3)
+        ob = mesh_ob(f"stick{i}", bm, [M[f"stick{i}"]], smooth=True, bevel=S.STICK_BEVEL, segs=5)
         ob.location = (x, 0.0, ZT + 0.006)
         ob.rotation_euler = (0.0, 0.0, math.radians(rz))
 
@@ -914,11 +974,11 @@ def lift(x):
 def strap():
     """Across the sticks near their back, its yellow end bent down over the die's right face, with four holes; a wire
     ring hangs from the last hole round the top-right pip."""
-    zs = S.ZSTICK + 0.055 + S.STRAP_T / 2              # on the paper
+    zs = S.ZSTICK + 0.04 + S.STRAP_T / 2               # on the paper
     y = S.STRAP_Y
     x0 = S.STRAP_X0
-    pts = [(-2.62, 0.6, zs + 0.12), (-2.5, 0.7, zs + 0.07), (-2.32, 0.84, zs + 0.045), (-2.12, 0.96, zs + 0.03),
-           (x0, y, zs + 0.01)]                                    # the left end turns forward, its tip curling up
+    pts = [(-3.0, y - 0.05, zs - 0.07), (-2.82, y - 0.025, zs - 0.02), (-2.6, y - 0.01, zs), (-2.3, y, zs),
+           (x0, y, zs)]                         # its long left end: flat, sagging a little past the sticks' back edge
     pts += [(x0 + (A - 0.05 - x0) * i / 20, y, zs) for i in range(1, 21)]
     pts = [(px_, py_, pz + lift(px_)) for px_, py_, pz in pts]       # riding up over the paper bunched under it
     lr = lift(A)
@@ -926,15 +986,32 @@ def strap():
     pts += [(A + 0.06, y, zs - 0.06 + lr), (A + 0.1, y, zs - 0.2 + lr), (A + 0.09, y, ZT - 0.2 + lr0),
             (A + 0.08, y, ZT - 0.62 + lr0)]
     sweep("strap", pts, (0, 1, 0), S.STRAP_W, S.STRAP_T, M["strap"], bevel=0.02)
+    torn_end(pts[1], pts[0])
+    # Flash's white-blue blob on the paper just behind the strap's left end
+    bx = -2.55
+    bl = bpy.data.meshes.new("paperblob")
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=3, radius=1.0)
+    rb = random.Random(3)
+    for v in bm.verts:
+        v.co *= 1.0 + rb.uniform(-0.12, 0.12)
+    bm.to_mesh(bl)
+    bm.free()
+    bl.polygons.foreach_set("use_smooth", [True] * len(bl.polygons))
+    bl.materials.append(M["blob"])
+    ob = bpy.data.objects.new("paperblob", bl)
+    link(ob)
+    ob.scale = (0.3, 0.2, 0.13)
+    ob.location = (bx, y + S.STRAP_W / 2 + 0.24, zs + lift(bx) + 0.04)
     for i, hx in enumerate(S.STRAP_HOLES):
-        h = cyl(f"strapholeT{i}", 0.2, 0.01, (hx, y, zs + S.STRAP_T / 2 + 0.012 + lift(hx)), M["hole"], verts=20,
+        h = cyl(f"strapholeT{i}", 0.23, 0.01, (hx, y, zs + S.STRAP_T / 2 + 0.012 + lift(hx)), M["hole"], verts=20,
                 bevel=0.0)
         h.scale = (1.0, 0.8, 1.0)
     hz = ZT - 0.4 + lr0
     cyl("strapholeS", 0.15, 0.01, (A + 0.09 + S.STRAP_T / 2 - 0.004, y, hz), M["hole"], rot=(0, 90, 0), verts=20,
         bevel=0.0)
     # the ring: through that hole, lying against the face round the top-right pip
-    zc = S.DIE_Z0 + S.DIE_H / 2 + S.PIP_DZ
+    zc = S.PIP_Z + S.PIP_DZ
     r = 0.8
     c = Vector((A + 0.1, S.STRAP_Y + 0.12, hz - r))
     pts = []
@@ -945,10 +1022,34 @@ def strap():
     tube("ring", pts, 0.032, M["wire"], verts=10, cyclic=True)
 
 
+def torn_end(p1, p0):
+    """The strap's left end torn off: a thin flap past its last point p0 (coming from p1), its edge in uneven points."""
+    t = (Vector(p0) - Vector(p1)).normalized()
+    side = Vector((0, 1, 0))
+    nrm = t.cross(side).normalized()
+    sd = nrm.cross(t).normalized()
+    w = S.STRAP_W
+    teeth = (0.06, 0.22, 0.1, 0.3, 0.12, 0.18, 0.04)          # how far each point of the torn edge reaches
+    edge = [(0.0, -w / 2 + 0.02)]
+    for k, d in enumerate(teeth):
+        edge.append((d, -w / 2 + w * (k + 0.5) / len(teeth)))
+    edge.append((0.0, w / 2 - 0.02))
+    poly = [(-0.12, w / 2 - 0.02)] + edge[::-1] + [(-0.12, -w / 2 + 0.02)]
+    bm = bmesh.new()
+    h = S.STRAP_T * 0.7
+    vs = [bm.verts.new(Vector(p0) + t * u + sd * v - nrm * h / 2) for u, v in poly]
+    f = bm.faces.new(vs)
+    ext = bmesh.ops.extrude_face_region(bm, geom=[f])
+    for v in [e for e in ext["geom"] if isinstance(e, bmesh.types.BMVert)]:
+        v.co += nrm * h
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh_ob("strapend", bm, [M["strap"]], smooth=False)
+
+
 def paper():
     """A crumpled pink paper on the sticks behind the strap, its back edge torn into points and curled up."""
     nx, ny = 40, 8
-    x0, x1 = -A + 0.3, A - 0.12          # (it starts right of where the strap turns forward, clear of it)
+    x0, x1 = -2.7, A - 0.12
     y1 = S.PAPER_Y1
     yb = S.STRAP_Y + S.STRAP_W / 2 + 0.05             # the strap's back edge
     bm = bmesh.new()
@@ -978,7 +1079,7 @@ def paper():
     for j in range(ny):
         for i in range(nx):
             bm.faces.new((rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]))
-    ob = mesh_ob("paper", bm, [M["paper"]])
+    ob = crumple_geo(mesh_ob("paper", bm, [M["paper"]]), 0.3, 0.06)
     mo = ob.modifiers.new("thick", "SOLIDIFY")
     mo.thickness = 0.02
     mo.offset = 1.0
@@ -988,11 +1089,11 @@ def paper():
     yw = S.STRAP_Y
     secs = []
     for i in range(33):            # crumpled: its front spreads and bulges unevenly on the sticks
-        x = -2.05 + (A - 0.15 + 2.05) * i / 32
+        x = -2.7 + (A - 0.15 + 2.7) * i / 32
         top = S.ZSTICK + 0.015 + lift(x) + 0.005
         hw = 0.36 + rr.uniform(-0.03, 0.03)
         hf = 0.42 + 0.07 * math.sin(2.3 * x + 1.0) + 0.04 * math.sin(5.9 * x + 2.0)   # its front, spread on the sticks
-        zb = S.ZSTICK + 0.008
+        zb = S.ZSTICK + 0.02              # (clear of the wires under it)
         zm_ = (zb + top) / 2 + 0.03 * math.sin(4.4 * x + 0.5)
         bul = 0.04 + 0.04 * math.sin(3.7 * x + 2.6)                              # a soft uneven bulge
         secs.append([bm.verts.new(v) for v in ((x, yw - hf, zb), (x, yw + hw, zb), (x, yw + hw * 0.9, top),
@@ -1003,7 +1104,7 @@ def paper():
     bm.faces.new(secs[0][::-1])
     bm.faces.new(secs[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    mesh_ob("paperwad", bm, [M["paper"]], smooth=True)
+    crumple_geo(mesh_ob("paperwad", bm, [M["paper"]], smooth=True), 0.35, 0.08)
     return ob
 
 
@@ -1032,26 +1133,39 @@ def hug(i, a0, a1, z0, z1, n=10, out=0.05):
 
 
 def wires():
-    """Two grey wires lying along the gaps between the sticks, each wrapping tight round a stick's rounded end and
-    tucking under it (Flash's hook round the ends; nothing hangs in the air)."""
-    n, w = S.STICK_N, S.STICK_W
+    """Two thin grey wires lying in the grooves between the sticks (Flash's two dark lines), their back ends under the
+    paper. The first ends in its groove short of the stick ends; the second hooks over the third stick's rounded end
+    (Flash's one visible hook) and tucks under it."""
+    n, w, bv = S.STICK_N, S.STICK_W, S.STICK_BEVEL
     gap = (S.STICK_X1 - S.STICK_X0 - n * w) / (n - 1)
-    z = S.ZSTICK + 0.056                       # resting on the sticks (they sit 0.006 up)
-    zm = ZT + 0.006 + S.STICK_T / 2            # half way up a stick's edge
-    zu = ZT - 0.045                            # just under the stick
-    xa = S.STICK_X0 + w + gap / 2
+    rw = 0.036
+    top = ZT + 0.006 + S.STICK_T                  # the sticks' top
+    sh = math.radians(32)                         # lying on one stick's rounded shoulder, at the groove
+    lean = gap / 2 + bv - (bv + rw) * math.sin(sh)
+    zg = top - bv + (bv + rw) * math.cos(sh) - 0.004
+    zm = ZT + 0.006 + S.STICK_T / 2               # half way up a stick's edge
+    zu = ZT - rw - 0.004                          # just under the sticks
+    xa = S.STICK_X0 + w + gap / 2 + lean          # (on stick 1's rim)
     cy1 = stick_end(1)[1]
-    pa = [(xa, 0.36, z - 0.02), (xa, 0.22, z), (xa, -1.0, z), (xa, cy1 + 0.3, z)]
-    pa += hug(1, 190, 268, z - 0.02, zm, 8)
-    cx1 = stick_end(1)[0]
-    pa += [(cx1 + 0.06, cy1 - 0.9 * w / 2 - 0.06, zu), (cx1 + 0.16, cy1 - 0.9 * w / 2 + 0.16, zu - 0.01)]
-    tube("wireA", pa, 0.045, M["wire2"], verts=8, smooth=True)
-    xb = xa + 2 * (w + gap)
-    cx3, cy3, _ = stick_end(3)
-    pb = [(xb, 0.36, z - 0.02), (xb, 0.22, z), (xb, -1.5, z), (xb, cy3 + 0.3, z)]
-    pb += hug(3, 200, 270, z - 0.01, zm, 8, out=0.06)       # (stick 2 leans toward it: wider of the rim)
-    pb += [(cx3 + 0.08, cy3 - 0.9 * w / 2 - 0.06, zu), (cx3 + 0.18, cy3 - 0.9 * w / 2 + 0.16, zu - 0.01)]
-    tube("wireB", pb, 0.045, M["wire2"], verts=8, smooth=True)
+    xa0, xb0 = xa - lean, S.STICK_X0 + 2 * w + 1.5 * gap      # the grooves' middles (the wires' back ends sink in
+    zd = top - 0.03                                             # them, under the paper)
+    pa = [(xa0, 0.75, zd), (xa0, 0.55, zd), (xa, 0.3, zg), (xa, -1.0, zg), (xa, cy1 + 0.25, zg)]
+    tube("wireA", pa, rw, M["wire2"], verts=8, smooth=True)
+    xb = S.STICK_X0 + 2 * w + 1.5 * gap + lean    # (on stick 2's rim, in the groove before it)
+    cx2, cy2, rz2 = stick_end(2)
+    c, s_ = math.cos(math.radians(rz2)), math.sin(math.radians(rz2))
+
+    def on2(lx, ly, z):                           # a point over stick 2's end (x from its middle), turned with it
+        return (cx2 + lx * c - ly * s_, lx * s_ + ly * c, z)
+    r = w / 2
+    pb = [(xb0, 0.75, zd), (xb0, 0.55, zd), (xb, 0.3, zg), (xb, -1.5, zg), (xb, cy2 + 0.55, zg)]
+    pb += [on2(-r * 0.62, cy2 + 0.22, top + rw + 0.004), on2(-0.05, cy2 - 0.12, top + rw + 0.004),  # across its end,
+           on2(r * 0.42, cy2 - 0.36, top + rw)]
+    pb += hug(2, 312, 312, top - 0.005, top - 0.005, 1, out=rw * 0.5)[:1]               # over its rounded rim
+    pb += hug(2, 313, 314, top - 0.07, ZT + 0.01, 1, out=rw + 0.012)                    # down its side
+    pb += hug(2, 316, 316, zu, zu, 1, out=-0.06)[:1]                                    # and tucked under it
+    pb += [on2(r * 0.5, cy2 - 0.2, zu - 0.005), on2(r * 0.15, cy2 + 0.05, zu - 0.01)]
+    tube("wireB", pb, rw, M["wire2"], verts=8, smooth=True)
 
 
 def build():

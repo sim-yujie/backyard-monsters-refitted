@@ -18,15 +18,16 @@ GROUND = 0.0
 
 # the die
 DIE_A = 2.42                # half its width
-DIE_Z0, DIE_H = 1.25, 4.55  # its bottom (on the tack pins) and height
+DIE_Z0, DIE_H = 1.25, 4.47  # its bottom (on the tack pins) and height (the thick sticks on it end at Flash's height)
 DIE_R = 0.42                # the rounded edges (Flash's die is soft, well rounded)
 PIP_R, PIP_DEPTH = 0.43, 0.16
 PIP_Y = (-0.82, 1.1)        # the two columns on the right face (Flash's sit right of the middle, close together)
 PIP_DZ = 1.16               # the three rows: middle, and this much above and below
+PIP_Z = 3.525               # the middle row's height
 
 # the matchbook on the left face
 MB_X0, MB_X1 = -3.02, 1.6   # the printed cover (the dark fold runs from MB_X1 round the front corner)
-MB_Z0, MB_Z1 = 0.33, 5.72
+MB_Z0, MB_Z1 = 0.33, 5.66
 MB_RISE = 0.27             # its bottom edge rises this much toward the front
 MB_GAP = 0.05               # off the die's face (glue)
 MB_FLARE = 0.09            # how far its bottom edge hangs away from the die
@@ -40,17 +41,18 @@ TACKS = (((2.11, -2.93), (1.68, -2.51, 0.7)),     # front: up into the cover's b
 TACK_R, TACK_T = 0.72, 0.1
 
 # the popsicle sticks on top
-STICK_N, STICK_W, STICK_T = 4, 1.25, 0.09
+STICK_N, STICK_W, STICK_T = 4, 1.25, 0.2      # Flash's sticks are thick and puffy: soft rounded rims
+STICK_BEVEL = 0.075
 STICK_X0, STICK_X1 = -2.78, 2.42   # side by side across this span: over the left face they reach the cover's edge
 STICK_Y0, STICK_Y1 = -4.0, 2.85
 
 # the strap across the back of the sticks, and the paper behind it
-STRAP_Y, STRAP_W, STRAP_T = 1.05, 1.2, 0.07
+STRAP_Y, STRAP_W, STRAP_T = 1.05, 1.55, 0.07
 STRAP_X0 = -1.9            # where its left end starts to turn toward the viewer's left (drooping off the back edge)
 STRAP_HOLES = (-1.7, -0.4, 0.85, 1.95)
 STRAP_LIFT = 0.3           # its right part rides this much higher, over paper bunched under it (see store.lift)
 STRAP_RAISE = 0.25         # and all of it this much (Flash's strap sits high on the paper)
-PAPER_Y1 = 2.35            # the paper's back edge (its front edge runs under the strap)
+PAPER_Y1 = 2.5             # the paper's back edge (its front edge runs under the strap)
 
 # Flash draws the die a little turned down at the back right: its right face's edges climb less steeply than the
 # camera's 2:1 (the pips' right column and the die's back corner sit lower). The die and everything on it lean this much
