@@ -555,13 +555,17 @@ def stone(name, col, top, wear, side_dark=0.0, scale=2.2, dirt=0.25, corner=0.0,
     n1 = t.noise(v, scale, 4.0, 0.55, 0.3)
     out = t.mix(srgb(*col), srgb(*wear), t.ramp(n1, [(0.35, (0, 0, 0, 1)), (0.7, (0.9, 0.9, 0.9, 1))]))
     n2 = t.noise(v, scale * 6, 3.0, 0.6)
-    out = t.mix(out, srgb(*[c * 0.78 for c in col]), t.ramp(n2, [(0.5, (0, 0, 0, 1)), (0.72, (0.7, 0.7, 0.7, 1))]))
+    out = t.mix(out, srgb(*[c * 0.78 for c in col]), t.ramp(n2, [(0.45, (0, 0, 0, 1)), (0.72, (0.9, 0.9, 0.9, 1))]))
     n3 = t.noise(v, scale * 22, 2.0, 0.5)              # Flash's fine speckle: the stone is grainy, not smooth
-    out = t.mix(out, srgb(*[min(255, c * 1.12) for c in col]), t.ramp(n3, [(0.5, (0, 0, 0, 1)), (0.68, (0.6, 0.6, 0.6, 1))]))
+    out = t.mix(out, srgb(*[min(255, c * 1.14) for c in col]), t.ramp(n3, [(0.45, (0, 0, 0, 1)), (0.66, (0.55, 0.55, 0.55, 1))]))
+    n4 = t.noise(v, scale * 40, 2.0, 0.5)              # and a darker speckle between
+    out = t.mix(out, srgb(*[c * 0.8 for c in col]), t.ramp(n4, [(0.55, (0, 0, 0, 1)), (0.72, (0.4, 0.4, 0.4, 1))]))
     geo = t.n("ShaderNodeNewGeometry")
     sep = t.n("ShaderNodeSeparateXYZ")
     t.link(geo.outputs["Normal"], sep.inputs[0])
     out = t.mix(out, srgb(*top), t.ramp(sep.outputs["Z"], [(0.35, (0, 0, 0, 1)), (0.85, (1, 1, 1, 1))]))
+    n5 = t.noise(v, scale * 3, 3.0, 0.55, 0.2)         # Flash's soft cloudy mottle over every face, the treads too
+    out = t.mix(out, srgb(*[c * 0.84 for c in top]), t.ramp(n5, [(0.45, (0, 0, 0, 1)), (0.7, (0.6, 0.6, 0.6, 1))]))
     if side_dark:                 # faces turned to +X (the shade side) a little darker, as Flash paints them
         dk = t.ramp(sep.outputs["X"], [(0.3, (0, 0, 0, 1)), (0.9, (side_dark,) * 3 + (1,))])
         out = t.mix(out, srgb(*[c * 0.7 for c in col]), dk)
@@ -597,17 +601,17 @@ def stone(name, col, top, wear, side_dark=0.0, scale=2.2, dirt=0.25, corner=0.0,
         out = t.mix(out, srgb(*[c * 0.5 for c in col]), k.outputs[0])
     out = t.grime(out, GROUND, 4.2, dirt, 0.6)
     t.set(**{"Base Color": out, "rough": 0.85, "metal": 0.0, "spec": 0.25})
-    t.bump(t.noise(v, scale * 9, 5.0, 0.65), 0.08, 0.01)
+    t.bump(t.noise(v, scale * 9, 5.0, 0.65), 0.14, 0.01)
     MATS[name] = t.m
     return t.m
 
 
 def materials():
     M = {}
-    M["stone"] = stone("stone", (136, 136, 140), (182, 182, 188), (104, 104, 110), corner=0.5, shade_lift=0.6)
+    M["stone"] = stone("stone", (136, 136, 140), (166, 166, 172), (100, 100, 106), corner=0.5, shade_lift=0.6)
     M["pit"] = stone("pit", (50, 50, 54), (46, 46, 50), (38, 38, 42), dirt=0.7)
-    M["copper"] = shiny("copper", (160, 80, 54), rough=0.5, metal=0.1, wear=(126, 60, 40), scale=2.0, dirt=0.15,
-                        side=0.55, spec=0.35)
+    M["copper"] = shiny("copper", (132, 66, 44), rough=0.55, metal=0.1, wear=(104, 50, 32), scale=2.0, dirt=0.2,
+                        side=0.55, spec=0.22)
     M["stud"] = shiny("stud", (112, 150, 170), rough=0.32, metal=0.55, wear=(150, 184, 200), scale=6, dirt=0.05,
                       side=0.4)
     M["flange"] = shiny("flange", (236, 234, 240), rough=0.35, metal=0.05, wear=(208, 204, 216), scale=3, dirt=0.05,
@@ -715,8 +719,8 @@ def roller(i, y, sgn, root):
         for k in range(S.STUD_AROUND):
             a = math.radians(ph + 360.0 * k / S.STUD_AROUND + 15 * i)
             d = Vector((math.cos(a), math.sin(a), 0.0))
-            st = box(f"r{i}stud", (0.32, 0.32, 0.2), d * (S.ROLL_R - 0.05) + Vector((0, 0, zr)), M["stud"],
-                     bevel=0.03, taper=0.5, parent=hub, segs=2)
+            st = box(f"r{i}stud", (0.33, 0.33, 0.15), d * (S.ROLL_R - 0.05) + Vector((0, 0, zr)), M["stud"],
+                     bevel=0.03, taper=0.35, parent=hub, segs=2)
             track(st, d, "Y")
     fr, ft = S.FLANGE_R, S.FLANGE_T
     for sgn_end in (-1, 1):
@@ -736,13 +740,13 @@ def bracket(root):
     pit (the piston that lowers the crusher)."""
     bx = S.BRACKET_X
     y = S.ROLL_Y
-    box("brkbar", (0.14, 2 * y + 0.44, 0.3), (bx, 0, 0), M["gold"], bevel=0.05, origin="center", parent=root)
+    box("brkbar", (0.2, 2 * y + 0.56, 0.44), (bx, 0, 0), M["gold"], bevel=0.08, origin="center", parent=root)
     for yy in (-y, y):
-        cyl("brkboss", 0.24, 0.16, (bx - 0.07, yy, 0), M["gold"], rot=(0, 90, 0), parent=root, verts=24, bevel=0.04)
-        cyl("brkcap", 0.13, 0.04, (bx + 0.09, yy, 0), M["gold"], rot=(0, 90, 0), parent=root, verts=20, bevel=0.015)
-    box("brkpost", (0.14, 0.42, S.AXLE_Z - S.PIT_FLOOR), (bx, 0.3, -(S.AXLE_Z - S.PIT_FLOOR)), M["gold"], bevel=0.04,
+        cyl("brkboss", 0.3, 0.2, (bx - 0.1, yy, 0), M["gold"], rot=(0, 90, 0), parent=root, verts=24, bevel=0.05)
+        cyl("brkcap", 0.17, 0.03, (bx + 0.1, yy, 0), M["gold"], rot=(0, 90, 0), parent=root, verts=20, bevel=0.025)
+    box("brkpost", (0.18, 0.56, S.AXLE_Z - S.PIT_FLOOR), (bx, 0.25, -(S.AXLE_Z - S.PIT_FLOOR)), M["gold"], bevel=0.06,
         parent=root)
-    box("brkknob", (0.18, 0.46, 0.22), (bx, 0.3, 0.12), M["gold"], bevel=0.05, parent=root)
+    box("brkknob", (0.24, 0.62, 0.36), (bx, 0.25, 0.1), M["gold"], bevel=0.08, parent=root)
 
 
 def crusher():
@@ -772,14 +776,14 @@ def juice():
     r = random.Random(51)
     holder = empty("juice", (0, 0, 0))
     MOVING.append(holder)
-    g = 0.072
-    for i in range(150):
-        t0 = r.uniform(16.4, 22.5)
+    g = 0.085
+    for i in range(260):
+        t0 = r.uniform(15.8, 20.5)
         a = r.uniform(0, 2 * math.pi)
         p0 = Vector((r.uniform(-0.9, 0.9), r.uniform(-0.9, 0.9), H - 0.3))
-        sp = r.uniform(0.0, 0.17) * (1.0 if r.random() < 0.7 else 0.45)
-        v = Vector((sp * math.cos(a), sp * math.sin(a), r.uniform(0.2, 0.6)))
-        rad = r.uniform(0.07, 0.15)
+        sp = r.uniform(0.0, 0.13) * (1.0 if r.random() < 0.6 else 0.4)
+        v = Vector((sp * math.cos(a), sp * math.sin(a), r.uniform(0.22, 0.48)))
+        rad = r.uniform(0.07, 0.13)
         path = dict(t0=t0, p0=p0, v=v, g=g, r=rad, land=None, fade=r.uniform(38, 49.5))
         # where it comes down: step along until it falls below the surface under it (after it starts falling)
         t = 0.0

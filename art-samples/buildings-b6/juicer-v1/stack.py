@@ -30,13 +30,13 @@ PIT_B = 1.46                # the pit's half width at the rim
 PIT_FLOOR = -1.3            # (below the ground: straight walls, deep enough to hide the crusher)
 
 # the crusher (its rest pose)
-AXLE_Z = 4.92               # the rollers' axles
-ROLL_Y = 0.72               # each roller's axle this far either side of X = 0
-ROLL_R = 0.55                # the copper drum's radius
+AXLE_Z = 4.85               # the rollers' axles
+ROLL_Y = 0.725              # each roller's axle this far either side of X = 0
+ROLL_R = 0.6               # the copper drum's radius
 ROLL_X = 0.98               # the drum runs X -ROLL_X..ROLL_X
-FLANGE_R = 0.7             # the end wheels
-FLANGE_T = 0.17
-BRACKET_X = 1.26            # the gold bracket's plane
+FLANGE_R = 0.71            # the end wheels
+FLANGE_T = 0.2
+BRACKET_X = 1.33            # the gold bracket's plane
 STUD_ROWS, STUD_AROUND = 3, 7
 
 # the animation
