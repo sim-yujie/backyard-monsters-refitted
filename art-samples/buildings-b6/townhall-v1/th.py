@@ -1277,6 +1277,10 @@ def level1():
     lathe("cloth-tie", [(0.52, zb - 0.25), (0.6, zb - 0.1), (0.56, zb + 0.08), (0.42, zb + 0.18)], (0, 0, 0),
           M["string"], verts=24)
     box("cloth-tag", (0.06, 0.9, 0.55), P(S.FRONT, 0.62, zb - 0.75), M["tag"], rot=(0, 8, S.FRONT), bevel=0.02)
+    # dark cloth flaps sticking out of the bundle behind the funnel (Flash), their feet in the ruff
+    flap = painted("flap", (46, 42, 40), rough=0.85, wear=(76, 70, 66), scale=3.0)
+    for k, (th, w, h, tilt) in enumerate(((S.FRONT + 120.0, 1.1, 2.0, 32.0), (S.FRONT - 125.0, 0.9, 1.7, 26.0))):
+        box(f"cloth-flap{k}", (0.06, w, h), P(th, 0.62, zb + 0.15), flap, rot=(0, tilt, th), bevel=0.02, bow=0.3)
     funnel(lv["fun_z"], None, k=lv["fun_k"], extra=lv["fun_extra"])
     # paper clips on the tie, left and right
     # a chain of silver links round the neck over the tie, two binder clips with their wire handles up
@@ -1369,8 +1373,9 @@ def level2():
         m = abs(u) / hu + abs(v) / hv
         p0 = lv["roof_plateau"]
         if m < p0:
-            return zt - 0.35 * m / p0
-        return zt - 0.35 - (zt - 0.35 - ze) * min(1.0, (m - p0) / (1.0 - p0)) ** 0.75
+            return zt - 0.35 * m / p0 + lv.get("roof_lift", 0.0) * max(0.0, 0.25 * u / hu - v / hv) * m
+        z = zt - 0.35 - (zt - 0.35 - ze) * min(1.0, (m - p0) / (1.0 - p0)) ** 0.75
+        return z + lv.get("roof_lift", 0.0) * max(0.0, 0.25 * u / hu - v / hv) * min(1.0, m)   # Flash: the back right rises
 
     rhombus("roof", hu, hv, lambda u, v, q: (q, roof_z(u, v)), M["dome"], 0.1, n=40)
     lathe("roof-top", [(0.75, zt - 0.1), (0.75, zt + 0.25), (0.45, zt + 0.3)], (0, 0, 0), M["steel"], verts=32)
@@ -1490,7 +1495,7 @@ def level3():
     funnel(ztop - 0.1, None, k=lv["fun_k"], extra=lv["fun_extra"])
     # two magnets on gold brackets, either side of the opening
     for k, th in enumerate(lv["magnets"]):
-        horseshoe(f"magnet{k}", P(th, cr + 2.0, lv["magnet_z"]), th, lv["magnet_z"] - pz1 - 0.75, rad=1.25, w=0.82)
+        horseshoe(f"magnet{k}", P(th, cr + 1.75, lv["magnet_z"]), th, lv["magnet_z"] - pz1 - 0.75, rad=1.15, w=0.8)
         box(f"magnet{k}-shelf", (1.5, 2.6, 0.22), P(th, cr + 1.9, pz1 + 0.02), M["gold"], rot=(0, 0, th), bevel=0.04)
     # the gold rail round it all on eight legs with gear feet, struts from the pan
     rr, za, zb = lv["rail"]
@@ -1768,8 +1773,16 @@ def frame9(i, th, lv):
         pts.append((P(th, d + 0.38, z), P(th, 1, 0)))
     studs(f"frame{i}-holes", pts, 0.12, M["hole"], flat_=0.2)
     # the tusk: out of the shoulder's foot, curving out and down toward the screen's edge, its point beside the post
-    tube(f"frame{i}-tusk", [P(ts, rh + 0.5, zs - 0.5), P(th - s * 3, d - 0.9, zs - 0.7), P(th - s * 6, d - 0.55, zs - 2.5),
-                            P(th - s * 13, d - 1.0, zs - 4.8)], 0.85, M["tusk"], r_end=0.1, smooth=True)
+    if front:      # Flash: the tusk sweeps out toward the screen's edge and down, its point turned outward
+        p0 = P(ts, rh + 0.5, zs - 0.5)
+        L = P(S.FRONT + math.copysign(90.0, ((th - S.FRONT + 180) % 360) - 180), 1, 0)
+        C, Z = P(S.FRONT, 1, 0), Vector((0, 0, 1))
+        p0 = p0 + Z * 0.4
+        tube(f"frame{i}-tusk", [p0, p0 + L * 0.9 + C * 0.5 - Z * 0.2, p0 + L * 1.9 + C * 0.95 - Z * 1.6,
+                                p0 + L * 2.45 + C * 1.05 - Z * 3.9], 0.8, M["tusk"], r_end=0.1, smooth=True)
+    else:
+        tube(f"frame{i}-tusk", [P(ts, rh + 0.5, zs - 0.5), P(th - s * 3, d - 0.9, zs - 0.7), P(th - s * 6, d - 0.55, zs - 2.5),
+                                P(th - s * 13, d - 1.0, zs - 4.8)], 0.85, M["tusk"], r_end=0.1, smooth=True)
     for k, z in enumerate((zt - 1.4, zt - 3.8)):
         spike(f"frame{i}-spike{k}", P(th, d + 0.36, z), P(th, 1, 0.4))
     spike(f"frame{i}-spike2", P(th, d, zt + 0.75), Vector((0, 0, 1)) + P(th, 0.5, 0))
