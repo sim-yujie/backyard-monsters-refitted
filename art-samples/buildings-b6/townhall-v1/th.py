@@ -676,7 +676,7 @@ def materials():
                           side=0.3)
     M["rustgold"] = painted("rustgold", (170, 112, 40), rough=0.5, metal=0.6, wear=(210, 150, 60), rust=(96, 56, 30),
                             scale=4, dirt=0.3, rust_at=0.55)
-    M["leather"] = painted("leather", (104, 84, 78), rough=0.75, wear=(128, 110, 104), rust=(70, 54, 50), scale=3.0,
+    M["leather"] = painted("leather", (74, 58, 54), rough=0.75, wear=(96, 80, 74), rust=(58, 44, 40), scale=3.0,
                            dirt=0.25, spec=0.3, rust_at=0.6)
     M["yellow"] = painted("yellow", (236, 168, 40), rough=0.45, metal=0.2, wear=(250, 196, 80), rust=(150, 96, 40),
                           scale=4.0, dirt=0.3, rust_at=0.72)
@@ -1254,8 +1254,8 @@ def level1():
         row = []
         for b in range(48):
             ph = 2 * math.pi * b / 48
-            r = 0.5 + 1.15 * t + 0.28 * t * math.sin(6 * ph + 1.0) + 0.12 * t * math.sin(11 * ph)
-            row.append(bm.verts.new((r * math.cos(ph), r * math.sin(ph), zb - 0.1 + 0.85 * t + 0.3 * t * math.sin(5 * ph + 0.4))))
+            r = 0.5 + 0.55 * t + 0.2 * t * math.sin(6 * ph + 1.0) + 0.1 * t * math.sin(11 * ph)
+            row.append(bm.verts.new((r * math.cos(ph), r * math.sin(ph), zb - 0.1 + 1.0 * t + 0.4 * t * math.sin(5 * ph + 0.4))))
         rows.append(row)
     for ra, rb in zip(rows, rows[1:]):
         for b in range(48):
@@ -1269,10 +1269,22 @@ def level1():
     box("cloth-tag", (0.06, 0.9, 0.55), P(S.FRONT, 0.62, zb - 0.75), M["tag"], rot=(0, 8, S.FRONT), bevel=0.02)
     funnel(lv["fun_z"], None, k=lv["fun_k"], extra=lv["fun_extra"])
     # paper clips on the tie, left and right
-    for k, th in enumerate((S.FRONT - 75, S.FRONT + 80)):
-        c = P(th, 0.7, zb + 0.1)
-        o = P(th, 1.25, zb + 0.9)
-        tube(f"clip{k}", [c, o, o + Vector((0, 0, 0.5)), c + Vector((0, 0, 0.6)) + (o - c) * 0.3], 0.035, M["chrome"])
+    # a chain of silver links round the neck over the tie, two binder clips with their wire handles up
+    rn = 0.74
+    for k in range(20):
+        a = 360.0 * k / 20
+        c = P(a, rn, zb + 0.22)
+        t = P(a + 90, 1, 0)
+        o = P(a, 1, 0) if k % 2 else Vector((0, 0, 1))
+        tube(f"chain{k}", [c + t * 0.13 * math.cos(math.radians(u)) + o * 0.07 * math.sin(math.radians(u))
+                           for u in range(0, 360, 30)], 0.03, M["chrome"], verts=6, cyclic=True)
+    for k, th in enumerate((S.FRONT - 88, S.FRONT + 88)):
+        c = P(th, 0.9, zb + 0.3)
+        box(f"clip{k}", (0.3, 0.55, 0.5), c, M["core"], rot=(0, 0, th), origin="centre", bevel=0.04)
+        for j, sg in enumerate((-1, 1)):
+            b0 = c + P(th + 90, 0.2 * sg, 0) + Vector((0, 0, 0.22))
+            o = b0 + P(th, 0.55, 0) + Vector((0, 0, 0.75))
+            tube(f"clip{k}-wire{j}", [b0, o, o + P(th + 90, -0.18 * sg, 0)], 0.035, M["chrome"])
     # the magnifying glass leant against the front, lens down, handle up
     lc = P(lv["mag_th"], cr + 0.9, lv["mag_z"])
     n = (P(lv["mag_th"], 1, 0) + Vector((0, 0, 0.25))).normalized()
