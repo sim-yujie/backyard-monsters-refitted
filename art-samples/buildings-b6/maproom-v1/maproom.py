@@ -851,7 +851,7 @@ def materials():
     M = {}
     # the stone: Flash's soft blue-grey block, pale on the lit left face, darker low down
     M["stone"] = painted("stone", (99, 99, 100), rough=0.9, wear=(76, 76, 80), scale=3.0, dirt=0.5, spec=0.2)
-    lift(M["stone"], (84, 84, 86), 0.22)
+    lift(M["stone"], (86, 86, 89), 0.34)
     shade_z(M["stone"], [(0.0, 0.72), (1.2, 0.92), (2.6, 0.95), (3.5, 0.82), (4.04, 0.6)])
     M["door"] = flat("door", (12, 12, 16), rough=1.0)
     # pale weathered boards (deck, roofs) and darker brown planks (walls, stairs)
@@ -859,8 +859,8 @@ def materials():
     shade_along(M["deck"], (0.707, 0.707, 0.0), 0.6, 5.0, 0.5)     # Flash's deck darkens to the right of the cabin
     M["roofx"] = wood("roof", (226, 192, 132), (150, 118, 76), axis="X", dirt=0.15)
     M["roofy"] = wood("roof", (226, 192, 132), (150, 118, 76), axis="Y", dirt=0.15)
-    M["plank"] = wood("plank", (100, 86, 64), (84, 72, 54), axis="Z", dirt=0.35, rings=4.0)
-    lift(M["plank"], (96, 80, 56), 0.15)              # Flash lights the cabin's walls almost evenly
+    M["plank"] = wood("plank", (96, 81, 59), (84, 71, 52), axis="Z", dirt=0.35, rings=4.0)
+    lift(M["plank"], (96, 80, 56), 0.08)              # Flash lights the cabin's walls almost evenly
     M["rim"] = wood("rim", (104, 82, 52), (74, 58, 36), axis="X", dirt=0.2)
     M["tplank"] = wood("tplank", (156, 126, 84), (126, 100, 64), axis="Z", dirt=0.25, rings=4.0)
     M["stair"] = wood("stair", (164, 138, 98), (98, 80, 52), axis="Z", dirt=0.3)
@@ -873,12 +873,12 @@ def materials():
     M["frame"] = wood("frame", (126, 106, 80), (96, 80, 58), axis="Z", dirt=0.1)
     M["glass"] = flat("glass", (16, 12, 8), rough=0.6)
     # weathering: soft stains and fine dirt on the stone and every wooden part (Flash's art is never clean)
-    stain(M["stone"], 0.9, 0.22, 1.0, fine=0.18)
+    stain(M["stone"], 1.6, 0.3, 1.0, fine=0.25)
     for k, (sc, amt) in {"deck": (0.7, 0.2), "roofx": (0.8, 0.16), "roofy": (0.8, 0.16), "plank": (1.1, 0.18), "tplank": (1.3, 0.16),
                          "stair": (1.0, 0.18), "riser": (1.0, 0.12), "stairside": (1.0, 0.18), "rim": (1.0, 0.15)}.items():
         stain(M[k], sc, amt, 2.0 + len(k), fine=0.1)
     # metals: Flash's old gold telescope, light steel scissors and posts, silver balls
-    M["brass"] = shiny("brass", (244, 172, 40), rough=0.35, metal=0.7, wear=(160, 98, 20), scale=2.0, dirt=0.15,
+    M["brass"] = shiny("brass", (250, 182, 44), rough=0.24, metal=0.88, wear=(150, 92, 16), scale=2.0, dirt=0.2,
                        side=0.3)
     M["bellin"] = painted("bellin", (54, 48, 22), rough=0.7, wear=(70, 34, 18), scale=2.0, dirt=0.0, spec=0.3)
     M["steel"] = shiny("steel", (176, 184, 200), rough=0.35, metal=0.75, wear=(140, 148, 166), scale=3.0, dirt=0.1)
