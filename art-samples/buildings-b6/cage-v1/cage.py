@@ -569,6 +569,31 @@ def screen_spot(t, cx, cy, ax, ay, amount):
 
 
 
+def beaded(name, dark, mid, pink, period=0.3):
+    """A rail's iron: dark below, its upper half (object Z > 0, the rail centred on its origin, its length along local
+    X) paler, dotted with pink every `period` along the rail, as Flash's beaded rails."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    tc = t.n("ShaderNodeTexCoord")
+    sep = t.n("ShaderNodeSeparateXYZ")
+    t.link(tc.outputs["Object"], sep.inputs[0])
+    ph = t.n("ShaderNodeMath", operation="MULTIPLY")
+    t.link(sep.outputs["X"], ph.inputs[0])
+    ph.inputs[1].default_value = 2 * math.pi / period
+    sn = t.n("ShaderNodeMath", operation="SINE")
+    t.link(ph.outputs[0], sn.inputs[0])
+    k0, k1 = (0, 0, 0, 1), (1, 1, 1, 1)
+    dots = t.ramp(sn.outputs[0], [(0.0, k0), (0.15, k1), (1.0, k1)])        # sine below 0 clamps to 0: half dark
+    up = t.ramp(sep.outputs["Z"], [(0.0, k0), (0.04, k1), (1.0, k1)])        # the upper half
+    col = t.mix(srgb(*dark), srgb(*mid), up)
+    col = t.mix(col, srgb(*pink), t.mix(dots, up, 1.0, "MULTIPLY"))
+    col = t.grime(col, GROUND, 2.6, 0.15, 0.55)
+    t.set(**{"Base Color": col, "rough": 0.55, "metal": 0.25, "spec": 0.3})
+    MATS[name] = t.m
+    return t.m
+
+
 def materials():
     M = {}
     # Flash's iron is near black with a purple-brown cast (right faces ~41,32,32, the lit left faces ~67,67,66), worn
@@ -578,13 +603,17 @@ def materials():
     # the cornice and roof: pale grey iron (~102,95,93), the face up paler still
     M["cap"] = painted("cap", (68, 56, 54), rough=0.45, metal=0.3, wear=(102, 92, 90), scale=4, dirt=0.2, spec=0.4,
                        top=(42, 34, 34))
+    # the flare: Flash's pale grey band under the dark block (~100 grey lit, ~54 in shade)
+    M["flare"] = painted("flare", (74, 68, 68), rough=0.5, metal=0.2, wear=(100, 92, 92), scale=5, dirt=0.1, spec=0.35)
     M["neck"] = painted("neck", (40, 30, 33), rough=0.5, metal=0.35, wear=(60, 52, 56), scale=6, dirt=0.1)
-    M["collar"] = shiny("collar", (130, 112, 114), rough=0.45, metal=0.35, wear=(110, 94, 96), scale=6, dirt=0.05)
-    M["spike"] = shiny("spike", (112, 118, 126), rough=0.4, metal=0.6, wear=(92, 98, 108), scale=6, dirt=0.05)
-    M["stud"] = shiny("stud", (134, 146, 150), rough=0.35, metal=0.7, wear=(96, 104, 112), scale=6, dirt=0.05)
-    # the rails: dark maroon iron with a pinkish worn top (Flash's front rails ~68,48,49 with a pink edge)
-    M["rail"] = painted("rail", (62, 37, 36), rough=0.5, metal=0.3, wear=(104, 72, 72), scale=5, dirt=0.15, spec=0.35,
-                        top=(96, 66, 66))
+    # the ring: pale pink-grey (Flash ~135,118,118 lit, ~54,40,40 in shade); low metal so it stays pink, not sky-grey
+    M["collar"] = shiny("collar", (122, 102, 105), rough=0.5, metal=0.15, wear=(104, 88, 90), scale=6, dirt=0.05)
+    # the spike: pale blue-grey (Flash ~120,125,140)
+    M["spike"] = shiny("spike", (150, 156, 170), rough=0.5, metal=0.25, wear=(124, 130, 142), scale=6, dirt=0.05)
+    # the studs: dark silver (Flash ~127,135,135 on the lit face, ~54-72 in shade)
+    M["stud"] = shiny("stud", (112, 122, 128), rough=0.45, metal=0.35, wear=(90, 98, 106), scale=6, dirt=0.05)
+    # the rails: dark maroon iron, their upper half dotted with Flash's pink highlight
+    M["rail"] = beaded("rail", (46, 28, 29), (84, 56, 58), (122, 88, 92), period=0.3)
     M["picket"] = painted("picket", (54, 34, 34), rough=0.5, metal=0.3, wear=(80, 56, 56), rust=(78, 46, 38), scale=6,
                           dirt=0.2, spec=0.35, rust_at=0.7)
     return M
@@ -602,34 +631,40 @@ def pyramid(name, base, height, at, mat, parent=None, tip=0.0):
 
 
 def stud(name, at, normal, mat):
-    """A pale pyramid stud with a flat top (Flash's blue-grey diamonds) standing out of a post's face."""
+    """A small pointed silver spike (a square pyramid) standing out of a post's face, as Flash's studs."""
     n = Vector(normal).normalized()
     r, d = S.STUD_R, S.STUD_D
-    o = lathe(name, [(r, -0.02), (r * 0.9, d * 0.3), (r * 0.18, d), (0.0, d)], (0, 0, 0), mat, verts=4)
+    o = lathe(name, [(r, -0.02), (r * 0.8, d * 0.2), (0.0, d)], (0, 0, 0), mat, verts=4)
     o.location = Vector(at)
     o.rotation_euler = (n.to_track_quat("Z", "Y") @ Euler((0, 0, math.radians(45))).to_quaternion()).to_euler()
     bv = o.modifiers.new("bevel", "BEVEL")
-    bv.width, bv.segments, bv.limit_method = 0.02, 2, "ANGLE"
+    bv.width, bv.segments, bv.limit_method = 0.01, 1, "ANGLE"
     return o
 
 
 def post(i, x, y):
     w, h = S.POST_W, S.POST_H
     nm = f"post{i}"
-    box(nm + "-shaft", (w, w, h), (x, y, GROUND), M["iron"], bevel=0.05, jitter=0.008)
+    box(nm + "-shaft", (w, w, h), (x, y, GROUND), M["iron"], bevel=0.04, jitter=0.008)
     z = GROUND + h
-    box(nm + "-cornice", (S.CORN_W, S.CORN_W, S.CORN_H), (x, y, z - 0.01), M["cap"], bevel=0.04)
+    # the cap, in narrowing tiers: a thin cornice, a pale sloped flare, a short step, a tall dark block, its low roof
+    box(nm + "-cornice", (S.CORN_W, S.CORN_W, S.CORN_H), (x, y, z - 0.01), M["cap"], bevel=0.025)
     z += S.CORN_H - 0.01
-    pyramid(nm + "-roof", S.CORN_W * 0.94, S.ROOF_H, (x, y, z - 0.01), M["cap"], tip=S.NECK_R * 0.9)
-    z += S.ROOF_H - 0.02
-    cyl(nm + "-neck", S.NECK_R, S.NECK_H, (x, y, z), M["neck"], verts=16, bevel=0.02)
-    z += S.NECK_H
-    # the collar: a squat round knob
+    pyramid(nm + "-roof", S.FLARE_W[0], S.FLARE_H, (x, y, z - 0.01), M["flare"], tip=S.FLARE_W[1] / 2)
+    z += S.FLARE_H - 0.01
+    box(nm + "-roofstep", (S.STEP_W, S.STEP_W, S.STEP_H), (x, y, z - 0.01), M["iron"], bevel=0.02)
+    z += S.STEP_H - 0.01
+    box(nm + "-roofblock", (S.BLOCK_W, S.BLOCK_W, S.BLOCK_H), (x, y, z - 0.01), M["iron"], bevel=0.02, jitter=0.005)
+    z += S.BLOCK_H - 0.01
+    pyramid(nm + "-rooftop", S.BLOCK_W + 0.05, S.TOP_H, (x, y, z - 0.01), M["cap"], tip=S.NECK_R)
+    z += S.TOP_H - 0.02
+    cyl(nm + "-neck", S.NECK_R, S.NECK_H, (x, y, z), M["neck"], verts=16, bevel=0.01)
+    z += S.NECK_H - 0.01
+    # the ring: a thin rounded disc
     cr, ch = S.COLLAR_R, S.COLLAR_H
-    lathe(nm + "-collar", [(S.NECK_R * 0.9, -0.03)] + [(cr * math.sin(math.pi * k / 8), ch * (1 - math.cos(math.pi * k / 8)) / 2)
-                                                     for k in range(1, 8)] + [(S.SPIKE_R * 1.1, ch), (0.0, ch)],
-          (x, y, z), M["collar"], verts=24)
-    z += S.COLLAR_H - 0.02
+    lathe(nm + "-collar", [(S.NECK_R * 0.9, -0.02), (cr * 0.8, 0.0), (cr, ch * 0.3), (cr, ch * 0.6), (cr * 0.8, ch),
+                          (S.SPIKE_R * 1.1, ch), (0.0, ch)], (x, y, z), M["collar"], verts=24)
+    z += ch - 0.02
     cyl(nm + "-spike", S.SPIKE_R, S.SPIKE_H, (x, y, z), M["spike"], verts=16, bevel=0.0, r2=0.0)
     for k, nrm in enumerate(((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0))):
         for j, sz in enumerate(S.STUD_Z):
@@ -637,8 +672,9 @@ def post(i, x, y):
             stud(f"{nm}-stud{k}{j}", at, nrm, M["stud"])
 
 
-def rail(name, p0, p1, z):
+def rail(name, p0, p1, z, nudge=(0.0, 0.0)):
     p0, p1 = S.fence(p0), S.fence(p1)
+    p0, p1 = (p0[0] + nudge[0], p0[1] + nudge[1]), (p1[0] + nudge[0], p1[1] + nudge[1])
     a, b = Vector((p0[0], p0[1], z)), Vector((p1[0], p1[1], z))
     o = box(name, ((b - a).length, S.RAIL_W, S.RAIL_H), (a + b) / 2, M["rail"], bevel=0.03, origin="center")
     o.rotation_euler = (0, 0, math.atan2(b.y - a.y, b.x - a.x))
@@ -672,7 +708,7 @@ def build():
         post(i, x, y)
     for k, (p0, p1, _) in enumerate(S.sides()):
         for j, z in enumerate(S.RAIL_Z):
-            rail(f"rail{k}{j}", p0, p1, GROUND + z)
+            rail(f"rail{k}{j}", p0, p1, GROUND + z, S.NUDGE.get(k, (0.0, 0.0)))
     n = 3 * (S.PER_BAY + 1)
     for k, (p0, p1, mid) in enumerate(S.sides()):
         d = (p1[0] - p0[0], p1[1] - p0[1])
@@ -680,7 +716,9 @@ def build():
             if mid and j % (S.PER_BAY + 1) == 0:
                 continue
             t = j / n
-            picket(f"{k}_{j}", *S.fence((p0[0] + d[0] * t, p0[1] + d[1] * t)), d)
+            nx, ny = S.NUDGE.get(k, (0.0, 0.0))
+            fx, fy = S.fence((p0[0] + d[0] * t, p0[1] + d[1] * t))
+            picket(f"{k}_{j}", fx + nx, fy + ny, d)
 
 
 FAMILY = (("post", "post"), ("rail", "rail"), ("picket", "picket"))
