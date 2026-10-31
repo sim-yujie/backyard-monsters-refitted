@@ -1,0 +1,208 @@
+STATE block1 damaged
+CONTACT post0          gap 0.000 ok  at -1.28 -1.28 1.20
+CONTACT post1          gap 0.000 ok  at 1.28 -1.28 1.20
+CONTACT post2          gap 0.000 ok  at 1.28 1.28 1.20
+CONTACT post3          gap 0.000 ok  at -1.28 1.28 1.20
+CONTACT raillo0        gap 0.000 ok  at 0.00 -1.28 0.12
+CONTACT raillo1        gap 0.000 ok  at 0.00 1.28 0.12
+CONTACT raillo2        gap 0.000 ok  at -1.28 -0.00 0.12
+CONTACT raillo3        gap 0.000 ok  at 1.28 -0.00 0.12
+CONTACT railhi0        gap 0.000 ok  at 0.00 -1.28 2.28
+CONTACT railhi1        gap 0.000 ok  at 0.00 1.28 2.28
+CONTACT railhi2        gap 0.000 ok  at -1.28 -0.00 2.28
+CONTACT railhi3        gap 0.000 ok  at 1.28 -0.00 2.28
+CONTACT side0-0        gap 0.000 ok  at -0.00 -1.28 0.56
+CONTACT side0-1        gap 0.000 ok  at -0.00 -1.28 1.20
+CONTACT brace0         gap 0.000 ok  at 0.00 -1.29 1.20
+CONTACT side1-0        gap 0.000 ok  at 1.28 0.00 0.56
+CONTACT side1-1        gap 0.000 ok  at 1.28 0.00 1.20
+CONTACT side1-2        gap 0.000 ok  at 1.28 0.00 1.84
+CONTACT brace1         gap 0.000 ok  at 1.29 -0.00 1.20
+CONTACT side2-0        gap 0.000 ok  at -0.00 1.28 0.56
+CONTACT side2-1        gap 0.000 ok  at -0.00 1.28 1.20
+CONTACT side2-2        gap 0.000 ok  at -0.00 1.28 1.84
+CONTACT brace2         gap 0.000 ok  at -0.00 1.29 1.20
+CONTACT side3-0        gap 0.000 ok  at -1.28 0.00 0.56
+CONTACT side3-1        gap 0.000 ok  at -1.28 0.00 1.20
+CONTACT side3-2        gap 0.000 ok  at -1.28 0.00 1.84
+CONTACT brace3         gap 0.000 ok  at -1.29 0.00 1.20
+CONTACT lid0           gap 0.000 ok  at -0.00 -0.93 2.26
+CONTACT lid4           gap 0.000 ok  at -0.00 0.93 2.26
+CONTACT floor          gap 0.000 ok  at -0.00 0.00 0.05
+CONTACT lid1           gap 0.000 ok  at 0.13 -0.46 2.26
+CONTACT lid2           gap 0.000 ok  at 0.01 0.00 2.26
+CONTACT lid3           gap 0.000 ok  at 0.01 0.47 2.26
+CONTACT lidbrace       gap 0.000 ok  at 0.06 0.02 2.36
+CONTACT side0-2        gap 0.000 ok  at 0.16 -1.28 1.84
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block1 destroyed
+CONTACT frame0         gap 0.000 ok  at 0.00 -1.28 0.12
+CONTACT frame1         gap 0.000 ok  at 0.00 1.28 0.12
+CONTACT frame2         gap 0.000 ok  at -1.28 -0.00 0.12
+CONTACT frame3         gap 0.000 ok  at 1.28 -0.00 0.12
+CONTACT floor0         gap 0.000 ok  at 0.00 -0.93 0.04
+CONTACT floor1         gap 0.000 ok  at 0.00 -0.46 0.04
+CONTACT floor2         gap 0.000 ok  at 0.00 0.00 0.04
+CONTACT floor3         gap 0.000 ok  at 0.00 0.46 0.04
+CONTACT floor4         gap 0.000 ok  at 0.00 0.93 0.04
+CONTACT post0          gap 0.000 ok  at -1.28 -1.28 0.28
+CONTACT post1          gap 0.000 ok  at 1.28 -1.28 0.21
+CONTACT post2          gap 0.000 ok  at 1.28 1.28 0.25
+CONTACT post3          gap 0.000 ok  at -1.28 1.28 0.31
+CONTACT plank0         gap 0.000 ok  at 0.10 -0.20 0.10
+CONTACT plank1         gap 0.000 ok  at -0.30 0.55 0.10
+CONTACT brace0         gap 0.000 ok  at 0.55 0.20 0.15
+CONTACT plank2         gap 0.000 ok  at -0.60 -0.75 0.26
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block2 damaged
+CONTACT granite        gap 0.000 ok  at 0.03 -0.13 1.30
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block2 destroyed
+CONTACT rock0          gap 0.000 ok  at -0.18 0.09 0.25
+CONTACT rock1          gap 0.000 ok  at 0.81 -0.48 0.21
+CONTACT rock2          gap 0.000 ok  at -0.85 -0.58 0.13
+CONTACT rock3          gap 0.000 ok  at 0.61 0.85 0.17
+CONTACT rock4          gap 0.000 ok  at -0.75 0.80 0.13
+CONTACT rock5          gap 0.000 ok  at 1.01 0.29 0.07
+CONTACT rock6          gap 0.000 ok  at 0.14 -0.94 0.09
+CONTACT rocktop        gap 0.000 ok  at -0.11 0.00 0.53
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block3 damaged
+CONTACT body           gap 0.000 ok  at 0.00 -0.00 1.10
+CONTACT slab           gap 0.000 ok  at -0.12 -0.15 2.29
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block3 destroyed
+CONTACT slab           gap 0.000 ok  at 0.01 0.00 0.12
+CONTACT cob0           gap 0.000 ok  at 0.91 -0.70 0.33
+CONTACT cob1           gap 0.000 ok  at -0.60 0.80 0.36
+CONTACT cob2           gap 0.000 ok  at 0.75 0.75 0.36
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block4 damaged
+CONTACT rim1           gap 0.000 ok  at 0.00 1.33 1.97
+CONTACT rim2           gap 0.000 ok  at -1.33 -0.00 1.97
+CONTACT rim3           gap 0.000 ok  at 1.33 -0.00 1.97
+CONTACT pyr00          gap 0.000 ok  at -0.85 -0.85 2.12
+CONTACT pyr01          gap 0.000 ok  at -0.85 -0.00 2.12
+CONTACT pyr02          gap 0.000 ok  at -0.85 0.85 2.12
+CONTACT pyr10          gap 0.000 ok  at -0.00 -0.85 2.12
+CONTACT pyr12          gap 0.000 ok  at -0.00 0.85 2.12
+CONTACT pyr21          gap 0.000 ok  at 0.85 -0.00 2.12
+CONTACT pyr22          gap 0.000 ok  at 0.85 0.85 2.12
+CONTACT pyrstub        gap 0.000 ok  at 0.85 -0.85 1.99
+CONTACT body           gap 0.000 ok  at 0.30 -0.30 0.98
+CONTACT rim0           gap 0.000 ok  at 0.00 -1.33 1.97
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block4 destroyed
+CONTACT puddle         gap 0.000 ok  at 0.10 -0.07 0.20
+CONTACT pyr0           gap 0.000 ok  at 0.35 -0.20 0.22
+CONTACT pyr1           gap 0.000 ok  at -0.50 0.40 0.20
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block5 damaged
+CONTACT obsidian       gap 0.000 ok  at 0.06 -0.21 1.57
+CONTACT crystal0       gap 0.000 ok  at -0.40 0.42 1.80
+CONTACT crystal1       gap 0.000 ok  at 0.39 -0.36 1.76
+CONTACT crystal2       gap 0.000 ok  at 0.08 0.79 1.75
+CONTACT crystal3       gap 0.000 ok  at -0.72 -0.28 1.73
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE block5 destroyed
+CONTACT shard0         gap 0.000 ok  at -1.01 -0.89 0.07
+CONTACT shard1         gap 0.000 ok  at -0.20 -0.97 0.11
+CONTACT shard2         gap 0.000 ok  at 0.40 -0.86 0.15
+CONTACT shard3         gap 0.000 ok  at 1.00 -0.72 0.14
+CONTACT shard4         gap 0.000 ok  at -1.14 -0.07 0.13
+CONTACT shard5         gap 0.000 ok  at -0.39 -0.09 0.09
+CONTACT shard6         gap 0.000 ok  at 0.45 -0.13 0.07
+CONTACT shard7         gap 0.000 ok  at 1.15 -0.13 0.17
+CONTACT shard8         gap 0.000 ok  at -1.07 0.71 0.08
+CONTACT shard9         gap 0.000 ok  at -0.33 0.98 0.13
+CONTACT shard10        gap 0.000 ok  at 0.35 0.75 0.12
+CONTACT shard11        gap 0.000 ok  at 1.02 0.76 0.20
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE stone damaged
+CONTACT stud-1-1       gap 0.000 ok  at -0.72 -0.72 2.49
+CONTACT studhole-1-1   gap 0.000 ok  at -0.72 -0.72 2.57
+CONTACT stud-10        gap 0.000 ok  at -0.72 -0.00 2.49
+CONTACT studhole-10    gap 0.000 ok  at -0.72 0.00 2.57
+CONTACT stud-11        gap 0.000 ok  at -0.72 0.72 2.49
+CONTACT studhole-11    gap 0.000 ok  at -0.72 0.72 2.57
+CONTACT stud0-1        gap 0.000 ok  at 0.00 -0.72 2.49
+CONTACT studhole0-1    gap 0.000 ok  at -0.00 -0.72 2.57
+CONTACT stud01         gap 0.000 ok  at 0.00 0.72 2.49
+CONTACT studhole01     gap 0.000 ok  at -0.00 0.72 2.57
+CONTACT stud11         gap 0.000 ok  at 0.72 0.72 2.49
+CONTACT studhole11     gap 0.000 ok  at 0.72 0.72 2.57
+CONTACT body           gap 0.000 ok  at 0.04 -0.21 1.24
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE stone destroyed
+CONTACT rock0          gap 0.000 ok  at -0.35 0.16 0.25
+CONTACT rock1          gap 0.000 ok  at 0.49 -0.40 0.26
+CONTACT rock2          gap 0.000 ok  at 0.45 0.65 0.17
+CONTACT rock3          gap 0.000 ok  at -0.60 -0.73 0.14
+CONTACT rock4          gap 0.000 ok  at 1.00 0.09 0.12
+CONTACT rocktop        gap 0.000 ok  at 0.05 -0.00 0.47
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE inferno1 damaged
+CONTACT glow           gap 0.000 ok  at -0.00 0.00 0.01
+CONTACT dome           gap 0.000 ok  at -0.00 0.00 0.48
+CONTACT rock0          gap 0.000 ok  at -0.30 -0.45 1.00
+CONTACT rock1          gap 0.000 ok  at 0.70 0.55 0.95
+CONTACT rock2          gap 0.000 ok  at -1.00 0.70 0.85
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE inferno1 destroyed
+CONTACT glow           gap 0.000 ok  at -0.00 0.00 0.01
+CONTACT plate00        gap 0.000 ok  at -0.97 -0.89 0.13
+CONTACT plate01        gap 0.000 ok  at -0.96 -0.04 0.09
+CONTACT plate02        gap 0.000 ok  at -0.89 0.87 0.16
+CONTACT plate10        gap 0.000 ok  at -0.05 -0.93 0.15
+CONTACT plate11        gap 0.000 ok  at -0.09 -0.04 0.11
+CONTACT plate12        gap 0.000 ok  at 0.04 0.97 0.13
+CONTACT plate20        gap 0.000 ok  at 1.00 -0.89 0.11
+CONTACT plate21        gap 0.000 ok  at 0.93 0.04 0.13
+CONTACT plate22        gap 0.000 ok  at 0.89 0.91 0.11
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE inferno2 damaged
+CONTACT collar         gap 0.000 ok  at 0.00 -0.00 0.98
+CONTACT rivet0         gap 0.000 ok  at 0.39 0.39 0.97
+CONTACT rivet1         gap 0.000 ok  at -0.39 0.39 0.97
+CONTACT rivet2         gap 0.000 ok  at -0.39 -0.39 0.97
+CONTACT rivet3         gap 0.000 ok  at 0.39 -0.39 0.97
+CONTACT groove0        gap 0.000 ok  at 0.74 0.74 0.95
+CONTACT groove1        gap 0.000 ok  at -0.74 0.74 0.95
+CONTACT groove2        gap 0.000 ok  at -0.74 -0.74 0.95
+CONTACT base           gap 0.000 ok  at 0.23 -0.24 0.35
+CONTACT cap            gap 0.000 ok  at -0.04 -0.34 0.83
+CONTACT spikestub      gap 0.000 ok  at 0.00 -0.00 1.09
+CONTACT capbit         gap 0.000 ok  at 0.95 -0.85 1.02
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE inferno2 destroyed
+CONTACT base           gap 0.000 ok  at 0.22 -0.22 0.18
+CONTACT cap0           gap 0.000 ok  at -0.35 0.21 0.42
+CONTACT cap1           gap 0.000 ok  at 0.40 0.35 0.43
+CONTACT cap2           gap 0.000 ok  at -0.20 -0.45 0.42
+CONTACT cap3           gap 0.000 ok  at 0.95 -0.95 0.15
+CONTACT cap4           gap 0.000 ok  at 1.51 -0.29 0.44
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE inferno3 damaged
+CONTACT lip0           gap 0.000 ok  at -0.00 -1.26 2.23
+CONTACT lip1           gap 0.000 ok  at -0.00 1.26 2.23
+CONTACT lip2           gap 0.000 ok  at -1.26 0.00 2.23
+CONTACT lip3           gap 0.000 ok  at 1.26 0.00 2.23
+CONTACT spike00        gap 0.000 ok  at -0.77 -0.77 2.33
+CONTACT spike01        gap 0.000 ok  at -0.77 0.00 2.33
+CONTACT spike02        gap 0.000 ok  at -0.77 0.77 2.33
+CONTACT spike10        gap 0.000 ok  at -0.00 -0.77 2.33
+CONTACT spike11        gap 0.000 ok  at -0.00 0.00 2.33
+CONTACT spike21        gap 0.000 ok  at 0.77 0.00 2.33
+CONTACT spike22        gap 0.000 ok  at 0.77 0.77 2.33
+CONTACT body           gap 0.000 ok  at 0.28 -0.14 1.10
+CONTACT worst gap 0.000, parts not reaching the ground: 0
+STATE inferno3 destroyed
+CONTACT stub           gap 0.000 ok  at 0.15 -0.18 0.22
+CONTACT spike0         gap 0.000 ok  at -0.50 0.40 0.55
+CONTACT spike1         gap 0.000 ok  at 0.40 0.50 0.55
+CONTACT spike2         gap 0.000 ok  at -0.60 -0.50 0.55
+CONTACT spike3         gap 0.000 ok  at 0.30 -0.30 0.55
+CONTACT spike4         gap 0.000 ok  at 1.06 0.13 0.82
+CONTACT spike5         gap 0.000 ok  at 0.37 -0.80 0.67
+CONTACT plate          gap 0.000 ok  at -0.50 0.10 0.80
+CONTACT worst gap 0.000, parts not reaching the ground: 0
