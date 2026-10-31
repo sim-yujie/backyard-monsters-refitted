@@ -4,7 +4,7 @@ there is one model and one still. The parts and their places are in stack.py; th
 (mbtex.py). The shared helpers (materials, meshes, camera, checks) are the HCC's hcc.py, unchanged.
 
     blender -b --factory-startup -P store.py -- 1 fit      work/fit-L1.png    quick render without the ground, 4 px per Flash px
-    blender -b --factory-startup -P store.py -- 1 still    render/L1-base.png (with the ground shadow), render/L1-alone.png
+    blender -b --factory-startup -P store.py -- 1 still    render/L1-raw.png (with the ground shadow), render/L1-alone.png
     blender -b --factory-startup -P store.py -- 1 check    CHECK lines: parts whose meshes overlap
     blender -b --factory-startup -P store.py -- 1 gap      GAP lines: parts in front of others from the camera
     blender -b --factory-startup -P store.py -- 1 probe sx sy ...   what the camera sees first through Flash pixels
@@ -632,57 +632,112 @@ def lift(mat, col, strength):
 
 
 def pip_mat():
-    """The pips: white paint in a round dimple, painted as Flash shades it (the light falls in from above: the top of the
-    dimple in the rim's shadow, grey, the bottom bright), since the sun never reaches the die's right face."""
+    """The pips: grey, shiny round dimples, painted as Flash shades them (dark inside the upper right rim, pale grey low
+    on the left, no white), since the sun never reaches the die's right face."""
     t = NT("pip")
-    sep = t.n("ShaderNodeSeparateXYZ")
-    t.link(t.n("ShaderNodeNewGeometry").outputs["Normal"], sep.inputs[0])
-    mr = t.n("ShaderNodeMapRange")              # normal Z -0.9..0.9 -> 0..1
+    dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(t.n("ShaderNodeNewGeometry").outputs["Normal"], dp.inputs[0])
+    dp.inputs[1].default_value = (0.0, -0.55, -0.835)     # bright low on the left (the cut faces' normals point in)
+    mr = t.n("ShaderNodeMapRange")              # -0.9..0.9 -> 0..1
     mr.inputs[1].default_value, mr.inputs[2].default_value = -0.9, 0.9
-    t.link(sep.outputs["Z"], mr.inputs[0])
-    col = t.ramp(mr.outputs[0], [(0.0, srgb(110, 108, 120)), (0.42, srgb(150, 148, 160)), (0.55, srgb(200, 198, 208)),
-                                 (0.75, srgb(232, 230, 236)), (1.0, srgb(246, 244, 248))])
-    t.set(**{"Base Color": col, "rough": 0.35, "spec": 0.4, "Emission Color": col, "Emission Strength": 0.55})
+    t.link(dp.outputs["Value"], mr.inputs[0])
+    col = t.ramp(mr.outputs[0], [(0.0, srgb(100, 100, 108)), (0.38, srgb(140, 140, 148)), (0.58, srgb(184, 184, 192)),
+                                 (0.7, srgb(226, 226, 232)), (0.8, srgb(198, 198, 206)), (1.0, srgb(176, 176, 184))])
+    t.set(**{"Base Color": col, "rough": 0.28, "spec": 0.55, "Emission Color": col, "Emission Strength": 0.45})
+    t.bump(t.noise(t.coords(), 30, 3.0, 0.6), 0.05, 0.01)
     MATS["pip"] = t.m
+    return t.m
+
+
+def fold_mat():
+    """The cover's fold round the die's front corner (Flash: a pale crease line where the print ends, then a dark
+    maroon band with darker creases running down it, browner at the top)."""
+    t = NT("fold")
+    uv = t.n("ShaderNodeUVMap")
+    sep = t.n("ShaderNodeSeparateXYZ")
+    t.link(uv.outputs["UV"], sep.inputs[0])
+    mr = t.n("ShaderNodeMapRange")                 # across the band: u from 1 (the crease) to FOLD_U1 (its far edge)
+    mr.inputs[1].default_value, mr.inputs[2].default_value = 1.0, FOLD_U1
+    t.link(sep.outputs["X"], mr.inputs[0])
+    col = t.ramp(mr.outputs[0], [(0.0, srgb(176, 128, 138)), (0.16, srgb(150, 92, 102)), (0.3, srgb(104, 40, 46)),
+                                 (0.55, srgb(78, 24, 30)), (0.8, srgb(92, 30, 34)), (1.0, srgb(70, 20, 24))])
+    # creases: a few soft dark lines running down the band
+    cr = t.noise(t.coords(scale=(4.0, 4.0, 0.25)), 2.0, 2.0, 0.4, 0.2)
+    col = t.mix(col, srgb(44, 12, 16), t.ramp(cr, [(0.58, (0, 0, 0, 1)), (0.7, (0.7, 0.7, 0.7, 1))]))
+    # browner at the top
+    mz = t.n("ShaderNodeMapRange")
+    mz.inputs[1].default_value, mz.inputs[2].default_value = 0.7, 1.0
+    t.link(sep.outputs["Y"], mz.inputs[0])
+    col = t.mix(col, srgb(96, 44, 22), t.ramp(mz.outputs[0], [(0.0, (0, 0, 0, 1)), (1.0, (0.7, 0.7, 0.7, 1))]))
+    col = t.grime(col, GROUND, 4.0, 0.2, 0.6)
+    t.set(**{"Base Color": col, "rough": 0.85, "spec": 0.25})
+    t.bump(cr, 0.1, 0.02)
+    MATS["fold"] = t.m
     return t.m
 
 
 def materials():
     M = {}
-    # the die: Flash's brick-red plastic (right face ~150,55,45), soft and a little glossy, darker low down
-    M["die"] = shiny("die", (172, 50, 40), rough=0.4, metal=0.0, wear=(146, 40, 32), scale=1.6, dirt=0.35, spec=0.45,
+    # the die: Flash's brick-red plastic (right face ~143,66,57), matte and a little worn, darker low down
+    M["die"] = shiny("die", (178, 70, 54), rough=0.62, metal=0.0, wear=(156, 62, 50), scale=1.6, dirt=0.5, spec=0.3,
                      side=0.25)
     M["pip"] = pip_mat()
-    lift(M["die"], (150, 54, 42), 0.55)
+    lift(M["die"], (156, 72, 58), 0.55)
     M["cover"] = printed("cover", HERE / "matchbook.png")
     M["coverback"] = painted("coverback", (190, 56, 66), rough=0.7, wear=(170, 48, 58), dirt=0.3)
-    M["striker"] = painted("striker", (84, 34, 26), rough=0.95, wear=(112, 52, 38), scale=14, dirt=0.2)
+    M["striker"] = fold_mat()
     # popsicle sticks: pale wood, white at the back, going pink toward the front and the right
-    pinks = ((0.0, 0.05), (0.0, 0.4), (0.25, 0.85), (0.85, 1.0))
+    pinks = ((0.0, 0.1), (0.1, 0.4), (0.55, 0.8), (0.9, 1.0))
     for i, (p0, p1) in enumerate(pinks):
-        w, p = (246, 240, 236), (250, 168, 164)
+        w, p = (232, 228, 226), (238, 158, 156)
         c0 = tuple(a + (b - a) * p0 for a, b in zip(w, p))
         c1 = tuple(a + (b - a) * p1 for a, b in zip(w, p))
-        M[f"stick{i}"] = along(f"stick{i}", [(0.0, c0), (0.45, c0), (1.0, c1)], axis="Y", rough=0.6, spec=0.3,
-                               dirt=0.1, grain=0.35, scale=3)
-    # the strap: tan at its left end, white in the middle, yellow over the right edge (world X)
-    M["strap"] = along("strap", [(0.0, (196, 140, 92)), (0.16, (226, 186, 140)), (0.32, (252, 248, 244)),
-                                 (0.7, (250, 244, 236)), (0.84, (236, 184, 64)), (1.0, (226, 168, 48))],
-                       axis="X", lo=S.STRAP_X0, hi=S.DIE_A + 0.1, space="Object", rough=0.45, spec=0.45, dirt=0.1)
+        M[f"stick{i}"] = along(f"stick{i}", [(0.0, c0), (0.45, c0), (1.0, c1)], axis="Y", rough=0.75, spec=0.2,
+                               dirt=0.1, grain=0.4, scale=3)
+    # the strap: a dark tip, tan at its left end, white in the middle, yellow over the right edge (world X)
+    M["strap"] = along("strap", [(0.0, (110, 64, 36)), (0.05, (180, 118, 72)), (0.14, (196, 140, 92)),
+                                 (0.28, (226, 186, 140)), (0.41, (252, 248, 244)), (0.74, (250, 244, 236)),
+                                 (0.86, (236, 176, 48)), (1.0, (224, 160, 36))],
+                       axis="X", lo=-2.62, hi=S.DIE_A + 0.1, space="Object", rough=0.45, spec=0.45, dirt=0.1)
     lift(M["strap"], (120, 96, 60), 0.5)
-    M["paper"] = along("paper", [(0.0, (236, 168, 160)), (0.5, (232, 150, 146)), (1.0, (220, 132, 132))], axis="Y",
-                       rough=0.75, spec=0.25, dirt=0.1, wear=(252, 232, 228), scale=3)
+    M["paper"] = along("paper", [(0.0, (222, 142, 138)), (0.5, (216, 130, 128)), (1.0, (206, 118, 120))], axis="Y",
+                       rough=0.8, spec=0.2, dirt=0.05, wear=(250, 226, 222), scale=2.2)
     # thumbtacks: Flash's bright old gold discs, dark brass pins
-    M["tack"] = shiny("tack", (228, 164, 48), rough=0.3, metal=0.6, side=0.4, wear=(196, 130, 34), scale=2.0,
+    M["tack"] = shiny("tack", (214, 166, 40), rough=0.3, metal=0.6, side=0.4, wear=(196, 130, 34), scale=2.0,
                       dirt=0.25, coat=0.2, spec=0.4)
-    M["pin"] = shiny("pin", (120, 92, 50), rough=0.35, metal=0.8, wear=(90, 66, 36), scale=4, dirt=0.05)
+    # Flash's front and right discs are a darker, browner old gold than the left one
+    M["tackdark"] = shiny("tackdark", (176, 118, 36), rough=0.35, metal=0.6, side=0.4, wear=(130, 84, 26), scale=2.0,
+                          dirt=0.3, coat=0.15, spec=0.35)
+    M["pin"] = shiny("pin", (176, 132, 60), rough=0.35, metal=0.8, wear=(130, 96, 44), scale=4, dirt=0.05)
     M["wire"] = shiny("wire", (196, 200, 208), rough=0.45, metal=0.4, wear=(140, 146, 156), scale=4, dirt=0.05)
+    # the wires lying along the sticks: Flash draws them as dark grey lines
+    M["wire2"] = shiny("wire2", (96, 98, 106), rough=0.5, metal=0.3, wear=(80, 82, 90), scale=4, dirt=0.0)
     M["hole"] = flat("hole", (24, 18, 18), rough=1.0)
     return M
 
 
-M = materials()
+def mb_path():
+    """The cover's path seen from above: flat along the left face to where the die's corner starts to round, then a
+    fold that wraps the corner standing off it (a dark gap between the fold and the die, as Flash's), ending at the
+    corner's middle. Returns the points and the path fraction where the print ends (MB_X1) and the fold begins."""
+    rc = S.DIE_R
+    o = rc + S.MB_GAP
+    cx, cy = A - rc, -A + rc
+    path = [(S.MB_X0 + (cx - S.MB_X0) * i / 24, cy - o) for i in range(25)]
+    for k in range(1, 9):
+        a = math.radians(-90 + 45 * k / 8)
+        r = o + 0.1 * k / 8
+        path.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+    ls = sum(math.dist(p, q) for p, q in zip(path, path[1:]))
+    return path, (S.MB_X1 - S.MB_X0) / ls
+
+
 A = S.DIE_A
+# the lean: a shear, not a turn, so the die's upright edges stay upright on screen (as Flash's): z drops with y
+_tn = math.tan(math.radians(S.TILT))
+TILT_M = Matrix(((1, 0, 0, 0), (0, 1, 0, 0), (0, -_tn, 1, _tn * S.TILT_PIVOT[0]), (0, 0, 0, 1)))
+FOLD_U1 = 1.0 / mb_path()[1]          # the fold's far edge in the cover's UV (the print fills u 0..1)
+M = materials()
 ZT = S.ZTOP
 
 
@@ -770,15 +825,10 @@ def sheet(name, path, z0, z1, nz, mats, split, thick=0.05, warp=0.0, flare=0.0):
 
 
 def matchbook():
-    """The cover glued to the left (-Y) face: printed front, then the brown striker strip round the front corner."""
-    rc = S.DIE_R
-    o = rc + S.MB_GAP
-    cx, cy = A - rc, -A + rc
-    path = [(S.MB_X0 + (cx - S.MB_X0) * i / 24, cy - o) for i in range(25)]
-    path += [(cx + o * math.cos(math.radians(a)), cy + o * math.sin(math.radians(a))) for a in range(-80, -44, 7)]
-    split = (S.MB_X1 - S.MB_X0) / ((cx - S.MB_X0) + o * math.radians(35))
+    """The cover glued to the left (-Y) face: printed front, then the fold round the front corner."""
+    path, split = mb_path()
 
-    def z0(s):          # the bottom edge: lowest at the left, rising toward the front, highest under the striker
+    def z0(s):          # the bottom edge: lowest at the left, rising toward the front, highest under the fold
         return S.MB_Z0 + S.MB_RISE * min(1.0, s / 0.68) + max(0.0, s - split + 0.04) * 1.5
 
     ob = sheet("mbcover", path, z0, S.MB_Z1, 24, [M["cover"], M["striker"]], split, thick=0.05, warp=0.025,
@@ -791,21 +841,21 @@ def tacks():
     prof = [(0.0, S.TACK_T + 0.05), (S.TACK_R * 0.5, S.TACK_T + 0.035), (S.TACK_R - 0.05, S.TACK_T),
             (S.TACK_R, S.TACK_T - 0.04), (S.TACK_R, 0.02), (S.TACK_R - 0.03, 0.0), (0.0, 0.0)]
     for i, ((gx, gy), top) in enumerate(S.TACKS):
-        lathe(f"tack{i}", prof, (gx, gy, GROUND), M["tack"], verts=48)
-        lathe(f"tackboss{i}", [(0.0, 0.14), (0.12, 0.13), (0.16, 0.04), (0.16, 0.0)], (gx, gy, S.TACK_T + 0.02),
+        lathe(f"tack{i}", prof, (gx, gy, GROUND), M["tackdark"] if i in (0, 2) else M["tack"], verts=48)
+        lathe(f"tackboss{i}", [(0.0, 0.04), (0.05, 0.035), (0.068, 0.0)], (gx, gy, S.TACK_T + 0.02),
               M["tack"], verts=24)
-        a = Vector((gx, gy, S.TACK_T + 0.12))
-        b = Vector(top)
-        b = b + (b - a).normalized() * 0.06              # a little into the card or the die
-        tube(f"tackpin{i}", [a, b], 0.05, M["pin"], verts=10)
+        a = Vector((gx, gy, S.TACK_T + 0.03))
+        b = TILT_M @ Vector(top)                       # the body leans; the pin goes up into it where it now is
+        b = b + (b - a).normalized() * 0.12              # a little into the card or the die
+        tube(f"tackpin{i}", [a, b], 0.042, M["pin"], verts=10)
 
 
 def sticks():
     n, w, t = S.STICK_N, S.STICK_W, S.STICK_T
-    gap = (2 * A - n * w) / (n - 1)
+    gap = (S.STICK_X1 - S.STICK_X0 - n * w) / (n - 1)
     jit = ((0.0, 0.0, 0.15), (-0.06, 0.05, -0.15), (0.05, -0.04, 0.2), (0.1, 0.02, -0.3))
     for i in range(n):
-        x = -A + w / 2 + i * (w + gap)
+        x = S.STICK_X0 + w / 2 + i * (w + gap)
         dy0, dy1, rz = jit[i]
         y0, y1 = S.STICK_Y0 + dy0, S.STICK_Y1 + dy1
         r = w / 2
@@ -823,9 +873,16 @@ def sticks():
         for v in [e for e in ext["geom"] if isinstance(e, bmesh.types.BMVert)]:
             v.co.z += t
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-        ob = mesh_ob(f"stick{i}", bm, [M[f"stick{i}"]], smooth=False, bevel=0.05, segs=3)
-        ob.location = (x, 0.0, ZT + 0.003)
+        ob = mesh_ob(f"stick{i}", bm, [M[f"stick{i}"]], smooth=False, bevel=0.03, segs=3)
+        ob.location = (x, 0.0, ZT + 0.006)
         ob.rotation_euler = (0.0, 0.0, math.radians(rz))
+
+
+def lift(x):
+    """How far the strap (and the paper under it) rides up over the paper bunched beneath its right part (Flash's
+    strap and its yellow end sit high over the sticks)."""
+    t = min(1.0, max(0.0, (x + 1.5) / 3.6))
+    return S.STRAP_LIFT * (0.35 + 0.65 * t * t * (3 - 2 * t))
 
 
 def strap():
@@ -834,21 +891,25 @@ def strap():
     zs = S.ZSTICK + 0.055 + S.STRAP_T / 2              # on the paper
     y = S.STRAP_Y
     x0 = S.STRAP_X0
-    pts = [(-2.98, 0.42, zs - 0.3), (-2.75, 0.56, zs - 0.14), (-2.5, 0.72, zs - 0.01), (-2.2, 0.9, zs + 0.01),
-           (x0, y, zs)]                                    # the left end turns forward and droops off the back edge
+    pts = [(-2.62, 0.6, zs + 0.12), (-2.5, 0.7, zs + 0.07), (-2.32, 0.84, zs + 0.045), (-2.12, 0.96, zs + 0.03),
+           (x0, y, zs + 0.01)]                                    # the left end turns forward, its tip curling up
     pts += [(x0 + (A - 0.05 - x0) * i / 20, y, zs) for i in range(1, 21)]
-    pts += [(A + 0.06, y, zs - 0.06), (A + 0.1, y, zs - 0.2), (A + 0.09, y, ZT - 0.2), (A + 0.08, y, ZT - 0.62)]
+    pts = [(px_, py_, pz + lift(px_)) for px_, py_, pz in pts]       # riding up over the paper bunched under it
+    lr = lift(A)
+    pts += [(A + 0.06, y, zs - 0.06 + lr), (A + 0.1, y, zs - 0.2 + lr), (A + 0.09, y, ZT - 0.2 + lr),
+            (A + 0.08, y, ZT - 0.62 + lr)]
     sweep("strap", pts, (0, 1, 0), S.STRAP_W, S.STRAP_T, M["strap"], bevel=0.02)
     for i, hx in enumerate(S.STRAP_HOLES):
-        h = cyl(f"strapholeT{i}", 0.17, 0.01, (hx, y, zs + S.STRAP_T / 2 - 0.004), M["hole"], verts=20, bevel=0.0)
+        h = cyl(f"strapholeT{i}", 0.2, 0.01, (hx, y, zs + S.STRAP_T / 2 + 0.012 + lift(hx)), M["hole"], verts=20,
+                bevel=0.0)
         h.scale = (1.0, 0.8, 1.0)
-    hz = ZT - 0.4
+    hz = ZT - 0.4 + lr
     cyl("strapholeS", 0.15, 0.01, (A + 0.09 + S.STRAP_T / 2 - 0.004, y, hz), M["hole"], rot=(0, 90, 0), verts=20,
         bevel=0.0)
     # the ring: through that hole, lying against the face round the top-right pip
     zc = S.DIE_Z0 + S.DIE_H / 2 + S.PIP_DZ
     r = 0.8
-    c = Vector((A + 0.1, S.STRAP_Y, hz - r))
+    c = Vector((A + 0.1, S.STRAP_Y + 0.12, hz - r))
     pts = []
     for k in range(64):
         a = 2 * math.pi * k / 64
@@ -859,25 +920,31 @@ def strap():
 
 def paper():
     """A crumpled pink paper on the sticks behind the strap, its back edge torn into points and curled up."""
-    nx, ny = 28, 8
-    x0, x1 = -A + 0.05, A - 0.12
+    nx, ny = 40, 8
+    x0, x1 = -A + 0.3, A - 0.12          # (it starts right of where the strap turns forward, clear of it)
     y1 = S.PAPER_Y1
     yb = S.STRAP_Y + S.STRAP_W / 2 + 0.05             # the strap's back edge
     bm = bmesh.new()
     rows = []
     rr = random.Random(77)
-    tips = [rr.uniform(-0.12, 0.22) + (0.2 if k % 3 == 1 else 0.0) for k in range(nx + 1)]
+    # an irregular torn edge: a slow wander of broad lobes and dips, and a few narrow torn flaps of differing size
+    ph = [rr.uniform(0, 6.3) for _ in range(3)]
+    tips = [0.2 * math.sin(0.4 * k + ph[0]) + 0.1 * math.sin(1.1 * k + ph[1]) + 0.05 * math.sin(2.9 * k + ph[2]) +
+            rr.uniform(-0.035, 0.035) for k in range(nx + 1)]
+    for k, hgt in ((5, 0.1), (17, 0.12), (33, 0.1)):
+        tips[k] += hgt
     for j in range(ny + 1):
         fy = j / ny
+        edge = 1.0 if j == ny else (0.4 if j == ny - 1 else 0.0)     # the tear shapes the last two rows
         row = []
         for i in range(nx + 1):
             fx = i / nx
             x = x0 + (x1 - x0) * fx
             yf = S.STRAP_Y - S.STRAP_W / 2 + 0.06        # its front edge under the strap
-            yy = yf + (y1 - yf) * fy + (tips[i] * 0.6 if j == ny else 0.0)
+            yy = yf + (y1 - yf) * fy + tips[i] * 0.6 * edge
             fr = max(0.0, (yy - yb) / (y1 - yb))          # flat under the strap, crumpled and curled up behind it
-            z = S.ZSTICK + 0.015 + 0.06 * math.sin(9 * fx + 3 * fy) * fr + 0.22 * fr ** 2.2 + \
-                (tips[i] * 0.2 if j == ny else 0.0) + rr.uniform(-0.015, 0.015) * fr
+            z = (S.ZSTICK + 0.015 + 0.07 * math.sin(9 * fx + 3 * fy) * fr + 0.6 * fr ** 1.5 + tips[i] * 0.45 * edge +
+                 rr.uniform(-0.02, 0.02) * fr) + lift(x)
             row.append(bm.verts.new((x, yy, z)))
         rows.append(row)
     for j in range(ny):
@@ -887,6 +954,25 @@ def paper():
     mo = ob.modifiers.new("thick", "SOLIDIFY")
     mo.thickness = 0.02
     mo.offset = 1.0
+    # the paper bunched up under the strap's right part: a crumpled wad from the sticks up to the sheet
+    bm = bmesh.new()
+    rr = random.Random(5)
+    yw = S.STRAP_Y
+    secs = []
+    for i in range(25):
+        x = -2.05 + (A - 0.15 + 2.05) * i / 24
+        top = S.ZSTICK + 0.015 + lift(x) + 0.005
+        hw = 0.36 + rr.uniform(-0.03, 0.03)
+        zb = S.ZSTICK + 0.008
+        secs.append([bm.verts.new(v) for v in ((x, yw - hw, zb), (x, yw + hw, zb), (x, yw + hw * 0.9, top),
+                                               (x, yw - hw * 0.9, top))])
+    for s0, s1 in zip(secs, secs[1:]):
+        for k in range(4):
+            bm.faces.new((s0[k], s0[(k + 1) % 4], s1[(k + 1) % 4], s1[k]))
+    bm.faces.new(secs[0][::-1])
+    bm.faces.new(secs[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh_ob("paperwad", bm, [M["paper"]], smooth=True)
     return ob
 
 
@@ -894,24 +980,31 @@ def wires():
     """Two grey wires lying along the gaps between the sticks; the first hooks down over the stick ends, the second
     turns across the front sticks' ends and hooks round the front one."""
     n, w = S.STICK_N, S.STICK_W
-    gap = (2 * A - n * w) / (n - 1)
-    z = S.ZSTICK + 0.042
-    xa = -A + w + gap / 2
-    tube("wireA", [(xa, 0.45, z - 0.02), (xa, 0.3, z), (xa, -1.0, z), (xa, -3.2, z), (xa, -3.4, z - 0.1),
-                   (xa, -3.45, z - 0.32)], 0.035, M["wire"], verts=8, smooth=True)
+    gap = (S.STICK_X1 - S.STICK_X0 - n * w) / (n - 1)
+    z = S.ZSTICK + 0.056                       # resting on the sticks (they sit 0.006 up)
+    xa = S.STICK_X0 + w + gap / 2
+    y0 = S.STICK_Y0
+    tube("wireA", [(xa, 0.36, z - 0.02), (xa, 0.22, z), (xa, -1.0, z), (xa, y0 + 0.3, z), (xa, y0 + 0.06, z - 0.03),
+                   (xa, y0 - 0.04, z - 0.12), (xa, y0 - 0.05, z - 0.2)], 0.045, M["wire2"], verts=8, smooth=True)
     xb = xa + 2 * (w + gap)
-    tube("wireB", [(xb, 0.45, z - 0.02), (xb, 0.3, z), (xb, -1.5, z), (xb + 0.1, -2.6, z), (xb + 0.4, -3.1, z), (1.95, -3.45, z),
-                   (1.98, -3.64, z), (2.0, -3.8, z - 0.1), (2.0, -3.83, z - 0.32)], 0.035, M["wire"], verts=8, smooth=True)
+    tube("wireB", [(xb, 0.36, z - 0.02), (xb, 0.22, z), (xb, -1.5, z), (xb + 0.1, y0 + 1.0, z), (xb + 0.4, y0 + 0.55, z),
+                   (1.95, y0 + 0.35, z), (1.98, y0 + 0.2, z + 0.005), (2.0, y0 + 0.04, z - 0.03), (2.0, y0 - 0.04, z - 0.12),
+                   (2.0, y0 - 0.06, z - 0.2)], 0.045, M["wire2"], verts=8, smooth=True)
 
 
 def build():
     die()
     wires()
     matchbook()
-    tacks()
     sticks()
     paper()
     strap()
+    bpy.context.view_layer.update()
+    for ob in list(COLL.objects):           # the body leans (stack.TILT); the tacks, made after, stay on the ground
+        if ob.parent is None:               # (an object can't hold a shear, so it goes into the mesh or curve itself)
+            ob.data.transform(TILT_M @ ob.matrix_world)
+            ob.matrix_world = Matrix.Identity(4)
+    tacks()
 
 
 FAMILY = (("die", "die"), ("wire", "wire"), ("mbcover", "cover"), ("tackpin", "pin"), ("tackboss", "tack"), ("tack", "tack"),
@@ -1114,6 +1207,9 @@ def border_of(objs, pad=10):
 
 
 
+POLYS = {}
+
+
 def trees():
     from mathutils.bvhtree import BVHTree
     bpy.context.view_layer.update()
@@ -1131,7 +1227,8 @@ def trees():
             continue
         mw = ev.matrix_world
         vs = [mw @ v.co for v in me.vertices]
-        out[o.name] = (o, BVHTree.FromPolygons(vs, [p.vertices[:] for p in me.polygons]), vs)
+        POLYS[o.name] = [p.vertices[:] for p in me.polygons]
+        out[o.name] = (o, BVHTree.FromPolygons(vs, POLYS[o.name]), vs)
         ev.to_mesh_clear()
     return out
 
@@ -1152,7 +1249,14 @@ def main():
                 fa, fb = family(a), family(b)
                 if fa == fb:
                     continue
-                n = len(ta.overlap(tb))
+                ov = ta.overlap(tb)
+                n = len(ov)
+                if n and os.environ.get("PB_WHERE") in (fa, fb):      # where: the first overlapping vertex of a
+                    va, vb = obs[i][2], tr[b.name][2]
+                    for ia, ib in ov[:6]:
+                        c = sum((va[k] for k in POLYS[a.name][ia]), Vector()) / len(POLYS[a.name][ia])
+                        d = sum((vb[k] for k in POLYS[b.name][ib]), Vector()) / len(POLYS[b.name][ib])
+                        print("CHECK where", a.name, tuple(round(x, 3) for x in c), b.name, tuple(round(x, 3) for x in d))
                 if n:
                     hits.setdefault(tuple(sorted((fa, fb))), []).append((a.name, b.name, n))
         for key, v in sorted(hits.items()):
@@ -1235,7 +1339,7 @@ def main():
     sc.cycles.denoiser = "OPENIMAGEDENOISE"
     if MODE == "still":
         sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 384))
-        sc.render.filepath = str(out / f"L{L}-base.png")
+        sc.render.filepath = str(out / f"L{L}-raw.png")          # post.py shade makes L1-base.png from it
         bpy.ops.render.render(write_still=True)
         # the building alone (no ground shadow), for the outline check
         bpy.data.objects["ground"].hide_render = True

@@ -1,6 +1,7 @@
 """post.py : the General Store 3D sample pictures, from store.py's renders (render/) and the Flash art (fref.py).
 Flash has one look for every General Store level and no animation, so there is one pair to show.
 
+    python post.py shade       render/L1-base.png   from L1-raw.png: the ground shadow lighter and shorter, as Flash's
     python post.py side        store-side.png       Flash | 3D, large (the building and its ground shadow), on grass
     python post.py outline     store-outline.png    Flash outline (red) on the 3D (cyan), the miss map; overlap printed
     python post.py crops       work/crop-*.png    full-size crops of the risky areas, Flash beside 3D
@@ -95,13 +96,31 @@ def game():
     return out
 
 
+def shade(k0=0.78, x1=28.0, x2=80.0, k2=0.2):
+    """Flash's ground shadow is lighter than the 3D sun's, and shorter to the right: keep the building's pixels as
+    rendered (render/L1-raw.png) and only thin the shadow (where render/L1-alone.png has no building), by k0 up to Flash
+    x = x1, fading to k2 at x2. The shadow is black; its strength is (raw alpha - building alpha) / (1 - building alpha)."""
+    raw = np.array(Image.open(R / "L1-raw.png").convert("RGBA")).astype(float) / 255
+    ba = np.array(Image.open(R / "L1-alone.png").convert("RGBA").getchannel("A")).astype(float) / 255
+    k = raw.shape[1] // (fref.FRAME[2] - fref.FRAME[0])
+    fx = np.arange(raw.shape[1]) / k + fref.FRAME[0]
+    kk = np.interp(fx, (x1, x2), (k0, k2))[None, :]
+    s = ((raw[..., 3] - ba) / np.maximum(1e-4, 1 - ba)).clip(0, 1)
+    a = ba + (1 - ba) * s * kk
+    rgb = raw[..., :3] * raw[..., 3:4] / np.maximum(1e-4, a)[..., None]        # premultiplied colour stays
+    out = np.dstack([rgb.clip(0, 1), a]) * 255
+    Image.fromarray(out.round().astype(np.uint8)).save(R / "L1-base.png")
+
+
 CROPS = {"top": (-42, -38, 42, 6), "cover": (-40, -12, 4, 48), "front": (-14, 20, 12, 58), "pips": (2, -20, 40, 40),
          "tackL": (-42, 24, -20, 44), "tackR": (22, 16, 44, 40), "strapend": (16, -24, 42, 8)}
 
 
 if __name__ == "__main__":
     what = sys.argv[1]
-    if what == "side":
+    if what == "shade":
+        shade()
+    elif what == "side":
         side().save(HERE / "store-side.png")
     elif what == "game":
         game().save(HERE / "store-game.png")

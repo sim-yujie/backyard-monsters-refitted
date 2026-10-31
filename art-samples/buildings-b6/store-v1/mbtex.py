@@ -61,29 +61,40 @@ def main():
     ImageDraw.Draw(band).rectangle((0, ty(1.62), tx(1.5), ty(1.5)), fill=(236, 150, 160, 150))
     img.alpha_composite(band.filter(ImageFilter.GaussianBlur(3)))
 
-    # the flame: a rounded drop, its tip up and to the right, with an orange rim
-    cx, cy = tx(-0.45), ty(3.5)
+    # the flame: Flash's flat yellow "guitar pick": a rounded triangle, its top side running up to the right, its point
+    # down (corners in world units round its middle, from the Flash picture)
+    cx, cy = -0.45, 3.55
+    corners = [(-1.08, -0.3), (0.98, 0.8), (0.16, -0.74)]
+    bulge = (0.16, 0.2, 0.2)          # how far each side (corner k to k+1) bows outward
     pts = []
-    for i in range(120):
-        a = 2 * math.pi * i / 120
-        r = 1.0 + 0.5 * max(0.0, math.cos(a + math.radians(30))) ** 6      # the tip down and to the right
-        pts.append((cx + 205 * r * math.cos(a) * 0.95, cy - 128 * r * math.sin(a)))
-    fl = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    fd = ImageDraw.Draw(fl)
-    fd.polygon(pts, fill=(226, 160, 52, 255))
-    inner = [(cx + (x - cx) * 0.94, cy + (y - cy) * 0.92) for x, y in pts]
-    fd.polygon(inner, fill=(238, 196, 64, 255))
-    hi = [(cx - 30 + (x - cx) * 0.55, cy - 22 + (y - cy) * 0.45) for x, y in pts]
-    fd.polygon(hi, fill=(244, 208, 90, 255))
-    fl = fl.filter(ImageFilter.GaussianBlur(4))
-    img.alpha_composite(fl)
+    for k in range(3):
+        (x0, z0), (x1, z1) = corners[k], corners[(k + 1) % 3]
+        mx, mz = (x0 + x1) / 2, (z0 + z1) / 2
+        nx, nz = -(z1 - z0), x1 - x0            # outward (the corners run clockwise)
+        ln = math.hypot(nx, nz)
+        qx, qz = mx + nx / ln * bulge[k] * 2, mz + nz / ln * bulge[k] * 2
+        for i in range(40):
+            t = i / 40
+            x = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * qx + t * t * x1
+            z = (1 - t) ** 2 * z0 + 2 * (1 - t) * t * qz + t * t * z1
+            pts.append((tx(cx + x), ty(cy + z)))
+    fl = Image.new("L", img.size, 0)
+    ImageDraw.Draw(fl).polygon(pts, fill=255)
+    fl = fl.filter(ImageFilter.GaussianBlur(22)).point(lambda v: 255 if v > 128 else 0)    # round the corners
+    fl = fl.filter(ImageFilter.GaussianBlur(5))
+    ys, xs = np.mgrid[0:H, 0:W].astype(float)
+    g = ((ys - ty(cy + 0.8)) / (ty(cy - 0.8) - ty(cy + 0.8))).clip(0, 1)[..., None]      # paler at the top
+    fc = np.array((250, 218, 86), float) * (1 - g) + np.array((236, 186, 48), float) * g
+    flame = Image.fromarray(fc.astype(np.uint8)).convert("RGBA")
+    flame.putalpha(fl)
+    img.alpha_composite(flame)
 
     # the match: a pale stick from the dark head (in the flame) down to the right, over the text
     hx, hy = tx(-0.98), ty(3.22)
     ex, ey = tx(1.1), ty(2.25)
     m = Image.new("RGBA", img.size, (0, 0, 0, 0))
     md = ImageDraw.Draw(m)
-    md.line((hx, hy, ex, ey), fill=(244, 226, 222, 255), width=11)
+    md.line((hx, hy, ex, ey), fill=(240, 214, 214, 200), width=10)
     ang = math.atan2(ey - hy, ex - hx)
     hp = []
     for i in range(40):
@@ -91,13 +102,13 @@ def main():
         u, v = 46 * math.cos(a), 26 * math.sin(a)
         hp.append((hx + u * math.cos(ang) - v * math.sin(ang), hy + u * math.sin(ang) + v * math.cos(ang)))
     md.polygon(hp, fill=(26, 30, 60, 255))
-    img.alpha_composite(m.filter(ImageFilter.GaussianBlur(2)))
+    img.alpha_composite(m.filter(ImageFilter.GaussianBlur(4)))
 
-    # the words: "MATCH" over "BOOK", heavy white letters with a dark red edge, nearly the cover's width
+    # the words: "MATCH" over "BOOK", heavy soft white-pink letters with a light pink edge, nearly the cover's width
     t = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    text_fit(t, "MATCH", (tx(-3.0), ty(2.45), tx(1.05), ty(1.62)), (246, 234, 236, 255), (214, 120, 132, 255), 5)
-    text_fit(t, "BOOK", (tx(-2.98), ty(1.5), tx(0.98), ty(0.62)), (242, 226, 230, 255), (214, 120, 132, 255), 5)
-    img.alpha_composite(t.filter(ImageFilter.GaussianBlur(1.5)))
+    text_fit(t, "MATCH", (tx(-3.0), ty(2.45), tx(1.05), ty(1.62)), (232, 200, 210, 255), (222, 146, 160, 255), 6)
+    text_fit(t, "BOOK", (tx(-2.98), ty(1.5), tx(0.98), ty(0.62)), (222, 192, 204, 255), (222, 146, 160, 255), 6)
+    img.alpha_composite(t.filter(ImageFilter.GaussianBlur(8)))
 
     # worn: a few pale scuffs and creases
     wr = random.Random(5)
