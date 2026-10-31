@@ -999,15 +999,16 @@ def shell34():
     opening cut at a slant on its upper left (a plane tilted from straight up toward the front left), the long gold
     barrel inside along the egg's axis, the cog on the barrel's top end."""
     c = _plane_pt(S.L4_EGG_C if L == 4 else S.L3_EGG_C)
+    cut = S.L4_CUT if L == 4 else S.L3_CUT
     u = tilted(*S.L3_EGG_AXIS)
-    n = tilted(*S.L3_CUT[:2])
-    d = S.L3_CUT[2]
-    rc, rt, rb = S.L3_EGG_R
+    n = tilted(*cut[:2])
+    d = cut[2]
+    rc, rt, rb = S.L4_EGG_R if L == 4 else S.L3_EGG_R
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=72, v_segments=40, radius=1.0)
     for v in bm.verts:
         z = v.co.z
-        k = rc * (1.0 - 0.1 * z)             # narrower toward the top, like an egg
+        k = rc * (1.0 + (S.L4_EGG_TAPER if L == 4 else S.L3_EGG_TAPER) * z)   # wider or narrower toward the top
         v.co = Vector((v.co.x * k, v.co.y * k, z * (rt if z > 0 else rb)))
     x = (n - u * n.dot(u)).normalized()
     rm = Matrix((x, u.cross(x), u)).transposed()
@@ -1035,7 +1036,8 @@ def shell34():
     end = bc + ba * (ln / 2)
     p0, f = cam_ray(*S.L3_COG_PX)
     cp = p0 + f * (end - p0).dot(f)                  # the point of that camera ray nearest the axle's end
-    e = frame_at("cog", cp, ba, xhint=(0, 0, 1))
+    cp = cp + (end - cp) * S.L3_COG_SINK             # sunk among the top blocks, as Flash
+    e = frame_at("cog", cp, (ba - f * S.L3_COG_FACE).normalized(), xhint=(0, 0, 1))
     gear("cogwheel", S.L3_COG_R, 14, 0.3, (0, 0, 0), M["gold"], (0, 0, 0), parent=e, tooth=0.2)
     cyl("cogboss", 0.4, 0.75, (0, 0, -0.55), M["golddark"], parent=e, verts=20)
     tube("cogpost", [end - ba * 0.3, cp - ba * 0.2], 0.22, M["golddark"])
@@ -1232,12 +1234,16 @@ def level34():
             q = A + Vector(S.polar(th, S.L3_FOOT_D, 0.0))
             disc(f"basepad{i}", S.L4_PAD_R, 0.0, h, at=q, mat=wd, verts=40)
     # the gold cog lying under the bellows (level 4: hung with the bellows over the ring's hole)
-    gear("groundcog", S.L3_GCOG_R, 22, 0.32, (A.x, A.y, S.L3_GCOG_Z + 0.16 + zb), M["gold"], (0, 0, 0), tooth=0.12)
+    gear("groundcog", S.L4_GCOG_R if lv4 else S.L3_GCOG_R, 22, 0.32, (A.x, A.y, S.L3_GCOG_Z + 0.16 + zb), M["gold"],
+         (0, 0, 0), tooth=0.12)
     cyl("groundcoghub", S.L3_BELLOWS_R * 0.8, S.L3_BELLOWS_Z - S.L3_GCOG_Z, (A.x, A.y, S.L3_GCOG_Z + zb),
         M["golddark"], verts=48)
     b, sh = shell34()
     top_b = shell_bottom(sh, A, S.L3_BELLOWS_R * 0.95) + 0.3
-    bellows("bellows", zb + S.L3_BELLOWS_Z, top_b, S.L3_BELLOWS_R, 3 if lv4 else 2, M["rubber"])
+    # Flash's bellows: wide flat rings on a grey plate
+    zp = zb + S.L3_BELLOWS_Z
+    cyl("bellowsplate", S.L3_PLATE_R, S.L3_PLATE_H, (A.x, A.y, zp - 0.04), M["steel"], verts=64, bevel=0.06)
+    bellows("bellows", zp + S.L3_PLATE_H - 0.06, top_b, S.L3_BELLOWS_R, S.L3_BELLOWS_RIBS, M["rubber"])
     # four feet: an arm out of the bellows to a threaded post with a nut on top and a nut foot on the ground
     # (level 4: steel pillars on the wooden base instead, with dark collars where the arms meet them)
     for i, th in enumerate((225.0, 45.0, -45.0, 135.0)):
