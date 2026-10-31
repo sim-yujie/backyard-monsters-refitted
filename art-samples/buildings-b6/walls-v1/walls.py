@@ -351,7 +351,7 @@ def weave(name):
     up = facing_up(t)
     u = m(t, "MULTIPLY_ADD", y, m(t, "SUBTRACT", 1.0, up), x)          # top: x, sides: x + y
     w = m(t, "MULTIPLY_ADD", up, m(t, "SUBTRACT", y, z), z)            # top: y, sides: z
-    k = m(t, "MULTIPLY_ADD", up, -0.9, 1.7)                             # top 0.8, sides 1.7 (Flash: coarse on top)
+    k = m(t, "MULTIPLY_ADD", up, -0.15, 0.8)                            # top 0.65, sides 0.8 (Flash: coarse weave)
     a = m(t, "MULTIPLY", m(t, "ADD", u, w), k)
     b = m(t, "MULTIPLY", m(t, "SUBTRACT", u, w), k)
     fa = m(t, "SUBTRACT", m(t, "FRACT", a), 0.5)
@@ -362,10 +362,10 @@ def weave(name):
     qb = m(t, "SUBTRACT", m(t, "ABSOLUTE", fa), 0.25)
     q = m(t, "MULTIPLY_ADD", c, m(t, "SUBTRACT", qb, qa), qa)          # across: two strands a cell
     d = m(t, "ADD", m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", p, 1.8)), 2.0),
-          m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", q, m(t, "MULTIPLY_ADD", up, -0.7, 4.0))), 2.0))
+          m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", q, m(t, "MULTIPLY_ADD", up, -0.2, 3.5))), 2.0))
     # top: fatter strands (q * 3.3) that touch, each white in the middle and ringed grey toward its edge (Flash)
-    top = t.ramp(d, [(0.0, srgb(248, 248, 250)), (0.5, srgb(238, 238, 242)), (0.6, srgb(140, 140, 148)), (0.72, srgb(146, 146, 154)), (0.86, srgb(196, 196, 202)), (1.0, srgb(186, 186, 194))])
-    side = t.ramp(d, [(0.0, srgb(176, 174, 176)), (0.55, srgb(146, 144, 146)), (0.85, srgb(96, 94, 96)), (1.0, srgb(58, 56, 58))])
+    top = t.ramp(d, [(0.0, srgb(246, 246, 248)), (0.3, srgb(236, 236, 240)), (0.44, srgb(200, 200, 206)), (0.5, srgb(104, 102, 110)), (0.8, srgb(108, 106, 114)), (0.9, srgb(200, 200, 206)), (1.0, srgb(196, 196, 202))])
+    side = t.ramp(d, [(0.0, srgb(170, 168, 172)), (0.45, srgb(136, 134, 138)), (0.75, srgb(90, 88, 92)), (1.0, srgb(62, 60, 64))])
     col = t.mix(side, top, up)
     col = t.mix(col, srgb(120, 112, 122), t.ramp(t.noise(t.coords(), 30.0, 2.0, 0.5), [(0.6, K0), (0.7, (0.35, 0.35, 0.35, 1))]))
     col = lift_right(t, col, 0.45)
@@ -404,15 +404,28 @@ def steel(name, col=(80, 70, 68), tip=None, sheen=True):
     out = srgb(*col)
     if tip:
         out = t.mix(out, srgb(*tip), t.ramp(axes(t, "Generated")[2], [(0.55, K0), (0.64, K1)]))
-    if sheen:                   # Flash: a soft pale sheen high on the face toward the light (world -Y, the left face)
+    if sheen:                   # Flash: each side face (lip and body) polished, pale toward its outer corner and dark
+        # toward the front corner, the face toward the light (world -Y) brighter
+        px, py = axes(t, "Position", "ShaderNodeNewGeometry")[:2]
         ny = axes(t, "Normal", "ShaderNodeNewGeometry")[1]
-        z = axes(t, "Position", "ShaderNodeNewGeometry")[2]
-        fac = t.mix(t.ramp(m(t, "MULTIPLY", ny, -1.0), [(0.5, K0), (0.9, K1)]), t.ramp(m(t, "MULTIPLY", z, 0.33), [(0.4, K0), (0.8, (0.85, 0.85, 0.85, 1))]),
-                    1.0, "MULTIPLY")
-        out = t.mix(out, srgb(214, 204, 200), fac)
+        g = t.ramp(m(t, "MULTIPLY_ADD", m(t, "SUBTRACT", py, px), 0.36, 1.0), [(0.45, K0), (1.0, (0.75, 0.75, 0.75, 1))])
+        lit = t.ramp(m(t, "MULTIPLY", ny, -1.0), [(0.0, (0.3, 0.3, 0.3, 1)), (0.8, K1)])
+        out = t.mix(out, srgb(184, 176, 174), t.mix(g, lit, 1.0, "MULTIPLY"))
     out = t.grime(out, 0.0, 2.4, 0.2, 1.0)
-    t.set(**{"Base Color": out, "rough": 0.2, "metal": 0.55, "spec": 0.6})
+    t.set(**{"Base Color": out, "rough": 0.25, "metal": 0.3, "spec": 0.6})
     t.bump(t.noise(t.coords(), 6.0, 3.0, 0.5), 0.04, 0.01)
+    MATS[name] = t.m
+    return t.m
+
+
+def spike_mat(name, lit, col=(34, 30, 30)):
+    """Inferno level 3's spikes (Flash): near-black glossy steel, the face toward the light (world -Y) lit `lit`."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    ny = axes(t, "Normal", "ShaderNodeNewGeometry")[1]
+    out = t.mix(srgb(*col), srgb(*lit), t.ramp(m(t, "MULTIPLY", ny, -1.0), [(0.35, K0), (0.6, K1)]))
+    t.set(**{"Base Color": out, "rough": 0.25, "metal": 0.3, "spec": 0.6})
     MATS[name] = t.m
     return t.m
 
@@ -422,9 +435,9 @@ def mats():
     return {
         "wood_side": wood("crate-side", (150, 104, 62), (92, 60, 36), "X", rings=7, dirt=0.3),
         "wood_side_y": wood("crate-side", (150, 104, 62), (92, 60, 36), "Y", rings=7, dirt=0.3),
-        "wood_frame": wood("crate-frame", (128, 86, 50), (78, 50, 30), "Z", rings=7, dirt=0.3),
-        "wood_frame_x": wood("crate-frame", (128, 86, 50), (78, 50, 30), "X", rings=7, dirt=0.3),
-        "wood_frame_y": wood("crate-frame", (128, 86, 50), (78, 50, 30), "Y", rings=7, dirt=0.3),
+        "wood_frame": wood("crate-frame", (184, 146, 98), (136, 104, 66), "Z", rings=7, dirt=0.3),
+        "wood_frame_x": wood("crate-frame", (184, 146, 98), (136, 104, 66), "X", rings=7, dirt=0.3),
+        "wood_frame_y": wood("crate-frame", (184, 146, 98), (136, 104, 66), "Y", rings=7, dirt=0.3),
         "wood_top": wood("crate-top", (206, 168, 116), (162, 124, 82), "X", rings=7, dirt=0.15),
         "wood_top_y": wood("crate-top", (206, 168, 116), (162, 124, 82), "Y", rings=7, dirt=0.15),
         "wood_brace": wood("crate-brace", (176, 132, 84), (124, 88, 54), "X", rings=7, dirt=0.15),
@@ -441,7 +454,8 @@ def mats():
         "gold": gold_mat("gold"),
         "gold_in": gold_mat("gold-in", (232, 160, 44)),
         "gold_rim": gold_mat("gold-rim", (240, 176, 56), lit=(255, 214, 70)),
-        "gold_top": gold_mat("gold-top", (206, 112, 10), tip=(255, 200, 50), lift=0.0, metal=0.05, lit=(244, 164, 34)),
+        "gold_top": gold_mat("gold-top", (172, 100, 16), lift=0.2, metal=0.05, lit=(194, 122, 26)),
+        "gold_top_lit": gold_mat("gold-top-lit", (172, 100, 16), lift=0.2, metal=0.05, lit=(255, 238, 70)),
         "obsidian": face_tint(obsidian("obsidian"), 2.0, 1.5),
         "obsidian_in": shiny("obsidian-in", (96, 96, 108), rough=0.35, metal=0.0, dirt=0.1),
         "smooth": face_tint(stone("smoothstone", (146, 148, 160), (160, 162, 172), top=(196, 196, 204), scale=4.0, dirt=0.3,
@@ -453,18 +467,18 @@ def mats():
         "glow": ground_glow("lava-ground", 1.5),
         "glow_small": ground_glow("lava-ground-small", 1.1, 0.7, 1.5, 0.6),
         "flame": flame("flame"),
-        "ibase": painted("ibase", (40, 36, 32), rough=0.7, wear=(66, 58, 50), scale=6.0, dirt=0.3, soot=0.5,
-                         top=(88, 70, 50)),
-        "icap": painted("icap", (106, 96, 82), rough=0.75, wear=(138, 126, 106), scale=7.0, dirt=0.3, soot=0.35,
-                        top=(124, 110, 88)),
+        "ibase": painted("ibase", (22, 20, 18), rough=0.7, wear=(34, 31, 28), scale=6.0, dirt=0.3, soot=0.5,
+                         top=(46, 40, 34)),
+        "icap": painted("icap", (82, 74, 64), rough=0.75, wear=(84, 76, 66), scale=7.0, dirt=0.3, soot=0.35,
+                        top=(150, 132, 100)),
         "icap_in": painted("icap-in", (160, 150, 134), rough=0.85, scale=10.0, dirt=0.0),
         "bronze": shiny("bronze", (124, 78, 32), rough=0.35, metal=0.7, dirt=0.2),
         "rivet": painted("rivet", (232, 230, 224), rough=0.35, dirt=0.0, spec=0.6),
-        "iron": steel("steel"),
-        "iron_dark": steel("steel-spike", (68, 60, 60), sheen=False),
-        "iron_tip": steel("steel-tip", (54, 48, 48), tip=(236, 232, 230), sheen=False),
+        "iron": steel("steel", (36, 31, 31)),
+        "iron_dark": spike_mat("steel-spike", (92, 86, 86)),
+        "iron_tip": spike_mat("steel-tip", (244, 240, 238)),
         "iron_in": shiny("iron-in", (100, 94, 90), rough=0.5, metal=0.8, dirt=0.05),
-        "bone": steel("steel-tip", (54, 48, 48), tip=(236, 232, 230), sheen=False),
+        "bone": spike_mat("steel-tip", (244, 240, 238)),
     }
 
 
@@ -759,7 +773,8 @@ def gold(M, state):
     for i in range(3):
         for j in range(3):
             x, y = -s / 2 + rim_w + (i + 0.5) * step, -s / 2 + rim_w + (j + 0.5) * step
-            pyrs.append(pyramid(f"pyr{i}{j}", step * 0.86, 0.66, (x, y, h - 0.02), M["gold_top"]))
+            mt = M["gold_top_lit"] if (i, j) in ((1, 1), (2, 1)) else M["gold_top"]
+            pyrs.append(pyramid(f"pyr{i}{j}", step * 0.9, 0.62, (x, y, h - 0.01), mt))
     if state == "damaged":
         # two pyramids knocked off (one lies at the foot), the front corner dented
         for k in ("pyr20", "pyr11"):
@@ -1030,7 +1045,7 @@ def spiked(M, state):
     """Inferno Block level 3: a glossy dark steel block, a thick lip round its top standing out a little, nine small
     dark steel pyramid spikes inside it, two of them with small white tips (Flash)."""
     s, h = 2.83, 2.62
-    lip_w, lip_h, over = 0.28, 0.42, 0.04
+    lip_w, lip_h, over = 0.34, 0.56, 0.03
     if state == "destroyed":
         stub = box("stub", (s - 0.1, s - 0.1, 0.4), (0, 0, 0), M["iron"], bevel=0.06)
         stub = bake(stub)
@@ -1055,15 +1070,15 @@ def spiked(M, state):
     for i, (x, y, sx, sy) in enumerate(((0, -L / 2 + lip_w / 2, L, lip_w), (0, L / 2 - lip_w / 2, L, lip_w),
                                          (-L / 2 + lip_w / 2, 0, lip_w, L - 2 * lip_w + 0.02),
                                          (L / 2 - lip_w / 2, 0, lip_w, L - 2 * lip_w + 0.02))):
-        lip.append(box(f"lip{i}", (sx, sy, lip_h), (x, y, z0), M["iron"], bevel=0.13))
-    floor = box("floor", (L - 2 * lip_w + 0.04, L - 2 * lip_w + 0.04, 0.08), (0, 0, z0 + 0.14), M["iron_dark"], bevel=0.0)
+        lip.append(box(f"lip{i}", (sx, sy, lip_h), (x, y, z0), M["iron"], bevel=0.18))
+    floor = box("floor", (L - 2 * lip_w + 0.04, L - 2 * lip_w + 0.04, 0.08), (0, 0, h - 0.24), M["iron_dark"], bevel=0.0)
     spikes = []
     step = (s - 2 * lip_w) / 3
     for i in range(3):
         for j in range(3):
             x, y = -s / 2 + lip_w + (i + 0.5) * step, -s / 2 + lip_w + (j + 0.5) * step
-            mt = M["iron_tip"] if (i, j) in ((1, 1), (2, 0)) else M["iron_dark"]
-            spikes.append(pyramid(f"spike{i}{j}", step * 0.9, 0.8, (x, y, z0 + 0.2), mt))
+            mt = M["iron_tip"] if (i, j) in ((1, 1), (2, 1)) else M["iron_dark"]
+            spikes.append(pyramid(f"spike{i}{j}", step * 1.02, 1.0, (x, y, h - 0.17), mt))
     lip.append(floor)
     if state == "damaged":
         # the sides battered in (two dents, the bent iron bright where it tore) and two spikes snapped off
@@ -1072,8 +1087,16 @@ def spiked(M, state):
         for k in ("spike20", "spike12"):
             o = bpy.data.objects.get(k)
             bpy.data.objects.remove(o, do_unlink=True)
-        return alive([body] + lip + spikes)
-    return [body] + lip + spikes
+        return grow(alive([body] + lip + spikes))
+    return grow([body] + lip + spikes)
+
+
+def grow(obs, k=1.055, dx=0.1):
+    """Flash draws Inferno level 3 a little larger than its footprint and nudged toward the front right."""
+    for o in obs:
+        o.scale = o.scale * k
+        o.location = o.location * k + Vector((dx, 0, 0))
+    return obs
 
 
 LOOKS = {"block1": crate, "block2": granite, "block3": cobbled, "block4": gold, "block5": obsid, "stone": stone_block,
