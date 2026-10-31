@@ -243,10 +243,17 @@ def lay_horn(i, at, yaw, roll=0.0):
     return obs
 
 
+def thaw():
+    """The drums' ice crust is gone with the rest of the frost: bare dark metal (still dented)."""
+    for o in named(r"tank\d"):
+        o.data.materials[0] = G["M"]["grate"]
+
+
 # ------------------------------------------------------------------------------------------------------------ damaged
 def damaged():
     # the frost and ice are gone (Flash's damaged chamber has none), and the arms holding the lid
-    kill(named(r"icicle.*|icicled.*|tankice.*|frostc|frostt|frostj.*|frostl.*|lintel.*|arml.*|armr.*"))
+    kill(named(r"icicle.*|icicled.*|tankice.*|tankcap.*|frostc|frostt|frostj.*|frostl.*|lintel.*|arml.*|armr.*"))
+    thaw()
     # the lid knocked loose: tipped up at its front and slid a little back, resting on the core's back edge
     lid = named(r"lid|grille.*")
     lx, ly, la, lz, lt = S.LID
@@ -299,7 +306,7 @@ def damaged():
 # ------------------------------------------------------------------------------------------------------------ destroyed
 def destroyed():
     G["build"]()
-    kill(named(r"icicle.*|icicled.*|tankice.*|frostc|frostt|frostj.*|frostl.*|lintel.*|arml.*|armr.*|fin.*|pipe|grate.*|leaf|door|hatchpane.*|"
+    kill(named(r"icicle.*|icicled.*|tankice.*|tankcap.*|frostc|frostt|frostj.*|frostl.*|lintel.*|arml.*|armr.*|fin.*|pipe|grate.*|leaf|door|hatchpane.*|"
                r"jamb.*|sill|hatch.*|core|tank1|tankshaft|bar1|bar3|coilpanel"))
     # the box broken down to a low shell: a ragged top, a black hollow, broken wall slabs round its rim
     hz = H * 0.36

@@ -26,8 +26,8 @@ SHEAR = 0.15
 # the box
 AX, AY = 3.2, 3.95          # half its length (X) and depth (Y)
 H = 6.45                    # its top
-BAR = 0.8                   # the frame bars' side
-BAR_R = 0.3                 # their rounded edges
+BAR = 0.92                  # the frame bars' side (thick round pipes, as Flash)
+BAR_R = 0.42                # their rounded edges
 
 # the doorway in the -Y face (X range, Z range), its lintel and jambs
 DOOR = (-2.1, 1.45, 0.45, 4.9)
@@ -48,7 +48,7 @@ GRILLE = (-0.5, 0.65, 1.35, 1.05)    # centre X, Y; half-length along X; half-le
 # the arms holding the lid: Flash pixels and heights along each, from under the lid down onto the bars
 ARM_L = ((-12, -27, 9.05), (-21, -23, 8.9), (-26, -12, 7.9), (-24, 4, 6.45))
 ARM_R = ((15, -24, 9.05), (25, -20, 8.9), (29, -8, 7.8), (26.5, 6, 6.4))
-ARM_W, ARM_T = 1.3, 1.0
+ARM_W, ARM_T = 1.5, 1.2
 
 # the compressor block on the +X face: X out to, Y from, Y to, height
 COMP = (5.12, -1.0, 3.44, 3.58)
