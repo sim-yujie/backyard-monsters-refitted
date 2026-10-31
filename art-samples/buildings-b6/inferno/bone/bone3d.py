@@ -51,7 +51,7 @@ BOWL = [(2.6, 0.62), (2.55, 0.8), (2.62, 0.92), (2.86, 1.02), (3.08, 1.2), (3.22
         (3.24, 2.7), (3.2, 3.25)]     # a dark waist, then the round belly bulging below the rim: a squat cauldron
 RIM_R, RIM_Z = 3.24, 3.42             # the rolled lip; the belly bulges below it, a squat cauldron as Flash
 IN_R, FLOOR_Z = 3.0, 1.55             # inside wall and floor
-ROLL_Y, ROLL_Z = (-1.0, 0.55), (3.05 if L < 3 else 2.4)    # Flash's two rollers (front, back); L3's lower: spikes in
+ROLL_Y, ROLL_Z = (-1.0, 0.55), (3.3 if L < 3 else 2.72)    # Flash's two rollers (front, back); L3's lower: spikes in
 ROLL_R = (0.42, 0.5)                  # their cores; level 1's front one carries bone teeth, the back one sockets
 ROLL_X = 2.2                          # the rollers' toothed length ends here; bare axles run on to the wall
 FRONT_X = (-2.05, 1.62)               # level 1: Flash's front roller block is shorter, its right end well in
@@ -87,13 +87,13 @@ def mats():
     m["groove"] = painted("groove", (86, 48, 24), rough=0.85, wear=(122, 72, 38), scale=10, dirt=0.3, spec=0.15)
     m["bonegap"] = painted("bonegap", (40, 32, 24), rough=0.85, wear=(70, 58, 42), scale=6, dirt=0.3, spec=0.15)
     m["bonedark"] = painted("bonedark", (84, 70, 52), rough=0.8, wear=(128, 110, 82), scale=5, dirt=0.3, spec=0.2)
-    m["spike"] = painted("spike", (132, 120, 104), rough=0.5, metal=0.35, wear=(196, 184, 162), rust=(70, 44, 26),
-                         scale=8, dirt=0.3, spec=0.4, soot=0.4, rust_at=0.6, grain=0.3)     # L3: grey-brown cones
+    m["spike"] = painted("spike", (138, 140, 142), rough=0.42, metal=0.4, wear=(222, 222, 216), rust=(70, 50, 36),
+                         scale=8, dirt=0.25, spec=0.5, soot=0.35, rust_at=0.7, grain=0.25)  # L3: Flash's grey steel
     m["core"] = painted("core", (14, 14, 13), rough=0.9, metal=0.1, wear=(34, 32, 30), scale=6, dirt=0.3, spec=0.12)
     m["roller"] = painted("roller", (124, 118, 104), rough=0.72, metal=0.15, wear=(196, 186, 160), rust=(84, 60, 40),
                           scale=9, dirt=0.6, spec=0.25, soot=0.6, rust_at=0.55, grain=0.55)  # L1: the rough grey slab
-    m["drum"] = painted("drum", (172, 74, 30), rough=0.5, metal=0.3, wear=(248, 162, 96), rust=(72, 24, 12),
-                        scale=3.0, dirt=0.6, spec=0.45, soot=0.65, rust_at=0.55, grain=0.35, streak=1.0)  # worn copper
+    m["drum"] = painted("drum", (206, 92, 26), rough=0.45, metal=0.3, wear=(255, 196, 96), rust=(84, 28, 10),
+                        scale=3.0, dirt=0.45, spec=0.5, soot=0.5, rust_at=0.6, grain=0.35, streak=1.0)  # worn copper
     m["hoprust"] = painted("hoprust", (122, 48, 16), rough=0.66, metal=0.15, wear=(204, 104, 42), rust=(38, 15, 8),
                            scale=2.5, dirt=0.65, spec=0.28, soot=0.85, rust_at=0.45, grain=0.6, streak=1.0)  # grimy
     m["hopside"] = painted("hopside", (52, 20, 9), rough=0.75, metal=0.15, wear=(96, 44, 18), rust=(26, 12, 7),
@@ -102,7 +102,11 @@ def mats():
                             spec=0.3, soot=0.5, grain=0.4)   # L3: the dark arm
     m["spiketip"] = painted("spiketip", (196, 186, 166), rough=0.5, metal=0.3, wear=(230, 224, 208), scale=8,
                             dirt=0.2, spec=0.4)
-    m["planks"] = kit.wood("planks", (206, 104, 40), (128, 54, 18), axis="Y", rings=4, dirt=0.4)    # orange boards
+    m["boxrust"] = painted("boxrust", (84, 32, 16), rough=0.68, metal=0.2, wear=(150, 70, 34), rust=(36, 14, 8),
+                           scale=4.0, dirt=0.6, spec=0.28, soot=0.7, rust_at=0.5, grain=0.5, streak=0.8)  # L1 bucket
+    m["belt"] = painted("belt", (158, 152, 136), rough=0.7, metal=0.1, wear=(214, 208, 190), rust=(70, 52, 36),
+                        scale=10, dirt=0.4, spec=0.25, soot=0.4, rust_at=0.6, grain=0.4)   # L1: Flash's pale belt
+    m["planks"] = kit.wood("planks", (206, 104, 40), (128, 54, 18), axis="X", rings=4, dirt=0.4)    # orange boards
     m["pale"] = painted("pale", (150, 152, 144), rough=0.5, metal=0.4, wear=(206, 206, 196), rust=(80, 60, 44),
                         scale=6, dirt=0.3, spec=0.4, rust_at=0.66)
     m["paleband"] = painted("paleband", (84, 96, 90), rough=0.55, metal=0.35, wear=(158, 170, 160), rust=(62, 44, 30),
@@ -124,6 +128,113 @@ def mats():
 
 
 M = mats()
+
+
+def cog_ring(name, r, root, teeth, depth, mat, parent=None, r_in=0.0, tip=0.25, at=(0, 0, 0), rot=(0, 0, 0),
+             bevel=0.015, phase=0.0):
+    """A toothed wheel in its local XY (axis local Z): pointed teeth from `root` out to `r` (tip = the flat tip's share
+    of a tooth's pitch), an open middle of radius r_in (0: solid). Flash's cogs, sprockets and the crusher discs."""
+    import bmesh
+    bm = bmesh.new()
+    pts = []
+    for i in range(teeth):
+        a = 2 * math.pi * (i + phase) / teeth
+        p = 2 * math.pi / teeth
+        for da, rr in ((-0.5, root), (-0.5 * tip, r), (0.5 * tip, r)):
+            pts.append((rr * math.cos(a + da * p), rr * math.sin(a + da * p)))
+    n = len(pts)
+    lo = [bm.verts.new((x, y, -depth / 2)) for x, y in pts]
+    hi = [bm.verts.new((x, y, depth / 2)) for x, y in pts]
+    for j in range(n):
+        bm.faces.new((lo[j], lo[(j + 1) % n], hi[(j + 1) % n], hi[j]))
+    if r_in > 0:
+        ilo = [bm.verts.new((r_in * math.cos(math.atan2(y, x)), r_in * math.sin(math.atan2(y, x)), -depth / 2))
+               for x, y in pts]
+        ihi = [bm.verts.new((v.co.x, v.co.y, depth / 2)) for v in ilo]
+        for j in range(n):
+            k = (j + 1) % n
+            bm.faces.new((hi[j], hi[k], ihi[k], ihi[j]))
+            bm.faces.new((lo[k], lo[j], ilo[j], ilo[k]))
+            bm.faces.new((ilo[k], ilo[j], ihi[j], ihi[k]))
+    else:
+        bm.faces.new(hi)
+        bm.faces.new(lo[::-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = kit.mesh_ob(name, bm, [mat], smooth=False, bevel=bevel, segs=2, parent=parent)
+    ob.location = at
+    ob.rotation_euler = rot
+    return ob
+
+
+def prism(name, pts, eu, ev, en, depth, mat, origin, parent=None, bevel=0.03):
+    """A flat plate: the 2D outline pts (u, v) in the plane eu, ev at origin, `depth` thick along en."""
+    import bmesh
+    bm = bmesh.new()
+    o, eu, ev, en = (Vector(v) for v in (origin, eu, ev, en))
+    lo = [bm.verts.new(o + eu * u + ev * v) for u, v in pts]
+    hi = [bm.verts.new(o + eu * u + ev * v + en * depth) for u, v in pts]
+    n = len(pts)
+    bm.faces.new(hi)
+    bm.faces.new(lo[::-1])
+    for j in range(n):
+        bm.faces.new((lo[j], lo[(j + 1) % n], hi[(j + 1) % n], hi[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return kit.mesh_ob(name, bm, [mat], smooth=False, bevel=bevel, segs=2, parent=parent)
+
+
+def belt_path(circles, n=240):
+    """The loop a belt makes round pulleys: the convex hull of the circles (centre (u, v), radius) in their plane,
+    resampled evenly; returns [(u, v)] and the loop's length."""
+    pts = []
+    for (cu, cv), r in circles:
+        pts += [(cu + r * math.cos(2 * math.pi * k / 180), cv + r * math.sin(2 * math.pi * k / 180)) for k in range(180)]
+    pts = sorted(set(pts))
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lower, upper = [], []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    hull = lower[:-1] + upper[:-1]
+    seg = [math.dist(hull[i], hull[(i + 1) % len(hull)]) for i in range(len(hull))]
+    total = sum(seg)
+    out, acc, i = [], 0.0, 0
+    for k in range(n):
+        s = total * k / n
+        while acc + seg[i] < s:
+            acc += seg[i]
+            i += 1
+        t = (s - acc) / seg[i]
+        a, b = hull[i], hull[(i + 1) % len(hull)]
+        out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+    return out, total
+
+
+def belt_band(name, loop, to3, axis, w, h, mat, parent=None):
+    """A closed band (w across along `axis`, h thick) through the 3D points of the loop."""
+    import bmesh
+    bm = bmesh.new()
+    P = [to3(*p) for p in loop]
+    axis = Vector(axis).normalized()
+    n = len(P)
+    rows = []
+    for i, p in enumerate(P):
+        t = (P[(i + 1) % n] - P[i - 1]).normalized()
+        nrm = t.cross(axis).normalized()
+        a, b = axis * (w / 2), nrm * (h / 2)
+        rows.append([bm.verts.new(p + a + b), bm.verts.new(p - a + b), bm.verts.new(p - a - b), bm.verts.new(p + a - b)])
+    for i in range(n):
+        r0, r1 = rows[i], rows[(i + 1) % n]
+        for j in range(4):
+            bm.faces.new((r0[j], r0[(j + 1) % 4], r1[(j + 1) % 4], r1[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return kit.mesh_ob(name, bm, [mat], smooth=True, bevel=0.0, parent=parent)
 
 
 def at_r(prof, z):
@@ -150,6 +261,13 @@ def bowl():
     lathe("bowlin", [(IN_R, 3.22), (IN_R - 0.08, 2.4), (IN_R - 0.4, 1.8), (2.0, FLOOR_Z), (0.0, FLOOR_Z)],
           (0, 0, 0), M["inside"], verts=72)
     ring("bowllip", RIM_R - 0.05, 0.11, M["lip"], z=RIM_Z - 0.02, n=72)    # Flash's rolled lip, a thin bright line
+    for i in range(28):                        # a row of rivets under the lip, and a seam band lower down
+        a = 2 * math.pi * (i + 0.5) / 28
+        rr = at_r(BOWL, 3.05) + 0.01
+        kit.blob(f"bowllipriv{i}", (rr * math.cos(a), rr * math.sin(a), 3.05), 0.055, 0.7, M["steel"])
+    if L < 3:
+        lathe("bowlseam", [(at_r(BOWL, 1.62), 1.56), (at_r(BOWL, 1.62) + 0.06, 1.6), (at_r(BOWL, 1.74) + 0.06, 1.76),
+                           (at_r(BOWL, 1.8), 1.8)], (0, 0, 0), M["band"], verts=72)
     if L >= 3:                                 # level 3: a riveted band round the bowl's belly
         lathe("bowlband", [(3.24, 2.1), (3.44, 2.18), (3.5, 2.45), (3.44, 2.72), (3.2, 2.8)], (0, 0, 0), M["band"],
               verts=72)
@@ -160,9 +278,10 @@ def bowl():
 
 # ------------------------------------------------------------------------------------------------ the rollers
 def rollers():
-    """Flash's two rollers along X, their bare axles into the inside wall. Level 1: a square front block with neat rows
-    of low blunt bone pyramids (Flash's comb) and a grey back roller with rows of dark round sockets; level 3 (Flash
-    redraws them): dark cores sunk below the rim, a few big grey-brown cones with pale tips. They turn (moving layer)."""
+    """Flash's two rollers along X, their bare axles into the inside wall; they turn against each other (moving
+    layer). Level 1: the front one a cog roller, a row of pale bone sprocket discs with pointed teeth on a dark core,
+    the back one a pale perforated drum, rows of dark round holes in raised collars, iron bands at its ends. Level 3
+    (Flash redraws them): dark cores filling the bowl to the rim, packed rows of tall sharp grey steel spikes."""
     for i, y in enumerate(ROLL_Y):
         r = ROLL_R[i]
         half = math.sqrt(IN_R ** 2 - y ** 2) - 0.08
@@ -173,69 +292,60 @@ def rollers():
         hub = kit.bpy.data.objects.new(f"roll{i}-spin", None)
         link(hub, e)
         kit.MOVING.append(hub)
-        core = M["coredark"] if L >= 3 else (M["bonegap"] if i == 0 else M["roller"])
-        if L < 3 and i == 0:                    # Flash's front roller: a square bone block, shorter than the back one
-            blk = cyl(f"roll{i}core", 0.5, FRONT_X[1] - FRONT_X[0], (0, 0, FRONT_X[0]), core, parent=hub, verts=4,
-                      bevel=0.04)
-            v0 = blk.data.vertices[0].co
-            a0 = math.atan2(v0.y, v0.x)
-            rf = 0.5 * math.cos(math.pi / 4)                 # the flat faces' distance from the axis
-        elif L < 3 and i == 1:                    # Flash's back roller: a flat-faced grey slab, a six-sided beam
-            slab = cyl(f"roll{i}core", r + 0.14, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), core, parent=hub, verts=6,
-                       bevel=0.05)
-            v0 = slab.data.vertices[0].co
-            a0 = math.atan2(v0.y, v0.x) + math.pi / 6        # the first flat face's middle
-        else:
-            cyl(f"roll{i}core", r, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), core, parent=hub, verts=28)
         cyl(f"roll{i}axle", 0.12, 2 * half, (0, 0, -half), M["steel"], parent=hub, verts=12)
-        if L >= 3:                  # Flash: a few rows of moderate grey-brown cones with pale tips, dark roller between
-            for k in range(4):
-                z = -1.55 + 0.5 * i + k * 1.0
-                if abs(z) > ROLL_X - 0.15:
+        for s_ in (-1, 1):                                    # a bolted collar where the axle leaves the roller
+            x_ = (FRONT_X[1] + 0.12 if s_ > 0 else FRONT_X[0] - 0.12) if (L < 3 and i == 0) else s_ * (ROLL_X + 0.15)
+            cyl(f"roll{i}collar{s_}", 0.22, 0.14, (0, 0, x_ - 0.07), M["steel"], parent=hub, verts=12, bevel=0.02)
+        if L >= 3:                  # Flash: tall sharp grey spikes packed in rows, the rows of the two rollers between
+            cyl(f"roll{i}core", r, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), M["coredark"], parent=hub, verts=28)
+            for b_ in (-1.4, 0.0, 1.4):
+                cyl(f"roll{i}band{b_}", r + 0.03, 0.1, (0, 0, b_ - 0.05), M["steel"], parent=hub, verts=28, bevel=0.01)
+            for k in range(6):
+                z = -1.85 + 0.37 * i + k * 0.74
+                if abs(z) > ROLL_X - 0.12:
                     continue
-                for j in range(3):
-                    a = 2 * math.pi * (j + 0.5 * (k % 2) + 0.25 * i) / 3
+                for j in range(4):
+                    a = 2 * math.pi * (j + 0.5 * (k % 2)) / 4
                     d = Vector((math.cos(a), math.sin(a), 0))
                     q = d.to_track_quat("Z", "Y").to_euler()
-                    sp = cyl(f"roll{i}spike{k}-{j}", 0.25, 0.48, (d.x * (r - 0.03), d.y * (r - 0.03), z), M["spike"],
-                             r2=0.07, verts=10, parent=hub, bevel=0.0)
+                    sp = cyl(f"roll{i}spike{k}-{j}", 0.21, 0.55, (d.x * (r - 0.04), d.y * (r - 0.04), z), M["spike"],
+                             r2=0.012, verts=12, parent=hub, bevel=0.0)
                     sp.rotation_euler = q
-                    tp = cyl(f"roll{i}spiketip{k}-{j}", 0.07, 0.13, (d.x * (r + 0.45), d.y * (r + 0.45), z),
-                             M["spiketip"], r2=0.008, verts=10, parent=hub, bevel=0.0)
-                    tp.rotation_euler = q
+                    kit.blob(f"roll{i}spikefoot{k}-{j}", (d.x * r, d.y * r, z), 0.2, 0.35, M["steel"], parent=hub)
             continue
-        if i == 0:                  # front: Flash's square bone block, tidy rows of low blunt pale pyramids (a waffle)
-            from mathutils import Matrix
-            for j in range(4):
-                a = a0 + math.pi / 4 + j * math.pi / 2           # each flat face's middle
-                d = Vector((math.cos(a), math.sin(a), 0))
-                t = Vector((-d.y, d.x, 0))
-                rot = (Matrix((t, Vector((0, 0, 1)), d)).transposed() @ Matrix.Rotation(math.pi / 4, 3, "Z")).to_euler()
-                for k in range(8):
-                    z = FRONT_X[0] + 0.26 + k * 0.44
-                    if z > FRONT_X[1] - 0.15:
-                        break
-                    for c in (-0.175, 0.175):
-                        g = 1.0 + rng.uniform(-0.06, 0.06)
-                        tooth = cyl(f"roll{i}tooth{k}-{j}{c}", 0.2 * g, 0.19 * g, d * (rf - 0.01) + t * c +
-                                    Vector((0, 0, z)), M["bone"], r2=0.075, verts=4, parent=hub, bevel=0.025)
-                        tooth.rotation_euler = rot
+        if i == 0:                  # front: Flash's cog roller, bone sprocket discs with pointed teeth on a dark core
+            ln = FRONT_X[1] - FRONT_X[0]
+            cyl(f"roll{i}core", 0.36, ln, (0, 0, FRONT_X[0]), M["core"], parent=hub, verts=16)
+            n = 9
+            pitch = ln / n
+            for k in range(n):
+                z = FRONT_X[0] + pitch * (k + 0.5)
+                cog_ring(f"roll{i}disc{k}", 0.72, 0.44, 10, pitch * 0.5, M["bone"], parent=hub, r_in=0.3, tip=0.06,
+                         at=(0, 0, z), bevel=0.02)
+                cyl(f"roll{i}spacer{k}", 0.4, pitch * 0.52, (0, 0, z + pitch * 0.24), M["bonedark"], parent=hub,
+                    verts=20, bevel=0.0)
             continue
-        # back: Flash's slab face, a row of dark round sockets on each flat face with pale worn bosses between
-        rr = (r + 0.14) * math.cos(math.pi / 6)              # the flat faces' distance from the axis
-        for j in range(6):
-            a = a0 + 2 * math.pi * j / 6
-            d = Vector((math.cos(a), math.sin(a), 0))
-            for k in range(8):
-                z = -ROLL_X + 0.3 + k * 0.55 + rng.uniform(-0.05, 0.05)
-                if z > ROLL_X - 0.2:
-                    break
-                h = cyl(f"roll{i}hole{j}-{k}", 0.13 * rng.uniform(0.8, 1.15), 0.04, (d.x * (rr - 0.02), d.y * (rr - 0.02), z),
-                        M["hole"], verts=10, parent=hub, bevel=0.0)
-                h.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
-                if k < 7:
-                    kit.blob(f"roll{i}boss{j}-{k}", (d.x * rr, d.y * rr, z + 0.27), 0.09 * rng.uniform(0.8, 1.2), 0.8,
-                             M["bone"] if rng.random() < 0.7 else M["pale"], parent=hub)
+        # back: Flash's perforated drum, pale, rows of dark round holes, iron bands at the ends
+        rb = 0.62
+        cyl(f"roll{i}core", rb, 2 * ROLL_X, (0, 0, -ROLL_X), M["bone"], parent=hub, verts=36, bevel=0.03)
+        for s_ in (-1, 1):
+            cyl(f"roll{i}end{s_}", rb + 0.04, 0.16, (0, 0, s_ * (ROLL_X - 0.08) - 0.08), M["steel"], parent=hub,
+                verts=36, bevel=0.02)
+        for j in range(10):
+            a = 2 * math.pi * j / 10
+            for k in range(7):
+                z = -ROLL_X + 0.5 + k * 0.56 + (0.28 if j % 2 else 0.0)
+                if z > ROLL_X - 0.35:
+                    continue
+                aa = a + rng.uniform(-0.03, 0.03)
+                d = Vector((math.cos(aa), math.sin(aa), 0))
+                q = d.to_track_quat("Z", "Y").to_euler()
+                h = cyl(f"roll{i}hole{j}-{k}", 0.12, 0.03, (d.x * (rb - 0.005), d.y * (rb - 0.005), z), M["hole"],
+                        verts=12, parent=hub, bevel=0.0)
+                h.rotation_euler = q
+                c_ = kit.blob(f"roll{i}lip{j}-{k}", (d.x * (rb - 0.03), d.y * (rb - 0.03), z), 0.165, 0.3,
+                              M["roller"], parent=hub)
+                c_.rotation_euler = q
 
 
 # ------------------------------------------------------------------------------------------------ the horn
@@ -318,8 +428,8 @@ def shield():
         wt, wb, z0, z1, lean = 3.0, 3.0, 0.95, 4.1, 0.5
         shape = [(-1, 0.5), (0, 0), (1, 0.5), (1, 1), (-1, 1)]
     else:
-        th, face, r0 = math.radians(SH3_TH), math.radians(-4), 3.82     # flat on the bowl's front right, as Flash
-        wt, wb, z0, z1, lean = 3.25, 2.9, 2.0, 3.8, 0.0
+        th, face, r0 = math.radians(SH3_TH), math.radians(-4), 4.1      # on the bowl's front right, as Flash,
+        wt, wb, z0, z1, lean = 3.25, 2.9, 2.0, 3.8, -0.55               # leaning back along the bowl's side
         shape = [(-1, 0), (1, 0), (1, 1), (-1, 1)]
     c = Vector((r0 * math.cos(th), r0 * math.sin(th), 0))
     out = Vector((math.cos(face), math.sin(face), 0))
@@ -339,12 +449,15 @@ def shield():
     for j in range(n):
         bm.faces.new((vs[0][j], vs[0][(j + 1) % n], vs[1][(j + 1) % n], vs[1][j]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    kit.mesh_ob("shield", bm, [M["rust"] if L < 3 else M["core"]], smooth=False, bevel=0.04, segs=2)
-    if L < 3:                                   # the pale lines: a triangle from the top corners down to the point
-        fr = [(-0.8, 0.9), (0.8, 0.9), (0.0, 0.16)]
-        for k in range(3):
-            sweep(f"shieldframe{k}", [at(*fr[k], 0.04), at(*fr[(k + 1) % 3], 0.04)], side, 0.07, 0.07, M["bone"],
-                  bevel=0.02)
+    kit.mesh_ob("shield", bm, [M["boxrust"] if L < 3 else M["core"]], smooth=False, bevel=0.04, segs=2)
+    if L < 3:                                   # Flash's copper rim round the dark face, bolts at its corners
+        n_ = len(shape)
+        for k in range(n_):
+            sweep(f"shieldframe{k}", [at(*shape[k], 0.03), at(*shape[(k + 1) % n_], 0.03)], out, 0.16, 0.1,
+                  M["copper"], bevel=0.03)
+            if shape[k][1] > 0:                 # (not at the point, where the belt runs down to the cog)
+                kit.blob(f"shieldcornerbolt{k}", at(shape[k][0] * 0.9, shape[k][1] * 0.94 + 0.03, 0.09), 0.06, 0.6,
+                     M["pale"])
     else:                                       # the thick rust frame (proud of the panel), a pale line inside it
         fr = [(-1.0, 0.0), (1.0, 0.0), (1.0, 1.0), (-1.0, 1.0)]
         for k in range(4):                      # Flash: a thick orange-lit top and left edge, thinner right and foot
@@ -368,27 +481,84 @@ def shield():
                      M["bone"])
     if L >= 3:
         return
-    # the rod from the point down to the plate
-    top = at(0.0, 0.03, -0.11)
-    sweep("shieldrod", [top, Vector((top.x, top.y, 0.12))], side, 0.12, 0.12, M["steel"], bevel=0.02)
-    # the chain hanging from the right edge, from an eye under it; it sways a little (moving layer)
+    # Flash's drive: a belt round two pulleys at the shield's top corners and down past its point to a pulley on the
+    # cog on the plate; the cog and pulleys turn and the belt runs (moving layer)
+    O = at(0.0, 0.0, 0.0)
+    eu = side
+    ev = (at(0.0, 1.0) - at(0.0, 0.0)).normalized()
+    en = eu.cross(ev).normalized()
+    if en.dot(out) < 0:
+        en = -en
+    DB = 0.27                                    # the belt's plane, out of the face
+    BH, BW = 0.05, 0.11                          # its thickness and width
+
+    def pl(a, b, d=DB):                          # a point in the belt's plane: a across, b up the face (metres)
+        return O + eu * a + ev * b + en * d
+    rot = en.to_track_quat("Z", "Y").to_euler()
+    rotd = tuple(math.degrees(a_) for a_ in rot)
+    zc = 0.17 + 0.52
+    bg = (zc - pl(0, 0, 0.1).z) / ev.z           # the cog's centre on the face's line, its teeth just over the plate
+    tops = [((-0.95, 2.5), 0.3), ((0.95, 2.5), 0.3)]
+    low = ((0.0, bg), 0.2)
+    loop, total = belt_path([(c, r + BH / 2) for c, r in tops + [low]])
+    belt_band("belt", loop, lambda a, b: pl(a, b), en, BW, BH, M["belt"])
+    STATE["belt"] = (loop, total, pl, en, tops, low)
+    for k, ((a, b), r) in enumerate(tops):      # the top pulleys: a grooved rim on spokes, on a stub axle
+        cyl(f"pulleyaxle{k}", 0.07, DB + 0.08, pl(a, b, 0.0), M["steel"], rot=rotd, verts=10)
+        kit.blob(f"pulleyboss{k}", pl(a, b, -0.02), 0.13, 0.5, M["darkrust"])
+        e_ = kit.bpy.data.objects.new(f"pulley{k}", None)
+        link(e_)
+        e_.location = pl(a, b)
+        e_.rotation_euler = rot
+        h_ = kit.bpy.data.objects.new(f"pulley{k}-spin", None)
+        link(h_, e_)
+        kit.MOVING.append(h_)
+        cyl(f"pulleyrim{k}", r, BW + 0.06, (0, 0, -(BW + 0.06) / 2), M["pale"], parent=h_, verts=28, bevel=0.01)
+        for s_ in (-1, 1):
+            cyl(f"pulleyflange{k}{s_}", r + 0.06, 0.03, (0, 0, s_ * (BW / 2 + 0.03) - 0.015), M["pale"], parent=h_,
+                verts=28, bevel=0.008)
+        cyl(f"pulleyhub{k}", 0.09, BW + 0.14, (0, 0, -(BW + 0.14) / 2), M["darkrust"], parent=h_, verts=12)
+        for j in range(5):
+            a_ = 2 * math.pi * j / 5
+            kit.blob(f"pulleyspoke{k}{j}", (r * 0.5 * math.cos(a_), r * 0.5 * math.sin(a_), BW / 2 + 0.035), 0.06,
+                     0.5, M["darkrust"], parent=h_, stretch=(1.0 + 1.4 * abs(math.cos(a_)), 1.0 + 1.4 * abs(math.sin(a_))))
+    # the cog on the plate: its own pulley in the belt's plane, the toothed wheel behind it, its axle in an iron
+    # block bolted to the plate under the shield's point
+    e_ = kit.bpy.data.objects.new("cog", None)
+    link(e_)
+    e_.location = pl(*low[0])
+    e_.rotation_euler = rot
+    h_ = kit.bpy.data.objects.new("cog-spin", None)
+    link(h_, e_)
+    kit.MOVING.append(h_)
+    cyl("cogpulley", low[1], BW + 0.06, (0, 0, -(BW + 0.06) / 2), M["steel"], parent=h_, verts=24, bevel=0.01)
+    cyl("cogflange", low[1] + 0.06, 0.03, (0, 0, BW / 2 + 0.03 - 0.015), M["steel"], parent=h_, verts=24, bevel=0.008)
+    cog_ring("cogwheel", 0.52, 0.41, 12, 0.12, M["cogsteel"], parent=h_, r_in=0.24, tip=0.3, at=(0, 0, -0.08))
+    for j in range(4):
+        a_ = 2 * math.pi * j / 4
+        kit.blob(f"cogspoke{j}", (0.3 * math.cos(a_), 0.3 * math.sin(a_), -0.08), 0.07, 0.6, M["cogsteel"],
+                 parent=h_, stretch=(1.0 + 1.3 * abs(math.cos(a_)), 1.0 + 1.3 * abs(math.sin(a_))))
+    cyl("coghub", 0.12, DB, (0, 0, -DB + 0.1), M["darkrust"], parent=h_, verts=14)
+    g = pl(*low[0], 0.0) - en * 0.12
+    box("cogblock", (0.42, 0.34, zc + 0.16 - 0.12), (g.x, g.y, 0.12), M["rust"],
+        rot=(0, 0, math.degrees(math.atan2(eu.y, eu.x))), bevel=0.04)
+    cyl("cogaxle", 0.08, 0.3, g - en * 0.05 + Vector((0, 0, zc - g.z)), M["steel"], rot=rotd, verts=10)
+    for s_ in (-1, 1):
+        kit.blob(f"cogblockbolt{s_}", Vector((g.x, g.y, 0.2)) + eu * (s_ * 0.27), 0.05, 0.6, M["steel"])
+    # the belt's cleats: they run round the loop (moving layer), so the belt is seen to move as Flash's
+    e_ = kit.bpy.data.objects.new("belt", None)
+    link(e_)
+    h_ = kit.bpy.data.objects.new("belt-spin", None)
+    link(h_, e_)
+    kit.MOVING.append(h_)
+    n = max(8, round(total / 0.26))
+    STATE["cleats"] = [box(f"beltcleat{k}", (0.045, BW + 0.01, 0.02), (0, 0, 0), M["bonegap"], parent=h_,
+                           bevel=0.01, origin="centre") for k in range(n)]
+    # Flash's steel stay: a plain rod from under the shield's right edge straight down to the plate
     top = at(0.98, 0.5, -0.11) - Vector((0, 0, 0.05))
-    e = kit.bpy.data.objects.new("chain", None)
-    link(e)
-    e.location = top
-    hub = kit.bpy.data.objects.new("chain-spin", None)
-    link(hub, e)
-    kit.MOVING.append(hub)
-    kit.blob("chaineye", top + Vector((0, 0, 0.03)), 0.08, 0.8, M["steel"])
-    n = 7
-    step = (top.z - 0.3) / n
-    for k in range(n):
-        lk = kit.bpy.data.objects.new(f"chainlink{k}", None)
-        link(lk, hub)
-        lk.location = (0, 0, -step * (k + 0.5))
-        lk.rotation_euler = (0, 0, face + math.radians(90 * (k % 2)))
-        tube(f"chainring{k}", [(0.06 * math.cos(2 * math.pi * j / 10), 0, step * 0.62 * math.sin(2 * math.pi * j / 10))
-                               for j in range(10)], 0.025, M["pale"], parent=lk, verts=6, cyclic=True)
+    kit.blob("stayeye", top + Vector((0, 0, 0.03)), 0.08, 0.8, M["steel"])
+    sweep("stay", [top, Vector((top.x, top.y, 0.12))], side, 0.09, 0.09, M["pale"], bevel=0.02)
+    kit.blob("stayfoot", Vector((top.x, top.y, 0.14)), 0.12, 0.45, M["steel"])
 
 
 def plate():
@@ -402,17 +572,13 @@ def plate():
 
 
 def cog():
-    """The cog, upright; it turns (moving layer). Level 1: small, on the plate, facing the camera's side, its axle in a
-    block bolted to the plate. Level 3: big with a hub and holes, in front of the hood's foot, its axle into the hood."""
-    r = 0.42 if L < 3 else 1.1
-    zc = 0.12 + r + 0.08 if L < 3 else 2.0
-    if L < 3:                                   # beside the shield's rod, under its point
-        p = STATE["shield_at"](0.42, 0.0, 0.32)
-        x, y = p.x, p.y
-        face = Vector((1, -1, 0)).normalized()
-    else:
-        face = Vector((math.cos(math.radians(-4)), math.sin(math.radians(-4)), 0))
-        x, y = 4.4, -0.57                       # Flash's place, in front of the plate's lower edge
+    """Level 3's big cog, upright in front of the hood's foot; it turns (moving layer). Flash: a grey toothed ring on
+    spokes round a bossed hub. (Level 1's cog is part of the shield's belt drive.)"""
+    if L < 3:                                   # level 1: the cog is part of the shield's belt drive
+        return
+    r, zc = 1.1, 2.0
+    face = Vector((math.cos(math.radians(-4)), math.sin(math.radians(-4)), 0))
+    x, y = 4.68, -0.59                          # Flash's place, in front of the plate's lower edge
     e = kit.bpy.data.objects.new("cog", None)
     link(e)
     e.location = (x, y, zc)
@@ -420,76 +586,118 @@ def cog():
     hub = kit.bpy.data.objects.new("cog-spin", None)
     link(hub, e)
     kit.MOVING.append(hub)
-    cm = M["steel"] if L < 3 else M["cogsteel"]
-    gear("cogwheel", r, 10 if L < 3 else 14, 0.16 if L < 3 else 0.22, (0, 0, 0), cm, (0, 0, 0), tooth=0.2,
-         parent=hub)
-    cyl("coghub", r * 0.32, 0.36, (0, 0, -0.18), cm, parent=hub, verts=16)
+    cm = M["cogsteel"]
+    cog_ring("cogwheel", r, r * 0.8, 14, 0.22, cm, parent=hub, r_in=r * 0.6, tip=0.3)    # Flash: a toothed ring,
+    for k in range(6):                          # six spokes to a bossed hub, the dark showing between them
+        a = 2 * math.pi * (k + 0.5) / 6
+        sweep(f"cogspoke{k}", [(0.2 * math.cos(a), 0.2 * math.sin(a), 0), (r * 0.64 * math.cos(a), r * 0.64 * math.sin(a), 0)],
+              (0, 0, 1), 0.12, 0.13, cm, parent=hub, bevel=0.02)
+    cyl("coghub", 0.26, 0.34, (0, 0, -0.17), cm, parent=hub, verts=20, bevel=0.03)
+    cyl("coghubface", 0.15, 0.36, (0, 0, -0.18), M["steel"], parent=hub, verts=16, bevel=0.02)
+    for k in range(14):                         # rivets round the ring's face
+        a = 2 * math.pi * (k + 0.5) / 14
+        kit.blob(f"cogrivet{k}", (r * 0.7 * math.cos(a), r * 0.7 * math.sin(a), 0.11), 0.04, 0.6, M["steel"], parent=hub)
     rot = tuple(math.degrees(a) for a in face.to_track_quat("Z", "Y").to_euler())
-    if L >= 3:
-        for k in range(5):
-            a = 2 * math.pi * k / 5
-            kit.blob(f"coghole{k}", (r * 0.55 * math.cos(a), r * 0.55 * math.sin(a), 0.11), r * 0.13, 0.25, M["dark"],
-                     parent=hub)
-        cyl("cogaxle", 0.11, 0.5, (x - face.x * 0.38, y - face.y * 0.38, zc), M["steel"], rot=rot, verts=10)
-        b = Vector((x, y, 0)) - face * 0.33     # its stand: a flat steel post on the ground plate up to a bearing,
-        box("cogstand", (0.14, 0.42, zc - 0.05), (b.x, b.y, 0.1), M["steel"], rot=(0, 0, -4), bevel=0.03)   # clear
-        cyl("cogbearing", 0.24, 0.12, (b.x - face.x * 0.06, b.y - face.y * 0.06, zc), M["steel"], rot=rot, verts=16,
-            bevel=0.02)                         # of the plate's frame behind it
-        return
-    # the axle block behind it, on the plate
-    b = Vector((x, y, 0)) - face * 0.35
-    box("cogblock", (0.5, 0.36, zc + 0.2), (b.x, b.y, 0.1), M["rust"], rot=(0, 0, -45), bevel=0.04)
-    cyl("cogaxle", 0.09, 0.5, (x - face.x * 0.4, y - face.y * 0.4, zc), M["steel"], rot=rot, verts=10)
+    cyl("cogaxle", 0.11, 0.5, (x - face.x * 0.38, y - face.y * 0.38, zc), M["steel"], rot=rot, verts=10)
+    b = Vector((x, y, 0)) - face * 0.33         # its stand: a flat steel post on the ground plate up to a bearing,
+    box("cogstand", (0.14, 0.42, zc - 0.05), (b.x, b.y, 0.1), M["steel"], rot=(0, 0, -4), bevel=0.03)   # clear of
+    cyl("cogbearing", 0.24, 0.12, (b.x - face.x * 0.06, b.y - face.y * 0.06, zc), M["steel"], rot=rot, verts=16,
+        bevel=0.02)                             # the plate's frame behind it
 
 
 # ------------------------------------------------------------------------------------------------ level 1: bucket
-def bones_heap(name, parent, centre, w, d, n, seed, mat=None):
+def bones_heap(name, parent, centre, w, d, n, seed, mat=None, mound=0.0, clear=None):
+    """A heap of bones: n bones (a shaft with knobbed ends) lying every way; `mound` piles them up in the middle.
+    clear(p) says whether a bone may lie at p (kept clear of the bucket's bar)."""
     r = kit.random.Random(seed)
     for i in range(n):
-        p = Vector((centre[0] + r.uniform(-w, w), centre[1] + r.uniform(-d, d), centre[2] + r.uniform(0, 0.12)))
-        ln = r.uniform(0.28, 0.45)
+        u, v = r.uniform(-1, 1), r.uniform(-1, 1)
+        p = Vector((centre[0] + u * w, centre[1] + v * d,
+                    centre[2] + r.uniform(0, 0.12) + mound * max(0.0, 1 - 0.7 * (u * u + v * v))))
+        ln = r.uniform(0.3, 0.5)
         a = r.uniform(0, math.pi)
-        q = Vector((math.cos(a), math.sin(a), r.uniform(-0.3, 0.3))).normalized() * ln / 2
-        tube(f"{name}{i}", [p - q, p + q], 0.045, mat or M["bone"], parent=parent, verts=8)
+        q = Vector((math.cos(a), math.sin(a), r.uniform(-0.45, 0.45))).normalized() * ln / 2
+        if clear and not all(clear(p + q * t_) for t_ in (-1.15, -0.5, 0.0, 0.5, 1.15)):
+            continue
+        m_ = mat or (M["bone"] if r.random() < 0.8 else M["hornbone"])
+        tube(f"{name}{i}", [p - q, p + q], 0.045, m_, parent=parent, verts=8)
         for s in (-1, 1):
-            kit.blob(f"{name}{i}k{s}", p + q * s * 1.05, 0.07, 0.8, mat or M["bone"], parent=parent)
+            kit.blob(f"{name}{i}k{s}", p + q * s * 1.05, 0.075, 0.8, m_, parent=parent)
+        if i % 7 == 3 and (not clear or clear(p + Vector((0.12, -0.1, 0.06)))):   # a knuckle or skull-cap
+            kit.blob(f"{name}{i}nub", p + Vector((0.12, -0.1, 0.06)), 0.13, 0.75, M["bone"], parent=parent)
 
 
 def bucket_frame():
     """Two bone posts carry the bar: the left one on the back-left rim, the right one on a shoe bolted inside the
-    rim; a dark iron paddle hangs from the left post down into the bowl (Flash's dark plate at the back left)."""
+    rim; Flash's dark iron paddle, a spade-shaped blade, hangs from the left post beside the bucket."""
     for i, x in enumerate(POST_X):
         z0 = RIM_Z - 0.1 if i == 0 else RIM_Z - 0.35
         box(f"post{i}", (0.22, 0.26, BAR_Z + 0.2 - z0), (x, 0, z0), M["bone"], bevel=0.04)
+        for k, z in enumerate((z0 + 0.45, BAR_Z - 0.35)):      # iron straps round the posts
+            box(f"poststrap{i}{k}", (0.28, 0.32, 0.1), (x, 0, z), M["darkrust"], bevel=0.02)
+        cyl(f"postcap{i}", 0.13, 0.1, (x, 0, BAR_Z + 0.2), M["steel"], verts=12, bevel=0.02)
     box("postshoe0", (0.44, 0.44, 0.16), (POST_X[0], 0, RIM_Z - 0.16), M["rust"], bevel=0.03)
     box("postshoe1", (0.62, 0.36, 0.2), (POST_X[1] + 0.12, 0, RIM_Z - 0.45), M["rust"], bevel=0.03)
+    for i, x in enumerate(POST_X):
+        kit.blob(f"postbolt{i}", (x, -0.23, RIM_Z - (0.08 if i == 0 else 0.35)), 0.055, 0.7, M["steel"])
     tube("bar", [(POST_X[0] - 0.1, 0, BAR_Z), (POST_X[1] + 0.1, 0, BAR_Z)], 0.07, M["bone"], verts=12)
     tube("poststrut", [(POST_X[0] + 0.05, 0.0, BAR_Z - 0.4), (-2.3, 2.2, RIM_Z - 0.04)], 0.06, M["bone"], verts=10)
-    # the paddle: a dark iron blade on the left post's inner side, from under the bar down to the rollers
-    box("paddle", (0.9, 0.12, 2.3), (POST_X[0] + 0.62, -0.25, ROLL_Z + 0.75), M["core"], rot=(0, 8, 0), bevel=0.05)
+    # the paddle: a dark iron spade on the left post's inner side, broad at its foot over the rollers, narrowing up
+    # to its shaft under the bar; a raised rim round the blade and two rivets
+    eu, ev = Vector((1, 0, 0)), Vector((math.sin(math.radians(8)), 0, math.cos(math.radians(8))))
+    o = Vector((POST_X[0] + 0.68, -0.31, ROLL_Z - 0.05))
+    blade = [(-0.43, 0.0), (0.43, 0.0), (0.43, 1.1), (0.3, 1.75), (0.1, 2.05), (-0.1, 2.05), (-0.3, 1.75), (-0.43, 1.1)]
+    prism("paddle", blade, eu, ev, (0, 1, 0), 0.1, M["core"], o, bevel=0.03)
+    for k in range(len(blade)):
+        a_, b_ = blade[k], blade[(k + 1) % len(blade)]
+        sweep(f"paddlerim{k}", [o + eu * a_[0] + ev * a_[1] - Vector((0, 0.02, 0)),
+                                o + eu * b_[0] + ev * b_[1] - Vector((0, 0.02, 0))], (0, 1, 0), 0.07, 0.06,
+              M["core"], bevel=0.015)
+    sweep("paddleshaft", [o + ev * 2.05 + Vector((0, 0.05, 0)), o + ev * 2.75 + Vector((0, 0.05, 0))], (0, 1, 0),
+          0.14, 0.1, M["core"], bevel=0.02)
+    for k, (u_, v_) in enumerate(((-0.25, 0.5), (0.25, 0.5), (0.0, 1.5))):
+        kit.blob(f"paddlerivet{k}", o + eu * u_ + ev * v_ - Vector((0, 0.03, 0)), 0.055, 0.6, M["steel"])
     box("paddlearm", (0.6, 0.1, 0.14), (POST_X[0] + 0.3, -0.2, BAR_Z - 0.75), M["rust"], bevel=0.02)
 
 
 def bucket():
+    """Flash's bucket: a deep dark rust box hung on the bar through its ends, heaped with bones; its walls framed with
+    iron corner straps and riveted rims, its bottom bright copper (seen as it turns over)."""
     e = kit.bpy.data.objects.new("bucket", None)
     link(e)
     e.location = (BUCKET_X, 0, BAR_Z)
     hub = kit.bpy.data.objects.new("bucket-spin", None)
     link(hub, e)
     kit.MOVING.append(hub)
-    W, D, H = 1.85, 1.65, 1.2
-    zb = -1.0                                   # its floor below the bar (the bar runs through its sides)
+    W, D, H = 1.8, 1.6, 1.12
+    zb = -0.92                                  # its floor below the bar (the bar runs through its sides)
     t = 0.08
-    box("bucketfloor", (W, D, t), (0, 0, zb), M["rust"], parent=hub, bevel=0.025)
+    box("bucketfloor", (W, D, t), (0, 0, zb), M["copper"], parent=hub, bevel=0.025)
     for s in (-1, 1):
-        box(f"bucketside{s}", (t, D, H), (s * (W - t) / 2, 0, zb), M["rust"], parent=hub, bevel=0.025)
-        box(f"bucketend{s}", (W - 2 * t, t, H), (0, s * (D - t) / 2, zb), M["rust"], parent=hub, bevel=0.025)
-        box(f"bucketlip{s}", (W + 0.06, 0.1, 0.1), (0, s * (D - 0.02) / 2, zb + H - 0.08), M["copper"], parent=hub,
+        box(f"bucketside{s}", (t, D, H), (s * (W - t) / 2, 0, zb), M["boxrust"], parent=hub, bevel=0.025)
+        box(f"bucketend{s}", (W - 2 * t, t, H), (0, s * (D - t) / 2, zb), M["boxrust"], parent=hub, bevel=0.025)
+        box(f"bucketlip{s}", (W + 0.08, 0.12, 0.1), (0, s * (D - 0.02) / 2, zb + H - 0.08), M["steel"], parent=hub,
             bevel=0.02)
+        box(f"bucketlipx{s}", (0.12, D + 0.08, 0.1), (s * (W - 0.02) / 2, 0, zb + H - 0.08), M["steel"], parent=hub,
+            bevel=0.02)
+        box(f"bucketfoot{s}", (W + 0.04, 0.1, 0.12), (0, s * (D - 0.02) / 2, zb - 0.02), M["darkrust"], parent=hub,
+            bevel=0.02)
+        for s2 in (-1, 1):                      # iron angles up the four corners, three rivets each face
+            box(f"bucketcorner{s}{s2}", (0.14, 0.14, H + 0.04), (s * (W / 2 - 0.04), s2 * (D / 2 - 0.04), zb - 0.02),
+                M["darkrust"], parent=hub, bevel=0.02)
+            for k in range(3):
+                z = zb + 0.2 + k * 0.36
+                kit.blob(f"bucketrivet{s}{s2}{k}", (s * (W / 2 - 0.1), s2 * (D / 2 + 0.02), z), 0.035, 0.6,
+                         M["pale"], parent=hub)
+                kit.blob(f"bucketrivetx{s}{s2}{k}", (s * (W / 2 + 0.02), s2 * (D / 2 - 0.1), z), 0.035, 0.6,
+                         M["pale"], parent=hub)
+        cyl(f"bucketboss{s}", 0.17, 0.08, (s * (W / 2 + 0.04), 0, 0), M["steel"], rot=(0, 90, 0), parent=hub,
+            verts=16, bevel=0.02)               # where the bar runs through the ends
     fill = kit.bpy.data.objects.new("bucketfill", None)
     link(fill, hub)
-    box("bucketfillbed", (W - 0.2, D - 0.2, 0.7), (0, 0, zb + 0.05), M["bonedark"], parent=fill, bevel=0.05)
-    bones_heap("bucketbone", fill, (0, 0, zb + 0.75), 0.6, 0.5, 9, 11)
+    box("bucketfillbed", (W - 0.2, D - 0.2, 0.8), (0, 0, zb + 0.05), M["bonedark"], parent=fill, bevel=0.05)
+    bones_heap("bucketbone", fill, (0, 0, zb + 0.82), 0.68, 0.58, 44, 11, mound=0.3,
+               clear=lambda p: math.hypot(p.y, p.z) > 0.26)       # the bar runs through above the heap's middle
     return hub, fill
 
 
@@ -616,10 +824,12 @@ def hopper():
     # the plank tray, hung from the wall's foot and running steeply down toward the rollers: boards along the chute,
     # rust rails along its sides, a batten near its foot
     o = f0 - j + HOP_V * 0.02
-    n = 6
+    n = 7                                       # Flash's slats run across the chute, one below the other
     for k in range(n):
-        quad_box(f"hopperboard{k}", o + w * ((k + 0.03) / n), w * (0.94 / n), ln * (1.0 - kit.rng.uniform(0.0, 0.05)),
-                 -up * 0.1, M["planks"], parent=hub, bevel=0.02)
+        quad_box(f"hopperboard{k}", o + ln * ((k + 0.04) / n) + w * kit.rng.uniform(0.0, 0.02),
+                 w * (1.0 - kit.rng.uniform(0.0, 0.04)), ln * (0.86 / n), -up * 0.1, M["planks"], parent=hub,
+                 bevel=0.02)
+    quad_box("hoppertraybed", o - up * 0.1, w, ln, -up * 0.05, M["hopside"], parent=hub, bevel=0.01)
     for k, s_ in enumerate((0.0, 1.0)):
         quad_box(f"hoppertrayrail{k}", o + w * s_ - w.normalized() * 0.07 - up * 0.1, w.normalized() * 0.12,
                  ln * 1.02, up * 0.24, M["hoprust"], parent=hub, bevel=0.03)
@@ -744,12 +954,32 @@ def turn(frame):
     f = (frame % FR) / FR
     for hub in kit.MOVING:
         n = hub.parent.name
-        if n.startswith("roll"):
-            hub.rotation_euler = (0, 0, math.radians(-2 * 360.0 * f / (1 if L < 3 else 1)))
+        if n.startswith("roll"):                # the two turn against each other, drawing the bones down between
+            hub.rotation_euler = (0, 0, math.radians((-1 if n == "roll0" else 1) * 2 * 360.0 * f))
         elif n == "cog":
             hub.rotation_euler = (0, 0, math.radians(360.0 * f))
-        elif n == "chain":
-            hub.rotation_euler = (math.radians(3.0 * math.sin(2 * math.pi * f)), 0, 0)
+    if L < 3:                                   # the belt runs round once as the cog turns once; the pulleys follow
+        loop, total, pl, en, tops, low = STATE["belt"]
+        cl = STATE["cleats"]
+        step = total / len(cl)
+        shift = step * max(1, round(2 * math.pi * low[1] / step))
+        for hub in kit.MOVING:
+            if hub.parent.name.startswith("pulley"):
+                k = int(hub.parent.name[6:])
+                turns = round(shift / tops[k][1] / (2 * math.pi / 5)) * (2 * math.pi / 5)
+                hub.rotation_euler = (0, 0, turns * f)
+        m = len(loop)
+        for k, c_ in enumerate(cl):
+            t = ((k * step + shift * f) / total % 1.0) * m
+            i0 = int(t) % m
+            a, b = loop[i0], loop[(i0 + 1) % m]
+            w_ = t - int(t)
+            p = pl(a[0] + (b[0] - a[0]) * w_, a[1] + (b[1] - a[1]) * w_)
+            tg = (pl(*b) - pl(*a)).normalized()
+            nr = tg.cross(en).normalized()       # out of the loop (the loop runs anticlockwise round en)
+            c_.location = p + nr * 0.022
+            from mathutils import Matrix
+            c_.rotation_euler = Matrix((tg, en, nr)).transposed().to_euler()
     tip = STATE["tip"]
     a = tip_angle(f)
     if L < 3:
