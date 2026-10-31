@@ -932,19 +932,30 @@ def materials():
     M["sillx"] = wood("sill", (170, 144, 100), (112, 94, 62), axis="X", dirt=0.2, rings=4.0)
     M["silly"] = wood("sill", (170, 144, 100), (112, 94, 62), axis="Y", dirt=0.2, rings=4.0)
     M["traywood"] = wood("traywood", (182, 154, 108), (120, 100, 66), axis="X", dirt=0.15, rings=3.0)
-    M["tray"] = shiny("tray", (150, 154, 162), rough=0.55, metal=0.35, wear=(104, 108, 118), scale=7.0, dirt=0.35)
+    M["tray"] = shiny("tray", (106, 112, 122), rough=0.42, metal=0.6, wear=(84, 88, 98), scale=7.0, dirt=0.35)
     M["frame"] = wood("frame", (124, 100, 66), (82, 66, 42), axis="Y", dirt=0.2, rings=3.0)
     M["shaft"] = wood("shaft", (58, 50, 42), (30, 26, 22), axis="Z", dirt=0.0, rings=3.0)
+    if L == 1:                          # look 1's bare frame: Flash's warm light tan, smooth, barely speckled
+        for k, ax in (("post", "Z"), ("postx", "X"), ("posty", "Y")):
+            M[k] = wood("post1", (178, 148, 102), (138, 110, 72), axis=ax, dirt=0.12, rings=4.0, knots=False)
     for k, (sc, amt) in {"post": (1.0, 0.25), "postx": (1.0, 0.25), "posty": (1.0, 0.25), "plank": (1.1, 0.22),
                          "gplank": (1.1, 0.2), "drum": (1.3, 0.12), "arm": (1.3, 0.12), "hub": (1.3, 0.12)}.items():
+        if L == 1 and k.startswith("post"):
+            stain(M[k], sc, 0.08, 2.0 + len(k), fine=0.03)
+            continue
         stain(M[k], sc, amt, 2.0 + len(k), fine=0.12)
     # metals: Flash's old gold pulleys, the blue-grey steel pipe and axle, dark springs
     M["gold"] = shiny("gold", (238, 176, 42), rough=0.28, metal=0.88, wear=(128, 76, 12), scale=2.0, dirt=0.25, side=0.3)
     M["dgold"] = shiny("dgold", (176, 118, 24), rough=0.34, metal=0.85, wear=(104, 56, 10), scale=2.0, dirt=0.3, side=0.3)
     M["groove"] = painted("groove", (46, 30, 26), rough=0.6, dirt=0.0, spec=0.3)
     M["steel"] = shiny("steel", (150, 160, 178), rough=0.35, metal=0.75, wear=(110, 118, 134), scale=3.0, dirt=0.15)
-    M["pipe"] = painted("pipe", (88, 104, 118), rough=0.45, metal=0.5, wear=(70, 84, 96), scale=3.0, dirt=0.3, spec=0.5)
-    M["spring"] = shiny("spring", (60, 66, 74), rough=0.38, metal=0.8, wear=(36, 40, 46), scale=3.0, dirt=0.1)
+    M["pipe"] = painted("pipe", (186, 204, 218), rough=0.42, metal=0.2, wear=(150, 168, 184), scale=3.0, dirt=0.25,
+                        spec=0.5)
+    if L == 1:                          # look 1's springs pale steel, as Flash's
+        M["spring"] = shiny("spring", (172, 180, 194), rough=0.32, metal=0.75, wear=(126, 134, 148), scale=3.0,
+                            dirt=0.1)
+    else:
+        M["spring"] = shiny("spring", (60, 66, 74), rough=0.38, metal=0.8, wear=(36, 40, 46), scale=3.0, dirt=0.1)
     M["belt"] = painted("belt", (66, 44, 50), rough=0.55, dirt=0.0, spec=0.35)
     M["ball"] = dimpled("ball", (206, 204, 216), (150, 148, 166))
     M["pot"] = painted("pot", (66, 44, 42), rough=0.4, wear=(54, 36, 34), scale=3.0, dirt=0.2, spec=0.5)
@@ -1158,7 +1169,7 @@ def hatch():
         for i in range(13):
             t = i / 12
             pts.append(roof_q(1, u1 - 0.05 + 0.25 * t, y0 - 0.15 + (y1 - y0 + 0.75) * t,
-                              h1 + 0.1 + 0.55 * math.sin(math.pi * min(1.0, t * 1.15))))
+                              h1 - 0.05 + 0.7 * math.sin(math.pi * min(1.0, t * 1.15))))
         sweep("spoon", pts, n, 0.26, 0.2, M["arm"], bevel=0.05)
 
 
@@ -1291,18 +1302,37 @@ def belt(p1, p2, b):
     def arc(c, rr, a0, a1, k=10):
         return [c + e1 * (rr * math.cos(math.radians(a0 + (a1 - a0) * i / k)))
                 + e2 * (rr * math.sin(math.radians(a0 + (a1 - a0) * i / k))) for i in range(k + 1)]
+    def span(c1, r1, a1, c2, r2, a2, k=12):
+        """The free rope from angle a1 on one wheel to a2 on the next (both run clockwise): a cubic curve that leaves
+        and meets each rim along its tangent, so it sags in one smooth curve with no kink, as Flash's."""
+        q1, q2 = [c + e1 * (rr * math.cos(math.radians(a))) + e2 * (rr * math.sin(math.radians(a)))
+                  for c, rr, a in ((c1, r1, a1), (c2, r2, a2))]
+        d1, d2 = [e1 * math.sin(math.radians(a)) - e2 * math.cos(math.radians(a)) for a in (a1, a2)]
+        h = (q2 - q1).length / 3
+        c1_, c2_ = q1 + d1 * h, q2 - d2 * h
+        return [q1 * (1 - u) ** 3 + c1_ * 3 * u * (1 - u) ** 2 + c2_ * 3 * u * u * (1 - u) + q2 * u ** 3
+                for u in (i / k for i in range(1, k))]
     bt = b + Vector((0, 0, S.BALL_R - 0.15))
     pts = [bt, p1 - e1 * (r + 0.04) - e2 * 1.5]
-    pts += arc(p1, r + 0.03, 180, 80, 8)
-    pts.append((p1 + p2) / 2 - e2 * 0.55)
-    pts += arc(p2, r + 0.03, 110, -10, 8)
-    if LOOK >= 4:
-        w = on_plane(*S.WHEEL_SCR)
-        pts.append(p2 + e1 * 0.9 - e2 * 0.55)
-        pts += arc(w, S.WHEEL_R + 0.22, 205, -25, 16)
-        pts.append(w + e1 * 0.85 - e2 * 2.5)
-        pts.append(w + e1 * 0.25 - e2 * 4.1)
+    if LOOK >= 3:                                    # off the first pulley and onto the second in one smooth sag
+        rr = r + 0.03
+        pts += arc(p1, rr, 180, 50, 10)
+        pts += span(p1, rr, 50, p2, rr, 130)
+        if LOOK >= 4:
+            w, wr = on_plane(*S.WHEEL_SCR), S.WHEEL_R + 0.22
+            pts += arc(p2, rr, 130, 20, 8)
+            pts += span(p2, rr, 20, w, wr, 205, 16)
+            pts += arc(w, wr, 205, -25, 16)
+            pts.append(w + e1 * 0.85 - e2 * 2.5)
+            pts.append(w + e1 * 0.25 - e2 * 4.1)
+        else:
+            pts += arc(p2, rr, 130, -10, 10)
+            pts.append(p2 + e1 * (r + 0.3) - e2 * 1.2)
+            pts.append(p2 + e1 * (r + 0.35) - e2 * 2.2)
     else:
+        pts += arc(p1, r + 0.03, 180, 80, 8)
+        pts.append((p1 + p2) / 2 - e2 * 0.55)
+        pts += arc(p2, r + 0.03, 110, -10, 8)
         pts.append(p2 + e1 * (r + 0.3) - e2 * 1.2)
         pts.append(p2 + e1 * (r + 0.35) - e2 * 2.2)
     sweep("belt", smooth_open(pts), n, 0.3, t, M["belt"], bevel=0.02)
@@ -1471,20 +1501,19 @@ def aframe():
 
 
 def belt1(pc, cc, cr, b):
-    """Look 1's rope: from the ball up over the pulley and down onto the coil's front."""
-    r = S.PUL_R
+    """Look 1's rope: ONE thick round rope, as Flash: from the ball up over the pulley and down its far side into the
+    cap below (where it runs on to the coil out of sight)."""
+    r, rr = S.PUL_R, 0.2
     _, n, e1, e2 = pul_plane()
 
-    def arc(c, rr, a0, a1, k=10):
-        return [c + e1 * (rr * math.cos(math.radians(a0 + (a1 - a0) * i / k)))
-                + e2 * (rr * math.sin(math.radians(a0 + (a1 - a0) * i / k))) for i in range(k + 1)]
+    def arc(c, rad, a0, a1, k=10):
+        return [c + e1 * (rad * math.cos(math.radians(a0 + (a1 - a0) * i / k)))
+                + e2 * (rad * math.sin(math.radians(a0 + (a1 - a0) * i / k))) for i in range(k + 1)]
     bt = b + Vector((0, 0, S.BALL_R - 0.15))
-    pts = [bt, pc - e1 * (r + 0.04) - e2 * 2.5]
-    pts += arc(pc, r + 0.03, 180, -30, 10)
-    end = cc + Vector((0.3, -cr - 0.12, 0.1))         # onto the coil's front, toward the camera
-    pts.append((pts[-1] + end) / 2 + e1 * 0.15)
-    pts.append(end)
-    sweep("belt", smooth_open(pts), n, 0.3, S.BELT_T, M["belt"], bevel=0.02)
+    pts = [bt, pc - e1 * (r + rr) - e2 * 2.5]
+    pts += arc(pc, r + rr - 0.06, 180, -10, 10)
+    pts.append(pc + e1 * (r + rr - 0.1) - e2 * (r + 0.9))
+    tube("belt", smooth_open(pts), rr, M["belt"], verts=14)
 
 
 def stool():
