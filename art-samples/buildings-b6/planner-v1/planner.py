@@ -854,7 +854,7 @@ def fieldstone(name, cols, mortar, scale=1.5, dirt=0.35, hi=None):
     if name in MATS:
         return MATS[name]
     t = NT(name)
-    v = t.coords(scale=(scale, scale, scale * 1.45))          # stones wider than tall
+    v = t.coords(scale=(scale, scale, scale * 1.8))           # stones wider than tall
     warp = t.n("ShaderNodeTexNoise")
     warp.inputs["Scale"].default_value = 1.2
     warp.inputs["Detail"].default_value = 2.0
@@ -871,12 +871,15 @@ def fieldstone(name, cols, mortar, scale=1.5, dirt=0.35, hi=None):
     stone = t.ramp(pick.outputs[0], [(i / (n - 1), srgb(*c)) for i, c in enumerate(cols)])
     sp = t.ramp(t.noise(v, 14.0, 3.0, 0.6), [(0.35, (0.72, 0.72, 0.72, 1)), (0.65, (1.08, 1.08, 1.08, 1))])
     stone = t.mix(stone, sp, 1.0, "MULTIPLY")
-    m = t.ramp(edge.outputs["Distance"], [(0.02, (1, 1, 1, 1)), (0.07, (0, 0, 0, 1))])
+    dome = t.ramp(edge.outputs["Distance"], [(0.0, (0.74, 0.74, 0.74, 1)), (0.2, (1.0, 1.0, 1.0, 1)),
+                                             (0.4, (1.08, 1.08, 1.08, 1))])
+    stone = t.mix(stone, dome, 1.0, "MULTIPLY")
+    m = t.ramp(edge.outputs["Distance"], [(0.012, (1, 1, 1, 1)), (0.04, (0, 0, 0, 1))])
     out = t.mix(stone, srgb(*mortar), m)
     out = t.grime(out, GROUND, 2.4, dirt, 0.5)
     t.set(**{"Base Color": out, "rough": 0.85, "spec": 0.3})
-    h = t.ramp(edge.outputs["Distance"], [(0.0, (0, 0, 0, 1)), (0.22, (1, 1, 1, 1))])
-    t.bump(h, 0.55, 0.05)
+    h = t.ramp(edge.outputs["Distance"], [(0.0, (0, 0, 0, 1)), (0.32, (1, 1, 1, 1))])
+    t.bump(h, 0.9, 0.09)
     MATS[name] = t.m
     return t.m
 
@@ -935,24 +938,25 @@ def brick(name, c1, c2, mortar, mode="box", bw=0.62, bh=0.21, dirt=0.3, mort=0.0
 
 def materials():
     M = {}
-    M["stone"] = fieldstone("stone", [(168, 166, 170), (140, 140, 148), (184, 178, 170), (150, 144, 140),
-                                      (124, 124, 134), (176, 176, 184)], (66, 62, 66))
+    M["stone"] = fieldstone("stone", [(206, 194, 170), (174, 166, 150), (216, 204, 178), (188, 174, 150),
+                                      (160, 154, 142), (198, 190, 172)], (118, 108, 92), scale=1.3)
     M["door"] = wood("door", (112, 84, 46), (70, 50, 26), axis="Z", dirt=0.2)
-    M["jamb"] = wood("jamb", (176, 146, 96), (120, 94, 60), axis="Z", dirt=0.2)
-    M["step"] = painted("step", (236, 232, 220), rough=0.8, wear=(196, 190, 176), scale=3.0, dirt=0.25, spec=0.2)
-    M["deck"] = wood("deck", (232, 204, 146), (176, 140, 88), axis="X", dirt=0.25)
-    M["deckedge"] = wood("deckedge", (166, 124, 70), (118, 86, 46), axis="X", dirt=0.2)
+    M["jamb"] = wood("jamb", (140, 112, 70), (98, 76, 46), axis="Z", dirt=0.25)
+    M["step"] = painted("step", (226, 214, 190), rough=0.85, wear=(170, 152, 118), scale=3.0, dirt=0.5, spec=0.15)
+    M["deck"] = wood("deck", (234, 198, 130), (176, 132, 74), axis="X", dirt=0.25)
+    M["deckedge"] = wood("deckedge", (150, 106, 58), (104, 72, 38), axis="Z", dirt=0.2)
     M["block"] = brick("block", (138, 68, 50), (118, 56, 40), (96, 48, 34), "box")
     M["drum"] = brick("drum", (122, 54, 34), (100, 44, 28), (48, 22, 14), "cyl", bw=0.5, bh=0.18, mort=0.02)
     M["cap"] = painted("cap", (244, 240, 230), rough=0.7, wear=(214, 206, 190), scale=4.0, dirt=0.0, spec=0.3)
     M["glow"] = flat("glow", (255, 214, 40), rough=0.6, emit=1.6)
     M["sash"] = flat("sash", (60, 34, 18), rough=0.8)
     M["hole"] = flat("hole", (22, 12, 8), rough=1.0)
-    M["shade"] = shiny("shade", (66, 68, 76), rough=0.45, metal=0.2, wear=(52, 54, 62), scale=2.0, dirt=0.15, spec=0.45)
+    M["shade"] = shiny("shade", (48, 48, 52), rough=0.42, metal=0.0, wear=(40, 40, 44), scale=2.0, dirt=0.15, spec=0.5,
+                       side=0.55)
     M["arm"] = shiny("arm", (22, 22, 26), rough=0.38, metal=0.3, wear=(32, 32, 38), scale=3.0, dirt=0.0, spec=0.5)
     M["spring"] = shiny("spring", (128, 146, 176), rough=0.3, metal=0.75, wear=(96, 110, 136), scale=3.0, dirt=0.0)
     M["post"] = shiny("post", (136, 146, 168), rough=0.35, metal=0.7, wear=(100, 108, 126), scale=3.0, dirt=0.1)
-    M["wire"] = flat("wire", (120, 92, 52), rough=0.6)
+    M["wire"] = flat("wire", (168, 118, 48), rough=0.5)
     M["knob"] = shiny("knob", (196, 204, 220), rough=0.25, metal=0.8, scale=3.0, dirt=0.0)
     return M
 
@@ -1014,12 +1018,15 @@ def base():
         o.location = C
     # the step: a pale slab along the door's foot
     c = C + P(S.STEP[0], S.BASE_R + 0.25, 0)
-    box("step", (2.6, 0.95, S.STEP[1]), c, M["step"], rot=(0, 0, S.STEP[0] + 90), bevel=0.14, segs=4)
+    box("step", (2.2, 0.8, S.STEP[1]), c, M["step"], rot=(0, 0, S.STEP[0] + 90), bevel=0.1, segs=3, jitter=0.03)
 
 
 def deck():
-    cyl("deck", S.DECK_R, S.DECK_Z1 - S.DECK_Z0, (S.BASE_C[0], S.BASE_C[1], S.DECK_Z0), M["deck"], verts=72,
-        bevel=0.05)
+    ob = cyl("deck", S.DECK_R, S.DECK_Z1 - S.DECK_Z0, (S.BASE_C[0], S.BASE_C[1], S.DECK_Z0), M["deck"], verts=72,
+             bevel=0.05)
+    ob.data.materials.append(M["deckedge"])          # its round side darker brown than the top, as Flash's
+    for f in ob.data.polygons:
+        f.material_index = 1 if abs(f.normal.z) < 0.5 else 0
     x0, x1, y0, y1 = S.PLAT
     x1 = S.BLOCK[1] - 0.04         # inside the block's walls on its +X and -Y sides; over its back and +Y side
     y0 = S.BLOCK[2] + 0.04
@@ -1049,17 +1056,47 @@ def block():
           rot=(0, 90, 0), verts=32)
 
 
+def rim_plane():
+    """The shade's rim: its middle (world) and the normal of its plane, pointing up into the shade. Seen almost edge-on,
+    as Flash draws it: a straight line falling SHADE_TILT[0] degrees to the right, turned SHADE_TILT[1] degrees further
+    so a sliver of the shade's outside shows above it, never its inside."""
+    c0 = over_drum(*S.SHADE_RIM[:2])
+    slope, show = map(math.radians, S.SHADE_TILT)
+    v = cam_fwd()
+    right = Vector((0.707, 0.707, 0.0))
+    upv = right.cross(v).normalized()
+    if upv.z < 0:
+        upv = -upv
+    d = right * math.cos(slope) - upv * math.sin(slope)
+    n0 = v.cross(d).normalized()
+    if n0.z < 0:
+        n0 = -n0
+    return c0, (n0 * math.cos(show) - v * math.sin(show)).normalized()
+
+
+def under_rim(p, gap=0.15):
+    """The height of the rim's plane over world point p (x, y), less gap."""
+    c0, n0 = rim_plane()
+    return c0.z - (n0.x * (p[0] - c0.x) + n0.y * (p[1] - c0.y)) / n0.z - gap
+
+
 def drum():
     cx, cy = S.DRUM_C
     z0 = S.DECK_Z1
     ob = cyl("drum", S.DRUM_R, S.DRUM_H, (cx, cy, z0), M["drum"], verts=64, bevel=0.03)
+    for v in ob.data.vertices:            # its top cut along the rim's plane, so it never shows through the shade
+        if v.co.z > S.DRUM_H / 2:
+            v.co.z = min(v.co.z, under_rim((cx + v.co.x, cy + v.co.y)) - z0)
     for i, th in enumerate(S.WIN_T):
         for j, (a, b) in enumerate(S.WIN_Z):
-            w = on_wall(f"window{i}{j}", th, S.DRUM_R, S.WIN_HW, z0 + a, z0 + b, 0.04, M["glow"], out=0.01)
+            p = P(th, S.DRUM_R, 0)
+            if z0 + b + 0.1 > under_rim((cx + p.x, cy + p.y), 0.0):
+                continue                  # under the shade
+            w = on_wall(f"window{i}{j}", th, S.DRUM_R, S.WIN_HW, z0 + a, z0 + b, 0.04, M["glow"], out=0.03)
             w.location = (cx, cy, 0)
-        f = on_wall(f"wsash{i}", th, S.DRUM_R, S.WIN_HW + 1.5, z0 + S.WIN_Z[0][1], z0 + S.WIN_Z[1][0], 0.05,
-                    M["sash"], out=0.02)
-        f.location = (cx, cy, 0)
+            f = on_wall(f"wsash{i}{j}", th, S.DRUM_R, S.WIN_HW + 2.2, z0 + a - 0.08, z0 + b + 0.08, 0.05,
+                        M["sash"], out=0.015)
+            f.location = (cx, cy, 0)
     return ob
 
 
@@ -1096,26 +1133,25 @@ def loft(name, rings, mat, cap0=True, cap1=True):
 def shade():
     """The lamp shade: an oblique cone from a tilted rim (its left end higher, Flash's mouth turned to the viewer's
     left) up to an upright round neck, a domed cap and a small steel knob. Returns the cap's top (the arm's head)."""
-    rx, ry, R = S.SHADE_RIM
-    c0 = over_drum(rx, ry)
-    tilt, bear = map(math.radians, S.SHADE_TILT)
-    n0 = Vector((math.sin(tilt) * math.cos(bear), math.sin(tilt) * math.sin(bear), math.cos(tilt)))
+    R = S.SHADE_RIM[2]
+    c0, n0 = rim_plane()
     nx, ny0, ny1, nr = S.SHADE_NECK
     c1, c2 = over_drum(nx, ny0), over_drum(nx, ny1)
     up = Vector((0, 0, 1))
     rings = [ring_at(c0 - n0 * 0.02, n0, R - 0.1), ring_at(c0, n0, R), ring_at(c0 + n0 * 0.1, n0, R + 0.02),
              ring_at(c0 + n0 * 0.2, n0, R - 0.06)]
+    # an oblique cone: every section parallel to the rim, the centres on the straight line from the rim's middle to the
+    # neck's bottom, so the sides are straight; the neck stands upright above it
+    c00 = c0 + n0 * 0.2
     n = 12
     for i in range(1, n + 1):
         t = i / n
-        c = (c0 + n0 * 0.2).lerp(c1, t)
-        nm = n0.lerp(up, t).normalized()
         r = nr + (R - 0.06 - nr) * (1 - t) ** S.SHADE_FLARE
-        rings.append(ring_at(c, nm, r))
-    rings += [ring_at(c2, up, nr * 0.98), ring_at(c2 + up * 0.12, up, nr * 0.86), ring_at(c2 + up * 0.26, up, nr * 0.6),
-              ring_at(c2 + up * 0.34, up, nr * 0.3)]
+        rings.append(ring_at(c00.lerp(c1, t), n0, r))
+    rings += [ring_at(c2, up, nr * 0.98), ring_at(c2 + up * 0.07, up, nr * 0.93),     # a flat top, as Flash's
+              ring_at(c2 + up * 0.12, up, nr * 0.78), ring_at(c2 + up * 0.14, up, nr * 0.3)]
     loft("shade", rings, M["shade"])
-    top = c2 + up * 0.34
+    top = c2 + up * 0.14
     cyl("knob", 0.07, 0.5, top - up * 0.05, M["knob"], verts=12, bevel=0.0)
     return top
 
@@ -1158,7 +1194,7 @@ def rails():
         cyl(f"post{i}", 0.055, S.RAIL_H, (p.x, p.y, z), M["post"], verts=10, bevel=0.0)
         cyl(f"postcap{i}", 0.085, 0.08, (p.x, p.y, z + S.RAIL_H), M["post"], verts=10, bevel=0.02)
     for j, h in enumerate((0.32, 0.62, 0.9)):
-        tube(f"wire{j}", [(p.x, p.y, z + h) for p in path], 0.018, M["wire"], verts=6)
+        tube(f"wire{j}", [(p.x, p.y, z + h) for p in path], 0.024, M["wire"], verts=6)
 
 
 def arm(head):
@@ -1191,7 +1227,7 @@ def arm(head):
         tube("springend", [hit_plane(*p, head, n) + n * 0.18, hit_plane(*p, head, n)], 0.04, M["spring"], verts=8)
     # the pivots: bolts through the corners
     for k in ("H0", "H1", "E0", "E1"):
-        j = cyl(f"j{k}", 0.1, 0.28, W[k] - n * 0.14, M["knob"], verts=12, bevel=0.02)
+        j = cyl(f"j{k}", 0.1, 0.28, W[k] - n * 0.14, M["arm"], verts=12, bevel=0.02)
         j.rotation_euler = n.to_track_quat("Z", "Y").to_euler()
     # the foot: a dark block on the deck, the lower rods pinned to it
     f = (W["F0"] + W["F1"]) / 2

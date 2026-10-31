@@ -439,6 +439,27 @@ def run(damaged, destroyed, soot_amount=(0.3, 0.45)):
     if MODE == "dry":                    # build and break only (a quick test that the rules run; no render)
         print("DONE", L, MODE, STATE)
         return
+    if MODE == "float":                  # every piece off the ground must touch another piece (no floating bits)
+        from mathutils.bvhtree import BVHTree
+        dg = bpy.context.evaluated_depsgraph_get()
+        obs = [o for o in SC.objects if o.type == "MESH" and not o.hide_render and o.name != "ground"]
+        trees, low = {}, {}
+        for o in obs:
+            e = o.evaluated_get(dg)
+            me = e.to_mesh()
+            vs = [o.matrix_world @ v.co for v in me.vertices]
+            if vs:
+                trees[o.name] = (BVHTree.FromPolygons(vs, [p.vertices[:] for p in me.polygons]), vs)
+                low[o.name] = min(v.z for v in vs)
+            e.to_mesh_clear()
+        for n, (t, vs) in trees.items():
+            if low[n] < 0.04:
+                continue
+            best = min((t2.find_nearest(v)[3] or 9.0) for n2, (t2, _) in trees.items() if n2 != n for v in vs[::4])
+            if best > 0.04:
+                print("FLOAT %s lowest z %.2f, nearest other part %.3f" % (n, low[n], best))
+        print("DONE", L, MODE, STATE)
+        return
     sc = SC
     out = HERE / "render"
     out.mkdir(exist_ok=True)

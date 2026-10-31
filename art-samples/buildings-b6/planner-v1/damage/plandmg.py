@@ -35,12 +35,18 @@ DZ = S.DECK_Z1
 C = Vector(S.BASE_C + (0.0,))
 R = random.Random(11)
 UP = Vector((0, 0, 1))
+S_TIP = float(__import__("os").environ.get("PB_TIP", -25))     # the damaged shade tips over to the left this far (degrees)
 
 
 # ------------------------------------------------------------------------------------------------------------ helpers
 def named(pat):
     """Unparented objects whose name (without .001) matches the regex pat in full."""
     return [o for o in SC.objects if o.parent is None and re.fullmatch(pat, o.name.split(".")[0])]
+
+
+def mid(o):
+    """The world middle of an object's vertices (the model bakes its placings into the meshes)."""
+    return o.matrix_world @ (sum((v.co for v in o.data.vertices), Vector()) / len(o.data.vertices))
 
 
 def turn(obs, pivot, axis, deg, move=(0, 0, 0)):
@@ -124,8 +130,7 @@ def burnt_metals():
 
 
 # ------------------------------------------------------------------------------------------------------------ damaged
-def damaged():
-    G["build"]()
+def damaged():                  # D.run() has built the model already
     base_ = named(r"base")[0]
     blk = named(r"block")[0]
     shade_burnt, arm_burnt, spring_burnt, post_burnt = burnt_metals()
@@ -144,24 +149,44 @@ def damaged():
     hole(blk, Vector((x1, S.BLOCK[3] - 0.25, DZ - 0.3)), 0.7, seed=12, squash=1.0)
     wy, wz, wr = S.WIN
     kill(named(r"winglow|winshade|winrim"))
-    blacken(named(r"winhole"))
+    kill(named(r"winhole"))                  # the blown-out hole is black inside already
     hole(blk, Vector((x1, wy, wz)), wr * 1.5, seed=13, squash=1.1)
     hole(blk, Vector((x1, 1.2, 0.9)), 0.36, seed=14)
     hole(named(r"parax")[0], Vector((3.4, S.BLOCK[2], DZ + S.PARA_H)), 0.4, seed=15)
-    # the shade slumped down over the drum, dented, its top leaning back to the right
+    # the shade knocked over to the left onto the squashed drum, a round dented blob, its neck up to the right
     shade = named(r"shade|knob")
-    rim = G["over_drum"](S.SHADE_RIM[0], S.SHADE_RIM[1])
-    pivot = rim + Vector((-0.707, -0.707, 0)) * S.SHADE_RIM[2]
-    sq = Matrix.Translation(rim) @ Matrix.Diagonal((1.12, 1.12, 0.78, 1)) @ Matrix.Translation(-rim)
+    bpy.context.view_layer.update()
+    head0 = mid(named(r"knob")[0])
+    rim = G["rim_plane"]()[0]
+    sq = Matrix.Translation(rim) @ Matrix.Diagonal((1.0, 1.0, 0.8, 1)) @ Matrix.Translation(-rim)
     for o in shade:
-        o.matrix_world = sq @ o.matrix_world        # slumped: lower and wider
-    turn(shade, pivot, Vector((1, -1, 0)), -16, move=(0.1, -0.3, -0.75))
-    crumple_geo(named(r"shade")[0], 1.4, 0.45, seed=3)
+        o.matrix_world = sq @ o.matrix_world
+    turn(shade, rim, Vector((1, -1, 0)), S_TIP, move=(-0.2, -0.2, -0.45))
+    sh = crumple_geo(named(r"shade")[0], 1.3, 0.45, seed=3)
+    tx = bpy.data.textures.new("shadedent", "CLOUDS")      # soft round dents, not paper creases
+    tx.noise_scale = 2.2
+    tx.noise_depth = 0
+    sh.modifiers["crumple"].texture = tx
+    sh.modifiers["crumple"].strength = 0.6
+    sh.modifiers["smooth"].factor = 0.6
+    sh.modifiers["smooth"].iterations = 3
+    cast = sh.modifiers.new("round", "CAST")              # pulled toward a ball: a round slumped blob, as Flash's
+    cast.cast_type = "SPHERE"
+    cast.factor = 0.75
+    ctr = bpy.data.objects.new("castc", None)               # round about the shade's own middle
+    G["COLL"].objects.link(ctr)
+    ctr.location = mid(sh)
+    cast.object = ctr
+    with bpy.context.temp_override(object=sh):
+        while sh.modifiers.find("round") > 1:
+            bpy.ops.object.modifier_move_up(modifier="round")
+    bpy.context.view_layer.update()
+    head1 = mid(named(r"knob")[0])
     # the drum squashed under it: lower, its upper windows gone
-    kill(named(r"window\d1|wsash\d"))
+    kill(named(r"window\d1|wsash\d1"))
     z0 = DZ
     sq = Matrix.Translation((0, 0, z0)) @ Matrix.Diagonal((1, 1, 0.6, 1)) @ Matrix.Translation((0, 0, -z0))
-    for o in named(r"drum|window\d0"):
+    for o in named(r"drum|window\d0|wsash\d0"):
         o.data.transform(o.matrix_world)
         o.matrix_world = Matrix.Identity(4)
         o.data.transform(sq)
@@ -174,7 +199,11 @@ def damaged():
     upper = named(r"armb|armt|arml|arme|armstub|spring|springend|jH0|jH1|jE0|jE1")
     lower = named(r"armf|armg")
     foot = px(*S.ARM_FOOT, Z=DZ)
-    turn(upper, foot, Vector((1, -1, 0)), -6, move=(0.1, -0.2, -0.55))
+    elbow = mid(named(r"jE1")[0])      # the upper arm swung about its elbow so its head
+    q = (head0 - elbow).rotation_difference(head1 - elbow)          # stays on the fallen shade's top
+    m = Matrix.Translation(elbow) @ q.to_matrix().to_4x4() @ Matrix.Translation(-elbow)
+    for o in upper:
+        o.matrix_world = m @ o.matrix_world
     turn(lower, foot, Vector((1, -1, 0)), -6)
     recolour(upper + lower + named(r"afoot"), arm_burnt)
     recolour(named(r"spring|springend"), spring_burnt)
@@ -223,13 +252,13 @@ def destroyed():
     for k in range(5):
         burn(C + P(R.uniform(-180, 180), R.uniform(0.5, 2.6), hz), 1.2)
     # gone: the decks, the drum and its windows, the railing, the door, the parapets and their caps
-    kill(named(r"deck|deckp|drum|window\d\d|wsash\d|post\d+|postcap\d+|wire\d|door|jamb.*|lintel|parax|capx|paray|capy|"
+    kill(named(r"deck|deckp|drum|window\d\d|wsash\d\d|post\d+|postcap\d+|wire\d|door|jamb.*|lintel|parax|capx|paray|capy|"
                r"winglow|winshade|winrim|afoot"))
     # the block a broken shell: lower, its top and back corner broken, its window a dark hole
     x1 = S.BLOCK[1]
     BK = 0.62
     blk.data.transform(Matrix.Diagonal((1, 1, BK, 1)))
-    blacken(named(r"winhole"))
+    kill(named(r"winhole"))                  # the blown-out hole is black inside already
     wy, wz, wr = S.WIN
     hole(blk, Vector((x1, wy, wz)), wr * 1.5, seed=21, squash=1.1)
     bt = DZ * BK
@@ -244,7 +273,8 @@ def destroyed():
     turn(shade, rim, Vector((1, -1, 0)), -78, move=target - rim)
     turn(shade, target, UP, 30)
     crumple_geo(named(r"shade")[0], 1.0, 0.4, seed=5)
-    recolour(shade, shade_burnt)
+    kill(named(r"knob"))                     # knocked off
+    recolour(named(r"shade"), shade_burnt)
     for k in range(4):
         burn(target + Vector((R.uniform(-1.6, 1.6), R.uniform(-1.6, 1.6), R.uniform(-0.5, 1.5))), 0.9)
     # the arm in a twisted heap beyond the shade, along the block's top

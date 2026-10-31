@@ -19,7 +19,7 @@ GROUND = 0.0
 YAW = 0.0
 
 # the stone tower
-BASE_C = (0.1, 0.35)        # its middle
+BASE_C = (0.2, 0.45)        # its middle
 BASE_R = 3.1
 BASE_H = 3.5                # its top (under the deck)
 DOOR_T = -92.0              # the door's bearing (degrees, 0 = +X), its half width (degrees) and its bottom, top
@@ -30,29 +30,29 @@ STEP = (-92.0, 0.45)        # the step's bearing and its height
 # the decks
 DECK_R = 3.25               # the round deck's radius
 DECK_Z0, DECK_Z1 = 3.5, 4.15
-PLAT = (-2.4, 4.45, 0.4, 6.0)     # the square deck: x0, x1, y0, y1
+PLAT = (-2.4, 4.8, 0.6, 5.5)     # the square deck: x0, x1, y0, y1
 # the brick block under the square deck
-BLOCK = (0.6, 4.45, 0.4, 4.6)     # x0, x1, y0, y1 (its +X and -Y faces show; the rest is inside the tower)
-PARA_H = 1.05               # the parapets' height above the deck
+BLOCK = (0.8, 4.8, 0.6, 4.8)     # x0, x1, y0, y1 (its +X and -Y faces show; the rest is inside the tower)
+PARA_H = 0.5               # the parapets' height above the deck
 PARA_T = 0.32               # their thickness
-PARA_X = (3.0, 4.45)        # the -Y parapet's run along X
-PARA_Y = (1.3, 3.8)         # the +X parapet's run along Y (a gap at the front corner)
-WIN = (3.85, 1.4, 0.5)      # the +X face's round window: y, z, radius
+PARA_X = (3.3, 4.8)        # the -Y parapet's run along X
+PARA_Y = (1.5, 4.0)         # the +X parapet's run along Y (a gap at the front corner)
+WIN = (4.05, 1.4, 0.5)      # the +X face's round window: y, z, radius
 
 # the brick drum on the round deck and its windows
 DRUM_C = (0.75, 0.05)
 DRUM_R = 2.2
-DRUM_H = 1.65
-WIN_T = (-135.0, -79.0, -40.0, -4.5, 32.0)            # window bearings
-WIN_HW = 7.0                                           # half width (degrees)
-WIN_Z = ((0.2, 0.75), (0.95, 1.55))                     # the lower and upper panes, above the deck
+DRUM_H = 2.15
+WIN_T = (-118.0, -78.0, -42.0, -4.0, 34.0)            # window bearings
+WIN_HW = 6.5                                           # half width (degrees)
+WIN_Z = ((0.2, 0.8), (1.12, 1.72))                     # the lower and upper panes, above the deck
 
-# the lamp shade: its rim (Flash px of its middle, radius), the rim's tilt (degrees) and the bearing the tilt leans
-# toward, the neck (Flash px x, its bottom and top y, radius) and how the cone flares out toward the rim
-SHADE_RIM = (-11.0, 13.0, 2.45)
-SHADE_TILT = (15.0, 90.0)
-SHADE_NECK = (-6.0, -8.0, -21.0, 0.85)
-SHADE_FLARE = 0.85
+# the lamp shade: its rim (Flash px of its middle, radius), the rim's tilt (how steeply its edge-on line falls to the
+# right on screen, and how far it turns past edge-on to show the shade's outside, degrees), the neck (Flash px x, its bottom and top y, radius) and how the cone flares out toward the rim
+SHADE_RIM = (-10.5, 12.5, 2.6)
+SHADE_TILT = (20.0, 9.0)
+SHADE_NECK = (-3.0, -12.0, -22.0, 1.0)
+SHADE_FLARE = 1.0
 
 # the arm: Flash px of its joints, all in one upright plane: the head bracket (H0 low on the neck's right, H1 above
 # it), the elbow (E1 the top rod's end, E0 the lower rod's) and the feet of the lower rods on the square deck
