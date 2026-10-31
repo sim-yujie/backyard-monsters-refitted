@@ -1,5 +1,5 @@
 == block1
-00:02.109  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:01.922  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block1 whole
 CONTACT post0          gap 0.000 ok  at -1.28 -1.28 1.20
 CONTACT post1          gap 0.000 ok  at 1.28 -1.28 1.20
@@ -97,7 +97,7 @@ CONTACT plank2         gap 0.000 ok  at -0.60 -0.75 0.26
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part post3 reaches 1.400 (footprint 1.415)
 == block2
-00:02.172  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.125  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block2 whole
 CONTACT granite        gap 0.000 ok  at -0.00 -0.00 1.15
 CONTACT worst gap 0.000, parts not reaching the ground: 0
@@ -124,7 +124,7 @@ CONTACT chunk3         gap 0.000 ok  at -0.74 -0.54 0.29
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part rock7 reaches 1.390 (footprint 1.415)
 == block3
-00:04.500  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.250  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block3 whole
 CONTACT body           gap 0.000 ok  at -0.00 0.00 1.09
 CONTACT slab           gap 0.000 ok  at 0.00 -0.00 2.29
@@ -143,7 +143,7 @@ CONTACT cob2           gap 0.000 ok  at 0.75 0.75 0.36
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part slab reaches 1.375 (footprint 1.415)
 == block4
-00:02.078  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:01.953  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block4 whole
 CONTACT body           gap 0.000 ok  at -0.00 0.00 1.12
 CONTACT rim0           gap 0.000 ok  at 0.00 -1.33 2.26
@@ -178,13 +178,13 @@ CONTACT rim0           gap 0.000 ok  at 0.00 -1.33 2.26
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part rim3 reaches 1.390 (footprint 1.415)
 STATE block4 destroyed
-CONTACT puddle         gap 0.000 ok  at -0.00 -0.01 0.20
+CONTACT puddle         gap 0.000 ok  at 0.00 -0.01 0.20
 CONTACT pyr0           gap 0.000 ok  at 0.35 -0.20 0.22
 CONTACT pyr1           gap 0.000 ok  at -0.50 0.40 0.20
 CONTACT worst gap 0.000, parts not reaching the ground: 0
-CONTACT furthest part puddle reaches 1.381 (footprint 1.415)
+CONTACT furthest part puddle reaches 1.363 (footprint 1.415)
 == block5
-00:02.015  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:01.984  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block5 whole
 CONTACT obsidian       gap 0.000 ok  at -0.00 -0.00 1.17
 CONTACT worst gap 0.000, parts not reaching the ground: 0
@@ -220,7 +220,7 @@ CONTACT heap4          gap 0.000 ok  at -0.60 0.44 0.57
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part shard7 reaches 1.390 (footprint 1.415)
 == stone
-00:02.046  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.078  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE stone whole
 CONTACT body           gap 0.000 ok  at -0.00 0.00 1.21
 CONTACT stud-1-1       gap 0.000 ok  at -0.72 -0.72 2.49
@@ -256,7 +256,7 @@ CONTACT rock7          gap 0.000 ok  at 0.05 0.04 0.97
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part rock6 reaches 1.252 (footprint 1.415)
 == inferno1
-00:02.015  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.109  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE inferno1 whole
 CONTACT dome           gap 0.000 ok  at 0.00 0.00 0.70
 CONTACT glow           gap 0.000 ok  at 0.00 0.00 0.00
@@ -386,41 +386,41 @@ CONTACT flame21        gap 0.000 ok  at 1.15 -0.65 0.02
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part plate01 reaches 1.345 (footprint 1.415)
 == inferno2
-00:02.000  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.094  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE inferno2 whole
-CONTACT cross          gap 0.000 ok  at -0.01 -0.01 0.61
-CONTACT corner0        gap 0.000 ok  at -0.93 -0.93 0.56
-CONTACT corner1        gap 0.000 ok  at 0.93 -0.93 0.56
-CONTACT corner2        gap 0.000 ok  at 0.93 0.93 0.56
-CONTACT corner3        gap 0.000 ok  at -0.93 0.93 0.56
-CONTACT spike          gap 0.000 ok  at -0.00 -0.00 1.28
-CONTACT collar         gap 0.000 ok  at -0.00 -0.00 1.24
-CONTACT stud0          gap 0.000 ok  at 0.62 0.00 1.23
-CONTACT stud1          gap 0.000 ok  at -0.00 0.62 1.23
-CONTACT stud2          gap 0.000 ok  at -0.62 0.00 1.23
-CONTACT stud3          gap 0.000 ok  at -0.00 -0.62 1.23
-CONTACT seam0          gap 0.000 ok  at 0.47 0.00 1.22
-CONTACT seam1          gap 0.000 ok  at -0.47 0.00 1.22
-CONTACT seam2          gap 0.000 ok  at -0.00 0.47 1.22
-CONTACT seam3          gap 0.000 ok  at -0.00 -0.47 1.22
+CONTACT cross          gap 0.000 ok  at -0.01 -0.01 0.62
+CONTACT corner0        gap 0.000 ok  at -0.93 -0.93 0.49
+CONTACT corner1        gap 0.000 ok  at 0.93 -0.93 0.49
+CONTACT corner2        gap 0.000 ok  at 0.93 0.93 0.49
+CONTACT corner3        gap 0.000 ok  at -0.93 0.93 0.49
+CONTACT spike          gap 0.000 ok  at -0.00 -0.00 1.30
+CONTACT collar         gap 0.000 ok  at -0.00 -0.00 1.26
+CONTACT stud0          gap 0.000 ok  at 0.62 0.00 1.25
+CONTACT stud1          gap 0.000 ok  at -0.00 0.62 1.25
+CONTACT stud2          gap 0.000 ok  at -0.62 0.00 1.25
+CONTACT stud3          gap 0.000 ok  at -0.00 -0.62 1.25
+CONTACT seam0          gap 0.000 ok  at 0.47 0.00 1.24
+CONTACT seam1          gap 0.000 ok  at -0.47 0.00 1.24
+CONTACT seam2          gap 0.000 ok  at -0.00 0.47 1.24
+CONTACT seam3          gap 0.000 ok  at -0.00 -0.47 1.24
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part corner3 reaches 1.415 (footprint 1.415)
 STATE inferno2 damaged
-CONTACT corner0        gap 0.000 ok  at -0.93 -0.93 0.56
-CONTACT corner2        gap 0.000 ok  at 0.93 0.93 0.56
-CONTACT corner3        gap 0.000 ok  at -0.93 0.93 0.56
-CONTACT collar         gap 0.000 ok  at -0.00 -0.00 1.24
-CONTACT stud1          gap 0.000 ok  at -0.00 0.62 1.23
-CONTACT stud2          gap 0.000 ok  at -0.62 0.00 1.23
-CONTACT stud3          gap 0.000 ok  at -0.00 -0.62 1.23
-CONTACT seam0          gap 0.000 ok  at 0.47 0.00 1.22
-CONTACT seam1          gap 0.000 ok  at -0.47 0.00 1.22
-CONTACT seam2          gap 0.000 ok  at -0.00 0.47 1.22
-CONTACT seam3          gap 0.000 ok  at -0.00 -0.47 1.22
-CONTACT corner1        gap 0.000 ok  at 0.96 -0.97 0.58
-CONTACT cross          gap 0.000 ok  at 0.11 -0.11 0.69
-CONTACT spikestub      gap 0.000 ok  at 0.00 0.00 1.34
-CONTACT capbit         gap 0.000 ok  at 1.05 -0.45 1.27
+CONTACT corner0        gap 0.000 ok  at -0.93 -0.93 0.49
+CONTACT corner2        gap 0.000 ok  at 0.93 0.93 0.49
+CONTACT corner3        gap 0.000 ok  at -0.93 0.93 0.49
+CONTACT collar         gap 0.000 ok  at -0.00 -0.00 1.26
+CONTACT stud1          gap 0.000 ok  at -0.00 0.62 1.25
+CONTACT stud2          gap 0.000 ok  at -0.62 0.00 1.25
+CONTACT stud3          gap 0.000 ok  at -0.00 -0.62 1.25
+CONTACT seam0          gap 0.000 ok  at 0.47 0.00 1.24
+CONTACT seam1          gap 0.000 ok  at -0.47 0.00 1.24
+CONTACT seam2          gap 0.000 ok  at -0.00 0.47 1.24
+CONTACT seam3          gap 0.000 ok  at -0.00 -0.47 1.24
+CONTACT corner1        gap 0.000 ok  at 0.96 -0.95 0.50
+CONTACT cross          gap 0.000 ok  at 0.11 -0.11 0.70
+CONTACT spikestub      gap 0.000 ok  at 0.00 0.00 1.36
+CONTACT capbit         gap 0.000 ok  at 1.05 -0.45 1.29
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part corner3 reaches 1.415 (footprint 1.415)
 STATE inferno2 destroyed
@@ -438,7 +438,7 @@ CONTACT cap5           gap 0.000 ok  at 0.94 0.95 0.35
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part corner3 reaches 1.415 (footprint 1.415)
 == inferno3
-00:02.094  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.469  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE inferno3 whole
 CONTACT body           gap 0.000 ok  at 0.00 -0.00 1.11
 CONTACT lip0           gap 0.000 ok  at 0.00 -1.28 2.41

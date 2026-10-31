@@ -239,7 +239,7 @@ def flame(name):
     return t.m
 
 
-def lava_rock(name, glow=1.0, cracks=4.0, ash=True):
+def lava_rock(name, glow=1.0, cracks=4.0, ash=True, low_fire=True):
     """The Inferno's near-black volcanic rock: orange lava glowing in its cracks (more low down) and in small spots all
     over, the top lit pale like hot ash (Flash's level 1 mound)."""
     if name in MATS:
@@ -252,9 +252,12 @@ def lava_rock(name, glow=1.0, cracks=4.0, ash=True):
     crack = t.ramp(vo.outputs["Distance"], [(0.01, K1), (0.035, K0)])
     z = axes(t, "Position", "ShaderNodeNewGeometry")[2]
     low = t.ramp(z, [(0.05, K1), (0.25, (0.75, 0.75, 0.75, 1)), (0.45, K0)])
+    if not low_fire:            # the destroyed rubble lies low: only a few dim cracks, not the standing mound's fire band
+        low = (0.35, 0.35, 0.35, 1)
     amt = t.mix(crack, low, 1.0, "MULTIPLY")
     fire = t.ramp(t.noise(v, 7.0, 3.0, 0.6), [(0.5, K0), (0.62, (0.85, 0.85, 0.85, 1))])
-    amt = t.mix(amt, t.mix(fire, low, 1.0, "MULTIPLY"), 1.0, "LIGHTEN")
+    if low_fire:
+        amt = t.mix(amt, t.mix(fire, low, 1.0, "MULTIPLY"), 1.0, "LIGHTEN")
     spots = t.ramp(t.noise(v, 5.5, 3.0, 0.6), [(0.68, K0), (0.74, (0.8, 0.8, 0.8, 1))])
     amt = t.mix(amt, spots, 1.0, "LIGHTEN")
     # Flash's broad smears of glowing orange over the dark rock, broken up by a finer noise
@@ -446,9 +449,9 @@ def mats():
         "smooth_in": stone("smoothstone-in", (176, 176, 184), (196, 196, 204), scale=12.0, dirt=0.05),
         "stud": stone("stud", (150, 150, 158), (170, 170, 178), top=(214, 214, 222), scale=6.0, dirt=0.1, rough=0.55),
         "lava": lava_rock("lava"),
-        "lava_dim": lava_rock("lava-dim", glow=0.6, ash=False),
+        "lava_dim": lava_rock("lava-dim", glow=0.5, ash=False, low_fire=False),
         "glow": ground_glow("lava-ground", 1.5),
-        "glow_small": ground_glow("lava-ground-small", 1.1, 0.7, 1.5, 1.6),
+        "glow_small": ground_glow("lava-ground-small", 1.1, 0.7, 1.5, 0.6),
         "flame": flame("flame"),
         "ibase": painted("ibase", (40, 36, 32), rough=0.7, wear=(66, 58, 50), scale=6.0, dirt=0.3, soot=0.5,
                          top=(88, 70, 50)),
@@ -737,7 +740,8 @@ def gold(M, state):
             x, y = v.co.x * 1.75, v.co.y * 1.75
             rr = (abs(x / 1.45) ** 2.5 + abs(y / 1.35) ** 2.5) ** (1 / 2.5) + 0.25 * noise.noise(Vector((x, y, 0.3)) * 1.3)
             z = max(0.0, 1.0 - rr ** 3) ** 0.5 * 0.36 * (1 + 0.45 * noise.noise(Vector((x * 2, y * 2, 1.0))))
-            v.co = Vector((x * 0.85, y * 0.85, z))        # x 0.85: the puddle stays inside its own square
+            sq = lambda c: c if abs(c) < 1.1 else math.copysign(1.1 + (abs(c) - 1.1) * 0.5, c)
+            v.co = Vector((sq(x), sq(y), z))               # its rim pulled in past 1.1: the puddle stays inside its square
         bmesh.ops.delete(bm, geom=[f for f in bm.faces if all(v.co.z < 0.004 for v in f.verts)], context="FACES")
         ob = mesh_ob("puddle", bm, [M["gold"]], bevel=0.0)
         mo = ob.modifiers.new("solid", "SOLIDIFY")
@@ -966,7 +970,7 @@ def cross_slab(M, state):
     lower, in the four corners; a thin bronze spike in the middle and four white bolt studs on the arms."""
     s = 2.8
     c = s / 3
-    hx, hc = 1.22, 1.12
+    hx, hc = 1.24, 0.98
 
     def plus(name, h, mat, bevel, L=s, W=c):
         a = box(name + "a", (L, W, h), (0, 0, 0), mat, bevel=0.0)
