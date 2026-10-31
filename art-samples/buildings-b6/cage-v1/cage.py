@@ -573,19 +573,19 @@ def materials():
     M = {}
     # Flash's iron is near black with a purple-brown cast (right faces ~41,32,32, the lit left faces ~67,67,66), worn
     # paler on the edges, a little rust, soft. Low metal and a broad roughness so the pale sky can't lay a grey veil on it
-    M["iron"] = painted("iron", (54, 42, 45), rough=0.55, metal=0.3, wear=(88, 76, 86), rust=(78, 46, 38), scale=7,
+    M["iron"] = painted("iron", (46, 31, 31), rough=0.55, metal=0.3, wear=(112, 96, 98), rust=(78, 46, 38), scale=10,
                         dirt=0.3, spec=0.35, rust_at=0.66)
     # the cornice and roof: pale grey iron (~102,95,93), the face up paler still
-    M["cap"] = painted("cap", (64, 58, 60), rough=0.45, metal=0.3, wear=(100, 94, 94), scale=4, dirt=0.2, spec=0.4,
-                       top=(40, 35, 38))
+    M["cap"] = painted("cap", (68, 56, 54), rough=0.45, metal=0.3, wear=(102, 92, 90), scale=4, dirt=0.2, spec=0.4,
+                       top=(42, 34, 34))
     M["neck"] = painted("neck", (40, 30, 33), rough=0.5, metal=0.35, wear=(60, 52, 56), scale=6, dirt=0.1)
-    M["collar"] = shiny("collar", (150, 126, 136), rough=0.42, metal=0.35, wear=(128, 104, 116), scale=6, dirt=0.05)
+    M["collar"] = shiny("collar", (130, 112, 114), rough=0.45, metal=0.35, wear=(110, 94, 96), scale=6, dirt=0.05)
     M["spike"] = shiny("spike", (112, 118, 126), rough=0.4, metal=0.6, wear=(92, 98, 108), scale=6, dirt=0.05)
-    M["stud"] = shiny("stud", (150, 166, 172), rough=0.35, metal=0.7, wear=(96, 104, 112), scale=6, dirt=0.05)
+    M["stud"] = shiny("stud", (134, 146, 150), rough=0.35, metal=0.7, wear=(96, 104, 112), scale=6, dirt=0.05)
     # the rails: dark maroon iron with a pinkish worn top (Flash's front rails ~68,48,49 with a pink edge)
-    M["rail"] = painted("rail", (52, 32, 34), rough=0.5, metal=0.3, wear=(96, 66, 70), scale=5, dirt=0.15, spec=0.35,
-                        top=(112, 80, 86))
-    M["picket"] = painted("picket", (46, 30, 33), rough=0.5, metal=0.3, wear=(70, 50, 54), rust=(78, 46, 38), scale=6,
+    M["rail"] = painted("rail", (62, 37, 36), rough=0.5, metal=0.3, wear=(104, 72, 72), scale=5, dirt=0.15, spec=0.35,
+                        top=(96, 66, 66))
+    M["picket"] = painted("picket", (54, 34, 34), rough=0.5, metal=0.3, wear=(80, 56, 56), rust=(78, 46, 38), scale=6,
                           dirt=0.2, spec=0.35, rust_at=0.7)
     return M
 
@@ -605,7 +605,7 @@ def stud(name, at, normal, mat):
     """A pale pyramid stud with a flat top (Flash's blue-grey diamonds) standing out of a post's face."""
     n = Vector(normal).normalized()
     r, d = S.STUD_R, S.STUD_D
-    o = lathe(name, [(r, -0.02), (r * 0.9, d * 0.35), (r * 0.3, d), (0.0, d)], (0, 0, 0), mat, verts=4)
+    o = lathe(name, [(r, -0.02), (r * 0.9, d * 0.3), (r * 0.18, d), (0.0, d)], (0, 0, 0), mat, verts=4)
     o.location = Vector(at)
     o.rotation_euler = (n.to_track_quat("Z", "Y") @ Euler((0, 0, math.radians(45))).to_quaternion()).to_euler()
     bv = o.modifiers.new("bevel", "BEVEL")

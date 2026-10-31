@@ -25,7 +25,7 @@ NECK_R, NECK_H = 0.17, 0.2
 COLLAR_R, COLLAR_H = 0.42, 0.24   # the squat pink-grey knob under the spike
 SPIKE_R, SPIKE_H = 0.2, 1.1
 STUD_Z = (0.85, 1.72)       # the studs' heights on every face
-STUD_R, STUD_D = 0.28, 0.13 # a stud's half-diagonal and how far it stands out
+STUD_R, STUD_D = 0.3, 0.19 # a stud's half-diagonal and how far it stands out
 
 # the fence
 FENCE_SHIFT = 0.4           # every rail and picket stands this far from the posts' middles toward the viewer (Flash
