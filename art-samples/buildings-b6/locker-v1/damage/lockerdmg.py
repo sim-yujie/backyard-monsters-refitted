@@ -330,7 +330,7 @@ def damaged():
                  -14)
         else:
             # the front post snapped: its nut and rod lie on the ground, the arm hangs down
-            kill(named(r"legrod2|legthread2-\d+|legnut2"))
+            kill(named(r"legrod2|legthread2-\d+|legnut2|legring2"))
             arm = named(r"legarm2")[0]
             turn([arm], A + a * (S.L3_BELLOWS_R - 0.2) + Vector((0, 0, S.L3_ARM_Z)), a.cross(Vector((0, 0, 1))), -28)
             G["hexnut"]("nutfall", ground_pt(40.0, 88.0), 0.72, 0.65, M["nut"]).rotation_euler.z = 0.4

@@ -665,6 +665,9 @@ def materials():
     # Flash's shell: a blue-grey chrome ball, a soft white sheen up left, darker low down and on the right
     M["chrome"] = shiny("chrome", (146, 160, 184), rough=0.3, metal=1.0, wear=(136, 150, 172), scale=2.0, dirt=0.25,
                         side=0.25, glow=tuple((x, y, 3.4, 3.4, 0.9, (246, 248, 252)) for x, y in S.SHEEN[L]))
+    if L >= 3:               # Flash's egg reads lighter and greyer than the ball below it
+        M["chrome"] = shiny("chrome34", (184, 190, 204), rough=0.3, metal=0.55, wear=(166, 174, 190), scale=2.0,
+                            dirt=0.2, side=0.3)
     M["inner"] = shiny("inner", (70, 48, 18), rough=0.35, metal=0.7, wear=(110, 74, 24), scale=3, dirt=0.2)
     M["steel"] = shiny("steel", (184, 192, 206), rough=0.3, metal=0.85, wear=(150, 158, 174), scale=4, dirt=0.2,
                        side=0.3)
@@ -685,6 +688,9 @@ def materials():
     M["lamp"] = flat("lamp", (252, 236, 210), rough=0.4, emit=0.5)
     M["lens"] = shiny("lens", (30, 30, 20), rough=0.2, metal=0.6, wear=(52, 50, 28), scale=3, dirt=0.0)
     M["core"] = shiny("core", (52, 34, 12), rough=0.45, metal=0.6, wear=(80, 52, 18), scale=3, dirt=0.3)
+    # levels 3-4: Flash's barrel reads as smaller, deeper gold blocks with black between them
+    M["block34"] = shiny("block34", (214, 140, 26), rough=0.26, metal=0.85, wear=(240, 186, 70), scale=2.0, dirt=0.15)
+    M["core34"] = shiny("core34", (46, 26, 8), rough=0.35, metal=0.75, wear=(70, 40, 12), scale=3, dirt=0.3)
     return M
 
 
@@ -876,23 +882,27 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
     return e
 
 
-def barrel(name, c, axis, r, length, rows, cols, parent=None):
+def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=None, core=None, checker=True):
     """The gold barrel inside the shell: a dark core with rows of gold blocks round it (period: two rows), turning
-    about its axle (local Z)."""
+    about its axle (local Z). Blocks in every other cell (checker) or every cell, filling `fill` (along, round) of it;
+    levels 3-4 use smaller blocks with black gaps between them, as Flash."""
     e = frame_at(name, c, axis, xhint=(0, 0, 1))
     hub = bpy.data.objects.new(name + "-spin", None)
     link(hub, e)
     MOVING.append(hub)
-    cyl(name + "core", r * 0.86, length, (0, 0, -length / 2), M["core"], parent=hub, verts=40, bevel=0.05)
+    cyl(name + "core", r * 0.86, length, (0, 0, -length / 2), core or M["core"], parent=hub, verts=40, bevel=0.05)
+    fa, fr = fill or (0.88, 0.86)
     for i in range(rows):
         a = 2 * math.pi * i / rows
         for j in range(cols):
-            if (i + j) % 2:
+            if checker and (i + j) % 2:
                 continue
             hgt = 0.18 + 0.16 * ((j * 7 + (i % 2) * 3) % 4) / 3
+            if fill is not None:
+                hgt = 0.1 + 0.22 * ((j * 5 + i * 3) % 5) / 4
             z = -length / 2 + (j + 0.5) * length / cols
-            box(f"{name}blk{i}-{j}", (length / cols * 0.88, 2 * math.pi * r / rows * 0.86, hgt + r * 0.14),
-                (math.cos(a) * r * 0.86, math.sin(a) * r * 0.86, z), M["block"], parent=hub,
+            box(f"{name}blk{i}-{j}", (length / cols * fa, 2 * math.pi * r / rows * fr, hgt + r * 0.14),
+                (math.cos(a) * r * 0.86, math.sin(a) * r * 0.86, z), mat or M["block"], parent=hub,
                 rot=(0, 90, math.degrees(a)), bevel=0.04, origin="bottom")
     return e, hub
 
@@ -974,42 +984,79 @@ def to_x(ob):
     return ob
 
 
+BODY = {}                            # levels 3-4: the barrel's middle and axle, once shell34 has made the body
+
+
+def tilted(bearing, deg):
+    """The unit vector from straight up toward `bearing` by `deg` degrees."""
+    v = Vector(S.polar(bearing, math.sin(math.radians(deg)), 0.0))
+    v.z = math.cos(math.radians(deg))
+    return v.normalized()
+
+
 def shell34():
-    """Level 2's ball grown into the locker body: cut flat at +X (the end plate, with a steel rim) and with its top
-    front cut open (a plane tilted from straight up toward the front left); the long gold barrel inside along world X,
-    the cog on a post at the top back."""
-    c = _plane_pt(S.L4_BODY_C if L == 4 else S.L3_BODY_C)
-    r = S.L4_BODY_R if L == 4 else S.L3_BODY_R
-    d = S.L4_PLATE_D if L == 4 else S.L3_PLATE_D
+    """Flash's tall narrow egg (wider low down, narrowing to the top), its long axis leaning toward the back right; the
+    opening cut at a slant on its upper left (a plane tilted from straight up toward the front left), the long gold
+    barrel inside along the egg's axis, the cog on the barrel's top end."""
+    c = _plane_pt(S.L4_EGG_C if L == 4 else S.L3_EGG_C)
+    u = tilted(*S.L3_EGG_AXIS)
+    n = tilted(*S.L3_CUT[:2])
+    d = S.L3_CUT[2]
+    rc, rt, rb = S.L3_EGG_R
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=72, v_segments=36, radius=r)
-    egg = S.L4_EGG if L == 4 else S.L3_EGG
+    bmesh.ops.create_uvsphere(bm, u_segments=72, v_segments=40, radius=1.0)
     for v in bm.verts:
-        if v.co.x < 0:
-            v.co.x *= egg
-    no = Vector(S.L3_CUT_N).normalized()
-    for co, nn in ((no * S.L3_CUT_D, no), (Vector((d, 0, 0)), Vector((1, 0, 0)))):
-        geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
-        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=co, plane_no=nn, clear_outer=True)
+        z = v.co.z
+        k = rc * (1.0 - 0.1 * z)             # narrower toward the top, like an egg
+        v.co = Vector((v.co.x * k, v.co.y * k, z * (rt if z > 0 else rb)))
+    x = (n - u * n.dot(u)).normalized()
+    rm = Matrix((x, u.cross(x), u)).transposed()
+    bmesh.ops.transform(bm, matrix=rm.to_4x4(), verts=bm.verts)
+    geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
+    bmesh.ops.bisect_plane(bm, geom=geom, plane_co=n * d, plane_no=n, clear_outer=True)
+    rim = [v.co.copy() for v in bm.verts if v.is_boundary]
+    # the barrel lies in the opening along its long way, its middle a little below the opening's middle
+    bc = c + sum(rim, Vector()) / len(rim) + n * S.L3_BARREL_SINK
+    ba = tilted(S.L3_BARREL_AXIS[0], 90.0 - S.L3_BARREL_AXIS[1])
+    bc = bc + ba * S.L3_BARREL[2]
+    BODY.update(bc=bc, ba=ba)
     sh = mesh_ob("ballshell", bm, [M["chrome"], M["inner"]])
     so = sh.modifiers.new("wall", "SOLIDIFY")
     so.thickness, so.offset, so.material_offset, so.use_rim = 0.14, -1.0, 1, True
     sh.location = c
-    rp = math.sqrt(r * r - d * d)
-    plate = cyl("ballplate", rp, 0.16, (c.x + d - 0.16, c.y, c.z), M["plate"], rot=(0, 90, 0), verts=72, bevel=0.04)
-    tube("ballrim", [(c.x + d, c.y + rp * math.cos(2 * math.pi * i / 72), c.z + rp * math.sin(2 * math.pi * i / 72))
-                     for i in range(72)], 0.07, M["steel"], cyclic=True)
-    x0, x1 = S.L4_BARREL_X if L == 4 else S.L3_BARREL_X
-    barrel("barrel", c + Vector(((x0 + x1) / 2, 0, 0)), (1, 0, 0), S.L4_BARREL_R if L == 4 else S.L3_BARREL_R, x1 - x0,
-           14, 7)
-    # the cog on a post at the top back (still)
-    cp = c + Vector(S.L3_COG_AT)
-    e = frame_at("cog", cp, (1, 0, 0), xhint=(0, 0, 1))
+    ln, br = S.L3_BARREL[:2]
+    if L == 4:
+        barrel("barrel", bc, ba, br, ln, S.L4_BARREL_ROWS, S.L4_BARREL_COLS, fill=S.L4_BLOCK_FILL, mat=M["block34"],
+               core=M["core34"])
+    else:
+        barrel("barrel", bc, ba, br, ln, S.L3_BARREL_ROWS, S.L3_BARREL_COLS, fill=S.L3_BLOCK_FILL, mat=M["block34"],
+               core=M["core34"])
+    # the cog standing over the barrel's top end where Flash shows it (still), on a gold post from the axle's end
+    end = bc + ba * (ln / 2)
+    p0, f = cam_ray(*S.L3_COG_PX)
+    cp = p0 + f * (end - p0).dot(f)                  # the point of that camera ray nearest the axle's end
+    e = frame_at("cog", cp, ba, xhint=(0, 0, 1))
     gear("cogwheel", S.L3_COG_R, 14, 0.3, (0, 0, 0), M["gold"], (0, 0, 0), parent=e, tooth=0.2)
-    cyl("cogboss", 0.4, 0.5, (0, 0, -0.25), M["golddark"], parent=e, verts=20)
-    q = c + (cp - c).normalized() * (r - 0.3)
-    tube("cogpost", [q, cp - Vector((0.3, 0, 0))], 0.16, M["golddark"])
+    cyl("cogboss", 0.4, 0.75, (0, 0, -0.55), M["golddark"], parent=e, verts=20)
+    tube("cogpost", [end - ba * 0.3, cp - ba * 0.2], 0.22, M["golddark"])
     return c, sh
+
+
+def shell_bottom(sh, at, r):
+    """The highest point where the shell's underside lies over a ring of radius r round `at` (where the bellows meet
+    it), so the bellows reach into the shell all round."""
+    from mathutils.bvhtree import BVHTree
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    t = BVHTree.FromObject(sh, dg)
+    inv = sh.matrix_world.inverted()
+    zs = []
+    for i in range(24):
+        p = Vector((at.x + r * math.cos(2 * math.pi * i / 24), at.y + r * math.sin(2 * math.pi * i / 24), 0.0))
+        hit = t.ray_cast(inv @ p, inv.to_3x3() @ Vector((0, 0, 1)))
+        if hit[0] is not None:
+            zs.append((sh.matrix_world @ hit[0]).z)
+    return max(zs)
 
 
 def chimney(b, cage=False):
@@ -1124,8 +1171,9 @@ def bow_head(hub, ln):
     bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])
     ob = mesh_ob("keybowhead", bm, [M["block"]], parent=hub, bevel=0.1, segs=4)
     # a thick round gold rim along the outline (Flash's head reads as a heavy ring round a flatter face)
-    tube("keybowrim", [to_local(q.x, q.y) for q in smooth_loop(sh["outer"], k=4)], 0.27, M["gold"], parent=hub,
-         cyclic=True)
+    # (the traced outline smoothed first: its pixel steps made the rim lumpy on the right)
+    tube("keybowrim", [to_local(q.x, q.y) for q in smooth_loop(relax(sh["outer"], 4), k=4)], 0.27, M["gold"],
+         parent=hub, cyclic=True)
     for k, hole in enumerate(sh["holes"]):
         hs = [to_local(*p) for p in hole]
         c = sum(hs, Vector()) / len(hs)
@@ -1141,6 +1189,15 @@ def bow_head(hub, ln):
     foot = to_local(*S.L4_BOW_FOOT)
     foot = foot + (foot - Vector((0, 0, ln + 0.3))).normalized() * 0.3    # into the head
     tube("keybowstem", [(0, 0, ln - 0.05), (0, 0, ln + 0.3), foot], 0.12, M["gold"], parent=hub, smooth=True)
+
+
+def relax(pts, n):
+    """A closed 2D loop with each point moved n times halfway to its neighbours' middle."""
+    pts = [Vector(p) for p in pts]
+    for _ in range(n):
+        m = len(pts)
+        pts = [pts[i] * 0.5 + (pts[i - 1] + pts[(i + 1) % m]) * 0.25 for i in range(m)]
+    return pts
 
 
 def smooth_loop(pts, k=6):
@@ -1164,43 +1221,60 @@ def level34():
     lv4 = L == 4
     zb = S.L4_BASE_H if lv4 else 0.0           # level 4 stands everything on its wooden base
     if lv4:
-        disc("disc", S.L4_BASE_R, 0.0, S.L4_BASE_H, at=px(*S.L4_BASE_C, Z=0.0), verts=20)
-    # the gold cog lying under the bellows
-    if not lv4:
-        gear("groundcog", S.L3_GCOG_R, 22, 0.32, (A.x, A.y, S.L3_GCOG_Z + 0.16), M["gold"], (0, 0, 0), tooth=0.12)
-        cyl("groundcoghub", S.L3_BELLOWS_R * 0.8, S.L3_BELLOWS_Z - S.L3_GCOG_Z, (A.x, A.y, S.L3_GCOG_Z),
-            M["golddark"], verts=48)
+        # Flash's base: a wooden ring under the bellows (grass shows inside it) with a round pad under each pillar
+        g = A
+        r0, r1 = S.L4_BASE_R - S.L4_BASE_W, S.L4_BASE_R
+        h = S.L4_BASE_H
+        wd = wood("wood", (204, 160, 108), (132, 90, 52), axis="X")
+        lathe("disc", [(r0 + 0.1, 0.0), (r1 - 0.1, 0.0), (r1, 0.06), (r1, h - 0.06), (r1 - 0.12, h), (r0 + 0.12, h),
+                       (r0, h - 0.06), (r0, 0.06)], (g.x, g.y, 0.0), wd, verts=72)
+        for i, th in enumerate((225.0, 45.0, -45.0, 135.0)):
+            q = A + Vector(S.polar(th, S.L3_FOOT_D, 0.0))
+            disc(f"basepad{i}", S.L4_PAD_R, 0.0, h, at=q, mat=wd, verts=40)
+    # the gold cog lying under the bellows (level 4: hung with the bellows over the ring's hole)
+    gear("groundcog", S.L3_GCOG_R, 22, 0.32, (A.x, A.y, S.L3_GCOG_Z + 0.16 + zb), M["gold"], (0, 0, 0), tooth=0.12)
+    cyl("groundcoghub", S.L3_BELLOWS_R * 0.8, S.L3_BELLOWS_Z - S.L3_GCOG_Z, (A.x, A.y, S.L3_GCOG_Z + zb),
+        M["golddark"], verts=48)
     b, sh = shell34()
-    top_b = b.z - math.sqrt((S.L4_BODY_R if lv4 else S.L3_BODY_R) ** 2 - S.L3_BELLOWS_R ** 2) + 0.3
-    bellows("bellows", zb + (0.0 if lv4 else S.L3_BELLOWS_Z), top_b, S.L3_BELLOWS_R, 3 if lv4 else 2, M["rubber"])
+    top_b = shell_bottom(sh, A, S.L3_BELLOWS_R * 0.95) + 0.3
+    bellows("bellows", zb + S.L3_BELLOWS_Z, top_b, S.L3_BELLOWS_R, 3 if lv4 else 2, M["rubber"])
     # four feet: an arm out of the bellows to a threaded post with a nut on top and a nut foot on the ground
     # (level 4: steel pillars on the wooden base instead, with dark collars where the arms meet them)
     for i, th in enumerate((225.0, 45.0, -45.0, 135.0)):
         a = Vector(S.polar(th, 1.0, 0.0))
         p = A + a * S.L3_FOOT_D
-        za = zb + S.L3_ARM_Z
-        tube(f"legarm{i}", [A + a * (S.L3_BELLOWS_R - 0.2) + Vector((0, 0, za)), p + Vector((0, 0, za))], 0.2,
-             M["rubber"])
+        za = zb + (S.L3_ARM_Z if lv4 else S.L3_BOLT_Z)
+        tube(f"legarm{i}", [A + a * (S.L3_BELLOWS_R - 0.2) + Vector((0, 0, za)),
+                            p - a * (0.0 if lv4 else 0.45) + Vector((0, 0, za))], 0.2, M["rubber"])
         if lv4:
             cyl(f"legpillar{i}", S.L4_PILLAR_R, S.L4_PILLAR_TOP - zb, (p.x, p.y, zb), M["steel"], verts=28, bevel=0.06)
             cyl(f"legcollar{i}", S.L4_PILLAR_R + 0.14, 0.5, (p.x, p.y, za - 0.25), M["rubber"], verts=28, bevel=0.06)
             cyl(f"legcap{i}", S.L4_PILLAR_R + 0.05, 0.12, (p.x, p.y, S.L4_PILLAR_TOP), M["steel"], verts=28,
                 bevel=0.04)
         else:
-            cyl(f"legrod{i}", 0.36, za + 0.2, (p.x, p.y, 0.3), M["needle"], verts=14, bevel=0.0)
-            for k in range(int((za - 0.2) / 0.16)):
-                tube(f"legthread{i}-{k}", [(p.x + 0.38 * math.cos(2 * math.pi * j / 12), p.y + 0.38 * math.sin(
-                    2 * math.pi * j / 12), 0.45 + k * 0.16) for j in range(12)], 0.03, M["needle"], cyclic=True)
-            hexnut(f"legnut{i}", (p.x, p.y, za - 0.15), 0.85, 0.75, M["nut"])
-            hexnut(f"legfoot{i}", (p.x, p.y, 0.0), 0.88, 0.6, M["nut"])
+            # Flash's short bolt: a small hex nut on the ground, a short thread, the arm's black ring round the post and
+            # a small round cap on top
+            hexnut(f"legfoot{i}", (p.x, p.y, 0.0), S.L3_NUT_R, 0.45, M["nut"])
+            cyl(f"legrod{i}", 0.24, za - 0.3, (p.x, p.y, 0.4), M["needle"], verts=14, bevel=0.0)
+            for k in range(int((za - 0.75) / 0.14)):
+                tube(f"legthread{i}-{k}", [(p.x + 0.26 * math.cos(2 * math.pi * j / 12), p.y + 0.26 * math.sin(
+                    2 * math.pi * j / 12), 0.55 + k * 0.14) for j in range(12)], 0.03, M["needle"], cyclic=True)
+            tube(f"legring{i}", [(p.x + 0.46 * math.cos(2 * math.pi * j / 24), p.y + 0.46 * math.sin(
+                2 * math.pi * j / 24), za) for j in range(24)], 0.24, M["rubber"], cyclic=True)
+            cyl(f"legnut{i}", 0.5, 0.75, (p.x, p.y, za + 0.12), M["nut"], verts=28, bevel=0.12)
     chimney(b, cage=lv4)
     # panels: on whatever shell part the camera sees at Flash's place
     for i, ((sx, sy), kind) in enumerate(S.L3_PANELS):
         panel(f"panel{i}", None, S.L3_BODY_R, sx, sy, "vent" if (lv4 and kind == "port") else kind, size=2.5,
               spin=S.L3_PANEL_SPIN[i], lean=S.L3_PANEL_LEAN[i], thick=0.3)
     # the key out of the barrel's back top
-    kb = b + Vector((S.L3_KEY_X, -0.2, S.L3_KEY_Z))
-    box("keyblock", (0.7, 0.8, kb.z - b.z + 0.4), (kb.x, kb.y, b.z - 0.4), M["golddark"], bevel=0.05)
+    bc, u = BODY["bc"], BODY["ba"]
+    up = (Vector((0, 0, 1)) - u * u.z).normalized()
+    ln, br = S.L3_BARREL[:2]
+    k0 = bc + u * (S.L3_KEY_AT - ln / 2) + up * br * 0.8
+    kb = k0 + up * 0.75
+    box("keyblock", (0.7, 0.8, (kb - k0).length + 0.1), k0, M["golddark"], bevel=0.05,
+        rot=tuple(math.degrees(a) for a in up.to_track_quat("Z", "Y").to_euler()))
     ring = toward(kb, Vector((0, 0, 1)), *S.L3_KEY_BOW)
     key("key", kb, Vector((0, 0, 1)), ring, S.L4_BOW_R if lv4 else 1.3 * S.L3_BOW_SCALE, 0.13, S.KEY0[L],
         bow=bow_head if lv4 else bow_monster)
@@ -1217,7 +1291,8 @@ def turn(frame):
         if hub.name in KEYS:
             hub.rotation_euler = (0, 0, math.radians(KEYS[hub.name] + S.KEY_TURN[L] * 360.0 * f))
         else:
-            hub.rotation_euler = (0, 0, math.radians(S.BARREL_TURN * f))
+            hub.rotation_euler = (0, 0, math.radians((720.0 / {3: S.L3_BARREL_ROWS, 4: S.L4_BARREL_ROWS}[L] if L >= 3 else
+                                                       S.BARREL_TURN) * f))
 
 
 def setup(sc):
