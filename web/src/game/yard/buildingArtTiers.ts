@@ -207,26 +207,26 @@ export interface TierArt {
 export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 20 Cannon Tower: 3D, tier 1 the steel bands (owner, 28 Oct 2026); the barrel stays 22 degrees up
   20: [
-    { from: 1, top: ["top.t1@2x.webp", -34, -21], shadow: ["shadow.t1.jpg", -31, 22], lift: 0,
-      turret: { body: ["body.t1@2x.webp", -34, -10], strip: ["turret.t1@2x.webp", -37, -41, 73, 57, 32], pivot: [0, 14.5],
+    { from: 1, top: ["top.t1@2x.webp", -33, -18], shadow: ["shadow.t1.jpg", -31, 22], lift: 0,
+      turret: { body: ["body.t1@2x.webp", -33, -9], strip: ["turret.t1@2x.webp", -32, -36, 64, 51, 32], pivot: [0, 14.5],
         aim: TURRET_AIM["20.t1"] } },
-    { from: 4, top: ["top.t2@2x.webp", -34, -36], shadow: ["shadow.t2.jpg", -31, 17], lift: 10,
-      turret: { body: ["body.t2@2x.webp", -34, -25], strip: ["turret.t2@2x.webp", -37, -56, 73, 57, 32], pivot: [0, -1],
+    { from: 4, top: ["top.t2@2x.webp", -33, -33], shadow: ["shadow.t2.jpg", -31, 17], lift: 10,
+      turret: { body: ["body.t2@2x.webp", -33, -24], strip: ["turret.t2@2x.webp", -32, -51, 64, 51, 32], pivot: [0, -1],
         aim: TURRET_AIM["20.t2"] } },
-    { from: 7, top: ["top.t3@2x.webp", -33, -47], shadow: ["shadow.t3.jpg", -31, 12], lift: 23,
-      turret: { body: ["body.t3@2x.webp", -33, -36], strip: ["turret.t3@2x.webp", -35, -66, 70, 54, 32], pivot: [0, -15.75],
+    { from: 7, top: ["top.t3@2x.webp", -33, -44], shadow: ["shadow.t3.jpg", -31, 12], lift: 23,
+      turret: { body: ["body.t3@2x.webp", -33, -36], strip: ["turret.t3@2x.webp", -31, -61, 62, 48, 32], pivot: [0, -15.75],
         aim: TURRET_AIM["20.t3"] } },
   ],
   // 21 Sniper Tower: 3D
   21: [
-    { from: 1, top: ["top.t1@2x.webp", -40, -46], shadow: ["shadow.t1.jpg", -37, 12], lift: 1,
-      turret: { body: ["body.t1@2x.webp", -40, -37], strip: ["turret.t1@2x.webp", -28, -52, 56, 42, 32], pivot: [0, -20],
+    { from: 1, top: ["top.t1@2x.webp", -39, -45], shadow: ["shadow.t1.jpg", -37, 12], lift: 1,
+      turret: { body: ["body.t1@2x.webp", -39, -37], strip: ["turret.t1@2x.webp", -27, -51, 54, 40, 32], pivot: [0, -20],
         aim: TURRET_AIM["21.t1"] } },
-    { from: 4, top: ["top.t2@2x.webp", -40, -76], shadow: ["shadow.t2.jpg", -37, 2], lift: 31,
-      turret: { body: ["body.t2@2x.webp", -40, -70], strip: ["turret.t2@2x.webp", -28, -82, 56, 42, 32], pivot: [0, -50],
+    { from: 4, top: ["top.t2@2x.webp", -39, -75], shadow: ["shadow.t2.jpg", -37, 2], lift: 31,
+      turret: { body: ["body.t2@2x.webp", -39, -67], strip: ["turret.t2@2x.webp", -27, -81, 54, 40, 32], pivot: [0, -50],
         aim: TURRET_AIM["21.t2"] } },
-    { from: 7, top: ["top.t3@2x.webp", -40, -93], shadow: ["shadow.t3.jpg", -38, -4], lift: 48,
-      turret: { body: ["body.t3@2x.webp", -40, -86], strip: ["turret.t3@2x.webp", -28, -99, 56, 42, 32], pivot: [0, -67],
+    { from: 7, top: ["top.t3@2x.webp", -39, -92], shadow: ["shadow.t3.jpg", -38, -4], lift: 48,
+      turret: { body: ["body.t3@2x.webp", -39, -84], strip: ["turret.t3@2x.webp", -27, -98, 54, 40, 32], pivot: [0, -67],
         aim: TURRET_AIM["21.t3"] } },
   ],
   // 22 Monster Bunker: 3D, five levels, so 1-2, 3-4 and 5; its shutters roll up into the deck as it lets its monsters out

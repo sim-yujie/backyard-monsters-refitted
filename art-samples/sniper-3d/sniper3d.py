@@ -56,6 +56,9 @@ PAINTED = {1: dict(body=(160, 182), pivot=(80, 34), top=(160, 198), top_pivot=(8
            2: dict(body=(160, 248), pivot=(80, 40), top=(160, 258), top_pivot=(80, 50), game_y=-50),
            3: dict(body=(160, 280), pivot=(80, 38), top=(160, 292), top_pivot=(80, 50), game_y=-67)}
 P = PAINTED[TIER]
+# the body canvas reaches this much (@2x px) further down than the painted one, so the front foot's ball is not cut off
+# (the painted canvas stopped in it); its top-left stays where it was (export3d.py cuts the body to what it covers)
+BODY_BELOW = int(os.environ.get("SNIPER_BODY_BELOW", 6))
 
 # ---------------------------------------------------------------------------------------------------------------- the shape
 R = 0.9                        # body hexagon corner radius (fitted to the painted outline, see measure.py)
@@ -70,11 +73,13 @@ TOP = TOP1 + (PAINTED[1]["game_y"] - P["game_y"]) * 2 / (S2 * math.cos(math.radi
 SECTIONS = TIER                # 1, 2 or 3 stacked sections
 FEET = (45.0, 45.0 + 112, 45.0 - 112)
 FOOT_D, FOOT_R = 1.14, 0.26
-FRONT_FOOT_D = 1.42            # the front foot stands out in front of the (drawn-out) front corner, as painted
+FRONT_FOOT_D = 1.18            # the front foot stands out in front of the (drawn-out) front corner, as painted
 TURRET_SCALE = 1.12
-DISC_STRETCH = 1.2             # the turntable too (the turret on it stays round: it turns)
-STRETCH = 1.6                  # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
-PLATE_STRETCH = 1.4            # the painted one (the body is only ever seen from this one side)
+DISC_STRETCH = 1.0             # the turntable too (the turret on it stays round: it turns)
+STRETCH = 1.2                  # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
+PLATE_STRETCH = 1.2            # the painted one (the body is only ever seen from this one side)
+# (owner, 31 Oct 2026, from Codex's perspective preview: STRETCH 1.6 -> 1.2, PLATE_STRETCH 1.4 -> 1.2, DISC_STRETCH
+# 1.2 -> 1.0, FRONT_FOOT_D 1.42 -> 1.18; the 30 degree camera stays)
 if os.environ.get("SNIPER_SHAPE"):       # for fit tests: body radius, plate radius, feet distance and radius, front foot, bottom
     R, PLATE_R, FOOT_D, FOOT_R, FRONT_FOOT_D, Z0 = (float(v) for v in os.environ["SNIPER_SHAPE"].split(","))
 if os.environ.get("SNIPER_STRETCH"):     # for camera-angle tests: body, plate, turntable
@@ -490,7 +495,7 @@ def main():
 
     info = dict(tier=TIER, elevation=EL, px_per_unit_4x=PPU, top=TOP)
     if what == "body":
-        bw, bh = P["body"]
+        bw, bh = P["body"][0], P["body"][1] + BODY_BELOW
         info["body_pivot_4x"] = frame(cam, bw * 2, bh * 2, P["pivot"][0] * 2, P["pivot"][1] * 2)
         shot(OUT / "body-4x.png", body_obs)
     elif what == "full":

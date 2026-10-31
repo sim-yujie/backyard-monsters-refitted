@@ -10,8 +10,9 @@ whole.
 
 - `body.t<N>@2x.webp`: the tower with its turret taken off. The Cannon's `body/body-4x.png` sits on the painted
   canvas (the kit's `canvas("cannon")`: origin 73 px from the left, 69 px above the bottom), so it is cut and halved
-  here; the Sniper's and Laser's `body@2x.png` already stand where the painted `body.t<N>@2x.webp` did, and the later
-  sets' (Aerial Defense, Railgun, Spurtz, Inferno) where their `strip.json`'s `body_entry` says.
+  here; the Sniper's (cut to what it covers) and Laser's `body@2x.png` already stand where the painted
+  `body.t<N>@2x.webp` did, and the later sets' (Aerial Defense, Railgun, Spurtz, Inferno) where their `strip.json`'s
+  `body_entry` says.
 - `turret.t<N>@2x.webp`: the turret strip, every cell cut to what any cell covers and set on whole 1x pixels. One row
   of headings at one fixed tilt (the Cannon, owner 28 Oct 2026: "Rather than overcomplicating the cannon barrel, can't
   we do calculation and modify the projectile direction rather than turning the head up and down"), or for a Laser
@@ -126,7 +127,13 @@ def read(tower, tier):
     elif tower == "sniper":
         info = json.loads((src / "strip.json").read_text())
         sheet = Image.open(src / ("strip@2x.png" if (src / "strip@2x.png").exists() else "turret@2x.png")).convert("RGBA")
-        body, body_at = Image.open(src / "body@2x.png").convert("RGBA"), PAINTED_BODY[tower][tier]
+        body = Image.open(src / "body@2x.png").convert("RGBA")
+        # cut to what it covers, on whole 1x pixels, so it keeps the still's left edge (its canvas reaches further
+        # down than the painted one, for the front foot: sniper3d.py BODY_BELOW)
+        x0, y0, x1, y1 = body.getbbox()
+        x0, y0, x1, y1 = x0 - x0 % 2, y0 - y0 % 2, x1 + x1 % 2, y1 + y1 % 2
+        body = body.crop((x0, y0, x1, y1))
+        body_at = (PAINTED_BODY[tower][tier][0] + x0 // 2, PAINTED_BODY[tower][tier][1] + y0 // 2)
         cw, ch = info["cell_w_2x"], info["cell_h_2x"]
         in_cell = info["pivot_in_cell_2x"]
         pivot = tuple(info["pivot"])
