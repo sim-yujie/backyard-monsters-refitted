@@ -82,8 +82,9 @@ LV[7] = dict(LV[6], holes=((FRONT, 30.0, 1.0), (FRONT - 90, 32.0, 0.8), (FRONT +
              pipes=(FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135), fun_z=LV[6]["fun_z"] + 1.35,
              scatter=True, straps=(-75.0, -15.0, -140.0, 50.0), dome_flat=0.85)     # Flash: a taller dome than 6
 LV[8] = dict(LV[7], pipe_r=0.62, fun_k=0.9, holes=LV[7]["holes"] + tuple((FRONT + a, e, 0.42) for a, e in
-                                                                     ((-58.0, 48.0), (-32.0, 56.0), (-12.0, 62.0),
-                                                                      (12.0, 62.0), (32.0, 56.0), (58.0, 48.0))))
+                                                                     ((-112.0, 44.0), (-88.0, 52.0), (-34.0, 49.0),
+                                                                      (0.0, 57.0), (34.0, 49.0),
+                                                                      (88.0, 52.0), (112.0, 44.0))))
 
 
 def polar(th, r, z):
