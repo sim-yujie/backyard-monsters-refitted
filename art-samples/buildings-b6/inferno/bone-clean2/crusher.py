@@ -477,7 +477,7 @@ def panel():
 
     if T >= 2:                                                                # the hot plate (tier 2), behind a grille (3)
         hot = mat("hot%d" % T, (40, 36, 34) if T >= 3 else (50, 36, 30), rough=0.7, metal=0.3, wear=(70, 60, 54), dirt=0.2,
-                  glow=((255, 120, 30), 0.8 if T == 2 else 3.0, 7.0 if T == 2 else 5.0), bump=0.1)
+                  glow=((255, 120, 30), 0.25 if T == 2 else 3.0, 7.0 if T == 2 else 5.0), bump=0.1)
         one("panel-hot", [hot], lambda a: a.cube(Tm((PF + 0.02, 0, 1.31)), (0.04, 2.3, 1.62), 0), bevel=0.01)
         if T >= 3:
             def gr(a):
@@ -519,43 +519,78 @@ DRUM_C = polar(3.62, 255)
 DRUM_AX = polar(1, 10)
 
 
+DRUM_H = 0.44                    # half its length: about as long as it is wide, a drum and not a barrel
+
+
 def drum_r(u):
-    return 0.46 + 0.06 * (1 - (u / 0.52) ** 2)
+    return 0.5 + 0.008 * (1 - (u / DRUM_H) ** 2)         # straight sides, the skin only a little tight
 
 
 def drum():
+    """A leather drum on its side: a rust-orange leather shell, a pale skin stretched over each end and stitched round
+    its edge, a dark hoop holding each skin, and a rope laced in a zig-zag from hoop to hoop that pulls the skins
+    tight. One split in the shell, between two ropes."""
     leather = mat("leather", (176, 86, 42), rough=0.82, wear=(120, 54, 28), wear_amt=0.85, dirt=0.4, speck=0.25,
                   bump=0.35, scale=9.0)
     dark = mat("drum-band", (40, 34, 30), rough=0.6, metal=0.4, wear=(72, 60, 52), dirt=0.2)
     gap = mat("split", (22, 12, 8), rough=0.9, dirt=0.0, speck=0.0, bump=0.0)
-    zc = 0.545
+    skin = mat("drum-skin", (230, 186, 128), rough=0.75, wear=(186, 136, 88), wear_amt=0.6, dirt=0.25, speck=0.2,
+               bump=0.2, scale=7.0)
+    rope = mat("rope", (212, 192, 150), rough=0.9, wear=(150, 128, 94), dirt=0.3, speck=0.3, bump=0.3, scale=30.0)
+    H = DRUM_H
+    zc = 0.555                                                                # the hoops stand on the ground
     M = aim(DRUM_AX, DRUM_C + Vector((0, 0, zc)))
+    phi0 = math.radians(115)                                                  # the split faces up and out
 
     def fn(a):
-        us = [-0.52 + 1.04 * i / 12 for i in range(13)]
-        a.lathe(M, [(0.02, -0.52)] + [(drum_r(u), u) for u in us] + [(0.02, 0.52)], 0, 40)
-        for u in (-0.4, 0.0, 0.4):                                            # dark bands round it
-            r = drum_r(u)
-            a.lathe(M, [(r - 0.01, u - 0.045), (r + 0.02, u - 0.04), (r + 0.025, u), (r + 0.02, u + 0.04),
-                        (r - 0.01, u + 0.045)], 1, 40)
-        for u in (-0.53, 0.53):                                               # rims at the ends
-            a.lathe(M, [(0.38, u - 0.03), (0.45, u - 0.03), (0.45, u + 0.03), (0.38, u + 0.03), (0.38, u - 0.03)], 1, 40)
-        # the split: a dark cut along the side facing up and out, with its edges a little lifted
-        ang = math.radians(115)
+        us = [-H + 2 * H * i / 12 for i in range(13)]
+        a.lathe(M, [(drum_r(u), u) for u in us], 0, 40)                       # the leather shell
+        for s in (-1, 1):
+            # the skin over the end, a little inside the hoop, and its edge lapped over the shell's rim
+            a.lathe(M, [(0.0, s * (H + 0.004)), (0.3, s * (H + 0.003)), (0.47, s * H), (0.5, s * (H - 0.015))], 3, 40)
+            # stitches round the skin's edge: short dark dashes across the seam
+            for k in range(24):
+                ang = 2 * math.pi * k / 24
+                rr = 0.43
+                p = Vector((rr * math.cos(ang), rr * math.sin(ang), s * (H + 0.006)))
+                rad = Vector((math.cos(ang), math.sin(ang), 0))
+                a.cube(M @ basis(rad, Vector((0, 0, 1)).cross(rad), Vector((0, 0, s)), p), (0.055, 0.016, 0.008), 1)
+            # the hoop: a dark band round the end that holds the skin
+            u0, u1 = s * (H - 0.06), s * (H + 0.016)
+            lo, hi = min(u0, u1), max(u0, u1)
+            a.lathe(M, [(0.495, lo), (0.545, lo + 0.005), (0.555, (lo + hi) / 2), (0.545, hi - 0.005), (0.495, hi),
+                        (0.495, lo)], 1, 40)
+        # the rope: 8 V's from hoop to hoop, lying on the shell, its ends running into the hoops
+        n, uh = 8, H - 0.035
+        step = 2 * math.pi / n
+
+        def on_shell(th, u):
+            rr = drum_r(u) + 0.02
+            return M @ Vector((rr * math.cos(th), rr * math.sin(th), u))
+
+        for k in range(n):
+            for th0, th1 in ((phi0 + k * step, phi0 + (k + 0.5) * step), (phi0 + (k + 0.5) * step, phi0 + (k + 1) * step)):
+                ua, ub = (-uh, uh) if th0 == phi0 + k * step else (uh, -uh)
+                pts = [on_shell(th0 + (th1 - th0) * i / 8, ua + (ub - ua) * i / 8) for i in range(9)]
+                for p0, p1 in zip(pts, pts[1:]):
+                    rod(a, p0, p1, 0.02, 4, 8)
+                for p in pts[1:-1]:
+                    a.sphere(Tm(p), 0.02, 4, 8, 5)
+        # the split: a dark cut along the shell between two ropes, near the skin end that faces the viewer
+        u0 = 0.2
+        r = drum_r(u0) - 0.01
         for s, w, h, mi in ((0.0, 0.07, 0.06, 2), (-0.05, 0.035, 0.04, 0), (0.05, 0.035, 0.04, 0)):
-            u0 = 0.2
-            r = drum_r(u0) - 0.01
-            ca = ang + s / r
+            ca = phi0 + s / r
             p = Vector((r * math.cos(ca), r * math.sin(ca), u0))
             nrm = Vector((math.cos(ca), math.sin(ca), 0))
             a.cube(M @ basis(nrm.cross(Vector((0, 0, 1))), Vector((0, 0, 1)), nrm, p + nrm * (0.012 if mi == 0 else 0)),
-                   (w, 0.34, h), mi)
-    one("drum", [leather, dark, gap], fn)
+                   (w, 0.3, h), mi)
+    one("drum", [leather, dark, gap, skin, rope], fn)
 
     if T >= 3:                                                                # a wooden wedge so it cannot roll
         out = Vector((DRUM_AX.y, -DRUM_AX.x, 0))                             # the side toward the viewer
         u_ax = 0.2
-        rho = drum_r(u_ax) - 0.004
+        rho = drum_r(u_ax) + 0.03                                         # it touches the ropes
         u1, h = 0.95, 0.42
         lo, hi = 0.0, u1 - 0.05
         for _ in range(50):                                                   # slide the thin edge in until it touches
