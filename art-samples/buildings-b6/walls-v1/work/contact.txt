@@ -1,5 +1,5 @@
 == block1
-00:02.047  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.109  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block1 whole
 CONTACT post0          gap 0.000 ok  at -1.28 -1.28 1.20
 CONTACT post1          gap 0.000 ok  at 1.28 -1.28 1.20
@@ -97,7 +97,7 @@ CONTACT plank2         gap 0.000 ok  at -0.60 -0.75 0.26
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part post3 reaches 1.400 (footprint 1.415)
 == block2
-00:02.125  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.172  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block2 whole
 CONTACT granite        gap 0.000 ok  at -0.00 -0.00 1.15
 CONTACT worst gap 0.000, parts not reaching the ground: 0
@@ -114,7 +114,7 @@ CONTACT rock3          gap 0.000 ok  at 0.56 0.80 0.12
 CONTACT rock4          gap 0.000 ok  at -0.90 0.85 0.09
 CONTACT rock5          gap 0.000 ok  at 1.05 0.24 0.06
 CONTACT rock6          gap 0.000 ok  at 0.10 -1.00 0.07
-CONTACT rock7          gap 0.000 ok  at -1.11 -0.05 0.09
+CONTACT rock7          gap 0.000 ok  at -1.02 -0.05 0.09
 CONTACT rock8          gap 0.000 ok  at -0.25 1.04 0.07
 CONTACT rock9          gap 0.000 ok  at 1.00 -1.00 0.07
 CONTACT chunk0         gap 0.000 ok  at -0.20 -0.01 0.41
@@ -122,9 +122,9 @@ CONTACT chunk1         gap 0.000 ok  at 0.51 -0.41 0.30
 CONTACT chunk2         gap 0.000 ok  at -0.70 0.49 0.27
 CONTACT chunk3         gap 0.000 ok  at -0.74 -0.54 0.29
 CONTACT worst gap 0.000, parts not reaching the ground: 0
-CONTACT furthest part rock7 reaches 1.479 (footprint 1.415)
+CONTACT furthest part rock7 reaches 1.390 (footprint 1.415)
 == block3
-00:02.015  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:04.500  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block3 whole
 CONTACT body           gap 0.000 ok  at -0.00 0.00 1.09
 CONTACT slab           gap 0.000 ok  at 0.00 -0.00 2.29
@@ -143,7 +143,7 @@ CONTACT cob2           gap 0.000 ok  at 0.75 0.75 0.36
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part slab reaches 1.375 (footprint 1.415)
 == block4
-00:01.969  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.078  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block4 whole
 CONTACT body           gap 0.000 ok  at -0.00 0.00 1.12
 CONTACT rim0           gap 0.000 ok  at 0.00 -1.33 2.26
@@ -182,9 +182,9 @@ CONTACT puddle         gap 0.000 ok  at -0.00 -0.01 0.20
 CONTACT pyr0           gap 0.000 ok  at 0.35 -0.20 0.22
 CONTACT pyr1           gap 0.000 ok  at -0.50 0.40 0.20
 CONTACT worst gap 0.000, parts not reaching the ground: 0
-CONTACT furthest part puddle reaches 1.625 (footprint 1.415)
+CONTACT furthest part puddle reaches 1.381 (footprint 1.415)
 == block5
-00:02.031  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.015  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE block5 whole
 CONTACT obsidian       gap 0.000 ok  at -0.00 -0.00 1.17
 CONTACT worst gap 0.000, parts not reaching the ground: 0
@@ -202,10 +202,10 @@ CONTACT shard0         gap 0.000 ok  at -1.01 -0.98 0.07
 CONTACT shard1         gap 0.000 ok  at -0.23 -1.04 0.12
 CONTACT shard2         gap 0.000 ok  at 0.37 -0.96 0.16
 CONTACT shard3         gap 0.000 ok  at 0.97 -0.84 0.14
-CONTACT shard4         gap 0.000 ok  at -1.12 -0.39 0.13
+CONTACT shard4         gap 0.000 ok  at -1.00 -0.39 0.13
 CONTACT shard5         gap 0.000 ok  at -0.39 -0.40 0.10
 CONTACT shard6         gap 0.000 ok  at 0.41 -0.44 0.08
-CONTACT shard7         gap 0.000 ok  at 1.09 -0.43 0.17
+CONTACT shard7         gap 0.000 ok  at 0.97 -0.43 0.17
 CONTACT shard8         gap 0.000 ok  at -1.05 0.18 0.08
 CONTACT shard9         gap 0.000 ok  at -0.33 0.39 0.13
 CONTACT shard10        gap 0.000 ok  at 0.33 0.21 0.13
@@ -218,9 +218,9 @@ CONTACT heap2          gap 0.000 ok  at -0.10 -0.55 0.61
 CONTACT heap3          gap 0.000 ok  at 0.18 0.56 0.31
 CONTACT heap4          gap 0.000 ok  at -0.60 0.44 0.57
 CONTACT worst gap 0.000, parts not reaching the ground: 0
-CONTACT furthest part shard4 reaches 1.511 (footprint 1.415)
+CONTACT furthest part shard7 reaches 1.390 (footprint 1.415)
 == stone
-00:02.282  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.046  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE stone whole
 CONTACT body           gap 0.000 ok  at -0.00 0.00 1.21
 CONTACT stud-1-1       gap 0.000 ok  at -0.72 -0.72 2.49
@@ -256,7 +256,7 @@ CONTACT rock7          gap 0.000 ok  at 0.05 0.04 0.97
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part rock6 reaches 1.252 (footprint 1.415)
 == inferno1
-00:01.985  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.015  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE inferno1 whole
 CONTACT dome           gap 0.000 ok  at 0.00 0.00 0.70
 CONTACT glow           gap 0.000 ok  at 0.00 0.00 0.00
@@ -386,7 +386,7 @@ CONTACT flame21        gap 0.000 ok  at 1.15 -0.65 0.02
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part plate01 reaches 1.345 (footprint 1.415)
 == inferno2
-00:02.125  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.000  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE inferno2 whole
 CONTACT cross          gap 0.000 ok  at -0.01 -0.01 0.61
 CONTACT corner0        gap 0.000 ok  at -0.93 -0.93 0.56
@@ -438,43 +438,43 @@ CONTACT cap5           gap 0.000 ok  at 0.94 0.95 0.35
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part corner3 reaches 1.415 (footprint 1.415)
 == inferno3
-00:02.078  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
+00:02.094  cycles           | WARNING HIPEW initialization failed: Error opening HIP dynamic library
 STATE inferno3 whole
-CONTACT body           gap 0.000 ok  at 0.00 -0.00 1.03
-CONTACT lip0           gap 0.000 ok  at 0.00 -1.31 2.22
-CONTACT lip1           gap 0.000 ok  at 0.00 1.31 2.22
-CONTACT lip2           gap 0.000 ok  at -1.31 -0.00 2.22
-CONTACT lip3           gap 0.000 ok  at 1.31 -0.00 2.22
-CONTACT floor          gap 0.000 ok  at -0.00 0.00 2.22
-CONTACT spike00        gap 0.000 ok  at -0.80 -0.80 2.47
-CONTACT spike01        gap 0.000 ok  at -0.80 -0.00 2.47
-CONTACT spike02        gap 0.000 ok  at -0.80 0.80 2.47
-CONTACT spike10        gap 0.000 ok  at -0.00 -0.80 2.47
-CONTACT spike11        gap 0.000 ok  at -0.00 -0.00 2.47
-CONTACT spike12        gap 0.000 ok  at -0.00 0.80 2.47
-CONTACT spike20        gap 0.000 ok  at 0.80 -0.80 2.47
-CONTACT spike21        gap 0.000 ok  at 0.80 -0.00 2.47
-CONTACT spike22        gap 0.000 ok  at 0.80 0.80 2.47
+CONTACT body           gap 0.000 ok  at 0.00 -0.00 1.11
+CONTACT lip0           gap 0.000 ok  at 0.00 -1.28 2.41
+CONTACT lip1           gap 0.000 ok  at 0.00 1.28 2.41
+CONTACT lip2           gap 0.000 ok  at -1.28 0.00 2.41
+CONTACT lip3           gap 0.000 ok  at 1.28 0.00 2.41
+CONTACT floor          gap 0.000 ok  at 0.00 0.00 2.38
+CONTACT spike00        gap 0.000 ok  at -0.76 -0.76 2.60
+CONTACT spike01        gap 0.000 ok  at -0.76 0.00 2.60
+CONTACT spike02        gap 0.000 ok  at -0.76 0.76 2.60
+CONTACT spike10        gap 0.000 ok  at -0.00 -0.76 2.60
+CONTACT spike11        gap 0.000 ok  at -0.00 0.00 2.60
+CONTACT spike12        gap 0.000 ok  at -0.00 0.76 2.60
+CONTACT spike20        gap 0.000 ok  at 0.76 -0.76 2.60
+CONTACT spike21        gap 0.000 ok  at 0.76 0.00 2.60
+CONTACT spike22        gap 0.000 ok  at 0.76 0.76 2.60
 CONTACT worst gap 0.000, parts not reaching the ground: 0
-CONTACT furthest part lip3 reaches 1.425 (footprint 1.415)
+CONTACT furthest part lip3 reaches 1.415 (footprint 1.415)
 STATE inferno3 damaged
-CONTACT lip0           gap 0.000 ok  at 0.00 -1.31 2.22
-CONTACT lip1           gap 0.000 ok  at 0.00 1.31 2.22
-CONTACT lip2           gap 0.000 ok  at -1.31 -0.00 2.22
-CONTACT lip3           gap 0.000 ok  at 1.31 -0.00 2.22
-CONTACT floor          gap 0.000 ok  at -0.00 0.00 2.22
-CONTACT spike00        gap 0.000 ok  at -0.80 -0.80 2.47
-CONTACT spike01        gap 0.000 ok  at -0.80 -0.00 2.47
-CONTACT spike02        gap 0.000 ok  at -0.80 0.80 2.47
-CONTACT spike10        gap 0.000 ok  at -0.00 -0.80 2.47
-CONTACT spike11        gap 0.000 ok  at -0.00 -0.00 2.47
-CONTACT spike21        gap 0.000 ok  at 0.80 -0.00 2.47
-CONTACT spike22        gap 0.000 ok  at 0.80 0.80 2.47
-CONTACT body           gap 0.000 ok  at 0.27 -0.13 1.07
+CONTACT lip0           gap 0.000 ok  at 0.00 -1.28 2.41
+CONTACT lip1           gap 0.000 ok  at 0.00 1.28 2.41
+CONTACT lip2           gap 0.000 ok  at -1.28 0.00 2.41
+CONTACT lip3           gap 0.000 ok  at 1.28 0.00 2.41
+CONTACT floor          gap 0.000 ok  at 0.00 0.00 2.38
+CONTACT spike00        gap 0.000 ok  at -0.76 -0.76 2.60
+CONTACT spike01        gap 0.000 ok  at -0.76 0.00 2.60
+CONTACT spike02        gap 0.000 ok  at -0.76 0.76 2.60
+CONTACT spike10        gap 0.000 ok  at -0.00 -0.76 2.60
+CONTACT spike11        gap 0.000 ok  at -0.00 0.00 2.60
+CONTACT spike21        gap 0.000 ok  at 0.76 0.00 2.60
+CONTACT spike22        gap 0.000 ok  at 0.76 0.76 2.60
+CONTACT body           gap 0.000 ok  at 0.27 -0.13 1.12
 CONTACT worst gap 0.000, parts not reaching the ground: 0
-CONTACT furthest part lip3 reaches 1.425 (footprint 1.415)
+CONTACT furthest part lip3 reaches 1.415 (footprint 1.415)
 STATE inferno3 destroyed
-CONTACT stub           gap 0.000 ok  at 0.17 -0.19 0.22
+CONTACT stub           gap 0.000 ok  at 0.15 -0.18 0.22
 CONTACT spike0         gap 0.000 ok  at -0.50 0.40 0.52
 CONTACT spike1         gap 0.000 ok  at 0.40 0.50 0.52
 CONTACT spike2         gap 0.000 ok  at -0.60 -0.50 0.52

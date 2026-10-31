@@ -162,6 +162,41 @@ def lift_right(t, col, k=0.4):
     return t.mix(col, grey.outputs[0], 1.0, "MULTIPLY")
 
 
+def face_tint(mat, left=1.0, right=1.0):
+    """Multiply a finished material's colour on the face toward the light (world -Y, screen left) and the face away
+    from it (+X, screen right), to match Flash's painted face brightness."""
+    nt = mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    inp = bsdf.inputs["Base Color"]
+    src = inp.links[0].from_socket if inp.links else None
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(nt.nodes.new("ShaderNodeNewGeometry").outputs["Normal"], sep.inputs[0])
+    neg = nt.nodes.new("ShaderNodeMath")
+    neg.operation = "MULTIPLY"
+    nt.links.new(sep.outputs[1], neg.inputs[0])
+    neg.inputs[1].default_value = -1.0
+    fs = []
+    for sock, k in ((neg.outputs[0], left), (sep.outputs[0], right)):
+        mr = nt.nodes.new("ShaderNodeMapRange")
+        mr.inputs[1].default_value, mr.inputs[2].default_value = 0.3, 0.9
+        mr.inputs[3].default_value, mr.inputs[4].default_value = 1.0, k
+        nt.links.new(sock, mr.inputs[0])
+        fs.append(mr.outputs[0])
+    both = nt.nodes.new("ShaderNodeMath")
+    both.operation = "MULTIPLY"
+    nt.links.new(fs[0], both.inputs[0])
+    nt.links.new(fs[1], both.inputs[1])
+    mul = nt.nodes.new("ShaderNodeVectorMath")
+    mul.operation = "SCALE"
+    if src:
+        nt.links.new(src, mul.inputs[0])
+    else:
+        mul.inputs[0].default_value = inp.default_value[:3]
+    nt.links.new(both.outputs[0], mul.inputs["Scale"])
+    nt.links.new(mul.outputs[0], inp)
+    return mat
+
+
 def see_through(t, col, alpha, strength):
     """Glowing and partly transparent (flames, the glow on the ground): emission mixed with transparency."""
     em = t.n("ShaderNodeEmission")
@@ -214,22 +249,24 @@ def lava_rock(name, glow=1.0, cracks=4.0, ash=True):
     vo = t.n("ShaderNodeTexVoronoi", feature="DISTANCE_TO_EDGE")
     vo.inputs["Scale"].default_value = cracks
     t.link(v, vo.inputs["Vector"])
-    crack = t.ramp(vo.outputs["Distance"], [(0.012, K1), (0.045, K0)])
+    crack = t.ramp(vo.outputs["Distance"], [(0.01, K1), (0.035, K0)])
     z = axes(t, "Position", "ShaderNodeNewGeometry")[2]
-    low = t.ramp(z, [(0.03, K1), (0.2, (0.7, 0.7, 0.7, 1)), (0.42, K0)])
+    low = t.ramp(z, [(0.05, K1), (0.25, (0.75, 0.75, 0.75, 1)), (0.45, K0)])
     amt = t.mix(crack, low, 1.0, "MULTIPLY")
+    fire = t.ramp(t.noise(v, 7.0, 3.0, 0.6), [(0.5, K0), (0.62, (0.85, 0.85, 0.85, 1))])
+    amt = t.mix(amt, t.mix(fire, low, 1.0, "MULTIPLY"), 1.0, "LIGHTEN")
     spots = t.ramp(t.noise(v, 5.5, 3.0, 0.6), [(0.68, K0), (0.74, (0.8, 0.8, 0.8, 1))])
     amt = t.mix(amt, spots, 1.0, "LIGHTEN")
     # Flash's broad smears of glowing orange over the dark rock, broken up by a finer noise
     patch = t.mix(t.ramp(t.noise(v, 2.2, 3.0, 0.5, 0.6), [(0.56, K0), (0.68, (0.75, 0.75, 0.75, 1))]),
                   t.ramp(t.noise(v, 14.0, 2.0, 0.5), [(0.35, (0.2, 0.2, 0.2, 1)), (0.6, K1)]), 1.0, "MULTIPLY")
     amt = t.mix(amt, patch, 1.0, "LIGHTEN")
-    rock = t.mix(srgb(8, 7, 7), srgb(30, 24, 22), t.ramp(t.noise(v, 6, 4.0, 0.6), [(0.4, K0), (0.7, K1)]))
+    rock = t.mix(srgb(6, 5, 5), srgb(24, 18, 16), t.ramp(t.noise(v, 6, 4.0, 0.6), [(0.4, K0), (0.7, K1)]))
     if ash:
         top = t.mix(t.ramp(m(t, "MULTIPLY", z, 0.5), [(0.45, K0), (0.62, (0.55, 0.55, 0.55, 1))]),
                     t.ramp(t.noise(v, 4, 3.0, 0.5), [(0.3, (0.3, 0.3, 0.3, 1)), (0.6, K1)]), 1.0, "MULTIPLY")
-        rock = t.mix(rock, srgb(128, 100, 90), top)
-    col = t.mix(rock, srgb(255, 110, 20), amt)
+        rock = t.mix(rock, srgb(176, 146, 128), top)
+    col = t.mix(rock, srgb(240, 72, 10), amt)
     t.set(**{"Base Color": col, "rough": 0.75, "spec": 0.12, "Emission Color": srgb(255, 96, 16)})
     t.link(m(t, "MULTIPLY", amt, 3.5 * glow), t.bsdf.inputs["Emission Strength"])
     t.bump(t.noise(v, 7.0, 4.0, 0.6), 0.3, 0.03)
@@ -255,10 +292,13 @@ def obsidian(name):
     glint = t.mix(t.ramp(edge.outputs["Distance"], [(0.0, K1), (0.055, K0)]),
                   t.ramp(t.noise(v, 2.4, 2.0, 0.5), [(0.64, K0), (0.68, K1)]), 1.0, "MULTIPLY")
     col = t.mix(col, srgb(240, 240, 246), glint)
-    col = t.mix(col, srgb(14, 14, 16), t.mix(facing_up(t), (0.65, 0.65, 0.65, 1), 1.0, "MULTIPLY"))   # darker top (Flash)
+    col = t.mix(col, srgb(10, 10, 12), t.mix(facing_up(t), (0.88, 0.88, 0.88, 1), 1.0, "MULTIPLY"))   # darker top (Flash)
     col = lift_right(t, col, 0.9)
     col = t.grime(col, 0.0, 2.6, 0.15, 0.7)
     t.set(**{"Base Color": col, "rough": 0.16, "spec": 0.4})
+    up = facing_up(t)
+    t.link(m(t, "MULTIPLY_ADD", up, -0.34, 0.4), t.bsdf.inputs["Specular IOR Level"])
+    t.link(m(t, "MULTIPLY_ADD", up, 0.3, 0.16), t.bsdf.inputs["Roughness"])
     geo = t.n("ShaderNodeNewGeometry")
     tilt = t.n("ShaderNodeVectorMath", operation="SUBTRACT")
     t.link(cell.outputs["Color"], tilt.inputs[0])
@@ -308,7 +348,7 @@ def weave(name):
     up = facing_up(t)
     u = m(t, "MULTIPLY_ADD", y, m(t, "SUBTRACT", 1.0, up), x)          # top: x, sides: x + y
     w = m(t, "MULTIPLY_ADD", up, m(t, "SUBTRACT", y, z), z)            # top: y, sides: z
-    k = 1.4
+    k = m(t, "MULTIPLY_ADD", up, -0.9, 1.7)                             # top 0.8, sides 1.7 (Flash: coarse on top)
     a = m(t, "MULTIPLY", m(t, "ADD", u, w), k)
     b = m(t, "MULTIPLY", m(t, "SUBTRACT", u, w), k)
     fa = m(t, "SUBTRACT", m(t, "FRACT", a), 0.5)
@@ -319,8 +359,9 @@ def weave(name):
     qb = m(t, "SUBTRACT", m(t, "ABSOLUTE", fa), 0.25)
     q = m(t, "MULTIPLY_ADD", c, m(t, "SUBTRACT", qb, qa), qa)          # across: two strands a cell
     d = m(t, "ADD", m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", p, 1.8)), 2.0),
-          m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", q, 3.6)), 2.0))
-    top = t.ramp(d, [(0.0, srgb(242, 242, 244)), (0.7, srgb(232, 232, 236)), (0.9, srgb(176, 174, 182)), (1.0, srgb(150, 148, 158))])
+          m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", q, m(t, "MULTIPLY_ADD", up, -0.7, 4.0))), 2.0))
+    # top: fatter strands (q * 3.3) that touch, each white in the middle and ringed grey toward its edge (Flash)
+    top = t.ramp(d, [(0.0, srgb(248, 248, 250)), (0.5, srgb(238, 238, 242)), (0.6, srgb(140, 140, 148)), (0.72, srgb(146, 146, 154)), (0.86, srgb(196, 196, 202)), (1.0, srgb(186, 186, 194))])
     side = t.ramp(d, [(0.0, srgb(176, 174, 176)), (0.55, srgb(146, 144, 146)), (0.85, srgb(96, 94, 96)), (1.0, srgb(58, 56, 58))])
     col = t.mix(side, top, up)
     col = t.mix(col, srgb(120, 112, 122), t.ramp(t.noise(t.coords(), 30.0, 2.0, 0.5), [(0.6, K0), (0.7, (0.35, 0.35, 0.35, 1))]))
@@ -332,7 +373,7 @@ def weave(name):
     return t.m
 
 
-def gold_mat(name, col=(200, 126, 22), tip=None, lift=0.35, metal=0.2):
+def gold_mat(name, col=(200, 126, 22), tip=None, lift=0.35, metal=0.2, lit=None):
     """Level 4: Flash's painted gold: warm orange, mostly flat colour with a soft sheen, the face away from the light
     still well lit. tip: the pyramids' upper part lit orange-yellow (Generated Z, so it follows each pyramid)."""
     if name in MATS:
@@ -341,6 +382,9 @@ def gold_mat(name, col=(200, 126, 22), tip=None, lift=0.35, metal=0.2):
     out = srgb(*col)
     if tip:
         out = t.mix(out, srgb(*tip), t.ramp(axes(t, "Generated")[2], [(0.7, K0), (0.95, K1)]))
+    if lit:                     # the faces turned toward the light (world -Y) bright yellow, as Flash's pyramids
+        ny = axes(t, "Normal", "ShaderNodeNewGeometry")[1]
+        out = t.mix(out, srgb(*lit), t.ramp(m(t, "MULTIPLY", ny, -1.0), [(0.2, K0), (0.6, K1)]))
     if lift:
         out = lift_right(t, out, lift)
     out = t.grime(out, 0.0, 2.2, 0.3, 1.0)      # no AO darkening: its noise came out as vertical streaks
@@ -349,7 +393,7 @@ def gold_mat(name, col=(200, 126, 22), tip=None, lift=0.35, metal=0.2):
     return t.m
 
 
-def steel(name, col=(96, 84, 82), tip=None, sheen=True):
+def steel(name, col=(80, 70, 68), tip=None, sheen=True):
     """Inferno level 3: glossy dark steel, warm grey, a broad sheen toward the light. tip: a small white tip."""
     if name in MATS:
         return MATS[name]
@@ -360,9 +404,9 @@ def steel(name, col=(96, 84, 82), tip=None, sheen=True):
     if sheen:                   # Flash: a soft pale sheen high on the face toward the light (world -Y, the left face)
         ny = axes(t, "Normal", "ShaderNodeNewGeometry")[1]
         z = axes(t, "Position", "ShaderNodeNewGeometry")[2]
-        fac = t.mix(t.ramp(m(t, "MULTIPLY", ny, -1.0), [(0.5, K0), (0.9, K1)]), t.ramp(m(t, "MULTIPLY", z, 0.33), [(0.25, K0), (0.65, (0.5, 0.5, 0.5, 1))]),
+        fac = t.mix(t.ramp(m(t, "MULTIPLY", ny, -1.0), [(0.5, K0), (0.9, K1)]), t.ramp(m(t, "MULTIPLY", z, 0.33), [(0.4, K0), (0.8, (0.85, 0.85, 0.85, 1))]),
                     1.0, "MULTIPLY")
-        out = t.mix(out, srgb(196, 184, 180), fac)
+        out = t.mix(out, srgb(214, 204, 200), fac)
     out = t.grime(out, 0.0, 2.4, 0.2, 1.0)
     t.set(**{"Base Color": out, "rough": 0.2, "metal": 0.55, "spec": 0.6})
     t.bump(t.noise(t.coords(), 6.0, 3.0, 0.5), 0.04, 0.01)
@@ -393,11 +437,12 @@ def mats():
         "weave_in": stone("weave-in", (176, 174, 176), (206, 204, 206), scale=12.0, dirt=0.05),
         "gold": gold_mat("gold"),
         "gold_in": gold_mat("gold-in", (232, 160, 44)),
-        "gold_rim": gold_mat("gold-rim", (240, 176, 56)),
-        "gold_top": gold_mat("gold-top", (178, 96, 10), tip=(255, 190, 40), lift=0.0, metal=0.45),
-        "obsidian": obsidian("obsidian"),
+        "gold_rim": gold_mat("gold-rim", (240, 176, 56), lit=(255, 214, 70)),
+        "gold_top": gold_mat("gold-top", (206, 112, 10), tip=(255, 200, 50), lift=0.0, metal=0.05, lit=(244, 164, 34)),
+        "obsidian": face_tint(obsidian("obsidian"), 2.0, 1.5),
         "obsidian_in": shiny("obsidian-in", (96, 96, 108), rough=0.35, metal=0.0, dirt=0.1),
-        "smooth": stone("smoothstone", (146, 148, 160), (160, 162, 172), top=(196, 196, 204), scale=4.0, dirt=0.3, rough=0.6),
+        "smooth": face_tint(stone("smoothstone", (146, 148, 160), (160, 162, 172), top=(196, 196, 204), scale=4.0, dirt=0.3,
+                                   rough=0.6), 0.84, 1.3),
         "smooth_in": stone("smoothstone-in", (176, 176, 184), (196, 196, 204), scale=12.0, dirt=0.05),
         "stud": stone("stud", (150, 150, 158), (170, 170, 178), top=(214, 214, 222), scale=6.0, dirt=0.1, rough=0.55),
         "lava": lava_rock("lava"),
@@ -413,7 +458,7 @@ def mats():
         "bronze": shiny("bronze", (124, 78, 32), rough=0.35, metal=0.7, dirt=0.2),
         "rivet": painted("rivet", (232, 230, 224), rough=0.35, dirt=0.0, spec=0.6),
         "iron": steel("steel"),
-        "iron_dark": steel("steel-spike", (54, 48, 48), sheen=False),
+        "iron_dark": steel("steel-spike", (68, 60, 60), sheen=False),
         "iron_tip": steel("steel-tip", (54, 48, 48), tip=(236, 232, 230), sheen=False),
         "iron_in": shiny("iron-in", (100, 94, 90), rough=0.5, metal=0.8, dirt=0.05),
         "bone": steel("steel-tip", (54, 48, 48), tip=(236, 232, 230), sheen=False),
@@ -637,8 +682,8 @@ def granite(M, state):
                  (0.1, -1.0, 0.9, 0.6, 0.16), (-1.1, -0.05, 0.7, 0.9, 0.18), (-0.25, 1.05, 0.8, 0.5, 0.15),
                  (1.0, -1.0, 0.6, 0.5, 0.14))
         for i, (x, y, sx, sy, sz) in enumerate(spots):
-            out.append(lump(f"rock{i}", (sx, sy, sz), (x, y, 0), M["granite_rubble"], seed=i + 1, rot=r.uniform(0, 90), sub=1,
-                            flat_shade=True, rough=0.22))
+            out.append(keep_in(lump(f"rock{i}", (sx, sy, sz), (x, y, 0), M["granite_rubble"], seed=i + 1, rot=r.uniform(0, 90),
+                                    sub=1, flat_shade=True, rough=0.22)))
         for i, (x, y, sz) in enumerate(((-0.2, 0.0, 0.35), (0.5, -0.4, 0.28), (-0.7, 0.5, 0.26), (-0.75, -0.55, 0.24))):
             o = lump(f"chunk{i}", (0.55, 0.45, sz), (x, y, 0.0), M["granite_rubble"], seed=11 + i, sub=1, flat_shade=True,
                      rot=r.uniform(0, 90))
@@ -692,7 +737,7 @@ def gold(M, state):
             x, y = v.co.x * 1.75, v.co.y * 1.75
             rr = (abs(x / 1.45) ** 2.5 + abs(y / 1.35) ** 2.5) ** (1 / 2.5) + 0.25 * noise.noise(Vector((x, y, 0.3)) * 1.3)
             z = max(0.0, 1.0 - rr ** 3) ** 0.5 * 0.36 * (1 + 0.45 * noise.noise(Vector((x * 2, y * 2, 1.0))))
-            v.co = Vector((x, y, z))
+            v.co = Vector((x * 0.85, y * 0.85, z))        # x 0.85: the puddle stays inside its own square
         bmesh.ops.delete(bm, geom=[f for f in bm.faces if all(v.co.z < 0.004 for v in f.verts)], context="FACES")
         ob = mesh_ob("puddle", bm, [M["gold"]], bevel=0.0)
         mo = ob.modifiers.new("solid", "SOLIDIFY")
@@ -738,7 +783,7 @@ def obsid(M, state):
             y = -0.95 + (i // 4) * 0.62 + r.uniform(-0.12, 0.12)
             o = lump(f"shard{i}", (r.uniform(0.75, 1.0), r.uniform(0.5, 0.7), r.uniform(0.22, 0.4)),
                      (x, y, 0), M["obsidian"], seed=i + 20, rough=0.35, sub=1, flat_shade=True, rot=r.uniform(0, 180))
-            out.append(o)
+            out.append(keep_in(o))
         for i, (x, y, sz) in enumerate(((-0.25, 0.1, 0.55), (0.35, -0.2, 0.45), (-0.1, -0.55, 0.4), (0.2, 0.55, 0.42),
                                         (-0.6, 0.45, 0.35))):
             o = lump(f"heap{i}", (0.8, 0.6, sz), (x, y, 0), M["obsidian"], seed=i + 40, rough=0.35, sub=1, flat_shade=True,
@@ -890,6 +935,20 @@ def settle(o, under):
     return o
 
 
+def keep_in(o, lim=1.39):
+    """Slide o toward the middle so no part of it passes the footprint's half side (rubble stays in its own square)."""
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = o.evaluated_get(dg)
+    me = ev.to_mesh()
+    vs = [ev.matrix_world @ v.co for v in me.vertices]
+    ev.to_mesh_clear()
+    for i in (0, 1):
+        hi, lo = max(v[i] for v in vs), min(v[i] for v in vs)
+        o.location[i] -= max(0.0, hi - lim) - max(0.0, -lo - lim)
+    return o
+
+
 def alive(obs):
     out = []
     for o in obs:
@@ -966,8 +1025,8 @@ def cross_slab(M, state):
 def spiked(M, state):
     """Inferno Block level 3: a glossy dark steel block, a thick lip round its top standing out a little, nine small
     dark steel pyramid spikes inside it, two of them with small white tips (Flash)."""
-    s, h = 2.85, 2.4
-    lip_w, lip_h, over = 0.22, 0.36, 0.04
+    s, h = 2.83, 2.62
+    lip_w, lip_h, over = 0.28, 0.42, 0.04
     if state == "destroyed":
         stub = box("stub", (s - 0.1, s - 0.1, 0.4), (0, 0, 0), M["iron"], bevel=0.06)
         stub = bake(stub)
@@ -992,7 +1051,7 @@ def spiked(M, state):
     for i, (x, y, sx, sy) in enumerate(((0, -L / 2 + lip_w / 2, L, lip_w), (0, L / 2 - lip_w / 2, L, lip_w),
                                          (-L / 2 + lip_w / 2, 0, lip_w, L - 2 * lip_w + 0.02),
                                          (L / 2 - lip_w / 2, 0, lip_w, L - 2 * lip_w + 0.02))):
-        lip.append(box(f"lip{i}", (sx, sy, lip_h), (x, y, z0), M["iron"], bevel=0.06))
+        lip.append(box(f"lip{i}", (sx, sy, lip_h), (x, y, z0), M["iron"], bevel=0.13))
     floor = box("floor", (L - 2 * lip_w + 0.04, L - 2 * lip_w + 0.04, 0.08), (0, 0, z0 + 0.14), M["iron_dark"], bevel=0.0)
     spikes = []
     step = (s - 2 * lip_w) / 3
@@ -1000,7 +1059,7 @@ def spiked(M, state):
         for j in range(3):
             x, y = -s / 2 + lip_w + (i + 0.5) * step, -s / 2 + lip_w + (j + 0.5) * step
             mt = M["iron_tip"] if (i, j) in ((1, 1), (2, 0)) else M["iron_dark"]
-            spikes.append(pyramid(f"spike{i}{j}", step * 0.88, 0.95, (x, y, z0 + 0.2), mt))
+            spikes.append(pyramid(f"spike{i}{j}", step * 0.9, 0.8, (x, y, z0 + 0.2), mt))
     lip.append(floor)
     if state == "damaged":
         # the sides battered in (two dents, the bent iron bright where it tore) and two spikes snapped off
