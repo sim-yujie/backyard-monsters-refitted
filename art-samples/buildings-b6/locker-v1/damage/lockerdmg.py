@@ -149,8 +149,13 @@ def nugget(name, at, s, yaw):
                 (R.uniform(-8, 8), R.uniform(-8, 8)))
 
 
-def ground_pt(sx, sy):
-    return px(sx, sy, Z=GROUND)
+def ground_pt(sx, sy, keep=1.0):
+    """The ground under Flash pixel (sx, sy), pulled inside the building's square (keep: margin)."""
+    p = px(sx, sy, Z=GROUND)
+    lim = HALF - keep
+    p.x = A.x + max(-lim, min(lim, p.x - A.x))
+    p.y = A.y + max(-lim, min(lim, p.y - A.y))
+    return p
 
 
 def shell():
@@ -225,19 +230,27 @@ def damaged():
         crumple(sh, 0.03, seed=5)
         holes_and_dents([(-26.0, -14.0, 0.75), (20.0, 4.0, 0.55), (-6.0, 12.0, 0.4)],
                         [(-30.0, -30.0, 2.0, 0.6), (8.0, -2.0, 1.8, 0.5), (28.0, -22.0, 1.4, 0.4)])
-        # the key slid out of the hole and hangs on the ball's front, its ring face on
-        q, n = surf(4.0, 12.0)
-        ring_at = q + n * 0.45
+        # the key knocked over the hole's front rim: swung forward and down, its ring hanging in front of the ball
         rc = centre([o for o in SC.objects if o.name.startswith("keyring")])
-        d1 = (n * 0.5 - Vector((0, 0, 1))).normalized()          # slot above, ring hanging below in front
-        place([k], rc, ax, ring_at, d1)
+        right = Vector((1, 1, 0)).normalized()
+        best = None
+        for ang in (150, -150):
+            v = Matrix.Rotation(math.radians(ang), 3, right) @ (rc - sp)
+            fwd = v.dot(-cam_fwd())
+            if best is None or fwd > best[0]:
+                best = (fwd, ang)
+        turn([k], sp, right, best[1])
+        for h in G["MOVING"]:
+            if h.name in G["KEYS"]:
+                h.rotation_euler = (0, 0, 0)
+        kill([o for o in SC.objects if o.name.startswith("keyslot")])
         burn(sp, 0.8)
         # panels: one knocked off onto the ground, two hanging askew
         pans = sorted(named(r"panel\d"), key=lambda o: o.name)
         for i, o in enumerate(pans):
             p = slot_of(o)
             if i == 1:
-                g = ground_pt(34.0, 84.0) + Vector((0, 0, 0.16))
+                g = ground_pt(22.0, 72.0) + Vector((0, 0, 0.16))
                 place([o], p, axis_of(o), g, Vector((0.15, -0.1, 1.0)))
                 burn(p, 1.0)
             else:
@@ -325,22 +338,23 @@ def destroyed():
     gold blocks inside, the key standing out of it, a pipe stub with its flange at the top right, two gold cogs half
     buried (left, and leaning on the front), a wooden plank, a steel plate and bolts on the ground."""
     c = ground_pt(6.0, 40.0) + Vector((0, 0, 2.25))
-    r = 3.9
+    r = 4.0
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=32, radius=r)
+    side = Vector((1, 1, 0)).normalized()                    # the picture's left-right
     for v in bm.verts:
-        v.co.z *= 0.78
-        v.co.x *= 1.05
+        v.co.z *= 0.84
+        v.co += side * v.co.dot(side) * 0.05
     pot = G["mesh_ob"]("pot", bm, [M["chrome"], M["inner"]])
     pot.location = c
     pot.rotation_euler = (math.radians(-8), math.radians(6), 0)
-    crumple(pot, 0.06, seed=31)
+    crumple(pot, 0.1, seed=31)
     sk = pot.modifiers.new("wall", "SOLIDIFY")
     sk.thickness, sk.offset, sk.material_offset, sk.use_rim = 0.16, -1.0, 1, True
     bpy.context.view_layer.update()
     # the big tear toward the front left, and smaller ones
-    q, n = surf2(pot, -16.0, 36.0)
-    hole(pot, q + n * 0.2 + Vector((0, 0, -0.3)), 2.7, seed=301, squash=1.1)
+    q, n = surf2(pot, -20.0, 30.0)
+    hole(pot, q + n * 0.6, 3.6, seed=301, squash=1.2)
     q, n = surf2(pot, 30.0, 48.0)
     hole(pot, q, 0.5, seed=302)
     q, n = surf2(pot, 14.0, 12.0)
@@ -348,13 +362,16 @@ def destroyed():
     q, n = surf2(pot, 36.0, 26.0)
     dent(pot, q, 1.4, 0.4, seed=304)
     # dark inside, gold blocks heaped in it
-    rock("potdark", c + Vector((-0.3, -0.4, -0.9)), 2.6, M["hole"], squash=0.55, seed=305)
-    for i in range(14):
+    # a heap of gold inside, toward the tear (resting on the pot's floor), loose blocks on it
+    hc = c + Vector((-0.5, -1.1, -2.0))
+    rock("potheap", hc, 2.3, M["block"], squash=0.6, seed=305)
+    for i in range(16):
         a = R.uniform(0, 6.3)
-        d = R.uniform(0.2, 1.8)
-        p = c + Vector((math.cos(a) * d - 0.4, math.sin(a) * d * 0.7 - 0.9, -1.05 + R.uniform(0, 0.8)))
-        s = R.uniform(0.38, 0.58)
-        chip(f"potgold{i}", p, (s, s * 0.85, s * 0.8), M["block"], R.uniform(0, 90),
+        d = R.uniform(0.0, 1.9)
+        h = 2.3 * 0.6 * math.sqrt(max(0.0, 1 - (d / 2.4) ** 2)) * 0.8
+        p = hc + Vector((math.cos(a) * d, math.sin(a) * d, h))
+        s_ = R.uniform(0.4, 0.62)
+        chip(f"potgold{i}", p, (s_, s_ * 0.85, s_ * 0.8), M["block"], R.uniform(0, 90),
              (R.uniform(-30, 30), R.uniform(-30, 30)))
     # the key out of the heap: shaft up to the ring at Flash's (2, -27)
     foot = c + Vector((-0.8, -1.6, -0.6))
@@ -376,7 +393,7 @@ def destroyed():
     gear("cogfrontw", 1.25, 12, 0.32, (0, 0, 0), M["gold"], (0, 0, 0), tooth=0.24, parent=cg)
     cg.matrix_world = Matrix.Translation(q + n * 0.25) @ Vector((0, 0, 1)).rotation_difference(
         (n - cam_fwd() * 0.8).normalized()).to_matrix().to_4x4()
-    gl = ground_pt(-40.0, 30.0)
+    gl = Vector((c.x, c.y, GROUND)) - side * 5.0
     cg2 = bpy.data.objects.new("cogleft", None)
     G["COLL"].objects.link(cg2)
     gear("cogleftw", 1.5, 14, 0.32, (0, 0, 0), M["gold"], (0, 0, 0), tooth=0.24, parent=cg2)
@@ -394,6 +411,27 @@ def destroyed():
         b.rotation_euler = (0, math.radians(90), math.radians(R.uniform(0, 180)))
     for p in (c + Vector((-1.5, -2.5, 0.5)), c + Vector((1.0, -2.0, 1.2)), c + Vector((-2.0, 1.0, 1.4))):
         burn(p, 1.8)
+
+
+def settle(obs):
+    """Drop each of obs straight down onto whatever lies under it (the heap, the pot, the ground)."""
+    for o in obs:
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        lo = lowest([o])
+        best = lo - GROUND
+        for c in o.bound_box:
+            w = o.matrix_world @ Vector(c)
+            st = Vector((w.x, w.y, lo - 0.01))
+            for _ in range(6):
+                ok, loc, _, _, ob, _ = SC.ray_cast(dg, st, Vector((0, 0, -1)))
+                if ok and (ob.hide_render or ob.name == "ground"):
+                    st = loc - Vector((0, 0, 1e-3))
+                    continue
+                break
+            if ok and ob is not o and not ob.hide_render:
+                best = min(best, lo - loc.z)
+        o.location.z -= max(0.0, best - 0.01)
 
 
 def surf2(o, sx, sy):
@@ -435,7 +473,7 @@ def float_check():
         if min(v.z for v in vs) < GROUND + 0.04:
             on.add(i)
         out = max(max(abs(v.x - A.x), abs(v.y - A.y)) for v in vs)
-        if out > HALF:
+        if out > HALF and max(v.z for v in vs) < 1.5:          # rubble on the ground stays in the square
             print("OUTSIDE %s %.2f" % (o.name, out))
     touch = {i: set() for i in range(len(items))}
     for i, (o, t, vs) in enumerate(items):
@@ -444,7 +482,7 @@ def float_check():
             hit = bool(t.overlap(t2))
             if not hit:
                 step = max(1, len(vs) // 400)
-                hit = any(t2.find_nearest(v, 0.05)[0] is not None for v in vs[::step])
+                hit = any(t2.find_nearest(v, 0.1)[0] is not None for v in vs[::step])
             if hit:
                 touch[i].add(j)
                 touch[j].add(i)
