@@ -49,6 +49,7 @@ STRAP_Y, STRAP_W, STRAP_T = 1.05, 1.2, 0.07
 STRAP_X0 = -1.9            # where its left end starts to turn toward the viewer's left (drooping off the back edge)
 STRAP_HOLES = (-1.7, -0.4, 0.85, 1.95)
 STRAP_LIFT = 0.3           # its right part rides this much higher, over paper bunched under it (see store.lift)
+STRAP_RAISE = 0.25         # and all of it this much (Flash's strap sits high on the paper)
 PAPER_Y1 = 2.35            # the paper's back edge (its front edge runs under the strap)
 
 # Flash draws the die a little turned down at the back right: its right face's edges climb less steeply than the

@@ -658,8 +658,11 @@ def pip_mat():
     t.link(dp.outputs["Value"], mr.inputs[0])
     col = t.ramp(mr.outputs[0], [(0.0, srgb(100, 100, 108)), (0.38, srgb(140, 140, 148)), (0.58, srgb(184, 184, 192)),
                                  (0.7, srgb(226, 226, 232)), (0.8, srgb(198, 198, 206)), (1.0, srgb(176, 176, 184))])
-    t.set(**{"Base Color": col, "rough": 0.28, "spec": 0.55, "Emission Color": col, "Emission Strength": 0.45})
-    t.bump(t.noise(t.coords(), 30, 3.0, 0.6), 0.05, 0.01)
+    # Flash's pips are mottled, worn silver, not clean
+    mot = t.noise(t.coords(), 14.0, 4.0, 0.6)
+    col = t.mix(col, srgb(118, 118, 126), t.ramp(mot, [(0.45, (0, 0, 0, 1)), (0.7, (0.45, 0.45, 0.45, 1))]))
+    t.set(**{"Base Color": col, "rough": 0.4, "spec": 0.5, "Emission Color": col, "Emission Strength": 0.45})
+    t.bump(t.noise(t.coords(), 30, 3.0, 0.6), 0.08, 0.01)
     MATS["pip"] = t.m
     return t.m
 
@@ -722,7 +725,7 @@ def materials():
     M["tack"] = shiny("tack", (214, 166, 40), rough=0.3, metal=0.6, side=0.4, wear=(196, 130, 34), scale=2.0,
                       dirt=0.25, coat=0.2, spec=0.4)
     # Flash's front disc is a darker, browner old gold than the others
-    M["tackdark"] = shiny("tackdark", (176, 118, 36), rough=0.35, metal=0.6, side=0.4, wear=(130, 84, 26), scale=2.0,
+    M["tackdark"] = shiny("tackdark", (150, 92, 30), rough=0.35, metal=0.6, side=0.4, wear=(108, 60, 22), scale=2.0,
                           dirt=0.3, coat=0.15, spec=0.35)
     M["pin"] = shiny("pin", (176, 132, 60), rough=0.35, metal=0.8, wear=(130, 96, 44), scale=4, dirt=0.05)
     M["wire"] = shiny("wire", (196, 200, 208), rough=0.45, metal=0.4, wear=(140, 146, 156), scale=4, dirt=0.05)
@@ -905,7 +908,7 @@ def lift(x):
     """How far the strap (and the paper under it) rides up over the paper bunched beneath its right part (Flash's
     strap and its yellow end sit high over the sticks)."""
     t = min(1.0, max(0.0, (x + 1.5) / 3.6))
-    return S.STRAP_LIFT * (0.35 + 0.65 * t * t * (3 - 2 * t))
+    return S.STRAP_RAISE + S.STRAP_LIFT * (0.35 + 0.65 * t * t * (3 - 2 * t))
 
 
 def strap():
@@ -919,14 +922,15 @@ def strap():
     pts += [(x0 + (A - 0.05 - x0) * i / 20, y, zs) for i in range(1, 21)]
     pts = [(px_, py_, pz + lift(px_)) for px_, py_, pz in pts]       # riding up over the paper bunched under it
     lr = lift(A)
-    pts += [(A + 0.06, y, zs - 0.06 + lr), (A + 0.1, y, zs - 0.2 + lr), (A + 0.09, y, ZT - 0.2 + lr),
-            (A + 0.08, y, ZT - 0.62 + lr)]
+    lr0 = lr - S.STRAP_RAISE                  # its bent-down end, hole and ring stay where they were (round the pip)
+    pts += [(A + 0.06, y, zs - 0.06 + lr), (A + 0.1, y, zs - 0.2 + lr), (A + 0.09, y, ZT - 0.2 + lr0),
+            (A + 0.08, y, ZT - 0.62 + lr0)]
     sweep("strap", pts, (0, 1, 0), S.STRAP_W, S.STRAP_T, M["strap"], bevel=0.02)
     for i, hx in enumerate(S.STRAP_HOLES):
         h = cyl(f"strapholeT{i}", 0.2, 0.01, (hx, y, zs + S.STRAP_T / 2 + 0.012 + lift(hx)), M["hole"], verts=20,
                 bevel=0.0)
         h.scale = (1.0, 0.8, 1.0)
-    hz = ZT - 0.4 + lr
+    hz = ZT - 0.4 + lr0
     cyl("strapholeS", 0.15, 0.01, (A + 0.09 + S.STRAP_T / 2 - 0.004, y, hz), M["hole"], rot=(0, 90, 0), verts=20,
         bevel=0.0)
     # the ring: through that hole, lying against the face round the top-right pip
@@ -967,7 +971,7 @@ def paper():
             yy = yf + (y1 - yf) * fy + tips[i] * 0.6 * edge
             fr = max(0.0, (yy - yb) / (y1 - yb))          # flat under the strap, crumpled and curled up behind it
             fr *= 1.0 - 0.45 * min(1.0, max(0.0, (fx - 0.78) / 0.22)) ** 2     # lower toward its right end (Flash)
-            z = (S.ZSTICK + 0.015 + 0.07 * math.sin(9 * fx + 3 * fy) * fr + 0.6 * fr ** 1.5 + tips[i] * 0.45 * edge +
+            z = (S.ZSTICK + 0.015 + 0.07 * math.sin(9 * fx + 3 * fy) * fr + 0.3 * fr ** 1.5 + tips[i] * 0.45 * edge +
                  rr.uniform(-0.02, 0.02) * fr) + lift(x)
             row.append(bm.verts.new((x, yy, z)))
         rows.append(row)
@@ -983,21 +987,25 @@ def paper():
     rr = random.Random(5)
     yw = S.STRAP_Y
     secs = []
-    for i in range(25):
-        x = -2.05 + (A - 0.15 + 2.05) * i / 24
+    for i in range(33):            # crumpled: its front spreads and bulges unevenly on the sticks
+        x = -2.05 + (A - 0.15 + 2.05) * i / 32
         top = S.ZSTICK + 0.015 + lift(x) + 0.005
         hw = 0.36 + rr.uniform(-0.03, 0.03)
+        hf = 0.42 + 0.07 * math.sin(2.3 * x + 1.0) + 0.04 * math.sin(5.9 * x + 2.0)   # its front, spread on the sticks
         zb = S.ZSTICK + 0.008
-        secs.append([bm.verts.new(v) for v in ((x, yw - hw, zb), (x, yw + hw, zb), (x, yw + hw * 0.9, top),
-                                               (x, yw - hw * 0.9, top))])
+        zm_ = (zb + top) / 2 + 0.03 * math.sin(4.4 * x + 0.5)
+        bul = 0.04 + 0.04 * math.sin(3.7 * x + 2.6)                              # a soft uneven bulge
+        secs.append([bm.verts.new(v) for v in ((x, yw - hf, zb), (x, yw + hw, zb), (x, yw + hw * 0.9, top),
+                                               (x, yw - hw * 0.9, top), (x, yw - hf * 0.85 - bul, zm_))])
     for s0, s1 in zip(secs, secs[1:]):
-        for k in range(4):
-            bm.faces.new((s0[k], s0[(k + 1) % 4], s1[(k + 1) % 4], s1[k]))
+        for a, b in ((0, 1), (1, 2), (2, 3), (3, 4), (4, 0)):
+            bm.faces.new((s0[a], s0[b], s1[b], s1[a]))
     bm.faces.new(secs[0][::-1])
     bm.faces.new(secs[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     mesh_ob("paperwad", bm, [M["paper"]], smooth=True)
     return ob
+
 
 
 def stick_end(i):

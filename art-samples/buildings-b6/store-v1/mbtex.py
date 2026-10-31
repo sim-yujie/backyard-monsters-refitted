@@ -104,10 +104,10 @@ def main():
     md.polygon(hp, fill=(26, 30, 60, 255))
     img.alpha_composite(m.filter(ImageFilter.GaussianBlur(4)))
 
-    # the words: "MATCH" over "BOOK", heavy soft white-pink letters with a light pink edge, nearly the cover's width
+    # the words: "MATCH" over "BOOK", heavy soft near-white letters with a light pink edge, nearly the cover's width
     t = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    text_fit(t, "MATCH", (tx(-3.0), ty(2.45), tx(1.05), ty(1.62)), (232, 200, 210, 255), (222, 146, 160, 255), 6)
-    text_fit(t, "BOOK", (tx(-2.98), ty(1.5), tx(0.98), ty(0.62)), (222, 192, 204, 255), (222, 146, 160, 255), 6)
+    text_fit(t, "MATCH", (tx(-3.0), ty(2.45), tx(1.05), ty(1.62)), (250, 238, 242, 255), (226, 160, 172, 255), 6)
+    text_fit(t, "BOOK", (tx(-2.98), ty(1.5), tx(0.98), ty(0.62)), (242, 228, 234, 255), (226, 160, 172, 255), 6)
     img.alpha_composite(t.filter(ImageFilter.GaussianBlur(10)))
 
     # worn: a few pale scuffs and creases
