@@ -23,9 +23,9 @@ YAW = 0.0
 
 # the house
 HA, HB = 2.55, 2.4          # half its size along X and Y (to the posts' outer faces)
-POST = 0.72                 # the corner posts' side
+POST = 0.8                  # the corner posts' side
 WALL_H = 4.9                # the walls' top (under the roof's eaves)
-SILL_H = 0.45               # the ground sills' height
+SILL_H = 0.6                # the ground sills' height
 PLANK_T = 0.14              # wall planks' thickness
 
 # the roof (ridge along Y, over X = RIDGE_X). Flash's render had some perspective: its roof is wider on the +X side
@@ -49,7 +49,24 @@ BALL_R = 1.08
 BALL_SCR = (-35.0, 49.5)            # Flash px of its middle (looks 1, 2, 4)
 
 # the look 1 posts' heights: front (+X -Y), left (-X -Y), right (+X +Y), back (-X +Y)
-POST1_H = (5.0, 4.6, 4.9, 6.0)
+POST1_H = (5.35, 5.5, 5.6, 5.8)
+# look 1's A-frame: two square legs in the upright plane y = A1_Y, from the ground at x = A1_FEET up to the apex (x, z)
+# under a steel cap, a little slate roof and the gold pulley; between the legs a windlass (a round axle along X) carries
+# the rope coil
+A1_Y = 0.2
+A1_APEX = (-1.1, 8.4)
+A1_FEET = (-4.6, 3.3)
+A1_W = 0.8                          # the legs' side
+WINDLASS_Z = 5.2
+COIL = (-2.0, 0.15, 0.6)              # the coil from x, to x, its radius (the axle: AXLE1_R, a knob out past the left leg)
+AXLE1_R = 0.16
+STOOL_C = (4.6, 2.5)                # look 1's step stool beside the bucket: its middle on the ground
+STOOL_H, STOOL_S = 2.5, 1.25        # its seat's top and side
+# look 2's back half: an open timber truss on the back posts (tie beam, two rafters, the ridge beam), a seat block on
+# the right back post, a rail and a diagonal brace on the open +X side
+TRUSS_Y = 2.04
+TRUSS_Z = 5.1                       # the tie beam's top
+SEAT = (2.25, 1.45, 1.5, 2.0, 0.65) # look 2's seat block: middle x, y, size x, y, thickness (on TRUSS_Z)
 
 # the slates: length down the slope, width along it, thickness, the step between rows; their lower ends lift
 TILE = (0.95, 1.05, 0.16, 0.74)
@@ -80,6 +97,8 @@ POT_R, POT_H = 1.9, 2.0
 POT_ARM_R = 0.26
 ARM_DROP = 0.3                      # the arm meets the bucket this far under the rim
 SPRING_C = (3.27, -0.01, 1.85)      # the springs' foot (on the pipe's top in looks 3, 4)
-SPRINGS = 1
-SPRING_OFF = (0.0, 0.5, 0.0)
+SPRINGS = 1                         # looks 3, 4 (looks 1, 2: two, on a block)
+SPRING_OFF = (0.0, -0.5, 0.0)
+SPRING12_Y = -0.35                  # looks 1, 2: the first spring's y (clear of look 1's A-frame)
+SPRING_BLOCK_H = 1.5                # looks 1, 2: the block the springs stand on
 PIPE_FOOT = (3.57, 0.83, 0.0)

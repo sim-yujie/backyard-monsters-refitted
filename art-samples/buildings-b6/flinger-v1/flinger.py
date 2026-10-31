@@ -909,7 +909,7 @@ def dimpled(name, col, dim):
 def materials():
     M = {}
     # Flash's weathered timber: grey-brown posts, darker wall planks, paler beams and the drum
-    M["post"] = wood("post", (130, 110, 78), (84, 72, 46), axis="Z", dirt=0.3, rings=4.0)
+    M["post"] = wood("post", (150, 126, 88), (96, 82, 54), axis="Z", dirt=0.3, rings=4.0)
     M["postx"] = wood("post", (130, 110, 78), (84, 72, 46), axis="X", dirt=0.3, rings=4.0)
     M["posty"] = wood("post", (130, 110, 78), (84, 72, 46), axis="Y", dirt=0.3, rings=4.0)
     M["plank"] = wood("plank", (112, 94, 64), (70, 58, 36), axis="Z", dirt=0.35, rings=4.0)
@@ -957,13 +957,15 @@ def corner_posts():
     hs = {1: S.POST1_H}.get(LOOK, None)
     for i, (sx, sy) in enumerate(((1, -1), (-1, -1), (1, 1), (-1, 1))):
         h = hs[i] if hs else roof_z(sx * c[0]) - 0.1
+        if LOOK == 2 and sy > 0:
+            h = S.TRUSS_Z - 0.4
         box(f"post{i}", (S.POST, S.POST, h), (sx * c[0], sy * c[1], 0), M["post"], bevel=0.06,
             rot=(0, 0, rng.uniform(-1, 1)))
 
 
 def sills():
     """The ground frame: a beam along each side, between the posts."""
-    w, h = 0.5, S.SILL_H
+    w, h = 0.6, S.SILL_H
     ax, by = A - S.POST, B - S.POST
     box("sill0", (2 * ax, w, h), (0, -B + w / 2 + 0.06, 0), M["postx"], bevel=0.05)
     box("sill1", (2 * ax, w, h), (0, B - w / 2 - 0.06, 0), M["postx"], bevel=0.05)
@@ -982,6 +984,11 @@ def walls():
     box("header", (2 * ax + 0.1, 0.2, 0.22), (0, -B + 0.16, z1), M["postx"], bevel=0.04)
     gz = lambda u: roof_z(-ax + u) - S.ROOF_T - 0.02
     planks("gable", (-ax, -B + 0.1), (ax, -B + 0.1), lambda u: z1 + 0.3, gz, M["gplank"], 7, thick=t, out=(0, -1))
+    if LOOK == 2:
+        planks("lwall", (-A + 0.06, S.ROOF2_Y1), (-A + 0.06, -by), lambda u: S.SILL_H,
+               lambda u: roof_z(-A) - S.ROOF_T - 0.04, M["plank"], 4, thick=t, out=(-1, 0))
+        box("inside", (2 * ax, 2 * by, 0.05), (0, 0, S.SILL_H - 0.04), M["inside"], bevel=0.0)
+        return
     # +X
     planks("xwall", (A - 0.06, -by), (A - 0.06, by), lambda u: S.SILL_H, lambda u: roof_z(A) - S.ROOF_T - 0.04, M["plank"], 7,
            thick=t, out=(1, 0))
@@ -1125,6 +1132,9 @@ def drum():
     c = Vector(S.DRUM_C)
     cyl("drum", S.DRUM_R, S.DRUM_L, c - Vector((S.DRUM_L / 2, 0, 0)), M["drum"], rot=(0, 90, 0), verts=32, bevel=0.06)
     cyl("axle", S.AXLE_R, 2 * A - 0.2, Vector((-A + 0.1, c.y, c.z)), M["steel"], rot=(0, 90, 0), verts=16, bevel=0.02)
+    for i, sx in enumerate((-1, 1)):
+        box(f"bearing{i}", (0.5, 0.4, 0.5), (sx * (A - S.POST / 2), c.y - 0.04, c.z), M["steel"], bevel=0.05,
+            origin="center")
     # the crank stick out of the drum's side, down and toward the viewer's left
     a = c + Vector((-S.DRUM_L / 2 + 0.25, -S.DRUM_R + 0.05, -0.1))
     tube("crank", [a, a + Vector((-0.3, -0.75, -0.7))], 0.07, M["arm"])
@@ -1284,13 +1294,20 @@ def bucket_arm():
     tube("barm", [a0, a1], S.POT_ARM_R if big else S.ARM_R, M["arm"], verts=16)
     # the springs: coils from a base up to the arm
     s0 = Vector(S.SPRING_C)
+    nspr = S.SPRINGS
+    if LOOK <= 2:
+        s0.z = S.SPRING_BLOCK_H
+        s0.y = S.SPRING12_Y
+        nspr = 2
+        off = Vector(S.SPRING_OFF)
+        box("sblock", (0.9, 0.9 + abs(off.y), S.SPRING_BLOCK_H), (s0.x, s0.y + off.y / 2, 0), M["posty"], bevel=0.06)
     dxy = Vector((a1.x - a0.x, a1.y - a0.y, 0))
-    k = max(0.0, min(1.0, Vector((s0.x - a0.x, s0.y - a0.y, 0)).dot(dxy) / dxy.length_squared))
-    top = a0 + (a1 - a0) * k          # the arm right above the springs' foot
-    for k in range(S.SPRINGS):
+    for k in range(nspr):
         off = Vector(S.SPRING_OFF) * k
         b0 = s0 + off
-        h = top.z - 0.1 - b0.z
+        f = max(0.0, min(1.0, Vector((b0.x - a0.x, b0.y - a0.y, 0)).dot(dxy) / dxy.length_squared))
+        top = a0 + (a1 - a0) * f          # the arm right above this spring's foot
+        h = top.z - S.ARM_R - b0.z
         rs = 0.3 if LOOK >= 3 else 0.22
         pts = [b0 + Vector((rs * math.cos(i * 0.4), rs * math.sin(i * 0.4), h * i / 110)) for i in range(111)]
         tube(f"spring{k}", pts, 0.06, M["spring"], verts=8)
@@ -1300,6 +1317,104 @@ def bucket_arm():
         cyl("pipeflange", 1.0, 0.2, f, M["pipe"], verts=40, bevel=0.05)
         tube("pipe", [f + Vector((0, 0, 0.1)), s0 - Vector((0, 0, 0.1))], 0.6, M["pipe"], verts=32)
         cyl("pipecap", 0.66, 0.14, s0 - Vector((0, 0, 0.1)), M["pipe"], verts=32, bevel=0.04)
+
+
+def beam(name, p0, p1, w, h, mat, bevel=0.04):
+    """A squared timber from p0 to p1 (w x h across)."""
+    p0, p1 = Vector(p0), Vector(p1)
+    d = p1 - p0
+    ob = box(name, (w, h, d.length), p0, mat, bevel=bevel)
+    ob.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
+    return ob
+
+
+def aframe():
+    """Look 1: the A-frame over the open frame: two legs to an apex with a steel cap, a little slate roof and the gold
+    pulley on top; between the legs a windlass with the rope coil; the rope from the ball over the pulley onto it."""
+    y = S.A1_Y
+    apex = Vector((S.A1_APEX[0], y, S.A1_APEX[1]))
+    w = S.A1_W
+    legs = []
+    for i, fx in enumerate(S.A1_FEET):
+        f = Vector((fx, y, 0.0))
+        beam(f"aleg{i}", f, apex + (apex - f).normalized() * 0.2, w, w, M["post"])
+        legs.append((f, apex - f))
+    box("acap", (0.95, 0.95, 0.5), apex + Vector((0, 0, -0.05)), M["steel"], bevel=0.06)
+    # the slate roof over the cap: two slates each side of a ridge along Y
+    for sd in (-1, 1):
+        for j, yy in enumerate((0.05,)):
+            ob = box(f"aslate{sd}{j}", (0.85, 1.0, 0.12), apex + Vector((sd * 0.36, yy, 0.38)), M["slate"],
+                     bevel=0.03, origin="center")
+            ob.rotation_euler = (0, math.radians(sd * 32 + rng.uniform(-3, 3)), math.radians(rng.uniform(-4, 4)))
+    # the pulley on a gold bracket out of the cap's front, so the rope runs clear in front of the cap and legs
+    _, n, e1, e2 = pul_plane()
+    pc = apex + Vector((0, -1.15, 0.75))
+    pulley("pul1", pc, S.PUL_R, M["dgold"])
+    tube("afork", [apex + Vector((0, -0.4, 0.1)), apex + Vector((0, -0.8, 0.25)), pc + n * 0.2], 0.08, M["gold"],
+         smooth=True)
+    # the windlass: a round wooden axle along X through both legs, a knob past the left leg, the coil on it
+    z = S.WINDLASS_Z
+    xl = [f.x + d.x * (z / d.z) for f, d in legs]
+    cyl("waxle", S.AXLE1_R, xl[1] - xl[0] + 0.9, Vector((xl[0] - 0.6, y, z)), M["drum"], rot=(0, 90, 0), verts=16)
+    sphere("wknob", 0.26, Vector((xl[0] - 0.65, y, z)), M["drum"], n=16)
+    c0, c1, cr = S.COIL
+    m = 9 * 24
+    for k, rr in enumerate((cr, cr - 0.2, cr - 0.37)):
+        pts = [Vector((c0 + (c1 - c0) * i / m, y + rr * math.cos(i * 2 * math.pi / 24 + k),
+                       z + rr * math.sin(i * 2 * math.pi / 24 + k))) for i in range(m + 1)]
+        tube(f"coil{k}", pts, 0.13 if k == 0 else 0.12, M["rope"], verts=10)
+    return pc, Vector(((c0 + c1) / 2, y, z)), cr
+
+
+def belt1(pc, cc, cr, b):
+    """Look 1's rope: from the ball up over the pulley and down onto the coil's front."""
+    r = S.PUL_R
+    _, n, e1, e2 = pul_plane()
+
+    def arc(c, rr, a0, a1, k=10):
+        return [c + e1 * (rr * math.cos(math.radians(a0 + (a1 - a0) * i / k)))
+                + e2 * (rr * math.sin(math.radians(a0 + (a1 - a0) * i / k))) for i in range(k + 1)]
+    bt = b + Vector((0, 0, S.BALL_R - 0.15))
+    pts = [bt, pc - e1 * (r + 0.04) - e2 * 2.5]
+    pts += arc(pc, r + 0.03, 180, -30, 10)
+    end = cc + Vector((0.3, -cr - 0.12, 0.1))         # onto the coil's front, toward the camera
+    pts.append((pts[-1] + end) / 2 + e1 * 0.15)
+    pts.append(end)
+    sweep("belt", smooth_open(pts), n, 0.3, S.BELT_T, M["belt"], bevel=0.02)
+
+
+def stool():
+    """Look 1: a little wooden step stool beside the bucket."""
+    c = Vector((*S.STOOL_C, 0.0))
+    h, sz = S.STOOL_H, S.STOOL_S
+    box("stoolseat", (sz, sz, 0.16), c + Vector((0, 0, h - 0.16)), M["arm"], bevel=0.04)
+    t, bt = sz / 2 - 0.14, sz / 2 + 0.12
+    for i, (sx, sy) in enumerate(((1, 1), (1, -1), (-1, 1), (-1, -1))):
+        beam(f"stoolleg{i}", c + Vector((sx * bt, sy * bt, 0)), c + Vector((sx * t, sy * t, h - 0.16)), 0.17, 0.17,
+             M["post"], bevel=0.03)
+    k = 0.42                                            # the rails at this fraction of the height, the step in front
+    q = bt + (t - bt) * k
+    box("stoolstep", (2 * q + 0.1, 0.4, 0.1), c + Vector((0, -q + 0.08, h * k)), M["arm"], bevel=0.03)
+    box("stoolrail0", (0.1, 2 * q, 0.14), c + Vector((q, 0, h * k)), M["post"], bevel=0.02)
+    box("stoolrail1", (0.1, 2 * q, 0.14), c + Vector((-q, 0, h * k)), M["post"], bevel=0.02)
+    box("stoolrail2", (2 * q, 0.1, 0.14), c + Vector((0, q, h * k)), M["post"], bevel=0.02)
+
+
+def back_frame():
+    """Look 2: the open back half: a tie beam on the back posts, two rafters up to the ridge beam, a seat block on the
+    right back post, a rail and a diagonal brace along the open +X side."""
+    y, z = S.TRUSS_Y, S.TRUSS_Z
+    box("tie", (2 * A, 0.42, 0.4), (0, y, z - 0.4), M["postx"], bevel=0.05)
+    sx, sy, wx, wy, st = S.SEAT
+    box("seat", (wx, wy, st), (sx, sy, z), M["drum"], bevel=0.06)
+    top = Vector((S.RIDGE_X, y, S.RIDGE_Z + 0.2))
+    beam("rafter0", (-A + 0.35, y, z), top + Vector((0, 0, 0.1)), 0.34, 0.34, M["post"])
+    beam("rafter1", (sx - 0.2, y, z + st), top + Vector((0, 0, 0.1)), 0.34, 0.34, M["post"])
+    beam("ridge", (S.RIDGE_X, S.ROOF2_Y1 - 0.6, S.RIDGE_Z - 0.42), (S.RIDGE_X, y + 0.3, S.RIDGE_Z - 0.42), 0.34, 0.34,
+         M["posty"])
+    xr = A - S.POST / 2
+    box("xrail", (0.36, 2 * (B - S.POST) + 0.1, 0.4), (xr, 0, 3.4), M["posty"], bevel=0.05)
+    beam("xbrace", (xr, -B + S.POST + 0.1, S.SILL_H), (xr, B - S.POST - 0.2, 3.45), 0.3, 0.3, M["post"])
 
 
 def build():
@@ -1316,6 +1431,11 @@ def build():
     if LOOK >= 2:
         p1, p2 = gold_parts()
         belt(p1, p2, b)
+    if LOOK == 2:
+        back_frame()
+    if LOOK == 1:
+        belt1(*aframe(), b)
+        stool()
     bpy.context.view_layer.update()
     for ob in list(COLL.objects):           # the whole building turns by stack.YAW (into the mesh or curve itself)
         if ob.type in ("MESH", "CURVE") and ob.parent is None:
@@ -1329,7 +1449,10 @@ FAMILY = (("post", "post"), ("sill", "post"), ("ywall", "wall"), ("gable", "wall
           ("spoon", "spoon"), ("drum", "drum"), ("axle", "axle"), ("crank", "drum"), ("bed", "bed"), ("strap", "bed"),
           ("ball", "ball"), ("gblock", "gold"), ("gstem", "gold"), ("grod", "gold"), ("pul", "pulley"),
           ("wheel", "wheel"), ("wcrank", "wheel"), ("wstand", "gold"), ("belt", "belt"), ("hub", "hub"),
-          ("bucket", "bucket"), ("barm", "arm"), ("spring", "spring"), ("pipe", "pipe"))
+          ("bucket", "bucket"), ("barm", "arm"), ("spring", "spring"), ("pipe", "pipe"),
+          ("bearing", "axle"), ("sblock", "post"), ("aleg", "post"), ("acap", "gold"), ("aslate", "roof"),
+          ("afork", "gold"), ("coil", "coil"), ("waxle", "coil"), ("wknob", "coil"), ("stool", "stool"), ("tie", "post"), ("seat", "post"),
+          ("rafter", "post"), ("ridge", "post"), ("xrail", "post"), ("xbrace", "post"))
 
 
 def family(o):
