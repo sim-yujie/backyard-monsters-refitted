@@ -53,7 +53,9 @@ RIM_R, RIM_Z = 3.24, 3.42             # the rolled lip; the belly bulges below i
 IN_R, FLOOR_Z = 3.0, 1.55             # inside wall and floor
 ROLL_Y, ROLL_Z = (-1.0, 0.55), (3.45 if L < 3 else 2.72)    # Flash's two rollers (front, back); L3's lower: spikes in
 ROLL_R = (0.42, 0.5) if L < 3 else (0.32, 0.36)   # their cores (level 3: thin, so its long spikes clear the other)
+SPIKE_BACK = (0.3, 0.38, 0.55, 0.72, 0.62)  # level 3: the back roller's spike lengths, row by row (the tray)
 ROLL_X = 2.2                          # the rollers' toothed length ends here; bare axles run on to the wall
+BACK_X0 = -1.4                        # level 1: the perforated drum's left end
 FRONT_X = (-2.05, 1.62)               # level 1: Flash's front roller block is shorter, its right end well in
 POST_X, BAR_Z = (-3.2, 2.75), 6.05     # level 1: the posts on the rim (Y 0) and the bar along X
 HORN = (-2.66, -2.5)                 # the horn's axis (X, Y), on the bowl's left
@@ -73,27 +75,36 @@ def mats():
                             scale=4.0, dirt=0.65, spec=0.24, soot=0.8, rust_at=0.6, grain=0.5, streak=0.5)  # L1: under the lip
     m["band"] = painted("band", (26, 68, 60), rough=0.58, metal=0.3, wear=(64, 128, 112), rust=(52, 32, 20), scale=16,
                         dirt=0.45, spec=0.32, soot=0.55, rust_at=0.6, grain=0.35)
-    m["lip"] = painted("lip", (88, 148, 130), rough=0.46, metal=0.3, wear=(188, 218, 204), rust=(60, 40, 26), scale=6,
-                       dirt=0.25, spec=0.38, soot=0.35, rust_at=0.66, grain=0.2)
-    m["inside"] = painted("inside", (16, 28, 26), rough=0.85, wear=(32, 52, 48), scale=3, dirt=0.4, spec=0.12)
+    m["lip"] = painted("lip", (80, 138, 120), rough=0.5, metal=0.3, wear=(170, 204, 188), rust=(60, 40, 26), scale=6,
+                       dirt=0.4, spec=0.34, soot=0.5, rust_at=0.62, grain=0.3)
+    m["inside"] = painted("inside", (10, 26, 24), rough=0.85, wear=(22, 50, 45), scale=3, dirt=0.6, spec=0.1,
+                          soot=0.7)                    # Flash: a dark teal, near black low down
     m["rust"] = painted("rust", (124, 48, 16), rough=0.62, metal=0.15, wear=(210, 108, 44), rust=(52, 22, 10),
                         scale=6.0, dirt=0.4, spec=0.32, soot=0.6, rust_at=0.52, grain=0.4)
     m["copper"] = painted("copper", (184, 78, 24), rough=0.55, metal=0.2, wear=(240, 146, 68), rust=(84, 32, 12),
                           scale=5.0, dirt=0.4, spec=0.4, soot=0.45, rust_at=0.58, grain=0.3)
-    m["bone"] = painted("bone", (184, 164, 126), rough=0.75, wear=(230, 214, 178), rust=(96, 74, 46), scale=6,
-                        dirt=0.45, spec=0.25, soot=0.5, rust_at=0.58, grain=0.3)
+    m["bone"] = painted("bone", (168, 150, 116), rough=0.78, wear=(216, 200, 166), rust=(96, 74, 46), scale=6,
+                        dirt=0.6, spec=0.22, soot=0.65, rust_at=0.55, grain=0.4)
     m["hornbone"] = painted("hornbone", (136, 134, 128), rough=0.6, wear=(214, 212, 204), rust=(112, 74, 44),
                             scale=14, dirt=0.35, spec=0.35, soot=0.5, rust_at=0.62, grain=0.3)
     m["groove"] = painted("groove", (86, 48, 24), rough=0.85, wear=(122, 72, 38), scale=10, dirt=0.3, spec=0.15)
     m["bonegap"] = painted("bonegap", (40, 32, 24), rough=0.85, wear=(70, 58, 42), scale=6, dirt=0.3, spec=0.15)
     m["bonedark"] = painted("bonedark", (84, 70, 52), rough=0.8, wear=(128, 110, 82), scale=5, dirt=0.3, spec=0.2)
-    m["spike"] = painted("spike", (168, 164, 158), rough=0.45, metal=0.1, wear=(232, 230, 222), rust=(70, 50, 36),
-                         scale=8, dirt=0.25, spec=0.5, soot=0.35, rust_at=0.7, grain=0.25)  # L3: Flash's grey steel
+    m["spike"] = painted("spike", (108, 102, 94), rough=0.55, metal=0.3, wear=(172, 160, 138), rust=(62, 44, 30),
+                         scale=8, dirt=0.55, spec=0.38, soot=0.6, rust_at=0.62, grain=0.4)  # L3: Flash's dark grey steel
+    m["toothbone"] = painted("toothbone", (150, 144, 128), rough=0.8, wear=(200, 194, 176), rust=(74, 58, 40), scale=7,
+                             dirt=0.75, spec=0.2, soot=0.8, rust_at=0.5, grain=0.55)   # L1: grimy grey bone teeth
+    m["drumbone"] = painted("drumbone", (150, 138, 112), rough=0.8, wear=(200, 188, 156), rust=(80, 62, 42), scale=5,
+                            dirt=0.7, spec=0.2, soot=0.75, rust_at=0.52, grain=0.5)    # L1: the perforated drum
+    m["comb"] = painted("comb", (70, 70, 68), rough=0.55, metal=0.4, wear=(132, 128, 118), rust=(60, 42, 28), scale=8,
+                        dirt=0.5, spec=0.35, soot=0.6, rust_at=0.6, grain=0.35)       # L1: the dark spikes between
     m["core"] = painted("core", (14, 14, 13), rough=0.9, metal=0.1, wear=(34, 32, 30), scale=6, dirt=0.3, spec=0.12)
     m["roller"] = painted("roller", (124, 118, 104), rough=0.72, metal=0.15, wear=(196, 186, 160), rust=(84, 60, 40),
                           scale=9, dirt=0.6, spec=0.25, soot=0.6, rust_at=0.55, grain=0.55)  # L1: the rough grey slab
-    m["drum"] = painted("drum", (206, 92, 26), rough=0.45, metal=0.3, wear=(255, 196, 96), rust=(84, 28, 10),
-                        scale=3.0, dirt=0.45, spec=0.5, soot=0.5, rust_at=0.6, grain=0.35, streak=1.0)  # worn copper
+    m["drum"] = painted("drum", (166, 72, 26), rough=0.85, wear=(208, 116, 52), rust=(72, 26, 10), scale=3.0,
+                        dirt=0.6, spec=0.15, soot=0.6, rust_at=0.55, grain=0.6, streak=0.12)  # Flash's matte leather
+    m["drumband"] = painted("drumband", (34, 18, 10), rough=0.85, wear=(70, 36, 18), scale=8, dirt=0.4, spec=0.12)
+    # drum (grain along its length), dark bands round it
     m["hoprust"] = painted("hoprust", (122, 48, 16), rough=0.66, metal=0.15, wear=(204, 104, 42), rust=(38, 15, 8),
                            scale=2.5, dirt=0.65, spec=0.28, soot=0.85, rust_at=0.45, grain=0.6, streak=1.0)  # grimy
     m["hopside"] = painted("hopside", (52, 20, 9), rough=0.75, metal=0.15, wear=(96, 44, 18), rust=(26, 12, 7),
@@ -116,8 +127,8 @@ def mats():
                             scale=7, dirt=0.5, spec=0.3, soot=0.5, rust_at=0.6, grain=0.35)    # the foot's pale band
     m["steel"] = painted("steel", (78, 80, 82), rough=0.48, metal=0.5, wear=(164, 164, 158), rust=(62, 42, 30),
                          scale=6, dirt=0.4, spec=0.4, soot=0.55, rust_at=0.6, grain=0.25)
-    m["cogsteel"] = painted("cogsteel", (138, 140, 138), rough=0.45, metal=0.5, wear=(214, 214, 208), rust=(84, 64, 46),
-                            scale=7, dirt=0.35, spec=0.4, soot=0.35, rust_at=0.66, grain=0.2)   # L3: Flash's pale cog
+    m["cogsteel"] = painted("cogsteel", (108, 110, 108), rough=0.5, metal=0.5, wear=(180, 180, 172), rust=(76, 58, 42),
+                            scale=7, dirt=0.5, spec=0.35, soot=0.5, rust_at=0.62, grain=0.3)   # L3: Flash's grey cog
     m["plate"] = painted("plate", (36, 46, 44), rough=0.6, metal=0.3, wear=(120, 132, 124), rust=(58, 40, 28),
                          scale=5, dirt=0.0, spec=0.3, top=(64, 76, 72), grain=0.3)
     m["dark"] = flat("dark", (12, 10, 9), rough=0.9)
@@ -298,44 +309,49 @@ def rollers():
         cyl(f"roll{i}axle", 0.12, 2 * half, (0, 0, -half), M["steel"], parent=hub, verts=12)
         for s_ in (-1, 1):                                    # a bolted collar where the axle leaves the roller
             x_ = (FRONT_X[1] + 0.12 if s_ > 0 else FRONT_X[0] - 0.12) if (L < 3 and i == 0) else s_ * (ROLL_X + 0.15)
+            if L < 3 and i == 1 and s_ < 0:
+                x_ = BACK_X0 - 0.15
             cyl(f"roll{i}collar{s_}", 0.22, 0.14, (0, 0, x_ - 0.07), M["steel"], parent=hub, verts=12, bevel=0.02)
         if L >= 3:                  # Flash: tall sharp grey spikes packed in rows, the rows of the two rollers between
             cyl(f"roll{i}core", r, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), M["coredark"], parent=hub, verts=28)
-            for k in range(4):                  # Flash: about a dozen big spikes in sight
-                z = -1.6 + 0.53 * i + k * 1.06
+            for k in range(5):                  # Flash: packed rows, the rollers barely showing between the spikes;
+                z = -1.85 + 0.425 * i + k * 0.85  # the two rollers' rows interleave, so the spikes always clear
                 if abs(z) > ROLL_X - 0.2:
                     continue
-                for j in range(3):
-                    a = 2 * math.pi * (j + 0.5 * (k % 2) + 0.25 * i) / 3
+                for j in range(4):
+                    a = 2 * math.pi * (j + 0.5 * (k % 2) + 0.25 * i) / 4
                     d = Vector((math.cos(a), math.sin(a), 0))
                     q = d.to_track_quat("Z", "Y").to_euler()
-                    sp = cyl(f"roll{i}spike{k}-{j}", 0.27, 0.68, (d.x * (r - 0.04), d.y * (r - 0.04), z), M["spike"],
-                             r2=0.012, verts=12, parent=hub, bevel=0.0)
+                    h_ = 0.8 if i == 0 else SPIKE_BACK[k]   # (back: shorter where the
+                    # hopper's tray swings down close over it)
+                    sp = cyl(f"roll{i}spike{k}-{j}", 0.25, h_, (d.x * (r - 0.06), d.y * (r - 0.06), z), M["spike"],
+                             r2=0.01, verts=12, parent=hub, bevel=0.0)
                     sp.rotation_euler = q
-                    kit.blob(f"roll{i}spikefoot{k}-{j}", (d.x * r, d.y * r, z), 0.26, 0.35, M["steel"], parent=hub)
+                    ft = cyl(f"roll{i}spikefoot{k}-{j}", 0.28, 0.08, (d.x * (r - 0.05), d.y * (r - 0.05), z),
+                             M["core"], verts=12, parent=hub, bevel=0.015)
+                    ft.rotation_euler = q
             continue
         if i == 0:                  # front: Flash's cog roller, bone sprocket discs with pointed teeth on a dark core
             ln = FRONT_X[1] - FRONT_X[0]
             cyl(f"roll{i}core", 0.36, ln, (0, 0, FRONT_X[0]), M["core"], parent=hub, verts=16)
-            n = 9
+            n = 14
             pitch = ln / n
             for k in range(n):
                 z = FRONT_X[0] + pitch * (k + 0.5)
-                cog_ring(f"roll{i}disc{k}", 0.7, 0.46, 8, pitch * 0.66, M["bone"], parent=hub, r_in=0.3, tip=0.5,
-                         at=(0, 0, z), bevel=0.03)     # Flash: rows of pale blocky flat-topped teeth, dark gaps
-                cyl(f"roll{i}spacer{k}", 0.42, pitch * 0.4, (0, 0, z + pitch * 0.3), M["bonegap"], parent=hub,
-                    verts=20, bevel=0.0)
+                cog_ring(f"roll{i}disc{k}", 0.68, 0.5, 11, pitch * 0.62, M["toothbone"], parent=hub, r_in=0.3,
+                         tip=0.42, at=(0, 0, z), bevel=0.02, phase=0.5 * (k % 2))   # Flash: rows of small grimy bone
+                cyl(f"roll{i}spacer{k}", 0.46, pitch * 0.42, (0, 0, z + pitch * 0.29), M["bonegap"], parent=hub,
+                    verts=20, bevel=0.0)                # teeth, staggered, dark gaps between them
             continue
         # back: Flash's perforated drum, pale, rows of dark round holes, iron bands at the ends
-        rb = 0.62
-        cyl(f"roll{i}core", rb, 2 * ROLL_X, (0, 0, -ROLL_X), M["bone"], parent=hub, verts=36, bevel=0.03)
-        for s_ in (-1, 1):
-            cyl(f"roll{i}end{s_}", rb + 0.04, 0.16, (0, 0, s_ * (ROLL_X - 0.08) - 0.08), M["steel"], parent=hub,
-                verts=36, bevel=0.02)
+        rb, x0 = 0.62, BACK_X0      # (Flash: it starts right of the front one; the paddle stands at its left end)
+        cyl(f"roll{i}core", rb, ROLL_X - x0, (0, 0, x0), M["drumbone"], parent=hub, verts=36, bevel=0.03)
+        for s_, z_ in ((-1, x0), (1, ROLL_X - 0.16)):
+            cyl(f"roll{i}end{s_}", rb + 0.04, 0.16, (0, 0, z_), M["steel"], parent=hub, verts=36, bevel=0.02)
         for j in range(10):
             a = 2 * math.pi * j / 10
-            for k in range(7):
-                z = -ROLL_X + 0.5 + k * 0.56 + (0.28 if j % 2 else 0.0)
+            for k in range(6):
+                z = x0 + 0.5 + k * 0.56 + (0.28 if j % 2 else 0.0)
                 if z > ROLL_X - 0.35:
                     continue
                 aa = a + rng.uniform(-0.03, 0.03)
@@ -345,8 +361,16 @@ def rollers():
                         verts=12, parent=hub, bevel=0.0)
                 h.rotation_euler = q
                 c_ = kit.blob(f"roll{i}lip{j}-{k}", (d.x * (rb - 0.03), d.y * (rb - 0.03), z), 0.165, 0.3,
-                              M["roller"], parent=hub)
+                              M["bonedark"], parent=hub)
                 c_.rotation_euler = q
+
+
+    if L < 3:                   # Flash's dark grey spikes between the rollers: a fixed comb along the gap
+        box("comb", (4.5, 0.14, 0.1), (0.35, -0.2, 3.73), M["comb"], bevel=0.02)
+        for k in range(12):
+            x_ = -1.55 + k * 0.27
+            sp = cyl(f"combspike{k}", 0.075, 0.4, (x_, -0.2, 3.8), M["comb"], r2=0.008, verts=10, bevel=0.0)
+            sp.rotation_euler = (math.radians(-22), math.radians(-10), 0)
 
 
 # ------------------------------------------------------------------------------------------------ the horn
@@ -404,8 +428,17 @@ def drum():
     c = Vector((x, y, r))
     rot = tuple(math.degrees(a) for a in u.to_track_quat("Z", "Y").to_euler())
     e = cyl("drum", r, ln, c - u * (ln / 2), M["drum"], rot=rot, verts=48, bevel=0.1)
-    cyl("drumseam", r + 0.014, 0.13, c - u * (ln / 2) + u * (ln * 0.47), M["bonegap"], rot=rot, verts=48)   # the dark
-    cyl("drumline", r + 0.008, 0.05, c - u * (ln / 2) + u * (ln * 0.86), M["groove"], rot=rot, verts=48)  # seam band
+    for k, (f_, w_) in enumerate(((0.36, 0.16), (0.42, 0.05), (0.7, 0.12), (0.88, 0.05))):    # Flash's dark bands
+        cyl(f"drumband{k}", r + 0.014, w_, c - u * (ln / 2) + u * (ln * f_), M["drumband"], rot=rot, verts=48)
+    up = Vector((0, 0, 1))
+    fr = u.cross(up).normalized()               # toward us
+    for k, (f0, f1, th) in enumerate(((0.14, 0.36, 38), (0.42, 0.58, 46))):     # and the split along it, broken by
+        pts = []                                # the band, as Flash
+        for j in range(5):
+            f_ = f0 + (f1 - f0) * j / 4
+            t_ = math.radians(th + (1.5 if j % 2 else -1.0))
+            pts.append(c - u * (ln / 2) + u * (ln * f_) + (up * math.cos(t_) + fr * math.sin(t_)) * (r + 0.005))
+        tube(f"drumsplit{k}", pts, 0.028, M["drumband"], verts=6)
     for s_ in (-1, 1):                          # rolled rims at both ends, the near cap a dark rust boss
         cyl(f"drumrim{s_}", r + 0.02, 0.1, c + u * (s_ * ln / 2 - (0.12 if s_ > 0 else -0.02)), M["rust"], rot=rot,
             verts=48, bevel=0.03)
@@ -415,6 +448,41 @@ def drum():
         box(f"drumchock{k}", (0.3, 0.5, 0.2), (p.x, p.y + r * 0.62, 0.0), M["rust"],
             rot=(0, 0, math.degrees(math.atan2(u.y, u.x))), bevel=0.03)
     return e
+
+
+def panel_glow(centre):
+    """Level 3: the hood's dark panel with Flash's faint orange glow from inside, brightest round the small gear."""
+    m = kit.bpy.data.materials.new("panelglow")
+    m.use_nodes = True
+    nt = m.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    b.inputs["Base Color"].default_value = srgb(14, 13, 12)
+    b.inputs["Roughness"].default_value = 0.9
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sub = nt.nodes.new("ShaderNodeVectorMath")
+    sub.operation = "SUBTRACT"
+    sub.inputs[1].default_value = tuple(centre)
+    nt.links.new(tc.outputs["Object"], sub.inputs[0])
+    ln = nt.nodes.new("ShaderNodeVectorMath")
+    ln.operation = "LENGTH"
+    nt.links.new(sub.outputs[0], ln.inputs[0])
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 3.0
+    nz.inputs["Detail"].default_value = 4.0
+    nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+    mx = nt.nodes.new("ShaderNodeMath")
+    mx.operation = "MULTIPLY_ADD"               # the distance, wobbled by the noise: a smudgy glow, not a disc
+    nt.links.new(nz.outputs["Fac"], mx.inputs[0])
+    mx.inputs[1].default_value = 0.6
+    nt.links.new(ln.outputs["Value"], mx.inputs[2])
+    rp = nt.nodes.new("ShaderNodeValToRGB")
+    el = rp.color_ramp.elements
+    el[0].position, el[0].color = 0.4, srgb(128, 50, 12)
+    el[1].position, el[1].color = 1.0, (0, 0, 0, 1)
+    nt.links.new(mx.outputs[0], rp.inputs["Fac"])
+    nt.links.new(rp.outputs["Color"], b.inputs["Emission Color"])
+    b.inputs["Emission Strength"].default_value = 1.0
+    return m
 
 
 # ------------------------------------------------------------------------------------------------ shield, plate, cog
@@ -473,6 +541,7 @@ def shield():
         gear("shieldgear", 0.36, 9, 0.08, at(-0.38, 0.68, 0.06), M["copper"], out.to_track_quat("Z", "Y").to_euler(),
              tooth=0.24)
         kit.blob("shieldgearhub", at(-0.38, 0.68, 0.11), 0.1, 0.6, M["rust"])
+        kit.bpy.data.objects["shield"].data.materials[0] = panel_glow(at(-0.3, 0.62))
     for u in (-0.85, 0.85):                     # brackets into the wall, bolts on the face
         for v in ((0.5, 0.88) if L < 3 else (0.2, 0.8)):
             p = at(u * 0.7, v, -0.22)
@@ -643,24 +712,27 @@ def bucket_frame():
         kit.blob(f"postbolt{i}", (x, -0.23, RIM_Z - (0.08 if i == 0 else 0.35)), 0.055, 0.7, M["steel"])
     tube("bar", [(POST_X[0] - 0.1, 0, BAR_Z), (POST_X[1] + 0.1, 0, BAR_Z)], 0.07, M["bone"], verts=12)
     tube("poststrut", [(POST_X[0] + 0.05, 0.0, BAR_Z - 0.4), (-2.3, 2.2, RIM_Z - 0.04)], 0.06, M["bone"], verts=10)
-    # the paddle: a dark iron spade on the left post's inner side, broad at its foot over the rollers, narrowing up
-    # to its shaft under the bar; a raised rim round the blade and two rivets
-    eu, ev = Vector((1, 0, 0)), Vector((math.sin(math.radians(8)), 0, math.cos(math.radians(8))))
-    o = Vector((POST_X[0] + 0.68, -0.31, ROLL_Z - 0.05))
-    blade = [(-0.43, 0.0), (0.43, 0.0), (0.43, 1.1), (0.3, 1.75), (0.1, 2.05), (-0.1, 2.05), (-0.3, 1.75), (-0.43, 1.1)]
-    prism("paddle", blade, eu, ev, (0, 1, 0), 0.1, M["core"], o, bevel=0.03)
+    # the paddle: Flash's big dark iron spade at the bowl's back left, behind the front roller, turned to face us and
+    # nearly as tall as the post: its foot dips into the bowl, the broad blade stands over the left rim, its shoulders
+    # narrow to a shaft that leans back to the post's head; a raised rim round the blade and rivets
+    eu = Vector((0.863, 0.505, 0))              # across the blade: square to our view
+    en = Vector((0.505, -0.863, 0))             # out of its face, toward us
+    ev = Vector((0, 0, 1))
+    o = Vector((-2.52, -0.64, 2.95))
+    blade = [(-0.3, 0.78), (0.45, 0.2), (0.45, 1.25), (0.64, 1.45), (0.62, 1.95), (0.34, 2.35), (0.1, 2.55),
+             (-0.1, 2.55), (-0.36, 2.2), (-0.52, 1.7), (-0.56, 0.95)]    # a spade: broad foot, tapering top
+    prism("paddle", blade, eu, ev, en, 0.1, M["core"], o, bevel=0.03)
+    f_ = en * 0.12
     for k in range(len(blade)):
         a_, b_ = blade[k], blade[(k + 1) % len(blade)]
-        sweep(f"paddlerim{k}", [o + eu * a_[0] + ev * a_[1] - Vector((0, 0.02, 0)),
-                                o + eu * b_[0] + ev * b_[1] - Vector((0, 0.02, 0))], (0, 1, 0), 0.07, 0.06,
+        sweep(f"paddlerim{k}", [o + eu * a_[0] + ev * a_[1] + f_, o + eu * b_[0] + ev * b_[1] + f_], en, 0.06, 0.08,
               M["core"], bevel=0.015)
-    sweep("paddleshaft", [o + ev * 2.05 + Vector((0, 0.05, 0)), o + ev * 2.75 + Vector((0, 0.05, 0))], (0, 1, 0),
-          0.14, 0.1, M["core"], bevel=0.02)
-    for k, (u_, v_) in enumerate(((-0.25, 0.5), (0.25, 0.5), (0.0, 1.5))):
-        kit.blob(f"paddlerivet{k}", o + eu * u_ + ev * v_ - Vector((0, 0.03, 0)), 0.055, 0.6, M["steel"])
-    top = o + ev * 2.45 + Vector((0, 0.05, 0))  # an iron strap from the shaft's head back to the post
-    box("paddlearm", (top.x - POST_X[0] + 0.12, 0.3, 0.14), ((top.x + POST_X[0]) / 2, -0.17, top.z - 0.07),
-        M["darkrust"], bevel=0.02)
+    head = Vector((POST_X[0] + 0.2, -0.2, BAR_Z - 0.3))
+    sweep("paddleshaft", [o + ev * 2.45 + en * 0.05, head], en, 0.1, 0.2, M["core"], bevel=0.02)
+    for k, (u_, v_) in enumerate(((-0.38, 1.1), (0.3, 1.1), (-0.36, 1.7), (0.45, 1.7), (0.0, 2.3))):
+        kit.blob(f"paddlerivet{k}", o + eu * u_ + ev * v_ + en * 0.15, 0.055, 0.6, M["steel"])
+    sweep("paddlearm", [head + Vector((0, 0.06, 0)), Vector((POST_X[0], 0, head.z))], (0, 0, 1), 0.36, 0.12,
+          M["darkrust"], bevel=0.02)            # an iron strap round the post holds the shaft's head
 
 
 def bucket():
