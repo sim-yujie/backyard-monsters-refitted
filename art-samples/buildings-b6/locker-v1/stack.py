@@ -23,8 +23,9 @@ ORIGIN = (0.0, 55.0)        # Flash pixel of the world origin (on the ground)
 GROUND = 0.0
 FRAMES = {1: 21, 2: 20, 3: 20, 4: 20}     # Flash's loops (level 4's data says 21, but its strip has 20 cells)
 
-KEY_TURN = 1.0              # the key's turns a loop (sign: which way)
-KEY0 = {1: 25.0, 2: 10.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
+KEY_TURN = {1: 0.5, 2: 0.5, 3: 1.0, 4: 1.0}   # the key's turns a loop (Flash's rings turn half round: they look
+                                             # the same after half a turn; the monster bows turn once round)
+KEY0 = {1: -1.0, 2: 28.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
 BARREL_TURN = 60.0          # the barrel turns two rows of blocks a loop (12 rows)
 
 # the ground middle under each level's axis (Flash px)
@@ -74,23 +75,24 @@ L3_BODY_C, L3_BODY_R = (2.0, -14.0), 4.4         # level 2's ball: Flash px of i
 L3_PLATE_D = 3.0                                 # the end plate: this far along world X from the middle
 L3_CUT_N, L3_CUT_D = (0.0, -0.259, 0.966), 1.2     # the opening: the cut plane's normal (up, toward the front left and
                                                  # the end plate), its distance from the middle
-L3_BARREL_X, L3_BARREL_R = (-2.3, 2.65), 3.0     # the barrel along world X (from, to, from the middle), core radius
+L3_BARREL_X, L3_BARREL_R = (-2.9, 2.65), 3.0     # the barrel along world X (from, to, from the middle), core radius
 L3_COG_R, L3_COG_AT = 1.5, (-0.6, 2.0, 3.6)      # the cog at the top back: radius, offset from the middle
 L3_GCOG_R, L3_GCOG_Z = 2.9, 0.35                 # the gold cog under the bellows: radius, height of its middle
 L3_BELLOWS_Z = 1.3                               # the bellows' foot (on the cog's hub)
 L3_BELLOWS_R = 3.3
-L3_FOOT_D, L3_ARM_Z = 4.6, 2.9
+L3_FOOT_D, L3_ARM_Z = 4.9, 2.9
 L3_CHIM_TOP, L3_CHIM_Y, L3_CHIM_W = (42.0, -72.0), 2.2, 2.0
-L3_CHIM_LEAN = (225.0, 0.0)                     # the chimney's foot swings toward this bearing by this much
+L3_CHIM_LEAN = (225.0, 28.0)                    # the chimney's foot swings toward this bearing by this much
 L3_KEY_X, L3_KEY_Z = -2.7, 2.0                   # the key's foot: offset from the middle along X, up
 L3_KEY_BOW = (-31.0, -70.0)                      # Flash px of the bow's middle
 L3_BOW_SCALE = 1.4
 L3_PANELS = (((-33.0, -22.0), "port"), ((-28.0, 6.0), "port"), ((27.0, 10.0), "port"))
 L3_PANEL_SPIN = (0.0, 0.0, 0.0)
 L3_PANEL_LEAN = (0.0, 0.2, 0.2)
-L4_BASE_C, L4_BASE_R, L4_BASE_H = (2.0, 57.0), 4.9, 0.45
-L4_BODY_C, L4_BODY_R, L4_PLATE_D = (3.0, -8.0), 4.7, 3.3
-L4_BARREL_X, L4_BARREL_R = (-2.5, 2.9), 3.2
+L4_BASE_C, L4_BASE_R, L4_BASE_H = (2.0, 57.0), 4.4, 0.45
+L4_BODY_C, L4_BODY_R, L4_PLATE_D = (2.0, -12.0), 4.7, 3.3
+L3_EGG, L4_EGG = 1.25, 1.25                      # the body's back half (toward -X) drawn out into an egg
+L4_BARREL_X, L4_BARREL_R = (-3.1, 2.9), 3.2
 L4_PILLAR_R, L4_PILLAR_TOP = 0.5, 5.9
 L4_BOW_R = 1.05
 

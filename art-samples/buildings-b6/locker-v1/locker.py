@@ -660,7 +660,7 @@ def rounded_poly(corners, rad, n=8):
 def materials():
     M = {}
     # Flash's shell: a blue-grey chrome ball, a soft white sheen up left, darker low down and on the right
-    M["chrome"] = shiny("chrome", (188, 198, 216), rough=0.14, metal=1.0, wear=(176, 186, 204), scale=2.0, dirt=0.25,
+    M["chrome"] = shiny("chrome", (150, 160, 174), rough=0.14, metal=1.0, wear=(140, 150, 166), scale=2.0, dirt=0.25,
                         side=0.25, glow=tuple((x, y, 3.4, 3.4, 0.9, (246, 248, 252)) for x, y in S.SHEEN[L]))
     M["inner"] = shiny("inner", (70, 48, 18), rough=0.35, metal=0.7, wear=(110, 74, 24), scale=3, dirt=0.2)
     M["steel"] = shiny("steel", (184, 192, 206), rough=0.3, metal=0.85, wear=(150, 158, 174), scale=4, dirt=0.2,
@@ -668,8 +668,8 @@ def materials():
     M["gold"] = shiny("gold", (232, 146, 30), rough=0.28, metal=0.85, side=0.3, wear=(246, 196, 92), scale=1.5,
                       dirt=0.3, streak=0.3)
     M["golddark"] = shiny("golddark", (150, 82, 16), rough=0.32, metal=0.8, wear=(196, 120, 36), scale=1.5, dirt=0.3)
-    M["block"] = shiny("block", (240, 168, 40), rough=0.22, metal=0.85, wear=(255, 214, 110), scale=2.0, dirt=0.1)
-    M["rubber"] = shiny("rubber", (40, 40, 54), rough=0.34, metal=0.25, wear=(54, 54, 70), scale=3, dirt=0.15,
+    M["block"] = shiny("block", (252, 196, 56), rough=0.22, metal=0.85, wear=(255, 214, 110), scale=2.0, dirt=0.1)
+    M["rubber"] = shiny("rubber", (36, 36, 46), rough=0.5, metal=0.1, wear=(54, 54, 70), scale=3, dirt=0.15,
                         side=0.2)
     M["glass"] = shiny("glass", (210, 226, 236), rough=0.15, metal=0.3, wear=(180, 200, 214), scale=3, dirt=0.0,
                        coat=0.6)
@@ -679,6 +679,7 @@ def materials():
                        side=0.4)
     M["nut"] = shiny("nut", (92, 98, 110), rough=0.35, metal=0.8, wear=(70, 76, 88), scale=4, dirt=0.2, side=0.3)
     M["hole"] = flat("hole", (14, 12, 16), rough=1.0)
+    M["core"] = shiny("core", (52, 34, 12), rough=0.45, metal=0.6, wear=(80, 52, 18), scale=3, dirt=0.3)
     return M
 
 
@@ -862,7 +863,7 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None):
     hub = bpy.data.objects.new(name + "-spin", None)
     link(hub, e)
     MOVING.append(hub)
-    cyl(name + "core", r * 0.86, length, (0, 0, -length / 2), M["golddark"], parent=hub, verts=40, bevel=0.05)
+    cyl(name + "core", r * 0.86, length, (0, 0, -length / 2), M["core"], parent=hub, verts=40, bevel=0.05)
     for i in range(rows):
         a = 2 * math.pi * i / rows
         for j in range(cols):
@@ -962,6 +963,10 @@ def shell34():
     d = S.L4_PLATE_D if L == 4 else S.L3_PLATE_D
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=72, v_segments=36, radius=r)
+    egg = S.L4_EGG if L == 4 else S.L3_EGG
+    for v in bm.verts:
+        if v.co.x < 0:
+            v.co.x *= egg
     no = Vector(S.L3_CUT_N).normalized()
     for co, nn in ((no * S.L3_CUT_D, no), (Vector((d, 0, 0)), Vector((1, 0, 0)))):
         geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
@@ -1018,7 +1023,7 @@ def chimney(b, cage=False):
     # lean it as Flash does (the foot toward the front left): turn every chimney part about the foot
     e = bpy.data.objects.new("chimlean", None)
     link(e)
-    e.location = (top.x, top.y, z0)
+    e.location = (top.x, top.y, top.z)
     bpy.context.view_layer.update()
     for o in list(SC.objects)[first:]:
         if o.parent is None and o is not e:
@@ -1045,6 +1050,8 @@ def bow_monster(hub, ln):
     tube("keybowgrin", [(x * s, 0, z0 + y * s) for x, y in ((-0.65, -0.45), (-0.3, -0.7), (0.1, -0.72), (0.55, -0.45))],
          0.07, M["gold"], parent=hub, smooth=True)
     tube("keybowstem", [(0, 0, ln - 0.05), (0, 0, z0 - 1.2 * s)], 0.1, M["gold"], parent=hub)
+    tube("keybowbar", [(-1.3 * s, 0, z0 + 0.3 * s), (1.28 * s, 0, z0 + 0.3 * s)], 0.06, M["gold"], parent=hub)
+    tube("keybowchin", [(0.08 * s, 0, z0 - 0.7 * s), (0.08 * s, 0, z0 - 1.22 * s)], 0.06, M["gold"], parent=hub)
 
 
 def bow_head(hub, ln):
@@ -1090,9 +1097,10 @@ def level34():
     if lv4:
         disc("disc", S.L4_BASE_R, 0.0, S.L4_BASE_H, at=px(*S.L4_BASE_C, Z=0.0), verts=20)
     # the gold cog lying under the bellows
-    gear("groundcog", S.L3_GCOG_R, 22, 0.32, (A.x, A.y, zb + S.L3_GCOG_Z + 0.16), M["gold"], (0, 0, 0), tooth=0.12)
-    cyl("groundcoghub", S.L3_BELLOWS_R * 0.8, S.L3_BELLOWS_Z - S.L3_GCOG_Z, (A.x, A.y, zb + S.L3_GCOG_Z),
-        M["golddark"], verts=48)
+    if not lv4:
+        gear("groundcog", S.L3_GCOG_R, 22, 0.32, (A.x, A.y, S.L3_GCOG_Z + 0.16), M["gold"], (0, 0, 0), tooth=0.12)
+        cyl("groundcoghub", S.L3_BELLOWS_R * 0.8, S.L3_BELLOWS_Z - S.L3_GCOG_Z, (A.x, A.y, S.L3_GCOG_Z),
+            M["golddark"], verts=48)
     b, sh = shell34()
     top_b = b.z - math.sqrt((S.L4_BODY_R if lv4 else S.L3_BODY_R) ** 2 - S.L3_BELLOWS_R ** 2) + 0.3
     bellows("bellows", zb + (0.0 if lv4 else S.L3_BELLOWS_Z), top_b, S.L3_BELLOWS_R, 3, M["rubber"])
@@ -1138,7 +1146,7 @@ def turn(frame):
     f = frame / FRAMES
     for hub in MOVING:
         if hub.name in KEYS:
-            hub.rotation_euler = (0, 0, math.radians(KEYS[hub.name] + S.KEY_TURN * 360.0 * f))
+            hub.rotation_euler = (0, 0, math.radians(KEYS[hub.name] + S.KEY_TURN[L] * 360.0 * f))
         else:
             hub.rotation_euler = (0, 0, math.radians(S.BARREL_TURN * f))
 
