@@ -42,13 +42,18 @@ class Lv:
             self.BAND_R, self.BAND_Z0, self.BAND_Z1 = 4.32, 0.9, 1.6   # the gold band round the dome's middle
             self.TANK_Z0 = self.TANK_Z1 = None
         else:
-            self.ORIGIN = (1.0, 51.5)
-            self.DOME_R = 3.8
-            self.TANK_Z0 = 1.33                       # the glass ring / tank: bottom (on the gold band) and top
-            self.TANK_Z1 = 2.42 + (TANK_RISE if level >= 4 else 0.0)
-            self.DOME_C = 3.24 + (TANK_RISE if level >= 4 else 0.0)
-            self.FOOT_R, self.FOOT_Z = 2.9, 0.78
-            self.BAND_R, self.BAND_Z0, self.BAND_Z1 = 3.05, 0.74, 1.36
+            self.ORIGIN = (0.0, 51.5)
+            self.DOME_R = 4.0
+            rise = TANK_RISE if level >= 4 else 0.0
+            self.TANK_Z0 = 1.33                       # the glass ring / tank: bottom (on the gold band)
+            self.GLASS_Z1 = 2.17 + rise               # the glass's top; above it a dark collar up to the dome
+            self.DOME_C = 3.3 + rise
+            self.DOME_Z0 = 2.95 + rise                # the dome's lower edge (Flash: a straight wall below a seam)
+            self.WALL_E = 33.0                        # the seam where the ball turns into the straight wall
+            self.TANK_Z1 = self.DOME_Z0
+            self.FOOT_R, self.FOOT_Z = 3.3, 0.22          # a low black base disc
+            self.BAND_R, self.BAND_Z0, self.BAND_Z1 = 2.8, 0.2, 1.36   # a gold bowl: top radius, bottom, top
+            self.BAND_R0 = 2.65                       # its bottom radius
             self.TANK_R = 2.85
         self.OPEN_R = 2.0                   # the opening in the dome's top
         self.OPEN_Z = self.DOME_C + math.sqrt(self.DOME_R ** 2 - self.OPEN_R ** 2)
@@ -59,7 +64,7 @@ class Lv:
             self.PORTS.append((-94.0, 28.0, "left", (-28.5, 32.0)))
             if level >= 2:
                 self.PORTS.append((4.0, 28.0, "right", (32.5, 32.0)))
-                self.FINS = [(-138.0, 40.0, (-37.0, 0.0)), (48.0, 40.0, (39.0, -1.0))]   # face bearing, tilt, Flash px
+                self.FINS = [(-138.0, 50.0, (-33.0, -3.0)), (48.0, 50.0, (35.0, -4.0))]   # face bearing, tilt, Flash px
         self.RIBS = (-90.0, 0.0, 90.0, 180.0) if self.ribbed else ()
 
 
@@ -67,13 +72,17 @@ TANK_RISE = 2.2                 # level 4: how much the glass tank lifts the dom
 PORT_HALF = (1.45, 1.3)               # the porthole plate's half size
 PORT_HOLE = 0.7                # the dark hole's radius
 RIB_W = 2.7                     # the ribs' width (across)
-RIB_T = 0.9                     # their thickness over the dome
-RIB_IN, RIB_OUT = 4.25, 5.85    # the uprights' inner and outer faces from the axis
-RIB_END = 32.0                  # the rib's top end: elevation on the ball (its shoulder)
-RIB_BEND = 4.4                  # level 3: where the uprights start bending in toward the dome (+ TANK_RISE at level 4)
-PLINTH = (3.1, 2.1, 0.65)       # the rib's foot block: across, outward, high
-PLINTH_D = 5.15
-FIN = (0.85, 1.25, 0.45)          # the wing plate: half across, half up, thickness
+RIB_T = 0.85                    # the strap's thickness at its top end (on the dome)
+RIB_TU = 0.7                    # ... and down the upright
+RIB_OUT = 5.6                   # the uprights' outer faces from the axis
+RIB_RC, RIB_B = 1.8, 3.5        # the outer line's quarter ellipse: its top's distance from the axis, its height
+RIB_ZV = 2.8                    # level 3: where the outer line turns upright (+ TANK_RISE at level 4)
+RIB_ENDS = {-90.0: 32.0, 0.0: 32.0, 90.0: 48.0, 180.0: 48.0}   # each rib's top end: elevation on the ball (Flash
+                                # ends the front ribs lower, in a gold frame on the shoulder; the back ones reach higher)
+PLINTH = (2.9, 1.1, 0.5)        # the rib's foot block: across, outward, high
+PLINTH_D = 5.2
+SLEEVE_Z = 1.75                # the top of the wider sleeve round the upright's foot (Flash: a step)
+FIN = (1.0, 1.7, 0.45)           # the wing plate: half across, half up, thickness
 
 
 def mounts(lv):

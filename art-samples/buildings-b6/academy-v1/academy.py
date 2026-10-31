@@ -511,7 +511,7 @@ def spinner(name, center, normal_bearing, tilt, parts):
 
 # ------------------------------------------------------------------------------------------------------------ the model
 def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spec=0.5, coat=0.0, ao_min=0.5,
-          streak=0.0, side=0.0, glow=()):
+          streak=0.0, side=0.0, glow=(), lit=None):
     """Flash's Hatchery is a glossy render: polished gold, chrome, red enamel. Soft, broad reflections, a faint
     mottle (`wear` colour in soft patches), darker in the creases and low down, and faint vertical polish streaks."""
     if name in MATS:
@@ -545,6 +545,17 @@ def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spe
         out = t.mix(out, srgb(*g[5]), fac)
         if k == 0:                 # the main sheen also glows a little, so the metal can't swallow it
             t.set(**{"Emission Color": srgb(*g[5]), "Emission Strength": fac})
+    if lit:                        # faces turned to the light wash out to a cream colour (Flash's bright gold faces)
+        d, col2, lo, hi = lit
+        geo = t.n("ShaderNodeNewGeometry")
+        dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+        t.link(geo.outputs["Normal"], dp.inputs[0])
+        dp.inputs[1].default_value = Vector(d).normalized()
+        mr = t.n("ShaderNodeMapRange", interpolation_type="SMOOTHSTEP")
+        mr.inputs[1].default_value, mr.inputs[2].default_value = lo, hi
+        t.link(dp.outputs["Value"], mr.inputs[0])
+        out = t.mix(out, srgb(*col2), mr.outputs[0])
+        t.set(**{"Emission Color": srgb(*col2), "Emission Strength": mr.outputs[0]})
     out = t.grime(out, GROUND, 4.0, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rr, "metal": metal, "spec": spec})
     if coat:
@@ -584,22 +595,24 @@ def materials():
     M = {}
     # the dome: Flash's glossy steel blue, bright white sheen up on the left, darker grey-lavender on the right
     hi = (-12.0, 12.0) if not V.ribbed else (-15.0, 5.0 - (19.0 if L >= 4 else 0.0))
-    M["dome"] = shiny("dome", (120, 127, 138), rough=0.42, metal=0.15, wear=(98, 104, 114), scale=3.0, dirt=0.42,
-                      side=-0.5, spec=0.45, glow=((hi[0], hi[1], 11.0, 14.0, 0.5, (226, 234, 244)),))
+    M["dome"] = shiny("dome", (108, 114, 127), rough=0.42, metal=0.15, wear=(88, 93, 104), scale=4.0, dirt=0.5,
+                      side=-0.8, spec=0.4, glow=((hi[0], hi[1], 11.0, 14.0, 0.26, (226, 234, 244)),))
     M["seam"] = shiny("seam", (78, 82, 92), rough=0.4, metal=0.5, scale=3, dirt=0.1)
-    M["plate"] = shiny("plate", (124, 130, 140), rough=0.42, metal=0.15, wear=(104, 110, 120), scale=2.0, dirt=0.15,
+    M["plate"] = shiny("plate", (90, 96, 106), rough=0.42, metal=0.15, wear=(78, 83, 93), scale=2.0, dirt=0.15,
                        side=-0.5)
     M["gold"] = shiny("gold", (250, 152, 18), rough=0.26, metal=0.6, side=0.3, wear=(255, 196, 70), scale=1.5,
                       dirt=0.12, streak=0.3, coat=0.15)
+    M["bandgold"] = shiny("bandgold", (236, 146, 24), rough=0.35, metal=0.2, side=0.3, wear=(250, 180, 60), scale=1.5,
+                          dirt=0.1, spec=0.5)
     M["golddark"] = shiny("golddark", (176, 100, 18), rough=0.3, metal=0.75, wear=(210, 140, 40), scale=1.5, dirt=0.4)
-    M["blockgold"] = shiny("blockgold", (224, 156, 40), rough=0.22, metal=0.9, wear=(240, 190, 90), scale=2.0,
-                           dirt=0.05, coat=0.2)
-    M["foot"] = shiny("foot", (24, 22, 22), rough=0.45, metal=0.2, wear=(34, 32, 32), scale=3, dirt=0.0, spec=0.3)
+    M["blockgold"] = shiny("blockgold", (186, 128, 28), rough=0.3, metal=0.55, wear=(160, 118, 36), scale=2.0,
+                           dirt=0.6, ao_min=0.15, coat=0.25, spec=0.5, lit=((-0.4, -0.9, 0.12), (252, 240, 196), 0.62, 0.9))
+    M["foot"] = shiny("foot", (14, 13, 13), rough=0.6, metal=0.1, wear=(22, 21, 21), scale=3, dirt=0.0, spec=0.15)
     M["hole"] = flat("hole", (10, 8, 8), rough=1.0)
-    M["pit"] = shiny("pit", (40, 30, 22), rough=0.5, metal=0.3, scale=3, dirt=0.0)
+    M["pit"] = shiny("pit", (16, 11, 7), rough=0.5, metal=0.3, scale=3, dirt=0.0)
     M["rim"] = shiny("rim", (150, 158, 170), rough=0.28, metal=0.6, wear=(130, 136, 150), scale=3, dirt=0.05)
-    M["rib"] = painted("rib", (150, 150, 162), rough=0.45, metal=0.35, wear=(128, 126, 140), scale=5.0, dirt=0.25,
-                       spec=0.45)
+    M["rib"] = painted("rib", (128, 130, 144), rough=0.5, metal=0.3, wear=(108, 108, 122), scale=5.0, dirt=0.35,
+                       spec=0.3)
     M["ribend"] = painted("ribend", (176, 178, 190), rough=0.4, metal=0.35, wear=(150, 150, 164), scale=5.0, dirt=0.1)
     M["glass"] = flat("glass", (150, 222, 240), rough=0.15, emit=0.9)
     M["glassframe"] = shiny("glassframe", (60, 70, 80), rough=0.35, metal=0.6, scale=3, dirt=0.1)
@@ -636,10 +649,12 @@ def orient(ob, n, u, s):
 def body():
     R, C = V.DOME_R, V.DOME_C
     e_open = math.degrees(math.asin((V.OPEN_Z - C) / R))
-    e_low = math.degrees(math.asin((V.BAND_Z1 - 0.05 - C) / R)) if not V.ribbed else math.degrees(math.asin((V.TANK_Z1 + 0.04 - C) / R))
+    e_low = math.degrees(math.asin((V.BAND_Z1 - 0.05 - C) / R)) if not V.ribbed else V.WALL_E
     prof = []
-    if V.ribbed:                     # a flat underside from the tank's edge out to the ball
-        prof.append((V.TANK_R - 0.1, V.TANK_Z1 + 0.04))
+    if V.ribbed:                     # a flat underside from the collar out to the wall, the wall up to the seam
+        rw = R * math.cos(math.radians(V.WALL_E))
+        prof += [(V.TANK_R - 0.1, V.DOME_Z0), (rw + 0.02, V.DOME_Z0), (rw + 0.06, V.DOME_Z0 + 0.06),
+                 (rw + 0.03, V.DOME_Z0 + 0.3)]
     else:
         prof.append((V.FOOT_R - 0.2, V.BAND_Z1 - 0.05))
     n = 40
@@ -666,11 +681,11 @@ def body():
                 (V.BAND_R - 0.12, V.BAND_Z1), (R - 0.3, V.BAND_Z1 + 0.02)]
         lathe("band", prof, (0, 0, 0), M["gold"], verts=128)
     else:
-        lathe("foot", [(V.FOOT_R - 0.25, 0.0), (V.FOOT_R - 0.1, 0.02), (V.FOOT_R, 0.25), (V.FOOT_R, V.FOOT_Z),
-                       (0.0, V.FOOT_Z)], (0, 0, 0), M["foot"], verts=96)
-        lathe("band", [(V.FOOT_R - 0.1, V.BAND_Z0), (V.BAND_R - 0.06, V.BAND_Z0), (V.BAND_R, V.BAND_Z0 + 0.08),
-                       (V.BAND_R, V.BAND_Z1 - 0.08), (V.BAND_R - 0.06, V.BAND_Z1), (V.TANK_R - 0.2, V.BAND_Z1)],
-              (0, 0, 0), M["gold"], verts=128)
+        lathe("foot", [(V.FOOT_R - 0.08, 0.0), (V.FOOT_R, 0.06), (V.FOOT_R, V.FOOT_Z - 0.06),
+                       (V.FOOT_R - 0.06, V.FOOT_Z), (0.0, V.FOOT_Z)], (0, 0, 0), M["foot"], verts=96)
+        lathe("band", [(V.BAND_R0 - 0.1, V.BAND_Z0 - 0.02), (V.BAND_R0, V.BAND_Z0), (V.BAND_R - 0.04, V.BAND_Z1 - 0.08),
+                       (V.BAND_R, V.BAND_Z1 - 0.03), (V.BAND_R - 0.06, V.BAND_Z1), (V.TANK_R - 0.2, V.BAND_Z1)],
+              (0, 0, 0), M["bandgold"], verts=128)
         tank()
         ribs()
     seams()
@@ -681,13 +696,13 @@ def body():
 
 
 def tank():
-    """The glass ring (level 3) / tank (level 4): glowing cyan glass between the gold band and the dome."""
-    z0, z1 = V.BAND_Z1 - 0.02, V.TANK_Z1 + 0.06
+    """The glass ring (level 3) / tank (level 4): glowing cyan glass on the gold bowl, a dark collar above it up to the
+    dome's lower edge (Flash: a black band under the dome)."""
+    z0, z1 = V.BAND_Z1 - 0.02, V.GLASS_Z1
     cyl("tank", V.TANK_R, z1 - z0, (0, 0, z0), M["glass"], verts=96, bevel=0.0)
-    # thin dark frame rings at the glass's top and bottom
-    for z in (z0 + 0.03, z1 - 0.06):
-        ring("tankring", V.TANK_R + 0.01, 0.05, M["glassframe"], z=z, n=96)
-    if L >= 4:                  # the tank's upright frame bars (Flash shows faint seams in the glass)
+    cyl("tankcollar", V.TANK_R + 0.04, V.DOME_Z0 + 0.05 - z1, (0, 0, z1), M["foot"], verts=96, bevel=0.02)
+    ring("tankring", V.TANK_R + 0.01, 0.05, M["glassframe"], z=z0 + 0.04, n=96)
+    if False:                   # upright frame bars in the glass (Flash shows none)
         for th in range(-180, 180, 30):
             a = math.radians(th + 15)
             p0 = (V.TANK_R * math.cos(a), V.TANK_R * math.sin(a), z0 + 0.05)
@@ -713,9 +728,12 @@ def seams():
         mer(-22.0, 33.0, 58.0)
         lat(33.0, -22.0, 48.0)
     else:
-        e0 = math.degrees(math.asin((V.TANK_Z1 + 0.1 - V.DOME_C) / V.DOME_R))
         for th in (-45.0, 45.0, 135.0, -135.0):
-            mer(th, e0, 56.0)
+            mer(th, V.WALL_E, 56.0)
+            lat(V.WALL_E, th - 22.0, th + 22.0)
+            rw = R * math.cos(math.radians(V.WALL_E)) + 0.035          # and on down the straight wall
+            tube("seam", [P(th, rw, V.DOME_Z0 + 0.08), P(th, rw, V.DOME_C + R * math.sin(math.radians(V.WALL_E)))],
+                 0.024, M["seam"], verts=6)
 
 
 def on_ball(sx, sy, r):
@@ -835,30 +853,46 @@ def bez(p0, t0, p3, t3, n):
             for t in (i / (n - 1) for i in range(n))]
 
 
-def rib_profile():
-    """The rib's side outline in its (r, z) plane, as matching outer and inner lines from its top end on the dome's
-    shoulder down to the plinth: the inner line lies on the ball, then drops to the upright's inner face; the outer
-    line keeps the rib's thickness over the ball, then rounds out to the upright's outer face at RIB_BEND."""
-    R, C, T = V.DOME_R, V.DOME_C, S.RIB_T
-    bend = S.RIB_BEND + (S.TANK_RISE if L >= 4 else 0.0)
-    e0 = math.radians(S.RIB_END)
+def rib_profile(th):
+    """The rib's side outline in its (r, z) plane, as matching outer and inner lines from its top end on the dome down
+    to the plinth. Flash draws an arched strap: the outer line a quarter ellipse (flat over the shoulder, round, then
+    upright at RIB_OUT), the strap thin (RIB_T at the top end, RIB_TU down the upright); near the top it rests on the
+    ball, lower down it stands off the dome with a dark gap behind it."""
+    R, C = V.DOME_R, V.DOME_C
+    zv = S.RIB_ZV + (S.TANK_RISE if L >= 4 else 0.0)
+    a, b = S.RIB_OUT - S.RIB_RC, S.RIB_B
     zb = S.PLINTH[2] - 0.05
-    o_top = Vector(((R + T) * math.cos(e0), C + (R + T) * math.sin(e0)))
-    o = bez(o_top, Vector((math.sin(e0), -math.cos(e0))), Vector((S.RIB_OUT, bend)), Vector((0, -1)), 14)
-    o += [Vector((S.RIB_OUT, bend + (zb - bend) * i / 6)) for i in range(1, 7)]
-    i_top = Vector((R * math.cos(e0), C + R * math.sin(e0)))
-    e1 = math.radians(4.0)
-    on = [Vector((R * math.cos(e0 + (e1 - e0) * k / 8), C + R * math.sin(e0 + (e1 - e0) * k / 8))) for k in range(9)]
-    zi = min(bend - 0.9, C - 0.6)
-    inn = on + bez(on[-1], Vector((math.sin(e1), -math.cos(e1))), Vector((S.RIB_IN, zi)), Vector((0, -1)), 8)[1:]
-    inn += [Vector((S.RIB_IN, zi + (zb - zi) * k / 5)) for k in range(1, 6)]
-    n = 40
-    return resample(o, n), resample(inn, n)
+    end = math.radians(S.RIB_ENDS[th])
+    # the ellipse from upright (t = 0) to the top (t = 90), cut where it reaches the end elevation on the ball
+    arc = []
+    for i in range(121):
+        t = math.radians(90.0 * i / 120)
+        p = Vector((S.RIB_RC + a * math.cos(t), zv + b * math.sin(t)))
+        if math.atan2(p.y - C, p.x) > end:
+            break
+        arc.append(p)
+    arc.reverse()                                  # top end first
+    o = arc + [Vector((S.RIB_OUT, zv + (zb - zv) * k / 8)) for k in range(1, 9)]
+    o = resample(o, 48)
+    inn = []
+    for i, p in enumerate(o):
+        q = o[min(i + 1, len(o) - 1)] - o[max(i - 1, 0)]
+        nrm = Vector((-q.y, q.x)).normalized()          # toward the inside (the axis side) of the curve
+        if nrm.x > 0:
+            nrm = -nrm
+        f = min(1.0, max(0.0, (zv + b * 0.6 - p.y) / (b * 0.6)))   # thickness: RIB_T at the top, RIB_TU upright
+        w = S.RIB_T + (S.RIB_TU - S.RIB_T) * f
+        c = p + nrm * w
+        d = c - Vector((0.0, C))
+        if d.length < R - 0.05:                     # rests on the dome: the inner face lies on the ball
+            c = Vector((0.0, C)) + d.normalized() * (R - 0.05)
+        inn.append(c)
+    return o, inn
 
 
 def rib_mesh(name, th, mat):
     """The rib at bearing th: the side outline extruded RIB_W across (a ribbon of quads between the two lines)."""
-    o, inn = rib_profile()
+    o, inn = rib_profile(th)
     a = math.radians(th)
     rad, side = Vector((math.cos(a), math.sin(a), 0)), Vector((-math.sin(a), math.cos(a), 0))
     hw = S.RIB_W / 2
@@ -874,36 +908,46 @@ def rib_mesh(name, th, mat):
     bm.faces.new(rows[0][::-1])
     bm.faces.new(rows[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return mesh_ob(name, bm, [mat], smooth=False, bevel=0.06, segs=3)
+    return mesh_ob(name, bm, [mat], smooth=True, bevel=0.06, segs=3)
 
 
 def ribs():
-    """Level 3 on: four steel ribs from the ground at the four sides, over the dome's shoulders, ending near the
-    opening; each lies in a gold-edged channel on the dome and stands on a plinth."""
+    """Level 3 on: four steel ribs from the ground at the four sides, over the dome's shoulders; each lies in a
+    gold-edged channel on the dome and stands on a plinth."""
     R = V.DOME_R
     for th in V.RIBS:
         a = math.radians(th)
         side = (-math.sin(a), math.cos(a), 0)
         rib_mesh("rib", th, M["rib"])
         pw, pd, ph = S.PLINTH
+        sl = S.RIB_TU + 0.24
+        box("ribsleeve", (sl, S.RIB_W + 0.2, S.SLEEVE_Z - ph + 0.05),
+            ((S.RIB_OUT + 0.12 - sl / 2) * math.cos(a), (S.RIB_OUT + 0.12 - sl / 2) * math.sin(a), ph - 0.05),
+            M["rib"], rot=(0, 0, th), bevel=0.06)
         box("plinth", (pd, pw, ph), (S.PLINTH_D * math.cos(a), S.PLINTH_D * math.sin(a), 0.0), M["rib"],
             rot=(0, 0, th), bevel=0.06)
-        # the gold channel edges on the dome: both sides of the rib and across under its top end
+        # the gold channel edges on the dome: both sides of the rib and across over its top end
         s = Vector(side)
-        e_low = math.degrees(math.asin((V.TANK_Z1 + 0.12 - V.DOME_C) / R))
+        e_low = V.WALL_E
+        top = S.RIB_ENDS[th] + 2.5
         for k in (-1, 1):
             pts = []
             for i in range(25):
-                e = S.RIB_END + 3 - (S.RIB_END + 3 - e_low) * i / 24
+                e = top - (top - e_low) * i / 24
                 p = ball(th, e) + s * k * (S.RIB_W / 2 + 0.1)
                 pts.append(Vector((0, 0, V.DOME_C)) + (p - Vector((0, 0, V.DOME_C))).normalized() * (R + 0.02))
-            sweep("ribgold", pts, (0, 0, 1) if False else _radial_side(pts), 0.17, 0.09, M["gold"], bevel=0.03)
+            sweep("ribgold", pts, _radial_side(pts), 0.26, 0.12, M["gold"], bevel=0.04)
+            rw = R * math.cos(math.radians(V.WALL_E)) + 0.06
+            q = Vector(S.polar(th + k * math.degrees(math.atan((S.RIB_W / 2 + 0.1) / rw)), rw, 0))
+            sweep("ribgold", [q + Vector((0, 0, V.DOME_Z0 + 0.1)), q + Vector((0, 0, pts[-1].z + 0.05))],
+                  Vector(S.polar(th + k * math.degrees(math.atan((S.RIB_W / 2 + 0.1) / rw)) + 90, 1, 0)),
+                  0.26, 0.12, M["gold"], bevel=0.04)
         pts = []
         for i in range(9):
             w = -1 + 2 * i / 8
-            p = ball(th, S.RIB_END + 3) + s * w * (S.RIB_W / 2 + 0.1)
+            p = ball(th, top) + s * w * (S.RIB_W / 2 + 0.1)
             pts.append(Vector((0, 0, V.DOME_C)) + (p - Vector((0, 0, V.DOME_C))).normalized() * (R + 0.02))
-        sweep("ribgold", pts, _radial_side(pts), 0.17, 0.09, M["gold"], bevel=0.03)
+        sweep("ribgold", pts, _radial_side(pts), 0.26, 0.12, M["gold"], bevel=0.04)
 
 
 def _radial_side(pts):
@@ -915,20 +959,27 @@ def _radial_side(pts):
 
 
 def blocks():
-    """The gold blocks in the opening: a big middle block and smaller ones round it, turning about the upright."""
+    """The gold blocks heaped in the opening, turning about the upright: a big middle block set corner-on and a ring of
+    smaller blocks leaning on it at mixed heights and tilts. Flash's picture repeats every half loop, so the heap is the
+    same after half a turn (each block has an identical twin opposite it)."""
     z = V.OPEN_Z
 
     def parts(hub):
-        box("blk", (2.2, 2.2, 1.5), (0, 0, -0.95), M["blockgold"], parent=hub, bevel=0.07, rot=(0, 0, 20))
-        cyl("blkaxle", 0.28, 0.45, (0, 0, -1.38), M["golddark"], parent=hub, verts=16)     # down to the pit floor
-        box("blk", (0.6, 0.6, 0.3), (0.15, -0.1, 0.5), M["blockgold"], parent=hub, bevel=0.05, rot=(0, 0, 50))
-        for k, (r, a, sz, dz, rot) in enumerate(((1.08, 10, 0.85, -0.35, 15), (1.1, 80, 0.75, -0.5, 40),
-                                                (1.05, 150, 0.85, -0.3, 5), (1.1, 220, 0.7, -0.6, 30),
-                                                (1.08, 290, 0.8, -0.25, 60))):
-            aa = math.radians(a)
-            box("blk", (sz, sz * 0.85, sz * 0.8), (r * math.cos(aa), r * math.sin(aa), dz), M["blockgold"],
-                parent=hub, bevel=0.05, rot=(rng.uniform(-8, 8), rng.uniform(-8, 8), a + rot))
-    e, hub = vspin("blocks", (0, 0, z - 0.55), parts)
+        box("blk", (1.9, 1.9, 1.15), (0, 0, -0.85), M["blockgold"], parent=hub, bevel=0.06, rot=(6, -4, 45))
+        cyl("blkaxle", 0.28, 0.8, (0, 0, -1.6), M["golddark"], parent=hub, verts=16)     # down to the pit floor
+        ring_ = ((1.0, 15, 0.82, -0.32, 20, (14, -10)), (1.04, 62, 0.7, -0.5, 35, (-12, 8)),
+                 (0.98, 108, 0.86, -0.25, 5, (8, 16)), (1.08, 150, 0.62, -0.62, 50, (-16, -6)))
+        for r, ang, sz, dz, rot, (tx, ty) in ring_:
+            for twin in (0, 180):
+                aa = math.radians(ang + twin)
+                sz *= 1.15
+                box("blk", (sz, sz * 0.9, sz * 0.85), (r * math.cos(aa), r * math.sin(aa), dz), M["blockgold"],
+                    parent=hub, bevel=0.05, rot=(tx, ty, ang + twin + rot))
+        for twin in (0, 180):                       # two small blocks lying on the middle one
+            aa = math.radians(70 + twin)
+            box("blk", (0.5, 0.45, 0.38), (0.42 * math.cos(aa), 0.42 * math.sin(aa), 0.24), M["blockgold"],
+                parent=hub, bevel=0.04, rot=(10, -6, 70 + twin + 30))
+    e, hub = vspin("blocks", (0, 0, z - 0.35), parts)
     MOVING.append(hub)
 
 
