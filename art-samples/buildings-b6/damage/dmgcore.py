@@ -29,6 +29,7 @@ STATE = ARGS[2] if len(ARGS) > 2 else "damaged"
 G = {}
 BURN = []                                          # scorch spots: (object or None, point (its local / world), radius)
 WALLS = ()
+CHAR_FLOOR = 0.35                                  # the least a scorch spot darkens inside its blotchy noise
 HERE = None
 L = M = SC = box = cyl = tube = lathe = GROUND = rng = None
 
@@ -325,7 +326,7 @@ def scorch(strength=0.92):
     ramp = nd.new("ShaderNodeMapRange")
     ramp.inputs["From Min"].default_value = 0.3
     ramp.inputs["From Max"].default_value = 0.62
-    ramp.inputs["To Min"].default_value = 0.35
+    ramp.inputs["To Min"].default_value = CHAR_FLOOR
     ln.new(nz.outputs["Fac"], ramp.inputs["Value"])
     mul = nd.new("ShaderNodeMath")
     mul.operation = "MULTIPLY"
