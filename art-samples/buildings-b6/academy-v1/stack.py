@@ -64,9 +64,9 @@ class Lv:
         self.PORTS = []
         self.FINS = []
         if not self.ribbed:
-            self.PORTS.append((-94.0, 28.0, "left", (-28.5, 32.0)))
+            self.PORTS.append((-94.0, 28.0, "left", (-26.5, 32.0)))
             if level >= 2:
-                self.PORTS.append((4.0, 28.0, "right", (32.5, 32.0)))
+                self.PORTS.append((4.0, 28.0, "right", (30.5, 32.0)))
                 self.FINS = [(-138.0, 52.0, (-35.0, -6.0)), (48.0, 52.0, (37.0, -7.0))]   # face bearing, tilt, Flash px
         self.RIBS = (-90.0, 0.0, 90.0, 180.0) if self.ribbed else ()
 

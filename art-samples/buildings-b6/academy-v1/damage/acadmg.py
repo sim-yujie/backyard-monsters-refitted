@@ -184,7 +184,8 @@ def wrench(port, deg, out=0.35):
     mw = port.matrix_world
     x, y, n = mw.col[0].to_3d(), mw.col[1].to_3d(), mw.col[2].to_3d()
     side = 1 if port is ports()[0] else -1
-    pivot = mw.translation + x * S.PORT_HALF[0] * side
+    hw = S.PORT_HALF[0]                  # the plate is curved on the ball: its inner edge lies that much below its middle
+    pivot = mw.translation + x * hw * side - n * (V.DOME_R - math.sqrt(V.DOME_R ** 2 - hw ** 2))
     spin_about([port], pivot, y, deg * side)
     port.location += n * out
 
