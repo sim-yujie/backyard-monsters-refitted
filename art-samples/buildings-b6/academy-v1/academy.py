@@ -671,8 +671,12 @@ def materials():
     M["dome"] = shiny("dome", (110, 116, 129), rough=0.66, metal=0.1, wear=(96, 102, 115), scale=7.0, dirt=0.5,
                       spec=0.18, sheen=SHEEN)
     M["seam"] = shiny("seam", (52, 56, 66), rough=0.5, metal=0.3, scale=3, dirt=0.1)
-    M["plate"] = shiny("plate", (108, 114, 126), rough=0.42, metal=0.15, wear=(96, 101, 112), scale=2.0, dirt=0.15,
-                       sheen=SHEEN)
+    # the plates: Flash's are a bluer, lighter grey than the dome with a darker edge (portedge); no sheen (it washed the
+    # level 1 plate to the dome's white)
+    M["plate"] = shiny("plate", (128, 144, 172), rough=0.42, metal=0.15, wear=(112, 126, 152), scale=2.0, dirt=0.15)
+    M["portedge"] = shiny("portedge", (58, 62, 74), rough=0.5, metal=0.3, scale=3, dirt=0.1)
+    M["finplate"] = shiny("finplate", (108, 114, 126), rough=0.42, metal=0.15, wear=(96, 101, 112), scale=2.0,
+                          dirt=0.15, sheen=SHEEN)
     M["gold"] = shiny("gold", (250, 152, 18), rough=0.26, metal=0.6, side=0.3, wear=(255, 196, 70), scale=1.5,
                       dirt=0.12, streak=0.3, coat=0.15)
     M["bandgold"] = shiny("bandgold", (236, 146, 24), rough=0.35, metal=0.2, side=0.3, wear=(250, 180, 60), scale=1.5,
@@ -681,9 +685,9 @@ def materials():
     # the blocks: matte, no sheen (spec 0, not metal): sitting in the shaded pit, a sheen of the pale blue-white sky
     # laid a grey veil over every face and turned the gold caramel; Flash: orange-gold lit sides, olive-gold tops,
     # red-brown sides turned from the light, cream on the few faces turned to it
-    M["blockgold"] = shiny("blockgold", (226, 150, 20), rough=0.45, metal=0.0, wear=(176, 104, 0), scale=2.0,
+    M["blockgold"] = shiny("blockgold", (238, 164, 32), rough=0.45, metal=0.0, wear=(176, 104, 0), scale=2.0,
                            dirt=0.95, ao_min=0.0, spec=0.0, top=((96, 74, 20), 0.85),
-                           shade=((-0.85, -0.62, 1.55), 0.3, -0.2, (112, 46, 10), 0.85), lit=((-0.35, -0.94, 0.0), (242, 236, 200), 0.58, 0.68))
+                           shade=((-0.85, -0.62, 1.55), 0.1, -0.35, (112, 46, 10), 0.85), lit=((-0.35, -0.94, 0.0), (242, 236, 200), 0.58, 0.68))
     M["foot"] = shiny("foot", (14, 13, 13), rough=0.6, metal=0.1, wear=(22, 21, 21), scale=3, dirt=0.0, spec=0.15)
     M["hole"] = flat("hole", (10, 8, 8), rough=1.0)
     M["pit"] = shiny("pit", (16, 11, 7), rough=0.5, metal=0.3, scale=3, dirt=0.0)
@@ -859,24 +863,28 @@ def porthole(th, ph, side, at):
     link(e)
     e.location = c
     orient(e, n, u, sv)
-    N = 10
+    # grid across the plate: a thin ring of quads round the face's edge takes the dark edge colour (Flash's plate
+    # has a darker rim), as do its sides
+    tt = [-1.0, -0.93] + [-0.8 + 1.6 * i / 8 for i in range(9)] + [0.93, 1.0]
+    N = len(tt) - 1
     bm = bmesh.new()
     lay = {}
     for k, h in ((0, T), (1, -0.15)):                  # the face, and the back sunk into the ball
         for i in range(N + 1):
             for j in range(N + 1):
-                lay[k, i, j] = bm.verts.new(loc(hw * (2 * i / N - 1), hh * (2 * j / N - 1), h))
+                lay[k, i, j] = bm.verts.new(loc(hw * tt[i], hh * tt[j], h))
     for k in (0, 1):
         for i in range(N):
             for j in range(N):
                 q = [lay[k, i, j], lay[k, i + 1, j], lay[k, i + 1, j + 1], lay[k, i, j + 1]]
-                bm.faces.new(q if k == 0 else q[::-1])
+                f = bm.faces.new(q if k == 0 else q[::-1])
+                f.material_index = 1 if k == 1 or i in (0, N - 1) or j in (0, N - 1) else 0
     rim = [(i, 0) for i in range(N)] + [(N, j) for j in range(N)] + [(i, N) for i in range(N, 0, -1)] +           [(0, j) for j in range(N, 0, -1)]
     for m, (i, j) in enumerate(rim):
         i2, j2 = rim[(m + 1) % len(rim)]
-        bm.faces.new((lay[0, i, j], lay[1, i, j], lay[1, i2, j2], lay[0, i2, j2]))
+        bm.faces.new((lay[0, i, j], lay[1, i, j], lay[1, i2, j2], lay[0, i2, j2])).material_index = 1
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    mesh_ob("portplate", bm, [M["plate"]], smooth=True, bevel=0.05, segs=2, parent=e)
+    mesh_ob("portplate", bm, [M["plate"], M["portedge"]], smooth=True, bevel=0.05, segs=2, parent=e)
     out = -1 if side == "left" else 1                 # local X toward the plate's outer edge
     inner = -out
     hx = 0.28 * out
@@ -926,7 +934,7 @@ def fin(th, ph, at):
     e.location = c
     orient(e, n, u, sv)
     box("fingold", (2 * hw, 2 * hh, T - 0.08), (0, 0, 0), M["gold"], parent=e, bevel=0.05)
-    box("finplate", (2 * hw - 0.08, 2 * hh - 0.08, 0.14), (0, 0, T - 0.12), M["plate"], parent=e, bevel=0.05)
+    box("finplate", (2 * hw - 0.08, 2 * hh - 0.08, 0.14), (0, 0, T - 0.12), M["finplate"], parent=e, bevel=0.05)
     box("finback", (2 * hw - 0.3, 2 * hh - 0.3, 1.2), (0, 0, -1.18), M["golddark"], parent=e, bevel=0.03)
 
 
@@ -1098,13 +1106,14 @@ def blocks():
         # (r + half the block's width stays under the opening's inner radius OPEN_R - 0.22). Each outer block leans on
         # the middle one, so they touch it and nothing else.
         blk("blk", (1.4, 1.4, 1.2), (0, 0, -0.5), M["blockgold"], parent=hub, rot=(14, -10, 45))
-        cyl("blkaxle", 0.28, 0.9, (0, 0, -1.35), M["golddark"], parent=hub, verts=16)      # down to the pit floor
+        cyl("blkaxle", 0.28, 1.2, (0, 0, -1.65), M["golddark"], parent=hub, verts=16)      # down to the pit floor
         for ang, r, sz, dz, rot, (tx, ty) in ((10, 1.12, 0.98, -0.42, 8, (16, -18)), (100, 1.02, 0.92, -0.5, -12, (-12, 10))):
             for twin in (0, 180):                   # Flash's picture repeats every half turn: each has a twin opposite
                 aa = math.radians(ang + twin)
                 blk("blk", (sz * 0.9, sz, sz * 0.85), (r * math.cos(aa), r * math.sin(aa), dz), M["blockgold"],
                     parent=hub, rot=(tx, ty, ang + twin + rot))
-    e, hub = vspin("blocks", (0, 0, z - 0.6), parts)
+    # Flash's heap fills the opening nearly to the rim (the axle still reaches the pit floor)
+    e, hub = vspin("blocks", (0, 0, z - 0.3), parts)
     MOVING.append(hub)
 
 

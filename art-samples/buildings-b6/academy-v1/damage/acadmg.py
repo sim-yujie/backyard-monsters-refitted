@@ -165,7 +165,7 @@ def ground_bits(at, n, kinds, seed=0, spread=1.0):
             ln = r.uniform(0.9, 1.5)
             box("bit", (ln, 0.26, 0.24), p, M["gold"], rot=(0, r.uniform(-4, 4), yaw), bevel=0.05)
         elif k == "shard":
-            box("bit", (r.uniform(0.7, 1.2), r.uniform(0.5, 0.9), 0.12), p, M["plate"],
+            box("bit", (r.uniform(0.7, 1.2), r.uniform(0.5, 0.9), 0.12), p, M["finplate"],
                 rot=(r.uniform(-8, 8), r.uniform(-8, 8), yaw), bevel=0.03, jitter=0.07)
         elif k == "disc":
             cyl("bit", r.uniform(0.45, 0.6), 0.1, p, M["seam"], verts=24)
@@ -228,7 +228,7 @@ def damaged():
         torn_holes(dome, spots)
         inside_behind(spots)
         p = ports()
-        wrench(p[0], 40.0, out=0.08)
+        wrench(p[0], 40.0, out=0.03)
         if L >= 2:                       # the right plate torn off, lying on the ground at the front right
             D.kill([p[1]])
             box("bit", (2.8, 2.5, 0.3), Vector((3.6, 3.2, GROUND)), M["plate"], rot=(3, -4, 20), bevel=0.05,
