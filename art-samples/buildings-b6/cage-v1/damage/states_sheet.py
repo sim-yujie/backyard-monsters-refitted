@@ -49,6 +49,7 @@ def main():
     ap.add_argument("--damaged", required=True)
     ap.add_argument("--destroyed", required=True)
     ap.add_argument("--scale", type=float, default=0.5)
+    ap.add_argument("--wrap", action="store_true", help="two rows per level: Flash's three looks, then 3D's three")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
     frame = tuple(int(v) for v in a.frame.split(","))
@@ -60,9 +61,17 @@ def main():
         line = []
         for st, spec in (("whole", a.whole), ("damaged", a.damaged), ("destroyed", a.destroyed)):
             d = still(spec, lv)
-            f = FS.compose(row, lrow, st, frame).resize(d.size, Image.BICUBIC)
-            line += [(f"Flash {st}", f), (f"3D {st}", d)]
-        cells.append((lv, line))
+            label = f"Flash {st}"
+            if not lrow[[s[1] for s in FS.STATES if s[0] == st][0]]:     # Flash has no art for this state:
+                label = f"Flash {st}: none (game keeps the whole look)"      # the game shows the whole look
+                f = FS.compose(row, lrow, "whole", frame).resize(d.size, Image.BICUBIC)
+            else:
+                f = FS.compose(row, lrow, st, frame).resize(d.size, Image.BICUBIC)
+            line += [(label, f), (f"3D {st}", d)]
+        if a.wrap:
+            cells += [(lv, line[0::2]), (lv, line[1::2])]
+        else:
+            cells.append((lv, line))
     w, h = cells[0][1][1][1].size
     # one crop for every cell: the box round all their pixels
     acc = np.zeros((h, w), bool)
@@ -74,7 +83,8 @@ def main():
     box = (max(0, xs.min() - pad), max(0, ys.min() - pad), min(w, xs.max() + pad), min(h, ys.max() + pad))
     cw, ch = int((box[2] - box[0]) * a.scale), int((box[3] - box[1]) * a.scale)
     head, lab = 50, 34
-    sheet = Image.new("RGBA", (cw * 6 + 5 * 6, head + len(cells) * (ch + lab + 6)), (24, 24, 24, 255))
+    ncol = len(cells[0][1])
+    sheet = Image.new("RGBA", (cw * ncol + (ncol - 1) * 6, head + len(cells) * (ch + lab + 6)), (24, 24, 24, 255))
     d = ImageDraw.Draw(sheet)
     d.text((8, 10), f"{a.name}: whole | damaged | destroyed, Flash beside 3D, one scale", fill=(255, 255, 255),
            font=font(26))

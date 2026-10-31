@@ -96,7 +96,20 @@ def holes(o, patches, axes, seed=0):
     loc = o.matrix_world.translation.copy()
     core = box(o.name + "-core", (w.x - 0.16, w.y - 0.16, w.z * 0.72), loc, D.inside(),
                bevel=0.0, rot=tuple(math.degrees(a) for a in o.rotation_euler))
-    return D.fine_holes(o, patches, axes=axes, cuts=14, seed=seed), core
+    o = D.fine_holes(o, patches, axes=axes, cuts=14, seed=seed)
+    # the rim torn, not stepped: every vertex on a hole's edge jolted along the face and bent a little inward
+    r = random.Random(seed + 7)
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    rim = {v for e in bm.edges if e.is_boundary for v in e.verts}
+    for v in rim:
+        n = v.normal.copy()
+        j = Vector((r.uniform(-1, 1), r.uniform(-1, 1), r.uniform(-1, 1))) * 0.045
+        j -= n * j.dot(n)
+        v.co += j - n * r.uniform(0.0, 0.05)
+    bm.to_mesh(o.data)
+    bm.free()
+    return o, core
 
 
 def ash(name, at, r, seed=0):
@@ -133,7 +146,22 @@ def lie(obs, axis_deg, deg, at):
     c = sum((o.matrix_world.translation for o in obs), Vector()) / len(obs)
     a = math.radians(axis_deg)
     turn(obs, c, (math.cos(a), math.sin(a), 0), deg, move=(at[0] - c.x, at[1] - c.y, 0))
-    D.sit(obs)
+    sit(obs)
+
+
+def sit(obs):
+    """Rest obs' lowest vertex on the ground (D.sit uses the turned bounding boxes, which leaves a turned cone
+    floating)."""
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    z = 1e9
+    for o in obs:
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        z = min([z] + [(ev.matrix_world @ v.co).z for v in me.vertices])
+        ev.to_mesh_clear()
+    for o in obs:
+        o.location.z += GROUND - z
 
 
 def charred():
@@ -294,9 +322,14 @@ def destroyed():
             kill(cap)                                       # this one's top is gone altogether
         else:                                               # in the middle of the yard, clear of the fallen bays
             spot = c * R.uniform(0.22, 0.42) + Vector((R.uniform(-0.5, 0.5), R.uniform(-0.5, 0.5), 0))
-            lie(cap, R.choice((0, 90, 180, 270)) + R.uniform(-10, 10), R.uniform(100, 112), spot)
-            for o in cap:                                   # toppled, spike down, half buried in the rubble
-                o.location.z -= 0.12
+            head = [o for o in cap if part(o)[1] != "spike"]
+            spike = [o for o in cap if part(o)[1] == "spike"]
+            lie(head, R.uniform(0, 180), R.uniform(4, 9), spot)          # dropped, sitting askew in the rubble
+            turn(head, spot, (0, 0, 1), R.uniform(0, 90))
+            for o in head:
+                o.location.z -= 0.05
+            a = R.uniform(0, 360)
+            lie(spike, a, 90, spot + Vector((math.cos(math.radians(a + 90)), math.sin(math.radians(a + 90)), 0)) * 1.0)
             recolour(cap, burnt)
         recolour([o for o in SC.objects if part(o)[0] == f"post{i}" and part(o)[1].startswith(("shaft", "stud"))],
                  burnt if i % 2 else charred_stud())
@@ -321,7 +354,7 @@ def destroyed():
             turn(obs, line, axis, 90 * sgn)
             # slid a little further in and turned a little, each bay its own way
             turn(obs, line, (0, 0, 1), R.uniform(-7, 7), move=tuple(into * R.uniform(0.3, 0.7)))
-            D.sit(obs)
+            sit(obs)
             if (k + b) % 2 == 0:
                 recolour(obs, burnt)
             # torn: some pickets gone from the bay, one or two thrown loose beside it
@@ -334,14 +367,14 @@ def destroyed():
                     else:
                         c = sum((o.matrix_world.translation for o in loose), Vector()) / len(loose)
                         turn(loose, c, (0, 0, 1), R.uniform(25, 70), move=tuple(into * R.uniform(0.6, 1.2)))
-                        D.sit(loose)
+                        sit(loose)
             for o in obs[:2]:
                 burn(o.matrix_world.translation, 0.9)
     # loose studs and iron chips in the yard
     for k in range(10):
         c = Vector((R.uniform(-3.6, 3.6), R.uniform(-3.6, 3.6), GROUND))
         if k % 2:
-            st = G["stud"](f"chipstud{k}", c, (0, 0, 1), M["stud"])
+            st = G["stud"](f"chipstud{k}", c, (0, 0, 1), charred_stud())
             st.rotation_euler.z += R.uniform(0, 1.5)
         else:
             chip(f"chip{k}", c, (R.uniform(0.3, 0.6), 0.12, 0.16), burnt, R.uniform(0, 180))
