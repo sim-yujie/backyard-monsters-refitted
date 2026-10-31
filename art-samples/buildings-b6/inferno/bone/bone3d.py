@@ -51,8 +51,8 @@ BOWL = [(2.6, 0.62), (2.55, 0.8), (2.62, 0.92), (2.86, 1.02), (3.08, 1.2), (3.22
         (3.24, 2.7), (3.2, 3.25)]     # a dark waist, then the round belly bulging below the rim: a squat cauldron
 RIM_R, RIM_Z = 3.24, 3.42             # the rolled lip; the belly bulges below it, a squat cauldron as Flash
 IN_R, FLOOR_Z = 3.0, 1.55             # inside wall and floor
-ROLL_Y, ROLL_Z = (-1.0, 0.55), (3.3 if L < 3 else 2.72)    # Flash's two rollers (front, back); L3's lower: spikes in
-ROLL_R = (0.42, 0.5)                  # their cores; level 1's front one carries bone teeth, the back one sockets
+ROLL_Y, ROLL_Z = (-1.0, 0.55), (3.45 if L < 3 else 2.72)    # Flash's two rollers (front, back); L3's lower: spikes in
+ROLL_R = (0.42, 0.5) if L < 3 else (0.32, 0.36)   # their cores (level 3: thin, so its long spikes clear the other)
 ROLL_X = 2.2                          # the rollers' toothed length ends here; bare axles run on to the wall
 FRONT_X = (-2.05, 1.62)               # level 1: Flash's front roller block is shorter, its right end well in
 POST_X, BAR_Z = (-3.2, 2.75), 6.05     # level 1: the posts on the rim (Y 0) and the bar along X
@@ -104,9 +104,12 @@ def mats():
                             dirt=0.2, spec=0.4)
     m["boxrust"] = painted("boxrust", (84, 32, 16), rough=0.68, metal=0.2, wear=(150, 70, 34), rust=(36, 14, 8),
                            scale=4.0, dirt=0.6, spec=0.28, soot=0.7, rust_at=0.5, grain=0.5, streak=0.8)  # L1 bucket
-    m["belt"] = painted("belt", (158, 152, 136), rough=0.7, metal=0.1, wear=(214, 208, 190), rust=(70, 52, 36),
+    m["beltmark"] = painted("beltmark", (128, 110, 84), rough=0.8, wear=(170, 150, 116), scale=8, dirt=0.3)
+    m["burnt"] = painted("burnt", (118, 50, 20), rough=0.62, metal=0.2, wear=(206, 112, 58), rust=(40, 16, 8),
+                         scale=4.0, dirt=0.6, spec=0.3, soot=0.8, rust_at=0.5, grain=0.5, streak=0.8)  # L3 frame
+    m["belt"] = painted("belt", (184, 170, 138), rough=0.7, metal=0.1, wear=(226, 214, 184), rust=(70, 52, 36),
                         scale=10, dirt=0.4, spec=0.25, soot=0.4, rust_at=0.6, grain=0.4)   # L1: Flash's pale belt
-    m["planks"] = kit.wood("planks", (206, 104, 40), (128, 54, 18), axis="X", rings=4, dirt=0.4)    # orange boards
+    m["planks"] = kit.wood("planks", (140, 60, 20), (64, 26, 9), axis="X", rings=4, dirt=0.75)    # orange boards
     m["pale"] = painted("pale", (150, 152, 144), rough=0.5, metal=0.4, wear=(206, 206, 196), rust=(80, 60, 44),
                         scale=6, dirt=0.3, spec=0.4, rust_at=0.66)
     m["paleband"] = painted("paleband", (84, 96, 90), rough=0.55, metal=0.35, wear=(158, 170, 160), rust=(62, 44, 30),
@@ -298,18 +301,18 @@ def rollers():
             cyl(f"roll{i}collar{s_}", 0.22, 0.14, (0, 0, x_ - 0.07), M["steel"], parent=hub, verts=12, bevel=0.02)
         if L >= 3:                  # Flash: tall sharp grey spikes packed in rows, the rows of the two rollers between
             cyl(f"roll{i}core", r, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), M["coredark"], parent=hub, verts=28)
-            for k in range(6):
-                z = -1.85 + 0.37 * i + k * 0.74
-                if abs(z) > ROLL_X - 0.12:
+            for k in range(4):                  # Flash: about a dozen big spikes in sight
+                z = -1.6 + 0.53 * i + k * 1.06
+                if abs(z) > ROLL_X - 0.2:
                     continue
-                for j in range(4):
-                    a = 2 * math.pi * (j + 0.5 * (k % 2)) / 4
+                for j in range(3):
+                    a = 2 * math.pi * (j + 0.5 * (k % 2) + 0.25 * i) / 3
                     d = Vector((math.cos(a), math.sin(a), 0))
                     q = d.to_track_quat("Z", "Y").to_euler()
-                    sp = cyl(f"roll{i}spike{k}-{j}", 0.21, 0.55, (d.x * (r - 0.04), d.y * (r - 0.04), z), M["spike"],
+                    sp = cyl(f"roll{i}spike{k}-{j}", 0.27, 0.68, (d.x * (r - 0.04), d.y * (r - 0.04), z), M["spike"],
                              r2=0.012, verts=12, parent=hub, bevel=0.0)
                     sp.rotation_euler = q
-                    kit.blob(f"roll{i}spikefoot{k}-{j}", (d.x * r, d.y * r, z), 0.2, 0.35, M["steel"], parent=hub)
+                    kit.blob(f"roll{i}spikefoot{k}-{j}", (d.x * r, d.y * r, z), 0.26, 0.35, M["steel"], parent=hub)
             continue
         if i == 0:                  # front: Flash's cog roller, bone sprocket discs with pointed teeth on a dark core
             ln = FRONT_X[1] - FRONT_X[0]
@@ -318,9 +321,9 @@ def rollers():
             pitch = ln / n
             for k in range(n):
                 z = FRONT_X[0] + pitch * (k + 0.5)
-                cog_ring(f"roll{i}disc{k}", 0.72, 0.44, 10, pitch * 0.5, M["bone"], parent=hub, r_in=0.3, tip=0.06,
-                         at=(0, 0, z), bevel=0.02)
-                cyl(f"roll{i}spacer{k}", 0.4, pitch * 0.52, (0, 0, z + pitch * 0.24), M["bonedark"], parent=hub,
+                cog_ring(f"roll{i}disc{k}", 0.7, 0.46, 8, pitch * 0.66, M["bone"], parent=hub, r_in=0.3, tip=0.5,
+                         at=(0, 0, z), bevel=0.03)     # Flash: rows of pale blocky flat-topped teeth, dark gaps
+                cyl(f"roll{i}spacer{k}", 0.42, pitch * 0.4, (0, 0, z + pitch * 0.3), M["bonegap"], parent=hub,
                     verts=20, bevel=0.0)
             continue
         # back: Flash's perforated drum, pale, rows of dark round holes, iron bands at the ends
@@ -462,7 +465,7 @@ def shield():
             a_, b_ = fr[k], fr[(k + 1) % 4]
             big = k in (2, 3)
             sweep(f"shieldframe{k}", [at(*a_, 0.06), at(*b_, 0.06)], out, 0.42 if big else 0.26, 0.4 if big else 0.3,
-                  M["copper"] if big else M["rust"], bevel=0.06)
+                  M["burnt"] if big else M["boxrust"], bevel=0.06)
         fr = [(-0.7, 0.14), (0.7, 0.14), (0.72, 0.86), (-0.72, 0.86)]
         for k in range(4):
             sweep(f"shieldline{k}", [at(*fr[k], 0.03), at(*fr[(k + 1) % 4], 0.03)], out, 0.05, 0.06, M["bone"],
@@ -550,7 +553,7 @@ def shield():
     link(h_, e_)
     kit.MOVING.append(h_)
     n = max(8, round(total / 0.26))
-    STATE["cleats"] = [box(f"beltcleat{k}", (0.045, BW + 0.01, 0.02), (0, 0, 0), M["bonegap"], parent=h_,
+    STATE["cleats"] = [box(f"beltcleat{k}", (0.045, BW + 0.01, 0.02), (0, 0, 0), M["beltmark"], parent=h_,
                            bevel=0.01, origin="centre") for k in range(n)]
     # Flash's steel stay: a plain rod from under the shield's right edge straight down to the plate
     top = at(0.98, 0.5, -0.11) - Vector((0, 0, 0.05))
@@ -744,7 +747,7 @@ COL_Z = 6.55                          # level 3: the column's head (Flash's grey
 # HOP_C is the cover's far-left top corner, HOP_U runs along the cover (to the right), HOP_V up its slope (to the back),
 # HOP_N out of it. The cover is tipped steeply toward the bowl; the plank tray lies parallel to it, lower, running out of
 # the hopper's mouth on the left and down over the rollers.
-HOP_C = Vector((-1.161, 2.01, 7.25))
+HOP_C = Vector((-1.161, 2.01, 7.25)) + Vector((-0.05, 0.0, -0.45))   # v6: down-left onto Flash's outline
 HOP_U, HOP_V, HOP_N = Vector((0.999, -0.043, 0.0)), Vector((0.033, 0.758, 0.651)), Vector((-0.028, -0.651, 0.759))
 HOP_W, HOP_L, HOP_D = 3.26, 1.34, 1.25      # the cover's length and width, and the tray's depth below the cover's top
 TRAY = (0.95, 0.3, 0.94, 1.55)              # the front wall's depth at the left and right ends, the tray's share of
@@ -806,9 +809,15 @@ def hopper():
                                       ((-0.05, 0.15, -0.16), 0.2, Lc - 0.3), ((W - 0.15, 0.15, -0.16), 0.2, Lc - 0.3))):
         qb(f"hopperedge{k}", at, du, dv, 0.18, M["copper" if k in (0, 2) else "hoprust"], bevel=0.05)
     # the bin under it: back wall, end walls and floor square to the cover
-    qb("hopperback", (0.0, 0.0, 0.24), W, t, D - 0.24, M["hopside"])
-    qb("hopperend0", (0.0, 0.0, 0.24), t, Lc, D - 0.24, M["hopside"])
-    qb("hopperend1", (W - t, 0.0, 0.24), t, Lc, D - 0.24, M["hopside"])
+    qb("hopperback", (0.0, 0.0, 0.24), W, t, D - 0.24, M["hoprust"])
+    qb("hopperend0", (0.0, 0.0, 0.24), t, Lc, D - 0.24, M["hoprust"])
+    qb("hopperend1", (W - t, 0.0, 0.24), t, Lc, D - 0.24, M["hoprust"])
+    for k in range(4):                          # Flash's planked lid inside the raised rim
+        qb(f"hopperlidboard{k}", (0.17, 0.17 + k * (Lc - 0.34) / 4 + 0.012, -0.07), W - 0.34, (Lc - 0.34) / 4 - 0.024,
+           0.07, M["planks"], bevel=0.015)
+    for s_ in (0.0, 1.0):                       # iron straps round the box's ends, a rivet row on each
+        qb(f"hopperstrap{s_}", (0.25 + s_ * (W - 0.62), -0.07, -0.02), 0.12, Lc + 0.14, D - 0.02, M["darkrust"],
+           bevel=0.02)
     qb("hopperfloor", (0.0, 0.0, D), W, Lc, t, M["hopside"])
     # Flash's front: a wall hanging straight down from the cover's near edge, deep at the left (the bin's floor runs
     # down to its mouth there) and shallow at the right; its foot is the tray's top edge, level on screen as Flash's
