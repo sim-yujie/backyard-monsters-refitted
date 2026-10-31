@@ -37,7 +37,7 @@ LV1 = dict(can=(2.25, 0.45, 6.9), legs=(-108.0, -60.0, -3.0, 50.0), leg_r=4.1, l
 
 # level 2: a bigger can, the sheet turned into a brown metal roof (top and eave heights, half sizes), bracket legs
 LV2 = dict(can=(2.9, 1.3, 6.4), roof_lift=0.7, legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_z=(10.1, 6.5), roof_plateau=0.3, roof_half=(5.0, 4.0),
-           fun_k=0.85, fun_extra=0.1, mag_th=-74.0, magnet_z=5.5, glass_th=-10.0, glass_d=3.25, glass_z=7.4)
+           fun_k=0.85, fun_extra=0.1, mag_th=-62.0, magnet_z=5.2, glass_th=-16.0, glass_d=3.05, glass_z=7.4)
 
 # level 3: the roof bent into a hood (radius, rim height) over a ribbed core on a steel pan, an octagonal gold rail
 LV3 = dict(hood=(3.25, 7.8), hood_sq=(0.75, 0.9), hood_flat=0.95, hood_drop=0.3, hood_flare=0.45, hood_corners=(-150.0, -125.0, 35.0, 70.0, 115.0), cut=(15.0, 46.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
@@ -82,9 +82,9 @@ LV[7] = dict(LV[6], holes=((FRONT, 30.0, 1.0), (FRONT - 90, 32.0, 0.8), (FRONT +
              pipes=(FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135), fun_z=LV[6]["fun_z"] + 1.35,
              scatter=True, straps=(-75.0, -15.0, -140.0, 50.0), dome_flat=0.85)     # Flash: a taller dome than 6
 LV[8] = dict(LV[7], pipe_r=0.62, fun_k=0.9, holes=LV[7]["holes"] + tuple((FRONT + a, e, 0.42) for a, e in
-                                                                     ((-112.0, 44.0), (-88.0, 52.0), (-34.0, 49.0),
+                                                                     ((-88.0, 52.0), (-34.0, 49.0),
                                                                       (0.0, 57.0), (34.0, 49.0),
-                                                                      (88.0, 52.0), (112.0, 44.0))))
+                                                                      (88.0, 52.0))))
 
 
 def polar(th, r, z):

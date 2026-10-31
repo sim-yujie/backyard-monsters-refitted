@@ -1169,7 +1169,7 @@ def level7(eight=False):
         if k < 2:
             elbows.append(gold_pipe(k, th, lv, th_dome=th + (25.0 if th > S.FRONT else -25.0)))
         else:
-            tb = th - 35.0 if th > S.FRONT else th + 35.0
+            tb = th - 23.0 if th > S.FRONT else th + 23.0      # clear of the side portholes
             elbows.append(gold_pipe(k, tb, lv, r_v=4.75, th_dome=tb, sleeve=False, z_end=lv["tiers"][0][2]))
     rp = lv.get("pipe_r", 0.5)
     for k, q in enumerate(elbows[:2]):         # the curls on the front pipes' elbows
