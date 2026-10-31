@@ -650,7 +650,9 @@ def run(build, turn, family=default_family, masonry=()):
     moving_objs = [o for o in SC.objects if under_moving(o)]
     turn(0)
     if MODE == "check":
-        for k in sorted({0, FRAMES // 3, 2 * FRAMES // 3}):
+        every = os.environ.get("CHECK_EVERY")          # e.g. 2: every 2nd frame instead of three
+        ks = range(0, FRAMES, int(every)) if every else sorted({0, FRAMES // 3, 2 * FRAMES // 3})
+        for k in ks:
             turn(k)
             tr = trees()
             obs = list(tr.values())
