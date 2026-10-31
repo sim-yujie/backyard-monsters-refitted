@@ -40,11 +40,16 @@ LV2 = dict(can=(2.9, 1.3, 6.4), legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_
            fun_k=0.85, fun_extra=0.6, mag_th=-82.0, magnet_z=5.5, glass_th=-12.0, glass_d=3.6, glass_z=8.1)
 
 # level 3: the roof bent into a hood (radius, rim height) over a ribbed core on a steel pan, an octagonal gold rail
-LV3 = dict(hood=(3.6, 8.4), hood_flat=1.02, hood_drop=0.3, cut=(19.0, 36.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
+LV3 = dict(hood=(3.7, 7.8), hood_flat=1.02, hood_drop=0.7, cut=(19.0, 36.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
            holes=((-90.0, 36.0, 1.05), (-2.0, 28.0, 0.9)),
            hood_rivets=((-140.0, 3.0), (-72.0, 3.0), (-18.0, 3.0), (52.0, 3.0), (-45.0, 72.0), (-100.0, 62.0)),
-           fun_k=1.0, fun_extra=0.0, magnets=(-84.0, -6.0), magnet_z=7.0, rail=(6.0, 3.0, 3.8), leg_d=5.0,
+           fun_k=1.0, fun_extra=0.0, magnets=(-84.0, -6.0), magnet_z=6.8, rail=(6.0, 3.0, 3.8), leg_d=5.0,
            frames=(-135.0, 45.0), frame_z=6.0)
+
+# level 4: the hood grown into a dome of four panels (seams at the quarters) on a tall drum with gold straps
+LV4 = dict(drum=(3.75, 2.5, 8.3), dome=(4.0, 8.3), dome_flat=0.8, seams=(-45.0, 45.0, 135.0, -135.0),
+           holes=((-90.0, 36.0, 0.95), (0.0, 36.0, 0.95)), fun_k=0.88, fun_extra=0.6, straps=(-75.0, -15.0, -133.0, 43.0),
+           foot_d=5.4, loops=((6.8, 1.2, 14.0), (4.6, 2.4, 22.0), (2.6, 1.8, 30.0)))
 
 FEET8 = tuple(FRONT + 45.0 * k for k in range(8))
 _BODY5 = dict(drum=(3.7, 4.6, 7.4), dome=(4.2, 7.4), fun_z=11.75, straps=(-70.0, -20.0, -140.0, 50.0),
@@ -67,6 +72,7 @@ LV = {
     1: LV1,
     2: LV2,
     3: LV3,
+    4: LV4,
     5: _BODY5,
     6: _lift(_BODY5, 1.0, tiers=((4.8, 3.9, 5.6), (6.0, 2.2, 3.9))),
 }

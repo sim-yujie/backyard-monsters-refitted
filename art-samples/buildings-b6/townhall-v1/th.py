@@ -1433,8 +1433,63 @@ def level3():
              M["palegold"], verts=10)
 
 
+def level4():
+    """The hood grown into a full dome of four riveted panels on a tall ribbed drum."""
+    lv = S.LV[4]
+    dr, dz0, dz1 = lv["drum"]
+    rr, zeq = lv["dome"]
+    fl = lv["dome_flat"]
+    ribbed("drum", dr, dz0, dz1 + 0.05, pitch=0.42, depth=0.16)
+    # the dome, flattened; its four panels overlap at raised seams; rivets down the seams and along the panel edges
+    prof = [(rr + 0.08, zeq - 0.12), (rr + 0.1, zeq), (rr, zeq + 0.02)]
+    for k in range(1, 25):
+        a = math.radians(90 * k / 24)
+        prof.append((max(0.001, rr * math.cos(a)), zeq + rr * fl * math.sin(a)))
+    lathe("dome", prof, (0, 0, 0), M["dome"], verts=96)
+    disc("dome-floor", 0.0, rr, zeq, M["dome"], thick=0.15)
+    seams = lv["seams"]
+    for k, th in enumerate(seams):
+        pts = [on_dome(rr + 0.04, zeq, th, el, fl, 0.0)[0] for el in range(0, 86, 5)]
+        sweep(f"dome-seam{k}", pts, P(th + 90, 1, 0), 0.42, 0.1, M["dome"], bevel=0.03)
+    skip = []
+    for i, (th, el, rp) in enumerate(lv["holes"]):
+        pp, n = on_dome(rr, zeq, th, el, fl, -0.02)
+        porthole(f"port{i}", pp, n, rp, frame=0.12, mat_ring=M["portrim"])
+        skip.append((th, el, math.degrees(rp / rr) + 3.0))
+    dome_rivets("dome-rvt", rr + 0.06, zeq, seams, 4.0, 80.0, 7.0, rr=0.07, double=3.0, flat_=fl, skip=skip)
+    ring_rivets("dome-lip", rr + 0.1, zeq - 0.06, 40, rr=0.07)
+    ztop = zeq + rr * fl
+    lathe("collar", [(0.45, ztop - 0.3), (0.7, ztop - 0.2), (0.72, ztop + 0.05), (0.5, ztop + 0.15), (0.36, ztop + 0.18)],
+          (0, 0, 0), M["gold"], verts=48)
+    funnel(ztop, None, k=lv["fun_k"], extra=lv["fun_extra"])
+    for i, th in enumerate(lv["straps"]):
+        strap(f"strap{i}", th, dr - 0.02, dz0 - 0.1, dz1, w=0.55, rivets=8)
+    # the base ring under the drum, the legs on rusty gear feet
+    lathe("base", [(0.01, dz0 - 0.55), (dr + 0.2, dz0 - 0.55), (dr + 0.32, dz0 - 0.3), (dr + 0.25, dz0 + 0.05),
+                   (dr - 0.1, dz0 + 0.08)], (0, 0, 0), M["steel"], verts=96)
+    fd = lv["foot_d"]
+    for i in range(8):
+        th = S.FRONT + 45 * i
+        gear(f"leg{i}-gear", 1.0, 12, 0.32, P(th, fd, 0.16), M["rustgold"], (0, 0, math.radians(th)), tooth=0.2)
+        tube(f"leg{i}-post", [P(th, fd, 0.3), P(th, fd, dz0 - 0.9), P(th, dr + 0.25, dz0 - 0.4)], 0.15, M["steel"],
+             verts=12)
+        cyl(f"leg{i}-cup", 0.42, 0.3, P(th, fd, dz0 - 1.05), M["gold"], verts=20, r2=0.25)
+    # the gold lattice at the two sides, red loop pipes over it, a red bar down the front
+    for k, th in enumerate((S.FRONT - 90, S.FRONT + 90)):
+        a0, a1 = P(th - 18, dr + 0.3, dz0 - 0.4), P(th + 18, dr + 0.3, dz0 - 0.4)
+        b0, b1 = P(th - 14, fd + 0.8, dz0 + 2.2), P(th + 14, fd + 0.8, dz0 + 2.2)
+        for j, (u, v) in enumerate(((a0, b1), (a1, b0), (a0, b0), (a1, b1))):
+            tube(f"lattice{k}{j}", [u, v], 0.1, M["palegold"], verts=8)
+        for j, (z, out, span) in enumerate(lv["loops"]):
+            c0, c1 = P(th - span, dr - 0.1, z), P(th + span, dr - 0.1, z - 0.3)
+            m0, m1 = P(th - span * 0.6, dr + out, z + 0.2), P(th + span * 0.6, dr + out, z - 0.6)
+            tube(f"loop{k}{j}", [c0, m0, P(th, dr + out + 0.5, z - 0.2), m1, c1], 0.26, M["red"], verts=16,
+                 smooth=True)
+    railbar("redbar", [P(S.FRONT, dr + 0.05, dz0 + 1.2), P(S.FRONT, dr + 0.3, dz0 - 0.5), P(S.FRONT, fd, dz0 - 1.0)], 0.28)
+
+
 def build():
-    {1: level1, 2: level2, 3: level3, 5: level5, 6: level6, 7: level7, 8: lambda: level7(True)}[L]()
+    {1: level1, 2: level2, 3: level3, 4: level4, 5: level5, 6: level6, 7: level7, 8: lambda: level7(True)}[L]()
 
 
 def family(o):
