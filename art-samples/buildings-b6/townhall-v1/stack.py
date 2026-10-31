@@ -36,7 +36,7 @@ LV1 = dict(can=(2.25, 0.45, 6.9), legs=(-108.0, -60.0, -3.0, 50.0), leg_r=4.1, l
            cloth_half=(4.6, 3.6), fun_k=0.72, fun_extra=1.2, mag_th=-86.0, mag_z=5.5, mag_r=1.35, mag_lean=0.3, mag_len=3.7)
 
 # level 2: a bigger can, the sheet turned into a brown metal roof (top and eave heights, half sizes), bracket legs
-LV2 = dict(can=(2.9, 1.3, 6.4), legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_z=(11.0, 6.5), roof_half=(4.8, 3.8),
+LV2 = dict(can=(2.9, 1.3, 6.4), legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_z=(10.9, 6.8), roof_plateau=0.42, roof_half=(4.8, 3.8),
            fun_k=0.85, fun_extra=0.6, mag_th=-82.0, magnet_z=5.5, glass_th=-12.0, glass_d=3.6, glass_z=8.1)
 
 # level 3: the roof bent into a hood (radius, rim height) over a ribbed core on a steel pan, an octagonal gold rail
@@ -49,7 +49,8 @@ LV3 = dict(hood=(3.6, 7.8), hood_flat=1.05, hood_drop=0.7, hood_flare=0.15, cut=
 # level 4: the hood grown into a dome of four panels (seams at the quarters) on a tall drum with gold straps
 LV4 = dict(drum=(3.75, 2.5, 8.3), dome=(4.0, 8.3), dome_flat=0.8, seams=(-45.0, 45.0, 135.0, -135.0),
            holes=((-90.0, 36.0, 0.95), (0.0, 36.0, 0.95)), fun_k=0.88, fun_extra=0.6, straps=(-75.0, -15.0, -133.0, 43.0),
-           foot_d=5.4, loops=((6.8, 1.2, 14.0), (4.6, 2.4, 22.0), (2.6, 1.8, 30.0)))
+           foot_d=5.4, petals=((180.0, 0.10), (90.0, 0.20), (-90.0, 0.30), (0.0, 0.40)), hook=(0.9, 1.25), hook_swirl=18.0,
+           brace_z=2.4)
 
 FEET8 = tuple(FRONT + 45.0 * k for k in range(8))
 _BODY5 = dict(drum=(3.7, 4.6, 7.4), dome=(4.2, 7.4), fun_z=11.75, straps=(-70.0, -20.0, -140.0, 50.0),
@@ -80,7 +81,7 @@ LV = {
 LV[7] = dict(LV[6], holes=((FRONT, 30.0, 1.0), (FRONT - 90, 32.0, 0.8), (FRONT + 90, 32.0, 0.8)),
              pipes=(FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135), fun_z=LV[6]["fun_z"] + 1.2, meridians=(),
              scatter=True, straps=(-75.0, -15.0, -140.0, 50.0))
-LV[8] = dict(LV[7], holes=LV[7]["holes"] + tuple((FRONT - 60 + 30 * k, 62.0, 0.42) for k in range(5)))
+LV[8] = dict(LV[7], holes=LV[7]["holes"] + tuple((FRONT - 90 + 30 * k, 56.0, 0.42) for k in range(7)))
 
 
 def polar(th, r, z):

@@ -611,7 +611,7 @@ def dots_mask(t, around, pitch, rad, z0=0.0, stagger=True):
     return mr.outputs[0]
 
 
-def perforated(name, col, hole, around, pitch, rad, z0=0.0, wear=None, rust=None):
+def perforated(name, col, hole, around, pitch, rad, z0=0.0, wear=None, rust=None, rough=0.5, metal=0.35):
     """Flash's perforated steel tiers: pale worn steel with rows of small dark holes."""
     if name in MATS:
         return MATS[name]
@@ -625,7 +625,7 @@ def perforated(name, col, hole, around, pitch, rad, z0=0.0, wear=None, rust=None
     m = dots_mask(t, around, pitch, rad, z0)
     out = t.mix(out, srgb(*hole), m)
     out = t.grime(out, GROUND, 4.0, 0.3, 0.5)
-    t.set(**{"Base Color": out, "rough": 0.5, "metal": 0.35, "spec": 0.4})
+    t.set(**{"Base Color": out, "rough": rough, "metal": metal, "spec": 0.4})
     t.bump(m, 0.25, 0.02)
     MATS[name] = t.m
     return t.m
@@ -655,12 +655,13 @@ def materials():
     M["rivet"] = shiny("rivet", (226, 230, 236), rough=0.3, metal=0.6, wear=(196, 200, 210), scale=6, dirt=0.05)
     M["steel"] = painted("steel", (176, 182, 192), rough=0.35, metal=0.8, wear=(140, 146, 156), rust=(130, 84, 50),
                          scale=3, dirt=0.3, rust_at=0.7)
-    M["perf_lo"] = perforated("perf_lo", (206, 206, 210), (40, 34, 34), 64, 0.75, 0.15, z0=0.0, wear=(176, 176, 182),
-                              rust=(150, 104, 70))
-    M["perf_hi"] = perforated("perf_hi", (206, 206, 210), (40, 34, 34), 52, 0.75, 0.15, z0=0.0, wear=(176, 176, 182),
-                              rust=(150, 104, 70))
+    M["perf_lo"] = perforated("perf_lo", (168, 170, 178), (40, 34, 34), 64, 0.75, 0.15, z0=0.0, wear=(150, 150, 158),
+                              rust=(150, 104, 70), rough=0.32, metal=0.75)
+    M["perf_hi"] = perforated("perf_hi", (168, 170, 178), (40, 34, 34), 52, 0.75, 0.15, z0=0.0, wear=(150, 150, 158),
+                              rust=(150, 104, 70), rough=0.32, metal=0.75)
     M["core"] = painted("core", (44, 40, 44), rough=0.45, metal=0.7, wear=(78, 74, 80), rust=(70, 46, 34), scale=3,
                         dirt=0.2, rust_at=0.7)
+    M["tiertop"] = painted("tiertop", (96, 94, 98), rough=0.6, metal=0.4, wear=(124, 122, 128), rust=(110, 80, 60))
     M["tindark"] = painted("tindark", (128, 138, 158), rough=0.3, metal=0.9, wear=(168, 178, 196), rust=(110, 80, 60),
                            scale=2.0, dirt=0.45, spec=0.5, rust_at=0.6)
     M["beige"] = painted("beige", (206, 196, 176), rough=0.55, metal=0.3, wear=(176, 166, 148), rust=(150, 104, 70),
@@ -1010,15 +1011,15 @@ def tiers6(lv):
     (r1, z1a, z1b), (r2, z2a, z2b) = lv["tiers"]
     def bulge(r, za, zb, out):
         return [(r - out * 0.6 - 0.12, zb), (r - out * 0.6, zb)] +             [(r - out * 0.6 + out * math.sin(math.pi * k / 12), zb - (zb - za) * k / 12) for k in range(1, 12)] +             [(r - out * 0.6, za), (r - out * 0.6 - 0.12, za)]
-    lathe("tier-lo", bulge(r2, z2a, z2b, 0.45), (0, 0, 0), M["perf_lo"], verts=128)
-    disc("tier-lo-top", r1 - 0.3, r2 - 0.2, z2b + 0.02, M["steel"], thick=0.1)
+    lathe("tier-lo", bulge(r2, z2a, z2b, 0.3), (0, 0, 0), M["perf_lo"], verts=128)
+    disc("tier-lo-top", r1 - 0.3, r2 - 0.2, z2b + 0.02, M["tiertop"], thick=0.1)
     ring("tier-lo-rim2", r2 - 0.2, 0.08, M["gold"], z=z2b, n=96)
     # the gold bowl under the lower tier
     lathe("tier-bowl", [(r2 + 0.22, z2a + 0.12), (r2 + 0.3, z2a - 0.02), (r2 + 0.05, z2a - 0.35), (r2 - 0.6, z2a - 0.62),
                         (2.0, z2a - 0.75), (0.01, z2a - 0.76)], (0, 0, 0), M["gold"], verts=128)
     ring("tier-lo-rim", r2 + 0.2, 0.13, M["gold"], z=z2a + 0.1, n=128)
-    lathe("tier-hi", bulge(r1, z1a, z1b, 0.38), (0, 0, 0), M["perf_hi"], verts=128)
-    disc("tier-hi-top", 0.0, r1 - 0.25, z1b + 0.02, M["steel"], thick=0.08)
+    lathe("tier-hi", bulge(r1, z1a, z1b, 0.26), (0, 0, 0), M["perf_hi"], verts=128)
+    disc("tier-hi-top", 0.0, r1 - 0.25, z1b + 0.02, M["tiertop"], thick=0.08)
     ring("tier-hi-rim", r1 - 0.1, 0.12, M["gold"], z=z1a + 0.05, n=96)
     ring("tier-hi-rim2", r1 - 0.2, 0.06, M["gold"], z=z1b, n=96)
 
@@ -1096,9 +1097,9 @@ def gold_pipe(i, th, lv, el=24.0, r_v=5.3):
     rr, zeq = lv["dome"]
     p, n = on_dome(rr, zeq, th, el, 1.0, -0.1)
     fd = lv["foot_d"]
-    rp = 0.4
+    rp = 0.55
     corner = P(th, r_v, p.z + 0.15)
-    pts = bend_path(p, corner, P(th, r_v, 1.0), 0.9)
+    pts = bend_path(p, corner, P(th, r_v, 1.0), 1.4, n=12)
     tube(f"pipe{i}", pts, rp, M["gold"], verts=20)
     # the sleeve where it leaves the dome, and the elbow's cap
     e = cyl(f"pipe{i}-sleeve", rp + 0.2, 0.9, p - n * 0.05, M["gold"], verts=28, bevel=0.06)
@@ -1142,7 +1143,10 @@ def level7(eight=False):
         p, n = on_dome(lv["dome"][0], lv["dome"][1], tp, 38.0, 1.0, 0.0)
         ring(f"rail{5 + k}-collar", 0.62, 0.15, M["red"], z=0.0).location = P(tp, 5.3, p.z - 1.4)
     if eight:
-        # level 8: red drips from the dome's foot, the drum's front opened (a dark slot)
+        # level 8: red drips from the dome's foot, the drum's front opened (a dark slot between gold edges)
+        box("slot", (0.12, 1.7, lv["drum"][2] - dz0 - 0.1), P(S.FRONT, dr + 0.03, dz0), M["hole"], rot=(0, 0, S.FRONT), bevel=0.0)
+        for s_ in (-1, 1):
+            strap(f"slot-edge{s_ + 1}", S.FRONT + s_ * 15, dr - 0.02, dz0, lv["drum"][2], w=0.36, rivets=6)
         for k, th in enumerate((-62.0, -28.0, -110.0, 20.0)):
             tube(f"drip{k}", [P(th, dr + 0.2, dz0 + 2.6), P(th, dr + 0.25, dz0 + 1.0), P(th, dr + 0.3, dz0 - 0.6)], 0.14,
                  M["red"], r_end=0.08)
@@ -1334,8 +1338,12 @@ def level2():
     hu, hv = lv["roof_half"]
 
     def roof_z(u, v):
+        # Flash's roof is a mansard: a broad gently sloping top, then steep sides that flatten out into the hem
         m = abs(u) / hu + abs(v) / hv
-        return zt - (zt - ze) * max(0.0, m - 0.12) / 0.88
+        p0 = lv["roof_plateau"]
+        if m < p0:
+            return zt - 0.35 * m / p0
+        return zt - 0.35 - (zt - 0.35 - ze) * min(1.0, (m - p0) / (1.0 - p0)) ** 0.75
 
     rhombus("roof", hu, hv, lambda u, v, q: (q, roof_z(u, v)), M["dome"], 0.1, n=40)
     lathe("roof-top", [(0.75, zt - 0.1), (0.75, zt + 0.25), (0.45, zt + 0.3)], (0, 0, 0), M["steel"], verts=32)
@@ -1458,33 +1466,80 @@ def level3():
              M["palegold"], verts=10)
 
 
+def petal(name, rr, zeq, fl, th, out, el0=-6.0, el1=84.0, thick=0.1):
+    """Level 4's raised dome plate centred on bearing th, `out` above the dome: narrow (+-23 deg) and rounded at its
+    foot under the equator, widening over the top where it crosses its neighbours; a rolled rim and rivets along its
+    edges."""
+    def w(el):
+        x = 23.0 + 0.014 * max(0.0, el - 25.0) ** 2
+        if el < -2.0:
+            x *= math.sqrt(max(0.0, 1.0 - ((-2.0 - el) / (-2.0 - el0 + 0.01)) ** 2)) * 0.6 + 0.4
+        return x
+    def fo(el):
+        return 0.022 * max(0.0, 15.0 - el)
+    nu, ne = 16, 40
+    bm = bmesh.new()
+    rows = []
+    for j in range(ne + 1):
+        el = el0 + (el1 - el0) * j / ne
+        rows.append([bm.verts.new(on_dome(rr, zeq, th + w(el) * (-1 + 2 * i / nu), el, fl, out + fo(el))[0])
+                     for i in range(nu + 1)])
+    for j in range(ne):
+        for i in range(nu):
+            bm.faces.new((rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = mesh_ob(name, bm, [M["dome"]])
+    mo = ob.modifiers.new("solid", "SOLIDIFY")
+    mo.thickness = thick
+    mo.offset = 0.0
+    mo = ob.modifiers.new("bevel", "BEVEL")
+    mo.width, mo.segments, mo.limit_method = 0.04, 2, "ANGLE"
+    els = [el0 + (el1 - el0) * j / ne for j in range(ne + 1)]
+    edge = ([on_dome(rr, zeq, th - w(e), e, fl, out + fo(e))[0] for e in els[::-1]] +
+            [on_dome(rr, zeq, th + w(e), e, fl, out + fo(e))[0] for e in els])
+    tube(name + "-rim", edge, 0.075, M["dome"], verts=8, smooth=True)
+    pts = []
+    for el in range(-3, 70, 9):
+        for s_ in (-1, 1):
+            pts.append(on_dome(rr, zeq, th + s_ * (w(el) - 4.0 / max(0.3, math.cos(math.radians(el)))), el, fl,
+                               out + fo(el) + thick / 2))
+    for b in range(-12, 13, 12):
+        pts.append(on_dome(rr, zeq, th + b, -4.0, fl, out + fo(-4.0) + thick / 2))
+    studs(name + "-rvt", pts, 0.1, M["rivet"])
+    return ob
+
+
 def level4():
     """The hood grown into a full dome of four riveted panels on a tall ribbed drum."""
     lv = S.LV[4]
     dr, dz0, dz1 = lv["drum"]
     rr, zeq = lv["dome"]
     fl = lv["dome_flat"]
-    ribbed("drum", dr, dz0, dz1 + 0.05, pitch=0.42, depth=0.16)
-    # the dome, flattened; its four panels overlap at raised seams; rivets down the seams and along the panel edges
+    ribbed("drum", dr, dz0, dz1 + 0.05, pitch=0.56, depth=0.22)
+    # the dome, flattened, under four raised petal plates (centred on the portholes and the back quarters) whose edges
+    # arch up from the drum and cross at the top; the dome shows in the gaps at the quarters as a riveted tongue
     prof = [(rr + 0.08, zeq - 0.12), (rr + 0.1, zeq), (rr, zeq + 0.02)]
     for k in range(1, 25):
         a = math.radians(90 * k / 24)
         prof.append((max(0.001, rr * math.cos(a)), zeq + rr * fl * math.sin(a)))
     lathe("dome", prof, (0, 0, 0), M["dome"], verts=96)
     disc("dome-floor", 0.0, rr, zeq, M["dome"], thick=0.15)
-    seams = lv["seams"]
-    for k, th in enumerate(seams):
-        pts = [on_dome(rr + 0.04, zeq, th, el, fl, 0.0)[0] for el in range(0, 86, 5)]
-        sweep(f"dome-seam{k}", pts, P(th + 90, 1, 0), 0.42, 0.1, M["dome"], bevel=0.03)
+    pet = lv["petals"]
+    for k, (th, out) in enumerate(pet):
+        petal(f"petal{k}", rr, zeq, fl, th, out)
     skip = []
     for i, (th, el, rp) in enumerate(lv["holes"]):
-        pp, n = on_dome(rr, zeq, th, el, fl, -0.02)
+        out = next(o for t, o in pet if abs(((t - th + 180) % 360) - 180) < 30)
+        pp, n = on_dome(rr, zeq, th, el, fl, out + 0.06)
         porthole(f"port{i}", pp, n, rp, frame=0.12, mat_ring=M["portrim"])
-        skip.append((th, el, math.degrees(rp / rr) + 3.0))
-    dome_rivets("dome-rvt", rr + 0.06, zeq, seams, 4.0, 80.0, 7.0, rr=0.07, double=3.0, flat_=fl, skip=skip)
-    ring_rivets("dome-lip", rr + 0.1, zeq - 0.06, 40, rr=0.07)
+    pts = []
+    for th in lv["seams"]:
+        for s_ in (-6.0, 6.0):
+            for el in range(2, 58, 10):
+                pts.append(on_dome(rr + 0.04, zeq, th + s_ / math.cos(math.radians(el)), el, fl, 0.0))
+    studs("dome-rvt", pts, 0.1, M["rivet"])
     ztop = zeq + rr * fl
-    lathe("collar", [(0.45, ztop - 0.3), (0.7, ztop - 0.2), (0.72, ztop + 0.05), (0.5, ztop + 0.15), (0.36, ztop + 0.18)],
+    lathe("collar", [(0.45, ztop - 0.3), (0.95, ztop + 0.1), (1.0, ztop + 0.4), (0.7, ztop + 0.6), (0.36, ztop + 0.62)],
           (0, 0, 0), M["gold"], verts=48)
     funnel(ztop, None, k=lv["fun_k"], extra=lv["fun_extra"])
     for i, th in enumerate(lv["straps"]):
@@ -1499,19 +1554,31 @@ def level4():
         tube(f"leg{i}-post", [P(th, fd, 0.3), P(th, fd, dz0 - 0.9), P(th, dr + 0.25, dz0 - 0.4)], 0.15, M["steel"],
              verts=12)
         cyl(f"leg{i}-cup", 0.42, 0.3, P(th, fd, dz0 - 1.05), M["gold"], verts=20, r2=0.25)
-    # the gold lattice at the two sides, red loop pipes over it, a red bar down the front
-    for k, th in enumerate((S.FRONT - 90, S.FRONT + 90)):
-        a0, a1 = P(th - 18, dr + 0.3, dz0 - 0.4), P(th + 18, dr + 0.3, dz0 - 0.4)
-        b0, b1 = P(th - 14, fd + 0.8, dz0 + 2.2), P(th + 14, fd + 0.8, dz0 + 2.2)
-        for j, (u, v) in enumerate(((a0, b1), (a1, b0), (a0, b0), (a1, b1))):
-            tube(f"lattice{k}{j}", [u, v], 0.1, M["palegold"], verts=8)
-        for j, (z, out, span) in enumerate(lv["loops"]):
-            c0, c1 = P(th - span, dr - 0.1, z), P(th + span, dr - 0.1, z - 0.3)
-            m0, m1 = P(th - span * 0.6, dr + out, z + 0.2), P(th + span * 0.6, dr + out, z - 0.6)
-            tube(f"loop{k}{j}", [c0, m0, P(th, dr + out + 0.5, z - 0.2), m1, c1], 0.26, M["red"], verts=16,
-                 smooth=True)
+    # a gold lattice ring on the leg cups, V braces from the cups up to the drum (not at the front), red hook pipes from
+    # the drum's foot arching out and down onto the cups, a red bar down the front
+    zc = dz0 - 0.75
+    for i in range(8):
+        a, b = S.FRONT + 45 * i, S.FRONT + 45 * (i + 1)
+        u, v = P(a, fd, zc + 0.08), P(b, fd, zc + 0.08)
+        box(f"lattice{i}", ((v - u).length + 0.5, 0.42, 0.14), (u + v) / 2, M["palegold"],
+            rot=(0, 0, math.degrees(math.atan2(v.y - u.y, v.x - u.x))), origin="centre", bevel=0.03)
+        if i in (0, 7):
+            continue
+        top = P((a + b) / 2, dr - 0.05, dz0 + lv["brace_z"])
+        for j, c in enumerate((a, b)):
+            sweep(f"brace{i}{j}", [P(c, fd - 0.15, zc + 0.15), top], P((a + b) / 2, 1, 0), 0.42, 0.1, M["palegold"],
+                  bevel=0.02)
+    for i in range(1, 8):
+        th = S.FRONT + 45 * i
+        z0, zt = dz0 + lv["hook"][0], dz0 + lv["hook"][1]
+        rel = ((th - S.FRONT + 180) % 360) - 180
+        t0 = th - math.copysign(lv["hook_swirl"], rel) if abs(rel) < 170 else th
+        # one round inverted U: up off the drum, over, and down onto the leg's cup (turning from t0 to the leg)
+        rs = (dr - 0.1, dr + 0.5, (dr + fd) / 2, fd, fd + 0.35, fd + 0.38, fd + 0.12, fd)
+        zs = (z0, z0 + 0.35, zt + 0.05, zt, zt - 0.35, zc + 1.0, zc + 0.45, zc + 0.25)
+        bs = [t0 + (th - t0) * min(1.0, k / 3) for k in range(8)]
+        tube(f"loop{i}", [P(b, r, z) for b, r, z in zip(bs, rs, zs)], 0.34, M["red"], verts=16, smooth=True)
     railbar("redbar", [P(S.FRONT, dr + 0.05, dz0 + 1.2), P(S.FRONT, dr + 0.3, dz0 - 0.5), P(S.FRONT, fd, dz0 - 1.0)], 0.28)
-
 
 # ---------------------------------------------------------------------------------------------------- levels 9 and 10
 def spike(name, at, direction, r=0.16, h=0.7, mat=None):
