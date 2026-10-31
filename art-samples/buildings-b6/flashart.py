@@ -46,6 +46,7 @@ def compose(row, lv, frame=0, pad=12):
         strip = Image.open(folder / f).convert("RGBA")
         k = frame % n
         parts.append(("anim", strip.crop((k * w, 0, (k + 1) * w, h)), x, y))
+    parts = [(k, im, int(round(x)), int(round(y))) for k, im, x, y in parts]   # Inferno rows have sub-pixel spots
     x0 = min(p[2] for p in parts) - pad
     y0 = min(p[3] for p in parts) - pad
     x1 = max(p[2] + p[1].width for p in parts) + pad
