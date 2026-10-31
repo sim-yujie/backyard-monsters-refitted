@@ -12,6 +12,7 @@ Loops: every turning part turns by a whole multiple of its own symmetry in one l
 are folded round their axle by the same symmetry, so the last frame runs into the first with no jump.
 """
 import math
+import os
 import random
 import sys
 from pathlib import Path
@@ -25,10 +26,12 @@ sys.path.insert(0, str(HERE.parent))
 import kit  # noqa: E402
 
 T = kit.L                                   # the tier
-kit.OUT = HERE
+kit.OUT = HERE / os.environ.get("PB_SUB", ".")       # anim renders go to anim/render (a smaller K than the stills)
+kit.OUT.mkdir(exist_ok=True)
 kit.ORIGIN = (0.0, 35.0)
 kit.FRAME = (-60, -70, 60, 70)
-kit.FRAMES = N = 36
+N = 36                                                  # frames in one loop
+kit.FRAMES = N + int(os.environ.get("PB_EXTRA", 0))     # PB_EXTRA=1 also renders frame 36 (= frame 0) for the loop check
 rnd = random.Random(31)
 
 K0, K1 = (0, 0, 0, 1), (1, 1, 1, 1)
@@ -143,7 +146,7 @@ def mat(name, col, rough=0.65, metal=0.0, wear=None, wear_amt=0.6, rust=None, ru
         out = t.mix(out, t.ramp(t.noise(v, scale * 12, 2.0, 0.5), [(0.3, grey(1 - speck)), (0.62, K1)]), 1.0, "MULTIPLY")
     if heat:
         at = t.n("ShaderNodeAttribute", attribute_name="heat")
-        hf = _math(t, "POWER", at.outputs["Fac"], 2.2)
+        hf = _math(t, "POWER", at.outputs["Fac"], 1.6)
         out = t.mix(out, kit.srgb(*heat[0]), hf)
         t.bsdf.inputs["Emission Color"].default_value = kit.srgb(*heat[0])
         t.link(_math(t, "MULTIPLY", hf, heat[1]), t.bsdf.inputs["Emission Strength"])
@@ -151,8 +154,10 @@ def mat(name, col, rough=0.65, metal=0.0, wear=None, wear_amt=0.6, rust=None, ru
     t.set(**{"Base Color": out, "rough": rough, "metal": metal, "spec": 0.4})
     if glow:
         gcol, gk, gs = glow
-        lo = 0.42 if gk > 1 else 0.58
-        mask = t.ramp(t.noise(v, gs, 6.0, 0.62, 0.5), [(lo, K0), (lo + 0.08, K1)])
+        if gk > 1:                                              # bright, through the grille
+            mask = t.ramp(t.noise(v, gs, 6.0, 0.62, 0.5), [(0.42, K0), (0.5, K1)])
+        else:                                                   # a faint, even warmth with softer and brighter patches
+            mask = t.ramp(t.noise(v, gs * 0.35, 2.0, 0.5, 0.2), [(0.3, grey(0.25)), (0.7, K1)])
         g = t.mix(kit.srgb(60, 10, 2), kit.srgb(*gcol), mask)
         t.link(g, t.bsdf.inputs["Emission Color"])
         t.link(_math(t, "MULTIPLY", mask, gk), t.bsdf.inputs["Emission Strength"])
@@ -471,7 +476,7 @@ def panel():
     one("panel-plate", [dark, copper], fn, bevel=0.015)
 
     if T >= 2:                                                                # the hot plate (tier 2), behind a grille (3)
-        hot = mat("hot%d" % T, (40, 36, 34), rough=0.7, metal=0.3, wear=(70, 60, 54), dirt=0.2,
+        hot = mat("hot%d" % T, (40, 36, 34) if T >= 3 else (50, 36, 30), rough=0.7, metal=0.3, wear=(70, 60, 54), dirt=0.2,
                   glow=((255, 120, 30), 0.8 if T == 2 else 3.0, 7.0 if T == 2 else 5.0), bump=0.1)
         one("panel-hot", [hot], lambda a: a.cube(Tm((PF + 0.02, 0, 1.31)), (0.04, 2.3, 1.62), 0), bevel=0.01)
         if T >= 3:
@@ -519,8 +524,8 @@ def drum_r(u):
 
 
 def drum():
-    leather = mat("leather", (176, 86, 42), rough=0.78, wear=(126, 58, 30), wear_amt=0.7, dirt=0.35, speck=0.15,
-                  bump=0.15)
+    leather = mat("leather", (176, 86, 42), rough=0.82, wear=(120, 54, 28), wear_amt=0.85, dirt=0.4, speck=0.25,
+                  bump=0.35, scale=9.0)
     dark = mat("drum-band", (40, 34, 30), rough=0.6, metal=0.4, wear=(72, 60, 52), dirt=0.2)
     gap = mat("split", (22, 12, 8), rough=0.9, dirt=0.0, speck=0.0, bump=0.0)
     zc = 0.545
@@ -537,13 +542,14 @@ def drum():
             a.lathe(M, [(0.38, u - 0.03), (0.45, u - 0.03), (0.45, u + 0.03), (0.38, u + 0.03), (0.38, u - 0.03)], 1, 40)
         # the split: a dark cut along the side facing up and out, with its edges a little lifted
         ang = math.radians(115)
-        for s, w, h, mi in ((0.0, 0.035, 0.05, 2), (-0.03, 0.02, 0.025, 0), (0.03, 0.02, 0.025, 0)):
+        for s, w, h, mi in ((0.0, 0.07, 0.06, 2), (-0.05, 0.035, 0.04, 0), (0.05, 0.035, 0.04, 0)):
             u0 = 0.2
             r = drum_r(u0) - 0.01
             ca = ang + s / r
             p = Vector((r * math.cos(ca), r * math.sin(ca), u0))
             nrm = Vector((math.cos(ca), math.sin(ca), 0))
-            a.cube(M @ basis(nrm.cross(Vector((0, 0, 1))), Vector((0, 0, 1)), nrm, p), (w, 0.3, h), mi)
+            a.cube(M @ basis(nrm.cross(Vector((0, 0, 1))), Vector((0, 0, 1)), nrm, p + nrm * (0.012 if mi == 0 else 0)),
+                   (w, 0.34, h), mi)
     one("drum", [leather, dark, gap], fn)
 
     if T >= 3:                                                                # a wooden wedge so it cannot roll
@@ -642,7 +648,7 @@ def rollers():
     per = 30.0
     black = mat("roll-black", (34, 35, 37), rough=0.6, metal=0.5, wear=(66, 64, 62), wear_amt=0.45, dirt=0.15, fold=12)
     spike = mat("spike%d" % T, (82, 84, 88), rough=0.5 if T == 2 else 0.75, metal=0.6, wear=(120, 120, 118),
-                wear_amt=0.35, dirt=0.15, fold=12, heat=((112, 32, 18), 0.5) if T == 3 else None)
+                wear_amt=0.35, dirt=0.15, fold=12, heat=((128, 36, 20), 0.9) if T == 3 else None)
     collar = mat("collar", (30, 30, 32), rough=0.55, metal=0.5, dirt=0.1, fold=12)
     sp = 2 * HL / rows
     for name, y, sgn, off in (("rollA", -YR, -1, 0.25), ("rollB", YR, 1, 0.75)):
