@@ -38,8 +38,8 @@ FR = kit.FRAMES
 rng = kit.rng
 
 # ------------------------------------------------------------------------------------------------ the body's sizes
-FOOT = [(3.0, 0.0), (3.04, 0.1), (3.0, 0.3), (2.8, 0.4), (2.55, 0.52), (2.45, 0.9), (2.42, 1.2), (2.4, 1.5)]
-BOWL = [(2.4, 1.5), (2.7, 1.6), (2.95, 1.8), (3.1, 2.2), (3.16, 2.7), (3.2, 3.25)]
+FOOT = [(3.0, 0.0), (3.03, 0.06), (3.0, 0.22), (2.88, 0.26), (2.88, 0.42), (2.72, 0.46), (2.62, 0.62)]   # two low steps
+BOWL = [(2.62, 0.62), (2.72, 0.72), (2.86, 0.86), (2.98, 1.1), (3.06, 1.5), (3.12, 2.1), (3.16, 2.7), (3.2, 3.25)]
 RIM_Z, RIM_R = 3.42, 3.24             # the rolled lip
 IN_R, FLOOR_Z = 3.0, 1.55             # inside wall and floor
 ROLL_Y, ROLL_Z, ROLL_R = (-1.15, 0.0, 1.15), 2.82, 0.36
@@ -47,41 +47,42 @@ POST_X, BAR_Z = (-3.2, 2.75), 6.05     # level 1: the posts on the rim (Y 0) and
 HORN = (-2.66, -2.5)                 # the horn's axis (X, Y), on the bowl's left
 DRUM = (-0.1, -3.78, 0.8, 2.7)      # the drum: middle X, Y, radius, length (along X)
 PLATE = (3.5, 0.3)                  # the steel plate's middle on the ground
-COG = (3.95, 0.25)                    # the cog's middle (X, Y) and it faces the camera's side (+X -Y)
 COLUMN = (3.05, 2.1)                   # level 3: the steel column
-SH3_TH = 5.0                          # level 3: where the hood stands round the bowl (deg)
+SH3_TH = -14.0                        # level 3: where the hood stands round the bowl (deg)
 
 
 def mats():
     """Flash's Inferno finish: dark, grimy and worn, strong wear on the edges; verdigris iron, rust, copper, old bone."""
     m = {}
-    m["iron"] = painted("iron", (13, 24, 22), rough=0.66, metal=0.25, wear=(36, 60, 54), rust=(50, 30, 18),
-                        scale=5.0, dirt=0.75, spec=0.28, soot=0.85, rust_at=0.5)
-    m["band"] = painted("band", (18, 50, 44), rough=0.6, metal=0.3, wear=(50, 108, 94), rust=(52, 32, 20), scale=6,
-                        dirt=0.55, spec=0.3, soot=0.7, rust_at=0.55)
+    m["iron"] = painted("iron", (15, 32, 28), rough=0.66, metal=0.25, wear=(40, 74, 64), rust=(50, 30, 18),
+                        scale=5.0, dirt=0.75, spec=0.28, soot=0.85, rust_at=0.5, grain=0.35)
+    m["band"] = painted("band", (20, 52, 46), rough=0.62, metal=0.3, wear=(36, 82, 72), rust=(52, 32, 20), scale=16,
+                        dirt=0.55, spec=0.3, soot=0.7, rust_at=0.58, grain=0.35)
     m["lip"] = painted("lip", (30, 82, 70), rough=0.5, metal=0.3, wear=(90, 160, 138), rust=(56, 36, 22), scale=6,
-                       dirt=0.35, spec=0.35, soot=0.5, rust_at=0.6)
+                       dirt=0.35, spec=0.35, soot=0.5, rust_at=0.6, grain=0.25)
     m["inside"] = painted("inside", (16, 18, 16), rough=0.9, wear=(34, 32, 28), scale=3, dirt=0.0, spec=0.1)
     m["rust"] = painted("rust", (104, 38, 14), rough=0.66, metal=0.15, wear=(190, 92, 38), rust=(44, 18, 8),
-                        scale=6.0, dirt=0.45, spec=0.3, soot=0.75, rust_at=0.5)
+                        scale=6.0, dirt=0.45, spec=0.3, soot=0.75, rust_at=0.5, grain=0.4)
     m["copper"] = painted("copper", (150, 58, 20), rough=0.6, metal=0.2, wear=(210, 110, 48), rust=(66, 26, 10),
-                          scale=5.0, dirt=0.5, spec=0.35, soot=0.6, rust_at=0.55)
+                          scale=5.0, dirt=0.5, spec=0.35, soot=0.6, rust_at=0.55, grain=0.35)
     m["bone"] = painted("bone", (176, 154, 116), rough=0.75, wear=(222, 204, 166), rust=(92, 72, 46), scale=6,
-                        dirt=0.45, spec=0.25, soot=0.55, rust_at=0.55)
-    m["hornbone"] = painted("hornbone", (132, 122, 106), rough=0.7, wear=(200, 190, 166), rust=(70, 58, 44), scale=6,
-                            dirt=0.4, spec=0.25, soot=0.65, rust_at=0.55)
+                        dirt=0.45, spec=0.25, soot=0.55, rust_at=0.55, grain=0.3)
+    m["hornbone"] = painted("hornbone", (116, 104, 88), rough=0.72, wear=(150, 138, 116), rust=(96, 58, 30), scale=14,
+                            dirt=0.4, spec=0.25, soot=0.65, rust_at=0.6, grain=0.35)
     m["bonedark"] = painted("bonedark", (84, 70, 52), rough=0.8, wear=(128, 110, 82), scale=5, dirt=0.3, spec=0.2)
     m["spike"] = painted("spike", (92, 90, 88), rough=0.42, metal=0.55, wear=(196, 192, 182), rust=(70, 46, 30),
-                         scale=8, dirt=0.25, spec=0.5, soot=0.4, rust_at=0.62)
+                         scale=8, dirt=0.25, spec=0.5, soot=0.4, rust_at=0.62, grain=0.2)
     m["core"] = painted("core", (9, 8, 8), rough=0.95, metal=0.1, wear=(26, 24, 22), scale=6, dirt=0.3, spec=0.12)
-    m["planks"] = kit.wood("planks", (178, 92, 40), (92, 40, 16), axis="Y", rings=7, dirt=0.55)
+    m["planks"] = kit.wood("planks", (118, 46, 18), (80, 30, 12), axis="Y", rings=4, dirt=0.6)    # dark rusty boards
     m["pale"] = painted("pale", (150, 152, 144), rough=0.5, metal=0.4, wear=(206, 206, 196), rust=(80, 60, 44),
                         scale=6, dirt=0.3, spec=0.4, rust_at=0.66)
     m["steel"] = painted("steel", (74, 76, 78), rough=0.48, metal=0.5, wear=(160, 160, 154), rust=(62, 42, 30),
-                         scale=6, dirt=0.4, spec=0.4, soot=0.6, rust_at=0.6)
+                         scale=6, dirt=0.4, spec=0.4, soot=0.6, rust_at=0.6, grain=0.25)
     m["plate"] = painted("plate", (36, 46, 44), rough=0.6, metal=0.3, wear=(120, 132, 124), rust=(58, 40, 28),
-                         scale=5, dirt=0.0, spec=0.3, top=(64, 76, 72))
+                         scale=5, dirt=0.0, spec=0.3, top=(64, 76, 72), grain=0.3)
     m["dark"] = flat("dark", (12, 10, 9), rough=0.9)
+    m["hole"] = flat("hole", (5, 4, 4), rough=1.0)
+    next(n for n in m["hole"].node_tree.nodes if n.type == "BSDF_PRINCIPLED").inputs["Specular IOR Level"].default_value = 0
     m["dust"] = flat("dust", (186, 168, 140), rough=1.0)
     next(n for n in m["dust"].node_tree.nodes if n.type == "BSDF_PRINCIPLED").inputs["Alpha"].default_value = 0.6
     return m
@@ -103,14 +104,14 @@ def wall_r(z):
 
 # ------------------------------------------------------------------------------------------------ the bowl
 def bowl():
-    lathe("bowlfoot", [(0.0, 0.0)] + FOOT + [(0.0, 1.0)], (0, 0, 0), M["iron"], verts=64)
+    lathe("bowlfoot", [(0.0, 0.0)] + FOOT[:6] + [(0.0, 0.46)], (0, 0, 0), M["steel"], verts=64)   # the grey steps
+    lathe("bowlneck", [(0.0, 0.46)] + FOOT[5:] + [(0.0, 1.0)], (0, 0, 0), M["iron"], verts=64)
     prof = BOWL + [(RIM_R - 0.06, 3.3), (RIM_R, RIM_Z - 0.06), (RIM_R - 0.08, RIM_Z + 0.02), (IN_R + 0.04, RIM_Z),
                    (IN_R, 3.2)]
     lathe("bowl", prof, (0, 0, 0), M["iron"], verts=72)
     lathe("bowlin", [(IN_R, 3.22), (IN_R - 0.08, 2.4), (IN_R - 0.4, 1.8), (2.0, FLOOR_Z), (0.0, FLOOR_Z)],
           (0, 0, 0), M["inside"], verts=72)
     ring("bowllip", RIM_R - 0.02, 0.09, M["lip"], z=RIM_Z - 0.06, n=72)
-    ring("bowlfootring", 2.98, 0.07, M["lip"], z=0.3, n=64)
     if L >= 3:                                 # level 3: a riveted band round the bowl's belly
         lathe("bowlband", [(3.1, 2.1), (3.36, 2.18), (3.44, 2.45), (3.36, 2.72), (3.12, 2.8)], (0, 0, 0), M["band"],
               verts=72)
@@ -132,15 +133,16 @@ def rollers():
         hub = kit.bpy.data.objects.new(f"roll{i}-spin", None)
         link(hub, e)
         kit.MOVING.append(hub)
-        cyl(f"roll{i}core", ROLL_R, 2 * half, (0, 0, -half), M["core"] if L >= 3 else M["bonedark"], parent=hub,
-            verts=20)
-        n_rings = 3 if L >= 3 else int(2 * half / 0.62)
+        cyl(f"roll{i}core", ROLL_R, 2 * half, (0, 0, -half), M["core"], parent=hub, verts=20)
+        n_rings = 3 if L >= 3 else int((2 * half - 0.5) / 0.42) + 1
         for k in range(n_rings):
             if L >= 3:                           # spikes kept clear of the wall, staggered between the rollers
                 z = -1.45 + 0.6 * (i % 2) + k * 1.2
-            else:
-                z = -half + 0.5 + k * (2 * half - 1.0) / max(1, n_rings - 1)
-            nj = 4
+            else:                                # rings half a step apart on neighbouring rollers
+                z = -half + 0.45 + 0.21 * (i % 2) + k * 0.42
+                if z > half - 0.45:
+                    continue
+            nj = 4 if L >= 3 else 8
             for j in range(nj):
                 a = 2 * math.pi * (j + (0.5 * (k % 2) + 0.3 * i if L >= 3 else 0.5 * (i % 2))) / nj
                 d = Vector((math.cos(a), math.sin(a), 0))
@@ -148,11 +150,15 @@ def rollers():
                     sp = cyl(f"roll{i}spike{k}-{j}", 0.27, 0.7, (d.x * (ROLL_R - 0.03), d.y * (ROLL_R - 0.03), z),
                              M["spike"], r2=0.015, verts=8, parent=hub, bevel=0.0)
                     sp.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
-                else:
-                    t = box(f"roll{i}tooth{k}-{j}", (0.24, 0.34, 0.36), (0, 0, 0), M["bone"], parent=hub, bevel=0.03,
+                elif (j + k) % 2 == 0:                   # level 1: a checker of flat bone teeth and steel spikes
+                    t = box(f"roll{i}tooth{k}-{j}", (0.2, 0.28, 0.3), (0, 0, 0), M["bone"], parent=hub, bevel=0.025,
                             origin="centre")
-                    t.location = (d.x * (ROLL_R + 0.08), d.y * (ROLL_R + 0.08), z)
+                    t.location = (d.x * (ROLL_R + 0.04), d.y * (ROLL_R + 0.04), z)
                     t.rotation_euler = (0, 0, a)
+                else:
+                    sp = cyl(f"roll{i}spike{k}-{j}", 0.15, 0.27, (d.x * (ROLL_R - 0.02), d.y * (ROLL_R - 0.02), z),
+                             M["pale"], r2=0.01, verts=4, parent=hub, bevel=0.0)
+                    sp.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
 
 
 # ------------------------------------------------------------------------------------------------ the horn
@@ -170,13 +176,16 @@ def horn():
     for i in range(first, n):                          # stacked rings, each a fat band with a groove under the next
         f0, f1 = i / n, (i + 1) / n
         za, zb = z0 + (z1 - z0) * f0, z0 + (z1 - z0) * f1
-        r = 0.46 + 0.38 * f1 ** 0.55 if L >= 3 else 0.52 + 0.42 * f1 ** 0.5
+        r = 0.42 + 0.44 * f1 ** 1.6 if L >= 3 else 0.52 + 0.42 * f1 ** 0.5
         prof += [(r - 0.09, za + 0.02), (r - 0.01, za + 0.08), (r, (za + zb) / 2), (r - 0.02, zb - 0.06),
                  (r - 0.1, zb - 0.01)]
-    prof += [(0.86, z1 + 0.02), (0.88, z1 + 0.1), (0.8, z1 + 0.14), (0.7, z1 + 0.06), (0.6, z1 - 0.9),
-             (0.0, z1 - 1.0)]
+    dz = 0.9 if L < 3 else 0.4                  # the inner wall stays inside the (tapered) rings
+    prof += [(0.86, z1 + 0.02), (0.88, z1 + 0.1), (0.8, z1 + 0.14), (0.7, z1 + 0.06), (0.6, z1 - dz),
+             (0.0, z1 - dz - 0.1)]
     lathe("horn", prof, (x, y, 0), M["hornbone"], verts=40)
-    lathe("hornhole", [(0.0, z1 - 0.95), (0.6, z1 - 0.95), (0.69, z1 + 0.05)], (x, y, 0.0), M["dark"], verts=32)
+    lathe("hornhole", [(0.0, z1 - dz + 0.1), (0.55, z1 - dz + 0.1), (0.64, z1 + 0.03)], (x, y, 0.0), M["hole"],
+          verts=32)
+    ring("hornlip", 0.84, 0.05, M["bone"], z=z1 + 0.1).location = (x, y, 0)    # Flash's pale worn lip
     a = math.atan2(y, x)
     if L >= 3:                                  # the bracket: a rust knee from the lip up under the cup, and a collar
         u = Vector((math.cos(a), math.sin(a), 0))
@@ -217,16 +226,19 @@ def drum():
 
 # ------------------------------------------------------------------------------------------------ shield, plate, cog
 def shield():
-    """The rust shield on the bowl's front right, standing off the wall on brackets. Level 1: a plate wider at the top,
-    leaning out, with Flash's pale inner frame and diamond, two struts from its foot down to the steel plate and a
-    short chain between them. Level 3 (Flash redraws it): a bigger hood, its foot low by the bowl's foot and its top
-    leaning out over the band; a thick rust frame round a dark panel with a pale inner line and a small copper gear."""
+    """The rust shield on the bowl's front right, standing off the wall on brackets. Level 1: Flash's pointed shield,
+    thick, leaning out, a pale triangle of lines down to its point; a steel rod from the point down to the plate, a
+    chain hanging from its right edge, the cog beside the rod. Level 3 (Flash redraws it): a bigger hood, its foot low
+    by the bowl's foot and its top leaning out over the band; a thick rust frame round a dark panel with a pale inner
+    line and a small copper gear."""
     if L < 3:
-        th, face, r0 = math.radians(4), math.radians(-2), 3.36
-        wt, wb, z0, z1, lean = 2.3, 1.4, 0.95, 4.1, 0.6
+        th, face, r0 = math.radians(-8), math.radians(-6), 3.4
+        wt, wb, z0, z1, lean = 3.0, 3.0, 0.95, 4.1, 0.5
+        shape = [(-1, 0.5), (0, 0), (1, 0.5), (1, 1), (-1, 1)]
     else:
-        th, face, r0 = math.radians(SH3_TH), math.radians(-10), 3.22
-        wt, wb, z0, z1, lean = 2.35, 2.05, 0.75, 3.7, 0.85
+        th, face, r0 = math.radians(SH3_TH), math.radians(-6), 3.36
+        wt, wb, z0, z1, lean = 2.7, 2.4, 0.75, 3.7, 0.85
+        shape = [(-1, 0), (1, 0), (1, 1), (-1, 1)]
     c = Vector((r0 * math.cos(th), r0 * math.sin(th), 0))
     out = Vector((math.cos(face), math.sin(face), 0))
     side = Vector((-math.sin(face), math.cos(face), 0))
@@ -238,21 +250,18 @@ def shield():
     STATE["shield_at"] = at
     import bmesh
     bm = bmesh.new()
-    vs = [[bm.verts.new(at(u, v, d)) for u, v in ((-1, 0), (1, 0), (1, 1), (-1, 1))] for d in (-0.14, 0.0)]
+    n = len(shape)
+    vs = [[bm.verts.new(at(u, v, d)) for u, v in shape] for d in (-0.22, 0.0)]
     bm.faces.new(vs[1])
     bm.faces.new(vs[0][::-1])
-    for j in range(4):
-        bm.faces.new((vs[0][j], vs[0][(j + 1) % 4], vs[1][(j + 1) % 4], vs[1][j]))
+    for j in range(n):
+        bm.faces.new((vs[0][j], vs[0][(j + 1) % n], vs[1][(j + 1) % n], vs[1][j]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     kit.mesh_ob("shield", bm, [M["rust"] if L < 3 else M["iron"]], smooth=False, bevel=0.04, segs=2)
-    if L < 3:                                   # the pale inner frame: a border and a diamond
-        fr = [(-0.78, 0.1), (0.78, 0.1), (0.8, 0.9), (-0.8, 0.9)]
-        for k in range(4):
-            sweep(f"shieldframe{k}", [at(*fr[k], 0.04), at(*fr[(k + 1) % 4], 0.04)], side, 0.07, 0.07, M["bone"],
-                  bevel=0.02)
-        dia = [(0.0, 0.18), (0.55, 0.5), (0.0, 0.82), (-0.55, 0.5)]
-        for k in range(4):
-            sweep(f"shielddia{k}", [at(*dia[k], 0.04), at(*dia[(k + 1) % 4], 0.04)], side, 0.06, 0.06, M["bone"],
+    if L < 3:                                   # the pale lines: a triangle from the top corners down to the point
+        fr = [(-0.8, 0.9), (0.8, 0.9), (0.0, 0.16)]
+        for k in range(3):
+            sweep(f"shieldframe{k}", [at(*fr[k], 0.04), at(*fr[(k + 1) % 3], 0.04)], side, 0.07, 0.07, M["bone"],
                   bevel=0.02)
     else:                                       # the thick rust frame (proud of the panel), a pale line inside it
         fr = [(-1.0, 0.0), (1.0, 0.0), (1.0, 1.0), (-1.0, 1.0)]
@@ -267,25 +276,23 @@ def shield():
              tooth=0.24)
         kit.blob("shieldgearhub", at(-0.38, 0.68, 0.11), 0.1, 0.6, M["rust"])
     for u in (-0.85, 0.85):                     # brackets into the wall, bolts on the face
-        for v in ((0.15, 0.85) if L < 3 else (0.55, 0.9)):
-            p = at(u * 0.7, v, -0.14)
+        for v in ((0.5, 0.88) if L < 3 else (0.55, 0.9)):
+            p = at(u * 0.7, v, -0.22)
             q = Vector((p.x, p.y, 0)).normalized() * (wall_r(p.z) - 0.08) + Vector((0, 0, p.z))
             sweep(f"shieldbracket{u}{v}", [q, p], (0, 0, 1), 0.14, 0.12, M["rust"], bevel=0.02)
             kit.blob(f"shieldbolt{u}{v}", at(u * (0.9 if L < 3 else 1.0), v, 0.06 if L < 3 else 0.2), 0.07, 0.7,
                      M["bone"])
-    px_, py_ = PLATE
     if L >= 3:                                  # its foot stands on the plate on two shoes
         for u in (-0.75, 0.75):
             f = at(u, 0.0, -0.07)
             box(f"shieldshoe{u}", (0.36, 0.3, max(0.05, f.z - 0.1)), (f.x, f.y, 0.1), M["rust"], rot=(0, 0, -10),
                 bevel=0.03)
         return
-    for u in (-0.6, 0.6):                       # two struts from the shield's foot down to the plate
-        top = at(u, 0.02, -0.07)
-        foot = Vector((top.x, top.y, 0.12))
-        sweep(f"shieldstrut{u}", [top, foot], side, 0.1, 0.1, M["steel"], bevel=0.02)
-    # the chain between them, hanging from an eye under the shield's foot; it sways a little (moving layer)
-    top = at(0.0, 0.0, -0.07)
+    # the rod from the point down to the plate
+    top = at(0.0, 0.03, -0.11)
+    sweep("shieldrod", [top, Vector((top.x, top.y, 0.12))], side, 0.12, 0.12, M["steel"], bevel=0.02)
+    # the chain hanging from the right edge, from an eye under it; it sways a little (moving layer)
+    top = at(0.98, 0.5, -0.11) - Vector((0, 0, 0.05))
     e = kit.bpy.data.objects.new("chain", None)
     link(e)
     e.location = top
@@ -293,23 +300,23 @@ def shield():
     link(hub, e)
     kit.MOVING.append(hub)
     kit.blob("chaineye", top + Vector((0, 0, 0.03)), 0.08, 0.8, M["steel"])
-    n = 5
-    step = (top.z - 0.22) / n
+    n = 7
+    step = (top.z - 0.3) / n
     for k in range(n):
         lk = kit.bpy.data.objects.new(f"chainlink{k}", None)
         link(lk, hub)
         lk.location = (0, 0, -step * (k + 0.5))
         lk.rotation_euler = (0, 0, face + math.radians(90 * (k % 2)))
         tube(f"chainring{k}", [(0.06 * math.cos(2 * math.pi * j / 10), 0, step * 0.62 * math.sin(2 * math.pi * j / 10))
-                               for j in range(10)], 0.025, M["steel"], parent=lk, verts=6, cyclic=True)
+                               for j in range(10)], 0.025, M["pale"], parent=lk, verts=6, cyclic=True)
 
 
 def plate():
     """The steel plate on the ground: a dark top inset in a pale bevelled rim, as Flash."""
     x, y = PLATE
-    w = 1.9 if L < 3 else 2.3
-    if L >= 3:
-        x, y = x - 0.15, y - 0.1
+    w = 1.9 if L < 3 else 2.8
+    if L >= 3:                                  # under the hood's foot, reaching to the column
+        x, y = x - 0.15, y - 0.6
     box("plate", (w, w * 0.9, 0.09), (x, y, 0), M["pale"], rot=(0, 0, 40), bevel=0.04)
     box("platetop", (w - 0.22, w * 0.9 - 0.22, 0.12), (x, y, 0), M["plate"], rot=(0, 0, 40), bevel=0.03)
 
@@ -319,8 +326,9 @@ def cog():
     block bolted to the plate. Level 3: big with a hub and holes, in front of the hood's foot, its axle into the hood."""
     r = 0.42 if L < 3 else 0.86
     zc = 0.12 + r + 0.08
-    if L < 3:
-        x, y = COG
+    if L < 3:                                   # beside the shield's rod, under its point
+        p = STATE["shield_at"](0.42, 0.0, 0.32)
+        x, y = p.x, p.y
         face = Vector((1, -1, 0)).normalized()
     else:
         at = STATE["shield_at"]
@@ -471,7 +479,7 @@ def hopper():
     box("hopperlid", (ln, t, HOP_D), (xm, yb - t / 2, zf), M["rust"], parent=hub, bevel=0.03)
     box("hopperfront", (ln, t, HOP_D * 0.55), (xm, yf + t / 2, zf), M["rust"], parent=hub, bevel=0.03)
     cw = HOP_W - SLOT                           # the plank cover over the mouth, open in a slot along its far edge
-    box("hoppercover", (ln - 2 * t, cw, t), (xm, yb - cw / 2, zf + HOP_D - t), M["planks"], parent=hub, bevel=0.03)
+    box("hoppercover", (ln - 2 * t, cw, t), (xm, yb - cw / 2, zf + HOP_D - t), M["rust"], parent=hub, bevel=0.03)
     for f in (0.1, 0.5, 0.9):                   # copper straps round it
         xx = x0 + ln * f
         box(f"hopperribb{f}", (0.14, 0.06, HOP_D), (xx, yb + 0.03, zf), M["copper"], parent=hub, bevel=0.02)

@@ -229,9 +229,10 @@ def wood(name, light, dark, axis="Z", rings=6.0, hue_jit=0.0, rough=0.78, dirt=0
 
 
 def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, dirt=0.3, spec=0.4, soot=0.0, top=None,
-            ao_min=0.55, rust_at=0.6):
+            ao_min=0.55, rust_at=0.6, grain=0.0):
     """Paint or metal with worn patches (`wear` colour shows through), rust blotches and soot (dark, dull smudges that
-    run down the part, as Flash's dirty metals)."""
+    run down the part, as Flash's dirty metals). `grain` adds a fine dark speckle and a rougher bump: Flash's grainy
+    paint."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
@@ -261,9 +262,12 @@ def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, di
         up = t.n("ShaderNodeMath", operation="ABSOLUTE")         # a box's faces may wind either way
         t.link(sep.outputs["Z"], up.inputs[0])
         out = t.mix(out, srgb(*top), t.ramp(up.outputs[0], [(0.3, (0, 0, 0, 1)), (0.8, (1, 1, 1, 1))]))
+    if grain:
+        g = t.ramp(t.noise(v, scale * 16, 2.0, 0.5), [(0.32, srgb(*(255 * (1 - grain),) * 3)), (0.62, (1, 1, 1, 1))])
+        out = t.mix(out, g, 1.0, "MULTIPLY")
     out = t.grime(out, GROUND, 2.6, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rough_in, "metal": metal, "spec": spec})
-    t.bump(t.noise(v, scale * 3, 4.0, 0.6), 0.06, 0.01)
+    t.bump(t.noise(v, scale * (3 + 6 * grain), 4.0, 0.6), 0.06 + 0.25 * grain, 0.01)
     MATS[name] = t.m
     return t.m
 
