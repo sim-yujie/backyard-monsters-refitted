@@ -25,9 +25,10 @@ import { bookFirstGrows, MAX_ATTEMPTS, MAX_GROW_DROPS, REBALANCE_JOB, rebalanceP
  */
 const dbName = process.env.BOTS_TEST_DB;
 
-const NOW = Math.floor(Date.now() / 1000);
 const HOUR = 60 * 60;
 const DAY = 24 * HOUR;
+/** The real clock, moved back 3 hours late in the UTC day, so NOW + 1 hour is still the same rebalance day. */
+const NOW = ((now) => (now % DAY > 21 * HOUR ? now - 3 * HOUR : now))(Math.floor(Date.now() / 1000));
 const T = 3;
 
 describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => {
