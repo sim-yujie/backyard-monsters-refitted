@@ -26,7 +26,7 @@ LW, LD, UW = G["LW"], G["LD"], G["UW"]
 LW_Z, LD_Z1 = G["LW_Z"], G["LD_Z1"]
 R = random.Random(5)
 
-LOWER = ("lwall", "lpost", "lskirt", "lband", "lrivet", "lbolt", "ldoor", "lstrip", "coil", "sdoor", "steam", "inner")
+LOWER = ("lwall", "lpost", "lskirt", "lband", "lbeam", "lrivet", "lbolt", "ldoor", "lstrip", "coil", "sdoor", "steam", "inner")
 UPPER = ("ldeck", "uwall", "uflank", "upost", "pilaster", "ustrip", "uband", "urivet", "ubolt", "pipe", "udeck",
          "plinth", "bell", "wire", "dome", "uinner")
 
@@ -107,7 +107,8 @@ def rewire():
     """The copper wires again, from where the tipped bells' tops are now."""
     D.kill(group("wire"))
     bpy.context.view_layer.update()
-    top = {"bellC": 3.4 + 1.75 + 0.05, "bellL": 2.06 + 0.6 + 0.05, "bellR": 2.06 + 0.6 + 0.05}
+    big, small = G["BIG_BELL"][-1][1] + G["BIG_COIL"] + 0.05, G["SMALL_BELL"][-1][1] + G["SMALL_COIL"] + 0.05
+    top = {"bellC": big, "bellL": small, "bellR": small}
     t = {k: bpy.data.objects[k].matrix_world @ Vector((0, 0, h)) for k, h in top.items()}
     q = t["bellC"] + Vector((0, 0, 0.1))
     for k, name in enumerate(("bellL", "bellR")):

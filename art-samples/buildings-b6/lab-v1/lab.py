@@ -27,7 +27,7 @@ LEVEL = int(ARGS[0])
 MODE = ARGS[1] if len(ARGS) > 1 else "fit"
 
 EL = 30.0
-ORIGIN = (-3.0, 45.0)                # Flash pixel of the world origin (the plan's middle on the ground)
+ORIGIN = (-0.5, 45.0)                # Flash pixel of the world origin (the plan's middle on the ground)
 GROUND = 0.0
 FRAME = (-86, -104, 126, 82)         # the canvas in Flash px (as fref.FRAME)
 K = int(os.environ.get("PB_K", 4 if MODE == "fit" else 12))     # render px per Flash px
@@ -656,9 +656,9 @@ UW = [(-6.0, 0.0), (-5.4, 1.9), (-3.5, 1.9), (-3.5, -3.3), (3.5, -3.3), (3.5, 1.
 UD = [(-7.5, 0.0), (-6.6, 2.3), (6.6, 2.3), (7.5, 0.0), (0.0, -5.8)]
 COIL_UV = (-3.6, 3.0)                       # the left gold column (the right one mirrored)
 DOOR_F, DOOR_W = 0.36, 1.5                  # the left side door: how far along the left face (from the corner), width
-PL_C, PL_H, PL_Z = (-0.7, 0.7), 1.3, 10.05  # the plinth under the big bell: middle, half side, top
+PL_C, PL_H, PL_Z = (-0.7, 0.7), 1.6, 9.84   # the plinth board under the big bell: middle, half side, top
 DOME_UV, DOME_R = (0.3, 0.25), 2.08         # the glass dome on the lower deck, in the upper recess
-PIPE_A, PIPE_B, PIPE_Z = (-4.3, 1.9), (-6.75, 1.0), 7.55   # the glass pipe: out of the flank, its bend, height
+PIPE_F, PIPE_Z, PIPE_OUT = 0.5, 7.7, 1.25    # the glass pipe: how far along the upper left face, height, reach
 BELL_S = (-3.82, 0.6)                       # the left small bell on the upper deck (the right one mirrored)
 
 
@@ -754,24 +754,40 @@ def materials():
     M["deckedge"] = painted("deckedge", (82, 58, 44), rough=0.55, metal=0.25, wear=(114, 84, 60), scale=3.0, dirt=0.3)
     M["frame"] = painted("frame", (98, 66, 46), rough=0.5, metal=0.35, wear=(136, 96, 62), rust=(70, 44, 30),
                          scale=4.0, dirt=0.3)
-    M["plinth"] = wood("plinth", (188, 140, 84), (140, 98, 58), dirt=0.2)
-    M["gold"] = shiny("gold", (204, 128, 36), rough=0.3, metal=0.75, side=0.45, wear=(240, 186, 80), scale=1.5,
+    M["plinth"] = wood("plinth", (130, 86, 50), (106, 70, 40), rings=3.0, dirt=0.3, knots=False)
+    M["gold"] = shiny("gold", (232, 162, 46), rough=0.3, metal=0.75, side=0.45, wear=(240, 186, 80), scale=1.5,
                       dirt=0.45, streak=0.3)
     M["brass"] = shiny("brass", (150, 104, 46), rough=0.35, metal=0.7, wear=(190, 140, 66), scale=2.0, dirt=0.3)
     M["pilaster"] = shiny("pilaster", (196, 204, 150), rough=0.4, metal=0.3, wear=(166, 172, 120), scale=2.0, dirt=0.2)
-    M["chrome"] = shiny("chrome", (184, 196, 190), rough=0.24, metal=0.9, wear=(140, 152, 148), scale=3, dirt=0.2,
-                        side=0.45)
+    # Flash's chrome is mottled: blue-grey with darker patches and white glints, not a clean mirror
+    M["chrome"] = shiny("chrome", (176, 190, 196), rough=0.26, metal=0.85, wear=(104, 118, 132), scale=7, dirt=0.2,
+                        side=0.5, streak=0.4)
     M["steel"] = shiny("steel", (120, 128, 132), rough=0.3, metal=0.8, wear=(150, 156, 160), scale=6, dirt=0.1)
     M["rivet"] = shiny("rivet", (170, 172, 170), rough=0.3, metal=0.8, wear=(120, 124, 128), scale=6, dirt=0.05)
-    M["copper"] = shiny("copper", (206, 110, 46), rough=0.35, metal=0.6, wear=(150, 70, 30), scale=8, dirt=0.0)
-    M["glass"] = shiny("glass", (96, 222, 214), rough=0.12, metal=0.05, wear=(150, 250, 240), scale=1.5, dirt=0.0,
-                       coat=0.7, side=0.45)
+    M["copper"] = shiny("copper", (178, 92, 40), rough=0.4, metal=0.6, wear=(120, 62, 30), scale=14, dirt=0.0)
+    M["glass"] = glass_mat()
     M["flange"] = shiny("flange", (44, 110, 180), rough=0.3, metal=0.4, wear=(80, 150, 210), scale=3, dirt=0.1)
     M["grate"] = painted("grate", (100, 98, 94), rough=0.6, metal=0.4, wear=(136, 134, 128), scale=4.0, dirt=0.2)
     M["hole"] = flat("hole", (12, 12, 18), rough=1.0)
     M["dome"] = dome_mat()
     M["steam"] = steam_mat()
     return M
+
+
+def glass_mat():
+    """The pipes' clear cyan glass: the wall shows dark through the middle, the edges glow bright cyan (Flash)."""
+    t = NT("glass")
+    rim = t.n("ShaderNodeLayerWeight")
+    rim.inputs["Blend"].default_value = 0.4
+    edge = t.ramp(rim.outputs["Facing"], [(0.25, (0, 0, 0, 1)), (0.85, (1, 1, 1, 1))])
+    col = t.mix(srgb(70, 190, 186), srgb(150, 250, 240), edge)
+    t.set(**{"Base Color": col, "rough": 0.12, "metal": 0.0, "spec": 0.6, "Transmission Weight": 0.65, "IOR": 1.15})
+    t.set(**{"Emission Color": srgb(110, 236, 226)})
+    em = t.n("ShaderNodeMath", operation="MULTIPLY")
+    t.link(edge, em.inputs[0])
+    em.inputs[1].default_value = 0.6
+    t.set(**{"Emission Strength": em.outputs[0]})
+    return t.m
 
 
 DOME_MAP = []          # the dome brew's mapping node: its location turns round a circle over one loop
@@ -802,13 +818,14 @@ def dome_mat():
 def steam_mat():
     t = NT("steam")
     v = t.coords()
-    n = t.noise(v, 3.0, 3.0, 0.5)
-    col = t.ramp(n, [(0.35, srgb(96, 98, 102)), (0.65, srgb(150, 152, 154))])
+    # Flash's steam is a mid grey mass, darker in the folds, with pale grey (not white) tops
+    n = t.noise(v, 2.2, 2.0, 0.5)
+    col = t.ramp(n, [(0.38, srgb(84, 86, 90)), (0.62, srgb(126, 128, 132))])
     geo = t.n("ShaderNodeNewGeometry")
     sep = t.n("ShaderNodeSeparateXYZ")
     t.link(geo.outputs["Normal"], sep.inputs[0])
-    col = t.mix(col, srgb(240, 242, 244), t.ramp(sep.outputs["Z"], [(0.45, (0, 0, 0, 1)), (0.9, (0.85, 0.85, 0.85, 1))]))
-    t.set(**{"Base Color": col, "rough": 0.9, "spec": 0.1})
+    col = t.mix(col, srgb(178, 180, 184), t.ramp(sep.outputs["Z"], [(0.55, (0, 0, 0, 1)), (0.95, (0.6, 0.6, 0.6, 1))]))
+    t.set(**{"Base Color": col, "rough": 0.95, "spec": 0.05})
     return t.m
 
 
@@ -825,9 +842,9 @@ def set_phase(dome_t=None, steam_t=None):
         for side, puffs in STEAM.items():
             for i, (ob, path) in enumerate(puffs):
                 s = ((i + steam_t) / len(puffs)) % 1.0
-                p, r = path(s)
+                p, sc = path(s)
                 ob.location = p
-                ob.scale = (r, r, r * 0.85)
+                ob.scale = sc
 
 
 # ------------------------------------------------------------------------------------------------------------ the body
@@ -859,23 +876,28 @@ def lower():
     # the gold ribbed columns at the front corners
     for k, (u, v) in enumerate((COIL_UV, (-COIL_UV[0], COIL_UV[1]))):
         x, y = uv(u, v)
-        prof = [(0.0, 0.0), (0.46, 0.0), (0.46, 0.14)]
-        for j in range(12):
-            z0 = 0.16 + j * 0.34
-            prof += [(0.32, z0), (0.52, z0 + 0.12), (0.5, z0 + 0.2), (0.32, z0 + 0.34)]
+        prof = [(0.0, 0.0), (0.42, 0.0), (0.42, 0.12)]
+        for j in range(7):                          # Flash's columns: a stack of sharp double cones
+            z0 = 0.14 + j * 0.58
+            prof += [(0.26, z0), (0.6, z0 + 0.27), (0.6, z0 + 0.31), (0.26, z0 + 0.58)]
         prof += [(0.42, LW_Z), (0.0, LW_Z)]
         lathe(f"coil{k}", prof, (x, y, 0.0), M["gold"], verts=28)
+    # a gold beam under the deck's front edge from column to column
+    ca, cb = Vector(uv(*COIL_UV)), Vector(uv(-COIL_UV[0], COIL_UV[1]))
+    _, _, tb, nb, angb = face(ca, cb)
+    p = (ca + cb) / 2
+    box("lbeam", ((cb - ca).length, 0.34, 0.42), (p.x, p.y, LW_Z - 0.42), M["gold"], rot=(0, 0, angb), bevel=0.04)
     # the recess between the columns: dark panels, brass strips, the grey door in the middle
     ra, rb = out[3], out[4]                        # its back face, left to right
     _, _, t, n, ang = face(ra, rb)
     mid = (Vector(ra) + Vector(rb)) / 2
-    box("ldoor", (1.5, 0.12, 2.4), (mid.x + n.x * 0.05, mid.y + n.y * 0.05, 0.9), M["grate"], rot=(0, 0, ang),
+    box("ldoor", (1.2, 0.12, 3.3), (mid.x + n.x * 0.05, mid.y + n.y * 0.05, 0.4), M["grate"], rot=(0, 0, ang),
         bevel=0.04)
     for j in range(5):                              # the door's zigzag ribs
-        z = 1.2 + j * 0.42
-        s = 0.3 if j % 2 else -0.3
+        z = 0.8 + j * 0.6
+        s = 0.22 if j % 2 else -0.22
         p = mid + t * s + n * 0.12
-        box(f"ldoorrib{j}", (0.72, 0.08, 0.12), (p.x, p.y, z), M["steel"], rot=(0, 0, ang), bevel=0.03)
+        box(f"ldoorrib{j}", (0.6, 0.08, 0.12), (p.x, p.y, z), M["steel"], rot=(0, 0, ang), bevel=0.03)
     for s in (-2.2, -1.4, 1.4, 2.2):
         p = mid + t * s + n * 0.03
         box(f"lstrip{s}", (0.12, 0.06, LW_Z - 0.6), (p.x, p.y, 0.3), M["brass"], rot=(0, 0, ang), bevel=0.02)
@@ -893,8 +915,8 @@ def lower():
             box(f"sdoorjamb{k}", (0.24, 0.3, 3.15), (p.x, p.y, 0.0), M["frame"], rot=(0, 0, ang))
         p = c + n * 0.1
         box(f"sdoorlintel{k}", (w + 0.5, 0.3, 0.3), (p.x, p.y, 3.0), M["frame"], rot=(0, 0, ang))
-        p = c + n * 1.05
-        box(f"sdoorplate{k}", (w + 0.9, 2.0, 0.14), (p.x, p.y, 0.0), M["deckedge"], rot=(0, 0, ang), bevel=0.03)
+        p = c + n * 1.3
+        box(f"sdoorplate{k}", (w + 1.2, 2.5, 0.14), (p.x, p.y, 0.0), M["deckedge"], rot=(0, 0, ang), bevel=0.03)
         steam(k, c, t, n)
 
 
@@ -908,22 +930,37 @@ STEAM = {}
 
 
 def steam(k, c, t, n):
-    """Puffs pouring out of the door's top half and rolling down and out onto the plate; set_phase moves them."""
-    def path(s, k=k):
-        out = 0.25 + 2.0 * s ** 0.8
-        z = 2.5 - 2.1 * s ** 1.3
-        side = 0.25 * math.sin(2.5 * s + 2 * k) * (1 if k == 0 else -1)
-        r = 0.48 + 0.32 * s
+    """Grey chunks tumbling out of the door's top half, falling outward and spilling across the plate (Flash);
+    set_phase moves them. A chunk starts inside the wall, falls to the plate, spreads flat and sinks into it."""
+    sgn = 1 if k == 0 else -1
+
+    def path(s, i, k=k):
+        jit = ((i * 7) % 5 - 2) / 2.0                     # each chunk drifts a little to its own side
+        if s < 0.5:                                       # out of the door and falling
+            f = s / 0.5
+            out = -0.3 + 2.2 * f ** 0.7
+            z = 2.45 - 1.95 * f ** 1.5
+            side = 0.15 * jit * f
+            r = 0.55 + 0.22 * f
+            sc = (r, r, r * 0.9)
+        else:                                             # spilling out across the plate, spreading and flattening
+            f = (s - 0.5) / 0.5
+            out = 1.9 + 0.45 * f
+            side = (0.15 + 0.55 * f) * jit + 0.25 * f * sgn
+            r = 0.77 + 0.1 * f - 0.55 * max(0.0, f - 0.8) / 0.2
+            z = 0.5 - 0.1 * f - 0.3 * max(0.0, f - 0.8) / 0.2
+            sc = (r * 1.15, r * 1.15, r * (0.7 - 0.2 * f))
         p = c + n * out + t * side
-        return Vector((p.x, p.y, max(z, r * 0.55 + 0.14))), r
+        return Vector((p.x, p.y, z)), sc
     puffs = []
-    for i in range(6):
+    for i in range(9):
         bm = bmesh.new()
-        bmesh.ops.create_icosphere(bm, subdivisions=3, radius=1.0)
-        for v in bm.verts:
-            v.co *= 1.0 + 0.18 * math.sin(3 * v.co.x + i) * math.cos(4 * v.co.y + 2 * i)
+        bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+        for v in bm.verts:                                # lumpy, chunky clumps rather than round balls
+            v.co *= 1.0 + 0.22 * math.sin(3.1 * v.co.x + i) * math.cos(3.7 * v.co.y + 2 * i) \
+                + 0.1 * math.sin(5 * v.co.z + 3 * i)
         ob = mesh_ob(f"steam{k}-{i}", bm, [M["steam"]], smooth=True)
-        puffs.append((ob, path))
+        puffs.append((ob, lambda s, i=i: path(s, i)))
     STEAM[k] = puffs
 
 
@@ -966,19 +1003,21 @@ def upper():
     bolts += [_on(a, b, f, z, 0.03) for f, z in ((0.2, 5.8), (0.2, 8.5), (0.85, 5.8), (0.85, 8.5))]
     bolts += [(mir(p), mir(n)) for p, n in bolts]
     studs("ubolt", bolts, 0.17, M["steel"], squash=0.45)
-    # the glass pipes: out of the flank, a bend, down to a blue flange on the lower deck
-    for k, mirrored in enumerate((False, True)):
-        f = mir if mirrored else (lambda p: p)
-        a = Vector(f(uv(*PIPE_A)) + (PIPE_Z,))
-        b = Vector(f(uv(*PIPE_B)) + (PIPE_Z,))
-        c = Vector(f(uv(*PIPE_B)) + (LD_Z1,))
-        r = 0.62
-        d = (b - a).normalized()
-        pts = [a, b - d * 0.9, b - d * 0.26 + Vector((0, 0, -0.26)), b + Vector((0, 0, -0.9)), c]
+    # the glass pipes: straight out of the upper side faces, a quarter bend down to a blue flange on the lower deck
+    for k, (i, j) in enumerate(((0, 1), (6, 7))):
+        a2, b2, t, n, _ = face(out[i], out[j])
+        w = a2.lerp(b2, PIPE_F if k == 0 else 1 - PIPE_F)
+        a = Vector((w.x, w.y, PIPE_Z))
+        n3 = Vector((n.x, n.y, 0.0))
+        r = 0.44
+        drop = PIPE_Z - LD_Z1
+        pts = [a, a + n3 * 0.35, a + n3 * (PIPE_OUT * 0.75) + Vector((0, 0, -0.15)),
+               a + n3 * PIPE_OUT + Vector((0, 0, -drop * 0.45)), a + n3 * PIPE_OUT + Vector((0, 0, -drop + 0.12))]
         tube(f"pipe{k}", [tuple(p) for p in pts], r, M["glass"], verts=16, smooth=True)
-        cyl(f"pipeflange{k}", 0.86, 0.18, tuple(c), M["flange"], verts=28)
-        ob = cyl(f"pipecollar{k}", 0.72, 0.24, tuple(a - d * 0.12), M["flange"], verts=24)
-        ob.rotation_euler = d.to_track_quat("Z", "Y").to_euler()
+        c = a + n3 * PIPE_OUT
+        cyl(f"pipeflange{k}", 0.7, 0.16, (c.x, c.y, LD_Z1), M["flange"], verts=28)
+        ob = cyl(f"pipecollar{k}", 0.5, 0.1, tuple(a + n3 * 0.02), M["flange"], verts=24)
+        ob.rotation_euler = n3.to_track_quat("Z", "Y").to_euler()
 
 
 def upper_deck():
@@ -1011,16 +1050,17 @@ def bell(name, at, prof, coil_r, coil_turns, coil_h):
     return Vector((at[0], at[1], at[2] + top + coil_h + 0.05))
 
 
-BIG_BELL = [(0.0, 0.0), (1.25, 0.0), (1.28, 0.16), (1.18, 0.32), (0.92, 0.4), (0.84, 0.55), (0.86, 1.4), (0.84, 2.5),
-            (0.78, 2.78), (0.56, 3.0), (0.48, 3.15), (0.5, 3.35), (0.0, 3.4)]
-SMALL_BELL = [(0.0, 0.0), (1.05, 0.0), (1.08, 0.14), (0.98, 0.26), (0.84, 0.32), (0.86, 0.8), (0.84, 1.25),
-              (0.72, 1.6), (0.5, 1.82), (0.3, 1.92), (0.32, 2.02), (0.0, 2.06)]
+BIG_BELL = [(0.0, 0.0), (1.25, 0.0), (1.28, 0.14), (1.2, 0.3), (0.98, 0.36), (0.9, 0.42), (0.84, 0.5), (0.82, 2.0),
+            (0.87, 2.08), (0.84, 2.18), (0.7, 2.4), (0.5, 2.6), (0.42, 2.75), (0.44, 2.9), (0.0, 2.92)]
+SMALL_BELL = [(0.0, 0.0), (1.0, 0.0), (1.04, 0.12), (0.96, 0.26), (0.8, 0.32), (0.78, 0.5), (0.8, 1.25), (0.74, 1.5),
+              (0.58, 1.72), (0.36, 1.84), (0.24, 1.9), (0.26, 2.0), (0.0, 2.02)]
+BIG_COIL, SMALL_COIL = 1.85, 0.6            # the coils' heights on top of the bells
 
 
 def top():
-    big = bell("bellC", (PL_C[0], PL_C[1], PL_Z), BIG_BELL, 0.42, 5, 1.75)
-    l_top = bell("bellL", uv(*BELL_S) + (UD_Z1,), SMALL_BELL, 0.24, 2.5, 0.6)
-    r_top = bell("bellR", mir(uv(*BELL_S)) + (UD_Z1,), SMALL_BELL, 0.24, 2.5, 0.6)
+    big = bell("bellC", (PL_C[0], PL_C[1], PL_Z), BIG_BELL, 0.42, 4.5, BIG_COIL)
+    l_top = bell("bellL", uv(*BELL_S) + (UD_Z1,), SMALL_BELL, 0.24, 2.5, SMALL_COIL)
+    r_top = bell("bellR", mir(uv(*BELL_S)) + (UD_Z1,), SMALL_BELL, 0.24, 2.5, SMALL_COIL)
     # the copper wire: from each small bell's top up in an arc into the big coil's top
     for k, p in enumerate((l_top, r_top)):
         q = big + Vector((0, 0, 0.1))
@@ -1060,7 +1100,7 @@ def build():
     set_phase(0.0, 0.0)
 
 
-FAMILY = (("lwall", "lwall"), ("lpost", "lwall"), ("lskirt", "lwall"), ("lband", "lwall"), ("lrivet", "lwall"),
+FAMILY = (("lwall", "lwall"), ("lpost", "lwall"), ("lskirt", "lwall"), ("lband", "lwall"), ("lbeam", "coil"), ("lrivet", "lwall"),
           ("lbolt", "lwall"), ("lstrip", "lwall"), ("ldoor", "ldoor"), ("coil", "coil"), ("sdoor", "sdoor"),
           ("steam", "steam"), ("ldeck", "ldeck"), ("uwall", "uwall"), ("uflank", "uwall"), ("upost", "uwall"),
           ("uband", "uwall"), ("urivet", "uwall"), ("ustrip", "uwall"), ("ubolt", "uwall"), ("pilaster", "pilaster"), ("pipe", "pipe"),
