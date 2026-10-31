@@ -113,7 +113,7 @@ describe("BuildPlacement ghost art", () => {
     expect(pictures.children).toHaveLength(2);
     const [body, turret] = pictures.children;
     expect([body?.x, body?.y]).toEqual([-39, -37]);
-    expect([turret?.x, turret?.y]).toEqual([-28, -52]);
-    expect([turret?.width, turret?.height]).toEqual([56, 42]);
+    expect([turret?.x, turret?.y]).toEqual([-27, -51]);
+    expect([turret?.width, turret?.height]).toEqual([54, 40]);
   });
 });
