@@ -8,6 +8,7 @@ Flash has one look for every Baiter level (a 41-frame loop), so there is one pai
     python post.py outline     baiter-outline.png  Flash outline (red) on the 3D (cyan), the miss map; overlap printed
     python post.py crops       crop-*.png          full-size crops of the main details, Flash beside 3D
     python post.py game        baiter-game.png     Flash | 3D at the game's own size (1x) and 2x, on grass
+    python post.py states      baiter-states.png   Flash | 3D whole, damaged, destroyed (shadows lightened alike)
 A 3D frame is the base picture (every still part and the ground shadow) with the frame's moving-parts layer laid over
 it, so nothing outside the moving parts can change between frames.
 """
@@ -40,17 +41,36 @@ SHADOW = 0.6                # the ground shadow's strength kept: Flash's is a so
 _BASE = {}
 
 
+def lighten(base, alone):
+    """base with its ground shadow lightened: pixels that are shadow, not building (alone), keep SHADOW of their
+    darkness."""
+    b = np.array(Image.open(base).convert("RGBA")).astype(float)
+    a1 = np.array(Image.open(alone).convert("RGBA"))[:, :, 3].astype(float)
+    a0 = b[:, :, 3]
+    b[:, :, 3] = np.where(a0 > a1, a1 + (a0 - a1) * SHADOW, a0)
+    return Image.fromarray(b.round().clip(0, 255).astype(np.uint8))
+
+
 def base3d():
-    """The base picture with its ground shadow lightened (pixels that are shadow, not building, keep SHADOW of their
-    darkness; where a moving part covers the shadow the parts layer is laid over anyway)."""
+    """The base picture with its ground shadow lightened (where a moving part covers the shadow the parts layer is
+    laid over anyway)."""
     if "b" not in _BASE:
-        b = np.array(Image.open(R / "L1-base.png").convert("RGBA")).astype(float)
-        a1 = np.array(Image.open(R / "L1-alone.png").convert("RGBA"))[:, :, 3].astype(float)
-        a0 = b[:, :, 3]
-        sh = a0 > a1
-        b[:, :, 3] = np.where(sh, a1 + (a0 - a1) * SHADOW, a0)
-        _BASE["b"] = Image.fromarray(b.round().clip(0, 255).astype(np.uint8))
+        _BASE["b"] = lighten(R / "L1-base.png", R / "L1-alone.png")
     return _BASE["b"].copy()
+
+
+def states():
+    """The states sheet (Flash | 3D whole, damaged, destroyed) from the renders, every 3D shadow lightened as in the
+    other sheets."""
+    W = HERE / "work"
+    frame3d(0).save(W / "_states-whole.png")
+    for st in ("damaged", "destroyed"):
+        lighten(R / f"L1-{st}-base.png", R / f"L1-{st}-alone.png").save(W / f"_states-{st}.png")
+    subprocess.run([sys.executable, str(HERE / "damage" / "states_sheet.py"), "--type", "19", "--name", NAME,
+                    "--levels", "1", "--frame", ",".join(str(v) for v in fref.FRAME),
+                    "--whole", str(W / "_states-whole.png"), "--damaged", str(W / "_states-damaged.png"),
+                    "--destroyed", str(W / "_states-destroyed.png"), "--scale", "0.5",
+                    "-o", str(HERE / "baiter-states.png")], check=True)
 
 
 def frame3d(k=0):
@@ -221,6 +241,8 @@ if __name__ == "__main__":
         print(anim(), "changed px (all, outside moving parts):", still_check())
     elif what == "motion":
         motion().save(HERE / "baiter-motion.png")
+    elif what == "states":
+        states()
     elif what == "game":
         game().save(HERE / "baiter-game.png")
     elif what == "outline":

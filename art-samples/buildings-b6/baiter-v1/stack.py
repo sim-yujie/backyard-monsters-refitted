@@ -18,25 +18,25 @@ GROUND = 0.0
 FRONT = -45.0               # the bearing that faces the viewer
 
 # the can
-CAN_R = 2.42
-CAN_Z1 = 4.3                # the shoulder: where the label ends and the domed top starts
-TOP_Z, TOP_R = 5.32, 1.06   # the rolled rim round the valve (its middle) and its radius
+CAN_R = 2.48
+CAN_Z1 = 3.95               # the shoulder: where the label ends and the domed top starts
+TOP_Z, TOP_R = 5.3, 1.2   # the rolled rim round the valve (its middle) and its radius
 RIM_W = 0.13                # that rim's tube radius
 
 # the crown ring on the shoulder (turns)
-CROWN_R = 2.70
-CROWN_Z1 = 4.5              # its top edge, just under the dome's lip (its flange rests on the can's top seam)
-CROWN_H = 0.36              # the band's height
-TOOTH_H, TEETH = 0.5, 24
-FLANGE_R = 2.44             # the flange's inner edge
-LIP_R, LIP_Z = 2.68, 4.53   # the dome's lip, over the crown
-SEAM_Z = 4.36               # the rolled seam on the can's top edge (the crown's flange rides on it)
+CROWN_R = 2.6
+CROWN_Z1 = 4.22             # its top edge, just under the dome's lip (its flange rests on the can's top seam)
+CROWN_H = 0.3              # the band's height
+TOOTH_H, TEETH = 0.3, 24
+FLANGE_R = 2.5             # the flange's inner edge
+LIP_R, LIP_Z = 2.66, 4.26   # the dome's lip, over the crown
+SEAM_Z = 4.01               # the rolled seam on the can's top edge (the crown's flange rides on it)
 
 # the bail: two plates bolted to the crown's outside, standing up past the dome's lip, a leaning wire half-hoop
 # between their pivots
-PLATE_W, PLATE_Z0, PLATE_Z1 = 0.66, 4.18, 5.26
-PLATE_R = CROWN_R + 0.06    # the plate's middle plane
-PIVOT_Z = 4.98
+PLATE_W, PLATE_Z0, PLATE_Z1 = 0.66, 3.92, 5.1
+PLATE_R = LIP_R + 0.1      # the plate's middle plane (it stands off the band, clear of the dome's lip)
+PIVOT_Z = 4.8
 BAIL_LEAN = 42.0            # degrees from upright, toward the rig's local -X
 
 # the nozzle cap (turns)
@@ -44,12 +44,12 @@ CAP_R, CAP_Z0, CAP_Z1 = 0.68, 5.22, 6.85
 
 # the cog on the front-right, its axle radial
 COG_TH = 0.0
-COG_D = 2.66                # its middle plane's distance from the can's axis
+COG_D = 2.74                # its middle plane's distance from the can's axis
 COG_R, COG_Z = 1.38, 2.46
 COG_TEETH = 12
 
 # the boulders either side
-ROCKS = ((-136.0, 3.0, 0.75, 1.35, 1.16), (54.0, 3.0, 0.72, 1.3, 1.14))   # bearing, distance, radial r, tangent r, height r
+ROCKS = ((-150.0, 3.0, 1.0, 1.6, 0.86), (62.0, 3.0, 0.95, 1.55, 0.84))   # bearing, distance, radial r, tangent r, height r
 
 FRAMES = 41
 TURNS = 1.0                 # the rig goes round once a loop, clockwise from above (bearing falling)

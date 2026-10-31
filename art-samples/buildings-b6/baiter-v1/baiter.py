@@ -606,7 +606,11 @@ def label_mat(name="label"):
     # soft wear: a faint mottle and scuffs
     vv = t.coords()
     n1 = t.noise(vv, 2.5, 3.0, 0.5, 0.2)
-    out = t.mix(out, srgb(150, 150, 140), t.ramp(n1, [(0.45, (0, 0, 0, 1)), (0.8, (0.4, 0.4, 0.4, 1))]))
+    out = t.mix(out, srgb(138, 140, 128), t.ramp(n1, [(0.4, (0, 0, 0, 1)), (0.78, (0.6, 0.6, 0.6, 1))]))
+    # grime runs down from the shoulder: tall streaky smudges, darker toward the top
+    vs = t.coords(scale=(7.0, 7.0, 0.5))
+    n3 = t.noise(vs, 2.0, 4.0, 0.6)
+    out = t.mix(out, srgb(112, 116, 98), t.ramp(n3, [(0.5, (0, 0, 0, 1)), (0.72, (0.55, 0.55, 0.55, 1))]))
     # Flash's painted shading: the label darkens strongly toward the right (away from the light)
     geo = t.n("ShaderNodeNewGeometry")
     dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
@@ -623,6 +627,51 @@ def label_mat(name="label"):
     out = t.grime(out, GROUND, 2.2, 0.3, 0.5)
     t.set(**{"Base Color": out, "rough": 0.55, "metal": 0.0, "spec": 0.25})
     t.bump(t.noise(vv, 22, 4.0, 0.6), 0.03, 0.01)
+    MATS[name] = t.m
+    return t.m
+
+
+def chrome(name):
+    """Flash's nozzle cap: polished chrome painted as upright bands (bright, dark, bright again across the cap as the
+    camera sees it, so the bands stay put while the cap turns), fine vertical polish streaks, a crisp sheen."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    geo = t.n("ShaderNodeNewGeometry")
+    dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(geo.outputs["Normal"], dp.inputs[0])
+    dp.inputs[1].default_value = (0.707, 0.707, 0.0)             # the screen's right, in the world
+    mr = t.n("ShaderNodeMapRange")
+    mr.inputs[1].default_value, mr.inputs[2].default_value = -1.0, 1.0
+    t.link(dp.outputs["Value"], mr.inputs[0])
+    g = lambda v: (v, v, v * 1.04, 1)
+    out = t.ramp(mr.outputs[0], [(0.0, g(0.05)), (0.1, g(0.5)), (0.2, g(0.92)), (0.32, g(0.75)), (0.44, g(0.3)),
+                                 (0.54, g(0.62)), (0.64, g(0.9)), (0.76, g(0.35)), (0.88, g(0.12)), (1.0, g(0.3))])
+    v2 = t.coords(scale=(9.0, 9.0, 0.35))
+    n2 = t.noise(v2, 3.0, 4.0, 0.6)
+    streak = t.ramp(n2, [(0.35, (0.72, 0.72, 0.72, 1)), (0.65, (1.0, 1.0, 1.0, 1))])
+    out = t.mix(out, streak, 1.0, "MULTIPLY")
+    rr = t.ramp(n2, [(0.3, (0.08, 0.08, 0.08, 1)), (0.7, (0.2, 0.2, 0.2, 1))])
+    t.set(**{"Base Color": out, "rough": rr, "metal": 0.75, "spec": 0.5})
+    t.set(**{"Emission Color": out, "Emission Strength": 0.25})
+    MATS[name] = t.m
+    return t.m
+
+
+def slime_mat(name, col, dark, light):
+    """Wet green slime: glossy, a darker mottle and pale wet lights, kept off the sky's grey veil (low coat)."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    v = t.coords()
+    out = srgb(*col)
+    n1 = t.noise(v, 3.0, 3.0, 0.5, 0.3)
+    out = t.mix(out, srgb(*dark), t.ramp(n1, [(0.4, (0, 0, 0, 1)), (0.7, (0.7, 0.7, 0.7, 1))]))
+    n2 = t.noise(v, 7.0, 2.0, 0.5)
+    out = t.mix(out, srgb(*light), t.ramp(n2, [(0.62, (0, 0, 0, 1)), (0.78, (0.6, 0.6, 0.6, 1))]))
+    t.set(**{"Base Color": out, "rough": 0.22, "metal": 0.0, "spec": 0.45})
+    t.set(**{"Emission Color": out, "Emission Strength": 0.12})
+    t.bump(t.noise(v, 6.0, 3.0, 0.5), 0.15, 0.02)
     MATS[name] = t.m
     return t.m
 
@@ -655,10 +704,14 @@ def materials():
     M["plate"] = painted("plate", (58, 72, 64), rough=0.5, metal=0.4, wear=(88, 104, 96), scale=5.0, dirt=0.15, spec=0.4)
     M["wire"] = shiny("wire", (126, 138, 156), rough=0.3, metal=0.7, wear=(150, 160, 176), scale=6, dirt=0.0)
     M["bolt"] = shiny("bolt", (40, 46, 46), rough=0.35, metal=0.7, wear=(80, 88, 90), scale=6, dirt=0.0)
-    M["cap"] = shiny("cap", (196, 200, 206), rough=0.25, metal=0.6, side=0.5, wear=(160, 164, 172), scale=3, dirt=0.05)
+    M["cap"] = chrome("cap")
     M["captop"] = shiny("captop", (238, 240, 244), rough=0.25, metal=0.3, wear=(214, 218, 224), scale=3, dirt=0.0)
     M["lever"] = shiny("lever", (104, 112, 120), rough=0.3, metal=0.7, side=0.4, wear=(150, 158, 166), scale=4, dirt=0.0)
     M["hole"] = flat("hole", (12, 10, 14), rough=1.0)
+    # the green slime: the crown's teeth, the drips down the label and the pool round the foot
+    M["slime"] = slime_mat("slime", (104, 168, 60), (62, 116, 38), (176, 214, 112))
+    M["teeth"] = slime_mat("teeth", (138, 186, 96), (98, 146, 68), (186, 220, 146))
+    M["pool"] = slime_mat("pool", (74, 124, 44), (48, 88, 30), (132, 178, 82))
     M["spray1"] = spray_mat("spray1", (192, 50, 232), 0.85, 0.9)
     M["spray2"] = spray_mat("spray2", (170, 52, 224), 0.65, 0.8)
     M["spray3"] = spray_mat("spray3", (156, 64, 214), 0.45, 0.6)
@@ -776,12 +829,17 @@ def lump(name, at, radii, mat, seed, rough=0.12, rot_z=0.0, subdiv=3, parent=Non
 
 
 def bell(n=14):
-    """The dome's crown: a quarter ellipse from just inside the lip (rising steeply) to the valve rim (level), so it
-    reads as Flash's round bell, not a flat lid."""
+    """The dome's crown: an elliptic arc from just inside the lip (leaning in, not upright) to the valve rim (level),
+    so it reads as Flash's big round bell, not a lid with straight sides."""
     r0, z0 = S.LIP_R - 0.08, S.LIP_Z + 0.13
     r1, z1 = S.TOP_R + 0.12, S.TOP_Z - 0.04
-    return [(r1 + (r0 - r1) * math.cos(math.pi / 2 * i / n), z0 + (z1 - z0) * math.sin(math.pi / 2 * i / n))
-            for i in range(n + 1)]
+    a0 = math.radians(28)                     # start part-way round the arc: the bell leans in from the lip, not upright
+    out = []
+    for i in range(n + 1):
+        a = a0 + (math.pi / 2 - a0) * i / n
+        out.append((r1 + (r0 - r1) * math.cos(a) / math.cos(a0),
+                    z0 + (z1 - z0) * (math.sin(a) - math.sin(a0)) / (1 - math.sin(a0))))
+    return out
 
 
 def can():
@@ -789,7 +847,7 @@ def can():
     lathe("can", [(R - 0.1, 0.0), (R - 0.02, 0.03), (R, 0.1), (R, Z1 - 0.02), (R - 0.02, Z1)], (0, 0, 0), M["label"],
           verts=128)
     ring("canfoot", R + 0.01, 0.06, M["foot"], z=0.11, n=128)
-    ring("seam", R + 0.05, 0.07, M["seam"], z=S.SEAM_Z, n=128)
+    ring("seam", R - 0.005, 0.035, M["seam"], z=S.SEAM_Z, n=128)
     # the domed top: a short wall up from the can's top, a lip out over the crown, then a round bell up to the rim
     # round the valve
     lathe("dome", [(R - 0.06, Z1 - 0.04), (R - 0.03, Z1 + 0.05), (S.FLANGE_R - 0.04, S.LIP_Z - 0.02),
@@ -797,8 +855,95 @@ def can():
                    (S.LIP_R - 0.04, S.LIP_Z + 0.105)] + bell(),
           (0, 0, 0), M["dome"], verts=128)
     ring("toprim", S.TOP_R, S.RIM_W, M["rim"], z=S.TOP_Z, n=96)
-    lathe("valvecup", [(S.TOP_R - 0.02, S.TOP_Z + 0.02), (S.TOP_R - 0.12, S.TOP_Z - 0.08), (0.8, S.TOP_Z - 0.1),
-                       (0.0, S.TOP_Z - 0.08)], (0, 0, 0), M["cup"], verts=64)
+    slime()
+    lathe("valvecup", [(S.TOP_R - 0.02, S.TOP_Z + 0.02), (S.TOP_R - 0.12, S.TOP_Z - 0.1), (0.8, S.TOP_Z - 0.13),
+                       (0.0, S.TOP_Z - 0.12)], (0, 0, 0), M["cup"], verts=64)
+
+
+def slime():
+    """Green slime off the crown's teeth: a thin glossy sheet hugging the can's wall from under the teeth, its foot
+    running down over the label in rounded drips of many lengths that swell at their tips, and a lumpy pool spreading
+    on the ground round the foot."""
+    r = random.Random(1977)
+    R = S.CAN_R
+    z_top = S.CROWN_Z1 - S.CROWN_H - S.TOOTH_H + 0.03   # from the teeth's tips (the shade above shows between them)
+    fingers = []                                    # (bearing, half width deg, length below the band's foot)
+    b = -215.0
+    while b < 125.0:
+        hw = r.uniform(2.2, 4.5)
+        L = r.uniform(0.25, 0.7) * (2.0 if r.random() < 0.3 else 1.0)
+        if abs(b - S.COG_TH) < 16.0:                # short over the cog's axle
+            L = min(L, 0.45)
+        fingers.append((b, hw, L))
+        b += r.uniform(7.0, 16.0)
+    base = S.CROWN_Z1 - S.CROWN_H - S.TOOTH_H     # the teeth's tips: the sheet always reaches a little below them
+
+    def reach(th):
+        """How far down from z_top the slime runs at bearing th, and how much of that is a drip's swollen tip."""
+        l0 = (z_top - base) + 0.08 + 0.04 * math.sin(math.radians(th) * 7)
+        best, tip = l0, 0.0
+        for c, hw, L in fingers:
+            d = abs((th - c + 180) % 360 - 180) / hw
+            if d >= 1.0:
+                continue
+            rw = R * math.radians(hw)                # the rounded end's radius, in world units
+            lf = (z_top - base) + L - rw + rw * math.sqrt(1 - d * d)
+            soft = 1 - d ** 4                        # widens into the sheet at its root
+            lf = l0 + (lf - l0) * soft if lf > l0 else l0
+            if lf > best:
+                best, tip = lf, min(1.0, L / 0.4)
+        return best, tip
+
+    n, m = 720, 22
+    bm = bmesh.new()
+    cols = []
+    for i in range(n):
+        th = -180.0 + 360.0 * i / n
+        a = math.radians(th)
+        c, sn = math.cos(a), math.sin(a)
+        L, tip = reach(th)
+        col = []
+        for j in range(m + 1):
+            v = j / m
+            z = z_top - L * v
+            t = 0.012 + 0.006 * math.sin(9 * a + 5 * v)
+            if z < base - 0.05:                     # below the teeth: thicker, the drip tips swollen
+                t += 0.02 + 0.05 * tip * max(0.0, (v - 0.55) / 0.45) ** 1.5 * (1.0 - 0.6 * max(0.0, v - 0.92) / 0.08)
+            col.append(bm.verts.new(((R + t) * c, (R + t) * sn, z)))
+        col.append(bm.verts.new(((R - 0.005) * c, (R - 0.005) * sn, z_top - L - 0.012)))
+        cols.append(col)
+    for i in range(n):
+        a_, b_ = cols[i], cols[(i + 1) % n]
+        for j in range(m + 1):
+            bm.faces.new((a_[j], a_[j + 1], b_[j + 1], b_[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh_ob("dripsheet", bm, [M["slime"]], smooth=True)
+    # the pool: a thin lumpy sheet round the foot, its rim in soft lobes, a few splats off it
+    bm = bmesh.new()
+    n = 96
+    ph = [r.uniform(0, 6.28) for _ in range(4)]
+    ctr = bm.verts.new((0, 0, 0.05))
+    rim = []
+    for k in range(n):
+        a = 2 * math.pi * k / n
+        front = 0.5 + 0.5 * math.cos(a - math.radians(S.FRONT))     # 1 toward the viewer: Flash's pool is thin there
+        reach = 0.6 + 0.22 * math.sin(3 * a + ph[0]) + 0.16 * math.sin(5 * a + ph[1]) + 0.1 * math.sin(9 * a + ph[2])
+        rr = R + max(0.14, reach * (1 - 0.6 * front))
+        rim.append((bm.verts.new((rr * math.cos(a), rr * math.sin(a), 0.0)),
+                    bm.verts.new(((rr - 0.12) * math.cos(a), (rr - 0.12) * math.sin(a), 0.07))))
+    for k in range(n):
+        j = (k + 1) % n
+        bm.faces.new((rim[k][0], rim[j][0], rim[j][1], rim[k][1]))
+        bm.faces.new((rim[k][1], rim[j][1], ctr))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh_ob("pool", bm, [M["pool"]], smooth=True, subsurf=1)
+    for k in range(6):
+        a = math.radians(r.uniform(-200, 110))
+        d = R + r.uniform(0.9, 1.3) * (1 - 0.5 * (0.5 + 0.5 * math.cos(a - math.radians(S.FRONT))))
+        s = r.uniform(0.1, 0.2)
+        ob = lump("poolsplat%d" % k, Vector((d * math.cos(a), d * math.sin(a), 0.0)), (s, s * 0.8, 0.04), M["pool"],
+                  950 + k, rough=0.2, subdiv=2)
+        ob.location.z -= 0.04 * 0.82
 
 
 def rocks():
@@ -825,14 +970,14 @@ def crown(parent):
 
     def drop(i):
         t = (i % 10) / 10.0 + 0.05
-        k = max(0.0, min(1.0, (0.4 - abs(t - 0.5)) / 0.16))
-        return S.TOOTH_H * k ** 0.6
+        k = max(0.0, min(1.0, (0.45 - abs(t - 0.5)) / 0.45))
+        return S.TOOTH_H * math.sin(k * math.pi / 2) ** 1.5
 
     cols = []
     for i in range(n):
         a = 2 * math.pi * i / n
         c, s = math.cos(a), math.sin(a)
-        zb = z0 - drop(i)
+        zb = z0
         cols.append([bm.verts.new((ro * c, ro * s, zb)), bm.verts.new((ro * c, ro * s, z1)),
                      bm.verts.new((S.FLANGE_R * c, S.FLANGE_R * s, z1)), bm.verts.new((S.FLANGE_R * c, S.FLANGE_R * s, zf)),
                      bm.verts.new((ri * c, ri * s, zf)), bm.verts.new((ri * c, ri * s, zb))])
@@ -842,7 +987,24 @@ def crown(parent):
             k = (j + 1) % 6
             bm.faces.new((a[j], b[j], b[k], a[k]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return mesh_ob("crown", bm, [M["crown"]], smooth=False, bevel=0.015, segs=2, parent=parent)
+    band = mesh_ob("crown", bm, [M["crown"]], smooth=False, bevel=0.015, segs=2, parent=parent)
+    # the teeth: short, rounded and slime green (Flash's), a ring of points hanging from the band's foot
+    bm = bmesh.new()
+    rows = []
+    for i in range(n):
+        a = 2 * math.pi * i / n
+        c, s = math.cos(a), math.sin(a)
+        zb = z0 - max(0.02, drop(i))
+        rows.append([bm.verts.new((ro * c, ro * s, zb)), bm.verts.new((ro * c, ro * s, z0 + 0.04)),
+                     bm.verts.new((ri * c, ri * s, z0 + 0.04)), bm.verts.new((ri * c, ri * s, zb))])
+    for i in range(n):
+        a, b = rows[i], rows[(i + 1) % n]
+        for j in range(4):
+            k = (j + 1) % 4
+            bm.faces.new((a[j], b[j], b[k], a[k]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh_ob("crownteeth", bm, [M["teeth"]], smooth=True, bevel=0.02, segs=2, parent=parent)
+    return band
 
 
 def plate(name, y_sign, parent):
@@ -865,18 +1027,19 @@ def plate(name, y_sign, parent):
         bm.faces.new((fr[i], fr[j], bk[j], bk[i]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     ob = mesh_ob(name, bm, [M["plate"]], smooth=False, bevel=0.03, segs=2, parent=parent)
-    ob.location = (0, y_sign * (S.CROWN_R + th / 2 + 0.005), S.PLATE_Z0)
-    # two rivets into the band, and the pivot bolt out through the plate
+    ob.location = (0, y_sign * S.PLATE_R, S.PLATE_Z0)
+    # two spacer rivets from the band out through the plate, and the pivot bolt out through the plate
     for i, x in enumerate((-0.2, 0.2)):
-        cyl(name + "rivet%d" % i, 0.06, 0.06, (x, y_sign * (S.CROWN_R + th + 0.0), S.PLATE_Z0 + 0.16), M["bolt"],
+        cyl(name + "rivet%d" % i, 0.06, S.PLATE_R - S.CROWN_R + th / 2 + 0.03,
+            (x, y_sign * (S.CROWN_R + 0.002), S.PLATE_Z0 + 0.16), M["bolt"],
             rot=(-90 * y_sign, 0, 0), verts=10, bevel=0.015, parent=parent)
-    b = cyl(name + "bolt", 0.13, 0.4, (0, y_sign * (S.CROWN_R - 0.16), S.PIVOT_Z), M["bolt"], rot=(-90 * y_sign, 0, 0),
+    b = cyl(name + "bolt", 0.13, 0.36, (0, y_sign * (S.PLATE_R - 0.16), S.PIVOT_Z), M["bolt"], rot=(-90 * y_sign, 0, 0),
             verts=16, bevel=0.03, parent=parent)
     return ob, b
 
 
 def bail_pts(n=40):
-    rc = S.CROWN_R - 0.04
+    rc = S.PLATE_R - 0.12
     lean = math.radians(S.BAIL_LEAN)
     out = []
     for i in range(n + 1):
@@ -1014,8 +1177,8 @@ def build():
     cog()
 
 
-FAMILY = (("canfoot", "can"), ("can", "can"), ("dome", "can"), ("seam", "can"), ("toprim", "can"),
-          ("valvecup", "can"), ("rock", "rock"), ("stone", "stone"), ("crown", "crown"), ("plate", "plate"),
+FAMILY = (("drip", "slime"), ("pool", "slime"), ("canfoot", "can"), ("can", "can"), ("dome", "can"), ("seam", "can"), ("toprim", "can"),
+          ("valvecup", "can"), ("rock", "rock"), ("stone", "stone"), ("crownteeth", "crown"), ("crown", "crown"), ("plate", "plate"),
           ("bail", "bail"), ("captop", "cap"), ("cap", "cap"), ("lever", "cap"), ("spout", "cap"), ("spray", "spray"),
           ("speck", "spray"), ("cog", "cog"), ("axle", "axle"), ("tag", "tag"))
 MASONRY = ()

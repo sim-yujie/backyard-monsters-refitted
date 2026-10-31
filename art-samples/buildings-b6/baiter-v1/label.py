@@ -60,21 +60,23 @@ def splash(im, cx, cy, r, col, drops=9, drips=4, seed=0):
 
 
 def make():
-    im = Image.new("RGBA", (W, H), (214, 216, 222, 255))
+    im = Image.new("RGBA", (W, H), (198, 200, 198, 255))
     d = ImageDraw.Draw(im)
     # faint paper mottle
     for _ in range(900):
         x, y = rng.uniform(0, W), rng.uniform(0, H)
         g = rng.randint(-14, 6)
-        d.ellipse((x - 6, y - 6, x + 6, y + 6), fill=(214 + g, 216 + g, 222 + g, 255))
+        d.ellipse((x - 6, y - 6, x + 6, y + 6), fill=(198 + g, 200 + g, 198 + g, 255))
     im = im.filter(ImageFilter.GaussianBlur(4))
     d = ImageDraw.Draw(im)
     # the green slime round the top, dripping down
     slime = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(slime)
     top = V(S.CAN_Z1)
-    edge = V(S.CAN_Z1 - 0.62)
+    edge = V(S.CAN_Z1 - 0.5)
     sd.rectangle((0, top, W, edge), fill=(118, 186, 58, 255))
+    # the shade under the crown's teeth: dark, so the pale green teeth stand out as Flash's do
+    sd.rectangle((0, top, W, V(S.CROWN_Z1 - S.CROWN_H - S.TOOTH_H + 0.02)), fill=(50, 60, 48, 255))
     x = 0.0
     while x < W:
         w = rng.uniform(18, 46)

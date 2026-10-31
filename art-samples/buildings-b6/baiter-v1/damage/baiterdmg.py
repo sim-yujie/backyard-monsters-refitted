@@ -193,8 +193,7 @@ def dome_profile():
     R_, Z1 = S.CAN_R, S.CAN_Z1
     return [(R_ - 0.06, Z1 - 0.04), (R_ - 0.03, Z1 + 0.05), (S.FLANGE_R - 0.04, S.LIP_Z - 0.02),
             (S.LIP_R - 0.02, S.LIP_Z - 0.01), (S.LIP_R + 0.02, S.LIP_Z + 0.03), (S.LIP_R - 0.01, S.LIP_Z + 0.08),
-            (S.LIP_R - 0.04, S.LIP_Z + 0.105), (S.LIP_R - 0.08, S.LIP_Z + 0.13), (2.5, 4.72), (2.3, 4.88),
-            (2.06, 5.03), (1.8, 5.15), (1.54, 5.24), (1.34, 5.285), (S.TOP_R + 0.12, S.TOP_Z - 0.04)]
+            (S.LIP_R - 0.04, S.LIP_Z + 0.105)] + G["bell"]()
 
 
 def damaged():
@@ -213,8 +212,12 @@ def damaged():
                 (0, 0, 0), M["label"], verts=160)
     lathe("caninside", [(0.0, 0.06), (R_ - 0.16, 0.06), (R_ - 0.16, Z1 - 0.1), (0.0, Z1 - 0.1)], (0, 0, 0), inside(),
           verts=48)
-    dent(can, [(-112, 1.5, 1.3, 0.22), (-62, 3.0, 0.9, 0.16), (-20, 1.0, 0.8, 0.12), (24, 3.5, 0.7, 0.1)])
-    tear(can, [(-100, 1.25, 0.62), (-58, 3.05, 0.34), (-12, 0.7, 0.24)], seed=3)
+    dents = [(-112, 1.5, 1.3, 0.22), (-62, 3.0, 0.9, 0.16), (-20, 1.0, 0.8, 0.12), (24, 3.5, 0.7, 0.1)]
+    tears = [(-100, 1.25, 0.62), (-58, 3.05, 0.34), (-12, 0.7, 0.24)]
+    dent(can, dents)
+    tear(can, tears, seed=3)
+    dent(O["dripsheet"], dents)                      # the slime on the label follows the crumpled, torn wall
+    tear(O["dripsheet"], tears, seed=3)
 
     # the domed top rebuilt fine, crushed lower, dented, torn open round the valve (the rim curling up)
     kill([O["dome"], O["toprim"], O["valvecup"]])
@@ -268,9 +271,9 @@ def damaged():
     kill([O["bail"]])
     plB = [O[n] for n in ("plateB", "plateBrivet0", "plateBrivet1", "plateBbolt")]
     plA = [O[n] for n in ("plateA", "plateArivet0", "plateArivet1", "plateAbolt")]
-    turn(plB, (0, -(S.CROWN_R + 0.06), S.PLATE_Z0 + 0.1), (1, 0, 0), 34)
-    turn(plA, (0, S.CROWN_R + 0.06, S.PLATE_Z0 + 0.1), (1, 0, 0), -14)
-    turn(plA, (0, S.CROWN_R + 0.06, S.PLATE_Z0 + 0.1), (0, 1, 0), 10)
+    turn(plB, (0, -S.PLATE_R, S.PLATE_Z0 + 0.1), (1, 0, 0), 34)
+    turn(plA, (0, S.PLATE_R, S.PLATE_Z0 + 0.1), (1, 0, 0), -14)
+    turn(plA, (0, S.PLATE_R, S.PLATE_Z0 + 0.1), (0, 1, 0), 10)
     bpy.context.view_layer.update()
     b0 = O["plateBbolt"].matrix_world @ Vector((0, 0, 0.36))
     pts = [b0, P(-84, 2.92, 4.42), P(-72, 2.86, 4.12), P(-58, 2.8, 3.86), P(-42, 2.79, 3.73), P(-26, 2.79, 3.71),
@@ -282,7 +285,7 @@ def damaged():
     burn(P(-90, 2.8, 4.9), 0.7)
 
     # the crown knocked askew on its seat
-    turn([O["crown"]], P(135, S.CROWN_R, S.CROWN_Z1), P(45, 1, 0), 3)
+    turn([O["crown"], O["crownteeth"]], P(135, S.CROWN_R, S.CROWN_Z1), P(45, 1, 0), 3)
 
     # green goo out of the top, running down the can's right side, each run ending in a drop
     gm = goo_mat()
@@ -298,7 +301,7 @@ def damaged():
     burn(P(25, R_, 4.2), 0.9)
 
     # the whole top knocked over a little to the left (its right edge lifts off the can, the goo rim fills the gap)
-    top = [O[n] for n in ("dome", "domeinside", "crown", "bail", "bailstub", "goorim")] + plA + plB + capset
+    top = [O[n] for n in ("dome", "domeinside", "crown", "crownteeth", "bail", "bailstub", "goorim")] + plA + plB + capset
     turn(top, (0, 0, S.CAN_Z1), P(-45, 1, 0), 5)
 
     # the cog off its axle, fallen at the foot, leaning back on the can's foot; the tag bent further
