@@ -4,10 +4,9 @@ import numpy as np
 from PIL import Image
 import fref
 
-AREAS = {"top left": (-30, 0, -14, 8), "top right": (14, 4, 30, 14), "top back": (-24, -6, -16, -2),
-         "band": (-20, 28, -8, 38), "band right": (12, 26, 20, 36), "bowl": (-12, 48, 8, 56), "bowl left": (-26, 44, -18, 50),
-         "foot L": (-38, 62, -33, 70), "dish face": (-8, -45, 8, -36), "dish right": (20, -30, 32, -22),
-         "pedestal top": (-10, -3, 0, 2), "pedestal side": (-10, 6, 0, 9), "port front": (-4, 32, 4, 40)}
+AREAS = {"dome left": (-18, 6, -10, 12), "dome right": (8, 10, 18, 16), "crown": (-22, 18, -14, 22),
+         "label left": (-20, 40, -10, 48), "label low": (-6, 46, 2, 52), "rock L": (-34, 34, -28, 44),
+         "rock R": (30, 30, 34, 42), "cog": (12, 32, 18, 38), "tag": (21, 38, 24, 46), "cap": (-2, -10, 4, -4)}
 
 
 def load(path):

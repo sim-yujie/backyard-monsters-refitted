@@ -606,7 +606,7 @@ def label_mat(name="label"):
     # soft wear: a faint mottle and scuffs
     vv = t.coords()
     n1 = t.noise(vv, 2.5, 3.0, 0.5, 0.2)
-    out = t.mix(out, srgb(150, 150, 140), t.ramp(n1, [(0.5, (0, 0, 0, 1)), (0.8, (0.25, 0.25, 0.25, 1))]))
+    out = t.mix(out, srgb(150, 150, 140), t.ramp(n1, [(0.45, (0, 0, 0, 1)), (0.8, (0.4, 0.4, 0.4, 1))]))
     # Flash's painted shading: the label darkens strongly toward the right (away from the light)
     geo = t.n("ShaderNodeNewGeometry")
     dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
@@ -614,14 +614,14 @@ def label_mat(name="label"):
     dp.inputs[1].default_value = (-0.5, -0.86, 0.0)
     shade = t.n("ShaderNodeMapRange")
     shade.inputs[1].default_value, shade.inputs[2].default_value = -0.7, 0.6
-    shade.inputs[3].default_value, shade.inputs[4].default_value = 0.35, 1.0
+    shade.inputs[3].default_value, shade.inputs[4].default_value = 0.3, 0.84
     t.link(dp.outputs["Value"], shade.inputs[0])
     grey = t.n("ShaderNodeCombineColor")
     for i in range(3):
         t.link(shade.outputs[0], grey.inputs[i])
     out = t.mix(out, grey.outputs[0], 1.0, "MULTIPLY")
     out = t.grime(out, GROUND, 2.2, 0.3, 0.5)
-    t.set(**{"Base Color": out, "rough": 0.5, "metal": 0.0, "spec": 0.35})
+    t.set(**{"Base Color": out, "rough": 0.55, "metal": 0.0, "spec": 0.25})
     t.bump(t.noise(vv, 22, 4.0, 0.6), 0.03, 0.01)
     MATS[name] = t.m
     return t.m
@@ -642,8 +642,8 @@ def materials():
     M = {}
     M["label"] = label_mat()
     # the domed top: Flash's steel blue, a bright white sheen on the left, darker to the right
-    M["dome"] = shiny("dome", (140, 156, 172), rough=0.3, metal=0.22, side=0.5, wear=(124, 138, 154), scale=2.0,
-                      dirt=0.1, spec=0.5, glow=((-11.0, 9.5, 5.0, 3.5, 0.75, (238, 246, 252)),
+    M["dome"] = shiny("dome", (126, 142, 156), rough=0.32, metal=0.22, side=0.8, wear=(110, 124, 140), scale=2.0,
+                      dirt=0.12, spec=0.36, glow=((-11.0, 9.5, 4.0, 3.5, 0.42, (226, 236, 244)),
                                                 (-6.0, 12.0, 10.0, 5.0, 0.3, (190, 204, 216))))
     M["seam"] = shiny("seam", (120, 134, 148), rough=0.3, metal=0.7, wear=(98, 110, 124), scale=4, dirt=0.15)
     M["rim"] = shiny("rim", (96, 104, 112), rough=0.32, metal=0.7, wear=(150, 156, 166), scale=4, dirt=0.1)
@@ -659,18 +659,18 @@ def materials():
     M["captop"] = shiny("captop", (238, 240, 244), rough=0.25, metal=0.3, wear=(214, 218, 224), scale=3, dirt=0.0)
     M["lever"] = shiny("lever", (104, 112, 120), rough=0.3, metal=0.7, side=0.4, wear=(150, 158, 166), scale=4, dirt=0.0)
     M["hole"] = flat("hole", (12, 10, 14), rough=1.0)
-    M["spray1"] = spray_mat("spray1", (214, 60, 236), 0.85, 1.2)
-    M["spray2"] = spray_mat("spray2", (200, 110, 230), 0.55, 0.8)
-    M["spray3"] = spray_mat("spray3", (214, 170, 236), 0.3, 0.5)
+    M["spray1"] = spray_mat("spray1", (192, 50, 232), 0.85, 0.9)
+    M["spray2"] = spray_mat("spray2", (170, 52, 224), 0.65, 0.8)
+    M["spray3"] = spray_mat("spray3", (156, 64, 214), 0.45, 0.6)
     # the cog: dark rusty brown iron; its axle steel; the pink tag
-    M["cog"] = painted("cog", (64, 54, 34), rough=0.7, metal=0.3, wear=(92, 78, 50), rust=(84, 60, 30), scale=6.0,
+    M["cog"] = painted("cog", (46, 38, 24), rough=0.75, metal=0.3, wear=(70, 58, 36), rust=(66, 46, 24), scale=6.0,
                        dirt=0.2, spec=0.3)
     M["axle"] = shiny("axle", (110, 116, 120), rough=0.35, metal=0.7, wear=(80, 84, 88), scale=6, dirt=0.1)
-    M["tag"] = painted("tag", (150, 112, 134), rough=0.6, metal=0.0, wear=(176, 140, 160), scale=4.0, dirt=0.35,
-                       spec=0.3, top=(196, 160, 184))
+    M["tag"] = painted("tag", (196, 146, 184), rough=0.6, metal=0.0, wear=(214, 170, 204), scale=4.0, dirt=0.35,
+                       spec=0.3, top=(232, 196, 222))
     # the boulders: near-black, a little brown, soft grey lights; the pale stones at their feet
-    M["rock"] = painted("rock", (28, 27, 23), rough=0.8, metal=0.0, wear=(56, 54, 46), scale=3.5, dirt=0.25, spec=0.3,
-                        top=(52, 50, 44))
+    M["rock"] = painted("rock", (21, 20, 17), rough=0.9, metal=0.0, wear=(46, 45, 38), scale=7.0, dirt=0.3, spec=0.1,
+                        top=(44, 43, 37))
     M["stone"] = painted("stone", (196, 198, 176), rough=0.8, metal=0.0, wear=(160, 162, 142), scale=4.0, dirt=0.1,
                          spec=0.2)
     return M
@@ -775,6 +775,15 @@ def lump(name, at, radii, mat, seed, rough=0.12, rot_z=0.0, subdiv=3, parent=Non
     return ob
 
 
+def bell(n=14):
+    """The dome's crown: a quarter ellipse from just inside the lip (rising steeply) to the valve rim (level), so it
+    reads as Flash's round bell, not a flat lid."""
+    r0, z0 = S.LIP_R - 0.08, S.LIP_Z + 0.13
+    r1, z1 = S.TOP_R + 0.12, S.TOP_Z - 0.04
+    return [(r1 + (r0 - r1) * math.cos(math.pi / 2 * i / n), z0 + (z1 - z0) * math.sin(math.pi / 2 * i / n))
+            for i in range(n + 1)]
+
+
 def can():
     R, Z1 = S.CAN_R, S.CAN_Z1
     lathe("can", [(R - 0.1, 0.0), (R - 0.02, 0.03), (R, 0.1), (R, Z1 - 0.02), (R - 0.02, Z1)], (0, 0, 0), M["label"],
@@ -785,8 +794,7 @@ def can():
     # round the valve
     lathe("dome", [(R - 0.06, Z1 - 0.04), (R - 0.03, Z1 + 0.05), (S.FLANGE_R - 0.04, S.LIP_Z - 0.02),
                    (S.LIP_R - 0.02, S.LIP_Z - 0.01), (S.LIP_R + 0.02, S.LIP_Z + 0.03), (S.LIP_R - 0.01, S.LIP_Z + 0.08),
-                   (S.LIP_R - 0.04, S.LIP_Z + 0.105), (S.LIP_R - 0.08, S.LIP_Z + 0.13), (2.5, 4.72), (2.3, 4.88), (2.06, 5.03), (1.8, 5.15), (1.54, 5.24), (1.34, 5.285),
-                   (S.TOP_R + 0.12, S.TOP_Z - 0.04)],
+                   (S.LIP_R - 0.04, S.LIP_Z + 0.105)] + bell(),
           (0, 0, 0), M["dome"], verts=128)
     ring("toprim", S.TOP_R, S.RIM_W, M["rim"], z=S.TOP_Z, n=96)
     lathe("valvecup", [(S.TOP_R - 0.02, S.TOP_Z + 0.02), (S.TOP_R - 0.12, S.TOP_Z - 0.08), (0.8, S.TOP_Z - 0.1),
@@ -794,8 +802,9 @@ def can():
 
 
 def rocks():
+    lump("stonefront", P(-123.0, 3.6, 0.0), (0.36, 0.26, 0.17), M["stone"], 77, rot_z=-30, subdiv=2)
     for i, (th, d, rr, rt, rz) in enumerate(S.ROCKS):
-        lump("rock%d" % i, P(th, d, 0.0), (rr, rt, rz), M["rock"], 40 + i, rough=0.16, rot_z=th, subdiv=4, grit=0.025)
+        lump("rock%d" % i, P(th, d, 0.0), (rr, rt, rz), M["rock"], 40 + i, rough=0.16, rot_z=th, subdiv=4, grit=0.06)
         # pale stones at its foot, toward the viewer
         for j in range(3):
             a = th + (-30 if i == 0 else 30) * (j + 0.5) / 3 - (8 if i == 0 else -8)
@@ -872,7 +881,9 @@ def bail_pts(n=40):
     out = []
     for i in range(n + 1):
         f = math.pi * i / n
-        out.append((-rc * math.sin(f) * math.sin(lean), -rc * math.cos(f), S.PIVOT_Z + rc * math.sin(f) * math.cos(lean)))
+        b = 1 + 0.36 * math.sin(f) * (1 - f / math.pi) ** 1.5
+        out.append((-rc * math.sin(f) * math.sin(lean), -rc * math.cos(f) * b,
+                    S.PIVOT_Z + 1.07 * rc * math.sin(f) * math.cos(lean)))
     return out
 
 
@@ -894,31 +905,33 @@ def nozzle(parent):
 
 
 def spray(parent):
-    """Purple mist out of the spout: dense magenta puffs at the mouth, paler and wider further out, the plume bending
-    back the way the rig came from (it turns clockwise from above, so the old mist trails toward local +Y)."""
+    """Purple mist out of the spout, as Flash's: thin vivid magenta wisps that stay near the cap, the plume bending
+    back the way the rig came from (it turns clockwise from above, so the old mist trails toward local +Y) and
+    drooping; a few strands side by side, each a row of small stretched blobs."""
     r = random.Random(1919)
-    x0, z0 = S.CAP_R + 0.2, S.CAP_Z1 - 0.32
-    n = 16
-    for i in range(n):
-        s = i / (n - 1)
-        a = math.radians(55 * s ** 1.5)
-        d = 0.15 + 2.3 * s
-        p = Vector((x0 + d * math.cos(a), d * math.sin(a), z0 - 0.25 * s))
-        rad = 0.1 + 0.32 * s
-        mat = M["spray1"] if s < 0.35 else (M["spray2"] if s < 0.7 else M["spray3"])
-        for k in range(2 if s > 0.2 else 1):
-            q = p + Vector((r.uniform(-0.12, 0.12), r.uniform(-0.15, 0.15), r.uniform(-0.1, 0.1))) * (0.5 + s)
-            ob = lump("spray%02d%d" % (i, k), q, (rad * 1.2, rad, rad * 0.75), mat, 300 + 2 * i + k, rough=0.2,
-                      subdiv=2, parent=parent)
-            ob.location.z -= rad * 0.62
+    x0, z0 = S.CAP_R + 0.16, S.CAP_Z1 - 0.32
+    for w in range(5):                      # five strands, fanning apart
+        n = 15
+        off = Vector((0, (w - 2) * 0.13, (w - 2) * 0.1))
+        for i in range(n):
+            s = i / (n - 1)
+            a = math.radians(70 * s ** 1.3)
+            d = 0.12 + 2.0 * s
+            p = Vector((x0 + d * math.cos(a), d * math.sin(a), z0 - 0.9 * s ** 1.4)) + off * (0.4 + s)
+            p += Vector((r.uniform(-0.05, 0.05), r.uniform(-0.06, 0.06), 0.06 * math.sin(9 * s + 2 * w)))
+            rad = 0.07 + 0.13 * s
+            mat = M["spray1"] if s < 0.45 else (M["spray2"] if s < 0.8 else M["spray3"])
+            ob = lump("spray%02d%d" % (i, w), p, (rad * 1.9, rad * 0.8, rad * 0.7), mat, 300 + 5 * i + w, rough=0.25,
+                      subdiv=2, parent=parent, rot_z=math.degrees(a) + 20)
+            ob.location.z -= rad * 0.58
             ob.visible_shadow = False
-    for j in range(14):                    # loose specks round the plume
-        s = r.uniform(0.2, 1.0)
-        a = math.radians(55 * s ** 1.5)
-        d = 0.15 + 2.3 * s
-        q = Vector((x0 + d * math.cos(a), d * math.sin(a), z0 - 0.25 * s)) + Vector(
-            (r.uniform(-0.4, 0.4), r.uniform(-0.5, 0.5), r.uniform(-0.45, 0.2)))
-        ob = lump("speck%02d" % j, q, (0.04, 0.04, 0.04), M["spray3"], 500 + j, rough=0.0, subdiv=1,
+    for j in range(8):                     # loose specks round the plume
+        s = r.uniform(0.3, 1.0)
+        a = math.radians(70 * s ** 1.3)
+        d = 0.12 + 2.0 * s
+        q = Vector((x0 + d * math.cos(a), d * math.sin(a), z0 - 0.9 * s ** 1.4)) + Vector(
+            (r.uniform(-0.25, 0.25), r.uniform(-0.3, 0.3), r.uniform(-0.3, 0.15)))
+        ob = lump("speck%02d" % j, q, (0.035, 0.035, 0.035), M["spray2"], 500 + j, rough=0.0, subdiv=1,
                   parent=parent)
         ob.visible_shadow = False
 
@@ -989,7 +1002,7 @@ def cog():
     ring_ob = ring("tagring", 0.16, 0.035, M["axle"], n=24)
     ring_ob.location = tp + Vector((0, 0, -0.05))
     track(ring_ob, side)
-    tag = box("tag", (0.07, 0.8, 1.78), tp + Vector((0, 0, -0.12)), M["tag"], bevel=0.03, origin="bottom",
+    tag = box("tag", (0.07, 1.08, 1.85), tp + Vector((0, 0, -0.12)), M["tag"], bevel=0.03, origin="bottom",
               rot=(192, 0, th))
     return hub
 
@@ -1065,11 +1078,11 @@ def setup(sc):
     # the sun: from the viewer's left and a little behind, high (the Flash ground shadow falls right, a little down)
     sun_d = bpy.data.lights.new("sun", "SUN")
     sun_d.energy = 4.8
-    sun_d.angle = math.radians(14)
+    sun_d.angle = math.radians(24)
     sun_d.color = (1.0, 0.95, 0.86)
     sun = bpy.data.objects.new("sun", sun_d)
     link(sun)
-    to_sun = Vector((-0.85, -0.62, 1.55)).normalized()
+    to_sun = Vector((-0.85, -0.62, 1.85)).normalized()
     sun.rotation_euler = (-to_sun).to_track_quat("-Z", "Y").to_euler()
     world = bpy.data.worlds.new("w")
     sc.world = world

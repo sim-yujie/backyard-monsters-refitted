@@ -36,8 +36,25 @@ def font(n):
         return ImageFont.load_default()
 
 
+SHADOW = 0.6                # the ground shadow's strength kept: Flash's is a soft, light one
+_BASE = {}
+
+
+def base3d():
+    """The base picture with its ground shadow lightened (pixels that are shadow, not building, keep SHADOW of their
+    darkness; where a moving part covers the shadow the parts layer is laid over anyway)."""
+    if "b" not in _BASE:
+        b = np.array(Image.open(R / "L1-base.png").convert("RGBA")).astype(float)
+        a1 = np.array(Image.open(R / "L1-alone.png").convert("RGBA"))[:, :, 3].astype(float)
+        a0 = b[:, :, 3]
+        sh = a0 > a1
+        b[:, :, 3] = np.where(sh, a1 + (a0 - a1) * SHADOW, a0)
+        _BASE["b"] = Image.fromarray(b.round().clip(0, 255).astype(np.uint8))
+    return _BASE["b"].copy()
+
+
 def frame3d(k=0):
-    base = Image.open(R / "L1-base.png").convert("RGBA")
+    base = base3d()
     p = R / f"L1-parts-{k:02d}.png"
     if p.exists():
         base.alpha_composite(Image.open(p).convert("RGBA"))
