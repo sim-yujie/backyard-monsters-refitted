@@ -16,9 +16,9 @@ block5    destroyed overlap (IoU) 0.504
 stone     whole     overlap (IoU) 0.852
 stone     damaged   overlap (IoU) 0.828
 stone     destroyed overlap (IoU) 0.630
-inferno1  whole     overlap (IoU) 0.825
-inferno1  damaged   overlap (IoU) 0.851
-inferno1  destroyed overlap (IoU) 0.670
+inferno1  whole     overlap (IoU) 0.844
+inferno1  damaged   overlap (IoU) 0.838
+inferno1  destroyed overlap (IoU) 0.665
 inferno2  whole     overlap (IoU) 0.838
 inferno2  damaged   overlap (IoU) 0.703
 inferno2  destroyed overlap (IoU) 0.760

@@ -251,104 +251,18 @@ CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part rock6 reaches 1.252 (footprint 1.415)
 == inferno1
 STATE inferno1 whole
-CONTACT dome           gap 0.000 ok  at 0.00 0.00 0.70
+CONTACT dome           gap 0.000 ok  at 0.00 -0.00 0.83
 CONTACT glow           gap 0.000 ok  at 0.00 0.00 0.00
-CONTACT flame0         gap 0.000 ok  at 1.55 -0.25 0.03
-CONTACT flame1         gap 0.000 ok  at 1.46 0.55 0.04
-CONTACT flame2         gap 0.000 ok  at 1.51 0.72 0.02
-CONTACT flame3         gap 0.000 ok  at 1.50 0.90 0.02
-CONTACT flame4         gap 0.000 ok  at 1.43 1.01 0.03
-CONTACT flame5         gap 0.000 ok  at 1.43 1.12 0.05
-CONTACT flame6         gap 0.000 ok  at 1.31 1.23 0.03
-CONTACT flame7         gap 0.000 ok  at 1.21 1.33 0.04
-CONTACT flame8         gap 0.000 ok  at 1.15 1.39 0.04
-CONTACT flame9         gap 0.000 ok  at 1.01 1.42 0.04
-CONTACT flame10        gap 0.000 ok  at 0.87 1.42 0.04
-CONTACT flame11        gap 0.000 ok  at 0.78 1.54 0.05
-CONTACT flame12        gap 0.000 ok  at 0.54 1.52 0.04
-CONTACT flame13        gap 0.000 ok  at 0.29 1.55 0.05
-CONTACT flame14        gap 0.000 ok  at -0.53 1.46 0.03
-CONTACT flame15        gap 0.000 ok  at -0.73 1.48 0.04
-CONTACT flame16        gap 0.000 ok  at -0.85 1.45 0.04
-CONTACT flame17        gap 0.000 ok  at -1.03 1.45 0.02
-CONTACT flame18        gap 0.000 ok  at -1.13 1.32 0.02
-CONTACT flame19        gap 0.000 ok  at -1.21 1.29 0.03
-CONTACT flame20        gap 0.000 ok  at -1.28 1.25 0.05
-CONTACT flame21        gap 0.000 ok  at -1.37 1.18 0.02
-CONTACT flame22        gap 0.000 ok  at -1.44 1.07 0.05
-CONTACT flame23        gap 0.000 ok  at -1.44 0.91 0.03
-CONTACT flame24        gap 0.000 ok  at -1.47 0.81 0.05
-CONTACT flame25        gap 0.000 ok  at -1.54 0.45 0.05
-CONTACT flame26        gap 0.000 ok  at -1.57 -0.23 0.05
-CONTACT flame27        gap 0.000 ok  at -1.50 -0.52 0.03
-CONTACT flame28        gap 0.000 ok  at -1.52 -0.69 0.05
-CONTACT flame29        gap 0.000 ok  at -1.44 -0.85 0.03
-CONTACT flame30        gap 0.000 ok  at -1.46 -1.08 0.04
-CONTACT flame31        gap 0.000 ok  at -1.33 -1.19 0.05
-CONTACT flame32        gap 0.000 ok  at -1.31 -1.28 0.03
-CONTACT flame33        gap 0.000 ok  at -1.26 -1.35 0.02
-CONTACT flame34        gap 0.000 ok  at -1.20 -1.39 0.04
-CONTACT flame35        gap 0.000 ok  at -1.05 -1.40 0.05
-CONTACT flame36        gap 0.000 ok  at -0.86 -1.45 0.02
-CONTACT flame37        gap 0.000 ok  at -0.77 -1.53 0.05
-CONTACT flame38        gap 0.000 ok  at -0.57 -1.48 0.05
-CONTACT flame39        gap 0.000 ok  at 0.29 -1.49 0.02
-CONTACT flame40        gap 0.000 ok  at 0.43 -1.56 0.03
-CONTACT flame41        gap 0.000 ok  at 0.71 -1.55 0.03
-CONTACT flame42        gap 0.000 ok  at 0.94 -1.47 0.04
-CONTACT flame43        gap 0.000 ok  at 0.99 -1.41 0.04
-CONTACT flame44        gap 0.000 ok  at 1.16 -1.35 0.05
-CONTACT flame45        gap 0.000 ok  at 1.21 -1.32 0.03
-CONTACT flame46        gap 0.000 ok  at 1.26 -1.25 0.04
-CONTACT flame47        gap 0.000 ok  at 1.38 -1.15 0.05
-CONTACT flame48        gap 0.000 ok  at 1.40 -1.02 0.03
-CONTACT flame49        gap 0.000 ok  at 1.51 -0.89 0.05
-CONTACT flame50        gap 0.000 ok  at 1.54 -0.78 0.04
-CONTACT flame51        gap 0.000 ok  at 1.50 -0.56 0.03
+CONTACT fire           gap 0.000 ok  at 0.00 -0.00 0.31
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part dome reaches 1.560 (footprint 1.415)
 STATE inferno1 damaged
-CONTACT dome           gap 0.000 ok  at -0.00 0.00 0.48
-CONTACT rock0          gap 0.000 ok  at -0.30 -0.45 1.00
-CONTACT rock1          gap 0.000 ok  at 0.70 0.55 0.95
-CONTACT rock2          gap 0.000 ok  at -1.00 0.70 0.85
+CONTACT dome           gap 0.000 ok  at -0.00 0.00 0.58
+CONTACT rock0          gap 0.000 ok  at -0.30 -0.45 1.01
+CONTACT rock1          gap 0.000 ok  at 0.70 0.55 1.02
+CONTACT rock2          gap 0.000 ok  at -1.00 0.70 0.95
 CONTACT glow           gap 0.000 ok  at 0.00 0.00 0.00
-CONTACT flame0         gap 0.000 ok  at 1.56 0.30 0.03
-CONTACT flame1         gap 0.000 ok  at 1.52 0.57 0.02
-CONTACT flame2         gap 0.000 ok  at 1.52 0.89 0.02
-CONTACT flame3         gap 0.000 ok  at 1.44 0.96 0.03
-CONTACT flame4         gap 0.000 ok  at 1.33 1.13 0.04
-CONTACT flame5         gap 0.000 ok  at 1.33 1.28 0.03
-CONTACT flame6         gap 0.000 ok  at 1.21 1.40 0.03
-CONTACT flame7         gap 0.000 ok  at 1.02 1.47 0.02
-CONTACT flame9         gap 0.000 ok  at 0.56 1.48 0.02
-CONTACT flame11        gap 0.000 ok  at -0.63 1.50 0.02
-CONTACT flame12        gap 0.000 ok  at -0.87 1.49 0.03
-CONTACT flame13        gap 0.000 ok  at -1.01 1.39 0.02
-CONTACT flame14        gap 0.000 ok  at -1.13 1.41 0.03
-CONTACT flame15        gap 0.000 ok  at -1.24 1.25 0.02
-CONTACT flame16        gap 0.000 ok  at -1.36 1.15 0.02
-CONTACT flame18        gap 0.000 ok  at -1.42 0.87 0.02
-CONTACT flame19        gap 0.000 ok  at -1.50 0.69 0.03
-CONTACT flame20        gap 0.000 ok  at -1.51 -0.21 0.02
-CONTACT flame21        gap 0.000 ok  at -1.46 -0.67 0.02
-CONTACT flame22        gap 0.000 ok  at -1.49 -0.80 0.02
-CONTACT flame23        gap 0.000 ok  at -1.42 -0.95 0.03
-CONTACT flame24        gap 0.000 ok  at -1.31 -1.19 0.03
-CONTACT flame25        gap 0.000 ok  at -1.24 -1.28 0.02
-CONTACT flame26        gap 0.000 ok  at -1.21 -1.32 0.02
-CONTACT flame27        gap 0.000 ok  at -1.02 -1.42 0.03
-CONTACT flame28        gap 0.000 ok  at -0.81 -1.48 0.02
-CONTACT flame29        gap 0.000 ok  at -0.64 -1.54 0.03
-CONTACT flame30        gap 0.000 ok  at -0.22 -1.50 0.02
-CONTACT flame31        gap 0.000 ok  at 0.66 -1.45 0.03
-CONTACT flame32        gap 0.000 ok  at 0.83 -1.45 0.02
-CONTACT flame33        gap 0.000 ok  at 0.99 -1.43 0.02
-CONTACT flame34        gap 0.000 ok  at 1.10 -1.41 0.03
-CONTACT flame35        gap 0.000 ok  at 1.31 -1.28 0.02
-CONTACT flame37        gap 0.000 ok  at 1.48 -1.01 0.03
-CONTACT flame38        gap 0.000 ok  at 1.49 -0.87 0.02
-CONTACT flame39        gap 0.000 ok  at 1.48 -0.50 0.03
+CONTACT fire           gap 0.000 ok  at 0.00 -0.00 0.25
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part dome reaches 1.560 (footprint 1.415)
 STATE inferno1 destroyed
@@ -362,20 +276,6 @@ CONTACT plate12        gap 0.000 ok  at 0.04 0.91 0.14
 CONTACT plate20        gap 0.000 ok  at 0.94 -0.82 0.12
 CONTACT plate21        gap 0.000 ok  at 0.87 0.04 0.14
 CONTACT plate22        gap 0.000 ok  at 0.83 0.85 0.12
-CONTACT flame2         gap 0.000 ok  at 1.06 0.85 0.02
-CONTACT flame3         gap 0.000 ok  at 0.98 1.01 0.02
-CONTACT flame4         gap 0.000 ok  at 0.72 1.10 0.02
-CONTACT flame5         gap 0.000 ok  at 0.33 1.19 0.02
-CONTACT flame6         gap 0.000 ok  at -0.51 1.12 0.02
-CONTACT flame7         gap 0.000 ok  at -0.72 1.11 0.02
-CONTACT flame10        gap 0.000 ok  at -1.15 0.55 0.02
-CONTACT flame11        gap 0.000 ok  at -1.19 0.33 0.02
-CONTACT flame12        gap 0.000 ok  at -1.16 -0.59 0.01
-CONTACT flame13        gap 0.000 ok  at -1.10 -0.86 0.02
-CONTACT flame14        gap 0.000 ok  at -0.90 -0.99 0.02
-CONTACT flame18        gap 0.000 ok  at 0.75 -1.13 0.03
-CONTACT flame19        gap 0.000 ok  at 0.91 -1.00 0.02
-CONTACT flame21        gap 0.000 ok  at 1.15 -0.65 0.02
 CONTACT worst gap 0.000, parts not reaching the ground: 0
 CONTACT furthest part plate01 reaches 1.345 (footprint 1.415)
 == inferno2

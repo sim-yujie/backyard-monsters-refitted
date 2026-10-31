@@ -226,15 +226,18 @@ def ground_glow(name, a, inner=0.95, outer=1.32, strength=3.0):
     return t.m
 
 
-def flame(name):
-    """A small licking flame: yellow at its foot, orange, red and fading at the tip (Generated Z along the cone)."""
+def fire_glow(name, peak=0.85, strength=2.8):
+    """Flash's fire round the Inferno mound: a soft blurred band, yellow at the foot, orange then red and fading out
+    upward, its top edge broken by a soft noise (Generated Z runs up the band)."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
     z = axes(t, "Generated")[2]
-    col = t.ramp(z, [(0.0, srgb(255, 236, 120)), (0.35, srgb(255, 150, 30)), (1.0, srgb(225, 50, 10))])
-    alpha = t.ramp(z, [(0.0, K1), (0.55, (0.85, 0.85, 0.85, 1)), (1.0, K0)])
-    see_through(t, col, alpha, 3.5)
+    n = t.noise(t.coords(), 3.0, 2.0, 0.5)
+    zz = m(t, "MULTIPLY_ADD", m(t, "SUBTRACT", n, 0.5), 0.7, z)       # the fade starts higher in some places than others
+    col = t.ramp(zz, [(0.0, srgb(255, 206, 80)), (0.25, srgb(255, 128, 26)), (0.75, srgb(226, 52, 10))])
+    alpha = t.ramp(zz, [(0.0, (peak, peak, peak, 1)), (0.35, (peak * 0.6, peak * 0.6, peak * 0.6, 1)), (0.85, K0)])
+    see_through(t, col, alpha, strength)
     MATS[name] = t.m
     return t.m
 
@@ -466,7 +469,7 @@ def mats():
         "lava_dim": lava_rock("lava-dim", glow=0.5, ash=False, low_fire=False),
         "glow": ground_glow("lava-ground", 1.5),
         "glow_small": ground_glow("lava-ground-small", 1.1, 0.7, 1.5, 0.6),
-        "flame": flame("flame"),
+        "fire": fire_glow("fire"),
         "ibase": painted("ibase", (22, 20, 18), rough=0.7, wear=(34, 31, 28), scale=6.0, dirt=0.3, soot=0.5,
                          top=(46, 40, 34)),
         "icap": painted("icap", (82, 74, 64), rough=0.75, wear=(84, 76, 66), scale=7.0, dirt=0.3, soot=0.35,
@@ -866,8 +869,8 @@ def stone_block(M, state):
 
 
 def magma(M, state):
-    """Inferno Block level 1: a low dome of near-black volcanic rock, lava glowing in its cracks and spots, a soft
-    orange glow on the ground round its foot and small flames licking up round it (Flash)."""
+    """Inferno Block level 1: a low, flat-topped square mound of near-black volcanic rock, lava glowing in its cracks
+    and spots, a soft orange glow on the ground round its foot and a soft band of fire round its sides (Flash)."""
     s, H = 3.0, 1.25
 
     def dome(name, H, seed, a=s / 2):
@@ -876,7 +879,7 @@ def magma(M, state):
         for v in bm.verts:
             x, y = v.co.x * a * 1.04, v.co.y * a * 1.04
             rr = (abs(x / a) ** 4 + abs(y / a) ** 4) ** 0.25
-            z = H * max(0.0, 1.0 - rr ** 2.2) ** 0.6
+            z = H * max(0.0, 1.0 - rr ** 6) ** 0.4 * (0.74 + 0.26 * max(0.0, 1.0 - rr * rr))
             z += 0.08 * noise.noise(Vector((x, y, seed)) * 2.2) * (z > 0)
             v.co = Vector((x, y, max(0.0, z)))
         # no flat skirt beyond the foot (it was the hard glowing square)
@@ -891,22 +894,24 @@ def magma(M, state):
         g.visible_shadow = False
         return g
 
-    def flames(a, n, hmin, hmax, seed, every=1.0):
-        r = random.Random(seed)
-        out = []
-        for k in range(n):
-            th = 2 * math.pi * (k + r.uniform(-0.3, 0.3)) / n
-            c, sn = math.cos(th), math.sin(th)
-            x = a * math.copysign(abs(c) ** 0.5, c) * r.uniform(0.97, 1.04)
-            y = a * math.copysign(abs(sn) ** 0.5, sn) * r.uniform(0.97, 1.04)
-            if r.random() > every:
-                continue
-            out_dir = math.degrees(math.atan2(y, x))
-            f = cyl(f"flame{k}", r.uniform(0.06, 0.1), r.uniform(hmin, hmax), (x, y, 0.0), M["flame"],
-                    rot=(0, r.uniform(8, 22), out_dir), verts=8, r2=0.0, bevel=0.0)
-            f.visible_shadow = False
-            out.append(f)
-        return out
+    def band(a, hb, mat, n=128):
+        """A ring of soft fire standing round the mound's foot (a rounded square of half-side a), hb high."""
+        bm = bmesh.new()
+        rows = []
+        for zf in (0.0, 0.5, 1.0):
+            row = []
+            for k in range(n):
+                th = 2 * math.pi * k / n
+                c, sn = math.cos(th), math.sin(th)
+                r = a * (1.0 + 0.06 * zf) / (abs(c) ** 4 + abs(sn) ** 4) ** 0.25
+                row.append(bm.verts.new((r * c, r * sn, hb * zf)))
+            rows.append(row)
+        for lo, hi in zip(rows, rows[1:]):
+            for k in range(n):
+                bm.faces.new((lo[k], lo[(k + 1) % n], hi[(k + 1) % n], hi[k]))
+        ob = mesh_ob("fire", bm, [mat], bevel=0.0)
+        ob.visible_shadow = False
+        return ob
 
     if state == "destroyed":
         r = random.Random(13)
@@ -916,7 +921,7 @@ def magma(M, state):
                 x, y = (i - 1) * 0.86 + r.uniform(-0.08, 0.08), (j - 1) * 0.86 + r.uniform(-0.08, 0.08)
                 out.append(lump(f"plate{i}{j}", (0.95, 0.9, r.uniform(0.22, 0.36)), (x, y, 0.0), M["lava_dim"],
                                 seed=i * 3 + j + 50, rough=0.18, rot=r.uniform(0, 60), sub=1, flat_shade=True))
-        return out + flames(1.15, 22, 0.12, 0.26, 3, every=0.6)
+        return out
     if state == "damaged":
         # the dome caved in lower, broken rocks heaped on it
         d = dome("dome", H * 0.7, 2.0)
@@ -925,8 +930,8 @@ def magma(M, state):
                lump("rock2", (0.5, 0.45, 0.35), (-1.0, 0.7, 0.03), M["lava"], seed=55)]
         for o in out[1:]:
             settle(o, [d])
-        return out + [glow(s / 2, M["glow"])] + flames(s / 2, 40, 0.14, 0.34, 2, every=0.8)
-    return [dome("dome", H, 1.0), glow(s / 2, M["glow"])] + flames(s / 2, 52, 0.18, 0.48, 1)
+        return out + [glow(s / 2, M["glow"]), band(s / 2 + 0.02, 0.5, M["fire"])]
+    return [dome("dome", H, 1.0), glow(s / 2, M["glow"]), band(s / 2 + 0.02, 0.62, M["fire"])]
 
 
 def settle(o, under):
@@ -1146,8 +1151,8 @@ def contact():
         if name not in held:
             print("CONTACT %-14s NOT CONNECTED TO THE GROUND" % name)
     print("CONTACT worst gap %.3f, parts not reaching the ground: %d" % (worst, len(obs) - len(held)))
-    # how far the parts reach out from the middle (the footprint's half side is 1.415; glow and flames may pass it)
-    far = max((max(abs(v.x), abs(v.y)), name) for name, _, vs in obs if not name.startswith(("glow", "flame")) for v in vs)
+    # how far the parts reach out from the middle (the footprint's half side is 1.415; glow and fire may pass it)
+    far = max((max(abs(v.x), abs(v.y)), name) for name, _, vs in obs if not name.startswith(("glow", "fire")) for v in vs)
     print("CONTACT furthest part %s reaches %.3f (footprint 1.415)" % (far[1], far[0]))
 
 
