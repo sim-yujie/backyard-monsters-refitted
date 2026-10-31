@@ -607,7 +607,7 @@ def materials():
     M["flare"] = painted("flare", (74, 68, 68), rough=0.5, metal=0.2, wear=(100, 92, 92), scale=5, dirt=0.1, spec=0.35)
     M["neck"] = painted("neck", (40, 30, 33), rough=0.5, metal=0.35, wear=(60, 52, 56), scale=6, dirt=0.1)
     # the ring: pale pink-grey (Flash ~135,118,118 lit, ~54,40,40 in shade); low metal so it stays pink, not sky-grey
-    M["collar"] = shiny("collar", (122, 102, 105), rough=0.5, metal=0.15, wear=(104, 88, 90), scale=6, dirt=0.05)
+    M["collar"] = shiny("collar", (112, 92, 98), rough=0.5, metal=0.15, wear=(96, 80, 86), scale=6, dirt=0.05)
     # the spike: pale blue-grey (Flash ~120,125,140)
     M["spike"] = shiny("spike", (150, 156, 170), rough=0.5, metal=0.25, wear=(124, 130, 142), scale=6, dirt=0.05)
     # the studs: dark silver (Flash ~127,135,135 on the lit face, ~54-72 in shade)
@@ -634,7 +634,7 @@ def stud(name, at, normal, mat):
     """A small pointed silver spike (a square pyramid) standing out of a post's face, as Flash's studs."""
     n = Vector(normal).normalized()
     r, d = S.STUD_R, S.STUD_D
-    o = lathe(name, [(r, -0.02), (r * 0.8, d * 0.2), (0.0, d)], (0, 0, 0), mat, verts=4)
+    o = lathe(name, [(r, -0.02), (r * 0.98, 0.01), (r * 0.8, d * 0.2), (0.0, d)], (0, 0, 0), mat, verts=4)
     o.location = Vector(at)
     o.rotation_euler = (n.to_track_quat("Z", "Y") @ Euler((0, 0, math.radians(45))).to_quaternion()).to_euler()
     bv = o.modifiers.new("bevel", "BEVEL")
@@ -668,7 +668,10 @@ def post(i, x, y):
     cyl(nm + "-spike", S.SPIKE_R, S.SPIKE_H, (x, y, z), M["spike"], verts=16, bevel=0.0, r2=0.0)
     for k, nrm in enumerate(((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0))):
         for j, sz in enumerate(S.STUD_Z):
-            at = Vector((x, y, GROUND + sz)) + Vector(nrm) * (w / 2 - 0.01)
+            # a little off the face's middle, away from the front corner (Flash's studs sit toward the outer edges)
+            tg = Vector((-nrm[1], nrm[0], 0))
+            tg = tg if tg.dot(Vector((1, -1, 0))) < 0 else -tg
+            at = Vector((x, y, GROUND + sz)) + Vector(nrm) * (w / 2 - 0.01) + tg * S.STUD_OFF
             stud(f"{nm}-stud{k}{j}", at, nrm, M["stud"])
 
 

@@ -475,7 +475,7 @@ def check():
         items.append((o, BVHTree.FromPolygons(vs, [p.vertices[:] for p in me.polygons]), vs))
         ev.to_mesh_clear()
     k = S.FENCE_SHIFT / math.sqrt(2)
-    lim = A + S.CORN_W / 2 + 0.05
+    lim = A + max(S.CORN_W / 2, S.POST_W / 2 + S.STUD_D) + 0.05
     nf = no = 0
     for o, t, vs in items:
         zmin = min(v.z for v in vs)

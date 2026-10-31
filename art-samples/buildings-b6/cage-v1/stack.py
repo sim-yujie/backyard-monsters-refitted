@@ -29,7 +29,8 @@ NECK_R, NECK_H = 0.12, 0.06
 COLLAR_R, COLLAR_H = 0.3, 0.12    # the thin pale pink-grey ring under the spike
 SPIKE_R, SPIKE_H = 0.13, 0.7 
 STUD_Z = (0.98, 1.72)       # the studs' heights on every face
-STUD_R, STUD_D = 0.21, 0.17 # a stud's half-diagonal and how far its point stands out
+STUD_R, STUD_D = 0.23, 0.26 # a stud's half-diagonal and how far its point stands out
+STUD_OFF = 0.1              # how far the studs sit off each face's middle, toward its outer edge
 
 # the fence
 FENCE_SHIFT = 0.4           # every rail and picket stands this far from the posts' middles toward the viewer (Flash
