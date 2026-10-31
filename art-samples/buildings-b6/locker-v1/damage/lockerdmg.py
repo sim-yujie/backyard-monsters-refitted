@@ -286,15 +286,15 @@ def damaged():
         lv4 = L == 4
         sh = shell()
         crumple(sh, 0.025, seed=7)
-        holes_and_dents([(-14.0, -14.0, 0.85), (22.0, -6.0, 0.6), (4.0, 16.0, 0.45)],
+        holes_and_dents([(-22.0, 24.0, 1.0), (22.0, -6.0, 0.7), (4.0, 16.0, 0.45)],
                         [(-26.0, -6.0, 2.2, 0.6), (14.0, 10.0, 1.8, 0.5), (30.0, -30.0, 1.6, 0.45)])
         # the chimney knocked over to the right at its foot, its flange hanging off
         ch = named(r"chimlean")[0]
         foot = slot_of(ch)
         screen_turn([ch], foot, -28)
         burn(foot, 1.2)
-        # the key knocked over to the left (level 4: right down to the shell)
-        screen_turn(key_parts() if lv4 else [k], sp, 52 if lv4 else 22)
+        # the key knocked over to the left (level 4: further, its bow still in the frame)
+        screen_turn(key_parts() if lv4 else [k], sp, 38 if lv4 else 22)
         burn(sp, 0.9)
         # panels askew, one torn off on the ground
         pans = sorted(named(r"panel\d"), key=lambda o: o.name)
@@ -492,9 +492,10 @@ def float_check():
         for j in range(i + 1, len(items)):
             t2, vs2 = items[j][1], items[j][2]
             hit = bool(t.overlap(t2))
-            if not hit:
-                step = max(1, len(vs) // 400)
-                hit = any(t2.find_nearest(v, 0.1)[0] is not None for v in vs[::step])
+            if not hit:                                         # both ways: a long part may have no vertex near
+                step, step2 = max(1, len(vs) // 400), max(1, len(vs2) // 400)
+                hit = (any(t2.find_nearest(v, 0.1)[0] is not None for v in vs[::step])
+                       or any(t.find_nearest(v, 0.1)[0] is not None for v in vs2[::step2]))
             if hit:
                 touch[i].add(j)
                 touch[j].add(i)
