@@ -100,10 +100,17 @@ def lay_pulley(name, at, tilt=(0, 0, 0)):
     e.matrix_world = Matrix.Translation(Vector((at[0], at[1], 0.0))) @ \
         Matrix.Rotation(math.radians(tilt[0]), 4, "X") @ Matrix.Rotation(math.radians(tilt[2]), 4, "Z")
     sit([e])
-    bpy.context.view_layer.update()
-    for k in e.children[:3]:
-        print("PROBE lay", name, k.name, k.parent.name, [round(v, 2) for v in k.matrix_world.col[2][:3]],
-              [round(v, 2) for v in e.matrix_world.col[2][:3]], k.type)
+
+
+def flat_wheel(name, at, r, spokes=8, wide=0.22):
+    """A new gold wheel lying flat on the ground at `at` (built in a level plane, so nothing of the old upright
+    wheel's turn is left in it)."""
+    keep = G["pul_plane"]
+    G["pul_plane"] = lambda: (Vector(), Vector((0, 0, 1)), Vector((1, 0, 0)), Vector((0, 1, 0)))
+    e = G["pulley"](name, Vector((at[0], at[1], 1.0)), r, M["dgold"], spokes=spokes, wide=wide)
+    G["pul_plane"] = keep
+    sit([e])
+    return e
 
 
 def tip_bucket(at, yaw, stub=True):
@@ -181,7 +188,7 @@ def damaged():
         scatter(named(r"aslate.*|acap"), (1.4, -3.9), 0.6, 3)
         kill(named(r"belt|afork"))
         lf = Vector((S.A1_FEET[0], S.A1_Y, 0))
-        turn(named(r"aleg0|waxle|wknob|coil\d"), lf, (0, 1, 0), -7)
+        turn(named(r"aleg0|waxle|wknob|wstrap|coil"), lf, (0, 1, 0), -7)
         snap(ob("post0"), 0.62)
         snap(ob("post2"), 0.55)
         # the stool knocked over
@@ -194,17 +201,32 @@ def damaged():
         lay_pulley("pul2", (0.4, -4.5))
         kill(named(r"gstem2|belt"))
         # a big hole in the -Y gable's planks, torn
-        wall_hole(r"gable\d+", (-0.3, -B, 6.1), 1.25, (0, -1, 0), 21)
+        if LOOK >= 3:
+            wall_hole(r"gable\d+", (-0.3, -B, 6.1), 1.25, (0, -1, 0), 21)
         debris((0.6, -3.4), 8, 1.6, seed=2, mats=mats)
     if LOOK == 2:
-        # the back truss broken: the left rafter down across the tie, the ridge beam fallen onto it; slates gone
-        turn(named(r"rafter0"), Vector((-A + 0.35, S.TRUSS_Y, S.TRUSS_Z)), (0, 1, 0), 45)
-        kill(named(r"ridge"))
-        gone = roof_hole(1, 1.6, -1.3, 1.35, 31)
-        scatter(gone[: len(gone) // 2], (3.6, -3.0), 0.9, 5)
-        kill(gone[len(gone) // 2:])
-        snap(ob("post2"), 0.7)
-        kill(named(r"xbrace"))
+        # half collapsed, as Flash: the +X side gave way, so the roof slid down off it (resting on the -X wall top and
+        # the +X stubs), the front gable's +X half gone; the back triangle fallen apart onto the ground
+        snap(ob("post0"), 0.32)
+        snap(ob("post2"), 0.42)
+        kill([o for o in named(r"gable\d+|header") if (o.matrix_world @ Vector(o.bound_box[0])).x > -0.2])
+        roof = named(r"slate-?\d+-\d+-\d+|roofb-?\d+|rslate\d+|gblock|grod|grodknob")
+        eave = Vector((S.RIDGE_X - S.SLOPE[-1][0], 0, S.RIDGE_Z - S.SLOPE[-1][1]))
+        turn(roof, eave, (0, 1, 0), 27, move=(-0.35, -0.15, -0.35))
+        kill(named(r"ridge|rafterk"))
+        ax, az = S.TRUSS_APEX
+        turn(named(r"rafter0"), Vector((S.TIE_X[0] + 0.5, S.TRUSS_Y, S.BACK2_H[0] + 0.5)), (0, 1, 0), 52)
+        r1 = named(r"rafter1")
+        turn(r1, Vector((ax, S.TRUSS_Y, az)), (1, 0.3, 0), 70, move=(1.8, 0.8, 0))
+        sit(r1)
+        tie = named(r"tie")
+        turn(tie, Vector((S.TIE_X[0], S.TRUSS_Y, S.BACK2_H[0] + 0.6)), (0, 1, 0), 24)
+        snap(ob("post3"), 0.75)
+        xr = named(r"xrail\d+")
+        scatter(xr[:1], (4.3, 1.8), 0.6, 11)
+        turn(xr[1:], Vector((2.4, -2.0, S.XRAILS[1])), (1, 0, 0), -20)
+        sit(xr[1:])
+        debris((3.4, 0.8), 6, 1.4, seed=12, mats=mats)
     if LOOK >= 3:
         # one big hole high in the +X slope (look 3: near the ridge; look 4 too), slates down; the pipe leaning
         gone = roof_hole(1, 0.9, -1.4, 1.35, 41)
@@ -217,8 +239,8 @@ def damaged():
         wall_hole(r"xwall\d+", (A, 0.4, 2.7), 1.1, (1, 0, 0), 43)
     if LOOK >= 4:
         # the big wheel knocked off its stand onto the ground behind, the crank bent; a hole in the -X slope too
-        lay_pulley("wheel", (5.6, 3.6), tilt=(12, 0, 0))
-        kill(named(r"wcrank|wstand"))
+        kill(named(r"wheel|wcrank|wstand"))
+        flat_wheel("wheelflat", (5.4, 3.4), S.WHEEL_R)
         lay_pulley("pul1", (-4.8, -1.0))
         kill(named(r"gstem1"))
 
