@@ -940,7 +940,7 @@ def materials():
     M["bucket"] = wood("bucket", (180, 150, 114), (132, 106, 80), axis="Z", dirt=0.25, rings=3.0, knots=False)
     M["bin"] = painted("bin", (74, 58, 44), rough=0.8, wear=(58, 44, 34), scale=3.0, dirt=0.0, spec=0.2)
     M["band"] = painted("band", (96, 74, 54), rough=0.6, dirt=0.0, spec=0.3)
-    M["stud"] = shiny("stud", (214, 206, 190) if LOOK >= 2 else (150, 154, 166), rough=0.35, metal=0.4, dirt=0.0)
+    M["stud"] = shiny("stud", (212, 220, 232) if LOOK >= 2 else (150, 154, 166), rough=0.35, metal=0.4, dirt=0.0)
     # look 3's rope drum: pale cream
     M["drum"] = painted("drum", (236, 206, 170), rough=0.6, wear=(214, 180, 142), scale=3.0, dirt=0.1, spec=0.3)
     M["groove"] = painted("groove", (176, 140, 104), rough=0.7, dirt=0.0, spec=0.2)
@@ -1036,11 +1036,16 @@ def bucket(look):
           verts=40)
     # the dark band round the rim and the studs on it
     ring("band", R + 0.005, 0.07, M["band"], z=z0 + h - 0.1).location.xy = (bx, by)
-    n = 14 if look >= 2 else 10
-    for i in range(n):
-        a = 2 * math.pi * (i + 0.5) / n
-        s = 0.13 if look >= 2 else 0.08
-        sphere("stud", s, (bx + (R + 0.03) * math.cos(a), by + (R + 0.03) * math.sin(a), z0 + h - 0.08), M["stud"],
+    if look >= 2:               # looks 2, 3: Flash's pale bluish clamps set over the rim all round
+        n = 11
+        for i in range(n):
+            a = 2 * math.pi * (i + 0.5) / n
+            box("stud", (0.36, 0.26, 0.36), (bx + (R - 0.07) * math.cos(a), by + (R - 0.07) * math.sin(a), z0 + h - 0.26),
+                M["stud"], rot=(0, 0, math.degrees(a)), bevel=0.04)
+        return
+    for i in range(10):
+        a = 2 * math.pi * (i + 0.5) / 10
+        sphere("stud", 0.08, (bx + (R + 0.03) * math.cos(a), by + (R + 0.03) * math.sin(a), z0 + h - 0.08), M["stud"],
                n=10)
 
 
