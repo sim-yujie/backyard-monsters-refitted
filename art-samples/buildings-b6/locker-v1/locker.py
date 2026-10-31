@@ -29,6 +29,9 @@ LEVEL = int(ARGS[0])
 MODE = ARGS[1] if len(ARGS) > 1 else "fit"
 sys.path.insert(0, str(HERE))
 import stack as S  # noqa: E402
+
+import json  # noqa: E402
+BOWS = json.loads((HERE / "bows.json").read_text())   # Flash's key bows, traced (work/bowtrace.py)
 FRAMES = S.FRAMES[LEVEL]             # Flash's loop at this level
 
 EL = 30.0
@@ -660,7 +663,7 @@ def rounded_poly(corners, rad, n=8):
 def materials():
     M = {}
     # Flash's shell: a blue-grey chrome ball, a soft white sheen up left, darker low down and on the right
-    M["chrome"] = shiny("chrome", (150, 160, 174), rough=0.14, metal=1.0, wear=(140, 150, 166), scale=2.0, dirt=0.25,
+    M["chrome"] = shiny("chrome", (146, 160, 184), rough=0.3, metal=1.0, wear=(136, 150, 172), scale=2.0, dirt=0.25,
                         side=0.25, glow=tuple((x, y, 3.4, 3.4, 0.9, (246, 248, 252)) for x, y in S.SHEEN[L]))
     M["inner"] = shiny("inner", (70, 48, 18), rough=0.35, metal=0.7, wear=(110, 74, 24), scale=3, dirt=0.2)
     M["steel"] = shiny("steel", (184, 192, 206), rough=0.3, metal=0.85, wear=(150, 158, 174), scale=4, dirt=0.2,
@@ -669,7 +672,7 @@ def materials():
                       dirt=0.3, streak=0.3)
     M["golddark"] = shiny("golddark", (150, 82, 16), rough=0.32, metal=0.8, wear=(196, 120, 36), scale=1.5, dirt=0.3)
     M["block"] = shiny("block", (252, 196, 56), rough=0.22, metal=0.85, wear=(255, 214, 110), scale=2.0, dirt=0.1)
-    M["rubber"] = shiny("rubber", (36, 36, 46), rough=0.5, metal=0.1, wear=(54, 54, 70), scale=3, dirt=0.15,
+    M["rubber"] = shiny("rubber", (16, 16, 20), rough=0.55, metal=0.0, wear=(30, 30, 38), scale=3, dirt=0.15,
                         side=0.2)
     M["glass"] = shiny("glass", (210, 226, 236), rough=0.15, metal=0.3, wear=(180, 200, 214), scale=3, dirt=0.0,
                        coat=0.6)
@@ -679,6 +682,8 @@ def materials():
                        side=0.4)
     M["nut"] = shiny("nut", (92, 98, 110), rough=0.35, metal=0.8, wear=(70, 76, 88), scale=4, dirt=0.2, side=0.3)
     M["hole"] = flat("hole", (14, 12, 16), rough=1.0)
+    M["lamp"] = flat("lamp", (252, 236, 210), rough=0.4, emit=0.5)
+    M["lens"] = shiny("lens", (30, 30, 20), rough=0.2, metal=0.6, wear=(52, 50, 28), scale=3, dirt=0.0)
     M["core"] = shiny("core", (52, 34, 12), rough=0.45, metal=0.6, wear=(80, 52, 18), scale=3, dirt=0.3)
     return M
 
@@ -829,16 +834,22 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
     sag = r - math.sqrt(max(0.0, r * r - 2 * h * h)) + lean * h   # how far the plate's corners stand off the ball
     box(name + "seat", (size * 0.8, size * 0.8, sag + 0.05), (0, 0, -sag - 0.05), M["steel"], parent=e, bevel=0.03)
     box(name + "plate", (size, size, thick), (0, 0, 0), M["steel"], parent=e, bevel=0.04)
-    # gold brackets: an L along the plate's left (-X) and top (+Y) edges
-    box(name + "brkL", (0.3, size * 0.96, thick + 0.22), (-h + 0.2, 0, 0.0), M["gold"], parent=e, bevel=0.05)
-    box(name + "brkT", (size * 0.84, 0.3, thick + 0.22), (0.05, h - 0.2, 0.0), M["gold"], parent=e, bevel=0.05)
+    if kind == "port":       # the plate sits on a gold block that shows past its top (-Y) and left (-X) edges
+        box(name + "goldback", (size * 0.94, size * 0.94, sag + thick * 0.8), (0.24, 0.24, -sag - 0.05), M["gold"],
+            parent=e, bevel=0.06)
+    else:
+        # gold brackets: an L along the plate's left (-X) and top (+Y) edges
+        box(name + "brkL", (0.3, size * 0.96, thick + 0.22), (-h + 0.2, 0, 0.0), M["gold"], parent=e, bevel=0.05)
+        box(name + "brkT", (size * 0.84, 0.3, thick + 0.22), (0.05, h - 0.2, 0.0), M["gold"], parent=e, bevel=0.05)
     for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
-        rivet(f"{name}rv{i}", (u * (h - 0.2), v * (h - 0.2), thick - 0.01), e)
+        rivet(f"{name}rv{i}", (u * (h - 0.2), v * (h - 0.2), thick - 0.01), e, r=0.12)
     if kind == "port":
-        pr = size * 0.24
-        tube(name + "portring", [(pr * math.cos(2 * math.pi * i / 40) + 0.12, pr * math.sin(2 * math.pi * i / 40) - 0.1,
-                                  thick + 0.02) for i in range(40)], 0.08, M["steel"], parent=e, cyclic=True)
-        cyl(name + "port", pr, 0.02, (0.12, -0.1, thick - 0.01), M["hole"], parent=e, verts=32, bevel=0.0)
+        pr = size * 0.3
+        tube(name + "portring", [(pr * math.cos(2 * math.pi * i / 40) + 0.08, pr * math.sin(2 * math.pi * i / 40) + 0.04,
+                                  thick + 0.0) for i in range(40)], 0.045, M["golddark"], parent=e, cyclic=True)
+        cyl(name + "port", pr, 0.02, (0.08, 0.04, thick - 0.03), M["hole"], parent=e, verts=32, bevel=0.0)
+        lathe(name + "lens", [(0.0, -0.05), (pr * 0.9, -0.05), (pr * 0.8, 0.03), (0.0, 0.06)], (0.08, 0.04, thick - 0.03),
+              M["lens"], parent=e, verts=32)
     elif kind == "vent":     # level 4: a dark recess behind upright gold bars
         box(name + "ventback", (size * 0.62, size * 0.62, 0.04), (0.1, -0.1, thick - 0.02), M["hole"], parent=e,
             bevel=0.0)
@@ -846,13 +857,22 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
             box(f"{name}bar{k}", (size * 0.6, 0.11, 0.12), (0.1, -0.1 + (k - 1.5) * size * 0.14, thick - 0.02),
                 M["gold"], parent=e, bevel=0.03)
     else:
-        hh = size * 0.16
-        box(name + "housing", (size * 0.6, size * 0.48, hh), (0.12, -0.08, thick - 0.07), M["steel"], parent=e,
+        # a small steel housing low left (+Y), its lit window on the face toward +Y in a gold frame
+        hh = size * 0.26
+        hy = size * 0.14
+        box(name + "housing", (size * 0.44, size * 0.34, hh), (0.18, hy, thick - 0.07), M["steel"], parent=e,
             bevel=0.05)
-        box(name + "window", (size * 0.42, size * 0.3, 0.03), (0.12, -0.08, thick - 0.07 + hh), M["glass"], parent=e,
-            bevel=0.01)
-        box(name + "lens", (size * 0.22, 0.2, hh * 0.8), (0.12, -0.08 - size * 0.24 - 0.08, thick - 0.04),
-            M["glass"], parent=e, bevel=0.04)
+        box(name + "lampframe", (size * 0.4, 0.06, hh * 0.86), (0.18, hy + size * 0.17 + 0.02, thick - 0.05),
+            M["gold"], parent=e, bevel=0.02)
+        box(name + "lamp", (size * 0.28, 0.05, hh * 0.6), (0.18, hy + size * 0.17 + 0.05, thick + hh * 0.08),
+            M["lamp"], parent=e, bevel=0.01)
+        # a round glass window up right (-Y) in a steel rim
+        gr = size * 0.19
+        gx, gy = -0.05, -size * 0.22
+        tube(name + "glassrim", [(gx + gr * math.cos(2 * math.pi * i / 36), gy + gr * 1.15 * math.sin(2 * math.pi * i / 36),
+                                  thick + 0.02) for i in range(36)], 0.05, M["steel"], parent=e, cyclic=True)
+        g = cyl(name + "glass", gr, 0.06, (gx, gy, thick - 0.02), M["glass"], parent=e, verts=32, bevel=0.02)
+        g.scale = (1.0, 1.15, 1.0)
     return e
 
 
@@ -1009,6 +1029,9 @@ def chimney(b, cage=False):
           (top.x, top.y, 0.0), M["steel"], verts=32)
     for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
         rivet(f"chimrv{i}", (top.x + u * w * 0.52, top.y + v * w * 0.52, top.z + 0.22), None, r=0.1)
+    zp = z0 + hgt * 0.55
+    box("chimplate", (w * 1.75, w * 1.45, 0.13), (top.x + 0.1, top.y - 0.1, zp), M["plate"], rot=(0, -24, 0),
+        bevel=0.03, origin="centre")
     if cage:                 # level 4: two gold hoops over the flange and gold bars down the sides
         for k, (dx, dy) in enumerate(((1, 0), (0, 1))):
             pts = []
@@ -1034,44 +1057,78 @@ def chimney(b, cage=False):
     return top
 
 
+def bow_plane(hub):
+    """Flash px -> the key's local frame: the point on the camera ray in the upright plane through the shaft that faces
+    the camera, with the key turned as at frame 0 (so the bow's picture at frame 0 is Flash's exactly)."""
+    hub.rotation_euler = (0, 0, math.radians(KEYS[hub.name]))
+    bpy.context.view_layer.update()
+    mw = hub.matrix_world.copy()
+    o = mw.translation
+    f = cam_fwd()
+    nrm = Vector((f.x, f.y, 0.0)).normalized()
+    inv = mw.inverted()
+
+    def to_local(sx, sy):
+        p = px(sx, sy, Z=0.0)
+        t = (o - p).dot(nrm) / f.dot(nrm)
+        return inv @ (p + f * t)
+    return to_local
+
+
 def bow_monster(hub, ln):
-    """Level 3: the key's bow, a gold wire monster head (outline with a curled horn, two eye loops, a grin)."""
-    s = S.L3_BOW_SCALE
-    z0 = ln + 1.3 * s
-    outline = [(-1.15, -0.55), (-1.35, 0.15), (-1.05, 0.85), (-0.55, 1.15), (-0.1, 1.3), (0.15, 1.75), (-0.1, 2.05),
-               (0.25, 2.1), (0.45, 1.7), (0.45, 1.25), (0.95, 0.95), (1.3, 0.4), (1.2, -0.3), (0.85, -0.85),
-               (0.3, -1.2), (-0.25, -1.25), (-0.75, -1.0)]
-    tube("keyboww", [(x * s, 0, z0 + y * s) for x, y in smooth_loop(outline)], 0.085, M["gold"], parent=hub,
-         cyclic=True)
-    for k, (cx, cy, rr) in enumerate(((-0.45, 0.3, 0.33), (0.4, 0.35, 0.3))):
-        tube(f"keyboweye{k}", [((cx + rr * math.cos(2 * math.pi * i / 24)) * s, 0,
-                                z0 + (cy + rr * 1.2 * math.sin(2 * math.pi * i / 24)) * s) for i in range(24)], 0.07,
-             M["gold"], parent=hub, cyclic=True)
-    tube("keybowgrin", [(x * s, 0, z0 + y * s) for x, y in ((-0.65, -0.45), (-0.3, -0.7), (0.1, -0.72), (0.55, -0.45))],
-         0.07, M["gold"], parent=hub, smooth=True)
-    tube("keybowstem", [(0, 0, ln - 0.05), (0, 0, z0 - 1.2 * s)], 0.1, M["gold"], parent=hub)
-    tube("keybowbar", [(-1.3 * s, 0, z0 + 0.3 * s), (1.28 * s, 0, z0 + 0.3 * s)], 0.06, M["gold"], parent=hub)
-    tube("keybowchin", [(0.08 * s, 0, z0 - 0.7 * s), (0.08 * s, 0, z0 - 1.22 * s)], 0.06, M["gold"], parent=hub)
+    """Level 3: the key's bow, Flash's curly gold wire monster (its centre lines traced from Flash, bows.json)."""
+    to_local = bow_plane(hub)
+    g = BOWS["3"]
+    me = bpy.data.meshes.new("keyboww")
+    me.from_pydata([tuple(to_local(*p)) for p in g["verts"]], [tuple(e) for e in g["edges"]], [])
+    ob = link(bpy.data.objects.new("keyboww", me), hub)
+    for o in bpy.context.view_layer.objects:
+        o.select_set(False)
+    bpy.context.view_layer.objects.active = ob
+    ob.select_set(True)
+    bpy.ops.object.convert(target="CURVE")
+    ob = bpy.context.view_layer.objects.active
+    ob.data.bevel_depth = 0.1
+    ob.data.bevel_resolution = 3
+    ob.data.use_fill_caps = True
+    ob.data.materials.append(M["gold"])
+    foot = to_local(*S.L3_BOW_FOOT)
+    foot = foot + (foot - Vector((0, 0, ln + 0.3))).normalized() * 0.15   # into the wire
+    tube("keybowstem", [(0, 0, ln - 0.05), (0, 0, ln + 0.3), foot], 0.1, M["gold"], parent=hub, smooth=True)
 
 
 def bow_head(hub, ln):
-    """Level 4: the key's bow, a thick solid gold monster head with two eye holes and a grin."""
-    r = S.L4_BOW_R
-    z0 = ln + r
-    e = bpy.data.objects.new("keybowhead", None)
-    link(e, hub)
-    e.location = (0, 0, z0)
-    e.rotation_euler = (math.radians(90), 0, 0)
-    lathe("keybowdisc", [(0.0, -0.22), (r * 0.9, -0.22), (r, -0.1), (r, 0.1), (r * 0.9, 0.22), (0.0, 0.22)], (0, 0, 0),
-          M["gold"], parent=e, verts=40)
-    for k, (cx, cy) in enumerate(((-0.38, 0.22), (0.38, 0.22))):
-        cyl(f"keyboweye{k}", 0.24 * r, 0.47, (cx * r, cy * r, -0.235), M["golddark"], parent=e, verts=20, bevel=0.0)
-    box("keybowgrin", (0.9 * r, 0.16 * r, 0.47), (0, -0.4 * r, 0), M["golddark"], parent=e, bevel=0.02,
-        origin="centre")
-    for k, sx in enumerate((-1, 1)):
-        cyl(f"keybowhorn{k}", 0.2 * r, 0.5 * r, (sx * 0.62 * r, 0.75 * r, 0), M["gold"], parent=e,
-            rot=(0, 0, -sx * 35), r2=0.04, verts=12)
-    tube("keybowstem", [(0, 0, ln - 0.05), (0, 0, z0 - r + 0.05)], 0.12, M["gold"], parent=hub)
+    """Level 4: the key's bow, Flash's solid gold monster head (its outline traced from Flash, bows.json), thick,
+    with soft rounded edges and an eye hole."""
+    to_local = bow_plane(hub)
+    sh = BOWS["4"]
+    bm = bmesh.new()
+    th = 0.62
+    vs = [bm.verts.new(to_local(*p)) for p in sh["outer"]]
+    face = bm.faces.new(vs)
+    bmesh.ops.recalc_face_normals(bm, faces=[face])
+    n = face.normal.copy()
+    ext = bmesh.ops.extrude_face_region(bm, geom=[face])
+    top = [g for g in ext["geom"] if isinstance(g, bmesh.types.BMVert)]
+    bmesh.ops.translate(bm, verts=top, vec=n * th)
+    bmesh.ops.translate(bm, verts=bm.verts[:], vec=-n * th / 2)
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])
+    ob = mesh_ob("keybowhead", bm, [M["block"]], parent=hub, bevel=0.3, segs=6)
+    for k, hole in enumerate(sh["holes"]):
+        hs = [to_local(*p) for p in hole]
+        c = sum(hs, Vector()) / len(hs)
+        r = sum((p - c).length for p in hs) / len(hs)
+        cut = cyl(f"keybowcut{k}", r * 1.05, th + 0.6, c - n * (th / 2 + 0.3), M["hole"], parent=hub, verts=16,
+                  bevel=0.0, rot=tuple(math.degrees(a) for a in n.to_track_quat("Z", "Y").to_euler()))
+        cut.hide_render = True
+        cut.display_type = "WIRE"
+        mo = ob.modifiers.new(f"eye{k}", "BOOLEAN")
+        mo.operation = "DIFFERENCE"
+        mo.object = cut
+        ob.modifiers.move(len(ob.modifiers) - 1, 0)
+    foot = to_local(*S.L4_BOW_FOOT)
+    foot = foot + (foot - Vector((0, 0, ln + 0.3))).normalized() * 0.3    # into the head
+    tube("keybowstem", [(0, 0, ln - 0.05), (0, 0, ln + 0.3), foot], 0.12, M["gold"], parent=hub, smooth=True)
 
 
 def smooth_loop(pts, k=6):
@@ -1103,7 +1160,7 @@ def level34():
             M["golddark"], verts=48)
     b, sh = shell34()
     top_b = b.z - math.sqrt((S.L4_BODY_R if lv4 else S.L3_BODY_R) ** 2 - S.L3_BELLOWS_R ** 2) + 0.3
-    bellows("bellows", zb + (0.0 if lv4 else S.L3_BELLOWS_Z), top_b, S.L3_BELLOWS_R, 3, M["rubber"])
+    bellows("bellows", zb + (0.0 if lv4 else S.L3_BELLOWS_Z), top_b, S.L3_BELLOWS_R, 3 if lv4 else 2, M["rubber"])
     # four feet: an arm out of the bellows to a threaded post with a nut on top and a nut foot on the ground
     # (level 4: steel pillars on the wooden base instead, with dark collars where the arms meet them)
     for i, th in enumerate((225.0, 45.0, -45.0, 135.0)):
@@ -1118,12 +1175,12 @@ def level34():
             cyl(f"legcap{i}", S.L4_PILLAR_R + 0.05, 0.12, (p.x, p.y, S.L4_PILLAR_TOP), M["steel"], verts=28,
                 bevel=0.04)
         else:
-            cyl(f"legrod{i}", 0.26, za + 0.2, (p.x, p.y, 0.3), M["needle"], verts=12, bevel=0.0)
+            cyl(f"legrod{i}", 0.36, za + 0.2, (p.x, p.y, 0.3), M["needle"], verts=14, bevel=0.0)
             for k in range(int((za - 0.2) / 0.16)):
-                tube(f"legthread{i}-{k}", [(p.x + 0.28 * math.cos(2 * math.pi * j / 12), p.y + 0.28 * math.sin(
+                tube(f"legthread{i}-{k}", [(p.x + 0.38 * math.cos(2 * math.pi * j / 12), p.y + 0.38 * math.sin(
                     2 * math.pi * j / 12), 0.45 + k * 0.16) for j in range(12)], 0.03, M["needle"], cyclic=True)
-            hexnut(f"legnut{i}", (p.x, p.y, za - 0.15), 0.72, 0.65, M["nut"])
-            hexnut(f"legfoot{i}", (p.x, p.y, 0.0), 0.72, 0.5, M["nut"])
+            hexnut(f"legnut{i}", (p.x, p.y, za - 0.15), 0.85, 0.75, M["nut"])
+            hexnut(f"legfoot{i}", (p.x, p.y, 0.0), 0.88, 0.6, M["nut"])
     chimney(b, cage=lv4)
     # panels: on whatever shell part the camera sees at Flash's place
     for i, ((sx, sy), kind) in enumerate(S.L3_PANELS):
@@ -1237,6 +1294,7 @@ def setup(sc):
     g = bpy.context.active_object
     g.name = "ground"
     g.is_shadow_catcher = True
+    g.data.materials.append(flat("groundref", (70, 92, 48), rough=0.9))
     return cam
 
 

@@ -230,16 +230,18 @@ def damaged():
         crumple(sh, 0.03, seed=5)
         holes_and_dents([(-26.0, -14.0, 0.75), (20.0, 4.0, 0.55), (-6.0, 12.0, 0.4)],
                         [(-30.0, -30.0, 2.0, 0.6), (8.0, -2.0, 1.8, 0.5), (28.0, -22.0, 1.4, 0.4)])
-        # the key knocked over the hole's front rim: swung forward and down, its ring hanging in front of the ball
-        rc = centre([o for o in SC.objects if o.name.startswith("keyring")])
-        right = Vector((1, 1, 0)).normalized()
-        best = None
-        for ang in (150, -150):
-            v = Matrix.Rotation(math.radians(ang), 3, right) @ (rc - sp)
-            fwd = v.dot(-cam_fwd())
-            if best is None or fwd > best[0]:
-                best = (fwd, ang)
-        turn([k], sp, right, best[1])
+        # the key knocked out of its slot and hanging over the shell's front, its ring in front of the ball low down
+        # (as Flash's; turning it about the slot dropped the ring into the hole)
+        bpy.context.view_layer.update()
+        mw = k.matrix_world.copy()
+        kz = (mw.to_3x3() @ Vector((0, 0, 1))).normalized()
+        f = -cam_fwd()
+        fh = Vector((f.x, f.y, 0.0)).normalized()
+        bc = centre([sh])
+        root = bc + (fh * 0.95 + Vector((0, 0, 0.3))).normalized() * (S.L2_BALL_R + 0.08)
+        dt = (fh * 0.4 + Vector((0, 0, -1))).normalized()
+        q = kz.rotation_difference(dt)
+        k.matrix_world = Matrix.Translation(root) @ q.to_matrix().to_4x4() @ mw.to_3x3().to_4x4()
         for h in G["MOVING"]:
             if h.name in G["KEYS"]:
                 h.rotation_euler = (0, 0, 0)
@@ -289,7 +291,7 @@ def damaged():
         for i, o in enumerate(pans):
             p = slot_of(o)
             if i == 1:
-                g = ground_pt(-36.0, 92.0) + Vector((0, 0, 0.16))
+                g = ground_pt(-30.0, 86.0) + Vector((0, 0, 0.16))
                 place([o], p, axis_of(o), g, Vector((-0.2, -0.15, 1.0)))
             else:
                 screen_turn([o], p, (25, 0, -20)[i], move=tuple(axis_of(o) * 0.15))
