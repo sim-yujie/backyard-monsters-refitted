@@ -29,7 +29,7 @@ import stack as S  # noqa: E402
 EL = 30.0
 ORIGIN = S.ORIGIN                     # Flash pixel of the world origin (the stone block's middle on the ground)
 GROUND = S.GROUND
-FRAME = (-70, -72, 92, 90)            # the canvas in Flash px (as fref.FRAME)
+FRAME = tuple(int(v) for v in os.environ.get("PB_FRAME", "-70,-72,92,90").split(","))   # the canvas in Flash px (as fref.FRAME; wider for the damage looks)
 K = int(os.environ.get("PB_K", 4 if MODE == "fit" else 12))     # render px per Flash px
 SX, SY, SZ = 10 * math.cos(math.radians(45)), 10 * math.sin(math.radians(45)) * math.sin(math.radians(EL)), \
     10 * math.cos(math.radians(EL))
@@ -850,35 +850,41 @@ def planks(name, p0, p1, z0_fn, z1_fn, mat, n, thick=0.12, gap=0.03, out=None, j
 def materials():
     M = {}
     # the stone: Flash's soft blue-grey block, pale on the lit left face, darker low down
-    M["stone"] = painted("stone", (99, 99, 100), rough=0.9, wear=(76, 76, 80), scale=3.0, dirt=0.5, spec=0.2)
-    lift(M["stone"], (86, 86, 89), 0.34)
-    shade_z(M["stone"], [(0.0, 0.72), (1.2, 0.92), (2.6, 0.95), (3.5, 0.82), (4.04, 0.6)])
+    M["stone"] = painted("stone", (96, 95, 106), rough=0.9, wear=(74, 72, 86), scale=3.0, dirt=0.5, spec=0.2)
+    lift(M["stone"], (84, 83, 94), 0.34)
+    shade_z(M["stone"], [(0.0, 0.66), (1.2, 0.84), (2.6, 0.95), (3.5, 0.82), (4.04, 0.6)])
+    # the corner footings: the same stone, pale on their rounded tops (Flash lights them from above)
+    M["foot"] = painted("foot", (100, 99, 110), rough=0.9, wear=(78, 76, 90), scale=3.0, dirt=0.45, spec=0.2)
+    lift(M["foot"], (88, 87, 98), 0.3)
+    shade_z(M["foot"], [(0.0, 0.66), (0.7, 0.86), (1.15, 1.08), (1.5, 1.4)])
     M["door"] = flat("door", (12, 12, 16), rough=1.0)
     # pale weathered boards (deck, roofs) and darker brown planks (walls, stairs)
-    M["deck"] = wood("deck", (208, 170, 100), (138, 104, 58), axis="X", dirt=0.25)
+    M["deck"] = wood("deck", (200, 166, 106), (126, 98, 60), axis="X", dirt=0.32)
     shade_along(M["deck"], (0.707, 0.707, 0.0), 0.6, 5.0, 0.5)     # Flash's deck darkens to the right of the cabin
-    M["roofx"] = wood("roof", (226, 192, 132), (150, 118, 76), axis="X", dirt=0.15)
-    M["roofy"] = wood("roof", (226, 192, 132), (150, 118, 76), axis="Y", dirt=0.15)
+    M["roofx"] = wood("roof", (226, 192, 130), (142, 110, 70), axis="X", dirt=0.2)
+    M["roofy"] = wood("roof", (214, 182, 124), (134, 104, 66), axis="Y", dirt=0.2)
+    M["corner"] = wood("corner", (176, 150, 108), (136, 112, 76), axis="Z", dirt=0.2, rings=4.0)
     M["plank"] = wood("plank", (96, 81, 59), (84, 71, 52), axis="Z", dirt=0.35, rings=4.0)
     lift(M["plank"], (96, 80, 56), 0.08)              # Flash lights the cabin's walls almost evenly
     M["rim"] = wood("rim", (104, 82, 52), (74, 58, 36), axis="X", dirt=0.2)
     M["tplank"] = wood("tplank", (156, 126, 84), (126, 100, 64), axis="Z", dirt=0.25, rings=4.0)
-    M["stair"] = wood("stair", (164, 138, 98), (98, 80, 52), axis="Z", dirt=0.3)
+    M["stair"] = wood("stair", (146, 120, 84), (88, 70, 44), axis="Z", dirt=0.3)
     M["riser"] = wood("riser", (92, 74, 46), (64, 50, 30), axis="Z", dirt=0.2)
     M["stairside"] = wood("stairside", (196, 166, 114), (150, 124, 82), axis="Z", dirt=0.2)
     lift(M["stairside"], (120, 100, 66), 0.25)
     lift(M["tplank"], (120, 96, 62), 0.15)
-    M["plate"] = shiny("plate", (214, 156, 34), rough=0.55, metal=0.5, wear=(150, 96, 18), scale=2.5, dirt=0.2)
-    M["tread"] = wood("stair", (164, 138, 98), (98, 80, 52), axis="Y", dirt=0.3)
+    M["plate"] = shiny("plate", (196, 134, 26), rough=0.32, metal=0.9, wear=(112, 66, 10), scale=1.6, dirt=0.4)
+    M["tread"] = wood("stair", (146, 120, 84), (88, 70, 44), axis="Y", dirt=0.3)
     M["frame"] = wood("frame", (126, 106, 80), (96, 80, 58), axis="Z", dirt=0.1)
     M["glass"] = flat("glass", (16, 12, 8), rough=0.6)
     # weathering: soft stains and fine dirt on the stone and every wooden part (Flash's art is never clean)
     stain(M["stone"], 1.6, 0.3, 1.0, fine=0.25)
-    for k, (sc, amt) in {"deck": (0.7, 0.2), "roofx": (0.8, 0.16), "roofy": (0.8, 0.16), "plank": (1.1, 0.18), "tplank": (1.3, 0.16),
+    stain(M["foot"], 1.6, 0.25, 4.0, fine=0.25)
+    for k, (sc, amt) in {"deck": (0.9, 0.28), "roofx": (1.0, 0.24), "roofy": (1.0, 0.24), "corner": (1.2, 0.2), "plank": (1.1, 0.18), "tplank": (1.3, 0.16),
                          "stair": (1.0, 0.18), "riser": (1.0, 0.12), "stairside": (1.0, 0.18), "rim": (1.0, 0.15)}.items():
         stain(M[k], sc, amt, 2.0 + len(k), fine=0.1)
     # metals: Flash's old gold telescope, light steel scissors and posts, silver balls
-    M["brass"] = shiny("brass", (250, 182, 44), rough=0.24, metal=0.88, wear=(150, 92, 16), scale=2.0, dirt=0.2,
+    M["brass"] = shiny("brass", (246, 194, 50), rough=0.26, metal=0.88, wear=(138, 92, 14), scale=2.0, dirt=0.25,
                        side=0.3)
     M["bellin"] = painted("bellin", (54, 48, 22), rough=0.7, wear=(70, 34, 18), scale=2.0, dirt=0.0, spec=0.3)
     M["steel"] = shiny("steel", (176, 184, 200), rough=0.35, metal=0.75, wear=(140, 148, 166), scale=3.0, dirt=0.1)
@@ -899,7 +905,7 @@ def base():
     box("base", (2 * A, 2 * A, S.BASE_H), (0, 0, 0), M["stone"], bevel=S.BASE_R, segs=4)
     c = A + S.FOOT_OUT - S.FOOT_S / 2
     for i, (sx, sy) in enumerate(((1, -1), (-1, -1), (1, 1), (-1, 1))):
-        box(f"foot{i}", (S.FOOT_S, S.FOOT_S, S.FOOT_H), (sx * c, sy * c, 0), M["stone"], bevel=0.3, segs=4)
+        box(f"foot{i}", (S.FOOT_S, S.FOOT_S, S.FOOT_H), (sx * c, sy * c, 0), M["foot"], bevel=0.46, segs=5)
     y0, y1, z0, z1 = S.DOOR
     box("door", (0.06, y1 - y0, z1 - z0), (A + 0.005, (y0 + y1) / 2, z0), M["door"], bevel=0.02)
 
@@ -947,8 +953,9 @@ def deck():
         M["door"], bevel=0.01)
     # a bed of boards on the stone under the deck boards
     box("deckbed", (2 * A - 0.1, 2 * A - 0.1, RIM_H), (0, 0, S.BASE_H), M["rim"], bevel=0.03)
+    cuts = [-D] + [-D + i * w + rng.uniform(-0.12, 0.12) * w for i in range(1, S.DECK_N)] + [D]
     for i in range(S.DECK_N):
-        ya, yb = -D + i * w + 0.015, -D + (i + 1) * w - 0.015
+        ya, yb = cuts[i] + rng.uniform(0.01, 0.035), cuts[i + 1] - rng.uniform(0.01, 0.035)
         t = S.DECK_T - RIM_H + rng.uniform(-0.02, 0.0)
         spans = [(-D, D)]
         if ya < sy1 and yb > sy0:           # the slot cuts this board: keep the ends and the strips beside the slot
@@ -1023,7 +1030,7 @@ def house():
     # the roof: two slopes of boards along X, from the ridge down past the eaves
     ang = math.radians(S.ROOF_PITCH)
     run = S.ROOF_RUN / math.cos(ang)
-    nb = 7
+    nb = 5
     bw = run / nb
     length = 2 * (ax + S.ROOF_END)
     for side in (-1, 1):
@@ -1031,8 +1038,18 @@ def house():
         for i in range(nb):
             s = (i + 0.5) * bw                       # along the slope from the ridge
             top = Vector((cx, cy + side * s * math.cos(ang), S.ROOF_Z - s * math.sin(ang)))
-            box(f"roof{side + 1}{i}", (length + rng.uniform(-0.06, 0.06), bw - 0.035, RT), top - nrm * RT / 2,
-                M["roofx"], rot=(-side * S.ROOF_PITCH + rng.uniform(-1, 1), 0, 0), bevel=0.04, origin="center")
+            box(f"roof{side + 1}{i}", (length + rng.uniform(-0.06, 0.06), bw - rng.uniform(0.07, 0.1), RT),
+                top - nrm * RT / 2, M["roofx"], rot=(-side * S.ROOF_PITCH + rng.uniform(-1.5, 1.5), 0, 0), bevel=0.04,
+                origin="center")
+        # under the boards a dark sheet (the gaps show dark), and a thick dark beam along the eave
+        mid = Vector((cx, cy + side * run / 2 * math.cos(ang), S.ROOF_Z - run / 2 * math.sin(ang)))
+        box(f"roofsheet{side + 1}", (length - 0.1, run - 0.1, 0.06), mid - nrm * (RT + 0.03), M["rim"],
+            rot=(-side * S.ROOF_PITCH, 0, 0), bevel=0.01, origin="center")
+        eave = Vector((cx, cy + side * (run - 0.12) * math.cos(ang), S.ROOF_Z - (run - 0.12) * math.sin(ang)))
+        box(f"roofeave{side + 1}", (length + 0.02, 0.2, 0.3), eave - nrm * (RT + 0.12), M["rim"],
+            rot=(-side * S.ROOF_PITCH, 0, 0), bevel=0.04, origin="center")
+    box("cornerboard", (0.16, 0.24, roof_under(cy + ay) - z0 + 0.02), (cx + ax + 0.02, cy + ay - 0.1, z0), M["corner"],
+        bevel=0.03)
     box("ridge", (length + 0.04, 0.24, 0.16), (cx, cy, S.ROOF_Z + 0.02), M["roofx"], bevel=0.05, origin="center")
 
 
@@ -1075,16 +1092,16 @@ def telescope():
     L_ = S.SCOPE_LEN
     # (r, z) along the tube from the eyepiece: a domed cap, a round knuckle, a fat barrel with rings, the flared horn
     # Flash: a knobby joint at the eye end, a short fat barrel, a horn that flares fast to a thick rim
-    prof = [(0.0, -0.06), (0.22, -0.04), (0.38, 0.04), (0.5, 0.16), (0.57, 0.32), (0.58, 0.44), (0.53, 0.56),
-            (0.45, 0.64), (0.43, 0.72), (0.5, 0.78), (0.5, 1.5), (0.56, 1.6), (0.63, 1.82), (0.66, 2.08),
-            (0.63, 2.32), (0.55, 2.48)]
+    prof = [(0.0, -0.06), (0.22, -0.04), (0.36, 0.04), (0.46, 0.16), (0.5, 0.3), (0.49, 0.42), (0.42, 0.52),
+            (0.4, 0.58), (0.5, 0.66), (0.62, 0.8), (0.7, 1.0), (0.72, 1.25), (0.7, 1.5), (0.62, 1.7), (0.67, 1.76),
+            (0.67, 1.86), (0.58, 1.92), (0.54, 2.0)]
     for k in range(1, 12):
         f = k / 11
-        prof.append((0.55 + 0.34 * f ** 1.7, 2.48 + (L_ - 2.5) * f))
-    prof += [(0.92, L_ - 0.02), (0.95, L_ + 0.05), (0.89, L_ + 0.08), (0.8, L_ + 0.03)]
+        prof.append((0.54 + 0.42 * f ** 2.8, 2.0 + (L_ - 2.02) * f))
+    prof += [(0.97, L_ - 0.02), (1.01, L_ + 0.06), (0.95, L_ + 0.11), (0.84, L_ + 0.05)]
     tb = lathe("scopetube", prof, e, M["brass"], verts=40)
     track(tb, d)
-    inner = [(0.8, L_ + 0.03), (0.66, L_ - 0.35), (0.52, L_ - 0.8), (0.42, L_ - 1.4), (0.0, L_ - 1.45)]
+    inner = [(0.84, L_ + 0.05), (0.66, L_ - 0.3), (0.5, L_ - 0.7), (0.42, L_ - 1.1), (0.0, L_ - 1.15)]
     ib = lathe("scopein", inner, e, M["bellin"], verts=40)
     track(ib, d)
     # the gold bracket: a plate on the front roof slope, an arm up to a clamp round the barrel
@@ -1097,14 +1114,14 @@ def telescope():
     if n.z < 0:
         n = -n
     plate = hit_plane(*S.SCOPE_PLATE, p0, n)
-    b = box("bracket", (1.1, 0.95, 0.1), plate + n * 0.05, M["plate"], bevel=0.035, origin="center")
+    b = box("bracket", (1.25, 1.05, 0.12), plate + n * 0.05, M["plate"], bevel=0.035, origin="center")
     b.rotation_euler = n.to_track_quat("Z", "X").to_euler()
     ox = S.ORIGIN[0]
     t = ((S.SCOPE_ARM - ox) / SX - (e.x + e.y)) / (d.x + d.y)
-    t = min(max(t, 0.9), 2.0)
+    t = min(max(t, 0.9), 1.6)
     clamp = e + d * t
-    low = clamp - Vector((0, 0, 0.45))
-    tube("bracketarm", [plate + n * 0.05, low], 0.14, M["brass"], verts=12)
+    low = clamp - Vector((0, 0, 0.4))
+    tube("bracketarm", [plate + n * 0.05, low], 0.22, M["brass"], verts=14)
     c = cyl("bracketclamp", 0.49, 0.2, clamp - d * 0.1, M["brass"], verts=32, bevel=0.04)
     track(c, d)
 
@@ -1126,10 +1143,10 @@ def scissors():
         outline = []
         for i in range(15):
             f = i / 14
-            outline.append(SP + b * ((ln + 0.3) * f - 0.25) + w * side * (0.44 * (1 - f) ** 0.55 + 0.03))
+            outline.append(SP + b * ((ln + 0.3) * f - 0.25) + w * side * (0.56 * (1 - f) ** 0.85 + 0.03))
         for i in range(14, -1, -1):
             f = i / 14
-            outline.append(SP + b * ((ln + 0.3) * f - 0.25) - w * side * (0.14 * (1 - f) + 0.02))
+            outline.append(SP + b * ((ln + 0.3) * f - 0.25) - w * side * (0.2 * (1 - f) + 0.02))
         bm = bmesh.new()
         a = [bm.verts.new(p + n * (off + 0.045)) for p in outline]
         c = [bm.verts.new(p + n * (off - 0.045)) for p in outline]
@@ -1142,11 +1159,11 @@ def scissors():
         mesh_ob(f"scisblade{k}", bm, [M["steel"]], bevel=0.03, segs=2)
         pts = [lift_(q, off) for q in loop]
         # Flash's handles are flat steel bands, not round wire
-        sweep(f"scisloop{k}", smooth_loop(pts), n, 0.12, 0.27, M["steel"], bevel=0.04, closed=True)
+        sweep(f"scisloop{k}", smooth_loop(pts), n, 0.14, 0.34, M["steel"], bevel=0.05, closed=True)
         start = pts[0]
         sweep(f"scisshank{k}", [SP + n * off, SP.lerp(start, 0.5) + n * off * 0.5, start], n, 0.14, 0.34, M["steel"],
               bevel=0.05)
-    c = cyl("scispivot", 0.16, 0.34, SP - n * 0.17, M["ball"], verts=20, bevel=0.04)
+    c = cyl("scispivot", 0.12, 0.3, SP - n * 0.15, M["steel"], verts=16, bevel=0.03)
     track(c, n)
 
 
@@ -1211,7 +1228,7 @@ def build():
 FAMILY = (("base", "stone"), ("foot", "stone"), ("door", "stone"), ("deck", "deck"), ("post", "rail"), ("ball", "rail"),
           ("rope", "rope"), ("hwall", "house"), ("gable", "house"), ("window", "window"), ("roof", "roof"),
           ("ridge", "roof"), ("twall", "tower"), ("tgable", "tower"), ("troof", "troof"), ("scope", "scope"),
-          ("bracket", "bracket"), ("scis", "scis"), ("stair", "stair"), ("step", "stair"), ("hand", "hand"))
+          ("bracket", "bracket"), ("scis", "scis"), ("stair", "stair"), ("step", "stair"), ("hand", "hand"), ("corner", "house"))
 
 
 def family(o):

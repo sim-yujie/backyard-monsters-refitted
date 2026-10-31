@@ -24,25 +24,25 @@ YAW = 2.5
 BASE_A = 2.93               # half its width
 BASE_H = 4.04               # its top (under the deck)
 BASE_R = 0.32               # its rounded upright edges
-FOOT_S, FOOT_H, FOOT_OUT = 1.15, 1.45, 0.16    # the corner footings: side, height, how far they stand out of the walls
+FOOT_S, FOOT_H, FOOT_OUT = 1.34, 1.5, 0.26    # the corner footings: side, height, how far they stand out of the walls
 
 # the deck
 DECK_A = 3.64               # half its width
 DECK_T = 0.42               # its thickness
 DECK_Z1 = BASE_H + DECK_T   # its top
 DECK_N = 9                  # boards (running along X)
-SLOT_W, SLOT_D = 1.9, 0.8   # the scissors' slot round their pivot (along X, along Y)
+SLOT_W, SLOT_D = 1.9, 1.25  # the scissors' slot round their pivot (along X, along Y)
 
 # the posts at the deck's corners, and the rope between their balls
 POST_IN = 0.36              # in from the deck's corners
-POST_IN_F = 0.6             # the front (-Y) posts: a little further in, so their rope runs behind the scissors
+POST_IN_F = 0.8             # the front (-Y) posts: a little further in, so their rope runs behind the scissors
 POST_H, POST_R, BALL_R = 1.4, 0.1, 0.3
 ROPE_R, ROPE_SAG = 0.1, 0.22
 
 # the cabin (the roof: a ridge along X, boards down both sides at ROOF_PITCH to ROOF_RUN from the ridge)
 HOUSE_C = (0.02, 1.3)      # its middle (before the shear)
 HOUSE_AX, HOUSE_AY = 1.22, 1.3   # half its length (X) and width (Y)
-ROOF_Z, ROOF_RUN, ROOF_PITCH = 9.22, 2.35, 43.0
+ROOF_Z, ROOF_RUN, ROOF_PITCH = 9.22, 2.05, 43.0
 ROOF_END = 0.3              # the roof's overhang past the gables
 # Flash draws the cabin's long walls flatter than the deck's edges (its art was a perspective render): the cabin and
 # its tower are sheared, y moving by HOUSE_SHEAR per unit of x behind the +X gable (which stays put)
@@ -56,17 +56,17 @@ TOWER_A = 0.56              # half its side
 TROOF_Z, TROOF_RUN, TROOF_DROP, TROOF_END = 12.3, 0.83, 1.27, 0.22
 
 # the telescope, placed where Flash draws it (Flash px; built after the yaw, in the camera's world)
-SCOPE_EYE = (0.8, -34.5, 0.0)       # the eyepiece end: Flash px x, y and its world y
-SCOPE_DIR = (0.066, -0.914, 0.5)   # toward the mouth (Flash's mouth: a 0.75 ellipse, level with the eyepiece)
-SCOPE_LEN = 3.7
-SCOPE_PLATE = (-7.5, -21.5)         # the bracket's plate on the front roof slope (Flash px)
+SCOPE_EYE = (-1.0, -34.6, 0.0)      # the eyepiece end: Flash px x, y and its world y
+SCOPE_DIR = (0.066, -0.914, 0.52)  # toward the mouth (Flash's mouth: a 0.75 ellipse, level with the eyepiece)
+SCOPE_LEN = 3.1
+SCOPE_PLATE = (-8.0, -23.5)         # the bracket's plate on the front roof slope (Flash px)
 SCOPE_ARM = -10.0                   # the arm meets the tube at this Flash x
 
 # the scissors (Flash px; their plane runs through the pivot and the two blade tips)
 SCIS_PIVOT = (-32.0, 19.0, -3.36)   # Flash x, y and world y
 SCIS_TIPS = ((-34.0, 58.5), (-24.6, 63.5))
-SCIS_TEAR = ((-36, 3), (-39, 0), (-43.5, -4), (-47, -8.5), (-49, -12.5), (-49.2, -17.5), (-47.2, -21), (-44.2, -22.3),
-             (-41.6, -21), (-39.9, -17), (-38.7, -12), (-37.5, -7), (-36.4, -2))
+SCIS_TEAR = ((-31.5, 13), (-34.5, 9.5), (-38.5, 5), (-42.5, 0), (-45.6, -5), (-47.6, -10), (-48.3, -15), (-47.4, -19.5),
+             (-45, -21.8), (-42.4, -21.2), (-40.6, -17.5), (-38.8, -12), (-37, -6), (-35.2, 0), (-33.6, 5.5), (-32.4, 10))
 SCIS_D = ((-24, 10), (-22.6, 5), (-21.3, 0.5), (-20, -4.5), (-18.8, -8.6), (-16.8, -9.4), (-12.6, -7), (-10, -2), (-10, 3), (-12, 7.5), (-15, 10),
           (-19.5, 10.5))
 
