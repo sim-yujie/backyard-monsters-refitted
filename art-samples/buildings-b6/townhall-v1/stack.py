@@ -37,7 +37,7 @@ LV1 = dict(can=(2.25, 0.45, 6.9), legs=(-108.0, -60.0, -3.0, 50.0), leg_r=4.1, l
 
 # level 2: a bigger can, the sheet turned into a brown metal roof (top and eave heights, half sizes), bracket legs
 LV2 = dict(can=(2.9, 1.3, 6.4), legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_z=(10.9, 6.8), roof_plateau=0.42, roof_half=(4.8, 3.8),
-           fun_k=0.85, fun_extra=0.6, mag_th=-82.0, magnet_z=5.5, glass_th=-12.0, glass_d=3.6, glass_z=8.1)
+           fun_k=0.85, fun_extra=0.6, mag_th=-82.0, magnet_z=5.5, glass_th=-12.0, glass_d=2.76, glass_z=7.82)
 
 # level 3: the roof bent into a hood (radius, rim height) over a ribbed core on a steel pan, an octagonal gold rail
 LV3 = dict(hood=(3.85, 7.6), hood_flat=1.0, hood_drop=0.3, hood_flare=0.15, cut=(15.0, 48.0), pan=(3.6, 1.3, 3.9), core_r=1.0,

@@ -894,8 +894,9 @@ def body_dome(lv):
     holes = lv.get("holes", [])
     skip = []
     for i, (th, el, rp) in enumerate(holes):
-        p, n = on_dome(rr, zeq, th, el, fl, -0.02)
-        porthole(f"port{i}", p, n, rp, frame=0.08 + 0.04 * (rp > 1.0), mat_ring=M[lv["port_mat"]] if "port_mat" in lv else None)
+        small = rp < 0.5                     # level 8's little windows: a thin rim standing on the dome
+        p, n = on_dome(rr, zeq, th, el, fl, 0.03 if small else -0.02)
+        porthole(f"port{i}", p, n, rp, frame=0.05 if small else 0.08 + 0.04 * (rp > 1.0), mat_ring=M[lv["port_mat"]] if "port_mat" in lv else None)
         skip.append((th, el, math.degrees(rp / rr) + 3.0))
     # rivet lines: double rows down the meridians and single rings round each porthole
     mer = lv.get("meridians", [])
@@ -903,6 +904,8 @@ def body_dome(lv):
         dome_rivets("dome-rvt", rr + 0.01, zeq, mer, 5.0, 80.0, 5.5, rr=0.055, double=1.9, skip=skip, flat_=fl)
     pts = []
     for th, el, rp in holes:
+        if rp < 0.5:
+            continue
         p, n = on_dome(rr, zeq, th, el, fl, 0.0)
         q = Vector(n).to_track_quat("Z", "Y")
         for k in range(14):
@@ -914,7 +917,7 @@ def body_dome(lv):
     # the gold collar on the top, the funnel standing in it
     ztop = zeq + rr * fl
     lathe("collar", [(0.6, ztop - 0.4), (0.98, ztop - 0.35), (1.02, ztop - 0.1), (0.95, ztop + 0.12),
-                     (0.5, ztop + 0.18), (0.38, ztop + 0.2)], (0, 0, 0), M["gold"], verts=48)
+                     (0.5, ztop + 0.18), (0.33, ztop + 0.2)], (0, 0, 0), M["gold"], verts=48)
     funnel(lv["fun_z"], M["brass"] if lv.get("brass_spout") else None, k=lv.get("fun_k", 1.0))
     for i, th in enumerate(lv.get("straps", [])):
         strap(f"strap{i}", th, dr - 0.02, dz0 - 0.2, dz1, w=0.56, rivets=7)
@@ -1077,7 +1080,8 @@ def crown(z, h=1.6):
         th = S.FRONT + 45 + 90 * k
         tube(f"crown-clasp{k}", [P(th, 1.0, z + 0.3), P(th, 0.85, z + 0.8), P(th, 0.55, z + h - 0.2), P(th, 0.42, z + h)],
              0.14, M["gold"], smooth=True)
-    lathe("crown-top", [(0.38, z + h - 0.15), (0.62, z + h - 0.05), (0.6, z + h + 0.12), (0.36, z + h + 0.18)],
+    lathe("crown-top", [(0.38, z + h - 0.15), (0.62, z + h - 0.05), (0.6, z + h + 0.12), (0.36, z + h + 0.18),
+                        (0.24, z + h + 0.16)],
           (0, 0, 0), M["gold"], verts=32)
 
 
@@ -1286,7 +1290,7 @@ def level1():
             o = b0 + P(th, 0.55, 0) + Vector((0, 0, 0.75))
             tube(f"clip{k}-wire{j}", [b0, o, o + P(th + 90, -0.18 * sg, 0)], 0.035, M["chrome"])
     # the magnifying glass leant against the front, lens down, handle up
-    lc = P(lv["mag_th"], cr + 0.9, lv["mag_z"])
+    lc = P(lv["mag_th"], cr + 0.82, lv["mag_z"])
     n = (P(lv["mag_th"], 1, 0) + Vector((0, 0, 0.25))).normalized()
     porthole("mag", lc, n, lv["mag_r"], frame=0.1, mat_ring=M["chrome"])
     up = Vector((0, 0, 1)) - n * n.z
@@ -1387,7 +1391,7 @@ def level2():
     th = lv["glass_th"]
     c = P(th, lv["glass_d"], lv["glass_z"])
     n = (P(th, 1, 0) * math.cos(math.radians(30)) + Vector((0, 0, math.sin(math.radians(30))))).normalized()
-    magnifier("glass", c, n, 1.2, Vector((0, 0, -1)), 3.6)
+    magnifier("glass", c, n, 1.2, (Vector((0, 0, -1)) + P(th, 0.5, 0)).normalized(), 3.0)
 
 
 def hood(name, r, zeq, cut_half, cut_el, flat_=1.0, drop=0.0, flare=0.0):
@@ -1832,6 +1836,8 @@ def horns(fz):
              M["gold"], r_end=0.05, smooth=True)
         facing_ring(f"loop{k}", P(a, 1.25, fz + 0.2), P(a + 90, 1, 0), 0.55, 0.09, M["red"])
     tube("antenna", [(0, 0, fz + 0.5), (0, 0, fz + 5.3)], 0.1, M["gold"])
+    lathe("antenna-plug", [(0.01, fz + 0.35), (0.23, fz + 0.35), (0.23, fz + 0.75), (0.01, fz + 0.75)], (0, 0, 0),
+          M["gold"], verts=24)
     ball("antenna-tip", (0, 0, fz + 5.3), 0.14, M["gold"])
 
 
