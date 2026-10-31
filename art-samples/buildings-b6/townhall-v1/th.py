@@ -657,8 +657,11 @@ def materials():
                          scale=3, dirt=0.3, rust_at=0.7)
     M["perf_lo"] = perforated("perf_lo", (168, 170, 178), (40, 34, 34), 64, 0.75, 0.15, z0=0.0, wear=(150, 150, 158),
                               rust=(150, 104, 70), rough=0.32, metal=0.75)
-    M["perf_hi"] = perforated("perf_hi", (168, 170, 178), (40, 34, 34), 52, 0.75, 0.15, z0=0.0, wear=(150, 150, 158),
-                              rust=(150, 104, 70), rough=0.32, metal=0.75)
+    # levels 6-8's tiers: Flash's grey-silver, darker than level 9's pale base
+    M["perf_hi"] = perforated("perf_hi", (134, 136, 144), (40, 34, 34), 52, 0.75, 0.15, z0=0.0, wear=(116, 116, 124),
+                              rust=(130, 94, 66), rough=0.4, metal=0.65)
+    M["perf_t"] = perforated("perf_t", (134, 136, 144), (40, 34, 34), 64, 0.75, 0.15, z0=0.0, wear=(116, 116, 124),
+                             rust=(130, 94, 66), rough=0.4, metal=0.65)
     M["core"] = painted("core", (44, 40, 44), rough=0.45, metal=0.7, wear=(78, 74, 80), rust=(70, 46, 34), scale=3,
                         dirt=0.2, rust_at=0.7)
     M["tiertop"] = painted("tiertop", (96, 94, 98), rough=0.6, metal=0.4, wear=(124, 122, 128), rust=(110, 80, 60))
@@ -1018,7 +1021,7 @@ def tiers6(lv):
     (r1, z1a, z1b), (r2, z2a, z2b) = lv["tiers"]
     def bulge(r, za, zb, out):
         return [(r - out * 0.6 - 0.12, zb), (r - out * 0.6, zb)] +             [(r - out * 0.6 + out * math.sin(math.pi * k / 12), zb - (zb - za) * k / 12) for k in range(1, 12)] +             [(r - out * 0.6, za), (r - out * 0.6 - 0.12, za)]
-    lathe("tier-lo", bulge(r2, z2a, z2b, 0.16), (0, 0, 0), M["perf_lo"], verts=128)
+    lathe("tier-lo", bulge(r2, z2a, z2b, 0.16), (0, 0, 0), M["perf_t"], verts=128)
     disc("tier-lo-top", r1 - 0.3, r2 - 0.2, z2b + 0.02, M["tiertop"], thick=0.1)
     ring("tier-lo-rim2", r2 - 0.2, 0.08, M["gold"], z=z2b, n=96)
     # the gold bowl under the lower tier
@@ -1246,7 +1249,7 @@ def level1():
             z = zb
         elif d < cr + 0.05:
             f = (d - 0.45) / (cr + 0.05 - 0.45)
-            z = zr + (zb - zr) * (1 - f ** 3) ** 0.4                         # a bulky bundle, not a peak
+            z = zr + (zb - zr) * (1 - f ** 2.2) ** 0.6                       # a tent spreading from the tie (Flash)
             z += 0.22 * math.sin(7 * ph + 0.6) * (1 - f) * min(1.0, 3 * f)  # the gathers under the tie
         else:
             e = d - cr - 0.05
