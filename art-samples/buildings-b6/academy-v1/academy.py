@@ -605,12 +605,14 @@ def materials():
     M["bandgold"] = shiny("bandgold", (236, 146, 24), rough=0.35, metal=0.2, side=0.3, wear=(250, 180, 60), scale=1.5,
                           dirt=0.1, spec=0.5)
     M["golddark"] = shiny("golddark", (176, 100, 18), rough=0.3, metal=0.75, wear=(210, 140, 40), scale=1.5, dirt=0.4)
-    M["blockgold"] = shiny("blockgold", (212, 142, 22), rough=0.28, metal=0.7, wear=(140, 92, 18), scale=2.0,
+    M["blockgold"] = shiny("blockgold", (196, 128, 18), rough=0.28, metal=0.7, wear=(140, 92, 18), scale=2.0,
                            dirt=0.9, ao_min=0.02, coat=0.3, spec=0.6, lit=((-0.55, -0.8, 0.25), (255, 238, 170), 0.5, 0.82))
     M["foot"] = shiny("foot", (14, 13, 13), rough=0.6, metal=0.1, wear=(22, 21, 21), scale=3, dirt=0.0, spec=0.15)
     M["hole"] = flat("hole", (10, 8, 8), rough=1.0)
     M["pit"] = shiny("pit", (16, 11, 7), rough=0.5, metal=0.3, scale=3, dirt=0.0)
     M["rim"] = shiny("rim", (150, 158, 170), rough=0.28, metal=0.6, wear=(130, 136, 150), scale=3, dirt=0.05)
+    # the opening's inner wall: dark like Flash's (a pale wall glowed cream with the blocks' light)
+    M["innerwall"] = shiny("innerwall", (38, 38, 44), rough=0.45, metal=0.4, wear=(30, 30, 36), scale=3, dirt=0.3)
     M["rib"] = painted("rib", (128, 130, 144), rough=0.5, metal=0.3, wear=(108, 108, 122), scale=5.0, dirt=0.35,
                        spec=0.3)
     M["ribend"] = painted("ribend", (176, 178, 190), rough=0.4, metal=0.35, wear=(150, 150, 164), scale=5.0, dirt=0.1)
@@ -667,7 +669,7 @@ def body():
              (V.OPEN_R - lip, V.OPEN_Z + 0.02), (V.OPEN_R - lip, V.OPEN_Z - 0.3)]
     lathe("dome", prof, (0, 0, 0), M["dome"], verts=128)
     prof[-1] = (V.OPEN_R - lip, V.OPEN_Z - 0.3)
-    lathe("domewall", [(V.OPEN_R - lip, V.OPEN_Z - 0.3), (V.OPEN_R - lip, V.OPEN_Z - 0.75)], (0, 0, 0), M["rim"],
+    lathe("domewall", [(V.OPEN_R - lip, V.OPEN_Z - 0.3), (V.OPEN_R - lip, V.OPEN_Z - 0.75)], (0, 0, 0), M["innerwall"],
           verts=64)
     lathe("domeinner", [(V.OPEN_R - lip, V.OPEN_Z - 0.75), (V.OPEN_R - lip, V.OPEN_Z - 1.9), (0.0, V.OPEN_Z - 1.9)],
           (0, 0, 0), M["pit"], verts=64)
