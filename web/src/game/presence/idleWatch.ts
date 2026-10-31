@@ -114,6 +114,8 @@ export class IdleWatch {
   private deferrals = 0;
   private warning = false;
   private disconnected = false;
+  /** The "Stay protected?" protection has run out: disconnect as if idle. */
+  private lapsed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   /** When the player last gave input; loading the page counts. */
   private lastInput: number;
@@ -171,6 +173,18 @@ export class IdleWatch {
     });
   }
 
+  /**
+   * The player's protection ran out (#275): with no real game action for ten
+   * minutes they are disconnected even if they moved the mouse, as an idle
+   * player is (owner, 30 Oct). An attack or a replay still defers it, and a
+   * real action that renews the protection before then calls this with false.
+   */
+  lapse(on: boolean): void {
+    if (on === this.lapsed || this.disconnected) return;
+    this.lapsed = on;
+    this.schedule();
+  }
+
   /** Any input: the player is there. Cheap, as pointer moves call it often. */
   readonly activity = (): void => {
     if (this.disconnected) return;
@@ -207,7 +221,7 @@ export class IdleWatch {
     const { disconnectMs, warningMs } = this.timings;
     const disconnectAt = this.lastInput + disconnectMs;
     const now = this.now();
-    if (now >= disconnectAt) {
+    if (now >= disconnectAt || this.lapsed) {
       this.disconnect();
       return;
     }

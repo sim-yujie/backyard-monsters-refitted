@@ -523,13 +523,6 @@ export const sightStrength = (since: number, rate: number): number | null => {
 export const SNIPER_TRAIL_TICKS = 34;
 /** Ticks the bright line of a Sniper's trail takes to fade after its round strikes. */
 const SNIPER_GLOW_TICKS = 19;
-/**
- * World px a tick the new look's Sniper round flies: four times Flash's ball,
- * so a shot across its range lands in about a tenth of a second and the flash,
- * the line and the strike read as one crack. Looks only: the engine has taken
- * the damage off on the tick it fired, and the wound shows when this lands.
- */
-export const SNIPER_ROUND_SPEED = 20;
 /** Ticks the wide sheath of light round a Sniper's line takes to fade after its round strikes. */
 const SNIPER_CRACK_TICKS = 10;
 /** The Sniper's strike: the yard's jolt, px, and how long it lasts, ticks. */
@@ -735,6 +728,8 @@ interface TowerState {
   /** Its door's way (`bunkerDoor`): open or shut, and since which tick. */
   doorOpen: boolean;
   doorSince: number;
+  /** Destroyed: it neither turns nor glows any more, as no rest will ever come from the engine. */
+  fallen: boolean;
 }
 
 /** What the effects ask of the yard renderer. */
@@ -839,6 +834,7 @@ export class TowerFx {
         door: 0,
         doorOpen: false,
         doorSince: Number.NEGATIVE_INFINITY,
+        fallen: false,
       });
     }
   }
@@ -905,6 +901,23 @@ export class TowerFx {
     if (!tower) return;
     tower.doorOpen = open;
     tower.doorSince = tick;
+  }
+
+  /**
+   * A tower was destroyed: its Tesla coil, Railgun charge and Laser sight go
+   * out for good. A Tesla destroyed mid-charge never gets its `coilRest`, so
+   * its film would otherwise roll on over the ruin. Shots already in the air
+   * still land.
+   */
+  fall(id: number): void {
+    const tower = this.towers.get(id);
+    if (!tower || tower.fallen) return;
+    tower.fallen = true;
+    tower.tesla = TESLA_IDLE;
+    tower.chargePending = false;
+    tower.targetCreep = -1;
+    tower.recoil = null;
+    tower.quake = Number.NEGATIVE_INFINITY;
   }
 
   /** A tower's splash radius in cartesian units: 0 for none, or a tower this does not know. */
@@ -1025,7 +1038,6 @@ export class TowerFx {
     this.nextKey += 1;
     // The flak's twin barrels take turns: its shell is drawn out of one of them.
     const barrel = type === 115 && this.painted ? this.barrelOf(tower, from, aim) : undefined;
-    const flies = type === 21 && this.painted ? SNIPER_ROUND_SPEED : speed;
     // A 3D Cannon keeps its barrel raised and lobs its shell: up out of the muzzle and down on the creep.
     const tilt = type === 20 ? tower.info.aim?.tilt : undefined;
     const arc =
@@ -1039,7 +1051,10 @@ export class TowerFx {
       bornTick: event.tick,
       x: from.x,
       y: from.y,
-      speed: Math.max(flies, 1),
+      // At its shell's speed, the new look's Sniper round too: the engine flies
+      // the shell and hurts when it lands (engine fidelity note 1), so a faster
+      // round would strike well before its wound and its kill.
+      speed: Math.max(speed, 1),
       splash: stats?.splash ?? 0,
       aim,
       stepX: 0,
@@ -1080,7 +1095,9 @@ export class TowerFx {
     const elapsed = Math.max(0, Math.min(tick - this.lastTick, 400));
     this.lastTick = tick;
 
-    for (const tower of this.towers.values()) this.turn(tower, tick, elapsed, creepAt, creeps);
+    for (const tower of this.towers.values()) {
+      if (!tower.fallen) this.turn(tower, tick, elapsed, creepAt, creeps);
+    }
 
     this.sparks?.begin();
     const graphics = this.graphics;
@@ -1748,6 +1765,7 @@ export class TowerFx {
       return;
     }
     for (const tower of this.towers.values()) {
+      if (tower.fallen) continue;
       const { phase, cell } = tower.tesla;
       if (phase !== "charge" && phase !== "loop") continue;
       const power = phase === "charge" ? cell / TESLA_CHARGE_END : 0.8 + jitter(tick, 7) * 0.2;
@@ -1873,6 +1891,7 @@ export class TowerFx {
     const sparks = this.sparks;
     if (!sparks) return;
     for (const tower of this.towers.values()) {
+      if (tower.fallen) continue;
       const { phase, cell } = tower.tesla;
       if (phase !== "charge" && phase !== "loop") continue;
       const power = phase === "charge" ? cell / TESLA_CHARGE_END : 0.85 + blastNoise(tick, 7) * 0.15;
@@ -2165,6 +2184,7 @@ export class TowerFx {
     const sparks = this.sparks;
     if (!sparks) return;
     for (const tower of this.towers.values()) {
+      if (tower.fallen) continue;
       if (tower.info.type !== 118 || !Number.isFinite(tower.lastShotTick)) continue;
       const rate = towerStats(tower.info.type, tower.info.level)?.rate ?? 160;
       const charge = railCharge(tick - tower.lastShotTick, rate);
@@ -2620,6 +2640,7 @@ export class TowerFx {
     const sparks = this.sparks;
     if (!sparks) return;
     for (const tower of this.towers.values()) {
+      if (tower.fallen) continue;
       const { info } = tower;
       if (info.type !== 21) continue;
       const rate = towerStats(info.type, info.level)?.rate ?? 80;

@@ -975,8 +975,9 @@ describe("hits, wounds and steady walking", () => {
       return layer.creepEffects.labelCount > 0 && tinted;
     });
     expect(hurt).toBe(true);
-    // A level 1 Cannon Tower does 20 a shot, shown as a loss.
-    expect(layer.creepEffects.labelsFor("creep:1")[0]?.amount).toBe(-20);
+    // A level 1 Cannon Tower's shell carries 20; it blasts a few pixels short
+    // of the Pokey (engine fidelity note 1), which takes 16, shown as a loss.
+    expect(layer.creepEffects.labelsFor("creep:1")[0]?.amount).toBe(-16);
     // And the tint clears again once the wound is old.
     playUntil(session, 0.3, layer, () => false);
     layer.destroy();

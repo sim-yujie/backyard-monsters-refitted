@@ -536,6 +536,17 @@ describe("TowerFx", () => {
     fx.destroy();
   });
 
+  it("puts out a Tesla destroyed mid-charge, which never gets the engine's rest", () => {
+    const { graphics, fx } = setUp(25);
+    fx.onCharge(1, 2);
+    fx.update(30, () => undefined);
+    expect(drawn(graphics)).toBeGreaterThan(0);
+    fx.fall(1);
+    fx.update(400, () => undefined);
+    expect(drawn(graphics)).toBe(0);
+    fx.destroy();
+  });
+
   it("stands down: nothing in the air, nothing drawn, a Tesla back on its idle cell (#308)", () => {
     const sniper = setUp(21);
     const target = creepAt(35, 235);
@@ -1073,7 +1084,7 @@ describe("TowerFx's new look", () => {
     return -1;
   };
 
-  it("flies the Sniper's round and the flak shell as painted tracers; the Sniper's lands near at once", async () => {
+  it("flies the Sniper's round and the flak shell as painted tracers, at their shells' speed", async () => {
     for (const type of [21, 115]) {
       const classic = await newLookSetUp(type, "classic");
       const full = await newLookSetUp(type, "full");
@@ -1093,19 +1104,14 @@ describe("TowerFx's new look", () => {
       expect(tracers[1]).toBeLessThan(tracers[0] ?? 0);
       full.fx.destroy();
       low.fx.destroy();
-      // The flak shell lands on the same tick in every look; the painted Sniper's
-      // round cracks across in a tenth of a second or so, where Flash's ball took
-      // more than half a second (the engine took the damage off as it fired).
+      // Each lands on the same tick in every look, as the engine's shell does
+      // (engine fidelity note 1): the Sniper's takes more than half a second.
       const fresh = await newLookSetUp(type, "full");
       const painted = landingTick(fresh.fx, type);
       const flash = landingTick(classic.fx, type);
       expect(painted).toBeGreaterThan(5);
-      if (type === 21) {
-        expect(painted - 5).toBeLessThanOrEqual(12);
-        expect(flash - 5).toBeGreaterThan(40);
-      } else {
-        expect(painted).toBe(flash);
-      }
+      expect(painted).toBe(flash);
+      if (type === 21) expect(flash - 5).toBeGreaterThan(40);
       fresh.fx.destroy();
       classic.fx.destroy();
     }

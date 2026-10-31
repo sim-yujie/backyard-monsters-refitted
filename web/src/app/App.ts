@@ -145,6 +145,8 @@ export class App {
       timings: protectionTimingsFor(window.location.search, import.meta.env.DEV),
       onShow: (endsAt) => prompt.show(endsAt),
       onHide: () => prompt.hide(),
+      // Out of protection is disconnected, input or none (owner, 30 Oct).
+      onLapse: (lapsed) => idle.lapse(lapsed),
       stay: stayProtected,
       account: getAuthToken,
     });

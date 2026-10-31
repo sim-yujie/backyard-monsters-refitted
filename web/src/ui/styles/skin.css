@@ -19,7 +19,7 @@
 
 /* ── Modern: scrap metal and bone ───────────────────────────────────────── */
 
-:root[data-skin="scrap"] .panel {
+:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) {
   --skin-frame: url("/ui/skin/scrap/frame.webp");
   --skin-frame-slice: 100;
   --skin-frame-width: 50px;
@@ -91,7 +91,7 @@
 
 /* ── Classic: Flash refreshed ───────────────────────────────────────────── */
 
-:root[data-skin="flash"] .panel {
+:root[data-skin="flash"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) {
   --skin-frame: url("/ui/skin/flash/frame.webp");
   --skin-frame-slice: 95;
   --skin-frame-width: 47.5px;
@@ -165,7 +165,9 @@
 
 /* ── The frame ──────────────────────────────────────────────────────────── */
 
-:root[data-skin] .panel {
+/* Also the cards that float over the game: "Stay protected?", the quick
+   check, world chat open and Map Room 1. */
+:root[data-skin] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) {
   color: var(--colour-text);
   background: none;
   border-style: solid;
@@ -236,6 +238,13 @@
   text-shadow:
     0 2px 0 var(--skin-title-stroke), 2px 0 0 var(--skin-title-stroke), -2px 0 0 var(--skin-title-stroke), 0 -2px 0 var(--skin-title-stroke),
     1.5px 1.5px 0 var(--skin-title-stroke), -1.5px 1.5px 0 var(--skin-title-stroke), 1.5px -1.5px 0 var(--skin-title-stroke), -1.5px -1.5px 0 var(--skin-title-stroke);
+}
+
+/* A window with no close disc (loading, "You were away too long") lends its
+   sign that corner too: Flash's long ribbon tails cut "Backyard Monsters" to
+   "Backyard M…" in the narrow loading window. */
+:root[data-skin] .panel__titlebar:not(:has(> .btn[aria-label^="Close"])) > .panel__title {
+  max-width: calc(100% + 2 * var(--skin-edge) + 16px);
 }
 
 /* The one or two words on the steel sign are dark on mustard: a thin light rim is enough. */
@@ -350,7 +359,7 @@
 :root[data-skin] .panel .btn--primary:focus-visible,
 :root[data-skin] .panel .btn--outline:focus-visible,
 :root[data-skin] .panel .build-info__build:focus-visible,
-:root[data-skin] .panel .tabs__tab:focus-visible,
+:root[data-skin] .panel :is(.tabs__tab, .test-report__tab, .baiter__tab, .planner-help__tab):focus-visible,
 :root[data-skin] .panel__titlebar > .btn[aria-label^="Close"]:focus-visible {
   box-shadow: none;
   filter: drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 4px var(--colour-accent));
@@ -369,17 +378,17 @@
 }
 
 /* A plain button on steel: a lit plate with a clear rim, not a dim smudge. */
-:root[data-skin="scrap"] .panel .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab) {
+:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close) {
   border-color: rgb(255 255 255 / 26%);
   background: linear-gradient(rgb(255 255 255 / 16%), rgb(255 255 255 / 6%));
   box-shadow: 0 2px 0 rgb(0 0 0 / 35%);
 }
 
-:root[data-skin="scrap"] .panel .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab):hover:not(:disabled) {
+:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close):hover:not(:disabled) {
   background: linear-gradient(rgb(255 255 255 / 24%), rgb(255 255 255 / 12%));
 }
 
-:root[data-skin="scrap"] .panel .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab):disabled {
+:root[data-skin="scrap"] :is(.panel, .stay-protected, .presence-check, .chat-box--open, .mr1) .btn:not(.btn--primary, .btn--outline, .btn--ghost, .btn--danger, .build-info__build, .tabs__tab, .mr1-card__close, .mr1__close):disabled {
   border-color: rgb(255 255 255 / 10%);
   background: rgb(0 0 0 / 20%);
   box-shadow: none;
@@ -387,7 +396,10 @@
 
 /* ── Tabs: painted tabs; the chosen one lit, the rest dull ──────────────── */
 
-:root[data-skin] .panel .tabs {
+/* Also the rows of ghost buttons that work as tabs: the Baiter's and its test
+   report's, the Yard Planner help's. */
+
+:root[data-skin] .panel :is(.tabs, .test-report__tabs, .baiter__tabs, .planner-help__tabs) {
   gap: 4px;
   padding: 0;
   border: 0;
@@ -395,7 +407,7 @@
   align-items: flex-end;
 }
 
-:root[data-skin] .panel .tabs__tab {
+:root[data-skin] .panel :is(.tabs__tab, .test-report__tab, .baiter__tab, .planner-help__tab) {
   min-height: 42px;
   padding: 3px 2px 0;
   border-style: solid;
@@ -412,14 +424,12 @@
   font-weight: var(--display-weight);
 }
 
-:root[data-skin] .panel .tabs__tab:hover {
+:root[data-skin] .panel :is(.tabs__tab, .test-report__tab, .baiter__tab, .planner-help__tab):hover {
   background: none;
   filter: brightness(1.1);
 }
 
-:root[data-skin] .panel .tabs__tab[aria-selected="true"],
-:root[data-skin] .panel .tabs__tab[aria-current="true"],
-:root[data-skin] .panel .tabs__tab[aria-pressed="true"] {
+:root[data-skin] .panel :is(.tabs__tab, .test-report__tab, .baiter__tab, .planner-help__tab):is([aria-selected="true"], [aria-current="true"], [aria-pressed="true"]) {
   min-height: 46px;
   border-image-source: var(--skin-tab-on);
   background: none;
@@ -476,6 +486,500 @@
   }
 }
 
+/* ── Outside the windows: the screen's own colours ──────────────────────── */
+
+/* The bars, chips, docks and cards over the game (the HUD, the Yard Planner's
+   bars, the maps' tools, world chat) read their colours from :root, not from
+   a window, so each style sets them here and the slate glass and its cyan go
+   everywhere at once. Both styles keep these dark with light words, as they
+   sit on the busy yard: steel blue-grey with orange in Modern, Flash's dark
+   brown with orange-yellow in Classic. The painted edge is the bars' rule
+   below. */
+:root[data-skin="scrap"] {
+  --skin-bar: url("/ui/skin/scrap/frame.webp");
+  --skin-bar-slice: 100;
+  --skin-bar-width: 16px;
+  --skin-bar-edge: 7px;
+  --skin-label: url("/ui/skin/scrap/title.webp");
+  --skin-label-slice: 0 72;
+  --skin-label-ink: #2c1a04;
+  --skin-label-stroke: rgb(255 226 120 / 85%);
+  --skin-button: url("/ui/skin/scrap/button.webp");
+  --skin-button-slice: 56;
+  --skin-button-cap: 22px;
+  --skin-button-stroke: #5a1800;
+  --skin-button2: url("/ui/skin/scrap/button-alt.webp");
+  --skin-button2-slice: 45;
+  --skin-button2-ink: #2c1a04;
+  --skin-button2-stroke: rgb(255 236 170 / 70%);
+  --skin-close: url("/ui/skin/scrap/close.webp");
+  --skin-ink: #f6f9fc;
+  --skin-ink-2: #dde5ee;
+  --skin-ink-3: #c8d3df;
+  --skin-ground: rgb(29 37 45 / 90%);
+
+  --colour-surface-base: #1d252d;
+  --colour-surface-raised: rgb(55 68 81 / 97%);
+  --colour-surface-overlay: rgb(255 255 255 / 12%);
+  --colour-surface-sunken: rgb(8 14 22 / 30%);
+  --colour-surface-input: rgb(8 14 22 / 55%);
+  --colour-surface-control: rgb(255 255 255 / 12%);
+  --colour-surface-control-hover: rgb(255 255 255 / 20%);
+  --colour-surface-selected: rgb(255 140 40 / 24%);
+  --colour-border: rgb(0 0 0 / 40%);
+  --colour-border-subtle: rgb(0 0 0 / 28%);
+  --colour-border-strong: rgb(255 255 255 / 30%);
+  --colour-text: #f6f9fc;
+  --colour-text-secondary: #dde5ee;
+  --colour-text-muted: #c8d3df;
+  --colour-text-disabled: #b4c0cc;
+  --colour-accent: #ff8a2a;
+  --colour-accent-hover: #ff9c48;
+  --colour-accent-pressed: #e8701a;
+  --colour-accent-text: #2a1200;
+  --colour-accent-soft: rgb(255 138 42 / 24%);
+  --colour-accent-line: rgb(255 150 60 / 80%);
+  --colour-dome-top: #63778a;
+  --colour-dome-bottom: #26313c;
+  --colour-dome-build-top: #a35624;
+  --colour-dome-build-bottom: #3e1a06;
+  --colour-dome-collect-top: #8c7526;
+  --colour-dome-collect-bottom: #352a06;
+  --colour-dome-rim: #a4602e;
+  --colour-dome-ring-track: rgb(0 0 0 / 35%);
+  --colour-avatar-ground: #2c3743;
+  --colour-badge-ground: #1d252d;
+}
+
+:root[data-skin="flash"] {
+  --skin-bar: url("/ui/skin/flash/chip.webp");
+  --skin-bar-slice: 40;
+  --skin-bar-width: 16px;
+  --skin-bar-edge: 5px;
+  --skin-label: url("/ui/skin/flash/title.webp");
+  --skin-label-slice: 0 130;
+  --skin-label-ink: #fff6dc;
+  --skin-label-stroke: #6b1010;
+  --skin-button: url("/ui/skin/flash/button.webp");
+  --skin-button-slice: 63;
+  --skin-button-cap: 22px;
+  --skin-button-stroke: #5a2a0a;
+  --skin-button2: url("/ui/skin/flash/button-small.webp");
+  --skin-button2-slice: 50;
+  --skin-button2-ink: #ffffff;
+  --skin-button2-stroke: #245a0c;
+  --skin-close: url("/ui/skin/flash/close.webp");
+  --skin-ink: #fff5e0;
+  --skin-ink-2: #f4e2c2;
+  --skin-ink-3: #e6cfa6;
+  --skin-ground: rgb(60 32 12 / 90%);
+
+  --colour-surface-base: #2b1708;
+  --colour-surface-raised: rgb(78 44 18 / 97%);
+  --colour-surface-overlay: rgb(255 230 180 / 12%);
+  --colour-surface-sunken: rgb(20 8 0 / 30%);
+  --colour-surface-input: rgb(20 8 0 / 50%);
+  --colour-surface-control: rgb(255 230 180 / 13%);
+  --colour-surface-control-hover: rgb(255 230 180 / 22%);
+  --colour-surface-selected: rgb(255 181 42 / 24%);
+  --colour-border: rgb(0 0 0 / 40%);
+  --colour-border-subtle: rgb(0 0 0 / 28%);
+  --colour-border-strong: rgb(255 220 160 / 34%);
+  --colour-text: #fff5e0;
+  --colour-text-secondary: #f4e2c2;
+  --colour-text-muted: #e6cfa6;
+  --colour-text-disabled: #d2b994;
+  --colour-accent: #ffb52a;
+  --colour-accent-hover: #ffc44f;
+  --colour-accent-pressed: #e89a10;
+  --colour-accent-text: #3a1c00;
+  --colour-accent-soft: rgb(255 181 42 / 24%);
+  --colour-accent-line: rgb(255 190 70 / 80%);
+  --colour-dome-top: #a06a32;
+  --colour-dome-bottom: #40220a;
+  --colour-dome-build-top: #c4560e;
+  --colour-dome-build-bottom: #5a1e02;
+  --colour-dome-collect-top: #5c9a26;
+  --colour-dome-collect-bottom: #1e3c08;
+  --colour-dome-rim: #ecc77e;
+  --colour-dome-ring-track: rgb(0 0 0 / 35%);
+  --colour-avatar-ground: #4a2a12;
+  --colour-badge-ground: #2b1708;
+}
+
+/* ── Bars and chips: the window's metal (or Flash's brown) on a thin edge ── */
+
+/* Every bar, dock and drop-down over the game that wore the glass: the
+   style's painted plate, its edge thin so a 44px bar keeps its room. */
+:root[data-skin] :is(
+  .hud:not(.hud--corner),
+  .hud--corner .hud__bar,
+  .hud-status__badge,
+  .hud-status__xp,
+  .hud-status__boost,
+  .friends-bar,
+  .friends-bar__card,
+  .friend-visit-line,
+  .account-menu__button--pill,
+  .account-menu__list,
+  .yard-viewtools--rail,
+  .yard-menu,
+  .yard-switcher__list,
+  .chat-box__tab,
+  .notice,
+  .zoom-controls,
+  .map-status,
+  .mr2-float,
+  .mr2-hover,
+  .mr2-tool,
+  .mr2-kit-filter,
+  .mr1-mini,
+  .mr1-legend,
+  .mr1-map__home,
+  .planner-bar,
+  .planner-menu__list,
+  .yard-zoom,
+  .yard-minimap,
+  .popover,
+  .cell-readout,
+  .map-hint,
+  .yard-attack-lock__banner,
+  .attack-strip,
+  .attack-menu__list,
+  .raid-bar,
+  .build-placing,
+  .ach-card,
+  .inferno-quake,
+  .descent-card,
+  .inferno-card,
+  .attack-tools__button,
+  .attack-dock__end,
+  .attack-viewtools__fold,
+  .test-report__peek
+) {
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--skin-bar-edge);
+  border-image-source: var(--skin-bar);
+  border-image-slice: var(--skin-bar-slice) fill;
+  border-image-width: var(--skin-bar-width);
+  border-image-repeat: round;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+
+  /* Light words on the plate, even inside a parchment window. */
+  --colour-text: var(--skin-ink);
+  --colour-text-strong: #ffffff;
+  --colour-text-secondary: var(--skin-ink-2);
+  --colour-text-muted: var(--skin-ink-3);
+}
+
+/* Bars inside a window (Map Room 1's map tools, world chat's tab) would take
+   the window's dark ink: given the plate's own. */
+:root[data-skin] :is(.mr1, .chat-box--open) :is(.mr1-mini, .mr1-legend, .mr1-map__home, .chat-box__tab) {
+  color: var(--skin-ink);
+}
+
+/* So would the cards on the Descent and Inferno maps ("Depth" was brown on
+   brown in Classic); their warning a red that shows on the dark plate. */
+:root[data-skin] .panel :is(.descent-card, .inferno-card) {
+  --colour-danger: #ff7a70;
+
+  color: var(--skin-ink);
+}
+
+/* A pin's name on Map Room 1: a dark tag on the painted map, in both styles. */
+:root[data-skin] .mr1-pin__tag {
+  background: var(--skin-ground);
+  color: var(--skin-ink);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+/* A message (the map's notices): its kind shown by a stripe inside the plate. */
+:root[data-skin] .notice--error {
+  box-shadow: inset 4px 0 0 var(--colour-danger);
+}
+
+:root[data-skin] .notice--warning {
+  box-shadow: inset 4px 0 0 var(--colour-warning);
+}
+
+:root[data-skin] .notice--info {
+  box-shadow: inset 4px 0 0 var(--colour-info);
+}
+
+/* A bar along a whole edge (the planner's): no rounded ends to show. */
+:root[data-skin] .planner-bar {
+  border-image-repeat: stretch;
+}
+
+/* Hovered, a plate lifts rather than changing its fill. */
+:root[data-skin] :is(.mr2-tool, .chat-box__tab, .account-menu__button--pill, .attack-tools__button):hover:not(:disabled) {
+  background: none;
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 45%)) brightness(1.12);
+}
+
+/* The attack's Catapult and Siege bar: pressed, still the plate (attack.css
+   keeps its own no-nudge rule); its picker open, lit in the accent. */
+:root[data-skin] .btn.attack-tools__button:is(:active, :disabled, [aria-expanded="true"]) {
+  background: none;
+}
+
+:root[data-skin] .attack-tools__button[aria-expanded="true"],
+:root[data-skin] .attack-tools__button--armed {
+  filter: drop-shadow(0 0 3px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+}
+
+:root[data-skin] .attack-tools__button--armed {
+  color: var(--colour-accent);
+}
+
+/* The army dock scrolls, so it would cut its first window's sign: room for
+   the sign above it, under the attack strip. */
+@media (width > 620px) and (height > 500px) {
+  :root[data-skin] .attack-dock__body {
+    padding-top: 20px;
+  }
+}
+
+/* A catapult or siege weapon waiting for its tap: its plate held down. */
+:root[data-skin] .panel :is(.attack-catapult__arm--armed, .attack-siege__fire--armed),
+:root[data-skin] .panel .btn:is(.attack-catapult__arm--armed, .attack-siege__fire--armed):is(:hover, :active):not(:disabled) {
+  border-image-source: var(--skin-button-pressed);
+  background: none;
+  color: #fff;
+  transform: translateY(2px);
+}
+
+/* Inside a window the glass's raised fill is see-through (the frame is the
+   fill), so what floats or sticks over a window's own content (a drop-down,
+   a sticky header or footer, a badge on a picture) takes the window's fill. */
+:root[data-skin] .panel :is(
+  .building-panel__more-menu,
+  .planner-inventory__header,
+  .planner-help__footer,
+  .unlock-tile__badge,
+  .champion__stage-level,
+  .chamber-card__where,
+  .inferno-tribe__level,
+  .kit-picker__confirm
+) {
+  background: var(--skin-fill);
+}
+
+/* A frozen champion's badge keeps its ice blue (on the window's fill its
+   words were lost in both styles). */
+:root[data-skin] .panel .chamber-card--frozen .chamber-card__where {
+  background: var(--colour-info);
+  color: var(--colour-text-inverse);
+  text-shadow: none;
+}
+
+/* A dark count on a picture (Housing's ×39): the dark chip's own light words,
+   not the parchment's dark ink. */
+:root[data-skin] .panel .housing-living__badge {
+  color: var(--skin-ink);
+}
+
+/* Bob's "?" over a scene: a small round button like the yard's domes. */
+:root[data-skin] .guide-help--float {
+  border-color: var(--colour-dome-rim);
+  background: radial-gradient(circle at 50% 35%, var(--colour-dome-top), var(--colour-dome-bottom));
+  color: #ffffff;
+  font-family: var(--font-display);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+/* The chosen one of a row of map tools: lit in the accent. */
+:root[data-skin] .mr2-tool[aria-pressed="true"] {
+  border-width: var(--skin-bar-edge);
+  padding: 0 var(--space-4);
+  filter: drop-shadow(0 0 3px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+}
+
+/* A name under a round yard button: a little sign, as on a window's title. */
+:root[data-skin] :is(.yard-dock__label, .yard-collect__label) {
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 10px;
+  border-radius: 0;
+  border-image-source: var(--skin-label);
+  border-image-slice: var(--skin-label-slice) fill;
+  border-image-width: 0 10px;
+  border-image-repeat: stretch;
+  padding-inline: 2px;
+  background: none;
+  color: var(--skin-label-ink);
+  text-shadow: 0 1px 0 var(--skin-label-stroke);
+}
+
+:root[data-skin="flash"] :is(.yard-dock__label, .yard-collect__label) {
+  border-width: 0 14px;
+  border-image-width: 0 14px;
+  padding-bottom: 3px;
+  text-shadow:
+    0 1px 0 var(--skin-label-stroke), 1px 0 0 var(--skin-label-stroke), -1px 0 0 var(--skin-label-stroke), 0 -1px 0 var(--skin-label-stroke);
+}
+
+/* A chosen toggle on a bar (Select, 3D, the map's Map/Yard and kit filter,
+   an attack's or replay's speed, the Inferno map's Map/List): the window's
+   small second plate, lit. */
+:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"], .attack-strip__speed-button[aria-pressed="true"], .inferno-map__toggle-button[aria-pressed="true"]) {
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 12px;
+  border-radius: 0;
+  border-image-source: var(--skin-button2);
+  border-image-slice: 0 var(--skin-button2-slice) fill;
+  border-image-width: 0 12px;
+  border-image-repeat: stretch;
+  padding-inline: 4px;
+  background: none;
+  box-shadow: none;
+  color: var(--skin-button2-ink);
+  text-shadow:
+    0 1px 0 var(--skin-button2-stroke), 1px 0 0 var(--skin-button2-stroke), -1px 0 0 var(--skin-button2-stroke), 0 -1px 0 var(--skin-button2-stroke);
+}
+
+:root[data-skin] .hud__scenes {
+  border-color: var(--colour-border);
+  background: var(--colour-surface-sunken);
+}
+
+/* A card's own close button (the map's place cards, Map Room 1): the
+   window's painted disc. */
+:root[data-skin] :is(.mr2-cell__close, .mr1-card__close, .mr1__close) {
+  width: 40px;
+  min-width: 0;
+  height: 40px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--skin-close) center / contain no-repeat;
+  color: transparent;
+  filter: drop-shadow(0 3px 2px rgb(0 0 0 / 35%));
+}
+
+:root[data-skin] :is(.mr2-cell__close, .mr1-card__close, .mr1__close):hover:not(:disabled) {
+  background: var(--skin-close) center / contain no-repeat;
+  filter: drop-shadow(0 3px 2px rgb(0 0 0 / 35%)) brightness(1.1);
+}
+
+:root[data-skin] :is(.mr2-cell__close, .mr1-card__close, .mr1__close) > svg {
+  visibility: hidden;
+}
+
+/* ── Floating cards: the window's frame, without a title sign ─────────── */
+
+/* A card is smaller than a window: the phone's thinner frame. */
+:root[data-skin="scrap"] :is(.stay-protected, .presence-check, .chat-box--open) {
+  --skin-frame-width: 32px;
+  --skin-edge: 15px;
+}
+
+:root[data-skin="flash"] :is(.stay-protected, .presence-check, .chat-box--open) {
+  --skin-frame-width: 30px;
+  --skin-edge: 16px;
+}
+
+/* The quick check scrolls inside itself on a short screen; the frame rule
+   would let it run off instead. */
+:root[data-skin] .presence-check {
+  overflow-y: auto;
+}
+
+:root[data-skin] :is(.stay-protected, .presence-check) {
+  padding: var(--space-1) var(--space-2);
+}
+
+:root[data-skin] .stay-protected__title {
+  color: var(--colour-warning);
+}
+
+:root[data-skin] :is(.presence-check__title, .stay-protected--over .stay-protected__title) {
+  color: var(--colour-danger);
+}
+
+/* World chat open: words in the window's inks. */
+:root[data-skin] .chat-box--open {
+  --chat-text: var(--colour-text-strong);
+  --chat-name: var(--colour-accent);
+  --chat-own: var(--colour-warning);
+
+  padding: 0 var(--space-1);
+}
+
+/* Folded, the lines on the yard: names in the style's light accent. */
+:root[data-skin="scrap"] .chat-box:not(.chat-box--open) {
+  --chat-name: #ffb070;
+}
+
+:root[data-skin="flash"] .chat-box:not(.chat-box--open) {
+  --chat-name: #ffd36a;
+}
+
+/* ── Buttons outside the windows ──────────────────────────────────────── */
+
+/* The one thing to do on a card or bar (Stay protected, Apply, Send, the
+   raid's I'm Ready Now) is the window's painted plate too. */
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary {
+  padding: 0 2px 3px;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 var(--skin-button-cap);
+  border-radius: 0;
+  border-image-source: var(--skin-button);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  border-image-repeat: stretch;
+  background: none;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke),
+    1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
+}
+
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary:hover:not(:disabled) {
+  background: none;
+  filter: brightness(1.08);
+}
+
+:root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary:disabled {
+  background: none;
+  filter: grayscale(1) brightness(0.85);
+}
+
+/* ── The sign-in screen ───────────────────────────────────────────────── */
+
+/* Around the window (sign-in, loading, the map's door, "You were away too
+   long"), the style's own ground rather than the slate: a lit sheet of
+   steel, or Flash's warm brown. The game's name in the title's ink. */
+:root[data-skin="scrap"] .scene-centre {
+  background: radial-gradient(ellipse at 50% 45%, #46576a, #1d252d 70%);
+}
+
+:root[data-skin="flash"] .scene-centre {
+  background: radial-gradient(ellipse at 50% 45%, #7a4a1e, #2b1708 70%);
+}
+
+:root[data-skin] .login-brand__title {
+  text-shadow:
+    0 2px 0 #000000, 2px 0 0 #000000, -2px 0 0 #000000, 0 -2px 0 #000000,
+    1.5px 1.5px 0 #000000, -1.5px 1.5px 0 #000000, 1.5px -1.5px 0 #000000, -1.5px -1.5px 0 #000000;
+}
+
+:root[data-skin] :is(.login-brand__note, .login-footer) {
+  color: var(--colour-text-secondary);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
 /* ── Phone (the phone layout's query, `phoneLayout.ts`) ─────────────────── */
 
 /* A thinner frame and a smaller sign and disc: the room goes to what is in
@@ -526,5 +1030,42 @@
 
   :root[data-skin] .build-menu__tabs .tabs__tab {
     font-size: min(var(--text-sm), 2.9vw);
+  }
+
+  /* The bars' edge thinner too: the planner's bottom line keeps one row. */
+  :root[data-skin] {
+    --skin-bar-edge: 4px;
+    --skin-bar-width: 12px;
+  }
+
+  /* The attack's army sheet along the bottom: the bars' plate, no rounded
+     ends (no drop shadow: a filter would hold its windows inside it). */
+  :root[data-skin] .attack-dock--sheet {
+    border-style: solid;
+    border-color: transparent;
+    border-width: var(--skin-bar-edge);
+    border-image-source: var(--skin-bar);
+    border-image-slice: var(--skin-bar-slice) fill;
+    border-image-width: var(--skin-bar-width);
+    border-image-repeat: stretch;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Its scrolling body leaves room for the Army window's sign. */
+  :root[data-skin] .attack-dock--sheet .attack-dock__body {
+    padding-top: 16px;
+  }
+
+  /* Map Room 1 fills the phone: the window's thinner frame. */
+  :root[data-skin="scrap"] .mr1 {
+    --skin-frame-width: 32px;
+    --skin-edge: 15px;
+  }
+
+  :root[data-skin="flash"] .mr1 {
+    --skin-frame-width: 30px;
+    --skin-edge: 16px;
   }
 }

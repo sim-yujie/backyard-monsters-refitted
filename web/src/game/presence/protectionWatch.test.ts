@@ -139,6 +139,29 @@ describe("ProtectionWatch", () => {
   });
 });
 
+describe("ProtectionWatch: the protection running out", () => {
+  it("says so at ten minutes since the last real action, and takes it back on the next", () => {
+    const lapses: boolean[] = [];
+    const lapsing = new ProtectionWatch({
+      onShow: () => {},
+      onHide: () => {},
+      onLapse: (lapsed) => lapses.push(lapsed),
+      stay: (plan) => stayAnswer(plan),
+      account: () => account,
+      now: () => Date.now(),
+    });
+    lapsing.hold();
+    lapsing.hear({ now: serverNow(), lastAction: serverNow() });
+    vi.advanceTimersByTime(minutes(10) - 1);
+    expect(lapses).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(lapses).toEqual([true]);
+    lapsing.hear({ lastAction: serverNow() });
+    expect(lapses).toEqual([true, false]);
+    lapsing.stop();
+  });
+});
+
 describe("ProtectionWatch.active: work in the Yard Planner", () => {
   let taps: number;
   beforeEach(() => {
