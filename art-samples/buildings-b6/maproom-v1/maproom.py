@@ -703,6 +703,109 @@ def lift_low(mat, s_low, z0, z1):
 
 
 
+def shade_along(mat, vec, lo, hi, k):
+    """Multiply the base colour by 1 .. k as world position . vec runs lo .. hi (Flash's broad painted shading)."""
+    nt = mat.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    src = b.inputs["Base Color"].links[0].from_socket
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    dp = nt.nodes.new("ShaderNodeVectorMath")
+    dp.operation = "DOT_PRODUCT"
+    nt.links.new(geo.outputs["Position"], dp.inputs[0])
+    dp.inputs[1].default_value = vec
+    mr = nt.nodes.new("ShaderNodeMapRange")
+    mr.inputs[1].default_value, mr.inputs[2].default_value = lo, hi
+    mr.inputs[3].default_value, mr.inputs[4].default_value = 1.0, k
+    nt.links.new(dp.outputs["Value"], mr.inputs[0])
+    mul = nt.nodes.new("ShaderNodeMix")
+    mul.data_type = "RGBA"
+    mul.blend_type = "MULTIPLY"
+    mul.inputs[0].default_value = 1.0
+    nt.links.new(src, mul.inputs[6])
+    nt.links.new(mr.outputs[0], mul.inputs[7])
+    nt.links.new(mul.outputs[2], b.inputs["Base Color"])
+
+
+def shade_z(mat, stops):
+    """Multiply the base colour by a ramp over world height: stops = [(z, factor), ...] (dark low down and in the
+    deck's shadow, as Flash paints its stone)."""
+    nt = mat.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    src = b.inputs["Base Color"].links[0].from_socket
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(geo.outputs["Position"], sep.inputs[0])
+    z0, z1 = stops[0][0], stops[-1][0]
+    mr = nt.nodes.new("ShaderNodeMapRange")
+    mr.inputs[1].default_value, mr.inputs[2].default_value = z0, z1
+    nt.links.new(sep.outputs["Z"], mr.inputs[0])
+    rmp = nt.nodes.new("ShaderNodeValToRGB")
+    el = rmp.color_ramp.elements
+    for i, (z, f) in enumerate(stops):
+        e = el[i] if i < 2 else el.new(0.5)
+        e.position = (z - z0) / (z1 - z0)
+        e.color = (f, f, f, 1)
+    nt.links.new(mr.outputs[0], rmp.inputs[0])
+    mul = nt.nodes.new("ShaderNodeMix")
+    mul.data_type = "RGBA"
+    mul.blend_type = "MULTIPLY"
+    mul.inputs[0].default_value = 1.0
+    nt.links.new(src, mul.inputs[6])
+    nt.links.new(rmp.outputs[0], mul.inputs[7])
+    nt.links.new(mul.outputs[2], b.inputs["Base Color"])
+
+
+def stain(mat, scale, amount, seed=0.0, fine=0.0):
+    """Weathering: multiply the base colour by soft dark patches of world-space noise (1 - amount at the darkest),
+    and with fine > 0 a speckle of small dark flecks on top (Flash's dirty, worn surfaces)."""
+    nt = mat.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    src = b.inputs["Base Color"].links[0].from_socket
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    out = src
+    for sc, amt, lo, hi in ((scale, amount, 0.42, 0.66), (scale * 9, fine, 0.55, 0.7)):
+        if not amt:
+            continue
+        nz = nt.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = sc
+        nz.inputs["Detail"].default_value = 4.0
+        nz.inputs["Roughness"].default_value = 0.6
+        try:
+            nz.noise_dimensions = "4D"
+            nz.inputs["W"].default_value = seed
+        except (TypeError, KeyError):
+            pass
+        nt.links.new(geo.outputs["Position"], nz.inputs["Vector"])
+        rmp = nt.nodes.new("ShaderNodeValToRGB")
+        el = rmp.color_ramp.elements
+        el[0].position, el[0].color = lo, (1 - amt, 1 - amt, 1 - amt, 1)
+        el[1].position, el[1].color = hi, (1, 1, 1, 1)
+        if sc != scale:                          # flecks: dark where the noise is high
+            el[0].color, el[1].color = (1, 1, 1, 1), (1 - amt, 1 - amt, 1 - amt, 1)
+        nt.links.new(nz.outputs["Fac"], rmp.inputs[0])
+        mul = nt.nodes.new("ShaderNodeMix")
+        mul.data_type = "RGBA"
+        mul.blend_type = "MULTIPLY"
+        mul.inputs[0].default_value = 1.0
+        nt.links.new(out, mul.inputs[6])
+        nt.links.new(rmp.outputs[0], mul.inputs[7])
+        out = mul.outputs[2]
+    nt.links.new(out, b.inputs["Base Color"])
+
+
+def smooth_loop(pts, k=4):
+    """A closed path through pts, Catmull-Rom smoothed (k points per span)."""
+    n = len(pts)
+    out = []
+    for i in range(n):
+        p0, p1, p2, p3 = (Vector(pts[(i + j) % n]) for j in (-1, 0, 1, 2))
+        for j in range(k):
+            t = j / k
+            out.append(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+                              + (3 * p1 - p0 - 3 * p2 + p3) * t ** 3))
+    return out
+
+
 def sphere(name, r, at, mat, n=24):
     prof = [(r * math.sin(math.pi * i / n), -r * math.cos(math.pi * i / n)) for i in range(n + 1)]
     return lathe(name, prof, at, mat, verts=2 * n)
@@ -747,26 +850,40 @@ def planks(name, p0, p1, z0_fn, z1_fn, mat, n, thick=0.12, gap=0.03, out=None, j
 def materials():
     M = {}
     # the stone: Flash's soft blue-grey block, pale on the lit left face, darker low down
-    M["stone"] = painted("stone", (104, 104, 112), rough=0.85, wear=(86, 86, 94), scale=1.4, dirt=0.45, spec=0.25)
-    lift(M["stone"], (90, 90, 98), 0.18)
+    M["stone"] = painted("stone", (100, 100, 103), rough=0.9, wear=(76, 76, 80), scale=3.0, dirt=0.5, spec=0.2)
+    lift(M["stone"], (86, 86, 90), 0.22)
+    shade_z(M["stone"], [(0.0, 0.72), (1.2, 0.92), (2.6, 0.95), (3.5, 0.82), (4.04, 0.6)])
     M["door"] = flat("door", (12, 12, 16), rough=1.0)
     # pale weathered boards (deck, roofs) and darker brown planks (walls, stairs)
     M["deck"] = wood("deck", (198, 168, 114), (130, 102, 64), axis="X", dirt=0.25)
+    shade_along(M["deck"], (0.707, 0.707, 0.0), 0.6, 5.0, 0.5)     # Flash's deck darkens to the right of the cabin
     M["roofx"] = wood("roof", (226, 192, 132), (150, 118, 76), axis="X", dirt=0.15)
     M["roofy"] = wood("roof", (226, 192, 132), (150, 118, 76), axis="Y", dirt=0.15)
-    M["plank"] = wood("plank", (122, 106, 86), (82, 70, 56), axis="Z", dirt=0.35, rings=4.0)
-    M["tplank"] = wood("tplank", (150, 116, 70), (104, 80, 50), axis="Z", dirt=0.25, rings=4.0)
+    M["plank"] = wood("plank", (100, 86, 64), (84, 72, 54), axis="Z", dirt=0.35, rings=4.0)
+    lift(M["plank"], (96, 80, 56), 0.3)              # Flash lights the cabin's walls almost evenly
+    M["rim"] = wood("rim", (104, 82, 52), (74, 58, 36), axis="X", dirt=0.2)
+    M["tplank"] = wood("tplank", (156, 126, 84), (126, 100, 64), axis="Z", dirt=0.25, rings=4.0)
     M["stair"] = wood("stair", (164, 138, 98), (98, 80, 52), axis="Z", dirt=0.3)
+    M["riser"] = wood("riser", (92, 74, 46), (64, 50, 30), axis="Z", dirt=0.2)
+    M["stairside"] = wood("stairside", (196, 166, 114), (150, 124, 82), axis="Z", dirt=0.2)
+    lift(M["stairside"], (120, 100, 66), 0.25)
+    lift(M["tplank"], (120, 96, 62), 0.15)
+    M["plate"] = shiny("plate", (214, 156, 34), rough=0.55, metal=0.5, wear=(150, 96, 18), scale=2.5, dirt=0.2)
     M["tread"] = wood("stair", (164, 138, 98), (98, 80, 52), axis="Y", dirt=0.3)
-    M["frame"] = wood("frame", (120, 96, 62), (70, 54, 34), axis="Z", dirt=0.1)
+    M["frame"] = wood("frame", (126, 106, 80), (96, 80, 58), axis="Z", dirt=0.1)
     M["glass"] = flat("glass", (16, 12, 8), rough=0.6)
+    # weathering: soft stains and fine dirt on the stone and every wooden part (Flash's art is never clean)
+    stain(M["stone"], 0.9, 0.22, 1.0, fine=0.18)
+    for k, (sc, amt) in {"deck": (0.7, 0.2), "roofx": (0.8, 0.16), "roofy": (0.8, 0.16), "plank": (1.1, 0.18), "tplank": (1.3, 0.16),
+                         "stair": (1.0, 0.18), "riser": (1.0, 0.12), "stairside": (1.0, 0.18), "rim": (1.0, 0.15)}.items():
+        stain(M[k], sc, amt, 2.0 + len(k), fine=0.1)
     # metals: Flash's old gold telescope, light steel scissors and posts, silver balls
     M["brass"] = shiny("brass", (244, 172, 40), rough=0.35, metal=0.7, wear=(160, 98, 20), scale=2.0, dirt=0.15,
                        side=0.3)
-    M["bellin"] = flat("bellin", (28, 30, 16), rough=0.8)
+    M["bellin"] = painted("bellin", (54, 48, 22), rough=0.7, wear=(70, 34, 18), scale=2.0, dirt=0.0, spec=0.3)
     M["steel"] = shiny("steel", (176, 184, 200), rough=0.35, metal=0.75, wear=(140, 148, 166), scale=3.0, dirt=0.1)
     M["ball"] = shiny("ball", (214, 220, 232), rough=0.25, metal=0.8, wear=(170, 176, 190), scale=3.0, dirt=0.05)
-    M["rope"] = painted("rope", (72, 50, 62), rough=0.9, dirt=0.0, spec=0.2)
+    M["rope"] = painted("rope", (52, 34, 44), rough=0.9, dirt=0.0, spec=0.2)
     M["hand"] = wood("hand", (176, 150, 104), (130, 104, 70), axis="Z", dirt=0.1)
     return M
 
@@ -809,16 +926,23 @@ SP = px(S.SCIS_PIVOT[0], S.SCIS_PIVOT[1], Y=S.SCIS_PIVOT[2])
 ST = [px(x, y, Z=-0.05) for x, y in S.SCIS_TIPS]
 
 
+RIM_H = 0.22
+
+
 def deck():
     D = S.DECK_A
     w = 2 * D / S.DECK_N
-    z0 = S.BASE_H
+    z0 = S.BASE_H + RIM_H
+    # a dark beam round the deck's rim under the boards (Flash's deck edge is a thick dark band)
+    for i, (sx, sy) in enumerate(((1, 0), (-1, 0), (0, 1), (0, -1))):
+        size = (0.14, 2 * D - 0.08, RIM_H) if sx else (2 * D - 0.36, 0.14, RIM_H)
+        box(f"deckrim{i}", size, (sx * (D - 0.11), sy * (D - 0.11), S.BASE_H), M["rim"], bevel=0.03)
     sp = unyaw(SP)
     x0, x1 = sp.x - S.SLOT_W * 0.55, sp.x + S.SLOT_W * 0.45
     sy0, sy1 = sp.y - S.SLOT_D / 2, sp.y + S.SLOT_D / 2
     for i in range(S.DECK_N):
         ya, yb = -D + i * w + 0.015, -D + (i + 1) * w - 0.015
-        t = S.DECK_T + rng.uniform(-0.02, 0.0)
+        t = S.DECK_T - RIM_H + rng.uniform(-0.02, 0.0)
         spans = [(-D, D)]
         if ya < sy1 and yb > sy0:           # the slot cuts this board: keep the ends and the strips beside the slot
             spans = [(-D, x0), (x1, D)]
@@ -885,7 +1009,7 @@ def house():
     cyl("windowglass", S.WIN_R, 0.03, (x, wy, wz), M["glass"], rot=(0, 90, 0), verts=40, bevel=0.0)
     ring_pts = [(x + 0.04, wy + S.WIN_R * math.cos(2 * math.pi * i / 48), wz + S.WIN_R * math.sin(2 * math.pi * i / 48))
                 for i in range(48)]
-    tube("windowring", ring_pts, 0.1, M["frame"], verts=10, cyclic=True)
+    tube("windowring", ring_pts, 0.065, M["frame"], verts=10, cyclic=True)
     box("windowbarV", (0.06, 0.12, 2 * S.WIN_R), (x + 0.02, wy, wz), M["frame"], bevel=0.02, origin="center")
     box("windowbarH", (0.06, 2 * S.WIN_R, 0.12), (x + 0.02, wy, wz), M["frame"], bevel=0.02, origin="center")
     # the roof: two slopes of boards along X, from the ridge down past the eaves
@@ -942,15 +1066,17 @@ def telescope():
     d = Vector(S.SCOPE_DIR).normalized()
     L_ = S.SCOPE_LEN
     # (r, z) along the tube from the eyepiece: a domed cap, a round knuckle, a fat barrel with rings, the flared horn
-    prof = [(0.0, -0.05), (0.16, -0.03), (0.28, 0.04), (0.38, 0.14), (0.43, 0.28), (0.42, 0.42), (0.36, 0.52),
-            (0.32, 0.6), (0.34, 0.66), (0.48, 0.7), (0.5, 0.78), (0.48, 0.82), (0.5, 0.88), (0.5, 1.3)]
+    # Flash: a knobby joint at the eye end, a short fat barrel, a horn that flares fast to a thick rim
+    prof = [(0.0, -0.06), (0.22, -0.04), (0.38, 0.04), (0.5, 0.16), (0.57, 0.32), (0.58, 0.44), (0.53, 0.56),
+            (0.45, 0.64), (0.43, 0.72), (0.5, 0.78), (0.5, 1.5), (0.56, 1.6), (0.63, 1.82), (0.66, 2.08),
+            (0.63, 2.32), (0.55, 2.48)]
     for k in range(1, 12):
         f = k / 11
-        prof.append((0.5 + 0.42 * f ** 1.8, 1.3 + (L_ - 1.35) * f))
-    prof += [(0.94, L_ - 0.02), (0.97, L_ + 0.04), (0.9, L_ + 0.07), (0.82, L_ + 0.03)]
+        prof.append((0.55 + 0.34 * f ** 1.7, 2.48 + (L_ - 2.5) * f))
+    prof += [(0.92, L_ - 0.02), (0.95, L_ + 0.05), (0.89, L_ + 0.08), (0.8, L_ + 0.03)]
     tb = lathe("scopetube", prof, e, M["brass"], verts=40)
     track(tb, d)
-    inner = [(0.82, L_ + 0.03), (0.7, L_ - 0.4), (0.55, L_ - 0.9), (0.44, L_ - 1.5), (0.0, L_ - 1.55)]
+    inner = [(0.8, L_ + 0.03), (0.66, L_ - 0.35), (0.52, L_ - 0.8), (0.42, L_ - 1.4), (0.0, L_ - 1.45)]
     ib = lathe("scopein", inner, e, M["bellin"], verts=40)
     track(ib, d)
     # the gold bracket: a plate on the front roof slope, an arm up to a clamp round the barrel
@@ -963,15 +1089,15 @@ def telescope():
     if n.z < 0:
         n = -n
     plate = hit_plane(*S.SCOPE_PLATE, p0, n)
-    b = box("bracket", (1.3, 1.1, 0.09), plate + n * 0.045, M["brass"], bevel=0.03, origin="center")
+    b = box("bracket", (1.1, 0.95, 0.1), plate + n * 0.05, M["plate"], bevel=0.035, origin="center")
     b.rotation_euler = n.to_track_quat("Z", "X").to_euler()
     ox = S.ORIGIN[0]
     t = ((S.SCOPE_ARM - ox) / SX - (e.x + e.y)) / (d.x + d.y)
-    t = min(max(t, 0.9), 1.6)
+    t = min(max(t, 0.9), 2.0)
     clamp = e + d * t
     low = clamp - Vector((0, 0, 0.45))
-    tube("bracketarm", [plate + n * 0.05, low], 0.12, M["brass"], verts=12)
-    c = cyl("bracketclamp", 0.5, 0.18, clamp - d * 0.09, M["brass"], verts=32, bevel=0.03)
+    tube("bracketarm", [plate + n * 0.05, low], 0.14, M["brass"], verts=12)
+    c = cyl("bracketclamp", 0.49, 0.2, clamp - d * 0.1, M["brass"], verts=32, bevel=0.04)
     track(c, d)
 
 
@@ -992,10 +1118,10 @@ def scissors():
         outline = []
         for i in range(15):
             f = i / 14
-            outline.append(SP + b * (ln * f - 0.25) + w * side * (0.2 * (1 - f) ** 0.7 + 0.015))
+            outline.append(SP + b * ((ln + 0.3) * f - 0.25) + w * side * (0.44 * (1 - f) ** 0.55 + 0.03))
         for i in range(14, -1, -1):
             f = i / 14
-            outline.append(SP + b * (ln * f - 0.25) - w * side * (0.07 * (1 - f) + 0.01))
+            outline.append(SP + b * ((ln + 0.3) * f - 0.25) - w * side * (0.14 * (1 - f) + 0.02))
         bm = bmesh.new()
         a = [bm.verts.new(p + n * (off + 0.045)) for p in outline]
         c = [bm.verts.new(p + n * (off - 0.045)) for p in outline]
@@ -1007,10 +1133,11 @@ def scissors():
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         mesh_ob(f"scisblade{k}", bm, [M["steel"]], bevel=0.03, segs=2)
         pts = [lift_(q, off) for q in loop]
-        tube(f"scisloop{k}", pts, 0.12, M["steel"], verts=12, cyclic=True, smooth=True)
+        # Flash's handles are flat steel bands, not round wire
+        sweep(f"scisloop{k}", smooth_loop(pts), n, 0.12, 0.27, M["steel"], bevel=0.04, closed=True)
         start = pts[0]
-        tube(f"scisshank{k}", [SP + n * off, SP.lerp(start, 0.5) + n * off * 0.5, start], 0.13, M["steel"], verts=12,
-             smooth=True)
+        sweep(f"scisshank{k}", [SP + n * off, SP.lerp(start, 0.5) + n * off * 0.5, start], n, 0.14, 0.34, M["steel"],
+              bevel=0.05)
     c = cyl("scispivot", 0.16, 0.34, SP - n * 0.17, M["ball"], verts=20, bevel=0.04)
     track(c, n)
 
@@ -1021,7 +1148,7 @@ def stairs():
     # the landing: a plank box against the stone, and the steps down toward -Y
     box("stairland", (x1 - x0, S.LAND_Y1 - S.LAND_Y0, lz - 0.08), ((x0 + x1) / 2, (S.LAND_Y0 + S.LAND_Y1) / 2, 0),
         M["stair"], bevel=0.04)
-    planks("stairside", (x1, S.LAND_Y0), (x1, S.LAND_Y1), lambda u: 0.02, lambda u: lz - 0.06, M["stair"], 5, 0.08,
+    planks("stairside", (x1, S.LAND_Y0), (x1, S.LAND_Y1), lambda u: 0.02, lambda u: lz - 0.06, M["stairside"], 5, 0.08,
            out=(1, 0))
     n = S.STEP_N
     dy = (S.LAND_Y0 - S.STAIR_Y0) / n
@@ -1029,12 +1156,18 @@ def stairs():
     for k in range(n):
         y0 = S.STAIR_Y0 + k * dy
         zt = (k + 1) * rise
-        box(f"step{k}", (x1 - x0 - 0.04, S.LAND_Y0 - y0, zt - 0.08), ((x0 + x1) / 2, (y0 + S.LAND_Y0) / 2, 0),
-            M["stair"], bevel=0.03)
+        box(f"step{k}", (x1 - x0 - 0.1, S.LAND_Y0 - y0, zt - 0.08), ((x0 + x1) / 2 - 0.04, (y0 + S.LAND_Y0) / 2, 0),
+            M["riser"], bevel=0.03)
         box(f"steptread{k}", (x1 - x0 + 0.02, dy + 0.06, 0.09), ((x0 + x1) / 2, y0 + dy / 2 - 0.03, zt - 0.09),
             M["tread"], bevel=0.03)
     box("steptreadL", (x1 - x0 + 0.02, S.LAND_Y1 - S.LAND_Y0 + 0.06, 0.09),
         ((x0 + x1) / 2, (S.LAND_Y0 + S.LAND_Y1) / 2, lz - 0.09), M["tread"], bevel=0.03)
+    # the outer stringer: a stepped board along the steps' +X side (Flash: paler than the dark step fronts)
+    run = S.LAND_Y0 - S.STAIR_Y0
+    poly = [(0.0, 0.0), (run + 0.02, 0.0), (run + 0.02, lz - 0.09)]
+    for k in range(n - 1, -1, -1):
+        poly += [(k * dy + dy, (k + 1) * rise - 0.09), (k * dy, (k + 1) * rise - 0.09)]
+    slab("stairstring", (x1 + 0.005, S.STAIR_Y0), (0, 1), poly, 0.08, M["stairside"], bevel=0.02, out=(1, 0))
     # the handrail on the outer side: from the bottom step up to the landing, along it to a post at the back
     hx = x1 - 0.1
     hh = 1.15

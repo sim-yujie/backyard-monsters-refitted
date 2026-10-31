@@ -36,7 +36,7 @@ SLOT_W, SLOT_D = 1.9, 0.44  # the scissors' slot round their pivot (along X, alo
 # the posts at the deck's corners, and the rope between their balls
 POST_IN = 0.36              # in from the deck's corners
 POST_H, POST_R, BALL_R = 1.4, 0.1, 0.3
-ROPE_R, ROPE_SAG = 0.075, 0.22
+ROPE_R, ROPE_SAG = 0.1, 0.22
 
 # the cabin (the roof: a ridge along X, boards down both sides at ROOF_PITCH to ROOF_RUN from the ridge)
 HOUSE_C = (0.02, 1.3)      # its middle (before the shear)
@@ -50,24 +50,24 @@ WIN_C = (1.11, 6.69)        # the round window in the +X gable: y, z
 WIN_R = 0.88
 
 # the tower on the cabin's ridge (its roof: a ridge along Y)
-TOWER_C = (0.7, 1.3)
-TOWER_A = 0.64              # half its side
-TROOF_Z, TROOF_RUN, TROOF_DROP, TROOF_END = 12.17, 1.13, 1.27, 0.3
+TOWER_C = (0.4, 1.3)
+TOWER_A = 0.56              # half its side
+TROOF_Z, TROOF_RUN, TROOF_DROP, TROOF_END = 12.3, 0.83, 1.27, 0.22
 
 # the telescope, placed where Flash draws it (Flash px; built after the yaw, in the camera's world)
-SCOPE_EYE = (2.5, -34.0, 0.0)       # the eyepiece end: Flash px x, y and its world y
+SCOPE_EYE = (0.8, -34.5, 0.0)       # the eyepiece end: Flash px x, y and its world y
 SCOPE_DIR = (0.066, -0.914, 0.5)   # toward the mouth (Flash's mouth: a 0.75 ellipse, level with the eyepiece)
-SCOPE_LEN = 3.65
-SCOPE_PLATE = (-7.0, -22.0)         # the bracket's plate on the front roof slope (Flash px)
-SCOPE_ARM = -8.0                    # the arm meets the tube at this Flash x
+SCOPE_LEN = 3.7
+SCOPE_PLATE = (-7.5, -21.5)         # the bracket's plate on the front roof slope (Flash px)
+SCOPE_ARM = -10.0                   # the arm meets the tube at this Flash x
 
 # the scissors (Flash px; their plane runs through the pivot and the two blade tips)
 SCIS_PIVOT = (-32.0, 19.0, -3.3)    # Flash x, y and world y
-SCIS_TIPS = ((-35.0, 57.0), (-26.0, 63.0))
-SCIS_TEAR = ((-36, 3), (-39, 0), (-43.5, -4), (-47, -9), (-49, -14), (-49.5, -19), (-48, -23), (-45.5, -24.5),
-             (-43, -23.5), (-41.5, -20), (-40, -14), (-38.5, -8), (-37, -2))
-SCIS_D = ((-23.5, 10), (-22.2, 5), (-21, 0.5), (-19.7, -4.5), (-18.5, -9), (-16, -10), (-11, -7), (-8.5, -2), (-8.5, 3), (-10.5, 7.5), (-14, 10),
-          (-19, 10.5))
+SCIS_TIPS = ((-34.0, 58.5), (-24.6, 63.5))
+SCIS_TEAR = ((-36, 3), (-39, 0), (-43.5, -4), (-47, -8.5), (-49, -12.5), (-49.2, -17.5), (-47.2, -21), (-44.2, -22.3),
+             (-41.6, -21), (-39.9, -17), (-38.7, -12), (-37.5, -7), (-36.4, -2))
+SCIS_D = ((-24, 10), (-22.6, 5), (-21.3, 0.5), (-20, -4.5), (-18.8, -8.6), (-16.8, -9.4), (-12.6, -7), (-10, -2), (-10, 3), (-12, 7.5), (-15, 10),
+          (-19.5, 10.5))
 
 # the stairs on the stone's +X face
 STAIR_X1 = 4.7              # their outer side
