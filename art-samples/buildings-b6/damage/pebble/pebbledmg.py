@@ -10,6 +10,7 @@ The camera looks from bearing -45 (toward +X -Y): screen right is bearing 45, sc
 damaged or destroyed animation for this building, so the rings, drum and ball stand still.
 """
 import math
+import os
 import random
 import sys
 from pathlib import Path
@@ -246,19 +247,51 @@ def damaged():
         hinge(objs(*ROOF), Vector((0, 0, ze)), rot=(9, -7, 0), move=(0.2, 0.15, -0.5))
         hinge(objs(*PIPE), polar(S.PIPE_TH, S.PIPE_R, ze - 0.2), rot=(10, -26, 0), move=(0, 0, -0.3))
     elif L == 3:
-        # Flash: the whole tower leans hard to the left; the roof slid down off it to the right, tipped toward us so
-        # it stands up like a slab; the horn snapped; blocks pushed out of the left side
+        # (owner 31 Oct: the leaning tower "is defying gravity. Just make it more shambled but still on the ground".)
+        # A slumped, half-collapsed tower resting on the grass: the whole tower squashed down and spread at its foot,
+        # the upper courses sagging (most to the right), blocks knocked askew on the blocks below, gaps; a few
+        # blocks fallen onto the grass; the roof tipped right and sagging down onto the stones; the horn snapped.
         wreck_roof([(-45, 0.3, 1.0), (60, 0.25, 0.8), (-120, 0.45, 0.7)], gone=0.2, short=0.45, wrench=0.05,
                    seed=3)
-        wreck_wall(head, 0.3, 0.2, r)
-        wreck_wall(head, 0.0, 0.5, r, lo=-170, hi=-100)              # the left side bulges out
+        wreck_wall(head, 0.3, 0.15, r)
         wreck_wall(collar, 0.4, 0.2, r)
         wreck_wall(rings, 0.2, 0.15, r)
-        keep = objs("pebble")
-        T = tilt_mat((-1.5, -1.5, GROUND), (18, -18, 0))                   # top toward bearing -135: screen left
-        shift_all(T, keep=keep)
-        hinge(objs(*ROOF), T @ polar(45, S.ROOF_R, ze), rot=(-27, 27, 0), move=(0.55, 0.55, -0.75))
-        hinge(objs(*PIPE), T @ polar(S.PIPE_TH, S.PIPE_R, ze - 0.2), rot=(18, -10, 30))
+        roof = objs(*ROOF)
+        keep = objs("pebble") + roof
+        shift_all(Matrix.Diagonal((1.1, 1.1, 0.76, 1.0)), keep=keep)         # squashed down onto the ground
+        stack_ = alive(head + collar + rings + basec)
+        ztop = max(bbox_w(o).z for o in stack_)
+        for o in stack_:
+            c = bbox_w(o)
+            h = max(0.0, c.z / ztop)
+            b = math.radians(bearing(o))
+            side = 0.45 + 0.55 * (1 + math.cos(b - math.radians(35))) / 2       # sags most toward the right
+            out = Vector((c.x, c.y, 0)).normalized()
+            dz = -0.42 * h ** 1.4 * side
+            push = out * (0.18 * (1 - h) * r.uniform(0.4, 1.0) + 0.1 * h * side * r.uniform(0.2, 1.0))
+            ax = Vector((-out.y, out.x, 0))
+            tipd = r.uniform(3, 9) + 10 * h * side
+            mw = o.matrix_world.copy()
+            o.matrix_world = Matrix.Translation(push + Vector((0, 0, dz))) @ Matrix.Translation(c) @                 Matrix.Rotation(math.radians(tipd * r.choice((-1, 1))), 4, ax) @ Matrix.Translation(-c) @ mw
+        # a few blocks off the top fallen onto the grass at the foot (front and right)
+        top = sorted(facing(alive(head), -110, 80), key=lambda o: -bbox_w(o).z)[:6]
+        for k, o in enumerate(top[::2]):
+            mw = o.matrix_world.copy()
+            o.parent = None
+            o.matrix_world = mw
+            th = (-75, -20, 40)[k % 3]
+            p = polar(th, 3.3 + 0.3 * k, 0.0)
+            c = bbox_w(o)
+            o.matrix_world = Matrix.Translation(Vector((p.x, p.y, c.z)) - c) @ Matrix.Translation(c) @                 Matrix.Rotation(math.radians(r.uniform(-25, 25)), 4, Vector((1, 1, 0)).normalized()) @                 Matrix.Rotation(math.radians(r.uniform(0, 90)), 4, "Z") @ Matrix.Translation(-c) @ o.matrix_world
+            o.matrix_world = Matrix.Translation((0, 0, GROUND - 0.03 - lowest([o]))) @ o.matrix_world
+            burn(p + Vector((0, 0, 0.3)), 0.6)
+        # the roof: tipped toward the right and down onto what is left of the head
+        e = hinge(roof, polar(35, S.ROOF_R, ze * 0.76), rot=(-14, 14, 0), move=(0, 0, 0))
+        bpy.context.view_layer.update()
+        drop_onto(e, roof, alive(head + collar + rings + basec), sink=0.1)
+        # the horn snapped and bent over
+        hinge(objs(*PIPE), Vector(S.polar(S.PIPE_TH, S.PIPE_R * 1.1, (ze - 0.2) * 0.76)), rot=(22, -14, 25),
+              move=(0, 0, -0.15))
     elif L == 6:
         # Flash: the pipe bent far out to the left, the roof tipped a little right with ragged planks and a plank
         # sticking out, gaps all over the head and a broken top course
@@ -294,6 +327,87 @@ def damaged():
     bd = {1: [(-12, 48, 30)], 3: [(-14, 54, 20), (-6, 58, -30), (6, 56, 60)], 6: [(-16, 50, 40), (8, 58, -20)],
           10: [(-16, 50, 20), (6, 58, 70), (14, 50, -30)]}[L]
     boards([(px(x, y, Z=GROUND).x, px(x, y, Z=GROUND).y, yaw) for x, y, yaw in bd], seed=4)
+
+
+def drop_onto(e, obs, supports, sink=0.08):
+    """Lower hinge e (carrying obs) straight down until obs rest on the supports, sunk in a little."""
+    from mathutils.bvhtree import BVHTree
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    vs, fs = [], []
+    for o in supports:
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        k = len(vs)
+        vs += [o.matrix_world @ v.co for v in me.vertices]
+        fs += [[k + i for i in p.vertices] for p in me.polygons]
+        ev.to_mesh_clear()
+    bvh = BVHTree.FromPolygons(vs, fs)
+    best = 1e9
+    for o in obs:
+        for k in kids(o):
+            if k.type not in ("MESH", "CURVE"):
+                continue
+            ev = k.evaluated_get(dg)
+            me = ev.to_mesh()
+            pts = [k.matrix_world @ v.co for v in me.vertices]
+            ev.to_mesh_clear()
+            for q in pts[::max(1, len(pts) // 300)]:
+                hit = bvh.ray_cast(q, Vector((0, 0, -1)))
+                if hit[0] is not None:
+                    best = min(best, hit[3])
+    if best < 1e9:
+        e.location.z -= best + sink
+        bpy.context.view_layer.update()
+    return best
+
+
+def contact_check(tol=0.06):
+    """Nothing floats: every part must touch the ground or touch (within tol) a part that does, through a chain of
+    contacts. Prints FLOAT <part> for each one that is not connected to the ground, then CONTACT <n floating>."""
+    from mathutils.bvhtree import BVHTree
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    items = []
+    for o in SC.objects:
+        if o.type not in ("MESH", "CURVE") or o.hide_render or o.name == "ground":
+            continue
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        vs = [o.matrix_world @ v.co for v in me.vertices]
+        if not vs:
+            ev.to_mesh_clear()
+            continue
+        bvh = BVHTree.FromPolygons(vs, [p.vertices[:] for p in me.polygons]) if me.polygons else None
+        ev.to_mesh_clear()
+        lo = Vector((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs)))
+        hi = Vector((max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
+        step = max(1, len(vs) // 400)
+        items.append((o.name, vs[::step], bvh, lo, hi))
+    n = len(items)
+    nb = [[] for _ in range(n)]
+    for i in range(n):
+        a = items[i]
+        for j in range(i + 1, n):
+            b = items[j]
+            if any(a[3][k] > b[4][k] + tol or b[3][k] > a[4][k] + tol for k in range(3)):
+                continue
+            hit = (b[2] is not None and any(b[2].find_nearest(v, tol)[0] is not None for v in a[1])) or                   (a[2] is not None and any(a[2].find_nearest(v, tol)[0] is not None for v in b[1]))
+            if hit:
+                nb[i].append(j)
+                nb[j].append(i)
+    seen = [items[i][3].z <= GROUND + tol for i in range(n)]
+    todo = [i for i in range(n) if seen[i]]
+    while todo:
+        i = todo.pop()
+        for j in nb[i]:
+            if not seen[j]:
+                seen[j] = True
+                todo.append(j)
+    bad = [items[i] for i in range(n) if not seen[i]]
+    for nm, vs, _, lo, hi in bad:
+        print("FLOAT", nm, "lowest %.2f" % lo.z)
+    print("CONTACT", len(bad), "floating of", n)
 
 
 # ------------------------------------------------------------------------------------------------------------ destroyed
@@ -404,4 +518,9 @@ def destroyed():
     burn(px(2, 36, Z=g + 0.8), 2.0)
 
 
+if os.environ.get("PB_CONTACT") == "1":            # only the contact check, no render
+    G["build"]()
+    damaged() if D.STATE == "damaged" else destroyed()
+    contact_check()
+    sys.exit(0)
 D.run(damaged, destroyed)
