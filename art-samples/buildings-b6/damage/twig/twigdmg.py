@@ -35,6 +35,11 @@ def roof_holes(patches, N=64, R=12, near=0.2, cuts=4):
     round that middle go. The shingle strips over a hole go with it; the sticks (the roof's frame) stay."""
     ro = objs("roof")[0]
     mw = ro.matrix_world.copy()
+    inner = ro.copy()                                  # the dark inside under the holes: the roof again, whole,
+    inner.data = ro.data.copy()                        # a little smaller and lower, in the hole's black
+    inner.data.materials[0] = inside()
+    G["COLL"].objects.link(inner)
+    inner.matrix_world = Matrix.Translation((0, 0, -0.14)) @ mw @ Matrix.Diagonal((0.95, 0.95, 1, 1))
     bm = bmesh.new()
     bm.from_mesh(ro.data)
     bm.faces.ensure_lookup_table()
@@ -49,6 +54,7 @@ def roof_holes(patches, N=64, R=12, near=0.2, cuts=4):
         if cs:
             c = sum(cs, Vector()) / len(cs)
             spots.append((c, max((p - c).length for p in cs) * 0.95 + 0.08, k))
+            burn(c, spots[-1][1] + 0.5)                # the hole's edge is burnt
     bmesh.ops.subdivide_edges(bm, edges=list(bm.edges), cuts=cuts, use_grid_fill=True)
     dead, gone = [], []
     for f in bm.faces:
@@ -88,16 +94,43 @@ def eave_point(y):
     return max(pts, key=lambda p: p.x)
 
 
+def bbox_w(o):
+    """The middle of o's bounding box, in the world."""
+    bpy.context.view_layer.update()
+    ev = o.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    return sum((o.matrix_world @ Vector(c) for c in ev.bound_box), Vector()) / 8
+
+
+def under(planks, roof, gap=0.12):
+    """Snap each plank whose top would stand up through the roof boards to just under them."""
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    pts = []
+    for o in roof:
+        ev = o.evaluated_get(dg)
+        pts += [o.matrix_world @ v.co for v in ev.to_mesh().vertices]
+    for o in planks:
+        ws = [o.matrix_world @ v.co for v in o.data.vertices]
+        lo, hi = min(p.z for p in ws), max(p.z for p in ws)
+        c = sum(ws, Vector()) / len(ws)
+        near = [p.z for p in pts if (p.xy - c.xy).length < 0.4]
+        if near and hi > min(near) - gap:
+            snap(o, max(0.05, (min(near) - gap - lo) / (hi - lo)))
+
+
 def pole(foot, top, r=0.13):
     return tube("pole", [Vector(foot), Vector(top)], r, M["post"]("Z"), r_end=r * 0.8)
 
 
 def damaged():
     hx, hy = HX, HY
+    T = Matrix()                                       # how the body moved: W(model point) is where it went
     # the legs give: the machine sinks onto stumps and leans a little to the front-left
-    if L == 1:
-        kill(objs("foot"))
-        shift_all(tilt_mat((0, 0, GROUND), (-3, 2, 0)) @ Matrix.Translation((0, 0, -0.32)))
+    if L == 1:                                         # the hut slumps: down on its front-left corner (that foot
+        z0 = Z0 - G["L1_DROP"]                         # crushed), leaning forward and to the left onto the press
+        kill([o for o in objs("foot") if o.location.x < 0 and o.location.y < 0])
+        T = Matrix.Translation((0, 0, -0.43)) @ tilt_mat((-hx, -hy, z0), (3, -6, 0))
+        shift_all(T)
     elif L < 10:
         legs = objs("leg")
         drop = 0.55
@@ -109,35 +142,71 @@ def damaged():
             top = o.matrix_world @ Vector((0, 0, max(v.co.z for v in o.data.vertices)))
             cap = cyl("legcap", 0.4, 0.1, top - Vector((0, 0, 0.09)), M["post"]("Z"), verts=20, bevel=0.04)
             cap.rotation_euler = o.rotation_euler
+            burn(top, 0.6)
     # the ceiling seen through the holes is the dark inside
     for o in objs("ceiling") if L > 1 else []:
-        o.data.materials[0] = M["hole"]
+        o.data.materials[0] = inside()
     # roof: torn holes between the sticks over the body (the sticks, its frame, stay), on the slopes the camera sees:
     # s in [0, 1) the right slope, [3, 4) the front one
-    if L in (3, 6):
-        w = 1.35 if L == 3 else 1.6
-        roof_holes([(3.27, 0.47, 0.13 * w, 0.16 * w), (3.74, 0.42, 0.12 * w, 0.14 * w),
-                    (0.26, 0.5, 0.12 * w, 0.17 * w), (0.73, 0.45, 0.11 * w, 0.13 * w)] +
-                   ([(3.5, 0.62, 0.1, 0.1), (0.5, 0.6, 0.08, 0.09)] if L == 6 else []))
-    if L == 10:                                        # the front bark sheet torn through in the middle
-        grid_holes(objs("roofF")[0], 16, 25, [(0.38, 0.45, 0.16, 0.22), (0.66, 0.3, 0.1, 0.14)])
-    if L == 1:                                         # the lean-to falls in at the front, into the cabinet
-        kill(objs("roofrake", "roofridge", "ceiling"))  # the ceiling gives way: the roof sags in between the walls
+    if L in (3, 6):                                    # big holes: most of each bay between two sticks gone
+        roof_holes([(3.25, 0.5, 0.26, 0.27), (3.75, 0.48, 0.25, 0.26), (0.25, 0.52, 0.17, 0.27),
+                    (0.75, 0.5, 0.16, 0.26)] +
+                   ([(3.5, 0.78, 0.07, 0.09), (0.5, 0.78, 0.05, 0.09)] if L == 6 else []))
+    if L == 10:                                        # the front bark sheet torn away, a ragged strip left along
+        fine_holes(objs("roofF")[0], [(0.5, 0.38, 0.62, 0.52)])         # the gate; its sticks and rope gone with it
+        kill(objs("roofstick"))
+        kill(sorted(objs("rope"), key=lambda o: bbox_w(o).y)[:1])
+        fine_holes(objs("roofB")[0], [(0.3, 0.35, 0.2, 0.25)], axes=("x", "z"), seed=3)     # the back roll holed
+        for o in objs("ceiling"):                      # the open top: the inside dark, its floor well down, the
+            o.data.materials[0] = inside()             # walls' broken tops round it
+            o.location.z -= 1.4
+        r = random.Random(5)                           # charred boards fallen in, poking up out of it
+        for k in range(5):
+            c = Vector((r.uniform(-0.6, 0.6), r.uniform(-1.2, 1.0), Z1 - 1.0))
+            box("fallenboard", (r.uniform(1.0, 1.6), 0.28, 0.1), c, M["dwood"]("X"),
+                rot=(r.uniform(-50, 50), r.uniform(-40, 40), r.uniform(0, 180)), bevel=0.03, origin="center")
+        burn((0, -0.2, Z1 - 0.6), 2.0)
+        for pt in ((0.5, -1.4, Z1 + 0.6), (-0.3, -0.9, Z1 + 0.9), (0.2, 0.4, Z1 + 1.6)):
+            burn(pt, 1.3)
+    if L == 1:                                         # the lean-to falls in, into the cabinet
+        def W(p):
+            return T @ Vector(p)
+        z0 = Z0 - G["L1_DROP"]
+        kill(objs("roofrake", "roofridge", "ceiling"))  # the ceiling gives way: the roof caves in between the walls
         kill([o for o in objs("beamR", "beamL") if o.matrix_world.translation.z > 3.0])
         for o in objs("gable"):                        # the gable boards over the cabinet snapped short
-            snap(o, rng.uniform(0.3, 0.6))
-        rp = objs("roofplank")
-        hinge(rp, (-1.6, -0.25, Z1 + 0.77 - 0.82), rot=(-9, 12, 0), move=(0, 0, -0.22))
+            snap(o, rng.uniform(0.15, 0.4))
+        for o in objs("gableback"):
+            snap(o, 0.3)
+        rp = sorted(objs("roofplank"), key=lambda o: o.location.y)
+        hinge(rp, W((-1.6, -0.25, Z1 + 0.77 - 0.5)), rot=(-4, 12, 0), move=(0, 0, -0.2))
+        r = random.Random(3)                           # then each board broken: some gone, the rest snapped short
+        for i, o in enumerate(rp):                     # and hanging down into the cabinet from the high edge
+            if i in (1, 4, 5, 8):
+                kill([o])
+                continue
+            me = o.data
+            xs = [v.co.x for v in me.vertices]
+            x0, x1 = min(xs), max(xs)
+            cut = x0 + (x1 - x0) * r.uniform(0.45, 0.75)
+            for v in me.vertices:
+                if v.co.x > cut:
+                    v.co.x = cut + r.uniform(-0.15, 0.15)
+            bpy.context.view_layer.update()
+            hi = o.matrix_world @ Vector((x0, 0, 0))
+            hinge([o], hi, rot=(r.uniform(-6, 6), r.uniform(14, 34), 0))
+            burn((cut, 0, 0), 0.6, o)
+        burn(W((0.3, 0.8, Z1 - 0.8)), 1.6)
         lp = objs("looseplank")
         kill(lp[1:])
         if lp:                                         # one loose plank slid down across the front, to the tray
-            a, b = Vector((-0.6, -2.6, 0.75)), Vector((0.6, -2.02, 3.55))   # up against the press's crossbar
+            a, b = W((-0.6, -2.6, 1.07)), W((0.6, -2.02, 3.87))       # up against the press's crossbar
             o = lp[0]
             o.rotation_euler = (b - a).to_track_quat("X", "Z").to_euler()
             o.location = (a + b) / 2
             o.scale = ((b - a).length / max(o.dimensions.x, 0.1), 0.45, 0.6)
         kill(objs("cap"))                              # the dome blown off: the open horn under it shows
-        top = Vector((G["PIPE_FOOT"].x, G["PIPE_FOOT"].y, 6.6 - 0.82))
+        top = W((G["PIPE_FOOT"].x, G["PIPE_FOOT"].y, 6.6 - 0.5))
         prof = [(0.26, 0.0), (0.28, 0.3), (0.38, 0.6), (0.48, 0.85), (0.55, 0.95), (0.52, 0.99), (0.4, 0.95)]
         hn = lathe("horn", prof, top - Vector((0, 0, 0.1)), M["horn"], verts=36)
         hn.rotation_euler = Vector((-0.25, -0.2, 1)).to_track_quat("Z", "Y").to_euler()
@@ -163,21 +232,35 @@ def damaged():
     for i, o in enumerate(rw):
         if L == 10 and i in (2, 3):
             kill([o])
-        elif i in {1: (3, 4, 5), 3: (4,), 6: (1, 4), 10: (5,)}[L]:
-            snap(o, {1: {3: 0.86, 4: 0.6, 5: 0.7}}.get(L, {}).get(i, 0.72 if i % 2 else 0.8))
+        elif L == 1:                                   # level 1: a low broken stump, lowest at the front
+            snap(o, (0.36, 0.48, 0.62, 0.68, 0.6, 0.55)[i])
+        elif L == 6 and i == 2:                        # one plank knocked out: the dark inside shows
+            kill([o])
+        elif i in {3: (1, 4), 6: (1, 4), 10: (1, 4, 5)}[L]:
+            snap(o, 0.72 if i % 2 else 0.8)
+    # the front wall broken at the top too, worst at level 10 under the gone roof; soot up the walls from the breaks
+    keep = {3: {3: 0.83}, 6: {0: 0.86, 3: 0.8}, 10: {1: 0.7, 2: 0.9, 3: 0.62}}.get(L, {})
+    for i, o in enumerate(sorted(objs("lwall"), key=lambda o: o.name)):
+        if i in keep:
+            snap(o, keep[i])
+    if L > 1:
+        for p in ((hx + 0.1, -0.6, 2.4), (hx + 0.1, 0.9, 3.4), (0.4, -hy - 0.1, 2.0)):
+            burn(T @ Vector(p) + Vector((0, 0, -0.55 if L < 10 else 0)), 1.3)
+    if L == 1:                                         # no wall plank stands up through the caved-in roof
+        under(objs("rwall", "bwall", "bwall2", "cabL", "gable", "gableback"), objs("roofplank", top=False))
     # the horn: the pipe bent back at its foot (levels 1 and 3, as Flash)
     if L in (1, 3):
         pipe = objs("pipe", "pipeband", "horn", "hornneck", "cap", "pipestay", "pipeplate")
-        foot = G["PIPE_FOOT"] + Vector((0, 0, -0.32 if L == 1 else -0.55))
+        foot = T @ (G["PIPE_FOOT"] - Vector((0, 0, 0.5))) if L == 1 else G["PIPE_FOOT"] + Vector((0, 0, -0.55))
         hinge(pipe, foot, rot=(14, -16, 0) if L == 3 else (8, -12, 0))
     # roller and tray
     roller = objs("roller", "rollercap", "rollerarm")
     R0 = G["ROLLER"]
     tray = objs("tray") + objs("traymount", "traymountplate", "traymountbolt")
     if L == 1:
-        hinge(roller, (R0.x - 1.0, R0.y, R0.z - 0.8), rot=(0, 14, 0), move=(0, -0.1, -0.35))
+        hinge(roller, T @ Vector((R0.x - 1.0, R0.y, R0.z - 0.5)), rot=(0, 14, 0), move=(0, -0.1, -0.35))
         kill(objs("traymount", "traymountplate", "traymountbolt"))
-        h = hinge(objs("tray"), (0, -hy, Z0 - 0.8), rot=(-28, 6, 0), move=(0, -0.1, 0))
+        h = hinge(objs("tray"), T @ Vector((0, -hy, Z0 - 0.5)), rot=(-28, 6, 0), move=(0, -0.1, 0))
         sit([h], 0.0)
     elif L == 3:                                       # the roller hangs from its left arm, the tray is gone
         hinge(roller, (R0.x - 1.05, R0.y, R0.z - 0.55), rot=(0, 72, 0))
@@ -254,12 +337,12 @@ def destroyed():
     px = G["px"]
     # the core: broken wall planks in a low dark jumble under everything
     r = random.Random(11)
-    for k in range(30):
-        sx, sy = r.uniform(-20, 26), r.uniform(24, 44)
-        mid = max(0.0, 1 - abs(sx - 4) / 26) * max(0.0, 1 - abs(sy - 32) / 14)
-        h = r.uniform(0.15, 0.4) + 0.9 * mid
+    for k in range(26):                                # packed close round the middle, highest there
+        sx, sy = r.uniform(-15, 21), r.uniform(27, 42)
+        mid = max(0.0, 1 - abs(sx - 4) / 20) * max(0.0, 1 - abs(sy - 34) / 10)
+        h = r.uniform(0.12, 0.3) + 0.7 * mid
         c = px(sx, sy, Z=g + h)
-        o = box("rubbleplank", (r.uniform(0.9, 1.8), r.uniform(0.38, 0.6), 0.14), c, (M["wood"] if k % 3 == 0 else M["dwood"])("X"),
+        o = box("rubbleplank", (r.uniform(0.9, 1.8), r.uniform(0.38, 0.6), 0.14), c, (M["wood"] if k % 4 == 0 else M["dwood"])("X"),
                 rot=(r.uniform(-35, 35), r.uniform(-30, 30), r.uniform(0, 180)), bevel=0.03, origin="center",
                 jitter=0.03)
     # the tray, tipped, under the front
@@ -284,9 +367,13 @@ def destroyed():
     hn.rotation_euler = (p1 - p0 + Vector((0, 0, 0.3))).to_track_quat("Z", "Y").to_euler()
     hn.modifiers.new("solid", "SOLIDIFY").thickness = 0.03
     # the roof's peak, broken off, sunk in the middle: the pagoda roof's top with its knot and twigs
-    c = px(7, 24, Z=g + 1.45)
-    G["pagoda_roof"](c.x, c.y, 0.75, 0.9, c.z, c.z + 1.15, lift=0.15)
-    hinge(objs("roof", "shingle", "roofstick", "knot", "tuft"), c, rot=(8, -10, 0))
+    c = px(7, 26, Z=g + 1.1)                           # sunk low in the heap, tipped: a dark lump with its twigs
+    G["pagoda_roof"](c.x, c.y, 0.62, 0.72, c.z, c.z + 0.95, lift=0.1)
+    hinge(objs("roof", "shingle", "roofstick", "knot", "tuft"), c, rot=(16, -14, 0))
+    # the middle burnt black: the char deepest under the post and the peak, as Flash's dark hollow
+    burn(px(6, 34, Z=g + 0.4), 2.3)
+    burn(px(-4, 38, Z=g + 0.3), 1.4)
+    burn(px(8, 26, Z=g + 1.3), 1.2)
     # the long light post across the middle, and one leaning up on the right
     along("rubblepost", px(-25, 30, Z=g + 1.05), px(27, 25, Z=g + 1.2), (0, 0.42, 0.42), M["post"]("X"), roll=8)
     along("rubblepost", px(31, 44, Z=g + 0.2), px(20, 9, Z=g + 2.0), (0, 0.4, 0.4), M["post"]("X"), roll=-6)

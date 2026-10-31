@@ -27,6 +27,7 @@ ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["1", "prev"
 MODE = ARGS[1] if len(ARGS) > 1 else "prev"
 STATE = ARGS[2] if len(ARGS) > 2 else "damaged"
 G = {}
+BURN = []                                          # scorch spots: (object or None, point (its local / world), radius)
 WALLS = ()
 HERE = None
 L = M = SC = box = cyl = tube = lathe = GROUND = rng = None
@@ -155,6 +156,52 @@ def sheet_holes(o, spots):
     return o
 
 
+def inside():
+    """The dark inside of a broken building, seen through holes: near black, no shine (Flash's holes are black)."""
+    m = bpy.data.materials.get("inside")
+    if m is None:
+        m = bpy.data.materials.new("inside")
+        m.use_nodes = True
+        bs = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        bs.inputs["Base Color"].default_value = (0.0, 0.0, 0.0, 1)
+        bs.inputs["Roughness"].default_value = 1.0
+        for k in ("Specular IOR Level", "Specular"):
+            if k in bs.inputs:
+                bs.inputs[k].default_value = 0.0
+    return m
+
+
+def fine_holes(o, patches, axes=("x", "y"), cuts=5, seed=0):
+    """Tear ragged holes in sheet o (baked first, cut finer so the edge is not stepped): patches (u, v, half u,
+    half v) in 0..1 across o's world bounding box along axes. Returns the baked object."""
+    o = bake(o)
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bmesh.ops.subdivide_edges(bm, edges=list(bm.edges), cuts=cuts, use_grid_fill=True)
+    mw = o.matrix_world
+    ws = [mw @ v.co for v in bm.verts]
+    lo = [min(getattr(p, a) for p in ws) for a in axes]
+    hi = [max(getattr(p, a) for p in ws) for a in axes]
+    dead, by = [], {}
+    for f in bm.faces:
+        c = mw @ f.calc_center_median()
+        u, v = ((getattr(c, a) - l) / max(1e-6, h - l) for a, l, h in zip(axes, lo, hi))
+        for k, (pu, pv, wu, wv) in enumerate(patches):
+            du, dv = (u - pu) / wu, (v - pv) / wv
+            a = math.atan2(dv, du)
+            if du * du + dv * dv < (1 + 0.2 * math.sin(5 * a + k + seed) + 0.1 * math.sin(13 * a + 2 * k)) ** 2:
+                dead.append(f)
+                by.setdefault(k, []).append(c)
+                break
+    for cs in by.values():                             # the edge round each hole burnt
+        m = sum(cs, Vector()) / len(cs)
+        burn(m, max((c - m).length for c in cs) + 0.4)
+    bmesh.ops.delete(bm, geom=dead, context="FACES")
+    bm.to_mesh(o.data)
+    bm.free()
+    return o
+
+
 def snap(o, keep, axis="Z"):
     """Shorten plank o to the fraction keep of its height, with a ragged broken end (its top vertices jagged)."""
     me = o.data
@@ -165,6 +212,8 @@ def snap(o, keep, axis="Z"):
         if v.co.z > cut:
             v.co.z = cut + (v.co.z - cut) * 0.04 + rng.uniform(-0.12, 0.12) * (z1 - z0) * 0.25 * \
                 (1 if v.co.x > 0 else -1)
+    xs, ys = [v.co.x for v in me.vertices], [v.co.y for v in me.vertices]
+    burn((sum(xs) / len(xs), sum(ys) / len(ys), cut), 0.7, o)       # the broken end is scorched
     return o
 
 
@@ -196,7 +245,7 @@ def debris(at, n=6, spread=1.2, kinds=("plank", "stick", "bracket"), seed=0, mat
 def soot(amount=0.35, scale=2.2):
     """Scorch: every material's colour darkened in soft patches (fixed noise in object space), as a battle left it."""
     for m in bpy.data.materials:
-        if not m.use_nodes:
+        if not m.use_nodes or m.name == "inside":
             continue
         t = m.node_tree
         bs = next((n for n in t.nodes if n.type == "BSDF_PRINCIPLED"), None)
@@ -221,6 +270,88 @@ def soot(amount=0.35, scale=2.2):
         t.links.new(ramp.outputs["Color"], mul.inputs[0])
         t.links.new(mul.outputs[0], mix.inputs["Factor"])
         mix.inputs["B"].default_value = (0.08, 0.06, 0.05, 1)
+        if inp.is_linked:
+            t.links.new(inp.links[0].from_socket, mix.inputs["A"])
+        else:
+            mix.inputs["A"].default_value = inp.default_value
+        t.links.new(mix.outputs["Result"], inp)
+
+
+def burn(p, r=1.0, o=None):
+    """A scorch spot round point p, radius r: world, or o's local point (it then follows o wherever o goes)."""
+    BURN.append((o, Vector(p), r))
+
+
+def scorch(strength=0.92):
+    """Char round the breaks, as Flash's damaged pictures: every material's colour goes toward black-brown near the
+    BURN spots (soft, blotchy edge), so the wood by a snapped plank or a torn hole is burnt and the rest is not."""
+    bpy.context.view_layer.update()
+    spots = []
+    for o, p, r in BURN:
+        try:
+            spots.append((o.matrix_world @ p if o is not None else p, r))
+        except ReferenceError:                      # its object went (killed or baked)
+            continue
+    if not spots:
+        return
+    gr = bpy.data.node_groups.new("scorch", "ShaderNodeTree")
+    gr.interface.new_socket("Fac", in_out="OUTPUT", socket_type="NodeSocketFloat")
+    nd, ln = gr.nodes, gr.links
+    geo = nd.new("ShaderNodeNewGeometry")
+    acc = None
+    for p, r in spots:
+        d = nd.new("ShaderNodeVectorMath")
+        d.operation = "DISTANCE"
+        d.inputs[1].default_value = p
+        ln.new(geo.outputs["Position"], d.inputs[0])
+        mr = nd.new("ShaderNodeMapRange")
+        mr.inputs["From Min"].default_value = r * 0.4
+        mr.inputs["From Max"].default_value = r
+        mr.inputs["To Min"].default_value = 1.0
+        mr.inputs["To Max"].default_value = 0.0
+        ln.new(d.outputs["Value"], mr.inputs["Value"])
+        if acc is None:
+            acc = mr.outputs["Result"]
+        else:
+            mx = nd.new("ShaderNodeMath")
+            mx.operation = "MAXIMUM"
+            ln.new(acc, mx.inputs[0])
+            ln.new(mr.outputs["Result"], mx.inputs[1])
+            acc = mx.outputs[0]
+    nz = nd.new("ShaderNodeTexNoise")                  # blotchy, not a clean ring
+    nz.inputs["Scale"].default_value = 1.6
+    nz.inputs["Detail"].default_value = 8.0
+    ln.new(geo.outputs["Position"], nz.inputs["Vector"])
+    ramp = nd.new("ShaderNodeMapRange")
+    ramp.inputs["From Min"].default_value = 0.3
+    ramp.inputs["From Max"].default_value = 0.62
+    ramp.inputs["To Min"].default_value = 0.35
+    ln.new(nz.outputs["Fac"], ramp.inputs["Value"])
+    mul = nd.new("ShaderNodeMath")
+    mul.operation = "MULTIPLY"
+    mul.use_clamp = True
+    ln.new(acc, mul.inputs[0])
+    ln.new(ramp.outputs["Result"], mul.inputs[1])
+    out = nd.new("NodeGroupOutput")
+    ln.new(mul.outputs[0], out.inputs["Fac"])
+    for m in bpy.data.materials:
+        if not m.use_nodes or m.name == "inside":
+            continue
+        t = m.node_tree
+        bs = next((n for n in t.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if bs is None:
+            continue
+        inp = bs.inputs["Base Color"]
+        gn = t.nodes.new("ShaderNodeGroup")
+        gn.node_tree = gr
+        f = t.nodes.new("ShaderNodeMath")
+        f.operation = "MULTIPLY"
+        f.inputs[1].default_value = strength
+        t.links.new(gn.outputs["Fac"], f.inputs[0])
+        mix = t.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        t.links.new(f.outputs[0], mix.inputs["Factor"])
+        mix.inputs["B"].default_value = (0.035, 0.024, 0.018, 1)
         if inp.is_linked:
             t.links.new(inp.links[0].from_socket, mix.inputs["A"])
         else:
@@ -302,6 +433,7 @@ def run(damaged, destroyed, soot_amount=(0.3, 0.45)):
     elif STATE == "destroyed":
         destroyed()
     soot(soot_amount[0] if STATE == "damaged" else soot_amount[1])
+    scorch()
     cam = G["setup"](SC)
     sc = SC
     out = HERE / "render"
