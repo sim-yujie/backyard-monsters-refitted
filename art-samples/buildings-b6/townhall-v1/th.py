@@ -691,7 +691,7 @@ def materials():
                           side=0.3)
     M["rustgold"] = painted("rustgold", (170, 112, 40), rough=0.5, metal=0.6, wear=(210, 150, 60), rust=(96, 56, 30),
                             scale=4, dirt=0.3, rust_at=0.55)
-    M["leather"] = painted("leather", (74, 58, 54), rough=0.75, wear=(96, 80, 74), rust=(58, 44, 40), scale=3.0,
+    M["leather"] = painted("leather", (92, 72, 68), rough=0.75, wear=(126, 104, 98), rust=(58, 44, 40), scale=3.0,
                            dirt=0.25, spec=0.3, rust_at=0.6)
     M["yellow"] = painted("yellow", (236, 168, 40), rough=0.45, metal=0.2, wear=(250, 196, 80), rust=(150, 96, 40),
                           scale=4.0, dirt=0.3, rust_at=0.72)
@@ -1158,7 +1158,7 @@ def level7(eight=False):
     (r1, z1a, z1b), (r2, z2a, z2b) = lv["tiers"]
     fd = lv["foot_d"]
     for i, th in enumerate(lv["feet"]):
-        star(f"foot{i}-star", P(th, fd, 0.0), 1.9, 1.15, 11, 0.32, M["gold"], rot=th * 1.7)
+        star(f"foot{i}-star", P(th, fd, 0.0), 2.2, 1.35, 11, 0.36, M["gold"], rot=th * 1.7)      # Flash's big stars
         lathe(f"foot{i}-vase", [(0.5, 0.75), (0.24, 1.0), (0.2, z2a - 0.9), (0.45, z2a - 0.45), (0.8, z2a - 0.2),
                                 (0.75, z2a - 0.1)], P(th, fd, 0.0), M["gold"], verts=32)
     fl = lv.get("dome_flat", 1.0)
@@ -1294,45 +1294,38 @@ def level1():
     def drape(u, v, q):
         d = q.length
         ph = math.atan2(q.y, q.x)
+        # Flash: a stiff sheet lying almost flat over the can's top (a low rise to the tie), its front and back
+        # corners hanging straight down over the rim, the side corners out as ragged wings
+        rag = 0.16 * math.sin(9 * ph + 0.7) + 0.1 * math.sin(17 * ph + 2.1)     # a ragged, uneven hem
+        w = math.sin(ph - math.radians(S.FRONT)) ** 2                      # 1 toward the side corners
+        rp = 1.4                                                           # the flat top round the tie
+        slope = (1 - w) * 3.0 + w * 1.6                                    # front and back steep, the sides gentle
         if d < 0.45:
             z = zb
+        elif d < rp:
+            f = (d - 0.45) / (rp - 0.45)
+            z = zb - 0.25 * f + 0.18 * math.sin(7 * ph + 0.6) * (1 - f) * min(1.0, 3 * f)  # gathers under the tie
         elif d < cr + 0.05:
-            f = (d - 0.45) / (cr + 0.05 - 0.45)
-            z = zr + (zb - zr) * (1 - f ** 2.2) ** 0.6                       # a tent spreading from the tie (Flash)
-            z += 0.22 * math.sin(7 * ph + 0.6) * (1 - f) * min(1.0, 3 * f)  # the gathers under the tie
+            z = zb - 0.25 - (d - rp) * slope
         else:
             e = d - cr - 0.05
-            w = math.sin(ph - math.radians(S.FRONT)) ** 2                  # 1 toward the side corners
-            dd = cr + 0.08 + e * (w + (1 - w) * 0.15)
+            dd = cr + 0.1 + e * (w * 0.95 + (1 - w) * 0.12)
             q = q * (dd / d)
-            z = zr - 0.06 - e * ((1 - w) * 1.5 + w * 0.22)
-        return q, z + 0.05 * math.sin(3.1 * q.x + 1.3) * math.sin(2.7 * q.y)
+            z = zb - 0.25 - (cr + 0.05 - rp) * slope - e * ((1 - w) * 1.5 + w * 0.5) - rag * min(1.0, e)
+        # rough leather: broad crumples
+        return q, z + 0.09 * math.sin(3.1 * q.x + 1.3) * math.sin(2.7 * q.y) + 0.05 * math.sin(7.3 * q.x - 2.0 * q.y)
     rhombus("cloth", *lv["cloth_half"], drape, M["leather"], 0.06)
-    # the gathered top: the cloth's neck flares out above the tie in crumpled folds round the spout
-    bm = bmesh.new()
-    rows = []
-    for a in range(7):
-        t = a / 6
-        row = []
-        for b in range(48):
-            ph = 2 * math.pi * b / 48
-            r = 0.5 + 0.55 * t + 0.2 * t * math.sin(6 * ph + 1.0) + 0.1 * t * math.sin(11 * ph)
-            row.append(bm.verts.new((r * math.cos(ph), r * math.sin(ph), zb - 0.1 + 1.0 * t + 0.4 * t * math.sin(5 * ph + 0.4))))
-        rows.append(row)
-    for ra, rb in zip(rows, rows[1:]):
-        for b in range(48):
-            bm.faces.new((ra[b], ra[(b + 1) % 48], rb[(b + 1) % 48], rb[b]))
-    ob = mesh_ob("cloth-ruff", bm, [M["leather"]])
-    mo = ob.modifiers.new("solid", "SOLIDIFY")
-    mo.thickness = 0.06
-    mo.offset = 1.0
+    # the neck: a tie round the spout and a few tangled dark straps looping round it (Flash)
     lathe("cloth-tie", [(0.52, zb - 0.25), (0.6, zb - 0.1), (0.56, zb + 0.08), (0.42, zb + 0.18)], (0, 0, 0),
           M["string"], verts=24)
     box("cloth-tag", (0.06, 0.9, 0.55), P(S.FRONT, 0.62, zb - 0.75), M["tag"], rot=(0, 8, S.FRONT), bevel=0.02)
-    # dark cloth flaps sticking out of the bundle behind the funnel (Flash), their feet in the ruff
-    flap = painted("flap", (46, 42, 40), rough=0.85, wear=(76, 70, 66), scale=3.0)
-    for k, (th, w, h, tilt) in enumerate(((S.FRONT + 120.0, 1.1, 2.0, 32.0), (S.FRONT - 125.0, 0.9, 1.7, 26.0))):
-        box(f"cloth-flap{k}", (0.06, w, h), P(th, 0.62, zb + 0.15), flap, rot=(0, tilt, th), bevel=0.02, bow=0.3)
+    flap = painted("flap", (40, 34, 32), rough=0.85, wear=(70, 62, 58), scale=3.0)
+    for k, (t0, t1, lift) in enumerate(((60.0, 250.0, 0.9), (150.0, 390.0, 0.7), (200.0, 330.0, 1.4), (-20.0, 160.0, 1.2))):
+        pts = []
+        for j in range(9):
+            a2 = t0 + (t1 - t0) * j / 8
+            pts.append(P(S.FRONT + a2, 0.66 + 0.2 * math.sin(j * 1.7 + k), zb - 0.15 + lift * math.sin(math.pi * j / 8)))
+        tube(f"cloth-strap{k}", pts, 0.09, flap, verts=8, smooth=True)
     # Flash's darker fold down the cloth's right slope, from under the tie out to the right corner, narrowing
     bm = bmesh.new()
     rows = []
@@ -1392,7 +1385,7 @@ def magnifier(name, c, n, rr, hdir, length):
 
 
 def horseshoe(name, c, th, h, rad=0.75, w=0.36):
-    """A red horseshoe magnet standing against the can at bearing th, its bend at c, legs hanging h, steel tips."""
+    """A red horseshoe magnet standing upright, its face toward bearing th, its bend at c, legs hanging h, steel tips."""
     side = P(th + 90, 1, 0)
     pts = [c + side * rad + Vector((0, 0, -h))]
     for k in range(13):
@@ -1451,6 +1444,9 @@ def level2():
 
     rhombus("roof", hu, hv, lambda u, v, q: (q, roof_z(u, v)), M["dome"], 0.1, n=40)
     lathe("roof-top", [(0.75, zt - 0.1), (0.75, zt + 0.25), (0.45, zt + 0.3)], (0, 0, 0), M["steel"], verts=32)
+    # Flash: the funnel stands on a tall silver tube out of the roof's top
+    lathe("roof-collar", [(0.42, zt + 0.2), (0.46, zt + 0.3), (0.46, zt + 1.05), (0.52, zt + 1.12), (0.3, zt + 1.18)],
+          (0, 0, 0), M["chrome"], verts=32)
     # the porthole on the front-left face, two screws
     def roof_pt(u, v, out=0.1):
         q = P(S.FRONT + 90, u, 0) + P(S.FRONT, v, 0)
@@ -1466,14 +1462,15 @@ def level2():
     pp, nrm = roof_pt(-2.2, 1.5, 0.12)
     porthole("roof-port", pp, nrm, 1.12, frame=0.12, mat_ring=M["chrome"])
     studs("roof-screws", [roof_pt(-3.5, 0.5, 0.12), roof_pt(-0.25, 3.0, 0.12)], 0.2, M["rivet"])
-    funnel(zt - 0.2, None, k=lv["fun_k"], extra=lv["fun_extra"])
-    binder("clip0", P(S.FRONT - 75, 2.2, roof_z(-2.12, 0.57) - 0.05), S.FRONT - 75, s=1.6)
-    binder("clip1", P(S.FRONT + 105, 2.2, roof_z(2.13, -0.57) - 0.05), S.FRONT + 105, s=1.6)
+    funnel(zt + 0.75, None, k=lv["fun_k"], extra=lv["fun_extra"])
+    # the binder clips hang on the tube either side, their wire handles up
+    binder("clip0", P(S.FRONT - 80, 0.97, zt + 0.25), S.FRONT - 80, s=1.4)
+    binder("clip1", P(S.FRONT + 100, 0.97, zt + 0.25), S.FRONT + 100, s=1.4)
     # the magnet on the can's front left, the magnifier leant on the roof's front right, handle down
     horseshoe("magnet", P(lv["mag_th"], cr + 0.3, lv["magnet_z"]), lv["mag_th"], 2.0, rad=0.85, w=0.5)
     th = lv["glass_th"]
     c = P(th, lv["glass_d"], lv["glass_z"])
-    n = (P(th, 1, 0) * math.cos(math.radians(30)) + Vector((0, 0, math.sin(math.radians(30))))).normalized()
+    n = (P(th, 1, 0) * math.cos(math.radians(18)) + Vector((0, 0, math.sin(math.radians(18))))).normalized()
     magnifier("glass", c, n, 1.2, (Vector((0, 0, -1)) + P(th, 0.5, 0)).normalized(), 3.0)
 
 
@@ -1541,7 +1538,7 @@ def level3():
     ring("pan-rim", pr + 0.02, 0.1, M["gold"], z=pz1, n=96)
     ring_rivets("pan-bolts", pr + 0.01, (pz0 + pz1) / 2 + 0.2, 16, rr=0.17)
     cr = lv["core_r"]
-    ribbed("core", cr, pz1, hz + 0.6, pitch=0.42, depth=0.12)
+    ribbed("core", cr, pz1, hz + 2.4, pitch=0.42, depth=0.12)       # up into the hood, seen through its opening
     box("core-vent", (0.4, 1.3, 1.0), P(S.FRONT, cr + 0.05, hz - 1.2), M["steel"], rot=(0, 0, S.FRONT), bevel=0.05)
     for k in range(3):
         box(f"core-vent{k}", (0.06, 1.1, 0.12), P(S.FRONT, cr + 0.26, hz - 1.05 + 0.3 * k), M["hole"],
@@ -1567,8 +1564,16 @@ def level3():
     funnel(ztop - 0.1, None, k=lv["fun_k"], extra=lv["fun_extra"])
     # two magnets on gold brackets, either side of the opening
     for k, th in enumerate(lv["magnets"]):
-        horseshoe(f"magnet{k}", P(th, cr + 1.75, lv["magnet_z"]), th, lv["magnet_z"] - pz1 - 0.75, rad=1.15, w=0.8)
-        box(f"magnet{k}-shelf", (1.5, 2.6, 0.22), P(th, cr + 1.9, pz1 + 0.02), M["gold"], rot=(0, 0, th), bevel=0.04)
+        # Flash: thick magnets standing upright with their faces to the camera, each on a bolted gold bracket
+        c = P(th, cr + 2.0, lv["magnet_z"])
+        horseshoe(f"magnet{k}", c, S.FRONT, lv["magnet_z"] - pz1 - 0.75, rad=0.82, w=0.92)
+        f0 = c + P(S.FRONT, 0.0, 0.0)
+        box(f"magnet{k}-shelf", (1.6, 2.6, 0.24), Vector((f0.x, f0.y, pz1 + 0.02)), M["gold"], rot=(0, 0, S.FRONT),
+            bevel=0.04)
+        bk = Vector((f0.x, f0.y, pz1 + 0.24)) + P(S.FRONT, 0.62, 0)
+        box(f"magnet{k}-bracket", (0.16, 2.6, 0.75), bk, M["gold"], rot=(0, 0, S.FRONT), bevel=0.04)
+        studs(f"magnet{k}-bolt", [(bk + P(S.FRONT, 0.09, 0) + P(S.FRONT + 90, s_ * 1.05, 0.38), P(S.FRONT, 1, 0))
+                                  for s_ in (-1, 1)], 0.12, M["rivet"])
     # the gold rail round it all on eight legs with gear feet, struts from the pan
     rr, za, zb = lv["rail"]
     # a hexagon, a flat side to the front
@@ -1706,7 +1711,7 @@ def level4():
         rs = (dr - 0.1, dr + 0.6, (dr + fd) / 2 + 0.4, fd + 0.65, fd + 1.0, fd + 0.95, fd + 0.45, fd)
         zs = (z0, z0 + 0.35, zt + 0.05, zt, zt - 0.35, zc + 1.0, zc + 0.45, zc + 0.25)
         bs = [t0 + (th - t0) * min(1.0, k / 3) for k in range(8)]
-        tube(f"loop{i}", [P(b, r, z) for b, r, z in zip(bs, rs, zs)], 0.34, M["red"], verts=16, smooth=True)
+        tube(f"loop{i}", [P(b, r, z) for b, r, z in zip(bs, rs, zs)], 0.44, M["red"], verts=16, smooth=True)
     railbar("redbar", [P(S.FRONT, dr + 0.05, dz0 + 1.2), P(S.FRONT, dr + 0.3, dz0 - 0.5), P(S.FRONT, fd, dz0 - 1.0)], 0.28)
 
 # ---------------------------------------------------------------------------------------------------- levels 9 and 10
@@ -1761,7 +1766,7 @@ def base910(lv, kind):
     lathe("base-bowl", [(r - 0.1, za + 0.05), (r - 0.5, za - 0.3), (2.0, za - 0.5), (0.01, za - 0.52)], (0, 0, 0),
           M["golddark"], verts=96)
     if kind == 9:
-        disc("base-top", dr - 0.1, r - 0.1, zb + 0.02, M["golddark"], thick=0.12)
+        disc("base-top", dr - 0.1, r - 0.1, zb + 0.02, M["core"], thick=0.12)      # Flash: dark under the core
         ring("base-rim-top", r - 0.1, 0.22, M["gold"], z=zb + 0.04, n=128)
         return
     rs, zs = lv["step"]                          # the dark step
@@ -1882,9 +1887,9 @@ def core9(lv):
     """Level 9's core front: the drum opened (a dark slot with gold edges), red frames at the sides, red rods."""
     dr, dz0, dz1 = lv["drum"]
     th = S.FRONT
-    box("slot", (0.12, 2.1, dz1 - dz0 - 0.1), P(th, dr + 0.03, dz0), M["hole"], rot=(0, 0, th), bevel=0.0)
+    box("slot", (0.12, 2.6, dz1 - dz0 - 0.1), P(th, dr + 0.03, dz0), M["hole"], rot=(0, 0, th), bevel=0.0)
     for s in (-1, 1):
-        strap(f"slot-edge{s + 1}", th + s * 21, dr - 0.02, dz0, dz1, w=0.36, rivets=6)
+        strap(f"slot-edge{s + 1}", th + s * 26, dr - 0.02, dz0, dz1, w=0.36, rivets=6)
     tube("slot-rod", [P(th, dr - 0.3, dz1 - 0.6), P(th, dr - 0.3, dz0 - 0.1)], 0.13, M["gold"])
     for k, a in enumerate((S.FRONT - 65, S.FRONT + 65)):
         ro = dr + 1.0
