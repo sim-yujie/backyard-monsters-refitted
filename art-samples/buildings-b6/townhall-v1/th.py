@@ -664,9 +664,14 @@ def materials():
     M["tiertop"] = painted("tiertop", (96, 94, 98), rough=0.6, metal=0.4, wear=(124, 122, 128), rust=(110, 80, 60))
     M["tindark"] = painted("tindark", (128, 138, 158), rough=0.3, metal=0.9, wear=(168, 178, 196), rust=(110, 80, 60),
                            scale=2.0, dirt=0.45, spec=0.5, rust_at=0.6)
+    M["band10"] = painted("band10", (178, 174, 166), rough=0.45, metal=0.45, wear=(150, 146, 138), rust=(140, 100, 70))
     M["beige"] = painted("beige", (206, 196, 176), rough=0.55, metal=0.3, wear=(176, 166, 148), rust=(150, 104, 70),
                          scale=3, dirt=0.35, rust_at=0.68)
     M["hole"] = flat("hole", (18, 14, 14), rough=1.0)
+    M["tusk"] = shiny("tusk", (246, 200, 96), rough=0.25, metal=0.8, side=0.3, wear=(255, 232, 156), scale=1.5,
+                      dirt=0.2, streak=0.3)
+    M["tinshade"] = painted("tinshade", (78, 82, 94), rough=0.35, metal=0.85, wear=(118, 124, 138), rust=(90, 64, 48))
+    M["hood"] = painted("hood", (62, 52, 50), rough=0.55, metal=0.3, wear=(92, 80, 76), rust=(70, 46, 36), scale=2.5, dirt=0.2, spec=0.5, rust_at=0.6)
     M["palegold"] = shiny("palegold", (232, 196, 128), rough=0.35, metal=0.6, wear=(206, 160, 90), scale=2, dirt=0.3,
                           side=0.3)
     M["rustgold"] = painted("rustgold", (170, 112, 40), rough=0.5, metal=0.6, wear=(210, 150, 60), rust=(96, 56, 30),
@@ -1400,7 +1405,7 @@ def hood(name, r, zeq, cut_half, cut_el, flat_=1.0, drop=0.0, flare=0.0):
             k = (i + 1) % nu
             bm.faces.new((rows[j][i], rows[j][k], rows[j + 1][k], rows[j + 1][i]))
     bmesh.ops.remove_doubles(bm, verts=rows[-1], dist=1e-4)
-    ob = mesh_ob(name, bm, [M["dome"]])
+    ob = mesh_ob(name, bm, [M["hood"]])
     mo = ob.modifiers.new("solid", "SOLIDIFY")
     mo.thickness = 0.14
     mo.offset = -1.0
@@ -1428,7 +1433,7 @@ def level3():
         box(f"core-vent{k}", (0.06, 1.1, 0.12), P(S.FRONT, cr + 0.26, hz - 1.05 + 0.3 * k), M["hole"],
             rot=(0, 0, S.FRONT), bevel=0.0)
     hood("hood", hr, hz, lv["cut"][0], lv["cut"][1], flat_=lv["hood_flat"], drop=lv["hood_drop"], flare=lv["hood_flare"])
-    disc("hood-floor", cr + 0.05, hr - 0.15, hz + 0.6, M["dome"], thick=0.1)
+    disc("hood-floor", cr + 0.05, hr - 0.15, hz + 0.6, M["hood"], thick=0.1)
     for i, (th, el, rp) in enumerate(lv["holes"]):
         pp, n = on_dome(hr, hz, th, el, lv["hood_flat"], 0.0)
         porthole(f"port{i}", pp, n, rp, frame=0.12, mat_ring=M["chrome"])
@@ -1438,8 +1443,8 @@ def level3():
     funnel(ztop - 0.1, None, k=lv["fun_k"], extra=lv["fun_extra"])
     # two magnets on gold brackets, either side of the opening
     for k, th in enumerate(lv["magnets"]):
-        horseshoe(f"magnet{k}", P(th, cr + 1.25, lv["magnet_z"]), th, lv["magnet_z"] - pz1 - 0.75, rad=0.98, w=0.6)
-        box(f"magnet{k}-shelf", (1.5, 2.3, 0.22), P(th, cr + 1.15, pz1 + 0.02), M["gold"], rot=(0, 0, th), bevel=0.04)
+        horseshoe(f"magnet{k}", P(th, cr + 2.0, lv["magnet_z"]), th, lv["magnet_z"] - pz1 - 0.75, rad=1.1, w=0.72)
+        box(f"magnet{k}-shelf", (1.5, 2.6, 0.22), P(th, cr + 1.9, pz1 + 0.02), M["gold"], rot=(0, 0, th), bevel=0.04)
     # the gold rail round it all on eight legs with gear feet, struts from the pan
     rr, za, zb = lv["rail"]
     # a hexagon, a flat side to the front
@@ -1460,8 +1465,8 @@ def level3():
     # the side frames: two pale gold uprights on the rail and a top bar leaning in to the hood's rim
     for k, th in enumerate(lv["frames"]):
         for j, dth in enumerate((-22.5, 22.5)):
-            tube(f"rail-frame{k}{j}", [P(th + dth, rr, zb), P(th + dth, rr, lv["frame_z"]),
-                                       P(th + dth * 0.6, hr + 0.3, lv["frame_z"] + 0.6)], 0.11, M["palegold"], verts=10)
+            tube(f"rail-frame{k}{j}", [P(th + dth, rr, zb), P(th + dth, rr, lv["frame_z"])], 0.11, M["palegold"],
+                 verts=10)
         tube(f"rail-frametop{k}", [P(th - 22.5, rr, lv["frame_z"]), P(th + 22.5, rr, lv["frame_z"])], 0.11,
              M["palegold"], verts=10)
 
@@ -1620,11 +1625,11 @@ def base910(lv, kind):
     with one row of big black holes, a dark perforated step on top."""
     r, za, zb = lv["base"]
     dr = lv["drum"][0]
-    mat = M["perf_lo"] if kind == 9 else M["beige"]
+    mat = M["perf_lo"] if kind == 9 else M["band10"]
     lathe("base", [(r - 0.7, zb), (r - 0.12, zb), (r + 0.02, zb - 0.25), (r + 0.08, (za + zb) / 2), (r + 0.02, za + 0.25),
                    (r - 0.12, za), (r - 0.7, za)], (0, 0, 0), mat, verts=128)
     ring("base-rim-hi", r - 0.05, 0.14, M["gold"], z=zb - 0.02, n=128)
-    ring("base-rim-lo", r, 0.16, M["gold"], z=za + 0.08, n=128)
+    ring("base-rim-lo", r, 0.16 if kind == 9 else 0.26, M["gold"], z=za + 0.08, n=128)
     lathe("base-bowl", [(r - 0.1, za + 0.05), (r - 0.5, za - 0.3), (2.0, za - 0.5), (0.01, za - 0.52)], (0, 0, 0),
           M["golddark"], verts=96)
     if kind == 9:
@@ -1658,6 +1663,14 @@ def foot_posts(lv):
     fd = lv["foot_d"]
     for i, th in enumerate(lv["feet"]):
         if is_quarter(lv, th):
+            continue
+        if "upipe" in lv and abs(th - S.FRONT) < 1:
+            rs, zs = lv["step"]
+            tube(f"post{i}-upipe", [P(th, rs - 0.2, zs - 0.2), P(th, rs + 0.5, zs + 0.15), P(th, r + 0.45, zb + 0.4),
+                                    P(th, r + 0.6, zb - 0.6), P(th, fd - 0.1, za + 0.1), P(th, fd, 1.75)],
+                 lv["upipe"], M["gold"], verts=20, smooth=True)
+            lathe(f"post{i}-cuff", [(lv["upipe"] + 0.12, 1.6), (lv["upipe"] + 0.14, 2.0), (lv["upipe"] + 0.02, 2.1)],
+                  P(th, fd, 0), M["gold"], verts=24)
             continue
         box(f"post{i}", (0.55, 0.55, zb + 0.55 - 1.8), P(th, fd, 1.8), M["gold"], rot=(0, 0, th), bevel=0.06)
         box(f"post{i}-arm", (fd - r + 0.5, 0.5, 0.45), P(th, (fd + r) / 2 - 0.15, zb - 0.1), M["gold"], rot=(0, 0, th),
@@ -1704,8 +1717,8 @@ def frame9(i, th, lv):
         pts.append((P(th, d + 0.38, z), P(th, 1, 0)))
     studs(f"frame{i}-holes", pts, 0.12, M["hole"], flat_=0.2)
     # the tusk: out of the shoulder's foot, curving out and down toward the screen's edge, its point beside the post
-    tube(f"frame{i}-tusk", [P(ts, rh + 0.5, zs - 0.5), P(th + s * 4, d - 0.9, zs - 0.4), P(th + s * 16, d - 0.1, zs - 1.6),
-                            P(th + s * 22, d, zs - 3.4)], 0.6, M["gold"], r_end=0.07, smooth=True)
+    tube(f"frame{i}-tusk", [P(ts, rh + 0.5, zs - 0.5), P(th - s * 3, d - 0.9, zs - 0.7), P(th - s * 6, d - 0.55, zs - 2.5),
+                            P(th - s * 13, d - 1.0, zs - 4.8)], 0.85, M["tusk"], r_end=0.1, smooth=True)
     for k, z in enumerate((zt - 1.4, zt - 3.8)):
         spike(f"frame{i}-spike{k}", P(th, d + 0.36, z), P(th, 1, 0.4))
     spike(f"frame{i}-spike2", P(th, d, zt + 0.75), Vector((0, 0, 1)) + P(th, 0.5, 0))
@@ -1723,9 +1736,9 @@ def core9(lv):
     """Level 9's core front: the drum opened (a dark slot with gold edges), red frames at the sides, red rods."""
     dr, dz0, dz1 = lv["drum"]
     th = S.FRONT
-    box("slot", (0.12, 1.5, dz1 - dz0 - 0.1), P(th, dr + 0.03, dz0), M["hole"], rot=(0, 0, th), bevel=0.0)
+    box("slot", (0.12, 2.1, dz1 - dz0 - 0.1), P(th, dr + 0.03, dz0), M["hole"], rot=(0, 0, th), bevel=0.0)
     for s in (-1, 1):
-        strap(f"slot-edge{s + 1}", th + s * 17, dr - 0.02, dz0, dz1, w=0.36, rivets=6)
+        strap(f"slot-edge{s + 1}", th + s * 21, dr - 0.02, dz0, dz1, w=0.36, rivets=6)
     tube("slot-rod", [P(th, dr - 0.3, dz1 - 0.6), P(th, dr - 0.3, dz0 - 0.1)], 0.13, M["gold"])
     for k, a in enumerate((S.FRONT - 65, S.FRONT + 65)):
         ro = dr + 1.0
@@ -1767,6 +1780,9 @@ def column10(i, th, lv):
              M["gold"], verts=12)
     lathe(f"col{i}-cap", [(0.66, zt - 0.95), (0.72, zt - 0.7), (0.92, zt - 0.4), (0.95, zt), (0.7, zt + 0.12),
                           (0.01, zt + 0.14)], c, M["gold"], verts=32)
+    rr, zeq = lv["dome"]
+    tube(f"col{i}-strut", [P(th, d - 0.45, lv["strut_z"]), on_dome(rr, zeq, th, 6.0, lv["dome_flat"], -0.15)[0]], 0.24,
+         M["gold"], verts=12)
     for s in (-1, 1):
         spike(f"col{i}-stud{s + 1}", c + Vector(S.polar(th + 90 * s, 0.35, zt + 0.05)), Vector((0, 0, 1)), r=0.16,
               h=0.5, mat=M["glass"])
@@ -1779,15 +1795,20 @@ def arm10(i, th, lv, front):
     rr, zeq = lv["dome"]
     sh, n = on_dome(rr, zeq, th, 48.0 if front else 34.0, lv["dome_flat"], 0.45)
     el = P(th, d - 0.1, zt + 0.55)
-    ball(f"arm{i}-elbow", el, 0.95, M["gold"])
+    ball(f"arm{i}-elbow", el, 1.0, M["gold"])
     mid = (el + sh) / 2 + Vector((0, 0, 0.3))
-    tube(f"arm{i}", [el, mid, sh], 0.75, M["gold"], verts=20, smooth=True)
+    # Flash's arm is a thick square gold beam (a soft bevel) with a gauntlet block next to the elbow
+    pts = [el * (1 - t) ** 2 + mid * 2 * t * (1 - t) + sh * t * t for t in (k / 10 for k in range(11))]
+    sweep(f"arm{i}", pts, P(th + 90, 1, 0), 1.5, 1.35, M["gold"], bevel=0.45)
+    g = el * 0.72 + sh * 0.28 + Vector((0, 0, 0.12))
+    b = box(f"arm{i}-gauntlet", (1.3, 1.8, 1.65), g, M["gold"], origin="centre", bevel=0.38)
+    b.rotation_euler = (sh - el).normalized().to_track_quat("X", "Z").to_euler()
     b = box(f"arm{i}-shoulder", (1.4, 1.6, 1.4), sh, M["gold"], origin="centre", bevel=0.14)
     b.rotation_euler = Vector(n).to_track_quat("X", "Z").to_euler()
     ball(f"arm{i}-blue", P(th, d + 0.7, zt + 0.5), 0.36, M["glass"])
     for k in range(3):
-        t = 0.25 + 0.22 * k
-        q = el * (1 - t) + sh * t + Vector((0, 0, 0.45 * 4 * t * (1 - t) + 0.5))
+        t = 0.42 + 0.17 * k
+        q = el * (1 - t) ** 2 + mid * 2 * t * (1 - t) + sh * t * t + Vector((0, 0, 0.62))
         spike(f"arm{i}-stud{k}", q, Vector((0, 0, 1)) + P(th, 0.4, 0), r=0.14, h=0.45, mat=M["glass"])
 
 

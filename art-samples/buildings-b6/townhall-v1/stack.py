@@ -40,11 +40,11 @@ LV2 = dict(can=(2.9, 1.3, 6.4), legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_
            fun_k=0.85, fun_extra=0.6, mag_th=-82.0, magnet_z=5.5, glass_th=-12.0, glass_d=3.6, glass_z=8.1)
 
 # level 3: the roof bent into a hood (radius, rim height) over a ribbed core on a steel pan, an octagonal gold rail
-LV3 = dict(hood=(3.6, 7.8), hood_flat=1.05, hood_drop=0.7, hood_flare=0.15, cut=(15.0, 48.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
-           holes=((-90.0, 36.0, 1.05), (-2.0, 28.0, 0.9)),
+LV3 = dict(hood=(3.85, 7.6), hood_flat=1.0, hood_drop=0.3, hood_flare=0.15, cut=(15.0, 48.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
+           holes=((-90.0, 34.0, 1.3), (-2.0, 28.0, 1.12)),
            hood_rivets=((-140.0, 3.0), (-72.0, 3.0), (-18.0, 3.0), (52.0, 3.0), (-45.0, 72.0), (-100.0, 62.0)),
-           fun_k=1.0, fun_extra=0.0, magnets=(-84.0, -6.0), magnet_z=6.8, rail=(6.0, 3.0, 3.8), leg_d=5.0,
-           frames=(-135.0, 45.0), frame_z=6.0)
+           fun_k=1.0, fun_extra=0.0, magnets=(-84.0, -6.0), magnet_z=6.0, rail=(6.0, 3.0, 3.8), leg_d=5.0,
+           frames=(-135.0, 45.0), frame_z=4.7)
 
 # level 4: the hood grown into a dome of four panels (seams at the quarters) on a tall drum with gold straps
 LV4 = dict(drum=(3.75, 2.5, 8.3), dome=(4.0, 8.3), dome_flat=0.8, seams=(-45.0, 45.0, 135.0, -135.0),
@@ -95,8 +95,9 @@ QUARTERS = (FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135)
 _BODY9 = dict(drum=(2.9, 5.0, 8.5), dome=(4.2, 8.5), dome_flat=1.28, fun_z=14.5, fun_k=0.82, base=(5.0, 2.0, 5.0),
               feet=FEET8, foot_d=5.8, foot_dq=6.3, quarters=QUARTERS, holes=((FRONT, 32.0, 1.15),), straps=(),
               meridians=tuple(FRONT + a for a in (-118.0, -82.0, -62.0, -28.0, -8.0, 28.0)))
-LV[9] = dict(_BODY9, frame_d=6.3, frame_top=9.7, shoulder_turn=13.0, shoulder_rise=1.4, drum_mat="tindark")
+LV[9] = dict(_BODY9, strut_z=5.2, foot_dq=6.8, frame_d=6.9, frame_top=9.7, shoulder_turn=13.0, shoulder_rise=1.4, drum_mat="tinshade")
 # level 10: Flash narrows the dome into a tall bullet over a dark core, the base lower with a dark step
 LV[10] = dict(_BODY9, drum=(2.6, 5.4, 9.0), dome=(3.6, 9.0), dome_flat=1.3, fun_z=14.56, fun_k=0.68,
-              base=(4.0, 1.5, 4.4), step=(3.4, 5.4), foot_d=5.6, foot_dq=6.4, col_top=(10.4, 10.4, 10.9, 10.9),
+              base=(4.0, 1.5, 3.7), step=(3.4, 5.4), foot_d=5.6, foot_dq=6.4, col_top=(9.7, 9.7, 10.9, 10.9),
+              upipe=0.4, strut_z=5.2,
               drum_mat="core", port_mat="gold", holes=((FRONT, 30.0, 1.0),))
