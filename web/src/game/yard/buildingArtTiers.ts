@@ -62,6 +62,13 @@
  * - **Shadows** are stand-ins: the silhouette leaned back, flattened and
  *   blurred, as on the sample sheets, until shadows are painted.
  *
+ * The yard buildings are 3D too (owner, 31 Oct 2026, `BUILDING_3D_ART`): the
+ * Twig Snapper, Pebble Shiner, Putty Squisher, Goo Factory, Storage Silo,
+ * Hatchery, Monster Housing and Hatchery Control Center, from branches
+ * art/buildings-3d-b6, -silo, -hatchery, -hcc and -housing
+ * (`web/tools/tower-tiers/export3d_buildings.py`), with the Modern look;
+ * the Classic look keeps the Flash ones.
+ *
  * The Town Hall's new art is the default (owner, 26 Oct 2026): one picture
  * per level (`TOWN_HALL_ART`), each painted from that level's Flash picture
  * (approved 26 Oct 2026, codex-art Part 13), on Flash's own shadow for that
@@ -154,8 +161,9 @@ export interface TierTurret {
 }
 
 /**
- * A tier's moving part, played as the Flash tower's `anim` layer was
- * (`web/tools/tower-tiers/export3d_static.py`): cell 0 is the tier at rest.
+ * A tier's moving part, played as the Flash building's `anim` layer was
+ * (`web/tools/tower-tiers/export3d_static.py`, `export3d_buildings.py`):
+ * cell 0 is the tier at rest.
  */
 export interface TierAnim {
   /** The strip, an `ArtAnim`: `[file, x, y, width, height, frames]`. */
@@ -169,6 +177,14 @@ export interface TierAnim {
    * part that moves (the 3D Tesla's film), drawn over `top`.
    */
   readonly whole?: boolean;
+  /**
+   * The building with its moving parts cut out (the 3D Twig Snapper without
+   * its saw and gears, `export3d_buildings.py`), drawn under the cells in
+   * place of `top`, which is then only the still for the icons. A part that
+   * turns leaves nothing behind it this way, where `top` would show it at
+   * rest under every cell.
+   */
+  readonly body?: TierImage;
 }
 
 export interface TierArt {
@@ -183,7 +199,7 @@ export interface TierArt {
   readonly lift: number;
   /** The turret that turns, for a tower with one; `top` is then only its still picture. */
   readonly turret?: TierTurret;
-  /** The part that moves, for a tower without a turret whose 3D tiers animate (the Tesla, the Bunker). */
+  /** The part that moves, for a tower without a turret whose 3D tiers animate (the Tesla, the Bunker), and a 3D building's. */
   readonly anim?: TierAnim;
 }
 
@@ -346,8 +362,89 @@ export const TOWN_HALL_ART: readonly TierArt[] = [
   { from: 10, top: ["top.new10@2x.webp", -77, -104], shadow: ["shadow.10.jpg", -85, 24], lift: 0 },
 ];
 
-/** Every type with new art the old-art switch turns back: the towers, then the Town Hall (14). */
-const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART };
+/**
+ * The 3D yard buildings (owner, 31 Oct 2026: "All approved", then "Add 3d
+ * buildings into game"), each modelled in Blender on Flash's pictures in the
+ * game's own pixel frame and exported by
+ * `web/tools/tower-tiers/export3d_buildings.py`: one look for each of Flash's
+ * (the producers' levels 1, 3, 6 and 10, the Hatchery's 1, 2 and 3), each on
+ * its own 3D ground shadow, no outline. What moves in Flash moves here, cell
+ * for cell (`yardAnim.ts` runs them as it ran Flash's): the parts that move
+ * are a strip over a `body` without them, and the Storage Silo's cells are
+ * the box its sack fills, its fill level as Flash's was. The Monster Housing
+ * and the Hatchery Control Center stand still, as Flash's did.
+ */
+export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  // 1 Twig Snapper: 3D, Flash's four looks (levels 1, 3, 6 and 10); its saw and gears turn
+  1: [
+    { from: 1, top: ["top.3d1@2x.webp", -33, -23], shadow: ["shadow.3d1.jpg", -35, 16], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", 1, 12, 20, 29, 34], body: ["body.3d1@2x.webp", -33, -23] } },
+    { from: 3, top: ["top.3d3@2x.webp", -33, -37], shadow: ["shadow.3d3.jpg", -34, 12], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", 1, 7, 20, 29, 34], body: ["body.3d3@2x.webp", -33, -37] } },
+    { from: 6, top: ["top.3d6@2x.webp", -33, -37], shadow: ["shadow.3d6.jpg", -34, 11], lift: 0,
+      anim: { strip: ["anim.3d6@2x.webp", 1, 4, 32, 32, 34], body: ["body.3d6@2x.webp", -33, -37] } },
+    { from: 10, top: ["top.3d10@2x.webp", -33, -53], shadow: ["shadow.3d10.jpg", -34, 11], lift: 0,
+      anim: { strip: ["anim.3d10@2x.webp", 1, 4, 32, 32, 34], body: ["body.3d10@2x.webp", -33, -53] } },
+  ],
+  // 2 Pebble Shiner: 3D, Flash's four looks; it shines as Flash's did
+  2: [
+    { from: 1, top: ["top.3d1@2x.webp", -32, -18], shadow: ["shadow.3d1.jpg", -32, 12], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -29, 6, 55, 27, 26], body: ["body.3d1@2x.webp", -32, -18] } },
+    { from: 3, top: ["top.3d3@2x.webp", -33, -33], shadow: ["shadow.3d3.jpg", -32, 8], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -30, 4, 57, 30, 26], body: ["body.3d3@2x.webp", -33, -33] } },
+    { from: 6, top: ["top.3d6@2x.webp", -33, -40], shadow: ["shadow.3d6.jpg", -32, 6], lift: 0,
+      anim: { strip: ["anim.3d6@2x.webp", -30, -4, 57, 38, 26], body: ["body.3d6@2x.webp", -33, -40] } },
+    { from: 10, top: ["top.3d10@2x.webp", -33, -40], shadow: ["shadow.3d10.jpg", -33, 6], lift: 0,
+      anim: { strip: ["anim.3d10@2x.webp", -30, -37, 63, 71, 24], body: ["body.3d10@2x.webp", -33, -40] } },
+  ],
+  // 3 Putty Squisher: 3D (v3), Flash's four looks; it squishes as Flash's did
+  3: [
+    { from: 1, top: ["top.3d1@2x.webp", -24, 4], shadow: ["shadow.3d1.jpg", -18, 27], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -7, 7, 24, 16, 26], body: ["body.3d1@2x.webp", -24, 4] } },
+    { from: 3, top: ["top.3d3@2x.webp", -31, -23], shadow: ["shadow.3d3.jpg", -30, 11], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -5, -9, 22, 16, 26], body: ["body.3d3@2x.webp", -31, -23] } },
+    { from: 6, top: ["top.3d6@2x.webp", -31, -46], shadow: ["shadow.3d6.jpg", -30, 11], lift: 0,
+      anim: { strip: ["anim.3d6@2x.webp", -5, -9, 22, 16, 26], body: ["body.3d6@2x.webp", -31, -46] } },
+    { from: 10, top: ["top.3d10@2x.webp", -32, -52], shadow: ["shadow.3d10.jpg", -32, 11], lift: 0,
+      anim: { strip: ["anim.3d10@2x.webp", -5, -52, 39, 59, 25], body: ["body.3d10@2x.webp", -32, -45] } },
+  ],
+  // 4 Goo Factory: 3D, Flash's four looks; its pump's globs as Flash's
+  4: [
+    { from: 1, top: ["top.3d1@2x.webp", -25, -34], shadow: ["shadow.3d1.jpg", -26, 19], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", 4, 14, 18, 42, 26], body: ["body.3d1@2x.webp", -25, -34] } },
+    { from: 3, top: ["top.3d3@2x.webp", -28, -34], shadow: ["shadow.3d3.jpg", -28, 15], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", 4, 13, 19, 43, 26], body: ["body.3d3@2x.webp", -28, -34] } },
+    { from: 6, top: ["top.3d6@2x.webp", -31, -34], shadow: ["shadow.3d6.jpg", -30, 15], lift: 0,
+      anim: { strip: ["anim.3d6@2x.webp", -19, 13, 42, 47, 26], body: ["body.3d6@2x.webp", -31, -34] } },
+    { from: 10, top: ["top.3d10@2x.webp", -40, -47], shadow: ["shadow.3d10.jpg", -39, 12], lift: 0,
+      anim: { strip: ["anim.3d10@2x.webp", -19, 13, 42, 47, 26], body: ["body.3d10@2x.webp", -40, -47] } },
+  ],
+  // 6 Storage Silo: 3D, one look; its 26 cells are the sack's fill, as Flash's
+  6: [
+    { from: 1, top: ["top.3d1@2x.webp", -36, -51], shadow: ["shadow.3d1.jpg", -37, 32], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -33, -21, 66, 70, 26], body: ["body.3d1@2x.webp", -36, -51] } },
+  ],
+  // 13 Hatchery: 3D, Flash's three looks; its crank turns while it hatches
+  13: [
+    { from: 1, top: ["top.3d1@2x.webp", -50, -67], shadow: ["shadow.3d1.jpg", -26, 21], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -47, -100, 93, 76, 31], columns: 22, body: ["body.3d1@2x.webp", -50, -52] } },
+    { from: 2, top: ["top.3d2@2x.webp", -51, -114], shadow: ["shadow.3d2.jpg", -51, 15], lift: 0,
+      anim: { strip: ["anim.3d2@2x.webp", -13, -121, 75, 87, 31], columns: 27, body: ["body.3d2@2x.webp", -51, -114] } },
+    { from: 3, top: ["top.3d3@2x.webp", -51, -113], shadow: ["shadow.3d3.jpg", -51, 13], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", 7, -102, 82, 92, 31], columns: 24, body: ["body.3d3@2x.webp", -51, -113] } },
+  ],
+  // 15 Monster Housing: 3D, one look, still as Flash's
+  15: [
+    { from: 1, top: ["top.3d1@2x.webp", -107, 10], shadow: ["shadow.3d1.jpg", -102, 29], lift: 0 },
+  ],
+  // 16 Hatchery Control Center: 3D, one look, still as Flash's
+  16: [
+    { from: 1, top: ["top.3d1@2x.webp", -40, -57], shadow: ["shadow.3d1.jpg", -40, 21], lift: 0 },
+  ],
+};
+
+/** Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings. */
+const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART, ...BUILDING_3D_ART };
 
 /** Whether an Inferno yard's `type` has tiers of its own (`INFERNO_TOWER_TIER_ART`). */
 export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
@@ -355,11 +452,12 @@ export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
 
 /**
  * The new picture a building shows at `level` in a `kind` yard, or null with
- * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1 and for
- * every type without new art.
+ * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1, for
+ * every type without new art and for a 3D building in an Inferno yard (which
+ * keeps its Inferno art until its own Inferno 3D look is approved).
  */
 export const tierArtFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
-  if (!newTowerArt()) return null;
+  if (!newTowerArt() || (kind === "inferno" && type in BUILDING_3D_ART)) return null;
   const inferno = hasInfernoTiers(type, kind);
   if ((inferno || type in TOWER_TIER_ART) && !MODERN_TOWERS.includes(type)) return null;
   let chosen: TierArt | null = null;

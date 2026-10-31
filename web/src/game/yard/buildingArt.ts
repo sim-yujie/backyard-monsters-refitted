@@ -19,10 +19,12 @@ import type { YardKind } from "./buildingCostData";
  * under construction — uses the level 1 art.
  * (`client/scripts/BFOUNDATION.as:896-914`.)
  *
- * The repainted defensive towers and Town Hall are the exception: unless the
- * player chose the old (Flash) art, each tier or level takes a new picture
- * from `buildingArtTiers.ts` instead of the Flash row; a tower whose turret
- * turns takes a body and a turret strip, like the Flash tower it replaces.
+ * The repainted defensive towers, the Town Hall and the 3D yard buildings are
+ * the exception: unless the player chose the old (Flash) art, each tier or
+ * level takes a new picture from `buildingArtTiers.ts` instead of the Flash
+ * row; a tower whose turret turns takes a body and a turret strip, like the
+ * Flash tower it replaces, and a building whose parts move a body and a strip
+ * of the moving parts.
  *
  * Two buildings have a lower maximum on Map Room 2 than the art table knows
  * about, and the client clamps the level before looking the art up
@@ -267,7 +269,8 @@ export interface ResolvedArt {
   /**
    * The whole building in one picture, for an icon, when `top` is only part
    * of it: a repainted tower whose turret turns has its body as `top` and the
-   * turret in `anims`, and keeps the tier's painted picture here.
+   * turret in `anims`, and keeps the tier's painted picture here; so does a 3D
+   * building whose moving parts are a strip of their own.
    */
   readonly still?: ResolvedImage;
 }
@@ -339,11 +342,15 @@ export const resolveArt = (
       layer === turret?.strip ? turret.columns : layer === anim?.strip ? anim.columns : undefined;
     const still = imageOf(row.folder, tier.top);
     const whole = !turret && anim?.whole === true;
+    // A 3D building whose moving parts are cut out of its body (the Twig Snapper's saw) draws the body under its cells.
+    const body = !turret && !whole ? anim?.body : undefined;
     const top = turret
       ? imageOf(row.folder, turret.body)
       : whole && anim
         ? imageOf(row.folder, [anim.strip[0], anim.strip[1], anim.strip[2], anim.strip[3], anim.strip[4]])
-        : still;
+        : body
+          ? imageOf(row.folder, body)
+          : still;
     if (top && still) {
       return {
         name: row.name,
@@ -353,7 +360,7 @@ export const resolveArt = (
         shadow: imageOf(row.folder, tier.shadow),
         anims: layers.map((layer) => animOf(row.folder, layer, columnsOf(layer))),
         topIsAnim: whole,
-        ...(turret || whole ? { still } : {}),
+        ...(turret || whole || body ? { still } : {}),
       };
     }
   }
