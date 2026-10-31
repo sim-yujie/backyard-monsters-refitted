@@ -345,7 +345,7 @@ def granite_mat(name, top_lo=(112, 112, 118), top_hi=(190, 190, 194), side_lo=(6
 
 def weave(name):
     """Level 3: Flash's woven stone, pairs of rounded strands laid on the diagonal, each square of the weave turned
-    across its neighbours (a basket weave), raised and shaded; near white on the top, grey on the sides. Laid out
+    across its neighbours (a basket weave), raised and shaded; mostly white on every face, thin grey lines round the strands, the sides only a little shaded. Laid out
     on the top in x, y and on the sides in (x + y), z, so one material covers every face."""
     if name in MATS:
         return MATS[name]
@@ -354,7 +354,7 @@ def weave(name):
     up = facing_up(t)
     u = m(t, "MULTIPLY_ADD", y, m(t, "SUBTRACT", 1.0, up), x)          # top: x, sides: x + y
     w = m(t, "MULTIPLY_ADD", up, m(t, "SUBTRACT", y, z), z)            # top: y, sides: z
-    k = m(t, "MULTIPLY_ADD", up, -0.15, 0.8)                            # top 0.65, sides 0.8 (Flash: coarse weave)
+    k = m(t, "MULTIPLY_ADD", up, -0.3, 0.95)                            # top 0.65, sides 0.95 (Flash: finer on the sides)
     a = m(t, "MULTIPLY", m(t, "ADD", u, w), k)
     b = m(t, "MULTIPLY", m(t, "SUBTRACT", u, w), k)
     fa = m(t, "SUBTRACT", m(t, "FRACT", a), 0.5)
@@ -365,12 +365,12 @@ def weave(name):
     qb = m(t, "SUBTRACT", m(t, "ABSOLUTE", fa), 0.25)
     q = m(t, "MULTIPLY_ADD", c, m(t, "SUBTRACT", qb, qa), qa)          # across: two strands a cell
     d = m(t, "ADD", m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", p, 1.8)), 2.0),
-          m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", q, m(t, "MULTIPLY_ADD", up, -0.2, 3.5))), 2.0))
-    # top: fatter strands (q * 3.3) that touch, each white in the middle and ringed grey toward its edge (Flash)
-    top = t.ramp(d, [(0.0, srgb(246, 246, 248)), (0.3, srgb(236, 236, 240)), (0.44, srgb(200, 200, 206)), (0.5, srgb(104, 102, 110)), (0.8, srgb(108, 106, 114)), (0.9, srgb(200, 200, 206)), (1.0, srgb(196, 196, 202))])
-    side = t.ramp(d, [(0.0, srgb(170, 168, 172)), (0.45, srgb(136, 134, 138)), (0.75, srgb(90, 88, 92)), (1.0, srgb(62, 60, 64))])
+          m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", q, 3.3)), 2.0))
+    # fat strands that touch, each white in the middle, a thin grey line round it and small grey pockets between (Flash)
+    top = t.ramp(d, [(0.0, srgb(248, 248, 250)), (0.34, srgb(240, 240, 244)), (0.44, srgb(212, 212, 218)), (0.5, srgb(112, 110, 118)), (0.66, srgb(118, 116, 124)), (0.76, srgb(214, 214, 220)), (1.0, srgb(180, 180, 186))])
+    side = t.ramp(d, [(0.0, srgb(226, 226, 230)), (0.34, srgb(212, 212, 216)), (0.46, srgb(180, 180, 186)), (0.52, srgb(100, 98, 106)), (0.66, srgb(106, 104, 112)), (0.76, srgb(178, 178, 184)), (1.0, srgb(140, 140, 146))])
     col = t.mix(side, top, up)
-    col = t.mix(col, srgb(120, 112, 122), t.ramp(t.noise(t.coords(), 30.0, 2.0, 0.5), [(0.6, K0), (0.7, (0.35, 0.35, 0.35, 1))]))
+    col = t.mix(col, srgb(150, 144, 152), t.ramp(t.noise(t.coords(), 30.0, 2.0, 0.5), [(0.6, K0), (0.7, (0.2, 0.2, 0.2, 1))]))
     col = lift_right(t, col, 0.45)
     col = t.grime(col, 0.0, 2.6, 0.15, 0.6)
     t.set(**{"Base Color": col, "rough": 0.7, "spec": 0.35})
