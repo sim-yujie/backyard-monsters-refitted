@@ -53,17 +53,17 @@ BALL_SCR = (-35.0, 49.5)            # Flash px of its middle (looks 1, 2, 4)
 # the look 1 posts' heights: front (+X -Y), left (-X -Y), right (+X +Y), back (-X +Y)
 POST1_H = (5.35, 5.5, 5.6, 5.8)
 # look 1's A-frame: two square legs in the upright plane y = A1_Y, from the ground at x = A1_FEET up to the apex (x, z)
-# under a steel cap, a little slate roof and the gold pulley; between the legs a windlass (a round axle along X) carries
-# the rope coil
+# under a steel cap, a little slate roof and the gold pulley; a windlass (a round axle along X) in front of the
+# legs carries the rope coil
 A1_Y = 0.2
-A1_APEX = (-0.4, 7.6)               # Flash's frame is wide and low
-A1_FEET = (-5.3, 4.6)
+A1_APEX = (-0.62, 7.67)             # Flash's frame is wide and low
+A1_FEET = (-5.3, 4.15)
 A1_W = 0.8                          # the legs' side
 A1_PUL = (-0.13, -0.95, 2.18)        # the pulley's middle from the apex (up and left of the cap, as Flash)
-WINDLASS_Z = 4.5
-COIL = 0.82                         # the coil's radius (it fills the windlass between the legs, each layer as long as the
-                                    # slanting legs let it: a barrel; the axle: AXLE1_R, a knob
-                                    # out past the left leg)
+WINDLASS_Z = 6.3                    # the coil: its axis' height, y (in front of the legs' plane), left end and radius
+COIL_Y = -1.15                      # (Flash's coil is long and fat: in front of the left leg, on behind the right one;
+COIL_X = -1.5                       # it ends where the right leg hides it from the camera)
+COIL = 0.66
 AXLE1_R = 0.16
 STOOL_C = (4.4, 3.7)                # look 1's step stool beside the bucket: its middle on the ground
 STOOL_H, STOOL_S = 1.8, 1.25        # its seat's top and side

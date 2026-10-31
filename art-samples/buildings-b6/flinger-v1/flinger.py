@@ -1139,7 +1139,7 @@ def hatch():
     lying open on the slates below it in look 3, the throwing spoon's curved tip in it in look 4."""
     u0, u1, y0, y1 = S.HATCH
     d, n, ln = slope_frame(1)
-    h1 = 0.36                       # the slates' top (the lid lies on them)
+    h1 = 0.25                       # the slates' top (the lid lies on them)
     # the shaft: black walls from the hole down into the house
     hs = [roof_q(1, u0, y0, -0.3), roof_q(1, u1, y0, -0.3), roof_q(1, u1, y1, -0.3), roof_q(1, u0, y1, -0.3)]
     low = [p - n * 1.4 for p in hs]
@@ -1280,7 +1280,6 @@ def gold_parts():
         # its stand: a gold post up from the ridge's back end to the hub's back
         rb = Vector((S.RIDGE_X, S.ROOF_Y1 - 0.2, S.RIDGE_Z + 0.1))
         tube("wstand", [rb, rb + Vector((0, 0.2, 0.5)), w - n * 0.25], 0.07, M["gold"], smooth=True)
-        print("PROBE wheel", tuple(round(v, 2) for v in w), "block", tuple(round(v, 2) for v in blk))
     return p1, p2
 
 
@@ -1410,24 +1409,65 @@ def aframe():
     pulley("pul1", pc, S.PUL_R, M["dgold"])
     tube("afork", [apex + Vector((0, -0.4, 0.2)), apex + Vector((0, -0.65, 0.7)), pc + n * 0.2], 0.08, M["gold"],
          smooth=True)
-    # the windlass: a round wooden axle along X through both legs, a knob past the left leg, the coil on it
-    z = S.WINDLASS_Z
-    xl = [f.x + d.x * (z / d.z) for f, d in legs]
-    cyl("waxle", S.AXLE1_R, xl[1] - xl[0] + 1.1, Vector((xl[0] - 0.8, y, z)), M["drum"], rot=(0, 90, 0), verts=16)
-    sphere("wknob", 0.26, Vector((xl[0] - 0.88, y, z)), M["drum"], n=16)
-    cr = S.COIL
-    tans = [abs(d.x / d.z) for f, d in legs]
-    for k, rr in enumerate((cr, cr - 0.25, cr - 0.48)):
-        tr = 0.16 if k == 0 else 0.14
-        # each layer stops short of the slanting legs at its own top (wider legs there): the coil is a barrel
-        c0, c1 = (xl[i] + (1 - 2 * i) * (w / 2 * math.hypot(1, tans[i]) + rr * tans[i] + tr + 0.03) for i in (0, 1))
-        turns = (c1 - c0) / 0.3
-        m = int(turns * 24)
-        pts = [Vector((c0 + (c1 - c0) * i / m, y + rr * math.cos(i * 2 * math.pi * turns / m + k),
-                       z + rr * math.sin(i * 2 * math.pi * turns / m + k))) for i in range(m + 1)]
-        tube(f"coil{k}", pts, tr, M["rope"], verts=10)
-    c0, c1 = (xl[0] + xl[1]) / 2 - 0.5, (xl[0] + xl[1]) / 2 + 0.5
-    return pc, Vector(((c0 + c1) / 2, y, z)), cr
+    # the windlass, as Flash draws it: a long fat coil in front of the left leg that runs on behind the right leg. Both
+    # legs share one plane, so the coil hangs in front of it (on a round axle held by an iron strap off the left leg)
+    # and ends where the right leg hides it from the camera: cut along the plane through the leg's left edge and the
+    # camera's line of sight, so the cut is seen edge-on and the coil seems to pass behind the leg
+    z, yc, cr = S.WINDLASS_Z, S.COIL_Y, S.COIL
+    f, d = legs[1]
+    ex = Vector((d.z, 0, -d.x)).normalized()
+    p0 = f - ex * (w / 2) - Vector((0, w / 2, 0))
+    n = d.cross(cam_fwd()).normalized()
+    if (f - p0).dot(n) < 0:
+        n = -n
+
+    def hidden(p, m=0.0):
+        return (p - p0).dot(n) > -m
+
+    def cut_cyl(name, r, xa, xb, mat):
+        """A round rod along X from xa to xb on the coil's axis, cut off where the right leg hides it (the cut faces
+        the camera edge-on, so it needs no lid)."""
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=r, radius2=r, depth=xb - xa)
+        bmesh.ops.rotate(bm, verts=bm.verts, cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(90), 3, "Y"))
+        bmesh.ops.translate(bm, verts=bm.verts, vec=((xa + xb) / 2, yc, z))
+        bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=p0 - n * 0.02, plane_no=n,
+                               clear_outer=True)
+        return mesh_ob(name, bm, [mat])
+    x0 = S.COIL_X
+    x1 = x0
+    while not hidden(Vector((x1, yc, z))):
+        x1 += 0.02
+    cut_cyl("waxle", S.AXLE1_R, x0 - 0.45, x1 + 1.0, M["drum"])
+    sphere("wknob", 0.26, Vector((x0 - 0.5, yc, z)), M["drum"], n=16)
+    fl, dl = legs[0]
+    zs = z - 0.55
+    tube("wstrap", [Vector((x0 - 0.25, yc, z)), Vector((x0 - 0.2, yc + 0.5, z - 0.25)),
+                    Vector((fl.x + dl.x * zs / dl.z, y - w / 2 + 0.05, zs))], 0.07, M["steel"])
+    # the coil: one solid of tight rope turns (a ridge winding round it every PITCH), so the leg's cut is clean
+    tr, pitch, na = 0.16, 0.3, 48
+    xs = [x0 + 0.02 * i for i in range(int((x1 + cr + 1.0 - x0) / 0.02))]
+    bm = bmesh.new()
+    rows = []
+    for xx in xs:
+        row = []
+        for j in range(na):
+            th = 2 * math.pi * j / na
+            u = ((xx - x0) / pitch - th / (2 * math.pi)) % 1.0
+            rr = cr + math.sqrt(max(0.0, tr * tr - ((u - 0.5) * pitch) ** 2))
+            if xx == x0:
+                rr = cr + 0.06
+            row.append(bm.verts.new((xx, yc + rr * math.cos(th), z + rr * math.sin(th))))
+        rows.append(row)
+    for r0, r1 in zip(rows, rows[1:]):
+        for j in range(na):
+            bm.faces.new((r0[j], r0[(j + 1) % na], r1[(j + 1) % na], r1[j]))
+    bm.faces.new(list(reversed(rows[0])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=p0 - n * 0.02, plane_no=n,
+                           clear_outer=True)
+    mesh_ob("coil", bm, [M["rope"]])
+    return pc, Vector(((x0 + x1) / 2, yc, z)), cr
 
 
 def belt1(pc, cc, cr, b):
