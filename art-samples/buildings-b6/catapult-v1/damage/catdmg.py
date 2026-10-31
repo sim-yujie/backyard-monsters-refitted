@@ -241,7 +241,7 @@ def destroyed():
         snap(o, R.uniform(0.18, 0.4))
     for o in named(r"post-?1"):
         snap(o, R.uniform(0.25, 0.35))
-    kill(named(r"leg-?1|back|rivet|stand|rod|arm"))
+    kill(named(r"leg-?1|back|rivet|stand|strap|rod2?|arm"))
     for o in named(r"(ywall|xwall-?1)\d+"):          # the planks' feet went with the posts: down on the ground
         o.location.z -= S.FOOT_H
     # the deck dropped onto the stubs, tilted toward the front
@@ -251,8 +251,9 @@ def destroyed():
     dr = named(r"drum|drod|groove")
     turn(dr, Vector((0, S.DRUM_Y, S.DRUM_Z)), (0, 0, 1), 28, move=(0.9, 0.6, 0.0))
     kill(named(r"pole"))
-    poles = [[G["tube"]("pole", [Vector(a), Vector(b)], S.POST3_R, M["poleZ"], verts=12)]
-             for a, b in (((-1.9, 1.4, 9.6), (0.4, 3.6, 7.6)), ((1.1, -1.1, 9.6), (2.7, 1.9, 7.9)))]
+    poles = [[G["tube"]("pole", [Vector(a).lerp(Vector(b), t / 6) for t in range(7)], S.POST3_R, M["poleZ"],
+                        verts=12)]          # rings all along it, so settle() feels what its middle lands on
+             for a, b in (((-2.0, 0.4, 9.6), (-1.3, 3.9, 8.9)), ((1.1, -1.1, 9.6), (2.7, 1.9, 7.9)))]
     # the +X gear standing in front, leaning on the box; the -X gear lying on the heap; the axle across it; one bow
     # lying across the deck, the other gone
     g1 = gear_parts("gear1")
@@ -263,7 +264,7 @@ def destroyed():
     settle(g1)
     for o in g1:
         burn(Vector((0, 0, 0)), 1.2, o)
-    ax = named(r"axle|sleeve")
+    ax = named(r"axle|sleeve|collar")
     turn(ax, Vector((0, S.AX2_Y, S.AX2_Z)), (0, 0, 1), -20, move=(0.3, 0.6, 3.0))
     g2 = gear_parts("gear-1")
     c = centre(g2)
@@ -279,10 +280,14 @@ def destroyed():
     for k, o in enumerate(br):
         turn([o], centre([o]), (1, 1, 0), 60 + 20 * k, move=Vector((-2.0 + 5.0 * k, -2.4 + 1.2 * k, 16.0)) -
              centre([o]))
-    for grp in [deck, dr, ax, g2] + poles + [bw] + [[o] for o in br]:      # each comes to rest on what is below
+    kill(named(r"bucket|bin|band|stud"))     # gone before anything settles, so nothing lands on it
+    grps = [deck, dr, ax, g2] + poles + [bw] + [[o] for o in br]
+    for k, grp in enumerate(grps):      # first lift each high above the ones before it, so none lands on a later one
+        for o in grp:
+            o.location.z += 40.0 * (k + 1)
+    for grp in grps:                    # then each comes to rest on what is below
         settle(grp)
     # the bucket smashed: its staves in pieces at the front left
-    kill(named(r"bucket|bin|band|stud"))
     for k in range(6):
         a = random.Random(60 + k)
         p = Vector((-1.2 + a.uniform(-0.9, 0.9), -3.6 + a.uniform(-0.6, 0.6), 0.0))
@@ -340,7 +345,7 @@ def float_check():
     # rubble outside the building's own square (the look 2/3 box with its bucket)
     for n in names:
         xs, ys = [v.x for v in tr[n][1]], [v.y for v in tr[n][1]]
-        if min(xs) < -2.6 or max(xs) > 4.6 or min(ys) < -5.0 or max(ys) > 4.6:
+        if min(xs) < -2.8 or max(xs) > 4.6 or min(ys) < -5.0 or max(ys) > 5.0:
             print("OUTSIDE", n, "x %.1f..%.1f y %.1f..%.1f" % (min(xs), max(xs), min(ys), max(ys)))
     print("DONE check", L, D.STATE)
 

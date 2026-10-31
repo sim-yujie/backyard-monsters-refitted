@@ -920,7 +920,7 @@ def materials():
     M = {}
     # Flash's timber: dark brown square posts and beams, pale tan sticks (the lever and look 1's cross bars)
     for ax in ("X", "Y", "Z"):
-        M["post" + ax] = wood("post", (104, 82, 60), (60, 46, 34), axis=ax, dirt=0.25, rings=4.0)
+        M["post" + ax] = wood("post", (94, 72, 54), (52, 40, 30), axis=ax, dirt=0.25, rings=4.0)
         M["pale" + ax] = wood("pale", (204, 172, 138), (156, 124, 96), axis=ax, dirt=0.1, rings=3.0, knots=False)
         if LOOK == 2:                   # look 2's box: dark chocolate planks
             M["plank" + ax] = wood("plank2", (86, 64, 46), (48, 36, 28), axis=ax, dirt=0.3, rings=4.0)
@@ -932,12 +932,12 @@ def materials():
     M["inside"] = flat("inside", (20, 15, 11), rough=1.0)
     # metals: Flash's pale blue-grey polished steel (the axles, bows, brackets), darker grey gears, near-black feet
     M["steel"] = shiny("steel", (176, 186, 202), rough=0.3, metal=0.8, wear=(128, 138, 156), scale=3.0, dirt=0.15)
-    M["gear"] = shiny("gear", (128, 128, 136), rough=0.4, metal=0.75, wear=(92, 92, 102), scale=3.0, dirt=0.2)
-    M["gdark"] = painted("gdark", (78, 78, 86), rough=0.5, metal=0.4, dirt=0.0, spec=0.4)
+    M["gear"] = shiny("gear", (160, 160, 168), rough=0.4, metal=0.75, wear=(116, 116, 126), scale=3.0, dirt=0.2)
+    M["gdark"] = painted("gdark", (108, 110, 120), rough=0.5, metal=0.4, dirt=0.0, spec=0.4)
     M["foot"] = painted("foot", (50, 50, 58), rough=0.45, metal=0.5, wear=(70, 70, 80), scale=4.0, dirt=0.2, spec=0.5)
     M["rivet"] = shiny("rivet", (220, 210, 186), rough=0.35, metal=0.5, dirt=0.0)
     # the bucket: pale tan wood, a dark brown inside, a dark band round the rim with studs
-    M["bucket"] = wood("bucket", (188, 160, 124), (140, 116, 88), axis="Z", dirt=0.25, rings=3.0, knots=False)
+    M["bucket"] = wood("bucket", (180, 150, 114), (132, 106, 80), axis="Z", dirt=0.25, rings=3.0, knots=False)
     M["bin"] = painted("bin", (74, 58, 44), rough=0.8, wear=(58, 44, 34), scale=3.0, dirt=0.0, spec=0.2)
     M["band"] = painted("band", (96, 74, 54), rough=0.6, dirt=0.0, spec=0.3)
     M["stud"] = shiny("stud", (214, 206, 190) if LOOK >= 2 else (150, 154, 166), rough=0.35, metal=0.4, dirt=0.0)
@@ -970,14 +970,15 @@ def rod(name, x0, x1, y, z, r, mat, verts=24):
 
 
 def wheel_gear(name, x, y, z, r, mat):
-    """Flash's toothed gear in an upright plane (axle along X): the toothed disc, a dark inner ring, a hub."""
+    """Flash's toothed gear in an upright plane (axle along X): the light grey toothed disc, a mid-grey inner disc
+    flush with its face, a thin pale ring on it, a short hub."""
     obs = [gear(name, r, 14, 0.24, (x, y, z), mat, (0, math.radians(90), 0), tooth=0.17)]
-    obs.append(cyl(name + "disc", r * 0.62, 0.28, (x - 0.14, y, z), M["gdark"], rot=(0, 90, 0), verts=32))
-    t = ring(name + "ring", r * 0.5, 0.07, M["steel"])          # Flash's pale ring inside the teeth
-    t.location = (x + 0.15, y, z)
+    obs.append(cyl(name + "disc", r * 0.64, 0.25, (x - 0.125, y, z), M["gdark"], rot=(0, 90, 0), verts=32))
+    t = ring(name + "ring", r * 0.46, 0.04, M["steel"])         # Flash's thin pale ring inside the teeth
+    t.location = (x + 0.13, y, z)
     t.rotation_euler = (0, math.radians(90), 0)
     obs.append(t)
-    obs.append(cyl(name + "hub", r * 0.24, 0.4, (x - 0.2, y, z), M["steel"], rot=(0, 90, 0), verts=24))
+    obs.append(cyl(name + "hub", r * 0.2, 0.3, (x - 0.15, y, z), M["steel"], rot=(0, 90, 0), verts=24))
     return obs
 
 
@@ -985,6 +986,10 @@ def wheel_gear(name, x, y, z, r, mat):
 def frame1():
     for sx in (-1, 1):
         for sy in (-1, 1):
+            if sx > 0 and sy > 0:       # the back right corner: a raked leg down to the ground behind
+                fx, fy = S.STRUT_FOOT
+                beam("leg11", (CX, CY, S.TOP1 - S.BEAM - 0.05), (fx, fy, 0.05), P - 0.08, P - 0.1, M["postY"])
+                continue
             box(f"post{sx}{sy}", (P, P, S.TOP1), (sx * CX, sy * CY, 0), M["postZ"], bevel=0.04, jitter=0.01)
         # the side beams along Y on the posts' tops
         box(f"sbeam{sx}", (S.BEAM, 2 * FB + 0.1, S.BEAM), (sx * (FA - S.BEAM / 2), 0, S.TOP1 - S.BEAM + 0.02),
@@ -1014,11 +1019,6 @@ def axle1():
     for x in (-(FA - S.BEAM / 2), FA - S.BEAM / 2):            # bracket blocks on the side beams
         box("bracket", (0.46, 0.5, 0.75), (x, y, S.TOP1 + 0.02), M["steel"], bevel=0.06)
     wheel_gear("gear", S.GEAR1_X, y, z, S.GEAR_R, M["gear"])
-    # the strut: a dark beam from a bearing block on the axle's end down to the ground behind
-    xe = x1 - 0.2
-    box("bracket", (0.4, 0.5, 0.55), (xe, y, z - 0.3), M["steel"], bevel=0.05)
-    fx, fy = S.STRUT_FOOT
-    beam("strut", (xe, y + 0.15, z + 0.05), (fx, fy, 0.05), 0.38, 0.36, M["postY"])
 
 
 def bucket(look):
@@ -1026,8 +1026,8 @@ def bucket(look):
     z0, z1 = S.BUCKET1 if look == 1 else S.BUCKET2
     R = S.BUCKET_R
     h = z1 - z0
-    rb = R * 0.72
-    prof = [(0.0, 0.0), (rb * 0.7, 0.0), (rb, 0.06), (rb + (R - rb) * 0.45, h * 0.45), (R * 0.985, h * 0.86), (R, h),
+    rb = R * 0.84                       # a round, barely tapered basket, as Flash's
+    prof = [(0.0, 0.0), (rb * 0.7, 0.0), (rb, 0.06), (R * 0.97, h * 0.45), (R * 1.0, h * 0.82), (R, h),
             (R - 0.1, h), (R - 0.13, h * 0.9), (rb - 0.13, 0.22), (0.0, 0.22)]
     o = lathe("bucket", prof, (bx, by, z0), M["bucket"], verts=40)
     o.data.polygons.foreach_set("material_index", [0] * len(o.data.polygons))
@@ -1098,6 +1098,15 @@ def axle2():
     for sx in (-1, 1):
         box("bracket", (0.56, 0.6, 0.72), (sx * S.BOW_X, S.ROD_Y, S.TOP2 - 0.02), M["steel"], bevel=0.06)
     rod("rod", -S.BOW_X, S.BOW_X, S.ROD_Y, S.ROD_Z, 0.15, M["steel"])
+    # Flash's busier steel between the gears: a second rod under the axle through the stands, collars on the axle
+    # inside the gears, and flat straps from each stand forward to its bracket block
+    y2, z2 = y - 0.15, S.TOP2 + 0.55
+    rod("rod2", -1.95, 1.95, y2, z2, 0.11, M["steel"])
+    for sx in (-1, 1):
+        rod("collar", sx * 1.95 - (0.3 if sx > 0 else 0.0), sx * 1.95 + (0.0 if sx > 0 else 0.3), y, z, 0.24,
+            M["steel"], verts=24)
+        box("strap", (0.14, (y - 0.1) - S.ROD_Y, 0.16), (sx * 1.72, (y - 0.1 + S.ROD_Y) / 2, S.TOP2 + 0.28),
+            M["steel"], bevel=0.03)
 
 
 def bows():
@@ -1155,7 +1164,7 @@ FAMILY = (("post", "post"), ("sbeam", "post"), ("leg", "post"), ("fbar", "bar"),
           ("axle", "axle"), ("sleeve", "axle"), ("bracket", "bracket"), ("gear", "gear"), ("strut", "strut"),
           ("bucket", "bucket"), ("bin", "bucket"), ("band", "bucket"), ("stud", "bucket"), ("foot", "foot"),
           ("rivet", "post"), ("xwall", "wall"), ("ywall", "wall"), ("deck", "wall"), ("back", "wall"),
-          ("stand", "bracket"), ("rod", "rod"), ("bow", "bow"), ("knob", "bow"), ("pole", "pole"), ("drod", "drum"),
+          ("stand", "bracket"), ("strap", "bracket"), ("collar", "axle"), ("rod", "rod"), ("bow", "bow"), ("knob", "bow"), ("pole", "pole"), ("drod", "drum"),
           ("drum", "drum"), ("groove", "drum"))
 
 
