@@ -776,13 +776,13 @@ def juice():
     r = random.Random(51)
     holder = empty("juice", (0, 0, 0))
     MOVING.append(holder)
-    g = 0.085
+    g = 0.1
     for i in range(260):
         t0 = r.uniform(15.8, 20.5)
         a = r.uniform(0, 2 * math.pi)
         p0 = Vector((r.uniform(-0.9, 0.9), r.uniform(-0.9, 0.9), H - 0.3))
         sp = r.uniform(0.0, 0.13) * (1.0 if r.random() < 0.6 else 0.4)
-        v = Vector((sp * math.cos(a), sp * math.sin(a), r.uniform(0.22, 0.48)))
+        v = Vector((sp * math.cos(a), sp * math.sin(a), r.uniform(0.3, 0.62)))
         rad = r.uniform(0.07, 0.13)
         path = dict(t0=t0, p0=p0, v=v, g=g, r=rad, land=None, fade=r.uniform(38, 49.5))
         # where it comes down: step along until it falls below the surface under it (after it starts falling)
