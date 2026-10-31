@@ -1449,10 +1449,19 @@ def main():
             o.visible_shadow = True
         bpy.data.objects["ground"].hide_render = True
         bpy.context.view_layer.update()
-        bx = border_of(moving_objs, pad=40)
+        # The render region round the moving parts at every frame of the turn, not only at rest: one taken at rest
+        # cut the crank's handle off wherever it swung past it (seen in the game, 31 Oct 2026).
+        boxes = []
+        for k in range(FRAMES):
+            turn(k)
+            bpy.context.view_layer.update()
+            boxes.append(border_of(moving_objs, pad=40))
         sc.render.use_border = True
         sc.render.use_crop_to_border = False
-        sc.render.border_min_x, sc.render.border_max_x, sc.render.border_min_y, sc.render.border_max_y = bx
+        sc.render.border_min_x = min(b[0] for b in boxes)
+        sc.render.border_max_x = max(b[1] for b in boxes)
+        sc.render.border_min_y = min(b[2] for b in boxes)
+        sc.render.border_max_y = max(b[3] for b in boxes)
         for k in range(n):
             turn(k)
             bpy.context.view_layer.update()
