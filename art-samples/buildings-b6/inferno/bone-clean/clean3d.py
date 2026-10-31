@@ -20,6 +20,7 @@ chute, two big meshing cogs and a slotted grille over a stronger panel glow, a s
 smokes, and a wooden wedge under the drum.
 """
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -32,7 +33,7 @@ TIER = kit.L
 kit.L = 1                      # Tier 1's model is built at its look 1 for every tier
 import bone3d as b  # noqa: E402
 kit.L = TIER
-kit.OUT = HERE
+kit.OUT = Path(os.environ["PB_OUT"]) if os.environ.get("PB_OUT") else HERE    # PB_OUT, PB_SHIFT: the wrap test
 if TIER > 1:
     kit.FRAMES = 48
 from kit import Vector, Matrix, Euler, box, cyl, tube, painted, flat, link, srgb  # noqa: E402
@@ -123,6 +124,57 @@ def smoke_mat():
     return t.m
 
 
+def fold(mat, n, axis="Z"):
+    """A copy of mat whose texture repeats n times round the part's own `axis` (object space), so a roller or cog that
+    turns by a whole step in the loop (one spike row, a quarter turn) looks exactly as it did: the loop has no jump.
+    The texture's object coordinates (x, y, z) become (r/n cos(n a), r/n sin(n a), along the axis)."""
+    key = (mat.name, n, axis)
+    if key in FOLDED:
+        return FOLDED[key]
+    m = mat.copy()
+    m.name = f"{mat.name}-fold{n}{axis}"
+    nt = m.node_tree
+    i, j, k = {"Z": ("X", "Y", "Z"), "X": ("Y", "Z", "X")}[axis]
+    for tc in [nd for nd in nt.nodes if nd.type == "TEX_COORD"]:
+        outs = [lk for lk in nt.links if lk.from_node == tc and lk.from_socket.name == "Object"]
+        if not outs:
+            continue
+        sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+        nt.links.new(tc.outputs["Object"], sep.inputs[0])
+
+        def op(kind, a, b=None, val=None):
+            nd = nt.nodes.new("ShaderNodeMath")
+            nd.operation = kind
+            for sock, v in ((nd.inputs[0], a), (nd.inputs[1], b)):
+                if v is None:
+                    continue
+                if isinstance(v, (int, float)):
+                    sock.default_value = v
+                else:
+                    nt.links.new(v, sock)
+            return nd.outputs[0]
+        a = op("ARCTAN2", sep.outputs[j], sep.outputs[i])
+        na = op("MULTIPLY", a, n)
+        r = op("SQRT", op("ADD", op("MULTIPLY", sep.outputs[i], sep.outputs[i]),
+                          op("MULTIPLY", sep.outputs[j], sep.outputs[j])))
+        rn = op("DIVIDE", r, float(n))
+        cx = op("MULTIPLY", rn, op("COSINE", na))
+        sy = op("MULTIPLY", rn, op("SINE", na))
+        comb = nt.nodes.new("ShaderNodeCombineXYZ")
+        nt.links.new(cx, comb.inputs[0])
+        nt.links.new(sy, comb.inputs[1])
+        nt.links.new(sep.outputs[k], comb.inputs[2])
+        for lk in outs:
+            to = lk.to_socket
+            nt.links.remove(lk)
+            nt.links.new(comb.outputs[0], to)
+    FOLDED[key] = m
+    return m
+
+
+FOLDED = {}
+
+
 # ------------------------------------------------------------------------------------------------ mesh helpers
 def frame_mat(o, x, y):
     """A 4x4 matrix whose columns are x, y, x cross y, placed at o."""
@@ -192,7 +244,9 @@ def cog_mesh(name, teeth, r_pitch, module, depth, mat, parent=None, spokes=4, r_
         f.smooth = False
     # the hub and the spokes, a little thinner than the rim
     inset = depth * 0.15
-    cone_into(bm, 0, r_hub, r_hub, depth + 0.03, Matrix.Identity(4), segs=20)
+    cone_into(bm, 0, r_hub, r_hub, depth + 0.03, Matrix.Identity(4), segs=24)
+    if not spokes:                                       # a solid web from the hub to the rim
+        cone_into(bm, 0, r_in + 0.01, r_in + 0.01, depth - 2 * inset, Matrix.Translation((0, 0, inset)), segs=4 * teeth)
     for k in range(spokes):
         a = 2 * math.pi * (k + 0.5) / spokes
         d = Vector((math.cos(a), math.sin(a), 0))
@@ -264,11 +318,17 @@ def panel():
         o.matrix_world = frame_mat(P_BL + PU * u + PV * v + PN * out, PU, PV)
     if TIER == 3:                                        # a slotted grille over the stronger glow
         gth = 0.05
+        boss = [c for c, _, _ in cog_layout() if u0 < c.x < u1 and v0 < c.y < v1]     # a cog's boss stands through it
         for k in range(7):
             v = v0 + 0.14 + k * (v1 - v0 - 0.28) / 6
-            bar = box(f"hotplategrille{k}", (u1 - u0 - 0.32, 0.07, gth), (0, 0, 0), C["strap"], bevel=0.012,
-                      origin="centre")
-            bar.matrix_world = frame_mat(P_BL + PU * ((u0 + u1) / 2) + PV * v + PN * (out + gth / 2), PU, PV)
+            spans = [(u0 + 0.16, u1 - 0.16)]
+            for c in boss:
+                if abs(v - c.y) < 0.24:                  # the bar stops either side of the boss
+                    spans = [(a_, min(b_, c.x - 0.23)) for a_, b_ in spans] + [(max(a_, c.x + 0.23), b_) for a_, b_ in spans]
+            for j, (a_, b_) in enumerate(sp for sp in spans if sp[1] - sp[0] > 0.05):
+                bar = box(f"hotplategrille{k}-{j}", (b_ - a_, 0.07, gth), (0, 0, 0), C["strap"], bevel=0.012,
+                          origin="centre")
+                bar.matrix_world = frame_mat(P_BL + PU * ((a_ + b_) / 2) + PV * v + PN * (out + gth / 2), PU, PV)
         for k, u in enumerate((u0 + 0.12, u1 - 0.12)):
             st = box(f"hotplategrille-side{k}", (0.1, v1 - v0 - 0.12, gth + 0.01), (0, 0, 0), C["strap"],
                      bevel=0.012, origin="centre")
@@ -287,16 +347,16 @@ COGS = []                      # (spin empty, teeth, sign, phase)
 
 def cog_layout():
     """(centre (u, v), teeth, pitch radius) of the two cogs: the big 12-tooth cog low on the panel and the one it
-    drives, Tier 2 a small 8-tooth cog up and behind it (toward the back), Tier 3 a second big 10-tooth cog."""
+    drives, Tier 2 a small 8-tooth cog up and behind it (toward the back), Tier 3 a second big 12-tooth cog."""
     na = 12
-    nb = 8 if TIER == 2 else 10
+    nb = 8 if TIER == 2 else 12
     ra, rb = COG_M * na / 2, COG_M * nb / 2
     ca = Vector(COG_A)
     cb = ca + Vector((math.cos(COG_ANG), math.sin(COG_ANG))) * (ra + rb + 0.015)    # a little play between the teeth
     return [(ca, na, ra), (cb, nb, rb)]
 
 
-COG_ANG = math.radians(44 if TIER == 2 else 58)
+COG_ANG = math.radians(44 if TIER == 2 else 66)
 
 
 def cogs(face_out):
@@ -318,10 +378,14 @@ def cogs(face_out):
         e = empty(name, parent=None, moving=True)
         e.matrix_world = frame_mat(base + PN * plane, PU, PV)
         spin = empty(name + "-spin", parent=e)
-        cog_mesh(f"{name}wheel", n, r, COG_M, COG_M * 1.4, C["cog"], parent=spin,
-                 r_hub=0.15 if n > 9 else 0.11)
-        nut = cyl(f"{name}nut", 0.1, 0.07, (0, 0, COG_M * 1.4 + 0.03), C["hub"], verts=6, bevel=0.01, parent=spin)
-        COGS.append((spin, n, sign, phase))
+        spokes = 4 if n == 12 else 0                    # the big cogs have four spokes, the small one a solid web
+        cog_mesh(f"{name}wheel", n, r, COG_M, COG_M * 1.4, fold(C["cog"], 8), parent=spin,
+                 r_hub=0.15 if n > 9 else 0.11, spokes=spokes)
+        cyl(f"{name}nut", 0.1, 0.07, (0, 0, COG_M * 1.4 + 0.03), fold(C["hub"], 8), verts=24, bevel=0.01, parent=spin)
+        # the turn in one loop: a quarter turn of the 12-tooth cog (three teeth, and its spokes come round to where
+        # they were); the other turns by the same three teeth. sym: the angle that brings each cog back to its look
+        sym = 2 * math.pi / math.gcd(n, spokes) if spokes else 2 * math.pi / 8
+        COGS.append((spin, n, sign, phase, sym))
 
 
 # ------------------------------------------------------------------------------------------------ rollers
@@ -343,10 +407,10 @@ def roller(i):
     bm = bmesh.new()
     rx = Matrix.Rotation(math.radians(90), 4, "Y")          # local Z onto X
     x0, x1 = xs[0] - 0.3, xs[-1] + 0.3
-    cone_into(bm, 0, CORE_R, CORE_R, x1 - x0, Matrix.Translation((x0, 0, 0)) @ rx, segs=32)
+    cone_into(bm, 0, CORE_R, CORE_R, x1 - x0, Matrix.Translation((x0, 0, 0)) @ rx, segs=60)
     for s in (-1, 1):                                       # end rings on the core
         xe = x0 if s < 0 else x1 - 0.1
-        cone_into(bm, 2, CORE_R + 0.05, CORE_R + 0.05, 0.1, Matrix.Translation((xe, 0, 0)) @ rx, segs=32)
+        cone_into(bm, 2, CORE_R + 0.05, CORE_R + 0.05, 0.1, Matrix.Translation((xe, 0, 0)) @ rx, segs=60)
     L_, rb = SPIKE
     phase = (math.pi / ROWS) if i else 0.0
     for j in range(ROWS):
@@ -364,11 +428,12 @@ def roller(i):
                 cone_into(bm, 1, rb, rb * (1 - k), (L_ + 0.03) * k, m, segs=14)
                 cone_into(bm, 3, rb * (1 - k), 0.004, (L_ + 0.03) * (1 - k),
                           m @ Matrix.Translation((0, 0, (L_ + 0.03) * k)), segs=14)
-    mats_ = [C["roller"], C["spike"], C["collar"], C["hottip"]]
+    mats_ = [fold(C[k], ROWS, "X") for k in ("roller", "spike", "collar", "hottip")]
     new_ob(f"rol{i}body", bm, mats_, parent=spin)
     # the bare axle out to the wall, in a bearing boss on the wall at each end
     ax0, ax1 = -wall_x + 0.08, wall_x - 0.08
-    cyl(f"rol{i}axle", 0.14, ax1 - ax0, (ax0, 0, 0), M["steel"], rot=(0, 90, 0), verts=18, bevel=0.02, parent=spin)
+    cyl(f"rol{i}axle", 0.14, ax1 - ax0, (ax0, 0, 0), fold(M["steel"], ROWS, "Z"), rot=(0, 90, 0), verts=60, bevel=0.02,
+        parent=spin)
     for s in (-1, 1):
         xb = s * (wall_x - 0.02)
         bo = cyl(f"bowl-bearing{i}{'ab'[s > 0]}", 0.26, 0.22, (xb, y, ROLL_Z), C["hub"],
@@ -648,14 +713,15 @@ ROCK = 1.5                             # the chute's rock (deg), twice a loop
 
 
 def turn(f):
+    f += int(os.environ.get("PB_SHIFT", 0))
     if TIER == 1:
         b.turn(f)
         return
     t = f / FR
     for spin, sign in ROLLS:            # the rollers turn toward each other, one row in a loop
         spin.rotation_euler = Euler((sign * 2 * math.pi / ROWS * t, 0, 0))
-    for spin, n, sign, phase in COGS:   # the big cog turns one tooth in a loop, the other with it
-        spin.rotation_euler = Euler((0, 0, phase + sign * 2 * math.pi / 12 * t * 12 / n))
+    for spin, n, sign, phase, _ in COGS:    # the big cog turns a quarter in a loop, the other with it
+        spin.rotation_euler = Euler((0, 0, phase + sign * math.pi / 2 * t * 12 / n))
     CHUTE["rock"].rotation_euler = Euler((0, math.radians(ROCK) * math.sin(4 * math.pi * t), 0))
     if SMOKE:
         at = CHUTE["smoke_at"]
