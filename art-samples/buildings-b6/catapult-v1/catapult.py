@@ -947,8 +947,8 @@ def materials():
     M["band"] = painted("band", (96, 74, 54), rough=0.6, dirt=0.0, spec=0.3)
     M["stud"] = shiny("stud", (212, 220, 232) if LOOK >= 2 else (150, 154, 166), rough=0.35, metal=0.4, dirt=0.0)
     # look 3's rope drum: pale cream
-    M["drum"] = painted("drum", (206, 170, 132), rough=0.65, wear=(178, 142, 106), scale=3.0, dirt=0.2, spec=0.2)
-    M["groove"] = painted("groove", (178, 142, 106), rough=0.7, dirt=0.0, spec=0.2)
+    M["drum"] = painted("drum", (214, 184, 152), rough=0.75, wear=(184, 150, 120), scale=9.0, dirt=0.25, spec=0.15)
+    M["groove"] = painted("groove", (182, 148, 116), rough=0.8, dirt=0.0, spec=0.1)
     return M
 
 
@@ -1026,11 +1026,12 @@ def axle1():
     # the -X end (Flash): a low dark saddle on the side beam, and the axle bent at a steel elbow out past the beam
     # and down toward the front, like a crank
     box("bracket", (0.42, 0.48, 0.42), (-xb, y, S.TOP1 + 0.0), M["gdark"], bevel=0.05)
+    # Flash's elbow is blocky: square steel arms meeting in a cube, a square cap on the end
     xe = -2.12
-    tube("elbow", [(-1.7, y, z), (xe, y, z), (xe, y - 0.1, z - 0.04), (xe, y - 0.7, z - 0.3)], 0.19, M["steel"],
-         verts=16)
-    sphere("elbow", 0.25, (xe, y - 0.03, z - 0.01), M["steel"], n=16)
-    sphere("elbow", 0.21, (xe, y - 0.72, z - 0.31), M["steel"], n=14)
+    beam("elbow", (-1.75, y, z), (xe, y, z), 0.42, 0.42, M["steel"], bevel=0.06)
+    box("elbow", (0.56, 0.56, 0.56), (xe, y - 0.04, z - 0.28), M["steel"], bevel=0.08)
+    beam("elbow", (xe, y - 0.2, z - 0.08), (xe, y - 0.72, z - 0.31), 0.38, 0.38, M["steel"], bevel=0.06)
+    box("elbow", (0.48, 0.24, 0.48), (xe, y - 0.78, z - 0.55), M["steel"], bevel=0.06)
     wheel_gear("gear", S.GEAR1_X, y, z, S.GEAR_R, M["gear"])
 
 
@@ -1166,7 +1167,7 @@ def lever2():
 
 def back_posts():
     """The back posts (Flash). Look 2: on each side a dark beam sloping up and back from the cross beam to a short post
-    on the sloping leg. Look 3 adds a tall forked post on a back cross beam: two round arms leaning apart (from the
+    on the sloping leg. Look 3 adds a tall forked post on a back cross beam: two square arms leaning apart (from the
     front Flash's two leaning posts, a V) with a small rope spool on a rod between them, behind the axle."""
     fx, fy, fz = S.AF_FRONT
     box("xbeam", (2 * (FA - S.BEAM) + 0.1, S.BEAM, S.BEAM), (0, S.XBEAM_Y, S.RAIL - S.BEAM), M["postX"], bevel=0.04)
@@ -1185,24 +1186,26 @@ def back_posts():
     zl = S.RAIL - 0.05 + (by - (back_top() - 0.2)) * (S.FOOT_H - S.RAIL + 0.05) / (S.BACK_Y - 0.45 - (back_top() - 0.2))
     box("bxbeam", (2 * CX + 0.2, 0.5, 0.5), (0, by, zl - 0.2), M["postX"], bevel=0.04)
     bx, _, bz = S.FORK_BASE
-    box("pole", (0.62, 0.58, bz + 0.3 - (zl + 0.3)), (0, by, zl + 0.28), M["poleZ"], bevel=0.06)
+    box("pole", (2 * bx + 0.2, 0.58, bz + 0.3 - (zl + 0.3)), (0, by, zl + 0.28), M["poleZ"], bevel=0.06)
     for sx in (-1, 1):
         f = Vector((sx * bx, by, bz))
         t = Vector((sx * S.APEX3[0], *S.APEX3[1:]))
-        tube("pole", [f, t], S.POST3_R, M["poleZ"], verts=16)
+        beam("pole", f, t, S.POST3_W, S.POST3_W, M["poleZ"], bevel=0.07)
     # the spool's rod, from arm to arm
     u = (S.DRUM_Z - bz) / (S.APEX3[2] - bz)
     xr = bx + (S.APEX3[0] - bx) * u
     rod("drod", -xr, xr, S.DRUM_Y, S.DRUM_Z, 0.12, M["steel"])
     r, ln = S.DRUM_R, S.DRUM_L
     h = ln / 2
-    prof = [(0.0, -h), (r * 0.72, -h), (r * 0.86, -h + 0.05), (r * 0.95, -h + 0.14), (r, -h + 0.32), (r, h - 0.32),
-            (r * 0.95, h - 0.14), (r * 0.86, h - 0.05), (r * 0.72, h), (0.0, h)]
+    # a soft ball of rope: rounded all the way from end to end, its ends small (Flash)
+    rad = lambda u: r * math.sqrt(1 - 0.64 * u * u)
+    prof = [(0.0, -h)] + [(rad(u), u * h) for u in [k / 8 - 1 for k in range(17)]] + [(0.0, h)]
     lathe("drum", prof, (S.DRUM_X, S.DRUM_Y, S.DRUM_Z), M["drum"], rot=(0, 90, 0), verts=48)
-    # two faint turns of the rope
-    for x in (-0.3, 0.0, 0.3):
-        t = ring("groove", r - 0.012, 0.022, M["groove"], n=64)
-        t.location = (S.DRUM_X + x, S.DRUM_Y, S.DRUM_Z)
+    # the turns of the rope, close together, sunk a little into it
+    for k in range(6):
+        u = (k - 2.5) / 3.2
+        t = ring("groove", rad(u) - 0.02, 0.028, M["groove"], n=64)
+        t.location = (S.DRUM_X + u * h, S.DRUM_Y, S.DRUM_Z)
         t.rotation_euler = (0, math.radians(90), 0)
 
 

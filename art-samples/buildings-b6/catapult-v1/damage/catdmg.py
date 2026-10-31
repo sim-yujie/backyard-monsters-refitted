@@ -164,11 +164,11 @@ def tip_bucket(deg=42, yaw=0.0, at=None):
     return obs
 
 
-def stub_tube(name, p0, p1, keep, r, mat):
-    """A round post snapped at the fraction keep: a short piece standing, with a jagged top."""
+def stub_tube(name, p0, p1, keep, w, mat):
+    """A square post (w wide) snapped at the fraction keep: a short piece standing, its top burnt."""
     p0, p1 = Vector(p0), Vector(p1)
     q = p0 + (p1 - p0) * keep
-    t = tube(name, [p0, q], r, mat, verts=12)
+    t = G["beam"](name, p0, q, w, w, mat)
     burn(q, 0.6)
     return t, q
 
@@ -223,15 +223,14 @@ def damaged():
         # the front
         kill([o for o in named(r"pole") if centre([o]).x > 0.3])
         bx, by, bz = S.FORK_BASE
-        _, q = stub_tube("pole", (bx, by, bz), S.APEX3, 0.42, S.POST3_R, M["poleZ"])
+        _, q = stub_tube("pole", (bx, by, bz), S.APEX3, 0.42, S.POST3_W, M["poleZ"])
         dr = named(r"drum|drod|groove")
         xr = max(p.x for p in points(named(r"drod")))
         piv = Vector((-xr, S.DRUM_Y, S.DRUM_Z))
         ang = math.degrees(math.atan2(S.DRUM_Z - q.z - 0.1, 2 * xr))
         turn(dr, piv, (0, 1, 0), ang)
         hole(named(r"ywall\d+"), (-1.2, -FB + 0.05, 1.3), 0.6, (0, -1, 0), 23)
-        G["tube"]("brokenpole", [Vector((2.3, -2.2, 0.15)), Vector((3.2, -0.5, 0.3))], S.POST3_R * 0.9, M["poleZ"],
-                  verts=12)
+        G["beam"]("brokenpole", (2.3, -2.2, 0.27), (3.2, -0.5, 0.42), S.POST3_W * 0.9, S.POST3_W * 0.9, M["poleZ"])
 
 
 # ------------------------------------------------------------------------------------------------------------ destroyed
@@ -255,8 +254,9 @@ def destroyed():
     dr = named(r"drum|drod|groove")
     turn(dr, Vector((0, S.DRUM_Y, S.DRUM_Z)), (0, 0, 1), 28, move=(0.9, 0.6, 0.0))
     kill(named(r"pole"))
-    poles = [[G["tube"]("pole", [Vector(a).lerp(Vector(b), t / 6) for t in range(7)], S.POST3_R, M["poleZ"],
-                        verts=12)]          # rings all along it, so settle() feels what its middle lands on
+    poles = [[G["sweep"]("pole", [Vector(a).lerp(Vector(b), t / 6) for t in range(7)],
+                         (Vector(b) - Vector(a)).cross(Vector((0, 0, 1))), S.POST3_W, S.POST3_W, M["poleZ"])]
+             # rings all along it, so settle() feels what its middle lands on
              for a, b in (((-2.0, 0.4, 9.6), (-1.3, 3.9, 8.9)), ((1.1, -1.1, 9.6), (2.7, 1.9, 7.9)))]
     # the +X gear standing in front, leaning on the box; the -X gear lying on the heap; the axle across it; one bow
     # lying across the deck, the other gone

@@ -13,7 +13,7 @@ grows through them:
           across the rails, a lower rod joins the bracket blocks, and from each block a curved steel bow rises back
           over its gear to a knob; two short dark posts lean back on the rails behind; the bucket hangs from the
           lever in front, as in look 1.
-  look 3  look 2 with the back posts grown into tall round leaning poles, a small rope spool on a rod between them
+  look 3  look 2 with the back posts grown into tall square leaning poles, a small rope spool on a rod between them
           behind the axle; the box's wood paler and yellower.
 
 World units: 10 Flash px across, 8.66 Flash px up (the twig/pebble/putty/hatchery/map room/flinger camera:
@@ -65,14 +65,14 @@ BOW = [(-1.45, 4.0), (-1.32, 4.9), (-0.95, 5.55), (-0.2, 6.15), (0.8, 6.6), (1.9
 
 # the back posts (looks 2, 3). Look 2: on each side a dark beam slopes up and back from the cross beam to a short post
 # on the sloping leg. Look 3 adds a tall forked post: a stem on a back cross beam, hidden behind the +X gear, and two
-# round arms leaning apart (from the front they make a V, as Flash's two leaning posts), a small rope spool on a rod
+# square arms leaning apart (from the front they make a V, as Flash's two leaning posts), a small rope spool on a rod
 # between them, behind the axle.
 XBEAM_Y = -0.2              # the cross beam between the side rails the sloping beams stand on
 AF_FRONT = (1.45, XBEAM_Y, RAIL)    # (|x|, y, z) a sloping beam's foot
 APEX2 = (1.6, 1.94, 3.95)   # its top, on the short post
 BXBEAM_Y = 2.98             # the back cross beam between the sloping legs, carrying the fork's stem
-FORK_BASE = (0.25, BXBEAM_Y, 3.62)  # (|x|, y, z) where the arms leave the stem
-APEX3 = (1.98, 2.32, 7.39)  # the arms' tops
-POST3_R = 0.32
-DRUM_X, DRUM_Y, DRUM_Z = -0.3, 2.57, 5.95
-DRUM_R, DRUM_L = 0.92, 1.36 # a small, rounded rope spool (Flash), not a big drum
+FORK_BASE = (0.45, BXBEAM_Y, 3.62)  # (|x|, y, z) where the arms leave the stem
+APEX3 = (2.2, 2.32, 7.39)   # the arms' tops (the bows' knobs end against them, as Flash)
+POST3_W = 0.6               # the arms are square beams (Flash), this wide
+DRUM_X, DRUM_Y, DRUM_Z = -0.3, 2.3, 5.45   # low, left of the middle (Flash); the -X arm passes behind it
+DRUM_R, DRUM_L = 1.15, 1.1  # a short, tall ball of rope between the arms (Flash), not a big drum
