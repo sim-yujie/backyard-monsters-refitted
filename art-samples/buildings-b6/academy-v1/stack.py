@@ -64,7 +64,7 @@ class Lv:
             self.PORTS.append((-94.0, 28.0, "left", (-28.5, 32.0)))
             if level >= 2:
                 self.PORTS.append((4.0, 28.0, "right", (32.5, 32.0)))
-                self.FINS = [(-138.0, 28.0, (-33.0, -4.0)), (48.0, 28.0, (35.0, -5.0))]   # face bearing, tilt, Flash px
+                self.FINS = [(-138.0, 48.0, (-36.0, -3.0)), (48.0, 48.0, (38.0, -4.0))]   # face bearing, tilt, Flash px
         self.RIBS = (-90.0, 0.0, 90.0, 180.0) if self.ribbed else ()
 
 
@@ -82,7 +82,7 @@ RIB_ENDS = {-90.0: 32.0, 0.0: 32.0, 90.0: 48.0, 180.0: 48.0}   # each rib's top 
 PLINTH = (2.9, 1.1, 0.5)        # the rib's foot block: across, outward, high
 PLINTH_D = 5.2
 SLEEVE_Z = 1.75                # the top of the wider sleeve round the upright's foot (Flash: a step)
-FIN = (0.8, 1.6, 0.4)            # the wing plate: half across, half up, thickness
+FIN = (0.8, 1.55, 0.4)            # the wing plate: half across, half up, thickness
 
 
 def mounts(lv):
