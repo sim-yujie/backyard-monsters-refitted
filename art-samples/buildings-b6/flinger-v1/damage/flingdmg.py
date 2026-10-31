@@ -109,8 +109,28 @@ def flat_wheel(name, at, r, spokes=8, wide=0.22):
     G["pul_plane"] = lambda: (Vector(), Vector((0, 0, 1)), Vector((1, 0, 0)), Vector((0, 1, 0)))
     e = G["pulley"](name, Vector((at[0], at[1], 1.0)), r, M["dgold"], spokes=spokes, wide=wide)
     G["pul_plane"] = keep
-    sit([e])
+    rest(e)
     return e
+
+
+def points(obs):
+    """The world points of obs and their children (curves evaluated with their bevel)."""
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    out = []
+    for o in obs:
+        for k in D.kids(o):
+            if k.type in ("MESH", "CURVE"):
+                ev = k.evaluated_get(dg)
+                out += [k.matrix_world @ v.co for v in ev.to_mesh().vertices]
+                ev.to_mesh_clear()
+    return out
+
+
+def rest(e):
+    """Set a wheel (an empty with its parts) on the ground by its real points: sit() reads the bevelled rings' and
+    spokes' boxes too low, which left the look 4 damaged wheel floating 0.7 up."""
+    e.location.z += GROUND - min(p.z for p in points([e]))
 
 
 def tip_bucket(at, yaw, stub=True):
@@ -182,13 +202,11 @@ def damaged():
     drum_out((-3.7, -2.6), 10)
     tip_bucket((4.6, 0.6) if LOOK < 4 else (5.2, 0.2), 30)
     if LOOK == 1:
-        # the A-frame's right leg snapped low, the cap, slates and pulley down; the left leg leans further; posts broken
-        snap(ob("aleg1"), 0.3)
+        # the A-frame still stands, as in Flash (its coil is cut where the right leg hides it, so the frame can't move
+        # without showing the cut), but its cap, slates and pulley are down and the posts broken
         lay_pulley("pul1", (0.6, -4.4))
         scatter(named(r"aslate.*|acap"), (1.4, -3.9), 0.6, 3)
         kill(named(r"belt|afork"))
-        lf = Vector((S.A1_FEET[0], S.A1_Y, 0))
-        turn(named(r"aleg0|waxle|wknob|wstrap|coil"), lf, (0, 1, 0), -7)
         snap(ob("post0"), 0.62)
         snap(ob("post2"), 0.55)
         # the stool knocked over
@@ -215,13 +233,12 @@ def damaged():
         turn(roof, eave, (0, 1, 0), 27, move=(-0.35, -0.15, -0.35))
         kill(named(r"ridge|rafterk"))
         ax, az = S.TRUSS_APEX
-        turn(named(r"rafter0"), Vector((S.TIE_X[0] + 0.5, S.TRUSS_Y, S.BACK2_H[0] + 0.5)), (0, 1, 0), 52)
         r1 = named(r"rafter1")
         turn(r1, Vector((ax, S.TRUSS_Y, az)), (1, 0.3, 0), 70, move=(1.8, 0.8, 0))
         sit(r1)
-        tie = named(r"tie")
-        turn(tie, Vector((S.TIE_X[0], S.TRUSS_Y, S.BACK2_H[0] + 0.6)), (0, 1, 0), 24)
+        # the back post under the seat snapped, so the seat, the tie and the left rafter fell flat behind
         snap(ob("post3"), 0.75)
+        scatter(named(r"seat|tie|rafter0"), (3.4, 2.6), 1.0, 13)
         xr = named(r"xrail\d+")
         scatter(xr[:1], (4.3, 1.8), 0.6, 11)
         turn(xr[1:], Vector((2.4, -2.0, S.XRAILS[1])), (1, 0, 0), -20)
@@ -259,21 +276,45 @@ def destroyed():
     for i in range(4):
         snap(ob(f"post{i}"), R.uniform(0.18, 0.3))
     kill(named(r"header|hframe\d|hshaft|spoon|gstem\d|wstand|wcrank|belt|rslate\d+|bed0|strap|bearing\d"))
-    # the -X slope gone; the +X slope (boards and slates) lying low and nearly flat over the stubs
+    # the -X slope gone; the +X slope (boards and slates) dropped low, still tilted toward the camera as in Flash: its
+    # eave on the ground at the front right, its ridge edge up on a heap of broken planks at the back left
     kill(named(r"slate-1-\d+-\d+|roofb-1\d+"))
     roof = named(r"slate1-\d+-\d+|roofb1\d+")
-    turn(roof, Vector((S.RIDGE_X, 0, S.RIDGE_Z)), (0, 1, 0), -33)
-    turn(roof, Vector((S.RIDGE_X, 0, S.RIDGE_Z)), (0, 0, 1), 8, move=(-1.2, -0.3, 0))
+    turn(roof, Vector((S.RIDGE_X, 0, S.RIDGE_Z)), (0, 1, 0), -16)
+    turn(roof, Vector((S.RIDGE_X, 0, S.RIDGE_Z)), (0, 0, 1), 10, move=(-0.8, -0.5, 0))
     sit(roof)
-    # the gold block on the slab; the pulleys and the wheel lying about; the pot on its side; the drum out
+    pts = points(roof)
+    x0 = min(p.x for p in pts)
+    high = [p for p in pts if p.x < x0 + 0.8]
+    zh = min(p.z for p in high)
+    y0, y1 = min(p.y for p in high), max(p.y for p in high)
+    n = max(2, round(zh / 0.4))
+    for k in range(n):                          # the planks the ridge edge rests on, crossed in a heap
+        a = random.Random(90 + k)
+        box(f"propplank{k}", (0.45, (y1 - y0) * a.uniform(0.6, 0.85), zh / n + 0.02),
+            (x0 + 0.45 + a.uniform(-0.15, 0.15), (y0 + y1) / 2 + a.uniform(-0.3, 0.3), k * zh / n), M["plank"],
+            rot=(0, 0, a.uniform(-25, 25)), bevel=0.04)
+    # wall and post stubs that would poke up through the fallen roof are flattened under it
+    cell = {}
+    for p in pts:
+        k = (round(p.x / 0.5), round(p.y / 0.5))
+        cell[k] = min(cell.get(k, 1e9), p.z)
+    for o in named(r"(ywall|xwall|bwall|lwall)\d+|post\d"):
+        if any(q.z > cell.get((round(q.x / 0.5), round(q.y / 0.5)), 1e9) - 0.05 for q in points([o])):
+            kill([o])
+    # the gold block on the slab; the pulleys lying about; the big wheel still standing at the back; the drum out;
+    # the pot gone (smashed)
     blk = named(r"gblock")
     turn(blk, Vector(S.BLOCK_C), (1, 1, 0), 30, move=(0.6, -1.0, 0))
     sit(blk)
     lay_pulley("pul1", (-3.4, -2.8), tilt=(8, 0, 0))
     lay_pulley("pul2", (2.0, -4.2))
-    lay_pulley("wheel", (1.0, 3.8), tilt=(14, 0, 0))
+    w = ob("wheel")
+    bpy.context.view_layer.update()
+    w.matrix_world.translation = Vector((-0.6, 3.2, w.matrix_world.translation.z))
+    rest(w)
     drum_out((-3.7, -2.4), 14)
-    tip_bucket((4.6, 1.4), 40, stub=False)
+    kill(named(r"bucket|bucketwall|bucketrim|bucketin"))
     kill(named(r"pipe.*|spring\d|barm|hub|hubpin"))
     # a loose length of the belt on the ground, slates and planks strewn
     pts = [Vector((-3.0 + 0.5 * k, -3.2 + 0.25 * math.sin(k * 1.3), 0.06)) for k in range(9)]
