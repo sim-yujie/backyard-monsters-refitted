@@ -235,7 +235,7 @@ def wood(name, light, dark, axis="Z", rings=6.0, hue_jit=0.0, rough=0.78, dirt=0
 
 
 def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, dirt=0.3, spec=0.4, soot=0.0, top=None,
-            ao_min=0.55, rust_at=0.6):
+            ao_min=0.55, rust_at=0.6, side=0.0):
     """Paint or metal with worn patches (`wear` colour shows through), rust blotches and soot (dark, dull smudges that
     run down the part, as Flash's dirty metals)."""
     if name in MATS:
@@ -267,6 +267,8 @@ def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, di
         up = t.n("ShaderNodeMath", operation="ABSOLUTE")         # a box's faces may wind either way
         t.link(sep.outputs["Z"], up.inputs[0])
         out = t.mix(out, srgb(*top), t.ramp(up.outputs[0], [(0.3, (0, 0, 0, 1)), (0.8, (1, 1, 1, 1))]))
+    if side:
+        out = side_shade(t, out, side)
     out = t.grime(out, GROUND, 2.6, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rough_in, "metal": metal, "spec": spec})
     t.bump(t.noise(v, scale * 3, 4.0, 0.6), 0.06, 0.01)
@@ -501,6 +503,22 @@ def spinner(name, center, normal_bearing, tilt, parts):
 
 
 # ------------------------------------------------------------------------------------------------------------ the model
+def side_shade(t, out, side, reach=3.4):
+    """Painted soft shading: lighter on the left (toward the light), darker on the right, as Flash shades its metal."""
+    geo = t.n("ShaderNodeNewGeometry")
+    dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(geo.outputs["Position"], dp.inputs[0])
+    dp.inputs[1].default_value = (-0.707, -0.707, 0.0)
+    mr = t.n("ShaderNodeMapRange")
+    mr.inputs[1].default_value, mr.inputs[2].default_value = -reach, reach
+    mr.inputs[3].default_value, mr.inputs[4].default_value = 1.0 - side, 1.0 + side * 0.25
+    t.link(dp.outputs["Value"], mr.inputs[0])
+    grey = t.n("ShaderNodeCombineColor")
+    for i in range(3):
+        t.link(mr.outputs[0], grey.inputs[i])
+    return t.mix(out, grey.outputs[0], 1.0, "MULTIPLY")
+
+
 def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spec=0.5, coat=0.0, ao_min=0.5,
           streak=0.0, side=0.0, glow=()):
     """Flash's Hatchery is a glossy render: polished gold, chrome, red enamel. Soft, broad reflections, a faint
@@ -518,19 +536,8 @@ def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spe
         v2 = t.coords(scale=(6.0, 6.0, 0.4))
         n2 = t.noise(v2, 3.0, 4.0, 0.6)
         rr = t.ramp(n2, [(0.3, (rough * (1 - streak),) * 3 + (1,)), (0.7, (min(1.0, rough * (1 + streak)),) * 3 + (1,))])
-    if side:                       # painted soft shading: lighter on the left (toward the light), darker on the right
-        geo = t.n("ShaderNodeNewGeometry")
-        dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
-        t.link(geo.outputs["Position"], dp.inputs[0])
-        dp.inputs[1].default_value = (-0.707, -0.707, 0.0)
-        mr = t.n("ShaderNodeMapRange")
-        mr.inputs[1].default_value, mr.inputs[2].default_value = -3.4, 3.4
-        mr.inputs[3].default_value, mr.inputs[4].default_value = 1.0 - side, 1.0 + side * 0.25
-        t.link(dp.outputs["Value"], mr.inputs[0])
-        grey = t.n("ShaderNodeCombineColor")
-        for i in range(3):
-            t.link(mr.outputs[0], grey.inputs[i])
-        out = t.mix(out, grey.outputs[0], 1.0, "MULTIPLY")
+    if side:
+        out = side_shade(t, out, side)
     for k, g in enumerate(glow):
         fac = screen_spot(t, *g[:5])
         out = t.mix(out, srgb(*g[5]), fac)
@@ -611,7 +618,7 @@ def dots_mask(t, around, pitch, rad, z0=0.0, stagger=True):
     return mr.outputs[0]
 
 
-def perforated(name, col, hole, around, pitch, rad, z0=0.0, wear=None, rust=None, rough=0.5, metal=0.35):
+def perforated(name, col, hole, around, pitch, rad, z0=0.0, wear=None, rust=None, rough=0.5, metal=0.35, side=0.0):
     """Flash's perforated steel tiers: pale worn steel with rows of small dark holes."""
     if name in MATS:
         return MATS[name]
@@ -624,7 +631,9 @@ def perforated(name, col, hole, around, pitch, rad, z0=0.0, wear=None, rust=None
         out = t.mix(out, srgb(*rust), t.ramp(t.noise(v, 3.5, 5.0, 0.65, 1.0), [(0.62, (0, 0, 0, 1)), (0.75, (0.8,) * 3 + (1,))]))
     m = dots_mask(t, around, pitch, rad, z0)
     out = t.mix(out, srgb(*hole), m)
-    out = t.grime(out, GROUND, 4.0, 0.3, 0.5)
+    if side:
+        out = side_shade(t, out, side)
+    out = t.grime(out, GROUND, 4.0, 0.3, 0.4)
     t.set(**{"Base Color": out, "rough": rough, "metal": metal, "spec": 0.4})
     t.bump(m, 0.25, 0.02)
     MATS[name] = t.m
@@ -634,8 +643,8 @@ def perforated(name, col, hole, around, pitch, rad, z0=0.0, wear=None, rust=None
 def materials():
     M = {}
     # the ribbed tin: bright worn chrome with soft rust and soot smudges low down (Flash's can at levels 1-3)
-    M["tin"] = painted("tin", (206, 212, 222), rough=0.24, metal=0.92, wear=(168, 174, 186), rust=(150, 96, 52),
-                       scale=2.0, dirt=0.35, spec=0.5, rust_at=0.66)
+    M["tin"] = painted("tin", (184, 188, 198), rough=0.24, metal=0.92, wear=(126, 130, 142), rust=(150, 70, 52),
+                       scale=2.0, dirt=0.5, spec=0.5, rust_at=0.6, ao_min=0.3, side=0.4)
     M["chrome"] = shiny("chrome", (214, 220, 228), rough=0.18, metal=1.0, wear=(186, 192, 204), scale=4, dirt=0.15)
     M["funnel"] = shiny("funnel", (200, 210, 222), rough=0.2, metal=1.0, wear=(168, 180, 196), scale=2, dirt=0.05,
                         streak=0.4)
@@ -643,8 +652,8 @@ def materials():
     M["portrim"] = shiny("portrim", (70, 84, 110), rough=0.3, metal=0.8, wear=(96, 110, 136), scale=3, dirt=0.05)
     M["brass"] = shiny("brass", (196, 150, 60), rough=0.26, metal=0.9, side=0.3, wear=(230, 196, 110), scale=2,
                        dirt=0.2, streak=0.4)
-    M["dome"] = painted("dome", (84, 66, 62), rough=0.58, metal=0.3, wear=(112, 94, 88), rust=(76, 50, 38), scale=2.5,
-                        dirt=0.2, spec=0.5, rust_at=0.6)
+    M["dome"] = painted("dome", (74, 50, 44), rough=0.5, metal=0.3, wear=(122, 96, 88), rust=(60, 36, 28), scale=2.5,
+                        dirt=0.3, spec=0.55, rust_at=0.6, ao_min=0.4, side=0.5)
     M["gold"] = shiny("gold", (232, 160, 34), rough=0.28, metal=0.85, side=0.3, wear=(250, 204, 96), scale=1.5,
                       dirt=0.35, streak=0.4)
     M["golddark"] = shiny("golddark", (178, 108, 22), rough=0.32, metal=0.8, wear=(212, 146, 52), scale=1.5, dirt=0.45)
@@ -655,16 +664,17 @@ def materials():
     M["rivet"] = shiny("rivet", (226, 230, 236), rough=0.3, metal=0.6, wear=(196, 200, 210), scale=6, dirt=0.05)
     M["steel"] = painted("steel", (176, 182, 192), rough=0.35, metal=0.8, wear=(140, 146, 156), rust=(130, 84, 50),
                          scale=3, dirt=0.3, rust_at=0.7)
-    M["perf_lo"] = perforated("perf_lo", (168, 170, 178), (40, 34, 34), 64, 0.75, 0.15, z0=0.0, wear=(150, 150, 158),
-                              rust=(150, 104, 70), rough=0.32, metal=0.75)
+    M["perf_lo"] = perforated("perf_lo", (168, 170, 178), (26, 22, 22), 64, 0.75, 0.2, z0=0.0, wear=(140, 140, 148),
+                              rust=(150, 104, 70), rough=0.32, metal=0.75, side=0.35)
     # levels 6-8's tiers: Flash's grey-silver, darker than level 9's pale base
-    M["perf_hi"] = perforated("perf_hi", (134, 136, 144), (40, 34, 34), 52, 0.75, 0.15, z0=0.0, wear=(116, 116, 124),
-                              rust=(130, 94, 66), rough=0.4, metal=0.65)
-    M["perf_t"] = perforated("perf_t", (134, 136, 144), (40, 34, 34), 64, 0.75, 0.15, z0=0.0, wear=(116, 116, 124),
-                             rust=(130, 94, 66), rough=0.4, metal=0.65)
+    M["perf_hi"] = perforated("perf_hi", (150, 152, 160), (26, 22, 22), 52, 0.75, 0.22, z0=0.0, wear=(108, 108, 116),
+                              rust=(130, 84, 60), rough=0.36, metal=0.7, side=0.55)
+    M["perf_t"] = perforated("perf_t", (124, 126, 134), (26, 22, 22), 64, 0.75, 0.21, z0=0.0, wear=(98, 98, 106),
+                             rust=(130, 84, 60), rough=0.4, metal=0.65, side=0.4)
     M["core"] = painted("core", (44, 40, 44), rough=0.45, metal=0.7, wear=(78, 74, 80), rust=(70, 46, 34), scale=3,
                         dirt=0.2, rust_at=0.7)
-    M["tiertop"] = painted("tiertop", (96, 94, 98), rough=0.6, metal=0.4, wear=(124, 122, 128), rust=(110, 80, 60))
+    M["tiertop"] = painted("tiertop", (82, 80, 84), rough=0.6, metal=0.4, wear=(118, 116, 122), rust=(110, 80, 60),
+                           side=0.35)
     M["tindark"] = painted("tindark", (128, 138, 158), rough=0.3, metal=0.9, wear=(168, 178, 196), rust=(110, 80, 60),
                            scale=2.0, dirt=0.45, spec=0.5, rust_at=0.6)
     M["band10"] = painted("band10", (178, 174, 166), rough=0.45, metal=0.45, wear=(150, 146, 138), rust=(140, 100, 70))
@@ -674,6 +684,8 @@ def materials():
     M["tusk"] = shiny("tusk", (246, 200, 96), rough=0.25, metal=0.8, side=0.3, wear=(255, 232, 156), scale=1.5,
                       dirt=0.2, streak=0.3)
     M["tinshade"] = painted("tinshade", (78, 82, 94), rough=0.35, metal=0.85, wear=(118, 124, 138), rust=(90, 64, 48))
+    M["dome10"] = painted("dome10", (112, 86, 82), rough=0.5, metal=0.3, wear=(156, 128, 122), rust=(76, 50, 40),
+                          scale=2.5, dirt=0.3, spec=0.55, rust_at=0.62, ao_min=0.4, side=0.45)
     M["hood"] = painted("hood", (62, 52, 50), rough=0.55, metal=0.3, wear=(92, 80, 76), rust=(70, 46, 36), scale=2.5, dirt=0.2, spec=0.5, rust_at=0.6)
     M["palegold"] = shiny("palegold", (232, 196, 128), rough=0.35, metal=0.6, wear=(206, 160, 90), scale=2, dirt=0.3,
                           side=0.3)
@@ -807,13 +819,13 @@ def funnel(z, spout_mat=None, k=1.0, extra=0.0):
     return ob
 
 
-def dome(name, r, zeq, flat_=1.0):
+def dome(name, r, zeq, flat_=1.0, mat=None):
     """The riveted dome: a hemisphere (height r * flat_) with a slight lip round its foot."""
     prof = [(r + 0.08, zeq - 0.12), (r + 0.1, zeq), (r, zeq + 0.02)]
     for i in range(1, 25):
         a = math.radians(90 * i / 24)
         prof.append((max(0.001, r * math.cos(a)), zeq + r * flat_ * math.sin(a)))
-    return lathe(name, prof, (0, 0, 0), M["dome"], verts=96)
+    return lathe(name, prof, (0, 0, 0), mat or M["dome"], verts=96)
 
 
 def on_dome(r, zeq, th, el, flat_=1.0, out=0.0):
@@ -889,9 +901,9 @@ def body_dome(lv):
     """The drum, dome, portholes, rivets, straps, collar and funnel of levels 4 to 8."""
     dr, dz0, dz1 = lv["drum"]
     rr, zeq = lv["dome"]
-    ribbed("drum", dr, dz0, dz1 + 0.05, pitch=0.42, depth=0.16, mat=M[lv["drum_mat"]] if "drum_mat" in lv else None)
+    ribbed("drum", dr, dz0, dz1 + 0.05, pitch=0.56, depth=0.24, mat=M[lv["drum_mat"]] if "drum_mat" in lv else None)
     fl = lv.get("dome_flat", 1.0)
-    dome("dome", rr, zeq, fl)
+    dome("dome", rr, zeq, fl, M[lv.get("dome_mat", "dome")])
     disc("dome-floor", 0.0, rr, zeq, M["dome"], thick=0.15)
     # the portholes: a front row of five round the dome's middle, four higher up between them
     holes = lv.get("holes", [])
@@ -979,10 +991,10 @@ def rails5(lv, tiers=None, sides=True, diag=True, front=True):
             zt = z0 + 0.1
             ro = (tiers[1][0] + 0.6) if tiers else fd + 0.8
             pts = [P(th, dr - 0.1, zt), P(th, ro, zt), P(th, ro, zt - 2.2)]
-            railbar(f"rail{i}", pts, 0.22)
-            railbar(f"rail{i}-in", [P(th, ro - 0.9, zt), P(th, ro - 0.9, zt - 1.6 if tiers else 1.3)], 0.2)
+            railbar(f"rail{i}", pts, 0.28)
+            railbar(f"rail{i}-in", [P(th, ro - 0.9, zt), P(th, ro - 0.9, zt - 1.6 if tiers else 1.3)], 0.26)
             railbar(f"rail{i}-up", [P(th, dr + 0.2, zt), P(th, dr + 0.2, zt + 1.8), P(th, dr + 1.0, zt + 1.8),
-                                    P(th, dr + 1.0, zt)], 0.15)
+                                    P(th, dr + 1.0, zt)], 0.2)
             box(f"rail{i}-panel", (0.06, 0.7, 1.6), P(th, ro - 0.45, zt - 2.0), M["steel"], rot=(0, 0, th + 90))
             if tiers:
                 railbar(f"rail{i}-rod", [P(th, ro, zt - 2.2), P(th, fd + 0.1, 1.2)], 0.07)
@@ -1767,10 +1779,18 @@ def is_quarter(lv, th):
     return any(abs(((th - q + 180) % 360) - 180) < 1 for q in lv["quarters"])
 
 
+def quarter_d(lv, th):
+    """How far out the frame or column at quarter bearing th stands."""
+    for i, q in enumerate(lv["quarters"]):
+        if abs(((th - q + 180) % 360) - 180) < 1:
+            return lv.get("col_d", (lv["foot_dq"],) * 4)[i]
+    return lv["foot_d"]
+
+
 def claw_feet(lv, kind):
     """The eight claw feet: those under the quarter frames or columns further out than the rest."""
     for i, th in enumerate(lv["feet"]):
-        claw_foot(i, th, lv["foot_dq"] if is_quarter(lv, th) else lv["foot_d"], 2.4, kind)
+        claw_foot(i, th, quarter_d(lv, th), 2.4, kind)
 
 
 def foot_posts(lv):
@@ -1895,7 +1915,7 @@ def level9():
 def column10(i, th, lv):
     """Level 10's gold column at a quarter: a red core between four gold bars, a gold foot and capital, standing on
     the claw foot; two blue studs on the capital."""
-    d, zt = lv["foot_dq"], lv["col_top"][i]
+    d, zt = quarter_d(lv, th), lv["col_top"][i]
     zb = 1.6
     c = P(th, d, 0.0)
     lathe(f"col{i}-base", [(0.86, zb), (0.9, zb + 0.25), (0.7, zb + 0.45), (0.68, zb + 0.95)], c, M["gold"], verts=32)
@@ -1917,26 +1937,33 @@ def column10(i, th, lv):
 def arm10(i, th, lv, front):
     """Level 10's gold arm from a column's capital over into the dome: an elbow ball, a thick forearm, a shoulder
     block on the dome, blue studs along the top and a big one on the elbow."""
-    d, zt = lv["foot_dq"], lv["col_top"][i]
+    d, zt = quarter_d(lv, th), lv["col_top"][i]
     rr, zeq = lv["dome"]
     rel = ((th - S.FRONT + 180) % 360) - 180      # the front arms meet the dome out on its shoulders, not over the middle
     sh, n = on_dome(rr, zeq, th + math.copysign(17.0, rel) if front else th, 50.0 if front else 34.0, lv["dome_flat"], 0.45)
     el = P(th, d - 0.1, zt + 0.55)
     ball(f"arm{i}-elbow", el, 1.0, M["gold"])
     mid = (el + sh) / 2 + Vector((0, 0, 0.3))
-    # Flash's arm is a thick square gold beam (a soft bevel) with a gauntlet block next to the elbow
+    # Flash's arm is a thick round gold sleeve in armour rings, a fat gauntlet next to the elbow and a big curved
+    # shoulder plate over the top where it meets the dome
     pts = [el * (1 - t) ** 2 + mid * 2 * t * (1 - t) + sh * t * t for t in (k / 10 for k in range(11))]
-    sweep(f"arm{i}", pts, P(th + 90, 1, 0), 1.5, 1.35, M["gold"], bevel=0.6)
-    for k, t in enumerate((0.38, 0.62, 0.84)):          # dark gold bands round the beam (its armour segments)
+    ar = 0.56 if front else 0.7                         # the front forearms are slimmer than the back shoulder pipes
+    tube(f"arm{i}", pts, ar, M["gold"], verts=20, smooth=True)
+    for k, t in enumerate((0.4, 0.62, 0.82)):           # armour rings round the sleeve
         q = el * (1 - t) ** 2 + mid * 2 * t * (1 - t) + sh * t * t
         dq = (2 * (1 - t) * (mid - el) + 2 * t * (sh - mid)).normalized()
-        b = box(f"arm{i}-band{k}", (0.22, 1.66, 1.5), q, M["golddark"], origin="centre", bevel=0.5)
-        b.rotation_euler = dq.to_track_quat("X", "Z").to_euler()
-    g = el * 0.72 + sh * 0.28 + Vector((0, 0, 0.12))
-    b = box(f"arm{i}-gauntlet", (1.3, 1.8, 1.65), g, M["gold"], origin="centre", bevel=0.38)
-    b.rotation_euler = (sh - el).normalized().to_track_quat("X", "Z").to_euler()
-    b = box(f"arm{i}-shoulder", (1.4, 1.6, 1.4), sh, M["gold"], origin="centre", bevel=0.14)
-    b.rotation_euler = Vector(n).to_track_quat("X", "Z").to_euler()
+        lathe(f"arm{i}-band{k}", [(ar - 0.02, -0.2), (ar + 0.12, -0.15), (ar + 0.16, 0.0), (ar + 0.12, 0.15),
+                                  (ar - 0.02, 0.2)], q, M["golddark"],
+              verts=32).rotation_euler = dq.to_track_quat("Z", "Y").to_euler()
+    g = el * 0.74 + sh * 0.26
+    gk = ar / 0.7
+    lathe(f"arm{i}-gauntlet", [(0.7 * gk, -0.95), (0.98 * gk, -0.85), (1.04 * gk, -0.3), (1.0 * gk, 0.6), (0.82 * gk, 0.9),
+                               (0.7 * gk, 0.95)], g,
+          M["gold"], verts=32).rotation_euler = (sh - el).normalized().to_track_quat("Z", "Y").to_euler()
+    # the shoulder: a domed plate (a squashed half ball) lying over the joint, its rim turned down onto the dome
+    lathe(f"arm{i}-shoulder", [(1.25, -0.35), (1.32, -0.1)] + [(1.3 * math.cos(math.radians(a)), 0.75 * math.sin(math.radians(a)))
+                                                                for a in range(10, 91, 10)], sh, M["gold"],
+          verts=40).rotation_euler = Vector(n).to_track_quat("Z", "Y").to_euler()
     ball(f"arm{i}-blue", P(th, d + 0.7, zt + 0.5), 0.36, M["glass"])
     for k in range(3):
         t = 0.42 + 0.17 * k
@@ -1961,16 +1988,18 @@ def core10(lv):
     """Level 10's dark core: three gold hoops with red clamps, rivet rows at the sides, a red bar down the front and
     red hoses curling down from it onto the dark step."""
     dr, dz0, dz1 = lv["drum"]
-    for k, z in enumerate((dz0 + 1.3, dz0 + 2.3, dz0 + 3.3)):
-        ring(f"hoop{k}", dr + 0.12, 0.16, M["gold"], z=z, n=96)
-        for j, a in enumerate((S.FRONT - 62, S.FRONT + 62)):
-            box(f"hoop{k}-clamp{j}", (0.36, 0.5, 0.5), P(a, dr + 0.15, z), M["red"], rot=(0, 0, a), origin="centre",
-                bevel=0.08)
-    railbar("redbar", [P(S.FRONT, dr + 0.3, dz1 - 0.2), P(S.FRONT, dr + 0.3, dz0 + 0.2)], 0.12)
+    for k, z in enumerate((dz0 + 1.05, dz0 + 2.05, dz0 + 3.05)):
+        ring(f"hoop{k}", dr + 0.22, 0.24, M["gold"], z=z, n=96)
+        for j, a in enumerate((S.FRONT - 50, S.FRONT + 50)):
+            facing_ring(f"hoop{k}-loop{j}", P(a, dr + 0.24, z), P(a + 90, 1, 0), 0.42, 0.11, M["red"])
+    railbar("redbar", [P(S.FRONT, dr + 0.5, dz1 - 0.2), P(S.FRONT, dr + 0.5, dz0 + 0.2)], 0.13)
     pts = []
-    for a in (S.FRONT - 75, S.FRONT + 75):
-        for k in range(14):
-            pts.append((P(a, dr + 0.01, dz0 + 0.4 + k * 0.29), P(a, 1, 0)))
+    for a in (S.FRONT - 74, S.FRONT + 74):
+        box(f"core-panel{a > S.FRONT:d}", (0.12, 0.62, dz1 - dz0 - 0.4), P(a, dr - 0.02, dz0 + 0.2), M["red"],
+            rot=(0, 0, a), bevel=0.03)
+        for b in (a - 4.5, a + 4.5):
+            for k in range(13):
+                pts.append((P(b, dr + 0.09, dz0 + 0.45 + k * 0.27), P(b, 1, 0)))
     studs("core-rvt", pts, 0.07, M["rivet"])
     zs = lv["base"][2] + 0.9
     for k, a in enumerate((S.FRONT - 40, S.FRONT + 40, S.FRONT - 115, S.FRONT + 115)):

@@ -53,7 +53,7 @@ LV4 = dict(drum=(3.75, 2.5, 8.3), dome=(4.0, 8.3), dome_flat=0.8, seams=(-45.0, 
            brace_z=2.4)
 
 FEET8 = tuple(FRONT + 45.0 * k for k in range(8))
-_BODY5 = dict(drum=(3.7, 4.6, 8.6), dome=(4.05, 8.6), dome_flat=0.85, fun_z=12.1, straps=(-70.0, -20.0, -140.0, 50.0),
+_BODY5 = dict(drum=(3.7, 4.6, 8.6), dome=(4.05, 8.6), dome_flat=0.7, fun_z=11.4, straps=(-70.0, -20.0, -140.0, 50.0),
               holes=tuple((FRONT + 45.0 * k, 34.0, 0.95) for k in range(8)), brass_spout=True,
               meridians=tuple(FRONT + 22.5 + 45.0 * k for k in range(8)), feet=FEET8, foot_d=5.9)
 
@@ -97,7 +97,8 @@ _BODY9 = dict(drum=(2.9, 5.0, 8.5), dome=(4.2, 8.5), dome_flat=1.28, fun_z=14.5,
               meridians=tuple(FRONT + a for a in (-118.0, -82.0, -62.0, -28.0, -8.0, 28.0)))
 LV[9] = dict(_BODY9, strut_z=5.2, foot_dq=6.8, frame_d=6.9, frame_top=9.7, shoulder_turn=13.0, shoulder_rise=1.4, drum_mat="tinshade")
 # level 10: Flash narrows the dome into a tall bullet over a dark core, the base lower with a dark step
-LV[10] = dict(_BODY9, drum=(2.6, 5.4, 9.0), dome=(3.6, 9.0), dome_flat=1.3, fun_z=14.56, fun_k=0.68,
+LV[10] = dict(_BODY9, drum=(2.6, 5.4, 9.5), dome=(3.95, 9.5), dome_flat=1.05, dome_mat="dome10", fun_z=14.56, fun_k=0.68,
               base=(4.0, 1.5, 3.7), step=(3.4, 5.4), foot_d=5.6, foot_dq=6.4, col_top=(9.7, 9.7, 10.9, 10.9),
+              col_d=(7.1, 7.1, 6.4, 6.4),
               upipe=0.4, strut_z=5.2,
               drum_mat="core", port_mat="gold", holes=((FRONT, 30.0, 1.0),))
