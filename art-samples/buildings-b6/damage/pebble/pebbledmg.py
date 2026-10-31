@@ -98,6 +98,28 @@ def polar(th, r, z):
     return Vector(S.polar(th, r, z))
 
 
+def charwood():
+    """Under torn-off shingles Flash shows charred dark-brown wood, not pure black."""
+    m = bpy.data.materials.get("charwood")
+    if m is None:
+        m = bpy.data.materials.new("charwood")
+        m.use_nodes = True
+        bs = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        bs.inputs["Base Color"].default_value = (0.045, 0.025, 0.014, 1)
+        bs.inputs["Roughness"].default_value = 1.0
+    return m
+
+
+def chunk(at, size, rot, r):
+    """A chunky broken lump of the wall: a big white block with flat faces and a seam across it, lying in the heap."""
+    o = box("chunk", size, at, M["stoneh"], rot=rot, bevel=0.1, jitter=0.06)
+    s2 = (size[0] * 0.5, size[1] * 1.0, size[2] * 0.9)
+    box("chunk", s2, Vector(at) + Matrix.Rotation(math.radians(rot[2]), 3, "Z") @ Vector((size[0] * 0.78, 0, 0)),
+        M["stoneh"], rot=(rot[0] + r.uniform(-8, 8), rot[1], rot[2] + r.uniform(-10, 10)), bevel=0.1, jitter=0.06)
+    burn(Vector(at) + Vector((0, 0, size[2])), 0.7)
+    return o
+
+
 def gapdark():
     """Behind a knocked-out block Flash shows a dark gap: the cores and ring bands go near black."""
     m = bpy.data.materials.get("gapdark")
@@ -123,15 +145,15 @@ def wreck_roof(holes, gone=0.25, short=0.35, wrench=0.1, seed=0, peak=True):
     top = (zt - ze) / RH
     prof = [(0.0, ze + 0.03)] + [(max(0.0, rr(top * i / 12) - 0.32), ze + 0.03 + (zt - ze - 0.3) * i / 12)
                                  for i in range(13)] + [(0.0, zt - 0.27)]
-    lathe("roofinside", prof, (0, 0, 0), D.inside(), verts=48)
+    lathe("roofinside", prof, (0, 0, 0), charwood(), verts=48)
     span = 2 * (RR - 0.1)
     pts = []
     patches = []
     for th, s, size in holes:
         p = polar(th, rr(s), ze + RH * s)
         pts.append((p, size))
-        patches.append((0.5 + p.x / span, 0.5 + p.y / span, 0.55 * size / span, 0.45 * size / span))
-    d = fine_holes(deck, patches, axes=("x", "y"), cuts=4, seed=seed)
+        patches.append((0.5 + p.x / span, 0.5 + p.y / span, 0.32 * size / span, 0.26 * size / span))
+    d = fine_holes(deck, patches, axes=("x", "y"), cuts=7, seed=seed)
     d.name = "roofdeck"
     pl = objs("roofplank")
     for o in pl:
@@ -338,11 +360,13 @@ def destroyed():
     hol = cyl("hollow", 1.2, 0.12, px(4, 36, Z=g), D.inside(), verts=32, bevel=0.0)
     hol.scale = (1.3, 0.9, 1.0)
     burn(px(4, 36, Z=g + 0.3), 2.6)
-    # a few big curved slabs of the wall: the biggest on the right lying back, face up; one on edge on the left; one
-    # behind, under the roof
-    slab(90, 1.5, px(4, 26, Z=g), (0.2, -0.5, 0.85), 10, r, sink=0.35)
-    slab(120, 1.8, px(18, 40, Z=g), (0.45, -0.5, 0.75), -10, r, sink=0.2)
-    slab(80, 1.4, px(-24, 38, Z=g), (-0.6, -0.6, 0.5), 80, r, sink=0.1)
+    # chunky broken lumps of the wall (flat-faced white blocks with seams) round and under the roof, all lower than
+    # its peak
+    for x, y, sz, rot in ((20, 40, (1.5, 1.2, 1.0), (8, -14, 30)), (14, 30, (1.3, 1.1, 1.2), (-10, 6, -20)),
+                          (-20, 36, (1.3, 1.0, 1.0), (12, 10, 60)), (-6, 26, (1.2, 1.0, 1.1), (0, -12, 10)),
+                          (26, 30, (1.0, 0.9, 0.8), (-6, 18, 75)), (6, 46, (1.1, 0.9, 0.7), (10, 0, -35))):
+        p = px(x, y, Z=g)
+        chunk((p.x, p.y, g - 0.1), sz, rot, r)
     # big head blocks tumbled at the left and front, the rest of the stones mostly gone
     for k, o in enumerate(head + rest):
         big = k < len(head)
@@ -357,11 +381,11 @@ def destroyed():
         o.matrix_world = Matrix.Translation(c) @ Matrix.Rotation(math.radians(r.uniform(0, 360)), 4, "Z") @             Matrix.Rotation(math.radians(r.uniform(-35, 35)), 4, "X") @ Matrix.Translation(-b0) @ mw
         burn(c, 0.5)
     # the roof smashed flat, broken, lying across the top
-    wreck_roof([(-45, 0.3, 1.1), (60, 0.3, 0.9), (170, 0.3, 0.9), (-120, 0.45, 0.7)], gone=0.3, short=0.4,
-               wrench=0.15, seed=21, peak=False)
+    wreck_roof([(-45, 0.3, 1.1), (60, 0.3, 0.9), (170, 0.3, 0.9), (-120, 0.45, 0.7)], gone=0.25, short=0.4,
+               wrench=0.15, seed=21)
     ze = S.z_eave(3)
-    e = hinge(objs(*ROOF), Vector((0, 0, ze)), rot=(-22, 14, 20), move=px(0, 30, Z=g + 0.9) - Vector((0, 0, ze)))
-    e.scale = (1.05, 1.0, 0.4)
+    e = hinge(objs(*ROOF), Vector((0, 0, ze)), rot=(-24, 16, 20), move=px(2, 32, Z=g + 1.25) - Vector((0, 0, ze)))
+    e.scale = (1.0, 1.0, 0.78)
     # the pipe broken, the horn lying at the back left
     kill(objs("pipearm", "pipeplate", "pipesocket"))
     foot = polar(S.PIPE_TH, S.PIPE_R, S.z_eave(3) - 0.2)
