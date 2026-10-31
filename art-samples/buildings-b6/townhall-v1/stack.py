@@ -40,7 +40,7 @@ LV2 = dict(can=(2.9, 1.3, 6.4), legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_
            fun_k=0.85, fun_extra=0.6, mag_th=-82.0, magnet_z=5.5, glass_th=-12.0, glass_d=3.6, glass_z=8.1)
 
 # level 3: the roof bent into a hood (radius, rim height) over a ribbed core on a steel pan, an octagonal gold rail
-LV3 = dict(hood=(3.7, 7.8), hood_flat=1.02, hood_drop=0.7, cut=(19.0, 36.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
+LV3 = dict(hood=(3.6, 7.8), hood_flat=1.05, hood_drop=0.7, hood_flare=0.15, cut=(15.0, 48.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
            holes=((-90.0, 36.0, 1.05), (-2.0, 28.0, 0.9)),
            hood_rivets=((-140.0, 3.0), (-72.0, 3.0), (-18.0, 3.0), (52.0, 3.0), (-45.0, 72.0), (-100.0, 62.0)),
            fun_k=1.0, fun_extra=0.0, magnets=(-84.0, -6.0), magnet_z=6.8, rail=(6.0, 3.0, 3.8), leg_d=5.0,
@@ -73,7 +73,7 @@ LV = {
     2: LV2,
     3: LV3,
     4: LV4,
-    5: _lift(_BODY5, 1.0, foot_d=5.8, plinth_z=2.4),   # Flash stands level 5 as high as level 6
+    5: _lift(_BODY5, 1.0, foot_d=5.8, plinth_z=2.4, drum=(3.7, 3.0, 8.4)),   # Flash stands level 5 as high as level 6
     6: _lift(_BODY5, 1.0, tiers=((4.8, 3.9, 5.6), (6.0, 2.2, 3.9))),
 }
 # levels 7 and 8: level 6 with one big front porthole and two at the sides, gold pipes at the four quarters, a crown

@@ -1365,21 +1365,21 @@ def level2():
     magnifier("glass", c, n, 1.2, Vector((0, 0, -1)), 3.6)
 
 
-def hood(name, r, zeq, cut_half, cut_el, flat_=1.0, drop=0.0):
+def hood(name, r, zeq, cut_half, cut_el, flat_=1.0, drop=0.0, flare=0.0):
     """Level 3's hood: the level 2 roof bent round into a dome shell (height r * flat_ above zeq, its rim dropping
     `drop` lower at the sides), with an arched opening at the front (cut_half degrees either side, up to cut_el)."""
     bm = bmesh.new()
-    nu, nv = 96, 24
+    nu, nv = 192, 48
     rows = []
     for j in range(nv + 1):
         e = math.radians(90.0 * j / nv)
+        rf = r * math.cos(e) + flare * (1 - j / nv) ** 3          # a bell: the rim flares out
         row = []
         for i in range(nu):
             a = 2 * math.pi * i / nu
             rel = abs(((math.degrees(a) - S.FRONT + 180) % 360) - 180)
             dz = -drop * (1 - math.cos(math.radians(min(90.0, rel)))) * (1 - j / nv) if drop else 0.0
-            row.append(bm.verts.new((r * math.cos(e) * math.cos(a), r * math.cos(e) * math.sin(a),
-                                     zeq + dz + r * flat_ * math.sin(e))))
+            row.append(bm.verts.new((rf * math.cos(a), rf * math.sin(a), zeq + dz + r * flat_ * math.sin(e))))
         rows.append(row)
     for j in range(nv):
         for i in range(nu):
@@ -1419,7 +1419,7 @@ def level3():
     for k in range(3):
         box(f"core-vent{k}", (0.06, 1.1, 0.12), P(S.FRONT, cr + 0.26, hz - 1.05 + 0.3 * k), M["hole"],
             rot=(0, 0, S.FRONT), bevel=0.0)
-    hood("hood", hr, hz, lv["cut"][0], lv["cut"][1], flat_=lv["hood_flat"], drop=lv["hood_drop"])
+    hood("hood", hr, hz, lv["cut"][0], lv["cut"][1], flat_=lv["hood_flat"], drop=lv["hood_drop"], flare=lv["hood_flare"])
     disc("hood-floor", cr + 0.05, hr - 0.15, hz + 0.6, M["dome"], thick=0.1)
     for i, (th, el, rp) in enumerate(lv["holes"]):
         pp, n = on_dome(hr, hz, th, el, lv["hood_flat"], 0.0)
@@ -1430,7 +1430,7 @@ def level3():
     funnel(ztop - 0.1, None, k=lv["fun_k"], extra=lv["fun_extra"])
     # two magnets on gold brackets, either side of the opening
     for k, th in enumerate(lv["magnets"]):
-        horseshoe(f"magnet{k}", P(th, cr + 1.25, lv["magnet_z"]), th, lv["magnet_z"] - pz1 - 0.75, rad=0.78, w=0.5)
+        horseshoe(f"magnet{k}", P(th, cr + 1.25, lv["magnet_z"]), th, lv["magnet_z"] - pz1 - 0.75, rad=0.98, w=0.6)
         box(f"magnet{k}-shelf", (1.5, 2.3, 0.22), P(th, cr + 1.15, pz1 + 0.02), M["gold"], rot=(0, 0, th), bevel=0.04)
     # the gold rail round it all on eight legs with gear feet, struts from the pan
     rr, za, zb = lv["rail"]
