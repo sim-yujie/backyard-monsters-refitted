@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { inflateSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
 import { ArtState, artFolder, resolveArt, restingLayers } from "./buildingArt";
@@ -14,6 +15,13 @@ const TYPES = [1, 2, 3, 4, 6, 13, 15, 16];
 /** The ones whose parts move, as Flash's do; Housing and the Control Center stand still. */
 const MOVING = [1, 2, 3, 4, 6, 13];
 
+/**
+ * The looks whose model reaches past Flash's picture, `[left, top, right, bottom]` in px each edge may differ: the
+ * Putty Squisher's first vial stands 8 px further right and its last wheel 12 px higher, the third Hatchery's front
+ * foot 9 px lower.
+ */
+const WIDER: Record<string, Box> = { "3:1": [6, 6, 8, 6], "3:10": [6, 12, 6, 6], "13:3": [6, 6, 6, 9] };
+
 /** A WebP's size in pixels, from its `VP8X` header (every picture with alpha has one). */
 const webpSize = (file: string): [number, number] => {
   const bytes = readFileSync(file);
@@ -23,6 +31,68 @@ const webpSize = (file: string): [number, number] => {
 
 /** The Flash row's looks for a type: each look's first level, its strip's cells and its offset. */
 const flashLooks = (type: number) => BUILDING_ART_ROWS.find((row) => row[0] === type)?.[3] ?? [];
+
+/** `[left, top, right, bottom]` in 1x px from the building's origin. */
+type Box = [number, number, number, number];
+
+/** A PNG's alpha, `[width, height, alpha]`: 8 or 16 bit RGB(A), not interlaced, all Flash's buildings are. */
+const pngAlpha = (file: string): [number, number, Uint8Array] => {
+  const bytes = readFileSync(file);
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  const [depth, colour, , , interlace] = bytes.subarray(24, 29);
+  expect([depth === 8 || depth === 16, colour === 2 || colour === 6, interlace], file).toEqual([true, true, 0]);
+  const idat: Buffer[] = [];
+  for (let at = 8; at < bytes.length; ) {
+    const length = bytes.readUInt32BE(at);
+    if (bytes.toString("latin1", at + 4, at + 8) === "IDAT") idat.push(bytes.subarray(at + 8, at + 8 + length));
+    at += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const pixel = ((colour === 6 ? 4 : 3) * (depth ?? 8)) / 8;
+  const stride = width * pixel;
+  const rows = new Uint8Array(stride * height);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    for (let i = 0; i < stride; i++) {
+      const a = i >= pixel ? (rows[y * stride + i - pixel] ?? 0) : 0;
+      const b = y > 0 ? (rows[(y - 1) * stride + i] ?? 0) : 0;
+      const c = y > 0 && i >= pixel ? (rows[(y - 1) * stride + i - pixel] ?? 0) : 0;
+      const p = a + b - c;
+      const nearest = Math.abs(p - a) <= Math.abs(p - b) && Math.abs(p - a) <= Math.abs(p - c) ? a : Math.abs(p - b) <= Math.abs(p - c) ? b : c;
+      const add = [0, a, b, (a + b) >> 1, nearest][filter ?? 0] ?? 0;
+      rows[y * stride + i] = ((raw[y * (stride + 1) + 1 + i] ?? 0) + add) & 255;
+    }
+  }
+  // An RGB picture is opaque all over; a 16 bit alpha's high byte is enough.
+  const alpha = new Uint8Array(width * height).fill(255);
+  if (colour === 6) for (let i = 0; i < alpha.length; i++) alpha[i] = rows[i * pixel + pixel - (depth === 16 ? 2 : 1)] ?? 0;
+  return [width, height, alpha];
+};
+
+/** What a Flash picture (or a strip's first cell) at `x`, `y` draws: its pixels over 2/255 alpha. */
+const drawn = (file: string, x: number, y: number, cellWidth?: number, cellHeight?: number): Box => {
+  const [width, height, alpha] = pngAlpha(file);
+  const [w, h] = [cellWidth ?? width, cellHeight ?? height];
+  const box: Box = [Infinity, Infinity, -Infinity, -Infinity];
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      if ((alpha[j * width + i] ?? 0) <= 2) continue;
+      box[0] = Math.min(box[0], i);
+      box[1] = Math.min(box[1], j);
+      box[2] = Math.max(box[2], i + 1);
+      box[3] = Math.max(box[3], j + 1);
+    }
+  }
+  return [x + box[0], y + box[1], x + box[2], y + box[3]];
+};
+
+const union = (boxes: Box[]): Box => [
+  Math.min(...boxes.map((box) => box[0])),
+  Math.min(...boxes.map((box) => box[1])),
+  Math.max(...boxes.map((box) => box[2])),
+  Math.max(...boxes.map((box) => box[3])),
+];
 
 afterEach(() => setClassicLook(false));
 
@@ -95,21 +165,35 @@ describe("the 3D yard buildings", () => {
     expect(missing).toEqual([]);
   });
 
-  it("stand where Flash's do: the whole building's top-left within a few pixels of Flash's", () => {
+  it("stand where Flash's do: what each draws at rest within a few pixels of Flash's", () => {
+    const off: string[] = [];
     for (const type of TYPES) {
+      const flashFolder = `${ASSETS}${BUILDING_ART_ROWS.find((row) => row[0] === type)?.[2] ?? ""}`;
       for (const look of BUILDING_3D_ART[type] ?? []) {
         const flash = flashLooks(type).find((one) => one[0] === look.from);
-        // Flash's building is its top and its strip (the Hatchery's roof is all strip).
-        const parts = [flash?.[1], ...(flash?.[7] ?? [])].filter((part) => !!part);
-        expect(parts.length, `type ${type} look ${look.from}`).toBeGreaterThan(0);
-        const left = Math.min(...parts.map((part) => part?.[1] ?? 0));
-        const top = Math.min(...parts.map((part) => part?.[2] ?? 0));
-        // Fitted to Flash's outline, so the edges agree to a few pixels.
-        expect(Math.abs(look.top[1] - left), `type ${type} look ${look.from} x`).toBeLessThanOrEqual(6);
-        expect(Math.abs(look.top[2] - top), `type ${type} look ${look.from} y`).toBeLessThanOrEqual(8);
-        expect(look.lift).toBe(0);
+        // Flash's building at rest is its top and its strips' first cells (the Hatchery's roof is all strip).
+        const boxes: Box[] = [];
+        const top = flash?.[1];
+        if (top) boxes.push(drawn(flashFolder + top[0], top[1], top[2], top[3], top[4]));
+        for (const [file, x, y, width, height] of flash?.[7] ?? []) {
+          boxes.push(drawn(flashFolder + file, x, y, width, height));
+        }
+        const want = union(boxes);
+        // The 3D top is cut to what it draws, to the whole 1x px, so its file's box is its building.
+        const [file, x, y] = look.top;
+        const [width, height] = webpSize(`${ASSETS}${artFolder(type) ?? ""}${file}`);
+        const got: Box = [x, y, x + width / 2, y + height / 2];
+        const name = `type ${type} look ${look.from}`;
+        // Fitted to Flash's outline: every edge within a few pixels, but for the few where the model itself is
+        // bigger than Flash's picture (its foot and body still where Flash's are).
+        const slack = WIDER[`${type}:${look.from}`] ?? [6, 6, 6, 6];
+        if ([0, 1, 2, 3].some((side) => Math.abs((got[side] ?? 0) - (want[side] ?? 0)) > (slack[side] ?? 6))) {
+          off.push(`${name}: 3D ${got.join(",")} vs Flash ${want.join(",")}`);
+        }
+        expect(look.lift, name).toBe(0);
       }
     }
+    expect(off).toEqual([]);
   });
 
   it("keep the picture when damaged and fall to the Flash rubble when destroyed", () => {
@@ -120,11 +204,21 @@ describe("the 3D yard buildings", () => {
     expect(ruin?.anims).toEqual([]);
   });
 
-  it("leave the Inferno's own producers, silo and hatchery as they are", () => {
-    for (const type of [1, 2, 3, 4, 6, 13]) {
-      const art = resolveArt(type, 1, ArtState.DEFAULT, "inferno");
-      expect(art?.top.url, `type ${type}`).not.toContain("3d");
-      expect(art?.folder).toMatch(/buildings\/i/);
+  it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {
+    for (const type of TYPES) {
+      for (const level of [1, 3, 6, 10]) {
+        expect(tierArtFor(type, level, "inferno"), `type ${type} level ${level}`).toBeNull();
+        const art = resolveArt(type, level, ArtState.DEFAULT, "inferno");
+        if (!art) continue;
+        expect(art.top.url, `type ${type} level ${level}`).not.toContain("3d");
+        expect(art.still?.url ?? "", `type ${type} level ${level}`).not.toContain("3d");
+      }
     }
+    // The Compound is the Monster Housing's folder: Flash's housing picture there.
+    expect(resolveArt(15, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(
+      `/assets/${artFolder(15) ?? ""}${flashLooks(15)[0]?.[1]?.[0] ?? ""}`,
+    );
+    // Outposts are overworld yards: the 3D look there too.
+    expect(resolveArt(15, 1, ArtState.DEFAULT, "outpost")?.top.url).toContain("/top.3d1@2x.webp");
   });
 });

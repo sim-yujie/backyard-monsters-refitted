@@ -72,6 +72,7 @@ BUILDINGS = {
 CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 10: 24},
          "putty": {1: 26, 3: 26, 6: 26, 10: 25}, "goo": {1: 26, 3: 26, 6: 26, 10: 26}, "silo": {1: 26},
          "hatchery": {1: 31, 2: 31, 3: 31}}
+TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
 
 
@@ -121,6 +122,32 @@ def split(scene, building):
 def ramp(n, px=8):
     """1 inside, falling to 0 over the last `px` of either end of a run of `n`."""
     return np.clip((np.minimum(np.arange(n), np.arange(n)[::-1]) + 0.5) / px, 0, 1)
+
+
+def tail(sh, px=TAIL):
+    """A 1x shadow the render's canvas cut off, carried on `px` past each edge it touches and faded out there (a
+    smooth fall, softened), with where its top-left moved to. One that touches no edge just fades over its last 8 px."""
+    cut = [sh[:, 0].max() > 0.02, sh[0].max() > 0.02, sh[:, -1].max() > 0.02, sh[-1].max() > 0.02]
+    if not any(cut):
+        return sh * ramp(sh.shape[0])[:, None] * ramp(sh.shape[1])[None, :], 0, 0
+    left, top, right, bottom = (px if c else 0 for c in cut)
+    out = np.pad(sh, ((top, bottom), (left, right)), mode="edge")
+
+    def fall(n, before, after):
+        f = np.ones(n)
+        t = (np.arange(px) + 1) / (px + 1)
+        if before:
+            f[:before] = (0.5 + 0.5 * np.cos(np.pi * t))[::-1]
+        if after:
+            f[n - after:] = 0.5 + 0.5 * np.cos(np.pi * t)
+        return f
+
+    out = out * fall(out.shape[0], top, bottom)[:, None] * fall(out.shape[1], left, right)[None, :]
+    # Rows carried straight on look combed: blur the carried part, the render's own shadow left as it was.
+    soft = ndimage.gaussian_filter(out, 2)
+    inside = np.zeros(out.shape, bool)
+    inside[top:top + sh.shape[0], left:left + sh.shape[1]] = True
+    return np.where(inside, out, soft), -left, -top
 
 
 def over(top, under):
@@ -206,14 +233,14 @@ def export(name, render):
 
         # The shadow, 1x, white where there is none: what Flash's shadow pictures are.
         sh = np.asarray(Image.fromarray(shade, "F").resize((shade.shape[1] // K, shade.shape[0] // K), Image.BOX))
-        # The render's canvas cuts a long shadow off at its edge: it fades out over the last 8 px instead.
-        sh = sh * ramp(sh.shape[0])[:, None] * ramp(sh.shape[1])[None, :]
+        # The render's canvas cuts a long shadow off at its edge: it is carried on past it and fades out there.
+        sh, tx, ty = tail(sh)
         ys, xs = np.nonzero(sh > 0.02)
         sx0, sy0 = max(0, int(xs.min()) - 1), max(0, int(ys.min()) - 1)
         sx1, sy1 = min(sh.shape[1], int(xs.max()) + 2), min(sh.shape[0], int(ys.max()) + 2)
         gray = np.clip(255 * (1 - sh[sy0:sy1, sx0:sx1]) + 0.5, 0, 255).astype("uint8")
         Image.fromarray(gray, "L").save(out / f"shadow.{tag}.jpg", "JPEG", quality=90)
-        row["shadow"] = [f"shadow.{tag}.jpg", fx + sx0, fy + sy0]
+        row["shadow"] = [f"shadow.{tag}.jpg", fx + tx + sx0, fy + ty + sy0]
 
         if cells:
             row["body"] = picture(body, bbox(body[..., 3]), f"body.{tag}@2x.webp")

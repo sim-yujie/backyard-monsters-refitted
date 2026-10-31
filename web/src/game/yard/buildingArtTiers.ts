@@ -416,7 +416,7 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
       anim: { strip: ["anim.3d3@2x.webp", 4, 13, 19, 43, 26], body: ["body.3d3@2x.webp", -28, -34] } },
     { from: 6, top: ["top.3d6@2x.webp", -31, -34], shadow: ["shadow.3d6.jpg", -30, 15], lift: 0,
       anim: { strip: ["anim.3d6@2x.webp", -19, 13, 42, 47, 26], body: ["body.3d6@2x.webp", -31, -34] } },
-    { from: 10, top: ["top.3d10@2x.webp", -40, -47], shadow: ["shadow.3d10.jpg", -38, 12], lift: 0,
+    { from: 10, top: ["top.3d10@2x.webp", -40, -47], shadow: ["shadow.3d10.jpg", -39, 12], lift: 0,
       anim: { strip: ["anim.3d10@2x.webp", -19, 13, 42, 47, 26], body: ["body.3d10@2x.webp", -40, -47] } },
   ],
   // 6 Storage Silo: 3D, one look; its 26 cells are the sack's fill, as Flash's
@@ -452,11 +452,12 @@ export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
 
 /**
  * The new picture a building shows at `level` in a `kind` yard, or null with
- * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1 and for
- * every type without new art.
+ * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1, for
+ * every type without new art and for a 3D building in an Inferno yard (which
+ * keeps its Inferno art until its own Inferno 3D look is approved).
  */
 export const tierArtFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
-  if (!newTowerArt()) return null;
+  if (!newTowerArt() || (kind === "inferno" && type in BUILDING_3D_ART)) return null;
   const inferno = hasInfernoTiers(type, kind);
   if ((inferno || type in TOWER_TIER_ART) && !MODERN_TOWERS.includes(type)) return null;
   let chosen: TierArt | null = null;
