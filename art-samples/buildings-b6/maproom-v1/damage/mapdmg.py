@@ -175,28 +175,22 @@ def damaged():
     for o in scope:
         o.matrix_world = m @ o.matrix_world
     print("PROBE scope eye", tuple(round(c, 2) for c in e1), "screen", scr(e1))
-    # the scissors knocked over: the teardrop's half swung out past the deck's left edge, its blade snapped off
+    # the scissors knocked over to the left, still in one piece (Flash keeps both blades and the pivot): opened wider,
+    # the pair leaning left, its pivot dropped to Flash's (-42, 22) in front of the deck's broken front edge
     sp = G["SP"]
-    kill(named(r"scisblade1"))
-    half = named(r"scisloop0|scisshank0|scisblade0")
-    screen_turn(half, sp, 30)
-    # then slid toward the camera (the picture does not move) until the blade's tip rests on the stone's front face
-    bpy.context.view_layer.update()
-    bl = named(r"scisblade0")[0]
-    tip = max((bl.matrix_world @ v.co for v in bl.data.vertices), key=lambda v: scr(v)[1])
-    nf = YAW_M.to_3x3() @ Vector((0, -1, 0))
-    v = -cam_fwd()
-    t = ((world((0, -A - 0.04, 0)) - tip).dot(nf)) / v.dot(nf)
-    turn(half, sp, (0, 0, 1), 0, move=tuple(v * t))
-    screen_turn(named(r"scisloop1|scisshank1"), sp, -12)
-    # a darker, bluer steel than the stone behind it (Flash's fallen blade reads clearly against the pale wall)
-    bl.data.materials.clear()
-    bl.data.materials.append(shiny("bladedark", (104, 112, 134), rough=0.38, metal=0.8, wear=(70, 74, 90), scale=3.0,
-                                   dirt=0.3))
-    blade = G["ST"][1]
-    # the snapped blade lies on the ground in front, left
-    g = px(-52.0, 66.0, Z=0.06)
-    along("scisbroken", g, g + Vector((1.9, -0.9, 0.0)), (0, 0.42, 0.08), M["steel"], roll=4)
+    pair = named(r"scis.*")
+    n = (G["ST"][0] - sp).cross(G["ST"][1] - sp).normalized()
+    if n.dot(-cam_fwd()) < 0:
+        n = -n
+    turn(named(r"scisloop1|scisshank1|scisblade1"), sp, n, -10)
+    turn(named(r"scisloop0|scisshank0|scisblade0|scisedge0"), sp, n, 14)
+    screen_turn(pair, sp, 18)
+    turn(pair, sp, (0, 0, 1), 0, move=tuple(px(-42.0, 22.0, Y=-3.95) - sp))
+    # darker, bluer blades than the stone behind them (Flash's fallen blades read clearly against the pale wall)
+    dark = shiny("bladedark", (104, 112, 134), rough=0.38, metal=0.8, wear=(70, 74, 90), scale=3.0, dirt=0.3)
+    for bl in named(r"scisblade[01]"):
+        bl.data.materials.clear()
+        bl.data.materials.append(dark)
     # the left post knocked off the deck: lying against the stone with its ball on the ground; its ropes hang
     kill(named(r"post3|ball3|rope2|rope3"))
     b3 = px(-38.0, 58.0, Z=S.BALL_R)
@@ -323,7 +317,7 @@ def destroyed():
         o.data.materials.clear()
         o.data.materials.append(sooty)
     n = (G["ST"][0] - sp).cross(G["ST"][1] - sp).normalized()
-    turn(named(r"scisloop0|scisshank0|scisblade0"), sp, n, -30)       # opened wide, in their own plane
+    turn(named(r"scisloop0|scisshank0|scisblade0|scisedge0"), sp, n, -30)       # opened wide, in their own plane
     turn(sc, sp, n.cross(up), math.degrees(n.angle(up)))
     bpy.context.view_layer.update()
     loops = [o for o in sc if o.name.startswith("scisloop")]
