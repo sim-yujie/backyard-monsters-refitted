@@ -63,13 +63,104 @@ SCOPE_PLATE = (-9.5, -22.5)         # the bracket's plate on the front roof slop
 SCOPE_ARM = -10.0                   # the arm meets the tube at this Flash x
 
 # the scissors (Flash px; their plane runs through the pivot and the two blade tips)
-SCIS_PIVOT = (-32.0, 19.0, -3.12)   # Flash x, y and world y (deep enough that the blades pass under the deck's front edge)
-SCIS_LOOP_Y = -3.36                 # the handles lie in the plane through the pivot at this world y (clear of rope and posts)
+SCIS_PIVOT = (-32.0, 12.6, -3.12)   # Flash x, y and world y: the pivot screw just above the deck's slot
+SCIS_LOOP_Y = -3.36                 # the handles bend (along the camera's ray: unseen) into the plane through the pivot
+                                    # at this world y, clear of the rope and posts
 SCIS_TIPS = ((-34.0, 58.5), (-24.6, 63.5))
+# Flash's own handle traces (kept for reference; the model is the matched pair of scis_design())
 SCIS_TEAR = ((-31.5, 13), (-34.5, 9.5), (-38.5, 5), (-42.5, 0), (-45.6, -5), (-47.6, -10), (-48.3, -15), (-47.4, -19.5),
              (-45, -21.8), (-42.4, -21.2), (-40.6, -17.5), (-38.8, -12), (-37, -6), (-35.2, 0), (-33.6, 5.5), (-32.4, 10))
 SCIS_D = ((-24, 10), (-22.6, 5), (-21.3, 0.5), (-20, -4.5), (-18.8, -8.6), (-16.8, -9.4), (-12.6, -7), (-10, -2), (-10, 3), (-12, 7.5), (-15, 10),
           (-19.5, 10.5))
+# the matched pair, in the scissors' own plane (a: right, b: up, world units, the pivot at 0, 0)
+SCIS_SHANK = (0.9, 40.0)            # each shank's length and its angle out from the centre line (the same both sides)
+SCIS_TEAR_LR = (2.6, 0.72, 28.0)    # the teardrop (left): length from its point, round end's radius, axis angle
+SCIS_D_LW = (2.6, 1.65, 20.0)        # the D (right): straight inner side's length, bulge, axis angle
+SCIS_ROD = 0.15                     # the handles' and shanks' tube radius
+SCIS_HUB = 0.34                     # each half's round boss at the pivot
+SCIS_BLADE_W = 0.30                 # a blade's width just below the boss (back edge to cutting edge)
+
+
+def _chaikin(pts, k=3, closed=True):
+    for _ in range(k):
+        out = []
+        m = len(pts) if closed else len(pts) - 1
+        for i in range(m):
+            p, q = pts[i], pts[(i + 1) % len(pts)]
+            out += [(0.75 * p[0] + 0.25 * q[0], 0.75 * p[1] + 0.25 * q[1]),
+                    (0.25 * p[0] + 0.75 * q[0], 0.25 * p[1] + 0.75 * q[1])]
+        pts = out if closed else [pts[0]] + out + [pts[-1]]
+    return pts
+
+
+def _dir(deg_right):
+    """Unit vector deg degrees to the right of straight up (negative: to the left)."""
+    t = math.radians(deg_right)
+    return (math.sin(t), math.cos(t))
+
+
+def scis_design(ST):
+    """The scissors in their own plane: ST = the two blade tips (a, b), left then right. Returns
+    {"halves": [{"loop", "shank", "blade", "edge", "z"}, ...] (0: teardrop handle with the right blade, in front;
+    1: D handle with the left blade, behind), "lines": [(kind, pts, closed)] for previews}."""
+    ls, ang = SCIS_SHANK
+    halves = []
+    # 0: the teardrop, up-left; its blade crosses to the right tip
+    d = _dir(-ang)
+    apex = (d[0] * ls, d[1] * ls)
+    L, R, ax = SCIS_TEAR_LR
+    u = _dir(-ax)
+    c = (apex[0] + u[0] * (L - R), apex[1] + u[1] * (L - R))
+    al = math.asin(R / (L - R))
+    th0 = math.atan2(-u[1], -u[0])                  # from the circle's centre back toward the apex
+    tear = [apex]
+    for i in range(25):                             # round the far side, tangent to tangent
+        t = th0 + (math.pi / 2 - al) + i / 24 * (2 * math.pi - 2 * (math.pi / 2 - al))
+        tear.append((c[0] + R * math.cos(t), c[1] + R * math.sin(t)))
+    tear = _chaikin([apex] + [((apex[0] * (1 - f) + tear[1][0] * f), (apex[1] * (1 - f) + tear[1][1] * f)) for f in (0.5,)]
+                    + tear[1:] + [((apex[0] * (1 - f) + tear[-1][0] * f), (apex[1] * (1 - f) + tear[-1][1] * f)) for f in (0.5,)], 3)
+    # 1: the D, up-right (mirror of the teardrop's shank); straight side inward, round side outward
+    p0 = (-apex[0], apex[1])
+    L2, W2, ax2 = SCIS_D_LW
+    u2 = _dir(ax2)
+    o2 = (u2[1], -u2[0])                            # outward (to the right)
+    mid = (p0[0] + u2[0] * L2 / 2, p0[1] + u2[1] * L2 / 2)
+    dl = [p0, (p0[0] + u2[0] * L2 * 0.5, p0[1] + u2[1] * L2 * 0.5)]
+    for i in range(21):
+        t = i / 20 * math.pi
+        e = math.sin(math.pi * (t / math.pi) ** 0.75) ** 0.7   # fullest toward the top, like Flash's D
+        dl.append((mid[0] + u2[0] * L2 / 2 * math.cos(t) + o2[0] * W2 * e,
+                   mid[1] + u2[1] * L2 / 2 * math.cos(t) + o2[1] * W2 * e))
+    dl = _chaikin(dl[:1] + dl[1:2] + [(mid[0] + u2[0] * L2 / 2, mid[1] + u2[1] * L2 / 2)] + dl[3:], 3)
+    for k, (loop, start, tip) in enumerate(((tear, apex, ST[1]), (dl, p0, ST[0]))):
+        # the blade: from round the boss down to its tip; back edge outward, a straight cutting edge inward
+        bl = math.hypot(*tip)
+        db = (tip[0] / bl, tip[1] / bl)
+        ob = (-db[1], db[0]) if tip[0] > 0 else (db[1], -db[0])      # outward from the centre line
+        hub = SCIS_HUB
+        back, cut = [], []
+        for i in range(13):
+            s = i / 12
+            w = SCIS_BLADE_W * (1 - s) ** 0.9 * (1 + 0.35 * s)
+            p = (db[0] * (hub * 0.55 + (bl - hub * 0.55) * s), db[1] * (hub * 0.55 + (bl - hub * 0.55) * s))
+            back.append((p[0] + ob[0] * w * 0.75, p[1] + ob[1] * w * 0.75))
+            cut.append((p[0] - ob[0] * w * 0.25, p[1] - ob[1] * w * 0.25))
+        # the boss: round the pivot over the top, from the cutting edge's root to the back edge's root
+        tc, tb = math.atan2(cut[0][1], cut[0][0]), math.atan2(back[0][1], back[0][0])
+        tu = math.atan2(-db[1], -db[0])
+        ccw = (tb - tc) % (2 * math.pi)
+        if abs(((tc + ccw / 2 - tu + math.pi) % (2 * math.pi)) - math.pi) > math.pi / 2:
+            ccw -= 2 * math.pi                      # the other way round passes over the top
+        cap = [(hub * math.cos(tc + ccw * i / 16), hub * math.sin(tc + ccw * i / 16)) for i in range(1, 16)]
+        blade = back + cut[::-1] + cap
+        halves.append({"loop": loop, "shank": [(0.0, 0.0), start], "blade": blade, "edge": cut, "tip": tip,
+                       "z": 1 if k == 0 else -1})
+    lines = []
+    for hv in halves:
+        lines += [("blade", hv["blade"], True), ("loop", hv["loop"], True), ("shank", hv["shank"], False)]
+    lines.append(("edge", halves[0]["edge"], False))
+    return {"halves": halves, "lines": lines}
+
 
 # the stairs on the stone's +X face
 STAIR_X1 = 4.7              # their outer side

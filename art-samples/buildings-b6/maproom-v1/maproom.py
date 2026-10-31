@@ -945,7 +945,7 @@ def deck():
     # a dark beam round the deck's rim under the boards (Flash's deck edge is a thick dark band)
     sp = unyaw(SP)
     x0, x1 = sp.x - S.SLOT_W * 0.55, sp.x + S.SLOT_W * 0.45
-    sy0, sy1 = sp.y - 0.2, sp.y - 0.2 + S.SLOT_D     # the blades lean forward through it; a thin strip stays in front
+    sy0, sy1 = sp.y - 0.32, sp.y - 0.2 + S.SLOT_D    # the blades lean forward through it; a thin strip stays in front
     for i, (sx, sy) in enumerate(((1, 0), (-1, 0), (0, 1))):
         size = (0.14, 2 * D - 0.08, RIM_H) if sx else (2 * D - 0.36, 0.14, RIM_H)
         box(f"deckrim{i}", size, (sx * (D - 0.11), sy * (D - 0.11), S.BASE_H), M["rim"], bevel=0.03)
@@ -1131,50 +1131,101 @@ def telescope():
     track(c, d)
 
 
+def rod(name, pts, r, side, mat, closed=False, verts=12):
+    """A round tube of radius r along world points pts (lying roughly in the plane with normal `side`)."""
+    bm = bmesh.new()
+    side = Vector(side).normalized()
+    rows = []
+    n = len(pts)
+    for i, p in enumerate(pts):
+        p = Vector(p)
+        if closed:
+            t = (Vector(pts[(i + 1) % n]) - Vector(pts[i - 1])).normalized()
+        else:
+            t = (Vector(pts[min(i + 1, n - 1)]) - Vector(pts[max(i - 1, 0)])).normalized()
+        nrm = t.cross(side).normalized()
+        sd = nrm.cross(t).normalized()
+        rows.append([bm.verts.new(p + r * (math.cos(2 * math.pi * j / verts) * sd + math.sin(2 * math.pi * j / verts) * nrm))
+                     for j in range(verts)])
+    pairs = list(zip(rows, rows[1:])) + ([(rows[-1], rows[0])] if closed else [])
+    for r0, r1 in pairs:
+        for j in range(verts):
+            bm.faces.new((r0[j], r0[(j + 1) % verts], r1[(j + 1) % verts], r1[j]))
+    if not closed:
+        bm.faces.new(rows[0][::-1])
+        bm.faces.new(rows[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return mesh_ob(name, bm, [mat])
+
+
 def scissors():
-    """Built in the camera's world (after the yaw): the plane through the pivot and the blade tips; the handle loops
-    lifted into it from Flash's pixels."""
+    """Built in the camera's world (after the yaw), in the plane through the pivot and the blade tips: a matched pair
+    (stack.scis_design(): equal mirrored shanks, a teardrop and a D of one tube thickness, two tapering blades that
+    cross at a domed pivot screw). The handles bend along the camera's ray (unseen) into a plane a little nearer the
+    camera, clear of the rope and posts."""
     n = (ST[0] - SP).cross(ST[1] - SP).normalized()
     if n.dot(-cam_fwd()) < 0:
         n = -n
-    # the handles: in a plane a little nearer the camera than the blades' (the same picture, clear of rope and posts)
+    down = ((ST[0] + ST[1]) / 2 - SP).normalized()
+    h = down.cross(n).normalized()
+    if (ST[1] - SP).dot(h) < 0:
+        h = -h
+    up = -down
     spl = px(S.SCIS_PIVOT[0], S.SCIS_PIVOT[1], Y=S.SCIS_LOOP_Y)
     nl = (ST[0] - spl).cross(ST[1] - spl).normalized()
     if nl.dot(-cam_fwd()) < 0:
         nl = -nl
-    lift_ = lambda q, off: hit_plane(q[0], q[1], spl, nl) + nl * off
-    # each half: a blade to one tip, a shank up from the pivot, a loop (A: teardrop with the far tip, B: D)
-    halves = ((ST[1], S.SCIS_TEAR, 0.07), (ST[0], S.SCIS_D, -0.07))
-    for k, (tip, loop, off) in enumerate(halves):
-        b = (tip - SP).normalized()
-        w = n.cross(b).normalized()
-        ln = (tip - SP).length
-        side = 1 if k == 0 else -1
-        outline = []
-        for i in range(15):
-            f = i / 14
-            outline.append(SP + b * ((ln + 0.3) * f - 0.25) + w * side * (0.7 * (1 - f) ** 0.8 + 0.03))
-        for i in range(14, -1, -1):
-            f = i / 14
-            outline.append(SP + b * ((ln + 0.3) * f - 0.25) - w * side * (0.2 * (1 - f) + 0.02))
+    f = cam_fwd()
+    b_full = S.SCIS_SHANK[0] * math.cos(math.radians(S.SCIS_SHANK[1]))
+
+    def to3(q, z, bend=True):
+        p = SP + h * q[0] + up * q[1]
+        if bend and q[1] > 0:
+            t = (spl - p).dot(nl) / f.dot(nl)
+            k = min(1.0, q[1] / b_full)
+            p = p + f * t * (k * k * (3 - 2 * k))
+        return p + n * z
+
+    D = S.scis_design([((t - SP).dot(h), (t - SP).dot(up)) for t in ST])
+    TH = 0.09                                       # a half's thickness
+    for k, hv in enumerate(D["halves"]):
+        z = hv["z"] * 0.07                          # 0 (teardrop, right blade) in front, 1 behind
+        # the blade with its round boss: a flat plate
+        out = [to3(q, z, bend=False) for q in hv["blade"]]
         bm = bmesh.new()
-        a = [bm.verts.new(p + n * (off + 0.045)) for p in outline]
-        c = [bm.verts.new(p + n * (off - 0.045)) for p in outline]
-        bm.faces.new(a)
-        bm.faces.new(c[::-1])
-        m = len(a)
+        fr = [bm.verts.new(p + n * TH / 2) for p in out]
+        bk = [bm.verts.new(p - n * TH / 2) for p in out]
+        caps = [bm.faces.new(fr), bm.faces.new(bk[::-1])]
+        bmesh.ops.triangulate(bm, faces=caps)          # the outline is not convex
+        m = len(fr)
         for i in range(m):
-            bm.faces.new((a[i], c[i], c[(i + 1) % m], a[(i + 1) % m]))
+            bm.faces.new((fr[i], bk[i], bk[(i + 1) % m], fr[(i + 1) % m]))
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-        mesh_ob(f"scisblade{k}", bm, [M["blade"]], bevel=0.03, segs=2)
-        pts = [lift_(q, off) for q in loop]
-        # Flash's handles are flat steel bands, not round wire
-        sweep(f"scisloop{k}", smooth_loop(pts), nl, 0.2, 0.27, M["steel"], bevel=0.085, closed=True)
-        start = pts[0]
-        sweep(f"scisshank{k}", [SP + n * off, SP + n * off * 0.5 + Vector((0, 0, 0.5)), start], n, 0.2, 0.27, M["blade"],
-              bevel=0.085)
-    c = cyl("scispivot", 0.12, 0.3, SP - n * 0.15, M["blade"], verts=16, bevel=0.03)
-    track(c, n)
+        mesh_ob(f"scisblade{k}", bm, [M["blade"]], bevel=0.025, segs=2)
+        # the handle: a round tube loop, and a shank of the same tube from the boss to it
+        rod(f"scisloop{k}", [to3(q, z) for q in hv["loop"]], S.SCIS_ROD, n, M["steel"], closed=True)
+        s0, s1 = Vector(hv["shank"][0]), Vector(hv["shank"][1])
+        dv = (s1 - s0).normalized()
+        sh = [s0 + dv * 0.22 + (s1 + dv * 0.25 - s0 - dv * 0.22) * (i / 6) for i in range(7)]   # into the loop's point
+        rod(f"scisshank{k}", [to3(q, z) for q in sh], S.SCIS_ROD, n, M["steel"])
+    # a dark line down the front blade's cutting edge, where it lies over the back blade
+    e = D["halves"][0]["edge"]
+    rod("scisedge0", [to3(q, 0.07 + TH / 2 - 0.02, bend=False) for q in e[1:-1]], 0.028, n, M["door"], verts=8)
+    # the pivot screw: a domed disc on the front half, with a slot across it
+    c = SP + n * (0.07 + TH / 2 - 0.01)
+    lt = lathe("scispivot", [(0.0, 0.0), (0.17, 0.0), (0.17, 0.025), (0.15, 0.045), (0.11, 0.062), (0.06, 0.07), (0.0, 0.073)],
+               c, M["steel"], verts=32)
+    track(lt, n)
+    bm = bmesh.new()
+    s1 = (h + up).normalized()
+    s2 = n.cross(s1).normalized()
+    cc = c + n * 0.062
+    for dx in (-1, 1):
+        for dy in (-1, 1):
+            for dz in (-1, 1):
+                bm.verts.new(cc + s1 * 0.12 * dx + s2 * 0.02 * dy + n * 0.02 * dz)
+    bmesh.ops.convex_hull(bm, input=bm.verts)
+    mesh_ob("scisslot", bm, [M["door"]], smooth=False)
 
 
 def stairs():
