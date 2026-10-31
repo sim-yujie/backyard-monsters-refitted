@@ -42,6 +42,10 @@ A shadow the canvas cuts off is carried on past the edge by `tail()`. The housin
 last ~20 px inside the canvas on its own (the flats' soft sun). A render 40 px wider on the right (31 Oct 2026) gave
 the same shadow, 1 px wider, so housing-v1's own canvas stays.
 
+A parts cell with a line of solid pixels on its outer edge was cut by its render and is warned about (`clipped()`). Goo
+levels 6 and 10 warn for cells 3-6: the bulge in their pipes touches the canvas's bottom, under one game px of its
+rounded tip lost, which the game does not show (checked 31 Oct 2026).
+
 It prints one line of JSON per look with the row `buildingArtTiers.ts` holds (`top`, `shadow`, and `anim` as
 `[file, x, y, width, height, cells]` with `body` and `columns` when the strip wraps), in 1x px from the origin.
 """
@@ -104,6 +108,16 @@ def whole(box):
 def bbox(alpha, floor=2 / 255):
     ys, xs = np.nonzero(alpha > floor)
     return whole((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
+
+
+def clipped(alpha, box, run=15):
+    """The edges ("left", "top", ...) of a parts cell where a line of solid pixels stops dead: a soft edge fades out over
+    a pixel or two, so `run` solid pixels on the cell's outermost line mean the render cut it there (31 Oct 2026: the
+    Hatchery's renders were cut to a region round its crank at rest, and lost the handle wherever it swung past)."""
+    x0, y0, x1, y1 = box
+    lines = {"left": alpha[y0:y1, x0], "top": alpha[y0, x0:x1], "right": alpha[y0:y1, x1 - 1],
+             "bottom": alpha[y1 - 1, x0:x1]}
+    return ", ".join(k for k, v in lines.items() if (v > 200).sum() > run)
 
 
 def split(scene, building):
@@ -223,6 +237,11 @@ def export(name, render):
             layers = []
             if names:
                 boxes = [Image.open(n).getchannel("A").point(lambda v: 255 if v > 2 else 0).getbbox() for n in names]
+                for n, b in zip(names, boxes):
+                    cut = clipped(np.asarray(Image.open(n).getchannel("A")), b)
+                    if cut:
+                        print(f"WARNING {n.name}: solid pixels on its {cut} edge, cut by the render's border or canvas",
+                              file=sys.stderr)
                 box = whole((min(b[0] for b in boxes), min(b[1] for b in boxes),
                              max(b[2] for b in boxes), max(b[3] for b in boxes)))
                 x0, y0, x1, y1 = box

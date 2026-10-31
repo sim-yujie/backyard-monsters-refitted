@@ -427,11 +427,11 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 13 Hatchery: 3D, Flash's three looks; its crank turns while it hatches
   13: [
     { from: 1, top: ["top.3d1@2x.webp", -50, -67], shadow: ["shadow.3d1.jpg", -26, 21], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -44, -73, 77, 49, 31], columns: 26, body: ["body.3d1@2x.webp", -50, -52] } },
+      anim: { strip: ["anim.3d1@2x.webp", -47, -100, 93, 76, 31], columns: 22, body: ["body.3d1@2x.webp", -50, -52] } },
     { from: 2, top: ["top.3d2@2x.webp", -51, -114], shadow: ["shadow.3d2.jpg", -51, 15], lift: 0,
-      anim: { strip: ["anim.3d2@2x.webp", -13, -112, 73, 78, 31], columns: 28, body: ["body.3d2@2x.webp", -51, -114] } },
+      anim: { strip: ["anim.3d2@2x.webp", -13, -121, 75, 87, 31], columns: 27, body: ["body.3d2@2x.webp", -51, -114] } },
     { from: 3, top: ["top.3d3@2x.webp", -51, -113], shadow: ["shadow.3d3.jpg", -51, 13], lift: 0,
-      anim: { strip: ["anim.3d3@2x.webp", 10, -100, 51, 72, 31], body: ["body.3d3@2x.webp", -51, -113] } },
+      anim: { strip: ["anim.3d3@2x.webp", 7, -102, 82, 92, 31], columns: 24, body: ["body.3d3@2x.webp", -51, -113] } },
   ],
   // 15 Monster Housing: 3D, one look, still as Flash's
   15: [
