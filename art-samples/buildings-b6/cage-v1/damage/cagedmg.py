@@ -112,24 +112,74 @@ def holes(o, patches, axes, seed=0):
     return o, core
 
 
+def ash_mat():
+    """Ash and soot: dark brown-black with paler grey blotches, fading out to the grass at its edge (the mesh's "fade"
+    attribute: 1 inside, 0 at the rim), so a patch has no hard sheet edge."""
+    m = bpy.data.materials.get("ashmat")
+    if m:
+        return m
+    m = painted("ashmat", (28, 22, 20), rough=1.0, metal=0.0, wear=(62, 56, 50), scale=2.5, dirt=0.0, spec=0.05)
+    t = m.node_tree
+    out = next(n for n in t.nodes if n.type == "OUTPUT_MATERIAL")
+    bs = next(n for n in t.nodes if n.type == "BSDF_PRINCIPLED")
+    at = t.nodes.new("ShaderNodeAttribute")
+    at.attribute_name = "fade"
+    nz = t.nodes.new("ShaderNodeTexNoise")                  # the fade broken up, so the rim is blotchy, not a ring
+    nz.inputs["Scale"].default_value = 1.6
+    nz.inputs["Detail"].default_value = 3.0
+    t.links.new(t.nodes.new("ShaderNodeTexCoord").outputs["Object"], nz.inputs["Vector"])
+    mul = t.nodes.new("ShaderNodeMath")
+    mul.operation, mul.use_clamp = "MULTIPLY", True
+    t.links.new(at.outputs["Fac"], mul.inputs[0])
+    sc = t.nodes.new("ShaderNodeMapRange")
+    sc.inputs[1].default_value, sc.inputs[2].default_value = 0.3, 0.6
+    sc.inputs[3].default_value, sc.inputs[4].default_value = 0.6, 1.6
+    t.links.new(nz.outputs["Fac"], sc.inputs[0])
+    t.links.new(sc.outputs[0], mul.inputs[1])
+    soft = t.nodes.new("ShaderNodeMapRange")                # a smooth roll-off, no visible step
+    soft.interpolation_type = "SMOOTHERSTEP"
+    soft.inputs[1].default_value, soft.inputs[2].default_value = 0.1, 0.95
+    t.links.new(mul.outputs[0], soft.inputs[0])
+    tr = t.nodes.new("ShaderNodeBsdfTransparent")
+    mx = t.nodes.new("ShaderNodeMixShader")
+    t.links.new(soft.outputs[0], mx.inputs[0])
+    t.links.new(tr.outputs[0], mx.inputs[1])
+    t.links.new(bs.outputs[0], mx.inputs[2])
+    t.links.new(mx.outputs[0], out.inputs["Surface"])
+    return m
+
+
 def ash(name, at, r, seed=0):
     """A ragged patch of ash and soot on the ground (Flash's broken buildings sit in a dark burnt patch): a thin flat
-    sheet, its edge torn, dark brown-black with paler grey ash in blotches."""
+    sheet, solid in the middle and fading out over its torn outer band."""
     q = random.Random(seed)
-    m = bpy.data.materials.get("ashmat") or painted("ashmat", (28, 22, 20), rough=1.0, metal=0.0, wear=(62, 56, 50),
-                                                    scale=2.5, dirt=0.0, spec=0.05)
     bm = bmesh.new()
-    n = 28
+    n = 32
     ph = [q.uniform(0, 6.3) for _ in range(3)]
-    ring = []
-    for i in range(n):
-        a = 2 * math.pi * i / n
-        rr = r * (1 + 0.22 * math.sin(3 * a + ph[0]) + 0.12 * math.sin(7 * a + ph[1]) + q.uniform(-0.12, 0.12))
-        ring.append(bm.verts.new((rr * math.cos(a), rr * math.sin(a) * q.uniform(0.85, 1.0), 0.0)))
+    sq = q.uniform(0.8, 1.0)
+    rings, fades = [], []
+    for k, (f, fade) in enumerate(((0.45, 1.0), (0.75, 0.55), (1.1, 0.0))):
+        ring = []
+        for i in range(n):
+            a = 2 * math.pi * i / n
+            rr = r * f * (1 + 0.24 * math.sin(3 * a + ph[0]) + 0.14 * math.sin(7 * a + ph[1])
+                          + 0.04 * math.sin(11 * a + ph[2]) + q.uniform(-0.04, 0.04))
+            ring.append(bm.verts.new((rr * math.cos(a), rr * math.sin(a) * sq, 0.0)))
+            fades.append(fade)
+        rings.append(ring)
     c = bm.verts.new((0, 0, 0))
+    fades.append(1.0)
     for i in range(n):
-        bm.faces.new((c, ring[i], ring[(i + 1) % n]))
-    o = G["mesh_ob"](name, bm, [m], smooth=False)
+        j = (i + 1) % n
+        bm.faces.new((c, rings[0][i], rings[0][j]))
+        for r0, r1 in zip(rings, rings[1:]):
+            bm.faces.new((r0[i], r1[i], r1[j], r0[j]))
+    bm.verts.index_update()
+    order = [v.index for v in bm.verts]
+    o = G["mesh_ob"](name, bm, [ash_mat()], smooth=True)
+    att = o.data.attributes.new("fade", "FLOAT", "POINT")
+    for idx, f in zip(order, fades):
+        att.data[idx].value = f
     o.location = (at[0], at[1], GROUND + 0.004 + 0.001 * (seed % 5))
     return o
 
@@ -276,9 +326,9 @@ def damaged():
 
 
 # ------------------------------------------------------------------------------------------------------------ destroyed
-def bay(k, b, name):
-    """Side k's bay b (0..2 from the side's start): its two rail pieces (from post face to post face) and its pickets,
-    built standing. Returns the objects and the bay's ground line ends (fence line)."""
+def bay(k, b, name, broken=False):
+    """Side k's bay b (0..2 from the side's start): its two rails (from post face to post face; broken: each snapped in
+    two with a gap) and its pickets, built standing. Returns the objects and the bay's ground line ends (fence line)."""
     p0, p1, mid = S.sides()[k]
     d = Vector((p1[0] - p0[0], p1[1] - p0[1], 0))
     ln = d.length
@@ -289,7 +339,13 @@ def bay(k, b, name):
     e = Vector((p0[0], p0[1], 0)) + d * t1 - (u * gap if mid or b == 2 else Vector())
     obs = []
     for j, z in enumerate(S.RAIL_Z):
-        obs.append(rail_fn(f"{name}rail{j}", (a.x, a.y), (e.x, e.y), z))
+        if not broken:
+            obs.append(rail_fn(f"{name}rail{j}", (a.x, a.y), (e.x, e.y), z))
+            continue
+        t, g = R.uniform(0.3, 0.7), R.uniform(0.06, 0.16)    # snapped: a gap torn out of it somewhere along
+        m1, m2 = a + (e - a) * (t - g), a + (e - a) * (t + g)
+        obs.append(rail_fn(f"{name}rail{j}a", (a.x, a.y), (m1.x, m1.y), z))
+        obs.append(rail_fn(f"{name}rail{j}b", (m2.x, m2.y), (e.x, e.y), z))
     n = 3 * (S.PER_BAY + 1)
     for j in range(1, n):
         if mid and j % (S.PER_BAY + 1) == 0:
@@ -324,7 +380,7 @@ def destroyed():
             spot = c * R.uniform(0.22, 0.42) + Vector((R.uniform(-0.5, 0.5), R.uniform(-0.5, 0.5), 0))
             head = [o for o in cap if part(o)[1] != "spike"]
             spike = [o for o in cap if part(o)[1] == "spike"]
-            lie(head, R.uniform(0, 180), R.uniform(4, 9), spot)          # dropped, sitting askew in the rubble
+            lie(head, R.uniform(0, 180), R.uniform(70, 100), spot)       # dropped, lying on its side in the rubble
             turn(head, spot, (0, 0, 1), R.uniform(0, 90))
             for o in head:
                 o.location.z -= 0.05
@@ -341,7 +397,7 @@ def destroyed():
         into = inward(k)
         for b in range(3):
             name = f"b{k}{b}"
-            obs, a, e = bay(k, b, name)
+            obs, a, e = bay(k, b, name, broken=b != 2)
             if b == 2:                                     # stubs: pickets snapped low, rails gone
                 kill([o for o in obs if "rail" in o.name or o.name.endswith("-tip")])
                 for o in [o for o in SC.objects if o.name.startswith(f"picket{name}p") and "-tip" not in o.name]:
@@ -354,7 +410,24 @@ def destroyed():
             turn(obs, line, axis, 90 * sgn)
             # slid a little further in and turned a little, each bay its own way
             turn(obs, line, (0, 0, 1), R.uniform(-7, 7), move=tuple(into * R.uniform(0.3, 0.7)))
-            sit(obs)
+            # torn and bent, not a tidy ladder: kinked where the rails broke, every picket knocked askew, a few bent
+            c = sum((o.matrix_world.translation for o in obs), Vector()) / len(obs)
+            far = [o for o in obs if (o.matrix_world.translation - c).dot(axis) > 0]
+            turn(far, c, (0, 0, 1), R.choice((-1, 1)) * R.uniform(12, 24), move=tuple(axis * R.uniform(0.1, 0.3)))
+            groups = {}
+            for o in obs:
+                groups.setdefault(o.name.split("-")[0], []).append(o)
+            for nm, grp in groups.items():
+                g = sum((o.matrix_world.translation for o in grp), Vector()) / len(grp)
+                if nm.startswith("picket"):
+                    turn(grp, g, (0, 0, 1), R.uniform(-16, 16), move=tuple(axis * R.uniform(-0.12, 0.12)))
+                    tip = [o for o in grp if o.name.endswith("-tip")]
+                    if tip and R.random() < 0.4:                # the spear tip bent sideways at its foot
+                        turn(tip, tip[0].matrix_world.translation, (0, 0, 1), R.choice((-1, 1)) * R.uniform(25, 50))
+                else:
+                    turn(grp, g, (0, 0, 1), R.uniform(-6, 6), move=tuple(into * R.uniform(-0.1, 0.1)))
+            for grp in groups.values():
+                sit(grp)
             if (k + b) % 2 == 0:
                 recolour(obs, burnt)
             # torn: some pickets gone from the bay, one or two thrown loose beside it
