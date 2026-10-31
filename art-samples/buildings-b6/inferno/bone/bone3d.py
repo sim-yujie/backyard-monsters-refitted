@@ -12,17 +12,17 @@ with its thick rolled lip on its foot, two crusher rollers filling it to the rim
 left, the orange metal drum lying at the front left with its far end in a bolted collar on the base, the shield on the
 bowl's front right and the steel plate on the ground under it. A second, orange sun lights only the copper, rust and
 wood (light linking), with an orange glow from below on the boards and copper: Flash's warm Inferno highlights.
-Level 1: a rust band under the lip; two bone posts on the rim carry a bar with the tipping bucket of bones; a square
-front roller with neat rows of blunt pale bone pyramids and a grey back roller with dark round sockets; a small cog on
-the plate. Level 3 (Flash redraws the crusher here): a band round the bowl, a few big grey cones with pale tips on dark
-rollers sunk below the rim, a steel column whose low arm carries the hopper, a big pale cog, and a bigger hood leaning
+Level 1: a rust band under the lip; two bone posts on the rim carry a bar with the tipping bucket heaped with bones and
+a black spade paddle beside it; a cog roller of pointed bone sprocket discs in front of a pale perforated drum; on the
+shield a belt round two pulleys at its top corners runs down past its point to the cog on the plate. Level 3 (Flash redraws the crusher here): a band round the bowl, rows of tall grey spikes on dark rollers filling
+the bowl to the rim, a steel column whose low arm carries the hopper, a big pale cog, and a bigger hood leaning
 back against the bowl. The hopper: a long rust bin tipped steeply toward the bowl under a thick rust cover with lit
 edges, a wall hanging straight down from the cover's near edge, and Flash's plank tray hung from that wall's foot and
 running steeply down over the rollers; its axle is at the tray's lower right, in the arm's bearing.
 
 Animation, as Flash (47 frames at level 1, 50 at level 3): level 1, the bucket turns once round the bar, tipping its
 bones onto the rollers; level 3, the hopper swings back about its axle to fill, then tips forward and its bones slide off the tray's foot.
-At both the rollers turn and the cog turns (and the level 1 chain sways); the falling bones and the dust are the moving
+At both the rollers turn against each other and the cog turns (level 1: the belt runs and its pulleys turn); the falling bones and the dust are the moving
 layer. Nothing else moves.
 """
 import math
@@ -87,7 +87,7 @@ def mats():
     m["groove"] = painted("groove", (86, 48, 24), rough=0.85, wear=(122, 72, 38), scale=10, dirt=0.3, spec=0.15)
     m["bonegap"] = painted("bonegap", (40, 32, 24), rough=0.85, wear=(70, 58, 42), scale=6, dirt=0.3, spec=0.15)
     m["bonedark"] = painted("bonedark", (84, 70, 52), rough=0.8, wear=(128, 110, 82), scale=5, dirt=0.3, spec=0.2)
-    m["spike"] = painted("spike", (138, 140, 142), rough=0.42, metal=0.4, wear=(222, 222, 216), rust=(70, 50, 36),
+    m["spike"] = painted("spike", (168, 164, 158), rough=0.45, metal=0.1, wear=(232, 230, 222), rust=(70, 50, 36),
                          scale=8, dirt=0.25, spec=0.5, soot=0.35, rust_at=0.7, grain=0.25)  # L3: Flash's grey steel
     m["core"] = painted("core", (14, 14, 13), rough=0.9, metal=0.1, wear=(34, 32, 30), scale=6, dirt=0.3, spec=0.12)
     m["roller"] = painted("roller", (124, 118, 104), rough=0.72, metal=0.15, wear=(196, 186, 160), rust=(84, 60, 40),
@@ -298,8 +298,6 @@ def rollers():
             cyl(f"roll{i}collar{s_}", 0.22, 0.14, (0, 0, x_ - 0.07), M["steel"], parent=hub, verts=12, bevel=0.02)
         if L >= 3:                  # Flash: tall sharp grey spikes packed in rows, the rows of the two rollers between
             cyl(f"roll{i}core", r, 2 * ROLL_X + 0.2, (0, 0, -ROLL_X - 0.1), M["coredark"], parent=hub, verts=28)
-            for b_ in (-1.4, 0.0, 1.4):
-                cyl(f"roll{i}band{b_}", r + 0.03, 0.1, (0, 0, b_ - 0.05), M["steel"], parent=hub, verts=28, bevel=0.01)
             for k in range(6):
                 z = -1.85 + 0.37 * i + k * 0.74
                 if abs(z) > ROLL_X - 0.12:
@@ -657,7 +655,9 @@ def bucket_frame():
           0.14, 0.1, M["core"], bevel=0.02)
     for k, (u_, v_) in enumerate(((-0.25, 0.5), (0.25, 0.5), (0.0, 1.5))):
         kit.blob(f"paddlerivet{k}", o + eu * u_ + ev * v_ - Vector((0, 0.03, 0)), 0.055, 0.6, M["steel"])
-    box("paddlearm", (0.6, 0.1, 0.14), (POST_X[0] + 0.3, -0.2, BAR_Z - 0.75), M["rust"], bevel=0.02)
+    top = o + ev * 2.45 + Vector((0, 0.05, 0))  # an iron strap from the shaft's head back to the post
+    box("paddlearm", (top.x - POST_X[0] + 0.12, 0.3, 0.14), ((top.x + POST_X[0]) / 2, -0.17, top.z - 0.07),
+        M["darkrust"], bevel=0.02)
 
 
 def bucket():
