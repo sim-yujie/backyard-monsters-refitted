@@ -32,8 +32,8 @@ FUN_SPOUT_R, FUN_RIM_R, FUN_CONE_H, FUN_SPOUT_H = 0.32, 2.2, 1.7, 1.0
 # per level: the drum (ribbed tin: radius, bottom, top), the dome (radius, equator height), the funnel's foot height
 # level 1: the tin can (radius, bottom, top), the legs (bearings, clamp distance and height, foot distance), the tie
 # round the funnel's spout, the funnel's size, the magnifying glass (bearing, height, lens radius)
-LV1 = dict(can=(2.25, 0.45, 6.9), legs=(-108.0, -60.0, -3.0, 50.0), leg_r=4.1, leg_z=3.0, foot_d=4.1, bundle_z=10.2,
-           cloth_half=(4.6, 3.6), fun_k=0.72, fun_extra=1.2, mag_th=-86.0, mag_z=3.8, mag_r=1.3, mag_lean=0.45)
+LV1 = dict(can=(2.25, 0.45, 6.9), legs=(-108.0, -60.0, -3.0, 50.0), leg_r=4.1, leg_z=3.0, foot_d=4.1, bundle_z=10.5, fun_z=9.4,
+           cloth_half=(4.6, 3.6), fun_k=0.72, fun_extra=1.2, mag_th=-86.0, mag_z=5.5, mag_r=1.35, mag_lean=0.3, mag_len=3.7)
 
 # level 2: a bigger can, the sheet turned into a brown metal roof (top and eave heights, half sizes), bracket legs
 LV2 = dict(can=(2.9, 1.3, 6.4), legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_z=(11.0, 6.5), roof_half=(4.8, 3.8),
@@ -73,7 +73,7 @@ LV = {
     2: LV2,
     3: LV3,
     4: LV4,
-    5: _BODY5,
+    5: _lift(_BODY5, 1.0, foot_d=5.8, plinth_z=2.4),   # Flash stands level 5 as high as level 6
     6: _lift(_BODY5, 1.0, tiers=((4.8, 3.9, 5.6), (6.0, 2.2, 3.9))),
 }
 # levels 7 and 8: level 6 with one big front porthole and two at the sides, gold pipes at the four quarters, a crown
@@ -86,3 +86,16 @@ LV[8] = dict(LV[7], holes=LV[7]["holes"] + tuple((FRONT - 60 + 30 * k, 62.0, 0.4
 def polar(th, r, z):
     a = math.radians(th)
     return (r * math.cos(a), r * math.sin(a), z)
+
+# levels 9 and 10: the body raised again (a bigger dome on a narrower core) on one wide base band; the four quarter
+# mounts where level 7's gold pipes stood carry level 9's gold frames and level 10's gold columns with arms; eight
+# claw feet further out
+QUARTERS = (FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135)
+_BODY9 = dict(drum=(2.9, 5.0, 8.5), dome=(4.2, 8.5), dome_flat=1.28, fun_z=14.5, fun_k=0.82, base=(5.0, 2.0, 5.0),
+              feet=FEET8, foot_d=5.8, foot_dq=6.3, quarters=QUARTERS, holes=((FRONT, 32.0, 1.15),), straps=(),
+              meridians=tuple(FRONT + a for a in (-118.0, -82.0, -62.0, -28.0, -8.0, 28.0)))
+LV[9] = dict(_BODY9, frame_d=6.3, frame_top=9.7, shoulder_turn=13.0, shoulder_rise=1.4, drum_mat="tindark")
+# level 10: Flash narrows the dome into a tall bullet over a dark core, the base lower with a dark step
+LV[10] = dict(_BODY9, drum=(2.6, 5.4, 9.0), dome=(3.6, 9.0), dome_flat=1.3, fun_z=14.56, fun_k=0.68,
+              base=(4.0, 1.5, 4.4), step=(3.4, 5.4), foot_d=5.6, foot_dq=6.4, col_top=(10.4, 10.4, 10.9, 10.9),
+              drum_mat="core", port_mat="gold", holes=((FRONT, 30.0, 1.0),))

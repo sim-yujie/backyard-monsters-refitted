@@ -659,6 +659,12 @@ def materials():
                               rust=(150, 104, 70))
     M["perf_hi"] = perforated("perf_hi", (206, 206, 210), (40, 34, 34), 52, 0.75, 0.15, z0=0.0, wear=(176, 176, 182),
                               rust=(150, 104, 70))
+    M["core"] = painted("core", (44, 40, 44), rough=0.45, metal=0.7, wear=(78, 74, 80), rust=(70, 46, 34), scale=3,
+                        dirt=0.2, rust_at=0.7)
+    M["tindark"] = painted("tindark", (128, 138, 158), rough=0.3, metal=0.9, wear=(168, 178, 196), rust=(110, 80, 60),
+                           scale=2.0, dirt=0.45, spec=0.5, rust_at=0.6)
+    M["beige"] = painted("beige", (206, 196, 176), rough=0.55, metal=0.3, wear=(176, 166, 148), rust=(150, 104, 70),
+                         scale=3, dirt=0.35, rust_at=0.68)
     M["hole"] = flat("hole", (18, 14, 14), rough=1.0)
     M["palegold"] = shiny("palegold", (232, 196, 128), rough=0.35, metal=0.6, wear=(206, 160, 90), scale=2, dirt=0.3,
                           side=0.3)
@@ -874,23 +880,24 @@ def body_dome(lv):
     """The drum, dome, portholes, rivets, straps, collar and funnel of levels 4 to 8."""
     dr, dz0, dz1 = lv["drum"]
     rr, zeq = lv["dome"]
-    ribbed("drum", dr, dz0, dz1 + 0.05, pitch=0.42, depth=0.16)
-    dome("dome", rr, zeq)
+    ribbed("drum", dr, dz0, dz1 + 0.05, pitch=0.42, depth=0.16, mat=M[lv["drum_mat"]] if "drum_mat" in lv else None)
+    fl = lv.get("dome_flat", 1.0)
+    dome("dome", rr, zeq, fl)
     disc("dome-floor", 0.0, rr, zeq, M["dome"], thick=0.15)
     # the portholes: a front row of five round the dome's middle, four higher up between them
     holes = lv.get("holes", [])
     skip = []
     for i, (th, el, rp) in enumerate(holes):
-        p, n = on_dome(rr, zeq, th, el, 1.0, -0.02)
-        porthole(f"port{i}", p, n, rp)
+        p, n = on_dome(rr, zeq, th, el, fl, -0.02)
+        porthole(f"port{i}", p, n, rp, frame=0.08 + 0.04 * (rp > 1.0), mat_ring=M[lv["port_mat"]] if "port_mat" in lv else None)
         skip.append((th, el, math.degrees(rp / rr) + 3.0))
     # rivet lines: double rows down the meridians and single rings round each porthole
     mer = lv.get("meridians", [])
     if mer:
-        dome_rivets("dome-rvt", rr + 0.01, zeq, mer, 5.0, 80.0, 5.5, rr=0.055, double=1.9, skip=skip)
+        dome_rivets("dome-rvt", rr + 0.01, zeq, mer, 5.0, 80.0, 5.5, rr=0.055, double=1.9, skip=skip, flat_=fl)
     pts = []
     for th, el, rp in holes:
-        p, n = on_dome(rr, zeq, th, el, 1.0, 0.0)
+        p, n = on_dome(rr, zeq, th, el, fl, 0.0)
         q = Vector(n).to_track_quat("Z", "Y")
         for k in range(14):
             a = 2 * math.pi * k / 14
@@ -899,10 +906,10 @@ def body_dome(lv):
         studs("dome-prvt", pts, 0.045, M["rivet"])
     ring_rivets("dome-lip", rr + 0.1, zeq - 0.06, 64, rr=0.045)
     # the gold collar on the top, the funnel standing in it
-    ztop = zeq + rr
+    ztop = zeq + rr * fl
     lathe("collar", [(0.6, ztop - 0.4), (0.98, ztop - 0.35), (1.02, ztop - 0.1), (0.95, ztop + 0.12),
                      (0.5, ztop + 0.18), (0.38, ztop + 0.2)], (0, 0, 0), M["gold"], verts=48)
-    funnel(lv["fun_z"], M["brass"] if lv.get("brass_spout") else None)
+    funnel(lv["fun_z"], M["brass"] if lv.get("brass_spout") else None, k=lv.get("fun_k", 1.0))
     for i, th in enumerate(lv.get("straps", [])):
         strap(f"strap{i}", th, dr - 0.02, dz0 - 0.2, dz1, w=0.56, rivets=7)
 
@@ -976,7 +983,7 @@ def plinth5(lv):
     corners = [(4.1 * math.cos(math.radians(22.5 + 45 * k)), 4.1 * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
     pts = rounded_poly(corners, 0.4, 4)
     bm = bmesh.new()
-    zb, zt = dz0 - 1.5, dz0
+    zb, zt = lv.get("plinth_z", dz0 - 1.5), dz0
     bot = [bm.verts.new((x, y, zb)) for x, y in pts]
     top = [bm.verts.new((x * 0.97, y * 0.97, zt)) for x, y in pts]
     n = len(pts)
@@ -1220,8 +1227,8 @@ def level1():
             z = zb
         elif d < cr + 0.05:
             f = (d - 0.45) / (cr + 0.05 - 0.45)
-            z = zb + (zr - zb) * (1 - (1 - f) ** 1.15)
-            z += 0.14 * math.sin(9 * ph) * (1 - f) * min(1.0, 3 * f)      # the gathers under the tie
+            z = zr + (zb - zr) * (1 - f ** 3) ** 0.4                         # a bulky bundle, not a peak
+            z += 0.22 * math.sin(7 * ph + 0.6) * (1 - f) * min(1.0, 3 * f)  # the gathers under the tie
         else:
             e = d - cr - 0.05
             w = math.sin(ph - math.radians(S.FRONT)) ** 2                  # 1 toward the side corners
@@ -1230,10 +1237,28 @@ def level1():
             z = zr - 0.06 - e * ((1 - w) * 1.5 + w * 0.22)
         return q, z + 0.05 * math.sin(3.1 * q.x + 1.3) * math.sin(2.7 * q.y)
     rhombus("cloth", *lv["cloth_half"], drape, M["leather"], 0.06)
+    # the gathered top: the cloth's neck flares out above the tie in crumpled folds round the spout
+    bm = bmesh.new()
+    rows = []
+    for a in range(7):
+        t = a / 6
+        row = []
+        for b in range(48):
+            ph = 2 * math.pi * b / 48
+            r = 0.5 + 1.15 * t + 0.28 * t * math.sin(6 * ph + 1.0) + 0.12 * t * math.sin(11 * ph)
+            row.append(bm.verts.new((r * math.cos(ph), r * math.sin(ph), zb - 0.1 + 0.85 * t + 0.3 * t * math.sin(5 * ph + 0.4))))
+        rows.append(row)
+    for ra, rb in zip(rows, rows[1:]):
+        for b in range(48):
+            bm.faces.new((ra[b], ra[(b + 1) % 48], rb[(b + 1) % 48], rb[b]))
+    ob = mesh_ob("cloth-ruff", bm, [M["leather"]])
+    mo = ob.modifiers.new("solid", "SOLIDIFY")
+    mo.thickness = 0.06
+    mo.offset = 1.0
     lathe("cloth-tie", [(0.52, zb - 0.25), (0.6, zb - 0.1), (0.56, zb + 0.08), (0.42, zb + 0.18)], (0, 0, 0),
           M["string"], verts=24)
     box("cloth-tag", (0.06, 0.9, 0.55), P(S.FRONT, 0.62, zb - 0.75), M["tag"], rot=(0, 8, S.FRONT), bevel=0.02)
-    funnel(zb - 0.5, None, k=lv["fun_k"], extra=lv["fun_extra"])
+    funnel(lv["fun_z"], None, k=lv["fun_k"], extra=lv["fun_extra"])
     # paper clips on the tie, left and right
     for k, th in enumerate((S.FRONT - 75, S.FRONT + 80)):
         c = P(th, 0.7, zb + 0.1)
@@ -1248,7 +1273,7 @@ def level1():
     hdir = (up.normalized() * 0.9 + side * lv["mag_lean"] + n * 0.3).normalized()
     a = lc + hdir * (lv["mag_r"] + 0.05)
     tube("mag-neck", [a, a + hdir * 0.5], 0.09, M["chrome"])
-    tube("mag-handle", [a + hdir * 0.45, a + hdir * 2.9], 0.22, M["handle"], r_end=0.27)
+    tube("mag-handle", [a + hdir * 0.45, a + hdir * lv["mag_len"]], 0.22, M["handle"], r_end=0.27)
 
 
 def magnifier(name, c, n, rr, hdir, length):
@@ -1488,8 +1513,273 @@ def level4():
     railbar("redbar", [P(S.FRONT, dr + 0.05, dz0 + 1.2), P(S.FRONT, dr + 0.3, dz0 - 0.5), P(S.FRONT, fd, dz0 - 1.0)], 0.28)
 
 
+# ---------------------------------------------------------------------------------------------------- levels 9 and 10
+def spike(name, at, direction, r=0.16, h=0.7, mat=None):
+    """A sharp cone standing on `at`, pointing along direction."""
+    return track(cyl(name, r, h, at, mat or M["chrome"], r2=0.0, verts=12, bevel=0.0), direction)
+
+
+def facing_ring(name, at, n, r, wire, mat):
+    """A ring whose plane faces n (a boss on the dome, a loop by the spout)."""
+    e = bpy.data.objects.new(name, None)
+    link(e)
+    e.location = at
+    e.rotation_euler = Vector(n).to_track_quat("Z", "Y").to_euler()
+    ring(name + "-r", r, wire, mat, parent=e, n=32)
+    return e
+
+
+def claw_foot(i, th, d, z_top, kind):
+    """Levels 9 and 10: a gold claw foot. 9: a gold drum on eight curved claws; 10: a shallow gold dish on ten long
+    thin claws. A post rises from its middle to z_top."""
+    c = P(th, d, 0.0)
+    if kind == 9:
+        lathe(f"foot{i}-drum", [(1.0, 0.42), (1.22, 0.55), (1.3, 0.8), (1.3, 1.6), (1.2, 1.82), (0.75, 1.95),
+                                (0.42, 2.0), (0.38, z_top)], c, M["gold"], verts=40)
+        n, r0, z0, rt = 9, 1.2, 0.75, 1.65
+    else:
+        lathe(f"foot{i}-dish", [(0.22, 0.8), (0.8, 0.95), (1.3, 1.3), (1.34, 1.48), (1.0, 1.5), (0.5, 1.48),
+                                (0.28, 1.65), (0.28, z_top)], c, M["gold"], verts=40)
+        n, r0, z0, rt = 10, 1.2, 1.2, 1.85
+    for k in range(n):
+        a = th + 360.0 * (k + 0.5) / n
+        pts = [c + Vector(S.polar(a, r0 - 0.15, z0)), c + Vector(S.polar(a, r0 + (rt - r0) * 0.55, z0 + 0.15)),
+               c + Vector(S.polar(a, rt, 0.4)), c + Vector(S.polar(a, rt - 0.12, 0.03))]
+        tube(f"foot{i}-claw{k}", pts, 0.15 if kind == 9 else 0.11, M["gold"], r_end=0.03, smooth=True)
+
+
+def base910(lv, kind):
+    """The wide base band of levels 9 and 10 under the core: 9 pale perforated steel with gold rims; 10 a beige band
+    with one row of big black holes, a dark perforated step on top."""
+    r, za, zb = lv["base"]
+    dr = lv["drum"][0]
+    mat = M["perf_lo"] if kind == 9 else M["beige"]
+    lathe("base", [(r - 0.7, zb), (r - 0.12, zb), (r + 0.02, zb - 0.25), (r + 0.08, (za + zb) / 2), (r + 0.02, za + 0.25),
+                   (r - 0.12, za), (r - 0.7, za)], (0, 0, 0), mat, verts=128)
+    ring("base-rim-hi", r - 0.05, 0.14, M["gold"], z=zb - 0.02, n=128)
+    ring("base-rim-lo", r, 0.16, M["gold"], z=za + 0.08, n=128)
+    lathe("base-bowl", [(r - 0.1, za + 0.05), (r - 0.5, za - 0.3), (2.0, za - 0.5), (0.01, za - 0.52)], (0, 0, 0),
+          M["golddark"], verts=96)
+    if kind == 9:
+        disc("base-top", dr - 0.1, r - 0.1, zb + 0.02, M["golddark"], thick=0.12)
+        ring("base-rim-top", r - 0.1, 0.22, M["gold"], z=zb + 0.04, n=128)
+        return
+    rs, zs = lv["step"]                          # the dark step
+    lathe("step", [(rs - 0.3, zs), (rs, zs), (rs + 0.05, zs - 0.45), (rs, zb - 0.05)], (0, 0, 0), M["core"], verts=96)
+    disc("base-top", rs - 0.05, r - 0.1, zb + 0.02, M["steel"], thick=0.12)
+    disc("step-top", dr - 0.1, rs, zs + 0.02, M["core"], thick=0.1)
+    ring("step-rim", rs, 0.07, M["gold"], z=zs, n=96)
+    pts = [(P(th, r + 0.09, (za + zb) / 2 + 0.1), P(th, 1, 0)) for th in (S.FRONT + 360.0 * (k + 0.5) / 26 for k in range(26))]
+    studs("base-holes", pts, 0.36, M["hole"], flat_=0.15)
+    pts = [(P(th, rs + 0.04, zs - 0.4), P(th, 1, 0)) for th in (S.FRONT + 360.0 * k / 34 for k in range(34))]
+    studs("step-holes", pts, 0.13, M["hole"], flat_=0.15)
+
+
+def is_quarter(lv, th):
+    return any(abs(((th - q + 180) % 360) - 180) < 1 for q in lv["quarters"])
+
+
+def claw_feet(lv, kind):
+    """The eight claw feet: those under the quarter frames or columns further out than the rest."""
+    for i, th in enumerate(lv["feet"]):
+        claw_foot(i, th, lv["foot_dq"] if is_quarter(lv, th) else lv["foot_d"], 2.4, kind)
+
+
+def foot_posts(lv):
+    """The short gold posts from the claw feet between the quarters up to the base band, a bracket into its top."""
+    r, za, zb = lv["base"]
+    fd = lv["foot_d"]
+    for i, th in enumerate(lv["feet"]):
+        if is_quarter(lv, th):
+            continue
+        box(f"post{i}", (0.55, 0.55, zb + 0.55 - 1.8), P(th, fd, 1.8), M["gold"], rot=(0, 0, th), bevel=0.06)
+        box(f"post{i}-arm", (fd - r + 0.5, 0.5, 0.45), P(th, (fd + r) / 2 - 0.15, zb - 0.1), M["gold"], rot=(0, 0, th),
+            bevel=0.06)
+
+
+def dome_harness(lv, rings=True):
+    """Gold straps from the collar down the dome's front and sides, each ending in a gold ring (levels 9 and 10)."""
+    rr, zeq = lv["dome"]
+    fl = lv.get("dome_flat", 1.0)
+    for k, t in enumerate((S.FRONT, S.FRONT - 48, S.FRONT + 48)):
+        el1 = 52.0 if k == 0 else 44.0
+        pts = [on_dome(rr, zeq, t, el, fl, 0.06)[0] for el in (84.0, 74.0, 64.0, el1 + 4)]
+        tube(f"harness{k}", pts, 0.12, M["gold"], smooth=True)
+        if rings:
+            p, n = on_dome(rr, zeq, t, el1, fl, 0.06)
+            facing_ring(f"harness{k}-ring", p, n, 0.32, 0.1, M["gold"])
+
+
+def frame9(i, th, lv):
+    """Level 9's gold frame at a quarter: a perforated square post up from the claw foot, a beam over to a big gold
+    shoulder drum on the dome (the front two lean in toward the porthole and sit higher), a big gold tusk curving out of
+    the shoulder toward the screen's edge, silver spikes."""
+    d, zt = lv["frame_d"], lv["frame_top"]
+    rr, zeq = lv["dome"]
+    fl = lv["dome_flat"]
+    zb = 2.3
+    s = {S.FRONT - 45: -1, S.FRONT + 45: 1, S.FRONT - 135: 1, S.FRONT + 135: -1}[th]
+    front = i < 2
+    ts = th - s * lv["shoulder_turn"] if front else th          # the shoulder's bearing
+    zs = zt + (lv["shoulder_rise"] if front else 0.0)           # and height
+    rh = rr * math.cos(math.asin(min(1.0, (zs - zeq) / (rr * fl))))
+    box(f"frame{i}", (0.75, 0.9, zt - zb + 0.4), P(th, d, zb), M["gold"], rot=(0, 0, th), bevel=0.08)
+    box(f"frame{i}-cap", (1.0, 1.1, 0.5), P(th, d, zt + 0.3), M["gold"], rot=(0, 0, th), bevel=0.1)
+    tube(f"frame{i}-beam", [P(th, d, zt + 0.5), P(ts, rh + 0.4, zs)], 0.42, M["gold"], verts=16)
+    # the shoulder: a big gold drum where the beam meets the dome, its round face outward
+    track(lathe(f"frame{i}-sleeve", [(0.0, 0.0), (1.05, 0.0), (1.2, 0.15), (1.24, 1.2), (1.12, 1.38), (0.65, 1.44),
+                                     (0.0, 1.46)], P(ts, rh - 0.6, zs), M["gold"], verts=40), P(th + s * 45, 1, 0))
+    pts = []
+    for k in range(7):
+        z = zb + 0.6 + k * (zt - zb - 1.2) / 6
+        for side in (-1, 1):
+            pts.append((P(th, d, z) + P(th + 90 * side, 0.455, 0), P(th + 90 * side, 1, 0)))
+        pts.append((P(th, d + 0.38, z), P(th, 1, 0)))
+    studs(f"frame{i}-holes", pts, 0.12, M["hole"], flat_=0.2)
+    # the tusk: out of the shoulder's foot, curving out and down toward the screen's edge, its point beside the post
+    tube(f"frame{i}-tusk", [P(ts, rh + 0.5, zs - 0.5), P(th + s * 4, d - 0.9, zs - 0.4), P(th + s * 16, d - 0.1, zs - 1.6),
+                            P(th + s * 22, d, zs - 3.4)], 0.6, M["gold"], r_end=0.07, smooth=True)
+    for k, z in enumerate((zt - 1.4, zt - 3.8)):
+        spike(f"frame{i}-spike{k}", P(th, d + 0.36, z), P(th, 1, 0.4))
+    spike(f"frame{i}-spike2", P(th, d, zt + 0.75), Vector((0, 0, 1)) + P(th, 0.5, 0))
+
+
+def tendrils(z):
+    """Level 9's tendrils: thin dark and gold whiskers up out of the collar, round the outside of the cone."""
+    for k, a in enumerate((S.FRONT - 100, S.FRONT - 150, S.FRONT + 170, S.FRONT + 125, S.FRONT + 80)):
+        pts = [P(a, 0.8, z + 0.2), P(a, 1.5, z + 1.1), P(a, 2.1, z + 2.3), P(a + 8, 2.5, z + 3.1),
+               P(a + 20, 2.2, z + 3.6)]
+        tube(f"tendril{k}", pts, 0.08, M["handle"] if k % 2 else M["golddark"], r_end=0.02, smooth=True)
+
+
+def core9(lv):
+    """Level 9's core front: the drum opened (a dark slot with gold edges), red frames at the sides, red rods."""
+    dr, dz0, dz1 = lv["drum"]
+    th = S.FRONT
+    box("slot", (0.12, 1.5, dz1 - dz0 - 0.1), P(th, dr + 0.03, dz0), M["hole"], rot=(0, 0, th), bevel=0.0)
+    for s in (-1, 1):
+        strap(f"slot-edge{s + 1}", th + s * 17, dr - 0.02, dz0, dz1, w=0.36, rivets=6)
+    tube("slot-rod", [P(th, dr - 0.3, dz1 - 0.6), P(th, dr - 0.3, dz0 - 0.1)], 0.13, M["gold"])
+    for k, a in enumerate((S.FRONT - 65, S.FRONT + 65)):
+        ro = dr + 1.0
+        railbar(f"eframe{k}", [P(a, ro, dz0 + 0.4), P(a, ro, dz0 + 2.9)], 0.16)
+        for j, z in enumerate((dz0 + 0.4, dz0 + 1.65, dz0 + 2.9)):
+            railbar(f"eframe{k}-p{j}", [P(a, dr - 0.1, z), P(a, ro + 0.35, z)], 0.13)
+    for k, a in enumerate((S.FRONT - 26, S.FRONT + 26)):
+        railbar(f"rod{k}", [P(a, dr - 0.05, dz0 + 1.3), P(a, dr + 0.35, dz0 + 0.6), P(a, dr + 0.9, lv["base"][2] + 0.05)],
+                0.11)
+
+
+def level9():
+    lv = S.LV[9]
+    body_dome(lv)
+    rr, zeq = lv["dome"]
+    top = zeq + rr * lv["dome_flat"]
+    crown(top, 1.0)
+    tendrils(top + 0.4)
+    dome_harness(lv)
+    base910(lv, 9)
+    core9(lv)
+    claw_feet(lv, 9)
+    foot_posts(lv)
+    for i, th in enumerate(lv["quarters"]):
+        frame9(i, th, lv)
+
+
+def column10(i, th, lv):
+    """Level 10's gold column at a quarter: a red core between four gold bars, a gold foot and capital, standing on
+    the claw foot; two blue studs on the capital."""
+    d, zt = lv["foot_dq"], lv["col_top"][i]
+    zb = 1.6
+    c = P(th, d, 0.0)
+    lathe(f"col{i}-base", [(0.86, zb), (0.9, zb + 0.25), (0.7, zb + 0.45), (0.68, zb + 0.95)], c, M["gold"], verts=32)
+    cyl(f"col{i}-red", 0.46, zt - zb - 1.6, P(th, d, zb + 0.8), M["red"], verts=24)
+    for k in range(4):
+        a = th + 45 + 90 * k
+        tube(f"col{i}-bar{k}", [c + Vector(S.polar(a, 0.48, zb + 0.8)), c + Vector(S.polar(a, 0.48, zt - 0.8))], 0.22,
+             M["gold"], verts=12)
+    lathe(f"col{i}-cap", [(0.66, zt - 0.95), (0.72, zt - 0.7), (0.92, zt - 0.4), (0.95, zt), (0.7, zt + 0.12),
+                          (0.01, zt + 0.14)], c, M["gold"], verts=32)
+    for s in (-1, 1):
+        spike(f"col{i}-stud{s + 1}", c + Vector(S.polar(th + 90 * s, 0.35, zt + 0.05)), Vector((0, 0, 1)), r=0.16,
+              h=0.5, mat=M["glass"])
+
+
+def arm10(i, th, lv, front):
+    """Level 10's gold arm from a column's capital over into the dome: an elbow ball, a thick forearm, a shoulder
+    block on the dome, blue studs along the top and a big one on the elbow."""
+    d, zt = lv["foot_dq"], lv["col_top"][i]
+    rr, zeq = lv["dome"]
+    sh, n = on_dome(rr, zeq, th, 48.0 if front else 34.0, lv["dome_flat"], 0.45)
+    el = P(th, d - 0.1, zt + 0.55)
+    ball(f"arm{i}-elbow", el, 0.95, M["gold"])
+    mid = (el + sh) / 2 + Vector((0, 0, 0.3))
+    tube(f"arm{i}", [el, mid, sh], 0.75, M["gold"], verts=20, smooth=True)
+    b = box(f"arm{i}-shoulder", (1.4, 1.6, 1.4), sh, M["gold"], origin="centre", bevel=0.14)
+    b.rotation_euler = Vector(n).to_track_quat("X", "Z").to_euler()
+    ball(f"arm{i}-blue", P(th, d + 0.7, zt + 0.5), 0.36, M["glass"])
+    for k in range(3):
+        t = 0.25 + 0.22 * k
+        q = el * (1 - t) + sh * t + Vector((0, 0, 0.45 * 4 * t * (1 - t) + 0.5))
+        spike(f"arm{i}-stud{k}", q, Vector((0, 0, 1)) + P(th, 0.4, 0), r=0.14, h=0.45, mat=M["glass"])
+
+
+def horns(fz):
+    """Level 10's gold horns out of the funnel's neck either side (fz: the funnel's foot), a gold rod up through it,
+    red loops."""
+    for k, a in enumerate((S.FRONT - 90, S.FRONT + 90)):
+        tube(f"horn{k}", [P(a, 0.3, fz + 0.8), P(a, 1.7, fz + 1.0), P(a, 2.45, fz + 2.0), P(a, 2.6, fz + 3.6)], 0.42,
+             M["gold"], r_end=0.05, smooth=True)
+        facing_ring(f"loop{k}", P(a, 1.25, fz + 0.2), P(a + 90, 1, 0), 0.55, 0.09, M["red"])
+    tube("antenna", [(0, 0, fz + 0.5), (0, 0, fz + 5.3)], 0.1, M["gold"])
+    ball("antenna-tip", (0, 0, fz + 5.3), 0.14, M["gold"])
+
+
+def core10(lv):
+    """Level 10's dark core: three gold hoops with red clamps, rivet rows at the sides, a red bar down the front and
+    red hoses curling down from it onto the dark step."""
+    dr, dz0, dz1 = lv["drum"]
+    for k, z in enumerate((dz0 + 1.3, dz0 + 2.3, dz0 + 3.3)):
+        ring(f"hoop{k}", dr + 0.12, 0.16, M["gold"], z=z, n=96)
+        for j, a in enumerate((S.FRONT - 62, S.FRONT + 62)):
+            box(f"hoop{k}-clamp{j}", (0.36, 0.5, 0.5), P(a, dr + 0.15, z), M["red"], rot=(0, 0, a), origin="centre",
+                bevel=0.08)
+    railbar("redbar", [P(S.FRONT, dr + 0.3, dz1 - 0.2), P(S.FRONT, dr + 0.3, dz0 + 0.2)], 0.12)
+    pts = []
+    for a in (S.FRONT - 75, S.FRONT + 75):
+        for k in range(14):
+            pts.append((P(a, dr + 0.01, dz0 + 0.4 + k * 0.29), P(a, 1, 0)))
+    studs("core-rvt", pts, 0.07, M["rivet"])
+    zs = lv["base"][2] + 0.9
+    for k, a in enumerate((S.FRONT - 40, S.FRONT + 40, S.FRONT - 115, S.FRONT + 115)):
+        s = -1 if (k % 2 == 0) else 1
+        tube(f"hose{k}", [P(a, dr - 0.05, dz0 + 0.9), P(a + 8 * s, dr + 0.9, dz0 + 0.7), P(a + 20 * s, dr + 1.3, zs + 0.4),
+                          P(a + 34 * s, dr + 0.7, zs + 0.3), P(a + 44 * s, dr + 0.2, zs + 0.05)], 0.25, M["red"],
+             smooth=True)
+
+
+def level10():
+    lv = S.LV[10]
+    body_dome(lv)
+    rr, zeq = lv["dome"]
+    crown(zeq + rr * lv["dome_flat"], 1.0)
+    horns(lv["fun_z"])
+    dome_harness(lv, rings=False)
+    pts = [on_dome(rr, zeq, S.FRONT + a, e, lv["dome_flat"], 0.0)
+           for a, e in ((0, 62), (-55, 30), (55, 30), (-100, 22), (100, 22))]
+    for k, (p, n) in enumerate(pts):
+        ball(f"dome-blue{k}", p, 0.24, M["glass"])
+    base910(lv, 10)
+    core10(lv)
+    claw_feet(lv, 10)
+    foot_posts(lv)
+    for i, th in enumerate(lv["quarters"]):
+        column10(i, th, lv)
+        arm10(i, th, lv, i < 2)
+
+
 def build():
-    {1: level1, 2: level2, 3: level3, 4: level4, 5: level5, 6: level6, 7: level7, 8: lambda: level7(True)}[L]()
+    {1: level1, 2: level2, 3: level3, 4: level4, 5: level5, 6: level6, 7: level7, 8: lambda: level7(True), 9: level9, 10: level10}[L]()
 
 
 def family(o):
