@@ -12,7 +12,7 @@ import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
-import { saveClassicLook, savedClassicLook } from "@/game/classicLook";
+import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, type MusicChoice } from "@/game/classicLook";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
 import { Popup } from "@/ui/Popup";
@@ -51,6 +51,12 @@ export const SETTINGS_TEXT = {
   lookClassic: "Classic (original Flash)",
   lookHint: "Classic shows and plays the game as the original did.",
   lookSaved: "Saved. Reload the page to see the change.",
+  musicLabel: "Music",
+  musicStyle: "Same as Style",
+  musicNew: "New",
+  musicFlash: "Original Flash",
+  musicHint: "The yard tune, whatever the Style.",
+  musicSaved: "Saved. Reload the page to hear the change.",
   lookFailed: "Could not save this in your browser. Check that site data is allowed.",
   downloadLabel: "Quality",
   downloadHigh: "High",
@@ -422,8 +428,43 @@ const lookSection = (): HTMLElement => {
     hint.classList.toggle("field__hint--error", !saved);
   });
 
-  section.append(heading, row, hint);
+  section.append(heading, row, hint, ...musicRows());
   return section;
+};
+
+/** Music on its own (a player's request, 31 Oct 2026): the new yard tune or Flash's, whatever the Style. */
+const musicRows = (): HTMLElement[] => {
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.musicLabel;
+  const music = document.createElement("select");
+  music.id = "settings-music";
+  music.className = "account-settings__select";
+  for (const [value, text] of [
+    ["style", SETTINGS_TEXT.musicStyle],
+    ["new", SETTINGS_TEXT.musicNew],
+    ["flash", SETTINGS_TEXT.musicFlash],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    music.append(option);
+  }
+  music.value = savedMusicChoice();
+  row.append(words, music);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-music-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.musicHint;
+  music.setAttribute("aria-describedby", hint.id);
+  music.addEventListener("change", () => {
+    const saved = saveMusicChoice(music.value as MusicChoice);
+    hint.textContent = saved ? SETTINGS_TEXT.musicSaved : SETTINGS_TEXT.lookFailed;
+    hint.classList.toggle("field__hint--error", !saved);
+  });
+  return [row, hint];
 };
 
 /** Privacy: the two switches and the blocked players with Unblock (friends WP9). */
