@@ -952,7 +952,7 @@ def foot5(i, th, d, z_top, big=False):
     cyl(f"foot{i}-cup", 0.36, 0.3, P(th, d, 1.2), M["gold"], verts=24, r2=0.24)
 
 
-def rails5(lv, tiers=None, sides=True, diag=True):
+def rails5(lv, tiers=None, sides=True, diag=True, front=True):
     """The red rails of levels 5 and 6: they hold the drum up on the eight feet. Front and diagonal bars run from the
     drum's foot down and out (at level 6 over the tiers' edges) and a thin rod drops from each to its foot; the side ones
     are square frames with a steel panel, a red handle above."""
@@ -961,7 +961,7 @@ def rails5(lv, tiers=None, sides=True, diag=True):
     fd = lv["foot_d"]
     for i, th in enumerate(lv["feet"]):
         rel = ((th - S.FRONT + 180) % 360) - 180
-        if abs(rel) < 1 or (diag and abs(abs(rel) - 45) < 1):
+        if (front and abs(rel) < 1) or (diag and abs(abs(rel) - 45) < 1):
             zs = z0 + (0.9 if abs(rel) < 1 else 0.6)
             if tiers:
                 (r1, z1a, z1b), (r2, z2a, z2b) = tiers
@@ -975,7 +975,7 @@ def rails5(lv, tiers=None, sides=True, diag=True):
                 railbar(f"rail{i}", [P(th, dr - 0.1, zs), P(th, dr + 0.6, z0 + 0.3), P(th, fd, 2.1), P(th, fd, 1.3)], 0.28)
             else:
                 railbar(f"rail{i}", [P(th, dr - 0.1, zs), P(th, fd + 0.3, z0 - 1.6), P(th, fd, 1.9), P(th, fd, 1.3)], 0.28)
-        elif sides and abs(abs(rel) - 45) >= 1:    # the sides: a frame
+        elif sides and abs(rel) >= 1 and abs(abs(rel) - 45) >= 1:    # the sides: a frame
             zt = z0 + 0.1
             ro = (tiers[1][0] + 0.6) if tiers else fd + 0.8
             pts = [P(th, dr - 0.1, zt), P(th, ro, zt), P(th, ro, zt - 2.2)]
@@ -1103,13 +1103,13 @@ def bend_path(a, corner, b, rad, n=8):
     return out
 
 
-def gold_pipe(i, th, lv, el=70.0, r_v=5.3, th_dome=None):
+def gold_pipe(i, th, lv, el=70.0, r_v=5.3, th_dome=None, sleeve=True, z_end=None):
     """Level 7's gold pipe: out of the crown, down the dome's surface along a meridian, an elbow (with a sleeve) out at
     the dome's foot, then straight down beside the drum onto the lower tier."""
     rr, zeq = lv["dome"]
     fl = lv.get("dome_flat", 1.0)
     rp = lv.get("pipe_r", 0.5)
-    z_end = lv["tiers"][1][2]
+    z_end = lv["tiers"][1][2] if z_end is None else z_end
     td = th if th_dome is None else th_dome      # the front pair runs down the dome's sides, as Flash draws them
     pts = [on_dome(rr, zeq, td + (th - td) * k / 8, e, fl, rp - 0.05)[0] for k, e in enumerate((el, el - 12, el - 24, el - 36, el - 46))]
     low = pts[-1]
@@ -1118,9 +1118,25 @@ def gold_pipe(i, th, lv, el=70.0, r_v=5.3, th_dome=None):
     tube(f"pipe{i}", pts, rp, M["gold"], verts=20)
     # the sleeve at the elbow, and a flange where it stands on the tier
     q = bend_path(low, corner, P(th, r_v, z_end), 1.0, n=10)[6]
-    cyl(f"pipe{i}-sleeve", rp + 0.16, 0.7, q + Vector((0, 0, -0.35)), M["gold"], verts=28, bevel=0.06)
+    if sleeve:
+        cyl(f"pipe{i}-sleeve", rp + 0.16, 0.7, q + Vector((0, 0, -0.35)), M["gold"], verts=28, bevel=0.06)
     cyl(f"pipe{i}-foot", rp + 0.22, 0.3, P(th, r_v, z_end), M["gold"], verts=24, r2=rp + 0.04)
     return q
+
+
+def scroll(name, q, s, rp):
+    """A gold curl on a front pipe's elbow (Flash's ram-horn scroll): it leaves the pipe's outer side, rises, rolls out
+    and down and curls back in, in the plane facing the camera."""
+    u = Vector(P(S.FRONT + 90, 1.0, 0.0)) * s
+    w = Vector((0.0, 0.0, 1.0))
+    c = q + u * (rp + 0.4) + w * 0.15
+    pts = []
+    for k in range(40):
+        t = k / 39
+        a = t * 2 * math.pi * 1.35
+        rad = 0.88 * (1 - 0.68 * t)
+        pts.append(c + rad * (-math.cos(a) * u + math.sin(a) * w))
+    tube(name, pts, 0.3, M["gold"], verts=16, r_end=0.13, smooth=True)
 
 
 def level7(eight=False):
@@ -1135,37 +1151,58 @@ def level7(eight=False):
                                 (0.75, z2a - 0.1)], P(th, fd, 0.0), M["gold"], verts=32)
     fl = lv.get("dome_flat", 1.0)
     crown(lv["dome"][1] + lv["dome"][0] * fl, lv["fun_z"] - lv["dome"][1] - lv["dome"][0] * fl)
-    elbows = [gold_pipe(k, th, lv, th_dome=th + (25.0 if th > S.FRONT else -25.0) if k < 2 else None)
-              for k, th in enumerate(lv["pipes"])]
-    rails5(lv, lv["tiers"], sides=False, diag=False)
+    # the front pair runs down the dome's sides; the back pair down its outline at the far sides, as Flash draws them
+    elbows = []
+    for k, th in enumerate(lv["pipes"]):
+        if k < 2:
+            elbows.append(gold_pipe(k, th, lv, th_dome=th + (25.0 if th > S.FRONT else -25.0)))
+        else:
+            tb = th - 35.0 if th > S.FRONT else th + 35.0
+            elbows.append(gold_pipe(k, tb, lv, r_v=4.75, th_dome=tb, sleeve=False, z_end=lv["tiers"][0][2]))
+    rp = lv.get("pipe_r", 0.5)
+    for k, q in enumerate(elbows[:2]):         # the curls on the front pipes' elbows
+        scroll(f"pipe{k}-curl", q, -1 if lv["pipes"][k] < S.FRONT else 1, rp)
+    rails5(lv, lv["tiers"], sides=False, diag=False, front=False)
     # the red rails: a post with knobs at each side, a bar down the front, two curved arms to the front pipes
     dr, dz0, _ = lv["drum"]
     for k, th in enumerate((S.FRONT - 90, S.FRONT + 90)):
         ro = fd + 1.05
-        railbar(f"rail{k}", [P(th, dr - 0.1, dz0 + 0.7), P(th, ro, dz0 + 0.7), P(th, ro, 0.4)], 0.17)
-        ball(f"rail{k}-k1", P(th, ro, dz0 + 0.7), 0.36, M["red"])
-        ball(f"rail{k}-k2", P(th, ro, z2a + 0.5), 0.33, M["red"])
-        ball(f"rail{k}-k3", P(th, ro, 0.45), 0.3, M["red"])
-    rp = lv.get("pipe_r", 0.5)
+        railbar(f"rail{k}", [P(th, dr - 0.1, dz0 + 0.7), P(th, ro, dz0 + 0.7), P(th, ro, 0.4)], 0.25)
+        ball(f"rail{k}-k1", P(th, ro, dz0 + 0.7), 0.46, M["red"])
+        ball(f"rail{k}-k2", P(th, ro, z2a + 0.5), 0.42, M["red"])
+        ball(f"rail{k}-k3", P(th, ro, 0.45), 0.36, M["red"])
+    # Flash's thick red pipe down the front: out of the drum, over both tiers' edges, down to the front foot's star
+    F = S.FRONT
+    top = [P(F, dr + 0.15, dz0 + 3.0), P(F, dr + 0.3, dz0 + 0.5)] if not eight else [P(F, dr + 0.1, dz0 + 0.35)]
+    railbar("rail8", top + [P(F, r1 + 0.3, z1b - 0.1), P(F, r2 + 0.35, z2b - 0.1), P(F, r2 + 0.35, 0.3)], 0.3)
+    if not eight:                               # level 8 opens the drum's front, the pipe starts below the slot
+        cyl("rail8-flange", 0.5, 0.3, P(F, dr + 0.05, dz0 + 2.8), M["red"], rot=(0, 90, F), verts=24)
+    ball("rail8-k1", P(F, r2 + 0.35, z2b - 0.1), 0.44, M["red"])
+    ball("rail8-k2", P(F, r2 + 0.35, 0.45), 0.42, M["red"])
+    # two thick red pipes from the drum down and out over the tiers to a red knob on the lower tier's edge
+    for k, s_ in enumerate((-1, 1)):
+        a, b = F + 18 * s_, F + 33 * s_
+        top = [P(a, dr + 0.1, dz0 + 2.4), P(a, dr + 0.4, dz0 + 1.4)]
+        if eight:                               # level 8: they run down the drum's sides from under the dome first
+            a, b = F + 32 * s_, F + 35 * s_
+            top = [P(a, dr + 0.12, lv["drum"][2] - 0.1), P(a, dr + 0.14, dz0 + 1.6), P(a, dr + 0.45, dz0 + 0.8)]
+        railbar(f"rail{9 + k}", top + [P((a + b) / 2, r1 + 0.25, z1b + 0.1), P(b, r2 - 0.05, z2b + 0.35)], 0.3 if eight else 0.27)
+        ball(f"rail{9 + k}-k", P(b, r2 - 0.05, z2b + 0.35), 0.42, M["red"])
     for k, q in enumerate(elbows[:2]):         # red collars round the front pipes' elbows
         ring(f"rail{5 + k}-collar", rp + 0.26, 0.13, M["red"], z=0.0).location = q + Vector((0, 0, 0.1))
     # two curved red arms from the drum to the front pipes, a red collar round each pipe
-    for k, (th, tp) in enumerate(((S.FRONT - 30, lv["pipes"][0]), (S.FRONT + 30, lv["pipes"][1]))):
-        a = P(th, dr - 0.1, dz0 + 1.4)
-        b = P(tp, 5.3 - rp + 0.05, z1a + 0.3)
-        mid = (a + b) / 2 + Vector((0, 0, -0.6))
-        tube(f"rail{3 + k}", [a, mid, b], 0.17, M["red"], smooth=True)
+    for k, tp in enumerate(lv["pipes"][:2]):
         ring(f"rail{3 + k}-collar", rp + 0.1, 0.14, M["red"], z=0.0).location = P(tp, 5.3, z1a + 0.3)
     if eight:
         # level 8: red drips from the dome's foot, the drum's front opened (a dark slot between gold edges)
-        box("slot", (0.12, 1.7, lv["drum"][2] - dz0 - 0.1), P(S.FRONT, dr + 0.03, dz0), M["hole"], rot=(0, 0, S.FRONT), bevel=0.0)
+        box("slot", (0.12, 1.9, lv["drum"][2] - dz0 - 0.1), P(S.FRONT, dr + 0.03, dz0), M["hole"], rot=(0, 0, S.FRONT), bevel=0.0)
         for s_ in (-1, 1):
-            strap(f"slot-edge{s_ + 1}", S.FRONT + s_ * 15, dr - 0.02, dz0, lv["drum"][2], w=0.36, rivets=6)
+            strap(f"slot-edge{s_ + 1}", S.FRONT + s_ * 17, dr - 0.02, dz0, lv["drum"][2], w=0.36, rivets=6)
         # a gold lip round the dome's foot, and red drips running from under it down the drum
         rr, zeq = lv["dome"]
         ring("dome-goldlip", rr + 0.1, 0.17, M["gold"], z=zeq + 0.05, n=96)
         zt = lv["drum"][2]
-        for k, (th, ln) in enumerate(((-104.0, 2.8), (-80.0, 1.6), (-10.0, 1.6), (14.0, 2.8), (-118.0, 1.4), (28.0, 1.4))):
+        for k, (th, ln) in enumerate(((-104.0, 2.8), (14.0, 2.8), (-118.0, 1.4), (28.0, 1.4))):
             tube(f"drip{k}", [P(th, dr + 0.14, zt - 0.05), P(th, dr + 0.2, zt - ln * 0.6), P(th, dr + 0.24, zt - ln)], 0.24,
                  M["red"], r_end=0.12)
 
@@ -1284,6 +1321,26 @@ def level1():
     flap = painted("flap", (46, 42, 40), rough=0.85, wear=(76, 70, 66), scale=3.0)
     for k, (th, w, h, tilt) in enumerate(((S.FRONT + 120.0, 1.1, 2.0, 32.0), (S.FRONT - 125.0, 0.9, 1.7, 26.0))):
         box(f"cloth-flap{k}", (0.06, w, h), P(th, 0.62, zb + 0.15), flap, rot=(0, tilt, th), bevel=0.02, bow=0.3)
+    # Flash's darker fold down the cloth's right slope, from under the tie out to the right corner, narrowing
+    bm = bmesh.new()
+    rows = []
+    for a in range(13):
+        t = a / 12
+        d = 0.75 + 3.7 * t
+        half = 36.0 * (1 - 0.75 * t)
+        row = []
+        for b in range(7):
+            ph = math.radians(S.FRONT + 84.0 + half * (b / 3 - 1) - 10.0 * t)
+            q, z = drape(0, 0, Vector((d * math.cos(ph), d * math.sin(ph), 0.0)))
+            row.append(bm.verts.new((q.x, q.y, z + 0.13)))
+        rows.append(row)
+    for ra, rb in zip(rows, rows[1:]):
+        for b in range(6):
+            bm.faces.new((ra[b], ra[b + 1], rb[b + 1], rb[b]))
+    ob = mesh_ob("cloth-fold", bm, [painted("fold", (36, 28, 24), rough=0.9, wear=(60, 46, 38), scale=3.0)])
+    mo = ob.modifiers.new("solid", "SOLIDIFY")
+    mo.thickness = 0.05
+    mo.offset = 1.0
     funnel(lv["fun_z"], None, k=lv["fun_k"], extra=lv["fun_extra"])
     # paper clips on the tie, left and right
     # a chain of silver links round the neck over the tie, two binder clips with their wire handles up
@@ -1348,14 +1405,14 @@ def bracket_leg(i, th, d, z0, z1, can_r):
         cyl(f"leg{i}-nut{k}", 0.32, 0.18, P(th, d + 0.5, z - 0.25), M["gold"], rot=(0, 90, th), verts=6)
 
 
-def binder(name, at, th):
-    """A black binder clip with chrome wire arms."""
-    box(name, (0.7, 0.9, 0.55), at, M["handle"], rot=(0, 0, th), bevel=0.05)
+def binder(name, at, th, s=1.0):
+    """A black binder clip with chrome wire arms (s: its size)."""
+    box(name, (0.7 * s, 0.9 * s, 0.55 * s), at, M["handle"], rot=(0, 0, th), bevel=0.05)
     side = P(th + 90, 1, 0)
     for k, sg in enumerate((1, -1)):
-        b = at + side * (sg * 0.3) + Vector((0, 0, 0.55))
-        tube(f"{name}-arm{k}", [b, b + Vector((0, 0, 0.5)) + P(th, 0.3, 0), b + Vector((0, 0, 0.7)) + P(th, 0.1, 0)],
-             0.035, M["chrome"])
+        b = at + side * (sg * 0.3 * s) + Vector((0, 0, 0.55 * s))
+        tube(f"{name}-arm{k}", [b, b + Vector((0, 0, 0.5 * s)) + P(th, 0.3 * s, 0), b + Vector((0, 0, 0.7 * s)) + P(th, 0.1 * s, 0)],
+             0.035 * s, M["chrome"])
 
 
 def level2():
@@ -1394,12 +1451,12 @@ def level2():
         if n.z < 0:
             n = -n
         return p0 + n * out, n
-    pp, nrm = roof_pt(-1.4, 1.3, 0.12)
-    porthole("roof-port", pp, nrm, 0.95, frame=0.12, mat_ring=M["chrome"])
+    pp, nrm = roof_pt(-2.2, 1.5, 0.12)
+    porthole("roof-port", pp, nrm, 1.12, frame=0.12, mat_ring=M["chrome"])
     studs("roof-screws", [roof_pt(-3.5, 0.5, 0.12), roof_pt(-0.25, 3.0, 0.12)], 0.2, M["rivet"])
     funnel(zt - 0.2, None, k=lv["fun_k"], extra=lv["fun_extra"])
-    binder("clip0", P(S.FRONT - 60, 0.95, zt + 0.25), S.FRONT - 60)
-    binder("clip1", P(S.FRONT + 50, 1.0, zt + 0.25), S.FRONT + 50)
+    binder("clip0", P(S.FRONT - 75, 2.2, roof_z(-2.12, 0.57) - 0.05), S.FRONT - 75, s=1.6)
+    binder("clip1", P(S.FRONT + 105, 2.2, roof_z(2.13, -0.57) - 0.05), S.FRONT + 105, s=1.6)
     # the magnet on the can's front left, the magnifier leant on the roof's front right, handle down
     horseshoe("magnet", P(lv["mag_th"], cr + 0.3, lv["magnet_z"]), lv["mag_th"], 2.0, rad=0.85, w=0.5)
     th = lv["glass_th"]
@@ -1764,10 +1821,12 @@ def frame9(i, th, lv):
     rh = rr * math.cos(math.asin(min(1.0, (zs - zeq) / (rr * fl))))
     box(f"frame{i}", (0.75, 0.9, zt - zb + 0.4), P(th, d, zb), M["gold"], rot=(0, 0, th), bevel=0.08)
     box(f"frame{i}-cap", (1.0, 1.1, 0.5), P(th, d, zt + 0.3), M["gold"], rot=(0, 0, th), bevel=0.1)
-    tube(f"frame{i}-beam", [P(th, d, zt + 0.5), P(ts, rh + 0.4, zs)], 0.42, M["gold"], verts=16)
-    # the shoulder: a big gold drum where the beam meets the dome, its round face outward
-    track(lathe(f"frame{i}-sleeve", [(0.0, 0.0), (1.05, 0.0), (1.2, 0.15), (1.24, 1.2), (1.12, 1.38), (0.65, 1.44),
-                                     (0.0, 1.46)], P(ts, rh - 0.6, zs), M["gold"], verts=40), P(th + s * 45, 1, 0))
+    # the beam arches up off the post and over onto the shoulder (Flash's frame curves in at the top)
+    tube(f"frame{i}-beam", [P(th, d, zt + 0.4), P(th, d - 0.2, zt + 0.85), P((th + ts) / 2, (d + rh) / 2 + 0.2, zs + 0.75),
+                            P(ts, rh + 0.4, zs)], 0.5, M["gold"], verts=20, smooth=True)
+    # the shoulder: a rounded gold knuckle where the beam meets the dome, its domed face outward
+    track(lathe(f"frame{i}-sleeve", [(0.0, 0.0), (1.0, 0.0), (1.18, 0.25), (1.24, 0.6), (1.14, 0.98), (0.9, 1.25),
+                                     (0.5, 1.42), (0.0, 1.48)], P(ts, rh - 0.6, zs), M["gold"], verts=40), P(th + s * 45, 1, 0))
     pts = []
     for k in range(7):
         z = zb + 0.6 + k * (zt - zb - 1.2) / 6

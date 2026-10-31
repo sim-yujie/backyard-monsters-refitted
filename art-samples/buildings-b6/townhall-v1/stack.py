@@ -33,17 +33,17 @@ FUN_SPOUT_R, FUN_RIM_R, FUN_CONE_H, FUN_SPOUT_H = 0.32, 2.2, 1.7, 1.0
 # level 1: the tin can (radius, bottom, top), the legs (bearings, clamp distance and height, foot distance), the tie
 # round the funnel's spout, the funnel's size, the magnifying glass (bearing, height, lens radius)
 LV1 = dict(can=(2.25, 0.45, 6.9), legs=(-108.0, -60.0, -3.0, 50.0), leg_r=4.1, leg_z=3.0, foot_d=4.1, bundle_z=10.5, fun_z=9.8,
-           cloth_half=(4.7, 3.7), fun_k=0.72, fun_extra=1.6, mag_th=-86.0, mag_z=5.5, mag_r=1.35, mag_lean=0.3, mag_len=3.7)
+           cloth_half=(4.7, 3.7), fun_k=0.72, fun_extra=1.6, mag_th=-94.0, mag_z=5.5, mag_r=1.35, mag_lean=0.3, mag_len=2.7)
 
 # level 2: a bigger can, the sheet turned into a brown metal roof (top and eave heights, half sizes), bracket legs
-LV2 = dict(can=(2.9, 1.3, 6.4), roof_lift=0.7, legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_z=(10.9, 6.8), roof_plateau=0.42, roof_half=(4.8, 3.8),
+LV2 = dict(can=(2.9, 1.3, 6.4), roof_lift=0.7, legs=(-90.0, 0.0, 90.0, 180.0), leg_d=4.9, roof_z=(10.9, 6.8), roof_plateau=0.52, roof_half=(4.8, 3.8),
            fun_k=0.85, fun_extra=0.6, mag_th=-82.0, magnet_z=5.5, glass_th=-12.0, glass_d=2.76, glass_z=7.82)
 
 # level 3: the roof bent into a hood (radius, rim height) over a ribbed core on a steel pan, an octagonal gold rail
-LV3 = dict(hood=(3.25, 7.1), hood_sq=(0.55, 0.8), hood_flat=1.38, hood_drop=0.3, hood_flare=0.45, hood_corners=(-150.0, -125.0, 35.0, 70.0, 115.0), cut=(19.0, 36.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
+LV3 = dict(hood=(3.25, 7.8), hood_sq=(0.55, 0.8), hood_flat=1.165, hood_drop=0.3, hood_flare=0.45, hood_corners=(-150.0, -125.0, 35.0, 70.0, 115.0), cut=(19.0, 36.0), pan=(3.6, 1.3, 3.9), core_r=1.0,
            holes=((-88.0, 40.0, 1.3), (-2.0, 36.0, 1.12)),
            hood_rivets=((-140.0, 3.0), (-72.0, 3.0), (-18.0, 3.0), (52.0, 3.0), (-45.0, 72.0), (-100.0, 62.0)),
-           fun_k=1.0, fun_extra=0.0, magnets=(-84.0, -6.0), magnet_z=5.7, rail=(6.0, 3.0, 3.8), leg_d=5.0,
+           fun_k=1.0, fun_extra=0.0, magnets=(-84.0, -6.0), magnet_z=6.0, rail=(6.0, 3.0, 3.8), leg_d=5.0,
            frames=(-135.0, 45.0), frame_z=4.7)
 
 # level 4: the hood grown into a dome of four panels (seams at the quarters) on a tall drum with gold straps
@@ -81,7 +81,7 @@ LV = {
 LV[7] = dict(LV[6], holes=((FRONT, 30.0, 1.0), (FRONT - 90, 32.0, 0.8), (FRONT + 90, 32.0, 0.8)),
              pipes=(FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135), fun_z=LV[6]["fun_z"] + 0.75,
              scatter=True, straps=(-75.0, -15.0, -140.0, 50.0))
-LV[8] = dict(LV[7], pipe_r=0.62, holes=LV[7]["holes"] + tuple((FRONT + a, 56.0, 0.42) for a in (-36.0, -18.0, 0.0, 18.0, 36.0)))
+LV[8] = dict(LV[7], pipe_r=0.62, fun_k=0.9, holes=LV[7]["holes"] + tuple((FRONT + a, 56.0, 0.42) for a in (-36.0, -18.0, 0.0, 18.0, 36.0)))
 
 
 def polar(th, r, z):
