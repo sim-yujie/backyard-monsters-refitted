@@ -26,7 +26,7 @@ D.load(HERE.parent / "maproom.py")
 from dmgcore import *  # noqa: E402,F401,F403
 S = G["S"]
 px, scr, YAW_M, SHEAR_M, cam_fwd = G["px"], G["scr"], G["YAW_M"], G["SHEAR_M"], G["cam_fwd"]
-sphere = G["sphere"]
+sphere, shiny = G["sphere"], G["shiny"]
 A = S.BASE_A
 DZ = S.DECK_Z1
 R = random.Random(11)
@@ -149,11 +149,20 @@ def damaged():
     h.data.transform(YAW_M @ SHEAR_M)
     burn(cabin_world((cx + ax, wy, wz)), 1.4)
     # the telescope's arm snapped off its plate: a short gold stub stays on the roof with the plate
-    kill(named(r"bracketarm"))
+    bpy.context.view_layer.update()
+    for o in named(r"bracketblock"):
+        o.scale = (0.7, 0.7, 0.22)
+    kill(named(r"bracket"))
     scope = named(r"scope.*|bracketclamp")
     # the cabin leans over to the left, sinking into the broken deck on that side
-    cabin = named(r"(hwall|gable|roof|ridge|corner|bracket).*") + [h]
+    cabin = named(r"(hwall|gable|roof|ridge|corner|bracket).*")     # (the hole is named gablehole: already in)
     piv = cabin_world((cx + ax, cy + ay, DZ))
+    bpy.context.view_layer.update()
+    stretch = Matrix.Translation((0, 0, DZ)) @ Matrix.Diagonal((1, 1, 1.2, 1)) @ Matrix.Translation((0, 0, -DZ))
+    for o in cabin:
+        mw = o.matrix_world.copy()
+        o.data = o.data.copy()                 # some parts share one mesh: stretch each once
+        o.data.transform(mw.inverted() @ stretch @ mw)
     turn(cabin, piv, world((1, -1, 0)), 8, move=(0, 0, -0.06))
     # the telescope lies on the deck's left part, its bell up to the left
     e0 = px(S.SCOPE_EYE[0], S.SCOPE_EYE[1], Y=S.SCOPE_EYE[2])
@@ -168,8 +177,22 @@ def damaged():
     print("PROBE scope eye", tuple(round(c, 2) for c in e1), "screen", scr(e1))
     # the scissors knocked over: the teardrop's half swung out past the deck's left edge, its blade snapped off
     sp = G["SP"]
-    kill(named(r"scisblade0"))
-    screen_turn(named(r"scisloop0|scisshank0"), sp, 28)
+    kill(named(r"scisblade1"))
+    half = named(r"scisloop0|scisshank0|scisblade0")
+    screen_turn(half, sp, 30)
+    # then slid toward the camera (the picture does not move) until the blade's tip rests on the stone's front face
+    bpy.context.view_layer.update()
+    bl = named(r"scisblade0")[0]
+    tip = max((bl.matrix_world @ v.co for v in bl.data.vertices), key=lambda v: scr(v)[1])
+    nf = YAW_M.to_3x3() @ Vector((0, -1, 0))
+    v = -cam_fwd()
+    t = ((world((0, -A - 0.04, 0)) - tip).dot(nf)) / v.dot(nf)
+    turn(half, sp, (0, 0, 1), 0, move=tuple(v * t))
+    screen_turn(named(r"scisloop1|scisshank1"), sp, -12)
+    # a darker, bluer steel than the stone behind it (Flash's fallen blade reads clearly against the pale wall)
+    bl.data.materials.clear()
+    bl.data.materials.append(shiny("bladedark", (104, 112, 134), rough=0.38, metal=0.8, wear=(70, 74, 90), scale=3.0,
+                                   dirt=0.3))
     blade = G["ST"][1]
     # the snapped blade lies on the ground in front, left
     g = px(-52.0, 66.0, Z=0.06)
@@ -186,7 +209,19 @@ def damaged():
     D_ = S.DECK_A
     kill(named(r"deckrim3\d"))
     front = named(r"deck0\d") + named(r"deckslot0\d")
-    turn(front, world((0, -D_ + 0.9, DZ - 0.2)), world((1, 0, 0)), -24, move=(0, 0, -0.1))
+    for k, o in enumerate(front):
+        x = o.location.x
+        turn([o], world((x, -D_ + 0.9, DZ - 0.2)), world((1, 0.25 * (k - 1), 0)), -18 - 14 * (k % 2),
+             move=(0, 0, -0.08 * k))
+    # broken board ends poking out and down over the front edge (Flash: a ragged row of splintered boards)
+    for k, (x, ln, yaw, tilt) in enumerate(((-2.9, 1.3, -78, 34), (-1.4, 1.0, -96, 48), (-0.2, 1.4, -84, 22),
+                                            (1.3, 1.1, -100, 40), (2.6, 0.9, -80, 55))):
+        sp_ = math.radians(tilt)
+        at = world((x, -D_ - 0.3 * ln * math.cos(sp_), DZ - 0.2 - 0.3 * ln * math.sin(sp_)))
+        box("splint", (ln, 0.42, 0.11), at, M["deck"], rot=(R.uniform(-8, 8), tilt, S.YAW + yaw), bevel=0.02,
+            origin="center", jitter=0.03)
+    for k, (x, ln, yaw) in enumerate(((-2.4, 0.7, 10), (0.9, 0.6, -14), (2.1, 0.8, 6))):
+        chip(world((x, -D_ + 0.05, DZ - 0.05)), ln, M["rim"], S.YAW + yaw, tilt=-12, w=0.2, t=0.14)
     second = named(r"deck1\d")
     if second:
         kill([second[-1]])
@@ -199,14 +234,18 @@ def damaged():
     # broken lumps at their rims, as Flash paints them)
     for k, (x, z, r) in enumerate(((1.6, 2.4, 0.55), (2.5, 1.25, 0.42), (0.2, 0.95, 0.5), (-0.6, 2.95, 0.42),
                                    (-1.9, 1.7, 0.36))):
-        d = ragged_disc(f"stonehole{k}", r, n=24, jit=0.16)
+        r *= 0.7
+        d = ragged_disc(f"stonehole{k}", r, n=24, jit=0.2)
         d.data.transform(Matrix.Rotation(math.radians(90), 4, "Z"))
         d.data.transform(Matrix.Diagonal((1, 1, 0.8, 1)))
         d.data.transform(YAW_M @ Matrix.Translation((x, -A - 0.012, z)))
         burn(world((x, -A, z)), r + 0.5)
-        rock(f"rim{k}", world((x + r * 0.7, -A - 0.05, z - r * 0.75)), 0.16, M["stone"], seed=40 + k)
-    paler(M["stone"], (150, 148, 172), 0.5)
-    paler(M["foot"], (158, 156, 178), 0.5)
+        for j in range(4):
+            a = math.radians(40 + 95 * j + 20 * k)
+            rock(f"rim{k}{j}", world((x + r * math.cos(a), -A - 0.06, z + r * 0.8 * math.sin(a))), 0.13 + 0.03 * (j % 2),
+                 M["foot"], seed=40 + 4 * k + j)
+    paler(M["stone"], (150, 148, 172), 0.25)
+    paler(M["foot"], (158, 156, 178), 0.25)
     # debris on the ground: plank ends and stone lumps
     for k, (sx, sy, ln, yaw) in enumerate(((-68, 49, 1.0, 20), (52, 46, 1.1, -30), (-58, 60, 0.7, 70), (40, 64, 0.6, 10))):
         chip(px(sx, sy, Z=0.06), ln, M["deck"], yaw)
@@ -228,9 +267,12 @@ def destroyed():
         side, t = int(f), f - int(f)
         u = -A + 2 * A * t
         x, y = [(u, -A), (A, u), (-u, A), (-A, -u)][side]
-        h = R.uniform(0.15, 0.75) if R.random() < 0.7 else 0.05
-        rock(f"rim{k}", world((x * 0.93, y * 0.93, hz + h * 0.4)), R.uniform(0.32, 0.55), M["stone"], squash=0.9,
-             seed=60 + k)
+        if R.random() < 0.25:
+            continue                        # gaps where the wall is broken right down
+        h = R.uniform(0.45, 1.5)
+        yaw = S.YAW + (0 if side % 2 == 0 else 90) + R.uniform(-12, 12)
+        box(f"wallbit{k}", (R.uniform(0.6, 1.2), R.uniform(0.3, 0.45), h), world((x * 0.95, y * 0.95, hz - 0.2)),
+            M["stone"], rot=(R.uniform(-16, 16), R.uniform(-16, 16), yaw), bevel=0.06, jitter=0.07, taper=R.uniform(0.6, 0.9))
     for k, (x, y) in enumerate(((-0.6, -1.2), (0.7, 0.4), (-1.2, 1.0), (1.1, -0.6))):
         rock(f"inlump{k}", world((x, y, hz - 0.1)), R.uniform(0.35, 0.5), M["stone"], squash=0.7, seed=90 + k)
         burn(world((x, y, hz)), 1.2)
@@ -239,13 +281,19 @@ def destroyed():
     # gone: the tower, the cabin's walls and window, the deck, the back roof slope, the posts and their rope, the
     # stairs' top and most of their rail
     kill(named(r"(twall|tgable|troof|hwall|gable|window|ridge|corner|post|ball|rope|deck|stairland|handrail|handpost[12]|door|step[23]|steptread[23L])"
-               r".*|roof2\d|roofsheet2|roofeave2|bracketarm|bracketclamp"))
+               r".*|roof2\d|roofsheet2|roofeave2|bracketarm|bracketclamp|bracketblock"))
     # the front roof slope (with the gold plate) lying tilted on the rubble
     roof = named(r"roof0\d|roofsheet0|roofeave0|bracket")
     cx, cy = S.HOUSE_C
     mid = cabin_world((cx, cy - S.ROOF_RUN / 2, S.ROOF_Z - S.ROOF_RUN / 2 * G["TAN"]))
-    target = px(0.0, 26.0, Z=hz + 0.9)
-    turn(roof, mid, world((1, 0, 0)), -28, move=target - mid)
+    target = px(0.0, 22.0, Z=hz + 1.7)
+    turn(roof, mid, world((1, 0, 0)), -38, move=target - mid)
+    # rubble under the raised slab: broken planks and stone propping it up
+    for k, (x, y, ln, yaw) in enumerate(((-0.8, -0.6, 2.2, 30), (0.6, 0.5, 1.9, -50), (-0.2, 0.9, 1.6, 80),
+                                         (0.9, -0.9, 1.4, 10))):
+        chip(world((x, y, hz + 0.25 + 0.2 * k)), ln, M["plank"], S.YAW + yaw, tilt=R.uniform(-20, 20), w=0.4, t=0.14)
+    for k, (x, y) in enumerate(((-0.3, -0.1), (0.5, -0.3), (-0.6, 0.6))):
+        rock(f"proplump{k}", world((x, y, hz + 0.35)), 0.6, M["stone"], squash=0.8, seed=120 + k)
     turn(roof, target, up, 18)
     turn(roof, target, world((0, 1, 0)), 9)
     burn(target, 1.6)
@@ -259,13 +307,21 @@ def destroyed():
     d1 = Vector((-0.75, -0.45, 0.45)).normalized()
     m = Matrix.Translation(e1) @ d0.rotation_difference(d1).to_matrix().to_4x4() @ Matrix.Translation(-e0)
     bpy.context.view_layer.update()
+    dull = shiny("brassburnt", (150, 98, 30), rough=0.45, metal=0.75, wear=(60, 40, 16), scale=1.6, dirt=0.6)
     for o in scope:
         o.matrix_world = m @ o.matrix_world
+        if o.name.startswith(("scopetube", "scoperim")):
+            o.data.materials.clear()
+            o.data.materials.append(dull)
     burn(e1 + d1 * 1.2, 1.3)
     burn(e1 + d1 * 3.0, 0.9)
     # the scissors lying flat, open, in front: loops to the right, blades to the left
     sc = named(r"scis.*")
     sp = G["SP"]
+    sooty = shiny("steelburnt", (112, 116, 128), rough=0.5, metal=0.7, wear=(58, 54, 56), scale=2.2, dirt=0.6)
+    for o in sc:
+        o.data.materials.clear()
+        o.data.materials.append(sooty)
     n = (G["ST"][0] - sp).cross(G["ST"][1] - sp).normalized()
     turn(named(r"scisloop0|scisshank0|scisblade0"), sp, n, -30)       # opened wide, in their own plane
     turn(sc, sp, n.cross(up), math.degrees(n.angle(up)))
@@ -284,8 +340,8 @@ def destroyed():
     # the whole heap charred in patches (Flash's heap is dark brown and black between the pale stone)
     for x in (-2.0, -0.5, 1.0, 2.2):
         for y in (-2.0, -0.4, 1.2, 2.4):
-            if R.random() < 0.7:
-                burn(world((x, y, hz + 0.6)), R.uniform(0.8, 1.3))
+            if R.random() < 0.85:
+                burn(world((x, y, hz + 0.6)), R.uniform(1.0, 1.6))
     # a fallen post with its ball, and the rope strewn on the ground
     b3 = px(-38.0, 66.0, Z=S.BALL_R)
     tube("postf", [b3 + Vector((0.2, 0.2, -0.15)), b3 + Vector((1.2, 0.9, -0.2))], S.POST_R, M["steel"], verts=12)

@@ -56,14 +56,15 @@ TOWER_A = 0.56              # half its side
 TROOF_Z, TROOF_RUN, TROOF_DROP, TROOF_END = 12.3, 0.83, 1.27, 0.22
 
 # the telescope, placed where Flash draws it (Flash px; built after the yaw, in the camera's world)
-SCOPE_EYE = (-1.0, -34.6, 0.0)      # the eyepiece end: Flash px x, y and its world y
-SCOPE_DIR = (0.066, -0.914, 0.52)  # toward the mouth (Flash's mouth: a 0.75 ellipse, level with the eyepiece)
-SCOPE_LEN = 3.1
-SCOPE_PLATE = (-8.0, -23.5)         # the bracket's plate on the front roof slope (Flash px)
+SCOPE_EYE = (-1.8, -35.5, 0.0)      # the eyepiece end: Flash px x, y and its world y
+SCOPE_DIR = (-0.05, -0.9, 0.40)    # toward the mouth: Flash's bell faces up-left, its middle ~2 px above the bulb's
+SCOPE_LEN = 2.75
+SCOPE_PLATE = (-9.5, -22.5)         # the bracket's plate on the front roof slope (Flash px)
 SCOPE_ARM = -10.0                   # the arm meets the tube at this Flash x
 
 # the scissors (Flash px; their plane runs through the pivot and the two blade tips)
-SCIS_PIVOT = (-32.0, 19.0, -3.36)   # Flash x, y and world y
+SCIS_PIVOT = (-32.0, 19.0, -3.12)   # Flash x, y and world y (deep enough that the blades pass under the deck's front edge)
+SCIS_LOOP_Y = -3.36                 # the handles lie in the plane through the pivot at this world y (clear of rope and posts)
 SCIS_TIPS = ((-34.0, 58.5), (-24.6, 63.5))
 SCIS_TEAR = ((-31.5, 13), (-34.5, 9.5), (-38.5, 5), (-42.5, 0), (-45.6, -5), (-47.6, -10), (-48.3, -15), (-47.4, -19.5),
              (-45, -21.8), (-42.4, -21.2), (-40.6, -17.5), (-38.8, -12), (-37, -6), (-35.2, 0), (-33.6, 5.5), (-32.4, 10))

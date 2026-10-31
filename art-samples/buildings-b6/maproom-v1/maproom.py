@@ -861,20 +861,20 @@ def materials():
     # pale weathered boards (deck, roofs) and darker brown planks (walls, stairs)
     M["deck"] = wood("deck", (200, 166, 106), (126, 98, 60), axis="X", dirt=0.32)
     shade_along(M["deck"], (0.707, 0.707, 0.0), 0.6, 5.0, 0.5)     # Flash's deck darkens to the right of the cabin
-    M["roofx"] = wood("roof", (226, 192, 130), (142, 110, 70), axis="X", dirt=0.2)
-    M["roofy"] = wood("roof", (214, 182, 124), (134, 104, 66), axis="Y", dirt=0.2)
+    M["roofx"] = wood("roof", (238, 214, 160), (156, 128, 86), axis="X", dirt=0.2)
+    M["roofy"] = wood("roof", (226, 204, 152), (146, 120, 80), axis="Y", dirt=0.2)
     M["corner"] = wood("corner", (176, 150, 108), (136, 112, 76), axis="Z", dirt=0.2, rings=4.0)
     M["plank"] = wood("plank", (96, 81, 59), (84, 71, 52), axis="Z", dirt=0.35, rings=4.0)
     lift(M["plank"], (96, 80, 56), 0.08)              # Flash lights the cabin's walls almost evenly
     M["rim"] = wood("rim", (104, 82, 52), (74, 58, 36), axis="X", dirt=0.2)
     M["tplank"] = wood("tplank", (156, 126, 84), (126, 100, 64), axis="Z", dirt=0.25, rings=4.0)
-    M["stair"] = wood("stair", (146, 120, 84), (88, 70, 44), axis="Z", dirt=0.3)
-    M["riser"] = wood("riser", (92, 74, 46), (64, 50, 30), axis="Z", dirt=0.2)
-    M["stairside"] = wood("stairside", (196, 166, 114), (150, 124, 82), axis="Z", dirt=0.2)
+    M["stair"] = wood("stair", (124, 98, 64), (74, 57, 34), axis="Z", dirt=0.3)
+    M["riser"] = wood("riser", (78, 62, 38), (54, 42, 24), axis="Z", dirt=0.2)
+    M["stairside"] = wood("stairside", (172, 142, 96), (128, 104, 66), axis="Z", dirt=0.2)
     lift(M["stairside"], (120, 100, 66), 0.25)
     lift(M["tplank"], (120, 96, 62), 0.15)
     M["plate"] = shiny("plate", (196, 134, 26), rough=0.32, metal=0.9, wear=(112, 66, 10), scale=1.6, dirt=0.4)
-    M["tread"] = wood("stair", (146, 120, 84), (88, 70, 44), axis="Y", dirt=0.3)
+    M["tread"] = wood("stair", (124, 98, 64), (74, 57, 34), axis="Y", dirt=0.3)
     M["frame"] = wood("frame", (126, 106, 80), (96, 80, 58), axis="Z", dirt=0.1)
     M["glass"] = flat("glass", (16, 12, 8), rough=0.6)
     # weathering: soft stains and fine dirt on the stone and every wooden part (Flash's art is never clean)
@@ -884,10 +884,13 @@ def materials():
                          "stair": (1.0, 0.18), "riser": (1.0, 0.12), "stairside": (1.0, 0.18), "rim": (1.0, 0.15)}.items():
         stain(M[k], sc, amt, 2.0 + len(k), fine=0.1)
     # metals: Flash's old gold telescope, light steel scissors and posts, silver balls
-    M["brass"] = shiny("brass", (246, 194, 50), rough=0.26, metal=0.88, wear=(138, 92, 14), scale=2.0, dirt=0.25,
+    M["brim"] = shiny("brim", (190, 116, 26), rough=0.34, metal=0.85, wear=(104, 56, 10), scale=2.0, dirt=0.35,
+                      side=0.3)
+    M["brass"] = shiny("brass", (238, 176, 42), rough=0.28, metal=0.88, wear=(128, 76, 12), scale=2.0, dirt=0.25,
                        side=0.3)
     M["bellin"] = painted("bellin", (54, 48, 22), rough=0.7, wear=(70, 34, 18), scale=2.0, dirt=0.0, spec=0.3)
-    M["steel"] = shiny("steel", (176, 184, 200), rough=0.35, metal=0.75, wear=(140, 148, 166), scale=3.0, dirt=0.1)
+    M["steel"] = shiny("steel", (184, 192, 208), rough=0.35, metal=0.75, wear=(140, 148, 166), scale=3.0, dirt=0.1)
+    M["blade"] = shiny("blade", (150, 156, 172), rough=0.4, metal=0.75, wear=(98, 102, 116), scale=3.0, dirt=0.2)
     M["ball"] = shiny("ball", (214, 220, 232), rough=0.25, metal=0.8, wear=(170, 176, 190), scale=3.0, dirt=0.05)
     M["rope"] = painted("rope", (52, 34, 44), rough=0.9, dirt=0.0, spec=0.2)
     M["hand"] = wood("hand", (176, 150, 104), (130, 104, 70), axis="Z", dirt=0.1)
@@ -1090,21 +1093,22 @@ def telescope():
     e = px(S.SCOPE_EYE[0], S.SCOPE_EYE[1], Y=S.SCOPE_EYE[2])
     d = Vector(S.SCOPE_DIR).normalized()
     L_ = S.SCOPE_LEN
-    # (r, z) along the tube from the eyepiece: a domed cap, a round knuckle, a fat barrel with rings, the flared horn
-    # Flash: a knobby joint at the eye end, a short fat barrel, a horn that flares fast to a thick rim
-    prof = [(0.0, -0.06), (0.22, -0.04), (0.36, 0.04), (0.46, 0.16), (0.5, 0.3), (0.49, 0.42), (0.42, 0.52),
-            (0.4, 0.58), (0.5, 0.66), (0.62, 0.8), (0.7, 1.0), (0.72, 1.25), (0.7, 1.5), (0.62, 1.7), (0.67, 1.76),
-            (0.67, 1.86), (0.58, 1.92), (0.54, 2.0)]
+    # (r, z) along the tube from the eyepiece. Flash: a fat round bulb right behind the bell, a short ringed neck, then
+    # the horn flaring fast to a thick dark orange rim
+    prof = [(0.0, -0.1), (0.25, -0.06), (0.42, 0.04), (0.55, 0.18), (0.62, 0.36), (0.63, 0.52), (0.58, 0.7),
+            (0.48, 0.86), (0.4, 0.96), (0.4, 1.0), (0.49, 1.04), (0.49, 1.14), (0.4, 1.18), (0.37, 1.24)]
     for k in range(1, 12):
         f = k / 11
-        prof.append((0.54 + 0.42 * f ** 2.8, 2.0 + (L_ - 2.02) * f))
-    prof += [(0.97, L_ - 0.02), (1.01, L_ + 0.06), (0.95, L_ + 0.11), (0.84, L_ + 0.05)]
+        prof.append((0.37 + 0.48 * f ** 2.6, 1.24 + (L_ - 0.04 - 1.24) * f))
     tb = lathe("scopetube", prof, e, M["brass"], verts=40)
     track(tb, d)
-    inner = [(0.84, L_ + 0.05), (0.66, L_ - 0.3), (0.5, L_ - 0.7), (0.42, L_ - 1.1), (0.0, L_ - 1.15)]
+    rim = lathe("scoperim", [(0.8, L_ - 0.08), (0.9, L_ - 0.02), (0.93, L_ + 0.05), (0.87, L_ + 0.11), (0.74, L_ + 0.05)],
+                e, M["brim"], verts=40)
+    track(rim, d)
+    inner = [(0.74, L_ + 0.05), (0.58, L_ - 0.3), (0.45, L_ - 0.7), (0.37, L_ - 1.0), (0.0, L_ - 1.05)]
     ib = lathe("scopein", inner, e, M["bellin"], verts=40)
     track(ib, d)
-    # the gold bracket: a plate on the front roof slope, an arm up to a clamp round the barrel
+    # the gold mount: Flash draws a chunky block straight under the neck, sitting on the front roof slope (no arm)
     ang = math.radians(S.ROOF_PITCH)
     cx, cy = S.HOUSE_C
     q = [YAW_M @ SHEAR_M @ Vector(v) for v in ((cx, cy, S.ROOF_Z), (cx + 1, cy, S.ROOF_Z),
@@ -1113,16 +1117,17 @@ def telescope():
     n = (q[1] - q[0]).cross(q[2] - q[0]).normalized()
     if n.z < 0:
         n = -n
+    neck = e + d * 1.075
+    # the plate on the roof where Flash draws the block's foot; a fat block from it up under the neck
     plate = hit_plane(*S.SCOPE_PLATE, p0, n)
-    b = box("bracket", (1.25, 1.05, 0.12), plate + n * 0.05, M["plate"], bevel=0.035, origin="center")
+    b = box("bracket", (1.4, 1.2, 0.2), plate + n * 0.04, M["plate"], bevel=0.05, origin="center")
     b.rotation_euler = n.to_track_quat("Z", "X").to_euler()
-    ox = S.ORIGIN[0]
-    t = ((S.SCOPE_ARM - ox) / SX - (e.x + e.y)) / (d.x + d.y)
-    t = min(max(t, 0.9), 1.6)
-    clamp = e + d * t
-    low = clamp - Vector((0, 0, 0.4))
-    tube("bracketarm", [plate + n * 0.05, low], 0.22, M["brass"], verts=14)
-    c = cyl("bracketclamp", 0.49, 0.2, clamp - d * 0.1, M["brass"], verts=32, bevel=0.04)
+    top = neck - Vector((0, 0, 0.3))
+    ax = top - plate
+    blk = box("bracketblock", (1.0, 0.95, ax.length + 0.12), plate - ax.normalized() * 0.02, M["brass"], bevel=0.14,
+              taper=0.84)
+    blk.rotation_euler = ax.to_track_quat("Z", "X").to_euler()
+    c = cyl("bracketclamp", 0.56, 0.18, neck - d * 0.09, M["brass"], verts=32, bevel=0.04)
     track(c, d)
 
 
@@ -1132,7 +1137,12 @@ def scissors():
     n = (ST[0] - SP).cross(ST[1] - SP).normalized()
     if n.dot(-cam_fwd()) < 0:
         n = -n
-    lift_ = lambda q, off: hit_plane(q[0], q[1], SP, n) + n * off
+    # the handles: in a plane a little nearer the camera than the blades' (the same picture, clear of rope and posts)
+    spl = px(S.SCIS_PIVOT[0], S.SCIS_PIVOT[1], Y=S.SCIS_LOOP_Y)
+    nl = (ST[0] - spl).cross(ST[1] - spl).normalized()
+    if nl.dot(-cam_fwd()) < 0:
+        nl = -nl
+    lift_ = lambda q, off: hit_plane(q[0], q[1], spl, nl) + nl * off
     # each half: a blade to one tip, a shank up from the pivot, a loop (A: teardrop with the far tip, B: D)
     halves = ((ST[1], S.SCIS_TEAR, 0.07), (ST[0], S.SCIS_D, -0.07))
     for k, (tip, loop, off) in enumerate(halves):
@@ -1143,7 +1153,7 @@ def scissors():
         outline = []
         for i in range(15):
             f = i / 14
-            outline.append(SP + b * ((ln + 0.3) * f - 0.25) + w * side * (0.56 * (1 - f) ** 0.85 + 0.03))
+            outline.append(SP + b * ((ln + 0.3) * f - 0.25) + w * side * (0.7 * (1 - f) ** 0.8 + 0.03))
         for i in range(14, -1, -1):
             f = i / 14
             outline.append(SP + b * ((ln + 0.3) * f - 0.25) - w * side * (0.2 * (1 - f) + 0.02))
@@ -1156,14 +1166,14 @@ def scissors():
         for i in range(m):
             bm.faces.new((a[i], c[i], c[(i + 1) % m], a[(i + 1) % m]))
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-        mesh_ob(f"scisblade{k}", bm, [M["steel"]], bevel=0.03, segs=2)
+        mesh_ob(f"scisblade{k}", bm, [M["blade"]], bevel=0.03, segs=2)
         pts = [lift_(q, off) for q in loop]
         # Flash's handles are flat steel bands, not round wire
-        sweep(f"scisloop{k}", smooth_loop(pts), n, 0.14, 0.34, M["steel"], bevel=0.05, closed=True)
+        sweep(f"scisloop{k}", smooth_loop(pts), nl, 0.2, 0.27, M["steel"], bevel=0.085, closed=True)
         start = pts[0]
-        sweep(f"scisshank{k}", [SP + n * off, SP.lerp(start, 0.5) + n * off * 0.5, start], n, 0.14, 0.34, M["steel"],
-              bevel=0.05)
-    c = cyl("scispivot", 0.12, 0.3, SP - n * 0.15, M["steel"], verts=16, bevel=0.03)
+        sweep(f"scisshank{k}", [SP + n * off, SP + n * off * 0.5 + Vector((0, 0, 0.5)), start], n, 0.2, 0.27, M["blade"],
+              bevel=0.085)
+    c = cyl("scispivot", 0.12, 0.3, SP - n * 0.15, M["blade"], verts=16, bevel=0.03)
     track(c, n)
 
 
