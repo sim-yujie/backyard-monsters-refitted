@@ -1,11 +1,11 @@
-"""post.py : the General Store 3D sample pictures, from store.py's renders (render/) and the Flash art (fref.py).
-Flash has one look for every General Store level and no animation, so there is one pair to show.
+"""post.py : the Map Room 3D sample pictures, from maproom.py's renders (render/) and the Flash art (fref.py).
+Flash has one look for every Map Room level and no animation, so there is one pair to show.
 
     python post.py shade       render/L1-base.png   from L1-raw.png: the ground shadow lighter and shorter, as Flash's
-    python post.py side        store-side.png       Flash | 3D, large (the building and its ground shadow), on grass
-    python post.py outline     store-outline.png    Flash outline (red) on the 3D (cyan), the miss map; overlap printed
-    python post.py crops       work/crop-*.png    full-size crops of the risky areas, Flash beside 3D
-    python post.py game        store-game.png       Flash | 3D at the game's own size (1x) and 2x, on grass
+    python post.py side        maproom-side.png       Flash | 3D, large (the building and its ground shadow), on grass
+    python post.py outline     maproom-outline.png    Flash outline (red) on the 3D (cyan), the miss map; overlap printed
+    python post.py crops       maproom-crop-*.png  full-size crops of the risky areas, Flash beside 3D
+    python post.py game        maproom-game.png       Flash | 3D at the game's own size (1x) and 2x, on grass
 """
 import sys
 from pathlib import Path
@@ -68,7 +68,7 @@ def side():
     b3 = Image.open(R / "L1-base.png").convert("RGBA")
     box = box_of(b3.size, b3)
     return pair([flash(b3.size).crop(box), on_grass(b3).crop(box)], ["Flash", "3D"],
-                "General Store (one look for every level, no animation in Flash)")
+                "Map Room (one look for every level, no animation in Flash)")
 
 
 def game():
@@ -112,8 +112,8 @@ def shade(k0=0.78, x1=28.0, x2=80.0, k2=0.2):
     Image.fromarray(out.round().astype(np.uint8)).save(R / "L1-base.png")
 
 
-CROPS = {"top": (-42, -38, 42, 6), "cover": (-40, -12, 4, 48), "front": (-14, 20, 12, 58), "pips": (2, -20, 40, 40),
-         "tackL": (-42, 24, -20, 44), "tackR": (22, 16, 44, 40), "strapend": (16, -24, 42, 8)}
+CROPS = {"house": (-22, -40, 26, 14), "tower": (-12, -72, 22, -30), "scope": (-26, -50, 8, -14),
+         "scissors": (-52, -28, -4, 26), "blades": (-46, 12, -16, 68), "stairs": (2, 8, 56, 70), "stone": (-62, 0, 40, 70)}
 
 
 if __name__ == "__main__":
@@ -121,13 +121,13 @@ if __name__ == "__main__":
     if what == "shade":
         shade()
     elif what == "side":
-        side().save(HERE / "store-side.png")
+        side().save(HERE / "maproom-side.png")
     elif what == "game":
-        game().save(HERE / "store-game.png")
+        game().save(HERE / "maproom-game.png")
     elif what == "outline":
-        r = fit.overlay(1, R / "L1-alone.png", HERE / "store-outline.png")
+        r = fit.overlay(1, R / "L1-alone.png", HERE / "maproom-outline.png")
         print(f"overlap (IoU) {r[0]:.3f}  Flash not covered {r[1]:.3f}  3D outside Flash {r[2]:.3f}")
     elif what == "crops":
         for name, b in CROPS.items():
             z = max(4, min(10, 700 // (b[2] - b[0])))
-            crops.crop(str(R / "L1-base.png"), *b, zoom=z).save(HERE / "work" / f"crop-{name}.png")
+            crops.crop(str(R / "L1-base.png"), *b, zoom=z).save(HERE / f"maproom-crop-{name}.png")

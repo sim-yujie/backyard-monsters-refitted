@@ -31,10 +31,11 @@ DECK_A = 3.64               # half its width
 DECK_T = 0.42               # its thickness
 DECK_Z1 = BASE_H + DECK_T   # its top
 DECK_N = 9                  # boards (running along X)
-SLOT_W, SLOT_D = 1.9, 0.44  # the scissors' slot round their pivot (along X, along Y)
+SLOT_W, SLOT_D = 1.9, 0.8   # the scissors' slot round their pivot (along X, along Y)
 
 # the posts at the deck's corners, and the rope between their balls
 POST_IN = 0.36              # in from the deck's corners
+POST_IN_F = 0.6             # the front (-Y) posts: a little further in, so their rope runs behind the scissors
 POST_H, POST_R, BALL_R = 1.4, 0.1, 0.3
 ROPE_R, ROPE_SAG = 0.1, 0.22
 
@@ -62,7 +63,7 @@ SCOPE_PLATE = (-7.5, -21.5)         # the bracket's plate on the front roof slop
 SCOPE_ARM = -10.0                   # the arm meets the tube at this Flash x
 
 # the scissors (Flash px; their plane runs through the pivot and the two blade tips)
-SCIS_PIVOT = (-32.0, 19.0, -3.3)    # Flash x, y and world y
+SCIS_PIVOT = (-32.0, 19.0, -3.36)   # Flash x, y and world y
 SCIS_TIPS = ((-34.0, 58.5), (-24.6, 63.5))
 SCIS_TEAR = ((-36, 3), (-39, 0), (-43.5, -4), (-47, -8.5), (-49, -12.5), (-49.2, -17.5), (-47.2, -21), (-44.2, -22.3),
              (-41.6, -21), (-39.9, -17), (-38.7, -12), (-37.5, -7), (-36.4, -2))

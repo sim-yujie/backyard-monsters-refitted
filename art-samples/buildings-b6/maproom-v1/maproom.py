@@ -850,17 +850,17 @@ def planks(name, p0, p1, z0_fn, z1_fn, mat, n, thick=0.12, gap=0.03, out=None, j
 def materials():
     M = {}
     # the stone: Flash's soft blue-grey block, pale on the lit left face, darker low down
-    M["stone"] = painted("stone", (100, 100, 103), rough=0.9, wear=(76, 76, 80), scale=3.0, dirt=0.5, spec=0.2)
-    lift(M["stone"], (86, 86, 90), 0.22)
+    M["stone"] = painted("stone", (99, 99, 100), rough=0.9, wear=(76, 76, 80), scale=3.0, dirt=0.5, spec=0.2)
+    lift(M["stone"], (84, 84, 86), 0.22)
     shade_z(M["stone"], [(0.0, 0.72), (1.2, 0.92), (2.6, 0.95), (3.5, 0.82), (4.04, 0.6)])
     M["door"] = flat("door", (12, 12, 16), rough=1.0)
     # pale weathered boards (deck, roofs) and darker brown planks (walls, stairs)
-    M["deck"] = wood("deck", (198, 168, 114), (130, 102, 64), axis="X", dirt=0.25)
+    M["deck"] = wood("deck", (208, 170, 100), (138, 104, 58), axis="X", dirt=0.25)
     shade_along(M["deck"], (0.707, 0.707, 0.0), 0.6, 5.0, 0.5)     # Flash's deck darkens to the right of the cabin
     M["roofx"] = wood("roof", (226, 192, 132), (150, 118, 76), axis="X", dirt=0.15)
     M["roofy"] = wood("roof", (226, 192, 132), (150, 118, 76), axis="Y", dirt=0.15)
     M["plank"] = wood("plank", (100, 86, 64), (84, 72, 54), axis="Z", dirt=0.35, rings=4.0)
-    lift(M["plank"], (96, 80, 56), 0.3)              # Flash lights the cabin's walls almost evenly
+    lift(M["plank"], (96, 80, 56), 0.15)              # Flash lights the cabin's walls almost evenly
     M["rim"] = wood("rim", (104, 82, 52), (74, 58, 36), axis="X", dirt=0.2)
     M["tplank"] = wood("tplank", (156, 126, 84), (126, 100, 64), axis="Z", dirt=0.25, rings=4.0)
     M["stair"] = wood("stair", (164, 138, 98), (98, 80, 52), axis="Z", dirt=0.3)
@@ -934,12 +934,19 @@ def deck():
     w = 2 * D / S.DECK_N
     z0 = S.BASE_H + RIM_H
     # a dark beam round the deck's rim under the boards (Flash's deck edge is a thick dark band)
-    for i, (sx, sy) in enumerate(((1, 0), (-1, 0), (0, 1), (0, -1))):
-        size = (0.14, 2 * D - 0.08, RIM_H) if sx else (2 * D - 0.36, 0.14, RIM_H)
-        box(f"deckrim{i}", size, (sx * (D - 0.11), sy * (D - 0.11), S.BASE_H), M["rim"], bevel=0.03)
     sp = unyaw(SP)
     x0, x1 = sp.x - S.SLOT_W * 0.55, sp.x + S.SLOT_W * 0.45
-    sy0, sy1 = sp.y - S.SLOT_D / 2, sp.y + S.SLOT_D / 2
+    sy0, sy1 = sp.y - 0.2, sp.y - 0.2 + S.SLOT_D     # the blades lean forward through it; a thin strip stays in front
+    for i, (sx, sy) in enumerate(((1, 0), (-1, 0), (0, 1))):
+        size = (0.14, 2 * D - 0.08, RIM_H) if sx else (2 * D - 0.36, 0.14, RIM_H)
+        box(f"deckrim{i}", size, (sx * (D - 0.11), sy * (D - 0.11), S.BASE_H), M["rim"], bevel=0.03)
+    for k, (a, b) in enumerate(((-D + 0.18, x0), (x1, D - 0.18))):      # the front beam stops either side of the slot
+        box(f"deckrim3{k}", (b - a, 0.14, RIM_H), ((a + b) / 2, -(D - 0.11), S.BASE_H), M["rim"], bevel=0.03)
+    # the slot's dark pit behind the blades (Flash's slot is a black hole)
+    box("deckpit", (x1 - x0, sy1 - (sp.y + 0.2), RIM_H + 0.25), ((x0 + x1) / 2, (sp.y + 0.2 + sy1) / 2, S.BASE_H - 0.27),
+        M["door"], bevel=0.01)
+    # a bed of boards on the stone under the deck boards
+    box("deckbed", (2 * A - 0.1, 2 * A - 0.1, RIM_H), (0, 0, S.BASE_H), M["rim"], bevel=0.03)
     for i in range(S.DECK_N):
         ya, yb = -D + i * w + 0.015, -D + (i + 1) * w - 0.015
         t = S.DECK_T - RIM_H + rng.uniform(-0.02, 0.0)
@@ -956,7 +963,8 @@ def deck():
 
 def posts():
     c = S.DECK_A - S.POST_IN
-    corners = [(c, -c), (c, c), (-c, c), (-c, -c)]
+    f = -(S.DECK_A - S.POST_IN_F)
+    corners = [(c, f), (c, c), (-c, c), (-c, f)]
     tops = []
     for i, (x, y) in enumerate(corners):
         cyl(f"post{i}", S.POST_R, S.POST_H, (x, y, S.DECK_Z1 - 0.05), M["steel"], verts=12, bevel=0.01)
@@ -996,12 +1004,12 @@ def house():
     th = 0.13
     flatz = lambda u: z0
     # the long walls (-Y front, +Y back) reach the roof's underside; the gables (+X with the window, -X) follow it
-    zf = roof_under(cy - ay) - 0.03
+    zf = roof_under(cy - ay) + 0.02
     planks("hwallF", (cx - ax, cy - ay), (cx + ax, cy - ay), flatz, lambda u: zf, M["plank"], 6, th, out=(0, -1))
     planks("hwallB", (cx + ax, cy + ay), (cx - ax, cy + ay), flatz, lambda u: zf, M["plank"], 6, th, out=(0, 1))
-    planks("gableR", (cx + ax, cy - ay), (cx + ax, cy + ay), flatz, lambda u: roof_under(cy - ay + u) - 0.03,
+    planks("gableR", (cx + ax, cy - ay), (cx + ax, cy + ay), flatz, lambda u: roof_under(cy - ay + u) + 0.02,
            M["plank"], 6, th, out=(1, 0))
-    planks("gableL", (cx - ax, cy + ay), (cx - ax, cy - ay), flatz, lambda u: roof_under(cy + ay - u) - 0.03,
+    planks("gableL", (cx - ax, cy + ay), (cx - ax, cy - ay), flatz, lambda u: roof_under(cy + ay - u) + 0.02,
            M["plank"], 6, th, out=(-1, 0))
     # the round window in the +X gable: dark panes, a wooden ring, a cross
     wy, wz = S.WIN_C
@@ -1033,7 +1041,7 @@ def tower():
     a = S.TOWER_A
     th = 0.11
     ang = math.atan(S.TROOF_DROP / S.TROOF_RUN)
-    tun = lambda x: S.TROOF_Z - abs(x - tx) * math.tan(ang) - 0.12 / math.cos(ang) - 0.03
+    tun = lambda x: S.TROOF_Z - abs(x - tx) * math.tan(ang) - 0.12 / math.cos(ang) + 0.02
     # the walls stand on the cabin's roof (their bottoms follow its slopes) up to the roof's underside; +-Y are gables
     rz = lambda y: roof_z(y) - 0.1
     planks("twallR", (tx + a, ty - a), (tx + a, ty + a), lambda u: rz(ty - a + u), lambda u: tun(tx + a), M["tplank"],
