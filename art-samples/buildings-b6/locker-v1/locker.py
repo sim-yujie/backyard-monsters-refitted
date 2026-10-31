@@ -1019,17 +1019,29 @@ def chimney(b, cage=False):
     z0 = b.z + 1.0
     w = S.L3_CHIM_W
     hgt = top.z - z0
-    box("chimduct", (w * 0.86, w * 0.86, hgt), (top.x, top.y, z0), M["rubber"], bevel=0.04)
-    for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
-        box(f"chimpost{i}", (0.2, 0.2, hgt + 0.05), (top.x + u * w * 0.43, top.y + v * w * 0.43, z0), M["gold"],
-            bevel=0.04)
+    # Flash's duct bends at the steel plate: upright above it, slanting down toward the body (-Y) below it
+    zp = top.z - hgt * 0.4
+    th = math.radians(S.L3_CHIM_BEND)
+    hl = (zp - z0) / math.cos(th)
+    for seg, base, h, tilt in (("up", Vector((top.x, top.y, zp)), top.z - zp, 0.0),
+                               ("low", Vector((top.x, top.y - math.sin(th) * hl, zp - math.cos(th) * hl)), hl + 0.2,
+                                th)):
+        rm = Matrix.Rotation(-tilt, 3, "X")
+        rot = (-math.degrees(tilt), 0, 0)
+        box(f"chimduct{seg}", (w * 0.86, w * 0.86, h), base, M["rubber"], rot=rot, bevel=0.04)
+        for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
+            box(f"chimpost{seg}{i}", (0.2, 0.2, h + 0.05), base + rm @ Vector((u * w * 0.43, v * w * 0.43, 0)),
+                M["gold"], rot=rot, bevel=0.04)
+        if cage:             # level 4: gold bars down the sides
+            for i, (u, v) in enumerate(((-1, 0), (0, -1), (1, 0), (0, 1))):
+                box(f"chimbar{seg}{i}", (0.12 if u else 0.5, 0.5 if u else 0.12, h * 0.9),
+                    base + rm @ Vector((u * w * 0.46, v * w * 0.46, h * 0.05)), M["gold"], rot=rot, bevel=0.03)
     fl = box("chimflange", (w * 1.3, w * 1.3, 0.22), (top.x, top.y, top.z), M["glass"], bevel=0.04)
     cyl("chimhole", w * 0.33, 0.04, (top.x, top.y, top.z + 0.2), M["hole"], verts=32, bevel=0.0)
     lathe("chimlip", [(w * 0.33, top.z + 0.18), (w * 0.4, top.z + 0.18), (w * 0.4, top.z + 0.3), (w * 0.33, top.z + 0.3)],
           (top.x, top.y, 0.0), M["steel"], verts=32)
     for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
         rivet(f"chimrv{i}", (top.x + u * w * 0.52, top.y + v * w * 0.52, top.z + 0.22), None, r=0.1)
-    zp = z0 + hgt * 0.55
     box("chimplate", (w * 1.75, w * 1.45, 0.13), (top.x + 0.1, top.y - 0.1, zp), M["plate"], rot=(0, -24, 0),
         bevel=0.03, origin="centre")
     if cage:                 # level 4: two gold hoops over the flange and gold bars down the sides
@@ -1040,9 +1052,6 @@ def chimney(b, cage=False):
                 s = math.cos(a) * w * 0.62
                 pts.append((top.x + dx * s, top.y + dy * s, top.z + 0.2 + math.sin(a) * w * 0.55))
             tube(f"chimhoop{k}", pts, 0.08, M["gold"])
-        for i, (u, v) in enumerate(((-1, 0), (0, -1), (1, 0), (0, 1))):
-            box(f"chimbar{i}", (0.12 if u else 0.5, 0.5 if u else 0.12, hgt * 0.9),
-                (top.x + u * w * 0.46, top.y + v * w * 0.46, z0 + hgt * 0.05), M["gold"], bevel=0.03)
     # lean it as Flash does (the foot toward the front left): turn every chimney part about the foot
     e = bpy.data.objects.new("chimlean", None)
     link(e)
@@ -1103,7 +1112,7 @@ def bow_head(hub, ln):
     to_local = bow_plane(hub)
     sh = BOWS["4"]
     bm = bmesh.new()
-    th = 0.62
+    th = 0.34
     vs = [bm.verts.new(to_local(*p)) for p in sh["outer"]]
     face = bm.faces.new(vs)
     bmesh.ops.recalc_face_normals(bm, faces=[face])
@@ -1113,7 +1122,10 @@ def bow_head(hub, ln):
     bmesh.ops.translate(bm, verts=top, vec=n * th)
     bmesh.ops.translate(bm, verts=bm.verts[:], vec=-n * th / 2)
     bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])
-    ob = mesh_ob("keybowhead", bm, [M["block"]], parent=hub, bevel=0.3, segs=6)
+    ob = mesh_ob("keybowhead", bm, [M["block"]], parent=hub, bevel=0.1, segs=4)
+    # a thick round gold rim along the outline (Flash's head reads as a heavy ring round a flatter face)
+    tube("keybowrim", [to_local(q.x, q.y) for q in smooth_loop(sh["outer"], k=4)], 0.27, M["gold"], parent=hub,
+         cyclic=True)
     for k, hole in enumerate(sh["holes"]):
         hs = [to_local(*p) for p in hole]
         c = sum(hs, Vector()) / len(hs)

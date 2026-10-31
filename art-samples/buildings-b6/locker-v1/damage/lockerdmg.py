@@ -237,11 +237,21 @@ def damaged():
         kz = (mw.to_3x3() @ Vector((0, 0, 1))).normalized()
         f = -cam_fwd()
         fh = Vector((f.x, f.y, 0.0)).normalized()
-        bc = centre([sh])
-        root = bc + (fh * 0.95 + Vector((0, 0, 0.3))).normalized() * (S.L2_BALL_R + 0.08)
-        dt = (fh * 0.4 + Vector((0, 0, -1))).normalized()
-        q = kz.rotation_difference(dt)
-        k.matrix_world = Matrix.Translation(root) @ q.to_matrix().to_4x4() @ mw.to_3x3().to_4x4()
+        # tipped over the hole's front rim like a lever: a short end up inside the hole, the ring end hanging down
+        # in front of the ball (Flash's damaged ring hangs in front of the shell)
+        c = G["_plane_pt"](S.L2_BALL_C)
+        hb, ht, hd = S.L2_HOLE
+        hn = Vector((math.sin(math.radians(ht)) * math.cos(math.radians(hb)),
+                     math.sin(math.radians(ht)) * math.sin(math.radians(hb)), math.cos(math.radians(ht))))
+        fp = (fh - hn * fh.dot(hn)).normalized()
+        rim = c + hn * hd + fp * math.sqrt(S.L2_BALL_R ** 2 - hd ** 2) + hn * 0.1
+        dt = (fh * math.cos(math.radians(30)) + Vector((0, 0, -math.sin(math.radians(30))))).normalized()
+        root = rim - dt * 3.4
+        r1 = kz.rotation_difference(dt).to_matrix() @ mw.to_3x3()
+        y1 = r1 @ Vector((0, 1, 0))
+        want = (f - dt * f.dot(dt)).normalized()          # the ring's face toward the camera
+        r2 = y1.rotation_difference(want).to_matrix() @ r1
+        k.matrix_world = Matrix.Translation(root) @ r2.to_4x4()
         for h in G["MOVING"]:
             if h.name in G["KEYS"]:
                 h.rotation_euler = (0, 0, 0)
@@ -291,7 +301,7 @@ def damaged():
         for i, o in enumerate(pans):
             p = slot_of(o)
             if i == 1:
-                g = ground_pt(-30.0, 86.0) + Vector((0, 0, 0.16))
+                g = ground_pt(-30.0, 86.0, keep=2.1) + Vector((0, 0, 0.16))
                 place([o], p, axis_of(o), g, Vector((-0.2, -0.15, 1.0)))
             else:
                 screen_turn([o], p, (25, 0, -20)[i], move=tuple(axis_of(o) * 0.15))
