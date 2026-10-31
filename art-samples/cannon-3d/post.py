@@ -292,6 +292,7 @@ def tilt_pieces(name):
     and 32 headings, square cells with the pivot in the middle, laid out as strip32. Returns the 4x barrels by
     [tilt][heading], the tilts and the 2x cell size."""
     src, out = R / name, HERE / name
+    out.mkdir(exist_ok=True)      # a fresh worktree has no tT/ yet
     cam = json.loads((src / "camera.json").read_text())
     tl = json.loads((src / "aim_tilt.json").read_text())
     px, py = cam["pivot_4x"]

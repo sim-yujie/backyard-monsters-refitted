@@ -54,7 +54,7 @@ PITCHES = [-22]                   # the tilt strip's rows, degrees DOWN (negativ
                                   # distance. The ring of spikes sits below the barrel's swing (RING_DZ), so it clears this
                                   # tilt at every heading; the upright spikes of c4d709e8 do not (`limits`: the back horns
                                   # cut the barrel at every tilt from 30 up to 20 down at some heading).
-TURRET_SCALE = 1.5              # the turning part, against the drum
+TURRET_SCALE = 1.35             # the turning part, against the drum (owner, 31 Oct 2026: was 1.5; the barrel stays 22 up)
 GUN_Z = 0.4 + float(os.environ.get("CANNON_GUN_LIFT", 0.1))   # the trunnions' height in the turning part (its units):
                                   # 0.1 higher than first built, which leaves the lowered ring more room
 RING_DZ = float(os.environ.get("CANNON_RING_DZ", -0.26))     # the spiked ring's height against the drum's top (owner,
