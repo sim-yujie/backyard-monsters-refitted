@@ -229,10 +229,10 @@ def wood(name, light, dark, axis="Z", rings=6.0, hue_jit=0.0, rough=0.78, dirt=0
 
 
 def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, dirt=0.3, spec=0.4, soot=0.0, top=None,
-            ao_min=0.55, rust_at=0.6, grain=0.0):
+            ao_min=0.55, rust_at=0.6, grain=0.0, streak=0.25):
     """Paint or metal with worn patches (`wear` colour shows through), rust blotches and soot (dark, dull smudges that
     run down the part, as Flash's dirty metals). `grain` adds a fine dark speckle and a rougher bump: Flash's grainy
-    paint."""
+    paint. `streak`: how much the soot is stretched along the part's own Z (1 = round smudges, no streaks)."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
@@ -249,7 +249,7 @@ def painted(name, col, rough=0.6, metal=0.0, wear=None, rust=None, scale=6.0, di
         out = t.mix(out, srgb(*rust), mask)
     rough_in = rough
     if soot:
-        v2 = t.coords(scale=(1.0, 1.0, 0.25))                  # stretched upright: streaks run down
+        v2 = t.coords(scale=(1.0, 1.0, streak))                # stretched upright: streaks run down
         n3 = t.noise(v2, scale * 0.5, 6.0, 0.7, 0.4)
         sm = t.ramp(n3, [(0.38, (0, 0, 0, 1)), (0.62, (soot, soot, soot, 1))])
         out = t.mix(out, srgb(30, 25, 22), sm)
