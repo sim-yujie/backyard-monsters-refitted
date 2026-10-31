@@ -53,6 +53,9 @@ class Lv:
             self.TANK_Z1 = self.DOME_Z0
             self.FOOT_R, self.FOOT_Z = 3.3, 0.22          # a low black base disc
             self.BAND_R, self.BAND_Z0, self.BAND_Z1 = 2.8, 0.2, 1.36   # a gold bowl: top radius, bottom, top
+            self.GOLD_H = 0.5                         # the gold ring's height on the black band
+            if level >= 4:                            # Flash level 4: a tall gold band under the glass, black below
+                self.BAND_Z1, self.GOLD_H = 1.65, 1.2
             self.BAND_R0 = 2.65                       # its bottom radius
             self.TANK_R = 2.85
         self.OPEN_R = 2.0                   # the opening in the dome's top
