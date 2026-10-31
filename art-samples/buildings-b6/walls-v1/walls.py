@@ -120,8 +120,93 @@ def lattice(name):
     return t.m
 
 
-def lava_rock(name, glow=1.0, cracks=4.0, foot=True):
-    """The Inferno's dark volcanic rock with orange lava glowing in its cracks, brighter low down."""
+K0, K1 = (0, 0, 0, 1), (1, 1, 1, 1)
+
+
+def m(t, op, a, b=None, c=None):
+    """A Math node on sockets or numbers."""
+    n = t.n("ShaderNodeMath", operation=op)
+    for i, x in enumerate((a, b, c)):
+        if x is None:
+            continue
+        if isinstance(x, (int, float)):
+            n.inputs[i].default_value = x
+        else:
+            t.link(x, n.inputs[i])
+    return n.outputs[0]
+
+
+def axes(t, kind="Object", node="ShaderNodeTexCoord"):
+    sep = t.n("ShaderNodeSeparateXYZ")
+    src = t.n(node)
+    t.link(src.outputs[kind], sep.inputs[0])
+    return sep.outputs
+
+
+def facing_up(t):
+    """1 on faces turned up (or down), 0 on the sides."""
+    nz = axes(t, "Normal", "ShaderNodeNewGeometry")[2]
+    return t.ramp(m(t, "ABSOLUTE", nz), [(0.5, K0), (0.7, K1)])
+
+
+def lift_right(t, col, k=0.4):
+    """Flash paints the face turned from the light (screen right, world +X) lighter than the 3D light leaves it."""
+    nx = axes(t, "Normal", "ShaderNodeNewGeometry")[0]
+    mr = t.n("ShaderNodeMapRange")
+    mr.inputs[1].default_value, mr.inputs[2].default_value = 0.3, 0.9
+    mr.inputs[3].default_value, mr.inputs[4].default_value = 1.0, 1.0 + k
+    t.link(nx, mr.inputs[0])
+    grey = t.n("ShaderNodeCombineColor")
+    for i in range(3):
+        t.link(mr.outputs[0], grey.inputs[i])
+    return t.mix(col, grey.outputs[0], 1.0, "MULTIPLY")
+
+
+def see_through(t, col, alpha, strength):
+    """Glowing and partly transparent (flames, the glow on the ground): emission mixed with transparency."""
+    em = t.n("ShaderNodeEmission")
+    t.link(col, em.inputs["Color"])
+    em.inputs["Strength"].default_value = strength
+    tr = t.n("ShaderNodeBsdfTransparent")
+    mx = t.n("ShaderNodeMixShader")
+    t.link(alpha, mx.inputs[0])
+    t.link(tr.outputs[0], mx.inputs[1])
+    t.link(em.outputs[0], mx.inputs[2])
+    t.link(mx.outputs[0], t.out.inputs["Surface"])
+
+
+def ground_glow(name, a, inner=0.95, outer=1.32, strength=3.0):
+    """Lava light on the ground round a rounded-square foot of half-side a: bright at the foot, fading out."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    x, y, _ = axes(t)
+    rr = m(t, "POWER", m(t, "ADD", m(t, "POWER", m(t, "ABSOLUTE", m(t, "DIVIDE", x, a)), 4.0),
+                         m(t, "POWER", m(t, "ABSOLUTE", m(t, "DIVIDE", y, a)), 4.0)), 0.25)
+    rr = m(t, "MULTIPLY", rr, 0.5)                    # a colour ramp only takes 0..1
+    col = t.ramp(rr, [(inner / 2, srgb(255, 176, 50)), ((inner + 0.1) / 2, srgb(255, 120, 22)), (outer / 2, srgb(230, 70, 10))])
+    alpha = t.ramp(rr, [(inner / 2, K1), ((inner + 0.08) / 2, (0.6, 0.6, 0.6, 1)), (outer / 2, K0)])
+    see_through(t, col, alpha, strength)
+    MATS[name] = t.m
+    return t.m
+
+
+def flame(name):
+    """A small licking flame: yellow at its foot, orange, red and fading at the tip (Generated Z along the cone)."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    z = axes(t, "Generated")[2]
+    col = t.ramp(z, [(0.0, srgb(255, 236, 120)), (0.35, srgb(255, 150, 30)), (1.0, srgb(225, 50, 10))])
+    alpha = t.ramp(z, [(0.0, K1), (0.55, (0.85, 0.85, 0.85, 1)), (1.0, K0)])
+    see_through(t, col, alpha, 3.5)
+    MATS[name] = t.m
+    return t.m
+
+
+def lava_rock(name, glow=1.0, cracks=4.0, ash=True):
+    """The Inferno's near-black volcanic rock: orange lava glowing in its cracks (more low down) and in small spots all
+    over, the top lit pale like hot ash (Flash's level 1 mound)."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
@@ -129,79 +214,209 @@ def lava_rock(name, glow=1.0, cracks=4.0, foot=True):
     vo = t.n("ShaderNodeTexVoronoi", feature="DISTANCE_TO_EDGE")
     vo.inputs["Scale"].default_value = cracks
     t.link(v, vo.inputs["Vector"])
-    crack = t.ramp(vo.outputs["Distance"], [(0.01, (1, 1, 1, 1)), (0.05, (0, 0, 0, 1))])
-    geo = t.n("ShaderNodeNewGeometry")
-    sep = t.n("ShaderNodeSeparateXYZ")
-    t.link(geo.outputs["Position"], sep.inputs[0])
-    low = t.ramp(sep.outputs["Z"], [(0.05, (1, 1, 1, 1)), (0.3, (0, 0, 0, 1))])
+    crack = t.ramp(vo.outputs["Distance"], [(0.012, K1), (0.045, K0)])
+    z = axes(t, "Position", "ShaderNodeNewGeometry")[2]
+    low = t.ramp(z, [(0.03, K1), (0.2, (0.7, 0.7, 0.7, 1)), (0.42, K0)])
     amt = t.mix(crack, low, 1.0, "MULTIPLY")
-    band = t.ramp(sep.outputs["Z"], [(0.03, (1, 1, 1, 1)), (0.22, (0, 0, 0, 1))])     # the foot glows all round
-    if foot:
-        amt = t.mix(amt, band, 1.0, "LIGHTEN")
-    rock = t.mix(srgb(30, 24, 24), srgb(84, 52, 40), t.ramp(t.noise(v, 6, 4.0, 0.6), [(0.4, (0, 0, 0, 1)), (0.7, (1, 1, 1, 1))]))
-    rock = t.mix(rock, srgb(170, 62, 26), t.ramp(t.noise(v, 11, 3.0, 0.6), [(0.62, (0, 0, 0, 1)), (0.72, (1, 1, 1, 1))]))
+    spots = t.ramp(t.noise(v, 5.5, 3.0, 0.6), [(0.68, K0), (0.74, (0.8, 0.8, 0.8, 1))])
+    amt = t.mix(amt, spots, 1.0, "LIGHTEN")
+    # Flash's broad smears of glowing orange over the dark rock, broken up by a finer noise
+    patch = t.mix(t.ramp(t.noise(v, 2.2, 3.0, 0.5, 0.6), [(0.56, K0), (0.68, (0.75, 0.75, 0.75, 1))]),
+                  t.ramp(t.noise(v, 14.0, 2.0, 0.5), [(0.35, (0.2, 0.2, 0.2, 1)), (0.6, K1)]), 1.0, "MULTIPLY")
+    amt = t.mix(amt, patch, 1.0, "LIGHTEN")
+    rock = t.mix(srgb(8, 7, 7), srgb(30, 24, 22), t.ramp(t.noise(v, 6, 4.0, 0.6), [(0.4, K0), (0.7, K1)]))
+    if ash:
+        top = t.mix(t.ramp(m(t, "MULTIPLY", z, 0.5), [(0.45, K0), (0.62, (0.55, 0.55, 0.55, 1))]),
+                    t.ramp(t.noise(v, 4, 3.0, 0.5), [(0.3, (0.3, 0.3, 0.3, 1)), (0.6, K1)]), 1.0, "MULTIPLY")
+        rock = t.mix(rock, srgb(128, 100, 90), top)
     col = t.mix(rock, srgb(255, 110, 20), amt)
-    t.set(**{"Base Color": col, "rough": 0.8, "spec": 0.3, "Emission Color": srgb(255, 96, 16)})
-    em = t.n("ShaderNodeMath", operation="MULTIPLY")
-    t.link(amt, em.inputs[0])
-    em.inputs[1].default_value = 6.0 * glow
-    t.link(em.outputs[0], t.bsdf.inputs["Emission Strength"])
-    t.bump(vo.outputs["Distance"], 0.6, 0.04)
+    t.set(**{"Base Color": col, "rough": 0.75, "spec": 0.12, "Emission Color": srgb(255, 96, 16)})
+    t.link(m(t, "MULTIPLY", amt, 3.5 * glow), t.bsdf.inputs["Emission Strength"])
+    t.bump(t.noise(v, 7.0, 4.0, 0.6), 0.3, 0.03)
     MATS[name] = t.m
     return t.m
 
 
 def obsidian(name):
+    """Level 5: glossy black-grey obsidian. Flat facets (each Voronoi cell turns the surface its own way, so each
+    catches the sky differently), a few lighter facets, thin white glints along some facet edges."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
     v = t.coords()
     cell = t.n("ShaderNodeTexVoronoi")
-    cell.inputs["Scale"].default_value = 1.3
+    cell.inputs["Scale"].default_value = 1.05
     t.link(v, cell.inputs["Vector"])
-    col = t.ramp(cell.outputs["Color"], [(0.0, srgb(8, 8, 10)), (0.7, srgb(14, 14, 18)), (0.86, srgb(60, 62, 72)),
-                                         (1.0, srgb(150, 152, 164))])
-    t.set(**{"Base Color": col, "rough": 0.2, "spec": 0.45})
+    edge = t.n("ShaderNodeTexVoronoi", feature="DISTANCE_TO_EDGE")
+    edge.inputs["Scale"].default_value = 1.05
+    t.link(v, edge.inputs["Vector"])
+    col = t.ramp(cell.outputs["Color"], [(0.0, srgb(16, 16, 18)), (0.45, srgb(28, 28, 30)), (0.7, srgb(46, 46, 50)),
+                                         (0.85, srgb(80, 80, 84)), (1.0, srgb(128, 128, 134))])
+    glint = t.mix(t.ramp(edge.outputs["Distance"], [(0.0, K1), (0.055, K0)]),
+                  t.ramp(t.noise(v, 2.4, 2.0, 0.5), [(0.64, K0), (0.68, K1)]), 1.0, "MULTIPLY")
+    col = t.mix(col, srgb(240, 240, 246), glint)
+    col = t.mix(col, srgb(14, 14, 16), t.mix(facing_up(t), (0.65, 0.65, 0.65, 1), 1.0, "MULTIPLY"))   # darker top (Flash)
+    col = lift_right(t, col, 0.9)
+    col = t.grime(col, 0.0, 2.6, 0.15, 0.7)
+    t.set(**{"Base Color": col, "rough": 0.16, "spec": 0.4})
+    geo = t.n("ShaderNodeNewGeometry")
+    tilt = t.n("ShaderNodeVectorMath", operation="SUBTRACT")
+    t.link(cell.outputs["Color"], tilt.inputs[0])
+    tilt.inputs[1].default_value = (0.5, 0.5, 0.5)
+    sc = t.n("ShaderNodeVectorMath", operation="SCALE")
+    t.link(tilt.outputs[0], sc.inputs[0])
+    sc.inputs["Scale"].default_value = 0.55
+    add = t.n("ShaderNodeVectorMath", operation="ADD")
+    t.link(geo.outputs["Normal"], add.inputs[0])
+    t.link(sc.outputs[0], add.inputs[1])
+    nrm = t.n("ShaderNodeVectorMath", operation="NORMALIZE")
+    t.link(add.outputs[0], nrm.inputs[0])
+    t.link(nrm.outputs[0], t.bsdf.inputs["Normal"])
+    MATS[name] = t.m
+    return t.m
+
+
+def granite_mat(name, top_lo=(112, 112, 118), top_hi=(190, 190, 194), side_lo=(60, 60, 64), side_hi=(128, 126, 130)):
+    """Level 2: Flash's mottled granite, salt-and-pepper specks over grey clouds, the top near white."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    v = t.coords()
+    mott = t.noise(v, 1.6, 5.0, 0.62)
+    col = t.mix(t.ramp(mott, [(0.35, srgb(*side_lo)), (0.65, srgb(*side_hi))]),
+                t.ramp(mott, [(0.3, srgb(*top_lo)), (0.7, srgb(*top_hi))]), facing_up(t))
+    col = t.mix(col, srgb(150, 134, 144), t.ramp(t.noise(v, 4.0, 2.0, 0.5), [(0.55, K0), (0.75, (0.3, 0.3, 0.3, 1))]))
+    sp = t.noise(v, 11.0, 2.0, 0.5)
+    col = t.mix(col, srgb(70, 68, 72), t.ramp(sp, [(0.32, (0.5, 0.5, 0.5, 1)), (0.42, K0)]))
+    col = t.mix(col, srgb(230, 230, 234), t.ramp(sp, [(0.62, K0), (0.72, (0.45, 0.45, 0.45, 1))]))
+    col = lift_right(t, col, 0.4)
+    col = t.grime(col, 0.0, 2.6, 0.2, 0.6)
+    t.set(**{"Base Color": col, "rough": 0.8, "spec": 0.3})
+    t.bump(sp, 0.12, 0.01)
+    MATS[name] = t.m
+    return t.m
+
+
+def weave(name):
+    """Level 3: Flash's woven stone, pairs of rounded strands laid on the diagonal, each square of the weave turned
+    across its neighbours (a basket weave), raised and shaded; near white on the top, grey on the sides. Laid out
+    on the top in x, y and on the sides in (x + y), z, so one material covers every face."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    x, y, z = axes(t)
+    up = facing_up(t)
+    u = m(t, "MULTIPLY_ADD", y, m(t, "SUBTRACT", 1.0, up), x)          # top: x, sides: x + y
+    w = m(t, "MULTIPLY_ADD", up, m(t, "SUBTRACT", y, z), z)            # top: y, sides: z
+    k = 1.4
+    a = m(t, "MULTIPLY", m(t, "ADD", u, w), k)
+    b = m(t, "MULTIPLY", m(t, "SUBTRACT", u, w), k)
+    fa = m(t, "SUBTRACT", m(t, "FRACT", a), 0.5)
+    fb = m(t, "SUBTRACT", m(t, "FRACT", b), 0.5)
+    c = m(t, "FLOORED_MODULO", m(t, "ADD", m(t, "FLOOR", a), m(t, "FLOOR", b)), 2.0)
+    p = m(t, "MULTIPLY_ADD", c, m(t, "SUBTRACT", fb, fa), fa)          # along the strand
+    qa = m(t, "SUBTRACT", m(t, "ABSOLUTE", fb), 0.25)
+    qb = m(t, "SUBTRACT", m(t, "ABSOLUTE", fa), 0.25)
+    q = m(t, "MULTIPLY_ADD", c, m(t, "SUBTRACT", qb, qa), qa)          # across: two strands a cell
+    d = m(t, "ADD", m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", p, 1.8)), 2.0),
+          m(t, "POWER", m(t, "ABSOLUTE", m(t, "MULTIPLY", q, 3.6)), 2.0))
+    top = t.ramp(d, [(0.0, srgb(242, 242, 244)), (0.7, srgb(232, 232, 236)), (0.9, srgb(176, 174, 182)), (1.0, srgb(150, 148, 158))])
+    side = t.ramp(d, [(0.0, srgb(176, 174, 176)), (0.55, srgb(146, 144, 146)), (0.85, srgb(96, 94, 96)), (1.0, srgb(58, 56, 58))])
+    col = t.mix(side, top, up)
+    col = t.mix(col, srgb(120, 112, 122), t.ramp(t.noise(t.coords(), 30.0, 2.0, 0.5), [(0.6, K0), (0.7, (0.35, 0.35, 0.35, 1))]))
+    col = lift_right(t, col, 0.45)
+    col = t.grime(col, 0.0, 2.6, 0.15, 0.6)
+    t.set(**{"Base Color": col, "rough": 0.7, "spec": 0.35})
+    t.bump(t.ramp(d, [(0.0, K1), (1.0, K0)]), 0.6, 0.05)
+    MATS[name] = t.m
+    return t.m
+
+
+def gold_mat(name, col=(200, 126, 22), tip=None, lift=0.35, metal=0.2):
+    """Level 4: Flash's painted gold: warm orange, mostly flat colour with a soft sheen, the face away from the light
+    still well lit. tip: the pyramids' upper part lit orange-yellow (Generated Z, so it follows each pyramid)."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    out = srgb(*col)
+    if tip:
+        out = t.mix(out, srgb(*tip), t.ramp(axes(t, "Generated")[2], [(0.7, K0), (0.95, K1)]))
+    if lift:
+        out = lift_right(t, out, lift)
+    out = t.grime(out, 0.0, 2.2, 0.3, 1.0)      # no AO darkening: its noise came out as vertical streaks
+    t.set(**{"Base Color": out, "rough": 0.38, "metal": metal, "spec": 0.6})
+    MATS[name] = t.m
+    return t.m
+
+
+def steel(name, col=(96, 84, 82), tip=None, sheen=True):
+    """Inferno level 3: glossy dark steel, warm grey, a broad sheen toward the light. tip: a small white tip."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    out = srgb(*col)
+    if tip:
+        out = t.mix(out, srgb(*tip), t.ramp(axes(t, "Generated")[2], [(0.55, K0), (0.64, K1)]))
+    if sheen:                   # Flash: a soft pale sheen high on the face toward the light (world -Y, the left face)
+        ny = axes(t, "Normal", "ShaderNodeNewGeometry")[1]
+        z = axes(t, "Position", "ShaderNodeNewGeometry")[2]
+        fac = t.mix(t.ramp(m(t, "MULTIPLY", ny, -1.0), [(0.5, K0), (0.9, K1)]), t.ramp(m(t, "MULTIPLY", z, 0.33), [(0.25, K0), (0.65, (0.5, 0.5, 0.5, 1))]),
+                    1.0, "MULTIPLY")
+        out = t.mix(out, srgb(196, 184, 180), fac)
+    out = t.grime(out, 0.0, 2.4, 0.2, 1.0)
+    t.set(**{"Base Color": out, "rough": 0.2, "metal": 0.55, "spec": 0.6})
+    t.bump(t.noise(t.coords(), 6.0, 3.0, 0.5), 0.04, 0.01)
     MATS[name] = t.m
     return t.m
 
 
 def mats():
+    MATS.clear()        # hcc.py made its own materials at import ("gold" with vertical polish streaks): never reuse them
     return {
         "wood_side": wood("crate-side", (150, 104, 62), (92, 60, 36), "X", rings=7, dirt=0.3),
         "wood_side_y": wood("crate-side", (150, 104, 62), (92, 60, 36), "Y", rings=7, dirt=0.3),
         "wood_frame": wood("crate-frame", (128, 86, 50), (78, 50, 30), "Z", rings=7, dirt=0.3),
         "wood_frame_x": wood("crate-frame", (128, 86, 50), (78, 50, 30), "X", rings=7, dirt=0.3),
         "wood_frame_y": wood("crate-frame", (128, 86, 50), (78, 50, 30), "Y", rings=7, dirt=0.3),
-        "wood_top": wood("crate-top", (222, 186, 136), (176, 136, 92), "X", rings=7, dirt=0.15),
-        "wood_top_y": wood("crate-top", (222, 186, 136), (176, 136, 92), "Y", rings=7, dirt=0.15),
+        "wood_top": wood("crate-top", (206, 168, 116), (162, 124, 82), "X", rings=7, dirt=0.15),
+        "wood_top_y": wood("crate-top", (206, 168, 116), (162, 124, 82), "Y", rings=7, dirt=0.15),
+        "wood_brace": wood("crate-brace", (176, 132, 84), (124, 88, 54), "X", rings=7, dirt=0.15),
         "wood_raw": flat("wood-raw", (186, 146, 100), rough=0.9),
         "wood_dark": flat("crate-inside", (52, 34, 22), rough=0.95),
-        "granite": painted("granite", (96, 100, 116), rough=0.85, wear=(146, 148, 160), rust=(56, 58, 68), rust_at=0.55,
-                           top=(150, 150, 158), scale=11.0, dirt=0.4, spec=0.3, ao_min=0.6),
-        "granite_in": stone("granite-in", (160, 160, 168), (186, 186, 194), scale=14.0, dirt=0.05),
-        "cobble": cobble("cobble"),
-        "lattice": lattice("lattice"),
-        "gold": shiny("gold", (255, 200, 50), rough=0.3, metal=0.25, dirt=0.04, side=0.15, scale=1.0, coat=0.6),
-        "gold_in": shiny("gold-in", (214, 150, 40), rough=0.45, metal=0.6, dirt=0.05),
-        "gold_top": shiny("gold-top", (255, 204, 52), rough=0.25, metal=0.25, dirt=0.0, scale=1.0, coat=0.6),
+        "granite": granite_mat("granite"),
+        "granite_rubble": granite_mat("granite-rubble", side_lo=(120, 118, 120), side_hi=(196, 196, 198)),
+        "granite_in": granite_mat("granite-in", top_lo=(150, 150, 154), top_hi=(196, 196, 200), side_lo=(140, 140, 144),
+                                  side_hi=(190, 190, 194)),
+        "crack": flat("crack-dark", (40, 38, 40), rough=0.95),
+        "cobble": weave("weave"),
+        "lattice": weave("weave"),
+        "weave_in": stone("weave-in", (176, 174, 176), (206, 204, 206), scale=12.0, dirt=0.05),
+        "gold": gold_mat("gold"),
+        "gold_in": gold_mat("gold-in", (232, 160, 44)),
+        "gold_rim": gold_mat("gold-rim", (240, 176, 56)),
+        "gold_top": gold_mat("gold-top", (178, 96, 10), tip=(255, 190, 40), lift=0.0, metal=0.45),
         "obsidian": obsidian("obsidian"),
         "obsidian_in": shiny("obsidian-in", (96, 96, 108), rough=0.35, metal=0.0, dirt=0.1),
         "smooth": stone("smoothstone", (146, 148, 160), (160, 162, 172), top=(196, 196, 204), scale=4.0, dirt=0.3, rough=0.6),
         "smooth_in": stone("smoothstone-in", (176, 176, 184), (196, 196, 204), scale=12.0, dirt=0.05),
-        "stud_hole": flat("stud-hole", (90, 92, 100), rough=0.8),
+        "stud": stone("stud", (150, 150, 158), (170, 170, 178), top=(214, 214, 222), scale=6.0, dirt=0.1, rough=0.55),
         "lava": lava_rock("lava"),
-        "lava_dim": lava_rock("lava-dim", glow=0.25, foot=False),
-        "lava_glow": flat("lava-glow", (255, 100, 16), rough=0.6, emit=1.6),
-        "ibase": painted("ibase", (48, 42, 38), rough=0.7, wear=(98, 86, 74), scale=6.0, dirt=0.35, soot=0.5),
-        "icap": painted("icap", (104, 94, 80), rough=0.75, wear=(134, 122, 104), scale=6.0, dirt=0.15),
+        "lava_dim": lava_rock("lava-dim", glow=0.6, ash=False),
+        "glow": ground_glow("lava-ground", 1.5),
+        "glow_small": ground_glow("lava-ground-small", 1.1, 0.7, 1.5, 1.6),
+        "flame": flame("flame"),
+        "ibase": painted("ibase", (40, 36, 32), rough=0.7, wear=(66, 58, 50), scale=6.0, dirt=0.3, soot=0.5,
+                         top=(88, 70, 50)),
+        "icap": painted("icap", (106, 96, 82), rough=0.75, wear=(138, 126, 106), scale=7.0, dirt=0.3, soot=0.35,
+                        top=(124, 110, 88)),
         "icap_in": painted("icap-in", (160, 150, 134), rough=0.85, scale=10.0, dirt=0.0),
-        "bronze": shiny("bronze", (176, 120, 50), rough=0.35, metal=0.9, dirt=0.1),
-        "rivet": shiny("rivet", (210, 206, 196), rough=0.3, metal=0.9, dirt=0.0),
-        "iron": shiny("iron", (132, 124, 120), rough=0.26, metal=0.85, wear=(130, 122, 118), dirt=0.3, side=0.3),
-        "iron_dark": shiny("iron-dark", (50, 46, 46), rough=0.4, metal=0.85, dirt=0.2),
+        "bronze": shiny("bronze", (124, 78, 32), rough=0.35, metal=0.7, dirt=0.2),
+        "rivet": painted("rivet", (232, 230, 224), rough=0.35, dirt=0.0, spec=0.6),
+        "iron": steel("steel"),
+        "iron_dark": steel("steel-spike", (54, 48, 48), sheen=False),
+        "iron_tip": steel("steel-tip", (54, 48, 48), tip=(236, 232, 230), sheen=False),
         "iron_in": shiny("iron-in", (100, 94, 90), rough=0.5, metal=0.8, dirt=0.05),
-        "bone": painted("bone", (236, 226, 214), rough=0.45, wear=(250, 244, 236), dirt=0.05, spec=0.5),
+        "bone": steel("steel-tip", (54, 48, 48), tip=(236, 232, 230), sheen=False),
     }
 
 
@@ -388,8 +603,9 @@ def crate(M, state):
     for k in range(n):
         lid.append(box(f"lid{k}", (s - 2 * b + 0.02, w - 0.025, t), (0, -hs + b + (k + 0.5) * w, h - b + 0.06), M["wood_top"],
                        bevel=0.01))
-    Ld = (s - 2 * b) / math.cos(math.radians(22)) - 0.1
-    lbrace = box("lidbrace", (Ld, b * 0.85, 0.12), (0, 0, h - b + 0.06 + t), M["wood_top"], rot=(0, 0, 22), bevel=0.02)
+    # Flash's lid brace runs corner to corner, left to right as the viewer sees it, a darker board set into the lid
+    Ld = (s - 2 * b) * math.sqrt(2) - 0.12
+    lbrace = box("lidbrace", (Ld, b * 0.9, 0.08), (0, 0, h - b + 0.06 + t), M["wood_brace"], rot=(0, 0, 45), bevel=0.02)
     parts += lid + [lbrace]
     floor = box("floor", (s - 2 * b, s - 2 * b, 0.1), (0, 0, 0), M["wood_dark"], bevel=0.0)
     parts.append(floor)
@@ -413,53 +629,60 @@ def granite(M, state):
     """Block level 2: a hewn block of grey granite, its top weathered pale."""
     s, h = 2.78, 2.3
     if state == "destroyed":
+        # Flash: pale broken stone and dust spread low over the whole square, more toward the left
         r = random.Random(5)
         out = []
-        for i, (x, y, sx, sy, sz) in enumerate(((-0.2, 0.1, 1.9, 1.4, 0.45), (0.8, -0.5, 1.3, 1.0, 0.35),
-                                                 (-0.85, -0.6, 1.2, 0.9, 0.3), (0.6, 0.85, 1.2, 1.0, 0.32),
-                                                 (-0.75, 0.8, 1.0, 0.8, 0.25), (1.0, 0.3, 0.8, 0.7, 0.22),
-                                                 (0.15, -0.95, 1.0, 0.7, 0.22))):
-            out.append(lump(f"rock{i}", (sx, sy, sz), (x, y, 0), M["granite"], seed=i + 1, rot=r.uniform(0, 90), sub=1,
-                            flat_shade=True))
-        top = lump("rocktop", (0.7, 0.6, 0.25), (-0.1, 0.0, 0.0), M["granite"], seed=11, sub=1, flat_shade=True)
-        settle(top, out)
-        return out + [top]
-    o = rough_box("granite", (s, s, h), M["granite"], amp=0.12, freq=1.6, seed=2, bevel=0.1)
+        spots = ((-0.3, 0.1, 1.5, 1.2, 0.3), (0.7, -0.55, 1.1, 0.9, 0.24), (-0.95, -0.7, 1.0, 0.9, 0.2),
+                 (0.55, 0.8, 1.0, 0.9, 0.22), (-0.9, 0.85, 0.9, 0.8, 0.18), (1.05, 0.25, 0.7, 0.6, 0.16),
+                 (0.1, -1.0, 0.9, 0.6, 0.16), (-1.1, -0.05, 0.7, 0.9, 0.18), (-0.25, 1.05, 0.8, 0.5, 0.15),
+                 (1.0, -1.0, 0.6, 0.5, 0.14))
+        for i, (x, y, sx, sy, sz) in enumerate(spots):
+            out.append(lump(f"rock{i}", (sx, sy, sz), (x, y, 0), M["granite_rubble"], seed=i + 1, rot=r.uniform(0, 90), sub=1,
+                            flat_shade=True, rough=0.22))
+        for i, (x, y, sz) in enumerate(((-0.2, 0.0, 0.35), (0.5, -0.4, 0.28), (-0.7, 0.5, 0.26), (-0.75, -0.55, 0.24))):
+            o = lump(f"chunk{i}", (0.55, 0.45, sz), (x, y, 0.0), M["granite_rubble"], seed=11 + i, sub=1, flat_shade=True,
+                     rot=r.uniform(0, 90))
+            settle(o, out)
+            out.append(o)
+        return out
+    o = rough_box("granite", (s, s, h), M["granite"], amp=0.035, freq=1.6, seed=2, bevel=0.08)
     if state == "damaged":
-        cs = [crack("crack0", (-0.5, -s / 2, h + 0.05), (-0.2, -s / 2, 0.5), 0.6, 0.4, M["granite_in"], 1, (0, -1, 0)),
-              crack("crack1", (s / 2, 0.45, h + 0.05), (s / 2, 0.8, 0.7), 0.6, 0.36, M["granite_in"], 2, (1, 0, 0)),
+        # deep dark cracks down the two faces in view, a corner broken off the top (pale inside)
+        cs = [crack("crack0", (-0.5, -s / 2, h + 0.05), (-0.2, -s / 2, 0.4), 1.0, 0.42, M["crack"], 1, (0, -1, 0)),
+              crack("crack0b", (-0.3, -s / 2, 1.3), (0.5, -s / 2, 0.9), 0.7, 0.26, M["crack"], 6, (0, -1, 0)),
+              crack("crack1", (s / 2, 0.45, h + 0.05), (s / 2, 0.8, 0.5), 1.0, 0.4, M["crack"], 2, (1, 0, 0)),
               cutter("chip", (1.1, 1.1, 0.9), (-s / 2 + 0.15, -s / 2 + 0.15, h), M["granite_in"], seed=4)]
         return [bite(o, cs)]
     return [o]
 
 
 def cobbled(M, state):
-    """Block level 3: cobbled sides under a white lattice-patterned slab."""
+    """Block level 3: grey woven stone, a near-white slab on top with the same weave."""
     s, h, t = 2.8, 2.18, 0.24
     if state == "destroyed":
         # the slab dropped flat to the ground, a few cobbles beside it
         slab = box("slab", (s - 0.05, s - 0.05, t), (0, 0, 0), M["lattice"], bevel=0.04)
-        slab = bite(slab, [crack("split", (-1.6, 0.3, t + 0.1), (1.6, -0.2, t + 0.1), t + 0.2, 0.12, M["cobble"], 5, (0, 0, 1))])
+        slab = bite(slab, [crack("split", (-1.6, 0.3, t + 0.1), (1.6, -0.2, t + 0.1), t + 0.2, 0.12, M["weave_in"], 5, (0, 0, 1))])
         out = [slab]
         for i, (x, y) in enumerate(((0.9, -0.7), (-0.6, 0.8), (0.75, 0.75))):
             o = lump(f"cob{i}", (0.42, 0.38, 0.26), (x, y, 0), M["cobble"], seed=i + 3, sub=1, flat_shade=True)
             settle(o, [slab])
             out.append(o)
         return out
-    body = rough_box("body", (s - 0.04, s - 0.04, h), M["cobble"], amp=0.04, freq=2.5, seed=3, bevel=0.04)
+    body = rough_box("body", (s - 0.04, s - 0.04, h), M["cobble"], amp=0.015, freq=2.5, seed=3, bevel=0.04)
     slab = box("slab", (s, s, t), (0, 0, h - 0.01), M["lattice"], bevel=0.04)
     if state == "damaged":
         # the right corner smashed off, top and side (as Flash), the broken stone pale; its pieces at the foot
         at = (s / 2 - 0.15, s / 2 - 0.35, h - 0.15)
-        body = bite(body, [cutter("smash", (2.4, 2.3, 2.0), at, M["cobble"], seed=8, rough=0.3)])
-        slab = bite(slab, [cutter("smash2", (2.4, 2.3, 2.0), at, M["cobble"], seed=8, rough=0.3)])
+        body = bite(body, [cutter("smash", (2.4, 2.3, 2.0), at, M["weave_in"], seed=8, rough=0.3)])
+        slab = bite(slab, [cutter("smash2", (2.4, 2.3, 2.0), at, M["weave_in"], seed=8, rough=0.3)])
         return [body, slab]
     return [body, slab]
 
 
 def gold(M, state):
     """Block level 4: a polished gold block, a raised rim round its top and nine pyramids inside it."""
-    s, h = 2.78, 1.95
+    s, h = 2.78, 2.25
     rim_w, rim_h = 0.12, 0.07
     if state == "destroyed":
         # melted to a low gold puddle, two pyramids sunk in it
@@ -481,19 +704,19 @@ def gold(M, state):
     rim = []
     for i, (x, y, sx, sy) in enumerate(((0, -s / 2 + rim_w / 2, s, rim_w), (0, s / 2 - rim_w / 2, s, rim_w),
                                          (-s / 2 + rim_w / 2, 0, rim_w, s - 2 * rim_w), (s / 2 - rim_w / 2, 0, rim_w, s - 2 * rim_w))):
-        rim.append(box(f"rim{i}", (sx, sy, rim_h), (x, y, h - 0.02), M["gold"], bevel=0.03))
+        rim.append(box(f"rim{i}", (sx, sy, rim_h), (x, y, h - 0.02), M["gold_rim"], bevel=0.03))
     pyrs = []
     step = (s - 2 * rim_w) / 3
     for i in range(3):
         for j in range(3):
             x, y = -s / 2 + rim_w + (i + 0.5) * step, -s / 2 + rim_w + (j + 0.5) * step
-            pyrs.append(pyramid(f"pyr{i}{j}", step * 0.98, 0.78, (x, y, h - 0.02), M["gold_top"]))
+            pyrs.append(pyramid(f"pyr{i}{j}", step * 0.86, 0.66, (x, y, h - 0.02), M["gold_top"]))
     if state == "damaged":
         # two pyramids knocked off (one lies at the foot), the front corner dented
         for k in ("pyr20", "pyr11"):
             o = next(p for p in pyrs if p.name == k)
             bpy.data.objects.remove(o, do_unlink=True)
-        stub = pyramid("pyrstub", step * 0.98, 0.25, (-s / 2 + rim_w + 2.5 * step, -s / 2 + rim_w + 0.5 * step, h - 0.02), M["gold_in"])
+        stub = pyramid("pyrstub", step * 0.74, 0.18, (-s / 2 + rim_w + 2.5 * step, -s / 2 + rim_w + 0.5 * step, h - 0.02), M["gold_in"])
         dent = cutter("dent", (0.9, 0.9, 1.0), (s / 2, -s / 2, 1.0), M["gold_in"], seed=12, rough=0.2)
         body = bite(body, [dent])
         cut2 = cutter("dent2", (0.9, 0.9, 1.0), (s / 2, -s / 2, 1.0), M["gold_in"], seed=12, rough=0.2)
@@ -507,16 +730,23 @@ def obsid(M, state):
     """Block level 5: a block of glossy black obsidian with chipped facets."""
     s, h = 2.78, 2.35
     if state == "destroyed":
+        # Flash: a heap of black shards over most of the square, higher in the middle, a few lying round it
         r = random.Random(9)
         out = []
-        for i in range(12):
-            x = -1.0 + (i % 4) * 0.67 + r.uniform(-0.15, 0.15)
-            y = -0.85 + (i // 4) * 0.85 + r.uniform(-0.15, 0.15)
-            o = lump(f"shard{i}", (r.uniform(0.7, 1.0), r.uniform(0.4, 0.6), r.uniform(0.2, 0.42)),
+        for i in range(14):
+            x = -1.0 + (i % 4) * 0.66 + r.uniform(-0.12, 0.12)
+            y = -0.95 + (i // 4) * 0.62 + r.uniform(-0.12, 0.12)
+            o = lump(f"shard{i}", (r.uniform(0.75, 1.0), r.uniform(0.5, 0.7), r.uniform(0.22, 0.4)),
                      (x, y, 0), M["obsidian"], seed=i + 20, rough=0.35, sub=1, flat_shade=True, rot=r.uniform(0, 180))
             out.append(o)
+        for i, (x, y, sz) in enumerate(((-0.25, 0.1, 0.55), (0.35, -0.2, 0.45), (-0.1, -0.55, 0.4), (0.2, 0.55, 0.42),
+                                        (-0.6, 0.45, 0.35))):
+            o = lump(f"heap{i}", (0.8, 0.6, sz), (x, y, 0), M["obsidian"], seed=i + 40, rough=0.35, sub=1, flat_shade=True,
+                     rot=r.uniform(0, 180))
+            settle(o, out)
+            out.append(o)
         return out
-    o = rough_box("obsidian", (s, s, h), M["obsidian"], amp=0.22, freq=0.9, seed=5, cuts=2, bevel=0.03, flat_shade=True)
+    o = rough_box("obsidian", (s, s, h), M["obsidian"], amp=0.05, freq=0.9, seed=5, cuts=2, bevel=0.03, flat_shade=True)
     if state == "damaged":
         # the top broken into jagged shards: big ragged bites out of the top and corners, chips at the foot
         cs = [cutter("b0", (1.4, 1.2, 1.0), (-0.5, -s / 2 + 0.1, h), M["obsidian_in"], seed=31, rough=0.35),
@@ -538,15 +768,17 @@ def stone_block(M, state):
     """Stone Block: a smooth pale stone block, narrower than the footprint, eight round studs round its top."""
     s, h = 2.3, 2.42
     if state == "destroyed":
-        out = []
-        for i, (x, y, sx, sy, sz) in enumerate(((-0.35, 0.15, 1.2, 1.0, 0.55), (0.5, -0.4, 1.0, 0.9, 0.45),
-                                                 (0.45, 0.65, 1.0, 0.85, 0.42), (-0.6, -0.75, 0.8, 0.7, 0.38),
-                                                 (1.0, 0.1, 0.7, 0.6, 0.32))):
-            out.append(lump(f"rock{i}", (sx, sy, sz), (x, y, 0), M["smooth"], seed=i + 40, rot=i * 37, sub=1,
-                            flat_shade=True))
-        top = lump("rocktop", (0.6, 0.5, 0.35), (0.05, 0.0, 0), M["smooth_in"], seed=46, sub=1, flat_shade=True)
-        settle(top, out)
-        return out + [top]
+        # Flash: a rounded heap of pale rubble in the middle of the square, a few stones round its foot
+        out = [lump("heap", (2.1, 1.9, 0.55), (0.0, 0.05, 0), M["smooth"], seed=39, rough=0.18, sub=2, flat_shade=True)]
+        for i, (x, y, sx, sy, sz) in enumerate(((-0.35, 0.15, 0.9, 0.8, 0.45), (0.45, -0.35, 0.8, 0.7, 0.4),
+                                                 (0.4, 0.55, 0.8, 0.7, 0.36), (-0.55, -0.6, 0.7, 0.6, 0.34),
+                                                 (0.95, 0.1, 0.6, 0.5, 0.3), (-0.95, 0.5, 0.55, 0.5, 0.28),
+                                                 (0.0, -0.95, 0.6, 0.5, 0.26), (0.05, 0.05, 0.7, 0.6, 0.4))):
+            o = lump(f"rock{i}", (sx, sy, sz), (x, y, 0), M["smooth" if i % 3 else "smooth_in"], seed=i + 40, rot=i * 37,
+                     sub=1, flat_shade=True)
+            settle(o, out)
+            out.append(o)
+        return out
     body = box("body", (s, s, h), (0, 0, 0), M["smooth"], bevel=0.16, segs=4)
     studs = []
     for i in (-1, 0, 1):
@@ -554,15 +786,14 @@ def stone_block(M, state):
             if i == 0 and j == 0:
                 continue
             p = (i * 0.72, j * 0.72, h - 0.01)
-            studs.append(cyl(f"stud{i}{j}", 0.24, 0.16, p, M["smooth"], bevel=0.03, verts=20))
-            studs.append(cyl(f"studhole{i}{j}", 0.12, 0.02, (p[0], p[1], h + 0.14), M["stud_hole"], bevel=0.0, verts=16))
+            studs.append(cyl(f"stud{i}{j}", 0.25, 0.17, p, M["stud"], bevel=0.09, verts=24))     # Flash: round knobs
     if state == "damaged":
         cs = [crack("crack0", (-0.3, -s / 2, h + 0.05), (0.1, -s / 2, 0.4), 0.5, 0.3, M["smooth_in"], 4, (0, -1, 0)),
               cutter("chip0", (1.3, 1.2, 1.1), (s / 2, -s / 2, h), M["smooth_in"], seed=41),
               cutter("chip1", (1.0, 1.3, 1.2), (s / 2, 0.5, 0.95), M["smooth_in"], seed=42),
               cutter("chip2", (1.1, 1.1, 1.1), (-s / 2, -s / 2, 1.1), M["smooth_in"], seed=45)]
         body = bite(body, cs)
-        for k in ("stud1-1", "studhole1-1", "stud10", "studhole10"):
+        for k in ("stud1-1", "stud10"):
             o = bpy.data.objects.get(k)
             if o:
                 bpy.data.objects.remove(o, do_unlink=True)
@@ -571,46 +802,67 @@ def stone_block(M, state):
 
 
 def magma(M, state):
-    """Inferno Block level 1: a low dome of dark volcanic rock, lava glowing in its cracks and round its foot."""
+    """Inferno Block level 1: a low dome of near-black volcanic rock, lava glowing in its cracks and spots, a soft
+    orange glow on the ground round its foot and small flames licking up round it (Flash)."""
     s, H = 3.0, 1.25
 
-    def dome(name, H, seed):
+    def dome(name, H, seed, a=s / 2):
         bm = bmesh.new()
-        bmesh.ops.create_grid(bm, x_segments=30, y_segments=30, size=1.0)
+        bmesh.ops.create_grid(bm, x_segments=34, y_segments=34, size=1.0)
         for v in bm.verts:
-            x, y = v.co.x * s / 2, v.co.y * s / 2
-            rr = (abs(x / (s / 2)) ** 4 + abs(y / (s / 2)) ** 4) ** 0.25
+            x, y = v.co.x * a * 1.04, v.co.y * a * 1.04
+            rr = (abs(x / a) ** 4 + abs(y / a) ** 4) ** 0.25
             z = H * max(0.0, 1.0 - rr ** 2.2) ** 0.6
             z += 0.08 * noise.noise(Vector((x, y, seed)) * 2.2) * (z > 0)
             v.co = Vector((x, y, max(0.0, z)))
+        # no flat skirt beyond the foot (it was the hard glowing square)
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if all(v.co.z < 0.004 for v in f.verts)], context="FACES")
         ob = mesh_ob(name, bm, [M["lava"]], bevel=0.0)
         mo = ob.modifiers.new("solid", "SOLIDIFY")
         mo.thickness = 0.02
         return ob
 
-    glow = box("glow", (s + 0.06, s + 0.06, 0.03), (0, 0, 0), M["lava_glow"], bevel=0.0)
+    def glow(a, mat):
+        g = box("glow", (2 * a + 1.8, 2 * a + 1.8, 0.004), (0, 0, 0.001), mat, bevel=0.0)
+        g.visible_shadow = False
+        return g
+
+    def flames(a, n, hmin, hmax, seed, every=1.0):
+        r = random.Random(seed)
+        out = []
+        for k in range(n):
+            th = 2 * math.pi * (k + r.uniform(-0.3, 0.3)) / n
+            c, sn = math.cos(th), math.sin(th)
+            x = a * math.copysign(abs(c) ** 0.5, c) * r.uniform(0.97, 1.04)
+            y = a * math.copysign(abs(sn) ** 0.5, sn) * r.uniform(0.97, 1.04)
+            if r.random() > every:
+                continue
+            out_dir = math.degrees(math.atan2(y, x))
+            f = cyl(f"flame{k}", r.uniform(0.06, 0.1), r.uniform(hmin, hmax), (x, y, 0.0), M["flame"],
+                    rot=(0, r.uniform(8, 22), out_dir), verts=8, r2=0.0, bevel=0.0)
+            f.visible_shadow = False
+            out.append(f)
+        return out
+
     if state == "destroyed":
         r = random.Random(13)
-        glow.scale = (0.6, 0.6, 1.0)
-        out = [glow]
+        out = [glow(1.1, M["glow_small"])]
         for i in range(3):
             for j in range(3):
-                x, y = (i - 1) * 0.92 + r.uniform(-0.08, 0.08), (j - 1) * 0.92 + r.uniform(-0.08, 0.08)
-                out.append(lump(f"plate{i}{j}", (1.05, 1.0, r.uniform(0.2, 0.34)), (x, y, 0.0), M["lava_dim"],
+                x, y = (i - 1) * 0.86 + r.uniform(-0.08, 0.08), (j - 1) * 0.86 + r.uniform(-0.08, 0.08)
+                out.append(lump(f"plate{i}{j}", (0.95, 0.9, r.uniform(0.22, 0.36)), (x, y, 0.0), M["lava_dim"],
                                 seed=i * 3 + j + 50, rough=0.18, rot=r.uniform(0, 60), sub=1, flat_shade=True))
-        return out
+        return out + flames(1.15, 22, 0.12, 0.26, 3, every=0.6)
     if state == "damaged":
         # the dome caved in lower, broken rocks heaped on it
         d = dome("dome", H * 0.7, 2.0)
-        out = [glow, d, lump("rock0", (0.7, 0.6, 0.45), (-0.3, -0.45, 0.03), M["lava"], seed=53),
+        out = [d, lump("rock0", (0.7, 0.6, 0.45), (-0.3, -0.45, 0.03), M["lava"], seed=53),
                lump("rock1", (0.55, 0.5, 0.4), (0.7, 0.55, 0.03), M["lava"], seed=54),
                lump("rock2", (0.5, 0.45, 0.35), (-1.0, 0.7, 0.03), M["lava"], seed=55)]
-        for o in out[2:]:
+        for o in out[1:]:
             settle(o, [d])
-        bpy.data.objects.remove(glow, do_unlink=True)
-        return out[1:]
-    bpy.data.objects.remove(glow, do_unlink=True)
-    return [dome("dome", H, 1.0)]
+        return out + [glow(s / 2, M["glow"])] + flames(s / 2, 40, 0.14, 0.34, 2, every=0.8)
+    return [dome("dome", H, 1.0), glow(s / 2, M["glow"])] + flames(s / 2, 52, 0.18, 0.48, 1)
 
 
 def settle(o, under):
@@ -650,13 +902,16 @@ def alive(obs):
 
 
 def cross_slab(M, state):
-    """Inferno Block level 2: a low cross-shaped slab (arms toward the footprint's corners), dark sooty sides under a
-    pale stone cap, a bronze spike and four rivets in the middle."""
-    L, W, hb, hc = 3.6, 1.85, 1.0, 0.28
+    """Inferno Block level 2 (Flash): a chunky block in a 3 x 3 grid. A raised cross of brown-grey stone, its arms
+    along the footprint's edges, strongly lit on top and dark down its far sides; dark sooty stone cubes, a little
+    lower, in the four corners; a thin bronze spike in the middle and four white bolt studs on the arms."""
+    s = 2.8
+    c = s / 3
+    hx, hc = 1.22, 1.12
 
-    def plus(name, L, W, z0, h, mat, bevel):
-        a = box(name + "a", (L, W, h), (0, 0, z0), mat, rot=(0, 0, 45), bevel=0.0)
-        b = box(name + "b", (L, W, h), (0, 0, z0), mat, rot=(0, 0, -45), bevel=0.0)
+    def plus(name, h, mat, bevel, L=s, W=c):
+        a = box(name + "a", (L, W, h), (0, 0, 0), mat, bevel=0.0)
+        b = box(name + "b", (W, L, h), (0, 0, 0), mat, bevel=0.0)
         mo = a.modifiers.new("u", "BOOLEAN")
         mo.operation, mo.solver, mo.object = "UNION", "EXACT", b
         a = bake(a)
@@ -664,55 +919,55 @@ def cross_slab(M, state):
         mo = a.modifiers.new("bevel", "BEVEL")
         mo.width, mo.segments, mo.limit_method = bevel, 2, "ANGLE"
         a.name = name
-        return a
+        return bake(a)
+
+    def corners(h):
+        return [box(f"corner{i}", (c + 0.03, c + 0.03, h), (x * c, y * c, 0), M["ibase"], bevel=0.05)
+                for i, (x, y) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1)))]
 
     if state == "destroyed":
-        base = plus("base", L, W, 0.0, 0.36, M["ibase"], 0.05)
-        base = bake(base)
-        c = cutter("b0", (1.4, 1.2, 1.0), (0.9, -0.9, 0.4), M["icap_in"], seed=61, rough=0.3)
-        base = bite(base, [c])
-        out = [base]
+        cross = plus("cross", 0.34, M["icap"], 0.05)
+        cross = bite(cross, [cutter("b0", (1.2, 1.0, 0.8), (1.1, 0.0, 0.35), M["icap_in"], seed=61, rough=0.3)])
+        cs = corners(0.26)
+        cs[1] = bite(cs[1], [cutter("b1", (0.8, 0.8, 0.5), (c + 0.2, -c - 0.2, 0.3), M["icap_in"], seed=66, rough=0.3)])
+        out = [cross] + cs
         r = random.Random(4)
-        for i, (x, y) in enumerate(((-0.35, 0.2), (0.4, 0.35), (-0.2, -0.45), (0.95, -0.95), (1.5, -0.3))):
-            o = lump(f"cap{i}", (0.8, 0.6, 0.18), (x, y, 0), M["icap"], seed=62 + i, rough=0.15, rot=r.uniform(0, 90), sub=1,
-                     flat_shade=True)
-            settle(o, [base])
+        for i, (x, y) in enumerate(((-0.35, 0.2), (0.4, 0.35), (-0.2, -0.45), (0.9, -0.85), (-0.95, 0.9), (0.95, 0.95))):
+            o = lump(f"cap{i}", (0.7, 0.55, 0.2), (x, y, 0), M["icap" if i % 2 else "ibase"], seed=62 + i, rough=0.15,
+                     rot=r.uniform(0, 90), sub=1, flat_shade=True)
+            settle(o, out)
             out.append(o)
         return out
-    base = plus("base", L, W, 0.0, hb, M["ibase"], 0.06)
-    cap = plus("cap", L - 0.1, W - 0.12, hb - 0.02, hc, M["icap"], 0.08)
-    spike = cyl("spike", 0.13, 0.75, (0, 0, hb + hc - 0.04), M["bronze"], r2=0.0, verts=12, bevel=0.0)
-    collar = cyl("collar", 0.2, 0.08, (0, 0, hb + hc - 0.04), M["bronze"], verts=16, bevel=0.02)
-    rivets = [cyl(f"rivet{i}", 0.07, 0.05, (0.55 * math.cos(math.radians(a)), 0.55 * math.sin(math.radians(a)), hb + hc - 0.04),
-                  M["rivet"], verts=10, bevel=0.015) for i, a in enumerate((45, 135, 225, 315))]
-    grooves = [box(f"groove{i}", (1.1, 0.07, 0.04), (1.05 * math.cos(math.radians(a)), 1.05 * math.sin(math.radians(a)), hb + hc - 0.05),
-                   M["ibase"], rot=(0, 0, a), bevel=0.0) for i, a in enumerate((45, 135, 225, 315))]
-    parts = [base, cap, spike, collar] + rivets + grooves
+    cross = plus("cross", hx, M["icap"], 0.06)
+    cs = corners(hc)
+    spike = cyl("spike", 0.12, 1.0, (0, 0, hx - 0.02), M["bronze"], r2=0.0, verts=12, bevel=0.0)
+    collar = cyl("collar", 0.19, 0.08, (0, 0, hx - 0.02), M["bronze"], verts=16, bevel=0.02)
+    studs = [cyl(f"stud{i}", 0.09, 0.07, (0.62 * x, 0.62 * y, hx - 0.02), M["rivet"], verts=12, bevel=0.03)
+             for i, (x, y) in enumerate(((1, 0), (0, 1), (-1, 0), (0, -1)))]
+    # the arms are slabs laid against the middle square: dark seams where they meet it (Flash)
+    for i, (x, y, sx, sy) in enumerate(((c / 2, 0, 0.05, c - 0.12), (-c / 2, 0, 0.05, c - 0.12), (0, c / 2, c - 0.12, 0.05),
+                                        (0, -c / 2, c - 0.12, 0.05))):
+        studs.append(box(f"seam{i}", (sx, sy, 0.03), (x, y, hx - 0.02), M["ibase"], bevel=0.0))
     if state == "damaged":
-        # the front arm's tip broken off (pale broken stone), the spike snapped, a piece of cap at the foot
-        cap = bake(cap)
-        c1 = cutter("b1", (1.1, 1.0, 1.4), (1.35, -1.35, 0.6), M["icap_in"], seed=63, rough=0.3)
-        c2 = cutter("b2", (1.1, 1.0, 1.4), (1.35, -1.35, 0.6), M["icap_in"], seed=63, rough=0.3)
-        base = bite(bake(base), [c1])
-        cap = bite(cap, [c2])
-        c3 = cutter("b3", (0.9, 0.8, 0.5), (-1.2, -1.15, hb + hc), M["icap_in"], seed=64, rough=0.3)
-        cap = bite(cap, [c3])
-        g = bpy.data.objects.get("groove3")
-        if g:
-            bpy.data.objects.remove(g, do_unlink=True)
+        # the front corner cube smashed, the right arm's end broken (pale broken stone), the spike snapped, a piece
+        # of the arm at the foot
+        cs[1] = bite(cs[1], [cutter("b1", (1.0, 1.0, 1.3), (c + 0.25, -c - 0.25, 0.8), M["icap_in"], seed=63, rough=0.3)])
+        cross = bite(cross, [cutter("b2", (0.9, 1.0, 0.9), (s / 2, 0.0, hx), M["icap_in"], seed=64, rough=0.3),
+                             cutter("b3", (0.7, 0.6, 0.5), (-0.2, -s / 2, hx), M["icap_in"], seed=67, rough=0.3)])
         bpy.data.objects.remove(spike, do_unlink=True)
-        stub = cyl("spikestub", 0.13, 0.3, (0, 0, hb + hc - 0.04), M["bronze"], r2=0.07, verts=12, bevel=0.0)
-        loose = lump("capbit", (0.6, 0.5, 0.2), (0.95, -0.85, 0), M["icap"], seed=65, sub=1, flat_shade=True, rot=20)
-        settle(loose, [base, cap])
-        return alive([base, cap, collar, stub, loose] + rivets + grooves)
-    return parts
+        stub = cyl("spikestub", 0.12, 0.28, (0, 0, hx - 0.02), M["bronze"], r2=0.07, verts=12, bevel=0.0)
+        bpy.data.objects.remove(studs[0], do_unlink=True)
+        loose = lump("capbit", (0.55, 0.45, 0.22), (1.05, -0.45, 0), M["icap"], seed=65, sub=1, flat_shade=True, rot=20)
+        settle(loose, [cross] + cs)
+        return alive([cross, collar, stub, loose] + cs + studs)
+    return [cross, spike, collar] + cs + studs
 
 
 def spiked(M, state):
-    """Inferno Block level 3: a dark iron block with a lip round its top and nine pyramid spikes, the middle two bone
-    white."""
+    """Inferno Block level 3: a glossy dark steel block, a thick lip round its top standing out a little, nine small
+    dark steel pyramid spikes inside it, two of them with small white tips (Flash)."""
     s, h = 2.85, 2.4
-    lip_w, lip_h = 0.2, 0.22
+    lip_w, lip_h, over = 0.22, 0.36, 0.04
     if state == "destroyed":
         stub = box("stub", (s - 0.1, s - 0.1, 0.4), (0, 0, 0), M["iron"], bevel=0.06)
         stub = bake(stub)
@@ -721,8 +976,8 @@ def spiked(M, state):
         r = random.Random(7)
         spots = ((-0.5, 0.4, 0.4), (0.4, 0.5, 0.4), (-0.6, -0.5, 0.4), (0.3, -0.3, 0.4), (0.9, 0.2, 0.4), (0.2, -0.8, 0.4))
         for i, (x, y, z) in enumerate(spots):
-            m = M["bone"] if i in (1, 3) else M["iron_dark"]
-            p = pyramid(f"spike{i}", 0.62, 0.7, (x, y, 0), m, rot=r.uniform(0, 90))
+            mt = M["iron_tip"] if i in (1, 3) else M["iron_dark"]
+            p = pyramid(f"spike{i}", 0.56, 0.58, (x, y, 0), mt, rot=r.uniform(0, 90))
             if i >= 4:
                 p.rotation_euler = (math.radians(90), 0, math.radians(r.uniform(0, 180)))
             drop(p, z)
@@ -731,18 +986,22 @@ def spiked(M, state):
         plate = box("plate", (1.2, 0.5, 0.1), (-0.5, 0.1, 0), M["iron"], rot=(0, 0, 70), bevel=0.02)
         settle(plate, out)
         return out + [plate]
-    body = box("body", (s, s, h), (0, 0, 0), M["iron"], bevel=0.14, segs=4)
+    body = box("body", (s - 2 * over, s - 2 * over, h - lip_h + 0.02), (0, 0, 0), M["iron"], bevel=0.12, segs=4)
+    L, z0 = s, h - lip_h
     lip = []
-    for i, (x, y, sx, sy) in enumerate(((0, -s / 2 + lip_w / 2, s, lip_w), (0, s / 2 - lip_w / 2, s, lip_w),
-                                         (-s / 2 + lip_w / 2, 0, lip_w, s - 2 * lip_w), (s / 2 - lip_w / 2, 0, lip_w, s - 2 * lip_w))):
-        lip.append(box(f"lip{i}", (sx, sy, lip_h), (x, y, h - 0.03), M["iron"], bevel=0.05))
+    for i, (x, y, sx, sy) in enumerate(((0, -L / 2 + lip_w / 2, L, lip_w), (0, L / 2 - lip_w / 2, L, lip_w),
+                                         (-L / 2 + lip_w / 2, 0, lip_w, L - 2 * lip_w + 0.02),
+                                         (L / 2 - lip_w / 2, 0, lip_w, L - 2 * lip_w + 0.02))):
+        lip.append(box(f"lip{i}", (sx, sy, lip_h), (x, y, z0), M["iron"], bevel=0.06))
+    floor = box("floor", (L - 2 * lip_w + 0.04, L - 2 * lip_w + 0.04, 0.08), (0, 0, z0 + 0.14), M["iron_dark"], bevel=0.0)
     spikes = []
     step = (s - 2 * lip_w) / 3
     for i in range(3):
         for j in range(3):
             x, y = -s / 2 + lip_w + (i + 0.5) * step, -s / 2 + lip_w + (j + 0.5) * step
-            m = M["bone"] if (i, j) in ((1, 1), (2, 0)) else M["iron_dark"]
-            spikes.append(pyramid(f"spike{i}{j}", step * 0.95, 0.85, (x, y, h - 0.03), m))
+            mt = M["iron_tip"] if (i, j) in ((1, 1), (2, 0)) else M["iron_dark"]
+            spikes.append(pyramid(f"spike{i}{j}", step * 0.88, 0.95, (x, y, z0 + 0.2), mt))
+    lip.append(floor)
     if state == "damaged":
         # the sides battered in (two dents, the bent iron bright where it tore) and two spikes snapped off
         body = bite(body, [cutter("d0", (1.3, 0.8, 1.2), (0.3, -s / 2 - 0.1, 0.9), M["iron_in"], seed=72, rough=0.3),
@@ -801,6 +1060,9 @@ def contact():
         if name not in held:
             print("CONTACT %-14s NOT CONNECTED TO THE GROUND" % name)
     print("CONTACT worst gap %.3f, parts not reaching the ground: %d" % (worst, len(obs) - len(held)))
+    # how far the parts reach out from the middle (the footprint's half side is 1.415; glow and flames may pass it)
+    far = max((max(abs(v.x), abs(v.y)), name) for name, _, vs in obs if not name.startswith(("glow", "flame")) for v in vs)
+    print("CONTACT furthest part %s reaches %.3f (footprint 1.415)" % (far[1], far[0]))
 
 
 def clear(keep):

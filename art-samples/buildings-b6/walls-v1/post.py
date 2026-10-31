@@ -78,6 +78,18 @@ def side(key):
     out.save(HERE / f"{key}-side.png")
 
 
+def crop(key, st, z=8):
+    cb = (6 * z, 2 * z, 62 * z, 60 * z)
+    a, b = flash(key, st, z).crop(cb), model(key, st, z).crop(cb)
+    label(a, f"Flash {F.NAMES[key]} {st}", 22)
+    label(b, "3D", 22)
+    w, h = a.size
+    out = Image.new("RGB", (2 * w + 8, h), (24, 24, 24))
+    out.paste(a.convert("RGB"), (0, 0))
+    out.paste(b.convert("RGB"), (w + 8, 0))
+    out.save(HERE / "crops" / f"{key}-{st}.png")
+
+
 def row(get, n=6):
     """n blocks of one look side by side along one yard axis (20 units = 20 px right, 10 px down each), drawn back to
     front like the game; get() -> the look's RGBA in the FRAME at 1x (shadow and block apart, all shadows first)."""
@@ -161,6 +173,18 @@ if __name__ == "__main__":
         for i, c in enumerate(cells):
             out.paste(c.convert("RGB"), (i * w, 0))
         out.save(W / f"cmp-{key}.png")
+    elif cmd == "pw":
+        # work/pw.png: Flash | 3D preview of one state (default whole) for the looks named, side by side at 4x
+        st = sys.argv[3] if len(sys.argv) > 3 else "whole"
+        z, cb = 4, (6 * 4, 2 * 4, 62 * 4, 60 * 4)
+        cells = []
+        for key in sys.argv[2].split(","):
+            cells += [flash(key, st, z).crop(cb), model(key, st, z, W / f"prev-{key}-{st}.png").crop(cb)]
+        w, h = cells[0].size
+        out = Image.new("RGB", (w * len(cells), h))
+        for i, c in enumerate(cells):
+            out.paste(c.convert("RGB"), (i * w, 0))
+        out.save(W / "pw.png")
     elif cmd == "fit":
         lines = []
         for key in F.LOOKS:
@@ -169,6 +193,13 @@ if __name__ == "__main__":
                     lines.append(f"{key:9s} {st:9s} overlap (IoU) {iou(key, st):.3f}")
         print("\n".join(lines))
         (W / "fit.txt").write_text("\n".join(lines) + "\n")
+    elif cmd == "crop":
+        # crops/<look>-<state>.png: Flash | 3D at 8x (the render's own size), cropped to the block
+        (HERE / "crops").mkdir(exist_ok=True)
+        sts = sys.argv[3].split(",") if len(sys.argv) > 3 else ["whole"]
+        for key in (sys.argv[2].split(",") if len(sys.argv) > 2 and sys.argv[2] != "all" else F.LOOKS):
+            for st in sts:
+                crop(key, st)
     elif cmd == "side":
         for key in sys.argv[2:] or F.LOOKS:
             side(key)
