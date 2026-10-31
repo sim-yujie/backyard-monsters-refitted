@@ -664,16 +664,16 @@ def materials():
     M["rivet"] = shiny("rivet", (226, 230, 236), rough=0.3, metal=0.6, wear=(196, 200, 210), scale=6, dirt=0.05)
     M["steel"] = painted("steel", (176, 182, 192), rough=0.35, metal=0.8, wear=(140, 146, 156), rust=(130, 84, 50),
                          scale=3, dirt=0.3, rust_at=0.7)
-    M["perf_lo"] = perforated("perf_lo", (168, 170, 178), (26, 22, 22), 64, 0.75, 0.2, z0=0.0, wear=(140, 140, 148),
-                              rust=(150, 104, 70), rough=0.32, metal=0.75, side=0.35)
-    # levels 6-8's tiers: Flash's grey-silver, darker than level 9's pale base
-    M["perf_hi"] = perforated("perf_hi", (150, 152, 160), (26, 22, 22), 52, 0.75, 0.22, z0=0.0, wear=(108, 108, 116),
-                              rust=(130, 84, 60), rough=0.36, metal=0.7, side=0.55)
-    M["perf_t"] = perforated("perf_t", (124, 126, 134), (26, 22, 22), 64, 0.75, 0.21, z0=0.0, wear=(98, 98, 106),
-                             rust=(130, 84, 60), rough=0.4, metal=0.65, side=0.4)
+    M["perf_lo"] = perforated("perf_lo", (220, 216, 218), (26, 22, 22), 64, 0.75, 0.2, z0=0.0, wear=(184, 178, 180),
+                              rust=(150, 104, 70), rough=0.34, metal=0.45, side=0.3)
+    # levels 6-8's tiers: Flash's lit silver, pale on the front and greyer to the sides (the dome and coils stay dark)
+    M["perf_hi"] = perforated("perf_hi", (212, 214, 222), (26, 22, 22), 52, 0.75, 0.22, z0=0.0, wear=(176, 176, 184),
+                              rust=(150, 104, 76), rough=0.34, metal=0.5, side=0.4)
+    M["perf_t"] = perforated("perf_t", (204, 206, 214), (26, 22, 22), 64, 0.75, 0.21, z0=0.0, wear=(170, 170, 178),
+                             rust=(150, 104, 76), rough=0.36, metal=0.5, side=0.35)
     M["core"] = painted("core", (44, 40, 44), rough=0.45, metal=0.7, wear=(78, 74, 80), rust=(70, 46, 34), scale=3,
                         dirt=0.2, rust_at=0.7)
-    M["tiertop"] = painted("tiertop", (82, 80, 84), rough=0.6, metal=0.4, wear=(118, 116, 122), rust=(110, 80, 60),
+    M["tiertop"] = painted("tiertop", (96, 94, 98), rough=0.6, metal=0.4, wear=(118, 116, 122), rust=(110, 80, 60),
                            side=0.35)
     M["tindark"] = painted("tindark", (128, 138, 158), rough=0.3, metal=0.9, wear=(168, 178, 196), rust=(110, 80, 60),
                            scale=2.0, dirt=0.45, spec=0.5, rust_at=0.6)
@@ -1115,7 +1115,7 @@ def bend_path(a, corner, b, rad, n=8):
     return out
 
 
-def gold_pipe(i, th, lv, el=70.0, r_v=5.3, th_dome=None, sleeve=True, z_end=None):
+def gold_pipe(i, th, lv, el=70.0, r_v=5.3, th_dome=None, sleeve=True, z_end=None, els=None):
     """Level 7's gold pipe: out of the crown, down the dome's surface along a meridian, an elbow (with a sleeve) out at
     the dome's foot, then straight down beside the drum onto the lower tier."""
     rr, zeq = lv["dome"]
@@ -1123,7 +1123,8 @@ def gold_pipe(i, th, lv, el=70.0, r_v=5.3, th_dome=None, sleeve=True, z_end=None
     rp = lv.get("pipe_r", 0.5)
     z_end = lv["tiers"][1][2] if z_end is None else z_end
     td = th if th_dome is None else th_dome      # the front pair runs down the dome's sides, as Flash draws them
-    pts = [on_dome(rr, zeq, td + (th - td) * k / 8, e, fl, rp - 0.05)[0] for k, e in enumerate((el, el - 12, el - 24, el - 36, el - 46))]
+    els = els or (el, el - 12, el - 24, el - 36, el - 46)
+    pts = [on_dome(rr, zeq, td + (th - td) * k / 8, e, fl, rp - 0.05)[0] for k, e in enumerate(els)]
     low = pts[-1]
     corner = P(th, r_v, low.z - 0.25)
     pts = pts[:-1] + bend_path(low, corner, P(th, r_v, z_end - 0.1), 1.0, n=10)
@@ -1158,19 +1159,26 @@ def level7(eight=False):
     (r1, z1a, z1b), (r2, z2a, z2b) = lv["tiers"]
     fd = lv["foot_d"]
     for i, th in enumerate(lv["feet"]):
-        star(f"foot{i}-star", P(th, fd, 0.0), 2.2, 1.35, 11, 0.36, M["gold"], rot=th * 1.7)      # Flash's big stars
+        star(f"foot{i}-star", P(th, fd, 0.0), 1.98, 1.22, 11, 0.36, M["gold"], rot=th * 1.7)     # Flash's big stars
         lathe(f"foot{i}-vase", [(0.5, 0.75), (0.24, 1.0), (0.2, z2a - 0.9), (0.45, z2a - 0.45), (0.8, z2a - 0.2),
                                 (0.75, z2a - 0.1)], P(th, fd, 0.0), M["gold"], verts=32)
     fl = lv.get("dome_flat", 1.0)
     crown(lv["dome"][1] + lv["dome"][0] * fl, lv["fun_z"] - lv["dome"][1] - lv["dome"][0] * fl)
-    # the front pair runs down the dome's sides; the back pair down its outline at the far sides, as Flash draws them
+    # Flash: the front pair comes out of the dome's lower sides (a gold flange, the curl on the elbow) and down onto
+    # the lower tier; the back pair out of the dome's back, round its outline and down close beside it
     elbows = []
+    rv = lv["pipe_v"]
     for k, th in enumerate(lv["pipes"]):
         if k < 2:
-            elbows.append(gold_pipe(k, th, lv, th_dome=th + (25.0 if th > S.FRONT else -25.0)))
+            td = th + (10.0 if th > S.FRONT else -10.0)
+            elbows.append(gold_pipe(k, th, lv, r_v=rv, th_dome=td, els=(22.0, 15.0)))
+            p, n = on_dome(lv["dome"][0], lv["dome"][1], td, 22.0, fl, 0.0)
+            cyl(f"pipe{k}-flange", lv.get("pipe_r", 0.5) + 0.1, 0.6, p - Vector(n) * 0.2, M["gold"], verts=24,
+                bevel=0.1).rotation_euler = Vector(n).to_track_quat("Z", "Y").to_euler()
         else:
             tb = th - 23.0 if th > S.FRONT else th + 23.0      # clear of the side portholes
-            elbows.append(gold_pipe(k, tb, lv, r_v=4.75, th_dome=tb, sleeve=False, z_end=lv["tiers"][0][2]))
+            elbows.append(gold_pipe(k, tb, lv, r_v=rv - 0.05, th_dome=th, sleeve=False, z_end=lv["tiers"][1][2],
+                                    els=(26.0, 22.0, 18.0)))
     rp = lv.get("pipe_r", 0.5)
     for k, q in enumerate(elbows[:2]):         # the curls on the front pipes' elbows
         scroll(f"pipe{k}-curl", q, -1 if lv["pipes"][k] < S.FRONT else 1, rp)
@@ -1204,7 +1212,7 @@ def level7(eight=False):
         ring(f"rail{5 + k}-collar", rp + 0.26, 0.13, M["red"], z=0.0).location = q + Vector((0, 0, 0.1))
     # two curved red arms from the drum to the front pipes, a red collar round each pipe
     for k, tp in enumerate(lv["pipes"][:2]):
-        ring(f"rail{3 + k}-collar", rp + 0.1, 0.14, M["red"], z=0.0).location = P(tp, 5.3, z1a + 0.3)
+        ring(f"rail{3 + k}-collar", rp + 0.1, 0.14, M["red"], z=0.0).location = P(tp, rv, z1a + 0.3)
     if eight:
         # level 8: red drips from the dome's foot, the drum's front opened (a dark slot between gold edges)
         box("slot", (0.12, 1.9, lv["drum"][2] - dz0 - 0.1), P(S.FRONT, dr + 0.03, dz0), M["hole"], rot=(0, 0, S.FRONT), bevel=0.0)
@@ -1298,8 +1306,8 @@ def level1():
         # corners hanging straight down over the rim, the side corners out as ragged wings
         rag = 0.16 * math.sin(9 * ph + 0.7) + 0.1 * math.sin(17 * ph + 2.1)     # a ragged, uneven hem
         w = math.sin(ph - math.radians(S.FRONT)) ** 2                      # 1 toward the side corners
-        rp = 1.4                                                           # the flat top round the tie
-        slope = (1 - w) * 3.0 + w * 1.6                                    # front and back steep, the sides gentle
+        rp = 0.9                                                           # Flash: it falls away from the tie
+        slope = (1 - w) * 2.4 + w * 0.9                # front and back steep, the sides gentle: broad shoulders
         if d < 0.45:
             z = zb
         elif d < rp:
@@ -1347,6 +1355,15 @@ def level1():
     mo.thickness = 0.05
     mo.offset = 1.0
     funnel(lv["fun_z"], None, k=lv["fun_k"], extra=lv["fun_extra"])
+    # Flash: the funnel sits on a bundle of dark straps wound round its spout, a silver buckle on the front
+    sh_top = lv["fun_z"] + S.FUN_SPOUT_H * lv["fun_k"] + lv["fun_extra"]
+    for k in range(4):
+        z = zb + 0.3 + (sh_top - zb - 0.35) * k / 3
+        o = ring(f"bundle{k}", S.FUN_SPOUT_R * lv["fun_k"] + 0.14, 0.16, flap, z=0.0, n=24)
+        o.location = (0, 0, z)
+        o.rotation_euler = (math.radians(9 * math.sin(2.1 * k)), math.radians(9 * math.cos(1.7 * k)), 0)
+    box("bundle-buckle", (0.1, 0.42, 0.34), P(S.FRONT + 10, S.FUN_SPOUT_R * lv["fun_k"] + 0.28, zb + 0.75), M["chrome"],
+        rot=(0, 0, S.FRONT + 10), origin="centre", bevel=0.03)
     # paper clips on the tie, left and right
     # a chain of silver links round the neck over the tie, two binder clips with their wire handles up
     rn = 0.74
@@ -1735,9 +1752,9 @@ def claw_foot(i, th, d, z_top, kind):
     thin claws. A post rises from its middle to z_top."""
     c = P(th, d, 0.0)
     if kind == 9:
-        lathe(f"foot{i}-drum", [(1.0, 0.42), (1.22, 0.55), (1.3, 0.8), (1.3, 1.6), (1.2, 1.82), (0.75, 1.95),
-                                (0.42, 2.0), (0.38, z_top)], c, M["gold"], verts=40)
-        n, r0, z0, rt = 9, 1.2, 0.75, 1.65
+        lathe(f"foot{i}-drum", [(1.1, 0.42), (1.36, 0.55), (1.45, 0.8), (1.45, 1.6), (1.34, 1.82), (0.85, 1.95),
+                                (0.48, 2.0), (0.44, z_top)], c, M["gold"], verts=40)
+        n, r0, z0, rt = 9, 1.32, 0.75, 2.15
     else:
         lathe(f"foot{i}-dish", [(0.22, 0.8), (0.8, 0.95), (1.3, 1.3), (1.34, 1.48), (1.0, 1.5), (0.5, 1.48),
                                 (0.28, 1.65), (0.28, z_top)], c, M["gold"], verts=40)
@@ -1746,7 +1763,7 @@ def claw_foot(i, th, d, z_top, kind):
         a = th + 360.0 * (k + 0.5) / n
         pts = [c + Vector(S.polar(a, r0 - 0.15, z0)), c + Vector(S.polar(a, r0 + (rt - r0) * 0.55, z0 + 0.15)),
                c + Vector(S.polar(a, rt, 0.4)), c + Vector(S.polar(a, rt - 0.12, 0.03))]
-        tube(f"foot{i}-claw{k}", pts, 0.15 if kind == 9 else 0.11, M["gold"], r_end=0.03, smooth=True)
+        tube(f"foot{i}-claw{k}", pts, 0.21 if kind == 9 else 0.11, M["gold"], r_end=0.04, smooth=True)
 
 
 def base910(lv, kind):
@@ -1766,8 +1783,10 @@ def base910(lv, kind):
     lathe("base-bowl", [(r - 0.1, za + 0.05), (r - 0.5, za - 0.3), (2.0, za - 0.5), (0.01, za - 0.52)], (0, 0, 0),
           M["golddark"], verts=96)
     if kind == 9:
-        disc("base-top", dr - 0.1, r - 0.1, zb + 0.02, M["core"], thick=0.12)      # Flash: dark under the core
+        disc("base-top", dr - 0.1, r - 0.1, zb + 0.02, M["steel"], thick=0.12)     # Flash: pale, grimy by the core
         ring("base-rim-top", r - 0.1, 0.22, M["gold"], z=zb + 0.04, n=128)
+        lathe("base-band", [(r - 0.05, za - 0.05), (r + 0.2, za), (r + 0.26, za + 0.3), (r + 0.2, za + 0.6),
+                            (r + 0.02, za + 0.66)], (0, 0, 0), M["gold"], verts=128)     # Flash: a gold band under the band
         return
     rs, zs = lv["step"]                          # the dark step
     lathe("step", [(rs - 0.3, zs), (rs, zs), (rs + 0.05, zs - 0.45), (rs, zb - 0.05)], (0, 0, 0), M["hood"], verts=96)
@@ -1813,6 +1832,16 @@ def foot_posts(lv):
             lathe(f"post{i}-cuff", [(lv["upipe"] + 0.12, 1.6), (lv["upipe"] + 0.14, 2.0), (lv["upipe"] + 0.02, 2.1)],
                   P(th, fd, 0), M["gold"], verts=24)
             continue
+        if lv.get("round_posts"):                # level 9: round gold posts with collars, bent in onto the band
+            cyl(f"post{i}", 0.56, zb - 1.6, P(th, fd, 1.8), M["gold"], verts=24)
+            for k, z in enumerate((2.5, zb - 0.5)):
+                lathe(f"post{i}-cuff{k}", [(0.56, z - 0.3), (0.82, z - 0.24), (0.88, z), (0.82, z + 0.24), (0.56, z + 0.3)],
+                      P(th, fd, 0), M["gold"], verts=24)
+            lathe(f"post{i}-cap", [(0.0, zb + 0.55), (0.5, zb + 0.5), (0.66, zb + 0.3), (0.62, zb)], P(th, fd, 0), M["gold"],
+                  verts=24)
+            tube(f"post{i}-arm", [P(th, fd, zb - 0.1), P(th, fd - 0.3, zb + 0.1), P(th, r - 0.3, zb + 0.15)], 0.42,
+                 M["gold"], verts=16, smooth=True)
+            continue
         box(f"post{i}", (0.55, 0.55, zb + 0.55 - 1.8), P(th, fd, 1.8), M["gold"], rot=(0, 0, th), bevel=0.06)
         box(f"post{i}-arm", (fd - r + 0.5, 0.5, 0.45), P(th, (fd + r) / 2 - 0.15, zb - 0.1), M["gold"], rot=(0, 0, th),
             bevel=0.06)
@@ -1832,47 +1861,58 @@ def dome_harness(lv, rings=True):
 
 
 def frame9(i, th, lv):
-    """Level 9's gold frame at a quarter: a perforated square post up from the claw foot, a beam over to a big gold
-    shoulder drum on the dome (the front two lean in toward the porthole and sit higher), a big gold tusk curving out of
-    the shoulder toward the screen's edge, silver spikes."""
-    d, zt = lv["frame_d"], lv["frame_top"]
+    """Level 9's gold frame at a quarter. Front two: a thick round gold column up from the claw foot that bends over in
+    a thick arm into a chunky gold shoulder drum on the dome's side (Flash's arms come forward and down onto the base).
+    Back two: a square gold post studded with blue-grey bolts, its top bent in over the dome to the collar. Silver
+    spikes on the outside."""
+    d = lv["col_d"][i]
     rr, zeq = lv["dome"]
     fl = lv["dome_flat"]
-    zb = 2.3
-    s = {S.FRONT - 45: -1, S.FRONT + 45: 1, S.FRONT - 135: 1, S.FRONT + 135: -1}[th]
-    front = i < 2
-    ts = th - s * lv["shoulder_turn"] if front else th          # the shoulder's bearing
-    zs = zt + (lv["shoulder_rise"] if front else 0.0)           # and height
-    rh = rr * math.cos(math.asin(min(1.0, (zs - zeq) / (rr * fl))))
-    box(f"frame{i}", (0.75, 0.9, zt - zb + 0.4), P(th, d, zb), M["gold"], rot=(0, 0, th), bevel=0.08)
-    box(f"frame{i}-cap", (1.0, 1.1, 0.5), P(th, d, zt + 0.3), M["gold"], rot=(0, 0, th), bevel=0.1)
-    # the beam arches up off the post and over onto the shoulder (Flash's frame curves in at the top)
-    tube(f"frame{i}-beam", [P(th, d, zt + 0.4), P(th, d - 0.2, zt + 0.85), P((th + ts) / 2, (d + rh) / 2 + 0.2, zs + 0.75),
-                            P(ts, rh + 0.4, zs)], 0.5, M["gold"], verts=20, smooth=True)
-    # the shoulder: a rounded gold knuckle where the beam meets the dome, its domed face outward
-    track(lathe(f"frame{i}-sleeve", [(0.0, 0.0), (1.0, 0.0), (1.18, 0.25), (1.24, 0.6), (1.14, 0.98), (0.9, 1.25),
-                                     (0.5, 1.42), (0.0, 1.48)], P(ts, rh - 0.6, zs), M["gold"], verts=40), P(th + s * 45, 1, 0))
+    zb = 2.0
+    out = P(th, 1, 0)
+    if i < 2:
+        el, turn = lv["shoulder"]
+        ts = th + (turn if th < S.FRONT else -turn)            # the shoulder turned a little toward the front
+        # the shoulder drum: a big gold sleeve on the dome's side, slanting out and down, the arm coming out of it
+        p, n = on_dome(rr, zeq, ts, el, fl, -0.2)
+        ax = (P(ts, 0.8, 0) - Vector((0, 0, 0.45))).normalized()
+        sl = lathe(f"frame{i}-drum", [(0.0, -0.2), (0.5, -0.12), (0.78, 0.15), (0.86, 0.5), (0.86, 1.6), (0.8, 1.8),
+                                      (0.62, 1.86), (0.0, 1.84)], p, M["gold"], verts=40)
+        track(sl, ax)
+        for k, t in enumerate((0.55, 1.35)):                  # two raised bands round the sleeve
+            ring(f"frame{i}-drum-band{k}", 0.86, 0.08, M["golddark"], parent=sl, z=t, n=40)
+        e = p + ax * 1.6
+        zt = e.z - 2.4
+        pts = [p + ax * 0.6, e + ax * 0.5, P(th, d - 0.35, e.z - 1.0), P(th, d, zt), P(th, d, zb)]
+        tube(f"frame{i}-arm", pts, 0.62, M["tusk"], verts=24, r_end=0.5, smooth=True)
+        for k, z in enumerate((zb + 0.5, zb + 1.9)):         # gold collars round the column's foot
+            lathe(f"frame{i}-cuff{k}", [(0.5, z - 0.25), (0.72, z - 0.2), (0.78, z), (0.72, z + 0.2), (0.5, z + 0.25)],
+                  P(th, d, 0), M["gold"], verts=32)
+        rb, _, zbb = lv["base"]                                # a thick gold bracket from the column onto the band
+        tube(f"frame{i}-brace", [P(th, d - 0.2, zbb - 0.6), P(th, d - 1.0, zbb - 0.1), P(th, rb - 0.3, zbb + 0.15)], 0.42,
+             M["gold"], verts=16, smooth=True)
+        for k, z in enumerate((zt - 0.6, zt - 2.4, zt - 4.2)):
+            spike(f"frame{i}-spike{k}", P(th, d + 0.45, z), P(th, 1, 0.3))
+        spike(f"frame{i}-spike3", e + ax * 0.6 + Vector((0, 0, 0.5)), P(th, 1, 0.6))
+        return
+    zt = lv["back_top"]
+    box(f"frame{i}", (0.85, 0.95, zt - zb + 0.3), P(th, d, zb), M["gold"], rot=(0, 0, th), bevel=0.1)
+    # the top: a thick square-ish beam over and in to the collar
+    ztop = zeq + rr * fl
+    tube(f"frame{i}-beam", [P(th, d, zt - 0.2), P(th, d - 0.25, zt + 0.5), P(th, d - 1.6, zt + 1.15),
+                            P(th, 2.6, ztop - 0.55), P(th, 1.2, ztop - 0.2)], 0.6, M["gold"], verts=20, smooth=True)
+    lathe(f"frame{i}-knee", [(0.0, -0.62), (0.6, -0.6), (0.68, -0.3), (0.68, 0.3), (0.6, 0.6), (0.0, 0.62)],
+          P(th, d - 0.15, zt + 0.25), M["gold"], verts=32)
     pts = []
     for k in range(7):
-        z = zb + 0.6 + k * (zt - zb - 1.2) / 6
+        z = zb + 0.7 + k * (zt - zb - 1.2) / 6
         for side in (-1, 1):
-            pts.append((P(th, d, z) + P(th + 90 * side, 0.455, 0), P(th + 90 * side, 1, 0)))
-        pts.append((P(th, d + 0.38, z), P(th, 1, 0)))
-    studs(f"frame{i}-holes", pts, 0.12, M["hole"], flat_=0.2)
-    # the tusk: out of the shoulder's foot, curving out and down toward the screen's edge, its point beside the post
-    if front:      # Flash: the tusk sweeps out toward the screen's edge and down, its point turned outward
-        p0 = P(ts, rh + 0.5, zs - 0.5)
-        L = P(S.FRONT + math.copysign(90.0, ((th - S.FRONT + 180) % 360) - 180), 1, 0)
-        C, Z = P(S.FRONT, 1, 0), Vector((0, 0, 1))
-        p0 = p0 + Z * 0.4
-        tube(f"frame{i}-tusk", [p0, p0 + L * 0.9 + C * 0.5 - Z * 0.2, p0 + L * 1.9 + C * 0.95 - Z * 1.6,
-                                p0 + L * 2.45 + C * 1.05 - Z * 3.9], 0.8, M["tusk"], r_end=0.1, smooth=True)
-    else:
-        tube(f"frame{i}-tusk", [P(ts, rh + 0.5, zs - 0.5), P(th - s * 3, d - 0.9, zs - 0.7), P(th - s * 6, d - 0.55, zs - 2.5),
-                                P(th - s * 13, d - 1.0, zs - 4.8)], 0.85, M["tusk"], r_end=0.1, smooth=True)
-    for k, z in enumerate((zt - 1.4, zt - 3.8)):
-        spike(f"frame{i}-spike{k}", P(th, d + 0.36, z), P(th, 1, 0.4))
-    spike(f"frame{i}-spike2", P(th, d, zt + 0.75), Vector((0, 0, 1)) + P(th, 0.5, 0))
+            pts.append((P(th, d, z) + P(th + 90 * side, 0.48, 0), P(th + 90 * side, 1, 0)))
+        pts.append((P(th, d + 0.43, z), out))
+    studs(f"frame{i}-bolts", pts, 0.13, M["portrim"], flat_=0.5)
+    for k, z in enumerate((zt - 1.0, zt - 3.5)):
+        spike(f"frame{i}-spike{k}", P(th, d + 0.42, z), P(th, 1, 0.4))
+    spike(f"frame{i}-spike2", P(th, d - 0.2, zt + 0.95), Vector((0, 0, 1)) + P(th, 0.6, 0))
 
 
 def tendrils(z):
@@ -1887,14 +1927,14 @@ def core9(lv):
     """Level 9's core front: the drum opened (a dark slot with gold edges), red frames at the sides, red rods."""
     dr, dz0, dz1 = lv["drum"]
     th = S.FRONT
-    box("slot", (0.12, 2.6, dz1 - dz0 - 0.1), P(th, dr + 0.03, dz0), M["hole"], rot=(0, 0, th), bevel=0.0)
+    box("slot", (0.12, 1.8, dz1 - dz0 - 0.1), P(th, dr + 0.03, dz0), M["core"], rot=(0, 0, th), bevel=0.0)
     for s in (-1, 1):
-        strap(f"slot-edge{s + 1}", th + s * 26, dr - 0.02, dz0, dz1, w=0.36, rivets=6)
+        strap(f"slot-edge{s + 1}", th + s * 20, dr - 0.02, dz0, dz1, w=0.36, rivets=6)
     tube("slot-rod", [P(th, dr - 0.3, dz1 - 0.6), P(th, dr - 0.3, dz0 - 0.1)], 0.13, M["gold"])
     for k, a in enumerate((S.FRONT - 65, S.FRONT + 65)):
         ro = dr + 1.0
-        railbar(f"eframe{k}", [P(a, ro, dz0 + 0.4), P(a, ro, dz0 + 2.9)], 0.16)
-        for j, z in enumerate((dz0 + 0.4, dz0 + 1.65, dz0 + 2.9)):
+        railbar(f"eframe{k}", [P(a, ro, dz0 + 0.4), P(a, ro, dz0 + 3.6)], 0.16)
+        for j, z in enumerate((dz0 + 0.4, dz0 + 2.0, dz0 + 3.6)):
             railbar(f"eframe{k}-p{j}", [P(a, dr - 0.1, z), P(a, ro + 0.35, z)], 0.13)
     for k, a in enumerate((S.FRONT - 26, S.FRONT + 26)):
         railbar(f"rod{k}", [P(a, dr - 0.05, dz0 + 1.3), P(a, dr + 0.35, dz0 + 0.6), P(a, dr + 0.9, lv["base"][2] + 0.05)],
@@ -1940,19 +1980,39 @@ def column10(i, th, lv):
 
 
 def arm10(i, th, lv, front):
-    """Level 10's gold arm from a column's capital over into the dome: an elbow ball, a thick forearm, a shoulder
-    block on the dome, blue studs along the top and a big one on the elbow."""
+    """Level 10's gold arm from a column's capital over into the dome. Front: an elbow ball, a straight forearm with a
+    fat gauntlet by the elbow and blue studs along its top, going into a chunky curved shoulder cuff on the dome's side.
+    Back: a thick shoulder pipe into a domed plate on the dome."""
     d, zt = quarter_d(lv, th), lv["col_top"][i]
     rr, zeq = lv["dome"]
     rel = ((th - S.FRONT + 180) % 360) - 180      # the front arms meet the dome out on its shoulders, not over the middle
-    sh, n = on_dome(rr, zeq, th + math.copysign(17.0, rel) if front else th, 50.0 if front else 34.0, lv["dome_flat"], 0.45)
+    sh, n = on_dome(rr, zeq, th + math.copysign(17.0, rel) if front else th, 40.0 if front else 34.0, lv["dome_flat"],
+                    0.45)
     el = P(th, d - 0.1, zt + 0.55)
-    ball(f"arm{i}-elbow", el, 1.0, M["gold"])
+    ball(f"arm{i}-elbow", el, 0.8 if front else 1.0, M["gold"])
+    if front:
+        ax = (sh - el).normalized()
+        ar = 0.56
+        tube(f"arm{i}", [el, sh], ar, M["gold"], verts=20)
+        lathe(f"arm{i}-gauntlet", [(0.62, -0.1), (0.9, 0.0), (0.98, 0.3), (0.94, 1.4), (0.8, 1.6), (0.6, 1.66)],
+              el + ax * 0.3, M["gold"], verts=32).rotation_euler = ax.to_track_quat("Z", "Y").to_euler()
+        ring(f"arm{i}-gband", 0.96, 0.09, M["golddark"], parent=None, z=0.0, n=40)
+        bpy.data.objects[f"arm{i}-gband"].location = el + ax * 0.75
+        bpy.data.objects[f"arm{i}-gband"].rotation_euler = ax.to_track_quat("Z", "Y").to_euler()
+        # the shoulder cuff: a fat gold barrel round the forearm's end, its outer lip flared, lying against the dome
+        c = sh - ax * 0.55
+        lathe(f"arm{i}-shoulder", [(0.6, -0.95), (1.02, -0.9), (1.12, -0.7), (1.0, -0.55), (1.0, 0.45), (1.08, 0.7),
+                                   (0.9, 0.85), (0.0, 0.88)], c, M["gold"],
+              verts=40).rotation_euler = ax.to_track_quat("Z", "Y").to_euler()
+        ball(f"arm{i}-blue", el + P(th, 0.6, 0) + Vector((0, 0, -0.1)), 0.36, M["glass"])
+        up = (Vector((0, 0, 1)) - ax * ax.z).normalized()
+        for k in range(3):
+            q = el + ax * (0.55 + 0.45 * k) + up * 0.88
+            spike(f"arm{i}-stud{k}", q, up + P(th, 0.3, 0), r=0.16, h=0.5, mat=M["glass"])
+        return
     mid = (el + sh) / 2 + Vector((0, 0, 0.3))
-    # Flash's arm is a thick round gold sleeve in armour rings, a fat gauntlet next to the elbow and a big curved
-    # shoulder plate over the top where it meets the dome
     pts = [el * (1 - t) ** 2 + mid * 2 * t * (1 - t) + sh * t * t for t in (k / 10 for k in range(11))]
-    ar = 0.56 if front else 0.7                         # the front forearms are slimmer than the back shoulder pipes
+    ar = 0.7
     tube(f"arm{i}", pts, ar, M["gold"], verts=20, smooth=True)
     for k, t in enumerate((0.4, 0.62, 0.82)):           # armour rings round the sleeve
         q = el * (1 - t) ** 2 + mid * 2 * t * (1 - t) + sh * t * t
@@ -1961,9 +2021,7 @@ def arm10(i, th, lv, front):
                                   (ar - 0.02, 0.2)], q, M["golddark"],
               verts=32).rotation_euler = dq.to_track_quat("Z", "Y").to_euler()
     g = el * 0.74 + sh * 0.26
-    gk = ar / 0.7
-    lathe(f"arm{i}-gauntlet", [(0.7 * gk, -0.95), (0.98 * gk, -0.85), (1.04 * gk, -0.3), (1.0 * gk, 0.6), (0.82 * gk, 0.9),
-                               (0.7 * gk, 0.95)], g,
+    lathe(f"arm{i}-gauntlet", [(0.7, -0.95), (0.98, -0.85), (1.04, -0.3), (1.0, 0.6), (0.82, 0.9), (0.7, 0.95)], g,
           M["gold"], verts=32).rotation_euler = (sh - el).normalized().to_track_quat("Z", "Y").to_euler()
     # the shoulder: a domed plate (a squashed half ball) lying over the joint, its rim turned down onto the dome
     lathe(f"arm{i}-shoulder", [(1.25, -0.35), (1.32, -0.1)] + [(1.3 * math.cos(math.radians(a)), 0.75 * math.sin(math.radians(a)))
@@ -1983,6 +2041,18 @@ def horns(fz):
         tube(f"horn{k}", [P(a, 0.3, fz + 0.8), P(a, 1.6, fz + 1.05), P(a, 2.3, fz + 2.1), P(a, 2.3, fz + 3.1),
                           P(a, 2.95, fz + 4.0)], 0.42, M["gold"], r_end=0.05, smooth=True)
         facing_ring(f"loop{k}", P(a, 1.25, fz + 0.2), P(a + 90, 1, 0), 0.55, 0.09, M["red"])
+    # Flash: a cage of red wire hoops round the funnel's neck, a red ring through them, gold tines up the cone
+    k_ = S.LV[10]["fun_k"]
+    sr, rr, ch, sh = S.FUN_SPOUT_R * k_, S.FUN_RIM_R * k_, S.FUN_CONE_H * k_, S.FUN_SPOUT_H * k_
+    def cone_r(f):
+        return sr + (rr - sr) * f ** 1.25 + 0.04
+    for k, a in enumerate(S.FRONT + 45.0 + 90.0 * j for j in range(4)):
+        tube(f"cage{k}", [P(a, 0.55, fz + 0.12), P(a, 1.12, fz + 0.5), P(a, 1.2, fz + 1.25), P(a, cone_r(0.85), fz + sh + ch * 0.85)],
+             0.08, M["red"], smooth=True)
+    ring("cage-ring", 1.18, 0.08, M["red"], z=fz + 1.0, n=48)
+    for k in range(6):
+        a = S.FRONT - 75.0 + 30.0 * k
+        tube(f"tine{k}", [P(a, cone_r(f), fz + sh + ch * f) for f in (0.1, 0.4, 0.7, 1.0)], 0.06, M["gold"], smooth=True)
     tube("antenna", [(0, 0, fz + 0.5), (0, 0, fz + 5.3)], 0.1, M["gold"])
     lathe("antenna-plug", [(0.01, fz + 0.35), (0.23, fz + 0.35), (0.23, fz + 0.75), (0.01, fz + 0.75)], (0, 0, 0),
           M["gold"], verts=24)

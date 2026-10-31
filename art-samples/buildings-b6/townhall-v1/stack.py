@@ -80,7 +80,8 @@ LV = {
 # levels 7 and 8: level 6 with one big front porthole and two at the sides, gold pipes at the four quarters, a crown
 LV[7] = dict(LV[6], holes=((FRONT, 30.0, 1.0), (FRONT - 90, 32.0, 0.8), (FRONT + 90, 32.0, 0.8)),
              pipes=(FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135), fun_z=LV[6]["fun_z"] + 1.35,
-             scatter=True, straps=(-75.0, -15.0, -140.0, 50.0), dome_flat=0.85)     # Flash: a taller dome than 6
+             scatter=True, straps=(-75.0, -15.0, -140.0, 50.0), dome_flat=0.85,     # Flash: a taller dome than 6
+             tiers=((4.3, 3.8, 5.0), (5.35, 2.2, 3.8)), foot_d=5.35, pipe_v=5.0)    # and a base a tenth narrower
 LV[8] = dict(LV[7], pipe_r=0.62, fun_k=0.9, holes=LV[7]["holes"] + tuple((FRONT + a, e, 0.42) for a, e in
                                                                      ((-88.0, 52.0), (-34.0, 49.0),
                                                                       (0.0, 57.0), (34.0, 49.0),
@@ -98,7 +99,10 @@ QUARTERS = (FRONT - 45, FRONT + 45, FRONT - 135, FRONT + 135)
 _BODY9 = dict(drum=(2.9, 5.0, 8.5), dome=(4.2, 8.5), dome_flat=1.28, fun_z=14.5, fun_k=0.82, base=(5.0, 2.0, 5.0),
               feet=FEET8, foot_d=5.8, foot_dq=6.3, quarters=QUARTERS, holes=((FRONT, 32.0, 1.15),), straps=(),
               meridians=tuple(FRONT + a for a in (-118.0, -82.0, -62.0, -28.0, -8.0, 28.0)))
-LV[9] = dict(_BODY9, strut_z=5.2, foot_dq=6.8, frame_d=6.9, frame_top=9.7, shoulder_turn=13.0, shoulder_rise=1.4, drum_mat="tinshade")
+# level 9: Flash's dome is smaller and higher than 10's, over a tall lit coil and a low base band
+LV[9] = dict(_BODY9, drum=(2.6, 4.0, 9.6), dome=(3.8, 9.6), dome_flat=1.2, fun_z=14.75, base=(4.7, 2.2, 4.0),
+             foot_d=5.6, foot_dq=7.0, col_d=(7.0, 7.0, 6.2, 6.2), back_top=10.6, shoulder=(36.0, 6.0),
+             round_posts=True)
 # level 10: Flash narrows the dome into a tall bullet over a dark core, the base lower with a dark step
 LV[10] = dict(_BODY9, drum=(2.6, 5.4, 9.5), dome=(3.95, 9.5), dome_flat=1.05, dome_mat="dome10", fun_z=14.56, fun_k=0.68,
               base=(4.0, 1.5, 3.7), step=(3.4, 5.4), foot_d=5.6, foot_dq=6.4, col_top=(9.7, 9.7, 10.9, 10.9),
