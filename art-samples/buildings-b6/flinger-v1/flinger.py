@@ -848,9 +848,10 @@ def planks(name, p0, p1, z0_fn, z1_fn, mat, n, thick=0.12, gap=0.03, out=None, j
 
 
 # ------------------------------------------------------------------------------------------------------------ the model
-def slate(name, cols, rough=0.42):
-    """Flash's slate tiles: each tile its own pale blue or lavender (Object Info random picks from cols), lighter
-    toward its lower edge where Flash paints a pale rim, with a faint mottle."""
+def slate(name, cols, rough=0.42, rows=True):
+    """Flash's slate tiles: each tile its own blue-grey or lavender (Object Info random picks from cols), with Flash's
+    strong contrast: a pale lit rim along its rounded lower end and a dark shadow line where the next row up lies over
+    it (both from the tile's UV: 0 at the lower end). rows=False: no UV (the ridge slates), a plain mottle only."""
     if name in MATS:
         return MATS[name]
     t = NT(name)
@@ -868,14 +869,20 @@ def slate(name, cols, rough=0.42):
         el.new(pos).color = col
     t.link(oi.outputs["Random"], r.inputs[0])
     col = r.outputs[0]
-    # the pale rim: the tile's own box (Generated), lighter toward its lower (local -X) end and its top face
-    sep = t.n("ShaderNodeSeparateXYZ")
-    t.link(t.n("ShaderNodeTexCoord").outputs["Generated"], sep.inputs[0])
-    rim = t.ramp(sep.outputs["X"], [(0.0, (1, 1, 1, 1)), (0.22, (0.35, 0.35, 0.35, 1)), (0.5, (0, 0, 0, 1))])
-    col = t.mix(col, srgb(206, 214, 246), t.mix(rim, (0, 0, 0, 1), 0.6), "MIX")
     n1 = t.noise(v, 9.0, 3.0, 0.5)
-    col = t.mix(col, t.ramp(n1, [(0.3, srgb(120, 124, 170)), (0.7, srgb(210, 214, 240))]), 0.22, "MIX")
-    col = t.grime(col, GROUND, 3.0, 0.15, 0.5)
+    col = t.mix(col, t.ramp(n1, [(0.3, srgb(104, 110, 160)), (0.7, srgb(214, 214, 242))]), 0.2, "MIX")
+    if rows:
+        sep = t.n("ShaderNodeSeparateXYZ")
+        t.link(t.n("ShaderNodeUVMap").outputs["UV"], sep.inputs[0])
+        u = sep.outputs["X"]
+        # the lit rim along the lower end
+        rim = t.ramp(u, [(0.0, (1, 1, 1, 1)), (0.1, (0.55, 0.55, 0.55, 1)), (0.26, (0, 0, 0, 1))])
+        col = t.mix(col, srgb(226, 228, 252), t.mix(rim, (0, 0, 0, 1), 0.35), "MIX")
+        # the shadow line under the next row's lower end (it lies over this tile from about u = 0.78)
+        sh = t.ramp(u, [(0.5, (1, 1, 1, 1)), (0.66, (0.62, 0.62, 0.7, 1)), (0.76, (0.2, 0.2, 0.3, 1)),
+                        (0.9, (0.16, 0.16, 0.24, 1))])
+        col = t.mix(col, sh, 1.0, "MULTIPLY")
+    col = t.grime(col, GROUND, 3.0, 0.15, 0.45)
     t.set(**{"Base Color": col, "rough": rough, "spec": 0.55})
     t.bump(t.noise(v, 14, 4.0, 0.6), 0.06, 0.01)
     MATS[name] = t.m
@@ -918,8 +925,14 @@ def materials():
     M["arm"] = wood("arm", (172, 142, 96), (110, 90, 58), axis="Y", dirt=0.15, rings=3.0)
     M["hub"] = wood("hub", (150, 128, 92), (100, 84, 56), axis="X", dirt=0.15, rings=3.0)
     M["inside"] = flat("inside", (16, 12, 9), rough=1.0)
-    M["slate"] = slate("slate", [(146, 158, 214), (128, 146, 204), (162, 160, 216), (150, 168, 222), (172, 176, 228),
-                                 (136, 150, 210)], rough=0.34)
+    cols = [(104, 122, 182), (128, 136, 196), (164, 154, 214), (110, 130, 190), (178, 170, 224), (92, 108, 166),
+            (142, 156, 210), (122, 116, 178)]
+    M["slate"] = slate("slate", cols, rough=0.34)
+    M["rslate"] = slate("rslate", cols, rough=0.34, rows=False)
+    M["sillx"] = wood("sill", (170, 144, 100), (112, 94, 62), axis="X", dirt=0.2, rings=4.0)
+    M["silly"] = wood("sill", (170, 144, 100), (112, 94, 62), axis="Y", dirt=0.2, rings=4.0)
+    M["traywood"] = wood("traywood", (182, 154, 108), (120, 100, 66), axis="X", dirt=0.15, rings=3.0)
+    M["tray"] = shiny("tray", (150, 154, 162), rough=0.55, metal=0.35, wear=(104, 108, 118), scale=7.0, dirt=0.35)
     M["frame"] = wood("frame", (124, 100, 66), (82, 66, 42), axis="Y", dirt=0.2, rings=3.0)
     M["shaft"] = wood("shaft", (58, 50, 42), (30, 26, 22), axis="Z", dirt=0.0, rings=3.0)
     for k, (sc, amt) in {"post": (1.0, 0.25), "postx": (1.0, 0.25), "posty": (1.0, 0.25), "plank": (1.1, 0.22),
@@ -953,24 +966,24 @@ def roof_z(x):
 
 
 def corner_posts():
-    c = (A - S.POST / 2, B - S.POST / 2)
+    c = (A - S.POST_IN, B - S.POST_IN)
     hs = {1: S.POST1_H}.get(LOOK, None)
     for i, (sx, sy) in enumerate(((1, -1), (-1, -1), (1, 1), (-1, 1))):
         h = hs[i] if hs else roof_z(sx * c[0]) - 0.1
         if LOOK == 2 and sy > 0:
-            h = S.TRUSS_Z - 0.4
+            h = S.BACK2_H[0 if sx < 0 else 1]
         box(f"post{i}", (S.POST, S.POST, h), (sx * c[0], sy * c[1], 0), M["post"], bevel=0.06,
             rot=(0, 0, rng.uniform(-1, 1)))
 
 
 def sills():
-    """The ground frame: a beam along each side, between the posts."""
-    w, h = 0.6, S.SILL_H
+    """The ground frame: a chunky beam along each side, between the posts (Flash's are pale, lit on top)."""
+    w, h = S.SILL_W, S.SILL_H
     ax, by = A - S.POST, B - S.POST
-    box("sill0", (2 * ax, w, h), (0, -B + w / 2 + 0.06, 0), M["postx"], bevel=0.05)
-    box("sill1", (2 * ax, w, h), (0, B - w / 2 - 0.06, 0), M["postx"], bevel=0.05)
-    box("sill2", (w, 2 * by, h), (A - w / 2 - 0.06, 0, 0), M["posty"], bevel=0.05)
-    box("sill3", (w, 2 * by, h), (-A + w / 2 + 0.06, 0, 0), M["posty"], bevel=0.05)
+    box("sill0", (2 * ax, w, h), (0, -B + w / 2 + 0.06, 0), M["sillx"], bevel=0.07)
+    box("sill1", (2 * ax, w, h), (0, B - w / 2 - 0.06, 0), M["sillx"], bevel=0.07)
+    box("sill2", (w, 2 * by, h), (A - w / 2 - 0.06, 0, 0), M["silly"], bevel=0.07)
+    box("sill3", (w, 2 * by, h), (-A + w / 2 + 0.06, 0, 0), M["silly"], bevel=0.07)
 
 
 def walls():
@@ -979,8 +992,9 @@ def walls():
     t = S.PLANK_T
     x0, x1, z0, z1 = S.OPEN
     # -Y: under the opening, the header over it, the gable above (its planks reach the roof's underside)
-    planks("ywall", (-ax, -B + 0.06), (ax, -B + 0.06), lambda u: S.SILL_H, lambda u: z0, M["plank"], 6, thick=t,
-           out=(0, -1))
+    if z0 > S.SILL_H + 0.1:
+        planks("ywall", (-ax, -B + 0.06), (ax, -B + 0.06), lambda u: S.SILL_H, lambda u: z0, M["plank"], 6, thick=t,
+               out=(0, -1))
     box("header", (2 * ax + 0.1, 0.2, 0.22), (0, -B + 0.16, z1), M["postx"], bevel=0.04)
     gz = lambda u: roof_z(-ax + u) - S.ROOF_T - 0.02
     planks("gable", (-ax, -B + 0.1), (ax, -B + 0.1), lambda u: z1 + 0.3, gz, M["gplank"], 7, thick=t, out=(0, -1))
@@ -1016,19 +1030,44 @@ def roof_q(s, u, y, h=0.0):
 
 
 def tile(name, s, u, y, tl, tw, tt, mat, tilt):
-    """One slate on slope s, its middle at u down the slope and y along it, its lower end lifted by tilt (deg)."""
+    """One slate on slope s, its middle at u down the slope and y along it, its lower end lifted by tilt (deg). Its
+    lower corners are rounded as Flash's; its UV runs 0 at the lower end to 1 at the top (the slate shader's rim and
+    the shadow line under the next row)."""
     d, n, _ = slope_frame(s)
     yv = Vector((0, 1, 0))
     a = math.radians(tilt)
     d2 = d * math.cos(a) + n * math.sin(a)
     n2 = n * math.cos(a) - d * math.sin(a)
     c = roof_q(s, u, y, tt * 0.5 + tl * 0.5 * math.sin(a))
+    hx, hy = tl / 2, tw / 2
+    r = min(0.2, tw * 0.22)
+    out = [(hx, -hy), (hx, hy)]
+    for cx, cy, a0 in ((-hx + r, hy - r, 90.0), (-hx + r, -hy + r, 180.0)):
+        for k in range(7):
+            t = math.radians(a0 + 90.0 * k / 6)
+            out.append((cx + r * math.cos(t), cy + r * math.sin(t)))
     bm = bmesh.new()
-    bmesh.ops.create_cube(bm, size=1.0)
-    for v in bm.verts:
-        lx, ly, lz = v.co.x * tl, v.co.y * tw, v.co.z * tt
-        v.co = c - d2 * lx + yv * ly + n2 * lz        # local +X up the slope (the Generated X: 0 at the lower end)
-    return mesh_ob(name, bm, [mat], bevel=0.075, segs=3)
+    uv = bm.loops.layers.uv.new("UVMap")
+    loc = {}
+    rows = []
+    for lz in (tt / 2, -tt / 2):
+        row = []
+        for lx, ly in out:
+            v = bm.verts.new(c - d2 * lx + yv * ly + n2 * lz)      # local +X up the slope
+            loc[v] = (lx / tl + 0.5, ly / tw + 0.5)
+            row.append(v)
+        rows.append(row)
+    top, bot = rows
+    bm.faces.new(top)
+    bm.faces.new(bot[::-1])
+    m = len(out)
+    for k in range(m):
+        bm.faces.new((top[k], bot[k], bot[(k + 1) % m], top[(k + 1) % m]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    for f in bm.faces:
+        for lp in f.loops:
+            lp[uv].uv = loc[lp.vert]
+    return mesh_ob(name, bm, [mat], bevel=0.07, segs=3)
 
 
 def roof(y0, y1):
@@ -1048,7 +1087,7 @@ def roof(y0, y1):
             for f in ((0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)):
                 bm.faces.new([vs[i] for i in f])
             bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-            mesh_ob(f"roofb{s}{k}", bm, [M["slate"]], smooth=False, bevel=0.03, segs=2)
+            mesh_ob(f"roofb{s}{k}", bm, [M["rslate"]], smooth=False, bevel=0.03, segs=2)
         # the slates, from the eave up (each row lies over the top of the one below)
         tl, tw, tt, step = S.TILE
         rows = int(math.ceil((ln - 0.1) / step))
@@ -1078,7 +1117,7 @@ def roof(y0, y1):
     while yy < y1 - 0.05:
         w = min(tw, y1 - yy)
         c = Vector((S.RIDGE_X, yy + w / 2, S.RIDGE_Z + 0.08))
-        box(f"rslate{j}", (0.7, w - 0.04, 0.16), c, M["slate"], rot=(0, 0, 0), bevel=0.05, origin="center")
+        box(f"rslate{j}", (0.7, w - 0.04, 0.16), c, M["rslate"], rot=(0, 0, 0), bevel=0.05, origin="center")
         yy += w
         j += 1
 
@@ -1096,16 +1135,12 @@ def slope_box(name, s, a0, a1, b0, b1, h0, h1, mat, bevel=0.03):
 
 
 def hatch():
-    """The hatch in the +X slope (looks 3 and 4): a neat timber frame standing just above the slates round a long
-    hole, the shaft under it, and what lies on its lower sill (a board in look 3, the throwing spoon's curved tip in
-    look 4)."""
+    """The hatch in the +X slope (looks 3 and 4): as Flash, a plain black hole in the slates (no frame), its plank lid
+    lying open on the slates below it in look 3, the throwing spoon's curved tip in it in look 4."""
     u0, u1, y0, y1 = S.HATCH
     d, n, ln = slope_frame(1)
-    fw, h1 = 0.2, 0.42
-    for k, (a0, a1, b0, b1) in enumerate(((u0 - fw, u0, y0 - fw, y1 + fw), (u1, u1 + fw, y0 - fw, y1 + fw),
-                                          (u0, u1, y0 - fw, y0), (u0, u1, y1, y1 + fw))):
-        slope_box(f"hframe{k}", 1, a0, a1, b0, b1, -0.3, h1, M["frame"])
-    # the shaft: its walls run down from the hole, dark brown wood (Flash shows the far one faintly lit)
+    h1 = 0.36                       # the slates' top (the lid lies on them)
+    # the shaft: black walls from the hole down into the house
     hs = [roof_q(1, u0, y0, -0.3), roof_q(1, u1, y0, -0.3), roof_q(1, u1, y1, -0.3), roof_q(1, u0, y1, -0.3)]
     low = [p - n * 1.4 for p in hs]
     bm = bmesh.new()
@@ -1113,10 +1148,10 @@ def hatch():
     for f in ((7, 6, 5, 4), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)):
         bm.faces.new([vs[i] for i in f])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    mesh_ob("hshaft", bm, [M["shaft"]], smooth=False)
+    mesh_ob("hshaft", bm, [M["inside"]], smooth=False)
     if LOOK == 3:
-        # the board: a plank lying on the lower sill, its far end out over the slates
-        slope_box("hboard", 1, u1 - 0.3, u1 + 0.85, y0 - 0.05, y1 + 0.3, h1, h1 + 0.12, M["arm"], bevel=0.04)
+        # the lid: planks lying flat on the slates just below the hole
+        slope_box("hboard", 1, u1 + 0.05, u1 + 1.05, y0 - 0.1, y1 + 0.15, h1, h1 + 0.14, M["arm"], bevel=0.04)
     if LOOK >= 4:
         # the spoon's tip: a curved wooden bar arching over the lower sill, its far end bent down onto the slates
         pts = []
@@ -1133,14 +1168,36 @@ def drum():
     cyl("drum", S.DRUM_R, S.DRUM_L, c - Vector((S.DRUM_L / 2, 0, 0)), M["drum"], rot=(0, 90, 0), verts=32, bevel=0.06)
     cyl("axle", S.AXLE_R, 2 * A - 0.2, Vector((-A + 0.1, c.y, c.z)), M["steel"], rot=(0, 90, 0), verts=16, bevel=0.02)
     for i, sx in enumerate((-1, 1)):
-        box(f"bearing{i}", (0.5, 0.4, 0.5), (sx * (A - S.POST / 2), c.y - 0.04, c.z), M["steel"], bevel=0.05,
+        box(f"bearing{i}", (0.5, 0.4, 0.5), (sx * (A - S.POST_IN), c.y - 0.04, c.z), M["steel"], bevel=0.05,
             origin="center")
     # the crank stick out of the drum's side, down and toward the viewer's left
     a = c + Vector((-S.DRUM_L / 2 + 0.25, -S.DRUM_R + 0.05, -0.1))
     tube("crank", [a, a + Vector((-0.3, -0.75, -0.7))], 0.07, M["arm"])
-    # the bed: two dark slats and a steel strap across the bottom of the opening
-    box("bed0", (2 * (A - S.POST), 0.3, 0.16), (0, -B + 0.55, S.OPEN[2] + 0.15), M["postx"], bevel=0.03)
-    box("strap", (2 * (A - S.POST), 0.42, 0.06), (0, -B + 0.45, S.OPEN[2] + 0.32), M["steel"], bevel=0.02)
+    tray()
+
+
+def tray():
+    """The tray under the drum, between the left and front posts: a curved sheet from just under the drum down onto the
+    -Y sill, its lip over the sill's front (look 1: a pale wooden board; from look 2 Flash's light-grey steel)."""
+    x0, x1 = -(A - S.POST) + 0.06, (A - S.POST) - 0.06
+    pts = S.TRAY if LOOK > 1 else S.TRAY[:4]          # look 1's board stops on the sill
+    prof = smooth_open([Vector((0, y, z)) for y, z in pts], k=3)
+    t = 0.12 if LOOK > 1 else 0.16
+    bm = bmesh.new()
+    rows = []
+    for p in prof:
+        rows.append([bm.verts.new((x, p.y, p.z + dz)) for x in (x0, x1) for dz in (0.0, -t)])
+    for a, b in zip(rows, rows[1:]):
+        for i, j in ((0, 1), (1, 3), (3, 2), (2, 0)):
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    bm.faces.new((rows[0][0], rows[0][1], rows[0][3], rows[0][2]))
+    bm.faces.new((rows[-1][0], rows[-1][2], rows[-1][3], rows[-1][1]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mat = M["traywood"] if LOOK == 1 else M["tray"]
+    mesh_ob("tray", bm, [mat], smooth=True, bevel=0.03, segs=2)
+    if LOOK > 1:                                        # its rolled lip on the ground
+        e = prof[-1]
+        cyl("traylip", 0.09, x1 - x0, Vector((x0, e.y, e.z)), mat, rot=(0, 90, 0), verts=12, bevel=0.0)
 
 
 def ball():
@@ -1298,6 +1355,7 @@ def bucket_arm():
     if LOOK <= 2:
         s0.z = S.SPRING_BLOCK_H
         s0.y = S.SPRING12_Y
+        s0.x = S.SPRING12_X
         nspr = 2
         off = Vector(S.SPRING_OFF)
         box("sblock", (0.9, 0.9 + abs(off.y), S.SPRING_BLOCK_H), (s0.x, s0.y + off.y / 2, 0), M["posty"], bevel=0.06)
@@ -1342,27 +1400,33 @@ def aframe():
     box("acap", (0.95, 0.95, 0.5), apex + Vector((0, 0, -0.05)), M["steel"], bevel=0.06)
     # the slate roof over the cap: two slates each side of a ridge along Y
     for sd in (-1, 1):
-        for j, yy in enumerate((0.05,)):
-            ob = box(f"aslate{sd}{j}", (0.85, 1.0, 0.12), apex + Vector((sd * 0.36, yy, 0.38)), M["slate"],
+        for j, yy in enumerate((0.35,)):
+            ob = box(f"aslate{sd}{j}", (1.15, 1.0, 0.13), apex + Vector((0.3 + sd * 0.5, yy, 0.36)), M["rslate"],
                      bevel=0.03, origin="center")
             ob.rotation_euler = (0, math.radians(sd * 32 + rng.uniform(-3, 3)), math.radians(rng.uniform(-4, 4)))
     # the pulley on a gold bracket out of the cap's front, so the rope runs clear in front of the cap and legs
     _, n, e1, e2 = pul_plane()
-    pc = apex + Vector((0, -1.15, 0.75))
+    pc = apex + Vector(S.A1_PUL)
     pulley("pul1", pc, S.PUL_R, M["dgold"])
-    tube("afork", [apex + Vector((0, -0.4, 0.1)), apex + Vector((0, -0.8, 0.25)), pc + n * 0.2], 0.08, M["gold"],
+    tube("afork", [apex + Vector((0, -0.4, 0.2)), apex + Vector((0, -0.65, 0.7)), pc + n * 0.2], 0.08, M["gold"],
          smooth=True)
     # the windlass: a round wooden axle along X through both legs, a knob past the left leg, the coil on it
     z = S.WINDLASS_Z
     xl = [f.x + d.x * (z / d.z) for f, d in legs]
-    cyl("waxle", S.AXLE1_R, xl[1] - xl[0] + 0.9, Vector((xl[0] - 0.6, y, z)), M["drum"], rot=(0, 90, 0), verts=16)
-    sphere("wknob", 0.26, Vector((xl[0] - 0.65, y, z)), M["drum"], n=16)
-    c0, c1, cr = S.COIL
-    m = 9 * 24
-    for k, rr in enumerate((cr, cr - 0.2, cr - 0.37)):
-        pts = [Vector((c0 + (c1 - c0) * i / m, y + rr * math.cos(i * 2 * math.pi / 24 + k),
-                       z + rr * math.sin(i * 2 * math.pi / 24 + k))) for i in range(m + 1)]
-        tube(f"coil{k}", pts, 0.13 if k == 0 else 0.12, M["rope"], verts=10)
+    cyl("waxle", S.AXLE1_R, xl[1] - xl[0] + 1.1, Vector((xl[0] - 0.8, y, z)), M["drum"], rot=(0, 90, 0), verts=16)
+    sphere("wknob", 0.26, Vector((xl[0] - 0.88, y, z)), M["drum"], n=16)
+    cr = S.COIL
+    tans = [abs(d.x / d.z) for f, d in legs]
+    for k, rr in enumerate((cr, cr - 0.25, cr - 0.48)):
+        tr = 0.16 if k == 0 else 0.14
+        # each layer stops short of the slanting legs at its own top (wider legs there): the coil is a barrel
+        c0, c1 = (xl[i] + (1 - 2 * i) * (w / 2 * math.hypot(1, tans[i]) + rr * tans[i] + tr + 0.03) for i in (0, 1))
+        turns = (c1 - c0) / 0.3
+        m = int(turns * 24)
+        pts = [Vector((c0 + (c1 - c0) * i / m, y + rr * math.cos(i * 2 * math.pi * turns / m + k),
+                       z + rr * math.sin(i * 2 * math.pi * turns / m + k))) for i in range(m + 1)]
+        tube(f"coil{k}", pts, tr, M["rope"], verts=10)
+    c0, c1 = (xl[0] + xl[1]) / 2 - 0.5, (xl[0] + xl[1]) / 2 + 0.5
     return pc, Vector(((c0 + c1) / 2, y, z)), cr
 
 
@@ -1401,20 +1465,27 @@ def stool():
 
 
 def back_frame():
-    """Look 2: the open back half: a tie beam on the back posts, two rafters up to the ridge beam, a seat block on the
-    right back post, a rail and a diagonal brace along the open +X side."""
-    y, z = S.TRUSS_Y, S.TRUSS_Z
-    box("tie", (2 * A, 0.42, 0.4), (0, y, z - 0.4), M["postx"], bevel=0.05)
+    """Look 2: the open back half as Flash draws it: a big open timber triangle (a tie beam lying on the left back post
+    and on a plank seat on the right back post, two rafters meeting at the apex under a block, the ridge beam back to
+    the roof) and two rails along the open +X side."""
+    y = S.TRUSS_Y
     sx, sy, wx, wy, st = S.SEAT
-    box("seat", (wx, wy, st), (sx, sy, z), M["drum"], bevel=0.06)
-    top = Vector((S.RIDGE_X, y, S.RIDGE_Z + 0.2))
-    beam("rafter0", (-A + 0.35, y, z), top + Vector((0, 0, 0.1)), 0.34, 0.34, M["post"])
-    beam("rafter1", (sx - 0.2, y, z + st), top + Vector((0, 0, 0.1)), 0.34, 0.34, M["post"])
-    beam("ridge", (S.RIDGE_X, S.ROOF2_Y1 - 0.6, S.RIDGE_Z - 0.42), (S.RIDGE_X, y + 0.3, S.RIDGE_Z - 0.42), 0.34, 0.34,
+    zs = S.BACK2_H[1]
+    box("seat", (wx, wy, st), (sx, sy, zs), M["arm"], bevel=0.05)
+    zt = zs + st                                       # the tie beam's underside (on the seat and the left post)
+    x0, x1 = S.TIE_X
+    beam("tie", (x0, y, zt + S.TIE_H / 2), (x1, y, zt + S.TIE_H / 2), S.TIE_H, 0.4, M["postx"])
+    ax, az = S.TRUSS_APEX
+    top = Vector((ax, y, az))
+    for k, fx in enumerate(S.TRUSS_FEET):
+        f = Vector((fx, y, zt + S.TIE_H - 0.05))
+        beam(f"rafter{k}", f, top + (top - f).normalized() * 0.22, 0.36, 0.36, M["post"])
+    box("rafterk", (0.56, 0.46, 0.5), top + Vector((0, 0, 0.02)), M["post"], bevel=0.06, origin="center")
+    beam("ridge", (S.RIDGE_X, S.ROOF2_Y1 - 0.6, S.RIDGE_Z - 0.42), (S.RIDGE_X, y - 0.18, S.RIDGE_Z - 0.42), 0.34, 0.34,
          M["posty"])
-    xr = A - S.POST / 2
-    box("xrail", (0.36, 2 * (B - S.POST) + 0.1, 0.4), (xr, 0, 3.4), M["posty"], bevel=0.05)
-    beam("xbrace", (xr, -B + S.POST + 0.1, S.SILL_H), (xr, B - S.POST - 0.2, 3.45), 0.3, 0.3, M["post"])
+    xr = A - S.POST_IN
+    for k, z in enumerate(S.XRAILS):
+        box(f"xrail{k}", (0.36, 2 * (B - S.POST) + 0.1, 0.38), (xr, 0, z - 0.19), M["posty"], bevel=0.05)
 
 
 def build():
@@ -1446,7 +1517,7 @@ def build():
 FAMILY = (("post", "post"), ("sill", "post"), ("ywall", "wall"), ("gable", "wall"), ("xwall", "wall"),
           ("bwall", "wall"), ("lwall", "wall"), ("header", "wall"), ("inside", "wall"), ("roof", "roof"),
           ("slate", "roof"), ("rslate", "roof"), ("hframe", "hatch"), ("hshaft", "hatch"), ("hboard", "board"),
-          ("spoon", "spoon"), ("drum", "drum"), ("axle", "axle"), ("crank", "drum"), ("bed", "bed"), ("strap", "bed"),
+          ("spoon", "spoon"), ("drum", "drum"), ("axle", "axle"), ("crank", "drum"), ("tray", "tray"),
           ("ball", "ball"), ("gblock", "gold"), ("gstem", "gold"), ("grod", "gold"), ("pul", "pulley"),
           ("wheel", "wheel"), ("wcrank", "wheel"), ("wstand", "gold"), ("belt", "belt"), ("hub", "hub"),
           ("bucket", "bucket"), ("barm", "arm"), ("spring", "spring"), ("pipe", "pipe"),

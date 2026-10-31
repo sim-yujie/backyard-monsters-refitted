@@ -100,6 +100,10 @@ def lay_pulley(name, at, tilt=(0, 0, 0)):
     e.matrix_world = Matrix.Translation(Vector((at[0], at[1], 0.0))) @ \
         Matrix.Rotation(math.radians(tilt[0]), 4, "X") @ Matrix.Rotation(math.radians(tilt[2]), 4, "Z")
     sit([e])
+    bpy.context.view_layer.update()
+    for k in e.children[:3]:
+        print("PROBE lay", name, k.name, k.parent.name, [round(v, 2) for v in k.matrix_world.col[2][:3]],
+              [round(v, 2) for v in e.matrix_world.col[2][:3]], k.type)
 
 
 def tip_bucket(at, yaw, stub=True):

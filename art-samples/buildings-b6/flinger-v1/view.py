@@ -1,7 +1,7 @@
-"""view.py : pick panels of work/fit-overlay-L1.png (0 Flash, 1 3D, 2 outlines, 3 miss map) side by side, to look at."""
+"""view.py : pick panels of work/fit-overlay-L{}.png (0 Flash, 1 3D, 2 outlines, 3 miss map) side by side, to look at."""
 import sys
 from PIL import Image
-im = Image.open("work/fit-overlay-L1.png")
+im = Image.open("work/fit-overlay-L%s.png" % (sys.argv[3] if len(sys.argv) > 3 else "1"))
 w = im.width // 4
 ps = [int(c) for c in sys.argv[1]] if len(sys.argv) > 1 else [0, 1]
 sc = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0
