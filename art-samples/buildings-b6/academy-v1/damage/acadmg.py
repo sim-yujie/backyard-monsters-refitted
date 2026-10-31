@@ -90,6 +90,20 @@ def torn_holes(o, spots, depth=0.3):
     bmesh.ops.delete(bm, geom=dead, context="FACES")
     near = lambda e: any((mw @ e.verts[0].co - Vector(s[:3])).length < s[3] * 1.8 for s in spots)
     bnd = [e for e in bm.edges if e.is_boundary and near(e)]
+    # the cut follows the mesh's faces (a stair-step edge): move each edge vertex out onto the hole's ragged outline,
+    # on the shell's surface, so the tear is a smooth wavy line
+    for v in {v for e in bnd for v in e.verts}:
+        w = mw @ v.co
+        k, (x, y, z, rad) = min(enumerate(spots), key=lambda ks: (w - Vector(ks[1][:3])).length)
+        d = w - Vector((x, y, z))
+        n = (w - CEN).normalized()
+        dt = d - n * d.dot(n)
+        if dt.length < 1e-6:
+            continue
+        a = math.atan2(d.z, (d.x + d.y) * 0.7) + k
+        rr = rad * (0.85 + 0.22 * math.sin(5 * a) + 0.06 * math.sin(11 * a + 1.3))
+        w2 = Vector((x, y, z)) + dt.normalized() * rr
+        v.co = mi @ (CEN + (w2 - CEN).normalized() * (w - CEN).length)
     ret = bmesh.ops.extrude_edge_only(bm, edges=bnd)
     nv = [g for g in ret["geom"] if isinstance(g, bmesh.types.BMVert)]
     nf = [g for g in ret["geom"] if isinstance(g, bmesh.types.BMFace)]
@@ -187,6 +201,22 @@ def ribs_at(th):
     return pick("rib"), pick("ribsleeve"), pick("plinth")
 
 
+def crumple(th, m, parts):
+    """A rib torn down into buckled plates (Flash): a bent stub on its plinth, a plate leaning on the glass, plates
+    lying on the ground. m mirrors the layout across the rib."""
+    rib, sl, pl = parts
+    D.kill([rib])
+    sl.scale.z = 0.6
+    a = math.radians(th)
+    P = lambda r, s, z: Vector((r * math.cos(a) - m * s * math.sin(a), r * math.sin(a) + m * s * math.cos(a), z))
+    box("ribplate", (0.7, 2.5, 2.2), P(5.25, 0.1, S.PLINTH[2]), M["rib"], rot=(6 * m, -14, th + 4 * m), bevel=0.06,
+        jitter=0.06)
+    box("ribplate", (0.55, 2.3, 3.0), P(4.5, -0.3, GROUND), M["rib"], rot=(-5 * m, -38, th - 6 * m), bevel=0.06,
+        jitter=0.06)
+    box("ribplate", (2.2, 1.8, 0.3), P(6.6, 1.4, GROUND), M["rib"], rot=(3, 2, th + 25 * m), bevel=0.05, jitter=0.05)
+    box("ribplate", (1.6, 2.2, 0.5), P(6.3, -1.7, GROUND), M["rib"], rot=(0, 18, th - 15 * m), bevel=0.05, jitter=0.05)
+
+
 # ------------------------------------------------------------------------------------------------------------ the looks
 def damaged():
     dome = D.objs("dome")[0]
@@ -204,7 +234,12 @@ def damaged():
                 jitter=0.05)
             cyl("bit", S.PORT_HOLE, 0.08, Vector((3.4, 3.1, 0.3)), M["hole"], verts=32)
             fins = sorted(D.objs("fin"), key=lambda o: o.name)
-            spin_about([fins[1]], fins[1].matrix_world.translation, (1, -1, 0), -35)       # bent back
+            # bent outward about its lower edge (still a fin, seated on the dome along that edge)
+            fm = fins[1].matrix_world
+            u, sv = fm.col[1].to_3d().normalized(), fm.col[0].to_3d().normalized()
+            pivot = fm.translation - u * S.FIN[1]
+            top = lambda g: (pivot + Matrix.Rotation(math.radians(g), 3, sv) @ (u * 2 * S.FIN[1]) - CEN).length
+            spin_about([fins[1]], pivot, sv, max((22, -22), key=top))
             D.kill([fins[0]])
             box("bit", (1.9, 3.2, 0.3), Vector((-3.0, -5.2, GROUND)), M["plate"], rot=(2, 3, -30), bevel=0.05)
             box("bit", (3.2, 0.28, 0.26), Vector((-2.8, -5.0, 0.3)), M["gold"], rot=(0, 0, 58), bevel=0.05)
@@ -219,16 +254,14 @@ def damaged():
         torn_holes(dome, spots)
         inside_behind(spots)
         # the front-left rib wrenched outward off the dome, the front-right one broken into chunks on the ground
-        rib, sl, pl = ribs_at(-90.0)
-        foot = Vector((0, -(S.RIB_OUT + 0.1), S.PLINTH[2]))
-        spin_about([rib, sl], foot, (1, 0, 0), 11.0)
-        rib, sl, pl = ribs_at(0.0)
-        D.kill([rib])
-        sl.scale.z = 0.55
+        got = {th: ribs_at(th) for th in V.RIBS}     # all looked up first: ribs_at counts the ribs still standing
+        back = got[90.0]
+        crumple(-90.0, 1, got[-90.0])
+        crumple(0.0, -1, got[0.0])
         ground_bits((6.3, -1.8), 4, ("chunk", "chunk", "shard", "chunk"), seed=5, spread=1.0)
         box("bit", (S.RIB_W, 0.8, 2.4), Vector((4.0, -3.4, GROUND)), M["rib"], rot=(84, 0, 30), bevel=0.06, jitter=0.06)
         if L >= 4:                       # level 4: the back-right rib snapped too, its top lying behind
-            rib, sl, pl = ribs_at(90.0)
+            rib, sl, pl = back
             spin_about([rib, sl], Vector((0, S.RIB_OUT + 0.1, S.PLINTH[2])), (1, 0, 0), -9.0)
             ground_bits((-5.6, 4.4), 3, ("chunk", "shard", "chunk"), seed=9, spread=1.0)
         ground_bits((-6.0, -3.4), 3, ("chunk", "bar", "shard"), seed=7, spread=0.9)

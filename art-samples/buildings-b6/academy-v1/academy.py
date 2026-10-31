@@ -511,7 +511,7 @@ def spinner(name, center, normal_bearing, tilt, parts):
 
 # ------------------------------------------------------------------------------------------------------------ the model
 def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spec=0.5, coat=0.0, ao_min=0.5,
-          streak=0.0, side=0.0, glow=(), lit=None):
+          streak=0.0, side=0.0, glow=(), lit=None, top=None):
     """Flash's Hatchery is a glossy render: polished gold, chrome, red enamel. Soft, broad reflections, a faint
     mottle (`wear` colour in soft patches), darker in the creases and low down, and faint vertical polish streaks."""
     if name in MATS:
@@ -556,6 +556,16 @@ def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spe
         t.link(dp.outputs["Value"], mr.inputs[0])
         out = t.mix(out, srgb(*col2), mr.outputs[0])
         t.set(**{"Emission Color": srgb(*col2), "Emission Strength": mr.outputs[0]})
+    if top:                        # faces turned up take this colour (Flash's blocks: olive-gold tops)
+        col3, amt = top
+        geo = t.n("ShaderNodeNewGeometry")
+        sep = t.n("ShaderNodeSeparateXYZ")
+        t.link(geo.outputs["Normal"], sep.inputs[0])
+        mr = t.n("ShaderNodeMapRange", interpolation_type="SMOOTHSTEP")
+        mr.inputs[1].default_value, mr.inputs[2].default_value = 0.55, 0.9
+        mr.inputs[4].default_value = amt
+        t.link(sep.outputs["Z"], mr.inputs[0])
+        out = t.mix(out, srgb(*col3), mr.outputs[0])
     out = t.grime(out, GROUND, 4.0, dirt, ao_min)
     t.set(**{"Base Color": out, "rough": rr, "metal": metal, "spec": spec})
     if coat:
@@ -591,13 +601,31 @@ def screen_spot(t, cx, cy, ax, ay, amount):
 
 
 
+def glassmat():
+    """Flash's glass: glowing cyan with a bright white upright highlight on the lit side and a fainter one beside it."""
+    if "glass" in MATS:
+        return MATS["glass"]
+    t = NT("glass")
+    geo = t.n("ShaderNodeNewGeometry")
+    dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(geo.outputs["Normal"], dp.inputs[0])
+    dp.inputs[1].default_value = Vector((0.3, -0.95, 0.0)).normalized()
+    hl = t.ramp(dp.outputs["Value"], [(0.80, (0, 0, 0, 1)), (0.86, (0.9, 0.9, 0.9, 1)), (0.9, (0.15, 0.15, 0.15, 1)),
+                                      (0.95, (0.5, 0.5, 0.5, 1)), (0.99, (0, 0, 0, 1))])
+    out = t.mix(srgb(150, 222, 240), srgb(255, 255, 255), hl)
+    t.set(**{"Base Color": out, "rough": 0.15, "metal": 0.0, "Emission Color": out, "Emission Strength": 0.9})
+    MATS["glass"] = t.m
+    return t.m
+
+
 def materials():
     M = {}
     # the dome: Flash's glossy steel blue, bright white sheen up on the left, darker grey-lavender on the right
     hi = (-12.0, 12.0) if not V.ribbed else (-15.0, 5.0 - (19.0 if L >= 4 else 0.0))
-    M["dome"] = shiny("dome", (108, 114, 127), rough=0.42, metal=0.15, wear=(88, 93, 104), scale=4.0, dirt=0.5,
-                      side=-0.8, spec=0.4, glow=((hi[0], hi[1], 11.0, 14.0, 0.26, (226, 234, 244)),))
-    M["seam"] = shiny("seam", (78, 82, 92), rough=0.4, metal=0.5, scale=3, dirt=0.1)
+    # matte, mottled steel (Flash's dome has no white hotspot: soft blotchy greys, panel seams)
+    M["dome"] = shiny("dome", (110, 116, 129), rough=0.66, metal=0.1, wear=(80, 86, 99), scale=7.0, dirt=0.5,
+                      side=-0.8, spec=0.18)
+    M["seam"] = shiny("seam", (52, 56, 66), rough=0.5, metal=0.3, scale=3, dirt=0.1)
     M["plate"] = shiny("plate", (90, 96, 106), rough=0.42, metal=0.15, wear=(78, 83, 93), scale=2.0, dirt=0.15,
                        side=-0.5)
     M["gold"] = shiny("gold", (250, 152, 18), rough=0.26, metal=0.6, side=0.3, wear=(255, 196, 70), scale=1.5,
@@ -605,8 +633,8 @@ def materials():
     M["bandgold"] = shiny("bandgold", (236, 146, 24), rough=0.35, metal=0.2, side=0.3, wear=(250, 180, 60), scale=1.5,
                           dirt=0.1, spec=0.5)
     M["golddark"] = shiny("golddark", (176, 100, 18), rough=0.3, metal=0.75, wear=(210, 140, 40), scale=1.5, dirt=0.4)
-    M["blockgold"] = shiny("blockgold", (196, 128, 18), rough=0.28, metal=0.7, wear=(140, 92, 18), scale=2.0,
-                           dirt=0.9, ao_min=0.02, coat=0.3, spec=0.6, lit=((-0.55, -0.8, 0.25), (255, 238, 170), 0.5, 0.82))
+    M["blockgold"] = shiny("blockgold", (204, 112, 0), rough=0.45, metal=0.2, wear=(150, 76, 0), scale=2.0,
+                           dirt=0.95, ao_min=0.0, spec=0.4, top=((122, 90, 12), 0.85), lit=((-0.55, -0.8, 0.0), (255, 250, 222), 0.55, 0.85))
     M["foot"] = shiny("foot", (14, 13, 13), rough=0.6, metal=0.1, wear=(22, 21, 21), scale=3, dirt=0.0, spec=0.15)
     M["hole"] = flat("hole", (10, 8, 8), rough=1.0)
     M["pit"] = shiny("pit", (16, 11, 7), rough=0.5, metal=0.3, scale=3, dirt=0.0)
@@ -615,8 +643,9 @@ def materials():
     M["innerwall"] = shiny("innerwall", (38, 38, 44), rough=0.45, metal=0.4, wear=(30, 30, 36), scale=3, dirt=0.3)
     M["rib"] = painted("rib", (128, 130, 144), rough=0.5, metal=0.3, wear=(108, 108, 122), scale=5.0, dirt=0.35,
                        spec=0.3)
-    M["ribend"] = painted("ribend", (176, 178, 190), rough=0.4, metal=0.35, wear=(150, 150, 164), scale=5.0, dirt=0.1)
-    M["glass"] = flat("glass", (150, 222, 240), rough=0.15, emit=0.9)
+    M["ribend"] = painted("ribend", (124, 126, 140), rough=0.4, metal=0.35, wear=(150, 150, 164), scale=5.0, dirt=0.1)
+    M["glass"] = glassmat()
+    M["glassline"] = flat("glassline", (96, 168, 196), rough=0.3, emit=0.5)
     M["glassframe"] = shiny("glassframe", (60, 70, 80), rough=0.35, metal=0.6, scale=3, dirt=0.1)
     return M
 
@@ -685,9 +714,12 @@ def body():
     else:
         lathe("foot", [(V.FOOT_R - 0.08, 0.0), (V.FOOT_R, 0.06), (V.FOOT_R, V.FOOT_Z - 0.06),
                        (V.FOOT_R - 0.06, V.FOOT_Z), (0.0, V.FOOT_Z)], (0, 0, 0), M["foot"], verts=96)
-        lathe("band", [(V.BAND_R0 - 0.1, V.BAND_Z0 - 0.02), (V.BAND_R0, V.BAND_Z0), (V.BAND_R - 0.04, V.BAND_Z1 - 0.08),
-                       (V.BAND_R, V.BAND_Z1 - 0.03), (V.BAND_R - 0.06, V.BAND_Z1), (V.TANK_R - 0.2, V.BAND_Z1)],
-              (0, 0, 0), M["bandgold"], verts=128)
+        # Flash: a thick black band down to the ground, a thin gold ring on it, then the glass
+        lathe("band", [(V.BAND_R0 - 0.1, V.BAND_Z0 - 0.02), (V.BAND_R0, V.BAND_Z0), (V.BAND_R - 0.04, V.BAND_Z1 - 0.48),
+                       (V.TANK_R - 0.2, V.BAND_Z1 - 0.46)], (0, 0, 0), M["foot"], verts=128)
+        lathe("band", [(V.TANK_R - 0.2, V.BAND_Z1 - 0.5), (V.BAND_R - 0.02, V.BAND_Z1 - 0.5),
+                       (V.BAND_R + 0.05, V.BAND_Z1 - 0.44), (V.BAND_R + 0.06, V.BAND_Z1 - 0.06),
+                       (V.BAND_R, V.BAND_Z1), (V.TANK_R - 0.2, V.BAND_Z1)], (0, 0, 0), M["bandgold"], verts=128)
         tank()
         ribs()
     seams()
@@ -704,12 +736,12 @@ def tank():
     cyl("tank", V.TANK_R, z1 - z0, (0, 0, z0), M["glass"], verts=96, bevel=0.0)
     cyl("tankcollar", V.TANK_R + 0.04, V.DOME_Z0 + 0.05 - z1, (0, 0, z1), M["foot"], verts=96, bevel=0.02)
     ring("tankring", V.TANK_R + 0.01, 0.05, M["glassframe"], z=z0 + 0.04, n=96)
-    if False:                   # upright frame bars in the glass (Flash shows none)
+    if True:                    # faint upright segment lines in the glass (Flash's glass is drawn in panels)
         for th in range(-180, 180, 30):
             a = math.radians(th + 15)
             p0 = (V.TANK_R * math.cos(a), V.TANK_R * math.sin(a), z0 + 0.05)
             p1 = (V.TANK_R * math.cos(a), V.TANK_R * math.sin(a), z1 - 0.05)
-            tube("tankbar", [p0, p1], 0.035, M["glassframe"], verts=8)
+            tube("tankbar", [p0, p1], 0.025, M["glassline"], verts=8)
 
 
 def seams():
@@ -941,13 +973,17 @@ def ribs():
         s = Vector(side)
         e_low = V.WALL_E
         top = S.RIB_ENDS[th] + 2.5
+        e_open = math.degrees(math.asin((V.OPEN_Z - V.DOME_C) / R))
+        up = e_open - 5.0                  # the front ribs' outer edging runs on up the dome toward the opening (Flash)
+        outer = {-90.0: -1, 0.0: 1}.get(th)
         for k in (-1, 1):
             pts = []
-            for i in range(25):
-                e = top - (top - e_low) * i / 24
+            hi = up if k == outer else top
+            for i in range(31):
+                e = hi - (hi - e_low) * i / 30
                 p = ball(th, e) + s * k * (S.RIB_W / 2 + 0.1)
                 pts.append(Vector((0, 0, V.DOME_C)) + (p - Vector((0, 0, V.DOME_C))).normalized() * (R + 0.02))
-            sweep("ribgold", pts, _radial_side(pts), 0.26, 0.12, M["gold"], bevel=0.04)
+            sweep("ribgold", pts, _radial_side(pts), 0.3, 0.12, M["gold"], bevel=0.04)
             rw = R * math.cos(math.radians(V.WALL_E)) + 0.06
             q = Vector(S.polar(th + k * math.degrees(math.atan((S.RIB_W / 2 + 0.1) / rw)), rw, 0))
             sweep("ribgold", [q + Vector((0, 0, V.DOME_Z0 + 0.1)), q + Vector((0, 0, pts[-1].z + 0.05))],
@@ -958,7 +994,7 @@ def ribs():
             w = -1 + 2 * i / 8
             p = ball(th, top) + s * w * (S.RIB_W / 2 + 0.1)
             pts.append(Vector((0, 0, V.DOME_C)) + (p - Vector((0, 0, V.DOME_C))).normalized() * (R + 0.02))
-        sweep("ribgold", pts, _radial_side(pts), 0.26, 0.12, M["gold"], bevel=0.04)
+        sweep("ribgold", pts, _radial_side(pts), 0.3, 0.12, M["gold"], bevel=0.04)
 
 
 def _radial_side(pts):
@@ -976,20 +1012,27 @@ def blocks():
     z = V.OPEN_Z
 
     def parts(hub):
-        box("blk", (2.15, 2.15, 1.15), (0, 0, -0.85), M["blockgold"], parent=hub, bevel=0.06, rot=(6, -4, 45))
-        cyl("blkaxle", 0.28, 0.55, (0, 0, -1.35), M["golddark"], parent=hub, verts=16)     # down to the pit floor
-        ring_ = ((1.0, 15, 0.82, -0.5, 20, (14, -10)), (1.04, 62, 0.7, -0.75, 35, (-12, 8)),
-                 (0.95, 108, 0.76, -0.4, 5, (8, 12)), (1.08, 150, 0.62, -0.85, 50, (-16, -6)))
+        # Flash: big blocks heaped up to the rim, black gaps between them, cream-lit faces; nothing reaches the inner
+        # wall (r + half the block's diagonal stays under the opening's inner radius OPEN_R - 0.22)
+        box("blk", (1.75, 1.75, 1.3), (0, 0, -0.75), M["blockgold"], parent=hub, bevel=0.06, rot=(16, -10, 45))
+        cyl("blkaxle", 0.28, 0.9, (0, 0, -1.35), M["golddark"], parent=hub, verts=16)      # down to the pit floor
+        ring_ = ((0.9, 12, 0.98, -0.4, 20, (22, -14)), (0.92, 64, 0.9, -0.62, 35, (-18, 12)),
+                 (0.88, 112, 0.94, -0.3, 5, (14, 20)), (0.94, 155, 0.86, -0.7, 50, (-24, -8)))
         for r, ang, sz, dz, rot, (tx, ty) in ring_:
             for twin in (0, 180):
                 aa = math.radians(ang + twin)
-                sz *= 1.15
                 box("blk", (sz, sz * 0.9, sz * 0.85), (r * math.cos(aa), r * math.sin(aa), dz), M["blockgold"],
+                    parent=hub, bevel=0.05, rot=(tx, ty, ang + twin + rot))
+        for ang, sz, dz, rot, (tx, ty) in ((40, 0.88, -0.55, 15, (12, 18)), (95, 0.84, -0.65, 40, (-14, 10)),
+                                            (160, 0.9, -0.5, 25, (18, -12))):
+            for twin in (0, 180):                   # an outer ring lower down, filling the opening to its wall
+                aa = math.radians(ang + twin)
+                box("blk", (sz, sz * 0.9, sz * 0.8), (1.12 * math.cos(aa), 1.12 * math.sin(aa), dz), M["blockgold"],
                     parent=hub, bevel=0.05, rot=(tx, ty, ang + twin + rot))
         for twin in (0, 180):                       # two small blocks lying on the middle one
             aa = math.radians(70 + twin)
-            box("blk", (0.5, 0.45, 0.38), (0.42 * math.cos(aa), 0.42 * math.sin(aa), 0.24), M["blockgold"],
-                parent=hub, bevel=0.04, rot=(10, -6, 70 + twin + 30))
+            box("blk", (0.55, 0.5, 0.42), (0.3 * math.cos(aa), 0.3 * math.sin(aa), 0.5), M["blockgold"],
+                parent=hub, bevel=0.04, rot=(12, -8, 70 + twin + 30))
     e, hub = vspin("blocks", (0, 0, z - 0.6), parts)
     MOVING.append(hub)
 

@@ -43,11 +43,11 @@ class Lv:
             self.TANK_Z0 = self.TANK_Z1 = None
         else:
             self.ORIGIN = (0.0, 51.5)
-            self.DOME_R = 4.0
+            self.DOME_R = 3.8                # (smaller than Flash's ribs' span: Flash's dome sits well inside them)
             rise = TANK_RISE if level >= 4 else 0.0
             self.TANK_Z0 = 1.33                       # the glass ring / tank: bottom (on the gold band)
-            self.GLASS_Z1 = 2.17 + rise               # the glass's top; above it a dark collar up to the dome
-            self.DOME_C = 3.3 + rise
+            self.GLASS_Z1 = (2.0 if level == 3 else 2.17) + rise               # the glass's top; above it a dark collar up to the dome
+            self.DOME_C = 3.5 + rise
             self.DOME_Z0 = 2.95 + rise                # the dome's lower edge (Flash: a straight wall below a seam)
             self.WALL_E = 33.0                        # the seam where the ball turns into the straight wall
             self.TANK_Z1 = self.DOME_Z0
@@ -64,7 +64,7 @@ class Lv:
             self.PORTS.append((-94.0, 28.0, "left", (-28.5, 32.0)))
             if level >= 2:
                 self.PORTS.append((4.0, 28.0, "right", (32.5, 32.0)))
-                self.FINS = [(-138.0, 48.0, (-36.0, -3.0)), (48.0, 48.0, (38.0, -4.0))]   # face bearing, tilt, Flash px
+                self.FINS = [(-138.0, 52.0, (-35.0, -6.0)), (48.0, 52.0, (37.0, -7.0))]   # face bearing, tilt, Flash px
         self.RIBS = (-90.0, 0.0, 90.0, 180.0) if self.ribbed else ()
 
 
@@ -82,7 +82,7 @@ RIB_ENDS = {-90.0: 32.0, 0.0: 32.0, 90.0: 48.0, 180.0: 48.0}   # each rib's top 
 PLINTH = (2.9, 1.1, 0.5)        # the rib's foot block: across, outward, high
 PLINTH_D = 5.2
 SLEEVE_Z = 1.75                # the top of the wider sleeve round the upright's foot (Flash: a step)
-FIN = (0.8, 1.55, 0.4)            # the wing plate: half across, half up, thickness
+FIN = (0.8, 1.75, 0.4)            # the wing plate: half across, half up, thickness
 
 
 def mounts(lv):
