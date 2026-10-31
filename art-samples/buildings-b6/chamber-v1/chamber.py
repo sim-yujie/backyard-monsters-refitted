@@ -850,20 +850,20 @@ def planks(name, p0, p1, z0_fn, z1_fn, mat, n, thick=0.12, gap=0.03, out=None, j
 def materials():
     M = {}
     # the box: Flash's icy blue-grey freezer walls, frosted paler toward the top, darker low down
-    M["wall"] = painted("wall", (82, 102, 108), rough=0.55, metal=0.1, wear=(124, 150, 156), rust=(48, 62, 68),
-                        scale=5.0, dirt=0.4, spec=0.4, top=(128, 150, 156), rust_at=0.55)
-    lift(M["wall"], (64, 82, 88), 0.15)
+    M["wall"] = painted("wall", (68, 84, 87), rough=0.7, metal=0.05, wear=(112, 126, 128), rust=(34, 42, 44),
+                        scale=6.0, dirt=0.5, spec=0.22, top=(82, 104, 106), rust_at=0.5)
+    lift(M["wall"], (52, 70, 74), 0.12)
     shade_z(M["wall"], [(0.0, 0.62), (1.6, 0.86), (4.8, 1.0), (6.0, 1.12), (6.5, 1.2)])
     # the frame bars: rounded brown-grey metal, worn
-    M["bar"] = painted("bar", (142, 128, 120), rough=0.45, metal=0.3, wear=(112, 100, 96), rust=(92, 80, 76), scale=3.0,
-                       dirt=0.3, spec=0.45)
-    lift(M["bar"], (120, 108, 100), 0.18)
-    M["arm"] = painted("arm", (132, 138, 140), rough=0.45, metal=0.3, wear=(104, 108, 112), rust=(84, 90, 94),
-                       scale=3.0, dirt=0.2, spec=0.45)
-    lift(M["arm"], (116, 122, 124), 0.2)
-    M["lid"] = painted("lid", (92, 128, 134), rough=0.5, metal=0.15, wear=(122, 154, 158), scale=2.6, dirt=0.15, spec=0.4,
-                       top=(112, 146, 150))
-    lift(M["lid"], (80, 112, 118), 0.22)
+    M["bar"] = painted("bar", (102, 97, 94), rough=0.72, metal=0.1, wear=(128, 120, 112), rust=(54, 50, 48), scale=7.0,
+                       dirt=0.35, spec=0.25)
+    lift(M["bar"], (100, 90, 86), 0.12)
+    M["arm"] = painted("arm", (96, 100, 104), rough=0.65, metal=0.15, wear=(128, 134, 138), rust=(58, 62, 66),
+                       scale=6.0, dirt=0.25, spec=0.28)
+    lift(M["arm"], (88, 92, 96), 0.12)
+    M["lid"] = painted("lid", (60, 94, 98), rough=0.65, metal=0.05, wear=(92, 126, 130), rust=(36, 52, 56), scale=5.0,
+                       dirt=0.2, spec=0.25, top=(66, 104, 108), rust_at=0.55)
+    lift(M["lid"], (54, 84, 88), 0.14)
     M["frost"] = painted("frost", (198, 214, 216), rough=0.35, wear=(150, 174, 182), scale=3.0, dirt=0.25, spec=0.6,
                          top=(222, 232, 234))
     lift(M["frost"], (170, 190, 196), 0.25)
@@ -872,9 +872,9 @@ def materials():
     M["core"] = painted("core", (40, 56, 62), rough=0.6, wear=(60, 80, 86), scale=4.0, dirt=0.2)
     M["grate"] = painted("grate", (46, 52, 56), rough=0.6, metal=0.4, wear=(70, 78, 82), scale=4.0, dirt=0.2)
     M["sill"] = painted("sill", (150, 156, 156), rough=0.8, wear=(110, 116, 118), scale=3.0, dirt=0.3, spec=0.3)
-    M["foot"] = painted("foot", (60, 62, 66), rough=0.9, wear=(96, 98, 104), scale=6.0, dirt=0.4, spec=0.25,
-                        top=(112, 114, 120))
-    M["brass"] = shiny("brass", (204, 184, 136), rough=0.4, metal=0.4, wear=(150, 128, 84), scale=2.0, dirt=0.3,
+    M["foot"] = painted("foot", (46, 48, 52), rough=0.9, wear=(150, 152, 156), scale=42.0, dirt=0.4, spec=0.2,
+                        top=(118, 120, 126))
+    M["brass"] = shiny("brass", (218, 204, 162), rough=0.45, metal=0.3, wear=(160, 140, 100), scale=2.0, dirt=0.3,
                        side=0.3)
     M["hornin"] = painted("hornin", (72, 56, 26), rough=0.8, wear=(110, 88, 44), scale=3.0, dirt=0.0, spec=0.3)
     M["coil"] = shiny("coil", (178, 136, 54), rough=0.35, metal=0.8, wear=(112, 82, 30), scale=3.0, dirt=0.2)
@@ -884,13 +884,16 @@ def materials():
                         spec=0.6, top=(222, 230, 232))
     M["glass"] = shiny("glass", (66, 98, 106), rough=0.12, metal=0.15, wear=(104, 138, 146), scale=2.0, dirt=0.1,
                        spec=0.8)
+    M["pane"] = shiny("pane", (78, 128, 134), rough=0.2, metal=0.1, wear=(150, 200, 204), scale=2.0, dirt=0.1,
+                      spec=0.6)
+    lift(M["pane"], (90, 150, 156), 0.15)
     M["glow"] = flat("glow", (120, 232, 240), rough=0.3, emit=2.0)
     M["gback"] = flat("gback", (20, 40, 46), rough=0.6)
     M["steel"] = shiny("steel", (184, 192, 200), rough=0.3, metal=0.8, wear=(140, 148, 160), scale=3.0, dirt=0.1)
     M["pipe"] = painted("pipe", (34, 36, 40), rough=0.5, metal=0.4, wear=(60, 64, 70), scale=4.0, dirt=0.0)
-    for k, (sc, amt) in {"wall": (1.4, 0.22), "bar": (1.6, 0.2), "arm": (1.6, 0.16), "lid": (1.4, 0.16),
+    for k, (sc, amt) in {"wall": (1.4, 0.4), "bar": (1.6, 0.3), "arm": (1.6, 0.28), "lid": (1.4, 0.3),
                          "foot": (1.6, 0.3), "frost": (1.6, 0.1), "tank": (1.6, 0.12), "sill": (1.6, 0.2)}.items():
-        stain(M[k], sc, amt, 2.0 + len(k), fine=0.45 if k == "foot" else 0.2)
+        stain(M[k], sc, amt, 2.0 + len(k), fine=0.6 if k in ("foot", "bar", "wall", "lid", "arm") else 0.35)
     return M
 
 
@@ -914,6 +917,17 @@ def body():
         box(f"foot{i}", (sx, sy, h), (x, y, 0), M["foot"], bevel=0.14, segs=3, jitter=0.03)
 
 
+def snow(name, at, r, squash=(1.0, 0.6, 0.85), jag=0.28):
+    """A ragged lump of snow (a jittered ball, flattened toward the wall)."""
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=2, radius=r)
+    for v in bm.verts:
+        v.co *= 1 + rng.uniform(-jag, jag * 0.7)
+        v.co.x, v.co.y, v.co.z = v.co.x * squash[0], v.co.y * squash[1], v.co.z * squash[2]
+        v.co += Vector(at)
+    return mesh_ob(name, bm, [M["frost"]], smooth=True)
+
+
 def doorway():
     x0, x1, z0, z1 = S.DOOR
     y = -AY
@@ -929,22 +943,41 @@ def doorway():
     for i, x in enumerate((x0 - S.JAMB / 2, x1 + S.JAMB / 2)):
         box(f"jamb{i}", (S.JAMB, o, z1), (x, y - o / 2, 0), M["wall"], bevel=0.08)
     lz = z1
-    lin = box("lintel", (x1 - x0 + 2 * S.JAMB + 0.3, o + 0.25, S.LINTEL_H), ((x0 + x1) / 2, y - (o + 0.25) / 2, lz),
-              M["frost"], bevel=0.22, segs=4, jitter=0.03)
-    crumple_geo(lin, 0.5, 0.14)
+    xm, hw = (x0 + x1) / 2, (x1 - x0) / 2 + S.JAMB * 0.5
+    za, zt = z1 - 1.5, z1 + 0.35                 # the arch springs from the jambs at za, its crown at zt
+
+    def arch_z(x):
+        c = max(-1.0, min(1.0, (x - xm) / hw))
+        return za + (zt - za) * math.sqrt(1 - c * c)
+    for i in range(26):                        # snow lumps along the arch, overlapping, of all sizes
+        a = math.pi * (i + rng.uniform(-0.3, 0.3)) / 25
+        x = xm - hw * math.cos(a)
+        snow(f"lintel{i}", (x, y - o + 0.12 - rng.uniform(0, 0.2), za + (zt - za) * math.sin(a) + rng.uniform(-0.15, 0.1)),
+             rng.uniform(0.22, 0.48), squash=(1.0, 0.55, 0.75))
+    for i, (x, z, r) in enumerate(((x0 + 0.15, z1 - 0.2, 0.55), (x1 - 0.15, z1 - 0.2, 0.55), (x0 + 0.75, z1 + 0.1, 0.5),
+                                   (x1 - 0.75, z1 + 0.1, 0.5), (xm, z1 + 0.5, 0.5))):
+        snow(f"lintel{30 + i}", (x, y - o + 0.2, z), r, squash=(1.1, 0.55, 0.8))     # the arch's corners filled: the opening reads round
+    for i, x in enumerate((x0 - S.JAMB / 2, x1 + S.JAMB / 2)):   # frost running down the jambs
+        for k in range(3):
+            snow(f"frostj{i}{k}", (x + rng.uniform(-0.08, 0.08), y - o + 0.05, za - 0.4 - k * 0.55),
+                 0.3 - k * 0.05, squash=(0.9, 0.55, 1.3))
     # frost down the box's left corner and along the top of the -Y face, under the bar
     fc = box("frostc", (0.36, 0.36, H - 1.6), (-AX - 0.02, -AY - 0.02, 1.25), M["frost"], bevel=0.12, jitter=0.03)
     crumple_geo(fc, 0.4, 0.1)
+    for i in range(11):                        # the corner's frost lumpy and ragged, thicker high up
+        z = 1.4 + i * (H - 2.0) / 10
+        snow(f"frostjc{i}", (-AX + rng.uniform(-0.1, 0.05), -AY + rng.uniform(-0.1, 0.05), z),
+             0.2 + 0.2 * i / 10 + rng.uniform(0, 0.08), squash=(0.9, 0.9, 1.2))
     ft = box("frostt", (2 * AX - 0.6, 0.3, 0.42), (0, -AY - 0.08, H - 0.95), M["frost"], bevel=0.12, jitter=0.03)
     crumple_geo(ft, 0.4, 0.1)
     # icicles under the lintel's front edge, and a few frozen drips down the jambs
-    for i in range(16):
-        x = x0 - 0.2 + (x1 - x0 + 0.4) * (i + rng.uniform(0.1, 0.9)) / 16
-        ln = rng.uniform(0.35, 1.1) * (1.4 if i % 5 == 2 else 1.0)
-        cyl(f"icicle{i}", rng.uniform(0.08, 0.15), ln, (x, y - o - 0.05 - rng.uniform(0, 0.12), lz + 0.08), M["ice"],
-            rot=(180, 0, 0), verts=8, r2=0.01, bevel=0.0)
+    for i in range(14):                        # icicles hanging from the snow arch
+        x = x0 - 0.1 + (x1 - x0 + 0.2) * (i + rng.uniform(0.1, 0.9)) / 14
+        ln = rng.uniform(0.3, 0.9) * (1.5 if i % 5 == 2 else 1.0)
+        cyl(f"icicle{i}", rng.uniform(0.07, 0.13), ln, (x, y - o - 0.02 - rng.uniform(0, 0.12), arch_z(x) - 0.25),
+            M["ice"], rot=(180, 0, 0), verts=8, r2=0.01, bevel=0.0)
     for i, x in enumerate((x0 - S.JAMB / 2, x1 + S.JAMB / 2)):
-        cyl(f"icicled{i}", 0.1, 1.6, (x, y - o - 0.03, lz + 0.05), M["ice"], rot=(180, 0, 0), verts=8, r2=0.02,
+        cyl(f"icicled{i}", 0.1, 1.3, (x, y - o - 0.03, za - 0.1), M["ice"], rot=(180, 0, 0), verts=8, r2=0.02,
             bevel=0.0)
     box("sill", (x1 - x0 + 2 * S.JAMB, o + 0.35, 0.3), ((x0 + x1) / 2, y - (o + 0.35) / 2, 0), M["sill"], bevel=0.06)
     # the door leaf, standing open toward the viewer's left, on the left jamb
@@ -971,11 +1004,11 @@ def compressor():
         poly = []
         for k in range(9):
             t = math.radians(90 * k / 8)
-            poly.append((2.0 * math.sin(t), h + 1.75 * math.cos(t)))
+            poly.append((1.8 * math.sin(t), h + 1.5 * math.cos(t)))
         for k in range(8, -1, -1):
             t = math.radians(90 * k / 8)
-            poly.append((1.45 * math.sin(t), h + 1.2 * math.cos(t)))
-        slab(f"fin{i}", (AX, yf), (1, 0), poly, 0.14, M["fin"], bevel=0.03, out=(0, -1))
+            poly.append((1.05 * math.sin(t), h + 0.8 * math.cos(t)))
+        slab(f"fin{i}", (AX + 0.15, yf), (1, 0), poly, 0.26, M["fin"], bevel=0.07, out=(0, -1))
     # the tanks on their plinth, and the pipe that curls down to them from the top
     tx, ty, tr, zs = S.TANK
     box("plinth", (2 * tr + 0.2, 2 * tr + 0.2, 0.42), (tx, ty, 0), M["grate"], bevel=0.06)
@@ -987,6 +1020,11 @@ def compressor():
             cyl(f"tankice{i}{k}", rng.uniform(0.06, 0.1), rng.uniform(0.25, 0.6),
                 (tx + tr * 0.99 * math.cos(a), ty + tr * 0.99 * math.sin(a), za + 0.12), M["ice"], rot=(180, 0, 0),
                 verts=8, r2=0.01, bevel=0.0)
+    for i, (za, zb) in enumerate(zs):
+        for k in range(9):
+            a = math.radians(-170 + k * 24 + rng.uniform(-8, 8))
+            snow(f"frostjt{i}{k}", (tx + tr * 0.86 * math.cos(a), ty + tr * 0.86 * math.sin(a), zb - 0.08),
+                 rng.uniform(0.2, 0.32), squash=(1.0, 1.0, 0.6))
     cyl("tankshaft", 0.4, zs[1][0] - zs[0][1] + 0.2, (tx, ty, zs[0][1] - 0.1), M["grate"], verts=16)
     tube("pipe", [(2.5, -2.9, H + 0.02), (2.85, -2.85, H + 0.75), (3.5, -2.8, H + 0.85), (3.95, -2.7, H + 0.2),
                   (4.1, -2.5, zs[1][1] + 0.9), (tx - 0.2, ty - 0.1, zs[1][1] - 0.02)], 0.09, M["pipe"], smooth=True)
@@ -1028,6 +1066,19 @@ def top():
     bm.faces.new(vs)
     mesh_ob("hatchglass", bm, [M["glass"]], smooth=False)
     tube("hatchrim", [tuple(at(u * 0.86, v * 0.88, 0.05)) for u, v in oct_], 0.11, M["steel"], cyclic=True)
+    lz0 = S.LID[3]
+    for k in range(4):                          # the glass stack: panes, each a little smaller, up to the lid
+        f = 0.98 - 0.07 * k
+        z0 = 0.12 + k * (lz0 - H - 0.3) / 4
+        bm = bmesh.new()
+        lo = [bm.verts.new(at(u * f, v * f, z0)) for u, v in oct_]
+        hi = [bm.verts.new(at(u * f, v * f, z0 + 0.2)) for u, v in oct_]
+        bm.faces.new(lo[::-1])
+        bm.faces.new(hi)
+        for j in range(8):
+            bm.faces.new((lo[j], lo[(j + 1) % 8], hi[(j + 1) % 8], hi[j]))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        mesh_ob(f"hatchpane{k}", bm, [M["pane"]], smooth=False, bevel=0.08, segs=2)
     # the lid and its glowing grille
     lx, ly, la, lz, lt = S.LID
     # the lid: a thick square slab, its front corner cut away along the arms (the hatch shows under the cut)
@@ -1045,6 +1096,22 @@ def top():
     x0, y0, x1, y1 = S.CORE
     box("core", (x1 - x0, y1 - y0, lz - H + 0.05), ((x0 + x1) / 2, (y0 + y1) / 2, H - 0.05), M["core"], bevel=0.1)
     (ax_, ay_), (bx_, by_) = S.LID_CUT
+    k = 0
+    for (pa, pb) in (((lx - la, ly - la), (ax_, ay_)), ((ax_, ay_), (bx_, by_)), ((bx_, by_), (lx + la, ly + la))):
+        n = max(2, int(math.dist(pa, pb) / 0.55))
+        ex, ey = pb[1] - pa[1], -(pb[0] - pa[0])            # outward (the lid's front edges run clockwise)
+        el = math.hypot(ex, ey)
+        ex, ey = ex / el, ey / el
+        for i in range(n + 1):                  # frost along the lid's front top edges, ragged, overhanging
+            t = (i + rng.uniform(-0.3, 0.3)) / n
+            if rng.random() < 0.2:
+                continue
+            q = (pa[0] + (pb[0] - pa[0]) * t + ex * 0.1, pa[1] + (pb[1] - pa[1]) * t + ey * 0.1)
+            snow(f"frostl{k}", (q[0], q[1], lz + lt - 0.05), rng.uniform(0.14, 0.28), squash=(1.5, 1.5, 0.4))
+            if rng.random() < 0.6:
+                cyl(f"icicle{60 + k}", rng.uniform(0.06, 0.1), rng.uniform(0.25, 0.7), (q[0] + ex * 0.12, q[1] + ey * 0.12,
+                    lz + 0.05), M["ice"], rot=(180, 0, 0), verts=8, r2=0.01, bevel=0.0)
+            k += 1
     for i in range(9):                      # icicles under the cut edge's left half
         t = 0.04 + 0.42 * (i + rng.uniform(0.1, 0.9)) / 9
         cyl(f"icicle{40 + i}", rng.uniform(0.07, 0.12), rng.uniform(0.3, 0.75) * (1.0 - t),
@@ -1094,7 +1161,7 @@ def build():
     arms()                                  # placed in the camera's world, where Flash draws them
 
 
-FAMILY = (("body", "body"), ("door", "door"), ("grate", "door"), ("leaf", "leaf"), ("jamb", "body"), ("lintel", "frost"), ("frostc", "frost"), ("frostt", "frost"),
+FAMILY = (("body", "body"), ("door", "door"), ("grate", "door"), ("leaf", "leaf"), ("jamb", "body"), ("lintel", "frost"), ("frostc", "frost"), ("frostt", "frost"), ("frostj", "frost"), ("frostl", "frost"),
           ("icicle", "frost"), ("sill", "sill"), ("barpost", "bar"), ("bar", "bar"), ("foot", "foot"),
           ("comp", "comp"), ("coilpanel", "comp"), ("coil", "coil"), ("fin", "fin"), ("plinth", "tank"),
           ("tank", "tank"), ("pipe", "pipe"), ("hornin", "horn"), ("horn", "horn"), ("hatch", "hatch"),
