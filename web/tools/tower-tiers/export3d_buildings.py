@@ -38,6 +38,10 @@ under it the shadow is the nearest shadow outside, and the still parts' own alph
 shadow, `(a - s) / (1 - s)`. A part that moves over open ground leaves nothing behind in the body, since the base never
 saw it.
 
+A shadow the canvas cuts off is carried on past the edge by `tail()`. The housing's is not cut: it fades out over its
+last ~20 px inside the canvas on its own (the flats' soft sun). A render 40 px wider on the right (31 Oct 2026) gave
+the same shadow, 1 px wider, so housing-v1's own canvas stays.
+
 It prints one line of JSON per look with the row `buildingArtTiers.ts` holds (`top`, `shadow`, and `anim` as
 `[file, x, y, width, height, cells]` with `body` and `columns` when the strip wraps), in 1x px from the origin.
 """
