@@ -5,8 +5,9 @@ disc, the black ribbed bellows, a polished blue-chrome shell, the gold wind-up k
 its shaft once a loop), the gold barrel of blocks inside (it turns about its axle), and steel panels with gold
 brackets bolted to the shell.
 Level 1: a small chrome ball on short bellows on a wooden disc, a closed shell, one panel box with a window.
-Level 2: a big ball with a hole in its top (the gold barrel shows through), four panels (two with portholes), taller
-bellows, and the disc lifted on three needle legs.
+Level 2: a big ball with an opening at its upper front left showing three gold cogs inside (the key's shaft comes down
+through the opening and turns the middle one), four panels (two with portholes), taller bellows, and the disc lifted
+on three needle legs.
 Level 3: the shell becomes an egg lying along world X with its top-front half cut away over the long barrel of gold
 blocks, a flat end plate on the right, a square chimney at the back right, a gold cog under a wide flat bellows, four
 bolt feet; the key's bow becomes a gold wire monster face.
@@ -25,7 +26,7 @@ FRAMES = {1: 21, 2: 20, 3: 20, 4: 20}     # Flash's loops (level 4's data says 2
 
 KEY_TURN = {1: 0.5, 2: 0.5, 3: 1.0, 4: 1.0}   # the key's turns a loop (Flash's rings turn half round: they look
                                              # the same after half a turn; the monster bows turn once round)
-KEY0 = {1: -1.0, 2: 28.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
+KEY0 = {1: -1.0, 2: 76.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
 BARREL_TURN = 60.0          # the barrel turns two rows of blocks a loop (12 rows)
 
 # the ground middle under each level's axis (Flash px)
@@ -49,12 +50,24 @@ L1_BOX_LEAN = 0.7
 L2_DISC_R, L2_DISC_Z, L2_DISC_H = 2.75, 1.85, 0.32
 L2_BELLOWS_R, L2_BELLOWS_RIBS = 2.15, 7
 L2_BALL_C, L2_BALL_R = (-1.0, -18.0), 4.2
-L2_HOLE = (245.0, 34.0, 3.55)                   # the top hole: the cut plane's normal tilted toward this bearing by this
+L2_HOLE = (290.0, 28.0, 3.8)                    # the top hole: the cut plane's normal tilted toward this bearing by this
                                                  # many degrees, at this distance from the ball's middle
 L2_LEGS = (225.0, 45.0, -45.0)                   # the three needle legs' bearings
 L2_LEG_D = 4.05
 L2_KEY_RING = (-27.0, -75.0)
 L2_KEY_RING_R = 1.5
+L2_KEY_LEAN = 35.0                               # the shaft leans this far out of the screen toward the camera
+L2_WALL = 0.28                                   # the shell's wall at the opening (Flash shows a thick lip)
+L2_KEY_FOOT = (-12.0, -38.0, 0.95)                # Flash px where the key's shaft goes down into the cogs, how far under
+                                                 # the opening
+L2_COG_PLATE = 0.45                              # the plate under the cogs: this far under them
+L2_COG_Z = 0.0                                   # the middle cog on the key's shaft: this far up it from the foot
+L2_COG_MID = (6, 0.72, 0.6)                      # the middle cog: teeth, radius, thickness
+L2_COG_TOOTH = 0.28                              # every cog's tooth height (one tooth size, so they mesh)
+L2_COGS = {                                      # the other two: teeth, radius, thickness, Flash px toward it, material
+    "cogbig": (8, 1.0, 0.65, 1.0, -34.0, "block"),
+    "cogback": (6, 0.72, 0.6, -18.0, -34.0, "block"),
+}
 L2_PANELS = (                                    # Flash px of each panel's middle, kind
     ((-42.0, -24.0), "port"),
     ((-28.0, -6.0), "port"),
@@ -81,14 +94,17 @@ L3_EGG_TAPER, L4_EGG_TAPER = -0.1, -0.1          # the egg's width change toward
 L3_EGG_AXIS = (250.0, 30.0)                       # the long axis: from straight up toward this bearing, by this much
 L3_CUT = (280.0, 48.0, 4.0)                      # the opening's plane: its normal from straight up toward this bearing
                                                  # by this much, its distance from the middle
-L3_BARREL = (6.4, 2.0, 1.0)                      # length, core radius, its middle moved up its axle
+L3_BARREL = (6.0, 1.7, 0.4)                       # length, core radius, its middle moved up its axle
+L4_BARREL = (6.6, 1.85, 1.0)                      # level 4: longer toward the top, under the cog
 L3_BARREL_SINK = -1.0                            # the barrel's middle: the opening's middle moved along its normal
 L3_BARREL_AXIS = (60.0, 45.0)                    # its axle: toward this bearing, rising by this much
-L3_BARREL_ROWS, L3_BARREL_COLS = 14, 6                 # blocks in every other cell
-L3_BLOCK_FILL = (0.82, 0.8)                      # how much of its cell each block fills (black gaps between)
+L3_BARREL_ROWS, L3_BARREL_COLS = 16, 7                 # blocks in every other cell
+L3_BLOCK_FILL = (0.78, 0.74)                      # how much of its cell each block fills (black gaps between)
+L3_PIN = 0.75                                    # level 3's blocks this high (Flash's are small)
 L4_BARREL_ROWS, L4_BARREL_COLS, L4_BLOCK_FILL = 12, 5, (0.86, 0.86)   # level 4: fewer, bigger blocks, as Flash
-L3_COG_R, L3_COG_PX = 1.5, (0.0, -66.0)          # the cog at the top: radius, Flash px of its middle
-L3_COG_SINK, L3_COG_FACE = 0.6, 0.7              # the cog pulled this far down to the barrel's end, its face turned
+L3_COG_R, L3_COG_PX = 0.95, (5.0, -63.0)          # the cog at the top: radius, Flash px of its middle
+L4_COG_PX = (8.0, -67.0)
+L3_COG_BACK, L3_COG_FACE = 2.8, 0.7              # the cog pulled this far down to the barrel's end, its face turned
                                                  # this much toward the camera (0: along the axle)
 L3_GCOG_R, L3_GCOG_Z = 2.9, 0.35                 # the gold cog under the bellows: radius, height of its middle
 L3_BELLOWS_Z = 1.3                               # the bellows' foot (on the cog's hub)
@@ -100,7 +116,10 @@ L3_NUT_R, L3_BOLT_Z = 0.8, 2.1                # level 3: the hex nut each bolt s
 L3_CHIM_TOP, L3_CHIM_Y, L3_CHIM_W = (42.0, -72.0), 4.5, 2.0
 L3_CHIM_LEAN = (225.0, 0.0)                     # the chimney's foot swings toward this bearing by this much
 L3_CHIM_BEND = 40.0                              # the duct below the plate slants this far toward the body
-L3_KEY_AT = 1.4                                  # the key's foot: this far up the barrel from its low end
+L3_KEY_RIM, L4_KEY_RIM = (-17.0, -49.0), (-22.0, -54.0)   # Flash px of the key's collar on the opening's rim
+L3_KEY_LEAN = 35.0                               # the stem leans this far out of the screen's plane toward the camera
+L3_KEY_DEPTH = 0.35                              # the key's bearing block reaches this far down the lip
+L3_KEY_RISE = 0.3                                # the collar this far over the lip (clear of the turning blocks)
 L3_KEY_BOW = (-31.0, -70.0)                      # Flash px of the bow's middle
 L3_BOW_SCALE = 1.4
 L3_BOW_FOOT, L4_BOW_FOOT = (-27.4, -58.0), (-27.5, -59.5)   # Flash px where the stem meets the bow

@@ -716,12 +716,12 @@ def on_ball(c, r, sx, sy):
     return q, (q - c).normalized()
 
 
-def toward(e, n, sx, sy):
+def toward(e, n, sx, sy, reach=400):
     """The point on the camera ray through (sx, sy) that lies most nearly along n from e (a part sticking out of a
-    surface at e and reaching the screen point (sx, sy))."""
+    surface at e and reaching the screen point (sx, sy)); it looks reach/20 world units either side of the ground."""
     p, f = cam_ray(sx, sy)
     best = None
-    for i in range(-400, 401):
+    for i in range(-reach, reach + 1):
         q = p + f * (i * 0.05)
         d = q - e
         if d.length < 1e-6:
@@ -774,7 +774,7 @@ def disc(name, r, z, h, at=None, mat=None, verts=64, lumpy=0.0):
     return ob
 
 
-def ball(name, c, r, mat, cut=None, inner=None, segs=64):
+def ball(name, c, r, mat, cut=None, inner=None, segs=64, wall=0.14):
     """A chrome ball; cut = (normal, distance): everything beyond that plane is cut away and the shell gets a wall."""
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=segs, v_segments=segs // 2, radius=r)
@@ -786,7 +786,7 @@ def ball(name, c, r, mat, cut=None, inner=None, segs=64):
     ob.location = c
     if cut:
         so = ob.modifiers.new("wall", "SOLIDIFY")
-        so.thickness = 0.14
+        so.thickness = wall
         so.offset = -1.0
         so.material_offset = 1
         so.material_offset_rim = 0
@@ -794,9 +794,11 @@ def ball(name, c, r, mat, cut=None, inner=None, segs=64):
     return ob
 
 
-def key(name, e_at, n, ring_at, ring_r, wire, phase, bow=None):
+def key(name, e_at, n, ring_at, ring_r, wire, phase, bow=None, slot=True, collar=0.25, tail=0.4):
     """The wind-up key: out of a dark slot at e_at along the shaft toward ring_at, its bow (a ring, or bow(parent)
-    builds it in the local XZ plane round local (0, 0, len + ...)). Turns about the shaft (local Z)."""
+    builds it in the local XZ plane round local (0, 0, len + ...)). Turns about the shaft (local Z). slot=False: no
+    slot (the shaft comes up out of the mechanism inside the shell); collar: where the collar sits along the shaft;
+    tail: how far the shaft reaches below e_at."""
     d = ring_at - e_at
     ln = d.length - ring_r
     e = frame_at(name, e_at, d, xhint=(0, 0, 1))
@@ -805,10 +807,11 @@ def key(name, e_at, n, ring_at, ring_r, wire, phase, bow=None):
     MOVING.append(hub)
     KEYS[hub.name] = phase
     # the slot in the shell (still) and the shaft (turning)
-    cyl(name + "slot", wire * 2.2, 0.06, (0, 0, -0.03), M["hole"], parent=e, verts=20, bevel=0.0)
-    cyl(name + "shaft", wire, ln + 0.4, (0, 0, -0.4), M["gold"], parent=hub, verts=16, bevel=0.0)
-    lathe(name + "collar", [(0.0, 0.25), (wire * 1.9, 0.25), (wire * 2.1, 0.38), (wire * 1.9, 0.5), (0.0, 0.5)],
-          (0, 0, 0), M["gold"], parent=hub, verts=20)
+    if slot:
+        cyl(name + "slot", wire * 2.2, 0.06, (0, 0, -0.03), M["hole"], parent=e, verts=20, bevel=0.0)
+    cyl(name + "shaft", wire, ln + tail, (0, 0, -tail), M["gold"], parent=hub, verts=16, bevel=0.0)
+    lathe(name + "collar", [(0.0, 0.0), (wire * 1.9, 0.0), (wire * 2.1, 0.13), (wire * 1.9, 0.25), (0.0, 0.25)],
+          (0, 0, collar), M["gold"], parent=hub, verts=20)
     if bow:
         bow(hub, ln)
     else:
@@ -819,6 +822,7 @@ def key(name, e_at, n, ring_at, ring_r, wire, phase, bow=None):
 
 
 KEYS = {}
+COGS = {}               # a turning cog's hub name -> (degrees at frame 0, degrees a loop)
 
 
 def rivet(name, at, parent, r=0.09, mat=None):
@@ -882,7 +886,7 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
     return e
 
 
-def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=None, core=None, checker=True):
+def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=None, core=None, checker=True, pin=1.0):
     """The gold barrel inside the shell: a dark core with rows of gold blocks round it (period: two rows), turning
     about its axle (local Z). Blocks in every other cell (checker) or every cell, filling `fill` (along, round) of it;
     levels 3-4 use smaller blocks with black gaps between them, as Flash."""
@@ -901,7 +905,7 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
             if fill is not None:
                 hgt = 0.1 + 0.22 * ((j * 5 + i * 3) % 5) / 4
             z = -length / 2 + (j + 0.5) * length / cols
-            box(f"{name}blk{i}-{j}", (length / cols * fa, 2 * math.pi * r / rows * fr, hgt + r * 0.14),
+            box(f"{name}blk{i}-{j}", (length / cols * fa, 2 * math.pi * r / rows * fr, (hgt + r * 0.14) * pin),
                 (math.cos(a) * r * 0.86, math.sin(a) * r * 0.86, z), mat or M["block"], parent=hub,
                 rot=(0, 90, math.degrees(a)), bevel=0.04, origin="bottom")
     return e, hub
@@ -932,12 +936,8 @@ def level2():
     b, tilt, dist = S.L2_HOLE
     nrm = Vector((math.sin(math.radians(tilt)) * math.cos(math.radians(b)),
                   math.sin(math.radians(tilt)) * math.sin(math.radians(b)), math.cos(math.radians(tilt))))
-    ball("ball", c, r, M["chrome"], cut=(nrm, dist), inner=M["inner"])
-    barrel("barrel", c + nrm * 0.6, (1, 0, 0), 2.3, 4.0, 12, 5)
-    # the key stands in the hole, its shaft from the barrel's top
-    bot = c + nrm * (dist - 0.9)
-    ring = toward(bot, Vector((0, 0, 1)), *S.L2_KEY_RING)
-    key("key", bot, nrm, ring, S.L2_KEY_RING_R, 0.14, S.KEY0[2])
+    ball("ball", c, r, M["chrome"], cut=(nrm, dist), inner=M["inner"], wall=S.L2_WALL)
+    cogs2(c, r, nrm, dist)
     for i, ((sx, sy), kind) in enumerate(S.L2_PANELS):
         panel(f"panel{i}", c, r, sx, sy, kind, size=2.9 if kind == "port" else 2.6, spin=S.L2_PANEL_SPIN[i],
               lean=S.L2_PANEL_LEAN[i], thick=0.3)
@@ -952,6 +952,82 @@ def level2():
         cyl(f"legtip{i}", 0.08, 0.35, (p1.x, p1.y, 0.35), M["needle"], rot=(180, 0, 0), r2=0.005, verts=12, bevel=0.0)
         sphere(f"legball{i}", 0.22, top, M["needle"])
         cyl(f"legcollar{i}", 0.2, 0.3, (p1.x, p1.y, p1.z - 0.15), M["arm"], verts=16, bevel=0.04)
+
+
+def under_cut(c, nrm, dist, sx, sy, below):
+    """The point the camera sees at Flash px (sx, sy) that lies `below` under a shell's cut plane (normal nrm, dist
+    from the shell's middle c)."""
+    p, f = cam_ray(sx, sy)
+    return p + f * ((dist - below - (p - c).dot(nrm)) / f.dot(nrm))
+
+
+def leaning(e, sx, sy, lean):
+    """The point on the camera ray through (sx, sy) such that a shaft from e to it leans `lean` degrees out of the
+    screen's plane toward the camera (0: the shaft lies across the view and keeps its full length on screen)."""
+    p, f = cam_ray(sx, sy)
+    w = p - e
+    across = (w - f * w.dot(f)).length
+    return p + f * (-math.tan(math.radians(lean)) * across - w.dot(f))
+
+
+def to_wall(p, d, c, r):
+    """How far from p along d (inside the ball c, r) the ball's inner wall is."""
+    oc = p - c
+    b = oc.dot(d)
+    return -b + math.sqrt(b * b - (oc.dot(oc) - r * r))
+
+
+def cogs2(c, r, nrm, dist):
+    """Level 2's mechanism, as Flash: three chunky gold cogs inside the ball, meshing. The middle one sits on the key's
+    shaft (the key comes down through the opening and winds it), the big one to its right and the small one behind it
+    at the left turn on axles out of the shell's inner wall. Each cog turns three teeth a loop, so the loop closes."""
+    rim = math.sqrt(r * r - dist * dist)
+    foot = under_cut(c, nrm, dist, *S.L2_KEY_FOOT)
+    ring = leaning(foot, *S.L2_KEY_RING, S.L2_KEY_LEAN)
+    u = (ring - foot).normalized()
+    cross = (dist - (foot - c).dot(nrm)) / u.dot(nrm)          # where the shaft passes the opening
+    wall = to_wall(foot, -u, c, r - S.L2_WALL)
+    teeth, rad, th = S.L2_COG_MID
+    back = th / 2 + S.L2_COG_PLATE                # the plate under the cogs, across the ball (the axles end on it)
+    e, hub = key("key", foot, nrm, ring, S.L2_KEY_RING_R, 0.14, S.KEY0[2], slot=False, collar=cross - 0.12,
+                 tail=back + 0.05)
+    pc = foot - u * back
+    h = (pc - c).dot(u)
+    pe = frame_at("cogplate", pc, -u, xhint=(0, 0, 1))
+    cyl("cogplatedisc", math.sqrt((r - S.L2_WALL) ** 2 - h * h) + 0.05, 0.2, (0, 0, 0), M["core"], parent=pe, verts=64)
+    cyl("keybearing", 0.34, 0.3, (0, 0, -0.25), M["golddark"], parent=e, verts=20)
+    wall = back
+    tooth_h = S.L2_COG_TOOTH
+    turn_mid = S.KEY_TURN[2] * 360.0
+    gear("keycog", rad, teeth, th, (0, 0, S.L2_COG_Z), M["block"], (0, 0, 0), tooth=tooth_h / rad, parent=hub)
+    cyl("keycoghub", 0.32, th + 0.2, (0, 0, S.L2_COG_Z - th / 2 - 0.1), M["golddark"], parent=hub, verts=20)
+    mid = foot + u * S.L2_COG_Z
+    for name, (n_teeth, rr, thick, sx, sy, mat) in S.L2_COGS.items():
+        # the cog's middle: in the middle cog's plane, toward where Flash shows it, meshing with the middle cog
+        p, f = cam_ray(sx, sy)
+        q = p + f * ((mid - p).dot(u) / f.dot(u))
+        d = (q - mid - u * (q - mid).dot(u)).normalized()
+        at = mid + d * (rad + rr - tooth_h * 0.8)
+        ce = frame_at(name, at, u, xhint=(0, 0, 1))
+        ch = bpy.data.objects.new(name + "-spin", None)
+        link(ch, ce)
+        MOVING.append(ch)
+        # mesh: where the middle cog has a tooth facing this one, this one has a gap facing back (gear() puts a tooth's
+        # middle at 45/teeth degrees past each pitch)
+        hub.rotation_euler = (0, 0, math.radians(S.KEY0[2]))
+        bpy.context.view_layer.update()
+        dm = hub.matrix_world.inverted().to_3x3() @ d
+        do = ce.matrix_world.inverted().to_3x3() @ -d
+        pm, po = 360.0 / teeth, 360.0 / n_teeth
+        frac = ((math.degrees(math.atan2(dm.y, dm.x)) - 45.0 / teeth) / pm) % 1.0
+        phase = (math.degrees(math.atan2(do.y, do.x)) - 45.0 / n_teeth - po * (0.5 - frac)) % po
+        COGS[ch.name] = (phase, -turn_mid * teeth / n_teeth)
+        gear(name + "wheel", rr, n_teeth, thick, (0, 0, 0), M[mat], (0, 0, 0), tooth=tooth_h / rr, parent=ch)
+        cyl(name + "hub", 0.3, thick + 0.2, (0, 0, -thick / 2 - 0.1), M["golddark"], parent=ch, verts=20)
+        ax = back
+        cyl(name + "axle", 0.12, ax + 0.05, (0, 0, -ax), M["golddark"], parent=ce, verts=12, bevel=0.0)
+        cyl(name + "boss", 0.3, 0.3, (0, 0, -ax - 0.05), M["golddark"], parent=ce, verts=20)
+    print("CHECK cogs2: rim radius %.2f, shaft crosses the opening %.2f from the foot, wall %.2f" % (rim, cross, wall))
 
 
 def sphere(name, r, at, mat, n=24):
@@ -1019,28 +1095,35 @@ def shell34():
     # the barrel lies in the opening along its long way, its middle a little below the opening's middle
     bc = c + sum(rim, Vector()) / len(rim) + n * S.L3_BARREL_SINK
     ba = tilted(S.L3_BARREL_AXIS[0], 90.0 - S.L3_BARREL_AXIS[1])
-    bc = bc + ba * S.L3_BARREL[2]
-    BODY.update(bc=bc, ba=ba)
+    bc = bc + ba * (S.L4_BARREL if L == 4 else S.L3_BARREL)[2]
+    BODY.update(bc=bc, ba=ba, c=c, n=n, d=d)
     sh = mesh_ob("ballshell", bm, [M["chrome"], M["inner"]])
     so = sh.modifiers.new("wall", "SOLIDIFY")
     so.thickness, so.offset, so.material_offset, so.use_rim = 0.14, -1.0, 1, True
     sh.location = c
-    ln, br = S.L3_BARREL[:2]
+    BODY["sh"] = sh
+    ln, br = (S.L4_BARREL if L == 4 else S.L3_BARREL)[:2]
     if L == 4:
         barrel("barrel", bc, ba, br, ln, S.L4_BARREL_ROWS, S.L4_BARREL_COLS, fill=S.L4_BLOCK_FILL, mat=M["block34"],
                core=M["core34"])
     else:
         barrel("barrel", bc, ba, br, ln, S.L3_BARREL_ROWS, S.L3_BARREL_COLS, fill=S.L3_BLOCK_FILL, mat=M["block34"],
-               core=M["core34"])
-    # the cog standing over the barrel's top end where Flash shows it (still), on a gold post from the axle's end
+               core=M["core34"], pin=S.L3_PIN)
+    # the cog inside the machine, as Flash: facing the camera just behind the barrel's top end, so the top blocks
+    # hide its lower half (still, as Flash); its post leaves the axle's end, runs down behind the top blocks and up
+    # behind the cog to its back
     end = bc + ba * (ln / 2)
-    p0, f = cam_ray(*S.L3_COG_PX)
-    cp = p0 + f * (end - p0).dot(f)                  # the point of that camera ray nearest the axle's end
-    cp = cp + (end - cp) * S.L3_COG_SINK             # sunk among the top blocks, as Flash
+    p0, f = cam_ray(*(S.L4_COG_PX if L == 4 else S.L3_COG_PX))
+    cp = p0 + f * ((end - p0).dot(f) + S.L3_COG_BACK)   # behind the point of that ray nearest the axle's end
     e = frame_at("cog", cp, (ba - f * S.L3_COG_FACE).normalized(), xhint=(0, 0, 1))
-    gear("cogwheel", S.L3_COG_R, 14, 0.3, (0, 0, 0), M["gold"], (0, 0, 0), parent=e, tooth=0.2)
+    gear("cogwheel", S.L3_COG_R, 11, 0.3, (0, 0, 0), M["gold"], (0, 0, 0), parent=e, tooth=0.2)
     cyl("cogboss", 0.4, 0.75, (0, 0, -0.55), M["golddark"], parent=e, verts=20)
-    tube("cogpost", [end - ba * 0.3, cp - ba * 0.2], 0.22, M["golddark"])
+    bpy.context.view_layer.update()
+    zf = (e.matrix_world.to_3x3() @ Vector((0, 0, 1))).normalized()
+    cu = Vector((0, 0, 1)) - f * f.z                     # the screen's up
+    cu = (cu - zf * cu.dot(zf)).normalized()
+    tube("cogpost", [end - ba * 0.3, cp - cu * (S.L3_COG_R * 1.15) - zf * 0.4, cp - zf * 0.5], 0.2, M["golddark"],
+         smooth=True)
     return c, sh
 
 
@@ -1273,17 +1356,27 @@ def level34():
     for i, ((sx, sy), kind) in enumerate(S.L3_PANELS):
         panel(f"panel{i}", None, S.L3_BODY_R, sx, sy, "vent" if (lv4 and kind == "port") else kind, size=2.5,
               spin=S.L3_PANEL_SPIN[i], lean=S.L3_PANEL_LEAN[i], thick=0.3)
-    # the key out of the barrel's back top
-    bc, u = BODY["bc"], BODY["ba"]
-    up = (Vector((0, 0, 1)) - u * u.z).normalized()
-    ln, br = S.L3_BARREL[:2]
-    k0 = bc + u * (S.L3_KEY_AT - ln / 2) + up * br * 0.8
-    kb = k0 + up * 0.75
-    box("keyblock", (0.7, 0.8, (kb - k0).length + 0.1), k0, M["golddark"], bevel=0.05,
-        rot=tuple(math.degrees(a) for a in up.to_track_quat("Z", "Y").to_euler()))
-    ring = toward(kb, Vector((0, 0, 1)), *S.L3_KEY_BOW)
-    key("key", kb, Vector((0, 0, 1)), ring, S.L4_BOW_R if lv4 else 1.3 * S.L3_BOW_SCALE, 0.13, S.KEY0[L],
-        bow=bow_head if lv4 else bow_monster)
+    # the key: as Flash, its stem comes down over the opening's rim at the upper left (the collar) into the machine,
+    # to a gold bearing block bolted to the shell's inner wall under the rim
+    from mathutils.bvhtree import BVHTree
+    c, n, d, sh = BODY["c"], BODY["n"], BODY["d"], BODY["sh"]
+    p, f = cam_ray(*(S.L4_KEY_RIM if lv4 else S.L3_KEY_RIM))
+    rim = p + f * ((d - (p - c).dot(n)) / f.dot(n))           # the opening's plane where Flash has the collar
+    bpy.context.view_layer.update()
+    t = BVHTree.FromObject(sh, bpy.context.evaluated_depsgraph_get())
+    lip = sh.matrix_world @ t.find_nearest(sh.matrix_world.inverted() @ rim)[0]   # the shell's lip nearest it
+    # a gold bearing clamped on the lip; the stem goes down into it, the collar just above
+    bc, ba = BODY["bc"], BODY["ba"]
+    out = lip - bc - ba * (lip - bc).dot(ba)            # away from the barrel's axle, clear of its blocks
+    out = (out - n * out.dot(n)).normalized()
+    box("keyblock", (0.5, 0.5, S.L3_KEY_DEPTH + 0.3), lip - n * S.L3_KEY_DEPTH + out * 0.3, M["golddark"], bevel=0.05,
+        rot=tuple(math.degrees(a) for a in n.to_track_quat("Z", "Y").to_euler()))
+    foot = lip + n * S.L3_KEY_RISE
+    tip = leaning(foot, *(S.L4_BOW_FOOT if lv4 else S.L3_BOW_FOOT), S.L3_KEY_LEAN)
+    u = (tip - foot).normalized()
+    key("key", foot, u, tip + u * 0.3, 0.3, 0.13, S.KEY0[L], bow=bow_head if lv4 else bow_monster, slot=False,
+        collar=0.0, tail=S.L3_KEY_RISE)
+    print("CHECK key34: lip %.2f from Flash's collar point" % (lip - rim).length)
 
 
 def build():
@@ -1296,6 +1389,9 @@ def turn(frame):
     for hub in MOVING:
         if hub.name in KEYS:
             hub.rotation_euler = (0, 0, math.radians(KEYS[hub.name] + S.KEY_TURN[L] * 360.0 * f))
+        elif hub.name in COGS:
+            ph, rate = COGS[hub.name]
+            hub.rotation_euler = (0, 0, math.radians(ph + rate * f))
         else:
             hub.rotation_euler = (0, 0, math.radians((720.0 / {3: S.L3_BARREL_ROWS, 4: S.L4_BARREL_ROWS}[L] if L >= 3 else
                                                        S.BARREL_TURN) * f))
@@ -1430,6 +1526,7 @@ def border_of(objs, pad=10):
 FAMILY = (("disc", "base"), ("bellows", "bellows"), ("ball", "shell"), ("key", "key"), ("box", "panel"),
           ("panel", "panel"), ("barrel", "barrel"), ("leg", "leg"), ("groundcog", "cog"), ("cog", "backcog"),
           ("chim", "chimney"))
+MASONRY = ()            # families allowed to touch each other (none here)
 
 
 
