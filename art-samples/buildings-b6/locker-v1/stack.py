@@ -94,7 +94,7 @@ L3_EGG_TAPER, L4_EGG_TAPER = -0.1, -0.1          # the egg's width change toward
 L3_EGG_AXIS = (250.0, 30.0)                       # the long axis: from straight up toward this bearing, by this much
 L3_CUT = (280.0, 48.0, 4.0)                      # the opening's plane: its normal from straight up toward this bearing
                                                  # by this much, its distance from the middle
-L3_BARREL = (6.0, 1.7, 0.4)                       # length, core radius, its middle moved up its axle
+L3_BARREL = (6.2, 1.7, 0.5)                       # length, core radius, its middle moved up its axle
 L4_BARREL = (6.6, 1.85, 1.0)                      # level 4: longer toward the top, under the cog
 L3_BARREL_SINK = -1.0                            # the barrel's middle: the opening's middle moved along its normal
 L3_BARREL_AXIS = (60.0, 45.0)                    # its axle: toward this bearing, rising by this much
@@ -118,8 +118,12 @@ L3_CHIM_LEAN = (225.0, 0.0)                     # the chimney's foot swings towa
 L3_CHIM_BEND = 40.0                              # the duct below the plate slants this far toward the body
 L3_KEY_RIM, L4_KEY_RIM = (-17.0, -49.0), (-22.0, -54.0)   # Flash px of the key's collar on the opening's rim
 L3_KEY_LEAN = 35.0                               # the stem leans this far out of the screen's plane toward the camera
+L3_KEY_AXIS = (-39.0, -85.0)                     # level 3: Flash px of the bow's far end when edge-on (frame 13): the key turns about
+                                                 # the line from the collar to here
+L3_AXIS_LEAN = 25.0                              # that line leans this far out of the screen's plane toward the camera
 L3_KEY_DEPTH = 0.35                              # the key's bearing block reaches this far down the lip
 L3_KEY_RISE = 0.3                                # the collar this far over the lip (clear of the turning blocks)
+L3_KEY_OUT, L4_KEY_OUT = 0.35, 0.0               # key and bearing moved this far out along the lip, off the blocks' path
 L3_KEY_BOW = (-31.0, -70.0)                      # Flash px of the bow's middle
 L3_BOW_SCALE = 1.4
 L3_BOW_FOOT, L4_BOW_FOOT = (-27.4, -58.0), (-27.5, -59.5)   # Flash px where the stem meets the bow

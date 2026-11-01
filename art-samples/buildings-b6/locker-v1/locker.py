@@ -1198,15 +1198,19 @@ def chimney(b, cage=False):
     return top
 
 
-def bow_plane(hub):
+def bow_plane(hub, on_shaft=False):
     """Flash px -> the key's local frame: the point on the camera ray in the upright plane through the shaft that faces
-    the camera, with the key turned as at frame 0 (so the bow's picture at frame 0 is Flash's exactly)."""
+    the camera, with the key turned as at frame 0 (so the bow's picture at frame 0 is Flash's exactly). on_shaft: in
+    the plane through the shaft's line that faces the camera most, so the bow turns about its own middle line."""
     hub.rotation_euler = (0, 0, math.radians(KEYS[hub.name]))
     bpy.context.view_layer.update()
     mw = hub.matrix_world.copy()
     o = mw.translation
     f = cam_fwd()
     nrm = Vector((f.x, f.y, 0.0)).normalized()
+    if on_shaft:
+        u = (mw.to_3x3() @ Vector((0, 0, 1))).normalized()
+        nrm = (f - u * f.dot(u)).normalized()
     inv = mw.inverted()
 
     def to_local(sx, sy):
@@ -1218,7 +1222,7 @@ def bow_plane(hub):
 
 def bow_monster(hub, ln):
     """Level 3: the key's bow, Flash's curly gold wire monster (its centre lines traced from Flash, bows.json)."""
-    to_local = bow_plane(hub)
+    to_local = bow_plane(hub, on_shaft=True)
     g = BOWS["3"]
     me = bpy.data.meshes.new("keyboww")
     me.from_pydata([tuple(to_local(*p)) for p in g["verts"]], [tuple(e) for e in g["edges"]], [])
@@ -1369,10 +1373,19 @@ def level34():
     bc, ba = BODY["bc"], BODY["ba"]
     out = lip - bc - ba * (lip - bc).dot(ba)            # away from the barrel's axle, clear of its blocks
     out = (out - n * out.dot(n)).normalized()
+    lip = lip + out * (S.L4_KEY_OUT if lv4 else S.L3_KEY_OUT)
     box("keyblock", (0.5, 0.5, S.L3_KEY_DEPTH + 0.3), lip - n * S.L3_KEY_DEPTH + out * 0.3, M["golddark"], bevel=0.05,
         rot=tuple(math.degrees(a) for a in n.to_track_quat("Z", "Y").to_euler()))
     foot = lip + n * S.L3_KEY_RISE
-    tip = leaning(foot, *(S.L4_BOW_FOOT if lv4 else S.L3_BOW_FOOT), S.L3_KEY_LEAN)
+    if lv4:
+        tip = leaning(foot, *S.L4_BOW_FOOT, S.L3_KEY_LEAN)
+    else:
+        # level 3: Flash's key turns about the line from the collar up through its bow (edge-on, at Flash's frame 13,
+        # the bow lies along it), so the bow stays over the opening all round the turn; the stem ends where that
+        # line passes Flash's bow foot
+        far = leaning(foot, *S.L3_KEY_AXIS, S.L3_AXIS_LEAN)
+        a, b, q = Vector(scr(foot)), Vector(scr(far)), Vector(S.L3_BOW_FOOT)
+        tip = foot + (far - foot) * ((q - a).dot(b - a) / (b - a).length_squared)
     u = (tip - foot).normalized()
     key("key", foot, u, tip + u * 0.3, 0.3, 0.13, S.KEY0[L], bow=bow_head if lv4 else bow_monster, slot=False,
         collar=0.0, tail=S.L3_KEY_RISE)
