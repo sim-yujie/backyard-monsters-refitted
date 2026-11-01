@@ -1,12 +1,12 @@
 """post.py : the Monster Lab 3D sample pictures, from lab.py's renders (render/) and the Flash art (fref.py).
-Flash has one look for every Lab level (1-4), animated (the dome's brew, steam from the side doors), so there is one
+Flash has one look for every Lab level (1-4), animated (the dome's brew, the side doors' turning cogs), so there is one
 pair of stills and one loop to show.
 
     python post.py side        lab-side.png       Flash | 3D, large (the building and its ground shadow), on grass
     python post.py outline     lab-outline.png    Flash outline (red) on the 3D (cyan), the miss map; overlap printed
     python post.py crops       work/crop-*.png    full-size crops of the risky areas, Flash beside 3D
     python post.py game        lab-game.png       Flash | 3D at the game's own size (1x) and 2x, on grass
-    python post.py anim        lab-anim.mp4       Flash | 3D, one whole loop (160 frames: 32 brew x 5 steam), half size
+    python post.py anim        lab-anim.mp4       Flash | 3D, one whole loop (160 frames: 32 brew x 5 cog), half size
                                work/anim/NNN.png  the 3D frames at full size (the still with the moving boxes laid on)
 """
 import subprocess
@@ -152,7 +152,7 @@ def anim():
         if k < 32:
             t.save(tmp / f"full-{k:03d}.png")
         im = pair([flash(b3.size, k).crop(box), on_grass(t).crop(box)], ["Flash", "3D"],
-                  "Monster Lab: the brew turns in the dome, steam pours from the side doors")
+                  "Monster Lab: the brew turns in the dome, the grey cogs turn in the side doors")
         im = im.resize((im.width // 2 // 2 * 2, im.height // 2 // 2 * 2), Image.LANCZOS)
         im.save(tmp / f"{k:03d}.png")
     out = HERE / "lab-anim.mp4"

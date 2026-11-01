@@ -1,6 +1,6 @@
 """fref.py : the Flash Monster Lab (building 116) in the game's own pixel frame (origin = the building's anchor), for
 fitting. Flash has one look for every level (levels 1-4), animated: the glass dome's swirling brew (anim.1, 32 frames)
-and steam pouring out of the two side doors (anim.2 left, anim.3 right, 5 frames each).
+and the grey cogs turning in the two side doors (anim.2 left, anim.3 right, 5 frames each).
 
     python fref.py grid [zoom]     -> work/flash-grid.png (the top, zoomed, 5 px grid in origin coords, every 10th labelled)
 Used as a module: flash_rgba(look, frame) -> (RGBA image at 1x covering FRAME, no ground shadow), shadow_rgba(look).
@@ -16,7 +16,7 @@ import flashart as F  # noqa: E402
 HERE = Path(__file__).resolve().parent
 FRAME = (-86, -104, 126, 82)      # x0, y0, x1, y1 in Flash px around the origin: the building and its shadow fit
 TID = 116
-ANIMS = 3                         # anim layers: dome (32 frames), left door steam (5), right door steam (5)
+ANIMS = 3                         # anim layers: dome (32 frames), left door cog (5), right door cog (5)
 
 
 def level_row():

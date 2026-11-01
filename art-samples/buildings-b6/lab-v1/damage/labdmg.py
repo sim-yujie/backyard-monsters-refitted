@@ -5,7 +5,7 @@ bells tipped; the destroyed look is the same parts in one low burnt heap inside 
 
     blender -b --factory-startup -P labdmg.py -- 1 <prev|still> <damaged|destroyed>      (run.sh <prev|still> <state>)
 
-Flash has no damaged or destroyed animation for the Lab, so each look is one still (the steam stays still too).
+Flash has no damaged or destroyed animation for the Lab, so each look is one still (the side cogs stay still too).
 """
 import math
 import os
@@ -28,7 +28,8 @@ LW, LD, UW = G["LW"], G["LD"], G["UW"]
 LW_Z, LD_Z1 = G["LW_Z"], G["LD_Z1"]
 R = random.Random(5)
 
-LOWER = ("lwall", "lpost", "lskirt", "lband", "lbeam", "lrivet", "lbolt", "ldoor", "lstrip", "coil", "sdoor", "steam", "inner")
+LOWER = ("lwall", "lpost", "lskirt", "lband", "lbeam", "lrivet", "lbolt", "ldoor", "lstrip", "coil", "sdoor", "scogcut", "scognub",
+         "inner")
 UPPER = ("ldeck", "uwall", "uflank", "upost", "pilaster", "ustrip", "uband", "urivet", "ubolt", "pipe", "udeck",
          "plinth", "bell", "wire", "dome", "uinner")
 
@@ -256,6 +257,8 @@ def damaged():
         o.scale.z *= crush
         o.location.z *= crush
     drop = LW_Z * (1 - crush)
+    for o in named("scog0", "scog1", "scoghub"):          # the side cogs sink whole into the crushed door plates,
+        o.location.z = 0.15                              # under the lowered lintels
     up = named(*UPPER)
     D.hinge(up, (0.0, 0.0, LW_Z), rot=(-5.0, -8.0, 0.0), move=(0.0, 0.0, -drop))
     # the upper deck cracked across its front: the front strip breaks off, its left half folds well down onto the
@@ -320,7 +323,9 @@ def destroyed():
     """Flash's heap: a low pile in the building's own square of broken deck pieces, navy and steel panels sticking up,
     the dome in the middle, the three bells, both glass pipes, copper wire loops, the gold columns lying in front."""
     G["build"]()
-    D.kill(named("steam", "uwall", "uflank", "upost", "pilaster", "ustrip", "uband", "urivet", "ubolt", "wire",
+    for o in named("scog0", "scog1", "scoghub"):          # the side cogs come loose whole
+        o.modifiers.clear()
+    D.kill(named("scogcut", "uwall", "uflank", "upost", "pilaster", "ustrip", "uband", "urivet", "ubolt", "wire",
                  "lstrip", "ldoor", "lbolt", "sdoorhole", "sdoorjamb", "sdoorlintel", "udeckrivet", "ldeckrivet", "lbeam"))
     inner(0.9)
     # the lower walls: a ragged stump about a fifth of their height
@@ -343,8 +348,9 @@ def destroyed():
     ufl, ufr = crack(uf, U_DIR, -1.0 / s2, seed=7)
     # everything still to be placed is parked high up first, so the heap is built from the ground up (place() and
     # rest() only look at what is already down)
-    loose = [lmb, lmf, la, lr, ubl, ubr, ufl, ufr] + [o for n in ("dome", "bellC", "bellL", "bellR", "pipe", "plinth", "coil")
-                                                  for o in group(n) if o.parent is None]
+    loose = [lmb, lmf, la, lr, ubl, ubr, ufl, ufr] + [
+        o for n in ("dome", "bellC", "bellL", "bellR", "pipe", "plinth", "coil", "scog0", "scog1", "scoghub")
+        for o in group(n) if o.parent is None]
     for o in loose:
         o.location.z += 1000.0
     # built from the bottom up: the lower deck's pieces on the stump, the gold columns lying in front, the dome in the
@@ -354,6 +360,9 @@ def destroyed():
         place([o], u, v, rot, sink=0.05)
     for k, (u, v, yaw) in enumerate(((-3.0, 3.3, 20.0), (4.0, 3.3, -20.0))):
         place(group(f"coil{k}"), u, v, (90.0, 0.0, yaw), sink=0.1)
+    # the grey side cogs thrown down at the heap's two ends, tipped half over
+    for k, (u, v, rot) in enumerate(((-6.6, 2.2, (58.0, 12.0, 20.0)), (6.6, 2.0, (-54.0, 16.0, -24.0)))):
+        place(group(f"scog{k}") + group(f"scoghub{k}"), u, v, rot, sink=0.3)
     place(group("dome"), 0.4, 0.4, (8.0, -6.0, 0.0), sink=0.5)           # the dome low in the middle of the heap
     for o, u, v, rot in ((ubl, -3.8, -3.6, (24.0, 6.0, 15.0)), (ubr, 3.8, -3.8, (-6.0, -26.0, -12.0)),
                          (ufl, -5.4, 0.0, (-16.0, 14.0, 25.0)), (ufr, 4.4, 0.4, (14.0, 18.0, -15.0))):

@@ -791,9 +791,10 @@ def materials():
     # the side cogs: the left one in the sun, grey with its teeth white where they face the light; the right one in
     # the building's shade, darker, its teeth only a lighter grey (as Flash draws them)
     M["cogsteel"] = matte_grey("cogsteel", (72, 74, 78), (240, 242, 244), lit=(-0.85, -0.62, 1.55),
-                               band=(_envf("SCOG_B0", 0.75), _envf("SCOG_B1", 0.9)))
-    M["cogshade"] = matte_grey("cogshade", (72, 74, 78), (100, 102, 106), lit=(0.62, 0.85, 1.55),
-                               band=(_envf("SCOG_B0", 0.75), _envf("SCOG_B1", 0.9)))
+                               band=(_envf("SCOG_B0", 0.75), _envf("SCOG_B1", 0.9)), glow=_envf("SCOG_EL", 0.8))
+    M["cogshade"] = matte_grey("cogshade", (int(_envf("SCOG_SR", 80)),) * 3, (int(_envf("SCOG_TR", 110)),) * 3,
+                               lit=(0.62, 0.85, 1.55), band=(_envf("SCOG_B0", 0.75), _envf("SCOG_B1", 0.9)),
+                               glow=_envf("SCOG_ER", 0.8))
     return M
 
 
@@ -855,7 +856,7 @@ def dome_mat():
     return t.m
 
 
-def matte_grey(name, side, top, lit=(0.0, 0.0, 1.0), band=(0.62, 0.9)):
+def matte_grey(name, side, top, lit=(0.0, 0.0, 1.0), band=(0.62, 0.9), glow=0.12):
     """Flash's side cogs: matte grey, lit evenly (a little glow keeps the shadowed faces grey, not rock), the faces
     turned toward `lit` near white (`top`; band: from where to where along that), so each tooth lights up as it turns
     past the light."""
@@ -869,7 +870,7 @@ def matte_grey(name, side, top, lit=(0.0, 0.0, 1.0), band=(0.62, 0.9)):
     dp.inputs[1].default_value = Vector(lit).normalized()
     col = t.mix(col, srgb(*top), t.ramp(dp.outputs["Value"], [(band[0], (0, 0, 0, 1)), (band[1], (1, 1, 1, 1))]))
     t.set(**{"Base Color": col, "rough": 1.0, "spec": 0.0})
-    t.set(**{"Emission Color": col, "Emission Strength": 0.12})
+    t.set(**{"Emission Color": col, "Emission Strength": glow})
     return t.m
 
 
@@ -993,32 +994,42 @@ SIDECOGS = {}
 # Flash's side doors each hold a grey metal cog wheel standing upright in the doorway, its axle along the wall, its
 # lower part hidden by the floor and the plate, turning so its teeth roll up out of the door and over the top (their
 # tops catch the light white). Its middle out from the door and up, tip radius, teeth, thickness along the axle, tooth
-# depth (a share of the radius).
+# depth (a share of the radius). The axle is turned a little out of the door so the wheel's face shows its teeth.
 SCOG_O, SCOG_Z = _envf("SCOG_O", 0.4), _envf("SCOG_Z", 0.6)
-SCOG_R, SCOG_N, SCOG_T, SCOG_D = _envf("SCOG_R", 1.8), int(_envf("SCOG_N", 10)), _envf("SCOG_T", 0.9), _envf("SCOG_D", 0.24)
+SCOG_R, SCOG_N, SCOG_T, SCOG_D = _envf("SCOG_R", 1.65), int(_envf("SCOG_N", 10)), _envf("SCOG_T", 0.55), _envf("SCOG_D", 0.24)
+SCOG_A = (_envf("SCOG_A0", -0.22), _envf("SCOG_A1", -0.25))   # along the wall, toward the outer corner (fit to Flash)
+SCOG_AX = _envf("SCOG_AX", 28.0)          # the axle swung this far (deg) from along the wall toward out of the door
 
 
 def side_cog(k, c, t, n):
     """The cog in side door k (door middle c on the wall, t along the wall, n out), a hub on each face, and a small
-    grey nub at the door's other foot. set_phase turns the wheel one tooth per 5-frame loop, so the loop has no seam
-    (the top goes out, away from the door)."""
+    round grey knob at the foot of the door jamb nearer the front. set_phase turns the wheel one tooth per 5-frame
+    loop, so the loop has no seam (the top goes out, away from the door)."""
     corner = -1 if k == 0 else 1                         # toward the face's outer corner, along t
-    at = c + n * SCOG_O + t * (corner * 0.08)
+    at = c + n * SCOG_O + t * (corner * SCOG_A[k])
     at = Vector((at.x, at.y, SCOG_Z))
-    q0 = Vector((t.x, t.y, 0.0)).to_track_quat("Z", "Y")   # local Z the axle (along the wall)
-    hd = SCOG_T + 0.14
+    ax = math.radians(SCOG_AX) * -corner     # the axle: along the wall, swung out by SCOG_AX (mirrored)
+    a = t * math.cos(ax) + n * math.sin(ax)
+    q0 = Vector((a.x, a.y, 0.0)).to_track_quat("Z", "Y")   # local Z the axle
+    hd = SCOG_T + 0.08
     mat = M["cogsteel" if k == 0 else "cogshade"]
-    hub = cyl(f"scoghub{k}", 0.34 * SCOG_R, hd, at, mat, verts=24, bevel=0.05)
+    hub = cyl(f"scoghub{k}", 0.28 * SCOG_R, hd, at, mat, verts=24, bevel=0.05)
     for v in hub.data.vertices:                          # centred on the axle, not standing on it
         v.co.z -= hd / 2
     obs = [gear(f"scog{k}", SCOG_R, SCOG_N, SCOG_T, at, mat, (0, 0, 0), tooth=SCOG_D), hub]
-    cut = box(f"scogcut{k}", (6.0, 6.0, 3.0), (at.x, at.y, 0.14 - 3.0), M["cogsteel"], bevel=0.0)
-    cut.hide_render = True                               # what lies under the plate is cut away, whatever the turn
-    for o in obs:
-        mo = o.modifiers.new("cut", "BOOLEAN")
-        mo.operation, mo.object = "DIFFERENCE", cut
-    p = c + n * 0.7 + t * (-corner * 0.62)
-    box(f"scognub{k}", (0.5, 0.45, 0.42), (p.x, p.y, 0.15), mat, rot=(0, 0, 25), bevel=0.12)
+    # what lies under the plate, behind the dark door panel (inside the wall) and in the wall's skirt and its rivets
+    # is cut away, whatever the turn
+    ang = math.degrees(math.atan2(t.y, t.x))
+    w, w2 = c - n * (3.0 - 0.07), c - n * (3.0 - 0.2)
+    for cut in (box(f"scogcut{k}", (6.0, 6.0, 3.0), (at.x, at.y, 0.14 - 3.0), M["cogsteel"], bevel=0.0),
+                box(f"scogcut{k}w", (6.0, 6.0, 6.0), (w.x, w.y, -1.0), M["cogsteel"], rot=(0, 0, ang), bevel=0.0),
+                box(f"scogcut{k}s", (6.0, 6.0, 1.34), (w2.x, w2.y, -1.0), M["cogsteel"], rot=(0, 0, ang), bevel=0.0)):
+        cut.hide_render = True
+        for o in obs:
+            mo = o.modifiers.new("cut", "BOOLEAN")
+            mo.operation, mo.object = "DIFFERENCE", cut
+    p = c + n * 0.58 + t * (-corner * (DOOR_W / 2 + 0.12))
+    cyl(f"scognub{k}", 0.24, 0.32, (p.x, p.y, 0.15), mat, verts=16, bevel=0.12)
     pitch = 2 * math.pi / SCOG_N
     for o in obs:
         o.rotation_euler = q0.to_euler()
@@ -1346,7 +1357,7 @@ def main():
                 if n:
                     hits.setdefault(tuple(sorted((fa, fb))), []).append((a.name, b.name, n))
         for key, v in sorted(hits.items()):
-            print("CHECK", key, sum(x[2] for x in v), v[:3])
+            print("CHECK", key, sum(x[2] for x in v), v[:int(os.environ.get("PB_CHECKN", 3))])
         # parts that touch nothing at all (floating)
         fams = sorted({family(o) for o, _, _ in obs})
         for fm in fams:
