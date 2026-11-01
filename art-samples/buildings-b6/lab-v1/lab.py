@@ -1,6 +1,6 @@
 """lab.py : the Monster Lab (Flash building 116) as a 3D model, in the approved 3D buildings' family (the HCC/Hatchery
 camera, light, render settings and scale; no outline). Flash has one look for every level (1-4), animated: the glass
-dome's swirling brew (32 frames) and steam pouring out of the two side doors (5 frames). One model, one still.
+dome's swirling brew (32 frames) and the grey cogs turning in the two side doors (5 frames). One model, one still.
 The shared helpers (materials, meshes, camera, checks) come from the HCC's hcc.py (art/buildings-3d-hcc).
 
     blender -b --factory-startup -P lab.py -- 1 fit      work/fit-L1.png    quick render without the ground, 4 px per Flash px
@@ -19,7 +19,7 @@ from pathlib import Path
 
 import bmesh
 import bpy
-from mathutils import Euler, Matrix, Vector
+from mathutils import Euler, Matrix, Quaternion, Vector
 
 HERE = Path(__file__).resolve().parent
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["1", "fit"]
@@ -34,6 +34,12 @@ K = int(os.environ.get("PB_K", 4 if MODE == "fit" else 12))     # render px per 
 SX, SY, SZ = 10 * math.cos(math.radians(45)), 10 * math.sin(math.radians(45)) * math.sin(math.radians(EL)), \
     10 * math.cos(math.radians(EL))
 L = LEVEL
+
+
+def _envf(k, d):
+    return float(os.environ.get(k, d))
+
+
 rng = random.Random(1600)
 
 
@@ -766,9 +772,6 @@ def materials():
     M["plinth"] = wood("plinth", (130, 86, 50), (106, 70, 40), rings=3.0, dirt=0.3, knots=False)
     M["gold"] = shiny("gold", (232, 162, 46), rough=0.3, metal=0.75, side=0.45, wear=(240, 186, 80), scale=1.5,
                       dirt=0.45, streak=0.3)
-    # the cogs a little darker and more orange than the beam, as in Flash
-    M["coggold"] = shiny("coggold", (228, 148, 48), rough=0.26, metal=0.5, side=0.15, wear=(244, 184, 92), scale=1.5, ao_min=0.7,
-                         dirt=0.2, streak=0.3)
     M["brass"] = shiny("brass", (150, 104, 46), rough=0.35, metal=0.7, wear=(190, 140, 66), scale=2.0, dirt=0.3)
     M["pilaster"] = shiny("pilaster", (196, 204, 150), rough=0.4, metal=0.3, wear=(166, 172, 120), scale=2.0, dirt=0.2)
     # Flash's chrome is mottled: blue-grey with darker patches and white glints, not a clean mirror
@@ -785,8 +788,12 @@ def materials():
     M["doorplate"] = painted("doorplate", (98, 95, 90), rough=0.55, metal=0.3, wear=(146, 142, 136), scale=4.0,
                              dirt=0.3)
     M["dome"] = dome_mat()
-    M["steam"] = steam_mat("steam", (82, 84, 88), (112, 114, 118))
-    M["steamchunk"] = steam_mat("steamchunk", (104, 106, 110), (224, 226, 228))
+    # the side cogs: the left one in the sun, grey with its teeth white where they face the light; the right one in
+    # the building's shade, darker, its teeth only a lighter grey (as Flash draws them)
+    M["cogsteel"] = matte_grey("cogsteel", (72, 74, 78), (240, 242, 244), lit=(-0.85, -0.62, 1.55),
+                               band=(_envf("SCOG_B0", 0.75), _envf("SCOG_B1", 0.9)))
+    M["cogshade"] = matte_grey("cogshade", (72, 74, 78), (100, 102, 106), lit=(0.62, 0.85, 1.55),
+                               band=(_envf("SCOG_B0", 0.75), _envf("SCOG_B1", 0.9)))
     return M
 
 
@@ -848,17 +855,19 @@ def dome_mat():
     return t.m
 
 
-def steam_mat(name, side, top):
-    """Flash's steam: matte grey smoke, solid, lit evenly (a little glow keeps the shadowed faces grey, not rock), the
-    faces turned up paler (`top`: near white on the chunks, a lighter grey on the slab)."""
+def matte_grey(name, side, top, lit=(0.0, 0.0, 1.0), band=(0.62, 0.9)):
+    """Flash's side cogs: matte grey, lit evenly (a little glow keeps the shadowed faces grey, not rock), the faces
+    turned toward `lit` near white (`top`; band: from where to where along that), so each tooth lights up as it turns
+    past the light."""
     t = NT(name)
     v = t.coords()
     n = t.noise(v, 2.4, 2.0, 0.5)
     col = t.ramp(n, [(0.36, srgb(*(int(c * 0.86) for c in side))), (0.64, srgb(*side))])
     geo = t.n("ShaderNodeNewGeometry")
-    sep = t.n("ShaderNodeSeparateXYZ")
-    t.link(geo.outputs["Normal"], sep.inputs[0])
-    col = t.mix(col, srgb(*top), t.ramp(sep.outputs["Z"], [(0.62, (0, 0, 0, 1)), (0.9, (1, 1, 1, 1))]))
+    dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(geo.outputs["Normal"], dp.inputs[0])
+    dp.inputs[1].default_value = Vector(lit).normalized()
+    col = t.mix(col, srgb(*top), t.ramp(dp.outputs["Value"], [(band[0], (0, 0, 0, 1)), (band[1], (1, 1, 1, 1))]))
     t.set(**{"Base Color": col, "rough": 1.0, "spec": 0.0})
     t.set(**{"Emission Color": col, "Emission Strength": 0.12})
     return t.m
@@ -867,16 +876,16 @@ def steam_mat(name, side, top):
 M = materials()
 
 
-def set_phase(dome_t=None, steam_t=None):
-    """The moving parts at a moment of their loops (0..1): the brew's swirl and the steam puffs."""
+def set_phase(dome_t=None, cog_t=None):
+    """The moving parts at a moment of their loops (0..1): the brew's swirl and the side doors' cogs."""
     if dome_t is not None:
         a = 2 * math.pi * dome_t
         for mp in DOME_MAP:
             mp.inputs["Location"].default_value = (0.55 * math.cos(a), 0.55 * math.sin(a), 0.3 * math.sin(a))
-    if steam_t is not None:
-        for side, puffs in STEAM.items():
+    if cog_t is not None:
+        for side, puffs in SIDECOGS.items():
             for ob, path in puffs:
-                p, sc, rot = path(steam_t)
+                p, sc, rot = path(cog_t)
                 ob.location = p
                 ob.scale = sc
                 ob.rotation_euler = rot
@@ -888,104 +897,6 @@ def posts(name, poly, z0, z1, skip=(), w=0.32):
         if i in skip:
             continue
         box(f"{name}{i}", (w, w, z1 - z0), (p[0], p[1], z0), M["frame"], rot=(0, 0, 45), bevel=0.04)
-
-
-def _envf(k, d):
-    return float(os.environ.get(k, d))
-
-
-# Flash's two gold "columns" are two upright cogs seen edge-on, drawn as a straight column of beads: about six evenly
-# spaced, level, pointed teeth (diamond points out to both sides, small dark gaps between them) on a slim faceted gold
-# body from the ground up under the gold beam, the end teeth rounder. Built as that stylised column, not a true wheel
-# (a wheel edge-on bunches its teeth top and bottom and its turned face shows as a flat strap). Its middle in the plan,
-# teeth, the body's half width across the screen, how far each tooth reaches past it, a tooth's half height (a share
-# of the spacing), its point (1 a sharp diamond, 2 round; the end teeth COG_PWE), depth toward the viewer / width.
-COG_UV = (_envf("COG_U", -3.7), _envf("COG_V", 3.0))
-COG_N, COG_RB, COG_H = int(_envf("COG_N", 6)), _envf("COG_RB", 0.37), _envf("COG_H", 0.22)
-COG_C, COG_PW, COG_PWE, COG_Q = _envf("COG_C", 0.36), _envf("COG_PW", 1.0), _envf("COG_PWE", 1.3), _envf("COG_Q", 0.75)
-COG_K = _envf("COG_K", 1.5)                 # how much the teeth keep to the two sides (0: all round the column)
-COG_FB = _envf("COG_FB", 0.4)               # and how far they still bulge toward the viewer (1: as far)
-
-
-def cog_column(name, c, top, mat, nc=int(_envf("COG_NC", 8))):
-    """The cog column standing at c (its foot on the ground) up to height top: an upright faceted bar (nc sides, a
-    corner pointing to each side), its section an oval COG_Q as deep toward the viewer as it is wide across the
-    screen, swelling at each tooth with a diamond profile, most toward the two sides, flat shaded like cut metal."""
-    e = Vector((1.0, 1.0, 0.0)).normalized()        # across the screen
-    d = Vector((1.0, -1.0, 0.0)).normalized()       # toward the viewer
-    p = top / COG_N
-    mids = [p * (i + 0.5) for i in range(COG_N)]
-    hc = COG_C * p
-
-    def rad(z):
-        f = 0.0
-        for i, m in enumerate(mids):
-            pw = COG_PWE if i in (0, COG_N - 1) else COG_PW
-            s = abs(z - m) / hc
-            if s < 1:
-                f = max(f, 1 - s ** pw)
-        y = min(z, top - z)                         # rounded off at the ground and under the beam
-        foot = 0.86 + 0.14 * math.sqrt(max(0.0, 1 - ((0.06 - y) / 0.06) ** 2)) if y < 0.06 else 1.0
-        return COG_RB * foot, COG_H * f * foot
-
-    zs = {0.0, 0.02, 0.04, top - 0.04, top - 0.02, top}
-    for m in mids:
-        for j in range(-12, 13):
-            zs.add(m + hc * j / 12)
-    for a, b in zip([0.0] + [m + hc for m in mids], [m - hc for m in mids] + [top]):
-        for j in range(1, 4):
-            zs.add(a + (b - a) * j / 4)
-    zs = sorted(z for z in zs if 0.0 <= z <= top)
-    bm = bmesh.new()
-    rows = []
-    for z in zs:
-        r, t = rad(z)
-        row = []
-        for j in range(nc):
-            ca, sa = math.cos(2 * math.pi * j / nc), math.sin(2 * math.pi * j / nc)
-            x = r * ca + t * math.copysign(abs(ca) ** COG_K, ca)
-            row.append(bm.verts.new(c + e * x + d * (COG_Q * (r + t * COG_FB) * sa) + Vector((0, 0, z))))
-        rows.append(row)
-    for r0, r1 in zip(rows, rows[1:]):
-        for j in range(nc):
-            bm.faces.new((r0[j], r0[(j + 1) % nc], r1[(j + 1) % nc], r1[j]))
-    for row, z in ((rows[0], 0.0), (rows[-1], zs[-1])):
-        mid = bm.verts.new(c + Vector((0, 0, z)))
-        for j in range(nc):
-            bm.faces.new((row[j], row[(j + 1) % nc], mid))
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return mesh_ob(name, bm, [mat], smooth=True, bevel=_envf("COG_BEV", 0.025), segs=2)
-
-
-def cog_wheel(k):
-    """Cog k (0 left, 1 right, its mirror image): the column on the ground in front of the wall's corner, up to the
-    gold beam's underside."""
-    u, v = COG_UV
-    c = Vector(uv(u, v)) if k == 0 else Vector(mir(uv(u, v)))
-    c = Vector((c.x, c.y, 0.0))
-    return [cog_column(f"coil{k}", c, _envf("COG_TOP", LW_Z - 0.42), M["coggold"])]
-
-
-def cog_sun(sun):
-    """Flash draws both cogs in full light, but they stand in front of the wings, which the low sun (from the left
-    and behind) would put them in the shadow of. So the cogs get the sun from a twin that only the cogs themselves
-    shadow; the main sun skips them (they still cast their ground shadow from it)."""
-    cogs = [o for o in SC.objects if o.name.startswith("coil")]
-    if not cogs or os.environ.get("PB_COGSHADE"):
-        return
-    inc, exc = bpy.data.collections.new("cog_lit"), bpy.data.collections.new("cog_unlit")
-    for o in cogs:
-        inc.objects.link(o)
-        exc.objects.link(o)
-    for co in exc.collection_objects:
-        co.light_linking.link_state = "EXCLUDE"
-    sun.light_linking.receiver_collection = exc
-    twin = sun.copy()
-    twin.data = sun.data.copy()
-    twin.data.energy *= 3.0                         # and stronger, so their sunlit sides shine like Flash's
-    link(twin)
-    twin.light_linking.receiver_collection = inc
-    twin.light_linking.blocker_collection = inc
 
 
 def lower():
@@ -1006,9 +917,15 @@ def lower():
     bolts = [_on(a, b, f, z, 0.03) for f, z in ((0.08, 2.9), (0.62, 3.3), (0.62, 1.9), (0.86, 2.5), (0.86, 1.1))]
     bolts += [(mir(p), mir(n)) for p, n in bolts]
     studs("lbolt", bolts, 0.19, M["steel"], squash=0.45)
-    # the two gold cogs at the front corners
-    for k in (0, 1):
-        cog_wheel(k)
+    # the gold ribbed columns at the front corners
+    for k, (u, v) in enumerate((COIL_UV, (-COIL_UV[0], COIL_UV[1]))):
+        x, y = uv(u, v)
+        prof = [(0.0, 0.0), (0.42, 0.0), (0.42, 0.12)]
+        for j in range(7):                          # Flash's columns: a stack of sharp double cones up to the beam
+            z0 = 0.14 + j * 0.58
+            prof += [(0.24, z0), (0.58, z0 + 0.28), (0.6, z0 + 0.29), (0.58, z0 + 0.3), (0.24, z0 + 0.58)]
+        prof += [(0.42, LW_Z), (0.0, LW_Z)]
+        lathe(f"coil{k}", prof, (x, y, 0.0), M["gold"], verts=28)
     # a gold beam under the deck's front edge from column to column
     ca, cb = Vector(uv(*COIL_UV)), Vector(uv(-COIL_UV[0], COIL_UV[1]))
     _, _, tb, nb, angb = face(ca, cb)
@@ -1047,7 +964,7 @@ def lower():
     for s in (-2.2, -1.4, 1.4, 2.2):
         p = mid + t * s + n * 0.03
         box(f"lstrip{s}", (0.12, 0.06, LW_Z - 0.6), (p.x, p.y, 0.3), M["brass"], rot=(0, 0, ang), bevel=0.02)
-    # the side doors with the steam: a brown frame round a dark opening, a brown plate on the ground in front
+    # the side doors with the grey cogs: a brown frame round a dark opening, a brown plate on the ground in front
     for k in (0, 1):
         a, b = (out[0], out[1]) if k == 0 else (out[6], out[7])
         f = DOOR_F if k == 0 else 1 - DOOR_F
@@ -1063,7 +980,7 @@ def lower():
         box(f"sdoorlintel{k}", (w + 0.5, 0.3, 0.3), (p.x, p.y, 3.0), M["frame"], rot=(0, 0, ang))
         p = c + n * 1.3
         box(f"sdoorplate{k}", (w + 1.2, 2.5, 0.14), (p.x, p.y, 0.0), M["deckedge"], rot=(0, 0, ang), bevel=0.03)
-        steam(k, c, t, n)
+        side_cog(k, c, t, n)
 
 
 def _on(a, b, f, z, out):
@@ -1072,57 +989,41 @@ def _on(a, b, f, z, out):
     return ((p.x, p.y, z), (n.x, n.y, 0.0))
 
 
-STEAM = {}
+SIDECOGS = {}
+# Flash's side doors each hold a grey metal cog wheel standing upright in the doorway, its axle along the wall, its
+# lower part hidden by the floor and the plate, turning so its teeth roll up out of the door and over the top (their
+# tops catch the light white). Its middle out from the door and up, tip radius, teeth, thickness along the axle, tooth
+# depth (a share of the radius).
+SCOG_O, SCOG_Z = _envf("SCOG_O", 0.4), _envf("SCOG_Z", 0.6)
+SCOG_R, SCOG_N, SCOG_T, SCOG_D = _envf("SCOG_R", 1.8), int(_envf("SCOG_N", 10)), _envf("SCOG_T", 0.9), _envf("SCOG_D", 0.24)
 
 
-def steam(k, c, t, n):
-    """Flash's steam: a solid, matte grey lump of smoke leaning out of the door and down onto the plate (a quarter
-    round: upright at the door, its face sloping out and down), with a few white-topped chunks sliding down its face
-    (set_phase moves them) and a small grey puff at the door's other foot. The chunks are identical and tumble with
-    their place on the path, so the loop has no seam (chunk j at the loop's end sits where chunk j+1 started)."""
+def side_cog(k, c, t, n):
+    """The cog in side door k (door middle c on the wall, t along the wall, n out), a hub on each face, and a small
+    grey nub at the door's other foot. set_phase turns the wheel one tooth per 5-frame loop, so the loop has no seam
+    (the top goes out, away from the door)."""
     corner = -1 if k == 0 else 1                         # toward the face's outer corner, along t
-    o0, z0, A, H, W = 0.08, 0.15, 2.35, 2.2, 1.0         # the lump: back (at the door), foot, reach, height, width
-    side0 = corner * 0.08
-
-    def arc(th):                                         # the lump's face at angle th (0 top .. pi/2 foot): a flat
-        e = 1.4                                          # quarter round, nearly a straight slope as in Flash
-        return o0 + A * math.sin(th) ** (2 / e), z0 + H * math.cos(th) ** (2 / e)
-    prof = [(o0, z0), arc(0.0)]                         # its face in a few rounded steps (Flash's blocky smoke)
-    for i in range(1, 6):
-        (oa, _), (ob, zb) = arc(math.pi / 2 * (i - 1) / 5), arc(math.pi / 2 * i / 5)
-        prof += [(ob, prof[-1][1]), (ob, zb)] if i < 5 else [(ob, prof[-1][1] * 0.5 + zb * 0.5), (ob, zb)]
-    bm = bmesh.new()
-    rows = []
-    for w in (-W / 2, W / 2):
-        rows.append([bm.verts.new(tuple(c + n * o + t * (side0 + w)) + (z,)) for o, z in prof])
-    bm.faces.new(rows[0])
-    bm.faces.new(rows[1][::-1])
-    m = len(prof)
-    for i in range(m):
-        j = (i + 1) % m
-        bm.faces.new((rows[0][i], rows[1][i], rows[1][j], rows[0][j]))
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    mesh_ob(f"steamslab{k}", bm, [M["steam"]], smooth=True, bevel=0.14, segs=3)
+    at = c + n * SCOG_O + t * (corner * 0.08)
+    at = Vector((at.x, at.y, SCOG_Z))
+    q0 = Vector((t.x, t.y, 0.0)).to_track_quat("Z", "Y")   # local Z the axle (along the wall)
+    hd = SCOG_T + 0.14
+    mat = M["cogsteel" if k == 0 else "cogshade"]
+    hub = cyl(f"scoghub{k}", 0.34 * SCOG_R, hd, at, mat, verts=24, bevel=0.05)
+    for v in hub.data.vertices:                          # centred on the axle, not standing on it
+        v.co.z -= hd / 2
+    obs = [gear(f"scog{k}", SCOG_R, SCOG_N, SCOG_T, at, mat, (0, 0, 0), tooth=SCOG_D), hub]
+    cut = box(f"scogcut{k}", (6.0, 6.0, 3.0), (at.x, at.y, 0.14 - 3.0), M["cogsteel"], bevel=0.0)
+    cut.hide_render = True                               # what lies under the plate is cut away, whatever the turn
+    for o in obs:
+        mo = o.modifiers.new("cut", "BOOLEAN")
+        mo.operation, mo.object = "DIFFERENCE", cut
     p = c + n * 0.7 + t * (-corner * 0.62)
-    box(f"steampuff{k}", (0.5, 0.45, 0.42), (p.x, p.y, z0), M["steam"], rot=(0, 0, 25), bevel=0.12)
-
-    def path(s):
-        th = math.pi / 2 * (0.06 + 0.9 * s)
-        o, z = arc(th)
-        o, z = o + 0.22 * math.sin(th), z + 0.22 * math.cos(th)   # riding on the steps, a little sunk in
-        r = 0.62 * (1.0 + 0.12 * math.sin(11 * s))
-        if s > 0.8:                                       # melting into the lump's foot at the end
-            r *= 1.0 - 0.85 * (s - 0.8) / 0.2
-        p = c + n * o + t * (side0 + 0.14 * math.sin(7 * s))
-        rot = Euler((0.3 * math.sin(5 * s), 0.25 * math.sin(4 * s + 1), 0.6 * s))
-        return Vector((p.x, p.y, z)), (r * 1.15, r * 1.0, r * 0.7), rot
-    puffs = []
-    for j in range(3):
-        bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=1.0)
-        ob = mesh_ob(f"steam{k}-{j}", bm, [M["steamchunk"]], smooth=False, bevel=0.09, segs=2)
-        puffs.append((ob, lambda u, j=j: path(((j + u) / 3) % 1.0)))
-    STEAM[k] = puffs
+    box(f"scognub{k}", (0.5, 0.45, 0.42), (p.x, p.y, 0.15), mat, rot=(0, 0, 25), bevel=0.12)
+    pitch = 2 * math.pi / SCOG_N
+    for o in obs:
+        o.rotation_euler = q0.to_euler()
+    SIDECOGS[k] = [(o, lambda s: (at, (1.0, 1.0, 1.0), (q0 @ Quaternion((0.0, 0.0, 1.0), pitch * s)).to_euler()))
+                   for o in obs]
 
 
 def lower_deck():
@@ -1262,7 +1163,7 @@ def build():
 
 FAMILY = (("lwall", "lwall"), ("lpost", "lwall"), ("lskirt", "lwall"), ("lband", "lwall"), ("lbeam", "coil"), ("lrivet", "lwall"),
           ("lbolt", "lwall"), ("lstrip", "lwall"), ("ldoor", "ldoor"), ("coil", "coil"), ("sdoor", "sdoor"),
-          ("steam", "steam"), ("ldeck", "ldeck"), ("uwall", "uwall"), ("uflank", "uwall"), ("upost", "uwall"),
+          ("scog", "scog"), ("ldeck", "ldeck"), ("uwall", "uwall"), ("uflank", "uwall"), ("upost", "uwall"),
           ("uband", "uwall"), ("urivet", "uwall"), ("ustrip", "uwall"), ("ubolt", "uwall"), ("pilaster", "pilaster"), ("pipe", "pipe"),
           ("udeck", "udeck"), ("plinth", "plinth"), ("bellC", "bellC"), ("bellL", "bellL"), ("bellR", "bellR"),
           ("wire", "wire"), ("domering", "dome"), ("domewire", "domewire"), ("domeclamp", "domewire"),
@@ -1319,7 +1220,6 @@ def setup(sc):
     link(sun)
     to_sun = Vector((-0.85, -0.62, 1.55)).normalized()
     sun.rotation_euler = (-to_sun).to_track_quat("-Z", "Y").to_euler()
-    cog_sun(sun)
     world = bpy.data.worlds.new("w")
     sc.world = world
     world.use_nodes = True
@@ -1374,7 +1274,7 @@ def cam_fwd():
 
 
 def all_static():
-    return [o for o in SC.objects if o.type in ("MESH", "CURVE") and not under_moving(o) and o.name != "ground"]
+    return [o for o in SC.objects if o.type in ("MESH", "CURVE") and not under_moving(o) and o.name != "ground" and not o.hide_render]
 
 
 def under_moving(o):
@@ -1410,7 +1310,7 @@ def trees():
     dg = bpy.context.evaluated_depsgraph_get()
     out = {}
     for o in SC.objects:
-        if o.type not in ("MESH", "CURVE") or o.name == "ground":
+        if o.type not in ("MESH", "CURVE") or o.name == "ground" or o.hide_render:
             continue
         ev = o.evaluated_get(dg)
         try:
@@ -1517,11 +1417,6 @@ def main():
         sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 24))
         sc.cycles.use_denoising = True
         bpy.data.objects["ground"].hide_render = True
-        if os.environ.get("PB_COGS"):              # a quick look at the two cogs only
-            x0, x1, y0, y1 = border_of([o for o in SC.objects if o.name.startswith("coil")], pad=40)
-            sc.render.use_border, sc.render.use_crop_to_border = True, False
-            sc.render.border_min_x, sc.render.border_max_x = x0, x1
-            sc.render.border_min_y, sc.render.border_max_y = min(y0, y1), max(y0, y1)
         sc.render.filepath = str(out / f"fit-L{L}.png")
         bpy.ops.render.render(write_still=True)
         print("DONE", L, MODE)
@@ -1553,7 +1448,7 @@ def main():
         if which in ("all", "dome"):
             border([bpy.data.objects["dome"]])
             for k in range(32):
-                set_phase(dome_t=k / 32, steam_t=0.0)
+                set_phase(dome_t=k / 32, cog_t=0.0)
                 sc.render.filepath = str(an / f"dome-{k:02d}.png")
                 bpy.ops.render.render(write_still=True)
         set_phase(0.0, 0.0)
@@ -1562,15 +1457,15 @@ def main():
                 break
             boxes = []
             for k in range(5):
-                set_phase(steam_t=k / 5)
+                set_phase(cog_t=k / 5)
                 bpy.context.view_layer.update()
-                boxes.append(border_of([o for o, _ in STEAM[side]], pad=24))
+                boxes.append(border_of([o for o, _ in SIDECOGS[side]], pad=24))
             border_of_all = (min(b[0] for b in boxes), max(b[1] for b in boxes), min(min(b[2:]) for b in boxes),
                              max(max(b[2:]) for b in boxes))
             sc.render.border_min_x, sc.render.border_max_x = border_of_all[:2]
             sc.render.border_min_y, sc.render.border_max_y = border_of_all[2:]
             for k in range(5):
-                set_phase(steam_t=k / 5)
+                set_phase(cog_t=k / 5)
                 sc.render.filepath = str(an / f"door{'LR'[side]}-{k:02d}.png")
                 bpy.ops.render.render(write_still=True)
     if MODE == "save":
