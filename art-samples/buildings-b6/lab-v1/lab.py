@@ -891,55 +891,70 @@ def _envf(k, d):
     return float(os.environ.get(k, d))
 
 
-# Flash's two gold "columns" are two upright cog wheels, seen almost edge-on: each a tall narrow gold shape with teeth
-# on both its edges. Their middle in the plan, radius, thickness, turn away from edge-on (deg), teeth, tooth length.
+# Flash's two gold "columns" are two upright cog wheels, turned nearly edge-on to the camera: each a tall chunky gold
+# body (the rim, about 70% of the full width) with round pointed teeth bulging out on both its edges, almost touching
+# up the side. Their middle in the plan, tip radius, turn away from edge-on (deg), teeth, rim thickness, how far each
+# tooth reaches past the rim's faces and past its edge.
 COG_UV = (_envf("COG_U", -3.7), _envf("COG_V", 3.0))
-COG_R, COG_T, COG_TURN = _envf("COG_R", 2.05), _envf("COG_T", 0.65), _envf("COG_TURN", 0.0)
-COG_N, COG_H, COG_TW = int(_envf("COG_N", 15)), _envf("COG_H", 0.3), _envf("COG_TW", 1.2)
+COG_R, COG_TURN, COG_N = _envf("COG_R", 1.76), _envf("COG_TURN", 6.0), int(_envf("COG_N", 14))
+COG_T, COG_TX, COG_H = _envf("COG_T", 0.78), _envf("COG_TX", 0.2), _envf("COG_H", 0.2)
 
 
-def cog_mesh(name, r, teeth, h, t, rim, tw, mat):
-    """A cog in local XY (axle local Z): a ring of thickness t (outer radius r - h, inner r - h - rim) and `teeth`
-    four-sided pointed teeth round it: each tooth's root is a diamond, tw wide along the axle at its middle (wider than
-    the ring) and pointed round the rim, tapering to a small tip at radius r, so that seen edge-on the teeth make a
-    zigzag on both sides, as Flash draws them."""
+def cog_dims():
+    return COG_R - COG_H, COG_T
+
+
+def cog_mesh(name, ro, t, teeth, h, tx, mat):
+    """The teeth of a cog in local XY (axle local Z): `teeth` lugs round a rim of outer radius ro and thickness t, each
+    a rounded double cone lying along the axle (fattest in the rim's middle plane, blunt points tx past each face),
+    reaching h past the rim's edge and nearly touching its neighbours, so that seen edge-on they make Flash's row of
+    round pointed bulges on both sides with the rim showing between them."""
     bm = bmesh.new()
-    ro, ri = r - h, r - h - rim
-    n = 64
-    loops = []
-    for z in (-t / 2, t / 2):
-        loops.append(([bm.verts.new((ro * math.cos(2 * math.pi * j / n), ro * math.sin(2 * math.pi * j / n), z))
-                       for j in range(n)],
-                      [bm.verts.new((ri * math.cos(2 * math.pi * j / n), ri * math.sin(2 * math.pi * j / n), z))
-                       for j in range(n)]))
-    (o0, i0), (o1, i1) = loops
-    for j in range(n):
-        jn = (j + 1) % n
-        bm.faces.new((o1[j], o1[jn], i1[jn], i1[j]))
-        bm.faces.new((o0[jn], o0[j], i0[j], i0[jn]))
-        bm.faces.new((o0[j], o0[jn], o1[jn], o1[j]))
-        bm.faces.new((i0[jn], i0[j], i1[j], i1[jn]))
     p = 2 * math.pi / teeth
+    hr = h + _envf("COG_HIN", 0.2)                 # the lug's radial half size; its middle sits COG_HIN inside the rim
+    wt = 0.5 * p * ro * _envf("COG_WT", 0.98)      # its half width round the rim
+    ta = t / 2 + tx                                 # its half length along the axle
+    pw = _envf("COG_PW", 1.5)                       # its side profile: 1 a sharp diamond, 2 round
+    nz, nc = 14, 16
     for i in range(teeth):
-        a = i * p
+        a = i * p + _envf("COG_PH", 0.5) * p    # local Y is up: a tooth straight down onto the ground
         rad, tan = Vector((math.cos(a), math.sin(a), 0)), Vector((-math.sin(a), math.cos(a), 0))
-        ax = Vector((0, 0, 1))
-        base = rad * (ro - 0.06)
-        wb = _envf("COG_WB", 0.95) * p * ro / 2     # the root's half width round the rim
-        vs = [bm.verts.new(base + tan * sx * wb + ax * sz * tw / 2) for sx, sz in ((-1, 0), (0, -1), (1, 0), (0, 1))]
-        tip = rad * r
-        vt = [bm.verts.new(tip + tan * sx * 0.05 + ax * sz * 0.05) for sx, sz in ((-1, 0), (0, -1), (1, 0), (0, 1))]
-        bm.faces.new(vs[::-1])
-        bm.faces.new(vt)
-        for j in range(4):
-            bm.faces.new((vs[j], vs[(j + 1) % 4], vt[(j + 1) % 4], vt[j]))
+        c = rad * (ro + h - hr)
+        rows = []
+        for iz in range(1, nz):
+            z = ta * (2 * iz / nz - 1)
+            s = (1 - abs(z / ta) ** pw) ** (1 / pw)
+            rows.append([bm.verts.new(c + rad * math.cos(2 * math.pi * j / nc) * hr * s
+                                      + tan * math.sin(2 * math.pi * j / nc) * wt * s + Vector((0, 0, z)))
+                         for j in range(nc)])
+        for r0, r1 in zip(rows, rows[1:]):
+            for j in range(nc):
+                jn = (j + 1) % nc
+                bm.faces.new((r0[j], r0[jn], r1[jn], r1[j]))
+        for row, z in ((rows[0], -ta), (rows[-1], ta)):
+            tip = bm.verts.new(c + Vector((0, 0, z)))
+            for j in range(nc):
+                bm.faces.new((row[j], row[(j + 1) % nc], tip))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return mesh_ob(name, bm, [mat], smooth=False, bevel=0.02, segs=2)
+    return mesh_ob(name, bm, [mat], smooth=True)
+
+
+def cog_rim(name, ro, ri, t, mat, n=64):
+    """A closed ring in local XY (axle local Z), radii ri..ro, thickness t, its edges rounded."""
+    bm = bmesh.new()
+    rows = [[bm.verts.new((r * math.cos(2 * math.pi * j / n), r * math.sin(2 * math.pi * j / n), z)) for j in range(n)]
+            for r, z in ((ri, -t / 2), (ro, -t / 2), (ro, t / 2), (ri, t / 2))]
+    for a, b in zip(rows, rows[1:] + rows[:1]):
+        for j in range(n):
+            jn = (j + 1) % n
+            bm.faces.new((a[j], a[jn], b[jn], b[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return mesh_ob(name, bm, [mat], bevel=0.07, segs=3)
 
 
 def cog_wheel(k):
-    """Cog k (0 left, 1 right, its mirror image): upright, its axle level, turned COG_TURN degrees from edge-on to the
-    camera; the toothed ring, a thinner web, a hub, and the axle into a bearing block on the wall corner."""
+    """Cog k (0 left, 1 right, its mirror image): upright on the ground, its axle level, turned COG_TURN degrees from
+    edge-on so a sliver of its face shows; the toothed rim, a recessed web, a hub flush with the rim."""
     u, v = COG_UV
     c = Vector(uv(u, v)) if k == 0 else Vector(mir(uv(u, v)))
     c = Vector((c.x, c.y, COG_R + 0.02))
@@ -949,11 +964,11 @@ def cog_wheel(k):
         ax = Vector((-ax.y, -ax.x, 0.0))
     q = ax.to_track_quat("Z", "Y")
     mw = Matrix.Translation(c) @ q.to_matrix().to_4x4()
-    obs = [cog_mesh(f"coil{k}", COG_R, COG_N, COG_H, COG_T, 0.3, COG_TW, M["gold"])]
-    obs.append(cyl(f"coil{k}web", COG_R - COG_H - 0.2, COG_T * 0.55, (0, 0, -COG_T * 0.275), M["gold"], verts=40,
-                   bevel=0.02))
-    ht = COG_T + _envf("COG_HUB", 0.0)
-    obs.append(cyl(f"coil{k}hub", 0.42, ht, (0, 0, -ht / 2), M["gold"], verts=24, bevel=0.04))
+    ro, t = cog_dims()
+    rim = cog_rim(f"coil{k}", ro, ro - 0.32, t, M["gold"])
+    obs = [rim, cog_mesh(f"coil{k}teeth", ro, t, COG_N, COG_H, COG_TX, M["gold"])]
+    obs.append(cyl(f"coil{k}web", ro - 0.3, t * 0.5, (0, 0, -t * 0.25), M["gold"], verts=48, bevel=0.02))
+    obs.append(cyl(f"coil{k}hub", 0.42, t, (0, 0, -t / 2), M["gold"], verts=32, bevel=0.06))
     for o in obs:
         o.matrix_world = mw @ o.matrix_basis
     return obs
@@ -1487,6 +1502,11 @@ def main():
         sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 24))
         sc.cycles.use_denoising = True
         bpy.data.objects["ground"].hide_render = True
+        if os.environ.get("PB_COGS"):              # a quick look at the two cogs only
+            x0, x1, y0, y1 = border_of([o for o in SC.objects if o.name.startswith("coil")], pad=40)
+            sc.render.use_border, sc.render.use_crop_to_border = True, False
+            sc.render.border_min_x, sc.render.border_max_x = x0, x1
+            sc.render.border_min_y, sc.render.border_max_y = min(y0, y1), max(y0, y1)
         sc.render.filepath = str(out / f"fit-L{L}.png")
         bpy.ops.render.render(write_still=True)
         print("DONE", L, MODE)
