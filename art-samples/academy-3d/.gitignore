@@ -1,0 +1,7 @@
+src/render/
+src/work/
+src/crops/
+src/__pycache__/
+src/*.png
+src/*.mp4
+!baseline/render/

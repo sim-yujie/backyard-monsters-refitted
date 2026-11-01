@@ -1,0 +1,7 @@
+{"id": 26, "name": "Monster Academy", "folder": "buildings/academy/",
+ "levels": [
+  [1, ["top.1.png", -42, -12], ["top.1.damaged.png", -50, -12], ["top.1.destroyed.png", -50, 11], ["shadow.1.jpg", -47, 27], ["shadow.1.damaged.jpg", -47, 20], ["shadow.1.destroyed.jpg", -48, 26], [["anim.1.v2.png", -22, -13, 48, 26, 21]]],
+  [2, ["top.2.png", -43, -14], ["top.2.damaged.png", -46, -15], ["top.1.destroyed.png", -50, 11], ["shadow.2.jpg", -48, 27], ["shadow.2.damaged.jpg", -35, 27], ["shadow.1.destroyed.jpg", -48, 26], [["anim.2.png", -22, -11, 47, 24, 21]]],
+  [3, ["top.3.png", -53, -18], ["top.3.damaged.png", -53, -17], ["top.1.destroyed.png", -50, 11], ["shadow.3.jpg", -53, 27], ["shadow.3.damaged.jpg", -57, 26], ["shadow.1.destroyed.jpg", -48, 26], [["anim.3.png", -24, -17, 48, 24, 21]]],
+  [4, ["top.4.png", -53, -37], ["top.4.damaged.png", -71, -35], ["top.1.destroyed.png", -50, 11], ["shadow.4.jpg", -53, 27], ["shadow.4.damaged.jpg", -69, 22], ["shadow.1.destroyed.jpg", -48, 26], [["anim.3.png", -24, -36, 48, 24, 21]]]
+]}
