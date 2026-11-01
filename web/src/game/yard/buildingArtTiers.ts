@@ -74,7 +74,9 @@
  * from its own art/buildings-3d-<name> branch; and every 3D building's
  * damaged and destroyed looks (art/buildings-3d-damage and the same
  * branches), which take the place of the tinted whole look and the Flash
- * rubble.
+ * rubble. Then (owner, 1 Nov 2026: "keep as is for now and integrate it into
+ * the game") the Monster Academy, art/buildings-3d-academy at tag
+ * academy-3d-baseline-2026-11-01.
  *
  * The Town Hall's new art is the default (owner, 26 Oct 2026): one picture
  * per level (`TOWN_HALL_ART`), each painted from that level's Flash picture
@@ -391,9 +393,10 @@ export const TOWN_HALL_ART: readonly TierArt[] = [
  * buildings into game"), each modelled in Blender on Flash's pictures in the
  * game's own pixel frame and exported by
  * `web/tools/tower-tiers/export3d_buildings.py`: one look for each of Flash's
- * (the producers' levels 1, 3, 6 and 10, the Hatchery's 1, 2 and 3), each on
- * its own 3D ground shadow, no outline. What moves in Flash moves here, cell
- * for cell (`yardAnim.ts` runs them as it ran Flash's): the parts that move
+ * (the producers' levels 1, 3, 6 and 10, the Hatchery's 1, 2 and 3, the
+ * Academy's 1 to 4), each on its own 3D ground shadow, no outline. What
+ * moves in Flash moves here, cell for cell (`yardAnim.ts` runs them as it
+ * ran Flash's): the parts that move
  * are a strip over a `body` without them, and the Storage Silo's cells are
  * the box its sack fills, its fill level as Flash's was. The Monster Housing
  * and the Hatchery Control Center stand still, as Flash's did.
@@ -577,6 +580,25 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
       anim: { strip: ["anim.3d1@2x.webp", -33, -24, 66, 72, 41], columns: 31, body: ["body.3d1@2x.webp", -40, -8] },
       damaged: { top: ["top.3d1.damaged@2x.webp", -40, -17], shadow: ["shadow.3d1.damaged.jpg", -41, 30] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -47, 16], shadow: ["shadow.3d1.destroyed.jpg", -47, 27] } },
+  ],
+  // 26 Monster Academy: 3D, Flash's four looks (the fourth also level 5); its gold cogs turn while it trains
+  26: [
+    { from: 1, top: ["top.3d1@2x.webp", -42, -12], shadow: ["shadow.3d1.jpg", -43, 24], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -18, -13, 40, 24, 21], body: ["body.3d1@2x.webp", -42, -12] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -72, -12], shadow: ["shadow.3d1.damaged.jpg", -71, 24] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -61, 12], shadow: ["shadow.3d1.destroyed.jpg", -60, 17] } },
+    { from: 2, top: ["top.3d2@2x.webp", -42, -21], shadow: ["shadow.3d2.jpg", -43, 24], lift: 0,
+      anim: { strip: ["anim.3d2@2x.webp", -18, -13, 40, 24, 21], body: ["body.3d2@2x.webp", -42, -21] },
+      damaged: { top: ["top.3d2.damaged@2x.webp", -72, -24], shadow: ["shadow.3d2.damaged.jpg", -72, 24] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -61, 12], shadow: ["shadow.3d2.destroyed.jpg", -60, 17] } },
+    { from: 3, top: ["top.3d3@2x.webp", -51, -18], shadow: ["shadow.3d3.jpg", -52, 23], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -19, -19, 38, 23, 21], body: ["body.3d3@2x.webp", -51, -18] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -76, -18], shadow: ["shadow.3d3.damaged.jpg", -92, 9] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -61, 12], shadow: ["shadow.3d3.destroyed.jpg", -60, 17] } },
+    { from: 4, top: ["top.3d4@2x.webp", -51, -37], shadow: ["shadow.3d4.jpg", -51, 17], lift: 0,
+      anim: { strip: ["anim.3d4@2x.webp", -19, -38, 38, 23, 21], body: ["body.3d4@2x.webp", -51, -37] },
+      damaged: { top: ["top.3d4.damaged@2x.webp", -76, -44], shadow: ["shadow.3d4.damaged.jpg", -90, 0] },
+      destroyed: { top: ["top.3d4.destroyed@2x.webp", -61, 12], shadow: ["shadow.3d4.destroyed.jpg", -60, 17] } },
   ],
   // 51 Catapult: 3D, Flash's three looks (the third also level 4), still
   51: [

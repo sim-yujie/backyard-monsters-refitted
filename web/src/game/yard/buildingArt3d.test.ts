@@ -12,20 +12,26 @@ const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import
 
 /**
  * The 3D yard buildings: the first eight (owner, 31 Oct 2026: "All approved"), then the Flinger, Juicer, Yard Planner,
- * Map Room, General Store, Blocks, Stone Block, Baiter, Catapult and Champion Cage (1 Nov 2026).
+ * Map Room, General Store, Blocks, Stone Block, Baiter, Catapult and Champion Cage (1 Nov 2026), then the Monster
+ * Academy.
  */
-const TYPES = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 51, 114];
+const TYPES = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 26, 51, 114];
 /** The ones whose parts move, as Flash's do; the rest stand still, as Flash's did. */
-const MOVING = [1, 2, 3, 4, 6, 9, 13, 19];
+const MOVING = [1, 2, 3, 4, 6, 9, 13, 19, 26];
 /** The ones with no damaged or destroyed 3D look yet: the General Store, tinted and then Flash's rubble. */
 const NO_RUIN = [12];
 
 /**
  * The looks whose model reaches past Flash's picture, `[left, top, right, bottom]` in px each edge may differ: the
  * Putty Squisher's first vial stands 8 px further right and its last wheel 12 px higher, the third Hatchery's front
- * foot 9 px lower.
+ * foot 9 px lower, the second Academy's shoulder brackets 7 px higher (as approved, 1 Nov 2026).
  */
-const WIDER: Record<string, Box> = { "3:1": [6, 6, 8, 6], "3:10": [6, 12, 6, 6], "13:3": [6, 6, 6, 9] };
+const WIDER: Record<string, Box> = {
+  "3:1": [6, 6, 8, 6],
+  "3:10": [6, 12, 6, 6],
+  "13:3": [6, 6, 6, 9],
+  "26:2": [6, 7, 6, 6],
+};
 
 /** A WebP's size in pixels, from its `VP8X` header (every picture with alpha has one). */
 const webpSize = (file: string): [number, number] => {

@@ -28,6 +28,7 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | block | 17 Block | art/buildings-3d-walls | walls-v1 | levels 1-5, still (8 render px a 1x px) |
 | stone | 18 Stone Block | art/buildings-3d-walls | walls-v1 | one look, still |
 | iblock | 17 Block in an Inferno yard | art/buildings-3d-walls | walls-v1 | levels 1-3, still |
+| academy | 26 Monster Academy | art/buildings-3d-academy | academy-v1 | levels 1-4 (4 also level 5); 21 cells of its cogs |
 
 The damaged and destroyed looks (`<building>:damaged`, `<building>:destroyed`) are stills, rendered the same way into
 `L<n>-damaged-base.png` and `-alone.png` (a wall's `block<n>-damaged-...`): the first eight's from
@@ -110,11 +111,14 @@ BUILDINGS = {
     "stone": dict(type=18, folder="walls/stone", frame=(-30, -30), k=8, looks=[(1, "stone-whole")], moves=None),
     "iblock": dict(type=17, folder="iwalls", frame=(-30, -30), k=8, moves=None,
                    looks=[(n, f"inferno{n}-whole") for n in range(1, 4)]),
+    "academy": dict(type=26, folder="academy", frame=(-76, -44), looks=[(n, f"L{n}") for n in range(1, 5)],
+                    moves="parts"),
 }
 # Flash's cells per look (`buildingArtData.ts`): the 3D strip must hold as many.
 CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 10: 24},
          "putty": {1: 26, 3: 26, 6: 26, 10: 25}, "goo": {1: 26, 3: 26, 6: 26, 10: 26}, "silo": {1: 26},
-         "hatchery": {1: 31, 2: 31, 3: 31}, "juicer": {1: 51}, "baiter": {1: 41}}
+         "hatchery": {1: 31, 2: 31, 3: 31}, "juicer": {1: 51}, "baiter": {1: 41},
+         "academy": {1: 21, 2: 21, 3: 21, 4: 21}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
 
