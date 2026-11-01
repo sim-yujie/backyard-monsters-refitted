@@ -14,6 +14,7 @@ const privacyApi = vi.hoisted(() => ({
 }));
 vi.mock("@/api/privacy", () => privacyApi);
 
+import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -259,5 +260,36 @@ describe("AccountSettings", () => {
     await settle();
     expect(document.querySelector<HTMLSelectElement>("#settings-look")!.value).toBe("classic");
     localStorage.clear();
+  });
+});
+
+describe("AccountSettings: World chat", () => {
+  afterEach(() => setWorldChatOn(true));
+
+  it("is on by default; switching it off turns world chat off now and keeps it in this browser", async () => {
+    localStorage.clear();
+    setWorldChatOn(true);
+    await open({});
+    const box = document.querySelector<HTMLInputElement>("#settings-world-chat")!;
+    expect(box.checked).toBe(true);
+    expect(box.closest("label")!.textContent).toBe(SETTINGS_TEXT.chatLabel);
+
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    expect(worldChatOn()).toBe(false);
+    expect(localStorage.getItem("bymr.worldChat")).toBe("off");
+
+    box.checked = true;
+    box.dispatchEvent(new Event("change"));
+    expect(worldChatOn()).toBe(true);
+    expect(localStorage.getItem("bymr.worldChat")).toBeNull();
+  });
+
+  it("shows Off when it is off, even when the account fails to load", async () => {
+    setWorldChatOn(false);
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.querySelector<HTMLInputElement>("#settings-world-chat")!.checked).toBe(false);
   });
 });

@@ -9,8 +9,10 @@ import {
   PING_INTERVAL_MS,
   RATE_LIMITED_TEXT,
   visibleEntries,
+  worldChat,
   type ChatSocket,
 } from "./chatSession";
+import { setWorldChatOn } from "./worldChatSetting";
 
 /** A socket the test drives: what the client sent, and the server's side. */
 class FakeSocket implements ChatSocket {
@@ -342,5 +344,90 @@ describe("reconnecting", () => {
     socket.drop();
     vi.advanceTimersByTime(MAX_RETRY_MS * 2);
     expect(sockets).toHaveLength(1);
+  });
+});
+
+describe("the World chat switch", () => {
+  it("off closes the socket and empties the room; nothing more is heard", () => {
+    const session = joined([wire(7, "hi", 1)]);
+    const socket = latest();
+    session.setEnabled(false);
+
+    expect(socket.closed).toBe(true);
+    expect(session.isEnabled).toBe(false);
+    expect(session.current.status).toBe(ChatStatus.OFF);
+    expect(session.current.entries).toEqual([]);
+    expect(session.current.channel).toBeNull();
+
+    // A late message on the closed socket changes nothing.
+    socket.hear({ type: "message", channel: CONFIG.channel, ...wire(8, "late", 2) });
+    expect(session.current.entries).toEqual([]);
+    // Nor does a drop bring a retry.
+    socket.drop();
+    vi.advanceTimersByTime(MAX_RETRY_MS * 2);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("off, a yard load's settings are kept but nothing connects", () => {
+    const session = newSession();
+    session.setEnabled(false);
+    session.configure(CONFIG);
+    session.reconnect();
+    vi.advanceTimersByTime(MAX_RETRY_MS * 2);
+    expect(sockets).toHaveLength(0);
+    expect(session.current.status).toBe(ChatStatus.OFF);
+  });
+
+  it("on again connects with the last settings, no yard load needed", () => {
+    const session = joined();
+    session.setEnabled(false);
+    session.setEnabled(true);
+
+    expect(sockets).toHaveLength(2);
+    expect(session.current.status).toBe(ChatStatus.CONNECTING);
+    latest().open();
+    expect(latest().sent[0]).toEqual({ type: "auth", userId: 2505, token: "tok" });
+    latest().hear({ type: "auth_ok", ...ME });
+    latest().hear({ type: "joined", channel: CONFIG.channel, history: [wire(7, "back", 3)] });
+    expect(session.current.status).toBe(ChatStatus.ONLINE);
+    expect(session.current.entries).toHaveLength(1);
+  });
+
+  it("on again before any yard load waits for one", () => {
+    const session = newSession();
+    session.setEnabled(false);
+    session.setEnabled(true);
+    expect(sockets).toHaveLength(0);
+    session.configure(CONFIG);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("on again after signing out stays off until the next yard load", () => {
+    const session = joined();
+    session.setEnabled(false);
+    session.stop();
+    session.setEnabled(true);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("a settings change while off is the one used when turned on", () => {
+    const session = joined();
+    session.setEnabled(false);
+    session.configure({ ...CONFIG, token: "fresh", channel: "chat:mr2-other" });
+    session.setEnabled(true);
+    latest().open();
+    expect(latest().sent[0]).toEqual({ type: "auth", userId: 2505, token: "fresh" });
+    latest().hear({ type: "auth_ok", ...ME });
+    expect(latest().sent[1]).toEqual({ type: "join", channel: "chat:mr2-other" });
+  });
+});
+
+describe("the player's world chat", () => {
+  it("follows the World chat switch", () => {
+    expect(worldChat.isEnabled).toBe(true);
+    setWorldChatOn(false, null);
+    expect(worldChat.isEnabled).toBe(false);
+    setWorldChatOn(true, null);
+    expect(worldChat.isEnabled).toBe(true);
   });
 });
