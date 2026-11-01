@@ -19,7 +19,7 @@ from pathlib import Path
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -880,20 +880,16 @@ POST_A, POST_B = polar(3.1, 188), polar(3.1, 55)
 FEED = {}         # the feeder's rocking frame (set by feeder1 / chute), for the pour
 
 
-def bones_in(a, M, sx, sy, z, n, mi):
-    """n little bones heaped in a box sx by sy (local XY, centred) at height z."""
-    for i in range(n):
-        p = Vector((rnd.uniform(-sx / 2 + 0.12, sx / 2 - 0.12), rnd.uniform(-sy / 2 + 0.1, sy / 2 - 0.1),
-                    z + rnd.uniform(0.0, 0.12)))
-        yaw, tilt = rnd.uniform(0, math.pi), rnd.uniform(-0.3, 0.3)
-        d = Vector((math.cos(yaw), math.sin(yaw), tilt)).normalized()
-        ln = rnd.uniform(0.22, 0.34)
-        B = M @ Tm(p) @ aim(d)
-        a.cone(B @ Tm((0, 0, -ln / 2)), 0.032, 0.032, ln, mi, 8)
-        side = Vector((1, 0, 0))
-        for e in (-ln / 2, ln / 2):
-            for s in (-1, 1):
-                a.sphere(B @ Tm(side * (0.035 * s) + Vector((0, 0, e))), 0.045, mi, 8, 6)
+# The box's heap: whole bones, as big as the ones that spill, lying flat in two layers on the floor (top z -1.53).
+# They never leave; the three bones that spill each loop lie on top of them (see BOX_BONES).
+BED = [(-0.285, -0.18, -1.465, 20, 0.46), (0.22, -0.19, -1.465, -15, 0.50), (-0.03, 0.06, -1.465, 70, 0.40),
+       (0.30, 0.17, -1.465, 10, 0.40), (-0.30, 0.15, -1.465, -30, 0.38),
+       (0.0, -0.08, -1.31, 8, 0.50), (-0.30, 0.08, -1.31, -60, 0.40), (0.30, 0.10, -1.31, 40, 0.44)]
+
+
+def bed(a, mi):
+    for x, y, z, yaw, ln in BED:
+        bone_shape(a, ln, 0.058, Tm((x, y, z)) @ Matrix.Rotation(math.radians(yaw), 4, "Z"), mi)
 
 
 def feeder1():
@@ -922,9 +918,11 @@ def feeder1():
 
     across = Vector((-bdir.y, bdir.x, 0))
     Mb = basis(bdir, across, (0, 0, 1), (mid.x, mid.y, 4.6))
-    hub = rocker("box", Mb, 2.2, 1)
+    hub = rocker("box", Mb, 0, 1)
+    ROCKS.pop()                                                               # it swings by box_angle instead
+    EXTRA.append(lambda f: setattr(hub, "rotation_euler", (math.radians(box_angle(f * N)), 0, 0)))
     W, Dp, H, zb = 1.3, 0.85, 0.5, -1.6
-    FEED.update(kind="box", M=Mb, amp=2.2, swings=1)
+    FEED.update(kind="box", M=Mb, angle=box_angle)
 
     def box(a):
         t = 0.07
@@ -938,7 +936,7 @@ def feeder1():
             for sy in (-1, 1):
                 a.cube(Tm((sx * (W / 2 + 0.008), sy * (Dp / 2 - 0.08), zb + H / 2)), (0.02, 0.16, H), 1)
                 a.cube(Tm((sx * (W / 2 - 0.08), sy * (Dp / 2 + 0.008), zb + H / 2)), (0.16, 0.02, H), 1)
-        bones_in(a, Matrix(), W, Dp, zb + 0.36, 20, 2)
+        bed(a, 2)
     one("box-body", [WOOD("X"), iron, BONE()], box, hub, bevel=0.012)
 
     rope = mat("rope", (176, 150, 104), rough=0.9, dirt=0.15, speck=0.2, bump=0.2)
@@ -1036,16 +1034,8 @@ def chute():
             a.cube(Tm((0, d0 + t / 2, ub + t + 0.1 + 0.2 * k)), (2 * w - 2 * t, t, 0.195), k % 2)
         for i in range(5):                                                    # the closed lid
             a.cube(Tm((-w - 0.02 + 0.2528 * (i + 0.5), (d0 + 2.05) / 2, ut + 0.035)), (0.25, 2.05 - d0, 0.07), (i + 1) % 2)
-        # a few bones at the mouth
-        for i in range(7):
-            p = Vector((rnd.uniform(-0.3, 0.3), rnd.uniform(d1 - 0.75, d1 - 0.15), ub + 0.1))
-            B = Tm(p) @ aim(Vector((math.cos(i * 1.7), math.sin(i * 1.7), 0.15)))
-            a.cone(B @ Tm((0, 0, -0.14)), 0.03, 0.03, 0.28, 3, 8)
-            for e in (-0.14, 0.14):
-                for s in (-1, 1):
-                    a.sphere(B @ Tm((0.03 * s, 0, e)), 0.042, 3, 8, 6)
 
-    one("chute-body", [planks, planks2, iron, BONE()], body, hub, bevel=0.012)
+    one("chute-body", [planks, planks2, iron], body, hub, bevel=0.012)
 
     heavy = T >= 3
 
@@ -1121,19 +1111,24 @@ def chimney():
 
 
 # ------------------------------------------------------------------------------------------------------------ the pour
-# Bones pour from the feeder into the rollers: tier 1 tips them over the front rim of the swaying box, tiers 2-3 slide
-# them down the chute floor (out from under the lid) and off its mouth. Each bone rides the feeder while it slides, then
-# falls freely (gravity, a little tumble) to the gap between the rollers, where it is crushed: it sinks into the gap and
-# shrinks away. Every bone runs once per loop, so the loop has no jump; more bones go when
-# the feeder tips forward.
+# Bones pour from the feeder into the rollers: tier 1's box swings back until its top bones roll over its front rim,
+# tiers 2-3 slide them down the chute floor (out from under the lid) and off its mouth. Each bone rides the feeder while
+# it slides, then falls freely (gravity, a little tumble) to the rollers, where it is crushed: it goes into the gap and
+# shrinks away. Every bone runs once per loop, so the loop has no jump.
 G = 0.03                          # gravity, units per frame per frame
 CRUSH = 3.0                       # frames a bone takes to vanish into the gap
 POUR = []                         # (bone object, its path)
 
 
+def box_angle(k):
+    """Tier 1's box swings on its ropes about the cross bar: back to +38 deg (its mouth tips to the front, over the
+    rollers, and the top bones spill), forward to -32 deg (its mouth tips away), hanging straight at frame 0."""
+    return 3.0 + 35.0 * math.sin(2 * math.pi * k / N - math.asin(3.0 / 35.0))
+
+
 def feed_m(k):
     """The feeder's world matrix at frame k (it rocks about its local X)."""
-    a = FEED["amp"] * math.sin(2 * math.pi * FEED["swings"] * k / N)
+    a = FEED["angle"](k) if "angle" in FEED else FEED["amp"] * math.sin(2 * math.pi * FEED["swings"] * k / N)
     return FEED["M"] @ Matrix.Rotation(math.radians(a), 4, "X")
 
 
@@ -1151,12 +1146,12 @@ def releases(n, peak, swings, lean=0.6):
     return out
 
 
-def bone_shape(a, ln, kr):
+def bone_shape(a, ln, kr, M=Matrix(), mi=0):
     """One bone along local X, centred: a round shaft with a pair of knobs at each end."""
-    a.cone(aim((1, 0, 0), (-ln / 2, 0, 0)), kr * 0.68, kr * 0.68, ln, 0, 10)
+    a.cone(M @ aim((1, 0, 0), (-ln / 2, 0, 0)), kr * 0.68, kr * 0.68, ln, mi, 10)
     for e in (-ln / 2, ln / 2):
         for s in (-1, 1):
-            a.sphere(Tm((e, kr * 0.68 * s, 0)), kr, 0, 10, 7)
+            a.sphere(M @ Tm((e, kr * 0.68 * s, 0)), kr, mi, 10, 7)
 
 
 def landing(p):
@@ -1164,27 +1159,27 @@ def landing(p):
 
 
 def pour():
-    rng = random.Random(53)
-    box = FEED["kind"] == "box"
     root = bpy.data.objects.new("pour", None)
     kit.link(root)
     kit.MOVING.append(root)
+    if FEED["kind"] == "box":
+        pour_box(root)
+    else:
+        pour_chute(root)
+    EXTRA.append(pour_move)
+
+
+def pour_chute(root):
+    """Down the chute floor from under the lid (local Y 1.55) and off the mouth (3.3), in three lanes."""
+    rng = random.Random(53)
     bone_m = BONE()
-    if box:      # over the box's front rim (local -Y, rim top z -1.1), down beside the comb onto the far roller's side
-        n, peak, y_t, z_t, flip = 7, 0.30, 0.2, 2.55, math.pi
-        s_y0, s_y1 = -0.06, -0.53
-        zs = [-0.96 if i % 2 else -0.8 for i in range(n)]      # two layers, so bones going together ride one on another
-        xs = [rng.uniform(-0.1, 0.1) for _ in range(n)]           # clear of the ropes at the box's front corners
-        yaws = [math.radians(rng.uniform(-10, 10)) for _ in range(n)]
-        go = Vector((0, -1, 0))
-    else:        # down the chute floor from under the lid (local Y 1.55) and off the mouth (3.3), riding the heap
-        n, peak, y_t, z_t, flip = 9, 0.42, 0.0, (2.65 if T == 2 else 2.7), math.radians(40)
-        s_y0, s_y1 = 1.55, 3.42
-        zs = [-0.74] * n
-        xs = [(-0.3, 0.3, 0.0)[i % 3] + rng.uniform(-0.015, 0.015) for i in range(n)]   # three lanes down the chute
-        yaws = [math.radians(90 + rng.uniform(-6, 6)) for _ in range(n)]
-        go = Vector((0, 1, 0))
-    rel = releases(n, peak, FEED["swings"], 0.6 if box else 0.35)
+    n, peak, y_t, z_t, flip = 9, 0.42, 0.0, (2.65 if T == 2 else 2.7), math.radians(40)
+    s_y0, s_y1 = 1.55, 3.42
+    zs = [-0.74] * n
+    xs = [(-0.3, 0.3, 0.0)[i % 3] + rng.uniform(-0.015, 0.015) for i in range(n)]
+    yaws = [math.radians(90 + rng.uniform(-6, 6)) for _ in range(n)]
+    go = Vector((0, 1, 0))
+    rel = releases(n, peak, FEED["swings"], 0.35)
     for i in range(n):
         ln, kr = rng.uniform(0.54, 0.62), rng.uniform(0.07, 0.076)   # big enough to read as bones at game size
         ob = one("pour-bone%d" % i, [bone_m], lambda a, ln=ln, kr=kr: bone_shape(a, ln, kr), root)
@@ -1202,36 +1197,219 @@ def pour():
             v = vh.length / way.length
         V = Vector((vh.x, vh.y, V.z))
         L = (s1 - s0).length
-        S = L / v if box else 19.0  # the chute: every bone takes as long, easing to its own speed, so none overtakes
-        v0 = v if box else 2 * L / S - v
+        S = 19.0                  # every bone takes as long, easing to its own speed, so none overtakes
+        v0 = 2 * L / S - v
         a1 = Vector((1, 0, 0)) if (rot0 @ Vector((1, 0, 0))).x >= 0 else Vector((-1, 0, 0))
         yaw1 = math.atan2(a1.y, a1.x) + math.radians(rng.uniform(-8, 8))
         q1 = (Matrix.Rotation(yaw1, 3, "Z") @ Matrix.Rotation(math.radians(rng.uniform(-8, 8)), 3, "Y")).to_quaternion()
         POUR.append((ob, dict(r=rel[i], S=S, Tf=Tf, v0=v0 / L, a=(v - v0) / L / S, s0=s0, s1=s1, yaw=yaws[i], P0=P0, V=V,
-                                    q0=rot0.to_quaternion(), q1=q1, flip=flip * side, box=box)))
+                                    q0=rot0.to_quaternion(), q1=q1, flip=flip * side, box=False)))
         print("POUR bone%d release %.1f slide %.1f fall %.1f speed %.3f from (%.2f %.2f %.2f) to (%.2f %.2f %.2f)" % (
             i, rel[i], S, Tf, v, *P0, *landing(POUR[-1][1])))
-    EXTRA.append(pour_move)
+
+
+# Tier 1: three whole bones lie side by side on top of the box's heap, fixed to the box. As the box swings back its
+# mouth tips toward the rollers; the three start to slide together, so each rolls over the front rim in turn (front one
+# first), drops onto the holed roller, rolls down its front and goes into the gap. While the box swings forward its
+# mouth faces away from the camera and its front wall hides the inside: the three are put back on the heap then, at a
+# frame the script finds where none of them can be seen, before the box swings back into view.
+RIM_Z, RIM_IN, RIM_OUT = -1.1, -0.355, -0.425          # the box's front wall: its top and inner and outer faces (local)
+BOX_BONES = [(-0.05, -0.235, -1.175, 0.52, 0.064),      # x, y, z on the heap, length, knob radius (front to back):
+             (0.06, 0.0, -1.17, 0.56, 0.066),           # their tops just under the rim, on the heap's top layer
+             (-0.02, 0.235, -1.17, 0.50, 0.064)]
+SLIP_K, SLIP_A = 7.0, 0.02        # the frame the three start to slide (the box is 37 deg back, about to swing forward)
+                                  # and how fast they speed up: they leave the rim as it swings forward, thrown clear
+ROLL = 0.3                        # rad a frame a falling bone rolls forward
+GAP_TH = math.radians(128)        # where on the holed roller (angle from its axle, 90 = top, 180 = the gap side) a
+CRUSH_BOX = 3.0                   # bone reaches the comb and is drawn under it into the gap, and the frames that takes
+
+
+def rim_clear(y, kr):
+    """The least height of a bone's centre at local y (lying across the box, knobs side by side) that clears the
+    front wall: none while it is clear of the wall, else round over the wall's top."""
+    rho, z = kr + 0.012, -9.0
+    for yc in (y - 0.68 * kr, y + 0.68 * kr):
+        dy = max(0.0, RIM_OUT - yc, yc - RIM_IN)
+        if dy < rho:
+            z = max(z, RIM_Z + math.sqrt(rho * rho - dy * dy))
+    return z
+
+
+def box_path(y0, z0, kr):
+    """A bone's height in the box (local) as it moves forward from y0: on the heap, up and over the rim, to just past
+    the rim's outer face. Returned as (y of its last point, the heights at n + 1 even steps of y)."""
+    yE = RIM_OUT - 0.68 * kr - 0.03
+    n = 80
+    ys = [y0 + (yE - y0) * i / n for i in range(n + 1)]
+    zs = [max(z0, rim_clear(y, kr)) for y in ys]
+    for _ in range(6):                                  # round off the corners, never below the clearance
+        zs = [zs[0]] + [max((zs[i - 1] + 2 * zs[i] + zs[i + 1]) / 4, rim_clear(ys[i], kr), z0)
+                        for i in range(1, n)] + [zs[-1]]
+    return yE, zs
+
+
+def slid(p, t):
+    """A sliding bone's place in the box t frames after the three start: all three move forward alike."""
+    d = min(SLIP_A * t * t / 2, p["y0"] - p["yE"])
+    u = d / (p["y0"] - p["yE"]) * (len(p["zs"]) - 1)
+    i = min(int(u), len(p["zs"]) - 2)
+    return Vector((p["x"], p["y0"] - d, p["zs"][i] + (p["zs"][i + 1] - p["zs"][i]) * (u - i)))
+
+
+def fall_to_roller(P0, V, kr):
+    """The time a bone thrown from P0 at V first comes to a roller or the comb (or drops below the rollers' tops)."""
+    t, w = 0.0, 1.68 * kr                               # w: how far its knobs reach from its middle
+    while t < 40:
+        t += 0.02
+        p = P0 + V * t - Vector((0, 0, G * t * t / 2))
+        if (Vector((p.y, p.z)) - Vector((YR, ZR))).length < 0.76 + w or \
+                (Vector((p.y, p.z)) - Vector((-YR, ZR))).length < 0.79 + w or \
+                (abs(p.y) < 0.07 + w and p.z < ZR + 0.86 + w) or p.z < ZR + 0.3:      # (the comb)
+            return t
+    return t
+
+
+def roll_down(th0, w0, r):
+    """A bone landed on the holed roller at angle th0 moving round it at w0 rad a frame: gravity rolls it down the
+    front (and the roller, turning toward the gap, carries it at least 2 deg a frame). Returns its angle at each
+    tenth of a frame until it reaches GAP_TH."""
+    out, th, w = [th0], th0, max(w0, math.radians(2))
+    while th < GAP_TH and len(out) < 400:
+        w = max(w - G * math.cos(th) / r * 0.1, math.radians(2))
+        th += w * 0.1
+        out.append(min(th, GAP_TH))
+    return out
+
+
+def pour_box(root):
+    rng = random.Random(57)
+    bone_m = BONE()
+    Rb = FEED["M"].to_3x3()
+    to_x = Matrix.Rotation(-math.atan2(Rb.col[0].y, Rb.col[0].x), 3, "Z")    # turns the bar's direction onto world X
+    for i, (x, y0, z0, ln, kr) in enumerate(BOX_BONES):
+        ob = one("pour-bone%d" % i, [bone_m], lambda a, ln=ln, kr=kr: bone_shape(a, ln, kr), root)
+        yE, zs = box_path(y0, z0, kr)
+        p = dict(box=True, x=x, kr=kr, y0=y0, yE=yE, zs=zs, rest=Vector((x, y0, z0)), kon=None)
+        S = math.sqrt(2 * (y0 - yE) / SLIP_A)
+        r = SLIP_K + S
+        M = feed_m(r)
+        E = slid(p, S)
+        vb = (feed_m(r + 0.05) @ E - feed_m(r - 0.05) @ E) / 0.1          # the rim's own speed as the box swings
+        vl = (slid(p, S) - slid(p, S - 0.05)) / 0.05                        # and the bone's in the box
+        V = vb + M.to_3x3() @ vl
+        Tf = fall_to_roller(M @ E, V, kr)
+        land = M @ E + V * Tf - Vector((0, 0, G * Tf * Tf / 2))
+        Vl = V - Vector((0, 0, G * Tf))
+        rl = (land.yz - Vector((YR, ZR))).length
+        th0 = math.atan2(land.z - ZR, land.y - YR)
+        w0 = (Vl.y * -math.sin(th0) + Vl.z * math.cos(th0)) / rl           # its speed round the roller as it lands
+        ths = roll_down(th0, w0, rl) if th0 < GAP_TH else [th0]            # (one that lands by the comb goes
+                                                                            # straight under it)
+        p.update(S=S, P0=M @ E, V=V, Tf=Tf, a_r=box_angle(r), to_x=to_x, yaw1=math.radians(rng.uniform(-8, 8)),
+                 land=land, rl=rl, ths=ths, R_=len(ths) / 10)
+        POUR.append((ob, p))
+        p["P1"] = on_roller(p, to_x @ Matrix.Rotation(p["yaw1"], 3, "Z") @ Rb, math.radians(p["a_r"]) + ROLL * Tf,
+                            p["R_"])[0]        # where it is when it goes under the comb
+        print("POUR box bone%d slides %.1f (leaves the rim at frame %.1f, %.3f a frame) falls %.1f onto the roller at "
+              "%.0f deg, rolls %.1f, gone at %.1f" % (i, S, r, vl.length, Tf, math.degrees(th0), p["R_"],
+                                                      r + Tf + p["R_"] + CRUSH_BOX))
+    box_refill()
+
+
+def box_rest(p, k):
+    M = feed_m(k)
+    return M @ p["rest"], M.to_3x3()
+
+
+def box_refill():
+    """Each bone is put back on the heap at the first frame after it is gone at which the camera cannot see it there."""
+    fwd = kit.cam_fwd()
+    for k in range(int(SLIP_K) + 1, N + int(SLIP_K)):
+        turn(k)
+        for ob, p in POUR:
+            loc, R = box_rest(p, k)
+            ob.location, ob.rotation_euler, ob.scale = loc, R.to_euler(), (1, 1, 1)
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        for ob, p in POUR:
+            if p["kon"] is not None or k < SLIP_K + p["S"] + p["Tf"] + p["R_"] + CRUSH_BOX:
+                continue
+            seen = 0
+            for v in ob.data.vertices:
+                w = ob.matrix_world @ v.co
+                ok, _, _, _, hit, _ = kit.SC.ray_cast(dg, w - fwd * 60, fwd)
+                seen += ok and hit == ob
+            print("POUR refill f%02d %s: %d of its points in view" % (k % N, ob.name, seen))
+            if seen == 0:
+                p["kon"] = k % N
+    if any(p["kon"] is None for _, p in POUR):
+        raise RuntimeError("no frame hides the box's bones")
+
+
+def box_bone_at(p, k):
+    t = (k - SLIP_K) % N
+    if t >= N - (SLIP_K - p["kon"]) % N:
+        loc, R = box_rest(p, k)
+        return "rest", loc, R, 1.0
+    if t < p["S"]:
+        M = feed_m(k)
+        return "slide", M @ slid(p, t), M.to_3x3(), 1.0
+    t -= p["S"]
+    Rb = FEED["M"].to_3x3()
+    if t < p["Tf"]:
+        u = t / p["Tf"]
+        loc = p["P0"] + p["V"] * t - Vector((0, 0, G * t * t / 2))
+        turn_z = Quaternion().slerp((p["to_x"] @ Matrix.Rotation(p["yaw1"], 3, "Z")).to_quaternion(), u * u).to_matrix()
+        return "fall", loc, turn_z @ Rb @ Matrix.Rotation(math.radians(p["a_r"]) + ROLL * t, 3, "X"), 1.0
+    t -= p["Tf"]
+    R1 = p["to_x"] @ Matrix.Rotation(p["yaw1"], 3, "Z") @ Rb
+    roll = math.radians(p["a_r"]) + ROLL * p["Tf"]
+    if t < p["R_"]:             # rolling down the holed roller's front
+        return ("roll",) + on_roller(p, R1, roll, t) + (1.0,)
+    _, R = on_roller(p, R1, roll, p["R_"])
+    loc0 = p["P1"]
+    t -= p["R_"]
+    if t < CRUSH_BOX:          # drawn under the comb into the gap, shrinking away
+        u = t / CRUSH_BOX
+        th0 = math.atan2(loc0.z - ZR, loc0.y - YR)
+        r0 = (loc0.yz - Vector((YR, ZR))).length
+        th = th0 + (math.radians(168) - th0) * u
+        r = r0 * (1 - 0.12 * u)
+        loc = Vector((loc0.x, YR + r * math.cos(th), ZR + r * math.sin(th)))
+        return "crush", loc, R @ Matrix.Rotation((th - th0) * r0 / 0.07, 3, "X"), (1 - u) ** 1.3
+    return "off", loc0, R1, 0.0
+
+
+def on_roller(p, R1, roll, t):
+    """(location, rotation) of a bone t frames after it lands, rolling round the holed roller with its knobs just
+    clear of it (easing in from where it landed)."""
+    th = p["ths"][min(int(t * 10), len(p["ths"]) - 1)]
+    R = R1 @ Matrix.Rotation(roll + (th - p["ths"][0]) * p["rl"] / 0.07, 3, "X")
+    n = Vector((0, math.cos(th), math.sin(th)))
+    r = max(0.76 + p["kr"] * (1 + 0.68 * abs(n.dot(R @ Vector((0, 1, 0))))), p["rl"] - 0.05 * t)
+    return Vector((p["land"].x, YR + r * math.cos(th), ZR + r * math.sin(th))), R
 
 
 def bone_at(p, k):
-    """(phase, location, rotation 3x3, scale) of a bone at frame k; phase is 'off', 'slide', 'fall' or 'crush'."""
+    """(phase, location, rotation 3x3, scale) of a bone at frame k; phase is 'rest' (tier 1, on the heap), 'slide',
+    'fall', 'crush' or 'off'."""
+    if p["box"]:
+        return box_bone_at(p, k)
     t = (k - (p["r"] - p["S"])) % N                     # frames since it started sliding
     if t < p["S"]:
         M = feed_m(k)
-        sc = min(1.0, t / 1.5) if p["box"] else 1.0      # in the box it comes up out of the heap
         u = p["v0"] * t + p["a"] * t * t / 2            # the share of the slide done
-        return "slide", M @ p["s0"].lerp(p["s1"], u), M.to_3x3() @ Matrix.Rotation(p["yaw"], 3, "Z"), sc
+        return "slide", M @ p["s0"].lerp(p["s1"], u), M.to_3x3() @ Matrix.Rotation(p["yaw"], 3, "Z"), 1.0
     t -= p["S"]
     if t < p["Tf"]:
         u = t / p["Tf"]
         loc = p["P0"] + p["V"] * t - Vector((0, 0, G * t * t / 2))
-        tumble = p["flip"] * (u if p["box"] else math.sin(math.pi * u))
-        turn_u = u if p["box"] else u ** 1.6               # off the chute it swings round late, clear of the next bone
+        tumble = p["flip"] * math.sin(math.pi * u)
+        turn_u = u ** 1.6                                # off the chute it swings round late, clear of the next bone
         return "fall", loc, Matrix.Rotation(tumble, 3, "Y") @ p["q0"].slerp(p["q1"], turn_u).to_matrix(), 1.0
     t -= p["Tf"]
     land = landing(p)
-    R = Matrix.Rotation(p["flip"] if p["box"] else 0.0, 3, "Y") @ p["q1"].to_matrix()
+    R = p["q1"].to_matrix()
     if t < CRUSH:
         u = t / CRUSH
         return "crush", land + Vector((0, -land.y * 0.6 * u, -0.26 * u - 0.05 * u * u)), R, (1 - u) ** 1.3
@@ -1249,8 +1427,7 @@ def pour_move(f):
 
 
 def pour_check():
-    """Every frame: a bone that is sliding or falling must touch nothing but the other bones (and, in its first frame
-    and a half in the box, the heap it comes up out of)."""
+    """Every frame: a bone that lies on the box's heap, slides or falls must touch nothing, not even another bone."""
     bad = 0
     for k in range(N):
         turn(k)
@@ -1258,7 +1435,7 @@ def pour_check():
         others = [(o, t) for o, t, _ in tr.values() if not o.name.startswith("pour")]
         for ob, p in POUR:
             ph = bone_at(p, k)[0]
-            if ph not in ("slide", "fall"):
+            if ph not in ("rest", "slide", "fall", "roll"):
                 continue
             _, tb, vs = tr[ob.name]
             hits = sorted({o.name for o, t in others if tb.overlap(t)})
@@ -1266,7 +1443,7 @@ def pour_check():
             bad += bool(hits)
             print("POUR f%02d %s %-5s hits %s nearest %.3f" % (k, ob.name, ph, hits, near))
             for ob2, p2 in POUR:
-                if ob2.name > ob.name and bone_at(p2, k)[0] in ("slide", "fall") and tb.overlap(tr[ob2.name][1]):
+                if ob2.name > ob.name and bone_at(p2, k)[0] in ("rest", "slide", "fall") and tb.overlap(tr[ob2.name][1]):
                     print("POUR f%02d bones %s and %s pass through each other" % (k, ob.name, ob2.name))
     print("POUR DONE frames with a touching bone:", bad)
 
@@ -1290,6 +1467,22 @@ def build():
     pour()
 
 
+_border = kit.border_of
+
+
+def border_all(objs, pad=10):
+    """The moving parts' render region over the whole loop (the kit takes it at frame 0 only; tier 1's box swings far)."""
+    bs = []
+    for k in range(N):
+        turn(k)
+        bpy.context.view_layer.update()
+        bs.append(_border(objs, pad))
+    turn(0)
+    bpy.context.view_layer.update()
+    return min(b[0] for b in bs), max(b[1] for b in bs), min(b[2] for b in bs), max(b[3] for b in bs)
+
+
+kit.border_of = border_all
 kit.run(build, turn)          # an unknown mode (pour) only builds the model
 if kit.MODE == "pour":
     pour_check()
