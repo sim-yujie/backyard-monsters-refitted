@@ -352,7 +352,13 @@ export const resolveArt = (
   // or, when each cell is the whole building, in its place: its top is then the strip's cell 0.
   if (tier) {
     const { turret, anim } = tier;
-    const layers = turret ? (turret.front ? [turret.strip, turret.front] : [turret.strip]) : anim ? [anim.strip] : [];
+    const layers = turret
+      ? turret.front
+        ? [turret.strip, turret.front]
+        : [turret.strip]
+      : anim
+        ? [anim.strip, ...(anim.more ?? [])]
+        : [];
     const columnsOf = (layer: ArtAnim): number | undefined =>
       layer === turret?.strip ? turret.columns : layer === anim?.strip ? anim.columns : undefined;
     const still = imageOf(row.folder, tier.top);

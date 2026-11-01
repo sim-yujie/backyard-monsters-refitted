@@ -76,7 +76,9 @@
  * branches), which take the place of the tinted whole look and the Flash
  * rubble. Then (owner, 1 Nov 2026: "keep as is for now and integrate it into
  * the game") the Monster Academy, art/buildings-3d-academy at tag
- * academy-3d-baseline-2026-11-01.
+ * academy-3d-baseline-2026-11-01; then (owner, 1 Nov 2026: "put lab in
+ * game") the Monster Lab, art/buildings-3d-lab at tag
+ * lab-3d-baseline-2026-11-01.
  *
  * The Town Hall's new art is the default (owner, 26 Oct 2026): one picture
  * per level (`TOWN_HALL_ART`), each painted from that level's Flash picture
@@ -194,6 +196,12 @@ export interface TierAnim {
    * rest under every cell.
    */
   readonly body?: TierImage;
+  /**
+   * Further strips beside `strip`, each run on its own as Flash's further
+   * `anim` layers were (the 3D Monster Lab's two side doors' cogs, beside
+   * its dome's brew), over the same `body`; one row each.
+   */
+  readonly more?: readonly ArtAnim[];
 }
 
 /** A 3D building's damaged or destroyed look: one still and its shadow (none where it casts none). */
@@ -398,7 +406,9 @@ export const TOWN_HALL_ART: readonly TierArt[] = [
  * moves in Flash moves here, cell for cell (`yardAnim.ts` runs them as it
  * ran Flash's): the parts that move
  * are a strip over a `body` without them, and the Storage Silo's cells are
- * the box its sack fills, its fill level as Flash's was. The Monster Housing
+ * the box its sack fills, its fill level as Flash's was. The Monster Lab's
+ * three strips are its dome's brew and its two side doors' cogs, as Flash's
+ * three, each the whole building round what moves, fading out over the body. The Monster Housing
  * and the Hatchery Control Center stand still, as Flash's did.
  */
 export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
@@ -617,6 +627,14 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
     { from: 1, top: ["top.3d1@2x.webp", -128, -12], shadow: ["shadow.3d1.jpg", -128, 17], lift: 0,
       damaged: { top: ["top.3d1.damaged@2x.webp", -128, -12], shadow: ["shadow.3d1.damaged.jpg", -128, 17] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -128, 11], shadow: ["shadow.3d1.destroyed.jpg", -128, 18] } },
+  ],
+  // 116 Monster Lab: 3D, Flash's one look for every level; its brew and its side doors' cogs move while it researches
+  116: [
+    { from: 1, top: ["top.3d1@2x.webp", -75, -92], shadow: ["shadow.3d1.jpg", -74, 5], lift: 0,
+      anim: { strip: ["anim.3d1.dome@2x.webp", -22, -24, 48, 40, 32], body: ["body.3d1@2x.webp", -75, -92],
+        more: [["anim.3d1.doorL@2x.webp", -68, 26, 34, 35, 5], ["anim.3d1.doorR@2x.webp", 40, 26, 27, 33, 5]] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -75, -81], shadow: ["shadow.3d1.damaged.jpg", -72, 11] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -75, -33], shadow: ["shadow.3d1.destroyed.jpg", -74, 10] } },
   ],
 };
 

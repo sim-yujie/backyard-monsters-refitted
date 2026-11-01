@@ -29,6 +29,7 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | stone | 18 Stone Block | art/buildings-3d-walls | walls-v1 | one look, still |
 | iblock | 17 Block in an Inferno yard | art/buildings-3d-walls | walls-v1 | levels 1-3, still |
 | academy | 26 Monster Academy | art/buildings-3d-academy | academy-v1 | levels 1-4 (4 also level 5); 21 cells of its cogs |
+| lab | 116 Monster Lab | art/buildings-3d-lab | lab-v1 | one look; 32 cells of its brew, 5 of each side door's cogs |
 
 The damaged and destroyed looks (`<building>:damaged`, `<building>:destroyed`) are stills, rendered the same way into
 `L<n>-damaged-base.png` and `-alone.png` (a wall's `block<n>-damaged-...`): the first eight's from
@@ -39,14 +40,18 @@ levels, and so does the 3D (`buildingArtTiers.ts` names it in every look).
 A look's renders (`render/`): `L<n>-base.png` (`base.png`), every still part with the ground shadow (a shadow
 catcher: black, the shade as alpha) and the moving parts hidden from the camera; `L<n>-alone.png`, the building with
 no ground shadow; and `L<n>-parts-NN.png`, one per Flash cell, only the moving parts, every still part held out. The
-silo's `cell-NN.png` are instead the whole scene for each fill level (`post.py cells`), changed only in the sack.
+silo's `cell-NN.png` are instead the whole scene for each fill level (`post.py cells`), changed only in the sack. The
+Lab's `anim/<layer>-NN.png` (`dome`, `doorL`, `doorR`, as Flash's three strips) are the whole scene too, rendered only
+in a border round that layer's moving part (`lab.py anim`), the rest of the canvas empty; its base shows them at rest.
 
 Writes into `server/public/assets/buildings/<folder>/` (the Flash building's own folder), per look `<n>`:
 
 - `body.3d<n>@2x.webp`: the still parts, the ground shadow taken off: what the strip's cells go over.
 - `anim.3d<n>@2x.webp`: the strip, as Flash's `anim` layer, its cells in Flash's order and number. A moving-parts
   building's cell is only its moving parts (cut to what any cell covers); the silo's is the box round all that the sack
-  ever changes, every pixel in it, with that box cut out of its body.
+  ever changes, every pixel in it, with that box cut out of its body. The Lab's, one strip per layer
+  (`anim.3d<n>.<layer>@2x.webp`), are the whole scene only round what moves, which is cut out of the body, fading out
+  past it over the body, with a clear margin round each cell (`boxed()`): a hard box edge showed as a line in the game.
 - `top.3d<n>@2x.webp`: the whole building at rest (body and cell 0), for the icons and the placing ghost; a still
   building's only picture.
 - `shadow.3d<n>.jpg`: the 3D ground shadow, 1x, white where there is none, as Flash's shadows (drawn multiplied).
@@ -66,7 +71,8 @@ levels 6 and 10 warn for cells 3-6: the bulge in their pipes touches the canvas'
 rounded tip lost, which the game does not show (checked 31 Oct 2026).
 
 It prints one line of JSON per look with the row `buildingArtTiers.ts` holds (`top`, `shadow`, and `anim` as
-`[file, x, y, width, height, cells]` with `body` and `columns` when the strip wraps), in 1x px from the origin.
+`[file, x, y, width, height, cells]` with `body` and `columns` when the strip wraps, and the Lab's further strips as
+`more`), in 1x px from the origin.
 """
 import json
 import sys
@@ -82,8 +88,9 @@ K = 12                         # render px a 1x px (a building's own `k` where i
 MAX_W = 4096                   # the widest a strip's file may be; wider, it wraps into rows (`columns`)
 RESOURCE = [(1, "L1"), (3, "L3"), (6, "L6"), (10, "L10")]
 # Each building: its type, its Flash folder, its canvas's top-left in 1x px, its looks (first level, render prefix)
-# and how it moves: "parts" (a layer of moving parts per cell), "cells" (the silo's whole cells) or None. `states`
-# gives a damaged or destroyed render's own canvas top-left where it is wider than the whole look's.
+# and how it moves: "parts" (a layer of moving parts per cell), "cells" (the silo's whole cells), "boxes" (the Lab's
+# `layers`, each a strip of its own of the whole scene in a box) or None. `states` gives a damaged or destroyed
+# render's own canvas top-left where it is wider than the whole look's.
 BUILDINGS = {
     "twig": dict(type=1, folder="twigsnapper.v2", frame=(-44, -64), looks=RESOURCE, moves="parts"),
     "pebble": dict(type=2, folder="pebbleshiner.v2", frame=(-44, -64), looks=RESOURCE, moves="parts"),
@@ -113,14 +120,18 @@ BUILDINGS = {
                    looks=[(n, f"inferno{n}-whole") for n in range(1, 4)]),
     "academy": dict(type=26, folder="academy", frame=(-76, -44), looks=[(n, f"L{n}") for n in range(1, 5)],
                     moves="parts"),
+    "lab": dict(type=116, folder="monsterlab", frame=(-86, -104), looks=[(1, "L1")], moves="boxes",
+                layers=("dome", "doorL", "doorR")),
 }
 # Flash's cells per look (`buildingArtData.ts`): the 3D strip must hold as many.
 CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 10: 24},
          "putty": {1: 26, 3: 26, 6: 26, 10: 25}, "goo": {1: 26, 3: 26, 6: 26, 10: 26}, "silo": {1: 26},
          "hatchery": {1: 31, 2: 31, 3: 31}, "juicer": {1: 51}, "baiter": {1: 41},
-         "academy": {1: 21, 2: 21, 3: 21, 4: 21}}
+         "academy": {1: 21, 2: 21, 3: 21, 4: 21}, "lab": {1: (32, 5, 5)}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
+MOVED = 8                      # levels (of 255) a Lab cell must differ from the first to count as moving, past the noise
+SPECK = 2                      # 1x px² of change below which it is the render's noise, not a moving part
 
 
 def load(path):
@@ -219,6 +230,49 @@ def save_webp(im, path):
     im.save(path, "WEBP", quality=90, alpha_quality=100, method=6)
 
 
+def boxed(base, building, names, k):
+    """One of the Lab's moving layers: its renders (`anim/<layer>-NN.png`) are the whole scene, ground shadow and all,
+    in a border round the moving part, the rest of the canvas empty. Each cell is laid into the base there and split
+    like it, the moving part counted as building wherever it is, and kept only round what moves: the `core`, every
+    pixel some cell changes by more than the render's noise, which comes out of the body; then a band where the cell is
+    whole (it covers the body's cut edge, which the game's texture filtering blurs), then a fade to nothing over the
+    body, which is the same picture there. The strip's box has a clear margin, so no cell bleeds into the next in the
+    game. Returns the box, the cells cut to it and the core."""
+    first = np.asarray(Image.open(names[0]).convert("RGBA")).astype("int16")
+    changed = np.zeros(building.shape, bool)
+    for n in names[1:]:
+        changed |= np.abs(np.asarray(Image.open(n).convert("RGBA")).astype("int16") - first).max(axis=2) > MOVED
+    rendered = first[..., 3] > 0
+    rx0, ry0, rx1, ry1 = Image.fromarray(rendered.astype("uint8") * 255).getbbox()
+    del first
+    # The render's noise flickers in specks; what moves is in pieces of a few 1x px at least.
+    parts, count = ndimage.label(changed)
+    sizes = ndimage.sum(changed, parts, range(1, count + 1))
+    changed = np.isin(parts, 1 + np.nonzero(sizes >= SPECK * k * k)[0])
+    del parts
+    # Inside the rendered border, far enough from its edge for the band and the fade.
+    inside = np.zeros(building.shape, bool)
+    inside[ry0:ry1, rx0:rx1] = True
+    edge = ndimage.distance_transform_edt(inside)
+    core = ndimage.binary_closing(changed, iterations=k // 2) & (edge > 2 * k)
+    near = ndimage.distance_transform_edt(~core)
+    weight = np.minimum(np.clip((2 * k - near) / k, 0, 1), np.clip(edge / k, 0, 1))
+    x0, y0, x1, y1 = bbox(weight, 0, k)
+    x0, y0 = max(0, x0 - k), max(0, y0 - k)
+    x1, y1 = min(building.shape[1], x1 + k), min(building.shape[0], y1 + k)
+    w = weight[y0:y1, x0:x1, None]
+    cells = []
+    for n in names:
+        c = load(n)
+        scene = base.copy()
+        scene[ry0:ry1, rx0:rx1] = c[ry0:ry1, rx0:rx1]
+        del c
+        cell = split(scene, building | (scene[..., 3] > 0.99) & core)[0][y0:y1, x0:x1].copy()
+        cell[..., 3:] *= w
+        cells.append(cell)
+    return (x0, y0, x1, y1), cells, core
+
+
 def export(name, render, state=None):
     """A building's whole looks, or with `state` ("damaged", "destroyed") the stills of that state `render` holds."""
     cfg = BUILDINGS[name]
@@ -255,7 +309,11 @@ def export(name, render, state=None):
             names = sorted(render.glob(f"{stem}parts-*.png"))
         elif moves == "cells":
             names = sorted(render.glob("cell-*.png"))
-        if moves:
+        elif moves == "boxes":
+            names = [sorted(render.glob(f"anim/{layer}-*.png")) for layer in cfg["layers"]]
+        if moves == "boxes":
+            assert tuple(map(len, names)) == CELLS[name][level], (name, level, [len(n) for n in names])
+        elif moves:
             assert len(names) == CELLS[name][level], (name, level, len(names))
         tag = f"3d{level}.{state}" if state else f"3d{level}"
 
@@ -279,6 +337,15 @@ def export(name, render, state=None):
             del c
             still = body.copy()
             body[y0:y1, x0:x1] = 0
+            strips = [(f"anim.{tag}@2x.webp", box, layers)]
+        elif moves == "boxes":
+            body, shade = split(base, building)
+            still = body.copy()
+            strips = []
+            for layer, files in zip(cfg["layers"], names):
+                box, cells, core = boxed(base, building, files, k)
+                body[core] = 0
+                strips.append((f"anim.{tag}.{layer}@2x.webp", box, cells))
         else:
             body, shade = split(base, building)
             still = body
@@ -296,8 +363,8 @@ def export(name, render, state=None):
                 layers = [load(n)[y0:y1, x0:x1].copy() for n in names]
                 still = body.copy()
                 still[y0:y1, x0:x1] = over(layers[0], body[y0:y1, x0:x1])
+            strips = [(f"anim.{tag}@2x.webp", box, layers)] if layers else []
         del base
-        cells = layers
 
         row = dict(building=name, type=cfg["type"], level=level, **({"state": state} if state else {}))
         row["top"] = picture(still, bbox(still[..., 3], k=k), f"top.{tag}@2x.webp")
@@ -316,22 +383,28 @@ def export(name, render, state=None):
             Image.fromarray(gray, "L").save(out / f"shadow.{tag}.jpg", "JPEG", quality=90)
             row["shadow"] = [f"shadow.{tag}.jpg", fx + tx + sx0, fy + ty + sy0]
 
-        if cells:
+        if strips:
             row["body"] = picture(body, bbox(body[..., 3], k=k), f"body.{tag}@2x.webp")
+        for i, (file, (x0, y0, x1, y1), layers) in enumerate(strips):
             w, h = (x1 - x0) * 2 // k, (y1 - y0) * 2 // k
             n = len(layers)
             cols = min(n, MAX_W // w)
             nrows = -(-n // cols)
             sheet = Image.new("RGBA", (w * cols, h * nrows), (0, 0, 0, 0))
-            for i, layer in enumerate(layers):
-                sheet.paste(resize_pm(layer, (w, h)), ((i % cols) * w, (i // cols) * h))
-            file = f"anim.{tag}@2x.webp"
+            for j, layer in enumerate(layers):
+                sheet.paste(resize_pm(layer, (w, h)), ((j % cols) * w, (j // cols) * h))
             save_webp(sheet, out / file)
-            row["anim"] = [file, *game(x0, y0), w // 2, h // 2, n]
-            if nrows > 1:
-                row["columns"] = cols
+            strip = [file, *game(x0, y0), w // 2, h // 2, n]
+            if i == 0:
+                row["anim"] = strip
+                if nrows > 1:
+                    row["columns"] = cols
+            else:
+                # The further strips (the Lab's side doors) run beside the first, as Flash's further layers; one row.
+                assert nrows == 1, (file, n, w)
+                row.setdefault("more", []).append(strip)
         files = [row["top"][0]] + ([row["shadow"][0]] if row["shadow"] else []) + (
-            [row["body"][0], row["anim"][0]] if cells else [])
+            [row["body"][0], *(strip[0] for strip in strips)] if strips else [])
         row["bytes"] = sum((out / f).stat().st_size for f in files)
         rows.append(row)
         print(json.dumps(row), flush=True)
