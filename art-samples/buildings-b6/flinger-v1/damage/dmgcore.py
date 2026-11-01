@@ -440,6 +440,26 @@ def run(damaged, destroyed, soot_amount=(0.3, 0.45)):
     out.mkdir(exist_ok=True)
     sc.cycles.use_denoising = True
     sc.cycles.denoiser = "OPENIMAGEDENOISE"
+    if MODE == "check":                 # check <re>: which parts the parts named by <re> pass into, and how low they sit
+        import re as _re
+        from mathutils.bvhtree import BVHTree
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        def world_tree(o):
+            ev = o.evaluated_get(dg)
+            me = ev.to_mesh()
+            t = BVHTree.FromPolygons([o.matrix_world @ v.co for v in me.vertices], [tuple(f.vertices) for f in me.polygons])
+            ev.to_mesh_clear()
+            return t
+        tree = {o.name: world_tree(o) for o in bpy.data.objects if o.type in ("MESH", "CURVE")
+                and o.name != "ground" and not o.hide_render}
+        pat = _re.compile(ARGS[3] if len(ARGS) > 3 else "wheel")
+        for a in tree:
+            if pat.match(a):
+                hits = [(b, len(tree[a].overlap(tb))) for b, tb in tree.items() if not pat.match(b)]
+                print("CHECK", a, [h for h in hits if h[1]][:6])
+        print("DONE", L, MODE, STATE)
+        return
     if MODE == "prev":
         sc.render.resolution_x = (G["FRAME"][2] - G["FRAME"][0]) * 4
         sc.render.resolution_y = (G["FRAME"][3] - G["FRAME"][1]) * 4

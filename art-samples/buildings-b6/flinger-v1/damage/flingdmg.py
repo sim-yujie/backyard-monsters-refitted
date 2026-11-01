@@ -257,7 +257,7 @@ def damaged():
     if LOOK >= 4:
         # the big wheel knocked off its stand onto the ground behind, the crank bent; a hole in the -X slope too
         kill(named(r"wheel|wcrank|wstand"))
-        flat_wheel("wheelflat", (5.4, 3.4), S.WHEEL_R)
+        flat_wheel("wheelflat", (5.5, 3.6), S.WHEEL_R)
         lay_pulley("pul1", (-4.8, -1.0))
         kill(named(r"gstem1"))
 
@@ -311,7 +311,7 @@ def destroyed():
     lay_pulley("pul2", (2.0, -4.2))
     w = ob("wheel")
     bpy.context.view_layer.update()
-    w.matrix_world.translation = Vector((-0.6, 3.2, w.matrix_world.translation.z))
+    w.matrix_world.translation = Vector((-1.0, 4.8, w.matrix_world.translation.z))   # behind the heap, clear of it
     rest(w)
     drum_out((-3.7, -2.4), 14)
     kill(named(r"bucket|bucketwall|bucketrim|bucketin"))

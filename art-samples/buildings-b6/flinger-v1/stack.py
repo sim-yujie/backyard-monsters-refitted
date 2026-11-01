@@ -89,14 +89,16 @@ ROOF2_Y1 = -0.6                     # look 2's roof covers the front part only, 
 HATCH = (0.6, 2.8, -0.05, 1.42)      # look 3, 4: the hatch in the +X slope: u0, u1 down the slope, y0, y1 (y1 short of
                                     # the back right post, whose top would show in the hole)
 
-# the gold block on the ridge's front end, the pulleys over it (all in one plane turned toward the camera)
+# the gold block on the ridge's front end, the pulleys over it (all in one upright plane along the ridge, as Flash: seen
+# at an angle, each wheel a tall ellipse leaning right)
 BLOCK_C = (0.85, -2.25, 8.4)
 BLOCK_S = (1.1, 1.0, 0.6)
-PUL_N = (-30.0, 20.0)               # the pulleys' plane (through the block's top): its normal's bearing and tilt
+PUL_N = (0.0, 8.0)                 # the pulleys' plane (through the block's top): its normal's bearing and tilt
+                                    # (fitted to Flash's ellipses: 0.68 as wide as tall, leaning 18 degrees)
 PUL1_SCR = (-30.0, -22.0)           # Flash px of the pulleys' and the big wheel's middles
 PUL2_SCR = (-6.0, -31.0)
-WHEEL_SCR = (35.0, -44.0)
-PUL_R, WHEEL_R = 0.52, 1.35
+WHEEL_SCR = (34.0, -48.5)
+PUL_R, WHEEL_R = 0.52, 1.55
 BELT_T = 0.1
 RIM_W, SPOKE_W = 0.085, 0.06        # the pulleys' gold rims and spokes (the wheel's: 1.3 times)
 

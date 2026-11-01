@@ -1272,25 +1272,31 @@ def gold_parts():
     p2 = on_plane(*S.PUL2_SCR)
     pulley("pul2", p2, S.PUL_R, M["dgold"])
     top = blk + Vector((0, 0, S.BLOCK_S[2] / 2))
-    tube("gstem2", [top + Vector((0, 0.1, -0.05)), p2 - e2 * 0.12], 0.07, M["gold"])
+    # the stems hold each pulley by the back end of its axle, so the belt runs clear in front of them
+    def stem(name, a, p):
+        """A straight stem from the block's top (its back edge) up to the axle's back knob, behind the rims."""
+        k = p - n * 0.37
+        tube(name, [Vector((k.x, a.y, a.z)), k], 0.07, M["gold"])
+    stem("gstem2", top + Vector((0, 0.1, -0.05)), p2)
     p1 = on_plane(*S.PUL1_SCR)
     if LOOK >= 3:
         pulley("pul1", p1, S.PUL_R, M["dgold"])
-        tube("gstem1", [top + Vector((0, -0.2, -0.05)), p1 - e2 * 0.12], 0.07, M["gold"])
+        stem("gstem1", top + Vector((0, -0.2, -0.05)), p1)
     else:
         # look 2: a gold rod out toward the viewer's left with a knob, where look 3's pulley will sit
         tube("grod", [top + Vector((0, -0.2, -0.05)), p1], 0.07, M["gold"])
         sphere("grodknob", 0.14, p1 - Vector((0, 0, 0.14)), M["gold"], n=12)
     if LOOK >= 4:
         w = on_plane(*S.WHEEL_SCR)
-        pulley("wheel", w, S.WHEEL_R, M["dgold"], spokes=8, wide=0.22)
-        # its crank: a bent gold handle on the hub
-        tube("wcrank", [w + n * 0.15, w + n * 0.3 - e1 * 0.35 - e2 * 0.15, w + n * 0.35 - e1 * 0.3 - e2 * 0.7,
-                        w + n * 0.35 + e1 * 0.05 - e2 * 0.85, w + n * 0.35 + e1 * 0.3 - e2 * 0.5],
+        pulley("wheel", w, S.WHEEL_R, M["dgold"], spokes=8, wide=0.4)
+        # its crank: a bent gold handle on the hub, hooked down and out to the lower left as Flash's
+        tube("wcrank", [w + n * 0.15, w + n * 0.3 - e1 * 0.55 - e2 * 0.05, w + n * 0.35 - e1 * 1.05 - e2 * 0.2,
+                        w + n * 0.35 - e1 * 1.1 - e2 * 0.45, w + n * 0.35 - e1 * 0.8 - e2 * 0.5,
+                        w + n * 0.35 - e1 * 0.65 - e2 * 0.3],
              0.085, M["gold"], smooth=True)
-        # its stand: a gold post up from the ridge's back end to the hub's back
+        # its stand: a gold post up from the ridge's back end to the axle's back knob, behind the rim
         rb = Vector((S.RIDGE_X, S.ROOF_Y1 - 0.2, S.RIDGE_Z + 0.1))
-        tube("wstand", [rb, rb + Vector((0, 0.2, 0.5)), w - n * 0.25], 0.07, M["gold"], smooth=True)
+        tube("wstand", [rb, rb + Vector((-0.35, 0.3, 0.5)), w - n * 0.45], 0.07, M["gold"], smooth=True)
     return p1, p2
 
 
@@ -1312,23 +1318,55 @@ def belt(p1, p2, b):
         c1_, c2_ = q1 + d1 * h, q2 - d2 * h
         return [q1 * (1 - u) ** 3 + c1_ * 3 * u * (1 - u) ** 2 + c2_ * 3 * u * u * (1 - u) + q2 * u ** 3
                 for u in (i / k for i in range(1, k))]
+    def tangent(c1, r1, s1, c2, r2, s2):
+        """The straight run from wheel 1 to wheel 2 (s = 1: the belt goes clockwise round that wheel, -1: anticlockwise):
+        the angles (deg) where it leaves wheel 1 and meets wheel 2."""
+        dx, dy = (c2 - c1).dot(e1), (c2 - c1).dot(e2)
+        phi = math.atan2(dy, dx)
+        for sg in (1, -1):
+            th = phi + sg * math.acos((s1 * r1 - s2 * r2) / math.hypot(dx, dy))
+            m = (math.cos(th), math.sin(th))                     # the run's normal; it heads along (sin, -cos)
+            run = (dx + (s2 * r2 - s1 * r1) * m[0], dy + (s2 * r2 - s1 * r1) * m[1])
+            if run[0] * math.sin(th) - run[1] * math.cos(th) > 0:
+                return math.degrees(math.atan2(s1 * m[1], s1 * m[0])), math.degrees(math.atan2(s2 * m[1], s2 * m[0]))
+    def turn(a0, a1, s):
+        """a1 unwrapped so the belt goes from a0 to a1 clockwise (s = 1) or anticlockwise (s = -1)."""
+        while s * (a0 - a1) <= 0:
+            a1 -= s * 360
+        while s * (a0 - a1) > 360:
+            a1 += s * 360
+        return a1
+    def run(q1, q2, k=4):
+        return [q1.lerp(q2, i / k) for i in range(1, k)]
     bt = b + Vector((0, 0, S.BALL_R - 0.15))
     pts = [bt, p1 - e1 * (r + 0.04) - e2 * 1.5]
-    if LOOK >= 3:                                    # off the first pulley and onto the second in one smooth sag
+    if LOOK >= 4:
+        # as Flash: over the first pulley, under the second, straight up onto the big wheel, over it, down its right
+        # side and away behind the roof; all in the pulleys' plane
+        rr, w, wr = r + 0.03, on_plane(*S.WHEEL_SCR), S.WHEEL_R + 0.22
+        a1, b1 = tangent(p1, rr, 1, p2, rr, -1)
+        pts += arc(p1, rr, 180, turn(180, a1, 1), 10)
+        q = arc(p2, rr, b1, turn(b1, -50, -1), 8)
+        pts += run(pts[-1], q[0]) + q
+        # off the second pulley's bottom toward the wheel's left side, then bending up round it (Flash draws it so,
+        # rather than a straight run onto the wheel's top)
+        a2, b2 = -50, 162
+        q1, q2 = q[-1], w + e1 * (wr * math.cos(math.radians(b2))) + e2 * (wr * math.sin(math.radians(b2)))
+        d1 = -e1 * math.sin(math.radians(a2)) + e2 * math.cos(math.radians(a2))
+        d2 = e1 * math.sin(math.radians(b2)) - e2 * math.cos(math.radians(b2))
+        h = (q2 - q1).length
+        c1_, c2_ = q1 + d1 * h * 0.35, q2 - d2 * h * 0.35
+        pts += [q1 * (1 - u) ** 3 + c1_ * 3 * u * (1 - u) ** 2 + c2_ * 3 * u * u * (1 - u) + q2 * u ** 3
+                for u in (i / 12 for i in range(1, 12))]
+        pts += arc(w, wr, b2, turn(b2, -20, 1), 18)
+        pts += [w + e1 * u + e2 * v for u, v in ((1.45, -1.5), (0.75, -2.3), (-0.4, -2.7), (-1.0, -3.2))]
+    elif LOOK >= 3:                                  # off the first pulley and onto the second in one smooth sag
         rr = r + 0.03
         pts += arc(p1, rr, 180, 50, 10)
         pts += span(p1, rr, 50, p2, rr, 130)
-        if LOOK >= 4:
-            w, wr = on_plane(*S.WHEEL_SCR), S.WHEEL_R + 0.22
-            pts += arc(p2, rr, 130, 20, 8)
-            pts += span(p2, rr, 20, w, wr, 205, 16)
-            pts += arc(w, wr, 205, -25, 16)
-            pts.append(w + e1 * 0.85 - e2 * 2.5)
-            pts.append(w + e1 * 0.25 - e2 * 4.1)
-        else:
-            pts += arc(p2, rr, 130, -10, 10)
-            pts.append(p2 + e1 * (r + 0.3) - e2 * 1.2)
-            pts.append(p2 + e1 * (r + 0.35) - e2 * 2.2)
+        pts += arc(p2, rr, 130, -10, 10)
+        pts.append(p2 + e1 * (r + 0.3) - e2 * 1.2)
+        pts.append(p2 + e1 * (r + 0.35) - e2 * 2.2)
     else:
         pts += arc(p1, r + 0.03, 180, 80, 8)
         pts.append((p1 + p2) / 2 - e2 * 0.55)
