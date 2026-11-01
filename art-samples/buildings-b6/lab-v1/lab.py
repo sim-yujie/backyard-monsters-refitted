@@ -879,7 +879,7 @@ def lower():
         prof = [(0.0, 0.0), (0.42, 0.0), (0.42, 0.12)]
         for j in range(7):                          # Flash's columns: a stack of sharp double cones
             z0 = 0.14 + j * 0.58
-            prof += [(0.26, z0), (0.6, z0 + 0.27), (0.6, z0 + 0.31), (0.26, z0 + 0.58)]
+            prof += [(0.24, z0), (0.58, z0 + 0.28), (0.6, z0 + 0.29), (0.58, z0 + 0.3), (0.24, z0 + 0.58)]
         prof += [(0.42, LW_Z), (0.0, LW_Z)]
         lathe(f"coil{k}", prof, (x, y, 0.0), M["gold"], verts=28)
     # a gold beam under the deck's front edge from column to column
