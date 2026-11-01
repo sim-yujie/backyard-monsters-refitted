@@ -766,6 +766,9 @@ def materials():
     M["plinth"] = wood("plinth", (130, 86, 50), (106, 70, 40), rings=3.0, dirt=0.3, knots=False)
     M["gold"] = shiny("gold", (232, 162, 46), rough=0.3, metal=0.75, side=0.45, wear=(240, 186, 80), scale=1.5,
                       dirt=0.45, streak=0.3)
+    # the cogs a little darker and more orange than the beam, as in Flash
+    M["coggold"] = shiny("coggold", (228, 148, 48), rough=0.26, metal=0.5, side=0.15, wear=(244, 184, 92), scale=1.5, ao_min=0.7,
+                         dirt=0.2, streak=0.3)
     M["brass"] = shiny("brass", (150, 104, 46), rough=0.35, metal=0.7, wear=(190, 140, 66), scale=2.0, dirt=0.3)
     M["pilaster"] = shiny("pilaster", (196, 204, 150), rough=0.4, metal=0.3, wear=(166, 172, 120), scale=2.0, dirt=0.2)
     # Flash's chrome is mottled: blue-grey with darker patches and white glints, not a clean mirror
@@ -891,87 +894,98 @@ def _envf(k, d):
     return float(os.environ.get(k, d))
 
 
-# Flash's two gold "columns" are two upright cog wheels, turned nearly edge-on to the camera: each a tall chunky gold
-# body (the rim, about 70% of the full width) with round pointed teeth bulging out on both its edges, almost touching
-# up the side. Their middle in the plan, tip radius, turn away from edge-on (deg), teeth, rim thickness, how far each
-# tooth reaches past the rim's faces and past its edge.
+# Flash's two gold "columns" are two upright cogs seen edge-on, drawn as a straight column of beads: about six evenly
+# spaced, level, pointed teeth (diamond points out to both sides, small dark gaps between them) on a slim faceted gold
+# body from the ground up under the gold beam, the end teeth rounder. Built as that stylised column, not a true wheel
+# (a wheel edge-on bunches its teeth top and bottom and its turned face shows as a flat strap). Its middle in the plan,
+# teeth, the body's half width across the screen, how far each tooth reaches past it, a tooth's half height (a share
+# of the spacing), its point (1 a sharp diamond, 2 round; the end teeth COG_PWE), depth toward the viewer / width.
 COG_UV = (_envf("COG_U", -3.7), _envf("COG_V", 3.0))
-COG_R, COG_TURN, COG_N = _envf("COG_R", 1.76), _envf("COG_TURN", 6.0), int(_envf("COG_N", 14))
-COG_T, COG_TX, COG_H = _envf("COG_T", 0.78), _envf("COG_TX", 0.2), _envf("COG_H", 0.2)
+COG_N, COG_RB, COG_H = int(_envf("COG_N", 6)), _envf("COG_RB", 0.37), _envf("COG_H", 0.22)
+COG_C, COG_PW, COG_PWE, COG_Q = _envf("COG_C", 0.36), _envf("COG_PW", 1.0), _envf("COG_PWE", 1.3), _envf("COG_Q", 0.75)
+COG_K = _envf("COG_K", 1.5)                 # how much the teeth keep to the two sides (0: all round the column)
+COG_FB = _envf("COG_FB", 0.4)               # and how far they still bulge toward the viewer (1: as far)
 
 
-def cog_dims():
-    return COG_R - COG_H, COG_T
+def cog_column(name, c, top, mat, nc=int(_envf("COG_NC", 8))):
+    """The cog column standing at c (its foot on the ground) up to height top: an upright faceted bar (nc sides, a
+    corner pointing to each side), its section an oval COG_Q as deep toward the viewer as it is wide across the
+    screen, swelling at each tooth with a diamond profile, most toward the two sides, flat shaded like cut metal."""
+    e = Vector((1.0, 1.0, 0.0)).normalized()        # across the screen
+    d = Vector((1.0, -1.0, 0.0)).normalized()       # toward the viewer
+    p = top / COG_N
+    mids = [p * (i + 0.5) for i in range(COG_N)]
+    hc = COG_C * p
 
+    def rad(z):
+        f = 0.0
+        for i, m in enumerate(mids):
+            pw = COG_PWE if i in (0, COG_N - 1) else COG_PW
+            s = abs(z - m) / hc
+            if s < 1:
+                f = max(f, 1 - s ** pw)
+        y = min(z, top - z)                         # rounded off at the ground and under the beam
+        foot = 0.86 + 0.14 * math.sqrt(max(0.0, 1 - ((0.06 - y) / 0.06) ** 2)) if y < 0.06 else 1.0
+        return COG_RB * foot, COG_H * f * foot
 
-def cog_mesh(name, ro, t, teeth, h, tx, mat):
-    """The teeth of a cog in local XY (axle local Z): `teeth` lugs round a rim of outer radius ro and thickness t, each
-    a rounded double cone lying along the axle (fattest in the rim's middle plane, blunt points tx past each face),
-    reaching h past the rim's edge and nearly touching its neighbours, so that seen edge-on they make Flash's row of
-    round pointed bulges on both sides with the rim showing between them."""
+    zs = {0.0, 0.02, 0.04, top - 0.04, top - 0.02, top}
+    for m in mids:
+        for j in range(-12, 13):
+            zs.add(m + hc * j / 12)
+    for a, b in zip([0.0] + [m + hc for m in mids], [m - hc for m in mids] + [top]):
+        for j in range(1, 4):
+            zs.add(a + (b - a) * j / 4)
+    zs = sorted(z for z in zs if 0.0 <= z <= top)
     bm = bmesh.new()
-    p = 2 * math.pi / teeth
-    hr = h + _envf("COG_HIN", 0.2)                 # the lug's radial half size; its middle sits COG_HIN inside the rim
-    wt = 0.5 * p * ro * _envf("COG_WT", 0.98)      # its half width round the rim
-    ta = t / 2 + tx                                 # its half length along the axle
-    pw = _envf("COG_PW", 1.5)                       # its side profile: 1 a sharp diamond, 2 round
-    nz, nc = 14, 16
-    for i in range(teeth):
-        a = i * p + _envf("COG_PH", 0.5) * p    # local Y is up: a tooth straight down onto the ground
-        rad, tan = Vector((math.cos(a), math.sin(a), 0)), Vector((-math.sin(a), math.cos(a), 0))
-        c = rad * (ro + h - hr)
-        rows = []
-        for iz in range(1, nz):
-            z = ta * (2 * iz / nz - 1)
-            s = (1 - abs(z / ta) ** pw) ** (1 / pw)
-            rows.append([bm.verts.new(c + rad * math.cos(2 * math.pi * j / nc) * hr * s
-                                      + tan * math.sin(2 * math.pi * j / nc) * wt * s + Vector((0, 0, z)))
-                         for j in range(nc)])
-        for r0, r1 in zip(rows, rows[1:]):
-            for j in range(nc):
-                jn = (j + 1) % nc
-                bm.faces.new((r0[j], r0[jn], r1[jn], r1[j]))
-        for row, z in ((rows[0], -ta), (rows[-1], ta)):
-            tip = bm.verts.new(c + Vector((0, 0, z)))
-            for j in range(nc):
-                bm.faces.new((row[j], row[(j + 1) % nc], tip))
+    rows = []
+    for z in zs:
+        r, t = rad(z)
+        row = []
+        for j in range(nc):
+            ca, sa = math.cos(2 * math.pi * j / nc), math.sin(2 * math.pi * j / nc)
+            x = r * ca + t * math.copysign(abs(ca) ** COG_K, ca)
+            row.append(bm.verts.new(c + e * x + d * (COG_Q * (r + t * COG_FB) * sa) + Vector((0, 0, z))))
+        rows.append(row)
+    for r0, r1 in zip(rows, rows[1:]):
+        for j in range(nc):
+            bm.faces.new((r0[j], r0[(j + 1) % nc], r1[(j + 1) % nc], r1[j]))
+    for row, z in ((rows[0], 0.0), (rows[-1], zs[-1])):
+        mid = bm.verts.new(c + Vector((0, 0, z)))
+        for j in range(nc):
+            bm.faces.new((row[j], row[(j + 1) % nc], mid))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return mesh_ob(name, bm, [mat], smooth=True)
-
-
-def cog_rim(name, ro, ri, t, mat, n=64):
-    """A closed ring in local XY (axle local Z), radii ri..ro, thickness t, its edges rounded."""
-    bm = bmesh.new()
-    rows = [[bm.verts.new((r * math.cos(2 * math.pi * j / n), r * math.sin(2 * math.pi * j / n), z)) for j in range(n)]
-            for r, z in ((ri, -t / 2), (ro, -t / 2), (ro, t / 2), (ri, t / 2))]
-    for a, b in zip(rows, rows[1:] + rows[:1]):
-        for j in range(n):
-            jn = (j + 1) % n
-            bm.faces.new((a[j], a[jn], b[jn], b[j]))
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return mesh_ob(name, bm, [mat], bevel=0.07, segs=3)
+    return mesh_ob(name, bm, [mat], smooth=True, bevel=_envf("COG_BEV", 0.025), segs=2)
 
 
 def cog_wheel(k):
-    """Cog k (0 left, 1 right, its mirror image): upright on the ground, its axle level, turned COG_TURN degrees from
-    edge-on so a sliver of its face shows; the toothed rim, a recessed web, a hub flush with the rim."""
+    """Cog k (0 left, 1 right, its mirror image): the column on the ground in front of the wall's corner, up to the
+    gold beam's underside."""
     u, v = COG_UV
     c = Vector(uv(u, v)) if k == 0 else Vector(mir(uv(u, v)))
-    c = Vector((c.x, c.y, COG_R + 0.02))
-    b = math.radians(45.0 + COG_TURN)
-    ax = Vector((math.cos(b), math.sin(b), 0.0))
-    if k == 1:
-        ax = Vector((-ax.y, -ax.x, 0.0))
-    q = ax.to_track_quat("Z", "Y")
-    mw = Matrix.Translation(c) @ q.to_matrix().to_4x4()
-    ro, t = cog_dims()
-    rim = cog_rim(f"coil{k}", ro, ro - 0.32, t, M["gold"])
-    obs = [rim, cog_mesh(f"coil{k}teeth", ro, t, COG_N, COG_H, COG_TX, M["gold"])]
-    obs.append(cyl(f"coil{k}web", ro - 0.3, t * 0.5, (0, 0, -t * 0.25), M["gold"], verts=48, bevel=0.02))
-    obs.append(cyl(f"coil{k}hub", 0.42, t, (0, 0, -t / 2), M["gold"], verts=32, bevel=0.06))
-    for o in obs:
-        o.matrix_world = mw @ o.matrix_basis
-    return obs
+    c = Vector((c.x, c.y, 0.0))
+    return [cog_column(f"coil{k}", c, _envf("COG_TOP", LW_Z - 0.42), M["coggold"])]
+
+
+def cog_sun(sun):
+    """Flash draws both cogs in full light, but they stand in front of the wings, which the low sun (from the left
+    and behind) would put them in the shadow of. So the cogs get the sun from a twin that only the cogs themselves
+    shadow; the main sun skips them (they still cast their ground shadow from it)."""
+    cogs = [o for o in SC.objects if o.name.startswith("coil")]
+    if not cogs or os.environ.get("PB_COGSHADE"):
+        return
+    inc, exc = bpy.data.collections.new("cog_lit"), bpy.data.collections.new("cog_unlit")
+    for o in cogs:
+        inc.objects.link(o)
+        exc.objects.link(o)
+    for co in exc.collection_objects:
+        co.light_linking.link_state = "EXCLUDE"
+    sun.light_linking.receiver_collection = exc
+    twin = sun.copy()
+    twin.data = sun.data.copy()
+    twin.data.energy *= 3.0                         # and stronger, so their sunlit sides shine like Flash's
+    link(twin)
+    twin.light_linking.receiver_collection = inc
+    twin.light_linking.blocker_collection = inc
 
 
 def lower():
@@ -1305,6 +1319,7 @@ def setup(sc):
     link(sun)
     to_sun = Vector((-0.85, -0.62, 1.55)).normalized()
     sun.rotation_euler = (-to_sun).to_track_quat("-Z", "Y").to_euler()
+    cog_sun(sun)
     world = bpy.data.worlds.new("w")
     sc.world = world
     world.use_nodes = True

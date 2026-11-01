@@ -351,10 +351,10 @@ def destroyed():
     for o, u, v, rot in ((lmb, 0.0, -2.2, (11.0, 11.0, 2.0)), (lmf, 0.2, 2.0, (-12.0, -12.0, -3.0)),
                          (la, -5.4, 0.2, (16.0, -20.0, 8.0)), (lr, 5.6, 0.0, (-18.0, 16.0, -5.0))):
         place([o], u, v, rot, sink=0.05)
-    for k, (u, v, yaw) in enumerate(((-3.0, 3.3, 20.0), (4.0, 3.3, -20.0))):
-        c = group(f"coil{k}")                          # each cog fallen over, nearly flat, its teeth up
-        a = c[0].matrix_world.col[2].xyz.normalized()
-        q = Quaternion((0.0, 0.0, 1.0), math.radians(yaw)) @ Quaternion(Vector((0.0, 0.0, 1.0)).cross(a), math.radians(-76.0))
+    for k, (u, v, yaw) in enumerate(((-4.6, 3.6, 14.0), (4.4, 3.4, -10.0))):
+        c = group(f"coil{k}")                          # each cog column fallen over on its side, lying across the front
+        q = Quaternion((0.0, 0.0, 1.0), math.radians(yaw)) @ Quaternion(Vector((1.0, -1.0, 0.0)).normalized(),
+                                                                         math.radians(88.0 if k else -88.0))
         place(c, u, v, [math.degrees(x) for x in q.to_euler("XYZ")], sink=0.1)
     place(group("dome"), 0.4, 0.4, (8.0, -6.0, 0.0), sink=0.5)           # the dome low in the middle of the heap
     for o, u, v, rot in ((ubl, -3.8, -3.6, (24.0, 6.0, 15.0)), (ubr, 3.8, -3.8, (-6.0, -26.0, -12.0)),
