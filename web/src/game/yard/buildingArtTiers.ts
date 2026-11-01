@@ -67,7 +67,14 @@
  * Hatchery, Monster Housing and Hatchery Control Center, from branches
  * art/buildings-3d-b6, -silo, -hatchery, -hcc and -housing
  * (`web/tools/tower-tiers/export3d_buildings.py`), with the Modern look;
- * the Classic look keeps the Flash ones.
+ * the Classic look keeps the Flash ones. Then (owner, 1 Nov 2026: "let me
+ * try out in game") the Flinger, Monster Juicer, Yard Planner, Map Room,
+ * General Store, Blocks, Stone Block, Wild Monster Baiter, Catapult and
+ * Champion Cage, and the Inferno's Blocks (`INFERNO_BUILDING_3D_ART`), each
+ * from its own art/buildings-3d-<name> branch; and every 3D building's
+ * damaged and destroyed looks (art/buildings-3d-damage and the same
+ * branches), which take the place of the tinted whole look and the Flash
+ * rubble.
  *
  * The Town Hall's new art is the default (owner, 26 Oct 2026): one picture
  * per level (`TOWN_HALL_ART`), each painted from that level's Flash picture
@@ -187,11 +194,18 @@ export interface TierAnim {
   readonly body?: TierImage;
 }
 
+/** A 3D building's damaged or destroyed look: one still and its shadow (none where it casts none). */
+export interface TierState {
+  readonly top: TierImage;
+  readonly shadow: TierImage | null;
+}
+
 export interface TierArt {
   /** The first level that shows this picture. */
   readonly from: number;
   readonly top: TierImage;
-  readonly shadow: TierImage;
+  /** Null for a 3D look that casts no shadow (the Inferno's first wall, a low rim of rock). */
+  readonly shadow: TierImage | null;
   /**
    * World px this picture's top stands above the Flash tower's: how much
    * higher the gun sits, so a tower's shots leave from it.
@@ -201,6 +215,16 @@ export interface TierArt {
   readonly turret?: TierTurret;
   /** The part that moves, for a tower without a turret whose 3D tiers animate (the Tesla, the Bunker), and a 3D building's. */
   readonly anim?: TierAnim;
+  /**
+   * A 3D building's damaged look, in place of the tinted whole one; it stands
+   * still, as Flash's damaged buildings without a damaged strip do.
+   */
+  readonly damaged?: TierState;
+  /**
+   * A 3D building's destroyed look, in place of the Flash rubble; like
+   * Flash's, one is often shared by all of a building's looks.
+   */
+  readonly destroyed?: TierState;
 }
 
 /** The three tiers of each tower, by type, lowest first. */
@@ -378,90 +402,253 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Twig Snapper: 3D, Flash's four looks (levels 1, 3, 6 and 10); its saw and gears turn
   1: [
     { from: 1, top: ["top.3d1@2x.webp", -33, -23], shadow: ["shadow.3d1.jpg", -35, 16], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", 1, 12, 20, 29, 34], body: ["body.3d1@2x.webp", -33, -23] } },
+      anim: { strip: ["anim.3d1@2x.webp", 1, 12, 20, 29, 34], body: ["body.3d1@2x.webp", -33, -23] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -41, -23], shadow: ["shadow.3d1.damaged.jpg", -36, 22] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -40, 7], shadow: ["shadow.3d3.destroyed.jpg", -40, 25] } },
     { from: 3, top: ["top.3d3@2x.webp", -33, -37], shadow: ["shadow.3d3.jpg", -34, 12], lift: 0,
-      anim: { strip: ["anim.3d3@2x.webp", 1, 7, 20, 29, 34], body: ["body.3d3@2x.webp", -33, -37] } },
+      anim: { strip: ["anim.3d3@2x.webp", 1, 7, 20, 29, 34], body: ["body.3d3@2x.webp", -33, -37] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -39, -32], shadow: ["shadow.3d3.damaged.jpg", -33, 16] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -40, 7], shadow: ["shadow.3d3.destroyed.jpg", -40, 25] } },
     { from: 6, top: ["top.3d6@2x.webp", -33, -37], shadow: ["shadow.3d6.jpg", -34, 11], lift: 0,
-      anim: { strip: ["anim.3d6@2x.webp", 1, 4, 32, 32, 34], body: ["body.3d6@2x.webp", -33, -37] } },
+      anim: { strip: ["anim.3d6@2x.webp", 1, 4, 32, 32, 34], body: ["body.3d6@2x.webp", -33, -37] },
+      damaged: { top: ["top.3d6.damaged@2x.webp", -31, -32], shadow: ["shadow.3d6.damaged.jpg", -32, 13] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -40, 7], shadow: ["shadow.3d3.destroyed.jpg", -40, 25] } },
     { from: 10, top: ["top.3d10@2x.webp", -33, -53], shadow: ["shadow.3d10.jpg", -34, 11], lift: 0,
-      anim: { strip: ["anim.3d10@2x.webp", 1, 4, 32, 32, 34], body: ["body.3d10@2x.webp", -33, -53] } },
+      anim: { strip: ["anim.3d10@2x.webp", 1, 4, 32, 32, 34], body: ["body.3d10@2x.webp", -33, -53] },
+      damaged: { top: ["top.3d10.damaged@2x.webp", -33, -49], shadow: ["shadow.3d10.damaged.jpg", -32, 13] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -40, 7], shadow: ["shadow.3d3.destroyed.jpg", -40, 25] } },
   ],
   // 2 Pebble Shiner: 3D, Flash's four looks; it shines as Flash's did
   2: [
     { from: 1, top: ["top.3d1@2x.webp", -32, -18], shadow: ["shadow.3d1.jpg", -32, 12], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -29, 6, 55, 27, 26], body: ["body.3d1@2x.webp", -32, -18] } },
+      anim: { strip: ["anim.3d1@2x.webp", -29, 6, 55, 27, 26], body: ["body.3d1@2x.webp", -32, -18] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -33, -16], shadow: ["shadow.3d1.damaged.jpg", -32, 14] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -38, 12], shadow: ["shadow.3d3.destroyed.jpg", -39, 20] } },
     { from: 3, top: ["top.3d3@2x.webp", -33, -33], shadow: ["shadow.3d3.jpg", -32, 8], lift: 0,
-      anim: { strip: ["anim.3d3@2x.webp", -30, 4, 57, 30, 26], body: ["body.3d3@2x.webp", -33, -33] } },
+      anim: { strip: ["anim.3d3@2x.webp", -30, 4, 57, 30, 26], body: ["body.3d3@2x.webp", -33, -33] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -35, -20], shadow: ["shadow.3d3.damaged.jpg", -35, 14] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -38, 12], shadow: ["shadow.3d3.destroyed.jpg", -39, 20] } },
     { from: 6, top: ["top.3d6@2x.webp", -33, -40], shadow: ["shadow.3d6.jpg", -32, 6], lift: 0,
-      anim: { strip: ["anim.3d6@2x.webp", -30, -4, 57, 38, 26], body: ["body.3d6@2x.webp", -33, -40] } },
+      anim: { strip: ["anim.3d6@2x.webp", -30, -4, 57, 38, 26], body: ["body.3d6@2x.webp", -33, -40] },
+      damaged: { top: ["top.3d6.damaged@2x.webp", -35, -39], shadow: ["shadow.3d6.damaged.jpg", -32, 7] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -38, 12], shadow: ["shadow.3d3.destroyed.jpg", -39, 20] } },
     { from: 10, top: ["top.3d10@2x.webp", -33, -40], shadow: ["shadow.3d10.jpg", -33, 6], lift: 0,
-      anim: { strip: ["anim.3d10@2x.webp", -30, -37, 63, 71, 24], body: ["body.3d10@2x.webp", -33, -40] } },
+      anim: { strip: ["anim.3d10@2x.webp", -30, -37, 63, 71, 24], body: ["body.3d10@2x.webp", -33, -40] },
+      damaged: { top: ["top.3d10.damaged@2x.webp", -33, -41], shadow: ["shadow.3d10.damaged.jpg", -33, 5] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -38, 12], shadow: ["shadow.3d3.destroyed.jpg", -39, 20] } },
   ],
   // 3 Putty Squisher: 3D (v3), Flash's four looks; it squishes as Flash's did
   3: [
     { from: 1, top: ["top.3d1@2x.webp", -24, 4], shadow: ["shadow.3d1.jpg", -18, 27], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -7, 7, 24, 16, 26], body: ["body.3d1@2x.webp", -24, 4] } },
+      anim: { strip: ["anim.3d1@2x.webp", -7, 7, 24, 16, 26], body: ["body.3d1@2x.webp", -24, 4] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -36, 4], shadow: ["shadow.3d1.damaged.jpg", -29, 28] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -24, 12], shadow: ["shadow.3d3.destroyed.jpg", -10, 30] } },
     { from: 3, top: ["top.3d3@2x.webp", -31, -23], shadow: ["shadow.3d3.jpg", -30, 11], lift: 0,
-      anim: { strip: ["anim.3d3@2x.webp", -5, -9, 22, 16, 26], body: ["body.3d3@2x.webp", -31, -23] } },
+      anim: { strip: ["anim.3d3@2x.webp", -5, -9, 22, 16, 26], body: ["body.3d3@2x.webp", -31, -23] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -44, -20], shadow: ["shadow.3d3.damaged.jpg", -44, 11] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -24, 12], shadow: ["shadow.3d3.destroyed.jpg", -10, 30] } },
     { from: 6, top: ["top.3d6@2x.webp", -31, -46], shadow: ["shadow.3d6.jpg", -30, 11], lift: 0,
-      anim: { strip: ["anim.3d6@2x.webp", -5, -9, 22, 16, 26], body: ["body.3d6@2x.webp", -31, -46] } },
+      anim: { strip: ["anim.3d6@2x.webp", -5, -9, 22, 16, 26], body: ["body.3d6@2x.webp", -31, -46] },
+      damaged: { top: ["top.3d6.damaged@2x.webp", -32, -38], shadow: ["shadow.3d6.damaged.jpg", -33, 13] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -24, 12], shadow: ["shadow.3d3.destroyed.jpg", -10, 30] } },
     { from: 10, top: ["top.3d10@2x.webp", -32, -52], shadow: ["shadow.3d10.jpg", -32, 11], lift: 0,
-      anim: { strip: ["anim.3d10@2x.webp", -5, -52, 39, 59, 25], body: ["body.3d10@2x.webp", -32, -45] } },
+      anim: { strip: ["anim.3d10@2x.webp", -5, -52, 39, 59, 25], body: ["body.3d10@2x.webp", -32, -45] },
+      damaged: { top: ["top.3d10.damaged@2x.webp", -44, -43], shadow: ["shadow.3d10.damaged.jpg", -40, 13] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -24, 12], shadow: ["shadow.3d3.destroyed.jpg", -10, 30] } },
   ],
   // 4 Goo Factory: 3D, Flash's four looks; its pump's globs as Flash's
   4: [
     { from: 1, top: ["top.3d1@2x.webp", -25, -34], shadow: ["shadow.3d1.jpg", -26, 19], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", 4, 14, 18, 42, 26], body: ["body.3d1@2x.webp", -25, -34] } },
+      anim: { strip: ["anim.3d1@2x.webp", 4, 14, 18, 42, 26], body: ["body.3d1@2x.webp", -25, -34] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -38, -25], shadow: ["shadow.3d1.damaged.jpg", -39, 17] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -42, 3], shadow: ["shadow.3d3.destroyed.jpg", -42, 23] } },
     { from: 3, top: ["top.3d3@2x.webp", -28, -34], shadow: ["shadow.3d3.jpg", -28, 15], lift: 0,
-      anim: { strip: ["anim.3d3@2x.webp", 4, 13, 19, 43, 26], body: ["body.3d3@2x.webp", -28, -34] } },
+      anim: { strip: ["anim.3d3@2x.webp", 4, 13, 19, 43, 26], body: ["body.3d3@2x.webp", -28, -34] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -41, -33], shadow: ["shadow.3d3.damaged.jpg", -37, 14] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -42, 3], shadow: ["shadow.3d3.destroyed.jpg", -42, 23] } },
     { from: 6, top: ["top.3d6@2x.webp", -31, -34], shadow: ["shadow.3d6.jpg", -30, 15], lift: 0,
-      anim: { strip: ["anim.3d6@2x.webp", -19, 13, 42, 47, 26], body: ["body.3d6@2x.webp", -31, -34] } },
+      anim: { strip: ["anim.3d6@2x.webp", -19, 13, 42, 47, 26], body: ["body.3d6@2x.webp", -31, -34] },
+      damaged: { top: ["top.3d6.damaged@2x.webp", -41, -28], shadow: ["shadow.3d6.damaged.jpg", -39, 14] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -42, 3], shadow: ["shadow.3d3.destroyed.jpg", -42, 23] } },
     { from: 10, top: ["top.3d10@2x.webp", -40, -47], shadow: ["shadow.3d10.jpg", -39, 12], lift: 0,
-      anim: { strip: ["anim.3d10@2x.webp", -19, 13, 42, 47, 26], body: ["body.3d10@2x.webp", -40, -47] } },
+      anim: { strip: ["anim.3d10@2x.webp", -19, 13, 42, 47, 26], body: ["body.3d10@2x.webp", -40, -47] },
+      damaged: { top: ["top.3d10.damaged@2x.webp", -42, -39], shadow: ["shadow.3d10.damaged.jpg", -43, 13] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -42, 3], shadow: ["shadow.3d3.destroyed.jpg", -42, 23] } },
+  ],
+  // 5 Flinger: 3D, Flash's four looks (the fourth also level 5), still as Flash's
+  5: [
+    { from: 1, top: ["top.3d1@2x.webp", -46, -46], shadow: ["shadow.3d1.jpg", -44, 20], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -62, -27], shadow: ["shadow.3d1.damaged.jpg", -62, 26] },
+      destroyed: { top: ["top.3d4.destroyed@2x.webp", -61, -4], shadow: ["shadow.3d4.destroyed.jpg", -60, 20] } },
+    { from: 2, top: ["top.3d2@2x.webp", -46, -38], shadow: ["shadow.3d2.jpg", -44, 20], lift: 0,
+      damaged: { top: ["top.3d2.damaged@2x.webp", -62, -10], shadow: ["shadow.3d2.damaged.jpg", -62, 28] },
+      destroyed: { top: ["top.3d4.destroyed@2x.webp", -61, -4], shadow: ["shadow.3d4.destroyed.jpg", -60, 20] } },
+    { from: 3, top: ["top.3d3@2x.webp", -46, -44], shadow: ["shadow.3d3.jpg", -44, 14], lift: 0,
+      damaged: { top: ["top.3d3.damaged@2x.webp", -62, -41], shadow: ["shadow.3d3.damaged.jpg", -62, 17] },
+      destroyed: { top: ["top.3d4.destroyed@2x.webp", -61, -4], shadow: ["shadow.3d4.destroyed.jpg", -60, 20] } },
+    { from: 4, top: ["top.3d4@2x.webp", -46, -67], shadow: ["shadow.3d4.jpg", -44, 17], lift: 0,
+      damaged: { top: ["top.3d4.damaged@2x.webp", -62, -35], shadow: ["shadow.3d4.damaged.jpg", -62, 23] },
+      destroyed: { top: ["top.3d4.destroyed@2x.webp", -61, -4], shadow: ["shadow.3d4.destroyed.jpg", -60, 20] } },
   ],
   // 6 Storage Silo: 3D, one look; its 26 cells are the sack's fill, as Flash's
   6: [
     { from: 1, top: ["top.3d1@2x.webp", -36, -51], shadow: ["shadow.3d1.jpg", -37, 32], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -33, -21, 66, 70, 26], body: ["body.3d1@2x.webp", -36, -51] } },
+      anim: { strip: ["anim.3d1@2x.webp", -33, -21, 66, 70, 26], body: ["body.3d1@2x.webp", -36, -51] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -40, -54], shadow: ["shadow.3d1.damaged.jpg", -37, 28] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -44, -5], shadow: ["shadow.3d1.destroyed.jpg", -55, 19] } },
+  ],
+  // 9 Monster Juicer: 3D, one look; its 51 cells as Flash's
+  9: [
+    { from: 1, top: ["top.3d1@2x.webp", -44, -22], shadow: ["shadow.3d1.jpg", -44, 27], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -42, -22, 84, 68, 51], columns: 24, body: ["body.3d1@2x.webp", -44, -7] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -56, -7], shadow: ["shadow.3d1.damaged.jpg", -55, 27] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -51, 4], shadow: ["shadow.3d1.destroyed.jpg", -51, 15] } },
+  ],
+  // 10 Yard Planner: 3D, one look, still as Flash's
+  10: [
+    { from: 1, top: ["top.3d1@2x.webp", -46, -30], shadow: ["shadow.3d1.jpg", -46, 33], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -48, -17], shadow: ["shadow.3d1.damaged.jpg", -46, 33] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -59, 13], shadow: ["shadow.3d1.destroyed.jpg", -59, 19] } },
+  ],
+  // 11 Map Room: 3D, one look, still as Flash's
+  11: [
+    { from: 1, top: ["top.3d1@2x.webp", -57, -67], shadow: ["shadow.3d1.jpg", -49, 22], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -74, -45], shadow: ["shadow.3d1.damaged.jpg", -73, 20] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -77, 5], shadow: ["shadow.3d1.destroyed.jpg", -72, 34] } },
+  ],
+  // 12 General Store: 3D, one look, still as Flash's
+  12: [
+    { from: 1, top: ["top.3d1@2x.webp", -42, -38], shadow: ["shadow.3d1.jpg", -36, 1], lift: 0 },
   ],
   // 13 Hatchery: 3D, Flash's three looks; its crank turns while it hatches
   13: [
     { from: 1, top: ["top.3d1@2x.webp", -50, -67], shadow: ["shadow.3d1.jpg", -26, 21], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -47, -100, 93, 76, 31], columns: 22, body: ["body.3d1@2x.webp", -50, -52] } },
+      anim: { strip: ["anim.3d1@2x.webp", -47, -100, 93, 76, 31], columns: 22, body: ["body.3d1@2x.webp", -50, -52] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -58, -93], shadow: ["shadow.3d1.damaged.jpg", -74, 27] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -46, 5], shadow: ["shadow.3d2.destroyed.jpg", -46, 42] } },
     { from: 2, top: ["top.3d2@2x.webp", -51, -114], shadow: ["shadow.3d2.jpg", -51, 15], lift: 0,
-      anim: { strip: ["anim.3d2@2x.webp", -13, -121, 75, 87, 31], columns: 27, body: ["body.3d2@2x.webp", -51, -114] } },
+      anim: { strip: ["anim.3d2@2x.webp", -13, -121, 75, 87, 31], columns: 27, body: ["body.3d2@2x.webp", -51, -114] },
+      damaged: { top: ["top.3d2.damaged@2x.webp", -51, -108], shadow: ["shadow.3d2.damaged.jpg", -51, 30] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -46, 5], shadow: ["shadow.3d2.destroyed.jpg", -46, 42] } },
     { from: 3, top: ["top.3d3@2x.webp", -51, -113], shadow: ["shadow.3d3.jpg", -51, 13], lift: 0,
-      anim: { strip: ["anim.3d3@2x.webp", 7, -102, 82, 92, 31], columns: 24, body: ["body.3d3@2x.webp", -51, -113] } },
+      anim: { strip: ["anim.3d3@2x.webp", 7, -102, 82, 92, 31], columns: 24, body: ["body.3d3@2x.webp", -51, -113] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -58, -117], shadow: ["shadow.3d3.damaged.jpg", -72, 28] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -46, 5], shadow: ["shadow.3d2.destroyed.jpg", -46, 42] } },
   ],
   // 15 Monster Housing: 3D, one look, still as Flash's
   15: [
-    { from: 1, top: ["top.3d1@2x.webp", -107, 10], shadow: ["shadow.3d1.jpg", -102, 29], lift: 0 },
+    { from: 1, top: ["top.3d1@2x.webp", -107, 10], shadow: ["shadow.3d1.jpg", -102, 29], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -105, 11], shadow: ["shadow.3d1.damaged.jpg", -105, 29] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -105, 29], shadow: ["shadow.3d1.destroyed.jpg", -102, 35] } },
   ],
   // 16 Hatchery Control Center: 3D, one look, still as Flash's
   16: [
-    { from: 1, top: ["top.3d1@2x.webp", -40, -57], shadow: ["shadow.3d1.jpg", -40, 21], lift: 0 },
+    { from: 1, top: ["top.3d1@2x.webp", -40, -57], shadow: ["shadow.3d1.jpg", -40, 21], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -53, -51], shadow: ["shadow.3d1.damaged.jpg", -40, 20] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -56, -6], shadow: ["shadow.3d1.destroyed.jpg", -72, 36] } },
+  ],
+  // 17 Block: 3D, Flash's five looks, still
+  17: [
+    { from: 1, top: ["top.3d1@2x.webp", -21, -21], shadow: ["shadow.3d1.jpg", -20, -2], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -21, -21], shadow: ["shadow.3d1.damaged.jpg", -20, -2] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -20, -6], shadow: ["shadow.3d1.destroyed.jpg", -20, 7] } },
+    { from: 2, top: ["top.3d2@2x.webp", -20, -20], shadow: ["shadow.3d2.jpg", -20, -1], lift: 0,
+      damaged: { top: ["top.3d2.damaged@2x.webp", -20, -20], shadow: ["shadow.3d2.damaged.jpg", -20, -1] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -17, 0], shadow: ["shadow.3d2.destroyed.jpg", -17, 1] } },
+    { from: 3, top: ["top.3d3@2x.webp", -20, -21], shadow: ["shadow.3d3.jpg", -8, -2], lift: 0,
+      damaged: { top: ["top.3d3.damaged@2x.webp", -20, -21], shadow: ["shadow.3d3.damaged.jpg", -8, 0] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -20, -2], shadow: ["shadow.3d3.destroyed.jpg", -16, 8] } },
+    { from: 4, top: ["top.3d4@2x.webp", -20, -21], shadow: ["shadow.3d4.jpg", -20, -2], lift: 0,
+      damaged: { top: ["top.3d4.damaged@2x.webp", -20, -21], shadow: ["shadow.3d4.damaged.jpg", -20, -2] },
+      destroyed: { top: ["top.3d4.destroyed@2x.webp", -15, 1], shadow: ["shadow.3d4.destroyed.jpg", 1, 9] } },
+    { from: 5, top: ["top.3d5@2x.webp", -20, -20], shadow: ["shadow.3d5.jpg", -21, -2], lift: 0,
+      damaged: { top: ["top.3d5.damaged@2x.webp", -20, -20], shadow: ["shadow.3d5.damaged.jpg", -21, -2] },
+      destroyed: { top: ["top.3d5.destroyed@2x.webp", -18, -1], shadow: ["shadow.3d5.destroyed.jpg", -18, 5] } },
+  ],
+  // 18 Stone Block: 3D, one look, still
+  18: [
+    { from: 1, top: ["top.3d1@2x.webp", -16, -19], shadow: ["shadow.3d1.jpg", -16, -1], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -16, -19], shadow: ["shadow.3d1.damaged.jpg", -16, -1] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -11, -2], shadow: ["shadow.3d1.destroyed.jpg", -11, 4] } },
+  ],
+  // 19 Wild Monster Baiter: 3D, one look; its 41 cells as Flash's
+  19: [
+    { from: 1, top: ["top.3d1@2x.webp", -40, -23], shadow: ["shadow.3d1.jpg", -41, 30], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -33, -24, 66, 72, 41], columns: 31, body: ["body.3d1@2x.webp", -40, -8] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -40, -17], shadow: ["shadow.3d1.damaged.jpg", -41, 30] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -47, 16], shadow: ["shadow.3d1.destroyed.jpg", -47, 27] } },
+  ],
+  // 51 Catapult: 3D, Flash's three looks (the third also level 4), still
+  51: [
+    { from: 1, top: ["top.3d1@2x.webp", -43, 12], shadow: ["shadow.3d1.jpg", -41, 34], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -51, 4], shadow: ["shadow.3d1.damaged.jpg", -49, 34] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -48, 22], shadow: ["shadow.3d3.destroyed.jpg", -49, 26] } },
+    { from: 2, top: ["top.3d2@2x.webp", -44, -23], shadow: ["shadow.3d2.jpg", -41, 21], lift: 0,
+      damaged: { top: ["top.3d2.damaged@2x.webp", -52, -23], shadow: ["shadow.3d2.damaged.jpg", -49, 23] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -48, 22], shadow: ["shadow.3d3.destroyed.jpg", -49, 26] } },
+    { from: 3, top: ["top.3d3@2x.webp", -44, -29], shadow: ["shadow.3d3.jpg", -41, 21], lift: 0,
+      damaged: { top: ["top.3d3.damaged@2x.webp", -52, -29], shadow: ["shadow.3d3.damaged.jpg", -49, 22] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -48, 22], shadow: ["shadow.3d3.destroyed.jpg", -49, 26] } },
+  ],
+  // 114 Champion Cage: 3D, one look, still as Flash's
+  114: [
+    { from: 1, top: ["top.3d1@2x.webp", -128, -12], shadow: ["shadow.3d1.jpg", -128, 17], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -128, -12], shadow: ["shadow.3d1.damaged.jpg", -128, 17] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -128, 11], shadow: ["shadow.3d1.destroyed.jpg", -128, 18] } },
+  ],
+};
+
+/**
+ * The Inferno's own 3D buildings, drawn in an Inferno yard from the
+ * Inferno's folders: its Blocks (17, `buildings/iwalls/`), three looks as
+ * Flash's, the first a low rim of rock that casts no shadow.
+ */
+export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  // 17 Block: 3D, the Inferno's three looks, still
+  17: [
+    { from: 1, top: ["top.3d1@2x.webp", -24, -6], shadow: null, lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -24, -7], shadow: null },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -20, 0], shadow: null } },
+    { from: 2, top: ["top.3d2@2x.webp", -21, -10], shadow: ["shadow.3d2.jpg", -21, 4], lift: 0,
+      damaged: { top: ["top.3d2.damaged@2x.webp", -21, -9], shadow: ["shadow.3d2.damaged.jpg", -21, 4] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -21, -2], shadow: ["shadow.3d2.destroyed.jpg", -21, 7] } },
+    { from: 3, top: ["top.3d3@2x.webp", -20, -24], shadow: ["shadow.3d3.jpg", -20, -3], lift: 0,
+      damaged: { top: ["top.3d3.damaged@2x.webp", -20, -24], shadow: ["shadow.3d3.damaged.jpg", -20, -3] },
+      destroyed: { top: ["top.3d3.destroyed@2x.webp", -20, -3], shadow: ["shadow.3d3.destroyed.jpg", -17, 7] } },
   ],
 };
 
 /** Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings. */
 const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART, ...BUILDING_3D_ART };
 
-/** Whether an Inferno yard's `type` has tiers of its own (`INFERNO_TOWER_TIER_ART`). */
+/**
+ * Whether an Inferno yard's `type` has tiers of its own (`INFERNO_TOWER_TIER_ART`,
+ * `INFERNO_BUILDING_3D_ART`).
+ */
 export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
-  kind === "inferno" && type in INFERNO_TOWER_TIER_ART;
+  kind === "inferno" && (type in INFERNO_TOWER_TIER_ART || type in INFERNO_BUILDING_3D_ART);
 
 /**
  * The new picture a building shows at `level` in a `kind` yard, or null with
  * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1, for
- * every type without new art and for a 3D building in an Inferno yard (which
- * keeps its Inferno art until its own Inferno 3D look is approved).
+ * every type without new art and for a 3D building in an Inferno yard with
+ * no Inferno 3D look of its own (it keeps its Inferno art until one is
+ * approved).
  */
 export const tierArtFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
-  if (!newTowerArt() || (kind === "inferno" && type in BUILDING_3D_ART)) return null;
-  const inferno = hasInfernoTiers(type, kind);
-  if ((inferno || type in TOWER_TIER_ART) && !MODERN_TOWERS.includes(type)) return null;
+  if (!newTowerArt()) return null;
+  let looks: readonly TierArt[] | undefined;
+  if (kind === "inferno" && type in INFERNO_BUILDING_3D_ART) {
+    looks = INFERNO_BUILDING_3D_ART[type];
+  } else if (kind === "inferno" && type in BUILDING_3D_ART) {
+    return null;
+  } else {
+    const inferno = kind === "inferno" && type in INFERNO_TOWER_TIER_ART;
+    if ((inferno || type in TOWER_TIER_ART) && !MODERN_TOWERS.includes(type)) return null;
+    looks = inferno ? INFERNO_TOWER_TIER_ART[type] : NEW_ART[type];
+  }
   let chosen: TierArt | null = null;
-  for (const tier of (inferno ? INFERNO_TOWER_TIER_ART[type] : NEW_ART[type]) ?? []) {
+  for (const tier of looks ?? []) {
     if (tier.from > level) break;
     chosen = tier;
   }

@@ -5,15 +5,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
 import { ArtState, artFolder, resolveArt, restingLayers } from "./buildingArt";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
-import { BUILDING_3D_ART, tierArtFor } from "./buildingArtTiers";
+import { BUILDING_3D_ART, INFERNO_BUILDING_3D_ART, tierArtFor } from "./buildingArtTiers";
 
 /** The game server's assets, which the 3D pictures are served from. */
 const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import.meta.url));
 
-/** The eight 3D yard buildings (owner, 31 Oct 2026: "All approved"). */
-const TYPES = [1, 2, 3, 4, 6, 13, 15, 16];
-/** The ones whose parts move, as Flash's do; Housing and the Control Center stand still. */
-const MOVING = [1, 2, 3, 4, 6, 13];
+/**
+ * The 3D yard buildings: the first eight (owner, 31 Oct 2026: "All approved"), then the Flinger, Juicer, Yard Planner,
+ * Map Room, General Store, Blocks, Stone Block, Baiter, Catapult and Champion Cage (1 Nov 2026).
+ */
+const TYPES = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 51, 114];
+/** The ones whose parts move, as Flash's do; the rest stand still, as Flash's did. */
+const MOVING = [1, 2, 3, 4, 6, 9, 13, 19];
+/** The ones with no damaged or destroyed 3D look yet: the General Store, tinted and then Flash's rubble. */
+const NO_RUIN = [12];
 
 /**
  * The looks whose model reaches past Flash's picture, `[left, top, right, bottom]` in px each edge may differ: the
@@ -32,24 +37,36 @@ const webpSize = (file: string): [number, number] => {
 /** The Flash row's looks for a type: each look's first level, its strip's cells and its offset. */
 const flashLooks = (type: number) => BUILDING_ART_ROWS.find((row) => row[0] === type)?.[3] ?? [];
 
+/** The Flash looks that each start a new picture: the Flinger's level 5 is its level 4 again. */
+const flashPictures = (type: number) =>
+  flashLooks(type).filter((look, i, all) => i === 0 || look[1]?.[0] !== all[i - 1]?.[1]?.[0]);
+
 /** `[left, top, right, bottom]` in 1x px from the building's origin. */
 type Box = [number, number, number, number];
 
-/** A PNG's alpha, `[width, height, alpha]`: 8 or 16 bit RGB(A), not interlaced, all Flash's buildings are. */
+/**
+ * A PNG's alpha, `[width, height, alpha]`: 8 or 16 bit RGB(A) or 8 bit palette (the walls'), not interlaced, all
+ * Flash's buildings are.
+ */
 const pngAlpha = (file: string): [number, number, Uint8Array] => {
   const bytes = readFileSync(file);
   const width = bytes.readUInt32BE(16);
   const height = bytes.readUInt32BE(20);
   const [depth, colour, , , interlace] = bytes.subarray(24, 29);
-  expect([depth === 8 || depth === 16, colour === 2 || colour === 6, interlace], file).toEqual([true, true, 0]);
+  const palette = colour === 3 && depth === 8;
+  expect([depth === 8 || depth === 16, colour === 2 || colour === 6 || palette, interlace], file).toEqual([true, true, 0]);
   const idat: Buffer[] = [];
+  // A palette's alpha per entry; entries past its end are opaque.
+  let trns = new Uint8Array(0);
   for (let at = 8; at < bytes.length; ) {
     const length = bytes.readUInt32BE(at);
-    if (bytes.toString("latin1", at + 4, at + 8) === "IDAT") idat.push(bytes.subarray(at + 8, at + 8 + length));
+    const chunk = bytes.toString("latin1", at + 4, at + 8);
+    if (chunk === "IDAT") idat.push(bytes.subarray(at + 8, at + 8 + length));
+    if (chunk === "tRNS") trns = bytes.subarray(at + 8, at + 8 + length);
     at += 12 + length;
   }
   const raw = inflateSync(Buffer.concat(idat));
-  const pixel = ((colour === 6 ? 4 : 3) * (depth ?? 8)) / 8;
+  const pixel = palette ? 1 : ((colour === 6 ? 4 : 3) * (depth ?? 8)) / 8;
   const stride = width * pixel;
   const rows = new Uint8Array(stride * height);
   for (let y = 0; y < height; y++) {
@@ -67,6 +84,7 @@ const pngAlpha = (file: string): [number, number, Uint8Array] => {
   // An RGB picture is opaque all over; a 16 bit alpha's high byte is enough.
   const alpha = new Uint8Array(width * height).fill(255);
   if (colour === 6) for (let i = 0; i < alpha.length; i++) alpha[i] = rows[i * pixel + pixel - (depth === 16 ? 2 : 1)] ?? 0;
+  if (palette) for (let i = 0; i < alpha.length; i++) alpha[i] = trns[rows[i] ?? 0] ?? 255;
   return [width, height, alpha];
 };
 
@@ -97,11 +115,11 @@ const union = (boxes: Box[]): Box => [
 afterEach(() => setClassicLook(false));
 
 describe("the 3D yard buildings", () => {
-  it("are the eight approved, one look for each of Flash's", () => {
+  it("are the approved ones, one look for each of Flash's pictures", () => {
     expect(Object.keys(BUILDING_3D_ART).map(Number)).toEqual(TYPES);
     for (const type of TYPES) {
       expect(BUILDING_3D_ART[type]?.map((look) => look.from), `type ${type}`).toEqual(
-        flashLooks(type).map((look) => look[0]),
+        flashPictures(type).map((look) => look[0]),
       );
     }
   });
@@ -141,9 +159,9 @@ describe("the 3D yard buildings", () => {
         expect(restingLayers(art!).map((layer) => layer.url)).toEqual([art?.top.url, art?.anims[0]?.url]);
       }
     }
-    for (const type of [15, 16]) {
-      const art = resolveArt(type, 4, ArtState.DEFAULT);
-      expect(art?.anims).toEqual([]);
+    for (const type of TYPES.filter((one) => !MOVING.includes(one))) {
+      const art = resolveArt(type, 1, ArtState.DEFAULT);
+      expect(art?.anims, `type ${type}`).toEqual([]);
       expect(art?.still).toBeUndefined();
       expect(art?.top.url).toContain("/top.3d1@2x.webp");
     }
@@ -151,11 +169,21 @@ describe("the 3D yard buildings", () => {
 
   it("ship every picture, strip and shadow they name, each strip as big as its cells", () => {
     const missing: string[] = [];
-    for (const type of TYPES) {
-      const folder = `${ASSETS}${artFolder(type) ?? ""}`;
-      for (const look of BUILDING_3D_ART[type] ?? []) {
-        const files = [look.top[0], look.shadow[0], ...(look.anim ? [look.anim.strip[0], look.anim.body?.[0] ?? ""] : [])];
-        for (const file of files) if (!existsSync(folder + file)) missing.push(`${type}: ${file}`);
+    const sets = [
+      ...TYPES.map((type) => [type, BUILDING_3D_ART[type] ?? [], "main"] as const),
+      [17, INFERNO_BUILDING_3D_ART[17] ?? [], "inferno"] as const,
+    ];
+    for (const [type, looks, kind] of sets) {
+      const folder = `${ASSETS}${artFolder(type, kind) ?? ""}`;
+      for (const look of looks) {
+        const files = [
+          look.top[0],
+          look.shadow?.[0],
+          look.anim?.strip[0],
+          look.anim?.body?.[0],
+          ...[look.damaged, look.destroyed].flatMap((ruin) => [ruin?.top[0], ruin?.shadow?.[0]]),
+        ];
+        for (const file of files) if (file && !existsSync(folder + file)) missing.push(`${type}: ${file}`);
         if (!look.anim || !existsSync(folder + look.anim.strip[0])) continue;
         const [file, , , width, height, cells] = look.anim.strip;
         const columns = look.anim.columns ?? cells;
@@ -196,16 +224,57 @@ describe("the 3D yard buildings", () => {
     expect(off).toEqual([]);
   });
 
-  it("keep the picture when damaged and fall to the Flash rubble when destroyed", () => {
-    const healthy = resolveArt(4, 10, ArtState.DEFAULT);
-    expect(resolveArt(4, 10, ArtState.DAMAGED)?.top.url).toBe(healthy?.top.url);
-    const ruin = resolveArt(4, 10, ArtState.DESTROYED);
-    expect(ruin?.top.url).toBe("/assets/buildings/goofactory.v2/top.destroyed.png");
-    expect(ruin?.anims).toEqual([]);
+  it("show their own 3D damaged and destroyed looks, standing still", () => {
+    for (const type of TYPES.filter((one) => !NO_RUIN.includes(one))) {
+      const folder = `/assets/${artFolder(type) ?? ""}`;
+      for (const look of BUILDING_3D_ART[type] ?? []) {
+        const name = `type ${type} look ${look.from}`;
+        expect(look.damaged, name).toBeDefined();
+        expect(look.destroyed, name).toBeDefined();
+        for (const [state, ruin] of [[ArtState.DAMAGED, look.damaged], [ArtState.DESTROYED, look.destroyed]] as const) {
+          const art = resolveArt(type, look.from, state);
+          expect(art?.top.url, name).toBe(`${folder}${ruin?.top[0] ?? ""}`);
+          expect(art?.shadow?.url ?? null, name).toBe(ruin?.shadow ? `${folder}${ruin.shadow[0]}` : null);
+          expect(art?.anims).toEqual([]);
+          expect(art?.still).toBeUndefined();
+        }
+      }
+    }
+    // Like Flash's, one rubble pile for all of a building's looks: the Goo Factory's from its third.
+    expect(resolveArt(4, 10, ArtState.DESTROYED)?.top.url).toBe("/assets/buildings/goofactory.v2/top.3d3.destroyed@2x.webp");
+    // The Classic look keeps Flash's.
+    setClassicLook(true);
+    expect(resolveArt(4, 10, ArtState.DESTROYED)?.top.url).toBe("/assets/buildings/goofactory.v2/top.destroyed.png");
+  });
+
+  it("without 3D ruins (the General Store) keep the picture when damaged and fall to the Flash rubble", () => {
+    for (const type of NO_RUIN) {
+      const healthy = resolveArt(type, 1, ArtState.DEFAULT);
+      expect(resolveArt(type, 1, ArtState.DAMAGED)?.top.url).toBe(healthy?.top.url);
+      const ruin = resolveArt(type, 1, ArtState.DESTROYED);
+      expect(ruin?.top.url).toBe(`/assets/${artFolder(type) ?? ""}${flashLooks(type)[0]?.[3]?.[0] ?? ""}`);
+    }
+  });
+
+  it("give the Inferno's Blocks their own 3D looks in an Inferno yard, from the Inferno's folder", () => {
+    const looks = INFERNO_BUILDING_3D_ART[17] ?? [];
+    expect(looks.map((look) => look.from)).toEqual([1, 2, 3]);
+    for (const level of [1, 2, 3, 4, 5]) {
+      const look = [...looks].reverse().find((one) => one.from <= level);
+      const art = resolveArt(17, level, ArtState.DEFAULT, "inferno");
+      expect(art?.top.url, `level ${level}`).toBe(`/assets/buildings/iwalls/${look?.top[0] ?? ""}`);
+      expect(resolveArt(17, level, ArtState.DESTROYED, "inferno")?.top.url).toBe(
+        `/assets/buildings/iwalls/${look?.destroyed?.top[0] ?? ""}`,
+      );
+    }
+    // The first casts no shadow.
+    expect(resolveArt(17, 1, ArtState.DEFAULT, "inferno")?.shadow).toBeNull();
+    setClassicLook(true);
+    expect(resolveArt(17, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe("/assets/buildings/iwalls/top.1.v2.png");
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {
-    for (const type of TYPES) {
+    for (const type of TYPES.filter((one) => !(one in INFERNO_BUILDING_3D_ART))) {
       for (const level of [1, 3, 6, 10]) {
         expect(tierArtFor(type, level, "inferno"), `type ${type} level ${level}`).toBeNull();
         const art = resolveArt(type, level, ArtState.DEFAULT, "inferno");

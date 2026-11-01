@@ -223,7 +223,7 @@ describe("the repainted tower tiers", () => {
     expect(tierLift(21, 7)).toBeGreaterThan(tierLift(21, 4));
     expect(tierLift(14, 9)).toBe(0);
     expect(tierArtFor(1, 10)?.lift).toBe(0);
-    expect(tierArtFor(9, 1)).toBeNull();
+    expect(tierArtFor(24, 1)).toBeNull();
   });
 
   it("stand each higher tier taller, on the same base", () => {
@@ -310,7 +310,7 @@ describe("the turning turrets", () => {
         expect(art?.topIsAnim).toBe(false);
         expect(art?.still?.url).toBe(`/assets/${folder}top.t${n}@2x.webp`);
         expect(art?.shadow?.url).toBe(
-          `/assets/${folder}${kind === "main" && PAINTED_SHADOWS.includes(type) ? `shadow.t${n}.jpg` : tier.shadow[0]}`,
+          `/assets/${folder}${kind === "main" && PAINTED_SHADOWS.includes(type) ? `shadow.t${n}.jpg` : tier.shadow?.[0] ?? ""}`,
         );
         // The 3D Cannon's prongs are cut out of each barrel cell, so no tower has a front layer now.
         expect(art?.anims).toHaveLength(1);
