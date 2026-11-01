@@ -887,6 +887,78 @@ def posts(name, poly, z0, z1, skip=(), w=0.32):
         box(f"{name}{i}", (w, w, z1 - z0), (p[0], p[1], z0), M["frame"], rot=(0, 0, 45), bevel=0.04)
 
 
+def _envf(k, d):
+    return float(os.environ.get(k, d))
+
+
+# Flash's two gold "columns" are two upright cog wheels, seen almost edge-on: each a tall narrow gold shape with teeth
+# on both its edges. Their middle in the plan, radius, thickness, turn away from edge-on (deg), teeth, tooth length.
+COG_UV = (_envf("COG_U", -3.7), _envf("COG_V", 3.0))
+COG_R, COG_T, COG_TURN = _envf("COG_R", 2.05), _envf("COG_T", 0.65), _envf("COG_TURN", 0.0)
+COG_N, COG_H, COG_TW = int(_envf("COG_N", 15)), _envf("COG_H", 0.3), _envf("COG_TW", 1.2)
+
+
+def cog_mesh(name, r, teeth, h, t, rim, tw, mat):
+    """A cog in local XY (axle local Z): a ring of thickness t (outer radius r - h, inner r - h - rim) and `teeth`
+    four-sided pointed teeth round it: each tooth's root is a diamond, tw wide along the axle at its middle (wider than
+    the ring) and pointed round the rim, tapering to a small tip at radius r, so that seen edge-on the teeth make a
+    zigzag on both sides, as Flash draws them."""
+    bm = bmesh.new()
+    ro, ri = r - h, r - h - rim
+    n = 64
+    loops = []
+    for z in (-t / 2, t / 2):
+        loops.append(([bm.verts.new((ro * math.cos(2 * math.pi * j / n), ro * math.sin(2 * math.pi * j / n), z))
+                       for j in range(n)],
+                      [bm.verts.new((ri * math.cos(2 * math.pi * j / n), ri * math.sin(2 * math.pi * j / n), z))
+                       for j in range(n)]))
+    (o0, i0), (o1, i1) = loops
+    for j in range(n):
+        jn = (j + 1) % n
+        bm.faces.new((o1[j], o1[jn], i1[jn], i1[j]))
+        bm.faces.new((o0[jn], o0[j], i0[j], i0[jn]))
+        bm.faces.new((o0[j], o0[jn], o1[jn], o1[j]))
+        bm.faces.new((i0[jn], i0[j], i1[j], i1[jn]))
+    p = 2 * math.pi / teeth
+    for i in range(teeth):
+        a = i * p
+        rad, tan = Vector((math.cos(a), math.sin(a), 0)), Vector((-math.sin(a), math.cos(a), 0))
+        ax = Vector((0, 0, 1))
+        base = rad * (ro - 0.06)
+        wb = _envf("COG_WB", 0.95) * p * ro / 2     # the root's half width round the rim
+        vs = [bm.verts.new(base + tan * sx * wb + ax * sz * tw / 2) for sx, sz in ((-1, 0), (0, -1), (1, 0), (0, 1))]
+        tip = rad * r
+        vt = [bm.verts.new(tip + tan * sx * 0.05 + ax * sz * 0.05) for sx, sz in ((-1, 0), (0, -1), (1, 0), (0, 1))]
+        bm.faces.new(vs[::-1])
+        bm.faces.new(vt)
+        for j in range(4):
+            bm.faces.new((vs[j], vs[(j + 1) % 4], vt[(j + 1) % 4], vt[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return mesh_ob(name, bm, [mat], smooth=False, bevel=0.02, segs=2)
+
+
+def cog_wheel(k):
+    """Cog k (0 left, 1 right, its mirror image): upright, its axle level, turned COG_TURN degrees from edge-on to the
+    camera; the toothed ring, a thinner web, a hub, and the axle into a bearing block on the wall corner."""
+    u, v = COG_UV
+    c = Vector(uv(u, v)) if k == 0 else Vector(mir(uv(u, v)))
+    c = Vector((c.x, c.y, COG_R + 0.02))
+    b = math.radians(45.0 + COG_TURN)
+    ax = Vector((math.cos(b), math.sin(b), 0.0))
+    if k == 1:
+        ax = Vector((-ax.y, -ax.x, 0.0))
+    q = ax.to_track_quat("Z", "Y")
+    mw = Matrix.Translation(c) @ q.to_matrix().to_4x4()
+    obs = [cog_mesh(f"coil{k}", COG_R, COG_N, COG_H, COG_T, 0.3, COG_TW, M["gold"])]
+    obs.append(cyl(f"coil{k}web", COG_R - COG_H - 0.2, COG_T * 0.55, (0, 0, -COG_T * 0.275), M["gold"], verts=40,
+                   bevel=0.02))
+    ht = COG_T + _envf("COG_HUB", 0.0)
+    obs.append(cyl(f"coil{k}hub", 0.42, ht, (0, 0, -ht / 2), M["gold"], verts=24, bevel=0.04))
+    for o in obs:
+        o.matrix_world = mw @ o.matrix_basis
+    return obs
+
+
 def lower():
     out = xy(LW)
     prism("lwall", out, 0.0, LW_Z, M["navy"], bevel=0.05)
@@ -905,15 +977,9 @@ def lower():
     bolts = [_on(a, b, f, z, 0.03) for f, z in ((0.08, 2.9), (0.62, 3.3), (0.62, 1.9), (0.86, 2.5), (0.86, 1.1))]
     bolts += [(mir(p), mir(n)) for p, n in bolts]
     studs("lbolt", bolts, 0.19, M["steel"], squash=0.45)
-    # the gold ribbed columns at the front corners
-    for k, (u, v) in enumerate((COIL_UV, (-COIL_UV[0], COIL_UV[1]))):
-        x, y = uv(u, v)
-        prof = [(0.0, 0.0), (0.42, 0.0), (0.42, 0.12)]
-        for j in range(7):                          # Flash's columns: a stack of sharp double cones up to the beam
-            z0 = 0.14 + j * 0.58
-            prof += [(0.24, z0), (0.58, z0 + 0.28), (0.6, z0 + 0.29), (0.58, z0 + 0.3), (0.24, z0 + 0.58)]
-        prof += [(0.42, LW_Z), (0.0, LW_Z)]
-        lathe(f"coil{k}", prof, (x, y, 0.0), M["gold"], verts=28)
+    # the two gold cogs at the front corners
+    for k in (0, 1):
+        cog_wheel(k)
     # a gold beam under the deck's front edge from column to column
     ca, cb = Vector(uv(*COIL_UV)), Vector(uv(-COIL_UV[0], COIL_UV[1]))
     _, _, tb, nb, angb = face(ca, cb)

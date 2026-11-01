@@ -1,6 +1,6 @@
 """labdmg.py : the Monster Lab's damaged and destroyed looks in 3D, after Flash's top.1.damaged.png and
 top.1.destroyed.png (one look for every level). The model (../lab.py) is built as it is, then broken: the lower walls
-crushed and holed so the whole upper tier drops and leans forward, the gold columns buckled, the pipes knocked askew, the
+crushed and holed so the whole upper tier drops and leans forward, the gold cogs pressed down, the pipes knocked askew, the
 bells tipped; the destroyed look is the same parts in one low burnt heap inside the building's square, the dome on top.
 
     blender -b --factory-startup -P labdmg.py -- 1 <prev|still> <damaged|destroyed>      (run.sh <prev|still> <state>)
@@ -270,13 +270,12 @@ def damaged():
         fold([piece, riv] + group(bell), crack_line(piece, V_DIR, dv), U_DIR, deg)
     burn(crack_line(fl, V_DIR, dv) + Vector((0, 0, 0.3)), 1.4)
     burn(crack_line(fr, U_DIR, du) + Vector((0, 0, 0.3)), 1.0)
-    # the gold columns buckle: each a little shorter and leaning outward, under the dropped deck
+    # the gold cogs pressed down into the ground under the dropped deck (Flash draws them shorter), leaning outward
     for k, s in ((0, 1), (1, -1)):
         c = group(f"coil{k}")
         base = c[0].location.copy()
-        for o in c:
-            o.scale.z *= 0.74
-        D.hinge(c, base, rot=(s * 9.0, s * -9.0, 0.0))
+        base.z = 0.0
+        D.hinge(c, base, rot=(s * 9.0, s * -9.0, 0.0), move=(0.0, 0.0, -1.55))
     # the pipes knocked askew round their wall ends; the bells tipped; the plinth slid
     for k, (rx, ry) in enumerate(((14.0, -6.0), (-6.0, 14.0))):
         p = group(f"pipe{k}") + group(f"pipeflange{k}") + group(f"pipecollar{k}")
@@ -318,7 +317,7 @@ def rewire():
 # ------------------------------------------------------------------------------------------------------------ destroyed
 def destroyed():
     """Flash's heap: a low pile in the building's own square of broken deck pieces, navy and steel panels sticking up,
-    the dome in the middle, the three bells, both glass pipes, copper wire loops, the gold columns lying in front."""
+    the dome in the middle, the three bells, both glass pipes, copper wire loops, the gold cogs fallen over in front."""
     G["build"]()
     D.kill(named("steam", "uwall", "uflank", "upost", "pilaster", "ustrip", "uband", "urivet", "ubolt", "wire",
                  "lstrip", "ldoor", "lbolt", "sdoorhole", "sdoorjamb", "sdoorlintel", "udeckrivet", "ldeckrivet", "lbeam"))
@@ -347,13 +346,16 @@ def destroyed():
                                                   for o in group(n) if o.parent is None]
     for o in loose:
         o.location.z += 1000.0
-    # built from the bottom up: the lower deck's pieces on the stump, the gold columns lying in front, the dome in the
+    # built from the bottom up: the lower deck's pieces on the stump, the gold cogs lying in front, the dome in the
     # middle, the upper deck's pieces tipped round it, the bells, the pipes, the plinth, the panels
     for o, u, v, rot in ((lmb, 0.0, -2.2, (11.0, 11.0, 2.0)), (lmf, 0.2, 2.0, (-12.0, -12.0, -3.0)),
                          (la, -5.4, 0.2, (16.0, -20.0, 8.0)), (lr, 5.6, 0.0, (-18.0, 16.0, -5.0))):
         place([o], u, v, rot, sink=0.05)
     for k, (u, v, yaw) in enumerate(((-3.0, 3.3, 20.0), (4.0, 3.3, -20.0))):
-        place(group(f"coil{k}"), u, v, (90.0, 0.0, yaw), sink=0.1)
+        c = group(f"coil{k}")                          # each cog fallen over, nearly flat, its teeth up
+        a = c[0].matrix_world.col[2].xyz.normalized()
+        q = Quaternion((0.0, 0.0, 1.0), math.radians(yaw)) @ Quaternion(Vector((0.0, 0.0, 1.0)).cross(a), math.radians(-76.0))
+        place(c, u, v, [math.degrees(x) for x in q.to_euler("XYZ")], sink=0.1)
     place(group("dome"), 0.4, 0.4, (8.0, -6.0, 0.0), sink=0.5)           # the dome low in the middle of the heap
     for o, u, v, rot in ((ubl, -3.8, -3.6, (24.0, 6.0, 15.0)), (ubr, 3.8, -3.8, (-6.0, -26.0, -12.0)),
                          (ufl, -5.4, 0.0, (-16.0, 14.0, 25.0)), (ufr, 4.4, 0.4, (14.0, 18.0, -15.0))):
