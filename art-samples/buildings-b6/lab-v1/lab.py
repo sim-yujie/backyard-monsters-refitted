@@ -998,7 +998,7 @@ def upper():
         pts += edge_pts(a, b, n_, UD_Z0 - 0.13, 0.08, inset=0.06)
     studs("urivet", pts, 0.07, M["rivet"])
     a, b = out[0], out[1]
-    bolts = [_on(a, b, f, z, 0.03) for f, z in ((0.25, 6.2), (0.25, 7.9), (0.7, 6.2), (0.7, 7.9))]
+    bolts = [_on(a, b, f, z, 0.03) for f, z in ((0.25, 6.2), (0.18, 8.5), (0.7, 6.2), (0.82, 8.5))]   # clear of the pipe
     a, b = out[1], out[2]
     bolts += [_on(a, b, f, z, 0.03) for f, z in ((0.2, 5.8), (0.2, 8.5), (0.85, 5.8), (0.85, 8.5))]
     bolts += [(mir(p), mir(n)) for p, n in bolts]
