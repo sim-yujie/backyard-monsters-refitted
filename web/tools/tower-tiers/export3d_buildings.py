@@ -1,6 +1,6 @@
 """Exports the 3D yard buildings (owner, 31 Oct 2026: "All approved", "Add 3d buildings into game") into the game.
 
-    python -I web/tools/tower-tiers/export3d_buildings.py <building> <render folder> [more pairs ...]
+    python -I web/tools/tower-tiers/export3d_buildings.py <building>[:damaged|:destroyed] <render folder> [more pairs ...]
 
     e.g. export3d_buildings.py twig D:/Coding/BYMR/worktrees/buildings-3d-b6/art-samples/buildings-b6/twig-v3/render
 
@@ -17,6 +17,23 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | hatchery | 13 Hatchery | art/buildings-3d-hatchery | hatchery-v1 | levels 1, 2, 3; the crank turns |
 | housing | 15 Monster Housing | art/buildings-3d-housing | housing-v1 | one look, still |
 | hcc | 16 Hatchery Control Center | art/buildings-3d-hcc | hcc-v1 | one look, still |
+| planner | 10 Yard Planner | art/buildings-3d-planner | planner-v1 | one look, still |
+| juicer | 9 Monster Juicer | art/buildings-3d-juicer | juicer-v1 | one look; 51 cells of its crusher and juice |
+| cage | 114 Champion Cage | art/buildings-3d-cage | cage-v1 | one look, still |
+| catapult | 51 Catapult | art/buildings-3d-catapult | catapult-v1 | levels 1, 2, 3 (3 also level 4), still |
+| baiter | 19 Wild Monster Baiter | art/buildings-3d-baiter | baiter-v1 | one look; 41 cells of its lure |
+| flinger | 5 Flinger | art/buildings-3d-flinger | flinger-v1 | levels 1, 2, 3, 4 (4 also level 5), still |
+| store | 12 General Store | art/buildings-3d-store | store-v1 | one look, still |
+| maproom | 11 Map Room | art/buildings-3d-maproom | maproom-v1 | one look, still |
+| block | 17 Block | art/buildings-3d-walls | walls-v1 | levels 1-5, still (8 render px a 1x px) |
+| stone | 18 Stone Block | art/buildings-3d-walls | walls-v1 | one look, still |
+| iblock | 17 Block in an Inferno yard | art/buildings-3d-walls | walls-v1 | levels 1-3, still |
+
+The damaged and destroyed looks (`<building>:damaged`, `<building>:destroyed`) are stills, rendered the same way into
+`L<n>-damaged-base.png` and `-alone.png` (a wall's `block<n>-damaged-...`): the first eight's from
+art/buildings-3d-damage (`art-samples/buildings-b6/damage/<building>/render`), the others' from their own folder's
+`render/`. A look with no render of that state is skipped: Flash shares one destroyed picture across a building's
+levels, and so does the 3D (`buildingArtTiers.ts` names it in every look).
 
 A look's renders (`render/`): `L<n>-base.png` (`base.png`), every still part with the ground shadow (a shadow
 catcher: black, the shade as alpha) and the moving parts hidden from the camera; `L<n>-alone.png`, the building with
@@ -32,6 +49,7 @@ Writes into `server/public/assets/buildings/<folder>/` (the Flash building's own
 - `top.3d<n>@2x.webp`: the whole building at rest (body and cell 0), for the icons and the placing ghost; a still
   building's only picture.
 - `shadow.3d<n>.jpg`: the 3D ground shadow, 1x, white where there is none, as Flash's shadows (drawn multiplied).
+- `top.3d<n>.damaged@2x.webp` and `shadow.3d<n>.damaged.jpg` (and `.destroyed`): a state's still and its shadow.
 
 The shadow comes off the base this way: outside the building (`alone.png`, grown a little) a base pixel is all shadow;
 under it the shadow is the nearest shadow outside, and the still parts' own alpha is what the base's is over that
@@ -59,12 +77,12 @@ from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parents[3]
 ASSETS = ROOT / "server" / "public" / "assets" / "buildings"
-K = 12                         # render px a 1x px
-HALF = K // 2                  # render px a @2x px
+K = 12                         # render px a 1x px (a building's own `k` where it differs: the walls' 8)
 MAX_W = 4096                   # the widest a strip's file may be; wider, it wraps into rows (`columns`)
 RESOURCE = [(1, "L1"), (3, "L3"), (6, "L6"), (10, "L10")]
 # Each building: its type, its Flash folder, its canvas's top-left in 1x px, its looks (first level, render prefix)
-# and how it moves: "parts" (a layer of moving parts per cell), "cells" (the silo's whole cells) or None.
+# and how it moves: "parts" (a layer of moving parts per cell), "cells" (the silo's whole cells) or None. `states`
+# gives a damaged or destroyed render's own canvas top-left where it is wider than the whole look's.
 BUILDINGS = {
     "twig": dict(type=1, folder="twigsnapper.v2", frame=(-44, -64), looks=RESOURCE, moves="parts"),
     "pebble": dict(type=2, folder="pebbleshiner.v2", frame=(-44, -64), looks=RESOURCE, moves="parts"),
@@ -75,11 +93,28 @@ BUILDINGS = {
                      moves="parts"),
     "housing": dict(type=15, folder="monsterhousing", frame=(-122, 0), looks=[(1, "")], moves=None),
     "hcc": dict(type=16, folder="hatcherycontrolcenter", frame=(-56, -66), looks=[(1, "L1")], moves=None),
+    "planner": dict(type=10, folder="yardplanner", frame=(-62, -34), looks=[(1, "L1")], moves=None),
+    "juicer": dict(type=9, folder="monsterjuiceloosener", frame=(-50, -22), looks=[(1, "L1")], moves="parts",
+                   states={"damaged": (-64, -14), "destroyed": (-64, -14)}),
+    "cage": dict(type=114, folder="monstercage", frame=(-140, -24), looks=[(1, "L1")], moves=None),
+    "catapult": dict(type=51, folder="catapult", frame=(-64, -40), looks=[(1, "L1"), (2, "L2"), (3, "L3")],
+                     moves=None),
+    "baiter": dict(type=19, folder="monsterbaiter", frame=(-50, -36), looks=[(1, "L1")], moves="parts"),
+    "flinger": dict(type=5, folder="flinger", frame=(-80, -72), looks=[(1, "L1"), (2, "L2"), (3, "L3"), (4, "L4")],
+                    moves=None),
+    "store": dict(type=12, folder="generalstore", frame=(-50, -44), looks=[(1, "L1")], moves=None),
+    "maproom": dict(type=11, folder="maproom", frame=(-70, -72), looks=[(1, "L1")], moves=None,
+                    states={"damaged": (-78, -72), "destroyed": (-78, -72)}),
+    "block": dict(type=17, folder="walls", frame=(-30, -30), k=8, moves=None,
+                  looks=[(n, f"block{n}-whole") for n in range(1, 6)]),
+    "stone": dict(type=18, folder="walls/stone", frame=(-30, -30), k=8, looks=[(1, "stone-whole")], moves=None),
+    "iblock": dict(type=17, folder="iwalls", frame=(-30, -30), k=8, moves=None,
+                   looks=[(n, f"inferno{n}-whole") for n in range(1, 4)]),
 }
 # Flash's cells per look (`buildingArtData.ts`): the 3D strip must hold as many.
 CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 10: 24},
          "putty": {1: 26, 3: 26, 6: 26, 10: 25}, "goo": {1: 26, 3: 26, 6: 26, 10: 26}, "silo": {1: 26},
-         "hatchery": {1: 31, 2: 31, 3: 31}}
+         "hatchery": {1: 31, 2: 31, 3: 31}, "juicer": {1: 51}, "baiter": {1: 41}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
 
@@ -99,15 +134,15 @@ def resize_pm(a, size):
     return Image.fromarray((np.dstack([np.clip(rgb, 0, 1), al]) * 255 + 0.5).astype("uint8"), "RGBA")
 
 
-def whole(box):
+def whole(box, k=K):
     """A render box grown to whole 1x px."""
     x0, y0, x1, y1 = box
-    return x0 // K * K, y0 // K * K, -(-x1 // K) * K, -(-y1 // K) * K
+    return x0 // k * k, y0 // k * k, -(-x1 // k) * k, -(-y1 // k) * k
 
 
-def bbox(alpha, floor=2 / 255):
+def bbox(alpha, floor=2 / 255, k=K):
     ys, xs = np.nonzero(alpha > floor)
-    return whole((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
+    return whole((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1), k)
 
 
 def clipped(alpha, box, run=15):
@@ -180,38 +215,47 @@ def save_webp(im, path):
     im.save(path, "WEBP", quality=90, alpha_quality=100, method=6)
 
 
-def export(name, render):
+def export(name, render, state=None):
+    """A building's whole looks, or with `state` ("damaged", "destroyed") the stills of that state `render` holds."""
     cfg = BUILDINGS[name]
     out = ASSETS / cfg["folder"]
-    fx, fy = cfg["frame"]
+    fx, fy = cfg.get("states", {}).get(state, cfg["frame"])
+    k = cfg.get("k", K)
+    moves = None if state else cfg["moves"]
     rows = []
 
     def game(px, py):
-        return fx + px // K, fy + py // K
+        return fx + px // k, fy + py // k
 
     def picture(a, box, file):
         x0, y0, x1, y1 = box
-        save_webp(resize_pm(a[y0:y1, x0:x1], ((x1 - x0) // HALF, (y1 - y0) // HALF)), out / file)
+        save_webp(resize_pm(a[y0:y1, x0:x1], ((x1 - x0) * 2 // k, (y1 - y0) * 2 // k)), out / file)
         return [file, *game(x0, y0)]
 
     for level, pre in cfg["looks"]:
-        stem = f"{pre}-" if pre else ""
+        if state:
+            # `L<n>-damaged-`, a wall's `block<n>-damaged-`; a look with no render of the state shares another's.
+            stem = f"{pre.removesuffix('-whole') or f'L{level}'}-{state}-"
+            if not (render / f"{stem}base.png").exists():
+                continue
+        else:
+            stem = f"{pre}-" if pre else ""
         base = load(render / f"{stem}base.png")
         alone = load(render / f"{stem}alone.png")
-        assert base.shape[0] % K == 0 and base.shape[1] % K == 0, (name, level, base.shape)
+        assert base.shape[0] % k == 0 and base.shape[1] % k == 0, (name, level, base.shape)
         building = alone[..., 3] > 0.01
         del alone
         # Cells are read one at a time (a strip's renders are a gigabyte as floats) and kept only as cut.
         names = []
-        if cfg["moves"] == "parts":
+        if moves == "parts":
             names = sorted(render.glob(f"{stem}parts-*.png"))
-        elif cfg["moves"] == "cells":
+        elif moves == "cells":
             names = sorted(render.glob("cell-*.png"))
-        if cfg["moves"]:
+        if moves:
             assert len(names) == CELLS[name][level], (name, level, len(names))
-        tag = f"3d{level}"
+        tag = f"3d{level}.{state}" if state else f"3d{level}"
 
-        if cfg["moves"] == "cells":
+        if moves == "cells":
             # Every pixel any cell changes, grown a 1x px: the sack's box. Each cell is split like the base, the
             # sack counted as building wherever it is.
             first = np.asarray(Image.open(names[0]).convert("RGBA")).astype("int16")
@@ -219,8 +263,8 @@ def export(name, render):
             for n in names[1:]:
                 changed |= np.abs(np.asarray(Image.open(n).convert("RGBA")).astype("int16") - first).max(axis=2) > 2
             del first
-            changed = ndimage.binary_dilation(changed, iterations=K)
-            box = bbox(changed.astype("float32"), 0.5)
+            changed = ndimage.binary_dilation(changed, iterations=k)
+            box = bbox(changed.astype("float32"), 0.5, k)
             x0, y0, x1, y1 = box
             layers = []
             for n in names:
@@ -243,7 +287,7 @@ def export(name, render):
                         print(f"WARNING {n.name}: solid pixels on its {cut} edge, cut by the render's border or canvas",
                               file=sys.stderr)
                 box = whole((min(b[0] for b in boxes), min(b[1] for b in boxes),
-                             max(b[2] for b in boxes), max(b[3] for b in boxes)))
+                             max(b[2] for b in boxes), max(b[3] for b in boxes)), k)
                 x0, y0, x1, y1 = box
                 layers = [load(n)[y0:y1, x0:x1].copy() for n in names]
                 still = body.copy()
@@ -251,23 +295,26 @@ def export(name, render):
         del base
         cells = layers
 
-        row = dict(building=name, type=cfg["type"], level=level)
-        row["top"] = picture(still, bbox(still[..., 3]), f"top.{tag}@2x.webp")
+        row = dict(building=name, type=cfg["type"], level=level, **({"state": state} if state else {}))
+        row["top"] = picture(still, bbox(still[..., 3], k=k), f"top.{tag}@2x.webp")
 
         # The shadow, 1x, white where there is none: what Flash's shadow pictures are.
-        sh = np.asarray(Image.fromarray(shade, "F").resize((shade.shape[1] // K, shade.shape[0] // K), Image.BOX))
+        sh = np.asarray(Image.fromarray(shade, "F").resize((shade.shape[1] // k, shade.shape[0] // k), Image.BOX))
         # The render's canvas cuts a long shadow off at its edge: it is carried on past it and fades out there.
         sh, tx, ty = tail(sh)
         ys, xs = np.nonzero(sh > 0.02)
-        sx0, sy0 = max(0, int(xs.min()) - 1), max(0, int(ys.min()) - 1)
-        sx1, sy1 = min(sh.shape[1], int(xs.max()) + 2), min(sh.shape[0], int(ys.max()) + 2)
-        gray = np.clip(255 * (1 - sh[sy0:sy1, sx0:sx1]) + 0.5, 0, 255).astype("uint8")
-        Image.fromarray(gray, "L").save(out / f"shadow.{tag}.jpg", "JPEG", quality=90)
-        row["shadow"] = [f"shadow.{tag}.jpg", fx + tx + sx0, fy + ty + sy0]
+        row["shadow"] = None
+        # A look that casts none (the Inferno's first wall, a low rim of rock) has no shadow picture.
+        if len(xs):
+            sx0, sy0 = max(0, int(xs.min()) - 1), max(0, int(ys.min()) - 1)
+            sx1, sy1 = min(sh.shape[1], int(xs.max()) + 2), min(sh.shape[0], int(ys.max()) + 2)
+            gray = np.clip(255 * (1 - sh[sy0:sy1, sx0:sx1]) + 0.5, 0, 255).astype("uint8")
+            Image.fromarray(gray, "L").save(out / f"shadow.{tag}.jpg", "JPEG", quality=90)
+            row["shadow"] = [f"shadow.{tag}.jpg", fx + tx + sx0, fy + ty + sy0]
 
         if cells:
-            row["body"] = picture(body, bbox(body[..., 3]), f"body.{tag}@2x.webp")
-            w, h = (x1 - x0) // HALF, (y1 - y0) // HALF
+            row["body"] = picture(body, bbox(body[..., 3], k=k), f"body.{tag}@2x.webp")
+            w, h = (x1 - x0) * 2 // k, (y1 - y0) * 2 // k
             n = len(layers)
             cols = min(n, MAX_W // w)
             nrows = -(-n // cols)
@@ -279,7 +326,8 @@ def export(name, render):
             row["anim"] = [file, *game(x0, y0), w // 2, h // 2, n]
             if nrows > 1:
                 row["columns"] = cols
-        files = [row["top"][0], row["shadow"][0]] + ([row["body"][0], row["anim"][0]] if cells else [])
+        files = [row["top"][0]] + ([row["shadow"][0]] if row["shadow"] else []) + (
+            [row["body"][0], row["anim"][0]] if cells else [])
         row["bytes"] = sum((out / f).stat().st_size for f in files)
         rows.append(row)
         print(json.dumps(row), flush=True)
@@ -290,5 +338,6 @@ if __name__ == "__main__":
     pairs = sys.argv[1:]
     assert pairs and len(pairs) % 2 == 0, __doc__
     for i in range(0, len(pairs), 2):
-        assert pairs[i] in BUILDINGS, pairs[i]
-        export(pairs[i], Path(pairs[i + 1]).resolve())
+        building, _, state = pairs[i].partition(":")
+        assert building in BUILDINGS and state in ("", "damaged", "destroyed"), pairs[i]
+        export(building, Path(pairs[i + 1]).resolve(), state or None)

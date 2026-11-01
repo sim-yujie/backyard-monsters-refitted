@@ -326,13 +326,28 @@ export const resolveArt = (
 
   // A repainted tier or Town Hall level, unless the old art is on: the same art for
   // default and damaged alike; a destroyed one falls through to the Flash rubble.
+  // A 3D building has damaged and destroyed looks of its own: a still and its shadow.
   // A tower whose turret turns is its body with the turret's strip over it, and
   // the parts of the body in front of the turret (the Cannon's prongs) over that.
   // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art,
-  // unless the Inferno has tiers of its own for it (the Blast Tower, the Sharpshooter).
+  // unless the Inferno has tiers of its own for it (the Blast Tower, the Sharpshooter, the Blocks).
   const ownInfernoArt =
     kind === "inferno" && row.folder !== ROWS.get(type)?.folder && !hasInfernoTiers(type, kind);
-  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted, kind);
+  const found = ownInfernoArt ? null : tierArtFor(type, wanted, kind);
+  const ruin = state === ArtState.DESTROYED ? found?.destroyed : state === ArtState.DAMAGED ? found?.damaged : undefined;
+  const ruinTop = ruin ? imageOf(row.folder, ruin.top) : null;
+  if (ruin && ruinTop) {
+    return {
+      name: row.name,
+      folder: row.folder,
+      level: found?.from ?? wanted,
+      top: ruinTop,
+      shadow: imageOf(row.folder, ruin.shadow),
+      anims: [],
+      topIsAnim: false,
+    };
+  }
+  const tier = state === ArtState.DESTROYED ? null : found;
   // A tier whose moving part is a strip (the 3D Tesla's film, the Bunker's shutters) has it over its top,
   // or, when each cell is the whole building, in its place: its top is then the strip's cell 0.
   if (tier) {
