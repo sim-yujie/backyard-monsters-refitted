@@ -49,8 +49,9 @@ Writes into `server/public/assets/buildings/<folder>/` (the Flash building's own
 - `body.3d<n>@2x.webp`: the still parts, the ground shadow taken off: what the strip's cells go over.
 - `anim.3d<n>@2x.webp`: the strip, as Flash's `anim` layer, its cells in Flash's order and number. A moving-parts
   building's cell is only its moving parts (cut to what any cell covers); the silo's is the box round all that the sack
-  ever changes, every pixel in it, with that box cut out of its body. The Lab's are as the silo's, one strip per layer,
-  `anim.3d<n>.<layer>@2x.webp`, each box kept inside its render's border.
+  ever changes, every pixel in it, with that box cut out of its body. The Lab's, one strip per layer
+  (`anim.3d<n>.<layer>@2x.webp`), are the whole scene only round what moves, which is cut out of the body, fading out
+  past it over the body, with a clear margin round each cell (`boxed()`): a hard box edge showed as a line in the game.
 - `top.3d<n>@2x.webp`: the whole building at rest (body and cell 0), for the icons and the placing ghost; a still
   building's only picture.
 - `shadow.3d<n>.jpg`: the 3D ground shadow, 1x, white where there is none, as Flash's shadows (drawn multiplied).
@@ -129,6 +130,8 @@ CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 
          "academy": {1: 21, 2: 21, 3: 21, 4: 21}, "lab": {1: (32, 5, 5)}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
+MOVED = 8                      # levels (of 255) a Lab cell must differ from the first to count as moving, past the noise
+SPECK = 2                      # 1x px² of change below which it is the render's noise, not a moving part
 
 
 def load(path):
@@ -229,27 +232,45 @@ def save_webp(im, path):
 
 def boxed(base, building, names, k):
     """One of the Lab's moving layers: its renders (`anim/<layer>-NN.png`) are the whole scene, ground shadow and all,
-    in a border round the moving part, the rest of the canvas empty. As the silo's cells: the box round every pixel
-    any cell changes, grown a 1x px and kept inside the rendered border, each cell laid into the base there and split
-    like it, the moving part counted as building wherever it is. Returns the box and the cells cut to it."""
+    in a border round the moving part, the rest of the canvas empty. Each cell is laid into the base there and split
+    like it, the moving part counted as building wherever it is, and kept only round what moves: the `core`, every
+    pixel some cell changes by more than the render's noise, which comes out of the body; then a band where the cell is
+    whole (it covers the body's cut edge, which the game's texture filtering blurs), then a fade to nothing over the
+    body, which is the same picture there. The strip's box has a clear margin, so no cell bleeds into the next in the
+    game. Returns the box, the cells cut to it and the core."""
     first = np.asarray(Image.open(names[0]).convert("RGBA")).astype("int16")
     changed = np.zeros(building.shape, bool)
     for n in names[1:]:
-        changed |= np.abs(np.asarray(Image.open(n).convert("RGBA")).astype("int16") - first).max(axis=2) > 2
-    rx0, ry0, rx1, ry1 = Image.fromarray((first[..., 3] > 0).astype("uint8") * 255).getbbox()
+        changed |= np.abs(np.asarray(Image.open(n).convert("RGBA")).astype("int16") - first).max(axis=2) > MOVED
+    rendered = first[..., 3] > 0
+    rx0, ry0, rx1, ry1 = Image.fromarray(rendered.astype("uint8") * 255).getbbox()
     del first
-    changed = ndimage.binary_dilation(changed, iterations=k)
-    x0, y0, x1, y1 = bbox(changed.astype("float32"), 0.5, k)
-    # The rendered border, shrunk to whole 1x px: nothing past it was rendered.
-    x0, y0, x1, y1 = max(x0, -(-rx0 // k) * k), max(y0, -(-ry0 // k) * k), min(x1, rx1 // k * k), min(y1, ry1 // k * k)
+    # The render's noise flickers in specks; what moves is in pieces of a few 1x px at least.
+    parts, count = ndimage.label(changed)
+    sizes = ndimage.sum(changed, parts, range(1, count + 1))
+    changed = np.isin(parts, 1 + np.nonzero(sizes >= SPECK * k * k)[0])
+    del parts
+    # Inside the rendered border, far enough from its edge for the band and the fade.
+    inside = np.zeros(building.shape, bool)
+    inside[ry0:ry1, rx0:rx1] = True
+    edge = ndimage.distance_transform_edt(inside)
+    core = ndimage.binary_closing(changed, iterations=k // 2) & (edge > 2 * k)
+    near = ndimage.distance_transform_edt(~core)
+    weight = np.minimum(np.clip((2 * k - near) / k, 0, 1), np.clip(edge / k, 0, 1))
+    x0, y0, x1, y1 = bbox(weight, 0, k)
+    x0, y0 = max(0, x0 - k), max(0, y0 - k)
+    x1, y1 = min(building.shape[1], x1 + k), min(building.shape[0], y1 + k)
+    w = weight[y0:y1, x0:x1, None]
     cells = []
     for n in names:
         c = load(n)
         scene = base.copy()
         scene[ry0:ry1, rx0:rx1] = c[ry0:ry1, rx0:rx1]
         del c
-        cells.append(split(scene, building | (scene[..., 3] > 0.99) & changed)[0][y0:y1, x0:x1].copy())
-    return (x0, y0, x1, y1), cells
+        cell = split(scene, building | (scene[..., 3] > 0.99) & core)[0][y0:y1, x0:x1].copy()
+        cell[..., 3:] *= w
+        cells.append(cell)
+    return (x0, y0, x1, y1), cells, core
 
 
 def export(name, render, state=None):
@@ -320,10 +341,11 @@ def export(name, render, state=None):
         elif moves == "boxes":
             body, shade = split(base, building)
             still = body.copy()
-            strips = [(f"anim.{tag}.{layer}@2x.webp", *boxed(base, building, files, k))
-                      for layer, files in zip(cfg["layers"], names)]
-            for _, (x0, y0, x1, y1), _ in strips:
-                body[y0:y1, x0:x1] = 0
+            strips = []
+            for layer, files in zip(cfg["layers"], names):
+                box, cells, core = boxed(base, building, files, k)
+                body[core] = 0
+                strips.append((f"anim.{tag}.{layer}@2x.webp", box, cells))
         else:
             body, shade = split(base, building)
             still = body

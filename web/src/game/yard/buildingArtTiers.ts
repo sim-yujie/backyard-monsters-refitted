@@ -407,8 +407,8 @@ export const TOWN_HALL_ART: readonly TierArt[] = [
  * ran Flash's): the parts that move
  * are a strip over a `body` without them, and the Storage Silo's cells are
  * the box its sack fills, its fill level as Flash's was. The Monster Lab's
- * three strips are its dome's brew and its two side doors' cogs, each the
- * whole building in the box round what moves, as Flash's three. The Monster Housing
+ * three strips are its dome's brew and its two side doors' cogs, as Flash's
+ * three, each the whole building round what moves, fading out over the body. The Monster Housing
  * and the Hatchery Control Center stand still, as Flash's did.
  */
 export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
@@ -631,8 +631,8 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 116 Monster Lab: 3D, Flash's one look for every level; its brew and its side doors' cogs move while it researches
   116: [
     { from: 1, top: ["top.3d1@2x.webp", -75, -92], shadow: ["shadow.3d1.jpg", -74, 5], lift: 0,
-      anim: { strip: ["anim.3d1.dome@2x.webp", -29, -27, 61, 41, 32], body: ["body.3d1@2x.webp", -75, -92],
-        more: [["anim.3d1.doorL@2x.webp", -70, 25, 34, 37, 5], ["anim.3d1.doorR@2x.webp", 36, 25, 30, 34, 5]] },
+      anim: { strip: ["anim.3d1.dome@2x.webp", -22, -24, 48, 40, 32], body: ["body.3d1@2x.webp", -75, -92],
+        more: [["anim.3d1.doorL@2x.webp", -68, 26, 34, 35, 5], ["anim.3d1.doorR@2x.webp", 40, 26, 27, 33, 5]] },
       damaged: { top: ["top.3d1.damaged@2x.webp", -75, -81], shadow: ["shadow.3d1.damaged.jpg", -72, 11] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -75, -33], shadow: ["shadow.3d1.destroyed.jpg", -74, 10] } },
   ],
