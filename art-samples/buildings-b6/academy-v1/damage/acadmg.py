@@ -1,8 +1,8 @@
 """acadmg.py : the Monster Academy's damaged and destroyed looks in 3D, after Flash's top.<level>.damaged.png and
 top.1.destroyed.png (Flash uses one destroyed picture at every level). The model (../academy.py) is built as it is,
-then broken: torn holes in the dome (a lighter torn rim with depth, the dark inside and gold blocks behind it), a dent
-round each hole, the porthole plates wrenched off their seats, fins and ribs broken off and lying on the ground; the
-destroyed look is the crushed dome shell lying open on the ground with its gold blocks spilled left and right.
+then broken: torn holes in the dome (a lighter torn rim with depth, the dark inside and gold cogs behind it), a dent
+round each hole, the window plates wrenched off their seats, ribs broken off and lying on the ground; the
+destroyed look is the crushed dome shell lying open on the ground with its gold slabs and cogs spilled left and right.
 
     blender -b --factory-startup -P acadmg.py -- <level> <prev|still> <damaged|destroyed>      (or sh run.sh ...)
 
@@ -129,9 +129,18 @@ def ball_mesh(name, r, at, mat):
     return ob
 
 
+def cogbit(name, at, r, teeth, rot, depth=0.3):
+    """A loose gold cog (the ones turning in the opening) at at, its flat underside there, turned by rot (degrees)."""
+    e = bpy.data.objects.new(name + "-at", None)
+    G["link"](e)
+    e.location = at
+    e.rotation_euler = [math.radians(a) for a in rot]
+    G["cog"](name, r, teeth, depth, depth / 2, M["blockgold"], e, phase=R.uniform(0, 60), d=min(0.3, r * 0.4))
+
+
 def inside_behind(spots):
-    """The dark inside of the dome, and a few gold blocks just inside each hole that catch the light through it."""
-    # only the part of the inner ball behind the holes: a whole ball would hide the gold blocks in the top opening
+    """The dark inside of the dome, and a few gold cogs just inside each hole that catch the light through it."""
+    # only the part of the inner ball behind the holes: a whole ball would hide the gold cogs in the top opening
     r = V.DOME_R - 0.55       # levels 3+: inside the straight wall below the seam (radius R cos WALL_E), or it shows
     if V.ribbed:
         r = min(r, V.DOME_R * math.cos(math.radians(V.WALL_E)) - 0.35)
@@ -149,9 +158,7 @@ def inside_behind(spots):
         n = (p - CEN).normalized()
         for i in range(3):
             q = p - n * R.uniform(0.75, 1.1) + Vector((R.uniform(-1, 1), R.uniform(-1, 1), R.uniform(-0.6, 0.2))) * rad * 0.4
-            sz = R.uniform(0.45, 0.7)
-            box("inblk", (sz, sz * 0.9, sz * 0.8), q, M["blockgold"], rot=(R.uniform(-20, 20), R.uniform(-20, 20),
-                R.uniform(0, 90)), origin="center", bevel=0.04)
+            cogbit("inblk", q, R.uniform(0.35, 0.55), 6, (R.uniform(-30, 30), R.uniform(-30, 30), 0.0))
 
 
 def ground_bits(at, n, kinds, seed=0, spread=1.0):
@@ -173,10 +180,8 @@ def ground_bits(at, n, kinds, seed=0, spread=1.0):
             s = r.uniform(0.9, 1.5)
             box("bit", (s, s * r.uniform(0.6, 0.9), s * r.uniform(0.5, 0.8)), p, M["rib"],
                 rot=(r.uniform(-10, 10), r.uniform(-10, 10), yaw), bevel=0.06, jitter=0.08)
-        elif k == "blk":
-            s = r.uniform(0.6, 0.9)
-            box("bit", (s, s, s * 0.8), p, M["blockgold"], rot=(r.uniform(-15, 15), r.uniform(-15, 15), yaw),
-                bevel=0.05)
+        elif k == "blk":                 # a gold cog from the opening, lying flat
+            cogbit("bit", p, r.uniform(0.5, 0.7), 6, (0.0, 0.0, yaw))
 
 
 def wrench(port, deg, out=0.35):
@@ -238,11 +243,11 @@ def damaged():
             # bent outward about its lower edge (still a fin, seated on the dome along that edge)
             fm = fins[1].matrix_world
             u, sv = fm.col[1].to_3d().normalized(), fm.col[0].to_3d().normalized()
-            pivot = fm.translation - u * S.FIN[1]
-            top = lambda g: (pivot + Matrix.Rotation(math.radians(g), 3, sv) @ (u * 2 * S.FIN[1]) - CEN).length
+            pivot = fm.translation - u * S.PORT_HALF[1]
+            top = lambda g: (pivot + Matrix.Rotation(math.radians(g), 3, sv) @ (u * 2 * S.PORT_HALF[1]) - CEN).length
             spin_about([fins[1]], pivot, sv, max((22, -22), key=top))
             D.kill([fins[0]])
-            box("bit", (1.9, 3.2, 0.3), Vector((-3.0, -5.2, GROUND)), M["plate"], rot=(2, 3, -30), bevel=0.05)
+            box("bit", (2.7, 2.5, 0.3), Vector((-3.0, -5.2, GROUND)), M["plate"], rot=(2, 3, -30), bevel=0.05)
             box("bit", (3.2, 0.28, 0.26), Vector((-2.8, -5.0, 0.3)), M["gold"], rot=(0, 0, 58), bevel=0.05)
             ground_bits((4.6, -1.6), 5, ("bar", "shard", "bar", "disc"), seed=3, spread=1.0)
         if L == 1:                       # Flash: a dark hole collar and a long gold bar lying at the front left

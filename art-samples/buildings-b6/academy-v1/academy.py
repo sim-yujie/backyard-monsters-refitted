@@ -687,7 +687,7 @@ def materials():
     # red-brown sides turned from the light, cream on the few faces turned to it
     M["blockgold"] = shiny("blockgold", (238, 164, 32), rough=0.45, metal=0.0, wear=(176, 104, 0), scale=2.0,
                            dirt=0.95, ao_min=0.0, spec=0.0, top=((96, 74, 20), 0.85),
-                           shade=((-0.85, -0.62, 1.55), 0.1, -0.35, (112, 46, 10), 0.85), lit=((-0.35, -0.94, 0.0), (242, 236, 200), 0.58, 0.68))
+                           shade=((-0.85, -0.62, 1.55), 0.1, -0.35, (112, 46, 10), 0.85), lit=((-0.35, -0.94, 0.0), (242, 236, 200), 0.8, 0.9))
     M["foot"] = shiny("foot", (14, 13, 13), rough=0.6, metal=0.1, wear=(22, 21, 21), scale=3, dirt=0.0, spec=0.15)
     M["hole"] = flat("hole", (10, 8, 8), rough=1.0)
     M["pit"] = shiny("pit", (16, 11, 7), rough=0.5, metal=0.3, scale=3, dirt=0.0)
@@ -781,8 +781,8 @@ def body():
     seams()
     for th, ph, side, at in V.PORTS:
         porthole(th, ph, side, at)
-    for th, ph, at in V.FINS:
-        fin(th, ph, at)
+    for th, ph, side, at in V.WINDOWS:
+        porthole(th, ph, side, at, name="fin", flat=True)
 
 
 def tank():
@@ -837,29 +837,36 @@ def on_ball(sx, sy, r):
     return o + fwd * (-b - math.sqrt(max(0.0, d)))
 
 
-def porthole(th, ph, side, at):
-    """A square plate lying flush on the ball at Flash pixel `at`, curved to follow it (Flash: the plate sits on the
-    dome, not standing off it); a dark round hole toward the outer edge, a gold L-bracket on the inner and top edges
-    (curved with the plate), gold rivets. The plate hangs on an empty at the ball point (local Z out of the ball,
-    Y up the ball, X across) that the damaged look levers off."""
+def porthole(th, ph, side, at, name="port", flat=False):
+    """A square window plate lying flush on the ball at Flash pixel `at`, curved to follow it (Flash: the plate sits on
+    the dome, not standing off it); a dark round hole toward the outer edge, a gold L-bracket on the inner and top
+    edges (curved with the plate), gold rivets. The plate hangs on an empty at the ball point (local Z out of the ball,
+    Y up the ball, X across) that the damaged look levers off. flat: the same window as a flat plate standing proud on
+    the ball's shoulder on a gold seat (level 2's back pair: Flash shows them standing up past the dome's outline)."""
     C, R = Vector((0, 0, V.DOME_C)), V.DOME_R
-    c = on_ball(at[0], at[1], R)
-    n = (c - C).normalized()
-    a = math.radians(th)
-    sv = Vector((-math.sin(a), math.cos(a), 0.0))
-    u = n.cross(sv).normalized()
-    if u.z < 0:
-        u = -u
-    sv = u.cross(n).normalized()
     hw, hh = S.PORT_HALF
     T = 0.2                                            # the plate's thickness over the ball
+    if flat:
+        c, n, u, sv = seat(th, ph, at, hw, hh, T)
 
-    def loc(x, y, h):                                  # local point over (x, y) on the ball, h off its surface
-        w = C + (c + sv * x + u * y - C).normalized() * (R + h)
-        d = w - c
-        return Vector((d.dot(sv), d.dot(u), d.dot(n)))
+        def loc(x, y, h):
+            return Vector((x, y, h))
+    else:
+        c = on_ball(at[0], at[1], R)
+        n = (c - C).normalized()
+        a = math.radians(th)
+        sv = Vector((-math.sin(a), math.cos(a), 0.0))
+        u = n.cross(sv).normalized()
+        if u.z < 0:
+            u = -u
+        sv = u.cross(n).normalized()
 
-    e = bpy.data.objects.new("port", None)
+        def loc(x, y, h):                              # local point over (x, y) on the ball, h off its surface
+            w = C + (c + sv * x + u * y - C).normalized() * (R + h)
+            d = w - c
+            return Vector((d.dot(sv), d.dot(u), d.dot(n)))
+
+    e = bpy.data.objects.new(name, None)
     link(e)
     e.location = c
     orient(e, n, u, sv)
@@ -901,6 +908,8 @@ def porthole(th, ph, side, at):
     for x, y in ((-0.63, 0.8), (0.75, 0.0), (-1.05, -0.5), (0.53, -1.0)):      # x toward the inner edge
         lathe("portrivet", [(0.0, 0.18), (0.13, 0.15), (0.19, 0.0)], tuple(loc(x * inner, y, T - 0.02)), M["gold"],
               parent=e, verts=12)
+    if flat:                                          # the gold seat under it, reaching into the dome
+        box("portseat", (2 * hw - 0.3, 2 * hh - 0.3, 1.2), (0, 0, -1.18), M["golddark"], parent=e, bevel=0.03)
 
 
 def seat(th, ph, at, hw, hh, T):
@@ -922,20 +931,6 @@ def seat(th, ph, at, hw, hh, T):
         if abs(d) < 1e-3:
             break
     return c, n, u, sv
-
-
-def fin(th, ph, at):
-    """Level 2: a steel wing plate standing proud on each back shoulder, its sides gold (Flash shows the gold edges
-    under it and its top standing up past the dome's outline); a block behind it reaches into the dome."""
-    hw, hh, T = S.FIN
-    c, n, u, sv = seat(th, ph, at, hw, hh, T)
-    e = bpy.data.objects.new("fin", None)
-    link(e)
-    e.location = c
-    orient(e, n, u, sv)
-    box("fingold", (2 * hw, 2 * hh, T - 0.08), (0, 0, 0), M["gold"], parent=e, bevel=0.05)
-    box("finplate", (2 * hw - 0.08, 2 * hh - 0.08, 0.14), (0, 0, T - 0.12), M["finplate"], parent=e, bevel=0.05)
-    box("finback", (2 * hw - 0.3, 2 * hh - 0.3, 1.2), (0, 0, -1.18), M["golddark"], parent=e, bevel=0.03)
 
 
 def resample(pts, n):
@@ -1089,48 +1084,82 @@ def _radial_side(pts):
     return t.cross(nrm).normalized()
 
 
-def blocks():
-    """The gold blocks heaped in the opening, turning about the upright: a big middle block set corner-on and a ring of
-    smaller blocks leaning on it at mixed heights and tilts. Flash's picture repeats every half loop, so the heap is the
-    same after half a turn (each block has an identical twin opposite it)."""
-    z = V.OPEN_Z
+def cog(name, r, teeth, depth, z, mat, parent, phase=0.0, d=0.24):
+    """A gold cog lying flat (axle upright) on parent at height z: chunky square-topped teeth d deep (each tooth's
+    top under a third of the pitch, steep flanks), a raised boss round the axle. phase: one tooth's middle bearing."""
+    p = 2 * math.pi / teeth
+    pts = []
+    for k in range(teeth):
+        m = math.radians(phase) + k * p
+        for f, rr in ((-0.23, r - d), (-0.14, r), (0.0, r), (0.14, r), (0.23, r - d), (0.5, r - d)):
+            pts.append((rr * math.cos(m + f * p), rr * math.sin(m + f * p)))
+    bm = bmesh.new()
+    vs = [bm.verts.new((x, y, -depth / 2)) for x, y in pts]
+    f = bm.faces.new(vs)
+    ext = bmesh.ops.extrude_face_region(bm, geom=[f])
+    for v in [e for e in ext["geom"] if isinstance(e, bmesh.types.BMVert)]:
+        v.co.z += depth
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = mesh_ob(name, bm, [mat], smooth=False, bevel=0.03, segs=1, parent=parent)
+    ob.location = (0, 0, z)
+    rb = max(0.2, 0.3 * r)
+    cyl(name + "boss", rb, depth + 0.12, (0, 0, z - depth / 2), mat, parent=parent, verts=20, bevel=0.03)
+    return ob
 
-    def blk(*a, **kw):
-        # crisp flat-shaded boxes: a rounded edge turned to the light caught the cream lit colour as a thin white line
-        ob = box(*a, bevel=0.0, **kw)
-        ob.data.polygons.foreach_set("use_smooth", [False] * len(ob.data.polygons))
-        return ob
 
-    def parts(hub):
-        # Flash: a few big blocks, the dark pit showing between them, cream-lit faces; nothing reaches the inner wall
-        # (r + half the block's width stays under the opening's inner radius OPEN_R - 0.22). Each outer block leans on
-        # the middle one, so they touch it and nothing else.
-        blk("blk", (1.4, 1.4, 1.2), (0, 0, -0.5), M["blockgold"], parent=hub, rot=(14, -10, 45))
-        cyl("blkaxle", 0.28, 1.2, (0, 0, -1.65), M["golddark"], parent=hub, verts=16)      # down to the pit floor
-        for ang, r, sz, dz, rot, (tx, ty) in ((10, 1.12, 0.98, -0.42, 8, (16, -18)), (100, 1.02, 0.92, -0.5, -12, (-12, 10))):
-            for twin in (0, 180):                   # Flash's picture repeats every half turn: each has a twin opposite
-                aa = math.radians(ang + twin)
-                blk("blk", (sz * 0.9, sz, sz * 0.85), (r * math.cos(aa), r * math.sin(aa), dz), M["blockgold"],
-                    parent=hub, rot=(tx, ty, ang + twin + rot))
-    # Flash's heap fills the opening nearly to the rim (the axle still reaches the pit floor)
-    e, hub = vspin("blocks", (0, 0, z - 0.3), parts)
+SPIN = []              # (hub, degrees it turns in one loop)
+
+
+def cogs():
+    """The gold cogs turning in the opening (Flash's loop: gold shapes turning in the dome's top). A big cog in the
+    middle with a smaller cog fixed on top of it, three small cogs meshing round it (whole teeth apart), all on axles down to the pit
+    floor. One loop turns each cog a whole number of teeth, so the loop closes: the big pair half a turn, the small
+    cogs (half the teeth) a whole turn the other way."""
+    z0 = V.OPEN_Z
+    d = 0.3                                       # tooth depth (the same on every cog, so they mesh)
+    rb, nb = 0.92, 10                             # the big cog: outer radius, teeth
+    rs, ns = (rb - d / 2) / 2 + d / 2, nb // 2    # the small cogs: half the pitch radius, half the teeth
+    dist = (rb - d / 2) + (rs - d / 2) + 0.04     # axle to axle: the pitch radii touch, a little play (the teeth
+                                                  # never pass into each other through the loop)
+    zb = -0.45                                    # the big and small cogs' middle, under the rim
+
+    def big(hub):
+        # its gaps face the small cogs (bearings 45 + k 36), so their teeth sit in them
+        cog("cog", rb, nb, 0.4, zb, M["blockgold"], hub, phase=45.0 + 18.0, d=d)
+        cog("cog", 0.66, 6, 0.4, zb + 0.4, M["blockgold"], hub, phase=15.0, d=0.24)
+        cyl("cogaxle", 0.14, 0.12, (0, 0, zb + 0.6), M["golddark"], parent=hub, verts=16)
+        cyl("cogaxle", 0.2, 1.7, (0, 0, zb - 1.75), M["golddark"], parent=hub, verts=16)       # down to the pit floor
+
+    e, hub = vspin("cogs", (0, 0, z0), big)
     MOVING.append(hub)
+    SPIN.append((hub, 180.0))
+    for th in (45.0, 153.0, -135.0):              # right, behind and left of the big cog as the camera sees it
+        a = math.radians(th)
+
+        def small(hub, th=th):
+            cog("cog", rs, ns, 0.4, 0.0, M["blockgold"], hub, phase=th + 180.0, d=d)
+            cyl("cogaxle", 0.12, 1.7, (0, 0, -1.75), M["golddark"], parent=hub, verts=12)
+
+        e, hub = vspin("cogs", (dist * math.cos(a), dist * math.sin(a), z0 + zb), small)
+        hub.rotation_euler = (0, 0, 0)
+        MOVING.append(hub)
+        SPIN.append((hub, -360.0))
 
 
 def build():
     body()
-    blocks()
+    cogs()
 
 
 def turn(frame):
-    """The blocks at Flash frame `frame` of FRAMES: once round a loop, at an even speed."""
-    for hub in MOVING:
-        hub.rotation_euler = (0, 0, math.radians(360.0 * frame / FRAMES))
+    """The cogs at Flash frame `frame` of FRAMES, turning at an even speed."""
+    for hub, deg in SPIN:
+        hub.rotation_euler = (0, 0, math.radians(deg * frame / FRAMES))
 
 
 FAMILY = (("dome", "dome"), ("seam", "dome"), ("foot", "foot"), ("band", "band"), ("tank", "tank"),
           ("port", "port"), ("fin", "fin"), ("ribgold", "ribgold"), ("rib", "rib"), ("plinth", "rib"),
-          ("blk", "blocks"))
+          ("cog", "blocks"))
 MASONRY = ()
 
 

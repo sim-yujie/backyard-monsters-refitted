@@ -62,12 +62,12 @@ class Lv:
         self.OPEN_Z = self.DOME_C + math.sqrt(self.DOME_R ** 2 - self.OPEN_R ** 2)
         # porthole plates: (face bearing, face tilt up, outer side, Flash pixel of the middle)
         self.PORTS = []
-        self.FINS = []
+        self.WINDOWS = []           # level 2's back pair: the same square window, standing proud on the shoulder
         if not self.ribbed:
             self.PORTS.append((-94.0, 28.0, "left", (-26.5, 32.0)))
-            if level >= 2:
+            if level >= 2:          # Flash level 2: four square windows round the dome, two in front, two behind
                 self.PORTS.append((4.0, 28.0, "right", (30.5, 32.0)))
-                self.FINS = [(-138.0, 52.0, (-35.0, -6.0)), (48.0, 52.0, (37.0, -7.0))]   # face bearing, tilt, Flash px
+                self.WINDOWS = [(-144.0, 46.0, "left", (-38.0, -7.0)), (54.0, 46.0, "right", (40.0, -8.0))]
         self.RIBS = (-90.0, 0.0, 90.0, 180.0) if self.ribbed else ()
 
 
@@ -85,7 +85,6 @@ RIB_ENDS = {-90.0: 32.0, 0.0: 32.0, 90.0: 48.0, 180.0: 48.0}   # each rib's top 
 PLINTH = (2.9, 1.1, 0.5)        # the rib's foot block: across, outward, high
 PLINTH_D = 5.2
 SLEEVE_Z = 1.75                # the top of the wider sleeve round the upright's foot (Flash: a step)
-FIN = (0.8, 1.75, 0.4)            # the wing plate: half across, half up, thickness
 
 
 def mounts(lv):
