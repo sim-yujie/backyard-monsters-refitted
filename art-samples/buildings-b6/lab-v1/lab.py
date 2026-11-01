@@ -646,12 +646,12 @@ def rounded_poly(corners, rad, n=8):
 # front edge facing the viewer, a back corner. The outlines are given in screen-plan coordinates (u, v): u = X + Y runs
 # across the screen (7.07 px a unit, + right), v = X - Y toward the viewer (3.54 px a unit, + down the screen). The
 # building is mirror-symmetric on screen: (u, v) -> (-u, v), i.e. (X, Y) -> (-Y, -X).
-LW_Z = 4.3                                  # the lower walls' height (the lower deck's underside)
-LD_Z0, LD_Z1 = 4.3, 4.97                    # the lower deck
+LW_Z = 4.6                                  # the lower walls' height (the lower deck's underside)
+LD_Z0, LD_Z1 = 4.6, 5.27                    # the lower deck
 UD_Z0, UD_Z1 = 9.0, 9.6                     # the upper deck
 LW = [(-8.9, 0.0), (-3.6, 2.8), (-3.0, 2.8), (-3.0, 1.2), (3.0, 1.2), (3.0, 2.8), (3.6, 2.8), (8.9, 0.0), (0.0, -7.0)]
 LD = [(-9.35, 0.0), (-5.2, 3.75), (5.2, 3.75), (9.35, 0.0), (0.0, -7.6)]
-UW = [(-6.0, 0.0), (-5.4, 1.9), (-3.5, 1.9), (-3.5, -3.3), (3.5, -3.3), (3.5, 1.9), (5.4, 1.9), (6.0, 0.0),
+UW = [(-5.35, 0.0), (-4.75, 1.9), (-3.5, 1.9), (-3.5, -3.3), (3.5, -3.3), (3.5, 1.9), (4.75, 1.9), (5.35, 0.0),
       (0.0, -5.2)]
 UD = [(-7.5, 0.0), (-6.6, 2.3), (6.6, 2.3), (7.5, 0.0), (0.0, -5.8)]
 COIL_UV = (-3.6, 3.0)                       # the left gold column (the right one mirrored)
@@ -675,7 +675,7 @@ def xy(poly):
     return [uv(u, v) for u, v in poly]
 
 
-def prism(name, pts, z0, z1, mat, bevel=0.04, parent=None, mats=None):
+def prism(name, pts, z0, z1, mat, bevel=0.04, parent=None, mats=None, side_mat=None):
     bm = bmesh.new()
     vs = [bm.verts.new((x, y, z0)) for x, y in pts]
     f = bm.faces.new(vs)
@@ -685,6 +685,10 @@ def prism(name, pts, z0, z1, mat, bevel=0.04, parent=None, mats=None):
     for v in [e for e in ext["geom"] if isinstance(e, bmesh.types.BMVert)]:
         v.co.z = z1
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    if side_mat:                                    # the upright faces get the second material
+        for fc in bm.faces:
+            fc.material_index = 1 if abs(fc.normal.z) < 0.5 else 0
+        mats = [mat, side_mat]
     return mesh_ob(name, bm, mats or [mat], smooth=False, bevel=bevel, segs=2, parent=parent)
 
 
@@ -749,8 +753,13 @@ def materials():
                         dirt=0.35, spec=0.5, soot=0.3, rust_at=0.66)
     M["navydark"] = painted("navydark", (14, 18, 34), rough=0.6, metal=0.1, wear=(30, 38, 62), scale=3.0, dirt=0.4)
     # the decks: brown riveted metal plate with soft glossy streaks (Flash ~93,67,56 with pale 164,125,71 glints)
-    M["deck"] = shiny("deck", (100, 70, 52), rough=0.42, metal=0.35, wear=(132, 96, 66), scale=1.5, dirt=0.25,
-                      streak=0.5, side=0.3, spec=0.45)
+    M["deck"] = shiny("deck", (118, 68, 44), rough=0.28, metal=0.3, wear=(190, 136, 78), scale=1.5, dirt=0.2,
+                      streak=0.6, side=0.3, spec=0.6, coat=0.5,
+                      glow=((-34, 8, 16, 4, 0.55, (196, 150, 92)), (34, 7, 14, 4, 0.35, (186, 140, 86)),
+                            (-28, -40, 16, 4, 0.4, (196, 150, 96))))
+    # the decks' edge band: the same plate a shade darker, so the lit top reads as a broad separate face (Flash)
+    M["deckside"] = shiny("deckside", (88, 52, 36), rough=0.35, metal=0.3, wear=(128, 86, 56), scale=1.5, dirt=0.2,
+                          streak=0.4, side=0.3, spec=0.5)
     M["deckedge"] = painted("deckedge", (82, 58, 44), rough=0.55, metal=0.25, wear=(114, 84, 60), scale=3.0, dirt=0.3)
     M["frame"] = painted("frame", (98, 66, 46), rough=0.5, metal=0.35, wear=(136, 96, 62), rust=(70, 44, 30),
                          scale=4.0, dirt=0.3)
@@ -769,6 +778,9 @@ def materials():
     M["flange"] = shiny("flange", (44, 110, 180), rough=0.3, metal=0.4, wear=(80, 150, 210), scale=3, dirt=0.1)
     M["grate"] = painted("grate", (100, 98, 94), rough=0.6, metal=0.4, wear=(136, 134, 128), scale=4.0, dirt=0.2)
     M["hole"] = flat("hole", (12, 12, 18), rough=1.0)
+    M["groove"] = flat("groove", (34, 34, 38), rough=0.8)
+    M["doorplate"] = painted("doorplate", (118, 114, 108), rough=0.5, metal=0.3, wear=(176, 172, 164), scale=4.0,
+                             dirt=0.25)
     M["dome"] = dome_mat()
     M["steam"] = steam_mat()
     return M
@@ -794,38 +806,60 @@ DOME_MAP = []          # the dome brew's mapping node: its location turns round 
 
 
 def dome_mat():
-    """The brew in the glass: pale mint with darker green swirls (they drift round in a loop), Flash's white sheen at
-    the top left, glowing a little so it stays bright as in Flash."""
+    """Flash's dome is glowing glass: bright saturated cyan, brightest round the rim, with darker green-teal swirls of
+    the brew seen inside it and white glints at the top left. The swirls are two noise layers looked up behind the
+    surface (along the view ray), so they read as inside the glass; they drift round in a loop."""
     t = NT("dome")
     tc = t.n("ShaderNodeTexCoord")
-    mp = t.n("ShaderNodeMapping")
-    mp.inputs["Scale"].default_value = (1.6, 1.6, 1.6)
-    t.link(tc.outputs["Object"], mp.inputs["Vector"])
-    DOME_MAP.append(mp)
-    v = mp.outputs[0]
-    n1 = t.noise(v, 1.4, 5.0, 0.6, 2.5)
-    swirl = t.ramp(n1, [(0.35, srgb(46, 120, 100)), (0.5, srgb(120, 210, 190)), (0.62, srgb(170, 246, 232))])
-    hi = screen_spot(t, -3.0, -14.0, 10.0, 4.0, 0.85)
-    col = t.mix(swirl, srgb(236, 255, 250), hi)
+    geo = t.n("ShaderNodeNewGeometry")
+    lay = []
+    for depth, scale in ((0.45, 1.7), (1.3, 1.2)):
+        back = t.n("ShaderNodeVectorMath", operation="MULTIPLY_ADD")      # the point `depth` behind the surface
+        t.link(geo.outputs["Incoming"], back.inputs[0])
+        back.inputs[1].default_value = (-depth,) * 3
+        t.link(tc.outputs["Object"], back.inputs[2])
+        mp = t.n("ShaderNodeMapping")
+        mp.inputs["Scale"].default_value = (scale,) * 3
+        t.link(back.outputs[0], mp.inputs["Vector"])
+        DOME_MAP.append(mp)
+        lay.append(t.noise(mp.outputs[0], 0.9, 1.5, 0.5, 2.0))
+    # the deep brew: dark green-teal clouds in bright cyan
+    col = t.ramp(lay[1], [(0.36, srgb(34, 100, 80)), (0.47, srgb(80, 172, 152)), (0.58, srgb(140, 236, 222)),
+                          (0.7, srgb(186, 252, 242))])
+    # the near swirls: darker teal streaks curling over it
+    band = t.ramp(lay[0], [(0.36, (0, 0, 0, 1)), (0.47, (0.6, 0.6, 0.6, 1)), (0.52, (0.6, 0.6, 0.6, 1)),
+                           (0.63, (0, 0, 0, 1))])
+    col = t.mix(col, srgb(36, 104, 84), band)
+    # the glass glows brightest round its rim (Flash's bright cyan edge)
     rim = t.n("ShaderNodeLayerWeight")
-    rim.inputs["Blend"].default_value = 0.35
-    col = t.mix(col, srgb(90, 200, 196), t.ramp(rim.outputs["Facing"], [(0.55, (0, 0, 0, 1)), (0.95, (0.8, 0.8, 0.8, 1))]))
-    t.set(**{"Base Color": col, "rough": 0.12, "metal": 0.0, "spec": 0.6, "coat": 0.8})
-    t.set(**{"Emission Color": col, "Emission Strength": 0.35})
+    rim.inputs["Blend"].default_value = 0.3
+    col = t.mix(col, srgb(150, 255, 250), t.ramp(rim.outputs["Facing"], [(0.35, (0, 0, 0, 1)), (0.8, (1, 1, 1, 1))]))
+    hi = screen_spot(t, -9.0, -8.0, 10.0, 4.5, 0.95)
+    col = t.mix(col, srgb(240, 255, 255), hi)
+    glint = screen_spot(t, -15.0, -2.0, 2.0, 4.0, 0.7)               # a small glint low on the left
+    col = t.mix(col, srgb(220, 255, 255), glint)
+    t.set(**{"Base Color": col, "rough": 0.08, "metal": 0.0, "spec": 0.7, "coat": 1.0})
+    t.bsdf.inputs["Coat Roughness"].default_value = 0.05
+    t.set(**{"Emission Color": col, "Emission Strength": 0.6})
     return t.m
 
 
 def steam_mat():
     t = NT("steam")
     v = t.coords()
-    # Flash's steam is a mid grey mass, darker in the folds, with pale grey (not white) tops
+    # Flash's steam: light grey blocks with white tops, a little see-through, lit evenly (it glows a touch, so the
+    # shadowed faces stay light grey rather than turning to rock)
     n = t.noise(v, 2.2, 2.0, 0.5)
-    col = t.ramp(n, [(0.38, srgb(84, 86, 90)), (0.62, srgb(126, 128, 132))])
+    col = t.ramp(n, [(0.38, srgb(150, 154, 160)), (0.62, srgb(176, 180, 186))])
     geo = t.n("ShaderNodeNewGeometry")
     sep = t.n("ShaderNodeSeparateXYZ")
     t.link(geo.outputs["Normal"], sep.inputs[0])
-    col = t.mix(col, srgb(178, 180, 184), t.ramp(sep.outputs["Z"], [(0.55, (0, 0, 0, 1)), (0.95, (0.6, 0.6, 0.6, 1))]))
-    t.set(**{"Base Color": col, "rough": 0.95, "spec": 0.05})
+    col = t.mix(col, srgb(236, 238, 240), t.ramp(sep.outputs["Z"], [(0.6, (0, 0, 0, 1)), (0.95, (1, 1, 1, 1))]))
+    al = t.n("ShaderNodeMath", operation="MULTIPLY_ADD")   # only the near faces show: no glassy edges behind
+    t.link(geo.outputs["Backfacing"], al.inputs[0])
+    al.inputs[1].default_value, al.inputs[2].default_value = -0.62, 0.62
+    t.set(**{"Base Color": col, "rough": 0.95, "spec": 0.05, "Alpha": al.outputs[0]})
+    t.set(**{"Emission Color": col, "Emission Strength": 0.3})
     return t.m
 
 
@@ -840,11 +874,11 @@ def set_phase(dome_t=None, steam_t=None):
             mp.inputs["Location"].default_value = (0.55 * math.cos(a), 0.55 * math.sin(a), 0.3 * math.sin(a))
     if steam_t is not None:
         for side, puffs in STEAM.items():
-            for i, (ob, path) in enumerate(puffs):
-                s = ((i + steam_t) / len(puffs)) % 1.0
-                p, sc = path(s)
+            for ob, path in puffs:
+                p, sc, rot = path(steam_t)
                 ob.location = p
                 ob.scale = sc
+                ob.rotation_euler = rot
 
 
 # ------------------------------------------------------------------------------------------------------------ the body
@@ -877,7 +911,7 @@ def lower():
     for k, (u, v) in enumerate((COIL_UV, (-COIL_UV[0], COIL_UV[1]))):
         x, y = uv(u, v)
         prof = [(0.0, 0.0), (0.42, 0.0), (0.42, 0.12)]
-        for j in range(7):                          # Flash's columns: a stack of sharp double cones
+        for j in range(7):                          # Flash's columns: a stack of sharp double cones up to the beam
             z0 = 0.14 + j * 0.58
             prof += [(0.24, z0), (0.58, z0 + 0.28), (0.6, z0 + 0.29), (0.58, z0 + 0.3), (0.24, z0 + 0.58)]
         prof += [(0.42, LW_Z), (0.0, LW_Z)]
@@ -891,13 +925,32 @@ def lower():
     ra, rb = out[3], out[4]                        # its back face, left to right
     _, _, t, n, ang = face(ra, rb)
     mid = (Vector(ra) + Vector(rb)) / 2
-    box("ldoor", (1.2, 0.12, 3.3), (mid.x + n.x * 0.05, mid.y + n.y * 0.05, 0.4), M["grate"], rot=(0, 0, ang),
+    dw, dz, dh = 1.4, 0.5, 2.8                      # the door: width, bottom, height (Flash: 10 x 19 px, sill included)
+    box("ldoor", (dw, 0.12, dh), (mid.x + n.x * 0.05, mid.y + n.y * 0.05, dz), M["doorplate"], rot=(0, 0, ang),
         bevel=0.04)
-    for j in range(5):                              # the door's zigzag ribs
-        z = 0.8 + j * 0.6
-        s = 0.22 if j % 2 else -0.22
-        p = mid + t * s + n * 0.12
-        box(f"ldoorrib{j}", (0.6, 0.08, 0.12), (p.x, p.y, z), M["steel"], rot=(0, 0, ang), bevel=0.03)
+    # Flash's door is engraved with a maze: a groove meandering down it (Flash's door is 10 x 16 px; the path is
+    # given in those pixel columns and rows), a dark groove round its edge and a pale sill at the foot
+    cw, rh = dw / 10, dh / 16
+    maze = [(6, -0.5), (6, 3.5), (3, 3.5), (3, 7), (6, 7), (6, 10.5), (3, 10.5), (3, 14), (6, 14), (6, 15.5)]
+    face_n = 0.11                                   # the door's front face, out from its middle
+
+    def dpt(c, r):
+        p = mid + t * ((c + 0.5) * cw - dw / 2) + n * face_n
+        return p, dz + dh - (r + 0.5) * rh
+    for j, (a, b) in enumerate(zip(maze, maze[1:])):
+        (pa, za), (pb, zb) = dpt(*a), dpt(*b)
+        p = (pa + pb) / 2
+        size = ((pa - pb).length + 0.08, 0.05, abs(za - zb) + 0.08)
+        box(f"ldoorgroove{j}", size, (p.x, p.y, (za + zb) / 2), M["groove"], rot=(0, 0, ang), bevel=0.01,
+            origin="centre")
+    ex = dw / 2 - 0.08
+    for j, (sx, sz, w, h) in enumerate(((-ex, dz + dh / 2, 0.07, dh - 0.16), (ex, dz + dh / 2, 0.07, dh - 0.16),
+                                        (0.0, dz + dh - 0.08, 2 * ex, 0.07))):
+        p = mid + t * sx + n * face_n
+        box(f"ldoorgroove-e{j}", (w, 0.05, h), (p.x, p.y, sz), M["groove"], rot=(0, 0, ang), bevel=0.01,
+            origin="centre")
+    p = mid + n * 0.14
+    box("ldoorsill", (dw + 0.1, 0.24, 0.22), (p.x, p.y, dz - 0.2), M["rivet"], rot=(0, 0, ang), bevel=0.04)
     for s in (-2.2, -1.4, 1.4, 2.2):
         p = mid + t * s + n * 0.03
         box(f"lstrip{s}", (0.12, 0.06, LW_Z - 0.6), (p.x, p.y, 0.3), M["brass"], rot=(0, 0, ang), bevel=0.02)
@@ -930,43 +983,36 @@ STEAM = {}
 
 
 def steam(k, c, t, n):
-    """Grey chunks tumbling out of the door's top half, falling outward and spilling across the plate (Flash);
-    set_phase moves them. A chunk starts inside the wall, falls to the plate, spreads flat and sinks into it."""
-    sgn = 1 if k == 0 else -1
+    """Flash's steam: low, blocky, see-through grey-white chunks blowing out of the door's lower half, outward and down
+    onto the plate toward the outer corner; set_phase moves them. Two lanes of identical chunks that tumble with
+    their place on the path, so the loop has no seam (chunk j at the loop's end sits where chunk j+1 started)."""
+    corner = -1 if k == 0 else 1                         # toward the face's outer corner, along t
+    lanes = ((-0.3, 0.0, 1.1), (0.3, 0.5, 1.0))                     # sideways offset, phase, size
 
-    def path(s, i, k=k):
-        jit = ((i * 7) % 5 - 2) / 2.0                     # each chunk drifts a little to its own side
-        if s < 0.5:                                       # out of the door and falling
-            f = s / 0.5
-            out = -0.3 + 2.2 * f ** 0.7
-            z = 2.45 - 1.95 * f ** 1.5
-            side = 0.15 * jit * f
-            r = 0.55 + 0.22 * f
-            sc = (r, r, r * 0.9)
-        else:                                             # spilling out across the plate, spreading and flattening
-            f = (s - 0.5) / 0.5
-            out = 1.9 + 0.45 * f
-            side = (0.15 + 0.55 * f) * jit + 0.25 * f * sgn
-            r = 0.77 + 0.1 * f - 0.55 * max(0.0, f - 0.8) / 0.2
-            z = 0.5 - 0.1 * f - 0.3 * max(0.0, f - 0.8) / 0.2
-            sc = (r * 1.15, r * 1.15, r * (0.7 - 0.2 * f))
+    def path(s, lane):
+        off, _, size = lanes[lane]
+        out = -0.35 + 2.6 * s ** 0.75                    # out of the door and away from the wall
+        z = max(0.2, 2.2 - 2.3 * s ** 1.25)              # falling from the door's middle to the plate
+        side = off + corner * 0.75 * s ** 1.3 + 0.12 * math.sin(13 * s + 3 * lane)   # blown toward the corner
+        r = size * (0.55 + 0.25 * s) * (1.0 + 0.15 * math.sin(17 * s + lane))
+        if s > 0.82:                                      # flattening into the plate at the end
+            r *= 1.0 - 0.8 * (s - 0.82) / 0.18
         p = c + n * out + t * side
-        return Vector((p.x, p.y, z)), sc
+        rot = Euler((0.25 * math.sin(5 * s + lane), 0.3 * math.sin(4 * s + 2 * lane), 0.4 * lane + 0.5 * s))
+        return Vector((p.x, p.y, z + 0.1 * r)), (r * 1.25, r * 1.0, r * 0.75), rot
     puffs = []
-    for i in range(9):
-        bm = bmesh.new()
-        bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
-        for v in bm.verts:                                # lumpy, chunky clumps rather than round balls
-            v.co *= 1.0 + 0.22 * math.sin(3.1 * v.co.x + i) * math.cos(3.7 * v.co.y + 2 * i) \
-                + 0.1 * math.sin(5 * v.co.z + 3 * i)
-        ob = mesh_ob(f"steam{k}-{i}", bm, [M["steam"]], smooth=True)
-        puffs.append((ob, lambda s, i=i: path(s, i)))
+    for lane in range(len(lanes)):
+        for j in range(5):
+            bm = bmesh.new()
+            bmesh.ops.create_cube(bm, size=1.0)
+            ob = mesh_ob(f"steam{k}-{lane}{j}", bm, [M["steam"]], smooth=False, bevel=0.07, segs=1)
+            puffs.append((ob, lambda u, j=j, lane=lane: path(((j + u) / 5 + lanes[lane][1] / 5) % 1.0, lane)))
     STEAM[k] = puffs
 
 
 def lower_deck():
     out = xy(LD)
-    prism("ldeck", out, LD_Z0, LD_Z1, M["deck"], bevel=0.06)
+    prism("ldeck", out, LD_Z0, LD_Z1, M["deck"], bevel=0.06, side_mat=M["deckside"])
     pts = []
     for a, b in faces_of(out):
         n = max(2, int((Vector(b) - Vector(a)).length / 0.8))
@@ -1022,7 +1068,7 @@ def upper():
 
 def upper_deck():
     out = xy(UD)
-    prism("udeck", out, UD_Z0, UD_Z1, M["deck"], bevel=0.06)
+    prism("udeck", out, UD_Z0, UD_Z1, M["deck"], bevel=0.06, side_mat=M["deckside"])
     pts = []
     for a, b in faces_of(out):
         n = max(2, int((Vector(b) - Vector(a)).length / 0.8))
@@ -1077,7 +1123,7 @@ def dome():
     z0 = LD_Z1
     lathe("domering", [(0.0, 0.0), (DOME_R + 0.22, 0.0), (DOME_R + 0.26, 0.18), (DOME_R + 0.12, 0.34), (0.0, 0.34)],
           (cx, cy, z0), M["steel"], verts=48)
-    prof = [(DOME_R * math.cos(math.radians(a)), DOME_R * math.sin(math.radians(a))) for a in range(0, 91, 6)]
+    prof = [(DOME_R * math.cos(math.radians(a)), 0.85 * DOME_R * math.sin(math.radians(a))) for a in range(0, 91, 6)]
     ob = lathe("dome", prof, (cx, cy, z0 + 0.3), M["dome"], verts=48)
     ob.data.polygons.foreach_set("use_smooth", [True] * len(ob.data.polygons))
     # orange wires from the ring's sides to small blue clamps on the deck's front corners
