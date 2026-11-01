@@ -58,7 +58,7 @@ class Lv:
                 self.BAND_Z1, self.GOLD_H = 1.65, 1.2
             self.BAND_R0 = 2.65                       # its bottom radius
             self.TANK_R = 2.85
-        self.OPEN_R = 2.0                   # the opening in the dome's top
+        self.OPEN_R = 2.25 if not self.ribbed else 2.13   # the opening in the dome's top (inside: Flash's 41 / 38.5 px)
         self.OPEN_Z = self.DOME_C + math.sqrt(self.DOME_R ** 2 - self.OPEN_R ** 2)
         # porthole plates: (face bearing, face tilt up, outer side, Flash pixel of the middle)
         self.PORTS = []
@@ -67,12 +67,16 @@ class Lv:
             self.PORTS.append((-94.0, 28.0, "left", (-26.5, 32.0)))
             if level >= 2:          # Flash level 2: four square windows round the dome, two in front, two behind
                 self.PORTS.append((4.0, 28.0, "right", (30.5, 32.0)))
-                self.WINDOWS = [(-144.0, 46.0, "left", (-38.0, -7.0)), (54.0, 46.0, "right", (40.0, -8.0))]
+                # (face turned well away from the camera and steeper than the ball: the portholes don't show)
+                self.WINDOWS = [(FRONT - 105.0, 26.0, "left", (-38.0, -7.0)),
+                                (FRONT + 105.0, 26.0, "right", (40.0, -8.0))]
         self.RIBS = (-90.0, 0.0, 90.0, 180.0) if self.ribbed else ()
 
 
 TANK_RISE = 2.2                 # level 4: how much the glass tank lifts the dome (Flash: 19 px)
 PORT_HALF = (1.45, 1.3)               # the porthole plate's half size
+WINDOW_OUT = 0.25               # level 2's back windows: how far they stand off the ball on their dark mount
+                                # (Flash: they lean out steeply, face turned from the camera, portholes hidden)
 PORT_HOLE = 0.8                # the dark hole's radius
 RIB_W = 2.7                     # the ribs' width (across)
 RIB_T = 0.85                    # the strap's thickness at its top end (on the dome)

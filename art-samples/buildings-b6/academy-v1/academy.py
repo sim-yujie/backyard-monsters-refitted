@@ -686,8 +686,8 @@ def materials():
     # laid a grey veil over every face and turned the gold caramel; Flash: orange-gold lit sides, olive-gold tops,
     # red-brown sides turned from the light, cream on the few faces turned to it
     M["blockgold"] = shiny("blockgold", (238, 164, 32), rough=0.45, metal=0.0, wear=(176, 104, 0), scale=2.0,
-                           dirt=0.95, ao_min=0.0, spec=0.0, top=((96, 74, 20), 0.85),
-                           shade=((-0.85, -0.62, 1.55), 0.1, -0.35, (112, 46, 10), 0.85), lit=((-0.35, -0.94, 0.0), (242, 236, 200), 0.8, 0.9))
+                           dirt=0.95, ao_min=0.0, spec=0.0, top=((96, 74, 20), 0.95),
+                           shade=((-0.85, -0.62, 1.55), 0.35, -0.1, (112, 46, 10), 0.9), lit=((-0.35, -0.94, 0.0), (242, 236, 200), 0.9, 0.98))
     M["foot"] = shiny("foot", (14, 13, 13), rough=0.6, metal=0.1, wear=(22, 21, 21), scale=3, dirt=0.0, spec=0.15)
     M["hole"] = flat("hole", (10, 8, 8), rough=1.0)
     M["pit"] = shiny("pit", (16, 11, 7), rough=0.5, metal=0.3, scale=3, dirt=0.0)
@@ -748,7 +748,7 @@ def body():
         e = math.radians(e_low + (e_open - e_low) * i / n)
         prof.append((R * math.cos(e), C + R * math.sin(e)))
     # the lip round the opening: rounded over, then the inner wall down into the pit
-    lip = 0.22
+    lip = LIP
     prof += [(V.OPEN_R - 0.04, V.OPEN_Z + 0.06), (V.OPEN_R - lip * 0.5, V.OPEN_Z + 0.07),
              (V.OPEN_R - lip, V.OPEN_Z + 0.02), (V.OPEN_R - lip, V.OPEN_Z - 0.3)]
     lathe("dome", prof, (0, 0, 0), M["dome"], verts=128)
@@ -842,12 +842,14 @@ def porthole(th, ph, side, at, name="port", flat=False):
     the dome, not standing off it); a dark round hole toward the outer edge, a gold L-bracket on the inner and top
     edges (curved with the plate), gold rivets. The plate hangs on an empty at the ball point (local Z out of the ball,
     Y up the ball, X across) that the damaged look levers off. flat: the same window as a flat plate standing proud on
-    the ball's shoulder on a gold seat (level 2's back pair: Flash shows them standing up past the dome's outline)."""
+    the ball's shoulder on a dark mount (level 2's back pair: Flash shows them standing up past the dome's outline,
+    nearly edge-on)."""
     C, R = Vector((0, 0, V.DOME_C)), V.DOME_R
     hw, hh = S.PORT_HALF
     T = 0.2                                            # the plate's thickness over the ball
     if flat:
         c, n, u, sv = seat(th, ph, at, hw, hh, T)
+        c = c + n * S.WINDOW_OUT
 
         def loc(x, y, h):
             return Vector((x, y, h))
@@ -908,8 +910,9 @@ def porthole(th, ph, side, at, name="port", flat=False):
     for x, y in ((-0.63, 0.8), (0.75, 0.0), (-1.05, -0.5), (0.53, -1.0)):      # x toward the inner edge
         lathe("portrivet", [(0.0, 0.18), (0.13, 0.15), (0.19, 0.0)], tuple(loc(x * inner, y, T - 0.02)), M["gold"],
               parent=e, verts=12)
-    if flat:                                          # the gold seat under it, reaching into the dome
-        box("portseat", (2 * hw - 0.3, 2 * hh - 0.3, 1.2), (0, 0, -1.18), M["golddark"], parent=e, bevel=0.03)
+    if flat:                                          # its dark mount, behind its lower half, down into the dome
+        box("finmount", (2 * hw - 0.6, hh, S.WINDOW_OUT + 0.4), (0, -0.4 * hh, -S.WINDOW_OUT - 0.5), M["seam"],
+            parent=e, bevel=0.03)
 
 
 def seat(th, ph, at, hw, hh, T):
@@ -1107,43 +1110,86 @@ def cog(name, r, teeth, depth, z, mat, parent, phase=0.0, d=0.24):
     return ob
 
 
+def wheel(name, r, teeth, depth, z, mat, parent, d, rim, spokes, hubr, phase=0.0):
+    """A big spoked cog lying flat on parent at height z: a toothed rim `rim` wide inside the teeth, chunky spokes at
+    bearings `spokes` down to a hub boss of radius hubr; the dark pit shows between the spokes."""
+    p = 2 * math.pi / teeth
+    ang = []
+    for k in range(teeth):
+        m = math.radians(phase) + k * p
+        for f, rr in ((-0.23, r - d), (-0.14, r), (0.0, r), (0.14, r), (0.23, r - d), (0.5, r - d)):
+            ang.append((m + f * p, rr))
+    rin = r - d - rim
+    bm = bmesh.new()
+    ring = []
+    for zz in (-depth / 2, depth / 2):
+        ring.append([bm.verts.new((rr * math.cos(a), rr * math.sin(a), zz)) for a, rr in ang])
+        ring.append([bm.verts.new((rin * math.cos(a), rin * math.sin(a), zz)) for a, rr in ang])
+    ob0, in0, ob1, in1 = ring
+    n = len(ang)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((ob1[i], ob1[j], in1[j], in1[i]))          # top
+        bm.faces.new((ob0[i], in0[i], in0[j], ob0[j]))          # underside
+        bm.faces.new((ob0[i], ob0[j], ob1[j], ob1[i]))          # teeth
+        bm.faces.new((in0[i], in1[i], in1[j], in0[j]))          # inside of the rim
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = mesh_ob(name, bm, [mat], smooth=False, bevel=0.03, segs=1, parent=parent)
+    ob.location = (0, 0, z)
+    cyl(name + "boss", hubr, depth + 0.12, (0, 0, z - depth / 2), mat, parent=parent, verts=24, bevel=0.03)
+    for th in spokes:
+        a = math.radians(th)
+        m = (rin + hubr) / 2
+        box(name + "spoke", (rin - hubr + 0.1, 0.56, depth - 0.08), (m * math.cos(a), m * math.sin(a), z - depth / 2),
+            mat, rot=(0, 0, th), bevel=0.03, segs=1, parent=parent)
+    return ob
+
+
 SPIN = []              # (hub, degrees it turns in one loop)
+LIP = 0.2              # the rounded lip round the opening: its width
 
 
 def cogs():
-    """The gold cogs turning in the opening (Flash's loop: gold shapes turning in the dome's top). A big cog in the
-    middle with a smaller cog fixed on top of it, three small cogs meshing round it (whole teeth apart), all on axles down to the pit
-    floor. One loop turns each cog a whole number of teeth, so the loop closes: the big pair half a turn, the small
-    cogs (half the teeth) a whole turn the other way."""
+    """The gold cogs turning in the opening (Flash's loop: a few big gold shapes turning in the dome's top, a mound
+    filling it to the rim). A big spoked 10-tooth cog fills the opening under the rim and turns on its axle; on top of
+    it a planet set: a tall fixed 8-tooth sun cog in the middle (its axle down through the big cog's hollow shaft) and two
+    5-tooth cogs riding on posts on the big cog, meshing with the sun, so they spin as the big cog carries them round.
+    One loop turns the big cog half a turn (5 teeth) and the riders 4 teeth on their posts, so the loop closes with the
+    riders swapped."""
     z0 = V.OPEN_Z
-    d = 0.3                                       # tooth depth (the same on every cog, so they mesh)
-    rb, nb = 0.92, 10                             # the big cog: outer radius, teeth
-    rs, ns = (rb - d / 2) / 2 + d / 2, nb // 2    # the small cogs: half the pitch radius, half the teeth
-    dist = (rb - d / 2) + (rs - d / 2) + 0.04     # axle to axle: the pitch radii touch, a little play (the teeth
-                                                  # never pass into each other through the loop)
-    zb = -0.45                                    # the big and small cogs' middle, under the rim
+    ri = V.OPEN_R - LIP                           # the opening's inner wall
+    rb, db, tb = ri - 0.12, 0.4, 0.4              # the big cog: outer radius, tooth depth, thickness
+    zb = -0.15 - tb / 2                           # its middle: its top a little under the rim
+    d, ns, nr = 0.3, 8, 5                         # the sun and riders: tooth depth, teeth
+    ps = (ri - 0.06 - 0.04 - d / 2) / (1 + 2.0 * nr / ns)    # the sun's pitch radius: the riders clear the wall
+    pr = ps * nr / ns                             # the riders' (the same tooth size, so they mesh)
+    dist = ps + pr + 0.04                         # sun to rider axle: the pitch radii touch, a little play
+    z1, ts, tr = 0.0, 0.6, 0.4                    # the planet set's underside; the sun's and riders' thickness
+    # the sun: fixed, its tooth gaps facing the riders (bearings 45 and -135)
+    cog("cogsun", ps + d / 2, ns, ts, z0 + z1 + ts / 2, M["blockgold"], None, phase=45.0 + 180.0 / ns, d=d)
+    cyl("cogaxle", 0.15, 2.05, (0, 0, z0 + z1 - 2.05), M["golddark"], verts=16)        # down to the pit floor
 
     def big(hub):
-        # its gaps face the small cogs (bearings 45 + k 36), so their teeth sit in them
-        cog("cog", rb, nb, 0.4, zb, M["blockgold"], hub, phase=45.0 + 18.0, d=d)
-        cog("cog", 0.66, 6, 0.4, zb + 0.4, M["blockgold"], hub, phase=15.0, d=0.24)
-        cyl("cogaxle", 0.14, 0.12, (0, 0, zb + 0.6), M["golddark"], parent=hub, verts=16)
-        cyl("cogaxle", 0.2, 1.7, (0, 0, zb - 1.75), M["golddark"], parent=hub, verts=16)       # down to the pit floor
+        # spokes under the riders' posts and opposite (the loop's half turn needs the wheel the same both ways)
+        wheel("cog", rb, 10, tb, zb, M["blockgold"], hub, db, 0.34, (45.0, 135.0, -45.0, -135.0), 0.65)
+        cyl("cogaxle", 0.3, 1.7, (0, 0, zb - tb / 2 - 1.7 + 0.05), M["golddark"], parent=hub, verts=20)
+        for th in (45.0, -135.0):                 # right and left of the sun as the camera sees it
+            a = math.radians(th)
+            e = bpy.data.objects.new("cogs", None)
+            link(e, hub)
+            e.location = (dist * math.cos(a), dist * math.sin(a), 0.0)
+            rider = bpy.data.objects.new("cogs-spin", None)
+            link(rider, e)
+            # a tooth pointing at the sun
+            cog("cog", pr + d / 2, nr, tr, z1 + tr / 2, M["blockgold"], rider, phase=th + 180.0, d=d)
+            cyl("cogpost", 0.24, z1 - zb - tb / 2 + 0.02, (0, 0, zb + tb / 2 - 0.01), M["golddark"],
+                parent=rider, verts=16)
+            # riding round with the big cog (+180) the rider turns on its post 180 * ns / nr the same way
+            SPIN.append((rider, 180.0 * ns / nr))
 
     e, hub = vspin("cogs", (0, 0, z0), big)
     MOVING.append(hub)
-    SPIN.append((hub, 180.0))
-    for th in (45.0, 153.0, -135.0):              # right, behind and left of the big cog as the camera sees it
-        a = math.radians(th)
-
-        def small(hub, th=th):
-            cog("cog", rs, ns, 0.4, 0.0, M["blockgold"], hub, phase=th + 180.0, d=d)
-            cyl("cogaxle", 0.12, 1.7, (0, 0, -1.75), M["golddark"], parent=hub, verts=12)
-
-        e, hub = vspin("cogs", (dist * math.cos(a), dist * math.sin(a), z0 + zb), small)
-        hub.rotation_euler = (0, 0, 0)
-        MOVING.append(hub)
-        SPIN.append((hub, -360.0))
+    SPIN.insert(0, (hub, 180.0))
 
 
 def build():
@@ -1431,6 +1477,33 @@ def main():
                             best = (hit[3], family(o2), o.name, o2.name)
             print("CLEAR %s nearest other part %.3f (%s)" % (fm, best[0], " ".join(best[1:])))
         print("DONE check")
+        return
+    if MODE == "cogcheck":
+        # every loop frame: the cogs (teeth and bosses; not the axles and posts, which pass through by design) must
+        # not pass into a cog turning differently, nor into the dome
+        hubs = [h for h, _ in SPIN]
+
+        def group(o):
+            p = o.parent
+            while p and p not in hubs:
+                p = p.parent
+            return p.name if p else "fixed"
+        worst = 0
+        for fr in range(FRAMES):
+            turn(fr)
+            tr = trees()
+            cg = [(o, t) for o, t, _ in tr.values() if o.name.startswith("cog") and
+                  not o.name.startswith(("cogaxle", "cogpost"))]
+            walls = [(o, t) for o, t, _ in tr.values() if o.name.startswith("dome")]
+            for i, (a, ta) in enumerate(cg):
+                for b, tb in cg[i + 1:] + walls:
+                    if b in [x for x, _ in cg] and group(a) == group(b):
+                        continue
+                    n = len(ta.overlap(tb))
+                    if n:
+                        worst = max(worst, n)
+                        print("CHECK frame %d %s (%s) x %s (%s) %d" % (fr, a.name, group(a), b.name, group(b), n))
+        print("DONE cogcheck worst %d" % worst)
         return
     if MODE == "gap":
         # as the game camera sees it: wherever one part lies in front of another along a camera ray, how far behind
