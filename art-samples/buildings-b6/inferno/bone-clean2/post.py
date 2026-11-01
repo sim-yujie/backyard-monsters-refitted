@@ -3,6 +3,7 @@
 python post.py stills            tier1-3.png, tiers.png, crops (crop-t<tier>-<part>.png), game-1x.png, game-2x.png
 python post.py anim <tier>       tier<tier>-anim.mp4 (the loop three times) and the loop check
 python post.py loop <tier>       only the loop check
+python post.py strip <tier> <k>  tier<tier>-pour-strip.png: six frames of the pour from frame k, close up and game size
 
 A frame is the base picture (every still part and the ground shadow) with the moving parts' layer laid over it. The
 camera is kit.py's: Flash px (sx, sy) of world point (X, Y, Z) = (SX (X + Y), 35 + SY (X - Y) - SZ Z), canvas
@@ -175,12 +176,41 @@ def anim(t):
     loopcheck(t)
 
 
+POUR = {1: cube(-1.7, 1.1, -0.9, 1.5, 1.9, 4.2), 2: cube(-1.3, 1.0, -0.9, 2.0, 1.9, 4.3),
+        3: cube(-1.3, 1.0, -0.9, 2.0, 1.9, 4.3)}
+
+
+def strip(t, k0, step=2, n=6):
+    """The pour, n frames from k0: close up (feeder to rollers, enlarged) over the same frames at game size
+    (1x and 2x on the Inferno ground)."""
+    ks = [(k0 + i * step) % N for i in range(n)]
+    ims = [frame(t, k) for k in ks]
+    cb = box_of(ims[0], POUR[t])
+    cl = [enlarge(on(im).crop(cb), 420) for im in ims]
+    cw, ch = cl[0].size
+    g1 = [on(im.resize((120 * s, 140 * s), Image.LANCZOS), GROUND) for s in (1, 2) for im in ims]
+    gw, gh = 240, 280
+    out = Image.new("RGBA", (n * cw, 60 + ch + gh + 20), BG)
+    d = ImageDraw.Draw(out)
+    d.text((14, 14), "%s: frames %s (every %d of 36)" % (NAMES[t], ", ".join(map(str, ks)), step),
+           fill=(30, 30, 30, 255), font=font(30))
+    for i in range(n):
+        out.alpha_composite(cl[i], (i * cw, 60))
+        x = i * cw + (cw - gw - 130) // 2
+        out.alpha_composite(g1[n + i], (x, 70 + ch))             # 2x
+        out.alpha_composite(g1[i], (x + gw + 10, 70 + ch + 70))   # 1x
+    out.convert("RGB").save(D / f"tier{t}-pour-strip.png")
+    print("DONE strip", t, ks)
+
+
 if __name__ == "__main__":
-    if sys.argv[1] in ("anim", "loop"):
+    if sys.argv[1] in ("anim", "loop", "strip"):
         R = D / "anim" / "render"
     if sys.argv[1] == "stills":
         stills()
     elif sys.argv[1] == "anim":
         anim(int(sys.argv[2]))
+    elif sys.argv[1] == "strip":
+        strip(int(sys.argv[2]), int(sys.argv[3]))
     else:
         loopcheck(int(sys.argv[2]))
