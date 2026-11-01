@@ -13,11 +13,11 @@ const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import
 /**
  * The 3D yard buildings: the first eight (owner, 31 Oct 2026: "All approved"), then the Flinger, Juicer, Yard Planner,
  * Map Room, General Store, Blocks, Stone Block, Baiter, Catapult and Champion Cage (1 Nov 2026), then the Monster
- * Academy.
+ * Academy and the Monster Lab.
  */
-const TYPES = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 26, 51, 114];
+const TYPES = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 26, 51, 114, 116];
 /** The ones whose parts move, as Flash's do; the rest stand still, as Flash's did. */
-const MOVING = [1, 2, 3, 4, 6, 9, 13, 19, 26];
+const MOVING = [1, 2, 3, 4, 6, 9, 13, 19, 26, 116];
 /** The ones with no damaged or destroyed 3D look yet: the General Store, tinted and then Flash's rubble. */
 const NO_RUIN = [12];
 
@@ -33,10 +33,15 @@ const WIDER: Record<string, Box> = {
   "26:2": [6, 7, 6, 6],
 };
 
-/** A WebP's size in pixels, from its `VP8X` header (every picture with alpha has one). */
+/**
+ * A WebP's size in pixels, from its `VP8X` header (every picture with alpha has one), or a plain lossy `VP8 `
+ * frame's for one solid all over (the Lab's dome strip, all building).
+ */
 const webpSize = (file: string): [number, number] => {
   const bytes = readFileSync(file);
-  expect(bytes.toString("latin1", 12, 16), file).toBe("VP8X");
+  const chunk = bytes.toString("latin1", 12, 16);
+  expect(["VP8X", "VP8 "], file).toContain(chunk);
+  if (chunk === "VP8 ") return [bytes.readUInt16LE(26) & 0x3fff, bytes.readUInt16LE(28) & 0x3fff];
   return [bytes.readUIntLE(24, 3) + 1, bytes.readUIntLE(27, 3) + 1];
 };
 
@@ -151,18 +156,23 @@ describe("the 3D yard buildings", () => {
     expect(resolveArt(1, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/twigsnapper.v2/top.6.png");
   });
 
-  it("move as Flash's do: the same cells, the moving parts over a body without them", () => {
+  it("move as Flash's do: the same strips and cells, the moving parts over a body without them", () => {
     for (const type of MOVING) {
       for (const look of BUILDING_3D_ART[type] ?? []) {
         const flash = flashLooks(type).find((one) => one[0] === look.from);
         const art = resolveArt(type, look.from, ArtState.DEFAULT);
-        expect(art?.anims, `type ${type} look ${look.from}`).toHaveLength(1);
-        expect(art?.anims[0]?.frames).toBe(flash?.[7]?.[0]?.[5]);
+        // As many strips as Flash's (the Lab's three: its brew and its two side doors), each with Flash's cells.
+        expect(art?.anims.map((anim) => anim.frames), `type ${type} look ${look.from}`).toEqual(
+          (flash?.[7] ?? []).map((strip) => strip[5]),
+        );
         // The body under the cells, the whole building at rest for the icons.
         expect(art?.top.url).toContain("/body.3d");
         expect(art?.still?.url).toContain("/top.3d");
         expect(art?.topIsAnim).toBe(false);
-        expect(restingLayers(art!).map((layer) => layer.url)).toEqual([art?.top.url, art?.anims[0]?.url]);
+        expect(restingLayers(art!).map((layer) => layer.url)).toEqual([
+          art?.top.url,
+          ...(art?.anims ?? []).map((anim) => anim.url),
+        ]);
       }
     }
     for (const type of TYPES.filter((one) => !MOVING.includes(one))) {
@@ -190,10 +200,14 @@ describe("the 3D yard buildings", () => {
           ...[look.damaged, look.destroyed].flatMap((ruin) => [ruin?.top[0], ruin?.shadow?.[0]]),
         ];
         for (const file of files) if (file && !existsSync(folder + file)) missing.push(`${type}: ${file}`);
+        for (const strip of look.anim?.more ?? []) if (!existsSync(folder + strip[0])) missing.push(`${type}: ${strip[0]}`);
         if (!look.anim || !existsSync(folder + look.anim.strip[0])) continue;
         const [file, , , width, height, cells] = look.anim.strip;
         const columns = look.anim.columns ?? cells;
         expect(webpSize(folder + file), file).toEqual([2 * width * columns, 2 * height * Math.ceil(cells / columns)]);
+        for (const [more, , , moreWidth, moreHeight, moreCells] of look.anim.more ?? []) {
+          if (existsSync(folder + more)) expect(webpSize(folder + more), more).toEqual([2 * moreWidth * moreCells, 2 * moreHeight]);
+        }
       }
     }
     expect(missing).toEqual([]);
