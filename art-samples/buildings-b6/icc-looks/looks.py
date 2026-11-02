@@ -135,6 +135,77 @@ def hot(name, col=(255, 112, 24), strength=7.0):
     return flat(name, col, rough=0.4, emit=strength)
 
 
+# the crystal's glow: every emitter of the crystal (shell, core, light) is scaled together by one number (1 = peak);
+# icc.py's anim mode renders the crystal's share of the light alone and scales it per frame
+CRYSTAL_E = dict(shell=0.78, core=3.5, light=140.0)
+
+
+def crystal_mat(name):
+    """A cut magma crystal that glows from within. Each facet's glow depends on how it faces a key direction (from the
+    upper left front, between the sun and the viewer), so the cut reads as clean facets even at game size: facets
+    toward the key hot orange, the others red to deep red, the faces turned away from the viewer darkest. The fine
+    chamfers on the edges catch the key as bright lines. Partly clear red glass (the hot heart shows through, darker
+    red the thicker it is), with a glossy coat that catches the sun."""
+    t = NT(name)
+    geo = t.n("ShaderNodeNewGeometry")
+    dp = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(geo.outputs["Normal"], dp.inputs[0])
+    dp.inputs[1].default_value = Vector((-0.25, -1.0, 1.25)).normalized()
+    key = t.n("ShaderNodeMapRange")
+    key.inputs[1].default_value, key.inputs[2].default_value = -0.3, 1.0
+    t.link(dp.outputs["Value"], key.inputs[0])
+    lw = t.n("ShaderNodeLayerWeight")
+    lw.inputs["Blend"].default_value = 0.5
+    face = t.sock(lw, "Facing", out=True)
+    # the heart: faces toward the viewer hottest; plus the key, so neighbouring facets differ
+    v = fmath(t, "ADD", fmath(t, "MULTIPLY", fmath(t, "SUBTRACT", 1.0, face), 0.6),
+              fmath(t, "MULTIPLY", key.outputs[0], 0.4))
+    vr = t.n("ShaderNodeMapRange")
+    vr.inputs[1].default_value, vr.inputs[2].default_value = 0.35, 0.95
+    t.link(v, vr.inputs[0])
+    glow = t.ramp(vr.outputs[0], [(0.0, srgb(70, 6, 3)), (0.3, srgb(140, 14, 5)), (0.55, srgb(196, 30, 8)),
+                                  (0.75, srgb(232, 62, 14)), (0.9, srgb(250, 110, 28)), (1.0, srgb(255, 160, 64))])
+    # the hot heart, seen through the stone: brightest down the middle of the crystal (as the viewer sees it) and
+    # in its lower middle, fading to the edges and toward the point and the foot
+    tc = t.n("ShaderNodeTexCoord")
+    lat = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(tc.outputs["Object"], lat.inputs[0])
+    lat.inputs[1].default_value = (0.7071, 0.7071, 0.0)          # the screen's left-right, in the crystal's frame
+    mid = t.n("ShaderNodeMapRange")
+    mid.inputs[1].default_value, mid.inputs[2].default_value = 0.04, 0.56
+    mid.inputs[3].default_value, mid.inputs[4].default_value = 1.0, 0.0
+    t.link(fmath(t, "ABSOLUTE", lat.outputs["Value"]), mid.inputs[0])
+    sz = t.n("ShaderNodeSeparateXYZ")
+    t.link(tc.outputs["Object"], sz.inputs[0])
+    hz = t.ramp(fmath(t, "DIVIDE", sz.outputs["Z"], 4.9), [(0.1, (0.25, 0.25, 0.25, 1)), (0.3, (1, 1, 1, 1)),
+                                                           (0.62, (1, 1, 1, 1)), (0.95, (0.3, 0.3, 0.3, 1))])
+    heart = fmath(t, "MULTIPLY", fmath(t, "MULTIPLY", mid.outputs[0], mid.outputs[0]), fmath(t, "MULTIPLY", hz, 0.8))
+    hot = t.n("ShaderNodeMix", data_type="RGBA", blend_type="ADD")
+    t.link(heart, hot.inputs[0])
+    t.link(glow, t.sock(hot, "A", "RGBA"))
+    t.sock(hot, "B", "RGBA").default_value = srgb(255, 150, 54)
+    glow = t.sock(hot, "Result", "RGBA", out=True)
+    t.set(**{"Base Color": srgb(110, 8, 4), "rough": 0.12, "coat": 0.4, "IOR": 1.62, "spec": 0.2,
+             "Transmission Weight": 0.25, "Emission Color": glow, "Emission Strength": CRYSTAL_E["shell"]})
+    t.bsdf.inputs["Coat Roughness"].default_value = 0.08
+    t.bsdf.inputs["Coat Tint"].default_value = srgb(255, 200, 180)
+    ab = t.n("ShaderNodeVolumeAbsorption")
+    ab.inputs["Color"].default_value = srgb(255, 54, 34)
+    ab.inputs["Density"].default_value = 2.2
+    t.link(ab.outputs[0], t.out.inputs["Volume"])
+    MATS[name] = t.m
+    return t.m
+
+
+def core_mat(name):
+    """The crystal's hot heart: seen through the red glass, yellow-orange like the Magma Tower's molten core."""
+    t = NT(name)
+    t.set(**{"Base Color": srgb(0, 0, 0), "rough": 0.5, "Emission Color": srgb(255, 150, 52),
+             "Emission Strength": CRYSTAL_E["core"]})
+    MATS[name] = t.m
+    return t.m
+
+
 GLOW = (255, 92, 14)
 if VAR == "a":       # Forged Steel: dark riveted iron, sooty, dark brass trim, magma-orange screens and vents
     M["gold"] = shiny("i-brass", (150, 94, 42), rough=0.36, metal=0.85, wear=(116, 70, 30), scale=1.5, dirt=0.4,
@@ -199,10 +270,11 @@ else:                # on a magma pool: half steel, half rock, chained egg pods,
     M["pod"] = rock("i-pod", (40, 40, 46), (78, 78, 86), crack=GLOW, crack_scale=2.2, crack_cover=0.7, rough=0.35,
                     metal=0.6, bump=0.2, glow=6.0)
     M["chain"] = shiny("i-chain", (74, 72, 74), rough=0.4, metal=0.95, wear=(54, 52, 54), scale=6, dirt=0.1)
-    _t = NT("i-crystal")
-    _t.set(**{"Base Color": srgb(220, 50, 12), "rough": 0.12, "coat": 1.0, "Emission Color": srgb(255, 72, 12),
-              "Emission Strength": 1.6})
-    M["crystal"] = _t.m
+    M["crystal"] = crystal_mat("i-crystal")
+    M["crystalcore"] = core_mat("i-crystal-core")
+    # the crystal's setting: worn brass, darker and duller in the recesses
+    M["cupbrass"] = shiny("i-cupbrass", (156, 100, 46), rough=0.32, metal=0.9, wear=(104, 64, 28), scale=3.0, dirt=0.45,
+                          ao_min=0.25, side=0.3, streak=0.35)
 
 
 def stud(name, at, th, mat, r=0.08):
@@ -384,6 +456,15 @@ def look_c():
         a = math.pi * i / 16
         z = H / 2 * (1 - math.cos(a))
         prof.append((max(0.0, RM * math.sin(a) * (1.05 - 0.22 * z / H)), z))
+
+    def egg_r(z):
+        a = math.acos(max(-1.0, min(1.0, 1 - 2 * z / H)))
+        return RM * math.sin(a) * (1.05 - 0.22 * z / H)
+    BZ0, BZ1 = 1.5, 1.74                       # the brass band: a strap hugging the egg just above its widest point
+    band = [(egg_r(BZ0) - 0.02, BZ0), (egg_r(BZ0) + 0.05, BZ0), (egg_r(BZ0) + 0.075, BZ0 + 0.03),
+            (egg_r(BZ1) + 0.075, BZ1 - 0.03), (egg_r(BZ1) + 0.05, BZ1), (egg_r(BZ1) - 0.02, BZ1)]
+    EZ = (BZ0 + BZ1) / 2
+    to_cam = -cam_fwd()
     for j, th in enumerate((-160.0, -64.0, -22.0, 62.0)):
         r = 4.75 if th in (-64.0, -22.0) else 5.0
         e = bpy.data.objects.new("pod%d-at" % j, None)
@@ -391,35 +472,132 @@ def look_c():
         e.location = P(th, r, -0.2)
         e.rotation_euler = (math.radians(rng.uniform(-6, 6)), math.radians(rng.uniform(-6, 6)), math.radians(th))
         lathe("podshell%d" % j, prof, (0, 0, 0), M["pod"], parent=e, verts=40)
-        ring("podband%d" % j, RM + 0.03, 0.08, M["gold"], parent=e, z=1.25, n=48)
+        lathe("podband%d" % j, band, (0, 0, 0), M["gold"], parent=e, verts=48)
         lathe("podcap%d" % j, [(0.0, H - 0.12), (0.22, H - 0.12), (0.2, H + 0.02), (0.0, H + 0.06)], (0, 0, 0),
               M["gold"], parent=e, verts=16)
         bpy.context.view_layer.update()
-        eye = e.matrix_world @ Vector((-(RM + 0.12), 0.0, 1.25))
-        # the chain from the pod's band to an eye on the bowl
-        anchor_z = ZB - 1.05
+        # the eye: a small brass ring standing out of the band, on the side toward the bowl that the viewer sees
+        best = None
+        for sgn in (-1, 1):
+            b = 180.0 + sgn * 62.0                       # bearing on the pod (local: 180 = toward the building)
+            w = e.matrix_world @ Vector(S.polar(b, egg_r(EZ) + 0.075, EZ))
+            if best is None or w.dot(to_cam) > best[0]:
+                best = (w.dot(to_cam), b)
+        b = best[1]
+        lug = bpy.data.objects.new("podlug%d-at" % j, None)
+        link(lug, e)
+        lug.location = S.polar(b, egg_r(EZ) + 0.07, EZ)
+        lug.rotation_euler = (0, 0, math.radians(b))
+        box("podlugplate%d" % j, (0.1, 0.2, 0.26), (0.0, 0.0, -0.13), M["gold"], parent=lug, bevel=0.03)
+        el = bpy.data.objects.new("podeye%d-at" % j, None)
+        link(el, lug)
+        el.location = (0.17, 0.0, 0.0)
+        el.rotation_euler = (math.radians(90), 0, 0)
+        ring("podeye%d" % j, 0.11, 0.035, M["gold"], parent=el, n=20)
+        bpy.context.view_layer.update()
+        eye = el.matrix_world @ Vector((0.1, 0.0, 0.0))
+        # the chain from that eye, slack, up to an eye low on the bowl
+        anchor_z = ZB - 1.55
         anchor = P(th, bowl_r(anchor_z) + 0.1, anchor_z)
         lathe("bowleye%d" % j, [(0.0, -0.1), (0.2, -0.1), (0.2, 0.06), (0.0, 0.1)], anchor - P(th, 0.08, 0.0),
               M["gold"], rot=(0, 90, th), verts=12)
-        chain("podchain%d" % j, eye, anchor, sag=0.4)
-    # the crystal: a glowing magma crystal held up in a brass cup and three claws, where the HCC has its dish
+        chain("podchain%d" % j, eye, anchor, sag=0.3)
+    crystal()
+
+
+def gem(name, rings, mat, rot0, tip, parent=None, jit=None):
+    """A cut crystal round local Z: six-sided rings (vertex radius, z) closed by a flat foot and a point at tip.
+    jit[k][i]: radius factor of ring k's vertex i (an uneven, natural cut); flat facets with fine chamfered edges."""
+    bm = bmesh.new()
+    rows = []
+    for k, (r, z) in enumerate(rings):
+        row = []
+        for i in range(6):
+            a = math.radians(rot0 + 60 * i)
+            f = jit[k][i] if jit else 1.0
+            row.append(bm.verts.new((r * f * math.cos(a), r * f * math.sin(a), z)))
+        rows.append(row)
+    for a, b in zip(rows, rows[1:]):
+        for i in range(6):
+            j = (i + 1) % 6
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    bm.faces.new(list(reversed(rows[0])))
+    t = bm.verts.new(tip)
+    for i in range(6):
+        bm.faces.new((rows[-1][i], rows[-1][(i + 1) % 6], t))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = mesh_ob(name, bm, [mat], smooth=False, parent=parent)
+    mo = ob.modifiers.new("bevel", "BEVEL")
+    mo.width = 0.03
+    mo.segments = 1
+    mo.limit_method = "ANGLE"
+    mo.angle_limit = math.radians(20)
+    return ob
+
+
+def crystal():
+    """The crystal on the post, where the HCC has its dish: a long cut magma crystal with two small side shards, set
+    in a hexagonal brass bezel on a round brass cup, held by three claws pressed onto its faces."""
     zt = ZT + S.TOP_DOME
     zp = zt - 0.08 + S.PED_H
-    A = Vector((S.PED_X, S.PED_Y, zp + S.POST_H + S.AXLE_R * 0.6 - 0.06))
-    lathe("crystalcup", [(0.0, 0.0), (0.55, 0.0), (0.8, 0.32), (0.74, 0.5), (0.0, 0.44)], A, M["gold"], verts=32)
-    cr = lathe("crystal", [(0.0, 0.0), (0.9, 1.2), (0.9, 2.7), (0.0, 5.0)], A + Vector((0, 0, 0.3)), M["crystal"],
-               verts=6)
-    cr.data.polygons.foreach_set("use_smooth", [False] * len(cr.data.polygons))
-    cr.rotation_euler = (math.radians(5), math.radians(-4), math.radians(15))
+    A = Vector((S.PED_X, S.PED_Y, zp + S.POST_H + S.AXLE_R * 0.6 - 0.06))     # the post's top
+    ROT = -35.0                       # a vertex edge just right of the viewer: two lit faces and a bright ridge
+    root = bpy.data.objects.new("crystal-at", None)
+    link(root)
+    root.location = A
+    # the cup: a foot on the post, a short stem, a round bowl, a rolled lip
+    lathe("crystalcup", [(0.0, 0.0), (0.6, 0.0), (0.62, 0.08), (0.42, 0.2), (0.4, 0.3), (0.66, 0.44), (0.84, 0.66),
+                         (0.92, 0.94), (0.86, 0.98), (0.82, 0.9), (0.0, 0.9)], (0, 0, 0), M["cupbrass"], parent=root,
+          verts=40)
+    ring("crystalcuplip", 0.91, 0.055, M["cupbrass"], parent=root, z=0.95, n=40)
+    ring("crystalcupfoot", 0.6, 0.045, M["golddark"], parent=root, z=0.05, n=40)
+    ring("crystalcupbelt", 0.8, 0.04, M["golddark"], parent=root, z=0.6, n=40)
+    # the bezel: a six-sided brass collar hugging the crystal's foot, its faces flush with the crystal's
+    RB, Z0, Z1 = 0.62, 0.86, 1.22
+    bz = lathe("crystalbezel", [(RB + 0.005, Z0), (RB + 0.15, Z0), (RB + 0.15, Z1 - 0.04), (RB + 0.11, Z1),
+                                (RB + 0.005, Z1)], (0, 0, 0), M["cupbrass"], parent=root, verts=6, rot=(0, 0, ROT))
+    bz.data.polygons.foreach_set("use_smooth", [False] * len(bz.data.polygons))
+    # the crystal: a straight foot in the bezel, widening, two-stage point; an emissive heart inside
+    rr = random.Random(77)
+    rings = [(RB, 0.5), (RB, Z1), (0.78, 2.1), (0.78, 3.15), (0.6, 3.9)]
+    jit = [[1.0] * 6] * 3 + [[rr.uniform(0.93, 1.07) for _ in range(6)] for _ in range(2)]
+    tip = (0.06, -0.04, 4.9)
+    cr = gem("crystal", rings, M["crystal"], ROT, tip, parent=root, jit=jit)
+    core = gem("crystalcore", [(0.26, 0.9), (0.4, 1.9), (0.4, 3.0), (0.26, 3.6)], M["crystalcore"], ROT,
+               (0.04, -0.03, 4.2), parent=root)
+    shards = [cr, core]
+    # two small side shards growing out of the crystal's lower half, leaning out
+    for k, (b, lean, ln, rad) in enumerate(((-112.0, 30.0, 1.6, 0.26), (52.0, 28.0, 1.35, 0.21))):
+        se = bpy.data.objects.new("crystalshard%d-at" % k, None)
+        link(se, root)
+        se.location = S.polar(b, 0.32, 1.45)
+        se.rotation_euler = Euler((0.0, math.radians(lean), math.radians(b)), "XYZ")
+        sj = [[rr.uniform(0.9, 1.1) for _ in range(6)] for _ in range(3)]
+        shards.append(gem("crystalshard%d" % k, [(rad * 0.8, 0.0), (rad, ln * 0.35), (rad * 0.85, ln * 0.72)],
+                          M["crystal"], ROT + 17 * k, (0.02, 0.0, ln), parent=se, jit=sj))
+        shards.append(gem("crystalshardcore%d" % k, [(rad * 0.35, 0.1), (rad * 0.4, ln * 0.55)], M["crystalcore"],
+                          ROT + 17 * k, (0.0, 0.0, ln * 0.8), parent=se))
+    # three claws up the cup's side, over the bezel, their points pressed onto the crystal's faces
     for k in range(3):
-        th = 30 + k * 120
-        tube("crystalclaw", [A + Vector(S.polar(th, 0.5, 0.25)), A + Vector(S.polar(th, 1.15, 1.1)),
-                             A + Vector(S.polar(th, 1.15, 2.2)), A + Vector(S.polar(th, 0.92, 3.1))],
-             0.11, M["gold"], smooth=True, r_end=0.04, verts=10)
+        b = ROT + 30 + 120 * k               # the middle of a face (faces at ROT+30+60i); not the front one
+        a0 = RB * math.cos(math.radians(30))
+        ap2 = 0.78 * math.cos(math.radians(30))
+        apz = lambda z: a0 + (ap2 - a0) * min(1.0, (z - Z1) / (2.1 - Z1))
+        pts = [S.polar(b, 0.5, 0.36), S.polar(b, 0.86, 0.7), S.polar(b, 1.01, 1.05), S.polar(b, apz(1.5) + 0.2, 1.5),
+               S.polar(b, apz(1.95) + 0.08, 1.95), S.polar(b, apz(2.25) + 0.03, 2.25),
+               S.polar(b, apz(2.4) - 0.015, 2.4)]          # the point bites into the face
+        tube("crystalclaw%d" % k, [Vector(q) for q in pts], 0.1, M["cupbrass"], parent=root, smooth=True,
+             r_end=0.012, verts=10)
+        lathe("crystalclawknob%d" % k, [(0.0, -0.06), (0.11, -0.04), (0.11, 0.04), (0.0, 0.07)],
+              S.polar(b, 0.98, 0.95), M["cupbrass"], parent=root, rot=(0, 90, b), verts=12)
+    for o in shards:                     # the crystal lets its light out (its glass doesn't block the light's rays)
+        o.visible_shadow = False
     lt = bpy.data.lights.new("crystal-light", "POINT")
-    lt.energy = 60.0
-    lt.color = (1.0, 0.45, 0.15)
-    lt.shadow_soft_size = 0.4
+    lt.energy = CRYSTAL_E["light"]
+    lt.color = (1.0, 0.42, 0.14)
+    lt.shadow_soft_size = 0.35
     lo = bpy.data.objects.new("crystal-light", lt)
-    link(lo)
-    lo.location = A + Vector((0, 0, 2.4))
+    link(lo, root)
+    lo.location = (0.0, 0.0, 2.4)
+    lo.visible_glossy = False            # light the building round it, but don't show as a blob inside the glass
+    lo.visible_transmission = False

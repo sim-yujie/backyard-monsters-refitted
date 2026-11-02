@@ -5,6 +5,9 @@ same body, mounting points, camera, light and scale). The three looks (materials
     blender -b --factory-startup -P icc.py -- a still    render/icc-a-base.png (12 px per game px, with the ground shadow)
     (a = Forged Steel, b = carved basalt, c = on a magma pool; run.sh <v> <mode> holds the PC-wide Blender lock)
     python sheets.py                                     icc-a/b/c.png, icc-abc-large.png, icc-abc-game.png
+    blender ... -- c region crystal crystal              render/region-c-crystal.png: a close render of named parts
+    blender ... -- c layers                              render/layer-c-{base,glow,light,cracks}: look C's glow layers
+    python anim.py all                                   look C final: idle, active loop (mp4/gif), crops, game size
 """
 import math
 import os
@@ -1163,6 +1166,95 @@ def main():
                 hits.append(ob.name)
                 o = loc + fwd * 1e-3
             print("PROBE", sx, sy, hits)
+        return
+    if MODE == "region":                     # region <prefix,prefix> <tag>: a quick close render of those parts
+        sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 64))
+        sc.cycles.use_denoising = True
+        pre = tuple(ARGS[2].split(","))
+        objs = [o for o in SC.objects if o.type in ("MESH", "CURVE") and o.name.startswith(pre)]
+        sc.render.use_border = True
+        sc.render.use_crop_to_border = True
+        (sc.render.border_min_x, sc.render.border_max_x, sc.render.border_min_y,
+         sc.render.border_max_y) = border_of(objs, pad=int(os.environ.get("PB_PAD", 30)))
+        sc.render.filepath = str(out / f"region-{L}-{ARGS[3]}.png")
+        bpy.ops.render.render(write_still=True)
+        print("DONE", L, MODE, ARGS[3])
+        return
+    if MODE == "layers":
+        # the crystal's glow animation, as light layers that add up (Cycles' light is linear in each emitter's
+        # strength): base = everything with the crystal dark; glow = the crystal's own glow alone (shell and core at
+        # peak) on the dark, unlit building; light = the light it throws (its point light at peak) alone; cracks =
+        # the drum's crack glow alone. anim.py makes each frame as base + pulse(t) * (glow + light) + flicker(t) *
+        # cracks. One region round the whole building, float EXR.
+        import numpy as np
+        sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 160))
+        sc.cycles.use_denoising = True
+        sc.cycles.denoiser = "OPENIMAGEDENOISE"
+        sc.render.use_border = True
+        sc.render.use_crop_to_border = True
+        b = border_of(all_static(), pad=40)
+        (sc.render.border_min_x, sc.render.border_max_x, sc.render.border_min_y, sc.render.border_max_y) = b
+        GLOWM = ("i-crystal", "i-crystal-core")
+        CRACKM = ("i-half", "i-halftop", "i-halfbowl")
+        saved = {}
+        for m in bpy.data.materials:
+            if not m.use_nodes:
+                continue
+            for nd in m.node_tree.nodes:
+                if nd.type == "BSDF_PRINCIPLED":
+                    s = nd.inputs["Emission Strength"]
+                    saved[(m.name, nd.name)] = ([lk.from_socket for lk in s.links], s.default_value)
+
+        def emit_only(keep):
+            for m in bpy.data.materials:
+                if not m.use_nodes:
+                    continue
+                for nd in m.node_tree.nodes:
+                    if nd.type != "BSDF_PRINCIPLED":
+                        continue
+                    s = nd.inputs["Emission Strength"]
+                    for lk in list(s.links):
+                        m.node_tree.links.remove(lk)
+                    src, val = saved[(m.name, nd.name)]
+                    if keep is None or m.name in keep:
+                        s.default_value = val
+                        for f in src:
+                            m.node_tree.links.new(f, s)
+                    else:
+                        s.default_value = 0.0
+
+        light = bpy.data.objects["crystal-light"].data
+        sun = bpy.data.objects["sun"].data
+        bg = next(n for n in sc.world.node_tree.nodes if n.type == "BACKGROUND")
+        ground = bpy.data.objects["ground"]
+        sun_e, bg_e, light_e = sun.energy, bg.inputs[1].default_value, light.energy
+        which = ARGS[2].split(",") if len(ARGS) > 2 else ["base", "glow", "light", "cracks"]
+        for name in which:
+            if name == "base":
+                emit_only(set(m.name for m in bpy.data.materials) - set(GLOWM))
+                sun.energy, bg.inputs[1].default_value, light.energy, ground.hide_render = sun_e, bg_e, 0.0, False
+            else:
+                emit_only({"glow": GLOWM, "light": (), "cracks": CRACKM}[name])
+                sun.energy, bg.inputs[1].default_value, ground.hide_render = 0.0, 0.0, True
+                light.energy = light_e if name == "light" else 0.0
+            sc.render.image_settings.file_format = "OPEN_EXR"
+            sc.render.image_settings.color_depth = "32"
+            sc.render.image_settings.exr_codec = "ZIP"
+            fp = out / f"layer-{L}-{name}.exr"
+            sc.render.filepath = str(fp)
+            bpy.ops.render.render(write_still=True)
+            im = bpy.data.images.load(str(fp))
+            a = np.array(im.pixels[:], dtype=np.float32).reshape(im.size[1], im.size[0], 4)[::-1]
+            np.save(out / f"layer-{L}-{name}.npy", a)
+            bpy.data.images.remove(im)
+            if name == "base":               # the same render as a normal PNG, to check anim.py's conversion
+                sc.render.image_settings.file_format = "PNG"
+                sc.render.image_settings.color_depth = "8"
+                bpy.data.images["Render Result"].save_render(str(out / f"layer-{L}-base.png"), scene=sc)
+            print("LAYER", name, a.shape, float(a[..., :3].max()))
+        (out / f"layer-{L}-border.txt").write_text(" ".join("%.6f" % x for x in b) + " %d %d\n" % (
+            sc.render.resolution_x, sc.render.resolution_y))
+        print("DONE", L, MODE)
         return
     if MODE == "fit":
         sc.cycles.samples = int(os.environ.get("PB_SAMPLES", 24))
