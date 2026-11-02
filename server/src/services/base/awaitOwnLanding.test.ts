@@ -94,6 +94,18 @@ describe("awaitOwnLanding", () => {
     expect(clock).toBe(1000);
   });
 
+  test("a Redis failure lets the load go on rather than cost the player their yard", async () => {
+    const get = fakeRedis.get;
+    fakeRedis.get = async () => {
+      throw new Error("redis gone");
+    };
+    try {
+      expect(await awaitOwnLanding(PLAYER, deps)).toBe(false);
+    } finally {
+      fakeRedis.get = get;
+    }
+  });
+
   test("another player's landing is not waited for", async () => {
     store.set(attackerSessionKey(PLAYER), String(ROW));
     store.set(descentFinalLockKey(PLAYER + 1), "1");

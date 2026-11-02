@@ -1,4 +1,5 @@
 import { redis } from "../../server.js";
+import { logger } from "../../utils/logger.js";
 import { MR1_TRIBE_IDS } from "../../game-data/tribes/v1/index.js";
 import { descentFinalLockKey } from "../inferno/descentSession.js";
 import { infernoTribeFinalLockKey } from "../inferno/infernoTribeSession.js";
@@ -58,10 +59,20 @@ export interface AwaitOwnLandingDeps {
 
 /**
  * Waits until none of `userid`'s attacks is landing, or the wait runs out.
+ * Never throws: a failure here must not cost the player their yard.
  *
  * @returns Whether it had to wait at all.
  */
 export const awaitOwnLanding = async (userid: number, deps: AwaitOwnLandingDeps = {}): Promise<boolean> => {
+  try {
+    return await waitForOwnLanding(userid, deps);
+  } catch (err) {
+    logger.error(`Waiting for ${userid}'s attack to land before a load failed: ${err}`);
+    return false;
+  }
+};
+
+const waitForOwnLanding = async (userid: number, deps: AwaitOwnLandingDeps): Promise<boolean> => {
   const waitMs = deps.waitMs ?? OWN_LANDING_WAIT_MS;
   const pollMs = deps.pollMs ?? OWN_LANDING_POLL_MS;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
