@@ -202,8 +202,9 @@
 
 /* A phone on its side: one bottom row, Collect all, More, Monsters, Build, at
    the phone's sizes, the zoom rail alone on the right edge above them. The
-   bubbles stand in rows of four above More with their words under them, as
-   a column up from More would not fit the short screen. */
+   bubbles stand in rows of three above More and to its right, where the
+   screen is empty (owner, beta 6), with their words under them, as a column
+   up from More would not fit the short screen. */
 @media (width > 620px) and (height <= 500px) {
   .bubble-menu {
     --bubble-anchor: 28px;
@@ -271,7 +272,7 @@
 
 .bubble-menu--grid.bubble-menu--open .bubble-menu__fan > .yard-dock__button {
   transform: translate(
-      calc(var(--bubble-col, 0) * var(--bubble-pitch) * -1),
+      calc(var(--bubble-col, 0) * var(--bubble-pitch)),
       calc((var(--bubble-start) + var(--bubble-row, 0) * var(--bubble-step)) * -1)
     )
     scale(1);

@@ -230,7 +230,7 @@ describe("BubbleMenu", () => {
     expect(menu.button.dataset["tut"]).toBe(TutTarget.DOCK_MORE);
   });
 
-  it("on a phone on its side stands the bubbles in rows of four, and in a column again upright", async () => {
+  it("on a phone on its side stands the bubbles in rows of three, and in a column again upright", async () => {
     const { menu, right, monsters, layout, flip } = setup();
     monsters.after(button("goals"), button("bell"), button("defences"), button("mail"));
     await settle();
@@ -251,8 +251,8 @@ describe("BubbleMenu", () => {
       ["0", "0"],
       ["1", "0"],
       ["2", "0"],
-      ["3", "0"],
       ["0", "1"],
+      ["1", "1"],
     ]);
 
     flip.set(false);
@@ -333,7 +333,7 @@ describe("the bubbles' column (bubble-menu.css)", () => {
     expect(css).not.toMatch(/--bubble-curve/);
   });
 
-  it("keeps the sideways phone's rows of four", () => {
-    expect(css).toMatch(/\.bubble-menu--grid\.bubble-menu--open \.bubble-menu__fan > \.yard-dock__button \{\s*transform: translate\(\s*calc\(var\(--bubble-col, 0\)/);
+  it("keeps the sideways phone's rows running right from More (owner, beta 6)", () => {
+    expect(css).toMatch(/\.bubble-menu--grid\.bubble-menu--open \.bubble-menu__fan > \.yard-dock__button \{\s*transform: translate\(\s*calc\(var\(--bubble-col, 0\) \* var\(--bubble-pitch\)\),/);
   });
 });

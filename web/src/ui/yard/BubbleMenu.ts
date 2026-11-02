@@ -19,7 +19,8 @@ import { menuBadgeLabel, menuBadgeText } from "./YardMenu";
  * and the yard switcher stay on the screen on a phone too, and everything
  * else is in the fan. On a phone held upright the fan is one column up from
  * More; on a phone on its side, too short for a column, the bubbles stand in
- * rows of `GRID_COLUMNS` above More, each word under its bubble.
+ * rows of `GRID_COLUMNS` above More and to its right, where the screen is
+ * empty (owner, beta 6), each word under its bubble.
  *
  * Behind a switch: `BUBBLE_MENU`, or `localStorage` `bymr.bubbleMenu` set to
  * "off" or "on" on this browser.
@@ -41,8 +42,8 @@ export const BUBBLE_ITEMS: readonly string[] = ["layout", "goals", "bell", "defe
 /** Where the fan lays its bubbles out in rows: a phone on its side, too short for one column. */
 export const GRID_QUERY = "(width > 620px) and (height <= 500px)";
 
-/** Bubbles in one row of the sideways grid. */
-export const GRID_COLUMNS = 4;
+/** Bubbles in one row of the sideways grid: as many as fit between More and the zoom rail. */
+export const GRID_COLUMNS = 3;
 
 /** How long the mouse rests on More before the fan opens, and off it before it shuts. */
 const HOVER_OPEN_MS = 90;
