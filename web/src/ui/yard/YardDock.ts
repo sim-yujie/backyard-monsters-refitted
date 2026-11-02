@@ -283,6 +283,8 @@ export class YardDock {
     );
     this.element.append(left, right);
     this.bubble = this.build && bubbles ? new BubbleMenu({ host: right, scope: this.element }) : null;
+    // bubble-menu.css places the buttons around the fan.
+    this.element.classList.toggle("yard-dock--bubbles", this.bubble !== null);
     this.menu = this.build
       ? new YardMenu({
           sources: [left, right],
