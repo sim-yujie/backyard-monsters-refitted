@@ -31,7 +31,8 @@ export const BUILDING_ART_LEVELS: Readonly<Record<number, readonly number[]>> = 
    * The tiers of the towers players see with the Modern look
    * (`MODERN_TOWERS` in `web/src/game/yard/buildingArtTiers.ts`): tiers 2 and 3
    * from levels 4 and 7, the Monster Bunker's and the six-level Magma Tower's
-   * from 3 and 5, and one picture for every level of the Spurtz Cannons. The
+   * from 3 and 5, and one picture for every level of the Spurtz Cannons and the
+   * Quake Tower (129, in the main yard and the Inferno alike). The
    * Inferno's Blast Tower and Sharpshooter (20 and 21 there, and 130) split as
    * the Cannon and Sniper do. The Flash towers, and the Classic look, have one
    * picture for every level. A viewer is sent only the tier's first level,
@@ -46,6 +47,7 @@ export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> 
   25: [1, 4, 7],
   115: [1, 4, 7],
   118: [1, 4, 7],
+  129: [1],
   130: [1, 4, 7],
   132: [1, 3, 5],
   136: [1],

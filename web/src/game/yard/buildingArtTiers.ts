@@ -98,13 +98,13 @@ import { TURRET_AIM } from "./turretAimData";
 /**
  * The towers whose new art players see with the Modern look: the 3D Cannon
  * (20), Sniper (21), Laser (23), Aerial Defense (115), Railgun (118), Magma
- * Tower (132), Spurtz Cannons (136, 137), Monster Bunker (22) and Tesla
- * (25), and in an Inferno yard the 3D Blast Tower (20 and 130) and
+ * Tower (132), Spurtz Cannons (136, 137), Monster Bunker (22), Tesla (25)
+ * and Quake Tower (129, in both yards), and in an Inferno yard the 3D Blast Tower (20 and 130) and
  * Sharpshooter (21, `INFERNO_TOWER_TIER_ART`). A tower in `TOWER_TIER_ART`
  * but not here keeps its Flash look. The server's `TOWER_TIER_ART_LEVELS`
  * names the same.
  */
-export const MODERN_TOWERS: readonly number[] = [20, 21, 22, 23, 25, 115, 118, 130, 132, 136, 137];
+export const MODERN_TOWERS: readonly number[] = [20, 21, 22, 23, 25, 115, 118, 129, 130, 132, 136, 137];
 
 /** Where a browser kept the old hidden tower switch (`?towers=new`, "1" on); cleared when the game loads. */
 export const OLD_NEW_TOWER_ART_KEY = "bymr.newTowerArt";
@@ -326,6 +326,15 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
     { from: 7, top: ["top.t3@2x.webp", -34, -22], shadow: ["shadow.t3.jpg", -33, 23], lift: 20,
       turret: { body: ["body.t3@2x.webp", -34, -7], strip: ["turret.t3@2x.webp", -48, -33, 96, 55, 32], pivot: [0, 3.4],
         aim: TURRET_AIM["118.t3"] } },
+  ],
+  // 129 Quake Tower: 3D, one look for all its levels as Flash's (new art, branch art/quake-3d). Each cell of its strike
+  // is the whole tower, stepped by the battle's `towerCell` events as Flash's anim.1.png was; Flash's shadow kept.
+  // Flash's damaged look animates; the 3D one is a still, as the other 3D buildings' (`export3d_quake.py`).
+  129: [
+    { from: 1, top: ["top.t1@2x.webp", -40, -78], shadow: ["shadow.1.v2.jpg", -37, 17], lift: 3,
+      anim: { strip: ["anim.t1@2x.webp", -40, -78, 80, 133, 33], columns: 25, whole: true },
+      damaged: { top: ["top.t1.damaged@2x.webp", -40, -78], shadow: ["shadow.1.v2.jpg", -40, 16] },
+      destroyed: { top: ["top.t1.destroyed@2x.webp", -46, -13], shadow: ["shadow.1.v2.jpg", -44, 10] } },
   ],
   // 132 Magma Tower: 3D, the Volcanic look (owner, 29 Oct 2026); six levels, so 1-2, 3-4 and 5-6
   132: [
