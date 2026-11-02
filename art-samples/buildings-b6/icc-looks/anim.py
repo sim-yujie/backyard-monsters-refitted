@@ -12,7 +12,9 @@
 Each frame is base + pulse(t) x (glow + light) + flicker(t) x cracks, in linear light, then Blender's Standard view
 (sRGB). glow is the crystal's own glow at peak (shell and core), light the light it throws (its point light); pulse 1 =
 peak. cracks is the drum's crack glow
-(already in base at full strength); flicker adds or takes away a little of it.
+(already in base at full strength); flicker adds or takes away a little of it. lava is the light the magma pool throws
+onto the building (rim stones, pods, legs, bowl): added steady, LAVA x, in idle and active alike, with a soft warm
+glow on the grass round the pool's rim (the pool's own area, blurred).
 """
 import math
 import subprocess
@@ -39,6 +41,11 @@ HALO = 0.85                   # the soft 2D halo round the crystal at peak (alph
 HALO_SIGMA = 70               # its blur radius in render px (12 render px = 1 game px)
 HALO_COL = (1.0, 0.36, 0.08)  # linear warm orange
 PAD = 160                     # room round the layers for the halo
+LAVA = 3.0                    # the magma pool's thrown light, added on top of what base has (1x): steady, idle and active
+LAVA_HALO = 0.60              # the soft warm glow on the grass just outside the pool's rim stones (alpha at the pool edge)
+LAVA_SIGMA = 60               # its blur radius in render px
+LAVA_WASH = 0.06              # the same glow as a faint warm wash on the parts next to the pool (rim stones, legs, pods)
+LAVA_COL = (1.0, 0.30, 0.05)  # linear warm orange, a little redder than the crystal's halo
 
 
 def pulse(k):
@@ -56,14 +63,19 @@ def flicker(k):
 
 
 def layers():
-    """The four layers, padded by PAD, plus the halo source: the crystal's own glow, blurred (0..1 at peak)."""
+    """The five layers, padded by PAD, plus the halo sources: the crystal's own glow, blurred (0..1 at peak), and the
+    magma pool's area, blurred (0.5 at its edge, doubled and clipped: 1 inside), and the pool's area itself."""
     from scipy.ndimage import gaussian_filter
     L = [np.pad(np.load(R / f"layer-c-{n}.npy"), ((PAD, PAD), (PAD, PAD), (0, 0)))
-         for n in ("base", "glow", "light", "cracks")]
+         for n in ("base", "glow", "light", "cracks", "lavalight")]
     g = L[1][..., :3].mean(2)
     g = np.clip((g - 0.08) / 0.5, 0, 1)                  # the crystal itself, not the faint glow it casts nearby
     h = gaussian_filter(g, HALO_SIGMA)
     L.append(h / h.max())
+    # the pool: solid in base, a clear hole in lavalight (its camera rays are held out); the ground shadow is never solid
+    pool = ((L[0][..., 3] > 0.98) & (L[4][..., 3] < 0.02)).astype(np.float32)
+    L.append(np.clip(2 * gaussian_filter(pool, LAVA_SIGMA), 0, 1))
+    L.append(pool)
     return L
 
 
@@ -72,20 +84,25 @@ def to_srgb(x):
     return np.where(x <= 0.0031308, x * 12.92, 1.055 * np.power(x, 1 / 2.4) - 0.055)
 
 
-def compose(L, s, f=0.0):
+def compose(L, s, f=0.0, lava=1.0):
     """One frame at glow s (1 = peak) and crack flicker f. The halo is a soft warm glow: added as light where the
-    building is, and as a see-through warm layer behind it (on the grass)."""
-    base, glow, light, cr, halo = L
+    building is, and as a see-through warm layer behind it (on the grass). lava (1 = on, the same in every frame):
+    the magma pool's steady light on the building and its soft glow on the grass round the rim."""
+    base, glow, light, cr, lv, halo, pool, inpool = L
     hs = HALO * s ** 1.5 * halo[..., None]
     col = np.array(HALO_COL, np.float32)
     rgb = (base[..., :3] + GAIN * s * glow[..., :3] + LIGHT * s ** LIGHT_POW * light[..., :3] + f * cr[..., :3]
-           + 0.35 * hs * col * base[..., 3:4])
+           + 0.35 * hs * col * base[..., 3:4] + lava * LAVA * lv[..., :3]
+           + lava * LAVA_WASH * (pool * (1 - inpool))[..., None] * np.array(LAVA_COL, np.float32) * base[..., 3:4])
     a = base[..., 3:4]
     straight = np.where(a > 1e-4, rgb / np.maximum(a, 1e-4), 0.0)
-    # the building over the halo layer (premultiplied, in linear light)
-    ha = np.clip(hs, 0, 1)
+    # the building over the halo layers (premultiplied, in linear light): crystal halo over the lava glow
+    hs = np.clip(hs, 0, 1)
+    hl = np.clip(lava * LAVA_HALO * pool[..., None], 0, 1)
+    ha = hs + hl * (1 - hs)
+    hcol = np.where(ha > 1e-4, (col * hs + np.array(LAVA_COL, np.float32) * hl * (1 - hs)) / np.maximum(ha, 1e-4), 0)
     out_a = a + ha * (1 - a)
-    pm = straight * a + col * ha * (1 - a)
+    pm = straight * a + hcol * ha * (1 - a)
     st = np.where(out_a > 1e-4, pm / np.maximum(out_a, 1e-4), 0.0)
     out = np.concatenate([to_srgb(st), np.clip(out_a, 0, 1)], axis=2)
     return Image.fromarray((out * 255 + 0.5).astype(np.uint8), "RGBA")
@@ -142,7 +159,7 @@ def tight(ims, pad=24):
 
 def check():
     L = layers()
-    mine = np.array(compose(L, 0.0)).astype(int)[PAD:-PAD, PAD:-PAD]
+    mine = np.array(compose(L, 0.0, lava=0.0)).astype(int)[PAD:-PAD, PAD:-PAD]
     bl = np.array(Image.open(R / "layer-c-base.png").convert("RGBA")).astype(int)
     m = bl[..., 3] > 250
     d = np.abs(mine[..., :3] - bl[..., :3])[m]

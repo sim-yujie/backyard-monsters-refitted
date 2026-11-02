@@ -6,7 +6,7 @@ same body, mounting points, camera, light and scale). The three looks (materials
     (a = Forged Steel, b = carved basalt, c = on a magma pool; run.sh <v> <mode> holds the PC-wide Blender lock)
     python sheets.py                                     icc-a/b/c.png, icc-abc-large.png, icc-abc-game.png
     blender ... -- c region crystal crystal              render/region-c-crystal.png: a close render of named parts
-    blender ... -- c layers                              render/layer-c-{base,glow,light,cracks}: look C's glow layers
+    blender ... -- c layers                              render/layer-c-{base,glow,light,cracks,lavalight}: look C's glow layers
     python anim.py all                                   look C final: idle, active loop (mp4/gif), crops, game size
 """
 import math
@@ -1228,13 +1228,24 @@ def main():
         bg = next(n for n in sc.world.node_tree.nodes if n.type == "BACKGROUND")
         ground = bpy.data.objects["ground"]
         sun_e, bg_e, light_e = sun.energy, bg.inputs[1].default_value, light.energy
-        which = ARGS[2].split(",") if len(ARGS) > 2 else ["base", "glow", "light", "cracks"]
+        # lavalight = the light the magma pool throws onto the building alone (its rim stones, pods, legs, bowl),
+        # without the pool itself: camera rays see a clear black hole where the pool is, every other ray sees the
+        # lava. anim.py adds it as a small steady glow in idle and active alike.
+        pnt = bpy.data.materials["i-pool"].node_tree
+        pout = next(n for n in pnt.nodes if n.type == "OUTPUT_MATERIAL" and n.is_active_output)
+        psrc = pout.inputs["Surface"].links[0].from_socket
+        lp, ho, mx = (pnt.nodes.new(t) for t in ("ShaderNodeLightPath", "ShaderNodeHoldout", "ShaderNodeMixShader"))
+        pnt.links.new(lp.outputs["Is Camera Ray"], mx.inputs[0])
+        pnt.links.new(psrc, mx.inputs[1])
+        pnt.links.new(ho.outputs[0], mx.inputs[2])
+        which = ARGS[2].split(",") if len(ARGS) > 2 else ["base", "glow", "light", "cracks", "lavalight"]
         for name in which:
+            pnt.links.new(mx.outputs[0] if name == "lavalight" else psrc, pout.inputs["Surface"])
             if name == "base":
                 emit_only(set(m.name for m in bpy.data.materials) - set(GLOWM))
                 sun.energy, bg.inputs[1].default_value, light.energy, ground.hide_render = sun_e, bg_e, 0.0, False
             else:
-                emit_only({"glow": GLOWM, "light": (), "cracks": CRACKM}[name])
+                emit_only({"glow": GLOWM, "light": (), "cracks": CRACKM, "lavalight": ("i-pool",)}[name])
                 sun.energy, bg.inputs[1].default_value, ground.hide_render = 0.0, 0.0, True
                 light.energy = light_e if name == "light" else 0.0
             sc.render.image_settings.file_format = "OPEN_EXR"
