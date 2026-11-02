@@ -100,3 +100,36 @@ export const TERATORN_ID = "C14";
 export const BOUNCE_RADIUS = 100;
 /** How many times the fireball jumps on: its rank. */
 export const bounceCount = (rank: number): number => rank;
+
+/*
+ * The revamp's four Lab abilities (owner, beta 6 grill, 2 Nov 2026). Flash's
+ * Lab had none for these monsters; the numbers are the owner's, the shares
+ * the Lab table's `effect` (`monsterCatalogue.ts`). Each works for an
+ * attacker and a defender alike, as Flash's ranks did (`MonsterBase.as:862-901`).
+ */
+
+/** C1 Pokey: "Swarm". */
+export const POKEY_ID = "C1";
+/** Pokeys on one target it takes for the swarm to be on; more add nothing. */
+export const SWARM_SIZE = 5;
+/** How much faster a swarming Pokey swings: 10%, 20%, 30%, its swing rate times 1 + this. */
+export const swarmSpeedShare = (rank: number): number => rank / 10;
+
+/** C2 Octo-ooze: "Weakening Ooze". */
+export const OCTO_ID = "C2";
+/** What the killer's damage loses while it is weakened: 5%, 10%, 15%. */
+export const weakenShare = (rank: number): number => (5 * rank) / 100;
+/** Seconds the weakening lasts; a new kill starts it again rather than stacking. */
+export const WEAKEN_SECONDS = 5;
+
+/** C6 Ichi: "Thorns". */
+export const ICHI_ID = "C6";
+/** What share of the health it actually lost goes back at the striker: 10%, 15%, 20%. */
+export const thornsShare = (rank: number): number => (5 + 5 * rank) / 100;
+
+/** C10 Crabatron: "Critical Hits". */
+export const CRABATRON_ID = "C10";
+/** The chance a hit does double damage: 10%, 15%, 20%. */
+export const critChance = (rank: number): number => (5 + 5 * rank) / 100;
+/** A critical hit's damage multiplier. */
+export const CRIT_MULTIPLIER = 2;

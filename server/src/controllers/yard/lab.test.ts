@@ -145,7 +145,7 @@ describe("refusals write nothing", () => {
 
   test("a malformed body is a 400", async () => {
     expect((await call(yardLabStartAction, {})).status).toBe(400);
-    expect((await call(yardLabStartAction, { monster: "C1" })).status).toBe(400);
+    expect((await call(yardLabStartAction, { monster: "C15" })).status).toBe(400); // Zafreeti: no lab ability
   });
 
   test("cancel and finish with nothing researching", async () => {

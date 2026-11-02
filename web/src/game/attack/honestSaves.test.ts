@@ -61,6 +61,8 @@ interface Fixture {
   playerLevel: number;
   defence?: { defenderChampions?: { t: number; l: number; hp: number; pl?: number }[] } & Record<string, unknown>;
   raid?: unknown;
+  /** The attacker's Monster Lab ranks, as the load's `attackerranks`. */
+  ranks?: Record<string, number>;
   log: { v: 1; seed: number; events: FlingEvent[] };
 }
 
@@ -177,6 +179,7 @@ const loadOf = (fixture: Fixture, kind: Kind, scenario: Scenario, brains?: Recor
     type: TYPE_OF[kind],
     attackerlevel: fixture.playerLevel,
     attackeracademy: fixture.levels,
+    ...(fixture.ranks && { attackerranks: fixture.ranks }),
     attpowerups: scenario.declareWar ? [{ id: "ap_declarewar" }] : [],
     ...(fixture.defence && { defenderforces: fixture.defence }),
     ...(fixture.height !== undefined && { cellheight: fixture.height }),

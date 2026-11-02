@@ -28,7 +28,7 @@ import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession } from "./AttackSession";
 import { BombFx, type BombArt } from "./bombFx";
 import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
-import { BuildingBars } from "./buildingBars";
+import { BAR_OFFSET, BAR_WIDTH, BuildingBars } from "./buildingBars";
 import {
   BUILDING_NUMBER_LIFT,
   CreepFx,
@@ -39,6 +39,7 @@ import {
   lungeOffset,
   mouthPoint,
   projectileStyle,
+  type NumberMods,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
@@ -57,7 +58,7 @@ import { classicLook } from "@/game/classicLook";
 import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
-import { StatusIconRow, statusesOf } from "./statusIcons";
+import { StatusIconRow, TowerStatusIcons, statusesOf } from "./statusIcons";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { SiegeFx, type SiegeArt } from "./siegeFx";
 import { TrapReveal } from "./trapReveal";
@@ -844,6 +845,8 @@ export class AttackBattleLayer {
   /* Buildings: the towers' guns and shots, the bars, the traps (#64, #66, #67). */
   private readonly towerFx: TowerFx;
   private readonly buildingBars: BuildingBars;
+  /** The towers' stickers over their bars: "weakened" by an Octo-ooze (owner, beta 6). */
+  private readonly towerStatus: TowerStatusIcons;
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
@@ -983,7 +986,9 @@ export class AttackBattleLayer {
       },
       this.reducedMotion,
       this.juice !== "off",
-      !this.classic,
+      // Both looks show the numbers; Classic in a plain font (owner, beta 6).
+      true,
+      this.classic,
     );
     this.overlay.addChild(this.fx.root);
 
@@ -1026,6 +1031,13 @@ export class AttackBattleLayer {
       (id) => this.maxHpById.get(id),
     );
     this.effects.addChild(this.buildingBars.root);
+    this.towerStatus = new TowerStatusIcons((id) => {
+      const origin = this.host.centreOf(id) ? originOf.get(id) : undefined;
+      return origin
+        ? { x: origin.x + BAR_OFFSET.x + BAR_WIDTH / 2, y: origin.y + BAR_OFFSET.y }
+        : null;
+    });
+    this.effects.addChild(this.towerStatus.root);
     // The blast over the bars; the splats it leaves come after, over it.
     this.effects.addChild(this.blastAir);
 
@@ -1086,6 +1098,7 @@ export class AttackBattleLayer {
     this.bombFx.update(shown);
     this.siegeFx.update(battle.siege(), shown);
     this.showBombNumbers(shown);
+    this.towerStatus.sync(battle.weakenedTowers());
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1342,6 +1355,7 @@ export class AttackBattleLayer {
 
     this.towerFx.destroy();
     this.buildingBars.destroy();
+    this.towerStatus.destroy();
     for (const burst of this.bursts) burst.ring.destroy();
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
@@ -1979,6 +1993,7 @@ export class AttackBattleLayer {
         event.amount,
         PROJECTILE_TICKS,
         projectileStyle(monsterId),
+        modsOf(event),
       );
       return;
     }
@@ -2001,8 +2016,19 @@ export class AttackBattleLayer {
     // Flash showed the same red numbers on buildings (`BFOUNDATION.as:534`).
     if (event.buildingId >= 0 && event.amount > 0) {
       const over = { x: target.x, y: target.y - BUILDING_NUMBER_LIFT };
-      this.fx.number(event.tick, `building:${event.buildingId}`, -1, event.amount, over, "damage");
+      const key = `building:${event.buildingId}`;
+      this.fx.number(event.tick, key, -1, event.amount, over, "damage", modsOf(event));
     }
+  }
+
+  /** An Ichi's thorns struck a tower: the number over it, with the thorn mark (owner, beta 6). */
+  private onThorns(event: Extract<BattleVisualEvent, { kind: "thorns" }>): void {
+    if (event.amount <= 0) return;
+    const centre = this.host.centreOf(event.buildingId);
+    if (!centre) return;
+    const over = { x: centre.x, y: centre.y - BUILDING_NUMBER_LIFT };
+    const key = `building:${event.buildingId}`;
+    this.fx.number(event.tick, key, -1, event.amount, over, "damage", { thorns: true });
   }
 
   /**
@@ -2019,7 +2045,8 @@ export class AttackBattleLayer {
       ? { x: view.lastX, y: view.lastY }
       : groundWorld(wound.ix, wound.iy, this.origin);
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
-    this.fx.number(tick, `creep:${wound.creepId}`, wound.creepId, wound.amount, at, "damage");
+    const key = `creep:${wound.creepId}`;
+    this.fx.number(tick, key, wound.creepId, wound.amount, at, "damage", modsOf(wound));
   }
 
   /**
@@ -2345,6 +2372,10 @@ export class AttackBattleLayer {
     }
     if (event.kind === "hurt") {
       if (!this.ledger.hurt(event)) this.showWound(event, event.tick);
+      return;
+    }
+    if (event.kind === "thorns") {
+      this.onThorns(event);
       return;
     }
     if (event.kind === "shot") {
@@ -2705,3 +2736,17 @@ export class AttackBattleLayer {
     }
   }
 }
+
+/** A hit's or wound's modifiers for its number: a crit, a cut, thorns (owner, beta 6). */
+const modsOf = (event: {
+  readonly bonus?: number;
+  readonly reduced?: number;
+  readonly thorns?: boolean;
+}): NumberMods | undefined =>
+  event.bonus === undefined && event.reduced === undefined && event.thorns !== true
+    ? undefined
+    : {
+        ...(event.bonus === undefined ? {} : { bonus: event.bonus }),
+        ...(event.reduced === undefined ? {} : { reduced: event.reduced }),
+        ...(event.thorns === true ? { thorns: true } : {}),
+      };

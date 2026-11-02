@@ -19,7 +19,7 @@ import type { TrainingContext } from "./training";
  * What the Lab tab shows, as data (`docs/design/yard-buildings.md` §6 "Lab
  * tab"; `docs/specs/monsters-and-hatchery.md` §4.2).
  *
- * The tab draws; this decides. The Lab's state, the ten monsters with an
+ * The tab draws; this decides. The Lab's state, the fourteen monsters with an
  * ability with their rank and next rank, what the ability does now and next,
  * the one reason Start (or Instant) cannot be pressed, and every price come
  * from here, checked in the order the server checks them (`researchGate`,
@@ -192,7 +192,10 @@ export const labSlot = (context: LabContext): LabSlot | null => {
 const unlocked = (context: LabContext, id: string): boolean =>
   Number(context.save.lockerdata?.[id]?.t) === 2;
 
-/** The ten monsters with an ability, in the Lab's list order (`MONSTERLABPOPUP.as:452`). */
+/**
+ * The fourteen monsters with an ability, in the Lab's list order
+ * (`MONSTERLABPOPUP.as:452`, with the revamp's four placed by price).
+ */
 export const labRows = (context: LabContext): LabRow[] => {
   const research = runningResearch(context);
   return [...LAB_ABILITIES]
@@ -339,7 +342,8 @@ const times = (value: number): string => `${value}×`;
  * value reads. The values are `MONSTERLAB._powerupProps[id].effect`
  * (`client/scripts/MONSTERLAB.as:77-188`); how the original printed each is
  * `MONSTERLABPOPUP.as:215-250` (Eye-ra as a percentage, Bandito as a speed,
- * Fang, Project X and Wormzer as multiples of the monster's damage).
+ * Fang, Project X and Wormzer as multiples of the monster's damage). The
+ * revamp's four (owner, 2 Nov 2026) read as percentages.
  */
 const EFFECTS: Readonly<Record<string, { readonly label: string; readonly value: (v: number) => string }>> = {
   C3: { label: "Blink range", value: String },
@@ -352,6 +356,10 @@ const EFFECTS: Readonly<Record<string, { readonly label: string; readonly value:
   C13: { label: "Pop-up splash", value: (v) => `${times(v)} its damage` },
   C14: { label: "Fireball bounces", value: String },
   C12: { label: "Rocket range", value: String },
+  C1: { label: "Swarm attack speed", value: (v) => `+${percent(v)}` },
+  C2: { label: "Killer's damage", value: (v) => `-${percent(v)} for 5 s` },
+  C6: { label: "Damage reflected", value: percent },
+  C10: { label: "Double-damage chance", value: percent },
 };
 
 /** What one rank of an ability gives, "Blink range 300"; rank 0 is "none". */

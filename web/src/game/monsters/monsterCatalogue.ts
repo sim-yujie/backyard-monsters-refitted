@@ -12,7 +12,8 @@
  * page 4 / order 4; Slimeattikus Mini (C18) stays blocked as C17's spawn. The
  * Inferno roster (IC1-IC8) is its own list, `INFERNO_MONSTER_CATALOGUE`, priced
  * in Sulfur (unlock, training) and Magma (hatching) on the Inferno yard
- * (`docs/design/inferno.md` §2.6). C200 is not included.
+ * (`docs/design/inferno.md` §2.6). C200 is not included. The Lab also has the
+ * revamp's four abilities (Pokey, Octo-ooze, Ichi, Crabatron; owner, 2 Nov 2026).
  *
  * This file exists twice, byte for byte: `web/src/game/monsters/monsterCatalogue.ts`
  * (what the Monsters screen shows) and `server/src/game-data/monsterCatalogue.ts`
@@ -584,10 +585,32 @@ export const INFERNO_MONSTER_CATALOGUE: readonly MonsterEntry[] = [
 ];
 
 export const LAB_ABILITIES: readonly LabAbility[] = [
+  // C1 Pokey — revamp (owner, 2 Nov 2026)
+  {
+    id: "C1",
+    order: 1,
+    name: "Swarm",
+    effectLabel: "Swarm Attack Speed",
+    description: "When 5 or more Pokeys attack the same target, each one attacks faster.",
+    upgradeDescription: "Swarming Pokeys attack even faster.",
+    costs: [[24000, 86400], [36000, 86400], [54000, 86400]],
+    effect: [0.1, 0.2, 0.3],
+  },
+  // C2 Octo-ooze — revamp (owner, 2 Nov 2026)
+  {
+    id: "C2",
+    order: 2,
+    name: "Weakening Ooze",
+    effectLabel: "Killer's Damage Cut",
+    description: "Whatever kills Octo-ooze is covered in ooze and deals less damage for 5 seconds.",
+    upgradeDescription: "The ooze weakens the killer more.",
+    costs: [[32000, 86400], [48000, 86400], [72000, 86400]],
+    effect: [0.05, 0.1, 0.15],
+  },
   // C3 Bolt — MONSTERLAB.as:78
   {
     id: "C3",
-    order: 1,
+    order: 3,
     name: "Teleportation",
     effectLabel: "Blink Range",
     description: "Adds the ability to blink increasing speed.",
@@ -598,7 +621,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C4 Fink — MONSTERLAB.as:89
   {
     id: "C4",
-    order: 2,
+    order: 4,
     name: "Claws",
     effectLabel: "Extra Target(s)",
     description: "Fink uses all of his claws to slaughter multiple buildings and monsters surrounding him.",
@@ -606,10 +629,21 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
     costs: [[96000, 108000], [128000, 108000], [144000, 108000]],
     effect: [1, 2, 3],
   },
+  // C6 Ichi — revamp (owner, 2 Nov 2026)
+  {
+    id: "C6",
+    order: 5,
+    name: "Thorns",
+    effectLabel: "Damage Reflected",
+    description: "Ichi reflects part of the damage it takes back at whatever hit it.",
+    upgradeDescription: "Ichi reflects more of the damage it takes.",
+    costs: [[500000, 108000], [750000, 108000], [1125000, 108000]],
+    effect: [0.1, 0.15, 0.2],
+  },
   // C7 Bandito — MONSTERLAB.as:100
   {
     id: "C7",
-    order: 3,
+    order: 6,
     name: "Whirlwind",
     effectLabel: "Whirlwind",
     description: "Attacks multiple enemies around him.",
@@ -620,7 +654,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C8 Fang — MONSTERLAB.as:111
   {
     id: "C8",
-    order: 4,
+    order: 7,
     name: "Venom",
     effectLabel: "Venom Damage",
     description: "Fang injects venom into the veins of his enemies, which continues to cause damage well after the bite.",
@@ -631,7 +665,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C5 Eye-ra — MONSTERLAB.as:122
   {
     id: "C5",
-    order: 5,
+    order: 8,
     name: "Airburst",
     effectLabel: "Airburst Bonus",
     description: "Eye-ra launches himself up dealing partial damage to air units and increased splash range and damage to ground targets.",
@@ -642,7 +676,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C9 Brain — MONSTERLAB.as:133
   {
     id: "C9",
-    order: 6,
+    order: 9,
     name: "Invisibility",
     effectLabel: "s Cloak Delay",
     description: "Gives the Brain the ability to turn invisible causing towers not to attack it.",
@@ -650,10 +684,21 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
     costs: [[3000000, 172800], [4500000, 172800], [6000000, 172800]],
     effect: [0, 4, 8],
   },
+  // C10 Crabatron — revamp (owner, 2 Nov 2026)
+  {
+    id: "C10",
+    order: 10,
+    name: "Critical Hits",
+    effectLabel: "Critical Hit Chance",
+    description: "Crabatron's hits have a chance to do double damage.",
+    upgradeDescription: "Raises the chance of a critical hit.",
+    costs: [[5000000, 216000], [7500000, 216000], [11250000, 216000]],
+    effect: [0.1, 0.15, 0.2],
+  },
   // C11 Project X — MONSTERLAB.as:144
   {
     id: "C11",
-    order: 7,
+    order: 11,
     name: "Acid Spores",
     effectLabel: "Acid Damage",
     description: "Adds the ability to unleash acid when the Project X dies.",
@@ -664,7 +709,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C13 Wormzer — MONSTERLAB.as:166
   {
     id: "C13",
-    order: 8,
+    order: 12,
     name: "Splash Damage",
     effectLabel: "Splash Damage",
     description: "Adds the ability to do extra splash damage when Wormzer pops up.",
@@ -675,7 +720,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C14 Teratorn — MONSTERLAB.as:177
   {
     id: "C14",
-    order: 9,
+    order: 13,
     name: "Ricochet",
     effectLabel: "Fireball Bounces",
     description: "Adds the ability for attacks to bounce off of buildings doing damage to multiple targets.",
@@ -686,7 +731,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C12 D.A.V.E. — MONSTERLAB.as:155
   {
     id: "C12",
-    order: 10,
+    order: 14,
     name: "Rockets",
     effectLabel: "Rocket Range",
     description: "Gives D.A.V.E. the ability to fire rockets increasing the damage he does.",

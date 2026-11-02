@@ -85,15 +85,19 @@ const ability = (id: string) => labAbility(id)!;
 const researching = { upg: "C3", upt: T0 + 3_600, upl: 1 };
 
 describe("labRows", () => {
-  it("lists the ten abilities in the Lab's order with their rank and next rank", () => {
+  it("lists the fourteen abilities in the Lab's order with their rank and next rank", () => {
     const rows = labRows(contextOf());
     expect(rows.map((row) => row.monster.id)).toEqual([
+      "C1",
+      "C2",
       "C3",
       "C4",
+      "C6",
       "C7",
       "C8",
       "C5",
       "C9",
+      "C10",
       "C11",
       "C13",
       "C14",
@@ -128,7 +132,7 @@ describe("labSlot and runningResearch", () => {
       labId: LAB,
     });
     expect(runningResearch(contextOf({ lab: { upg: "C3" } }))).toBeNull();
-    expect(runningResearch(contextOf({ lab: { upg: "C1", upt: T0 + 5, upl: 1 } }))).toBeNull();
+    expect(runningResearch(contextOf({ lab: { upg: "C15", upt: T0 + 5, upl: 1 } }))).toBeNull();
   });
 });
 
