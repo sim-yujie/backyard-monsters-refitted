@@ -1,7 +1,7 @@
 /**
  * The account settings dialog: change username and the Shiny Lock switch,
- * opened from the account menu. Its "Game effects" and "Building art" parts
- * are kept in this browser only: no server.
+ * opened from the account menu. Its "World chat", "Game effects" and "Look and
+ * sound" parts are kept in this browser only: no server.
  *
  * Both are server rules this only fronts. A rename keeps the game's username
  * rules and a long cooldown (`changeUsername.ts`); Shiny Lock makes the server
@@ -13,6 +13,7 @@ import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type Priva
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
 import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, type MusicChoice } from "@/game/classicLook";
+import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
 import { Popup } from "@/ui/Popup";
@@ -32,6 +33,8 @@ export const SETTINGS_TEXT = {
   friendRequestsLabel: "Accept friend requests",
   friendRequestsHint: "When off, nobody can send you a friend request.",
   privacyFailed: "Could not save that privacy setting. Try again.",
+  chatLabel: "World chat",
+  chatHint: "Off hides the chat box and stops chat messages.",
   blockedTitle: "Blocked players",
   blockedNone: "You have not blocked anyone.",
   blockedLoadFailed: "Could not load your blocked players.",
@@ -109,6 +112,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
         usernameSection(account, options),
         shinySection(account),
         privacySection(account.privacy),
+        chatSection(),
         lookSection(),
         effectsSection(),
       );
@@ -118,7 +122,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
       // Kept in this browser, so they work without the server.
-      body.append(lookSection(), effectsSection());
+      body.append(chatSection(), lookSection(), effectsSection());
     },
   );
   return popup;
@@ -283,6 +287,38 @@ const privacyToggle = (
         box.disabled = false;
       },
     );
+  });
+  section.append(row, hint);
+  return section;
+};
+
+/**
+ * "World chat" (owner, 1 Nov 2026): off takes the chat box away and closes
+ * world chat's connection at once (`game/chat/worldChatSetting.ts`); on brings
+ * both back, no reload.
+ */
+const chatSection = (): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.id = "settings-world-chat";
+  box.checked = worldChatOn();
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.chatLabel;
+  row.append(box, words);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-world-chat-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.chatHint;
+  box.setAttribute("aria-describedby", hint.id);
+  box.addEventListener("change", () => {
+    const saved = setWorldChatOn(box.checked);
+    hint.textContent = saved ? SETTINGS_TEXT.chatHint : SETTINGS_TEXT.lookFailed;
+    hint.classList.toggle("field__hint--error", !saved);
   });
   section.append(row, hint);
   return section;

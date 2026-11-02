@@ -111,7 +111,7 @@ import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
-import { ChatBox } from "@/ui/chat/ChatBox";
+import { WorldChatBox } from "@/ui/chat/WorldChatBox";
 import {
   MONSTERS_TAB_ORDER,
   MonsterBuilding,
@@ -391,8 +391,11 @@ export class YardScene implements Scene {
   private bell: NotificationDoor | null = null;
   /** The Defences button and screen (#363): the own yard of a Map Room 2 player. */
   private defences: DefencesDoor | null = null;
-  /** World chat's box (#282), on every yard; the connection is `worldChat`'s and outlives it. */
-  private chat: ChatBox | null = null;
+  /**
+   * World chat's box (#282), on every yard while the player's "World chat"
+   * switch is on; the connection is `worldChat`'s and outlives it.
+   */
+  private chat: WorldChatBox | null = null;
   /** The Starter Kit picker, while open (outposts WP9). */
   private kitPicker: StarterKitPicker | null = null;
   /** Picks a tapped mushroom on the own yard (§5.6); null on a foreign one. */
@@ -576,7 +579,7 @@ export class YardScene implements Scene {
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
 
-    this.chat = new ChatBox({
+    this.chat = new WorldChatBox({
       session: worldChat,
       api: chatApi,
       container: context.overlay.content,
