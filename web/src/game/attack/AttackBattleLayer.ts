@@ -26,7 +26,7 @@ import type { Yard } from "@/game/yard/yardModel";
 import type { AttackSession } from "./AttackSession";
 import { BombFx, type BombArt } from "./bombFx";
 import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
-import { BuildingBars } from "./buildingBars";
+import { BAR_OFFSET, BAR_WIDTH, BuildingBars } from "./buildingBars";
 import {
   BUILDING_NUMBER_LIFT,
   CreepFx,
@@ -55,7 +55,7 @@ import { classicLook } from "@/game/classicLook";
 import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
-import { StatusIconRow, statusesOf } from "./statusIcons";
+import { StatusIconRow, TowerStatusIcons, statusesOf } from "./statusIcons";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
 import { SiegeFx, type SiegeArt } from "./siegeFx";
 import { TrapReveal } from "./trapReveal";
@@ -840,6 +840,8 @@ export class AttackBattleLayer {
   /* Buildings: the towers' guns and shots, the bars, the traps (#64, #66, #67). */
   private readonly towerFx: TowerFx;
   private readonly buildingBars: BuildingBars;
+  /** The towers' stickers over their bars: "weakened" by an Octo-ooze (owner, beta 6). */
+  private readonly towerStatus: TowerStatusIcons;
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
@@ -1019,6 +1021,13 @@ export class AttackBattleLayer {
       (id) => this.maxHpById.get(id),
     );
     this.effects.addChild(this.buildingBars.root);
+    this.towerStatus = new TowerStatusIcons((id) => {
+      const origin = this.host.centreOf(id) ? originOf.get(id) : undefined;
+      return origin
+        ? { x: origin.x + BAR_OFFSET.x + BAR_WIDTH / 2, y: origin.y + BAR_OFFSET.y }
+        : null;
+    });
+    this.effects.addChild(this.towerStatus.root);
     // The blast over the bars; the splats it leaves come after, over it.
     this.effects.addChild(this.blastAir);
 
@@ -1079,6 +1088,7 @@ export class AttackBattleLayer {
     this.bombFx.update(shown);
     this.siegeFx.update(battle.siege(), shown);
     this.showBombNumbers(shown);
+    this.towerStatus.sync(battle.weakenedTowers());
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1335,6 +1345,7 @@ export class AttackBattleLayer {
 
     this.towerFx.destroy();
     this.buildingBars.destroy();
+    this.towerStatus.destroy();
     for (const burst of this.bursts) burst.ring.destroy();
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
