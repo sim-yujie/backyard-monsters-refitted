@@ -53,10 +53,10 @@ RISE = (0.0, 0.3, 0.6)[TIER - 1]                    # how much taller each look'
 # ---- the measurements (units: 37.5 game px; the world's origin is the footprint's middle on the ground)
 DRUM_R, DRUM_H = 0.70, 0.26
 PIT_R = 0.41
-WT_R = 0.36                                         # the weight's radius
+WT_R = 0.375                                        # the weight's radius
 WT_Z0 = 0.27                                        # its foot at rest
-WT_BODY = 1.28                                      # its plated body's top
-WT_BAND = 1.40                                      # its red and white shoulder's top
+WT_BODY = 1.25                                      # its plated body's top
+WT_BAND = 1.33                                      # its red and white shoulder's top
 UP_Y, UP_T = 0.55, 0.12                             # the uprights' middles (+-y) and thickness
 BAR_Z = 2.84 + RISE                                 # the crossbar's axis
 BAR_R = 0.09
@@ -66,10 +66,11 @@ WHEEL_Z, WHEEL_R = 0.43, 0.2                        # the winch wheels' axles an
 WHEEL_X = {-1: 0.18, 1: 0.0}                        # their axles' x (Flash: the -y one stands further forward)
 WHEEL_ZS = {-1: 0.54, 1: WHEEL_Z}                   # and height (the -y one higher)
 COIL_R = 0.14                                       # chain wound round the bar: its centre line's radius
-HANG = 0.90                                         # the claw's tip at rest, below the bar's axis
-LUG_Z = WT_BAND + 0.19                              # the ring on the weight's cap, its middle at rest
+HANG = 0.66                                         # the claw's tip at rest, below the bar's axis
+LUG_Z = WT_BAND + 0.23                              # the ring on the weight's cap, its middle at rest
+SPIN = float(os.environ.get("QUAKE_SPIN", "-35"))     # the claw's turn at rest (its bow to the left, Flash)
 LINK = 0.062                                        # chain pitch
-HX = -0.07                                          # the claw's stem, behind the ring (it curls through it to +x)
+HX = -0.10                                          # the claw's stem, behind the ring (it curls through it to +x)
 GY = -0.07                                          # the gantry stands this far toward -y of the drum (Flash)
 
 # Flash's strike, per cell: the weight's lift in screen px (1x) and the claw's drop (0-1 of the way to the ring)
@@ -89,8 +90,8 @@ def materials():
                    soot=soot),
         bar=iron("bar", base=(110, 96, 94), dark=(54, 44, 44), rust=(130, 70, 44), edge=(210, 196, 190), rust_k=0.45,
                  soot=soot),
-        cap=iron("cap", base=(146, 136, 136), dark=(82, 72, 74), rust=(150, 84, 52), edge=(236, 228, 224), rust_k=0.4,
-                 dents=1.2, soot=soot),
+        cap=iron("cap", base=(132, 122, 122), dark=(64, 56, 58), rust=(150, 84, 52), edge=(232, 224, 220), rust_k=0.45,
+                 dents=1.4, soot=0.35 + soot),
         rim=iron("rim", base=(150, 128, 124), dark=(80, 66, 64), rust=(140, 76, 48), edge=(226, 210, 204), rust_k=0.5,
                  soot=soot),
         band=W.mat_worn_diag("band", (178, 30, 24), (112, 92, 88), n=8, lean=0.0, under=(70, 50, 44),
@@ -103,7 +104,7 @@ def materials():
                    dents=0.6, soot=soot),
         rubber=L.mat_flat("rubber", (44, 36, 34), spec=0.2),
         pit=L.mat_flat("pit", (14, 10, 9), spec=0.0),
-        gold=iron("gold", base=(200, 158, 62), dark=(118, 84, 26), rust=(110, 90, 40), edge=(250, 226, 150), rust_k=0.25,
+        gold=iron("gold", base=(178, 136, 50), dark=(92, 64, 20), rust=(110, 90, 40), edge=(250, 226, 150), rust_k=0.25,
                   dents=0.3, spec=0.45, spec_col=(1.0, 0.9, 0.6, 1)),
         brass=iron("brass", base=(214, 166, 52), dark=(130, 92, 20), rust=(110, 90, 40), edge=(252, 232, 150),
                    rust_k=0.2, dents=0.4, spec=0.5, spec_col=(1.0, 0.9, 0.6, 1)),
@@ -171,7 +172,7 @@ def upright(bm, yc, jag=0.0, seed=0.0):
     bm.faces.new(rings[-1])
 
 
-def chain_link(bm, c, d, nrm, mat, ln=0.074, wd=0.046, r=0.0125):
+def chain_link(bm, c, d, nrm, mat, ln=0.074, wd=0.05, r=0.0155):
     """One oval link at c, long along d, lying in the plane of d and nrm."""
     d = d.normalized()
     s = nrm - d * nrm.dot(d)
@@ -252,9 +253,9 @@ def build_static(M, root):
     W.lathe("drum_foot", [[(DRUM_R + 0.03, 0.0), (DRUM_R + 0.03, 0.05), (DRUM_R, 0.06)]], [M["rim"]], parent=root)
     W.lathe("drum", [[(DRUM_R, 0.06), (DRUM_R, DRUM_H - 0.04)]], [M["band"]], bev=0, parent=root)
     W.lathe("drum_rim", [[(DRUM_R, DRUM_H - 0.04), (DRUM_R + 0.012, DRUM_H - 0.02), (DRUM_R, DRUM_H),
-                          (0.62, DRUM_H + 0.005), (0.49, DRUM_H)]], [M["rim"]], parent=root)
-    W.lathe("rubber", [[(0.5, DRUM_H), (0.5, DRUM_H + 0.03), (0.475, DRUM_H + 0.05), (0.44, DRUM_H + 0.045),
-                        (PIT_R + 0.01, DRUM_H + 0.02), (PIT_R, DRUM_H - 0.02)]], [M["rubber"]], bev=0.012, parent=root)
+                          (0.64, DRUM_H + 0.005), (0.54, DRUM_H)]], [M["rim"]], parent=root)
+    W.lathe("rubber", [[(0.55, DRUM_H), (0.55, DRUM_H + 0.035), (0.52, DRUM_H + 0.07), (0.46, DRUM_H + 0.065),
+                        (PIT_R + 0.01, DRUM_H + 0.03), (PIT_R, DRUM_H - 0.02)]], [M["rubber"]], bev=0.012, parent=root)
     pit_floor = M["lava"] if TIER >= 2 else M["pit"]
     W.lathe("pit", [[(PIT_R, DRUM_H - 0.02), (PIT_R, 0.12)], [(PIT_R, 0.12), (0.0, 0.12)]], [M["pit"], pit_floor],
             bev=0, parent=root, mat_of_seg=[0, 1])
@@ -365,21 +366,21 @@ def build_weight(M, root):
     seg_body = [(WT_R - 0.02, WT_Z0), (WT_R, WT_Z0 + 0.03), (WT_R, WT_BODY)]
     W.lathe("wt_body", [seg_body], [M["body"]], parent=w, wob=0.006 if not DMG else 0.03, seed=1.0)
     W.lathe("wt_bottom", [[(WT_R - 0.02, WT_Z0), (0.0, WT_Z0)]], [M["rim"]], bev=0, parent=w)
-    W.lathe("wt_band", [[(WT_R, WT_BODY), (WT_R + 0.02, WT_BODY + 0.025), (WT_R + 0.022, WT_BODY + 0.06),
-                         (WT_R + 0.005, WT_BAND - 0.03), (WT_R - 0.05, WT_BAND)]], [M["check"]], bev=0, parent=w,
+    W.lathe("wt_band", [[(WT_R, WT_BODY), (WT_R + 0.016, WT_BODY + 0.02), (WT_R + 0.017, WT_BODY + 0.05),
+                         (WT_R + 0.002, WT_BAND - 0.012), (WT_R - 0.04, WT_BAND)]], [M["check"]], bev=0, parent=w,
             wob=0.004 if not DMG else 0.025, seed=2.0)
-    W.lathe("wt_cap", [[(WT_R - 0.05, WT_BAND), (0.24, WT_BAND + 0.04), (0.13, WT_BAND + 0.07),
-                        (0.07, WT_BAND + 0.08), (0.0, WT_BAND + 0.08)]], [M["cap"]], parent=w,
+    W.lathe("wt_cap", [[(WT_R - 0.04, WT_BAND), (0.27, WT_BAND + 0.06), (0.19, WT_BAND + 0.12),
+                        (0.10, WT_BAND + 0.155), (0.0, WT_BAND + 0.165)]], [M["cap"]], parent=w,
             wob=0.008 if not DMG else 0.02, seed=3.0)
     bm = bmesh.new()       # the ring on top, its face toward the bar's ends (the claw comes in from above)
     sub = bmesh.new()
     bmesh.ops.create_circle(sub, segments=20, radius=1.0)
-    ring_pts = [Vector((0, 0.075 * math.cos(2 * math.pi * k / 20), LUG_Z + 0.075 * math.sin(2 * math.pi * k / 20)))
+    ring_pts = [Vector((0, 0.062 * math.cos(2 * math.pi * k / 20), LUG_Z + 0.062 * math.sin(2 * math.pi * k / 20)))
                 for k in range(21)]
     sub.free()
-    L.tube(bm, ring_pts, [0.026] * 21, sides=8, cap=False)
-    L.rbox(bm, (0.08, 0.12, 0.06), Matrix.Translation((0, 0, WT_BAND + 0.06)), bevel=0.02, segs=2, taper=0.7)
-    ob("wt_ring", bm, [M["block"]], w)
+    L.tube(bm, ring_pts, [0.024] * 21, sides=8, cap=False)
+    L.rbox(bm, (0.07, 0.1, 0.05), Matrix.Translation((0, 0, WT_BAND + 0.145)), bevel=0.02, segs=2, taper=0.7)
+    ob("wt_ring", bm, [M["frame"]], w)
     # red straps at the body's sides (Flash: red down both silhouette edges) and rivet columns
     bm = bmesh.new()
     for b in (135, 315):
@@ -403,20 +404,29 @@ def build_weight(M, root):
 
 
 def build_hook(M, root):
-    """The pulley block and claw on their own empty (they come down, haul and fly back up)."""
-    h = L.empty("HOOK", bpy.data.objects["GANTRY"], loc=(0, -GY, 0))
-    tip = BAR_Z - HANG
-    blk = BAR_Z - COIL_R - 0.2                        # the block's foot: it hangs right under the coil (Flash)
+    """The pulley block and claw on their own empty, pivoting on the claw's stem (they come down spinning, haul and fly
+    back up). The claw is a short copper J: its stem drops from the block, its bow (centred on the weight's axis when
+    turned to 0) catches the weight's ring, its point curls back up."""
+    h = L.empty("HOOK", bpy.data.objects["GANTRY"], loc=(HX, -GY, 0))
+    low = BAR_Z - HANG                                # the bow's lowest point (its tube's middle) at rest
+    blk = BAR_Z - COIL_R - 0.19                       # the block's middle: it hangs right under the coil (Flash)
+    rc = -HX                                          # the bow's radius: its middle sits on the weight's axis
     bm = bmesh.new()
-    L.rbox(bm, (0.19, 0.16, 0.18), Matrix.Translation((HX, 0, blk)), bevel=0.035, segs=2, taper=0.75)
+    L.rbox(bm, (0.3, 0.25, 0.24), Matrix.Translation((0, 0, blk)), bevel=0.045, segs=2, taper=0.8)
     sub = bmesh.new()
-    bmesh.ops.create_cone(sub, cap_ends=True, segments=16, radius1=0.06, radius2=0.06, depth=0.15)
-    L.add_mesh(bm, sub, Matrix.Translation((HX, 0, blk + 0.09)) @ Matrix.Rotation(math.radians(90), 4, 'X'))
-    ob("block", bm, [M["block"]], h)
-    bm = bmesh.new()       # the claw: a big talon down from the block, curling through the ring's plane and up
-    pts = L.bezier((HX, 0, blk + 0.02), (HX - 0.02, 0, tip + 0.12), (0.02, 0, tip - 0.05), (0.15, 0, tip + 0.1), 22)
-    rad = [0.075 * (1 - 0.85 * (i / 21) ** 1.2) for i in range(22)]
-    L.tube(bm, pts, rad, sides=12, flat=0.65)
+    bmesh.ops.create_cone(sub, cap_ends=True, segments=16, radius1=0.075, radius2=0.075, depth=0.27)
+    L.add_mesh(bm, sub, Matrix.Translation((0, 0, blk + 0.03)) @ Matrix.Rotation(math.radians(90), 4, 'X'))
+    ob("block", bm, [M["frame"]], h)
+    bm = bmesh.new()
+    pts = [Vector((0, 0, blk - 0.1 - (blk - 0.1 - (low + rc)) * k / 6)) for k in range(7)]
+    for k in range(1, 13):                            # the bow, half a turn under its middle
+        a = math.pi + math.pi * k / 12
+        pts.append(Vector((rc + rc * math.cos(a), 0, low + rc + rc * math.sin(a))))
+    pts += [Vector((2 * rc + 0.004, 0, low + rc + 0.06)), Vector((2 * rc + 0.0, 0, low + rc + 0.12)),
+            Vector((2 * rc - 0.03, 0, low + rc + 0.17))]
+    n = len(pts)
+    rad = [0.08 * (1 - 0.78 * (i / (n - 1)) ** 1.3) for i in range(n)]
+    L.tube(bm, pts, rad, sides=12, flat=0.7)
     ob("claw", bm, [M["claw"]], h)
     return h
 
@@ -424,11 +434,12 @@ def build_hook(M, root):
 def pose(M, root, cell):
     """Sets the strike's cell: the weight's lift, the claw's drop, the chains (rebuilt, so they run with the winch)."""
     lift = LIFT_PX[cell] / PX
-    drop_full = (BAR_Z - HANG - 0.03) - LUG_Z         # the claw's curl down through the ring's middle
+    drop_full = (BAR_Z - HANG) - (LUG_Z + 0.062 - 0.024 - 0.022)   # the bow sits in the ring's top
     drop = DOWN[cell] * drop_full - (lift if 14 <= cell <= 28 else 0.0)
     w, h = bpy.data.objects["WEIGHT"], bpy.data.objects["HOOK"]
     w.location.z = lift
     h.location.z = -drop
+    h.rotation_euler.z = math.radians(SPIN) * (1.0 - DOWN[cell])   # it spins round as it comes down (Flash)
     for name in ("hook_chain", "coils", "side_chains"):
         old = bpy.data.objects.get(name)
         if old:
@@ -436,7 +447,7 @@ def pose(M, root, cell):
     turn = drop                                        # chain paid out off the bar's middle coil
     bm = bmesh.new()
     top = BAR_Z - COIL_R
-    bottom = BAR_Z - COIL_R - 0.2 + 0.15 - drop
+    bottom = BAR_Z - COIL_R - 0.19 + 0.12 - drop
     if bottom < top - 0.02:
         chain_on(bm, [(HX, -GY, top), (HX, -GY, bottom)], 0.0, 0)
     g = bpy.data.objects["GANTRY"]
