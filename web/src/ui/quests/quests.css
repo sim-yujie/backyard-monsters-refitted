@@ -717,14 +717,30 @@
 
   .quest {
     --quest-art: 40px;
-    --quest-reward: 56px;
-    --quest-action: 70px;
+    --quest-reward: 52px;
+    --quest-action: 66px;
 
     gap: 0 var(--space-2);
   }
 
+  .quest__title {
+    font-size: 14px;
+  }
+
+  .quest__rewards .events-reward {
+    gap: 3px;
+  }
+
   .quest__rewards .res-icon {
-    height: 20px;
+    height: 18px;
+  }
+
+  .quest__rewards .events-reward__pictures {
+    min-width: 18px;
+  }
+
+  .quest__rewards .events-reward__figure {
+    font-size: var(--text-xs);
   }
 
   /* Upright: two rows of days, 1-4 then 5, 6 and a wide 7, so the Shiny
