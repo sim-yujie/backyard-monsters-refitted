@@ -65,7 +65,6 @@ export const TutTarget = {
   /** Package (b) tags the practice camp's tile and pin. */
   MR1_PRACTICE: "mr1-practice",
   TARGET_ATTACK: "target-attack",
-  MR2_RANGE: "mr2-range",
   MR2_TAKEOVER: "mr2-takeover",
   MR2_FIND: "mr2-find",
   FILL_ALL: "fill-all",
