@@ -17,6 +17,8 @@ import "@/ui/styles/skin.css";
 import { App } from "@/app/App";
 import { installErrorLog } from "@/game/bugReport/errorLog";
 import { installErrorReporter } from "@/game/bugReport/errorReporter";
+import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
+import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { applySkin } from "@/ui/skin";
 
 // The bug report's list of recent errors, from the very start, and the
@@ -39,6 +41,14 @@ void app.start().catch((error: unknown) => {
   console.error("Failed to start:", error);
   host.textContent = "The game could not start. Check the console for details.";
 });
+
+// "New version": a tab left open across a release learns the live page now
+// runs another build. A dev build serves /src/main.ts and has nothing to compare.
+const running = runningBundleName();
+if (running) {
+  const prompt = new UpdatePrompt(host);
+  new UpdateCheck({ running, fetchPage: fetchLivePage, onNewVersion: () => prompt.show() }).start();
+}
 
 // A handle for measuring in the browser: frame cost, renderer state, forced
 // redraws. Development only, so nothing ships with a global back door.

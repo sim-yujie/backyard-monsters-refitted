@@ -1467,6 +1467,40 @@ body {
   }
 }
 
+/* "New version" (app/updateCheck.ts): a small card under the HUD, nothing
+   behind it dimmed or blocked. Accent-edged: news, not a warning. */
+.update-prompt {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  inset-inline: var(--space-3);
+  z-index: var(--z-system);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: fit-content;
+  margin-inline: auto;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-accent-line);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-popup);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+}
+
+.update-prompt__icon {
+  flex: none;
+}
+
+.update-prompt__title {
+  white-space: nowrap;
+}
+
+.update-prompt__reload,
+.update-prompt__close {
+  flex: none;
+}
+
 /* The in-game check (#273): in the "Stay protected?" card's place, and like it
    nothing behind is dimmed or blocked. Danger-edged: the yard can be attacked.
    Its own block name: `.bot-check` is the sign-up form's Turnstile widget. */
