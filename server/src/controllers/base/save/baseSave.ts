@@ -746,8 +746,8 @@ const saveBase = async (
 
     // Quests (`services/quests/hooks.ts`), each on its player's main row
     // under its own lock, after the commit: a won attack, a tribe camp
-    // destroyed, catapult hits for the attacker; a held defence for the
-    // owner of a player's yard. Logged and lost on a failure.
+    // destroyed, catapult hits and loot (before the cap) for the attacker; a
+    // held defence for the owner of a player's yard. Logged and lost on a failure.
     const damageAfter = Number(baseSave.damage) || 0;
     await recordQuestEvents(
       postgres.em,
@@ -759,6 +759,7 @@ const saveBase = async (
         before: storedHealthData,
         after: battle?.buildinghealthdata,
         log: battleInput?.log,
+        loot: loot?.credit,
       }),
       now
     );

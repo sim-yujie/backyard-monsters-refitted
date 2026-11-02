@@ -86,7 +86,8 @@ const cancel = (id: unknown): Promise<YardAnswer> =>
  * the achievements' record the first request works out (issue #204).
  */
 const settled = (row: Row | null) => {
-  const { savetime: _savetime, monsters: _monsters, achievements: _achievements, ...rest } = row!;
+  // The first action writes the achievements and quests records (a cancel never takes them back).
+  const { savetime: _savetime, monsters: _monsters, achievements: _achievements, dailyquests: _dailyquests, ...rest } = row!;
   return rest;
 };
 

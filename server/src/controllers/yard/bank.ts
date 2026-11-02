@@ -37,12 +37,7 @@ export const yardBankAction = defineYardAction({
     );
     // Goals BK1-BK4, or the Inferno's IBK1-IBK4: the most one tap has banked (#227).
     const onboarding = countBank(save, plan.report.banked, inferno ? "infernoBestBank" : "bestBank");
-    // Weekly resource quests count what was banked, per resource; not the Inferno's.
-    const banked = plan.report.banked as Partial<Record<"r1" | "r2" | "r3" | "r4", number>>;
-    const questEvents: Record<string, number> = inferno
-      ? {}
-      : { bankR1: banked.r1 ?? 0, bankR2: banked.r2 ?? 0, bankR3: banked.r3 ?? 0, bankR4: banked.r4 ?? 0 };
-    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding }, questEvents } : { ...plan, questEvents };
+    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding } } : plan;
   },
   // An outpost's harvesters show a disabled "Auto-Banking" button
   // (`client/scripts/BUILDINGINFO.as:130-131`): their income is banked for them.

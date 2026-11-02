@@ -393,6 +393,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
       before: storedHealthData,
       after: outcome.buildinghealthdata,
       log: input.log,
+      loot: loot.credit,
     }),
     now
   );

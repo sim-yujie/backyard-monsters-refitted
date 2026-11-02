@@ -8,6 +8,8 @@ import { postgres } from "../../server.js";
 import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
 import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
 import { syncInfernoCap } from "../../services/inferno/infernoLoad.js";
+import { jobQuestEvents } from "../../services/quests/hooks.js";
+import { recordQuests } from "../../services/quests/state.js";
 import { catchUpYard } from "../../services/yard/catchUp.js";
 import { notInOutpostErr, notYourYardErr } from "../../services/yard/yardErrors.js";
 import { yardKindOf, type YardKind } from "../../services/yardplanner/costs.js";
@@ -96,7 +98,9 @@ export const onPlannerYard = async <T>(
     const yard = await lockOwnYard(tx, user, baseid);
     const now = getCurrentDateTime();
     const flingerBefore = yard.save.flinger;
-    catchUpYard(yard.save, now);
+    const completed = catchUpYard(yard.save, now);
+    // Hatches the catch-up finished count for quests, as a yard action's do.
+    if (!yard.inferno) recordQuests(yard.main, now, jobQuestEvents(completed));
     const batchResult = run(yard.save, now);
     // A Resource Pod an Apply finishes moves the Inferno caps, as a yard
     // action's does (`runYardAction`).

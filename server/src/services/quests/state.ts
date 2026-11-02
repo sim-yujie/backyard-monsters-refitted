@@ -140,7 +140,7 @@ const setOf = (raw: unknown): QuestSet | null => {
   return { period: one.period, quests, bonus: one.bonus === true, swaps: whole(one.swaps) };
 };
 
-/** The record in `save.quests`, cleaned up; an empty one for a save that has none. */
+/** The record in `save.dailyquests`, cleaned up; an empty one for a save that has none. */
 export const readQuests = (raw: unknown): QuestRecord => {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return emptyQuests();
   const one = raw as Record<string, unknown>;
@@ -266,12 +266,17 @@ export const variantChoices = (kind: QuestKind, player: QuestPlayer): string[] =
   }
 };
 
+/** How many a quest of `kind` needs for `player` (`random` draws a random need). */
+export const needOf = (kind: QuestKind, player: QuestPlayer, random: () => number = Math.random): number => {
+  const need = kind.need;
+  if ("random" in need) return need.random[0] + Math.floor(random() * (need.random[1] - need.random[0] + 1));
+  if ("capShare" in need) return Math.max(1, Math.floor(Math.max(0, player.cap) * need.capShare));
+  return byTownHall(need, player.townHall);
+};
+
 const entry = (slot: number, kind: QuestKind, player: QuestPlayer, seed: string, shiny = 0): QuestEntry => {
   const random = rng(hash(`${seed}|${kind.id}`));
-  const need =
-    "random" in kind.need
-      ? kind.need.random[0] + Math.floor(random() * (kind.need.random[1] - kind.need.random[0] + 1))
-      : byTownHall(kind.need, player.townHall);
+  const need = needOf(kind, player, random);
   const choices = variantChoices(kind, player);
   const variant = kind.variant ? choices[Math.floor(random() * choices.length)] : undefined;
   return {

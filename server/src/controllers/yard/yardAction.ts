@@ -516,8 +516,6 @@ export const catchUpLockedYard = async (
 
     const completed = await catchUpLockedRow(tx, locked, now);
     await recordAchievements(tx, locked, now, builtEvents(completed));
-    // Hatches that finished while the player was away count for quests.
-    if (locked.type === BaseType.MAIN) recordQuests(locked, now, jobQuestEvents(completed));
     await tx.flush();
     return { save: locked, completed };
   });
@@ -534,6 +532,10 @@ export const catchUpLockedRow = async (tx: EntityManager, locked: Save, now: num
   const completed = catchUpYard(locked, now);
   await joinMapRoom2(tx, locked);
   await autobankYard(tx, locked, now, completed);
+  // Hatches that finished while the player was away count for
+  // quests, on every path that catches the main row up (a load, a raid, a
+  // friend's help or gift).
+  if (locked.type === BaseType.MAIN) recordQuests(locked, now, jobQuestEvents(completed));
   return completed;
 };
 

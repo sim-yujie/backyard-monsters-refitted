@@ -7,13 +7,13 @@ import type { EventReward } from "./events/eventRewards.js";
  * nothing else, so changing the list or a number is an edit here only.
  *
  * Decided by the owner: the login card's Shiny, 5 daily quests and their
- * all-done Shiny, 3 weekly quests (social, resources, fighting) and their
- * Shiny, one free swap a day, resets at 00:00 UTC and Monday 00:00 UTC.
+ * all-done Shiny, 3 weekly quests (social, resources, fighting) with their
+ * needs and rewards (decision 13, confirmed 2 Nov), one free swap a day,
+ * resets at 00:00 UTC and Monday 00:00 UTC.
  *
- * PROVISIONAL (lead + owner still settling, 2 Nov): the daily kinds below,
- * every `need` and resource table, the weekly numbers, and what counts as a
- * won attack / a held defence (`services/quests/attacks.ts`). Marked
- * `provisional: true` so a test lists what is still to be signed off.
+ * PROVISIONAL (still to settle): the daily `need` tables, the catapult
+ * targets and hit reach, and what counts as a won attack / a held defence
+ * ({@link FIGHT_RULES}). Marked `provisional: true` where it is per kind.
  */
 
 /** Shiny paid on each day of the 7-day login card. */
@@ -42,7 +42,9 @@ export const WEEKLY_ALL_DONE_SHINY = 10;
  * itself sees the action happen (never from the client's word). A quest with
  * a variant (a monster, a tribe, a building type) counts the stat's
  * `<stat>:<variant>` key instead, which the hooks add next to the plain one.
- * - `bankR1`..`bankR4`: resources banked from harvesters (`yard/bank`), per kind.
+ * - `lootR1`..`lootR4`: resources looted in attacks on players, bots and Wild
+ *   Monster tribes (owner, decision 13), per kind: the battle's credit before
+ *   the attacker's storage cap, so a full storage still counts.
  * - `hatch` (`hatch:<monster id>`): monsters that finished hatching.
  * - `attackLaunch`: an attack launched on a player's yard (no win needed).
  * - `tribeDestroy` (`tribeDestroy:<tribe>`): a Wild Monster tribe's yard destroyed.
@@ -54,10 +56,10 @@ export const WEEKLY_ALL_DONE_SHINY = 10;
  * - `newFriend`: a new friend that counts (level 5+, played in the last 7 days, never a friend before).
  */
 export const QUEST_STATS = [
-  "bankR1",
-  "bankR2",
-  "bankR3",
-  "bankR4",
+  "lootR1",
+  "lootR2",
+  "lootR3",
+  "lootR4",
   "hatch",
   "attackLaunch",
   "tribeDestroy",
@@ -118,6 +120,11 @@ export interface RandomNeed {
   readonly random: readonly [min: number, max: number];
 }
 
+/** A need that is a share of the player's storage cap when the quest is picked (rounded down, at least 1). */
+export interface CapShareNeed {
+  readonly capShare: number;
+}
+
 /** A number per Town Hall level 1-10 (index 0 = level 1); levels past the table use its last entry. */
 export type ByTownHall = readonly [number, number, number, number, number, number, number, number, number, number];
 
@@ -138,7 +145,7 @@ export interface QuestKind {
   /** The stats that move it (any of them). */
   readonly stats: readonly QuestStat[];
   /** How many, by Town Hall level, or a random number picked with the quest. */
-  readonly need: ByTownHall | RandomNeed;
+  readonly need: ByTownHall | RandomNeed | CapShareNeed;
   /** Picked with the quest and stored with it; the quest counts `<stat>:<variant>`. */
   readonly variant?: QuestVariant;
   readonly unlock?: QuestUnlock;
@@ -194,11 +201,31 @@ export const DAILY_QUESTS: readonly QuestKind[] = [
 // Weekly quests: one from each group (numbers PROVISIONAL).
 // ---------------------------------------------------------------------------
 
-/** Share of the storage cap a weekly resource quest pays, in each of the four resources (PROVISIONAL). */
-export const WEEKLY_PAY_SHARE = 0.1;
+/**
+ * Owner, decision 13: the weekly Resources quest is "loot X of one named
+ * resource in attacks", X = this share of the storage cap (one full storage;
+ * not yet checked against loot per attack, tune after beta).
+ */
+export const WEEKLY_LOOT_CAP_SHARE = 1;
+/** Decision 13: the weekly Resources quest pays this share of the storage cap in THAT resource. */
+export const WEEKLY_LOOT_PAY_SHARE = 0.15;
+/** Decision 13 (owner confirmed 2 Nov): attacks won or defences held for the weekly Fighting quest, every Town Hall level. */
+export const WEEKLY_FIGHTS = 10;
+const WEEKLY_FIGHTS_NEED: ByTownHall = [
+  WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS,
+  WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS,
+];
+/** Decision 13: Social and Fighting each pay a 1-hour speed-up (SP2). */
+const WEEKLY_SPEEDUP: readonly EventReward[] = [{ kind: "speedup", item: "SP2", count: 1 }];
 
-/** Resources to bank for the weekly collect quest, by Town Hall level. */
-const WEEKLY_COLLECT: ByTownHall = [10_000, 25_000, 50_000, 100_000, 200_000, 350_000, 600_000, 900_000, 1_250_000, 1_750_000];
+/** A weekly loot quest for one resource (Map Room needed to attack). */
+const weeklyLoot = (id: string, stat: QuestStat, resource: "r1" | "r2" | "r3" | "r4"): QuestKind => ({
+  id,
+  stats: [stat],
+  need: { capShare: WEEKLY_LOOT_CAP_SHARE },
+  unlock: { building: 11 },
+  pay: { resources: [resource], share: WEEKLY_LOOT_PAY_SHARE },
+});
 
 /** The weekly groups, in the order they are shown. One kind is picked from each. */
 export const WEEKLY_GROUPS = ["social", "resources", "fighting"] as const;
@@ -207,19 +234,20 @@ export type WeeklyGroup = (typeof WEEKLY_GROUPS)[number];
 export const WEEKLY_QUESTS: Readonly<Record<WeeklyGroup, readonly QuestKind[]>> = {
   social: [
     // Owner: help or gift friends 5 times, any mix.
-    { id: "weeklyHelpGift", stats: ["friendHelp", "friendGift"], need: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5], unlock: { friend: true }, extra: [{ kind: "speedup", item: "SP2", count: 1 }] },
+    { id: "weeklyHelpGift", stats: ["friendHelp", "friendGift"], need: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5], unlock: { friend: true }, extra: WEEKLY_SPEEDUP },
     // Owner: players with no qualifying friend make 5 new friends instead.
-    { id: "weeklyNewFriends", stats: ["newFriend"], need: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5], unlock: { noFriend: true }, extra: [{ kind: "speedup", item: "SP2", count: 1 }] },
+    { id: "weeklyNewFriends", stats: ["newFriend"], need: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5], unlock: { noFriend: true }, extra: WEEKLY_SPEEDUP },
   ],
   resources: [
-    { id: "weeklyTwigs", stats: ["bankR1"], need: WEEKLY_COLLECT, unlock: { building: 1 }, pay: { resources: ["r1", "r2", "r3", "r4"], share: WEEKLY_PAY_SHARE }, provisional: true },
-    { id: "weeklyPebbles", stats: ["bankR2"], need: WEEKLY_COLLECT, unlock: { building: 2 }, pay: { resources: ["r1", "r2", "r3", "r4"], share: WEEKLY_PAY_SHARE }, provisional: true },
-    { id: "weeklyPutty", stats: ["bankR3"], need: WEEKLY_COLLECT, unlock: { building: 3 }, pay: { resources: ["r1", "r2", "r3", "r4"], share: WEEKLY_PAY_SHARE }, provisional: true },
-    { id: "weeklyGoo", stats: ["bankR4"], need: WEEKLY_COLLECT, unlock: { building: 4 }, pay: { resources: ["r1", "r2", "r3", "r4"], share: WEEKLY_PAY_SHARE }, provisional: true },
+    // Owner, decision 13: loot X of one named resource in attacks (tribes count too).
+    weeklyLoot("weeklyLootTwigs", "lootR1", "r1"),
+    weeklyLoot("weeklyLootPebbles", "lootR2", "r2"),
+    weeklyLoot("weeklyLootPutty", "lootR3", "r3"),
+    weeklyLoot("weeklyLootGoo", "lootR4", "r4"),
   ],
   fighting: [
     // Owner: won attacks OR held defences both count.
-    { id: "weeklyFights", stats: ["attackWin", "defenceWin"], need: [3, 3, 5, 5, 8, 8, 10, 10, 12, 12], extra: [{ kind: "speedup", item: "SP3", count: 1 }], provisional: true },
+    { id: "weeklyFights", stats: ["attackWin", "defenceWin"], need: WEEKLY_FIGHTS_NEED, extra: WEEKLY_SPEEDUP },
   ],
 };
 

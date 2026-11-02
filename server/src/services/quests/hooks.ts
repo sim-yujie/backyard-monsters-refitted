@@ -49,6 +49,23 @@ export const upgradeQuestEvents = (t: unknown, sign: 1 | -1 = 1): QuestEvents =>
   return {};
 };
 
+/** The four resources an attack's loot credit names, as the loot stats count them. */
+const LOOT_STATS = { r1: "lootR1", r2: "lootR2", r3: "lootR3", r4: "lootR4" } as const;
+
+/**
+ * An attack's loot (owner, decision 13): `lootR1`..`lootR4`, the battle's
+ * credit BEFORE the attacker's storage cap, so a full storage still counts.
+ */
+export const lootQuestEvents = (credit: Readonly<Partial<Record<string, unknown>>> | null | undefined): QuestEvents => {
+  const out: QuestEvents = {};
+  for (const [key, stat] of Object.entries(LOOT_STATS)) {
+    const value = Math.floor(Number(credit?.[key]));
+    if (Number.isFinite(value) && value > 0) out[stat] = value;
+  }
+  return out;
+};
+
+
 /** One bomb from a fling log, where it landed. */
 interface BombAt {
   x: number;
@@ -143,6 +160,8 @@ export interface LandedQuestAttack {
   after?: HealthMap;
   /** The fling log, for the catapult bombs. */
   log?: unknown;
+  /** The battle's loot credit before the attacker's cap (decision 13). */
+  loot?: Readonly<Partial<Record<string, unknown>>> | null;
 }
 
 /**
@@ -151,7 +170,7 @@ export interface LandedQuestAttack {
  * `tribeDestroy:<tribe>` when a Map Room 2 camp's Town Hall fell; catapult hits.
  */
 export const attackQuestEvents = (attack: LandedQuestAttack): QuestEvents => {
-  const sets: QuestEvents[] = [];
+  const sets: QuestEvents[] = [lootQuestEvents(attack.loot)];
   if (attack.damageAfter >= FIGHT_RULES.winDamage && attack.damageAfter > attack.damageBefore) sets.push({ attackWin: 1 });
   const tribe = campTribeOf(attack.defender);
   if (tribe && hallFell(attack.defender, attack.before, attack.after)) sets.push(questEvent("tribeDestroy", tribe));
