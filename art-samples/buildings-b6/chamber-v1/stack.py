@@ -56,7 +56,7 @@ COIL = (-0.6, 3.0, 0.45, 2.65, 5)     # Y from, Y to, Z from, Z to, loops
 FINS_Y = (0.2, 1.05, 1.9)
 # (r5) the machine beside the door: two drums lying on their side (axis across the view), one on the other, on a low base:
 # centre X, Y, half-length, and the Z range (bottom, top) of each drum (the base's height = the lower drum's bottom)
-TANK = (3.95, -2.1, 1.1, ((1.0, 2.25), (2.22, 3.55)))
+TANK = (3.95, -2.1, 1.25, ((0.95, 2.4), (2.36, 3.88)))   # (r6: ~15% bigger)
 
 # the horns: X, Y, base Z, mouth-middle Z, mouth radius
 HORNS = ((-3.45, -4.0, H + 0.3, 8.75, 0.68), (-0.86, AY, H + 0.3, 10.49, 0.66), (3.5, 4.15, 5.3, 7.94, 0.68))

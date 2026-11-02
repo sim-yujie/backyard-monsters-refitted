@@ -248,7 +248,7 @@ def thaw():
     for o in named(r"tank\d"):
         o.data.materials[0] = G["M"]["grate"]
     # (r5) and the frost painted on the bars, the horns and the slabs' rims: undo the last frost mix of each
-    for k in ("bar", "brass"):
+    for k in ("bar", "brass", "fin"):
         nt = G["M"][k].node_tree
         b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
         m = b.inputs["Base Color"].links[0].from_node
@@ -261,7 +261,7 @@ def thaw():
 # ------------------------------------------------------------------------------------------------------------ damaged
 def damaged():
     # the frost and ice are gone (Flash's damaged chamber has none), and the arms holding the lid
-    kill(named(r"icicle.*|icicled.*|tankice.*|tankcap.*|frostc|frostt|frostj.*|frostl.*|lintel.*|arml.*|armr.*"))
+    kill(named(r"icicle.*|icicled.*|tankice.*|tankcap.*|frostc|frostt|frostj.*|frostl.*|lintel.*|arml.*|armr.*|hatchfrost.*"))
     thaw()
     # the lid knocked loose: tipped up at its front and slid a little back, resting on the core's back edge
     lid = named(r"lid|grille.*")
@@ -300,6 +300,12 @@ def damaged():
     keep_in(lay_horn(2, px(78, 56, Z=0.0), 25, roll=10))
     coil = named(r"coil")
     turn(coil, world((S.COMP[0], 0, S.COIL[2])), world((0, 1, 0)) - world((0, 0, 0)), 18)
+    fin = named(r"fin1")
+    for o in fin:                           # (r6) the horns are curves now (round tusks): make it a mesh to drop it
+        bpy.ops.object.select_all(action="DESELECT")
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.convert(target="MESH")
     fin = named(r"fin1")
     turn(fin, world((AX + 1.0, S.FINS_Y[1], S.COMP[3])), world((0, 1, 0)) - world((0, 0, 0)), 62)
     drop(fin, S.COMP[3] - 0.03)
