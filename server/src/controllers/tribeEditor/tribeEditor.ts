@@ -134,15 +134,29 @@ const BuildingSchema = z
   })
   .passthrough();
 
+/** A structured field: `jsonBody.ts` re-stringifies a JSON body's objects, so it may arrive as a string. */
+const parsedJson = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }, schema);
+
 const SaveBodySchema = z.object({
   tribe: z.string().refine(isTribeId, "Unknown tribe"),
   level: z.coerce.number().int().min(1).max(99),
-  buildingdata: z.record(z.string(), BuildingSchema),
+  buildingdata: parsedJson(z.record(z.string(), BuildingSchema)),
   /** Optional slices the editor may also change; absent ones keep the layout's. */
-  academy: z.record(z.string(), z.unknown()).optional(),
-  monsters: z.record(z.string(), z.unknown()).optional(),
-  lockerdata: z.record(z.string(), z.unknown()).optional(),
+  academy: parsedJson(z.record(z.string(), z.unknown())).optional(),
+  monsters: parsedJson(z.record(z.string(), z.unknown())).optional(),
+  lockerdata: parsedJson(z.record(z.string(), z.unknown())).optional(),
 });
+
+/** Parses a save request's body (exported for tests). */
+export const parseSaveBody = (body: unknown) => SaveBodySchema.safeParse(body);
 
 /** One building as the data file keeps it. */
 export const cleanBuilding = (raw: Record<string, unknown>): Record<string, unknown> => {
@@ -220,7 +234,7 @@ const yard = async (ctx: Context) => {
 
 const save = async (ctx: Context) => {
   if (refuseUnlessOn(ctx)) return;
-  const parsed = SaveBodySchema.safeParse(ctx.request.body);
+  const parsed = parseSaveBody(ctx.request.body);
   if (!parsed.success) {
     ctx.status = Status.BAD_REQUEST;
     ctx.body = { error: `The yard could not be saved: ${parsed.error.issues[0]?.message ?? "bad request"}` };

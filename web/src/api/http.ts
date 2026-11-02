@@ -230,6 +230,11 @@ export const send = async <T extends ApiEnvelope>(
   path: string,
   options: SendOptions = {},
 ): Promise<T> => {
+  // The tribe yard editor answers its yard's routes in the browser, so they
+  // never reach the player's own yard on the server (`game/tribeEditor`).
+  const answered = localRoute?.(method, path, options.form ?? options.json ?? options.query ?? {});
+  if (answered) return (await answered) as T;
+
   const search = options.query ? encodeForm(options.query) : "";
   const url = `${apiUrl(path)}${search ? `?${search}` : ""}`;
 
@@ -264,6 +269,25 @@ export const send = async <T extends ApiEnvelope>(
     }
   }
   return envelope;
+};
+
+/**
+ * A stand-in that answers some requests in the browser instead of the server:
+ * a promise for the answer (or a rejection, as the server's refusal would be),
+ * or undefined to let the request go out as usual. Only the tribe yard editor
+ * sets one (`game/tribeEditor/tribeEditSession.ts`), while its yard is open.
+ */
+export type LocalRoute = (
+  method: HttpMethod,
+  path: string,
+  body: FormBody | JsonBody,
+) => Promise<ApiEnvelope> | undefined;
+
+let localRoute: LocalRoute | null = null;
+
+/** Sets (or, with null, clears) the {@link LocalRoute}. */
+export const setLocalRoute = (route: LocalRoute | null): void => {
+  localRoute = route;
 };
 
 /** POSTs a form-encoded body and unwraps the JSON envelope. */

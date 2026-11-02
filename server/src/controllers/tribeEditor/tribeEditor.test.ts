@@ -9,6 +9,7 @@ const { tribeEditorEnabled } = await import("../../config/TribeEditorConfig.js")
 const {
   cleanBuilding,
   editorStatus,
+  parseSaveBody,
   editorYard,
   levelsFileSource,
   registerTribeEditorRoutes,
@@ -89,6 +90,16 @@ describe("tribe yard editor data", () => {
     expect(answer.yard.buildingdata).toEqual(kozu[0]!.buildingdata as Record<string, unknown>);
     expect(answer.yard.buildingdata).not.toBe(kozu[0]!.buildingdata);
     expect(answer.yard).toMatchObject({ baseid: "0", type: "main", userid: 2503, level: 33, outposts: [] });
+  });
+
+  test("a save body reads its yard whether sent as an object or as the JSON string the server's edge makes of it", () => {
+    const buildingdata = { "3": { X: 1, Y: 2, t: 22, l: 2, id: 3, m: { C5: 4 } } };
+    for (const sent of [buildingdata, JSON.stringify(buildingdata)]) {
+      const parsed = parseSaveBody({ tribe: "abunaki", level: "30", buildingdata: sent });
+      expect(parsed.success).toBe(true);
+      expect(parsed.data!.buildingdata["3"]).toMatchObject({ X: 1, t: 22, m: { C5: 4 } });
+    }
+    expect(parseSaveBody({ tribe: "moloch", level: 30, buildingdata }).success).toBe(false);
   });
 
   test("a building keeps its place, type, level, id and garrison; job timers are dropped", () => {
