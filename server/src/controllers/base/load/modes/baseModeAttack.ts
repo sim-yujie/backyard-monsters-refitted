@@ -32,7 +32,7 @@ import { autobankOwner } from "../../../../services/maproom/v2/autobank.js";
 import { academyLevels } from "../../../../services/base/combat/abandonedAttack.js";
 import { academyRanks } from "../../../../game-rules/combat/index.js";
 import { isDeclareWarRunning } from "../../../../services/alliance/powerups.js";
-import { mr2NeighbourBonusEnabled } from "../../../../config/MapRoom2Config.js";
+import { mr2NeighbourBonusMode } from "../../../../config/MapRoom2Config.js";
 import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
 import {
   generateNoise,
@@ -237,9 +237,10 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
   // With Map Room 2's neighbour bonus switched on, the friendly cells around
   // the target go in too (`docs/mr2-neighbours.md`); switched off, or with no
   // friend next to it, the defence is served exactly as before.
+  const bonusMode = mapversion === MapRoomVersion.V2 ? mr2NeighbourBonusMode() : "off";
   const neighbours =
-    mapversion === MapRoomVersion.V2 && mr2NeighbourBonusEnabled() && save.cell && userSave.worldid
-      ? await loadFriendlyNeighbourCount(save.cell, userSave.worldid)
+    bonusMode !== "off" && save.cell && userSave.worldid
+      ? await loadFriendlyNeighbourCount(save.cell, userSave.worldid, bonusMode === "players")
       : 0;
   const served = await servedDefenderForces(save, userSave);
   const defenderForces = neighbours > 0 ? { ...served, neighbours } : served;

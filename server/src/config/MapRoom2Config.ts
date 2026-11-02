@@ -33,11 +33,24 @@ export const EDGE_TRANSITION_WIDTH = 3;
  */
 export const MAX_RESOURCE_CAPACITY = 7_046_100_000;
 
+/** Which Map Room 2 cells the neighbour defence bonus covers. */
+export type Mr2NeighbourBonusMode = "off" | "all" | "players";
+
 /**
- * Whether Map Room 2's neighbour defence bonus is on (`docs/mr2-neighbours.md`):
- * a cell under attack defends better for each friendly cell around it.
- * `MR2_NEIGHBOUR_BONUS` is `on` or `true`; off by default, which serves every
- * attack exactly as before. Read on each attack load, so tests can flip it.
+ * Map Room 2's neighbour defence bonus switch (`docs/mr2-neighbours.md`): a
+ * cell under attack defends better for each friendly cell around it.
+ * `MR2_NEIGHBOUR_BONUS` is `on` (or `true`) for every cell, `players` for
+ * players' main yards and outposts only (no wild monster camps), and off for
+ * anything else, the default, which serves every attack exactly as before.
+ * Read on each attack load, so tests can flip it.
  */
+export const mr2NeighbourBonusMode = (
+  env: Record<string, string | undefined> = process.env
+): Mr2NeighbourBonusMode => {
+  if (isSwitchOn(env.MR2_NEIGHBOUR_BONUS)) return "all";
+  return env.MR2_NEIGHBOUR_BONUS?.trim().toLowerCase() === "players" ? "players" : "off";
+};
+
+/** Whether the neighbour bonus is on for any cell at all. */
 export const mr2NeighbourBonusEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
-  isSwitchOn(env.MR2_NEIGHBOUR_BONUS);
+  mr2NeighbourBonusMode(env) !== "off";

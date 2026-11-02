@@ -57,12 +57,17 @@ export interface DefenderForces {
  * then +6, +4 and +2 each for the fourth to sixth, so a cell ringed by six
  * friends has +24% building health and +24% tower damage.
  */
-export const NEIGHBOUR_DEFENCE_BONUS: readonly number[] = [0, 0.08, 0.14, 0.18, 0.2, 0.22, 0.24];
+export const NEIGHBOUR_DEFENCE_BONUS: readonly number[] = [
+  0, 0.08, 0.14, 0.18, 0.2, 0.22, 0.24,
+];
 
-/** The battle's defence bonus for `neighbours` friendly cells; none for 0 or an unreadable count. */
-export const neighbourDefenceBonus = (neighbours: number | undefined): DefenceBonus | undefined => {
+/** The battle's defence bonus for `neighbours` friendly cells; none for 0 or a bad count. */
+export const neighbourDefenceBonus = (
+  neighbours: number | undefined,
+): DefenceBonus | undefined => {
   if (neighbours === undefined || !Number.isSafeInteger(neighbours)) return undefined;
-  const share = NEIGHBOUR_DEFENCE_BONUS[Math.min(neighbours, NEIGHBOUR_DEFENCE_BONUS.length - 1)] ?? 0;
+  const top = NEIGHBOUR_DEFENCE_BONUS.length - 1;
+  const share = NEIGHBOUR_DEFENCE_BONUS[Math.min(neighbours, top)] ?? 0;
   return share > 0 ? { hp: share, damage: share } : undefined;
 };
 
@@ -315,6 +320,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
     }
   }
   const buffs = parseBattleBuffs(value.buffs);
+  const neighbours = typeof value.neighbours === "number" ? value.neighbours : undefined;
   // A session stored before issue #310 holds one `defenderChampion`.
   const champions = Array.isArray(value.defenderChampions)
     ? value.defenderChampions
@@ -332,7 +338,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
       }),
     ),
     ...(buffs && { buffs }),
-    ...(neighbourDefenceBonus(value.neighbours as number) && { neighbours: value.neighbours as number }),
+    ...(neighbours !== undefined && neighbourDefenceBonus(neighbours) && { neighbours }),
   };
 };
 
@@ -341,13 +347,19 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
  * battle without one runs as it always did. The levels go in whenever there
  * are any: a Spurtz Cannon's Spurtz fight at the defender's level with no
  * bunker or caged champion on the yard too (issue #313). The boosts go in
- * whenever either side has one, and the neighbour bonus whenever the count gives one.
+ * whenever either side has one, and the neighbour bonus whenever the count
+ * gives one.
  */
 export const battleDefence = (
   forces: DefenderForces | null | undefined,
 ): Pick<
   BattleOptions,
-  "bunkers" | "defenderLevels" | "defenderRanks" | "defenderChampions" | "buffs" | "defenceBonus"
+  | "bunkers"
+  | "defenderLevels"
+  | "defenderRanks"
+  | "defenderChampions"
+  | "buffs"
+  | "defenceBonus"
 > => {
   if (!forces) return {};
   const hasBunkers = Object.keys(forces.bunkers).length > 0;

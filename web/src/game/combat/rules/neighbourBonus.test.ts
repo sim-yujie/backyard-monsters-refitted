@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { createBattle, type BattleOptions } from "./engine.js";
+import { createBattle, type BattleOptions, type DefenceBonus } from "./engine.js";
 import {
   battleDefence,
   NEIGHBOUR_DEFENCE_BONUS,
@@ -53,10 +53,11 @@ const lost = (yard: ReturnType<typeof yardOf>) => yard.buildings[0]!.maxHp - yar
 
 const FIXTURES = fileURLToPath(new URL("../../../../test/fixtures/combat/", import.meta.url));
 const SANDBOX = fileURLToPath(new URL("../../../../test/fixtures/baseload-sandbox-yard.json", import.meta.url));
-const read = (path: string) => JSON.parse(readFileSync(path, "utf8")) as Record<string, never>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const read = (path: string): Record<string, any> => JSON.parse(readFileSync(path, "utf8"));
 
 /** The bench battle on the sandbox yard: four flings, a champion, a bomb. */
-const mixedWaves = (extra: { defenceBonus?: BattleOptions["defenceBonus"] } = {}) => {
+const mixedWaves = (extra: { defenceBonus?: DefenceBonus } = {}) => {
   const fixture = read(`${FIXTURES}mixed-waves.json`);
   const sandbox = read(SANDBOX);
   return replayAttack({
@@ -80,7 +81,7 @@ describe("switched off: the battle as it always was", () => {
     ["a bonus of nothing", { hp: 0, damage: 0 }],
     ["a negative bonus, which is ignored", { hp: -0.5, damage: -0.5 }],
   ])("plays the Cannon battle exactly as before with %s", (_name, defenceBonus) => {
-    expect(checkpointAfter(CANNON, { defenceBonus }, 1500)).toEqual(checkpointAfter(CANNON, {}, 1500));
+    expect(checkpointAfter(CANNON, { defenceBonus: defenceBonus! }, 1500)).toEqual(checkpointAfter(CANNON, {}, 1500));
   });
 
   it("replays the bench battle to the same digest with no neighbours served", () => {
@@ -172,7 +173,7 @@ describe("switched on", () => {
 
   it("does less to the sandbox yard in the bench battle with six neighbours", () => {
     const plain = mixedWaves();
-    const ringed = mixedWaves({ defenceBonus: neighbourDefenceBonus(6) });
+    const ringed = mixedWaves({ defenceBonus: neighbourDefenceBonus(6)! });
     expect(ringed.digest).not.toBe(plain.digest);
     expect(ringed.damage).toBeLessThan(plain.damage);
   });

@@ -13,12 +13,13 @@ mock.module("../../../server.js", () => ({
       },
     },
   },
+  redis: {},
 }));
 
 const { friendlyNeighbourCount, loadFriendlyNeighbourCount, mr2NeighbourCoords } = await import(
   "./neighbourDefence.js"
 );
-const { mr2NeighbourBonusEnabled } = await import("../../../config/MapRoom2Config.js");
+const { mr2NeighbourBonusEnabled, mr2NeighbourBonusMode } = await import("../../../config/MapRoom2Config.js");
 
 const LAND = Terrain.LAND2;
 const land = () => LAND;
@@ -31,6 +32,13 @@ describe("MR2_NEIGHBOUR_BONUS", () => {
     expect(mr2NeighbourBonusEnabled({ MR2_NEIGHBOUR_BONUS: "yes" })).toBe(false);
     expect(mr2NeighbourBonusEnabled({ MR2_NEIGHBOUR_BONUS: "on" })).toBe(true);
     expect(mr2NeighbourBonusEnabled({ MR2_NEIGHBOUR_BONUS: " TRUE " })).toBe(true);
+  });
+
+  test("players covers players' cells only; on covers every cell", () => {
+    expect(mr2NeighbourBonusMode({})).toBe("off");
+    expect(mr2NeighbourBonusMode({ MR2_NEIGHBOUR_BONUS: "on" })).toBe("all");
+    expect(mr2NeighbourBonusMode({ MR2_NEIGHBOUR_BONUS: " Players " })).toBe("players");
+    expect(mr2NeighbourBonusEnabled({ MR2_NEIGHBOUR_BONUS: "players" })).toBe(true);
   });
 });
 
@@ -89,6 +97,10 @@ describe("a wild monster camp", () => {
     expect(friendlyNeighbourCount({ ...camp, x: 11 }, [], land)).toBe(1);
   });
 
+  test("has none when the bonus covers players only", () => {
+    expect(friendlyNeighbourCount(camp, [], land, true)).toBe(0);
+  });
+
   test("loses it to water", () => {
     const heightAt = (x: number, y: number) => (x === 11 && y === 19 ? Terrain.WATER2 : LAND);
     expect(friendlyNeighbourCount(camp, [], heightAt)).toBe(0);
@@ -124,6 +136,8 @@ describe("a player's cell", () => {
     const stored = mr2NeighbourCoords(10, 20).map(({ x, y }) => ({ x, y, uid: 7, base_type: MapRoomCell.OUTPOST }));
     expect(friendlyNeighbourCount({ ...outpost, base_type: MapRoomCell.HOMECELL }, stored, land)).toBe(6);
     expect(friendlyNeighbourCount(outpost, [], land)).toBe(0);
+    // Players only changes nothing for a player's cell.
+    expect(friendlyNeighbourCount(outpost, stored, land, true)).toBe(6);
   });
 });
 
@@ -138,5 +152,12 @@ describe("loadFriendlyNeighbourCount", () => {
     expect(where.$and).toContainEqual({ map_version: 2 });
     expect(where.$and).toContainEqual({ world: "w-1" });
     expect((where.$and[0]!.$or as unknown[]).length).toBe(6);
+  });
+
+  test("players only: a camp is not even looked up", async () => {
+    queries.length = 0;
+    const count = await loadFriendlyNeighbourCount({ x: 10, y: 20, uid: 0, base_type: MapRoomCell.WM }, "w-1", true);
+    expect(count).toBe(0);
+    expect(queries).toHaveLength(0);
   });
 });

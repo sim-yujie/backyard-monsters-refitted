@@ -70,11 +70,13 @@ const tribeOf = (cell: CellAt): number => (cell.x + cell.y) % Tribes.length;
  * @param target - The cell under attack.
  * @param stored - The stored world map cells at its neighbours' positions (any others are ignored).
  * @param heightAt - The terrain height of a cell with no stored row (the world's noise).
+ * @param playersOnly - Count for players' cells only: a camp then has none (`MR2_NEIGHBOUR_BONUS=players`).
  */
 export const friendlyNeighbourCount = (
   target: TargetCell,
   stored: readonly StoredNeighbour[],
-  heightAt: (x: number, y: number) => number
+  heightAt: (x: number, y: number) => number,
+  playersOnly = false
 ): number => {
   const rows = new Map(stored.map((cell) => [`${cell.x},${cell.y}`, cell]));
   const around = mr2NeighbourCoords(target.x, target.y);
@@ -86,7 +88,7 @@ export const friendlyNeighbourCount = (
     }).length;
   }
 
-  if (target.base_type !== MapRoomCell.WM) return 0;
+  if (playersOnly || target.base_type !== MapRoomCell.WM) return 0;
   const tribe = tribeOf(target);
   return around.filter(({ x, y }) => {
     const row = rows.get(`${x},${y}`);
@@ -103,8 +105,14 @@ export const friendlyNeighbourCount = (
  *
  * @param target - The attacked cell.
  * @param worldid - The world it is in.
+ * @param playersOnly - Count for players' cells only.
  */
-export const loadFriendlyNeighbourCount = async (target: TargetCell, worldid: string): Promise<number> => {
+export const loadFriendlyNeighbourCount = async (
+  target: TargetCell,
+  worldid: string,
+  playersOnly = false
+): Promise<number> => {
+  if (playersOnly && !isPlayerCell(target)) return 0;
   const around = mr2NeighbourCoords(target.x, target.y);
   const stored = await postgres.em.find(
     WorldMapCell,
@@ -122,5 +130,5 @@ export const loadFriendlyNeighbourCount = async (target: TargetCell, worldid: st
     noise ??= generateNoise(worldid);
     return getTerrainHeight(noise, x, y);
   };
-  return friendlyNeighbourCount(target, stored, heightAt);
+  return friendlyNeighbourCount(target, stored, heightAt, playersOnly);
 };

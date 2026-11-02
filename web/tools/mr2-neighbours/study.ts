@@ -1,7 +1,8 @@
 /**
  * The calculation behind `docs/mr2-neighbours.md`: real MR2 armies against
  * real MR2 defences in the real combat engine, with each candidate neighbour
- * bonus. Run from `web/`: `bun tools/mr2-neighbours/study.ts [quick]`.
+ * bonus. Run from `web/`:
+ * `bun tools/mr2-neighbours/study.ts [table | need [wide] | calibrate]`.
  */
 import { createBattle } from "../../src/game/combat/rules/engine.ts";
 import { buildEngineYard } from "../../src/game/combat/rules/yard.ts";
@@ -96,7 +97,7 @@ const avg = (yard: string, army: Roster, bonus?: { hp?: number; damage?: number 
 
 /** The smallest share of the army (in 5% steps) that takes the yard to 90%. */
 const armyNeeded = (yard: string, army: Roster, bonus?: { hp?: number; damage?: number }): number => {
-  for (let scale = 0.3; scale <= 3.001; scale += 0.05) {
+  for (let scale = 0.5; scale <= 3.001; scale += 0.05) {
     if (avg(yard, scaled(army, scale), bonus).damage >= 90) return Math.round(scale * 100) / 100;
   }
   return Infinity;
@@ -148,14 +149,7 @@ if (mode === "need") {
   for (const [yard, name] of pairs) {
     const row = [`${yard}/${name}`];
     for (const [label, bonus] of Object.entries(settings)) {
-      let need = Infinity;
-      for (let scale = 0.5; scale <= 3.001; scale += 0.05) {
-        if (avg(yard, scaled(ARMIES[name]!, scale), bonus).damage >= 90) {
-          need = Math.round(scale * 100) / 100;
-          break;
-        }
-      }
-      row.push(`${label} ${need}`);
+      row.push(`${label} ${armyNeeded(yard, ARMIES[name]!, bonus)}`);
     }
     console.log(row.join("	"));
   }
