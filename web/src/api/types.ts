@@ -757,6 +757,11 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   notifications?: number;
   /**
+   * What the Quests button's red number counts (beta 6), from the latest yard
+   * answer that carried `questsClaimable`; the load itself does not send it.
+   */
+  questsClaimable?: number;
+  /**
    * The owner's loads: how to reach world chat (#282, `game/chat/chatSession.ts`).
    * `chatservers` is every load's, the chat WebSocket's `host:port`;
    * `chattoken` (a day's, per player) and `chatchannel` (the world room for
@@ -1500,6 +1505,11 @@ export type YardResponse<Report> = ApiEnvelope &
     notifications?: number;
     /** Paid unlocks not yet shown, as `/base/load` sends them (#204). */
     achievements?: AchievementUnlock[];
+    /**
+     * Quests, login days and bonuses waiting for a Claim tap (beta 6, the
+     * Quests button's red number). Absent before the player's quest record exists.
+     */
+    questsClaimable?: number;
   };
 
 /**
