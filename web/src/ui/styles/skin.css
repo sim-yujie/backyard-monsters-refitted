@@ -678,6 +678,16 @@
   --colour-text-muted: var(--skin-ink-3);
 }
 
+/* The yard's zoom rail is one plate: the zoom group inside it (+ and −) wears
+   none of its own, so the four buttons line up in one column instead of +
+   and − sitting in a second frame, pushed right (owner, beta 6). The list
+   above names `.yard-zoom` for the planner's zoom bar, which stands alone. */
+:root[data-skin] .yard-viewtools.yard-viewtools--rail .yard-zoom {
+  border: 0;
+  border-image: none;
+  filter: none;
+}
+
 /* Bars inside a window (Map Room 1's map tools, world chat's tab) would take
    the window's dark ink: given the plate's own. */
 :root[data-skin] :is(.mr1, .chat-box--open) :is(.mr1-mini, .mr1-legend, .mr1-map__home, .chat-box__tab) {

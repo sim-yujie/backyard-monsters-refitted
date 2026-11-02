@@ -342,7 +342,14 @@
   color: var(--colour-text-muted);
 }
 
-/* ── Map Room 2 tools: My range (#177) ──────────────────────────────────── */
+/* The stats line is a developer aid (devStats()); when it is off the element
+   stays in the Find sheet with [hidden], and the display:flex above would
+   otherwise still draw its empty plate. */
+.map-status[hidden] {
+  display: none;
+}
+
+/* ── Map Room 2 tools: the range legend (#177) ─────────────────────────── */
 
 /* The glass every floating Map Room 2 control and card shares. */
 .mr2-float {
@@ -1181,7 +1188,7 @@
 
 /*
  * A phone (R-MR2-phone): Find becomes the wide "Find a place" bar under the
- * HUD, My range sits under it on the right, and pinching replaces the zoom
+ * HUD, the tools sit beside it on the right, and pinching replaces the zoom
  * buttons. The cell panel is the bottom sheet (#174), and while it is open
  * the phone rule above puts these away.
  */
@@ -1233,7 +1240,7 @@
     right: 12px;
   }
 
-  /* Mail, My range and the kit filter are wider than a phone together: the
+  /* Mail and the kit filter are wider than a phone together: the
      filter wraps to a row of its own instead of pushing Mail off the left edge. */
   .mr2-tools-dock .mr2-toolrow {
     flex-wrap: wrap;
@@ -1262,11 +1269,11 @@
     display: none;
   }
 
-  /* One row under the HUD (#381): "Find a place", then Mail, My range and
-     Filter as icon buttons. The kit row folds into Filter and opens as a list
+  /* One row under the HUD (#381): "Find a place", then Mail and Filter as
+     icon buttons (My range went in beta 6). The kit row folds into Filter and opens as a list
      under it, so nothing is pushed off the screen's edge. */
   .mr2-find-dock {
-    right: calc(12px + 3 * var(--control-height) + 3 * var(--space-2));
+    right: calc(12px + 2 * var(--control-height) + 2 * var(--space-2));
   }
 
   /* The open Find sheet takes the whole width; the tool row steps aside. */

@@ -76,7 +76,7 @@ const TEST_TIPS: Partial<Record<GuideScreen, readonly Tip[]>> = {
     { text: "Threads.", target: TutTarget.MAIL_THREADS },
     { text: "Nothing to point at." },
   ],
-  [GuideScreen.MR2]: [{ text: "Range.", target: TutTarget.MR2_RANGE }],
+  [GuideScreen.MR2]: [{ text: "Find.", target: TutTarget.MR2_FIND }],
   [GuideScreen.SHOP]: [{ text: "Workers.", target: TutTarget.SHOP_WORKERS, side: "below" }],
   [GuideScreen.ATTACK]: [{ text: "Drop on open ground." }],
 };
@@ -414,11 +414,11 @@ describe("seen when the player moves on", () => {
     view()!.attached = false;
 
     const map = box();
-    control(TutTarget.MR2_RANGE, map);
+    control(TutTarget.MR2_FIND, map);
     bus.emit("screen", { id: GuideScreen.MR2, root: map, header: null });
     expect(send).toHaveBeenCalledWith(GuideScreen.YARD);
     await settle();
-    expect(view()!.shown).toMatchObject({ text: "Range." });
+    expect(view()!.shown).toMatchObject({ text: "Find." });
   });
 
   it("a replay never marks anything seen", async () => {

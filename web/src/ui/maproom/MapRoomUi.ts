@@ -95,7 +95,7 @@ export interface MapRoomUiHandlers {
   onZoom: (zoom: number) => void;
   onZoomStep: (direction: 1 | -1) => void;
   onCellPanelClose: () => void;
-  /** "My range" turned on or off (#177), from its button or the cell panel. */
+  /** "My range" turned on or off (#177), from the legend's switch or the own yard's cell panel. */
   onRangeToggle: (on: boolean) => void;
   /** The kit filter (#334) was changed. */
   onKitFilterChange: (filter: KitFilter) => void;
@@ -213,7 +213,7 @@ export class MapRoomUi {
     bottomRight.append(this.rangeControl.legend);
     const tools = document.createElement("div");
     tools.className = "mr2-toolrow";
-    tools.append(this.rangeControl.button, this.kitFilterControl.toggle, this.kitFilterControl.element);
+    tools.append(this.kitFilterControl.toggle, this.kitFilterControl.element);
     this.zoomControl.mount(tools);
     bottomRight.append(tools);
     this.tools = tools;

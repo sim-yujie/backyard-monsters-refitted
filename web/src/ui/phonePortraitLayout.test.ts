@@ -31,12 +31,12 @@ const media = (source: string, query: string): string => {
 };
 
 describe("upright phone layout", () => {
-  it("puts Map Room 2's Mail, My range and Filter beside the search bar, on screen (#381)", () => {
+  it("puts Map Room 2's Mail and Filter beside the search bar, on screen (#381)", () => {
     const phone = media(css("styles/maproom.css"), "width <= 620px");
     // One row under the HUD: the tools at the right, the search bar up to them.
     expect(phone).toMatch(/\.mr2-tools-dock \{\s*top: calc\(var\(--hud-height\) \+ var\(--space-2\)\);\s*left: auto;/);
     expect(phone).toMatch(/\.mr2-tools-dock \.mr2-toolrow \{\s*flex-wrap: nowrap;/);
-    expect(phone).toMatch(/\.mr2-find-dock \{\s*right: calc\(12px \+ 3 \* var\(--control-height\) \+ 3 \* var\(--space-2\)\);/);
+    expect(phone).toMatch(/\.mr2-find-dock \{\s*right: calc\(12px \+ 2 \* var\(--control-height\) \+ 2 \* var\(--space-2\)\);/);
     expect(phone).toMatch(/\.mr2-tools-dock \.mr2-tool,[^{]*\{[^}]*width: var\(--control-height\);/);
     // The "Find a place" bar starts after the floating "?".
     expect(phone).toMatch(/> \.guide-help--float:not\(\[hidden\]\)\) > \.mr2-find-dock \{\s*left: 56px;/);

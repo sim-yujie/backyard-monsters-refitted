@@ -12,7 +12,7 @@
 /* ── The yard's Mail button: left of Monsters, at its height ────────────── */
 
 .yard-dock__right > .yard-dock__button--mail {
-  right: 240px;
+  right: calc(var(--dock-row) + var(--dock-pitch));
   bottom: 30px;
 }
 
