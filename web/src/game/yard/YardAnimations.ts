@@ -156,6 +156,32 @@ export const advanceAnimLayers = (layers: readonly AnimLayer[], seconds: number)
 };
 
 /**
+ * Moves on the layers of a building that has an idle loop of its own
+ * (`ResolvedAnim.rest`, the Inferno's Incubator Control Centre, whose lava
+ * breathes whether it hatches or not): a strip's first `rest` cells while the
+ * building is idle, the others while it is `working`.
+ *
+ * `progress` counts the working loop's cells either way, so both loops take
+ * the same time round, each idle cell standing for several working ones, and a
+ * building that starts or stops working carries on from the same point of the
+ * loop. A layer with no `rest` is left alone, as is one whose policy holds it
+ * (a building mid-build).
+ */
+export const loopAnimLayers = (layers: readonly AnimLayer[], seconds: number, working: boolean): void => {
+  for (const layer of layers) {
+    const rest = layer.anim.rest;
+    const ticksPerFrame = layer.policy.ticksPerFrame;
+    if (!rest || ticksPerFrame === null || !layer.resolved) continue;
+    const frames = layer.sprite.totalFrames;
+    const loop = frames - rest;
+    if (loop <= 0) continue;
+    layer.progress = (layer.progress + (seconds * YARD_TICK_HZ) / ticksPerFrame) % loop;
+    const cell = working ? rest + Math.floor(layer.progress) : Math.floor((layer.progress * rest) / loop);
+    layer.sprite.currentFrame = Math.min(cell, frames - 1);
+  }
+};
+
+/**
  * Puts every layer back on cell 0, for a hatchery whose production has just
  * stopped (`BUILDING13.as:44-47`). Called every frame it stays stopped, which
  * costs a compare: Pixi skips a `currentFrame` that has not changed.

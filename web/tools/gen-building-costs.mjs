@@ -532,6 +532,33 @@ const INFERNO_YARD_PLANNER = 10;
   planner.blocked = false;
 }
 
+/**
+ * The Incubator Control Centre (16) is buildable in the Inferno: owner,
+ * 2 Nov 2026 ("put it in game first for me to make a judgement call"). Flash
+ * has an unused, `block`ed row for it (`INFERNOYARDPROPS.as:1289-1330`, the
+ * Hatchery Control Center's art and type): 4,000,000 Bone, Coal and Sulfur,
+ * 25 hours, 64,000 health, kept as it is. Proposed (`docs/design/inferno.md`
+ * §2.5): one from Under Hall 4, which needs Under Hall 4 and two Incubators at
+ * level 3 (`re` is `[type, count, level]`; Flash's was `[[14,1,3],[13,3,2]]`,
+ * Under Hall 3 and three level 2 Incubators, but the Inferno cannot store
+ * 4,000,000 of anything before Under Hall 4).
+ */
+const INFERNO_CONTROL_CENTRE = 16;
+{
+  const centre = infernos.find((one) => one.id === INFERNO_CONTROL_CENTRE);
+  if (!centre) throw new Error(`INFERNOYARDPROPS.as: no Hatchery Control Center (${INFERNO_CONTROL_CENTRE}) entry`);
+  if (centre.steps.length !== 1) {
+    throw new Error(`INFERNOYARDPROPS.as:${centre.line}: the Hatchery Control Center has ${centre.steps.length} steps`);
+  }
+  centre.blocked = false;
+  centre.name = "Incubator Control Centre";
+  centre.quantity = [0, 0, 0, 0, 1, 1, 1];
+  centre.steps[0].re = [
+    [UNDER_HALL, 1, 4],
+    [13, 2, 3],
+  ];
+}
+
 {
   const hall = infernos.find((one) => one.id === UNDER_HALL);
   if (!hall) throw new Error(`INFERNOYARDPROPS.as: no Under Hall (${UNDER_HALL}) entry`);

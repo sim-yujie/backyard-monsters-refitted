@@ -69,6 +69,10 @@ export const INFERNO_ART_ROWS: readonly ArtRow[] = [
   [15, "Compound", "buildings/monsterhousing/", [
     [1,["top.3.v2.png",-109,11],["top.3.damaged.v2.png",-107,12],["top.3.destroyed.v2.png",-108,21],["shadow.3.v2.jpg",-112,23],["shadow.3.damaged.v2.jpg",-110,25],["shadow.3.destroyed.v2.jpg",-109,25]],
   ], [4000,14000,25000,43000,75000,130000], 200],
+  // 16 Incubator Control Centre (special) — INFERNO_RENAMED, after INFERNOYARDPROPS.as:1309
+  [16, "Incubator Control Centre", "buildings/hatcherycontrolcenter/", [
+    [1,["top.1.png",-40,-58],["top.1.damaged.png",-51,-59],["top.1.destroyed.png",-53,-7],["shadow.1.jpg",-51,20],["shadow.1.damaged.jpg",-50,25],["shadow.1.destroyed.jpg",-57,24]],
+  ], [64000], 120],
   // 17 Block (wall) — INFERNOYARDPROPS.as:1365
   [17, "Block", "buildings/iwalls/", [
     [1,["top.1.v2.png",-24,-5],["top.1.damaged.v2.png",-24,-5],["top.1.destroyed.v2.png",-24,-5],["shadow.1.v2.jpg",-20,0.8],["shadow.1.damaged.v2.jpg",-20,0.8],["shadow.1.destroyed.v2.jpg",-20,0.8]],

@@ -200,6 +200,12 @@ export interface ResolvedAnim {
   readonly frames: number;
   /** Cells in a row, for a strip of several rows (the 3D Laser's tilts); one row without it. */
   readonly columns?: number;
+  /**
+   * The first `rest` cells are the building's loop while it is not working,
+   * the others its loop while it is (`TierAnim.rest`, the Inferno's Incubator
+   * Control Centre); absent for a strip that is one loop.
+   */
+  readonly rest?: number;
 }
 
 /**
@@ -286,7 +292,7 @@ const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
   };
 };
 
-const animOf = (folder: string, entry: ArtAnim, columns?: number): ResolvedAnim => ({
+const animOf = (folder: string, entry: ArtAnim, columns?: number, rest?: number): ResolvedAnim => ({
   url: `${ASSET_ROOT}${folder}${entry[0]}`,
   x: entry[1],
   y: entry[2],
@@ -294,6 +300,7 @@ const animOf = (folder: string, entry: ArtAnim, columns?: number): ResolvedAnim 
   height: entry[4],
   frames: entry[5],
   ...(columns ? { columns } : {}),
+  ...(rest ? { rest } : {}),
 });
 
 /** Indices into an `ArtLevel` tuple for the default, damaged and destroyed art. */
@@ -379,7 +386,9 @@ export const resolveArt = (
         level: tier.from,
         top,
         shadow: imageOf(row.folder, tier.shadow),
-        anims: layers.map((layer) => animOf(row.folder, layer, columnsOf(layer))),
+        anims: layers.map((layer) =>
+          animOf(row.folder, layer, columnsOf(layer), layer === anim?.strip ? anim.rest : undefined),
+        ),
         topIsAnim: whole,
         ...(turret || whole || body ? { still } : {}),
       };

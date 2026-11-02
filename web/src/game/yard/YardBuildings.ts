@@ -14,6 +14,7 @@ import {
 import {
   advanceAnimLayers,
   buildAnimLayers,
+  loopAnimLayers,
   resolveAnimLayers,
   restAnimLayers,
   setLayerFrame,
@@ -91,6 +92,13 @@ interface FortOverlay {
   readonly front: Sprite;
   backResolved: boolean;
   frontResolved: boolean;
+}
+
+/** Where a building's strip was before a redraw (`show`), to carry on from. */
+interface StripPlace {
+  readonly url: string;
+  readonly frames: number;
+  readonly progress: number;
 }
 
 interface BuildingView {
@@ -276,6 +284,19 @@ export class YardBuildings {
    * that runs only while working holds still.
    */
   show(yard: Yard, atlas: YardArtAtlas, work: WorkMap = NO_WORK): void {
+    // The yard is shown again after every save change — each hatch, each
+    // `state` answer — so a strip keeps its place across the redraw rather than
+    // starting over: the Inferno's Incubator Control Centre's crystal pulse
+    // otherwise jumped back to its dimmest cell, and its lava to liquid yellow,
+    // every time one Incubator handed over to the next.
+    const places = new Map<number, readonly StripPlace[]>();
+    for (const view of this.views) {
+      if (view.anims.length === 0) continue;
+      places.set(
+        view.building.id,
+        view.anims.map((layer) => ({ url: layer.anim.url, frames: layer.anim.frames, progress: layer.progress })),
+      );
+    }
     this.clear();
     this.kind = yard.kind;
     // Only the latest pair is kept: the yard is shown again after every save.
@@ -314,6 +335,13 @@ export class YardBuildings {
 
       // Straight after their own top, so depth order still reads down the list.
       const anims = art ? buildAnimLayers(building, art) : [];
+      const was = places.get(building.id);
+      anims.forEach((layer, index) => {
+        const place = was?.[index];
+        if (place && place.url === layer.anim.url && place.frames === layer.anim.frames) {
+          layer.progress = place.progress;
+        }
+      });
       for (const layer of anims) this.tops.addChild(layer.sprite);
       if (fort) this.tops.addChild(fort.front);
 
@@ -452,7 +480,9 @@ export class YardBuildings {
       if (view.anims.length === 0) continue;
       for (const layer of view.anims) layer.sprite.visible = animsOn && layer.resolved;
       if (!animsOn || deltaSeconds <= 0) continue;
-      if (now < view.workUntil) advanceAnimLayers(view.anims, deltaSeconds);
+      // A strip with an idle loop of its own (the Inferno's Incubator Control Centre) runs either way.
+      if (view.anims[0]?.anim.rest) loopAnimLayers(view.anims, deltaSeconds, now < view.workUntil);
+      else if (now < view.workUntil) advanceAnimLayers(view.anims, deltaSeconds);
       else if (view.restOnIdle) restAnimLayers(view.anims);
     }
   }

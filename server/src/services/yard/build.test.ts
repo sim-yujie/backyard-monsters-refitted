@@ -465,3 +465,58 @@ describe("main-yard Inferno buildings", () => {
     expect(cancelled.report.purse).toMatchObject(PURSE);
   });
 });
+
+/**
+ * The Inferno yard's Incubator Control Centre (owner, 2 Nov 2026): the
+ * Hatchery Control Center's type (16) on an Inferno yard, Flash's unused row
+ * (`INFERNOYARDPROPS.as:1289-1330`): 4,000,000 Bone, Coal and Sulfur, 25
+ * hours; proposed: one from Under Hall 4, needing two level 3 Incubators.
+ */
+describe("build in the Inferno yard: the Incubator Control Centre", () => {
+  const CONTROL_CENTRE = 16;
+  const INCUBATOR = 13;
+
+  /** An Inferno yard with its Under Hall at `underHall` and the Incubators at the levels given. */
+  const inferno = (underHall: number, incubators: readonly number[]): BuildSave => {
+    const save = yard({ type: "inferno" });
+    save.buildingdata!["1"] = { id: 1, t: HALL, X: -65, Y: -65, l: underHall } as never;
+    incubators.forEach((level, i) => {
+      save.buildingdata![String(10 + i)] = { id: 10 + i, t: INCUBATOR, X: -400 + 120 * i, Y: -350, l: level } as never;
+    });
+    return save;
+  };
+
+  test("not at Under Hall 3: 409 townHall {have 3, need 4}", () => {
+    const [status, data] = refusedWith(() =>
+      planBuild(inferno(3, [3, 3]), { type: CONTROL_CENTRE, x: 250, y: -350 }, NOW),
+    );
+    expect(status).toBe(409);
+    expect(data).toMatchObject({ reason: "townHall", townHall: { have: 3, need: 4 } });
+  });
+
+  test("Under Hall 4 with one level 3 Incubator: 409 requirements, two needed", () => {
+    const [status, data] = refusedWith(() =>
+      planBuild(inferno(4, [3, 2]), { type: CONTROL_CENTRE, x: 250, y: -350 }, NOW),
+    );
+    expect(status).toBe(409);
+    expect(data).toMatchObject({ reason: "requirements" });
+    // `[type, count, level]`: two Incubators at level 3.
+    expect(data.requirements).toEqual([[INCUBATOR, 2, 3]]);
+  });
+
+  test("Under Hall 4 and two level 3 Incubators: it starts, 25 hours, 4,000,000 Bone, Coal and Sulfur", () => {
+    const outcome = planBuild(inferno(4, [3, 3]), { type: CONTROL_CENTRE, x: 250, y: -350 }, NOW);
+    expect(outcome.report).toMatchObject({
+      t: CONTROL_CENTRE,
+      seconds: 90_000,
+      cost: { r1: 4_000_000, r2: 4_000_000, r3: 4_000_000, r4: 0 },
+    });
+  });
+
+  test("only one", () => {
+    const save = inferno(4, [3, 3]);
+    save.buildingdata!["20"] = { id: 20, t: CONTROL_CENTRE, X: 250, Y: -350, l: 1 } as never;
+    const [, data] = refusedWith(() => planBuild(save, { type: CONTROL_CENTRE, x: 250, y: 100 }, NOW));
+    expect(data).toMatchObject({ reason: "limit", limit: { have: 1, allowed: 1 } });
+  });
+});
