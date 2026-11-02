@@ -16,10 +16,12 @@ import {
   isSpurtzCannon,
   parseDefenderForces,
   towerShellFlies,
+  trapStats,
   type Battle,
   type BattleVisualEvent,
   type CreepSnapshot,
 } from "@/game/combat/rules";
+import { playEffect } from "@/game/sound/sound";
 import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -785,6 +787,8 @@ const BOMB_NUMBER_TICKS = 20;
 
 /** Ticks a trap's blast ring takes to fade. */
 export const BURST_TICKS = 14;
+/** The Heavy Trap's type: its explosion is the bigger one, with a small shake. */
+const HEAVY_TRAP = 117;
 const SCORCH_COLOUR = 0x1c1410;
 
 /** Whether the viewer asked for less motion. */
@@ -894,6 +898,8 @@ export class AttackBattleLayer {
 
   /* The bigger effects trial (feat/attack-juice-demo); drawing only. */
   private readonly juice: JuiceLevel;
+  /** "Effects: low" (or a small screen): the Modern trap explosion throws half the bits. */
+  private readonly effectsLow: boolean;
   /** The Classic look: Flash's battle, without the new effects (`game/classicLook.ts`). */
   private readonly classic: boolean;
   /** Wall-clock ms the picture holds still until, for a hit-stop; the battle runs on. */
@@ -914,6 +920,7 @@ export class AttackBattleLayer {
     this.now = options.now ?? (() => performance.now());
     this.classic = options.classic ?? classicLook();
     this.juice = this.classic ? "off" : (options.juice ?? juiceLevel());
+    this.effectsLow = (options.effectsQuality ?? effectsQuality()) === "low";
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -2619,8 +2626,10 @@ export class AttackBattleLayer {
   /**
    * Shows every trap that has just gone off (issue #66): the renderer lifts
    * its concealment, `syncDamage` then draws it as the ruin its zero health
-   * says, and a scorch with a fading ring marks the blast, as `BTRAP.Explode`
-   * did (`client/scripts/BTRAP.as:88-153`).
+   * says, and a scorch marks the blast, as `BTRAP.Explode` did
+   * (`client/scripts/BTRAP.as:88-153`). With the Classic look a thin fading
+   * ring goes with it; the Modern look draws the trap explosion instead
+   * (`BlastFx.trap`, a sample for the owner, beta 6) with Flash's trap sound.
    */
   private revealTraps(fired: readonly number[], tick: number): void {
     for (const id of this.traps.sync(fired)) {
@@ -2634,6 +2643,20 @@ export class AttackBattleLayer {
       scorch.position.set(at.x, at.y);
       this.effects.addChild(scorch);
       this.scorches.push(scorch);
+      // Modern: the trap explosion (a sample for the owner, beta 6), its fireball as big as the blast; the
+      // blast is a circle round the footprint's middle, on screen root two times its radius across.
+      const blast = trapStats(building.type)?.size;
+      if (this.juice !== "off" && blast) {
+        const middle = { x: building.worldX, y: building.worldY + 10 };
+        const heavy = building.type === HEAVY_TRAP;
+        this.blastFx.trap(tick, middle, blast * Math.SQRT2, heavy, this.effectsLow);
+        // Its sound, only as it goes off (not when skipping to the end).
+        if (!this.settled) {
+          playEffect("trap");
+          if (heavy) playEffect("trapheavy");
+        }
+        continue;
+      }
       const ring = new Graphics();
       ring.position.set(at.x, at.y);
       this.effects.addChild(ring);

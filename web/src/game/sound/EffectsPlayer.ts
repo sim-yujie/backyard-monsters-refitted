@@ -29,7 +29,7 @@ import { GESTURE_EVENTS, type GestureTarget } from "./MusicPlayer";
  * not saved up, so nothing goes off late in a heap.
  */
 
-export type Effect = "bankfire" | "bankland" | "ibankfire" | "ibankland";
+export type Effect = "bankfire" | "bankland" | "ibankfire" | "ibankland" | "trap" | "trapheavy";
 
 export interface EffectFile {
   readonly url: string;
@@ -42,6 +42,9 @@ export const EFFECTS: Readonly<Record<Effect, EffectFile>> = {
   bankland: { url: "/assets/sounds/uisounds/sound_bankland.mp3", volume: 0.8 },
   ibankfire: { url: "/assets/sounds/infernosounds/sound_ibankfire.mp3", volume: 0.8 },
   ibankland: { url: "/assets/sounds/infernosounds/sound_ibankland.mp3", volume: 0.8 },
+  // A trap going off (Modern look): Flash's trap sound; the Heavy Trap layers a building's fall over it, louder.
+  trap: { url: "/assets/sounds/attacksounds/sound_trap.mp3", volume: 0.8 },
+  trapheavy: { url: "/assets/sounds/attacksounds/building_destroy_1.mp3", volume: 1 },
 };
 
 /** The least time between two starts of one effect: two Flash frames at 40 fps. */
