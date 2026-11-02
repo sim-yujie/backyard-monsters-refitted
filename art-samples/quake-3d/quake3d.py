@@ -73,6 +73,12 @@ SPIN = float(os.environ.get("QUAKE_SPIN", "-35"))     # the claw's turn at rest 
 LINK = 0.056                                        # chain pitch
 HX = -0.10                                          # the claw's stem, behind the ring (it curls through it to +x)
 GY = -0.015                                         # the gantry stands this far toward -y of the drum (Flash)
+# the damaged look (one loose pass after Flash's anim.1.damaged.png): chunks bitten out of the uprights' edges, per
+# upright (z middle, half height, depth, +1 front edge / -1 back edge), and the +y one's kink
+BITES = {-1: [(1.3, 0.34, 0.27, 1), (2.25, 0.2, 0.11, -1), (0.6, 0.16, 0.1, -1), (BAR_Z - 0.08, 0.12, 0.09, -1),
+              (0.35, 0.1, 0.09, 1)],
+         1: [(1.75, 0.26, 0.13, -1), (0.85, 0.2, 0.15, 1), (2.35, 0.12, 0.07, 1), (0.4, 0.12, 0.08, -1)]}
+KINK_Z = 1.3
 
 # Flash's strike, per cell: the weight's lift in screen px (1x) and the claw's drop (0-1 of the way to the ring)
 LIFT_PX = [0] * 14 + [1, 2, 4, 6, 7, 8, 10, 11, 12, 13, 15, 15, 16, 17, 17, 15, 11, 5, 0]
@@ -111,9 +117,22 @@ def rusty(name, base=(86, 70, 60), dark=(42, 33, 29), rust=(150, 76, 36), edge=(
                     edge_dark=0.45, sheen=0.04)
 
 
+def dk(c, k=0.78):
+    """The damaged look's scorched colour: darker (Flash's damaged tower is darker and sootier)."""
+    return tuple(int(v * k) for v in c) if DMG else c
+
+
+def iron(name, **kw):
+    if DMG:
+        defaults = rusty.__defaults__
+        names = rusty.__code__.co_varnames[1:1 + len(defaults)]
+        for key in ("base", "dark", "rust", "edge"):
+            kw[key] = dk(kw.get(key, defaults[names.index(key)]))
+    return rusty(name, **kw)
+
+
 def materials():
-    iron = rusty
-    soot = 0.25 if DMG else 0.0
+    soot = 0.45 if DMG else 0.0         # the damaged look: scorched (Flash's is darker, sooty)
     M = dict(
         upright=iron("upright", base=(90, 78, 64), dark=(38, 32, 26), rust=(132, 66, 34), edge=(172, 150, 122),
                      rust_k=0.65 + (0.2 if DMG else 0), soot=0.45 + soot, dents=0.8, cover=0.5),
@@ -125,9 +144,10 @@ def materials():
                  dents=1.4, soot=0.5 + soot, cover=0.5),
         rim=iron("rim", base=(132, 110, 92), dark=(66, 52, 42), rust=(146, 74, 40), edge=(208, 186, 160), rust_k=0.7,
                  soot=0.4 + soot, cover=0.5),
-        band=W.mat_worn_diag("band", (150, 26, 18), (84, 58, 44), n=8, lean=0.0, under=(56, 34, 24),
+        band=W.mat_worn_diag("band", dk((150, 26, 18)), dk((84, 58, 44)), n=8, lean=0.0, under=dk((56, 34, 24)),
                              edge=(196, 170, 150), soot=0.65 + soot, dirt=0.8),
-        check=W.mat_worn_diag("check", (180, 30, 22), (190, 174, 162), n=6, lean=0.0, under=(110, 76, 62),
+        check=W.mat_worn_diag("check", dk((180, 30, 22)), dk((190, 174, 162), 0.72), n=6, lean=0.0,
+                              under=dk((110, 76, 62)),
                               edge=(210, 116, 100), soot=0.55 + soot, dirt=0.6, dirt_top=0.35, chips=0.7),
         body=iron("body", base=(132, 80, 60), dark=(80, 46, 34), rust=(136, 68, 38), edge=(206, 160, 136), rust_k=0.45,
                   dents=0.7, seams=6, soot=0.12 + soot, cover=0.52),
@@ -190,9 +210,23 @@ def upright(bm, yc, s, jag=0.0, seed=0.0):
     rings = []
     for z in zs:
         bx, fx = upright_xs(z, s)
-        if jag:      # the damaged look: torn, dented edges
+        if jag:      # the damaged look: torn, dented edges, chunks bitten out (Flash's damaged uprights)
             fx += jag * noise.noise(Vector((z * 6.0, seed, 0.3)))
             bx += jag * noise.noise(Vector((z * 6.0, seed + 4.0, 1.7)))
+            for zc, hw, dep, edge in BITES[s]:
+                u = (z - zc) / hw
+                if abs(u) < 1.0:
+                    d = dep * (1.0 - u * u) ** 0.5 * (0.75 + 0.5 * abs(noise.noise(Vector((z * 14.0, seed, 2.0)))))
+                    if edge > 0:
+                        fx -= d
+                    else:
+                        bx += d
+            if fx - bx < 0.07:
+                mid = (fx + bx) / 2
+                bx, fx = mid - 0.035, mid + 0.035
+            if s > 0 and z < KINK_Z:      # the +y upright knocked askew below a kink (Flash's leans)
+                k = 0.11 * (KINK_Z - z) / KINK_Z
+                bx, fx = bx - k, fx - k
         xs = [bx + (fx - bx) * i / cols for i in range(cols + 1)]
         ring = [bm.verts.new((x, y0, z)) for x in xs] + [bm.verts.new((x, y1, z)) for x in reversed(xs)]
         rings.append(ring)
@@ -283,17 +317,20 @@ def build_static(M, root):
 
     # the drum: a foot ring, the banded side, the rim, the black rubber ring round the pit, the pit
     W.lathe("drum_foot", [[(DRUM_R + 0.03, 0.0), (DRUM_R + 0.03, 0.05), (DRUM_R, 0.06)]], [M["rim"]], parent=root)
-    W.lathe("drum", [[(DRUM_R, 0.06), (DRUM_R, DRUM_H - 0.04)]], [M["band"]], bev=0, parent=root)
+    W.lathe("drum", [[(DRUM_R, 0.06), (DRUM_R, DRUM_H - 0.04)]], [M["band"]], bev=0, parent=root,
+            wob=0.03 if DMG else 0.0, wob_scale=5.0, seed=6.0)
     W.lathe("drum_rim", [[(DRUM_R, DRUM_H - 0.04), (DRUM_R + 0.012, DRUM_H - 0.02), (DRUM_R, DRUM_H),
                           (0.66, DRUM_H + 0.005), (0.56, DRUM_H)]], [M["rim"]], parent=root)
     W.lathe("rubber", [[(0.57, DRUM_H), (0.57, DRUM_H + 0.025), (0.545, DRUM_H + 0.05), (0.48, DRUM_H + 0.045),
                         (PIT_R + 0.01, DRUM_H + 0.02), (PIT_R, DRUM_H - 0.02)]], [M["rubber"]], bev=0.012, parent=root)
+    if DMG:
+        breach(M, root)
     pit_floor = M["lava"] if TIER >= 2 else M["pit"]
     W.lathe("pit", [[(PIT_R, DRUM_H - 0.02), (PIT_R, 0.12)], [(PIT_R, 0.12), (0.0, 0.12)]], [M["pit"], pit_floor],
             bev=0, parent=root, mat_of_seg=[0, 1])
     # brass clamps on the rim (Flash: one front-left, one at the front)
     bm = bmesh.new()
-    for b in (50, 128):
+    for b in ((50,) if DMG else (50, 128)):     # damaged: the front-left one knocked off (debris, below)
         n = bear(b)
         m = Matrix.Translation(bear(b, DRUM_R - 0.03, DRUM_H - 0.13)) @ Matrix.Rotation(math.radians(-b), 4, 'Z')
         L.rbox(bm, (0.16, 0.1, 0.17), m, bevel=0.02, segs=2)
@@ -305,7 +342,7 @@ def build_static(M, root):
     # the uprights, a boss round the bar on each face, rivets down their edges
     bm = bmesh.new()
     for s in (-1, 1):
-        upright(bm, s * UPY[s], s, jag=0.05 if DMG else 0.0, seed=3.0 * s)
+        upright(bm, s * UPY[s], s, jag=0.07 if DMG else 0.0, seed=3.0 * s)
     up = ob("uprights", bm, [M["upright"]], g, sharp=30)
     bm = bmesh.new()
     cen, nor = [], []
@@ -337,7 +374,7 @@ def build_static(M, root):
 
     # the winch wheels on brackets off the feet
     bm = bmesh.new()
-    for s in (-1, 1):
+    for s in ((1,) if DMG else (-1, 1)):        # damaged: the -y wheel smashed off (debris, below)
         y = s * SIDEY[s]
         rim = bmesh.new()
         bmesh.ops.create_cone(rim, cap_ends=True, segments=28, radius1=WHEEL_R + 0.04, radius2=WHEEL_R + 0.04, depth=0.035)
@@ -396,24 +433,36 @@ def build_weight(M, root):
     domed cap and its ring."""
     w = L.empty("WEIGHT", root)
     seg_body = [(WT_R - 0.02, WT_Z0), (WT_R, WT_Z0 + 0.03), (WT_R, WT_BODY)]
-    W.lathe("wt_body", [seg_body], [M["body"]], parent=w, wob=0.006 if not DMG else 0.03, seed=1.0)
+    W.lathe("wt_body", [seg_body], [M["body"]], parent=w, wob=0.006 if not DMG else 0.035,
+            wob_scale=2.2 if not DMG else 4.0, seed=1.0)
     W.lathe("wt_bottom", [[(WT_R - 0.02, WT_Z0), (0.0, WT_Z0)]], [M["rim"]], bev=0, parent=w)
     W.lathe("wt_foot", [L.band(WT_R, WT_R + 0.014, WT_Z0 + 0.02, WT_Z0 + 0.11, 0.008)], [M["rim"]], parent=w)   # Flash: a pale foot hoop
     W.lathe("wt_band", [[(WT_R, WT_BODY), (WT_R + 0.016, WT_BODY + 0.02), (WT_R + 0.017, WT_BODY + 0.05),
                          (WT_R + 0.002, WT_BAND - 0.012), (WT_R - 0.04, WT_BAND)]], [M["check"]], bev=0, parent=w,
-            wob=0.004 if not DMG else 0.025, seed=2.0)
-    W.lathe("wt_cap", [[(WT_R - 0.04, WT_BAND), (0.27, WT_BAND + 0.06), (0.19, WT_BAND + 0.12),
-                        (0.10, WT_BAND + 0.155), (0.0, WT_BAND + 0.165)]], [M["cap"]], parent=w,
-            wob=0.008 if not DMG else 0.02, seed=3.0)
+            wob=0.004 if not DMG else 0.045, wob_scale=2.2 if not DMG else 7.0, seed=2.0)
+    if DMG:      # the cap crushed up into a crumpled peak, the ring torn off (Flash's damaged weight)
+        cap = W.lathe("wt_cap", [[(WT_R - 0.03, WT_BAND), (0.30, WT_BAND + 0.05), (0.19, WT_BAND + 0.13),
+                                  (0.11, WT_BAND + 0.24), (0.06, WT_BAND + 0.33), (0.0, WT_BAND + 0.36)]], [M["cap"]],
+                      parent=w, wob=0.08, wob_scale=6.0, seed=3.0)
+        W.wobble(cap, 0.035, 9.0, 4.0, radial=False, zamp=0.05)
+        bm = bmesh.new()       # a bent stub where the ring was
+        L.rbox(bm, (0.05, 0.07, 0.09), Matrix.Translation((0.02, 0.0, WT_BAND + 0.36)) @ Matrix.Rotation(
+            math.radians(35), 4, 'Y'), bevel=0.015, segs=2, taper=0.6)
+        ob("wt_ring", bm, [M["frame"]], w)
+        w.rotation_euler = (math.radians(-5), math.radians(4), 0)      # knocked askew in its pit
+    else:
+        W.lathe("wt_cap", [[(WT_R - 0.04, WT_BAND), (0.27, WT_BAND + 0.06), (0.19, WT_BAND + 0.12),
+                            (0.10, WT_BAND + 0.155), (0.0, WT_BAND + 0.165)]], [M["cap"]], parent=w, wob=0.008, seed=3.0)
     bm = bmesh.new()       # the ring on top, its face toward the bar's ends (the claw comes in from above)
     sub = bmesh.new()
     bmesh.ops.create_circle(sub, segments=20, radius=1.0)
     ring_pts = [Vector((0, 0.062 * math.cos(2 * math.pi * k / 20), LUG_Z + 0.062 * math.sin(2 * math.pi * k / 20)))
                 for k in range(21)]
     sub.free()
-    L.tube(bm, ring_pts, [0.024] * 21, sides=8, cap=False)
-    L.rbox(bm, (0.07, 0.1, 0.05), Matrix.Translation((0, 0, WT_BAND + 0.145)), bevel=0.02, segs=2, taper=0.7)
-    ob("wt_ring", bm, [M["frame"]], w)
+    if not DMG:
+        L.tube(bm, ring_pts, [0.024] * 21, sides=8, cap=False)
+        L.rbox(bm, (0.07, 0.1, 0.05), Matrix.Translation((0, 0, WT_BAND + 0.145)), bevel=0.02, segs=2, taper=0.7)
+        ob("wt_ring", bm, [M["frame"]], w)
     # red straps at the body's sides (Flash: red down both silhouette edges) and rivet columns
     bm = bmesh.new()
     for b in (135, 315):
@@ -492,9 +541,69 @@ def pose(M, root, cell):
     ob("coils", bm, [M["gold"]], g)
     bm = bmesh.new()
     for s in (-1, 1):
+        if DMG and s < 0:      # damaged: its wheel gone, the -y chain snapped and hangs loose off the bar's front
+            yc = s * SIDEY[s]
+            top = [(COIL_R * math.cos(math.pi * i / 6), yc, BAR_Z + COIL_R * math.sin(math.pi * i / 6))
+                   for i in range(6, -1, -1)]
+            chain_on(bm, top + [(COIL_R + 0.02, yc, BAR_Z - 0.6), (COIL_R + 0.05, yc - 0.02, 1.25),
+                                (COIL_R + 0.12, yc - 0.03, 1.05)], 0.0, 0, side=Vector((0, 1, 0)))
+            continue
         chain_on(bm, side_loop(s * SIDEY[s], WHEEL_X[s], WHEEL_ZS[s]), turn * 1.6, 0, closed=True, side=Vector((0, 1, 0)))
     ob("side_chains", bm, [M["gold"]], g)
     bpy.context.view_layer.update()
+
+
+def breach(M, root, b0=78.0, b1=122.0):
+    """The damaged look: a ragged chunk knocked out of the drum's front (side band, rim and rubber ring), deepest in the
+    middle of bearings b0-b1; the black of the pit shows through."""
+    for name in ("drum", "drum_rim", "rubber", "drum_foot"):
+        o = bpy.data.objects[name]
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        dead = []
+        for f in bm.faces:
+            c = f.calc_center_median()
+            b = math.degrees(math.atan2(c.x, c.y)) % 360
+            if b0 < b < b1:
+                u = (b - b0) / (b1 - b0)
+                floor = DRUM_H - 0.19 * math.sin(math.pi * u) - 0.07 * noise.noise(Vector((b * 0.6, 1.0, 0.0)))
+                if c.z > floor or (name == "drum_foot" and 0.25 < u < 0.7):
+                    dead.append(f)
+        bmesh.ops.delete(bm, geom=dead, context='FACES')
+        bm.to_mesh(o.data)
+        bm.free()
+    W.lathe("breach_wall", [[(DRUM_R - 0.03, 0.06), (DRUM_R - 0.03, DRUM_H - 0.04)]], [M["pit"]],
+            bev=0, parent=root)     # dark inner skin seen through the hole
+
+
+def build_damage_debris(M, root):
+    """The damaged look's debris (Flash's: red band chunks and grey iron at the foot, the clamp knocked off): grey
+    rubble round the drum's foot, red chunks off its band at the front-left, the brass clamp on the ground, the -y
+    winch wheel fallen on its side in a heap."""
+    bm = bmesh.new()
+    W.clods(bm, [bear(40 * i + 20, 0.62 if i % 3 == 0 else 0.76 + 0.16 * ((i * 0.37) % 1.0), DRUM_H if i % 3 == 0 else 0.03)
+                 for i in range(9)],
+            r=0.06, seed=2.0)
+    W.clods(bm, [Vector((0.15 + 0.22 * ((i * 0.53) % 1.0), -0.78 - 0.32 * ((i * 0.71) % 1.0), 0.03)) for i in range(7)],
+            r=0.085, seed=5.0)                               # the heap where the wheel stood
+    for i in range(8):     # red shards off the drum's band, out of the breach
+        b = 82 + 9 * i
+        q = Matrix.Rotation(math.radians(-b + 40 * i), 4, 'Z') @ Matrix.Rotation(math.radians(25 + 17 * (i % 3)), 4, 'X')
+        L.rbox(bm, (0.13 + 0.05 * (i % 2), 0.035, 0.1 + 0.03 * (i % 3)),
+               Matrix.Translation(bear(b, DRUM_R + 0.1 + 0.16 * ((i * 0.61) % 1.0), 0.04)) @ q, bevel=0.01, segs=1, mat=1)
+    ob("rubble", bm, [M["frame"], M["strap"]], root, sharp=60)
+    bm = bmesh.new()
+    m = (Matrix.Translation(bear(146, DRUM_R + 0.2, 0.06)) @ Matrix.Rotation(math.radians(-120), 4, 'Z')
+         @ Matrix.Rotation(math.radians(70), 4, 'X'))
+    L.rbox(bm, (0.16, 0.1, 0.17), m, bevel=0.02, segs=2)
+    ob("clamp_off", bm, [M["brass"]], root)
+    bm = bmesh.new()       # the -y wheel, fallen and leaning on the heap, a bite out of its rim
+    rim = bmesh.new()
+    bmesh.ops.create_cone(rim, cap_ends=True, segments=28, radius1=WHEEL_R + 0.04, radius2=WHEEL_R + 0.04, depth=0.05)
+    bmesh.ops.delete(rim, geom=[v for v in rim.verts if v.co.x > 0.12 and v.co.y > 0.05], context='VERTS')
+    L.add_mesh(bm, rim, Matrix.Translation((0.32, -1.05, 0.12)) @ Matrix.Rotation(math.radians(30), 4, 'Z')
+               @ Matrix.Rotation(math.radians(62), 4, 'X'))
+    ob("wheel_off", bm, [M["frame"]], root)
 
 
 def build_destroyed(M, root):
@@ -534,10 +643,7 @@ def build():
     build_weight(M, root)
     build_hook(M, root)
     if DMG:
-        bm = bmesh.new()       # rubble on the foot plate and the drum's rim
-        W.clods(bm, [bear(40 * i + 20, 0.62 + 0.12 * ((i * 0.37) % 1.0), DRUM_H if i % 2 else 0.08) for i in range(9)],
-                r=0.05, seed=2.0)
-        ob("rubble", bm, [M["frame"]], root, sharp=60)
+        build_damage_debris(M, root)
     return M, root
 
 
