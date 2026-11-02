@@ -1268,10 +1268,11 @@ def compressor():
         for k in range(8, -1, -1):
             t = math.radians(90 * k / 8)
             poly.append((1.05 * math.sin(t), h + 0.8 * math.cos(t)))
-        # (r6) round in section, thick at the wall and pointed at the tip, curving out and down (Flash's tusks)
-        pts = [(AX - 0.1 + 1.5 * math.sin(math.radians(a)), yf + 0.13, h + 0.06 + 1.2 * math.cos(math.radians(a)))
-               for a in range(0, 91, 6)]
-        tube(f"fin{i}", pts, 0.34, M["fin"], r_end=0.025, verts=12, smooth=True)
+        # (r7) round dark steel tusks lying ON the right box's top by the main wall: thick at the root, rising up
+        # and curving back (toward +Y, the picture's upper right) to a point, like fins leaning back (Flash)
+        pts = [(AX + 0.5 + 0.2 * math.sin(math.radians(a)), yf + 0.9 - 1.45 * math.cos(math.radians(a)),
+                h - 0.15 + 1.5 * math.sin(math.radians(a))) for a in range(0, 91, 6)]
+        tube(f"fin{i}", pts, 0.4, M["fin"], r_end=0.03, verts=12, smooth=True)
     # (r5) Flash's machine beside the door: two fat ice-crusted drums lying on their side, one on the other, hugging
     # the wall corner on a low dark base; ice over their upper halves (frost_up on "tank"), crusty lumps of frost along
     # their tops, a few icicles; dark gaps between them (no hose)
@@ -1280,14 +1281,20 @@ def compressor():
     for i, (za, zb) in enumerate(zs):
         r = (zb - za) / 2
         zc = za + r
-        e = min(r * 0.8, tl * 0.5)              # the rounded drum ends (fat, nearly round)
-        prof = [(0.0, -tl)] + [(r - e + e * math.sin(math.pi / 2 * k / 5), -tl + e - e * math.cos(math.pi / 2 * k / 5))
-                               for k in range(6)]
-        prof += [(r * 0.98, -tl * 0.3), (r, 0.0), (r * 0.98, tl * 0.3)]
-        prof += [(r - e + e * math.sin(math.pi / 2 * k / 5), tl - e + e * math.cos(math.pi / 2 * k / 5))
-                 for k in range(5, -1, -1)] + [(0.0, tl)]
-        tk = lathe(f"tank{i}", prof, (tx, ty, zc), M["tank"], rot=(90, 0, 135), verts=40)
-        crumple_geo(tk, 0.26, 0.13)             # (r6) rougher, more broken outline
+        # (r7) a barrel lying on its side: bulging middle, round domed ends, smooth (no crumple facets)
+        re_ = r * 0.86                          # the radius where the end dome starts
+        e = min(re_ * 0.75, tl * 0.4)
+        prof = [(0.0, -tl)] + [(re_ - e + e * math.sin(math.pi / 2 * k / 8), -tl + e - e * math.cos(math.pi / 2 * k / 8))
+                               for k in range(9)]
+        prof += [(re_ + (r - re_) * math.sin(math.pi * (k / 8)), -tl + e + (2 * tl - 2 * e) * k / 8) for k in range(1, 8)]
+        prof += [(re_ - e + e * math.sin(math.pi / 2 * k / 8), tl - e + e * math.cos(math.pi / 2 * k / 8))
+                 for k in range(8, -1, -1)] + [(0.0, tl)]
+        tk = lathe(f"tank{i}", prof, (tx, ty, zc), M["tank"], rot=(90, 0, 135), verts=48)
+        for k in range(2):                      # two raised hoops round the barrel
+            u = (-0.45 + 0.9 * k) * (tl - e)
+            c = Vector((tx, ty, zc)) + ACROSS * u
+            lathe(f"tankhoop{i}{k}", [(0.0, -0.07), (r * 1.03, -0.07), (r * 1.03, 0.07), (0.0, 0.07)],
+                  (c.x, c.y, c.z), M["tank"], rot=(90, 0, 135), verts=48)
         for k in range(5):                      # crusty frost lumps along the top, gaps between them
             u = (-0.72 + 0.36 * k + rng.uniform(-0.06, 0.06)) * tl
             p = Vector((tx, ty, zc)) + ACROSS * u + ALONG * rng.uniform(-0.05, 0.4) * r
@@ -1325,23 +1332,30 @@ def top():
     box("hatchbase", (2.1, 2.1, zb - H + 0.02), (sx, sy, H - 0.02), M["core"], bevel=0.06)
     th = (lz0 + 0.02 - zb) / nsl
     for k in range(nsl):
-        hs = 1.3 - 0.05 * k + (0.03 if k == 1 else 0.0)   # half side (square, sides along X and Y like the lid)
+        # (r7) uneven: each slab a little different in size, offset and turn
+        hs = (1.3, 1.2, 1.34)[k]                # half side (square, sides along X and Y like the lid)
+        ox, oy = ((0.05, -0.03), (-0.09, 0.06), (0.07, 0.04))[k]
+        yw = math.radians((2.5, -3.5, 1.5)[k])
         z0 = zb + k * th
-        sq = rounded_poly([(sx - hs, sy - hs), (sx + hs, sy - hs), (sx + hs, sy + hs), (sx - hs, sy + hs)], 0.18, 4)
+        sq = rounded_poly([(-hs, -hs), (hs, -hs), (hs, hs), (-hs, hs)], 0.18, 4)
+        sq = [(sx + ox + x * math.cos(yw) - y * math.sin(yw), sy + oy + x * math.sin(yw) + y * math.cos(yw))
+              for x, y in sq]
         bm = bmesh.new()
         lo = [bm.verts.new((x, y, z0)) for x, y in sq]
-        hi = [bm.verts.new((x, y, z0 + th)) for x, y in sq]
+        hi = [bm.verts.new((x, y, z0 + th - (0.03 if k == 1 else 0.0))) for x, y in sq]
         bm.faces.new(lo[::-1])
         bm.faces.new(hi)
         for j in range(len(sq)):
             bm.faces.new((lo[j], lo[(j + 1) % len(sq)], hi[(j + 1) % len(sq)], hi[j]))
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         mesh_ob(f"hatchpane{k}", bm, [M["pane"]], smooth=False, bevel=0.06, segs=2)
-        tube(f"hatchpanef{k}", [(x, y, z0 + th - 0.03) for x, y in sq], 0.04, M["rimc"], cyclic=True, verts=8)
-        for j in range(5):                      # ragged lumps of frost along the two front edges
-            t = rng.uniform(-0.9, 0.9) * hs
-            at = (sx + t, sy - hs - 0.02, z0 + th - 0.04) if j % 2 else (sx - hs - 0.02, sy + t, z0 + th - 0.04)
-            snow(f"hatchfrost{k}{j}", at, rng.uniform(0.1, 0.16), squash=(1.5, 1.5, 0.7), jag=0.45)
+        # (r7) no rim lines: frost only as ragged lumps on the edges, bunched in places, bare in others
+        for j in range(7):
+            t = rng.uniform(-0.95, 0.95) * hs
+            x, y = (t, -hs - 0.02) if j % 2 else (-hs - 0.02, t)
+            at = (sx + ox + x * math.cos(yw) - y * math.sin(yw), sy + oy + x * math.sin(yw) + y * math.cos(yw),
+                  z0 + th - rng.uniform(0.02, 0.12))
+            snow(f"hatchfrost{k}{j}", at, rng.uniform(0.08, 0.2), squash=(1.6, 1.6, 0.6), jag=0.5)
     # a dark post through the middle, from the roof to the lid (the gaps between the slabs stay dark)
     box("hatchpanep0", (1.1, 1.1, lz0 - H + 0.02), (sx, sy, H - 0.02), M["core"], bevel=0.05)
     # the lid and its glowing grille
