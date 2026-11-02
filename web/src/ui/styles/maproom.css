@@ -1354,3 +1354,13 @@
     text-align: start;
   }
 }
+
+/* Map Room 2's neighbour defence bonus: the painted shield, "+11%" and "×3" (`neighbourBonusChip.ts`). */
+.mr2-chip--neighbours {
+  gap: var(--space-2);
+}
+
+.neighbour-bonus__count {
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}

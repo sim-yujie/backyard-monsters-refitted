@@ -8,6 +8,7 @@ import { createBattle } from "../../src/game/combat/rules/engine.ts";
 import { buildEngineYard } from "../../src/game/combat/rules/yard.ts";
 import { toCombatYard } from "../../src/game/combat/rules/types.ts";
 import { damagePercent } from "../../src/game/combat/rules/damagePercent.ts";
+import { neighbourDefenceBonus } from "../../src/game/combat/rules/defence.ts";
 import { kozu } from "../../../server/src/game-data/tribes/v2/kozu.ts";
 import { legionnaire } from "../../../server/src/game-data/tribes/v2/legionnaire.ts";
 import { abunaki } from "../../../server/src/game-data/tribes/v2/abunaki.ts";
@@ -127,6 +128,10 @@ if (mode === "need") {
   const settings: Record<string, { hp?: number; damage?: number }> = process.argv[3] === "single48" ? {
     "hp+48": { hp: 0.48 },
     "dmg+48": { damage: 0.48 },
+  } : process.argv[3] === "ladder" ? {
+    // The game's own table (owner's 3 Nov ladder): 1, 3 and 6 neighbours.
+    none: {},
+    ...Object.fromEntries([1, 3, 6].map((n) => [`n${n}`, neighbourDefenceBonus(n)!])),
   } : process.argv[3] === "wide" ? {
     none: {},
     "hp+24": { hp: 0.24 },

@@ -3,6 +3,8 @@
 usage: python -I make.py <art-samples/icons folder from branch art/game-icons> [name,name,...]
        python -I make.py ../../../art-samples/mr2-ground/icons range,range2,income,height
          (the Map Room ground icons: tower range, its second option, income, height)
+       python -I make.py ../../../art-samples/mr2-bonus5/icon neighbours,neighbours2
+         (Map Room 2's neighbour defence bonus, and its second option)
 
 Reads each icon's tight crop at painted size (large/<name>.png) and writes
 <name>-<side>.webp for every side in SIDES: square, the icon centred with a

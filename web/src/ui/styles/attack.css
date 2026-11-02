@@ -110,6 +110,26 @@
   display: none;
 }
 
+/* Map Room 2's neighbour defence bonus on the target (`neighbourBonusChip.ts`). */
+.attack-strip__neighbours {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-2) 1px 2px;
+  border: 1px solid var(--colour-info);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--colour-info) 16%, transparent);
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.attack-strip__neighbours .neighbour-bonus__count {
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
 .attack-strip__spacer {
   flex: 1 1 auto;
 }
@@ -328,6 +348,18 @@
   }
 
   .attack-strip__boosts .attack-strip__word {
+    display: none;
+  }
+
+  /* The neighbour bonus hangs under the strip too, right of the boosts bolt. */
+  .attack-strip__neighbours {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: calc(var(--space-2) + 36px);
+    background: var(--colour-surface-raised);
+  }
+
+  .attack-strip__neighbours .neighbour-bonus__count {
     display: none;
   }
 
