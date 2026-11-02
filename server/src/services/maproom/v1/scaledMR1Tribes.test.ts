@@ -14,19 +14,26 @@ const TRIBE = "2"; // Legionnaire, Town Hall 1-2 tier
 const ATTACK_ID = 4242;
 
 const store = new Map<string, string>();
+const sets = new Map<string, Set<string>>();
 let maproom: { userid: number; tribedata: Record<string, unknown>[] };
 let userSave: Record<string, unknown>;
 const persisted: unknown[] = [];
 /** The event counter writes (`services/events/progressStore.ts`), as `[event, amount]`. */
 const counted: [string, number][] = [];
 
+/** The stand-in ORM's entity manager: only it skips the request context (the finaliser's own). */
+const fakeOrmEm = {};
+
 mock.module("../../../server.js", () => ({
   postgres: {
+    orm: { em: fakeOrmEm },
     em: {
       populate: async (user: Record<string, unknown>) => {
         user.save = userSave;
       },
-      findOne: async () => maproom,
+      // The finaliser loads the attacker with their row; anything else is the Map Room 1 row.
+      findOne: async (entity: { name?: string }) =>
+        entity?.name === "User" ? { userid: ATTACKER, username: "attacker", save: userSave } : maproom,
       persist: (entity: unknown) => persisted.push(entity),
       flush: async () => {},
       // Only the event counter's SQL is answered; anything else fails as with no database.
@@ -52,6 +59,15 @@ mock.module("../../../server.js", () => ({
       return "OK";
     },
     del: async (key: string) => (store.delete(key) ? 1 : 0),
+    sadd: async (key: string, member: string) => {
+      const set = sets.get(key) ?? new Set<string>();
+      sets.set(key, set);
+      if (set.has(member)) return 0;
+      set.add(member);
+      return 1;
+    },
+    srem: async (key: string, member: string) => (sets.get(key)?.delete(member) ? 1 : 0),
+    smembers: async (key: string) => [...(sets.get(key) ?? [])],
   },
 }));
 
@@ -83,7 +99,26 @@ mock.module("../../base/combat/replayRunner.js", () => ({
   },
 }));
 
+const core = await import("@mikro-orm/core");
+// Kept before the stand-in replaces the module in place. Object.create keeps the
+// static getEntityManager the DB tests that run later need, and any other
+// entity manager still gets a real request context.
+const RealRequestContext = core.RequestContext;
+const realCreate = core.RequestContext.create.bind(core.RequestContext);
+mock.module("@mikro-orm/core", () => ({
+  ...core,
+  RequestContext: Object.assign(Object.create(RealRequestContext), {
+    create: (em: unknown, next: () => unknown) => (em === fakeOrmEm ? next() : realCreate(em as never, next as never)),
+  }),
+}));
+
 const { baseSave } = await import("../../../controllers/base/save/baseSave.js");
+const { attackCheckpoint } = await import("../../../controllers/base/attackCheckpoint.js");
+const { ROWLESS_CLOSE_ATTEMPTS, finaliseExpiredRowlessAttacks, finaliseRowlessAttacksOf } = await import(
+  "../../base/finaliseRowlessAttack.js"
+);
+const { mr1TribeFinalLockKey } = await import("./mr1TribeSession.js");
+const { ROWLESS_CHECKPOINT_INDEX, rowlessCheckpointKey } = await import("../../base/rowlessCheckpoint.js");
 const { combatConfig } = await import("../../../config/CombatConfig.js");
 /** The mode the suite runs in, put back after a test changes it (C7). */
 const MODE = combatConfig.mode;
@@ -177,6 +212,7 @@ beforeEach(() => {
   reports.length = 0;
   warn.mockClear();
   store.clear();
+  sets.clear();
   persisted.length = 0;
   counted.length = 0;
   maproom = { userid: ATTACKER, tribedata: [{ baseid: TRIBE, tribeHealthData: {} }] };
@@ -634,5 +670,137 @@ describe("Map Room 1 tribe save: the Krallen Hunt's loot", () => {
     startSession(ATTACKER, now(), ARMY);
     expect(await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) }))).toBeNull();
     expect(counted).toEqual([]);
+  });
+});
+
+/**
+ * Leaving never undoes the attack (owner, 2 Nov 2026): when the final save
+ * never arrives, the attacker's next load lands the attack from the last
+ * checkpoint the server holds, and never more than that record shows.
+ */
+describe("Map Room 1 tribe attack left without a save", () => {
+  const REF = { kind: "mr1" as const, userid: ATTACKER, baseid: TRIBE };
+
+  const checkpoint = async (log: unknown, tick: number) => {
+    const ctx = {
+      authUser: { userid: ATTACKER, username: "attacker" },
+      request: {
+        body: {
+          basesaveid: "0",
+          baseid: TRIBE,
+          attackid: String(ATTACK_ID),
+          tick: String(tick),
+          flinglog: JSON.stringify(log),
+          sources: JSON.stringify(["5000"]),
+        },
+      },
+      ip: "127.0.0.1",
+    } as unknown as Context & { body: Record<string, unknown> };
+    try {
+      await attackCheckpoint(ctx, async () => {});
+      return ctx.body;
+    } catch (caught) {
+      return caught as { data?: { reason?: string } };
+    }
+  };
+
+  const finalSave = () =>
+    ctxFor({ over: "1", attackid: String(ATTACK_ID), tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) });
+
+  test("the next load lands it from its last checkpoint: army spent, damage, loot, session ended", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    expect(await checkpoint(WRECK, WRECK_TICK)).toMatchObject({ stored: true });
+    const battle = serverBattle(WRECK, WRECK_TICK);
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    const { r1, r2, r3, r4 } = battle.attackloot;
+    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4 });
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 4 });
+    expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: Math.trunc(battle.damage) });
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+    expect(sets.get(ROWLESS_CHECKPOINT_INDEX)?.size ?? 0).toBe(0);
+
+    // Once: the next load finds nothing, and a late save is refused.
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect((await run(finalSave()))?.data?.reason).toBe("no-session");
+    expect((userSave.resources as Record<string, number>).r1).toBe(100 + r1);
+  });
+
+  test("never more than the record shows: the battle stops at the checkpoint's tick", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    await checkpoint(SCRATCH, SCRATCH_TICK);
+    const battle = serverBattle(SCRATCH, SCRATCH_TICK);
+    expect(battle.damage).toBeLessThan(90);
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 60 });
+    expect(maproom.tribedata[0]!.destroyed).not.toBe(1);
+    expect(maproom.tribedata[0]).toMatchObject({ damage: Math.trunc(battle.damage) });
+  });
+
+  test("a checkpoint that arrives after the save lands nothing more", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    await checkpoint(SCRATCH, SCRATCH_TICK);
+    expect(await run(finalSave())).toBeNull();
+    const snapshot = () =>
+      structuredClone({ resources: userSave.resources, monsters: userSave.monsters, tribe: maproom.tribedata[0] });
+    const after = snapshot();
+
+    expect(await checkpoint(WRECK, WRECK_TICK)).toMatchObject({ data: { reason: "no-session" } });
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(snapshot()).toEqual(after);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+  });
+
+  test("not while the save holds the attack: the checkpoint waits for the next load", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    await checkpoint(SCRATCH, SCRATCH_TICK);
+    store.set(mr1TribeFinalLockKey(ATTACKER, TRIBE), "1");
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+    store.delete(mr1TribeFinalLockKey(ATTACKER, TRIBE));
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+  });
+
+  test("a replay that keeps failing lands with no battle after a few tries: the flung monsters still spent", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    await checkpoint(SCRATCH, SCRATCH_TICK);
+    replayTimesOut = true;
+    for (let attempt = 0; attempt < ROWLESS_CLOSE_ATTEMPTS; attempt++) {
+      expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    }
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual(ARMY);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 60 });
+    expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    expect(maproom.tribedata[0]!.destroyed).not.toBe(1);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+  });
+
+  test("the minute sweep lands it only once its window has closed", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    await checkpoint(SCRATCH, SCRATCH_TICK);
+    expect(await finaliseExpiredRowlessAttacks()).toBe(0);
+    try {
+      setSystemTime(new Date(Date.now() + 421_000));
+      expect(await finaliseExpiredRowlessAttacks()).toBe(1);
+    } finally {
+      setSystemTime();
+    }
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+  });
+
+  test("an attack still open is landed by the attacker's own next load, not another player's", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    await checkpoint(SCRATCH, SCRATCH_TICK);
+    expect(await finaliseRowlessAttacksOf(OTHER, "load")).toBe(0);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
   });
 });

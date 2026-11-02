@@ -23,19 +23,26 @@ const FORCES = { bunkers: {}, defenderLevels: { IC1: 2 }, defenderChampions: [] 
 const ARMY = { C1: 200, C10: 20 };
 
 const store = new Map<string, string>();
+const sets = new Map<string, Set<string>>();
 let row: Partial<InfernoProgress> | null;
 let userSave: Record<string, unknown>;
 const persisted: unknown[] = [];
 let flushes = 0;
 const sql: string[] = [];
 
+/** The stand-in ORM's entity manager: only it skips the request context (the finaliser's own). */
+const fakeOrmEm = {};
+
 mock.module("../../server.js", () => ({
   postgres: {
+    orm: { em: fakeOrmEm },
     em: {
       populate: async (user: Record<string, unknown>) => {
         user.save = userSave;
       },
-      findOne: async () => row,
+      // The finaliser loads the attacker with their row; anything else is the Inferno progress row.
+      findOne: async (entity: { name?: string }) =>
+        entity?.name === "User" ? { userid: ATTACKER, username: "descender", save: userSave } : row,
       create: (entity: new () => object, data: object) => Object.assign(new entity(), data),
       persist: (entity: unknown) => persisted.push(entity),
       flush: async () => {
@@ -61,6 +68,15 @@ mock.module("../../server.js", () => ({
       return "OK";
     },
     del: async (key: string) => (store.delete(key) ? 1 : 0),
+    sadd: async (key: string, member: string) => {
+      const set = sets.get(key) ?? new Set<string>();
+      sets.set(key, set);
+      if (set.has(member)) return 0;
+      set.add(member);
+      return 1;
+    },
+    srem: async (key: string, member: string) => (sets.get(key)?.delete(member) ? 1 : 0),
+    smembers: async (key: string) => [...(sets.get(key) ?? [])],
   },
 }));
 
@@ -94,7 +110,23 @@ mock.module("../base/combat/replayRunner.js", () => ({
   },
 }));
 
+const core = await import("@mikro-orm/core");
+// Kept before the stand-in replaces the module in place. Object.create keeps the
+// static getEntityManager the DB tests that run later need, and any other
+// entity manager still gets a real request context.
+const RealRequestContext = core.RequestContext;
+const realCreate = core.RequestContext.create.bind(core.RequestContext);
+mock.module("@mikro-orm/core", () => ({
+  ...core,
+  RequestContext: Object.assign(Object.create(RealRequestContext), {
+    create: (em: unknown, next: () => unknown) => (em === fakeOrmEm ? next() : realCreate(em as never, next as never)),
+  }),
+}));
+
 const { baseSave } = await import("../../controllers/base/save/baseSave.js");
+const { attackCheckpoint } = await import("../../controllers/base/attackCheckpoint.js");
+const { finaliseRowlessAttacksOf } = await import("../base/finaliseRowlessAttack.js");
+const { ROWLESS_CHECKPOINT_INDEX, rowlessCheckpointKey } = await import("../base/rowlessCheckpoint.js");
 const { combatConfig } = await import("../../config/CombatConfig.js");
 const MODE = combatConfig.mode;
 const { serialiseAttackSession } = await import("../base/attackSession.js");
@@ -209,6 +241,7 @@ beforeEach(() => {
   replayTimesOut = false;
   inputs.length = 0;
   store.clear();
+  sets.clear();
   persisted.length = 0;
   flushes = 0;
   sql.length = 0;
@@ -553,5 +586,97 @@ describe("the 13th win: the Descent is passed", () => {
     expect(ctx.body.descent).toMatchObject({ won: false, level: 13, captured: false, infernobaseid: null });
     expect(row!.descent_passed_at).toBeUndefined();
     expect(sql).toEqual([]);
+  });
+});
+
+/** The client's running record of the attack on `baseid` (`POST /base/checkpoint`). */
+const sendCheckpoint = async (baseid: string, log: unknown, tick: number, sources: string[]) => {
+  const ctx = {
+    authUser: { userid: ATTACKER, username: "attacker" },
+    request: {
+      body: {
+        basesaveid: "0",
+        baseid,
+        attackid: String(ATTACK_ID),
+        tick: String(tick),
+        flinglog: JSON.stringify(log),
+        sources: JSON.stringify(sources),
+      },
+    },
+    ip: "127.0.0.1",
+  } as unknown as Context & { body: Record<string, unknown> };
+  try {
+    await attackCheckpoint(ctx, async () => {});
+    return ctx.body;
+  } catch (caught) {
+    return caught as { data?: { reason?: string } };
+  }
+};
+
+/**
+ * Leaving never undoes the attack (owner, 2 Nov 2026): when the final save
+ * never arrives, the attacker's next load lands the Descent attack from the
+ * last checkpoint the server holds, and never more than that record shows.
+ */
+describe("a Descent attack left without a save", () => {
+  const REF = { kind: "descent" as const, userid: ATTACKER, baseid: "201" };
+
+  test("the next load lands it from its last checkpoint: the battle to that tick, the loot, the yard beaten", async () => {
+    startSession();
+    const loot = { r1: 400, r2: 300, r3: 200, r4: 100 };
+    canned = { damage: 90, attackloot: loot, buildinghealthdata: { "0": 0 } };
+    expect(await sendCheckpoint("201", SCRATCH, 1_200, [MAIN_BASEID])).toMatchObject({ stored: true });
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    // The server's own battle, fought to the moment the attacker was last seen.
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]!.tick).toBe(1_200);
+    expect(userSave.iresources).toEqual({ r1: 3400, r2: 2300, r3: 1200, r4: 600 });
+    expect(row!.descent_destroyed![0]).toBe(1);
+    expect(store.has(descentSessionKey(ATTACKER))).toBe(false);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+    expect(sets.get(ROWLESS_CHECKPOINT_INDEX)?.size ?? 0).toBe(0);
+
+    // Once: the next load finds nothing, and a late save is refused.
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect((await run(finalSave()))?.data?.reason).toBe("no-session");
+    expect(userSave.iresources).toEqual({ r1: 3400, r2: 2300, r3: 1200, r4: 600 });
+    expect(inputs).toHaveLength(1);
+  });
+
+  test("a loss at the checkpoint stays a loss: the yard keeps its damage, the counter stays", async () => {
+    startSession();
+    canned = { damage: 40, attackloot: { r1: 10, r2: 0, r3: 0, r4: 0 }, buildinghealthdata: { "1": 0 } };
+    await sendCheckpoint("201", SCRATCH, 1_200, [MAIN_BASEID]);
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    expect(row!.descent_destroyed![0]).toBe(0);
+    expect(row!.descent_best![0]).toBe(40);
+    expect(store.has(descentSessionKey(ATTACKER))).toBe(false);
+  });
+
+  test("a checkpoint that arrives after the save lands nothing more", async () => {
+    startSession();
+    canned = { damage: 50, attackloot: { r1: 40, r2: 0, r3: 0, r4: 0 }, buildinghealthdata: {} };
+    expect(await run(finalSave())).toBeNull();
+    const purse = structuredClone(userSave.iresources);
+    const best = row!.descent_best![0];
+
+    expect(await sendCheckpoint("201", SCRATCH, 2_000, [MAIN_BASEID])).toMatchObject({ data: { reason: "no-session" } });
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(userSave.iresources).toEqual(purse);
+    expect(row!.descent_best![0]).toBe(best);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+  });
+
+  test("with the Inferno switched off nothing of it lands; the checkpoint waits", async () => {
+    startSession();
+    canned = { damage: 90, attackloot: { r1: 400, r2: 0, r3: 0, r4: 0 }, buildinghealthdata: {} };
+    await sendCheckpoint("201", SCRATCH, 1_200, [MAIN_BASEID]);
+    process.env.INFERNO_ENABLED = "off";
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(userSave.iresources).toEqual(PURSE);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
   });
 });
