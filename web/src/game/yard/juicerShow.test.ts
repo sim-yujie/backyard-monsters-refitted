@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mulberry32 } from "@/game/combat/rules/rng";
 import {
   blendOf,
+  isInfernoMonster,
   GIBLETS_IN_AIR_LIMIT,
   gibletPose,
   JUICER_SPOUT_HEIGHT,
@@ -118,5 +119,12 @@ describe("planGiblets (GIBLETS.Create)", () => {
     const middle = gibletPose(giblet!, giblet!.duration / 2)!;
     expect(middle.lift).toBeCloseTo(giblet!.hop);
     expect(gibletPose(giblet!, giblet!.duration)).toBeNull();
+  });
+  it("throws magma for an Inferno monster, as BUILDING9.Blend's IC test, and goo for the rest", () => {
+    expect(isInfernoMonster("IC1")).toBe(true);
+    expect(isInfernoMonster("IC7")).toBe(true);
+    expect(isInfernoMonster("C6")).toBe(false);
+    expect(isInfernoMonster("C14")).toBe(false);
+    expect(isInfernoMonster("G1")).toBe(false);
   });
 });

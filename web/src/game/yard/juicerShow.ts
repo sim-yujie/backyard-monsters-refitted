@@ -51,6 +51,9 @@ export const SPURT_CAP = 70;
 /** What one monster adds to the blend: `ceil(_goo / 400)`, `_goo` its hatch cost (`CreepBase.as:1287`). */
 export const blendOf = (hatchCost: number): number => Math.ceil(Math.max(0, hatchCost) / 400);
 
+/** An Inferno monster, whose goo ball is magma (`BUILDING9.as:55`: `substr(0, 2) == "IC"`). */
+export const isInfernoMonster = (monster: string): boolean => monster.startsWith("IC");
+
 /** How many giblets a spurt throws for a blend at a Juicer level (`BUILDING9.as:100-109`). */
 export const spurtAmount = (blend: number, level: number): number => {
   let amount = Math.min(Math.floor(blend), SPURT_CAP);

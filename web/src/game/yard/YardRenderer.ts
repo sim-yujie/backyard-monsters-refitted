@@ -12,7 +12,7 @@ import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
 import { MAX_JUICE_WALKERS, YardLifeLayer } from "./YardLifeLayer";
 import { holdBack, juicerDoor, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
 import { YardGibletsLayer } from "./YardGibletsLayer";
-import { blendOf, JUICER_SPOUT, JuicerBlend, planGiblets } from "./juicerShow";
+import { blendOf, isInfernoMonster, JUICER_SPOUT, JuicerBlend, planGiblets } from "./juicerShow";
 import type { JuicedNews } from "@/game/monsters/juiceNews";
 import { flyerAltitude } from "@/game/attack/monsterSprites";
 import { playEffect } from "@/game/sound/sound";
@@ -140,6 +140,8 @@ export class YardRenderer {
   private readonly juiceNews = new Map<number, JuicedNews>();
   /** Blend of monsters juiced but not walked there, added with the next arrival. */
   private readonly unwalked = new Map<number, number>();
+  /** Juicers whose last arrival was an Inferno monster: their balls are magma (`_lastType` 8). */
+  private readonly magmaLast = new Set<number>();
 
   /**
    * Where the planner hangs its world-space decals: the tower range discs and
@@ -806,13 +808,16 @@ export class YardRenderer {
     const cost = news.hatchCost[monster] ?? 0;
     blend.add(blendOf(cost) + (this.unwalked.get(id) ?? 0));
     this.unwalked.delete(id);
+    if (isInfernoMonster(monster)) this.magmaLast.add(id);
+    else this.magmaLast.delete(id);
     this.throwJuice(id, Math.ceil(cost * news.rate));
   }
 
   /**
    * Goo balls from the Juicer to the Town Hall (`ResourcePackages.Create`,
-   * `BUILDING9.as:66`, `:85`). Drawing only: the goo is banked already, so a
-   * landing adds nothing.
+   * `BUILDING9.as:66`, `:85`): Flash's goo ball, or its magma ball when the
+   * last monster in was an Inferno one. Drawing only: the goo is banked
+   * already, so a landing adds nothing.
    */
   private throwJuice(id: number, amount: number): void {
     const juicer = this.byId.get(id);
@@ -825,7 +830,13 @@ export class YardRenderer {
       const offset = this.buildings.offsetOf(building.id);
       return { x: building.worldX + offset.x, y: building.worldY + offset.y };
     };
-    const flights = planFlights([{ type: juicer.type, ...at(juicer), resource: "r4", amount }], at(hall));
+    const planned = planFlights(
+      [{ type: juicer.type, ...at(juicer), resource: "r4", amount }],
+      at(hall),
+    );
+    const flights = this.magmaLast.has(id)
+      ? planned.map((flight) => ({ ...flight, dot: "magma" as const }))
+      : planned;
     if (flights.length > 0) this.collect.launch(flights, () => undefined);
   }
 
@@ -836,6 +847,7 @@ export class YardRenderer {
       const juicer = this.byId.get(id);
       if (!juicer) {
         this.blends.delete(id);
+        this.magmaLast.delete(id);
         continue;
       }
       if (!blend.running) continue;
@@ -1079,6 +1091,7 @@ export class YardRenderer {
     this.collect.destroy();
     this.giblets.destroy();
     this.blends.clear();
+    this.magmaLast.clear();
     this.life.destroy();
     this.clearMushrooms();
     this.popping.clear();

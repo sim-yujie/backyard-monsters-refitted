@@ -109,6 +109,11 @@ export interface BankSource {
 /** One ball. Positions are world px; times are seconds from the throw. */
 export interface Flight {
   readonly resource: HarvestKey;
+  /**
+   * The ball's picture when it is not the resource's own: `magma`, the
+   * Juicer's ball for an Inferno monster (`BUILDING9.as:66`).
+   */
+  readonly dot?: "magma";
   /** What its landing adds to the pool. */
   readonly share: number;
   readonly fromX: number;
