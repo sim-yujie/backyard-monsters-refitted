@@ -52,16 +52,17 @@ RISE = (0.0, 0.3, 0.6)[TIER - 1]                    # how much taller each look'
 
 # ---- the measurements (units: 37.5 game px; the world's origin is the footprint's middle on the ground)
 DRUM_R, DRUM_H = 0.70, 0.26
-PIT_R = 0.41
-WT_R = 0.375                                        # the weight's radius
+PIT_R = 0.43
+WT_R = 0.39                                         # the weight's radius (fix 3 Nov: Flash's fills the gap)
 WT_Z0 = 0.27                                        # its foot at rest
-WT_BODY = 1.25                                      # its plated body's top
+WT_BODY = 1.19                                      # its plated body's top (Flash's band is twice as deep)
 WT_BAND = 1.33                                      # its red and white shoulder's top
-UP_Y, UP_T = 0.55, 0.12                             # the uprights' middles (+-y) and thickness
-BAR_Z = 2.84 + RISE                                 # the crossbar's axis
+UP_T = 0.15                                         # the uprights' thickness
+UPY = {-1: 0.74, 1: 0.66}                           # their middles (3 Nov: wider apart, as Flash; the +y one steps out back)
+BAR_Z = 2.74 + RISE                                 # the crossbar's axis
 BAR_R = 0.09
-BAR_Y = (-1.17, 1.03)
-SIDE_Y = 0.86                                       # the side chains' loops (+-y)
+BAR_Y = (-1.105, 0.96)
+SIDEY = {-1: 0.915, 1: 0.84}                        # the side chains' loops, just outside the uprights
 WHEEL_Z, WHEEL_R = 0.43, 0.2                        # the winch wheels' axles and radius
 WHEEL_X = {-1: 0.18, 1: 0.0}                        # their axles' x (Flash: the -y one stands further forward)
 WHEEL_ZS = {-1: 0.54, 1: WHEEL_Z}                   # and height (the -y one higher)
@@ -69,9 +70,9 @@ COIL_R = 0.14                                       # chain wound round the bar:
 HANG = 0.66                                         # the claw's tip at rest, below the bar's axis
 LUG_Z = WT_BAND + 0.23                              # the ring on the weight's cap, its middle at rest
 SPIN = float(os.environ.get("QUAKE_SPIN", "-35"))     # the claw's turn at rest (its bow to the left, Flash)
-LINK = 0.062                                        # chain pitch
+LINK = 0.056                                        # chain pitch
 HX = -0.10                                          # the claw's stem, behind the ring (it curls through it to +x)
-GY = -0.07                                          # the gantry stands this far toward -y of the drum (Flash)
+GY = -0.015                                         # the gantry stands this far toward -y of the drum (Flash)
 
 # Flash's strike, per cell: the weight's lift in screen px (1x) and the claw's drop (0-1 of the way to the ring)
 LIFT_PX = [0] * 14 + [1, 2, 4, 6, 7, 8, 10, 11, 12, 13, 15, 15, 16, 17, 17, 15, 11, 5, 0]
@@ -80,39 +81,70 @@ PX = 37.5 * math.cos(math.radians(L.EL))           # screen px (1x) per unit of 
 
 
 # --------------------------------------------------------------------------------------------------------- materials
+WARM_SHADE = [(0.0, (0.30, 0.25, 0.20, 1)), (0.18, (0.44, 0.37, 0.30, 1)), (0.5, (0.80, 0.72, 0.62, 1)),
+              (1.0, (1.0, 0.95, 0.86, 1))]
+
+
+def rusty(name, base=(86, 70, 60), dark=(42, 33, 29), rust=(150, 76, 36), edge=(170, 148, 120), rust_k=0.85,
+          soot=0.3, dents=1.0, dirt=0.45, spec=0.1, spec_col=(1.0, 0.86, 0.7, 1), cover=0.46, seams=0):
+    """worn3d.mat_iron made rustier and warmer for the Quake Tower (lead's check 3 Nov: Flash is rusty brown with soot,
+    the 3D was clean grey-purple): more rust (cover: the noise level where rust starts), soot, a warm shade ramp."""
+    p = L.Paint(name)
+    col = p.ramp(p.noise(2.5, 4.0, 0.6), [(0.3, srgb(*dark)), (0.7, srgb(*base))])
+    if seams:
+        idx, f, _ = W._stave(p, seams, wob=0.0)
+        col = p.mix(col, p.ramp(W._white(p, idx), [(0.0, W._grey(0.8)), (1.0, W._grey(1.12))]), 1.0, 'MULTIPLY')
+        d = p.math("MINIMUM", f, p.math("SUBTRACT", 1.0, f))
+        col = p.mix(col, srgb(*[int(c * 0.35) for c in dark]), p.ramp(d, [(0.02, W.WHITE), (0.045, W.BLACK)]))
+    convex, concave = W._attr(p)
+    rn = p.math("ADD", p.noise(4.0, 8.0, 0.66), p.math("MULTIPLY", concave, 0.35))
+    rm = p.ramp(rn, [(cover, W.BLACK), (cover + 0.1, W._grey(rust_k))])
+    rcol = p.ramp(p.noise(11.0, 4.0), [(0.35, srgb(*[int(c * 0.55) for c in rust])), (0.65, srgb(*rust))])
+    col = p.mix(col, rcol, rm)
+    pit = p.ramp(p.noise(18.0, 3.0), [(0.62, W.BLACK), (0.68, W.WHITE)])
+    col = p.mix(col, srgb(*[int(c * 0.4) for c in dark]), p.math("MULTIPLY", W._bw(p, pit), 0.75))
+    dent = W._voronoi(p, 9.0)
+    col = p.mix(col, p.ramp(dent, [(0.05, W._grey(0.78)), (0.4, W._grey(1.06))]), 1.0, 'MULTIPLY')
+    col = W.weather(p, col, edge=edge, edge_k=0.6, cavity=0.7, dirt=dirt, soot=soot, streaks=0.3)
+    h = p.math("MULTIPLY", p.math("ADD", p.math("MULTIPLY", dent, dents), p.math("MULTIPLY", W._bw(p, pit), -0.15)), 2.5)
+    return p.finish(col, spec=spec, spec_rough=0.5, spec_col=spec_col, metal=True, bump=(h, 0.8), shade=WARM_SHADE,
+                    edge_dark=0.45, sheen=0.04)
+
+
 def materials():
-    iron = W.mat_iron
-    soot = 0.45 if DMG else 0.0
+    iron = rusty
+    soot = 0.25 if DMG else 0.0
     M = dict(
-        upright=iron("upright", base=(110, 94, 94), dark=(52, 44, 46), rust=(132, 72, 50), edge=(206, 186, 180),
-                     rust_k=0.55 + (0.25 if DMG else 0), soot=soot, dents=0.8),
-        frame=iron("frame", base=(92, 80, 78), dark=(46, 38, 38), rust=(130, 70, 44), edge=(184, 166, 160), rust_k=0.6,
-                   soot=soot),
-        bar=iron("bar", base=(110, 96, 94), dark=(54, 44, 44), rust=(130, 70, 44), edge=(210, 196, 190), rust_k=0.45,
-                 soot=soot),
-        cap=iron("cap", base=(132, 122, 122), dark=(64, 56, 58), rust=(150, 84, 52), edge=(232, 224, 220), rust_k=0.45,
-                 dents=1.4, soot=0.35 + soot),
-        rim=iron("rim", base=(150, 128, 124), dark=(80, 66, 64), rust=(140, 76, 48), edge=(226, 210, 204), rust_k=0.5,
-                 soot=soot),
-        band=W.mat_worn_diag("band", (178, 30, 24), (112, 92, 88), n=8, lean=0.0, under=(70, 50, 44),
-                             edge=(220, 200, 190), soot=0.4 + soot, dirt=0.6),
-        check=W.mat_worn_diag("check", (186, 30, 24), (198, 184, 178), n=6, lean=0.0, under=(120, 84, 74),
-                              edge=(214, 120, 108), soot=0.45 + soot, dirt=0.5, dirt_top=0.3, chips=0.6),
-        body=iron("body", base=(106, 64, 54), dark=(66, 38, 32), rust=(124, 62, 38), edge=(206, 160, 144), rust_k=0.4,
-                  dents=0.7, seams=6, soot=soot),
-        strap=iron("strap", base=(170, 40, 30), dark=(96, 22, 18), rust=(120, 60, 34), edge=(220, 150, 130), rust_k=0.4,
-                   dents=0.6, soot=soot),
-        rubber=L.mat_flat("rubber", (44, 36, 34), spec=0.2),
+        upright=iron("upright", base=(90, 78, 64), dark=(38, 32, 26), rust=(132, 66, 34), edge=(172, 150, 122),
+                     rust_k=0.65 + (0.2 if DMG else 0), soot=0.45 + soot, dents=0.8, cover=0.5),
+        frame=iron("frame", base=(84, 72, 58), dark=(34, 28, 23), rust=(128, 64, 32), edge=(160, 140, 114), rust_k=0.7,
+                   soot=0.4 + soot, cover=0.5),
+        bar=iron("bar", base=(92, 82, 66), dark=(38, 33, 27), rust=(130, 66, 34), edge=(184, 164, 132), rust_k=0.55,
+                 soot=0.35 + soot, cover=0.52),
+        cap=iron("cap", base=(122, 106, 92), dark=(56, 46, 40), rust=(150, 80, 44), edge=(214, 196, 176), rust_k=0.6,
+                 dents=1.4, soot=0.5 + soot, cover=0.5),
+        rim=iron("rim", base=(132, 110, 92), dark=(66, 52, 42), rust=(146, 74, 40), edge=(208, 186, 160), rust_k=0.7,
+                 soot=0.4 + soot, cover=0.5),
+        band=W.mat_worn_diag("band", (158, 28, 20), (96, 76, 64), n=8, lean=0.0, under=(60, 40, 32),
+                             edge=(196, 170, 150), soot=0.65 + soot, dirt=0.8),
+        check=W.mat_worn_diag("check", (180, 30, 22), (190, 174, 162), n=6, lean=0.0, under=(110, 76, 62),
+                              edge=(210, 116, 100), soot=0.55 + soot, dirt=0.6, dirt_top=0.35, chips=0.7),
+        body=iron("body", base=(98, 58, 44), dark=(56, 32, 24), rust=(124, 60, 32), edge=(196, 150, 128), rust_k=0.5,
+                  dents=0.7, seams=6, soot=0.3 + soot, cover=0.5),
+        strap=iron("strap", base=(160, 38, 26), dark=(90, 22, 16), rust=(120, 56, 30), edge=(212, 140, 118), rust_k=0.5,
+                   dents=0.6, soot=0.3 + soot, cover=0.5),
+        rubber=L.mat_flat("rubber", (40, 32, 28), spec=0.2),
         pit=L.mat_flat("pit", (14, 10, 9), spec=0.0),
-        gold=iron("gold", base=(178, 136, 50), dark=(92, 64, 20), rust=(110, 90, 40), edge=(250, 226, 150), rust_k=0.25,
-                  dents=0.3, spec=0.45, spec_col=(1.0, 0.9, 0.6, 1)),
-        brass=iron("brass", base=(214, 166, 52), dark=(130, 92, 20), rust=(110, 90, 40), edge=(252, 232, 150),
-                   rust_k=0.2, dents=0.4, spec=0.5, spec_col=(1.0, 0.9, 0.6, 1)),
-        claw=iron("claw", base=(228, 140, 72), dark=(150, 78, 34), rust=(120, 60, 30), edge=(255, 214, 160), rust_k=0.3,
-                  dents=0.4, spec=0.4),
-        block=iron("block", base=(150, 140, 140), dark=(80, 72, 74), rust=(130, 76, 50), edge=(228, 220, 216),
-                   rust_k=0.4, soot=soot),
-        rivet=iron("rivet", base=(70, 54, 48), dark=(36, 28, 24), rust=(120, 64, 36), edge=(170, 150, 136), rust_k=0.5),
+        # the chains: Flash's are dull dark brass-brown (mean (81, 69, 34) on the sheet), not bright gold
+        gold=iron("gold", base=(112, 90, 42), dark=(52, 40, 16), rust=(96, 62, 28), edge=(176, 148, 86), rust_k=0.35,
+                  dents=0.3, spec=0.18, spec_col=(0.9, 0.78, 0.5, 1), soot=0.25, dirt=0.4, cover=0.55),
+        brass=iron("brass", base=(196, 150, 50), dark=(118, 84, 20), rust=(110, 84, 36), edge=(240, 216, 140),
+                   rust_k=0.3, dents=0.4, spec=0.4, spec_col=(1.0, 0.9, 0.6, 1), soot=0.25, cover=0.55),
+        claw=iron("claw", base=(214, 128, 64), dark=(140, 70, 30), rust=(120, 60, 30), edge=(250, 204, 150), rust_k=0.3,
+                  dents=0.4, spec=0.35, soot=0.1, cover=0.6),
+        block=iron("block", base=(132, 118, 106), dark=(70, 58, 50), rust=(140, 74, 44), edge=(212, 196, 180),
+                   rust_k=0.6, soot=0.35 + soot, cover=0.5),
+        rivet=iron("rivet", base=(66, 50, 42), dark=(32, 25, 20), rust=(120, 62, 34), edge=(160, 140, 122), rust_k=0.5),
     )
     if TIER >= 2:
         M.update(brimstone=W.mat_brimstone("brimstone"), lava=W.mat_lava("lava"))
@@ -132,24 +164,24 @@ def rot_x90():
     return Matrix.Rotation(math.radians(-90), 4, 'X')
 
 
-def upright_xs(z):
+def upright_xs(z, s=-1):
     """The upright's back and front edge (x) at height z: narrow at the head, stepping out toward the front below a
     concave fillet, a round head about the bar."""
-    z1, z2, hr = 1.55, 2.05, 0.15
+    z1, z2, hr = 1.75, 2.2, 0.13           # 3 Nov: narrower, as Flash's (head 0.26, foot 0.42 across)
     if z > BAR_Z:
         h = max(0.0, hr * hr - (z - BAR_Z) ** 2) ** 0.5
         return -h, h
     if z <= z1:
-        front = 0.36
+        front = 0.29
     elif z <= z2:
-        s = (z - z1) / (z2 - z1)
-        front = 0.15 + 0.21 * (1 - s) ** 2
+        t = (z - z1) / (z2 - z1)
+        front = hr + (0.29 - hr) * (1 - t) ** 2
     else:
-        front = 0.15
-    return -0.15, front
+        front = hr
+    return (-hr, front) if s < 0 else (-front, hr)   # the +y one mirrored: steps out toward the back (Flash)
 
 
-def upright(bm, yc, jag=0.0, seed=0.0):
+def upright(bm, yc, s, jag=0.0, seed=0.0):
     """One upright: the profile lofted up z as a closed section (the two faces and the edges), so its faces are a quad grid."""
     y0, y1 = yc - UP_T / 2, yc + UP_T / 2
     zs = [0.08 + (BAR_Z - 0.08) * i / 44 for i in range(45)]
@@ -157,7 +189,7 @@ def upright(bm, yc, jag=0.0, seed=0.0):
     cols = 6
     rings = []
     for z in zs:
-        bx, fx = upright_xs(z)
+        bx, fx = upright_xs(z, s)
         if jag:      # the damaged look: torn, dented edges
             fx += jag * noise.noise(Vector((z * 6.0, seed, 0.3)))
             bx += jag * noise.noise(Vector((z * 6.0, seed + 4.0, 1.7)))
@@ -172,7 +204,7 @@ def upright(bm, yc, jag=0.0, seed=0.0):
     bm.faces.new(rings[-1])
 
 
-def chain_link(bm, c, d, nrm, mat, ln=0.074, wd=0.05, r=0.0155):
+def chain_link(bm, c, d, nrm, mat, ln=0.066, wd=0.042, r=0.0115):
     """One oval link at c, long along d, lying in the plane of d and nrm."""
     d = d.normalized()
     s = nrm - d * nrm.dot(d)
@@ -253,9 +285,9 @@ def build_static(M, root):
     W.lathe("drum_foot", [[(DRUM_R + 0.03, 0.0), (DRUM_R + 0.03, 0.05), (DRUM_R, 0.06)]], [M["rim"]], parent=root)
     W.lathe("drum", [[(DRUM_R, 0.06), (DRUM_R, DRUM_H - 0.04)]], [M["band"]], bev=0, parent=root)
     W.lathe("drum_rim", [[(DRUM_R, DRUM_H - 0.04), (DRUM_R + 0.012, DRUM_H - 0.02), (DRUM_R, DRUM_H),
-                          (0.64, DRUM_H + 0.005), (0.54, DRUM_H)]], [M["rim"]], parent=root)
-    W.lathe("rubber", [[(0.55, DRUM_H), (0.55, DRUM_H + 0.035), (0.52, DRUM_H + 0.07), (0.46, DRUM_H + 0.065),
-                        (PIT_R + 0.01, DRUM_H + 0.03), (PIT_R, DRUM_H - 0.02)]], [M["rubber"]], bev=0.012, parent=root)
+                          (0.66, DRUM_H + 0.005), (0.56, DRUM_H)]], [M["rim"]], parent=root)
+    W.lathe("rubber", [[(0.57, DRUM_H), (0.57, DRUM_H + 0.025), (0.545, DRUM_H + 0.05), (0.48, DRUM_H + 0.045),
+                        (PIT_R + 0.01, DRUM_H + 0.02), (PIT_R, DRUM_H - 0.02)]], [M["rubber"]], bev=0.012, parent=root)
     pit_floor = M["lava"] if TIER >= 2 else M["pit"]
     W.lathe("pit", [[(PIT_R, DRUM_H - 0.02), (PIT_R, 0.12)], [(PIT_R, 0.12), (0.0, 0.12)]], [M["pit"], pit_floor],
             bev=0, parent=root, mat_of_seg=[0, 1])
@@ -273,24 +305,24 @@ def build_static(M, root):
     # the uprights, a boss round the bar on each face, rivets down their edges
     bm = bmesh.new()
     for s in (-1, 1):
-        upright(bm, s * UP_Y, jag=0.05 if DMG else 0.0, seed=3.0 * s)
+        upright(bm, s * UPY[s], s, jag=0.05 if DMG else 0.0, seed=3.0 * s)
     up = ob("uprights", bm, [M["upright"]], g, sharp=30)
     bm = bmesh.new()
     cen, nor = [], []
     for s in (-1, 1):
         for z in [0.45 + 0.3 * i for i in range(int((BAR_Z - 0.6) / 0.3))]:
-            bx, fx = upright_xs(z)
+            bx, fx = upright_xs(z, s)
             for x in (bx + 0.05, fx - 0.05):
-                cen.append((x, s * (UP_Y + UP_T / 2), z))
+                cen.append((x, s * (UPY[s] + UP_T / 2), z))
                 nor.append((0, s, 0))
     W.rivets(bm, cen, nor, r=0.022)
     ob("up_rivets", bm, [M["rivet"]], g)
     bm = bmesh.new()
     for s in (-1, 1):
         for face in (-1, 1):
-            y = s * UP_Y + face * (UP_T / 2 + 0.02)
+            y = s * UPY[s] + face * (UP_T / 2 + 0.015)
             sub = bmesh.new()
-            bmesh.ops.create_cone(sub, cap_ends=True, segments=20, radius1=0.15, radius2=0.13, depth=0.04)
+            bmesh.ops.create_cone(sub, cap_ends=True, segments=20, radius1=0.15, radius2=0.13, depth=0.03)
             L.add_mesh(bm, sub, Matrix.Translation((0, y, BAR_Z)) @ Matrix.Rotation(math.radians(90 * face), 4, 'X'))
     ob("bosses", bm, [M["frame"]], g)
 
@@ -306,7 +338,7 @@ def build_static(M, root):
     # the winch wheels on brackets off the feet
     bm = bmesh.new()
     for s in (-1, 1):
-        y = s * SIDE_Y
+        y = s * SIDEY[s]
         rim = bmesh.new()
         bmesh.ops.create_cone(rim, cap_ends=True, segments=28, radius1=WHEEL_R + 0.04, radius2=WHEEL_R + 0.04, depth=0.035)
         for dy in (-0.04, 0.04):
@@ -316,8 +348,8 @@ def build_static(M, root):
         bmesh.ops.create_cone(hub, cap_ends=True, segments=20, radius1=WHEEL_R - 0.02, radius2=WHEEL_R - 0.02, depth=0.05)
         L.add_mesh(bm, hub, Matrix.Translation((WHEEL_X[s], y, WHEEL_ZS[s])) @ Matrix.Rotation(math.radians(90), 4, 'X'))
         ax = bmesh.new()
-        bmesh.ops.create_cone(ax, cap_ends=True, segments=16, radius1=0.05, radius2=0.05, depth=abs(y) - UP_Y + 0.12)
-        L.add_mesh(bm, ax, Matrix.Translation((WHEEL_X[s], s * (UP_Y + (abs(y) - UP_Y + 0.12) / 2), WHEEL_ZS[s]))
+        bmesh.ops.create_cone(ax, cap_ends=True, segments=16, radius1=0.05, radius2=0.05, depth=abs(y) - UPY[s] + 0.12)
+        L.add_mesh(bm, ax, Matrix.Translation((WHEEL_X[s], s * (UPY[s] + (abs(y) - UPY[s] + 0.12) / 2), WHEEL_ZS[s]))
                    @ Matrix.Rotation(math.radians(90), 4, 'X'))
         L.rbox(bm, (0.16, 0.07, WHEEL_ZS[s] - 0.09), Matrix.Translation((WHEEL_X[s], y + s * 0.1, 0.12)), bevel=0.02, segs=2)
         W.bolts(bm, [(WHEEL_X[s] + r * math.cos(a), y + s * 0.065, WHEEL_ZS[s] + r * math.sin(a)) for r in (0.1,)
@@ -331,10 +363,10 @@ def build_static(M, root):
         bm = bmesh.new()     # forged steel straps across the uprights, riveted
         for s in (-1, 1):
             for z in (0.7, 1.6, BAR_Z - 0.45):
-                bx, fx = upright_xs(z)
-                L.rbox(bm, (fx - bx + 0.04, UP_T + 0.04, 0.09), Matrix.Translation(((bx + fx) / 2, s * UP_Y, z)),
+                bx, fx = upright_xs(z, s)
+                L.rbox(bm, (fx - bx + 0.04, UP_T + 0.04, 0.09), Matrix.Translation(((bx + fx) / 2, s * UPY[s], z)),
                        bevel=0.015, segs=2)
-                W.rivets(bm, [(x, s * (UP_Y + UP_T / 2 + 0.02), z + 0.045) for x in (bx + 0.06, fx - 0.06)],
+                W.rivets(bm, [(x, s * (UPY[s] + UP_T / 2 + 0.02), z + 0.045) for x in (bx + 0.06, fx - 0.06)],
                          [(0, s, 0)] * 2, r=0.02)
         ob("straps", bm, [M["forged"]], g)
 
@@ -366,6 +398,7 @@ def build_weight(M, root):
     seg_body = [(WT_R - 0.02, WT_Z0), (WT_R, WT_Z0 + 0.03), (WT_R, WT_BODY)]
     W.lathe("wt_body", [seg_body], [M["body"]], parent=w, wob=0.006 if not DMG else 0.03, seed=1.0)
     W.lathe("wt_bottom", [[(WT_R - 0.02, WT_Z0), (0.0, WT_Z0)]], [M["rim"]], bev=0, parent=w)
+    W.lathe("wt_foot", [L.band(WT_R, WT_R + 0.014, WT_Z0 + 0.02, WT_Z0 + 0.11, 0.008)], [M["rim"]], parent=w)   # Flash: a pale foot hoop
     W.lathe("wt_band", [[(WT_R, WT_BODY), (WT_R + 0.016, WT_BODY + 0.02), (WT_R + 0.017, WT_BODY + 0.05),
                          (WT_R + 0.002, WT_BAND - 0.012), (WT_R - 0.04, WT_BAND)]], [M["check"]], bev=0, parent=w,
             wob=0.004 if not DMG else 0.025, seed=2.0)
@@ -455,11 +488,11 @@ def pose(M, root, cell):
     bm = bmesh.new()
     coil(bm, -GY, 3.0, 0.2, turn, 0)
     for s in (-1, 1):
-        coil(bm, s * SIDE_Y, 2.0, 0.14, -turn, 0)
+        coil(bm, s * SIDEY[s], 2.0, 0.09, -turn, 0)
     ob("coils", bm, [M["gold"]], g)
     bm = bmesh.new()
     for s in (-1, 1):
-        chain_on(bm, side_loop(s * SIDE_Y, WHEEL_X[s], WHEEL_ZS[s]), turn * 1.6, 0, closed=True, side=Vector((0, 1, 0)))
+        chain_on(bm, side_loop(s * SIDEY[s], WHEEL_X[s], WHEEL_ZS[s]), turn * 1.6, 0, closed=True, side=Vector((0, 1, 0)))
     ob("side_chains", bm, [M["gold"]], g)
     bpy.context.view_layer.update()
 
@@ -531,6 +564,9 @@ def main():
         cells = range(33) if what == "cells" else [int(a) for a in ARGS[2:]] or [0]
         for c in cells:
             pose(M, root, c)
+            for name in filter(None, os.environ.get("QUAKE_HIDE", "").split(",")):   # debugging: leave parts out
+                if bpy.data.objects.get(name):
+                    bpy.data.objects.remove(bpy.data.objects[name])
             L.shot(out / f"{prefix}-{c:02d}.png", L.objs_under(root))
             print("CELL", c, flush=True)
     elif what == "destroyed":
