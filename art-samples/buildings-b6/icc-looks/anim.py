@@ -13,8 +13,20 @@ Each frame is base + pulse(t) x (glow + light) + flicker(t) x cracks, in linear 
 (sRGB). glow is the crystal's own glow at peak (shell and core), light the light it throws (its point light); pulse 1 =
 peak. cracks is the drum's crack glow
 (already in base at full strength); flicker adds or takes away a little of it. lava is the light the magma pool throws
-onto the building (rim stones, pods, legs, bowl): added steady, LAVA x, in idle and active alike, with a soft warm
-glow on the grass round the pool's rim (the pool's own area, blurred).
+onto the building (rim stones, pods, legs, bowl), LAVA x, in idle and active alike, with a soft warm glow on the grass
+round the pool's rim (the pool's own area, blurred).
+
+The lava breathes (owner, 2 Nov 2026: "the soft animated glow of the lava"): all of its light (what base has, LAVA x
+more, the grass glow and the warm wash) swells and fades together between BREATH_LO and 1 of its full strength, one
+smooth cosine every BREATH_S seconds, and the pool's own surface dips a little with it (POOL_DIP). The crystal's glow and
+pulse are as before. So the loops are as long as one breath: active NA = 64 frames (the crystal pulses twice, the lava
+breathes once), idle NI = 32 frames played at half the game's rate (the game's `rest` cells), so a breath is 4.8 s in
+both and the lava keeps its phase when the building starts or stops hatching (idle cell i = active cell 2i's lava).
+
+    python anim.py game      render/game/: the game's cells for web/tools/tower-tiers/export3d_buildings.py ("icc"):
+                             idle-NN.png, active-NN.png (the building and its glows, no ground shadow) and shadow.png
+                             (the ground shadow alone, as alpha), all on look C's whole render canvas
+                             icc-c-idle.mp4, icc-c-active.mp4 (rebuilt from the game's cells, as the game plays them)
 """
 import math
 import subprocess
@@ -46,6 +58,11 @@ LAVA_HALO = 0.60              # the soft warm glow on the grass just outside the
 LAVA_SIGMA = 60               # its blur radius in render px
 LAVA_WASH = 0.06              # the same glow as a faint warm wash on the parts next to the pool (rim stones, legs, pods)
 LAVA_COL = (1.0, 0.30, 0.05)  # linear warm orange, a little redder than the crystal's halo
+NA = 64                       # active loop: two crystal pulses, one lava breath (4.8 s)
+NI = 32                       # idle loop: one lava breath, each frame shown twice by the game (4.8 s)
+BREATH_LO = 0.70              # the lava light at the low of a breath, as a share of its full strength
+POOL_DIP = 0.10               # how much the pool's own surface dims at the low of a breath (linear)
+NOISE = 0.012                 # the shadow catcher's faint wash over the open ground, taken off the shadow
 
 
 def pulse(k):
@@ -54,6 +71,12 @@ def pulse(k):
     s = 0.5 - 0.5 * math.cos(t) + 0.05 * math.sin(2 * t)
     s = (s + 0.01) / 1.02
     return LO + (1 - LO) * max(0.0, min(1.0, s))
+
+
+def breath(k, n):
+    """The lava's strength at frame k of an n-frame loop: one smooth cosine breath, full (1.0) at frame 0, BREATH_LO
+    half way."""
+    return BREATH_LO + (1 - BREATH_LO) * (0.5 + 0.5 * math.cos(2 * math.pi * k / n))
 
 
 def flicker(k):
@@ -84,21 +107,25 @@ def to_srgb(x):
     return np.where(x <= 0.0031308, x * 12.92, 1.055 * np.power(x, 1 / 2.4) - 0.055)
 
 
-def compose(L, s, f=0.0, lava=1.0):
+def compose(L, s, f=0.0, lava=1.0, b=1.0):
     """One frame at glow s (1 = peak) and crack flicker f. The halo is a soft warm glow: added as light where the
-    building is, and as a see-through warm layer behind it (on the grass). lava (1 = on, the same in every frame):
-    the magma pool's steady light on the building and its soft glow on the grass round the rim."""
+    building is, and as a see-through warm layer behind it (on the grass). lava (1 = on, 0 = base alone): the magma
+    pool's light on the building and its soft glow on the grass round the rim, at breath b (1 = full, `breath()`): the
+    whole of the pool's light, base's 1x and LAVA x more, is b x what it is at full, and the pool's surface dims by
+    POOL_DIP at the low of a breath."""
     base, glow, light, cr, lv, halo, pool, inpool = L
     hs = HALO * s ** 1.5 * halo[..., None]
     col = np.array(HALO_COL, np.float32)
-    rgb = (base[..., :3] + GAIN * s * glow[..., :3] + LIGHT * s ** LIGHT_POW * light[..., :3] + f * cr[..., :3]
-           + 0.35 * hs * col * base[..., 3:4] + lava * LAVA * lv[..., :3]
-           + lava * LAVA_WASH * (pool * (1 - inpool))[..., None] * np.array(LAVA_COL, np.float32) * base[..., 3:4])
+    dip = 1 - lava * POOL_DIP * (1 - b) / (1 - BREATH_LO) * inpool[..., None]
+    rgb = (base[..., :3] * dip + GAIN * s * glow[..., :3] + LIGHT * s ** LIGHT_POW * light[..., :3] + f * cr[..., :3]
+           + 0.35 * hs * col * base[..., 3:4] + lava * (b * (1 + LAVA) - 1) * lv[..., :3]
+           + lava * b * LAVA_WASH * (pool * (1 - inpool))[..., None] * np.array(LAVA_COL, np.float32)
+           * base[..., 3:4])
     a = base[..., 3:4]
     straight = np.where(a > 1e-4, rgb / np.maximum(a, 1e-4), 0.0)
     # the building over the halo layers (premultiplied, in linear light): crystal halo over the lava glow
     hs = np.clip(hs, 0, 1)
-    hl = np.clip(lava * LAVA_HALO * pool[..., None], 0, 1)
+    hl = np.clip(lava * b * LAVA_HALO * pool[..., None], 0, 1)
     ha = hs + hl * (1 - hs)
     hcol = np.where(ha > 1e-4, (col * hs + np.array(LAVA_COL, np.float32) * hl * (1 - hs)) / np.maximum(ha, 1e-4), 0)
     out_a = a + ha * (1 - a)
@@ -198,46 +225,123 @@ def game_sheet(idle, low, peak):
                  22, 10)
 
 
+def loops(L):
+    """The idle and active loops' frames, one at a time: (name, frame index, image). Idle: the crystal steady at IDLE,
+    the lava breathing over NI frames; active: the crystal's pulse and the cracks' flicker as before (N frames each), the
+    lava breathing over NA."""
+    for i in range(NI):
+        yield "idle", i, compose(L, IDLE, b=breath(i, NI))
+    for k in range(NA):
+        yield "active", k, compose(L, pulse(k % N), flicker(k % N), b=breath(k, NA))
+
+
+def widest(L):
+    """The box round everything any frame shows: the crystal at its peak and the lava at full reach furthest."""
+    return tight([compose(L, 1.0, b=1.0), compose(L, IDLE, b=1.0)])
+
+
+def mp4(frames, path, times=2):
+    """frames (on grass) `times` round at the game's rate, as an mp4."""
+    tmp = Path(tempfile.mkdtemp(prefix="icc-anim-"))
+    j = 0
+    for _ in range(times):
+        for f in frames:
+            f = f.crop((0, 0, f.width // 2 * 2, f.height // 2 * 2))
+            f.convert("RGB").save(tmp / f"{j:04d}.png")
+            j += 1
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-framerate", f"{FPS:.4f}", "-i", str(tmp / "%04d.png"),
+                    "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", str(path)], check=True)
+
+
 def run_all():
     L = layers()
     fr = W / "anim"
     fr.mkdir(exist_ok=True)
-    frames = [compose(L, pulse(k), flicker(k)) for k in range(N)]
-    idle = compose(L, IDLE)
-    box = tight(frames + [idle])
-    for k, f in enumerate(frames):
-        f.crop(box).save(fr / f"{k:03d}.png")
+    for old in fr.glob("*.png"):
+        old.unlink()
+    box = widest(L)
     kpk = max(range(N), key=pulse)
     klo = min(range(N), key=pulse)
-    peak = frames[kpk].crop(box)
+    idle = active = peak = low = None
+    for name, k, im in loops(L):
+        im = im.crop(box)
+        im.save(fr / f"{name}-{k:03d}.png")
+        if name == "idle" and k == 0:
+            idle = im
+        if name == "active" and k == kpk:
+            peak = im
+        if name == "active" and k == klo:
+            low = im
     on_grass(peak).save(HERE / "icc-c-final.png")
-    on_grass(idle.crop(box)).save(HERE / "icc-c-idle.png")
+    on_grass(idle).save(HERE / "icc-c-idle.png")
     print("pulse", [round(pulse(k), 3) for k in range(N)], "peak frame", kpk)
-    # the mp4: the loop four times round, full size on grass
-    tmp = Path(tempfile.mkdtemp(prefix="icc-anim-"))
-    for rep in range(4):
-        for k, f in enumerate(frames):
-            g = on_grass(f.crop(box))
-            g = g.crop((0, 0, g.width // 2 * 2, g.height // 2 * 2))
-            g.save(tmp / f"{rep * N + k:03d}.png")
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-framerate", f"{FPS:.4f}", "-i", str(tmp / "%03d.png"),
-                    "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", str(HERE / "icc-c-active.mp4")], check=True)
-    gif = [on_grass(f.crop(box)).convert("RGB") for f in frames]
-    gif = [g.resize((g.width // 3, g.height // 3), Image.LANCZOS) for g in gif]
-    gif[0].save(HERE / "icc-c-active.gif", save_all=True, append_images=gif[1:], duration=int(1000 / FPS), loop=0)
+    print("breath (active)", [round(breath(k, NA), 3) for k in range(0, NA, 4)])
+    # the mp4s, as the game plays them (full size, on grass): the active loop and the idle loop (each idle frame
+    # shown twice), each twice round (9.6 s)
+    sm = lambda g: g.resize((g.width // 2, g.height // 2), Image.LANCZOS)  # noqa: E731  half size: the files stay small
+    act = [sm(on_grass(Image.open(fr / f"active-{k:03d}.png"))) for k in range(NA)]
+    mp4(act, HERE / "icc-c-active.mp4")
+    idl = [sm(on_grass(Image.open(fr / f"idle-{k // 2:03d}.png"))) for k in range(2 * NI)]
+    mp4(idl, HERE / "icc-c-idle.mp4")
+    # the gif: every other frame (it stays small), a third size
+    gif = [g.resize((g.width * 2 // 3, g.height * 2 // 3), Image.LANCZOS).convert("RGB") for g in act[::2]]
+    gif[0].save(HERE / "icc-c-active.gif", save_all=True, append_images=gif[1:], duration=int(2000 / FPS), loop=0)
     # the crystal before | after: the same frame area of the old look-C still and of the new peak and idle
     ox, oy, rw, rh = region()
     old = Image.open(R / "icc-c-base.png").convert("RGBA")
     newfull = Image.new("RGBA", (rw, rh))
-    newfull.paste(frames[kpk], (ox, oy))
+    newfull.paste(peak, (ox + box[0], oy + box[1]))
     idlefull = Image.new("RGBA", (rw, rh))
-    idlefull.paste(idle, (ox, oy))
+    idlefull.paste(idle, (ox + box[0], oy + box[1]))
     cb = crystal_box(old, newfull)
     z = 2
     tiles = [label(on_grass(im.crop(cb)).resize(((cb[2] - cb[0]) * z, (cb[3] - cb[1]) * z), Image.LANCZOS), t)
              for im, t in ((old, "Before (look sample)"), (newfull, "After: active, peak"), (idlefull, "After: idle"))]
     row(tiles).save(HERE / "icc-c-crystal-crop.png")
-    game_sheet(idle.crop(box), frames[klo].crop(box), peak).save(HERE / "icc-c-game.png")
+    game_sheet(idle, low, peak).save(HERE / "icc-c-game.png")
+
+
+def unshadowed(base):
+    """base split into the building with no ground shadow (premultiplied, as base) and the shadow alone (alpha of
+    black), as export3d_buildings.py's split(): the shadow catcher's pixels are pure black, the building's never are;
+    under the building the shadow is the nearest outside it, and the building's own alpha what base's is over that."""
+    from scipy import ndimage
+    a = base[..., 3]
+    st = np.where(a > 1e-4, base[..., :3].max(2) / np.maximum(a, 1e-4), 0)
+    building = (a > 0.02) & ~((st < 0.002) & (a < 0.95))
+    building = ndimage.binary_opening(building, iterations=2)
+    near = ndimage.binary_dilation(building, iterations=3)
+    shade = np.clip((a - NOISE) / (1 - NOISE), 0, 1)
+    idx = ndimage.distance_transform_edt(near, return_distances=False, return_indices=True)
+    s = np.where(near, shade[idx[0], idx[1]], shade)
+    ba = np.where(near, np.clip((a - s) / np.maximum(1 - s, 1e-3), 0, 1), 0)
+    ba[ba < 0.04] = 0
+    body = base.copy()
+    body[..., :3] = np.where(ba[..., None] > 0, base[..., :3], 0)
+    body[..., 3] = ba
+    return body, s
+
+
+def run_game():
+    """The game's cells (`export3d_buildings.py icc`), on look C's whole render canvas, the padded layers placed in it
+    (the halo past the canvas's edge is cut): the building and its glows with no ground shadow, and the shadow."""
+    L = layers()
+    L[0], shade = unshadowed(L[0])
+    out = R / "game"
+    out.mkdir(exist_ok=True)
+    for old in out.glob("*.png"):
+        old.unlink()
+    ox, oy, rw, rh = region()
+
+    def place(im):
+        c = Image.new(im.mode, (rw, rh), 0)
+        c.paste(im, (ox, oy))
+        return c
+
+    place(Image.fromarray((np.clip(shade, 0, 1) * 255 + 0.5).astype(np.uint8), "L")).save(out / "shadow.png")
+    for name, k, im in loops(L):
+        place(im).save(out / f"{name}-{k:02d}.png")
+    print("game cells", NI, "idle,", NA, "active, canvas", rw, rh, "layers at", ox, oy)
 
 
 def crystal_box(*ims):
@@ -258,4 +362,4 @@ def crystal_box(*ims):
 
 
 if __name__ == "__main__":
-    {"check": check, "all": run_all}[sys.argv[1]]()
+    {"check": check, "all": run_all, "game": run_game}[sys.argv[1]]()
