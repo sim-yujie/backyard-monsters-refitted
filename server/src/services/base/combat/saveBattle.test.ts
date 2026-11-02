@@ -27,7 +27,8 @@ mock.module("../reportManager.js", () => ({
   logBanReport: async () => {},
 }));
 
-const { recordBattleMismatches } = await import("./saveBattle.js");
+const { recordBattleMismatches, saveReplayDeadline } = await import("./saveBattle.js");
+const { FINALISE_REPLAY_DEADLINE_MS, SAVE_REPLAY_DEADLINE_MS } = await import("./replayRunner.js");
 const { DEFAULT_COMBAT_VALIDATION_MODE } = await import("../../../config/CombatConfig.js");
 
 const ctx = { ip: "127.0.0.1" } as unknown as Context;
@@ -157,5 +158,17 @@ describe("recordBattleMismatches", () => {
     await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "log");
     expect(mismatchLines()).toHaveLength(1);
     expect(error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the save's replay deadline (owner, 2 Nov 2026)", () => {
+  test("a save the player waits on keeps the short deadline", () => {
+    expect(saveReplayDeadline({})).toBe(SAVE_REPLAY_DEADLINE_MS);
+    expect(saveReplayDeadline({ left: false })).toBe(SAVE_REPLAY_DEADLINE_MS);
+  });
+
+  test("a save sent as the player left gets the finaliser's, since nothing sends it again", () => {
+    expect(saveReplayDeadline({ left: true })).toBe(FINALISE_REPLAY_DEADLINE_MS);
+    expect(FINALISE_REPLAY_DEADLINE_MS).toBeGreaterThan(SAVE_REPLAY_DEADLINE_MS);
   });
 });

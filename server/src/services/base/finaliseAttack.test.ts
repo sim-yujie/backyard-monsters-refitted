@@ -199,7 +199,7 @@ const {
   landCheckpointedAttack,
   releaseUnfoughtAttackOf,
 } = await import("./finaliseAttack.js");
-const { storeCheckpoint, acquireFinalLock } = await import("./attackCheckpointStore.js");
+const { storeCheckpoint, acquireFinalLock, releaseFinalLock } = await import("./attackCheckpointStore.js");
 const { attackCheckpointKey } = await import("./attackCheckpoint.js");
 const { attackSessionKey, attackerSessionKey } = await import("./attackSession.js");
 const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
@@ -750,6 +750,23 @@ describe("when finalisation runs", () => {
     await arm();
     expect(await finaliseAttacksFor(ATTACKER, "build")).toBe(1);
     expect(defender.attackid).toBe(0);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("the attacker's reload waits for the save their leaving page sent, then never serves the attack undone", async () => {
+    await arm();
+    // The keepalive save holds the lock while it lands; it lets go 300 ms later.
+    await acquireFinalLock(BASESAVEID);
+    const started = Date.now();
+    setTimeout(() => void releaseFinalLock(BASESAVEID), 300);
+
+    await finaliseBeforeLoad(ATTACKER, "build", "0", false);
+
+    // It waited rather than skip the attack as busy, and by the time it read
+    // the rows the attack was landed (here by the load itself, the stand-in
+    // save having written nothing): the monsters spent, the row freed.
+    expect(Date.now() - started).toBeGreaterThanOrEqual(250);
+    expect(defender.attackid).toBe(0);
+    expect(userSave.monsters.housed.C1).toBeLessThan(200);
   }, REPLAY_TIMEOUT_MS);
 
   test("the defender's load waits for the attacker's window to close", async () => {
