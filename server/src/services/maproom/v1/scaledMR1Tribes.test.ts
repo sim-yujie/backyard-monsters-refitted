@@ -15,6 +15,10 @@ const ATTACK_ID = 4242;
 
 const store = new Map<string, string>();
 const sets = new Map<string, Set<string>>();
+/** A Redis delete this picks fails, as if the server died right there. */
+let crashOn: ((key: string) => boolean) | null = null;
+/** The landing's database write fails. */
+let flushFails = false;
 let maproom: { userid: number; tribedata: Record<string, unknown>[] };
 let userSave: Record<string, unknown>;
 const persisted: unknown[] = [];
@@ -35,7 +39,9 @@ mock.module("../../../server.js", () => ({
       findOne: async (entity: { name?: string }) =>
         entity?.name === "User" ? { userid: ATTACKER, username: "attacker", save: userSave } : maproom,
       persist: (entity: unknown) => persisted.push(entity),
-      flush: async () => {},
+      flush: async () => {
+        if (flushFails) throw new Error("the database refused the write");
+      },
       // Only the event counter's SQL is answered; anything else fails as with no database.
       execute: async (sql: string, params: unknown[]) => {
         if (!sql.includes("event_progress")) throw new Error("no database");
@@ -58,7 +64,10 @@ mock.module("../../../server.js", () => ({
       store.set(key, value);
       return "OK";
     },
-    del: async (key: string) => (store.delete(key) ? 1 : 0),
+    del: async (key: string) => {
+      if (crashOn?.(key)) throw new Error("the server stopped here");
+      return store.delete(key) ? 1 : 0;
+    },
     sadd: async (key: string, member: string) => {
       const set = sets.get(key) ?? new Set<string>();
       sets.set(key, set);
@@ -207,6 +216,8 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  crashOn = null;
+  flushFails = false;
   replayTimesOut = false;
   setMode("log");
   reports.length = 0;
@@ -753,6 +764,81 @@ describe("Map Room 1 tribe attack left without a save", () => {
     expect(await checkpoint(WRECK, WRECK_TICK)).toMatchObject({ data: { reason: "no-session" } });
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
     expect(snapshot()).toEqual(after);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+  });
+
+  test("a crash between ending the session and dropping the checkpoint never lands it twice", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    await checkpoint(WRECK, WRECK_TICK);
+    const { r1 } = serverBattle(WRECK, WRECK_TICK).attackloot;
+
+    // The landing writes the database and ends the session, then the server
+    // dies before the checkpoint goes.
+    crashOn = (key) => key === rowlessCheckpointKey(REF);
+    await finaliseRowlessAttacksOf(ATTACKER, "load");
+    crashOn = null;
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+    const snapshot = () =>
+      structuredClone({ resources: userSave.resources, monsters: userSave.monsters, tribe: maproom.tribedata[0] });
+    const landed = snapshot();
+    expect((landed.resources as Record<string, number>).r1).toBe(100 + r1);
+    persisted.length = 0;
+
+    // After the restart the load, and the sweep, find the checkpoint left
+    // behind: it is dropped, nothing lands again.
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(await finaliseExpiredRowlessAttacks()).toBe(0);
+    expect(snapshot()).toEqual(landed);
+    expect(persisted).toHaveLength(0);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+    expect(sets.get(ROWLESS_CHECKPOINT_INDEX)?.size ?? 0).toBe(0);
+  });
+
+  test("a crash after the final save's write: neither a resent save nor the finaliser lands it again", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    await checkpoint(SCRATCH, SCRATCH_TICK);
+
+    // The final save lands, then the server dies before the session ends,
+    // leaving both the session and the checkpoint.
+    crashOn = (key) => key === mr1TribeSessionKey(ATTACKER, TRIBE);
+    expect(await run(finalSave())).not.toBeNull();
+    crashOn = null;
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(true);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+    const snapshot = () =>
+      structuredClone({ resources: userSave.resources, monsters: userSave.monsters, tribe: maproom.tribedata[0] });
+    const landed = snapshot();
+    expect(landed.resources).not.toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    persisted.length = 0;
+
+    // The client sends the save again: refused, and what was left is cleared.
+    expect((await run(finalSave()))?.data?.reason).toBe("landed");
+    expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(snapshot()).toEqual(landed);
+    expect(persisted).toHaveLength(0);
+  });
+
+  test("a database write that fails lands nothing, and the attack can still land", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    await checkpoint(WRECK, WRECK_TICK);
+    const { r1 } = serverBattle(WRECK, WRECK_TICK).attackloot;
+
+    // Nothing was written: the next try reads the rows as they were.
+    const before = structuredClone({ userSave, maproom });
+    flushFails = true;
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    flushFails = false;
+    ({ userSave, maproom } = structuredClone(before));
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    expect((userSave.resources as Record<string, number>).r1).toBe(100 + r1);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
   });
 

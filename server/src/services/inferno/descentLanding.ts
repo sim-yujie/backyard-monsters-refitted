@@ -18,7 +18,7 @@ import { recordAchievementEvents } from "../achievements/events.js";
 import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
 import type { AbandonedOutcome } from "../base/combat/abandonedAttack.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
-import { endRowlessAttack, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
+import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
 import { checkAttackBinding } from "../base/attackSession.js";
 import { battleReplayInput, battleTick } from "../base/combat/battle.js";
 import { championsAfterAttack } from "../base/combat/attackerRow.js";
@@ -195,62 +195,68 @@ const writeDescentLanding = async (
   const em = postgres.em;
   const userSave = user.save!;
   const { baseid, index, template, progress, kept, yard } = served;
+  const ref = { kind: "descent" as const, userid: user.userid, baseid };
 
-  // The army leaves the main yard's housing through the fling log, capped by
-  // what it housed at the start (the session's `entryHoused`), as a Map Room 1
-  // attack's does.
-  await monsterUpdateHandler([...attacker.entries], userSave, {
-    session: descent.session,
-    finalises: true,
-    flinglog: attacker.flinglog,
-    now,
-    mapRoom3: false,
-  });
+  // Marked landed before anything is written: whatever a crash after the
+  // write leaves behind lands nothing more (`landRowlessOnce`).
+  const { loot, update, infernobaseid } = await landRowlessOnce(ref, descent.session, async () => {
+    // The army leaves the main yard's housing through the fling log, capped by
+    // what it housed at the start (the session's `entryHoused`), as a Map Room 1
+    // attack's does.
+    await monsterUpdateHandler([...attacker.entries], userSave, {
+      session: descent.session,
+      finalises: true,
+      flinglog: attacker.flinglog,
+      now,
+      mapRoom3: false,
+    });
 
-  // The attacker's champions as the log explains them (#23, C1), and what
-  // each that fought learned from the server's battle (issue #219). No siege
-  // weapon is used in the Descent, so the siege stock is left alone.
-  if (attacker.attackerchampion) {
-    userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
-  }
-  if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
-
-  // The replay's gain, capped by what the yard has left to give, into the
-  // Inferno purse in full.
-  const loot = creditableMR1Loot(battle?.attackloot, mr1TribePool(template), kept?.looted);
-  userSave.iresources = purseAfterDescentLoot(userSave.iresources, loot);
-
-  const update = descentProgressAfter(progress, {
-    index,
-    damage: battle?.damage ?? 0,
-    health: battle?.buildinghealthdata ?? kept?.health ?? {},
-    loot,
-  });
-
-  let row = await em.findOne(InfernoProgress, { userid: user.userid });
-  if (!row) {
-    row = em.create(InfernoProgress, { userid: user.userid });
-  }
-  row.descent_destroyed = update.descentDestroyed;
-  row.descent_best = update.descentBest;
-  row.descent_yards = update.descentYards as InfernoProgress["descent_yards"];
-  row.updated_at = new Date(now * 1000);
-
-  let infernobaseid = progress.infernoBaseid;
-  if (update.captured) {
-    row.descent_passed_at = new Date(now * 1000);
-    if (!infernobaseid) {
-      const infernoYard = await createInfernoYard(em, user, userSave);
-      infernobaseid = infernoYard.baseid;
-      row.inferno_baseid = infernobaseid;
-      // Owning the yard unlocks Korath on the surface (owner I10, WP 5.1).
-      row.korath_unlocked_at ??= new Date(now * 1000);
+    // The attacker's champions as the log explains them (#23, C1), and what
+    // each that fought learned from the server's battle (issue #219). No siege
+    // weapon is used in the Descent, so the siege stock is left alone.
+    if (attacker.attackerchampion) {
+      userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
     }
-  }
+    if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
 
-  em.persist(row);
-  em.persist(userSave);
-  await em.flush();
+    // The replay's gain, capped by what the yard has left to give, into the
+    // Inferno purse in full.
+    const loot = creditableMR1Loot(battle?.attackloot, mr1TribePool(template), kept?.looted);
+    userSave.iresources = purseAfterDescentLoot(userSave.iresources, loot);
+
+    const update = descentProgressAfter(progress, {
+      index,
+      damage: battle?.damage ?? 0,
+      health: battle?.buildinghealthdata ?? kept?.health ?? {},
+      loot,
+    });
+
+    let row = await em.findOne(InfernoProgress, { userid: user.userid });
+    if (!row) {
+      row = em.create(InfernoProgress, { userid: user.userid });
+    }
+    row.descent_destroyed = update.descentDestroyed;
+    row.descent_best = update.descentBest;
+    row.descent_yards = update.descentYards as InfernoProgress["descent_yards"];
+    row.updated_at = new Date(now * 1000);
+
+    let infernobaseid = progress.infernoBaseid;
+    if (update.captured) {
+      row.descent_passed_at = new Date(now * 1000);
+      if (!infernobaseid) {
+        const infernoYard = await createInfernoYard(em, user, userSave);
+        infernobaseid = infernoYard.baseid;
+        row.inferno_baseid = infernobaseid;
+        // Owning the yard unlocks Korath on the surface (owner I10, WP 5.1).
+        row.korath_unlocked_at ??= new Date(now * 1000);
+      }
+    }
+
+    em.persist(row);
+    em.persist(userSave);
+    await em.flush();
+    return { loot, update, infernobaseid };
+  });
 
   if (update.captured) {
     logger.info("Descent passed by {username} (userid {userid}): Inferno yard {baseid}", {
@@ -271,7 +277,7 @@ const writeDescentLanding = async (
 
   // Spent: the lock is still held, so a copy of this save finds nothing, and
   // the attack's checkpoint goes with it, so the finaliser does not land it again.
-  await endRowlessAttack({ kind: "descent", userid: user.userid, baseid }, descent.session.attackid);
+  await endRowlessAttack(ref, descent.session.attackid);
 
   if (battle) yard.buildinghealthdata = battle.buildinghealthdata;
   return {

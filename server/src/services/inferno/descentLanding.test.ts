@@ -23,6 +23,8 @@ const FORCES = { bunkers: {}, defenderLevels: { IC1: 2 }, defenderChampions: [] 
 const ARMY = { C1: 200, C10: 20 };
 
 const store = new Map<string, string>();
+/** A Redis delete this picks fails, as if the server died right there. */
+let crashOn: ((key: string) => boolean) | null = null;
 const sets = new Map<string, Set<string>>();
 let row: Partial<InfernoProgress> | null;
 let userSave: Record<string, unknown>;
@@ -67,7 +69,10 @@ mock.module("../../server.js", () => ({
       store.set(key, value);
       return "OK";
     },
-    del: async (key: string) => (store.delete(key) ? 1 : 0),
+    del: async (key: string) => {
+      if (crashOn?.(key)) throw new Error("the server stopped here");
+      return store.delete(key) ? 1 : 0;
+    },
     sadd: async (key: string, member: string) => {
       const set = sets.get(key) ?? new Set<string>();
       sets.set(key, set);
@@ -235,6 +240,7 @@ const PURSE = { r1: 3000, r2: 2000, r3: 1000, r4: 500 };
 const savedSwitch = process.env.INFERNO_ENABLED;
 
 beforeEach(() => {
+  crashOn = null;
   process.env.INFERNO_ENABLED = "on";
   (combatConfig as { mode: typeof MODE }).mode = "log";
   canned = null;
@@ -666,6 +672,26 @@ describe("a Descent attack left without a save", () => {
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
     expect(userSave.iresources).toEqual(purse);
     expect(row!.descent_best![0]).toBe(best);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+  });
+
+  test("a crash between ending the session and dropping the checkpoint never lands it twice", async () => {
+    startSession();
+    canned = { damage: 50, attackloot: { r1: 40, r2: 0, r3: 0, r4: 0 }, buildinghealthdata: {} };
+    await sendCheckpoint("201", SCRATCH, 1_200, [MAIN_BASEID]);
+
+    crashOn = (key) => key === rowlessCheckpointKey(REF);
+    await finaliseRowlessAttacksOf(ATTACKER, "load");
+    crashOn = null;
+    expect(store.has(descentSessionKey(ATTACKER))).toBe(false);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+    const purse = structuredClone(userSave.iresources);
+    expect(purse).not.toEqual(PURSE);
+    expect(inputs).toHaveLength(1);
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(userSave.iresources).toEqual(purse);
+    expect(inputs).toHaveLength(1);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
   });
 

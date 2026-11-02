@@ -16,7 +16,7 @@ import { bombSpendOf, catapultLevelOf, chargeBombSpend, type BombSpend } from ".
 import { checkpointSession, parseFlingLog } from "../../base/attackCheckpoint.js";
 import type { AbandonedOutcome } from "../../base/combat/abandonedAttack.js";
 import { replayAbandonedInWorker } from "../../base/combat/replayRunner.js";
-import { endRowlessAttack, type RowlessCheckpoint } from "../../base/rowlessCheckpoint.js";
+import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../../base/rowlessCheckpoint.js";
 import { recordBombSpend } from "../../base/combat/recordBombSpend.js";
 import { checkAttackBinding, type AttackSession } from "../../base/attackSession.js";
 import { storedDamage } from "../../base/storedDamage.js";
@@ -194,64 +194,70 @@ const writeTribeLanding = async (
 ) => {
   const userSave = user.save!;
   const { maproom, existingTribe, tribeData } = served;
+  const ref = { kind: "mr1" as const, userid: user.userid, baseid };
 
   const wasDestroyed = Boolean(existingTribe.destroyed);
 
-  // The tribe keeps its own monsters, the stored ones or its template's: the
-  // save's copy is never written (issue #23, C2). What the battle did to it
-  // is the replay's; a landing without one writes none of it.
-  if (battle) {
-    existingTribe.tribeHealthData = battle.buildinghealthdata;
-    existingTribe.destroyed = battle.destroyed;
-    existingTribe.destroyedAt = battle.destroyed
-      ? wasDestroyed ? existingTribe.destroyedAt ?? now : now
-      : undefined;
-    existingTribe.damage = storedDamage(battle.damage) ?? existingTribe.damage;
+  // Marked landed before anything is written: whatever a crash after the
+  // write leaves behind lands nothing more (`landRowlessOnce`).
+  const { credit, credited } = await landRowlessOnce(ref, session, async () => {
+    // The tribe keeps its own monsters, the stored ones or its template's: the
+    // save's copy is never written (issue #23, C2). What the battle did to it
+    // is the replay's; a landing without one writes none of it.
+    if (battle) {
+      existingTribe.tribeHealthData = battle.buildinghealthdata;
+      existingTribe.destroyed = battle.destroyed;
+      existingTribe.destroyedAt = battle.destroyed
+        ? wasDestroyed ? existingTribe.destroyedAt ?? now : now
+        : undefined;
+      existingTribe.damage = storedDamage(battle.damage) ?? existingTribe.damage;
 
-    userSave.wmstatus.forEach((tribe) => {
-      if (tribe[0] === Number(baseid)) tribe[2] = battle.destroyed;
+      userSave.wmstatus.forEach((tribe) => {
+        if (tribe[0] === Number(baseid)) tribe[2] = battle.destroyed;
+      });
+    }
+
+    // The army settles as a Map Room 2 attack's does (issue #132): the flung
+    // monsters leave the main yard's housing as caught up now, capped by what
+    // it housed at entry (the session's `entryHoused`).
+    await monsterUpdateHandler([...attacker.entries], userSave, {
+      session,
+      finalises: true,
+      flinglog: attacker.flinglog,
+      now,
+      mapRoom3: false,
     });
-  }
 
-  // The army settles as a Map Room 2 attack's does (issue #132): the flung
-  // monsters leave the main yard's housing as caught up now, capped by what
-  // it housed at entry (the session's `entryHoused`).
-  await monsterUpdateHandler([...attacker.entries], userSave, {
-    session,
-    finalises: true,
-    flinglog: attacker.flinglog,
-    now,
-    mapRoom3: false,
+    // Read before the champions below are written (`attackLootOf` reads them the same way).
+    const krallenBuff = krallenBuffOf(parseFlingLog(attacker.flinglog), userSave.champion);
+
+    // The attacker's own row as the log explains it, not as the save says it
+    // (#23, C1): siege less what was used, champion health only downwards.
+    if (attacker.attackerchampion) {
+      userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
+    }
+    // Each champion that fought learns from the server's battle, once, under
+    // the tribe's final lock (issue #219).
+    if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
+    userSave.siege = siegeAfterAttack(userSave.siege, attacker.flinglog);
+
+    if (attacker.bombs) userSave.resources = chargeBombSpend(attacker.bombs.spend, userSave.resources);
+
+    // The replay's gain, capped by what the tribe has left to give. The tribe
+    // gives up the whole credit; the attacker keeps what fits in their
+    // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
+    const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
+    const credited: ResourceAmounts = bankAttackLoot(userSave, credit, krallenBuff).credited;
+
+    const looted = { ...existingTribe.looted };
+    for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
+    existingTribe.looted = looted;
+
+    postgres.em.persist(maproom);
+    postgres.em.persist(userSave);
+    await postgres.em.flush();
+    return { credit, credited };
   });
-
-  // Read before the champions below are written (`attackLootOf` reads them the same way).
-  const krallenBuff = krallenBuffOf(parseFlingLog(attacker.flinglog), userSave.champion);
-
-  // The attacker's own row as the log explains it, not as the save says it
-  // (#23, C1): siege less what was used, champion health only downwards.
-  if (attacker.attackerchampion) {
-    userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
-  }
-  // Each champion that fought learns from the server's battle, once, under
-  // the tribe's final lock (issue #219).
-  if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
-  userSave.siege = siegeAfterAttack(userSave.siege, attacker.flinglog);
-
-  if (attacker.bombs) userSave.resources = chargeBombSpend(attacker.bombs.spend, userSave.resources);
-
-  // The replay's gain, capped by what the tribe has left to give. The tribe
-  // gives up the whole credit; the attacker keeps what fits in their
-  // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
-  const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
-  const credited: ResourceAmounts = bankAttackLoot(userSave, credit, krallenBuff).credited;
-
-  const looted = { ...existingTribe.looted };
-  for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
-  existingTribe.looted = looted;
-
-  postgres.em.persist(maproom);
-  postgres.em.persist(userSave);
-  await postgres.em.flush();
 
   // Event loot (the monthly Krallen Hunt): the tribe's whole credit, before
   // the attacker's cap, once, under the tribe's final lock.
@@ -288,7 +294,7 @@ const writeTribeLanding = async (
 
   // Spent: the lock is still held, so a copy of this save finds nothing, and
   // the attack's checkpoint goes with it, so the finaliser does not land it again.
-  await endRowlessAttack({ kind: "mr1", userid: user.userid, baseid }, session.attackid);
+  await endRowlessAttack(ref, session.attackid);
 
   return { save: tribeAsStored(served), credited };
 };

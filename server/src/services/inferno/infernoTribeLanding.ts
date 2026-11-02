@@ -19,7 +19,7 @@ import { logger } from "../../utils/logger.js";
 import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
 import { flungOf, type AbandonedOutcome } from "../base/combat/abandonedAttack.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
-import { endRowlessAttack, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
+import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
 import { checkAttackBinding } from "../base/attackSession.js";
 import { battleReplayInput, battleTick } from "../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../base/combat/saveBattle.js";
@@ -166,56 +166,62 @@ const writeInfernoTribeLanding = async (
   const won = battle ? underHallFallen(template.buildingdata as JsonObject, battle.buildinghealthdata) : false;
   const loot = creditableMR1Loot(battle?.attackloot, mr1TribePool(template), kept?.looted);
 
-  const landed = await em.transactional(async (tx) => {
-    const main = await lockMain(tx, user);
-    const inferno = await lockArmyYard(tx, user, main);
+  const ref = { kind: "inferno-tribe" as const, userid: user.userid, baseid };
 
-    // The monsters that fought leave the Housing Bunkers, as caught up now,
-    // capped by what they held at the start (`entryHoused`). A yard someone
-    // else is attacking right now is only measured, not caught up: their
-    // attack owns its row.
-    if (!isAttackActive(inferno)) catchUpYard(inferno, now);
-    const taken = flungPerYard({
-      cells: [{ baseid: inferno.baseid, housed: countsOf(inferno.monsters?.housed) }],
-      sent: {},
-      entryHoused: tribe.session.entryHoused,
-      logged: flung,
-    });
-    inferno.monsters = subtractHoused(inferno.monsters, taken[inferno.baseid]);
+  // Marked landed before anything is written: whatever a crash after the
+  // write leaves behind lands nothing more (`landRowlessOnce`).
+  const landed = await landRowlessOnce(ref, tribe.session, () =>
+    em.transactional(async (tx) => {
+      const main = await lockMain(tx, user);
+      const inferno = await lockArmyYard(tx, user, main);
 
-    syncInfernoCap(main, inferno);
-    const funded = fundPurse(main.iresources, loot);
-    main.iresources = funded.iresources;
+      // The monsters that fought leave the Housing Bunkers, as caught up now,
+      // capped by what they held at the start (`entryHoused`). A yard someone
+      // else is attacking right now is only measured, not caught up: their
+      // attack owns its row.
+      if (!isAttackActive(inferno)) catchUpYard(inferno, now);
+      const taken = flungPerYard({
+        cells: [{ baseid: inferno.baseid, housed: countsOf(inferno.monsters?.housed) }],
+        sent: {},
+        entryHoused: tribe.session.entryHoused,
+        logged: flung,
+      });
+      inferno.monsters = subtractHoused(inferno.monsters, taken[inferno.baseid]);
 
-    const row = (await tx.findOne(InfernoMaproom, { userid: user.userid }, { lockMode: LockMode.PESSIMISTIC_WRITE })) ??
-      tx.create(InfernoMaproom, { userid: user.userid });
-    const tribedata = [...(row.tribedata ?? [])];
-    let state = tribedata.find((entry) => String(entry.baseid) === baseid);
-    if (!state) {
-      state = { baseid, tribeHealthData: {} };
-      tribedata.push(state);
-    }
-    if (battle) {
-      state.tribeHealthData = battle.buildinghealthdata;
-      state.damage = Math.max(0, Math.min(100, Math.floor(battle.damage)));
-    }
-    if (won) {
-      state.destroyed = 1;
-      state.destroyedAt = now;
-    }
-    const looted = { ...state.looted };
-    for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + loot[key];
-    state.looted = looted;
-    row.tribedata = tribedata;
-    tx.persist(row);
+      syncInfernoCap(main, inferno);
+      const funded = fundPurse(main.iresources, loot);
+      main.iresources = funded.iresources;
 
-    await tx.flush();
-    return { credited: funded.credited, total: purseAmounts(main.iresources), state };
-  });
+      const row = (await tx.findOne(InfernoMaproom, { userid: user.userid }, { lockMode: LockMode.PESSIMISTIC_WRITE })) ??
+        tx.create(InfernoMaproom, { userid: user.userid });
+      const tribedata = [...(row.tribedata ?? [])];
+      let state = tribedata.find((entry) => String(entry.baseid) === baseid);
+      if (!state) {
+        state = { baseid, tribeHealthData: {} };
+        tribedata.push(state);
+      }
+      if (battle) {
+        state.tribeHealthData = battle.buildinghealthdata;
+        state.damage = Math.max(0, Math.min(100, Math.floor(battle.damage)));
+      }
+      if (won) {
+        state.destroyed = 1;
+        state.destroyedAt = now;
+      }
+      const looted = { ...state.looted };
+      for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + loot[key];
+      state.looted = looted;
+      row.tribedata = tribedata;
+      tx.persist(row);
+
+      await tx.flush();
+      return { credited: funded.credited, total: purseAmounts(main.iresources), state };
+    })
+  );
 
   // Spent: the lock is still held, so a copy of this save finds nothing, and
   // the attack's checkpoint goes with it, so the finaliser does not land it again.
-  await endRowlessAttack({ kind: "inferno-tribe", userid: user.userid, baseid }, tribe.session.attackid);
+  await endRowlessAttack(ref, tribe.session.attackid);
 
   if (battle) yard.buildinghealthdata = battle.buildinghealthdata;
   return {

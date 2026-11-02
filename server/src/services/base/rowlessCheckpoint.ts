@@ -1,3 +1,4 @@
+import { attackNotBoundErr } from "../../errors/errors.js";
 import { redis } from "../../server.js";
 import { MR1_TRIBE_IDS } from "../../game-data/tribes/v1/index.js";
 import {
@@ -44,7 +45,10 @@ import type { AttackSession } from "./attackSession.js";
  * lands it (or the finaliser, `finaliseRowlessAttack.ts`) ends the session
  * and then drops the checkpoint, both under the kind's final lock; and a
  * checkpoint request that finds the session gone after storing drops what it
- * stored (`controllers/base/attackCheckpoint.ts`). So an attack lands once.
+ * stored (`controllers/base/attackCheckpoint.ts`). Those two Redis steps come
+ * after the database write, so a crash between them could leave a session or
+ * a checkpoint of a landed attack; the landed mark (`landRowlessOnce`), set
+ * before the write, is what makes that land nothing. So an attack lands once.
  */
 
 export type RowlessKind = "mr1" | "descent" | "inferno-tribe";
@@ -187,6 +191,60 @@ export const endRowlessAttack = async (ref: RowlessRef, attackid: number): Promi
   if (open && open.session.attackid === attackid) await redis.del(sessionKeyOf(ref));
   const stored = await readRowlessCheckpoint(ref);
   if (!stored || stored.checkpoint.attackid === attackid) await discardRowlessCheckpoint(ref);
+};
+
+/** One attack, told apart from any other on the same yard: attack ids are random, so its start goes with it. */
+export interface RowlessAttackId {
+  readonly attackid: number;
+  readonly startedat: number;
+}
+
+/**
+ * The mark that this attack has landed. Set before its landing writes
+ * anything (`landRowlessOnce`), and kept past the checkpoint's own life, so
+ * whatever outlives a landing cut short after its database write — a session
+ * or checkpoint a crash left behind, a resent final save — finds it and lands
+ * nothing more.
+ */
+export const rowlessLandedKey = ({ kind, userid, baseid }: RowlessRef, { attackid, startedat }: RowlessAttackId) =>
+  `attack-landed:${kind}:${userid}:${baseid}:${attackid}:${startedat}`;
+
+/** How long the landed mark is kept: a day past the checkpoint's 7 days. */
+export const ROWLESS_LANDED_TTL = ATTACK_CHECKPOINT_TTL + 24 * 60 * 60;
+
+/** Whether this attack has landed (or is landing right now, under the kind's final lock). */
+export const rowlessLanded = async (ref: RowlessRef, attack: RowlessAttackId): Promise<boolean> =>
+  (await redis.get(rowlessLandedKey(ref, attack))) !== null;
+
+/**
+ * Lands an attack at most once (the final save's path and the finaliser's).
+ * The landed mark is set first, with NX: an attack already marked is not
+ * written again, only its leftover session and checkpoint are cleared, and the
+ * caller is refused as a save of an attack that is over. `write` is the
+ * landing's database write; if it fails the mark goes again, so a resent
+ * save or the finaliser can still land the attack. What follows the write
+ * (counters, quests, ending the session, dropping the checkpoint) runs after
+ * this returns: a failure or a crash there leaves the mark, so nothing is
+ * landed twice. A crash between the mark and the write's commit lands
+ * nothing, which is the side to err on. The caller holds the kind's final lock.
+ */
+export const landRowlessOnce = async <T>(
+  ref: RowlessRef,
+  attack: RowlessAttackId,
+  write: () => Promise<T>
+): Promise<T> => {
+  const key = rowlessLandedKey(ref, attack);
+  const marked = (await redis.set(key, "1", "EX", String(ROWLESS_LANDED_TTL), "NX")) === "OK";
+  if (!marked) {
+    await endRowlessAttack(ref, attack.attackid);
+    throw attackNotBoundErr("landed");
+  }
+  try {
+    return await write();
+  } catch (err) {
+    await redis.del(key);
+    throw err;
+  }
 };
 
 /** Takes the lock the kind's final save takes (issue #138's rule). */

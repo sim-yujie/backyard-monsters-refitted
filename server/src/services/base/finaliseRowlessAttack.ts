@@ -13,11 +13,13 @@ import {
   acquireRowlessFinalLock,
   countRowlessCloseFailure,
   discardRowlessCheckpoint,
+  endRowlessAttack,
   isInfernoKind,
   listRowlessCheckpoints,
   readRowlessCheckpoint,
   readRowlessCloseFailures,
   releaseRowlessFinalLock,
+  rowlessLanded,
   type RowlessCheckpoint,
   type RowlessKind,
   type RowlessRef,
@@ -48,7 +50,10 @@ import {
  *   load ever needs it: the yard is the attacker's own copy.
  *
  * Exactly once: the final save and this take the kind's final lock, and each
- * ends the session and drops the checkpoint before letting go. A replay that
+ * ends the session and drops the checkpoint before letting go. Those Redis
+ * steps follow the database write, so each landing first marks the attack
+ * landed (`landRowlessOnce`); a session or checkpoint a crash left behind is
+ * then only cleared, never landed again. A replay that
  * fails {@link ROWLESS_CLOSE_ATTEMPTS} times is given up: the attack lands
  * with no battle, its flung monsters spent; one that cannot land even so is
  * dropped after as many more, never retried for the checkpoint's 7 days.
@@ -70,10 +75,23 @@ const LANDERS: Readonly<Record<RowlessKind, Lander>> = {
 const finaliseLocked = async (ref: RowlessRef, trigger: string): Promise<RowlessOutcome> => {
   const stored = await readRowlessCheckpoint(ref);
   if (!stored) return "none";
+
+  const facts = { kind: ref.kind, userid: ref.userid, baseid: ref.baseid, attackid: stored.checkpoint.attackid, trigger };
+
+  // Landed already, and a crash cut the landing short before it ended the
+  // session and dropped this checkpoint (`landRowlessOnce`): only those go.
+  if (await rowlessLanded(ref, stored.checkpoint)) {
+    await endRowlessAttack(ref, stored.checkpoint.attackid);
+    logger.warn("Dropped the checkpoint of an attack on a yard with no row that had already landed", {
+      event: "attack-finalise-already-landed",
+      ...facts,
+    });
+    return "stale";
+  }
+
   // With the Inferno switched off nothing of it lands; the checkpoint waits.
   if (isInfernoKind(ref.kind) && !infernoConfig.enabled) return "none";
 
-  const facts = { kind: ref.kind, userid: ref.userid, baseid: ref.baseid, attackid: stored.checkpoint.attackid, trigger };
   const user = await postgres.em.findOne(User, { userid: ref.userid }, { populate: ["save"] });
   if (!user?.save) {
     await discardRowlessCheckpoint(ref);

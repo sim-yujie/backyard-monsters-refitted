@@ -588,6 +588,15 @@ times lands with no battle (the flung monsters and bombs still spent); one that 
 3 more is dropped. Inferno kinds wait while the Inferno is off. An attack left before its first
 checkpoint reached the server lands nothing, as on Map Room 2.
 
+These yards have no row whose `attackid` could clear in the landing's own database write, and
+ending the session and dropping the checkpoint are Redis steps after that write. So every landing
+(final save or finaliser) first sets `attack-landed:<kind>:<userid>:<baseid>:<attackid>:<startedat>`
+with NX (kept 8 days; `landRowlessOnce`). A mark already set means the attack has landed: its
+leftover session and checkpoint are cleared, a resent final save is refused `landed`, and the
+finaliser logs `attack-finalise-already-landed` and lands nothing. The mark is removed again if the
+database write itself fails, so the attack can still land; a crash between the mark and the
+write's commit lands nothing (never twice).
+
 The web client pauses new drops while the server is behind (`web/src/game/attack/plugins/checkpoint.ts`):
 once a drop has gone 10 seconds without a confirmed checkpoint holding it, new drops, bombs and
 siege weapons are refused ("Reconnecting…") until one is confirmed. A failed checkpoint is tried
