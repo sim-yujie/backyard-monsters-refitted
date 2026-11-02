@@ -59,7 +59,8 @@ SETS = {"cannon": ("cannon", TIERS3), "sniper": ("sniper", TIERS3), "laser": ("l
         "sharpshooter": ("inferno", {1: "t2", 2: "t2-look2", 3: "t2-look3"}),
         "magma": ("inferno", {1: "t3", 2: "t3-look2", 3: "t3-look3"})}
 # The painted bodies the Sniper's and Laser's `body@2x.png` stand on, 1x from the origin (`buildingArtTiers.ts`).
-PAINTED_BODY = {"sniper": {1: (-40, -37), 2: (-40, -70), 3: (-40, -86)},
+# (The 3D Sniper's tier 3 stands a section taller than the painted one: its body canvas starts 13 px higher.)
+PAINTED_BODY = {"sniper": {1: (-40, -37), 2: (-40, -70), 3: (-40, -99)},
                 "laser": {1: (-33, -29), 2: (-33, -54), 3: (-33, -71)}}
 # The Cannon's painted canvas (`finish.canvas("cannon")`): the origin's x, and its height above the canvas's bottom.
 CANNON_X, CANNON_UP = 73, 69

@@ -56,7 +56,10 @@ PPU = 2 * S2                   # px per unit in our 4x renders
 # the painted pieces (buildingArtTiers.ts, Sniper): body canvas @2x and the pivot on it, and the pivot's game y
 PAINTED = {1: dict(body=(160, 182), pivot=(80, 34), top=(160, 198), top_pivot=(80, 50), game_y=-20),
            2: dict(body=(160, 248), pivot=(80, 40), top=(160, 258), top_pivot=(80, 50), game_y=-50),
-           3: dict(body=(160, 280), pivot=(80, 38), top=(160, 292), top_pivot=(80, 50), game_y=-67)}
+           3: dict(body=(160, 306), pivot=(80, 38), top=(160, 318), top_pivot=(80, 50), game_y=-80)}
+# (2 Nov 2026, owner: "Too stubby? legs feel too long": the body now reaches down to Flash's, so tier 1 is one tall
+# section on short legs, and each higher tier adds one section of the same height on top (30 game px), so tier 3's
+# turning point rises from the painted -67 to -80.)
 P = PAINTED[TIER]
 # the body canvas reaches this much (@2x px) further down than the painted one, so the front foot's ball is not cut off
 # (the painted canvas stopped in it); its top-left stays where it was (export3d.py cuts the body to what it covers)
@@ -65,7 +68,9 @@ BODY_BELOW = int(os.environ.get("SNIPER_BODY_BELOW", 6))
 # ---------------------------------------------------------------------------------------------------------------- the shape
 R = 0.82                       # the body square's half diagonal (its faces' outer corners at Flash's +-48 @2x px)
 FRONT = 45.0                   # the corner at the viewer
-Z0 = {1: 0.86, 2: 0.82, 3: 0.74}[TIER]   # the body's bottom (it stands on three ball feet), fitted per tier
+Z0 = float(os.environ.get("SNIPER_Z0", 0.52))   # the body's bottom, every tier (was 0.86: long legs, a squat body)
+H2 = 30 * 2 / (S2 * math.cos(math.radians(EL)))   # each section above the
+#                                                 first: 30 game px
 PLATE_T = 0.19                 # the top plate's thickness
 PLATE_R = 1.1                  # the top plate's half diagonal (it overhangs the body; its corners notched, as Flash's)
 PLATE_NOTCH = 0.17             # the round notch cut into each of the plate's corners
@@ -242,14 +247,16 @@ def build():
     sc.collection.objects.link(body)
 
     top_body = TOP - 0.03 - PLATE_T            # where the stacked sections end and the plate begins
-    hs = (top_body - Z0) / SECTIONS
+    hs1 = top_body - (SECTIONS - 1) * H2 - Z0   # the first section (tier 1's whole body), then H2 each
+    zs = [Z0] + [Z0 + hs1 + i * H2 for i in range(SECTIONS)]
     NL, NR = face_axes("L")[2], face_axes("R")[2]   # the outward normals of the two faces we see
 
     # ---- the square sections, a trim band at each joint, corner strips, the striped front corner
     skin, trim, stripe, panel, brass, slots = (bmesh.new() for _ in range(6))
     rivets = bmesh.new()
     for s in range(SECTIONS):
-        za, zb = Z0 + s * hs, Z0 + (s + 1) * hs
+        za, zb = zs[s], zs[s + 1]
+        hs = zb - za
         prism(skin, sqpts(R * 0.985), za + 0.02, zb - 0.02, bevel=0.03)
         for zz in ((za, za + 0.07),) + (((zb - 0.07, zb),) if s < SECTIONS - 1 else ()):
             prism(trim, sqpts(R * 1.025), zz[0], zz[1], bevel=0.02)
@@ -268,7 +275,7 @@ def build():
         stripe.faces.new((vs[0][0], vs[0][1], vs[1][1], vs[1][0]))
         stripe.faces.new((vs[0][1], vs[0][2], vs[1][2], vs[1][1]))
         # door on the front-left face: a steel hatch with a hinge rod along its foot and a lip on top
-        dh = min(0.8, hs - 0.36)
+        dh = min(0.66 * hs, hs - 0.36)        # 0.8 on a 30 px section, as before; taller on tier 1's
         h0 = za + (hs - dh) / 2 + 0.01
         DU = 0.1                               # the door's middle along the face (toward its outer corner, as Flash's)
         rbox(panel, (0.66, 0.08, dh), face_frame("L", h0, u=DU), bevel=0.035)
@@ -283,7 +290,7 @@ def build():
         studs(rivets, [face_frame("L", h0 + zz, u=uu, out=0.075).translation for uu in (DU - 0.25, DU + 0.25) for zz in (0.14, dh - 0.12)],
               [NL] * 4, r=0.026)
         # the plug panel on the front-right face: two brass sockets, a blue and a red cable looping out to the right
-        ph = min(0.84, hs - 0.34)
+        ph = min(0.69 * hs, hs - 0.34)
         p0 = za + (hs - ph) / 2 + 0.01
         PU = -0.2                              # the plug panel's middle along the face (toward the right corner, as Flash's)
         rbox(panel, (0.56, 0.07, ph), face_frame("R", p0, u=PU), bevel=0.035)
