@@ -8,10 +8,12 @@ Run with Blender 5.2 in the background (it builds the whole scene from nothing):
   blender -b --factory-startup -P sniper3d.py -- T full H              render/tT/full-hH.png    (everything, for checks)
   blender -b --factory-startup -P sniper3d.py -- T save                sniper-tT.blend
 
-T is the tier, 1-3. Units: the body's hexagon has corner radius 1 (57 px in the @2x art). Ground bearing b (the game's
-heading: 0 = down-right on screen, 45 = at the viewer, 135 = left, 225 = away, 315 = right) is the Blender direction
-(sin b, cos b, 0). The hexagon has a corner at the viewer, as painted, so we see two faces: front-left (door) and
-front-right (cable plugs). The camera is the Cannon sample's (orthographic, EL degrees down, from bearing 45, light from the
+T is the tier, 1-3. Units: 1 = 57 px in the @2x art. Ground bearing b (the game's heading: 0 = down-right on screen,
+45 = at the viewer, 135 = left, 225 = away, 315 = right) is the Blender direction (sin b, cos b, 0). The body is a square
+box with a corner at the viewer, as Flash's Sniper (and the 3D Tesla and Laser), so we see two faces: front-left (door)
+and front-right (cable plugs), the striped band down the corner between them, four ball feet under its corners.
+(Owner, 2 Nov 2026: the body was a hexagon until then; "the original design was clearly square body, same as tesla,
+laser".) The camera is the Cannon sample's (orthographic, EL degrees down, from bearing 45, light from the
 upper left), scaled to the painted art and shifted so the turret's turning point lands on the painted one.
 
 The look (painted-look materials, outline, light, camera) is the shared one in ../tower-3d/look3d.py.
@@ -61,25 +63,27 @@ P = PAINTED[TIER]
 BODY_BELOW = int(os.environ.get("SNIPER_BODY_BELOW", 6))
 
 # ---------------------------------------------------------------------------------------------------------------- the shape
-R = 0.9                        # body hexagon corner radius (fitted to the painted outline, see measure.py)
+R = 0.82                       # the body square's half diagonal (its faces' outer corners at Flash's +-48 @2x px)
 FRONT = 45.0                   # the corner at the viewer
 Z0 = {1: 0.86, 2: 0.82, 3: 0.74}[TIER]   # the body's bottom (it stands on three ball feet), fitted per tier
 PLATE_T = 0.19                 # the top plate's thickness
-PLATE_R = 1.06                 # the top plate's corner radius (it overhangs the body)
-DISC_R = 0.70                  # the turntable
+PLATE_R = 1.1                  # the top plate's half diagonal (it overhangs the body; its corners notched, as Flash's)
+PLATE_NOTCH = 0.17             # the round notch cut into each of the plate's corners
+DISC_R = 0.64                  # the turntable (fits inside the square plate's top, nearly touching its front edges, as Flash's)
 TOP1 = 2.31                    # tier 1's turning point height (painted: 91 px above the ground's middle at @2x)
 # each tier's turning point stands as much higher as the painted one does (game px x2, seen at EL)
 TOP = TOP1 + (PAINTED[1]["game_y"] - P["game_y"]) * 2 / (S2 * math.cos(math.radians(EL)))
 SECTIONS = TIER                # 1, 2 or 3 stacked sections
-FEET = (45.0, 45.0 + 112, 45.0 - 112)
-FOOT_D, FOOT_R = 1.14, 0.26
+FEET = (45.0, 135.0, 225.0, 315.0)    # under the body's four corners, as Flash's
+FOOT_D, FOOT_R = 1.10, 0.26     # the side balls just inside the 160 px body canvas (Flash: +-78 @2x px)
 FRONT_FOOT_D = 1.18            # the front foot stands out in front of the (drawn-out) front corner, as painted
 TURRET_SCALE = 1.12
 DISC_STRETCH = 1.0             # the turntable too (the turret on it stays round: it turns)
-STRETCH = 1.2                  # the body's hexagon is drawn out toward the viewer, so its front corner reads as sharp as
-PLATE_STRETCH = 1.2            # the painted one (the body is only ever seen from this one side)
-# (owner, 31 Oct 2026, from Codex's perspective preview: STRETCH 1.6 -> 1.2, PLATE_STRETCH 1.4 -> 1.2, DISC_STRETCH
-# 1.2 -> 1.0, FRONT_FOOT_D 1.42 -> 1.18; the 30 degree camera stays)
+STRETCH = float(os.environ.get("SNIPER_SQ_STRETCH", 1.0))   # the body square drawn out toward the viewer (1: a true
+PLATE_STRETCH = STRETCH        # square, as the 3D Tesla and Laser; the plate follows the body)
+# (owner, 31 Oct 2026, from Codex's perspective preview, on the hexagon body: STRETCH 1.6 -> 1.2, PLATE_STRETCH 1.4 -> 1.2,
+# DISC_STRETCH 1.2 -> 1.0, FRONT_FOOT_D 1.42 -> 1.18; the 30 degree camera stays. The square body (2 Nov) is a true
+# square: drawn out, its front corner turned sharper than Flash's.)
 if os.environ.get("SNIPER_SHAPE"):       # for fit tests: body radius, plate radius, feet distance and radius, front foot, bottom
     R, PLATE_R, FOOT_D, FOOT_R, FRONT_FOOT_D, Z0 = (float(v) for v in os.environ["SNIPER_SHAPE"].split(","))
 if os.environ.get("SNIPER_STRETCH"):     # for camera-angle tests: body, plate, turntable
@@ -92,21 +96,23 @@ def drawn(p, k):
     return p + v * ((k - 1) * p.dot(v))
 
 
-def hexpts(r, z=0.0, k=None):
-    """The body's hexagon (corner at the viewer), drawn out toward the viewer by k."""
+def sqpts(r, z=0.0, k=None):
+    """The body's square, half diagonal r: its corners at the viewer (0), left (1), away (2) and right (3), drawn out
+    toward the viewer by k."""
     v = bear(FRONT)
     k = STRETCH if k is None else k
-    pts = [bear(FRONT + 60 * i, r, z) for i in range(6)]
+    pts = [bear(FRONT + 90 * i, r, z) for i in range(4)]
     return [p + v * ((k - 1) * p.dot(v)) for p in pts]
 
 
-def notched(pts, n):
-    """A polygon with a small V cut into each corner."""
+def notched(pts, n, steps=6):
+    """A polygon with a round notch of radius n cut into each corner (a quarter circle about the corner, as Flash's
+    Sniper plate)."""
     out = []
     m = len(pts)
     for i, p in enumerate(pts):
-        a, b = pts[i - 1], pts[(i + 1) % m]
-        out += [p + (a - p).normalized() * n, p * (1 - 0.9 * n / p.length), p + (b - p).normalized() * n]
+        ua, ub = (pts[i - 1] - p).normalized(), (pts[(i + 1) % m] - p).normalized()
+        out += [p + (ua * (1 - t / steps) + ub * (t / steps)).normalized() * n for t in range(steps + 1)]
     return out
 
 
@@ -136,8 +142,8 @@ def prism(bm, poly, z0, z1, mat=0, bevel=0.0, segs=2):
 def face_axes(side):
     """The face we see on side 'L' (door) or 'R' (plugs): its middle, the way along it (L: toward its outer corner, R:
     toward the front corner) and its outward normal, all on the ground."""
-    h = hexpts(R)
-    c0, c1 = h[0], (h[1] if side == "L" else h[5])
+    h = sqpts(R)
+    c0, c1 = h[0], (h[1] if side == "L" else h[3])
     t = (c1 - c0).normalized() if side == "L" else (c0 - c1).normalized()
     mid = (c0 + c1) / 2
     n = Vector((t.y, -t.x, 0))
@@ -239,23 +245,23 @@ def build():
     hs = (top_body - Z0) / SECTIONS
     NL, NR = face_axes("L")[2], face_axes("R")[2]   # the outward normals of the two faces we see
 
-    # ---- the hexagonal sections, a trim band at each joint, corner strips, the striped front corner
+    # ---- the square sections, a trim band at each joint, corner strips, the striped front corner
     skin, trim, stripe, panel, brass, slots = (bmesh.new() for _ in range(6))
     rivets = bmesh.new()
     for s in range(SECTIONS):
         za, zb = Z0 + s * hs, Z0 + (s + 1) * hs
-        prism(skin, hexpts(R * 0.985), za + 0.02, zb - 0.02, bevel=0.03)
+        prism(skin, sqpts(R * 0.985), za + 0.02, zb - 0.02, bevel=0.03)
         for zz in ((za, za + 0.07),) + (((zb - 0.07, zb),) if s < SECTIONS - 1 else ()):
-            prism(trim, hexpts(R * 1.025), zz[0], zz[1], bevel=0.02)
-        for k, cp in enumerate(hexpts(R * 0.975)):   # corner strips (the front one is under the stripe band)
+            prism(trim, sqpts(R * 1.025), zz[0], zz[1], bevel=0.02)
+        for k, cp in enumerate(sqpts(R * 0.975)):   # corner strips (the front one is under the stripe band)
             if k == 0:
                 continue
             rot = Matrix.Rotation(-math.atan2(cp.x, cp.y), 4, 'Z')
             rbox(trim, (0.1, 0.1, hs - 0.1), Matrix.Translation(cp + Vector((0, 0, za + 0.05))) @ rot, bevel=0.025)
         # the striped band down the front corner, a little proud of the two faces
         w, d = 0.22, 0.012
-        hh = hexpts(R * 0.985)
-        v, vl, vr = hh[0], hh[1], hh[5]
+        hh = sqpts(R * 0.985)
+        v, vl, vr = hh[0], hh[1], hh[3]
         pl, pr = v + (vl - v).normalized() * w + NL * d, v + (vr - v).normalized() * w + NR * d
         pv = v + bear(FRONT) * d * 2
         vs = [[stripe.verts.new((p.x, p.y, z)) for p in (pl, pv, pr)] for z in (za + 0.07, zb - (0.07 if s < SECTIONS - 1 else 0.03))]
@@ -264,34 +270,36 @@ def build():
         # door on the front-left face: a steel hatch with a hinge rod along its foot and a lip on top
         dh = min(0.8, hs - 0.36)
         h0 = za + (hs - dh) / 2 + 0.01
-        rbox(panel, (0.6, 0.08, dh), face_frame("L", h0, u=0.04), bevel=0.035)
-        rbox(panel, (0.5, 0.06, dh - 0.2), face_frame("L", h0 + 0.1, u=0.04, out=0.03), bevel=0.02)
+        DU = 0.1                               # the door's middle along the face (toward its outer corner, as Flash's)
+        rbox(panel, (0.66, 0.08, dh), face_frame("L", h0, u=DU), bevel=0.035)
+        rbox(panel, (0.56, 0.06, dh - 0.2), face_frame("L", h0 + 0.1, u=DU, out=0.03), bevel=0.02)
         for i in range(3):                     # the hatch's vent slots, as painted
-            rbox(slots, (0.34, 0.03, 0.04), face_frame("L", h0 + dh * (0.42 + 0.13 * i), u=0.04, out=0.062), bevel=0.01)
-        rbox(panel, (0.58, 0.2, 0.06), face_frame("L", h0 + dh - 0.05, u=0.04, out=0.05) @ Matrix.Rotation(math.radians(-25), 4, 'X'),
+            rbox(slots, (0.38, 0.03, 0.04), face_frame("L", h0 + dh * (0.42 + 0.13 * i), u=DU, out=0.062), bevel=0.01)
+        rbox(panel, (0.64, 0.2, 0.06), face_frame("L", h0 + dh - 0.05, u=DU, out=0.05) @ Matrix.Rotation(math.radians(-25), 4, 'X'),
              bevel=0.02)
-        for uu in (-0.16, 0.24):
+        for uu in (DU - 0.22, DU + 0.22):
             cyl(panel, 0.05, 0.16, face_frame("L", h0 + 0.02, u=uu, out=0.08) @ Matrix.Rotation(math.pi / 2, 4, 'Y'), segs=16)
-        cyl(panel, 0.035, 0.6, face_frame("L", h0 + 0.02, u=0.04, out=0.08) @ Matrix.Rotation(math.pi / 2, 4, 'Y'), segs=12)
-        studs(rivets, [face_frame("L", h0 + zz, u=uu, out=0.075).translation for uu in (-0.2, 0.28) for zz in (0.14, dh - 0.12)],
+        cyl(panel, 0.035, 0.66, face_frame("L", h0 + 0.02, u=DU, out=0.08) @ Matrix.Rotation(math.pi / 2, 4, 'Y'), segs=12)
+        studs(rivets, [face_frame("L", h0 + zz, u=uu, out=0.075).translation for uu in (DU - 0.25, DU + 0.25) for zz in (0.14, dh - 0.12)],
               [NL] * 4, r=0.026)
         # the plug panel on the front-right face: two brass sockets, a blue and a red cable looping out to the right
         ph = min(0.84, hs - 0.34)
         p0 = za + (hs - ph) / 2 + 0.01
-        rbox(panel, (0.54, 0.07, ph), face_frame("R", p0, u=-0.1), bevel=0.035)
+        PU = -0.2                              # the plug panel's middle along the face (toward the right corner, as Flash's)
+        rbox(panel, (0.56, 0.07, ph), face_frame("R", p0, u=PU), bevel=0.035)
         sock = []
         for zz in (0.7, 0.3):
-            f = face_frame("R", p0 + ph * zz, u=-0.14, out=0.06)
+            f = face_frame("R", p0 + ph * zz, u=PU - 0.04, out=0.06)
             cyl(brass, 0.11, 0.07, f @ Matrix.Rotation(-math.pi / 2, 4, 'X'), segs=6)
             cyl(brass, 0.075, 0.18, f @ Matrix.Translation((0, 0.1, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), segs=16)
             cyl(brass, 0.085, 0.04, f @ Matrix.Translation((0, 0.17, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), segs=16)
             sock.append(f @ Vector((0, 0.19, 0)))
-        studs(rivets, [face_frame("R", p0 + zz, u=uu, out=0.07).translation for uu in (-0.33, 0.13) for zz in (0.08, ph - 0.08)],
+        studs(rivets, [face_frame("R", p0 + zz, u=uu, out=0.07).translation for uu in (PU - 0.23, PU + 0.23) for zz in (0.08, ph - 0.08)],
               [NR] * 4, r=0.024)
         tn, nn = -face_axes("R")[1], NR        # along the face toward the right corner, and out
         up = Vector((0, 0, 1))
-        ends = [face_frame("R", zb - 0.1, u=-0.42, out=0.0).translation,
-                face_frame("R", p0 + ph * 0.6, u=-0.44, out=0.0).translation]
+        ends = [face_frame("R", zb - 0.2, u=-0.54, out=0.0).translation,
+                face_frame("R", p0 + ph * 0.6, u=-0.56, out=0.0).translation]
         for (a, e, m) in ((sock[0], ends[0], "blue"), (sock[1], ends[1], "red")):
             pts = bezier(a, a + tn * 0.42 + nn * 0.06 - up * 0.04, e + tn * 0.5 + nn * 0.14 + up * 0.02, e, n=20)
             cab = bmesh.new()
@@ -299,13 +307,13 @@ def build():
             ob = obj_from_bm(f"cable_{m}_{s}", cab, [M[m]], parent=body)
             add_outline(ob, LN["cool"], LINE * 0.8)
         # rivets along the joints on the faces we see
-        for nb, nv in (("L", NL), ("R", NR)):
+        for nb, nv, us in (("L", NL, (-0.28, 0.1, 0.46)), ("R", NR, (-0.46, -0.1, 0.28))):   # clear of the stripe band
             for zz in (za + 0.035,) + ((zb - 0.035,) if s < SECTIONS - 1 else ()):
-                studs(rivets, [face_frame(nb, zz, u=uu, out=0.04).translation for uu in (-0.32, 0.0, 0.32)], [nv] * 3,
+                studs(rivets, [face_frame(nb, zz, u=uu, out=0.04).translation for uu in us], [nv] * 3,
                       r=0.024)
     if TIER == 1:   # the amber lamp at the top left of the door face
         lamp, glow = bmesh.new(), bmesh.new()
-        f = face_frame("L", top_body - 0.16, u=0.3, out=0.0)
+        f = face_frame("L", top_body - 0.16, u=0.42, out=0.0)
         cyl(lamp, 0.12, 0.08, f @ Matrix.Translation((0, 0.04, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X'), segs=20)
         bmesh.ops.create_uvsphere(glow, u_segments=20, v_segments=10, radius=0.1,
                                   matrix=f @ Matrix.Translation((0, 0.09, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'X') @ diag(1, 1, 0.8))
@@ -322,18 +330,28 @@ def build():
         if name != "stripe":
             add_outline(ob, LN[line])
 
-    # ---- the top plate: a notched hexagon (trim colour rim, skin colour top), the turntable in it
+    # ---- the top plate: a square with a round notch in each corner, as Flash's (trim colour rim, skin colour top), the
+    # turntable in it
     plate, ptop = bmesh.new(), bmesh.new()
     PS = PLATE_STRETCH
-    prism(plate, notched(hexpts(PLATE_R, k=PS), 0.14), top_body, top_body + PLATE_T - 0.02, bevel=0.03)
-    prism(ptop, notched(hexpts(PLATE_R * 0.9, k=PS), 0.12), top_body + PLATE_T - 0.03, top_body + PLATE_T, bevel=0.01, segs=1)
-    c = [Vector((p.x * 0.97, p.y * 0.97, top_body + PLATE_T - 0.01)) for i, p in enumerate(hexpts(PLATE_R * 0.9, k=PS))]
-    c += [(a + b) / 2 for a, b in zip(c, c[1:] + c[:1])]
+    PT = 0.94                                  # the top's inset
+    prism(plate, notched(sqpts(PLATE_R, k=PS), PLATE_NOTCH), top_body, top_body + PLATE_T - 0.02, bevel=0.03)
+    prism(ptop, notched(sqpts(PLATE_R * PT, k=PS), PLATE_NOTCH * 0.85), top_body + PLATE_T - 0.03, top_body + PLATE_T,
+          bevel=0.01, segs=1)
+    zt_ = top_body + PLATE_T - 0.01
+    cs = sqpts(PLATE_R * PT, k=PS)
+    c = []
+    for k in range(4):                         # rivets in from each corner's notch and two along each edge, outside the disc
+        a, b = cs[k], cs[(k + 1) % 4]
+        c.append(a * (1 - (PLATE_NOTCH + 0.07) / a.length))
+        c += [a + (b - a) * f_ for f_ in (0.2, 0.8)]
+    c = [Vector((p.x * 0.96, p.y * 0.96, zt_)) for p in c]
     studs(rivets, c, [Vector((0, 0, 1))] * len(c), r=0.03)
-    for k in range(6):                         # rivets round the plate's side
-        hp = hexpts(PLATE_R, k=PS)
-        mid = (hp[k] + hp[(k + 1) % 6]) / 2
-        studs(rivets, [mid + Vector((0, 0, top_body + PLATE_T * 0.45))], [mid.normalized()], r=0.026)
+    hp = sqpts(PLATE_R, k=PS)
+    for k in range(4):                         # rivets round the plate's side
+        a, b = hp[k], hp[(k + 1) % 4]
+        n_ = Vector(((a + b) / 2).xy).normalized().to_3d()
+        studs(rivets, [a + (b - a) * f_ + Vector((0, 0, top_body + PLATE_T * 0.45)) for f_ in (0.3, 0.7)], [n_] * 2, r=0.026)
     add_outline(obj_from_bm("plate", plate, [M["trim"]], parent=body, sharp=35), LN["warm"])
     add_outline(obj_from_bm("plate_top", ptop, [M["trim"] if TIER == 1 else M["skin"]], parent=body, sharp=35), LN["warm"], LINE * 0.6)
     disc = lathe("turntable", [
@@ -360,8 +378,7 @@ def build():
         bmesh.ops.create_uvsphere(balls, u_segments=32, v_segments=16, radius=FOOT_R, matrix=Matrix.Translation(cpos))
         cyl(belts, FOOT_R * 1.035, 0.07, Matrix.Translation(cpos), segs=32)
         cyl(belts, FOOT_R * 0.98, 0.03, Matrix.Translation(cpos + Vector((0, 0, -0.06))), segs=32)
-        corner = min((FRONT + 60 * k for k in range(6)), key=lambda b: abs(((b - fb + 180) % 360) - 180))
-        a = drawn(bear(corner, R * 0.8, Z0 + 0.04), STRETCH)
+        a = drawn(bear(fb, R * 0.8, Z0 + 0.04), STRETCH)   # from the body's corner above it
         e = cpos + Vector((0, 0, FOOT_R * 0.7)) + (bear(fb) * -0.08)
         tube(struts, bezier(a, a + Vector((0, 0, -0.12)), e + (a - e) * 0.3, e, n=10), [0.065] * 10, sides=14)
         cyl(struts, 0.09, 0.06, Matrix.Translation(e + Vector((0, 0, 0.0))), segs=16)
