@@ -148,6 +148,8 @@ export interface TribeEditBarOptions {
   onChanged: () => void;
   /** "Save as …"; resolves with the line to show. */
   onSave: () => Promise<string>;
+  /** "Reset attacked camps" (local database); resolves with the line to show. */
+  onReset: () => Promise<string>;
   /** Back to the picker. */
   onPick: () => void;
   /** Back to the player's own yard. */
@@ -157,6 +159,8 @@ export interface TribeEditBarOptions {
 export class TribeEditBar {
   readonly panel: Panel;
   readonly saveButton: HTMLButtonElement;
+  readonly resetButton: HTMLButtonElement;
+  private resetArmed = false;
   private readonly message: HTMLElement;
   private readonly selection: HTMLElement;
   private readonly housing: HTMLDetailsElement;
@@ -184,6 +188,10 @@ export class TribeEditBar {
     );
 
     this.saveButton = button(`Save as ${edit.name} level ${edit.level}`, () => void this.save(), "btn btn--primary");
+    this.resetButton = button(TribeEditBar.RESET_LABEL, () => void this.reset());
+    this.resetButton.title =
+      "Camps of this level that were already opened or attacked keep their old yard. " +
+      "This drops them from the local database so they use the saved yard.";
     this.message = el("p", "tribe-editor__message");
     this.message.setAttribute("role", "status");
 
@@ -193,7 +201,7 @@ export class TribeEditBar {
     const ways = el("div", "tribe-editor__ways");
     ways.append(button("Other tribe/level", () => options.onPick()), button("Exit to my yard", () => options.onExit()));
 
-    this.panel.setContent(source, hint, this.saveButton, this.message, this.selection, this.housing, ways);
+    this.panel.setContent(source, hint, this.saveButton, this.resetButton, this.message, this.selection, this.housing, ways);
     this.renderSelection();
     this.renderHousing();
   }
@@ -228,6 +236,29 @@ export class TribeEditBar {
       this.message.textContent = `Not saved: ${caught instanceof Error ? caught.message : "something went wrong."}`;
     } finally {
       this.saveButton.disabled = false;
+    }
+  }
+
+  static readonly RESET_LABEL = "Reset attacked camps";
+
+  /** The first click asks again; the second drops the stored camps. */
+  private async reset(): Promise<void> {
+    if (!this.resetArmed) {
+      this.resetArmed = true;
+      this.resetButton.textContent = "Click again to reset";
+      this.message.textContent = `Drops already attacked ${this.options.edit.name} level ${this.options.edit.level} camps from the local database.`;
+      return;
+    }
+    this.resetArmed = false;
+    this.resetButton.disabled = true;
+    this.resetButton.textContent = TribeEditBar.RESET_LABEL;
+    this.message.textContent = "Resetting…";
+    try {
+      this.message.textContent = await this.options.onReset();
+    } catch (caught) {
+      this.message.textContent = `Not reset: ${caught instanceof Error ? caught.message : "something went wrong."}`;
+    } finally {
+      this.resetButton.disabled = false;
     }
   }
 

@@ -11,6 +11,8 @@ const {
   editorStatus,
   parseSaveBody,
   editorYard,
+  isStoredCampOf,
+  resetStoredCamps,
   levelsFileSource,
   registerTribeEditorRoutes,
   savedYard,
@@ -46,7 +48,7 @@ describe("tribe yard editor switch", () => {
     expect(tribeEditorEnabled({ TRIBE_EDITOR: "on", ENV: "local", NODE_ENV: "production" })).toBe(false);
   });
 
-  test("off, no route is mounted; on, the three editor routes are", () => {
+  test("off, no route is mounted; on, the four editor routes are", () => {
     const off = recordingRouter();
     expect(registerTribeEditorRoutes(off.router, false)).toBe(false);
     expect(off.mounted).toEqual([]);
@@ -57,6 +59,7 @@ describe("tribe yard editor switch", () => {
       "GET /api/:apiVersion/dev/tribe-editor/status",
       "GET /api/:apiVersion/dev/tribe-editor/yard",
       "POST /api/:apiVersion/dev/tribe-editor/save",
+      "POST /api/:apiVersion/dev/tribe-editor/reset",
     ]);
   });
 
@@ -150,5 +153,49 @@ describe("tribe yard editor data", () => {
     await Bun.write(file, source.replace('import type { SaveData } from "../../../../types/EntityData.js";', "type SaveData = unknown;"));
     const loaded = await import(file);
     expect(loaded.legionnaireLevels).toEqual({ 26: { name: "a" }, 40: { name: "b" } });
+  });
+});
+
+describe("reset attacked camps (local database)", () => {
+  // Cell (238,208): (238+208) % 4 = 2, Abunakki; the world hash is 8 digits.
+  const camp = { type: "tribe", wmid: 21, level: 31, userid: 0, worldid: "w-1", baseid: "12345678238208" };
+
+  test("matches only a Map Room 2 camp row of that tribe and level", () => {
+    expect(isStoredCampOf(camp, "abunaki", 31)).toBe(true);
+    expect(isStoredCampOf({ ...camp, baseid: 12345678238208 as never }, "abunaki", 31)).toBe(true);
+    expect(isStoredCampOf(camp, "abunaki", 32)).toBe(false);
+    expect(isStoredCampOf(camp, "kozu", 31)).toBe(false);
+    expect(isStoredCampOf({ ...camp, type: "main" }, "abunaki", 31)).toBe(false);
+    expect(isStoredCampOf({ ...camp, userid: 2503 }, "abunaki", 31)).toBe(false);
+    expect(isStoredCampOf({ ...camp, worldid: null }, "abunaki", 31)).toBe(false);
+    // Map Room 3's 15-digit ids and a cell of another tribe never match.
+    expect(isStoredCampOf({ ...camp, baseid: "312345678238208" }, "abunaki", 31)).toBe(false);
+    expect(isStoredCampOf({ ...camp, baseid: "12345678238209" }, "abunaki", 31)).toBe(false);
+  });
+
+  test("removes the matching rows and leaves every other row", async () => {
+    const other = { ...camp, baseid: "12345678238209" };
+    const removed: unknown[] = [];
+    let asked: Record<string, unknown> = {};
+    let flushed = 0;
+    const store = {
+      find: async (_entity: unknown, where: Record<string, unknown>) => {
+        asked = where;
+        return [camp, other];
+      },
+      remove: (row: unknown) => removed.push(row),
+      flush: async () => {
+        flushed += 1;
+      },
+    };
+    expect(await resetStoredCamps("abunaki", 31, store as never)).toBe(1);
+    expect(asked).toEqual({ type: "tribe", wmid: 21, level: 31, userid: 0 });
+    expect(removed).toEqual([camp]);
+    expect(flushed).toBe(1);
+
+    const none = { ...store, find: async () => [] };
+    flushed = 0;
+    expect(await resetStoredCamps("kozu", 40, none as never)).toBe(0);
+    expect(flushed).toBe(0);
   });
 });

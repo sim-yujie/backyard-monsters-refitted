@@ -10,6 +10,8 @@ import type { ApiEnvelope, BaseLoadResponse, BuildingDataMap } from "./types";
  *   GET  /api/:apiVersion/dev/tribe-editor/status
  *   GET  /api/:apiVersion/dev/tribe-editor/yard   tribe, level
  *   POST /api/:apiVersion/dev/tribe-editor/save   tribe, level, buildingdata, …
+ *   POST /api/:apiVersion/dev/tribe-editor/reset  tribe, level (drops the LOCAL database's
+ *                                                 stored camps of that tribe and level)
  */
 
 const PREFIX = "/api/:apiVersion/dev/tribe-editor";
@@ -79,3 +81,18 @@ export const loadTribeYard = (tribe: TribeId, level: number): Promise<TribeYardR
 /** "Save as <Tribe> level <N>". */
 export const saveTribeYard = (body: TribeSaveBody): Promise<TribeSaveResponse> =>
   postJson<TribeSaveResponse>(`${PREFIX}/save`, { ...body });
+
+export interface TribeResetResponse extends ApiEnvelope {
+  tribe: TribeId;
+  level: number;
+  /** How many stored camps the local database dropped. */
+  removed: number;
+}
+
+/**
+ * "Reset attacked camps": camps of this tribe and level that were already
+ * opened or attacked keep their stored yard; this drops those rows in the
+ * LOCAL database, so they are made again from the saved yard.
+ */
+export const resetTribeCamps = (tribe: TribeId, level: number): Promise<TribeResetResponse> =>
+  postJson<TribeResetResponse>(`${PREFIX}/reset`, { tribe, level });

@@ -6,12 +6,14 @@ import type { Context } from "koa";
 import { z } from "zod";
 import { tribeEditorEnabled } from "../../config/TribeEditorConfig.js";
 import { WORLD_SIZE } from "../../config/MapRoom2Config.js";
+import { Save } from "../../database/models/save.model.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { getFlags } from "../../game-data/flags.js";
 import { storeItems } from "../../game-data/store/storeItems.js";
 import { apiVersion } from "../../middleware/apiVersioning.js";
 import { verifyUserAuth } from "../../middleware/auth.js";
 import { logRequest } from "../../middleware/logRequest.js";
+import { postgres } from "../../server.js";
 import {
   TRIBE_IDS,
   TRIBE_OF,
@@ -33,6 +35,8 @@ import { logger } from "../../utils/logger.js";
  *   GET  /api/:apiVersion/dev/tribe-editor/status          the tribes, their levels, what is saved
  *   GET  /api/:apiVersion/dev/tribe-editor/yard?tribe&level the yard a camp of that level uses now
  *   POST /api/:apiVersion/dev/tribe-editor/save             "Save as <Tribe> level <N>"
+ *   POST /api/:apiVersion/dev/tribe-editor/reset            "Reset attacked camps": drops the LOCAL
+ *                                                           database's stored rows of this tribe and level
  *
  * The web client edits the yard in the browser (`web/src/game/tribeEditor`):
  * nothing here reads or writes the player's own rows. A save writes the yard
@@ -214,6 +218,68 @@ export const writeSavedYard = async (
   return file;
 };
 
+/** The parts of a stored camp row {@link isStoredCampOf} looks at. */
+export interface StoredCampRow {
+  type?: string | null;
+  wmid?: number | null;
+  level?: number | null;
+  userid?: number | null;
+  worldid?: string | null;
+  baseid?: string | number | null;
+}
+
+/**
+ * Whether a stored row is a Map Room 2 camp of this tribe and level, and
+ * nothing else: a `tribe` row with no owner, in a world, with the 14-digit
+ * Map Room 2 base id whose cell (its last six digits) belongs to the tribe,
+ * and the tribe's `wmid` (`tribeSaveV2.ts`). Map Room 1 camps (no world) and
+ * Map Room 3 ones (15 digits) never match, nor does any player's yard.
+ */
+export const isStoredCampOf = (row: StoredCampRow, tribe: TribeId, level: number): boolean => {
+  const index = TRIBE_IDS.indexOf(tribe);
+  const baseid = String(row.baseid ?? "");
+  if (row.type !== "tribe" || row.userid !== 0 || !row.worldid) return false;
+  if (row.wmid !== index * 10 + 1 || row.level !== level) return false;
+  if (!/^\d{14}$/.test(baseid)) return false;
+  const cellX = Number(baseid.slice(-6, -3));
+  const cellY = Number(baseid.slice(-3));
+  return (cellX + cellY) % TRIBE_IDS.length === index;
+};
+
+/** The few database calls {@link resetStoredCamps} makes (a MikroORM entity manager). */
+export interface CampRowStore {
+  find: (entity: typeof Save, where: Record<string, unknown>) => Promise<StoredCampRow[]>;
+  remove: (row: StoredCampRow) => unknown;
+  flush: () => Promise<void>;
+}
+
+/**
+ * "Reset attacked camps": a camp keeps its stored row (and the yard it was
+ * made with) once someone opened or attacked it, so a newly saved yard only
+ * reaches camps nobody touched yet. This drops the LOCAL database's stored
+ * rows of this tribe's camps of exactly this level, so each one is made again
+ * from the saved yard the next time it is opened (the same thing the 12-hour
+ * camp refresh does in `baseModeView.ts`). Live never reaches it: the route
+ * exists only while the editor is on (`TribeEditorConfig.ts`).
+ */
+export const resetStoredCamps = async (
+  tribe: TribeId,
+  level: number,
+  store: CampRowStore = postgres.em as unknown as CampRowStore,
+): Promise<number> => {
+  const index = TRIBE_IDS.indexOf(tribe);
+  const rows = await store.find(Save, { type: "tribe", wmid: index * 10 + 1, level, userid: 0 });
+  const camps = rows.filter((row) => isStoredCampOf(row, tribe, level));
+  for (const row of camps) store.remove(row);
+  if (camps.length > 0) await store.flush();
+  return camps.length;
+};
+
+const ResetBodySchema = z.object({
+  tribe: z.string().refine(isTribeId, "Unknown tribe"),
+  level: z.coerce.number().int().min(1).max(99),
+});
+
 const status = async (ctx: Context) => {
   if (refuseUnlessOn(ctx)) return;
   ctx.status = Status.OK;
@@ -254,6 +320,22 @@ const save = async (ctx: Context) => {
   };
 };
 
+const reset = async (ctx: Context) => {
+  if (refuseUnlessOn(ctx)) return;
+  const parsed = ResetBodySchema.safeParse(ctx.request.body);
+  if (!parsed.success) {
+    ctx.status = Status.BAD_REQUEST;
+    ctx.body = { error: "Pick a Map Room 2 tribe and a level." };
+    return;
+  }
+  const tribe = parsed.data.tribe as TribeId;
+  const { level } = parsed.data;
+  const removed = await resetStoredCamps(tribe, level);
+  logger.info(`Tribe yard editor: reset ${removed} stored ${tribeName(tribe)} level ${level} camps (local database)`);
+  ctx.status = Status.OK;
+  ctx.body = { error: 0, tribe, level, removed };
+};
+
 /**
  * Mounts the editor's routes, only when the editor is on. Returns whether it
  * did, so `app.routes.ts` can log it.
@@ -263,5 +345,6 @@ export const registerTribeEditorRoutes = (router: Router, enabled: boolean = tri
   router.get(`${PREFIX}/status`, apiVersion, verifyUserAuth, logRequest, status);
   router.get(`${PREFIX}/yard`, apiVersion, verifyUserAuth, logRequest, yard);
   router.post(`${PREFIX}/save`, apiVersion, verifyUserAuth, logRequest, save);
+  router.post(`${PREFIX}/reset`, apiVersion, verifyUserAuth, logRequest, reset);
   return true;
 };

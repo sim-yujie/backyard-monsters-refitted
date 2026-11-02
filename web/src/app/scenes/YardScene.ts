@@ -100,7 +100,7 @@ import { CompareView, pointerInPlanPane } from "@/game/yard/CompareView";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
-import { loadTribeYard, saveTribeYard, tribeEditorStatus, type TribeId } from "@/api/tribeEditor";
+import { loadTribeYard, resetTribeCamps, saveTribeYard, tribeEditorStatus, type TribeId } from "@/api/tribeEditor";
 import {
   consumeTribeEditTarget,
   endTribeEdit,
@@ -2615,6 +2615,12 @@ export class YardScene implements Scene {
       onSave: async () => {
         const saved = await saveTribeYard({ tribe: tribe.tribe, level: tribe.level, ...tribe.sim.saveBody() });
         return `Saved ${saved.buildings} buildings to ${saved.file}.`;
+      },
+      onReset: async () => {
+        const { removed } = await resetTribeCamps(tribe.tribe, tribe.level);
+        return removed === 0
+          ? "No attacked camps of this level were stored."
+          : `Reset ${removed} attacked camp${removed === 1 ? "" : "s"}: they use the saved yard now.`;
       },
       onPick: () => void this.openTribePicker({ tribe: tribe.tribe, level: tribe.level }),
       onExit: () => context.goTo(SceneName.YARD),
