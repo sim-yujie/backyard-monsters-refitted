@@ -154,7 +154,7 @@ import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/g
 import { footprintBox } from "@/game/yard/YardGrid";
 import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugins";
 import "@/game/yard/plugins";
-import { devDetails } from "../devDetails";
+import { devStats } from "../devDetails";
 
 /**
  * A yard: the player's own, or — handed a {@link ViewTarget} by the map —
@@ -2795,11 +2795,11 @@ export class YardScene implements Scene {
     const own = this.store?.target;
     // A player reads whose yard this is and the planner's "Yard centre" (#54,
     // #56); the counts, the plot, the frame time and the selected id are a
-    // developer's (#150).
+    // developer's (#150), behind their own opt-in switch (`devStats`, beta 6).
     const parts = [
       ...(this.target ? [`${this.whose()}, read-only`] : []),
       ...(this.hint ? [this.hint] : []),
-      ...(devDetails()
+      ...(devStats()
         ? [
             ...(own?.kind === "outpost" ? [yardTitle(own)] : []),
             `${buildings} buildings · ${yard.mushrooms.length} mushrooms`,

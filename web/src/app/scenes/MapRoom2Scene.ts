@@ -97,6 +97,7 @@ import { RelocateDialog } from "@/ui/maproom/RelocateDialog";
 import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog";
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
+import { devStats } from "../devDetails";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
 import { isPhoneLayout } from "@/ui/phoneLayout";
@@ -1194,11 +1195,14 @@ export class MapRoom2Scene implements Scene {
 
     ui.setSight(this.sight.sources);
     ui.setAttackers(this.revealedAttackers());
-    ui.setStatus(
-      `${this.store.loadedZones} zones · ${this.store.pendingRequests} queued · ` +
-        `${this.frameCostMs.toFixed(1)} ms/frame · ` +
-        `${this.renderer.lastBuildMs.toFixed(2)} ms/chunk`,
-    );
+    // The counts are a developer's, behind their opt-in switch (beta 6).
+    if (devStats()) {
+      ui.setStatus(
+        `${this.store.loadedZones} zones · ${this.store.pendingRequests} queued · ` +
+          `${this.frameCostMs.toFixed(1)} ms/frame · ` +
+          `${this.renderer.lastBuildMs.toFixed(2)} ms/chunk`,
+      );
+    }
   }
 
   /**

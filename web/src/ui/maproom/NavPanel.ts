@@ -1,4 +1,5 @@
 import type { Bookmark } from "@/api/bookmarks";
+import { devStats } from "@/app/devDetails";
 import { outpostTitle, type OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
 
@@ -87,8 +88,9 @@ export class NavPanel {
 
     this.status = document.createElement("p");
     this.status.className = "map-status";
-    // The frame and zone counts are for whoever is building the map (#176).
-    this.status.hidden = !import.meta.env.DEV;
+    // The frame and zone counts are for whoever is building the map (#176),
+    // behind their own opt-in switch (`devStats`, beta 6).
+    this.status.hidden = !devStats();
 
     this.panel.setContent(actions, this.outposts, this.list, add, this.status);
   }
