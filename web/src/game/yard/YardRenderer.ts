@@ -204,6 +204,7 @@ export class YardRenderer {
     this.root.addChild(
       this.ground.root,
       this.isoDecals,
+      this.giblets.ground,
       this.rangeOval,
       this.buildings.shadows,
       this.buildings.tops,
@@ -443,6 +444,7 @@ export class YardRenderer {
     for (const layer of [
       this.ground.root,
       this.isoDecals,
+      this.giblets.ground,
       this.buildings.shadows,
       this.buildings.tops,
       this.giblets.root,

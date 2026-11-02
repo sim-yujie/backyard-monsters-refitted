@@ -4,8 +4,10 @@ import { gibletPose, type Giblet } from "./juicerShow";
 /**
  * Draws the Monster Juicer's spurt: the giblets of `GIBLET.as` hopping out of
  * the spout, and the splat each leaves where it lands (`EFFECTS.SplatParticle`).
- * The flights are `juicerShow.ts`'s; this only paints them, in one Graphics
- * redrawn each frame, above the buildings as Flash's `MAP._RESOURCES`.
+ * The flights are `juicerShow.ts`'s; this only paints them, each frame: the
+ * giblets in `root`, above the buildings as Flash's `MAP._RESOURCES`, and the
+ * splats in `ground`, under them as Flash's `MAP._EFFECTS` (`MAP.as:173-193`),
+ * so a splat never sits on the Juicer itself.
  *
  * Flash's splat grows for about ten frames and is then stamped into the
  * ground for good (`EFFECTS.as:159-169`, `SnapShot`); here it grows the same
@@ -43,8 +45,12 @@ interface Splat {
 }
 
 export class YardGibletsLayer {
+  /** The giblets in the air: goes above the buildings. */
   readonly root = new Container();
+  /** The splats on the ground: goes under the buildings. */
+  readonly ground = new Container();
   private readonly paint = new Graphics();
+  private readonly splatPaint = new Graphics();
   private readonly spurts: Spurt[] = [];
   private readonly splats: Splat[] = [];
 
@@ -55,6 +61,8 @@ export class YardGibletsLayer {
   ) {
     this.root.eventMode = "none";
     this.root.addChild(this.paint);
+    this.ground.eventMode = "none";
+    this.ground.addChild(this.splatPaint);
   }
 
   /** Giblets still in the air, for `GIBLETS.Create`'s limit. */
@@ -75,7 +83,9 @@ export class YardGibletsLayer {
 
   update(deltaSeconds: number): void {
     const g = this.paint;
+    const ground = this.splatPaint;
     g.clear();
+    ground.clear();
     if (this.spurts.length === 0 && this.splats.length === 0) return;
     const dt = Math.max(0, deltaSeconds);
 
@@ -90,9 +100,9 @@ export class YardGibletsLayer {
       const scale = SPLAT_SCALE + SPLAT_GROW * grow;
       const fade = splat.t <= SPLAT_GROW_SECONDS ? 1 : 1 - (splat.t - SPLAT_GROW_SECONDS) / SPLAT_FADE_SECONDS;
       const r = SPLAT_RADIUS * scale;
-      g.ellipse(splat.x, splat.y, r, r * 0.5).fill({ color: SPLAT_RED, alpha: 0.85 * fade });
+      ground.ellipse(splat.x, splat.y, r, r * 0.5).fill({ color: SPLAT_RED, alpha: 0.85 * fade });
       for (const [angle, distance, share] of splat.lobes) {
-        g.ellipse(
+        ground.ellipse(
           splat.x + Math.cos(angle) * r * distance,
           splat.y + Math.sin(angle) * r * distance * 0.5,
           r * share,
@@ -132,11 +142,13 @@ export class YardGibletsLayer {
     this.spurts.length = 0;
     this.splats.length = 0;
     this.paint.clear();
+    this.splatPaint.clear();
   }
 
   destroy(): void {
     this.clear();
     this.root.destroy({ children: true });
+    this.ground.destroy({ children: true });
   }
 
   private splat(x: number, y: number): void {
