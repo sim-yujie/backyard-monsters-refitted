@@ -34,10 +34,10 @@ export const BUBBLE_MENU_KEY = "bymr.bubbleMenu";
 
 /**
  * The buttons in the fan by their `data-dock` name, the one nearest More
- * first. A new one (Quests, later) only needs its name here, and its button
- * put in the dock.
+ * first (Quests, the owner's beta 6 priority). A new one only needs its name
+ * here, and its button put in the dock.
  */
-export const BUBBLE_ITEMS: readonly string[] = ["layout", "goals", "bell", "defences", "mail"];
+export const BUBBLE_ITEMS: readonly string[] = ["quests", "layout", "goals", "bell", "defences", "mail"];
 
 /** Where the fan lays its bubbles out in rows: a phone on its side, too short for one column. */
 export const GRID_QUERY = "(width > 620px) and (height <= 500px)";
