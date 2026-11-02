@@ -1,0 +1,491 @@
+/*
+ * The Quests window (`ui/quests/QuestsPanel.ts`), its login card
+ * (`loginCard.ts`, also in the pop-up `LoginPopup.ts`) and its dock button
+ * (`game/yard/plugins/quests.ts`).
+ *
+ * Same rule as ui.css: values come from tokens.css. The panel is the shared
+ * `.panel`, centred under the HUD; on a phone it is a bottom sheet, as
+ * Goals and Events are.
+ */
+
+/* ── The button's red number ──────────────────────────────────────────── */
+
+.yard-dock__badge.quests-badge {
+  background: #e0362f;
+  border-color: #7a1512;
+  color: #fff;
+}
+
+.quests-door[aria-expanded="true"] .yard-dock__disc {
+  border-color: var(--colour-accent);
+}
+
+/* ── The panel ─────────────────────────────────────────────────────────── */
+
+.quests-panel {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  left: 50%;
+  z-index: var(--z-hud);
+  width: min(480px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - var(--hud-height) - 160px);
+  min-width: 0;
+  transform: translateX(-50%);
+}
+
+.quests-panel .panel__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.quests-tabs {
+  flex: none;
+  margin: var(--space-2) var(--space-3) 0;
+}
+
+.quests-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.quests-tabs__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #e0362f;
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.quests-tabs__count[hidden] {
+  display: none;
+}
+
+.quests-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+
+.quests-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.quests-section__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.quests-section__count {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+}
+
+.quests-section__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #ffb347;
+}
+
+.quests-section__clock {
+  flex: none;
+  align-self: center;
+}
+
+/* ── The login card ───────────────────────────────────────────────────── */
+
+.quests-login {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.quests-login__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quests-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 2px 6px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+.quests-day__label {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--colour-text-muted);
+}
+
+.quests-day__shiny {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text);
+}
+
+.quests-day--today {
+  border-color: #ffb347;
+  background: rgb(255 140 40 / 18%);
+  box-shadow: 0 0 0 1px #ffb347 inset;
+}
+
+.quests-day--today .quests-day__label {
+  color: #ffb347;
+}
+
+.quests-day--next {
+  border-style: dashed;
+}
+
+.quests-day--claimed {
+  opacity: 0.55;
+}
+
+/* Day 7 pays the most: a gold edge. */
+.quests-day--last:not(.quests-day--claimed) {
+  border-color: #e8c24a;
+}
+
+.quests-day__mark {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  color: var(--colour-success);
+}
+
+.quests-login__note {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+.quests-claim {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-height);
+  font-weight: 800;
+}
+
+.quests-claim__figure {
+  font-variant-numeric: tabular-nums;
+}
+
+.quests-claim--busy {
+  cursor: progress;
+}
+
+/* ── A quest row ───────────────────────────────────────────────────────── */
+
+.quests-set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.quests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quests-list__note {
+  padding: 0 var(--space-2);
+}
+
+.quest {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: 6px var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.quest--ready {
+  border-color: #ffb347;
+  background: rgb(255 140 40 / 12%);
+}
+
+.quest--claimed {
+  opacity: 0.6;
+}
+
+.quest--bonus {
+  border-style: dashed;
+}
+
+.quest--bonus.quest--ready {
+  border-style: solid;
+}
+
+.quest__art {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+}
+
+.quest__picture {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  filter: drop-shadow(0 1px 2px var(--colour-art-shadow));
+}
+
+/* The loot quest's resource, at the picture's corner. */
+.quest__art > .res-icon {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+}
+
+.quest__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.quest__title {
+  font-weight: 800;
+  color: var(--colour-text-strong);
+  line-height: 1.25;
+}
+
+.quest__hint {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.quest__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.quest__bar {
+  position: relative;
+  flex: 1;
+  min-width: 40px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--colour-dome-ring-track, rgb(255 255 255 / 12%));
+}
+
+.quest__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+  background: var(--colour-accent);
+}
+
+.quest--ready .quest__fill,
+.quest--claimed .quest__fill {
+  background: var(--colour-success);
+}
+
+.quest__count {
+  flex: none;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text-secondary);
+}
+
+.quest__rewards {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* In a row the reward reads left to right: picture, then figure. */
+.quest__rewards .events-reward {
+  flex-direction: row;
+  gap: 3px;
+}
+
+.quest__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+}
+
+.quest__done {
+  color: var(--colour-success);
+}
+
+.quest__swap {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.quests-set__swap-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.quests-refusal {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-danger);
+}
+
+.quests-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+.quests-status__text {
+  margin: 0;
+}
+
+/* ── The login pop-up ─────────────────────────────────────────────────── */
+
+.quests-login-popup {
+  width: min(440px, calc(100vw - 2 * var(--space-4)));
+}
+
+.quests-login-popup .panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.quests-login-popup__hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.quests-login-popup__picture {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.quests-login-popup__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-secondary);
+}
+
+.quests-login-popup__more {
+  align-self: center;
+}
+
+/* ── Phones ───────────────────────────────────────────────────────────── */
+
+@media (width <= 620px) {
+  .quests-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    max-height: min(85vh, calc(100dvh - var(--hud-height)));
+    transform: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .quests-pane {
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .quest {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .quest__art,
+  .quest__picture {
+    width: 40px;
+    height: 40px;
+  }
+
+  .quest__action {
+    min-width: 56px;
+  }
+
+  .quests-claim {
+    min-height: 44px;
+  }
+}
+
+/* A phone on its side: the panel takes the height down to the screen's foot. */
+@media (width > 620px) and (height <= 500px) {
+  .quests-panel {
+    top: calc(var(--hud-height) + var(--space-1));
+    max-height: calc(100dvh - var(--hud-height) - var(--space-3) - var(--space-4));
+  }
+}

@@ -107,7 +107,7 @@ export const claimedLine = (title: string, rewards: readonly EventReward[]): HTM
  * A small picture for one reward, and its short figure. A reward `gained`
  * (claimed, not on offer) signs its resources and Shiny "+10K", in green.
  */
-const rewardBadge = (reward: EventReward, gained = false): HTMLElement => {
+export const rewardBadge = (reward: EventReward, gained = false): HTMLElement => {
   const badge = el("span", `events-reward events-reward--${reward.kind}`);
   const pictures = el("span", "events-reward__pictures");
   let figure = "";
