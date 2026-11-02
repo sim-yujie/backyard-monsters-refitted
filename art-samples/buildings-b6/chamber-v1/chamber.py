@@ -962,9 +962,9 @@ def materials():
     M["arm"] = painted("arm", (96, 100, 104), rough=0.65, metal=0.15, wear=(128, 134, 138), rust=(58, 62, 66),
                        scale=6.0, dirt=0.25, spec=0.28)
     lift(M["arm"], (88, 92, 96), 0.12)
-    M["lid"] = painted("lid", (42, 62, 72), rough=0.65, metal=0.05, wear=(70, 94, 104), rust=(22, 32, 38), scale=5.0,
-                       dirt=0.2, spec=0.25, top=(50, 74, 84), rust_at=0.5)
-    lift(M["lid"], (38, 56, 66), 0.08)
+    M["lid"] = painted("lid", (46, 68, 78), rough=0.65, metal=0.05, wear=(76, 102, 112), rust=(22, 32, 38), scale=5.0,
+                       dirt=0.2, spec=0.25, top=(56, 82, 92), rust_at=0.5)
+    lift(M["lid"], (42, 62, 72), 0.1)
     M["frost"] = painted("frost", (178, 198, 206), rough=0.45, wear=(140, 166, 178), scale=3.0, dirt=0.3, spec=0.4,
                          top=(206, 220, 226))
     lift(M["frost"], (150, 172, 182), 0.14)
