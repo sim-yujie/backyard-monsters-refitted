@@ -326,12 +326,17 @@ export const saveAttack = async (
  */
 export const sendAttackCheckpoint = (
   checkpoint: AttackCheckpoint,
+  options: RequestOptions = {},
 ): Promise<ApiEnvelope & { stored?: boolean }> =>
-  post(CHECKPOINT_PATH, {
-    basesaveid: String(checkpoint.basesaveid),
-    ...(checkpoint.baseid !== undefined && { baseid: checkpoint.baseid }),
-    attackid: String(checkpoint.attackid),
-    tick: String(checkpoint.tick),
-    flinglog: JSON.stringify(checkpoint.flinglog),
-    sources: JSON.stringify(checkpoint.sources),
-  });
+  post(
+    CHECKPOINT_PATH,
+    {
+      basesaveid: String(checkpoint.basesaveid),
+      ...(checkpoint.baseid !== undefined && { baseid: checkpoint.baseid }),
+      attackid: String(checkpoint.attackid),
+      tick: String(checkpoint.tick),
+      flinglog: JSON.stringify(checkpoint.flinglog),
+      sources: JSON.stringify(checkpoint.sources),
+    },
+    options,
+  );

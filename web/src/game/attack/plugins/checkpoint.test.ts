@@ -2,11 +2,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import type { BaseLoadResponse } from "@/api/types";
-import { AttackSession } from "@/game/attack/AttackSession";
+import { AttackSession, DropsHeldError } from "@/game/attack/AttackSession";
 import type { AttackMounts } from "@/game/attack/attackPlugins";
 import { checkpointOf, type AttackCheckpoint } from "@/game/attack/attackCheckpoint";
 import type { AttackTarget } from "@/game/attack/attackTarget";
-import { CHECKPOINT_INTERVAL_MS, createCheckpointPlugin } from "./checkpoint";
+import { Notices } from "@/ui/maproom/Notices";
+import {
+  CHECKPOINT_INTERVAL_MS,
+  DROP_HOLD_AFTER_MS,
+  REQUEST_TIMEOUT_MS,
+  RETRY_MS,
+  createCheckpointPlugin,
+} from "./checkpoint";
 
 /**
  * The attack's running record on the server (issue #138): sent on every drop
@@ -71,16 +78,36 @@ describe("checkpointOf", () => {
     });
   });
 
-  it("is never taken for a Map Room 1 tribe, which has no basesaveid (#132)", () => {
-    const tribeLoad = { ...load(), baseid: "11" } as Record<string, unknown>;
-    delete tribeLoad["basesaveid"];
-    const tribe: AttackTarget = {
+  const rowless = (extra: Partial<AttackTarget>): AttackTarget => {
+    const rowlessLoad = { ...load(), baseid: "11" } as Record<string, unknown>;
+    delete rowlessLoad["basesaveid"];
+    return {
       ...target(),
       baseid: "11",
-      mapversion: 1,
-      load: tribeLoad as unknown as BaseLoadResponse,
+      load: rowlessLoad as unknown as BaseLoadResponse,
+      ...extra,
     };
-    const session = new AttackSession({ target: tribe, seed: 3 });
+  };
+
+  it("names a yard with no row by its base id: a Map Room 1 tribe, a Descent yard, a Moloch tribe", () => {
+    for (const extra of [
+      { mapversion: 1 },
+      { descentYard: 3 },
+      { infernoTribe: true },
+    ] as const) {
+      const session = new AttackSession({ target: rowless(extra), seed: 3 });
+      session.start();
+      session.appendFling({ x: -200, y: -200, monsters: { C1: 2 } });
+      expect(checkpointOf(session)).toMatchObject({
+        basesaveid: 0,
+        baseid: "11",
+        attackid: 77,
+      });
+    }
+  });
+
+  it("is never taken for any other attack with no row (a practice attack, a raid)", () => {
+    const session = new AttackSession({ target: rowless({ mapversion: 2 }), seed: 3 });
     session.start();
     session.appendFling({ x: -200, y: -200, monsters: { C1: 2 } });
     expect(checkpointOf(session)).toBeNull();
@@ -105,14 +132,20 @@ describe("the checkpoint plugin", () => {
   let session: AttackSession;
   let teardown: (() => void) | void;
   let sent: AttackCheckpoint[];
-  let send: ReturnType<typeof vi.fn<(checkpoint: AttackCheckpoint) => Promise<unknown>>>;
+  let notices: Notices;
+  let send: ReturnType<
+    typeof vi.fn<
+      (checkpoint: AttackCheckpoint, options?: { signal?: AbortSignal }) => Promise<unknown>
+    >
+  >;
 
   beforeEach(() => {
     vi.useFakeTimers();
     session = new AttackSession({ target: target(), seed: 3 });
     session.start();
     sent = [];
-    send = vi.fn(async (checkpoint: AttackCheckpoint) => {
+    notices = new Notices();
+    send = vi.fn(async (checkpoint: AttackCheckpoint, _options?: { signal?: AbortSignal }) => {
       sent.push(checkpoint);
       return { error: 0, stored: true };
     });
@@ -125,7 +158,10 @@ describe("the checkpoint plugin", () => {
   });
 
   const mount = () => {
-    teardown = createCheckpointPlugin({ send })({ session } as unknown as AttackMounts);
+    teardown = createCheckpointPlugin({ send })({
+      session,
+      notices,
+    } as unknown as AttackMounts);
   };
 
   it("sends nothing before the first drop, however long the clock runs", async () => {
@@ -181,7 +217,9 @@ describe("the checkpoint plugin", () => {
     teardown?.();
     session = new AttackSession({ target: target(), seed: 3 });
     session.start();
-    send.mockRejectedValue(new ApiError("no", { status: 200, details: { data: { reason: "expired" } } }));
+    send.mockRejectedValue(
+      new ApiError("no", { status: 200, details: { data: { reason: "expired" } } }),
+    );
     mount();
     session.appendFling({ x: -200, y: -200, monsters: { C1: 1 } });
     await flush();
@@ -223,19 +261,166 @@ describe("the checkpoint plugin", () => {
       await flush();
       expect(send).toHaveBeenCalledTimes(2);
     } finally {
-      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
     }
   });
 
-  it("carries on past a network failure", async () => {
+  it("tries again shortly after a network failure", async () => {
     send.mockRejectedValueOnce(new Error("offline"));
     mount();
     session.appendFling({ x: -200, y: -200, monsters: { C1: 1 } });
     await flush();
-    session.advance(1);
-    vi.advanceTimersByTime(CHECKPOINT_INTERVAL_MS);
-    await flush();
+    expect(send).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(RETRY_MS);
     expect(send).toHaveBeenCalledTimes(2);
+    expect(sent).toHaveLength(1);
+  });
+
+  describe("pausing drops while the server is behind (owner, 2 Nov 2026)", () => {
+    const fling = (x = -200): void => {
+      session.appendFling({ x, y: -200, monsters: { C1: 1 } });
+    };
+    const reconnecting = (): boolean =>
+      (notices.element.textContent ?? "").includes("Reconnecting");
+    const offline = (): void => {
+      send.mockImplementation(async () => {
+        throw new TypeError("Failed to fetch");
+      });
+    };
+    const online = (): void => {
+      send.mockImplementation(async (checkpoint) => {
+        sent.push(checkpoint);
+        return { error: 0, stored: true };
+      });
+    };
+
+    it("pauses new drops once a drop has gone ten seconds unconfirmed, and resumes once one is confirmed", async () => {
+      offline();
+      mount();
+      fling();
+      await vi.advanceTimersByTimeAsync(DROP_HOLD_AFTER_MS - 1000);
+      expect(session.dropsHeld()).toBe(false);
+      fling(-150);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(session.dropsHeld()).toBe(true);
+      expect(reconnecting()).toBe(true);
+      expect(() => fling(-100)).toThrow(DropsHeldError);
+      expect(session.flingLog().events).toHaveLength(2);
+      // Retried every couple of seconds meanwhile.
+      expect(send.mock.calls.length).toBeGreaterThanOrEqual(DROP_HOLD_AFTER_MS / RETRY_MS);
+      // The battle runs on.
+      expect(session.state().phase).toBe("running");
+
+      online();
+      await vi.advanceTimersByTimeAsync(RETRY_MS);
+      expect(session.dropsHeld()).toBe(false);
+      expect(reconnecting()).toBe(false);
+      expect(sent.at(-1)!.flinglog.events).toHaveLength(2);
+      fling(-100);
+      expect(session.flingLog().events).toHaveLength(3);
+    });
+
+    it("does not pause a slow phone whose checkpoints take four seconds each", async () => {
+      send.mockImplementation(
+        (checkpoint) =>
+          new Promise((resolve) => {
+            sent.push(checkpoint);
+            window.setTimeout(() => resolve({ error: 0, stored: true }), 4000);
+          }),
+      );
+      mount();
+      for (let second = 0; second < 30; second++) {
+        if (second < 5) fling(-200 + second * 20);
+        for (let half = 0; half < 2; half++) {
+          await vi.advanceTimersByTimeAsync(500);
+          expect(session.dropsHeld()).toBe(false);
+        }
+      }
+      expect(reconnecting()).toBe(false);
+      expect(sent.at(-1)!.flinglog.events).toHaveLength(5);
+    });
+
+    it("gives up a checkpoint that hangs and sends it again before drops pause", async () => {
+      send.mockImplementationOnce(
+        (_checkpoint, options) =>
+          new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError")),
+            );
+          }),
+      );
+      mount();
+      fling();
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + RETRY_MS);
+      expect(send.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(sent.length).toBeGreaterThanOrEqual(1);
+      expect(session.dropsHeld()).toBe(false);
+      await vi.advanceTimersByTimeAsync(DROP_HOLD_AFTER_MS);
+      expect(session.dropsHeld()).toBe(false);
+    });
+
+    it("lets go once the attack is over, once it is no longer this player's, and on teardown", async () => {
+      offline();
+      mount();
+      fling();
+      await vi.advanceTimersByTimeAsync(DROP_HOLD_AFTER_MS);
+      expect(session.dropsHeld()).toBe(true);
+      session.leave();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(session.dropsHeld()).toBe(false);
+      expect(reconnecting()).toBe(false);
+
+      teardown?.();
+      session = new AttackSession({ target: target(), seed: 3 });
+      session.start();
+      mount();
+      fling();
+      await vi.advanceTimersByTimeAsync(DROP_HOLD_AFTER_MS);
+      expect(session.dropsHeld()).toBe(true);
+      send.mockRejectedValue(
+        new ApiError("no", { status: 200, details: { data: { reason: "expired" } } }),
+      );
+      await vi.advanceTimersByTimeAsync(RETRY_MS);
+      expect(session.dropsHeld()).toBe(false);
+      expect(reconnecting()).toBe(false);
+
+      teardown?.();
+      session = new AttackSession({ target: target(), seed: 3 });
+      session.start();
+      offline();
+      mount();
+      fling();
+      await vi.advanceTimersByTimeAsync(DROP_HOLD_AFTER_MS);
+      expect(session.dropsHeld()).toBe(true);
+      teardown?.();
+      teardown = undefined;
+      expect(session.dropsHeld()).toBe(false);
+      expect(reconnecting()).toBe(false);
+    });
+
+    it("never pauses an attack the server keeps no record of (a practice attack, a raid)", async () => {
+      const practiceLoad = { ...load() } as Record<string, unknown>;
+      delete practiceLoad["basesaveid"];
+      session = new AttackSession({
+        target: {
+          ...target(),
+          mapversion: 2,
+          load: practiceLoad as unknown as BaseLoadResponse,
+        },
+        seed: 3,
+      });
+      session.start();
+      mount();
+      fling();
+      await vi.advanceTimersByTimeAsync(DROP_HOLD_AFTER_MS * 2);
+      expect(send).not.toHaveBeenCalled();
+      expect(session.dropsHeld()).toBe(false);
+      fling(-150);
+    });
   });
 
   it("tears down its timer", () => {
