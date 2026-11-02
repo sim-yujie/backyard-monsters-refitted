@@ -1047,8 +1047,8 @@ def materials():
     lift(M["coil"], (96, 60, 32), 0.08)
     M["panel"] = painted("panel", (30, 33, 34), rough=0.85, wear=(42, 46, 46), scale=4.0, dirt=0.1)
     M["cframe"] = painted("cframe", (62, 70, 74), rough=0.6, metal=0.3, wear=(92, 100, 104), scale=4.0, dirt=0.2)
-    # (r6) the horns on the right box: dark steel tusks, a white highlight along their top (frost_up below)
-    M["fin"] = shiny("fin", (108, 114, 120), rough=0.4, metal=0.45, wear=(76, 82, 88), scale=3.0, dirt=0.25)
+    # (r8) the cooling pipes on the right box: grey metal, a frosted white highlight along their top (frost_up below)
+    M["fin"] = shiny("fin", (118, 124, 130), rough=0.4, metal=0.45, wear=(84, 90, 96), scale=3.0, dirt=0.25)
     # the tanks: dark machinery, frost only on the faces turned up (their top edges)
     # (r5: the drums lying on their side; dark metal, ice-crusted on their upper half by frost_up below)
     M["tank"] = painted("tank", (40, 50, 56), rough=0.45, metal=0.3, wear=(66, 80, 88), rust=(16, 20, 24),
@@ -1086,7 +1086,7 @@ def materials():
            ((196, 212, 220), 2.6, 0.15), seed=8.0)
     mottle(M["tank"], [(1.4, 0.16, 3.0), (6.0, 0.12, 2.0)], ((200, 214, 222), 3.0, 0.08), seed=9.0)
     mottle(M["fin"], [(2.0, 0.2, 3.0), (3.0, 0.2, 3.0, 0.3), (10.0, 0.12, 2.0)], ((58, 62, 66), 3.0, 0.3), seed=10.0)
-    frost_up(M["fin"], (226, 232, 236), lo=0.3, hi=0.65, scale=2.0, cover=0.95, seed=26.0, amount=0.95)
+    frost_up(M["fin"], (232, 238, 242), lo=0.2, hi=0.5, scale=2.0, cover=1.0, seed=26.0, amount=1.0)
     # (r5) frost back where Flash has it: white streaks down the frosted faces, frost on the bars' top edges, white
     # highlights on the arms' top and outer edges, the drums iced over on top
     frost_up(M["rime"], (228, 238, 244), scale=2.4, cover=0.82, zs=0.16, seed=21.0, up=False)
@@ -1268,11 +1268,12 @@ def compressor():
         for k in range(8, -1, -1):
             t = math.radians(90 * k / 8)
             poly.append((1.05 * math.sin(t), h + 0.8 * math.cos(t)))
-        # (r7) round dark steel tusks lying ON the right box's top by the main wall: thick at the root, rising up
-        # and curving back (toward +Y, the picture's upper right) to a point, like fins leaning back (Flash)
-        pts = [(AX + 0.5 + 0.2 * math.sin(math.radians(a)), yf + 0.9 - 1.45 * math.cos(math.radians(a)),
-                h - 0.15 + 1.5 * math.sin(math.radians(a))) for a in range(0, 91, 6)]
-        tube(f"fin{i}", pts, 0.4, M["fin"], r_end=0.03, verts=12, smooth=True)
+        # (r8) not horns: three parallel curved cooling pipes, round and even in thickness, leaving the main wall and
+        # bending down onto the right box's top (both ends buried: in the wall, in the box); grey metal, frosted
+        # white along the top (frost_up on "fin"), dark gaps between them
+        pts = [(AX - 0.15 + 1.55 * math.sin(math.radians(a)), yf, h - 0.12 + 1.4 * math.cos(math.radians(a)))
+               for a in range(0, 91, 5)]
+        tube(f"fin{i}", pts, 0.3, M["fin"], verts=16, smooth=True)
     # (r5) Flash's machine beside the door: two fat ice-crusted drums lying on their side, one on the other, hugging
     # the wall corner on a low dark base; ice over their upper halves (frost_up on "tank"), crusty lumps of frost along
     # their tops, a few icicles; dark gaps between them (no hose)

@@ -301,7 +301,7 @@ def damaged():
     coil = named(r"coil")
     turn(coil, world((S.COMP[0], 0, S.COIL[2])), world((0, 1, 0)) - world((0, 0, 0)), 18)
     fin = named(r"fin1")
-    for o in fin:                           # (r6) the horns are curves now (round tusks): make it a mesh to drop it
+    for o in fin:                           # (r8) the fins are curved cooling pipes (curves): make it a mesh to drop it
         bpy.ops.object.select_all(action="DESELECT")
         o.select_set(True)
         bpy.context.view_layer.objects.active = o
