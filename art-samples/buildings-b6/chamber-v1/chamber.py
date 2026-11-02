@@ -858,6 +858,57 @@ def mottle(mat, layers, scuff=None, seed=0.0):
     nt.links.new(out, b.inputs["Base Color"])
 
 
+def frost_up(mat, col, lo=0.35, hi=0.75, scale=3.0, cover=0.6, zs=1.0, seed=0.0, up=True, amount=1.0, axis=None):
+    """(r5) Frost painted over the part: `col` mixed in where a world-space noise is high (about `cover` of the surface;
+    zs < 1 stretches it upright into streaks running down) and, with up=True, only on the faces turned up (normal Z
+    from lo to hi), as Flash's frosted top edges."""
+    nt = mat.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    src = b.inputs["Base Color"].links[0].from_socket
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    n = nt.nodes.new("ShaderNodeTexNoise")
+    n.inputs["Scale"].default_value = scale
+    n.inputs["Detail"].default_value = 5.0
+    n.inputs["Roughness"].default_value = 0.6
+    n.inputs["Distortion"].default_value = 0.3
+    try:
+        n.noise_dimensions = "4D"
+        n.inputs["W"].default_value = seed
+    except (TypeError, KeyError):
+        pass
+    mp = nt.nodes.new("ShaderNodeMapping")
+    mp.inputs["Scale"].default_value = (1.0, 1.0, zs)
+    nt.links.new(geo.outputs["Position"], mp.inputs["Vector"])
+    nt.links.new(mp.outputs[0], n.inputs["Vector"])
+    k = 0.66 - 0.3 * cover
+    r = nt.nodes.new("ShaderNodeValToRGB")
+    el = r.color_ramp.elements
+    el[0].position, el[0].color = k, (0, 0, 0, 1)
+    el[1].position, el[1].color = k + 0.1, (amount, amount, amount, 1)
+    nt.links.new(n.outputs["Fac"], r.inputs[0])
+    fac = r.outputs[0]
+    if up:                                      # (axis: the faces turned that way instead of up)
+        dp = nt.nodes.new("ShaderNodeVectorMath")
+        dp.operation = "DOT_PRODUCT"
+        nt.links.new(geo.outputs["Normal"], dp.inputs[0])
+        dp.inputs[1].default_value = axis or (0.0, 0.0, 1.0)
+        mr = nt.nodes.new("ShaderNodeMapRange")
+        mr.inputs[1].default_value, mr.inputs[2].default_value = lo, hi
+        nt.links.new(dp.outputs["Value"], mr.inputs[0])
+        mul = nt.nodes.new("ShaderNodeMath")
+        mul.operation = "MULTIPLY"
+        nt.links.new(mr.outputs[0], mul.inputs[0])
+        nt.links.new(fac, mul.inputs[1])
+        fac = mul.outputs[0]
+    m = nt.nodes.new("ShaderNodeMix")
+    m.data_type = "RGBA"
+    m.blend_type = "MIX"
+    nt.links.new(fac, m.inputs[0])
+    nt.links.new(src, m.inputs[6])
+    m.inputs[7].default_value = srgb(*col)
+    nt.links.new(m.outputs[2], b.inputs["Base Color"])
+
+
 def drape(name, p0, d, out, us, zb, zt, depth, mat, bulge=0.12, sub=1):
     """A sheet of snow or ice hanging on an upright face: columns at us (along the ground direction d from p0), each
     from zb[i] up to zt[i], `depth` thick (its back on the face, its front `out` from it), the front bowed out by bulge
@@ -951,20 +1002,23 @@ def materials():
     M = {}
     # the box: Flash's icy blue-grey freezer walls, frosted paler toward the top, darker low down
     # (r4: darker mid slate blue-grey, as Flash, with heavy dark streaks; frost only along the edges)
-    M["wall"] = painted("wall", (68, 94, 102), rough=0.7, metal=0.05, wear=(92, 120, 126), rust=(24, 34, 38),
-                        scale=6.0, dirt=0.55, spec=0.22, top=(70, 96, 102), rust_at=0.48)
-    lift(M["wall"], (58, 84, 92), 0.17)
-    shade_z(M["wall"], [(0.0, 0.6), (1.6, 0.84), (4.8, 1.0), (6.0, 1.08), (6.5, 1.12)])
+    # (r5: about 10% lighter again; Flash 93 brightness)
+    M["wall"] = painted("wall", (78, 106, 115), rough=0.7, metal=0.05, wear=(104, 134, 140), rust=(28, 38, 42),
+                        scale=6.0, dirt=0.5, spec=0.22, top=(84, 110, 118), rust_at=0.48)
+    lift(M["wall"], (74, 102, 110), 0.32)
+    shade_z(M["wall"], [(0.0, 0.84), (1.6, 0.96), (4.8, 1.02), (6.0, 1.08), (6.5, 1.12)])
     # the frame bars: rounded grey metal with a slight brown tint (cool grey in the shade, as Flash), worn
     M["bar"] = painted("bar", (98, 95, 94), rough=0.72, metal=0.1, wear=(124, 120, 118), rust=(50, 52, 56), scale=7.0,
                        dirt=0.35, spec=0.25)
     lift(M["bar"], (84, 96, 102), 0.15)
-    M["arm"] = painted("arm", (96, 100, 104), rough=0.65, metal=0.15, wear=(128, 134, 138), rust=(58, 62, 66),
-                       scale=6.0, dirt=0.25, spec=0.28)
-    lift(M["arm"], (88, 92, 96), 0.12)
-    M["lid"] = painted("lid", (46, 68, 78), rough=0.65, metal=0.05, wear=(76, 102, 112), rust=(22, 32, 38), scale=5.0,
-                       dirt=0.2, spec=0.25, top=(56, 82, 92), rust_at=0.5)
-    lift(M["lid"], (42, 62, 72), 0.1)
+    # (r5) lighter steel, white highlights on the top and outer edges (frost_up below)
+    for k in ("arm", "arml", "armr"):
+        M[k] = painted(k, (126, 131, 136), rough=0.6, metal=0.15, wear=(160, 166, 170), rust=(76, 80, 86),
+                       scale=6.0, dirt=0.22, spec=0.32)
+        lift(M[k], (112, 118, 124), 0.16)
+    M["lid"] = painted("lid", (54, 78, 89), rough=0.65, metal=0.05, wear=(86, 114, 124), rust=(26, 36, 42), scale=5.0,
+                       dirt=0.2, spec=0.25, top=(64, 92, 103), rust_at=0.5)
+    lift(M["lid"], (48, 70, 80), 0.12)
     M["frost"] = painted("frost", (178, 198, 206), rough=0.45, wear=(140, 166, 178), scale=3.0, dirt=0.3, spec=0.4,
                          top=(206, 220, 226))
     lift(M["frost"], (150, 172, 182), 0.14)
@@ -973,9 +1027,10 @@ def materials():
                          dirt=0.3, spec=0.35, top=(170, 188, 198), rust_at=0.5)
     lift(M["snowd"], (96, 116, 128), 0.08)
     # frost running down the walls: slate blue-grey, streaky, paler only in streaks (Flash's frozen faces, not white)
-    M["rime"] = painted("rime", (104, 126, 136), rough=0.5, wear=(140, 162, 172), rust=(44, 58, 66), scale=3.0,
-                        dirt=0.25, spec=0.4, top=(190, 206, 214), rust_at=0.5)
-    lift(M["rime"], (70, 90, 100), 0.08)
+    # (r5) paler again, with white streaks running down from the top edge (frost_up below)
+    M["rime"] = painted("rime", (124, 148, 158), rough=0.5, wear=(170, 190, 198), rust=(56, 72, 80), scale=3.0,
+                        dirt=0.2, spec=0.4, top=(200, 214, 222), rust_at=0.55)
+    lift(M["rime"], (90, 110, 120), 0.1)
     M["ice"] = shiny("ice", (170, 198, 210), rough=0.3, metal=0.0, wear=(120, 156, 172), scale=3.0, dirt=0.25, spec=0.5)
     M["dark"] = flat("dark", (14, 18, 20), rough=0.9)
     M["core"] = painted("core", (40, 56, 62), rough=0.6, wear=(60, 80, 86), scale=4.0, dirt=0.2)
@@ -986,32 +1041,39 @@ def materials():
     M["brass"] = shiny("brass", (200, 176, 120), rough=0.45, metal=0.3, wear=(160, 140, 100), scale=2.0, dirt=0.3,
                        side=0.3)
     M["hornin"] = painted("hornin", (72, 56, 26), rough=0.8, wear=(110, 88, 44), scale=3.0, dirt=0.0, spec=0.3)
-    M["coil"] = shiny("coil", (178, 136, 54), rough=0.35, metal=0.8, wear=(112, 82, 30), scale=3.0, dirt=0.2)
-    M["panel"] = painted("panel", (34, 36, 34), rough=0.8, wear=(50, 52, 48), scale=4.0, dirt=0.1)
+    # (r5) thin dark copper wire in a dark recessed frame
+    M["coil"] = shiny("coil", (146, 88, 46), rough=0.4, metal=0.6, wear=(96, 56, 28), scale=3.0, dirt=0.2)
+    lift(M["coil"], (110, 64, 32), 0.2)
+    M["panel"] = painted("panel", (30, 33, 34), rough=0.85, wear=(42, 46, 46), scale=4.0, dirt=0.1)
+    M["cframe"] = painted("cframe", (62, 70, 74), rough=0.6, metal=0.3, wear=(92, 100, 104), scale=4.0, dirt=0.2)
     M["fin"] = shiny("fin", (190, 196, 200), rough=0.25, metal=0.25, wear=(176, 184, 190), scale=3.0, dirt=0.15)
     # the tanks: dark machinery, frost only on the faces turned up (their top edges)
-    M["tank"] = painted("tank", (54, 66, 74), rough=0.45, metal=0.3, wear=(96, 112, 120), rust=(22, 28, 32),
+    # (r5: the drums lying on their side; dark metal, ice-crusted on their upper half by frost_up below)
+    M["tank"] = painted("tank", (52, 64, 72), rough=0.45, metal=0.3, wear=(80, 96, 104), rust=(20, 26, 30),
                         scale=3.0, dirt=0.4, spec=0.4, rust_at=0.5, ao_min=0.35)
     M["glass"] = shiny("glass", (66, 98, 106), rough=0.12, metal=0.15, wear=(104, 138, 146), scale=2.0, dirt=0.1,
                        spec=0.8)
-    # the stack under the arms: dark slate-steel layers, frosted only on their upturned edges
-    M["pane"] = painted("pane", (50, 64, 76), rough=0.6, metal=0.1, wear=(70, 86, 98), rust=(26, 34, 42), scale=4.0,
-                        dirt=0.2, spec=0.3, top=(112, 132, 144), rust_at=0.5)
-    lift(M["pane"], (46, 62, 74), 0.1)
+    # the slabs under the arms: slate-steel, their edges frosted pale cyan-white (frost ring, r5)
+    M["rimc"] = painted("rimc", (196, 226, 234), rough=0.35, wear=(160, 200, 212), scale=3.0, dirt=0.15, spec=0.5)
+    lift(M["rimc"], (150, 190, 200), 0.15)
+    M["pane"] = painted("pane", (58, 76, 88), rough=0.6, metal=0.1, wear=(70, 86, 98), rust=(26, 34, 42), scale=4.0,
+                        dirt=0.2, spec=0.3, top=(140, 172, 184), rust_at=0.5)
+    lift(M["pane"], (52, 70, 82), 0.12)
     M["glow"] = flat("glow", (120, 232, 240), rough=0.3, emit=2.0)
     M["gback"] = flat("gback", (20, 40, 46), rough=0.6)
     M["bolt"] = shiny("bolt", (146, 152, 156), rough=0.45, metal=0.3, wear=(100, 106, 110), scale=3.0, dirt=0.3)
     M["steel"] = shiny("steel", (184, 192, 200), rough=0.3, metal=0.8, wear=(140, 148, 160), scale=3.0, dirt=0.1)
     M["pipe"] = painted("pipe", (34, 36, 40), rough=0.5, metal=0.4, wear=(60, 64, 70), scale=4.0, dirt=0.0)
-    for k, (sc, amt) in {"wall": (1.4, 0.55), "bar": (1.6, 0.3), "arm": (1.6, 0.28), "lid": (1.4, 0.5),
+    for k, (sc, amt) in {"wall": (1.4, 0.55), "bar": (1.6, 0.3), "arm": (1.6, 0.28), "arml": (1.6, 0.28), "armr": (1.6, 0.28), "lid": (1.4, 0.5),
                          "foot": (1.6, 0.3), "frost": (1.6, 0.1), "tank": (1.6, 0.3), "sill": (1.6, 0.2),
                          "snowd": (1.8, 0.3), "rime": (1.8, 0.3), "pane": (1.6, 0.3)}.items():
-        stain(M[k], sc, amt, 2.0 + len(k), fine=0.6 if k in ("foot", "bar", "wall", "lid", "arm") else 0.35)
+        stain(M[k], sc, amt, 2.0 + len(k), fine=0.6 if k in ("foot", "bar", "wall", "lid", "arm", "arml", "armr") else 0.35)
     # Flash's surfaces are grimy and blotchy, never flat: big dark blotches, dark streaks running down, lighter scuffs
     # and a grain of flecks
     mottle(M["wall"], [(0.9, 0.24, 3.0), (2.4, 0.3, 4.0, 0.15), (5.0, 0.22, 4.0, 0.2), (3.2, 0.18, 4.0), (11.0, 0.16, 2.0)], ((96, 122, 130), 2.2, 0.22), seed=1.0)
     mottle(M["bar"], [(1.1, 0.18, 3.0), (4.0, 0.14, 3.0), (13.0, 0.15, 2.0)], ((140, 138, 136), 2.6, 0.22), seed=2.0)
-    mottle(M["arm"], [(1.0, 0.18, 3.0), (3.6, 0.15, 3.0), (12.0, 0.14, 2.0)], ((150, 158, 162), 2.4, 0.3), seed=3.0)
+    for k in ("arm", "arml", "armr"):
+        mottle(M[k], [(1.0, 0.18, 3.0), (3.6, 0.15, 3.0), (12.0, 0.14, 2.0)], ((150, 158, 162), 2.4, 0.3), seed=3.0)
     mottle(M["lid"], [(0.9, 0.22, 3.0), (2.6, 0.22, 4.0, 0.2), (3.4, 0.16, 4.0), (12.0, 0.12, 2.0)], ((92, 122, 132), 2.0, 0.2), seed=4.0)
     mottle(M["snowd"], [(1.2, 0.2, 3.0), (2.6, 0.24, 4.0, 0.15), (9.0, 0.1, 2.0)], ((176, 194, 204), 2.4, 0.25), seed=11.0)
     mottle(M["pane"], [(1.4, 0.16, 3.0), (10.0, 0.1, 2.0)], ((84, 102, 116), 2.4, 0.2), seed=12.0)
@@ -1022,6 +1084,14 @@ def materials():
            ((196, 212, 220), 2.6, 0.15), seed=8.0)
     mottle(M["tank"], [(1.4, 0.16, 3.0), (6.0, 0.12, 2.0)], ((200, 214, 222), 3.0, 0.08), seed=9.0)
     mottle(M["fin"], [(2.0, 0.2, 3.0), (3.0, 0.2, 3.0, 0.3), (10.0, 0.12, 2.0)], ((80, 86, 90), 3.0, 0.3), seed=10.0)
+    # (r5) frost back where Flash has it: white streaks down the frosted faces, frost on the bars' top edges, white
+    # highlights on the arms' top and outer edges, the drums iced over on top
+    frost_up(M["rime"], (226, 236, 242), scale=2.4, cover=0.8, zs=0.16, seed=21.0, up=False)
+    frost_up(M["bar"], (210, 222, 230), lo=0.45, hi=0.85, scale=2.6, cover=0.58, seed=22.0)
+    for k, sgn in (("arml", -1), ("armr", 1)):   # the arms' highlight: along their top and outer edges
+        frost_up(M[k], (228, 234, 238), lo=0.55, hi=0.85, scale=1.4, cover=0.85, seed=23.0, amount=0.85,
+                 axis=tuple(Vector((sgn * 0.62, sgn * 0.62, 0.48)).normalized()))
+    frost_up(M["tank"], (196, 212, 222), lo=0.2, hi=0.55, scale=1.8, cover=0.95, seed=24.0)
     return M
 
 
@@ -1112,7 +1182,7 @@ def doorway():
     zb = []
     for i, x in enumerate(xs):
         if x < x0 - S.JAMB:                     # left of the door: frozen far down, deepest at the corner
-            z = 1.1 + 2.6 * min(1.0, max(0.0, x + AX) / 0.45) ** 1.5 + 0.25 * math.sin(7 * x)   # down the corner edge only
+            z = 0.8 + 1.5 * min(1.0, max(0.0, x + AX) / 0.6) ** 1.5 + 0.25 * math.sin(7 * x)   # (r5) far down the whole strip
         elif x <= x1 + S.JAMB:                  # above the door (under the snow sheet)
             z = z1 + 0.3
         else:                                   # right of the door: a shorter band
@@ -1122,7 +1192,7 @@ def doorway():
     xs = [-AX - 0.06 + 0.42 * i / 29 for i in range(30)]
     dr = drips(xs, 5, 0.2, 0.7, (0.05, 0.12))
     drape("frostj", (0.0, y), (1, 0), (0, -1), xs, [0.95 + 2.2 * max(0.0, (xx + AX - 0.12) / 0.3) ** 2 - dr[i]
-                                                    for i, xx in enumerate(xs)], [H - 0.6] * len(xs), 0.1, M["snowd"],
+                                                    for i, xx in enumerate(xs)], [H - 0.6] * len(xs), 0.1, M["rime"],
           bulge=0.05)
     # and a band of frost down the top of the +X face
     ys = [-AY + B / 2 + (2 * AY - B / 2 - 0.25) * i / 99 for i in range(100)]
@@ -1158,15 +1228,31 @@ def compressor():
     x1, y0, y1, h = S.COMP
     box("comp", (x1 - AX + 0.1, y1 - y0, h), ((AX + x1) / 2 - 0.05, (y0 + y1) / 2, 0), M["wall"], bevel=0.12)
     cy0, cy1, cz0, cz1, n = S.COIL
+    # (r5) Flash's coil: a thin dark copper wire zig-zagging up and down in a dark recessed frame (a raised dark steel
+    # rim round a black back plate)
     box("coilpanel", (0.06, cy1 - cy0 + 0.3, cz1 - cz0 + 0.3), (x1 + 0.02, (cy0 + cy1) / 2, cz0 - 0.15), M["panel"],
         bevel=0.02)
+    fw, fo = 0.18, 0.16
+    pw_, ph_ = cy1 - cy0 + 0.3, cz1 - cz0 + 0.3     # the back plate's width and height
+    for k, (size, cy, z) in enumerate((((fo, pw_ + 2 * fw, fw), (cy0 + cy1) / 2, cz1 + 0.15),
+                                       ((fo, pw_ + 2 * fw, fw), (cy0 + cy1) / 2, cz0 - 0.15 - fw),
+                                       ((fo, fw, ph_), cy0 - 0.15 - fw / 2, cz0 - 0.15),
+                                       ((fo, fw, ph_), cy1 + 0.15 + fw / 2, cz0 - 0.15))):
+        box(f"coilpanelf{k}", size, (x1 + fo / 2 - 0.02, cy, z), M["cframe"], bevel=0.04)
+    legs = 2 * n
+    sp = (cy1 - cy0) / legs
+    rr = sp / 2
     pts = []
-    w = (cy1 - cy0) / (2 * n)
-    for i in range(n):
-        ya, yb = cy0 + 2 * i * w + w * 0.25, cy0 + (2 * i + 1) * w + w * 0.75
-        pts += [(x1 + 0.14, ya, cz0), (x1 + 0.14, ya, cz1 - w), (x1 + 0.14, (ya + yb) / 2, cz1),
-                (x1 + 0.14, yb, cz1 - w), (x1 + 0.14, yb, cz0)]
-    tube("coil", pts, 0.085, M["coil"], smooth=True)
+    for i in range(legs):
+        yl = cy0 + (i + 0.5) * sp
+        up = i % 2 == 0
+        za, zb = (cz0 + rr, cz1 - rr) if up else (cz1 - rr, cz0 + rr)
+        pts += [(x1 + 0.09, yl, za), (x1 + 0.09, yl, zb)]
+        if i < legs - 1:                        # the round turn over (or under) to the next leg
+            for k in range(1, 8):
+                t = math.pi * k / 8
+                pts.append((x1 + 0.09, yl + rr - rr * math.cos(t), zb + (rr if up else -rr) * math.sin(t)))
+    tube("coil", pts, 0.042, M["coil"], verts=8)
     for i, yf in enumerate(S.FINS_Y):
         poly = []
         for k in range(9):
@@ -1176,26 +1262,32 @@ def compressor():
             t = math.radians(90 * k / 8)
             poly.append((1.05 * math.sin(t), h + 0.8 * math.cos(t)))
         slab(f"fin{i}", (AX + 0.15, yf), (1, 0), poly, 0.26, M["fin"], bevel=0.07, out=(0, -1))
-    # the tanks on their plinth, and the pipe that curls down to them from the top
-    tx, ty, tr, zs = S.TANK
-    box("plinth", (2 * tr + 0.2, 2 * tr + 0.2, 0.42), (tx, ty, 0), M["grate"], bevel=0.06)
-    for i, (za, zb) in enumerate(zs):              # (r4) dark ribbed drums; frost only along their top rims, a few icicles
-        tk = lathe(f"tank{i}", [(0.0, za), (tr * 0.86, za), (tr * 1.0, za + 0.12), (tr * 1.0, za + 0.3),
-                                (tr * 0.94, za + 0.38), (tr * 0.94, zb - 0.38), (tr * 1.0, zb - 0.3), (tr * 1.0, zb - 0.12),
-                                (tr * 0.86, zb), (0.0, zb)], (tx, ty, 0), M["tank"], verts=40)
-        crumple_geo(tk, 0.3, 0.04)
-        prof = [(tr * 0.74, zb + 0.02), (tr * 0.88, zb + 0.07), (tr * 1.0, zb - 0.02), (tr * 1.05, zb - 0.2),
-                (tr * 1.02, zb - 0.3)]
-        cap = lathe(f"tankcap{i}", prof, (tx, ty, 0), M["frost"], verts=40)
-        crumple_geo(cap, 0.3, 0.08)
-        for k in range(6):
-            a = math.radians(-160 + k * 30 + rng.uniform(-8, 8))
-            cyl(f"tankice{i}{k}", rng.uniform(0.05, 0.09), rng.uniform(0.2, 0.5),
-                (tx + tr * 1.02 * math.cos(a), ty + tr * 1.02 * math.sin(a), zb - 0.24), M["ice"], rot=(180, 0, 0),
-                verts=8, r2=0.01, bevel=0.0)
-    cyl("tankshaft", 0.4, zs[1][0] - zs[0][1] + 0.2, (tx, ty, zs[0][1] - 0.1), M["grate"], verts=16)
-    tube("pipe", [(2.5, -2.9, H + 0.02), (2.85, -2.85, H + 0.75), (3.5, -2.8, H + 0.85), (3.95, -2.7, H + 0.2),
-                  (4.1, -2.5, zs[1][1] + 0.9), (tx - 0.2, ty - 0.1, zs[1][1] - 0.02)], 0.09, M["pipe"], smooth=True)
+    # (r5) Flash's machine beside the door: two fat ice-crusted drums lying on their side, one on the other, hugging
+    # the wall corner on a low dark base; ice over their upper halves (frost_up on "tank"), crusty lumps of frost along
+    # their tops, a few icicles; dark gaps between them (no hose)
+    tx, ty, tl, zs = S.TANK
+    box("plinth", (2 * tl - 0.5, 0.7, zs[0][0] + 0.1), (tx - 0.3, ty + 0.3, 0), M["cframe"], rot=(0, 0, 45), bevel=0.06)
+    for i, (za, zb) in enumerate(zs):
+        r = (zb - za) / 2
+        zc = za + r
+        e = min(r * 0.8, tl * 0.5)              # the rounded drum ends (fat, nearly round)
+        prof = [(0.0, -tl)] + [(r - e + e * math.sin(math.pi / 2 * k / 5), -tl + e - e * math.cos(math.pi / 2 * k / 5))
+                               for k in range(6)]
+        prof += [(r * 0.98, -tl * 0.3), (r, 0.0), (r * 0.98, tl * 0.3)]
+        prof += [(r - e + e * math.sin(math.pi / 2 * k / 5), tl - e + e * math.cos(math.pi / 2 * k / 5))
+                 for k in range(5, -1, -1)] + [(0.0, tl)]
+        tk = lathe(f"tank{i}", prof, (tx, ty, zc), M["tank"], rot=(90, 0, 135), verts=40)
+        crumple_geo(tk, 0.32, 0.06)
+        for k in range(3):                      # crusty frost along the top
+            u = (-0.5 + 0.5 * k + rng.uniform(-0.08, 0.08)) * tl
+            p = Vector((tx, ty, zc)) + ACROSS * u + ALONG * rng.uniform(-0.1, 0.25) * r
+            snow(f"tankcapf{i}{k}", (p.x, p.y, zc + r * rng.uniform(0.6, 0.72)), r * rng.uniform(0.38, 0.48),
+                 squash=(1.0, 1.0, 0.55), jag=0.24)
+        for k in range(4):                      # a few icicles from the ice's lower edge, on the side toward the viewer
+            u = (-0.75 + 0.5 * k + rng.uniform(-0.1, 0.1)) * tl
+            p = Vector((tx, ty, zc)) + ACROSS * u + ALONG * r * 0.88
+            cyl(f"tankice{i}{k}", rng.uniform(0.05, 0.08), rng.uniform(0.2, 0.42), (p.x, p.y, zc + 0.05), M["ice"],
+                rot=(180, 0, 0), verts=8, r2=0.01, bevel=0.0)
 
 
 def horns():
@@ -1210,43 +1302,30 @@ def horns():
 
 
 def top():
-    # the glass hatch: an octagon facing the viewer, tipped a little toward them, on a low frame
-    cx, cy, ra, rb, tilt = S.HATCH
-    c = Vector((cx, cy, H + 0.32))
-    tt = math.tan(math.radians(tilt))
-    oct_ = [(ra * math.cos(math.radians(22.5 + 45 * k)) / math.cos(math.radians(22.5)),
-             rb * math.sin(math.radians(22.5 + 45 * k)) / math.cos(math.radians(22.5))) for k in range(8)]
-
-    def at(u, v, dz=0.0):
-        return c + ACROSS * u + ALONG * v + Vector((0, 0, -v * tt + dz))
-    bm = bmesh.new()
-    top_ = [bm.verts.new(at(u, v)) for u, v in oct_]
-    bot = [bm.verts.new(at(u, v) * 1.0 - Vector((0, 0, at(u, v).z - H + 0.02))) for u, v in oct_]
-    bm.faces.new(top_)
-    bm.faces.new(bot[::-1])
-    for k in range(8):
-        bm.faces.new((top_[k], bot[k], bot[(k + 1) % 8], top_[(k + 1) % 8]))
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    mesh_ob("hatchbase", bm, [M["arm"]], smooth=False, bevel=0.06, segs=2)
-    inner = [(u * 0.82, v * 0.84) for u, v in oct_]
-    bm = bmesh.new()
-    vs = [bm.verts.new(at(u, v, 0.04)) for u, v in inner]
-    bm.faces.new(vs)
-    mesh_ob("hatchglass", bm, [M["glass"]], smooth=False)
-    tube("hatchrim", [tuple(at(u * 0.86, v * 0.88, 0.05)) for u, v in oct_], 0.11, M["steel"], cyclic=True)
+    # (r5) no glass hatch any more: the slabs below stand on the roof where it was
+    cx, cy = S.HATCH[:2]
     lz0 = S.LID[3]
-    for k in range(4):                          # the glass stack: panes, each a little smaller, up to the lid
-        f = 0.98 - 0.07 * k
-        z0 = 0.12 + k * (lz0 - H - 0.3) / 4
+    # (r5) under the arms, Flash's 2-3 wide flat square slabs, nearly equal, one over the other with dark gaps, their
+    # edges frosted pale cyan-white (a frost rim round each top edge)
+    sx, sy = cx, cy
+    nsl = 3
+    for k in range(nsl):
+        hs = 1.32 - 0.04 * k                    # half side (square, sides along X and Y like the lid)
+        th = 0.45
+        z0 = H + 0.15 + k * (lz0 - H - 0.15 - th + 0.02) / (nsl - 1)
+        sq = rounded_poly([(sx - hs, sy - hs), (sx + hs, sy - hs), (sx + hs, sy + hs), (sx - hs, sy + hs)], 0.18, 4)
         bm = bmesh.new()
-        lo = [bm.verts.new(at(u * f, v * f, z0)) for u, v in oct_]
-        hi = [bm.verts.new(at(u * f, v * f, z0 + 0.2)) for u, v in oct_]
+        lo = [bm.verts.new((x, y, z0)) for x, y in sq]
+        hi = [bm.verts.new((x, y, z0 + th)) for x, y in sq]
         bm.faces.new(lo[::-1])
         bm.faces.new(hi)
-        for j in range(8):
-            bm.faces.new((lo[j], lo[(j + 1) % 8], hi[(j + 1) % 8], hi[j]))
+        for j in range(len(sq)):
+            bm.faces.new((lo[j], lo[(j + 1) % len(sq)], hi[(j + 1) % len(sq)], hi[j]))
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-        mesh_ob(f"hatchpane{k}", bm, [M["pane"]], smooth=False, bevel=0.08, segs=2)
+        mesh_ob(f"hatchpane{k}", bm, [M["pane"]], smooth=False, bevel=0.06, segs=2)
+        tube(f"hatchpanef{k}", [(x, y, z0 + th - 0.03) for x, y in sq], 0.055, M["rimc"], cyclic=True, verts=8)
+    # a dark post through the middle, from the roof to the lid (the gaps between the slabs stay dark)
+    box("hatchpanep0", (1.4, 1.4, lz0 - H + 0.02), (sx, sy, H - 0.02), M["core"], bevel=0.05)
     # the lid and its glowing grille
     lx, ly, la, lz, lt = S.LID
     # the lid: a thick square slab, its front corner cut away along the arms (the hatch shows under the cut)
@@ -1269,6 +1348,31 @@ def top():
         snow(f"frostl{i}", (cx_, cy_, lz + lt * 0.55), 0.42, squash=(1.0, 1.0, 0.62), jag=0.22)
         ox, oy = (0.25, -0.05) if i else (-0.05, -0.25)      # hanging over the edge the camera sees
         snow(f"frostl{i}b", (cx_ + ox, cy_ + oy, lz + lt * 0.15), 0.22, squash=(0.8, 0.8, 1.1), jag=0.2)
+    # (r5) a pale frosted band round the foot of the lid's front faces (its left piece, the cut, its right face): a thin
+    # draped sheet with a ragged lower edge and a few icicles
+    segs_ = [((lx - la, ly - la), S.LID_CUT[0]), (S.LID_CUT[0], S.LID_CUT[1]), (S.LID_CUT[1], (lx + la, ly + la))]
+    for j, (pa, pb) in enumerate(segs_):
+        dv = Vector((pb[0] - pa[0], pb[1] - pa[1], 0))
+        ln = dv.length
+        dv.normalize()
+        out = (dv.y, -dv.x)
+        us = [0.2 + (ln - 0.4) * i / 40 for i in range(41)]
+        dr = [0.0] * len(us)
+        for _ in range(max(2, int(ln * 1.5))):
+            uc, dl, hw = rng.uniform(us[0], us[-1]), rng.uniform(0.08, 0.3), rng.uniform(0.08, 0.2)
+            for i, u in enumerate(us):
+                f = 1 - abs(u - uc) / hw
+                if f > 0:
+                    dr[i] = max(dr[i], dl * f ** 0.6)
+        sh = crumple_geo(drape(f"frostlb{j}", pa, (dv.x, dv.y), out, us,
+                               [lz - 0.04 - dr[i] + 0.04 * math.sin(5 * u) for i, u in enumerate(us)],
+                               [lz + lt * 0.55 + 0.03 * math.sin(7 * u) for u in us], 0.07, M["frost"], bulge=0.04),
+                         0.3, 0.025)
+        for k in range(int(ln * 1.2)):
+            u = rng.uniform(us[0], us[-1])
+            p_ = Vector(pa) .to_3d() + dv * u + Vector((out[0], out[1], 0)) * 0.05
+            cyl(f"icicle{20 + 10 * j + k}", rng.uniform(0.04, 0.07), rng.uniform(0.15, 0.35), (p_.x, p_.y, lz - 0.02),
+                M["ice"], rot=(180, 0, 0), verts=8, r2=0.01, bevel=0.0)
     gx, gy, gax, gay = S.GRILLE
     zt = lz + lt
     box("grilleback", (2 * gax, 2 * gay, 0.04), (gx, gy, zt - 0.02), M["gback"], bevel=0.0)
@@ -1287,7 +1391,7 @@ def arms():
         sm = smooth_loop(wp, 4)
         # an open curve: Catmull-Rom without wrapping (drop the closing spans)
         sm = sm[:4 * (len(wp) - 1) + 1]
-        sweep(nm, sm, ACROSS, S.ARM_W, S.ARM_T, M["arm"], rnd=24)          # round and bulky, as Flash
+        sweep(nm, sm, ACROSS, S.ARM_W, S.ARM_T, M[nm], rnd=24)          # round and bulky, as Flash
         # bolts: a big round head near the top, then pairs of smaller heads down the arm's face toward the viewer
         eye = (ALONG * math.cos(math.radians(EL)) + Vector((0, 0, math.sin(math.radians(EL))))).normalized()
         for j, (f, r, pair) in enumerate(((0.14, 0.17, False), (0.5, 0.14, False), (0.84, 0.14, False))):

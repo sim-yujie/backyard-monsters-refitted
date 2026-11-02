@@ -30,7 +30,7 @@ BAR = 0.92                  # the frame bars' side (thick round pipes, as Flash)
 BAR_R = 0.42                # their rounded edges
 
 # the doorway in the -Y face (X range, Z range), its lintel and jambs
-DOOR = (-2.1, 1.45, 0.45, 4.9)
+DOOR = (-1.8, 1.45, 0.45, 4.9)      # (r5: x0 -2.1 -> -1.8, a wider wall strip left of it, as Flash)
 JAMB = 0.42                 # the jambs' width; they and the lintel stand JAMB_OUT out of the face
 JAMB_OUT = 0.5
 LINTEL_H = 0.95
@@ -52,10 +52,11 @@ ARM_W, ARM_T = 1.5, 1.2
 
 # the compressor block on the +X face: X out to, Y from, Y to, height
 COMP = (5.12, -1.0, 3.44, 3.58)
-COIL = (-0.6, 3.0, 0.45, 3.05, 6)     # Y from, Y to, Z from, Z to, loops
+COIL = (-0.6, 3.0, 0.45, 2.65, 5)     # Y from, Y to, Z from, Z to, loops
 FINS_Y = (0.2, 1.05, 1.9)
-# the tanks: centre X, Y, radius, and the Z range of each drum
-TANK = (4.3, -2.1, 1.05, ((0.45, 1.75), (1.95, 3.3)))
+# (r5) the machine beside the door: two drums lying on their side (axis across the view), one on the other, on a low base:
+# centre X, Y, half-length, and the Z range (bottom, top) of each drum (the base's height = the lower drum's bottom)
+TANK = (3.95, -2.1, 1.1, ((1.0, 2.25), (2.22, 3.55)))
 
 # the horns: X, Y, base Z, mouth-middle Z, mouth radius
 HORNS = ((-3.45, -4.0, H + 0.3, 8.75, 0.68), (-0.86, AY, H + 0.3, 10.49, 0.66), (3.5, 4.15, 5.3, 7.94, 0.68))

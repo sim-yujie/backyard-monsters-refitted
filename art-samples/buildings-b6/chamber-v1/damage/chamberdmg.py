@@ -272,7 +272,8 @@ def damaged():
     hole(comp, world((S.COMP[0] - 0.6, S.COMP[1], 1.6)), 0.5, seed=61)
     tx, ty, tr, zs = S.TANK
     tank = named(r"tank1")[0]
-    hole(tank, world((tx + tr * 0.7, ty - tr * 0.7, (zs[1][0] + zs[1][1]) / 2)), 0.5, seed=62, n=(1, -1, 0))
+    rr = (zs[1][1] - zs[1][0]) / 2                 # (r5: the drums lie on their side; a hole in the upper one's front)
+    hole(tank, world((tx + rr * 0.75, ty - rr * 0.75, (zs[1][0] + zs[1][1]) / 2)), 0.42, seed=62, n=(1, -1, 0))
     burn(world((tx, ty, 2.2)), 1.8)
     burn(world((S.COMP[0], 1.2, 1.2)), 1.6)
     cut_all(body, comp, tank)
@@ -307,7 +308,7 @@ def damaged():
 def destroyed():
     G["build"]()
     kill(named(r"icicle.*|icicled.*|tankice.*|tankcap.*|frostc|frostt|frostj.*|frostl.*|lintel.*|arml.*|armr.*|fin.*|pipe|grate.*|leaf|door|hatchpane.*|"
-               r"jamb.*|sill|hatch.*|core|tank1|tankshaft|bar1|bar3|coilpanel|ladder.*"))
+               r"jamb.*|sill|hatch.*|core|tank1|tankshaft|bar1|bar3|coilpanel.*|ladder.*"))
     thaw()
     # the box broken down to a low shell: a ragged top, a black hollow, broken wall slabs round its rim
     hz = H * 0.36
