@@ -7,7 +7,12 @@ import { logger } from "../../../utils/logger.js";
 import { logReport } from "../reportManager.js";
 import type { AbandonedInput, AbandonedOutcome } from "./abandonedAttack.js";
 import { battleMismatches, type ClientBattle } from "./battle.js";
-import { ReplayTimeoutError, SAVE_REPLAY_DEADLINE_MS, replayAbandonedInWorker } from "./replayRunner.js";
+import {
+  FINALISE_REPLAY_DEADLINE_MS,
+  ReplayTimeoutError,
+  SAVE_REPLAY_DEADLINE_MS,
+  replayAbandonedInWorker,
+} from "./replayRunner.js";
 
 /**
  * The attack save's side of the server's battle (issue #23, C3 and C4): the
@@ -22,6 +27,18 @@ export interface SavedBase {
   /** Absent for a Map Room 1 tribe, which has no row. */
   readonly basesaveid?: number;
 }
+
+/**
+ * How long a save's replay may run. A save sent as the attacker left the
+ * attack screen (`left`, issue #138) gets the finaliser's longer deadline:
+ * its page is gone, so nobody is waiting on the answer and nothing would send
+ * it again. Past the ordinary 5 s it used to land nothing at all where there
+ * is no checkpoint to finish it from (a Map Room 1 tribe, the Descent, a
+ * Moloch tribe), so leaving a big battle undid it (owner, 2 Nov 2026). The
+ * final lock (30 s) still outlasts it.
+ */
+export const saveReplayDeadline = (input: Pick<AbandonedInput, "left">): number =>
+  input.left === true ? FINALISE_REPLAY_DEADLINE_MS : SAVE_REPLAY_DEADLINE_MS;
 
 /**
  * The save's battle replay, in a worker (issue #23, C5). A replay past its
@@ -40,7 +57,7 @@ export const replayBattleForSave = async (
   handOff: string
 ): Promise<AbandonedOutcome> => {
   try {
-    return await replayAbandonedInWorker(input, SAVE_REPLAY_DEADLINE_MS);
+    return await replayAbandonedInWorker(input, saveReplayDeadline(input));
   } catch (err) {
     if (!(err instanceof ReplayTimeoutError)) throw err;
     logger.warn(`Attack replay for {username} on base {baseid} timed out: ${handOff}`, {

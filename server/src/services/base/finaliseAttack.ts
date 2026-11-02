@@ -25,6 +25,7 @@ import {
   releaseFinalLock,
 } from "./attackCheckpointStore.js";
 import { attackerSessionKey } from "./attackSession.js";
+import { awaitOwnLanding } from "./awaitOwnLanding.js";
 import { endAttackSession, readAttackSession } from "./attackSessionStore.js";
 import { buildingDataWithout, spendFlung, type SourceCell } from "./combat/abandonedAttack.js";
 import { battleReplayInput, foughtLoot } from "./combat/battle.js";
@@ -635,7 +636,8 @@ export const releaseUnfoughtAttackOf = async (userid: number): Promise<boolean> 
 
 /**
  * What `/base/load` runs first (`baseLoad.ts`), before it reads a single row:
- * on the player's own yard load and before their next attack, every attack
+ * after waiting out any of the player's own attacks still landing
+ * (`awaitOwnLanding.ts`), on the player's own yard load and before their next attack, every attack
  * they left without a save, and their open attack with nothing fought
  * released; before an attack, the target's previous attack if it expired
  * unsaved. Never throws — a failure here must not cost the player
@@ -653,6 +655,9 @@ export const finaliseBeforeLoad = async (
   attacking: boolean
 ): Promise<void> => {
   try {
+    // A save of this player's attack still landing (one sent as they left by
+    // a reload or Back, say) lands first, so the yard never shows it undone.
+    await awaitOwnLanding(userid);
     await finaliseAttacksFor(userid, mode);
     await releaseUnfoughtAttackOf(userid);
     if (attacking) await finaliseExpiredOnBase(baseid);
