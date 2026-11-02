@@ -16,24 +16,10 @@
   bottom: 30px;
 }
 
-/* Defences pushes Goals one place left: Quests follows. */
+/* Defences pushes Goals one place left: Quests follows. On a phone (upright
+   or on its side) the button lives in the Menu grid instead (YardMenu.ts). */
 .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--quests {
   right: 600px;
-}
-
-@media (width > 620px) and (height <= 500px) {
-  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--quests {
-    right: 574px;
-  }
-}
-
-/* A phone upright: above Goals in the right-hand column. */
-@media (width <= 620px) {
-  .yard-dock__right > .yard-dock__button--quests,
-  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--quests {
-    right: 26px;
-    bottom: 352px;
-  }
 }
 
 /* ── The button's red number ──────────────────────────────────────────── */
@@ -59,6 +45,12 @@
   max-height: calc(100vh - var(--hud-height) - 160px);
   min-width: 0;
   transform: translateX(-50%);
+}
+
+/* A claim's notice ("Quest claimed +1.4M") shows over the open window, not
+   hidden under it. */
+.overlay__layer:has(> .quests-panel:not([hidden])) > .yard-notices {
+  z-index: calc(var(--z-hud) + 1);
 }
 
 .quests-panel .panel__body {
@@ -448,6 +440,12 @@
   padding: var(--space-3) var(--space-4) var(--space-4);
 }
 
+/* The pop-up drops the card's title, so its "2/7" keeps to the right, as in
+   the window. */
+.quests-login-popup .quests-section__head {
+  justify-content: flex-end;
+}
+
 .quests-login-popup__hero {
   display: flex;
   align-items: center;
@@ -482,7 +480,9 @@
     bottom: 0;
     width: auto;
     max-width: none;
-    max-height: min(85vh, calc(100dvh - var(--hud-height)));
+    /* Starts below the HUD's chat and Events row, so the title plate and
+       the close button cover neither. */
+    max-height: min(85vh, calc(100dvh - var(--hud-height) - 100px));
     transform: none;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: 0;
