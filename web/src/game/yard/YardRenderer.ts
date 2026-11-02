@@ -23,6 +23,14 @@ import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from 
 import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
 import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
+import { rangeRadii } from "./planner/RangeLayer";
+import {
+  hoverRange,
+  RANGE_COLOUR,
+  RANGE_EDGE_ALPHA,
+  RANGE_FILL_ALPHA,
+  rangeHoverFrame,
+} from "./towerRangeHover";
 
 /**
  * The yard's scene graph: ground, mushrooms, buildings and the selection
@@ -78,6 +86,15 @@ export class YardRenderer {
   private readonly popping = new Map<string, number>();
   private readonly blueprint = new BlueprintLayer(this.buildings.art);
   private readonly chrome = new Graphics();
+  /**
+   * The range oval of the defence the mouse rests on (`towerRangeHover.ts`):
+   * on the ground under the buildings, as Flash drew it on
+   * `MAP._BUILDINGFOOTPRINTS`. One ellipse, redrawn only when the tower
+   * changes; the grow-in is a scale and alpha write per frame.
+   */
+  private readonly rangeOval = new Graphics();
+  private rangeTarget: YardBuilding | null = null;
+  private rangeElapsed = 0;
   private readonly planner = new PlannerOverlay();
   /** Progress bars over running builds and upgrades, own yard only (#139). */
   private readonly jobBars = new YardJobBars((id) => this.jobBarAnchor(id));
@@ -169,9 +186,12 @@ export class YardRenderer {
   constructor() {
     this.buildings.onArtReady(() => this.openSheets());
     this.isoDecals.eventMode = "none";
+    this.rangeOval.eventMode = "none";
+    this.rangeOval.visible = false;
     this.root.addChild(
       this.ground.root,
       this.isoDecals,
+      this.rangeOval,
       this.buildings.shadows,
       this.buildings.tops,
       this.collect.root,
@@ -246,6 +266,7 @@ export class YardRenderer {
     const popNew = Boolean(options.popNewMushrooms) && this.yard !== null && !prefersReducedMotion();
     this.clearMushrooms();
     this.setHovered(null);
+    this.setRangeHover(null);
     this.setSelected(null);
     this.yard = yard;
     this.byId.clear();
@@ -326,6 +347,59 @@ export class YardRenderer {
       this.chromeDirty = false;
       this.drawChrome();
     }
+    this.growRangeOval(deltaSeconds);
+  }
+
+  /**
+   * Shows the range oval of the defence the mouse is resting on, or hides it
+   * when passed null. Pass only a mouse's hover: phones and tablets show no
+   * oval (owner). Whether this building gets one at all — own yard, a
+   * standing, idle defence — is `hoverRange`'s call; the planner and the
+   * blueprint view never show it.
+   */
+  setRangeHover(building: YardBuilding | null): void {
+    const yard = this.yard;
+    const range =
+      building &&
+      yard &&
+      !this.plannerVisuals &&
+      this.currentView === YardView.ISO &&
+      !this.stored.has(building.id) &&
+      !this.concealed.has(building.id)
+        ? hoverRange(building, yard)
+        : null;
+    const target = range === null ? null : building;
+    if (target?.id === this.rangeTarget?.id) return;
+
+    this.rangeTarget = target;
+    this.rangeElapsed = 0;
+    this.rangeOval.visible = false;
+    this.rangeOval.clear();
+    if (!target || range === null) return;
+
+    const { rx, ry } = rangeRadii(range, YardView.ISO);
+    this.rangeOval
+      .ellipse(0, 0, rx, ry)
+      .fill({ color: RANGE_COLOUR, alpha: RANGE_FILL_ALPHA })
+      .stroke({ color: RANGE_COLOUR, alpha: RANGE_EDGE_ALPHA, width: 1, pixelLine: true });
+    const offset = this.buildings.offsetOf(target.id);
+    this.rangeOval.position.set(target.centreX + offset.x, target.centreY + offset.y);
+  }
+
+  /** The tower the range oval belongs to, or null; for tests and the scene. */
+  get rangeHoverId(): number | null {
+    return this.rangeTarget?.id ?? null;
+  }
+
+  /** Runs the oval's 0.25 s wait and 0.25 s grow-in (`rangeHoverFrame`). */
+  private growRangeOval(deltaSeconds: number): void {
+    if (!this.rangeTarget) return;
+    this.rangeElapsed += deltaSeconds;
+    const frame = rangeHoverFrame(this.rangeElapsed);
+    this.rangeOval.visible = frame !== null;
+    if (!frame) return;
+    this.rangeOval.alpha = frame.alpha;
+    this.rangeOval.scale.set(frame.scaleX, frame.scaleY);
   }
 
   setHovered(building: YardBuilding | null): void {
@@ -365,6 +439,7 @@ export class YardRenderer {
     ]) {
       layer.visible = iso;
     }
+    if (!iso) this.setRangeHover(null);
     this.blueprint.setActive(!iso);
     this.life.setHidden(!iso || this.lifeHidden);
     this.chromeDirty = true;
@@ -582,6 +657,8 @@ export class YardRenderer {
   setPlannerVisuals(visuals: PlannerVisuals | null): void {
     this.plannerVisuals = visuals;
     this.chromeDirty = true;
+    // The planner draws its own rings; a hover oval would sit on top of them.
+    if (visuals) this.setRangeHover(null);
     if (!visuals) {
       this.planner.clear();
       this.blueprint.setPlanned(null);
