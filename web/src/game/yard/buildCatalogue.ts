@@ -16,6 +16,7 @@ import { overCap } from "./storage";
 import { isSurfaceInferno, purseFunds, surfaceInfernoStanding, UNDER_HALL_REQUIREMENT } from "./surfaceInferno";
 import { freeWorkers, sharperToolsMultiplier } from "./workers";
 import type { Yard, YardWorkers } from "./yardModel";
+import { isTribeEditing } from "@/game/tribeEditor/tribeEditSession";
 
 /**
  * What the build menu offers and why a tile cannot be built, as data
@@ -426,6 +427,28 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     (common?.reason === "townHall" || common?.reason === "requirements" || common?.reason === "infernoLocked")
   ) {
     status = "locked";
+  }
+
+  // The tribe yard editor (LOCAL only): wild monster tribes do not follow the
+  // player's rules (owner, 2 Nov 2026), so everything is free, instant and unlimited.
+  if (isTribeEditing()) {
+    return {
+      type,
+      category,
+      cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      seconds: 0,
+      atOnce,
+      owned,
+      allowed: Math.max(owned + 1, allowed),
+      most: Math.max(owned + 1, most),
+      status: "ready",
+      needs: [],
+      instantPrice: 0,
+      gate: null,
+      instantGate: null,
+      inferno,
+      stored: null,
+    };
   }
 
   const instantPrice = instantCost(step);

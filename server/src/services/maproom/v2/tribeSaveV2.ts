@@ -1,11 +1,8 @@
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { Tribe, Tribes } from "../../../enums/Tribes.js";
-import { calculateTribeLevel, minimumTribeLevels } from "./calculateTribeLevel.js";
-import { abunaki } from "../../../game-data/tribes/v2/abunaki.js";
-import { dreadnaught } from "../../../game-data/tribes/v2/dreadnaught.js";
-import { kozu } from "../../../game-data/tribes/v2/kozu.js";
-import { legionnaire } from "../../../game-data/tribes/v2/legionnaire.js";
+import { calculateTribeLevel } from "./calculateTribeLevel.js";
+import { tribeIdAt, tribeLayoutFor } from "./tribeLayouts.js";
 
 /**
  * Generates a save for a wild monster on Map Room 2 based on the given base ID.
@@ -40,37 +37,14 @@ export const tribeSaveV2 = (baseid: string, worldid: string | null | undefined) 
 };
 
 /**
- * Fetches the tribe data based on the given tribe index.
+ * Fetches the tribe data based on the given tribe index: the yard saved for
+ * this level, or the nearest one below it (`tribeLayouts.ts`).
  *
  * @param {number} tribeIndex - The tribe index.
  * @param {number} level - The level of the wild monster.
  * @returns {object} - An object containing the tribe save data.
  */
-const fetchTribeData = (tribeIndex: number, level: number) => {
-  const tribeData = [legionnaire, kozu, abunaki, dreadnaught];
-
-  // Get the selected tribe
-  const selectedTribe = tribeData[tribeIndex];
-  const tribe = Tribes[tribeIndex] as Tribe;
-
-  // Sort keys from selected tribe
-  const keys = Object.keys(selectedTribe);
-  const sortedKeys = keys.sort((a, b) => parseInt(a) - parseInt(b));
-
-  // Get level range for this tribe
-  const lowerLimit = minimumTribeLevels[tribe];
-  const higherLimit = 45;
-  const levelRange = higherLimit - lowerLimit;
-
-  // Find the appropriate key based on the level
-  const levelsPerKey = Math.ceil(levelRange / sortedKeys.length);
-  let keyIndex = Math.floor((level - lowerLimit) / levelsPerKey);
-
-  // Safety bounds
-  keyIndex = Math.max(0, Math.min(keyIndex, sortedKeys.length - 1));
-
-  const selectedKey = parseInt(sortedKeys[keyIndex]);
-  const tribeSave = selectedTribe[selectedKey];
-
+export const fetchTribeData = (tribeIndex: number, level: number) => {
+  const { save: tribeSave } = tribeLayoutFor(tribeIdAt(tribeIndex), level);
   return { tribeSave };
 };

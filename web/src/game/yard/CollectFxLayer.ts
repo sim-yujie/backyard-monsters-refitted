@@ -29,40 +29,76 @@ import type { HarvestKey } from "./harvest";
  * is going or the bank was refused.
  */
 
+/**
+ * A ball's picture: a resource's, or `magma`, the ball the Monster Juicer
+ * throws for an Inferno monster (`BUILDING9.as:66`, `_lastType` 8).
+ */
+export type PackageDot = HarvestKey | "magma";
+
 /** The ball of each resource, and the shadow they share. */
 export interface CollectFxArt {
-  dot(resource: HarvestKey): Texture;
+  dot(resource: PackageDot): Texture;
   readonly shadow: Texture;
   destroy(): void;
 }
 
+interface DotStyle {
+  /** Gradient stops: [ratio 0..255, r, g, b]. */
+  readonly stops: readonly (readonly number[])[];
+  /** The gradient's middle, px from the ball's. */
+  readonly lightX: number;
+  readonly lightY: number;
+  /** The gradient's radius, px. */
+  readonly radius: number;
+}
+
 /**
- * The `packagedot` frames 1-4 of `client/scripts/_assets/assets.swf` (shapes
- * 1803-1806): an 11 px circle, a 1 px black outline, and a radial gradient
- * centred 2.85 px up and left of the middle, 9.04 px in radius. Stops are
- * [ratio 0..255, r, g, b].
+ * The `packagedot` frames of `client/scripts/_assets/assets.swf`: an 11 px
+ * circle, a 1 px black outline, and a radial gradient. Frames 1-4 (shapes
+ * 1803-1806) are the four resources, centred 2.85 px up and left of the
+ * middle, 9.04 px in radius; frame 8 (shape 1810) is magma, centred 1.9 px
+ * left and 2.55 px up, 8.58 px in radius.
  */
-const DOT_STOPS: Readonly<Record<HarvestKey, readonly (readonly number[])[]>> = {
-  r1: [
+const RESOURCE_LIGHT = -2.85;
+const RESOURCE_GRADIENT_RADIUS = 9.04;
+const resourceDot = (stops: readonly (readonly number[])[]): DotStyle => ({
+  stops,
+  lightX: RESOURCE_LIGHT,
+  lightY: RESOURCE_LIGHT,
+  radius: RESOURCE_GRADIENT_RADIUS,
+});
+const DOT_STYLES: Readonly<Record<PackageDot, DotStyle>> = {
+  r1: resourceDot([
     [0, 164, 89, 57],
     [255, 106, 38, 38],
-  ],
-  r2: [
+  ]),
+  r2: resourceDot([
     [2, 174, 174, 174],
     [255, 94, 94, 94],
-  ],
-  r3: [
+  ]),
+  r3: resourceDot([
     [0, 239, 143, 191],
     [255, 199, 5, 199],
-  ],
-  r4: [
+  ]),
+  r4: resourceDot([
     [2, 36, 253, 36],
     [255, 2, 101, 1],
-  ],
+  ]),
+  magma: {
+    stops: [
+      [0, 252, 237, 13],
+      [35, 252, 158, 13],
+      [84, 180, 70, 56],
+      [137, 60, 6, 0],
+      [192, 101, 8, 0],
+      [255, 131, 7, 0],
+    ],
+    lightX: -1.9,
+    lightY: -2.55,
+    radius: 8.58,
+  },
 };
 const DOT_RADIUS = 5;
-const DOT_LIGHT_OFFSET = -2.85;
-const DOT_GRADIENT_RADIUS = 9.04;
 
 /**
  * `mcShadow` (shape 1801): a 14.6 × 8.5 px black ellipse at 30% opacity under
@@ -94,18 +130,19 @@ const canvasTexture = (
   return new Texture({ source: new CanvasSource({ resource: canvas, resolution: ART_RESOLUTION }) });
 };
 
-const drawDot = (resource: HarvestKey): Texture => {
+const drawDot = (resource: PackageDot): Texture => {
   const size = (DOT_RADIUS + 1) * 2;
+  const style = DOT_STYLES[resource];
   return canvasTexture(size, size, (context) => {
     const gradient = context.createRadialGradient(
-      DOT_LIGHT_OFFSET,
-      DOT_LIGHT_OFFSET,
+      style.lightX,
+      style.lightY,
       0,
-      DOT_LIGHT_OFFSET,
-      DOT_LIGHT_OFFSET,
-      DOT_GRADIENT_RADIUS,
+      style.lightX,
+      style.lightY,
+      style.radius,
     );
-    for (const [ratio, r, g, b] of DOT_STOPS[resource]) {
+    for (const [ratio, r, g, b] of style.stops) {
       gradient.addColorStop(ratio! / 255, `rgb(${r},${g},${b})`);
     }
     context.beginPath();
@@ -135,7 +172,7 @@ const drawShadow = (): Texture =>
 
 /** The art drawn on first use, the way Flash's vector symbols look. */
 export const packageArt = (): CollectFxArt => {
-  const dots = new Map<HarvestKey, Texture>();
+  const dots = new Map<PackageDot, Texture>();
   let shadow: Texture | null = null;
   return {
     dot(resource) {
@@ -216,7 +253,7 @@ export class CollectFxLayer {
     for (const flight of flights) {
       const dot = this.freeDots.pop() ?? this.makeSprite(this.dots);
       const shadow = this.freeShadows.pop() ?? this.makeSprite(this.shadows);
-      dot.texture = this.art.dot(flight.resource);
+      dot.texture = this.art.dot(flight.dot ?? flight.resource);
       shadow.texture = this.art.shadow;
       dot.visible = false;
       shadow.visible = false;

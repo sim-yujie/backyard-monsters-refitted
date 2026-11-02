@@ -30,6 +30,7 @@ import { IncomePrediction, overdriveEndOf } from "./outpostIncome";
 import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
+import { isTribeEditing } from "@/game/tribeEditor/tribeEditSession";
 
 /**
  * One of the player's own yards, the main yard or an outpost, as one source
@@ -448,7 +449,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   }
 
   get yard(): Yard {
-    this.cachedYard ??= readYard(this.current);
+    // A tribe camp in the editor stands on the plot a camp grows to (`readYard`).
+    this.cachedYard ??= readYard(this.current, isTribeEditing() ? { wild: true } : {});
     return this.cachedYard;
   }
 
@@ -712,7 +714,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
         entry.resolve({ ok: true, report: null, completed: [] });
         continue;
       }
-      const refusal = entry.type === "action" ? (entry.check?.(this) ?? null) : null;
+      // The tribe yard editor (LOCAL only) builds free, instant and without
+      // the player's limits, so the client's own checks are left out there.
+      const refusal =
+        entry.type === "action" && !isTribeEditing() ? (entry.check?.(this) ?? null) : null;
       if (refusal && entry.type === "action") {
         entry.resolve({ ok: false, refusal });
         continue;

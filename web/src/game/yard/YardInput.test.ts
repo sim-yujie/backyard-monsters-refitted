@@ -125,3 +125,23 @@ describe("a tap that opens nothing", () => {
     expect(tap(canvas, "touch")).toBe(false);
   });
 });
+
+describe("hover: a tower's range oval is a mouse's alone", () => {
+  it("says whether the pointer over a building is a mouse", () => {
+    const onHover = vi.fn();
+    const { canvas } = mount(CAGE, { onHover });
+    canvas.dispatchEvent(pointer("pointermove", "mouse"));
+    expect(onHover).toHaveBeenLastCalledWith(CAGE, true);
+    canvas.dispatchEvent(pointer("pointermove", "touch"));
+    expect(onHover).toHaveBeenLastCalledWith(CAGE, false);
+    canvas.dispatchEvent(pointer("pointermove", "pen"));
+    expect(onHover).toHaveBeenLastCalledWith(CAGE, false);
+  });
+
+  it("clears when the pointer leaves the canvas", () => {
+    const onHover = vi.fn();
+    const { canvas } = mount(CAGE, { onHover });
+    canvas.dispatchEvent(pointer("pointerleave", "mouse"));
+    expect(onHover).toHaveBeenLastCalledWith(null, false);
+  });
+});

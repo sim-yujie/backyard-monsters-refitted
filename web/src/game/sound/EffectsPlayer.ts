@@ -29,7 +29,7 @@ import { GESTURE_EVENTS, type GestureTarget } from "./MusicPlayer";
  * not saved up, so nothing goes off late in a heap.
  */
 
-export type Effect = "bankfire" | "bankland" | "ibankfire" | "ibankland" | "trap" | "trapheavy";
+export type Effect = "bankfire" | "bankland" | "ibankfire" | "ibankland" | "trap" | "trapheavy" | "juice" | "splat5";
 
 export interface EffectFile {
   readonly url: string;
@@ -45,6 +45,9 @@ export const EFFECTS: Readonly<Record<Effect, EffectFile>> = {
   // A trap going off (Modern look): Flash's trap sound; the Heavy Trap layers a building's fall over it, louder.
   trap: { url: "/assets/sounds/attacksounds/sound_trap.mp3", volume: 0.8 },
   trapheavy: { url: "/assets/sounds/attacksounds/building_destroy_1.mp3", volume: 1 },
+  // The Monster Juicer blending (`BUILDING9.as:79-81`) and a giblet landing (`GIBLET.as:58`).
+  juice: { url: "/assets/sounds/othersounds/sound_juice.mp3", volume: 0.8 },
+  splat5: { url: "/assets/sounds/attacksounds/sound_splat5.mp3", volume: 0.8 },
 };
 
 /** The least time between two starts of one effect: two Flash frames at 40 fps. */
