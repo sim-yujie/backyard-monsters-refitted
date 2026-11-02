@@ -153,11 +153,11 @@ describe("BuildMenu", () => {
     expect(cannon.querySelector("img")?.getAttribute("src")).toBe(buildPicture(20, "main", false).url);
     expect(cannon.querySelector("img")?.getAttribute("src")).toMatch(/^\/assets\/buildingbuttons\/modern\/20\.main\./);
     expect(cannon.querySelector(".build-tile__picture--modern")).not.toBeNull();
-    // The Booby Trap has no new look yet: Flash's button, as before.
-    expect(tile(menu, 24).querySelector("img")?.getAttribute("src")).toBe("/assets/buildingbuttons/24.jpg");
-    expect(tile(menu, 24).querySelector(".build-tile__picture--modern")).toBeNull();
 
     menu.open(BuildCategory.BUILDINGS);
+    // The Monster Locker has no new look yet: Flash's button, as before.
+    expect(tile(menu, 8).querySelector("img")?.getAttribute("src")).toBe("/assets/buildingbuttons/8.jpg");
+    expect(tile(menu, 8).querySelector(".build-tile__picture--modern")).toBeNull();
     menu.turn(1);
     const lab = tile(menu, 116);
     expect(lab.classList.contains("build-tile--locked")).toBe(true);

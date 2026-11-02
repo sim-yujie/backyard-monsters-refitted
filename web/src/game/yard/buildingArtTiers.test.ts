@@ -223,7 +223,7 @@ describe("the repainted tower tiers", () => {
     expect(tierLift(21, 7)).toBeGreaterThan(tierLift(21, 4));
     expect(tierLift(14, 9)).toBe(0);
     expect(tierArtFor(1, 10)?.lift).toBe(0);
-    expect(tierArtFor(24, 1)).toBeNull();
+    expect(tierArtFor(24, 1)?.lift).toBe(0);
   });
 
   it("stand each higher tier taller, on the same base", () => {

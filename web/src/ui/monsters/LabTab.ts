@@ -34,7 +34,7 @@ import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersT
  *
  * Top to bottom: the Lab as one slot ("Monster Lab · level 2 · Idle", or the
  * running research with its countdown, Finish now and Cancel) — one Lab, one
- * research at a time; then the ten monsters with an ability, each with its
+ * research at a time; then the fourteen monsters with an ability, each with its
  * rank 0–3, the next rank's putty and time, what the ability does now and
  * next in plain words, and the reason it cannot be researched yet ("Needs Lab
  * level 2", "Needs Octo-ooze at level 3"); beside it (under it on a phone)

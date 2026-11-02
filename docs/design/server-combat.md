@@ -380,8 +380,9 @@ checks that an honest client's save writes exactly what it showed, on the golden
 ends an attack runs the same replay over the tribe as its load served it, with the engine's
 `"tribe"` kind (a tribe row is otherwise read as a Map Room 2 camp), and writes the tribe's health,
 damage, `destroyed` (by the camp threshold, as the web client works it out for a tribe) and the
-loot from it, before the tribe's own loot cap. With no checkpoint for a tribe, a replay past its
-deadline lands nothing. `battle.test.ts` runs the golden fixtures' logs against a tribe too.
+loot from it, before the tribe's own loot cap. A replay past its deadline lands nothing yet: a
+resent save, or else the finaliser from the attack's checkpoint (owner, 2 Nov 2026,
+`finaliseRowlessAttack.ts`), lands it. `battle.test.ts` runs the golden fixtures' logs against a tribe too.
 
 **Implemented (issue #23, C6):** the attack report is built by the shared `rules/report.ts`
 (`attackReport`, with the monster names moved there from the web's army panel), from the log and

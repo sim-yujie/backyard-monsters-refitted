@@ -31,6 +31,8 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | academy | 26 Monster Academy | art/buildings-3d-academy | academy-v1 | levels 1-4 (4 also level 5); 21 cells of its cogs |
 | lab | 116 Monster Lab | art/buildings-3d-lab | lab-v1 | one look; 32 cells of its brew, 5 of each side door's cogs |
 | chamber | 119 Champion Chamber | art/buildings-3d-chamber | chamber-v1 | one look, still |
+| booby | 24 Booby Trap | art/traps-3d | traps-3d (traps.py) | one look, still; destroyed = fired |
+| heavy | 117 Heavy Trap | art/traps-3d | traps-3d (traps.py) | one look, still; destroyed = fired |
 | icc | 16 Incubator Control Centre in an Inferno yard | art/icc-inferno-looks | icc-looks (look C) | one look; 32 idle and 64 working cells, each the whole building |
 
 The Inferno's Incubator Control Centre (`icc`, moves "loops") is look C (owner, 2 Nov 2026: "I want to see it in the
@@ -133,6 +135,8 @@ BUILDINGS = {
                 layers=("dome", "doorL", "doorR")),
     "chamber": dict(type=119, folder="champchamber", frame=(-78, -66), looks=[(1, "L1")], moves=None),
     "icc": dict(type=16, folder="hatcherycontrolcenter", frame=(-80, -84), looks=[(1, "")], moves="loops"),
+    "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
+    "heavy": dict(type=117, folder="heavytrap", frame=(-24, -14), looks=[(1, "heavy-whole")], moves=None),
 }
 # Flash's cells per look (`buildingArtData.ts`): the 3D strip must hold as many.
 CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 10: 24},

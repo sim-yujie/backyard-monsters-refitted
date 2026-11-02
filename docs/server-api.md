@@ -416,10 +416,10 @@ army with no attack behind it):
   (and the `wmstatus` flag) come from that replay, `destroyed` by the camp threshold the web
   client applies to a tribe (90% damage), and so does the loot; the save's copies are only
   compared (`attack-replay-mismatch`). A final save with no usable log writes no battle and
-  credits no loot. A replay past its 5 s deadline lands nothing: there is no checkpoint and no
-  finaliser for a tribe, so the save is answered `attackResultPendingErr` (`reason:
-  "replayTimeout"`), the session is kept for a resent save while its window lasts (the web client
-  sends it once more after 4 seconds), and the tribe respawns in time anyway. It then applies the attacker's side — the army (the flung monsters leave the
+  credits no loot. A replay past its 5 s deadline lands nothing yet: the save is answered
+  `attackResultPendingErr` (`reason: "replayTimeout"`) and the session is kept for a resent save
+  while its window lasts (the web client sends it once more after 4 seconds); with none, the
+  finaliser lands the attack from its last checkpoint (see "Leaving an attack" below). It then applies the attacker's side — the army (the flung monsters leave the
   main yard's housing through `monsterupdate` and the fling log, capped by the session's
   `entryHoused`, exactly as an MR2 attack settles; `attackcreatures` is ignored and only the
   main yard's `monsterupdate` entry is read), `attackerchampion`, `attackersiege`,
@@ -428,7 +428,9 @@ army with no attack behind it):
   `creditableMR1Loot` (`mr1TribeRules.ts`): each resource whole and non-negative, and everything
   taken from that tribe since it last respawned (`tribedata[].looted`) at most its pool — its
   `resources` plus its harvesters' `st` — times `LOOT_GAIN_RATIO` (1.6, the low-level bonus).
-  There is no `/base/checkpoint` for a tribe attack.
+  The client checkpoints a tribe attack as it does any other (`basesaveid` 0 and the tribe's
+  `baseid`), so one left without this save lands from its last checkpoint (see "Leaving an attack:
+  checkpoints and finalisation" below).
 
 **Checking.** On an attack save — the caller is not the owner and the row's `attackid` is
 non-zero — the session is read back and checked before `validateSave`, before the economy audit
@@ -507,7 +509,7 @@ costs (issue #23, C7, `services/base/combat/saveBattle.ts`): `off` nothing; `log
 `log` is the way back) the same, then the save is refused with `attackReplayRejectedErr` (409,
 `reason: "replayMismatch"`, `fields`, "The server replayed this battle and got a different result,
 so it did not take this save.") before anything is written, so a Map Room 2 attack is left to the finaliser, which lands the server's own result
-from the checkpoint, and a Map Room 1 tribe attack lands nothing. The defender's `monsters` is not
+from the checkpoint, and so is a Map Room 1 tribe attack (from its own checkpoint). The defender's `monsters` is not
 compared (C2 ignores it). An `attackersiege` difference alone is logged but never refused
 (`LOG_ONLY_FIELDS`, issue #201): the server writes its own siege figure, and the attacker's stock
 can honestly move during an attack (bought in another tab after the map loaded). An honest web client fought the same battle with the same engine and the same inputs (the
@@ -530,7 +532,7 @@ lost connection) is not undone, the client also checkpoints it:
 
 | Method | Path | Middleware | Request fields | Response |
 |---|---|---|---|---|
-| POST | `/base/checkpoint` | verifyUserAuth | `AttackCheckpointSchema`: `basesaveid`, `attackid?`, `tick` (battle ticks reached), `flinglog` (JSON string, the §3.10 fling log so far), `sources` (JSON string array of the attacker's cell base ids, in the order a fling spends them) | `{ error: 0, stored: true, tick }`, or `{ error: 0, stored: false }` for a log with no events (#79) |
+| POST | `/base/checkpoint` | verifyUserAuth | `AttackCheckpointSchema`: `basesaveid` (0 for a yard with no row, below), `baseid?` (that yard's base id), `attackid?`, `tick` (battle ticks reached), `flinglog` (JSON string, the §3.10 fling log so far), `sources` (JSON string array of the attacker's cell base ids, in the order a fling spends them) | `{ error: 0, stored: true, tick }`, or `{ error: 0, stored: false }` for a log with no events (#79) |
 
 Sent after every drop, bomb and siege weapon, every 5 seconds while the battle runs, and once
 more when the page is hidden. Bound
@@ -562,6 +564,43 @@ same final lock:
   window has closed.
 
 The final save and the finalisation discard the checkpoint, so each attack is written once.
+
+**Yards with no row** (owner, 2 Nov 2026: leaving a battle must never undo it). A Map Room 1
+tribe, a Descent yard (201-213) and a Moloch tribe of the Inferno map have no defender row: every
+player fights their own copy, and the attack's session is keyed by attacker and yard
+(`mr1TribeSession.ts`, `descentSession.ts`, `infernoTribeSession.ts`). Their checkpoints carry
+`basesaveid` 0 and the yard's `baseid`, are bound to the caller's own session for that yard (any
+other `baseid` is refused `permissionErr`; a Descent yard or Moloch tribe also while the Inferno
+is off), and are kept under `attack-checkpoint:<kind>:<userid>:<baseid>` (kind `mr1`, `descent`
+or `inferno-tribe`) beside the Flinger payload the start served, indexed by the set
+`attack-checkpoints:rowless` (`services/base/rowlessCheckpoint.ts`). A checkpoint stored just as
+the save landed the attack (its session gone when read back) is dropped again and refused
+`no-session`, so it cannot land the attack a second time. The finaliser
+(`services/base/finaliseRowlessAttack.ts`) lands such an attack through the kind's own landing
+(`scaledMR1Tribes.ts`, `descentLanding.ts`, `infernoTribeLanding.ts`), the same code the final
+save runs: the battle replayed to the checkpoint's tick, the monsters flung by then spent, that
+moment's damage and loot, the Descent's or the tribe's progress, a yard won only if that battle
+won it. It runs at the top of the attacker's `/base/load` (`build` and every attack mode),
+`/bm/inferno/load` and `/bm/inferno/attack/start`, window or not, and from the 60-second sweep once
+the window has closed; under the kind's final lock (`attack-final:mr1:<userid>:<baseid>`,
+`attack-final:descent:<userid>`, `attack-final:inferno-tribe:<userid>`). A replay that fails 3
+times lands with no battle (the flung monsters and bombs still spent); one that cannot land after
+3 more is dropped. Inferno kinds wait while the Inferno is off. An attack left before its first
+checkpoint reached the server lands nothing, as on Map Room 2.
+
+These yards have no row whose `attackid` could clear in the landing's own database write, and
+ending the session and dropping the checkpoint are Redis steps after that write. So every landing
+(final save or finaliser) first sets `attack-landed:<kind>:<userid>:<baseid>:<attackid>:<startedat>`
+with NX (kept 8 days; `landRowlessOnce`). A mark already set means the attack has landed: its
+leftover session and checkpoint are cleared, a resent final save is refused `landed`, and the
+finaliser logs `attack-finalise-already-landed` and lands nothing. The mark is removed again if the
+database write itself fails, so the attack can still land; a crash between the mark and the
+write's commit lands nothing (never twice).
+
+The web client pauses new drops while the server is behind (`web/src/game/attack/plugins/checkpoint.ts`):
+once a drop has gone 10 seconds without a confirmed checkpoint holding it, new drops, bombs and
+siege weapons are refused ("Reconnecting…") until one is confirmed. A failed checkpoint is tried
+again after 2 seconds, and one that hangs is given up after 7.
 
 **Champion brains** (issue #219, `services/base/combat/championBrain.ts`). Whatever lands an
 attack (the `over` save, a Map Room 1 tribe's `over` save, or the finaliser, which also lands
@@ -853,7 +892,8 @@ can be attacked, once the cave is at level 5.
   bombs, no siege, each fling within `flingercapacity`), over the yard as an Inferno yard with
   the session's defence and the yard's number (base id less 200: from yard 7 surface monsters burn, WP 1.21). The save's own `damage`, `destroyed`, health and `attackloot` are only
   compared (`attack-replay-mismatch`). A replay past its deadline answers `replayTimeout` and lands
-  nothing; the session is kept for a resent save. An attack with no final save lands nothing.
+  nothing yet; the session is kept for a resent save. An attack with no final save lands from its
+  last checkpoint (see "Yards with no row" under "Leaving an attack").
 - **What lands.** The flung monsters leave the main yard's housing. The replay's loot, capped by
   what the yard holds less what it gave before, goes into the main save's `iresources` (the
   Inferno purse) with **no** storage cap (Flash). Damage of 90% or more beats the yard; less keeps
