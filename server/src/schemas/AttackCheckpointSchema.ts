@@ -21,6 +21,8 @@ const jsonField = z
  */
 export const AttackCheckpointSchema = z.object({
   basesaveid: z.string().transform((id) => parseInt(id, 10)),
+  /** The yard, for an attack on one with no row (`basesaveid` 0): a Map Room 1 tribe, a Descent yard, a Moloch tribe. */
+  baseid: z.string().optional(),
   attackid: z.string().optional(),
   tick: z.coerce.number(),
   flinglog: jsonField,

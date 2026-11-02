@@ -392,22 +392,22 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      * for the camp's tribe and level, so the panel offers it again (owner, #221).
      */
     /**
-     * Moloch's Descent (Inferno WP 1.13): like a Map Room 1 tribe, nothing
-     * lands it later, and its way out is home to the main yard, where Flash
-     * returned after it, with Moloch's word on the fight over the panel first.
+     * Moloch's Descent (Inferno WP 1.13): like a Map Room 1 tribe, its way
+     * out is home to the main yard, where Flash returned after it, with
+     * Moloch's word on the fight over the panel first.
      */
     const descent = target.descentYard !== undefined;
     let stopDescentResult: (() => void) | null = null;
     const repeatable = target.kind === "wild" && (target.mapversion ?? 2) === 2 && target.cell !== undefined;
     /**
-     * A Map Room 1 tribe has no checkpoint and nothing lands its attack later
-     * (`docs/server-api.md` "Map Room 1 tribe attacks"), so a timed-out save
-     * is sent again once; a Map Room 2 attack is landed by the server's
-     * finaliser.
+     * A Map Room 1 tribe's timed-out save is sent again once: the server's
+     * finaliser would land it only from the last checkpoint, a few seconds
+     * behind the end (`docs/server-api.md` "Yards with no row"); a Map Room 2
+     * attack is left to that finaliser.
      */
     /**
-     * A Moloch tribe from the Inferno map (WP 2.10): nothing lands it later
-     * either, its result is in the landing's `tribe` block, and its ways out
+     * A Moloch tribe from the Inferno map (WP 2.10): its result is in the
+     * landing's `tribe` block, and its ways out
      * are the Inferno map (the scene's `goToMap`) and, Flash's Return Home,
      * the Inferno yard.
      */
