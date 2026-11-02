@@ -72,9 +72,11 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * achievements hear Flash's Descent counter (18 "Into the Depths" at 1, after
  * any first attack; 19 "Rock Bottom" at 14).
  *
- * A replay past its deadline lands nothing: the answer is
+ * A replay past its deadline lands nothing yet: the answer is
  * `attackResultPendingErr` and the session is kept for a resent save, as for
- * a Map Room 1 tribe. An attack left without a final save lands nothing.
+ * a Map Room 1 tribe. An attack left without a final save lands from its last
+ * checkpoint, through this same landing (`landDescentFromCheckpoint`,
+ * `finaliseRowlessAttack.ts`; owner, 2 Nov 2026).
  */
 
 /** What the landing answers about the Descent, for the report and the map. */

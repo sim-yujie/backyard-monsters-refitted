@@ -68,9 +68,11 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  *   credit, whatever the purse kept;
  * - the tribe's health, damage, wreck and loot given, in `maproom_inferno`.
  *
- * A replay past its deadline lands nothing (`attackResultPendingErr`; the
- * session is kept for a resent save). An attack left without a final save
- * lands nothing, and the monsters stay home.
+ * A replay past its deadline lands nothing yet (`attackResultPendingErr`;
+ * the session is kept for a resent save). An attack left without a final
+ * save lands from its last checkpoint, through this same landing
+ * (`landInfernoTribeFromCheckpoint`, `finaliseRowlessAttack.ts`; owner,
+ * 2 Nov 2026).
  */
 
 /** What the landing answers about the tribe, for the report and the map. */
