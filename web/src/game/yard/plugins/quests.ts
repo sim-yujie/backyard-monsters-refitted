@@ -16,8 +16,9 @@ import { screenBusy } from "./announcements";
  * the Quests button with its red number, the Quests window, and the login
  * card's pop-up.
  *
- * - **Button.** In the dock beside Monsters for now; the beta 6 bubble menu
- *   (feat/hud-tidy) takes it by changing {@link placeQuestsButton} alone.
+ * - **Button.** Put in the dock beside Monsters; the bubble menu gathers it
+ *   into More's fan, nearest More (`BUBBLE_ITEMS`), or it stays in the dock
+ *   with the menu off.
  *   The red number is `questsClaimable`, which every yard answer carries.
  * - **Window.** Read with `quests/state` on mount and whenever it opens;
  *   claims and the swap answer with the new view, so the window follows at
@@ -60,10 +61,7 @@ const writeShownDay = (baseid: string, day: string): void => {
   }
 };
 
-/**
- * Puts the Quests button on the screen. The one line that moves when the
- * bubble menu (feat/hud-tidy) lands.
- */
+/** Puts the Quests button in the dock, where the bubble menu (if on) gathers it. */
 export const placeQuestsButton = (mounts: YardMounts, button: HTMLElement): void => mounts.dock.placeBesideMonsters(button);
 
 /** The button's painted picture: Flash's "quest complete" monster. */
