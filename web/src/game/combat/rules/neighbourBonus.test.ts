@@ -106,30 +106,35 @@ describe("switched off: the battle as it always was", () => {
 });
 
 describe("the table", () => {
-  it("rises with every neighbour, by less each time, to +24% at six", () => {
-    expect(NEIGHBOUR_DEFENCE_BONUS).toEqual([0, 0.08, 0.14, 0.18, 0.2, 0.22, 0.24]);
+  it("rises with every neighbour, by no more each time, to +15% at six", () => {
+    expect(NEIGHBOUR_DEFENCE_BONUS).toEqual([0, 0.05, 0.09, 0.11, 0.13, 0.14, 0.15]);
     for (let n = 1; n <= 6; n += 1) {
       expect(NEIGHBOUR_DEFENCE_BONUS[n]!).toBeGreaterThan(NEIGHBOUR_DEFENCE_BONUS[n - 1]!);
+      if (n >= 2) {
+        const step = NEIGHBOUR_DEFENCE_BONUS[n]! - NEIGHBOUR_DEFENCE_BONUS[n - 1]!;
+        const before = NEIGHBOUR_DEFENCE_BONUS[n - 1]! - NEIGHBOUR_DEFENCE_BONUS[n - 2]!;
+        expect(step).toBeLessThanOrEqual(before + 1e-9);
+      }
     }
   });
 
   it("boosts building health and tower damage alike", () => {
-    expect(neighbourDefenceBonus(1)).toEqual({ hp: 0.08, damage: 0.08 });
-    expect(neighbourDefenceBonus(6)).toEqual({ hp: 0.24, damage: 0.24 });
+    expect(neighbourDefenceBonus(1)).toEqual({ hp: 0.05, damage: 0.05 });
+    expect(neighbourDefenceBonus(6)).toEqual({ hp: 0.15, damage: 0.15 });
     // More than six cannot happen on a hex grid; it reads as six.
-    expect(neighbourDefenceBonus(9)).toEqual({ hp: 0.24, damage: 0.24 });
+    expect(neighbourDefenceBonus(9)).toEqual({ hp: 0.15, damage: 0.15 });
   });
 
   it("keeps a served count through the attack session and into the battle", () => {
     const forces = parseDefenderForces({ ...FORCES, neighbours: 2 });
     expect(forces?.neighbours).toBe(2);
-    expect(battleDefence(forces).defenceBonus).toEqual({ hp: 0.14, damage: 0.14 });
+    expect(battleDefence(forces).defenceBonus).toEqual({ hp: 0.09, damage: 0.09 });
   });
 });
 
 describe("switched on", () => {
-  it("puts 21 on the Cannon's first shot with one neighbour, int(20 x 1.08)", () => {
-    const { battle } = pokeyBattle(CANNON, { defenceBonus: { damage: 0.08 } });
+  it("puts 21 on the Cannon's first shot with one neighbour, int(20 x 1.05)", () => {
+    const { battle } = pokeyBattle(CANNON, { defenceBonus: { damage: 0.05 } });
     let hurt: number | undefined;
     for (let step = 0; step < 400 && hurt === undefined; step += 1) {
       battle.step();
@@ -138,9 +143,9 @@ describe("switched on", () => {
     expect(hurt).toBe(21);
   });
 
-  it("stacks on Tower Overdrive: int(20 x 1.25 x 1.24) = 31", () => {
+  it("stacks on Tower Overdrive: int(20 x 1.25 x 1.15) = 28", () => {
     const { battle } = pokeyBattle(CANNON, {
-      defenceBonus: { damage: 0.24 },
+      defenceBonus: { damage: 0.15 },
       buffs: { defender: { towerDamage: true } },
     });
     let hurt: number | undefined;
@@ -148,24 +153,24 @@ describe("switched on", () => {
       battle.step();
       hurt = battle.recentEvents(0).find((event) => event.kind === "hurt")?.amount;
     }
-    expect(hurt).toBe(31);
+    expect(hurt).toBe(28);
   });
 
-  it("makes a building take 1 / 1.08 of each swing", () => {
+  it("makes a building take 1 / 1.05 of each swing", () => {
     const plain = pokeyBattle(SILENT);
-    const tough = pokeyBattle(SILENT, { defenceBonus: { hp: 0.08 } });
+    const tough = pokeyBattle(SILENT, { defenceBonus: { hp: 0.05 } });
     run(plain.battle, 1500);
     run(tough.battle, 1500);
     const swings = lost(plain.yard) / 60;
     expect(swings).toBeGreaterThan(0);
-    expect(lost(tough.yard)).toBeCloseTo((swings * 60) / 1.08, 6);
+    expect(lost(tough.yard)).toBeCloseTo((swings * 60) / 1.05, 6);
     // Its health ceiling stays where it was: only the damage shrinks.
     expect(tough.yard.buildings[0]!.maxHp).toBe(plain.yard.buildings[0]!.maxHp);
   });
 
   it("leaves the attacker's Pokey hitting as hard when only tower damage is boosted", () => {
     const plain = pokeyBattle(SILENT);
-    const boosted = pokeyBattle(SILENT, { defenceBonus: { damage: 0.24 } });
+    const boosted = pokeyBattle(SILENT, { defenceBonus: { damage: 0.15 } });
     run(plain.battle, 1500);
     run(boosted.battle, 1500);
     expect(lost(boosted.yard)).toBe(lost(plain.yard));
