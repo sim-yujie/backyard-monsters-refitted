@@ -96,6 +96,8 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "guide/army",
   "guide/skip",
   "events/ladder/claim",
+  "quests/claim",
+  "quests/bonus/claim",
   "siege/lab/start",
   "siege/lab/cancel",
   "siege/lab/finish",
@@ -119,6 +121,10 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "achievements/state",
   "achievements/seen",
   "events/calendar/claim",
+  // The quest window's read, its login card (as the event calendar) and the daily swap.
+  "quests/state",
+  "quests/login/claim",
+  "quests/swap",
 ];
 
 /** An in-game check's answer (#273) counts only when it was right. */
