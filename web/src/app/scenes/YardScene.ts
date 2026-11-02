@@ -1106,7 +1106,13 @@ export class YardScene implements Scene {
       canvas: context.canvas,
       pick: (x, y) => this.renderer.pick(x, y),
       // Carrying a new building, the ghost is what the pointer is over.
-      onHover: (building) => this.renderer.setHovered(this.placement ? null : building),
+      onHover: (building, mouse) => {
+        const over = this.placement ? null : building;
+        this.renderer.setHovered(over);
+        // A defence's range oval: mouse only, not while carrying a building
+        // or in the planner, which draws its own rings.
+        this.renderer.setRangeHover(mouse && !this.planner ? over : null);
+      },
       onSelect: (building) => this.tap(building),
       // Not while carrying a new building: that click is a drop.
       pickMushroom: (x, y) =>
@@ -1988,6 +1994,7 @@ export class YardScene implements Scene {
     const spot = placement.grid.spotAt(type, point.x, point.y);
     placement.moveTo(spot.x, spot.y);
     this.renderer.setHovered(null);
+    this.renderer.setRangeHover(null);
     this.refreshBuildButton();
     guideBus.emit("carry", { type });
   }
