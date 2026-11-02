@@ -271,6 +271,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Bun keeps module mocks across files: a battle left canned here would be
+  // every later file's replay (CI run 41459356322, finaliseAttack.test.ts).
+  canned = null;
+  replayTimesOut = false;
+  crashOn = null;
   if (savedSwitch === undefined) delete process.env.INFERNO_ENABLED;
   else process.env.INFERNO_ENABLED = savedSwitch;
   (combatConfig as { mode: typeof MODE }).mode = MODE;
