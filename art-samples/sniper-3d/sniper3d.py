@@ -298,8 +298,8 @@ def build():
               [NR] * 4, r=0.024)
         tn, nn = -face_axes("R")[1], NR        # along the face toward the right corner, and out
         up = Vector((0, 0, 1))
-        ends = [face_frame("R", zb - 0.2, u=-0.54, out=0.0).translation,
-                face_frame("R", p0 + ph * 0.6, u=-0.56, out=0.0).translation]
+        ends = [face_frame("R", zb - 0.2, u=-0.54, out=-0.06).translation,      # the ends inside the face
+                face_frame("R", p0 + ph * 0.6, u=-0.56, out=-0.06).translation]
         for (a, e, m) in ((sock[0], ends[0], "blue"), (sock[1], ends[1], "red")):
             pts = bezier(a, a + tn * 0.42 + nn * 0.06 - up * 0.04, e + tn * 0.5 + nn * 0.14 + up * 0.02, e, n=20)
             cab = bmesh.new()
