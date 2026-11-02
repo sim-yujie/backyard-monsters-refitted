@@ -78,7 +78,9 @@
  * the game") the Monster Academy, art/buildings-3d-academy at tag
  * academy-3d-baseline-2026-11-01; then (owner, 1 Nov 2026: "put lab in
  * game") the Monster Lab, art/buildings-3d-lab at tag
- * lab-3d-baseline-2026-11-01.
+ * lab-3d-baseline-2026-11-01; then (owner, 2 Nov 2026: "Champion chamber
+ * pass") the Champion Chamber, art/buildings-3d-chamber at 40e38b1b8
+ * (round 9, the cooling pipes).
  *
  * The Town Hall's new art is the default (owner, 26 Oct 2026): one picture
  * per level (`TOWN_HALL_ART`), each painted from that level's Flash picture
@@ -645,6 +647,12 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
         more: [["anim.3d1.doorL@2x.webp", -68, 26, 34, 35, 5], ["anim.3d1.doorR@2x.webp", 40, 26, 27, 33, 5]] },
       damaged: { top: ["top.3d1.damaged@2x.webp", -75, -81], shadow: ["shadow.3d1.damaged.jpg", -72, 11] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -75, -33], shadow: ["shadow.3d1.destroyed.jpg", -74, 10] } },
+  ],
+  // 119 Champion Chamber: 3D, Flash's one look, still as Flash's
+  119: [
+    { from: 1, top: ["top.3d1@2x.webp", -66, -61], shadow: ["shadow.3d1.jpg", -65, 17], lift: 0,
+      damaged: { top: ["top.3d1.damaged@2x.webp", -66, -61], shadow: ["shadow.3d1.damaged.jpg", -66, 19] },
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -66, -25], shadow: ["shadow.3d1.destroyed.jpg", -66, 23] } },
   ],
 };
 
