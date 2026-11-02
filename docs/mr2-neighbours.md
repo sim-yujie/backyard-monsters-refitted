@@ -5,10 +5,49 @@ Beta 6 plan item 6. A Map Room 2 cell defends better the more friendly cells sit
 - A player's cell (main yard or outpost) counts **that player's own** cells around it (0 to 6).
 - A wild monster camp counts camps **of its own tribe** around it.
 
-Built on branch `feat/mr2-neighbours` behind the switch `MR2_NEIGHBOUR_BONUS` (off by default).
-Waiting for the owner. Not merged.
+Built on branch `feat/mr2-neighbours` behind the switch `MR2_NEIGHBOUR_BONUS` (off by default), merged
+into revamp. Branch `feat/mr2-bonus5` (3 Nov) lowers it to the owner's ladder and shows it to players.
 
-## Recommendation
+## Owner's ladder (3 Nov): +5, +9, +11, +13, +14, +15%
+
+The owner: "maybe reduce 8 to 5? It can be kept to both players and tribes." The first ladder
+(+8 / 14 / 18 / 20 / 22 / 24%) scaled by 5/8 and rounded: **+5, +9, +11, +13, +14, +15%** for 1 to 6
+friendly neighbours, building health and tower damage alike. Same rule for players and tribe camps; the
+intended switch value is `on` (both), still off by default until release.
+
+Extra army needed with the new ladder (same five fights, 5 seeds each, 5% steps;
+`bun tools/mr2-neighbours/study.ts need ladder`):
+
+| Fight | none (army needed) | 1 neighbour (+5%) | 3 neighbours (+11%) | 6 neighbours (+15%) |
+|---|---|---|---|---|
+| Abunakki vs Daves | 1.15 loads | +9% | +13% | +22% |
+| Dreadnaut vs Daves | 0.75 | +13% | +13% | +20% |
+| Dreadnaut vs ground mix | 2.35 | +11% | +15% | +17% |
+| Player vs air | 0.70 | +7% | +29% | +36% |
+| Kozu vs ground mix | 1.05 | -14%* | +14% | 0* |
+| **Average of all five** | | **+5%** | **+17%** | **+19%** |
+| Average without Kozu | | +10% | +18% | +24% |
+
+\* Kozu against the ground mix is the noisiest fight: the Pokey-heavy mix swings on small changes, so
+a small bonus can even make it easier on these five seeds. Read the averages as about ±5%.
+
+In short: one neighbour asks an attacker for about **5-10% more army**, three for about **17%**, a cell
+ringed by six for about **20%** (it was 13 / 22 / 30% on the old ladder).
+
+## What players see
+
+- **Map Room 2 cell pop-up:** a chip with a painted shield (teal, linked cells, two up arrows) +
+  "+11%" + "×3" on any player's cell or camp that has friendly neighbours. Hover says "3 friendly
+  neighbours: buildings +11% health, towers +11% damage." Nothing shows with the switch off or with no
+  friend around.
+- **Attack screen:** the same chip in the top strip, beside the boosts chip, for the whole battle.
+- The count is the server's: the map area (`getarea`) sends each land cell's count as `nb`, worked out
+  by the same `friendlyNeighbourCount` the attack load uses; the attack strip reads the count frozen
+  into the attack load. The percent comes from the battle's own table.
+- Icon: `web/public/ui/icons/neighbours-*.webp` (Codex painting, `art-samples/mr2-bonus5/icon/optA`).
+  The other option, a hex shield with friends either side, is `neighbours2` (`optB`).
+
+## Recommendation (first study, old +8% ladder)
 
 1. **Boost both building health and tower damage, by the same amount.** Health alone does little
    against armies the towers cannot hurt much. Tower damage alone does nothing against flying armies.
@@ -114,15 +153,14 @@ about 13% more army against nearly every camp. Choices:
   count with the attack. The player's game and the server's re-check both read that same count, so both
   fight the same battle.
 - **Tower damage:** every tower shot is multiplied (on top of Tower Overdrive).
-- **Building health:** each hit on a building is divided by the bonus (1.08 means each hit does 1/1.08).
+- **Building health:** each hit on a building is divided by the bonus (1.05 means each hit does 1/1.05).
   Health bars, stored health and loot stay as they are; the building just takes longer to destroy.
 - **Not boosted:** traps, Monster Bunker monsters and caged champions.
 
 ## Not done yet
 
-- Players cannot see the bonus anywhere. If the owner wants it, the Map Room 2 cell pop-up and the attack
-  screen would need an icon with "+8%" (painted icon, per the icons rule).
-- Not tried in a live game. The tests cover the battle, the count and the switch.
+- "View yard" (looking inside without attacking) does not show the chip; the cell pop-up shows it first.
+- The sections below the ladder table above are the first study (old +8% ladder), kept for the reasoning.
 
 ## Files
 
@@ -131,4 +169,7 @@ about 13% more army against nearly every camp. Choices:
 - `server/src/services/maproom/v2/neighbourDefence.ts`: counting the friendly neighbours.
 - `server/src/config/MapRoom2Config.ts`: the switch.
 - `server/src/controllers/base/load/modes/baseModeAttack.ts`: adds the count when the switch is on.
-- `web/tools/mr2-neighbours/study.ts`: the calculation. Run from `web/`: `bun tools/mr2-neighbours/study.ts need`.
+- `server/src/controllers/maproom/v2/getArea.ts`: sends each cell's count as `nb` when the switch is on.
+- `web/src/game/maproom/neighbourBonus.ts`, `web/src/ui/maproom/neighbourBonusChip.ts`: what the chip shows.
+- `web/tools/mr2-neighbours/study.ts`: the calculation. Run from `web/`: `bun tools/mr2-neighbours/study.ts need`
+  (`need ladder` for the game's own table at 1, 3 and 6 neighbours).
