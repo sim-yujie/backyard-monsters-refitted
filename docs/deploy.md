@@ -303,7 +303,7 @@ The live game was first put online straight from a computer, not from
 GitHub: the server's `/opt/bymr` is a plain copy of the code (no `git`
 inside), and the Vercel project `bymrevamped` is not connected to a
 repository. To update, from Git Bash on your computer, in the main
-`backyard-monsters-refitted` folder, on the `release` branch at the new version tag, never `revamp`
+`backyard-monsters-refitted` folder, on the `main` branch (called `release` until 2 Nov 2026) at the new version tag, never `revamp`
 (see `docs/release.md`; put in your server's IP address and your ssh key's file name):
 
 ```
