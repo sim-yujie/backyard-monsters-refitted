@@ -247,6 +247,15 @@ def thaw():
     """The drums' ice crust is gone with the rest of the frost: bare dark metal (still dented)."""
     for o in named(r"tank\d"):
         o.data.materials[0] = G["M"]["grate"]
+    # (r5) and the frost painted on the bars, the horns and the slabs' rims: undo the last frost mix of each
+    for k in ("bar", "brass"):
+        nt = G["M"][k].node_tree
+        b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+        m = b.inputs["Base Color"].links[0].from_node
+        if m.type == "MIX" and not m.inputs[7].is_linked and m.inputs[6].is_linked:
+            nt.links.new(m.inputs[6].links[0].from_socket, b.inputs["Base Color"])
+    for o in named(r"hatchpanef\d"):
+        o.data.materials[0] = G["M"]["pane"]
 
 
 # ------------------------------------------------------------------------------------------------------------ damaged
@@ -320,7 +329,7 @@ def destroyed():
     for k in range(28):
         f = k / 28 * 4
         side, t = int(f), f - int(f)
-        ux, uy = -AX + 2 * AX * t, -AY + 2 * AY * t
+        ux, uy = -AX + 0.6 + (2 * AX - 1.2) * t, -AY + 0.6 + (2 * AY - 1.2) * t   # (r5) kept off the corners: no overhang
         x, y = [(ux, -AY), (AX, uy), (-ux, AY), (-AX, -uy)][side]
         if R.random() < 0.2:
             continue                        # gaps where the wall is broken right down
