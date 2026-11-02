@@ -57,10 +57,12 @@
   letter-spacing: var(--display-tracking);
 }
 
+/* As many columns as fit whole words ("Monsters", "Main yard"), three on a
+   375px phone, with a gap between them so no two signs touch (beta 6). */
 .yard-menu__grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3) 0;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-3) var(--space-2);
   justify-items: center;
 }
 
