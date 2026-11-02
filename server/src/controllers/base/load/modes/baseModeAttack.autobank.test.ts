@@ -26,11 +26,15 @@ let tables: Map<unknown, Row[]>;
 const store = new Map<string, string>();
 const sessions = new Map<number, AttackSession>();
 
-const matches = (row: Row, where: Row) =>
+const matches = (row: Row, where: Row): boolean =>
   Object.entries(where).every(([key, value]) =>
-    value !== null && typeof value === "object" && "$in" in value
-      ? (value.$in as unknown[]).includes(row[key])
-      : row[key] === value
+    key === "$and"
+      ? (value as Row[]).every((part) => matches(row, part))
+      : key === "$or"
+        ? (value as Row[]).some((part) => matches(row, part))
+        : value !== null && typeof value === "object" && "$in" in value
+          ? (value.$in as unknown[]).includes(row[key])
+          : row[key] === value
   );
 
 interface StandIn {
@@ -280,6 +284,60 @@ describe("the attack load freezes both sides' shop boosts (beta.4)", () => {
   test("no boosts anywhere: the defence is served as before", async () => {
     const session = await attack(MAIN_BASEID);
     expect(session?.defenderForces).not.toHaveProperty("buffs");
+  });
+});
+
+describe("Map Room 2's neighbour defence bonus (docs/mr2-neighbours.md)", () => {
+  /** The outpost's cell as its owner's, with one more of the owner's outposts next to it. */
+  const ringOutpost = () => {
+    const cells = tables.get(WorldMapCell)!;
+    Object.assign(cells.find((row) => row.baseid === OUTPOST_BASEID)!, { uid: OWNER, base_type: 3 });
+    // (241, 208) is an odd column: (241, 207) above it is a neighbour.
+    cells.push({ baseid: "2000241207x", map_version: 2, world: "world-a", x: 241, y: 207, uid: OWNER, base_type: 3, terrainHeight: 125 });
+    // Someone else's, also next to it: not a friend.
+    cells.push({ baseid: "2000242208x", map_version: 2, world: "world-a", x: 242, y: 208, uid: 999, base_type: 3, terrainHeight: 125 });
+  };
+  const saved = process.env.MR2_NEIGHBOUR_BONUS;
+  const restore = () => {
+    if (saved === undefined) delete process.env.MR2_NEIGHBOUR_BONUS;
+    else process.env.MR2_NEIGHBOUR_BONUS = saved;
+  };
+
+  test("switched off (the default): the defence is served exactly as before, with no count", async () => {
+    delete process.env.MR2_NEIGHBOUR_BONUS;
+    try {
+      ringOutpost();
+      const session = await attack(OUTPOST_BASEID);
+      expect(session?.defenderForces).toEqual({ bunkers: {}, defenderLevels: {}, defenderChampions: [] });
+    } finally {
+      restore();
+    }
+  });
+
+  test("switched on: the owner's own neighbouring outpost is counted, served and kept", async () => {
+    process.env.MR2_NEIGHBOUR_BONUS = "on";
+    try {
+      ringOutpost();
+      const session = await attack(OUTPOST_BASEID);
+      expect(session?.defenderForces).toEqual({
+        bunkers: {},
+        defenderLevels: {},
+        defenderChampions: [],
+        neighbours: 1,
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  test("switched on, with no friend next to it: nothing is added", async () => {
+    process.env.MR2_NEIGHBOUR_BONUS = "on";
+    try {
+      const session = await attack(MAIN_BASEID);
+      expect(session?.defenderForces).not.toHaveProperty("neighbours");
+    } finally {
+      restore();
+    }
   });
 });
 
