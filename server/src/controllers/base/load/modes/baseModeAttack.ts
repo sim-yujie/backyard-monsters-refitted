@@ -32,6 +32,8 @@ import { autobankOwner } from "../../../../services/maproom/v2/autobank.js";
 import { academyLevels } from "../../../../services/base/combat/abandonedAttack.js";
 import { academyRanks } from "../../../../game-rules/combat/index.js";
 import { isDeclareWarRunning } from "../../../../services/alliance/powerups.js";
+import { mr2NeighbourBonusEnabled } from "../../../../config/MapRoom2Config.js";
+import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -232,7 +234,15 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
   // The defence the battle is fought against, served to the client and kept
   // in the session for the server's replay (issue #195).
   // With both sides' shop boosts as they run now (beta.4): the attacker's off their main yard.
-  const defenderForces = await servedDefenderForces(save, userSave);
+  // With Map Room 2's neighbour bonus switched on, the friendly cells around
+  // the target go in too (`docs/mr2-neighbours.md`); switched off, or with no
+  // friend next to it, the defence is served exactly as before.
+  const neighbours =
+    mapversion === MapRoomVersion.V2 && mr2NeighbourBonusEnabled() && save.cell && userSave.worldid
+      ? await loadFriendlyNeighbourCount(save.cell, userSave.worldid)
+      : 0;
+  const served = await servedDefenderForces(save, userSave);
+  const defenderForces = neighbours > 0 ? { ...served, neighbours } : served;
   // The attacker's champions' brains as they stand now, after the load has
   // landed any attack they left (issue #219): frozen into the session, served
   // to the client, and the only brains this battle is ever fought with.

@@ -1,3 +1,4 @@
+import { isSwitchOn } from "./BotConfig.js";
 import { MapRoom2 } from "../enums/MapRoom.js";
 
 /**
@@ -31,3 +32,12 @@ export const EDGE_TRANSITION_WIDTH = 3;
  * @constant {number}
  */
 export const MAX_RESOURCE_CAPACITY = 7_046_100_000;
+
+/**
+ * Whether Map Room 2's neighbour defence bonus is on (`docs/mr2-neighbours.md`):
+ * a cell under attack defends better for each friendly cell around it.
+ * `MR2_NEIGHBOUR_BONUS` is `on` or `true`; off by default, which serves every
+ * attack exactly as before. Read on each attack load, so tests can flip it.
+ */
+export const mr2NeighbourBonusEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
+  isSwitchOn(env.MR2_NEIGHBOUR_BONUS);
