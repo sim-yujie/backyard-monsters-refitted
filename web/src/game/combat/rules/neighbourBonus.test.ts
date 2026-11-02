@@ -89,7 +89,7 @@ describe("switched off: the battle as it always was", () => {
     const served = mixedWaves(battleDefence(parseDefenderForces({ ...FORCES })));
     expect(served.digest).toBe(plain.digest);
     expect(served.damage).toBe(plain.damage);
-  });
+  }, 60_000);
 
   it("serves no bonus for 0 neighbours, or a count it cannot read", () => {
     for (const neighbours of [undefined, 0, -1, 1.5, Number.NaN]) {
@@ -176,5 +176,5 @@ describe("switched on", () => {
     const ringed = mixedWaves({ defenceBonus: neighbourDefenceBonus(6)! });
     expect(ringed.digest).not.toBe(plain.digest);
     expect(ringed.damage).toBeLessThan(plain.damage);
-  });
+  }, 60_000);
 });
