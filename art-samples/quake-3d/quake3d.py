@@ -472,11 +472,15 @@ def build_destroyed(M, root):
     for o in list(bpy.data.objects):
         if o.name in ("uprights", "up_rivets", "bosses", "bar", "straps"):
             o.parent = gantry
-    gantry.rotation_euler = (math.radians(-62), math.radians(8), math.radians(-14))
-    gantry.location = (0.25, 0.15, 0.32)
+    # the gantry buckled and slumped back to the right, crushed to half its height (Flash's wreck stays low)
+    gantry.scale = (1.0, 1.0, 0.5)
+    gantry.rotation_euler = (math.radians(14), math.radians(-70), math.radians(24))
+    gantry.location = (-0.2, 0.1, 0.05)
     w, h = bpy.data.objects["WEIGHT"], bpy.data.objects["HOOK"]
-    w.rotation_euler = (math.radians(84), 0, math.radians(30))
-    w.location = (0.2, -0.75, 0.62)
+    # the weight toppled onto the drum, lying across the pit with its cap toward the viewer's left (Flash)
+    ax = Vector((math.cos(math.radians(12)), math.sin(math.radians(12)), -0.17)).normalized()
+    w.rotation_euler = (0, math.radians(80), math.radians(12))
+    w.location = Vector((0, 0, DRUM_H + WT_R * 0.45)) - ax * 0.8
     h.parent = gantry
     bm = bmesh.new()
     W.clods(bm, [bear(30 * i + 11, 0.55 + 0.35 * ((i * 0.61) % 1.0), 0.04) for i in range(12)], r=0.07, seed=1.0)
