@@ -246,15 +246,22 @@ import {
   BOLT_ID,
   BOUNCE_RADIUS,
   BRAIN_ID,
+  CRABATRON_ID,
+  CRIT_MULTIPLIER,
   DAVE_ID,
   EYE_RA_ID,
   FANG_ID,
   FINK_ID,
   FINK_RADIUS,
+  ICHI_ID,
+  OCTO_ID,
+  POKEY_ID,
   PROJECT_X_ID,
   PROJECT_X_RADIUS,
+  SWARM_SIZE,
   TERATORN_ID,
   VENOM_INTERVAL_SECONDS,
+  WEAKEN_SECONDS,
   WORMZER_ID,
   WORMZER_RADIUS,
   airburstPercent,
@@ -264,11 +271,15 @@ import {
   blinkRouteLimit,
   bounceCount,
   cloakDelaySeconds,
+  critChance,
   daveRange,
   finkExtraTargets,
   projectXMultiplier,
   rankOf,
+  swarmSpeedShare,
+  thornsShare,
   venomShare,
+  weakenShare,
   wormzerMultiplier,
 } from "./specialMoves.js";
 
@@ -896,6 +907,10 @@ export interface CreepSnapshot {
   readonly poisonStacks?: number;
   /** Malphus mid-hop over a wall: ticks since it took off, under {@link HOP_TICKS}. */
   readonly hop?: number;
+  /** A ranked Pokey in a swarm of 5 or more on one target, swinging faster (Lab "Swarm"). */
+  readonly swarming?: boolean;
+  /** Oozed by an Octo-ooze it killed: dealing less damage for a while (Lab "Weakening Ooze"). */
+  readonly weakened?: boolean;
 }
 
 /**
@@ -1010,6 +1025,10 @@ export type BattleVisualEvent =
       readonly flying: boolean;
       /** Health the swing took off, after fortification; 0 when it hit nothing. */
       readonly amount: number;
+      /** What a Crabatron's critical hit added to `amount`, after fortification. */
+      readonly bonus?: number;
+      /** What an Octo-ooze's weakening took off the swing, after fortification. */
+      readonly reduced?: number;
     }
   | {
       /** A creep lost health: a tower shot, splash, a trap, or another creep. */
@@ -1021,6 +1040,25 @@ export type BattleVisualEvent =
       readonly ix: number;
       readonly iy: number;
       /** Health actually taken, capped at what the creep had left. */
+      readonly amount: number;
+      /** What a Crabatron's critical hit added to the blow. */
+      readonly bonus?: number;
+      /** What an Octo-ooze's weakening took off the blow (a weakened tower or monster). */
+      readonly reduced?: number;
+      /** The blow is an Ichi's thorns: damage it reflected back at whoever hit it. */
+      readonly thorns?: boolean;
+    }
+  | {
+      /**
+       * An Ichi's thorns struck a tower (Lab "Thorns"): `amount`, after
+       * fortification, off the building that shot it, at its yard anchor.
+       */
+      readonly kind: "thorns";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly buildingId: number;
+      readonly ix: number;
+      readonly iy: number;
       readonly amount: number;
     }
   | {
@@ -1180,9 +1218,25 @@ export interface Battle {
    * only: not in the state or the checkpoint. A fresh copy per call.
    */
   bunkerPools(): Readonly<Record<number, Readonly<Record<string, number>>>>;
+  /**
+   * The towers an Octo-ooze's ooze is weakening right now (Lab "Weakening
+   * Ooze"), by building id, ascending. Drawing only. A fresh copy per call.
+   */
+  weakenedTowers(): readonly number[];
 }
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
+
+/**
+ * What kind of blow lands, for the Lab's abilities (owner, 2 Nov 2026): a
+ * plain `hit`; a Crabatron's `crit`, its double already in the damage; a
+ * damage-over-time tick (`dot`, venom or flame), which neither an Octo-ooze's
+ * ooze cuts nor an Ichi reflects; and an Ichi's `thorns`, never reflected again.
+ */
+type Blow = "hit" | "crit" | "dot" | "thorns";
+
+/** A blow an Octo-ooze's ooze can weaken and an Ichi can reflect: one struck, not a tick. */
+const struck = (blow: Blow): boolean => blow === "hit" || blow === "crit";
 
 /** `decoy`: a defender the Decoy holds ({@link BattleOptions.siege}). */
 type Behaviour = "attack" | "defend" | "bunker" | "heal" | "retreat" | "decoy";
@@ -1359,6 +1413,12 @@ interface Creep {
   huntPen: number;
   /** Malphus: the tick its hop over a wall began (`CreepBase.as:1503-1528`), or -1. */
   hopStart: number;
+  /** A ranked Pokey with 4 more Pokeys of its side on its target this tick (Lab "Swarm"). */
+  swarming: boolean;
+  /** Octo-ooze's ooze on the creep that killed one: the tick it wears off; 0 for none. */
+  weakUntil: number;
+  /** The share of its damage the ooze takes off while it lasts. */
+  weakShare: number;
 }
 
 /** A {@link ChampionLesson} as the battle builds it (issue #219). */
@@ -1425,6 +1485,9 @@ const NO_ABILITIES = {
   hunts: false,
   huntPen: -1,
   hopStart: -1,
+  swarming: false,
+  weakUntil: 0,
+  weakShare: 0,
 } as const;
 
 interface DefenderHome {
@@ -1492,6 +1555,10 @@ interface Tower {
   quakeFrame: number;
   /** `_targetVacuum`: it fires at the Vacuum's hose (Inferno WP 6.6). */
   onHose: boolean;
+  /** Octo-ooze's ooze on a tower that killed one: the tick it wears off; 0 for none. */
+  weakUntil: number;
+  /** The share of its damage the ooze takes off while it lasts. */
+  weakShare: number;
 }
 
 /**
@@ -2023,10 +2090,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         : null,
       quakeFrame: 0,
       onHose: false,
+      weakUntil: 0,
+      weakShare: 0,
     });
   }
 
   for (const tower of towers) towerReports.set(tower.building.id, tower.report);
+  /** Each tower by its report, for the blows that reach a creep with only the report in hand. */
+  const towerOfReport = new Map<TowerReport, Tower>();
+  for (const tower of towers) towerOfReport.set(tower.report, tower);
 
   /** Laser beams still sweeping, oldest first; each outlives its tower (`LASERS.as`). */
   const laserBeams: LaserBeam[] = [];
@@ -2198,6 +2270,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     grid.removeBuilding(building);
   };
 
+  /*
+   * The Lab's revamp abilities (owner, 2 Nov 2026). `towerSource` is the tower
+   * whose shot {@link towerHurt} is landing, taken (and cleared) by the
+   * {@link damageCreep} it calls, so a blow that one sets off (a death blast,
+   * thorns) is not the tower's. `lastBlowMods` is what the last
+   * {@link damageBuilding} added (a crit) or took off (an ooze), for the
+   * swing's number.
+   */
+  let towerSource: Tower | null = null;
+  let lastBlowMods: { readonly bonus: number; readonly reduced: number } | null = null;
+  /** The share an Octo-ooze's ooze takes off a creep's blows now; 0 when it is not oozed. */
+  const weakShareOf = (creep: Creep): number => (creep.weakUntil > tick ? creep.weakShare : 0);
+  /** The same for a tower's shots. */
+  const towerWeakShare = (tower: Tower): number =>
+    tower.weakUntil > tick ? tower.weakShare : 0;
+  /** Whether a Crabatron's blow is a critical hit: one draw, for a ranked Crabatron only. */
+  const critRoll = (creep: Creep): boolean =>
+    creep.rank > 0 && creep.monsterId === CRABATRON_ID && rng.float() < critChance(creep.rank);
+  /** Whether Pokeys can swarm at all this battle: a side has them ranked. */
+  const swarmsPossible =
+    rankOf(options.ranks, POKEY_ID) > 0 || rankOf(options.defenderRanks, POKEY_ID) > 0;
+
   /**
    * `BFOUNDATION.modifyHealth` (`:499-541`): fortification, then loot.
    *
@@ -2214,10 +2308,24 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep: Creep | null,
     lootMultiplier = creep ? lootOf(creep) : 1,
     byAttacker = creep !== null,
+    blow: Blow = "hit",
   ): number => {
+    lastBlowMods = null;
     if (building.hp <= 0 || raw <= 0) return 0;
+    // An Octo-ooze's ooze on the striker takes its share off (Lab "Weakening Ooze").
+    const weak = creep && struck(blow) ? weakShareOf(creep) : 0;
+    const reduced = raw * weak;
+    if (weak > 0) raw -= reduced;
     const dealt = fortifiedDamage(raw, building.fortification, 0);
     const applied = Math.min(dealt, building.hp);
+    if (weak > 0 || blow === "crit") {
+      // The number's modifiers, after fortification as the number itself is.
+      const scale = raw > 0 ? dealt / raw : 0;
+      lastBlowMods = {
+        bonus: blow === "crit" ? Math.min(applied, (raw - raw / CRIT_MULTIPLIER) * scale) : 0,
+        reduced: reduced * scale,
+      };
+    }
     if (creep) {
       const row = attackerRowOf.get(creep.id);
       if (row) row.buildingDamage += applied;
@@ -2309,7 +2417,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     raw: number,
     by: Creep | null = null,
     striker: Creep | null = null,
+    blow: Blow = "hit",
   ): number => {
+    const tower = towerSource;
+    towerSource = null;
     if (creep.hp <= 0) return 0;
     // A defender's blow turns the attacker on it (issue #195), and its aggro
     // ends a flying champion's look (`ChampionBase.as:903`, issue #222).
@@ -2323,6 +2434,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.puttyArmour > 0) raw *= 1 - creep.puttyArmour;
     // The Monster Defensive Buff is armour of its own too (`BeastMode.as`).
     if (boosted(creep, "monsterArmour")) raw *= 1 - MONSTER_ARMOUR_BUFF;
+    // An Octo-ooze's ooze on the tower or monster striking (Lab "Weakening Ooze").
+    let weak = 0;
+    if (struck(blow)) weak = tower ? towerWeakShare(tower) : striker ? weakShareOf(striker) : 0;
+    const reduced = raw * weak;
+    if (weak > 0) raw -= reduced;
     const applied = Math.min(raw, creep.hp);
     if (applied > 0) {
       visual.push({
@@ -2333,6 +2449,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         ix: creep.ix,
         iy: creep.iy,
         amount: applied,
+        ...(blow === "crit" ? { bonus: Math.min(applied, raw - raw / CRIT_MULTIPLIER) } : {}),
+        ...(weak > 0 ? { reduced } : {}),
+        ...(blow === "thorns" ? { thorns: true } : {}),
       });
     }
     creep.hp -= raw;
@@ -2345,10 +2464,71 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         countLost(creep);
       }
       recordDeath(creep);
+      if (creep.rank > 0 && creep.monsterId === OCTO_ID) ooze(creep, tower, striker);
       onDeath(creep);
     }
     if (striker && striker.friendly && !creep.friendly) creditDefender(striker, applied, killed);
+    // Ichi's thorns: a share of the health it actually lost, back at the striker.
+    if (applied > 0 && creep.rank > 0 && creep.monsterId === ICHI_ID && struck(blow)) {
+      thorns(creep, applied * thornsShare(creep.rank), tower, striker);
+    }
     return applied;
+  };
+
+  /** A tower's blow at a creep: {@link damageCreep}, knowing whose shot it is. */
+  const towerHurt = (report: TowerReport, creep: Creep, raw: number): number => {
+    towerSource = towerOfReport.get(report) ?? null;
+    return damageCreep(creep, raw);
+  };
+
+  /**
+   * Octo-ooze's "Weakening Ooze" (owner, 2 Nov 2026): the tower or the other
+   * side's monster that killed it deals its share less for
+   * {@link WEAKEN_SECONDS}. A new kill starts the time again and sets the
+   * share; it never stacks.
+   */
+  const ooze = (octo: Creep, tower: Tower | null, striker: Creep | null): void => {
+    const until = tick + ticks(WEAKEN_SECONDS);
+    const share = weakenShare(octo.rank);
+    if (tower) {
+      tower.weakUntil = until;
+      tower.weakShare = share;
+    } else if (striker && striker.hp > 0 && !striker.gone && striker.friendly !== octo.friendly) {
+      striker.weakUntil = until;
+      striker.weakShare = share;
+    }
+  };
+
+  /**
+   * Ichi's "Thorns" (owner, 2 Nov 2026): `amount` back at whoever struck it, a
+   * tower, a monster or a champion. Only what it actually lost counts (the
+   * caller's `applied`, never overkill), and a splash only its own share.
+   */
+  const thorns = (
+    ichi: Creep,
+    amount: number,
+    tower: Tower | null,
+    striker: Creep | null,
+  ): void => {
+    if (amount <= 0) return;
+    if (tower) {
+      const building = tower.building;
+      if (building.hp <= 0 || ichi.friendly) return;
+      const dealt = damageBuilding(building, amount, ichi, lootOf(ichi), true, "thorns");
+      if (dealt <= 0) return;
+      visual.push({
+        kind: "thorns",
+        tick,
+        creepId: ichi.id,
+        buildingId: building.id,
+        ix: building.x,
+        iy: building.y,
+        amount: dealt,
+      });
+      return;
+    }
+    if (!striker || striker.hp <= 0 || striker.gone || striker.friendly === ichi.friendly) return;
+    damageCreep(striker, amount, null, ichi, "thorns");
   };
 
   /**
@@ -3417,7 +3597,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const hit of index.inRange(splash, at.x, at.y, flags)) {
       const dealt = Math.max((shot / splash) * (splash - hit.dist), shot / 5);
       const health = hit.creep.hp;
-      tower.report.damageDealt += damageCreep(hit.creep, dealt);
+      tower.report.damageDealt += towerHurt(tower.report, hit.creep, dealt);
       if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
     }
   };
@@ -3910,7 +4090,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * The renderer's note of a swing that connected: a lunge or a projectile at
    * the attacker's end, a flash at the target's. Not simulation state.
    */
-  const recordHit = (creep: Creep, targetIx: number, targetIy: number, amount: number): void => {
+  const recordHit = (
+    creep: Creep,
+    targetIx: number,
+    targetIy: number,
+    amount: number,
+    mods: { readonly bonus: number; readonly reduced: number } | null = null,
+  ): void => {
     visual.push({
       kind: "hit",
       tick,
@@ -3924,6 +4110,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ranged: creep.range > 1,
       flying: creep.flying,
       amount,
+      ...(mods && mods.bonus > 0 ? { bonus: mods.bonus } : {}),
+      ...(mods && mods.reduced > 0 ? { reduced: mods.reduced } : {}),
     });
   };
 
@@ -3939,6 +4127,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (creep.rank > 0 && creep.monsterId === BANDITO_ID) {
       boost *= banditoSpeedPercent(creep.rank) / 100;
     }
+    // A swarming Pokey swings 10, 20 or 30% faster (Lab "Swarm", owner 2 Nov 2026).
+    if (creep.swarming) boost *= 1 + swarmSpeedShare(creep.rank);
     return Math.trunc(boost === 1 ? creep.attackDelay : creep.attackDelay / boost);
   };
 
@@ -3978,12 +4168,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // itself (`Projectilev2.as:155`), neither of them a `MonsterBase`.
     const fireball = (creep.champion && creep.monsterId === FOMOR_ID) || shot;
     const looting = fireball ? 1 : lootOf(creep);
-    recordHit(
-      creep,
-      target.x,
-      target.y,
-      damageBuilding(target, creep.damage * multiplier, creep, looting),
-    );
+    // A ranked Crabatron's critical hit doubles the blow (Lab "Critical Hits").
+    const crit = critRoll(creep);
+    const blow = crit ? creep.damage * multiplier * CRIT_MULTIPLIER : creep.damage * multiplier;
+    const dealt = damageBuilding(target, blow, creep, looting, true, crit ? "crit" : "hit");
+    recordHit(creep, target.x, target.y, dealt, lastBlowMods);
     if (creep.rank > 0) onAttack(creep, creep.damage * multiplier, null, target);
     if (creep.monsterId === KING_WORMZER_ID) {
       kingWormzerSplash(creep, creep.damage * multiplier, null, target);
@@ -4077,7 +4266,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const strikeCreep = (creep: Creep, foe: Creep, by: Creep | null): number => {
     if (!(creep.champion && creep.monsterId === KORATH_ID)) {
-      return damageCreep(foe, huntBlow(creep), by, creep);
+      // A ranked Crabatron's critical hit doubles the blow (Lab "Critical Hits").
+      const crit = critRoll(creep);
+      const blow = crit ? huntBlow(creep) * CRIT_MULTIPLIER : huntBlow(creep);
+      return damageCreep(foe, blow, by, creep, crit ? "crit" : "hit");
     }
     if (foe.flying && hasFireball(KORATH_ID, creep.level, creep.power)) {
       // The flame catches as the fireball lands, before its damage (`FIREBALL.as:138-149`).
@@ -4107,7 +4299,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.burnTick += 1;
     if (creep.burnTick < FLAME_INTERVAL) return false;
     creep.burnTick -= FLAME_INTERVAL;
-    damageCreep(creep, creep.burnDps, null, creep.burnBy);
+    damageCreep(creep, creep.burnDps, null, creep.burnBy, "dot");
     return creep.hp <= 0;
   };
 
@@ -4310,7 +4502,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.venomTick += 1;
     if (creep.venomTick < ticks(VENOM_INTERVAL_SECONDS)) return false;
     creep.venomTick = 0;
-    damageCreep(creep, creep.venomStacks * creep.venomDps, null, creep.venomBy);
+    damageCreep(creep, creep.venomStacks * creep.venomDps, null, creep.venomBy, "dot");
     return creep.hp <= 0;
   };
 
@@ -5718,7 +5910,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const creep = hit.creep;
       const before = creep.hp;
       const dealt = quakeDamage(power, tower.range, hit.dist, creep.hp);
-      tower.report.damageDealt += damageCreep(creep, dealt);
+      tower.report.damageDealt += towerHurt(tower.report, creep, dealt);
       if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
     }
     const hose = vacuum;
@@ -5790,7 +5982,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     flags: number,
   ): void => {
     const before = creep.hp;
-    report.damageDealt += damageCreep(creep, shot);
+    report.damageDealt += towerHurt(report, creep, shot);
     if (before > 0 && creep.hp <= 0) report.kills += 1;
     if (splash <= 0) return;
     // `DealLinearAEDamage` over the blast, with its floor of a fifth (`:340-389`),
@@ -5799,7 +5991,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const linear = (shot / splash) * (splash - hit.dist);
       const dealt = Math.max(linear, shot / 5);
       const health = hit.creep.hp;
-      report.damageDealt += damageCreep(hit.creep, dealt);
+      report.damageDealt += towerHurt(report, hit.creep, dealt);
       if (health > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
   };
@@ -5878,7 +6070,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const linear = Math.trunc((shell.damage / radius) * (radius - dist));
       const dealt = Math.max(linear, Math.trunc(shell.damage / 5));
       const before = hit.creep.hp;
-      report.damageDealt += damageCreep(hit.creep, dealt);
+      report.damageDealt += towerHurt(report, hit.creep, dealt);
       if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
   };
@@ -6076,7 +6268,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const linear = Math.trunc((shell.damage / radius) * (radius - dist));
       const dealt = Math.max(linear, Math.trunc(shell.damage / 5));
       const before = hit.creep.hp;
-      report.damageDealt += damageCreep(hit.creep, dealt);
+      report.damageDealt += towerHurt(report, hit.creep, dealt);
       if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
     if (rng.float() > SPURTZ_HATCH_CHANCE) {
@@ -6231,7 +6423,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         ix: target.ix,
         iy: target.iy,
       });
-      tower.report.damageDealt += damageCreep(
+      tower.report.damageDealt += towerHurt(
+        tower.report,
         target,
         towerShotDamage(damage, building.hp, building.maxHp),
       );
@@ -6306,7 +6499,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const at = screenPointOf(hit.creep.ix, hit.creep.iy);
       if (!beamHits(fromX, fromY, toX, toY, at.x, at.y, RAILGUN_BEAM_RADIUS)) continue;
       const before = hit.creep.hp;
-      tower.report.damageDealt += damageCreep(hit.creep, dealt);
+      tower.report.damageDealt += towerHurt(tower.report, hit.creep, dealt);
       if (before > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
     }
   };
@@ -6371,7 +6564,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const report = beam.tower.report;
       for (const hit of index.inRange(beam.splash, at.x, at.y, TRAP_TARGETS)) {
         const before = hit.creep.hp;
-        report.damageDealt += damageCreep(
+        report.damageDealt += towerHurt(
+          report,
           hit.creep,
           laserPulse(beam.damage, beam.splash, hit.dist),
         );
@@ -6804,6 +6998,33 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (drop > 0) visual.splice(0, drop);
   };
 
+  /**
+   * Pokey's "Swarm" (owner, 2 Nov 2026): a ranked Pokey is swarming this tick
+   * while it and 4 or more other Pokeys of its side are swinging at one target.
+   */
+  const markSwarms = (): void => {
+    const counts = new Map<number, number>();
+    for (const creep of creeps) {
+      creep.swarming = false;
+      const key = swarmKey(creep);
+      if (key !== null) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    for (const creep of creeps) {
+      const key = swarmKey(creep);
+      if (key !== null && creep.rank > 0) creep.swarming = (counts.get(key) ?? 0) >= SWARM_SIZE;
+    }
+  };
+
+  /** A swinging Pokey's target and side as one number; null for anything else. */
+  const swarmKey = (creep: Creep): number | null => {
+    if (creep.monsterId !== POKEY_ID || creep.hp <= 0 || creep.gone || !creep.attacking) {
+      return null;
+    }
+    const target = creep.targetCreep >= 0 ? creep.targetCreep * 2 + 1 : creep.targetBuilding * 2;
+    if (target < 0) return null;
+    return target * 2 + (creep.friendly ? 1 : 0);
+  };
+
   const step = (): void => {
     if (finished) return;
     tick += 1;
@@ -6832,6 +7053,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     tickDecoy();
     tickBunkerDoors();
     tickVacuum();
+    if (swarmsPossible) markSwarms();
     for (const creep of creeps) {
       tickCreep(creep);
       if (creep.burrows) tickBurrow(creep);
@@ -6952,7 +7174,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ...(creep.hopStart >= 0 && tick - creep.hopStart < HOP_TICKS
         ? { hop: tick - creep.hopStart }
         : {}),
+      ...(creep.swarming ? { swarming: true } : {}),
+      ...(creep.weakUntil > tick ? { weakened: true } : {}),
     }));
+
+  const weakenedTowers = (): number[] =>
+    towers
+      .filter((tower) => tower.weakUntil > tick && tower.building.hp > 0)
+      .map((tower) => tower.building.id)
+      .sort((one, other) => one - other);
 
   const recentEvents = (sinceTick: number): BattleVisualEvent[] => {
     let start = 0;
@@ -7129,6 +7359,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     recentEvents,
     siege: siegeSnapshot,
     bunkerPools,
+    weakenedTowers,
   };
 };
 
