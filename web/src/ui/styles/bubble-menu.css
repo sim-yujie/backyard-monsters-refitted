@@ -1,0 +1,137 @@
+/*
+ * The bubble menu (beta 6 desk sample, `ui/yard/BubbleMenu.ts`): More on the
+ * yard's bottom row, in Mail's old place beside Monsters, and Layout, Goals,
+ * Alerts, Defences and Mail fanning up out of it as bubbles, each word on a
+ * sign to the bubble's left. The fan bends a little to the left, away from
+ * Collect all and the screen's edge.
+ *
+ * The fan is a zero-sized point at the centre of More's disc; each bubble
+ * hangs there by its disc's centre and flies out to its place, the k-th
+ * (`--bubble-k`, set by the script, 1 nearest More) `--bubble-start` plus
+ * k-1 steps up and k² × `--bubble-curve` left. They fly out one after the
+ * other and fold back the other way round.
+ *
+ * Every colour comes from tokens.css and the dock's own classes, so the
+ * Classic and Modern looks dress the bubbles as they dress the dock.
+ */
+
+.bubble-menu {
+  /* Half More's disc: where the fan hangs from, from the box's top. */
+  --bubble-anchor: 34px;
+  --bubble-disc: 56px;
+  --bubble-start: 84px;
+  --bubble-step: 64px;
+  --bubble-curve: 5px;
+
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bubble-menu[hidden] {
+  display: none;
+}
+
+/* The bottom row, in Mail's old place left of Monsters (yard-hud.css). */
+.yard-dock__right > .bubble-menu {
+  right: calc(var(--dock-row) + var(--dock-pitch));
+  bottom: 30px;
+  width: var(--dock-slot);
+}
+
+.bubble-menu > .yard-dock__button--more {
+  width: 100%;
+}
+
+.yard-dock__badge.bubble-menu__badge {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+/* More's three dots turn a quarter while the fan is out. */
+.yard-dock__button--more .yard-dock__disc > svg {
+  transition: transform var(--motion-normal) var(--easing);
+}
+
+.bubble-menu--open .yard-dock__button--more .yard-dock__disc > svg {
+  transform: rotate(90deg);
+}
+
+.bubble-menu__fan {
+  position: absolute;
+  top: var(--bubble-anchor);
+  right: 50%;
+  width: 0;
+  height: 0;
+}
+
+.bubble-menu__fan[hidden] {
+  display: none;
+}
+
+/* A bubble: hung by its disc's centre, folded into More while shut. */
+.bubble-menu__fan > .yard-dock__button {
+  position: absolute;
+  right: calc(var(--bubble-disc) / -2);
+  bottom: calc(var(--bubble-disc) / -2);
+  flex-direction: row-reverse;
+  gap: var(--space-2);
+  opacity: 0;
+  transform: scale(0.2);
+  transform-origin: calc(100% - var(--bubble-disc) / 2) 50%;
+  transition:
+    transform 170ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 140ms linear;
+  transition-delay: calc((var(--bubble-count, 1) - var(--bubble-k, 1)) * 25ms);
+  pointer-events: none;
+}
+
+.bubble-menu--open .bubble-menu__fan > .yard-dock__button {
+  opacity: 1;
+  transform: translate(
+      calc(var(--bubble-k, 1) * var(--bubble-k, 1) * var(--bubble-curve) * -1),
+      calc((var(--bubble-start) + (var(--bubble-k, 1) - 1) * var(--bubble-step)) * -1)
+    )
+    scale(1);
+  transition:
+    transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 160ms linear;
+  transition-delay: calc((var(--bubble-k, 1) - 1) * 40ms);
+  pointer-events: auto;
+}
+
+.bubble-menu__fan .yard-dock__disc {
+  width: var(--bubble-disc);
+  height: var(--bubble-disc);
+}
+
+/* A phone held upright: More above Build, where Layout stood, the bubbles a
+   little smaller and closer. */
+@media (width <= 620px) {
+  .bubble-menu {
+    --bubble-anchor: 30px;
+    --bubble-disc: 52px;
+    --bubble-start: 76px;
+    --bubble-step: 60px;
+    --bubble-curve: 4px;
+  }
+
+  .yard-dock__right > .bubble-menu {
+    right: 26px;
+    bottom: 136px;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-menu__fan > .yard-dock__button,
+  .bubble-menu--open .bubble-menu__fan > .yard-dock__button {
+    transition: opacity var(--motion-fast) linear;
+    transition-delay: 0s;
+  }
+
+  .yard-dock__button--more .yard-dock__disc > svg {
+    transition: none;
+  }
+}

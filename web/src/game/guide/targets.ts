@@ -40,6 +40,8 @@ export const TutTarget = {
   DOCK_YARDS: "dock-yards",
   /** The phone's Menu button, which holds Map, Mail, Monsters and the rest (#381). */
   DOCK_MENU: "dock-menu",
+  /** The bubble menu's More button, which fans out Layout, Goals, Alerts, Defences and Mail (beta 6). */
+  DOCK_MORE: "dock-more",
   BUILD_TAB: "build-tab:",
   BUILD_CARD: "build-card:",
   BUILD_NEXT_PAGE: "build-next-page",

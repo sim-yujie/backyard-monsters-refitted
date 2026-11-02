@@ -11,6 +11,7 @@ import { formatAmount } from "@/ui/format";
 import { icon, type IconName } from "@/ui/icons";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
 import "@/ui/styles/yard-hud.css";
+import { BubbleMenu, bubbleMenuOn } from "./BubbleMenu";
 import { CollectAll } from "./CollectAll";
 import { YardMenu } from "./YardMenu";
 import { YardSwitcher } from "./YardSwitcher";
@@ -43,6 +44,10 @@ import { YardSwitcher } from "./YardSwitcher";
  *
  * On a phone the own yard's dock folds into one Menu button (`YardMenu`,
  * #381): only Build, Collect all and Menu stay on the bottom row.
+ *
+ * With the bubble menu on (`BubbleMenu`, beta 6), the own yard's Layout,
+ * Goals, Alerts, Defences and Mail fan out of one More button instead of
+ * standing in the bottom row; the phone's Menu leaves More where it is.
  */
 
 /** Monsters' picture: a Pokey, the first monster every player has. */
@@ -190,12 +195,14 @@ export class YardDock {
   private readonly switcher: YardSwitcher | null;
   /** The phone's Menu: the own yard only (a visit has few buttons). */
   private readonly menu: YardMenu | null;
+  /** More and its fan of bubbles: the own yard only, while the switch is on. */
+  private readonly bubble: BubbleMenu | null;
   private binding: YardUiBinding | null = null;
   private unsubscribe: (() => void) | null = null;
   private readonly finished: FinishedMonstersJobs;
   private readonly unsubscribeFinished: () => void;
 
-  constructor(options: YardDockOptions) {
+  constructor(options: YardDockOptions, bubbles: boolean = bubbleMenuOn()) {
     this.options = options;
     this.finished = options.finished ?? finishedMonstersJobs;
     this.element = document.createElement("div");
@@ -275,12 +282,15 @@ export class YardDock {
       ...(this.attack ? [this.attack.element] : []),
     );
     this.element.append(left, right);
+    this.bubble = this.build && bubbles ? new BubbleMenu({ host: right, scope: this.element }) : null;
     this.menu = this.build
       ? new YardMenu({
           sources: [left, right],
           host: this.element,
           keep: (element) =>
-            element === this.build?.element || element === this.collect.element,
+            element === this.build?.element ||
+            element === this.collect.element ||
+            element === this.bubble?.element,
         })
       : null;
     if (this.menu) {
@@ -365,6 +375,7 @@ export class YardDock {
 
   destroy(): void {
     this.unsubscribeFinished();
+    this.bubble?.destroy();
     this.menu?.destroy();
     this.bind(null);
     this.collect.destroy();
