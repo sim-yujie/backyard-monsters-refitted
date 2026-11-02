@@ -296,6 +296,12 @@
   opacity: 0.5;
 }
 
+/* A Modern picture has no white ground to grey: half would sink it into the dark tile. */
+.build-tile--limit .build-tile__picture--modern img,
+.build-tile--maxed .build-tile__picture--modern img {
+  opacity: 0.75;
+}
+
 .build-tile--locked,
 .build-tile--limit,
 .build-tile--maxed {
