@@ -1,0 +1,109 @@
+/*
+ * The tribe yard editor (LOCAL game only, `ui/tribeEditor/TribeEditorPanel.ts`):
+ * the tribe and level picker, the edit bar on the left of the yard, and the
+ * button on the own yard that opens the picker.
+ */
+
+.tribe-editor {
+  width: min(380px, calc(100vw - 2 * var(--space-4)));
+  font-size: var(--text-sm);
+}
+
+.tribe-picker {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+}
+
+.tribe-edit-bar {
+  position: fixed;
+  top: calc(var(--hud-height, 64px) + var(--space-4));
+  left: var(--space-4);
+  max-height: calc(100vh - var(--hud-height, 64px) - 140px);
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.tribe-editor .panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tribe-editor__note {
+  margin: 0;
+  color: var(--colour-text-muted);
+}
+
+.tribe-editor__message {
+  margin: 0;
+  min-height: 1.2em;
+  color: var(--colour-warning-bright);
+  overflow-wrap: anywhere;
+}
+
+.tribe-editor__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tribe-editor__row > span:first-child {
+  flex: 1;
+}
+
+.tribe-editor__select,
+.tribe-editor__number {
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.tribe-editor__select {
+  flex: 2;
+}
+
+.tribe-editor__number {
+  width: 4.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tribe-editor__heading,
+.tribe-editor__subheading {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+}
+
+.tribe-editor__selection,
+.tribe-editor__monsters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+}
+
+.tribe-editor__ways {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tribe-editor__housing summary {
+  cursor: pointer;
+  color: var(--colour-text-secondary);
+}
+
+.tribe-editor-open {
+  position: fixed;
+  left: var(--space-4);
+  top: 180px;
+  z-index: 15;
+}
+
+.tribe-edit-bar[hidden] {
+  display: none;
+}

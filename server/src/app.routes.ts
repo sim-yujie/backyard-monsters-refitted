@@ -113,6 +113,7 @@ import { upgradeWalls } from "./controllers/yardplanner/upgradeWalls.js";
 import { rearmTraps } from "./controllers/yardplanner/rearmTraps.js";
 import { layoutRoute } from "./controllers/yardplanner/layoutRoute.js";
 import { yardRoutes } from "./controllers/yard/index.js";
+import { registerTribeEditorRoutes } from "./controllers/tribeEditor/tribeEditor.js";
 import {
   getNotifications,
   getUnreadNotifications,
@@ -302,6 +303,13 @@ router.post("/api/:apiVersion/bm/yardplanner/deletetemplate", apiVersion, verify
 for (const { path, controller } of yardRoutes) {
   router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
 }
+
+/**  ────────────────────────────────────────────────
+* 🛠️ Tribe yard editor (LOCAL servers only: `TRIBE_EDITOR=on` with `ENV=local`
+*    and no production `NODE_ENV`, `config/TribeEditorConfig.ts`). Off, its
+*    routes are not registered at all, so they answer 404.
+* ──────────────────────────────────────────────── */
+registerTribeEditorRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Notifications (the yard's bell, issue #257, `controllers/notifications/notifications.ts`)

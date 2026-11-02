@@ -100,6 +100,15 @@ import { CompareView, pointerInPlanPane } from "@/game/yard/CompareView";
 import { YardInput } from "@/game/yard/YardInput";
 import { formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
+import { loadTribeYard, resetTribeCamps, saveTribeYard, tribeEditorStatus, type TribeId } from "@/api/tribeEditor";
+import {
+  consumeTribeEditTarget,
+  endTribeEdit,
+  setTribeEditTarget,
+  startTribeEdit,
+  type TribeEdit,
+} from "@/game/tribeEditor/tribeEditSession";
+import { TribeEditBar, TribePicker } from "@/ui/tribeEditor/TribeEditorPanel";
 import { Notices } from "@/ui/maproom/Notices";
 import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
 import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
@@ -471,6 +480,15 @@ export class YardScene implements Scene {
   private own: OwnYardTarget = MAIN_YARD;
   /** An outpost just taken over: "Veni, Vidi, Vici!" once it has loaded. */
   private takenOver: OwnYardTarget["takenOver"] | null = null;
+  /**
+   * The tribe yard editor (LOCAL game only): the Map Room 2 camp yard open in
+   * place of the player's own, whose yard routes the browser answers
+   * (`game/tribeEditor`). Taken once, in `enter`; ended in `exit`.
+   */
+  private tribe: TribeEdit | null = null;
+  private tribeBar: TribeEditBar | null = null;
+  private tribePicker: TribePicker | null = null;
+  private tribeOpenButton: HTMLButtonElement | null = null;
   /** True while the attack load is in flight, so a second click does nothing. */
   private attacking = false;
   private selected: YardBuilding | null = null;
@@ -537,6 +555,13 @@ export class YardScene implements Scene {
     const own = consumeOwnYardTarget();
     this.own = this.target ? MAIN_YARD : (own ?? MAIN_YARD);
     this.takenOver = this.target ? null : (own?.takenOver ?? null);
+    // A tribe yard the editor's picker asked for (LOCAL game only).
+    const tribeTarget = this.target ? null : consumeTribeEditTarget();
+    this.tribe = tribeTarget ? startTribeEdit(tribeTarget) : null;
+    if (this.tribe) {
+      this.own = MAIN_YARD;
+      this.takenOver = null;
+    }
     const whose = this.whose();
     // Another player's Inferno yard is looked at from the Inferno: its HUD
     // shows the own purse as Bone, Coal, Sulfur and Magma, so the realm is
@@ -627,7 +652,7 @@ export class YardScene implements Scene {
     if (target?.attack) {
       this.dock.setAttack({ disabled: true, title: `Attack ${target.name}'s yard` });
     }
-    if (!target) {
+    if (!target && !this.tribe) {
       this.friendsBar = new FriendsBar({
         onVisit: (friend) => this.visitFriendYard(friend),
         onMessage: (friend) => void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
@@ -689,13 +714,22 @@ export class YardScene implements Scene {
     this.panelDock.className = "map-dock map-dock--right";
     context.overlay.content.append(this.panelDock);
 
-    if (!target) this.startAttackGuard(context);
+    if (!target && !this.tribe) this.startAttackGuard(context);
 
     await this.load();
   }
 
   exit(): void {
     presence.setScreen(ELSEWHERE);
+    this.tribeBar?.close();
+    this.tribeBar = null;
+    this.tribePicker?.close();
+    this.tribePicker = null;
+    this.tribeOpenButton?.remove();
+    this.tribeOpenButton = null;
+    // Leaving the screen leaves the tribe editor: the yard routes go to the server again.
+    if (this.tribe) endTribeEdit();
+    this.tribe = null;
     for (const unregister of this.unregisterTargets.splice(0)) unregister();
     this.attackGuard?.destroy();
     this.attackGuard = null;
@@ -878,8 +912,10 @@ export class YardScene implements Scene {
     try {
       // The own-yard load that sent a player with no Map Room here from the
       // map door (issue #162), when there was one: always the main yard's.
-      const primed = !target && own.kind === "main" ? takePrimedOwnYard() : null;
-      const response = primed ?? (await loadYardFor(target, undefined, own));
+      const tribe = this.tribe;
+      const primed = !target && !tribe && own.kind === "main" ? takePrimedOwnYard() : null;
+      // The tribe editor's camp yard comes from the editor, never the player's row.
+      const response = tribe ? tribe.sim.yard() : (primed ?? (await loadYardFor(target, undefined, own)));
       // The scene may have been swapped out while the request was in flight.
       if (this.context !== context) return;
       // The Inferno load names the yard, whose baseid every yard route sends.
@@ -896,7 +932,7 @@ export class YardScene implements Scene {
       this.save = response;
       this.notices.clear("yard-load");
       // The owner's load carries world chat's token and room (#282).
-      const chat = target ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
+      const chat = target || tribe ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
       if (chat) worldChat.configure(chat);
 
       // The planner's entry rule: the own yard's, never a visit's. The
@@ -948,6 +984,12 @@ export class YardScene implements Scene {
       this.refreshBuildButton();
       // Once the yard is drawn, because the first answer may redraw it.
       store?.start();
+      if (tribe) {
+        // The tribe editor: none of the player's own yard's packages, pings or helps.
+        presence.setScreen(ELSEWHERE);
+        this.startTribeBar(tribe, context);
+        return;
+      }
       // The tutorial's packages (issue #227), then the screen event they listen for.
       if (store) this.mountPlugins(store, context);
       // The presence ping says the player is here (#226): a raid may be due.
@@ -957,6 +999,8 @@ export class YardScene implements Scene {
       if (store?.kind === "outpost") this.arriveAtOutpost(store, context);
       // A friend's help landing while the player is here refreshes the yard (#374).
       if (store?.kind === "main") this.watchHelps(store);
+      // The tribe yard editor's way in, on a local server that has it on.
+      if (store?.kind === "main") void this.offerTribeEditor(context);
     } catch (caught) {
       // No Inferno yard to open (the Descent not won, or the Inferno switched
       // off, both refusals rather than a lost sign-in): back to the main yard,
@@ -1390,6 +1434,7 @@ export class YardScene implements Scene {
     }
     this.selected = building;
     this.renderer.setSelected(building);
+    this.tribeBar?.select(building?.id ?? null);
 
     if (!building) {
       const open = this.panel !== null;
@@ -2120,6 +2165,8 @@ export class YardScene implements Scene {
    */
   private refreshPlannerButton(): void {
     const open = this.planner !== null;
+    // The planner has its own toolbars; the tribe editor's bar steps aside meanwhile.
+    if (this.tribeBar) this.tribeBar.panel.element.hidden = open;
     this.dock?.setLayout({
       disabled: this.access === PlannerAccess.LOCKED,
       open,
@@ -2144,7 +2191,7 @@ export class YardScene implements Scene {
     const store = this.store;
     if (!store || store.kind !== "main") return this.yard;
     const save = withStoredDecorations(store.save);
-    return save === store.save ? store.yard : readYard(save);
+    return save === store.save ? store.yard : readYard(save, this.tribe ? { wild: true } : {});
   }
 
   /* ── Compare (#9) ───────────────────────────────────────────────────── */
@@ -2337,7 +2384,7 @@ export class YardScene implements Scene {
       target: withCell(this.own, response),
       // What this load, or the map's load before it, finished while the
       // player was away (#135); the store announces it once it starts.
-      away: takeAwayJobs(outpostBaseid(this.own)),
+      away: this.tribe ? [] : takeAwayJobs(outpostBaseid(this.own)),
       onAuthFailure: () => {
         if (this.context === context) context.goTo(SceneName.LOGIN);
       },
@@ -2513,7 +2560,78 @@ export class YardScene implements Scene {
 
   /** Whose yard this is ({@link whoseYard}), for the loading lines and the status line. */
   private whose(): string {
+    if (this.tribe) return `the ${this.tribe.name} level ${this.tribe.level} yard`;
     return whoseYard(this.target, this.own);
+  }
+
+  /* ── The tribe yard editor (LOCAL game only) ────────────────────────── */
+
+  /**
+   * The own main yard's way into the tribe yard editor: a button, shown only
+   * when this server says the editor is on (it never is on the live server,
+   * whose routes answer 404).
+   */
+  private async offerTribeEditor(context: SceneContext): Promise<void> {
+    const status = await tribeEditorStatus().catch(() => null);
+    if (!status || this.context !== context || this.tribe || this.tribeOpenButton) return;
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "btn tribe-editor-open";
+    open.textContent = "Tribe editor";
+    open.title = "Design the Map Room 2 tribe yards (local game only)";
+    open.addEventListener("click", () => void this.openTribePicker());
+    context.overlay.content.append(open);
+    this.tribeOpenButton = open;
+  }
+
+  /** The tribe and level picker; Open re-opens the yard screen on that camp's yard. */
+  private async openTribePicker(initial?: { tribe: TribeId; level: number }): Promise<void> {
+    const context = this.context;
+    if (!context || this.tribePicker) return;
+    const status = await tribeEditorStatus().catch(() => null);
+    if (!status || this.context !== context) {
+      this.notices.show("tribe-editor", "The tribe editor is not on for this server.", {
+        level: "info",
+        timeoutMs: 4_000,
+      });
+      return;
+    }
+    this.tribePicker = new TribePicker({
+      status,
+      ...(initial && { initial }),
+      onClose: () => {
+        this.tribePicker = null;
+      },
+      onOpen: async (tribe, level) => {
+        const response = await loadTribeYard(tribe, level);
+        const name = status.tribes.find((one) => one.id === tribe)?.name ?? tribe;
+        if (this.context !== context) return;
+        setTribeEditTarget({ ...response, name });
+        this.tribePicker?.close();
+        context.goTo(SceneName.YARD);
+      },
+    }).mount(context.overlay.modal);
+  }
+
+  /** The edit bar on the left while a tribe yard is open. */
+  private startTribeBar(tribe: TribeEdit, context: SceneContext): void {
+    this.tribeBar?.close();
+    this.tribeBar = new TribeEditBar({
+      edit: tribe,
+      onChanged: () => void this.store?.refresh(),
+      onSave: async () => {
+        const saved = await saveTribeYard({ tribe: tribe.tribe, level: tribe.level, ...tribe.sim.saveBody() });
+        return `Saved ${saved.buildings} buildings to ${saved.file}.`;
+      },
+      onReset: async () => {
+        const { removed } = await resetTribeCamps(tribe.tribe, tribe.level);
+        return removed === 0
+          ? "No attacked camps of this level were stored."
+          : `Reset ${removed} attacked camp${removed === 1 ? "" : "s"}: they use the saved yard now.`;
+      },
+      onPick: () => void this.openTribePicker({ tribe: tribe.tribe, level: tribe.level }),
+      onExit: () => context.goTo(SceneName.YARD),
+    }).mount(context.overlay.content);
   }
 
   /**
@@ -2690,6 +2808,7 @@ export class YardScene implements Scene {
     const before = this.yard;
     this.yard = yard;
     this.save = store.save;
+    this.tribeBar?.refresh();
     this.mail?.setSaveUnread(store.save.unreadmessages);
     this.bell?.setSaveCount(store.save.notifications);
     this.showDefences(store);
