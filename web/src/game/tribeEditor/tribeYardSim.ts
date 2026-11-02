@@ -73,7 +73,7 @@ export class TribeYardSim {
     }
     this.save.buildingdata = buildings;
     this.save.buildinghealthdata = {};
-    this.save.monsters = (this.save.monsters ?? {}) as BaseLoadResponse["monsters"];
+    this.save.monsters = (this.save.monsters ?? {}) as NonNullable<BaseLoadResponse["monsters"]>;
   }
 
   /* ── What the editor panel reads and changes ─────────────────────────── */
