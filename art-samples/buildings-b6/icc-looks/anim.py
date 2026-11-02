@@ -7,7 +7,7 @@
                              icc-c-active.mp4       the active loop, four times round (full size, on grass)
                              icc-c-active.gif       one loop, a third size
                              icc-c-crystal-crop.png the crystal, before (the look sample) | after, enlarged
-                             icc-c-game.png         game size 1x and 2x, idle and active peak, beside the Magma Tower
+                             icc-c-game.png         game size 1x and 2x, idle, active low and peak, beside the Magma Tower
 
 Each frame is base + pulse(t) x (glow + light) + flicker(t) x cracks, in linear light, then Blender's Standard view
 (sRGB). glow is the crystal's own glow at peak (shell and core), light the light it throws (its point light); pulse 1 =
@@ -30,10 +30,15 @@ GRASS = (96, 140, 60)
 K = 12                        # render px per game px
 N = 32                        # frames in the loop
 FPS = 40 / 3                  # the game's frame rate for animated 3D buildings (as the Lab's 32-frame brew)
-IDLE = 0.40                   # idle: steady glow, as a share of the active peak
-LO = 0.58                     # active: the pulse's low point
-LIGHT = 4.0                   # the crystal's thrown light (a warm sheen on the drum's top) against its glow
-GAIN = 1.15                   # the glow at pulse 1 against the strength it was rendered at (looks.py CRYSTAL_E)
+IDLE = 0.22                   # idle: steady glow, as a share of the active peak
+LO = 0.35                     # active: the pulse's low point
+LIGHT = 9.0                   # the crystal's thrown light (warm sheen on the drum's top, bezel, cup) at peak
+LIGHT_POW = 1.6               # the thrown light falls off faster than the glow below peak (peak stands out)
+GAIN = 1.2                    # the glow at pulse 1 against the strength it was rendered at (looks.py CRYSTAL_E)
+HALO = 0.85                   # the soft 2D halo round the crystal at peak (alpha of its brightest point)
+HALO_SIGMA = 70               # its blur radius in render px (12 render px = 1 game px)
+HALO_COL = (1.0, 0.36, 0.08)  # linear warm orange
+PAD = 160                     # room round the layers for the halo
 
 
 def pulse(k):
@@ -51,7 +56,15 @@ def flicker(k):
 
 
 def layers():
-    return [np.load(R / f"layer-c-{n}.npy") for n in ("base", "glow", "light", "cracks")]
+    """The four layers, padded by PAD, plus the halo source: the crystal's own glow, blurred (0..1 at peak)."""
+    from scipy.ndimage import gaussian_filter
+    L = [np.pad(np.load(R / f"layer-c-{n}.npy"), ((PAD, PAD), (PAD, PAD), (0, 0)))
+         for n in ("base", "glow", "light", "cracks")]
+    g = L[1][..., :3].mean(2)
+    g = np.clip((g - 0.08) / 0.5, 0, 1)                  # the crystal itself, not the faint glow it casts nearby
+    h = gaussian_filter(g, HALO_SIGMA)
+    L.append(h / h.max())
+    return L
 
 
 def to_srgb(x):
@@ -60,11 +73,21 @@ def to_srgb(x):
 
 
 def compose(L, s, f=0.0):
-    base, glow, light, cr = L
-    rgb = base[..., :3] + GAIN * s * (glow[..., :3] + LIGHT * light[..., :3]) + f * cr[..., :3]
+    """One frame at glow s (1 = peak) and crack flicker f. The halo is a soft warm glow: added as light where the
+    building is, and as a see-through warm layer behind it (on the grass)."""
+    base, glow, light, cr, halo = L
+    hs = HALO * s ** 1.5 * halo[..., None]
+    col = np.array(HALO_COL, np.float32)
+    rgb = (base[..., :3] + GAIN * s * glow[..., :3] + LIGHT * s ** LIGHT_POW * light[..., :3] + f * cr[..., :3]
+           + 0.35 * hs * col * base[..., 3:4])
     a = base[..., 3:4]
     straight = np.where(a > 1e-4, rgb / np.maximum(a, 1e-4), 0.0)
-    out = np.concatenate([to_srgb(straight), np.clip(a, 0, 1)], axis=2)
+    # the building over the halo layer (premultiplied, in linear light)
+    ha = np.clip(hs, 0, 1)
+    out_a = a + ha * (1 - a)
+    pm = straight * a + col * ha * (1 - a)
+    st = np.where(out_a > 1e-4, pm / np.maximum(out_a, 1e-4), 0.0)
+    out = np.concatenate([to_srgb(st), np.clip(out_a, 0, 1)], axis=2)
     return Image.fromarray((out * 255 + 0.5).astype(np.uint8), "RGBA")
 
 
@@ -105,7 +128,7 @@ def region():
     b = (R / "layer-c-border.txt").read_text().split()
     x0, x1, y0, y1 = map(float, b[:4])
     rw, rh = int(b[4]), int(b[5])
-    return int(x0 * rw), int(rh - y1 * rh), rw, rh
+    return int(x0 * rw) - PAD, int(rh - y1 * rh) - PAD, rw, rh
 
 
 def tight(ims, pad=24):
@@ -119,7 +142,7 @@ def tight(ims, pad=24):
 
 def check():
     L = layers()
-    mine = np.array(compose(L, 0.0)).astype(int)
+    mine = np.array(compose(L, 0.0)).astype(int)[PAD:-PAD, PAD:-PAD]
     bl = np.array(Image.open(R / "layer-c-base.png").convert("RGBA")).astype(int)
     m = bl[..., 3] > 250
     d = np.abs(mine[..., :3] - bl[..., :3])[m]
@@ -127,15 +150,16 @@ def check():
     print("alpha diff max", np.abs(mine[..., 3] - bl[..., 3]).max())
 
 
-def game_sheet(idle, peak):
-    """1x and 2x game size (Flash px), idle and active peak, beside the Magma Tower's in-game 3D (tier 1 and 3)."""
+def game_sheet(idle, low, peak):
+    """1x and 2x game size (Flash px): idle, active at its lowest and at its peak, beside the Magma Tower's in-game 3D
+    (tier 1 and 3)."""
     mt = Path(sys.argv[2]) if len(sys.argv) > 2 else W / "magma"
     tw = [Image.open(mt / f"body.t{t}@2x.webp").convert("RGBA") for t in (1, 3)]
     tops = [Image.open(mt / f"top.t{t}@2x.webp").convert("RGBA") for t in (1, 3)]
     cols = []
     for scale, name in ((1, "1x"), (2, "2x")):
         tiles = []
-        for im, what in ((idle, "idle"), (peak, "active")):
+        for im, what in ((idle, "idle"), (low, "active low"), (peak, "active peak")):
             g = on_grass(im.resize((im.width * scale // K, im.height * scale // K), Image.LANCZOS))
             tiles.append(label(g.resize((g.width * 2, g.height * 2), Image.NEAREST), f"ICC {what} {name}", 20, 8))
         for t, (b, tp) in enumerate(zip(tw, tops)):
@@ -167,6 +191,7 @@ def run_all():
     for k, f in enumerate(frames):
         f.crop(box).save(fr / f"{k:03d}.png")
     kpk = max(range(N), key=pulse)
+    klo = min(range(N), key=pulse)
     peak = frames[kpk].crop(box)
     on_grass(peak).save(HERE / "icc-c-final.png")
     on_grass(idle.crop(box)).save(HERE / "icc-c-idle.png")
@@ -187,15 +212,15 @@ def run_all():
     ox, oy, rw, rh = region()
     old = Image.open(R / "icc-c-base.png").convert("RGBA")
     newfull = Image.new("RGBA", (rw, rh))
-    newfull.alpha_composite(frames[kpk], (ox, oy))
+    newfull.paste(frames[kpk], (ox, oy))
     idlefull = Image.new("RGBA", (rw, rh))
-    idlefull.alpha_composite(idle, (ox, oy))
+    idlefull.paste(idle, (ox, oy))
     cb = crystal_box(old, newfull)
     z = 2
     tiles = [label(on_grass(im.crop(cb)).resize(((cb[2] - cb[0]) * z, (cb[3] - cb[1]) * z), Image.LANCZOS), t)
              for im, t in ((old, "Before (look sample)"), (newfull, "After: active, peak"), (idlefull, "After: idle"))]
     row(tiles).save(HERE / "icc-c-crystal-crop.png")
-    game_sheet(idle.crop(box), peak).save(HERE / "icc-c-game.png")
+    game_sheet(idle.crop(box), frames[klo].crop(box), peak).save(HERE / "icc-c-game.png")
 
 
 def crystal_box(*ims):
