@@ -128,7 +128,8 @@ describe("QuestsPanel", () => {
     panel.render(list({ quests: { ...view, daily: { ...view.daily, bonus: { shiny: 5, ready: true, claimed: false } } } }));
     q<HTMLButtonElement>(".quests-login__claim")!.click();
     expect(options.onClaimLogin).toHaveBeenCalled();
-    expect(q(".quests-login__claim")?.textContent).toContain("Claim day 3");
+    expect(q(".quests-login__claim")?.textContent).toBe("Claim+3");
+    expect(q(".quests-login__claim")?.getAttribute("aria-label")).toBe("Claim day 3: 3 Shiny");
     q<HTMLButtonElement>("[data-bonus='daily'] .quest__claim")!.click();
     expect(options.onClaimBonus).toHaveBeenCalledWith("daily");
   });
@@ -149,6 +150,69 @@ describe("QuestsPanel", () => {
     expect(q(".quests-login__note")?.textContent).toBe("Next day in 6h 0m");
     panel.tick(NOW + 3600);
     expect(q(".quests-login__note")?.textContent).toBe("Next day in 5h 0m");
+    expect(q(".quests-login--done")).not.toBeNull();
+    expect(q(".quests-day--next")?.dataset["day"]).toBe("4");
+    expect(q(".quests-day--next .quests-day__soon")).not.toBeNull();
+  });
+
+  it("marks each login day by its state: ticks on claimed days, today tappable, day 7 the big one", () => {
+    const { panel, options } = panelOf();
+    panel.render(list());
+    expect(all(".quests-day--claimed .quests-day__mark")).toHaveLength(2);
+    expect(all(".quests-day__mark")).toHaveLength(2);
+    expect(all(".quests-day--later")).toHaveLength(4);
+    expect(q(".quests-day--last")?.dataset["day"]).toBe("7");
+    expect(q(".quests-day--last .quests-day__shiny")?.textContent).toBe("10");
+    q(".quests-day--today")!.click();
+    expect(options.onClaimLogin).toHaveBeenCalledTimes(1);
+    // A claimed day, or today while a claim waits, does nothing.
+    q(".quests-day--claimed")!.click();
+    panel.render(list({ busy: "login" }));
+    q(".quests-day--today")!.click();
+    expect(options.onClaimLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("lays every row out the same: picture, words and bar, reward, action", () => {
+    const { panel } = panelOf();
+    panel.render(list());
+    const rows = all(".quests-set--daily .quest");
+    expect(rows).toHaveLength(6);
+    for (const row of rows) {
+      expect([...row.children].map((child) => child.className.split(" ")[0])).toEqual([
+        "quest__art",
+        "quest__main",
+        "quest__rewards",
+        "quest__action",
+      ]);
+      // The figures ride on the bar; nothing else shares its line.
+      expect(row.querySelector(".quest__bar > .quest__count")).not.toBeNull();
+      expect(row.querySelector(".quest__main .events-reward")).toBeNull();
+      expect(row.querySelectorAll(".quest__rewards .events-reward").length).toBeGreaterThan(0);
+    }
+    panel.show("weekly");
+    for (const row of all(".quests-set--weekly .quest")) {
+      expect(row.lastElementChild?.previousElementSibling?.classList.contains("quest__rewards")).toBe(true);
+    }
+    expect(all(".quests-set--weekly .quest")[0]!.querySelectorAll(".quest__rewards .events-reward")).toHaveLength(2);
+  });
+
+  it("puts every picture on the same framed tile, never a white-boxed Build button", () => {
+    const { panel } = panelOf();
+    const view = questsView();
+    const daily = [
+      quest(0, "upgradeDefence", { need: 1 }),
+      quest(1, "upgradeResource", { need: 1 }),
+      quest(2, "catapultHit", { variant: "20" }),
+      quest(3, "hatchMonster", { variant: "C5" }),
+      quest(4, "attackPlayer", { need: 1 }),
+    ];
+    panel.render(list({ quests: { ...view, daily: { ...view.daily, quests: daily } } }));
+    const pictures = all(".quest__picture");
+    expect(pictures).toHaveLength(6);
+    for (const picture of pictures) {
+      expect(picture.parentElement?.classList.contains("quest__frame")).toBe(true);
+      expect(picture.getAttribute("src")).not.toContain("buildingbuttons");
+    }
   });
 
   it("switches to Weekly: three quests, the bonus and the countdown to Monday", () => {

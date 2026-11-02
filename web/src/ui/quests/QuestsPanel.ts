@@ -4,6 +4,7 @@ import {
   BONUS_PICTURE,
   canSwap,
   lootResource,
+  pictureFillsTile,
   progressShare,
   progressText,
   questHint,
@@ -75,13 +76,38 @@ export const swapKey = (slot: number): string => `swap:${slot}`;
 export const resetText = (seconds: number): string =>
   seconds > 0 ? `Resets in ${formatCountdown(seconds)}` : "New quests: reopen Quests";
 
-const picture = (art: Portrait, className: string): HTMLImageElement => {
-  const image = el("img", className);
+/**
+ * The quest's picture on its tile. Every row's picture sits on the same
+ * framed tile (owner, 2 Nov: "some quest images are white background while
+ * some aren't"): see-through Flash art stands on the tile, the painted
+ * monster squares fill it.
+ */
+const pictureTile = (art: Portrait): HTMLElement => {
+  const frame = el("span", "quest__frame");
+  const image = el("img", pictureFillsTile(art) ? "quest__picture quest__picture--fill" : "quest__picture");
   image.alt = "";
   image.decoding = "async";
   image.loading = "lazy";
   showPortrait(image, art);
-  return image;
+  frame.append(image);
+  return frame;
+};
+
+/**
+ * A row's progress bar with its figures written on it ("2/3"), so the
+ * figures never push the reward about.
+ */
+const progressBar = (label: string, have: number, need: number, share: number, figures: string): HTMLElement => {
+  const bar = el("span", "quest__bar");
+  bar.setAttribute("role", "progressbar");
+  bar.setAttribute("aria-label", label);
+  bar.setAttribute("aria-valuemin", "0");
+  bar.setAttribute("aria-valuemax", String(need));
+  bar.setAttribute("aria-valuenow", String(Math.min(have, need)));
+  const fill = el("span", "quest__fill");
+  fill.style.width = `${Math.round(share * 1000) / 10}%`;
+  bar.append(fill, el("span", "quest__count", figures));
+  return bar;
 };
 
 export class QuestsPanel {
@@ -281,7 +307,7 @@ export class QuestsPanel {
     const title = questTitle(quest);
 
     const art = el("span", "quest__art");
-    art.append(picture(questPicture(quest), "quest__picture"));
+    art.append(pictureTile(questPicture(quest)));
     const loot = lootResource(quest.kind);
     if (loot) art.append(resourceIcon(loot, { decorative: true, tooltip: false }));
 
@@ -289,20 +315,12 @@ export class QuestsPanel {
     main.append(el("span", "quest__title", title));
     const hint = questHint(quest);
     if (hint) main.append(el("span", "quest__hint", hint));
-    const line = el("div", "quest__line");
-    const bar = el("span", "quest__bar");
-    bar.setAttribute("role", "progressbar");
-    bar.setAttribute("aria-label", title);
-    bar.setAttribute("aria-valuemin", "0");
-    bar.setAttribute("aria-valuemax", String(quest.need));
-    bar.setAttribute("aria-valuenow", String(Math.min(quest.have, quest.need)));
-    const fill = el("span", "quest__fill");
-    fill.style.width = `${Math.round(progressShare(quest) * 1000) / 10}%`;
-    bar.append(fill);
-    const rewards = el("span", "quest__rewards");
+    main.append(progressBar(title, quest.have, quest.need, progressShare(quest), progressText(quest)));
+
+    // The reward has its own column, the same place on every row (owner,
+    // 2 Nov: it sat on the bar's line on some rows and under it on others).
+    const rewards = el("div", "quest__rewards");
     for (const reward of quest.rewards) rewards.append(rewardBadge(reward));
-    line.append(bar, el("span", "quest__count", progressText(quest)), rewards);
-    main.append(line);
 
     const action = el("div", "quest__action");
     const key = questKey(period, quest.slot);
@@ -328,7 +346,7 @@ export class QuestsPanel {
       swap.addEventListener("click", () => this.options.onSwap(quest.slot));
       action.append(swap);
     }
-    row.append(art, main, action);
+    row.append(art, main, rewards, action);
     return row;
   }
 
@@ -342,23 +360,12 @@ export class QuestsPanel {
     const title = `All ${total} done`;
 
     const art = el("span", "quest__art");
-    art.append(picture(BONUS_PICTURE, "quest__picture"));
+    art.append(pictureTile(BONUS_PICTURE));
     const main = el("div", "quest__main");
     main.append(el("span", "quest__title", title));
-    const line = el("div", "quest__line");
-    const bar = el("span", "quest__bar");
-    bar.setAttribute("role", "progressbar");
-    bar.setAttribute("aria-label", title);
-    bar.setAttribute("aria-valuemin", "0");
-    bar.setAttribute("aria-valuemax", String(total));
-    bar.setAttribute("aria-valuenow", String(done));
-    const fill = el("span", "quest__fill");
-    fill.style.width = `${total > 0 ? Math.round((done / total) * 1000) / 10 : 0}%`;
-    bar.append(fill);
-    const rewards = el("span", "quest__rewards");
+    main.append(progressBar(title, done, total, total > 0 ? done / total : 0, `${done}/${total}`));
+    const rewards = el("div", "quest__rewards");
     rewards.append(rewardBadge({ kind: "shiny", amount: bonus.shiny }));
-    line.append(bar, el("span", "quest__count", `${done}/${total}`), rewards);
-    main.append(line);
 
     const action = el("div", "quest__action");
     if (bonus.claimed) {
@@ -374,7 +381,7 @@ export class QuestsPanel {
       claim.addEventListener("click", () => this.options.onClaimBonus(period));
       action.append(claim);
     }
-    row.append(art, main, action);
+    row.append(art, main, rewards, action);
     return row;
   }
 }

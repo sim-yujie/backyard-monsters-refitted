@@ -2,8 +2,8 @@ import type { EventReward, GrantedReward } from "@/api/events";
 import type { QuestsView, QuestView } from "@/api/quests";
 import { monsterName } from "@/game/combat/rules/report";
 import { shortAmount } from "@/game/events/eventsModel";
+import { classicLook } from "@/game/classicLook";
 import { monsterPortrait, type Portrait } from "@/game/portraits";
-import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { typeName } from "@/game/yard/planner/summary";
 
 /**
@@ -120,12 +120,43 @@ export const questHint = (quest: Pick<QuestView, "kind">): string | null => {
 /** The resource a weekly loot quest names, or null. */
 export const lootResource = (kind: string): keyof typeof RESOURCE_WORDS | null => LOOT_KINDS[kind] ?? null;
 
+/**
+ * The building pictures a quest can name, as Flash's see-through pop-up art.
+ * Never the Build menu's buttons (`assets/buildingbuttons`): those are boxed
+ * on white (owner, 2 Nov: "some quest images are white background"). The
+ * cannon tower is cropped from `building-cannon.png`, which sits small in an
+ * empty square. The Modern build pictures (feat/build-pictures) can replace
+ * these once both are merged.
+ */
+const CANNON_TOWER: Portrait = { src: `${import.meta.env.BASE_URL}quests/cannon-tower.png`, fallback: `${POPUP}building-cannon.png` };
+const BUILDING_ART: Readonly<Record<number, Portrait>> = {
+  6: { src: `${POPUP}building-storage.v2.png`, fallback: null },
+  14: { src: `${POPUP}building-townhall.png`, fallback: null },
+  20: CANNON_TOWER,
+};
+
+/**
+ * A monster's picture: the painted icon (Modern), or Flash's large
+ * see-through art in Classic, sharper than the 45px `-small.png`.
+ */
+const monsterPicture = (id: string): Portrait => {
+  const portrait = monsterPortrait(id, "icon");
+  return classicLook() && /^C\d+$/.test(id) ? { src: `${POPUP}${id}-150.png`, fallback: portrait.src } : portrait;
+};
+
+/**
+ * Whether a picture is a full square painting (the Modern monster icons,
+ * which carry their own backdrop) that fills its tile, rather than
+ * see-through art that sits on the tile.
+ */
+export const pictureFillsTile = (portrait: Portrait): boolean => portrait.src.includes("/portraits/");
+
 /** The quest's painted picture: the monster, tribe or building it names, or Flash's own art. */
 export const questPicture = (quest: Pick<QuestView, "kind" | "variant">): Portrait => {
   const art = (file: string): Portrait => ({ src: `${POPUP}${file}`, fallback: null });
   switch (quest.kind) {
     case "hatchMonster":
-      return quest.variant ? monsterPortrait(quest.variant, "icon") : art("building-hatchery.png");
+      return quest.variant ? monsterPicture(quest.variant) : art("building-hatchery.png");
     case "attackPlayer":
       return art("firstblood.v2.png");
     case "destroyTribe":
@@ -134,12 +165,12 @@ export const questPicture = (quest: Pick<QuestView, "kind" | "variant">): Portra
         : art("military.png");
     case "catapultHit": {
       const type = buildingType(quest);
-      return type === null ? art("building-catapult.png") : { src: buttonUrl(type), fallback: `${POPUP}building-catapult.png` };
+      return (type !== null && BUILDING_ART[type]) || art("building-catapult.png");
     }
     case "upgradeResource":
-      return { src: buttonUrl(1), fallback: `${POPUP}gatherer.v2.png` };
+      return art("gatherer.v2.png");
     case "upgradeDefence":
-      return { src: buttonUrl(20), fallback: `${POPUP}levelup.v2.png` };
+      return CANNON_TOWER;
     case "mushroom":
       return art("goldmushroom.png");
     case "friendHelp":

@@ -7,6 +7,7 @@ import {
   plural,
   progressText,
   questHint,
+  pictureFillsTile,
   questPicture,
   questTitle,
   tabClaimable,
@@ -68,7 +69,8 @@ describe("plural", () => {
 describe("questPicture", () => {
   it("uses the painted picture of what the quest names", () => {
     expect(questPicture({ kind: "destroyTribe", variant: "kozu" }).src).toBe("/assets/popups/tribe_kozu.v2.png");
-    expect(questPicture({ kind: "catapultHit", variant: "20" }).src).toBe("/assets/buildingbuttons/20.jpg");
+    expect(questPicture({ kind: "catapultHit", variant: "20" }).src).toBe("/quests/cannon-tower.png");
+    expect(questPicture({ kind: "catapultHit", variant: "14" }).src).toBe("/assets/popups/building-townhall.png");
     expect(questPicture({ kind: "hatchMonster", variant: "C1" }).src).toContain("C1");
     expect(questPicture({ kind: "juice" }).src).toBe("/assets/popups/monsterjuice.v2.png");
     expect(questPicture({ kind: "weeklyLootGoo" }).src).toBe("/assets/popups/loot.png");
@@ -77,6 +79,22 @@ describe("questPicture", () => {
   it("falls back to Flash art for a tribe or building it does not know", () => {
     expect(questPicture({ kind: "destroyTribe", variant: "nobody" }).src).toBe("/assets/popups/military.png");
     expect(questPicture({ kind: "catapultHit", variant: "x" }).src).toBe("/assets/popups/building-catapult.png");
+    expect(questPicture({ kind: "catapultHit", variant: "1" }).src).toBe("/assets/popups/building-catapult.png");
+  });
+
+  it("never uses the Build menu's white-boxed buttons", () => {
+    const kinds = ["catapultHit", "upgradeResource", "upgradeDefence", "hatchMonster", "mushroom", "attackPlayer"];
+    for (const kind of kinds) {
+      for (const variant of [undefined, "1", "2", "3", "4", "6", "14", "20", "21", "23", "25"]) {
+        expect(questPicture(variant === undefined ? { kind } : { kind, variant }).src).not.toContain("buildingbuttons");
+      }
+    }
+  });
+
+  it("lets only the painted squares fill their tile", () => {
+    expect(pictureFillsTile({ src: "/portraits/C1-icon.webp", fallback: null })).toBe(true);
+    expect(pictureFillsTile(questPicture({ kind: "upgradeDefence" }))).toBe(false);
+    expect(pictureFillsTile(questPicture({ kind: "juice" }))).toBe(false);
   });
 });
 
