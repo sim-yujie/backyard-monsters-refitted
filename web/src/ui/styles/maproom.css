@@ -342,6 +342,13 @@
   color: var(--colour-text-muted);
 }
 
+/* The stats line is a developer aid (devStats()); when it is off the element
+   stays in the Find sheet with [hidden], and the display:flex above would
+   otherwise still draw its empty plate. */
+.map-status[hidden] {
+  display: none;
+}
+
 /* ── Map Room 2 tools: the range legend (#177) ─────────────────────────── */
 
 /* The glass every floating Map Room 2 control and card shares. */
