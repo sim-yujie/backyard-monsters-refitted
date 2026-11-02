@@ -346,11 +346,11 @@ def spikes(M, root):
     if TIER == 2:
         cl = bmesh.new()
         W.clods(cl, [bear(360 * i / 20 + 7 * (i % 3), DRUM_R + 0.02 + 0.1 * ((i * 0.37) % 1.0), 0.03) for i in range(20)
-                     if min(abs((360 * i / 20) % 180), 180 - abs((360 * i / 20) % 180)) > 22], r=0.06)
+                     if min(abs((360 * i / 20) % 180), 180 - abs((360 * i / 20) % 180)) > 40], r=0.06)
         ob("clods", cl, [M["brimstone"]], root, sharp=60)
     st = bmesh.new()
     uv = st.loops.layers.uv.new("UVMap")
-    bs = [b for b in range(10, 360, 20) if min(b % 180, 180 - b % 180) > 28]
+    bs = [b for b in range(10, 360, 20) if min(b % 180, 180 - b % 180) > 45 and not 250 < b < 330]   # clear of the feet, chains, wheel
     for i, b in enumerate(bs):
         lean = (0.18 + 0.1 * ((i * 0.53) % 1.0)) * big
         h = (0.26 + 0.12 * ((i * 0.71) % 1.0)) * big
