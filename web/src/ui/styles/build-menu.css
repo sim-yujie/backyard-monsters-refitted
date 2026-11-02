@@ -275,6 +275,21 @@
   filter: grayscale(1) brightness(0.62) contrast(40) invert(0.3) brightness(1.43);
 }
 
+/*
+ * The Modern look's picture: the building's new look on a transparent ground
+ * (`game/yard/buildButtonArt.ts`), so the tile's own colour shows round it.
+ * Locked, it is a dark shape of itself, as Flash's silhouettes were of its art.
+ */
+.build-tile__picture--modern img,
+.build-info__picture--modern img {
+  object-fit: contain;
+}
+
+.build-tile__picture--modern.build-tile__picture--shade img,
+.build-info__picture--modern.build-info__picture--shade img {
+  filter: brightness(0) opacity(0.5);
+}
+
 /* At the limit for now, or for good: the original's grey shroud. */
 .build-tile--limit .build-tile__picture img,
 .build-tile--maxed .build-tile__picture img {

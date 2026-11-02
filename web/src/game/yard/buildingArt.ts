@@ -1,6 +1,6 @@
 import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel, type ArtRow } from "./buildingArtData";
 import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
-import { hasInfernoTiers, tierArtFor } from "./buildingArtTiers";
+import { hasInfernoTiers, tierArtFor, type TierArt } from "./buildingArtTiers";
 import type { YardKind } from "./buildingCostData";
 
 /**
@@ -310,6 +310,23 @@ const SHADOW_INDEX: Record<ArtState, 4 | 5 | 6> = { "": 4, damaged: 5, destroyed
 const ANIM_INDEX: Record<ArtState, 7 | 8 | null> = { "": 7, damaged: 8, destroyed: null };
 
 /**
+ * The new (Modern) look a building shows at `level` in a `kind` yard: its
+ * repainted or 3D tier (`tierArtFor`), or null where the yard draws Flash's
+ * art (the Classic look, a type with no new look, and a type the Inferno draws
+ * from its own folder, the Under Hall say, unless the Inferno has tiers of its
+ * own for it: the Blast Tower, the Sharpshooter, the Blocks, the Incubator
+ * Control Centre). The build menu's Modern pictures follow it
+ * (`buildButtonArt.ts`).
+ */
+export const newLookFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
+  const row = rowFor(type, kind);
+  if (!row) return null;
+  const ownInfernoArt =
+    kind === "inferno" && row.folder !== ROWS.get(type)?.folder && !hasInfernoTiers(type, kind);
+  return ownInfernoArt ? null : tierArtFor(type, level, kind);
+};
+
+/**
  * The art for one building, or null when the type is not in the table.
  *
  * `level` is the building's own level; 0 (under construction) and anything
@@ -338,9 +355,7 @@ export const resolveArt = (
   // the parts of the body in front of the turret (the Cannon's prongs) over that.
   // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art,
   // unless the Inferno has tiers of its own for it (the Blast Tower, the Sharpshooter, the Blocks).
-  const ownInfernoArt =
-    kind === "inferno" && row.folder !== ROWS.get(type)?.folder && !hasInfernoTiers(type, kind);
-  const found = ownInfernoArt ? null : tierArtFor(type, wanted, kind);
+  const found = newLookFor(type, wanted, kind);
   const ruin = state === ArtState.DESTROYED ? found?.destroyed : state === ArtState.DAMAGED ? found?.damaged : undefined;
   const ruinTop = ruin ? imageOf(row.folder, ruin.top) : null;
   if (ruin && ruinTop) {

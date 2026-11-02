@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
+import { setClassicLook } from "@/game/classicLook";
+import { buildPicture } from "@/game/yard/buildButtonArt";
 import { BuildCategory } from "@/game/yard/buildCatalogue";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -61,6 +63,7 @@ const HALL = building(1, 14, { l: 3 });
 
 afterEach(() => {
   document.body.replaceChildren();
+  setClassicLook(false);
 });
 
 const info = (menu: BuildMenu): HTMLElement => menu.element.querySelector<HTMLElement>(".build-info")!;
@@ -100,7 +103,8 @@ describe("BuildMenu", () => {
     );
   });
 
-  it("a tile: the original's picture, name and N of M built", () => {
+  it("a tile: the original's picture with the Classic look, name and N of M built", () => {
+    setClassicLook(true);
     const { menu } = setup([HALL, building(2, 20)]);
     menu.open(BuildCategory.DEFENSIVE);
     const cannon = tile(menu, 20);
@@ -111,6 +115,7 @@ describe("BuildMenu", () => {
   });
 
   it("a locked tile: the silhouette, a lock, and the hall that unlocks it", () => {
+    setClassicLook(true);
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.BUILDINGS);
     menu.turn(1);
@@ -124,6 +129,7 @@ describe("BuildMenu", () => {
   });
 
   it("a tile locked by a building says which; one with no silhouette on disk is shaded", () => {
+    setClassicLook(true);
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.BUILDINGS);
     expect(tile(menu, 26).querySelector(".build-tile__count")?.textContent).toBe(
@@ -138,6 +144,26 @@ describe("BuildMenu", () => {
     const snapper = tile(bare, 1);
     expect(snapper.querySelector(".build-tile__count")?.textContent).toBe("Needs a Town Hall");
     expect(snapper.querySelector(".build-tile__picture--shade")).not.toBeNull();
+  });
+
+  it("with the Modern look, a tile shows the building's new look, shaded from itself while locked", () => {
+    const { menu } = setup([HALL, building(2, 20)]);
+    menu.open(BuildCategory.DEFENSIVE);
+    const cannon = tile(menu, 20);
+    expect(cannon.querySelector("img")?.getAttribute("src")).toBe(buildPicture(20, "main", false).url);
+    expect(cannon.querySelector("img")?.getAttribute("src")).toMatch(/^\/assets\/buildingbuttons\/modern\/20\.main\./);
+    expect(cannon.querySelector(".build-tile__picture--modern")).not.toBeNull();
+    // The Booby Trap has no new look yet: Flash's button, as before.
+    expect(tile(menu, 24).querySelector("img")?.getAttribute("src")).toBe("/assets/buildingbuttons/24.jpg");
+    expect(tile(menu, 24).querySelector(".build-tile__picture--modern")).toBeNull();
+
+    menu.open(BuildCategory.BUILDINGS);
+    menu.turn(1);
+    const lab = tile(menu, 116);
+    expect(lab.classList.contains("build-tile--locked")).toBe(true);
+    // Not Flash's silhouette, which is of Flash's art: the new picture, drawn dark.
+    expect(lab.querySelector("img")?.getAttribute("src")).toBe(buildPicture(116, "main", false).url);
+    expect(lab.querySelector(".build-tile__picture--modern.build-tile__picture--shade")).not.toBeNull();
   });
 
   it("a type the yard has all of for good wears the tick", () => {

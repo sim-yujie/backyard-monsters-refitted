@@ -1,7 +1,7 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { guidePays } from "@/game/guide/steps";
-import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
+import { buildPicture, buildPictureUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import {
   BUILD_CATALOGUE,
   BuildCategory,
@@ -712,8 +712,9 @@ export class BuildMenu {
 }
 
 /**
- * The building's picture from the original's build buttons, or its dark
- * silhouette while it is locked (`game/yard/buildButtonArt.ts`).
+ * The building's picture: with the Modern look its new look where it has one,
+ * otherwise the original's build button; while it is locked, its dark
+ * silhouette (`game/yard/buildButtonArt.ts`).
  */
 const picture = (offer: BuildOffer, className: string, kind: YardKind): HTMLElement => {
   const box = document.createElement("span");
@@ -723,10 +724,14 @@ const picture = (offer: BuildOffer, className: string, kind: YardKind): HTMLElem
   image.alt = "";
   image.setAttribute("decoding", "async");
   const locked = offer.status === "locked";
-  const silhouette = locked ? silhouetteUrl(offer.type, kind) : null;
-  image.src = silhouette ?? buttonUrl(offer.type, kind);
+  const art = buildPicture(offer.type, kind);
+  // Flash's silhouettes are of Flash's art: a Modern picture is shaded from itself.
+  const silhouette = locked && !art.modern ? silhouetteUrl(offer.type, kind) : null;
+  image.src = silhouette ?? art.url;
   // No silhouette on disk: the plain picture, drawn dark by the CSS.
   if (locked && !silhouette) box.classList.add(`${className}--shade`);
+  // The new look on a transparent ground, on the tile's own colour.
+  if (art.modern) box.classList.add(`${className}--modern`);
   box.append(image);
   if (offer.status === "locked" || offer.status === "maxed") {
     const badge = document.createElement("span");
@@ -839,7 +844,7 @@ export class PlacementBar {
     what.className = "build-placing__what";
     const image = document.createElement("img");
     image.className = "build-placing__picture";
-    image.src = buttonUrl(options.type, options.kind);
+    image.src = buildPictureUrl(options.type, options.kind);
     image.alt = "";
     const words = document.createElement("div");
     words.className = "build-placing__words";
