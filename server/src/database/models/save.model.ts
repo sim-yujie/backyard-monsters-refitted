@@ -415,6 +415,15 @@ export class Save {
   @Property({ type: "json", columnType: "jsonb", nullable: true })
   achievements?: JsonObject | null = null;
 
+  /**
+   * The daily login card, daily quests and weekly quests
+   * (`services/quests/state.ts`); not Flash's one-time `quests` above. Main saves only; `NULL` until the first
+   * quests are picked. Server-only like {@link Save.achievements}: it decides
+   * what Shiny is paid, so `/base/save` can never write it.
+   */
+  @Property({ type: "json", columnType: "jsonb", nullable: true })
+  dailyquests?: JsonObject | null = null;
+
   @Property({ type: Date })
   takeoverDate: Opt<Date> = new Date();
 

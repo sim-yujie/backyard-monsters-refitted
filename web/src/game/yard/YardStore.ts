@@ -782,6 +782,7 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerlevel === "number") slices.playerlevel = response.playerlevel;
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
+    if (typeof response.questsClaimable === "number") slices.questsClaimable = response.questsClaimable;
     // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
     Object.assign(slices, siegeSlices(this.current, response.completed, response.report));
     this.applied = Math.max(this.applied, number);

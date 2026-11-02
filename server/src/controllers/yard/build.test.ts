@@ -81,7 +81,8 @@ const instant = (type: unknown, x: unknown, y: unknown) =>
 
 /** The row without the columns a request always moves (as in `upgrade.test.ts`). */
 const settled = (row: Row | null) => {
-  const { savetime: _savetime, monsters: _monsters, achievements: _achievements, ...rest } = row!;
+  // The first action writes the achievements and quests records (a cancel never takes them back).
+  const { savetime: _savetime, monsters: _monsters, achievements: _achievements, dailyquests: _dailyquests, ...rest } = row!;
   return rest;
 };
 

@@ -1,4 +1,5 @@
 import { BaseMode, BaseType } from "../../../../enums/Base.js";
+import { recordQuestEvents } from "../../../../services/quests/record.js";
 import { MapRoomCell, MapRoomVersion } from "../../../../enums/MapRoom.js";
 import { World } from "../../../../database/models/world.model.js";
 import { WorldMapCell } from "../../../../database/models/worldmapcell.model.js";
@@ -289,6 +290,12 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
         championHealth
       )
     );
+  }
+
+  // Daily quest: an attack launched on a player's yard counts, won or not
+  // (owner, decision 10). On the attacker's main row, under its own lock.
+  if (save.type !== BaseType.TRIBE && save.saveuserid !== user.userid) {
+    await recordQuestEvents(postgres.em, userSave.basesaveid, { attackLaunch: 1 });
   }
 
   // Create an attack log and update neighbour attack counters

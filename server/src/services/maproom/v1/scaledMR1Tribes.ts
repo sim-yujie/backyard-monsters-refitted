@@ -28,6 +28,10 @@ import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
+import { tribeOfBase } from "../../goals/counters.js";
+import { addQuestEvents, questEvent } from "../../quests/state.js";
+import { lootQuestEvents } from "../../quests/hooks.js";
+import { recordQuestEvents } from "../../quests/record.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
 import { recordAttackAchievements } from "../../achievements/events.js";
 import {
@@ -181,9 +185,20 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
 
   // Goals WM1-WM4 (#227): a tribe this replay destroyed, counted on the
   // attacker's main row under its own lock.
-  if (battle?.destroyed && !wasDestroyed) {
-    await recordTribeDestroyed(postgres.em, userSave.basesaveid, String(saveData.baseid));
-  }
+  const destroyedNow = !!battle?.destroyed && !wasDestroyed;
+  if (destroyedNow) await recordTribeDestroyed(postgres.em, userSave.basesaveid, String(saveData.baseid));
+  // Quests: the tribe's loot before the cap (decision 13), and a tribe's yard
+  // destroyed, which is also a won attack.
+  await recordQuestEvents(
+    postgres.em,
+    userSave.basesaveid,
+    addQuestEvents(
+      lootQuestEvents(lootCredit),
+      destroyedNow ? questEvent("tribeDestroy", tribeOfBase(String(saveData.baseid))) : null,
+      destroyedNow ? { attackWin: 1 } : null
+    ),
+    now
+  );
 
   // Each biggest Putty bomb fired counts towards Huge Rage (#299); a Map Room 1
   // Kozu tribe is counted by its tribe counter above, never here.

@@ -1,5 +1,6 @@
 import { YardInstantUpgradeSchema } from "../../schemas/YardSchemas.js";
 import { planInstantUpgrade } from "../../services/yard/instantUpgrade.js";
+import { upgradeQuestEvents } from "../../services/quests/hooks.js";
 import { withInfernoStanding } from "../../services/yard/surfaceInferno.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -21,6 +22,7 @@ export const yardInstantUpgradeAction = defineYardAction({
       slices: { buildingdata: plan.buildingdata },
       shiny: plan.shiny,
       points: plan.points,
+      questEvents: upgradeQuestEvents(type),
     };
   },
   outposts: "allow",

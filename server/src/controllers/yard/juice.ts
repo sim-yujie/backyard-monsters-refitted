@@ -19,14 +19,14 @@ export const yardJuiceAction = defineYardAction({
     const plan = planJuice(save, body.monsters);
     // Goals BL1-BL4 count every surface monster juiced (#227); on an outpost it lands on
     // the main row. Inferno monsters are left out: the goals are the surface tutorial's.
-    const onboarding = countJuiced(
-      save,
-      Object.entries(plan.report.juiced).reduce(
-        (sum, [id, count]) => (isInfernoMonster(id) ? sum : sum + count),
-        0
-      )
+    const surface = Object.entries(plan.report.juiced).reduce(
+      (sum, [id, count]) => (isInfernoMonster(id) ? sum : sum + count),
+      0
     );
-    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding } } : plan;
+    const onboarding = countJuiced(save, surface);
+    // Daily quests count the same surface monsters.
+    const questEvents = { juice: surface };
+    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding }, questEvents } : { ...plan, questEvents };
   },
   outposts: "allow",
   inferno: "allow",
