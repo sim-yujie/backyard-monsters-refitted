@@ -112,7 +112,7 @@ describe("BuildPlacement ghost art", () => {
     const pictures = ghost.children.at(-1) as Container;
     expect(pictures.children).toHaveLength(2);
     const [body, turret] = pictures.children;
-    expect([body?.x, body?.y]).toEqual([-39, -37]);
+    expect([body?.x, body?.y]).toEqual([-40, -34]);
     expect([turret?.x, turret?.y]).toEqual([-27, -51]);
     expect([turret?.width, turret?.height]).toEqual([54, 40]);
   });

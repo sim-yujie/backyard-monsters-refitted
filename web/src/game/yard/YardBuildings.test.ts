@@ -71,6 +71,18 @@ describe("YardBuildings.setAnimFrame", () => {
     expect(buildings.tops.children.length).toBe(before);
     buildings.destroy();
   });
+
+  // The yard is shown again after every save change; a strip that started
+  // over each time made the Inferno ICC's crystal blink to its dimmest cell
+  // whenever one Incubator handed over to the next.
+  it("keeps each strip's place when the yard is shown again", () => {
+    const buildings = new YardBuildings();
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    buildings.setAnimFrame(2, 0, 9);
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    expect(buildings.animFrameOf(2, 0)).toBe(9);
+    buildings.destroy();
+  });
 });
 
 describe("YardBuildings: fortification overlays", () => {
