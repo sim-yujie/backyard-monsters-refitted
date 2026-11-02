@@ -5,7 +5,8 @@
 
 Run it again whenever a building's new look changes or a new one lands. `jobs.ts` names every type in a build menu
 (main yard, outposts, Inferno) that shows a new look in the yard (`newLookFor`) and the files the yard draws it from;
-each picture is that building at level 1, the look a new one has (as Flash's buttons showed), with its ground shadow,
+each picture is that building at level 1, the look a new one has (as Flash's buttons showed; Housing and the Champion
+Cage at their top level, as level 1 is a bare fence), centred on the building itself, with its ground shadow,
 on a transparent ground and fitted into the same box so every building sits at about the same size in its tile.
 
 Writes `server/public/assets/buildingbuttons/modern/<type>.<main|inferno>.<hash>.webp` (the hash changes with the
@@ -37,6 +38,10 @@ MIDDLE_Y = 156
 SCALE = 2
 # A pixel counts as part of the building above this alpha, for the crop.
 ALPHA_FLOOR = 10
+# Close-ups, as Flash's own buttons for these two: Housing's fence runs off the tile round its building block, and
+# the Champion Cage's fence fills the tile. type: (how much bigger than fitting the whole, middle as a share of the
+# building's own width and height).
+CLOSE_UP = {15: (2.1, (0.80, 0.44)), 114: (1.6, (0.5, 0.5))}
 
 
 def load(url: str) -> Image.Image:
@@ -60,8 +65,23 @@ def shadow_layer(url: str) -> Image.Image:
     return at_scale(layer, url)
 
 
+def close_up(top: Image.Image, zoom: float, focus: tuple[float, float]) -> Image.Image:
+    """The building alone, `zoom` times its whole-fit size, its `focus` point in the picture's middle."""
+    own = top.getchannel("A").point(lambda a: 255 if a > ALPHA_FLOOR else 0).getbbox()
+    building = top.crop(own)
+    fit = min(BOX_W / building.width, BOX_H / building.height) * zoom
+    building = building.resize((round(building.width * fit), round(building.height * fit)), Image.LANCZOS)
+    picture = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    x = round(WIDTH / 2 - focus[0] * building.width)
+    y = round(MIDDLE_Y - focus[1] * building.height)
+    picture.paste(building, (x, y), building)
+    return picture
+
+
 def compose(job: dict) -> Image.Image:
     top = at_scale(load(job["top"]["url"]), job["top"]["url"])
+    if job["type"] in CLOSE_UP:
+        return close_up(top, *CLOSE_UP[job["type"]])
     layers = []
     if job["shadow"]:
         layers.append((shadow_layer(job["shadow"]["url"]), job["shadow"]["x"] * SCALE, job["shadow"]["y"] * SCALE))
@@ -73,8 +93,16 @@ def compose(job: dict) -> Image.Image:
     canvas = Image.new("RGBA", (right - left, down - up), (0, 0, 0, 0))
     for image, x, y in layers:
         canvas.alpha_composite(image, (x - left, y - up))
-    box = canvas.getchannel("A").point(lambda a: 255 if a > ALPHA_FLOOR else 0).getbbox()
-    building = canvas.crop(box)
+    solid = lambda image: image.getchannel("A").point(lambda a: 255 if a > ALPHA_FLOOR else 0).getbbox()
+    box = solid(canvas)
+    # Centred on the building alone, not building and shadow: the shadow reaches out to one side and would
+    # push the building off the tile's middle (owner, 2 Nov 2026). The crop is widened to be even either side.
+    own = solid(top)
+    middle = layers[-1][1] - left + (own[0] + own[2]) / 2
+    half = max(middle - box[0], box[2] - middle)
+    box = (round(middle - half), box[1], round(middle + half), box[3])
+    building = Image.new("RGBA", (box[2] - box[0], box[3] - box[1]), (0, 0, 0, 0))
+    building.alpha_composite(canvas.crop((max(0, box[0]), box[1], min(canvas.width, box[2]), box[3])), (max(0, -box[0]), 0))
     fit = min(BOX_W / building.width, BOX_H / building.height)
     size = (max(1, round(building.width * fit)), max(1, round(building.height * fit)))
     building = building.resize(size, Image.LANCZOS)
