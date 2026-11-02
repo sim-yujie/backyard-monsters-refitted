@@ -8,6 +8,34 @@
  * Goals and Events are.
  */
 
+/* ── The dock button: the bottom row, left of Goals (goals.css) ──────────
+   Until the beta 6 bubble menu (feat/hud-tidy) takes it. */
+
+.yard-dock__right > .yard-dock__button--quests {
+  right: 510px;
+  bottom: 30px;
+}
+
+/* Defences pushes Goals one place left: Quests follows. */
+.yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--quests {
+  right: 600px;
+}
+
+@media (width > 620px) and (height <= 500px) {
+  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--quests {
+    right: 574px;
+  }
+}
+
+/* A phone upright: above Goals in the right-hand column. */
+@media (width <= 620px) {
+  .yard-dock__right > .yard-dock__button--quests,
+  .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--quests {
+    right: 26px;
+    bottom: 352px;
+  }
+}
+
 /* ── The button's red number ──────────────────────────────────────────── */
 
 .yard-dock__badge.quests-badge {
@@ -313,14 +341,16 @@
 
 .quest__line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: 4px var(--space-2);
   min-width: 0;
 }
 
+/* The bar takes what is left; on a narrow row the rewards drop under it. */
 .quest__bar {
   position: relative;
-  flex: 1;
+  flex: 1 1 60px;
   min-width: 40px;
   height: 8px;
   overflow: hidden;
