@@ -198,6 +198,27 @@ describe("the Hatchery Control Centre (the Inferno's Incubator Control Centre)",
     const save = saveWith(yard, { monsters: monsters([0, 2]) });
     expect(animates(save, 16, 50, SAVED)).toBe(false);
   });
+
+  // The crystal dropped to idle for about a second each time a hatch handed
+  // over to the next: the store's once-a-second tick hands the hatchery the
+  // shared queue's head, and until then neither it nor the centre was working.
+  it("keeps working past a hatch while the shared queue holds monsters", () => {
+    const save = saveWith(yard, { monsters: { ...monsters([1, 1]), hcc: [["C1", 2, 1]] } });
+    const work = readWork(save);
+    expect(work.get(50)).toBe(INF);
+    expect(work.get(13)).toBe(INF);
+    expect(work.get(14)).toBe(INF);
+  });
+
+  it("does not count the shared queue for a centre that cannot hand it out", () => {
+    const shared = { ...monsters([1, 1]), hcc: [["C1", 2, 1]] };
+    const building = saveWith({ ...yard, "50": { id: 50, t: 16, l: 1, cB: 100 } }, { monsters: shared });
+    expect(readWork(building).get(13)).toBe(SAVED + 30);
+    const wrecked = saveWith(yard, { monsters: shared, buildinghealthdata: { "50": 0 } });
+    expect(readWork(wrecked).get(50)).toBe(SAVED + 60);
+    const empty = saveWith(yard, { monsters: { ...monsters([1, 1]), hcc: [["C1", 0, 1]] } });
+    expect(readWork(empty).get(50)).toBe(SAVED + 60);
+  });
 });
 
 describe("the Monster Academy and the Monster Lab", () => {

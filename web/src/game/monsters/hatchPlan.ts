@@ -183,16 +183,29 @@ const readQueue = (raw: unknown, levels: Readonly<Record<string, number>>): Queu
   return queue;
 };
 
-const buildingsOfType = (save: BaseLoadResponse, type: number): [number, BuildingData][] =>
+/** The slices of a save that say whether its HCC works. */
+type HccSave = Pick<BaseLoadResponse, "buildingdata" | "buildinghealthdata">;
+
+const buildingsOfType = (save: HccSave, type: number): [number, BuildingData][] =>
   Object.entries(save.buildingdata ?? {})
     .filter(([, building]) => Number(building?.t) === type)
     .map(([key, building]): [number, BuildingData] => [Number(building.id ?? key), building])
     .filter(([id]) => Number.isFinite(id));
 
-const healthOf = (save: BaseLoadResponse, id: number, building: BuildingData): number | null =>
+const healthOf = (save: HccSave, id: number, building: BuildingData): number | null =>
   finite(save.buildinghealthdata?.[String(id)] ?? building.hp);
 
 const underConstruction = (building: BuildingData): boolean => (finite(building.cB) ?? 0) > 0;
+
+/**
+ * The yard's HCC, once built, and whether it works (hands the shared queue to
+ * the hatcheries): above {@link HCC_MIN_HEALTH}. Null when the yard has none.
+ */
+export const readHcc = (save: HccSave): { readonly id: number; readonly works: boolean } | null => {
+  const found = buildingsOfType(save, HCC_TYPE)[0] ?? null;
+  if (!found || underConstruction(found[1])) return null;
+  return { id: found[0], works: (healthOf(save, found[0], found[1]) ?? Infinity) > HCC_MIN_HEALTH };
+};
 
 /** The hatcheries in service order, as the server orders them: `hid` first, then new ones by id. */
 const serviceOrder = (save: BaseLoadResponse): [number, BuildingData][] => {
@@ -288,14 +301,7 @@ export const readHatchYard = (save: BaseLoadResponse, now: number): HatchYard =>
     };
   });
 
-  const hccBuilding = buildingsOfType(save, HCC_TYPE)[0] ?? null;
-  const hcc =
-    hccBuilding && !underConstruction(hccBuilding[1])
-      ? {
-          id: hccBuilding[0],
-          works: (healthOf(save, hccBuilding[0], hccBuilding[1]) ?? Infinity) > HCC_MIN_HEALTH,
-        }
-      : null;
+  const hcc = readHcc(save);
 
   const housed: Record<string, number> = {};
   for (const [key, raw] of Object.entries(monsters?.housed ?? {})) {
