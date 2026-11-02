@@ -124,7 +124,10 @@ const PAIRS: Array<[string, string, number]> = [
 
 if (mode === "need") {
   // The smallest army (share of a full load, 5% steps) that takes the yard to 90% on average.
-  const settings: Record<string, { hp?: number; damage?: number }> = process.argv[3] === "wide" ? {
+  const settings: Record<string, { hp?: number; damage?: number }> = process.argv[3] === "single48" ? {
+    "hp+48": { hp: 0.48 },
+    "dmg+48": { damage: 0.48 },
+  } : process.argv[3] === "wide" ? {
     none: {},
     "hp+24": { hp: 0.24 },
     "dmg+24": { damage: 0.24 },
