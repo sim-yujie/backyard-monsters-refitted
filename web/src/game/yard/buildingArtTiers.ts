@@ -261,6 +261,7 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
         aim: TURRET_AIM["20.t3"] } },
   ],
   // 21 Sniper Tower: 3D, a square body as Flash's (owner, 2 Nov 2026; it was a hexagon)
+  // a tall box on short legs as Flash's; each tier adds a 30 px section on top, so tier 3 stands 13 px above the painted one
   21: [
     { from: 1, top: ["top.t1@2x.webp", -40, -45], shadow: ["shadow.t1.jpg", -37, 12], lift: 1,
       turret: { body: ["body.t1@2x.webp", -40, -34], strip: ["turret.t1@2x.webp", -27, -51, 54, 40, 32], pivot: [0, -20],
@@ -268,8 +269,8 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
     { from: 4, top: ["top.t2@2x.webp", -40, -75], shadow: ["shadow.t2.jpg", -37, 2], lift: 31,
       turret: { body: ["body.t2@2x.webp", -40, -64], strip: ["turret.t2@2x.webp", -27, -81, 54, 40, 32], pivot: [0, -50],
         aim: TURRET_AIM["21.t2"] } },
-    { from: 7, top: ["top.t3@2x.webp", -40, -92], shadow: ["shadow.t3.jpg", -38, -4], lift: 48,
-      turret: { body: ["body.t3@2x.webp", -40, -81], strip: ["turret.t3@2x.webp", -27, -98, 54, 40, 32], pivot: [0, -67],
+    { from: 7, top: ["top.t3@2x.webp", -40, -105], shadow: ["shadow.t3.jpg", -38, -4], lift: 61,
+      turret: { body: ["body.t3@2x.webp", -40, -94], strip: ["turret.t3@2x.webp", -27, -111, 54, 40, 32], pivot: [0, -80],
         aim: TURRET_AIM["21.t3"] } },
   ],
   // 22 Monster Bunker: 3D, five levels, so 1-2, 3-4 and 5; its shutters roll up into the deck as it lets its monsters out
