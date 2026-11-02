@@ -140,11 +140,9 @@
   }
 }
 
-/* Sideways: one row of buttons in the sheet, and Collect all beside Build. */
+/* Sideways: Collect all beside Build. The sheet keeps the upright columns'
+   width, as 84px cut "Monsters" and "Defences" short ("Monste…"). */
 @media (width > 620px) and (height <= 500px) {
-  .yard-menu__grid {
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  }
 
   .yard-dock.is-folded .yard-dock__right > .yard-collect {
     top: auto;
