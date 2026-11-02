@@ -149,7 +149,9 @@ if (mode === "need") {
     ["player", "air"],
     ["kozu", "groundMix"],
   ];
-  for (const [yard, name] of pairs) {
+  // Optional 5th argument "yard/army" runs just that pair.
+  const only = process.argv[4];
+  for (const [yard, name] of pairs.filter(([y, n]) => !only || `${y}/${n}` === only)) {
     const row = [`${yard}/${name}`];
     for (const [label, bonus] of Object.entries(settings)) {
       row.push(`${label} ${armyNeeded(yard, ARMIES[name]!, bonus)}`);

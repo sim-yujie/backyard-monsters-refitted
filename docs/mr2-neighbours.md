@@ -70,8 +70,8 @@ Extra army needed at 1, 3 and 6 neighbours, from the table above (5% steps, so a
 
 | # | Boosts | Stacking | Cap | 1 neighbour | 3 neighbours | 6 neighbours |
 |---|---|---|---|---|---|---|
-| A | health only | +8% each | none (+48%) | +4% | +17% | HEALTH48 |
-| B | tower damage only | +8% each | none (+48%) | +6% | +13% | DAMAGE48 |
+| A | health only | +8% each | none (+48%) | +4% | +17% | +25% |
+| B | tower damage only | +8% each | none (+48%) | +6% | +13% | +30% |
 | C | both | +8% each | none (+48%) | +13% | +30% | +60% or more |
 | D | both | +8% each | 3 neighbours (+24%) | +13% | +30% | +30% |
 | **E** | **both** | **+8, +6, +4, +2, +2, +2** | **+24% at 6** | **+13%** | **+22%** | **+30%** |
