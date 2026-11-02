@@ -15,11 +15,13 @@ const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import
  * Map Room, General Store, Blocks, Stone Block, Baiter, Catapult and Champion Cage (1 Nov 2026), then the Monster
  * Academy and the Monster Lab.
  */
-const TYPES = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 26, 51, 114, 116];
+const TYPES = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 24, 26, 51, 114, 116, 117];
 /** The ones whose parts move, as Flash's do; the rest stand still, as Flash's did. */
 const MOVING = [1, 2, 3, 4, 6, 9, 13, 19, 26, 116];
 /** The ones with no damaged or destroyed 3D look yet: the General Store, tinted and then Flash's rubble. */
 const NO_RUIN = [12];
+/** The traps (art/traps-3d): whole until they fire, then their destroyed look is the fired trap; never damaged. */
+const TRAPS = [24, 117];
 
 /**
  * The looks whose model reaches past Flash's picture, `[left, top, right, bottom]` in px each edge may differ: the
@@ -246,7 +248,7 @@ describe("the 3D yard buildings", () => {
   });
 
   it("show their own 3D damaged and destroyed looks, standing still", () => {
-    for (const type of TYPES.filter((one) => !NO_RUIN.includes(one))) {
+    for (const type of TYPES.filter((one) => !NO_RUIN.includes(one) && !TRAPS.includes(one))) {
       const folder = `/assets/${artFolder(type) ?? ""}`;
       for (const look of BUILDING_3D_ART[type] ?? []) {
         const name = `type ${type} look ${look.from}`;
@@ -266,6 +268,20 @@ describe("the 3D yard buildings", () => {
     // The Classic look keeps Flash's.
     setClassicLook(true);
     expect(resolveArt(4, 10, ArtState.DESTROYED)?.top.url).toBe("/assets/buildings/goofactory.v2/top.destroyed.png");
+  });
+
+  it("show the traps fired in 3D once they go off, and Flash's traps with the Classic look", () => {
+    for (const type of TRAPS) {
+      const folder = `/assets/${artFolder(type) ?? ""}`;
+      const [look] = BUILDING_3D_ART[type] ?? [];
+      expect(look?.damaged, `type ${type}`).toBeUndefined();
+      expect(resolveArt(type, 1, ArtState.DEFAULT)?.top.url).toBe(`${folder}top.3d1@2x.webp`);
+      expect(resolveArt(type, 1, ArtState.DESTROYED)?.top.url).toBe(`${folder}top.3d1.destroyed@2x.webp`);
+      expect(resolveArt(type, 1, ArtState.DESTROYED)?.shadow?.url).toBe(`${folder}shadow.3d1.destroyed.jpg`);
+    }
+    setClassicLook(true);
+    expect(resolveArt(24, 1, ArtState.DESTROYED)?.top.url).toBe("/assets/buildings/boobytrap/top.1.destroyed.png");
+    expect(resolveArt(117, 1, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/heavytrap/top.1.png");
   });
 
   it("without 3D ruins (the General Store) keep the picture when damaged and fall to the Flash rubble", () => {
