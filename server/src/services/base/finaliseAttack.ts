@@ -26,6 +26,7 @@ import {
 } from "./attackCheckpointStore.js";
 import { attackerSessionKey } from "./attackSession.js";
 import { awaitOwnLanding } from "./awaitOwnLanding.js";
+import { finaliseExpiredRowlessAttacks, finaliseRowlessAttacksOf } from "./finaliseRowlessAttack.js";
 import { endAttackSession, readAttackSession } from "./attackSessionStore.js";
 import { buildingDataWithout, spendFlung, type SourceCell } from "./combat/abandonedAttack.js";
 import { battleReplayInput, foughtLoot } from "./combat/battle.js";
@@ -659,6 +660,9 @@ export const finaliseBeforeLoad = async (
     // a reload or Back, say) lands first, so the yard never shows it undone.
     await awaitOwnLanding(userid);
     await finaliseAttacksFor(userid, mode);
+    // So is one on a Map Room 1 tribe, a Descent yard or a Moloch tribe
+    // (`finaliseRowlessAttack.ts`), which have no row of their own.
+    await finaliseRowlessAttacksOf(userid, mode);
     await releaseUnfoughtAttackOf(userid);
     if (attacking) await finaliseExpiredOnBase(baseid);
   } catch (err) {
@@ -682,6 +686,7 @@ export const startAttackFinaliser = (): (() => void) => {
     running = true;
     try {
       await finaliseExpiredAttacks();
+      await finaliseExpiredRowlessAttacks();
     } catch (err) {
       logger.error(`Abandoned attack sweep failed: ${err}`);
     } finally {

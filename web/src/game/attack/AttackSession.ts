@@ -418,6 +418,14 @@ const UNTARGETED_CLASSES: ReadonlySet<BuildingClass> = new Set<BuildingClass>([
 const rosterEmpty = (roster: Roster): boolean =>
   Object.values(roster).every((count) => count <= 0);
 
+/** A drop refused while drops are paused (`AttackSession.holdDrops`); its message is the player's. */
+export class DropsHeldError extends Error {
+  constructor() {
+    super("Reconnecting…");
+    this.name = "DropsHeldError";
+  }
+}
+
 export class AttackSession {
   readonly target: AttackTarget;
   readonly seed: number;
@@ -426,6 +434,7 @@ export class AttackSession {
   private endReason: AttackEndReason | null = null;
   private response: BaseLoadResponse | null = null;
   private battle_: Battle | null = null;
+  private dropsHeld_ = false;
   private combatYard: CombatYard | null = null;
   private declareWar_: boolean;
   private countdownSeconds: number;
@@ -945,6 +954,23 @@ export class AttackSession {
     return this.endReason;
   }
 
+  /**
+   * Pauses (or resumes) new drops, bombs and siege weapons: each is refused
+   * with a {@link DropsHeldError} until released. The checkpoint package holds
+   * them while the server has not confirmed its record of the attack for a
+   * while (`plugins/checkpoint.ts`), so a player who cuts the connection
+   * cannot go on dropping where the server cannot see it, then close the tab
+   * and have the unseen part undone. The battle itself runs on.
+   */
+  holdDrops(held: boolean): void {
+    this.dropsHeld_ = held;
+  }
+
+  /** Whether new drops are paused ({@link holdDrops}). */
+  dropsHeld(): boolean {
+    return this.dropsHeld_;
+  }
+
   /** The running battle, or null before {@link load}. */
   battle(): Battle | null {
     return this.battle_;
@@ -1108,6 +1134,8 @@ export class AttackSession {
     const battle = this.battle_;
     if (!battle || this.phase === "idle") throw new Error(`AttackSession: ${what} before load`);
     if (this.phase === "ended") throw new Error(`AttackSession: ${what} after the attack ended`);
+    // Nothing new while the server's record of the attack is out of date (see `holdDrops`).
+    if (this.dropsHeld_) throw new DropsHeldError();
     // An input layer that fires before the scene's start() starts the clock.
     if (this.phase === "loaded") this.phase = "running";
     return battle;

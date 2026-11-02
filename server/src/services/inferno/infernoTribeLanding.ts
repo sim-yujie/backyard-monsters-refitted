@@ -8,7 +8,7 @@ import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { attackNotBoundErr, noInfernoYardErr } from "../../errors/errors.js";
-import { RESOURCE_KEYS, type ResourceAmounts } from "../../game-rules/combat/index.js";
+import { RESOURCE_KEYS, type FlingLog, type ResourceAmounts } from "../../game-rules/combat/index.js";
 import { BaseSaveSchema } from "../../schemas/BaseSaveSchema.js";
 import { postgres } from "../../server.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -16,13 +16,16 @@ import type { SaveData } from "../../types/EntityData.js";
 import type { TribeData } from "../../types/TribeData.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
-import { parseFlingLog } from "../base/attackCheckpoint.js";
+import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
+import { flungOf, type AbandonedOutcome } from "../base/combat/abandonedAttack.js";
+import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
+import { endRowlessAttack, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
 import { checkAttackBinding } from "../base/attackSession.js";
 import { battleReplayInput, battleTick } from "../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../base/combat/saveBattle.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { creditableMR1Loot, mr1TribePool } from "../maproom/v1/mr1TribeRules.js";
-import { countsOf, flungPerYard, subtractHoused } from "../yard/attackRoster.js";
+import { countsOf, flungPerYard, subtractHoused, type Counts } from "../yard/attackRoster.js";
 import { catchUpYard } from "../yard/catchUp.js";
 import { fundPurse } from "../yard/surfaceInferno.js";
 import { descentFightableLog, purseAmounts } from "./descent.js";
@@ -32,7 +35,6 @@ import { infernoTribeOf } from "./infernoTribeMap.js";
 import { infernoTribeRespawnAt, infernoTribeYardOf, underHallFallen } from "./infernoTribes.js";
 import {
   acquireInfernoTribeFinalLock,
-  endInfernoTribeSession,
   readInfernoTribeSession,
   releaseInfernoTribeFinalLock,
   type InfernoTribeSession,
@@ -113,20 +115,52 @@ const tribeYard = (template: SaveData, baseid: string, kept: TribeData | undefin
     buildinghealthdata: { ...(kept?.tribeHealthData ?? {}) },
   });
 
+/** The tribe as the start served it, and the player's stored copy of it. */
+interface ServedInfernoTribe {
+  readonly baseid: string;
+  readonly template: SaveData;
+  readonly kept: TribeData | undefined;
+  readonly yard: Save;
+}
+
+const servedInfernoTribe = async (user: User, baseid: string): Promise<ServedInfernoTribe> => {
+  const template = infernoTribeYardOf(baseid)!;
+  const stored = await postgres.em.findOne(InfernoMaproom, { userid: user.userid });
+  const kept = stored ? infernoTribeOf(stored, baseid) : undefined;
+  return { baseid, template, kept, yard: tribeYard(template, baseid, kept) };
+};
+
 const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises: boolean) => {
-  const em = postgres.em;
   const now = getCurrentDateTime();
   const baseid = String(saveData.baseid);
 
   const tribe = await requireTribeBinding(ctx, user, saveData, now);
-  const template = infernoTribeYardOf(baseid)!;
-  const stored = await em.findOne(InfernoMaproom, { userid: user.userid });
-  const kept = stored ? infernoTribeOf(stored, baseid) : undefined;
-  const yard = tribeYard(template, baseid, kept);
+  const served = await servedInfernoTribe(user, baseid);
 
-  if (!finalises) return { save: yard, tribe: null };
+  if (!finalises) return { save: served.yard, tribe: null };
 
-  const battle = await tribeBattle(ctx, user, saveData, tribe, yard);
+  const battle = await tribeBattle(ctx, user, saveData, tribe, served.yard);
+  return writeInfernoTribeLanding(user, tribe, served, battle, battle?.flung ?? null, now);
+};
+
+/**
+ * Lands a Moloch tribe attack (see the file comment) and ends it: the final
+ * save's path, and the finaliser's for an attack its attacker left
+ * (`finaliseRowlessAttack.ts`). The caller holds the tribe's final lock.
+ *
+ * @param flung - What leaves the Housing Bunkers: the battle's own count, or
+ *   null for none.
+ */
+const writeInfernoTribeLanding = async (
+  user: User,
+  tribe: InfernoTribeSession,
+  served: ServedInfernoTribe,
+  battle: AbandonedOutcome | null,
+  flung: Counts | null,
+  now: number
+): Promise<{ save: Save; tribe: InfernoTribeLanded }> => {
+  const em = postgres.em;
+  const { baseid, template, kept, yard } = served;
   const won = battle ? underHallFallen(template.buildingdata as JsonObject, battle.buildinghealthdata) : false;
   const loot = creditableMR1Loot(battle?.attackloot, mr1TribePool(template), kept?.looted);
 
@@ -143,7 +177,7 @@ const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises:
       cells: [{ baseid: inferno.baseid, housed: countsOf(inferno.monsters?.housed) }],
       sent: {},
       entryHoused: tribe.session.entryHoused,
-      logged: battle?.flung ?? null,
+      logged: flung,
     });
     inferno.monsters = subtractHoused(inferno.monsters, taken[inferno.baseid]);
 
@@ -177,8 +211,9 @@ const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises:
     return { credited: funded.credited, total: purseAmounts(main.iresources), state };
   });
 
-  // Spent: the lock is still held, so a copy of this save finds nothing.
-  await endInfernoTribeSession(user.userid);
+  // Spent: the lock is still held, so a copy of this save finds nothing, and
+  // the attack's checkpoint goes with it, so the finaliser does not land it again.
+  await endRowlessAttack({ kind: "inferno-tribe", userid: user.userid, baseid }, tribe.session.attackid);
 
   if (battle) yard.buildinghealthdata = battle.buildinghealthdata;
   return {
@@ -192,6 +227,41 @@ const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises:
       respawnat: infernoTribeRespawnAt(landed.state),
     },
   };
+};
+
+/**
+ * Lands a Moloch tribe attack its attacker left without the final save, from
+ * the attack's last checkpoint (`finaliseRowlessAttack.ts`; owner, 2 Nov
+ * 2026): the battle replayed to the moment the attacker was last seen, then
+ * landed exactly as the final save lands it: the monsters that fought by then
+ * leave the Housing Bunkers, the tribe is won only if that battle brought its
+ * Under Hall down, and its damage and loot of that moment land. With `replay`
+ * false (a replay that keeps failing) there is no battle: every monster the
+ * fightable log flung is spent all the same, and nothing is won.
+ * The caller holds the tribe's final lock.
+ */
+export const landInfernoTribeFromCheckpoint = async (
+  user: User,
+  stored: RowlessCheckpoint,
+  now: number,
+  replay = true
+): Promise<{ save: Save; tribe: InfernoTribeLanded }> => {
+  const { checkpoint } = stored;
+  const tribe: InfernoTribeSession = {
+    baseid: stored.baseid,
+    flingerCapacity: stored.flingerCapacity,
+    session: checkpointSession(checkpoint),
+  };
+  const served = await servedInfernoTribe(user, stored.baseid);
+  const fightable = descentFightableLog(checkpoint.flinglog, tribe.flingerCapacity, tribe.session.attackerAcademy);
+
+  let battle: AbandonedOutcome | null = null;
+  if (replay && tribe.session.entryHoused) {
+    const input = tribeReplayInput(tribe, served.yard, checkpoint.flinglog, checkpoint.tick, true);
+    if (input) battle = await replayAbandonedInWorker(input);
+  }
+
+  return writeInfernoTribeLanding(user, tribe, served, battle, battle?.flung ?? flungOf(fightable.events), now);
 };
 
 /** The attacker's main row, locked and read afresh: the purse lives on it. */
@@ -219,6 +289,36 @@ const lockArmyYard = async (tx: EntityManager, user: User, main: Save): Promise<
 };
 
 /**
+ * The replay input for a Moloch tribe attack: the log cut to what the attack
+ * can do (`descentFightableLog`), over the tribe as an Inferno yard with the
+ * defence the start served, to `tick`. Shared by the save and the finaliser.
+ */
+const tribeReplayInput = (
+  tribe: InfernoTribeSession,
+  yard: Save,
+  log: FlingLog,
+  tick: number,
+  left: boolean | undefined
+) =>
+  battleReplayInput({
+    flinglog: descentFightableLog(log, tribe.flingerCapacity, tribe.session.attackerAcademy),
+    session: tribe.session,
+    defender: {
+      type: String(yard.type),
+      kind: "inferno",
+      buildingdata: yard.buildingdata as JsonObject | undefined,
+      buildinghealthdata: (yard.buildinghealthdata ?? {}) as JsonObject,
+      resources: yard.resources as JsonObject | undefined,
+    },
+    // The Inferno yard has no champion, catapult or siege: the cut log has no
+    // bomb or siege, and a champion fling finds no champion to send.
+    attacker: { champion: [], catapult: 0, siege: null },
+    tick,
+    declareWar: tribe.session.declareWar ?? false,
+    left,
+  });
+
+/**
  * The server's battle for the save that ends a tribe attack, or null when
  * there is none to fight: no roster in the session, or no usable fling log.
  *
@@ -231,31 +331,14 @@ const tribeBattle = async (
   tribe: InfernoTribeSession,
   yard: Save
 ) => {
-  const { session } = tribe;
   const log = parseFlingLog(saveData.flinglog);
-  if (!session.entryHoused || !log) return null;
+  if (!tribe.session.entryHoused || !log) return null;
 
-  const input = battleReplayInput({
-    flinglog: descentFightableLog(log, tribe.flingerCapacity, session.attackerAcademy),
-    session,
-    defender: {
-      type: String(yard.type),
-      kind: "inferno",
-      buildingdata: yard.buildingdata as JsonObject | undefined,
-      buildinghealthdata: (yard.buildinghealthdata ?? {}) as JsonObject,
-      resources: yard.resources as JsonObject | undefined,
-    },
-    // The Inferno yard has no champion, catapult or siege: the cut log has no
-    // bomb or siege, and a champion fling finds no champion to send.
-    attacker: { champion: [], catapult: 0, siege: null },
-    tick: battleTick(saveData.tick),
-    declareWar: session.declareWar ?? false,
-    left: saveData.left,
-  });
+  const input = tribeReplayInput(tribe, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
   const base = { baseid: String(saveData.baseid) };
-  const battle = await replayBattleForSave(ctx, user, base, input, "a Moloch tribe has no finaliser, so nothing lands");
+  const battle = await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint");
 
   // Where the save disagrees with it: logged, or refused under
   // `COMBAT_SAVE_VALIDATION=reject` before anything is written.

@@ -329,6 +329,7 @@ export const sendAttackCheckpoint = (
 ): Promise<ApiEnvelope & { stored?: boolean }> =>
   post(CHECKPOINT_PATH, {
     basesaveid: String(checkpoint.basesaveid),
+    ...(checkpoint.baseid !== undefined && { baseid: checkpoint.baseid }),
     attackid: String(checkpoint.attackid),
     tick: String(checkpoint.tick),
     flinglog: JSON.stringify(checkpoint.flinglog),
