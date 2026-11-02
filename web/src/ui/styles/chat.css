@@ -172,8 +172,13 @@ button.chat-line__name {
   pointer-events: auto;
 }
 
+/* On a short window (a laptop at 125%: 730px tall) a 260px room ran the box
+   down behind Main yard and Map, which took the clicks meant for the input
+   (bug report 4). The room gives way instead: the left dock's top sits 229px
+   above the bottom, the box's tab, status, input and painted frame take up to
+   150px besides the lines, and 13px keeps a gap. */
 .chat-box--open .chat-box__lines {
-  height: 260px;
+  height: clamp(80px, calc(100dvh - var(--chat-top) - 229px - 150px - 13px), 260px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
