@@ -37,6 +37,7 @@ import {
   lungeOffset,
   mouthPoint,
   projectileStyle,
+  type NumberMods,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
@@ -978,7 +979,9 @@ export class AttackBattleLayer {
       },
       this.reducedMotion,
       this.juice !== "off",
-      !this.classic,
+      // Both looks show the numbers; Classic in a plain font (owner, beta 6).
+      true,
+      this.classic,
     );
     this.overlay.addChild(this.fx.root);
 
@@ -1983,6 +1986,7 @@ export class AttackBattleLayer {
         event.amount,
         PROJECTILE_TICKS,
         projectileStyle(monsterId),
+        modsOf(event),
       );
       return;
     }
@@ -2005,8 +2009,19 @@ export class AttackBattleLayer {
     // Flash showed the same red numbers on buildings (`BFOUNDATION.as:534`).
     if (event.buildingId >= 0 && event.amount > 0) {
       const over = { x: target.x, y: target.y - BUILDING_NUMBER_LIFT };
-      this.fx.number(event.tick, `building:${event.buildingId}`, -1, event.amount, over, "damage");
+      const key = `building:${event.buildingId}`;
+      this.fx.number(event.tick, key, -1, event.amount, over, "damage", modsOf(event));
     }
+  }
+
+  /** An Ichi's thorns struck a tower: the number over it, with the thorn mark (owner, beta 6). */
+  private onThorns(event: Extract<BattleVisualEvent, { kind: "thorns" }>): void {
+    if (event.amount <= 0) return;
+    const centre = this.host.centreOf(event.buildingId);
+    if (!centre) return;
+    const over = { x: centre.x, y: centre.y - BUILDING_NUMBER_LIFT };
+    const key = `building:${event.buildingId}`;
+    this.fx.number(event.tick, key, -1, event.amount, over, "damage", { thorns: true });
   }
 
   /**
@@ -2023,7 +2038,8 @@ export class AttackBattleLayer {
       ? { x: view.lastX, y: view.lastY }
       : groundWorld(wound.ix, wound.iy, this.origin);
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
-    this.fx.number(tick, `creep:${wound.creepId}`, wound.creepId, wound.amount, at, "damage");
+    const key = `creep:${wound.creepId}`;
+    this.fx.number(tick, key, wound.creepId, wound.amount, at, "damage", modsOf(wound));
   }
 
   /**
@@ -2349,6 +2365,10 @@ export class AttackBattleLayer {
     }
     if (event.kind === "hurt") {
       if (!this.ledger.hurt(event)) this.showWound(event, event.tick);
+      return;
+    }
+    if (event.kind === "thorns") {
+      this.onThorns(event);
       return;
     }
     if (event.kind === "shot") {
@@ -2693,3 +2713,17 @@ export class AttackBattleLayer {
     }
   }
 }
+
+/** A hit's or wound's modifiers for its number: a crit, a cut, thorns (owner, beta 6). */
+const modsOf = (event: {
+  readonly bonus?: number;
+  readonly reduced?: number;
+  readonly thorns?: boolean;
+}): NumberMods | undefined =>
+  event.bonus === undefined && event.reduced === undefined && event.thorns !== true
+    ? undefined
+    : {
+        ...(event.bonus === undefined ? {} : { bonus: event.bonus }),
+        ...(event.reduced === undefined ? {} : { reduced: event.reduced }),
+        ...(event.thorns === true ? { thorns: true } : {}),
+      };

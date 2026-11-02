@@ -232,7 +232,7 @@ describe("the punchy blast in a real attack (feat/punchy-trial)", () => {
     expect(Math.abs(root.pivot.y)).toBeLessThanOrEqual(MAX_SHAKE);
   });
 
-  it("Korath's quake in the Classic look: Flash's rings alone, no blast, shake or damage numbers", () => {
+  it("Korath's quake in the Classic look: Flash's rings alone, no blast or shake; numbers as Modern", () => {
     const modern = setUp(SCENES.korath);
     let modernNumbers = 0;
     until(modern.session, modern.layer, (events) => {
@@ -242,14 +242,16 @@ describe("the punchy blast in a real attack (feat/punchy-trial)", () => {
     expect(modernNumbers).toBeGreaterThan(0);
 
     const { session, layer, root } = setUp(SCENES.korath, undefined, true);
+    let classicNumbers = 0;
     until(session, layer, (events) => {
-      expect(layer.creepEffects.labelCount).toBe(0);
+      classicNumbers = Math.max(classicNumbers, layer.creepEffects.labelCount);
       return events.some((event) => event.kind === "quake");
     });
     for (let step = 0; step < TICKS_PER_SECOND; step += 1) frame(session, layer);
     expect(layer.blasts.blastsMade).toBe(0);
     expect(layer.blasts.shakeAmp).toBe(0);
-    expect(layer.creepEffects.labelCount).toBe(0);
+    // Damage numbers show in the Classic look too since beta 6 (owner).
+    expect(classicNumbers).toBeGreaterThan(0);
     expect(root.pivot.x).toBe(0);
     expect(root.pivot.y).toBe(0);
   });
