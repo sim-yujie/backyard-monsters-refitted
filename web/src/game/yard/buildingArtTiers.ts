@@ -331,10 +331,10 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // is the whole tower, stepped by the battle's `towerCell` events as Flash's anim.1.png was; Flash's shadow kept.
   // Flash's damaged look animates; the 3D one is a still, as the other 3D buildings' (`export3d_quake.py`).
   129: [
-    { from: 1, top: ["top.t1@2x.webp", -40, -78], shadow: ["shadow.1.v2.jpg", -37, 17], lift: 3,
-      anim: { strip: ["anim.t1@2x.webp", -40, -78, 80, 133, 33], columns: 25, whole: true },
-      damaged: { top: ["top.t1.damaged@2x.webp", -40, -78], shadow: ["shadow.1.v2.jpg", -40, 16] },
-      destroyed: { top: ["top.t1.destroyed@2x.webp", -46, -13], shadow: ["shadow.1.v2.jpg", -44, 10] } },
+    { from: 1, top: ["top.t1@2x.webp", -40, -74], shadow: ["shadow.1.v2.jpg", -37, 17], lift: -1,
+      anim: { strip: ["anim.t1@2x.webp", -40, -74, 80, 129, 33], columns: 25, whole: true },
+      damaged: { top: ["top.t1.damaged@2x.webp", -40, -74], shadow: ["shadow.1.v2.jpg", -40, 16] },
+      destroyed: { top: ["top.t1.destroyed@2x.webp", -47, -12], shadow: ["shadow.1.v2.jpg", -44, 10] } },
   ],
   // 132 Magma Tower: 3D, the Volcanic look (owner, 29 Oct 2026); six levels, so 1-2, 3-4 and 5-6
   132: [
