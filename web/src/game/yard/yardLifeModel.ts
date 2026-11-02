@@ -578,6 +578,29 @@ export interface Walker {
   trip: YardPoint[] | null;
   /** Going into the Chamber: gone once its trip is over ({@link walkerGone}). */
   leaving: boolean;
+  /** A monster on its way into the Monster Juicer ({@link juiceTrip}); absent otherwise. */
+  juice?: JuiceWalk;
+}
+
+/**
+ * A monster walking (or flying) to the Monster Juicer to be juiced, as Flash's
+ * creep in juice mode (`CreepBase.as:369-382`, `:1270-1288`).
+ */
+export interface JuiceWalk {
+  /** The Juicer's building id. */
+  readonly juicer: number;
+  /** A flyer takes off first and drops into the Juicer at the end. */
+  readonly flies: boolean;
+  /** Its height above the ground now, world px. */
+  altitude: number;
+  /** The height it climbs to (`m_altitudeMax`). */
+  readonly top: number;
+  /** Ticks into its take-off. */
+  rise: number;
+  /** Ticks into its drop at the Juicer, or null before it gets there. */
+  landing: number | null;
+  /** The height its drop started from. */
+  dropFrom: number;
 }
 
 /** A point in yard units. */
@@ -759,7 +782,7 @@ export const reconcileWalkers = (
     }
   }
   for (const [key, walker] of current) {
-    if (!next.has(key) && walker.leaving && walker.trip !== null) next.set(key, walker);
+    if (!next.has(key) && walker.leaving && !walkerGone(walker)) next.set(key, walker);
   }
   return next;
 };
@@ -776,6 +799,10 @@ const inside = (area: LifeArea, x: number, y: number): boolean =>
  */
 export const stepWalker = (walker: Walker, random: Random): void => {
   walker.age++;
+  if (walker.juice) {
+    stepJuice(walker, walker.juice);
+    return;
+  }
   if (walker.trip !== null) {
     stepTrip(walker);
     return;
@@ -880,8 +907,76 @@ export const thawTrip = (walker: Walker, door: YardPoint, route: TripRoute): boo
   return false;
 };
 
-/** Whether a walker has gone into the Chamber and is to be taken off. */
-export const walkerGone = (walker: Walker): boolean => walker.leaving && walker.trip === null;
+/**
+ * Whether a walker has gone into the Chamber, or into the Juicer, and is to be
+ * taken off. A flyer at the Juicer first drops into it ({@link JUICE_DROP_TICKS}).
+ */
+export const walkerGone = (walker: Walker): boolean =>
+  walker.leaving &&
+  walker.trip === null &&
+  (!walker.juice || !walker.juice.flies || (walker.juice.landing ?? 0) >= JUICE_DROP_TICKS);
+
+/* ── Trips into the Monster Juicer ──────────────────────────────────────── */
+
+/**
+ * A flyer's take-off when it is sent to the Juicer: up to its top height over
+ * two seconds, easing in (`CreepBase.as:373-379`, `TweenLite.to(_graphicMC, 2,
+ * Sine.easeIn)`), in creature ticks.
+ */
+export const JUICE_RISE_TICKS = 2 * CREATURE_TICK_HZ;
+
+/** A flyer stands still until it is this high (`CreepBase.as:1466-1468`: speed 0 below altitude 25). */
+export const JUICE_MIN_FLY_ALTITUDE = 25;
+
+/** A flyer's drop into the Juicer: 0.4 s, easing out (`CreepBase.as:1274-1281`). */
+export const JUICE_DROP_TICKS = Math.round(0.4 * CREATURE_TICK_HZ);
+
+/**
+ * Where a monster goes into the Juicer: the front corner of its footprint,
+ * the one nearest the viewer, as at the Chamber ({@link chamberDoor}).
+ */
+export const juicerDoor = chamberDoor;
+
+/**
+ * Sends a penned monster to the Juicer `juicer` along `route` from where it
+ * stands to `door` (`changeModeJuice`, `CreepBase.as:369-382`). A flyer climbs
+ * to `top` px first. Returns false, leaving it be, when there is no way.
+ */
+export const juiceTrip = (
+  walker: Walker,
+  juicer: number,
+  door: YardPoint,
+  route: TripRoute,
+  flies: boolean,
+  top: number,
+): boolean => {
+  if (!startTrip(walker, route({ x: walker.x, y: walker.y }, door), true)) return false;
+  walker.juice = { juicer, flies, altitude: 0, top, rise: 0, landing: null, dropFrom: 0 };
+  return true;
+};
+
+/** One tick of a monster on its way into the Juicer. */
+const stepJuice = (walker: Walker, juice: JuiceWalk): void => {
+  if (walker.trip !== null) {
+    if (juice.flies) {
+      if (juice.rise < JUICE_RISE_TICKS) {
+        juice.rise++;
+        juice.altitude = juice.top * (1 - Math.cos(((juice.rise / JUICE_RISE_TICKS) * Math.PI) / 2));
+      }
+      if (juice.altitude < JUICE_MIN_FLY_ALTITUDE) return;
+    }
+    stepTrip(walker);
+    if (walker.trip === null && juice.flies) {
+      juice.landing = 0;
+      juice.dropFrom = juice.altitude;
+    }
+    return;
+  }
+  if (juice.landing !== null && juice.landing < JUICE_DROP_TICKS) {
+    juice.landing++;
+    juice.altitude = juice.dropFrom * (1 - Math.sin(((juice.landing / JUICE_DROP_TICKS) * Math.PI) / 2));
+  }
+};
 
 /** One tick of a trip: on at its trip speed, through as many waypoints as that reaches. */
 const stepTrip = (walker: Walker): void => {

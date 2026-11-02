@@ -54,6 +54,7 @@ import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
+import { onJuiced } from "@/game/monsters/juiceNews";
 import { openInfernoMap } from "@/game/inferno/tribeEntry";
 import { backToInferno } from "@/game/inferno/tribeReturn";
 import {
@@ -421,6 +422,8 @@ export class YardScene implements Scene {
   /** The own yard's store; null on a visit and before the load answers. */
   private store: YardStore | null = null;
   private unsubscribeStore: (() => void) | null = null;
+  /** Stops showing juices in the yard (`juiceNews.ts`). */
+  private unsubscribeJuice: (() => void) | null = null;
   /** What the panel and the HUD are handed on the own yard. */
   private binding: YardUiBinding | null = null;
   /** The tab came back while the planner was open; refresh once it closes. */
@@ -2400,6 +2403,10 @@ export class YardScene implements Scene {
     setResourceRealm(store.kind === "inferno" ? "inferno" : "surface");
     setScreenTune(store.kind === "inferno" ? "infernoYard" : "yard");
     this.unsubscribeStore = store.subscribe((change) => this.onStoreChange(change));
+    // A juice walks the juiced monsters into the Juicer: drawing only (`juicerShow.ts`).
+    this.unsubscribeJuice = onJuiced((news) => {
+      if (this.store === store) this.renderer.juice(news);
+    });
     this.binding = {
       store,
       scene: {
@@ -2770,6 +2777,8 @@ export class YardScene implements Scene {
     this.kitPicker = null;
     this.unsubscribeStore?.();
     this.unsubscribeStore = null;
+    this.unsubscribeJuice?.();
+    this.unsubscribeJuice = null;
     this.store?.destroy();
     this.store = null;
     this.binding = null;

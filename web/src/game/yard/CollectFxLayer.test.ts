@@ -1,4 +1,4 @@
-import { Texture } from "pixi.js";
+import { Texture, type Sprite } from "pixi.js";
 import { describe, expect, it, vi } from "vitest";
 import { planFlights, type Flight } from "./collectFx";
 import { CollectFxLayer, type CollectFxArt } from "./CollectFxLayer";
@@ -115,5 +115,19 @@ describe("CollectFxLayer", () => {
     layer.cancel(group);
     layer.finish();
     expect(sound).not.toHaveBeenCalled();
+  });
+  it("shows a flight's own ball when it has one: the Juicer's magma ball for an Inferno monster", () => {
+    const magma = new Texture();
+    const dot = vi.fn((resource: string) => (resource === "magma" ? magma : Texture.EMPTY));
+    const layer = new CollectFxLayer({ art: { dot, shadow: Texture.EMPTY, destroy: vi.fn() } });
+    const [goo] = planFlights(
+      [{ type: 9, x: 0, y: 0, resource: "r4", amount: 1 }],
+      { x: 600, y: 0 },
+      () => 0,
+    );
+    layer.launch([goo!, { ...goo!, dot: "magma" }], () => {});
+    expect(dot).toHaveBeenCalledWith("r4");
+    expect(dot).toHaveBeenCalledWith("magma");
+    expect(dotsOf(layer).map((sprite) => (sprite as Sprite).texture)).toContain(magma);
   });
 });
