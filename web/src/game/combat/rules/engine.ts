@@ -632,6 +632,13 @@ export interface BattleOptions {
    */
   readonly buffs?: BattleBuffs;
   /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): what the
+   * friendly cells around the defending cell add to its defence, as the attack
+   * load froze it ({@link DefenceBonus}). Absent, or both parts 0, the battle
+   * runs exactly as it did before the bonus existed.
+   */
+  readonly defenceBonus?: DefenceBonus;
+  /**
    * The attacker's Siege Lab levels per weapon (Inferno WP 6.5 to 6.7): what a
    * `siege` event fights at. An absent weapon, or none at all, is level 0,
    * and its event is ignored, so a log from before the Decoy replays as it did.
@@ -679,6 +686,18 @@ export type BuffSpan = boolean | number;
  */
 export const buffOn = (span: BuffSpan | undefined, tick: number): boolean =>
   span === true || (typeof span === "number" && Math.trunc(tick / TICKS_PER_SECOND) <= span);
+
+/**
+ * A defence bonus as fractions (`docs/mr2-neighbours.md`): `damage` 0.08 makes
+ * every tower shot 1.08 times as hard, on top of Tower Overdrive; `hp` 0.08
+ * makes every building take 1 / 1.08 of each hit, as if it had 1.08 times its
+ * health, after fortification. Neither changes a building's stored health, its
+ * health bar's ceiling or the loot it holds: it only takes longer to empty.
+ */
+export interface DefenceBonus {
+  readonly damage?: number;
+  readonly hp?: number;
+}
 
 /** Each side's boosts ({@link SideBuffs}); the attacker's towers never fire. */
 export interface BattleBuffs {
@@ -1990,6 +2009,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * (`MonsterBase.as:799-845`), so one that runs out mid-battle only misses
    * the monsters that come later.
    */
+  /*
+   * Map Room 2's neighbour bonus (`DefenceBonus`): 1 and 1 without one, which
+   * every multiplication and test below leaves exactly as it was.
+   */
+  const bonusDamage = 1 + Math.max(0, options.defenceBonus?.damage ?? 0);
+  const bonusToughness = 1 + Math.max(0, options.defenceBonus?.hp ?? 0);
+  /** What a building takes from `raw`: fortification, then the neighbour bonus. */
+  const buildingTakes = (raw: number, fortification: number): number => {
+    const dealt = fortifiedDamage(raw, fortification, 0);
+    return bonusToughness === 1 ? dealt : dealt / bonusToughness;
+  };
   const attackerBuffs: SideBuffs = (options.raid ? undefined : options.buffs?.attacker) ?? {};
   const defenderBuffs: SideBuffs = options.buffs?.defender ?? {};
   const boosted = (creep: Creep, buff: keyof SideBuffs): boolean =>
@@ -1998,7 +2028,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * Tower Overdrive on the defender's towers' damage, 1 without it: looked at
    * on every shot, so it stops the moment it runs out (`BUILDING20.as:29`).
    */
-  const towerBoost = (): number => (buffOn(defenderBuffs.towerDamage, tick) ? TOWER_OVERDRIVE : 1);
+  const towerBoost = (): number =>
+    (buffOn(defenderBuffs.towerDamage, tick) ? TOWER_OVERDRIVE : 1) * bonusDamage;
   /** Monster Overdrive (`MonsterDust.as`), on a creep as it joins the field. */
   const boostDamage = (creep: Creep): void => {
     if (boosted(creep, "monsterDamage")) creep.damage *= MONSTER_OVERDRIVE;
@@ -2319,7 +2350,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const weak = creep && struck(blow) ? weakShareOf(creep) : 0;
     const reduced = raw * weak;
     if (weak > 0) raw -= reduced;
-    const dealt = fortifiedDamage(raw, building.fortification, 0);
+    const dealt = buildingTakes(raw, building.fortification);
     const applied = Math.min(dealt, building.hp);
     if (weak > 0 || blow === "crit") {
       // The number's modifiers, after fortification as the number itself is.
@@ -4005,7 +4036,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       exposure(
         fireAt(building),
         building.hp,
-        fortifiedDamage(champion.damage, building.fortification, 0) / delay,
+        buildingTakes(champion.damage, building.fortification) / delay,
         champion.hp,
       );
     /** A candidate's features; its threat only when asked, being the costly one. */
