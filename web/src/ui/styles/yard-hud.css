@@ -668,7 +668,16 @@
   cursor: pointer;
 }
 
-.yard-viewtools__overview:hover {
+/* + and − dressed as Fit and the speaker below them: one column of four
+   alike buttons, not two filled tiles over two bare icons (owner, beta 6). */
+.yard-viewtools--rail .yard-zoom .yard-zoom__step {
+  border-color: transparent;
+  background: transparent;
+  color: var(--colour-text);
+}
+
+.yard-viewtools__overview:hover,
+.yard-viewtools--rail .yard-zoom .yard-zoom__step:hover:not(:disabled) {
   background: var(--colour-surface-control);
 }
 
