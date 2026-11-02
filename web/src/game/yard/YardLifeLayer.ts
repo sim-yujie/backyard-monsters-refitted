@@ -23,7 +23,6 @@ import {
   CREATURE_TICK_HZ,
   EMPTY_LIFE,
   freezeTrip,
-  JUICE_DROP_TICKS,
   juiceTrip,
   MAX_TICKS_PER_FRAME,
   reconcileWalkers,
@@ -196,11 +195,11 @@ export class YardLifeLayer {
     const sameCage = !first && life !== null && before.cage?.id === next.cage?.id;
     // Off this yard every trip snaps to its end: one going in is gone, one coming out is home.
     if (!sameCage) {
-      for (const walker of this.walkers.values()) {
+      for (const [key, walker] of this.walkers) {
+        // One on its way into the Juicer is gone, unheard: its goo was banked already.
+        if (walker.juice) this.walkers.delete(key);
         walker.trip = null;
-        // One on its way into the Juicer is gone: its goo was banked already.
-        if (walker.juice) walker.juice.landing = JUICE_DROP_TICKS;
-        else walker.leaving = false;
+        walker.leaving = false;
       }
       this.dropped.clear();
     }
