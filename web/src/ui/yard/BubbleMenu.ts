@@ -15,9 +15,11 @@ import { menuBadgeLabel, menuBadgeText } from "./YardMenu";
  * button another file puts in the dock later (Mail, the bell, Goals,
  * Defences) is gathered as it arrives.
  *
- * On a phone held upright More stands above Build, where Layout stood. On a
- * phone on its side the yard's round buttons are all in the Menu sheet, so
- * the fan lets its buttons go back to the dock and the Menu folds them in.
+ * The fan replaces the phone's Menu (`YardMenu`): with it on, Map, Monsters
+ * and the yard switcher stay on the screen on a phone too, and everything
+ * else is in the fan. On a phone held upright the fan is one column up from
+ * More; on a phone on its side, too short for a column, the bubbles stand in
+ * rows of `GRID_COLUMNS` above More, each word under its bubble.
  *
  * Behind a switch: `BUBBLE_MENU`, or `localStorage` `bymr.bubbleMenu` set to
  * "off" or "on" on this browser.
@@ -36,8 +38,11 @@ export const BUBBLE_MENU_KEY = "bymr.bubbleMenu";
  */
 export const BUBBLE_ITEMS: readonly string[] = ["layout", "goals", "bell", "defences", "mail"];
 
-/** Where the fan lets its buttons go to the Menu sheet: a phone on its side. */
-export const UNWRAP_QUERY = "(width > 620px) and (height <= 500px)";
+/** Where the fan lays its bubbles out in rows: a phone on its side, too short for one column. */
+export const GRID_QUERY = "(width > 620px) and (height <= 500px)";
+
+/** Bubbles in one row of the sideways grid. */
+export const GRID_COLUMNS = 4;
 
 /** How long the mouse rests on More before the fan opens, and off it before it shuts. */
 const HOVER_OPEN_MS = 90;
@@ -74,7 +79,7 @@ export interface BubbleMenuOptions {
   readonly host: HTMLElement;
   /** Where to look for the buttons, wherever they are now: the whole dock. */
   readonly scope: HTMLElement;
-  /** The phone-on-its-side test; `matchMedia(UNWRAP_QUERY)` by default, none where there is no window. */
+  /** The phone-on-its-side test; `matchMedia(GRID_QUERY)` by default, none where there is no window. */
   readonly media?: MediaQueryList | null;
 }
 
@@ -90,7 +95,7 @@ export class BubbleMenu {
   private readonly media: MediaQueryList | null;
   private readonly scopeWatch: MutationObserver | null;
   private readonly fanWatch: MutationObserver | null;
-  private active = false;
+  private grid = false;
   private open = false;
   /** Opened by a press, not the mouse resting on it: stays open when the mouse leaves. */
   private pinned = false;
@@ -167,16 +172,17 @@ export class BubbleMenu {
         ? options.media
         : typeof window === "undefined"
           ? null
-          : (window.matchMedia?.(UNWRAP_QUERY) ?? null);
+          : (window.matchMedia?.(GRID_QUERY) ?? null);
     this.media?.addEventListener?.("change", this.onMediaChange);
     document.addEventListener("pointerdown", this.onOutsidePress, true);
     window.addEventListener("keydown", this.onKeyDown);
-    this.setActive(this.media?.matches !== true);
+    this.gather();
+    this.setGrid(this.media?.matches === true);
   }
 
-  /** Whether the buttons are in the fan (not a phone on its side). */
-  get isActive(): boolean {
-    return this.active;
+  /** Whether the bubbles stand in rows (a phone on its side) rather than one column. */
+  get isGrid(): boolean {
+    return this.grid;
   }
 
   get isOpen(): boolean {
@@ -190,22 +196,18 @@ export class BubbleMenu {
     );
   }
 
-  /** Gathers the buttons into the fan, or lets them go back to the dock (a phone on its side). */
-  setActive(active: boolean): void {
-    this.active = active;
-    if (active) {
-      this.gather();
-    } else {
-      this.setOpen(false);
-      for (const item of this.items) this.options.host.append(item);
-    }
+  /** Rows (a phone on its side) or one column; an open fan shuts as the phone turns. */
+  setGrid(grid: boolean): void {
+    if (grid !== this.grid) this.setOpen(false);
+    this.grid = grid;
+    this.element.classList.toggle("bubble-menu--grid", grid);
     this.refresh();
   }
 
   /** Opens or shuts the fan; `pinned` for a press, which the mouse leaving does not undo. */
   setOpen(open: boolean, pinned = false): void {
     this.clearHover();
-    const shown = open && this.active && this.visibleItems().length > 0;
+    const shown = open && this.visibleItems().length > 0;
     this.pinned = shown && pinned;
     if (shown === this.open) return;
     this.open = shown;
@@ -241,7 +243,6 @@ export class BubbleMenu {
 
   /** Moves the fan's buttons in from wherever they are in the dock, in the list's order. */
   private gather(): void {
-    if (!this.active) return;
     const wanted: HTMLElement[] = [];
     for (const name of BUBBLE_ITEMS) {
       const found = this.options.scope.querySelector<HTMLElement>(
@@ -263,9 +264,13 @@ export class BubbleMenu {
   /** Each shown bubble's place in the fan, More's total, and More itself only while it holds something. */
   private refresh(): void {
     const visible = this.visibleItems();
-    visible.forEach((item, index) => item.style.setProperty("--bubble-k", String(index + 1)));
+    visible.forEach((item, index) => {
+      item.style.setProperty("--bubble-k", String(index + 1));
+      item.style.setProperty("--bubble-col", String(index % GRID_COLUMNS));
+      item.style.setProperty("--bubble-row", String(Math.floor(index / GRID_COLUMNS)));
+    });
     this.element.style.setProperty("--bubble-count", String(visible.length));
-    this.element.hidden = !this.active || visible.length === 0;
+    this.element.hidden = visible.length === 0;
     if (this.element.hidden && this.open) this.setOpen(false);
 
     const badges = [...this.fan.querySelectorAll<HTMLElement>(".yard-dock__badge")].map(
@@ -274,7 +279,7 @@ export class BubbleMenu {
         text: badge.textContent ?? "",
       }),
     );
-    const text = this.active ? menuBadgeText(badges) : null;
+    const text = menuBadgeText(badges);
     this.badge.hidden = text === null;
     this.badge.textContent = text ?? "";
     this.button.setAttribute("aria-label", text ? `More. ${menuBadgeLabel(text)}` : "More");
@@ -318,5 +323,5 @@ export class BubbleMenu {
     if (event.key === "Escape" && this.open) this.setOpen(false);
   };
 
-  private readonly onMediaChange = (): void => this.setActive(this.media?.matches !== true);
+  private readonly onMediaChange = (): void => this.setGrid(this.media?.matches === true);
 }

@@ -83,7 +83,7 @@ describe("BubbleMenu", () => {
   it("gathers Layout into the fan and leaves Monsters on the bottom row", () => {
     const { menu, right, monsters, layout, names } = setup();
 
-    expect(menu.isActive).toBe(true);
+    expect(menu.isGrid).toBe(false);
     expect(names()).toEqual(["layout"]);
     expect(layout.parentElement).not.toBe(right);
     expect(monsters.parentElement).toBe(right);
@@ -227,26 +227,41 @@ describe("BubbleMenu", () => {
     expect(menu.button.dataset["tut"]).toBe(TutTarget.DOCK_MORE);
   });
 
-  it("on a phone on its side lets its buttons go back to the dock, and gathers them again upright", () => {
-    const { menu, right, layout, flip } = setup();
+  it("on a phone on its side stands the bubbles in rows of four, and in a column again upright", async () => {
+    const { menu, right, monsters, layout, flip } = setup();
+    monsters.after(button("goals"), button("bell"), button("defences"), button("mail"));
+    await settle();
     menu.button.click();
 
     flip.set(true);
-    expect(menu.isActive).toBe(false);
+    expect(menu.isGrid).toBe(true);
     expect(menu.isOpen).toBe(false);
-    expect(layout.parentElement).toBe(right);
-    expect(menu.element.hidden).toBe(true);
+    expect(menu.element.classList.contains("bubble-menu--grid")).toBe(true);
+    // Still in the fan: the phone's Menu is gone, so nothing goes back to the dock.
+    expect(layout.parentElement).not.toBe(right);
+    expect(menu.element.hidden).toBe(false);
+    const places = menu.items.map((item) => [
+      item.style.getPropertyValue("--bubble-col"),
+      item.style.getPropertyValue("--bubble-row"),
+    ]);
+    expect(places).toEqual([
+      ["0", "0"],
+      ["1", "0"],
+      ["2", "0"],
+      ["3", "0"],
+      ["0", "1"],
+    ]);
 
     flip.set(false);
-    expect(menu.items).toEqual([layout]);
-    expect(menu.element.hidden).toBe(false);
+    expect(menu.isGrid).toBe(false);
+    expect(menu.element.classList.contains("bubble-menu--grid")).toBe(false);
   });
 
-  it("starts sideways with its buttons left in the dock", () => {
+  it("starts sideways in rows, its buttons in the fan", () => {
     const { menu, right, layout } = setup(true);
-    expect(menu.isActive).toBe(false);
-    expect(layout.parentElement).toBe(right);
-    expect(menu.element.hidden).toBe(true);
+    expect(menu.isGrid).toBe(true);
+    expect(layout.parentElement).not.toBe(right);
+    expect(menu.element.hidden).toBe(false);
   });
 });
 
@@ -266,6 +281,24 @@ describe("YardDock with the bubble menu", () => {
     expect(fan.querySelector('[data-dock="mail"]')).not.toBeNull();
     expect(more.querySelector(".bubble-menu__badge")?.textContent).toBe("1");
     dock.destroy();
+  });
+
+  it("has no phone Menu with the fan on, and wears yard-dock--bubbles for the layout", () => {
+    const on = new YardDock({ onMap: vi.fn(), onLayout: vi.fn(), onBuild: vi.fn() }, true).mount(
+      document.body,
+    );
+    expect(on.element.classList.contains("yard-dock--bubbles")).toBe(true);
+    expect(on.element.querySelector('[data-dock="menu"]')).toBeNull();
+    expect(on.element.querySelector(".yard-menu")).toBeNull();
+    expect(on.element.querySelector('.yard-dock__left > [data-dock="map"]')).not.toBeNull();
+    on.destroy();
+
+    const off = new YardDock({ onMap: vi.fn(), onLayout: vi.fn(), onBuild: vi.fn() }, false).mount(
+      document.body,
+    );
+    expect(off.element.classList.contains("yard-dock--bubbles")).toBe(false);
+    expect(off.element.querySelector('[data-dock="menu"]')).not.toBeNull();
+    off.destroy();
   });
 
   it("keeps the old bottom row with the switch off, and has none on a visit", () => {

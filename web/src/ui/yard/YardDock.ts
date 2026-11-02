@@ -47,7 +47,10 @@ import { YardSwitcher } from "./YardSwitcher";
  *
  * With the bubble menu on (`BubbleMenu`, beta 6), the own yard's Layout,
  * Goals, Alerts, Defences and Mail fan out of one More button instead of
- * standing in the bottom row; the phone's Menu leaves More where it is.
+ * standing in the bottom row, and the phone has no Menu: the dock wears
+ * `yard-dock--bubbles` and `bubble-menu.css` places the buttons, Map and the
+ * switcher in the left corner, More, Monsters, Collect all and Build in the
+ * right one, on a desktop and a phone alike.
  */
 
 /** Monsters' picture: a Pokey, the first monster every player has. */
@@ -283,18 +286,18 @@ export class YardDock {
     );
     this.element.append(left, right);
     this.bubble = this.build && bubbles ? new BubbleMenu({ host: right, scope: this.element }) : null;
-    // bubble-menu.css places the buttons around the fan.
+    // The fan holds what the phone's Menu folded away, and Map, Monsters and
+    // the switcher fit on a phone without it: one menu, not two.
     this.element.classList.toggle("yard-dock--bubbles", this.bubble !== null);
-    this.menu = this.build
-      ? new YardMenu({
-          sources: [left, right],
-          host: this.element,
-          keep: (element) =>
-            element === this.build?.element ||
-            element === this.collect.element ||
-            element === this.bubble?.element,
-        })
-      : null;
+    this.menu =
+      this.build && !this.bubble
+        ? new YardMenu({
+            sources: [left, right],
+            host: this.element,
+            keep: (element) =>
+              element === this.build?.element || element === this.collect.element,
+          })
+        : null;
     if (this.menu) {
       left.append(this.menu.button);
       this.element.append(this.menu.sheet);
