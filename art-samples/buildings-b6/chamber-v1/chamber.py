@@ -1271,9 +1271,11 @@ def compressor():
         # (r8) not horns: three parallel curved cooling pipes, round and even in thickness, leaving the main wall and
         # bending down onto the right box's top (both ends buried: in the wall, in the box); grey metal, frosted
         # white along the top (frost_up on "fin"), dark gaps between them
-        pts = [(AX - 0.15 + 1.55 * math.sin(math.radians(a)), yf, h - 0.12 + 1.4 * math.cos(math.radians(a)))
+        # (r9) slimmer (radius 0.3 -> 0.17), and a much flatter bend so they lie low along the box top, sloping from
+        # the wall down toward the front-right edge (they stood up like arches on the wall in r8)
+        pts = [(AX - 0.15 + 1.65 * math.sin(math.radians(a)), yf, h - 0.1 + 0.8 * math.cos(math.radians(a)))
                for a in range(0, 91, 5)]
-        tube(f"fin{i}", pts, 0.3, M["fin"], verts=16, smooth=True)
+        tube(f"fin{i}", pts, 0.17, M["fin"], verts=16, smooth=True)
     # (r5) Flash's machine beside the door: two fat ice-crusted drums lying on their side, one on the other, hugging
     # the wall corner on a low dark base; ice over their upper halves (frost_up on "tank"), crusty lumps of frost along
     # their tops, a few icicles; dark gaps between them (no hose)

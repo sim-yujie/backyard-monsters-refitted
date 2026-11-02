@@ -53,7 +53,7 @@ ARM_W, ARM_T = 1.5, 1.2
 # the compressor block on the +X face: X out to, Y from, Y to, height
 COMP = (5.12, -1.0, 3.44, 3.58)
 COIL = (-0.6, 3.0, 0.45, 2.65, 5)     # Y from, Y to, Z from, Z to, loops
-FINS_Y = (0.0, 1.0, 2.0)   # (r8: the three cooling pipes, spread evenly like Flash)
+FINS_Y = (0.5, 1.0, 1.5)   # (r8: the three cooling pipes; r9: tighter, a gap of about half a pipe's thickness, as Flash)
 # (r5) the machine beside the door: two drums lying on their side (axis across the view), one on the other, on a low base:
 # centre X, Y, half-length, and the Z range (bottom, top) of each drum (the base's height = the lower drum's bottom)
 TANK = (3.95, -2.1, 1.25, ((0.95, 2.4), (2.36, 3.88)))   # (r6: ~15% bigger)
