@@ -139,6 +139,8 @@ export interface Yard {
    * around the plot. A wild monster camp is always foreign.
    */
   readonly foreign: boolean;
+  /** A wild monster camp, on the plot `WMBASE.Setup` grows it to (`wildYardSize`). */
+  readonly wild?: boolean;
   /**
    * Which props table the yard reads: `outpost` for a player's outpost (its
    * save's `type`), whose limits, prices and level caps are its own and whose
@@ -432,6 +434,7 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
     bounds,
     expansionLevel,
     foreign,
+    ...(wild && { wild }),
     kind,
     cellHeight: typeof response.cellheight === "number" ? response.cellheight : 0,
     buildings,

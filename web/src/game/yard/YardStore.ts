@@ -449,7 +449,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   }
 
   get yard(): Yard {
-    this.cachedYard ??= readYard(this.current);
+    // A tribe camp in the editor stands on the plot a camp grows to (`readYard`).
+    this.cachedYard ??= readYard(this.current, isTribeEditing() ? { wild: true } : {});
     return this.cachedYard;
   }
 

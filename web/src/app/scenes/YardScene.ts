@@ -2158,6 +2158,8 @@ export class YardScene implements Scene {
    */
   private refreshPlannerButton(): void {
     const open = this.planner !== null;
+    // The planner has its own toolbars; the tribe editor's bar steps aside meanwhile.
+    if (this.tribeBar) this.tribeBar.panel.element.hidden = open;
     this.dock?.setLayout({
       disabled: this.access === PlannerAccess.LOCKED,
       open,
@@ -2182,7 +2184,7 @@ export class YardScene implements Scene {
     const store = this.store;
     if (!store || store.kind !== "main") return this.yard;
     const save = withStoredDecorations(store.save);
-    return save === store.save ? store.yard : readYard(save);
+    return save === store.save ? store.yard : readYard(save, this.tribe ? { wild: true } : {});
   }
 
   /* ── Compare (#9) ───────────────────────────────────────────────────── */

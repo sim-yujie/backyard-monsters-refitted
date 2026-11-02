@@ -223,7 +223,7 @@ export class TribeYardSim {
       protected: 0,
       buildingdata: structuredClone(this.buildings()),
       buildinghealthdata: {},
-      storedata: {},
+      storedata: structuredClone(this.save.storedata ?? {}),
       monsters: structuredClone(this.save.monsters ?? {}),
       lockerdata: structuredClone(this.save.lockerdata ?? {}),
       academy: structuredClone(this.save.academy ?? {}),
