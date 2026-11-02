@@ -191,6 +191,14 @@ mock.module("../alliance/powerups.js", () => ({
   isDeclareWarRunning: async () => false,
 }));
 
+// The real replay runner, whatever an earlier file left in its place: bun keeps
+// module mocks across files, and a stand-in with a battle canned by another
+// suite failed every landing here on CI (run 41459356322). The query makes the
+// real module one no mock replaces.
+const REAL_RUNNER = "./combat/replayRunner.ts?real";
+const realRunner = (await import(REAL_RUNNER)) as typeof import("./combat/replayRunner.js");
+mock.module("./combat/replayRunner.js", () => ({ ...realRunner }));
+
 const {
   finaliseAbandonedAttack,
   finaliseAttacksFor,
