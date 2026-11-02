@@ -333,7 +333,7 @@ export const TOWER_TIER_ART: Readonly<Record<number, readonly TierArt[]>> = {
   129: [
     { from: 1, top: ["top.t1@2x.webp", -40, -74], shadow: ["shadow.1.v2.jpg", -37, 17], lift: -1,
       anim: { strip: ["anim.t1@2x.webp", -40, -74, 80, 129, 33], columns: 25, whole: true },
-      damaged: { top: ["top.t1.damaged@2x.webp", -40, -74], shadow: ["shadow.1.v2.jpg", -40, 16] },
+      damaged: { top: ["top.t1.damaged@2x.webp", -42, -74], shadow: ["shadow.1.v2.jpg", -40, 16] },
       destroyed: { top: ["top.t1.destroyed@2x.webp", -47, -12], shadow: ["shadow.1.v2.jpg", -44, 10] } },
   ],
   // 132 Magma Tower: 3D, the Volcanic look (owner, 29 Oct 2026); six levels, so 1-2, 3-4 and 5-6
