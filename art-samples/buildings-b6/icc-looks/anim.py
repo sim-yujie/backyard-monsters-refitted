@@ -16,12 +16,15 @@ peak. cracks is the drum's crack glow
 onto the building (rim stones, pods, legs, bowl), LAVA x, in idle and active alike, with a soft warm glow on the grass
 round the pool's rim (the pool's own area, blurred).
 
-The lava breathes (owner, 2 Nov 2026: "the soft animated glow of the lava"): all of its light (what base has, LAVA x
-more, the grass glow and the warm wash) swells and fades together between BREATH_LO and 1 of its full strength, one
-smooth cosine every BREATH_S seconds, and the pool's own surface dips a little with it (POOL_DIP). The crystal's glow and
-pulse are as before. So the loops are as long as one breath: active NA = 64 frames (the crystal pulses twice, the lava
-breathes once), idle NI = 32 frames played at half the game's rate (the game's `rest` cells), so a breath is 4.8 s in
-both and the lava keeps its phase when the building starts or stops hatching (idle cell i = active cell 2i's lava).
+The lava cools and heats (owner, 2 Nov 2026: "Was hoping it transition from the ground's brownish red to yellow like
+liquid magma. Right now its just liquid magma yellow."): one smooth cosine every 4.8 s, heat 1 (frame 0) to 0 and back.
+The pool's surface goes from its rendered liquid yellow-orange (heat 1) through red-hot to a cooled crust in the Inferno
+ground's own brownish red (heat 0: CRUST, measured off an in-game shot, where the render's crust is, VEIN where it glowed
+brightest), a smooth curve in sRGB. All of the pool's thrown light (what base has, LAVA x more, the ground glow and the
+warm wash) dims with it to LIGHT_LO and reddens (TINT_COOL, LAVA_COL_COOL). The crystal's glow and pulse are as before.
+So the loops are as long as one cycle: active NA = 64 frames (the crystal pulses twice, the lava cycles once), idle
+NI = 32 frames played at half the game's rate (the game's `rest` cells), so a cycle is 4.8 s in both and the lava keeps
+its phase when the building starts or stops hatching (idle cell i = active cell 2i's lava).
 
     python anim.py game      render/game/: the game's cells for web/tools/tower-tiers/export3d_buildings.py ("icc"):
                              idle-NN.png, active-NN.png (the building and its glows, no ground shadow) and shadow.png
@@ -58,10 +61,14 @@ LAVA_HALO = 0.60              # the soft warm glow on the grass just outside the
 LAVA_SIGMA = 60               # its blur radius in render px
 LAVA_WASH = 0.06              # the same glow as a faint warm wash on the parts next to the pool (rim stones, legs, pods)
 LAVA_COL = (1.0, 0.30, 0.05)  # linear warm orange, a little redder than the crystal's halo
-NA = 64                       # active loop: two crystal pulses, one lava breath (4.8 s)
-NI = 32                       # idle loop: one lava breath, each frame shown twice by the game (4.8 s)
-BREATH_LO = 0.70              # the lava light at the low of a breath, as a share of its full strength
-POOL_DIP = 0.10               # how much the pool's own surface dims at the low of a breath (linear)
+NA = 64                       # active loop: two crystal pulses, one lava cycle (4.8 s)
+NI = 32                       # idle loop: one lava cycle, each frame shown twice by the game (4.8 s)
+CRUST = (58, 35, 28)          # sRGB: the cooled pool's dark crust = the Inferno ground (median of an in-game shot)
+VEIN = (140, 46, 28)          # sRGB: the cooled pool where it glowed brightest, a deep brownish red
+RED_HOT = (1.0, 0.42, 0.45)   # sRGB channel factors on the hot surface half way: red-hot, between the two ends
+LIGHT_LO = 0.15               # the pool's thrown light at the cool end, as a share of its full strength
+TINT_COOL = (1.0, 0.45, 0.35) # and its colour there (linear channel factors): redder
+LAVA_COL_COOL = (1.0, 0.10, 0.03)  # the ground glow's and wash's colour at the cool end (linear)
 NOISE = 0.012                 # the shadow catcher's faint wash over the open ground, taken off the shadow
 
 
@@ -73,10 +80,10 @@ def pulse(k):
     return LO + (1 - LO) * max(0.0, min(1.0, s))
 
 
-def breath(k, n):
-    """The lava's strength at frame k of an n-frame loop: one smooth cosine breath, full (1.0) at frame 0, BREATH_LO
-    half way."""
-    return BREATH_LO + (1 - BREATH_LO) * (0.5 + 0.5 * math.cos(2 * math.pi * k / n))
+def heat(k, n):
+    """The lava's heat at frame k of an n-frame loop: one smooth cosine, liquid yellow (1.0) at frame 0, cooled crust
+    (0.0) half way."""
+    return 0.5 + 0.5 * math.cos(2 * math.pi * k / n)
 
 
 def flicker(k):
@@ -87,7 +94,8 @@ def flicker(k):
 
 def layers():
     """The five layers, padded by PAD, plus the halo sources: the crystal's own glow, blurred (0..1 at peak), and the
-    magma pool's area, blurred (0.5 at its edge, doubled and clipped: 1 inside), and the pool's area itself."""
+    magma pool's area, blurred (0.5 at its edge, doubled and clipped: 1 inside), the pool's area itself, and how
+    brightly each pool pixel glows in the render (0 crust .. 1 brightest), which picks its colour when cooled."""
     from scipy.ndimage import gaussian_filter
     L = [np.pad(np.load(R / f"layer-c-{n}.npy"), ((PAD, PAD), (PAD, PAD), (0, 0)))
          for n in ("base", "glow", "light", "cracks", "lavalight")]
@@ -99,6 +107,8 @@ def layers():
     pool = ((L[0][..., 3] > 0.98) & (L[4][..., 3] < 0.02)).astype(np.float32)
     L.append(np.clip(2 * gaussian_filter(pool, LAVA_SIGMA), 0, 1))
     L.append(pool)
+    y = L[0][..., :3] @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    L.append((np.clip((y - 0.03) / 0.97, 0, 1) ** 0.6 * pool).astype(np.float32))
     return L
 
 
@@ -110,28 +120,40 @@ def to_srgb(x):
 def compose(L, s, f=0.0, lava=1.0, b=1.0):
     """One frame at glow s (1 = peak) and crack flicker f. The halo is a soft warm glow: added as light where the
     building is, and as a see-through warm layer behind it (on the grass). lava (1 = on, 0 = base alone): the magma
-    pool's light on the building and its soft glow on the grass round the rim, at breath b (1 = full, `breath()`): the
-    whole of the pool's light, base's 1x and LAVA x more, is b x what it is at full, and the pool's surface dims by
-    POOL_DIP at the low of a breath."""
-    base, glow, light, cr, lv, halo, pool, inpool = L
+    pool's light on the building and its soft glow on the ground round the rim, at heat b (1 = liquid yellow, 0 = cooled
+    crust, `heat()`): the whole of the pool's light, base's 1x and LAVA x more, is lerp(LIGHT_LO, 1, b) x what it is at
+    full and reddens toward the cool end, and the pool's surface takes its colour from the hot render, red-hot and the
+    cooled crust (a quadratic Bezier in sRGB, so the colour moves smoothly)."""
+    base, glow, light, cr, lv, halo, pool, inpool, pat = L
     hs = HALO * s ** 1.5 * halo[..., None]
     col = np.array(HALO_COL, np.float32)
-    dip = 1 - lava * POOL_DIP * (1 - b) / (1 - BREATH_LO) * inpool[..., None]
-    rgb = (base[..., :3] * dip + GAIN * s * glow[..., :3] + LIGHT * s ** LIGHT_POW * light[..., :3] + f * cr[..., :3]
-           + 0.35 * hs * col * base[..., 3:4] + lava * (b * (1 + LAVA) - 1) * lv[..., :3]
-           + lava * b * LAVA_WASH * (pool * (1 - inpool))[..., None] * np.array(LAVA_COL, np.float32)
-           * base[..., 3:4])
+    lw = lava * (LIGHT_LO + (1 - LIGHT_LO) * b)
+    tint = np.array(TINT_COOL, np.float32) * (1 - b) + b
+    lcol = np.array(LAVA_COL_COOL, np.float32) * (1 - b) + np.array(LAVA_COL, np.float32) * b
+    rgb = (base[..., :3] + GAIN * s * glow[..., :3] + LIGHT * s ** LIGHT_POW * light[..., :3] + f * cr[..., :3]
+           + 0.35 * hs * col * base[..., 3:4] + (lw * (1 + LAVA) * tint - lava) * lv[..., :3]
+           + lw * LAVA_WASH * (pool * (1 - inpool))[..., None] * lcol * base[..., 3:4])
     a = base[..., 3:4]
     straight = np.where(a > 1e-4, rgb / np.maximum(a, 1e-4), 0.0)
     # the building over the halo layers (premultiplied, in linear light): crystal halo over the lava glow
     hs = np.clip(hs, 0, 1)
-    hl = np.clip(lava * b * LAVA_HALO * pool[..., None], 0, 1)
+    hl = np.clip(lw * LAVA_HALO * pool[..., None], 0, 1)
     ha = hs + hl * (1 - hs)
-    hcol = np.where(ha > 1e-4, (col * hs + np.array(LAVA_COL, np.float32) * hl * (1 - hs)) / np.maximum(ha, 1e-4), 0)
+    hcol = np.where(ha > 1e-4, (col * hs + lcol * hl * (1 - hs)) / np.maximum(ha, 1e-4), 0)
     out_a = a + ha * (1 - a)
     pm = straight * a + hcol * ha * (1 - a)
     st = np.where(out_a > 1e-4, pm / np.maximum(out_a, 1e-4), 0.0)
-    out = np.concatenate([to_srgb(st), np.clip(out_a, 0, 1)], axis=2)
+    srgb = to_srgb(st)
+    if lava > 0:
+        # the pool's surface, in sRGB: hot (the render) <- red-hot <- cooled crust (CRUST .. VEIN by how it glowed)
+        ys, xs = np.nonzero(inpool > 0)
+        hot = srgb[ys, xs]
+        p = pat[ys, xs][:, None]
+        cool = (np.array(CRUST, np.float32) + (np.array(VEIN, np.float32) - np.array(CRUST, np.float32)) * p) / 255
+        mid = hot * np.array(RED_HOT, np.float32)
+        w = b * lava
+        srgb[ys, xs] = (1 - w) ** 2 * cool + 2 * w * (1 - w) * mid + w ** 2 * hot
+    out = np.concatenate([srgb, np.clip(out_a, 0, 1)], axis=2)
     return Image.fromarray((out * 255 + 0.5).astype(np.uint8), "RGBA")
 
 
@@ -227,12 +249,12 @@ def game_sheet(idle, low, peak):
 
 def loops(L):
     """The idle and active loops' frames, one at a time: (name, frame index, image). Idle: the crystal steady at IDLE,
-    the lava breathing over NI frames; active: the crystal's pulse and the cracks' flicker as before (N frames each), the
-    lava breathing over NA."""
+    the lava cycling over NI frames; active: the crystal's pulse and the cracks' flicker as before (N frames each), the
+    lava cycling over NA."""
     for i in range(NI):
-        yield "idle", i, compose(L, IDLE, b=breath(i, NI))
+        yield "idle", i, compose(L, IDLE, b=heat(i, NI))
     for k in range(NA):
-        yield "active", k, compose(L, pulse(k % N), flicker(k % N), b=breath(k, NA))
+        yield "active", k, compose(L, pulse(k % N), flicker(k % N), b=heat(k, NA))
 
 
 def widest(L):
@@ -275,7 +297,7 @@ def run_all():
     on_grass(peak).save(HERE / "icc-c-final.png")
     on_grass(idle).save(HERE / "icc-c-idle.png")
     print("pulse", [round(pulse(k), 3) for k in range(N)], "peak frame", kpk)
-    print("breath (active)", [round(breath(k, NA), 3) for k in range(0, NA, 4)])
+    print("heat (active)", [round(heat(k, NA), 3) for k in range(0, NA, 4)])
     # the mp4s, as the game plays them (full size, on grass): the active loop and the idle loop (each idle frame
     # shown twice), each twice round (9.6 s)
     sm = lambda g: g.resize((g.width // 2, g.height // 2), Image.LANCZOS)  # noqa: E731  half size: the files stay small
