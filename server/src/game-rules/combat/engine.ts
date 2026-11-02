@@ -1043,7 +1043,10 @@ export type BattleVisualEvent =
       readonly amount: number;
       /** What a Crabatron's critical hit added to the blow. */
       readonly bonus?: number;
-      /** What an Octo-ooze's weakening took off the blow (a weakened tower or monster). */
+      /**
+       * What an Octo-ooze's weakening (a weakened tower or monster) or Fomor's
+       * enrage armour on the creep took off the blow.
+       */
       readonly reduced?: number;
       /** The blow is an Ichi's thorns: damage it reflected back at whoever hit it. */
       readonly thorns?: boolean;
@@ -2430,6 +2433,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     // An enraged creep's armour, `1 - armor` off every hit (issue #222).
     // A putty boost is its own armour; the two combine as 1-(1-a)(1-b).
+    // Only Fomor's enrage sets `armour`: its cut shows as "(-X)" too (owner).
+    const fomorCut = raw * creep.armour;
     if (creep.armour > 0) raw *= 1 - creep.armour;
     if (creep.puttyArmour > 0) raw *= 1 - creep.puttyArmour;
     // The Monster Defensive Buff is armour of its own too (`BeastMode.as`).
@@ -2450,7 +2455,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         iy: creep.iy,
         amount: applied,
         ...(blow === "crit" ? { bonus: Math.min(applied, raw - raw / CRIT_MULTIPLIER) } : {}),
-        ...(weak > 0 ? { reduced } : {}),
+        ...(weak > 0 || fomorCut > 0 ? { reduced: reduced + fomorCut } : {}),
         ...(blow === "thorns" ? { thorns: true } : {}),
       });
     }
