@@ -1042,11 +1042,11 @@ def materials():
                        side=0.3)
     M["hornin"] = painted("hornin", (72, 56, 26), rough=0.8, wear=(110, 88, 44), scale=3.0, dirt=0.0, spec=0.3)
     # (r5) thin dark copper wire in a dark recessed frame
-    M["coil"] = shiny("coil", (146, 88, 46), rough=0.4, metal=0.6, wear=(96, 56, 28), scale=3.0, dirt=0.2)
-    lift(M["coil"], (110, 64, 32), 0.2)
+    M["coil"] = shiny("coil", (132, 84, 46), rough=0.4, metal=0.65, wear=(92, 56, 30), scale=3.0, dirt=0.2)
+    lift(M["coil"], (96, 60, 32), 0.08)
     M["panel"] = painted("panel", (30, 33, 34), rough=0.85, wear=(42, 46, 46), scale=4.0, dirt=0.1)
     M["cframe"] = painted("cframe", (62, 70, 74), rough=0.6, metal=0.3, wear=(92, 100, 104), scale=4.0, dirt=0.2)
-    M["fin"] = shiny("fin", (190, 196, 200), rough=0.25, metal=0.25, wear=(176, 184, 190), scale=3.0, dirt=0.15)
+    M["fin"] = shiny("fin", (210, 216, 220), rough=0.25, metal=0.2, wear=(186, 194, 200), scale=3.0, dirt=0.15)
     # the tanks: dark machinery, frost only on the faces turned up (their top edges)
     # (r5: the drums lying on their side; dark metal, ice-crusted on their upper half by frost_up below)
     M["tank"] = painted("tank", (52, 64, 72), rough=0.45, metal=0.3, wear=(80, 96, 104), rust=(20, 26, 30),
@@ -1058,7 +1058,7 @@ def materials():
     lift(M["rimc"], (150, 190, 200), 0.15)
     M["pane"] = painted("pane", (58, 76, 88), rough=0.6, metal=0.1, wear=(70, 86, 98), rust=(26, 34, 42), scale=4.0,
                         dirt=0.2, spec=0.3, top=(140, 172, 184), rust_at=0.5)
-    lift(M["pane"], (52, 70, 82), 0.12)
+    lift(M["pane"], (96, 126, 138), 0.3)       # (r5: under the lid, in its shadow; Flash's slabs are pale)
     M["glow"] = flat("glow", (120, 232, 240), rough=0.3, emit=2.0)
     M["gback"] = flat("gback", (20, 40, 46), rough=0.6)
     M["bolt"] = shiny("bolt", (146, 152, 156), rough=0.45, metal=0.3, wear=(100, 106, 110), scale=3.0, dirt=0.3)
@@ -1086,7 +1086,10 @@ def materials():
     mottle(M["fin"], [(2.0, 0.2, 3.0), (3.0, 0.2, 3.0, 0.3), (10.0, 0.12, 2.0)], ((80, 86, 90), 3.0, 0.3), seed=10.0)
     # (r5) frost back where Flash has it: white streaks down the frosted faces, frost on the bars' top edges, white
     # highlights on the arms' top and outer edges, the drums iced over on top
-    frost_up(M["rime"], (226, 236, 242), scale=2.4, cover=0.8, zs=0.16, seed=21.0, up=False)
+    frost_up(M["rime"], (228, 238, 244), scale=2.4, cover=0.82, zs=0.16, seed=21.0, up=False)
+    # frost on the horns' pipes, on their side toward the viewer's left (as Flash)
+    frost_up(M["brass"], (220, 230, 236), lo=0.15, hi=0.55, scale=2.0, cover=0.45, zs=0.3, seed=25.0,
+             axis=tuple(Vector((-0.66, -0.66, 0.35)).normalized()))
     frost_up(M["bar"], (210, 222, 230), lo=0.45, hi=0.85, scale=2.6, cover=0.58, seed=22.0)
     for k, sgn in (("arml", -1), ("armr", 1)):   # the arms' highlight: along their top and outer edges
         frost_up(M[k], (228, 234, 238), lo=0.55, hi=0.85, scale=1.4, cover=0.85, seed=23.0, amount=0.85,
@@ -1311,7 +1314,7 @@ def top():
     nsl = 3
     for k in range(nsl):
         hs = 1.32 - 0.04 * k                    # half side (square, sides along X and Y like the lid)
-        th = 0.45
+        th = 0.3
         z0 = H + 0.15 + k * (lz0 - H - 0.15 - th + 0.02) / (nsl - 1)
         sq = rounded_poly([(sx - hs, sy - hs), (sx + hs, sy - hs), (sx + hs, sy + hs), (sx - hs, sy + hs)], 0.18, 4)
         bm = bmesh.new()
@@ -1325,7 +1328,7 @@ def top():
         mesh_ob(f"hatchpane{k}", bm, [M["pane"]], smooth=False, bevel=0.06, segs=2)
         tube(f"hatchpanef{k}", [(x, y, z0 + th - 0.03) for x, y in sq], 0.055, M["rimc"], cyclic=True, verts=8)
     # a dark post through the middle, from the roof to the lid (the gaps between the slabs stay dark)
-    box("hatchpanep0", (1.4, 1.4, lz0 - H + 0.02), (sx, sy, H - 0.02), M["core"], bevel=0.05)
+    box("hatchpanep0", (1.1, 1.1, lz0 - H + 0.02), (sx, sy, H - 0.02), M["core"], bevel=0.05)
     # the lid and its glowing grille
     lx, ly, la, lz, lt = S.LID
     # the lid: a thick square slab, its front corner cut away along the arms (the hatch shows under the cut)

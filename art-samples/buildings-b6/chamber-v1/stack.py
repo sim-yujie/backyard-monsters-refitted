@@ -30,7 +30,7 @@ BAR = 0.92                  # the frame bars' side (thick round pipes, as Flash)
 BAR_R = 0.42                # their rounded edges
 
 # the doorway in the -Y face (X range, Z range), its lintel and jambs
-DOOR = (-1.8, 1.45, 0.45, 4.9)      # (r5: x0 -2.1 -> -1.8, a wider wall strip left of it, as Flash)
+DOOR = (-1.6, 1.45, 0.45, 4.9)      # (r5: x0 -2.1 -> -1.6, a wider wall strip left of it, as Flash)
 JAMB = 0.42                 # the jambs' width; they and the lintel stand JAMB_OUT out of the face
 JAMB_OUT = 0.5
 LINTEL_H = 0.95
