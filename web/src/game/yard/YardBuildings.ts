@@ -14,6 +14,7 @@ import {
 import {
   advanceAnimLayers,
   buildAnimLayers,
+  loopAnimLayers,
   resolveAnimLayers,
   restAnimLayers,
   setLayerFrame,
@@ -452,7 +453,9 @@ export class YardBuildings {
       if (view.anims.length === 0) continue;
       for (const layer of view.anims) layer.sprite.visible = animsOn && layer.resolved;
       if (!animsOn || deltaSeconds <= 0) continue;
-      if (now < view.workUntil) advanceAnimLayers(view.anims, deltaSeconds);
+      // A strip with an idle loop of its own (the Inferno's Incubator Control Centre) runs either way.
+      if (view.anims[0]?.anim.rest) loopAnimLayers(view.anims, deltaSeconds, now < view.workUntil);
+      else if (now < view.workUntil) advanceAnimLayers(view.anims, deltaSeconds);
       else if (view.restOnIdle) restAnimLayers(view.anims);
     }
   }

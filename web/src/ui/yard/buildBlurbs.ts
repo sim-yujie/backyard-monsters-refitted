@@ -59,6 +59,8 @@ export const INFERNO_BUILD_BLURBS: Readonly<Record<number, string>> = {
   // Not built in Flash's Inferno; the surface's words (owner decision 2026-10-29).
   10: "Gives you a bird's-eye view of the yard, so moving buildings or remodelling it is a snap.",
   13: "Converts Magma into flesh and blood monsters to do your bidding.",
+  // Flash's Inferno never offered it (owner decision 2026-11-02).
+  16: "Runs all your Incubators from one queue: each monster goes to the next Incubator that is free.",
   17: "A simple block for walls that protect buildings and lead attackers into traps or closer to towers. Upgrades from Brimstone to Granite to Forged Steel.",
   21: "Long-range tower great for picking off monsters one by one.",
   24: "Invisible to the enemy until it is too late: it deals large damage to a small area when a monster steps on it.",

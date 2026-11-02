@@ -555,6 +555,27 @@ for (const [id, { baseurl, offsets }] of Object.entries(INFERNO_ADDED)) {
   if (!added) throw new Error(`INFERNO_ADDED: ${baseurl} has no default picture`);
   infernoEntries.push(added);
 }
+
+/**
+ * Inferno types that keep the main table's art but go by another name. The
+ * Incubator Control Centre (owner, 2 Nov 2026) is Flash's unused Inferno
+ * Hatchery Control Center row (`INFERNOYARDPROPS.as:1289-1330`), the same
+ * folder and pictures: the Classic look draws Flash's HCC in the Inferno, the
+ * Modern look its own 3D (`INFERNO_BUILDING_3D_ART`).
+ */
+const INFERNO_RENAMED = {
+  16: "Incubator Control Centre",
+};
+
+for (const [id, name] of Object.entries(INFERNO_RENAMED)) {
+  const entry = infernoAll.find((one) => one.id === Number(id));
+  if (!entry || infernoEntries.some((one) => one.id === entry.id)) {
+    throw new Error(`INFERNOYARDPROPS.as: type ${id} has changed; review INFERNO_RENAMED`);
+  }
+  const renamed = onDisk({ ...entry, name, file: "INFERNO_RENAMED, after INFERNOYARDPROPS.as" });
+  if (!renamed) throw new Error(`INFERNO_RENAMED: ${entry.baseurl} has no default picture`);
+  infernoEntries.push(renamed);
+}
 infernoEntries.sort((a, b) => a.id - b.id);
 
 writeFileSync(

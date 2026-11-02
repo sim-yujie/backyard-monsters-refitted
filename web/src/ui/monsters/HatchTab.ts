@@ -773,7 +773,7 @@ export class HatchTab implements MonstersTab {
     head.className = "hatch-line__head";
     const title = document.createElement("h3");
     title.className = "hatch-line__title";
-    title.textContent = "Hatchery Control Centre";
+    title.textContent = this.words.controlCentre;
     const waiting = document.createElement("span");
     waiting.className = "hatch-line__waiting";
     waiting.textContent = `${formatAmount(queuedCount(yard.shared))} waiting of ${formatAmount(HCC_STACKS * STACK_SIZE)}`;

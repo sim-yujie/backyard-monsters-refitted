@@ -188,6 +188,7 @@ describe("the 3D yard buildings", () => {
     const sets = [
       ...TYPES.map((type) => [type, BUILDING_3D_ART[type] ?? [], "main"] as const),
       [17, INFERNO_BUILDING_3D_ART[17] ?? [], "inferno"] as const,
+      [16, INFERNO_BUILDING_3D_ART[16] ?? [], "inferno"] as const,
     ];
     for (const [type, looks, kind] of sets) {
       const folder = `${ASSETS}${artFolder(type, kind) ?? ""}`;
@@ -291,6 +292,28 @@ describe("the 3D yard buildings", () => {
     expect(resolveArt(17, 1, ArtState.DEFAULT, "inferno")?.shadow).toBeNull();
     setClassicLook(true);
     expect(resolveArt(17, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe("/assets/buildings/iwalls/top.1.v2.png");
+  });
+
+  it("give the Inferno's Incubator Control Centre look C, its idle loop then its working loop in one strip", () => {
+    const art = resolveArt(16, 1, ArtState.DEFAULT, "inferno");
+    expect(art?.name).toBe("Incubator Control Centre");
+    const folder = "/assets/buildings/hatcherycontrolcenter/";
+    // Every cell is the whole building: the top is cell 0, the still the icons' picture.
+    expect(art?.topIsAnim).toBe(true);
+    expect(art?.top.url).toBe(`${folder}anim.i3d1@2x.webp`);
+    expect(art?.still?.url).toBe(`${folder}top.i3d1@2x.webp`);
+    expect(art?.shadow?.url).toBe(`${folder}shadow.i3d1.jpg`);
+    expect(art?.anims.map(({ frames, columns, rest }) => ({ frames, columns, rest }))).toEqual([
+      { frames: 96, columns: 15, rest: 32 },
+    ]);
+    // No 3D ruins of its own yet: the whole look when damaged, Flash's HCC rubble when destroyed.
+    expect(resolveArt(16, 1, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${folder}anim.i3d1@2x.webp`);
+    expect(resolveArt(16, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${folder}top.1.destroyed.png`);
+    // The main yard's HCC keeps its own 3D look; the Classic look is Flash's HCC in both.
+    expect(resolveArt(16, 1, ArtState.DEFAULT, "main")?.top.url).toBe(`${folder}top.3d1@2x.webp`);
+    setClassicLook(true);
+    expect(resolveArt(16, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.png`);
+    expect(resolveArt(16, 1, ArtState.DEFAULT, "inferno")?.anims).toEqual([]);
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {

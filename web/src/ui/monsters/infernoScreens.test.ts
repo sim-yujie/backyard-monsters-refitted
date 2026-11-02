@@ -109,7 +109,8 @@ describe("Inferno monster screens: the tab strip", () => {
     ]);
     expect(tabs.map((tab) => tab.label)).toEqual(["Unlock", "Hatch", "Compound", "Train"]);
     expect(tabs.find((tab) => tab.id === MonstersTabId.HOUSING)?.buildings).toEqual([128]);
-    expect(tabs.find((tab) => tab.id === MonstersTabId.HATCH)?.buildings).toEqual([13]);
+    // Its Incubators and, once built, its Incubator Control Centre (the HCC type, owner 2 Nov 2026).
+    expect(tabs.find((tab) => tab.id === MonstersTabId.HATCH)?.buildings).toEqual([13, 16]);
   });
 });
 

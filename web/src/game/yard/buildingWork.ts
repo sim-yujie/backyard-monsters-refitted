@@ -34,7 +34,9 @@ import { animPolicy, WorkKind } from "./yardAnim";
  * - a hatchery works while its monster is at stage 1 — not stage 2, waiting
  *   for housing (`BUILDING13.as:34`) — and past the end of that monster when
  *   more are queued behind it, so it does not stall for the ten seconds the
- *   store waits before asking the server for the next one.
+ *   store waits before asking the server for the next one;
+ * - a Hatchery Control Centre works while any hatchery in its yard does (only
+ *   the Inferno's Incubator Control Centre shows it: its crystal pulses).
  */
 
 /** Building id → the server-clock second its work stops. */
@@ -95,11 +97,13 @@ export const readWork = (save: WorkSave): WorkMap => {
   const work = new Map<number, number>();
 
   const lockers: number[] = [];
+  const centres: number[] = [];
   for (const [key, raw] of Object.entries(buildings)) {
     if (!raw || typeof raw.t !== "number") continue;
     const id = typeof raw.id === "number" ? raw.id : Number(key);
     const kind = animPolicy(raw.t)?.work;
     if (kind === WorkKind.UNLOCK) lockers.push(id);
+    if (kind === WorkKind.CONTROL) centres.push(id);
     if (kind !== WorkKind.HARVEST) continue;
     if (outpost) {
       // An outpost harvester never stays full: `BRESOURCE.Setup` starts it
@@ -132,7 +136,10 @@ export const readWork = (save: WorkSave): WorkMap => {
   for (const job of hatcheryJobs(save.monsters, save.storedata, savedAt)) {
     if (job.endsAt === null) continue;
     const queued = hasQueue(queues[hatcheries.indexOf(Number(job.id))]?.[2]);
-    later(work, job.buildingId, queued ? Number.POSITIVE_INFINITY : job.endsAt);
+    const until = queued ? Number.POSITIVE_INFINITY : job.endsAt;
+    later(work, job.buildingId, until);
+    // A Hatchery Control Centre works while any hatchery in its yard does.
+    for (const id of centres) later(work, id, until);
   }
 
   return work;

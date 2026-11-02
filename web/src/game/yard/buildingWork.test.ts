@@ -42,6 +42,7 @@ describe("which types animate only while working", () => {
       4: WorkKind.HARVEST,
       8: WorkKind.UNLOCK,
       13: WorkKind.HATCH,
+      16: WorkKind.CONTROL,
       26: WorkKind.TRAIN,
       116: WorkKind.RESEARCH,
       // Decorations, the sign and the Outpost Defender loop for ever in Flash.
@@ -170,6 +171,32 @@ describe("the hatchery", () => {
       const save = saveWith(hatchery, { monsters: monsters(stage) });
       expect(animates(save, 13, 13, SAVED), `stage ${stage}`).toBe(false);
     }
+  });
+});
+
+describe("the Hatchery Control Centre (the Inferno's Incubator Control Centre)", () => {
+  const yard = { "13": { id: 13, t: 13, l: 1 }, "14": { id: 14, t: 13, l: 1 }, "50": { id: 50, t: 16, l: 1 } };
+  const monsters = (stages: [number, number], queue: unknown = []) =>
+    ({
+      saved: SAVED,
+      h: [
+        ["C1", 30, queue],
+        ["C1", 60, []],
+      ],
+      hid: [13, 14],
+      hstage: stages,
+    }) as unknown as NonNullable<WorkSave["monsters"]>;
+
+  it("works while any hatchery in its yard does, until the last one stops", () => {
+    const save = saveWith(yard, { monsters: monsters([1, 1]) });
+    expect(animates(save, 16, 50, SAVED + 59)).toBe(true);
+    expect(animates(save, 16, 50, SAVED + 60)).toBe(false);
+    expect(readWork(saveWith(yard, { monsters: monsters([1, 0], [["C1", 3, 1]]) })).get(50)).toBe(INF);
+  });
+
+  it("is idle with every hatchery idle", () => {
+    const save = saveWith(yard, { monsters: monsters([0, 2]) });
+    expect(animates(save, 16, 50, SAVED)).toBe(false);
   });
 });
 

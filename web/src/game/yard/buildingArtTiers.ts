@@ -202,6 +202,15 @@ export interface TierAnim {
    * its dome's brew), over the same `body`; one row each.
    */
   readonly more?: readonly ArtAnim[];
+  /**
+   * A building that moves when idle too (the Inferno's Incubator Control
+   * Centre: its lava breathes, and its crystal pulses as well while it
+   * hatches): the strip's first `rest` cells are its idle loop, the others its
+   * working loop. Both take the same time round, the idle cells each shown for
+   * longer, and a building that starts or stops working carries on from the
+   * same point of the loop (`loopAnimLayers`).
+   */
+  readonly rest?: number;
 }
 
 /** A 3D building's damaged or destroyed look: one still and its shadow (none where it casts none). */
@@ -641,9 +650,20 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
 /**
  * The Inferno's own 3D buildings, drawn in an Inferno yard from the
  * Inferno's folders: its Blocks (17, `buildings/iwalls/`), three looks as
- * Flash's, the first a low rim of rock that casts no shadow.
+ * Flash's, the first a low rim of rock that casts no shadow; and its
+ * Incubator Control Centre (16, in the Hatchery Control Center's folder,
+ * which the Inferno's row shares), look C from art/icc-inferno-looks (owner,
+ * 2 Nov 2026: "I want to see it in the inferno + the soft animated glow of the
+ * lava"), exported by `export3d_buildings.py icc`.
  */
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
+  // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
+  // No damaged or destroyed look of its own yet: the damaged one is the whole look tinted, the destroyed Flash's.
+  16: [
+    { from: 1, top: ["top.i3d1@2x.webp", -67, -53], shadow: ["shadow.i3d1.jpg", -65, 24], lift: 0,
+      anim: { strip: ["anim.i3d1@2x.webp", -67, -60, 133, 160, 96], columns: 15, whole: true, rest: 32 } },
+  ],
   // 17 Block: 3D, the Inferno's three looks, still
   17: [
     { from: 1, top: ["top.3d1@2x.webp", -24, -6], shadow: null, lift: 0,

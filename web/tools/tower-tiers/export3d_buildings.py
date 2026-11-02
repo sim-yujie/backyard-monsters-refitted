@@ -30,6 +30,14 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | iblock | 17 Block in an Inferno yard | art/buildings-3d-walls | walls-v1 | levels 1-3, still |
 | academy | 26 Monster Academy | art/buildings-3d-academy | academy-v1 | levels 1-4 (4 also level 5); 21 cells of its cogs |
 | lab | 116 Monster Lab | art/buildings-3d-lab | lab-v1 | one look; 32 cells of its brew, 5 of each side door's cogs |
+| icc | 16 Incubator Control Centre in an Inferno yard | art/icc-inferno-looks | icc-looks (look C) | one look; 32 idle and 64 working cells, each the whole building |
+
+The Inferno's Incubator Control Centre (`icc`, moves "loops") is look C (owner, 2 Nov 2026: "I want to see it in the
+inferno + the soft animated glow of the lava"). Its glows are made after Blender (`icc-looks/anim.py game`), so its
+renders are `render/game/`: `idle-NN.png` and `active-NN.png`, the building and its glows with no ground shadow, and
+`shadow.png`, the ground shadow alone as alpha, all on the whole render canvas. Every cell is the whole building
+(`whole`): the first `rest` cells are its idle loop, the lava breathing, the rest its working loop, the crystal pulsing
+too (`TierAnim.rest`). Its files are `*.i3d1*` in the HCC's folder, which the Inferno's row 16 shares.
 
 The damaged and destroyed looks (`<building>:damaged`, `<building>:destroyed`) are stills, rendered the same way into
 `L<n>-damaged-base.png` and `-alone.png` (a wall's `block<n>-damaged-...`): the first eight's from
@@ -122,6 +130,7 @@ BUILDINGS = {
                     moves="parts"),
     "lab": dict(type=116, folder="monsterlab", frame=(-86, -104), looks=[(1, "L1")], moves="boxes",
                 layers=("dome", "doorL", "doorR")),
+    "icc": dict(type=16, folder="hatcherycontrolcenter", frame=(-80, -84), looks=[(1, "")], moves="loops"),
 }
 # Flash's cells per look (`buildingArtData.ts`): the 3D strip must hold as many.
 CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 10: 24},
@@ -273,6 +282,54 @@ def boxed(base, building, names, k):
     return (x0, y0, x1, y1), cells, core
 
 
+def export_loops(name, render):
+    """The Inferno ICC (`icc`): a strip of whole cells, its idle loop then its working loop, its top (idle cell 0) and
+    its shadow. See the module comment."""
+    cfg = BUILDINGS[name]
+    out = ASSETS / cfg["folder"]
+    fx, fy = cfg["frame"]
+    k = cfg.get("k", K)
+    names = sorted(render.glob("idle-*.png")) + sorted(render.glob("active-*.png"))
+    rest = len(list(render.glob("idle-*.png")))
+    assert rest and len(names) > rest, (name, render)
+    boxes = [Image.open(n).getchannel("A").point(lambda v: 255 if v > 2 else 0).getbbox() for n in names]
+    x0, y0, x1, y1 = whole((min(b[0] for b in boxes), min(b[1] for b in boxes),
+                            max(b[2] for b in boxes), max(b[3] for b in boxes)), k)
+    w, h = (x1 - x0) * 2 // k, (y1 - y0) * 2 // k
+    n = len(names)
+    cols = min(n, MAX_W // w)
+    nrows = -(-n // cols)
+    sheet = Image.new("RGBA", (w * cols, h * nrows), (0, 0, 0, 0))
+    first = None
+    for j, path in enumerate(names):
+        cell = load(path)
+        if j == 0:
+            first = cell
+        sheet.paste(resize_pm(cell[y0:y1, x0:x1], (w, h)), ((j % cols) * w, (j // cols) * h))
+    tag = "i3d1"
+    save_webp(sheet, out / f"anim.{tag}@2x.webp")
+    row = dict(building=name, type=cfg["type"], level=1)
+    tx0, ty0, tx1, ty1 = bbox(first[..., 3], k=k)
+    save_webp(resize_pm(first[ty0:ty1, tx0:tx1], ((tx1 - tx0) * 2 // k, (ty1 - ty0) * 2 // k)), out / f"top.{tag}@2x.webp")
+    row["top"] = [f"top.{tag}@2x.webp", fx + tx0 // k, fy + ty0 // k]
+    shade = np.asarray(Image.open(render / "shadow.png").convert("L")).astype("float32") / 255
+    sh = np.asarray(Image.fromarray(shade, "F").resize((shade.shape[1] // k, shade.shape[0] // k), Image.BOX))
+    sh, sx, sy = tail(sh)
+    ys, xs = np.nonzero(sh > 0.02)
+    sx0, sy0 = max(0, int(xs.min()) - 1), max(0, int(ys.min()) - 1)
+    sx1, sy1 = min(sh.shape[1], int(xs.max()) + 2), min(sh.shape[0], int(ys.max()) + 2)
+    gray = np.clip(255 * (1 - sh[sy0:sy1, sx0:sx1]) + 0.5, 0, 255).astype("uint8")
+    Image.fromarray(gray, "L").save(out / f"shadow.{tag}.jpg", "JPEG", quality=90)
+    row["shadow"] = [f"shadow.{tag}.jpg", fx + sx + sx0, fy + sy + sy0]
+    row["anim"] = [f"anim.{tag}@2x.webp", fx + x0 // k, fy + y0 // k, w // 2, h // 2, n]
+    row["columns"] = cols
+    row["whole"] = True
+    row["rest"] = rest
+    row["bytes"] = sum((out / f).stat().st_size for f in (row["top"][0], row["shadow"][0], row["anim"][0]))
+    print(json.dumps(row), flush=True)
+    return [row]
+
+
 def export(name, render, state=None):
     """A building's whole looks, or with `state` ("damaged", "destroyed") the stills of that state `render` holds."""
     cfg = BUILDINGS[name]
@@ -417,4 +474,8 @@ if __name__ == "__main__":
     for i in range(0, len(pairs), 2):
         building, _, state = pairs[i].partition(":")
         assert building in BUILDINGS and state in ("", "damaged", "destroyed"), pairs[i]
+        if BUILDINGS[building]["moves"] == "loops":
+            assert not state, pairs[i]
+            export_loops(building, Path(pairs[i + 1]).resolve())
+            continue
         export(building, Path(pairs[i + 1]).resolve(), state or None)
