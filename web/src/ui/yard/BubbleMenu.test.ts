@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TUT_FOLD_ATTRIBUTE, TutTarget } from "@/game/guide/targets";
 import { BUBBLE_ITEMS, BUBBLE_MENU_KEY, BubbleMenu, bubbleMenuOn } from "./BubbleMenu";
@@ -315,5 +318,22 @@ describe("YardDock with the bubble menu", () => {
     const visit = new YardDock({ onMap: vi.fn(), onHome: vi.fn() }, true).mount(document.body);
     expect(visit.element.querySelector(".bubble-menu")).toBeNull();
     visit.destroy();
+  });
+});
+
+describe("the bubbles' column (bubble-menu.css)", () => {
+  const css = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), "../styles/bubble-menu.css"),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+
+  it("stands straight up from More, not in an arc (owner, beta 6)", () => {
+    const open = css.match(/\.bubble-menu--open \.bubble-menu__fan > \.yard-dock__button \{[^}]*\}/)?.[0] ?? "";
+    expect(open).toMatch(/transform: translateY\(calc\(\(var\(--bubble-start\) \+ \(var\(--bubble-k, 1\) - 1\) \* var\(--bubble-step\)\) \* -1\)\)/);
+    expect(css).not.toMatch(/--bubble-curve/);
+  });
+
+  it("keeps the sideways phone's rows of four", () => {
+    expect(css).toMatch(/\.bubble-menu--grid\.bubble-menu--open \.bubble-menu__fan > \.yard-dock__button \{\s*transform: translate\(\s*calc\(var\(--bubble-col, 0\)/);
   });
 });

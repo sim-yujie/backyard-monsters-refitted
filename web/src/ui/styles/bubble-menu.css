@@ -1,13 +1,14 @@
 /*
  * The bubble menu (beta 6 desk sample, `ui/yard/BubbleMenu.ts`): More on the
  * yard's bottom row, beside Monsters, and Layout, Goals, Alerts, Defences and
- * Mail fanning up out of it as bubbles, each word on a sign to the bubble's
- * left. The fan bends a little to the left, away from the screen's edge.
+ * Mail standing up out of it as bubbles in one straight column, each word on
+ * a sign to the bubble's left (owner, beta 6: straight, not an arc).
  *
  * The fan is a zero-sized point at the centre of More's disc; each bubble
  * hangs there by its disc's centre and flies out to its place, the k-th
  * (`--bubble-k`, set by the script, 1 nearest More) `--bubble-start` plus
- * k-1 steps up and k² × `--bubble-curve` left. They fly out one after the
+ * k-1 steps straight up. The column has room for a sixth (Quests) under the
+ * top bar at every size. They fly out one after the
  * other and fold back the other way round. On a phone on its side the
  * bubbles stand in rows instead (`--bubble-col`, `--bubble-row`).
  *
@@ -28,7 +29,6 @@
   --bubble-disc: 56px;
   --bubble-start: 84px;
   --bubble-step: 64px;
-  --bubble-curve: 5px;
 
   z-index: 1;
   display: flex;
@@ -96,10 +96,7 @@
 
 .bubble-menu--open .bubble-menu__fan > .yard-dock__button {
   opacity: 1;
-  transform: translate(
-      calc(var(--bubble-k, 1) * var(--bubble-k, 1) * var(--bubble-curve) * -1),
-      calc((var(--bubble-start) + (var(--bubble-k, 1) - 1) * var(--bubble-step)) * -1)
-    )
+  transform: translateY(calc((var(--bubble-start) + (var(--bubble-k, 1) - 1) * var(--bubble-step)) * -1))
     scale(1);
   transition:
     transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -172,14 +169,13 @@
 /* A phone held upright: the switcher over Map and Friends beside it in the
    left corner (yard-hud.css, friends-bar.css), and the right corner a square
    of four under the thumb: More over Monsters, Collect all over Build. The
-   fan rises from More, the bubbles a little smaller and closer. */
+   column rises straight from More, the bubbles a little smaller and closer. */
 @media (width <= 620px) {
   .bubble-menu {
     --bubble-anchor: 30px;
     --bubble-disc: 52px;
     --bubble-start: 76px;
     --bubble-step: 60px;
-    --bubble-curve: 4px;
   }
 
   .yard-dock__right > .bubble-menu,
@@ -248,6 +244,12 @@
 
   .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
     bottom: var(--space-4);
+  }
+
+  /* Friends a step right of Map, so their signs keep the bottom row's gap
+     instead of touching (lead, beta 6). */
+  .overlay__layer:has(> .yard-dock--bubbles) > .friends-bar > .friends-bar__toggle {
+    left: 100px;
   }
 
   /* The yard's readout line would sit on Friends. */
