@@ -51,7 +51,7 @@ export const yardChampionCancelEggAction = defineYardAction({
 /** `POST /bm/yard/champion/feed` — feed the champion from housing (`monsters`) or with Shiny. */
 export const yardChampionFeedAction = defineYardAction({
   schema: YardChampionFeedSchema,
-  run: ({ save, body, now }) => planChampionFeed(save, body.mode, now),
+  run: ({ save, body, now }) => ({ ...planChampionFeed(save, body.mode, now), questEvents: { feedChampion: 1 } }),
 });
 
 /** `POST /bm/yard/champion/evolve` — evolve to the next level now, for Shiny. */

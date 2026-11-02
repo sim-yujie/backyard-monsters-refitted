@@ -66,6 +66,7 @@ import { guideRoutes } from "./guide.js";
 import { tipsRoutes } from "./tips.js";
 import { achievementsRoutes } from "./achievements.js";
 import { eventsRoutes } from "./events.js";
+import { questsRoutes } from "./quests.js";
 
 /**
  * Every yard action route, mounted by `app.routes.ts` as
@@ -141,6 +142,7 @@ export const yardRoutes: YardRouteEntry[] = [
   ...achievementsRoutes,
   // Events: the login calendar and collection ladder claims (`events.ts`).
   ...eventsRoutes,
+  ...questsRoutes,
   // One building moved (the Inferno's WP 1.15; the main yard and outposts too).
   { path: "move", controller: yardRoute(yardMoveAction) },
   // The Siege Lab and Siege Factory (Inferno WP 6.3, `siege.ts`).

@@ -46,6 +46,8 @@ import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
 import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 import { recordAttackAchievements } from "../achievements/events.js";
 import { countAttackLoot } from "../events/lootEvents.js";
+import { attackQuestEvents, defenceQuestEvents } from "../quests/hooks.js";
+import { recordQuestEvents, recordUserQuestEvents } from "../quests/record.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -379,6 +381,24 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // the final lock, and after the commit, so a counter that fails to write
   // (logged and lost) cannot take the landing down with it.
   await countAttackLoot(postgres.em, attacker.userid, userSave, loot.credit, now);
+
+  // Quests, as the hand-landed save counts them (`controllers/base/save/baseSave.ts`).
+  await recordQuestEvents(
+    postgres.em,
+    userSave.basesaveid,
+    attackQuestEvents({
+      defender,
+      damageBefore,
+      damageAfter: landedDamage,
+      before: storedHealthData,
+      after: outcome.buildinghealthdata,
+      log: input.log,
+    }),
+    now
+  );
+  if (defender.type !== BaseType.TRIBE && defender.saveuserid && defender.saveuserid !== attacker.userid) {
+    await recordUserQuestEvents(postgres.em, defender.saveuserid, defenceQuestEvents(landedDamage), now);
+  }
 
   await endAttackSession(basesaveid);
   await discardCheckpoint(basesaveid);

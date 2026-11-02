@@ -41,6 +41,8 @@ import { onboardingSummary } from "../../services/onboarding/summary.js";
 import { updateOnboarding } from "../../services/onboarding/state.js";
 import { INFERNO_QUESTS, markDone } from "../../services/goals/goalRules.js";
 import { townHallLevel, type ResourceAmounts } from "../../services/yardplanner/costs.js";
+import { jobQuestEvents } from "../../services/quests/hooks.js";
+import { addQuestEvents, claimableCount, readQuests, recordQuests, type QuestEvents } from "../../services/quests/state.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 
@@ -167,6 +169,9 @@ export type YardSlices = Partial<
     // charge and fund themselves (the wrapper's pool is the surface one).
     | "siege"
     | "iresources"
+    // The quests' record (`services/quests/state.ts`), main yard only; the
+    // wrapper counts the request's progress on it after the slices land.
+    | "dailyquests"
   >
 >;
 
@@ -221,6 +226,12 @@ export interface YardOutcome<Report> {
    * builds are counted by the wrapper; do not repeat them here.
    */
   achievementEvents?: AchievementEvents;
+  /**
+   * Quest progress the action brought about (`services/quests/hooks.ts`): an
+   * upgrade started, a bank, a mushroom. The catch-up's finished hatches are
+   * counted by the wrapper; do not repeat them here.
+   */
+  questEvents?: QuestEvents;
 }
 
 /**
@@ -505,6 +516,8 @@ export const catchUpLockedYard = async (
 
     const completed = await catchUpLockedRow(tx, locked, now);
     await recordAchievements(tx, locked, now, builtEvents(completed));
+    // Hatches that finished while the player was away count for quests.
+    if (locked.type === BaseType.MAIN) recordQuests(locked, now, jobQuestEvents(completed));
     await tx.flush();
     return { save: locked, completed };
   });
@@ -558,6 +571,7 @@ export const catchUpLockedOutpost = async (
     const completed = catchUpYard(yard.save, now);
     await autobankYard(tx, yard.main, now, [], yard.outpost);
     await recordAchievements(tx, yard.main, now, builtEvents(completed), yard.outpost);
+    recordQuests(yard.main, now, jobQuestEvents(completed));
     await tx.flush();
     return { save: yard.outpost, completed };
   });
@@ -667,6 +681,9 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       // Blocks and Heavy Traps are the surface's; Flash's Inferno builds were
       // not checked against them, `docs/design/inferno.md` §5); the Under
       // Hall's level is achievement 20's (`BUILDING14.Constructed`).
+      // Quests: the account's, on the main row; nothing in the Inferno counts.
+      // Before the achievements so `reportAfterAchievements` sees them.
+      if (!yard.inferno) recordQuests(yard.main, now, addQuestEvents(jobQuestEvents(completed), outcome.questEvents));
       const events = yard.inferno
         ? { underhall: townHallLevel(save.buildingdata, "inferno") }
         : addEvents(builtEvents(completed), outcome.achievementEvents);
@@ -687,6 +704,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         // the Inferno the badge counts the Inferno quests (`goalBookOf`).
         onboarding: onboardingSummary(yard.inferno ? save : yard.main),
         achievements: unseenAchievements(yard.main),
+        questsClaimable: yard.main.dailyquests ? claimableCount(readQuests(yard.main.dailyquests), now) : null,
         outpost: yard.outpost ? String(yard.outpost.baseid) : null,
       };
     });
@@ -707,6 +725,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         playerlevel: answer.playerlevel,
         playerpoints: answer.playerpoints,
         ...(answer.achievements.length > 0 && { achievements: answer.achievements }),
+        // The quest window's red number (`services/quests/state.ts`).
+        ...(answer.questsClaimable !== null && { questsClaimable: answer.questsClaimable }),
       },
       outpost: answer.outpost,
       flingerBefore,

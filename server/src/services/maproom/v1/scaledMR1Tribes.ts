@@ -28,6 +28,9 @@ import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
+import { tribeOfBase } from "../../goals/counters.js";
+import { addQuestEvents, questEvent } from "../../quests/state.js";
+import { recordQuestEvents } from "../../quests/record.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
 import { recordAttackAchievements } from "../../achievements/events.js";
 import {
@@ -183,6 +186,13 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
   // attacker's main row under its own lock.
   if (battle?.destroyed && !wasDestroyed) {
     await recordTribeDestroyed(postgres.em, userSave.basesaveid, String(saveData.baseid));
+    // Quests: a tribe's yard destroyed is also a won attack.
+    await recordQuestEvents(
+      postgres.em,
+      userSave.basesaveid,
+      addQuestEvents(questEvent("tribeDestroy", tribeOfBase(String(saveData.baseid))), { attackWin: 1 }),
+      now
+    );
   }
 
   // Each biggest Putty bomb fired counts towards Huge Rage (#299); a Map Room 1
