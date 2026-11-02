@@ -9,8 +9,13 @@ import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
 import { YardHelpMarks } from "./YardHelpMarks";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
-import { YardLifeLayer } from "./YardLifeLayer";
-import { holdBack, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
+import { MAX_JUICE_WALKERS, YardLifeLayer } from "./YardLifeLayer";
+import { holdBack, juicerDoor, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
+import { YardGibletsLayer } from "./YardGibletsLayer";
+import { blendOf, JUICER_SPOUT, JuicerBlend, planGiblets } from "./juicerShow";
+import type { JuicedNews } from "@/game/monsters/juiceNews";
+import { flyerAltitude } from "@/game/attack/monsterSprites";
+import { playEffect } from "@/game/sound/sound";
 import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
@@ -128,6 +133,13 @@ export class YardRenderer {
   private readonly lifeHolds = new Set<LifeHold>();
   /** The resource balls a bank throws at the Town Hall (#208), over every building. */
   private readonly collect = new CollectFxLayer();
+  /** The Monster Juicer's spurt (`juicerShow.ts`), over every building. */
+  private readonly giblets = new YardGibletsLayer(Math.random, () => playEffect("splat5"));
+  /** Each Juicer at work, by building id, and what its arrivals carry. */
+  private readonly blends = new Map<number, JuicerBlend>();
+  private readonly juiceNews = new Map<number, JuicedNews>();
+  /** Blend of monsters juiced but not walked there, added with the next arrival. */
+  private readonly unwalked = new Map<number, number>();
 
   /**
    * Where the planner hangs its world-space decals: the tower range discs and
@@ -185,6 +197,7 @@ export class YardRenderer {
 
   constructor() {
     this.buildings.onArtReady(() => this.openSheets());
+    this.life.onJuiceArrive = (monster, juicer) => this.juiceArrived(monster, juicer);
     this.isoDecals.eventMode = "none";
     this.rangeOval.eventMode = "none";
     this.rangeOval.visible = false;
@@ -194,6 +207,7 @@ export class YardRenderer {
       this.rangeOval,
       this.buildings.shadows,
       this.buildings.tops,
+      this.giblets.root,
       this.collect.root,
       this.blueprint.root,
       this.chrome,
@@ -335,6 +349,7 @@ export class YardRenderer {
     if (this.currentView === YardView.ISO) {
       this.buildings.draw(visible, deltaSeconds, this.work?.now() ?? 0);
       this.life.update(visible, deltaSeconds);
+      this.runJuicers(deltaSeconds);
       this.jobBars.update();
       // A handful of badges: cheap to place every frame.
       if (this.hatchMarks.current) this.hatchMarks.reposition();
@@ -430,6 +445,7 @@ export class YardRenderer {
       this.isoDecals,
       this.buildings.shadows,
       this.buildings.tops,
+      this.giblets.root,
       this.collect.root,
       this.buildings.markers,
       this.jobBars.root,
@@ -733,6 +749,110 @@ export class YardRenderer {
     this.buildings.resortByDepth();
   }
 
+  /* ── The Monster Juicer at work (`juicerShow.ts`) ──────────────────── */
+
+  /**
+   * Shows a juice the server has made (`juiceNews.ts`): the juiced monsters
+   * walk (or fly) from their pens into the Juicer, which blends each as it
+   * gets there. Drawing only; the goo is banked already. With no Juicer
+   * drawn nothing shows; under reduced motion, or with no way there, the
+   * Juicer blends at once.
+   */
+  juice(news: JuicedNews): void {
+    const yard = this.yard;
+    const juicer = this.byId.get(news.juicer);
+    if (!yard || !juicer || this.stored.has(juicer.id) || this.concealed.has(juicer.id)) return;
+    const [width, height] = juicer.footprint;
+    const door = juicerDoor({ x: juicer.x, y: juicer.y, width, height });
+    const route = (from: YardPoint, to: YardPoint) => routeBetween(yard, from, to);
+    this.juiceNews.set(juicer.id, news);
+    let walking = 0;
+    let unwalked = 0;
+    for (const [monster, count] of Object.entries(news.monsters)) {
+      const room = Math.max(0, MAX_JUICE_WALKERS - walking);
+      const started = this.life.juice(monster, Math.min(count, room), juicer.id, door, route, flyerAltitude(monster));
+      walking += started;
+      unwalked += blendOf(news.hatchCost[monster] ?? 0) * (count - started);
+    }
+    const blend = this.blendFor(juicer.id, news.level);
+    if (walking === 0) blend.add(unwalked);
+    else if (unwalked > 0) this.unwalked.set(juicer.id, (this.unwalked.get(juicer.id) ?? 0) + unwalked);
+  }
+
+  /** Juicers mid-blend, for tests and the browser checks. */
+  get juicersBlending(): number {
+    let count = 0;
+    for (const blend of this.blends.values()) if (blend.running) count++;
+    return count;
+  }
+
+  private blendFor(id: number, level: number): JuicerBlend {
+    let blend = this.blends.get(id);
+    if (!blend) {
+      blend = new JuicerBlend(level);
+      this.blends.set(id, blend);
+    }
+    blend.level = level;
+    return blend;
+  }
+
+  /** A monster got into the Juicer: `Blend`, and its goo ball flies off (`BUILDING9.as:54-68`). */
+  private juiceArrived(monster: string, id: number): void {
+    const news = this.juiceNews.get(id);
+    if (!news) return;
+    const blend = this.blendFor(id, news.level);
+    const cost = news.hatchCost[monster] ?? 0;
+    blend.add(blendOf(cost) + (this.unwalked.get(id) ?? 0));
+    this.unwalked.delete(id);
+    this.throwJuice(id, Math.ceil(cost * news.rate));
+  }
+
+  /**
+   * Goo balls from the Juicer to the Town Hall (`ResourcePackages.Create`,
+   * `BUILDING9.as:66`, `:85`). Drawing only: the goo is banked already, so a
+   * landing adds nothing.
+   */
+  private throwJuice(id: number, amount: number): void {
+    const juicer = this.byId.get(id);
+    const hall = this.yard?.buildings.find(
+      (building) =>
+        building.type === TOWN_HALL_TYPE && !this.stored.has(building.id) && !this.concealed.has(building.id),
+    );
+    if (!juicer || !hall || amount <= 0) return;
+    const at = (building: YardBuilding): { x: number; y: number } => {
+      const offset = this.buildings.offsetOf(building.id);
+      return { x: building.worldX + offset.x, y: building.worldY + offset.y };
+    };
+    const flights = planFlights([{ type: juicer.type, ...at(juicer), resource: "r4", amount }], at(hall));
+    if (flights.length > 0) this.collect.launch(flights, () => undefined);
+  }
+
+  /** Runs each Juicer's blend a frame: its strip, its sound, its spurt and its last goo ball. */
+  private runJuicers(deltaSeconds: number): void {
+    this.giblets.update(deltaSeconds);
+    for (const [id, blend] of this.blends) {
+      const juicer = this.byId.get(id);
+      if (!juicer) {
+        this.blends.delete(id);
+        continue;
+      }
+      if (!blend.running) continue;
+      for (const event of blend.advance(deltaSeconds)) {
+        if (event.kind === "sound") playEffect("juice");
+        else if (event.kind === "goo") this.throwJuice(id, 1);
+        else {
+          const offset = this.buildings.offsetOf(id);
+          const spout = {
+            x: juicer.worldX + offset.x + JUICER_SPOUT.x,
+            y: juicer.worldY + offset.y + JUICER_SPOUT.y,
+          };
+          this.giblets.throw(planGiblets(spout, event.amount, this.giblets.inAir));
+        }
+      }
+      this.buildings.setAnimFrame(id, 0, blend.cell);
+    }
+  }
+
   /* ── A bank's balls ─────────────────────────────────────────────────── */
 
   /**
@@ -955,6 +1075,8 @@ export class YardRenderer {
     this.unwatchSeason?.();
     this.unwatchSeason = null;
     this.collect.destroy();
+    this.giblets.destroy();
+    this.blends.clear();
     this.life.destroy();
     this.clearMushrooms();
     this.popping.clear();
