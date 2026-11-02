@@ -648,13 +648,13 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   ],
   // 24 Booby Trap: 3D (art/traps-3d), one look; destroyed is the fired trap (the spikes lying round a burnt patch)
   24: [
-    { from: 1, top: ["top.3d1@2x.webp", -14, 1], shadow: ["shadow.3d1.jpg", -14, 3], lift: 0,
-      destroyed: { top: ["top.3d1.destroyed@2x.webp", -15, 2], shadow: ["shadow.3d1.destroyed.jpg", -15, 3] } },
+    { from: 1, top: ["top.3d1@2x.webp", -14, 2], shadow: ["shadow.3d1.jpg", -1, 7], lift: 0,
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -13, 3], shadow: null } },
   ],
   // 117 Heavy Trap: 3D (art/traps-3d), one look; destroyed is the fired trap (the jaws shut in an arch)
   117: [
-    { from: 1, top: ["top.3d1@2x.webp", -13, -4], shadow: ["shadow.3d1.jpg", -5, 3], lift: 0,
-      destroyed: { top: ["top.3d1.destroyed@2x.webp", -13, -3], shadow: ["shadow.3d1.destroyed.jpg", -2, 7] } },
+    { from: 1, top: ["top.3d1@2x.webp", -13, -2], shadow: ["shadow.3d1.jpg", -6, 5], lift: 0,
+      destroyed: { top: ["top.3d1.destroyed@2x.webp", -13, 1], shadow: ["shadow.3d1.destroyed.jpg", 0, 7] } },
   ],
 };
 

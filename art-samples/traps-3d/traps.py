@@ -29,7 +29,7 @@ from pathlib import Path
 
 import bmesh
 import bpy
-from mathutils import Euler, Vector
+from mathutils import Euler, Matrix, Vector
 
 HERE = Path(__file__).resolve().parent
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["booby", "prev"]
@@ -140,7 +140,20 @@ def spike_mat(name, col=(226, 228, 232), shade=(120, 122, 128)):
     return t.m
 
 
-def scorch_mat(name="scorch", col=(22, 30, 14)):
+def flat_spike_mat(name, col=(238, 238, 240), shade=(196, 198, 204)):
+    """Flash's small trap spikes: flat white, only a little greyer on the side away from the light (no metal shine)."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    nx, ny, nz = axes(t, "Normal", "ShaderNodeNewGeometry")
+    lit = m(t, "ADD", m(t, "MULTIPLY", nx, -0.6), m(t, "ADD", m(t, "MULTIPLY", ny, -0.45), m(t, "MULTIPLY", nz, 0.6)))
+    out = t.mix(srgb(*shade), srgb(*col), t.ramp(lit, [(-0.3, K0), (0.3, K1)]))
+    t.set(**{"Base Color": out, "rough": 0.7, "metal": 0.0, "spec": 0.2})
+    MATS[name] = t.m
+    return t.m
+
+
+def scorch_mat(name="scorch", col=(16, 26, 10)):
     """The burnt ground where the Booby Trap's dome was (Flash's fired look shows it dark there): a dark disc that
     fades out to its edge."""
     if name in MATS:
@@ -150,8 +163,24 @@ def scorch_mat(name="scorch", col=(22, 30, 14)):
     d = m(t, "SQRT", m(t, "ADD", m(t, "MULTIPLY", px, px), m(t, "MULTIPLY", py, py)))
     a = t.ramp(d, [(0.0, (0.97, 0.97, 0.97, 1)), (0.5, (0.88, 0.88, 0.88, 1)), (0.98, K0)])
     n1 = t.noise(t.coords(), 5.0, 3.0, 0.5)
-    t.set(**{"Base Color": t.mix(srgb(*col), srgb(40, 34, 30), t.ramp(n1, [(0.4, K0), (0.7, K1)])), "rough": 0.95,
+    t.set(**{"Base Color": t.mix(srgb(*col), srgb(30, 40, 20), t.ramp(n1, [(0.4, K0), (0.7, K1)])), "rough": 0.95,
              "spec": 0.05, "Alpha": a})
+    MATS[name] = t.m
+    return t.m
+
+
+def speck_plate(name, col, speck):
+    """The Heavy Trap's plate: dark brown, grimy, with small pale specks (Flash's plate)."""
+    if name in MATS:
+        return MATS[name]
+    t = NT(name)
+    v = t.coords()
+    n1 = t.noise(v, 4.0, 3.0, 0.5, 0.2)
+    out = t.mix(srgb(*col), srgb(30, 22, 18), t.ramp(n1, [(0.4, K0), (0.7, (0.7, 0.7, 0.7, 1))]))
+    n2 = t.noise(v, 38.0, 1.0, 0.5)
+    out = t.mix(out, srgb(*speck), t.ramp(n2, [(0.70, K0), (0.74, K1)]))
+    t.set(**{"Base Color": out, "rough": 0.8, "metal": 0.1, "spec": 0.25})
+    t.bump(t.noise(v, 20, 4.0, 0.6), 0.05, 0.01)
     MATS[name] = t.m
     return t.m
 
@@ -163,11 +192,11 @@ def mats():
         "scorch": scorch_mat(),
         "char": painted("char", (40, 34, 32), rough=0.85, wear=(72, 62, 56), dirt=0.1, ao_min=0.7),
         "spike": spike_mat("spike"),
-        "plate": painted("bear-plate", (70, 56, 56), rough=0.55, metal=0.35, wear=(112, 96, 96), rust=(66, 40, 34),
-                         dirt=0.12, ao_min=0.65, scale=9.0),
-        "red": shiny("bear-red", (214, 40, 40), rough=0.32, metal=0.05, wear=(170, 30, 30), dirt=0.1, coat=0.3,
-                     ao_min=0.75, scale=7.0),
-        "inside": painted("bear-inside", (40, 9, 9), rough=0.6, metal=0.2, wear=(62, 20, 20), dirt=0.05, ao_min=0.6),
+        "flatspike": flat_spike_mat("flat-spike"),
+        "plate": speck_plate("bear-plate", (54, 40, 32), (150, 140, 132)),
+        "red": painted("bear-red", (192, 32, 30), rough=0.3, metal=0.05, wear=(110, 22, 20), rust=(70, 26, 20),
+                       dirt=0.35, soot=0.45, ao_min=0.45, scale=7.0, spec=0.6),
+        "inside": painted("bear-inside", (26, 10, 9), rough=0.7, metal=0.1, wear=(44, 18, 16), dirt=0.1, ao_min=0.5),
         "hinge": painted("bear-hinge", (66, 58, 58), rough=0.45, metal=0.5, wear=(104, 94, 94), dirt=0.1, ao_min=0.7),
     }
 
@@ -210,6 +239,22 @@ def spike(name, at_r, bearing, length, r0, mat, up=0.0, z=0.1, sides=6):
     return ob
 
 
+def flat_spike(name, at_r, bearing, length, half_w, thick, mat, z=0.0, tilt=0.0):
+    """Flash's small Booby Trap spike: a flat white triangle lying out from the dome's edge, a low ridge on top (four
+    faces), its foot at radius at_r, its point `length` further out along `bearing`; `tilt` degrees turns it on its
+    ridge (for the fired look's spikes lying a little askew)."""
+    bm = bmesh.new()
+    vs = [bm.verts.new(c) for c in ((0, -half_w, 0), (0, half_w, 0), (0, 0, thick), (length, 0, 0))]
+    for f in ((vs[0], vs[1], vs[2]), (vs[0], vs[2], vs[3]), (vs[1], vs[3], vs[2]), (vs[0], vs[3], vs[1])):
+        bm.faces.new(f)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = mesh_ob(name, bm, [mat], smooth=False)
+    b = math.radians(bearing)
+    ob.location = (at_r * math.cos(b), at_r * math.sin(b), z)
+    ob.rotation_euler = Euler((math.radians(tilt), 0, b), "XYZ")
+    return ob
+
+
 def jaw_band(name, th0, th1, r, h, thick, teeth, tooth_h, mats_, z0=0.0, n=60, lean=0.35):
     """One jaw of the bear trap: a band of the ring from angle th0 to th1 (degrees), `h` tall from z0, `thick` deep,
     its top cut into `teeth` sharp teeth `tooth_h` high that lean in toward the middle. Materials: outside and top
@@ -238,7 +283,7 @@ def jaw_band(name, th0, th1, r, h, thick, teeth, tooth_h, mats_, z0=0.0, n=60, l
     for f, mi in faces:
         f.material_index = mi
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return mesh_ob(name, bm, mats_, smooth=False, bevel=0.012, segs=2)
+    return mesh_ob(name, bm, mats_, smooth=True, bevel=0.012, segs=2)     # smooth: flat strips read as streaks
 
 
 def drop(o, z=0.0):
@@ -249,48 +294,36 @@ def drop(o, z=0.0):
 
 
 # ------------------------------------------------------------------------------------------------------------ looks
-BOOBY_R = float(os.environ.get("PB_BR", 0.98))       # the dome's foot
-BOOBY_H = float(os.environ.get("PB_BH", 0.74))        # the dome's top
-SPIKE_OUT = float(os.environ.get("PB_SO", 1.4))     # how far the spikes' points reach from the middle
-SPIKE_W = float(os.environ.get("PB_SW", 0.19))       # a spike's foot (radius)
+BOOBY_R = float(os.environ.get("PB_BR", 1.02))       # the dome's foot
+BOOBY_H = float(os.environ.get("PB_BH", 0.5))         # the dome's top (Flash's is a wide flat oval)
+BOOBY_P = float(os.environ.get("PB_BP", 0.7))         # the profile's power: below 1 the top is flatter, the sides steeper
+SPIKE_OUT = float(os.environ.get("PB_SO", 0.3))     # how far a spike's point reaches past the dome's foot
+SPIKE_W = float(os.environ.get("PB_SW", 0.13))        # a spike's foot (half width)
+SPIKE_T = float(os.environ.get("PB_ST", 0.09))       # its ridge's height
 
 
 def booby(M, state):
-    """Booby Trap: a steel-blue dome on a darker band, eight white spikes straight out of the band."""
+    """Booby Trap: a wide, flat steel-blue dome, eight small flat white spikes at its foot (Flash has no band)."""
     obs = []
-    band_r, band_h = BOOBY_R + 0.02, 0.08
-    spike_len = SPIKE_OUT - band_r + 0.1
+    spike_at = BOOBY_R - 0.04
+    spike_len = SPIKE_OUT + 0.04
     if state == "whole":
         prof = [(0.0, BOOBY_H)]
-        for k in range(1, 13):                       # a squashed half sphere, a little flatter on top (a mine)
-            a = k / 12 * math.pi / 2
-            prof.append((BOOBY_R * math.sin(a), band_h * 0.6 + (BOOBY_H - band_h * 0.6) * math.cos(a) ** 1.1))
+        for k in range(1, 17):                       # a squashed lens: flat on top, rounding down to the foot
+            a = k / 16 * math.pi / 2
+            prof.append((BOOBY_R * math.sin(a), BOOBY_H * math.cos(a) ** BOOBY_P))
         prof += [(BOOBY_R, 0.0), (0.0, 0.0)]
-        obs.append(revolve("dome", prof, M["dome"]))
-        obs.append(revolve("band", [(0.0, band_h), (band_r - 0.05, band_h), (band_r, band_h - 0.04), (band_r, 0.02),
-                                    (band_r - 0.03, 0.0), (0.0, 0.0)], M["band"], verts=48))
+        obs.append(revolve("dome", prof, M["dome"], verts=64))
         for k in range(8):
-            obs.append(spike(f"spike{k}", band_r - 0.1, -45 + 45 * k, spike_len, SPIKE_W, M["spike"], z=0.1))
+            obs.append(flat_spike(f"spike{k}", spike_at, -45 + 45 * k, spike_len, SPIKE_W, SPIKE_T, M["flatspike"]))
     else:
-        # the dome blown away; the spikes lie where they were, each on a dark broken bit of the band
+        # the dome blown away: a dark scorched patch where it stood, the small spikes lying where they were
+        obs.append(revolve("scorch", [(0.0, 0.004), (BOOBY_R, 0.004), (BOOBY_R, 0.0), (0.0, 0.0)], M["scorch"],
+                           verts=64))
         for k in range(8):
-            b = -45 + 45 * k + rng.uniform(-6, 6)
-            out = rng.uniform(-0.04, 0.03)
-            s = spike(f"spike{k}", band_r - 0.1 + out, b, spike_len, SPIKE_W, M["spike"], up=rng.uniform(-4, 6),
-                      z=0.1)
-            obs.append(s)
-            br = math.radians(b)
-            chunk_r = band_r - 0.1 + out
-            ch = G["box"](f"bandbit{k}", (0.12, 0.3, 0.1), (chunk_r * math.cos(br), chunk_r * math.sin(br), 0.0),
-                          M["char"], rot=(rng.uniform(-8, 8), rng.uniform(-8, 8), math.degrees(br)), bevel=0.02,
-                          jitter=0.012)
-            obs.append(ch)
-        obs.append(revolve("scorch", [(0.0, 0.004), (1.0, 0.004), (1.0, 0.0), (0.0, 0.0)], M["scorch"], verts=48))
-        for k in range(5):                                       # a few dark shards of the dome nearer the middle
-            a = rng.uniform(0, 2 * math.pi)
-            r = rng.uniform(0.35, 0.75)
-            obs.append(G["box"](f"shard{k}", (0.14, 0.1, 0.035), (r * math.cos(a), r * math.sin(a), 0.0), M["char"],
-                                rot=(0, 0, rng.uniform(0, 180)), bevel=0.01, jitter=0.01))
+            b = -45 + 45 * k + rng.uniform(-5, 5)
+            obs.append(flat_spike(f"spike{k}", spike_at + rng.uniform(-0.05, 0.03), b, spike_len, SPIKE_W, SPIKE_T,
+                                  M["flatspike"], tilt=rng.uniform(-12, 12)))
     return obs
 
 
@@ -298,6 +331,9 @@ HEAVY_R = float(os.environ.get("PB_HR", 0.95))       # the jaws' ring
 PLATE_R = float(os.environ.get("PB_PR", 1.27))       # the round plate under it
 JAW_H = float(os.environ.get("PB_JH", 0.4))
 TOOTH_H = float(os.environ.get("PB_TH", 0.24))
+HSPIKE_L = float(os.environ.get("PB_HSL", 0.5))     # the Heavy Trap's spikes: short and stubby, as Flash's
+HSPIKE_W = float(os.environ.get("PB_HSW", 0.14))
+ARCH_Z = float(os.environ.get("PB_AZ", 0.5))         # the shut jaws' height, squashed
 PLATE_T = 0.12
 
 
@@ -318,16 +354,19 @@ def heavy(M, state):
         obs.append(jaw_band("jawB", 0, 180, HEAVY_R, JAW_H, 0.1, 7, TOOTH_H, jm, z0=PLATE_T))
         for k in range(8):
             b = -45 + 45 * k + 22.5
-            obs.append(spike(f"spike{k}", HEAVY_R + 0.02, b, 0.68, 0.08, M["spike"], up=50, z=PLATE_T + JAW_H * 0.5))
+            obs.append(spike(f"spike{k}", HEAVY_R + 0.02, b, HSPIKE_L, HSPIKE_W, M["flatspike"], up=40,
+                             z=PLATE_T + JAW_H * 0.5))
     else:
         # shut: each jaw turned 90 degrees up about the hinge line (world X), the two meeting overhead in an arch
+        # Flash's shut trap is a LOW flat arch lying almost on the plate: the shut jaws squashed down (ARCH_Z)
         for nm, th0, th1, ang in (("jawF", 180, 360, -90), ("jawB", 0, 180, 90)):
             j = jaw_band(nm, th0, th1, HEAVY_R, JAW_H, 0.1, 7, TOOTH_H, jm, z0=0.0)
-            j.rotation_euler = Euler((math.radians(ang), 0, 0), "XYZ")
+            j.data.transform(Matrix.Rotation(math.radians(ang), 4, "X"))
+            j.data.transform(Matrix.Diagonal((1.0, 1.0, ARCH_Z, 1.0)))
             j.location = (0, 0, PLATE_T + 0.02)
             obs.append(j)
         for k, (r, a) in enumerate(((0.75, 200), (0.9, 290))):      # two spikes snapped off, lying on the plate
-            obs.append(spike(f"spikebit{k}", r, a, 0.32, 0.07, M["spike"], up=-3, z=PLATE_T + 0.07))
+            obs.append(spike(f"spikebit{k}", r, a, 0.26, 0.1, M["flatspike"], up=-3, z=PLATE_T + 0.07))
     return obs
 
 

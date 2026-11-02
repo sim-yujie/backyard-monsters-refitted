@@ -277,8 +277,10 @@ describe("the 3D yard buildings", () => {
       expect(look?.damaged, `type ${type}`).toBeUndefined();
       expect(resolveArt(type, 1, ArtState.DEFAULT)?.top.url).toBe(`${folder}top.3d1@2x.webp`);
       expect(resolveArt(type, 1, ArtState.DESTROYED)?.top.url).toBe(`${folder}top.3d1.destroyed@2x.webp`);
-      expect(resolveArt(type, 1, ArtState.DESTROYED)?.shadow?.url).toBe(`${folder}shadow.3d1.destroyed.jpg`);
     }
+    // the fired Heavy Trap's shut jaws cast a shadow; the fired Booby Trap is only flat spikes on a scorch, so none
+    expect(resolveArt(117, 1, ArtState.DESTROYED)?.shadow?.url).toBe("/assets/buildings/heavytrap/shadow.3d1.destroyed.jpg");
+    expect(resolveArt(24, 1, ArtState.DESTROYED)?.shadow ?? null).toBeNull();
     setClassicLook(true);
     expect(resolveArt(24, 1, ArtState.DESTROYED)?.top.url).toBe("/assets/buildings/boobytrap/top.1.destroyed.png");
     expect(resolveArt(117, 1, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/heavytrap/top.1.png");
