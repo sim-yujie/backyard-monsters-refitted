@@ -154,7 +154,7 @@ const vec2 NEIGHBOURS[6] = vec2[6](
 // Ground blending, in hex units (corner radius 1): how far the noise pushes the point, the edge
 // noise's size and strength, and the fade width on Medium/High and on Low.
 const float WARP = 0.6;
-const float BEND = 0.3;
+const float BEND = 0.18;
 const float BEND_FREQ = 1.3;
 const float EDGE_FREQ = 2.2;
 const float EDGE_NOISE = 0.8;
@@ -178,6 +178,8 @@ const float BEACH_FAR = 0.035;
 const float BEACH_NEAR = 0.15;
 const float SHALLOWS_REACH = 0.38;
 const float MID_SEA = 0.5;
+// The step (hex units) over which High measures the coast's slope.
+const float COAST_STEP = 0.01;
 const float SURF_SPACING = 0.2;
 const float SURF_SPEED = 0.22;
 const vec3 FOAM_WHITE = vec3(0.97, 0.99, 1.0);
@@ -656,6 +658,13 @@ void main() {
   vec2 slope = vec2(dFdx(c.s) / max(abs(dFdx(h.x)), 1e-6), dFdy(c.s) / max(abs(dFdy(h.y)), 1e-6));
   float dist = c.s / max(length(slope), 0.6);
   float coastMask = c.both && c.known ? smoothstep(0.004, 0.05, min(c.land, c.water)) : 0.0;
+  // On High the coast's slope is measured on the ground itself, a small step either way: the
+  // screen's slope is one value per 2x2 pixels, which drew the foam's edge in little steps.
+  if (uQuality > 1.5 && coastMask > 0.0 && dist > -0.2 && dist < 0.7) {
+    Coast cx = coastOf(blendAt(h + vec2(COAST_STEP, 0.0)));
+    Coast cy = coastOf(blendAt(h + vec2(0.0, COAST_STEP)));
+    if (cx.both && cy.both) dist = c.s / max(length(vec2(cx.s - c.s, cy.s - c.s)) / COAST_STEP, 0.6);
+  }
 
   vec3 land = vec3(0.0);
   float landSum = 0.0;
