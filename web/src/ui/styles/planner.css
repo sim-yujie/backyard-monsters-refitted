@@ -497,6 +497,12 @@
   font-size: var(--text-sm);
 }
 
+/* Only offered when a loaded slot has unsaved edits; display: flex above
+   would otherwise beat the hidden attribute. */
+.planner-apply__check[hidden] {
+  display: none;
+}
+
 .planner-apply__actions {
   display: flex;
   gap: var(--space-2);
