@@ -227,6 +227,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/yardplanner/savetemplate",
   "POST /api/:apiVersion/bm/yardplanner/deletetemplate",
   "POST /api/:apiVersion/player/savebookmarks",
+  // A game-team warning or chat pause marked seen (moderation, 3 Nov).
+  "POST /api/:apiVersion/bm/moderation/notice/:id/seen",
   "POST /api/:apiVersion/bm/friends/request",
   "POST /api/:apiVersion/bm/friends/request/answer",
   "POST /api/:apiVersion/bm/friends/request/cancel",
