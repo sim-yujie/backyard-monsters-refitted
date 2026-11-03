@@ -9,21 +9,20 @@ import { destroyLiveArt, loadLiveArt, type LiveTextures } from "./liveArt";
 import { LiveChunk, type LiveChunkLayer, type LiveSource } from "./LiveChunk";
 import { liveLevelFor, planFor, type LivePlan } from "./liveLevel";
 import { SkyLayer, type ViewRect } from "./SkyLayer";
-import { SMOKE_MIN_ZOOM, SmokeLayer } from "./SmokeLayer";
 import { WaterLayer } from "./WaterLayer";
 import { WaterSheet } from "./WaterSheet";
 
 /**
  * Map Room 2, alive (owner, 3 Nov 2026: "Can we make the map live/animated
  * like in civ?"). Part 1: the water moves and foams on the shores, cloud
- * shadows drift over the near map and clouds over the far one, smoke rises
- * from yards, outposts and camps, and now and then gulls fly over.
+ * shadows drift over the near map and clouds over the far one, and now and
+ * then gulls fly over. (The smoke over yards was dropped by the owner.)
  *
  * Kept apart from the renderer, which only tells it when a chunk is built,
  * shown, hidden or thrown away (`chunkBuilt`, `show`, `drop`) and calls
  * `update` once a frame. Everything is built with its chunk; a frame only
  * advances the clock, and at the animation rate (`LivePlan.stepSeconds`)
- * redraws the small water sheet and moves the puffs, clouds and birds on
+ * redraws the small water sheet and moves the clouds and birds on
  * screen. Nothing here ever rebuilds a chunk on its own account.
  *
  * Off in Classic (Flash's map stood still) and on Quality Low, where nothing
@@ -33,10 +32,10 @@ import { WaterSheet } from "./WaterSheet";
  *
  * Part 2 (the land features: trees swaying, marsh bubbles, glints on
  * resources) adds a `LiveChunkLayer` to `layers` below: it gets each chunk's
- * cells at build time and a `step` at the animation rate, as the smoke does.
+ * cells at build time and a `step` at the animation rate.
  */
 export class LiveMap {
-  /** Shadows and smoke over every chunk's buildings, then clouds and birds over those. */
+  /** Shadows over every chunk's buildings, then clouds and birds over those. */
   readonly overlay = new Container();
 
   private readonly chunkOverlay = new Container();
@@ -155,7 +154,6 @@ export class LiveMap {
     if (this.sinceStep < this.plan.stepSeconds) return;
     this.sinceStep = 0;
 
-    this.chunkOverlay.visible = zoom >= SMOKE_MIN_ZOOM;
     // Below the hex zoom the renderer shows its one-texel-a-cell raster, and no chunk is on screen.
     const visible = zoom < LOD_HEX_ZOOM ? [] : [...this.chunks.values()].filter((chunk) => chunk.visible);
     if (this.sheet && visible.length > 0) this.sheet.render(this.renderer, this.clock);
@@ -193,11 +191,10 @@ export class LiveMap {
         this.sheet = new WaterSheet(art.water, art.foam, this.plan.waterResolution);
         layers.push(new WaterLayer(this.sheet, this.plan.foam && art.foam !== null));
       }
-      if (art.smoke.length > 0) layers.push(new SmokeLayer(art.smoke));
       this.layers = layers;
       if (art.clouds.length > 0 || art.bird) {
         this.sky = new SkyLayer(art.clouds, art.bird, this.plan.birds);
-        // Shadows under the smoke; clouds and birds over everything.
+        // Shadows under the chunks' overlays; clouds and birds over everything.
         this.overlay.addChildAt(this.sky.shadows, 0);
         this.overlay.addChild(this.sky.above);
       }

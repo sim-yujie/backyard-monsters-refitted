@@ -7,8 +7,7 @@ import type { Quality } from "@/game/quality";
  * - Classic looks exactly as Flash did, and Flash's map stood still: `off`.
  * - Quality Low is for slow internet and slow PCs: `off`, and none of the
  *   living map's art is downloaded.
- * - Quality Medium: `reduced`, the water and the yards' smoke at half the
- *   animation rate, from the smaller copies of the art, and no clouds or birds.
+ * - Quality Medium: `reduced`, the water at half the animation rate, from the smaller copies of the art, and no clouds or birds.
  * - Quality High: `full`.
  */
 export type LiveLevel = "off" | "reduced" | "full";
@@ -25,8 +24,6 @@ export interface LivePlan {
   readonly water: boolean;
   /** Foam washing along the shores. */
   readonly foam: boolean;
-  /** Smoke over yards, outposts and tribe camps. */
-  readonly smoke: boolean;
   /** Cloud shadows drifting over the near map, and clouds over the far map. */
   readonly clouds: boolean;
   /** Now and then a few gulls fly across. */
@@ -34,7 +31,7 @@ export interface LivePlan {
   /**
    * Seconds between animation steps. The map is redrawn every frame anyway
    * (Pixi's ticker), so this only paces the water sheet's redraw and the
-   * smoke's moves: 30 steps a second on High, 15 on Medium.
+   * sky's moves: 30 steps a second on High, 15 on Medium.
    */
   readonly stepSeconds: number;
   /** Pixels per world point in the water sheet: sharper glints on High. */
@@ -48,7 +45,6 @@ const PLANS: Record<LiveLevel, LivePlan> = {
     level: "off",
     water: false,
     foam: false,
-    smoke: false,
     clouds: false,
     birds: false,
     stepSeconds: Number.POSITIVE_INFINITY,
@@ -59,7 +55,6 @@ const PLANS: Record<LiveLevel, LivePlan> = {
     level: "reduced",
     water: true,
     foam: true,
-    smoke: true,
     clouds: false,
     birds: false,
     stepSeconds: 1 / 15,
@@ -70,7 +65,6 @@ const PLANS: Record<LiveLevel, LivePlan> = {
     level: "full",
     water: true,
     foam: true,
-    smoke: true,
     clouds: true,
     birds: true,
     stepSeconds: 1 / 30,

@@ -88,7 +88,7 @@ export class MapRenderer {
   /** Flash's ground tiles, fetched the same way; flat hexes until they land. */
   private readonly groundArt = new GroundArt();
   private readonly constructionBadge = new ConstructionBadge();
-  /** The living map (water, smoke, clouds, birds): its own layers, told when chunks come and go. */
+  /** The living map (water, clouds, birds): its own layers, told when chunks come and go. */
   private readonly live = new LiveMap(this.ground, () => this.rebuildAll());
   private readonly chunks = new Map<number, MapChunk>();
   private readonly residency = new ChunkResidency({

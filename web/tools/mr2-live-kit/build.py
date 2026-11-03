@@ -1,6 +1,6 @@
 """Builds the living map's painted art (MR2 part 1) from Codex's pictures.
 
-Each folder here (water, foam, clouds, smoke, bird) holds prompt.txt and the
+Each folder here (water, foam, clouds, bird) holds prompt.txt and the
 picture Codex painted from it, art.png (run.sh <folder>). This script cuts them
 into the small files the game loads, in web/public/maproom/live/:
 
@@ -8,7 +8,6 @@ into the small files the game loads, in web/public/maproom/live/:
   tile, white with the shape in alpha (the shader colours it) (High 512 px, Medium 256 px).
 - foam@2x.webp / foam.webp: shore foam, the same way (256 and 128 px: it is only ever a thin band).
 - clouds.webp: three clouds side by side (High only; Medium has no clouds).
-- smoke@2x.webp / smoke.webp: four smoke puffs in a 2 x 2 grid.
 - bird.webp: one gull from above (High only).
 
 Low draws no animation, so it downloads none of these.
@@ -104,12 +103,6 @@ def main() -> None:
     save(row, "clouds.webp", (row.shape[1], row.shape[0]))
     widths = [round(c.shape[1] * 256 / c.shape[0]) for c in clouds]
     print("cloud widths", widths)
-
-    smoke = black_to_alpha(load("smoke"), floor=0.03, gain=1.1)
-    # Halfway to white: Codex's warm grey read as brown haze over the grass.
-    smoke[..., :3] = smoke[..., :3] * 0.5 + 0.5
-    save(smoke, "smoke@2x.webp", (256, 256))
-    save(smoke, "smoke.webp", (128, 128))
 
     bird_rgb = load("bird")
     green = (bird_rgb[..., 1] - np.maximum(bird_rgb[..., 0], bird_rgb[..., 2]))

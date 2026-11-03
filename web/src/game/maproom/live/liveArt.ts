@@ -18,13 +18,11 @@ export interface LiveTextures {
   foam: Texture | null;
   /** Three clouds seen from above. */
   clouds: Texture[];
-  /** Four smoke puffs. */
-  smoke: Texture[];
   /** A gull from above, wings spread. */
   bird: Texture | null;
 }
 
-const empty = (): LiveTextures => ({ water: null, foam: null, clouds: [], smoke: [], bird: null });
+const empty = (): LiveTextures => ({ water: null, foam: null, clouds: [], bird: null });
 
 const fetch = async (file: string): Promise<Texture | null> => {
   try {
@@ -42,11 +40,10 @@ const cut = (sheet: Texture, frames: readonly Rectangle[]): Texture[] =>
 export const loadLiveArt = async (plan: LivePlan): Promise<LiveTextures> => {
   if (plan.level === "off") return empty();
   const suffix = plan.artSuffix;
-  const [water, foam, clouds, smoke, bird] = await Promise.all([
+  const [water, foam, clouds, bird] = await Promise.all([
     plan.water ? fetch(`water-glints${suffix}.webp`) : null,
     plan.foam ? fetch(`foam${suffix}.webp`) : null,
     plan.clouds ? fetch("clouds.webp") : null,
-    plan.smoke ? fetch(`smoke${suffix}.webp`) : null,
     plan.birds ? fetch("bird.webp") : null,
   ]);
 
@@ -69,21 +66,11 @@ export const loadLiveArt = async (plan: LivePlan): Promise<LiveTextures> => {
     }
     art.clouds = cut(clouds, frames);
   }
-  if (smoke) {
-    const half = smoke.width / 2;
-    art.smoke = cut(smoke, [
-      new Rectangle(0, 0, half, half),
-      new Rectangle(half, 0, half, half),
-      new Rectangle(0, half, half, half),
-      new Rectangle(half, half, half, half),
-    ]);
-  }
   return art;
 };
 
 /** Drops the frames cut from the sheets; the sheets stay in `Assets`' cache. */
 export const destroyLiveArt = (art: LiveTextures): void => {
-  for (const frame of [...art.clouds, ...art.smoke]) frame.destroy(false);
+  for (const frame of art.clouds) frame.destroy(false);
   art.clouds = [];
-  art.smoke = [];
 };

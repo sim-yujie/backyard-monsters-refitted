@@ -37,7 +37,7 @@ export interface LiveCell {
  *
  * A layer adds what it draws through `addGround` (into the renderer's sorted
  * ground layer, for things that must sit between cells, like the water) or
- * `overlay` (over every chunk's buildings and plates, for smoke). It never
+ * `overlay` (over every chunk's buildings and plates). It never
  * has to track visibility or clean up itself.
  */
 export class LiveChunk {
@@ -107,7 +107,7 @@ export class LiveChunk {
 }
 
 /**
- * A layer of the living map that draws per chunk (the water, the smoke; the
+ * A layer of the living map that draws per chunk (the water; the
  * land features' animation in part 2).
  *
  * `build` runs once when the renderer builds or rebuilds a chunk, never per

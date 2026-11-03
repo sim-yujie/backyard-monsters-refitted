@@ -18,13 +18,13 @@ describe("liveLevelFor", () => {
 describe("planFor", () => {
   it("draws nothing and never steps when off", () => {
     const plan = planFor("off");
-    expect([plan.water, plan.foam, plan.smoke, plan.clouds, plan.birds]).toEqual([false, false, false, false, false]);
+    expect([plan.water, plan.foam, plan.clouds, plan.birds]).toEqual([false, false, false, false]);
     expect(plan.stepSeconds).toBe(Number.POSITIVE_INFINITY);
   });
 
-  it("on Medium moves the water and smoke at half rate from the small art, with no clouds or birds", () => {
+  it("on Medium moves the water at half rate from the small art, with no clouds or birds", () => {
     const plan = planFor("reduced");
-    expect([plan.water, plan.foam, plan.smoke]).toEqual([true, true, true]);
+    expect([plan.water, plan.foam]).toEqual([true, true]);
     expect([plan.clouds, plan.birds]).toEqual([false, false]);
     expect(plan.stepSeconds).toBeCloseTo(2 * planFor("full").stepSeconds);
     expect(plan.artSuffix).toBe("");
@@ -32,7 +32,7 @@ describe("planFor", () => {
 
   it("on High draws everything from the sharp art", () => {
     const plan = planFor("full");
-    expect([plan.water, plan.foam, plan.smoke, plan.clouds, plan.birds]).toEqual([true, true, true, true, true]);
+    expect([plan.water, plan.foam, plan.clouds, plan.birds]).toEqual([true, true, true, true]);
     expect(plan.artSuffix).toBe("@2x");
   });
 });
