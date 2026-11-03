@@ -51,7 +51,20 @@ export const setScreenTune = (tune: Tune | null | undefined): void => {
   musicPlayer().want(tune);
 };
 
-/** Plays a sound effect, unless the player has sound effects off (or the switches are not known yet). */
-export const playEffect = (effect: Effect): void => {
-  effectsPlayer().play(effect);
+/**
+ * Plays a sound effect, at `volume` or its own, unless the player has sound
+ * effects off (or the switches are not known yet).
+ */
+export const playEffect = (effect: Effect, volume?: number): void => {
+  const played = effectsPlayer().play(effect, volume);
+  if (import.meta.env.DEV) {
+    // `__effectsLog` for the browser checks: every effect asked for, and whether it sounded.
+    const log = ((globalThis as Record<string, unknown>)["__effectsLog"] ??= []) as unknown[];
+    if (log.length < 5_000) log.push({ at: Math.round(performance.now()), effect, volume, played });
+  }
+};
+
+/** Fetches an attack's sounds as it opens (`attackSounds.ts`); nothing with sound effects off. */
+export const preloadEffects = (list: readonly Effect[]): void => {
+  effectsPlayer().preload(list);
 };
