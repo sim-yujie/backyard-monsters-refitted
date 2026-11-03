@@ -68,7 +68,7 @@ describe("TribeYardSim", () => {
     expect(sim.garrison(2)).toEqual({ C5: 44 });
   });
 
-  it("applies a plan: moves, planned levels at once, left-out buildings removed", async () => {
+  it("applies a layout: moves, an old planned level ignored, left-out buildings removed", async () => {
     const sim = new TribeYardSim(yard());
     const data = JSON.stringify({
       version: 2,
@@ -80,7 +80,7 @@ describe("TribeYardSim", () => {
     });
     const answer = (await call(sim, "yardplanner/apply", { data })) as { moved: number; buildingdata: BuildingDataMap };
     expect(answer.moved).toBe(1);
-    expect(answer.buildingdata["1"]).toMatchObject({ X: 20, Y: 20, l: 7 });
+    expect(answer.buildingdata["1"]).toMatchObject({ X: 20, Y: 20, l: 4 });
     expect(answer.buildingdata["3"]).toBeUndefined();
   });
 
