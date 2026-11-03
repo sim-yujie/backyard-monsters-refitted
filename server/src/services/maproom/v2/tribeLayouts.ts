@@ -105,9 +105,12 @@ const savedThisRun: Record<TribeId, Record<number, SaveData>> = {
   dreadnaught: {},
 };
 
+/** Whether the data files' saved yards count; off only in tests of the originals ({@link ignoreShippedSaves}). */
+let shippedSaves = true;
+
 /** The yards saved per level for a tribe: the data file's, then this run's on top. */
 export const savedLayouts = (tribe: TribeId): Record<number, SaveData> => ({
-  ...(savedTribeLevels[tribe] ?? {}),
+  ...(shippedSaves ? (savedTribeLevels[tribe] ?? {}) : {}),
   ...savedThisRun[tribe],
 });
 
@@ -148,4 +151,9 @@ export const rememberSavedLayout = (tribe: TribeId, level: number, save: SaveDat
 /** Forgets this run's saves (tests). */
 export const forgetSavedLayouts = (): void => {
   for (const tribe of TRIBE_IDS) savedThisRun[tribe] = {};
+};
+
+/** Leaves the data files' saved yards out, so only the original layouts and this run's saves count (tests). */
+export const ignoreShippedSaves = (ignore: boolean): void => {
+  shippedSaves = !ignore;
 };
