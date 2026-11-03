@@ -134,7 +134,7 @@ export const gooPool = (rolls: readonly [number, number, number, number, number]
  * cattail clumps are about a third of a cell tall). Shares of the grid squares (on High) by kind.
  */
 export const MARSH_GRID = 0.19;
-export const MARSH_PIECES = { reeds: 0.34, lilies: 0.12, rocks: 0.06, log: 0.012 } as const;
+export const MARSH_PIECES = { reeds: 0.34, lilies: 0.16, rocks: 0.06, log: 0.012 } as const;
 
 /**
  * Edge trees, pines, boulders, goo pools and reeds: the share of their grid squares kept at each

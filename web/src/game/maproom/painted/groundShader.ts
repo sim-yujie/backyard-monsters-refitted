@@ -890,8 +890,10 @@ void main() {
     if (treeFade > 0.0 && max(feat.share.x, max(feat.share.y, feat.share.z)) > 0.001) {
       float density = uQuality > 1.5 ? ${FEATURE_DENSITY.high.toFixed(2)} : uQuality > 0.5 ? ${FEATURE_DENSITY.medium.toFixed(2)} : ${FEATURE_DENSITY.low.toFixed(2)};
       colour = drawFeatures(colour, vWorld, wdx, wdy, treeFade, detailFade * featShown, density);
-      // The marsh's cattails, lily pads, log and wet rocks (mr2-marsh), on their own larger grid.
-      if (feat.share.z > 0.01) colour = drawMarsh(colour, vWorld, wdx, wdy, detailFade * featShown, density);
+      // The marsh's cattails, lily pads, log and wet rocks (mr2-marsh), on their own larger grid; big
+      // enough to stay until cells are about as small as the trees' (mock-up B's marsh reads by them).
+      float marshFade = smoothstep(12.0, 28.0, cellPixels) * featShown;
+      if (feat.share.z > 0.01 && marshFade > 0.0) colour = drawMarsh(colour, vWorld, wdx, wdy, marshFade, density);
     }
     float rockFade = smoothstep(7.0, 16.0, cellPixels);
     if (rockFade > 0.0) colour = drawRocks(colour, vWorld, wdx, wdy, rockFade);
