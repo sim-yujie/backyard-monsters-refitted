@@ -71,12 +71,18 @@ describe("REAL_ACTION_ROUTES", () => {
   test.each([
     ["POST", "/api/:apiVersion/bm/inferno/attack/start"],
     ["POST", "/api/:apiVersion/bm/inferno/transfer"],
-    ["POST", "/api/:apiVersion/player/sendmessage"],
     ["POST", "/api/:apiVersion/player/requesttruce"],
     ["POST", "/api/:apiVersion/bm/friends/help"],
     ["POST", "/api/:apiVersion/bm/friends/gifts/collect"],
   ])("%s %s is a real action (3 Nov)", (method, route) => {
     expect(isRealActionRequest(ctxOf(method), route)).toBe(true);
+  });
+
+  test("mail is like chat; only a truce proposed in a thread counts (owner, 3 Nov)", () => {
+    const route = "/api/:apiVersion/player/sendmessage";
+    expect(isRealActionRequest(ctxOf("POST", { type: "message" }), route)).toBe(false);
+    expect(isRealActionRequest(ctxOf("POST", {}), route)).toBe(false);
+    expect(isRealActionRequest(ctxOf("POST", { type: "trucerequest" }), route)).toBe(true);
   });
 
   // Security review, 3 Nov: writes that change no game state could be

@@ -1,6 +1,7 @@
 import type { Context } from "koa";
 
 import { ATTACK_MODES } from "../../enums/Base.js";
+import { MessageType } from "../../enums/MessageType.js";
 
 /**
  * The routes that count as a real game action (#271), in one place.
@@ -10,8 +11,8 @@ import { ATTACK_MODES } from "../../enums/Base.js";
  * real server-side game actions count (collect, build, upgrade, hatch,
  * attack, planner apply and the like); being there does not. Since 3 Nov
  * every action that changes the game counts (owner: an active player must
- * never be disconnected): the Inferno's attacks and transfers, mail and
- * truces, and friends' help and gifts too. None of these count
+ * never be disconnected): the Inferno's attacks and transfers, truce
+ * requests, and friends' help and gifts too. None of these count
  * ({@link NOT_REAL_ACTION_ROUTES}):
  *
  * - the `/presence` ping, and every load or poll a client sends while it sits
@@ -23,8 +24,8 @@ import { ATTACK_MODES } from "../../enums/Base.js";
  *   tutorial tips, and the account's own settings and sign-in;
  * - writes that change no game state and so could be repeated for nothing
  *   (security review, 3 Nov): saved layouts and templates, Map Room
- *   bookmarks, alliance work, friend requests, and world chat (not an HTTP
- *   route at all). They keep the player connected, as they are input, but
+ *   bookmarks, alliance work, friend requests, mail (owner, 3 Nov: "mail
+ *   like chat") and world chat (not an HTTP route at all). They keep the player connected, as they are input, but
  *   do not renew the protection.
  *
  * A test holds every write route in `app.routes.ts` and the friends routes
@@ -137,6 +138,13 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
 /** An in-game check's answer (#273) counts only when it was right. */
 const isSolvedCheck = (ctx: Context): boolean => (ctx.body as { solved?: unknown } | undefined)?.solved === true;
 
+/**
+ * A mail that proposes a truce in a thread. Other mail is like world chat
+ * (owner, 3 Nov: "mail like chat"): input, not a game action.
+ */
+const isTruceMail = (ctx: Context): boolean =>
+  (ctx.request.body as { type?: unknown } | undefined)?.type === MessageType.TRUCE_REQUEST;
+
 /** An attack load: the attack's start. Any other load is not an action. */
 const isAttackLoad = (ctx: Context): boolean => {
   const body = ctx.request.body as { type?: unknown } | undefined;
@@ -166,9 +174,10 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   // The Inferno: an attack's start (its save is /base/save) and sending monsters down.
   { method: "POST", path: "/api/:apiVersion/bm/inferno/attack/start" },
   { method: "POST", path: "/api/:apiVersion/bm/inferno/transfer" },
-  // Mail and truces (owner, 3 Nov): rate-limited, and bot-watched as any action.
-  { method: "POST", path: "/api/:apiVersion/player/sendmessage" },
+  // Truce requests (owner, 3 Nov): rate-limited, and bot-watched as any action.
+  // Plain mail is not one (owner: "mail like chat").
   { method: "POST", path: "/api/:apiVersion/player/requesttruce" },
+  { method: "POST", path: "/api/:apiVersion/player/sendmessage", when: isTruceMail },
   // Friends: help in their yard, and gifts.
   { method: "POST", path: "/api/:apiVersion/bm/friends/help" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gift" },
