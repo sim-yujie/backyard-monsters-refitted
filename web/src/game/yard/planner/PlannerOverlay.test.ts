@@ -10,7 +10,6 @@ const visuals = (over: Partial<PlannerVisuals>): PlannerVisuals => ({
   selected: NONE,
   moved: NONE,
   invalid: NONE,
-  planned: null,
   marquee: null,
   plot: null,
   ...over,

@@ -1,5 +1,14 @@
 # Yard Planner — Upgrades from the Planner (F1), Implementation Plan
 
+> **Removed 2026-11-03 (owner decision).** Per-building upgrade planning in the Layout planner is
+> gone: "There shouldn't be a way to queue upgrades at once." Players also reported the building
+> window opening over the yard while they picked up or moved a building, so that window is gone
+> too. Apply now only moves buildings; the server ignores any old `plan` field and never starts
+> upgrades from Apply. Upgrades start from each building's own Upgrade button in the yard.
+> **Upgrade walls** stays in the planner (intentional). On phones, Select all, Mirror, Align and
+> Distribute moved to the top of More, in a "Selection" section. The plan below is kept for history
+> only.
+
 Dated 2026-09-24. This is the implementation plan for GitHub issue #1, "Planner: upgrade and
 fortify from inside the planner (F1)": select a building, see its current and next level, plan an
 upgrade, and have Apply start the planned jobs against the real yard up to the number of free

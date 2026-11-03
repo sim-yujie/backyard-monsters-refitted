@@ -3,11 +3,6 @@ import type { SelectionSummary, SelectionTypeCost } from "@/game/yard/planner/su
 import { GroupOp, GROUP_OPS } from "@/game/yard/planner/groupTools";
 import { percentText, type CoverageFigures } from "@/game/yard/planner/coverage";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
-import {
-  wallClockSeconds,
-  type ApplyPreview,
-  type PlanTotals,
-} from "@/game/yard/planner/upgrades";
 import type { YardWorkers } from "@/game/yard/yardModel";
 import { YardView } from "@/game/yard/YardRenderer";
 import { formatAmount, formatCountdown } from "@/ui/format";
@@ -67,7 +62,8 @@ import { costLineParts, isPhone, PlannerLayout } from "./plannerLayout";
  * undo/redo, and a bottom bar of the summary, a one-line cost, Box, the
  * drawer, More and Apply; sideways, all of that in one bar along the bottom.
  * Everything else moves into the More sheet, and Mirror, Align and Distribute
- * are lent to the building sheet (`lendArrange`). The controls are moved, not
+ * are lent to the scene's selection row (`lendArrange`), which sits at the top
+ * of More (`setSelectionTools`). The controls are moved, not
  * copied, so every state this class keeps (a disabled Mirror, a count on the
  * drawer) is right in either place; and they are moved back exactly where
  * they were when the window returns to a desktop's shape. A desktop never
@@ -391,7 +387,7 @@ class Menu {
       const anchor = this.element.getBoundingClientRect();
       this.list.style.setProperty("--menu-top", `${anchor.bottom}px`);
       this.list.style.setProperty("--menu-left", `${anchor.left}px`);
-      // Low on the screen (Align in a phone's building sheet, #45) it opens
+      // Low on the screen (Align in a phone's More sheet, #45) it opens
       // upward, or it would hang off the bottom of the screen.
       this.list.style.setProperty("--menu-bottom", `${window.innerHeight - anchor.top}px`);
       this.list.classList.toggle("planner-menu__list--up", anchor.bottom > window.innerHeight / 2);
@@ -519,7 +515,7 @@ export class PlannerBar {
   private readonly layoutsButton: HTMLButtonElement;
   private readonly help: HTMLButtonElement;
   private readonly exit: HTMLButtonElement;
-  /** Mirror, Align and Distribute: lent to the building sheet on a phone. */
+  /** Mirror, Align and Distribute: lent to More's Selection section on a phone. */
   private readonly arrangeGroup: HTMLElement | null;
   /** Upgrade walls, re-arm, Checklist, Layouts and Apply. Null when read-only. */
   private readonly actionRow: HTMLElement | null;
@@ -529,6 +525,9 @@ export class PlannerBar {
   /** The costs in one line; a tap shows the full cells. */
   private readonly costLine: HTMLButtonElement;
   private readonly moreSheet: HTMLElement;
+  /** More's first section on a phone: Select all and the arrange tools (#45). */
+  private readonly moreSelectionSection: HTMLElement;
+  private readonly moreSelection: HTMLElement;
   private readonly moreView: HTMLElement;
   private readonly morePlanSection: HTMLElement;
   private readonly morePlan: HTMLElement;
@@ -957,6 +956,9 @@ export class PlannerBar {
       moreBody.append(section);
       return [section, list];
     };
+    [this.moreSelectionSection, this.moreSelection] = moreSection("Selection");
+    this.moreSelectionSection.classList.add("planner-more__section--selection");
+    this.moreSelectionSection.hidden = true;
     [, this.moreView] = moreSection("Show on the yard");
     [this.morePlanSection, this.morePlan] = moreSection("Plan");
     this.moreSheet.append(moreTitlebar, moreBody);
@@ -1006,14 +1008,42 @@ export class PlannerBar {
   }
 
   /**
-   * Lends Mirror, Align and Distribute to `host` (a phone's building sheet),
-   * or takes them back into the top bar with null. A read-only bar has none.
+   * Lends Mirror, Align and Distribute to `host` (the scene's selection row,
+   * which a phone shows at the top of More), or takes them back into the top
+   * bar with null. A read-only bar has none.
+   *
+   * Lent, Align and Distribute show their rows in place, as the View switches
+   * do: a menu that has to be opened first, inside a sheet that closes on any
+   * button press, would close before it opened.
    */
   lendArrange(host: HTMLElement | null): void {
     const arrange = this.arrangeGroup;
     if (!arrange) return;
-    if (host && isPhone(this.layout)) this.places.move(arrange, host);
+    const lent = host !== null && isPhone(this.layout);
+    if (lent) this.places.move(arrange, host);
     else this.places.restoreOne(arrange);
+    this.align.setInline(lent);
+    this.distribute.setInline(lent);
+  }
+
+  /**
+   * Puts the scene's selection row (Select all, and the arrange tools lent by
+   * `lendArrange`) at the top of a phone's More sheet, or takes it out with
+   * null (#45). The section follows the row's own `hidden`, so the scene calls
+   * this again whenever the selection changes what the row offers.
+   *
+   * It used to live in the building sheet, which opened over the yard on every
+   * selection; that sheet was removed on 2026-11-03 (owner: nothing may open
+   * over the yard while a building is picked up or moved).
+   */
+  setSelectionTools(tools: HTMLElement | null): void {
+    if (!tools || !isPhone(this.layout)) {
+      if (this.moreSelection.firstChild) this.moreSelection.replaceChildren();
+      this.moreSelectionSection.hidden = true;
+      return;
+    }
+    if (tools.parentNode !== this.moreSelection) this.moreSelection.replaceChildren(tools);
+    this.moreSelectionSection.hidden = tools.hidden;
   }
 
   /** Opens or closes a phone's More sheet. A desktop has none. */
@@ -1265,59 +1295,15 @@ export class PlannerBar {
     );
   }
 
-  /**
-   * The same six cells, read from the plan rather than from the selection
-   * (§5.3).
-   *
-   * `free` is what the wall-clock lower bound is divided by, and it comes from
-   * the yard rather than from the totals because the plan does not know how
-   * many workers are already on a job.
-   */
-  setPlanSummary(totals: PlanTotals, free: number): void {
-    const breakdown = describeBreakdown(totals.byType, 0);
-    this.setResourceCells(totals.needed, totals.held, totals.shortfall, breakdown);
-
-    const clock = wallClockSeconds(totals, free);
-    this.line.seconds = totals.seconds;
-    this.renderCostLine();
-    this.timeCell.set(
-      totals.seconds === 0 ? "—" : formatCountdown(totals.seconds),
-      totals.seconds === 0
-        ? "No worker time: nothing is planned."
-        : `${totals.seconds.toLocaleString()} worker seconds over ${totals.steps} ${totals.steps === 1 ? "step" : "steps"}.\nAt least ${formatCountdown(clock)} of real time with ${free} free ${free === 1 ? "worker" : "workers"} — a lower bound, because jobs do not parallelise perfectly and one building takes one step at a time.`,
-    );
-
-    this.shinyCell.set(
-      totals.shiny === 0 ? "—" : formatAmount(totals.shiny),
-      "What it would cost in shiny to buy every planned step outright. Not for sale in the planner yet.",
-    );
-  }
-
-  /**
-   * The free-worker readout, and what Apply would do with them.
-   *
-   * The preview is the same walk Apply runs (§5.5), so the tooltip promises
-   * what the dialog will itemise and the server will then report.
-   */
-  setWorkers(workers: YardWorkers, preview: ApplyPreview | null): void {
+  /** The free-worker readout. */
+  setWorkers(workers: YardWorkers): void {
     const free = Math.max(0, workers.total - workers.busy);
-    const tail = preview
-      ? `\n${preview.started.length} would start on Apply, ${preview.waiting.length} would wait for a worker, ${preview.finished.length} wall and trap ${preview.finished.length === 1 ? "step" : "steps"} would finish instantly.`
-      : "";
     this.workersCell.set(
       `${free} free / ${workers.total}`,
-      `${workers.busy} of ${workers.total} ${workers.total === 1 ? "worker is" : "workers are"} already on a job.${tail}`,
-      preview !== null && preview.waiting.length > 0,
+      `${workers.busy} of ${workers.total} ${workers.total === 1 ? "worker is" : "workers are"} already on a job.`,
     );
   }
 
-  /**
-   * How many buildings are in the plan but nowhere on the plot.
-   *
-   * Hidden at zero: an untouched plan should not carry a count of nothing.
-   * Apply is hard-blocked while it is not zero (§8, Q4), so the cell is the
-   * bar's standing answer to "why is Apply refusing me".
-   */
   /**
    * The share of the plot the towers reach, land and air (#55): "Land 87% ·
    * Air 41%", or "No towers" when none is placed.
@@ -1343,6 +1329,13 @@ export class PlannerBar {
     );
   }
 
+  /**
+   * How many buildings are in the plan but nowhere on the plot.
+   *
+   * Hidden at zero: an untouched plan should not carry a count of nothing.
+   * Apply is hard-blocked while it is not zero (§8, Q4), so the cell is the
+   * bar's standing answer to "why is Apply refusing me".
+   */
   setUnplaced(count: number): void {
     this.unplacedCell.element.hidden = count === 0;
     this.unplacedCell.set(
@@ -1541,8 +1534,6 @@ const summarise = (state: PlannerState, touch = false): string => {
         : `${state.selectionCount} selected`,
   );
   parts.push(state.movedCount === 1 ? "1 moved" : `${state.movedCount} moved`);
-  // Left out at zero: an untouched plan should not carry a count of nothing.
-  if (state.plannedCount > 0) parts.push(`${state.plannedCount} planned`);
   if (state.storedCount > 0) {
     parts.push(`${state.storedCount} stored`);
   }

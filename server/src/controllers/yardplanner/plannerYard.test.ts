@@ -137,7 +137,7 @@ beforeEach(() => {
 const layout = (nodes: Row[]) => JSON.stringify({ version: 2, expansion: 0, nodes });
 
 describe("Apply on an outpost", () => {
-  test("moves the outpost's buildings and starts its planned upgrade on the main pool", async () => {
+  test("moves the outpost's buildings and starts no planned upgrade an old client sends", async () => {
     const data = layout([
       { id: 1, t: 112, x: 0, y: -50 },
       { id: 2, t: 20, x: 200, y: -200, plan: { level: 2, order: 0 } },
@@ -149,11 +149,9 @@ describe("Apply on an outpost", () => {
     expect(answer.status).toBe(200);
     expect(locked).toEqual([7, 90]);
     const cannon = (outpostSave.buildingdata as Record<string, Row>)["2"]!;
-    const [r1, , , , time] = OUTPOST_COSTS[20]!.costs[1]!;
-    expect(cannon).toMatchObject({ X: 200, Y: -200, cU: time });
-    expect((mainSave.resources as Record<string, number>).r1).toBe(1_000_000 - r1);
-    expect(answer.body.resources).toBe(mainSave.resources);
-    expect(outpostSave.resources).toEqual({});
+    expect(cannon).toEqual({ id: 2, t: 20, X: 200, Y: -200, l: 1 });
+    expect(mainSave.resources).toEqual({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 });
+    expect(answer.body.upgrades).toBeNull();
     expect(mainSave.buildingdata).toEqual({ "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 } });
   });
 
@@ -196,6 +194,67 @@ describe("layouts in an outpost", () => {
     expect(answer.status).toBe(409);
     expect(answer.body.reason).toBe("notInOutpost");
     expect(mainSave.savetemplate).toEqual({});
+  });
+});
+
+/**
+ * Owner, 2026-11-03: "There shouldnt be a way to queue upgrades at once."
+ * Apply used to start every planned upgrade a layout carried, one job per
+ * building, when the client sent `startUpgrades=1`. Now it only moves, whatever
+ * an old client or a hand-made request sends.
+ */
+describe("Apply refuses planned upgrades", () => {
+  beforeEach(() => {
+    mainSave.buildingdata = {
+      "0": { id: 0, t: 14, X: 0, Y: 0, l: 10 },
+      "5": { id: 5, t: 20, X: 300, Y: 300, l: 1 },
+      "6": { id: 6, t: 20, X: -300, Y: 300, l: 1 },
+      "7": { id: 7, t: 17, X: 300, Y: -300, l: 1 },
+    };
+  });
+
+  const planned = layout([
+    { id: 0, t: 14, x: 0, y: 0 },
+    { id: 5, t: 20, x: 200, y: 200, plan: { level: 3, order: 0 } },
+    { id: 6, t: 20, x: -300, y: 300, plan: { level: 2, order: 1 } },
+    { id: 7, t: 17, x: 300, y: -300, plan: { level: 5, order: 2 } },
+  ]);
+
+  test("moves the buildings and upgrades, charges and scores nothing", async () => {
+    const answer = await run(applyLayout, { data: planned, startUpgrades: 1 });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.moved).toBe(1);
+    expect(answer.body.upgrades).toBeNull();
+    const buildings = mainSave.buildingdata as Record<string, Row>;
+    expect(buildings["5"]).toEqual({ id: 5, t: 20, X: 200, Y: 200, l: 1 });
+    expect(buildings["6"]).toEqual({ id: 6, t: 20, X: -300, Y: 300, l: 1 });
+    expect(buildings["7"]).toEqual({ id: 7, t: 17, X: 300, Y: -300, l: 1 });
+    expect(mainSave.resources).toEqual({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 });
+    expect(mainSave.points).toBe("0");
+  });
+
+  test("a plan past the top of a ladder is no longer a reason to refuse the move", async () => {
+    const data = layout([
+      { id: 0, t: 14, x: 0, y: 0 },
+      { id: 5, t: 20, x: 300, y: 300, plan: { level: 99, order: 0 } },
+      { id: 6, t: 20, x: -300, y: 300 },
+      { id: 7, t: 17, x: 300, y: -300 },
+    ]);
+
+    const answer = await run(applyLayout, { data, startUpgrades: "1" });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.upgrades).toBeNull();
+  });
+
+  test("an old layout with planned upgrades still saves, without them", async () => {
+    const answer = await run(saveLayout, { name: "Old", data: planned }, { slot: "2" });
+
+    expect(answer.status).toBe(200);
+    const nodes = (answer.body.layout as Row).nodes as Row[];
+    expect(nodes.map((node) => node.id)).toEqual([0, 5, 6, 7]);
+    expect(nodes.some((node) => "plan" in node)).toBe(false);
   });
 });
 

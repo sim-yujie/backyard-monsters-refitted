@@ -113,6 +113,36 @@ describe("reportAnswer", () => {
     expect(channel.asked).toEqual([]);
     expect(executed).toHaveLength(0);
   });
+
+  test("a line in the reporter's own country room is reported as in Global", async () => {
+    delete process.env.CHAT_COUNTRY_ROOMS;
+    const { em, executed } = fakeEm();
+    const room = history([line(77, "the real words", 1_700_000_000_123)]);
+    const answer = await reportAnswer(
+      em,
+      { userid: 2505, country: "PH" } as User,
+      { userid: 77, channel: "chat:country:PH", message: "x", ts: 1_700_000_000_123 },
+      room.read,
+    );
+    expect(answer).toEqual({ status: 200, body: { error: 0, stored: true, verified: true } });
+    expect(room.asked).toEqual(["chat:country:PH"]);
+    expect(executed[0]!.params).toContain("chat:country:PH");
+  });
+
+  test("another country's room cannot be reported from outside it", async () => {
+    delete process.env.CHAT_COUNTRY_ROOMS;
+    const { em, executed } = fakeEm();
+    const room = history([]);
+    const answer = await reportAnswer(
+      em,
+      { userid: 2505, country: "SG" } as User,
+      { userid: 77, channel: "chat:country:PH", message: "x", ts: 5 },
+      room.read,
+    );
+    expect(answer.status).toBe(400);
+    expect(room.asked).toEqual([]);
+    expect(executed).toHaveLength(0);
+  });
 });
 
 describe("yardAnswer", () => {

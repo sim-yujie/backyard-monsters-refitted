@@ -6,9 +6,12 @@ import {
   visibleEntries,
   type ChatEntry,
   type ChatLine,
+  type ChatRoom,
   type ChatSession,
   type ChatState,
 } from "@/game/chat/chatSession";
+import { countryLabel, countryName } from "@/game/account/countries";
+import { countryLabelNodes } from "@/ui/countryFlag";
 import { icon } from "@/ui/icons";
 import "@/ui/styles/chat.css";
 
@@ -26,6 +29,10 @@ import "@/ui/styles/chat.css";
  * `game/chat/chatSession.ts`'s, and outlives the box. A new line is added on
  * its own, the oldest dropped as the room's history fills; every line is
  * drawn afresh only when the room, the mute list or the box's opening changes.
+ *
+ * A player whose country has a room (owner 3 Nov 2026) gets a second tab
+ * beside Global in the open box; Global stays the default and carries a short
+ * line saying it is in English.
  */
 
 export interface ChatBoxOptions {
@@ -58,6 +65,19 @@ export const statusText = (status: ChatStatus): string | null => {
 const coarsePointer = (): boolean =>
   typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 
+/** Global's tab. */
+export const GLOBAL_LABEL = "\u{1F310} Global";
+
+/** What a room's tab says: "🌐 Global" or "🇵🇭 Philippines". */
+export const roomLabel = (room: ChatRoom): string =>
+  room.kind === "country" && room.country ? countryLabel(room.country) : GLOBAL_LABEL;
+
+/** The line at the top of Global: English there, and the country room for the player's own language. */
+export const globalRuleText = (hasCountryRoom: boolean): string =>
+  hasCountryRoom
+    ? "Global chat is in English. Use your country chat for your own language."
+    : "Global chat is in English.";
+
 const REPORTED_TEXT = "Thanks. The moderators will take a look.";
 const REPORT_FAILED_TEXT = "That report could not be sent. Try again in a moment.";
 const NO_YARD_TEXT = "That player's yard could not be opened.";
@@ -84,7 +104,12 @@ export class ChatBox {
   readonly element: HTMLElement;
 
   private readonly tab: HTMLButtonElement;
+  private readonly tabLabel: HTMLElement;
   private readonly dot: HTMLElement;
+  /** Global and the country room's tabs, shown open when there are two. */
+  private readonly rooms: HTMLElement;
+  /** "Global chat is in English", over Global's lines. */
+  private readonly rule: HTMLElement;
   private readonly lines: HTMLOListElement;
   private readonly status: HTMLElement;
   private readonly statusText: HTMLElement;
@@ -121,12 +146,29 @@ export class ChatBox {
     this.tab.className = "chat-box__tab";
     this.dot = document.createElement("span");
     this.dot.className = "chat-box__dot";
-    const tabLabel = document.createElement("span");
-    tabLabel.className = "chat-box__tab-label";
-    tabLabel.textContent = "World chat";
+    this.tabLabel = document.createElement("span");
+    this.tabLabel.className = "chat-box__tab-label";
+    this.tabLabel.textContent = "World chat";
     const close = icon("close", 14, "chat-box__close-icon");
-    this.tab.append(this.dot, tabLabel, close);
+    this.tab.append(this.dot, this.tabLabel, close);
     this.tab.addEventListener("click", () => this.setOpen(!this.open));
+
+    this.rooms = document.createElement("div");
+    this.rooms.className = "chat-box__rooms";
+    this.rooms.setAttribute("role", "tablist");
+    this.rooms.setAttribute("aria-label", "Chat rooms");
+    this.rooms.hidden = true;
+    this.rooms.addEventListener("click", (event) => {
+      const button = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-room]") : null;
+      const channel = button?.dataset["room"];
+      if (!channel) return;
+      this.pick(null);
+      options.session.showRoom(channel);
+    });
+
+    this.rule = document.createElement("p");
+    this.rule.className = "chat-box__rule";
+    this.rule.hidden = true;
 
     this.lines = document.createElement("ol");
     this.lines.className = "chat-box__lines";
@@ -169,7 +211,7 @@ export class ChatBox {
       if (event.key === "Escape") this.setOpen(false);
     });
 
-    this.element.append(this.tab, this.lines, this.status, this.player, this.form);
+    this.element.append(this.tab, this.rooms, this.rule, this.lines, this.status, this.player, this.form);
     options.container.append(this.element);
 
     this.unsubscribe = options.session.subscribe((state) => this.render(state));
@@ -216,6 +258,7 @@ export class ChatBox {
     this.element.dataset["status"] = state.status;
     this.dot.title = online ? "Connected" : (statusText(state.status) ?? "");
 
+    this.renderRooms(state);
     this.renderLines(state);
 
     const words = online ? null : statusText(state.status);
@@ -231,6 +274,62 @@ export class ChatBox {
     else this.renderPlayer();
 
     if (wasAtEnd || !this.open) this.scrollToEnd();
+  }
+
+  /** The room tabs, the folded tab's name, Global's English line and the input's words. */
+  private renderRooms(state: ChatState): void {
+    const shown = state.rooms.find((room) => room.channel === state.channel) ?? null;
+    const country = state.rooms.find((room) => room.kind === "country") ?? null;
+    const inCountry = shown?.kind === "country" && !!shown.country;
+
+    const labelKey = inCountry && shown?.country ? shown.country : "";
+    if (this.tabLabel.dataset["country"] !== labelKey) {
+      this.tabLabel.dataset["country"] = labelKey;
+      if (labelKey) this.tabLabel.replaceChildren(...countryLabelNodes(labelKey));
+      else this.tabLabel.textContent = "World chat";
+    }
+    this.element.dataset["unread"] = state.unread.size > 0 ? "true" : "false";
+
+    const two = state.rooms.length > 1;
+    this.rooms.hidden = !two || !this.open;
+    if (two) {
+      const key = state.rooms.map((room) => `${room.channel}|${room.country}`).join(",");
+      if (this.rooms.dataset["key"] !== key) {
+        this.rooms.dataset["key"] = key;
+        this.rooms.replaceChildren(
+          ...state.rooms.map((room) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "chat-box__room";
+            button.setAttribute("role", "tab");
+            button.dataset["room"] = room.channel;
+            if (room.kind === "country" && room.country) {
+              button.replaceChildren(...countryLabelNodes(room.country));
+              button.title = countryName(room.country);
+            } else button.textContent = roomLabel(room);
+            return button;
+          }),
+        );
+      }
+      for (const button of this.rooms.querySelectorAll<HTMLElement>("[data-room]")) {
+        const channel = button.dataset["room"] ?? "";
+        const selected = channel === state.channel;
+        button.setAttribute("aria-selected", String(selected));
+        button.classList.toggle("chat-box__room--on", selected);
+        button.classList.toggle("chat-box__room--unread", state.unread.has(channel));
+        button.tabIndex = this.open ? 0 : -1;
+      }
+    } else if (this.rooms.childElementCount > 0) {
+      this.rooms.replaceChildren();
+      delete this.rooms.dataset["key"];
+    }
+
+    this.rule.hidden = !this.open || inCountry || state.rooms.length === 0;
+    this.rule.textContent = globalRuleText(!!country);
+
+    const where = inCountry && shown?.country ? countryName(shown.country) : null;
+    this.input.placeholder = where ? `Say something to ${where}…` : "Say something to the world…";
+    this.input.setAttribute("aria-label", where ? `Message to ${where} chat` : "Message to world chat");
   }
 
   /**

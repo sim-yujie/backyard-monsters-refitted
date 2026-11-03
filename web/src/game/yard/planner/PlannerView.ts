@@ -139,13 +139,11 @@ export class PlannerView {
     return hit;
   }
 
-  /** Updates the selection, moved, planned and invalid chrome and the marquee. */
+  /** Updates the selection, moved and invalid chrome and the marquee. */
   draw(state: {
     selected: ReadonlySet<number>;
     moved: ReadonlySet<number>;
     invalid: ReadonlySet<number>;
-    /** Planned target level by id, for the badge and the blueprint labels. */
-    planned: ReadonlyMap<number, number> | null;
     marquee: Rect | null;
     /** Compare's highlights (#9), or null outside compare. */
     diff?: CompareDiff | null;

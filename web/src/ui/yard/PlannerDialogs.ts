@@ -1,16 +1,12 @@
-import type { TrapPlacement, UpgradeCost } from "@/api/types";
+import type { TrapPlacement } from "@/api/types";
 import { costOf, sumCosts } from "@/game/yard/buildingCosts";
 import type { Checklist } from "@/game/yard/planner/checklist";
 import { MissReason, type LoadMiss } from "@/game/yard/planner/layout";
 import { PlaceBlock, type PlaceCheck } from "@/game/yard/planner/plan";
 import { heldResources, isShort, shortfallOf, typeName } from "@/game/yard/planner/summary";
-import type { ApplyPreview } from "@/game/yard/planner/upgrades";
 import type { Yard } from "@/game/yard/yardModel";
-import { formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
-import { costAmounts } from "@/ui/resourceIcon";
 import { costRows } from "./costRows";
-import { describeSkip, describeStep } from "./upgradeText";
 
 /**
  * The planner's small overlays: the pre-Apply checklist, the Apply dialog, the
@@ -45,12 +41,11 @@ export interface ChecklistPanelOptions {
 /**
  * The pre-Apply checklist.
  *
- * Blocking rows disable Apply. Warning rows do not: the upgrade half of Apply
- * is partial by design (`docs/design/planner-upgrades.md` §5.5), so "not
- * enough workers" is a thing to know before the click and never a reason to
- * refuse the moves. They are drawn with their own mark and their own colour,
- * because a red cross against a job that will simply start later reads as a
- * broken plan.
+ * Blocking rows disable Apply. Warning rows do not: a decoration left in the
+ * drawer goes into storage (#128), which is a thing to know before the click
+ * and never a reason to refuse the moves. They are drawn with their own mark
+ * and their own colour, because a red cross against something that is fine
+ * reads as a broken plan.
  */
 export const checklistPanel = (options: ChecklistPanelOptions): Panel => {
   const panel = new Panel({
@@ -200,44 +195,24 @@ export const confirmPanel = (options: ConfirmPanelOptions): Panel => {
 export interface ApplyPanelOptions {
   /** How many buildings the layout would move. */
   moved: number;
-  /** What Apply would do with the plan, from `PlannerSession.applyPreview`. */
-  preview: ApplyPreview;
   /** The slot the plan was loaded from, or null when none is. */
   slotName: string | null;
   /** True when the plan has edits the slot does not carry. */
   dirty: boolean;
-  /** Opens the layouts panel, for a plan that belongs to no slot yet. */
-  onSaveAs: () => void;
-  /**
-   * Whether the yard has layout slots to save the plan to: false on an
-   * outpost (`BasePlanner.as:41`, #191). Absent reads as true.
-   */
-  layouts?: boolean;
-  onConfirm: (choice: { startUpgrades: boolean; saveFirst: boolean }) => void;
+  onConfirm: (choice: { saveFirst: boolean }) => void;
   onClose: () => void;
 }
 
 /**
- * The Apply dialog (design §4.5, `docs/design/planner-upgrades.md` §5.5).
+ * The Apply dialog (design §4.5).
  *
- * Apply is one request that both moves the buildings and starts the jobs (§8,
- * Q1), and the upgrade half of it is **partial by design** (§3.2): the server
- * starts as many as there are free workers and resources and reports the rest.
- * That is only fair if it is said before the click, so this panel runs the
- * client's copy of the server's walk and itemises the answer — what starts,
- * what finishes on the spot, what waits for a worker, what cannot start at all
- * and why, what it costs and what is left afterwards.
+ * Apply only moves buildings. It used to start planned upgrades as well;
+ * per-building planning was removed on 2026-11-03 (owner: there should be no
+ * way to queue upgrades at once), so this is the one-line moves summary and
+ * nothing else.
  *
- * A plan with nothing upgraded gets the one-line moves summary and no
- * itemisation, which is what §4.5 asks for: moves alone need no dialog beyond
- * a sentence.
- *
- * ## Save first
- *
- * Apply closes the planner (§8, Q4) and the jobs it could not start stay in
- * the *layout*, not in the yard. So a plan that came from a slot offers to
- * write itself back first, ticked, and a plan with no slot is told plainly
- * that its waiting upgrades live only in a saved layout.
+ * A plan that came from a slot and has edits the slot does not carry offers to
+ * write itself back first, ticked, because Apply closes the planner (§8, Q4).
  */
 export const applyPanel = (options: ApplyPanelOptions): Panel => {
   const panel = new Panel({
@@ -246,13 +221,6 @@ export const applyPanel = (options: ApplyPanelOptions): Panel => {
     onClose: options.onClose,
   });
 
-  const preview = options.preview;
-  const planned =
-    preview.started.length +
-    preview.finished.length +
-    preview.waiting.length +
-    preview.skipped.length;
-
   const heading = document.createElement("p");
   heading.className = "planner-apply__heading";
   heading.textContent =
@@ -260,54 +228,20 @@ export const applyPanel = (options: ApplyPanelOptions): Panel => {
       ? "Nothing will move."
       : `${options.moved} ${options.moved === 1 ? "building" : "buildings"} will move.`;
 
-  const startBox = checkbox(
-    "Start the planned upgrades now",
-    "Leave this off to move the buildings and start nothing. The plans stay where they are.",
-  );
-  startBox.input.checked = true;
-  startBox.label.hidden = planned === 0;
-
-  const lists = document.createElement("div");
-  lists.className = "planner-apply__lists";
-
-  const totals = document.createElement("dl");
-  totals.className = "cell-facts planner-apply__totals";
-
   const saveBox = checkbox(
     options.slotName ? `Save to “${options.slotName}” first` : "Save this layout first",
-    "Upgrades that have to wait for a worker are kept in the saved layout, not in the yard.",
+    "Write this plan back to its layout slot before applying it.",
   );
   const canSave = options.slotName !== null && options.dirty;
   saveBox.input.checked = canSave;
   saveBox.label.hidden = !canSave;
-
-  const saveNote = document.createElement("p");
-  saveNote.className = "planner-apply__save-note u-muted";
-  saveNote.hidden = canSave || planned === 0;
-  const hasLayouts = options.layouts ?? true;
-  saveNote.textContent = !hasLayouts
-    ? "An outpost keeps no saved layouts: upgrades that cannot start now are not kept."
-    : options.slotName === null
-      ? "Waiting upgrades are kept only in a saved layout."
-      : `“${options.slotName}” already matches this plan.`;
-
-  const saveAs = document.createElement("button");
-  saveAs.type = "button";
-  saveAs.className = "btn btn--ghost planner-apply__save-as";
-  saveAs.textContent = "Save as…";
-  saveAs.title = "Open the layout slots and keep this plan in one.";
-  saveAs.hidden = !hasLayouts || options.slotName !== null || planned === 0;
-  saveAs.addEventListener("click", options.onSaveAs);
 
   const confirm = document.createElement("button");
   confirm.type = "button";
   confirm.className = "btn btn--primary";
   confirm.textContent = "Apply";
   confirm.addEventListener("click", () => {
-    options.onConfirm({
-      startUpgrades: planned > 0 && startBox.input.checked,
-      saveFirst: canSave && saveBox.input.checked,
-    });
+    options.onConfirm({ saveFirst: canSave && saveBox.input.checked });
   });
 
   const cancel = document.createElement("button");
@@ -320,90 +254,8 @@ export const applyPanel = (options: ApplyPanelOptions): Panel => {
   actions.className = "planner-apply__actions";
   actions.append(confirm, cancel);
 
-  const render = (): void => {
-    const on = planned > 0 && startBox.input.checked;
-    lists.hidden = !on;
-    totals.hidden = !on;
-    if (!on) {
-      lists.replaceChildren();
-      totals.replaceChildren();
-      return;
-    }
-
-    lists.replaceChildren(
-      ...upgradeList(
-        `${preview.started.length} ${preview.started.length === 1 ? "upgrade starts" : "upgrades start"} now`,
-        preview.started.map((row) =>
-          costLine(`${describeStep(row)} — `, row.cost, `, ${formatCountdown(row.seconds)}`),
-        ),
-        "start",
-      ),
-      ...upgradeList(
-        `${preview.finished.length} wall and trap ${preview.finished.length === 1 ? "step finishes" : "steps finish"} at once`,
-        preview.finished.map((row) => costLine(`${describeStep(row)} — `, row.cost, "")),
-        "finish",
-      ),
-      ...upgradeList(
-        `${preview.waiting.length} ${preview.waiting.length === 1 ? "waits" : "wait"} for a free worker`,
-        preview.waiting.map((row) => describeStep(row)),
-        "wait",
-      ),
-      ...upgradeList(
-        `${preview.skipped.length} cannot start`,
-        preview.skipped.map((row) => `${describeStep(row)} — ${describeSkip(row)}`),
-        "skip",
-      ),
-    );
-
-    totals.replaceChildren(
-      ...amountRows("Total deducted now", preview.cost),
-      ...amountRows("You will have left", preview.remaining),
-    );
-  };
-
-  startBox.input.addEventListener("change", render);
-  render();
-
-  panel.setContent(heading, startBox.label, lists, totals, saveBox.label, saveNote, saveAs, actions);
+  panel.setContent(heading, saveBox.label, actions);
   return panel;
-};
-
-/** "Cannon Tower L1 → L2 — <icons and amounts>, 15m 0s" (#93). */
-const costLine = (head: string, cost: UpgradeCost, tail: string): HTMLElement => {
-  const line = document.createElement("span");
-  line.append(head, costAmounts(cost) ?? "nothing", tail);
-  return line;
-};
-
-/** One titled list of report rows, or nothing at all when it is empty. */
-const upgradeList = (
-  title: string,
-  rows: readonly (string | Node)[],
-  kind: string,
-): HTMLElement[] => {
-  if (rows.length === 0) return [];
-
-  const heading = document.createElement("p");
-  heading.className = `planner-apply__list-title planner-apply__list-title--${kind}`;
-  heading.textContent = title;
-
-  const list = document.createElement("ul");
-  list.className = "planner-apply__list";
-  for (const row of rows) {
-    const item = document.createElement("li");
-    item.append(row);
-    list.append(item);
-  }
-  return [heading, list];
-};
-
-/** "Total deducted now: <twigs> 21.0M <pebbles> 15.8M", one `dt`/`dd` pair. */
-const amountRows = (label: string, cost: UpgradeCost): HTMLElement[] => {
-  const term = document.createElement("dt");
-  term.textContent = label;
-  const value = document.createElement("dd");
-  value.append(costAmounts(cost) ?? "nothing");
-  return [term, value];
 };
 
 /** A labelled checkbox, returned as the label that wraps it and the input. */
@@ -445,8 +297,6 @@ export interface LoadProblems {
   readonly didNotFit: number;
   /** Saved nodes this yard has no building for. */
   readonly missing: number;
-  /** Planned upgrades the layout carried that this yard cannot do. */
-  readonly plansDropped: number;
 }
 
 /**
@@ -464,7 +314,7 @@ export interface LoadProblems {
  */
 export const describeLoadProblems = (problems: LoadProblems): string | null => {
   const parts: string[] = [];
-  const { didNotFit, missing, plansDropped } = problems;
+  const { didNotFit, missing } = problems;
 
   if (didNotFit > 0) {
     parts.push(
@@ -474,11 +324,6 @@ export const describeLoadProblems = (problems: LoadProblems): string | null => {
   if (missing > 0) {
     parts.push(`${missing} saved ${plural(missing, "building")} no longer in this yard`);
   }
-  if (plansDropped > 0) {
-    parts.push(
-      `${plansDropped} planned ${plural(plansDropped, "upgrade")} ${plansDropped === 1 ? "was" : "were"} dropped because those buildings have caught up or are on a job`,
-    );
-  }
   if (parts.length === 0) return null;
 
   const where =
@@ -486,13 +331,7 @@ export const describeLoadProblems = (problems: LoadProblems): string | null => {
       ? `“${problems.name}” was designed for expansion ${problems.layoutExpansion} and you are at ${problems.yardExpansion}`
       : `“${problems.name}” was designed for expansion ${problems.layoutExpansion}`;
 
-  // The tail is about buildings standing in the wrong place, so a load whose
-  // only complaint is a dropped upgrade plan does not get it — there is
-  // nothing to move.
-  const tail =
-    didNotFit > 0 || missing > 0
-      ? " Nothing was placed for you — move or remove them yourself."
-      : "";
+  const tail = " Nothing was placed for you — move or remove them yourself.";
   return `${where}: ${parts.join("; ")}.${tail}`;
 };
 
