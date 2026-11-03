@@ -383,12 +383,12 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     const user = await (postgres.em as ReturnType<typeof em>).findOneOrFail(User, { userid: B });
     const ctx = { authUser: user, request: { body: { friendRequests: false, hideOnline: true } } } as unknown as Context;
     await updateSettings(ctx);
-    expect(ctx.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: false } });
+    expect(ctx.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: false, country: null, countryAsked: false, countryChannel: null } });
     expect(await reasonOf(ask(A, B))).toBe("requestsOff");
 
-    const back = { authUser: user, request: { body: { friendRequests: true } } } as unknown as Context;
+    const back = { authUser: user, request: { body: { friendRequests: true, country: null, countryAsked: false, countryChannel: null } } } as unknown as Context;
     await updateSettings(back);
-    expect(back.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: true } });
+    expect(back.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: true, country: null, countryAsked: false, countryChannel: null } });
     expect(((await ask(A, B)) as any).request.status).toBe("pending");
   });
 });
