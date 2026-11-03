@@ -184,6 +184,7 @@ export class PlannerSession {
   private readonly onFind: (() => void) | undefined;
   private readonly onRanges: (() => void) | undefined;
   private readonly onGroup: ((outcome: GroupOutcome) => void) | undefined;
+  private readonly onTap: (() => void) | undefined;
   /**
    * Set for the life of the session: this plan may be read, never changed.
    *
@@ -257,6 +258,14 @@ export class PlannerSession {
      */
     onGroup?: (outcome: GroupOutcome) => void;
     /**
+     * A finger tapped the yard (F14), on a building or off one.
+     *
+     * The scene keeps a phone's sheets off the yard while a building is moved,
+     * and a tap is the player asking for them back (`shownSheet`). Called
+     * before the tap's own refresh, so that refresh draws the sheet it brings.
+     */
+    onTap?: () => void;
+    /**
      * Opens the plan for reading only (design §8, Q5).
      *
      * Selection, search, the two views and the cost cells all still work —
@@ -276,6 +285,7 @@ export class PlannerSession {
     this.onFind = options.onFind;
     this.onRanges = options.onRanges;
     this.onGroup = options.onGroup;
+    this.onTap = options.onTap;
     this.readOnly = options.readOnly ?? false;
     this.yard = options.yard;
     this.plan = Plan.fromYard(options.yard);
@@ -963,6 +973,7 @@ export class PlannerSession {
    * gamble on how still the finger was.
    */
   private tap(world: Point, shift: boolean): void {
+    this.onTap?.();
     const id = this.view.pick(world.x, world.y);
     if (id === null) {
       if (!shift) this.clearSelection();
