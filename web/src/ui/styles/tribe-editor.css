@@ -1,6 +1,6 @@
 /*
  * The tribe yard editor (LOCAL game only, `ui/tribeEditor/TribeEditorPanel.ts`):
- * the tribe and level picker, the edit bar on the left of the yard, and the
+ * the tribe and level picker, the edit bar on the right of the yard, and the
  * button on the own yard that opens the picker.
  */
 
@@ -17,11 +17,16 @@
   z-index: 40;
 }
 
+/*
+ * Top right: the global chat holds the top left. It stays left of the zoom
+ * rail (58px wide on the right edge) and ends above the dock's Layout and
+ * Collect buttons (up to about 280px from the bottom).
+ */
 .tribe-edit-bar {
   position: fixed;
   top: calc(var(--hud-height, 64px) + var(--space-4));
-  left: var(--space-4);
-  max-height: calc(100vh - var(--hud-height, 64px) - 140px);
+  right: calc(var(--space-4) + 58px + var(--space-3));
+  max-height: calc(100vh - var(--hud-height, 64px) - var(--space-4) - 300px);
   overflow-y: auto;
   z-index: 20;
 }

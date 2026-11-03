@@ -298,7 +298,8 @@ const yard = async (ctx: Context) => {
   ctx.body = editorYard(parsed.data.tribe as TribeId, parsed.data.level, ctx.authUser.userid);
 };
 
-const save = async (ctx: Context) => {
+/** "Save as <Tribe> level <N>" (exported for tests). */
+export const save = async (ctx: Context) => {
   if (refuseUnlessOn(ctx)) return;
   const parsed = parseSaveBody(ctx.request.body);
   if (!parsed.success) {
@@ -308,8 +309,19 @@ const save = async (ctx: Context) => {
   }
   const tribe = parsed.data.tribe as TribeId;
   const { level } = parsed.data;
-  const file = await writeSavedYard(tribe, level, savedYard(parsed.data));
-  logger.info(`Tribe yard editor: saved ${tribeName(tribe)} level ${level} to ${file}`);
+  const yard = savedYard(parsed.data);
+  const file = path.join(levelsDir(), `${tribe}.ts`);
+  rememberSavedLayout(tribe, level, yard);
+  // The data file is part of the server's code, so a `bun --watch` server (the
+  // owner's local game) restarts the moment it changes and would cut this reply
+  // off (the editor then showed "status 500"): answer first, then write the file
+  // once the reply has gone out.
+  ctx.res.once("finish", () => {
+    writeSavedYard(tribe, level, yard).then(
+      (written) => logger.info(`Tribe yard editor: saved ${tribeName(tribe)} level ${level} to ${written}`),
+      (error: unknown) => logger.error(`Tribe yard editor: could not write ${file}: ${String(error)}`),
+    );
+  });
   ctx.status = Status.OK;
   ctx.body = {
     ...editorStatus(),
