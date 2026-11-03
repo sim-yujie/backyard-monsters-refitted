@@ -1,10 +1,11 @@
 import { Container, type Renderer } from "pixi.js";
-import { AREA_ZONE_SIZE, LOD_HEX_ZOOM } from "@/config";
+import { AREA_ZONE_SIZE } from "@/config";
 import { classicLook } from "@/game/classicLook";
 import { mapRoomGrid } from "@/game/HexGrid";
 import { onQualityChange, quality, type Quality } from "@/game/quality";
 import { inWorld, zoneFor, zoneFromId, type CellRange } from "../zones";
 import type { ChunkRef } from "../chunks";
+import { hexZoom } from "../lod";
 import { destroyLiveArt, loadLiveArt, type LiveTextures } from "./liveArt";
 import { LiveChunk, type LiveChunkLayer, type LiveSource } from "./LiveChunk";
 import { liveLevelFor, planFor, type LivePlan } from "./liveLevel";
@@ -155,7 +156,7 @@ export class LiveMap {
     this.sinceStep = 0;
 
     // Below the hex zoom the renderer shows its one-texel-a-cell raster, and no chunk is on screen.
-    const visible = zoom < LOD_HEX_ZOOM ? [] : [...this.chunks.values()].filter((chunk) => chunk.visible);
+    const visible = zoom < hexZoom() ? [] : [...this.chunks.values()].filter((chunk) => chunk.visible);
     if (this.sheet && visible.length > 0) this.sheet.render(this.renderer, this.clock);
     for (const layer of this.layers) layer.step?.(this.clock, visible, zoom);
     this.sky?.step(this.clock, viewOf(range), zoom);

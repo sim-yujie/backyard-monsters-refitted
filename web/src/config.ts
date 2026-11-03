@@ -128,6 +128,10 @@ export const DEFAULT_ZOOM = 0.6;
  *                        geometry in the band that costs the most.
  *   LOD_BADGE_ZOOM 0.55  cell 61.9 px, ~810 cells: room for a two-digit level.
  *   LOD_LABEL_ZOOM 0.90  cell 101 px, ~300 cells: room for a name.
+ *
+ * These are flat-top's numbers. On pointy-top (MR2_HEX_SHAPE) `lod.ts`'s
+ * `hexZoom` / `glyphZoom` move the first two down so the same number of cells
+ * is on screen; the badge and name thresholds stay, markers being one size.
  */
 export const LOD_HEX_ZOOM = 0.22;
 export const LOD_GLYPH_ZOOM = 0.3;
