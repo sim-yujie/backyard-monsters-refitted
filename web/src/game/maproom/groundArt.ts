@@ -1,5 +1,6 @@
 import { Assets, Rectangle, Texture } from "pixi.js";
 import { classicLook } from "@/game/classicLook";
+import { mapRoomGrid } from "@/game/HexGrid";
 import { terrainBand } from "./cellVisuals";
 
 /**
@@ -16,9 +17,22 @@ import { terrainBand } from "./cellVisuals";
  * in Flash's colours but for a toned-down water (owner's pick: option A with
  * calm water); `web/tools/maproom-ground/build.py` makes it from Codex's
  * painted swatches.
+ *
+ * Pointy-top hexes (`MR2_HEX_SHAPE=pointy`, MR2 look plan step 1) use the same
+ * tiles cut to the new shape by `web/tools/maproom-ground/cut_pointy.py`, one
+ * sheet per cell height (`config.ts`): Classic's 150 x 100 cell
+ * (`ground-pointy100`), Modern's 150 x 150 (`ground-painted-pointy150`, with
+ * Flash's `ground-pointy150` behind it). Each tile is the cell's top face and
+ * the same 25 points of cliff below its two lower edges.
  */
-const FLASH_SHEET_URL = `${import.meta.env.BASE_URL}maproom/ground@2x.webp`;
-const PAINTED_SHEET_URL = `${import.meta.env.BASE_URL}maproom/ground-painted@2x.webp`;
+const sheetUrl = (name: string): string => `${import.meta.env.BASE_URL}maproom/${name}@2x.webp`;
+
+/** The Flash and painted sheets for the world grid's shape and cell size. */
+const sheetsForGrid = (): { flash: string; painted: string } => {
+  if (mapRoomGrid.shape !== "pointy") return { flash: sheetUrl("ground"), painted: sheetUrl("ground-painted") };
+  const height = mapRoomGrid.cellHeight;
+  return { flash: sheetUrl(`ground-pointy${height}`), painted: sheetUrl(`ground-painted-pointy${height}`) };
+};
 const SHEET_COLUMNS = 4;
 const SHEET_ROWS = 3;
 const TILE_COUNT = 11;
@@ -35,9 +49,16 @@ export interface WaterSurface {
 const FLASH_WATER_SURFACE: WaterSurface = { colour: 0x00ccff, alpha: 0.5 };
 const PAINTED_WATER_SURFACE: WaterSurface = { colour: 0x2a8fc8, alpha: 0.4 };
 
-/** Where the cell's place is on a tile: the middle of its top face. */
+/** Points of cliff below a tile's top face. */
+const CLIFF_HEIGHT = 25;
+
+/**
+ * Where the cell's place is on a tile: the middle of its top face (0.375 on
+ * Flash's 150 x 100 tiles; read from the grid, so pointy-top's taller tiles
+ * line up too).
+ */
 export const GROUND_ANCHOR_X = 0.5;
-export const GROUND_ANCHOR_Y = 0.375;
+export const groundAnchorY = (): number => mapRoomGrid.cellHeight / 2 / (mapRoomGrid.cellHeight + CLIFF_HEIGHT);
 
 export class GroundArt {
   private tiles: Texture[] = [];
@@ -73,8 +94,9 @@ export class GroundArt {
   }
 
   private async loadOnce(): Promise<boolean> {
-    if (!classicLook() && (await this.loadSheet(PAINTED_SHEET_URL, PAINTED_WATER_SURFACE))) return true;
-    return this.loadSheet(FLASH_SHEET_URL, FLASH_WATER_SURFACE);
+    const sheets = sheetsForGrid();
+    if (!classicLook() && (await this.loadSheet(sheets.painted, PAINTED_WATER_SURFACE))) return true;
+    return this.loadSheet(sheets.flash, FLASH_WATER_SURFACE);
   }
 
   private async loadSheet(url: string, surface: WaterSurface): Promise<boolean> {

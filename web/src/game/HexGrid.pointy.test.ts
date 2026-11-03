@@ -9,7 +9,6 @@ import { hexDistance, hexNeighbours } from "./maproom/rules/range";
  * agreeing with the grid the map draws and picks with.
  */
 
-const SHAPES: HexShape[] = ["flat", "pointy"];
 const grids: Record<HexShape | "classic", HexGrid> = {
   flat: new HexGrid(150, 75, "flat"),
   pointy: new HexGrid(150, 150, "pointy"),

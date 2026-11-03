@@ -29,7 +29,7 @@ import {
   type Resources,
   type TakeoverQuoteResponse,
 } from "@/api/types";
-import { CELL_HEIGHT, CELL_WIDTH, DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
+import { DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
 import { mapRefreshSeconds } from "@/game/quality";
 import {
   attackRefusal,
@@ -50,7 +50,8 @@ import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
-import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
+import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
+import { loadHexShape } from "@/game/maproom/hexShapeSetting";
 import {
   rangeSources,
   reachText,
@@ -139,8 +140,23 @@ const ZOOM_STEP = 1.5;
 const PUMP_INTERVAL_SECONDS = 0.25;
 /** How often visible zones are checked for staleness. */
 const STALE_CHECK_INTERVAL_SECONDS = 5;
-/** The world's size in map pixels, which the camera keeps inside. */
-const WORLD_BOUNDS = mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT);
+/**
+ * The world's size in map pixels, which the camera keeps inside: read each
+ * time, because the grid takes the server's hex shape when the map opens
+ * (`setHexShape`, MR2 look plan step 1).
+ */
+const worldBounds = (): { width: number; height: number } => mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT);
+
+/**
+ * The zoom floor for the grid's size: `MIN_ZOOM` fits Flash's flat-top world
+ * (90,075 x 60,075) in a 1080p screen; a pointy-top world is bigger, so the
+ * floor drops by as much to fit it the same way.
+ */
+const FLAT_WORLD = { width: 90_075, height: 60_075 };
+const mapMinZoom = (): number => {
+  const bounds = worldBounds();
+  return MIN_ZOOM * Math.min(1, FLAT_WORLD.width / bounds.width, FLAT_WORLD.height / bounds.height);
+};
 
 /** Said when the "Tilted map" choice could not be stored on the account. */
 const TILT_SAVE_FAILED = "Could not save the tilted map setting. It will reset next time.";
@@ -150,8 +166,8 @@ const TILT_SAVE_FAILED = "Could not save the tilted map setting. It will reset n
  * from the grid's own steps: the minimap is drawn in cells, not map pixels.
  */
 const worldToCellSpace = (world: { x: number; y: number }): { col: number; row: number } => ({
-  col: (world.x / WORLD_BOUNDS.width) * WORLD_WIDTH,
-  row: (world.y / WORLD_BOUNDS.height) * WORLD_HEIGHT,
+  col: (world.x / worldBounds().width) * WORLD_WIDTH,
+  row: (world.y / worldBounds().height) * WORLD_HEIGHT,
 });
 
 /** How often countdowns, the status line and the open cell panel are refreshed. */
@@ -165,7 +181,7 @@ const KIT_FILTER_KEY = "bymr.map.kitFilter";
 
 export class MapRoom2Scene implements Scene {
   private readonly camera = new Camera({
-    bounds: WORLD_BOUNDS,
+    bounds: worldBounds(),
   });
 
   /**
@@ -290,6 +306,14 @@ export class MapRoom2Scene implements Scene {
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
+    // The world's hex shape (MR2 look plan step 1) before anything is drawn
+    // or picked: the grid's geometry follows the server's rules. Classic gets
+    // its own pointy-top cell size (never tilted, Flash's 3/4 tiles).
+    const shape = await loadHexShape();
+    if (this.context !== context) return;
+    setHexShape(shape, classicLook());
+    this.camera.setBounds(worldBounds());
+    this.camera.setMinZoom(mapMinZoom());
     this.pendingFocus = consumeMapFocus();
     this.viewportWidth = context.width;
     this.viewportHeight = context.height;
@@ -569,7 +593,7 @@ export class MapRoom2Scene implements Scene {
       // Edge limits and the zoom floor for what the tilted screen really sees,
       // which is more than the screen at the top: no empty space beyond the
       // world's edge, at the edge or zoomed right out.
-      this.camera.setMinZoom(tiltMinZoom(tilt, WORLD_BOUNDS, MIN_ZOOM));
+      this.camera.setMinZoom(tiltMinZoom(tilt, worldBounds(), mapMinZoom()));
       this.camera.setViewExtent(tilt.flatBounds());
       this.tiltView.invalidate();
     } else {
@@ -579,7 +603,7 @@ export class MapRoom2Scene implements Scene {
       if (!this.renderer.root.parent) context.stage.addChildAt(this.renderer.root, 0);
       this.camera.setPointerMap(null);
       this.camera.setViewExtent(null);
-      this.camera.setMinZoom(MIN_ZOOM);
+      this.camera.setMinZoom(mapMinZoom());
       // The root was moved for the tilt texture; put it back for the flat camera.
       this.applyCamera();
     }
@@ -831,13 +855,17 @@ export class MapRoom2Scene implements Scene {
     const topLeft = mapRoomGrid.pixelToCell(view.left, view.top);
     const bottomRight = mapRoomGrid.pixelToCell(view.right, view.bottom);
 
+    // Two cells of margin across the stagger: flat-top's odd columns reach
+    // half a cell further up and down than their neighbours, pointy-top's odd
+    // rows half a cell further right. One cell the other way.
+    const pointy = mapRoomGrid.shape === "pointy";
+    const colMargin = pointy ? 2 : 1;
+    const rowMargin = pointy ? 1 : 2;
     return {
-      minCol: clamp(topLeft.col - 1, WORLD_WIDTH),
-      maxCol: clamp(bottomRight.col + 1, WORLD_WIDTH),
-      // Two rows of margin vertically: the odd-column stagger means a column
-      // reaches half a cell further up and down than its neighbour.
-      minRow: clamp(topLeft.row - 2, WORLD_HEIGHT),
-      maxRow: clamp(bottomRight.row + 2, WORLD_HEIGHT),
+      minCol: clamp(topLeft.col - colMargin, WORLD_WIDTH),
+      maxCol: clamp(bottomRight.col + colMargin, WORLD_WIDTH),
+      minRow: clamp(topLeft.row - rowMargin, WORLD_HEIGHT),
+      maxRow: clamp(bottomRight.row + rowMargin, WORLD_HEIGHT),
     };
   }
 
@@ -919,7 +947,7 @@ export class MapRoom2Scene implements Scene {
       return;
     }
     const centre = this.worldToCanvas(this.cellPoint(cell));
-    const half = (CELL_WIDTH / 2) * this.camera.zoom * (this.tilt ? this.tilt.scaleAt(centre.y) : 1);
+    const half = (mapRoomGrid.cellWidth / 2) * this.camera.zoom * (this.tilt ? this.tilt.scaleAt(centre.y) : 1);
     ui.showHover(content, { left: centre.x - half, right: centre.x + half, middle: centre.y });
   }
 
@@ -938,8 +966,8 @@ export class MapRoom2Scene implements Scene {
     if (!ui || !panel) return;
     const pan = panClearOfPanel({
       point: this.worldToCanvas(this.cellPoint(cell)),
-      halfWidth: (CELL_WIDTH / 2) * this.camera.zoom,
-      halfHeight: (CELL_HEIGHT / 2) * this.camera.zoom,
+      halfWidth: (mapRoomGrid.cellWidth / 2) * this.camera.zoom,
+      halfHeight: (mapRoomGrid.cellHeight / 2) * this.camera.zoom,
       panel,
       viewportWidth: this.viewportWidth,
       hudBottom: ui.hudBottom(),
