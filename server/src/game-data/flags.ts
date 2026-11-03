@@ -26,6 +26,8 @@ export const getFlags = () => ({
   maproom: 1,
   maproom2: 0, // controlled by baseLoad.ts based on town hall level
   mr2upgraded: 0,
+  /** Map Room 2's painted look for this account (MR2_PAINTED_MAP, `baseLoad.ts`). */
+  mr2painted: 0,
   inferno: devConfig.inferno ? 1 : 0,
   infernoMapBlocked: devConfig.infernoMaproom ? 1 : 0,
   showProgressBar: 0,

@@ -1,0 +1,8 @@
+# refs: forest hills
+Use your image generation tool (one call) to create ONE new image, landscape 3:2 (as large as the tool allows), and save it as sheet.png in the current folder. Do not write code, do not draw with scripts.
+
+The attached pictures are crops of a concept painting of a cartoon strategy game world map. MATCH ITS ART STYLE EXACTLY: bright, painted, toy-like cartoon, saturated yellow-greens and warm sandy yellows, crisp small painted details, warm sunlight from the top-left. Not photo-real. No text, no logos, no watermark, no hex lines, no grid lines, no borders, no buildings, no monsters, no number badges, no frames or labels around the pictures. Ignore the pale hex lines, buildings, monsters and badges in the attached crops: copy only the ground painting.
+
+THE PICTURE: forest edge pieces on a FLAT PURE MAGENTA background (#FF00FF) everywhere else, seen from the tilted top-down camera of the attached crops.
+- Top band: ONE long horizontal CANOPY EDGE STRIP running the FULL WIDTH of the picture (edge to edge, so it can repeat sideways with no seam): the soft rounded outer edge of a dense forest canopy, the treetops packed solid along its top, its lower edge a bumpy line of rounded crowns with small soft shadows on the magenta.
+- Below it, in two rows of four, 8 single trees, each centred in its own cell with magenta round it: four round leafy cartoon trees of different sizes and greens, and four pines (two tall, two small), each with a small soft contact shadow at its foot.
