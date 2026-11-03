@@ -3,6 +3,7 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import type { Context } from "koa";
 import { Terrain } from "../../../enums/MapRoom.js";
 import { activeLandFeature } from "./landFeature.js";
+import { activeRiverEdges } from "./rivers.js";
 import { userCell, type UserCellFields, type UserCellOwner } from "../../../controllers/maproom/v2/cells/userCell.js";
 import { wildMonsterCell, type WildMonsterCellFields } from "../../../controllers/maproom/v2/cells/wildMonsterCell.js";
 
@@ -33,5 +34,9 @@ export const createCellData = async (
   // ground: the map draws it and the cell pop-up lists what it does. Left out
   // otherwise, so the switch off sends exactly what it always did.
   const feature = activeLandFeature(worldid, cell.x, cell.y, cell.terrainHeight);
-  return feature !== 0 ? { ...data, lf: feature } : data;
+  // The river edges on the cell's own three sides (`rivers.ts`), with the
+  // rivers switch on: look only, drawn by the Modern map. Left out otherwise.
+  const rivers = activeRiverEdges(worldid, cell.x, cell.y, cell.terrainHeight);
+  if (feature === 0 && rivers === 0) return data;
+  return { ...data, ...(feature !== 0 && { lf: feature }), ...(rivers !== 0 && { rv: rivers }) };
 };
