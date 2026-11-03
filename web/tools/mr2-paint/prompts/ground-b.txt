@@ -1,0 +1,11 @@
+# refs: marsh forest meadow2
+Use your image generation tool (one call) to create ONE new SQUARE image (1:1, as large as the tool allows) and save it as sheet.png in the current folder. Do not write code, do not draw with scripts.
+
+The attached pictures are crops of a concept painting of a cartoon strategy game world map. MATCH ITS ART STYLE EXACTLY: bright, painted, toy-like cartoon, saturated yellow-greens and warm sandy yellows, crisp small painted details, warm sunlight from the top-left. Not photo-real. No text, no logos, no watermark, no hex lines, no grid lines, no borders, no buildings, no monsters, no number badges, no frames or labels around the pictures. Ignore the pale hex lines, buildings, monsters and badges in the attached crops: copy only the ground painting.
+
+THE PICTURE: a 2 x 2 grid of four equal square ground textures for the game's painted landscape.
+Each square is a SEAMLESS TILEABLE TEXTURE seen from STRAIGHT ABOVE (top-down, only soft painted shading, no horizon, no perspective, no big single objects, no long cast shadows): its left edge continues into its right edge and its top edge into its bottom edge, so copies laid side by side show no seam. The detail is even all over the square (no vignette, no darker or lighter corners, no centre spot), small and dense, at the scale of the attached crops (a small flower is about 6-10 px in a square). The four squares touch edge to edge with NO gaps, NO gutters and NO frames between them.
+- Top-left: MARSH MUD: dark olive-brown wet mud with glossy wet highlights, small puddles of dark water, a few tiny green moss specks and short sprouts, like the ground of the goo marsh in the attached crop (no reeds, no goo pools, those are separate).
+- Top-right: FOREST FLOOR: shaded dark green moss and fallen leaves, little ferns and twigs, soft dappled light, the ground you would see in a small clearing under the trees of the attached forest crop (no tree trunks, no treetops).
+- Bottom-left: SNOW: bright white snow with soft blue-grey shading and a few small grey rock tips poking through, cartoon painted.
+- Bottom-right: PLAIN MEADOW: the same bright yellow-green cartoon grass as the attached meadow crop, with soft light and dark patches and small tufts, but NO flowers.
