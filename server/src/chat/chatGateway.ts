@@ -19,6 +19,7 @@ import {
   leaveChannel,
   postMessage,
 } from "./chatRooms.js";
+import { applyModeration } from "./chatModeration.js";
 import { clients, type SocketData } from "./chatState.js";
 import { initTransport, subscribeControl } from "./chatTransport.js";
 import { ChatControlType } from "../enums/Chat.js";
@@ -49,6 +50,8 @@ const handleControlMessage = (payload: string) => {
     logger.error(`Chat control message was not valid JSON: ${payload}`);
     return;
   }
+
+  if (applyModeration(message)) return;
 
   if (message.type !== ChatControlType.AllianceEvict && message.type !== ChatControlType.CountryEvict) return;
 

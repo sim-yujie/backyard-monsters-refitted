@@ -202,6 +202,19 @@ export const userPermaBannedErr = () =>
     isClientFriendly: true
   });
 
+/**
+ * A ban set from the dashboard (`services/admin/moderation.ts`): says until
+ * when (UTC; the game shows it in the player's own time from `until`) and
+ * the owner's reason.
+ */
+export const userBannedErr = (ban: { until: Date | null; reason: string | null }, text: string) =>
+  new ClientSafeError({
+    message: text,
+    status: Status.FORBIDDEN,
+    data: { reason: "banned", until: ban.until?.toISOString() ?? null, banReason: ban.reason },
+    isClientFriendly: true,
+  });
+
 export const antiCheatBanErr = () =>
   new ClientSafeError({
     message:

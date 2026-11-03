@@ -22,6 +22,10 @@ export enum ServerMessageType {
   NameUpdate = "name_update",
   IgnoreList = "ignore_list",
   Error = "error",
+  /** The game team banned this player: the connection closes after it. */
+  Kicked = "kicked",
+  /** The game team left this player a warning or a mute: the game fetches it to show. */
+  Notice = "notice",
 }
 
 export enum ErrorCode {
@@ -32,6 +36,8 @@ export enum ErrorCode {
   InvalidChannel = "invalid_channel",
   NotInChannel = "not_in_channel",
   ServerError = "server_error",
+  /** The game team paused this player's chat; `until` says when it ends. */
+  Muted = "muted",
 }
 
 export enum AuthFailReason {
@@ -47,6 +53,8 @@ export interface HistoryEntry {
   body: string;
   messageType: AllianceMessageType;
   ts: number;
+  /** Said by the game team (an `ADMIN_USER_IDS` account): the chat box marks it. Set by the server only. */
+  gm?: boolean;
 }
 
 export interface IgnoreEntry {
@@ -69,12 +77,15 @@ export type ServerMessage =
   | { type: ServerMessageType.AuthOk; userId: number; displayName: string }
   | { type: ServerMessageType.AuthFail; reason: AuthFailReason }
   | { type: ServerMessageType.Joined; channel: string; history: HistoryEntry[] }
-  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; allianceImage: number | null; body: string; ts: number }
+  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; allianceImage: number | null; body: string; ts: number; gm?: boolean }
   | { type: ServerMessageType.UserEnter; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.UserExit; channel: string; userId: number }
   | { type: ServerMessageType.NameUpdate; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.IgnoreList; list: IgnoreEntry[] }
-  | { type: ServerMessageType.Error; code: ErrorCode };
+  | { type: ServerMessageType.Error; code: Exclude<ErrorCode, ErrorCode.Muted> }
+  | { type: ServerMessageType.Error; code: ErrorCode.Muted; until: number }
+  | { type: ServerMessageType.Kicked; reason: "banned"; until: number | null; text: string }
+  | { type: ServerMessageType.Notice };
 
 interface Sender { send(data: string): void; }
 
