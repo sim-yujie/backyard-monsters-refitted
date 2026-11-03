@@ -24,7 +24,6 @@ import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
-import { RiverLayer } from "./painted/RiverLayer";
 import { classicLook } from "@/game/classicLook";
 import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
@@ -76,12 +75,6 @@ export class MapRenderer {
   /** Every chunk's badges, markers and plates, over every chunk's ground. */
   private readonly worldTop = new Container();
   private readonly highlight = new Graphics();
-  /**
-   * Map Room 2 rivers along the cell edges (look plan step 7), over the ground
-   * (the painted ground's mesh sits under it) and under the cells' markers.
-   * Look only; drawn only with the painted look on.
-   */
-  private readonly rivers = new RiverLayer();
   /**
    * The upright marker layer for the tilted map (`markerPins.ts`): while the
    * tilt is on, `world` and `worldTop` leave `root` (so they are not drawn
@@ -165,7 +158,6 @@ export class MapRenderer {
     this.root.addChild(
       this.raster.sprite,
       this.ground,
-      this.rivers.container,
       this.world,
       this.range.container,
       this.worldTop,
@@ -189,8 +181,8 @@ export class MapRenderer {
       if (tilted) {
         this.markers.addChild(this.world, this.worldTop);
       } else {
-        // Back in the flat map's order: over the ground and rivers, and the badges over the range.
-        this.root.addChildAt(this.world, this.root.getChildIndex(this.rivers.container) + 1);
+        // Back in the flat map's order: over the ground, and the badges over the range.
+        this.root.addChildAt(this.world, this.root.getChildIndex(this.ground) + 1);
         this.root.addChildAt(this.worldTop, this.root.getChildIndex(this.range.container) + 1);
       }
     }
@@ -295,7 +287,7 @@ export class MapRenderer {
     this.painted?.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
     this.live.zoneArrived(zone.id);
-    this.rivers.invalidate();
+    this.painted?.invalidateRivers();
     // The range and the highlight stand on the cells, which now have their heights.
     this.range.invalidate();
     this.drawHighlight();
@@ -304,7 +296,7 @@ export class MapRenderer {
   /** How far a cell is drawn from its spot on the grid (`ground.ts`), for picking and outlines. */
   readonly liftAt = (col: number, row: number): number => cellLift(this.store.getCell(col, row));
 
-  /** What the river layer reads of the loaded cells. */
+  /** What the rivers (look plan step 7, painted by the painted ground) read of the loaded cells. */
   private readonly riverCells = {
     rvAt: (col: number, row: number): number => {
       const cell = this.store.getCell(col, row);
@@ -363,7 +355,8 @@ export class MapRenderer {
     // is exactly today's tiles. Never in Classic (Flash's map, which never
     // gets the painted look anyway), and not on the far raster tier yet.
     const riversShown = this.painted !== null && tier !== LodTier.RASTER && !classicLook();
-    const riversWork = this.rivers.update(range, riversShown, this.riverCells);
+    const riversWork = this.painted?.updateRivers(range, riversShown, this.riverCells) ?? false;
+    if (riversWork) this.paintedStepped = true;
 
     if (tier === LodTier.RASTER) {
       const changed = this.lastTier !== tier;
@@ -425,7 +418,6 @@ export class MapRenderer {
     this.raster.sprite.visible = !painted;
     if (this.lastTier !== null && this.lastTier !== LodTier.RASTER) this.ground.visible = !painted;
     this.range.invalidate();
-    this.rivers.invalidate();
     this.drawHighlight();
     this.rebuildAll();
     return painted;
@@ -437,7 +429,6 @@ export class MapRenderer {
     setFlatGround(false);
     this.dropAllChunks();
     this.live.destroy();
-    this.rivers.destroy();
     this.pool.destroy();
     this.avatars.destroy();
     this.buildings.destroy();

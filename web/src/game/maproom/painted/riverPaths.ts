@@ -32,6 +32,12 @@ export interface RiverPoint {
   y: number;
   /** Half the water's width, in world pixels. */
   half: number;
+  /**
+   * How much of a river mouth this is, 0 to 1: 0 upstream, rising over the last edge to 1 where the
+   * river meets the water, then falling back to 0 at the tip of the stretch that reaches into the
+   * water. The painted ground widens the river into an estuary by it and fades it into the shallows.
+   */
+  mouth: number;
 }
 
 /** One stretch of river between junctions or ends. */
@@ -42,6 +48,12 @@ export interface RiverPath {
   /** Points at the start and at the end that reach out into the water (no banks there). */
   wetStart: number;
   wetEnd: number;
+  /**
+   * Where the river steps down a cliff (indices into `points`): the hook for waterfalls. Empty while
+   * the painted map lays every cell flat; the cliffs of look plan step 5 (feat/mr2-hills) will give
+   * cells a lift, and a waterfall can then be drawn at each of these points.
+   */
+  falls: number[];
 }
 
 /** What the paths need to know about a cell. */
@@ -56,17 +68,23 @@ export interface RiverCells {
 
 /** Half the water's width for river widths 1, 2, 3, as a share of the cell width. */
 export const HALF_WIDTH_SHARE = [0, 0.05, 0.074, 0.1] as const;
-/** How much the width wanders with the place (0.18 = up to 18% wider or narrower). */
-const WIDTH_WANDER = 0.18;
-/** The bulge to one side, at most this share of the edge's length. */
+/** How much the width wanders with the place (0.3 = up to 30% wider or narrower). */
+const WIDTH_WANDER = 0.3;
+/** The bulge to one side, at most this share of the edge's length, and the S-bend on top of it. */
 const BULGE_SHARE = 0.11;
+const S_BEND_SHARE = 0.07;
 /** Points along each edge. */
 const STEPS_PER_EDGE = 10;
 /** How far a mouth reaches into the water, as a share of an edge, and how much wider it gets. */
 const MOUTH_REACH = 0.9;
-const MOUTH_FLARE = 2.4;
-/** A source starts at this share of its width. */
-const SOURCE_TAPER = 0.35;
+const MOUTH_FLARE = 2.6;
+/** The river widens by this much over its last edge on land, into an estuary. */
+const ESTUARY_FLARE = 1.6;
+/** A source starts at this share of its width and reaches its full width over this many edges. */
+const SOURCE_TAPER = 0.3;
+const SOURCE_EDGES = 2;
+/** A lift step between two corners bigger than this (world pixels) is a fall (the waterfall hook). */
+const FALL_MIN = 0.5;
 
 interface Corner {
   key: string;
@@ -91,7 +109,12 @@ const hashOf = (text: string): number => {
 const wander = (x: number, y: number, cellWidth: number): number => {
   const u = x / cellWidth;
   const v = y / cellWidth;
-  return 0.6 * Math.sin(u * 2.1 + v * 1.3) + 0.4 * Math.sin(u * -1.7 + v * 2.9 + 1.7);
+  // A slow swell over a few cells and a quicker ripple, so the banks neither run parallel nor wobble.
+  return (
+    0.5 * Math.sin(u * 0.9 + v * 0.7) +
+    0.3 * Math.sin(u * 2.1 + v * 1.3 + 0.4) +
+    0.2 * Math.sin(u * -1.7 + v * 2.9 + 1.7)
+  );
 };
 
 const cornerKey = (x: number, y: number): string => `${Math.round(x * 4)}:${Math.round(y * 4)}`;
@@ -194,7 +217,11 @@ export const riverPaths = (
     const keys = [a.key, b.key].sort();
     // The side is fixed by the edge, not by which way the path walks it.
     const sign = a.key === keys[0] ? 1 : -1;
-    const bulge = sign * ((hashOf(`${keys[0]}|${keys[1]}`) / 0xffffffff) * 2 - 1) * BULGE_SHARE * length;
+    const hash = hashOf(`${keys[0]}|${keys[1]}`);
+    const bulge = sign * ((hash / 0xffffffff) * 2 - 1) * BULGE_SHARE * length;
+    // An S-bend on top, its strength from another part of the hash; it keeps the ends' directions.
+    // No sign: walking the edge the other way flips both the normal and cos(pi t), so it stays put.
+    const sBend = ((((hash >>> 11) & 1023) / 1023) * 2 - 1) * S_BEND_SHARE * length;
     const nx = -chordY / length;
     const ny = chordX / length;
     const halfA = halfAtCorner(a, b, before);
@@ -207,18 +234,18 @@ export const riverPaths = (
       const h10 = t3 - 2 * t2 + t;
       const h01 = -2 * t3 + 3 * t2;
       const h11 = t3 - t2;
-      const side = Math.sin(Math.PI * t) ** 2 * bulge;
+      const side = Math.sin(Math.PI * t) ** 2 * (bulge + sBend * Math.cos(Math.PI * t));
       const x = h00 * a.x + h10 * t0x + h01 * b.x + h11 * t1x + nx * side;
       const y = h00 * a.y + h10 * t0y + h01 * b.y + h11 * t1y + ny * side + a.lift * (1 - t) + b.lift * t;
       const half = (halfA * (1 - t) + halfB * t) * (1 + WIDTH_WANDER * wander(x, y, grid.cellWidth));
-      out.push({ x, y, half });
+      out.push({ x, y, half, mouth: 0 });
     }
   };
 
   const lastPoint = (corner: Corner, previous: Corner): RiverPoint => {
     const half = halfAtCorner(corner, previous, beyond(corner, previous));
     const y = corner.y + corner.lift;
-    return { x: corner.x, y, half: half * (1 + WIDTH_WANDER * wander(corner.x, y, grid.cellWidth)) };
+    return { x: corner.x, y, half: half * (1 + WIDTH_WANDER * wander(corner.x, y, grid.cellWidth)), mouth: 0 };
   };
 
   /** Paths break at ends, junctions and the water. */
@@ -230,10 +257,12 @@ export const riverPaths = (
   const paths: RiverPath[] = [];
   const walk = (start: Corner, first: Corner): void => {
     const points: RiverPoint[] = [];
+    const falls: number[] = [];
     let from = start;
     let to = first;
     for (;;) {
       done.add(edgeKey(from, to));
+      if (Math.abs(from.lift - to.lift) > FALL_MIN) falls.push(points.length + STEPS_PER_EDGE / 2);
       edgeCurve(from, to, points);
       if (stops(to)) break;
       const onward = at(to.links[0]!.key === from.key ? to.links[1]!.key : to.links[0]!.key);
@@ -245,7 +274,7 @@ export const riverPaths = (
     // Both ends, always (a path can have a mouth at one end and a source at the other).
     const wetStart = finishEnd(points, start, true);
     const wetEnd = finishEnd(points, to, false);
-    paths.push({ points, mouth: wetStart + wetEnd > 0, wetStart, wetEnd });
+    paths.push({ points, mouth: wetStart + wetEnd > 0, wetStart, wetEnd, falls: falls.map((index) => index + wetStart) });
   };
 
   /** Flares a mouth into the water or narrows a source; returns the points added in the water. */
@@ -254,6 +283,15 @@ export const riverPaths = (
     const end = atStart ? points[0]! : points[points.length - 1]!;
     const inner = atStart ? points[1]! : points[points.length - 2]!;
     if (corner.water) {
+      // The last edge on land widens into an estuary and turns into a mouth.
+      const land = Math.min(STEPS_PER_EDGE + 1, points.length);
+      for (let i = 0; i < land; i++) {
+        const point = atStart ? points[i]! : points[points.length - 1 - i]!;
+        const share = 1 - i / (land - 1 || 1);
+        const ease = share * share * (3 - 2 * share);
+        point.half *= 1 + (ESTUARY_FLARE - 1) * ease;
+        point.mouth = Math.max(point.mouth, ease);
+      }
       const dx = end.x - inner.x;
       const dy = end.y - inner.y;
       const step = Math.hypot(dx, dy) || 1;
@@ -265,18 +303,20 @@ export const riverPaths = (
         extra.push({
           x: end.x + (dx / step) * reach * share,
           y: end.y + (dy / step) * reach * share,
-          half: end.half * (1 + (MOUTH_FLARE - 1) * share),
+          half: end.half * (1 + (MOUTH_FLARE / ESTUARY_FLARE - 1) * share),
+          mouth: 1 - share,
         });
       }
       if (atStart) points.unshift(...extra.reverse());
       else points.push(...extra);
       return count;
     }
-    // A source: narrow over the first edge.
-    const count = Math.min(STEPS_PER_EDGE, points.length);
+    // A source: narrow over the first edges, easing into the full width.
+    const count = Math.min(STEPS_PER_EDGE * SOURCE_EDGES, points.length);
     for (let i = 0; i < count; i++) {
       const point = atStart ? points[i]! : points[points.length - 1 - i]!;
-      point.half *= SOURCE_TAPER + (1 - SOURCE_TAPER) * (i / count);
+      const share = i / count;
+      point.half *= SOURCE_TAPER + (1 - SOURCE_TAPER) * Math.sqrt(share);
     }
     return 0;
   };

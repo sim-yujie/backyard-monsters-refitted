@@ -99,6 +99,37 @@ describe.each<HexShape>(["pointy", "flat"])("river shapes on %s-top hexes", (sha
     expect(widest).toBeGreaterThan(narrowest * 3);
   });
 
+  it("widens into an estuary and fades its mouth out into the water", () => {
+    const rv = rivers();
+    const mouthCell = HexGrid.neighbours(6, 6)[2]!;
+    const paths = riverPaths(range(0, 12, 0, 12), world(rv, [key(mouthCell.col, mouthCell.row)]));
+    const path = paths.find((one) => one.mouth)!;
+    const points = path.points;
+    // Walk from the source to the tip of the mouth.
+    const order = path.wetEnd > 0 ? points : [...points].reverse();
+    const wet = Math.max(path.wetStart, path.wetEnd);
+    const coast = order.length - 1 - wet;
+    expect(order[coast]!.mouth).toBeCloseTo(1, 5);
+    expect(order[0]!.mouth).toBe(0);
+    // The tip has faded out; the mouth only falls on the way out.
+    expect(order[order.length - 1]!.mouth).toBeCloseTo(0, 5);
+    for (let i = coast; i + 1 < order.length; i++) expect(order[i + 1]!.mouth).toBeLessThanOrEqual(order[i]!.mouth);
+    // Wider at the coast than an edge upstream.
+    expect(order[coast]!.half).toBeGreaterThan(order[Math.max(0, coast - 10)]!.half);
+  });
+
+  it("marks a fall where the river steps down (the waterfall hook)", () => {
+    const rv = rivers();
+    const flat = riverPaths(range(0, 12, 0, 12), world(rv));
+    expect(flat.flatMap((path) => path.falls)).toEqual([]);
+    // Ground stepping up row by row (a lift is drawn upwards): edges across rows step down.
+    const terraced: RiverCells = { ...world(rv), liftOf: (_col, row) => -20 * row };
+    const stepped = riverPaths(range(0, 12, 0, 12), terraced);
+    const falls = stepped.flatMap((path) => path.falls.map((index) => path.points[index]));
+    expect(falls.length).toBeGreaterThan(0);
+    for (const point of falls) expect(point).toBeDefined();
+  });
+
   it("breaks into three paths at a junction", () => {
     setHexShape(shape);
     // Three edges round one corner: cell (6,6)'s edges 0 and 1, and the edge between its neighbours 0 and 1.

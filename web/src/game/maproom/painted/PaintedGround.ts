@@ -8,6 +8,8 @@ import { cellCentre, paintedCellShape, textureAspect, type CellShape } from "./c
 import { GroundData } from "./GroundData";
 import { SHADER_TEXTURES } from "./groundKinds";
 import { GROUND_FRAGMENT, GROUND_VERTEX } from "./groundShader";
+import { RiverLayer } from "./RiverLayer";
+import type { RiverCells } from "./riverPaths";
 
 /** The ground texture atlas, 4 textures a row (`web/tools/mr2-paint/build.py`). */
 const ATLAS_URL = `${import.meta.env.BASE_URL}maproom/painted/ground@4x.webp`;
@@ -130,6 +132,8 @@ export class PaintedGround {
   private spritesUrl: string | null = null;
   private readonly spriteStandIn: CanvasSource;
   private readonly startMs = performance.now();
+  /** The rivers' distance picture (look plan step 7), painted by the shader with the sea's water. */
+  private readonly rivers = new RiverLayer();
   private readonly stopQuality: () => void;
   private destroyed = false;
 
@@ -151,9 +155,12 @@ export class PaintedGround {
         uSpritesReady: { value: 0, type: "f32" },
         uCellPoints: { value: shape.cellWidth, type: "f32" },
         uTime: { value: 0, type: "f32" },
+        uRiverRect: { value: this.rivers.uniforms.rect, type: "vec4<f32>" },
+        uRiverOn: { value: 0, type: "f32" },
       },
       uData: this.data.source,
       uSprites: this.spriteStandIn,
+      uRiver: this.rivers.uniforms.source,
     };
     SHADER_TEXTURES.forEach((_, index) => {
       resources[`uGround${index}`] = this.standIns[index]!;
@@ -182,9 +189,32 @@ export class PaintedGround {
     });
   }
 
-  private get uniforms(): { uQuality: number; uTime: number; uSpritesReady: number } {
-    return (this.shader.resources.groundUniforms as { uniforms: { uQuality: number; uTime: number; uSpritesReady: number } })
-      .uniforms;
+  private get uniforms(): { uQuality: number; uTime: number; uSpritesReady: number; uRiverOn: number } {
+    return (
+      this.shader.resources.groundUniforms as {
+        uniforms: { uQuality: number; uTime: number; uSpritesReady: number; uRiverOn: number };
+      }
+    ).uniforms;
+  }
+
+  /**
+   * Shows the rivers round `range` (rebuilding their picture when the view leaves the built cells),
+   * or hides them. Returns whether the picture changed, so a tilted view knows to redraw.
+   */
+  updateRivers(range: CellRange, shown: boolean, cells: RiverCells): boolean {
+    const changed = this.rivers.update(range, shown, cells);
+    if (!changed) return false;
+    const { source, on } = this.rivers.uniforms;
+    if (this.shader.resources.uRiver !== source) this.shader.resources.uRiver = source;
+    this.uniforms.uRiverOn = on ? 1 : 0;
+    // The rectangle is the same array the uniform holds; mark the group changed so it is uploaded.
+    (this.shader.resources.groundUniforms as { update(): void }).update();
+    return true;
+  }
+
+  /** A zone arrived: the rivers are rebuilt on the next `updateRivers`. */
+  invalidateRivers(): void {
+    this.rivers.invalidate();
   }
 
   /**
@@ -194,7 +224,7 @@ export class PaintedGround {
    * Water out of sight, or Quality Low, keeps the clock still.
    */
   animate(nowMs: number, range: CellRange, level: Quality = quality()): boolean {
-    if (WATER_STEP_MS[level] === null || !this.data.hasWater(range)) return false;
+    if (WATER_STEP_MS[level] === null || !(this.rivers.showing || this.data.hasWater(range))) return false;
     const time = waterTime(nowMs, this.startMs, level);
     if (time === this.uniforms.uTime) return false;
     this.uniforms.uTime = time;
@@ -307,6 +337,7 @@ export class PaintedGround {
     this.mesh.destroy();
     this.shader.destroy();
     this.data.destroy();
+    this.rivers.destroy();
     for (const source of [...this.textures, ...this.standIns, this.spriteStandIn]) source.destroy();
     this.sprites?.destroy();
   }

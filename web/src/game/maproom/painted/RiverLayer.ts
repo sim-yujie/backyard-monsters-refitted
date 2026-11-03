@@ -1,79 +1,78 @@
-import { Container, Graphics } from "pixi.js";
+import { BufferImageSource } from "pixi.js";
 import { mapRoomGrid } from "@/game/HexGrid";
 import { quality, type Quality } from "@/game/quality";
 import type { CellRange } from "../zones";
-import { ribbonOutline, riverPaths, type RiverCells, type RiverPath } from "./riverPaths";
+import { buildRiverMask, type RiverMask, type WorldRect } from "./riverMask";
+import { riverPaths, type RiverCells } from "./riverPaths";
 
 /**
- * Map Room 2 rivers, drawn (look plan step 7): a winding water ribbon along
- * the cell edges with soft banks, from `riverPaths.ts`'s shapes. Its own
- * layer over the painted ground's mesh and under the cells' markers (the
- * painted look lays the ground flat, so the ribbon needs no lift there).
+ * Map Room 2 rivers (look plan step 7), for the painted ground: the river shapes (`riverPaths.ts`)
+ * turned into the distance picture its shader paints them from (`riverMask.ts`). The rivers are
+ * painted inside the ground, with the coast's water, so nothing is drawn over the ground any more.
  *
- * Look only. Nothing is drawn unless the server sent rivers (`rv`, switch
- * `MR2_RIVERS`) and the renderer shows the layer: only with the painted look
- * (`MR2_PAINTED_MAP`) on, so with it off the map is exactly today's tiles;
- * Classic is always Flash's map.
+ * Look only. Nothing shows unless the server sent rivers (`rv`, switch `MR2_RIVERS`) and the
+ * renderer asks for them: only with the painted look (`MR2_PAINTED_MAP`) on, so with it off the map
+ * is exactly today's tiles; Classic is always Flash's map.
  *
- * Quality (`quality.ts`):
- * - High: grassy bank shadow, pebble-and-mud bank, shallow edge water, deeper
- *   middle, broken glints on the water.
- * - Medium: mud bank, shallow edge water, deeper middle.
- * - Low: the water alone, one colour.
- *
- * Built for the cells on screen plus a margin, again only when the view
- * leaves that, a zone arrives, or the quality changes; panning costs nothing.
+ * Built for the cells on screen plus a margin, again only when the view leaves that, a zone arrives,
+ * or the Quality changes; panning costs nothing.
  */
 
 /** Cells built past each side of the view, so a short pan does not rebuild. */
 const MARGIN = 6;
 
-/** Bank widths past the water each side, as shares of the cell width. */
-const GRASS_BANK_SHARE = 0.075;
-const MUD_BANK_SHARE = 0.014;
+/** Texels a cell, by Quality: the distance picture stays sharp with few (the GPU blends them). */
+const TEXELS_PER_CELL: Record<Quality, number> = { high: 40, medium: 32, low: 22 };
 
-const COLOURS = {
-  grassBank: 0x3f6a22,
-  mudBank: 0x8c8456,
-  shallow: 0x62b6dc,
-  deep: 0x2f82c8,
-  glint: 0xe8f7ff,
-} as const;
-
-/** The deeper middle's share of the water's width. */
-const DEEP_SHARE = 0.58;
+/** What the shader gets: the picture, where it lies, and whether to look at it. */
+export interface RiverUniforms {
+  source: BufferImageSource;
+  /** x0, y0, 1 / width, 1 / height, in world points. */
+  rect: Float32Array;
+  on: boolean;
+}
 
 export class RiverLayer {
-  readonly container = new Container();
-
-  private readonly grassBank = new Graphics();
-  private readonly mudBank = new Graphics();
-  private readonly shallow = new Graphics();
-  private readonly deep = new Graphics();
-  private readonly glints = new Graphics();
-
+  /** A 1 x 1 "no river" picture until the first build. */
+  private source = new BufferImageSource({
+    resource: new Uint8Array(4),
+    width: 1,
+    height: 1,
+    format: "rgba8unorm",
+    scaleMode: "linear",
+    autoGenerateMipmaps: false,
+  });
+  private readonly rect = new Float32Array([0, 0, 1, 1]);
+  private on = false;
   private built: CellRange | null = null;
   private builtQuality: Quality | null = null;
   private stale = true;
-
-  constructor() {
-    this.container.interactiveChildren = false;
-    this.container.addChild(this.grassBank, this.mudBank, this.shallow, this.deep, this.glints);
-  }
+  private anyRiver = false;
 
   /** A zone arrived (new rivers or heights): rebuilt on the next `update`. */
   invalidate(): void {
     this.stale = true;
   }
 
+  get uniforms(): RiverUniforms {
+    return { source: this.source, rect: this.rect, on: this.on };
+  }
+
+  /** Whether rivers are showing (so the water clock needs to run). */
+  get showing(): boolean {
+    return this.on;
+  }
+
   /**
-   * Shows the rivers round `range`, or hides the layer. Returns whether it
-   * rebuilt, so the renderer can count it as work.
+   * Shows the rivers round `range`, or hides them. Returns whether the picture changed (rebuilt,
+   * shown or hidden), so the renderer can redraw a tilted view and count the work.
    */
-  update(range: CellRange, shown: boolean, cells: RiverCells): boolean {
-    this.container.visible = shown;
-    if (!shown) return false;
-    const level = quality();
+  update(range: CellRange, shown: boolean, cells: RiverCells, level: Quality = quality()): boolean {
+    if (!shown) {
+      const was = this.on;
+      this.on = false;
+      return was;
+    }
     const built = this.built;
     if (
       !this.stale &&
@@ -84,7 +83,9 @@ export class RiverLayer {
       range.minRow >= built.minRow &&
       range.maxRow <= built.maxRow
     ) {
-      return false;
+      const was = this.on;
+      this.on = this.anyRiver;
+      return was !== this.on;
     }
     const around: CellRange = {
       minCol: range.minCol - MARGIN,
@@ -92,65 +93,60 @@ export class RiverLayer {
       minRow: range.minRow - MARGIN,
       maxRow: range.maxRow + MARGIN,
     };
-    this.draw(riverPaths(around, cells), level);
+    const mask = buildRiverMask(riverPaths(around, cells), worldRectOf(around), mapRoomGrid.cellWidth, TEXELS_PER_CELL[level]);
+    this.upload(mask);
     this.built = around;
     this.builtQuality = level;
     this.stale = false;
+    this.anyRiver = mask.any;
+    this.on = mask.any;
     return true;
   }
 
   destroy(): void {
-    this.container.destroy({ children: true });
+    this.source.destroy();
   }
 
-  private draw(paths: RiverPath[], level: Quality): void {
-    for (const graphics of [this.grassBank, this.mudBank, this.shallow, this.deep, this.glints]) graphics.clear();
-    const cellWidth = mapRoomGrid.cellWidth;
-    const grass = GRASS_BANK_SHARE * cellWidth;
-    const mud = MUD_BANK_SHARE * cellWidth;
-
-    // Every path's bank first, then every path's water, so where two rivers
-    // meet the water joins over both banks.
-    if (level === "high") this.fillAll(this.grassBank, paths, grass, 1, COLOURS.grassBank);
-    if (level !== "low") this.fillAll(this.mudBank, paths, mud, 1, COLOURS.mudBank);
-    this.fillAll(this.shallow, paths, 0, 1, level === "low" ? COLOURS.deep : COLOURS.shallow);
-    if (level !== "low") this.fillAll(this.deep, paths, 0, DEEP_SHARE, COLOURS.deep);
-    if (level === "high") this.drawGlints(paths);
-    // The grass bank is a soft shade, not a stripe.
-    this.grassBank.alpha = 0.32;
-  }
-
-  /** Each path's outline, `extra` wider each side, plus round caps at its ends so joins close. */
-  private fillAll(graphics: Graphics, paths: RiverPath[], extra: number, scale: number, colour: number): void {
-    for (const path of paths) {
-      // Banks stop at the shore; only the water reaches out into the sea.
-      const points = extra > 0 ? path.points.slice(path.wetStart, path.points.length - path.wetEnd) : path.points;
-      if (points.length < 2) continue;
-      graphics.poly(ribbonOutline(points, extra, scale)).fill({ color: colour });
-      for (const end of [points[0]!, points[points.length - 1]!]) {
-        graphics.circle(end.x, end.y, end.half * scale + extra).fill({ color: colour });
-      }
+  private upload(mask: RiverMask): void {
+    if (mask.width === this.source.width && mask.height === this.source.height) {
+      (this.source.resource as Uint8Array).set(mask.bytes);
+      this.source.update();
+    } else {
+      const old = this.source;
+      this.source = new BufferImageSource({
+        resource: mask.bytes,
+        width: mask.width,
+        height: mask.height,
+        format: "rgba8unorm",
+        scaleMode: "linear",
+        autoGenerateMipmaps: false,
+      });
+      old.destroy();
     }
-  }
-
-  /** Short light streaks off the middle of the water, broken at a steady rhythm. */
-  private drawGlints(paths: RiverPath[]): void {
-    const width = Math.max(1, mapRoomGrid.cellWidth * 0.009);
-    for (const path of paths) {
-      const points = path.points;
-      for (let i = 2; i + 3 < points.length; i += 7) {
-        const a = points[i]!;
-        const b = points[i + 3]!;
-        // A third of the way to one bank, alternating sides.
-        const side = (i / 7) % 2 < 1 ? 0.3 : -0.3;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const length = Math.hypot(dx, dy) || 1;
-        const nx = (-dy / length) * a.half * side;
-        const ny = (dx / length) * a.half * side;
-        this.glints.moveTo(a.x + nx, a.y + ny).lineTo(b.x + nx, b.y + ny);
-      }
-    }
-    this.glints.stroke({ color: COLOURS.glint, width, alpha: 0.55, cap: "round" });
+    const { x0, y0, x1, y1 } = mask.rect;
+    this.rect.set([x0, y0, 1 / Math.max(1e-6, x1 - x0), 1 / Math.max(1e-6, y1 - y0)]);
   }
 }
+
+/** The world rectangle round a range of cells (a cell's width and height past its outer centres). */
+export const worldRectOf = (range: CellRange): WorldRect => {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const col of [range.minCol, range.minCol + 1, range.maxCol - 1, range.maxCol]) {
+    for (const row of [range.minRow, range.minRow + 1, range.maxRow - 1, range.maxRow]) {
+      const centre = mapRoomGrid.cellToPixel(col, row);
+      x0 = Math.min(x0, centre.x);
+      y0 = Math.min(y0, centre.y);
+      x1 = Math.max(x1, centre.x);
+      y1 = Math.max(y1, centre.y);
+    }
+  }
+  return {
+    x0: x0 - mapRoomGrid.cellWidth,
+    y0: y0 - mapRoomGrid.cellHeight,
+    x1: x1 + mapRoomGrid.cellWidth,
+    y1: y1 + mapRoomGrid.cellHeight,
+  };
+};
