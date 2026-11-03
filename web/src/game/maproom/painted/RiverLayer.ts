@@ -7,12 +7,13 @@ import { ribbonOutline, riverPaths, type RiverCells, type RiverPath } from "./ri
 /**
  * Map Room 2 rivers, drawn (look plan step 7): a winding water ribbon along
  * the cell edges with soft banks, from `riverPaths.ts`'s shapes. Its own
- * layer over the ground and under the cells' markers, so it sits the same on
- * today's tiles and, later, on the painted ground.
+ * layer over the painted ground's mesh and under the cells' markers (the
+ * painted look lays the ground flat, so the ribbon needs no lift there).
  *
  * Look only. Nothing is drawn unless the server sent rivers (`rv`, switch
- * `MR2_RIVERS`) and the renderer shows the layer (Modern only; Classic is
- * always Flash's map).
+ * `MR2_RIVERS`) and the renderer shows the layer: only with the painted look
+ * (`MR2_PAINTED_MAP`) on, so with it off the map is exactly today's tiles;
+ * Classic is always Flash's map.
  *
  * Quality (`quality.ts`):
  * - High: grassy bank shadow, pebble-and-mud bank, shallow edge water, deeper

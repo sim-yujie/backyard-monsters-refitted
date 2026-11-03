@@ -77,7 +77,8 @@ export class MapRenderer {
   private readonly highlight = new Graphics();
   /**
    * Map Room 2 rivers along the cell edges (look plan step 7), over the ground
-   * and under the cells' markers. Look only; Modern only.
+   * (the painted ground's mesh sits under it) and under the cells' markers.
+   * Look only; drawn only with the painted look on.
    */
   private readonly rivers = new RiverLayer();
   /** The player's attack range (#177), over the cells and under the highlight. */
@@ -301,10 +302,11 @@ export class MapRenderer {
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();
 
-    // Rivers show with the cells, never in Classic (Flash's map) and not on the
-    // far raster. When the painted look (feat/mr2-paint) lands, it also
-    // decides here: rivers belong to the painted map.
-    const riversWork = this.rivers.update(range, tier !== LodTier.RASTER && !classicLook(), this.riverCells);
+    // Rivers belong to the painted map (MR2_PAINTED_MAP): with it off the map
+    // is exactly today's tiles. Never in Classic (Flash's map, which never
+    // gets the painted look anyway), and not on the far raster tier yet.
+    const riversShown = this.painted !== null && tier !== LodTier.RASTER && !classicLook();
+    const riversWork = this.rivers.update(range, riversShown, this.riverCells);
 
     if (tier === LodTier.RASTER) {
       const changed = this.lastTier !== tier;
@@ -366,6 +368,7 @@ export class MapRenderer {
     this.raster.sprite.visible = !painted;
     if (this.lastTier !== null && this.lastTier !== LodTier.RASTER) this.ground.visible = !painted;
     this.range.invalidate();
+    this.rivers.invalidate();
     this.drawHighlight();
     this.rebuildAll();
     return painted;
