@@ -5,7 +5,7 @@ import { dreadnaught } from "../../../game-data/tribes/v2/dreadnaught.js";
 import { kozu } from "../../../game-data/tribes/v2/kozu.js";
 import { legionnaire } from "../../../game-data/tribes/v2/legionnaire.js";
 import { savedTribeLevels } from "../../../game-data/tribes/v2/levels/index.js";
-import { minimumTribeLevels } from "./calculateTribeLevel.js";
+import { calculateTribeLevel, minimumTribeLevels } from "./calculateTribeLevel.js";
 
 /**
  * The Map Room 2 wild monster camps' yards, by tribe and level.
@@ -62,11 +62,20 @@ export const tribeIdAt = (tribeIndex: number): TribeId => {
 /** The lowest level a tribe's camps have. */
 export const lowestTribeLevel = (tribe: TribeId): number => minimumTribeLevels[TRIBE_OF[tribe]];
 
-/** The levels a tribe's camps can have: its minimum up to 44. */
+/**
+ * The levels a tribe's camps really have on the map. A camp's tribe is
+ * `(x + y) % 4` and its level depends on `x + y` too (`calculateTribeLevel`),
+ * so each tribe only ever gets every 4th level of its band: Legionnaire
+ * 25, 29 … 41, Kozu 30 … 42, Abunakki 27 … 43, Dreadnaut 28 … 44.
+ */
 export const tribeLevels = (tribe: TribeId): number[] => {
-  const levels: number[] = [];
-  for (let level = lowestTribeLevel(tribe); level < TRIBE_LEVEL_CAP; level++) levels.push(level);
-  return levels;
+  const index = TRIBE_IDS.indexOf(tribe);
+  const levels = new Set<number>();
+  // The level repeats every lcm(4, band) of x + y, well inside 4 x 45.
+  for (let sum = index; sum < Tribes.length * TRIBE_LEVEL_CAP; sum += Tribes.length) {
+    levels.add(calculateTribeLevel(sum, 0, TRIBE_OF[tribe]));
+  }
+  return [...levels].sort((a, b) => a - b);
 };
 
 /**
