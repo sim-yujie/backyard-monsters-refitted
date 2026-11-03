@@ -8,6 +8,7 @@ import {
   isSpurtzCannon,
   trapStats,
   type BattleVisualEvent,
+  type SiegeSnapshot,
 } from "@/game/combat/rules";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
@@ -40,10 +41,15 @@ import { ATTACK_EFFECTS, type Effect } from "@/game/sound/EffectsPlayer";
  * | A building damaged / falling (`BFOUNDATION.as:1070-1092`) | `damage1-3` / `destroy1-4` by level, `destroytownhall` | the smoke puff |
  * | A resource bomb thrown (`ResourceBombs.Trigger`)    | `twigbomb/pebblebomb/puttybomb`| the bomb's drop          |
  * | A trap (`BTRAP.as:147`, `BHEAVYTRAP.as:109`)        | `trap`                         | the trap's reveal        |
+ * | A Jar thrown, cracking under 60%, breaking (`BTOWER.as:277,288-292,320`) | `jar_land_2`, `glass_cracking_1-4`, `glass_explode_1-2` | the siege snapshot |
+ * | The Decoy thrown, blowing up (`Decoy.as:213,297`)   | `decoyLandSound`, `decoyExplosionSound` | the siege snapshot |
+ * | The Vacuum dropped, let go or broken (`VacuumHose.as:195,255`) | `vacuumstart`, `vacuumloopoff` / `vacuumbroken` | the siege snapshot |
  *
  * A tower with a siege Jar on it plays at 0.4, as Flash's `isJard` did.
  * Flash never played `warcry1` or `Rezghul_Fire_Damage` (they are in the
- * folder, not in any call), so neither is here.
+ * folder, not in any call), so neither is here. The Decoy's and the
+ * Vacuum's hum loops (`decoyLoopingSound`, `vacuumloop`) are left out: the
+ * effects player plays one-off sounds only.
  *
  * Only the choosing is here; {@link EffectsPlayer} plays them, keeps them
  * from rattling, and stays silent with sound effects off.
@@ -78,9 +84,30 @@ const INFERNO_ONLY: ReadonlySet<Effect> = new Set<Effect>([
   "ihit7",
 ]);
 
-/** The attack sounds an attack on this kind of yard fetches as it opens. */
-export const attackSoundsFor = (inferno: boolean): readonly Effect[] =>
-  inferno ? ATTACK_EFFECTS : ATTACK_EFFECTS.filter((effect) => !INFERNO_ONLY.has(effect));
+/** The siege weapons' sounds, fetched only when the attacker has siege weapons along. */
+const SIEGE_ONLY: ReadonlySet<Effect> = new Set<Effect>([
+  "jarland",
+  "jarcrack1",
+  "jarcrack2",
+  "jarcrack3",
+  "jarcrack4",
+  "jarexplode1",
+  "jarexplode2",
+  "decoyland",
+  "decoyexplode",
+  "vacuumstart",
+  "vacuumbroken",
+  "vacuumoff",
+]);
+
+/**
+ * The attack sounds an attack fetches as it opens: the Inferno's own only on
+ * an Inferno yard, the siege weapons' only with siege weapons along.
+ */
+export const attackSoundsFor = (inferno: boolean, siege = false): readonly Effect[] =>
+  ATTACK_EFFECTS.filter(
+    (effect) => (inferno || !INFERNO_ONLY.has(effect)) && (siege || !SIEGE_ONLY.has(effect)),
+  );
 
 const TOWN_HALL = 14;
 const CANNON_TYPE = 20;
@@ -107,6 +134,10 @@ export class AttackSounds {
   private readonly random: () => number;
   /** What each creep last swung at, so a shooter growls once per target. */
   private readonly lastTarget = new Map<number, string>();
+  /** The siege weapons as last seen, by a key per throw: a jar's health and break, the Decoy's blast, the Vacuum's health. */
+  private readonly jarsSeen = new Map<string, { health: number | null; broke: boolean }>();
+  private decoySeen: { key: number; exploded: boolean } | null = null;
+  private vacuumSeen: { key: number; health: number } | null = null;
 
   constructor(options: AttackSoundsOptions) {
     this.play = options.play;
@@ -186,6 +217,50 @@ export class AttackSounds {
   /** A Wormzer went under (true) or came up (false). */
   onBurrow(under: boolean): void {
     this.play(under ? "dig" : "arise");
+  }
+
+  /**
+   * The siege weapons this frame (`Battle.siege`), against the last frame:
+   * a jar or the Decoy thrown, a jar cracking or breaking, the Decoy going
+   * off, the Vacuum dropped and let go.
+   */
+  onSiege(siege: SiegeSnapshot, tick: number): void {
+    const jarsNow = new Set<string>();
+    for (const jar of siege.jars) {
+      const key = `${jar.buildingId}:${jar.landsAt}`;
+      jarsNow.add(key);
+      const seen = this.jarsSeen.get(key);
+      if (!seen) {
+        this.play("jarland");
+        this.jarsSeen.set(key, { health: jar.health, broke: jar.breaking });
+        continue;
+      }
+      // `UpdateJar`: a crack on every blow once it is under 60%.
+      if (jar.health !== null && seen.health !== null && jar.health < seen.health && jar.health / jar.durability < 0.6) {
+        this.play(this.pick("jarcrack", 1, 4));
+      }
+      if (jar.breaking && !seen.broke) this.play(this.pick("jarexplode", 1, 2));
+      seen.health = jar.health;
+      seen.broke = jar.breaking;
+    }
+    for (const key of this.jarsSeen.keys()) if (!jarsNow.has(key)) this.jarsSeen.delete(key);
+
+    const decoy = siege.decoy;
+    if (decoy && this.decoySeen?.key !== decoy.droppedAt) {
+      this.play("decoyland");
+      this.decoySeen = { key: decoy.droppedAt, exploded: false };
+    }
+    const seenDecoy = this.decoySeen;
+    if (seenDecoy && !seenDecoy.exploded && (!decoy || tick >= decoy.explodesAt)) {
+      this.play("decoyexplode");
+      seenDecoy.exploded = true;
+    }
+    if (!decoy) this.decoySeen = null;
+
+    const vacuum = siege.vacuum;
+    if (vacuum && this.vacuumSeen?.key !== vacuum.droppedAt) this.play("vacuumstart");
+    if (!vacuum && this.vacuumSeen) this.play(this.vacuumSeen.health <= 0 ? "vacuumbroken" : "vacuumoff");
+    this.vacuumSeen = vacuum ? { key: vacuum.droppedAt, health: vacuum.health } : null;
   }
 
   private onShot(towerId: number): void {

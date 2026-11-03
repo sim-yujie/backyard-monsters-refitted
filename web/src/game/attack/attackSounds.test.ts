@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { QUAKE_ANIM_FRAMES, type BattleVisualEvent } from "@/game/combat/rules";
+import { QUAKE_ANIM_FRAMES, type BattleVisualEvent, type SiegeSnapshot } from "@/game/combat/rules";
 import { EFFECTS, EffectsPlayer, type Effect, type EffectsBackend } from "@/game/sound/EffectsPlayer";
 import { AttackSounds, attackSoundsFor, damageSoundFor, destroySoundFor } from "./attackSounds";
 
@@ -211,17 +211,61 @@ describe("attack sounds", () => {
     ]);
   });
 
+  it("throws, cracks and breaks a Jar; throws and blows up the Decoy; drops and lets go the Vacuum", () => {
+    const { sounds, effects } = world();
+    const none: SiegeSnapshot = { active: null, decoy: null, vacuum: null, jars: [] };
+    const jar = (health: number | null, breaking = false) => ({
+      buildingId: 1,
+      landsAt: 30,
+      frame: 0,
+      breaking,
+      health,
+      durability: 100,
+    });
+    sounds.onSiege(none, 0);
+    sounds.onSiege({ ...none, jars: [jar(null)] }, 10);
+    sounds.onSiege({ ...none, jars: [jar(100)] }, 30);
+    // Above 60% a blow makes no crack; under it, every blow does.
+    sounds.onSiege({ ...none, jars: [jar(70)] }, 40);
+    sounds.onSiege({ ...none, jars: [jar(50)] }, 50);
+    sounds.onSiege({ ...none, jars: [jar(null, true)] }, 60);
+    sounds.onSiege(none, 80);
+    expect(effects()).toEqual(["jarland", "jarcrack1", "jarexplode1"]);
+
+    const decoy = { x: 0, y: 0, droppedAt: 100, landsAt: 140, explodesAt: 300, range: 100 };
+    const later = world();
+    later.sounds.onSiege({ ...none, decoy }, 100);
+    later.sounds.onSiege({ ...none, decoy }, 200);
+    later.sounds.onSiege(none, 300);
+    const vacuum = { buildingId: 14, droppedAt: 400, endsAt: 900, health: 50, durability: 50, took: null };
+    later.sounds.onSiege({ ...none, vacuum }, 400);
+    later.sounds.onSiege({ ...none, vacuum: { ...vacuum, health: 0 } }, 500);
+    later.sounds.onSiege(none, 501);
+    later.sounds.onSiege({ ...none, vacuum: { ...vacuum, droppedAt: 600 } }, 600);
+    later.sounds.onSiege(none, 900);
+    expect(later.effects()).toEqual([
+      "decoyland",
+      "decoyexplode",
+      "vacuumstart",
+      "vacuumbroken",
+      "vacuumstart",
+      "vacuumoff",
+    ]);
+  });
+
   it("fetches the Inferno's own sounds only for an Inferno yard", () => {
     expect(attackSoundsFor(false)).not.toContain("ihit1");
     expect(attackSoundsFor(false)).not.toContain("icannon");
     expect(attackSoundsFor(false)).toContain("laser");
     expect(attackSoundsFor(true)).toContain("ihit1");
+    expect(attackSoundsFor(false)).not.toContain("jarland");
+    expect(attackSoundsFor(false, true)).toContain("jarland");
     for (const effect of attackSoundsFor(true)) expect(EFFECTS[effect].attack).toBe(true);
   });
 
   it("every sound the attack picks is a known effect whose file is on the game server", () => {
     const serverPublic = fileURLToPath(new URL("../../../../server/public", import.meta.url));
-    for (const effect of attackSoundsFor(true)) {
+    for (const effect of attackSoundsFor(true, true)) {
       expect(existsSync(serverPublic + EFFECTS[effect].url), effect).toBe(true);
     }
   });

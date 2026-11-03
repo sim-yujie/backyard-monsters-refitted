@@ -1059,7 +1059,8 @@ export class AttackBattleLayer {
     // Flash's attack sounds, in both looks; fetched now, not with the game.
     const inferno = !this.session.raiding && combatKind(this.session.target) === "inferno";
     const play = options.playSound ?? playEffect;
-    if (!options.playSound) preloadEffects(attackSoundsFor(inferno));
+    const siegeAlong = !inferno && this.session.target.roster.siege !== null;
+    if (!options.playSound) preloadEffects(attackSoundsFor(inferno, siegeAlong));
     this.sounds = new AttackSounds({
       // Nothing sounds once the battle is put to rest: a skip to the end is silent.
       play: (effect, volume) => {
@@ -1124,7 +1125,9 @@ export class AttackBattleLayer {
     this.blastFx.update(shown);
     this.fx.update(shown);
     this.bombFx.update(shown);
-    this.siegeFx.update(battle.siege(), shown);
+    const siege = battle.siege();
+    if (!this.settled) this.sounds.onSiege(siege, tick);
+    this.siegeFx.update(siege, shown);
     this.showBombNumbers(shown);
     this.towerStatus.sync(battle.weakenedTowers());
 

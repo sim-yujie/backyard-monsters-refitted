@@ -46,7 +46,7 @@ const INFERNO = "/assets/sounds/infernosounds/";
  * one of a family starts at most once in {@link GROUP_GAP_MS}, so fifty
  * monsters biting at once sound like a fight, not a rattle.
  */
-export type EffectGroup = "hit" | "splat" | "land" | "damage" | "destroy" | "growl" | "magma";
+export type EffectGroup = "hit" | "splat" | "land" | "damage" | "destroy" | "growl" | "magma" | "crack" | "shatter";
 
 export interface EffectFile {
   readonly url: string;
@@ -129,6 +129,19 @@ const effects = {
   // A Wormzer going under and coming up (`MonsterBase.renderBurrow`), at half volume.
   dig: { url: `${ATTACK}wormzer_dig.mp3`, volume: 0.5, attack: true },
   arise: { url: `${ATTACK}wormzer_arise.mp3`, volume: 0.5, attack: true },
+  // The siege weapons' one-off sounds (`Jars.as:12-16`, `Decoy.as:22,32`, `VacuumHose.as:195,255`).
+  jarland: { url: `${OTHER}jar_land_2.mp3`, volume: 0.8, attack: true },
+  jarcrack1: { url: `${OTHER}glass_cracking_1.mp3`, volume: 0.8, attack: true, group: "crack" },
+  jarcrack2: { url: `${OTHER}glass_cracking_2.mp3`, volume: 0.8, attack: true, group: "crack" },
+  jarcrack3: { url: `${OTHER}glass_cracking_3.mp3`, volume: 0.8, attack: true, group: "crack" },
+  jarcrack4: { url: `${OTHER}glass_cracking_4.mp3`, volume: 0.8, attack: true, group: "crack" },
+  jarexplode1: { url: `${OTHER}glass_explode_1.mp3`, volume: 0.8, attack: true, group: "shatter" },
+  jarexplode2: { url: `${OTHER}glass_explode_2.mp3`, volume: 0.8, attack: true, group: "shatter" },
+  decoyland: { url: `${OTHER}decoyLandSound.mp3`, volume: 0.8, attack: true },
+  decoyexplode: { url: `${OTHER}decoyExplosionSound.mp3`, volume: 0.8, attack: true },
+  vacuumstart: { url: `${OTHER}vacuumstart.mp3`, volume: 0.8, attack: true },
+  vacuumbroken: { url: `${OTHER}vacuumbroken.mp3`, volume: 0.8, attack: true },
+  vacuumoff: { url: `${OTHER}vacuumloopoff.mp3`, volume: 0.8, attack: true },
 } as const satisfies Record<string, EffectFile>;
 
 export type Effect = keyof typeof effects;
