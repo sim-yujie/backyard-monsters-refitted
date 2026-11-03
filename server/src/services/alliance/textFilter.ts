@@ -1,4 +1,4 @@
-import { Filter as BadWords } from "bad-words";
+import { makeWordFilter } from "../chat/badWords.js";
 
 import { ALLIANCE_NAME_MAX_LENGTH, ALLIANCE_NAME_MIN_LENGTH } from "../../config/AllianceConfig.js";
 import {
@@ -8,7 +8,7 @@ import {
   allianceNameTooShortErr,
 } from "../../errors/errors.js";
 
-const filter = new BadWords();
+const filter = makeWordFilter();
 const LEADING_CHARACTER = /^[\p{L}\p{N}]/u;
 
 /**

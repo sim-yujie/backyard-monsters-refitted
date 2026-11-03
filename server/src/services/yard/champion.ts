@@ -1,4 +1,4 @@
-import { Filter as BadWords } from "bad-words";
+import { makeWordFilter } from "../chat/badWords.js";
 import {
   atChampionLevel,
   championEntry,
@@ -480,7 +480,7 @@ export const planChampionHeal = (save: ChampionSave, type?: number) => {
   return { report, slices: { champion: champions }, ...(credits > 0 ? { shiny: credits } : {}) };
 };
 
-const profanity = new BadWords();
+const profanity = makeWordFilter();
 
 /**
  * `POST /bm/yard/champion/rename`: name the champion in the cage.
