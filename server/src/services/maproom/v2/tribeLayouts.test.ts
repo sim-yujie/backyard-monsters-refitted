@@ -15,6 +15,7 @@ import {
   tribeIdAt,
   tribeLayoutFor,
   tribeLevels,
+  type TribeId,
 } from "./tribeLayouts.js";
 
 /** `fetchTribeData` as it was before per-level yards: equal level bands, one per layout. */
@@ -46,8 +47,25 @@ describe("tribeLayoutFor", () => {
         checked++;
       }
     });
-    // Legionnaire, Abunakki and Dreadnaut 25-44 (20 each), Kozu 29-44 (16).
-    expect(checked).toBe(76);
+    // Legionnaire 5, Kozu 4, Abunakki 5, Dreadnaut 5: the levels camps really have.
+    expect(checked).toBe(19);
+  });
+
+  test("lists exactly the levels real camps have", () => {
+    const real = new Map<TribeId, Set<number>>();
+    for (let x = 0; x < 200; x++) {
+      for (let y = 0; y < 200; y++) {
+        const index = (x + y) % Tribes.length;
+        const id = tribeIdAt(index);
+        if (!real.has(id)) real.set(id, new Set());
+        real.get(id)!.add(calculateTribeLevel(x, y, Tribes[index]!));
+      }
+    }
+    for (const tribe of TRIBE_IDS) expect(tribeLevels(tribe)).toEqual([...real.get(tribe)!].sort((a, b) => a - b));
+    expect(tribeLevels("legionnaire")).toEqual([25, 29, 33, 37, 41]);
+    expect(tribeLevels("kozu")).toEqual([30, 34, 38, 42]);
+    expect(tribeLevels("abunaki")).toEqual([27, 31, 35, 39, 43]);
+    expect(tribeLevels("dreadnaught")).toEqual([28, 32, 36, 40, 44]);
   });
 
   test("every real camp cell keeps its yard (levels from calculateTribeLevel)", () => {
