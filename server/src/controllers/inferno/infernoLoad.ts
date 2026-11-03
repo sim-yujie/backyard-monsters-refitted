@@ -20,6 +20,7 @@ import { visibleCredits } from "../../services/user/shinyLock.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { awaitOwnLanding } from "../../services/base/awaitOwnLanding.js";
 
 /** What `POST /bm/inferno/load` answers: the yard, caught up, with the purse. */
 export type InfernoLoadBody = Record<string, unknown> & {
@@ -95,6 +96,9 @@ export const infernoLoad: KoaController = async (ctx) => {
   requireInfernoEnabled();
   // An attack the player left, or one on their yard whose window closed, lands
   // before the yard is read (`infernoPlayerFinalise.ts`).
+  // So does a Descent or Moloch tribe save of theirs still landing (one sent as
+  // they left the attack screen), so the purse never shows it undone.
+  await awaitOwnLanding(ctx.authUser.userid);
   await closeBeforeInfernoLoad(ctx.authUser.userid);
   ctx.status = Status.OK;
   ctx.body = await loadInfernoYard(postgres.em, ctx.authUser, getCurrentDateTime());
