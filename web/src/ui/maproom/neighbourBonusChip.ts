@@ -3,7 +3,8 @@ import { neighbourBonusLine, neighbourBonusView } from "@/game/maproom/neighbour
 
 /**
  * Map Room 2's neighbour defence bonus as a painted icon and numbers:
- * "[shield] +11% ×3" (`game/maproom/neighbourBonus.ts`). Null when the cell
+ * "[shield] +11%", the total bonus only (owner, 3 Nov: no count shown;
+ * the hover line still says how many neighbours) (`game/maproom/neighbourBonus.ts`). Null when the cell
  * has none, so nothing shows with the switch off. The map's cell pop-up and
  * the attack screen both use it.
  */
@@ -17,11 +18,7 @@ export const neighbourBonusChip = (count: number | undefined, className: string)
   chip.setAttribute("role", "note");
   chip.setAttribute("aria-label", line);
   const amount = iconAmount("neighbours", `+${view.percent}%`, { size: 24, tooltip: false, label: "Neighbour defence bonus" });
-  const times = document.createElement("span");
-  times.className = "neighbour-bonus__count";
-  times.textContent = `×${view.count}`;
-  times.setAttribute("aria-hidden", "true");
-  chip.append(amount, times);
+  chip.append(amount);
   return chip;
 };
 

@@ -37,7 +37,7 @@ ringed by six for about **20%** (it was 13 / 22 / 30% on the old ladder).
 ## What players see
 
 - **Map Room 2 cell pop-up:** a chip with a painted shield (teal, linked cells, two up arrows) +
-  "+11%" + "×3" on any player's cell or camp that has friendly neighbours. Hover says "3 friendly
+  "+11%" (the total bonus; no count shown, owner 3 Nov) on any player's cell or camp that has friendly neighbours. Hover says "3 friendly
   neighbours: buildings +11% health, towers +11% damage." Nothing shows with the switch off or with no
   friend around.
 - **Attack screen:** the same chip in the top strip, beside the boosts chip, for the whole battle.

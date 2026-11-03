@@ -125,11 +125,6 @@
   white-space: nowrap;
 }
 
-.attack-strip__neighbours .neighbour-bonus__count {
-  font-size: var(--text-xs);
-  opacity: 0.8;
-}
-
 .attack-strip__spacer {
   flex: 1 1 auto;
 }
@@ -357,10 +352,6 @@
     top: calc(100% + var(--space-1));
     left: calc(var(--space-2) + 36px);
     background: var(--colour-surface-raised);
-  }
-
-  .attack-strip__neighbours .neighbour-bonus__count {
-    display: none;
   }
 
   .attack-menu__list {
