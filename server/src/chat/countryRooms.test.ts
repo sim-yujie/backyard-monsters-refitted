@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { ChannelType, ChatControlType } from "../enums/Chat.js";
 import type { ChatClient } from "./chatState.js";
 
@@ -51,7 +51,6 @@ mock.module("./chatHistory.js", () => ({
 const { authorizeJoin, evict, joinChannel, postMessage } = await import("./chatRooms.js");
 
 const USERID = 2503;
-const savedRooms = process.env.CHAT_COUNTRY_ROOMS;
 
 const fakeClient = (): ChatClient => ({
   ws: {
@@ -67,16 +66,10 @@ const fakeClient = (): ChatClient => ({
 });
 
 beforeEach(() => {
-  delete process.env.CHAT_COUNTRY_ROOMS;
   stored = null;
   lookups.length = 0;
   published.length = 0;
   pushed.length = 0;
-});
-
-afterEach(() => {
-  if (savedRooms === undefined) delete process.env.CHAT_COUNTRY_ROOMS;
-  else process.env.CHAT_COUNTRY_ROOMS = savedRooms;
 });
 
 describe("authorizeJoin: country rooms", () => {
@@ -92,13 +85,15 @@ describe("authorizeJoin: country rooms", () => {
 
   test("another country's room is refused, even one that exists", async () => {
     stored = { country: "SG" };
-    process.env.CHAT_COUNTRY_ROOMS = "PH,SG";
     expect(await authorizeJoin(USERID, "chat:country:PH")).toBeNull();
   });
 
-  test("a room for a country without one in the config is refused", async () => {
+  test("every country has a room: a player from Singapore joins the Singapore room", async () => {
     stored = { country: "SG" };
-    expect(await authorizeJoin(USERID, "chat:country:SG")).toBeNull();
+    expect(await authorizeJoin(USERID, "chat:country:SG")).toEqual({
+      key: "chat:country:SG",
+      info: { type: ChannelType.Country, country: "SG" },
+    });
   });
 
   test("no country set, or no such player, means no country room", async () => {
@@ -108,10 +103,9 @@ describe("authorizeJoin: country rooms", () => {
     expect(await authorizeJoin(USERID, "chat:country:PH")).toBeNull();
   });
 
-  test("taking a country off the config closes its room", async () => {
-    stored = { country: "PH" };
-    process.env.CHAT_COUNTRY_ROOMS = "";
-    expect(await authorizeJoin(USERID, "chat:country:PH")).toBeNull();
+  test("a stored code that is not a country gets no room", async () => {
+    stored = { country: "XX" };
+    expect(await authorizeJoin(USERID, "chat:country:XX")).toBeNull();
   });
 
   test("odd spellings of a room name are refused", async () => {
