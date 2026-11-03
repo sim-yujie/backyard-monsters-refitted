@@ -888,6 +888,12 @@ export interface WildMonsterCell {
   /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
   lf?: number;
   /**
+   * Map Room 2 rivers (look only, server `rivers.ts`, switch `MR2_RIVERS`): the river on this
+   * cell's own three edges, axial directions 0, 1, 2, two bits of width (1-3) each,
+   * `width << (2 * direction)`. Absent where none, or with the switch off.
+   */
+  rv?: number;
+  /**
    * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
    * friendly cells around this one, 1 to 6, counted as the attack load counts
    * them. Sent only with the switch on and at least one friend.
@@ -905,6 +911,12 @@ export interface PlayerCell {
   aid: number | null;
   /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
   lf?: number;
+  /**
+   * Map Room 2 rivers (look only, server `rivers.ts`, switch `MR2_RIVERS`): the river on this
+   * cell's own three edges, axial directions 0, 1, 2, two bits of width (1-3) each,
+   * `width << (2 * direction)`. Absent where none, or with the switch off.
+   */
+  rv?: number;
   /** Owner username. */
   n: string;
   /** Owner's base level. */

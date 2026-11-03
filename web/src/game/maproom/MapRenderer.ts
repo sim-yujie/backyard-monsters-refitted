@@ -1,5 +1,5 @@
 import { Container, Graphics, type Renderer } from "pixi.js";
-import { MAX_TEXT_OBJECTS } from "@/config";
+import { MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT } from "@/config";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import { HOVER_COLOUR, KitFilter, SELECT_COLOUR, type MapViewerContext } from "./cellVisuals";
 import {
@@ -22,6 +22,9 @@ import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
+import { RiverLayer } from "./painted/RiverLayer";
+import { classicLook } from "@/game/classicLook";
+import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
 
@@ -71,6 +74,11 @@ export class MapRenderer {
   /** Every chunk's badges, markers and plates, over every chunk's ground. */
   private readonly worldTop = new Container();
   private readonly highlight = new Graphics();
+  /**
+   * Map Room 2 rivers along the cell edges (look plan step 7), over the ground
+   * and under the cells' markers. Look only; Modern only.
+   */
+  private readonly rivers = new RiverLayer();
   /** The player's attack range (#177), over the cells and under the highlight. */
   private readonly range = new RangeOverlay();
 
@@ -132,6 +140,7 @@ export class MapRenderer {
     this.root.addChild(
       this.raster.sprite,
       this.ground,
+      this.rivers.container,
       this.world,
       this.range.container,
       this.worldTop,
@@ -216,6 +225,7 @@ export class MapRenderer {
     this.raster.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
     this.live.zoneArrived(zone.id);
+    this.rivers.invalidate();
     // The range and the highlight stand on the cells, which now have their heights.
     this.range.invalidate();
     this.drawHighlight();
@@ -223,6 +233,19 @@ export class MapRenderer {
 
   /** How far a cell is drawn from its spot on the grid (`ground.ts`), for picking and outlines. */
   readonly liftAt = (col: number, row: number): number => cellLift(this.store.getCell(col, row));
+
+  /** What the river layer reads of the loaded cells. */
+  private readonly riverCells = {
+    rvAt: (col: number, row: number): number => {
+      const cell = this.store.getCell(col, row);
+      return cell && !isFogCell(cell) && "rv" in cell ? (cell.rv ?? 0) : 0;
+    },
+    isWater: (col: number, row: number): boolean => {
+      const cell = this.store.getCell(col, row);
+      return cell !== undefined && !isFogCell(cell) && cell.i <= WATER_MAX_HEIGHT;
+    },
+    liftOf: this.liftAt,
+  };
 
   setHovered(cell: OffsetCell | null): void {
     if (same(this.hovered, cell)) return;
@@ -264,6 +287,11 @@ export class MapRenderer {
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();
 
+    // Rivers show with the cells, never in Classic (Flash's map) and not on the
+    // far raster. When the painted look (feat/mr2-paint) lands, it also
+    // decides here: rivers belong to the painted map.
+    const riversWork = this.rivers.update(range, tier !== LodTier.RASTER && !classicLook(), this.riverCells);
+
     if (tier === LodTier.RASTER) {
       const changed = this.lastTier !== tier;
       this.ground.visible = false;
@@ -288,7 +316,7 @@ export class MapRenderer {
     ) {
       this.residency.keep(this.visibleIds, nowMs);
       this.sweep(nowMs);
-      return false;
+      return riversWork;
     }
 
     this.lastTier = tier;
@@ -302,6 +330,7 @@ export class MapRenderer {
   destroy(): void {
     this.dropAllChunks();
     this.live.destroy();
+    this.rivers.destroy();
     this.pool.destroy();
     this.avatars.destroy();
     this.buildings.destroy();
