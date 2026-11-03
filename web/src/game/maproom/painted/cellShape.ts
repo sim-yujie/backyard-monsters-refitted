@@ -1,5 +1,5 @@
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
-import type { OffsetCell, Point } from "@/game/HexGrid";
+import { hexShape, mapRoomGrid, type OffsetCell, type Point } from "@/game/HexGrid";
 
 /**
  * The hex shape the painted ground is drawn on (Map Room 2 Modern look, plan step 2).
@@ -158,5 +158,8 @@ export const locateCell = (shape: CellShape, x: number, y: number): CellHit => {
  */
 export const textureAspect = (shape: CellShape): number => shape.unitY / shape.unitX;
 
-/** The shape the painted ground draws on today: flat-top, until lane A's pointy-top HexGrid lands. */
-export const paintedCellShape = (): CellShape => flatTopShape();
+/** The shape the painted ground draws on: the map's own grid, flat-top or pointy-top (MR2_HEX_SHAPE). */
+export const paintedCellShape = (): CellShape =>
+  hexShape() === "pointy"
+    ? pointyTopShape(mapRoomGrid.cellWidth, mapRoomGrid.cellHeight)
+    : flatTopShape(mapRoomGrid.cellWidth, mapRoomGrid.cellHeight);
