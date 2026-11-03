@@ -17,8 +17,8 @@ import { BaseType } from "../../../enums/Base.js";
 import {
   attackNotBoundErr,
   permissionErr,
-  saveFailureErr,
 } from "../../../errors/errors.js";
+import { refuseMissingBase } from "../../../services/base/missingBase.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
 import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
@@ -154,7 +154,14 @@ export const baseSave: KoaController = async (ctx) => {
     return;
   }
 
-  if (!baseSave) throw saveFailureErr();
+  // A row that is gone: answered as an expected refusal, and logged (`missingBase.ts`).
+  if (!baseSave) {
+    return refuseMissingBase(ctx, user, {
+      baseid: saveData.baseid,
+      basesaveid,
+      saveType: Number(saveData.attackid) ? "attack" : "own",
+    });
+  }
 
   // Another player's Inferno yard, attacked through the new Inferno: its
   // attack is bound to its row (`services/inferno/infernoPlayerLanding.ts`).

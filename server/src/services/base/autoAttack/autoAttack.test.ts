@@ -65,6 +65,7 @@ let planRow: Record<string, any> | null;
 const flush = mock(async () => {});
 const upsert = mock(async () => {});
 const mint = mock(async () => {});
+const removeRow = mock((_row: unknown) => {});
 
 const reset = () => {
   store.clear();
@@ -72,6 +73,7 @@ const reset = () => {
   flush.mockClear();
   upsert.mockClear();
   mint.mockClear();
+  removeRow.mockClear();
   camp = {
     basesaveid: BASESAVEID,
     baseid: CAMP,
@@ -128,7 +130,7 @@ mock.module("../../../server.js", () => ({
       find: async () => [],
       populate: async () => {},
       persist: () => {},
-      remove: () => {},
+      remove: removeRow,
       upsert,
       flush,
       // The transaction an attack lands in (audit P1, P2): the stand-in rows change
@@ -433,6 +435,19 @@ describe("runAutoAttack refuses, writing nothing", () => {
     camp.attackid = 77;
     camp.attacks = [{ starttime: now() - 10 }];
     expect((await refusal(runAutoAttack(user() as never, CAMP))).message).toContain("under attack");
+    expect(mint).not.toHaveBeenCalled();
+    expect(camp.attackid).toBe(77);
+  });
+
+  test("a camp past its 12 hours that someone is attacking keeps its row", async () => {
+    // A camp keeps its template's old `savetime` until an attack's save, and a
+    // camp row never lists its attacks, so only the session says it is in play.
+    camp.savetime = now() - 13 * 60 * 60;
+    camp.attackid = 77;
+    store.set(attackSessionKey(BASESAVEID), JSON.stringify({ attackerid: 999, attackid: 77, startedat: now() - 10 }));
+
+    expect((await refusal(runAutoAttack(user() as never, CAMP))).message).toContain("under attack");
+    expect(removeRow).not.toHaveBeenCalled();
     expect(mint).not.toHaveBeenCalled();
     expect(camp.attackid).toBe(77);
   });
