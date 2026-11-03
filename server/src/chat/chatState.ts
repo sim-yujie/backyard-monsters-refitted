@@ -20,7 +20,8 @@ export interface SocketData {
  */
 export type ChannelInfo =
   | { type: ChannelType.Alliance; allianceId: number }
-  | { type: ChannelType.Global };
+  | { type: ChannelType.Global }
+  | { type: ChannelType.Country; country: string };
 
 /** An authenticated connection and every channel it currently holds. */
 export interface ChatClient {

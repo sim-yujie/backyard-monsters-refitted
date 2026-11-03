@@ -7,6 +7,8 @@
 export enum ChannelType {
   Alliance = "alliance",
   Global = "global",
+  /** A country's room (`CHAT_COUNTRY_ROOMS`): stored and named like Global, joined only from the player's stored country. */
+  Country = "country",
 }
 
 /**
@@ -17,4 +19,6 @@ export enum ChannelType {
  */
 export enum ChatControlType {
   AllianceEvict = "alliance_evict",
+  /** The player changed their country: out of the old country room. */
+  CountryEvict = "country_evict",
 }

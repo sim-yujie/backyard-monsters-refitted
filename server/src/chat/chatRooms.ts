@@ -26,8 +26,9 @@ import {
   subscribeToChannel,
   unsubscribeFromChannel,
 } from "./chatTransport.js";
-import { ALLIANCE_CHANNEL_ALIAS } from "../config/ChatConfig.js";
-import { ChannelType } from "../enums/Chat.js";
+import { ALLIANCE_CHANNEL_ALIAS, COUNTRY_CHANNEL_PREFIX, countryChannelFor } from "../config/ChatConfig.js";
+import { ChannelType, ChatControlType } from "../enums/Chat.js";
+import type { ChatControlMessage } from "./chatControl.js";
 
 interface ResolvedChannel {
   key: string;
@@ -47,6 +48,11 @@ const MAX_MSG_LEN = 200;
  * and the key is derived from the player's own membership, so no client can name
  * another alliance's channel regardless of what it sends.
  *
+ * Country rooms work the same way: the client may name only the room its base
+ * load issued (`chatcountrychannel`), and the server checks that against the
+ * room derived from the player's stored country, so a player can be in one
+ * country room at most, their own, and only while that country has a room.
+ *
  * @param {number} userid - The player requesting the join.
  * @param {string} requestedChannel - The channel name as sent by the client.
  * @returns {Promise<ResolvedChannel | null>} The channel key and its kind, or null if not permitted.
@@ -63,6 +69,17 @@ export const authorizeJoin = async (userid: number, requestedChannel: string): P
     const key = allianceChannelKey(user.alliance_id);
 
     return { key, info: { type: ChannelType.Alliance, allianceId: user.alliance_id } };
+  }
+
+  if (requestedChannel.startsWith(COUNTRY_CHANNEL_PREFIX)) {
+    const em = postgres.orm.em.fork();
+    const user = await em.findOne(User, { userid }, { fields: ["country"] });
+
+    const key = countryChannelFor(user?.country);
+
+    if (!key || key !== requestedChannel || !user?.country) return null;
+
+    return { key, info: { type: ChannelType.Country, country: user.country } };
   }
 
   const key = validateChannel(requestedChannel);
@@ -229,4 +246,24 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
   };
 
   publishToChannel(channel, JSON.stringify(outgoing));
+};
+
+/**
+ * Takes a client out of the rooms a control message says they no longer
+ * belong in: every alliance room for an alliance eviction; every country room
+ * but `keep` (the new country's) for a country change.
+ *
+ * @param {ChatClient} client - The client to act on.
+ * @param {ChatControlMessage} message - The eviction published by the API side.
+ */
+export const evict = (client: ChatClient, message: ChatControlMessage) => {
+  for (const [channel, info] of [...client.channels]) {
+    if (message.type === ChatControlType.AllianceEvict && info.type === ChannelType.Alliance) {
+      leaveChannel(client, channel);
+    }
+
+    if (message.type === ChatControlType.CountryEvict && info.type === ChannelType.Country && channel !== message.keep) {
+      leaveChannel(client, channel);
+    }
+  }
 };

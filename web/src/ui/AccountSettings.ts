@@ -10,6 +10,10 @@
 
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
+import { setCountry, type CountrySettings } from "@/api/country";
+import { countryLabelNodes } from "@/ui/countryFlag";
+import { worldChat } from "@/game/chat/chatSession";
+import { CountryPicker } from "@/ui/CountryPicker";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
 import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, type MusicChoice } from "@/game/classicLook";
@@ -35,6 +39,11 @@ export const SETTINGS_TEXT = {
   privacyFailed: "Could not save that privacy setting. Try again.",
   chatLabel: "World chat",
   chatHint: "Off hides the chat box and stops chat messages.",
+  countryTitle: "Country",
+  countryNotSet: "Not set",
+  countryHint: "Some countries have their own chat room beside Global.",
+  countryRoom: "Your country has its own chat room, next to Global in the chat box.",
+  countryFailed: "Could not save your country. Try again.",
   blockedTitle: "Blocked players",
   blockedNone: "You have not blocked anyone.",
   blockedLoadFailed: "Could not load your blocked players.",
@@ -113,6 +122,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
         shinySection(account),
         privacySection(account.privacy),
         chatSection(),
+        countrySection(account.country),
         lookSection(),
         effectsSection(),
       );
@@ -242,6 +252,60 @@ const shinySection = (account: AccountInfo): HTMLElement => {
   });
 
   section.append(row, hint);
+  return section;
+};
+
+/**
+ * The player's country (owner 3 Nov 2026): what is stored now, and a
+ * searchable list that saves on a pick. A country with a room switches the
+ * chat box to it at once (`worldChat.setCountryRoom`).
+ */
+const countrySection = (stored: CountrySettings): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const heading = document.createElement("h3");
+  heading.className = "account-settings__heading";
+  heading.textContent = SETTINGS_TEXT.countryTitle;
+
+  const now = document.createElement("p");
+  now.className = "account-settings__country-now";
+  now.id = "settings-country-now";
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-country-hint";
+  hint.setAttribute("aria-live", "polite");
+
+  const show = (settings: CountrySettings): void => {
+    if (settings.country) now.replaceChildren(...countryLabelNodes(settings.country));
+    else now.textContent = SETTINGS_TEXT.countryNotSet;
+    hint.textContent = settings.countryChannel ? SETTINGS_TEXT.countryRoom : SETTINGS_TEXT.countryHint;
+    hint.classList.remove("field__hint--error");
+  };
+  show(stored);
+
+  const picker = new CountryPicker({
+    selected: stored.country,
+    onPick: (code) => {
+      picker.setDisabled(true);
+      setCountry(code).then(
+        (settings) => {
+          picker.setSelected(settings.country);
+          picker.setDisabled(false);
+          show(settings);
+          worldChat.setCountryRoom(settings.countryChannel, settings.country);
+        },
+        () => {
+          picker.setDisabled(false);
+          hint.textContent = SETTINGS_TEXT.countryFailed;
+          hint.classList.add("field__hint--error");
+        },
+      );
+    },
+  });
+  picker.search.id = "settings-country-search";
+  picker.search.setAttribute("aria-describedby", hint.id);
+
+  section.append(heading, now, hint, picker.element);
   return section;
 };
 
