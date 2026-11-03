@@ -16,6 +16,7 @@ import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners } from "./ground";
 import { GroundArt } from "./groundArt";
+import { LiveMap } from "./live/LiveMap";
 import { ConstructionBadge } from "./constructionBadge";
 import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
@@ -87,6 +88,8 @@ export class MapRenderer {
   /** Flash's ground tiles, fetched the same way; flat hexes until they land. */
   private readonly groundArt = new GroundArt();
   private readonly constructionBadge = new ConstructionBadge();
+  /** The living map (water, smoke, clouds, birds): its own layers, told when chunks come and go. */
+  private readonly live = new LiveMap(this.ground, () => this.rebuildAll());
   private readonly chunks = new Map<number, MapChunk>();
   private readonly residency = new ChunkResidency({
     ttlMs: CHUNK_TTL_MS,
@@ -132,6 +135,7 @@ export class MapRenderer {
       this.world,
       this.range.container,
       this.worldTop,
+      this.live.overlay,
       this.highlight,
     );
   }
@@ -197,6 +201,7 @@ export class MapRenderer {
   attach(renderer: Renderer): void {
     this.atlas?.destroy();
     this.atlas = new MapAtlas(renderer);
+    this.live.attach(renderer);
     this.dropAllChunks();
     this.lastRange = null;
   }
@@ -205,6 +210,7 @@ export class MapRenderer {
   applyZone(zone: ZoneRecord): void {
     this.raster.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
+    this.live.zoneArrived(zone.id);
     // The range and the highlight stand on the cells, which now have their heights.
     this.range.invalidate();
     this.drawHighlight();
@@ -248,6 +254,7 @@ export class MapRenderer {
       this.range.setZoom(zoom);
     }
 
+    this.live.update(range, zoom);
     const tier = tierForZoom(zoom);
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();
@@ -289,6 +296,7 @@ export class MapRenderer {
 
   destroy(): void {
     this.dropAllChunks();
+    this.live.destroy();
     this.pool.destroy();
     this.avatars.destroy();
     this.buildings.destroy();
@@ -309,6 +317,7 @@ export class MapRenderer {
     for (const [id, chunk] of this.chunks) {
       if (visible.has(id)) continue;
       chunk.visible = false;
+      this.live.show(id, false);
       // Text is the scarce resource, so an off-screen chunk gives its share
       // back as soon as the on-screen ones might want it.
       if (this.pool.inUse > MAX_TEXT_OBJECTS) chunk.releaseText();
@@ -352,6 +361,7 @@ export class MapRenderer {
           sight: this.sight,
         };
         chunk.build(this.store, nowSeconds, context);
+        this.live.chunkBuilt(ref, { store: this.store, viewer: context, nowSeconds, groundReady: this.groundArt.ready });
         this.buildMs = performance.now() - started;
         this.dirty.delete(ref.id);
       }
@@ -361,6 +371,7 @@ export class MapRenderer {
       }
       chunk.applyView(view);
       chunk.visible = true;
+      this.live.show(ref.id, true);
     }
 
     this.visibleIds = [...visible];
@@ -373,6 +384,7 @@ export class MapRenderer {
     for (const id of this.residency.evict(nowMs)) {
       this.chunks.get(id)?.destroy();
       this.chunks.delete(id);
+      this.live.drop(id);
       this.dirty.delete(id);
     }
   }
@@ -380,6 +392,7 @@ export class MapRenderer {
   private dropAllChunks(): void {
     for (const chunk of this.chunks.values()) chunk.destroy();
     this.chunks.clear();
+    this.live.dropAll();
     this.dirty.clear();
     this.visibleIds = [];
     for (const id of this.residency.ids()) this.residency.forget(id);
