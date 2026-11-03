@@ -29,12 +29,12 @@ import { ribbonOutline, riverPaths, type RiverCells, type RiverPath } from "./ri
 const MARGIN = 6;
 
 /** Bank widths past the water each side, as shares of the cell width. */
-const GRASS_BANK_SHARE = 0.05;
-const MUD_BANK_SHARE = 0.022;
+const GRASS_BANK_SHARE = 0.075;
+const MUD_BANK_SHARE = 0.014;
 
 const COLOURS = {
-  grassBank: 0x4f7a2c,
-  mudBank: 0xa89464,
+  grassBank: 0x3f6a22,
+  mudBank: 0x8c8456,
   shallow: 0x62b6dc,
   deep: 0x2f82c8,
   glint: 0xe8f7ff,
@@ -117,14 +117,17 @@ export class RiverLayer {
     if (level !== "low") this.fillAll(this.deep, paths, 0, DEEP_SHARE, COLOURS.deep);
     if (level === "high") this.drawGlints(paths);
     // The grass bank is a soft shade, not a stripe.
-    this.grassBank.alpha = 0.45;
+    this.grassBank.alpha = 0.32;
   }
 
   /** Each path's outline, `extra` wider each side, plus round caps at its ends so joins close. */
   private fillAll(graphics: Graphics, paths: RiverPath[], extra: number, scale: number, colour: number): void {
     for (const path of paths) {
-      graphics.poly(ribbonOutline(path.points, extra, scale)).fill({ color: colour });
-      for (const end of [path.points[0]!, path.points[path.points.length - 1]!]) {
+      // Banks stop at the shore; only the water reaches out into the sea.
+      const points = extra > 0 ? path.points.slice(path.wetStart, path.points.length - path.wetEnd) : path.points;
+      if (points.length < 2) continue;
+      graphics.poly(ribbonOutline(points, extra, scale)).fill({ color: colour });
+      for (const end of [points[0]!, points[points.length - 1]!]) {
         graphics.circle(end.x, end.y, end.half * scale + extra).fill({ color: colour });
       }
     }

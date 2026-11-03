@@ -39,6 +39,9 @@ export interface RiverPath {
   points: RiverPoint[];
   /** The river meets water at the first or last point (and was flared there). */
   mouth: boolean;
+  /** Points at the start and at the end that reach out into the water (no banks there). */
+  wetStart: number;
+  wetEnd: number;
 }
 
 /** What the paths need to know about a cell. */
@@ -52,7 +55,7 @@ export interface RiverCells {
 }
 
 /** Half the water's width for river widths 1, 2, 3, as a share of the cell width. */
-export const HALF_WIDTH_SHARE = [0, 0.042, 0.064, 0.088] as const;
+export const HALF_WIDTH_SHARE = [0, 0.05, 0.074, 0.1] as const;
 /** How much the width wanders with the place (0.18 = up to 18% wider or narrower). */
 const WIDTH_WANDER = 0.18;
 /** The bulge to one side, at most this share of the edge's length. */
@@ -60,8 +63,8 @@ const BULGE_SHARE = 0.11;
 /** Points along each edge. */
 const STEPS_PER_EDGE = 10;
 /** How far a mouth reaches into the water, as a share of an edge, and how much wider it gets. */
-const MOUTH_REACH = 0.45;
-const MOUTH_FLARE = 1.9;
+const MOUTH_REACH = 0.9;
+const MOUTH_FLARE = 2.4;
 /** A source starts at this share of its width. */
 const SOURCE_TAPER = 0.35;
 
@@ -240,15 +243,14 @@ export const riverPaths = (
     }
     points.push(lastPoint(to, from));
     // Both ends, always (a path can have a mouth at one end and a source at the other).
-    const startMouth = finishEnd(points, start, true);
-    const endMouth = finishEnd(points, to, false);
-    const mouth = startMouth || endMouth;
-    paths.push({ points, mouth });
+    const wetStart = finishEnd(points, start, true);
+    const wetEnd = finishEnd(points, to, false);
+    paths.push({ points, mouth: wetStart + wetEnd > 0, wetStart, wetEnd });
   };
 
-  /** Flares a mouth into the water or narrows a source; returns whether it was a mouth. */
-  const finishEnd = (points: RiverPoint[], corner: Corner, atStart: boolean): boolean => {
-    if (points.length < 2 || (!corner.water && corner.links.length !== 1)) return false;
+  /** Flares a mouth into the water or narrows a source; returns the points added in the water. */
+  const finishEnd = (points: RiverPoint[], corner: Corner, atStart: boolean): number => {
+    if (points.length < 2 || (!corner.water && corner.links.length !== 1)) return 0;
     const end = atStart ? points[0]! : points[points.length - 1]!;
     const inner = atStart ? points[1]! : points[points.length - 2]!;
     if (corner.water) {
@@ -257,7 +259,7 @@ export const riverPaths = (
       const step = Math.hypot(dx, dy) || 1;
       const reach = MOUTH_REACH * grid.cellWidth * 0.58;
       const extra: RiverPoint[] = [];
-      const count = 4;
+      const count = 6;
       for (let i = 1; i <= count; i++) {
         const share = i / count;
         extra.push({
@@ -268,7 +270,7 @@ export const riverPaths = (
       }
       if (atStart) points.unshift(...extra.reverse());
       else points.push(...extra);
-      return true;
+      return count;
     }
     // A source: narrow over the first edge.
     const count = Math.min(STEPS_PER_EDGE, points.length);
@@ -276,7 +278,7 @@ export const riverPaths = (
       const point = atStart ? points[i]! : points[points.length - 1 - i]!;
       point.half *= SOURCE_TAPER + (1 - SOURCE_TAPER) * (i / count);
     }
-    return false;
+    return 0;
   };
 
   const ordered = [...corners.values()].sort((p, q) => (p.key < q.key ? -1 : p.key > q.key ? 1 : 0));
