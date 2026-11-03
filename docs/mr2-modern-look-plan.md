@@ -1,402 +1,435 @@
-# Map Room 2, Modern look: the plan to reach the Codex mock-up
+# Map Room 2, Modern look: the plan to reach mock-up B
 
-Status: plan only, nothing built. Branch `docs/mr2-look-plan`, written 3 Nov 2026 by helper mr2-look-plan.
+Status: plan only. Branch `docs/mr2-look-plan`, rewritten 3 Nov 2026 by helper mr2-plan2 around the owner's
+decisions of that morning (memory note `mr2-modern-look.md`). The first version of this plan (11 steps,
+aimed at the older Codex mock-up) is in git history (commit 723c95458).
 Baseline to go back to: tag `mr2-baseline-2026-11-03` (commit 6e2f6f41e).
 
 ## In short (for the owner)
 
-Today's Modern map is Flash's map repainted: every hex is its own flat tile with a monster portrait and a
-level badge. The Codex mock-up is one continuous painted landscape (beaches, shallows, hills with cliffs,
-forests, rivers, snowy peaks) with thin hex lines on top, small painted villages instead of portraits,
-and glowing borders round players' land. The plan gets there in **11 steps, about 27 helper-days, about
-2 weeks with 3 helpers**. Every step ends on the Review Desk as a real game screenshot beside the
-mock-up at the same scale. The new look sits behind a **switch**: off, the map is exactly today's
-Modern; Classic always stays Flash. The **art test** (below) shows the ground style is reachable: Codex's
-painted grass, sand, turquoise shallows and sea, mr2-land's trees and a Codex hill, cut into 7 separate
-hex tiles on today's grid, join with no seam. Honest estimate: the steps cover every element of the
-mock-up, and after them the map should look **about 85-90%** like it. The last 5-10% is polish (more prop
-variety, lighting, small decorations), which step 11 is for, judged on a scorecard on the desk.
+The target is **mock-up B** (`worktrees/mr2-mockup2/art-samples/mr2-mockup2/variant-B-soft-lines.jpg`,
+branch `docs/mr2-mockup2`): one continuous painted landscape seen through a tilted camera, pointy-top
+hexes with faint lines, rolling hills and a rocky cliff, a solid forest, a goo marsh, a coast with surf,
+a river on the cell edges, today's Town Hall / Outpost pictures with name tags, today's tribe portraits
+with their level circles, and glowing borders round players' cells.
 
-| # | Step | What the owner will see on the desk | Helper-days | Runs in parallel? |
+The plan gets there in **12 steps (0-11), about 33 helper-days, about 14-15 working days with 3 helpers**,
+plus the owner's desk rounds. Every look step ends on the Review Desk with a real game screenshot beside
+the same crop of mock-up B at the same scale, and an honest list of differences. All of it sits behind
+switches: off = today's map; Classic always stays the Flash map. Honest estimate: after steps 1-10 the map
+should look **about 85-90% like mock-up B**; step 11 (polish) is there to close the rest to 95%.
+
+![which step builds which part](../art-samples/mr2-look-plan/plan-on-mockup.jpg)
+
+`art-samples/mr2-look-plan/plan-on-mockup.jpg`: mock-up B with the step numbers on the parts they build.
+
+### The owner's rules this plan follows (3 Nov 2026)
+
+- "95% like" mock-up B is THE target. Every look step shows a side-by-side (mock-up crop beside a real
+  in-game shot at the same scale) with an honest list of differences.
+- Two mock-up flaws are **not** copied: the river drawn as a narrow man-made channel (rivers must look
+  natural, winding along the cell edges) and separate tree crowns (forests read as one solid canopy).
+- One continuous painted landscape, no tile side walls; faint hex lines always shown (B strength);
+  painted rolling hills and rocky cliffs; solid canopy forests, blended rock and goo marsh; no farm
+  fields; player cells show their Outpost or Town Hall with name tags; tribe camps KEEP today's monster
+  portraits and level circles; rivers along cell edges (look only); glowing borders round players' land
+  only (yours cyan, alliance green, others blue, attackers red); real medium tilt at every zoom, opt-out;
+  pointy-top hexes; no smoke.
+- Behind a switch (off = today's map; revert = switch off; baseline tag `mr2-baseline-2026-11-03`);
+  Classic always stays the Flash map; Quality High/Medium/Low; only the owner and lead see it until it is
+  ready, then on for Modern players by a server switch that can be turned off again.
+- Painted art comes from Codex (`codex exec` with mock-up crops as `-i` references), never Blender.
+- Main yards get no land bonus (mr2-land). Tilt: MEDIUM (camera 32 degrees, far cells 66% of near),
+  on by default in Modern, a player switch makes the map flat and is remembered for the account.
+
+### What is already built, and what happens to it
+
+| Branch (worktree) | What it has | Keep | Change | Drop |
 |---|---|---|---|---|
-| 1 | Painted ground + the switch | One continuous painted ground (grass, sand, rock, snow, marsh, sea) blending across hex edges, thin hex lines, gentle hill shading; today's map with the switch off | 3 | First; art for 3 and 6 starts alongside |
-| 2 | Coast | Turquoise shallows fading to deep blue, white surf on every beach, sea stacks and little islets | 2 | After 1 (with mr2-live merged) |
-| 3 | Hills, cliffs, mountains | Raised grassy hills with rock cliffs, rocky hills, snowy peaks in ranges | 3 | Art from day 1; code after 1 |
-| 4 | Dense forests, marsh, rocks | Forest hexes packed with trees spilling over edges, marsh with goo pools and reeds, boulder fields | 1.5 | After 1 and mr2-land merged |
-| 5 | Rivers and waterfalls | Blue rivers running downhill along hex edges to the sea, waterfalls where they drop | 3 | Yes (server part any time) |
-| 6 | Villages | Players' yards and outposts and the four tribes' camps as small painted villages; bigger with level; ruins when razed | 4 | Art from day 1; code after 1 |
-| 7 | Reading the map | Glowing borders round players' land, a small chip under each village (level + who), in-range / protected cues | 2.5 | After 6 |
-| 8 | Clouds and far zoom | Painted cloud banks at the edge of what you can see; the zoomed-out map as a painted continent | 2 | After 2 |
-| 9 | Info card | The cell pop-up as the mock-up's card: one word, then icon + number rows, height badge | 1.5 | Yes, any time |
-| 10 | Quality and speed | High / Medium / Low side by side; download sizes; frame times on Low; the full 3-picture scorecard | 2 | After 2-8 |
-| 11 | Polish to 95% | Fixes for the lowest-scoring elements on the scorecard | 2.5 | Last |
-
-Owner questions are in section 9 (five, each with a suggested answer).
-
-### The art test
-
-![art test](../art-samples/mr2-look-plan/desk-main.jpg)
-
-`art-samples/mr2-look-plan/desk-main.jpg` (test on today's hex shape beside the mock-up, same hex width)
-and `side-by-side.jpg` (today's Modern map | test on today's hex shape | test with taller hexes |
-mock-up). Pictures are git-ignored like all art samples, apart from these two sheets.
-
-How it was made (`art-samples/mr2-look-plan/compose.py`, prompts in `work/*/prompt.txt`):
-- **Codex, 5 calls, about 90 s each, the study's method** (section 6 of `docs/mr2-civ-study.md`, with the
-  mock-up crops attached as style references): seamless grass, beach sand, turquoise shallows and deep
-  sea textures, and one hill hex painted over a template of today's hex (150 x 75) on magenta. Codex
-  kept the template's hex corners to within a few pixels.
-- **Reused**: mr2-land's painted trees and rocks (`land-props@2x.webp`) and mr2-live's painted foam.
-- **Put together the way the game would**: textures sampled in world position (so neighbours of the
-  same ground join), the ground chosen by the cell under a noise-shifted point (so the beach wanders
-  across hex lines), water depth from distance to land, a foam line on the shore, thin hex lines, sprites
-  sorted by their foot, soft shadows from the top-left light.
-- **Seamless check**: each of the 7 cells is saved as its own hex tile (`tiles/`), and the tiles pasted
-  back together differ from the one-piece picture by **0** in every pixel, on both hex shapes.
-
-How close it is, honestly:
-- **Close**: the ground textures, the sea colours and surf, the trees and the hill's cliff are in the
-  mock-up's style; at the same scale they could pass as parts of it.
-- **Not yet**: (1) the mock-up's grass is busier: flowers, tufts, small rocks everywhere; ours is plainer.
-  (2) Our hill is a neat hex column; the mock-up's is rounder and more ragged. (3) In only 7 hexes the
-  beach still mostly follows hex edges; over a real coast the wander shows more. (4) Our hexes are
-  flatter (150 x 75) than the mock-up's (about 220 x 150 at its scale); the taller-hex version in
-  `side-by-side.jpg` is visibly closer (question 2). (5) No villages, borders or chips yet (steps 6-7).
-- My rating of the ground alone: about 75-80% of the mock-up; the gaps are the ones steps 3, 4 and 11
-  are for.
+| `feat/mr2-bonus5` (mr2-bonus5) | Neighbour bonus ladder +5/9/11/13/14/15%, painted shield chip in the pop-up and attack strip | All (approved) | Its neighbour count follows the pointy-top neighbours in step 1 | - |
+| `feat/mr2-land` (mr2-land) | Land features (forest, rocks, marsh, nodes): rules, battle, income, `lf` in getarea, pop-up row and pictures; Codex trees/rocks drawn round each feature hex | Rules, server, `lf` data, pop-up row and its pictures | - | The map drawing (`landProps.ts`, `landSprites.ts`, the `features` layer in `MapChunk.ts`): it is single trees on flat-top hexes; step 6 repaints features as canopy in the new landscape |
+| `feat/mr2-live` (mr2-live) | Moving water and shore foam, cloud shadows, far cloud banks, gulls, smoke | Cloud shadows, gulls, cloud banks (`SkyLayer.ts`), the live framework and Quality levels (`LiveMap.ts`, `liveLevel.ts`) | Water and foam (`WaterSheet.ts`, `WaterLayer.ts`) are per-hex frames for flat-top hexes: redone for pointy-top in step 1 (tile map) and moved into the painted coast in step 3 | Smoke (`SmokeLayer.ts`, `smoke*.webp`, its prompt) |
+| `feat/mr2-tilt` (mr2-tilt) | Prototype: flat map drawn to a texture and laid on a `PerspectiveMesh`; pointer un-tilting; light/medium/strong; tests | All (`tilt.ts`, `TiltView.ts`, scene and input hooks) | Medium becomes the default, opt-out per account; the missing parts in step 4 | The light/strong choices from the player's view (kept in code for tests) |
 
 ---
 
-## 1. Every element of the mock-up, today, and the step that makes it
+## 1. Steps
 
-The mock-up is three pictures: 1 close view, 2 hex info card, 3 zoomed-out view
-(`review-desk/img/mr2civ-compare-1..3.jpg`, left halves; full size in the mr2-civ-study worktree,
-`shots/mr2-civ-study/codex/codex-1..3.png`). The "share" column is a rough share of the picture area,
-used for the scorecard (section 7).
+Every step: behind the switches (section 4); Classic checked unchanged (and, after step 1, checked on
+pointy-top); a real game screenshot from the yardtester world in the helper's own database copy beside
+the same crop of mock-up B at the same scale (a near cell is about 300 px wide in the 2000 px mock-up;
+the shot is scaled so its near cells match); an honest list of differences; High / Medium / Low shown when
+the step adds art. One test browser at a time on the PC, opened only for the pictures.
 
-| # | Element in the mock-up | Share | Today (Modern) | Step | How |
-|---|---|---|---|---|---|
-| E1 | One continuous painted ground, thin hex lines over it | 26% | Separate flat tiles, each its own hex column with a dark edge | 1 | Ground shader (2.1) |
-| E2 | Ground types blending across hex edges (beach wandering through hexes) | 5% | Hard tile edges | 1 | Warped cell lookup in the shader (2.1) |
-| E3 | Busy grass: flowers, tufts, little rocks, bushes | 5% | Plain grass texture | 1, 11 | Textures + scattered decals (2.4) |
-| E4 | Golden beaches with grey rocks at the waterline | 3% | Sand tiles | 1, 2 | Sand texture + waterline rocks (2.2) |
-| E5 | Turquoise shallows, deep blue sea, white surf | 12% | Toned-down blue water tiles; mr2-live adds glints and foam | 2 | Shader depth + mr2-live foam (2.2) |
-| E6 | Sea stacks and small islets | 2% | None | 2 | Props on sea cells near land (2.2) |
-| E7 | Hills: raised grassy plateaus with rock cliffs | 6% | Flash's lift: a higher tile with a strip of cliff | 3 | Plateau + cliff sprites by height (2.3) |
-| E8 | Snowy mountain peaks in ranges | 5% | Grey rock tiles (170 m and up) | 3 | Peak sprites on the highest cells (2.3) |
-| E9 | Dense forests (pines and round trees) | 10% | mr2-land: trees round the hex's clear middle | 4 | mr2-land props, denser, + canopy texture far out (2.4) |
-| E10 | Marsh: goo pools, reeds, dead trees | 3% | mr2-land: puddles and reeds | 4 | mr2-land props + marsh ground texture |
-| E11 | Boulder fields | 2% | mr2-land: rock groups | 4 | mr2-land props |
-| E12 | Rivers with waterfalls | 4% | None | 5 | River network from height, along hex edges (2.5) |
-| E13 | Glowing coloured borders round owned land | 2% | A white ring on the viewer's own cell | 7 | Edge glow sprites (2.7) |
-| E14 | Outposts and tribe camps as small painted villages | 6% | Monster portraits and Town Hall pictures | 6 | Village sprites by owner, tribe, level (2.6) |
-| E15 | Dark stat chips under a cell (icons + numbers) | 1% | Round level badge, name plate; mr2-land and bonus5 add pop-up rows | 7 | Cell chip (section 3) |
-| E16 | Glowing resource-node icons (picture 3) | 1% | mr2-land: resource piles | 4 | mr2-land node props + a soft glow |
-| E17 | Cloud banks over the edge of the map | 6% | Flat grey/striped fog; mr2-live: clouds over the far map | 8 | Painted cloud banks on fog cells at the sight edge (2.8) |
-| E18 | Tilted 3/4 view, warm top-left light, soft shadows | (all) | Same 3/4 art angle, little shadow | 1, 3, 11 | Baked into the art (2.9) |
-| E19 | Info card: wood-and-steel frame, one word, icon + number rows, height badge | picture 2 | DOM cell panel; mr2-land adds a land row | 9 | Restyle of `CellPanel` (2.10) |
-| E20 | Zoomed-out continent: tiny painted trees, peaks, territories readable | picture 3 | One flat colour texel per cell (raster) | 8 | The ground shader at far zoom (2.8) |
-| E21 | (Not in a still picture) living map: water, smoke, gulls | - | mr2-live branch | - | mr2-live, unchanged |
-| E22 | Small extras: wheat field, paths, fences round villages | 1% | None | 11 | Decals and village art |
-
-Everything listed has a step. Nothing in the mock-up is left out on purpose.
-
----
-
-## 2. Technical approach (Pixi 8, WebGL, today's chunks and zoom tiers)
-
-Today (from the code): the world is 800 x 800 cells on an odd-q, flat-top grid, each cell 150 x 75 world
-points, column step 112.5, row step 75 (`config.ts` `CELL_WIDTH/HEIGHT`, `game/HexGrid.ts`). Below zoom
-0.22 the map is one texture with one texel per cell (`TerrainRaster.ts`); above it, 10 x 10-cell chunks
-of sprites (`MapChunk.ts`): one ground tile per cell stood at its height (`ground.ts`, `groundArt.ts`),
-a hairline outline, and the cell's marker (tribe portrait and badge, or Town Hall / outpost picture and
-name plate). All the ground sprites share one layer sorted by paint order. `lod.ts` toggles layers by zoom
-(glyphs from 0.30, portraits and badges from 0.55, labels from 0.90). Pixi is set to WebGL
-(`App.ts` `preference: "webgl"`), so one GLSL shader is enough.
-
-New code lives in `web/src/game/maproom/painted/` so today's path stays untouched (section 6).
-
-### 2.1 Ground: one shader instead of a tile per cell (step 1)
-
-- **Cell data texture.** `TerrainRaster` already writes one texel per cell as zones arrive. The painted
-  look keeps a second 800 x 800 RGBA texture of *data*, not colour: R = height, G = land feature (`lf`
-  from mr2-land), B = river edge bits (step 5), A = flags (fog / not loaded / water). 2.5 MB of video
-  memory, uploaded at most once a frame, exactly as today.
-- **One quad, one shader** covers the visible world at every zoom. Per pixel it finds its hex (the
-  same maths as `HexGrid.pixelToCell`), reads that cell and its neighbours from the data texture, and:
-  - picks the ground type from height + feature (deep sea < 80, sea < 100 with shallows near land,
-    sand 100-109, grass 110-149, lush grass 150-169, rock 170-184, snow 185+, marsh/forest floor from
-    `lf`);
-  - samples that ground's **seamless painted texture in world position**, so same-type neighbours join
-    with no seam (the art test's check: 0 difference);
-  - **blends across edges**: the lookup point is shifted by a smooth noise (about a fifth of a hex), so
-    beaches and meadows wander across hex lines as in the mock-up, then edges are softened;
-  - **hill shading**: light from the top-left using the height difference to the neighbours;
-  - draws the **thin hex lines** by distance to the hex edge (dark on land, pale on water), fading out
-    at far zoom (today's `OUTLINE_MIN_ZOOM` rule).
-- This replaces today's thousands of sorted ground sprites (2-3 per cell) with one draw, so it is
-  cheaper than now on the CPU. On the GPU it is about 10 texture reads a pixel on High (section 5).
-- **Ground textures** are in one atlas (10 tiling textures), painted by Codex with the mock-up crop
-  attached, made seamless and colour-matched to the mock-up (as in the art test).
-- **Picking and the camera are unchanged.** The ground is flat; only hills lift (2.3), and
-  `ground.ts` `pickCell` already handles a per-cell lift.
-
-### 2.2 Coast (step 2)
-
-- **Shallows and deep water** in the shader: water cells next to land are shallow turquoise near the
-  shared edge and deepen with distance (the neighbour read gives the distance inside a cell); open sea
-  is deep blue. Colours taken from the mock-up.
-- **Surf**: a bright foam line where the shader's land and water meet, plus mr2-live's painted foam
-  (`live/foam@2x.webp`) moving over the shallows on High and Medium (mr2-live's `WaterSheet` stays the
-  owner of animation; on the painted look it draws only foam and glints, not the water itself).
-- **Sea stacks and islets**: props on sea cells within 2 of land, picked by a hash of the cell (same on
-  every computer), with a foam ring; grey rocks along the waterline on sand cells.
-
-### 2.3 Height: hills, cliffs, snowy mountains (step 3)
-
-- Height stays the gameplay number it is today (range and income); this is only how it is shown.
-- **Hills** (about 150-169 m): the cell's top is raised a little (about 20 points, like the art test)
-  and **cliff pieces** are drawn along the hex's three front edges wherever the cell stands higher than
-  the neighbour in front, as Flash's columns did but painted and ragged. Pieces: 3 edge directions x 2
-  heights x 3 variants, plus grassy overhang tufts. Pick from a cell hash.
-- **Rocky hills** (170-184 m): same, with rock tops and boulders.
-- **Snowy peaks** (185 m and up, the rarest cells): 1-hex peak sprites, and 2-3 hex ridge pieces where
-  peaks touch, so they read as a range. Every land cell holds a camp or a yard, so peaks stand round
-  the edge of the hex with the middle kept clear (mr2-land's `inClearMiddle` rule): the camp sits in a
-  mountain pass.
-- Sorted with the trees and villages by foot, so a hill covers what is behind it.
-
-### 2.4 Forests, marsh, rocks, grass detail (step 4)
-
-- Built on mr2-land's `landProps.ts` (props round the clear middle, same on every computer) and its
-  painted sheet. Changes: about twice the trees on High so forest hexes are packed like the mock-up,
-  a few trees allowed over the edge into neighbours, a darker forest-floor texture, a **canopy texture**
-  for far zoom (trees seen from above) so forests still read when single trees are hidden.
-- Marsh: a marsh ground texture (mud and goo) under mr2-land's puddles and reeds; a few dead trees.
-- Grass detail: scattered small decals (flower patches, tufts, pebbles, bushes) from a hash, drawn in
-  the shader as stamps or as a few sprites per cell on High only.
-
-### 2.5 Rivers and waterfalls (step 5)
-
-- **Art only**: rivers change no numbers (Modern-only look; Classic and Modern must play the same).
-- **Where they come from**: the server builds the river network once at start from the world's height
-  noise (it can compute any cell's height, `generateMap.ts` `getTerrainHeight`): sources on high
-  ground picked by a seeded hash, each river walking **downhill along hex edges** (between cells, as Civ
-  V and the study's brief; every land cell has a camp or yard in its middle) until it reaches the sea or
-  a lake. Since it always goes downhill, it never runs up a hill.
-- **How the client learns them**: the server adds a small `rv` number to each cell in `getarea` (3 bits:
-  the cell's own three edges, so every edge is stored once), like mr2-land's `lf`. No database column;
-  same answer on every computer; works with fog (you only get rivers of cells you can see).
-  Switch: `MR2_RIVERS=on` like mr2-land's `MR2_LAND_FEATURES`.
-- **Drawing**: a ribbon mesh along the edges, smoothed and wobbled, widening downstream, with a tiling
-  painted river texture that scrolls on High/Medium; **waterfalls** (animated 4-frame sprite) where the
-  river drops a height band or meets the sea from a hill; a little delta at the mouth.
-
-### 2.6 Villages instead of portraits (step 6)
-
-- Each cell's marker becomes a small painted village drawn at the cell's middle (the clear middle mr2-land
-  keeps free):
-  - **Tribe camps**: Legionnaire, Kozu, Abunakki, Dreadnaut, each its own look (banners and colours,
-    e.g. the mock-up's skull gate and purple tents), in 3 sizes by level (1-15, 16-30, 31+), and a ruined
-    version for razed camps.
-  - **Player main yard**: 3 sizes by Town Hall level (1-3, 4-7, 8-10), roofs in the relation colour.
-  - **Outpost**: hut, harvester, tower, fence (the mock-up's), 3 sizes; the Starter Kit tint stays on
-    the tower.
-  - The protection dome, truce tick, idle-worker cue and construction badge stay, refitted to the
-    village size.
-- Every land cell holds a camp, so camps must be **small** or the map looks crowded, unlike the mock-up's
-  open country (question 1): a camp is about a third of a hex; a player village about half.
-
-### 2.7 Borders (step 7)
-
-- Glowing borders round **players'** cells, merged where one owner's cells touch: for every owned cell,
-  each of its 6 edges whose neighbour has another owner gets a glow-line sprite (additive, tinted by
-  relation: own cyan as today's `OWN_COLOUR`, alliance green, others blue, attackers red). At most 6
-  sprites a cell, built with the chunk. A faint tint inside. A slow pulse on High only.
-- Tribe camps get no border (every land cell is one); their banner colour does the job (question 3).
-
-### 2.8 Clouds at the sight edge and the far zoom (step 8)
-
-- Fog cells (outside the player's sight, `Sight.ts`) become **painted cloud**: the shader draws a soft
-  cloud texture on fog cells, and big cloud-bank sprites sit on fog cells next to seen ones, as in the
-  mock-up's edges. mr2-live's drifting clouds stay on top on High.
-- **Far zoom (raster tier, below 0.22)**: the same shader replaces the one-colour-per-cell texture, with
-  hex lines off, the canopy texture for forests, rock and snow textures for mountains, and hill shading
-  so ranges read. At the glyph tier (0.30-0.55) mountains and villages show as sprites, single trees do
-  not.
-
-### 2.9 The tilted 3/4 view: baked into the art, not a camera change
-
-- The mock-up is an orthographic 3/4 view (hexes the same size at the top and bottom of the picture).
-  Today's map is the same kind of view. So the tilt is **baked into the art** (trees, cliffs, villages
-  drawn from 3/4, ground textures seen from above), and the camera stays a flat 2D camera.
-- A real perspective camera (far hexes smaller) would need a projection mesh, break picking, LOD and
-  chunk visibility, and is not in the mock-up. Not proposed.
-- One real difference: the mock-up's hexes are taller for their width (about 0.68 against today's 0.5).
-  Changing that for the painted look only is possible (a second `HexGrid` with row step 100; sizes that
-  use `CELL_HEIGHT` and mr2-land's 37.5 must follow) but costs about 1.5 days and touches many files
-  (question 2).
-
-### 2.10 Info card (step 9)
-
-- `ui/maproom/CellPanel.ts` (DOM) restyled as the mock-up's card in the Modern window skin (steel, from
-  `feat/ui-skin`) with the wood title board: one word (the ground or feature name), then rows of one
-  painted icon + one number (range, damage, health, income; mr2-land's land row and bonus5's neighbour
-  chip feed them), and the height badge (mountain-arrow icon + "+48m"). The buttons (attack, scout, move)
-  stay as today below the rows.
-
----
-
-## 3. What players must still read at a glance
-
-Portraits and name plates told players who is on a cell. The villages must keep that, with icons and
-numbers rather than words:
-
-| Players need | Today | Painted look |
-|---|---|---|
-| Who owns it | Portrait (tribe) or name plate (player), plate colour by relation | Village style (each tribe has its own), roof and border colour by relation; name plate stays at the closest zoom (label tier) |
-| Its level | Round badge / gold star | **Cell chip** under the village: small dark rounded strip, [tribe emblem or relation icon] + level number, from the badge zoom (0.55) |
-| Attackable or not | Dome (protected), tick (truce), range overlay | Same dome and tick, sized to the village; cells out of the player's attack range slightly faded when the range overlay is on (`RangeOverlay.ts`), as today |
-| Razed camp | Faded portrait + cross | Ruined village (broken huts, smoke) + the same cross |
-| The cell's bonuses | Pop-up only | Chip grows at close zoom (0.9+) to the mock-up's strip: land feature and height icons + numbers (mr2-land, bonus5) |
-| Which monsters | Portrait | Hover card and pop-up keep the tribe portrait |
-
----
-
-## 4. Steps in detail (order, deliverable, desk picture, days, lanes)
-
-Every step: behind the switch; a real game screenshot (yardtester world, own database copy) beside the
-mock-up crop at the same hex width; Classic checked unchanged; High / Medium / Low shown when the step
-adds art. The single test browser is shared, so screenshots are taken in one short session per step.
-No Blender is needed (all art is Codex painting).
-
-Lanes for 3 helpers:
-- **Lane A (map code)**: 1 -> 2 -> 8 -> 10
-- **Lane B (art, then its code)**: Codex art for 3 and 6 from day 1 -> 3 -> 6 -> 7
-- **Lane C**: 9 and the server half of 5 from day 1 -> 5 -> 4 (once mr2-land is merged) -> 11 (with all)
-
-| Step | Deliverable | Desk picture | Days | Needs |
+| # | Step | What the player sees when it is done | Helper-days | Needs |
 |---|---|---|---|---|
-| 1 | `painted/` ground shader, data texture, 10 ground textures, hex lines, switch | Near and mid zoom beside mock-up picture 1; switch off = today | 3 | - |
-| 2 | Shallows, surf, sea stacks, waterline rocks | A coast at near zoom beside the mock-up's left side | 2 | 1, mr2-live merged |
-| 3 | Hill cliffs, rocky hills, snowy peaks (art + placement) | A hill and a mountain range beside the mock-up's hill hex and peak | 3 | 1 |
-| 4 | Denser forests, canopy, marsh ground, grass decals | A forest and marsh beside the mock-up's right side | 1.5 | 1, mr2-land merged |
-| 5 | Server river network + `rv`, river ribbons, waterfalls | A river from hill to sea beside the mock-up's river | 3 | 1 (client half) |
-| 6 | 22 village sprites, placement, dome/tick refit | Each tribe and player village at 3 sizes, in game | 4 | 1 |
-| 7 | Borders, cell chip, range fade | A mixed area: own, alliance, enemy, camps; beside mock-up picture 1 | 2.5 | 6 |
-| 8 | Cloud banks, far zoom through the shader | Zoomed-out view beside mock-up picture 3 | 2 | 2 |
-| 9 | Info card restyle | The pop-up beside mock-up picture 2 | 1.5 | - |
-| 10 | Quality levels, sizes, frame times, scorecard | 3 pictures x 3 Quality levels; the scorecard | 2 | 2-8 |
-| 11 | Polish the lowest-scoring elements | Before/after for each fix; final scorecard | 2.5 | 10 |
-| | **Total** | | **27** | about 10-11 working days with 3 helpers |
+| 0 | Merge the waiting branches | Nothing new on screen (all switches off); bonus5's chip, land's pop-up row work as approved | 1 | Owner's go per branch |
+| 1 | Pointy-top hexes (rules + today's tile map + Classic) | With the shape switch on, every map hex has a point at top and bottom; neighbours, range, takeover, neighbour bonus all follow; Classic shows Flash's own tiles cut to the new shape | 3.5 | 0 |
+| 2 | Painted ground + hex lines + the look switch | One continuous painted ground (meadow with flowers, sand, rock, marsh mud, forest floor), faint cream hex lines over everything, no tile walls | 3 | 1 (HexGrid part) |
+| 3 | Coast and sea | Turquoise shallows, deep blue sea, white surf breaking on a coastline that wanders across cells, sea rocks; water moves (mr2-live's water, redone) | 2 | 2 |
+| 4 | Tilt, full version | Medium tilt at every zoom; portraits, badges, buildings and name tags stand upright; edges and zoom-out stop cleanly; minimap shows a trapezoid; an account switch makes the map flat | 5 | prototype merged (0); upright layer after 1 |
+| 5 | Hills and cliffs | Ground swells into rolling hills with soft slope shading; rocky cliffs where the height drops sharply, following the land, grass over their top; height in the pop-up | 3 | 2 |
+| 6 | Canopy forests, rock fields, goo marsh | Forests as one solid mass of treetops across cells, single trees only at the edge, small clearings where camps stand; rocky ground fading into grass; goo pools and reeds blending into the meadow | 3 | 2, land merged |
+| 7 | Rivers on cell edges | Natural blue rivers winding along cell edges from high ground to the sea, soft rocky banks, a small waterfall where they leave a cliff | 3 | 1 (server half), 5 (falls) |
+| 8 | Borders and markers on the painted map | Glowing borders round players' land (cyan / green / blue / red), Town Halls and Outposts with name tags, tribe portraits with level circles, domes and ticks, all sized to the new cells | 2 | 1, 4 (upright layer) |
+| 9 | Far zoom and clouds | Zoomed out, the painted continent still reads (canopy, peaks, borders); painted cloud banks at the edge of sight fill the top of the tilted screen | 2 | 2, 3, 4 |
+| 10 | Quality and speed | High / Medium / Low side by side; download sizes; frame times on the owner's kind of PC; the tilt redraws only on change; the scorecard | 2 | 2-9 |
+| 11 | Polish to 95% | Fixes for the lowest-scoring parts of the scorecard, before/after for each; final scorecard | 3 | 10 |
+| | **Total** | | **32.5** (call it 33) | |
+
+### Step 0. Merge the waiting branches (1 day)
+
+- **Order**: `feat/mr2-bonus5` -> `feat/mr2-land` -> `feat/mr2-live` -> `feat/mr2-tilt`, each into
+  revamp with the owner's go and the `merge-approved` checks. All switches stay off, so players see no
+  change.
+- **Before merging**: on `feat/mr2-land`, a small commit takes the prop drawing out of `MapChunk.ts` /
+  `MapRenderer.ts` (keep `landArt.ts` only if the pop-up pictures need it). On `feat/mr2-live`, a commit
+  removes `SmokeLayer.ts`, the smoke art and its prompt, and its hooks.
+- **Expected conflicts** (checked with `git merge-tree` against revamp be410ca27): bonus5 alone is clean;
+  land after bonus5 conflicts in 6 files: `server/src/game-rules/combat/MANIFEST.json`,
+  `web/src/game/combat/rules/MANIFEST.json` (re-run the manifest stamp), `web/src/api/types.ts` (keep both
+  fields), `web/src/ui/maproom/CellPanel.ts` (keep both rows), `web/src/ui/styles/maproom.css` (keep both),
+  `web/test/fixtures/defence-replay-mixed-waves.json` (re-stamp the replay; result must stay the same).
+  `defence.ts` on both sides merges by itself; its tests must show the land and neighbour bonuses
+  multiply. Live after land conflicts in `web/src/game/maproom/MapRenderer.ts` only (both add hooks; keep
+  both). Tilt after all three is clean.
+- **Check**: web and server test suites, typecheck, the golden defence replay; MR2 opened once with all
+  switches off looks exactly like the baseline.
+
+### Step 1. Pointy-top hexes (3.5 days)
+
+Why early: the painted ground, the neighbour rules, range, clicking, the tilt's cell lookup, rivers and
+borders all depend on the hex shape. Stored cell coordinates (x, y) do not change; which cells are
+neighbours does. Nobody plays MR2 on the live server today (owner), so the change hurts no one.
+
+- **The rule**: odd-r offset, pointy-top (odd **rows** shifted half a cell right), replacing today's
+  odd-q flat-top. Axial: `q = x - (y - (y & 1)) / 2, r = y`. The world is 800 x 800 (both even), so the
+  wrap keeps parity. Tribe camps stay `(x + y) % 4`; on odd-r a camp still has at most one same-tribe
+  neighbour (now at (x-1, y+1) on even rows, (x+1, y-1) on odd rows), so the neighbour bonus numbers for
+  camps stay the same; a test proves it.
+- **One switch for the shape**: server `.env` `MR2_HEX_SHAPE=flat|pointy` (default flat = exactly
+  today), sent with the map settings; the client sets the shape once when the map opens. Every rule and
+  drawing reads it, so flat stays byte-for-byte today's game.
+- **Files (checked by search, 3 Nov)**:
+  - Server rules: `server/src/game-rules/maproom/range.ts` (`stepsBetween`), its mirror
+    `web/src/game/maproom/rules/range.ts`, both `MANIFEST.json` and `sync.test.ts` in those folders;
+    `server/src/services/maproom/v2/neighbourDefence.ts` (`mr2NeighbourCoords`),
+    `server/src/services/maproom/v2/takeoverCost.ts` (`isAdjacentToMainYard`);
+    `server/src/services/maproom/v2/rangeCheck.ts` (uses `hexDistance`; its square sweep still covers
+    every cell in range on pointy-top, check by test); `server/src/controllers/maproom/v2/getArea.ts`
+    (bonus5's neighbour count, via `mr2NeighbourCoords`).
+  - Web geometry: `web/src/game/HexGrid.ts` (`toAxial`, `toOffset`, `neighbours`, `cellToPixel`,
+    `pixelToCell`, `writeCellCorners`, `worldBounds`; a shape parameter instead of fixed odd-q),
+    `web/src/config.ts` (cell size per shape), `web/src/game/maproom/attackRange.ts` (edge sides in
+    `HexGrid.neighbours` order), `web/src/game/maproom/ground.ts` (`pickCell` with lift),
+    `web/src/game/maproom/cellVisuals.ts` (hex width function near line 500, fog-edge test),
+    `web/src/game/maproom/mapAtlas.ts` (hex outline and hole textures drawn from half/quarter width),
+    `web/src/game/maproom/MapChunk.ts` (marker offsets from `CELL_HEIGHT`),
+    `web/src/game/maproom/TerrainRaster.ts` (one texel per cell: shift odd rows, not columns),
+    `web/src/game/maproom/chunks.ts` and `web/src/app/scenes/MapRoom2Scene.ts` (visible cell range:
+    the margins of one column / two rows swap to two columns / one row), `web/src/game/maproom/RangeOverlay.ts`
+    (follows `writeCellCorners`), `web/src/ui/maproom/Minimap.ts` (cell from pixel, approximate).
+  - Today's tile art: `web/src/game/maproom/groundArt.ts` and the sheets `public/maproom/ground@2x.webp`
+    (Flash) and `ground-painted@2x.webp` (Modern): a script in `web/tools/maproom-ground/` cuts Flash's own
+    tile textures and cliff strip to the pointy-top shape (no new painting: Classic stays Flash's pixels).
+  - mr2-live: `live/WaterSheet.ts` / `WaterLayer.ts` (foam frames per hex edge; pointy-top has vertical
+    left and right edges instead of top and bottom ones).
+  - Not affected, though a search for "flat" finds them: `web/src/game/yard/YardRenderer.ts` and
+    `web/src/ui/yard/PlannerBar.ts` ("flat top-down view" of the yard planner). Map Room 1 and Map Room 3
+    (`services/maproom/v3`) have their own grids and do not change.
+- **Cell size**: today's tiles are 150 x 75 with a 3/4 view baked in. With pointy-top: the tile map
+  (Classic and look-off) uses 150 wide, 100 tall, row step 75 (the same row step as today); the painted
+  map (step 2) uses a top-down cell, about 150 x 150, row step 112.5, because the real tilt now does the
+  foreshortening (150 x 150 at medium tilt looks about 150 x 127, close to mock-up B's near cells). Step
+  2 fixes the final number against the side-by-side. The zoom tier numbers in `config.ts` (`LOD_*`) are
+  re-tuned so the same number of cells is on screen at each tier.
+- **Tribe groups (ON HOLD, Discord vote)**: if the vote passes, they slot in right after this step, in
+  the same lane: camp layout in groups of 6-20 (Abunakki 1-6), and the camp half of the neighbour count
+  becomes "camps of the same group". About 2-3 days; no look step depends on them.
+- **Art**: none (Flash tiles are re-cut by script).
+- **Check**: unit tests for both shapes: neighbours are symmetric, distance 1 = the six neighbours,
+  wrap at the world edge, range sets match between server and web (`sync.test.ts`), takeover adjacency
+  and the neighbour count agree with `HexGrid.neighbours`; picking: every point inside a drawn hex picks
+  that hex. Screenshots: Classic and Modern tile maps on pointy-top beside today's flat-top; range overlay
+  and takeover marks on pointy-top. No mock-up side-by-side (this step is shape, not look).
+
+### Step 2. Painted ground, hex lines and the look switch (3 days)
+
+- **Approach (kept from plan 1, section 2.1)**: one quad and one WebGL shader draws the ground for the
+  visible world at every zoom, from a data texture of 800 x 800 cells (R height, G land feature `lf`,
+  B river edge bits, A flags fog / not loaded / water). Per pixel it finds its pointy-top hex, reads the
+  cell and its neighbours, picks the ground (meadow, lush meadow, sand, rock, marsh mud, forest floor,
+  snow on the rare peaks), samples that ground's seamless texture in world position (neighbours of the
+  same ground join with no seam), shifts the lookup by smooth noise so ground types wander across hex
+  lines, and draws the faint hex lines by distance to the edge.
+- **Hex lines, B strength**: light cream, about 30% opacity, 1-2 px on screen, over everything (canopy,
+  hills, marsh, shallows), always on. Hidden only under rivers (step 7).
+- **No walls**: no tile side walls, no cell columns; height shows only as shading (step 5).
+- **Look switch**: `MR2_PAINTED_MAP=off|staff|on` (server `.env`; `staff` = owner and lead accounts
+  only, by user id list), sent with the map settings; `off` = today's tile map. A local override
+  (`bymr.mr2Look`) for development. Classic never loads the painted code. If the shader fails on a GPU,
+  the map falls back to tiles by itself. The painted look needs `MR2_HEX_SHAPE=pointy`.
+- **Files**: new `web/src/game/maproom/painted/` (ground shader, data texture, textures atlas); one
+  choice in `MapRenderer.ts` at scene start; server map settings (where `MR2_LAND_FEATURES` is sent).
+- **Art (Codex)**: seamless textures: meadow with tiny flowers, lush meadow, sand, rocky ground, marsh
+  mud, forest floor, snow, plus a sheet of small grass decals (flower patches, tufts, pebbles). Mock-up B
+  crops of each attached with `-i`.
+- **Check**: unit test that switch off builds exactly today's chunk; shader compile fallback test;
+  side-by-side of a meadow-and-beach area beside mock-up B's left-middle crop.
+
+### Step 3. Coast and sea (2 days)
+
+- Shallows turquoise near the shore deepening to deep blue, white surf where land meets water, a
+  coastline that wanders across cells (from step 2's noise), sea rocks and small rocky islets near land
+  (cell hash, same on every computer). mr2-live's moving water and foam are redrawn in the shader's coast
+  (glints and foam scroll on High, half rate on Medium, still on Low).
+- **Files**: `painted/` (coast in the shader, sea-rock sprites), `live/WaterLayer.ts` (on the painted
+  look it draws only glints and foam).
+- **Art (Codex)**: shallows and deep-sea textures, surf/foam strip, 6-8 sea rocks and islets.
+- **Check**: side-by-side of a coast at near zoom beside mock-up B's left edge.
+
+### Step 4. Tilt, full version (5 days)
+
+Built on the merged prototype (`web/src/game/maproom/tilt.ts`, `TiltView.ts`). The prototype draws the
+whole flat map into a texture each frame and warps it; pointer positions are un-tilted before the camera
+and the hex rule see them, so picking already works and a new hex shape only replaces the last step.
+
+- **Medium by default in Modern**, opt-out: a switch in the map's settings makes the map flat; remembered
+  for the account (a new account setting on the server, like the privacy settings; today's Classic and
+  sound choices are kept in the browser only). Classic is always flat.
+- **Upright markers**: portraits, level circles, Town Halls, Outposts, name tags, domes, ticks and
+  construction badges move out of the warped texture into a layer drawn on top, each placed at its
+  cell's foot through the tilt and scaled by the local size, so they stand straight and do not squash.
+  The rest of the map (ground, props drawn as sprites, borders) stays in the warped texture.
+- **Camera edge limits** in tilted space; **zoomed-out view**: no empty band at the top of the screen
+  (limit the zoom-out or fill with step 9's cloud banks); **minimap**: the view box drawn as a trapezoid.
+- **Cell-pinned pop-ups** (hover card, cell panel anchor, takeover and range marks, bookmarks) placed
+  through the tilt; **high-DPI** screens; **phone layout** (touch pan and pinch through the un-tilt).
+- **Speed**: the flat texture is redrawn only when something changed (camera, chunk, animation tick of a
+  visible layer), not every frame; Quality Low uses a lower-resolution texture (question 2).
+- **Files**: `tilt.ts`, `TiltView.ts`, `MapRoom2Scene.ts`, `MapInput.ts`, `Camera.ts`, `ui/maproom/Minimap.ts`,
+  `LabelLayer.ts`, `MapChunk.ts` (marker layer split, after step 1 merges), `ui/maproom/CellPanel.ts`
+  anchoring, account settings (server controller + `ui/AccountSettings.ts`).
+- **Art**: none.
+- **Check**: existing `tilt.test.ts` plus tests for the upright layer position, edge limits and the
+  minimap trapezoid; screenshots at three zooms tilted and flat, on a high-DPI and a phone-sized window;
+  side-by-side of the near view beside the whole of mock-up B (far cells 66% of near on both).
+
+### Step 5. Hills and cliffs (3 days)
+
+- **Rolling hills**: the ground's shading follows a smooth height field (heights blended across cells,
+  not stepped per cell), lit from the top-left, so hills swell over several cells with no walls.
+- **Rocky cliffs** where the height between neighbours drops by more than a set amount: a painted cliff
+  ribbon along a smoothed line between the high and low ground (it follows the land, not the hex lines),
+  grass overhanging its top, scree at its foot (blends into step 6's rocky ground).
+- **Snowy peaks** stay rare (185 m and up): peak pieces round the edge of the cell, camp spot kept clear.
+- **Height in the pop-up**: a mountain-arrow icon and the number (e.g. "+48 m") in `CellPanel.ts`.
+- **Files**: `painted/` (height field and shading in the shader, cliff ribbon mesh), `CellPanel.ts`.
+- **Art (Codex)**: cliff face strip (tiling along its length, 2-3 variants), grassy overhang edge, scree
+  patches, 2-3 peak pieces.
+- **Check**: side-by-side of a hill with a cliff beside mock-up B's centre-back.
+
+### Step 6. Canopy forests, rock fields, goo marsh (3 days)
+
+- **Forest**: forest cells (mr2-land's `lf`) are painted as one solid canopy: a seamless top-down canopy
+  texture in the shader over all forest cells, shaded so it bulges (rounded treetops, mixed light and dark
+  greens, a few pines poking up as sprites), with single trees only along the outer edge where it meets
+  the meadow. Camps on forest cells stand in a small clearing. Not separate tree crowns (mock-up flaw).
+- **Rock**: rocky ground texture with boulder sprites fading into the grass, not stickers.
+- **Marsh**: dark wet mud with bright goo pools and reeds, blending softly into the meadow.
+- **Resource nodes**: mr2-land's node piles with a soft glow, kept small.
+- **Files**: `painted/` (canopy and marsh in the shader, edge-tree and boulder placement); mr2-land's
+  `lf` data. Not mr2-land's old `landProps.ts`.
+- **Art (Codex)**: canopy texture (seamless, from above at the tilt), canopy edge strip, 6-8 edge trees
+  and pines, rocky ground texture and boulders, marsh mud with goo pools, reed clumps.
+- **Check**: side-by-side of the forest and the marsh beside mock-up B's right half; canopy must read as
+  one mass at near and mid zoom.
+
+### Step 7. Rivers on cell edges (3 days)
+
+- **Look only**: rivers change no numbers (Classic and Modern play the same).
+- **Server**: a river network built once from the world's height (`generateMap.ts` `getTerrainHeight`):
+  sources on high ground by a seeded hash, each river running downhill along pointy-top cell edges to the
+  sea. Sent as `rv` bits per cell in getarea (each cell's own three edges), like `lf`; switch
+  `MR2_RIVERS`. No database change.
+- **Client**: a ribbon along the edges with natural curves inside the edge band (wobble, wider
+  downstream, soft rocky banks with grass), not the mock-up's straight channel; a small waterfall where
+  it leaves a cliff (step 5); the hex line hidden under it.
+- **Files**: server `services/maproom/v2/` (new rivers module, `getArea.ts`), web `painted/` river mesh,
+  `api/types.ts`.
+- **Art (Codex)**: river water strip (tiling), bank strip, waterfall (3-4 frames), river mouth.
+- **Check**: server tests (always downhill, ends at sea, edges only, same on every run); side-by-side of a
+  river from the cliff to the sea beside mock-up B's river, with the channel flaw named as an intended
+  difference.
+
+### Step 8. Borders and markers on the painted map (2 days)
+
+- **Borders**: glowing lines round players' cells only, merged where one owner's cells touch: yours cyan,
+  alliance green, others blue, attackers red; a soft haze inside the edge; slow pulse on High only.
+  Tribe camps get no border.
+- **Markers**: Town Hall or Outpost picture with its level star and name tag on player cells; today's
+  tribe portraits and level circles on camps, sized to the new cell, standing upright (step 4's layer).
+  Dome, truce tick, idle and construction badges kept.
+- **Files**: `painted/` borders, `MapChunk.ts` / the upright layer, `cellVisuals.ts`.
+- **Art**: none new (border glow drawn in code).
+- **Check**: a mixed area (own, alliance, other, attacker, camps) beside mock-up B's yardtester and
+  agenttester cells.
+
+### Step 9. Far zoom and clouds (2 days)
+
+- The painted ground shader also draws the far zoom (instead of today's one colour per cell): canopy,
+  peaks, coast and borders still read; hex lines fade out.
+- Fog cells (outside the player's sight) become painted cloud; mr2-live's cloud banks sit along the edge
+  of sight and fill the far top of the tilted screen; cloud shadows and gulls kept on High.
+- **Files**: `painted/`, `TerrainRaster.ts` (kept for the tile map), `live/SkyLayer.ts`.
+- **Art (Codex)**: tiling cloud texture, 3-4 cloud banks (mr2-live has some already).
+- **Check**: zoomed-out screenshots tilted and flat. Mock-up B has no far view, so this is judged on the
+  desk by eye (owner's call), not by the 95% rule.
+
+### Step 10. Quality and speed (2 days)
+
+- High / Medium / Low per section 5's table; lazy download of painted art on first map open; frame times
+  at each zoom measured on the owner's kind of PC with the in-game readout (not the headless browser).
+- The scorecard: each part of mock-up B (ground, hex lines, coast, hills, cliff, canopy, rock, marsh,
+  river, borders, markers, tilt) scored 0-100% on the side-by-sides, weighted by its share of the picture.
+- **Check**: 3 Quality levels side by side; download sizes; frame times; the scorecard on the desk.
+
+### Step 11. Polish to 95% (3 days)
+
+Fixes for the lowest-scoring parts. Expected candidates (honest): grass detail density (mock-up B has
+flowers and small rocks everywhere), the canopy's depth and shadow, hill roundness, cliff variety,
+repetition visible at mid zoom, warmth of the light. Before/after for each fix; a final scorecard.
 
 ---
 
-## 5. Art list for Codex
+## 2. Lanes for 3 helpers
 
-Method: the study's (section 6) and the art test's: `codex exec` with the mock-up crops attached (`-i`)
-as style reference, the same style header as `work/*/prompt.txt`, sprites on pure magenta (keyed out)
-over a template of today's hex where shape matters (the test showed Codex keeps a template's corners),
-textures as square seamless tiles then checked by rolling half a tile. One family of assets per call;
-`build.py` per kit cuts, keys, colour-matches to the mock-up and writes the three Quality copies, as
-mr2-land's and mr2-live's kits do. Sizes are in world points (a hex is 150 x 75); High = `@4x` only where
-mr2-land already uses it, otherwise `@2x`; Medium and Low use the smaller copies in the table.
+Helpers in parallel must not touch the same files. The hot files are `MapChunk.ts`, `MapRenderer.ts`,
+`MapRoom2Scene.ts`, `HexGrid.ts` and `CellPanel.ts`; each lane below owns them in turn.
 
-| Family | Pieces | Size (points) | High / Medium / Low | Step |
-|---|---|---|---|---|
-| Ground textures (seamless): meadow, lush grass, forest floor, canopy from above, sand, marsh mud, rock/scree, snow, shallows, deep sea | 10 | 256 x 256 tile | 512 / 256 / 128 px | 1, 4 |
-| Grass decals: flower patches, tufts, pebbles, bushes | 12 | 10-25 | @2x / 1x / none | 1, 11 |
-| Sea stacks, islets, waterline rocks | 9 | 20-60 | @2x / 1x / 1x | 2 |
-| Cliff edge pieces (3 directions x 2 heights x 3 variants) + overhang tufts | 22 | 80 x 30-50 | @2x / 1x / 1x | 3 |
-| Hill tops (grassy, rocky), peaks, 2-3 hex ridges | 14 | 60-200 wide | @2x / 1x / 1x | 3 |
-| Extra forest/marsh props (dead trees, extra pines, reed clumps) to add to mr2-land's sheet | 8 | 20-40 | @4x / @2x / 1x (as mr2-land) | 4 |
-| River texture (tiling along its length), banks, waterfall 4 frames, river mouth | 7 | 64-wide strip; falls 40 x 40 | @2x / 1x / 1x (still) | 5 |
-| Villages: 4 tribes x 3 sizes + 4 ruins; yard x 3; outpost x 3 | 22 | 50-80 wide | @2x / 1x / 1x | 6 |
-| Cloud banks and a tiling cloud texture | 7 | 150-400 | @2x / 1x / 1x | 8 |
-| Info card: wood title board, height badge icon | 2 | UI | as UI skin | 9 |
+| Day | Lane A: rules and map core | Lane B: painted landscape | Lane C: tilt |
+|---|---|---|---|
+| 1 | 0 merges | Codex art batch for 2, 3, 5, 6 (textures are shape-free) | 4: account switch, edge limits, minimap (tilt files only) |
+| 2-4 | 1 pointy-top (HexGrid + rules first, merged by day 2 so B and C build on it) | 2 painted ground (`painted/` only; uses the new HexGrid from day 3) | 4 continued: upright marker layer (after 1 merges), pop-ups, DPI, phone |
+| 5-6 | 7 rivers (server first, then the ribbon) | 3 coast | 4 finished (speed: redraw on change) |
+| 7-9 | 7 finished, then 8 borders and markers | 5 hills and cliffs | 6 canopy, rock, marsh |
+| 10-12 | 10 quality and speed (measures 6 and 9 as they land) | 9 far zoom and clouds | 6 finished, then scorecard pictures for 10 |
+| 13-15 | 11 polish (split by part across all three lanes) | 11 | 11 |
 
-Prompt style (all calls start with the art test's header): "MATCH ITS ART STYLE EXACTLY: bright,
-painted, toy-like cartoon, saturated yellow-greens and warm sandy yellows, crisp small painted details,
-warm sunlight from the top-left, seen from a tilted top-down camera. Not photo-real. No text, no logos,
-no watermark, no hex lines, no grid." Then the one family, its layout on the sheet (grid of N on
-magenta), and what to leave out.
+- **Merge order of the waiting branches**: bonus5 -> land (minus map props) -> live (minus smoke) ->
+  tilt (switch off), all in step 0, before any lane edits `CellPanel.ts` or `MapRenderer.ts`. Expected
+  conflicts are listed in step 0.
+- **Clashes to watch**: step 1 and step 4 both touch `MapChunk.ts` and `MapRoom2Scene.ts`; lane C starts
+  the marker layer only after step 1 is merged. Steps 5 and 6 both add to the ground shader: lane B owns
+  the shader file, lane C adds canopy as its own shader include and texture, merged after step 5.
+  Step 7's ribbon and step 5's cliff both draw over the ground: separate files in `painted/`.
+- **Tribe groups**, if the vote passes, go in lane A right after step 1 (2-3 days), pushing steps 7 and 8
+  back by that much.
+- Desk rounds: one desk card per finished look step (2, 3, 5, 6, 7, 8) and one for the tilt (4); the
+  lanes go on while the owner reviews.
 
----
+## 3. Estimate (honest)
 
-## 6. Revert design
+- **Helper-days**: 0 (1) + 1 (3.5) + 2 (3) + 3 (2) + 4 (5) + 5 (3) + 6 (3) + 7 (3) + 8 (2) + 9 (2) + 10 (2)
+  + 11 (3) = **32.5, call it 33**. Tribe groups would add 2-3.
+- **Calendar with 3 helpers**: about **14-15 working days** of helper time, plus desk rounds; with the owner
+  reviewing every 1-2 days, about **3 weeks** end to end.
+- **Likeness**: after steps 1-10, about **85-90%** of mock-up B. A rule-built map repeats where a single
+  painting is hand-composed, so the last part is detail and variety, not structure. Step 11 must close:
+  grass detail, canopy depth, hill roundness, cliff and rock variety, repetition, light. If the scorecard
+  is still below 95% after step 11, the plan is another polish round on the lowest parts, not new
+  features.
+- **Not in the estimate**: the info card restyle from plan 1 (question 3), new tribe-camp art (the owner
+  kept today's portraits), the old village art (dropped with the new target).
 
-- **Code baseline**: tag `mr2-baseline-2026-11-03` (6e2f6f41e), as tagged by the lead.
-- **Runtime switch** (so a revert is a switch flip, not a new release):
-  - Server `.env` `MR2_PAINTED_MAP=off|on` (off by default, the pattern of `MR2_LAND_FEATURES` and
-    `MR2_NEIGHBOUR_BONUS`), sent to the client with the map's settings. Flip and restart: every player
-    is back on today's map at their next map open.
-  - For review before it is on: a local override (`bymr.mr2Look` = `painted` / `tiles`) the lead and
-    owner can set; not shown to players (no player picker, as the window style).
-  - **Classic always wins**: with Classic on, the painted code is never loaded and the map is Flash's.
-- **Code kept apart**: the painted look is `game/maproom/painted/*` plus one choice in `MapRenderer`
-  at scene start ("tiles" = today's `groundArt`/`ground`/portraits, "painted" = the new layers). Today's
-  files keep working unchanged; a unit test checks that with the switch off a chunk builds exactly
-  today's sprites. If the shader fails to compile on a player's GPU, the map falls back to "tiles" by
-  itself.
-- **Data**: nothing in the database changes. `rv` (rivers) is computed and sent like `lf`; with its
-  own switch off, no rivers are sent.
+## 4. Switches and revert
 
-## 7. Performance and download budget
+- `MR2_HEX_SHAPE=flat|pointy` (server): the world's hex shape for every player, Classic included. Default
+  flat = today.
+- `MR2_PAINTED_MAP=off|staff|on` (server): the painted look for Modern players. `staff` = owner and lead
+  only, until the owner says it is ready; then `on`. Off = today's tile map (on the current shape).
+- `MR2_RIVERS`, plus the existing `MR2_LAND_FEATURES` and `MR2_NEIGHBOUR_BONUS`.
+- Player: the tilt switch (account setting), on by default; Quality High/Medium/Low as today.
+- **Classic always wins**: Classic never loads the painted code or the tilt. On pointy-top it shows
+  Flash's own tiles cut to the new shape (question 1).
+- **Revert**: switch the painted map off (players get the tile map at their next map open); for a full
+  return to today, also set the shape back to flat. Nothing in the database changes with either switch
+  (neighbour bonuses are frozen into each attack; takeover adjacency is checked at the takeover). Code
+  baseline: tag `mr2-baseline-2026-11-03`.
 
-Today, at the badge zoom (0.55) a 1080p screen shows about 810 cells, about 2,700 at the glyph zoom
-(0.30), 5,100 at 0.22; each cell is 2-5 sprites, and every ground sprite sits in one sorted layer.
+## 5. Quality and download budget (kept from plan 1, adjusted)
 
 | | High | Medium | Low |
 |---|---|---|---|
-| Ground | Full shader: blending, hill shade, decals | Shader without decals | "Lite" shader: no edge noise, no neighbour blending, 3 texture reads a pixel |
+| Ground | Full shader: blending, hill shading, decals | No decals | Lite shader: no edge noise, 3 texture reads a pixel |
 | Ground textures | 512 px | 256 px | 128 px |
-| Props per forest cell | up to 20 | 10 | canopy texture + 3 |
-| Prop sprite cap per chunk (100 cells) | 600 | 300 | 120 |
-| Animation | mr2-live full, river flow, waterfalls, border pulse | mr2-live reduced, rivers half rate | none |
-| Download (estimate, lazy on first map open) | about 2.5-3 MB | about 1.2 MB | about 0.6 MB |
+| Canopy edge trees and boulders per chunk (100 cells) | 600 | 300 | 120 |
+| Animation | water, foam, river flow, waterfalls, border pulse, clouds, gulls | half rate, no gulls | none |
+| Tilt texture | full resolution | full | half resolution (question 2) |
+| Download (estimate, lazy on first map open) | 2.5-3 MB | about 1.2 MB | about 0.6 MB |
 
-- CPU: the ground drops from 2-3 sorted sprites per cell to one quad, so building a chunk gets cheaper;
-  the props added are capped per chunk and hidden below the badge zoom (the canopy texture stands in).
-- GPU: about 10 texture reads a pixel on High at 1080p is well inside integrated graphics; Low reads 3.
-  No per-chunk render textures, so video memory stays small (data texture 2.5 MB + atlases).
-- Step 10 measures frame time with the in-game readout (backtick) at each zoom tier and Quality on the
-  owner's kind of PC, not in the headless test browser (it draws without the graphics card).
-- **Scorecard for "95% similar"**: each element E1-E22 gets a 0-100% look score on the side-by-sides,
-  weighted by its share (section 1); the target is a weighted 95%. Step 10 scores it; step 11 fixes the
-  lowest.
+The tilt adds one extra draw of the whole screen into a texture; with redraw-on-change (step 4) it costs
+nothing while the map is still.
 
-## 8. Risks
+## 6. Art list for Codex
 
-1. **95% may need more polish than 2.5 days.** The mock-up is a one-off painting where every hex is
-   hand-composed; a rule-built map repeats. Mitigation: many variants per prop, decals, the scorecard.
-2. **Every land cell has a camp**, the mock-up shows open country. Small camps (question 1) or the map
-   looks crowded.
-3. **Players lose the monster portraits** they read the map by: tribe looks, chips and the hover card
-   carry it (section 3); judge on the desk at step 7.
-4. **Weak GPUs**: Lite shader on Low, automatic fallback to today's tiles if the shader fails.
-5. **Art consistency over about 110 Codex pieces**: every call carries the mock-up crop; the lead vets
-   full size before the desk.
-6. **Merges**: steps 2 and 4 build on mr2-live and mr2-land; they wait for those branches to merge.
-7. **Taller hexes** (if chosen) touch many constants and mr2-land's prop placement.
-8. **Classic regressions**: Classic never loads the new code; checked at every step.
+Method (kept from plan 1): `codex exec` with mock-up B crops attached as `-i` references, one family per
+call, sprites on pure magenta (keyed out), textures as seamless squares checked by rolling half a tile; a
+`build.py` per kit cuts, keys, colour-matches to mock-up B and writes the High / Medium / Low copies.
+Prompt header: "MATCH ITS ART STYLE EXACTLY: bright, painted, toy-like cartoon, saturated yellow-greens
+and warm sandy yellows, crisp small painted details, warm sunlight from the top-left, seen from a tilted
+top-down camera. Not photo-real. No text, no logos, no watermark, no hex lines, no grid." Never Blender.
 
-## 9. Questions for the owner (with a suggested answer)
+| Family | Pieces | Step |
+|---|---|---|
+| Ground textures: meadow with flowers, lush meadow, sand, rocky ground, marsh mud, forest floor, snow | 7 | 2 |
+| Grass decals: flower patches, tufts, pebbles | 9 | 2, 11 |
+| Shallows and deep-sea textures, surf strip, sea rocks and islets | 10 | 3 |
+| Cliff face strips, grassy overhang, scree, peak pieces | 9 | 5 |
+| Canopy texture, canopy edge strip, edge trees and pines, boulders, marsh goo pools, reeds | 16 | 6 |
+| River water strip, bank strip, waterfall frames, mouth | 7 | 7 |
+| Cloud texture and banks (extra to mr2-live's) | 4 | 9 |
 
-1. **Every land hex has a tribe camp. Draw camps as small camps (a few huts and a tribe banner) and
-   only players' cells as full villages?** Suggested: yes; camps grow a little with level (3 sizes) but
-   stay about a third of a hex, so the land still looks open like the mock-up.
-2. **Keep today's hex shape, or taller hexes like the mock-up?** (see `side-by-side.jpg`) Suggested:
-   keep today's shape for steps 1-10 (cheaper, less risk), and try taller hexes behind the switch in step
-   11 only if the scorecard says the shape is what holds it below 95%.
-3. **Glowing borders round whose land?** Suggested: players only (own cyan, alliance green, others
-   blue, attackers red), merged where one player's cells touch; tribes show their banner colour instead.
-4. **Rivers: looks only, or should they change numbers?** Suggested: looks only (Classic and Modern must
-   play the same).
-5. **Who sees the new look, and when?** Suggested: only you and the lead (local switch) until step 10's
-   scorecard; then on for all Modern players with the server switch, which also turns it back off.
+About 62 pieces (plan 1 had about 110; the village art is gone).
+
+## 7. Risks
+
+1. **95% may need more than 3 polish days** (a rule-built map repeats). Mitigation: variants, decals,
+   the scorecard; another polish round rather than new features.
+2. **Pointy-top touches rules**: range, takeover, neighbour bonus. Mitigation: one shape switch,
+   tests for both shapes, server/web sync test; nobody plays MR2 live today.
+3. **Classic on pointy-top** is no longer pixel-for-pixel Flash (question 1).
+4. **Tilt speed on weak PCs**: redraw on change, half resolution on Low, the account switch.
+5. **Upright markers vs the warped map**: markers drawn on top could hide things behind them at the far
+   edge; sorted by the cell's distance.
+6. **Merges**: steps 3 and 6 wait for mr2-live and mr2-land in step 0.
+
+## 8. Questions for the owner (with a suggested answer)
+
+1. **Pointy-top hexes change which cells are neighbours for every player, so Classic's map must turn
+   pointy-top too. How should Classic look?** Suggested: Classic keeps Flash's own tiles, colours and
+   portraits, cut to the pointy-top shape by a script (no new art), and turns pointy-top on the same day
+   as Modern.
+2. **Tilt on Quality Low: keep it at half resolution, or turn it off?** Suggested: keep it on at half
+   resolution; players on slow PCs can still switch it off.
+3. **The cell pop-up: restyle it as the earlier mock-up's wood-and-steel card now, or keep today's pop-up
+   with the new height and land rows?** Suggested: keep today's pop-up for now (mock-up B has no card);
+   the card restyle later as its own small job (about 1.5 days).
+4. **If the new look has to be switched off after it is live, should the hexes also go back to flat-top?**
+   Suggested: no, switch off the painted look only (players keep pointy-top on today's tiles, so
+   neighbours do not change mid-season); the shape switch is only for a full return to today.
 
 ---
 
-Files: this plan; `art-samples/mr2-look-plan/compose.py` (the test, needs the mr2-land, mr2-live and
-mr2-civ-study worktrees for its reused art; copy them in if those worktrees are removed),
-`work/run.sh` and `work/*/prompt.txt` (the Codex calls).
+## Desk card draft
+
+- **Title**: Map Room 2 Modern look: the build plan for mock-up B
+- **What you will notice**: nothing in the game yet; this is the order in which helpers build the map
+  you approved (picture with the step numbers on it), about 3 weeks with 3 helpers, with a side-by-side
+  against mock-up B on the desk after every step.
+- **Picture**: `art-samples/mr2-look-plan/plan-on-mockup.jpg`
+- **Questions** (each with the suggested answer as the first button): questions 1-4 above.
+
+Files: this plan; `art-samples/mr2-look-plan/plan-on-mockup.jpg`. Plan 1's art test
+(`desk-main.jpg`, `side-by-side.jpg`, `compose.py`) is on flat-top hexes and is kept only as a record of
+the texture method.
